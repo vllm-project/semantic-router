@@ -114,9 +114,9 @@ case $COMMAND in
     echo "  https://pypi.org/project/vllm-sr/${CURRENT_VERSION}/"
     echo ""
     echo "Next steps:"
-    echo "  1. Create git tag: git tag v${CURRENT_VERSION}"
-    echo "  2. Push tag: git push origin v${CURRENT_VERSION}"
-    echo "  3. Create GitHub release"
+    echo "  1. Prepare release + next dev cycle: make release RELEASE_VERSION=${CURRENT_VERSION}"
+    echo "  2. Push the release tag and next dev bump: git push origin HEAD --follow-tags"
+    echo "  3. Tag workflows publish the release images and GitHub release"
     ;;
     
   *)
@@ -131,4 +131,3 @@ case $COMMAND in
     exit 1
     ;;
 esac
-

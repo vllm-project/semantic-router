@@ -7,7 +7,7 @@ listeners:
 providers:
   defaults:
     default_model: qwen/qwen3.5-rocm
-    default_reasoning_effort: high
+    default_reasoning_effort: low
     reasoning_families:
       qwen3:
         parameter: enable_thinking
@@ -112,12 +112,69 @@ routing:
             operator: OR
         operator: AND
       tier: 1
-    - description: Dedicated reasoning tier for proofs, derivations, and hard math.
+    - description: Narrow premium reasoning lane for formal math proofs and derivations.
       modelRefs:
         - model: openai/gpt5.4
           reasoning_effort: high
           use_reasoning: true
-      name: reasoning_math
+      name: formal_math_proof
+      plugins:
+        - configuration:
+            capture_request_body: true
+            capture_response_body: true
+            enabled: true
+            max_body_bytes: 4096
+            max_records: 100000
+          type: router_replay
+      priority: 252
+      rules:
+        conditions:
+          - name: math
+            type: domain
+          - name: reasoning_request_markers
+            type: keyword
+          - conditions:
+              - conditions:
+                  - name: verification_required
+                    type: projection
+                  - name: wrong_answer
+                    type: user_feedback
+                  - name: correction_feedback_markers
+                    type: keyword
+                  - name: likely_dissatisfied
+                    type: reask
+                  - name: verification_markers
+                    type: keyword
+                  - name: reference_heavy_markers
+                    type: keyword
+                  - name: needs_fact_check
+                    type: fact_check
+                  - name: architecture_markers
+                    type: keyword
+                  - name: agentic_request_markers
+                    type: keyword
+                  - name: code_request_markers
+                    type: keyword
+                  - name: implementation_markers
+                    type: keyword
+                  - name: architecture_design
+                    type: embedding
+                  - name: complex_stem
+                    type: embedding
+                  - name: agentic_workflows
+                    type: embedding
+                  - name: premium_legal_analysis
+                    type: embedding
+                operator: OR
+            operator: NOT
+        operator: AND
+      tier: 2
+    - description: Deep philosophy and first-principles reasoning outside the narrow formal-math overlay.
+      modelRefs:
+        - model: google/gemini-3.1-pro
+          reasoning_effort: high
+          use_reasoning: true
+      name: reasoning_deep
       plugins:
         - configuration:
             capture_request_body: true
@@ -129,42 +186,25 @@ routing:
       priority: 250
       rules:
         conditions:
-          - name: math
-            type: domain
-          - conditions:
-              - name: balance_reasoning
-                type: projection
-              - name: math_task:medium
-                type: complexity
-              - name: math_task:hard
-                type: complexity
-            operator: OR
-        operator: AND
-      tier: 2
-    - description: Deep non-specialist reasoning and philosophy analysis that justifies a reasoning-tier model.
-      modelRefs:
-        - model: openai/gpt5.4
-          reasoning_effort: high
-          use_reasoning: true
-      name: reasoning_specialist
-      plugins:
-        - configuration:
-            capture_request_body: true
-            capture_response_body: true
-            enabled: true
-            max_body_bytes: 4096
-            max_records: 100000
-          type: router_replay
-      priority: 244
-      rules:
-        conditions:
           - conditions:
               - conditions:
-                  - name: philosophy
+                  - name: math
                     type: domain
                   - conditions:
                       - name: reasoning_request_markers
                         type: keyword
+                    operator: NOT
+                  - conditions:
+                      - name: balance_reasoning
+                        type: projection
+                      - name: math_task:medium
+                        type: complexity
+                    operator: OR
+                operator: AND
+              - conditions:
+                  - name: philosophy
+                    type: domain
+                  - conditions:
                       - name: reasoning_general_en
                         type: embedding
                       - name: reasoning_general_zh
@@ -181,8 +221,6 @@ routing:
                         type: embedding
                       - name: research_synthesis
                         type: embedding
-                      - name: reasoning_request_markers
-                        type: keyword
                       - name: research_request_markers
                         type: keyword
                     operator: OR
@@ -198,8 +236,6 @@ routing:
             operator: OR
           - conditions:
               - conditions:
-                  - name: math
-                    type: domain
                   - name: law
                     type: domain
                   - name: health
@@ -238,12 +274,12 @@ routing:
             operator: NOT
         operator: AND
       tier: 3
-    - description: High-structure execution plans, migrations, and workflow orchestration with multi-step constraints.
+    - description: High-structure execution plans, systems design, and specialist STEM synthesis.
       modelRefs:
         - model: google/gemini-3.1-pro
           reasoning_effort: high
           use_reasoning: true
-      name: complex_agentic
+      name: complex_specialist
       plugins:
         - configuration:
             capture_request_body: true
@@ -256,61 +292,28 @@ routing:
       rules:
         conditions:
           - conditions:
-              - name: agentic_workflows
-                type: embedding
-              - name: agentic_request_markers
-                type: keyword
-            operator: OR
-          - conditions:
-              - name: multi_step_markers
-                type: keyword
-              - name: ordered_workflow
-                type: structure
-              - name: numbered_steps
-                type: structure
-              - name: first_then_flow
-                type: structure
-              - name: constraint_dense
-                type: structure
-              - name: format_directive_dense
-                type: structure
-            operator: OR
-          - conditions:
-              - name: balance_medium
-                type: projection
-              - name: balance_complex
-                type: projection
-              - name: balance_reasoning
-                type: projection
-            operator: OR
-          - conditions:
               - conditions:
-                  - name: architecture_markers
-                    type: keyword
-                  - name: architecture_design
-                    type: embedding
-                operator: OR
-            operator: NOT
-        operator: AND
-      tier: 4
-    - description: Complex systems design and specialist STEM synthesis outside the dedicated math lane.
-      modelRefs:
-        - model: google/gemini-3.1-pro
-          reasoning_effort: high
-          use_reasoning: true
-      name: complex_technical
-      plugins:
-        - configuration:
-            capture_request_body: true
-            capture_response_body: true
-            enabled: true
-            max_body_bytes: 4096
-            max_records: 100000
-          type: router_replay
-      priority: 236
-      rules:
-        conditions:
-          - conditions:
+                  - conditions:
+                      - name: agentic_workflows
+                        type: embedding
+                      - name: agentic_request_markers
+                        type: keyword
+                    operator: OR
+                  - conditions:
+                      - name: multi_step_markers
+                        type: keyword
+                      - name: ordered_workflow
+                        type: structure
+                      - name: numbered_steps
+                        type: structure
+                      - name: first_then_flow
+                        type: structure
+                      - name: constraint_dense
+                        type: structure
+                      - name: format_directive_dense
+                        type: structure
+                    operator: OR
+                operator: AND
               - conditions:
                   - name: computer science
                     type: domain
@@ -354,23 +357,18 @@ routing:
                     type: embedding
                   - name: simple_request_markers
                     type: keyword
-                  - name: agentic_request_markers
+                  - name: creative_request_markers
                     type: keyword
-                  - name: ordered_workflow
-                    type: structure
-                  - name: numbered_steps
-                    type: structure
-                  - name: first_then_flow
-                    type: structure
+                  - name: creative_tasks
+                    type: embedding
                 operator: OR
             operator: NOT
         operator: AND
-      tier: 5
+      tier: 4
     - description: Explicit correction requests on evidence-sensitive follow-ups.
       modelRefs:
-        - model: google/gemini-3.1-pro
-          reasoning_effort: medium
-          use_reasoning: true
+        - model: google/gemini-2.5-flash-lite
+          use_reasoning: false
       name: feedback_wrong_answer_verified
       plugins:
         - configuration:
@@ -398,7 +396,7 @@ routing:
                 type: keyword
             operator: NOT
         operator: AND
-      tier: 6
+      tier: 5
     - description: Low-medium cost coding, debugging, refactoring, and technical Q&A.
       modelRefs:
         - model: qwen/qwen3.5-rocm
@@ -457,7 +455,7 @@ routing:
                 operator: OR
             operator: NOT
         operator: AND
-      tier: 7
+      tier: 6
     - description: Conservative route for evidence-sensitive health and medical guidance.
       modelRefs:
         - model: google/gemini-3.1-pro
@@ -510,7 +508,7 @@ routing:
                 operator: OR
             operator: NOT
         operator: AND
-      tier: 8
+      tier: 7
     - description: Evidence-sensitive business, economics, history, and psychology explanation.
       modelRefs:
         - model: google/gemini-2.5-flash-lite
@@ -578,7 +576,7 @@ routing:
                 operator: OR
             operator: NOT
         operator: AND
-      tier: 9
+      tier: 8
     - description: Cheap clarification lane for explicit restatements and single-turn re-asks.
       modelRefs:
         - model: qwen/qwen3.5-rocm
@@ -614,7 +612,7 @@ routing:
                 operator: OR
             operator: NOT
         operator: AND
-      tier: 10
+      tier: 9
     - description: Low-cost business, history, and psychology explanation when verification pressure is absent.
       modelRefs:
         - model: qwen/qwen3.5-rocm
@@ -707,10 +705,10 @@ routing:
                 operator: OR
             operator: NOT
         operator: AND
-      tier: 11
+      tier: 10
     - description: Low-cost creative writing, copywriting, and interpersonal drafting.
       modelRefs:
-        - model: google/gemini-2.5-flash-lite
+        - model: qwen/qwen3.5-rocm
           use_reasoning: false
       name: medium_creative
       plugins:
@@ -763,12 +761,12 @@ routing:
                 operator: OR
             operator: NOT
         operator: AND
-      tier: 12
-    - description: Short factual questions with explicit verification or source cues.
+      tier: 11
+    - description: Short English or Chinese factual questions, including explicit verification asks, that should stay on the cheap lane.
       modelRefs:
         - model: qwen/qwen3.5-rocm
           use_reasoning: false
-      name: verified_fast_qa
+      name: fast_qa
       plugins:
         - configuration:
             capture_request_body: true
@@ -799,105 +797,75 @@ routing:
           - name: short_context
             type: context
           - conditions:
-              - name: balance_simple
-                type: projection
-              - name: balance_medium
-                type: projection
-            operator: OR
-          - conditions:
-              - name: verification_required
-                type: projection
-              - name: verification_markers
-                type: keyword
-              - name: reference_heavy_markers
-                type: keyword
-            operator: OR
-          - conditions:
               - conditions:
-                  - name: health
-                    type: domain
-                  - name: law
-                    type: domain
-                  - name: code_request_markers
-                    type: keyword
-                  - name: implementation_markers
-                    type: keyword
-                  - name: urgency_elevated
-                    type: projection
-                  - name: wrong_answer
-                    type: user_feedback
-                  - name: correction_feedback_markers
-                    type: keyword
-                  - name: likely_dissatisfied
-                    type: reask
-                operator: OR
-            operator: NOT
-        operator: AND
-      tier: 13
-    - description: Cheapest short-context factual or definitional answers across English and Chinese.
-      modelRefs:
-        - model: qwen/qwen3.5-rocm
-          use_reasoning: false
-      name: simple_fast_qa
-      plugins:
-        - configuration:
-            capture_request_body: true
-            capture_response_body: true
-            enabled: true
-            max_body_bytes: 4096
-            max_records: 100000
-          type: router_replay
-      priority: 180
-      rules:
-        conditions:
-          - conditions:
-              - conditions:
-                  - name: fast_qa_en
-                    type: embedding
-                  - name: en
-                    type: language
+                  - conditions:
+                      - name: balance_simple
+                        type: projection
+                      - name: balance_medium
+                        type: projection
+                    operator: OR
+                  - conditions:
+                      - name: verification_required
+                        type: projection
+                      - name: verification_markers
+                        type: keyword
+                      - name: reference_heavy_markers
+                        type: keyword
+                    operator: OR
+                  - conditions:
+                      - conditions:
+                          - name: health
+                            type: domain
+                          - name: law
+                            type: domain
+                          - name: code_request_markers
+                            type: keyword
+                          - name: implementation_markers
+                            type: keyword
+                          - name: urgency_elevated
+                            type: projection
+                          - name: wrong_answer
+                            type: user_feedback
+                          - name: correction_feedback_markers
+                            type: keyword
+                          - name: likely_dissatisfied
+                            type: reask
+                        operator: OR
+                    operator: NOT
                 operator: AND
               - conditions:
-                  - name: fast_qa_zh
-                    type: embedding
-                  - name: zh
-                    type: language
+                  - name: balance_simple
+                    type: projection
+                  - conditions:
+                      - conditions:
+                          - name: verification_required
+                            type: projection
+                          - name: needs_fact_check
+                            type: fact_check
+                          - name: verification_markers
+                            type: keyword
+                          - name: reference_heavy_markers
+                            type: keyword
+                          - name: code_request_markers
+                            type: keyword
+                          - name: implementation_markers
+                            type: keyword
+                          - name: urgency_elevated
+                            type: projection
+                          - name: wrong_answer
+                            type: user_feedback
+                          - name: correction_feedback_markers
+                            type: keyword
+                          - name: likely_dissatisfied
+                            type: reask
+                          - name: feedback_clarification_overlay
+                            type: projection
+                        operator: OR
+                    operator: NOT
                 operator: AND
-              - name: simple_request_markers
-                type: keyword
             operator: OR
-          - name: short_context
-            type: context
-          - name: balance_simple
-            type: projection
-          - conditions:
-              - conditions:
-                  - name: verification_required
-                    type: projection
-                  - name: needs_fact_check
-                    type: fact_check
-                  - name: verification_markers
-                    type: keyword
-                  - name: reference_heavy_markers
-                    type: keyword
-                  - name: code_request_markers
-                    type: keyword
-                  - name: implementation_markers
-                    type: keyword
-                  - name: urgency_elevated
-                    type: projection
-                  - name: wrong_answer
-                    type: user_feedback
-                  - name: correction_feedback_markers
-                    type: keyword
-                  - name: likely_dissatisfied
-                    type: reask
-                  - name: feedback_clarification_overlay
-                    type: projection
-                operator: OR
-            operator: NOT
         operator: AND
-      tier: 14
+      tier: 12
     - description: Lowest-cost fallback for everyday traffic and non-specialized requests.
       modelRefs:
         - model: qwen/qwen3.5-rocm
@@ -989,7 +957,7 @@ routing:
                 operator: NOT
             operator: AND
         operator: OR
-      tier: 15
+      tier: 13
     - description: Absolute final fallback that guarantees a routing decision when no earlier balance lane matches.
       modelRefs:
         - model: qwen/qwen3.5-rocm
@@ -1006,7 +974,7 @@ routing:
       priority: 10
       rules:
         operator: AND
-      tier: 16
+      tier: 14
   modelCards:
     - capabilities:
         - legal_analysis
@@ -1022,51 +990,53 @@ routing:
         - cost:highest
         - specialty:legal
     - capabilities:
-        - creative_writing
-        - copywriting
+        - verified_explanation
+        - source_backed_correction
         - nuanced_explanation
       context_window_size: 262144
-      description: MEDIUM tier alias for low-cost expressive and verified explainer tasks.
+      description: MEDIUM tier alias for low-cost verified explanation and correction tasks.
       modality: text
       name: google/gemini-2.5-flash-lite
       quality_score: 0.68
       tags:
         - tier:medium
         - cost:low
-        - specialty:expressive
+        - specialty:verified
     - capabilities:
         - architecture
         - stem_analysis
         - long_context
+        - general_reasoning
       context_window_size: 262144
-      description: COMPLEX tier alias for systems design, hard STEM, health, and verified recovery.
+      description: COMPLEX tier alias for systems design, hard STEM, health guidance, and deep general reasoning.
       modality: text
       name: google/gemini-3.1-pro
       quality_score: 0.82
       tags:
         - tier:complex
         - cost:upper_mid
-        - specialty:systems
+        - specialty:complex_generalist
     - capabilities:
         - reasoning
         - proofs
-        - argumentation
+        - formal_derivation
       context_window_size: 262144
-      description: REASONING tier alias for proofs and deep non-specialist reasoning.
+      description: REASONING tier alias for narrow formal math proofs and derivations.
       modality: text
       name: openai/gpt5.4
       quality_score: 0.9
       tags:
         - tier:reasoning
         - cost:high
-        - specialty:multi_step
+        - specialty:formal_proof
     - capabilities:
         - fast_qa
         - self_hosted
         - concise_answers
         - general_chat
+        - creative_drafting
       context_window_size: 262144
-      description: SIMPLE tier alias and free self-hosted default for fast QA, broad fallback, and most low-cost traffic.
+      description: SIMPLE tier alias and free self-hosted default for fast QA, broad fallback, creative drafting, and most low-cost traffic.
       modality: text
       name: qwen/qwen3.5-rocm
       quality_score: 0.58

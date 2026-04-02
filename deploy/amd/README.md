@@ -19,16 +19,17 @@ This playbook documents the AMD reference profile for a single real ROCm vLLM ba
   - `providers.models[].pricing` is example pricing for Insights cost comparison
   - `global.model_catalog.modules` can still tighten learned-signal thresholds without changing the routing-owned DSL surface
 
-The active AMD profile contains 16 routing decisions:
+The active AMD profile contains 13 routing decisions:
 
-- `simple_*` (2): cheapest factual and general fallback lanes
-- `medium_*` (3): low-cost coding, explainer, and creative lanes
-- `verified_*` (3): evidence-sensitive overlays layered above their cheaper base lanes
-- `feedback_*` (2): explicit correction and clarification recovery lanes
-- `complex_*` (2): hard technical and multi-step execution lanes
-- `reasoning_*` (2): proof-grade math and deep general reasoning lanes
 - `premium_*` (1): premium legal escalation only
-- `fallback_*` (1): absolute terminal safety-net lane when no earlier decision matches
+- `reasoning_*` (1): proofs, math, philosophy, and deep general reasoning
+- `complex_*` (1): multi-step execution, systems design, and specialist STEM
+- `feedback_*` (2): explicit correction and clarification recovery lanes
+- `verified_*` (2): evidence-sensitive health and explainer overlays
+- `medium_*` (3): low-cost coding, explainer, and creative lanes
+- `fast_*` (1): short factual lane for both plain and verified fast QA
+- `simple_*` (1): lowest-cost general fallback
+- `casual_*` (1): absolute terminal safety-net lane when no earlier decision matches
 
 ## Installation
 
@@ -147,10 +148,10 @@ The runtime does not add a parallel “scorecard” schema. The profile expresse
 
 | Tier | Alias | Example pricing per 1M tokens | Role in the profile |
 |------|-------|-------------------------------|---------------------|
-| SIMPLE | `qwen/qwen3.5-rocm` | prompt `$0.00`, completion `$0.00` | Free self-hosted default alias for fast QA, broad fallback, and most low-cost traffic |
-| MEDIUM | `google/gemini-2.5-flash-lite` | prompt `$0.01`, completion `$0.04` | Low-cost expressive and verified explainer lane |
-| COMPLEX | `google/gemini-3.1-pro` | prompt `$0.48`, completion `$1.92` | Hard technical, health, and verified correction lane |
-| REASONING | `openai/gpt5.4` | prompt `$1.20`, completion `$4.80` | Proofs and deep general reasoning |
+| SIMPLE | `qwen/qwen3.5-rocm` | prompt `$0.00`, completion `$0.00` | Free self-hosted default alias for fast QA, broad fallback, creative drafting, and most low-cost traffic |
+| MEDIUM | `google/gemini-2.5-flash-lite` | prompt `$0.01`, completion `$0.04` | Low-cost verified explanation and correction lane |
+| COMPLEX | `google/gemini-3.1-pro` | prompt `$0.48`, completion `$1.92` | Hard technical, deep reasoning, specialist STEM, and health lane |
+| REASONING | `openai/gpt5.4` | prompt `$1.20`, completion `$4.80` | Narrow formal-math proof lane |
 | PREMIUM | `anthropic/claude-opus-4.6` | prompt `$1.80`, completion `$7.20` | Reserved for legal and high-risk analysis |
 
 Pricing is intentionally exaggerated for Insights demos so savings are easy to see. These values are not intended to mirror real vendor billing.
@@ -160,28 +161,26 @@ Pricing is intentionally exaggerated for Insights demos so savings are easy to s
 | Priority | Decision | Alias | What it is for | Match sketch |
 |---------:|----------|-------|----------------|--------------|
 | 260 | `premium_legal` | `anthropic/claude-opus-4.6` | Highest-risk legal and compliance analysis | law or explicit legal-risk cues + premium legal embedding, verification overlay, or medium/hard `legal_risk` |
-| 250 | `reasoning_math` | `openai/gpt5.4` | Proofs, derivations, and hard math | `domain:math` + `projection:balance_reasoning` or hard math complexity |
-| 244 | `reasoning_specialist` | `openai/gpt5.4` | Philosophy and deep general reasoning | philosophy or reasoning/research cues + medium-or-higher reasoning band, excluding technical and correction overlays |
-| 242 | `complex_agentic` | `google/gemini-3.1-pro` | Multi-step plans, migrations, and runbooks | agentic embedding / markers + workflow structure + medium-or-higher difficulty |
-| 236 | `complex_technical` | `google/gemini-3.1-pro` | Systems design and specialist STEM synthesis | architecture or STEM cues + medium-or-higher difficulty, excluding fast-QA and workflow overlays |
-| 232 | `feedback_wrong_answer_verified` | `google/gemini-3.1-pro` | Explicit correction on evidence-sensitive follow-ups | verified correction overlay + explicit correction evidence, excluding code-heavy recovery |
+| 252 | `formal_math_proof` | `openai/gpt5.4` | Narrow premium overlay for formal math proofs and derivations | `domain:math` + explicit reasoning/proof cues, excluding verified and specialist overlays |
+| 250 | `reasoning_deep` | `google/gemini-3.1-pro` | Deep philosophy and first-principles reasoning outside the narrow math overlay | philosophy / research / general-reasoning cues, plus softer math reasoning without explicit proof markers, on medium-or-higher difficulty |
+| 242 | `complex_specialist` | `google/gemini-3.1-pro` | Multi-step execution plans, systems design, and specialist STEM synthesis | agentic workflow cues or architecture / STEM signals + medium-or-higher difficulty, excluding fast-QA and creative drafting |
+| 232 | `feedback_wrong_answer_verified` | `google/gemini-2.5-flash-lite` | Explicit correction on evidence-sensitive follow-ups | verified correction overlay + explicit correction evidence, excluding code-heavy recovery |
 | 220 | `medium_code_general` | `qwen/qwen3.5-rocm` | Low-medium cost coding and bug triage | code markers / embedding + medium/complex band, plus urgent simple bug triage, excluding creative drafting |
 | 218 | `verified_health` | `google/gemini-3.1-pro` | Evidence-sensitive health and medical guidance | `domain:health` + verification pressure + health guidance or medium+ band |
 | 214 | `verified_explainer` | `google/gemini-2.5-flash-lite` | Evidence-sensitive business, history, and psychology explanation | explainer cues + verification pressure, excluding fast-QA and correction overlays |
 | 212 | `feedback_need_clarification` | `qwen/qwen3.5-rocm` | Cheap clarification and single-turn re-ask lane | `projection:feedback_clarification_overlay`, excluding verified/correction/code overlays |
 | 208 | `medium_explainer` | `qwen/qwen3.5-rocm` | Low-cost business, history, and psychology explanation | explainer cues + medium/complex band, or strong explainer embeddings in simple traffic, excluding verified overlays |
-| 200 | `medium_creative` | `google/gemini-2.5-flash-lite` | Creative writing and interpersonal drafting | creative markers / embedding + simple or medium band |
-| 184 | `verified_fast_qa` | `qwen/qwen3.5-rocm` | Short English or Chinese factual questions with verification | fast-QA embeddings or simple cue + short context + explicit verification cues |
-| 180 | `simple_fast_qa` | `qwen/qwen3.5-rocm` | Cheapest short-context factual answers | fast-QA embeddings or simple cue + short context + simple band, excluding verification and urgency |
+| 200 | `medium_creative` | `qwen/qwen3.5-rocm` | Creative writing and interpersonal drafting | creative markers / embedding + simple or medium band |
+| 184 | `fast_qa` | `qwen/qwen3.5-rocm` | Short English or Chinese factual questions, including explicit verification asks | fast-QA embeddings or simple cue + short context; verified asks can rise to `balance_medium`, plain asks stay in `balance_simple` |
 | 170 | `simple_general` | `qwen/qwen3.5-rocm` | Lowest-cost fallback for general traffic | short simple traffic or medium-context `domain:other` traffic, excluding explicit specialist and verification overlays |
 
 This ordering is intentional:
 
-- high-risk legal and proof-heavy reasoning win first
+- high-risk legal and narrow formal-math proofs win first
 - projection-driven correction recovery beats ordinary verified or explainer traffic
 - health and verified explainer overlays sit above their cheap base lanes
-- complex technical and agentic routes beat generic medium lanes
-- fast-QA stays cheap unless verification is explicit
+- the merged complex specialist lane beats generic medium lanes
+- fast-QA stays cheap even when verification is explicit, unless a higher-risk overlay wins first
 - `simple_general` remains the broad fallback
 
 ## Signal Overview
@@ -226,7 +225,7 @@ The profile intentionally does not keep emotion-only projection bands. They adde
 
 ## Calibration Loop
 
-The stable examples are also maintained as machine-readable probes in [balance.probes.yaml](../recipes/balance.probes.yaml) for live `POST /api/v1/eval` calibration loops. The maintained suite currently covers the 15 calibrated non-fallback decisions with 54 probe variants, including a greeting guardrail that should stay on `simple_general` and multi-turn `messages` probes that exercise clarification and verified-correction follow-ups.
+The stable examples are also maintained as machine-readable probes in [balance.probes.yaml](../recipes/balance.probes.yaml) for live `POST /api/v1/eval` calibration loops. The maintained suite currently covers the 13 calibrated non-fallback decisions with 55 probe variants, including a greeting guardrail that should stay on `simple_general` and multi-turn `messages` probes that exercise clarification and verified-correction follow-ups.
 
 Run local validation first:
 

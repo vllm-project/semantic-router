@@ -32,13 +32,19 @@ curl -fsSL https://vllm-semantic-router.com/install.sh | bash
 安装脚本会：
 
 - 检测 Python 3.10 或更新版本
-- 将 `vllm-sr` 安装到 `~/.local/share/vllm-sr`
+- 将最新开发版 `vllm-sr` 安装到 `~/.local/share/vllm-sr`
 - 在 `~/.local/bin/vllm-sr` 写入启动器
 - 除非您选择退出，否则为 `vllm-sr serve` 准备 Docker
 - 在可能的情况下自动启动 `vllm-sr serve` 并打开控制台
 - 若无法打开浏览器，则打印控制台访问方式与远程服务器提示
 
 若 `~/.local/bin` 尚未在 `PATH` 中，安装脚本会打印需要添加的 `export` 行。
+
+若您需要最新稳定版，请运行：
+
+```bash
+curl -fsSL https://vllm-semantic-router.com/install.sh | bash -s -- --channel stable
+```
 
 Windows 用户请使用下文手动 PyPI 流程。
 
@@ -49,7 +55,10 @@ Windows 用户请使用下文手动 PyPI 流程。
 python -m venv vsr
 source vsr/bin/activate  # Windows：vsr\Scripts\activate
 
-# 从 PyPI 安装
+# 安装最新开发版
+pip install --pre vllm-sr
+
+# 若需要最新稳定版
 pip install vllm-sr
 ```
 

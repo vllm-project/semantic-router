@@ -4,7 +4,7 @@ description: >
   Probes are grouped by decision so the calibration loop can measure
   decision-level robustness across multiple prompt variants instead of one
   crafted sample, including short-turn guardrails that should not fall into the
-  feedback overlays. The suite focuses on the 15 calibrated non-fallback lanes;
+  feedback overlays. The suite focuses on the 13 calibrated non-fallback lanes;
   the terminal `casual_chat` decision remains an absolute safety net rather
   than a first-class calibration target.
 routing_assets:
@@ -27,10 +27,10 @@ decisions:
         query: Assess the legal risk in this agreement by analyzing indemnification, limitation of liability, and the compliance duties each party assumes.
         tags: [paraphrase, contract]
 
-  - id: reasoning_math
-    expected_decision: reasoning_math
+  - id: formal_math_proof
+    expected_decision: formal_math_proof
     expected_alias: openai/gpt5.4
-    objective: Pure mathematical reasoning that should not collapse into a general reasoning lane.
+    objective: Narrow formal-math overlay for rigorous proofs and derivations that justify the expensive reasoning tier.
     variants:
       - id: irrationality_proof
         query: Prove rigorously that the square root of 2 is irrational.
@@ -38,11 +38,14 @@ decisions:
       - id: integer_ratio_proof
         query: Give a formal proof that sqrt(2) cannot be expressed as a ratio of integers.
         tags: [paraphrase, proof]
+      - id: infinite_primes
+        query: Prove by contradiction that there are infinitely many prime numbers.
+        tags: [robustness, proof]
 
-  - id: reasoning_specialist
-    expected_decision: reasoning_specialist
-    expected_alias: openai/gpt5.4
-    objective: Deep philosophy and general reasoning without strong technical, legal, or health specialist cues.
+  - id: reasoning_deep
+    expected_decision: reasoning_deep
+    expected_alias: google/gemini-3.1-pro
+    objective: Deep philosophy and first-principles reasoning outside the narrow formal-math overlay.
     variants:
       - id: av_ethics
         query: Compare utilitarianism and deontology, then argue which framework better handles autonomous-vehicle dilemmas.
@@ -54,10 +57,10 @@ decisions:
         query: From first principles, compare three ways to reason under uncertainty and justify which one is most robust.
         tags: [robustness, reasoning]
 
-  - id: complex_agentic
-    expected_decision: complex_agentic
+  - id: complex_specialist
+    expected_decision: complex_specialist
     expected_alias: google/gemini-3.1-pro
-    objective: Multi-step planning with checkpoints, rollback structure, and execution phases.
+    objective: Multi-step execution planning, systems design, and specialist STEM synthesis on the complex tier.
     variants:
       - id: migration_runbook
         query: Plan a zero-downtime monolith-to-microservices migration with checkpoints, rollback steps, owners, and validation after each phase.
@@ -68,12 +71,6 @@ decisions:
       - id: incident_recovery_runbook
         query: Create a phased incident-recovery runbook with owners, checkpoints, rollback criteria, and verification gates for each stage.
         tags: [robustness, orchestration]
-
-  - id: complex_technical
-    expected_decision: complex_technical
-    expected_alias: google/gemini-3.1-pro
-    objective: Complex systems design and specialist STEM synthesis outside the dedicated math lane.
-    variants:
       - id: distributed_rate_limiter
         query: Design the software architecture for a distributed rate limiter in a microservices platform, including service boundaries and consistency tradeoffs.
         tags: [baseline, architecture]
@@ -89,8 +86,8 @@ decisions:
 
   - id: feedback_wrong_answer_verified
     expected_decision: feedback_wrong_answer_verified
-    expected_alias: google/gemini-3.1-pro
-    objective: Wrong-answer correction requests that also require verified, sourced answers.
+    expected_alias: google/gemini-2.5-flash-lite
+    objective: Wrong-answer correction requests that need verified, sourced answers without escalating to the complex tier.
     variants:
       - id: roman_republic_correction
         query: This is wrong. Please correct the explanation of why the Roman Republic collapsed and cite reliable historical sources.
@@ -179,8 +176,8 @@ decisions:
 
   - id: medium_creative
     expected_decision: medium_creative
-    expected_alias: google/gemini-2.5-flash-lite
-    objective: Creative ideation and interpersonal drafting without specialist routing or verification cues.
+    expected_alias: qwen/qwen3.5-rocm
+    objective: Creative ideation and interpersonal drafting that should stay on the cheapest general-purpose lane.
     variants:
       - id: tea_house_taglines
         query: Invent three evocative taglines for a fictional tea house called Moonleaf.
@@ -219,10 +216,10 @@ decisions:
             content: That was confusing. Restate it more clearly and give one simple example.
         tags: [feedback, messages, clarification]
 
-  - id: verified_fast_qa
-    expected_decision: verified_fast_qa
+  - id: fast_qa
+    expected_decision: fast_qa
     expected_alias: qwen/qwen3.5-rocm
-    objective: Short English or Chinese factual questions with explicit verification or source requirements.
+    objective: Short English or Chinese factual questions that should stay on the cheap lane, with or without explicit verification asks.
     variants:
       - id: australia_capital
         query: "Verify this with a source: Is the capital of Australia Sydney or Canberra?"
@@ -236,12 +233,6 @@ decisions:
       - id: jupiter_verify
         query: 太阳系最大的行星是木星吗？请核实并给来源。
         tags: [paraphrase, zh]
-
-  - id: simple_fast_qa
-    expected_decision: simple_fast_qa
-    expected_alias: qwen/qwen3.5-rocm
-    objective: Very short English or Chinese factual Q and A without verification overlays.
-    variants:
       - id: who_are_you
         query: Who are you? Answer briefly.
         tags: [baseline, en]

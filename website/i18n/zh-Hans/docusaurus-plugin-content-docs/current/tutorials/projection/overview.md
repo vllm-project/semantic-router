@@ -105,7 +105,7 @@ sidebar_position: 1
 - `difficulty_score` 混合上下文、结构、关键词、嵌入与复杂度等证据
 - `difficulty_band` 将分数映射为 `balance_simple`、`balance_medium`、`balance_complex`、`balance_reasoning`
 - `verification_pressure` 与 `verification_band` 产生如 `verification_required` 等可复用核验输出
-- `premium_legal`、`reasoning_math` 等决策将原始 `domain` 匹配与投影输出组合
+- `premium_legal`、`reasoning_deep` 等决策将原始 `domain` 匹配与投影输出组合
 
 该配方重要之处在于：投影在多条路由间复用，而非单一玩具示例。
 

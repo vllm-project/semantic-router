@@ -31,9 +31,9 @@ This is what makes Semantic Router especially relevant for AMD deployments. It s
 
 The easiest way to understand vLLM Semantic Router is as a four-layer architecture:
 
-- **Signals** are the raw observations extracted from each request. In this repository, the AMD profile uses signals such as `keyword`, `embedding`, `structure`, `fact_check`, `user_feedback`, `preference`, `language`, `domain`, `context`, and `complexity`.
+- **Signals** are the raw observations extracted from each request. In this repository, the AMD profile uses signals such as `keyword`, `embedding`, `structure`, `fact_check`, `user_feedback`, `reask`, `language`, `domain`, `context`, and `complexity`.
 - **Projections** are the coordination layer. They take raw signal evidence and turn it into reusable routing outputs such as `balance_simple`, `balance_complex`, `balance_reasoning`, `verification_required`, or `urgency_elevated`.
-- **Decisions** are the policy layer. They combine signals and projection outputs into named routing outcomes such as `medium_code_general`, `reasoning_math`, or `premium_legal`.
+- **Decisions** are the policy layer. They combine signals and projection outputs into named routing outcomes such as `medium_code_general`, `reasoning_deep`, or `premium_legal`.
 - **Models** are the target lanes. Decisions point to logical models or aliases through `modelRefs`, while endpoint wiring, pricing, and backend references live in the provider model catalog.
 
 In other words, the runtime flow is:
@@ -58,9 +58,9 @@ At a high level, this deployment consists of:
 The reference alias layout is:
 
 - `qwen/qwen3.5-rocm` for the SIMPLE lane
-- `google/gemini-2.5-flash-lite` for lower-cost expressive medium tasks
-- `google/gemini-3.1-pro` for complex technical or architecture-heavy tasks
-- `openai/gpt5.4` for high-reasoning escalation
+- `google/gemini-2.5-flash-lite` for lower-cost verified explanation and correction tasks
+- `google/gemini-3.1-pro` for complex technical, deep reasoning, STEM, or health-sensitive tasks
+- `openai/gpt5.4` for narrow formal-proof escalation
 - `anthropic/claude-opus-4.6` for the premium legal lane
 
 Pricing in the profile is intentionally exaggerated so Insights can make tier differences and savings easy to see. It is a demo-friendly routing profile, not a mirror of vendor billing.
@@ -184,16 +184,17 @@ The remote import path applies the full YAML directly during onboarding. If you 
 
 ## What the Reference Profile Is Doing
 
-The imported profile expresses a complete AMD routing story with 23 active decisions across:
+The imported profile expresses a complete AMD routing story with 13 active decisions across:
 
-- simple fallback lanes
-- medium domain lanes
-- verified overlays
-- feedback recovery lanes
-- complex technical lanes
-- reasoning escalation lanes
-- one emotionally engaged general lane
 - one premium legal lane
+- one reasoning lane for proofs, philosophy, and deep general reasoning
+- one complex specialist lane for multi-step execution, systems design, and specialist STEM work
+- two feedback recovery lanes
+- two verified overlays
+- three medium-cost lanes
+- one fast factual lane
+- one simple general lane
+- one terminal casual fallback lane
 
 This is useful because replay and Insights stay signal-native. Instead of inventing a separate runtime dimension schema, the system shows what actually happened during routing: which signals matched, which projection outputs fired, which decision won, and which alias received the request.
 
@@ -218,13 +219,13 @@ Debug this Python stack trace and suggest the most likely fix.
 
 This should land on the cheaper coding lane backed by `qwen/qwen3.5-rocm`.
 
-### Deep Reasoning
+### Formal Math Proof
 
 ```text
 Prove rigorously that the square root of 2 is irrational.
 ```
 
-This should escalate into the reasoning tier and map to the `openai/gpt5.4` alias.
+This should hit the narrow formal-proof overlay and map to the `openai/gpt5.4` alias.
 
 ### Premium Legal Analysis
 
