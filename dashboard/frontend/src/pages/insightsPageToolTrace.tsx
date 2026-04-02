@@ -4,6 +4,7 @@ import MarkdownRenderer from '../components/MarkdownRenderer'
 import type { ViewField } from '../components/ViewModal'
 
 import type { InsightsRecord, ToolTrace, ToolTraceStep } from './insightsPageTypes'
+import { hasMeaningfulToolResultText } from '../tools/toolResultSupport'
 import styles from './InsightsPage.module.css'
 
 const TOOL_TRACE_STYLES: Record<string, { tint: string; accent: string }> = {
@@ -315,11 +316,7 @@ function findMatchingToolResultIndex(
 }
 
 function isSuccessfulToolResult(step: ToolTraceStep) {
-  return step.type === 'client_tool_result' && hasMeaningfulToolResult(step.text)
-}
-
-function hasMeaningfulToolResult(text?: string) {
-  return Boolean(text && text.trim().length > 0)
+  return step.type === 'client_tool_result' && hasMeaningfulToolResultText(step.text)
 }
 
 function getTraceToolNames(trace?: ToolTrace) {
