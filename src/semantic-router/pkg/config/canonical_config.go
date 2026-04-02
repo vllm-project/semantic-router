@@ -366,8 +366,11 @@ func normalizeExternalModelIDsFromProviderModel(model CanonicalProviderModel) ma
 		}
 		result[key] = model.ProviderModelID
 	}
+	// When no backend_refs are defined (metadata-only provider model),
+	// still store the provider_model_id so pricing lookups by provider
+	// model ID (e.g. from Envoy AI Gateway) can resolve to this model.
 	if len(result) == 0 {
-		return nil
+		result["default"] = model.ProviderModelID
 	}
 	return result
 }
