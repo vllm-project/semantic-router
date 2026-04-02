@@ -12,6 +12,7 @@ type Signals struct {
 	Categories        []Category         `yaml:"categories"`
 	FactCheckRules    []FactCheckRule    `yaml:"fact_check_rules,omitempty"`
 	UserFeedbackRules []UserFeedbackRule `yaml:"user_feedback_rules,omitempty"`
+	ReaskRules        []ReaskRule        `yaml:"reask_rules,omitempty"`
 	PreferenceRules   []PreferenceRule   `yaml:"preference_rules,omitempty"`
 	LanguageRules     []LanguageRule     `yaml:"language_rules,omitempty"`
 	ContextRules      []ContextRule      `yaml:"context_rules,omitempty"`
@@ -60,6 +61,24 @@ type FactCheckRule struct {
 type UserFeedbackRule struct {
 	Name        string `yaml:"name"`
 	Description string `yaml:"description,omitempty"`
+}
+
+type ReaskRule struct {
+	Name          string  `yaml:"name"`
+	Description   string  `yaml:"description,omitempty"`
+	Threshold     float32 `yaml:"threshold,omitempty"`
+	LookbackTurns int     `yaml:"lookback_turns,omitempty"`
+}
+
+func (r ReaskRule) WithDefaults() ReaskRule {
+	result := r
+	if result.Threshold == 0 {
+		result.Threshold = 0.8
+	}
+	if result.LookbackTurns == 0 {
+		result.LookbackTurns = 1
+	}
+	return result
 }
 
 type ModalityRule struct {

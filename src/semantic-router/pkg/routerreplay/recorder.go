@@ -15,6 +15,8 @@ const (
 type (
 	Signal        = store.Signal
 	RoutingRecord = store.Record
+	ToolTrace     = store.ToolTrace
+	ToolTraceStep = store.ToolTraceStep
 	UsageCost     = store.UsageCost
 )
 
@@ -115,6 +117,11 @@ func (r *Recorder) UpdateUsageCost(id string, usage UsageCost) error {
 	return r.storage.UpdateUsageCost(ctx, id, usage)
 }
 
+func (r *Recorder) UpdateToolTrace(id string, trace ToolTrace) error {
+	ctx := context.Background()
+	return r.storage.UpdateToolTrace(ctx, id, trace)
+}
+
 // GetRecord returns a copy of the record with the given ID.
 func (r *Recorder) GetRecord(id string) (RoutingRecord, bool) {
 	ctx := context.Background()
@@ -146,79 +153,78 @@ func truncateBody(body []byte, maxBytes int) (string, bool) {
 	return string(body[:maxBytes]), true
 }
 
-func LogFields(r RoutingRecord, event string) map[string]interface{} {
-	fields := map[string]interface{}{
-		"event":           event,
-		"replay_id":       r.ID,
-		"decision":        r.Decision,
-		"category":        r.Category,
-		"original_model":  r.OriginalModel,
-		"selected_model":  r.SelectedModel,
-		"reasoning_mode":  r.ReasoningMode,
-		"request_id":      r.RequestID,
-		"timestamp":       r.Timestamp,
-		"from_cache":      r.FromCache,
-		"streaming":       r.Streaming,
-		"response_status": r.ResponseStatus,
-		"signals": map[string]interface{}{
-			"keyword":       r.Signals.Keyword,
-			"embedding":     r.Signals.Embedding,
-			"domain":        r.Signals.Domain,
-			"fact_check":    r.Signals.FactCheck,
-			"user_feedback": r.Signals.UserFeedback,
-			"preference":    r.Signals.Preference,
-			"language":      r.Signals.Language,
-			"context":       r.Signals.Context,
-			"complexity":    r.Signals.Complexity,
-		},
+func logSignalFields(signals Signal) map[string]interface{} {
+	return map[string]interface{}{
+		"keyword":       signals.Keyword,
+		"embedding":     signals.Embedding,
+		"domain":        signals.Domain,
+		"fact_check":    signals.FactCheck,
+		"user_feedback": signals.UserFeedback,
+		"reask":         signals.Reask,
+		"preference":    signals.Preference,
+		"language":      signals.Language,
+		"context":       signals.Context,
+		"structure":     signals.Structure,
+		"complexity":    signals.Complexity,
+		"modality":      signals.Modality,
+		"authz":         signals.Authz,
+		"jailbreak":     signals.Jailbreak,
+		"pii":           signals.PII,
+		"kb":            signals.KB,
+	}
+}
+
+func appendGuardrailLogFields(fields map[string]interface{}, r RoutingRecord) {
+	if !r.GuardrailsEnabled && !r.JailbreakEnabled && !r.PIIEnabled {
+		return
 	}
 
-	// Guardrails
-	if r.GuardrailsEnabled || r.JailbreakEnabled || r.PIIEnabled {
-		fields["guardrails_enabled"] = r.GuardrailsEnabled
-		fields["jailbreak_enabled"] = r.JailbreakEnabled
-		fields["pii_enabled"] = r.PIIEnabled
+	fields["guardrails_enabled"] = r.GuardrailsEnabled
+	fields["jailbreak_enabled"] = r.JailbreakEnabled
+	fields["pii_enabled"] = r.PIIEnabled
 
-		// Jailbreak detection results (request-level)
-		if r.JailbreakDetected {
-			fields["jailbreak_detected"] = r.JailbreakDetected
-			fields["jailbreak_type"] = r.JailbreakType
-			fields["jailbreak_confidence"] = r.JailbreakConfidence
-		}
+	if r.JailbreakDetected {
+		fields["jailbreak_detected"] = r.JailbreakDetected
+		fields["jailbreak_type"] = r.JailbreakType
+		fields["jailbreak_confidence"] = r.JailbreakConfidence
+	}
+	if r.ResponseJailbreakDetected {
+		fields["response_jailbreak_detected"] = r.ResponseJailbreakDetected
+		fields["response_jailbreak_type"] = r.ResponseJailbreakType
+		fields["response_jailbreak_confidence"] = r.ResponseJailbreakConfidence
+	}
+	if r.PIIDetected {
+		fields["pii_detected"] = r.PIIDetected
+		fields["pii_entities"] = r.PIIEntities
+		fields["pii_blocked"] = r.PIIBlocked
+	}
+}
 
-		// Response jailbreak detection results
-		if r.ResponseJailbreakDetected {
-			fields["response_jailbreak_detected"] = r.ResponseJailbreakDetected
-			fields["response_jailbreak_type"] = r.ResponseJailbreakType
-			fields["response_jailbreak_confidence"] = r.ResponseJailbreakConfidence
-		}
-
-		// PII detection results
-		if r.PIIDetected {
-			fields["pii_detected"] = r.PIIDetected
-			fields["pii_entities"] = r.PIIEntities
-			fields["pii_blocked"] = r.PIIBlocked
-		}
+func appendRAGLogFields(fields map[string]interface{}, r RoutingRecord) {
+	if !r.RAGEnabled {
+		return
 	}
 
-	// RAG
-	if r.RAGEnabled {
-		fields["rag_enabled"] = r.RAGEnabled
-		fields["rag_backend"] = r.RAGBackend
-		fields["rag_context_length"] = r.RAGContextLength
-		fields["rag_similarity_score"] = r.RAGSimilarityScore
+	fields["rag_enabled"] = r.RAGEnabled
+	fields["rag_backend"] = r.RAGBackend
+	fields["rag_context_length"] = r.RAGContextLength
+	fields["rag_similarity_score"] = r.RAGSimilarityScore
+}
+
+func appendHallucinationLogFields(fields map[string]interface{}, r RoutingRecord) {
+	if !r.HallucinationEnabled {
+		return
 	}
 
-	// Hallucination detection
-	if r.HallucinationEnabled {
-		fields["hallucination_enabled"] = r.HallucinationEnabled
-		fields["hallucination_detected"] = r.HallucinationDetected
-		fields["hallucination_confidence"] = r.HallucinationConfidence
-		if len(r.HallucinationSpans) > 0 {
-			fields["hallucination_spans"] = r.HallucinationSpans
-		}
+	fields["hallucination_enabled"] = r.HallucinationEnabled
+	fields["hallucination_detected"] = r.HallucinationDetected
+	fields["hallucination_confidence"] = r.HallucinationConfidence
+	if len(r.HallucinationSpans) > 0 {
+		fields["hallucination_spans"] = r.HallucinationSpans
 	}
+}
 
+func appendUsageCostLogFields(fields map[string]interface{}, r RoutingRecord) {
 	if r.PromptTokens != nil {
 		fields["prompt_tokens"] = *r.PromptTokens
 	}
@@ -243,6 +249,63 @@ func LogFields(r RoutingRecord, event string) map[string]interface{} {
 	if r.BaselineModel != nil {
 		fields["baseline_model"] = *r.BaselineModel
 	}
+}
 
+func LogFields(r RoutingRecord, event string) map[string]interface{} {
+	fields := map[string]interface{}{
+		"event":             event,
+		"replay_id":         r.ID,
+		"decision":          r.Decision,
+		"decision_tier":     r.DecisionTier,
+		"decision_priority": r.DecisionPriority,
+		"category":          r.Category,
+		"original_model":    r.OriginalModel,
+		"selected_model":    r.SelectedModel,
+		"reasoning_mode":    r.ReasoningMode,
+		"confidence_score":  r.ConfidenceScore,
+		"selection_method":  r.SelectionMethod,
+		"request_id":        r.RequestID,
+		"timestamp":         r.Timestamp,
+		"from_cache":        r.FromCache,
+		"streaming":         r.Streaming,
+		"response_status":   r.ResponseStatus,
+		"signals":           logSignalFields(r.Signals),
+	}
+	if len(r.Projections) > 0 {
+		fields["projections"] = r.Projections
+	}
+	if len(r.ProjectionScores) > 0 {
+		fields["projection_scores"] = r.ProjectionScores
+	}
+	if len(r.SignalConfidences) > 0 {
+		fields["signal_confidences"] = r.SignalConfidences
+	}
+	if len(r.SignalValues) > 0 {
+		fields["signal_values"] = r.SignalValues
+	}
+	appendToolTraceLogFields(fields, r.ToolTrace)
+
+	appendGuardrailLogFields(fields, r)
+	appendRAGLogFields(fields, r)
+	appendHallucinationLogFields(fields, r)
+	appendUsageCostLogFields(fields, r)
 	return fields
+}
+
+func appendToolTraceLogFields(fields map[string]interface{}, trace *ToolTrace) {
+	if trace == nil {
+		return
+	}
+	if trace.Flow != "" {
+		fields["tool_trace_flow"] = trace.Flow
+	}
+	if trace.Stage != "" {
+		fields["tool_trace_stage"] = trace.Stage
+	}
+	if len(trace.ToolNames) > 0 {
+		fields["tool_names"] = trace.ToolNames
+	}
+	if len(trace.Steps) > 0 {
+		fields["tool_trace_step_count"] = len(trace.Steps)
+	}
 }

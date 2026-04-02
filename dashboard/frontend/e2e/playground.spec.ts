@@ -20,6 +20,50 @@ function chatStreamBody(content: string, reasoning = ''): string {
   return initialLine + [...reasoningLines, ...contentLines].join('') + 'data: [DONE]\n\n';
 }
 
+function chatToolCallBody(
+  toolName: string,
+  args: Record<string, unknown>,
+  callId = 'call_open_web_1',
+): string {
+  return JSON.stringify({
+    choices: [
+      {
+        index: 0,
+        message: {
+          role: 'assistant',
+          content: '',
+          tool_calls: [
+            {
+              id: callId,
+              type: 'function',
+              function: {
+                name: toolName,
+                arguments: JSON.stringify(args),
+              },
+            },
+          ],
+        },
+        finish_reason: 'tool_calls',
+      },
+    ],
+  });
+}
+
+function chatJsonBody(content: string): string {
+  return JSON.stringify({
+    choices: [
+      {
+        index: 0,
+        message: {
+          role: 'assistant',
+          content,
+        },
+        finish_reason: 'stop',
+      },
+    ],
+  });
+}
+
 async function mockStreamingChatFetch(
   page: import('@playwright/test').Page,
   chunks: string[],
@@ -258,6 +302,60 @@ test.describe('Playground Chat Component', () => {
     
     // Input should be cleared after sending
     await expect(input).toHaveValue('');
+  });
+
+  test('routes open_web through the backend proxy', async ({ page }) => {
+    let chatRequestCount = 0;
+    let openWebRequestBody: Record<string, unknown> | null = null;
+
+    await page.route('**/api/tools/open-web', async (route) => {
+      openWebRequestBody = route.request().postDataJSON() as Record<string, unknown>;
+
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          url: 'https://example.com/article',
+          title: 'Example Article',
+          content: 'Example content returned by the backend proxy.',
+          length: 46,
+          truncated: false,
+          method: 'direct',
+        }),
+      });
+    });
+
+    await page.route('**/api/router/v1/chat/completions', async (route) => {
+      chatRequestCount += 1;
+
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: chatRequestCount === 1
+          ? chatToolCallBody('open_web', {
+              url: 'https://example.com/article',
+              format: 'markdown',
+              max_length: 15000,
+            })
+          : chatJsonBody('The page was fetched through the backend proxy.'),
+      });
+    });
+
+    await page.getByPlaceholder('Ask me anything...').fill('Open an article for me');
+    await page.getByRole('button', { name: 'Send message' }).click();
+
+    await expect(page.getByText('The page was fetched through the backend proxy.')).toBeVisible({ timeout: 10000 });
+    await expect(page.getByText('Example Article')).toBeVisible({ timeout: 10000 });
+
+    expect(openWebRequestBody).toMatchObject({
+      url: 'https://example.com/article',
+      timeout: 30,
+      force_jina: false,
+      format: 'markdown',
+      max_length: 15000,
+      with_images: false,
+    });
+    expect(chatRequestCount).toBe(2);
   });
 
   test('handles API error gracefully', async ({ page }) => {

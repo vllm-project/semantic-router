@@ -126,6 +126,7 @@ const SIGNAL_COLORS: Record<string, string> = {
   domains: '#DCDCAA',
   fact_check: '#CE9178',
   user_feedbacks: '#C586C0',
+  reasks: '#FFB454',
   preferences: '#4FC1FF',
   language: '#B5CEA8',
   context: '#D7BA7D',

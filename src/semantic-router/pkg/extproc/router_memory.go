@@ -70,8 +70,7 @@ func createMemoryStore(cfg *config.RouterConfig) (memory.Store, error) {
 		Dimension: cfg.Memory.Milvus.Dimension,
 	}
 
-	logging.Infof("Memory: Connecting to Milvus at %s, collection=%s", milvusAddress, collectionName)
-	logging.Infof("Memory: Using embedding model=%s", embeddingConfig.Model)
+	logging.Infof("Memory: connecting to Milvus at %s, collection=%s, embedding=%s", milvusAddress, collectionName, embeddingConfig.Model)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
@@ -121,7 +120,7 @@ func createMemoryStore(cfg *config.RouterConfig) (memory.Store, error) {
 		}
 		redisCache, err := memory.NewRedisCache(ctx, cacheCfg)
 		if err != nil {
-			logging.Warnf("Memory: Redis cache disabled (connection failed: %v), using Milvus only", err)
+			logging.Warnf("Memory: Redis cache disabled (connection failed: %v)", err)
 		} else {
 			result = memory.NewCachingStore(store, redisCache)
 		}

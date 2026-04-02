@@ -64,6 +64,7 @@ type SignalMatches struct {
 	DomainRules       []string
 	FactCheckRules    []string // "needs_fact_check" or "no_fact_check_needed"
 	UserFeedbackRules []string // "need_clarification", "satisfied", "want_different", "wrong_answer"
+	ReaskRules        []string // History-aware dissatisfaction signals from repeated user turns
 	PreferenceRules   []string // Route preference names matched via external LLM
 	LanguageRules     []string // Language codes: "en", "es", "zh", "fr", etc.
 	ContextRules      []string // Context rule names matched (e.g. "low_token_count")
@@ -209,6 +210,7 @@ func (e *DecisionEngine) matchesSignalType(
 		"embedding":     signals.EmbeddingRules,
 		"fact_check":    signals.FactCheckRules,
 		"user_feedback": signals.UserFeedbackRules,
+		"reask":         signals.ReaskRules,
 		"preference":    signals.PreferenceRules,
 		"language":      signals.LanguageRules,
 		"context":       signals.ContextRules,

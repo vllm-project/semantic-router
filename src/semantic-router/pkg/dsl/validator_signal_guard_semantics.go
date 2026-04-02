@@ -285,6 +285,9 @@ func signalsMutuallyExclusive(
 		projectionOutputsShareMapping(semantics.projectionOutputOwners, firstName, secondName) {
 		return true
 	}
+	if signalType == config.SignalTypeLanguage {
+		return true
+	}
 	if signalType == config.SignalTypeContext &&
 		contextSignalsDisjoint(semantics.contextRanges, firstName, secondName) {
 		return true
@@ -317,7 +320,7 @@ func contextSignalsDisjoint(
 }
 
 func signalTypeParticipatesInGuardWarning(signalType string) bool {
-	return signalType != config.SignalTypeProjection
+	return signalType != config.SignalTypeProjection && signalType != config.SignalTypeContext
 }
 
 func overlaySignalType() string {

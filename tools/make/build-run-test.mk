@@ -69,8 +69,8 @@ run-router-onnx: build-router-onnx
 		./bin/router-onnx -config=$${ONNX_CONFIG_FILE:-e2e/config/onnx-binding/config.onnx-binding-test.yaml} --enable-system-prompt-api=true
 
 # Unit test semantic-router
-# By default, Milvus, Redis, and Llama Stack tests are skipped. To enable them, set the relevant env var to false.
-# Example: make test-semantic-router SKIP_MILVUS_TESTS=false SKIP_LLAMA_STACK_TESTS=false
+# By default, Milvus, Redis, Valkey, and Llama Stack tests are skipped. To enable them, set the relevant env var to false.
+# Example: make test-semantic-router SKIP_MILVUS_TESTS=false SKIP_VALKEY_TESTS=false
 test-semantic-router: ## Run unit tests for semantic-router (set SKIP_MILVUS_TESTS=false to enable Milvus tests)
 test-semantic-router: build-router
 	@$(LOG_TARGET)

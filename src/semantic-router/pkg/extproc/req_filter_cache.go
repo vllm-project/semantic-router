@@ -61,14 +61,15 @@ func (r *OpenAIRouter) handleCaching(ctx *RequestContext, categoryName string) (
 
 	ctx.RequestModel = requestModel
 	ctx.RequestQuery = requestQuery
+	ctx.CacheQuery = cache.ScopeQueryToUser(requestQuery, cacheScopeUserID(ctx))
 
 	cacheEnabled := r.semanticCacheEnabledForScope(categoryName)
 
-	if response, shouldReturn := r.performCacheLookup(ctx, categoryName, requestModel, requestQuery, cacheEnabled); shouldReturn {
+	if response, shouldReturn := r.performCacheLookup(ctx, categoryName, requestModel, cacheEnabled); shouldReturn {
 		return response, true
 	}
 
-	r.storePendingCacheRequest(ctx, categoryName, requestModel, requestQuery, cacheEnabled)
+	r.storePendingCacheRequest(ctx, categoryName, requestModel, cacheEnabled)
 
 	return nil, false
 }
@@ -85,19 +86,21 @@ func (r *OpenAIRouter) handleLooperCacheSkip(ctx *RequestContext, categoryName s
 	}
 	ctx.RequestModel = requestModel
 	ctx.RequestQuery = requestQuery
+	ctx.CacheQuery = cache.ScopeQueryToUser(requestQuery, cacheScopeUserID(ctx))
 
 	cacheEnabled := r.semanticCacheEnabledForScope(categoryName)
-	r.storePendingCacheRequest(ctx, categoryName, requestModel, requestQuery, cacheEnabled)
+	r.storePendingCacheRequest(ctx, categoryName, requestModel, cacheEnabled)
 	return nil, false
 }
 
 // storePendingCacheRequest adds a pending cache request if caching is enabled for this decision.
-func (r *OpenAIRouter) storePendingCacheRequest(ctx *RequestContext, categoryName, requestModel, requestQuery string, cacheEnabled bool) {
-	if requestQuery == "" || !r.Cache.IsEnabled() || !cacheEnabled {
+func (r *OpenAIRouter) storePendingCacheRequest(ctx *RequestContext, categoryName, requestModel string, cacheEnabled bool) {
+	cacheQuery := cacheQueryForContext(ctx)
+	if cacheQuery == "" || !r.Cache.IsEnabled() || !cacheEnabled {
 		return
 	}
 	ttlSeconds := r.Config.GetCacheTTLSecondsForDecision(categoryName)
-	if err := r.Cache.AddPendingRequest(ctx.RequestID, requestModel, requestQuery, ctx.OriginalRequestBody, ttlSeconds); err != nil {
+	if err := r.Cache.AddPendingRequest(ctx.RequestID, requestModel, cacheQuery, ctx.OriginalRequestBody, ttlSeconds); err != nil {
 		logging.Errorf("Error adding pending request to cache: %v", err)
 	}
 }
@@ -105,9 +108,10 @@ func (r *OpenAIRouter) storePendingCacheRequest(ctx *RequestContext, categoryNam
 // performCacheLookup searches for a cached response matching the request query.
 // Returns the cached response and true on cache hit, or nil and false on miss/error/skip.
 func (r *OpenAIRouter) performCacheLookup(
-	ctx *RequestContext, categoryName, requestModel, requestQuery string, cacheEnabled bool,
+	ctx *RequestContext, categoryName, requestModel string, cacheEnabled bool,
 ) (*ext_proc.ProcessingResponse, bool) {
-	if requestQuery == "" || !r.Cache.IsEnabled() || !cacheEnabled {
+	cacheQuery := cacheQueryForContext(ctx)
+	if cacheQuery == "" || !r.Cache.IsEnabled() || !cacheEnabled {
 		return nil, false
 	}
 
@@ -117,18 +121,18 @@ func (r *OpenAIRouter) performCacheLookup(
 	}
 
 	logging.Infof("handleCaching: Performing cache lookup - model=%s, query='%s', threshold=%.2f",
-		requestModel, requestQuery, threshold)
+		requestModel, ctx.RequestQuery, threshold)
 
 	spanCtx, span := tracing.StartPluginSpan(ctx.TraceContext, "semantic-cache", categoryName)
 
 	startTime := time.Now()
-	cachedResponse, found, cacheErr := r.Cache.FindSimilarWithThreshold(requestModel, requestQuery, threshold)
+	cachedResponse, found, cacheErr := r.Cache.FindSimilarWithThreshold(requestModel, cacheQuery, threshold)
 	lookupTime := time.Since(startTime).Milliseconds()
 
 	logging.Infof("FindSimilarWithThreshold returned: found=%v, error=%v, lookupTime=%dms", found, cacheErr, lookupTime)
 
 	tracing.SetSpanAttributes(span,
-		attribute.String(tracing.AttrCacheKey, requestQuery),
+		attribute.String(tracing.AttrCacheKey, ctx.RequestQuery),
 		attribute.Bool(tracing.AttrCacheHit, found),
 		attribute.Int64(tracing.AttrCacheLookupTimeMs, lookupTime),
 		attribute.String(tracing.AttrCategoryName, categoryName),
@@ -153,7 +157,7 @@ func (r *OpenAIRouter) performCacheLookup(
 		logging.LogEvent("cache_hit", map[string]interface{}{
 			"request_id": ctx.RequestID,
 			"model":      requestModel,
-			"query":      requestQuery,
+			"query":      ctx.RequestQuery,
 			"category":   categoryName,
 			"threshold":  threshold,
 		})
@@ -170,4 +174,14 @@ func (r *OpenAIRouter) performCacheLookup(
 	ctx.TraceContext = spanCtx
 
 	return nil, false
+}
+
+func cacheQueryForContext(ctx *RequestContext) string {
+	if ctx == nil {
+		return ""
+	}
+	if ctx.CacheQuery != "" {
+		return ctx.CacheQuery
+	}
+	return ctx.RequestQuery
 }

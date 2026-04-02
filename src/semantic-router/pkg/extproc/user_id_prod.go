@@ -18,7 +18,11 @@ import (
 func extractUserID(ctx *RequestContext) string {
 	// Check auth header (trusted source, injected by auth backend)
 	if userID, ok := ctx.Headers[headers.AuthzUserID]; ok && userID != "" {
-		logging.Debugf("Memory: Using user_id from auth header (%s)", headers.AuthzUserID)
+		logging.ComponentDebugEvent("extproc", "memory_user_id_resolved", map[string]interface{}{
+			"request_id": ctx.RequestID,
+			"source":     "auth_header",
+			"header":     headers.AuthzUserID,
+		})
 		return userID
 	}
 

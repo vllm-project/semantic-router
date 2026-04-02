@@ -15,10 +15,10 @@ Our project addresses five fundamental challenges in LLM systems:
 In traditional LLM routing, we only look at the user's query text. But there's so much more information we're missing:
 
 - **Context signals**: What domain is this query about? (math, code, creative writing?)
-- **Quality signals**: Does this query need fact-checking? Is the user giving feedback?
+- **Quality signals**: Does this query need fact-checking? Is the user giving feedback or re-asking after a weak answer?
 - **User signals**: What are the user's preferences? What's their satisfaction level?
 
-**Our solution**: A comprehensive signal extraction system that captures 14
+**Our solution**: A comprehensive signal extraction system that captures 16
 maintained signal families from requests, responses, users, and runtime
 context.
 

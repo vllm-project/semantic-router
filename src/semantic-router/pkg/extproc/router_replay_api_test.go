@@ -17,6 +17,52 @@ import (
 func TestHandleRouterReplayAPIListTrimsQueryAndReturnsRecords(t *testing.T) {
 	router, recordID := newReplayAPITestRouter(t)
 
+	body := mustReplayListBody(t, router, "/v1/router_replay?limit=10")
+	assertReplayPage(t, body, 1, 1, 10, 0)
+
+	record := mustSingleReplayRecord(t, body)
+	assertStringField(t, record, "id", recordID)
+	assertIntField(t, record, "prompt_tokens", 1200)
+	assertStringField(t, record, "currency", "USD")
+	assertStringField(t, record, "baseline_model", "expensive-model")
+}
+
+func TestHandleRouterReplayAPIRecordLookup(t *testing.T) {
+	router, recordID := newReplayAPITestRouter(t)
+
+	body := mustReplayLookupBody(t, router, recordID)
+	assertStringField(t, body, "id", recordID)
+	assertStringField(t, body, "decision", "decision-a")
+	assertIntField(t, body, "decision_tier", 2)
+	assertIntField(t, body, "decision_priority", 100)
+	assertIntField(t, body, "completion_tokens", 300)
+	assertFloat64Field(t, body, "actual_cost", 0.0042)
+	assertFloat64Field(t, body, "cost_savings", 0.0058)
+	assertStringSliceField(t, body, "projections", []string{"balance_reasoning"})
+}
+
+func TestHandleRouterReplayAPIListDoesNotDuplicateSharedStorageRecords(t *testing.T) {
+	sharedStore := store.NewMemoryStore(10, 0)
+	recorderA := routerreplay.NewRecorder(sharedStore)
+	recorderB := routerreplay.NewRecorder(sharedStore)
+	if _, err := recorderA.AddRecord(routerreplay.RoutingRecord{
+		ID:        "replay-shared-1",
+		Decision:  "decision-a",
+		RequestID: "req-shared-1",
+		Timestamp: time.Unix(1, 0).UTC(),
+	}); err != nil {
+		t.Fatalf("failed to add shared replay record: %v", err)
+	}
+
+	router := &OpenAIRouter{
+		ReplayRecorder:    recorderA,
+		ReplayStoreShared: true,
+		ReplayRecorders: map[string]*routerreplay.Recorder{
+			"decision-a": recorderA,
+			"decision-b": recorderB,
+		},
+	}
+
 	response := router.handleRouterReplayAPI("GET", "/v1/router_replay?limit=10")
 	if response == nil || response.GetImmediateResponse() == nil {
 		t.Fatal("expected immediate replay list response")
@@ -24,62 +70,7 @@ func TestHandleRouterReplayAPIListTrimsQueryAndReturnsRecords(t *testing.T) {
 
 	body := decodeJSONBody(t, response.GetImmediateResponse().Body)
 	if got := int(body["count"].(float64)); got != 1 {
-		t.Fatalf("expected count=1, got %d", got)
-	}
-	if got := int(body["total"].(float64)); got != 1 {
-		t.Fatalf("expected total=1, got %d", got)
-	}
-	if got := int(body["limit"].(float64)); got != 10 {
-		t.Fatalf("expected limit=10, got %d", got)
-	}
-	if got := int(body["offset"].(float64)); got != 0 {
-		t.Fatalf("expected offset=0, got %d", got)
-	}
-	data, ok := body["data"].([]interface{})
-	if !ok || len(data) != 1 {
-		t.Fatalf("expected one replay record, got %#v", body["data"])
-	}
-	record, ok := data[0].(map[string]interface{})
-	if !ok {
-		t.Fatalf("expected replay record object, got %#v", data[0])
-	}
-	if got := record["id"]; got != recordID {
-		t.Fatalf("expected replay id %q, got %#v", recordID, got)
-	}
-	if got := int(record["prompt_tokens"].(float64)); got != 1200 {
-		t.Fatalf("expected prompt_tokens=1200, got %d", got)
-	}
-	if got := record["currency"]; got != "USD" {
-		t.Fatalf("expected currency=USD, got %#v", got)
-	}
-	if got := record["baseline_model"]; got != "expensive-model" {
-		t.Fatalf("expected baseline_model=expensive-model, got %#v", got)
-	}
-}
-
-func TestHandleRouterReplayAPIRecordLookup(t *testing.T) {
-	router, recordID := newReplayAPITestRouter(t)
-
-	response := router.handleRouterReplayAPI("GET", "/v1/router_replay/"+recordID)
-	if response == nil || response.GetImmediateResponse() == nil {
-		t.Fatal("expected immediate replay lookup response")
-	}
-
-	body := decodeJSONBody(t, response.GetImmediateResponse().Body)
-	if got := body["id"]; got != recordID {
-		t.Fatalf("expected replay id %q, got %#v", recordID, got)
-	}
-	if got := body["decision"]; got != "decision-a" {
-		t.Fatalf("expected decision-a, got %#v", got)
-	}
-	if got := int(body["completion_tokens"].(float64)); got != 300 {
-		t.Fatalf("expected completion_tokens=300, got %d", got)
-	}
-	if got := body["actual_cost"].(float64); got != 0.0042 {
-		t.Fatalf("expected actual_cost=0.0042, got %#v", got)
-	}
-	if got := body["cost_savings"].(float64); got != 0.0058 {
-		t.Fatalf("expected cost_savings=0.0058, got %#v", got)
+		t.Fatalf("expected shared count=1, got %d", got)
 	}
 }
 
@@ -236,17 +227,22 @@ func newReplayAPITestRouter(t *testing.T) (*OpenAIRouter, string) {
 	currency := "USD"
 	baselineModel := "expensive-model"
 	recordID, err := recorder.AddRecord(routerreplay.RoutingRecord{
-		ID:               "replay-1",
-		Decision:         "decision-a",
-		RequestID:        "req-1",
-		PromptTokens:     &promptTokens,
-		CompletionTokens: &completionTokens,
-		TotalTokens:      &totalTokens,
-		ActualCost:       &actualCost,
-		BaselineCost:     &baselineCost,
-		CostSavings:      &costSavings,
-		Currency:         &currency,
-		BaselineModel:    &baselineModel,
+		ID:                "replay-1",
+		Decision:          "decision-a",
+		DecisionTier:      2,
+		DecisionPriority:  100,
+		RequestID:         "req-1",
+		Projections:       []string{"balance_reasoning"},
+		ProjectionScores:  map[string]float64{"reasoning_pressure": 0.82},
+		SignalConfidences: map[string]float64{"projection:balance_reasoning": 0.82},
+		PromptTokens:      &promptTokens,
+		CompletionTokens:  &completionTokens,
+		TotalTokens:       &totalTokens,
+		ActualCost:        &actualCost,
+		BaselineCost:      &baselineCost,
+		CostSavings:       &costSavings,
+		Currency:          &currency,
+		BaselineModel:     &baselineModel,
 	})
 	if err != nil {
 		t.Fatalf("failed to add replay record: %v", err)
@@ -281,6 +277,83 @@ func newReplayAPITestRouterWithRecords(t *testing.T, count int, requestBody stri
 		ReplayRecorders: map[string]*routerreplay.Recorder{
 			"decision-a": recorder,
 		},
+	}
+}
+
+func mustReplayListBody(t *testing.T, router *OpenAIRouter, path string) map[string]interface{} {
+	t.Helper()
+	return mustReplayResponseBody(t, router.handleRouterReplayAPI("GET", path), "expected immediate replay list response")
+}
+
+func mustReplayLookupBody(t *testing.T, router *OpenAIRouter, recordID string) map[string]interface{} {
+	t.Helper()
+	return mustReplayResponseBody(t, router.handleRouterReplayAPI("GET", "/v1/router_replay/"+recordID), "expected immediate replay lookup response")
+}
+
+func mustReplayResponseBody(
+	t *testing.T,
+	response *ext_proc.ProcessingResponse,
+	failureMessage string,
+) map[string]interface{} {
+	t.Helper()
+	if response == nil || response.GetImmediateResponse() == nil {
+		t.Fatal(failureMessage)
+	}
+	return decodeJSONBody(t, response.GetImmediateResponse().Body)
+}
+
+func assertReplayPage(t *testing.T, body map[string]interface{}, count int, total int, limit int, offset int) {
+	t.Helper()
+	assertIntField(t, body, "count", count)
+	assertIntField(t, body, "total", total)
+	assertIntField(t, body, "limit", limit)
+	assertIntField(t, body, "offset", offset)
+}
+
+func mustSingleReplayRecord(t *testing.T, body map[string]interface{}) map[string]interface{} {
+	t.Helper()
+	data := mustReplayData(t, body["data"])
+	if len(data) != 1 {
+		t.Fatalf("expected one replay record, got %#v", body["data"])
+	}
+	return data[0]
+}
+
+func assertIntField(t *testing.T, body map[string]interface{}, field string, want int) {
+	t.Helper()
+	got, ok := body[field].(float64)
+	if !ok || int(got) != want {
+		t.Fatalf("expected %s=%d, got %#v", field, want, body[field])
+	}
+}
+
+func assertFloat64Field(t *testing.T, body map[string]interface{}, field string, want float64) {
+	t.Helper()
+	got, ok := body[field].(float64)
+	if !ok || got != want {
+		t.Fatalf("expected %s=%v, got %#v", field, want, body[field])
+	}
+}
+
+func assertStringField(t *testing.T, body map[string]interface{}, field string, want string) {
+	t.Helper()
+	got, ok := body[field].(string)
+	if !ok || got != want {
+		t.Fatalf("expected %s=%q, got %#v", field, want, body[field])
+	}
+}
+
+func assertStringSliceField(t *testing.T, body map[string]interface{}, field string, want []string) {
+	t.Helper()
+	values, ok := body[field].([]interface{})
+	if !ok || len(values) != len(want) {
+		t.Fatalf("expected %s=%v, got %#v", field, want, body[field])
+	}
+	for index, expected := range want {
+		value, ok := values[index].(string)
+		if !ok || value != expected {
+			t.Fatalf("expected %s[%d]=%q, got %#v", field, index, expected, values[index])
+		}
 	}
 }
 

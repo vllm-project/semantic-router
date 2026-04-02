@@ -2,7 +2,7 @@
 sidebar_position: 2
 ---
 
-# Installation
+# Quickstart
 
 This guide will help you install and run the vLLM Semantic Router. The router runs entirely on CPU and does not require GPU for inference.
 
@@ -28,57 +28,19 @@ curl -fsSL https://vllm-semantic-router.com/install.sh | bash
 The installer:
 
 - Detects Python 3.10 or newer
-- Installs `vllm-sr` into `~/.local/share/vllm-sr`
+- Installs the latest development `vllm-sr` release into `~/.local/share/vllm-sr`
 - Writes a launcher to `~/.local/bin/vllm-sr`
 - Prepares Docker for `vllm-sr serve` unless you opt out
 - Starts `vllm-sr serve` automatically and opens the dashboard when possible
 - Prints dashboard access and remote-server hints if a browser cannot be opened
 
-Useful variants:
-
-```bash
-# Install only the CLI
-curl -fsSL https://vllm-semantic-router.com/install.sh | bash -s -- --mode cli
-
-# Skip runtime bootstrap and start Docker yourself later
-curl -fsSL https://vllm-semantic-router.com/install.sh | bash -s -- --runtime skip
-
-# Force the first launch onto the AMD/ROCm path
-curl -fsSL https://vllm-semantic-router.com/install.sh | bash -s -- --platform amd
-
-# Install without auto-starting serve + dashboard
-curl -fsSL https://vllm-semantic-router.com/install.sh | bash -s -- --no-launch
-
-# Skip runtime bootstrap and keep only userland install steps
-curl -fsSL https://vllm-semantic-router.com/install.sh | bash -s -- --runtime skip
-```
-
 If `~/.local/bin` is not already on your `PATH`, the installer prints the export line to add it.
 
-### Agent install (OpenClaw and similar agents)
+Need the latest stable release instead? Run:
 
-Use the agent flow when another local agent should perform the install on your behalf. Keep the same supported installer, but tell the agent to use the no-launch path so it does not auto-start `vllm-sr serve` or open a browser during the handoff.
-
-Preferred long-term path: publish or install the repo-managed `openclaw-vsr-bridge` skill from this repository (`dashboard/backend/skillpacks/openclaw-vsr-bridge/SKILL.md`). Until that registry entry exists, use the hosted prompt files below so homepage and agent copy stay short.
-
-Hosted prompt files:
-
-- CLI-only prompt: [https://vllm-semantic-router.com/install/agent/vllm-sr-cli.md](https://vllm-semantic-router.com/install/agent/vllm-sr-cli.md)
-- Install-and-bridge prompt: [https://vllm-semantic-router.com/install/agent/openclaw-vsr-bridge.md](https://vllm-semantic-router.com/install/agent/openclaw-vsr-bridge.md)
-
-CLI-only prompt:
-
-```text
-Fetch and follow https://vllm-semantic-router.com/install/agent/vllm-sr-cli.md.
+```bash
+curl -fsSL https://vllm-semantic-router.com/install.sh | bash -s -- --channel stable
 ```
-
-Install-and-bridge prompt:
-
-```text
-Fetch and follow https://vllm-semantic-router.com/install/agent/openclaw-vsr-bridge.md.
-```
-
-The hosted Markdown files still point back to the same supported installer. OpenClaw handoff still happens later through the bridge skill or `vllm-sr config import --from openclaw`, not through a second installer.
 
 Windows users should use the manual PyPI flow below.
 
@@ -89,7 +51,10 @@ Windows users should use the manual PyPI flow below.
 python -m venv vsr
 source vsr/bin/activate  # On Windows: vsr\Scripts\activate
 
-# Install from PyPI
+# Install the latest development release
+pip install --pre vllm-sr
+
+# Install the latest stable release instead
 pip install vllm-sr
 ```
 
@@ -196,48 +161,15 @@ vllm-sr serve
 # Use custom config file
 vllm-sr serve --config my-config.yaml
 
+# Set the router log level
+vllm-sr serve --log-level debug
+
 # Use custom Docker image
 vllm-sr serve --image ghcr.io/vllm-project/semantic-router/vllm-sr:latest
 
 # Control image pull policy
 vllm-sr serve --image-pull-policy always
 ```
-
-## Kubernetes Deployment
-
-For production deployments on Kubernetes or OpenShift, use the **Kubernetes Operator**:
-
-### Quick Start with Operator
-
-```bash
-# Clone repository
-git clone https://github.com/vllm-project/semantic-router
-cd semantic-router/deploy/operator
-
-# Install CRDs and operator
-make install
-make deploy IMG=ghcr.io/vllm-project/semantic-router-operator:latest
-
-# Deploy a semantic router instance
-kubectl apply -f config/samples/vllm_v1alpha1_semanticrouter.yaml
-```
-
-**Benefits:**
-
-- ✅ Declarative configuration using Kubernetes CRDs
-- ✅ Automatic platform detection (OpenShift/Kubernetes)
-- ✅ Built-in high availability and scaling
-- ✅ Integrated monitoring and observability
-- ✅ Lifecycle management and upgrades
-
-See the **[Kubernetes Operator Guide](k8s/operator)** for complete documentation.
-
-### Other Kubernetes Deployment Options
-
-- **[Istio Integration](k8s/istio)** - Service mesh deployment
-- **[AI Gateway](k8s/ai-gateway)** - Gateway API integration
-- **[Production Stack](k8s/production-stack)** - Complete production setup
-- **[Dynamo](k8s/dynamo)** - Dynamic configuration management
 
 ## Docker Compose
 
@@ -247,8 +179,8 @@ For local development and testing:
 
 ## Next Steps
 
+- **[Install with Operator](k8s/operator)** - Deploy on Kubernetes or OpenShift with the operator
 - **[Configuration Guide](configuration)** - Advanced routing and signal configuration
-- **[Kubernetes Operator](k8s/operator)** - Production Kubernetes deployment
 - **[API Documentation](../api/router)** - Complete API reference
 - **[Tutorials](../tutorials/signal/overview)** - Learn by example
 

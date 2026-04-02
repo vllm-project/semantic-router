@@ -1,7 +1,0 @@
-plugin:
-  type: pii
-  configuration:
-    enabled: true
-    threshold: 0.85
-    pii_types_allowed:
-      - EMAIL_ADDRESS

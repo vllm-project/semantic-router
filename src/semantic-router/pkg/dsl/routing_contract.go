@@ -155,6 +155,9 @@ func (d *decompiler) appendCoreSignals(prog *Program) {
 	for _, uf := range d.cfg.UserFeedbackRules {
 		prog.Signals = append(prog.Signals, d.userFeedbackToSignal(&uf))
 	}
+	for _, rule := range d.cfg.ReaskRules {
+		prog.Signals = append(prog.Signals, d.reaskToSignal(&rule))
+	}
 	for _, pref := range d.cfg.PreferenceRules {
 		prog.Signals = append(prog.Signals, d.preferenceToSignal(&pref))
 	}

@@ -12,11 +12,13 @@ import (
 // FastExtractResult holds fields extracted from the request body via gjson
 // without allocating the full OpenAI SDK struct.
 type FastExtractResult struct {
-	Model           string
-	Stream          bool
-	UserContent     string
-	NonUserMessages []string
-	FirstImageURL   string
+	Model             string
+	Stream            bool
+	UserContent       string
+	PriorUserMessages []string
+	NonUserMessages   []string
+	HasAssistantReply bool
+	FirstImageURL     string
 }
 
 // extractContentFast extracts model, stream, message content, and the first
@@ -25,22 +27,8 @@ type FastExtractResult struct {
 // E2E latency for large request bodies (~300ms for 64KB → ~1ms with gjson).
 func extractContentFast(body []byte) (*FastExtractResult, error) {
 	r := &FastExtractResult{}
-
-	modelResult := gjson.GetBytes(body, "model")
-	if !modelResult.Exists() {
-		return nil, errMissingModel
-	}
-	if modelResult.Type != gjson.String {
-		return nil, &jsonTypeError{field: "model", want: "string", got: modelResult.Type.String()}
-	}
-	r.Model = modelResult.String()
-
-	streamResult := gjson.GetBytes(body, "stream")
-	if streamResult.Exists() {
-		if streamResult.Type != gjson.True && streamResult.Type != gjson.False {
-			return nil, &jsonTypeError{field: "stream", want: "boolean", got: streamResult.Type.String()}
-		}
-		r.Stream = streamResult.Type == gjson.True
+	if err := extractModelAndStreamFast(body, r); err != nil {
+		return nil, err
 	}
 
 	messages := gjson.GetBytes(body, "messages")
@@ -48,25 +36,73 @@ func extractContentFast(body []byte) (*FastExtractResult, error) {
 		return r, nil
 	}
 
-	messages.ForEach(func(_, msg gjson.Result) bool {
-		role := msg.Get("role").String()
-		text := extractTextFromContent(msg.Get("content"))
-
-		switch role {
-		case "user":
-			r.UserContent = text
-			if r.FirstImageURL == "" {
-				r.FirstImageURL = extractImageURLFromContent(msg.Get("content"))
-			}
-		case "system", "assistant":
-			if text != "" {
-				r.NonUserMessages = append(r.NonUserMessages, text)
-			}
-		}
-		return true
-	})
+	populateFastExtractMessages(messages, r)
 
 	return r, nil
+}
+
+func extractModelAndStreamFast(body []byte, result *FastExtractResult) error {
+	modelResult := gjson.GetBytes(body, "model")
+	if !modelResult.Exists() {
+		return errMissingModel
+	}
+	if modelResult.Type != gjson.String {
+		return &jsonTypeError{field: "model", want: "string", got: modelResult.Type.String()}
+	}
+	result.Model = modelResult.String()
+
+	streamResult := gjson.GetBytes(body, "stream")
+	if !streamResult.Exists() {
+		return nil
+	}
+	if streamResult.Type != gjson.True && streamResult.Type != gjson.False {
+		return &jsonTypeError{field: "stream", want: "boolean", got: streamResult.Type.String()}
+	}
+	result.Stream = streamResult.Type == gjson.True
+	return nil
+}
+
+func populateFastExtractMessages(messages gjson.Result, result *FastExtractResult) {
+	messages.ForEach(func(_, msg gjson.Result) bool {
+		consumeFastExtractMessage(msg, result)
+		return true
+	})
+}
+
+func consumeFastExtractMessage(msg gjson.Result, result *FastExtractResult) {
+	role := msg.Get("role").String()
+	content := msg.Get("content")
+	text := extractTextFromContent(content)
+
+	switch role {
+	case "user":
+		recordFastExtractUserMessage(result, text, content)
+	case "system", "assistant":
+		recordFastExtractNonUserMessage(result, role, text)
+	}
+}
+
+func recordFastExtractUserMessage(result *FastExtractResult, text string, content gjson.Result) {
+	if result.FirstImageURL == "" {
+		result.FirstImageURL = extractImageURLFromContent(content)
+	}
+	if text == "" {
+		return
+	}
+	if result.UserContent != "" {
+		result.PriorUserMessages = append(result.PriorUserMessages, result.UserContent)
+	}
+	result.UserContent = text
+}
+
+func recordFastExtractNonUserMessage(result *FastExtractResult, role string, text string) {
+	if text == "" {
+		return
+	}
+	result.NonUserMessages = append(result.NonUserMessages, text)
+	if role == "assistant" {
+		result.HasAssistantReply = true
+	}
 }
 
 // extractTextFromContent extracts text from a message content field that can

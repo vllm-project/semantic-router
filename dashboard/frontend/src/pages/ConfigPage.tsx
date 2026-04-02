@@ -254,6 +254,9 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'global-config'
       case 'User Feedback':
         cfg.signals.user_feedbacks = (cfg.signals.user_feedbacks || []).filter(s => s.name !== targetName)
         break
+      case 'Reask':
+        cfg.signals.reasks = (cfg.signals.reasks || []).filter(s => s.name !== targetName)
+        break
       case 'Language':
         cfg.signals.language = (cfg.signals.language || []).filter(s => s.name !== targetName)
         break
@@ -277,6 +280,9 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'global-config'
         break
       case 'PII':
         cfg.signals.pii = (cfg.signals.pii || []).filter(s => s.name !== targetName)
+        break
+      case 'KB':
+        cfg.signals.kb = (cfg.signals.kb || []).filter(s => s.name !== targetName)
         break
       default:
         break

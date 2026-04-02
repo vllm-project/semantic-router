@@ -142,6 +142,8 @@ func (c *Compiler) compileSignals() {
 			c.compileFactCheckSignal(s)
 		case "user_feedback":
 			c.compileUserFeedbackSignal(s)
+		case "reask":
+			c.compileReaskSignal(s)
 		case "preference":
 			c.compilePreferenceSignal(s)
 		case "language":
@@ -254,6 +256,20 @@ func (c *Compiler) compileUserFeedbackSignal(s *SignalDecl) {
 		rule.Description = v
 	}
 	c.config.UserFeedbackRules = append(c.config.UserFeedbackRules, rule)
+}
+
+func (c *Compiler) compileReaskSignal(s *SignalDecl) {
+	rule := config.ReaskRule{Name: s.Name}
+	if v, ok := getStringField(s.Fields, "description"); ok {
+		rule.Description = v
+	}
+	if v, ok := getFloat32Field(s.Fields, "threshold"); ok {
+		rule.Threshold = v
+	}
+	if v, ok := getIntField(s.Fields, "lookback_turns"); ok {
+		rule.LookbackTurns = v
+	}
+	c.config.ReaskRules = append(c.config.ReaskRules, rule)
 }
 
 func (c *Compiler) compilePreferenceSignal(s *SignalDecl) {
@@ -959,6 +975,22 @@ func (c *Compiler) buildDecisionPlugin(pluginType string, fields map[string]Valu
 		cfg := config.FastResponsePluginConfig{}
 		if v, ok := getStringField(fields, "message"); ok {
 			cfg.Message = v
+		}
+		setPluginConfig(cfg)
+
+	case "request_params":
+		cfg := config.RequestParamsPluginConfig{}
+		if v, ok := getStringArrayField(fields, "blocked_params"); ok {
+			cfg.BlockedParams = v
+		}
+		if v, ok := getIntField(fields, "max_tokens_limit"); ok {
+			cfg.MaxTokensLimit = &v
+		}
+		if v, ok := getIntField(fields, "max_n"); ok {
+			cfg.MaxN = &v
+		}
+		if v, ok := getBoolField(fields, "strip_unknown"); ok {
+			cfg.StripUnknown = v
 		}
 		setPluginConfig(cfg)
 

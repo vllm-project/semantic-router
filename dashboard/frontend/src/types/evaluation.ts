@@ -8,6 +8,7 @@ export type EvaluationDimension =
   | 'domain'
   | 'fact_check'
   | 'user_feedback'
+  | 'reask'
   | 'accuracy';
 
 export interface EvaluationConfig {
@@ -115,7 +116,7 @@ export interface TaskResults {
 export const LEVEL_INFO: Record<EvaluationLevel, { label: string; description: string; color: string }> = {
   router: {
     label: 'Signal Level',
-    description: 'Evaluates the signal extraction accuracy (domain, fact_check, user_feedback)',
+    description: 'Evaluates the signal extraction accuracy (domain, fact_check, user_feedback, reask)',
     color: '#10b981', // green
   },
   mom: {
@@ -141,6 +142,11 @@ export const DIMENSION_INFO: Record<EvaluationDimension, { label: string; descri
     label: 'User Feedback Detection',
     description: 'Evaluates feedback signal extraction accuracy',
     color: '#22c55e', // green
+  },
+  reask: {
+    label: 'Reask Detection',
+    description: 'Evaluates repeated-question dissatisfaction signal accuracy',
+    color: '#f59e0b', // amber
   },
   accuracy: {
     label: 'System Accuracy',

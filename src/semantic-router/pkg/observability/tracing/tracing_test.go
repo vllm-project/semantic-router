@@ -249,6 +249,7 @@ func TestSpanAttributeConstants(t *testing.T) {
 		SpanSignalDomain,
 		SpanSignalFactCheck,
 		SpanSignalUserFeedback,
+		SpanSignalReask,
 		SpanSignalPreference,
 		SpanSignalLanguage,
 		SpanSignalLatency,

@@ -14,11 +14,13 @@ import type {
   EmbeddingSignal,
   FactCheckSignal,
   JailbreakSignal,
+  KBSignal,
   KeywordSignal,
   LanguageSignal,
   ModalitySignal,
   PIISignal,
   PreferenceSignal,
+  ReaskSignal,
   RoleBindingSignal,
   SignalType,
   StructureSignal,
@@ -50,6 +52,7 @@ type UnifiedSignalData = Partial<
   PreferenceSignal &
   FactCheckSignal &
   UserFeedbackSignal &
+  ReaskSignal &
   LanguageSignal &
   ContextSignal &
   StructureSignal &
@@ -57,7 +60,8 @@ type UnifiedSignalData = Partial<
   ModalitySignal &
   RoleBindingSignal &
   JailbreakSignal &
-  PIISignal
+  PIISignal &
+  KBSignal
 >
 
 interface UnifiedSignal {
@@ -90,6 +94,7 @@ export default function ConfigPageSignalsSection({
     })),
     fact_check: config?.fact_check_rules,
     user_feedbacks: config?.user_feedback_rules,
+    reasks: config?.reask_rules,
     preferences: config?.preference_rules,
     language: config?.language_rules,
     context: config?.context_rules,
@@ -159,6 +164,17 @@ export default function ConfigPageSignalsSection({
       type: 'User Feedback',
       summary: uf.description || 'No description',
       rawData: uf
+    })
+  })
+
+  effectiveSignals?.reasks?.forEach(reask => {
+    const lookback = reask.lookback_turns ?? 1
+    const threshold = reask.threshold ?? 0.8
+    allSignals.push({
+      name: reask.name,
+      type: 'Reask',
+      summary: `${reask.description || 'No description'} • lookback ${lookback} • threshold ${formatThreshold(threshold)}`,
+      rawData: reask
     })
   })
 
@@ -236,6 +252,16 @@ export default function ConfigPageSignalsSection({
       type: 'PII',
       summary: `Threshold: ${p.threshold}${allowed > 0 ? `, ${allowed} types allowed` : ', deny all'}`,
       rawData: p
+    })
+  })
+
+  effectiveSignals?.kb?.forEach(kbSignal => {
+    const match = kbSignal.match || 'best'
+    allSignals.push({
+      name: kbSignal.name,
+      type: 'KB',
+      summary: `${kbSignal.kb} • ${kbSignal.target.kind}:${kbSignal.target.value} • ${match}`,
+      rawData: kbSignal,
     })
   })
 
@@ -388,6 +414,15 @@ export default function ConfigPageSignalsSection({
           }
         ]
       })
+    } else if (signal.type === 'Reask') {
+      sections.push({
+        title: 'Reask Signal',
+        fields: [
+          { label: 'Description', value: signal.rawData.description || 'N/A', fullWidth: true },
+          { label: 'Threshold', value: signal.rawData.threshold !== undefined ? formatThreshold(signal.rawData.threshold) : 'Default (80%)' },
+          { label: 'Lookback Turns', value: signal.rawData.lookback_turns?.toString() || '1' },
+        ]
+      })
     } else if (signal.type === 'Language') {
       sections.push({
         title: 'Language Signal',
@@ -527,6 +562,16 @@ export default function ConfigPageSignalsSection({
           { label: 'Description', value: signal.rawData.description || 'N/A', fullWidth: true }
         ]
       })
+    } else if (signal.type === 'KB') {
+      sections.push({
+        title: 'Knowledge Base Signal',
+        fields: [
+          { label: 'Knowledge Base', value: signal.rawData.kb || 'N/A' },
+          { label: 'Target Kind', value: signal.rawData.target?.kind || 'N/A' },
+          { label: 'Target Value', value: signal.rawData.target?.value || 'N/A', fullWidth: true },
+          { label: 'Match', value: signal.rawData.match || 'best' },
+        ],
+      })
     } else {
       sections.push({
         title: 'Details',
@@ -579,7 +624,11 @@ export default function ConfigPageSignalsSection({
       benign_patterns: '',
       pii_threshold: 0.5,
       pii_types_allowed: '',
-      pii_include_history: false
+      pii_include_history: false,
+      kb_name: '',
+      target_kind: 'group',
+      target_value: '',
+      kb_match: 'best',
     }
 
     const initialData: AddSignalFormState = mode === 'edit' && signal ? {
@@ -595,6 +644,7 @@ export default function ConfigPageSignalsSection({
       mmlu_categories: (signal.rawData.mmlu_categories || []).join('\n'),
       preference_examples: (signal.rawData.examples || []).join('\n'),
       preference_threshold: signal.rawData.threshold,
+      lookback_turns: signal.rawData.lookback_turns,
       min_tokens: signal.rawData.min_tokens || '0',
       max_tokens: signal.rawData.max_tokens || '8K',
       structure_feature: signal.type === 'Structure' ? JSON.stringify(signal.rawData.feature || {}, null, 2) : defaultForm.structure_feature,
@@ -615,7 +665,11 @@ export default function ConfigPageSignalsSection({
       benign_patterns: (signal.rawData.benign_patterns || []).join('\n'),
       pii_threshold: signal.rawData.threshold ?? 0.5,
       pii_types_allowed: (signal.rawData.pii_types_allowed || []).join('\n'),
-      pii_include_history: !!signal.rawData.include_history
+      pii_include_history: !!signal.rawData.include_history,
+      kb_name: signal.type === 'KB' ? signal.rawData.kb || '' : '',
+      target_kind: signal.type === 'KB' ? signal.rawData.target?.kind || 'group' : 'group',
+      target_value: signal.type === 'KB' ? signal.rawData.target?.value || '' : '',
+      kb_match: signal.type === 'KB' ? signal.rawData.match || 'best' : 'best',
     } : defaultForm
 
     const conditionallyHideFieldExceptType = (type: SignalType) => {
@@ -627,7 +681,7 @@ export default function ConfigPageSignalsSection({
         name: 'type',
         label: 'Type',
         type: 'select',
-        options: ['Keywords', 'Embeddings', 'Domain', 'Preference', 'Fact Check', 'User Feedback', 'Language', 'Context', 'Structure', 'Complexity', 'Modality', 'Authz', 'Jailbreak', 'PII'],
+        options: ['Keywords', 'Embeddings', 'Domain', 'Preference', 'Fact Check', 'User Feedback', 'Reask', 'Language', 'Context', 'Structure', 'Complexity', 'Modality', 'Authz', 'Jailbreak', 'PII', 'KB'],
         required: true,
         description: 'Fields are validated based on the selected type.'
       },
@@ -662,6 +716,25 @@ export default function ConfigPageSignalsSection({
         placeholder: 'e.g., 0.35',
         description: 'Override the global preference threshold for this specific rule.',
         shouldHide: conditionallyHideFieldExceptType('Preference')
+      },
+      {
+        name: 'threshold',
+        label: 'Threshold (reask only)',
+        type: 'number',
+        min: 0,
+        max: 1,
+        step: 0.01,
+        placeholder: '0.80',
+        shouldHide: conditionallyHideFieldExceptType('Reask')
+      },
+      {
+        name: 'lookback_turns',
+        label: 'Lookback Turns (reask only)',
+        type: 'number',
+        min: 1,
+        step: 1,
+        placeholder: '1',
+        shouldHide: conditionallyHideFieldExceptType('Reask')
       },
       {
         name: 'operator',
@@ -863,6 +936,36 @@ export default function ConfigPageSignalsSection({
         type: 'boolean',
         description: 'Whether to include conversation history in PII detection',
         shouldHide: conditionallyHideFieldExceptType('PII')
+      },
+      {
+        name: 'kb_name',
+        label: 'Knowledge Base (KB only)',
+        type: 'text',
+        placeholder: 'privacy_kb',
+        description: 'Name from global.model_catalog.kbs',
+        shouldHide: conditionallyHideFieldExceptType('KB')
+      },
+      {
+        name: 'target_kind',
+        label: 'Target Kind (KB only)',
+        type: 'select',
+        options: ['group', 'label'],
+        shouldHide: conditionallyHideFieldExceptType('KB')
+      },
+      {
+        name: 'target_value',
+        label: 'Target Value (KB only)',
+        type: 'text',
+        placeholder: 'privacy_policy',
+        description: 'Group or label name inside the selected knowledge base',
+        shouldHide: conditionallyHideFieldExceptType('KB')
+      },
+      {
+        name: 'kb_match',
+        label: 'Match (KB only)',
+        type: 'select',
+        options: ['best', 'threshold'],
+        shouldHide: conditionallyHideFieldExceptType('KB')
       }
     ]
 
@@ -980,6 +1083,21 @@ export default function ConfigPageSignalsSection({
             {
               name,
               description: formData.description
+            }
+          ]
+          break
+        }
+        case 'Reask': {
+          const threshold = Number.isFinite(formData.threshold) ? Math.max(0, Math.min(1, Number(formData.threshold))) : undefined
+          const lookback_turns = Number.isFinite(formData.lookback_turns) ? Math.max(1, Math.trunc(Number(formData.lookback_turns))) : undefined
+
+          newConfig.signals.reasks = [
+            ...(newConfig.signals.reasks || []),
+            {
+              name,
+              description: formData.description || undefined,
+              threshold,
+              lookback_turns,
             }
           ]
           break
@@ -1190,6 +1308,31 @@ export default function ConfigPageSignalsSection({
               include_history: formData.pii_include_history || false,
               description: formData.description || undefined
             }
+          ]
+          break
+        }
+        case 'KB': {
+          const kb = (formData.kb_name || '').trim()
+          const targetKind = formData.target_kind || 'group'
+          const targetValue = (formData.target_value || '').trim()
+          const match = formData.kb_match || 'best'
+          if (!kb) {
+            throw new Error('Knowledge base is required for KB signals.')
+          }
+          if (!targetValue) {
+            throw new Error('Target value is required for KB signals.')
+          }
+          newConfig.signals.kb = [
+            ...(newConfig.signals.kb || []),
+            {
+              name,
+              kb,
+              target: {
+                kind: targetKind,
+                value: targetValue,
+              },
+              match,
+            },
           ]
           break
         }

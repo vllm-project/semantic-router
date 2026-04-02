@@ -1,6 +1,6 @@
 import { FLEET_SIM_NAV_ITEMS } from '../utils/fleetSimApi'
 
-export type LayoutDropdownKey = 'manager' | 'knowledgeBase' | 'analysisOps'
+export type LayoutDropdownKey = 'manager' | 'analysisOps'
 
 export type LayoutConfigSection =
   | 'models'
@@ -32,6 +32,7 @@ export interface LayoutMenuSection {
 export interface LayoutNavLink {
   label: string
   to: string
+  matchMode?: 'exact' | 'prefix'
 }
 
 export const PRIMARY_NAV_LINKS: LayoutNavLink[] = [
@@ -39,7 +40,7 @@ export const PRIMARY_NAV_LINKS: LayoutNavLink[] = [
   { label: 'Playground', to: '/playground' },
   { label: 'Brain', to: '/topology' },
   { label: 'DSL', to: '/builder' },
-  { label: 'Insight', to: '/insights' },
+  { label: 'Insight', to: '/insights', matchMode: 'prefix' },
 ]
 
 export const SECONDARY_NAV_LINKS: LayoutNavLink[] = []
@@ -63,7 +64,7 @@ export const MANAGER_MENU_SECTIONS: LayoutMenuSection[] = [
 
 export const KNOWLEDGE_BASE_MENU_SECTIONS: LayoutMenuSection[] = [
   {
-    title: 'Knowledge',
+    title: 'Knowledge Base',
     items: [
       { kind: 'route', label: 'Bases', to: '/knowledge-bases/bases' },
       { kind: 'route', label: 'Groups', to: '/knowledge-bases/groups' },
@@ -79,16 +80,16 @@ export const ANALYSIS_OPERATIONS_MENU_SECTIONS: LayoutMenuSection[] = [
       { kind: 'config', label: 'Global Config', configSection: 'global-config' },
       { kind: 'route', label: 'Evaluation', to: '/evaluation' },
       { kind: 'route', label: 'Ratings', to: '/ratings' },
+      { kind: 'route', label: 'ML Setup', to: '/ml-setup' },
+      { kind: 'config', label: 'MCP Setup', configSection: 'mcp' },
     ],
   },
   {
-    title: 'Operations',
+    title: 'Observability',
     items: [
-      { kind: 'route', label: 'ML Setup', to: '/ml-setup' },
-      { kind: 'config', label: 'MCP Servers', configSection: 'mcp' },
       { kind: 'route', label: 'Status', to: '/status' },
       { kind: 'route', label: 'Logs', to: '/logs' },
-      { kind: 'route', label: 'Grafana', to: '/monitoring' },
+      { kind: 'route', label: 'Monitoring', to: '/monitoring' },
       { kind: 'route', label: 'Tracing', to: '/tracing' },
     ],
   },

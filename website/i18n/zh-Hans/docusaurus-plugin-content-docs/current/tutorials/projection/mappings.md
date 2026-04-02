@@ -83,7 +83,7 @@ routing:
             gte: 0.82
 
   decisions:
-    - name: reasoning_math
+    - name: reasoning_deep
       priority: 250
       rules:
         operator: AND
@@ -109,10 +109,10 @@ PROJECTION mapping difficulty_band {
   ]
 }
 
-ROUTE reasoning_math {
+ROUTE reasoning_deep {
   PRIORITY 250
   WHEN domain("math") AND projection("balance_reasoning")
-  MODEL "openai/gpt5.4"
+  MODEL "google/gemini-3.1-pro"
 }
 ```
 

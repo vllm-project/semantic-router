@@ -4,7 +4,7 @@ export const DEFAULT_ROUTER_EVAL_ENDPOINT = 'http://localhost:8080/api/v1/eval';
 export const DEFAULT_MOM_EVAL_ENDPOINT = 'http://localhost:8801';
 
 export const LEVEL_DIMENSIONS: Record<EvaluationLevel, EvaluationDimension[]> = {
-  router: ['domain', 'fact_check', 'user_feedback'],
+  router: ['domain', 'fact_check', 'user_feedback', 'reask'],
   mom: ['accuracy'],
 };
 

@@ -333,37 +333,17 @@ func appendRuntimeValidationWarning(diagnostics []DiagnosticJSON, prog *dsl.Prog
 }
 
 func runtimeValidationWarningMessage(prog *dsl.Program) string {
-	hasTests := len(prog.TestBlocks) > 0
-	hasSoftmaxPartitions := hasSoftmaxExclusiveProjectionPartitions(prog)
-	switch {
-	case hasTests && hasSoftmaxPartitions:
-		return "TEST blocks and softmax_exclusive PROJECTION partition centroid checks are parsed in browser validation but not executed against native runtime validation; run sr-dsl validate natively for runtime routing and centroid checks"
-	case hasTests:
+	if len(prog.TestBlocks) > 0 {
 		return "TEST blocks are parsed in browser validation but not executed against the native routing signal pipeline; run sr-dsl validate natively for runtime TEST checks"
-	default:
-		return "softmax_exclusive PROJECTION partition centroid checks are not run in browser validation; run sr-dsl validate natively for embedding-based centroid similarity warnings"
 	}
+	return ""
 }
 
 func runtimeValidationWarningPosition(prog *dsl.Program) (int, int) {
 	if len(prog.TestBlocks) > 0 {
 		return prog.TestBlocks[0].Pos.Line, prog.TestBlocks[0].Pos.Column
 	}
-	for _, partition := range prog.ProjectionPartitions {
-		if partition.Semantics == "softmax_exclusive" {
-			return partition.Pos.Line, partition.Pos.Column
-		}
-	}
 	return 0, 0
-}
-
-func hasSoftmaxExclusiveProjectionPartitions(prog *dsl.Program) bool {
-	for _, partition := range prog.ProjectionPartitions {
-		if partition.Semantics == "softmax_exclusive" {
-			return true
-		}
-	}
-	return false
 }
 
 func marshalJSON(v interface{}) string {

@@ -23,76 +23,96 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 )
 
-var _ = Describe("VectorStoreConfig", func() {
-	Context("Validate", func() {
-		It("should pass when disabled", func() {
-			cfg := &config.VectorStoreConfig{Enabled: false}
-			Expect(cfg.Validate()).NotTo(HaveOccurred())
-		})
+var _ = Describe("VectorStoreConfig Validate", func() {
+	It("should pass when disabled", func() {
+		cfg := &config.VectorStoreConfig{Enabled: false}
+		Expect(cfg.Validate()).NotTo(HaveOccurred())
+	})
 
-		It("should fail when enabled without backend_type", func() {
-			cfg := &config.VectorStoreConfig{Enabled: true}
-			Expect(cfg.Validate()).To(HaveOccurred())
-		})
+	It("should fail when enabled without backend_type", func() {
+		cfg := &config.VectorStoreConfig{Enabled: true}
+		Expect(cfg.Validate()).To(HaveOccurred())
+	})
 
-		It("should pass with memory backend", func() {
-			cfg := &config.VectorStoreConfig{
-				Enabled:     true,
-				BackendType: "memory",
-			}
-			Expect(cfg.Validate()).NotTo(HaveOccurred())
-		})
+	It("should pass with memory backend", func() {
+		cfg := &config.VectorStoreConfig{
+			Enabled:     true,
+			BackendType: "memory",
+		}
+		Expect(cfg.Validate()).NotTo(HaveOccurred())
+	})
 
-		It("should fail with milvus backend but no milvus config", func() {
-			cfg := &config.VectorStoreConfig{
-				Enabled:     true,
-				BackendType: "milvus",
-			}
+	It("should fail with unknown backend type", func() {
+		cfg := &config.VectorStoreConfig{
+			Enabled:     true,
+			BackendType: "redis",
+		}
+		err := cfg.Validate()
+		Expect(err).To(HaveOccurred())
+		Expect(err.Error()).To(ContainSubstring("must be 'memory', 'milvus', 'llama_stack', or 'valkey'"))
+	})
+
+	Context("milvus", func() {
+		It("should fail without milvus config", func() {
+			cfg := &config.VectorStoreConfig{Enabled: true, BackendType: "milvus"}
 			err := cfg.Validate()
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring("milvus configuration is required"))
 		})
 
-		It("should pass with milvus backend and config", func() {
+		It("should pass with config", func() {
 			cfg := &config.VectorStoreConfig{
-				Enabled:     true,
-				BackendType: "milvus",
-				Milvus:      &config.MilvusConfig{},
+				Enabled: true, BackendType: "milvus", Milvus: &config.MilvusConfig{},
+			}
+			Expect(cfg.Validate()).NotTo(HaveOccurred())
+		})
+	})
+
+	Context("valkey", func() {
+		It("should pass with config", func() {
+			cfg := &config.VectorStoreConfig{
+				Enabled: true, BackendType: "valkey",
+				Valkey: &config.ValkeyVectorStoreConfig{Host: "localhost", Port: 6379},
 			}
 			Expect(cfg.Validate()).NotTo(HaveOccurred())
 		})
 
-		It("should fail with unknown backend type", func() {
+		It("should fail without valkey config", func() {
+			cfg := &config.VectorStoreConfig{Enabled: true, BackendType: "valkey"}
+			err := cfg.Validate()
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("valkey configuration is required"))
+		})
+
+		It("should fail without host", func() {
 			cfg := &config.VectorStoreConfig{
-				Enabled:     true,
-				BackendType: "redis",
+				Enabled: true, BackendType: "valkey",
+				Valkey: &config.ValkeyVectorStoreConfig{Port: 6379},
 			}
 			err := cfg.Validate()
 			Expect(err).To(HaveOccurred())
-			Expect(err.Error()).To(ContainSubstring("must be 'memory', 'milvus', or 'llama_stack'"))
+			Expect(err.Error()).To(ContainSubstring("valkey.host is required"))
 		})
+	})
 
-		It("should pass with llama_stack backend and valid search_type", func() {
+	Context("llama_stack", func() {
+		It("should pass with valid search_type", func() {
 			for _, st := range []string{"", "vector", "hybrid"} {
 				cfg := &config.VectorStoreConfig{
-					Enabled:     true,
-					BackendType: "llama_stack",
+					Enabled: true, BackendType: "llama_stack",
 					LlamaStack: &config.LlamaStackVectorStoreConfig{
-						Endpoint:   "http://localhost:8321",
-						SearchType: st,
+						Endpoint: "http://localhost:8321", SearchType: st,
 					},
 				}
 				Expect(cfg.Validate()).NotTo(HaveOccurred(), "search_type=%q should be valid", st)
 			}
 		})
 
-		It("should fail with llama_stack backend and invalid search_type", func() {
+		It("should fail with invalid search_type", func() {
 			cfg := &config.VectorStoreConfig{
-				Enabled:     true,
-				BackendType: "llama_stack",
+				Enabled: true, BackendType: "llama_stack",
 				LlamaStack: &config.LlamaStackVectorStoreConfig{
-					Endpoint:   "http://localhost:8321",
-					SearchType: "invalid_type",
+					Endpoint: "http://localhost:8321", SearchType: "invalid_type",
 				},
 			}
 			err := cfg.Validate()
@@ -100,39 +120,35 @@ var _ = Describe("VectorStoreConfig", func() {
 			Expect(err.Error()).To(ContainSubstring("search_type must be 'vector' or 'hybrid'"))
 		})
 	})
+})
 
-	Context("ApplyDefaults", func() {
-		It("should fill in all defaults", func() {
-			cfg := &config.VectorStoreConfig{Enabled: true, BackendType: "memory"}
-			cfg.ApplyDefaults()
+var _ = Describe("VectorStoreConfig ApplyDefaults", func() {
+	It("should fill in all defaults", func() {
+		cfg := &config.VectorStoreConfig{Enabled: true, BackendType: "memory"}
+		cfg.ApplyDefaults()
 
-			Expect(cfg.FileStorageDir).To(Equal("/var/lib/vsr/data"))
-			Expect(cfg.MaxFileSizeMB).To(Equal(50))
-			Expect(cfg.EmbeddingModel).To(Equal("bert"))
-			Expect(cfg.EmbeddingDimension).To(Equal(384)) // BERT default
-			Expect(cfg.IngestionWorkers).To(Equal(2))
-			Expect(cfg.SupportedFormats).To(ContainElements(".txt", ".md", ".json", ".csv", ".html"))
-		})
+		Expect(cfg.FileStorageDir).To(Equal("/var/lib/vsr/data"))
+		Expect(cfg.MaxFileSizeMB).To(Equal(50))
+		Expect(cfg.EmbeddingModel).To(Equal("bert"))
+		Expect(cfg.EmbeddingDimension).To(Equal(384))
+		Expect(cfg.IngestionWorkers).To(Equal(2))
+		Expect(cfg.SupportedFormats).To(ContainElements(".txt", ".md", ".json", ".csv", ".html"))
+	})
 
-		It("should not override existing values", func() {
-			cfg := &config.VectorStoreConfig{
-				Enabled:            true,
-				BackendType:        "memory",
-				FileStorageDir:     "/custom/path",
-				MaxFileSizeMB:      100,
-				EmbeddingModel:     "qwen3",
-				EmbeddingDimension: 1024,
-				IngestionWorkers:   4,
-				SupportedFormats:   []string{".txt"},
-			}
-			cfg.ApplyDefaults()
+	It("should not override existing values", func() {
+		cfg := &config.VectorStoreConfig{
+			Enabled: true, BackendType: "memory",
+			FileStorageDir: "/custom/path", MaxFileSizeMB: 100,
+			EmbeddingModel: "qwen3", EmbeddingDimension: 1024,
+			IngestionWorkers: 4, SupportedFormats: []string{".txt"},
+		}
+		cfg.ApplyDefaults()
 
-			Expect(cfg.FileStorageDir).To(Equal("/custom/path"))
-			Expect(cfg.MaxFileSizeMB).To(Equal(100))
-			Expect(cfg.EmbeddingModel).To(Equal("qwen3"))
-			Expect(cfg.EmbeddingDimension).To(Equal(1024))
-			Expect(cfg.IngestionWorkers).To(Equal(4))
-			Expect(cfg.SupportedFormats).To(Equal([]string{".txt"}))
-		})
+		Expect(cfg.FileStorageDir).To(Equal("/custom/path"))
+		Expect(cfg.MaxFileSizeMB).To(Equal(100))
+		Expect(cfg.EmbeddingModel).To(Equal("qwen3"))
+		Expect(cfg.EmbeddingDimension).To(Equal(1024))
+		Expect(cfg.IngestionWorkers).To(Equal(4))
+		Expect(cfg.SupportedFormats).To(Equal([]string{".txt"}))
 	})
 })

@@ -64,7 +64,11 @@ class TestPluginTypeValidation:
             PluginType.ROUTER_REPLAY.value,
             PluginType.MEMORY.value,
             PluginType.RAG.value,
+            PluginType.IMAGE_GEN.value,
             PluginType.FAST_RESPONSE.value,
+            PluginType.REQUEST_PARAMS.value,
+            PluginType.RESPONSE_JAILBREAK.value,
+            PluginType.TOOLS.value,
         ]
 
         for plugin_type in valid_types:
@@ -76,6 +80,70 @@ class TestPluginTypeValidation:
         """Test that invalid plugin types are rejected."""
         with pytest.raises(PydanticValidationError, match="Input should be.*enum"):
             PluginConfig(type="invalid_plugin", configuration={"enabled": True})
+
+    def test_new_plugin_types_validate_in_full_config(self):
+        """Test newly exposed plugin types validate end-to-end."""
+        config_yaml = """
+version: v0.1
+listeners:
+  - name: "http-8888"
+    address: "0.0.0.0"
+    port: 8888
+signals:
+  keywords:
+    - name: "test_keywords"
+      operator: "OR"
+      keywords: ["test"]
+  domains:
+    - name: "test"
+      description: "Test domain"
+decisions:
+  - name: "test_decision"
+    description: "Decision with extended plugin coverage"
+    priority: 100
+    rules:
+      operator: "OR"
+      conditions:
+        - type: "keyword"
+          name: "test_keywords"
+    modelRefs:
+      - model: "test_model"
+    plugins:
+      - type: "request_params"
+        configuration:
+          blocked_params: ["logprobs"]
+          max_tokens_limit: 256
+          max_n: 1
+          strip_unknown: true
+      - type: "response_jailbreak"
+        configuration:
+          enabled: true
+          threshold: 0.7
+          action: "header"
+      - type: "image_gen"
+        configuration:
+          enabled: true
+          backend: "openai"
+          backend_config:
+            api_key: "test-key"
+providers:
+  models:
+    - name: "test_model"
+      endpoints:
+        - name: "ep1"
+          weight: 1
+          endpoint: "localhost:8000"
+  default_model: "test_model"
+"""
+
+        temp_path = _write_config(config_yaml)
+
+        try:
+            config = parse_user_config(temp_path)
+            errors = validate_user_config(config)
+            assert len(errors) == 0, f"Unexpected validation errors: {errors}"
+        finally:
+            os.unlink(temp_path)
 
 
 class TestRouterReplayPluginConfig:
@@ -100,9 +168,9 @@ class TestRouterReplayPluginConfig:
         """Test router_replay plugin configuration defaults."""
         config = RouterReplayPluginConfig(enabled=True)
         assert config.enabled is True
-        assert config.max_records == 200  # Default
-        assert config.capture_request_body is False  # Default
-        assert config.capture_response_body is False  # Default
+        assert config.max_records == 10000  # Default
+        assert config.capture_request_body is True  # Default
+        assert config.capture_response_body is True  # Default
         assert config.max_body_bytes == 4096  # Default
 
     def test_router_replay_plugin_in_config(self):
@@ -371,9 +439,7 @@ class TestRAGPluginConfig:
         assert config.min_confidence_threshold == 0.5
 
     def test_rag_config_required_fields_only(self):
-        """Test RAGPluginConfig with only required fields (enabled + backend).
-        All optional fields should default to None.
-        """
+        """Test RAGPluginConfig with only required fields; optional fields default to None."""
         config = RAGPluginConfig(enabled=True, backend="milvus")
         assert config.enabled is True
         assert config.backend == "milvus"
@@ -396,12 +462,7 @@ class TestRAGPluginConfig:
             RAGPluginConfig(enabled=True)
 
     def test_rag_config_field_constraints(self):
-        """Test that Pydantic field constraints reject out-of-range values.
-
-        Covers: similarity_threshold (0.0-1.0), top_k (>=1),
-        max_context_length (>=1), cache_ttl_seconds (>=1),
-        min_confidence_threshold (0.0-1.0).
-        """
+        """Test that Pydantic rejects out-of-range RAG field values."""
         # similarity_threshold > 1.0
         with pytest.raises(PydanticValidationError):
             RAGPluginConfig(enabled=True, backend="milvus", similarity_threshold=1.1)
@@ -425,11 +486,7 @@ class TestRAGPluginConfig:
             )
 
     def test_rag_plugin_in_full_config(self):
-        """Test RAG plugin end-to-end: YAML parsing + validation.
-
-        Verifies that a complete YAML config with a RAG plugin can be
-        parsed into Pydantic models and passes validation without errors.
-        """
+        """Test end-to-end RAG plugin YAML parsing and validation."""
         config_yaml = """
 version: v0.1
 listeners:
@@ -509,11 +566,7 @@ providers:
             os.unlink(temp_path)
 
     def test_invalid_rag_config_in_full_yaml(self):
-        """Test that invalid RAG configuration is caught by the validator.
-
-        Uses similarity_threshold=1.5 (exceeds 0.0-1.0) and top_k="invalid"
-        (wrong type) to verify the validation pipeline catches bad RAG configs.
-        """
+        """Test that invalid RAG YAML is caught by the validator."""
         config_yaml = """
 version: v0.1
 listeners:
@@ -638,14 +691,7 @@ providers:
             os.unlink(temp_path)
 
     def test_multiple_plugins_with_rag(self):
-        """Test decision with RAG plugin alongside other plugins.
-
-        This validates the real-world use case from config.template.yaml
-        where RAG is used together with system_prompt, semantic-cache,
-        and router_replay in the same decision.
-
-        Reference: src/semantic-router/pkg/extproc/req_filter_rag.go
-        """
+        """Test RAG alongside system_prompt, semantic-cache, and router_replay."""
         config_yaml = """
 version: v0.1
 listeners:

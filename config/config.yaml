@@ -206,6 +206,16 @@ routing:
       - name: need_clarification
         description: The user asks for a clearer or more detailed answer.
 
+    reasks:
+      - name: likely_dissatisfied
+        description: The current user turn closely repeats the immediately previous user turn.
+        threshold: 0.8
+        lookback_turns: 1
+      - name: persistently_dissatisfied
+        description: The current user turn repeats the last two user turns in a row.
+        threshold: 0.8
+        lookback_turns: 2
+
     preferences:
       - name: terse_answers
         description: Users who prefer short, direct responses.
@@ -479,11 +489,6 @@ routing:
             enabled: true
             mode: insert
             system_prompt: You are a senior business consultant. Give practical recommendations and clear tradeoffs.
-        - type: pii
-          configuration:
-            enabled: true
-            threshold: 0.85
-            pii_types_allowed: [EMAIL_ADDRESS]
         - type: semantic-cache
           configuration:
             enabled: true
@@ -567,10 +572,10 @@ routing:
         - type: router_replay
           configuration:
             enabled: true
-            max_records: 5000
+            max_records: 10000
             capture_request_body: true
-            capture_response_body: false
-            max_body_bytes: 65536
+            capture_response_body: true
+            max_body_bytes: 4096
 
     - name: computer-science-remom-route
       description: ReMoM route for complex computer science prompts.
@@ -659,6 +664,14 @@ routing:
         - type: fast_response
           configuration:
             message: The primary model is saturated, so a lightweight response was returned immediately.
+        - type: request_params
+          configuration:
+            blocked_params:
+              - logprobs
+              - top_logprobs
+            max_tokens_limit: 8192
+            max_n: 4
+            strip_unknown: false
 
     - name: support_router_dc_route
       description: Embedding-driven support route that escalates only when the derived projection band says the request is not a simple support query.
@@ -758,12 +771,6 @@ routing:
           cost_weight: 0.1
           quality_gap_threshold: 0.08
           normalize_scores: true
-      plugins:
-        - type: jailbreak
-          configuration:
-            enabled: true
-            threshold: 0.6
-
     - name: spanish_rl_route
       description: RL-driven route for Spanish-language traffic with Milvus RAG.
       priority: 135
@@ -956,6 +963,26 @@ routing:
             backend_config:
               vector_store_id: local-vs
               file_ids: [kb-001, kb-002]
+
+    - name: repeat_question_escalation
+      description: Escalate when the user repeats the same question after an unsatisfying answer.
+      priority: 114
+      rules:
+        operator: AND
+        conditions:
+          - type: reask
+            name: likely_dissatisfied
+      modelRefs:
+        - model: qwen3-32b
+          use_reasoning: true
+      algorithm:
+        type: static
+      plugins:
+        - type: header_mutation
+          configuration:
+            add:
+              - key: x-escalation-reason
+                value: repeated-question
 
     - name: safe_only_svm_route
       description: SVM route that only matches when prompt-injection signals are absent.
@@ -1224,6 +1251,7 @@ global:
               tokens_per_unit: 2000000
               unit: hour
     router_replay:
+      enabled: true
       store_backend: postgres
       ttl_seconds: 2592000
       async_writes: true
@@ -1496,6 +1524,16 @@ global:
         embedding_model: all-MiniLM-L6-v2
         request_timeout_seconds: 30
         search_type: hybrid
+      valkey:
+        host: valkey
+        port: 6379
+        database: 0
+        password: valkey-secret
+        connect_timeout: 5
+        collection_prefix: "vsr_vs_"
+        metric_type: COSINE
+        index_m: 16
+        index_ef_construction: 200
 
   integrations:
     tools:

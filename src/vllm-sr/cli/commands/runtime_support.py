@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import os
+import shutil
 from pathlib import Path
 
 import yaml
@@ -13,6 +14,8 @@ from cli.bootstrap import (
     BootstrapResult,
     is_setup_mode_config,
 )
+from cli.runtime_stack import resolve_runtime_stack
+from cli.service_defaults import inject_local_service_runtime_defaults
 from cli.utils import get_logger
 
 log = get_logger(__name__)
@@ -29,6 +32,10 @@ PASSTHROUGH_ENV_RULES = (
     ("ANTHROPIC_API_KEY", True),
     ("OPENAI_API_KEY", True),
     ("OPENCLAW_BASE_IMAGE", False),
+    ("SR_LOG_LEVEL", False),
+    ("SR_LOG_ENCODING", False),
+    ("SR_LOG_DEVELOPMENT", False),
+    ("SR_LOG_ADD_CALLER", False),
 )
 
 ALGORITHM_TYPES = [
@@ -128,6 +135,131 @@ def _write_runtime_config(source_config_path: Path, config: dict[str, object]) -
     with runtime_config_path.open("w") as handle:
         yaml.dump(config, handle, default_flow_style=False, sort_keys=False)
     return runtime_config_path
+
+
+def _runtime_kb_asset_dir(config_path: Path) -> Path:
+    kb_dir = _runtime_config_output_dir(config_path) / "knowledge_bases"
+    kb_dir.mkdir(parents=True, exist_ok=True)
+    return kb_dir
+
+
+def _candidate_kb_source_roots(config_path: Path, source_path: str) -> list[Path]:
+    source_root = Path(source_path)
+    if source_root.is_absolute():
+        return [source_root]
+
+    candidates: list[Path] = [config_path.parent / source_root]
+    for ancestor in Path(__file__).resolve().parents:
+        config_root = ancestor / "config"
+        if config_root.is_dir():
+            candidates.append(config_root / source_root)
+    return candidates
+
+
+def _resolve_kb_source_root(config_path: Path, source_path: str) -> Path | None:
+    for candidate in _candidate_kb_source_roots(config_path, source_path):
+        if candidate.exists():
+            return candidate
+    return None
+
+
+def _configured_knowledge_bases(config: dict[str, object]) -> list[dict[str, object]]:
+    global_config = config.get("global")
+    if not isinstance(global_config, dict):
+        return []
+
+    model_catalog = global_config.get("model_catalog")
+    if not isinstance(model_catalog, dict):
+        return []
+
+    kb_configs = model_catalog.get("kbs")
+    if not isinstance(kb_configs, list):
+        return []
+
+    return [kb_config for kb_config in kb_configs if isinstance(kb_config, dict)]
+
+
+def _kb_source_spec(
+    kb_config: dict[str, object],
+) -> tuple[str, dict[str, object], str] | None:
+    source = kb_config.get("source")
+    if not isinstance(source, dict):
+        return None
+
+    source_path = str(source.get("path") or "").strip()
+    kb_name = str(kb_config.get("name") or "").strip()
+    if not source_path or not kb_name:
+        return None
+
+    return kb_name, source, source_path
+
+
+def _stage_runtime_kb_source(
+    *,
+    kb_name: str,
+    source: dict[str, object],
+    source_path: str,
+    config_path: Path,
+    kb_asset_dir: Path,
+) -> bool:
+    resolved_source_root = _resolve_kb_source_root(config_path, source_path)
+    if resolved_source_root is None:
+        log.warning(
+            "Runtime config sync: could not resolve KB source.path=%s for %s",
+            source_path,
+            kb_name,
+        )
+        return False
+
+    staged_root = kb_asset_dir / kb_name
+    try:
+        if staged_root.resolve() != resolved_source_root.resolve():
+            if staged_root.exists():
+                shutil.rmtree(staged_root)
+            shutil.copytree(resolved_source_root, staged_root)
+
+        staged_relative_path = staged_root.relative_to(
+            _runtime_config_output_dir(config_path)
+        ).as_posix()
+        if source.get("path") != staged_relative_path:
+            source["path"] = staged_relative_path
+        return True
+    except OSError as exc:
+        log.warning(
+            "Runtime config sync: failed to stage KB assets for %s from %s: %s",
+            kb_name,
+            resolved_source_root,
+            exc,
+        )
+        return False
+
+
+def _stage_runtime_kb_sources(
+    config: dict[str, object],
+    config_path: Path,
+) -> bool:
+    kb_configs = _configured_knowledge_bases(config)
+    if not kb_configs:
+        return False
+
+    changed = False
+    kb_asset_dir = _runtime_kb_asset_dir(config_path)
+    for kb_config in kb_configs:
+        kb_source_spec = _kb_source_spec(kb_config)
+        if kb_source_spec is None:
+            continue
+        kb_name, source, source_path = kb_source_spec
+        changed = (
+            _stage_runtime_kb_source(
+                kb_name=kb_name,
+                source=source,
+                source_path=source_path,
+                config_path=config_path,
+                kb_asset_dir=kb_asset_dir,
+            )
+            or changed
+        )
+    return changed
 
 
 def _set_use_cpu_false_for_amd(
@@ -238,6 +370,67 @@ def apply_platform_gpu_defaults(
     return True
 
 
+def _normalized_algorithm_override(
+    algorithm: str | None, setup_mode: bool
+) -> str | None:
+    if not algorithm:
+        return None
+
+    if setup_mode:
+        log.warning(
+            f"--algorithm={algorithm} ignored in setup mode until a runnable config is activated"
+        )
+        return None
+
+    return algorithm.lower()
+
+
+def _routing_decisions(config: dict[str, object]) -> list[dict[str, object]]:
+    routing = config.get("routing")
+    if not isinstance(routing, dict):
+        log.warning("No routing section found; skipping --algorithm override")
+        return []
+
+    decisions = routing.get("decisions", [])
+    if not isinstance(decisions, list):
+        log.warning("routing.decisions is not a list; skipping --algorithm override")
+        return []
+
+    return [decision for decision in decisions if isinstance(decision, dict)]
+
+
+def _apply_algorithm_override(
+    config: dict[str, object], normalized_algorithm: str
+) -> bool:
+    log.info(f"Model selection algorithm: {normalized_algorithm}")
+    log_algorithm_hint(normalized_algorithm)
+    decisions = _routing_decisions(config)
+    if not decisions:
+        return False
+
+    for decision in decisions:
+        if "algorithm" not in decision:
+            decision["algorithm"] = {}
+        decision["algorithm"]["type"] = normalized_algorithm
+        log.info(
+            "  Injected algorithm.type=%s into decision '%s'",
+            normalized_algorithm,
+            decision.get("name", "unnamed"),
+        )
+    return True
+
+
+def _finalize_runtime_config_write(
+    config_path: Path, config: dict[str, object], changed: bool
+) -> Path:
+    if not changed:
+        return config_path
+
+    effective_config = _write_runtime_config(config_path, config)
+    log.info(f"Created effective runtime config: {effective_config}")
+    return effective_config
+
+
 def inject_algorithm_into_config(config_path: Path, algorithm: str) -> Path:
     """Create a temporary config with algorithm.type injected into all decisions."""
     with config_path.open() as handle:
@@ -311,6 +504,7 @@ def apply_runtime_mode_env_vars(
     setup_mode: bool,
     platform: str | None,
     algorithm: str | None = None,
+    log_level: str | None = None,
 ) -> None:
     """Apply runtime-mode environment variables derived from CLI flags."""
     if minimal:
@@ -338,65 +532,35 @@ def apply_runtime_mode_env_vars(
     if algorithm:
         env_vars[RUNTIME_ALGORITHM_OVERRIDE_ENV] = algorithm.lower()
 
+    if log_level:
+        normalized_log_level = log_level.lower()
+        env_vars["SR_LOG_LEVEL"] = normalized_log_level
+        log.info(f"Router log level: {normalized_log_level}")
+
 
 def resolve_effective_config_path(
     config_path: Path, algorithm: str | None, setup_mode: bool, platform: str | None
 ) -> Path:
     """Apply CLI algorithm and platform override translation when appropriate."""
-    apply_algorithm = bool(algorithm)
-    apply_gpu_defaults = _platform_requires_gpu_defaults(platform)
-
-    if not apply_algorithm and not apply_gpu_defaults:
-        return config_path
-    if apply_algorithm and setup_mode:
-        log.warning(
-            f"--algorithm={algorithm} ignored in setup mode until a runnable config is activated"
-        )
-        apply_algorithm = False
-        if not apply_gpu_defaults:
-            return config_path
-
     with config_path.open() as handle:
         config = yaml.safe_load(handle) or {}
 
-    changed = False
-    if apply_algorithm:
-        normalized = algorithm.lower()
-        log.info(f"Model selection algorithm: {normalized}")
-        routing = config.get("routing")
-        if not isinstance(routing, dict):
-            log.warning("No routing section found; skipping --algorithm override")
-            decisions = []
-        else:
-            decisions = routing.get("decisions", [])
-            if not isinstance(decisions, list):
-                log.warning(
-                    "routing.decisions is not a list; skipping --algorithm override"
-                )
-                decisions = []
-
-        for decision in decisions:
-            if "algorithm" not in decision:
-                decision["algorithm"] = {}
-            decision["algorithm"]["type"] = normalized
-            log.info(
-                "  Injected algorithm.type=%s into decision '%s'",
-                normalized,
-                decision.get("name", "unnamed"),
-            )
-        if decisions:
-            changed = True
-        log_algorithm_hint(normalized)
-
-    if apply_platform_gpu_defaults(config, platform):
-        changed = True
-
-    if not changed:
+    changed = _stage_runtime_kb_sources(config, config_path)
+    if not setup_mode:
+        changed = (
+            inject_local_service_runtime_defaults(config, resolve_runtime_stack())
+            or changed
+        )
+    normalized_algorithm = _normalized_algorithm_override(algorithm, setup_mode)
+    apply_gpu_defaults = _platform_requires_gpu_defaults(platform)
+    if not normalized_algorithm and not apply_gpu_defaults and not changed:
         return config_path
 
-    effective_config = _write_runtime_config(config_path, config)
-    log.info(f"Created effective runtime config: {effective_config}")
-    return effective_config
+    if normalized_algorithm:
+        changed = _apply_algorithm_override(config, normalized_algorithm) or changed
+
+    changed = apply_platform_gpu_defaults(config, platform) or changed
+    return _finalize_runtime_config_write(config_path, config, changed)
 
 
 def sync_runtime_config(

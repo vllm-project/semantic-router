@@ -595,6 +595,7 @@ SIGNAL embedding emb { threshold: 0.75 candidates: ["test"] }
 SIGNAL domain dom { description: "test" mmlu_categories: ["math"] }
 SIGNAL fact_check fc { description: "fact check" }
 SIGNAL user_feedback uf { description: "feedback" }
+SIGNAL reask ra { description: "repeat question" threshold: 0.8 lookback_turns: 2 }
 SIGNAL preference pref { description: "preference" threshold: 0.7 examples: ["keep it concise", "bullet points only"] }
 SIGNAL language lang { description: "English" }
 SIGNAL context ctx { min_tokens: "1K" max_tokens: "32K" }
@@ -621,6 +622,12 @@ SIGNAL authz auth { role: "admin" subjects: [{ kind: "User", name: "admin" }] }
 	}
 	if len(cfg.UserFeedbackRules) != 1 {
 		t.Errorf("expected 1 user_feedback rule, got %d", len(cfg.UserFeedbackRules))
+	}
+	if len(cfg.ReaskRules) != 1 {
+		t.Errorf("expected 1 reask rule, got %d", len(cfg.ReaskRules))
+	}
+	if cfg.ReaskRules[0].Threshold != 0.8 || cfg.ReaskRules[0].LookbackTurns != 2 {
+		t.Errorf("unexpected reask config: %+v", cfg.ReaskRules[0])
 	}
 	if len(cfg.PreferenceRules) != 1 {
 		t.Errorf("expected 1 preference rule, got %d", len(cfg.PreferenceRules))
@@ -1625,6 +1632,12 @@ func TestCompileAllPluginTypes(t *testing.T) {
 			body:       `enabled: true backend: "dall-e-3"`,
 			verifyType: "image_gen",
 		},
+		{
+			name:       "request_params",
+			pluginType: "request_params",
+			body:       `blocked_params: ["logprobs", "top_logprobs"] max_tokens_limit: 500 max_n: 1 strip_unknown: true`,
+			verifyType: "request_params",
+		},
 	}
 
 	for _, tc := range pluginTests {
@@ -2324,6 +2337,7 @@ SIGNAL embedding emb { threshold: 0.75 candidates: ["test"] aggregation_method: 
 SIGNAL domain dom { description: "test" mmlu_categories: ["math"] }
 SIGNAL fact_check fc { description: "fact check" }
 SIGNAL user_feedback uf { description: "feedback" }
+SIGNAL reask ra { description: "repeat question" threshold: 0.8 lookback_turns: 2 }
 SIGNAL preference pref { description: "preference" threshold: 0.7 examples: ["keep it concise", "bullet points only"] }
 SIGNAL language lang { description: "English" }
 SIGNAL context ctx { min_tokens: "1K" max_tokens: "32K" }
@@ -2366,6 +2380,12 @@ ROUTE test_route {
 	}
 	if len(rt.UserFeedbackRules) != 1 {
 		t.Errorf("user_feedback rules: %d", len(rt.UserFeedbackRules))
+	}
+	if len(rt.ReaskRules) != 1 {
+		t.Errorf("reask rules: %d", len(rt.ReaskRules))
+	}
+	if rt.ReaskRules[0].Threshold != 0.8 || rt.ReaskRules[0].LookbackTurns != 2 {
+		t.Errorf("unexpected reask round-trip: %+v", rt.ReaskRules[0])
 	}
 	if len(rt.PreferenceRules) != 1 {
 		t.Errorf("preference rules: %d", len(rt.PreferenceRules))
@@ -3273,6 +3293,7 @@ SIGNAL embedding emb { threshold: 0.75 candidates: ["test"] }
 SIGNAL domain dom { description: "test" mmlu_categories: ["math"] }
 SIGNAL fact_check fc { description: "fact check" }
 SIGNAL user_feedback uf { description: "feedback" }
+SIGNAL reask ra { description: "repeat question" threshold: 0.8 lookback_turns: 2 }
 SIGNAL preference pref { description: "preference" threshold: 0.7 examples: ["keep it concise", "bullet points only"] }
 SIGNAL language lang { description: "English" }
 SIGNAL context ctx { min_tokens: "1K" max_tokens: "32K" }
@@ -3293,7 +3314,7 @@ ROUTE test_route { PRIORITY 1 WHEN domain("dom") MODEL "m:1b" }
 
 	expectedSignals := []string{
 		"SIGNAL domain dom", "SIGNAL keyword kw", "SIGNAL embedding emb",
-		"SIGNAL fact_check fc", "SIGNAL user_feedback uf",
+		"SIGNAL fact_check fc", "SIGNAL user_feedback uf", "SIGNAL reask ra",
 		"SIGNAL preference pref", "SIGNAL language lang",
 		"SIGNAL context ctx", "SIGNAL complexity comp",
 		"SIGNAL modality mod", "SIGNAL authz auth",
@@ -3308,6 +3329,9 @@ ROUTE test_route { PRIORITY 1 WHEN domain("dom") MODEL "m:1b" }
 	}
 	if !strings.Contains(dslText, `examples: ["keep it concise", "bullet points only"]`) {
 		t.Error("decompiled DSL missing preference examples")
+	}
+	if !strings.Contains(dslText, `lookback_turns: 2`) {
+		t.Error("decompiled DSL missing reask lookback_turns")
 	}
 }
 
@@ -4137,39 +4161,39 @@ ROUTE r2 { PRIORITY 100 WHEN domain("science") AND NOT domain("math") MODEL "m2"
 func TestValidateSameSignalTypeNoGuard(t *testing.T) {
 	input := `
 SIGNAL domain math { mmlu_categories: ["math"] }
-SIGNAL domain science { mmlu_categories: ["physics"] }
 ROUTE math_route { PRIORITY 200 WHEN domain("math") MODEL "m1" }
-ROUTE science_route { PRIORITY 100 WHEN domain("science") MODEL "m2" }
+ROUTE science_route { PRIORITY 100 WHEN domain("math") MODEL "m2" }
 `
 	diags, _ := Validate(input)
 	found := false
 	for _, d := range diags {
 		if d.Level == DiagWarning && strings.Contains(d.Message, "no mutual exclusion guard") {
 			found = true
-			if d.Fix == nil {
-				t.Error("expected QuickFix suggestion for guard")
-			} else if !strings.Contains(d.Fix.NewText, "NOT") {
-				t.Errorf("QuickFix should suggest NOT guard, got: %s", d.Fix.NewText)
+			if !strings.Contains(d.Message, `domain("math")`) {
+				t.Fatalf("expected exact shared signal example in warning, got: %s", d.Message)
+			}
+			if d.Fix != nil {
+				t.Fatalf("shared exact-signal warning should not offer an unsafe auto-fix, got: %+v", d.Fix)
 			}
 		}
 	}
 	if !found {
-		t.Error("expected guard warning for same-type signals without NOT")
+		t.Error("expected guard warning for shared exact signal without exclusion")
 	}
 }
 
-func TestValidateSameSignalTypeWithGuard(t *testing.T) {
+func TestValidateDifferentSignalNamesSameTypeDoNotWarn(t *testing.T) {
 	input := `
 SIGNAL domain math { mmlu_categories: ["math"] }
 SIGNAL domain science { mmlu_categories: ["physics"] }
 ROUTE math_route { PRIORITY 200 WHEN domain("math") MODEL "m1" }
-ROUTE science_route { PRIORITY 100 WHEN domain("science") AND NOT domain("math") MODEL "m2" }
+ROUTE science_route { PRIORITY 100 WHEN domain("science") MODEL "m2" }
 `
 	diags, _ := Validate(input)
 	for _, d := range diags {
 		if strings.Contains(d.Message, "no mutual exclusion guard") &&
 			strings.Contains(d.Message, "math_route") && strings.Contains(d.Message, "science_route") {
-			t.Errorf("should not warn when NOT guard is present: %s", d.Message)
+			t.Errorf("should not warn for different signal names of the same type: %s", d.Message)
 		}
 	}
 }
@@ -4193,7 +4217,6 @@ func TestValidateSameSignalTypeAggregatesMultipleOverlaps(t *testing.T) {
 	input := `
 SIGNAL domain math { mmlu_categories: ["math"] }
 SIGNAL domain science { mmlu_categories: ["physics"] }
-SIGNAL domain history { mmlu_categories: ["history"] }
 SIGNAL keyword urgent { keywords: ["urgent"] }
 SIGNAL keyword asap { keywords: ["asap"] }
 SIGNAL keyword help { keywords: ["help"] }
@@ -4204,7 +4227,7 @@ ROUTE primary_route {
 }
 ROUTE fallback_route {
   PRIORITY 100
-  WHEN domain("history") AND keyword("help")
+  WHEN (domain("math") OR domain("science")) AND (keyword("urgent") OR keyword("asap")) AND keyword("help")
   MODEL "m2"
 }
 `
@@ -4224,20 +4247,17 @@ ROUTE fallback_route {
 	if !strings.Contains(guardDiag.Message, "domain=2, keyword=2") {
 		t.Fatalf("expected per-type overlap counts in message, got: %s", guardDiag.Message)
 	}
-	if !strings.Contains(guardDiag.Message, `domain("math") vs domain("history")`) {
-		t.Fatalf("expected first representative domain example, got: %s", guardDiag.Message)
+	if !strings.Contains(guardDiag.Message, `domain("math")`) {
+		t.Fatalf("expected first representative shared domain example, got: %s", guardDiag.Message)
 	}
-	if !strings.Contains(guardDiag.Message, `domain("science") vs domain("history")`) {
-		t.Fatalf("expected second representative domain example, got: %s", guardDiag.Message)
+	if !strings.Contains(guardDiag.Message, `domain("science")`) {
+		t.Fatalf("expected second representative shared domain example, got: %s", guardDiag.Message)
 	}
-	if !strings.Contains(guardDiag.Message, `keyword("asap") vs keyword("help")`) {
-		t.Fatalf("expected third representative keyword example, got: %s", guardDiag.Message)
+	if !strings.Contains(guardDiag.Message, `keyword("asap")`) {
+		t.Fatalf("expected third representative shared keyword example, got: %s", guardDiag.Message)
 	}
-	if guardDiag.Fix == nil {
-		t.Fatal("expected quick fix for aggregated guard warning")
-	}
-	if got := guardDiag.Fix.NewText; got != `domain("history") AND NOT domain("math")` {
-		t.Fatalf("aggregated guard fix = %q, want %q", got, `domain("history") AND NOT domain("math")`)
+	if guardDiag.Fix != nil {
+		t.Fatalf("expected no quick fix for aggregated shared-signal warning, got: %+v", guardDiag.Fix)
 	}
 }
 
@@ -4444,7 +4464,34 @@ ROUTE long_route {
 	}
 }
 
-func TestValidateContextBoundaryOverlapStillWarns(t *testing.T) {
+func TestValidateLanguageSignalsDoNotWarnForDifferentLanguages(t *testing.T) {
+	input := `
+SIGNAL language zh { languages: ["zh"] }
+SIGNAL language en { languages: ["en"] }
+
+ROUTE zh_route {
+  PRIORITY 200
+  WHEN language("zh")
+  MODEL "m1"
+}
+
+ROUTE en_route {
+  PRIORITY 100
+  WHEN language("en")
+  MODEL "m2"
+}
+`
+	diags, _ := Validate(input)
+	for _, d := range diags {
+		if strings.Contains(d.Message, "no mutual exclusion guard") &&
+			strings.Contains(d.Message, "zh_route") &&
+			strings.Contains(d.Message, "en_route") {
+			t.Fatalf("expected language signals to be treated as mutually exclusive, got: %s", d.Message)
+		}
+	}
+}
+
+func TestValidateContextBoundaryOverlapDifferentNamesDoNotWarn(t *testing.T) {
 	input := `
 SIGNAL context short_context {
   min_tokens: "0"
@@ -4468,16 +4515,41 @@ ROUTE medium_route {
 }
 `
 	diags, _ := Validate(input)
-	found := false
 	for _, d := range diags {
 		if strings.Contains(d.Message, "no mutual exclusion guard") &&
 			strings.Contains(d.Message, "short_route") &&
 			strings.Contains(d.Message, "medium_route") {
-			found = true
+			t.Fatalf("expected different context signal names to skip guard warning, got: %s", d.Message)
 		}
 	}
-	if !found {
-		t.Fatal("expected overlapping context boundary to keep guard warning")
+}
+
+func TestValidateSharedContextSignalDoesNotWarn(t *testing.T) {
+	input := `
+SIGNAL context short_context {
+  min_tokens: "0"
+  max_tokens: "1K"
+}
+
+ROUTE short_route {
+  PRIORITY 200
+  WHEN context("short_context")
+  MODEL "m1"
+}
+
+ROUTE also_short_route {
+  PRIORITY 100
+  WHEN context("short_context")
+  MODEL "m2"
+}
+`
+	diags, _ := Validate(input)
+	for _, d := range diags {
+		if strings.Contains(d.Message, "no mutual exclusion guard") &&
+			strings.Contains(d.Message, "short_route") &&
+			strings.Contains(d.Message, "also_short_route") {
+			t.Fatalf("expected shared context signals to skip guard warning, got: %s", d.Message)
+		}
 	}
 }
 
@@ -5210,7 +5282,7 @@ DECISION_TREE routing_policy {
 	}
 	found := false
 	for _, err := range errs {
-		if strings.Contains(err.Error(), "cannot be mixed with ROUTE") {
+		if strings.Contains(err.Error(), "DECISION_TREE and ROUTE") {
 			found = true
 		}
 	}

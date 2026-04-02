@@ -108,6 +108,20 @@ func (d *decompiler) decompileSignals() {
 		d.write("}\n\n")
 	}
 
+	for _, rule := range d.cfg.ReaskRules {
+		d.write("SIGNAL reask %s {\n", quoteName(rule.Name))
+		if rule.Description != "" {
+			d.write("  description: %q\n", rule.Description)
+		}
+		if rule.Threshold != 0 {
+			d.write("  threshold: %g\n", rule.Threshold)
+		}
+		if rule.LookbackTurns != 0 {
+			d.write("  lookback_turns: %d\n", rule.LookbackTurns)
+		}
+		d.write("}\n\n")
+	}
+
 	for _, pref := range d.cfg.PreferenceRules {
 		d.write("SIGNAL preference %s {\n", quoteName(pref.Name))
 		if pref.Description != "" {
@@ -554,6 +568,23 @@ func decompilePluginConfig(p *config.DecisionPlugin) string {
 		}
 		if cfg.Message != "" {
 			fmt.Fprintf(&sb, "    message: %q\n", cfg.Message)
+		}
+	case "request_params":
+		cfg, ok := decodePluginConfig[config.RequestParamsPluginConfig](p)
+		if !ok {
+			break
+		}
+		if len(cfg.BlockedParams) > 0 {
+			fmt.Fprintf(&sb, "    blocked_params: %s\n", formatStringArray(cfg.BlockedParams))
+		}
+		if cfg.MaxTokensLimit != nil {
+			fmt.Fprintf(&sb, "    max_tokens_limit: %d\n", *cfg.MaxTokensLimit)
+		}
+		if cfg.MaxN != nil {
+			fmt.Fprintf(&sb, "    max_n: %d\n", *cfg.MaxN)
+		}
+		if cfg.StripUnknown {
+			fmt.Fprintf(&sb, "    strip_unknown: true\n")
 		}
 	case "tools":
 		cfg, ok := decodePluginConfig[config.ToolsPluginConfig](p)
@@ -1018,6 +1049,20 @@ func (d *decompiler) userFeedbackToSignal(uf *config.UserFeedbackRule) *SignalDe
 		fields["description"] = StringValue{V: uf.Description}
 	}
 	return &SignalDecl{SignalType: "user_feedback", Name: uf.Name, Fields: fields}
+}
+
+func (d *decompiler) reaskToSignal(rule *config.ReaskRule) *SignalDecl {
+	fields := make(map[string]Value)
+	if rule.Description != "" {
+		fields["description"] = StringValue{V: rule.Description}
+	}
+	if rule.Threshold != 0 {
+		fields["threshold"] = FloatValue{V: float64(rule.Threshold)}
+	}
+	if rule.LookbackTurns != 0 {
+		fields["lookback_turns"] = IntValue{V: rule.LookbackTurns}
+	}
+	return &SignalDecl{SignalType: "reask", Name: rule.Name, Fields: fields}
 }
 
 func (d *decompiler) preferenceToSignal(pref *config.PreferenceRule) *SignalDecl {
@@ -1629,6 +1674,27 @@ func pluginConfigToFields(p *config.DecisionPlugin) map[string]Value {
 		}
 		if cfg.Message != "" {
 			fields["message"] = StringValue{V: cfg.Message}
+		}
+	case "request_params":
+		cfg, ok := decodePluginConfig[config.RequestParamsPluginConfig](p)
+		if !ok {
+			return fields
+		}
+		if len(cfg.BlockedParams) > 0 {
+			var items []Value
+			for _, s := range cfg.BlockedParams {
+				items = append(items, StringValue{V: s})
+			}
+			fields["blocked_params"] = ArrayValue{Items: items}
+		}
+		if cfg.MaxTokensLimit != nil {
+			fields["max_tokens_limit"] = IntValue{V: *cfg.MaxTokensLimit}
+		}
+		if cfg.MaxN != nil {
+			fields["max_n"] = IntValue{V: *cfg.MaxN}
+		}
+		if cfg.StripUnknown {
+			fields["strip_unknown"] = BoolValue{V: true}
 		}
 	case "tools":
 		cfg, ok := decodePluginConfig[config.ToolsPluginConfig](p)

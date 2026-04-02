@@ -35,7 +35,8 @@ func defaultCanonicalServiceGlobal() CanonicalServiceGlobal {
 			MaxResponses: 1000,
 		},
 		RouterReplay: RouterReplayConfig{
-			StoreBackend: "memory",
+			Enabled:      true,
+			StoreBackend: "postgres",
 			TTLSeconds:   2592000,
 			AsyncWrites:  false,
 		},

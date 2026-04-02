@@ -86,23 +86,24 @@ func (s *Server) Start() error {
 			if err != nil {
 				return fmt.Errorf("failed to load TLS certificate from %s: %w", s.certPath, err)
 			}
-			logging.Infof("Loaded TLS certificate from %s", s.certPath)
+			logging.ComponentEvent("extproc", "tls_certificate_loaded", map[string]interface{}{
+				"path": s.certPath,
+			})
 		} else {
 			// Create self-signed certificate
 			cert, err = tlsutil.CreateSelfSignedTLSCertificate()
 			if err != nil {
 				return fmt.Errorf("failed to create self-signed certificate: %w", err)
 			}
-			logging.Infof("Created self-signed TLS certificate")
+			logging.ComponentEvent("extproc", "tls_certificate_created", map[string]interface{}{
+				"source": "self_signed",
+			})
 		}
 
 		creds := credentials.NewTLS(&tls.Config{
 			Certificates: []tls.Certificate{cert},
 		})
 		serverOpts = append(serverOpts, grpc.Creds(creds))
-		logging.Infof("Starting secure LLM Router ExtProc server on port %d...", s.port)
-	} else {
-		logging.Infof("Starting insecure LLM Router ExtProc server on port %d...", s.port)
 	}
 
 	maxMsgSize := config.Get().Looper.GetGRPCMaxMsgSize()
@@ -110,7 +111,11 @@ func (s *Server) Start() error {
 		grpc.MaxRecvMsgSize(maxMsgSize),
 		grpc.MaxSendMsgSize(maxMsgSize),
 	)
-	logging.Infof("gRPC max message size: %d MB", maxMsgSize/(1024*1024))
+	logging.ComponentEvent("extproc", "server_starting", map[string]interface{}{
+		"port":       s.port,
+		"secure":     s.secure,
+		"max_msg_mb": maxMsgSize / (1024 * 1024),
+	})
 	s.server = grpc.NewServer(serverOpts...)
 	ext_proc.RegisterExternalProcessorServer(s.server, s.service)
 
@@ -118,7 +123,6 @@ func (s *Server) Start() error {
 	serverErrCh := make(chan error, 1)
 	go func() {
 		if err := s.server.Serve(lis); err != nil && !errors.Is(err, grpc.ErrServerStopped) {
-			logging.Errorf("Server error: %v", err)
 			serverErrCh <- err
 		} else {
 			serverErrCh <- nil
@@ -138,11 +142,16 @@ func (s *Server) Start() error {
 	select {
 	case err := <-serverErrCh:
 		if err != nil {
-			logging.Errorf("Server exited with error: %v", err)
+			logging.ComponentErrorEvent("extproc", "server_stopped_with_error", map[string]interface{}{
+				"port":  s.port,
+				"error": err.Error(),
+			})
 			return err
 		}
 	case <-signalChan:
-		logging.Infof("Received shutdown signal, gracefully stopping server...")
+		logging.ComponentEvent("extproc", "server_shutdown_requested", map[string]interface{}{
+			"port": s.port,
+		})
 	}
 
 	s.Stop()
@@ -153,7 +162,9 @@ func (s *Server) Start() error {
 func (s *Server) Stop() {
 	if s.server != nil {
 		s.server.GracefulStop()
-		logging.Infof("Server stopped")
+		logging.ComponentEvent("extproc", "server_stopped", map[string]interface{}{
+			"port": s.port,
+		})
 	}
 }
 
@@ -248,7 +259,9 @@ func (s *Server) watchConfigAndReload(ctx context.Context) {
 	// Check if we're using Kubernetes config source
 	cfg := config.Get()
 	if cfg != nil && cfg.ConfigSource == config.ConfigSourceKubernetes {
-		logging.Infof("ConfigSource is kubernetes, watching for config updates from controller")
+		logging.ComponentEvent("extproc", "config_update_watch_started", map[string]interface{}{
+			"source": "kubernetes",
+		})
 		// Watch for config updates from the Kubernetes controller
 		s.watchKubernetesConfigUpdates(ctx)
 		return
@@ -256,7 +269,7 @@ func (s *Server) watchConfigAndReload(ctx context.Context) {
 
 	watcher, err := fsnotify.NewWatcher()
 	if err != nil {
-		logging.LogEvent("config_watcher_error", map[string]interface{}{
+		logging.ComponentErrorEvent("extproc", "config_watcher_error", map[string]interface{}{
 			"stage": "create_watcher",
 			"error": err.Error(),
 		})
@@ -271,7 +284,7 @@ func (s *Server) watchConfigAndReload(ctx context.Context) {
 
 	// Watch both the file and its directory to handle symlink swaps (Kubernetes ConfigMap)
 	if err := watcher.Add(cfgDir); err != nil {
-		logging.LogEvent("config_watcher_error", map[string]interface{}{
+		logging.ComponentErrorEvent("extproc", "config_watcher_error", map[string]interface{}{
 			"stage": "watch_dir",
 			"dir":   cfgDir,
 			"error": err.Error(),
@@ -287,13 +300,21 @@ func (s *Server) watchConfigAndReload(ctx context.Context) {
 	)
 
 	reload := func() {
-		logging.Infof("[ConfigReload] Triggered reload for config file: %s", cfgFile)
+		logging.ComponentDebugEvent("extproc", "config_reload_triggered", map[string]interface{}{
+			"file": cfgFile,
+		})
 
-		// Log file info before parsing
 		if info, err := os.Stat(cfgFile); err == nil {
-			logging.Infof("[ConfigReload] Config file stat: size=%d, modTime=%s", info.Size(), info.ModTime().Format("2006-01-02 15:04:05"))
+			logging.ComponentDebugEvent("extproc", "config_file_stat", map[string]interface{}{
+				"file":       cfgFile,
+				"size_bytes": info.Size(),
+				"mod_time":   info.ModTime().Format("2006-01-02 15:04:05"),
+			})
 		} else {
-			logging.Errorf("[ConfigReload] Cannot stat config file: %v", err)
+			logging.ComponentDebugEvent("extproc", "config_file_stat_failed", map[string]interface{}{
+				"file":  cfgFile,
+				"error": err.Error(),
+			})
 		}
 
 		err := s.reloadRouterFromFile(cfgFile)
@@ -305,24 +326,18 @@ func (s *Server) watchConfigAndReload(ctx context.Context) {
 			if strings.Contains(err.Error(), "model download preflight failed") {
 				event["stage"] = "model_download"
 			}
-			logging.LogEvent("config_reload_failed", event)
-			logging.Errorf("[ConfigReload] FAILED to build new router: %v", err)
+			logging.ComponentErrorEvent("extproc", "config_reload_failed", event)
 			return
 		}
 
 		newRouter := s.service.GetRouter()
-		// Log decisions in the newly loaded config
-		if newRouter.Config != nil {
-			logging.Infof("[ConfigReload] New router built successfully: decisions=%d", len(newRouter.Config.Decisions))
-			for i, d := range newRouter.Config.Decisions {
-				logging.Infof("[ConfigReload]   decision[%d]: name=%q, modelRefs=%d, priority=%d", i, d.Name, len(d.ModelRefs), d.Priority)
-			}
-		}
-
-		logging.LogEvent("config_reloaded", map[string]interface{}{
+		event := map[string]interface{}{
 			"file": cfgFile,
-		})
-		logging.Infof("[ConfigReload] Router swapped successfully with new config")
+		}
+		if newRouter != nil && newRouter.Config != nil {
+			event["decision_count"] = len(newRouter.Config.Decisions)
+		}
+		logging.ComponentEvent("extproc", "config_reloaded", event)
 	}
 
 	for {
@@ -333,17 +348,26 @@ func (s *Server) watchConfigAndReload(ctx context.Context) {
 			if !ok {
 				return
 			}
-			logging.Debugf("[ConfigWatcher] fsnotify event: name=%s, op=%s", ev.Name, ev.Op.String())
+			logging.ComponentDebugEvent("extproc", "config_watcher_event", map[string]interface{}{
+				"name": ev.Name,
+				"op":   ev.Op.String(),
+			})
 			if ev.Op&(fsnotify.Write|fsnotify.Create|fsnotify.Rename|fsnotify.Remove|fsnotify.Chmod) != 0 {
 				if shouldReloadForConfigEvent(cfgFile, cfgDir, ev.Name) {
 					if !pending || time.Since(last) > 250*time.Millisecond {
 						pending = true
 						last = time.Now()
-						logging.Infof("[ConfigWatcher] Config change detected, scheduling reload in 300ms: event=%s, file=%s", ev.Op.String(), ev.Name)
+						logging.ComponentEvent("extproc", "config_reload_scheduled", map[string]interface{}{
+							"file":     ev.Name,
+							"event":    ev.Op.String(),
+							"delay_ms": 300,
+						})
 						// Slight delay to let file settle
 						go func() { time.Sleep(300 * time.Millisecond); reload() }()
 					} else {
-						logging.Debugf("[ConfigWatcher] Debounced event (too soon): %s", ev.Name)
+						logging.ComponentDebugEvent("extproc", "config_reload_debounced", map[string]interface{}{
+							"file": ev.Name,
+						})
 					}
 				}
 			}
@@ -351,7 +375,7 @@ func (s *Server) watchConfigAndReload(ctx context.Context) {
 			if !ok {
 				return
 			}
-			logging.LogEvent("config_watcher_error", map[string]interface{}{
+			logging.ComponentErrorEvent("extproc", "config_watcher_error", map[string]interface{}{
 				"stage": "watch_loop",
 				"error": err.Error(),
 			})
@@ -374,15 +398,16 @@ func (s *Server) watchKubernetesConfigUpdates(ctx context.Context) {
 
 			err := s.reloadRouterFromConfig("kubernetes", s.configPath, newCfg)
 			if err != nil {
-				logging.LogEvent("config_reload_failed", map[string]interface{}{
+				logging.ComponentErrorEvent("extproc", "config_reload_failed", map[string]interface{}{
 					"source": "kubernetes",
 					"error":  err.Error(),
 				})
 				continue
 			}
 
-			logging.LogEvent("config_reloaded", map[string]interface{}{
-				"source": "kubernetes",
+			logging.ComponentEvent("extproc", "config_reloaded", map[string]interface{}{
+				"source":         "kubernetes",
+				"decision_count": len(newCfg.Decisions),
 			})
 		}
 	}

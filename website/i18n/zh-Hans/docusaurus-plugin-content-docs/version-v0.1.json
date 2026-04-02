@@ -7,9 +7,9 @@
     "message": "概述",
     "description": "The label for category Overview in sidebar tutorialSidebar"
   },
-  "sidebar.tutorialSidebar.category.Installation": {
-    "message": "安装",
-    "description": "The label for category Installation in sidebar tutorialSidebar"
+  "sidebar.tutorialSidebar.category.Quickstart": {
+    "message": "快速开始",
+    "description": "The label for category Quickstart in sidebar tutorialSidebar"
   },
   "sidebar.tutorialSidebar.category.Install with Gateways": {
     "message": "网关集成",

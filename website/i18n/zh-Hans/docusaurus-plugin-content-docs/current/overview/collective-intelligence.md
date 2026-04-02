@@ -132,8 +132,7 @@ routing:
     - name: "protected-route"
       plugins:
         - type: "semantic-cache" # 加速
-        - type: "jailbreak" # 安全
-        - type: "pii" # 隐私
+        - type: "response_jailbreak" # 响应筛查
         - type: "system_prompt" # 上下文
         - type: "hallucination" # 质量
 ```
@@ -186,7 +185,7 @@ reason: "擅长数学证明"
 ```yaml
 plugins_applied:
   - semantic-cache: "未命中缓存，继续"
-  - jailbreak: "未检测到对抗模式"
+  - response_jailbreak: "持续检查输出是否越界"
   - system_prompt: "追加：请给出严格数学证明"
   - hallucination: "启用事实核验"
 ```
@@ -195,7 +194,7 @@ plugins_applied:
 
 - **准确**：路由到数学专家
 - **快**：先查缓存
-- **安全**：确认无越狱企图
+- **安全**：持续筛查输出风险
 - **高质量**：启用幻觉检测
 
 **这就是集体智能**：并非由单一组件拍板，而是信号、投影、规则、模型与插件协作涌现出的决策。

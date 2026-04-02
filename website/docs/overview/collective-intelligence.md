@@ -47,7 +47,7 @@ Different signals capture different aspects of intelligence:
 | Signal family group                                                                                                            | Intelligence aspect                                      |
 | ------------------------------------------------------------------------------------------------------------------------------ | -------------------------------------------------------- |
 | **Heuristic** (`authz`, `context`, `keyword`, `language`, `structure`)                                                         | Fast request-shape, locale, and policy gating            |
-| **Learned** (`complexity`, `domain`, `embedding`, `modality`, `fact-check`, `jailbreak`, `pii`, `preference`, `user-feedback`) | Semantic, safety, modality, and preference understanding |
+| **Learned** (`complexity`, `domain`, `embedding`, `kb`, `modality`, `fact-check`, `jailbreak`, `pii`, `preference`, `reask`, `user-feedback`) | Semantic, safety, modality, follow-up, and preference understanding |
 
 **Collective benefit**: The combination of signals provides a richer understanding than any single signal.
 
@@ -130,8 +130,7 @@ routing:
     - name: "protected-route"
       plugins:
         - type: "semantic-cache" # Speed optimization
-        - type: "jailbreak" # Security layer
-        - type: "pii" # Privacy protection
+        - type: "response_jailbreak" # Response screening
         - type: "system_prompt" # Context injection
         - type: "hallucination" # Quality assurance
 ```
@@ -186,7 +185,7 @@ reason: "Specialized in mathematical proofs"
 ```yaml
 plugins_applied:
   - semantic-cache: "Cache miss, proceeding"
-  - jailbreak: "No adversarial patterns detected"
+  - response_jailbreak: "Output screening remains active"
   - system_prompt: "Added: 'Provide rigorous mathematical proof'"
   - hallucination: "Enabled for fact verification"
 ```

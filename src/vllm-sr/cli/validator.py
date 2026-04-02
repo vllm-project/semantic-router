@@ -12,6 +12,8 @@ from cli.models import (
     PluginType,
     SemanticCachePluginConfig,
     FastResponsePluginConfig,
+    RequestParamsPluginConfig,
+    ResponseJailbreakPluginConfig,
     ToolsPluginConfig,
     SystemPromptPluginConfig,
     HeaderMutationPluginConfig,
@@ -19,6 +21,7 @@ from cli.models import (
     RouterReplayPluginConfig,
     MemoryPluginConfig,
     RAGPluginConfig,
+    ImageGenPluginConfig,
 )
 from pydantic import ValidationError as PydanticValidationError
 from cli.utils import get_logger
@@ -396,12 +399,15 @@ def validate_plugin_configurations(config: UserConfig) -> List[ValidationError]:
     config_models = {
         PluginType.SEMANTIC_CACHE.value: SemanticCachePluginConfig,
         PluginType.FAST_RESPONSE.value: FastResponsePluginConfig,
+        PluginType.REQUEST_PARAMS.value: RequestParamsPluginConfig,
+        PluginType.RESPONSE_JAILBREAK.value: ResponseJailbreakPluginConfig,
         PluginType.SYSTEM_PROMPT.value: SystemPromptPluginConfig,
         PluginType.HEADER_MUTATION.value: HeaderMutationPluginConfig,
         PluginType.HALLUCINATION.value: HallucinationPluginConfig,
         PluginType.ROUTER_REPLAY.value: RouterReplayPluginConfig,
         PluginType.MEMORY.value: MemoryPluginConfig,
         PluginType.RAG.value: RAGPluginConfig,
+        PluginType.IMAGE_GEN.value: ImageGenPluginConfig,
         PluginType.TOOLS.value: ToolsPluginConfig,
     }
 
