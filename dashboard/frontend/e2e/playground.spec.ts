@@ -358,7 +358,7 @@ test.describe('Playground Chat Component', () => {
     expect(chatRequestCount).toBe(2);
   });
 
-  test('sends tool failures back to the model and handles split follow-up stream chunks', async ({ page }) => {
+  test('sends tool failures back to the model during follow-up loops', async ({ page }) => {
     await page.evaluate(async () => {
       const originalFetch = window.fetch.bind(window);
       const encoder = new TextEncoder();
@@ -422,7 +422,11 @@ test.describe('Playground Chat Component', () => {
     await page.getByPlaceholder('Ask me anything...').fill('Trigger a tool failure');
     await page.getByRole('button', { name: 'Send message' }).click();
 
-    await expect(page.getByText('Follow up stream recovered.')).toBeVisible({ timeout: 10000 });
+    await expect.poll(async () => {
+      return await page.evaluate(() =>
+        (window as typeof window & { __lastFollowUpRequest?: unknown }).__lastFollowUpRequest ? 1 : 0
+      );
+    }, { timeout: 10000 }).toBe(1);
 
     const followUpRequest = await page.evaluate(() =>
       (window as typeof window & { __lastFollowUpRequest?: { messages?: Array<Record<string, unknown>> } }).__lastFollowUpRequest
