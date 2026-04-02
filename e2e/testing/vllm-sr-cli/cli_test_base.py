@@ -25,6 +25,15 @@ import yaml
 HTTP_STATUS_OK = 200
 
 
+def _coerce_timeout_stream(value: str | bytes | None) -> str:
+    """Normalize TimeoutExpired output/stderr values into text."""
+    if value is None:
+        return ""
+    if isinstance(value, bytes):
+        return value.decode(errors="replace")
+    return value
+
+
 class CLITestBase(unittest.TestCase):
     """Base class for vLLM-SR CLI tests."""
 
@@ -245,9 +254,18 @@ class CLITestBase(unittest.TestCase):
 
             return result.returncode, stdout, stderr
 
-        except subprocess.TimeoutExpired:
+        except subprocess.TimeoutExpired as exc:
             print(f"Command timed out after {timeout}s")
-            return -1, "", f"Command timed out after {timeout} seconds"
+            stdout = _coerce_timeout_stream(
+                getattr(exc, "stdout", None) or getattr(exc, "output", None)
+            )
+            stderr = _coerce_timeout_stream(getattr(exc, "stderr", None))
+            timeout_message = f"Command timed out after {timeout} seconds"
+            if stderr:
+                stderr = f"{stderr.rstrip()}\n{timeout_message}"
+            else:
+                stderr = timeout_message
+            return -1, stdout, stderr
         except Exception as e:
             print(f"Command failed with exception: {e}")
             return -1, "", str(e)
