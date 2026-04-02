@@ -116,7 +116,7 @@ const allTeamMembers: TeamMember[] = [
     role: <Translate id="team.members.Yehudit.role">Software Engineer</Translate>,
     company: 'Red Hat',
     avatar: 'https://avatars.githubusercontent.com/u/34643974?s=400&v=4',
-    github: 'https://github.com/yehudit1987',
+    github: 'https://github.com/yehuditkerido',
     linkedin: 'https://www.linkedin.com/in/yehuditkerido/',
     bio: <Translate id="team.members.Yehudit.bio">Software engineer with a research-driven mindset, focused on cloud-native platforms and AI infrastructure. Open-source contributor.</Translate>,
     memberType: 'committer',
