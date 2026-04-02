@@ -183,6 +183,7 @@ docs:
   - docs/agent/tech-debt/td-035-signal-group-default-coverage-contract-gap.md
   - docs/agent/tech-debt/td-036-decision-tree-authoring-roundtrip-gap.md
   - docs/agent/tech-debt/td-037-dev-integration-env-ownership-and-shared-suite-topology.md
+  - docs/agent/tech-debt/td-038-custom-chat-completions-structs.md
   - docs/agent/glossary.md
   - docs/agent/adr/README.md
   - docs/agent/adr/adr-0001-harness-layering.md
@@ -468,6 +469,9 @@ doc_governance:
     - path: docs/agent/tech-debt/td-037-dev-integration-env-ownership-and-shared-suite-topology.md
       steward: agent-contract
       freshness: update when the TD037 debt record changes materially
+    - path: docs/agent/tech-debt/td-038-custom-chat-completions-structs.md
+      steward: agent-contract
+      freshness: update when the TD038 debt record changes materially
     - path: docs/agent/glossary.md
       steward: agent-contract
       freshness: update when harness terms or categories change
