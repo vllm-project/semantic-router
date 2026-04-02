@@ -31,10 +31,12 @@ def is_setup_mode_config(config: Mapping[str, Any]) -> bool:
 
 
 def detect_canonical_storage_backends(config: Mapping[str, Any]) -> set[str]:
-    """Return provisionable backends implied by canonical service defaults."""
-    if is_setup_mode_config(config):
-        return set()
+    """Return provisionable backends implied by canonical service defaults.
 
+    Setup-mode bootstrap still uses the local default sidecar stack so the
+    first `vllm-sr serve` starts the same local storage dependencies that the
+    activated config will later consume.
+    """
     backends: set[str] = set()
     for service_key in CANONICAL_SERVICE_DEFAULTS:
         backend = effective_service_backend(config, service_key)

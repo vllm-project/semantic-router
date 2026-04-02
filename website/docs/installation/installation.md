@@ -28,13 +28,19 @@ curl -fsSL https://vllm-semantic-router.com/install.sh | bash
 The installer:
 
 - Detects Python 3.10 or newer
-- Installs `vllm-sr` into `~/.local/share/vllm-sr`
+- Installs the latest development `vllm-sr` release into `~/.local/share/vllm-sr`
 - Writes a launcher to `~/.local/bin/vllm-sr`
 - Prepares Docker for `vllm-sr serve` unless you opt out
 - Starts `vllm-sr serve` automatically and opens the dashboard when possible
 - Prints dashboard access and remote-server hints if a browser cannot be opened
 
 If `~/.local/bin` is not already on your `PATH`, the installer prints the export line to add it.
+
+Need the latest stable release instead? Run:
+
+```bash
+curl -fsSL https://vllm-semantic-router.com/install.sh | bash -s -- --channel stable
+```
 
 Windows users should use the manual PyPI flow below.
 
@@ -45,7 +51,10 @@ Windows users should use the manual PyPI flow below.
 python -m venv vsr
 source vsr/bin/activate  # On Windows: vsr\Scripts\activate
 
-# Install from PyPI
+# Install the latest development release
+pip install --pre vllm-sr
+
+# Install the latest stable release instead
 pip install vllm-sr
 ```
 

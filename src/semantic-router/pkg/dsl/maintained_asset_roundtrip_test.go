@@ -61,11 +61,11 @@ func TestMaintainedBalanceRecipeUsesProjectionPartitionsAndTieredDecisions(t *te
 	assertMaintainedBalanceIntentPartition(t, cfg.Projections.Partitions)
 	assertMaintainedBalanceProjectionBands(t, cfg.Projections)
 	assertMaintainedBalanceDecisionTiers(t, cfg.Decisions)
-	assertMaintainedBalanceRoute(t, cfg.Decisions, "complex_agentic")
-	assertMaintainedBalanceRoute(t, cfg.Decisions, "complex_technical")
-	assertMaintainedBalanceRoute(t, cfg.Decisions, "reasoning_specialist")
+	assertMaintainedBalanceRoute(t, cfg.Decisions, "formal_math_proof")
+	assertMaintainedBalanceRoute(t, cfg.Decisions, "complex_specialist")
+	assertMaintainedBalanceRoute(t, cfg.Decisions, "reasoning_deep")
 	assertMaintainedBalanceRoute(t, cfg.Decisions, "verified_health")
-	assertMaintainedBalanceRoute(t, cfg.Decisions, "verified_fast_qa")
+	assertMaintainedBalanceRoute(t, cfg.Decisions, "fast_qa")
 	assertMaintainedBalanceRoute(t, cfg.Decisions, "casual_chat")
 }
 
@@ -87,7 +87,6 @@ func TestMaintainedBalanceBaseRoutesExplicitlyExcludeVerifiedOverlay(t *testing.
 
 	for _, routeName := range []string{
 		"medium_explainer",
-		"simple_fast_qa",
 		"simple_general",
 	} {
 		decision := mustFindMaintainedBalanceDecision(t, cfg.Decisions, routeName)
@@ -297,11 +296,17 @@ func assertMaintainedBalanceDSLMarkers(t *testing.T, dslPath, dslText string) {
 	if !strings.Contains(dslText, "SIGNAL reask likely_dissatisfied") {
 		t.Fatalf("%s must define the maintained reask helper for clarification routing", dslPath)
 	}
-	if !strings.Contains(dslText, "ROUTE complex_agentic") {
-		t.Fatalf("%s must include the clawrouter-inspired complex_agentic route", dslPath)
+	if !strings.Contains(dslText, "ROUTE formal_math_proof") {
+		t.Fatalf("%s must include the narrow formal_math_proof route", dslPath)
 	}
-	if !strings.Contains(dslText, "ROUTE verified_fast_qa") {
-		t.Fatalf("%s must include the merged verified_fast_qa route", dslPath)
+	if !strings.Contains(dslText, "ROUTE reasoning_deep") {
+		t.Fatalf("%s must include the merged reasoning_deep route", dslPath)
+	}
+	if !strings.Contains(dslText, "ROUTE complex_specialist") {
+		t.Fatalf("%s must include the merged complex_specialist route", dslPath)
+	}
+	if !strings.Contains(dslText, "ROUTE fast_qa") {
+		t.Fatalf("%s must include the merged fast_qa route", dslPath)
 	}
 }
 
