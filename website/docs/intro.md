@@ -28,12 +28,12 @@ We use the project to answer a small set of hard systems questions:
 
 ### Signal and Projection Routing
 
-Captures **14 maintained signal families** and coordinates them with reusable
+Captures **16 maintained signal families** and coordinates them with reusable
 projections before route selection:
 
 | Layer           | Components                                                                                                                                                               | Role                                                      |
 | --------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | --------------------------------------------------------- |
-| **Signals**     | `authz`, `context`, `keyword`, `language`, `structure`, `complexity`, `domain`, `embedding`, `modality`, `fact-check`, `jailbreak`, `pii`, `preference`, `user-feedback` | Extract reusable request, safety, and preference facts    |
+| **Signals**     | `authz`, `context`, `keyword`, `language`, `structure`, `complexity`, `domain`, `embedding`, `kb`, `modality`, `fact-check`, `jailbreak`, `pii`, `preference`, `reask`, `user-feedback` | Extract reusable request, safety, follow-up, and preference facts |
 | **Projections** | `partitions`, `scores`, `mappings`                                                                                                                                       | Coordinate competing matches and emit named routing bands |
 | **Decisions**   | AND/OR policy rules over signals and projections                                                                                                                         | Select the active route and model candidates              |
 

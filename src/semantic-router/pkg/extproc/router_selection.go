@@ -28,7 +28,9 @@ func createModelSelectorRegistry(cfg *config.RouterConfig) *selection.Registry {
 
 	registry := selectionFactory.CreateAll()
 	selection.GlobalRegistry = registry
-	logging.Infof("[Router] Initialized model selection registry (per-decision algorithm config)")
+	logging.ComponentEvent("extproc", "model_selection_registry_initialized", map[string]interface{}{
+		"mode": "per_decision_algorithm_config",
+	})
 	return registry
 }
 

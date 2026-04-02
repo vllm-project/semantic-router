@@ -112,6 +112,7 @@ func TestCreateLooperResponseIncludesTrackedHeaders(t *testing.T) {
 		VSRMatchedAuthz:         []string{"authz:team-a"},
 		VSRMatchedJailbreak:     []string{"jailbreak:block"},
 		VSRMatchedPII:           []string{"pii:email"},
+		VSRMatchedReask:         []string{"likely_dissatisfied"},
 		VSRMatchedProjection:    []string{"balance_reasoning"},
 		VSRContextTokenCount:    42,
 		VSRSelectedDecisionName: "coding",
@@ -132,6 +133,7 @@ func TestCreateLooperResponseIncludesTrackedHeaders(t *testing.T) {
 	assert.Equal(t, "authz:team-a", headerMap[headers.VSRMatchedAuthz])
 	assert.Equal(t, "jailbreak:block", headerMap[headers.VSRMatchedJailbreak])
 	assert.Equal(t, "pii:email", headerMap[headers.VSRMatchedPII])
+	assert.Equal(t, "likely_dissatisfied", headerMap[headers.VSRMatchedReask])
 	assert.Equal(t, "balance_reasoning", headerMap[headers.VSRMatchedProjection])
 	assert.Equal(t, "coding", headerMap[headers.VSRSelectedDecision])
 	assert.Equal(t, "programming", headerMap[headers.VSRSelectedCategory])

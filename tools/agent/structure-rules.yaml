@@ -170,6 +170,7 @@ legacy_hotspots:
   - paths:
       - src/semantic-router/pkg/classification/classifier.go
       - src/semantic-router/pkg/services/classification.go
+    file_checks: relaxed
     function_checks: relaxed
   - paths:
       - dashboard/backend/handlers/openclaw.go

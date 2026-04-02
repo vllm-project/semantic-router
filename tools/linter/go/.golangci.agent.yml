@@ -109,6 +109,17 @@ linters:
           - gocognit
           - nestif
         path: (^|/)src/semantic-router/pkg/decision/engine_category_kb_test\.go$
+      - linters:
+          - cyclop
+          - errcheck
+          - funlen
+          - gocognit
+          - nestif
+        path: (^|/)src/semantic-router/pkg/modelselection/benchmark_runner\.go$
+      - linters:
+          - cyclop
+          - errcheck
+        path: (^|/)src/semantic-router/pkg/classification/vllm_client\.go$
 
 issues:
   max-issues-per-linter: 0

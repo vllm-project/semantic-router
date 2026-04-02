@@ -25,6 +25,14 @@ HTTP_OK_MIN = 200
 HTTP_REDIRECT_MIN = 300
 
 
+def resolve_repo_path(path: Path | None) -> Path | None:
+    if path is None:
+        return None
+    if path.is_absolute():
+        return path
+    return (REPO_ROOT / path).resolve()
+
+
 def normalize_router_url(router_url: str) -> str:
     normalized = router_url.strip().rstrip("/")
     eval_suffix = "/api/v1/eval"
@@ -126,10 +134,15 @@ def wait_for_router_ready(
 
 
 def evaluate_probe(router_url: str, probe: Probe) -> dict[str, Any]:
+    request_payload: dict[str, Any]
+    if probe.messages:
+        request_payload = {"messages": list(probe.messages)}
+    else:
+        request_payload = {"text": probe.query}
     status, payload = http_json(
         "POST",
         f"{normalize_router_url(router_url)}/api/v1/eval",
-        {"text": probe.query},
+        request_payload,
     )
     data = ensure_success(status, payload, "POST /api/v1/eval")
     if not isinstance(data, dict):
@@ -150,7 +163,8 @@ def evaluate_probe(router_url: str, probe: Probe) -> dict[str, Any]:
         "variant_id": probe.variant_id,
         "expected_decision": probe.expected_decision,
         "expected_alias": probe.expected_alias,
-        "query": probe.query,
+        "query": probe.query or summarize_probe_messages(probe.messages),
+        "messages": list(probe.messages),
         "notes": probe.notes,
         "tags": list(probe.tags),
         "actual_decision": actual_decision,
@@ -162,6 +176,36 @@ def evaluate_probe(router_url: str, probe: Probe) -> dict[str, Any]:
         "signal_confidences": data.get("signal_confidences") or {},
         "metrics": data.get("metrics") or {},
     }
+
+
+def summarize_probe_messages(messages: tuple[dict[str, Any], ...]) -> str:
+    if not messages:
+        return ""
+    for message in reversed(messages):
+        if str(message.get("role") or "").strip().lower() != "user":
+            continue
+        content = summarize_message_content(message.get("content"))
+        if content:
+            return content
+    return json.dumps(list(messages), ensure_ascii=False)
+
+
+def summarize_message_content(content: Any) -> str:
+    if isinstance(content, str):
+        return content.strip()
+    if not isinstance(content, list):
+        return ""
+    parts: list[str] = []
+    for item in content:
+        if not isinstance(item, dict):
+            continue
+        part_type = str(item.get("type") or "").strip().lower()
+        if part_type not in ("", "text", "input_text"):
+            continue
+        text = str(item.get("text") or "").strip()
+        if text:
+            parts.append(text)
+    return " ".join(parts).strip()
 
 
 def evaluate_probes(
@@ -202,6 +246,9 @@ def evaluate_probes(
 
 
 def run_validate(dsl_path: Path | None, yaml_path: Path | None) -> dict[str, Any]:
+    dsl_path = resolve_repo_path(dsl_path)
+    yaml_path = resolve_repo_path(yaml_path)
+
     if dsl_path is None and yaml_path is None:
         return {"skipped": True, "reason": "no local DSL or YAML asset provided"}
 
@@ -274,6 +321,8 @@ def run_validate(dsl_path: Path | None, yaml_path: Path | None) -> dict[str, Any
 def deploy_config(
     router_url: str, yaml_path: Path, dsl_path: Path | None
 ) -> dict[str, Any]:
+    yaml_path = resolve_repo_path(yaml_path)
+    dsl_path = resolve_repo_path(dsl_path)
     payload = {"yaml": yaml_path.read_text(encoding="utf-8")}
     if dsl_path is not None:
         payload["dsl"] = dsl_path.read_text(encoding="utf-8")

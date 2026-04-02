@@ -4,8 +4,6 @@ import "sort"
 
 const (
 	DecisionPluginSemanticCache     = "semantic-cache"
-	DecisionPluginJailbreak         = "jailbreak"
-	DecisionPluginPII               = "pii"
 	DecisionPluginSystemPrompt      = "system_prompt"
 	DecisionPluginHeaderMutation    = "header_mutation"
 	DecisionPluginHallucination     = "hallucination"
@@ -31,6 +29,7 @@ var supportedSignalTypes = []string{
 	SignalTypeModality,
 	SignalTypePII,
 	SignalTypePreference,
+	SignalTypeReask,
 	SignalTypeStructure,
 	SignalTypeKB,
 	SignalTypeUserFeedback,
@@ -41,9 +40,7 @@ var supportedDecisionPluginTypes = []string{
 	DecisionPluginHallucination,
 	DecisionPluginHeaderMutation,
 	DecisionPluginImageGen,
-	DecisionPluginJailbreak,
 	DecisionPluginMemory,
-	DecisionPluginPII,
 	DecisionPluginRAG,
 	DecisionPluginRequestParams,
 	DecisionPluginResponseJailbreak,

@@ -128,13 +128,14 @@ type RouteOpt struct {
 
 // rawRouteItem: a single element inside a route body
 type rawRouteItem struct {
-	Pos       lexer.Position
-	Priority  *int          `parser:"  'PRIORITY' @Int"`
-	Tier      *int          `parser:"| 'TIER' @Int"`
-	When      *BoolExprTop  `parser:"| 'WHEN' @@"`
-	Model     *rawModelList `parser:"| 'MODEL' @@"`
-	Algorithm *rawAlgoSpec  `parser:"| 'ALGORITHM' @@"`
-	Plugin    *rawPluginRef `parser:"| 'PLUGIN' @@"`
+	Pos         lexer.Position
+	Priority    *int          `parser:"  'PRIORITY' @Int"`
+	Tier        *int          `parser:"| 'TIER' @Int"`
+	When        *BoolExprTop  `parser:"| 'WHEN' @@"`
+	Model       *rawModelList `parser:"| 'MODEL' @@"`
+	Algorithm   *rawAlgoSpec  `parser:"| 'ALGORITHM' @@"`
+	Plugin      *rawPluginRef `parser:"| 'PLUGIN' @@"`
+	Description *string       `parser:"| 'DESCRIPTION' @String"`
 }
 
 // rawPluginDecl: PLUGIN <name> <type> { fields... }
@@ -152,17 +153,17 @@ type rawPluginRef struct {
 	Fields []*FieldEntry `parser:"( '{' @@* '}' )?"`
 }
 
-// rawModelList: comma-separated model refs
+// rawModelList: comma-separated model refs (trailing comma tolerated)
 type rawModelList struct {
 	Pos    lexer.Position
-	Models []*rawModelRef `parser:"@@ ( ',' @@ )*"`
+	Models []*rawModelRef `parser:"@@ ( ',' @@ )* ','?"`
 }
 
-// rawModelRef: "model_name" (options...)?
+// rawModelRef: "model_name" or model_name (options...)?
 type rawModelRef struct {
 	Pos     lexer.Position
-	Model   string      `parser:"@String"`
-	Options []*ModelOpt `parser:"( '(' @@ ( ',' @@ )* ')' )?"`
+	Model   string      `parser:"@(String | Ident)"`
+	Options []*ModelOpt `parser:"( '(' @@ ( ',' @@ )* ','? ')' )?"`
 }
 
 // ModelOpt: key = value inside model options
@@ -200,11 +201,11 @@ type BoolFactor struct {
 	SignalRef *rawSignalRefExpr `parser:"| @@"`
 }
 
-// rawSignalRefExpr: signal_type("signal_name")
+// rawSignalRefExpr: signal_type("signal_name") or signal_type(signal_name)
 type rawSignalRefExpr struct {
 	Pos        lexer.Position
 	SignalType string `parser:"@Ident"`
-	SignalName string `parser:"'(' @String ')'"`
+	SignalName string `parser:"'(' @(String | Ident) ')'"`
 }
 
 // ---------- Field / Value (parsed by participle) ----------

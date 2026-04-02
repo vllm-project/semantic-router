@@ -66,7 +66,6 @@ func captureRequestHeaders(
 	ctx *RequestContext,
 ) (string, string) {
 	requestHeaders := v.RequestHeaders.Headers
-	logging.Debugf("Processing request headers: %+v", requestHeaders.Headers)
 	for _, header := range requestHeaders.Headers {
 		headerValue := extractHeaderValue(header)
 		ctx.Headers[header.Key] = headerValue
@@ -76,11 +75,20 @@ func captureRequestHeaders(
 		}
 		if header.Key == headers.VSRLooperRequest && headerValue == "true" {
 			ctx.LooperRequest = true
-			logging.Infof("Detected looper internal request, will skip plugin processing")
 		}
 	}
 
-	return ctx.Headers[":method"], ctx.Headers[":path"]
+	method := ctx.Headers[":method"]
+	path := ctx.Headers[":path"]
+	logging.ComponentDebugEvent("extproc", "request_headers_captured", map[string]interface{}{
+		"request_id":     ctx.RequestID,
+		"method":         method,
+		"path":           path,
+		"header_count":   len(requestHeaders.Headers),
+		"looper_request": ctx.LooperRequest,
+	})
+
+	return method, path
 }
 
 func setRequestHeaderSpanAttributes(
@@ -111,7 +119,10 @@ func detectStreamingExpectation(ctx *RequestContext) {
 
 	if strings.Contains(strings.ToLower(accept), "text/event-stream") {
 		ctx.ExpectStreamingResponse = true
-		logging.Infof("Client expects streaming response based on Accept header")
+		logging.ComponentDebugEvent("extproc", "streaming_expectation_detected", map[string]interface{}{
+			"request_id": ctx.RequestID,
+			"source":     "accept_header",
+		})
 	}
 }
 

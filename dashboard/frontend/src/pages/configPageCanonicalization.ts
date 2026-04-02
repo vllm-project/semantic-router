@@ -13,6 +13,7 @@ const LEGACY_SIGNAL_SECTIONS = [
   ['categories', 'domains'],
   ['fact_check_rules', 'fact_check'],
   ['user_feedback_rules', 'user_feedbacks'],
+  ['reask_rules', 'reasks'],
   ['preference_rules', 'preferences'],
   ['language_rules', 'language'],
   ['context_rules', 'context'],

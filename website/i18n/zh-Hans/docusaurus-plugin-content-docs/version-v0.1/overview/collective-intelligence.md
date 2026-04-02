@@ -105,8 +105,7 @@ Plugin 协同工作以增强响应：
 ```yaml
 plugins:
   - type: "semantic-cache"    # 速度优化
-  - type: "jailbreak"         # 安全层
-  - type: "pii"               # 隐私保护
+  - type: "response_jailbreak" # 响应筛查
   - type: "system_prompt"     # 上下文注入
   - type: "hallucination"     # 质量保证
 ```

@@ -59,6 +59,7 @@ func appendLooperSignalHeaders(
 	appendJoinedHeader(setHeaders, headers.VSRMatchedDomains, reqCtx.VSRMatchedDomains)
 	appendJoinedHeader(setHeaders, headers.VSRMatchedFactCheck, reqCtx.VSRMatchedFactCheck)
 	appendJoinedHeader(setHeaders, headers.VSRMatchedUserFeedback, reqCtx.VSRMatchedUserFeedback)
+	appendJoinedHeader(setHeaders, headers.VSRMatchedReask, reqCtx.VSRMatchedReask)
 	appendJoinedHeader(setHeaders, headers.VSRMatchedPreference, reqCtx.VSRMatchedPreference)
 	appendJoinedHeader(setHeaders, headers.VSRMatchedLanguage, reqCtx.VSRMatchedLanguage)
 	appendJoinedHeader(setHeaders, headers.VSRMatchedContext, reqCtx.VSRMatchedContext)

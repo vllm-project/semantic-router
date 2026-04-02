@@ -238,7 +238,35 @@ function extractSignals(config: ConfigData): SignalConfig[] {
     })
   })
 
-  // 6. Preference Rules
+  // 6. Reask Rules
+  // From reask_rules (Go/Router format)
+  config.reask_rules?.forEach(rule => {
+    addSignal({
+      type: 'reask',
+      name: rule.name,
+      description: rule.description,
+      latency: SIGNAL_LATENCY.reask,
+      config: {
+        threshold: rule.threshold,
+        lookback_turns: rule.lookback_turns,
+      },
+    })
+  })
+  // From signals.reasks (Python CLI format)
+  routingSignals?.reasks?.forEach(rule => {
+    addSignal({
+      type: 'reask',
+      name: rule.name,
+      description: rule.description,
+      latency: SIGNAL_LATENCY.reask,
+      config: {
+        threshold: rule.threshold,
+        lookback_turns: rule.lookback_turns,
+      },
+    })
+  })
+
+  // 7. Preference Rules
   // From preference_rules (Go/Router format)
   config.preference_rules?.forEach(rule => {
     addSignal({
@@ -500,6 +528,17 @@ function extractSignals(config: ConfigData): SignalConfig[] {
 function extractProjectionSignals(config: ConfigData): SignalConfig[] {
   const projectionSignals: SignalConfig[] = []
   const projections = config.routing?.projections ?? config.projections
+  const scoreInputsByName = new Map(
+    (projections?.scores ?? []).map((score) => [
+      score.name,
+      (score.inputs ?? [])
+        .filter((input): input is NonNullable<typeof input> => Boolean(input?.type && input?.name))
+        .map((input) => ({
+          type: input.type,
+          name: input.name,
+        })),
+    ]),
+  )
 
   projections?.mappings?.forEach(mapping => {
     mapping.outputs?.forEach(output => {
@@ -512,6 +551,7 @@ function extractProjectionSignals(config: ConfigData): SignalConfig[] {
           source: mapping.source,
           method: mapping.method || 'threshold_bands',
           mapping: mapping.name,
+          upstreamSignals: scoreInputsByName.get(mapping.source) ?? [],
         },
       })
     })
@@ -716,6 +756,7 @@ export function groupSignalsByType(signals: SignalConfig[]): Record<SignalType, 
     domain: [],
     fact_check: [],
     user_feedback: [],
+    reask: [],
     preference: [],
     language: [],
     context: [],

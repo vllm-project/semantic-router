@@ -12,6 +12,8 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	routerconfig "github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 )
 
 // Sample config for testing - uses raw config fallback since full parsing requires more dependencies
@@ -429,6 +431,41 @@ func TestTopologyTestQueryHandler_EvaluatedRules(t *testing.T) {
 	// Basic validation - routing latency should be >= 0 (can be 0 for very fast execution)
 	if result.RoutingLatency < 0 {
 		t.Errorf("Expected non-negative routing latency, got %d", result.RoutingLatency)
+	}
+}
+
+func TestBuildEvaluatedRule_EmptyConditionsSerializeAsEmptyArray(t *testing.T) {
+	rule := buildEvaluatedRule(
+		routerconfig.Decision{
+			Name:     "casual_chat",
+			Priority: 10,
+		},
+		map[string]bool{},
+	)
+
+	if rule.Conditions == nil {
+		t.Fatal("expected empty Conditions slice, got nil")
+	}
+	if len(rule.Conditions) != 0 {
+		t.Fatalf("expected no conditions, got %v", rule.Conditions)
+	}
+
+	payload, err := json.Marshal(rule)
+	if err != nil {
+		t.Fatalf("failed to marshal rule: %v", err)
+	}
+
+	var parsed map[string]any
+	if err := json.Unmarshal(payload, &parsed); err != nil {
+		t.Fatalf("failed to unmarshal rule JSON: %v", err)
+	}
+
+	conditions, ok := parsed["conditions"].([]any)
+	if !ok {
+		t.Fatalf("expected conditions to serialize as JSON array, got %T (%v)", parsed["conditions"], parsed["conditions"])
+	}
+	if len(conditions) != 0 {
+		t.Fatalf("expected empty conditions array, got %v", conditions)
 	}
 }
 

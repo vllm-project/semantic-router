@@ -1,5 +1,0 @@
-plugin:
-  type: jailbreak
-  configuration:
-    enabled: true
-    threshold: 0.85

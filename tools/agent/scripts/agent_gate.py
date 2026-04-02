@@ -147,6 +147,7 @@ def build_parser() -> argparse.ArgumentParser:
 def _add_changed_file_args(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--base-ref", default=None)
     parser.add_argument("--changed-files", default=None)
+    parser.add_argument("--changed-files-path", default=None)
 
 
 def _add_format_arg(
@@ -247,9 +248,15 @@ def main() -> int:
     if args.command == "scorecard":
         return handle_scorecard(args)
 
-    changed_files = get_changed_files(
-        getattr(args, "changed_files", None), getattr(args, "base_ref", None)
-    )
+    try:
+        changed_files = get_changed_files(
+            getattr(args, "changed_files", None),
+            getattr(args, "base_ref", None),
+            getattr(args, "changed_files_path", None),
+        )
+    except ValueError as exc:
+        parser.error(str(exc))
+        return 2
     handlers = {
         "changed-files": handle_changed_files,
         "resolve": handle_resolve,

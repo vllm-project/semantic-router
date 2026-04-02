@@ -87,3 +87,26 @@ func TestParseStreamingChunk_MalformedJSON(t *testing.T) {
 	// Content should not change
 	assert.Equal(t, "Existing content", ctx.StreamingContent)
 }
+
+func TestParseStreamingChunk_CapturesToolCalls(t *testing.T) {
+	router := &OpenAIRouter{}
+	ctx := &RequestContext{
+		StreamingMetadata:  make(map[string]interface{}),
+		StreamingToolCalls: make(map[int]*StreamingToolCallState),
+	}
+
+	chunk1 := `data: {"id":"chatcmpl-123","object":"chat.completion.chunk","created":1234567890,"model":"test-model","choices":[{"index":0,"delta":{"tool_calls":[{"index":0,"id":"call_weather","type":"function","function":{"name":"get_weather","arguments":"{\"location\":\""}}]},"finish_reason":null}]}
+
+`
+	router.parseStreamingChunk(chunk1, ctx)
+
+	chunk2 := "data: {\"id\":\"chatcmpl-123\",\"object\":\"chat.completion.chunk\",\"created\":1234567890,\"model\":\"test-model\",\"choices\":[{\"index\":0,\"delta\":{\"tool_calls\":[{\"index\":0,\"function\":{\"arguments\":\"San Francisco\\\"}\"}}]},\"finish_reason\":\"tool_calls\"}]}\n\n"
+	router.parseStreamingChunk(chunk2, ctx)
+
+	if assert.Contains(t, ctx.StreamingToolCalls, 0) {
+		assert.Equal(t, "call_weather", ctx.StreamingToolCalls[0].ID)
+		assert.Equal(t, "get_weather", ctx.StreamingToolCalls[0].Name)
+		assert.JSONEq(t, `{"location":"San Francisco"}`, ctx.StreamingToolCalls[0].Arguments)
+	}
+	assert.Equal(t, "tool_calls", ctx.StreamingMetadata["finish_reason"])
+}

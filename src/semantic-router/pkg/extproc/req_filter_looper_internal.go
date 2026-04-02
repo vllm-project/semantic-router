@@ -42,11 +42,12 @@ func (r *OpenAIRouter) getReasoningInfoFromDecision(
 			if reasoningEffort == "" {
 				reasoningEffort = "medium"
 			}
-			logging.Infof(
-				"[Looper] Found reasoning config in ModelRef: use=%v, effort=%s",
-				*ref.UseReasoning,
-				reasoningEffort,
-			)
+			logging.ComponentDebugEvent("extproc", "looper_reasoning_config_found", map[string]interface{}{
+				"model":             modelName,
+				"source":            "model_ref",
+				"reasoning_enabled": *ref.UseReasoning,
+				"reasoning_effort":  reasoningEffort,
+			})
 			return *ref.UseReasoning, reasoningEffort
 		}
 	}
@@ -64,11 +65,12 @@ func (r *OpenAIRouter) getReasoningInfoFromDecision(
 	if r.Config.DefaultReasoningEffort != "" {
 		reasoningEffort = r.Config.DefaultReasoningEffort
 	}
-	logging.Infof(
-		"[Looper] Found reasoning_family in ModelParams: %s, effort=%s",
-		params.ReasoningFamily,
-		reasoningEffort,
-	)
+	logging.ComponentDebugEvent("extproc", "looper_reasoning_config_found", map[string]interface{}{
+		"model":            modelName,
+		"source":           "model_params",
+		"reasoning_family": params.ReasoningFamily,
+		"reasoning_effort": reasoningEffort,
+	})
 	return true, reasoningEffort
 }
 
@@ -87,7 +89,11 @@ func (r *OpenAIRouter) modifyRequestBodyForLooper(
 		ctx.ExpectStreamingResponse,
 	)
 	if err != nil {
-		logging.Errorf("[Looper] Error serializing modified request: %v", err)
+		logging.ComponentErrorEvent("extproc", "looper_request_serialize_failed", map[string]interface{}{
+			"request_id": ctx.RequestID,
+			"model":      modelName,
+			"error":      err.Error(),
+		})
 		return nil, fmt.Errorf("error serializing modified request: %w", err)
 	}
 
@@ -101,11 +107,13 @@ func (r *OpenAIRouter) modifyRequestBodyForLooper(
 		decisionName,
 	)
 	if err != nil {
-		logging.Errorf(
-			"[Looper] Error setting reasoning mode %v to request: %v",
-			useReasoning,
-			err,
-		)
+		logging.ComponentErrorEvent("extproc", "looper_reasoning_mode_apply_failed", map[string]interface{}{
+			"request_id":        ctx.RequestID,
+			"model":             modelName,
+			"decision":          decisionName,
+			"reasoning_enabled": useReasoning,
+			"error":             err.Error(),
+		})
 		return nil, fmt.Errorf("error setting reasoning mode: %w", err)
 	}
 
@@ -116,7 +124,12 @@ func (r *OpenAIRouter) modifyRequestBodyForLooper(
 		ctx,
 	)
 	if err != nil {
-		logging.Errorf("[Looper] Error adding system prompt: %v", err)
+		logging.ComponentErrorEvent("extproc", "looper_system_prompt_apply_failed", map[string]interface{}{
+			"request_id": ctx.RequestID,
+			"model":      modelName,
+			"decision":   decisionName,
+			"error":      err.Error(),
+		})
 		return nil, fmt.Errorf("error adding system prompt: %w", err)
 	}
 
@@ -138,7 +151,9 @@ func (r *OpenAIRouter) buildHeaderMutationsForLooper(
 			setHeaders,
 			newHeaderValueOption("Authorization", fmt.Sprintf("Bearer %s", accessKey)),
 		)
-		logging.Infof("[Looper] Added Authorization header for model %s", modelName)
+		logging.ComponentDebugEvent("extproc", "looper_authorization_header_injected", map[string]interface{}{
+			"model": modelName,
+		})
 	}
 
 	if decision == nil {
@@ -148,19 +163,9 @@ func (r *OpenAIRouter) buildHeaderMutationsForLooper(
 	pluginSetHeaders, pluginRemoveHeaders := r.buildHeaderMutations(decision)
 	if len(pluginSetHeaders) > 0 {
 		setHeaders = append(setHeaders, pluginSetHeaders...)
-		logging.Infof(
-			"[Looper] Applied %d header mutations from decision %s",
-			len(pluginSetHeaders),
-			decision.Name,
-		)
 	}
 	if len(pluginRemoveHeaders) > 0 {
 		removeHeaders = append(removeHeaders, pluginRemoveHeaders...)
-		logging.Infof(
-			"[Looper] Applied %d header deletions from decision %s",
-			len(pluginRemoveHeaders),
-			decision.Name,
-		)
 	}
 
 	return setHeaders, removeHeaders
@@ -171,11 +176,18 @@ func (r *OpenAIRouter) handleLooperInternalRequest(
 	modelName string,
 	ctx *RequestContext,
 ) (*ext_proc.ProcessingResponse, error) {
-	logging.Infof("[Looper] Handling internal request for model: %s", modelName)
+	logging.ComponentDebugEvent("extproc", "looper_request_handled", map[string]interface{}{
+		"request_id": ctx.RequestID,
+		"model":      modelName,
+	})
 
 	modifiedBody, err := rewriteRequestModel(ctx.OriginalRequestBody, modelName)
 	if err != nil {
-		logging.Errorf("[Looper] Failed to rewrite request body: %v", err)
+		logging.ComponentErrorEvent("extproc", "looper_request_rewrite_failed", map[string]interface{}{
+			"request_id": ctx.RequestID,
+			"model":      modelName,
+			"error":      err.Error(),
+		})
 		return r.createErrorResponse(500, "Failed to process looper request: "+err.Error()), nil
 	}
 
@@ -215,7 +227,12 @@ func (r *OpenAIRouter) handleLooperInternalRequestWithPlugins(
 		ctx,
 	)
 	if err != nil {
-		logging.Errorf("[Looper] Failed to modify request body: %v", err)
+		logging.ComponentErrorEvent("extproc", "looper_request_modify_failed", map[string]interface{}{
+			"request_id": ctx.RequestID,
+			"model":      modelName,
+			"decision":   decisionName,
+			"error":      err.Error(),
+		})
 		return r.createErrorResponse(500, "Failed to process looper request"), nil
 	}
 
@@ -230,23 +247,32 @@ func (r *OpenAIRouter) resolveLooperDecision(
 	ctx *RequestContext,
 ) (*config.Decision, *ext_proc.ProcessingResponse) {
 	if decisionName == "" {
-		logging.Warnf("[Looper] No decision name in looper request, falling back to simple routing")
+		logging.ComponentWarnEvent("extproc", "looper_decision_missing", map[string]interface{}{
+			"request_id": ctx.RequestID,
+			"model":      modelName,
+			"fallback":   "simple_routing",
+		})
 		response, _ := r.handleLooperInternalRequest(modelName, ctx)
 		return nil, response
 	}
 
-	logging.Infof(
-		"[Looper] Processing internal request for model: %s, decision: %s",
-		modelName,
-		decisionName,
-	)
+	logging.ComponentDebugEvent("extproc", "looper_request_processing", map[string]interface{}{
+		"request_id": ctx.RequestID,
+		"model":      modelName,
+		"decision":   decisionName,
+	})
 
 	decision := r.findDecisionByName(decisionName)
 	if decision != nil {
 		return decision, nil
 	}
 
-	logging.Warnf("[Looper] Decision %s not found, falling back to simple routing", decisionName)
+	logging.ComponentWarnEvent("extproc", "looper_decision_not_found", map[string]interface{}{
+		"request_id": ctx.RequestID,
+		"model":      modelName,
+		"decision":   decisionName,
+		"fallback":   "simple_routing",
+	})
 	response, _ := r.handleLooperInternalRequest(modelName, ctx)
 	return nil, response
 }
@@ -262,10 +288,13 @@ func (r *OpenAIRouter) prepareLooperInternalContext(
 	ctx.VSRSelectedModel = modelName
 	ctx.RequestModel = modelName
 
-	if replayCfg := decision.GetRouterReplayConfig(); replayCfg != nil && replayCfg.Enabled {
+	if replayCfg := r.Config.EffectiveRouterReplayConfigForDecision(decisionName); replayCfg != nil {
 		cfgCopy := *replayCfg
 		ctx.RouterReplayPluginConfig = &cfgCopy
-		logging.Debugf("[Looper] Router replay enabled for decision %s", decisionName)
+		logging.ComponentDebugEvent("extproc", "looper_router_replay_enabled", map[string]interface{}{
+			"request_id": ctx.RequestID,
+			"decision":   decisionName,
+		})
 	}
 }
 
@@ -277,11 +306,11 @@ func applyLooperReasoningContext(
 ) {
 	if useReasoning {
 		ctx.VSRReasoningMode = "on"
-		logging.Infof(
-			"[Looper] Reasoning enabled for model %s, effort: %s",
-			modelName,
-			reasoningEffort,
-		)
+		logging.ComponentDebugEvent("extproc", "looper_reasoning_enabled", map[string]interface{}{
+			"request_id":       ctx.RequestID,
+			"model":            modelName,
+			"reasoning_effort": reasoningEffort,
+		})
 		return
 	}
 
@@ -293,7 +322,10 @@ func (r *OpenAIRouter) parseLooperRequestForPlugins(
 ) (*openai.ChatCompletionNewParams, error) {
 	openAIRequest, err := parseOpenAIRequest(ctx.OriginalRequestBody)
 	if err != nil {
-		logging.Errorf("[Looper] Failed to parse request body: %v", err)
+		logging.ComponentErrorEvent("extproc", "looper_request_parse_failed", map[string]interface{}{
+			"request_id": ctx.RequestID,
+			"error":      err.Error(),
+		})
 		return nil, err
 	}
 

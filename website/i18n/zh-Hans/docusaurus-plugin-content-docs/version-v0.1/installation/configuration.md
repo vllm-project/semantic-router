@@ -196,13 +196,6 @@ decisions:
       configuration:
         enabled: true
         similarity_threshold: 0.9  # 数学问题需要更高的阈值
-    - type: "jailbreak"
-      configuration:
-        enabled: true
-    - type: "pii"
-      configuration:
-        enabled: true
-        threshold: 0.8
     - type: "system_prompt"
       configuration:
         enabled: true
@@ -463,13 +456,6 @@ decisions:
         configuration:
           enabled: true
           similarity_threshold: 0.9  # 数学问题更高
-      - type: "jailbreak"
-        configuration:
-          enabled: true
-      - type: "pii"
-        configuration:
-          enabled: true
-          threshold: 0.8
       - type: "system_prompt"
         configuration:
           enabled: true

@@ -25,7 +25,11 @@ import (
 func extractUserID(ctx *RequestContext) string {
 	// Check auth header first (trusted source, injected by auth backend)
 	if userID, ok := ctx.Headers[headers.AuthzUserID]; ok && userID != "" {
-		logging.Debugf("Memory: Using user_id from auth header (%s)", headers.AuthzUserID)
+		logging.ComponentDebugEvent("extproc", "memory_user_id_resolved", map[string]interface{}{
+			"request_id": ctx.RequestID,
+			"source":     "auth_header",
+			"header":     headers.AuthzUserID,
+		})
 		return userID
 	}
 
@@ -33,7 +37,10 @@ func extractUserID(ctx *RequestContext) string {
 	if ctx.ResponseAPICtx != nil && ctx.ResponseAPICtx.OriginalRequest != nil {
 		if ctx.ResponseAPICtx.OriginalRequest.Metadata != nil {
 			if userID, ok := ctx.ResponseAPICtx.OriginalRequest.Metadata["user_id"]; ok && userID != "" {
-				logging.Warnf("Memory: Using user_id from request metadata (DEV BUILD - UNTRUSTED fallback)")
+				logging.ComponentWarnEvent("extproc", "memory_user_id_untrusted_fallback", map[string]interface{}{
+					"request_id": ctx.RequestID,
+					"source":     "response_api_metadata",
+				})
 				return userID
 			}
 		}
@@ -46,7 +53,10 @@ func extractUserID(ctx *RequestContext) string {
 			ctx.ChatCompletionUserID = extractChatCompletionUserIDFromBody(ctx.ChatCompletionRequestBody)
 		}
 		if ctx.ChatCompletionUserID != "" {
-			logging.Warnf("Memory: Using user_id from Chat Completions (DEV BUILD - UNTRUSTED fallback)")
+			logging.ComponentWarnEvent("extproc", "memory_user_id_untrusted_fallback", map[string]interface{}{
+				"request_id": ctx.RequestID,
+				"source":     "chat_completions_body",
+			})
 			return ctx.ChatCompletionUserID
 		}
 	}

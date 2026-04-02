@@ -21,7 +21,7 @@ func (r *OpenAIRouter) logRoutingDecision(ctx *RequestContext, reasonCode string
 		effortForMetrics = r.getReasoningEffort(decisionName, selectedModel)
 	}
 
-	logging.LogEvent("routing_decision", map[string]interface{}{
+	logging.ComponentEvent("extproc", "routing_decision", map[string]interface{}{
 		"reason_code":        reasonCode,
 		"request_id":         ctx.RequestID,
 		"original_model":     originalModel,
@@ -40,8 +40,15 @@ func (r *OpenAIRouter) recordRoutingDecision(ctx *RequestContext, decisionName s
 	routingCtx, routingSpan := tracing.StartDecisionSpan(ctx.TraceContext, decisionName)
 
 	useReasoning := reasoningDecision.UseReasoning
-	logging.Infof("Entropy-based reasoning decision for this query: %v on [%s] model (confidence: %.3f, reason: %s)",
-		useReasoning, matchedModel, reasoningDecision.Confidence, reasoningDecision.DecisionReason)
+	logging.ComponentDebugEvent("extproc", "reasoning_decision_applied", map[string]interface{}{
+		"request_id":        ctx.RequestID,
+		"decision":          decisionName,
+		"original_model":    originalModel,
+		"selected_model":    matchedModel,
+		"reasoning_enabled": useReasoning,
+		"confidence":        reasoningDecision.Confidence,
+		"decision_reason":   reasoningDecision.DecisionReason,
+	})
 
 	effortForMetrics := r.getReasoningEffort(decisionName, matchedModel)
 	metrics.RecordReasoningDecision(decisionName, matchedModel, useReasoning, effortForMetrics)
@@ -79,7 +86,9 @@ func (r *OpenAIRouter) trackVSRDecision(ctx *RequestContext, categoryName string
 func (r *OpenAIRouter) setClearRouteCache(response *ext_proc.ProcessingResponse) {
 	if response.GetRequestBody() != nil && response.GetRequestBody().GetResponse() != nil {
 		response.GetRequestBody().GetResponse().ClearRouteCache = true
-		logging.Debugf("Setting ClearRouteCache=true (feature enabled)")
+		logging.ComponentDebugEvent("extproc", "route_cache_clear_enabled", map[string]interface{}{
+			"feature": "clear_route_cache",
+		})
 	}
 }
 
@@ -146,18 +155,26 @@ func buildReplayRoutingRecord(
 	decisionName string,
 ) routerreplay.RoutingRecord {
 	guardrailsEnabled, jailbreakEnabled, piiEnabled, hallucinationEnabled := replayGuardrailState(ctx)
+	decisionTier, decisionPriority := replayDecisionMetadata(ctx)
 	record := routerreplay.RoutingRecord{
-		RequestID:       ctx.RequestID,
-		Decision:        decisionName,
-		Category:        ctx.VSRSelectedCategory,
-		OriginalModel:   originalModel,
-		SelectedModel:   replaySelectedModel(originalModel, selectedModel),
-		ReasoningMode:   replayReasoningMode(ctx),
-		ConfidenceScore: ctx.VSRSelectedDecisionConfidence,
-		SelectionMethod: ctx.VSRSelectionMethod,
-		Signals:         replaySignalState(ctx),
-		Streaming:       ctx.ExpectStreamingResponse,
-		FromCache:       ctx.VSRCacheHit,
+		RequestID:         ctx.RequestID,
+		Decision:          decisionName,
+		DecisionTier:      decisionTier,
+		DecisionPriority:  decisionPriority,
+		Category:          ctx.VSRSelectedCategory,
+		OriginalModel:     originalModel,
+		SelectedModel:     replaySelectedModel(originalModel, selectedModel),
+		ReasoningMode:     replayReasoningMode(ctx),
+		ConfidenceScore:   ctx.VSRSelectedDecisionConfidence,
+		SelectionMethod:   ctx.VSRSelectionMethod,
+		Signals:           replaySignalState(ctx),
+		Projections:       replayProjectionState(ctx),
+		ProjectionScores:  cloneReplayFloat64Map(ctx.VSRProjectionScores),
+		SignalConfidences: cloneReplayFloat64Map(ctx.VSRSignalConfidences),
+		SignalValues:      cloneReplayFloat64Map(ctx.VSRSignalValues),
+		ToolTrace:         buildReplayRequestToolTrace(ctx),
+		Streaming:         ctx.ExpectStreamingResponse,
+		FromCache:         ctx.VSRCacheHit,
 
 		GuardrailsEnabled: guardrailsEnabled,
 		JailbreakEnabled:  jailbreakEnabled,
@@ -187,6 +204,13 @@ func buildReplayRoutingRecord(
 	return record
 }
 
+func replayDecisionMetadata(ctx *RequestContext) (int, int) {
+	if ctx == nil || ctx.VSRSelectedDecision == nil {
+		return 0, 0
+	}
+	return ctx.VSRSelectedDecision.Tier, ctx.VSRSelectedDecision.Priority
+}
+
 func replayReasoningMode(ctx *RequestContext) string {
 	if ctx.VSRReasoningMode == "" {
 		return "off"
@@ -208,12 +232,25 @@ func replaySignalState(ctx *RequestContext) routerreplay.Signal {
 		Domain:       ctx.VSRMatchedDomains,
 		FactCheck:    ctx.VSRMatchedFactCheck,
 		UserFeedback: ctx.VSRMatchedUserFeedback,
+		Reask:        ctx.VSRMatchedReask,
 		Preference:   ctx.VSRMatchedPreference,
 		Language:     ctx.VSRMatchedLanguage,
 		Context:      ctx.VSRMatchedContext,
 		Structure:    ctx.VSRMatchedStructure,
 		Complexity:   ctx.VSRMatchedComplexity,
+		Modality:     ctx.VSRMatchedModality,
+		Authz:        ctx.VSRMatchedAuthz,
+		Jailbreak:    ctx.VSRMatchedJailbreak,
+		PII:          ctx.VSRMatchedPII,
+		KB:           ctx.VSRMatchedKB,
 	}
+}
+
+func replayProjectionState(ctx *RequestContext) []string {
+	if ctx == nil || len(ctx.VSRMatchedProjection) == 0 {
+		return nil
+	}
+	return append([]string(nil), ctx.VSRMatchedProjection...)
 }
 
 func replayGuardrailState(ctx *RequestContext) (bool, bool, bool, bool) {
@@ -242,7 +279,8 @@ func persistReplayRecord(
 	ctx.RouterReplayRecorder = recorder
 
 	if stored, ok := recorder.GetRecord(replayID); ok {
-		logging.LogEvent(
+		logging.ComponentEvent(
+			"extproc",
 			"router_replay_start",
 			routerreplay.LogFields(stored, "router_replay_start"),
 		)
@@ -266,7 +304,11 @@ func (r *OpenAIRouter) updateRouterReplayStatus(ctx *RequestContext, status int,
 
 	err := recorder.UpdateStatus(ctx.RouterReplayID, status, ctx.VSRCacheHit, streaming)
 	if err != nil {
-		logging.Errorf("Failed to update router replay status: %v", err)
+		logging.ComponentErrorEvent("extproc", "router_replay_status_update_failed", map[string]interface{}{
+			"request_id": ctx.RequestID,
+			"replay_id":  ctx.RouterReplayID,
+			"error":      err.Error(),
+		})
 	}
 }
 
@@ -287,10 +329,19 @@ func (r *OpenAIRouter) attachRouterReplayResponse(ctx *RequestContext, responseB
 	if len(responseBody) > 0 {
 		_ = recorder.AttachResponse(ctx.RouterReplayID, responseBody)
 	}
+	if responseTrace := buildReplayResponseToolTrace(ctx, responseBody); responseTrace != nil {
+		if stored, ok := recorder.GetRecord(ctx.RouterReplayID); ok {
+			responseTrace = mergeReplayToolTraces(stored.ToolTrace, responseTrace)
+		}
+		if responseTrace != nil {
+			_ = recorder.UpdateToolTrace(ctx.RouterReplayID, *responseTrace)
+		}
+	}
 
 	if isFinal {
 		if rec, ok := recorder.GetRecord(ctx.RouterReplayID); ok {
-			logging.LogEvent(
+			logging.ComponentEvent(
+				"extproc",
 				"router_replay_complete",
 				routerreplay.LogFields(rec, "router_replay_complete"),
 			)
@@ -328,7 +379,11 @@ func (r *OpenAIRouter) updateRouterReplayHallucinationStatus(ctx *RequestContext
 		ctx.HallucinationSpans,
 	)
 	if err != nil {
-		logging.Errorf("Failed to update router replay hallucination status: %v", err)
+		logging.ComponentErrorEvent("extproc", "router_replay_hallucination_update_failed", map[string]interface{}{
+			"request_id": ctx.RequestID,
+			"replay_id":  ctx.RouterReplayID,
+			"error":      err.Error(),
+		})
 	}
 }
 
@@ -346,6 +401,10 @@ func (r *OpenAIRouter) updateRouterReplayUsageCost(ctx *RequestContext, usage ro
 	}
 
 	if err := recorder.UpdateUsageCost(ctx.RouterReplayID, usage); err != nil {
-		logging.Errorf("Failed to update router replay usage cost: %v", err)
+		logging.ComponentErrorEvent("extproc", "router_replay_usage_update_failed", map[string]interface{}{
+			"request_id": ctx.RequestID,
+			"replay_id":  ctx.RouterReplayID,
+			"error":      err.Error(),
+		})
 	}
 }

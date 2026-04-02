@@ -40,12 +40,12 @@ User Query → Signal Extraction → Projection Coordination → Decision Engine
 
 ### 1. Signal Extraction
 
-The router extracts 14 maintained signal families from each request:
+The router extracts 16 maintained signal families from each request:
 
 | Signal family group | Families                                                                                                         | Example role                                         |
 | ------------------- | ---------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------- |
 | **Heuristic**       | `authz`, `context`, `keyword`, `language`, `structure`                                                           | Cheap policy, request-shape, and locale gating       |
-| **Learned**         | `complexity`, `domain`, `embedding`, `modality`, `fact-check`, `jailbreak`, `pii`, `preference`, `user-feedback` | Semantic, safety, and response-quality understanding |
+| **Learned**         | `complexity`, `domain`, `embedding`, `kb`, `modality`, `fact-check`, `jailbreak`, `pii`, `preference`, `reask`, `user-feedback` | Semantic, safety, follow-up, and response-quality understanding |
 
 ### 2. Projection Coordination
 
@@ -117,8 +117,7 @@ routing:
     - name: "guarded-route"
       plugins:
         - type: "semantic-cache" # Check cache first
-        - type: "jailbreak" # Detect adversarial prompts
-        - type: "pii" # Filter sensitive data
+        - type: "response_jailbreak" # Screen risky responses
         - type: "system_prompt" # Add context
         - type: "hallucination" # Verify facts
 ```
@@ -175,7 +174,7 @@ if (has_math_keywords AND is_math_domain) OR has_high_math_embedding: route_to_m
 **Plugins Applied**:
 
 - semantic-cache: Cache miss, proceed
-- jailbreak: No adversarial patterns
+- response_jailbreak: Output screening remains active
 - system_prompt: Added "Provide rigorous mathematical proof"
 - hallucination: Enabled for verification
 

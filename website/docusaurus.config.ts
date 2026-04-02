@@ -2,6 +2,8 @@ import type { Config } from '@docusaurus/types'
 import type * as Preset from '@docusaurus/preset-classic'
 import { themes } from 'prism-react-renderer'
 import { SITE_SOCIAL_PREVIEW_IMAGE } from './src/data/socialPreview'
+import remarkMath from 'remark-math'
+import rehypeKatex from 'rehype-katex'
 
 const lightCodeTheme = themes.vsDark
 const darkCodeTheme = themes.vsDark
@@ -36,6 +38,7 @@ const config: Config = {
 
   markdown: {
     mermaid: true,
+    format: 'mdx',
     hooks: {
       onBrokenMarkdownLinks: 'warn',
     },
@@ -47,6 +50,12 @@ const config: Config = {
       'classic',
       {
         docs: {
+          beforeDefaultRemarkPlugins: [
+            [remarkMath, {}],
+          ],
+          beforeDefaultRehypePlugins: [
+            [rehypeKatex, {}],
+          ],
           sidebarPath: './sidebars.ts',
           lastVersion: 'current',
           versions: {

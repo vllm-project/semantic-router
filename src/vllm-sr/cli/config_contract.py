@@ -72,6 +72,7 @@ SIGNAL_FAMILY_SPECS = (
         "user_feedback",
         "user_feedback_rules",
     ),
+    SignalFamilySpec("reasks", "reasks", "reask", "reask_rules"),
     SignalFamilySpec("preferences", "preferences", "preference", "preference_rules"),
     SignalFamilySpec("language", "language", "language", "language_rules"),
     SignalFamilySpec("context", "context", "context", "context_rules"),

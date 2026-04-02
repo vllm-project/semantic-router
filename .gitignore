@@ -12,6 +12,7 @@ target/
 *.pyz
 __pycache__/
 .venv/
+.venv-agent/
 pii_env/
 
 # Python build artifacts
@@ -207,3 +208,6 @@ src/training/cache_embeddings/aws/vllm-inventory-*.ini
 grafana/
 grafana-data/
 prometheus-data/
+
+# Local dev makefile (not committed)
+Makefile.local

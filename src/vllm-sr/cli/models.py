@@ -294,6 +294,15 @@ class KBSignal(BaseModel):
     match: Optional[Literal["best", "threshold"]] = None
 
 
+class Reask(BaseModel):
+    """History-aware repeated-question dissatisfaction signal."""
+
+    name: str
+    description: Optional[str] = None
+    threshold: Optional[float] = None
+    lookback_turns: Optional[int] = None
+
+
 class Signals(BaseModel):
     """All signal configurations."""
 
@@ -302,6 +311,7 @@ class Signals(BaseModel):
     domains: Optional[List[Domain]] = []
     fact_check: Optional[List[FactCheck]] = []
     user_feedbacks: Optional[List[UserFeedback]] = []
+    reasks: Optional[List[Reask]] = []
     preferences: Optional[List[Preference]] = []
     language: Optional[List[Language]] = []
     context: Optional[List[ContextRule]] = []
@@ -389,7 +399,10 @@ class PluginType(str, Enum):
     ROUTER_REPLAY = "router_replay"
     MEMORY = "memory"
     RAG = "rag"
+    IMAGE_GEN = "image_gen"
     FAST_RESPONSE = "fast_response"
+    REQUEST_PARAMS = "request_params"
+    RESPONSE_JAILBREAK = "response_jailbreak"
     TOOLS = "tools"
 
 
@@ -412,6 +425,23 @@ class FastResponsePluginConfig(BaseModel):
     """Configuration for fast_response plugin."""
 
     message: str
+
+
+class RequestParamsPluginConfig(BaseModel):
+    """Configuration for request_params plugin."""
+
+    blocked_params: Optional[List[str]] = None
+    max_tokens_limit: Optional[int] = Field(default=None, ge=1)
+    max_n: Optional[int] = Field(default=None, ge=1)
+    strip_unknown: Optional[bool] = None
+
+
+class ResponseJailbreakPluginConfig(BaseModel):
+    """Configuration for response_jailbreak plugin."""
+
+    enabled: bool
+    threshold: Optional[float] = Field(default=None, ge=0.0, le=1.0)
+    action: Optional[Literal["block", "header", "none"]] = None
 
 
 class ToolsPluginConfig(BaseModel):
@@ -467,12 +497,12 @@ class RouterReplayPluginConfig(BaseModel):
 
     enabled: bool = True
     max_records: int = Field(
-        default=200,
+        default=10000,
         gt=0,
-        description="Maximum records in memory (must be > 0, default: 200)",
+        description="Maximum records in memory (must be > 0, default: 10000)",
     )
-    capture_request_body: bool = False  # Capture request payloads
-    capture_response_body: bool = False  # Capture response payloads
+    capture_request_body: bool = True  # Capture request payloads
+    capture_response_body: bool = True  # Capture response payloads
     max_body_bytes: int = Field(
         default=4096,
         gt=0,
@@ -550,7 +580,7 @@ class RAGPluginConfig(BaseModel):
     # Optional: Context injection mode
     # - "tool_role": Inject as tool role messages (compatible with hallucination detection)
     # - "system_prompt": Prepend to system prompt
-    injection_mode: Optional[str] = Field(
+    injection_mode: Optional[Literal["tool_role", "system_prompt"]] = Field(
         default=None,
         description="Injection mode: tool_role (default) or system_prompt",
     )
@@ -566,7 +596,7 @@ class RAGPluginConfig(BaseModel):
     # - "skip": Continue without context (default)
     # - "block": Return error response
     # - "warn": Continue with warning header
-    on_failure: Optional[str] = Field(
+    on_failure: Optional[Literal["skip", "block", "warn"]] = Field(
         default=None,
         description="On failure: skip (default), block, or warn",
     )
@@ -615,6 +645,19 @@ class PluginConfig(BaseModel):
         elif hasattr(data.get("type"), "value"):
             data["type"] = data["type"].value
         return data
+
+
+class ImageGenPluginConfig(BaseModel):
+    """Configuration for image_gen plugin."""
+
+    enabled: bool
+    backend: str
+    backend_config: Optional[Dict[str, Any]] = None
+    modality_detection: Optional[Dict[str, Any]] = None
+    default_width: Optional[int] = Field(default=None, ge=1)
+    default_height: Optional[int] = Field(default=None, ge=1)
+    max_inference_steps: Optional[int] = Field(default=None, ge=1)
+    timeout_seconds: Optional[int] = Field(default=None, ge=1)
 
 
 class Decision(BaseModel):

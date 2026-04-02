@@ -102,6 +102,10 @@ const (
 	// Example: "need_clarification,wrong_answer"
 	VSRMatchedUserFeedback = "x-vsr-matched-user-feedback"
 
+	// VSRMatchedReask contains comma-separated list of matched repeated-question dissatisfaction signals.
+	// Example: "likely_dissatisfied,persistently_dissatisfied"
+	VSRMatchedReask = "x-vsr-matched-reask"
+
 	// VSRMatchedPreference contains comma-separated list of matched preference signals.
 	// Example: "creative_writing,technical_analysis"
 	VSRMatchedPreference = "x-vsr-matched-preference"

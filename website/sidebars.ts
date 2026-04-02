@@ -31,6 +31,7 @@ const sidebars: SidebarsConfig = {
       label: 'Installation',
       items: [
         'installation/installation',
+        'installation/k8s/operator',
         'installation/configuration',
         {
           type: 'category',
@@ -85,6 +86,7 @@ const sidebars: SidebarsConfig = {
                 'tutorials/signal/learned/jailbreak',
                 'tutorials/signal/learned/pii',
                 'tutorials/signal/learned/preference',
+                'tutorials/signal/learned/reask',
                 'tutorials/signal/learned/kb',
                 'tutorials/signal/learned/user-feedback',
               ],
@@ -129,6 +131,7 @@ const sidebars: SidebarsConfig = {
                 'tutorials/algorithm/selection/kmeans',
                 'tutorials/algorithm/selection/knn',
                 'tutorials/algorithm/selection/latency-aware',
+                'tutorials/algorithm/selection/mlp',
                 'tutorials/algorithm/selection/rl-driven',
                 'tutorials/algorithm/selection/router-dc',
                 'tutorials/algorithm/selection/static',
@@ -179,8 +182,6 @@ const sidebars: SidebarsConfig = {
               items: [
                 'tutorials/plugin/content-safety',
                 'tutorials/plugin/hallucination',
-                'tutorials/plugin/jailbreak',
-                'tutorials/plugin/pii',
                 'tutorials/plugin/response-jailbreak',
               ],
             },
@@ -272,3 +273,5 @@ const sidebars: SidebarsConfig = {
 }
 
 export default sidebars
+
+// ci: trigger rerun

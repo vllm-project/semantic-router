@@ -40,7 +40,10 @@ func (r *OpenAIRouter) evaluateSignalsForDecision(
 	signals, authzErr := r.Classifier.EvaluateAllSignalsWithHeaders(
 		signalInput.compressedText,
 		signalInput.allMessagesText,
+		signalInput.currentUserText,
+		signalInput.priorUserMessages,
 		nonUserMessages,
+		signalInput.hasAssistantReply,
 		ctx.Headers,
 		false,
 		ctx.RequestImageURL,
@@ -49,35 +52,46 @@ func (r *OpenAIRouter) evaluateSignalsForDecision(
 	)
 	if authzErr != nil {
 		signalSpan.End()
-		logging.Errorf("[Signal Evaluation] Authz evaluation failed: %v", authzErr)
+		logging.ComponentErrorEvent("extproc", "signal_evaluation_failed", map[string]interface{}{
+			"request_id": ctx.RequestID,
+			"stage":      "authz",
+			"error":      authzErr.Error(),
+		})
 		return nil, authzErr
 	}
 
 	signalLatency := time.Since(signalStart).Milliseconds()
 	r.applySignalResultsToContext(ctx, signals)
-	logSignalEvaluationResults(signals)
+	logSignalEvaluationResults(ctx, signalLatency, signals)
 	tracing.EndSignalSpan(signalSpan, collectMatchedSignalRules(signals), 1.0, signalLatency)
 	ctx.TraceContext = signalCtx
 	r.processUserFeedbackForElo(signals.MatchedUserFeedbackRules, originalModel, ctx)
 	return signals, nil
 }
 
-func logSignalEvaluationResults(signals *classification.SignalResults) {
-	logging.Infof("Signal evaluation results: keyword=%v, embedding=%v, domain=%v, fact_check=%v, user_feedback=%v, preference=%v, language=%v, context=%v, complexity=%v, modality=%v, authz=%v, jailbreak=%v, pii=%v, projection=%v",
-		signals.MatchedKeywordRules,
-		signals.MatchedEmbeddingRules,
-		signals.MatchedDomainRules,
-		signals.MatchedFactCheckRules,
-		signals.MatchedUserFeedbackRules,
-		signals.MatchedPreferenceRules,
-		signals.MatchedLanguageRules,
-		signals.MatchedContextRules,
-		signals.MatchedComplexityRules,
-		signals.MatchedModalityRules,
-		signals.MatchedAuthzRules,
-		signals.MatchedJailbreakRules,
-		signals.MatchedPIIRules,
-		signals.MatchedProjectionRules)
+func logSignalEvaluationResults(ctx *RequestContext, signalLatencyMs int64, signals *classification.SignalResults) {
+	logging.ComponentDebugEvent("extproc", "signal_evaluation_complete", map[string]interface{}{
+		"request_id":     ctx.RequestID,
+		"latency_ms":     signalLatencyMs,
+		"keyword":        signals.MatchedKeywordRules,
+		"embedding":      signals.MatchedEmbeddingRules,
+		"domain":         signals.MatchedDomainRules,
+		"fact_check":     signals.MatchedFactCheckRules,
+		"user_feedback":  signals.MatchedUserFeedbackRules,
+		"reask":          signals.MatchedReaskRules,
+		"preference":     signals.MatchedPreferenceRules,
+		"language":       signals.MatchedLanguageRules,
+		"context":        signals.MatchedContextRules,
+		"structure":      signals.MatchedStructureRules,
+		"complexity":     signals.MatchedComplexityRules,
+		"modality":       signals.MatchedModalityRules,
+		"authz":          signals.MatchedAuthzRules,
+		"jailbreak":      signals.MatchedJailbreakRules,
+		"pii":            signals.MatchedPIIRules,
+		"kb":             signals.MatchedKBRules,
+		"projection":     signals.MatchedProjectionRules,
+		"context_tokens": signals.TokenCount,
+	})
 }
 
 func (r *OpenAIRouter) runDecisionEngine(
@@ -93,7 +107,11 @@ func (r *OpenAIRouter) runDecisionEngine(
 	metrics.RecordDecisionEvaluation(decisionLatency)
 
 	if err != nil {
-		logging.Errorf("Decision evaluation error: %v", err)
+		logging.ComponentErrorEvent("extproc", "decision_evaluation_failed", map[string]interface{}{
+			"request_id": ctx.RequestID,
+			"strategy":   r.Config.Strategy,
+			"error":      err.Error(),
+		})
 		tracing.EndDecisionSpan(decisionSpan, 0.0, []string{}, r.Config.Strategy)
 		ctx.TraceContext = decisionCtx
 		return nil, r.defaultDecisionFallbackModel(originalModel)
@@ -129,12 +147,20 @@ func (r *OpenAIRouter) finalizeDecisionEvaluation(
 	evaluationConfidence := result.Confidence
 
 	ctx.VSRSelectedDecisionConfidence = evaluationConfidence
-	logging.Infof("Decision Evaluation Result: decision=%s, category=%s, confidence=%.3f, matched_rules=%v",
-		decisionName, categoryName, evaluationConfidence, result.MatchedRules)
+	logging.ComponentDebugEvent("extproc", "decision_evaluated", map[string]interface{}{
+		"request_id":    ctx.RequestID,
+		"decision":      decisionName,
+		"category":      categoryName,
+		"confidence":    evaluationConfidence,
+		"matched_rules": result.MatchedRules,
+	})
 
 	if !r.Config.IsAutoModelName(originalModel) {
-		logging.Infof("Model %s explicitly specified, keeping original model (decision %s plugins will be applied)",
-			originalModel, decisionName)
+		logging.ComponentDebugEvent("extproc", "explicit_model_preserved", map[string]interface{}{
+			"request_id":     ctx.RequestID,
+			"original_model": originalModel,
+			"decision":       decisionName,
+		})
 		return decisionName, evaluationConfidence, reasoningDecision, ""
 	}
 
@@ -151,7 +177,7 @@ func (r *OpenAIRouter) finalizeDecisionEvaluation(
 
 func (r *OpenAIRouter) applyDecisionResultToContext(result *decision.DecisionResult, ctx *RequestContext) string {
 	ctx.VSRSelectedDecision = result.Decision
-	if pluginCfg := result.Decision.GetRouterReplayConfig(); pluginCfg != nil && pluginCfg.Enabled {
+	if pluginCfg := r.Config.EffectiveRouterReplayConfigForDecision(result.Decision.Name); pluginCfg != nil {
 		ctx.RouterReplayPluginConfig = pluginCfg
 	}
 
@@ -181,7 +207,11 @@ func (r *OpenAIRouter) selectDecisionRuntimeModel(
 		selectedModel := r.Config.DefaultModel
 		ctx.VSRSelectedModel = selectedModel
 		ctx.VSRSelectionMethod = "default"
-		logging.Infof("No model refs in decision %s, using default model: %s", decisionName, selectedModel)
+		logging.ComponentDebugEvent("extproc", "decision_model_defaulted", map[string]interface{}{
+			"request_id":     ctx.RequestID,
+			"decision":       decisionName,
+			"selected_model": selectedModel,
+		})
 		return selectedModel, entropy.ReasoningDecision{}
 	}
 
@@ -193,14 +223,19 @@ func (r *OpenAIRouter) selectDecisionRuntimeModel(
 		categoryName,
 	)
 	selectedModel := selectedModelRef.Model
+	selectionFields := map[string]interface{}{
+		"request_id":        ctx.RequestID,
+		"decision":          decisionName,
+		"selected_model":    selectedModelRef.Model,
+		"selection_method":  usedMethod,
+		"uses_lora_adapter": selectedModelRef.LoRAName != "",
+	}
 	if selectedModelRef.LoRAName != "" {
 		selectedModel = selectedModelRef.LoRAName
-		logging.Infof("Selected model from decision %s: %s (LoRA adapter for base model %s) using %s selection",
-			decisionName, selectedModel, selectedModelRef.Model, usedMethod)
-	} else {
-		logging.Infof("Selected model from decision %s: %s using %s selection",
-			decisionName, selectedModel, usedMethod)
+		selectionFields["selected_model"] = selectedModel
+		selectionFields["base_model"] = selectedModelRef.Model
 	}
+	logging.ComponentDebugEvent("extproc", "decision_model_selected", selectionFields)
 	ctx.VSRSelectedModel = selectedModel
 	ctx.VSRSelectionMethod = usedMethod
 	return selectedModel, applyReasoningModeFromSelectedModel(selectedModelRef, decisionName, evaluationConfidence, ctx)

@@ -112,7 +112,7 @@ func (c *Classifier) SelectBestModelFromList(candidateModels []string, categoryN
 		return candidateModels[0]
 	}
 
-	logging.Infof("Selected best model %s for decision %s with score %.4f", bestModel, categoryName, bestScore)
+	logging.Debugf("Selected best model %s for decision %s from candidates (score=%.4f)", bestModel, categoryName, bestScore)
 	return bestModel
 }
 
@@ -177,7 +177,6 @@ func (c *Classifier) initializeFactCheckClassifier() error {
 	}
 
 	c.factCheckClassifier = classifier
-	logging.Infof("Fact-check classifier initialized successfully")
 	return nil
 }
 
@@ -203,12 +202,11 @@ func (c *Classifier) initializeHallucinationDetector() error {
 			// NLI is optional - log warning but don't fail
 			logging.Warnf("Failed to initialize NLI model: %v (NLI-enhanced detection will be unavailable)", err)
 		} else {
-			logging.Infof("NLI model initialized successfully for enhanced hallucination detection")
+			logging.Infof("NLI model initialized for enhanced hallucination detection")
 		}
 	}
 
 	c.hallucinationDetector = detector
-	logging.Infof("Hallucination detector initialized successfully")
 	return nil
 }
 
@@ -228,7 +226,6 @@ func (c *Classifier) initializeFeedbackDetector() error {
 	}
 
 	c.feedbackDetector = detector
-	logging.Infof("Feedback detector initialized successfully")
 	return nil
 }
 
@@ -268,7 +265,7 @@ func (c *Classifier) initializePreferenceClassifier() error {
 	}
 
 	c.preferenceClassifier = classifier
-	logging.Infof("Preference classifier initialized successfully with %d routes", len(c.Config.PreferenceRules))
+	logging.Infof("Preference classifier initialized: %d routes", len(c.Config.PreferenceRules))
 	return nil
 }
 
@@ -284,7 +281,6 @@ func (c *Classifier) initializeLanguageClassifier() error {
 	}
 
 	c.languageClassifier = classifier
-	logging.Infof("Language classifier initialized")
 	return nil
 }
 
@@ -298,11 +294,6 @@ func (c *Classifier) ClassifyFactCheck(text string) (*FactCheckResult, error) {
 	result, err := c.factCheckClassifier.Classify(text)
 	if err != nil {
 		return nil, fmt.Errorf("fact-check classification failed: %w", err)
-	}
-
-	if result != nil {
-		logging.Infof("Fact-check classification: needs_fact_check=%v, confidence=%.3f, label=%s",
-			result.NeedsFactCheck, result.Confidence, result.Label)
 	}
 
 	return result, nil
@@ -320,11 +311,6 @@ func (c *Classifier) DetectHallucination(context, question, answer string) (*Hal
 	result, err := c.hallucinationDetector.Detect(context, question, answer)
 	if err != nil {
 		return nil, fmt.Errorf("hallucination detection failed: %w", err)
-	}
-
-	if result != nil {
-		logging.Infof("Hallucination detection: detected=%v, confidence=%.3f, unsupported_spans=%d",
-			result.HallucinationDetected, result.Confidence, len(result.UnsupportedSpans))
 	}
 
 	return result, nil

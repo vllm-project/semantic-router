@@ -295,6 +295,7 @@ export interface ResponseAPIConfig {
 }
 
 export interface RouterReplayConfig {
+  enabled?: boolean
   store_backend?: string
   ttl_seconds?: number
   async_writes?: boolean
@@ -722,6 +723,7 @@ export interface ConfigSignals {
   domains?: DomainSignal[]
   fact_check?: FactCheckSignal[]
   user_feedbacks?: UserFeedbackSignal[]
+  reasks?: ReaskSignal[]
   preferences?: PreferenceSignal[]
   language?: LanguageSignal[]
   context?: ContextSignal[]
@@ -731,6 +733,7 @@ export interface ConfigSignals {
   role_bindings?: RoleBindingSignal[]
   jailbreak?: JailbreakSignal[]
   pii?: PIISignal[]
+  kb?: KBSignal[]
 }
 
 export interface ConfigProjections {
@@ -1007,6 +1010,16 @@ export interface RoleBindingSignal {
   description?: string
 }
 
+export interface KBSignal {
+  name: string
+  kb: string
+  target: {
+    kind: 'label' | 'group'
+    value: string
+  }
+  match?: 'best' | 'threshold'
+}
+
 export interface FactCheckSignal {
   name: string
   description: string
@@ -1015,6 +1028,13 @@ export interface FactCheckSignal {
 export interface UserFeedbackSignal {
   name: string
   description: string
+}
+
+export interface ReaskSignal {
+  name: string
+  description?: string
+  threshold?: number
+  lookback_turns?: number
 }
 
 export interface PreferenceSignal {
@@ -1133,6 +1153,7 @@ export interface ConfigData {
   embedding_rules?: EmbeddingSignal[]
   fact_check_rules?: FactCheckSignal[]
   user_feedback_rules?: UserFeedbackSignal[]
+  reask_rules?: ReaskSignal[]
   preference_rules?: PreferenceSignal[]
   language_rules?: LanguageSignal[]
   context_rules?: ContextSignal[]
@@ -1149,6 +1170,7 @@ export type SignalType =
   | 'Preference'
   | 'Fact Check'
   | 'User Feedback'
+  | 'Reask'
   | 'Language'
   | 'Context'
   | 'Structure'
@@ -1157,6 +1179,7 @@ export type SignalType =
   | 'Authz'
   | 'Jailbreak'
   | 'PII'
+  | 'KB'
 
 export interface DecisionFormState {
   name: string
@@ -1183,6 +1206,7 @@ export interface AddSignalFormState {
   max_tokens?: string
   preference_examples?: string
   preference_threshold?: number
+  lookback_turns?: number
   complexity_threshold?: number
   structure_feature?: string
   structure_predicate?: string
@@ -1200,6 +1224,10 @@ export interface AddSignalFormState {
   pii_threshold?: number
   pii_types_allowed?: string
   pii_include_history?: boolean
+  kb_name?: string
+  target_kind?: 'label' | 'group'
+  target_value?: string
+  kb_match?: 'best' | 'threshold'
 }
 
 export const formatThreshold = (value: number): string => {

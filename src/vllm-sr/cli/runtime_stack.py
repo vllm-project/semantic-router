@@ -24,6 +24,8 @@ DEFAULT_JAEGER_OTLP_PORT = 4318
 DEFAULT_JAEGER_UI_PORT = 16686
 DEFAULT_PROMETHEUS_PORT = 9090
 DEFAULT_GRAFANA_PORT = 3000
+DEFAULT_REDIS_PORT = 6379
+DEFAULT_POSTGRES_PORT = 5432
 
 STACK_NAME_PATTERN = re.compile(r"[^A-Za-z0-9_.-]+")
 
@@ -41,6 +43,8 @@ class RuntimeStackLayout:
     jaeger_container_name: str
     prometheus_container_name: str
     grafana_container_name: str
+    redis_container_name: str
+    postgres_container_name: str
     router_port: int
     metrics_port: int
     dashboard_port: int
@@ -50,6 +54,8 @@ class RuntimeStackLayout:
     jaeger_ui_port: int
     prometheus_port: int
     grafana_port: int
+    redis_port: int
+    postgres_port: int
 
     @property
     def dashboard_url(self) -> str:
@@ -115,6 +121,18 @@ class RuntimeStackLayout:
         return f"http://{self.jaeger_container_name}:4317"
 
     @property
+    def redis_url(self) -> str:
+        return f"localhost:{self.redis_port}"
+
+    @property
+    def postgres_url(self) -> str:
+        return f"localhost:{self.postgres_port}"
+
+    @property
+    def storage_container_names(self) -> tuple[str, ...]:
+        return (self.redis_container_name, self.postgres_container_name)
+
+    @property
     def runtime_container_names(self) -> tuple[str, ...]:
         return tuple(
             dict.fromkeys(
@@ -159,6 +177,8 @@ def resolve_runtime_stack(
         jaeger_container_name = f"{DEFAULT_STACK_NAME}-jaeger"
         prometheus_container_name = f"{DEFAULT_STACK_NAME}-prometheus"
         grafana_container_name = f"{DEFAULT_STACK_NAME}-grafana"
+        redis_container_name = f"{DEFAULT_STACK_NAME}-redis"
+        postgres_container_name = f"{DEFAULT_STACK_NAME}-postgres"
     else:
         container_name = f"{resolved_stack_name}-vllm-sr-container"
         router_container_name = f"{resolved_stack_name}-vllm-sr-router-container"
@@ -169,6 +189,8 @@ def resolve_runtime_stack(
         jaeger_container_name = f"{resolved_stack_name}-vllm-sr-jaeger"
         prometheus_container_name = f"{resolved_stack_name}-vllm-sr-prometheus"
         grafana_container_name = f"{resolved_stack_name}-vllm-sr-grafana"
+        redis_container_name = f"{resolved_stack_name}-vllm-sr-redis"
+        postgres_container_name = f"{resolved_stack_name}-vllm-sr-postgres"
 
     return RuntimeStackLayout(
         stack_name=resolved_stack_name,
@@ -182,6 +204,8 @@ def resolve_runtime_stack(
         jaeger_container_name=jaeger_container_name,
         prometheus_container_name=prometheus_container_name,
         grafana_container_name=grafana_container_name,
+        redis_container_name=redis_container_name,
+        postgres_container_name=postgres_container_name,
         router_port=DEFAULT_ROUTER_PORT + resolved_port_offset,
         metrics_port=DEFAULT_METRICS_PORT + resolved_port_offset,
         dashboard_port=DEFAULT_DASHBOARD_PORT + resolved_port_offset,
@@ -191,6 +215,8 @@ def resolve_runtime_stack(
         jaeger_ui_port=DEFAULT_JAEGER_UI_PORT + resolved_port_offset,
         prometheus_port=DEFAULT_PROMETHEUS_PORT + resolved_port_offset,
         grafana_port=DEFAULT_GRAFANA_PORT + resolved_port_offset,
+        redis_port=DEFAULT_REDIS_PORT + resolved_port_offset,
+        postgres_port=DEFAULT_POSTGRES_PORT + resolved_port_offset,
     )
 
 

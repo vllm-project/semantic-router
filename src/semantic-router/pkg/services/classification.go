@@ -162,8 +162,9 @@ func NewPlaceholderClassificationService() *ClassificationService {
 func (s *ClassificationService) ClassifyIntent(req IntentRequest) (*IntentResponse, error) {
 	start := time.Now()
 
-	if req.Text == "" {
-		return nil, fmt.Errorf("text cannot be empty")
+	input, err := req.resolveSignalInput()
+	if err != nil {
+		return nil, err
 	}
 
 	// Check if classifier is available
@@ -184,12 +185,21 @@ func (s *ClassificationService) ClassifyIntent(req IntentRequest) (*IntentRespon
 	// Use signal-driven architecture: evaluate all signals first
 	// Check if we should force evaluate all signals (for eval scenarios)
 	forceEvaluateAll := req.Options != nil && req.Options.EvaluateAllSignals
-	signals := s.classifier.EvaluateAllSignalsWithForceOption(req.Text, forceEvaluateAll)
+	signals := s.classifier.EvaluateAllSignalsWithContext(
+		input.evaluationText,
+		input.contextText,
+		input.currentUserText,
+		input.priorUserMessages,
+		input.nonUserMessages,
+		input.hasAssistantReply,
+		forceEvaluateAll,
+		"",
+		nil,
+	)
 
 	// Evaluate decision with engine (if decisions are configured)
 	// Pass pre-computed signals to avoid re-evaluation
 	var decisionResult *decision.DecisionResult
-	var err error
 	if s.config != nil && len(s.config.Decisions) > 0 {
 		decisionResult, err = s.classifier.EvaluateDecisionWithEngine(signals)
 		if err != nil {
@@ -210,7 +220,7 @@ func (s *ClassificationService) ClassifyIntent(req IntentRequest) (*IntentRespon
 		confidence = decisionResult.Confidence
 	} else {
 		// Fallback to traditional classification
-		category, confidence, _, err = s.classifier.ClassifyCategoryWithEntropy(req.Text)
+		category, confidence, _, err = s.classifier.ClassifyCategoryWithEntropy(input.evaluationText)
 		if err != nil {
 			// Graceful fallback when classification fails
 			// When domain signal was skipped due to low confidence and no decision matches,

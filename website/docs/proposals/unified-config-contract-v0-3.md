@@ -89,6 +89,7 @@ Router-global defaults are now owned by the router itself, not by a second user-
 - `global:` only overrides what you need to change
 - `global.router` groups router-engine control knobs, including `config_source`
 - `global.services` groups shared APIs and runtime services
+- `global.services.router_replay.enabled` provides the router-wide replay default, while route-local `router_replay.enabled: false` is the explicit opt-out
 - `global.stores` groups storage-backed services
 - `global.integrations` groups helper runtime integrations
 - `global.model_catalog` groups router-owned model assets under `embeddings`, `system`, `external`, `classifiers`, and `modules`, including embedding fallback knobs such as `embedding_config.top_k`

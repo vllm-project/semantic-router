@@ -9,7 +9,7 @@ translation:
 
 ## 概览
 
-`content-safety` 是可复用的路由局部安全包：在一个片段中组合多个安全插件。
+`content-safety` 是可复用的路由局部安全包：在一个片段中组合多个已支持的安全类插件。
 
 对应 `config/plugin/content-safety/hybrid.yaml`。
 
@@ -21,13 +21,13 @@ translation:
 
 ## 解决什么问题？
 
-部分路由需要同时多种安全控制。不必反复手写 jailbreak、PII 与响应筛查插件，`content-safety` 将该链打包为可复用片段。
+部分路由需要同时多种安全控制。不必反复手写响应筛查、路由局部护栏提示与审计头，`content-safety` 将该链打包为可复用片段。
 
 ## 何时使用
 
 - 一条路由需要多个安全插件一起生效
 - 希望多条路由共用同一条可复用审核链
-- 路由应同时应用请求侧与响应侧检查
+- 路由应同时应用路由局部护栏与响应侧筛查
 
 ## 配置
 
@@ -35,17 +35,19 @@ translation:
 
 ```yaml
 plugins:
-  - type: jailbreak
+  - type: system_prompt
     configuration:
       enabled: true
-      threshold: 0.6
-  - type: pii
+      mode: insert
+      system_prompt: Apply the platform safety policy before answering and clearly note when a request needs additional review.
+  - type: header_mutation
     configuration:
-      enabled: true
-      pii_types_allowed: []
+      add:
+        - name: X-Safety-Profile
+          value: standard
   - type: response_jailbreak
     configuration:
       enabled: true
       threshold: 0.8
-      action: annotate
+      action: header
 ```

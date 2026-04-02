@@ -59,7 +59,7 @@ func (m *MemoryStore) Add(ctx context.Context, record Record) (string, error) {
 	}
 
 	// Make a copy to avoid external mutations
-	copyRec := record
+	copyRec := cloneRecord(record)
 	m.records = append(m.records, &copyRec)
 	m.byID[copyRec.ID] = &copyRec
 
@@ -76,7 +76,7 @@ func (m *MemoryStore) Get(ctx context.Context, id string) (Record, bool, error) 
 		return Record{}, false, nil
 	}
 
-	return *rec, true, nil
+	return cloneRecord(*rec), true, nil
 }
 
 // List returns all records ordered by timestamp descending.
@@ -86,7 +86,7 @@ func (m *MemoryStore) List(ctx context.Context) ([]Record, error) {
 
 	result := make([]Record, len(m.records))
 	for i := len(m.records) - 1; i >= 0; i-- {
-		result[len(m.records)-1-i] = *m.records[i]
+		result[len(m.records)-1-i] = cloneRecord(*m.records[i])
 	}
 
 	return result, nil
@@ -155,7 +155,7 @@ func (m *MemoryStore) UpdateHallucinationStatus(ctx context.Context, id string, 
 
 	rec.HallucinationDetected = detected
 	rec.HallucinationConfidence = confidence
-	rec.HallucinationSpans = spans
+	rec.HallucinationSpans = cloneStringSlice(spans)
 
 	return nil
 }
@@ -179,6 +179,20 @@ func (m *MemoryStore) UpdateUsageCost(ctx context.Context, id string, usage Usag
 	rec.Currency = cloneStringPtr(usage.Currency)
 	rec.BaselineModel = cloneStringPtr(usage.BaselineModel)
 
+	return nil
+}
+
+// UpdateToolTrace updates tool-calling trace details for a record.
+func (m *MemoryStore) UpdateToolTrace(ctx context.Context, id string, trace ToolTrace) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	rec, ok := m.byID[id]
+	if !ok {
+		return fmt.Errorf("record with ID %s not found", id)
+	}
+
+	rec.ToolTrace = cloneToolTrace(&trace)
 	return nil
 }
 

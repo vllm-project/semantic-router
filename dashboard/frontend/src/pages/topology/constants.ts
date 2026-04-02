@@ -9,6 +9,7 @@ export const SIGNAL_ICONS: Record<SignalType, string> = {
   domain: 'DOM',
   fact_check: 'FC',
   user_feedback: 'UF',
+  reask: 'RA',
   preference: 'PREF',
   language: 'LANG',
   context: 'CTX',
@@ -29,6 +30,7 @@ export const SIGNAL_COLORS: Record<SignalType, { background: string; border: str
   domain: { background: '#4a5568', border: '#2d3748' },       // Dark Gray
   fact_check: { background: '#4a5568', border: '#2d3748' },   // Dark Gray
   user_feedback: { background: '#4a5568', border: '#2d3748' }, // Dark Gray
+  reask: { background: '#4a5568', border: '#2d3748' },        // Dark Gray
   preference: { background: '#4a5568', border: '#2d3748' },   // Dark Gray
   language: { background: '#4a5568', border: '#2d3748' },     // Dark Gray
   context: { background: '#4a5568', border: '#2d3748' },      // Dark Gray
@@ -49,6 +51,7 @@ export const SIGNAL_LATENCY: Record<SignalType, string> = {
   domain: '10-50ms',
   fact_check: '10-50ms',
   user_feedback: '10-50ms',
+  reask: '10-50ms',
   preference: '200-500ms',
   language: '<1ms',
   context: '<1ms',
@@ -65,22 +68,32 @@ export const SIGNAL_LATENCY: Record<SignalType, string> = {
 // ============== Plugin Icons ==============
 export const PLUGIN_ICONS: Record<PluginType, string> = {
   'semantic-cache': 'SC',
+  'memory': 'MEM',
   'system_prompt': 'SP',
   'header_mutation': 'HM',
   'hallucination': 'HAL',
   'router_replay': 'RR',
+  'rag': 'RAG',
+  'image_gen': 'IMG',
   'fast_response': 'FR',
+  'request_params': 'RP',
+  'response_jailbreak': 'RJ',
   'tools': 'TL',
 }
 
 // ============== Plugin Colors (NVIDIA Dark Theme) ==============
 export const PLUGIN_COLORS: Record<PluginType, { background: string; border: string }> = {
   'semantic-cache': { background: '#76b900', border: '#5a8f00' },  // NVIDIA Green
+  'memory': { background: '#3f6b73', border: '#2e4f55' },
   'system_prompt': { background: '#8fd400', border: '#76b900' },   // Light Green
   'header_mutation': { background: '#606c7a', border: '#3d4a59' }, // Slate Gray
   'hallucination': { background: '#556b7d', border: '#3d4a59' },   // Cool Gray
   'router_replay': { background: '#6ba300', border: '#5a8f00' },   // Green (consistent with other plugins)
+  'rag': { background: '#2f855a', border: '#276749' },
+  'image_gen': { background: '#7b5ea7', border: '#5b3f86' },
   'fast_response': { background: '#4a5568', border: '#2d3748' },   // Dark Gray
+  'request_params': { background: '#805ad5', border: '#6b46c1' },
+  'response_jailbreak': { background: '#c05621', border: '#9c4221' },
   'tools': { background: '#5a6c7d', border: '#3d4a59' },
 }
 
@@ -186,20 +199,51 @@ export const TOPOLOGY_LAYER_LAYOUT = {
   x: {
     client: 0,
     signals: 340,
-    decisions: 900,
-    algorithms: 1380,
-    pluginChains: 1700,
-    models: 2200,
+    projections: 640,
+    decisions: 1040,
+    algorithms: 1520,
+    pluginChains: 1840,
+    models: 2340,
+  },
+  framePadding: {
+    client: 36,
+    signals: 54,
+    projections: 60,
+    decisions: 84,
+    algorithms: 68,
+    pluginChains: 72,
+    models: 88,
+  },
+  horizontalGap: {
+    clientToSignals: 156,
+    signalsToProjections: 198,
+    projectionsToDecisions: 244,
+    decisionsToAlgorithms: 286,
+    algorithmsToPluginChains: 196,
+    pluginChainsToModels: 248,
   },
   verticalSpacing: {
     client: { base: 0, min: 0, compactThreshold: 1, compactStep: 0 },
     signals: { base: 34, min: 14, compactThreshold: 8, compactStep: 2.5 },
+    projections: { base: 38, min: 16, compactThreshold: 6, compactStep: 2.5 },
     decisions: { base: 42, min: 16, compactThreshold: 9, compactStep: 3 },
     algorithms: { base: 48, min: 20, compactThreshold: 4, compactStep: 4 },
     pluginChains: { base: 52, min: 20, compactThreshold: 5, compactStep: 4 },
     models: { base: 76, min: 36, compactThreshold: 9, compactStep: 2.5 },
   },
   lanes: {
+    signals: {
+      enableAt: 7,
+      maxPerLane: 6,
+      maxLanes: 2,
+      laneGap: 212,
+    },
+    projections: {
+      enableAt: 5,
+      maxPerLane: 4,
+      maxLanes: 2,
+      laneGap: 228,
+    },
     decisions: {
       enableAt: 7,
       maxPerLane: 6,
@@ -228,6 +272,7 @@ export const SIGNAL_TYPES: SignalType[] = [
   'domain',
   'fact_check',
   'user_feedback',
+  'reask',
   'preference',
   'language',
   'context',
@@ -244,9 +289,15 @@ export const SIGNAL_TYPES: SignalType[] = [
 // ============== Plugin Types Array ==============
 export const PLUGIN_TYPES: PluginType[] = [
   'semantic-cache',
+  'memory',
   'system_prompt',
   'header_mutation',
   'hallucination',
   'router_replay',
+  'rag',
+  'image_gen',
   'fast_response',
+  'request_params',
+  'response_jailbreak',
+  'tools',
 ]

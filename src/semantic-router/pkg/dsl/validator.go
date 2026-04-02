@@ -265,7 +265,7 @@ func (v *Validator) checkRouteReferences(route *RouteDecl) {
 		if !v.pluginNames[pr.Name] && !isInlinePluginType(pr.Name) {
 			fix := v.suggestPlugin(pr.Name)
 			v.addDiag(DiagWarning, pr.Pos,
-				fmt.Sprintf("Plugin %q is not defined as a template and is not a recognized inline plugin type", pr.Name),
+				fmt.Sprintf("Plugin %q is not defined as a template and is not a recognized inline plugin type. Supported inline types: system_prompt, semantic_cache, hallucination, memory, rag, tools, image_gen, fast_response, request_params, router_replay, header_mutation, response_jailbreak. Define a template with PLUGIN %s <type> { ... } or use a supported type", pr.Name, pr.Name),
 				fix,
 			)
 		}
@@ -273,7 +273,7 @@ func (v *Validator) checkRouteReferences(route *RouteDecl) {
 
 	if len(route.Models) == 0 {
 		v.addDiag(DiagWarning, route.Pos,
-			fmt.Sprintf("Route %q has no MODEL specified", route.Name),
+			fmt.Sprintf("Route %q has no MODEL specified. Add MODEL \"<model_name>\" inside the route body", route.Name),
 			nil,
 		)
 		return
@@ -335,7 +335,7 @@ func (v *Validator) walkBoolExpr(expr BoolExpr) {
 		if !v.isSignalDefined(e.SignalType, e.SignalName) {
 			fix := v.suggestSignal(e.SignalType, e.SignalName)
 			v.addDiag(DiagWarning, e.Pos,
-				fmt.Sprintf("Signal '%s(\"%s\")' is not defined", e.SignalType, e.SignalName),
+				fmt.Sprintf("Signal %s(\"%s\") referenced in WHEN clause is not defined. Add SIGNAL %s %s { ... } as a top-level declaration", e.SignalType, e.SignalName, e.SignalType, e.SignalName),
 				fix,
 			)
 		}
@@ -418,7 +418,7 @@ func (v *Validator) checkSignalConstraints(s *SignalDecl) {
 	// Check valid signal types
 	if !config.IsSupportedSignalType(s.SignalType) {
 		v.addDiag(DiagConstraint, s.Pos,
-			fmt.Sprintf("Unknown signal type %q in %s", s.SignalType, context),
+			fmt.Sprintf("Unknown signal type %q in %s. Supported signal types: keyword, embedding, domain, fact_check, user_feedback, preference, language, context, structure, complexity, modality, authz, jailbreak, pii, kb", s.SignalType, context),
 			nil,
 		)
 	}
@@ -508,7 +508,7 @@ func (v *Validator) checkAlgorithmConstraints(algo *AlgoSpec, parentContext stri
 			fix = &QuickFix{Description: fmt.Sprintf("Change to %q", similar), NewText: similar}
 		}
 		v.addDiag(DiagConstraint, algo.Pos,
-			fmt.Sprintf("%s: unknown algorithm type %q", parentContext, algo.AlgoType),
+			fmt.Sprintf("%s: unknown algorithm type %q. Supported types: %s", parentContext, algo.AlgoType, strings.Join(validAlgoTypes, ", ")),
 			fix,
 		)
 	}
