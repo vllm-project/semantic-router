@@ -65,9 +65,7 @@ routing:
         - model: gpt-4o
           use_reasoning: false
       plugins:
-        - type: pii
         - type: system_prompt
-        - type: jailbreak
         - type: semantic-cache
 global:
   router:

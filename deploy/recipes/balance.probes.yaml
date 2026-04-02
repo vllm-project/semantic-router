@@ -1,8 +1,12 @@
 name: balance
 description: >
-  Executable eval probes for the maintained balance routing profile. Probes are
-  grouped by decision so the calibration loop can measure decision-level
-  robustness across multiple prompt variants instead of one crafted sample.
+  Executable eval probes for the simplified maintained balance routing profile.
+  Probes are grouped by decision so the calibration loop can measure
+  decision-level robustness across multiple prompt variants instead of one
+  crafted sample, including short-turn guardrails that should not fall into the
+  feedback overlays. The suite focuses on the 15 calibrated non-fallback lanes;
+  the terminal `casual_chat` decision remains an absolute safety net rather
+  than a first-class calibration target.
 routing_assets:
   yaml: deploy/recipes/balance.yaml
   dsl: deploy/recipes/balance.dsl
@@ -22,10 +26,11 @@ decisions:
       - id: regulatory_risk_review
         query: Assess the legal risk in this agreement by analyzing indemnification, limitation of liability, and the compliance duties each party assumes.
         tags: [paraphrase, contract]
+
   - id: reasoning_math
     expected_decision: reasoning_math
     expected_alias: openai/gpt5.4
-    objective: Pure mathematical reasoning that should not collapse into a generic reasoning lane.
+    objective: Pure mathematical reasoning that should not collapse into a general reasoning lane.
     variants:
       - id: irrationality_proof
         query: Prove rigorously that the square root of 2 is irrational.
@@ -33,21 +38,26 @@ decisions:
       - id: integer_ratio_proof
         query: Give a formal proof that sqrt(2) cannot be expressed as a ratio of integers.
         tags: [paraphrase, proof]
-  - id: reasoning_philosophy
-    expected_decision: reasoning_philosophy
+
+  - id: reasoning_specialist
+    expected_decision: reasoning_specialist
     expected_alias: openai/gpt5.4
-    objective: Philosophy-domain reasoning with explicit argumentative depth.
+    objective: Deep philosophy and general reasoning without strong technical, legal, or health specialist cues.
     variants:
       - id: av_ethics
         query: Compare utilitarianism and deontology, then argue which framework better handles autonomous-vehicle dilemmas.
-        tags: [baseline, ethics]
-      - id: compatibilism_argument
-        query: Compare compatibilism and libertarian free will, then argue which view better explains moral responsibility.
-        tags: [paraphrase, ethics]
+        tags: [baseline, philosophy]
+      - id: inference_modes
+        query: Compare deductive, inductive, and abductive reasoning in general terms, without anchoring the discussion to any one domain.
+        tags: [paraphrase, reasoning]
+      - id: first_principles_tradeoffs
+        query: From first principles, compare three ways to reason under uncertainty and justify which one is most robust.
+        tags: [robustness, reasoning]
+
   - id: complex_agentic
     expected_decision: complex_agentic
     expected_alias: google/gemini-3.1-pro
-    objective: Multi-step agentic planning with execution phases, checkpoints, and rollback structure.
+    objective: Multi-step planning with checkpoints, rollback structure, and execution phases.
     variants:
       - id: migration_runbook
         query: Plan a zero-downtime monolith-to-microservices migration with checkpoints, rollback steps, owners, and validation after each phase.
@@ -58,10 +68,11 @@ decisions:
       - id: incident_recovery_runbook
         query: Create a phased incident-recovery runbook with owners, checkpoints, rollback criteria, and verification gates for each stage.
         tags: [robustness, orchestration]
-  - id: complex_architecture
-    expected_decision: complex_architecture
+
+  - id: complex_technical
+    expected_decision: complex_technical
     expected_alias: google/gemini-3.1-pro
-    objective: System-design and architecture requests without strong workflow-orchestration cues.
+    objective: Complex systems design and specialist STEM synthesis outside the dedicated math lane.
     variants:
       - id: distributed_rate_limiter
         query: Design the software architecture for a distributed rate limiter in a microservices platform, including service boundaries and consistency tradeoffs.
@@ -69,17 +80,13 @@ decisions:
       - id: multi_region_feature_flags
         query: Design the architecture for a multi-region feature-flag service, including storage boundaries, cache strategy, and consistency tradeoffs.
         tags: [paraphrase, architecture]
-  - id: complex_stem
-    expected_decision: complex_stem
-    expected_alias: google/gemini-3.1-pro
-    objective: Specialist STEM reasoning with technical explanation plus experiment design.
-    variants:
       - id: battery_degradation
         query: In electrochemistry terms, compare SEI growth, lithium plating, and cathode cracking as causes of lithium-ion battery degradation, then propose experiments to isolate the dominant mechanism.
         tags: [baseline, stem]
       - id: qubit_decoherence
-        query: Compare dielectric loss, flux noise, and quasiparticle poisoning as causes of superconducting-qubit decoherence, then propose experiments to isolate the dominant source.
+        query: Compare modeling approaches for turbulent fluid simulation.
         tags: [paraphrase, stem]
+
   - id: feedback_wrong_answer_verified
     expected_decision: feedback_wrong_answer_verified
     expected_alias: google/gemini-3.1-pro
@@ -94,6 +101,16 @@ decisions:
       - id: meiji_correction
         query: That is incorrect. Please correct the explanation of what caused the Meiji Restoration and support the correction with sources.
         tags: [robustness, feedback]
+      - id: roman_republic_followup_messages
+        messages:
+          - role: user
+            content: Why did the Roman Republic collapse?
+          - role: assistant
+            content: It collapsed mainly because Rome stopped expanding.
+          - role: user
+            content: That answer is wrong. Please correct it and cite reliable historical sources.
+        tags: [feedback, messages, history, verified]
+
   - id: medium_code_general
     expected_decision: medium_code_general
     expected_alias: qwen/qwen3.5-rocm
@@ -111,34 +128,7 @@ decisions:
       - id: urgent_bug_zh
         query: 这太离谱了！！！马上告诉我该怎么处理这个 bug。
         tags: [robustness, coding, urgent]
-  - id: verified_business
-    expected_decision: verified_business
-    expected_alias: google/gemini-2.5-flash-lite
-    objective: Business analysis with explicit evidence or source requirements.
-    variants:
-      - id: pricing_strategy_evidence
-        query: "Verify this claim with evidence: compare two B2B SaaS pricing strategies and cite sources for the market-share claim."
-        tags: [baseline, business]
-      - id: churn_benchmark_sources
-        query: Compare enterprise SaaS churn benchmarks and verify the claim with sources before drawing a conclusion.
-        tags: [paraphrase, business]
-      - id: retention_sources
-        query: Compare B2B SaaS retention benchmarks and support the answer with sources before recommending a pricing model.
-        tags: [robustness, business]
-  - id: medium_business
-    expected_decision: medium_business
-    expected_alias: qwen/qwen3.5-rocm
-    objective: Business reasoning without explicit verification requirements.
-    variants:
-      - id: plg_vs_slg
-        query: Explain when a mid-market SaaS company should prefer product-led growth over sales-led growth, and outline the trade-offs.
-        tags: [baseline, business]
-      - id: pricing_model_tradeoffs
-        query: Explain when a B2B software company should prefer usage-based pricing over seat-based pricing, and outline the trade-offs.
-        tags: [paraphrase, business]
-      - id: annual_vs_monthly
-        query: Explain the trade-offs between annual and monthly pricing for a B2B SaaS product.
-        tags: [robustness, business]
+
   - id: verified_health
     expected_decision: verified_health
     expected_alias: google/gemini-3.1-pro
@@ -150,63 +140,47 @@ decisions:
       - id: sleep_apnea_sources
         query: What are common early signs of sleep apnea? Answer with citations to reliable medical sources.
         tags: [paraphrase, health]
-  - id: verified_history
-    expected_decision: verified_history
+
+  - id: verified_explainer
+    expected_decision: verified_explainer
     expected_alias: google/gemini-2.5-flash-lite
-    objective: History explanations that explicitly demand citations or verification.
+    objective: Evidence-sensitive business, history, or psychology explanations that should stay on the conservative mid-tier lane.
     variants:
+      - id: pricing_strategy_evidence
+        query: "Verify this claim with evidence: compare two B2B SaaS pricing strategies and cite sources for the market-share claim."
+        tags: [baseline, business]
+      - id: churn_benchmark_sources
+        query: Compare enterprise SaaS churn benchmarks and verify the claim with sources before drawing a conclusion.
+        tags: [paraphrase, business]
       - id: roman_republic_with_citations
         query: "Verify the claim and answer with citations: why did the Roman Republic collapse?"
         tags: [baseline, history]
-      - id: meiji_restoration_sources
-        query: Explain what caused the Meiji Restoration and support the answer with reputable historical sources.
-        tags: [paraphrase, history]
-  - id: medium_history
-    expected_decision: medium_history
+      - id: burnout_sources
+        query: Explain burnout patterns in high-pressure knowledge work and support the answer with reputable sources.
+        tags: [robustness, psychology]
+
+  - id: medium_explainer
+    expected_decision: medium_explainer
     expected_alias: qwen/qwen3.5-rocm
-    objective: History explanations without explicit evidence or verification overlays.
+    objective: Business, history, and psychology explanation without explicit verification overlays.
     variants:
+      - id: plg_vs_slg
+        query: Explain when a mid-market SaaS company should prefer product-led growth over sales-led growth, and outline the trade-offs.
+        tags: [baseline, business]
       - id: roman_republic_plain
         query: In plain language, explain why the Roman Republic collapsed.
         tags: [baseline, history]
-      - id: ming_dynasty_plain
-        query: In plain language, explain why the Ming dynasty fell.
-        tags: [paraphrase, history]
-      - id: meiji_plain
-        query: In plain language, explain what caused the Meiji Restoration.
-        tags: [robustness, history]
-  - id: medium_psychology
-    expected_decision: medium_psychology
-    expected_alias: qwen/qwen3.5-rocm
-    objective: Psychology explanation and practical intervention lane.
-    variants:
       - id: procrastination
         query: Why do people procrastinate even when the task matters, and what interventions tend to help?
         tags: [baseline, psychology]
       - id: confirmation_bias
         query: Why do people fall into confirmation bias, and what strategies usually help reduce it?
         tags: [paraphrase, psychology]
-      - id: procrastination_important_work
-        query: Why do people procrastinate on important work, and what interventions usually help?
-        tags: [robustness, psychology]
-  - id: engaged_general
-    expected_decision: engaged_general
-    expected_alias: google/gemini-2.5-flash-lite
-    objective: General prompts with explicit emotion or urgency that should avoid brittle specialist misroutes.
-    variants:
-      - id: celebratory_reply_zh
-        query: 太好了！！！我终于拿到 offer 了，帮我写一段兴奋但得体的回复。
-        tags: [baseline, emotion]
-      - id: roommate_text
-        query: I am overwhelmed right now!! Help me write a calm text to my roommate and keep it supportive.
-        tags: [paraphrase, emotion]
-      - id: dinner_reschedule
-        query: This is ridiculous!! Help me write a calm message to reschedule tonight's dinner.
-        tags: [robustness, emotion]
+
   - id: medium_creative
     expected_decision: medium_creative
     expected_alias: google/gemini-2.5-flash-lite
-    objective: Creative ideation without specialist routing or verification cues.
+    objective: Creative ideation and interpersonal drafting without specialist routing or verification cues.
     variants:
       - id: tea_house_taglines
         query: Invent three evocative taglines for a fictional tea house called Moonleaf.
@@ -214,21 +188,17 @@ decisions:
       - id: pottery_branding
         query: Invent three concise names and taglines for a boutique pottery studio with a calm, modern feel.
         tags: [paraphrase, creative]
-  - id: reasoning_general
-    expected_decision: reasoning_general
-    expected_alias: openai/gpt5.4
-    objective: Deep reasoning requests with explicit non-specialist framing.
-    variants:
-      - id: uncertainty_frameworks
-        query: Compare three general approaches to reasoning under uncertainty, without focusing on any specific domain.
-        tags: [baseline, reasoning]
-      - id: inference_modes
-        query: Compare deductive, inductive, and abductive reasoning in general terms, without anchoring the discussion to any one domain.
-        tags: [paraphrase, reasoning]
+      - id: roommate_text
+        query: I am overwhelmed right now!! Help me write a calm text to my roommate and keep it supportive.
+        tags: [emotion, drafting]
+      - id: dinner_reschedule
+        query: This is ridiculous!! Help me write a calm message to reschedule tonight's dinner.
+        tags: [emotion, drafting]
+
   - id: feedback_need_clarification
     expected_decision: feedback_need_clarification
     expected_alias: qwen/qwen3.5-rocm
-    objective: Clarification feedback overlays that ask for a simpler restatement.
+    objective: Clarification follow-ups that ask for a simpler restatement or repeat the same ask once.
     variants:
       - id: explain_more_clearly
         query: Explain that more clearly and give one simple example.
@@ -239,35 +209,20 @@ decisions:
       - id: concrete_example
         query: Please explain that more clearly and give one concrete example.
         tags: [robustness, feedback]
-  - id: verified_fast_qa_zh
-    expected_decision: verified_fast_qa_zh
+      - id: inflation_followup_messages
+        messages:
+          - role: user
+            content: Explain inflation vs recession in plain English.
+          - role: assistant
+            content: Inflation is when prices rise, and recession is when the economy gets worse.
+          - role: user
+            content: That was confusing. Restate it more clearly and give one simple example.
+        tags: [feedback, messages, clarification]
+
+  - id: verified_fast_qa
+    expected_decision: verified_fast_qa
     expected_alias: qwen/qwen3.5-rocm
-    objective: Short Chinese factual questions with explicit verification or source cues.
-    variants:
-      - id: paris_source
-        query: 法国的首都是巴黎吗？给出处。
-        tags: [baseline, zh]
-      - id: jupiter_verify
-        query: 太阳系最大的行星是木星吗？请核实并给来源。
-        tags: [paraphrase, zh]
-      - id: australia_capital_verify
-        query: 澳大利亚的首都是悉尼还是堪培拉？请核实并给出处。
-        tags: [robustness, zh]
-  - id: simple_fast_qa_zh
-    expected_decision: simple_fast_qa_zh
-    expected_alias: qwen/qwen3.5-rocm
-    objective: Short Chinese factual questions without verification overlays.
-    variants:
-      - id: water_formula
-        query: 水的化学式是什么？请简短回答。
-        tags: [baseline, zh]
-      - id: months_in_year
-        query: 一年有几个月？请简短回答。
-        tags: [paraphrase, zh]
-  - id: verified_fast_qa_en
-    expected_decision: verified_fast_qa_en
-    expected_alias: qwen/qwen3.5-rocm
-    objective: Short English factual questions with explicit verification or source requirements.
+    objective: Short English or Chinese factual questions with explicit verification or source requirements.
     variants:
       - id: australia_capital
         query: "Verify this with a source: Is the capital of Australia Sydney or Canberra?"
@@ -275,10 +230,17 @@ decisions:
       - id: light_vs_sound
         query: Verify with a source whether light travels faster than sound.
         tags: [paraphrase, en]
-  - id: simple_fast_qa_en
-    expected_decision: simple_fast_qa_en
+      - id: paris_source
+        query: 法国的首都是巴黎吗？给出处。
+        tags: [baseline, zh]
+      - id: jupiter_verify
+        query: 太阳系最大的行星是木星吗？请核实并给来源。
+        tags: [paraphrase, zh]
+
+  - id: simple_fast_qa
+    expected_decision: simple_fast_qa
     expected_alias: qwen/qwen3.5-rocm
-    objective: Very short English factual or identity-style Q and A without verification cues.
+    objective: Very short English or Chinese factual Q and A without verification overlays.
     variants:
       - id: who_are_you
         query: Who are you? Answer briefly.
@@ -286,17 +248,35 @@ decisions:
       - id: arithmetic
         query: What is 2 + 2? Answer briefly.
         tags: [paraphrase, en]
+      - id: water_formula
+        query: 水的化学式是什么？请简短回答。
+        tags: [baseline, zh]
+      - id: months_in_year
+        query: 一年有几个月？请简短回答。
+        tags: [paraphrase, zh]
+
   - id: simple_general
     expected_decision: simple_general
     expected_alias: qwen/qwen3.5-rocm
-    objective: Short general explanations that should avoid fast-QA and specialist routes.
+    objective: Short general explanations and lightweight everyday drafting that should avoid fast-QA and specialist routes.
     variants:
+      - id: casual_greeting
+        query: hi
+        tags: [baseline, greeting]
+      - id: casual_greeting_messages
+        messages:
+          - role: user
+            content: hi
+        tags: [baseline, greeting, messages, first_turn]
       - id: induction_cooktops
         query: In one short paragraph, explain how induction cooktops work for a home kitchen user.
         tags: [baseline, general]
       - id: refrigerator_cooling
         query: In one short paragraph, explain how a refrigerator keeps food cold.
         tags: [paraphrase, general]
-      - id: heat_pump_plain
+      - id: composting_plain
         query: In one short paragraph, explain how composting works for a first-time apartment resident.
         tags: [robustness, general]
+      - id: celebratory_reply_zh
+        query: 太好了！！！我终于拿到 offer 了，帮我写一段兴奋但得体的回复。
+        tags: [zh, drafting]

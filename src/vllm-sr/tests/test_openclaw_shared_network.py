@@ -154,7 +154,7 @@ def test_docker_start_vllm_sr_places_dashboard_openclaw_runtime_flags_before_ima
         },
     )
     captured = _capture_run_commands(monkeypatch)
-    _stub_valid_docker_cli(monkeypatch, tmp_path)
+    docker_bin = _stub_valid_docker_cli(monkeypatch, tmp_path)
 
     rc, _, _ = docker_cli.docker_start_vllm_sr(
         str(config_path),
@@ -169,13 +169,51 @@ def test_docker_start_vllm_sr_places_dashboard_openclaw_runtime_flags_before_ima
     dashboard_cmd = _find_container_run_cmd(captured, "vllm-sr-dashboard-container")
     image_index = dashboard_cmd.index("dashboard-image:latest")
     socket_mount_index = dashboard_cmd.index(f"{socket_path}:/var/run/docker.sock")
-    runtime_env_index = dashboard_cmd.index("OPENCLAW_CONTAINER_RUNTIME=docker")
+    docker_mount_index = dashboard_cmd.index(f"{docker_bin}:/usr/local/bin/docker:ro")
+    runtime_env_index = dashboard_cmd.index(
+        "OPENCLAW_CONTAINER_RUNTIME=/usr/local/bin/docker"
+    )
 
     assert socket_mount_index < image_index
+    assert docker_mount_index < image_index
     assert runtime_env_index < image_index
 
 
-def test_docker_start_vllm_sr_uses_in_image_docker_cli_by_default(
+def test_docker_start_vllm_sr_mounts_host_docker_cli_by_default(tmp_path, monkeypatch):
+    config_path = tmp_path / "config.yaml"
+    config_path.write_text(
+        "version: v0.1\nlisteners:\n  - name: http-8899\n    address: 0.0.0.0\n    port: 8899\n"
+    )
+
+    docker_bin = _stub_valid_docker_cli(monkeypatch, tmp_path)
+    monkeypatch.setattr(docker_start, "get_container_runtime", lambda: "docker")
+    monkeypatch.setattr(
+        docker_start,
+        "get_runtime_images",
+        lambda **kwargs: {
+            "router": "test-image",
+            "envoy": "test-image",
+            "dashboard": "test-image",
+        },
+    )
+    captured = _capture_run_commands(monkeypatch)
+
+    rc, _, _ = docker_cli.docker_start_vllm_sr(
+        str(config_path),
+        {},
+        [{"name": "http-8899", "address": "0.0.0.0", "port": 8899}],
+        network_name="vllm-sr-network",
+        openclaw_network_name="vllm-sr-network",
+        minimal=False,
+    )
+
+    assert rc == 0
+    dashboard_cmd = _find_container_run_cmd(captured, "vllm-sr-dashboard-container")
+    assert "OPENCLAW_CONTAINER_RUNTIME=/usr/local/bin/docker" in dashboard_cmd
+    assert f"{docker_bin}:/usr/local/bin/docker:ro" in dashboard_cmd
+
+
+def test_docker_start_vllm_sr_uses_in_image_docker_cli_when_opted_out(
     tmp_path, monkeypatch
 ):
     config_path = tmp_path / "config.yaml"
@@ -184,6 +222,7 @@ def test_docker_start_vllm_sr_uses_in_image_docker_cli_by_default(
     )
 
     docker_bin = _stub_valid_docker_cli(monkeypatch, tmp_path)
+    monkeypatch.setenv("VLLM_SR_MOUNT_DOCKER_CLI", "0")
     monkeypatch.setattr(docker_start, "get_container_runtime", lambda: "docker")
     monkeypatch.setattr(
         docker_start,
@@ -417,6 +456,9 @@ def test_start_vllm_sr_uses_isolated_network_and_container_names(monkeypatch):
         lambda path: {
             "listeners": [{"name": "http-8899", "address": "0.0.0.0", "port": 8899}]
         },
+    )
+    monkeypatch.setattr(
+        core, "provision_storage_backends", lambda *args, **kwargs: set()
     )
     monkeypatch.setattr(
         runtime_lifecycle,

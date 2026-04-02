@@ -1,5 +1,7 @@
 package nlgen
 
+import "strings"
+
 // SchemaReference is the complete DSL grammar reference injected into the
 // system prompt when generating DSL from natural language. It serves as
 // "schema-as-supervision" -- the LLM uses it as both documentation and
@@ -465,12 +467,46 @@ Rules:
 // It concatenates the schema reference, few-shot examples, and the user's
 // natural language instruction into one user message.
 func BuildNLPrompt(instruction string) string {
-	return SchemaReference + "\n" + FewShotExamples + "\n# Task\n\nGenerate a Semantic Router DSL program for the following requirement:\n\n" + instruction + "\n\nGenerate the DSL program:\n"
+	return BuildNLPromptWithContext(instruction, "")
+}
+
+// BuildNLPromptWithContext constructs the shared NL-to-DSL prompt plus caller
+// supplied context such as the current DSL or preferred target model names.
+func BuildNLPromptWithContext(instruction string, taskContext string) string {
+	var sections []string
+	sections = append(sections, SchemaReference)
+	sections = append(sections, FewShotExamples)
+	if trimmedContext := strings.TrimSpace(taskContext); trimmedContext != "" {
+		sections = append(sections, "# Additional Context\n\n"+trimmedContext)
+	}
+	sections = append(
+		sections,
+		"# Task\n\nGenerate a Semantic Router DSL program for the following requirement:\n\n"+strings.TrimSpace(instruction)+"\n\nGenerate the DSL program:\n",
+	)
+	return strings.Join(sections, "\n")
 }
 
 // BuildRepairPrompt constructs a follow-up prompt for the LLM when its
 // previous output failed to parse. It includes the bad code, the error,
 // and the full schema reference so the model can self-correct.
 func BuildRepairPrompt(badCode string, parseErr string) string {
-	return SchemaReference + "\n\nThe following DSL program has errors:\n\n" + badCode + "\n\nError: " + parseErr + "\n\nFix the errors and output ONLY the corrected DSL program. Do not wrap in code fences.\n"
+	return BuildRepairPromptWithContext("", "", badCode, parseErr)
+}
+
+// BuildRepairPromptWithContext constructs a follow-up prompt for the LLM when
+// a previous DSL draft needs repair.
+func BuildRepairPromptWithContext(instruction string, taskContext string, badCode string, feedback string) string {
+	var sections []string
+	sections = append(sections, SchemaReference)
+	if trimmedInstruction := strings.TrimSpace(instruction); trimmedInstruction != "" {
+		sections = append(sections, "# Original Task\n\n"+trimmedInstruction)
+	}
+	if trimmedContext := strings.TrimSpace(taskContext); trimmedContext != "" {
+		sections = append(sections, "# Additional Context\n\n"+trimmedContext)
+	}
+	sections = append(
+		sections,
+		"The following DSL program has errors:\n\n"+strings.TrimSpace(badCode)+"\n\nFeedback:\n"+strings.TrimSpace(feedback)+"\n\nFix the errors and output ONLY the corrected DSL program. Do not wrap in code fences.\n",
+	)
+	return strings.Join(sections, "\n\n")
 }

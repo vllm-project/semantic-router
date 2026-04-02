@@ -102,11 +102,21 @@ repos:
     hooks:
       - id: supply-chain-security-scan
         name: supply chain security scan (AST)
-        entry: python3 tools/security/ast_security_scanner.py scan . --fail-on HIGH
+        entry: bash -c 'if [ ! -x ./.venv-agent/bin/python ]; then echo "run make precommit-install" >&2; exit 1; fi; exec ./.venv-agent/bin/python tools/security/ast_security_scanner.py scan . --fail-on HIGH'
         language: system
         pass_filenames: false
         always_run: true
         files: \.(py|go|js|ts|tsx|rs)$
+
+  # Repo-native changed-file lint gate
+  - repo: local
+    hooks:
+      - id: agent-changed-files-lint
+        name: agent changed-files lint
+        entry: bash -c 'if [ ! -x ./.venv-agent/bin/python ]; then echo "run make precommit-install" >&2; exit 1; fi; exec ./.venv-agent/bin/python tools/agent/scripts/run_agent_precommit_lint.py "$@"' --
+        language: system
+        pass_filenames: true
+        require_serial: true
 
 # Commented out flake8 - only reports issues, doesn't auto-fix
 # -   repo: https://github.com/PyCQA/flake8

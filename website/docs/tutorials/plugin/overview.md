@@ -64,6 +64,4 @@ The plugin docs now mirror `config/plugin/` one page at a time.
 
 - [Content Safety](./content-safety)
 - [Hallucination](./hallucination)
-- [Jailbreak](./jailbreak)
-- [PII](./pii)
 - [Response Jailbreak](./response-jailbreak)

@@ -396,7 +396,7 @@ const DslGuide: React.FC<DslGuideProps> = ({ onInsertSnippet }) => {
       )}
 
       {/* Plugins */}
-      {matchesSearch('plugin jailbreak pii cache memory rag') && (
+      {matchesSearch('plugin jailbreak pii cache memory rag image_gen request_params fast_response response_jailbreak tools') && (
         <Section title={`Plugins (${PLUGIN_TYPES.length} types)`} icon="🔌">
           <p className={styles.hint}>
             Plugins add pre/post processing. Declare with{' '}

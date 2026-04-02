@@ -164,6 +164,7 @@ func (s *ClassificationService) ClassifyIntentForEval(req IntentRequest) (*EvalR
 		input.currentUserText,
 		input.priorUserMessages,
 		input.nonUserMessages,
+		input.hasAssistantReply,
 		true,
 		"",
 		nil,
@@ -172,24 +173,31 @@ func (s *ClassificationService) ClassifyIntentForEval(req IntentRequest) (*EvalR
 	var decisionResult *decision.DecisionResult
 	var traces []decision.DecisionTrace
 	if s.config != nil && len(s.config.Decisions) > 0 {
-		if wantTrace {
-			var err error
-			decisionResult, traces, err = s.classifier.EvaluateDecisionWithEngineAndTrace(signals)
-			if err != nil && !strings.Contains(err.Error(), "no decisions configured") {
-				logging.Warnf("Decision evaluation failed: %v", err)
-			}
-		} else {
-			var err error
-			decisionResult, err = s.classifier.EvaluateDecisionWithEngine(signals)
-			if err != nil && !strings.Contains(err.Error(), "no decisions configured") {
-				logging.Warnf("Decision evaluation failed: %v", err)
-			}
-		}
+		decisionResult, traces = s.evaluateIntentDecision(signals, wantTrace)
 	}
 
 	resp := s.buildEvalResponse(input.evaluationText, signals, decisionResult)
 	resp.EvalTrace = traces
 	return resp, nil
+}
+
+func (s *ClassificationService) evaluateIntentDecision(
+	signals *classification.SignalResults,
+	wantTrace bool,
+) (*decision.DecisionResult, []decision.DecisionTrace) {
+	if !wantTrace {
+		decisionResult, err := s.classifier.EvaluateDecisionWithEngine(signals)
+		if err != nil && !strings.Contains(err.Error(), "no decisions configured") {
+			logging.Warnf("Decision evaluation failed: %v", err)
+		}
+		return decisionResult, nil
+	}
+
+	decisionResult, traces, err := s.classifier.EvaluateDecisionWithEngineAndTrace(signals)
+	if err != nil && !strings.Contains(err.Error(), "no decisions configured") {
+		logging.Warnf("Decision evaluation failed: %v", err)
+	}
+	return decisionResult, traces
 }
 
 func buildMatchedSignals(signals *classification.SignalResults) *MatchedSignals {

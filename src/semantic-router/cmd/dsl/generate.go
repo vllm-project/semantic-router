@@ -9,7 +9,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/vllm-project/semantic-router/src/semantic-router/internal/nlgen"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/nlgen"
 )
 
 func runGenerate() {

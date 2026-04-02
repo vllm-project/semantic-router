@@ -98,3 +98,4 @@ Keep the numeric index unique within `docs/agent/plans/`.
 - [pl-0021-local-runtime-three-image-rollout.md](pl-0021-local-runtime-three-image-rollout.md)
 - [pl-0022-dev-integration-consolidation-loop.md](pl-0022-dev-integration-consolidation-loop.md)
 - [pl-0023-dashboard-dsl-natural-language-mode-loop.md](pl-0023-dashboard-dsl-natural-language-mode-loop.md)
+- [pl-0024-balance-recipe-simplification-loop.md](pl-0024-balance-recipe-simplification-loop.md)

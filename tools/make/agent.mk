@@ -16,6 +16,7 @@ AGENT_GOLANGCI_LINT_VERSION ?= 2.5.0
 AGENT_REPORT_WRITE ?=
 AGENT_REPORT_WRITE_PATH ?=
 AGENT_REPORT_CONTEXT_DETAIL ?= compact
+AGENT_SKIP_PRECOMMIT_BASELINE ?=
 
 # Repo-local venv for harness deps (avoids PEP 668 / externally-managed-environment on Homebrew Python).
 AGENT_VENV ?= $(CURDIR)/.venv-agent
@@ -116,8 +117,10 @@ agent-lint: agent-bootstrap ## Run lint and structure gates for changed files
 	fi; \
 	FILE_ARGS="$$(printf '%s\n' "$$RAW_FILES" | paste -sd' ' -)"; \
 	CSV_FILES="$$(printf '%s\n' "$$RAW_FILES" | paste -sd',' -)"; \
-	echo "Running baseline pre-commit checks..."; \
-	"$(AGENT_PRE_COMMIT)" run --files $$FILE_ARGS && \
+	if [ "$(AGENT_SKIP_PRECOMMIT_BASELINE)" != "1" ]; then \
+		echo "Running baseline pre-commit checks..."; \
+		AGENT_SKIP_PRECOMMIT_CHANGED_LINT=1 "$(AGENT_PRE_COMMIT)" run --files $$FILE_ARGS || exit $$?; \
+	fi; \
 	echo "Running Python lint..." && \
 	"$(AGENT_PYTHON)" tools/agent/scripts/agent_gate.py run-python-lint --changed-files "$$CSV_FILES" && \
 	echo "Running Go structural lint..." && \

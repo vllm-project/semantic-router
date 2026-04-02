@@ -153,7 +153,7 @@ func TestExtractAutoStore_NoMemoryPlugin_ReturnsFalse(t *testing.T) {
 		VSRSelectedDecision: &config.Decision{
 			Name: "no_memory_decision",
 			Plugins: []config.DecisionPlugin{
-				{Type: "pii", Configuration: config.MustStructuredPayload(map[string]interface{}{"enabled": true})},
+				{Type: "system_prompt", Configuration: config.MustStructuredPayload(map[string]interface{}{"enabled": true})},
 				// No memory plugin
 			},
 		},

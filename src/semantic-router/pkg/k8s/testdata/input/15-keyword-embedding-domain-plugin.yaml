@@ -87,15 +87,6 @@ spec:
           use_reasoning: true
           reasoning_effort: "high"
       plugins:
-        - type: "pii"
-          configuration:
-            enabled: true
-            threshold: 0.9
-            pii_types_allowed: ["PERSON", "ORGANIZATION", "EMAIL", "PHONE_NUMBER"]
-        - type: "jailbreak"
-          configuration:
-            enabled: true
-            threshold: 0.88
         - type: "system_prompt"
           configuration:
             system_prompt: "You are a legal compliance assistant. Provide accurate information about regulations and compliance requirements. Always remind users to consult legal professionals for specific advice."
@@ -128,11 +119,6 @@ spec:
           use_reasoning: true
           reasoning_effort: "medium"
       plugins:
-        - type: "pii"
-          configuration:
-            enabled: true
-            threshold: 0.85
-            pii_types_allowed: ["PERSON", "ORGANIZATION", "FINANCIAL_DATA"]
         - type: "semantic-cache"
           configuration:
             enabled: true

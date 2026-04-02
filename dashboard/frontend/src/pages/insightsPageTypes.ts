@@ -10,6 +10,28 @@ export interface Signal {
   context?: string[]
   structure?: string[]
   complexity?: string[]
+  modality?: string[]
+  authz?: string[]
+  jailbreak?: string[]
+  pii?: string[]
+  kb?: string[]
+}
+
+export interface ToolTraceStep {
+  type: string
+  source?: string
+  role?: string
+  text?: string
+  tool_name?: string
+  tool_call_id?: string
+  arguments?: string
+}
+
+export interface ToolTrace {
+  flow?: string
+  stage?: string
+  tool_names?: string[]
+  steps?: ToolTraceStep[]
 }
 
 export interface InsightsRecord {
@@ -17,6 +39,8 @@ export interface InsightsRecord {
   timestamp: string
   request_id?: string
   decision?: string
+  decision_tier: number
+  decision_priority: number
   category?: string
   original_model?: string
   selected_model?: string
@@ -24,6 +48,11 @@ export interface InsightsRecord {
   confidence_score?: number
   selection_method?: string
   signals: Signal
+  projections?: string[]
+  projection_scores?: Record<string, number>
+  signal_confidences?: Record<string, number>
+  signal_values?: Record<string, number>
+  tool_trace?: ToolTrace
   request_body?: string
   response_body?: string
   response_status?: number

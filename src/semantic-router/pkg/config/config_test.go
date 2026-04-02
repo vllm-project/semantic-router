@@ -3405,7 +3405,7 @@ default_model: "test-model"
 			decision := &Decision{
 				Name: "test_decision",
 				Plugins: []DecisionPlugin{
-					{Type: "pii", Configuration: MustStructuredPayload(map[string]interface{}{"enabled": true})},
+					{Type: "system_prompt", Configuration: MustStructuredPayload(map[string]interface{}{"enabled": true})},
 				},
 			}
 

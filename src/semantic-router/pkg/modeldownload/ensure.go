@@ -74,8 +74,4 @@ func logModelRegistry(registry map[string]string) {
 		"unique_models":    len(uniqueModels),
 		"registry_aliases": len(registry),
 	})
-	logging.Debugf("Registry Details:")
-	for localPath, repoID := range registry {
-		logging.Debugf("  %s -> %s", localPath, repoID)
-	}
 }

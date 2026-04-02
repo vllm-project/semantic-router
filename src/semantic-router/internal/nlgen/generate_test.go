@@ -187,6 +187,67 @@ func TestGenerateFromNL_SystemPromptContainsSchema(t *testing.T) {
 	}
 }
 
+func TestBuildNLPromptWithContextIncludesAdditionalContext(t *testing.T) {
+	prompt := BuildNLPromptWithContext("Route math queries", "Preferred target model for route references: qwen2.5:7b")
+	if !strings.Contains(prompt, "# Additional Context") {
+		t.Fatalf("expected prompt to include additional context section, got:\n%s", prompt)
+	}
+	if !strings.Contains(prompt, "Preferred target model for route references: qwen2.5:7b") {
+		t.Fatalf("expected prompt to include task context, got:\n%s", prompt)
+	}
+}
+
+func TestRepairFromFeedbackUsesRepairPhaseAndAttemptOffset(t *testing.T) {
+	client := &mockLLMClient{
+		responses: []string{
+			`SIGNAL language zh {
+  description: "Chinese prompts"
+}
+
+ROUTE zh_route {
+  PRIORITY 100
+  WHEN language("zh")
+  MODEL "qwen2.5:7b"
+}
+
+ROUTE fallback {
+  PRIORITY 1
+  MODEL "qwen2.5:3b"
+}`,
+		},
+	}
+
+	var events []ProgressEvent
+	result, err := RepairFromFeedback(
+		context.Background(),
+		client,
+		"Add Chinese routing before the fallback.",
+		`ROUTE broken {`,
+		`3:3: unexpected token "}"`,
+		WithTaskContext("Preferred target model for route references: qwen2.5:7b"),
+		WithAttemptOffset(2),
+		WithProgressReporter(func(event ProgressEvent) {
+			events = append(events, event)
+		}),
+		WithMaxRetries(0),
+	)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if result.Attempts != 1 {
+		t.Fatalf("expected one repair call, got %d", result.Attempts)
+	}
+	if len(events) == 0 {
+		t.Fatal("expected repair progress events")
+	}
+	if events[0].Phase != "repair" || events[0].Attempt != 3 {
+		t.Fatalf("expected first progress event to report repair attempt 3, got %#v", events[0])
+	}
+	if !strings.Contains(client.calls[0].Messages[1].Content, "# Original Task") {
+		t.Fatalf("expected repair prompt to include original task context, got:\n%s", client.calls[0].Messages[1].Content)
+	}
+}
+
 // ---------- Eval Harness ----------
 
 // NLEvalCase defines one test case for the NL-to-DSL eval harness.

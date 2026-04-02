@@ -47,7 +47,7 @@ const Layout: React.FC<LayoutProps> = ({
   const canUseMLSetup = canAccessMLSetup(user)
   const secondaryNavLinks = SECONDARY_NAV_LINKS.filter((link) => link.to !== '/users' || canManageUsers)
   const managerMenuSections = filterLayoutMenuSections(
-    MANAGER_MENU_SECTIONS,
+    [...MANAGER_MENU_SECTIONS, ...KNOWLEDGE_BASE_MENU_SECTIONS],
     item => canManageUsers || item.kind !== 'route' || item.to !== '/users'
   )
   const analysisOperationsMenuSections = filterLayoutMenuSections(
@@ -68,12 +68,6 @@ const Layout: React.FC<LayoutProps> = ({
     isConfigPage,
     configSection
   )
-  const isKnowledgeBaseActive = hasActiveLayoutMenuSection(
-    KNOWLEDGE_BASE_MENU_SECTIONS,
-    location.pathname,
-    isConfigPage,
-    configSection
-  ) || location.pathname.startsWith('/knowledge-bases/')
   const isAnalysisOpsActive = hasActiveLayoutMenuSection(
     systemMenuSections,
     location.pathname,
@@ -117,7 +111,7 @@ const Layout: React.FC<LayoutProps> = ({
   const renderTopNavLink = (link: LayoutNavLink) => (
     <NavLink
       key={link.to}
-      end
+      end={link.matchMode !== 'prefix'}
       to={link.to}
       className={({ isActive }) => (isActive ? `${styles.navLink} ${styles.navLinkActive}` : styles.navLink)}
     >
@@ -267,34 +261,6 @@ const Layout: React.FC<LayoutProps> = ({
               <div className={styles.navDropdown}>
                 <button
                   type="button"
-                  aria-expanded={openDropdown === 'knowledgeBase'}
-                  aria-haspopup="menu"
-                  className={`${styles.navLink} ${isKnowledgeBaseActive ? styles.navLinkActive : ''}`}
-                  onClick={(e) => {
-                    e.stopPropagation()
-                    toggleDropdown('knowledgeBase')
-                  }}
-                >
-                  Knowledge
-                  <svg
-                    width="12"
-                    height="12"
-                    viewBox="0 0 12 12"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth="1.5"
-                    className={`${styles.dropdownArrow} ${openDropdown === 'knowledgeBase' ? styles.dropdownArrowOpen : ''}`}
-                  >
-                    <path d="M3 4.5L6 7.5L9 4.5" strokeLinecap="round" strokeLinejoin="round" />
-                  </svg>
-                </button>
-                {openDropdown === 'knowledgeBase'
-                  ? renderDropdownMenu(KNOWLEDGE_BASE_MENU_SECTIONS, styles.dropdownMenu, 'Knowledge')
-                  : null}
-              </div>
-              <div className={styles.navDropdown}>
-                <button
-                  type="button"
                   aria-expanded={openDropdown === 'analysisOps'}
                   aria-haspopup="menu"
                   className={`${styles.navLink} ${isAnalysisOpsActive ? styles.navLinkActive : ''}`}
@@ -319,7 +285,7 @@ const Layout: React.FC<LayoutProps> = ({
                 {openDropdown === 'analysisOps'
                   ? renderDropdownMenu(
                       systemMenuSections,
-                      styles.dropdownMenuRight,
+                      styles.dropdownMenu,
                       'System'
                     )
                   : null}
@@ -415,7 +381,6 @@ const Layout: React.FC<LayoutProps> = ({
               </NavLink>
             ))}
             {renderMobileMenuSection('Manager', managerMenuSections)}
-            {renderMobileMenuSection('Knowledge', KNOWLEDGE_BASE_MENU_SECTIONS)}
             {renderMobileMenuSection('System', systemMenuSections)}
           </div>
         ) : null}

@@ -80,7 +80,7 @@ def start_vllm_sr(
     print_vllm_logo()
     source_config_file = source_config_file or config_file
     runtime_config_file = runtime_config_file or config_file
-    user_config = load_config(source_config_file) or {}
+    user_config = load_config(runtime_config_file) or {}
     listeners = user_config.get("listeners", [])
     if not listeners:
         log.error("No listeners configured in config.yaml")
@@ -370,8 +370,7 @@ def show_logs(service: str, follow: bool = False):
 def show_status(service: str = "all"):
     """Show runtime service status."""
     stack_layout = resolve_runtime_stack()
-    status = _runtime_stack_status(stack_layout)
-    sim_status = docker_container_status(stack_layout.fleet_sim_container_name)
+    status, sim_status = _resolve_runtime_status_snapshot(stack_layout)
     if status == "not found":
         if sim_status == "running":
             log.info(
@@ -401,6 +400,23 @@ def show_status(service: str = "all"):
     log.info("")
     log.info("For detailed logs: vllm-sr logs <envoy|router|dashboard|simulator>")
     log.info("=" * 60)
+
+
+def _resolve_runtime_status_snapshot(
+    stack_layout: RuntimeStackLayout,
+) -> tuple[str, str]:
+    try:
+        return (
+            _runtime_stack_status(stack_layout),
+            docker_container_status(stack_layout.fleet_sim_container_name),
+        )
+    except SystemExit:
+        log.info("Status: Not running")
+        log.info(
+            "Docker daemon is not reachable, so local container status cannot be inspected"
+        )
+        log.info("Start with: vllm-sr serve")
+        return "not found", "not found"
 
 
 def _validate_runtime_service(service: str) -> None:

@@ -29,6 +29,7 @@ type routerComponents struct {
 	toolsDatabase        *tools.ToolsDatabase
 	responseAPIFilter    *ResponseAPIFilter
 	replayRecorder       *routerreplay.Recorder
+	replayStoreShared    bool
 	replayRecorders      map[string]*routerreplay.Recorder
 	modelSelector        *selection.Registry
 	memoryStore          memory.Store
@@ -119,7 +120,7 @@ func buildRouterComponents(cfg *config.RouterConfig) (*routerComponents, error) 
 	}
 
 	responseAPIFilter := createResponseAPIFilter(cfg)
-	replayRecorders, replayRecorder := createReplayRuntime(cfg)
+	replayRecorders, replayRecorder, replayStoreShared := createReplayRuntime(cfg)
 	modelSelector := createModelSelectorRegistry(cfg)
 	memoryStore, memoryExtractor := createMemoryRuntime(cfg)
 	credentialResolver := buildCredentialResolver(cfg)
@@ -144,6 +145,7 @@ func buildRouterComponents(cfg *config.RouterConfig) (*routerComponents, error) 
 		toolsDatabase:        toolsDatabase,
 		responseAPIFilter:    responseAPIFilter,
 		replayRecorder:       replayRecorder,
+		replayStoreShared:    replayStoreShared,
 		replayRecorders:      replayRecorders,
 		modelSelector:        modelSelector,
 		memoryStore:          memoryStore,
@@ -162,6 +164,7 @@ func (components *routerComponents) buildRouter() *OpenAIRouter {
 		ToolsDatabase:        components.toolsDatabase,
 		ResponseAPIFilter:    components.responseAPIFilter,
 		ReplayRecorder:       components.replayRecorder,
+		ReplayStoreShared:    components.replayStoreShared,
 		ModelSelector:        components.modelSelector,
 		ReplayRecorders:      components.replayRecorders,
 		MemoryStore:          components.memoryStore,

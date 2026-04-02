@@ -47,7 +47,7 @@ COPY dashboard/wizmap/ ./
 RUN npm run build -- --outDir /app/wizmap-dist
 
 # Stage 2: Build backend with Go
-FROM golang:1.24-alpine AS backend-builder
+FROM golang:1.24-bookworm AS backend-builder
 WORKDIR /app
 
 # Use Go proxy for reliable downloads
@@ -58,23 +58,28 @@ ARG TARGETARCH
 ARG TARGETOS=linux
 
 RUN set -eux; \
-    apk_add_with_retry() { \
+    apt_get_install_with_retry() { \
       for attempt in 1 2 3 4 5; do \
-        if apk add --no-cache "$@"; then \
+        if apt-get update && apt-get install -y --no-install-recommends "$@"; then \
+          rm -rf /var/lib/apt/lists/*; \
           return 0; \
         fi; \
-        echo "apk add failed (attempt ${attempt}/5), retrying..." >&2; \
+        echo "apt-get install failed (attempt ${attempt}/5), retrying..." >&2; \
+        rm -rf /var/lib/apt/lists/*; \
         sleep $((attempt * 2)); \
       done; \
       return 1; \
     }; \
-    apk_add_with_retry build-base
+    apt_get_install_with_retry build-essential
 
 # Copy src/semantic-router first (required by dashboard/backend/go.mod replace directive)
-# Only copy the packages we actually need (config, modelinventory, observability, startupstatus) - NOT pkg/cli which has extra deps
+# Only copy the packages we actually need for dashboard backend builds - NOT pkg/cli which has extra deps
 COPY src/semantic-router/go.mod src/semantic-router/go.sum /app/src/semantic-router/
+COPY src/semantic-router/internal/nlgen/ /app/src/semantic-router/internal/nlgen/
 COPY src/semantic-router/pkg/config/ /app/src/semantic-router/pkg/config/
+COPY src/semantic-router/pkg/dsl/ /app/src/semantic-router/pkg/dsl/
 COPY src/semantic-router/pkg/modelinventory/ /app/src/semantic-router/pkg/modelinventory/
+COPY src/semantic-router/pkg/nlgen/ /app/src/semantic-router/pkg/nlgen/
 COPY src/semantic-router/pkg/observability/ /app/src/semantic-router/pkg/observability/
 COPY src/semantic-router/pkg/startupstatus/ /app/src/semantic-router/pkg/startupstatus/
 
@@ -88,28 +93,32 @@ COPY dashboard/backend/ /app/dashboard/backend/
 RUN CGO_ENABLED=1 GOOS=${TARGETOS} GOARCH=${TARGETARCH} go build -ldflags="-w -s" -o /app/dashboard-backend main.go
 
 # Stage 3: Final runtime image
-FROM alpine:3.19
+FROM python:3.11-slim-bookworm
 ENV PYTHONPATH=/app
 ENV VIRTUAL_ENV=/opt/vllm-sr-dashboard-venv
 ENV PATH="${VIRTUAL_ENV}/bin:${PATH}"
+ENV DEBIAN_FRONTEND=noninteractive
 RUN set -eux; \
-    apk_add_with_retry() { \
+    apt_get_install_with_retry() { \
       for attempt in 1 2 3 4 5; do \
-        if apk add --no-cache "$@"; then \
+        if apt-get update && apt-get install -y --no-install-recommends "$@"; then \
+          rm -rf /var/lib/apt/lists/*; \
           return 0; \
         fi; \
-        echo "apk add failed (attempt ${attempt}/5), retrying..." >&2; \
+        echo "apt-get install failed (attempt ${attempt}/5), retrying..." >&2; \
+        rm -rf /var/lib/apt/lists/*; \
         sleep $((attempt * 2)); \
       done; \
       return 1; \
     }; \
-    apk_add_with_retry ca-certificates curl docker-cli py3-pip python3 su-exec wget
+    apt_get_install_with_retry ca-certificates curl docker.io gosu wget
 WORKDIR /app
 COPY --from=backend-builder /app/dashboard-backend /app/dashboard-backend
 COPY --from=backend-builder /app/dashboard-backend /usr/local/bin/dashboard-backend
 COPY --from=frontend-builder /app/frontend/dist /app/frontend
 COPY --from=wizmap-builder /app/wizmap-dist /app/frontend/embedded/wizmap
 COPY src/vllm-sr/requirements.txt /app/requirements.txt
+COPY src/training/model_eval/ /app/src/training/model_eval/
 COPY src/vllm-sr/cli/ /app/cli/
 COPY src/vllm-sr/start-dashboard.sh /app/start-dashboard.sh
 COPY src/vllm-sr/cli/templates/tools_db.json /app/config/tools_db.json
@@ -121,9 +130,10 @@ COPY dashboard/backend/entrypoint.sh /app/entrypoint.sh
 RUN python3 -m venv "${VIRTUAL_ENV}" && \
     "${VIRTUAL_ENV}/bin/pip" install --no-cache-dir --upgrade pip && \
     "${VIRTUAL_ENV}/bin/pip" install --no-cache-dir -r /app/requirements.txt && \
+    "${VIRTUAL_ENV}/bin/pip" install --no-cache-dir -r /app/src/training/model_eval/requirements.txt && \
     chmod +x /app/entrypoint.sh /app/start-dashboard.sh
-RUN addgroup -g 65532 nonroot && \
-    adduser -D -u 65532 -G nonroot nonroot && \
+RUN groupadd --gid 65532 nonroot && \
+    useradd --uid 65532 --gid 65532 --create-home --shell /usr/sbin/nologin nonroot && \
     chown -R nonroot:nonroot /app
 EXPOSE 8700
 # Note: We run as root initially so entrypoint can fix ownership/permissions, then switch to nonroot

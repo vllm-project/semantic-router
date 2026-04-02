@@ -2,6 +2,7 @@ package classification
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"slices"
 	"strings"
@@ -68,7 +69,7 @@ func textForSignalFunc(text, uncompressedText string, skipCompressionSignals map
 	}
 }
 
-func (c *Classifier) EvaluateAllSignalsWithContext(text string, contextText string, currentUserText string, priorUserMessages []string, nonUserMessages []string, forceEvaluateAll bool, uncompressedText string, skipCompressionSignals map[string]bool, imageURL ...string) *SignalResults {
+func (c *Classifier) EvaluateAllSignalsWithContext(text string, contextText string, currentUserText string, priorUserMessages []string, nonUserMessages []string, hasPriorAssistantReply bool, forceEvaluateAll bool, uncompressedText string, skipCompressionSignals map[string]bool, imageURL ...string) *SignalResults {
 	defer c.enterSignalEvaluationLoadGate()()
 	// Determine which signals (type:name) should be evaluated
 	var usedSignals map[string]bool
@@ -95,7 +96,7 @@ func (c *Classifier) EvaluateAllSignalsWithContext(text string, contextText stri
 		imgArg = imageURL[0]
 	}
 
-	dispatchers := c.buildSignalDispatchers(results, &mu, textForSignal, contextText, currentUserText, priorUserMessages, nonUserMessages, imgArg)
+	dispatchers := c.buildSignalDispatchers(results, &mu, textForSignal, contextText, currentUserText, priorUserMessages, nonUserMessages, hasPriorAssistantReply, imgArg)
 	runSignalDispatchers(dispatchers, usedSignals, ready, &wg)
 
 	wg.Wait()
@@ -262,7 +263,12 @@ func (c *Classifier) evaluateFactCheckSignal(results *SignalResults, mu *sync.Mu
 	}
 }
 
-func (c *Classifier) evaluateUserFeedbackSignal(results *SignalResults, mu *sync.Mutex, text string) {
+func (c *Classifier) evaluateUserFeedbackSignal(results *SignalResults, mu *sync.Mutex, text string, hasPriorAssistantReply bool) {
+	if !shouldEvaluateUserFeedbackSignal(hasPriorAssistantReply) {
+		logging.Debugf("[Signal Computation] User feedback signal skipped: no prior assistant reply")
+		return
+	}
+
 	start := time.Now()
 	feedbackResult, err := c.ClassifyFeedback(text)
 	elapsed := time.Since(start)
@@ -360,6 +366,10 @@ func (c *Classifier) evaluatePreferenceSignal(results *SignalResults, mu *sync.M
 
 	logging.Debugf("[Signal Computation] Preference signal evaluation completed in %v", elapsed)
 	if err != nil {
+		if errors.Is(err, ErrPreferenceBelowThreshold) {
+			logging.Debugf("preference rule did not match threshold: %v", err)
+			return
+		}
 		logging.Errorf("preference rule evaluation failed: %v", err)
 	} else if preferenceResult != nil {
 		// Check if this preference is defined in preference_rules

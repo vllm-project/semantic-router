@@ -528,6 +528,17 @@ function extractSignals(config: ConfigData): SignalConfig[] {
 function extractProjectionSignals(config: ConfigData): SignalConfig[] {
   const projectionSignals: SignalConfig[] = []
   const projections = config.routing?.projections ?? config.projections
+  const scoreInputsByName = new Map(
+    (projections?.scores ?? []).map((score) => [
+      score.name,
+      (score.inputs ?? [])
+        .filter((input): input is NonNullable<typeof input> => Boolean(input?.type && input?.name))
+        .map((input) => ({
+          type: input.type,
+          name: input.name,
+        })),
+    ]),
+  )
 
   projections?.mappings?.forEach(mapping => {
     mapping.outputs?.forEach(output => {
@@ -540,6 +551,7 @@ function extractProjectionSignals(config: ConfigData): SignalConfig[] {
           source: mapping.source,
           method: mapping.method || 'threshold_bands',
           mapping: mapping.name,
+          upstreamSignals: scoreInputsByName.get(mapping.source) ?? [],
         },
       })
     })

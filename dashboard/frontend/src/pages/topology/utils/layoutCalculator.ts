@@ -29,6 +29,13 @@ interface LayoutMeta {
   totalDecisionCount: number
 }
 
+interface LayerFrame {
+  left: number
+  center: number
+  right: number
+  width: number
+}
+
 interface LayoutOptions {
   densityMode?: DecisionDensityMode
   expandHiddenDecisions?: boolean
@@ -48,6 +55,38 @@ const DENSITY_LANE_GAP_SCALE: Record<DecisionDensityMode, number> = {
   compact: 0.9,
   balanced: 1,
   cinematic: 1.12,
+}
+
+const DENSITY_HORIZONTAL_GAP_SCALE: Record<DecisionDensityMode, number> = {
+  compact: 0.92,
+  balanced: 1.08,
+  cinematic: 1.2,
+}
+
+const DENSITY_FRAME_PADDING_SCALE: Record<DecisionDensityMode, number> = {
+  compact: 0.9,
+  balanced: 1.04,
+  cinematic: 1.12,
+}
+
+const ORDERED_LAYERS: LayerName[] = [
+  'client',
+  'signals',
+  'projections',
+  'decisions',
+  'algorithms',
+  'pluginChains',
+  'models',
+]
+
+const HORIZONTAL_GAP_BY_LAYER: Record<LayerName, number> = {
+  client: TOPOLOGY_LAYER_LAYOUT.horizontalGap.clientToSignals,
+  signals: TOPOLOGY_LAYER_LAYOUT.horizontalGap.signalsToProjections,
+  projections: TOPOLOGY_LAYER_LAYOUT.horizontalGap.projectionsToDecisions,
+  decisions: TOPOLOGY_LAYER_LAYOUT.horizontalGap.decisionsToAlgorithms,
+  algorithms: TOPOLOGY_LAYER_LAYOUT.horizontalGap.algorithmsToPluginChains,
+  pluginChains: TOPOLOGY_LAYER_LAYOUT.horizontalGap.pluginChainsToModels,
+  models: 0,
 }
 
 function getAdaptiveLayerSpacing(layerName: LayerName, nodeCount: number): number {
@@ -159,16 +198,11 @@ export function calculateFullLayout(
     }
   })
 
-  // ============== Three-Layer Architecture (Left -> Right) ==============
-  // Layer 1: Input (client + signals)
-  // Layer 2: Decision (decision engine)
-  // Layer 3: Projection (algorithm/plugin/model execution)
-  const LAYER_X_POSITIONS = TOPOLOGY_LAYER_LAYOUT.x
-
   // Group nodes by layer
   const nodesByLayer: Record<LayerName, Node[]> = {
     client: [],
     signals: [],
+    projections: [],
     decisions: [],
     algorithms: [],
     pluginChains: [],
@@ -180,6 +214,8 @@ export function calculateFullLayout(
       nodesByLayer.client.push(node)
     } else if (node.id.startsWith('signal-group-')) {
       nodesByLayer.signals.push(node)
+    } else if (node.id.startsWith('projection-group-')) {
+      nodesByLayer.projections.push(node)
     } else if (node.id.startsWith('decision-') || node.id === 'default-route' || node.id === 'fallback-decision' || node.id === 'more-decisions') {
       nodesByLayer.decisions.push(node)
     } else if (node.id.startsWith('algorithm-')) {
@@ -190,6 +226,100 @@ export function calculateFullLayout(
       nodesByLayer.models.push(node)
     }
   })
+
+  const decisionLaneRule = TOPOLOGY_LAYER_LAYOUT.lanes.decisions
+  const decisionMaxPerLane = Math.min(6, decisionLaneRule.maxPerLane)
+  const regularDecisionCount = nodesByLayer.decisions.filter(node => node.id.startsWith('decision-')).length
+  const decisionLaneCount = Math.max(
+    1,
+    Math.ceil(Math.max(regularDecisionCount, 1) / decisionMaxPerLane)
+  )
+  const decisionLaneSpan = Math.max(0, decisionLaneCount - 1) * decisionLaneRule.laneGap * laneGapScale
+
+  const signalLaneRule = TOPOLOGY_LAYER_LAYOUT.lanes.signals
+  const signalLaneCount = nodesByLayer.signals.length >= signalLaneRule.enableAt
+    ? Math.max(
+        1,
+        Math.min(
+          signalLaneRule.maxLanes,
+          Math.ceil(nodesByLayer.signals.length / signalLaneRule.maxPerLane)
+        )
+      )
+    : 1
+  const signalLaneSpan = Math.max(0, signalLaneCount - 1) * signalLaneRule.laneGap * laneGapScale
+
+  const projectionLaneRule = TOPOLOGY_LAYER_LAYOUT.lanes.projections
+  const projectionLaneCount = nodesByLayer.projections.length >= projectionLaneRule.enableAt
+    ? Math.max(
+        1,
+        Math.min(
+          projectionLaneRule.maxLanes,
+          Math.ceil(nodesByLayer.projections.length / projectionLaneRule.maxPerLane)
+        )
+      )
+    : 1
+  const projectionLaneSpan = Math.max(0, projectionLaneCount - 1) * projectionLaneRule.laneGap * laneGapScale
+
+  const modelLaneRule = TOPOLOGY_LAYER_LAYOUT.lanes.models
+  const modelLaneCount = nodesByLayer.models.length >= modelLaneRule.enableAt
+    ? Math.max(
+        1,
+        Math.min(
+          modelLaneRule.maxLanes,
+          Math.ceil(nodesByLayer.models.length / modelLaneRule.maxPerLane)
+        )
+      )
+    : 1
+  const modelLaneSpan = Math.max(0, modelLaneCount - 1) * modelLaneRule.laneGap * laneGapScale
+
+  const getLayerMaxNodeWidth = (layerName: LayerName): number => {
+    const fallbackWidth = layerName === 'models' ? MODEL_NODE_WIDTH : 180
+    return nodesByLayer[layerName].reduce((maxWidth, node) => {
+      const dim = nodeDimensions.get(node.id)
+      return Math.max(maxWidth, dim?.width ?? fallbackWidth)
+    }, fallbackWidth)
+  }
+
+  const getLayerFrameWidth = (layerName: LayerName): number => {
+    const baseWidth = getLayerMaxNodeWidth(layerName)
+    const framePadding = TOPOLOGY_LAYER_LAYOUT.framePadding[layerName] * DENSITY_FRAME_PADDING_SCALE[densityMode]
+
+    switch (layerName) {
+      case 'signals':
+        return baseWidth + framePadding * 2 + signalLaneSpan
+      case 'projections':
+        return baseWidth + framePadding * 2 + projectionLaneSpan
+      case 'decisions':
+        return baseWidth + framePadding * 2 + decisionLaneSpan
+      case 'algorithms':
+        return baseWidth + framePadding * 2 + Math.max(0, decisionLaneCount - 1) * TOPOLOGY_LAYER_LAYOUT.lanes.algorithms.laneGap * laneGapScale
+      case 'pluginChains':
+        return baseWidth + framePadding * 2 + Math.max(0, decisionLaneCount - 1) * TOPOLOGY_LAYER_LAYOUT.lanes.pluginChains.laneGap * laneGapScale
+      case 'models':
+        return baseWidth + framePadding * 2 + modelLaneSpan
+      default:
+        return baseWidth + framePadding * 2
+    }
+  }
+
+  const layerFrames = ORDERED_LAYERS.reduce<Record<LayerName, LayerFrame>>((frames, layerName, index) => {
+    const width = getLayerFrameWidth(layerName)
+    const previousLayer = ORDERED_LAYERS[index - 1]
+    const previousRight = previousLayer ? frames[previousLayer].right : 0
+    const gap = previousLayer
+      ? HORIZONTAL_GAP_BY_LAYER[previousLayer] * DENSITY_HORIZONTAL_GAP_SCALE[densityMode]
+      : 0
+    const left = previousRight + gap
+
+    frames[layerName] = {
+      left,
+      center: left + width / 2,
+      right: left + width,
+      width,
+    }
+
+    return frames
+  }, {} as Record<LayerName, LayerFrame>)
 
   const nodeById = new Map<string, Node>()
   nodes.forEach(node => {
@@ -210,14 +340,14 @@ export function calculateFullLayout(
   }
 
   // Use upstream barycenter ordering to reduce edge crossings in dense layers.
-  const getIncomingBarycenter = (nodeId: string, currentLayerX: number): number | null => {
+  const getIncomingBarycenter = (nodeId: string, currentLayerLeft: number): number | null => {
     const sourceIds = incomingSourcesByTarget.get(nodeId)
     if (!sourceIds || sourceIds.length === 0) return null
 
     const sourceCenters = sourceIds
       .map(sourceId => nodeById.get(sourceId))
       .filter((sourceNode): sourceNode is Node => Boolean(sourceNode))
-      .filter(sourceNode => (sourceNode.position?.x ?? 0) < currentLayerX)
+      .filter(sourceNode => (sourceNode.position?.x ?? 0) < currentLayerLeft)
       .map(sourceNode => getNodeCenterY(sourceNode))
       .filter(centerY => Number.isFinite(centerY))
 
@@ -227,9 +357,9 @@ export function calculateFullLayout(
     return sum / sourceCenters.length
   }
 
-  const sortByBarycenter = (layerX: number) => (a: Node, b: Node) => {
-    const aBarycenter = getIncomingBarycenter(a.id, layerX)
-    const bBarycenter = getIncomingBarycenter(b.id, layerX)
+  const sortByBarycenter = (layerLeft: number) => (a: Node, b: Node) => {
+    const aBarycenter = getIncomingBarycenter(a.id, layerLeft)
+    const bBarycenter = getIncomingBarycenter(b.id, layerLeft)
 
     if (aBarycenter !== null && bBarycenter !== null && aBarycenter !== bBarycenter) {
       return aBarycenter - bBarycenter
@@ -244,7 +374,7 @@ export function calculateFullLayout(
     return Array.from({ length: laneCount }, (_, index) => (index - (laneCount - 1) / 2) * laneGap)
   }
 
-  const placeStack = (orderedNodes: Node[], x: number, spacing: number): void => {
+  const placeStack = (orderedNodes: Node[], centerX: number, spacing: number): void => {
     if (orderedNodes.length === 0) return
     const totalHeight = orderedNodes.reduce((sum, node) => {
       const dim = nodeDimensions.get(node.id) || { width: 150, height: 80 }
@@ -255,35 +385,28 @@ export function calculateFullLayout(
 
     orderedNodes.forEach(node => {
       const dim = nodeDimensions.get(node.id) || { width: 150, height: 80 }
-      node.position = { x, y: currentY }
+      node.position = { x: centerX - dim.width / 2, y: currentY }
       currentY += dim.height + spacing
     })
   }
 
   const decisionLaneByName = new Map<string, number>()
   const decisionCenterYByName = new Map<string, number>()
-  let decisionLaneCount = 1
-  let decisionLaneOffsets = [0]
+  const decisionLaneOffsets = getLaneOffsets(decisionLaneCount, decisionLaneRule.laneGap * laneGapScale)
 
   const placeDecisionLayer = (): void => {
     const layerNodes = nodesByLayer.decisions
     if (layerNodes.length === 0) return
 
-    const layerX = LAYER_X_POSITIONS.decisions
+    const layerFrame = layerFrames.decisions
     const spacing = Math.max(8, getAdaptiveLayerSpacing('decisions', layerNodes.length) * spacingScale)
-    const orderedNodes = [...layerNodes].sort(sortByBarycenter(layerX))
+    const orderedNodes = [...layerNodes].sort(sortByBarycenter(layerFrame.left))
 
     const regularDecisionNodes = orderedNodes.filter(node => node.id.startsWith('decision-'))
     const auxiliaryNodes = orderedNodes.filter(node => !node.id.startsWith('decision-'))
 
-    const laneRule = TOPOLOGY_LAYER_LAYOUT.lanes.decisions
-    const maxPerLane = Math.min(6, laneRule.maxPerLane)
-    const requiredLanes = Math.ceil(Math.max(regularDecisionNodes.length, 1) / maxPerLane)
-    decisionLaneCount = Math.max(1, requiredLanes)
-    decisionLaneOffsets = getLaneOffsets(decisionLaneCount, laneRule.laneGap * laneGapScale)
-
     const lanes: Node[][] = Array.from({ length: decisionLaneCount }, () => [])
-    const laneChunkSize = Math.max(1, maxPerLane)
+    const laneChunkSize = Math.max(1, decisionMaxPerLane)
 
     regularDecisionNodes.forEach((node, index) => {
       const laneIndex = Math.min(decisionLaneCount - 1, Math.floor(index / laneChunkSize))
@@ -296,8 +419,8 @@ export function calculateFullLayout(
     }
 
     lanes.forEach((laneNodes, laneIndex) => {
-      const laneX = layerX + decisionLaneOffsets[laneIndex]
-      placeStack(laneNodes, laneX, spacing)
+      const laneCenterX = layerFrame.center + decisionLaneOffsets[laneIndex]
+      placeStack(laneNodes, laneCenterX, spacing)
       laneNodes.forEach(node => {
         if (!node.id.startsWith('decision-')) return
         const dim = nodeDimensions.get(node.id) || { width: 150, height: 80 }
@@ -316,7 +439,7 @@ export function calculateFullLayout(
     const layerNodes = nodesByLayer[layerName]
     if (layerNodes.length === 0) return
 
-    const baseX = LAYER_X_POSITIONS[layerName]
+    const layerFrame = layerFrames[layerName]
     const spacing = Math.max(8, getAdaptiveLayerSpacing(layerName, layerNodes.length) * spacingScale)
     const alignedLaneOffsets = getLaneOffsets(decisionLaneCount, laneGap * laneGapScale)
     const fallbackNodes: Node[] = []
@@ -338,14 +461,14 @@ export function calculateFullLayout(
 
       const dim = nodeDimensions.get(node.id) || { width: 150, height: 80 }
       node.position = {
-        x: baseX + alignedLaneOffsets[laneIndex],
+        x: layerFrame.center + alignedLaneOffsets[laneIndex] - dim.width / 2,
         y: decisionCenterY - dim.height / 2,
       }
     })
 
     if (fallbackNodes.length > 0) {
-      const orderedFallback = [...fallbackNodes].sort(sortByBarycenter(baseX))
-      placeStack(orderedFallback, baseX, spacing)
+      const orderedFallback = [...fallbackNodes].sort(sortByBarycenter(layerFrame.left))
+      placeStack(orderedFallback, layerFrame.center, spacing)
     }
   }
 
@@ -353,24 +476,52 @@ export function calculateFullLayout(
     const layerNodes = nodesByLayer[layerName]
     if (layerNodes.length === 0) return
 
-    const layerX = LAYER_X_POSITIONS[layerName]
+    const layerFrame = layerFrames[layerName]
     const spacing = Math.max(8, getAdaptiveLayerSpacing(layerName, layerNodes.length) * spacingScale)
-    const orderedNodes = [...layerNodes].sort(sortByBarycenter(layerX))
+    const orderedNodes = [...layerNodes].sort(sortByBarycenter(layerFrame.left))
     const laneRule = TOPOLOGY_LAYER_LAYOUT.lanes.models
-    const laneCount = orderedNodes.length >= laneRule.enableAt
-      ? Math.max(1, Math.min(laneRule.maxLanes, Math.ceil(orderedNodes.length / laneRule.maxPerLane)))
-      : 1
-    const laneOffsets = getLaneOffsets(laneCount, laneRule.laneGap * laneGapScale)
-    const laneChunkSize = Math.max(1, Math.ceil(orderedNodes.length / laneCount))
+    const laneOffsets = getLaneOffsets(modelLaneCount, laneRule.laneGap * laneGapScale)
+    const laneChunkSize = Math.max(1, Math.ceil(orderedNodes.length / modelLaneCount))
 
+    const lanes: Node[][] = Array.from({ length: modelLaneCount }, () => [])
+    orderedNodes.forEach((node, index) => {
+      const laneIndex = Math.min(modelLaneCount - 1, Math.floor(index / laneChunkSize))
+      lanes[laneIndex].push(node)
+    })
+
+    lanes.forEach((laneNodes, laneIndex) => {
+      placeStack(laneNodes, layerFrame.center + laneOffsets[laneIndex], spacing)
+    })
+  }
+
+  const placePackedLayer = (
+    layerName: 'signals' | 'projections',
+    laneCount: number,
+    laneGap: number
+  ): void => {
+    const layerNodes = nodesByLayer[layerName]
+    if (layerNodes.length === 0) return
+
+    const layerFrame = layerFrames[layerName]
+    const spacing = Math.max(8, getAdaptiveLayerSpacing(layerName, layerNodes.length) * spacingScale)
+    const orderedNodes = [...layerNodes].sort(sortByBarycenter(layerFrame.left))
+
+    if (laneCount <= 1) {
+      placeStack(orderedNodes, layerFrame.center, spacing)
+      return
+    }
+
+    const laneOffsets = getLaneOffsets(laneCount, laneGap * laneGapScale)
+    const laneChunkSize = Math.max(1, Math.ceil(orderedNodes.length / laneCount))
     const lanes: Node[][] = Array.from({ length: laneCount }, () => [])
+
     orderedNodes.forEach((node, index) => {
       const laneIndex = Math.min(laneCount - 1, Math.floor(index / laneChunkSize))
       lanes[laneIndex].push(node)
     })
 
     lanes.forEach((laneNodes, laneIndex) => {
-      placeStack(laneNodes, layerX + laneOffsets[laneIndex], spacing)
+      placeStack(laneNodes, layerFrame.center + laneOffsets[laneIndex], spacing)
     })
   }
 
@@ -378,6 +529,12 @@ export function calculateFullLayout(
 
   placeDecisionLayer()
   placedLayers.add('decisions')
+
+  const projectionLayerNodes = nodesByLayer.projections
+  if (projectionLayerNodes.length > 0) {
+    placePackedLayer('projections', projectionLaneCount, projectionLaneRule.laneGap)
+    placedLayers.add('projections')
+  }
 
   placeDecisionLinkedLayer('algorithms', 'algorithm-', TOPOLOGY_LAYER_LAYOUT.lanes.algorithms.laneGap)
   placedLayers.add('algorithms')
@@ -395,7 +552,7 @@ export function calculateFullLayout(
   if (topology.defaultModel) {
     const defaultRouteNode = nodeById.get('default-route')
     if (defaultRouteNode) {
-      const routeDim = nodeDimensions.get('default-route') || { width: 160, height: 80 }
+      const routeDim = nodeDimensions.get('default-route') || { width: 200, height: 140 }
       const routeCenterY = (defaultRouteNode.position?.y ?? 0) + routeDim.height / 2
 
       // Find the default model node (could be shared with a decision)
@@ -413,7 +570,7 @@ export function calculateFullLayout(
           && defaultModelNode.data.fromDecisions.some((d: string) => d !== 'default')
         if (!isShared) {
           defaultModelNode.position = {
-            x: defaultModelNode.position?.x ?? LAYER_X_POSITIONS.models,
+            x: defaultModelNode.position?.x ?? layerFrames.models.center - modelDim.width / 2,
             y: routeCenterY - modelDim.height / 2,
           }
         }
@@ -425,16 +582,22 @@ export function calculateFullLayout(
   ;(Object.entries(nodesByLayer) as [LayerName, Node[]][]).forEach(([layerName, layerNodes]) => {
     if (layerNodes.length === 0 || placedLayers.has(layerName)) return
 
-    const layerX = LAYER_X_POSITIONS[layerName]
-    const orderedNodes = [...layerNodes].sort(sortByBarycenter(layerX))
+    if (layerName === 'signals') {
+      placePackedLayer('signals', signalLaneCount, signalLaneRule.laneGap)
+      return
+    }
+
+    const layerFrame = layerFrames[layerName]
+    const orderedNodes = [...layerNodes].sort(sortByBarycenter(layerFrame.left))
 
     if (orderedNodes.length === 1 && layerName === 'client') {
-      orderedNodes[0].position = { x: layerX, y: 0 }
+      const dim = nodeDimensions.get(orderedNodes[0].id) || { width: 150, height: 80 }
+      orderedNodes[0].position = { x: layerFrame.center - dim.width / 2, y: 0 }
       return
     }
 
     const spacing = Math.max(8, getAdaptiveLayerSpacing(layerName, orderedNodes.length) * spacingScale)
-    placeStack(orderedNodes, layerX, spacing)
+    placeStack(orderedNodes, layerFrame.center, spacing)
   })
 
   // ============== 9. Apply Highlighting ==============

@@ -27,7 +27,7 @@ export interface SignalConfig {
   name: string
   description?: string
   latency: string
-  config: KeywordSignalConfig | EmbeddingSignalConfig | DomainSignalConfig | ContextSignalConfig | StructureSignalConfig | ComplexitySignalConfig | ModalitySignalConfig | AuthzSignalConfig | JailbreakSignalConfig | PIISignalConfig | KBSignalConfig | GenericSignalConfig
+  config: KeywordSignalConfig | EmbeddingSignalConfig | DomainSignalConfig | ContextSignalConfig | StructureSignalConfig | ComplexitySignalConfig | ModalitySignalConfig | AuthzSignalConfig | JailbreakSignalConfig | PIISignalConfig | KBSignalConfig | ProjectionSignalConfig | GenericSignalConfig
 }
 
 export interface KeywordSignalConfig {
@@ -114,6 +114,18 @@ export interface KBSignalConfig {
     value: string
   }
   match?: 'best' | 'threshold'
+}
+
+export interface ProjectionSignalInputRef {
+  type: SignalType
+  name: string
+}
+
+export interface ProjectionSignalConfig {
+  source: string
+  method: string
+  mapping: string
+  upstreamSignals: ProjectionSignalInputRef[]
 }
 
 export interface GenericSignalConfig {
@@ -204,11 +216,16 @@ export interface AutoMixConfig {
 // ============== Plugin Types ==============
 export type PluginType =
   | 'semantic-cache'
+  | 'memory'
   | 'system_prompt'
   | 'header_mutation'
   | 'hallucination'
   | 'router_replay'
+  | 'rag'
+  | 'image_gen'
   | 'fast_response'
+  | 'request_params'
+  | 'response_jailbreak'
   | 'tools'
 
 export interface PluginConfig {
@@ -480,12 +497,28 @@ export interface ConfigData {
     description?: string
   }>
   projections?: {
+    scores?: Array<{
+      name: string
+      method?: string
+      inputs?: Array<{
+        type: SignalType
+        name: string
+        weight?: number
+        value_source?: string
+        match?: number
+        miss?: number
+      }>
+    }>
     mappings?: Array<{
       name: string
       source: string
       method?: string
       outputs?: Array<{
         name: string
+        lt?: number
+        lte?: number
+        gt?: number
+        gte?: number
       }>
     }>
   }

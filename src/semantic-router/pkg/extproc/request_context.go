@@ -35,6 +35,13 @@ type ChatCompletionMessage struct {
 	Content string
 }
 
+// StreamingToolCallState accumulates tool-call deltas across streaming chunks.
+type StreamingToolCallState struct {
+	ID        string
+	Name      string
+	Arguments string
+}
+
 // RequestContext holds the context for processing a request.
 type RequestContext struct {
 	Headers             map[string]string
@@ -55,11 +62,12 @@ type RequestContext struct {
 	StreamedBody *StreamedBodyHandler
 
 	// Streaming accumulation for caching
-	StreamingChunks   []string               // Accumulated SSE chunks
-	StreamingContent  string                 // Accumulated content from delta.content
-	StreamingMetadata map[string]interface{} // id, model, created from first chunk
-	StreamingComplete bool                   // True when [DONE] marker received
-	StreamingAborted  bool                   // True if stream ended abnormally (EOF, cancel, timeout)
+	StreamingChunks    []string                        // Accumulated SSE chunks
+	StreamingContent   string                          // Accumulated content from delta.content
+	StreamingMetadata  map[string]interface{}          // id, model, created from first chunk
+	StreamingToolCalls map[int]*StreamingToolCallState // Accumulated delta.tool_calls keyed by tool index
+	StreamingComplete  bool                            // True when [DONE] marker received
+	StreamingAborted   bool                            // True if stream ended abnormally (EOF, cancel, timeout)
 
 	// TTFT tracking
 	TTFTRecorded bool
@@ -99,6 +107,9 @@ type RequestContext struct {
 	VSRMatchedPII          []string // Matched PII rule names (denied PII types detected)
 	VSRMatchedKB           []string // Matched knowledge-base signal names
 	VSRMatchedProjection   []string // Matched projection mapping outputs
+	VSRProjectionScores    map[string]float64
+	VSRSignalConfidences   map[string]float64
+	VSRSignalValues        map[string]float64
 
 	// Endpoint tracking for windowed metrics
 	SelectedEndpoint string // The endpoint address selected for this request

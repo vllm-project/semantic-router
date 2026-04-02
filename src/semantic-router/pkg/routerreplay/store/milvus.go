@@ -474,6 +474,20 @@ func (m *MilvusStore) UpdateUsageCost(ctx context.Context, id string, usage Usag
 	return m.upsertRecord(ctx, record)
 }
 
+// UpdateToolTrace updates tool-calling trace details for a record.
+func (m *MilvusStore) UpdateToolTrace(ctx context.Context, id string, trace ToolTrace) error {
+	record, found, err := m.Get(ctx, id)
+	if err != nil {
+		return err
+	}
+	if !found {
+		return fmt.Errorf("record with ID %s not found", id)
+	}
+
+	record.ToolTrace = cloneToolTrace(&trace)
+	return m.upsertRecord(ctx, record)
+}
+
 // upsertRecord updates a record by deleting and reinserting.
 func (m *MilvusStore) upsertRecord(ctx context.Context, record Record) error {
 	// Marshal record

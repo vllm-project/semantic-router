@@ -202,7 +202,7 @@ func isSignalTypeUsed(usedSignals map[string]bool, signalType string) bool {
 // EvaluateAllSignals evaluates all signal types and returns SignalResults
 // This is the new method that includes fact_check signals
 func (c *Classifier) EvaluateAllSignals(text string) *SignalResults {
-	return c.EvaluateAllSignalsWithContext(text, text, text, nil, nil, false, "", nil)
+	return c.EvaluateAllSignalsWithContext(text, text, text, nil, nil, false, false, "", nil)
 }
 
 // EvaluateAllSignalsWithHeaders evaluates all signal types including the authz signal.
@@ -219,7 +219,7 @@ func (c *Classifier) EvaluateAllSignals(text string) *SignalResults {
 // Optional trailing arguments (positional after imageURL):
 //   - uncompressedText (string): original text before prompt compression
 //   - skipCompressionSignals (map[string]bool): signal types that must use uncompressedText
-func (c *Classifier) EvaluateAllSignalsWithHeaders(text string, contextText string, currentUserText string, priorUserMessages []string, nonUserMessages []string, headers map[string]string, forceEvaluateAll bool, imageURL string, extra ...interface{}) (*SignalResults, error) {
+func (c *Classifier) EvaluateAllSignalsWithHeaders(text string, contextText string, currentUserText string, priorUserMessages []string, nonUserMessages []string, hasPriorAssistantReply bool, headers map[string]string, forceEvaluateAll bool, imageURL string, extra ...interface{}) (*SignalResults, error) {
 	var uncompressedText string
 	var skipCompressionSignals map[string]bool
 	if len(extra) >= 2 {
@@ -230,7 +230,7 @@ func (c *Classifier) EvaluateAllSignalsWithHeaders(text string, contextText stri
 			skipCompressionSignals = m
 		}
 	}
-	results := c.EvaluateAllSignalsWithContext(text, contextText, currentUserText, priorUserMessages, nonUserMessages, forceEvaluateAll, uncompressedText, skipCompressionSignals, imageURL)
+	results := c.EvaluateAllSignalsWithContext(text, contextText, currentUserText, priorUserMessages, nonUserMessages, hasPriorAssistantReply, forceEvaluateAll, uncompressedText, skipCompressionSignals, imageURL)
 
 	// Evaluate authz signal if role bindings are configured and the signal type is used
 	usedSignals := c.getUsedSignals()
@@ -278,7 +278,7 @@ func (c *Classifier) EvaluateAllSignalsWithHeaders(text string, contextText stri
 // EvaluateAllSignalsWithForceOption evaluates signals with option to force evaluate all
 // forceEvaluateAll: if true, evaluates all configured signals regardless of decision usage
 func (c *Classifier) EvaluateAllSignalsWithForceOption(text string, forceEvaluateAll bool) *SignalResults {
-	return c.EvaluateAllSignalsWithContext(text, text, text, nil, nil, forceEvaluateAll, "", nil)
+	return c.EvaluateAllSignalsWithContext(text, text, text, nil, nil, false, forceEvaluateAll, "", nil)
 }
 
 // EvaluateDecisionWithEngine evaluates all decisions using pre-computed signals

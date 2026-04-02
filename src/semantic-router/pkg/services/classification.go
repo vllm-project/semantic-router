@@ -191,6 +191,7 @@ func (s *ClassificationService) ClassifyIntent(req IntentRequest) (*IntentRespon
 		input.currentUserText,
 		input.priorUserMessages,
 		input.nonUserMessages,
+		input.hasAssistantReply,
 		forceEvaluateAll,
 		"",
 		nil,

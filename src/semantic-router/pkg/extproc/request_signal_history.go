@@ -6,6 +6,7 @@ type signalConversationHistory struct {
 	currentUserMessage string
 	priorUserMessages  []string
 	nonUserMessages    []string
+	hasAssistantReply  bool
 }
 
 func signalConversationHistoryFromFastExtract(result *FastExtractResult) signalConversationHistory {
@@ -16,6 +17,7 @@ func signalConversationHistoryFromFastExtract(result *FastExtractResult) signalC
 		currentUserMessage: result.UserContent,
 		priorUserMessages:  append([]string(nil), result.PriorUserMessages...),
 		nonUserMessages:    append([]string(nil), result.NonUserMessages...),
+		hasAssistantReply:  result.HasAssistantReply,
 	}
 }
 
@@ -35,6 +37,9 @@ func extractSignalConversationHistory(req *openai.ChatCompletionNewParams) signa
 			history.currentUserMessage = textContent
 		case "system", "assistant":
 			history.nonUserMessages = append(history.nonUserMessages, textContent)
+			if role == "assistant" {
+				history.hasAssistantReply = true
+			}
 		}
 	}
 

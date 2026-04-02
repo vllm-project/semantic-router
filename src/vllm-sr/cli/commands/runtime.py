@@ -117,7 +117,7 @@ def _execute_serve(
         envoy_image=envoy_image,
         dashboard_image=dashboard_image,
         pull_policy=image_pull_policy,
-        enable_observability=not minimal and not setup_mode,
+        enable_observability=not minimal,
     )
 
 

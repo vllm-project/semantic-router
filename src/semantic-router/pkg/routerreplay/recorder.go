@@ -15,6 +15,8 @@ const (
 type (
 	Signal        = store.Signal
 	RoutingRecord = store.Record
+	ToolTrace     = store.ToolTrace
+	ToolTraceStep = store.ToolTraceStep
 	UsageCost     = store.UsageCost
 )
 
@@ -115,6 +117,11 @@ func (r *Recorder) UpdateUsageCost(id string, usage UsageCost) error {
 	return r.storage.UpdateUsageCost(ctx, id, usage)
 }
 
+func (r *Recorder) UpdateToolTrace(id string, trace ToolTrace) error {
+	ctx := context.Background()
+	return r.storage.UpdateToolTrace(ctx, id, trace)
+}
+
 // GetRecord returns a copy of the record with the given ID.
 func (r *Recorder) GetRecord(id string) (RoutingRecord, bool) {
 	ctx := context.Background()
@@ -157,7 +164,13 @@ func logSignalFields(signals Signal) map[string]interface{} {
 		"preference":    signals.Preference,
 		"language":      signals.Language,
 		"context":       signals.Context,
+		"structure":     signals.Structure,
 		"complexity":    signals.Complexity,
+		"modality":      signals.Modality,
+		"authz":         signals.Authz,
+		"jailbreak":     signals.Jailbreak,
+		"pii":           signals.PII,
+		"kb":            signals.KB,
 	}
 }
 
@@ -240,24 +253,59 @@ func appendUsageCostLogFields(fields map[string]interface{}, r RoutingRecord) {
 
 func LogFields(r RoutingRecord, event string) map[string]interface{} {
 	fields := map[string]interface{}{
-		"event":           event,
-		"replay_id":       r.ID,
-		"decision":        r.Decision,
-		"category":        r.Category,
-		"original_model":  r.OriginalModel,
-		"selected_model":  r.SelectedModel,
-		"reasoning_mode":  r.ReasoningMode,
-		"request_id":      r.RequestID,
-		"timestamp":       r.Timestamp,
-		"from_cache":      r.FromCache,
-		"streaming":       r.Streaming,
-		"response_status": r.ResponseStatus,
-		"signals":         logSignalFields(r.Signals),
+		"event":             event,
+		"replay_id":         r.ID,
+		"decision":          r.Decision,
+		"decision_tier":     r.DecisionTier,
+		"decision_priority": r.DecisionPriority,
+		"category":          r.Category,
+		"original_model":    r.OriginalModel,
+		"selected_model":    r.SelectedModel,
+		"reasoning_mode":    r.ReasoningMode,
+		"confidence_score":  r.ConfidenceScore,
+		"selection_method":  r.SelectionMethod,
+		"request_id":        r.RequestID,
+		"timestamp":         r.Timestamp,
+		"from_cache":        r.FromCache,
+		"streaming":         r.Streaming,
+		"response_status":   r.ResponseStatus,
+		"signals":           logSignalFields(r.Signals),
 	}
+	if len(r.Projections) > 0 {
+		fields["projections"] = r.Projections
+	}
+	if len(r.ProjectionScores) > 0 {
+		fields["projection_scores"] = r.ProjectionScores
+	}
+	if len(r.SignalConfidences) > 0 {
+		fields["signal_confidences"] = r.SignalConfidences
+	}
+	if len(r.SignalValues) > 0 {
+		fields["signal_values"] = r.SignalValues
+	}
+	appendToolTraceLogFields(fields, r.ToolTrace)
 
 	appendGuardrailLogFields(fields, r)
 	appendRAGLogFields(fields, r)
 	appendHallucinationLogFields(fields, r)
 	appendUsageCostLogFields(fields, r)
 	return fields
+}
+
+func appendToolTraceLogFields(fields map[string]interface{}, trace *ToolTrace) {
+	if trace == nil {
+		return
+	}
+	if trace.Flow != "" {
+		fields["tool_trace_flow"] = trace.Flow
+	}
+	if trace.Stage != "" {
+		fields["tool_trace_stage"] = trace.Stage
+	}
+	if len(trace.ToolNames) > 0 {
+		fields["tool_names"] = trace.ToolNames
+	}
+	if len(trace.Steps) > 0 {
+		fields["tool_trace_step_count"] = len(trace.Steps)
+	}
 }

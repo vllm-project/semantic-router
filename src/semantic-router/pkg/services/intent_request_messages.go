@@ -17,12 +17,14 @@ type intentSignalInput struct {
 	currentUserText   string
 	priorUserMessages []string
 	nonUserMessages   []string
+	hasAssistantReply bool
 }
 
 type intentConversationHistory struct {
 	currentUserMessage string
 	priorUserMessages  []string
 	nonUserMessages    []string
+	hasAssistantReply  bool
 }
 
 type intentMessageContentPart struct {
@@ -59,6 +61,7 @@ func resolveIntentSignalInputFromMessages(messages []IntentMessage) (intentSigna
 		currentUserText:   history.currentUserMessage,
 		priorUserMessages: append([]string(nil), history.priorUserMessages...),
 		nonUserMessages:   append([]string(nil), history.nonUserMessages...),
+		hasAssistantReply: history.hasAssistantReply,
 	}
 
 	if input.evaluationText == "" && len(history.nonUserMessages) > 0 {
@@ -95,6 +98,9 @@ func extractIntentConversationHistory(messages []IntentMessage) intentConversati
 			history.currentUserMessage = text
 		case "system", "assistant":
 			history.nonUserMessages = append(history.nonUserMessages, text)
+			if strings.EqualFold(strings.TrimSpace(msg.Role), "assistant") {
+				history.hasAssistantReply = true
+			}
 		}
 	}
 
