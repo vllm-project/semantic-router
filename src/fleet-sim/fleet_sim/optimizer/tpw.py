@@ -1,5 +1,38 @@
-from dataclasses import dataclass
+"""Tokens-per-watt (energy-efficiency) analysis for GPU serving fleets.
+
+Computes output tok/J across GPU profiles and multi-pool routing topologies.
+
+**Model dependency warning**: W, H, and the power logistic curve all
+depend on the served model, not just the GPU.  Pre-built profiles
+(H100_80GB, A100_80GB, A10G) are calibrated for Llama-3-70B on 8-GPU TP
+(H100/A100) or 7B-class on single-GPU (A10G).  Do not compare ``tok/W``
+across profiles that represent different models — the ratio will reflect
+model size, not GPU efficiency.
+
+**Single-pool N_gpus cancellation**: For a *single homogeneous pool*,
+``tokens_per_watt = mu_gpu × ρ × mean_L_out / P(n_active)`` is
+independent of fleet size (N numerator and denominator cancel).
+
+**Multi-pool fleets**: N does NOT cancel across pools.  Use
+:class:`FleetTpwResult` which computes the correct aggregate:
+``fleet_tpw = Σ(λ_i × L_out_i) / Σ(N_i × P_i(n_i))``.
+
+:func:`fleet_tpw_analysis` is the correct function for comparing:
+
+* **Homo pool**   — all traffic to one GPU type / one model.
+* **Hetero pool** — short requests routed to small-GPU/small-model pool,
+                    long requests to large-GPU/large-model pool.
+* **Semantic router** — fraction α of requests to a fast/cheap pool
+                        (e.g. A10G + 7B model), rest to a capable pool
+                        (e.g. H100 + 70B).
+
+The CDF for each pool must be normalised so its last cumulative fraction
+is 1.0.  Use :func:`_split_cdf` to produce correctly normalised sub-CDFs.
+"""
+
 import math
+from dataclasses import dataclass
+
 from . import analytical
 
 # ── Tokens-per-Watt analysis ──────────────────────────────────────────────────
@@ -328,32 +361,18 @@ def fleet_tpw_analysis(
 ) -> FleetTpwResult:
     """Compute fleet-level tokens-per-watt across a multi-pool routing topology.
 
-    This is the correct function for comparing:
-
-    * **Homo pool**   — all traffic to one GPU type / one model.
-    * **Hetero pool** — short requests routed to small-GPU/small-model pool,
-                        long requests to large-GPU/large-model pool.
-    * **Semantic router** — fraction α of requests to a fast/cheap pool
-                            (e.g. A10G + 7B model), rest to a capable pool
-                            (e.g. H100 + 70B).
-
-    Unlike :func:`tpw_analysis`, this function correctly accounts for the
-    fact that N does **not** cancel across pools:
-
-        fleet_tpw = Σ_i(λ_i × mean_L_out_i) / Σ_i(N_i × P_i(n_i))
+    Unlike :func:`tpw_analysis`, N does **not** cancel across pools:
+    ``fleet_tpw = Σ_i(λ_i × mean_L_out_i) / Σ_i(N_i × P_i(n_i))``
 
     Parameters
     ----------
     pools : list of dicts, one per pool.  Each dict must contain:
-
-        ``gpu``        : ManualProfile for this pool.
-        ``cdf``        : (sub-)CDF for this pool's traffic.  For a b_short
-                         split use :func:`_split_cdf` to obtain per-pool
-                         sub-CDFs with correctly normalised fractions.
-        ``lam``        : arrival rate into this pool (req/s).
-        ``max_ctx``    : context window for this pool (tokens).
-        ``label``      : human-readable label (e.g. "short-7B", "long-70B").
-
+        ``gpu``     : ManualProfile for this pool.
+        ``cdf``     : (sub-)CDF for this pool's traffic.  For a b_short split
+                      use :func:`_split_cdf` to obtain per-pool sub-CDFs.
+        ``lam``     : arrival rate into this pool (req/s).
+        ``max_ctx`` : context window for this pool (tokens).
+        ``label``   : human-readable label (e.g. "short-7B", "long-70B").
     lam_total : total arrival rate (req/s); used only for output annotation.
     t_slo_ms  : P99 TTFT SLO (ms) — applied to every pool independently.
     topology  : optional label for the routing topology.
@@ -365,11 +384,10 @@ def fleet_tpw_analysis(
 
     Notes
     -----
-    The CDF for each pool must be normalised so its last cumulative fraction
-    is 1.0.  Use :func:`_split_cdf` to produce correctly normalised sub-CDFs.
-
-    Power model accuracy caveats propagate: if any pool uses a LOW-quality
-    power model, the fleet-level tok/W estimate inherits that uncertainty.
+    Each pool's CDF must be normalised (last cumulative fraction = 1.0).
+    Use :func:`_split_cdf` to produce correctly normalised sub-CDFs.
+    If any pool uses a LOW-quality power model, the fleet-level tok/W
+    estimate inherits that uncertainty.
     """
     pool_points: list[TpwPoint] = []
     for spec in pools:

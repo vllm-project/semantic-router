@@ -1,8 +1,70 @@
+"""Grid-flexibility (demand-response) analysis for LLM serving fleets.
+
+Models the GPU-to-Grid (G2G) batch-size control mechanism proposed by
+Hassan et al. (arXiv:2602.05116v1, 2025): when the grid signals high load,
+the LLM serving engine caps the maximum in-flight batch size (vLLM
+``max_num_seqs``).  A lower cap reduces GPU power draw at the cost of
+higher queuing latency.
+
+The main entry point :func:`grid_flex_analysis` sweeps power-reduction
+percentages and returns a list of :class:`GridFlexPoint` trade-off entries,
+each carrying analytical and optional DES-verified P99 TTFT estimates.
+For each flex level it: (1) inverts the GPU power model to derive
+``n_max_cap``; (2) estimates P99 TTFT analytically (M/G/c); (3) optionally
+runs a DES simulation to verify the analytical estimate.
+
+Throttled recalibration
+-----------------------
+At n_max_cap < n_slots_full, each GPU iteration covers fewer concurrent
+sequences: iter_t(n_max_cap) = W + H*n_max_cap < iter_t(n_slots_full).
+Using the full-load mu_slot underestimates throughput and makes the
+analytical model falsely diverge (inf P99) when n_max_cap is below
+the full-load Erlang saturation threshold but actually still stable.
+Using a throttled profile gives the correct M/G/c calibration for the
+reduced concurrency level.
+
+Verification
+------------
+Both analytical and DES paths predict P99 TTFT independently; agreement
+(typically within 10–15%) confirms the M/G/c model is adequate for
+production sizing.  The *power* side is verified by comparing the logistic
+power curve against the ML.ENERGY benchmark data points embedded in the
+profile constants.  The G2G paper uses ``H100-SXM5`` hardware; the
+``H100_80GB`` profile logistic parameters (k=1.0, x0=4.2) are fitted to
+those measurements.
+
+Sources
+-------
+- Hassan et al. (2025) "GPU-to-Grid: Coupling LLM Inference with Power
+  System Control", arXiv:2602.05116v1.
+- ML.ENERGY Benchmark v3.0 (Chung et al., NeurIPS 2025 D&B track),
+  https://ml.energy/leaderboard — measured H100-SXM5 power vs. batch size.
+- NVIDIA GPU Spec Sheets: H100-SXM5 TDP 700W; A100-SXM4 TDP 400W.
+
+Examples
+--------
+>>> from fleet_sim import grid_flex_analysis, H100_80GB
+>>> import json
+>>> cdf = json.load(open("data/azure_cdf.json"))
+>>> # Analytical only (fast)
+>>> curve = grid_flex_analysis(cdf, lam=200, n_gpus=40, gpu=H100_80GB,
+...                            t_slo_ms=500)
+>>> # With DES verification (slower but verified)
+>>> curve = grid_flex_analysis(cdf, lam=200, n_gpus=40, gpu=H100_80GB,
+...                            t_slo_ms=500, n_sim_requests=20000)
+>>> for pt in curve:
+...     des = f"{pt.p99_ttft_des_ms:.1f}ms" if pt.p99_ttft_des_ms else "—"
+...     print(f"flex={pt.flex_pct:4.0f}%  n_max={pt.n_max_cap:3d}"
+...           f"  {pt.power_per_gpu_w:.0f}W/GPU  P99={pt.p99_ttft_ms:.1f}ms"
+...           f"  DES={des}  {'OK' if pt.slo_met else 'BREACH'}")
+"""
+
 from dataclasses import dataclass
+
 from ..core.fleet import Fleet, FleetConfig, PoolConfig
-from . import analytical
-from ..workload.synthetic import PoissonWorkload
 from ..gpu_profiles.manual import ManualProfile
+from ..workload.synthetic import PoissonWorkload
+from . import analytical
 
 # ── Grid-flexibility analysis ─────────────────────────────────────────────────
 
@@ -68,43 +130,6 @@ def grid_flex_analysis(
 ) -> list[GridFlexPoint]:
     """Compute the power–latency trade-off curve for a fleet under demand response.
 
-    Models the GPU-to-Grid (G2G) batch-size control mechanism proposed by
-    Hassan et al. (arXiv:2602.05116v1, 2025): when the grid signals high load,
-    the LLM serving engine caps the maximum in-flight batch size (vLLM
-    ``max_num_seqs``).  A lower cap reduces GPU power draw at the cost of
-    higher queuing latency.
-
-    For each *flex_pct* this function:
-
-    1. Derives ``n_max_cap`` — the batch-size cap that achieves the target
-       power reduction — by inverting the GPU power model.  If the profile
-       has logistic parameters (``power_logistic_k > 0``) the logistic curve
-       is used; otherwise linear interpolation is used.
-    2. Estimates P99 TTFT analytically (M/G/c) with ``n_max_cap`` slots.
-    3. Optionally runs a DES simulation at ``n_max_cap`` slots to verify the
-       analytical estimate (``n_sim_requests > 0``).
-
-    Verification note
-    -----------------
-    The simulator verifies the *latency* side of the G2G trade-off: capping
-    n_max_cap on a fleet of *n_gpus* GPUs at arrival rate *lam* req/s, both
-    the analytical and DES paths predict P99 TTFT independently.  Agreement
-    between them (typically within 10–15%) confirms the M/G/c model is
-    adequate for production sizing.
-
-    The *power* side is verified by comparing the logistic power curve against
-    the ML.ENERGY benchmark data points embedded in the profile constants.
-    The G2G paper uses ``H100-SXM5`` hardware; the ``H100_80GB`` profile
-    logistic parameters (k=1.0, x0=4.2) are fitted to those measurements.
-
-    Sources
-    -------
-    - Hassan et al. (2025) "GPU-to-Grid: Coupling LLM Inference with Power
-      System Control", arXiv:2602.05116v1.
-    - ML.ENERGY Benchmark v3.0 (Chung et al., NeurIPS 2025 D&B track),
-      https://ml.energy/leaderboard — measured H100-SXM5 power vs. batch size.
-    - NVIDIA GPU Spec Sheets: H100-SXM5 TDP 700W; A100-SXM4 TDP 400W.
-
     Parameters
     ----------
     cdf             : workload CDF as list of (token_threshold, cumulative_frac)
@@ -113,12 +138,9 @@ def grid_flex_analysis(
     gpu             : ManualProfile with power_idle_w and power_nominal_w set
     t_slo_ms        : P99 TTFT SLO (ms) — used to flag slo_met
     max_ctx         : maximum context window for this pool (tokens)
-    flex_pcts       : list of power-reduction percentages to sweep.
-                      Defaults to [0, 5, 10, 15, 20, 25, 30, 40, 50].
-    n_sim_requests  : number of requests for DES verification at each flex level.
-                      0 (default) disables DES.  10 000–30 000 is sufficient
-                      for a stable P99 estimate.  DES runs are independent per
-                      flex level, so runtime scales linearly.
+    flex_pcts       : power-reduction pcts to sweep, default [0, 5, ..., 50].
+    n_sim_requests  : DES request count per flex level. 0 (default) disables DES.
+                      10k–30k for stable P99. Independent per level, scales linearly.
     verbose         : print progress when running DES verification.
 
     Returns
@@ -128,63 +150,31 @@ def grid_flex_analysis(
 
     Raises
     ------
-    ValueError
-        If *gpu* does not have power model constants configured.
-
-    Examples
-    --------
-    >>> from fleet_sim import grid_flex_analysis, H100_80GB
-    >>> import json
-    >>> cdf = json.load(open("data/azure_cdf.json"))
-    >>> # Analytical only (fast)
-    >>> curve = grid_flex_analysis(cdf, lam=200, n_gpus=40, gpu=H100_80GB,
-    ...                            t_slo_ms=500)
-    >>> # With DES verification (slower but verified)
-    >>> curve = grid_flex_analysis(cdf, lam=200, n_gpus=40, gpu=H100_80GB,
-    ...                            t_slo_ms=500, n_sim_requests=20000)
-    >>> for pt in curve:
-    ...     des = f"{pt.p99_ttft_des_ms:.1f}ms" if pt.p99_ttft_des_ms else "—"
-    ...     print(f"flex={pt.flex_pct:4.0f}%  n_max={pt.n_max_cap:3d}"
-    ...           f"  {pt.power_per_gpu_w:.0f}W/GPU  P99={pt.p99_ttft_ms:.1f}ms"
-    ...           f"  DES={des}  {'OK' if pt.slo_met else 'BREACH'}")
+    ValueError – if *gpu* has no power model constants configured.
     """
     if flex_pcts is None:
         flex_pcts = [0.0, 5.0, 10.0, 15.0, 20.0, 25.0, 30.0, 40.0, 50.0]
 
     # Validate power model is available
     _ = gpu.power_at_concurrency(1)  # raises ValueError if not configured
-
     power_model_type = "logistic" if gpu.power_logistic_k > 0.0 else "linear"
     n_slots_full = gpu.n_slots(max_ctx)
-
     results: list[GridFlexPoint] = []
     for flex_pct in flex_pcts:
         # Target power per GPU after flex commitment (clamped to idle floor)
         target_power = max(
             gpu.power_idle_w, gpu.power_nominal_w * (1.0 - flex_pct / 100.0)
         )
-
-        # Invert power model to find n_max_cap, then cap at the actual
-        # KV-cache-limited slot count for this max_ctx window.
+        # Invert power model to find n_max_cap, cap at KV-cache slot limit.
         n_max_cap = min(n_slots_full, gpu.invert_power(target_power))
-
         actual_power = gpu.power_at_concurrency(n_max_cap)
         fleet_kw = n_gpus * actual_power / 1000.0
-
-        # Recalibrate service rate at the *throttled* concurrency level.
-        # At n_max_cap < n_slots_full, each GPU iteration covers fewer
-        # concurrent sequences: iter_t(n_max_cap) = W + H*n_max_cap < iter_t(n_slots_full).
-        # Using the full-load mu_slot underestimates throughput and makes the
-        # analytical model falsely diverge (inf P99) when n_max_cap is below
-        # the full-load Erlang saturation threshold but actually still stable.
-        # Using a throttled profile here gives the correct M/G/c calibration
-        # for the reduced concurrency level.
+        # Recalibrate at throttled concurrency (see module docstring).
         capped_gpu = _throttled_profile(gpu, n_max_cap, max_ctx)
         mu_cap, cv2_cap, _, mean_prefill_cap = analytical.calibrate(
             cdf, max_ctx, capped_gpu
         )
         mu_slot_cap = mu_cap / n_max_cap if n_max_cap > 0 else 1e-9
-
         c_slots = n_gpus * n_max_cap
         p99_s = analytical.p99_wait(c_slots, lam, mu_slot_cap, cv2_cap)
         p99_ttft_ms = (p99_s + mean_prefill_cap) * 1000.0
@@ -212,7 +202,6 @@ def grid_flex_analysis(
             except Exception as e:
                 if verbose:
                     print(f"  [DES error at flex={flex_pct}%]: {e}")
-
         # slo_met uses DES P99 when available (more accurate)
         effective_p99 = p99_ttft_des_ms if p99_ttft_des_ms is not None else p99_ttft_ms
         results.append(
@@ -227,7 +216,6 @@ def grid_flex_analysis(
                 power_model=power_model_type,
             )
         )
-
     return results
 
 

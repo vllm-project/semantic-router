@@ -1,3 +1,20 @@
+"""Analytical sizing utilities for GPU fleet capacity planning.
+
+Provides CDF evaluation, Erlang-C / Kimura queuing formulas, and GPU
+service-rate calibration used by the optimizer to compute the minimum
+GPU count such that P99 wait ≤ t_slo AND utilisation ≤ rho_max.
+
+Functions
+---------
+cdf_eval            : Evaluate CDF at token length *t* using linear interpolation.
+erlang_c            : Numerically stable Erlang-C P(W_q > 0).
+p99_wait            : Kimura (1994) M/G/c P99 waiting time (s).
+calibrate           : Estimate (mu_gpu, cv2, n_slots) from CDF for a pool
+                      handled by *gpu*.
+min_gpus_analytical : Minimum GPU count such that P99 wait ≤ t_slo AND
+                      utilisation ≤ rho_max.
+"""
+
 import math
 
 from ..gpu_profiles import GpuProfile
