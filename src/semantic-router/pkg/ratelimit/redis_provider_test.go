@@ -17,13 +17,14 @@ func setupMiniredis(t *testing.T) (*miniredis.Miniredis, redis.Cmdable) {
 }
 
 func testPricingFunc(model string) (float64, float64, string, bool) {
-	// Matches the doc's CEL unit table:
-	// claude-opus-4-6: input_rate=500, output_rate=2500 per token in $10⁻⁸
-	// That means: promptPer1M = 500/100 = $5, completionPer1M = 2500/100 = $25
+	// Matches values-staging.yaml pricing (dollars per 1M tokens).
+	// CEL rate = dollars_per_1M * 100, e.g. $5.50 → 550 per token in $10⁻⁸
 	pricing := map[string][2]float64{
-		"claude-opus-4-6":   {5.0, 25.0},
-		"claude-sonnet-4-6": {3.0, 15.0},
+		"claude-opus-4-6":   {5.50, 27.50},
+		"claude-sonnet-4-6": {3.30, 16.50},
+		"claude-sonnet-4-5": {3.00, 15.00},
 		"claude-haiku-4-5":  {1.0, 5.0},
+		"meta-llama3-2-1b":  {0.10, 0.10},
 	}
 	if p, ok := pricing[model]; ok {
 		return p[0], p[1], "USD", true
@@ -132,16 +133,16 @@ func TestRedisLimiter_ReportIncrementsCost(t *testing.T) {
 	}
 
 	// Expected CEL cost:
-	// input: 1000 * (5.0 * 100) = 1000 * 500 = 500,000
-	// output: 500 * (25.0 * 100) = 500 * 2500 = 1,250,000
-	// total: 1,750,000
+	// input: 1000 * (5.50 * 100) = 1000 * 550 = 550,000
+	// output: 500 * (27.50 * 100) = 500 * 2750 = 1,375,000
+	// total: 1,925,000
 	key := "sr:budget:alice@example.com:day"
 	got, err := mr.Get(key)
 	if err != nil {
 		t.Fatalf("key %s not found: %v", key, err)
 	}
-	if got != "1750000" {
-		t.Errorf("spend = %s, want 1750000", got)
+	if got != "1925000" {
+		t.Errorf("spend = %s, want 1925000", got)
 	}
 
 	// Verify TTL was set
@@ -171,9 +172,9 @@ func TestRedisLimiter_ReportAccumulatesAcrossModels(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// Opus cost: 1000*500 + 500*2500 = 1,750,000
+	// Opus cost: 1000*550 + 500*2750 = 1,925,000
 	// Haiku cost: 2000*100 + 1000*500 = 700,000
-	// Total: 2,450,000
+	// Total: 2,625,000
 	d, err := p.Check(ctx)
 	if err != nil {
 		t.Fatal(err)
@@ -181,7 +182,7 @@ func TestRedisLimiter_ReportAccumulatesAcrossModels(t *testing.T) {
 	if !d.Allowed {
 		t.Error("expected ALLOW, user is under $15 budget")
 	}
-	expectedRemaining := int64(1_500_000_000 - 2_450_000)
+	expectedRemaining := int64(1_500_000_000 - 2_625_000)
 	if d.Remaining != expectedRemaining {
 		t.Errorf("remaining = %d, want %d", d.Remaining, expectedRemaining)
 	}
@@ -248,14 +249,14 @@ func TestRedisLimiter_CustomKeyPrefix(t *testing.T) {
 func TestRedisLimiter_CalculateCELCost(t *testing.T) {
 	p := &RedisLimiterProvider{pricingFunc: testPricingFunc}
 
-	// Opus: promptPer1M=$5, completionPer1M=$25
-	// inputRate = 5*100 = 500, outputRate = 25*100 = 2500
+	// Opus: promptPer1M=$5.50, completionPer1M=$27.50
+	// inputRate = 5.50*100 = 550, outputRate = 27.50*100 = 2750
 	cost := p.calculateCELCost("claude-opus-4-6", TokenUsage{
 		InputTokens:  1000,
 		OutputTokens: 500,
 	})
-	// 1000*500 + 500*2500 = 500000 + 1250000 = 1750000
-	if cost != 1_750_000 {
-		t.Errorf("CEL cost = %d, want 1750000", cost)
+	// 1000*550 + 500*2750 = 550000 + 1375000 = 1925000
+	if cost != 1_925_000 {
+		t.Errorf("CEL cost = %d, want 1925000", cost)
 	}
 }
