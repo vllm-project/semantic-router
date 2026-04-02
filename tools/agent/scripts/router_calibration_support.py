@@ -327,11 +327,11 @@ def deploy_config(
     if dsl_path is not None:
         payload["dsl"] = dsl_path.read_text(encoding="utf-8")
     status, response = http_json(
-        "PATCH",
+        "PUT",
         f"{normalize_router_url(router_url)}/config/router",
         payload,
     )
-    return ensure_success(status, response, "PATCH /config/router")
+    return ensure_success(status, response, "PUT /config/router")
 
 
 def write_json(path: Path, payload: Any) -> None:

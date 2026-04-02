@@ -1,6 +1,7 @@
 package classification
 
 import (
+	"math"
 	"testing"
 
 	candle_binding "github.com/vllm-project/semantic-router/candle-binding"
@@ -86,8 +87,8 @@ func TestEmbeddingClassifier_ClassifyAllDefaultTopKReturnsBestHardMatch(t *testi
 	if len(matched) != 1 {
 		t.Fatalf("Expected 1 match with default top_k, got %d: %+v", len(matched), matched)
 	}
-	if matched[0].RuleName != "ai" {
-		t.Fatalf("Expected top hard match to be 'ai', got %+v", matched)
+	if matched[0].RuleName != "programming" {
+		t.Fatalf("Expected top hard match to be 'programming', got %+v", matched)
 	}
 	if matched[0].Method != "hard" {
 		t.Fatalf("Expected hard match, got %+v", matched[0])
@@ -118,7 +119,7 @@ func TestEmbeddingClassifier_ClassifyAllExplicitTopKReturnsMultipleHardMatches(t
 		t.Fatalf("Expected 2 matches, got %d: %+v", len(matched), matched)
 	}
 
-	expectedOrder := []string{"ai", "programming"}
+	expectedOrder := []string{"programming", "ai"}
 	for i, match := range matched {
 		if match.RuleName != expectedOrder[i] {
 			t.Fatalf("Expected match %d to be %q, got %+v", i, expectedOrder[i], matched)
@@ -158,16 +159,16 @@ func TestEmbeddingClassifier_ClassifyDetailedReturnsAllAcceptedMatchesBeforeTopK
 	if len(detailed.Matches) != 2 {
 		t.Fatalf("expected both hard matches before top_k output shaping, got %+v", detailed.Matches)
 	}
-	if detailed.Matches[0].RuleName != "ai" || detailed.Matches[1].RuleName != "programming" {
-		t.Fatalf("expected ai then programming from detailed matches, got %+v", detailed.Matches)
+	if detailed.Matches[0].RuleName != "programming" || detailed.Matches[1].RuleName != "ai" {
+		t.Fatalf("expected programming then ai from detailed matches, got %+v", detailed.Matches)
 	}
 
 	limited, err := classifier.ClassifyAll("TensorFlow pipeline")
 	if err != nil {
 		t.Fatalf("ClassifyAll failed: %v", err)
 	}
-	if len(limited) != 1 || limited[0].RuleName != "ai" {
-		t.Fatalf("expected top_k output shaping to keep only ai, got %+v", limited)
+	if len(limited) != 1 || limited[0].RuleName != "programming" {
+		t.Fatalf("expected top_k output shaping to keep only programming, got %+v", limited)
 	}
 }
 
@@ -253,6 +254,54 @@ func TestEmbeddingClassifier_ClassifyAllSoftMatchesRespectConfiguredTopK(t *test
 		if match.Method != "soft" {
 			t.Fatalf("Expected soft match, got %+v", match)
 		}
+	}
+}
+
+func TestEmbeddingClassifier_MaxAggregationUsesPrototypeAwareScoring(t *testing.T) {
+	stubEmbeddingLookup(t, map[string][]float32{
+		"query":      makeEmbedding(1.0, 0.0, 0.0),
+		"candidate1": makeEmbedding(1.0, 0.0, 0.0),
+		"candidate2": makeEmbedding(0.4, 0.0, 0.0),
+	})
+
+	classifier := newTestEmbeddingClassifier(t, []config.EmbeddingRule{
+		{
+			Name:                      "rule_a",
+			Candidates:                []string{"candidate1", "candidate2"},
+			SimilarityThreshold:       0.90,
+			AggregationMethodConfiged: config.AggregationMethodMax,
+		},
+	}, config.HNSWConfig{
+		PreloadEmbeddings: true,
+		PrototypeScoring: config.PrototypeScoringConfig{
+			BestWeight: 0.75,
+			TopM:       2,
+		},
+	})
+
+	detailed, err := classifier.ClassifyDetailed("query")
+	if err != nil {
+		t.Fatalf("ClassifyDetailed failed: %v", err)
+	}
+	if len(detailed.Scores) != 1 {
+		t.Fatalf("expected a single scored rule, got %+v", detailed.Scores)
+	}
+
+	score := detailed.Scores[0]
+	if score.Best != 1.0 {
+		t.Fatalf("expected best similarity to stay at 1.0, got %.4f", score.Best)
+	}
+	if math.Abs(float64(score.Support)-0.7) > 1e-6 {
+		t.Fatalf("expected support to average top-2 prototypes to 0.7, got %.4f", score.Support)
+	}
+	if math.Abs(float64(score.Score)-0.925) > 1e-6 {
+		t.Fatalf("expected prototype-aware max score 0.925, got %.4f", score.Score)
+	}
+	if score.PrototypeCount != 2 {
+		t.Fatalf("expected 2 prototypes, got %d", score.PrototypeCount)
+	}
+	if len(detailed.Matches) != 1 || math.Abs(float64(detailed.Matches[0].Score)-0.925) > 1e-6 {
+		t.Fatalf("expected matched score to use prototype-aware aggregation, got %+v", detailed.Matches)
 	}
 }
 

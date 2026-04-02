@@ -417,10 +417,11 @@ func (c *EmbeddingClassifier) embeddingAggregationOptions(rule config.EmbeddingR
 	switch rule.AggregationMethodConfiged {
 	case config.AggregationMethodMean:
 		return prototypeScoreOptions{BestWeight: 0, TopM: 0}
-	case config.AggregationMethodAny, config.AggregationMethodMax:
-		return prototypeScoreOptions{BestWeight: 1, TopM: 1}
 	default:
-		return prototypeScoreOptions{BestWeight: 1, TopM: 1}
+		// "max"/"any" keep their rule-level acceptance semantics, but the
+		// underlying bank score now uses the shared prototype-aware defaults
+		// instead of collapsing back to a single winning prototype.
+		return defaultPrototypeScoreOptions(c.optimizationConfig.PrototypeScoring)
 	}
 }
 
