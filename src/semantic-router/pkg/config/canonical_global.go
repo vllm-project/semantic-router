@@ -79,6 +79,7 @@ type CanonicalModelModules struct {
 	PromptCompression       PromptCompressionConfig         `yaml:"prompt_compression"`
 	PromptGuard             CanonicalPromptGuardModule      `yaml:"prompt_guard"`
 	Classifier              CanonicalClassifierModule       `yaml:"classifier"`
+	Complexity              ComplexityModelConfig           `yaml:"complexity"`
 	HallucinationMitigation CanonicalHallucinationModule    `yaml:"hallucination_mitigation"`
 	FeedbackDetector        CanonicalFeedbackDetectorModule `yaml:"feedback_detector"`
 	ModalityDetector        ModalityDetectorConfig          `yaml:"modality_detector"`
@@ -233,6 +234,7 @@ func applyCanonicalGlobal(cfg *RouterConfig, global *CanonicalGlobal) error {
 	cfg.PromptCompression = global.ModelCatalog.Modules.PromptCompression
 	cfg.PromptGuard = global.ModelCatalog.Modules.PromptGuard.PromptGuardConfig
 	cfg.Classifier = global.ModelCatalog.Modules.Classifier.runtimeConfig()
+	cfg.ComplexityModel = global.ModelCatalog.Modules.Complexity.WithDefaults()
 	cfg.HallucinationMitigation = global.ModelCatalog.Modules.HallucinationMitigation.runtimeConfig()
 	cfg.FeedbackDetector = global.ModelCatalog.Modules.FeedbackDetector.FeedbackDetectorConfig
 	cfg.ModalityDetector = global.ModelCatalog.Modules.ModalityDetector

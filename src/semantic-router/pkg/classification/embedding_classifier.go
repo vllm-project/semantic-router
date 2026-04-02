@@ -101,6 +101,7 @@ type EmbeddingClassifier struct {
 
 	// Optimization: preloaded candidate embeddings
 	candidateEmbeddings map[string][]float32 // candidate text -> embedding vector
+	rulePrototypeBanks  map[string]*prototypeBank
 
 	// Configuration
 	optimizationConfig config.HNSWConfig
@@ -118,6 +119,7 @@ func NewEmbeddingClassifier(cfgRules []config.EmbeddingRule, optConfig config.HN
 	c := &EmbeddingClassifier{
 		rules:               cfgRules,
 		candidateEmbeddings: make(map[string][]float32),
+		rulePrototypeBanks:  make(map[string]*prototypeBank),
 		optimizationConfig:  optConfig,
 		preloadEnabled:      optConfig.PreloadEmbeddings,
 		modelType:           optConfig.ModelType, // Use configured model type
@@ -234,6 +236,8 @@ func (c *EmbeddingClassifier) preloadCandidateEmbeddings() error {
 		return firstError
 	}
 
+	c.rebuildRulePrototypeBanks()
+
 	return nil
 }
 
@@ -307,8 +311,18 @@ func (c *EmbeddingClassifier) Classify(text string) (string, float64, error) {
 // (default 1, 0 disables truncation). When top_k is increased, the decision
 // engine can compose multiple embedding matches together.
 func (c *EmbeddingClassifier) ClassifyAll(text string) ([]MatchedRule, error) {
+	result, err := c.ClassifyDetailed(text)
+	if err != nil {
+		return nil, err
+	}
+	return c.sortAndLimitMatches(result.Matches), nil
+}
+
+// ClassifyDetailed performs full label scoring and returns the complete score
+// distribution plus all accepted matches before top-k output shaping.
+func (c *EmbeddingClassifier) ClassifyDetailed(text string) (*EmbeddingClassificationResult, error) {
 	if len(c.rules) == 0 {
-		return nil, nil
+		return &EmbeddingClassificationResult{}, nil
 	}
 
 	// Validate input
@@ -328,63 +342,25 @@ func (c *EmbeddingClassifier) ClassifyAll(text string) ([]MatchedRule, error) {
 
 	logging.Infof("Computed query embedding (model: %s, dimension: %d)", modelType, len(queryEmbedding))
 
-	// Step 2: Search all candidates once and get similarities
-	candidateSimilarities, err := c.searchAllCandidates(queryEmbedding)
+	// Step 2: Ensure candidate embeddings and prototype banks exist
+	if ensureErr := c.ensureCandidateEmbeddings(); ensureErr != nil {
+		return nil, ensureErr
+	}
+
+	// Step 3: Score all rules against their prototype banks
+	scoredRules, err := c.scoreRules(queryEmbedding)
 	if err != nil {
 		return nil, err
 	}
-
-	logging.Infof("Computed %d candidate similarities in %v", len(candidateSimilarities), time.Since(startTime))
-
-	// Step 3: Aggregate scores per rule and find all matches
-	matched := c.findAllMatchedRules(candidateSimilarities)
+	matched := c.findAllMatchedRules(scoredRules)
 
 	elapsed := time.Since(startTime)
 	logging.Infof("ClassifyAll completed in %v: %d rules matched out of %d", elapsed, len(matched), len(c.rules))
 
-	return matched, nil
-}
-
-// searchAllCandidates computes similarities for all candidates in one pass
-// Always uses brute-force to ensure we get ALL candidate similarities
-func (c *EmbeddingClassifier) searchAllCandidates(queryEmbedding []float32) (map[string]float32, error) {
-	// Lazy fallback: if candidate embeddings are empty (preload was disabled or failed),
-	// compute them now on the first request. This ensures the embedding signal always works
-	if len(c.candidateEmbeddings) == 0 && !c.preloadEnabled {
-		logging.Warnf("[Embedding Signal] No preloaded candidate embeddings found — computing at runtime")
-		if err := c.preloadCandidateEmbeddings(); err != nil {
-			logging.Errorf("[Embedding Signal] Runtime embedding computation also failed: %v", err)
-			// Mark as attempted so we don't retry on every subsequent request
-			c.preloadEnabled = true
-			return nil, fmt.Errorf("failed to compute candidate embeddings at runtime: %w", err)
-		}
-		c.preloadEnabled = true
-		logging.Infof("[Embedding Signal] Lazy fallback succeeded — candidate embeddings now cached for subsequent requests")
-	}
-
-	candidateSimilarities := make(map[string]float32)
-	totalCandidates := len(c.candidateEmbeddings)
-
-	// For embedding classification, we MUST compute similarities for ALL candidates
-	// to correctly aggregate scores per rule and find the best match.
-	// HNSW is an approximate algorithm designed for topK search, not exhaustive search.
-	// Even with large ef values, HNSW may miss some candidates due to graph connectivity.
-	//
-	// Brute-force is the right choice here because:
-	// 1. We need complete results (all candidates), not approximate topK
-	// 2. Candidate sets are typically small (50-200), making brute-force very fast
-	// 3. Embeddings are pre-loaded in memory, so it's just dot products (microseconds each)
-	// 4. Simpler and more reliable than tuning HNSW parameters
-
-	logging.Infof("Computing similarities for all %d candidates (brute-force)", totalCandidates)
-
-	for candidate, embedding := range c.candidateEmbeddings {
-		sim := cosineSimilarity(queryEmbedding, embedding)
-		candidateSimilarities[candidate] = sim
-		logging.Debugf("[Brute-force] candidate=%q, similarity=%.4f", candidate, sim)
-	}
-
-	return candidateSimilarities, nil
+	return &EmbeddingClassificationResult{
+		Scores:  scoredRules,
+		Matches: matched,
+	}, nil
 }
 
 // MatchedRule holds the result for a matched embedding rule
@@ -394,16 +370,23 @@ type MatchedRule struct {
 	Method   string // "hard" or "soft"
 }
 
-type scoredEmbeddingRule struct {
-	Name      string
-	Score     float32
-	Threshold float32
+type EmbeddingRuleScore struct {
+	Name           string
+	Score          float64
+	Best           float64
+	Support        float64
+	Threshold      float64
+	PrototypeCount int
 }
 
-// findAllMatchedRules aggregates candidate similarities per rule and returns the
-// top-ranked matches subject to the configured top_k limit.
-func (c *EmbeddingClassifier) findAllMatchedRules(candidateSimilarities map[string]float32) []MatchedRule {
-	scoredRules := c.scoreRules(candidateSimilarities)
+type EmbeddingClassificationResult struct {
+	Scores  []EmbeddingRuleScore
+	Matches []MatchedRule
+}
+
+// findAllMatchedRules aggregates candidate similarities per rule and returns all
+// accepted matches before final top-k output shaping.
+func (c *EmbeddingClassifier) findAllMatchedRules(scoredRules []EmbeddingRuleScore) []MatchedRule {
 	hardMatches := make([]MatchedRule, 0, len(scoredRules))
 
 	// Phase 1: collect all hard matches (score >= rule threshold).
@@ -412,14 +395,14 @@ func (c *EmbeddingClassifier) findAllMatchedRules(candidateSimilarities map[stri
 			logging.Infof("Hard match found: rule=%q, score=%.4f", rule.Name, rule.Score)
 			hardMatches = append(hardMatches, MatchedRule{
 				RuleName: rule.Name,
-				Score:    float64(rule.Score),
+				Score:    rule.Score,
 				Method:   "hard",
 			})
 		}
 	}
 
 	if len(hardMatches) > 0 {
-		return c.sortAndLimitMatches(hardMatches)
+		return c.sortMatches(hardMatches)
 	}
 
 	// Phase 2: No hard matches — check if soft matching is enabled
@@ -430,12 +413,12 @@ func (c *EmbeddingClassifier) findAllMatchedRules(candidateSimilarities map[stri
 
 	softMatches := make([]MatchedRule, 0, len(scoredRules))
 	for _, rule := range scoredRules {
-		if rule.Score >= c.optimizationConfig.MinScoreThreshold {
+		if rule.Score >= float64(c.optimizationConfig.MinScoreThreshold) {
 			logging.Infof("Soft match found: rule=%q, score=%.4f (min_threshold=%.3f)",
 				rule.Name, rule.Score, c.optimizationConfig.MinScoreThreshold)
 			softMatches = append(softMatches, MatchedRule{
 				RuleName: rule.Name,
-				Score:    float64(rule.Score),
+				Score:    rule.Score,
 				Method:   "soft",
 			})
 		}
@@ -446,49 +429,50 @@ func (c *EmbeddingClassifier) findAllMatchedRules(candidateSimilarities map[stri
 		return nil
 	}
 
-	return c.sortAndLimitMatches(softMatches)
+	return c.sortMatches(softMatches)
 }
 
-func (c *EmbeddingClassifier) scoreRules(candidateSimilarities map[string]float32) []scoredEmbeddingRule {
-	scoredRules := make([]scoredEmbeddingRule, 0, len(c.rules))
+func (c *EmbeddingClassifier) scoreRules(queryEmbedding []float32) ([]EmbeddingRuleScore, error) {
+	if err := c.ensureCandidateEmbeddings(); err != nil {
+		return nil, err
+	}
+
+	scoredRules := make([]EmbeddingRuleScore, 0, len(c.rules))
 	for _, rule := range c.rules {
-		if len(rule.Candidates) == 0 {
+		bank, ok := c.rulePrototypeBanks[rule.Name]
+		if !ok || bank == nil || len(bank.prototypes) == 0 {
 			continue
 		}
 
-		similarities := make([]float32, 0, len(rule.Candidates))
-		for _, candidate := range rule.Candidates {
-			if sim, ok := candidateSimilarities[candidate]; ok {
-				similarities = append(similarities, sim)
-			}
-		}
-		if len(similarities) == 0 {
-			continue
-		}
+		bankScore := bank.score(queryEmbedding, c.embeddingAggregationOptions(rule))
+		logging.Infof("Rule %q: score=%.4f best=%.4f support=%.4f threshold=%.3f matched=%v (prototypes=%d)",
+			rule.Name, bankScore.Score, bankScore.Best, bankScore.Support, rule.SimilarityThreshold,
+			bankScore.Score >= float64(rule.SimilarityThreshold), bankScore.PrototypeCount)
 
-		aggregatedScore := c.aggregateScoresForRule(similarities, rule.AggregationMethodConfiged)
-		logging.Infof("Rule %q: aggregated_score=%.4f, threshold=%.3f, matched=%v (method=%s, candidates=%d)",
-			rule.Name, aggregatedScore, rule.SimilarityThreshold,
-			aggregatedScore >= rule.SimilarityThreshold,
-			rule.AggregationMethodConfiged, len(similarities))
-
-		scoredRules = append(scoredRules, scoredEmbeddingRule{
-			Name:      rule.Name,
-			Score:     aggregatedScore,
-			Threshold: rule.SimilarityThreshold,
+		scoredRules = append(scoredRules, EmbeddingRuleScore{
+			Name:           rule.Name,
+			Score:          bankScore.Score,
+			Best:           bankScore.Best,
+			Support:        bankScore.Support,
+			Threshold:      float64(rule.SimilarityThreshold),
+			PrototypeCount: bankScore.PrototypeCount,
 		})
 	}
-	return scoredRules
+	return scoredRules, nil
 }
 
-func (c *EmbeddingClassifier) sortAndLimitMatches(matches []MatchedRule) []MatchedRule {
+func (c *EmbeddingClassifier) sortMatches(matches []MatchedRule) []MatchedRule {
 	sort.Slice(matches, func(i, j int) bool {
 		if matches[i].Score == matches[j].Score {
 			return matches[i].RuleName < matches[j].RuleName
 		}
 		return matches[i].Score > matches[j].Score
 	})
+	return matches
+}
 
+func (c *EmbeddingClassifier) sortAndLimitMatches(matches []MatchedRule) []MatchedRule {
+	matches = c.sortMatches(matches)
 	topK := 1
 	if c.optimizationConfig.TopK != nil {
 		topK = *c.optimizationConfig.TopK
@@ -501,49 +485,14 @@ func (c *EmbeddingClassifier) sortAndLimitMatches(matches []MatchedRule) []Match
 	return matches[:topK]
 }
 
-// aggregateScoresForRule applies the aggregation method to compute the final score
-func (c *EmbeddingClassifier) aggregateScoresForRule(similarities []float32, method config.AggregationMethod) float32 {
-	if len(similarities) == 0 {
-		return 0.0
-	}
-
-	switch method {
+func (c *EmbeddingClassifier) embeddingAggregationOptions(rule config.EmbeddingRule) prototypeScoreOptions {
+	switch rule.AggregationMethodConfiged {
 	case config.AggregationMethodMean:
-		var sum float32
-		for _, sim := range similarities {
-			sum += sim
-		}
-		return sum / float32(len(similarities))
-
-	case config.AggregationMethodMax:
-		var max float32
-		for _, sim := range similarities {
-			if sim > max {
-				max = sim
-			}
-		}
-		return max
-
-	case config.AggregationMethodAny:
-		// For "any" method, return the max similarity
-		// The threshold check will be done by the caller
-		var max float32
-		for _, sim := range similarities {
-			if sim > max {
-				max = sim
-			}
-		}
-		return max
-
+		return prototypeScoreOptions{BestWeight: 0, TopM: 0}
+	case config.AggregationMethodAny, config.AggregationMethodMax:
+		return prototypeScoreOptions{BestWeight: 1, TopM: 1}
 	default:
-		logging.Warnf("Unsupported aggregation method: %q, using max", method)
-		var max float32
-		for _, sim := range similarities {
-			if sim > max {
-				max = sim
-			}
-		}
-		return max
+		return prototypeScoreOptions{BestWeight: 1, TopM: 1}
 	}
 }
 
@@ -570,4 +519,26 @@ func cosineSimilarity(a, b []float32) float32 {
 // GetPreloadStats returns statistics about preloaded embeddings
 func (c *EmbeddingClassifier) GetPreloadStats() int {
 	return len(c.candidateEmbeddings)
+}
+
+func (c *EmbeddingClassifier) rebuildRulePrototypeBanks() {
+	c.rulePrototypeBanks = make(map[string]*prototypeBank, len(c.rules))
+	prototypeCfg := c.optimizationConfig.PrototypeScoring.WithDefaults()
+	for _, rule := range c.rules {
+		examples := make([]prototypeExample, 0, len(rule.Candidates))
+		for _, candidate := range rule.Candidates {
+			embedding, ok := c.candidateEmbeddings[candidate]
+			if !ok || len(embedding) == 0 {
+				continue
+			}
+			examples = append(examples, prototypeExample{
+				Key:       candidate,
+				Text:      candidate,
+				Embedding: embedding,
+			})
+		}
+		bank := newPrototypeBank(examples, prototypeCfg)
+		c.rulePrototypeBanks[rule.Name] = bank
+		logPrototypeBankSummary("Embedding Signal", rule.Name, bank)
+	}
 }

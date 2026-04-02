@@ -23,12 +23,13 @@ const (
 // KnowledgeBaseConfig declares a reusable embedding-backed KB instance that is
 // loaded at router startup.
 type KnowledgeBaseConfig struct {
-	Name            string                      `json:"name" yaml:"name"`
-	Source          KnowledgeBaseSource         `json:"source" yaml:"source"`
-	Threshold       float32                     `json:"threshold" yaml:"threshold"`
-	LabelThresholds map[string]float32          `json:"label_thresholds,omitempty" yaml:"label_thresholds,omitempty"`
-	Groups          map[string][]string         `json:"groups,omitempty" yaml:"groups,omitempty"`
-	Metrics         []KnowledgeBaseMetricConfig `json:"metrics,omitempty" yaml:"metrics,omitempty"`
+	Name             string                      `json:"name" yaml:"name"`
+	Source           KnowledgeBaseSource         `json:"source" yaml:"source"`
+	Threshold        float32                     `json:"threshold" yaml:"threshold"`
+	LabelThresholds  map[string]float32          `json:"label_thresholds,omitempty" yaml:"label_thresholds,omitempty"`
+	Groups           map[string][]string         `json:"groups,omitempty" yaml:"groups,omitempty"`
+	Metrics          []KnowledgeBaseMetricConfig `json:"metrics,omitempty" yaml:"metrics,omitempty"`
+	PrototypeScoring PrototypeScoringConfig      `json:"prototype_scoring,omitempty" yaml:"prototype_scoring,omitempty"`
 }
 
 // KnowledgeBaseSource points at the KB asset directory and manifest.
@@ -129,6 +130,12 @@ type KnowledgeBaseDefinition struct {
 type KnowledgeBaseLabelDef struct {
 	Description string   `json:"description,omitempty" yaml:"description,omitempty"`
 	Exemplars   []string `json:"exemplars" yaml:"exemplars"`
+}
+
+func (c KnowledgeBaseConfig) WithDefaults() KnowledgeBaseConfig {
+	result := c
+	result.PrototypeScoring = result.PrototypeScoring.WithDefaults()
+	return result
 }
 
 func LoadKnowledgeBaseDefinition(baseDir string, source KnowledgeBaseSource) (KnowledgeBaseDefinition, error) {

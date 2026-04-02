@@ -66,3 +66,4 @@ Keep the numeric index unique within `docs/agent/adr/`.
 - [adr-0001-harness-layering.md](adr-0001-harness-layering.md)
 - [adr-0002-tech-debt-index-and-entry-directory.md](adr-0002-tech-debt-index-and-entry-directory.md)
 - [adr-0003-dashboard-dsl-natural-language-mode.md](adr-0003-dashboard-dsl-natural-language-mode.md)
+- [adr-0004-prototype-aware-label-scoring-for-embedding-backed-signals.md](adr-0004-prototype-aware-label-scoring-for-embedding-backed-signals.md)

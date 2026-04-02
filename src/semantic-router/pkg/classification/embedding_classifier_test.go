@@ -132,6 +132,45 @@ func TestEmbeddingClassifier_ClassifyAllExplicitTopKReturnsMultipleHardMatches(t
 	}
 }
 
+func TestEmbeddingClassifier_ClassifyDetailedReturnsAllAcceptedMatchesBeforeTopK(t *testing.T) {
+	stubEmbeddingLookup(t, map[string][]float32{
+		"TensorFlow pipeline":  makeEmbedding(0.90, 0.85, 0.10),
+		"machine learning":     makeEmbedding(0.85, 0.0, 0.0),
+		"neural network":       makeEmbedding(0.80, 0.0, 0.0),
+		"python code":          makeEmbedding(0.0, 0.90, 0.0),
+		"software development": makeEmbedding(0.0, 0.85, 0.0),
+		"recipe":               makeEmbedding(0.0, 0.0, 0.30),
+		"ingredients":          makeEmbedding(0.0, 0.0, 0.25),
+	})
+
+	classifier := newTestEmbeddingClassifier(t, topicRules(), config.HNSWConfig{
+		PreloadEmbeddings: true,
+		TopK:              intPtr(1),
+	})
+
+	detailed, err := classifier.ClassifyDetailed("TensorFlow pipeline")
+	if err != nil {
+		t.Fatalf("ClassifyDetailed failed: %v", err)
+	}
+	if len(detailed.Scores) != 3 {
+		t.Fatalf("expected full score distribution across 3 rules, got %+v", detailed.Scores)
+	}
+	if len(detailed.Matches) != 2 {
+		t.Fatalf("expected both hard matches before top_k output shaping, got %+v", detailed.Matches)
+	}
+	if detailed.Matches[0].RuleName != "ai" || detailed.Matches[1].RuleName != "programming" {
+		t.Fatalf("expected ai then programming from detailed matches, got %+v", detailed.Matches)
+	}
+
+	limited, err := classifier.ClassifyAll("TensorFlow pipeline")
+	if err != nil {
+		t.Fatalf("ClassifyAll failed: %v", err)
+	}
+	if len(limited) != 1 || limited[0].RuleName != "ai" {
+		t.Fatalf("expected top_k output shaping to keep only ai, got %+v", limited)
+	}
+}
+
 func TestEmbeddingClassifier_ClassifyAllMatchesClassify(t *testing.T) {
 	stubEmbeddingLookup(t, map[string][]float32{
 		"query":                makeEmbedding(1.0, 0.0, 0.0),

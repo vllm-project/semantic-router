@@ -165,12 +165,29 @@ func (c *Classifier) embeddingRuleCentroid(
 
 func (c *EmbeddingClassifier) ensureCandidateEmbeddings() error {
 	if len(c.candidateEmbeddings) > 0 {
+		if len(c.rulePrototypeBanks) == 0 {
+			c.rebuildRulePrototypeBanks()
+		}
 		return nil
 	}
 	return c.preloadCandidateEmbeddings()
 }
 
 func (c *EmbeddingClassifier) ruleCentroid(rule config.EmbeddingRule) ([]float32, error) {
+	if bank, ok := c.rulePrototypeBanks[rule.Name]; ok && bank != nil && len(bank.prototypes) > 0 {
+		centroid := make([]float32, len(bank.prototypes[0].Embedding))
+		for _, prototype := range bank.prototypes {
+			for i, value := range prototype.Embedding {
+				centroid[i] += value
+			}
+		}
+		scale := float32(len(bank.prototypes))
+		for i := range centroid {
+			centroid[i] /= scale
+		}
+		return centroid, nil
+	}
+
 	if len(rule.Candidates) == 0 {
 		return nil, fmt.Errorf("embedding rule %q has no candidates", rule.Name)
 	}

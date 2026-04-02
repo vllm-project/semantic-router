@@ -194,6 +194,7 @@ func CanonicalGlobalFromRouterConfig(cfg *RouterConfig) *CanonicalGlobal {
 					},
 					Preference: cfg.PreferenceModel.WithDefaults(),
 				},
+				Complexity: cfg.ComplexityModel.WithDefaults(),
 				HallucinationMitigation: CanonicalHallucinationModule{
 					Enabled:                 cfg.HallucinationMitigation.Enabled,
 					OnHallucinationDetected: cfg.HallucinationMitigation.OnHallucinationDetected,
