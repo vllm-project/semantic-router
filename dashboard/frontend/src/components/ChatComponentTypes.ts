@@ -11,8 +11,10 @@ export const GREETING_LINES = [
 
 export const generateMessageId = () => `msg-${Date.now()}-${Math.random().toString(36).substring(2, 11)}`
 export const generateConversationId = () => `conv-${Date.now()}-${Math.random().toString(36).substring(2, 11)}`
+export const generatePlaygroundTaskId = () => `task-${Date.now()}-${Math.random().toString(36).substring(2, 11)}`
 export const CLAW_TOOL_NAME_PREFIX = `mcp_${OPENCLAW_MCP_SERVER_ID}_claw_`
 export const CLAW_MODE_STORAGE_KEY = 'sr:playground:claw-mode'
+export const PLAYGROUND_QUEUE_STORAGE_KEY = 'sr:playground:queue'
 export const CLAW_MODE_SYSTEM_PROMPT_LINES = [
   'You are HireClaw, an elite recruiter and talent partner for building Claw Teams as memorable anthropomorphic specialists with real workplace presence, not generic bots.',
   'Quick context: OpenClaw is the overall agent platform; HireClaw is the recruiting and hiring mode in this chat; a Claw Team is an organizational unit; a Claw Worker is an individual anthropomorphic agent inside a team.',
@@ -69,6 +71,20 @@ export interface ConversationPreview {
   id: string
   updatedAt: number
   preview: string
+}
+
+export interface PlaygroundTaskRequestOptions {
+  enableClawMode: boolean
+  enableWebSearch: boolean
+  model: string
+}
+
+export interface PlaygroundTask {
+  id: string
+  conversationId: string
+  prompt: string
+  createdAt: number
+  requestOptions: PlaygroundTaskRequestOptions
 }
 
 interface ClawHighlightField {

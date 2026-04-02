@@ -1,3 +1,5 @@
+import { memo } from 'react'
+
 import styles from './ChatComponent.module.css'
 import HeaderDisplay from './HeaderDisplay'
 import ThinkingBlock from './ThinkingBlock'
@@ -180,7 +182,7 @@ function UserOrSystemMessage({ message }: Pick<MessageCardProps, 'message'>) {
   )
 }
 
-function MessageCard({
+const MessageCard = memo(function MessageCard({
   expandedToolCards,
   message,
   onToggleToolCard,
@@ -188,6 +190,10 @@ function MessageCard({
 }: MessageCardProps) {
   const isRatingsMessage =
     message.role === 'assistant' && Boolean(message.choices && message.choices.length > 1)
+  const showCopyAction =
+    (message.role === 'assistant' || message.role === 'user') &&
+    Boolean(message.content) &&
+    !message.isStreaming
 
   return (
     <div
@@ -217,10 +223,10 @@ function MessageCard({
         {message.role === 'assistant' && message.reasoning_mom_responses ? (
           <ReMoMResponsesDisplay rounds={message.reasoning_mom_responses} />
         ) : null}
-        {message.role === 'assistant' && message.content && !message.isStreaming ? (
+        {showCopyAction ? (
           <div className={styles.messageActionRow}>
             <MessageActionBar content={message.content} />
-            {message.headers?.['x-vsr-selected-model'] ? (
+            {message.role === 'assistant' && message.headers?.['x-vsr-selected-model'] ? (
               <FeedbackButtons
                 modelId={message.headers['x-vsr-selected-model']}
                 category={message.headers['x-vsr-selected-decision']}
@@ -232,7 +238,12 @@ function MessageCard({
       </div>
     </div>
   )
-}
+}, (prevProps, nextProps) => (
+  prevProps.message === nextProps.message
+  && prevProps.prevUserQuery === nextProps.prevUserQuery
+  && prevProps.onToggleToolCard === nextProps.onToggleToolCard
+  && prevProps.expandedToolCards === nextProps.expandedToolCards
+))
 
 export default function ChatComponentMessages({
   expandedToolCards,

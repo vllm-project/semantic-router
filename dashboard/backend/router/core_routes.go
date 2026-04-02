@@ -66,6 +66,9 @@ func registerToolRoutes(mux *http.ServeMux, cfg *config.Config) {
 	mux.HandleFunc("/api/tools/open-web", handlers.OpenWebHandler())
 	log.Printf("Open Web API endpoint registered: /api/tools/open-web")
 
+	mux.HandleFunc("/api/tools/weather", handlers.WeatherHandler())
+	log.Printf("Weather API endpoint registered: /api/tools/weather")
+
 	mux.HandleFunc("/api/tools/fetch-raw", handlers.FetchRawHandler())
 	log.Printf("Fetch Raw API endpoint registered: /api/tools/fetch-raw")
 }
