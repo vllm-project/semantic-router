@@ -76,6 +76,25 @@ const TopologyFlow: React.FC = () => {
     handleDecisionFocus,
   ])
 
+  const stageGuide = useMemo(() => {
+    if (!data) return []
+
+    const projectionCount = data.signals.filter(signal => signal.type === 'projection').length
+    const runtimeCount = data.decisions.reduce((count, decision) => {
+      const hasAlgorithm = Boolean(decision.algorithm && decision.algorithm.type !== 'static')
+      const hasPluginChain = Boolean(decision.plugins && decision.plugins.length > 0)
+      return count + (hasAlgorithm ? 1 : 0) + (hasPluginChain ? 1 : 0)
+    }, 0)
+
+    return [
+      { id: 'signals', label: 'Signal Fabric', count: data.signals.length },
+      { id: 'projections', label: 'Projection Maps', count: projectionCount },
+      { id: 'decisions', label: 'Decision Lanes', count: data.decisions.length },
+      { id: 'runtime', label: 'Runtime Chain', count: runtimeCount },
+      { id: 'models', label: 'Model Pool', count: data.models.length },
+    ]
+  }, [data])
+
   useEffect(() => {
     setExpandHiddenDecisions(false)
   }, [densityMode])
@@ -102,7 +121,7 @@ const TopologyFlow: React.FC = () => {
     if (nodes.length > 0) {
       const timer = setTimeout(() => {
         fitView({
-          padding: 0.12,
+          padding: 0.16,
           duration: 300,
           minZoom: 0.15,
           maxZoom: 1.0
@@ -148,7 +167,7 @@ const TopologyFlow: React.FC = () => {
         {/* Flow Canvas */}
         <div className={styles.flowContainer}>
           <div className={styles.layoutToolbar}>
-            <div className={styles.toolbarSection}>
+            <div className={`${styles.toolbarSection} ${styles.densitySection}`}>
               <span className={styles.toolbarLabel}>Density</span>
               <div className={styles.modeSwitch}>
                 {(['compact', 'balanced', 'cinematic'] as DecisionDensityMode[]).map(mode => (
@@ -162,6 +181,16 @@ const TopologyFlow: React.FC = () => {
                   </button>
                 ))}
               </div>
+              {stageGuide.length > 0 && (
+                <div className={styles.densitySummary} aria-label="Brain topology stage summary">
+                  {stageGuide.map(stage => (
+                    <span key={stage.id} className={styles.densitySummaryItem}>
+                      <span className={styles.densitySummaryValue}>{stage.count}</span>
+                      <span className={styles.densitySummaryLabel}>{stage.label}</span>
+                    </span>
+                  ))}
+                </div>
+              )}
             </div>
 
             <div className={styles.toolbarSection}>
@@ -232,7 +261,7 @@ const TopologyFlow: React.FC = () => {
               style: { strokeWidth: 1.5 },
             }}
             fitView
-            fitViewOptions={{ padding: 0.12, minZoom: 0.15, maxZoom: 1.0 }}
+            fitViewOptions={{ padding: 0.16, minZoom: 0.15, maxZoom: 1.0 }}
             defaultViewport={{ x: 0, y: 0, zoom: 0.32 }}
           >
             <Background 

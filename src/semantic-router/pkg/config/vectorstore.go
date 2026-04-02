@@ -134,42 +134,71 @@ func (c *VectorStoreConfig) Validate() error {
 	if !c.Enabled {
 		return nil
 	}
+	if err := validateVectorStoreBackendType(c.BackendType); err != nil {
+		return err
+	}
+	return validateVectorStoreBackendConfig(c)
+}
 
-	switch c.BackendType {
+func validateVectorStoreBackendType(backendType string) error {
+	switch backendType {
 	case "memory", "milvus", "llama_stack", "valkey":
-		// valid
+		return nil
 	case "":
 		return fmt.Errorf("vector_store.backend_type is required when enabled")
 	default:
-		return fmt.Errorf("vector_store.backend_type must be 'memory', 'milvus', 'llama_stack', or 'valkey', got '%s'", c.BackendType)
+		return fmt.Errorf(
+			"vector_store.backend_type must be 'memory', 'milvus', 'llama_stack', or 'valkey', got '%s'",
+			backendType,
+		)
 	}
+}
 
-	if c.BackendType == "milvus" && c.Milvus == nil {
+func validateVectorStoreBackendConfig(c *VectorStoreConfig) error {
+	switch c.BackendType {
+	case "milvus":
+		return validateMilvusVectorStoreConfig(c)
+	case "valkey":
+		return validateValkeyVectorStoreConfig(c)
+	case "llama_stack":
+		return validateLlamaStackVectorStoreConfig(c)
+	default:
+		return nil
+	}
+}
+
+func validateMilvusVectorStoreConfig(c *VectorStoreConfig) error {
+	if c.Milvus == nil {
 		return fmt.Errorf("vector_store.milvus configuration is required when backend_type is 'milvus'")
 	}
-
-	if c.BackendType == "valkey" {
-		if c.Valkey == nil {
-			return fmt.Errorf("vector_store.valkey configuration is required when backend_type is 'valkey'")
-		}
-		if c.Valkey.Host == "" {
-			return fmt.Errorf("vector_store.valkey.host is required")
-		}
-	}
-
-	if c.BackendType == "llama_stack" {
-		if c.LlamaStack == nil {
-			return fmt.Errorf("vector_store.llama_stack configuration is required when backend_type is 'llama_stack'")
-		}
-		if c.LlamaStack.Endpoint == "" {
-			return fmt.Errorf("vector_store.llama_stack.endpoint is required")
-		}
-		if st := c.LlamaStack.SearchType; st != "" && st != "vector" && st != "hybrid" {
-			return fmt.Errorf("vector_store.llama_stack.search_type must be 'vector' or 'hybrid', got '%s'", st)
-		}
-	}
-
 	return nil
+}
+
+func validateValkeyVectorStoreConfig(c *VectorStoreConfig) error {
+	if c.Valkey == nil {
+		return fmt.Errorf("vector_store.valkey configuration is required when backend_type is 'valkey'")
+	}
+	if c.Valkey.Host == "" {
+		return fmt.Errorf("vector_store.valkey.host is required")
+	}
+	return nil
+}
+
+func validateLlamaStackVectorStoreConfig(c *VectorStoreConfig) error {
+	if c.LlamaStack == nil {
+		return fmt.Errorf("vector_store.llama_stack configuration is required when backend_type is 'llama_stack'")
+	}
+	if c.LlamaStack.Endpoint == "" {
+		return fmt.Errorf("vector_store.llama_stack.endpoint is required")
+	}
+	return validateLlamaStackVectorStoreSearchType(c.LlamaStack.SearchType)
+}
+
+func validateLlamaStackVectorStoreSearchType(searchType string) error {
+	if searchType == "" || searchType == "vector" || searchType == "hybrid" {
+		return nil
+	}
+	return fmt.Errorf("vector_store.llama_stack.search_type must be 'vector' or 'hybrid', got '%s'", searchType)
 }
 
 // ApplyDefaults fills in default values for unset fields.

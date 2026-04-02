@@ -144,6 +144,20 @@ export const researchPapers = [
     sortOrder: 58,
   },
   {
+    id: 'cross-layer-policy-compilation',
+    type: 'paper',
+    title: 'From Inference Routing to Agent Orchestration: Declarative Policy Compilation with Cross-Layer Verification',
+    authors: 'Huamin Chen, Xunzhuo Liu, Bowei He, Xue Liu',
+    venue: 'arXiv Technical Report',
+    year: '2026',
+    abstract: 'We extend the Semantic Router DSL from stateless, per-request routing to multi-step agent workflows, emitting verified decision nodes for orchestration frameworks, Kubernetes artifacts, YANG/NETCONF payloads, and protocol-boundary gates from a single declarative source file.',
+    links: [
+      { type: 'paper', url: 'https://arxiv.org/abs/2603.27299', label: 'Paper' },
+    ],
+    featured: true,
+    sortOrder: 58.5,
+  },
+  {
     id: 'knowledge-access-beats-model-size',
     type: 'paper',
     title: 'Knowledge Access Beats Model Size: Memory Augmented Routing for Persistent AI Agents',

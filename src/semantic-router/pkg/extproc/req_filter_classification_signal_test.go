@@ -18,11 +18,13 @@ func TestPrepareSignalEvaluationInput_CombinesMessagesWithoutCompression(t *test
 	input := router.prepareSignalEvaluationInput(signalConversationHistory{
 		currentUserMessage: "user question",
 		nonUserMessages:    []string{"system setup", "assistant reply"},
+		hasAssistantReply:  true,
 	})
 
 	assert.Equal(t, "user question", input.evaluationText)
 	assert.Equal(t, "system setup assistant reply user question", input.allMessagesText)
 	assert.Equal(t, "user question", input.compressedText)
+	assert.True(t, input.hasAssistantReply)
 	assert.Nil(t, input.skipCompressionSignals)
 }
 
@@ -38,6 +40,7 @@ func TestPrepareSignalEvaluationInput_UsesNonUserMessagesWhenUserContentMissing(
 	assert.Equal(t, "system setup assistant reply", input.evaluationText)
 	assert.Equal(t, "system setup assistant reply", input.allMessagesText)
 	assert.Equal(t, "system setup assistant reply", input.compressedText)
+	assert.False(t, input.hasAssistantReply)
 }
 
 func TestApplySignalResultsToContext_PropagatesSignalState(t *testing.T) {

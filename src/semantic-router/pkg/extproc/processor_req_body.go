@@ -115,7 +115,7 @@ func (r *OpenAIRouter) handleModelRouting(openAIRequest *openai.ChatCompletionNe
 	// OpenAI-compatible routing
 	switch {
 	case !isAutoModel:
-		return r.handleSpecifiedModelRouting(openAIRequest, originalModel, ctx)
+		return r.handleSpecifiedModelRouting(openAIRequest, originalModel, decisionName, ctx)
 	case r.shouldUseLooper(ctx.VSRSelectedDecision):
 		logging.ComponentDebugEvent("extproc", "looper_execution_selected", map[string]interface{}{
 			"request_id": ctx.RequestID,
@@ -202,13 +202,14 @@ func (r *OpenAIRouter) handleAutoModelRouting(openAIRequest *openai.ChatCompleti
 }
 
 // handleSpecifiedModelRouting handles routing for explicitly specified models
-func (r *OpenAIRouter) handleSpecifiedModelRouting(openAIRequest *openai.ChatCompletionNewParams, originalModel string, ctx *RequestContext) (*ext_proc.ProcessingResponse, error) {
+func (r *OpenAIRouter) handleSpecifiedModelRouting(openAIRequest *openai.ChatCompletionNewParams, originalModel string, decisionName string, ctx *RequestContext) (*ext_proc.ProcessingResponse, error) {
 	logging.ComponentDebugEvent("extproc", "specified_model_routing_selected", map[string]interface{}{
 		"request_id": ctx.RequestID,
 		"model":      originalModel,
 	})
 
 	// Track VSR decision information for non-auto models
+	ctx.VSRSelectedDecisionName = decisionName
 	ctx.VSRSelectedModel = originalModel
 	ctx.VSRReasoningMode = "off" // Non-auto models don't use reasoning mode by default
 	// Security checks (jailbreak/PII) are handled at the signal level via fast_response plugin
@@ -232,10 +233,13 @@ func (r *OpenAIRouter) handleSpecifiedModelRouting(openAIRequest *openai.ChatCom
 	}
 
 	// Log routing decision
-	r.logRoutingDecision(ctx, "model_specified", originalModel, originalModel, "", false)
+	r.logRoutingDecision(ctx, "model_specified", originalModel, originalModel, decisionName, false)
 
 	// Save the actual model for token tracking
 	ctx.RequestModel = originalModel
+
+	// Capture router replay information if enabled even when the client pins a model.
+	r.startRouterReplay(ctx, originalModel, originalModel, decisionName)
 
 	// Handle tool selection
 	r.handleToolSelectionForRequest(openAIRequest, response, ctx)

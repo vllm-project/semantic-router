@@ -4,28 +4,20 @@ from __future__ import annotations
 
 from cli.docker_services import docker_start_postgres, docker_start_redis
 from cli.runtime_stack import RuntimeStackLayout
+from cli.service_defaults import detect_canonical_storage_backends
 from cli.utils import get_logger
 
 log = get_logger(__name__)
-
-PROVISIONABLE_BACKENDS = {"redis", "postgres"}
 
 
 def detect_required_backends(config: dict) -> set[str]:
     """Read store_backend values from the config and return backends that need provisioning.
 
-    Reads from the canonical v0.3 path: global.services.<key>.store_backend.
+    Reads from the canonical v0.3 path: global.services.<key>.store_backend and
+    falls back to router-owned canonical defaults for local serve workflows.
     Returns only backends the CLI knows how to provision (redis, postgres).
     """
-    services = config.get("global", {}).get("services", {})
-
-    backends: set[str] = set()
-    for service_key in ("response_api", "router_replay"):
-        backend = services.get(service_key, {}).get("store_backend", "")
-        if backend in PROVISIONABLE_BACKENDS:
-            backends.add(backend)
-
-    return backends
+    return detect_canonical_storage_backends(config)
 
 
 def start_storage_backends(

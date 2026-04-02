@@ -295,6 +295,7 @@ export interface ResponseAPIConfig {
 }
 
 export interface RouterReplayConfig {
+  enabled?: boolean
   store_backend?: string
   ttl_seconds?: number
   async_writes?: boolean
@@ -732,6 +733,7 @@ export interface ConfigSignals {
   role_bindings?: RoleBindingSignal[]
   jailbreak?: JailbreakSignal[]
   pii?: PIISignal[]
+  kb?: KBSignal[]
 }
 
 export interface ConfigProjections {
@@ -1008,6 +1010,16 @@ export interface RoleBindingSignal {
   description?: string
 }
 
+export interface KBSignal {
+  name: string
+  kb: string
+  target: {
+    kind: 'label' | 'group'
+    value: string
+  }
+  match?: 'best' | 'threshold'
+}
+
 export interface FactCheckSignal {
   name: string
   description: string
@@ -1167,6 +1179,7 @@ export type SignalType =
   | 'Authz'
   | 'Jailbreak'
   | 'PII'
+  | 'KB'
 
 export interface DecisionFormState {
   name: string
@@ -1211,6 +1224,10 @@ export interface AddSignalFormState {
   pii_threshold?: number
   pii_types_allowed?: string
   pii_include_history?: boolean
+  kb_name?: string
+  target_kind?: 'label' | 'group'
+  target_value?: string
+  kb_match?: 'best' | 'threshold'
 }
 
 export const formatThreshold = (value: number): string => {

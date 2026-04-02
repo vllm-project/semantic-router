@@ -14,6 +14,7 @@ import type {
   EmbeddingSignal,
   FactCheckSignal,
   JailbreakSignal,
+  KBSignal,
   KeywordSignal,
   LanguageSignal,
   ModalitySignal,
@@ -59,7 +60,8 @@ type UnifiedSignalData = Partial<
   ModalitySignal &
   RoleBindingSignal &
   JailbreakSignal &
-  PIISignal
+  PIISignal &
+  KBSignal
 >
 
 interface UnifiedSignal {
@@ -250,6 +252,16 @@ export default function ConfigPageSignalsSection({
       type: 'PII',
       summary: `Threshold: ${p.threshold}${allowed > 0 ? `, ${allowed} types allowed` : ', deny all'}`,
       rawData: p
+    })
+  })
+
+  effectiveSignals?.kb?.forEach(kbSignal => {
+    const match = kbSignal.match || 'best'
+    allSignals.push({
+      name: kbSignal.name,
+      type: 'KB',
+      summary: `${kbSignal.kb} • ${kbSignal.target.kind}:${kbSignal.target.value} • ${match}`,
+      rawData: kbSignal,
     })
   })
 
@@ -550,6 +562,16 @@ export default function ConfigPageSignalsSection({
           { label: 'Description', value: signal.rawData.description || 'N/A', fullWidth: true }
         ]
       })
+    } else if (signal.type === 'KB') {
+      sections.push({
+        title: 'Knowledge Base Signal',
+        fields: [
+          { label: 'Knowledge Base', value: signal.rawData.kb || 'N/A' },
+          { label: 'Target Kind', value: signal.rawData.target?.kind || 'N/A' },
+          { label: 'Target Value', value: signal.rawData.target?.value || 'N/A', fullWidth: true },
+          { label: 'Match', value: signal.rawData.match || 'best' },
+        ],
+      })
     } else {
       sections.push({
         title: 'Details',
@@ -602,7 +624,11 @@ export default function ConfigPageSignalsSection({
       benign_patterns: '',
       pii_threshold: 0.5,
       pii_types_allowed: '',
-      pii_include_history: false
+      pii_include_history: false,
+      kb_name: '',
+      target_kind: 'group',
+      target_value: '',
+      kb_match: 'best',
     }
 
     const initialData: AddSignalFormState = mode === 'edit' && signal ? {
@@ -639,7 +665,11 @@ export default function ConfigPageSignalsSection({
       benign_patterns: (signal.rawData.benign_patterns || []).join('\n'),
       pii_threshold: signal.rawData.threshold ?? 0.5,
       pii_types_allowed: (signal.rawData.pii_types_allowed || []).join('\n'),
-      pii_include_history: !!signal.rawData.include_history
+      pii_include_history: !!signal.rawData.include_history,
+      kb_name: signal.type === 'KB' ? signal.rawData.kb || '' : '',
+      target_kind: signal.type === 'KB' ? signal.rawData.target?.kind || 'group' : 'group',
+      target_value: signal.type === 'KB' ? signal.rawData.target?.value || '' : '',
+      kb_match: signal.type === 'KB' ? signal.rawData.match || 'best' : 'best',
     } : defaultForm
 
     const conditionallyHideFieldExceptType = (type: SignalType) => {
@@ -651,7 +681,7 @@ export default function ConfigPageSignalsSection({
         name: 'type',
         label: 'Type',
         type: 'select',
-        options: ['Keywords', 'Embeddings', 'Domain', 'Preference', 'Fact Check', 'User Feedback', 'Reask', 'Language', 'Context', 'Structure', 'Complexity', 'Modality', 'Authz', 'Jailbreak', 'PII'],
+        options: ['Keywords', 'Embeddings', 'Domain', 'Preference', 'Fact Check', 'User Feedback', 'Reask', 'Language', 'Context', 'Structure', 'Complexity', 'Modality', 'Authz', 'Jailbreak', 'PII', 'KB'],
         required: true,
         description: 'Fields are validated based on the selected type.'
       },
@@ -906,6 +936,36 @@ export default function ConfigPageSignalsSection({
         type: 'boolean',
         description: 'Whether to include conversation history in PII detection',
         shouldHide: conditionallyHideFieldExceptType('PII')
+      },
+      {
+        name: 'kb_name',
+        label: 'Knowledge Base (KB only)',
+        type: 'text',
+        placeholder: 'privacy_kb',
+        description: 'Name from global.model_catalog.kbs',
+        shouldHide: conditionallyHideFieldExceptType('KB')
+      },
+      {
+        name: 'target_kind',
+        label: 'Target Kind (KB only)',
+        type: 'select',
+        options: ['group', 'label'],
+        shouldHide: conditionallyHideFieldExceptType('KB')
+      },
+      {
+        name: 'target_value',
+        label: 'Target Value (KB only)',
+        type: 'text',
+        placeholder: 'privacy_policy',
+        description: 'Group or label name inside the selected knowledge base',
+        shouldHide: conditionallyHideFieldExceptType('KB')
+      },
+      {
+        name: 'kb_match',
+        label: 'Match (KB only)',
+        type: 'select',
+        options: ['best', 'threshold'],
+        shouldHide: conditionallyHideFieldExceptType('KB')
       }
     ]
 
@@ -1248,6 +1308,31 @@ export default function ConfigPageSignalsSection({
               include_history: formData.pii_include_history || false,
               description: formData.description || undefined
             }
+          ]
+          break
+        }
+        case 'KB': {
+          const kb = (formData.kb_name || '').trim()
+          const targetKind = formData.target_kind || 'group'
+          const targetValue = (formData.target_value || '').trim()
+          const match = formData.kb_match || 'best'
+          if (!kb) {
+            throw new Error('Knowledge base is required for KB signals.')
+          }
+          if (!targetValue) {
+            throw new Error('Target value is required for KB signals.')
+          }
+          newConfig.signals.kb = [
+            ...(newConfig.signals.kb || []),
+            {
+              name,
+              kb,
+              target: {
+                kind: targetKind,
+                value: targetValue,
+              },
+              match,
+            },
           ]
           break
         }

@@ -313,6 +313,7 @@ function summaryForKey(key: RouterSystemKey, data: unknown): RouterSectionSummar
       ]
     case 'router_replay':
       return [
+        { label: 'Enabled', value: stringOrFallback(section?.enabled, 'Disabled') },
         { label: 'Store backend', value: stringOrFallback(section?.store_backend) },
         { label: 'Retention', value: section?.ttl_seconds ? `${section.ttl_seconds}s` : 'Not set' },
         { label: 'Async writes', value: stringOrFallback(section?.async_writes, 'Disabled') },
@@ -536,6 +537,7 @@ function fieldsForKey(key: RouterSystemKey): FieldConfig[] {
       ]
     case 'router_replay':
       return [
+        { name: 'enabled', label: 'Enable Router Replay', type: 'boolean' },
         { name: 'store_backend', label: 'Store Backend', type: 'select', options: ['memory', 'redis', 'postgres', 'milvus'], required: true },
         { name: 'ttl_seconds', label: 'TTL (seconds)', type: 'number', placeholder: '2592000' },
         { name: 'async_writes', label: 'Async Writes', type: 'boolean' },

@@ -42,7 +42,7 @@ jobs:
              [[ "${{ needs.changes.outputs.agent_exec }}" == "true" ]] || \
              [[ "${{ github.event_name }}" == "schedule" ]] || \
              [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
-            echo 'profiles=["kubernetes", "dashboard", "router-replay-postgres"]' >> $GITHUB_OUTPUT
+            echo 'profiles=["kubernetes", "dashboard"]' >> $GITHUB_OUTPUT
             echo 'should_run=true' >> $GITHUB_OUTPUT
             echo "Running default baseline profiles due to common/core changes or push/schedule/manual trigger"
             exit 0
@@ -62,7 +62,6 @@ jobs:
           [[ "${{ needs.changes.outputs.e2e_multi_endpoint }}" == "true" ]] && profiles+=("multi-endpoint")
           [[ "${{ needs.changes.outputs.e2e_authz_rbac }}" == "true" ]] && profiles+=("authz-rbac")
           [[ "${{ needs.changes.outputs.e2e_streaming }}" == "true" ]] && profiles+=("streaming")
-          [[ "${{ needs.changes.outputs.e2e_router_replay_postgres }}" == "true" ]] && profiles+=("router-replay-postgres")
 
           # Convert to JSON array
           if [ ${#profiles[@]} -eq 0 ]; then

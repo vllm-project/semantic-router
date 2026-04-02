@@ -28,9 +28,10 @@ const sidebars: SidebarsConfig = {
     },
     {
       type: 'category',
-      label: 'Quickstart',
+      label: 'Installation',
       items: [
         'installation/installation',
+        'installation/k8s/operator',
         'installation/configuration',
         {
           type: 'category',
@@ -181,8 +182,6 @@ const sidebars: SidebarsConfig = {
               items: [
                 'tutorials/plugin/content-safety',
                 'tutorials/plugin/hallucination',
-                'tutorials/plugin/jailbreak',
-                'tutorials/plugin/pii',
                 'tutorials/plugin/response-jailbreak',
               ],
             },

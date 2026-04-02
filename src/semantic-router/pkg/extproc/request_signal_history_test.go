@@ -33,6 +33,7 @@ func TestExtractSignalConversationHistory_ChatCompletionsMixedRoles(t *testing.T
 	assert.Equal(t, "second question", history.currentUserMessage)
 	assert.Equal(t, []string{"first question"}, history.priorUserMessages)
 	assert.Equal(t, []string{"System prompt", "first answer"}, history.nonUserMessages)
+	assert.True(t, history.hasAssistantReply)
 }
 
 func TestSignalConversationHistoryFromFastExtract_PreservesResponseAPIUserChain(t *testing.T) {
@@ -77,4 +78,5 @@ func TestSignalConversationHistoryFromFastExtract_PreservesResponseAPIUserChain(
 	assert.Equal(t, "What is my name again?", history.currentUserMessage)
 	assert.Equal(t, []string{"Hello"}, history.priorUserMessages)
 	assert.Equal(t, []string{"Remember my name is Alice.", "Hi there!"}, history.nonUserMessages)
+	assert.True(t, history.hasAssistantReply)
 }

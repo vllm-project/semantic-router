@@ -83,10 +83,10 @@ def _attach_docker_socket(mount_specs):
 
 
 def _attach_docker_cli(mount_specs, env_vars, *, resolve_docker_cli):
-    mount_host_cli = os.getenv("VLLM_SR_MOUNT_DOCKER_CLI") == "1"
+    mount_host_cli = _should_mount_host_docker_cli()
     if not mount_host_cli:
         env_vars["OPENCLAW_CONTAINER_RUNTIME"] = "docker"
-        log.info("Using in-image Docker CLI for dashboard OpenClaw")
+        log.info("Using in-image Docker CLI for dashboard container management")
         return
 
     docker_bin = resolve_docker_cli(os.getenv("VLLM_SR_DOCKER_BIN"))
@@ -100,11 +100,28 @@ def _attach_docker_cli(mount_specs, env_vars, *, resolve_docker_cli):
         container_docker_bin = "/usr/local/bin/docker"
         mount_specs.append(f"{docker_bin}:{container_docker_bin}:ro")
         env_vars["OPENCLAW_CONTAINER_RUNTIME"] = container_docker_bin
-        log.info(f"Mounting Docker CLI for dashboard OpenClaw: {docker_bin}")
+        log.info(
+            f"Mounting host Docker CLI for dashboard container management: {docker_bin}"
+        )
         return
 
     env_vars["OPENCLAW_CONTAINER_RUNTIME"] = "docker"
+    requested_mount = os.getenv("VLLM_SR_MOUNT_DOCKER_CLI")
+    if requested_mount:
+        log.warning(
+            "VLLM_SR_MOUNT_DOCKER_CLI requested a host Docker CLI mount, "
+            "but no supported Docker CLI was found; falling back to in-image Docker CLI"
+        )
+        return
+
     log.warning(
-        "VLLM_SR_MOUNT_DOCKER_CLI=1 requested a host Docker CLI mount, "
-        "but no supported Docker CLI was found; falling back to in-image Docker CLI"
+        "Host Docker CLI was not found; falling back to the in-image Docker CLI for "
+        "dashboard container management"
     )
+
+
+def _should_mount_host_docker_cli() -> bool:
+    raw = (os.getenv("VLLM_SR_MOUNT_DOCKER_CLI") or "").strip().lower()
+    if raw == "":
+        return True
+    return raw in {"1", "true", "yes", "on"}

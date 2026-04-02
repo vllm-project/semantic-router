@@ -22,6 +22,7 @@ func TestExtractContentFast_SimpleRequest(t *testing.T) {
 	assert.True(t, r.Stream)
 	assert.Equal(t, "Hello world", r.UserContent)
 	assert.Empty(t, r.NonUserMessages)
+	assert.False(t, r.HasAssistantReply)
 	assert.Empty(t, r.FirstImageURL)
 }
 
@@ -40,6 +41,7 @@ func TestExtractContentFast_MultiRole(t *testing.T) {
 	assert.False(t, r.Stream)
 	assert.Equal(t, "Explain quantum physics.", r.UserContent)
 	assert.Equal(t, []string{"You are a helpful assistant.", "Quantum physics is..."}, r.NonUserMessages)
+	assert.True(t, r.HasAssistantReply)
 }
 
 func TestExtractContentFast_ContentParts(t *testing.T) {

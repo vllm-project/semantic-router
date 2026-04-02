@@ -196,6 +196,9 @@ def test_start_vllm_sr_creates_and_connects_shared_network_without_observability
         },
     )
     monkeypatch.setattr(
+        core, "provision_storage_backends", lambda *args, **kwargs: set()
+    )
+    monkeypatch.setattr(
         runtime_lifecycle,
         "docker_container_status",
         lambda name: "not found" if name == "vllm-sr-container" else "running",
@@ -243,6 +246,94 @@ def test_start_vllm_sr_creates_and_connects_shared_network_without_observability
         ("vllm-sr-network", "vllm-sr-envoy-container"),
         ("vllm-sr-network", "vllm-sr-dashboard-container"),
     ]
+
+
+def test_start_vllm_sr_loads_runtime_config_for_backend_provisioning(monkeypatch):
+    load_paths = []
+    provisioned = {}
+
+    def record(name, ret=(0, "", "")):
+        def _fn(*args, **kwargs):
+            provisioned.setdefault("calls", []).append((name, args, kwargs))
+            return ret
+
+        return _fn
+
+    def fake_load_config(path):
+        load_paths.append(path)
+        return {
+            "listeners": [{"name": "http-8899", "address": "0.0.0.0", "port": 8899}],
+            "global": {
+                "services": {
+                    "response_api": {"store_backend": "redis"},
+                    "router_replay": {"store_backend": "postgres"},
+                }
+            },
+        }
+
+    monkeypatch.setattr(core, "print_vllm_logo", lambda: None)
+    monkeypatch.setattr(core, "ensure_clean_runtime_container", lambda _name: None)
+    monkeypatch.setattr(core, "load_config", fake_load_config)
+    monkeypatch.setattr(
+        core,
+        "provision_storage_backends",
+        lambda config, network_name, stack_layout: provisioned.update(
+            {
+                "config": config,
+                "network_name": network_name,
+                "stack_layout": stack_layout,
+            }
+        )
+        or set(),
+    )
+    monkeypatch.setattr(
+        runtime_lifecycle,
+        "docker_container_status",
+        lambda name: "not found" if name == "vllm-sr-container" else "running",
+    )
+    monkeypatch.setattr(
+        runtime_lifecycle, "docker_create_network", record("docker_create_network")
+    )
+    monkeypatch.setattr(
+        core, "start_fleet_sim_sidecar", record("start_fleet_sim_sidecar", False)
+    )
+    monkeypatch.setattr(core, "docker_start_vllm_sr", record("docker_start_vllm_sr"))
+    monkeypatch.setattr(
+        runtime_lifecycle, "docker_network_connect", record("docker_network_connect")
+    )
+    monkeypatch.setattr(
+        runtime_lifecycle, "docker_logs_since", lambda *args, **kwargs: (0, "", "")
+    )
+    monkeypatch.setattr(
+        runtime_lifecycle, "docker_exec", lambda *args, **kwargs: (0, "ok", "")
+    )
+    monkeypatch.setattr(
+        runtime_lifecycle, "load_openclaw_registry", lambda *args, **kwargs: []
+    )
+    monkeypatch.setattr(runtime_lifecycle, "docker_logs", lambda *args, **kwargs: None)
+    monkeypatch.setattr(core, "_wait_and_verify_runtime", lambda *args, **kwargs: None)
+    monkeypatch.setattr(
+        core, "recover_openclaw_containers", lambda *args, **kwargs: None
+    )
+    monkeypatch.setattr(core, "log_runtime_summary", lambda *args, **kwargs: None)
+    monkeypatch.setattr(core, "maybe_finish_setup_mode", lambda *args, **kwargs: False)
+
+    core.start_vllm_sr(
+        "/tmp/effective-config.yaml",
+        env_vars={},
+        enable_observability=False,
+        source_config_file="/tmp/source-config.yaml",
+        runtime_config_file="/tmp/runtime-config.yaml",
+    )
+
+    assert load_paths == ["/tmp/runtime-config.yaml"]
+    assert provisioned["config"]["global"]["services"]["response_api"][
+        "store_backend"
+    ] == ("redis")
+    assert (
+        provisioned["config"]["global"]["services"]["router_replay"]["store_backend"]
+        == "postgres"
+    )
 
 
 def test_resolve_runtime_stack_supports_custom_stack_name_and_port_offset():
@@ -304,6 +395,9 @@ def test_start_vllm_sr_uses_state_root_override(monkeypatch):
         lambda _path: {
             "listeners": [{"name": "http-8899", "address": "0.0.0.0", "port": 8899}]
         },
+    )
+    monkeypatch.setattr(
+        core, "provision_storage_backends", lambda *args, **kwargs: set()
     )
     monkeypatch.setattr(
         runtime_lifecycle,

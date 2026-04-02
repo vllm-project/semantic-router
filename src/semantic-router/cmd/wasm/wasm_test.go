@@ -104,6 +104,75 @@ ROUTE r1 {
 	}
 }
 
+func TestValidateSoftmaxProjectionPartitionDoesNotAddBrowserRuntimeWarning(t *testing.T) {
+	input := js.ValueOf(`MODEL qwen {
+  modality: "text"
+  capabilities: ["chat"]
+}
+
+SIGNAL embedding alpha {
+  threshold: 0.1
+  candidates: ["alpha example"]
+}
+
+SIGNAL embedding beta {
+  threshold: 0.1
+  candidates: ["beta example"]
+}
+
+PROJECTION partition intent_partition {
+  semantics: "softmax_exclusive"
+  members: ["alpha", "beta"]
+  default: "alpha"
+}`)
+
+	result := validate(js.Undefined(), []js.Value{input})
+	str := result.(string)
+
+	var vr ValidateResult
+	json.Unmarshal([]byte(str), &vr)
+	for _, diag := range vr.Diagnostics {
+		if strings.Contains(diag.Message, "browser validation") {
+			t.Fatalf("did not expect browser runtime warning for softmax_exclusive partition, got: %s", diag.Message)
+		}
+	}
+}
+
+func TestValidateTestBlocksStillAddBrowserRuntimeWarning(t *testing.T) {
+	input := js.ValueOf(`MODEL qwen {
+  modality: "text"
+  capabilities: ["chat"]
+}
+
+SIGNAL keyword intent {
+  operator: "any"
+  keywords: ["hello"]
+  threshold: 0.8
+}
+
+ROUTE r1 {
+  PRIORITY 1
+  WHEN keyword("intent")
+  MODEL "qwen"
+}
+
+TEST greet_route {
+  "hello" -> "r1"
+}`)
+
+	result := validate(js.Undefined(), []js.Value{input})
+	str := result.(string)
+
+	var vr ValidateResult
+	json.Unmarshal([]byte(str), &vr)
+	for _, diag := range vr.Diagnostics {
+		if strings.Contains(diag.Message, "TEST blocks are parsed in browser validation") {
+			return
+		}
+	}
+	t.Fatal("expected TEST block browser runtime warning")
+}
+
 func TestValidateNoArgs(t *testing.T) {
 	result := validate(js.Undefined(), []js.Value{})
 	str := result.(string)

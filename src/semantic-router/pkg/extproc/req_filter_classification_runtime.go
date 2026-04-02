@@ -43,6 +43,7 @@ func (r *OpenAIRouter) evaluateSignalsForDecision(
 		signalInput.currentUserText,
 		signalInput.priorUserMessages,
 		nonUserMessages,
+		signalInput.hasAssistantReply,
 		ctx.Headers,
 		false,
 		ctx.RequestImageURL,
@@ -176,7 +177,7 @@ func (r *OpenAIRouter) finalizeDecisionEvaluation(
 
 func (r *OpenAIRouter) applyDecisionResultToContext(result *decision.DecisionResult, ctx *RequestContext) string {
 	ctx.VSRSelectedDecision = result.Decision
-	if pluginCfg := result.Decision.GetRouterReplayConfig(); pluginCfg != nil && pluginCfg.Enabled {
+	if pluginCfg := r.Config.EffectiveRouterReplayConfigForDecision(result.Decision.Name); pluginCfg != nil {
 		ctx.RouterReplayPluginConfig = pluginCfg
 	}
 

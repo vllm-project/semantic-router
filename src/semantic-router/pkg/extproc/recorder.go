@@ -155,18 +155,26 @@ func buildReplayRoutingRecord(
 	decisionName string,
 ) routerreplay.RoutingRecord {
 	guardrailsEnabled, jailbreakEnabled, piiEnabled, hallucinationEnabled := replayGuardrailState(ctx)
+	decisionTier, decisionPriority := replayDecisionMetadata(ctx)
 	record := routerreplay.RoutingRecord{
-		RequestID:       ctx.RequestID,
-		Decision:        decisionName,
-		Category:        ctx.VSRSelectedCategory,
-		OriginalModel:   originalModel,
-		SelectedModel:   replaySelectedModel(originalModel, selectedModel),
-		ReasoningMode:   replayReasoningMode(ctx),
-		ConfidenceScore: ctx.VSRSelectedDecisionConfidence,
-		SelectionMethod: ctx.VSRSelectionMethod,
-		Signals:         replaySignalState(ctx),
-		Streaming:       ctx.ExpectStreamingResponse,
-		FromCache:       ctx.VSRCacheHit,
+		RequestID:         ctx.RequestID,
+		Decision:          decisionName,
+		DecisionTier:      decisionTier,
+		DecisionPriority:  decisionPriority,
+		Category:          ctx.VSRSelectedCategory,
+		OriginalModel:     originalModel,
+		SelectedModel:     replaySelectedModel(originalModel, selectedModel),
+		ReasoningMode:     replayReasoningMode(ctx),
+		ConfidenceScore:   ctx.VSRSelectedDecisionConfidence,
+		SelectionMethod:   ctx.VSRSelectionMethod,
+		Signals:           replaySignalState(ctx),
+		Projections:       replayProjectionState(ctx),
+		ProjectionScores:  cloneReplayFloat64Map(ctx.VSRProjectionScores),
+		SignalConfidences: cloneReplayFloat64Map(ctx.VSRSignalConfidences),
+		SignalValues:      cloneReplayFloat64Map(ctx.VSRSignalValues),
+		ToolTrace:         buildReplayRequestToolTrace(ctx),
+		Streaming:         ctx.ExpectStreamingResponse,
+		FromCache:         ctx.VSRCacheHit,
 
 		GuardrailsEnabled: guardrailsEnabled,
 		JailbreakEnabled:  jailbreakEnabled,
@@ -196,6 +204,13 @@ func buildReplayRoutingRecord(
 	return record
 }
 
+func replayDecisionMetadata(ctx *RequestContext) (int, int) {
+	if ctx == nil || ctx.VSRSelectedDecision == nil {
+		return 0, 0
+	}
+	return ctx.VSRSelectedDecision.Tier, ctx.VSRSelectedDecision.Priority
+}
+
 func replayReasoningMode(ctx *RequestContext) string {
 	if ctx.VSRReasoningMode == "" {
 		return "off"
@@ -223,7 +238,19 @@ func replaySignalState(ctx *RequestContext) routerreplay.Signal {
 		Context:      ctx.VSRMatchedContext,
 		Structure:    ctx.VSRMatchedStructure,
 		Complexity:   ctx.VSRMatchedComplexity,
+		Modality:     ctx.VSRMatchedModality,
+		Authz:        ctx.VSRMatchedAuthz,
+		Jailbreak:    ctx.VSRMatchedJailbreak,
+		PII:          ctx.VSRMatchedPII,
+		KB:           ctx.VSRMatchedKB,
 	}
+}
+
+func replayProjectionState(ctx *RequestContext) []string {
+	if ctx == nil || len(ctx.VSRMatchedProjection) == 0 {
+		return nil
+	}
+	return append([]string(nil), ctx.VSRMatchedProjection...)
 }
 
 func replayGuardrailState(ctx *RequestContext) (bool, bool, bool, bool) {
@@ -301,6 +328,14 @@ func (r *OpenAIRouter) attachRouterReplayResponse(ctx *RequestContext, responseB
 
 	if len(responseBody) > 0 {
 		_ = recorder.AttachResponse(ctx.RouterReplayID, responseBody)
+	}
+	if responseTrace := buildReplayResponseToolTrace(ctx, responseBody); responseTrace != nil {
+		if stored, ok := recorder.GetRecord(ctx.RouterReplayID); ok {
+			responseTrace = mergeReplayToolTraces(stored.ToolTrace, responseTrace)
+		}
+		if responseTrace != nil {
+			_ = recorder.UpdateToolTrace(ctx.RouterReplayID, *responseTrace)
+		}
 	}
 
 	if isFinal {

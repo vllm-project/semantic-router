@@ -152,48 +152,15 @@ vllm-sr serve
 # Use custom config file
 vllm-sr serve --config my-config.yaml
 
+# Set the router log level
+vllm-sr serve --log-level debug
+
 # Use custom Docker image
 vllm-sr serve --image ghcr.io/vllm-project/semantic-router/vllm-sr:latest
 
 # Control image pull policy
 vllm-sr serve --image-pull-policy always
 ```
-
-## Kubernetes Deployment
-
-For production deployments on Kubernetes or OpenShift, use the **Kubernetes Operator**:
-
-### Quick Start with Operator
-
-```bash
-# Clone repository
-git clone https://github.com/vllm-project/semantic-router
-cd semantic-router/deploy/operator
-
-# Install CRDs and operator
-make install
-make deploy IMG=ghcr.io/vllm-project/semantic-router-operator:latest
-
-# Deploy a semantic router instance
-kubectl apply -f config/samples/vllm_v1alpha1_semanticrouter.yaml
-```
-
-**Benefits:**
-
-- ✅ Declarative configuration using Kubernetes CRDs
-- ✅ Automatic platform detection (OpenShift/Kubernetes)
-- ✅ Built-in high availability and scaling
-- ✅ Integrated monitoring and observability
-- ✅ Lifecycle management and upgrades
-
-See the **[Kubernetes Operator Guide](k8s/operator)** for complete documentation.
-
-### Other Kubernetes Deployment Options
-
-- **[Istio Integration](k8s/istio)** - Service mesh deployment
-- **[AI Gateway](k8s/ai-gateway)** - Gateway API integration
-- **[Production Stack](k8s/production-stack)** - Complete production setup
-- **[Dynamo](k8s/dynamo)** - Dynamic configuration management
 
 ## Docker Compose
 
@@ -203,8 +170,8 @@ For local development and testing:
 
 ## Next Steps
 
+- **[Install with Operator](k8s/operator)** - Deploy on Kubernetes or OpenShift with the operator
 - **[Configuration Guide](configuration)** - Advanced routing and signal configuration
-- **[Kubernetes Operator](k8s/operator)** - Production Kubernetes deployment
 - **[API Documentation](../api/router)** - Complete API reference
 - **[Tutorials](../tutorials/signal/overview)** - Learn by example
 

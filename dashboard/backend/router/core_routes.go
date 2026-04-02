@@ -39,7 +39,10 @@ func registerConfigRoutes(mux *http.ServeMux, cfg *config.Config) {
 	mux.HandleFunc("/api/router/config/deploy", handlers.DeployHandler(cfg.AbsConfigPath, cfg.ReadonlyMode, cfg.ConfigDir))
 	mux.HandleFunc("/api/router/config/rollback", handlers.RollbackHandler(cfg.AbsConfigPath, cfg.ReadonlyMode, cfg.ConfigDir))
 	mux.HandleFunc("/api/router/config/versions", handlers.ConfigVersionsHandler(cfg.AbsConfigPath))
-	log.Printf("Config API endpoints registered: /api/router/config/all, /api/router/config/yaml, /api/router/config/update, /api/router/config/deploy, /api/router/config/deploy/preview, /api/router/config/rollback, /api/router/config/versions")
+	mux.HandleFunc("/api/router/config/nl/verify", handlers.BuilderNLVerifyHandler(cfg.AbsConfigPath, cfg.EnvoyURL))
+	mux.HandleFunc("/api/router/config/nl/generate/stream", handlers.BuilderNLGenerateStreamHandler(cfg.AbsConfigPath, cfg.EnvoyURL))
+	mux.HandleFunc("/api/router/config/nl/generate", handlers.BuilderNLGenerateHandler(cfg.AbsConfigPath, cfg.EnvoyURL))
+	log.Printf("Config API endpoints registered: /api/router/config/all, /api/router/config/yaml, /api/router/config/update, /api/router/config/nl/verify, /api/router/config/nl/generate/stream, /api/router/config/nl/generate, /api/router/config/deploy, /api/router/config/deploy/preview, /api/router/config/rollback, /api/router/config/versions")
 
 	mux.HandleFunc("/api/router/config/global", handlers.RouterDefaultsHandler(cfg.ConfigDir))
 	mux.HandleFunc("/api/router/config/global/update", handlers.UpdateRouterDefaultsHandler(cfg.ConfigDir, cfg.ReadonlyMode))
@@ -223,9 +226,8 @@ func findEvaluationProjectRoot(start string) string {
 
 func isEvaluationProjectRoot(dir string) bool {
 	requiredPaths := []string{
-		"AGENTS.md",
-		filepath.Join("dashboard", "backend"),
 		filepath.Join("src", "training", "model_eval", "mmlu_pro_vllm_eval.py"),
+		filepath.Join("src", "training", "model_eval", "signal_eval.py"),
 	}
 
 	for _, relPath := range requiredPaths {

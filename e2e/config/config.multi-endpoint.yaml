@@ -37,18 +37,6 @@ routing:
         - type: system_prompt
           configuration:
             system_prompt: You are a senior software engineer. Provide clear, production-quality code with best practices.
-        - type: jailbreak
-          configuration:
-            enabled: true
-            threshold: 0.5
-        - type: pii
-          configuration:
-            enabled: true
-            threshold: 0.6
-            pii_types_allowed:
-              - GPE
-              - ORGANIZATION
-              - DATE_TIME
     - name: general_to_prod
       description: Route general/user queries to Prod (strict safety)
       priority: 50
@@ -64,15 +52,6 @@ routing:
         - type: system_prompt
           configuration:
             system_prompt: You are a helpful assistant operating under strict data protection policies. Never store, log, or repeat any personal information shared by the user. If a user shares personal data, remind them to avoid sharing sensitive details.
-        - type: jailbreak
-          configuration:
-            enabled: true
-            threshold: 0.9
-        - type: pii
-          configuration:
-            enabled: true
-            threshold: 0.9
-            pii_types_allowed: []
   signals:
     keywords:
       - name: code_keywords

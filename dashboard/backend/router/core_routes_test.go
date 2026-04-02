@@ -14,14 +14,15 @@ func TestResolveEvaluationProjectRootFallsBackToWorkingDirectoryRepo(t *testing.
 	if err := os.MkdirAll(filepath.Dir(scriptPath), 0o755); err != nil {
 		t.Fatalf("MkdirAll(script dir): %v", err)
 	}
-	if err := os.MkdirAll(filepath.Join(repoRoot, "dashboard", "backend"), 0o755); err != nil {
-		t.Fatalf("MkdirAll(dashboard/backend): %v", err)
-	}
-	if err := os.WriteFile(filepath.Join(repoRoot, "AGENTS.md"), []byte("test"), 0o644); err != nil {
-		t.Fatalf("WriteFile(AGENTS.md): %v", err)
-	}
 	if err := os.WriteFile(scriptPath, []byte("print('ok')\n"), 0o644); err != nil {
 		t.Fatalf("WriteFile(script): %v", err)
+	}
+	signalScriptPath := filepath.Join(repoRoot, "src", "training", "model_eval", "signal_eval.py")
+	if err := os.WriteFile(signalScriptPath, []byte("print('ok')\n"), 0o644); err != nil {
+		t.Fatalf("WriteFile(signal script): %v", err)
+	}
+	if err := os.MkdirAll(filepath.Join(repoRoot, "dashboard", "backend"), 0o755); err != nil {
+		t.Fatalf("MkdirAll(dashboard/backend): %v", err)
 	}
 
 	workDir := filepath.Join(repoRoot, "dashboard", "backend")
@@ -55,5 +56,45 @@ func TestResolveEvaluationProjectRootFallsBackToWorkingDirectoryRepo(t *testing.
 	}
 	if gotResolved != wantResolved {
 		t.Fatalf("resolveEvaluationProjectRoot() = %q, want %q", got, repoRoot)
+	}
+}
+
+func TestResolveEvaluationProjectRootRecognizesRuntimeAppLayout(t *testing.T) {
+	appRoot := t.TempDir()
+	scriptDir := filepath.Join(appRoot, "src", "training", "model_eval")
+	if err := os.MkdirAll(scriptDir, 0o755); err != nil {
+		t.Fatalf("MkdirAll(script dir): %v", err)
+	}
+	for _, scriptName := range []string{"mmlu_pro_vllm_eval.py", "signal_eval.py"} {
+		scriptPath := filepath.Join(scriptDir, scriptName)
+		if err := os.WriteFile(scriptPath, []byte("print('ok')\n"), 0o644); err != nil {
+			t.Fatalf("WriteFile(%s): %v", scriptName, err)
+		}
+	}
+
+	previousWD, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("Getwd(): %v", err)
+	}
+	chdirErr := os.Chdir(appRoot)
+	if chdirErr != nil {
+		t.Fatalf("Chdir(%s): %v", appRoot, chdirErr)
+	}
+	t.Cleanup(func() {
+		_ = os.Chdir(previousWD)
+	})
+
+	cfg := &config.Config{ConfigDir: string(filepath.Separator)}
+	got := resolveEvaluationProjectRoot(cfg)
+	gotResolved, err := filepath.EvalSymlinks(got)
+	if err != nil {
+		t.Fatalf("EvalSymlinks(got): %v", err)
+	}
+	wantResolved, err := filepath.EvalSymlinks(appRoot)
+	if err != nil {
+		t.Fatalf("EvalSymlinks(appRoot): %v", err)
+	}
+	if gotResolved != wantResolved {
+		t.Fatalf("resolveEvaluationProjectRoot() = %q, want %q", got, appRoot)
 	}
 }

@@ -140,6 +140,13 @@
   margin-top: 6px;
 }
 
+.signalGroupSubtitle {
+  margin-bottom: 6px;
+  font-size: 10px;
+  line-height: 1.4;
+  opacity: 0.82;
+}
+
 .signalLatency {
   display: flex;
   align-items: center;
@@ -643,53 +650,19 @@
 
 /* ============== Default Route Node ============== */
 .defaultRouteNode {
-  composes: nodeBase;
-  background: linear-gradient(135deg, #607D8B, #455A64);
+  composes: decisionNode;
+  background: linear-gradient(135deg, #556270, #41505d);
   color: white;
   border: 2px dashed #90A4AE;
-  min-width: 160px;
+  min-width: 200px;
 }
 
 .defaultRouteHeader {
   display: flex;
   align-items: center;
   gap: 6px;
-  margin-bottom: 6px;
-}
-
-.defaultRouteIcon {
-  font-size: 18px;
-}
-
-.defaultRouteTitle {
-  font-weight: 600;
-  font-size: 13px;
-}
-
-.defaultRouteInfo {
-  display: flex;
-  flex-direction: column;
   gap: 4px;
   width: 100%;
-  padding-top: 6px;
-  border-top: 1px solid rgba(255, 255, 255, 0.2);
-}
-
-.defaultRouteLabel {
-  font-size: 10px;
-  opacity: 0.8;
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
-}
-
-.defaultRouteModel {
-  font-size: 11px;
-  background: rgba(255, 255, 255, 0.15);
-  padding: 3px 8px;
-  border-radius: 4px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
 }
 
 /* ============== Fallback Decision Node ============== */

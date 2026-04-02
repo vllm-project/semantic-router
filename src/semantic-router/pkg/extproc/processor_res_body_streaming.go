@@ -54,6 +54,9 @@ func ensureStreamingState(ctx *RequestContext) {
 	if ctx.StreamingMetadata == nil {
 		ctx.StreamingMetadata = make(map[string]interface{})
 	}
+	if ctx.StreamingToolCalls == nil {
+		ctx.StreamingToolCalls = make(map[int]*StreamingToolCallState)
+	}
 }
 
 func (r *OpenAIRouter) finalizeStreamingResponse(ctx *RequestContext) {
@@ -99,6 +102,7 @@ func (r *OpenAIRouter) parseStreamingChunk(chunk string, ctx *RequestContext) {
 
 		extractStreamingMetadata(ctx, chunkData)
 		extractStreamingContent(ctx, chunkData)
+		extractStreamingToolCalls(ctx, chunkData)
 		if usage, ok := chunkData["usage"].(map[string]interface{}); ok {
 			ctx.StreamingMetadata["usage"] = usage
 		}
@@ -127,16 +131,18 @@ func extractStreamingContent(ctx *RequestContext, chunkData map[string]interface
 		return
 	}
 
-	choice, ok := choices[0].(map[string]interface{})
-	if !ok {
-		return
-	}
-	if delta, ok := choice["delta"].(map[string]interface{}); ok {
-		if content, ok := delta["content"].(string); ok && content != "" {
-			ctx.StreamingContent += content
+	for _, rawChoice := range choices {
+		choice, ok := rawChoice.(map[string]interface{})
+		if !ok {
+			continue
 		}
-	}
-	if finishReason, ok := choice["finish_reason"].(string); ok && finishReason != "" {
-		ctx.StreamingMetadata["finish_reason"] = finishReason
+		if delta, ok := choice["delta"].(map[string]interface{}); ok {
+			if content, ok := delta["content"].(string); ok && content != "" {
+				ctx.StreamingContent += content
+			}
+		}
+		if finishReason, ok := choice["finish_reason"].(string); ok && finishReason != "" {
+			ctx.StreamingMetadata["finish_reason"] = finishReason
+		}
 	}
 }

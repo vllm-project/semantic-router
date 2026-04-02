@@ -106,3 +106,22 @@ def test_check_envoy_status_does_not_fallback_for_monolith_container(monkeypatch
             ],
         )
     ]
+
+
+def test_show_status_reports_not_running_when_docker_daemon_unreachable(monkeypatch):
+    messages = []
+    stack_layout = runtime_stack.resolve_runtime_stack()
+
+    monkeypatch.setattr(core, "resolve_runtime_stack", lambda: stack_layout)
+    monkeypatch.setattr(
+        core,
+        "_runtime_stack_status",
+        lambda _stack_layout: (_ for _ in ()).throw(SystemExit(1)),
+    )
+    monkeypatch.setattr(core.log, "info", messages.append)
+
+    core.show_status()
+
+    assert "Status: Not running" in messages
+    assert any("Docker daemon is not reachable" in message for message in messages)
+    assert "Start with: vllm-sr serve" in messages

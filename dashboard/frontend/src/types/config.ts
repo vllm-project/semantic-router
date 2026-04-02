@@ -242,7 +242,19 @@ export interface ModelRef {
 }
 
 export interface PluginConfig {
-  type: 'system_prompt' | 'semantic-cache' | 'hallucination' | 'header_mutation' | 'router_replay' | 'fast_response'
+  type:
+    | 'semantic-cache'
+    | 'memory'
+    | 'system_prompt'
+    | 'header_mutation'
+    | 'hallucination'
+    | 'router_replay'
+    | 'rag'
+    | 'image_gen'
+    | 'fast_response'
+    | 'tools'
+    | 'request_params'
+    | 'response_jailbreak'
   configuration: Record<string, unknown>
 }
 
