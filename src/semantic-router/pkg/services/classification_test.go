@@ -220,6 +220,7 @@ func TestBuildIntentResponseFromSignals_IncludesExtendedMatchedSignals(t *testin
 		MatchedAuthzRules:      []string{"premium_tier"},
 		MatchedJailbreakRules:  []string{"jailbreak:block"},
 		MatchedPIIRules:        []string{"pii:email"},
+		MatchedReaskRules:      []string{"likely_dissatisfied"},
 		MatchedProjectionRules: []string{"balance_reasoning"},
 	}
 	decisionResult := &decision.DecisionResult{
@@ -240,6 +241,7 @@ func TestBuildIntentResponseFromSignals_IncludesExtendedMatchedSignals(t *testin
 	assert.Equal(t, []string{"premium_tier"}, response.MatchedSignals.Authz)
 	assert.Equal(t, []string{"jailbreak:block"}, response.MatchedSignals.Jailbreak)
 	assert.Equal(t, []string{"pii:email"}, response.MatchedSignals.PII)
+	assert.Equal(t, []string{"likely_dissatisfied"}, response.MatchedSignals.Reask)
 	assert.Equal(t, []string{"balance_reasoning"}, response.MatchedSignals.Projection)
 }
 

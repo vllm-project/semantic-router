@@ -224,7 +224,7 @@ export default function ConfigPageDecisionsSection({
   }
 
   const openDecisionEditor = (mode: 'add' | 'edit', decision?: DecisionRow) => {
-    const conditionTypeOptions = ['keyword', 'domain', 'preference', 'user_feedback', 'embedding', 'fact_check', 'language', 'context', 'structure', 'complexity', 'modality', 'authz', 'jailbreak', 'pii', 'projection'] as const
+    const conditionTypeOptions = ['keyword', 'domain', 'preference', 'user_feedback', 'reask', 'embedding', 'fact_check', 'language', 'context', 'structure', 'complexity', 'modality', 'authz', 'jailbreak', 'pii', 'projection'] as const
     const projectionOutputs = (config?.projections?.mappings || []).flatMap((mapping) =>
       (mapping.outputs || []).map((output) => output.name)
     )
@@ -239,6 +239,8 @@ export default function ConfigPageDecisionsSection({
           return config?.signals?.preferences?.map((p) => p.name) || []
         case 'user_feedback':
           return config?.signals?.user_feedbacks?.map((u) => u.name) || []
+        case 'reask':
+          return config?.signals?.reasks?.map((r) => r.name) || []
         case 'embedding':
           return config?.signals?.embeddings?.map((e) => e.name) || []
         case 'fact_check':

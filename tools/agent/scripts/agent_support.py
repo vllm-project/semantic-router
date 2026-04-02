@@ -399,7 +399,15 @@ def run_python_lint(changed_files: list[str]) -> int:
     if not files:
         print("No changed Python files detected.")
         return 0
-    command = ["python3", "-m", "ruff", "check", "--config", str(RUFF_CONFIG), *files]
+    command = [
+        sys.executable,
+        "-m",
+        "ruff",
+        "check",
+        "--config",
+        str(RUFF_CONFIG),
+        *files,
+    ]
     print(f"+ {' '.join(command)}")
     subprocess.run(command, cwd=REPO_ROOT, check=True)
     return 0

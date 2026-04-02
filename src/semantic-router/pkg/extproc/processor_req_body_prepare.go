@@ -34,7 +34,9 @@ func (r *OpenAIRouter) translateResponseAPIRequest(
 	}
 
 	ctx.ResponseAPICtx = respCtx
-	logging.Infof("Response API: Translated to Chat Completions format")
+	logging.ComponentDebugEvent("extproc", "response_api_request_translated", map[string]interface{}{
+		"request_id": ctx.RequestID,
+	})
 	return translatedBody, nil
 }
 
@@ -50,7 +52,9 @@ func (r *OpenAIRouter) extractFastRequestState(
 		return nil, status.Errorf(codes.InvalidArgument, "invalid request body: %v", err)
 	}
 	if fast.Stream {
-		logging.Infof("Original request contains stream parameter: true")
+		logging.ComponentDebugEvent("extproc", "stream_parameter_detected", map[string]interface{}{
+			"request_id": ctx.RequestID,
+		})
 		ctx.ExpectStreamingResponse = true
 	}
 	return fast, nil
@@ -61,10 +65,10 @@ func (r *OpenAIRouter) runRequestPreRoutingStages(
 	fast *FastExtractResult,
 	ctx *RequestContext,
 ) (requestDecisionState, *ext_proc.ProcessingResponse) {
+	history := signalConversationHistoryFromFastExtract(fast)
 	decisionName, _, reasoningDecision, selectedModel, authzErr := r.performDecisionEvaluation(
 		originalModel,
-		fast.UserContent,
-		fast.NonUserMessages,
+		history,
 		ctx,
 	)
 	if authzErr != nil {
@@ -101,22 +105,33 @@ func (r *OpenAIRouter) applyRateLimitAndCacheChecks(
 		rlCtx := r.buildRateLimitContext(ctx, selectedModel)
 		decision, err := r.RateLimiter.Check(rlCtx)
 		if err != nil {
-			logging.Errorf("[Request Body] Rate limit check error: %v", err)
+			logging.ComponentErrorEvent("extproc", "rate_limit_check_failed", map[string]interface{}{
+				"request_id": ctx.RequestID,
+				"model":      selectedModel,
+				"error":      err.Error(),
+			})
 			return r.createRateLimitResponse(decision)
 		}
 		if decision != nil && !decision.Allowed {
-			logging.Infof("[Request Body] Rate limited: user=%s model=%s provider=%s remaining=%d",
-				rlCtx.UserID, rlCtx.Model, decision.Provider, decision.Remaining)
+			logging.ComponentEvent("extproc", "rate_limit_rejected", map[string]interface{}{
+				"request_id":         ctx.RequestID,
+				"model":              rlCtx.Model,
+				"provider":           decision.Provider,
+				"remaining":          decision.Remaining,
+				"user_scope_present": rlCtx.UserID != "",
+			})
 			return r.createRateLimitResponse(decision)
 		}
 		ctx.RateLimitCtx = &rlCtx
 	}
 
 	if response, shouldReturn := r.handleCaching(ctx, decisionName); shouldReturn {
-		logging.Infof("handleCaching returned a response, returning immediately")
+		logging.ComponentDebugEvent("extproc", "cache_short_circuit", map[string]interface{}{
+			"request_id": ctx.RequestID,
+			"decision":   decisionName,
+		})
 		return response
 	}
-	logging.Infof("handleCaching returned no cached response, continuing to model routing")
 	return nil
 }
 
@@ -153,7 +168,11 @@ func (r *OpenAIRouter) prepareRequestForModelRouting(
 
 	requestBody, memErr := r.handleMemoryRetrieval(ctx, userContent, requestBody, openAIRequest)
 	if memErr != nil {
-		logging.Warnf("Memory retrieval failed: %v, continuing without memory", memErr)
+		logging.ComponentWarnEvent("extproc", "memory_retrieval_failed", map[string]interface{}{
+			"request_id": ctx.RequestID,
+			"error":      memErr.Error(),
+			"fallback":   "continue_without_memory",
+		})
 	}
 	if ctx.MemoryContext != "" {
 		ctx.OriginalRequestBody = requestBody
@@ -181,7 +200,11 @@ func (r *OpenAIRouter) maybeForceImageGenerationModality(userContent string, ctx
 		Confidence: 1.0,
 		Method:     "image_generation_tool",
 	}
-	logging.Infof("[ModalityRouter] Explicit image_generation tool detected — forcing modality=%s", modality)
+	logging.ComponentDebugEvent("extproc", "modality_forced", map[string]interface{}{
+		"request_id": ctx.RequestID,
+		"modality":   modality,
+		"reason":     "image_generation_tool",
+	})
 }
 
 func (r *OpenAIRouter) refreshResponseAPITranslatedBody(ctx *RequestContext, requestBody []byte) {
@@ -201,10 +224,16 @@ func (r *OpenAIRouter) reparseRequestWithMemory(
 
 	updatedReq, err := parseOpenAIRequest(requestBody)
 	if err != nil {
-		logging.Errorf("[MemoryPatch] Failed to re-parse memory-augmented body: %v", err)
+		logging.ComponentErrorEvent("extproc", "memory_request_reparse_failed", map[string]interface{}{
+			"request_id": ctx.RequestID,
+			"error":      err.Error(),
+		})
 		return openAIRequest
 	}
 
-	logging.Infof("[MemoryPatch] Re-parsed request with memory, body_len=%d", len(requestBody))
+	logging.ComponentDebugEvent("extproc", "memory_request_reparsed", map[string]interface{}{
+		"request_id": ctx.RequestID,
+		"body_len":   len(requestBody),
+	})
 	return updatedReq
 }

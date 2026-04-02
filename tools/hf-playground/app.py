@@ -2,9 +2,9 @@ import streamlit as st
 import streamlit.components.v1 as components
 import torch
 from transformers import (
-    AutoTokenizer,
     AutoModelForSequenceClassification,
     AutoModelForTokenClassification,
+    AutoTokenizer,
 )
 
 # ============== Model Configurations ==============
@@ -109,6 +109,8 @@ MODELS = {
     },
 }
 
+TOKEN_PREVIEW_LIMIT = 50
+
 
 @st.cache_resource
 def load_model(model_id: str, model_type: str):
@@ -175,7 +177,7 @@ def classify_tokens(text: str, model_id: str) -> list:
         predictions = torch.argmax(outputs.logits, dim=-1)[0].tolist()
     entities = []
     current_entity = None
-    for pred, (start, end) in zip(predictions, offset_mapping):
+    for pred, (start, end) in zip(predictions, offset_mapping, strict=False):
         if start == end:
             continue
         label = id2label[pred]
@@ -189,10 +191,9 @@ def classify_tokens(text: str, model_id: str) -> list:
             and label[2:] == current_entity["type"]
         ):
             current_entity["end"] = end
-        else:
-            if current_entity:
-                entities.append(current_entity)
-                current_entity = None
+        elif current_entity:
+            entities.append(current_entity)
+            current_entity = None
     if current_entity:
         entities.append(current_entity)
     for e in entities:
@@ -219,7 +220,7 @@ def classify_tokens_simple(text: str, model_id: str) -> list:
     # Group consecutive tokens with the same label
     entities = []
     current_entity = None
-    for pred, (start, end) in zip(predictions, offset_mapping):
+    for pred, (start, end) in zip(predictions, offset_mapping, strict=False):
         if start == end:
             continue
         label = id2label[pred]
@@ -313,9 +314,7 @@ def create_highlighted_html_simple(text: str, entities: list) -> str:
     return f'<div style="padding:15px;background:#f8f9fa;border-radius:8px;line-height:2;">{html}</div>'
 
 
-def main():
-    st.set_page_config(page_title="LLM Semantic Router", page_icon="🚀", layout="wide")
-
+def render_header() -> None:
     # Header with logo
     col1, col2 = st.columns([1, 4])
     with col1:
@@ -331,6 +330,8 @@ def main():
 
     st.markdown("---")
 
+
+def render_sidebar() -> dict:
     # Sidebar
     with st.sidebar:
         st.header("⚙️ Settings")
@@ -343,223 +344,285 @@ def main():
         st.markdown("**Links**")
         st.markdown("- [Models](https://huggingface.co/LLM-Semantic-Router)")
         st.markdown("- [GitHub](https://github.com/vllm-project/semantic-router)")
+    return model_config
 
-    # Initialize session state
+
+def initialize_session_state() -> None:
     if "result" not in st.session_state:
         st.session_state.result = None
 
-    # Main content
-    st.subheader("📝 Input")
 
-    # Different input UI based on model type
+def render_inputs(model_config: dict) -> dict[str, str | None]:
+    st.subheader("📝 Input")
     if model_config["type"] == "dialogue":
-        # Dialogue models need query, response, and followup
         demo = model_config["demo"]
-        query_input = st.text_input(
-            "🗣️ User Query:",
-            value=demo["query"],
-            placeholder="Enter the original user query...",
-        )
-        response_input = st.text_input(
-            "🤖 System Response:",
-            value=demo["response"],
-            placeholder="Enter the system's response...",
-        )
-        followup_input = st.text_input(
-            "💬 User Follow-up:",
-            value=demo["followup"],
-            placeholder="Enter the user's follow-up message...",
-        )
-        text_input = user_intent_input = tool_call_input = None
+        inputs = {
+            "query_input": st.text_input(
+                "🗣️ User Query:",
+                value=demo["query"],
+                placeholder="Enter the original user query...",
+            ),
+            "response_input": st.text_input(
+                "🤖 System Response:",
+                value=demo["response"],
+                placeholder="Enter the system's response...",
+            ),
+            "followup_input": st.text_input(
+                "💬 User Follow-up:",
+                value=demo["followup"],
+                placeholder="Enter the user's follow-up message...",
+            ),
+            "text_input": None,
+            "user_intent_input": None,
+            "tool_call_input": None,
+        }
     elif model_config["type"] == "toolcall_verifier":
-        # Tool call verifier needs user intent and tool call
         demo = model_config["demo"]
-        user_intent_input = st.text_input(
-            "👤 User Intent:",
-            value=demo["user_intent"],
-            placeholder="Enter the user's original intent...",
-        )
-        tool_call_input = st.text_area(
-            "🔧 Tool Call JSON:",
-            value=demo["tool_call"],
-            height=120,
-            placeholder="Enter the tool call JSON to verify...",
-        )
-        text_input = query_input = response_input = followup_input = None
+        inputs = {
+            "user_intent_input": st.text_input(
+                "👤 User Intent:",
+                value=demo["user_intent"],
+                placeholder="Enter the user's original intent...",
+            ),
+            "tool_call_input": st.text_area(
+                "🔧 Tool Call JSON:",
+                value=demo["tool_call"],
+                height=120,
+                placeholder="Enter the tool call JSON to verify...",
+            ),
+            "text_input": None,
+            "query_input": None,
+            "response_input": None,
+            "followup_input": None,
+        }
     else:
-        # Standard text input for other models
-        text_input = st.text_area(
-            "Enter text to analyze:",
-            value=model_config["demo"],
-            height=120,
-            placeholder="Type your text here...",
-        )
-        query_input = response_input = followup_input = user_intent_input = (
-            tool_call_input
-        ) = None
+        inputs = {
+            "text_input": st.text_area(
+                "Enter text to analyze:",
+                value=model_config["demo"],
+                height=120,
+                placeholder="Type your text here...",
+            ),
+            "query_input": None,
+            "response_input": None,
+            "followup_input": None,
+            "user_intent_input": None,
+            "tool_call_input": None,
+        }
 
     st.markdown("---")
+    return inputs
 
-    # Analyze button
-    if st.button("🔍 Analyze", type="primary", use_container_width=True):
-        if model_config["type"] == "dialogue":
-            if (
-                not query_input.strip()
-                or not response_input.strip()
-                or not followup_input.strip()
-            ):
-                st.warning("Please fill in all dialogue fields.")
-            else:
-                with st.spinner("Analyzing..."):
-                    label, emoji, conf, scores = classify_dialogue(
-                        query_input,
-                        response_input,
-                        followup_input,
-                        model_config["id"],
-                        model_config["labels"],
-                    )
-                    st.session_state.result = {
-                        "type": "dialogue",
-                        "label": label,
-                        "emoji": emoji,
-                        "confidence": conf,
-                        "scores": scores,
-                        "input": {
-                            "query": query_input,
-                            "response": response_input,
-                            "followup": followup_input,
-                        },
-                    }
-        elif model_config["type"] == "toolcall_verifier":
-            if not user_intent_input.strip() or not tool_call_input.strip():
-                st.warning("Please fill in both user intent and tool call fields.")
-            else:
-                with st.spinner("Analyzing..."):
-                    input_text, tokens, labels, unauthorized = (
-                        classify_toolcall_verifier(
-                            user_intent_input, tool_call_input, model_config["id"]
-                        )
-                    )
-                    st.session_state.result = {
-                        "type": "toolcall_verifier",
-                        "input_text": input_text,
-                        "tokens": tokens,
-                        "labels": labels,
-                        "unauthorized": unauthorized,
-                        "user_intent": user_intent_input,
-                        "tool_call": tool_call_input,
-                    }
-        elif not text_input.strip():
-            st.warning("Please enter some text to analyze.")
-        else:
-            with st.spinner("Analyzing..."):
-                if model_config["type"] == "sequence":
-                    label, emoji, conf, scores = classify_sequence(
-                        text_input, model_config["id"], model_config["labels"]
-                    )
-                    st.session_state.result = {
-                        "type": "sequence",
-                        "label": label,
-                        "emoji": emoji,
-                        "confidence": conf,
-                        "scores": scores,
-                    }
-                elif model_config["type"] == "token":
-                    entities = classify_tokens(text_input, model_config["id"])
-                    st.session_state.result = {
-                        "type": "token",
-                        "entities": entities,
-                        "text": text_input,
-                    }
-                else:  # token_simple
-                    entities = classify_tokens_simple(text_input, model_config["id"])
-                    st.session_state.result = {
-                        "type": "token_simple",
-                        "entities": entities,
-                        "text": text_input,
-                    }
 
-    # Display results
-    if st.session_state.result:
-        st.markdown("---")
-        st.subheader("📊 Results")
-        result = st.session_state.result
-        if result["type"] in ("sequence", "dialogue"):
-            col1, col2 = st.columns([1, 1])
-            with col1:
-                st.success(f"{result['emoji']} **{result['label']}**")
-                st.metric("Confidence", f"{result['confidence']:.1%}")
-            with col2:
-                st.markdown("**All Scores:**")
-                sorted_scores = dict(
-                    sorted(result["scores"].items(), key=lambda x: x[1], reverse=True)
-                )
-                for k, v in sorted_scores.items():
-                    st.progress(v, text=f"{k}: {v:.1%}")
-        elif result["type"] == "token":
-            entities = result["entities"]
-            if entities:
-                st.success(f"Found {len(entities)} PII entity(s)")
-                for e in entities:
-                    st.markdown(f"- **{e['type']}**: `{e['text']}`")
-                st.markdown("### Highlighted Text")
-                components.html(
-                    create_highlighted_html(result["text"], entities), height=150
-                )
-            else:
-                st.info("No PII detected")
-        elif result["type"] == "token_simple":
-            entities = result["entities"]
-            # Count unauthorized tokens
-            unauthorized = [e for e in entities if e["type"] == "UNAUTHORIZED"]
+def analyze_dialogue(model_config: dict, inputs: dict[str, str | None]) -> dict | None:
+    query_input = inputs["query_input"]
+    response_input = inputs["response_input"]
+    followup_input = inputs["followup_input"]
+    if not query_input or not response_input or not followup_input:
+        st.warning("Please fill in all dialogue fields.")
+        return None
+    if (
+        not query_input.strip()
+        or not response_input.strip()
+        or not followup_input.strip()
+    ):
+        st.warning("Please fill in all dialogue fields.")
+        return None
 
-            if unauthorized:
-                st.error(f"⚠️ Found {len(unauthorized)} UNAUTHORIZED token(s)")
-                st.markdown("**Unauthorized tokens:**")
-                for e in unauthorized:
-                    st.markdown(f"- `{e['text']}`")
-            else:
-                st.success("All tokens are AUTHORIZED")
+    with st.spinner("Analyzing..."):
+        label, emoji, conf, scores = classify_dialogue(
+            query_input,
+            response_input,
+            followup_input,
+            model_config["id"],
+            model_config["labels"],
+        )
+    return {
+        "type": "dialogue",
+        "label": label,
+        "emoji": emoji,
+        "confidence": conf,
+        "scores": scores,
+        "input": {
+            "query": query_input,
+            "response": response_input,
+            "followup": followup_input,
+        },
+    }
 
-            st.markdown("### Token Classification")
-            components.html(
-                create_highlighted_html_simple(result["text"], entities), height=150
+
+def analyze_toolcall_verifier(
+    model_config: dict, inputs: dict[str, str | None]
+) -> dict | None:
+    user_intent_input = inputs["user_intent_input"]
+    tool_call_input = inputs["tool_call_input"]
+    if not user_intent_input or not tool_call_input:
+        st.warning("Please fill in both user intent and tool call fields.")
+        return None
+    if not user_intent_input.strip() or not tool_call_input.strip():
+        st.warning("Please fill in both user intent and tool call fields.")
+        return None
+
+    with st.spinner("Analyzing..."):
+        input_text, tokens, labels, unauthorized = classify_toolcall_verifier(
+            user_intent_input, tool_call_input, model_config["id"]
+        )
+    return {
+        "type": "toolcall_verifier",
+        "input_text": input_text,
+        "tokens": tokens,
+        "labels": labels,
+        "unauthorized": unauthorized,
+        "user_intent": user_intent_input,
+        "tool_call": tool_call_input,
+    }
+
+
+def analyze_text(model_config: dict, inputs: dict[str, str | None]) -> dict | None:
+    text_input = inputs["text_input"]
+    if not text_input or not text_input.strip():
+        st.warning("Please enter some text to analyze.")
+        return None
+
+    with st.spinner("Analyzing..."):
+        if model_config["type"] == "sequence":
+            label, emoji, conf, scores = classify_sequence(
+                text_input, model_config["id"], model_config["labels"]
             )
-        elif result["type"] == "toolcall_verifier":
-            unauthorized = result["unauthorized"]
+            return {
+                "type": "sequence",
+                "label": label,
+                "emoji": emoji,
+                "confidence": conf,
+                "scores": scores,
+            }
+        if model_config["type"] == "token":
+            entities = classify_tokens(text_input, model_config["id"])
+            return {
+                "type": "token",
+                "entities": entities,
+                "text": text_input,
+            }
 
-            if unauthorized:
-                st.error(f"⚠️ BLOCKED: Unauthorized tool call detected!")
-                st.markdown(f"**Flagged tokens:** {[t for t, _ in unauthorized[:10]]}")
-                st.markdown(f"**Total unauthorized tokens:** {len(unauthorized)}")
-            else:
-                st.success("Tool call authorized")
+        entities = classify_tokens_simple(text_input, model_config["id"])
+        return {
+            "type": "token_simple",
+            "entities": entities,
+            "text": text_input,
+        }
 
-            st.markdown("### Input Format")
-            st.code(result["input_text"], language="text")
 
-            st.markdown("### Token-Level Classification")
-            # Create a simple table view
-            token_label_pairs = list(zip(result["tokens"], result["labels"]))
-            # Show first 50 tokens to avoid overwhelming the UI
-            display_tokens = token_label_pairs[:50]
+def run_analysis(model_config: dict, inputs: dict[str, str | None]) -> None:
+    if not st.button("🔍 Analyze", type="primary", use_container_width=True):
+        return
 
-            for i in range(0, len(display_tokens), 5):
-                cols = st.columns(5)
-                for j, col in enumerate(cols):
-                    if i + j < len(display_tokens):
-                        token, label = display_tokens[i + j]
-                        color = "🔴" if label == "UNAUTHORIZED" else "🟢"
-                        col.markdown(f"{color} `{token}`")
+    if model_config["type"] == "dialogue":
+        result = analyze_dialogue(model_config, inputs)
+    elif model_config["type"] == "toolcall_verifier":
+        result = analyze_toolcall_verifier(model_config, inputs)
+    else:
+        result = analyze_text(model_config, inputs)
 
-            if len(token_label_pairs) > 50:
-                st.info(f"Showing first 50 of {len(token_label_pairs)} tokens")
+    if result is not None:
+        st.session_state.result = result
 
-        # Raw Prediction Data expander
-        with st.expander("🔬 Raw Prediction Data"):
-            st.json(result)
 
-    # Footer
+def render_sequence_result(result: dict) -> None:
+    col1, col2 = st.columns([1, 1])
+    with col1:
+        st.success(f"{result['emoji']} **{result['label']}**")
+        st.metric("Confidence", f"{result['confidence']:.1%}")
+    with col2:
+        st.markdown("**All Scores:**")
+        sorted_scores = dict(
+            sorted(result["scores"].items(), key=lambda item: item[1], reverse=True)
+        )
+        for label, score in sorted_scores.items():
+            st.progress(score, text=f"{label}: {score:.1%}")
+
+
+def render_token_result(result: dict) -> None:
+    entities = result["entities"]
+    if entities:
+        st.success(f"Found {len(entities)} PII entity(s)")
+        for entity in entities:
+            st.markdown(f"- **{entity['type']}**: `{entity['text']}`")
+        st.markdown("### Highlighted Text")
+        components.html(create_highlighted_html(result["text"], entities), height=150)
+        return
+    st.info("No PII detected")
+
+
+def render_token_simple_result(result: dict) -> None:
+    entities = result["entities"]
+    unauthorized = [entity for entity in entities if entity["type"] == "UNAUTHORIZED"]
+    if unauthorized:
+        st.error(f"⚠️ Found {len(unauthorized)} UNAUTHORIZED token(s)")
+        st.markdown("**Unauthorized tokens:**")
+        for entity in unauthorized:
+            st.markdown(f"- `{entity['text']}`")
+    else:
+        st.success("All tokens are AUTHORIZED")
+
+    st.markdown("### Token Classification")
+    components.html(
+        create_highlighted_html_simple(result["text"], entities), height=150
+    )
+
+
+def render_toolcall_verifier_result(result: dict) -> None:
+    unauthorized = result["unauthorized"]
+    if unauthorized:
+        st.error("⚠️ BLOCKED: Unauthorized tool call detected!")
+        st.markdown(f"**Flagged tokens:** {[token for token, _ in unauthorized[:10]]}")
+        st.markdown(f"**Total unauthorized tokens:** {len(unauthorized)}")
+    else:
+        st.success("Tool call authorized")
+
+    st.markdown("### Input Format")
+    st.code(result["input_text"], language="text")
+
+    st.markdown("### Token-Level Classification")
+    token_label_pairs = list(zip(result["tokens"], result["labels"], strict=False))
+    display_tokens = token_label_pairs[:TOKEN_PREVIEW_LIMIT]
+
+    for index in range(0, len(display_tokens), 5):
+        cols = st.columns(5)
+        for offset, col in enumerate(cols):
+            if index + offset >= len(display_tokens):
+                continue
+            token, label = display_tokens[index + offset]
+            color = "🔴" if label == "UNAUTHORIZED" else "🟢"
+            col.markdown(f"{color} `{token}`")
+
+    if len(token_label_pairs) > TOKEN_PREVIEW_LIMIT:
+        st.info(
+            f"Showing first {TOKEN_PREVIEW_LIMIT} of {len(token_label_pairs)} tokens"
+        )
+
+
+def render_results() -> None:
+    if not st.session_state.result:
+        return
+
+    st.markdown("---")
+    st.subheader("📊 Results")
+    result = st.session_state.result
+    result_type = result["type"]
+    if result_type in ("sequence", "dialogue"):
+        render_sequence_result(result)
+    elif result_type == "token":
+        render_token_result(result)
+    elif result_type == "token_simple":
+        render_token_simple_result(result)
+    elif result_type == "toolcall_verifier":
+        render_toolcall_verifier_result(result)
+
+    with st.expander("🔬 Raw Prediction Data"):
+        st.json(result)
+
+
+def render_footer() -> None:
     st.markdown("---")
     st.markdown(
         """
@@ -571,6 +634,17 @@ def main():
         """,
         unsafe_allow_html=True,
     )
+
+
+def main():
+    st.set_page_config(page_title="LLM Semantic Router", page_icon="🚀", layout="wide")
+    render_header()
+    model_config = render_sidebar()
+    initialize_session_state()
+    inputs = render_inputs(model_config)
+    run_analysis(model_config, inputs)
+    render_results()
+    render_footer()
 
 
 if __name__ == "__main__":

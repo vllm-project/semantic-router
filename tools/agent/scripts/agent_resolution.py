@@ -9,6 +9,7 @@ import re
 import shlex
 import subprocess
 from collections.abc import Iterable
+from pathlib import Path
 
 from agent_context_pack import build_context_pack
 from agent_models import (
@@ -38,6 +39,23 @@ def normalize_changed_path(raw_path: str) -> str:
     while path.startswith("./"):
         path = path[2:]
     return path
+
+
+def load_changed_files(changed_files_path: str | None) -> str | None:
+    if not changed_files_path:
+        return None
+
+    path = Path(changed_files_path)
+    if not path.is_absolute():
+        path = REPO_ROOT / path
+
+    try:
+        return path.read_text(encoding="utf-8")
+    except OSError as exc:
+        reason = exc.strerror or str(exc)
+        raise ValueError(
+            f"unable to read changed files from '{path}': {reason}"
+        ) from exc
 
 
 def git_changed_files(base_ref: str | None) -> list[str]:
@@ -74,8 +92,16 @@ def git_changed_files(base_ref: str | None) -> list[str]:
     return split_changed_files(result.stdout)
 
 
-def get_changed_files(explicit: str | None, base_ref: str | None) -> list[str]:
-    files = split_changed_files(explicit)
+def get_changed_files(
+    explicit: str | None,
+    base_ref: str | None,
+    changed_files_path: str | None = None,
+) -> list[str]:
+    raw_changed_files = explicit
+    if raw_changed_files is None:
+        raw_changed_files = load_changed_files(changed_files_path)
+
+    files = split_changed_files(raw_changed_files)
     if files:
         return files
     return git_changed_files(base_ref)

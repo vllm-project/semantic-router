@@ -23,7 +23,7 @@ type VectorStoreConfig struct {
 	// Enabled controls whether vector store functionality is active.
 	Enabled bool `json:"enabled" yaml:"enabled"`
 
-	// BackendType selects the storage backend: "memory", "milvus", or "llama_stack".
+	// BackendType selects the storage backend: "memory", "milvus", "llama_stack", or "valkey".
 	BackendType string `json:"backend_type" yaml:"backend_type"`
 
 	// FileStorageDir is the base directory for uploaded file storage.
@@ -62,6 +62,11 @@ type VectorStoreConfig struct {
 	// Llama Stack handles embedding internally, so vSR's CandleEmbedder is
 	// not used for insert/search — only Llama Stack's configured model is used.
 	LlamaStack *LlamaStackVectorStoreConfig `json:"llama_stack,omitempty" yaml:"llama_stack,omitempty"`
+
+	// Valkey holds Valkey vector store backend configuration.
+	// When backend_type is "valkey", vSR uses Valkey with the valkey-search
+	// module for vector storage via the valkey-glide Go client.
+	Valkey *ValkeyVectorStoreConfig `json:"valkey,omitempty" yaml:"valkey,omitempty"`
 }
 
 // VectorStoreMemoryConfig holds configuration for the in-memory backend.
@@ -93,38 +98,107 @@ type LlamaStackVectorStoreConfig struct {
 	SearchType string `json:"search_type,omitempty" yaml:"search_type,omitempty"`
 }
 
+// ValkeyVectorStoreConfig holds configuration for the Valkey vector store backend.
+// This is the dedicated configuration struct used by the vector_store.valkey config block.
+type ValkeyVectorStoreConfig struct {
+	// Host is the Valkey server hostname (default "localhost").
+	Host string `json:"host" yaml:"host"`
+
+	// Port is the Valkey server port (default 6379).
+	Port int `json:"port" yaml:"port"`
+
+	// Database number (default 0).
+	Database int `json:"database" yaml:"database"`
+
+	// Password for Valkey authentication (optional).
+	Password string `json:"password,omitempty" yaml:"password,omitempty"`
+
+	// ConnectTimeout in seconds (default 10).
+	ConnectTimeout int `json:"connect_timeout" yaml:"connect_timeout"`
+
+	// CollectionPrefix is the prefix for hash keys and index names (default "vsr_vs_").
+	CollectionPrefix string `json:"collection_prefix" yaml:"collection_prefix"`
+
+	// MetricType is the distance metric: "COSINE", "L2", or "IP" (default "COSINE").
+	MetricType string `json:"metric_type" yaml:"metric_type"`
+
+	// IndexM is the HNSW M parameter (default 16).
+	IndexM int `json:"index_m" yaml:"index_m"`
+
+	// IndexEfConstruction is the HNSW efConstruction parameter (default 200).
+	IndexEfConstruction int `json:"index_ef_construction" yaml:"index_ef_construction"`
+}
+
 // Validate checks the vector store configuration for errors.
 func (c *VectorStoreConfig) Validate() error {
 	if !c.Enabled {
 		return nil
 	}
+	if err := validateVectorStoreBackendType(c.BackendType); err != nil {
+		return err
+	}
+	return validateVectorStoreBackendConfig(c)
+}
 
-	switch c.BackendType {
-	case "memory", "milvus", "llama_stack":
-		// valid
+func validateVectorStoreBackendType(backendType string) error {
+	switch backendType {
+	case "memory", "milvus", "llama_stack", "valkey":
+		return nil
 	case "":
 		return fmt.Errorf("vector_store.backend_type is required when enabled")
 	default:
-		return fmt.Errorf("vector_store.backend_type must be 'memory', 'milvus', or 'llama_stack', got '%s'", c.BackendType)
+		return fmt.Errorf(
+			"vector_store.backend_type must be 'memory', 'milvus', 'llama_stack', or 'valkey', got '%s'",
+			backendType,
+		)
 	}
+}
 
-	if c.BackendType == "milvus" && c.Milvus == nil {
+func validateVectorStoreBackendConfig(c *VectorStoreConfig) error {
+	switch c.BackendType {
+	case "milvus":
+		return validateMilvusVectorStoreConfig(c)
+	case "valkey":
+		return validateValkeyVectorStoreConfig(c)
+	case "llama_stack":
+		return validateLlamaStackVectorStoreConfig(c)
+	default:
+		return nil
+	}
+}
+
+func validateMilvusVectorStoreConfig(c *VectorStoreConfig) error {
+	if c.Milvus == nil {
 		return fmt.Errorf("vector_store.milvus configuration is required when backend_type is 'milvus'")
 	}
-
-	if c.BackendType == "llama_stack" {
-		if c.LlamaStack == nil {
-			return fmt.Errorf("vector_store.llama_stack configuration is required when backend_type is 'llama_stack'")
-		}
-		if c.LlamaStack.Endpoint == "" {
-			return fmt.Errorf("vector_store.llama_stack.endpoint is required")
-		}
-		if st := c.LlamaStack.SearchType; st != "" && st != "vector" && st != "hybrid" {
-			return fmt.Errorf("vector_store.llama_stack.search_type must be 'vector' or 'hybrid', got '%s'", st)
-		}
-	}
-
 	return nil
+}
+
+func validateValkeyVectorStoreConfig(c *VectorStoreConfig) error {
+	if c.Valkey == nil {
+		return fmt.Errorf("vector_store.valkey configuration is required when backend_type is 'valkey'")
+	}
+	if c.Valkey.Host == "" {
+		return fmt.Errorf("vector_store.valkey.host is required")
+	}
+	return nil
+}
+
+func validateLlamaStackVectorStoreConfig(c *VectorStoreConfig) error {
+	if c.LlamaStack == nil {
+		return fmt.Errorf("vector_store.llama_stack configuration is required when backend_type is 'llama_stack'")
+	}
+	if c.LlamaStack.Endpoint == "" {
+		return fmt.Errorf("vector_store.llama_stack.endpoint is required")
+	}
+	return validateLlamaStackVectorStoreSearchType(c.LlamaStack.SearchType)
+}
+
+func validateLlamaStackVectorStoreSearchType(searchType string) error {
+	if searchType == "" || searchType == "vector" || searchType == "hybrid" {
+		return nil
+	}
+	return fmt.Errorf("vector_store.llama_stack.search_type must be 'vector' or 'hybrid', got '%s'", searchType)
 }
 
 // ApplyDefaults fills in default values for unset fields.

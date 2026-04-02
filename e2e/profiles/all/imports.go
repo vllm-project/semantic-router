@@ -17,6 +17,7 @@ import (
 	responseapi "github.com/vllm-project/semantic-router/e2e/profiles/response-api"
 	responseapiredis "github.com/vllm-project/semantic-router/e2e/profiles/response-api-redis"
 	responseapirediscluster "github.com/vllm-project/semantic-router/e2e/profiles/response-api-redis-cluster"
+	routerreplay "github.com/vllm-project/semantic-router/e2e/profiles/router-replay"
 	routingstrategies "github.com/vllm-project/semantic-router/e2e/profiles/routing-strategies"
 	streaming "github.com/vllm-project/semantic-router/e2e/profiles/streaming"
 )
@@ -59,6 +60,11 @@ func init() {
 	register(
 		"response-api-redis-cluster",
 		func() framework.Profile { return responseapirediscluster.NewProfile() },
+		framework.ProfileCapabilities{LocalImages: mockVLLMLocalImages},
+	)
+	register(
+		"router-replay",
+		func() framework.Profile { return routerreplay.NewProfile() },
 		framework.ProfileCapabilities{LocalImages: mockVLLMLocalImages},
 	)
 	register("routing-strategies", func() framework.Profile { return routingstrategies.NewProfile() }, framework.ProfileCapabilities{})

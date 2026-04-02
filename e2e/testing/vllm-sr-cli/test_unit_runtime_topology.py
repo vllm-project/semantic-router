@@ -26,6 +26,7 @@ class TestCLITestBaseRuntimeTopology(unittest.TestCase):
     def setUp(self):
         self.base = CLITestBase(methodName="runTest")
         self.base.container_runtime = "docker"
+        self.base.test_dir = os.getcwd()
 
     def _mock_statuses(self, statuses_by_name: dict[str, str]):
         def side_effect(command, *, timeout, **_kwargs):
@@ -142,6 +143,22 @@ class TestCLITestBaseRuntimeTopology(unittest.TestCase):
             side_effect=lambda name: "/usr/bin/podman" if name == "podman" else None,
         ), self.assertRaisesRegex(RuntimeError, "Podman is installed but unsupported"):
             CLITestBase._detect_container_runtime()
+
+    @mock.patch.object(CLITestBase, "_run_subprocess")
+    def test_run_cli_preserves_partial_output_on_timeout(self, run_subprocess):
+        run_subprocess.side_effect = subprocess.TimeoutExpired(
+            cmd=["vllm-sr", "serve"],
+            timeout=30,
+            output="Created bootstrap setup config\n",
+            stderr="Waiting for Dashboard to become healthy...\n",
+        )
+
+        return_code, stdout, stderr = self.base.run_cli(["serve"], timeout=30)
+
+        self.assertEqual(return_code, -1)
+        self.assertIn("bootstrap setup config", stdout)
+        self.assertIn("dashboard to become healthy", stderr.lower())
+        self.assertIn("command timed out after 30 seconds", stderr.lower())
 
 
 class TestCLITestRunnerRuntimeDetection(unittest.TestCase):

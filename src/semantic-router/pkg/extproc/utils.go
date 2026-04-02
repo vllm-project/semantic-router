@@ -68,19 +68,8 @@ func serializeOpenAIRequestWithStream(req *openai.ChatCompletionNewParams, hasSt
 
 // extractUserAndNonUserContent extracts content from request messages
 func extractUserAndNonUserContent(req *openai.ChatCompletionNewParams) (string, []string) {
-	var userContent string
-	var nonUser []string
-
-	for _, msg := range req.Messages {
-		role, textContent := extractMessageRoleAndContent(msg)
-		if role == "user" {
-			userContent = textContent
-		} else if role != "" {
-			nonUser = append(nonUser, textContent)
-		}
-	}
-
-	return userContent, nonUser
+	history := extractSignalConversationHistory(req)
+	return history.currentUserMessage, history.nonUserMessages
 }
 
 func extractMessageRoleAndContent(msg openai.ChatCompletionMessageParamUnion) (string, string) {

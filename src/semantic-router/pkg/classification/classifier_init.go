@@ -22,19 +22,27 @@ func (c *CategoryInitializerImpl) Init(modelID string, useCPU bool, numClasses .
 	success := candle_binding.InitCandleBertClassifier(modelID, numClasses[0], useCPU)
 	if success {
 		c.usedModernBERT = false
-		logging.Infof("Initialized category classifier with auto-detection")
+		logging.ComponentEvent("classifier", "category_classifier_initialized", map[string]interface{}{
+			"backend":   "candle_bert_auto",
+			"model_ref": modelID,
+		})
 		return nil
 	}
 
 	// Fallback to ModernBERT-specific init for backward compatibility
-	// This handles models with incomplete configs (missing hidden_act, etc.)
-	logging.Infof("Auto-detection failed, falling back to ModernBERT category initializer")
+	logging.ComponentDebugEvent("classifier", "category_classifier_fallback_enabled", map[string]interface{}{
+		"fallback_backend": "modernbert",
+		"model_ref":        modelID,
+	})
 	err := candle_binding.InitModernBertClassifier(modelID, useCPU)
 	if err != nil {
 		return fmt.Errorf("failed to initialize category classifier (both auto-detect and ModernBERT): %w", err)
 	}
 	c.usedModernBERT = true
-	logging.Infof("Initialized ModernBERT category classifier (fallback mode)")
+	logging.ComponentEvent("classifier", "category_classifier_initialized", map[string]interface{}{
+		"backend":   "modernbert",
+		"model_ref": modelID,
+	})
 	return nil
 }
 
@@ -44,13 +52,15 @@ type MmBERT32KCategoryInitializerImpl struct {
 }
 
 func (c *MmBERT32KCategoryInitializerImpl) Init(modelID string, useCPU bool, numClasses ...int) error {
-	logging.Infof("Initializing mmBERT-32K intent classifier from: %s", modelID)
 	err := candle_binding.InitMmBert32KIntentClassifier(modelID, useCPU)
 	if err != nil {
 		return fmt.Errorf("failed to initialize mmBERT-32K intent classifier: %w", err)
 	}
 	c.usedMmBERT32K = true
-	logging.Infof("Initialized mmBERT-32K intent classifier (32K context, YaRN RoPE)")
+	logging.ComponentEvent("classifier", "category_classifier_initialized", map[string]interface{}{
+		"backend":   "mmbert_32k",
+		"model_ref": modelID,
+	})
 	return nil
 }
 
@@ -131,19 +141,28 @@ func (c *JailbreakInitializerImpl) Init(modelID string, useCPU bool, numClasses 
 	err := candle_binding.InitJailbreakClassifier(modelID, numClasses[0], useCPU)
 	if err == nil {
 		c.usedModernBERT = false
-		logging.Infof("Initialized jailbreak classifier with auto-detection")
+		logging.ComponentEvent("classifier", "jailbreak_detector_initialized", map[string]interface{}{
+			"backend":   "candle_bert_auto",
+			"model_ref": modelID,
+		})
 		return nil
 	}
 
 	// Fallback to ModernBERT-specific init for backward compatibility
 	// This handles models with incomplete configs (missing hidden_act, etc.)
-	logging.Infof("Auto-detection failed, falling back to ModernBERT jailbreak initializer")
+	logging.ComponentDebugEvent("classifier", "jailbreak_detector_fallback_enabled", map[string]interface{}{
+		"fallback_backend": "modernbert",
+		"model_ref":        modelID,
+	})
 	err = candle_binding.InitModernBertJailbreakClassifier(modelID, useCPU)
 	if err != nil {
 		return fmt.Errorf("failed to initialize jailbreak classifier (both auto-detect and ModernBERT): %w", err)
 	}
 	c.usedModernBERT = true
-	logging.Infof("Initialized ModernBERT jailbreak classifier (fallback mode)")
+	logging.ComponentEvent("classifier", "jailbreak_detector_initialized", map[string]interface{}{
+		"backend":   "modernbert",
+		"model_ref": modelID,
+	})
 	return nil
 }
 
@@ -158,13 +177,19 @@ type MmBERT32KJailbreakInitializerImpl struct {
 }
 
 func (c *MmBERT32KJailbreakInitializerImpl) Init(modelID string, useCPU bool, numClasses ...int) error {
-	logging.Infof("Initializing mmBERT-32K jailbreak detector from: %s", modelID)
+	logging.ComponentDebugEvent("classifier", "jailbreak_detector_backend_loading", map[string]interface{}{
+		"backend":   "mmbert_32k",
+		"model_ref": modelID,
+	})
 	err := candle_binding.InitMmBert32KJailbreakClassifier(modelID, useCPU)
 	if err != nil {
 		return fmt.Errorf("failed to initialize mmBERT-32K jailbreak detector: %w", err)
 	}
 	c.usedMmBERT32K = true
-	logging.Infof("Initialized mmBERT-32K jailbreak detector (32K context, YaRN RoPE)")
+	logging.ComponentEvent("classifier", "jailbreak_detector_initialized", map[string]interface{}{
+		"backend":   "mmbert_32k",
+		"model_ref": modelID,
+	})
 	return nil
 }
 
@@ -213,7 +238,9 @@ func createMmBERT32KJailbreakInference() JailbreakInference {
 func createJailbreakInference(promptGuardCfg *config.PromptGuardConfig, routerCfg *config.RouterConfig) (JailbreakInference, error) {
 	// Check for mmBERT-32K first (takes precedence)
 	if promptGuardCfg.UseMmBERT32K {
-		logging.Infof("Using mmBERT-32K for jailbreak detection (32K context, YaRN RoPE)")
+		logging.ComponentEvent("classifier", "jailbreak_detector_backend_selected", map[string]interface{}{
+			"backend": "mmbert_32k",
+		})
 		return createMmBERT32KJailbreakInference(), nil
 	}
 
@@ -232,7 +259,10 @@ func createJailbreakInference(promptGuardCfg *config.PromptGuardConfig, routerCf
 			return nil, fmt.Errorf("external guardrail model name is required")
 		}
 
-		logging.Infof("Found external guardrail model (provider=%s)", externalCfg.Provider)
+		logging.ComponentEvent("classifier", "jailbreak_detector_backend_selected", map[string]interface{}{
+			"backend":  "external_guardrail",
+			"provider": externalCfg.Provider,
+		})
 
 		// Use vLLM-based inference with external config
 		// Pass default threshold from PromptGuardConfig
@@ -256,19 +286,28 @@ func (c *PIIInitializerImpl) Init(modelID string, useCPU bool, numClasses int) e
 	success := candle_binding.InitCandleBertTokenClassifier(modelID, numClasses, useCPU)
 	if success {
 		c.usedModernBERT = false
-		logging.Infof("Initialized PII token classifier with auto-detection")
+		logging.ComponentEvent("classifier", "pii_detector_initialized", map[string]interface{}{
+			"backend":   "candle_bert_auto",
+			"model_ref": modelID,
+		})
 		return nil
 	}
 
 	// Fallback to ModernBERT-specific init for backward compatibility
 	// This handles models with incomplete configs (missing hidden_act, etc.)
-	logging.Infof("Auto-detection failed, falling back to ModernBERT PII initializer")
+	logging.ComponentDebugEvent("classifier", "pii_detector_fallback_enabled", map[string]interface{}{
+		"fallback_backend": "modernbert",
+		"model_ref":        modelID,
+	})
 	err := candle_binding.InitModernBertPIITokenClassifier(modelID, useCPU)
 	if err != nil {
 		return fmt.Errorf("failed to initialize PII token classifier (both auto-detect and ModernBERT): %w", err)
 	}
 	c.usedModernBERT = true
-	logging.Infof("Initialized ModernBERT PII token classifier (fallback mode)")
+	logging.ComponentEvent("classifier", "pii_detector_initialized", map[string]interface{}{
+		"backend":   "modernbert",
+		"model_ref": modelID,
+	})
 	return nil
 }
 
@@ -283,13 +322,19 @@ type MmBERT32KPIIInitializerImpl struct {
 }
 
 func (c *MmBERT32KPIIInitializerImpl) Init(modelID string, useCPU bool, numClasses int) error {
-	logging.Infof("Initializing mmBERT-32K PII detector from: %s", modelID)
+	logging.ComponentDebugEvent("classifier", "pii_detector_backend_loading", map[string]interface{}{
+		"backend":   "mmbert_32k",
+		"model_ref": modelID,
+	})
 	err := candle_binding.InitMmBert32KPIIClassifier(modelID, useCPU)
 	if err != nil {
 		return fmt.Errorf("failed to initialize mmBERT-32K PII detector: %w", err)
 	}
 	c.usedMmBERT32K = true
-	logging.Infof("Initialized mmBERT-32K PII detector (32K context, YaRN RoPE)")
+	logging.ComponentEvent("classifier", "pii_detector_initialized", map[string]interface{}{
+		"backend":   "mmbert_32k",
+		"model_ref": modelID,
+	})
 	return nil
 }
 

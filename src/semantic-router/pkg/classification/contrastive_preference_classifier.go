@@ -1,6 +1,7 @@
 package classification
 
 import (
+	"errors"
 	"fmt"
 	"runtime"
 	"strings"
@@ -10,6 +11,19 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 )
+
+var ErrPreferenceBelowThreshold = errors.New("preference below threshold")
+
+type preferenceEmbeddingTask struct {
+	ruleName string
+	text     string
+}
+
+type preferenceEmbeddingResult struct {
+	ruleName  string
+	embedding []float32
+	err       error
+}
 
 // ContrastivePreferenceClassifier performs few-shot preference routing using embeddings.
 // It preloads embeddings for each preference rule's examples/description and selects
@@ -60,57 +74,66 @@ func NewContrastivePreferenceClassifier(rules []config.PreferenceRule, modelType
 // preloadRuleEmbeddings computes embeddings for all rule examples concurrently.
 func (c *ContrastivePreferenceClassifier) preloadRuleEmbeddings() error {
 	start := time.Now()
-
-	type task struct {
-		ruleName string
-		text     string
+	tasks, err := c.collectEmbeddingTasks()
+	if err != nil {
+		return err
 	}
 
-	var tasks []task
+	resultCh := c.embedRuleExamples(tasks)
+	loaded, firstErr := c.collectEmbeddedResults(resultCh)
+
+	logging.Infof("[Preference Contrastive] preloaded %d/%d example embeddings using model=%s in %v", loaded, len(tasks), c.modelType, time.Since(start))
+
+	if firstErr != nil {
+		return firstErr
+	}
+
+	return nil
+}
+
+func (c *ContrastivePreferenceClassifier) collectEmbeddingTasks() ([]preferenceEmbeddingTask, error) {
+	tasks := make([]preferenceEmbeddingTask, 0)
 	for _, rule := range c.rules {
 		for _, example := range c.collectExamples(rule) {
 			if strings.TrimSpace(example) == "" {
 				continue
 			}
-			tasks = append(tasks, task{ruleName: rule.Name, text: example})
+			tasks = append(tasks, preferenceEmbeddingTask{ruleName: rule.Name, text: example})
 		}
 	}
 
 	if len(tasks) == 0 {
-		return fmt.Errorf("no examples provided for contrastive preference classifier")
+		return nil, fmt.Errorf("no examples provided for contrastive preference classifier")
 	}
+	return tasks, nil
+}
 
-	numWorkers := runtime.NumCPU() * 2
-	if numWorkers > len(tasks) {
-		numWorkers = len(tasks)
-	}
+func (c *ContrastivePreferenceClassifier) embedRuleExamples(
+	tasks []preferenceEmbeddingTask,
+) <-chan preferenceEmbeddingResult {
+	taskCh := make(chan preferenceEmbeddingTask, len(tasks))
+	resultCh := make(chan preferenceEmbeddingResult, len(tasks))
 
-	type result struct {
-		ruleName  string
-		embedding []float32
-		err       error
-	}
-
-	taskCh := make(chan task, len(tasks))
-	resultCh := make(chan result, len(tasks))
-
-	for _, t := range tasks {
-		taskCh <- t
+	for _, task := range tasks {
+		taskCh <- task
 	}
 	close(taskCh)
 
 	var wg sync.WaitGroup
-	for i := 0; i < numWorkers; i++ {
+	for i := 0; i < c.embeddingWorkerCount(len(tasks)); i++ {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			for t := range taskCh {
-				out, err := getEmbeddingWithModelType(t.text, c.modelType, 0)
+			for task := range taskCh {
+				out, err := getEmbeddingWithModelType(task.text, c.modelType, 0)
 				if err != nil {
-					resultCh <- result{ruleName: t.ruleName, err: err}
+					resultCh <- preferenceEmbeddingResult{ruleName: task.ruleName, err: err}
 					continue
 				}
-				resultCh <- result{ruleName: t.ruleName, embedding: out.Embedding}
+				resultCh <- preferenceEmbeddingResult{
+					ruleName:  task.ruleName,
+					embedding: out.Embedding,
+				}
 			}
 		}()
 	}
@@ -119,7 +142,12 @@ func (c *ContrastivePreferenceClassifier) preloadRuleEmbeddings() error {
 		wg.Wait()
 		close(resultCh)
 	}()
+	return resultCh
+}
 
+func (c *ContrastivePreferenceClassifier) collectEmbeddedResults(
+	resultCh <-chan preferenceEmbeddingResult,
+) (int, error) {
 	loaded := 0
 	var firstErr error
 
@@ -138,13 +166,15 @@ func (c *ContrastivePreferenceClassifier) preloadRuleEmbeddings() error {
 		loaded++
 	}
 
-	logging.Infof("[Preference Contrastive] preloaded %d/%d example embeddings using model=%s in %v", loaded, len(tasks), c.modelType, time.Since(start))
+	return loaded, firstErr
+}
 
-	if firstErr != nil {
-		return firstErr
+func (c *ContrastivePreferenceClassifier) embeddingWorkerCount(taskCount int) int {
+	numWorkers := runtime.NumCPU() * 2
+	if numWorkers > taskCount {
+		return taskCount
 	}
-
-	return nil
+	return numWorkers
 }
 
 // Classify picks the preference with the highest similarity to the query.
@@ -197,7 +227,12 @@ func (c *ContrastivePreferenceClassifier) Classify(text string) (*PreferenceResu
 	}
 	threshold := c.ruleThresholds[bestRule]
 	if threshold > 0 && bestScore < threshold {
-		return nil, fmt.Errorf("preference similarity %.3f below threshold %.3f", bestScore, threshold)
+		return nil, fmt.Errorf(
+			"%w: preference similarity %.3f below threshold %.3f",
+			ErrPreferenceBelowThreshold,
+			bestScore,
+			threshold,
+		)
 	}
 	return &PreferenceResult{
 		Preference: bestRule,

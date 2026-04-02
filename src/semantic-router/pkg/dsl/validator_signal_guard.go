@@ -21,10 +21,10 @@ type signalTypeGuardOverlap struct {
 	loName     string
 }
 
-// checkSameSignalTypeGuard warns when two routes reference the same signal type
-// in their WHEN clauses without a NOT guard for mutual exclusion. Without a guard,
-// both routes can match the same query, and priority alone picks the winner —
-// even if the lower-priority route's signal has higher confidence.
+// checkSameSignalTypeGuard warns when two routes depend on the same exact signal
+// reference in their WHEN clauses without an explicit exclusion path. Without a
+// guard, both routes can match the same query and priority alone picks the
+// winner.
 func (v *Validator) checkSameSignalTypeGuard() {
 	semantics := v.guardConflictSemantics()
 	infos := v.collectRouteSignalInfos(semantics)
@@ -155,17 +155,22 @@ func addSignalTypeGuardOverlaps(
 	hiNames []string,
 	loNames []string,
 ) {
+	if len(hiNames) == 0 || len(loNames) == 0 {
+		return
+	}
+	loNameSet := make(map[string]struct{}, len(loNames))
+	for _, loName := range loNames {
+		loNameSet[loName] = struct{}{}
+	}
 	for _, hiName := range hiNames {
-		for _, loName := range loNames {
-			if hiName == loName {
-				continue
-			}
-			key := signalType + "|" + hiName + "|" + loName
-			overlapSet[key] = signalTypeGuardOverlap{
-				signalType: signalType,
-				hiName:     hiName,
-				loName:     loName,
-			}
+		if _, ok := loNameSet[hiName]; !ok {
+			continue
+		}
+		key := signalType + "|" + hiName
+		overlapSet[key] = signalTypeGuardOverlap{
+			signalType: signalType,
+			hiName:     hiName,
+			loName:     hiName,
 		}
 	}
 }
@@ -235,10 +240,9 @@ func (v *Validator) emitAggregatedGuardDiag(
 		exampleLabel = "examples"
 	}
 
-	firstOverlap := overlaps[0]
 	v.addDiag(DiagWarning, loInfo.route.Pos,
 		fmt.Sprintf(
-			"ROUTE %q and ROUTE %q have %d same-signal-type %s with no mutual exclusion guard (%s); %s: %s; both can fire on the same query",
+			"ROUTE %q and ROUTE %q share %d exact-signal-name %s with no mutual exclusion guard (%s); %s: %s; both can fire on the same query",
 			hiInfo.route.Name,
 			loInfo.route.Name,
 			totalOverlaps,
@@ -247,33 +251,12 @@ func (v *Validator) emitAggregatedGuardDiag(
 			exampleLabel,
 			strings.Join(examples, ", "),
 		),
-		&QuickFix{
-			Description: fmt.Sprintf(
-				"Add guard: WHEN %s(%q) AND NOT %s(%q)",
-				firstOverlap.signalType,
-				firstOverlap.loName,
-				firstOverlap.signalType,
-				firstOverlap.hiName,
-			),
-			NewText: fmt.Sprintf(
-				"%s(\"%s\") AND NOT %s(\"%s\")",
-				firstOverlap.signalType,
-				firstOverlap.loName,
-				firstOverlap.signalType,
-				firstOverlap.hiName,
-			),
-		},
+		nil,
 	)
 }
 
 func formatSignalTypeGuardExample(overlap signalTypeGuardOverlap) string {
-	return fmt.Sprintf(
-		"%s(%q) vs %s(%q)",
-		overlap.signalType,
-		overlap.hiName,
-		overlap.signalType,
-		overlap.loName,
-	)
+	return fmt.Sprintf("%s(%q)", overlap.signalType, overlap.hiName)
 }
 
 func sortedCountKeys(counts map[string]int) []string {

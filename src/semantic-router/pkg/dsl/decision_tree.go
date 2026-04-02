@@ -89,7 +89,7 @@ func decisionTreeBranchToRoute(
 	}
 
 	if len(route.Models) == 0 {
-		return nil, fmt.Errorf("DECISION_TREE %q branch %d must declare at least one MODEL", unquoteIdent(tree.Name), branchIndex+1)
+		return nil, fmt.Errorf("DECISION_TREE %q branch %d must declare at least one MODEL. Add MODEL \"<model_name>\" inside the branch body", unquoteIdent(tree.Name), branchIndex+1)
 	}
 
 	conditions := make([]BoolExpr, 0, len(priorConditions)+1)

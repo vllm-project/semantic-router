@@ -113,6 +113,10 @@
   min-width: 132px;
 }
 
+.densitySection {
+  min-width: 360px;
+}
+
 .toolbarLabel {
   font-size: 10px;
   text-transform: uppercase;
@@ -136,6 +140,37 @@
 .modeSwitch {
   display: flex;
   gap: 4px;
+}
+
+.densitySummary {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  max-width: 440px;
+}
+
+.densitySummaryItem {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 4px;
+  padding: 4px 8px;
+  border-radius: 999px;
+  background: rgba(118, 185, 0, 0.1);
+  border: 1px solid rgba(118, 185, 0, 0.14);
+}
+
+.densitySummaryValue {
+  color: #f4f8ee;
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1;
+}
+
+.densitySummaryLabel {
+  color: rgba(219, 226, 211, 0.78);
+  font-size: 10px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
 }
 
 .modeBtn,
@@ -352,6 +387,14 @@
 
   .toolbarSection {
     min-width: 110px;
+  }
+
+  .densitySection {
+    min-width: 300px;
+  }
+
+  .densitySummary {
+    max-width: 360px;
   }
 
   .modeBtn,

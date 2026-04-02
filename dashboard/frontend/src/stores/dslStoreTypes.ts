@@ -1,6 +1,9 @@
 import type { RouteInput } from '@/lib/dslMutations'
 import type {
   ASTProgram,
+  BuilderNLGenerateRequest,
+  BuilderNLProgressEvent,
+  BuilderNLStagedDraft,
   ConfigVersion,
   DeployResult,
   DeployStep,
@@ -44,6 +47,12 @@ interface DSLState {
   deployPreviewMerged: string
   deployPreviewLoading: boolean
   deployPreviewError: string | null
+
+  // --- Natural Language Builder ---
+  nlGenerating: boolean
+  nlGenerateError: string | null
+  nlStagedDraft: BuilderNLStagedDraft | null
+  nlProgressEvents: BuilderNLProgressEvent[]
 }
 
 interface DSLActions {
@@ -160,6 +169,15 @@ interface DSLActions {
 
   /** Fetch available config versions. */
   fetchVersions(): Promise<void>
+
+  /** Generate DSL from a natural-language request and optional custom model connection. */
+  generateFromNaturalLanguage(input: BuilderNLGenerateRequest): Promise<void>
+
+  /** Apply the staged NL draft into the live Builder editor while preserving the current deploy base YAML. */
+  applyNaturalLanguageDraft(): void
+
+  /** Clear the staged NL draft and any related review state. */
+  discardNaturalLanguageDraft(): void
 }
 
 type DSLStore = DSLState & DSLActions

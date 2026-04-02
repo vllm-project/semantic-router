@@ -10,8 +10,9 @@ export interface FieldSchema {
 
 export const SIGNAL_TYPES = [
   'keyword', 'embedding', 'domain', 'fact_check', 'user_feedback',
+  'reask',
   'preference', 'language', 'context', 'structure', 'complexity', 'modality', 'authz',
-  'jailbreak', 'pii',
+  'jailbreak', 'pii', 'kb',
 ] as const
 
 export type SignalType = typeof SIGNAL_TYPES[number]
@@ -49,6 +50,12 @@ export function getSignalFieldSchema(signalType: string): FieldSchema[] {
     case 'user_feedback':
       return [
         { key: 'description', label: 'Description', type: 'string', required: true },
+      ]
+    case 'reask':
+      return [
+        { key: 'description', label: 'Description', type: 'string' },
+        { key: 'threshold', label: 'Threshold', type: 'number', placeholder: '0.80' },
+        { key: 'lookback_turns', label: 'Lookback Turns', type: 'number', placeholder: '1' },
       ]
     case 'preference':
       return [
@@ -104,6 +111,13 @@ export function getSignalFieldSchema(signalType: string): FieldSchema[] {
         { key: 'include_history', label: 'Include History', type: 'boolean', description: 'Include conversation history in detection' },
         { key: 'description', label: 'Description', type: 'string' },
       ]
+    case 'kb':
+      return [
+        { key: 'kb', label: 'Knowledge Base', type: 'string', required: true, placeholder: 'my_kb', description: 'Name of the knowledge base to query' },
+        { key: 'target', label: 'Target', type: 'json', description: 'Match target, e.g. { kind: "group", value: "category" }' },
+        { key: 'match', label: 'Match Strategy', type: 'select', options: ['best', 'all'], description: 'How to match against the KB' },
+        { key: 'description', label: 'Description', type: 'string' },
+      ]
     default:
       return [
         { key: 'description', label: 'Description', type: 'string' },
@@ -114,7 +128,7 @@ export function getSignalFieldSchema(signalType: string): FieldSchema[] {
 export const PLUGIN_TYPES = [
   'semantic_cache', 'memory', 'system_prompt',
   'header_mutation', 'hallucination', 'router_replay', 'rag', 'image_gen',
-  'fast_response', 'tools',
+  'fast_response', 'tools', 'request_params', 'response_jailbreak',
 ] as const
 
 export const PLUGIN_DESCRIPTIONS: Record<string, string> = {
@@ -128,6 +142,8 @@ export const PLUGIN_DESCRIPTIONS: Record<string, string> = {
   image_gen: 'Route to image generation backends',
   fast_response: 'Short-circuit and return a fixed response without calling upstream models',
   tools: 'Route-local tool filtering and semantic tool selection',
+  request_params: 'Mutate request parameters before forwarding to the model',
+  response_jailbreak: 'Screen generated responses for jailbreak-like output before returning',
 }
 
 export function getPluginFieldSchema(pluginType: string): FieldSchema[] {
@@ -170,8 +186,8 @@ export function getPluginFieldSchema(pluginType: string): FieldSchema[] {
         { key: 'backend', label: 'Backend', type: 'string', required: true, placeholder: 'my_vector_store', description: 'Backend name for retrieval' },
         { key: 'top_k', label: 'Top K', type: 'number', placeholder: '5', description: 'Number of documents to retrieve' },
         { key: 'similarity_threshold', label: 'Similarity Threshold', type: 'number', placeholder: '0.7' },
-        { key: 'injection_mode', label: 'Injection Mode', type: 'select', options: ['', 'system', 'user', 'context'] },
-        { key: 'on_failure', label: 'On Failure', type: 'select', options: ['', 'skip', 'fail'] },
+        { key: 'injection_mode', label: 'Injection Mode', type: 'select', options: ['', 'tool_role', 'system_prompt'] },
+        { key: 'on_failure', label: 'On Failure', type: 'select', options: ['', 'skip', 'block', 'warn'] },
       ]
     case 'header_mutation':
       return [
@@ -195,6 +211,19 @@ export function getPluginFieldSchema(pluginType: string): FieldSchema[] {
         { key: 'semantic_selection', label: 'Semantic Selection', type: 'boolean', description: 'Run semantic tool selection from the global tools database' },
         { key: 'allow_tools', label: 'Allow Tools', type: 'string[]', placeholder: 'Tool name to allow' },
         { key: 'block_tools', label: 'Block Tools', type: 'string[]', placeholder: 'Tool name to block' },
+      ]
+    case 'request_params':
+      return [
+        { key: 'blocked_params', label: 'Blocked Params', type: 'string[]', placeholder: 'Parameter name to block', description: 'Request body parameters to strip before forwarding' },
+        { key: 'max_tokens_limit', label: 'Max Tokens Limit', type: 'number', placeholder: '4096', description: 'Maximum allowed value for max_tokens' },
+        { key: 'max_n', label: 'Max N', type: 'number', placeholder: '1', description: 'Maximum allowed value for n (number of completions)' },
+        { key: 'strip_unknown', label: 'Strip Unknown', type: 'boolean', description: 'Remove fields not in the OpenAI spec' },
+      ]
+    case 'response_jailbreak':
+      return [
+        { key: 'enabled', label: 'Enabled', type: 'boolean' },
+        { key: 'threshold', label: 'Threshold', type: 'number', placeholder: '0.8', description: 'Minimum classifier score required to flag the response' },
+        { key: 'action', label: 'Action', type: 'select', options: ['', 'block', 'header', 'none'], description: 'Block the response, emit warning headers, or do nothing' },
       ]
     default:
       return [

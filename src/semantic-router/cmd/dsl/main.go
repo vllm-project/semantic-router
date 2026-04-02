@@ -15,6 +15,7 @@ Commands:
   decompile  Convert YAML config to routing-only DSL
   validate   Validate a DSL file
   fmt        Format a DSL file
+  generate   Generate DSL from natural language using an LLM
 
 Examples:
   sr-dsl compile -o config.yaml --base providers.yaml privacy-router.dsl
@@ -22,7 +23,9 @@ Examples:
   sr-dsl compile --format crd -o semanticrouter.yaml config.dsl
   sr-dsl decompile -o config.dsl config.yaml
   sr-dsl validate config.dsl
+  sr-dsl validate --runtime-checks config.dsl
   sr-dsl fmt -o formatted.dsl config.dsl
+  sr-dsl generate --api-url http://localhost:8090 --model Qwen2.5-72B "Route math to qwen-math, default to qwen2.5:3b"
 `
 
 func main() {
@@ -43,6 +46,8 @@ func main() {
 		runValidate()
 	case "fmt", "format":
 		runFormat()
+	case "generate":
+		runGenerate()
 	case "help", "-h", "--help":
 		fmt.Print(usage)
 	default:
@@ -101,6 +106,7 @@ func runDecompile() {
 
 func runValidate() {
 	fs := flag.NewFlagSet("validate", flag.ExitOnError)
+	runtimeChecks := fs.Bool("runtime-checks", false, "Run native TEST block and projection partition runtime validation")
 
 	if err := fs.Parse(os.Args[1:]); err != nil {
 		fmt.Fprintf(os.Stderr, "Error: %s\n", err)
@@ -109,15 +115,26 @@ func runValidate() {
 
 	if fs.NArg() == 0 {
 		fmt.Fprintln(os.Stderr, "Error: input file required")
-		fmt.Fprintln(os.Stderr, "Usage: sr-dsl validate <input.dsl>")
+		fmt.Fprintln(os.Stderr, "Usage: sr-dsl validate [--runtime-checks] <input.dsl>")
 		os.Exit(1)
 	}
 
 	inputPath := fs.Arg(0)
-	errCount := dsl.CLIValidateWithRunner(inputPath, os.Stdout, buildNativeTestBlockRunner)
+	errCount := dsl.CLIValidateWithRunner(
+		inputPath,
+		os.Stdout,
+		validateRunnerFactory(*runtimeChecks),
+	)
 	if errCount > 0 {
 		os.Exit(1)
 	}
+}
+
+func validateRunnerFactory(enableRuntimeChecks bool) dsl.TestBlockRunnerFactory {
+	if !enableRuntimeChecks {
+		return nil
+	}
+	return buildNativeTestBlockRunner
 }
 
 func runFormat() {

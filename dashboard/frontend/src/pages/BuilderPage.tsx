@@ -17,6 +17,7 @@ import { BuilderDeployConfirmModal, BuilderDeployToast, BuilderDragOverlay } fro
 import { VisualMode } from "./builderPageVisualShell";
 import { BuilderGuideDrawer } from "./builderPageGuideDrawer";
 import { BuilderImportModal } from "./builderPageImportModal";
+import { BuilderNaturalLanguagePanel } from "./builderPageNaturalLanguagePanel";
 import { BuilderOutputPanel } from "./builderPageOutputPanel";
 import { useResizableWidth } from "./builderPageResizeHooks";
 import { BuilderStatusBar } from "./builderPageStatusBar";
@@ -32,6 +33,7 @@ const BuilderPage: React.FC = () => {
     diagnostics,
     symbols,
     ast,
+    baseConfigYaml,
     wasmReady,
     wasmError,
     loading,
@@ -81,6 +83,13 @@ const BuilderPage: React.FC = () => {
     deployPreviewMerged,
     deployPreviewLoading,
     deployPreviewError,
+    nlGenerating,
+    nlGenerateError,
+    nlProgressEvents,
+    nlStagedDraft,
+    generateFromNaturalLanguage,
+    applyNaturalLanguageDraft,
+    discardNaturalLanguageDraft,
   } = useDSLStore();
   const { isReadonly, isLoading: readonlyLoading } = useReadonly();
 
@@ -121,6 +130,7 @@ const BuilderPage: React.FC = () => {
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const autoLoadedDefaultConfigRef = useRef(false);
   const autoLoadingDefaultConfigRef = useRef(false);
+  const isNaturalLanguageMode = mode === "nl";
 
   // Initialize WASM on mount
   useEffect(() => {
@@ -139,6 +149,14 @@ const BuilderPage: React.FC = () => {
     }
   }, [mode, wasmReady, dslSource, parseAST]);
 
+  useEffect(() => {
+    if (!isNaturalLanguageMode) {
+      return;
+    }
+    setGuideOpen(false);
+    setOutputPanelOpen(false);
+  }, [isNaturalLanguageMode]);
+
   const toggleSection = useCallback((key: keyof SectionState) => {
     setSections((prev) => ({ ...prev, [key]: !prev[key] }));
   }, []);
@@ -146,6 +164,7 @@ const BuilderPage: React.FC = () => {
   const handleModeSwitch = useCallback(
     (newMode: EditorMode) => {
       setMode(newMode);
+      setOutputPanelOpen(newMode !== "nl");
       // When switching to visual, parse AST
       if (newMode === "visual" && wasmReady && dslSource.trim()) {
         parseAST();
@@ -153,7 +172,8 @@ const BuilderPage: React.FC = () => {
     },
     [setMode, wasmReady, dslSource, parseAST],
   );
-  const deployDisabled = readonlyLoading || isReadonly;
+  const hasPendingNLDraft = nlStagedDraft !== null;
+  const deployDisabled = readonlyLoading || isReadonly || hasPendingNLDraft;
 
   // --- Entity CRUD handlers ---
 
@@ -460,8 +480,15 @@ const BuilderPage: React.FC = () => {
   }, [wasmReady, readonlyLoading, dslSource, loadFromRouter, compile]);
 
   // Diagnostic counts
-  const errorCount = diagnostics.filter((d) => d.level === "error").length;
+  const validationErrorCount = diagnostics.filter((d) => d.level === "error").length;
+  const errorCount = validationErrorCount + (compileError ? 1 : 0);
   const modelCount = ast?.models?.length ?? symbols?.models?.length ?? 0;
+  const currentModelNames = useMemo(() => {
+    const rawNames = ast?.models?.map((model) => model.name) ?? symbols?.models ?? [];
+    return Array.from(
+      new Set(rawNames.map((name) => name.trim()).filter(Boolean)),
+    );
+  }, [ast?.models, symbols?.models]);
   const signalCount = ast?.signals?.length ?? symbols?.signals?.length ?? 0;
   const projectionPartitionCount = ast?.projectionPartitions?.length ?? 0;
   const projectionScoreCount = ast?.projectionScores?.length ?? 0;
@@ -508,12 +535,15 @@ const BuilderPage: React.FC = () => {
         deployDisabledReason={
           isReadonly
             ? "Deploy is unavailable in read-only mode"
+            : hasPendingNLDraft
+              ? "Apply or discard the staged NL draft before deploying the live Builder config"
             : readonlyLoading
               ? "Checking deploy permissions..."
               : undefined
         }
+        showBuilderSecondaryActions={!isNaturalLanguageMode}
         guideOpen={guideOpen}
-        outputPanelOpen={outputPanelOpen}
+        outputPanelOpen={!isNaturalLanguageMode && outputPanelOpen}
         onModeSwitch={handleModeSwitch}
         onImport={handleOpenImport}
         onCompile={compile}
@@ -576,38 +606,37 @@ const BuilderPage: React.FC = () => {
             </div>
           )}
           {mode === "nl" && (
-            <div className={styles.nlPlaceholder}>
-              <div className={styles.nlPlaceholderIcon}>🤖</div>
-              <div className={styles.nlPlaceholderTitle}>
-                Natural Language Mode
-              </div>
-              <div>
-                Describe your routing configuration in plain English and let AI
-                generate DSL for you.
-              </div>
-              <div
-                style={{
-                  fontSize: "var(--text-xs)",
-                  color: "var(--color-text-muted)",
-                }}
-              >
-                Coming soon — Phase 6
-              </div>
-            </div>
+            <BuilderNaturalLanguagePanel
+              currentDsl={dslSource}
+              baseConfigYaml={baseConfigYaml}
+              currentModelNames={currentModelNames}
+              wasmReady={wasmReady}
+              generating={nlGenerating}
+              error={nlGenerateError}
+              progressEvents={nlProgressEvents}
+              stagedDraft={nlStagedDraft}
+              onGenerate={generateFromNaturalLanguage}
+              onApplyDraft={applyNaturalLanguageDraft}
+              onDiscardDraft={discardNaturalLanguageDraft}
+              onModeSwitch={handleModeSwitch}
+            />
           )}
         </div>
 
-        <BuilderOutputPanel
-          open={outputPanelOpen}
-          width={outputWidth}
-          yamlOutput={yamlOutput}
-          crdOutput={crdOutput}
-          dslSource={dslSource}
-          compileError={compileError}
-          onDragStart={handleDragStart}
-          onOpen={() => setOutputPanelOpen(true)}
-          onClose={() => setOutputPanelOpen(false)}
-        />
+        {!isNaturalLanguageMode ? (
+          <BuilderOutputPanel
+            open={outputPanelOpen}
+            width={outputWidth}
+            yamlOutput={yamlOutput}
+            crdOutput={crdOutput}
+            dslSource={dslSource}
+            dslTabLabel="DSL"
+            compileError={compileError}
+            onDragStart={handleDragStart}
+            onOpen={() => setOutputPanelOpen(true)}
+            onClose={() => setOutputPanelOpen(false)}
+          />
+        ) : null}
       </div>
 
       <BuilderStatusBar
@@ -654,7 +683,7 @@ const BuilderPage: React.FC = () => {
       />
 
       <BuilderGuideDrawer
-        open={guideOpen}
+        open={!isNaturalLanguageMode && guideOpen}
         width={guideWidth}
         isDragging={isGuideDragging}
         onClose={() => setGuideOpen(false)}

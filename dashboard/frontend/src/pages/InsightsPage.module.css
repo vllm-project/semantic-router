@@ -174,11 +174,39 @@
   padding: 0 0.5rem;
 }
 
+.insightsTable table {
+  width: max-content;
+  min-width: 100%;
+  table-layout: fixed;
+}
+
 .requestId,
 .timestamp {
   font-family: var(--font-mono);
   font-size: 0.8rem;
   color: var(--color-text-secondary);
+  white-space: nowrap;
+}
+
+.requestIdLink {
+  display: inline-flex;
+  align-items: center;
+  text-decoration: none;
+  max-width: 100%;
+}
+
+.requestIdLink:hover .requestId,
+.requestIdLink:focus-visible .requestId {
+  color: var(--color-primary-light);
+  text-decoration: underline;
+}
+
+.requestId {
+  display: inline-block;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .decision {
@@ -196,18 +224,36 @@
 .modalSignalPill {
   display: inline-flex;
   align-items: center;
-  padding: 0.18rem 0.55rem;
+  gap: 0.35rem;
+  padding: 0.24rem 0.62rem;
   border-radius: 999px;
-  border: 1px solid rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.16);
   font-size: 0.75rem;
   font-family: var(--font-mono);
-  color: var(--color-text);
+  color: rgba(255, 255, 255, 0.94);
+  background: rgba(255, 255, 255, 0.04);
+  max-width: 100%;
+  overflow-wrap: anywhere;
+  white-space: normal;
 }
 
 .signalOverflow {
   color: var(--color-text-secondary);
   font-size: 0.75rem;
   padding: 0.18rem 0.2rem;
+}
+
+.tableSummaryText {
+  display: inline-block;
+  max-width: 100%;
+  overflow: hidden;
+  color: rgba(255, 255, 255, 0.88);
+  font-size: 0.76rem;
+  font-family: var(--font-mono);
+  line-height: 1.2;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  vertical-align: middle;
 }
 
 .reasoningBadge {
@@ -348,37 +394,40 @@
   border-radius: 999px;
   font-size: 0.75rem;
   font-weight: 700;
+  border: 1px solid rgba(255, 255, 255, 0.14);
 }
 
 .alertDanger {
-  background: rgba(239, 68, 68, 0.18);
-  color: #ffd0ca;
+  background: rgba(255, 255, 255, 0.05);
+  color: #ffe3e1;
 }
 
 .alertWarn {
-  background: rgba(245, 158, 11, 0.18);
-  color: #ffe1a3;
+  background: rgba(255, 255, 255, 0.05);
+  color: #fff0cf;
 }
 
 .alertSuccess {
-  background: rgba(118, 185, 0, 0.15);
-  color: var(--color-primary-light);
+  background: rgba(118, 185, 0, 0.12);
+  color: #f7fff0;
 }
 
 .alertInfo {
-  background: rgba(0, 212, 255, 0.14);
-  color: var(--color-accent-cyan);
+  background: rgba(255, 255, 255, 0.05);
+  color: #f3fbff;
 }
 
 .bodyPreview {
   margin: 0;
-  padding: 0.75rem;
+  padding: 0.9rem 1rem;
   max-height: 400px;
   overflow: auto;
-  border: 1px solid var(--color-border);
+  border: 1px solid rgba(255, 255, 255, 0.16);
   border-radius: var(--radius-sm);
-  background: var(--color-bg-tertiary);
-  color: var(--color-text);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.045), rgba(255, 255, 255, 0.02)),
+    rgba(255, 255, 255, 0.02);
+  color: #ffffff;
   font-size: 0.8rem;
   font-family: var(--font-mono);
   white-space: pre-wrap;
@@ -395,6 +444,289 @@
   background: rgba(255, 255, 255, 0.04);
 }
 
+.toolTraceTimeline {
+  display: flex;
+  flex-direction: column;
+  gap: 0.9rem;
+}
+
+.toolTraceSummaryGrid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 0.85rem;
+}
+
+.toolTraceSummaryCard {
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+  min-height: 112px;
+  padding: 0.95rem 1rem;
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  border-radius: var(--radius-md);
+  background:
+    radial-gradient(circle at top right, rgba(118, 185, 0, 0.12), transparent 42%),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.045), rgba(255, 255, 255, 0.02)),
+    rgba(9, 13, 13, 0.92);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04);
+}
+
+.toolTraceSummaryLabel {
+  color: rgba(255, 255, 255, 0.72);
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.toolTraceSummaryValue {
+  color: #ffffff;
+  font-size: 1.1rem;
+  font-weight: 800;
+  line-height: 1.2;
+}
+
+.toolTraceSummaryMeta {
+  color: rgba(255, 255, 255, 0.66);
+  font-size: 0.78rem;
+}
+
+.toolTraceSummaryTools {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  min-width: 0;
+}
+
+.toolTraceFlowShell {
+  display: flex;
+  flex-direction: column;
+  gap: 0.9rem;
+}
+
+.toolTraceLegend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.toolTraceLegendItem {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  padding: 0.42rem 0.78rem;
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  border-radius: 999px;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.045), rgba(255, 255, 255, 0.02)),
+    var(--tool-trace-tint, rgba(255, 255, 255, 0.08));
+  color: #ffffff;
+  font-size: 0.74rem;
+  font-weight: 700;
+}
+
+.toolTraceLegendIcon,
+.toolTraceRoleIcon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--tool-trace-accent, rgba(255, 255, 255, 0.92));
+}
+
+.toolTraceLegendIcon svg,
+.toolTraceRoleIcon svg {
+  width: 0.92rem;
+  height: 0.92rem;
+}
+
+.toolTraceLegendLabel {
+  letter-spacing: 0.01em;
+  min-width: 0;
+}
+
+.toolTraceStepRow {
+  display: grid;
+  grid-template-columns: 42px minmax(0, 1fr);
+  gap: 0.85rem;
+  align-items: stretch;
+}
+
+.toolTraceMarker {
+  position: relative;
+  display: flex;
+  justify-content: center;
+}
+
+.toolTraceMarkerDot {
+  position: relative;
+  z-index: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  border-radius: 12px;
+  background:
+    linear-gradient(145deg, rgba(255, 255, 255, 0.06), rgba(8, 13, 13, 0.96));
+  color: var(--tool-trace-accent, #ffffff);
+  font-size: 0.8rem;
+  font-weight: 800;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.04),
+    0 0 0 1px rgba(255, 255, 255, 0.02);
+}
+
+.toolTraceMarkerLine {
+  position: absolute;
+  top: 34px;
+  bottom: -0.9rem;
+  width: 1px;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.16), rgba(255, 255, 255, 0.03));
+}
+
+.toolTraceStepCard {
+  display: flex;
+  flex-direction: column;
+  gap: 0.65rem;
+  padding: 0.95rem 1rem;
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  border-radius: var(--radius-md);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.045), rgba(255, 255, 255, 0.02)),
+    linear-gradient(145deg, var(--tool-trace-tint, rgba(255, 255, 255, 0.08)), rgba(8, 12, 12, 0.94) 36%, rgba(12, 18, 18, 0.92) 100%);
+  box-shadow:
+    inset 2px 0 0 var(--tool-trace-accent, rgba(255, 255, 255, 0.92)),
+    inset 0 1px 0 rgba(255, 255, 255, 0.04);
+}
+
+.toolTraceHeader {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.45rem;
+}
+
+.toolTraceRolePill {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  padding: 0.32rem 0.72rem;
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  border-radius: 999px;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.045), rgba(255, 255, 255, 0.02)),
+    var(--tool-trace-tint, rgba(255, 255, 255, 0.08));
+  color: #ffffff;
+  font-size: 0.74rem;
+  font-weight: 700;
+  max-width: 100%;
+  overflow-wrap: anywhere;
+}
+
+.toolTraceTitleRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.8rem;
+  flex-wrap: wrap;
+}
+
+.toolTraceTitle {
+  color: #ffffff;
+  font-size: 0.96rem;
+  font-weight: 800;
+}
+
+.toolTraceStatusBadge {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.28rem 0.58rem;
+  border-radius: 999px;
+  font-size: 0.73rem;
+  font-weight: 700;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+}
+
+.toolTraceStatusBadgeSuccess {
+  background: rgba(118, 185, 0, 0.1);
+  color: #efffe4;
+}
+
+.toolTraceStatusBadgeFailed {
+  background: rgba(255, 255, 255, 0.05);
+  color: #ffd6d1;
+}
+
+.toolTraceMeta {
+  color: rgba(255, 255, 255, 0.66);
+  font-size: 0.76rem;
+  font-family: var(--font-mono);
+}
+
+.toolTraceBlock {
+  margin: 0;
+  padding: 0.8rem 0.9rem;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: var(--radius-sm);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.04), rgba(255, 255, 255, 0.018)),
+    rgba(255, 255, 255, 0.015);
+  color: #ffffff;
+  font-size: 0.78rem;
+  font-family: var(--font-mono);
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.toolTraceMarkdown {
+  padding: 0.85rem 0.95rem;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: var(--radius-sm);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.045), rgba(255, 255, 255, 0.02)),
+    rgba(255, 255, 255, 0.015);
+}
+
+.toolTraceMarkdown :global(.markdown) {
+  color: #ffffff;
+}
+
+.toolTraceMarkdown :global(.markdown h1),
+.toolTraceMarkdown :global(.markdown h2) {
+  font-size: 1.12rem;
+  border-bottom: none;
+  padding-bottom: 0;
+}
+
+.toolTraceMarkdown :global(.markdown h3) {
+  font-size: 1rem;
+}
+
+.toolTraceMarkdown :global(.markdown p:last-child) {
+  margin-bottom: 0;
+}
+
+.toolTraceMarkdown :global(.markdown h1),
+.toolTraceMarkdown :global(.markdown h2),
+.toolTraceMarkdown :global(.markdown h3),
+.toolTraceMarkdown :global(.markdown h4),
+.toolTraceMarkdown :global(.markdown h5),
+.toolTraceMarkdown :global(.markdown h6),
+.toolTraceMarkdown :global(.markdown strong) {
+  color: #ffffff;
+}
+
+.toolTraceMarkdown :global(.markdown a) {
+  color: #d7ff94;
+}
+
+.toolTraceMarkdown :global(.markdown blockquote) {
+  background: rgba(255, 255, 255, 0.03);
+  border-left-color: rgba(118, 185, 0, 0.8);
+  color: rgba(255, 255, 255, 0.82);
+}
+
 @media (max-width: 900px) {
   .toolbar,
   .pagination {
@@ -408,5 +740,23 @@
 
   .filterRow {
     flex-direction: column;
+  }
+
+  .toolTraceSummaryGrid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 640px) {
+  .toolTraceSummaryGrid {
+    grid-template-columns: 1fr;
+  }
+
+  .toolTraceStepRow {
+    grid-template-columns: 1fr;
+  }
+
+  .toolTraceMarker {
+    display: none;
   }
 }

@@ -127,11 +127,12 @@ PII policy violation for decision <name>: denied PII types [<types>]
 1. **Allow the PII type** if it should be permitted:
 
 ```yaml
-plugins:
-  - type: "pii"
-    configuration:
-      pii_types_allowed:
-        - "LOCATION" # Add denied type here
+routing:
+  signals:
+    pii:
+      - name: "default_pii_policy"
+        pii_types_allowed:
+          - "LOCATION" # Add denied type here
 ```
 
 2. **Raise threshold** if false positives:

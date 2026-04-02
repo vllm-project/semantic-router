@@ -54,10 +54,6 @@ routing:
         - model: Qwen/Qwen2.5-14B-Instruct-AWQ
           use_reasoning: true
       plugins:
-        - type: pii
-          configuration:
-            enabled: true
-            pii_types_allowed: []
         - type: hallucination
           configuration:
             enabled: true
@@ -77,10 +73,6 @@ routing:
         - model: Qwen/Qwen2.5-14B-Instruct-AWQ
           use_reasoning: true
       plugins:
-        - type: pii
-          configuration:
-            enabled: true
-            pii_types_allowed: []
         - type: hallucination
           configuration:
             enabled: true
@@ -100,10 +92,6 @@ routing:
         - model: Qwen/Qwen2.5-14B-Instruct-AWQ
           use_reasoning: false
       plugins:
-        - type: pii
-          configuration:
-            enabled: true
-            pii_types_allowed: []
         - type: hallucination
           configuration:
             enabled: true

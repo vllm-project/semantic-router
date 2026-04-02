@@ -54,20 +54,25 @@ func ensureStreamingState(ctx *RequestContext) {
 	if ctx.StreamingMetadata == nil {
 		ctx.StreamingMetadata = make(map[string]interface{})
 	}
+	if ctx.StreamingToolCalls == nil {
+		ctx.StreamingToolCalls = make(map[int]*StreamingToolCallState)
+	}
 }
 
 func (r *OpenAIRouter) finalizeStreamingResponse(ctx *RequestContext) {
 	ctx.StreamingComplete = true
-	logging.Infof("Streaming response completed, attempting to cache")
+	logging.ComponentDebugEvent("extproc", "streaming_response_finalized", map[string]interface{}{
+		"model":            ctx.RequestModel,
+		"attempting_cache": true,
+	})
 
 	if ctx.RequestModel != "" && !ctx.StartTime.IsZero() {
 		completionLatency := time.Since(ctx.StartTime).Seconds()
 		metrics.RecordModelCompletionLatency(ctx.RequestModel, completionLatency)
-		logging.Infof(
-			"Recorded completion latency for streaming response: model=%s, latency=%.3fs",
-			ctx.RequestModel,
-			completionLatency,
-		)
+		logging.ComponentDebugEvent("extproc", "streaming_completion_latency_recorded", map[string]interface{}{
+			"model":                 ctx.RequestModel,
+			"completion_latency_ms": time.Since(ctx.StartTime).Milliseconds(),
+		})
 	}
 
 	if err := r.cacheStreamingResponse(ctx); err != nil {
@@ -97,6 +102,7 @@ func (r *OpenAIRouter) parseStreamingChunk(chunk string, ctx *RequestContext) {
 
 		extractStreamingMetadata(ctx, chunkData)
 		extractStreamingContent(ctx, chunkData)
+		extractStreamingToolCalls(ctx, chunkData)
 		if usage, ok := chunkData["usage"].(map[string]interface{}); ok {
 			ctx.StreamingMetadata["usage"] = usage
 		}
@@ -125,16 +131,18 @@ func extractStreamingContent(ctx *RequestContext, chunkData map[string]interface
 		return
 	}
 
-	choice, ok := choices[0].(map[string]interface{})
-	if !ok {
-		return
-	}
-	if delta, ok := choice["delta"].(map[string]interface{}); ok {
-		if content, ok := delta["content"].(string); ok && content != "" {
-			ctx.StreamingContent += content
+	for _, rawChoice := range choices {
+		choice, ok := rawChoice.(map[string]interface{})
+		if !ok {
+			continue
 		}
-	}
-	if finishReason, ok := choice["finish_reason"].(string); ok && finishReason != "" {
-		ctx.StreamingMetadata["finish_reason"] = finishReason
+		if delta, ok := choice["delta"].(map[string]interface{}); ok {
+			if content, ok := delta["content"].(string); ok && content != "" {
+				ctx.StreamingContent += content
+			}
+		}
+		if finishReason, ok := choice["finish_reason"].(string); ok && finishReason != "" {
+			ctx.StreamingMetadata["finish_reason"] = finishReason
+		}
 	}
 }

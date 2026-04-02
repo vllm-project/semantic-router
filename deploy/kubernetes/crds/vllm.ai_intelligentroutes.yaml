@@ -133,17 +133,23 @@ spec:
                               as a raw JSON object
                             x-kubernetes-preserve-unknown-fields: true
                           type:
-                            description: Type is the plugin type (semantic-cache,
-                              jailbreak, pii, system_prompt, header_mutation, hallucination,
-                              router_replay)
+                            description: Type is the plugin type (fast_response, hallucination,
+                              header_mutation, image_gen, memory, rag, request_params,
+                              response_jailbreak, router_replay, semantic-cache, system_prompt,
+                              tools)
                             enum:
-                            - semantic-cache
-                            - jailbreak
-                            - pii
-                            - system_prompt
-                            - header_mutation
+                            - fast_response
                             - hallucination
+                            - header_mutation
+                            - image_gen
+                            - memory
+                            - rag
+                            - request_params
+                            - response_jailbreak
                             - router_replay
+                            - semantic-cache
+                            - system_prompt
+                            - tools
                             type: string
                         required:
                         - type

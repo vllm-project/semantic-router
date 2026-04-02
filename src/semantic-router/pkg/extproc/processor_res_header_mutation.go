@@ -98,6 +98,7 @@ func buildResponseHeaderMutation(
 	builder.addJoined(headers.VSRMatchedDomains, ctx.VSRMatchedDomains)
 	builder.addJoined(headers.VSRMatchedFactCheck, ctx.VSRMatchedFactCheck)
 	builder.addJoined(headers.VSRMatchedUserFeedback, ctx.VSRMatchedUserFeedback)
+	builder.addJoined(headers.VSRMatchedReask, ctx.VSRMatchedReask)
 	builder.addJoined(headers.VSRMatchedPreference, ctx.VSRMatchedPreference)
 	builder.addJoined(headers.VSRMatchedLanguage, ctx.VSRMatchedLanguage)
 	builder.addJoined(headers.VSRMatchedContext, ctx.VSRMatchedContext)

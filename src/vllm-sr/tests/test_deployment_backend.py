@@ -196,6 +196,19 @@ class TestConfigTranslator:
         assert "OPENAI_API_KEY" not in names, "Sensitive var leaked into plain env"
         assert "HF_ENDPOINT" in names, "Non-sensitive var should be in plain env"
 
+    def test_router_log_level_env_vars_are_included_in_plain_env(self, tmp_path):
+        config = tmp_path / "config.yaml"
+        config.write_text(yaml.safe_dump({"listeners": []}))
+
+        values = translate_config_to_helm_values(
+            str(config),
+            env_vars={"SR_LOG_LEVEL": "debug", "SR_LOG_ENCODING": "console"},
+        )
+        env_entries = {entry["name"]: entry["value"] for entry in values["env"]}
+
+        assert env_entries["SR_LOG_LEVEL"] == "debug"
+        assert env_entries["SR_LOG_ENCODING"] == "console"
+
     def test_env_secret_name_added_to_values(self, tmp_path):
         config = tmp_path / "config.yaml"
         config.write_text(yaml.safe_dump({"listeners": []}))

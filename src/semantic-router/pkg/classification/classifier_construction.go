@@ -24,6 +24,7 @@ func (b *classifierOptionBuilder) build(categoryMapping *CategoryMapping) ([]opt
 		b.addEmbeddingClassifier,
 		b.addContextClassifier,
 		b.addStructureClassifier,
+		b.addReaskClassifier,
 		b.addComplexityClassifier,
 		b.addContrastiveJailbreakClassifiers,
 		b.addAuthzClassifier,
@@ -45,7 +46,9 @@ func (b *classifierOptionBuilder) addKeywordClassifier() error {
 	}
 	keywordClassifier, err := NewKeywordClassifier(b.cfg.KeywordRules)
 	if err != nil {
-		logging.Errorf("Failed to create keyword classifier: %v", err)
+		logging.ComponentErrorEvent("classifier", "keyword_classifier_create_failed", map[string]interface{}{
+			"error": err.Error(),
+		})
 		return err
 	}
 	b.options = append(b.options, withKeywordClassifier(keywordClassifier))
@@ -64,7 +67,9 @@ func (b *classifierOptionBuilder) addEmbeddingClassifier() error {
 	}
 	keywordEmbeddingClassifier, err := NewEmbeddingClassifier(b.cfg.EmbeddingRules, optConfig)
 	if err != nil {
-		logging.Errorf("Failed to create keyword embedding classifier: %v", err)
+		logging.ComponentErrorEvent("classifier", "embedding_classifier_create_failed", map[string]interface{}{
+			"error": err.Error(),
+		})
 		return err
 	}
 	b.options = append(b.options, withKeywordEmbeddingClassifier(createEmbeddingInitializer(), keywordEmbeddingClassifier))
@@ -86,10 +91,25 @@ func (b *classifierOptionBuilder) addStructureClassifier() error {
 	}
 	structureClassifier, err := NewStructureClassifier(b.cfg.StructureRules)
 	if err != nil {
-		logging.Errorf("Failed to create structure classifier: %v", err)
+		logging.ComponentErrorEvent("classifier", "structure_classifier_create_failed", map[string]interface{}{
+			"error": err.Error(),
+		})
 		return err
 	}
 	b.options = append(b.options, withStructureClassifier(structureClassifier))
+	return nil
+}
+
+func (b *classifierOptionBuilder) addReaskClassifier() error {
+	if len(b.cfg.ReaskRules) == 0 {
+		return nil
+	}
+	reaskClassifier, err := NewReaskClassifier(b.cfg.ReaskRules, b.defaultEmbeddingModelType())
+	if err != nil {
+		logging.Errorf("Failed to create reask classifier: %v", err)
+		return err
+	}
+	b.options = append(b.options, withReaskClassifier(reaskClassifier))
 	return nil
 }
 
@@ -110,7 +130,10 @@ func (b *classifierOptionBuilder) addComplexityClassifier() error {
 	}
 	complexityClassifier, err := NewComplexityClassifier(b.cfg.ComplexityRules, modelType)
 	if err != nil {
-		logging.Errorf("Failed to create complexity classifier: %v", err)
+		logging.ComponentErrorEvent("classifier", "complexity_classifier_create_failed", map[string]interface{}{
+			"model_type": modelType,
+			"error":      err.Error(),
+		})
 		return err
 	}
 	b.options = append(b.options, withComplexityClassifier(complexityClassifier))
@@ -131,7 +154,11 @@ func (b *classifierOptionBuilder) addContrastiveJailbreakClassifiers() error {
 		}
 		cjc, err := NewContrastiveJailbreakClassifier(rule, defaultModelType)
 		if err != nil {
-			logging.Errorf("Failed to create contrastive jailbreak classifier for rule %q: %v", rule.Name, err)
+			logging.ComponentErrorEvent("classifier", "contrastive_jailbreak_classifier_create_failed", map[string]interface{}{
+				"rule":       rule.Name,
+				"model_type": defaultModelType,
+				"error":      err.Error(),
+			})
 			return err
 		}
 		contrastiveClassifiers[rule.Name] = cjc
@@ -140,7 +167,9 @@ func (b *classifierOptionBuilder) addContrastiveJailbreakClassifiers() error {
 		return nil
 	}
 	b.options = append(b.options, withContrastiveJailbreakClassifiers(contrastiveClassifiers))
-	logging.Infof("Initialized %d contrastive jailbreak classifiers", len(contrastiveClassifiers))
+	logging.ComponentEvent("classifier", "contrastive_jailbreak_classifiers_initialized", map[string]interface{}{
+		"count": len(contrastiveClassifiers),
+	})
 	return nil
 }
 
@@ -154,7 +183,9 @@ func (b *classifierOptionBuilder) addAuthzClassifier() error {
 		return fmt.Errorf("failed to create authz classifier: %w", err)
 	}
 	b.options = append(b.options, withAuthzClassifier(authzClassifier))
-	logging.Infof("Authz classifier initialized with %d role bindings", len(roleBindings))
+	logging.ComponentEvent("classifier", "authz_classifier_initialized", map[string]interface{}{
+		"role_bindings": len(roleBindings),
+	})
 	return nil
 }
 
@@ -165,7 +196,9 @@ func (b *classifierOptionBuilder) addCategoryClassifier(categoryMapping *Categor
 	var categoryInitializer CategoryInitializer
 	var categoryInference CategoryInference
 	if b.cfg.CategoryModel.UseMmBERT32K {
-		logging.Infof("Using mmBERT-32K for intent/category classification (32K context, YaRN RoPE)")
+		logging.ComponentEvent("classifier", "category_classifier_backend_selected", map[string]interface{}{
+			"backend": "mmbert_32k",
+		})
 		categoryInitializer = createMmBERT32KCategoryInitializer()
 		categoryInference = createMmBERT32KCategoryInference()
 	} else {
@@ -195,7 +228,11 @@ func (b *classifierOptionBuilder) initMultiModalIfNeeded(reason string) error {
 	if err := initMultiModalModel(mmPath, b.cfg.UseCPU); err != nil {
 		return fmt.Errorf("failed to initialize multimodal model for %s: %w", reason, err)
 	}
-	logging.Infof("Initialized multimodal embedding model for %s: %s", reason, mmPath)
+	logging.ComponentEvent("classifier", "multimodal_embedding_initialized", map[string]interface{}{
+		"reason":    reason,
+		"model_ref": mmPath,
+		"use_cpu":   b.cfg.UseCPU,
+	})
 	b.multiModalInitialized = true
 	return nil
 }
@@ -224,7 +261,9 @@ func buildJailbreakDependencies(cfg *config.RouterConfig) (JailbreakInitializer,
 
 func buildPIIDependencies(cfg *config.RouterConfig) (PIIInitializer, PIIInference) {
 	if cfg.PIIModel.UseMmBERT32K {
-		logging.Infof("Using mmBERT-32K for PII detection (32K context, YaRN RoPE)")
+		logging.ComponentEvent("classifier", "pii_detector_backend_selected", map[string]interface{}{
+			"backend": "mmbert_32k",
+		})
 		return createMmBERT32KPIIInitializer(), createMmBERT32KPIIInference()
 	}
 	return createPIIInitializer(), createPIIInference()
@@ -272,11 +311,18 @@ func (b *classifierOptionBuilder) addKBClassifiers() error {
 	for _, kb := range b.cfg.KnowledgeBases {
 		classifier, err := NewKnowledgeBaseClassifier(kb, modelType, b.cfg.ConfigBaseDir)
 		if err != nil {
-			logging.Warnf("[KnowledgeBase:%s] Failed to create classifier: %v (kb signals for this KB disabled)", kb.Name, err)
+			logging.ComponentWarnEvent("classifier", "knowledge_base_classifier_create_failed", map[string]interface{}{
+				"knowledge_base":     kb.Name,
+				"error":              err.Error(),
+				"kb_signals_enabled": false,
+			})
 			continue
 		}
 		classifiers[kb.Name] = classifier
-		logging.Infof("[KnowledgeBase:%s] Initialized with %d labels", kb.Name, classifier.LabelCount())
+		logging.ComponentEvent("classifier", "knowledge_base_classifier_initialized", map[string]interface{}{
+			"knowledge_base": kb.Name,
+			"labels":         classifier.LabelCount(),
+		})
 	}
 	if len(classifiers) == 0 {
 		return nil
@@ -287,10 +333,14 @@ func (b *classifierOptionBuilder) addKBClassifiers() error {
 
 func (c *Classifier) logHeuristicClassifierInitialization() {
 	if c.contextClassifier != nil {
-		logging.Infof("Context classifier initialized with %d rules", len(c.contextClassifier.rules))
+		logging.ComponentEvent("classifier", "context_classifier_initialized", map[string]interface{}{
+			"rules": len(c.contextClassifier.rules),
+		})
 	}
 	if c.structureClassifier != nil {
-		logging.Infof("Structure classifier initialized with %d rules", len(c.structureClassifier.rules))
+		logging.ComponentEvent("classifier", "structure_classifier_initialized", map[string]interface{}{
+			"rules": len(c.structureClassifier.rules),
+		})
 	}
 }
 
@@ -311,7 +361,10 @@ func (c *Classifier) initializeBestEffortRuntimeClassifiers() {
 			continue
 		}
 		if err := step.init(); err != nil {
-			logging.Warnf("Failed to initialize %s: %v", step.label, err)
+			logging.ComponentWarnEvent("classifier", "optional_runtime_initializer_failed", map[string]interface{}{
+				"initializer": step.label,
+				"error":       err.Error(),
+			})
 		}
 	}
 }

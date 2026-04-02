@@ -61,6 +61,7 @@ Supported input types currently include:
 - `domain`
 - `fact_check`
 - `user_feedback`
+- `reask`
 - `preference`
 - `language`
 - `context`

@@ -44,6 +44,7 @@ func (s *ClassificationAPIServer) handleClassificationMetrics(w http.ResponseWri
 		"embeddings":            len(cfg.EmbeddingRules),
 		"fact_check":            len(cfg.FactCheckRules),
 		"user_feedback":         len(cfg.UserFeedbackRules),
+		"reask":                 len(cfg.ReaskRules),
 		"preferences":           len(cfg.PreferenceRules),
 		"language":              len(cfg.LanguageRules),
 		"context":               len(cfg.ContextRules),

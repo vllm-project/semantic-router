@@ -270,10 +270,10 @@ make precommit-local
    - Unit tests for all components
 
 2. **Create a pull request** with:
-   - A classified PR title using the repository prefixes from [.github/PULL_REQUEST_TEMPLATE.md](.github/PULL_REQUEST_TEMPLATE.md), such as `[Doc] Clarify PR title guidance` or `[Router][CI/Build] Tighten affected test selection`
-   - Clear description of changes
+   - A module-aligned PR title using the repository prefixes from [.github/PULL_REQUEST_TEMPLATE.md](.github/PULL_REQUEST_TEMPLATE.md), such as `[Docs][CI/Build] Align PR template with vLLM` or `[Router][Dashboard] Tighten route visibility in the console`
+   - A clear `Purpose` section describing the change and affected module(s)
    - Reference to any related issues
-   - Test results and validation steps
+   - A `Test Plan` and `Test Result` section with the actual validation steps and outcomes
 
 3. **Address review feedback** promptly
 

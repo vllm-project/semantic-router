@@ -18,7 +18,8 @@ class Probe:
     variant_id: str
     probe_id: str
     expected_decision: str
-    query: str
+    query: str | None = None
+    messages: tuple[dict[str, Any], ...] = ()
     expected_alias: str | None = None
     notes: str | None = None
     tags: tuple[str, ...] = ()
@@ -63,9 +64,10 @@ def _load_grouped_probes(raw_decisions: list[Any]) -> list[Probe]:
                 )
             variant_id = str(variant.get("id") or f"v{variant_index + 1}").strip()
             query = str(variant.get("query") or "").strip()
-            if not variant_id or not query:
+            messages = _normalize_messages(variant.get("messages"))
+            if not variant_id or (not query and not messages):
                 raise ValueError(
-                    f"decision[{index}].variants[{variant_index}] must include non-empty id and query"
+                    f"decision[{index}].variants[{variant_index}] must include non-empty id and either query or messages"
                 )
             probes.append(
                 Probe(
@@ -73,7 +75,8 @@ def _load_grouped_probes(raw_decisions: list[Any]) -> list[Probe]:
                     variant_id=variant_id,
                     probe_id=f"{decision_id}:{variant_id}",
                     expected_decision=expected,
-                    query=query,
+                    query=query or None,
+                    messages=messages,
                     expected_alias=expected_alias,
                     notes=(
                         str(variant.get("notes") or "").strip()
@@ -94,9 +97,10 @@ def _load_legacy_probes(raw_probes: list[Any]) -> list[Probe]:
         probe_id = str(item.get("id") or item.get("expected_decision") or "").strip()
         expected = str(item.get("expected_decision") or "").strip()
         query = str(item.get("query") or "").strip()
-        if not probe_id or not expected or not query:
+        messages = _normalize_messages(item.get("messages"))
+        if not probe_id or not expected or (not query and not messages):
             raise ValueError(
-                f"probe[{index}] must include non-empty id, expected_decision, and query"
+                f"probe[{index}] must include non-empty id, expected_decision, and either query or messages"
             )
         probes.append(
             Probe(
@@ -104,7 +108,8 @@ def _load_legacy_probes(raw_probes: list[Any]) -> list[Probe]:
                 variant_id=probe_id,
                 probe_id=probe_id,
                 expected_decision=expected,
-                query=query,
+                query=query or None,
+                messages=messages,
                 expected_alias=str(item.get("expected_alias") or "").strip() or None,
                 notes=str(item.get("notes") or "").strip() or None,
                 tags=_normalize_tags(item.get("tags")),
@@ -201,6 +206,17 @@ def _normalize_tags(raw_tags: Any) -> tuple[str, ...]:
     if not isinstance(raw_tags, list):
         return ()
     normalized = [str(tag).strip() for tag in raw_tags if str(tag).strip()]
+    return tuple(normalized)
+
+
+def _normalize_messages(raw_messages: Any) -> tuple[dict[str, Any], ...]:
+    if not isinstance(raw_messages, list):
+        return ()
+    normalized: list[dict[str, Any]] = []
+    for index, item in enumerate(raw_messages):
+        if not isinstance(item, dict):
+            raise ValueError(f"messages[{index}] must be a mapping")
+        normalized.append(item)
     return tuple(normalized)
 
 

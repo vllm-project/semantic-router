@@ -1,14 +1,16 @@
 plugins:
-  - type: jailbreak
+  - type: system_prompt
     configuration:
       enabled: true
-      threshold: 0.6
-  - type: pii
+      mode: insert
+      system_prompt: Apply the platform safety policy before answering and clearly note when a request needs additional review.
+  - type: header_mutation
     configuration:
-      enabled: true
-      pii_types_allowed: []
+      add:
+        - name: X-Safety-Profile
+          value: standard
   - type: response_jailbreak
     configuration:
       enabled: true
       threshold: 0.8
-      action: annotate
+      action: header

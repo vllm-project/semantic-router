@@ -63,6 +63,7 @@ def _execute_serve(
     image_pull_policy: str,
     readonly: bool,
     minimal: bool,
+    log_level: str | None,
     platform: str | None,
     algorithm: str | None,
     target: str | None,
@@ -85,7 +86,13 @@ def _execute_serve(
     env_vars: dict[str, str] = {}
     append_passthrough_env_vars(env_vars)
     apply_runtime_mode_env_vars(
-        env_vars, minimal, readonly, setup_mode, platform, algorithm
+        env_vars,
+        minimal,
+        readonly,
+        setup_mode,
+        platform,
+        algorithm,
+        log_level=log_level,
     )
 
     effective_config_path = resolve_effective_config_path(
@@ -110,7 +117,7 @@ def _execute_serve(
         envoy_image=envoy_image,
         dashboard_image=dashboard_image,
         pull_policy=image_pull_policy,
-        enable_observability=not minimal and not setup_mode,
+        enable_observability=not minimal,
     )
 
 
@@ -166,6 +173,15 @@ def _execute_serve(
     help="Start in minimal mode: only router + envoy, no dashboard or observability (Jaeger, Prometheus, Grafana)",
 )
 @click.option(
+    "--log-level",
+    type=click.Choice(
+        ["debug", "info", "warn", "warning", "error", "dpanic", "panic", "fatal"],
+        case_sensitive=False,
+    ),
+    default=None,
+    help="Router log level override (debug, info, warn, error, dpanic, panic, fatal)",
+)
+@click.option(
     "--platform",
     default=None,
     help="Platform branding (e.g., 'amd' for AMD GPU deployments). "
@@ -204,6 +220,7 @@ def serve(
     image_pull_policy: str,
     readonly: bool,
     minimal: bool,
+    log_level: str | None,
     platform: str | None,
     algorithm: str | None,
     target: str | None,
@@ -263,6 +280,9 @@ def serve(
         # Minimal mode (no dashboard, no observability)
         vllm-sr serve --minimal
 
+        # Start router with debug logs
+        vllm-sr serve --log-level debug
+
         # Platform branding (for AMD deployments)
         vllm-sr serve --platform amd
 
@@ -276,6 +296,7 @@ def serve(
         image_pull_policy,
         readonly,
         minimal,
+        log_level,
         platform,
         algorithm,
         target,

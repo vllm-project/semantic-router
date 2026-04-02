@@ -31,7 +31,12 @@ func (r *OpenAIRouter) selectEndpointForModel(ctx *RequestContext, model string)
 		return "", "", fmt.Errorf("endpoint resolution for model %q: %w", model, err)
 	}
 	if endpointFound {
-		logging.Infof("Selected endpoint address: %s (name: %s) for model: %s", endpointAddress, endpointName, model)
+		logging.ComponentDebugEvent("extproc", "endpoint_selected", map[string]interface{}{
+			"request_id":    ctx.RequestID,
+			"model":         model,
+			"endpoint":      endpointAddress,
+			"endpoint_name": endpointName,
+		})
 	}
 
 	ctx.SelectedEndpoint = endpointAddress
@@ -48,7 +53,11 @@ func (r *OpenAIRouter) resolveModelNameForEndpoint(modelName string, endpointNam
 	}
 	resolved := r.Config.ResolveExternalModelID(modelName, endpointName)
 	if resolved != modelName {
-		logging.Infof("Resolved model name: %s -> %s (endpoint: %s)", modelName, resolved, endpointName)
+		logging.ComponentDebugEvent("extproc", "external_model_resolved", map[string]interface{}{
+			"requested_model": modelName,
+			"resolved_model":  resolved,
+			"endpoint_name":   endpointName,
+		})
 	}
 	return resolved
 }
@@ -156,7 +165,11 @@ func (r *OpenAIRouter) createRoutingResponse(
 			Body: modifiedBody,
 		},
 	}
-	logging.Infof("createRoutingResponse: modifiedBody length=%d, model=%s", len(modifiedBody), model)
+	logging.ComponentDebugEvent("extproc", "routing_response_built", map[string]interface{}{
+		"request_id": ctx.RequestID,
+		"model":      model,
+		"body_bytes": len(modifiedBody),
+	})
 
 	contentLength := len(modifiedBody)
 	state, errorResponse := r.buildRouteHeaderState(model, endpoint, endpointName, ctx, &contentLength)
@@ -186,7 +199,11 @@ func (r *OpenAIRouter) createSpecifiedModelResponse(
 
 	needsBodyMutation := upstreamModel != model
 	if needsBodyMutation {
-		logging.Infof("Model name rewriting: %s -> %s in request body", model, upstreamModel)
+		logging.ComponentDebugEvent("extproc", "model_name_rewritten", map[string]interface{}{
+			"request_id":      ctx.RequestID,
+			"requested_model": model,
+			"upstream_model":  upstreamModel,
+		})
 	}
 
 	// RAG/memory injection modifies ctx.OriginalRequestBody. Without a body
@@ -194,8 +211,12 @@ func (r *OpenAIRouter) createSpecifiedModelResponse(
 	// dropping the personalized context. Force the mutation so the modified
 	// body actually reaches the upstream model.
 	if !needsBodyMutation && (ctx.RAGRetrievedContext != "" || ctx.MemoryContext != "") {
-		logging.Infof("Forcing body mutation: personalized context injected (RAG=%d, memory=%d chars) for specified model %s",
-			len(ctx.RAGRetrievedContext), len(ctx.MemoryContext), model)
+		logging.ComponentDebugEvent("extproc", "body_mutation_forced", map[string]interface{}{
+			"request_id":   ctx.RequestID,
+			"model":        model,
+			"rag_chars":    len(ctx.RAGRetrievedContext),
+			"memory_chars": len(ctx.MemoryContext),
+		})
 		needsBodyMutation = true
 	}
 
@@ -230,7 +251,11 @@ func (r *OpenAIRouter) buildRouteHeaderState(
 
 	profile, profileErr := r.Config.GetProviderProfileForEndpoint(endpointName)
 	if profileErr != nil {
-		logging.Errorf("Provider profile resolution failed for endpoint %s: %v", endpointName, profileErr)
+		logging.ComponentErrorEvent("extproc", "provider_profile_resolution_failed", map[string]interface{}{
+			"request_id":    ctx.RequestID,
+			"endpoint_name": endpointName,
+			"error":         profileErr.Error(),
+		})
 		return nil, r.createErrorResponse(500, "Internal routing error. Contact your administrator.")
 	}
 	state.profile = profile
@@ -253,17 +278,30 @@ func (r *OpenAIRouter) appendCredentialHeaders(
 ) *ext_proc.ProcessingResponse {
 	llmProvider, authHeader, authPrefix, authErr := resolveProviderAuth(state.profile)
 	if authErr != nil {
-		logging.Errorf("Provider auth resolution failed for endpoint %s: %v", endpointName, authErr)
+		logging.ComponentErrorEvent("extproc", "provider_auth_resolution_failed", map[string]interface{}{
+			"request_id":    ctx.RequestID,
+			"endpoint_name": endpointName,
+			"error":         authErr.Error(),
+		})
 		return r.createErrorResponse(500, "Internal routing error. Contact your administrator.")
 	}
 
 	accessKey, credErr := r.CredentialResolver.KeyForProvider(llmProvider, model, ctx.Headers)
 	if credErr != nil {
-		logging.Errorf("Credential resolution failed for model %s: %v", model, credErr)
+		logging.ComponentErrorEvent("extproc", "credential_resolution_failed", map[string]interface{}{
+			"request_id": ctx.RequestID,
+			"model":      model,
+			"error":      credErr.Error(),
+		})
 		return r.createErrorResponse(401, "Authentication failed. Check your API key configuration.")
 	}
 	if accessKey == "" {
-		logging.Debugf("No API key for %s model %q (fail_open=true) — preserving original auth header", llmProvider, model)
+		logging.ComponentDebugEvent("extproc", "provider_auth_preserved", map[string]interface{}{
+			"request_id": ctx.RequestID,
+			"provider":   llmProvider,
+			"model":      model,
+			"mode":       "preserve_original_header",
+		})
 		return nil
 	}
 
@@ -277,7 +315,12 @@ func (r *OpenAIRouter) appendCredentialHeaders(
 			RawValue: []byte(value),
 		},
 	})
-	logging.Infof("Added %s header for model %s (provider=%s)", authHeader, model, llmProvider)
+	logging.ComponentDebugEvent("extproc", "provider_auth_injected", map[string]interface{}{
+		"request_id":  ctx.RequestID,
+		"provider":    llmProvider,
+		"model":       model,
+		"header_name": authHeader,
+	})
 	return nil
 }
 
@@ -333,11 +376,6 @@ func (r *OpenAIRouter) applyRoutingPathHeader(
 				RawValue: []byte("/v1/chat/completions"),
 			},
 		})
-		if specifiedModel {
-			logging.Infof("Response API: Rewriting path to /v1/chat/completions (specified model)")
-		} else {
-			logging.Infof("Response API: Rewriting path to /v1/chat/completions")
-		}
 		return specifiedModel, nil
 	}
 	if state.profile == nil {
@@ -356,11 +394,6 @@ func (r *OpenAIRouter) applyRoutingPathHeader(
 				RawValue: []byte(chatPath),
 			},
 		})
-		if specifiedModel {
-			logging.Infof("Provider profile: Rewriting path to %s (specified model)", chatPath)
-		} else {
-			logging.Infof("Provider profile: Rewriting path to %s", chatPath)
-		}
 	}
 	return false, nil
 }
@@ -373,11 +406,9 @@ func (r *OpenAIRouter) applyDecisionHeaderMutations(state *routeHeaderState, ctx
 	pluginSetHeaders, pluginRemoveHeaders := r.buildHeaderMutations(ctx.VSRSelectedDecision)
 	if len(pluginSetHeaders) > 0 {
 		state.setHeaders = append(state.setHeaders, pluginSetHeaders...)
-		logging.Infof("Applied %d header mutations from decision %s", len(pluginSetHeaders), ctx.VSRSelectedDecision.Name)
 	}
 	if len(pluginRemoveHeaders) > 0 {
 		state.removeHeaders = append(state.removeHeaders, pluginRemoveHeaders...)
-		logging.Infof("Applied %d header deletions from decision %s", len(pluginRemoveHeaders), ctx.VSRSelectedDecision.Name)
 	}
 }
 

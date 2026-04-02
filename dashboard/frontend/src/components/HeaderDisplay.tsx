@@ -66,6 +66,10 @@ const HEADER_INFO: Record<string, { label: string; type: 'info' | 'success' | 'w
     label: 'User Feedback',
     type: 'info',
   },
+  'x-vsr-matched-reask': {
+    label: 'Reask',
+    type: 'info',
+  },
   'x-vsr-matched-preference': {
     label: 'Preference',
     type: 'info',
@@ -133,6 +137,23 @@ const HEADER_INFO: Record<string, { label: string; type: 'info' | 'success' | 'w
   },
 }
 
+function shouldSummarizeHeaderValue(key: string, values: string[]): boolean {
+  return values.length > 1 && (key.startsWith('x-vsr-matched-') || key === 'x-vsr-looper-models-used')
+}
+
+function summarizeHeaderValue(key: string, rawValue: string): string {
+  const values = rawValue
+    .split(',')
+    .map(value => value.trim())
+    .filter(Boolean)
+
+  if (!shouldSummarizeHeaderValue(key, values)) {
+    return rawValue
+  }
+
+  return `${values[0]} +${values.length - 1}`
+}
+
 const HeaderDisplay = ({ headers }: HeaderDisplayProps) => {
   // Filter to only show headers that exist
   const displayHeaders = Object.entries(headers).filter(([key]) => key in HEADER_INFO)
@@ -146,10 +167,11 @@ const HeaderDisplay = ({ headers }: HeaderDisplayProps) => {
       <div className={styles.headers}>
         {displayHeaders.map(([key, value]) => {
           const info = HEADER_INFO[key]
+          const displayValue = summarizeHeaderValue(key, value)
           return (
             <div key={key} className={`${styles.header} ${styles[info.type]}`} title={`${info.label}: ${value}`}>
               <span className={styles.label}>{info.label}</span>
-              <span className={styles.value}>{value}</span>
+              <span className={styles.value}>{displayValue}</span>
             </div>
           )
         })}

@@ -96,6 +96,10 @@ func (r *OpenAIRouter) handleRouterReplayListAPI(method string, rawQuery string)
 }
 
 func (r *OpenAIRouter) collectRouterReplayRecords() []routerreplay.RoutingRecord {
+	if r.ReplayStoreShared && r.ReplayRecorder != nil {
+		return sortRouterReplayRecords(r.ReplayRecorder.ListAllRecords())
+	}
+
 	var records []routerreplay.RoutingRecord
 	for _, recorder := range r.ReplayRecorders {
 		records = append(records, recorder.ListAllRecords()...)
@@ -104,6 +108,10 @@ func (r *OpenAIRouter) collectRouterReplayRecords() []routerreplay.RoutingRecord
 		records = r.ReplayRecorder.ListAllRecords()
 	}
 
+	return sortRouterReplayRecords(records)
+}
+
+func sortRouterReplayRecords(records []routerreplay.RoutingRecord) []routerreplay.RoutingRecord {
 	sort.SliceStable(records, func(i, j int) bool {
 		if records[i].Timestamp.Equal(records[j].Timestamp) {
 			return records[i].ID > records[j].ID
@@ -129,6 +137,10 @@ func (r *OpenAIRouter) handleRouterReplayRecordAPI(method string, replayID strin
 }
 
 func (r *OpenAIRouter) findRouterReplayRecord(replayID string) (routerreplay.RoutingRecord, bool) {
+	if r.ReplayStoreShared && r.ReplayRecorder != nil {
+		return r.ReplayRecorder.GetRecord(replayID)
+	}
+
 	for _, recorder := range r.ReplayRecorders {
 		if record, ok := recorder.GetRecord(replayID); ok {
 			return record, true

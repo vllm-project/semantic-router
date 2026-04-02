@@ -14,14 +14,14 @@ import (
 // This is the new approach that uses Decision-based routing with AND/OR rule combinations
 // Decision evaluation is ALWAYS performed when decisions are configured (for plugin features like
 // hallucination detection), but model selection only happens for auto models.
-func (r *OpenAIRouter) performDecisionEvaluation(originalModel string, userContent string, nonUserMessages []string, ctx *RequestContext) (string, float64, entropy.ReasoningDecision, string, error) {
+func (r *OpenAIRouter) performDecisionEvaluation(originalModel string, history signalConversationHistory, ctx *RequestContext) (string, float64, entropy.ReasoningDecision, string, error) {
 	var decisionName string
 	var evaluationConfidence float64
 	var reasoningDecision entropy.ReasoningDecision
 	var selectedModel string
 
 	// Check if there's content to evaluate
-	if len(nonUserMessages) == 0 && userContent == "" {
+	if len(history.nonUserMessages) == 0 && history.currentUserMessage == "" {
 		return "", 0.0, entropy.ReasoningDecision{}, "", nil
 	}
 
@@ -34,12 +34,12 @@ func (r *OpenAIRouter) performDecisionEvaluation(originalModel string, userConte
 		return "", 0.0, entropy.ReasoningDecision{}, "", nil
 	}
 
-	signalInput := r.prepareSignalEvaluationInput(userContent, nonUserMessages)
+	signalInput := r.prepareSignalEvaluationInput(history)
 	if signalInput.evaluationText == "" {
 		return "", 0.0, entropy.ReasoningDecision{}, "", nil
 	}
 
-	signals, authzErr := r.evaluateSignalsForDecision(originalModel, signalInput, nonUserMessages, ctx)
+	signals, authzErr := r.evaluateSignalsForDecision(originalModel, signalInput, history.nonUserMessages, ctx)
 	if authzErr != nil {
 		return "", 0, entropy.ReasoningDecision{}, "", authzErr
 	}
@@ -52,7 +52,7 @@ func (r *OpenAIRouter) performDecisionEvaluation(originalModel string, userConte
 	decisionName, evaluationConfidence, reasoningDecision, selectedModel = r.finalizeDecisionEvaluation(
 		result,
 		originalModel,
-		userContent,
+		history.currentUserMessage,
 		ctx,
 	)
 	return decisionName, evaluationConfidence, reasoningDecision, selectedModel, nil
