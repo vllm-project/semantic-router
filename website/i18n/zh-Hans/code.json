@@ -1528,6 +1528,12 @@
   "team.members.NoaLimoy.bio": {
     "message": "具有研究思维的软件工程师，专注于云原生平台和 AI 基础设施。开源贡献者。"
   },
+  "team.members.MarinaKoushnir.role": {
+    "message": "开源贡献者"
+  },
+  "team.members.MarinaKoushnir.bio": {
+    "message": "vLLM Semantic Router 的开源贡献者。"
+  },
   "team.members.JaredforReal.role": {
     "message": "软件工程师"
   },
