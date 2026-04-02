@@ -11,6 +11,7 @@ import ChatComponentRoomToggle from './ChatComponentRoomToggle'
 import ChatComponentSidebarShell from './ChatComponentSidebarShell'
 import {
   buildChoicesArray,
+  consumeEventStream,
   getFirstChoice,
   isEventStreamContentType,
   mergeParsedChoices,
@@ -41,6 +42,7 @@ import { ensureOpenClawServerConnected } from '../tools/mcp/api'
 import { useConversationStorage } from '../hooks'
 import { useReadonly } from '../contexts/ReadonlyContext'
 import type { ToolCall, ToolResult } from '../tools'
+import { serializeToolResultForModel } from '../tools/toolResultSupport'
 
 interface ChatComponentProps {
   endpoint?: string
@@ -511,47 +513,22 @@ const ChatComponent = ({
 
         applyParsedCompletion(parsedResponse, false)
       } else {
-        const reader = response.body?.getReader()
-        if (!reader) {
+        if (!response.body) {
           throw new Error('No response body')
         }
 
-        const decoder = new TextDecoder()
-        let buffer = ''
-
-        while (true) {
-          const { done, value } = await reader.read()
-          if (done) break
-
-          const chunk = decoder.decode(value, { stream: true })
-          buffer += chunk
-          const lines = buffer.split('\n')
-
-          // Keep the last incomplete line in the buffer
-          buffer = lines.pop() || ''
-
-          for (const line of lines) {
-            if (!line.startsWith('data: ')) {
-              continue
-            }
-
-            const data = line.slice(6).trim()
-            if (data === '[DONE]') {
-              continue
-            }
-
-            const parsedChunk = parseChatCompletionPayload(data)
-            if (!parsedChunk) {
-              continue
-            }
-
-            if (parsedChunk.errorMessage) {
-              throw new Error(parsedChunk.errorMessage)
-            }
-
-            applyParsedCompletion(parsedChunk, true)
+        await consumeEventStream(response.body, (data) => {
+          const parsedChunk = parseChatCompletionPayload(data)
+          if (!parsedChunk) {
+            return
           }
-        }
+
+          if (parsedChunk.errorMessage) {
+            throw new Error(parsedChunk.errorMessage)
+          }
+
+          applyParsedCompletion(parsedChunk, true)
+        })
       }
 
       // If we had tool calls, execute tools in a loop until model gives final answer
@@ -650,24 +627,11 @@ const ChatComponent = ({
               }))
             },
             // Tool results (truncate long content to avoid exceeding model context)
-            ...toolResults.map(tr => {
-              const MAX_TOOL_RESULT_LENGTH = 15000 // ~4k tokens
-              let content = typeof tr.content === 'string'
-                ? tr.content
-                : JSON.stringify(tr.content)
-
-              // Truncate if too long
-              if (content.length > MAX_TOOL_RESULT_LENGTH) {
-                content = content.substring(0, MAX_TOOL_RESULT_LENGTH) + '\n\n...[Content truncated due to length]'
-                console.log(`Tool result for ${tr.name} truncated from ${typeof tr.content === 'string' ? tr.content.length : JSON.stringify(tr.content).length} to ${MAX_TOOL_RESULT_LENGTH} chars`)
-              }
-
-              return {
-                role: 'tool',
-                tool_call_id: tr.callId,
-                content
-              }
-            })
+            ...toolResults.map(tr => ({
+              role: 'tool',
+              tool_call_id: tr.callId,
+              content: serializeToolResultForModel(tr),
+            }))
           ]
 
           // Make follow-up API call with tools enabled
@@ -776,39 +740,19 @@ const ChatComponent = ({
           } else {
             if (!followUpResponse.body) break
 
-            const followUpReader = followUpResponse.body.getReader()
-            const followUpDecoder = new TextDecoder()
-
-            while (true) {
-              const { done, value } = await followUpReader.read()
-              if (done) break
-
-              const chunk = followUpDecoder.decode(value, { stream: true })
-              const lines = chunk.split('\n').filter(line => line.trim() !== '')
-
-              for (const line of lines) {
-                if (!line.startsWith('data: ')) {
-                  continue
-                }
-
-                const data = line.slice(6).trim()
-                if (data === '[DONE]') {
-                  continue
-                }
-
-                const parsedFollowUpChunk = parseChatCompletionPayload(data)
-                if (!parsedFollowUpChunk) {
-                  continue
-                }
-
-                if (parsedFollowUpChunk.errorMessage) {
-                  console.error('Follow-up streaming chunk returned an error:', parsedFollowUpChunk.errorMessage)
-                  continue
-                }
-
-                applyFollowUpCompletion(parsedFollowUpChunk, true)
+            await consumeEventStream(followUpResponse.body, (data) => {
+              const parsedFollowUpChunk = parseChatCompletionPayload(data)
+              if (!parsedFollowUpChunk) {
+                return
               }
-            }
+
+              if (parsedFollowUpChunk.errorMessage) {
+                console.error('Follow-up streaming chunk returned an error:', parsedFollowUpChunk.errorMessage)
+                return
+              }
+
+              applyFollowUpCompletion(parsedFollowUpChunk, true)
+            })
           }
 
           // Save content from this iteration

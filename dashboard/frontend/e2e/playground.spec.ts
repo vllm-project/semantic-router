@@ -358,6 +358,83 @@ test.describe('Playground Chat Component', () => {
     expect(chatRequestCount).toBe(2);
   });
 
+  test('sends tool failures back to the model and handles split follow-up stream chunks', async ({ page }) => {
+    await page.evaluate(async () => {
+      const originalFetch = window.fetch.bind(window);
+      const encoder = new TextEncoder();
+      let completionRequestCount = 0;
+
+      const streamResponse = (chunks: string[]) => new Response(new ReadableStream({
+        start(controller) {
+          for (const chunk of chunks) {
+            controller.enqueue(encoder.encode(chunk));
+          }
+          controller.close();
+        },
+      }), {
+        headers: {
+          'Content-Type': 'text/event-stream',
+          'Cache-Control': 'no-cache',
+        },
+      });
+
+      window.fetch = async (input, init) => {
+        const url = typeof input === 'string'
+          ? input
+          : input instanceof Request
+            ? input.url
+            : String(input);
+
+        if (url.includes('/api/router/v1/chat/completions')) {
+          completionRequestCount += 1;
+
+          if (completionRequestCount === 1) {
+            return streamResponse([
+              'data: {"choices":[{"index":0,"delta":{"tool_calls":[{"index":0,"id":"call_open_web_1","type":"function","function":{"name":"open_web","arguments":"{\\"url\\":\\"https://example.com/article\\"}"}}]}}]}\n\n',
+              'data: {"choices":[{"index":0,"finish_reason":"tool_calls"}]}\n\n',
+              'data: [DONE]\n\n',
+            ]);
+          }
+
+          if (completionRequestCount === 2) {
+            const requestBody = typeof init?.body === 'string' ? JSON.parse(init.body) : null;
+            (window as typeof window & { __lastFollowUpRequest?: unknown }).__lastFollowUpRequest = requestBody;
+
+            return streamResponse([
+              'data: {"choices":[{"index":0,"delta":{"content":"Follow',
+              ' up stream recovered."}}]}\n\n',
+              'data: [DONE]\n\n',
+            ]);
+          }
+        }
+
+        if (url.includes('/api/tools/open-web') || url.startsWith('https://r.jina.ai/')) {
+          return new Response('upstream failure', {
+            status: 500,
+            statusText: 'Internal Server Error',
+          });
+        }
+
+        return originalFetch(input, init);
+      };
+    });
+
+    await page.getByPlaceholder('Ask me anything...').fill('Trigger a tool failure');
+    await page.getByRole('button', { name: 'Send message' }).click();
+
+    await expect(page.getByText('Follow up stream recovered.')).toBeVisible({ timeout: 10000 });
+
+    const followUpRequest = await page.evaluate(() =>
+      (window as typeof window & { __lastFollowUpRequest?: { messages?: Array<Record<string, unknown>> } }).__lastFollowUpRequest
+    );
+
+    const toolMessage = followUpRequest?.messages?.find((message) => message.role === 'tool');
+
+    expect(toolMessage).toBeTruthy();
+    expect(toolMessage?.content).toContain('Tool execution failed:');
+    expect(toolMessage?.content).not.toBe('null');
+  });
+
   test('handles API error gracefully', async ({ page }) => {
     // Mock API to return an error
     await page.route('**/api/router/v1/chat/completions', async (route) => {
