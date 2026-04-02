@@ -6,6 +6,7 @@
 
 ENV ?= cpu
 CHANGED_FILES ?=
+AGENT_CHANGED_FILES_PATH ?=
 AGENT_BASE_REF ?=
 AGENT_SERVE_CONFIG ?=
 AGENT_SERVE_ARGS ?=
@@ -110,7 +111,7 @@ agent-stop-local: ## Stop local vllm-sr services
 
 agent-lint: agent-bootstrap ## Run lint and structure gates for changed files
 	@$(LOG_TARGET)
-	@RAW_FILES="$$( "$(AGENT_PYTHON)" tools/agent/scripts/agent_gate.py changed-files --base-ref "$(AGENT_BASE_REF)" --changed-files "$(CHANGED_FILES)")"; \
+	@RAW_FILES="$$( "$(AGENT_PYTHON)" tools/agent/scripts/agent_gate.py changed-files --base-ref "$(AGENT_BASE_REF)" --changed-files "$(CHANGED_FILES)" --changed-files-path "$(AGENT_CHANGED_FILES_PATH)")"; \
 	if [ -z "$$RAW_FILES" ]; then \
 		echo "No changed files detected."; \
 		exit 0; \
@@ -135,8 +136,8 @@ agent-lint: agent-bootstrap ## Run lint and structure gates for changed files
 agent-fast-gate: ## Run the fast gate: manifest validation, lint, and lightweight tests
 	@$(LOG_TARGET)
 	@$(MAKE) agent-validate
-	@$(MAKE) agent-lint CHANGED_FILES="$(CHANGED_FILES)" AGENT_BASE_REF="$(AGENT_BASE_REF)"
-	@"$(AGENT_PYTHON)" tools/agent/scripts/agent_gate.py run-tests --mode fast --base-ref "$(AGENT_BASE_REF)" --changed-files "$(CHANGED_FILES)"
+	@$(MAKE) agent-lint CHANGED_FILES="$(CHANGED_FILES)" AGENT_CHANGED_FILES_PATH="$(AGENT_CHANGED_FILES_PATH)" AGENT_BASE_REF="$(AGENT_BASE_REF)"
+	@"$(AGENT_PYTHON)" tools/agent/scripts/agent_gate.py run-tests --mode fast --base-ref "$(AGENT_BASE_REF)" --changed-files "$(CHANGED_FILES)" --changed-files-path "$(AGENT_CHANGED_FILES_PATH)"
 
 agent-ci-lint: agent-bootstrap ## Reproduce the CI changed-file lint gate locally
 	@$(LOG_TARGET)
@@ -158,18 +159,18 @@ agent-ci-lint: agent-bootstrap ## Reproduce the CI changed-file lint gate locall
 agent-report: agent-venv-install ## Show primary skill, impacted surfaces, and validation commands
 	@$(LOG_TARGET)
 	@if [ -n "$(AGENT_REPORT_WRITE_PATH)" ]; then \
-		"$(AGENT_PYTHON)" tools/agent/scripts/agent_gate.py report --env "$(ENV)" --base-ref "$(AGENT_BASE_REF)" --changed-files "$(CHANGED_FILES)" --context-detail "$(AGENT_REPORT_CONTEXT_DETAIL)" --write "$(AGENT_REPORT_WRITE_PATH)"; \
+		"$(AGENT_PYTHON)" tools/agent/scripts/agent_gate.py report --env "$(ENV)" --base-ref "$(AGENT_BASE_REF)" --changed-files "$(CHANGED_FILES)" --changed-files-path "$(AGENT_CHANGED_FILES_PATH)" --context-detail "$(AGENT_REPORT_CONTEXT_DETAIL)" --write "$(AGENT_REPORT_WRITE_PATH)"; \
 	elif [ -n "$(AGENT_REPORT_WRITE)" ]; then \
-		"$(AGENT_PYTHON)" tools/agent/scripts/agent_gate.py report --env "$(ENV)" --base-ref "$(AGENT_BASE_REF)" --changed-files "$(CHANGED_FILES)" --context-detail "$(AGENT_REPORT_CONTEXT_DETAIL)" --write-default; \
+		"$(AGENT_PYTHON)" tools/agent/scripts/agent_gate.py report --env "$(ENV)" --base-ref "$(AGENT_BASE_REF)" --changed-files "$(CHANGED_FILES)" --changed-files-path "$(AGENT_CHANGED_FILES_PATH)" --context-detail "$(AGENT_REPORT_CONTEXT_DETAIL)" --write-default; \
 	else \
-		"$(AGENT_PYTHON)" tools/agent/scripts/agent_gate.py report --env "$(ENV)" --base-ref "$(AGENT_BASE_REF)" --changed-files "$(CHANGED_FILES)" --context-detail "$(AGENT_REPORT_CONTEXT_DETAIL)"; \
+		"$(AGENT_PYTHON)" tools/agent/scripts/agent_gate.py report --env "$(ENV)" --base-ref "$(AGENT_BASE_REF)" --changed-files "$(CHANGED_FILES)" --changed-files-path "$(AGENT_CHANGED_FILES_PATH)" --context-detail "$(AGENT_REPORT_CONTEXT_DETAIL)"; \
 	fi
 
 agent-ci-gate: ## Run the repo-standard fast CI gate
 	@$(LOG_TARGET)
-	@$(MAKE) agent-report ENV="$(ENV)" CHANGED_FILES="$(CHANGED_FILES)" AGENT_BASE_REF="$(AGENT_BASE_REF)"
-	@"$(AGENT_PYTHON)" tools/agent/scripts/agent_gate.py resolve --base-ref "$(AGENT_BASE_REF)" --changed-files "$(CHANGED_FILES)" --format summary
-	@$(MAKE) agent-fast-gate CHANGED_FILES="$(CHANGED_FILES)" AGENT_BASE_REF="$(AGENT_BASE_REF)"
+	@$(MAKE) agent-report ENV="$(ENV)" CHANGED_FILES="$(CHANGED_FILES)" AGENT_CHANGED_FILES_PATH="$(AGENT_CHANGED_FILES_PATH)" AGENT_BASE_REF="$(AGENT_BASE_REF)"
+	@"$(AGENT_PYTHON)" tools/agent/scripts/agent_gate.py resolve --base-ref "$(AGENT_BASE_REF)" --changed-files "$(CHANGED_FILES)" --changed-files-path "$(AGENT_CHANGED_FILES_PATH)" --format summary
+	@$(MAKE) agent-fast-gate CHANGED_FILES="$(CHANGED_FILES)" AGENT_CHANGED_FILES_PATH="$(AGENT_CHANGED_FILES_PATH)" AGENT_BASE_REF="$(AGENT_BASE_REF)"
 
 agent-smoke-local: ## Validate local container, router, envoy, and dashboard health
 	@$(LOG_TARGET)
@@ -231,7 +232,7 @@ agent-smoke-local: ## Validate local container, router, envoy, and dashboard hea
 
 agent-e2e-affected: agent-venv-install ## Run local E2E profiles affected by the changed files
 	@$(LOG_TARGET)
-	@"$(AGENT_PYTHON)" tools/agent/scripts/agent_gate.py run-e2e --base-ref "$(AGENT_BASE_REF)" --changed-files "$(CHANGED_FILES)"
+	@"$(AGENT_PYTHON)" tools/agent/scripts/agent_gate.py run-e2e --base-ref "$(AGENT_BASE_REF)" --changed-files "$(CHANGED_FILES)" --changed-files-path "$(AGENT_CHANGED_FILES_PATH)"
 
 test-and-build-local: ## Reproduce the CI Test And Build job locally
 	@$(LOG_TARGET)
@@ -254,15 +255,15 @@ agent-pr-gate: ## Reproduce the baseline PR requirements locally
 agent-feature-gate: ## Run lint, targeted tests, local smoke, and a final report
 	@$(LOG_TARGET)
 	@set -e; \
-	$(MAKE) agent-ci-gate CHANGED_FILES="$(CHANGED_FILES)" AGENT_BASE_REF="$(AGENT_BASE_REF)"; \
-	"$(AGENT_PYTHON)" tools/agent/scripts/agent_gate.py run-tests --mode feature-only --base-ref "$(AGENT_BASE_REF)" --changed-files "$(CHANGED_FILES)"; \
-	if [ "$$( "$(AGENT_PYTHON)" tools/agent/scripts/agent_gate.py needs-smoke --base-ref "$(AGENT_BASE_REF)" --changed-files "$(CHANGED_FILES)")" = "true" ]; then \
+	$(MAKE) agent-ci-gate CHANGED_FILES="$(CHANGED_FILES)" AGENT_CHANGED_FILES_PATH="$(AGENT_CHANGED_FILES_PATH)" AGENT_BASE_REF="$(AGENT_BASE_REF)"; \
+	"$(AGENT_PYTHON)" tools/agent/scripts/agent_gate.py run-tests --mode feature-only --base-ref "$(AGENT_BASE_REF)" --changed-files "$(CHANGED_FILES)" --changed-files-path "$(AGENT_CHANGED_FILES_PATH)"; \
+	if [ "$$( "$(AGENT_PYTHON)" tools/agent/scripts/agent_gate.py needs-smoke --base-ref "$(AGENT_BASE_REF)" --changed-files "$(CHANGED_FILES)" --changed-files-path "$(AGENT_CHANGED_FILES_PATH)")" = "true" ]; then \
 		trap '$(MAKE) agent-stop-local ENV=$(ENV) AGENT_STACK_NAME="$(AGENT_STACK_NAME)" AGENT_PORT_OFFSET="$(AGENT_PORT_OFFSET)" >/dev/null 2>&1 || true' EXIT; \
 		$(MAKE) agent-dev ENV=$(ENV); \
 		$(MAKE) agent-serve-local ENV=$(ENV) AGENT_STACK_NAME="$(AGENT_STACK_NAME)" AGENT_PORT_OFFSET="$(AGENT_PORT_OFFSET)"; \
 		$(MAKE) agent-smoke-local AGENT_STACK_NAME="$(AGENT_STACK_NAME)" AGENT_PORT_OFFSET="$(AGENT_PORT_OFFSET)"; \
 	fi; \
-	"$(AGENT_PYTHON)" tools/agent/scripts/agent_gate.py report --env "$(ENV)" --base-ref "$(AGENT_BASE_REF)" --changed-files "$(CHANGED_FILES)"
+	"$(AGENT_PYTHON)" tools/agent/scripts/agent_gate.py report --env "$(ENV)" --base-ref "$(AGENT_BASE_REF)" --changed-files "$(CHANGED_FILES)" --changed-files-path "$(AGENT_CHANGED_FILES_PATH)"
 
 .PHONY: agent-help agent-venv-install agent-bootstrap agent-ci-lint agent-dev agent-serve-local agent-stop-local \
 	agent-validate agent-lint agent-fast-gate agent-report agent-ci-gate agent-smoke-local agent-e2e-affected \

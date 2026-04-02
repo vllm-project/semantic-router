@@ -13,8 +13,11 @@ def test_detect_required_backends_uses_canonical_defaults():
     assert detect_required_backends(config) == {"redis", "postgres"}
 
 
-def test_detect_required_backends_skips_setup_mode_bootstrap_config():
-    assert detect_required_backends(build_bootstrap_config()) == set()
+def test_detect_required_backends_uses_defaults_for_setup_mode_bootstrap_config():
+    assert detect_required_backends(build_bootstrap_config()) == {
+        "redis",
+        "postgres",
+    }
 
 
 def test_detect_required_backends_respects_explicit_service_disable():
@@ -50,6 +53,15 @@ def test_inject_local_service_runtime_defaults_populates_canonical_connections()
     assert services["router_replay"]["postgres"]["host"] == "vllm-sr-postgres"
     assert services["router_replay"]["postgres"]["database"] == "vsr"
     assert services["router_replay"]["postgres"]["user"] == "router"
+
+
+def test_inject_local_service_runtime_defaults_keeps_setup_bootstrap_minimal():
+    config = build_bootstrap_config()
+
+    changed = inject_local_service_runtime_defaults(config, resolve_runtime_stack())
+
+    assert changed is False
+    assert "global" not in config
 
 
 def test_inject_local_service_runtime_defaults_backfills_blank_backend_fields():
