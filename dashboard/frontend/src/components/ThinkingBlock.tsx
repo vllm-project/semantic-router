@@ -20,18 +20,8 @@ const ThinkingBlock = ({ content, isStreaming = false, thinkingTime }: ThinkingB
   useEffect(() => {
     const shouldAutoCollapse = content.length > AUTO_COLLAPSE_THRESHOLD
 
-    console.log('ThinkingBlock state:', {
-      contentLength: content.length,
-      threshold: AUTO_COLLAPSE_THRESHOLD,
-      shouldAutoCollapse,
-      isStreaming,
-      hasAutoCollapsed,
-      isExpanded
-    })
-
     // Auto-collapse as soon as content exceeds threshold, even while streaming
     if (shouldAutoCollapse && !hasAutoCollapsed) {
-      console.log(`✅ Auto-collapsing: content length ${content.length} > ${AUTO_COLLAPSE_THRESHOLD}`)
       setIsExpanded(false)
       setHasAutoCollapsed(true)
     }

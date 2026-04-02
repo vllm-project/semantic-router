@@ -103,6 +103,48 @@ const extractToolCalls = (source: JsonRecord | null): ParsedToolCallChunk[] => {
 export const isEventStreamContentType = (contentType: string | null): boolean =>
   typeof contentType === 'string' && contentType.includes('text/event-stream')
 
+const extractEventStreamDataLines = (buffer: string, flush: boolean) => {
+  const lines = buffer.split('\n')
+  const remainder = flush ? '' : (lines.pop() || '')
+
+  return { lines, remainder }
+}
+
+export const consumeEventStream = async (
+  stream: ReadableStream<Uint8Array>,
+  onData: (data: string) => void
+) => {
+  const reader = stream.getReader()
+  const decoder = new TextDecoder()
+  let buffer = ''
+
+  while (true) {
+    const { done, value } = await reader.read()
+    buffer += decoder.decode(value ?? new Uint8Array(), { stream: !done })
+
+    const { lines, remainder } = extractEventStreamDataLines(buffer, done)
+    buffer = remainder
+
+    for (const rawLine of lines) {
+      const line = rawLine.trim()
+      if (!line.startsWith('data: ')) {
+        continue
+      }
+
+      const data = line.slice(6).trim()
+      if (!data || data === '[DONE]') {
+        continue
+      }
+
+      onData(data)
+    }
+
+    if (done) {
+      break
+    }
+  }
+}
+
 export const mergeParsedChoices = (
   choiceContents: Map<number, ChoiceAccumulator>,
   parsedChoices: ParsedChatChoice[]
