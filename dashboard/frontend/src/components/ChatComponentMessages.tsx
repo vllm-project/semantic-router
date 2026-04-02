@@ -188,6 +188,10 @@ function MessageCard({
 }: MessageCardProps) {
   const isRatingsMessage =
     message.role === 'assistant' && Boolean(message.choices && message.choices.length > 1)
+  const showCopyAction =
+    (message.role === 'assistant' || message.role === 'user') &&
+    Boolean(message.content) &&
+    !message.isStreaming
 
   return (
     <div
@@ -217,10 +221,10 @@ function MessageCard({
         {message.role === 'assistant' && message.reasoning_mom_responses ? (
           <ReMoMResponsesDisplay rounds={message.reasoning_mom_responses} />
         ) : null}
-        {message.role === 'assistant' && message.content && !message.isStreaming ? (
+        {showCopyAction ? (
           <div className={styles.messageActionRow}>
             <MessageActionBar content={message.content} />
-            {message.headers?.['x-vsr-selected-model'] ? (
+            {message.role === 'assistant' && message.headers?.['x-vsr-selected-model'] ? (
               <FeedbackButtons
                 modelId={message.headers['x-vsr-selected-model']}
                 category={message.headers['x-vsr-selected-decision']}

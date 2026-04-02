@@ -960,11 +960,6 @@ body.playground-fullscreen .container {
   box-shadow: none !important;
 }
 
-.input:disabled {
-  opacity: 0.6;
-  cursor: not-allowed;
-}
-
 .input::placeholder {
   color: var(--color-text-muted);
 }
@@ -980,6 +975,12 @@ body.playground-fullscreen .container {
   display: flex;
   align-items: center;
   gap: 0.4rem;
+}
+
+.composerButtons {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
 }
 
 .inputModeControls {

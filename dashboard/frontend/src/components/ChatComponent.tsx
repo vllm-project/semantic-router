@@ -9,6 +9,7 @@ import ChatComponentConversationViewport from './ChatComponentConversationViewpo
 import ChatComponentInputBar from './ChatComponentInputBar'
 import ChatComponentRoomToggle from './ChatComponentRoomToggle'
 import ChatComponentSidebarShell from './ChatComponentSidebarShell'
+import ChatTaskQueue from './ChatTaskQueue'
 import {
   buildChoicesArray,
   consumeEventStream,
@@ -33,13 +34,15 @@ import {
   type ConversationPreview,
   generateConversationId,
   generateMessageId,
+  generatePlaygroundTaskId,
   type Message,
+  type PlaygroundTask,
   type ReMoMRoundResponse,
 } from './ChatComponentTypes'
 import { useToolRegistry } from '../tools'
 import { useMCPToolSync } from '../tools/mcp'
 import { ensureOpenClawServerConnected } from '../tools/mcp/api'
-import { useConversationStorage } from '../hooks'
+import { useConversationStorage, usePlaygroundQueue } from '../hooks'
 import { useReadonly } from '../contexts/ReadonlyContext'
 import type { ToolCall, ToolResult } from '../tools'
 import { serializeToolResultForModel } from '../tools/toolResultSupport'
@@ -59,6 +62,7 @@ const ChatComponent = ({
   const [conversationId, setConversationId] = useState<string>(() => generateConversationId())
   const [inputValue, setInputValue] = useState('')
   const [isLoading, setIsLoading] = useState(false)
+  const [activeTask, setActiveTask] = useState<PlaygroundTask | null>(null)
   const model = 'MoM' // Fixed to MoM
   const [error, setError] = useState<string | null>(null)
   const [showThinking, setShowThinking] = useState(false)
@@ -82,11 +86,21 @@ const ChatComponent = ({
   const inputRef = useRef<HTMLTextAreaElement>(null)
   const abortControllerRef = useRef<AbortController | null>(null)
   const hasHydratedConversation = useRef(false)
+  const isLoadingRef = useRef(false)
+  const activeTaskRef = useRef<PlaygroundTask | null>(null)
+  const messagesRef = useRef<Message[]>([])
 
   const { conversations, saveConversation, getConversation, deleteConversation } = useConversationStorage<Message[]>({
     storageKey: 'sr:chat:conversations',
     maxConversations: 20,
   })
+  const {
+    clearConversationQueue,
+    enqueueTask,
+    getQueue,
+    removeTask: removeQueuedTask,
+    reorderTasks,
+  } = usePlaygroundQueue()
 
   const restoreMessages = useCallback((payload: Message[]) => {
     return payload.map(message => ({
@@ -94,6 +108,10 @@ const ChatComponent = ({
       timestamp: new Date(message.timestamp),
     }))
   }, [])
+
+  useEffect(() => {
+    messagesRef.current = messages
+  }, [messages])
 
   // MCP 工具同步 - 自动将 MCP 服务器的工具同步到 toolRegistry
   const { refresh: refreshMCPTools } = useMCPToolSync({ enabled: true, pollInterval: 30000 })
@@ -119,15 +137,6 @@ const ChatComponent = ({
     [otherToolDefinitions]
   )
   const clawManagementDisabled = readonlyLoading || isReadonly
-  const activeOtherToolDefinitions = useMemo(
-    () => (
-      enableClawMode && !clawManagementDisabled
-        ? [...baseOtherToolDefinitions, ...clawToolDefinitions]
-        : baseOtherToolDefinitions
-    ),
-    [baseOtherToolDefinitions, clawManagementDisabled, clawToolDefinitions, enableClawMode]
-  )
-
   // When headers arrive, show HeaderReveal
   useEffect(() => {
     if (pendingHeaders && Object.keys(pendingHeaders).length > 0) {
@@ -231,7 +240,36 @@ const ChatComponent = ({
         }
       })
   }, [conversations])
+  const queuedTasks = useMemo(() => getQueue(conversationId), [conversationId, getQueue])
   const generateId = generateMessageId
+
+  const buildTaskRequestOptions = useCallback(
+    () => ({
+      enableClawMode: enableClawMode && !clawManagementDisabled,
+      enableWebSearch,
+      model,
+    }),
+    [clawManagementDisabled, enableClawMode, enableWebSearch]
+  )
+
+  const buildTaskTools = useCallback(
+    (task: PlaygroundTask) => {
+      const otherTools = task.requestOptions.enableClawMode && !clawManagementDisabled
+        ? [...baseOtherToolDefinitions, ...clawToolDefinitions]
+        : baseOtherToolDefinitions
+
+      return [
+        ...otherTools,
+        ...(task.requestOptions.enableWebSearch ? searchToolDefinitions : []),
+      ]
+    },
+    [
+      baseOtherToolDefinitions,
+      clawManagementDisabled,
+      clawToolDefinitions,
+      searchToolDefinitions,
+    ]
+  )
 
   const handleThinkingComplete = useCallback(() => {}, [])
 
@@ -246,6 +284,9 @@ const ChatComponent = ({
       if (!target) return
 
       abortControllerRef.current?.abort()
+      activeTaskRef.current = null
+      isLoadingRef.current = false
+      setActiveTask(null)
       setIsLoading(false)
       setConversationId(target.id)
       setMessages(restoreMessages(Array.isArray(target.payload) ? target.payload : []))
@@ -263,10 +304,14 @@ const ChatComponent = ({
     (id: string) => {
       const remaining = conversations.filter(conv => conv.id !== id)
 
+      clearConversationQueue(id)
       deleteConversation(id)
 
       if (id === conversationId) {
         abortControllerRef.current?.abort()
+        activeTaskRef.current = null
+        isLoadingRef.current = false
+        setActiveTask(null)
         setIsLoading(false)
         setError(null)
         setPendingHeaders(null)
@@ -285,14 +330,15 @@ const ChatComponent = ({
         }
       }
     },
-    [conversationId, conversations, deleteConversation, restoreMessages]
+    [clearConversationQueue, conversationId, conversations, deleteConversation, restoreMessages]
   )
 
-  const handleSend = async () => {
-    const trimmedInput = inputValue.trim()
-    if (!trimmedInput || isLoading) return
+  const executeTask = useCallback(async (task: PlaygroundTask) => {
+    const trimmedInput = task.prompt.trim()
+    if (!trimmedInput) return
 
     setError(null)
+
     const userMessage: Message = {
       id: generateId(),
       role: 'user',
@@ -301,12 +347,12 @@ const ChatComponent = ({
     }
 
     setMessages(prev => [...prev, userMessage])
-    setInputValue('')
+    isLoadingRef.current = true
     setIsLoading(true)
 
     setPendingHeaders(null)
     setShowHeaderReveal(false)
-    setShowThinking(true)  // Show immediately when user sends message
+    setShowThinking(true)
 
     const assistantMessageId = generateId()
     const assistantMessage: Message = {
@@ -321,16 +367,13 @@ const ChatComponent = ({
     try {
       abortControllerRef.current = new AbortController()
 
-      const activeTools = [
-        ...activeOtherToolDefinitions,
-        ...(enableWebSearch ? searchToolDefinitions : []),
-      ]
+      const activeTools = buildTaskTools(task)
       const chatMessages = buildChatMessages(
-        messages,
+        messagesRef.current,
         trimmedInput,
-        enableClawMode && !clawManagementDisabled
+        task.requestOptions.enableClawMode && !clawManagementDisabled
       )
-      const requestBody = buildChatRequestBody(model, chatMessages, activeTools)
+      const requestBody = buildChatRequestBody(task.requestOptions.model, chatMessages, activeTools)
 
       const response = await fetch(endpoint, {
         method: 'POST',
@@ -351,8 +394,8 @@ const ChatComponent = ({
       if (Object.keys(responseHeaders).length > 0) {
         console.log('Headers received, showing HeaderReveal')
         setPendingHeaders(responseHeaders)
-        setShowThinking(false)  // Hide full-screen thinking animation
-        setShowHeaderReveal(true)  // Show HeaderReveal
+        setShowThinking(false)
+        setShowHeaderReveal(true)
       }
 
       const choiceContents: Map<number, ChoiceAccumulator> = new Map()
@@ -517,7 +560,7 @@ const ChatComponent = ({
           throw new Error('No response body')
         }
 
-        await consumeEventStream(response.body, (data) => {
+        await consumeEventStream(response.body, data => {
           const parsedChunk = parseChatCompletionPayload(data)
           if (!parsedChunk) {
             return
@@ -531,39 +574,28 @@ const ChatComponent = ({
         })
       }
 
-      // If we had tool calls, execute tools in a loop until model gives final answer
       if (hasToolCalls) {
-        // Maximum tool call iterations to prevent infinite loops
         const MAX_TOOL_ITERATIONS = 30
         let iteration = 0
-
-        // Accumulated tool calls and results across all iterations
         let allToolCalls = Array.from(toolCallsMap.values())
         let allToolResults: ToolResult[] = []
-
-        // Track final content from tool loop
         let finalContent = ''
-
         let currentMessages: OutboundChatMessage[] = [...chatMessages]
 
         while (iteration < MAX_TOOL_ITERATIONS) {
           iteration++
           console.log(`Tool iteration ${iteration}/${MAX_TOOL_ITERATIONS}`)
 
-          // Get current tool calls to execute
           const currentToolCalls = iteration === 1
             ? allToolCalls
             : Array.from(toolCallsMap.values())
 
           if (currentToolCalls.length === 0) break
 
-          // Mark all tools as running
           currentToolCalls.forEach(tc => { tc.status = 'running' })
 
-          // Update UI with current tool calls
           const uiToolCalls = [...allToolCalls]
           if (iteration > 1) {
-            // Add new tool calls from subsequent iterations
             currentToolCalls.forEach(tc => {
               if (!uiToolCalls.find(t => t.id === tc.id)) {
                 uiToolCalls.push(tc)
@@ -580,12 +612,10 @@ const ChatComponent = ({
             )
           )
 
-          // Execute all current tools in parallel
           const toolResults = await executeTools(currentToolCalls, {
             signal: abortControllerRef.current?.signal,
           })
 
-          // Update tool statuses based on results
           toolResults.forEach(result => {
             const tc = currentToolCalls.find(t => t.id === result.callId)
             if (tc) {
@@ -593,10 +623,8 @@ const ChatComponent = ({
             }
           })
 
-          // Accumulate results
           allToolResults = [...allToolResults, ...toolResults]
 
-          // Update message with completed tool calls and all results
           setMessages(prev =>
             prev.map(m =>
               m.id === assistantMessageId
@@ -605,15 +633,12 @@ const ChatComponent = ({
             )
           )
 
-          // Auto-expand the first tool card
           if (uiToolCalls.length > 0 && expandedToolCards.size === 0) {
             setExpandedToolCards(new Set([uiToolCalls[0].id]))
           }
 
-          // Build messages for next API call
           currentMessages = [
             ...currentMessages,
-            // Assistant message with tool_calls
             {
               role: 'assistant',
               content: null,
@@ -626,7 +651,6 @@ const ChatComponent = ({
                 }
               }))
             },
-            // Tool results (truncate long content to avoid exceeding model context)
             ...toolResults.map(tr => ({
               role: 'tool',
               tool_call_id: tr.callId,
@@ -634,17 +658,15 @@ const ChatComponent = ({
             }))
           ]
 
-          // Make follow-up API call with tools enabled
           const followUpResponse = await fetch(endpoint, {
             method: 'POST',
             headers: {
               'Content-Type': 'application/json',
             },
             body: JSON.stringify({
-              model,
+              model: task.requestOptions.model,
               messages: currentMessages,
               stream: true,
-              // Keep tools enabled for multi-step tool usage (same logic as initial request)
               tools: activeTools,
               tool_choice: 'auto',
             }),
@@ -661,7 +683,6 @@ const ChatComponent = ({
           let hasMoreToolCalls = false
           let streamFinishReason = ''
 
-          // Reset tool calls map for this iteration
           toolCallsMap.clear()
 
           const syncFollowUpMessage = (streaming: boolean) => {
@@ -740,7 +761,7 @@ const ChatComponent = ({
           } else {
             if (!followUpResponse.body) break
 
-            await consumeEventStream(followUpResponse.body, (data) => {
+            await consumeEventStream(followUpResponse.body, data => {
               const parsedFollowUpChunk = parseChatCompletionPayload(data)
               if (!parsedFollowUpChunk) {
                 return
@@ -755,23 +776,18 @@ const ChatComponent = ({
             })
           }
 
-          // Save content from this iteration
           if (followUpContent) {
             finalContent = followUpContent
             console.log(`Iteration ${iteration} content: ${followUpContent.substring(0, 100)}`)
           }
 
-          // Check if we should continue the loop
           if (streamFinishReason === 'tool_calls' && toolCallsMap.size > 0) {
-            // Model wants to call more tools, continue loop
             console.log(`Model requested ${toolCallsMap.size} more tool call(s) (finish_reason: tool_calls), will continue loop`)
             continue
           } else if (streamFinishReason === 'stop' || streamFinishReason === 'length') {
-            // Model finished, exit loop
             console.log(`Model finished (finish_reason: ${streamFinishReason}), exiting tool loop`)
             break
           } else if (!hasMoreToolCalls) {
-            // No more tool calls, exit loop
             console.log('No more tool calls detected, exiting tool loop')
             break
           }
@@ -783,7 +799,6 @@ const ChatComponent = ({
           console.warn('Reached maximum tool iterations, stopping')
         }
 
-        // Ensure final content is set after all tool iterations
         console.log('Tool loop finished, final content length:', finalContent.length)
         if (finalContent) {
           setMessages(prev =>
@@ -794,35 +809,32 @@ const ChatComponent = ({
             )
           )
         } else {
-          // If no content after tool loop, generate a fallback summary from tool results
           console.warn('Tool loop finished but no content received from model, generating fallback summary')
 
-          // Generate fallback content based on tool results
           let fallbackContent = ''
           if (allToolResults.length > 0) {
             const successResults = allToolResults.filter(tr => !tr.error)
             const failedResults = allToolResults.filter(tr => tr.error)
 
             if (successResults.length > 0) {
-              fallbackContent = '基于搜索结果，以下是相关信息：\n\n'
+              fallbackContent = 'Based on the tool results, here is the relevant information:\n\n'
               for (const tr of successResults) {
                 if (typeof tr.content === 'string' && tr.content.length > 0) {
-                  // 截取前 500 字符作为摘要
                   const summary = tr.content.length > 500
-                    ? tr.content.substring(0, 500) + '...'
+                    ? `${tr.content.substring(0, 500)}...`
                     : tr.content
-                  fallbackContent += summary + '\n\n'
+                  fallbackContent += `${summary}\n\n`
                 }
               }
             }
 
             if (failedResults.length > 0 && !fallbackContent) {
-              fallbackContent = '抱歉，部分工具执行失败。请尝试重新查询或使用其他关键词。'
+              fallbackContent = 'Some tool calls failed. Please try again or refine the request.'
             }
           }
 
           if (!fallbackContent) {
-            fallbackContent = '模型没有生成响应内容，请尝试重新提问。'
+            fallbackContent = 'The model did not generate a response. Please try again.'
           }
 
           setMessages(prev =>
@@ -835,12 +847,9 @@ const ChatComponent = ({
         }
       }
 
-      // Finalize message
       const finalChoices: Choice[] | undefined = isRatingsMode
         ? buildChoicesArray(choiceContents)
         : undefined
-
-      // Get final thinking process from supported reasoning fields
       const finalThinkingProcess = latestThinkingProcess || getFirstChoice(choiceContents)?.reasoningContent || ''
 
       console.log('[ReMoM] Setting reasoning_mom_responses:', reasoningMomResponses)
@@ -867,11 +876,90 @@ const ChatComponent = ({
       setError(errorMessage)
       setMessages(prev => prev.filter(m => m.id !== assistantMessageId))
     } finally {
+      isLoadingRef.current = false
       setIsLoading(false)
       setShowThinking(false)
+      if (activeTaskRef.current?.id === task.id) {
+        activeTaskRef.current = null
+      }
+      setActiveTask(current => (current?.id === task.id ? null : current))
       abortControllerRef.current = null
     }
-  }
+  }, [
+    buildTaskTools,
+    clawManagementDisabled,
+    endpoint,
+    executeTools,
+    expandedToolCards.size,
+    generateId,
+  ])
+
+  const handleSend = useCallback(() => {
+    const trimmedInput = inputValue.trim()
+    if (!trimmedInput) return
+
+    const nextTask: PlaygroundTask = {
+      id: generatePlaygroundTaskId(),
+      conversationId,
+      prompt: trimmedInput,
+      createdAt: Date.now(),
+      requestOptions: buildTaskRequestOptions(),
+    }
+
+    if (!conversations.some(conv => conv.id === conversationId)) {
+      hasHydratedConversation.current = true
+      saveConversation(conversationId, messagesRef.current)
+    }
+
+    setError(null)
+    setInputValue('')
+
+    if (!isLoadingRef.current && !activeTaskRef.current && queuedTasks.length === 0) {
+      activeTaskRef.current = nextTask
+      setActiveTask(nextTask)
+      void executeTask(nextTask)
+      return
+    }
+    enqueueTask(nextTask)
+  }, [
+    buildTaskRequestOptions,
+    conversationId,
+    conversations,
+    enqueueTask,
+    executeTask,
+    inputValue,
+    queuedTasks.length,
+    saveConversation,
+  ])
+
+  useEffect(() => {
+    if (enableClawMode && clawView === 'room') {
+      return
+    }
+    if (isLoadingRef.current || activeTaskRef.current || queuedTasks.length === 0) {
+      return
+    }
+    const nextTask = queuedTasks[0]
+    removeQueuedTask(conversationId, nextTask.id)
+    activeTaskRef.current = nextTask
+    setActiveTask(nextTask)
+    void executeTask(nextTask)
+  }, [
+    clawView,
+    conversationId,
+    enableClawMode,
+    executeTask,
+    queuedTasks,
+    removeQueuedTask,
+  ])
+
+  const handleDeleteQueuedTask = useCallback((taskId: string) => {
+    removeQueuedTask(conversationId, taskId)
+  }, [conversationId, removeQueuedTask])
+
+  const handleReorderQueuedTasks = useCallback((sourceTaskId: string, targetTaskId: string) => {
+    reorderTasks(conversationId, sourceTaskId, targetTaskId)
+  }, [conversationId, reorderTasks])
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter' && !e.shiftKey) {
@@ -882,11 +970,15 @@ const ChatComponent = ({
 
   const handleStop = () => {
     abortControllerRef.current?.abort()
+    isLoadingRef.current = false
     setIsLoading(false)
   }
 
   const handleNewConversation = useCallback(() => {
     abortControllerRef.current?.abort()
+    activeTaskRef.current = null
+    isLoadingRef.current = false
+    setActiveTask(null)
     setIsLoading(false)
     setMessages([])
     setError(null)
@@ -1024,6 +1116,12 @@ const ChatComponent = ({
                   expandedToolCards={expandedToolCards}
                   messages={messages}
                   onToggleToolCard={handleToggleToolCard}
+                />
+                <ChatTaskQueue
+                  activeTask={activeTask}
+                  queuedTasks={queuedTasks}
+                  onDeleteTask={handleDeleteQueuedTask}
+                  onReorderTasks={handleReorderQueuedTasks}
                 />
                 <ChatComponentInputBar
                   enableClawMode={enableClawMode}

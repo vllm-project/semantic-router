@@ -114,6 +114,20 @@ async function mockPlaygroundBootstrap(page: import('@playwright/test').Page): P
   await mockAuthenticatedAppShell(page);
 }
 
+async function readStoredQueuePrompts(page: import('@playwright/test').Page): Promise<string[]> {
+  return page.evaluate(() => {
+    const raw = window.localStorage.getItem('sr:playground:queue');
+    if (!raw) {
+      return [];
+    }
+
+    const parsed = JSON.parse(raw) as Record<string, Array<{ prompt?: string }>>;
+    return Object.values(parsed).flatMap(tasks =>
+      Array.isArray(tasks) ? tasks.map(task => task.prompt || '').filter(Boolean) : []
+    );
+  });
+}
+
 test.describe('Playground Chat Component', () => {
   test.beforeEach(async ({ page }) => {
     await mockPlaygroundBootstrap(page);
@@ -227,6 +241,127 @@ test.describe('Playground Chat Component', () => {
     const input = page.getByPlaceholder('Ask me anything...');
     await input.fill('Hello, this is a test message');
     await expect(input).toHaveValue('Hello, this is a test message');
+  });
+
+  test('shows a copy button for user messages and copies their content', async ({ page }) => {
+    await page.route('**/api/router/v1/chat/completions', async route => {
+      await route.fulfill({
+        status: 200,
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: chatJsonBody('Assistant reply'),
+      });
+    });
+
+    await page.evaluate(() => {
+      let copiedText = '';
+      Object.defineProperty(window, '__copiedUserMessage', {
+        configurable: true,
+        get: () => copiedText,
+        set: (value: string) => {
+          copiedText = value;
+        },
+      });
+
+      Object.defineProperty(navigator, 'clipboard', {
+        configurable: true,
+        value: {
+          writeText: async (text: string) => {
+            (window as typeof window & { __copiedUserMessage?: string }).__copiedUserMessage = text;
+          },
+        },
+      });
+    });
+
+    await page.getByPlaceholder('Ask me anything...').fill('Copy my user message');
+    await page.getByRole('button', { name: 'Send message' }).click();
+
+    const userMessage = page.locator('[data-message-role="user"]').last();
+    await expect(userMessage).toContainText('Copy my user message');
+
+    await userMessage.getByRole('button', { name: 'Copy' }).click();
+
+    await expect.poll(() =>
+      page.evaluate(() => (window as typeof window & { __copiedUserMessage?: string }).__copiedUserMessage ?? '')
+    ).toBe('Copy my user message');
+  });
+
+  test('preserves markdown list formatting when citations are present', async ({ page }) => {
+    await page.evaluate(() => {
+      const now = Date.now();
+      window.localStorage.setItem(
+        'sr:chat:conversations',
+        JSON.stringify([
+          {
+            id: 'citation-conversation',
+            createdAt: now - 60_000,
+            updatedAt: now,
+            payload: [
+              {
+                id: 'citation-user',
+                role: 'user',
+                content: 'Show me the summary',
+                timestamp: new Date(now - 30_000).toISOString(),
+              },
+              {
+                id: 'citation-assistant',
+                role: 'assistant',
+                content: '## Summary\n- First cited point [1]\n- Second cited point [2]',
+                timestamp: new Date(now - 20_000).toISOString(),
+                toolResults: [
+                  {
+                    callId: 'search-call-1',
+                    name: 'search_web',
+                    content: [
+                      { title: 'Source One', url: 'https://example.com/source-one', snippet: 'One' },
+                      { title: 'Source Two', url: 'https://example.com/source-two', snippet: 'Two' },
+                    ],
+                  },
+                ],
+              },
+            ],
+          },
+        ]),
+      );
+    });
+
+    await page.goto('/playground', { waitUntil: 'domcontentloaded' });
+
+    const assistantMessage = page.locator('[data-message-role="assistant"]').last();
+    await expect(assistantMessage.getByRole('heading', { name: 'Summary' })).toBeVisible();
+    await expect(assistantMessage.locator('li')).toHaveCount(2);
+    await expect(assistantMessage.getByRole('link', { name: '[1]' })).toHaveAttribute('href', 'https://example.com/source-one');
+    await expect(assistantMessage.getByRole('link', { name: '[2]' })).toHaveAttribute('href', 'https://example.com/source-two');
+  });
+
+  test('does not send on Enter while IME composition is active', async ({ page }) => {
+    let requestCount = 0;
+    await page.route('**/api/router/v1/chat/completions', async route => {
+      requestCount += 1;
+      await route.fulfill({
+        status: 200,
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: chatJsonBody('IME-safe response'),
+      });
+    });
+
+    const input = page.getByPlaceholder('Ask me anything...');
+    await input.fill('你好');
+    await input.dispatchEvent('compositionstart');
+    await input.press('Enter');
+
+    await page.waitForTimeout(200);
+    expect(requestCount).toBe(0);
+    await expect(page.locator('[data-message-role="user"]')).toHaveCount(0);
+
+    await input.dispatchEvent('compositionend');
+    await input.press('Enter');
+
+    await expect.poll(() => requestCount).toBe(1);
+    await expect(page.locator('[data-message-role="user"]').last()).toContainText('你好');
   });
 
   test('send button disabled when input empty', async ({ page }) => {
@@ -428,15 +563,21 @@ test.describe('Playground Chat Component', () => {
       );
     }, { timeout: 10000 }).toBe(1);
 
-    const followUpRequest = await page.evaluate(() =>
+    await expect.poll(async () => {
+      const request = await page.evaluate(() =>
+        (window as typeof window & { __lastFollowUpRequest?: { messages?: Array<Record<string, unknown>> } }).__lastFollowUpRequest
+      );
+      return request?.messages?.find((message) => message.role === 'tool')?.content ?? null;
+    }, { timeout: 10000 }).not.toBeNull();
+
+    const refreshedFollowUpRequest = await page.evaluate(() =>
       (window as typeof window & { __lastFollowUpRequest?: { messages?: Array<Record<string, unknown>> } }).__lastFollowUpRequest
     );
 
-    const toolMessage = followUpRequest?.messages?.find((message) => message.role === 'tool');
-
-    expect(toolMessage).toBeTruthy();
-    expect(toolMessage?.content).toContain('Tool execution failed:');
-    expect(toolMessage?.content).not.toBe('null');
+    expect(refreshedFollowUpRequest?.messages?.some((message) => message.role === 'tool')).toBeTruthy();
+    const resolvedToolMessage = refreshedFollowUpRequest?.messages?.find((message) => message.role === 'tool');
+    expect(resolvedToolMessage?.content).toContain('Tool execution failed:');
+    expect(resolvedToolMessage?.content).not.toBe('null');
   });
 
   test('executes the built-in calculate tool and forwards the structured result', async ({ page }) => {
@@ -545,7 +686,85 @@ test.describe('Playground Chat Component', () => {
     await page.getByRole('button', { name: 'Send message' }).click();
     
     // Stop button should appear (look for it quickly before response completes)
-    await expect(page.getByRole('button', { name: 'Stop generating' })).toBeVisible({ timeout: 1000 });
+    await expect(page.getByRole('button', { name: 'Stop generating' })).toBeVisible({ timeout: 5000 });
+  });
+
+  test('queues prompts during streaming, restores them after reload, and lets queued tasks be removed', async ({ page }) => {
+    let requestCount = 0;
+    await page.route('**/api/router/v1/chat/completions', async route => {
+      requestCount += 1;
+      await new Promise(resolve => setTimeout(resolve, 6000));
+      await route.fulfill({
+        status: 200,
+        headers: {
+          'Content-Type': 'text/event-stream',
+          'Cache-Control': 'no-cache',
+        },
+        body: chatStreamBody(`Response ${requestCount}`),
+      });
+    });
+
+    const input = page.getByPlaceholder('Ask me anything...');
+    await input.fill('First queued task');
+    await page.getByRole('button', { name: 'Send message' }).click();
+    await expect.poll(() => requestCount).toBe(1);
+    const queue = page.getByTestId('playground-task-queue');
+
+    await input.fill('Second queued task');
+    await page.getByRole('button', { name: 'Send message' }).click();
+    await input.fill('Third queued task');
+    await page.getByRole('button', { name: 'Send message' }).click();
+
+    await expect(queue.getByTestId('playground-task-running')).toContainText('First queued task', { timeout: 5000 });
+    await expect.poll(() => readStoredQueuePrompts(page)).toEqual(['Second queued task', 'Third queued task']);
+
+    await page.reload({ waitUntil: 'domcontentloaded' });
+
+    const restoredQueue = page.getByTestId('playground-task-queue');
+    await expect(restoredQueue.getByTestId('playground-task-running')).toContainText('Second queued task', { timeout: 10000 });
+    await expect(restoredQueue).toContainText('Third queued task');
+    await expect.poll(() => readStoredQueuePrompts(page)).toEqual(['Third queued task']);
+
+    const thirdQueuedTask = restoredQueue.locator('[data-testid^="playground-task-queue-item-"]').filter({ hasText: 'Third queued task' }).first();
+    await thirdQueuedTask.getByRole('button', { name: /Remove queued task:/ }).click();
+
+    await expect(restoredQueue).not.toContainText('Third queued task');
+    await expect.poll(() => readStoredQueuePrompts(page)).toEqual([]);
+  });
+
+  test('allows queued tasks to be reordered by dragging', async ({ page }) => {
+    let requestCount = 0;
+    await page.route('**/api/router/v1/chat/completions', async route => {
+      requestCount += 1;
+      await new Promise(resolve => setTimeout(resolve, 6000));
+      await route.fulfill({
+        status: 200,
+        headers: {
+          'Content-Type': 'text/event-stream',
+          'Cache-Control': 'no-cache',
+        },
+        body: chatStreamBody('Streaming response for queue ordering'),
+      });
+    });
+
+    const input = page.getByPlaceholder('Ask me anything...');
+    await input.fill('First queued task');
+    await page.getByRole('button', { name: 'Send message' }).click();
+    await expect.poll(() => requestCount).toBe(1);
+    const queue = page.getByTestId('playground-task-queue');
+
+    await input.fill('Second queued task');
+    await page.getByRole('button', { name: 'Send message' }).click();
+    await input.fill('Third queued task');
+    await page.getByRole('button', { name: 'Send message' }).click();
+
+    await expect(queue.getByTestId('playground-task-running')).toContainText('First queued task', { timeout: 5000 });
+    const secondQueuedTask = queue.locator('[data-testid^="playground-task-queue-item-"]').filter({ hasText: 'Second queued task' }).first();
+    const thirdQueuedTask = queue.locator('[data-testid^="playground-task-queue-item-"]').filter({ hasText: 'Third queued task' }).first();
+
+    await thirdQueuedTask.dragTo(secondQueuedTask);
+
+    await expect.poll(() => readStoredQueuePrompts(page)).toEqual(['Third queued task', 'Second queued task']);
   });
 
   test('anchors the current user turn near the top and respects manual scrolling during streaming', async ({ page }) => {
