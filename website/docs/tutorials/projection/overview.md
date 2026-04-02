@@ -101,7 +101,7 @@ The maintained [`deploy/recipes/balance.yaml`](https://github.com/vllm-project/s
 - `difficulty_score` blends context, structure, keyword, embedding, and complexity evidence
 - `difficulty_band` converts that score into `balance_simple`, `balance_medium`, `balance_complex`, and `balance_reasoning`
 - `verification_pressure` plus `verification_band` produce reusable verification outputs such as `verification_required`
-- decisions such as `premium_legal` or `reasoning_math` combine raw `domain` matches with projection outputs
+- decisions such as `premium_legal` or `reasoning_deep` combine raw `domain` matches with projection outputs
 
 That recipe is important because it shows projections being reused across many routes, not just one toy example.
 

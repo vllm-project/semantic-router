@@ -5,7 +5,8 @@ MODE="${VLLM_SR_INSTALL_MODE:-serve}"
 REQUESTED_RUNTIME="${VLLM_SR_RUNTIME:-auto}"
 INSTALL_ROOT="${VLLM_SR_INSTALL_ROOT:-$HOME/.local/share/vllm-sr}"
 BIN_DIR="${VLLM_SR_BIN_DIR:-$HOME/.local/bin}"
-PIP_SPEC="${VLLM_SR_PIP_SPEC:-vllm-sr}"
+PIP_SPEC="${VLLM_SR_PIP_SPEC:-}"
+REQUESTED_CHANNEL="${VLLM_SR_INSTALL_CHANNEL:-dev}"
 PYTHON_BIN="${VLLM_SR_PYTHON:-}"
 REQUESTED_PLATFORM="${VLLM_SR_INSTALL_PLATFORM:-${VLLM_SR_PLATFORM:-auto}}"
 AUTO_LAUNCH="${VLLM_SR_INSTALL_AUTO_LAUNCH:-1}"
@@ -108,6 +109,31 @@ should_auto_launch() {
   [ "$REQUESTED_RUNTIME" != "skip" ] || return 1
 }
 
+describe_package_channel() {
+  if [ -n "$PIP_SPEC" ]; then
+    printf 'custom (--pip-spec override)\n'
+    return
+  fi
+
+  printf '%s\n' "$REQUESTED_CHANNEL"
+}
+
+describe_package_selection() {
+  if [ -n "$PIP_SPEC" ]; then
+    printf '%s\n' "$PIP_SPEC"
+    return
+  fi
+
+  case "$REQUESTED_CHANNEL" in
+    dev)
+      printf 'vllm-sr (--pre, latest development release)\n'
+      ;;
+    stable)
+      printf 'vllm-sr (latest stable release)\n'
+      ;;
+  esac
+}
+
 print_install_plan() {
   local requested_runtime python_cmd python_version runtime_cmd package_manager
   requested_runtime="$REQUESTED_RUNTIME"
@@ -147,8 +173,9 @@ print_install_plan() {
   printf '  runtime      %s\n' "$requested_runtime"
   printf '  launch       %s\n' "$(if should_auto_launch; then printf 'auto first-run'; else printf 'manual'; fi)"
   printf '  platform     %s\n' "$(display_platform_plan)"
+  printf '  channel      %s\n' "$(describe_package_channel)"
   printf '  python deps  pip, setuptools, wheel\n'
-  printf '  package      %s\n' "$PIP_SPEC"
+  printf '  package      %s\n' "$(describe_package_selection)"
   printf '  system deps  %s\n' "$(describe_python_dependency_plan "$python_cmd")"
   printf '  runtime deps %s\n' "$(describe_runtime_dependency_plan "$runtime_cmd")"
   printf '  install root %s\n' "$INSTALL_ROOT"
@@ -159,7 +186,8 @@ print_install_plan() {
 usage() {
   cat <<'EOF'
 Usage: install.sh [--mode cli|serve] [--runtime auto|docker|skip]
-                  [--install-root PATH] [--bin-dir PATH] [--pip-spec SPEC]
+                  [--install-root PATH] [--bin-dir PATH]
+                  [--channel stable|dev] [--pip-spec SPEC]
                   [--python PATH] [--platform PLATFORM] [--no-launch]
 
 Installs the vLLM Semantic Router CLI into an isolated virtual environment and
@@ -175,7 +203,10 @@ Options:
   --install-root PATH      Installation root. Default:
                            ~/.local/share/vllm-sr
   --bin-dir PATH           Launcher directory. Default: ~/.local/bin
-  --pip-spec SPEC          Python package spec to install. Default: vllm-sr
+  --channel stable|dev     Package channel to install when --pip-spec is not
+                           set. Default: dev
+  --pip-spec SPEC          Explicit Python package spec to install. Overrides
+                           --channel when set
   --python PATH            Explicit Python interpreter to use
   --platform PLATFORM      Platform hint for first-run serve. Use 'amd' for ROCm.
                            Default: auto
@@ -188,6 +219,7 @@ Environment overrides:
   VLLM_SR_RUNTIME
   VLLM_SR_INSTALL_ROOT
   VLLM_SR_BIN_DIR
+  VLLM_SR_INSTALL_CHANNEL
   VLLM_SR_PIP_SPEC
   VLLM_SR_PYTHON
   VLLM_SR_INSTALL_PLATFORM
@@ -593,6 +625,28 @@ EOF
   chmod +x "$launcher_path"
 }
 
+install_requested_package() {
+  if [ -n "$PIP_SPEC" ]; then
+    run_quiet_step \
+      "Installing vLLM Semantic Router from $PIP_SPEC" \
+      "$INSTALL_ROOT/venv/bin/python" -m pip install --disable-pip-version-check --upgrade --quiet "$PIP_SPEC"
+    return
+  fi
+
+  case "$REQUESTED_CHANNEL" in
+    dev)
+      run_quiet_step \
+        "Installing latest development vLLM Semantic Router release" \
+        "$INSTALL_ROOT/venv/bin/python" -m pip install --disable-pip-version-check --upgrade --quiet --pre vllm-sr
+      ;;
+    stable)
+      run_quiet_step \
+        "Installing latest stable vLLM Semantic Router release" \
+        "$INSTALL_ROOT/venv/bin/python" -m pip install --disable-pip-version-check --upgrade --quiet vllm-sr
+      ;;
+  esac
+}
+
 install_cli() {
   local python_cmd
   python_cmd="$(find_python)" || {
@@ -609,9 +663,7 @@ install_cli() {
   run_quiet_step \
     "Bootstrapping installer Python tooling" \
     "$INSTALL_ROOT/venv/bin/python" -m pip install --disable-pip-version-check --upgrade --quiet pip setuptools wheel
-  run_quiet_step \
-    "Installing vLLM Semantic Router from $PIP_SPEC" \
-    "$INSTALL_ROOT/venv/bin/python" -m pip install --disable-pip-version-check --upgrade --quiet "$PIP_SPEC"
+  install_requested_package
   step "Writing launcher to $BIN_DIR/vllm-sr"
   create_launcher
   done_step "Launcher is ready"
@@ -881,6 +933,11 @@ parse_args() {
         PIP_SPEC="$2"
         shift 2
         ;;
+      --channel)
+        [ "$#" -ge 2 ] || die "Missing value for --channel"
+        REQUESTED_CHANNEL="$2"
+        shift 2
+        ;;
       --python)
         [ "$#" -ge 2 ] || die "Missing value for --python"
         PYTHON_BIN="$2"
@@ -920,6 +977,14 @@ validate_args() {
       ;;
     *)
       die "--runtime must be one of: auto, docker, skip"
+      ;;
+  esac
+
+  case "$REQUESTED_CHANNEL" in
+    stable|dev)
+      ;;
+    *)
+      die "--channel must be one of: stable, dev"
       ;;
   esac
 
