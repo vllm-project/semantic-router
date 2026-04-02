@@ -1,3 +1,5 @@
+import { memo } from 'react'
+
 import styles from './ChatComponent.module.css'
 import HeaderDisplay from './HeaderDisplay'
 import ThinkingBlock from './ThinkingBlock'
@@ -180,7 +182,7 @@ function UserOrSystemMessage({ message }: Pick<MessageCardProps, 'message'>) {
   )
 }
 
-function MessageCard({
+const MessageCard = memo(function MessageCard({
   expandedToolCards,
   message,
   onToggleToolCard,
@@ -236,7 +238,12 @@ function MessageCard({
       </div>
     </div>
   )
-}
+}, (prevProps, nextProps) => (
+  prevProps.message === nextProps.message
+  && prevProps.prevUserQuery === nextProps.prevUserQuery
+  && prevProps.onToggleToolCard === nextProps.onToggleToolCard
+  && prevProps.expandedToolCards === nextProps.expandedToolCards
+))
 
 export default function ChatComponentMessages({
   expandedToolCards,

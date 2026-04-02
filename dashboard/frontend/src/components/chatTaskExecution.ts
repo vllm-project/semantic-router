@@ -12,6 +12,7 @@ import {
   type ParsedToolCallChunk,
 } from './chatResponseParsing'
 import { buildChatMessages, buildChatRequestBody, collectResponseHeaders } from './chatRequestSupport'
+import { createFrameSyncController } from './chatStreamingFrameSync'
 import { runToolLoop } from './chatTaskToolLoop'
 import type { Choice, Message, PlaygroundTask, ReMoMRoundResponse } from './ChatComponentTypes'
 import type { ToolCall, ToolDefinition, ToolResult } from '../tools'
@@ -106,6 +107,8 @@ export const runPlaygroundTask = async ({
   setShowHeaderReveal(false)
   setShowThinking(true)
 
+  let cancelStreamingChoiceSync = () => {}
+
   try {
     abortControllerRef.current = new AbortController()
     const activeTools = buildTaskTools(task)
@@ -189,7 +192,7 @@ export const runPlaygroundTask = async ({
       return true
     }
 
-    const syncAssistantChoices = (streaming: boolean) => {
+    const commitAssistantChoices = (streaming: boolean) => {
       if (hasToolCalls && !getFirstChoice(choiceContents)?.content) return
 
       if (isRatingsMode) {
@@ -233,6 +236,21 @@ export const runPlaygroundTask = async ({
             : message
         )
       )
+    }
+
+    const streamingChoiceSync = createFrameSyncController(() => {
+      commitAssistantChoices(true)
+    })
+    cancelStreamingChoiceSync = () => streamingChoiceSync.cancel()
+
+    const syncAssistantChoices = (streaming: boolean) => {
+      if (streaming) {
+        streamingChoiceSync.schedule()
+        return
+      }
+
+      streamingChoiceSync.cancel()
+      commitAssistantChoices(false)
     }
 
     const applyParsedCompletion = (parsedCompletion: ParsedChatCompletion, streaming: boolean) => {
@@ -294,6 +312,7 @@ export const runPlaygroundTask = async ({
     const finalChoices: Choice[] | undefined = isRatingsMode ? buildChoicesArray(choiceContents) : undefined
     const finalThinkingProcess = latestThinkingProcessRef.current || getFirstChoice(choiceContents)?.reasoningContent || ''
     setShowThinking(false)
+    streamingChoiceSync.drain()
     updateConversationMessages(task.conversationId, prev =>
       prev.map(message =>
         message.id === assistantMessageId
@@ -309,6 +328,7 @@ export const runPlaygroundTask = async ({
       )
     )
   } catch (err) {
+    cancelStreamingChoiceSync()
     if (err instanceof Error && err.name === 'AbortError') {
       return
     }
@@ -318,6 +338,7 @@ export const runPlaygroundTask = async ({
       prev.filter(message => message.id !== assistantMessageId)
     )
   } finally {
+    cancelStreamingChoiceSync()
     isLoadingRef.current = false
     setIsLoading(false)
     setShowThinking(false)

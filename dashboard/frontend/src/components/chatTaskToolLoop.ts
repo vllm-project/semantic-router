@@ -8,6 +8,7 @@ import {
   type ParsedToolCallChunk,
 } from './chatResponseParsing'
 import type { OutboundChatMessage } from './chatRequestSupport'
+import { createFrameSyncController } from './chatStreamingFrameSync'
 import type { Message, PlaygroundTask } from './ChatComponentTypes'
 import type { ToolCall, ToolDefinition, ToolResult } from '../tools'
 import { serializeToolResultForModel } from '../tools/toolResultSupport'
@@ -158,7 +159,7 @@ export const runToolLoop = async ({
     let streamFinishReason = ''
     toolCallsMap.clear()
 
-    const syncFollowUpMessage = (streaming: boolean) => {
+    const commitFollowUpMessage = (streaming: boolean) => {
       if (followUpThinking) {
         latestThinkingProcessRef.current = followUpThinking
       }
@@ -176,6 +177,20 @@ export const runToolLoop = async ({
             : message
         )
       )
+    }
+
+    const followUpStreamingSync = createFrameSyncController(() => {
+      commitFollowUpMessage(true)
+    })
+
+    const syncFollowUpMessage = (streaming: boolean) => {
+      if (streaming) {
+        followUpStreamingSync.schedule()
+        return
+      }
+
+      followUpStreamingSync.cancel()
+      commitFollowUpMessage(false)
     }
 
     const applyFollowUpCompletion = (parsedCompletion: ParsedChatCompletion, streaming: boolean) => {
@@ -231,6 +246,7 @@ export const runToolLoop = async ({
     if (followUpContent) {
       finalContent = followUpContent
     }
+    followUpStreamingSync.drain()
     if (streamFinishReason === 'tool_calls' && toolCallsMap.size > 0) {
       continue
     }

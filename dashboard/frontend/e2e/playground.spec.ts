@@ -436,6 +436,88 @@ test.describe('Playground Chat Component', () => {
     await expect(page.getByText('Final background chunk.')).toBeVisible({ timeout: 5000 });
   });
 
+  test('switching back to a saved session snaps the transcript to the latest messages', async ({ page }) => {
+    await page.setViewportSize({ width: 1280, height: 560 });
+
+    await page.evaluate(() => {
+      const now = Date.now();
+      const longHistory = Array.from({ length: 12 }, (_, index) => {
+        const offset = (12 - index) * 90_000;
+        return [
+          {
+            id: `long-user-${index + 1}`,
+            role: 'user',
+            content: index === 0 ? 'Long history session' : `Long history follow-up ${index + 1}`,
+            timestamp: new Date(now - 4_000_000 + offset).toISOString(),
+          },
+          {
+            id: `long-assistant-${index + 1}`,
+            role: 'assistant',
+            content: Array.from(
+              { length: 8 },
+              (_, paragraphIndex) =>
+                `Long history answer ${index + 1}, paragraph ${paragraphIndex + 1}: the transcript should reopen near the latest content.`
+            ).join('\n\n'),
+            timestamp: new Date(now - 4_000_000 + offset + 15_000).toISOString(),
+          },
+        ];
+      }).flat();
+
+      const recentConversation = [
+        {
+          id: 'recent-user',
+          role: 'user',
+          content: 'Recent short session',
+          timestamp: new Date(now - 30_000).toISOString(),
+        },
+        {
+          id: 'recent-assistant',
+          role: 'assistant',
+          content: 'Short reply for the currently selected session.',
+          timestamp: new Date(now - 15_000).toISOString(),
+        },
+      ];
+
+      window.localStorage.setItem(
+        'sr:chat:conversations',
+        JSON.stringify([
+          {
+            id: 'recent-conversation',
+            createdAt: now - 60_000,
+            updatedAt: now - 10_000,
+            payload: recentConversation,
+          },
+          {
+            id: 'long-history-conversation',
+            createdAt: now - 5_000_000,
+            updatedAt: now - 20_000,
+            payload: longHistory,
+          },
+        ])
+      );
+    });
+
+    await page.goto('/playground', { waitUntil: 'domcontentloaded' });
+    await expect(page.getByText('Short reply for the currently selected session.')).toBeVisible();
+
+    const sidebarShell = page.getByTestId('playground-sidebar-shell');
+    const longHistoryButton = sidebarShell.getByRole('button', { name: 'Long history session' });
+    if (await longHistoryButton.count() === 0 || !(await longHistoryButton.first().isVisible().catch(() => false))) {
+      await page.getByRole('button', { name: 'Open sidebar' }).click();
+    }
+
+    await longHistoryButton.click();
+    await expect(page.getByText('Long history answer 12, paragraph 8: the transcript should reopen near the latest content.')).toBeVisible();
+
+    const transcript = page.getByTestId('chat-transcript');
+    await expect.poll(async () => {
+      return transcript.evaluate(node => {
+        const container = node as HTMLDivElement;
+        return container.scrollHeight - container.scrollTop - container.clientHeight;
+      });
+    }, { timeout: 5000 }).toBeLessThan(24);
+  });
+
   test('sends message and receives response (mocked API)', async ({ page }) => {
     // Mock the chat API endpoint
     await page.route('**/api/router/v1/chat/completions', async (route) => {

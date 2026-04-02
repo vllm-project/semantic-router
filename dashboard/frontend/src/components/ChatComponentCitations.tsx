@@ -55,12 +55,16 @@ export const ContentWithCitations = ({
       return null
     }
 
+    if (isStreaming) {
+      return <div className={styles.streamingCitationContent}>{content}</div>
+    }
+
     const markdownContent = (!safeSources || safeSources.length === 0 || !/\[\d+\]/.test(content))
       ? content
       : injectCitationLinks(content, safeSources)
 
     return <MarkdownRenderer content={markdownContent} />
-  }, [content, safeSources])
+  }, [content, isStreaming, safeSources])
 
   return (
     <div className={styles.contentWithCitations} translate={translateAttr}>

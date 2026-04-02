@@ -686,6 +686,7 @@ const ChatComponent = ({
                   </div>
                 )}
                 <ChatComponentConversationViewport
+                  conversationId={conversationId}
                   expandedToolCards={expandedToolCards}
                   messages={messages}
                   onToggleToolCard={handleToggleToolCard}

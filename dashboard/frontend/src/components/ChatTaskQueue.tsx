@@ -118,13 +118,10 @@ export default function ChatTaskQueue({
                 aria-label={`Reorder queued task: ${promptLabel}`}
                 title="Drag to reorder"
               >
-                <svg width="14" height="14" viewBox="0 0 14 14" fill="currentColor" aria-hidden="true">
-                  <circle cx="4.25" cy="3.25" r="0.85" />
-                  <circle cx="9.75" cy="3.25" r="0.85" />
-                  <circle cx="4.25" cy="7" r="0.85" />
-                  <circle cx="9.75" cy="7" r="0.85" />
-                  <circle cx="4.25" cy="10.75" r="0.85" />
-                  <circle cx="9.75" cy="10.75" r="0.85" />
+                <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.45" aria-hidden="true">
+                  <path d="M3.5 3.5v5.5c0 1.1.9 2 2 2H11" strokeLinecap="round" strokeLinejoin="round" />
+                  <path d="M3.5 3.5h4.2" strokeLinecap="round" />
+                  <path d="M7.1 6.9 11 10.8l-2.2 2.2" strokeLinecap="round" strokeLinejoin="round" />
                 </svg>
               </button>
 

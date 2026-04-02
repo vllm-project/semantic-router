@@ -2163,6 +2163,12 @@ body.playground-fullscreen .container {
   display: block;
 }
 
+.streamingCitationContent {
+  white-space: pre-wrap;
+  word-break: break-word;
+  overflow-wrap: anywhere;
+}
+
 .contentWithCitations>* {
   margin-bottom: 0.25rem;
 }
