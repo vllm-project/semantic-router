@@ -127,41 +127,84 @@ func buildSimilarityMatrix(examples []prototypeExample) [][]float64 {
 }
 
 func clusterPrototypeExamples(examples []prototypeExample, similarityMatrix [][]float64, threshold float64) [][]int {
-	remaining := make(map[int]struct{}, len(examples))
-	for i := range examples {
-		remaining[i] = struct{}{}
-	}
+	remaining := remainingPrototypeIndices(len(examples))
 
 	clusters := make([][]int, 0, len(examples))
 	for len(remaining) > 0 {
-		bestSeed := -1
-		bestCluster := []int(nil)
-		for idx := range remaining {
-			cluster := make([]int, 0, len(remaining))
-			cluster = append(cluster, idx)
-			for other := range remaining {
-				if other == idx {
-					continue
-				}
-				if similarityMatrix[idx][other] >= threshold {
-					cluster = append(cluster, other)
-				}
-			}
-
-			sort.Ints(cluster)
-			if len(cluster) > len(bestCluster) || (len(cluster) == len(bestCluster) && (bestSeed == -1 || examples[idx].Text < examples[bestSeed].Text)) {
-				bestSeed = idx
-				bestCluster = cluster
-			}
-		}
-
+		bestCluster := selectBestPrototypeCluster(examples, similarityMatrix, threshold, remaining)
 		clusters = append(clusters, bestCluster)
-		for _, idx := range bestCluster {
-			delete(remaining, idx)
-		}
+		removeClusterMembers(remaining, bestCluster)
 	}
 
 	return clusters
+}
+
+func remainingPrototypeIndices(count int) map[int]struct{} {
+	remaining := make(map[int]struct{}, count)
+	for i := 0; i < count; i++ {
+		remaining[i] = struct{}{}
+	}
+	return remaining
+}
+
+func selectBestPrototypeCluster(
+	examples []prototypeExample,
+	similarityMatrix [][]float64,
+	threshold float64,
+	remaining map[int]struct{},
+) []int {
+	bestSeed := -1
+	bestCluster := []int(nil)
+	for idx := range remaining {
+		cluster := clusterForPrototypeSeed(similarityMatrix, threshold, remaining, idx)
+		if preferPrototypeCluster(examples, idx, bestSeed, cluster, bestCluster) {
+			bestSeed = idx
+			bestCluster = cluster
+		}
+	}
+	return bestCluster
+}
+
+func clusterForPrototypeSeed(
+	similarityMatrix [][]float64,
+	threshold float64,
+	remaining map[int]struct{},
+	seed int,
+) []int {
+	cluster := make([]int, 0, len(remaining))
+	cluster = append(cluster, seed)
+	for other := range remaining {
+		if other == seed {
+			continue
+		}
+		if similarityMatrix[seed][other] >= threshold {
+			cluster = append(cluster, other)
+		}
+	}
+	sort.Ints(cluster)
+	return cluster
+}
+
+func preferPrototypeCluster(
+	examples []prototypeExample,
+	candidateSeed int,
+	currentSeed int,
+	candidateCluster []int,
+	currentCluster []int,
+) bool {
+	if len(candidateCluster) != len(currentCluster) {
+		return len(candidateCluster) > len(currentCluster)
+	}
+	if currentSeed == -1 {
+		return true
+	}
+	return examples[candidateSeed].Text < examples[currentSeed].Text
+}
+
+func removeClusterMembers(remaining map[int]struct{}, cluster []int) {
+	for _, idx := range cluster {
+		delete(remaining, idx)
+	}
 }
 
 func selectPrototypeMedoid(examples []prototypeExample, cluster []int, similarityMatrix [][]float64) prototypeRepresentative {

@@ -4,10 +4,8 @@ import (
 	"encoding/base64"
 	"fmt"
 	"os"
-	"runtime"
 	"sort"
 	"strings"
-	"sync"
 	"time"
 
 	candle_binding "github.com/vllm-project/semantic-router/candle-binding"
@@ -143,90 +141,20 @@ func NewEmbeddingClassifier(cfgRules []config.EmbeddingRule, optConfig config.HN
 // Uses concurrent processing for better performance
 func (c *EmbeddingClassifier) preloadCandidateEmbeddings() error {
 	startTime := time.Now()
-
-	// Collect all unique candidates
-	uniqueCandidates := make(map[string]bool)
-	for _, rule := range c.rules {
-		for _, candidate := range rule.Candidates {
-			uniqueCandidates[candidate] = true
-		}
-	}
-
-	if len(uniqueCandidates) == 0 {
+	candidates := c.collectUniqueCandidates()
+	if len(candidates) == 0 {
 		logging.Infof("No candidates to preload")
 		return nil
 	}
 
-	// Determine model type
 	modelType := c.getModelType()
-
 	logging.Infof("[Embedding Signal] Preloading embeddings for %d unique candidates using model: %s (dimension: %d) with concurrent processing...",
-		len(uniqueCandidates), modelType, c.optimizationConfig.TargetDimension)
+		len(candidates), modelType, c.optimizationConfig.TargetDimension)
 
-	// Convert map to slice for concurrent processing
-	candidates := make([]string, 0, len(uniqueCandidates))
-	for candidate := range uniqueCandidates {
-		candidates = append(candidates, candidate)
-	}
-
-	// Use worker pool for concurrent embedding generation
-	numWorkers := runtime.NumCPU() * 2
-	if numWorkers > len(candidates) {
-		numWorkers = len(candidates)
-	}
-
-	type result struct {
-		candidate string
-		embedding []float32
-		err       error
-	}
-
-	resultChan := make(chan result, len(candidates))
-	candidateChan := make(chan string, len(candidates))
-
-	// Send all candidates to channel
-	for _, candidate := range candidates {
-		candidateChan <- candidate
-	}
-	close(candidateChan)
-
-	// Start workers
-	var wg sync.WaitGroup
-	for i := 0; i < numWorkers; i++ {
-		wg.Add(1)
-		go func(workerID int) {
-			defer wg.Done()
-			for candidate := range candidateChan {
-				output, err := getEmbeddingWithModelType(candidate, modelType, c.optimizationConfig.TargetDimension)
-				if err != nil {
-					resultChan <- result{candidate: candidate, err: err}
-				} else {
-					resultChan <- result{candidate: candidate, embedding: output.Embedding}
-				}
-			}
-		}(i)
-	}
-
-	// Close result channel when all workers are done
-	go func() {
-		wg.Wait()
-		close(resultChan)
-	}()
-
-	// Collect results
-	var firstError error
-	successCount := 0
-	for res := range resultChan {
-		if res.err != nil {
-			if firstError == nil {
-				firstError = fmt.Errorf("failed to compute embedding for candidate %q: %w", res.candidate, res.err)
-			}
-			logging.Warnf("Failed to compute embedding for candidate %q: %v", res.candidate, res.err)
-		} else {
-			c.candidateEmbeddings[res.candidate] = res.embedding
-			successCount++
-		}
-	}
+	numWorkers := c.preloadWorkerCount(len(candidates))
+	successCount, firstError := c.collectCandidateEmbeddingResults(
+		c.startCandidateEmbeddingWorkers(candidates, modelType, numWorkers),
+	)
 
 	elapsed := time.Since(startTime)
 	logging.Infof("[Embedding Signal] Preloaded %d/%d candidate embeddings using model %s in %v (workers: %d)",
