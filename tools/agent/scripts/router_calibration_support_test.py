@@ -1,14 +1,15 @@
+import importlib
+import sys
 import tempfile
 import unittest
 from pathlib import Path
 from unittest import mock
-import sys
 
 SCRIPT_DIR = Path(__file__).resolve().parent
 if str(SCRIPT_DIR) not in sys.path:
     sys.path.insert(0, str(SCRIPT_DIR))
 
-import router_calibration_support
+router_calibration_support = importlib.import_module("router_calibration_support")
 
 
 class DeployConfigTest(unittest.TestCase):

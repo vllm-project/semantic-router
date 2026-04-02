@@ -34,6 +34,11 @@ interface ChatComponentProps {
 
 type ClawPlaygroundView = 'control' | 'room'
 
+interface ConversationHeaderRevealState {
+  headers: Record<string, string>
+  visible: boolean
+}
+
 const ChatComponent = ({
   endpoint = '/api/router/v1/chat/completions',
   isFullscreenMode = false,
@@ -41,15 +46,11 @@ const ChatComponent = ({
   const [conversationMessages, setConversationMessages] = useState<Record<string, Message[]>>({})
   const [conversationId, setConversationId] = useState<string>(() => generateConversationId())
   const [inputValue, setInputValue] = useState('')
-  const [isLoading, setIsLoading] = useState(false)
-  const [activeTask, setActiveTask] = useState<PlaygroundTask | null>(null)
+  const [activeTasks, setActiveTasks] = useState<Record<string, PlaygroundTask>>({})
   const model = 'MoM' // Fixed to MoM
-  const [error, setError] = useState<string | null>(null)
-  const [errorConversationId, setErrorConversationId] = useState<string | null>(null)
-  const [showThinking, setShowThinking] = useState(false)
-  const [showHeaderReveal, setShowHeaderReveal] = useState(false)
-  const [pendingHeaders, setPendingHeaders] = useState<Record<string, string> | null>(null)
-  const [headerRevealConversationId, setHeaderRevealConversationId] = useState<string | null>(null)
+  const [conversationErrors, setConversationErrors] = useState<Record<string, string>>({})
+  const [conversationThinking, setConversationThinking] = useState<Record<string, boolean>>({})
+  const [headerRevealStates, setHeaderRevealStates] = useState<Record<string, ConversationHeaderRevealState>>({})
   const [isFullscreen] = useState(isFullscreenMode)
   const [enableWebSearch, setEnableWebSearch] = useState(true)
   const [enableClawMode, setEnableClawMode] = useState<boolean>(() => {
@@ -66,10 +67,9 @@ const ChatComponent = ({
   const { isReadonly, isLoading: readonlyLoading } = useReadonly()
 
   const inputRef = useRef<HTMLTextAreaElement>(null)
-  const abortControllerRef = useRef<AbortController | null>(null)
+  const abortControllersRef = useRef<Record<string, AbortController>>({})
   const hasHydratedConversation = useRef(false)
-  const isLoadingRef = useRef(false)
-  const activeTaskRef = useRef<PlaygroundTask | null>(null)
+  const activeTasksRef = useRef<Record<string, PlaygroundTask>>({})
   const conversationIdRef = useRef(conversationId)
   const conversationMessagesRef = useRef<Record<string, Message[]>>({})
 
@@ -85,6 +85,106 @@ const ChatComponent = ({
     removeTask: removeQueuedTask,
     reorderTasks,
   } = usePlaygroundQueue()
+
+  const setConversationError = useCallback((targetConversationId: string, error: string | null) => {
+    setConversationErrors(prev => {
+      if (!error) {
+        if (!(targetConversationId in prev)) {
+          return prev
+        }
+        const next = { ...prev }
+        delete next[targetConversationId]
+        return next
+      }
+      if (prev[targetConversationId] === error) {
+        return prev
+      }
+      return {
+        ...prev,
+        [targetConversationId]: error,
+      }
+    })
+  }, [])
+
+  const setConversationThinkingState = useCallback((targetConversationId: string, visible: boolean) => {
+    setConversationThinking(prev => {
+      const current = prev[targetConversationId] ?? false
+      if (current === visible) {
+        return prev
+      }
+      if (!visible) {
+        if (!(targetConversationId in prev)) {
+          return prev
+        }
+        const next = { ...prev }
+        delete next[targetConversationId]
+        return next
+      }
+      return {
+        ...prev,
+        [targetConversationId]: true,
+      }
+    })
+  }, [])
+
+  const setConversationHeaderReveal = useCallback((
+    targetConversationId: string,
+    headers: Record<string, string> | null,
+    visible = false
+  ) => {
+    setHeaderRevealStates(prev => {
+      if (!headers || Object.keys(headers).length === 0) {
+        if (!(targetConversationId in prev)) {
+          return prev
+        }
+        const next = { ...prev }
+        delete next[targetConversationId]
+        return next
+      }
+      const current = prev[targetConversationId]
+      if (current && current.visible === visible && current.headers === headers) {
+        return prev
+      }
+      return {
+        ...prev,
+        [targetConversationId]: {
+          headers,
+          visible,
+        },
+      }
+    })
+  }, [])
+
+  const setActiveTaskForConversation = useCallback((task: PlaygroundTask) => {
+    if (activeTasksRef.current[task.conversationId]?.id === task.id) {
+      return
+    }
+    const next = {
+      ...activeTasksRef.current,
+      [task.conversationId]: task,
+    }
+    activeTasksRef.current = next
+    setActiveTasks(next)
+  }, [])
+
+  const clearActiveTaskForConversation = useCallback((targetConversationId: string, taskId: string) => {
+    const currentTask = activeTasksRef.current[targetConversationId]
+    if (!currentTask || currentTask.id !== taskId) {
+      return
+    }
+    const next = { ...activeTasksRef.current }
+    delete next[targetConversationId]
+    activeTasksRef.current = next
+    setActiveTasks(next)
+  }, [])
+
+  const registerAbortController = useCallback((targetConversationId: string, controller: AbortController | null) => {
+    if (controller) {
+      abortControllersRef.current[targetConversationId] = controller
+      return
+    }
+    delete abortControllersRef.current[targetConversationId]
+  }, [])
 
   const restoreMessages = useCallback((payload: Message[]) => {
     return payload.map(message => ({
@@ -165,16 +265,15 @@ const ChatComponent = ({
     [otherToolDefinitions]
   )
   const clawManagementDisabled = readonlyLoading || isReadonly
-  // When headers arrive, show HeaderReveal
+  const currentHeaderRevealState = headerRevealStates[conversationId]
+
   useEffect(() => {
-    if (
-      pendingHeaders
-      && Object.keys(pendingHeaders).length > 0
-      && headerRevealConversationId === conversationId
-    ) {
-      setShowHeaderReveal(true)
+    if (!currentHeaderRevealState || currentHeaderRevealState.visible) {
+      return
     }
-  }, [conversationId, headerRevealConversationId, pendingHeaders])
+
+    setConversationHeaderReveal(conversationId, currentHeaderRevealState.headers, true)
+  }, [conversationId, currentHeaderRevealState, setConversationHeaderReveal])
 
   // Toggle fullscreen mode by adding/removing class to body
   useEffect(() => {
@@ -290,20 +389,10 @@ const ChatComponent = ({
     [conversationId, conversationMessages, getStoredMessagesForConversation]
   )
   const queuedTasks = useMemo(() => getQueue(conversationId), [conversationId, getQueue])
-  const nextQueuedTask = useMemo(() => {
-    const allQueuedTasks = Object.values(queues).flat()
-    if (allQueuedTasks.length === 0) {
-      return null
-    }
-
-    return allQueuedTasks.reduce<PlaygroundTask>((earliestTask, task) => (
-      task.createdAt < earliestTask.createdAt ? task : earliestTask
-    ), allQueuedTasks[0])
-  }, [queues])
   const generateId = generateMessageId
-  const isCurrentConversationRunning = Boolean(
-    isLoading && activeTask && activeTask.conversationId === conversationId
-  )
+  const activeConversationTask = activeTasks[conversationId] ?? null
+  const hasRunningTasks = Object.keys(activeTasks).length > 0
+  const isCurrentConversationRunning = Boolean(activeConversationTask)
 
   const buildTaskRequestOptions = useCallback(
     () => ({
@@ -336,10 +425,8 @@ const ChatComponent = ({
   const handleThinkingComplete = useCallback(() => {}, [])
 
   const handleHeaderRevealComplete = useCallback(() => {
-    setShowHeaderReveal(false)
-    setPendingHeaders(null)
-    setHeaderRevealConversationId(null)
-  }, [])
+    setConversationHeaderReveal(conversationId, null)
+  }, [conversationId, setConversationHeaderReveal])
 
   const handleSelectConversation = useCallback(
     (id: string) => {
@@ -356,32 +443,21 @@ const ChatComponent = ({
   const handleDeleteConversation = useCallback(
     (id: string) => {
       const remaining = conversations.filter(conv => conv.id !== id)
-      const deletingActiveConversation = activeTaskRef.current?.conversationId === id
+      const deletingActiveConversation = Boolean(activeTasksRef.current[id])
 
       clearConversationQueue(id)
       deleteConversation(id)
       removeConversationMessages(id)
 
       if (deletingActiveConversation) {
-        abortControllerRef.current?.abort()
-        activeTaskRef.current = null
-        isLoadingRef.current = false
-        setActiveTask(null)
-        setIsLoading(false)
-        setShowThinking(false)
-        setShowHeaderReveal(false)
+        abortControllersRef.current[id]?.abort()
+        clearActiveTaskForConversation(id, activeTasksRef.current[id].id)
       }
 
-      if (errorConversationId === id) {
-        setError(null)
-        setErrorConversationId(null)
-      }
-
-      if (headerRevealConversationId === id) {
-        setPendingHeaders(null)
-        setHeaderRevealConversationId(null)
-        setShowHeaderReveal(false)
-      }
+      registerAbortController(id, null)
+      setConversationError(id, null)
+      setConversationThinkingState(id, false)
+      setConversationHeaderReveal(id, null)
 
       if (id === conversationId) {
         setExpandedToolCards(new Set())
@@ -396,60 +472,61 @@ const ChatComponent = ({
       }
     },
     [
+      clearActiveTaskForConversation,
       clearConversationQueue,
       conversationId,
       conversations,
       deleteConversation,
-      errorConversationId,
-      headerRevealConversationId,
       removeConversationMessages,
+      registerAbortController,
+      setConversationError,
+      setConversationHeaderReveal,
+      setConversationThinkingState,
     ]
   )
 
   const executeTask = useCallback((task: PlaygroundTask) => runPlaygroundTask({
-    abortControllerRef,
-    activeTaskRef,
     buildTaskTools,
     clawManagementDisabled,
+    clearConversationActiveTask: clearActiveTaskForConversation,
     endpoint,
     executeTools,
     expandedToolCardCount: expandedToolCards.size,
     generateId,
     getConversationMessagesSnapshot,
     getCurrentConversationId: () => conversationIdRef.current,
-    isLoadingRef,
-    setActiveTask,
-    setError,
-    setErrorConversationId,
+    registerAbortController,
+    setConversationError,
+    setConversationHeaderReveal,
+    setConversationThinking: setConversationThinkingState,
     setExpandedToolCards,
-    setHeaderRevealConversationId,
-    setIsLoading,
-    setPendingHeaders,
-    setShowHeaderReveal,
-    setShowThinking,
     task,
     updateConversationMessages,
   }), [
-    activeTaskRef,
     buildTaskTools,
     clawManagementDisabled,
+    clearActiveTaskForConversation,
     endpoint,
     executeTools,
     expandedToolCards.size,
     generateId,
     getConversationMessagesSnapshot,
-    isLoadingRef,
-    setActiveTask,
-    setError,
-    setErrorConversationId,
+    registerAbortController,
+    setConversationError,
+    setConversationHeaderReveal,
+    setConversationThinkingState,
     setExpandedToolCards,
-    setHeaderRevealConversationId,
-    setIsLoading,
-    setPendingHeaders,
-    setShowHeaderReveal,
-    setShowThinking,
     updateConversationMessages,
   ])
+
+  const startTask = useCallback((task: PlaygroundTask) => {
+    if (activeTasksRef.current[task.conversationId]) {
+      return
+    }
+
+    setActiveTaskForConversation(task)
+    void executeTask(task)
+  }, [executeTask, setActiveTaskForConversation])
 
   const handleSend = useCallback(() => {
     const trimmedInput = inputValue.trim()
@@ -468,14 +545,11 @@ const ChatComponent = ({
       saveConversation(conversationId, getConversationMessagesSnapshot(conversationId))
     }
 
-    setError(null)
-    setErrorConversationId(null)
+    setConversationError(conversationId, null)
     setInputValue('')
 
-    if (!isLoadingRef.current && !activeTaskRef.current && !nextQueuedTask) {
-      activeTaskRef.current = nextTask
-      setActiveTask(nextTask)
-      void executeTask(nextTask)
+    if (!activeTasksRef.current[conversationId]) {
+      startTask(nextTask)
       return
     }
     enqueueTask(nextTask)
@@ -484,25 +558,32 @@ const ChatComponent = ({
     conversationId,
     conversations,
     enqueueTask,
-    executeTask,
     getConversationMessagesSnapshot,
     inputValue,
-    nextQueuedTask,
     saveConversation,
+    setConversationError,
+    startTask,
   ])
 
   useEffect(() => {
-    if (isLoadingRef.current || activeTaskRef.current || !nextQueuedTask) {
-      return
-    }
-    removeQueuedTask(nextQueuedTask.conversationId, nextQueuedTask.id)
-    activeTaskRef.current = nextQueuedTask
-    setActiveTask(nextQueuedTask)
-    void executeTask(nextQueuedTask)
+    Object.entries(queues).forEach(([targetConversationId, queue]) => {
+      if (queue.length === 0 || activeTasksRef.current[targetConversationId]) {
+        return
+      }
+
+      const nextTask = queue.reduce<PlaygroundTask>((earliestTask, task) => (
+        task.createdAt < earliestTask.createdAt ? task : earliestTask
+      ), queue[0])
+
+      removeQueuedTask(targetConversationId, nextTask.id)
+      startTask(nextTask)
+    })
   }, [
+    activeTasks,
     executeTask,
-    nextQueuedTask,
+    queues,
     removeQueuedTask,
+    startTask,
   ])
 
   const handleDeleteQueuedTask = useCallback((taskId: string) => {
@@ -539,13 +620,7 @@ const ChatComponent = ({
   }
 
   const handleStop = () => {
-    if (activeTaskRef.current?.conversationId !== conversationId) {
-      return
-    }
-
-    abortControllerRef.current?.abort()
-    isLoadingRef.current = false
-    setIsLoading(false)
+    abortControllersRef.current[conversationId]?.abort()
   }
 
   const handleNewConversation = useCallback(() => {
@@ -555,18 +630,18 @@ const ChatComponent = ({
   }, [])
 
   const handleToggleClawMode = useCallback(() => {
-    if (isLoading || isTogglingClawMode) return
+    if (hasRunningTasks || isTogglingClawMode) return
     if (enableClawMode) {
       setEnableClawMode(false)
-      setError(null)
+      setConversationError(conversationId, null)
       return
     }
     setEnableClawMode(true)
-    setError(null)
-  }, [enableClawMode, isLoading, isTogglingClawMode])
+    setConversationError(conversationId, null)
+  }, [conversationId, enableClawMode, hasRunningTasks, isTogglingClawMode, setConversationError])
 
   const isTeamRoomView = enableClawMode && clawView === 'room', roomCreateDisabled = isTeamRoomView && clawManagementDisabled
-  const modeToggleDisabled = isLoading || isTogglingClawMode || readonlyLoading
+  const modeToggleDisabled = hasRunningTasks || isTogglingClawMode || readonlyLoading
 
   const handleToggleTeamView = useCallback(() => { if (!enableClawMode || modeToggleDisabled) return; setClawView(prev => (prev === 'room' ? 'control' : 'room')) }, [enableClawMode, modeToggleDisabled])
 
@@ -596,12 +671,11 @@ const ChatComponent = ({
     : null
   const liveThinkingProcess = messages.reduceRight((thinking, message) =>
     thinking || (message.role === 'assistant' && message.isStreaming ? message.thinkingProcess || '' : ''), '')
-  const visibleError = errorConversationId === conversationId ? error : null
-  const shouldShowThinking = !isTeamRoomView && showThinking && activeTask?.conversationId === conversationId
+  const visibleError = conversationErrors[conversationId] ?? null
+  const shouldShowThinking = !isTeamRoomView && Boolean(conversationThinking[conversationId])
   const shouldShowHeaderReveal = !isTeamRoomView
-    && showHeaderReveal
-    && pendingHeaders
-    && headerRevealConversationId === conversationId
+    && Boolean(currentHeaderRevealState?.visible)
+    && Boolean(currentHeaderRevealState?.headers)
 
   return (
     <>
@@ -612,9 +686,9 @@ const ChatComponent = ({
         />
       )}
 
-      {shouldShowHeaderReveal && pendingHeaders && (
+      {shouldShowHeaderReveal && currentHeaderRevealState?.headers && (
         <HeaderReveal
-          headers={pendingHeaders}
+          headers={currentHeaderRevealState.headers}
           onComplete={handleHeaderRevealComplete}
           displayDuration={2000}
         />
@@ -677,8 +751,7 @@ const ChatComponent = ({
                     <button
                       className={styles.errorDismiss}
                       onClick={() => {
-                        setError(null)
-                        setErrorConversationId(null)
+                        setConversationError(conversationId, null)
                       }}
                     >
                       ×

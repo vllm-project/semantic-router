@@ -45,24 +45,37 @@ export function renderToolNamesCell(record: InsightsRecord): ReactNode {
   )
 }
 
-export function buildToolTraceFields(record: InsightsRecord): ViewField[] {
+export function buildToolTraceFields(
+  record: InsightsRecord,
+  options: { canViewFlowDetails: boolean },
+): ViewField[] {
   const trace = record.tool_trace
   if (!trace || !hasToolTraceContent(trace)) {
     return []
   }
 
-  return [
+  return buildToolTraceFieldList(trace, options.canViewFlowDetails)
+}
+
+function buildToolTraceFieldList(trace: ToolTrace, canViewFlowDetails: boolean): ViewField[] {
+  const fields: ViewField[] = [
     {
       label: 'Overview',
       value: renderToolTraceOverview(trace),
       fullWidth: true,
     },
-    {
-      label: 'Flow',
-      value: renderToolTraceFlow(trace),
-      fullWidth: true,
-    },
   ]
+
+  fields.push({
+    label: 'Flow',
+    value:
+      canViewFlowDetails || !hasProtectedToolTraceFlow(trace)
+        ? renderToolTraceFlow(trace)
+        : renderBlockedToolTraceFlow(),
+    fullWidth: true,
+  })
+
+  return fields
 }
 
 function renderToolTraceOverview(trace: ToolTrace) {
@@ -359,6 +372,19 @@ function formatToolTraceStage(stage?: string, fallbackStepType?: string) {
 
 function hasToolTraceContent(trace?: ToolTrace) {
   return Boolean(trace?.steps?.length || trace?.tool_names?.length || trace?.stage || trace?.flow)
+}
+
+function hasProtectedToolTraceFlow(trace: ToolTrace) {
+  return Boolean(trace.steps?.length || trace.flow)
+}
+
+function renderBlockedToolTraceFlow() {
+  return (
+    <div className={styles.readonlyLock}>
+      <span>🔒</span>
+      <span>Flow details are available to write and admin roles only</span>
+    </div>
+  )
 }
 
 function toolTraceTintStyle(stepType: string): CSSProperties {

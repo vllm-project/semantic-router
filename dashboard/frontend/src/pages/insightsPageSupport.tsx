@@ -303,7 +303,7 @@ export function createInsightsTableColumns(): Column<InsightsRecord>[] {
 
 export function buildInsightsRecordSections(
   record: InsightsRecord,
-  options: { isReadonly: boolean },
+  options: { isReadonly: boolean; canViewReplayFlowDetails: boolean },
 ): ViewSection[] {
   const sections: ViewSection[] = []
 
@@ -345,7 +345,9 @@ export function buildInsightsRecordSections(
     })
   }
 
-  const toolTraceFields = buildToolTraceFields(record)
+  const toolTraceFields = buildToolTraceFields(record, {
+    canViewFlowDetails: options.canViewReplayFlowDetails,
+  })
   if (toolTraceFields.length > 0) {
     sections.push({
       title: 'Tool Trace',
