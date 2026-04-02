@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/openai/openai-go"
 	"github.com/tidwall/gjson"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/memory"
@@ -45,7 +46,7 @@ func extractAutoStore(ctx *RequestContext) bool {
 //  1. Auth header (x-authz-user-id) injected by external auth service (Authorino, Envoy Gateway JWT, etc.)
 //  2. metadata["user_id"] in Response API request (fallback for development/testing)
 //  3. Chat Completions "user" field (fallback for development/testing)
-func extractMemoryInfo(ctx *RequestContext) (sessionID string, userID string, history []memory.Message, err error) {
+func extractMemoryInfo(ctx *RequestContext) (sessionID string, userID string, history []openai.ChatCompletionMessageParamUnion, err error) {
 	// Determine API type
 	isResponseAPI := ctx.ResponseAPICtx != nil && ctx.ResponseAPICtx.IsResponseAPIRequest
 	isChatCompletions := len(ctx.ChatCompletionMessages) > 0
@@ -116,22 +117,19 @@ func deriveSessionIDFromMessages(messages []ChatCompletionMessage, userID string
 	return "cc-" + hex.EncodeToString(hash[:])[:16]
 }
 
-// convertChatCompletionMessages converts ChatCompletionMessage[] to memory.Message[].
-func convertChatCompletionMessages(messages []ChatCompletionMessage) []memory.Message {
-	result := make([]memory.Message, 0, len(messages))
+// convertChatCompletionMessages converts ChatCompletionMessage[] to SDK message unions.
+func convertChatCompletionMessages(messages []ChatCompletionMessage) []openai.ChatCompletionMessageParamUnion {
+	result := make([]openai.ChatCompletionMessageParamUnion, 0, len(messages))
 	for _, msg := range messages {
-		result = append(result, memory.Message{
-			Role:    msg.Role,
-			Content: msg.Content,
-		})
+		result = append(result, memory.SDKMessageForRole(msg.Role, msg.Content))
 	}
 	return result
 }
 
-// convertStoredResponsesToMessages converts StoredResponse[] to Message[].
+// convertStoredResponsesToMessages converts StoredResponse[] to SDK message unions.
 // It extracts user input and assistant output from each stored response.
-func convertStoredResponsesToMessages(storedResponses []*responseapi.StoredResponse) []memory.Message {
-	var messages []memory.Message
+func convertStoredResponsesToMessages(storedResponses []*responseapi.StoredResponse) []openai.ChatCompletionMessageParamUnion {
+	var messages []openai.ChatCompletionMessageParamUnion
 	for _, stored := range storedResponses {
 		messages = appendInputMessages(messages, stored.Input)
 		messages = appendOutputMessages(messages, stored.OutputText, stored.Output)
@@ -140,7 +138,7 @@ func convertStoredResponsesToMessages(storedResponses []*responseapi.StoredRespo
 }
 
 // appendInputMessages appends user-side messages extracted from Response API InputItems.
-func appendInputMessages(messages []memory.Message, items []responseapi.InputItem) []memory.Message {
+func appendInputMessages(messages []openai.ChatCompletionMessageParamUnion, items []responseapi.InputItem) []openai.ChatCompletionMessageParamUnion {
 	for _, item := range items {
 		if item.Type != "message" {
 			continue
@@ -153,16 +151,16 @@ func appendInputMessages(messages []memory.Message, items []responseapi.InputIte
 		if role == "" {
 			role = "user"
 		}
-		messages = append(messages, memory.Message{Role: role, Content: content})
+		messages = append(messages, memory.SDKMessageForRole(role, content))
 	}
 	return messages
 }
 
 // appendOutputMessages appends assistant-side messages. It prefers OutputText
 // when available and falls back to extracting from individual OutputItems.
-func appendOutputMessages(messages []memory.Message, outputText string, items []responseapi.OutputItem) []memory.Message {
+func appendOutputMessages(messages []openai.ChatCompletionMessageParamUnion, outputText string, items []responseapi.OutputItem) []openai.ChatCompletionMessageParamUnion {
 	if outputText != "" {
-		return append(messages, memory.Message{Role: "assistant", Content: outputText})
+		return append(messages, memory.SDKMessageForRole("assistant", outputText))
 	}
 	for _, item := range items {
 		if item.Type != "message" {
@@ -176,7 +174,7 @@ func appendOutputMessages(messages []memory.Message, outputText string, items []
 		if role == "" {
 			role = "assistant"
 		}
-		messages = append(messages, memory.Message{Role: role, Content: content})
+		messages = append(messages, memory.SDKMessageForRole(role, content))
 	}
 	return messages
 }

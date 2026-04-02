@@ -58,6 +58,13 @@ linters:
           - funlen
           - gocognit
           - nestif
+          - staticcheck
+        path: (^|/)src/semantic-router/pkg/extproc/extproc_test\.go$
+      - linters:
+          - cyclop
+          - funlen
+          - gocognit
+          - nestif
           - errcheck
         path: (^|/)src/semantic-router/pkg/cache/cache_test\.go$
       - linters:

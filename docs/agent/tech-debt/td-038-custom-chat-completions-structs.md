@@ -2,7 +2,7 @@
 
 ## Status
 
-Partially resolved — major packages migrated, remaining surfaces tracked below.
+Resolved — all packages migrated to official `openai-go` SDK types.
 
 ## Scope
 
@@ -18,7 +18,7 @@ OpenAI API and creates maintenance burden when fields are added or changed.
 
 ## Evidence
 
-Packages that **have already been migrated** in earlier loops:
+All packages have been migrated:
 
 | Package | Removed Structs | Now Uses |
 |---------|----------------|----------|
@@ -26,13 +26,13 @@ Packages that **have already been migrated** in earlier loops:
 | `pkg/classification` | 6 structs (ChatCompletionRequest, ChatMessage, ChatCompletionResponse, Choice, Message, Usage) | `openai.ChatCompletion`, `openai.ChatCompletionMessageParamUnion` with composition for `ExtraBody` |
 | `pkg/modelselection` | 3 structs (ChatCompletionRequest, ChatMessage, ChatCompletionResponse) | `openai.ChatCompletion`, `openai.ChatCompletionMessageParamUnion` with composition for error fields |
 | `pkg/mcp` | 4 structs (OpenAITool, OpenAIToolFunction, OpenAIToolCall, OpenAIToolCallFunction) | `openai.ChatCompletionToolParam`, `openai.ChatCompletionMessageToolCall` |
+| `pkg/cache` | 2 structs (ChatMessage, OpenAIRequest) | `openai.ChatCompletionNewParams` for request parsing; `extractUserContent` uses SDK content union |
+| `pkg/memory` | 1 struct (Message) | `openai.ChatCompletionMessageParamUnion` directly; `SDKMessageRole`/`SDKMessageContent` helpers for extraction |
 
-Packages with **remaining custom types** (lower priority):
-
-| Package | Custom Types | Notes |
-|---------|-------------|-------|
-| `pkg/cache` | Message, Usage structs | Used for cache serialization; migration deferred to avoid cache format break |
-| `pkg/memory` | Message struct | Used for memory store serialization |
+**Key finding**: Neither `pkg/cache` nor `pkg/memory` custom types were serialized
+to persistent storage — `cache.ChatMessage`/`OpenAIRequest` were only used for
+parsing incoming request JSON, and `memory.Message` was an in-memory representation.
+No cache format migration strategy was needed.
 
 ## Why It Matters
 
@@ -50,11 +50,12 @@ explaining why the extension is necessary.
 
 ## Exit Criteria
 
-- [ ] `pkg/cache` serialization types migrated or documented as intentional exceptions
-- [ ] `pkg/memory` serialization types migrated or documented as intentional exceptions
-- [ ] Zero custom `ChatCompletion*` type definitions remain outside documented exceptions
-- [ ] Compatibility tests cover all conversion paths
+- [x] `pkg/cache` types migrated (PR #1685 — no serialization, pure code replacement)
+- [x] `pkg/memory` types migrated (PR #1685 — no serialization, pure code replacement)
+- [x] Zero custom `ChatCompletion*` type definitions remain outside documented exceptions
+- [x] Compatibility tests cover all conversion paths (`pkg/cache/sdk_compat_test.go`)
 
 ## Tracking
 
-Follow-up issue: #1685
+- Initial migration: PR #1550 (issue #1517)
+- Completion: PR for issue #1685

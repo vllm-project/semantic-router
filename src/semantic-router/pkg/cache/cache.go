@@ -8,65 +8,39 @@ import (
 	"os"
 	"strings"
 	"sync"
+
+	"github.com/openai/openai-go"
 )
 
-// ChatMessage represents a message in the OpenAI chat format with role and content.
-// Content is json.RawMessage to support both plain strings and multimodal arrays.
-type ChatMessage struct {
-	Role    string          `json:"role"`
-	Content json.RawMessage `json:"content"`
-}
-
-// extractTextContent returns the text portion of a message's content field.
-// Handles both plain strings and OpenAI multimodal content arrays.
-func extractTextContent(raw json.RawMessage) string {
-	if len(raw) == 0 {
-		return ""
+// extractUserContent returns the text portion of a user message's content.
+// Handles both plain string and multimodal content array variants via the
+// official openai-go SDK union type.
+func extractUserContent(content openai.ChatCompletionUserMessageParamContentUnion) string {
+	if content.OfString.Value != "" {
+		return content.OfString.Value
 	}
-	// Try plain string first
-	var s string
-	if err := json.Unmarshal(raw, &s); err == nil {
-		return s
-	}
-	// Try array of content parts (multimodal)
-	var parts []struct {
-		Type string `json:"type"`
-		Text string `json:"text,omitempty"`
-	}
-	if err := json.Unmarshal(raw, &parts); err == nil {
-		var result string
-		for _, p := range parts {
-			if p.Type == "text" && p.Text != "" {
-				result += p.Text
-			}
+	var result string
+	for _, part := range content.OfArrayOfContentParts {
+		if part.OfText != nil {
+			result += part.OfText.Text
 		}
-		return result
 	}
-	return ""
+	return result
 }
 
-// OpenAIRequest represents the structure of an OpenAI API request
-type OpenAIRequest struct {
-	Model       string        `json:"model"`
-	Messages    []ChatMessage `json:"messages"`
-	Stream      bool          `json:"stream,omitempty"`
-	Temperature float32       `json:"temperature,omitempty"`
-	MaxTokens   int           `json:"max_tokens,omitempty"`
-	Tools       []interface{} `json:"tools,omitempty"`
-	TopP        float32       `json:"top_p,omitempty"`
-}
-
-// ExtractQueryFromOpenAIRequest parses an OpenAI request and extracts the user query
+// ExtractQueryFromOpenAIRequest parses an OpenAI request using the official
+// openai-go SDK types and extracts the user query (last user message text)
+// along with the model name.
 func ExtractQueryFromOpenAIRequest(requestBody []byte) (string, string, error) {
-	var req OpenAIRequest
+	var req openai.ChatCompletionNewParams
 	if err := json.Unmarshal(requestBody, &req); err != nil {
 		return "", "", fmt.Errorf("invalid request body: %w", err)
 	}
 
 	var userMessages []string
 	for _, msg := range req.Messages {
-		if msg.Role == "user" {
-			text := extractTextContent(msg.Content)
+		if msg.OfUser != nil {
+			text := extractUserContent(msg.OfUser.Content)
 			if text != "" {
 				userMessages = append(userMessages, text)
 			}
