@@ -7,6 +7,12 @@ AGENT_PRE_COMMIT ?= $(CURDIR)/.venv-agent/bin/pre-commit
 precommit-install: ## Install pre-commit into the agent harness venv
 precommit-install:
 	@$(MAKE) agent-venv-install
+	@echo "Installing repo-local git hooks (pre-commit + pre-push)..."
+	@"$(AGENT_PRE_COMMIT)" install --hook-type pre-commit --hook-type pre-push
+
+precommit-branch-gate: agent-venv-install ## Run the local prelint gate used by the pre-push hook
+	@$(MAKE) agent-ci-lint AGENT_BASE_REF="$(AGENT_BASE_REF)"
+	@$(MAKE) precommit-check
 
 precommit-check: agent-venv-install ## Run pre-commit checks on all relevant files
 	@echo "Running pre-commit on all tracked files..."
@@ -14,7 +20,8 @@ precommit-check: agent-venv-install ## Run pre-commit checks on all relevant fil
 
 # Run the full CI pre-commit pipeline in a Docker container.
 # This mirrors .github/workflows/pre-commit.yml by running both
-# `make agent-ci-lint` and `make precommit-check`.
+# `make precommit-branch-gate` and `make precommit-check` inside the
+# containerized toolchain.
 #
 # For interactive debugging:
 #   export PRECOMMIT_CONTAINER=ghcr.io/vllm-project/semantic-router/precommit:latest
@@ -43,4 +50,4 @@ precommit-local:
 	    -e AGENT_BASE_REF="$(AGENT_BASE_REF)" \
 	    -v $(shell pwd):/app \
 	    -w /app \
-	    ${PRECOMMIT_CONTAINER} bash -c 'make agent-ci-lint && make precommit-check'
+	    ${PRECOMMIT_CONTAINER} bash -c 'make precommit-branch-gate'
