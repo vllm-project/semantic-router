@@ -475,7 +475,7 @@ export default function ConfigPageTaxonomyClassifiers({
     return [
       { label: 'Total Knowledge Bases', value: counts.total, hint: 'All KB packages currently discoverable by the router.' },
       { label: 'Built-In', value: counts.builtin, hint: 'Router-shipped bases managed through the same control plane.' },
-      { label: 'Custom', value: counts.custom, hint: 'User-managed bases stored alongside router config.' },
+      { label: 'Custom', value: counts.custom, hint: 'User-managed bases persisted in the shared runtime KB store.' },
     ]
   }, [activeView, counts.builtin, counts.custom, counts.total, groupOverview, labelOverview])
 

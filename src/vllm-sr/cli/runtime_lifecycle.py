@@ -265,10 +265,7 @@ def ensure_runtime_container_not_exited(
 def _runtime_service_container_name(
     stack_layout: RuntimeStackLayout, service: str
 ) -> str:
-    preferred = stack_layout.service_container_name(service)
-    if docker_container_status(preferred) != "not found":
-        return preferred
-    return stack_layout.container_name
+    return stack_layout.service_container_name(service)
 
 
 def recover_openclaw_containers(

@@ -14,7 +14,7 @@ providers:
     provider_model_id: qwen/qwen3.5-rocm
     backend_refs:
     - name: local-vllm
-      endpoint: localhost:8000
+      endpoint: vllm:8000
       protocol: http
       type: vllm
       weight: 1
@@ -27,37 +27,22 @@ providers:
     provider_model_id: anthropic/claude-opus-4.6
     backend_refs:
     - name: vllm_primary
-      endpoint: localhost:8000
+      endpoint: vllm:8000
       protocol: http
       weight: 1
     pricing:
       prompt_per_1m: 0.12
       completion_per_1m: 0.39
       currency: USD
-global:
-  model_catalog:
-    kbs:
-    - name: mmlu_kb
-      source:
-        path: knowledge_bases/
-        manifest: labels.json
-      threshold: 0.25
-      groups:
-        escalate: [biology, business, computer_science, economics, history, math, other, philosophy, psychology]
-        keep: [chemistry, engineering, health, law, physics]
-      metrics:
-      - name: escalate_vs_keep
-        type: group_margin
-        positive_group: escalate
-        negative_group: keep
 routing:
   decisions:
   - name: escalate_72b
+    description: Escalate high-uplift MMLU domains to the frontier 72B lane.
     priority: 200
     tier: 1
     modelRefs:
     - model: cloud/frontier-72b
-      use_reasoning: null
+      use_reasoning: false
     rules:
       operator: OR
       conditions:
@@ -80,11 +65,12 @@ routing:
       - type: kb
         name: best_psychology
   - name: keep_7b
+    description: Keep lower-uplift MMLU domains on the local 7B lane.
     priority: 100
     tier: 2
     modelRefs:
     - model: local/small-7b
-      use_reasoning: null
+      use_reasoning: false
     rules:
       operator: AND
       conditions:
@@ -132,7 +118,7 @@ routing:
       kb: mmlu_kb
       target:
         kind: label
-        value: computer_science
+        value: computer science
       match: best
     - name: best_economics
       kb: mmlu_kb

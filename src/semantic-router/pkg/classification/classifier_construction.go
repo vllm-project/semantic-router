@@ -2,16 +2,21 @@ package classification
 
 import (
 	"fmt"
+	"runtime"
 	"strings"
+	"sync"
+
+	"golang.org/x/sync/errgroup"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 )
 
 type classifierOptionBuilder struct {
-	cfg                   *config.RouterConfig
-	options               []option
-	multiModalInitialized bool
+	cfg                *config.RouterConfig
+	options            []option
+	multiModalInitOnce sync.Once
+	multiModalInitErr  error
 }
 
 func newClassifierOptionBuilder(cfg *config.RouterConfig, options []option) *classifierOptionBuilder {
@@ -19,50 +24,96 @@ func newClassifierOptionBuilder(cfg *config.RouterConfig, options []option) *cla
 }
 
 func (b *classifierOptionBuilder) build(categoryMapping *CategoryMapping) ([]option, error) {
-	steps := []func() error{
-		b.addKeywordClassifier,
-		b.addEmbeddingClassifier,
-		b.addContextClassifier,
-		b.addStructureClassifier,
-		b.addReaskClassifier,
-		b.addComplexityClassifier,
-		b.addContrastiveJailbreakClassifiers,
-		b.addAuthzClassifier,
-		b.addKBClassifiers,
+	steps := []func() (option, error){
+		b.buildKeywordClassifierOption,
+		b.buildEmbeddingClassifierOption,
+		b.buildContextClassifierOption,
+		b.buildStructureClassifierOption,
+		b.buildReaskClassifierOption,
+		b.buildComplexityClassifierOption,
+		b.buildContrastiveJailbreakClassifiersOption,
+		b.buildAuthzClassifierOption,
+		b.buildKBClassifiersOption,
 	}
-	for _, step := range steps {
-		if err := step(); err != nil {
-			return nil, err
-		}
+	parallelOptions, err := b.buildParallelOptions(steps)
+	if err != nil {
+		return nil, err
 	}
+	b.options = append(b.options, parallelOptions...)
 	b.addCategoryClassifier(categoryMapping)
 	b.addMCPCategoryClassifier()
 	return b.options, nil
 }
 
-func (b *classifierOptionBuilder) addKeywordClassifier() error {
+func (b *classifierOptionBuilder) buildParallelOptions(steps []func() (option, error)) ([]option, error) {
+	if len(steps) == 0 {
+		return nil, nil
+	}
+
+	results := make([]option, len(steps))
+	var group errgroup.Group
+	group.SetLimit(classifierBuildParallelism(len(steps)))
+
+	for i, step := range steps {
+		group.Go(func() error {
+			opt, err := step()
+			if err != nil {
+				return err
+			}
+			results[i] = opt
+			return nil
+		})
+	}
+
+	if err := group.Wait(); err != nil {
+		return nil, err
+	}
+
+	options := make([]option, 0, len(results))
+	for _, opt := range results {
+		if opt != nil {
+			options = append(options, opt)
+		}
+	}
+	return options, nil
+}
+
+func classifierBuildParallelism(stepCount int) int {
+	if stepCount <= 1 {
+		return 1
+	}
+	parallelism := runtime.NumCPU()
+	if parallelism <= 0 {
+		parallelism = 1
+	}
+	if parallelism > stepCount {
+		parallelism = stepCount
+	}
+	return parallelism
+}
+
+func (b *classifierOptionBuilder) buildKeywordClassifierOption() (option, error) {
 	if len(b.cfg.KeywordRules) == 0 {
-		return nil
+		return nil, nil
 	}
 	keywordClassifier, err := NewKeywordClassifier(b.cfg.KeywordRules)
 	if err != nil {
 		logging.ComponentErrorEvent("classifier", "keyword_classifier_create_failed", map[string]interface{}{
 			"error": err.Error(),
 		})
-		return err
+		return nil, err
 	}
-	b.options = append(b.options, withKeywordClassifier(keywordClassifier))
-	return nil
+	return withKeywordClassifier(keywordClassifier), nil
 }
 
-func (b *classifierOptionBuilder) addEmbeddingClassifier() error {
+func (b *classifierOptionBuilder) buildEmbeddingClassifierOption() (option, error) {
 	if len(b.cfg.EmbeddingRules) == 0 {
-		return nil
+		return nil, nil
 	}
 	optConfig := b.cfg.EmbeddingConfig
 	if strings.EqualFold(strings.TrimSpace(optConfig.ModelType), "multimodal") {
 		if err := b.initMultiModalIfNeeded("embedding_rules with model_type=multimodal"); err != nil {
-			return err
+			return nil, err
 		}
 	}
 	keywordEmbeddingClassifier, err := NewEmbeddingClassifier(b.cfg.EmbeddingRules, optConfig)
@@ -70,62 +121,58 @@ func (b *classifierOptionBuilder) addEmbeddingClassifier() error {
 		logging.ComponentErrorEvent("classifier", "embedding_classifier_create_failed", map[string]interface{}{
 			"error": err.Error(),
 		})
-		return err
+		return nil, err
 	}
-	b.options = append(b.options, withKeywordEmbeddingClassifier(createEmbeddingInitializer(), keywordEmbeddingClassifier))
-	return nil
+	return withKeywordEmbeddingClassifier(createEmbeddingInitializer(), keywordEmbeddingClassifier), nil
 }
 
-func (b *classifierOptionBuilder) addContextClassifier() error {
+func (b *classifierOptionBuilder) buildContextClassifierOption() (option, error) {
 	if len(b.cfg.ContextRules) == 0 {
-		return nil
+		return nil, nil
 	}
 	tokenCounter := &CharacterBasedTokenCounter{}
-	b.options = append(b.options, withContextClassifier(NewContextClassifier(tokenCounter, b.cfg.ContextRules)))
-	return nil
+	return withContextClassifier(NewContextClassifier(tokenCounter, b.cfg.ContextRules)), nil
 }
 
-func (b *classifierOptionBuilder) addStructureClassifier() error {
+func (b *classifierOptionBuilder) buildStructureClassifierOption() (option, error) {
 	if len(b.cfg.StructureRules) == 0 {
-		return nil
+		return nil, nil
 	}
 	structureClassifier, err := NewStructureClassifier(b.cfg.StructureRules)
 	if err != nil {
 		logging.ComponentErrorEvent("classifier", "structure_classifier_create_failed", map[string]interface{}{
 			"error": err.Error(),
 		})
-		return err
+		return nil, err
 	}
-	b.options = append(b.options, withStructureClassifier(structureClassifier))
-	return nil
+	return withStructureClassifier(structureClassifier), nil
 }
 
-func (b *classifierOptionBuilder) addReaskClassifier() error {
+func (b *classifierOptionBuilder) buildReaskClassifierOption() (option, error) {
 	if len(b.cfg.ReaskRules) == 0 {
-		return nil
+		return nil, nil
 	}
 	reaskClassifier, err := NewReaskClassifier(b.cfg.ReaskRules, b.defaultEmbeddingModelType())
 	if err != nil {
 		logging.Errorf("Failed to create reask classifier: %v", err)
-		return err
+		return nil, err
 	}
-	b.options = append(b.options, withReaskClassifier(reaskClassifier))
-	return nil
+	return withReaskClassifier(reaskClassifier), nil
 }
 
-func (b *classifierOptionBuilder) addComplexityClassifier() error {
+func (b *classifierOptionBuilder) buildComplexityClassifierOption() (option, error) {
 	if len(b.cfg.ComplexityRules) == 0 {
-		return nil
+		return nil, nil
 	}
 	modelType := b.defaultEmbeddingModelType()
 	if config.HasImageCandidatesInRules(b.cfg.ComplexityRules) {
 		if err := b.initMultiModalIfNeeded("complexity image_candidates"); err != nil {
-			return err
+			return nil, err
 		}
 	}
 	if strings.EqualFold(strings.TrimSpace(modelType), "multimodal") {
 		if err := b.initMultiModalIfNeeded("complexity model_type=multimodal"); err != nil {
-			return err
+			return nil, err
 		}
 	}
 	complexityClassifier, err := NewComplexityClassifier(
@@ -138,59 +185,70 @@ func (b *classifierOptionBuilder) addComplexityClassifier() error {
 			"model_type": modelType,
 			"error":      err.Error(),
 		})
-		return err
+		return nil, err
 	}
-	b.options = append(b.options, withComplexityClassifier(complexityClassifier))
-	return nil
+	return withComplexityClassifier(complexityClassifier), nil
 }
 
-func (b *classifierOptionBuilder) addContrastiveJailbreakClassifiers() error {
+func (b *classifierOptionBuilder) buildContrastiveJailbreakClassifiersOption() (option, error) {
 	contrastiveClassifiers := make(map[string]*ContrastiveJailbreakClassifier)
 	defaultModelType := b.cfg.EmbeddingConfig.ModelType
+	if strings.EqualFold(strings.TrimSpace(defaultModelType), "multimodal") {
+		if err := b.initMultiModalIfNeeded("contrastive jailbreak with model_type=multimodal"); err != nil {
+			return nil, err
+		}
+	}
+
+	var mu sync.Mutex
+	var group errgroup.Group
+	group.SetLimit(classifierBuildParallelism(len(b.cfg.JailbreakRules)))
+
 	for _, rule := range b.cfg.JailbreakRules {
 		if rule.Method != "contrastive" {
 			continue
 		}
-		if strings.EqualFold(strings.TrimSpace(defaultModelType), "multimodal") {
-			if err := b.initMultiModalIfNeeded("contrastive jailbreak with model_type=multimodal"); err != nil {
+		group.Go(func() error {
+			cjc, err := NewContrastiveJailbreakClassifier(rule, defaultModelType)
+			if err != nil {
+				logging.ComponentErrorEvent("classifier", "contrastive_jailbreak_classifier_create_failed", map[string]interface{}{
+					"rule":       rule.Name,
+					"model_type": defaultModelType,
+					"error":      err.Error(),
+				})
 				return err
 			}
-		}
-		cjc, err := NewContrastiveJailbreakClassifier(rule, defaultModelType)
-		if err != nil {
-			logging.ComponentErrorEvent("classifier", "contrastive_jailbreak_classifier_create_failed", map[string]interface{}{
-				"rule":       rule.Name,
-				"model_type": defaultModelType,
-				"error":      err.Error(),
-			})
-			return err
-		}
-		contrastiveClassifiers[rule.Name] = cjc
+			mu.Lock()
+			contrastiveClassifiers[rule.Name] = cjc
+			mu.Unlock()
+			return nil
+		})
+	}
+
+	if err := group.Wait(); err != nil {
+		return nil, err
 	}
 	if len(contrastiveClassifiers) == 0 {
-		return nil
+		return nil, nil
 	}
-	b.options = append(b.options, withContrastiveJailbreakClassifiers(contrastiveClassifiers))
 	logging.ComponentEvent("classifier", "contrastive_jailbreak_classifiers_initialized", map[string]interface{}{
 		"count": len(contrastiveClassifiers),
 	})
-	return nil
+	return withContrastiveJailbreakClassifiers(contrastiveClassifiers), nil
 }
 
-func (b *classifierOptionBuilder) addAuthzClassifier() error {
+func (b *classifierOptionBuilder) buildAuthzClassifierOption() (option, error) {
 	roleBindings := b.cfg.GetRoleBindings()
 	if len(roleBindings) == 0 {
-		return nil
+		return nil, nil
 	}
 	authzClassifier, err := NewAuthzClassifier(roleBindings)
 	if err != nil {
-		return fmt.Errorf("failed to create authz classifier: %w", err)
+		return nil, fmt.Errorf("failed to create authz classifier: %w", err)
 	}
-	b.options = append(b.options, withAuthzClassifier(authzClassifier))
 	logging.ComponentEvent("classifier", "authz_classifier_initialized", map[string]interface{}{
 		"role_bindings": len(roleBindings),
 	})
-	return nil
+	return withAuthzClassifier(authzClassifier), nil
 }
 
 func (b *classifierOptionBuilder) addCategoryClassifier(categoryMapping *CategoryMapping) {
@@ -222,23 +280,23 @@ func (b *classifierOptionBuilder) addMCPCategoryClassifier() {
 }
 
 func (b *classifierOptionBuilder) initMultiModalIfNeeded(reason string) error {
-	if b.multiModalInitialized {
-		return nil
-	}
-	mmPath := config.ResolveModelPath(b.cfg.MultiModalModelPath)
-	if mmPath == "" {
-		return fmt.Errorf("%s requires embedding_models.multimodal_model_path to be set", reason)
-	}
-	if err := initMultiModalModel(mmPath, b.cfg.UseCPU); err != nil {
-		return fmt.Errorf("failed to initialize multimodal model for %s: %w", reason, err)
-	}
-	logging.ComponentEvent("classifier", "multimodal_embedding_initialized", map[string]interface{}{
-		"reason":    reason,
-		"model_ref": mmPath,
-		"use_cpu":   b.cfg.UseCPU,
+	b.multiModalInitOnce.Do(func() {
+		mmPath := config.ResolveModelPath(b.cfg.MultiModalModelPath)
+		if mmPath == "" {
+			b.multiModalInitErr = fmt.Errorf("%s requires embedding_models.multimodal_model_path to be set", reason)
+			return
+		}
+		if err := initMultiModalModel(mmPath, b.cfg.UseCPU); err != nil {
+			b.multiModalInitErr = fmt.Errorf("failed to initialize multimodal model for %s: %w", reason, err)
+			return
+		}
+		logging.ComponentEvent("classifier", "multimodal_embedding_initialized", map[string]interface{}{
+			"reason":    reason,
+			"model_ref": mmPath,
+			"use_cpu":   b.cfg.UseCPU,
+		})
 	})
-	b.multiModalInitialized = true
-	return nil
+	return b.multiModalInitErr
 }
 
 func (b *classifierOptionBuilder) defaultEmbeddingModelType() string {
@@ -273,66 +331,49 @@ func buildPIIDependencies(cfg *config.RouterConfig) (PIIInitializer, PIIInferenc
 	return createPIIInitializer(), createPIIInference()
 }
 
-func (c *Classifier) initializeConfiguredCategoryRuntime() error {
-	if c.IsCategoryEnabled() {
-		return c.initializeCategoryClassifier()
-	}
-	if c.IsMCPCategoryEnabled() {
-		return c.initializeMCPCategoryClassifier()
-	}
-	return nil
-}
-
-func (c *Classifier) initializeRequiredRuntimeClassifiers() error {
-	steps := []struct {
-		enabled bool
-		init    func() error
-	}{
-		{enabled: c.IsJailbreakEnabled(), init: c.initializeJailbreakClassifier},
-		{enabled: c.IsPIIEnabled(), init: c.initializePIIClassifier},
-		{enabled: c.IsKeywordEmbeddingClassifierEnabled(), init: c.initializeKeywordEmbeddingClassifier},
-	}
-	for _, step := range steps {
-		if !step.enabled {
-			continue
-		}
-		if err := step.init(); err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
-func (b *classifierOptionBuilder) addKBClassifiers() error {
+func (b *classifierOptionBuilder) buildKBClassifiersOption() (option, error) {
 	if len(b.cfg.KnowledgeBases) == 0 {
-		return nil
+		return nil, nil
 	}
 	modelType := strings.ToLower(strings.TrimSpace(b.cfg.EmbeddingConfig.ModelType))
 	if modelType == "" {
 		modelType = "qwen3"
 	}
 	classifiers := make(map[string]*KnowledgeBaseClassifier, len(b.cfg.KnowledgeBases))
+
+	var mu sync.Mutex
+	var group errgroup.Group
+	group.SetLimit(classifierBuildParallelism(len(b.cfg.KnowledgeBases)))
+
 	for _, kb := range b.cfg.KnowledgeBases {
-		classifier, err := NewKnowledgeBaseClassifier(kb, modelType, b.cfg.ConfigBaseDir)
-		if err != nil {
-			logging.ComponentWarnEvent("classifier", "knowledge_base_classifier_create_failed", map[string]interface{}{
-				"knowledge_base":     kb.Name,
-				"error":              err.Error(),
-				"kb_signals_enabled": false,
+		group.Go(func() error {
+			classifier, err := NewKnowledgeBaseClassifier(kb, modelType, b.cfg.ConfigBaseDir)
+			if err != nil {
+				logging.ComponentWarnEvent("classifier", "knowledge_base_classifier_create_failed", map[string]interface{}{
+					"knowledge_base":     kb.Name,
+					"error":              err.Error(),
+					"kb_signals_enabled": false,
+				})
+				return nil
+			}
+			mu.Lock()
+			classifiers[kb.Name] = classifier
+			mu.Unlock()
+			logging.ComponentEvent("classifier", "knowledge_base_classifier_initialized", map[string]interface{}{
+				"knowledge_base": kb.Name,
+				"labels":         classifier.LabelCount(),
 			})
-			continue
-		}
-		classifiers[kb.Name] = classifier
-		logging.ComponentEvent("classifier", "knowledge_base_classifier_initialized", map[string]interface{}{
-			"knowledge_base": kb.Name,
-			"labels":         classifier.LabelCount(),
+			return nil
 		})
 	}
-	if len(classifiers) == 0 {
-		return nil
+
+	if err := group.Wait(); err != nil {
+		return nil, err
 	}
-	b.options = append(b.options, withKBClassifiers(classifiers))
-	return nil
+	if len(classifiers) == 0 {
+		return nil, nil
+	}
+	return withKBClassifiers(classifiers), nil
 }
 
 func (c *Classifier) logHeuristicClassifierInitialization() {
@@ -345,30 +386,5 @@ func (c *Classifier) logHeuristicClassifierInitialization() {
 		logging.ComponentEvent("classifier", "structure_classifier_initialized", map[string]interface{}{
 			"rules": len(c.structureClassifier.rules),
 		})
-	}
-}
-
-func (c *Classifier) initializeBestEffortRuntimeClassifiers() {
-	steps := []struct {
-		enabled bool
-		label   string
-		init    func() error
-	}{
-		{enabled: c.IsFactCheckEnabled(), label: "fact-check classifier", init: c.initializeFactCheckClassifier},
-		{enabled: c.IsHallucinationDetectionEnabled(), label: "hallucination detector", init: c.initializeHallucinationDetector},
-		{enabled: c.IsFeedbackDetectorEnabled(), label: "feedback detector", init: c.initializeFeedbackDetector},
-		{enabled: c.IsPreferenceClassifierEnabled(), label: "preference classifier", init: c.initializePreferenceClassifier},
-		{enabled: len(c.Config.LanguageRules) > 0, label: "language classifier", init: c.initializeLanguageClassifier},
-	}
-	for _, step := range steps {
-		if !step.enabled {
-			continue
-		}
-		if err := step.init(); err != nil {
-			logging.ComponentWarnEvent("classifier", "optional_runtime_initializer_failed", map[string]interface{}{
-				"initializer": step.label,
-				"error":       err.Error(),
-			})
-		}
 	}
 }

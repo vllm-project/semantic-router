@@ -191,79 +191,6 @@ RUN mkdir -p /build/out && \
     echo "=== Built nlp-binding library ===" && \
     ls -la /build/out/
 
-# Stage 1c-wasm: Build DSL compiler to WebAssembly for the dashboard
-# The WASM target only uses pkg/dsl (pure Go), but go.mod has replace directives
-# pointing to ../../candle-binding etc. We create stub go.mod files so go mod
-# download succeeds without copying the full binding source trees.
-FROM --platform=$BUILDPLATFORM golang:1.24 AS wasm-builder
-WORKDIR /build
-COPY src/semantic-router/ ./
-# Create stub modules for local replace directives (not needed by WASM build)
-RUN mkdir -p /candle-binding /ml-binding /nlp-binding && \
-    echo 'module github.com/vllm-project/semantic-router/candle-binding' > /candle-binding/go.mod && \
-    echo 'module github.com/vllm-project/semantic-router/ml-binding'    > /ml-binding/go.mod && \
-    echo 'module github.com/vllm-project/semantic-router/nlp-binding'   > /nlp-binding/go.mod
-RUN go mod download
-RUN CGO_ENABLED=0 GOOS=js GOARCH=wasm go build \
-      -buildvcs=false \
-      -ldflags="-s -w" \
-      -o /build/signal-compiler.wasm \
-      ./cmd/wasm/ && \
-    # Go 1.24+ moved wasm_exec.js from misc/wasm/ to lib/wasm/
-    if [ -f "$(go env GOROOT)/lib/wasm/wasm_exec.js" ]; then \
-      cp "$(go env GOROOT)/lib/wasm/wasm_exec.js" /build/wasm_exec.js; \
-    else \
-      cp "$(go env GOROOT)/misc/wasm/wasm_exec.js" /build/wasm_exec.js; \
-    fi
-
-# Stage 1c: Build dashboard frontend with Node.js
-FROM node:20-alpine AS frontend-builder
-WORKDIR /app/frontend
-COPY dashboard/frontend/package.json dashboard/frontend/package-lock.json ./
-# Use official npm registry to avoid mirror timeouts
-RUN npm config set registry https://registry.npmjs.org/ && \
-    npm ci --include=dev
-COPY dashboard/frontend/ ./
-# Copy WASM artifacts into public/ before building
-COPY --from=wasm-builder /build/signal-compiler.wasm /build/wasm_exec.js ./public/
-RUN npm run build
-
-FROM node:20-alpine AS wizmap-builder
-WORKDIR /app/wizmap
-COPY dashboard/wizmap/package.json dashboard/wizmap/package-lock.json ./
-RUN npm config set registry https://registry.npmjs.org/ && \
-    npm ci --include=dev
-COPY dashboard/wizmap/ ./
-RUN npm run build -- --outDir /app/wizmap-dist
-
-# Stage 1c: Build dashboard backend with Go
-FROM --platform=$BUILDPLATFORM golang:1.24 AS dashboard-builder
-ARG TARGETARCH
-WORKDIR /app
-
-ENV GOPROXY=https://proxy.golang.org,direct
-
-COPY src/semantic-router/go.mod src/semantic-router/go.sum /app/src/semantic-router/
-COPY src/semantic-router/internal/nlgen/ /app/src/semantic-router/internal/nlgen/
-COPY src/semantic-router/pkg/config/ /app/src/semantic-router/pkg/config/
-COPY src/semantic-router/pkg/dsl/ /app/src/semantic-router/pkg/dsl/
-COPY src/semantic-router/pkg/modelinventory/ /app/src/semantic-router/pkg/modelinventory/
-COPY src/semantic-router/pkg/nlgen/ /app/src/semantic-router/pkg/nlgen/
-COPY src/semantic-router/pkg/observability/ /app/src/semantic-router/pkg/observability/
-COPY src/semantic-router/pkg/startupstatus/ /app/src/semantic-router/pkg/startupstatus/
-
-COPY dashboard/backend/go.mod dashboard/backend/go.sum /app/dashboard/backend/
-WORKDIR /app/dashboard/backend
-RUN go mod download
-
-COPY dashboard/backend/ /app/dashboard/backend/
-RUN if [ "$TARGETARCH" = "arm64" ]; then \
-      apt-get update && apt-get install -y gcc-aarch64-linux-gnu && rm -rf /var/lib/apt/lists/* && \
-      CC=aarch64-linux-gnu-gcc CGO_ENABLED=1 GOOS=linux GOARCH=arm64 go build -buildvcs=false -ldflags="-w -s" -o /app/dashboard-backend main.go; \
-    else \
-      CGO_ENABLED=1 GOOS=linux go build -buildvcs=false -ldflags="-w -s" -o /app/dashboard-backend main.go; \
-    fi
-
 # Stage 2: Build Go semantic router
 FROM --platform=$BUILDPLATFORM golang:1.24 AS go-builder
 ARG TARGETARCH
@@ -309,89 +236,47 @@ RUN if [ "$TARGETARCH" = "arm64" ]; then \
       CGO_ENABLED=1 go build -buildvcs=false -ldflags="-w -s" -o router ./cmd; \
     fi
 
-# Stage 3: Get Envoy binary
-FROM envoyproxy/envoy:v1.34-latest AS envoy
+# Stage 3: Final router runtime image
+FROM debian:bookworm-slim
 
-# Stage 4: Final runtime image
-FROM python:3.12-slim
-ARG GIT_SSL_NO_VERIFY
+ENV VIRTUAL_ENV=/opt/vllm-sr-venv
+ENV PATH="${VIRTUAL_ENV}/bin:${PATH}"
 
-# Install system dependencies
 RUN set -eux; \
     apt-get update; \
     apt-get install -y --no-install-recommends \
-        supervisor \
-        curl \
+        bash \
         ca-certificates \
-        docker.io; \
+        curl \
+        libssl3 \
+        python3 \
+        python3-pip \
+        python3-venv \
+        python3-yaml; \
     apt-get clean; \
     rm -rf /var/lib/apt/lists/*
 
-# Copy binaries from builders (rust artifacts from normalized /build/out/)
+RUN python3 -m venv "${VIRTUAL_ENV}" && \
+    "${VIRTUAL_ENV}/bin/pip" install --no-cache-dir --upgrade pip && \
+    "${VIRTUAL_ENV}/bin/pip" install --no-cache-dir 'huggingface_hub[cli]==1.5.0'
+
 COPY --from=go-builder /build/router /usr/local/bin/router
 COPY --from=rust-builder /build/out/libcandle_semantic_router.so /usr/local/lib/
 COPY --from=ml-builder /build/out/libml_semantic_router.so /usr/local/lib/
 COPY --from=nlp-builder /build/out/libnlp_binding.so /usr/local/lib/
-COPY --from=envoy /usr/local/bin/envoy /usr/local/bin/envoy
-COPY --from=dashboard-builder /app/dashboard-backend /usr/local/bin/dashboard-backend
-COPY --from=frontend-builder /app/frontend/dist /app/frontend
-COPY --from=wizmap-builder /app/wizmap-dist /app/frontend/embedded/wizmap
 
-# Set library path
 ENV LD_LIBRARY_PATH=/usr/local/lib
 
-# Create necessary directories
-RUN mkdir -p /app /app/models /app/config /etc/envoy /var/log/supervisor /var/log
-
-# Copy Python CLI (includes templates in cli/templates/)
 WORKDIR /app
-COPY src/vllm-sr/cli/ /app/cli/
-COPY src/vllm-sr/requirements.txt /app/requirements.txt
+RUN mkdir -p /app /app/.vllm-sr /app/config /app/models
 
-# Copy tools database to config directory
-COPY src/vllm-sr/cli/templates/tools_db.json /app/config/tools_db.json
-COPY config/kb/ /app/config/kb/
-# Copy packaged OpenClaw skill catalog and skill packs consumed by dashboard /api/openclaw/skills
-COPY dashboard/backend/config/openclaw-skills.json /app/config/openclaw-skills.json
-COPY dashboard/backend/skillpacks/ /app/skills/
-
-# Copy bench directory for evaluation benchmarks
-COPY bench/ /app/bench/
-
-# Copy training/model_eval directory for signal evaluation
-COPY src/training/model_eval/ /app/src/training/model_eval/
-
-# GIT_SSL_NO_VERIFY=1: add --trusted-host for pypi (proxy)
-RUN if [ "$GIT_SSL_NO_VERIFY" = "1" ]; then PIP_EXTRA="--trusted-host pypi.org --trusted-host files.pythonhosted.org"; else PIP_EXTRA=""; fi && \
-    pip install $PIP_EXTRA --no-cache-dir -r requirements.txt && \
-    pip install $PIP_EXTRA --no-cache-dir -r /app/bench/requirements.txt && \
-    pip install $PIP_EXTRA --no-cache-dir -r /app/src/training/model_eval/requirements.txt
-
-# Copy start scripts
+COPY config/knowledge_bases/ /app/config/knowledge_bases/
 COPY src/vllm-sr/start-router.sh /app/start-router.sh
-COPY src/vllm-sr/start-envoy.sh /app/start-envoy.sh
-COPY src/vllm-sr/start-dashboard.sh /app/start-dashboard.sh
-RUN chmod +x /app/start-router.sh /app/start-envoy.sh /app/start-dashboard.sh
+RUN chmod +x /app/start-router.sh
 
-# Copy supervisord configuration
-COPY src/vllm-sr/supervisord.conf /etc/supervisor/conf.d/supervisord.conf
+EXPOSE 50051 8080 9190
 
-# Create log files and directories with proper permissions for non-root
-RUN touch /var/log/envoy_access.log /var/log/supervisor/supervisord.log && \
-    chmod 666 /var/log/envoy_access.log /var/log/supervisor/supervisord.log && \
-    chmod 777 /var/log /var/log/supervisor /var/run
-
-# Expose ports
-# Note: Listener ports are configured in config.yaml and mapped dynamically
-# 50051: Router gRPC (ExtProc)
-# 9190: Prometheus metrics
-# 9901: Envoy admin
-# 8700: Dashboard UI
-EXPOSE 50051 9190 9901 8700
-
-# Volume for model cache
-# Mount host's ./models directory to persist downloaded models
 VOLUME ["/app/models"]
 
-# Run supervisord
-ENTRYPOINT ["/usr/bin/supervisord", "-c", "/etc/supervisor/conf.d/supervisord.conf"]
+ENTRYPOINT ["/app/start-router.sh"]
+CMD ["/app/config.yaml"]

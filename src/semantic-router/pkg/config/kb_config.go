@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"slices"
 	"strings"
 )
 
@@ -89,12 +90,30 @@ func (s KnowledgeBaseSource) ResolveManifestBaseName() string {
 func (s KnowledgeBaseSource) candidateRoots(baseDir string) []string {
 	candidates := make([]string, 0, 4)
 	if baseDir != "" {
+		if runtimeRoot := s.runtimeStateCandidateRoot(baseDir); runtimeRoot != "" {
+			candidates = append(candidates, runtimeRoot)
+		}
 		candidates = append(candidates, filepath.Join(baseDir, s.Path))
 	}
 	for _, root := range builtinConfigAssetRoots() {
 		candidates = append(candidates, filepath.Join(root, s.Path))
 	}
-	return candidates
+	return uniqueStringSlice(candidates)
+}
+
+func (s KnowledgeBaseSource) runtimeStateCandidateRoot(baseDir string) string {
+	cleanBaseDir := filepath.Clean(strings.TrimSpace(baseDir))
+	cleanSourcePath := cleanKnowledgeBaseSourcePath(s.Path)
+	if cleanBaseDir == "" || cleanSourcePath == "" || filepath.IsAbs(cleanSourcePath) {
+		return ""
+	}
+	if filepath.Base(cleanBaseDir) == ".vllm-sr" {
+		return ""
+	}
+	if cleanSourcePath != "knowledge_bases" && !strings.HasPrefix(cleanSourcePath, "knowledge_bases/") {
+		return ""
+	}
+	return filepath.Join(cleanBaseDir, ".vllm-sr", filepath.FromSlash(cleanSourcePath))
 }
 
 // KBSignalRule binds one KB output to a normal routing signal.
@@ -164,6 +183,25 @@ func builtinConfigAssetRoots() []string {
 		roots = append(roots, filepath.Join(filepath.Dir(file), "..", "..", "..", "..", "config"))
 	}
 	return roots
+}
+
+func cleanKnowledgeBaseSourcePath(path string) string {
+	cleaned := filepath.ToSlash(filepath.Clean(strings.TrimSpace(path)))
+	if cleaned == "." {
+		return ""
+	}
+	return strings.TrimSuffix(cleaned, "/")
+}
+
+func uniqueStringSlice(values []string) []string {
+	result := make([]string, 0, len(values))
+	for _, value := range values {
+		if value == "" || slices.Contains(result, value) {
+			continue
+		}
+		result = append(result, value)
+	}
+	return result
 }
 
 func pathExists(path string) bool {

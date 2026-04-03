@@ -17,7 +17,8 @@ The codebase still contains oversized hotspots and uneven package seams that do 
 - [src/semantic-router/pkg/config/config.go](../../../src/semantic-router/pkg/config/config.go)
 - [src/semantic-router/pkg/extproc/processor_req_body.go](../../../src/semantic-router/pkg/extproc/processor_req_body.go)
 - [src/semantic-router/pkg/extproc/processor_res_body.go](../../../src/semantic-router/pkg/extproc/processor_res_body.go)
-- [src/vllm-sr/cli/docker_cli.py](../../../src/vllm-sr/cli/docker_cli.py)
+- [src/vllm-sr/cli/core.py](../../../src/vllm-sr/cli/core.py)
+- [src/vllm-sr/cli/commands/runtime.py](../../../src/vllm-sr/cli/commands/runtime.py)
 - [dashboard/frontend/src/pages/BuilderPage.tsx](../../../dashboard/frontend/src/pages/BuilderPage.tsx)
 - [dashboard/frontend/src/components/ChatComponent.tsx](../../../dashboard/frontend/src/components/ChatComponent.tsx)
 

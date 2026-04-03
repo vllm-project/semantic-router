@@ -46,7 +46,7 @@ def _stub_valid_docker_cli(monkeypatch, tmp_path):
     return docker_bin
 
 
-def test_docker_start_vllm_sr_honors_legacy_override(tmp_path, monkeypatch):
+def test_docker_start_vllm_sr_rejects_legacy_topology_override(tmp_path, monkeypatch):
     config_path = tmp_path / "config.yaml"
     config_path.write_text(
         "version: v0.1\nlisteners:\n  - name: http-8899\n    address: 0.0.0.0\n    port: 8899\n"
@@ -54,40 +54,16 @@ def test_docker_start_vllm_sr_honors_legacy_override(tmp_path, monkeypatch):
 
     monkeypatch.setenv("VLLM_SR_TOPOLOGY", "legacy")
     monkeypatch.setattr(docker_start, "get_container_runtime", lambda: "docker")
-    monkeypatch.setattr(
-        docker_start, "get_docker_image", lambda **kwargs: "legacy-image:latest"
-    )
-    monkeypatch.setattr(
-        docker_start,
-        "get_runtime_images",
-        lambda **kwargs: (_ for _ in ()).throw(
-            AssertionError("split image resolution should not run for legacy topology")
-        ),
-    )
-    captured = _capture_run_commands(monkeypatch)
-    _stub_valid_docker_cli(monkeypatch, tmp_path)
 
-    rc, _, _ = docker_cli.docker_start_vllm_sr(
-        str(config_path),
-        {},
-        [{"name": "http-8899", "address": "0.0.0.0", "port": 8899}],
-        network_name="vllm-sr-network",
-        openclaw_network_name="vllm-sr-network",
-        minimal=False,
-    )
-
-    assert rc == 0
-    assert len(captured) == 1
-    container_cmd = _find_container_run_cmd(captured, "vllm-sr-container")
-    assert "legacy-image:latest" in container_cmd
-    assert "VLLM_SR_ROUTER_CONTAINER_NAME=vllm-sr-router-container" not in container_cmd
-    assert "VLLM_SR_ENVOY_CONTAINER_NAME=vllm-sr-envoy-container" not in container_cmd
-    assert (
-        "VLLM_SR_DASHBOARD_CONTAINER_NAME=vllm-sr-dashboard-container"
-        not in container_cmd
-    )
-    assert "-p" in container_cmd
-    assert "8700:8700" in " ".join(container_cmd)
+    with pytest.raises(ValueError, match="Unsupported runtime topology"):
+        docker_cli.docker_start_vllm_sr(
+            str(config_path),
+            {},
+            [{"name": "http-8899", "address": "0.0.0.0", "port": 8899}],
+            network_name="vllm-sr-network",
+            openclaw_network_name="vllm-sr-network",
+            minimal=False,
+        )
 
 
 def test_docker_start_vllm_sr_sets_openclaw_shared_network_env(tmp_path, monkeypatch):
@@ -430,7 +406,7 @@ def test_render_observability_template_uses_stack_specific_container_hosts():
 
     rendered = docker_services.render_observability_template(template, stack_layout)
 
-    assert "router: audit-a-vllm-sr-container" in rendered
+    assert "router: audit-a-vllm-sr-router-container" in rendered
     assert "metrics: audit-a-vllm-sr-router-container:9190" in rendered
     assert "audit-a-vllm-sr-prometheus" in rendered
     assert "audit-a-vllm-sr-jaeger" in rendered
@@ -463,7 +439,7 @@ def test_start_vllm_sr_uses_isolated_network_and_container_names(monkeypatch):
     monkeypatch.setattr(
         runtime_lifecycle,
         "docker_container_status",
-        lambda name: "not found" if name == "audit-a-vllm-sr-container" else "running",
+        lambda _name: "running",
     )
     monkeypatch.setattr(
         runtime_lifecycle, "docker_create_network", record("docker_create_network")
@@ -498,7 +474,8 @@ def test_start_vllm_sr_uses_isolated_network_and_container_names(monkeypatch):
     assert start_calls[0][2]["network_name"] == "audit-a-vllm-sr-network"
     assert start_calls[0][2]["openclaw_network_name"] == "audit-a-vllm-sr-network"
     assert (
-        start_calls[0][2]["stack_layout"].container_name == "audit-a-vllm-sr-container"
+        start_calls[0][2]["stack_layout"].router_container_name
+        == "audit-a-vllm-sr-router-container"
     )
     assert (
         start_calls[0][2]["env_vars"]["TARGET_FLEET_SIM_URL"]
@@ -515,7 +492,6 @@ def test_stop_vllm_sr_cleans_residual_observability_and_openclaw(monkeypatch):
     calls = []
     stack_layout = resolve_runtime_stack(stack_name="audit-a")
     status_map = {
-        stack_layout.container_name: "not found",
         stack_layout.fleet_sim_container_name: "not found",
         stack_layout.grafana_container_name: "running",
         stack_layout.prometheus_container_name: "exited",
@@ -601,21 +577,23 @@ def test_runtime_service_container_name_prefers_split_runtime_container(monkeypa
     )
 
 
-def test_runtime_service_container_name_falls_back_to_legacy_container(monkeypatch):
+def test_runtime_service_container_name_returns_split_name_when_container_missing(
+    monkeypatch,
+):
     stack_layout = resolve_runtime_stack(stack_name="audit-a")
     monkeypatch.setattr(
         core,
         "docker_container_status",
-        lambda name: "running" if name == stack_layout.container_name else "not found",
+        lambda _name: "not found",
     )
 
     assert (
         core._runtime_service_container_name("router", stack_layout)
-        == stack_layout.container_name
+        == stack_layout.router_container_name
     )
 
 
-def test_runtime_stack_status_detects_split_runtime_when_legacy_container_missing(
+def test_runtime_stack_status_detects_split_runtime_when_dashboard_running(
     monkeypatch,
 ):
     stack_layout = resolve_runtime_stack(stack_name="audit-a")
@@ -634,7 +612,6 @@ def test_stop_vllm_sr_stops_split_runtime_containers(monkeypatch):
     calls = []
     stack_layout = resolve_runtime_stack(stack_name="audit-a")
     status_map = {
-        stack_layout.container_name: "not found",
         stack_layout.router_container_name: "running",
         stack_layout.envoy_container_name: "exited",
         stack_layout.dashboard_container_name: "running",

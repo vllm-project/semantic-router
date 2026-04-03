@@ -122,7 +122,7 @@ COPY src/training/model_eval/ /app/src/training/model_eval/
 COPY src/vllm-sr/cli/ /app/cli/
 COPY src/vllm-sr/start-dashboard.sh /app/start-dashboard.sh
 COPY src/vllm-sr/cli/templates/tools_db.json /app/config/tools_db.json
-COPY config/kb/ /app/config/kb/
+COPY config/knowledge_bases/ /app/config/knowledge_bases/
 COPY dashboard/backend/config/openclaw-skills.json /app/config/openclaw-skills.json
 COPY dashboard/backend/skillpacks/ /app/skills/
 # Copy entrypoint script

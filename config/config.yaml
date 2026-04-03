@@ -1620,7 +1620,7 @@ global:
     kbs:
       - name: privacy_kb
         source:
-          path: kb/privacy/
+          path: knowledge_bases/privacy/
           manifest: labels.json
         threshold: 0.55
         prototype_scoring:
@@ -1680,6 +1680,33 @@ global:
             type: group_margin
             positive_group: private
             negative_group: public
+      - name: mmlu_kb
+        source:
+          path: knowledge_bases/mmlu/
+          manifest: labels.json
+        threshold: 0.25
+        groups:
+          escalate:
+            - biology
+            - business
+            - computer science
+            - economics
+            - history
+            - math
+            - other
+            - philosophy
+            - psychology
+          keep:
+            - chemistry
+            - engineering
+            - health
+            - law
+            - physics
+        metrics:
+          - name: escalate_vs_keep
+            type: group_margin
+            positive_group: escalate
+            negative_group: keep
     modules:
       prompt_compression:
         enabled: true

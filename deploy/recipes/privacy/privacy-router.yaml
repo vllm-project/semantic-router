@@ -46,27 +46,6 @@ providers:
           protocol: http
           weight: 1
 
-global:
-  model_catalog:
-    kbs:
-      - name: privacy_kb
-        source:
-          path: knowledge_bases/
-          manifest: labels.json
-        threshold: 0.30
-        groups:
-          security_containment: [prompt_injection, credential_exfiltration, jailbreak_role, system_prompt_extraction]
-          privacy_policy: [proprietary_code, internal_document, pii, business_strategy, trade_secret_ip, operational_infrastructure, locality_directive, customer_data]
-          frontier_reasoning: [architecture_analysis, root_cause_analysis, multi_step_tradeoffs]
-          local_standard: [generic_coding, simple_task, general_knowledge]
-          private: [prompt_injection, credential_exfiltration, jailbreak_role, system_prompt_extraction, proprietary_code, internal_document, pii, business_strategy, trade_secret_ip, operational_infrastructure, locality_directive, customer_data]
-          public: [architecture_analysis, root_cause_analysis, multi_step_tradeoffs, generic_coding, simple_task, general_knowledge]
-        metrics:
-          - name: private_vs_public
-            type: group_margin
-            positive_group: private
-            negative_group: public
-
 routing:
   modelCards:
     - name: local/private-qwen

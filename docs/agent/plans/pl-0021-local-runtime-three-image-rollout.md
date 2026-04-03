@@ -7,9 +7,9 @@
 
 ## Goal
 
-- Evolve the split local runtime from three role-specific containers that share one `vllm-sr` image into three role-specific images for router, Envoy, and dashboard.
-- Preserve the canonical `vllm-sr serve` contract, stack-scoped `vllm-sr-network`, current host-facing ports, config propagation semantics, and OpenClaw connectivity while reducing image coupling and rebuild cost.
-- Keep the rollout compatible with the current single-image transition state by introducing explicit per-role image contracts that fall back to the existing `VLLM_SR_IMAGE`.
+- Stabilize the split local runtime around explicit router, Envoy, and dashboard image selection after the 2026-03-26 review follow-up narrowed the intended steady-state contract.
+- Preserve the canonical `vllm-sr serve` contract, stack-scoped `vllm-sr-network`, current host-facing ports, config propagation semantics, and OpenClaw connectivity while keeping the narrowed publication surface aligned with local startup behavior.
+- Keep the contracted runtime shape explicit: router reuses `vllm-sr` or `vllm-sr-rocm`, dashboard keeps the existing `dashboard` image, and Envoy defaults to upstream `envoyproxy/envoy` with host-side config generation rather than a repo-managed Envoy image.
 
 ## Scope
 
@@ -27,10 +27,10 @@
 ## Exit Criteria
 
 - Local runtime image selection exposes explicit router, Envoy, and dashboard image contracts for `vllm-sr serve`, Make targets, and test harnesses while remaining backward compatible with `VLLM_SR_IMAGE`.
-- `cpu-local` split runtime can start router, Envoy, and dashboard from independent images without changing host-facing dashboard, router API, router metrics, or Envoy listener URLs.
-- `amd-local` keeps a first-class ROCm path for the router image while allowing dashboard and Envoy to remain on CPU-compatible images unless a narrower requirement appears.
-- Dashboard and Envoy role images include exactly the runtime assets they need for config apply, status, OpenClaw, and local development flows instead of inheriting the full router runtime payload.
-- Build and publish workflows can produce and tag the new role images without breaking the existing `vllm-sr`, `vllm-sr-rocm`, `dashboard`, or `vllm-sr-sim` contracts during the transition.
+- `cpu-local` split runtime can start router, Envoy, and dashboard with the contracted steady-state image model: router from `vllm-sr`, dashboard from `dashboard`, and Envoy from upstream `envoyproxy/envoy`, without changing host-facing dashboard, router API, router metrics, or Envoy listener URLs.
+- `amd-local` keeps a first-class ROCm path for the router image while dashboard and Envoy remain on CPU-compatible images unless a narrower requirement appears.
+- CLI defaults, docs, and validation paths no longer imply that dedicated `vllm-sr-router*` or repo-managed `vllm-sr-envoy` publication are the intended default contract.
+- Any historical experimentation around repo-managed router or Envoy role images is either retired from the resume target or recorded explicitly as non-default divergence.
 - Focused tests, `make agent-validate`, the relevant CLI test gates, and CPU-local smoke pass for the final changed-file set; any remaining architecture divergence is recorded as indexed debt.
 
 ## Task List
@@ -41,12 +41,13 @@
 - [x] `TI004` Carve out the dashboard runtime image with the Docker CLI, OpenClaw assets, and runtime helpers needed by local split-topology flows.
 - [x] `TI005` Carve out the router runtime image, including the ROCm-specific path, and remove role payload that no longer belongs in the router-independent images.
 - [x] `TI006` Align release and publish workflows, docs, and local developer entrypoints with the multi-image contract.
-- [ ] `TI007` Run the validation ladder for the final changed-file set and retire or record any remaining divergence.
+- [ ] `TI007` Run the validation ladder for the contracted steady-state image contract and retire or record any remaining divergence.
 
 ## Current Loop
 
 - Date: 2026-03-25
-- Current task: `TI006` complete; router publish or release flows now emit CPU and ROCm role images alongside the existing runtime images, and the next loop should focus on the final validation ladder in `TI007`
+- 2026-03-26 review follow-up: the intended resume target is now the contracted steady-state contract described in the status note above; the earlier router-role and repo-managed Envoy publication work recorded below remains historical exploration evidence rather than the default target to continue shipping.
+- Current task: `TI007` remains open, but future resume should validate the contracted steady-state image contract instead of continuing the earlier full three-image publication push.
 - Branch: `codex/topology-separation-research`
 - Planned loop order:
   - `L1` document the current single-image payload and the compatibility-first rollout contract

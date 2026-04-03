@@ -42,6 +42,7 @@
 - 2026-03-19: package and harness validation passed for the config refactor: `go test ./pkg/config/...`, `go test ./pkg/extproc/...`, `make agent-validate`, `make agent-lint CHANGED_FILES="..."`, `make test-semantic-router`, and `make agent-ci-gate CHANGED_FILES="..."`.
 - 2026-03-19: CPU-local smoke passed on an isolated local stack via `make agent-serve-local ENV=cpu AGENT_STACK_NAME=pl0008-smoke AGENT_PORT_OFFSET=400`, `make agent-smoke-local AGENT_STACK_NAME=pl0008-smoke AGENT_PORT_OFFSET=400`, and `make agent-stop-local ENV=cpu AGENT_STACK_NAME=pl0008-smoke AGENT_PORT_OFFSET=400`; container, router, envoy, dashboard, and fleet-sim all reported healthy.
 - Completed on 2026-03-19: `S006` closed the final runtime evidence gap, so TD025 and TD026 were retired in the same loop as the earlier package and harness validation.
+- 2026-04-03: ADR0006 now provides the durable cross-stack dependency direction for the dashboard-backend and config-boundary work recorded here.
 
 ## Decision Log
 
@@ -56,4 +57,4 @@
 - [../tech-debt/README.md](../tech-debt/README.md)
 - [../tech-debt/td-025-dashboard-backend-runtime-control-slice-collapse.md](../tech-debt/td-025-dashboard-backend-runtime-control-slice-collapse.md)
 - [../tech-debt/td-026-go-config-contract-boundary-collapse.md](../tech-debt/td-026-go-config-contract-boundary-collapse.md)
-- [../adr/README.md](../adr/README.md) (no dedicated ADR yet)
+- [../adr/adr-0006-platform-kernel-and-contract-first-control-planes.md](../adr/adr-0006-platform-kernel-and-contract-first-control-planes.md)

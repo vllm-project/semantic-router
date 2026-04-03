@@ -518,7 +518,7 @@ def render_observability_template(
 ) -> str:
     replacements = (
         ("vllm-sr-container:9190", f"{stack_layout.router_container_name}:9190"),
-        ("vllm-sr-container", stack_layout.container_name),
+        ("vllm-sr-container", stack_layout.router_container_name),
         ("vllm-sr-prometheus", stack_layout.prometheus_container_name),
         ("vllm-sr-jaeger", stack_layout.jaeger_container_name),
     )

@@ -26,7 +26,7 @@
 
 ## Task List
 
-- [ ] `BAL001` Create and index the durable execution plan for the balance simplification loop.
+- [x] `BAL001` Create and index the durable execution plan for the balance simplification loop.
 - [ ] `BAL002` Collapse the balance decision tree into a balance-first lane set, including merged reasoning, technical, explainer, and fast-QA routes.
 - [ ] `BAL003` Remove or demote non-essential signals and projections, add the narrow `reask` signal, and ensure every retained balance-owned feature is actually consumed.
 - [ ] `BAL004` Regenerate the maintained YAML and rewrite the executable probe manifest and AMD README to match the simplified contract.
@@ -37,6 +37,7 @@
 
 - Loop status: opened on 2026-04-01.
 - Completed in this loop:
+  - created and indexed this execution plan so the balance simplification work can resume from the repository alone
   - audited the current maintained balance recipe, probe manifest, maintained tests, and AMD README
   - separated validator noise from recipe-design issues in the old `no mutual exclusion guard` warnings
   - confirmed the current 21-decision profile still mixes balance routing with taxonomy-style specialization

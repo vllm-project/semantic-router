@@ -63,10 +63,14 @@ func syncRuntimeConfigLocally(configPath string) (string, error) {
 
 func syncRuntimeConfigInManagedContainer() (string, error) {
 	containerName := managedRuntimeSyncContainerName()
+	pythonBinary := "python3"
+	if managedRuntimeUsesSplitContainers() {
+		pythonBinary = dashboardVenvPythonPath
+	}
 	output, err := execInManagedContainer(
 		containerName,
 		30*time.Second,
-		"python3",
+		pythonBinary,
 		"-c",
 		buildRuntimeSyncPythonScript("/app", managedContainerSourceConfigPath),
 	)

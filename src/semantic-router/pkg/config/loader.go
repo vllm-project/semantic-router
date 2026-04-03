@@ -8,6 +8,7 @@ import (
 	"sort"
 	"strings"
 	"sync"
+	"sync/atomic"
 
 	"gopkg.in/yaml.v2"
 
@@ -20,9 +21,9 @@ var (
 	configErr  error
 	configMu   sync.RWMutex
 
-	// Config change notification channel
-	configUpdateCh chan *RouterConfig
-	configUpdateMu sync.Mutex
+	configUpdateMu          sync.Mutex
+	configUpdateSubscribers = map[uint64]chan *RouterConfig{}
+	configUpdateNextID      uint64
 )
 
 // Load loads the configuration from the specified YAML file once and caches it globally.
@@ -430,24 +431,33 @@ func Replace(newCfg *RouterConfig) {
 	configErr = nil
 	configMu.Unlock()
 
-	// Notify listeners of config change
+	// Notify listeners of config change.
 	configUpdateMu.Lock()
-	if configUpdateCh != nil {
+	subscribers := make(map[uint64]chan *RouterConfig, len(configUpdateSubscribers))
+	for id, ch := range configUpdateSubscribers {
+		subscribers[id] = ch
+	}
+	configUpdateMu.Unlock()
+
+	if len(subscribers) == 0 {
+		logging.ComponentDebugEvent("config", "config_update_listener_missing", nil)
+		return
+	}
+	for id, ch := range subscribers {
 		select {
-		case configUpdateCh <- newCfg:
+		case ch <- newCfg:
 			logging.ComponentDebugEvent("config", "config_update_notified", map[string]interface{}{
+				"subscriber_id":  id,
 				"decision_count": len(newCfg.Decisions),
 			})
 		default:
 			logging.ComponentWarnEvent("config", "config_update_notification_skipped", map[string]interface{}{
+				"subscriber_id":  id,
 				"reason":         "channel_full",
 				"decision_count": len(newCfg.Decisions),
 			})
 		}
-	} else {
-		logging.ComponentDebugEvent("config", "config_update_listener_missing", nil)
 	}
-	configUpdateMu.Unlock()
 }
 
 // Get returns the current configuration
@@ -457,14 +467,56 @@ func Get() *RouterConfig {
 	return config
 }
 
-// WatchConfigUpdates returns a channel that receives config updates
-// Only one watcher is supported at a time
-func WatchConfigUpdates() <-chan *RouterConfig {
-	configUpdateMu.Lock()
-	defer configUpdateMu.Unlock()
+type ConfigUpdateSubscription struct {
+	ch        chan *RouterConfig
+	closeOnce sync.Once
+	closeFn   func()
+}
 
-	if configUpdateCh == nil {
-		configUpdateCh = make(chan *RouterConfig, 1)
+func (s *ConfigUpdateSubscription) Updates() <-chan *RouterConfig {
+	if s == nil {
+		return nil
 	}
-	return configUpdateCh
+	return s.ch
+}
+
+func (s *ConfigUpdateSubscription) Close() {
+	if s == nil {
+		return
+	}
+	s.closeOnce.Do(func() {
+		if s.closeFn != nil {
+			s.closeFn()
+		}
+	})
+}
+
+func SubscribeConfigUpdates(buffer int) *ConfigUpdateSubscription {
+	if buffer <= 0 {
+		buffer = 1
+	}
+
+	id := atomic.AddUint64(&configUpdateNextID, 1)
+	ch := make(chan *RouterConfig, buffer)
+
+	configUpdateMu.Lock()
+	configUpdateSubscribers[id] = ch
+	configUpdateMu.Unlock()
+
+	return &ConfigUpdateSubscription{
+		ch: ch,
+		closeFn: func() {
+			configUpdateMu.Lock()
+			delete(configUpdateSubscribers, id)
+			configUpdateMu.Unlock()
+			close(ch)
+		},
+	}
+}
+
+// WatchConfigUpdates returns a compatibility channel that receives config
+// updates. New code should prefer SubscribeConfigUpdates so callers can
+// explicitly release their subscription.
+func WatchConfigUpdates() <-chan *RouterConfig {
+	return SubscribeConfigUpdates(1).Updates()
 }

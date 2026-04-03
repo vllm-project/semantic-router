@@ -79,7 +79,7 @@ def test_check_envoy_status_falls_back_to_envoy_validate(monkeypatch):
     ]
 
 
-def test_check_envoy_status_does_not_fallback_for_monolith_container(monkeypatch):
+def test_check_envoy_status_does_not_fallback_for_non_envoy_container(monkeypatch):
     stack_layout = runtime_stack.resolve_runtime_stack()
     captured = []
 
@@ -90,10 +90,13 @@ def test_check_envoy_status_does_not_fallback_for_monolith_container(monkeypatch
     monkeypatch.setattr(core, "docker_exec", fake_exec)
     monkeypatch.setattr(core, "docker_container_status", lambda _name: "running")
 
-    assert core._check_envoy_status(stack_layout.container_name, stack_layout) is False
+    assert (
+        core._check_envoy_status(stack_layout.router_container_name, stack_layout)
+        is False
+    )
     assert captured == [
         (
-            stack_layout.container_name,
+            stack_layout.router_container_name,
             [
                 "curl",
                 "-f",

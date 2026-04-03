@@ -385,9 +385,9 @@ signals:
 global:
   model_catalog:
     kbs:
-      - name: "privacy_knowledge_base"
+      - name: "privacy_kb"
         source:
-          path: "kb/privacy/"
+          path: "knowledge_bases/privacy/"
           manifest: "labels.json"
         threshold: 0.55
         groups:
@@ -396,7 +396,7 @@ global:
 signals:
   kb:
     - name: "privacy_policy"
-      kb: "privacy_knowledge_base"
+      kb: "privacy_kb"
       target:
         kind: "group"
         value: "privacy_policy"

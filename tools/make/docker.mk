@@ -164,7 +164,7 @@ docker-help: ## Show help for Docker-related make targets and environment variab
 	@echo "  CONTAINER_RUNTIME - Container runtime (default: docker; Podman is not supported)"
 	@echo "  DOCKER_REGISTRY   - Docker registry (default: ghcr.io/vllm-project/semantic-router)"
 	@echo "  DOCKER_TAG        - Docker tag (default: latest)"
-	@echo "  SKIP_COMPAT_IMAGE - set to 1 only when the local router compatibility image is already up to date"
+	@echo "  SKIP_ROUTER_IMAGE - set to 1 only when the local router image is already up to date"
 	@echo "  SERVED_NAME       - Served model name for custom runs"
 	@echo "  VLLM_SR_PLATFORM  - vllm-sr platform hint (set to amd to use ROCm defaults)"
 	@echo "  VLLM_SR_TARGETARCH - target image architecture (default: host-native, amd64 for ROCm)"
@@ -204,12 +204,17 @@ VLLM_SR_SIM_CONTAINER ?= vllm-sr-sim-container
 VLLM_SR_SIM_DOCKERFILE ?= src/fleet-sim/Dockerfile
 VLLM_SR_SIM_DIR ?= src/fleet-sim
 VLLM_SR_SIM_PORT ?= 8810
+SKIP_ROUTER_IMAGE_SOURCE := $(origin SKIP_ROUTER_IMAGE)
 SKIP_COMPAT_IMAGE_SOURCE := $(origin SKIP_COMPAT_IMAGE)
-SKIP_COMPAT_IMAGE_DEFAULT := 0
+SKIP_ROUTER_IMAGE_DEFAULT := 0
+ifeq ($(SKIP_ROUTER_IMAGE_SOURCE),undefined)
 ifeq ($(SKIP_COMPAT_IMAGE_SOURCE),undefined)
-SKIP_COMPAT_IMAGE_EFFECTIVE := $(SKIP_COMPAT_IMAGE_DEFAULT)
+SKIP_ROUTER_IMAGE_EFFECTIVE := $(SKIP_ROUTER_IMAGE_DEFAULT)
 else
-SKIP_COMPAT_IMAGE_EFFECTIVE := $(SKIP_COMPAT_IMAGE)
+SKIP_ROUTER_IMAGE_EFFECTIVE := $(SKIP_COMPAT_IMAGE)
+endif
+else
+SKIP_ROUTER_IMAGE_EFFECTIVE := $(SKIP_ROUTER_IMAGE)
 endif
 VLLM_SR_HOST_ARCH_RAW := $(shell uname -m)
 ifeq ($(VLLM_SR_HOST_ARCH_RAW),arm64)
@@ -249,7 +254,7 @@ ifeq ($(GIT_SSL_NO_VERIFY),1)
 VLLM_SR_BUILD_ARGS += --build-arg GIT_SSL_NO_VERIFY=1
 endif
 
-vllm-sr-dev: ## Rebuild vLLM Semantic Router image and install CLI
+vllm-sr-dev: ## Rebuild vLLM Semantic Router router image and install CLI
 vllm-sr-dev:
 	@$(LOG_TARGET)
 	@echo "=========================================="
@@ -259,10 +264,10 @@ vllm-sr-dev:
 	@echo "Topology: $(VLLM_SR_TOPOLOGY_NORMALIZED)"
 	@echo "This will:"
 	@echo "  1. Clean up old containers"
-	@if [ "$(SKIP_COMPAT_IMAGE_EFFECTIVE)" = "1" ]; then \
-		echo "  2. Reuse the existing vLLM-SR router compatibility Docker image"; \
+	@if [ "$(SKIP_ROUTER_IMAGE_EFFECTIVE)" = "1" ]; then \
+		echo "  2. Reuse the existing vLLM-SR router Docker image"; \
 	else \
-		echo "  2. Rebuild the vLLM-SR router compatibility Docker image"; \
+		echo "  2. Rebuild the vLLM-SR router Docker image"; \
 	fi
 	@if [ "$(VLLM_SR_TOPOLOGY_NORMALIZED)" = "split" ]; then \
 		echo "  3. Ensure the official Envoy image is available"; \
@@ -278,12 +283,12 @@ vllm-sr-dev:
 	@$(CONTAINER_RUNTIME) rm -f $(VLLM_SR_RUNTIME_CONTAINERS) 2>/dev/null || echo "  No runtime containers to remove"
 	@$(CONTAINER_RUNTIME) rm -f $(VLLM_SR_SIM_CONTAINER) 2>/dev/null || echo "  No simulator container to remove"
 	@echo ""
-	@if [ "$(SKIP_COMPAT_IMAGE_EFFECTIVE)" = "1" ]; then \
-		echo "2. Reusing existing vLLM-SR router compatibility Docker image (SKIP_COMPAT_IMAGE=1)"; \
-		echo "   Only use this when the local router compatibility image already includes your latest code changes."; \
+	@if [ "$(SKIP_ROUTER_IMAGE_EFFECTIVE)" = "1" ]; then \
+		echo "2. Reusing existing vLLM-SR router Docker image (SKIP_ROUTER_IMAGE=1)"; \
+		echo "   Only use this when the local router image already includes your latest code changes."; \
 		echo ""; \
 	else \
-		echo "2. Rebuilding vLLM-SR router compatibility Docker image..."; \
+		echo "2. Rebuilding vLLM-SR router Docker image..."; \
 		echo "  Building from: $(PWD)"; \
 		echo "  Platform: $(if $(VLLM_SR_PLATFORM_NORMALIZED),$(VLLM_SR_PLATFORM_NORMALIZED),default)"; \
 		echo "  Target arch: $(VLLM_SR_TARGETARCH)"; \
@@ -293,7 +298,7 @@ vllm-sr-dev:
 		echo ""; \
 		$(CONTAINER_RUNTIME) build $(VLLM_SR_BUILD_ARGS) -t $(VLLM_SR_IMAGE) -f $(VLLM_SR_DOCKERFILE) .; \
 		echo ""; \
-		echo "Router compatibility image built: $(VLLM_SR_IMAGE)"; \
+		echo "Router image built: $(VLLM_SR_IMAGE)"; \
 		echo ""; \
 	fi
 	@if [ "$(VLLM_SR_TOPOLOGY_NORMALIZED)" = "split" ]; then \
@@ -337,10 +342,10 @@ vllm-sr-dev:
 	@echo "  Or use:        make vllm-sr-start"
 	@echo ""
 
-vllm-sr-build: ## Build vLLM Semantic Router Docker image
+vllm-sr-build: ## Build vLLM Semantic Router router Docker image
 vllm-sr-build:
 	@$(LOG_TARGET)
-	@echo "Building vLLM Semantic Router Docker image..."
+	@echo "Building vLLM Semantic Router router Docker image..."
 	@echo "  Platform: $(if $(VLLM_SR_PLATFORM_NORMALIZED),$(VLLM_SR_PLATFORM_NORMALIZED),default)"
 	@echo "  Target arch: $(VLLM_SR_TARGETARCH)"
 	@echo "  Build platform: $(VLLM_SR_BUILDPLATFORM)"

@@ -18,7 +18,7 @@ OpenAI API and creates maintenance burden when fields are added or changed.
 
 ## Evidence
 
-Packages that **have been migrated** (this PR):
+Packages that **have already been migrated** in earlier loops:
 
 | Package | Removed Structs | Now Uses |
 |---------|----------------|----------|
@@ -39,7 +39,7 @@ Packages with **remaining custom types** (lower priority):
 - Schema drift: custom structs miss new fields added to the OpenAI API
 - Maintenance burden: changes must be replicated across multiple struct definitions
 - Testing gap: custom types can silently diverge from what clients actually send
-- PR #1070 reviewer explicitly flagged this as needed work
+- Earlier review feedback explicitly flagged this consolidation as required work
 
 ## Desired End State
 

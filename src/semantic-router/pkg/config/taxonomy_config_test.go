@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 
@@ -14,7 +15,7 @@ func TestKnowledgeBaseYAMLRoundTrip(t *testing.T) {
 	kb := KnowledgeBaseConfig{
 		Name: "privacy_kb",
 		Source: KnowledgeBaseSource{
-			Path:     "kb/privacy/",
+			Path:     "knowledge_bases/privacy/",
 			Manifest: "labels.json",
 		},
 		Threshold: 0.55,
@@ -70,7 +71,7 @@ func TestKBConfigJSONUsesLowercaseFieldNames(t *testing.T) {
 		KB: KnowledgeBaseConfig{
 			Name: "privacy_kb",
 			Source: KnowledgeBaseSource{
-				Path:     "kb/privacy/",
+				Path:     "knowledge_bases/privacy/",
 				Manifest: "labels.json",
 			},
 			Threshold: 0.55,
@@ -104,56 +105,117 @@ func TestKBConfigJSONUsesLowercaseFieldNames(t *testing.T) {
 	}
 }
 
-func TestDefaultCanonicalModelCatalogUsesPrivacyKBDefaults(t *testing.T) {
+func TestDefaultCanonicalModelCatalogUsesBuiltInKBDefaults(t *testing.T) {
 	catalog := defaultCanonicalModelCatalog()
-	if len(catalog.KBs) != 1 {
-		t.Fatalf("expected 1 default kb, got %d", len(catalog.KBs))
+	if len(catalog.KBs) != 2 {
+		t.Fatalf("expected 2 default kbs, got %d", len(catalog.KBs))
 	}
 
-	kb := catalog.KBs[0]
-	if kb.Name != "privacy_kb" {
-		t.Fatalf("default kb name = %q, want privacy_kb", kb.Name)
+	privacyKB, ok := findKnowledgeBaseConfig(catalog.KBs, "privacy_kb")
+	if !ok {
+		t.Fatal("missing privacy_kb default")
 	}
-	if kb.Threshold != 0.55 {
-		t.Fatalf("default kb threshold = %.2f, want 0.55", kb.Threshold)
+	if privacyKB.Source.Path != "knowledge_bases/privacy/" {
+		t.Fatalf("default kb source path = %q, want knowledge_bases/privacy/", privacyKB.Source.Path)
 	}
-	if kb.LabelThresholds["prompt_injection"] != 0.7 {
-		t.Fatalf("default kb label threshold = %.2f, want 0.7", kb.LabelThresholds["prompt_injection"])
+	if privacyKB.Threshold != 0.55 {
+		t.Fatalf("default kb threshold = %.2f, want 0.55", privacyKB.Threshold)
+	}
+	if privacyKB.LabelThresholds["prompt_injection"] != 0.7 {
+		t.Fatalf("default kb label threshold = %.2f, want 0.7", privacyKB.LabelThresholds["prompt_injection"])
+	}
+
+	mmluKB, ok := findKnowledgeBaseConfig(catalog.KBs, "mmlu_kb")
+	if !ok {
+		t.Fatal("missing mmlu_kb default")
+	}
+	if mmluKB.Source.Path != "knowledge_bases/mmlu/" {
+		t.Fatalf("default kb source path = %q, want knowledge_bases/mmlu/", mmluKB.Source.Path)
+	}
+	if mmluKB.Threshold != 0.25 {
+		t.Fatalf("default kb threshold = %.2f, want 0.25", mmluKB.Threshold)
+	}
+	if !slices.Equal(
+		mmluKB.Groups["escalate"],
+		[]string{"biology", "business", "computer science", "economics", "history", "math", "other", "philosophy", "psychology"},
+	) {
+		t.Fatalf("mmlu_kb escalate group = %v", mmluKB.Groups["escalate"])
 	}
 }
 
 func TestKnowledgeBaseSourceResolvePathFallsBackToBundledAssets(t *testing.T) {
-	source := KnowledgeBaseSource{
-		Path:     "kb/privacy/",
-		Manifest: "labels.json",
-	}
+	for _, tc := range []struct {
+		name           string
+		sourcePath     string
+		bundledPath    string
+		runtimeDirName string
+	}{
+		{
+			name:           "privacy",
+			sourcePath:     "knowledge_bases/privacy/",
+			bundledPath:    "config/knowledge_bases/privacy",
+			runtimeDirName: "privacy_kb",
+		},
+		{
+			name:           "mmlu",
+			sourcePath:     "knowledge_bases/mmlu/",
+			bundledPath:    "config/knowledge_bases/mmlu",
+			runtimeDirName: "mmlu_kb",
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			source := KnowledgeBaseSource{
+				Path:     tc.sourcePath,
+				Manifest: "labels.json",
+			}
 
-	resolved := source.ResolvePath(t.TempDir())
-	if !strings.HasSuffix(filepath.ToSlash(resolved), "config/kb/privacy") {
-		t.Fatalf("ResolvePath() = %q, want bundled config/kb/privacy fallback", resolved)
-	}
-	if _, err := os.Stat(filepath.Join(resolved, source.Manifest)); err != nil {
-		t.Fatalf("expected bundled manifest to exist: %v", err)
+			resolved := source.ResolvePath(t.TempDir())
+			if !strings.HasSuffix(filepath.ToSlash(resolved), tc.bundledPath) {
+				t.Fatalf("ResolvePath() = %q, want bundled %s fallback", resolved, tc.bundledPath)
+			}
+			if _, err := os.Stat(filepath.Join(resolved, source.Manifest)); err != nil {
+				t.Fatalf("expected bundled manifest to exist: %v", err)
+			}
+		})
 	}
 }
 
 func TestKnowledgeBaseSourceResolveManifestPathFallsBackWhenLocalManifestMissing(t *testing.T) {
-	baseDir := t.TempDir()
-	if err := os.MkdirAll(filepath.Join(baseDir, "kb", "privacy"), 0o755); err != nil {
-		t.Fatalf("mkdir local kb dir: %v", err)
-	}
+	for _, tc := range []struct {
+		name           string
+		sourcePath     string
+		runtimeDirName string
+		bundledPath    string
+	}{
+		{
+			name:           "privacy",
+			sourcePath:     "knowledge_bases/privacy/",
+			runtimeDirName: "privacy_kb",
+			bundledPath:    "config/knowledge_bases/privacy/labels.json",
+		},
+		{
+			name:           "mmlu",
+			sourcePath:     "knowledge_bases/mmlu/",
+			runtimeDirName: "mmlu_kb",
+			bundledPath:    "config/knowledge_bases/mmlu/labels.json",
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			baseDir := t.TempDir()
+			if err := os.MkdirAll(filepath.Join(baseDir, "knowledge_bases", tc.runtimeDirName), 0o755); err != nil {
+				t.Fatalf("mkdir local kb dir: %v", err)
+			}
 
-	source := KnowledgeBaseSource{
-		Path:     "kb/privacy/",
-		Manifest: "labels.json",
-	}
+			source := KnowledgeBaseSource{
+				Path:     tc.sourcePath,
+				Manifest: "labels.json",
+			}
 
-	manifestPath := source.ResolveManifestPath(baseDir)
-	if !strings.HasSuffix(filepath.ToSlash(manifestPath), "config/kb/privacy/labels.json") {
-		t.Fatalf(
-			"ResolveManifestPath() = %q, want bundled config/kb/privacy/labels.json fallback",
-			manifestPath,
-		)
+			manifestPath := source.ResolveManifestPath(baseDir)
+			if !strings.HasSuffix(filepath.ToSlash(manifestPath), tc.bundledPath) {
+				t.Fatalf("ResolveManifestPath() = %q, want bundled %s fallback", manifestPath, tc.bundledPath)
+			}
+		})
 	}
 }
 
@@ -241,6 +303,15 @@ func TestValidateKnowledgeBaseContractsRejectsUnknownKB(t *testing.T) {
 	if !strings.Contains(err.Error(), "global.model_catalog.kbs") {
 		t.Fatalf("unexpected error: %v", err)
 	}
+}
+
+func findKnowledgeBaseConfig(kbs []KnowledgeBaseConfig, name string) (KnowledgeBaseConfig, bool) {
+	for _, kb := range kbs {
+		if kb.Name == name {
+			return kb, true
+		}
+	}
+	return KnowledgeBaseConfig{}, false
 }
 
 func TestValidateKnowledgeBaseContractsResolvesManifestBindings(t *testing.T) {

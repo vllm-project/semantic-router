@@ -141,19 +141,23 @@ func createToolsDatabase(cfg *config.RouterConfig) *tools.ToolsDatabase {
 func createRouterClassifier(
 	cfg *config.RouterConfig,
 	mappings *classifierMappings,
-) (*classification.Classifier, error) {
-	classifier, err := classification.NewClassifier(
+) (*classification.Classifier, *services.ClassificationService, error) {
+	classifier, err := classification.BuildClassifier(
 		cfg,
 		mappings.categoryMapping,
 		mappings.piiMapping,
 		mappings.jailbreakMapping,
 	)
 	if err != nil {
-		return nil, fmt.Errorf("failed to create classifier: %w", err)
+		return nil, nil, fmt.Errorf("failed to build classifier: %w", err)
 	}
 
-	services.NewClassificationService(classifier, cfg)
-	return classifier, nil
+	if err := classifier.InitializeRuntime(); err != nil {
+		return nil, nil, fmt.Errorf("failed to initialize classifier runtime: %w", err)
+	}
+
+	classificationService := services.NewClassificationService(classifier, cfg)
+	return classifier, classificationService, nil
 }
 
 func createResponseAPIFilter(cfg *config.RouterConfig) *ResponseAPIFilter {
