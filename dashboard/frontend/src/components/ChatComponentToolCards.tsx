@@ -1,7 +1,7 @@
 import { useMemo } from 'react'
 
 import type { ToolCall, ToolResult } from '../tools'
-import { parseMCPToolName } from '../tools/mcp'
+import { isOpenClawMCPToolName, parseMCPToolName } from '../tools/mcp'
 
 import styles from './ChatComponent.module.css'
 import {
@@ -52,9 +52,9 @@ export const ToolCard = ({
 }) => {
   const toolName = toolCall.function.name
   const parsedMCPTool = parseMCPToolName(toolName)
-  const clawToolName = parsedMCPTool?.toolName || ''
+  const isClawMCPToolCall = isOpenClawMCPToolName(toolName)
+  const clawToolName = isClawMCPToolCall ? parsedMCPTool?.toolName || '' : ''
   const displayToolName = getToolDisplayName(clawToolName || toolName)
-  const isClawMCPToolCall = clawToolName.startsWith('claw_')
   const isClawCreateToolCall = clawToolName === 'claw_create_team' || clawToolName === 'claw_create_worker'
   const rawArgs = toolCall.function.arguments || ''
   const parsedArgs = useMemo(() => {

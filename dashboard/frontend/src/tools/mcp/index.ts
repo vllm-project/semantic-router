@@ -42,6 +42,7 @@ export {
   mcpToolToRegisteredTool,
   parseMCPToolName,
   isMCPTool,
+  isOpenClawMCPToolName,
   convertMCPTools,
   getMCPToolId,
 } from './mcpToolBridge'

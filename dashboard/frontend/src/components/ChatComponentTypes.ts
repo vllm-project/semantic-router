@@ -1,5 +1,4 @@
 import type { ToolCall, ToolResult, WebSearchResult } from '../tools'
-import { OPENCLAW_MCP_SERVER_ID } from '../tools/mcp/api'
 
 export const GREETING_LINES = [
   'Hi there, I am MoM :-)',
@@ -12,7 +11,6 @@ export const GREETING_LINES = [
 export const generateMessageId = () => `msg-${Date.now()}-${Math.random().toString(36).substring(2, 11)}`
 export const generateConversationId = () => `conv-${Date.now()}-${Math.random().toString(36).substring(2, 11)}`
 export const generatePlaygroundTaskId = () => `task-${Date.now()}-${Math.random().toString(36).substring(2, 11)}`
-export const CLAW_TOOL_NAME_PREFIX = `mcp_${OPENCLAW_MCP_SERVER_ID}_claw_`
 export const CLAW_MODE_STORAGE_KEY = 'sr:playground:claw-mode'
 export const PLAYGROUND_QUEUE_STORAGE_KEY = 'sr:playground:queue'
 export const CLAW_MODE_SYSTEM_PROMPT_LINES = [
