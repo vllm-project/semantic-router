@@ -54,8 +54,8 @@ func TestRedactReplayResponseBodyRemovesSensitiveFields(t *testing.T) {
 	if !ok {
 		t.Fatalf("tool_trace missing or invalid: %#v", payload["tool_trace"])
 	}
-	if got := toolTrace["flow"]; got != "" {
-		t.Fatalf("tool_trace.flow = %#v, want empty string", got)
+	if got := toolTrace["flow"]; got != "User Query -> Tool Calling -> Tool Execute -> LLM Answer" {
+		t.Fatalf("tool_trace.flow = %#v, want preserved flow", got)
 	}
 
 	steps, ok := toolTrace["steps"].([]any)
@@ -74,6 +74,22 @@ func TestRedactReplayResponseBodyRemovesSensitiveFields(t *testing.T) {
 		if got, ok := step["arguments"]; ok && got != "" {
 			t.Fatalf("step %d arguments = %#v, want empty string", index, got)
 		}
+	}
+
+	if got := steps[0].(map[string]any)["content_redacted"]; got != true {
+		t.Fatalf("user_input content_redacted = %#v, want true", got)
+	}
+	if got := steps[1].(map[string]any)["content_redacted"]; got != true {
+		t.Fatalf("assistant_tool_call content_redacted = %#v, want true", got)
+	}
+	if got := steps[2].(map[string]any)["content_redacted"]; got != true {
+		t.Fatalf("client_tool_result content_redacted = %#v, want true", got)
+	}
+	if got := steps[2].(map[string]any)["status"]; got != redactedToolResultStatusSucceeded {
+		t.Fatalf("client_tool_result status = %#v, want %q", got, redactedToolResultStatusSucceeded)
+	}
+	if got := steps[3].(map[string]any)["content_redacted"]; got != true {
+		t.Fatalf("assistant_final_response content_redacted = %#v, want true", got)
 	}
 }
 
@@ -108,5 +124,30 @@ func TestRedactRouterReplayResponseSkipsWriteCapableUsers(t *testing.T) {
 	}
 	if string(actualBody) != string(originalBody) {
 		t.Fatalf("response body changed for write-capable user: got %s want %s", actualBody, originalBody)
+	}
+}
+
+func TestToolTraceResultStatus(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name string
+		text any
+		want string
+	}{
+		{name: "meaningful text", text: "{\"temperature\":\"18C\"}", want: redactedToolResultStatusSucceeded},
+		{name: "failure prefix", text: "Tool execution failed: timeout", want: redactedToolResultStatusFailed},
+		{name: "null text", text: "null", want: redactedToolResultStatusFailed},
+		{name: "empty text", text: "", want: redactedToolResultStatusFailed},
+		{name: "missing text", text: nil, want: redactedToolResultStatusFailed},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			if got := toolTraceResultStatus(tt.text); got != tt.want {
+				t.Fatalf("toolTraceResultStatus(%#v) = %q, want %q", tt.text, got, tt.want)
+			}
+		})
 	}
 }

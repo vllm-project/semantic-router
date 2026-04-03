@@ -88,7 +88,9 @@ func NewFileEloStorage(path string) (*FileEloStorage, error) {
 		doneChan: make(chan struct{}),
 	}
 
-	logging.Infof("[EloStorage] Initialized file storage: %s", path)
+	logging.ComponentEvent("selection", "elo_file_storage_initialized", map[string]interface{}{
+		"storage_path": path,
+	})
 	return storage, nil
 }
 

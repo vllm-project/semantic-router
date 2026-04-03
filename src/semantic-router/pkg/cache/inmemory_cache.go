@@ -85,9 +85,6 @@ type InMemoryCacheOptions struct {
 
 // NewInMemoryCache initializes a new in-memory semantic cache instance
 func NewInMemoryCache(options InMemoryCacheOptions) *InMemoryCache {
-	logging.Debugf("Initializing in-memory cache: enabled=%t, maxEntries=%d, ttlSeconds=%d, threshold=%.3f, eviction_policy=%s, useHNSW=%t",
-		options.Enabled, options.MaxEntries, options.TTLSeconds, options.SimilarityThreshold, options.EvictionPolicy, options.UseHNSW)
-
 	// Set HNSW search ef parameter
 	efSearch := options.HNSWEfSearch
 	if efSearch <= 0 {
@@ -100,7 +97,15 @@ func NewInMemoryCache(options InMemoryCacheOptions) *InMemoryCache {
 		embeddingModel = "bert" // Default: BERT (fastest, lowest memory)
 	}
 
-	logging.Infof("[Semantic Cache] Initialized with embedding model: %s", embeddingModel)
+	logging.ComponentEvent("cache", "inmemory_cache_init_started", map[string]interface{}{
+		"enabled":              options.Enabled,
+		"max_entries":          options.MaxEntries,
+		"ttl_seconds":          options.TTLSeconds,
+		"similarity_threshold": options.SimilarityThreshold,
+		"eviction_policy":      options.EvictionPolicy,
+		"use_hnsw":             options.UseHNSW,
+		"embedding_model":      embeddingModel,
+	})
 
 	cache := &InMemoryCache{
 		entries:             []CacheEntry{},
@@ -116,20 +121,37 @@ func NewInMemoryCache(options InMemoryCacheOptions) *InMemoryCache {
 		embeddingModel:      embeddingModel,
 	}
 
+	logging.ComponentEvent("cache", "inmemory_cache_initialized", map[string]interface{}{
+		"enabled":              options.Enabled,
+		"max_entries":          options.MaxEntries,
+		"ttl_seconds":          options.TTLSeconds,
+		"similarity_threshold": options.SimilarityThreshold,
+		"eviction_policy":      options.EvictionPolicy,
+		"use_hnsw":             options.UseHNSW,
+		"hnsw_ef_search":       efSearch,
+		"embedding_model":      embeddingModel,
+	})
+
 	// Initialize O(1) eviction policy
 	switch options.EvictionPolicy {
 	case LRUEvictionPolicyType:
 		cache.optimizedLRU = NewLRUPolicy()
 		cache.evictionPolicy = cache.optimizedLRU
-		logging.Debugf("LRU policy initialized for O(1) eviction")
+		logging.ComponentDebugEvent("cache", "inmemory_cache_eviction_policy_initialized", map[string]interface{}{
+			"policy": "lru",
+		})
 	case LFUEvictionPolicyType:
 		cache.optimizedLFU = NewLFUPolicy()
 		cache.evictionPolicy = cache.optimizedLFU
-		logging.Debugf("LFU policy initialized for O(1) eviction")
+		logging.ComponentDebugEvent("cache", "inmemory_cache_eviction_policy_initialized", map[string]interface{}{
+			"policy": "lfu",
+		})
 	default: // FIFO
 		cache.optimizedFIFO = NewFIFOPolicy()
 		cache.evictionPolicy = cache.optimizedFIFO
-		logging.Debugf("FIFO policy initialized for O(1) eviction")
+		logging.ComponentDebugEvent("cache", "inmemory_cache_eviction_policy_initialized", map[string]interface{}{
+			"policy": "fifo",
+		})
 	}
 
 	// Initialize HNSW index if enabled
@@ -143,7 +165,11 @@ func NewInMemoryCache(options InMemoryCacheOptions) *InMemoryCache {
 			efConstruction = 200 // Default value
 		}
 		cache.hnswIndex = newHNSWIndex(M, efConstruction)
-		logging.Debugf("HNSW index initialized: M=%d, efConstruction=%d", M, efConstruction)
+		logging.ComponentDebugEvent("cache", "inmemory_cache_hnsw_initialized", map[string]interface{}{
+			"hnsw_m":               M,
+			"hnsw_ef_construction": efConstruction,
+			"hnsw_ef_search":       efSearch,
+		})
 	}
 
 	// Start background cleanup goroutine if TTL is enabled
@@ -156,7 +182,9 @@ func NewInMemoryCache(options InMemoryCacheOptions) *InMemoryCache {
 		}
 		cache.cleanupTicker = time.NewTicker(cleanupInterval)
 		go cache.backgroundCleanup()
-		logging.Debugf("Background cleanup started: interval=%v", cleanupInterval)
+		logging.ComponentDebugEvent("cache", "inmemory_cache_cleanup_started", map[string]interface{}{
+			"interval_seconds": cleanupInterval.Seconds(),
+		})
 	}
 
 	return cache

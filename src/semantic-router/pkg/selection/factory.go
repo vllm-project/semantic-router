@@ -301,7 +301,9 @@ func (f *Factory) CreateAll() *Registry {
 	latencyAwareSelector := NewLatencyAwareSelector(nil)
 	registry.Register(MethodLatencyAware, latencyAwareSelector)
 
-	logging.Infof("[SelectionFactory] Created all selectors: static, elo, router_dc, automix, hybrid, knn, kmeans, svm, mlp, rl_driven, gmtrouter, latency_aware")
+	logging.ComponentEvent("selection", "selection_factory_initialized", map[string]interface{}{
+		"selector_count": len(registry.selectors),
+	})
 	return registry
 }
 
@@ -315,7 +317,9 @@ func Initialize(cfg *ModelSelectionConfig, modelConfig map[string]config.ModelPa
 	// Create all selectors and register globally
 	GlobalRegistry = factory.CreateAll()
 
-	logging.Infof("[Selection] Initialized global selector registry")
+	logging.ComponentEvent("selection", "selection_registry_initialized", map[string]interface{}{
+		"selector_count": len(GlobalRegistry.selectors),
+	})
 }
 
 // GetSelector returns a selector for the specified method from global registry

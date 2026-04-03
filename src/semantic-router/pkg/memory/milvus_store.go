@@ -52,7 +52,10 @@ type MilvusStoreOptions struct {
 // NewMilvusStore creates a new MilvusStore instance
 func NewMilvusStore(options MilvusStoreOptions) (*MilvusStore, error) {
 	if !options.Enabled {
-		logging.Debugf("MilvusStore: disabled, returning stub")
+		logging.ComponentDebugEvent("memory", "milvus_store_init_skipped", map[string]interface{}{
+			"reason":  "disabled",
+			"enabled": false,
+		})
 		return &MilvusStore{
 			enabled: false,
 		}, nil
@@ -97,8 +100,11 @@ func NewMilvusStore(options MilvusStoreOptions) (*MilvusStore, error) {
 		return nil, fmt.Errorf("failed to ensure collection exists: %w", err)
 	}
 
-	logging.Infof("MilvusStore: initialized with collection='%s', embedding_model='%s'",
-		store.collectionName, store.embeddingConfig.Model)
+	logging.ComponentEvent("memory", "milvus_store_initialized", map[string]interface{}{
+		"collection_name": store.collectionName,
+		"embedding_model": store.embeddingConfig.Model,
+		"dimension":       store.config.Milvus.Dimension,
+	})
 
 	return store, nil
 }
@@ -111,15 +117,19 @@ func (m *MilvusStore) ensureCollection(ctx context.Context) error {
 	}
 
 	if hasCollection {
-		logging.Debugf("MilvusStore: collection '%s' already exists", m.collectionName)
+		logging.ComponentDebugEvent("memory", "milvus_collection_present", map[string]interface{}{
+			"collection_name": m.collectionName,
+		})
 		// Load collection to make it queryable
 		if loadErr := m.client.LoadCollection(ctx, m.collectionName, false); loadErr != nil {
-			logging.Warnf("MilvusStore: failed to load collection: %v (may already be loaded)", loadErr)
+			logging.ComponentWarnEvent("memory", "milvus_collection_load_failed", map[string]interface{}{
+				"collection_name":       m.collectionName,
+				"error":                 loadErr.Error(),
+				"may_already_be_loaded": true,
+			})
 		}
 		return nil
 	}
-
-	logging.Infof("MilvusStore: creating collection '%s' with dimension %d", m.collectionName, m.config.Milvus.Dimension)
 
 	// Define schema for agentic memory
 	schema := &entity.Schema{
@@ -196,7 +206,12 @@ func (m *MilvusStore) ensureCollection(ctx context.Context) error {
 	if m.config.Milvus.NumPartitions > 0 {
 		numPartitions = int64(m.config.Milvus.NumPartitions)
 	}
-	logging.Infof("MilvusStore: creating collection with %d partitions (partition key: user_id)", numPartitions)
+	logging.ComponentEvent("memory", "milvus_collection_create_started", map[string]interface{}{
+		"collection_name": m.collectionName,
+		"dimension":       m.config.Milvus.Dimension,
+		"num_partitions":  numPartitions,
+		"partition_key":   "user_id",
+	})
 
 	if createErr := m.client.CreateCollection(ctx, schema, 1, client.WithPartitionNum(numPartitions)); createErr != nil {
 		return fmt.Errorf("failed to create collection: %w", createErr)
@@ -216,7 +231,9 @@ func (m *MilvusStore) ensureCollection(ctx context.Context) error {
 		return fmt.Errorf("failed to load collection: %w", err)
 	}
 
-	logging.Infof("MilvusStore: collection '%s' created and loaded successfully", m.collectionName)
+	logging.ComponentEvent("memory", "milvus_collection_created", map[string]interface{}{
+		"collection_name": m.collectionName,
+	})
 	return nil
 }
 

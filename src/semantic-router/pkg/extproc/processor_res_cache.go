@@ -3,6 +3,7 @@ package extproc
 import (
 	"encoding/json"
 	"errors"
+	"sort"
 
 	"github.com/openai/openai-go"
 	"go.opentelemetry.io/otel/attribute"
@@ -66,9 +67,7 @@ func (r *OpenAIRouter) cacheStreamingResponse(ctx *RequestContext) error {
 	}
 
 	usage := extractStreamingUsage(ctx)
-	r.reportStreamingUsageMetrics(ctx, usage)
-
-	reconstructedJSON, err := buildReconstructedStreamingResponse(ctx, usage)
+	reconstructedJSON, err := buildReconstructedStreamingResponse(ctx, usage, false)
 	if err != nil {
 		if errors.Is(err, errSkipStreamingCache) {
 			return nil
@@ -104,33 +103,64 @@ func (e *streamingCacheSkipError) Error() string { return "skip streaming cache"
 func buildReconstructedStreamingResponse(
 	ctx *RequestContext,
 	usage openai.CompletionUsage,
+	includeToolCalls bool,
 ) ([]byte, error) {
+	if ctx == nil {
+		return nil, errSkipStreamingCache
+	}
+
+	id, idOK := ctx.StreamingMetadata["id"].(string)
+	model, modelOK := ctx.StreamingMetadata["model"].(string)
+	created, createdOK := ctx.StreamingMetadata["created"].(int64)
+	if !idOK || !modelOK || !createdOK {
+		logging.Warnf("Streaming response missing metadata required for reconstruction, skipping")
+		return nil, errSkipStreamingCache
+	}
+
 	finishReason := "stop"
 	if finishReasonValue, ok := ctx.StreamingMetadata["finish_reason"].(string); ok && finishReasonValue != "" {
 		finishReason = finishReasonValue
 	}
 
-	reconstructed := openai.ChatCompletion{
-		ID:      ctx.StreamingMetadata["id"].(string),
-		Object:  "chat.completion",
-		Created: ctx.StreamingMetadata["created"].(int64),
-		Model:   ctx.StreamingMetadata["model"].(string),
-		Choices: []openai.ChatCompletionChoice{
-			{
-				Index: 0,
-				Message: openai.ChatCompletionMessage{
-					Role:    "assistant",
-					Content: ctx.StreamingContent,
-				},
-				FinishReason: finishReason,
-			},
-		},
-		Usage: usage,
+	message := map[string]interface{}{
+		"role": "assistant",
+	}
+	if ctx.StreamingContent != "" {
+		message["content"] = ctx.StreamingContent
+	} else {
+		message["content"] = nil
 	}
 
-	if len(reconstructed.Choices) == 0 || reconstructed.Choices[0].Message.Content == "" {
-		logging.Warnf("Reconstructed response has no valid choices or content, skipping cache")
+	toolCalls := buildStreamingResponseToolCalls(ctx)
+	if includeToolCalls && len(toolCalls) > 0 {
+		message["tool_calls"] = toolCalls
+		if finishReason == "stop" {
+			finishReason = "tool_calls"
+		}
+	}
+
+	if ctx.StreamingContent == "" && (!includeToolCalls || len(toolCalls) == 0) {
+		logging.Warnf("Reconstructed response has no valid assistant payload, skipping cache")
 		return nil, errSkipStreamingCache
+	}
+
+	reconstructed := map[string]interface{}{
+		"id":      id,
+		"object":  "chat.completion",
+		"created": created,
+		"model":   model,
+		"choices": []map[string]interface{}{
+			{
+				"index":         0,
+				"message":       message,
+				"finish_reason": finishReason,
+			},
+		},
+		"usage": map[string]interface{}{
+			"prompt_tokens":     usage.PromptTokens,
+			"completion_tokens": usage.CompletionTokens,
+			"total_tokens":      usage.TotalTokens,
+		},
 	}
 
 	reconstructedJSON, err := json.Marshal(reconstructed)
@@ -139,6 +169,35 @@ func buildReconstructedStreamingResponse(
 		return nil, err
 	}
 	return reconstructedJSON, nil
+}
+
+func buildStreamingResponseToolCalls(ctx *RequestContext) []map[string]interface{} {
+	if ctx == nil || len(ctx.StreamingToolCalls) == 0 {
+		return nil
+	}
+
+	indexes := make([]int, 0, len(ctx.StreamingToolCalls))
+	for index := range ctx.StreamingToolCalls {
+		indexes = append(indexes, index)
+	}
+	sort.Ints(indexes)
+
+	toolCalls := make([]map[string]interface{}, 0, len(indexes))
+	for _, index := range indexes {
+		call := ctx.StreamingToolCalls[index]
+		if call == nil || (call.ID == "" && call.Name == "" && call.Arguments == "") {
+			continue
+		}
+		toolCalls = append(toolCalls, map[string]interface{}{
+			"id":   call.ID,
+			"type": "function",
+			"function": map[string]interface{}{
+				"name":      call.Name,
+				"arguments": call.Arguments,
+			},
+		})
+	}
+	return toolCalls
 }
 
 func (r *OpenAIRouter) cacheReconstructedStreamingResponse(

@@ -210,9 +210,16 @@ func CreateKNNSelector(cfg *MLSelectorConfig, embeddingFunc func(string) ([]floa
 	if knnCfg.PretrainedPath != "" {
 		if knnSelector, ok := mlSelector.(*modelselection.KNNSelector); ok {
 			if err := knnSelector.Load(knnCfg.PretrainedPath); err != nil {
-				logging.Warnf("[MLAdapter] Failed to load pretrained KNN model from %s: %v", knnCfg.PretrainedPath, err)
+				logging.ComponentWarnEvent("selection", "ml_adapter_pretrained_model_load_failed", map[string]interface{}{
+					"algorithm":  "knn",
+					"model_path": knnCfg.PretrainedPath,
+					"error":      err.Error(),
+				})
 			} else {
-				logging.Infof("[MLAdapter] Loaded pretrained KNN model from %s", knnCfg.PretrainedPath)
+				logging.ComponentEvent("selection", "ml_adapter_pretrained_model_loaded", map[string]interface{}{
+					"algorithm":  "knn",
+					"model_path": knnCfg.PretrainedPath,
+				})
 			}
 		}
 	}
@@ -245,9 +252,16 @@ func CreateKMeansSelector(cfg *MLSelectorConfig, embeddingFunc func(string) ([]f
 	if kmeansCfg.PretrainedPath != "" {
 		if kmeansSelector, ok := mlSelector.(*modelselection.KMeansSelector); ok {
 			if err := kmeansSelector.Load(kmeansCfg.PretrainedPath); err != nil {
-				logging.Warnf("[MLAdapter] Failed to load pretrained KMeans model from %s: %v", kmeansCfg.PretrainedPath, err)
+				logging.ComponentWarnEvent("selection", "ml_adapter_pretrained_model_load_failed", map[string]interface{}{
+					"algorithm":  "kmeans",
+					"model_path": kmeansCfg.PretrainedPath,
+					"error":      err.Error(),
+				})
 			} else {
-				logging.Infof("[MLAdapter] Loaded pretrained KMeans model from %s", kmeansCfg.PretrainedPath)
+				logging.ComponentEvent("selection", "ml_adapter_pretrained_model_loaded", map[string]interface{}{
+					"algorithm":  "kmeans",
+					"model_path": kmeansCfg.PretrainedPath,
+				})
 			}
 		}
 	}
@@ -279,9 +293,16 @@ func CreateSVMSelector(cfg *MLSelectorConfig, embeddingFunc func(string) ([]floa
 	if svmCfg.PretrainedPath != "" {
 		if svmSelector, ok := mlSelector.(*modelselection.SVMSelector); ok {
 			if err := svmSelector.Load(svmCfg.PretrainedPath); err != nil {
-				logging.Warnf("[MLAdapter] Failed to load pretrained SVM model from %s: %v", svmCfg.PretrainedPath, err)
+				logging.ComponentWarnEvent("selection", "ml_adapter_pretrained_model_load_failed", map[string]interface{}{
+					"algorithm":  "svm",
+					"model_path": svmCfg.PretrainedPath,
+					"error":      err.Error(),
+				})
 			} else {
-				logging.Infof("[MLAdapter] Loaded pretrained SVM model from %s", svmCfg.PretrainedPath)
+				logging.ComponentEvent("selection", "ml_adapter_pretrained_model_loaded", map[string]interface{}{
+					"algorithm":  "svm",
+					"model_path": svmCfg.PretrainedPath,
+				})
 			}
 		}
 	}
@@ -312,9 +333,16 @@ func CreateMLPSelector(cfg *MLSelectorConfig, embeddingFunc func(string) ([]floa
 	if mlpCfg.PretrainedPath != "" {
 		if mlpSelector, ok := mlSelector.(*modelselection.MLPSelector); ok {
 			if err := mlpSelector.Load(mlpCfg.PretrainedPath); err != nil {
-				logging.Warnf("[MLAdapter] Failed to load pretrained MLP model from %s: %v", mlpCfg.PretrainedPath, err)
+				logging.ComponentWarnEvent("selection", "ml_adapter_pretrained_model_load_failed", map[string]interface{}{
+					"algorithm":  "mlp",
+					"model_path": mlpCfg.PretrainedPath,
+					"error":      err.Error(),
+				})
 			} else {
-				logging.Infof("[MLAdapter] Loaded pretrained MLP model from %s", mlpCfg.PretrainedPath)
+				logging.ComponentEvent("selection", "ml_adapter_pretrained_model_loaded", map[string]interface{}{
+					"algorithm":  "mlp",
+					"model_path": mlpCfg.PretrainedPath,
+				})
 			}
 		}
 	}

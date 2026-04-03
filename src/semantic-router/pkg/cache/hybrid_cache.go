@@ -119,11 +119,19 @@ type HybridCacheOptions struct {
 
 // NewHybridCache creates a new hybrid cache instance
 func NewHybridCache(options HybridCacheOptions) (*HybridCache, error) {
-	logging.Infof("Initializing hybrid cache: enabled=%t, maxMemoryEntries=%d, threshold=%.3f",
-		options.Enabled, options.MaxMemoryEntries, options.SimilarityThreshold)
+	logging.ComponentEvent("cache", "hybrid_cache_init_started", map[string]interface{}{
+		"enabled":              options.Enabled,
+		"max_memory_entries":   options.MaxMemoryEntries,
+		"similarity_threshold": options.SimilarityThreshold,
+		"ttl_seconds":          options.TTLSeconds,
+		"rebuild_on_startup":   !options.DisableRebuildOnStartup,
+	})
 
 	if !options.Enabled {
-		logging.Debugf("Hybrid cache disabled, returning inactive instance")
+		logging.ComponentDebugEvent("cache", "hybrid_cache_init_skipped", map[string]interface{}{
+			"reason":  "disabled",
+			"enabled": false,
+		})
 		return &HybridCache{
 			enabled: false,
 		}, nil
@@ -160,27 +168,36 @@ func NewHybridCache(options HybridCacheOptions) (*HybridCache, error) {
 		enabled:             true,
 	}
 
-	logging.Infof("Hybrid cache initialized: HNSW(M=%d, ef=%d), maxMemory=%d",
-		options.HNSWM, options.HNSWEfConstruction, options.MaxMemoryEntries)
+	logging.ComponentEvent("cache", "hybrid_cache_initialized", map[string]interface{}{
+		"hnsw_m":               options.HNSWM,
+		"hnsw_ef_construction": options.HNSWEfConstruction,
+		"max_memory_entries":   options.MaxMemoryEntries,
+		"similarity_threshold": options.SimilarityThreshold,
+		"ttl_seconds":          options.TTLSeconds,
+		"rebuild_on_startup":   !options.DisableRebuildOnStartup,
+	})
 
 	// Rebuild HNSW index from Milvus on startup (enabled by default)
 	// This ensures the in-memory index is populated after a restart
 	// Set DisableRebuildOnStartup=true to skip this step (not recommended for production)
 	if !options.DisableRebuildOnStartup {
-		logging.Infof("Hybrid cache: rebuilding HNSW index from Milvus...")
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
 		defer cancel()
 
 		if err := cache.RebuildFromMilvus(ctx); err != nil {
-			logging.Warnf("Hybrid cache: failed to rebuild HNSW index from Milvus: %v", err)
-			logging.Warnf("Hybrid cache: continuing with empty HNSW index")
+			logging.ComponentWarnEvent("cache", "hybrid_cache_rebuild_failed", map[string]interface{}{
+				"source":      "startup",
+				"error":       err.Error(),
+				"empty_index": true,
+			})
 			// Don't fail initialization, just log warning and continue with empty index
-		} else {
-			logging.Infof("Hybrid cache: HNSW index rebuild complete")
 		}
 	} else {
-		logging.Warnf("Hybrid cache: skipping HNSW index rebuild (DisableRebuildOnStartup=true)")
-		logging.Warnf("Hybrid cache: index will be empty until entries are added")
+		logging.ComponentWarnEvent("cache", "hybrid_cache_rebuild_skipped", map[string]interface{}{
+			"source":      "startup",
+			"reason":      "disabled_on_startup",
+			"empty_index": true,
+		})
 	}
 
 	return cache, nil
@@ -239,7 +256,9 @@ func (h *HybridCache) RebuildFromMilvus(ctx context.Context) error {
 	}
 
 	start := time.Now()
-	logging.Infof("HybridCache.RebuildFromMilvus: starting HNSW index rebuild from Milvus")
+	logging.ComponentEvent("cache", "hybrid_cache_rebuild_started", map[string]interface{}{
+		"max_memory_entries": h.maxMemoryEntries,
+	})
 
 	// Query all entries from Milvus
 	requestIDs, embeddings, err := h.milvusCache.GetAllEntries(ctx)
@@ -248,11 +267,16 @@ func (h *HybridCache) RebuildFromMilvus(ctx context.Context) error {
 	}
 
 	if len(requestIDs) == 0 {
-		logging.Infof("HybridCache.RebuildFromMilvus: no entries to rebuild, starting with empty index")
+		logging.ComponentEvent("cache", "hybrid_cache_rebuild_completed", map[string]interface{}{
+			"entries_loaded":     0,
+			"entries_available":  0,
+			"duration_seconds":   time.Since(start).Seconds(),
+			"entries_per_second": 0.0,
+			"empty":              true,
+			"truncated":          false,
+		})
 		return nil
 	}
-
-	logging.Infof("HybridCache.RebuildFromMilvus: rebuilding HNSW index with %d entries", len(requestIDs))
 
 	// Lock for the entire rebuild process
 	h.mu.Lock()
@@ -268,8 +292,11 @@ func (h *HybridCache) RebuildFromMilvus(ctx context.Context) error {
 	for i, embedding := range embeddings {
 		// Check memory limits
 		if len(h.embeddings) >= h.maxMemoryEntries {
-			logging.Warnf("HybridCache.RebuildFromMilvus: reached max memory entries (%d), stopping rebuild at %d/%d",
-				h.maxMemoryEntries, i, len(embeddings))
+			logging.ComponentWarnEvent("cache", "hybrid_cache_rebuild_truncated", map[string]interface{}{
+				"max_memory_entries": h.maxMemoryEntries,
+				"entries_loaded":     i,
+				"entries_available":  len(embeddings),
+			})
 			break
 		}
 
@@ -282,25 +309,37 @@ func (h *HybridCache) RebuildFromMilvus(ctx context.Context) error {
 		// Progress logging for large datasets
 		if (i+1)%batchSize == 0 {
 			elapsed := time.Since(start)
-			rate := float64(i+1) / elapsed.Seconds()
+			rate := 0.0
+			if elapsed.Seconds() > 0 {
+				rate = float64(i+1) / elapsed.Seconds()
+			}
 			remaining := len(embeddings) - (i + 1)
-			eta := time.Duration(float64(remaining)/rate) * time.Second
-			logging.Infof("HybridCache.RebuildFromMilvus: progress %d/%d (%.1f%%, %.0f entries/sec, ETA: %v)",
-				i+1, len(embeddings), float64(i+1)/float64(len(embeddings))*100, rate, eta)
+			etaSeconds := 0.0
+			if rate > 0 {
+				etaSeconds = float64(remaining) / rate
+			}
+			logging.ComponentDebugEvent("cache", "hybrid_cache_rebuild_progress", map[string]interface{}{
+				"entries_loaded":     i + 1,
+				"entries_available":  len(embeddings),
+				"progress_percent":   float64(i+1) / float64(len(embeddings)) * 100,
+				"entries_per_second": rate,
+				"eta_seconds":        etaSeconds,
+			})
 		}
 	}
 
 	elapsed := time.Since(start)
-	rate := float64(len(h.embeddings)) / elapsed.Seconds()
-	logging.Infof("HybridCache.RebuildFromMilvus: rebuild complete - %d entries in %v (%.0f entries/sec)",
-		len(h.embeddings), elapsed, rate)
-
-	logging.LogEvent("hybrid_cache_rebuilt", map[string]interface{}{
-		"backend":           "hybrid",
-		"entries_loaded":    len(h.embeddings),
-		"entries_in_milvus": len(embeddings),
-		"duration_seconds":  elapsed.Seconds(),
-		"entries_per_sec":   rate,
+	rate := 0.0
+	if elapsed.Seconds() > 0 {
+		rate = float64(len(h.embeddings)) / elapsed.Seconds()
+	}
+	logging.ComponentEvent("cache", "hybrid_cache_rebuild_completed", map[string]interface{}{
+		"entries_loaded":     len(h.embeddings),
+		"entries_available":  len(embeddings),
+		"duration_seconds":   elapsed.Seconds(),
+		"entries_per_second": rate,
+		"empty":              len(h.embeddings) == 0,
+		"truncated":          len(h.embeddings) < len(embeddings),
 	})
 
 	metrics.UpdateCacheEntries("hybrid", len(h.embeddings))

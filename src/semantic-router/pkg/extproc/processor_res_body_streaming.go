@@ -75,11 +75,20 @@ func (r *OpenAIRouter) finalizeStreamingResponse(ctx *RequestContext) {
 		})
 	}
 
+	usage := extractStreamingUsage(ctx)
+	r.reportStreamingUsageMetrics(ctx, usage)
+
 	if err := r.cacheStreamingResponse(ctx); err != nil {
 		logging.Errorf("Failed to cache streaming response: %v", err)
 	}
 
-	r.attachRouterReplayResponse(ctx, []byte(ctx.StreamingContent), true)
+	replayResponseBody, err := buildReconstructedStreamingResponse(ctx, usage, true)
+	if err != nil {
+		logging.Warnf("Failed to reconstruct streaming replay response body: %v", err)
+		replayResponseBody = []byte(ctx.StreamingContent)
+	}
+
+	r.attachRouterReplayResponse(ctx, replayResponseBody, true)
 }
 
 // parseStreamingChunk parses an SSE chunk to extract content and metadata.

@@ -355,13 +355,19 @@ func NewRLDrivenSelector(cfg *RLDrivenConfig) *RLDrivenSelector {
 	if cfg.StoragePath != "" {
 		storage, err := NewFileEloStorage(cfg.StoragePath)
 		if err != nil {
-			logging.Errorf("[RLDrivenSelector] Failed to initialize storage: %v", err)
+			logging.ComponentErrorEvent("selection", "rl_driven_storage_init_failed", map[string]interface{}{
+				"storage_path": cfg.StoragePath,
+				"error":        err.Error(),
+			})
 		} else {
 			selector.storage = storage
 
 			// Load existing preferences from storage
 			if err := selector.loadFromStorage(); err != nil {
-				logging.Warnf("[RLDrivenSelector] Failed to load preferences from storage: %v", err)
+				logging.ComponentWarnEvent("selection", "rl_driven_storage_load_failed", map[string]interface{}{
+					"storage_path": cfg.StoragePath,
+					"error":        err.Error(),
+				})
 			}
 
 			// Start auto-save
@@ -373,7 +379,10 @@ func NewRLDrivenSelector(cfg *RLDrivenConfig) *RLDrivenSelector {
 			}
 
 			storage.StartAutoSave(interval, selector.getAllPreferencesForStorage)
-			logging.Infof("[RLDrivenSelector] Storage initialized with auto-save interval: %v", interval)
+			logging.ComponentEvent("selection", "rl_driven_storage_initialized", map[string]interface{}{
+				"storage_path":            cfg.StoragePath,
+				"auto_save_interval_secs": interval.Seconds(),
+			})
 		}
 	}
 
@@ -381,18 +390,28 @@ func NewRLDrivenSelector(cfg *RLDrivenConfig) *RLDrivenSelector {
 	// Requires external server: src/training/rl_model_selection/router_r1_server.py
 	if cfg.EnableLLMRouting && cfg.RouterR1ServerURL != "" {
 		selector.routerR1Client = NewRouterR1Client(cfg.RouterR1ServerURL)
-		logging.Infof("[RLDrivenSelector] Router-R1 LLM routing enabled, server: %s", cfg.RouterR1ServerURL)
+		logging.ComponentEvent("selection", "rl_driven_router_r1_enabled", map[string]interface{}{
+			"server_url": cfg.RouterR1ServerURL,
+		})
 
 		// Verify connectivity
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
 		if err := selector.routerR1Client.HealthCheck(ctx); err != nil {
-			logging.Warnf("[RLDrivenSelector] Router-R1 server not reachable: %v (will retry on use)", err)
+			logging.ComponentWarnEvent("selection", "rl_driven_router_r1_unreachable", map[string]interface{}{
+				"server_url":   cfg.RouterR1ServerURL,
+				"error":        err.Error(),
+				"retry_on_use": true,
+			})
 		} else {
-			logging.Infof("[RLDrivenSelector] Router-R1 server connected successfully")
+			logging.ComponentEvent("selection", "rl_driven_router_r1_connected", map[string]interface{}{
+				"server_url": cfg.RouterR1ServerURL,
+			})
 		}
 	} else if cfg.EnableLLMRouting {
-		logging.Warnf("[RLDrivenSelector] Router-R1 LLM routing enabled but no server URL configured")
+		logging.ComponentWarnEvent("selection", "rl_driven_router_r1_config_missing", map[string]interface{}{
+			"llm_routing_enabled": true,
+		})
 	}
 
 	return selector
@@ -461,8 +480,10 @@ func (r *RLDrivenSelector) InitializeFromConfig(modelConfig map[string]config.Mo
 	}
 	r.categoryMu.Unlock()
 
-	logging.Infof("[RLDrivenSelector] Initialized with %d models, %d categories",
-		len(modelConfig), len(categories))
+	logging.ComponentEvent("selection", "rl_driven_selector_initialized", map[string]interface{}{
+		"model_count":    len(modelConfig),
+		"category_count": len(categories),
+	})
 }
 
 // Select chooses the best model using Thompson Sampling or Router-R1 LLM routing
@@ -1308,7 +1329,9 @@ func (r *RLDrivenSelector) loadFromStorage() error {
 		}
 	}
 
-	logging.Infof("[RLDrivenSelector] Loaded preferences from storage")
+	logging.ComponentEvent("selection", "rl_driven_preferences_loaded", map[string]interface{}{
+		"categories_loaded": len(allRatings),
+	})
 	return nil
 }
 
