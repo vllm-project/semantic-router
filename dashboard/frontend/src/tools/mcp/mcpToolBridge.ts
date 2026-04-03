@@ -7,6 +7,25 @@ import type { MCPTool } from './types'
 import type { ToolDefinition, ToolExecutor, RegisteredTool, ToolMetadata, ToolParameters } from '../types'
 import * as api from './api'
 
+const MCP_TOOL_PREFIX = 'mcp_'
+const UUID_LIKE_SERVER_KEY = /^[a-f0-9-]+$/i
+
+const SERVER_KEY_BY_ID: Record<string, string> = {
+  [api.OPENCLAW_MCP_SERVER_ID]: api.OPENCLAW_MCP_TOOL_NAMESPACE,
+}
+
+const SERVER_ID_BY_KEY: Record<string, string> = {
+  [api.OPENCLAW_MCP_TOOL_NAMESPACE]: api.OPENCLAW_MCP_SERVER_ID,
+}
+
+function getMCPServerKey(serverId: string): string {
+  return SERVER_KEY_BY_ID[serverId] || serverId
+}
+
+function resolveMCPServerId(serverKey: string): string {
+  return SERVER_ID_BY_KEY[serverKey] || serverKey
+}
+
 /**
  * 从原始 JSON Schema 生成增强的工具描述
  * 
@@ -69,7 +88,7 @@ export function mcpToolToDefinition(tool: MCPTool): ToolDefinition {
   return {
     type: 'function',
     function: {
-      name: `mcp_${tool.serverId}_${tool.name}`,
+      name: getMCPToolId(tool.serverId, tool.name),
       // 使用从原始 JSON Schema 生成的增强描述
       description: buildEnhancedDescription(tool),
       parameters,
@@ -97,7 +116,7 @@ export function createMCPToolExecutor(tool: MCPTool): ToolExecutor {
  */
 export function mcpToolToRegisteredTool(tool: MCPTool): RegisteredTool {
   const metadata: ToolMetadata = {
-    id: `mcp_${tool.serverId}_${tool.name}`,
+    id: getMCPToolId(tool.serverId, tool.name),
     displayName: tool.name,
     category: 'custom',
     icon: 'mcp',
@@ -120,40 +139,58 @@ export function mcpToolToRegisteredTool(tool: MCPTool): RegisteredTool {
 
 /**
  * 解析 MCP 工具名称
- * 格式: mcp_{serverId}_{toolName}
+ * 格式: mcp_{serverKey}_{toolName}
  */
 export function parseMCPToolName(fullName: string): { serverId: string; toolName: string } | null {
-  if (!fullName.startsWith('mcp_')) {
+  if (!fullName.startsWith(MCP_TOOL_PREFIX)) {
     return null
   }
-  
-  const parts = fullName.slice(4).split('_')
-  if (parts.length < 2) {
-    return null
-  }
-  
-  // serverId 是 UUID，包含 - 字符
-  // 假设 serverId 是第一个部分，剩余的是 toolName
-  // UUID 格式: xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx
-  // 我们需要更智能地解析
-  
-  // 简化处理：找到第一个非 UUID 字符的位置
-  const match = fullName.match(/^mcp_([a-f0-9-]+)_(.+)$/i)
-  if (match) {
-    return {
-      serverId: match[1],
-      toolName: match[2],
+
+  for (const [serverKey, serverId] of Object.entries(SERVER_ID_BY_KEY)) {
+    const aliasPrefix = `${MCP_TOOL_PREFIX}${serverKey}_`
+    if (fullName.startsWith(aliasPrefix)) {
+      const toolName = fullName.slice(aliasPrefix.length)
+      if (!toolName) {
+        return null
+      }
+
+      return {
+        serverId,
+        toolName,
+      }
     }
   }
-  
-  return null
+
+  const remainder = fullName.slice(MCP_TOOL_PREFIX.length)
+  const separatorIndex = remainder.indexOf('_')
+  if (separatorIndex <= 0 || separatorIndex === remainder.length - 1) {
+    return null
+  }
+
+  const serverKey = remainder.slice(0, separatorIndex)
+  if (!UUID_LIKE_SERVER_KEY.test(serverKey)) {
+    return null
+  }
+
+  return {
+    serverId: resolveMCPServerId(serverKey),
+    toolName: remainder.slice(separatorIndex + 1),
+  }
 }
 
 /**
  * 检查是否是 MCP 工具
  */
 export function isMCPTool(toolName: string): boolean {
-  return toolName.startsWith('mcp_')
+  return toolName.startsWith(MCP_TOOL_PREFIX)
+}
+
+/**
+ * 检查是否是内建 OpenClaw MCP 工具
+ */
+export function isOpenClawMCPToolName(toolName: string): boolean {
+  const parsed = parseMCPToolName(toolName)
+  return Boolean(parsed && parsed.serverId === api.OPENCLAW_MCP_SERVER_ID && parsed.toolName.startsWith('claw_'))
 }
 
 /**
@@ -167,5 +204,5 @@ export function convertMCPTools(tools: MCPTool[]): RegisteredTool[] {
  * 获取 MCP 工具的完整 ID
  */
 export function getMCPToolId(serverId: string, toolName: string): string {
-  return `mcp_${serverId}_${toolName}`
+  return `${MCP_TOOL_PREFIX}${getMCPServerKey(serverId)}_${toolName}`
 }

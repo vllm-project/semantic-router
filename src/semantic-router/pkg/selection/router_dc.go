@@ -179,7 +179,9 @@ func (r *RouterDCSelector) InitializeFromConfig(modelConfig map[string]config.Mo
 
 		r.modelEmbeddings[model] = embedding
 		modelsWithDescriptions++
-		logging.Debugf("[RouterDC] Initialized embedding for model %s", model)
+		logging.ComponentDebugEvent("selection", "router_dc_model_embedding_initialized", map[string]interface{}{
+			"model": model,
+		})
 	}
 
 	logging.ComponentDebugEvent("selection", "router_dc_config_embeddings_initialized", map[string]interface{}{

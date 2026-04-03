@@ -91,7 +91,10 @@ func (d *FeedbackDetector) loadMappingFromConfig(modelPath string) error {
 		d.mapping.LabelToIdx[normalizedLabel] = idx
 	}
 
-	logging.Infof("Loaded feedback mapping from config.json: %d labels", len(d.mapping.IdxToLabel))
+	logging.ComponentEvent("classifier", "feedback_mapping_loaded", map[string]interface{}{
+		"labels":    len(d.mapping.IdxToLabel),
+		"model_ref": modelPath,
+	})
 	for idx, label := range d.mapping.IdxToLabel {
 		logging.Debugf("  %s -> %s", idx, label)
 	}
@@ -134,31 +137,28 @@ func (d *FeedbackDetector) Initialize() error {
 		return fmt.Errorf("failed to load id2label mapping from %s/config.json: %w", d.config.ModelID, err)
 	}
 
-	logging.Infof("💬 Initializing Feedback Detector:")
-	logging.Infof("Model: %s", d.config.ModelID)
-	logging.Infof("CPU Mode: %v", d.config.UseCPU)
+	backend := "modernbert"
 
 	// Check if mmBERT-32K is configured (takes precedence)
 	if d.config.UseMmBERT32K {
-		logging.Infof("Type: mmBERT-32K (32K context, YaRN RoPE)")
 		err := candle.InitMmBert32KFeedbackClassifier(d.config.ModelID, d.config.UseCPU)
 		if err != nil {
 			return fmt.Errorf("failed to initialize mmBERT-32K feedback detector from %s: %w", d.config.ModelID, err)
 		}
+		backend = "mmbert_32k"
 		d.useMmBERT32K = true
-		d.initialized = true
-		logging.Infof("Feedback detector initialized successfully")
-		return nil
-	}
-
-	logging.Infof("Type: ModernBERT (ML-based)")
-	err := candle.InitFeedbackDetector(d.config.ModelID, d.config.UseCPU)
-	if err != nil {
-		return fmt.Errorf("failed to initialize feedback detector ML model from %s: %w", d.config.ModelID, err)
+	} else {
+		err := candle.InitFeedbackDetector(d.config.ModelID, d.config.UseCPU)
+		if err != nil {
+			return fmt.Errorf("failed to initialize feedback detector ML model from %s: %w", d.config.ModelID, err)
+		}
 	}
 
 	d.initialized = true
-	logging.Infof("Feedback detector initialized successfully")
+	logging.ComponentEvent("classifier", "feedback_detector_initialized", map[string]interface{}{
+		"backend":   backend,
+		"model_ref": d.config.ModelID,
+	})
 
 	return nil
 }

@@ -13,6 +13,12 @@ import (
 	"github.com/vllm-project/semantic-router/dashboard/backend/auth"
 )
 
+const (
+	redactedToolResultStatusSucceeded = "succeeded"
+	redactedToolResultStatusFailed    = "failed"
+	toolExecutionFailurePrefix        = "Tool execution failed:"
+)
+
 func attachRouterReplayResponseRedaction(proxy *httputil.ReverseProxy) {
 	if proxy == nil {
 		return
@@ -166,11 +172,6 @@ func redactReplayRecordMap(record map[string]any) bool {
 func redactToolTraceMap(toolTrace map[string]any) bool {
 	changed := false
 
-	if flow, ok := toolTrace["flow"].(string); ok && strings.TrimSpace(flow) != "" {
-		toolTrace["flow"] = ""
-		changed = true
-	}
-
 	steps, ok := toolTrace["steps"].([]any)
 	if !ok {
 		return changed
@@ -181,15 +182,43 @@ func redactToolTraceMap(toolTrace map[string]any) bool {
 		if !ok {
 			continue
 		}
+		if toolTraceStepType(step) == "client_tool_result" {
+			step["status"] = toolTraceResultStatus(step["text"])
+			changed = true
+		}
 		if text, ok := step["text"].(string); ok && strings.TrimSpace(text) != "" {
 			step["text"] = ""
+			step["content_redacted"] = true
 			changed = true
 		}
 		if arguments, ok := step["arguments"].(string); ok && strings.TrimSpace(arguments) != "" {
 			step["arguments"] = ""
+			step["content_redacted"] = true
 			changed = true
 		}
 	}
 
 	return changed
+}
+
+func toolTraceStepType(step map[string]any) string {
+	value, _ := step["type"].(string)
+	return strings.TrimSpace(value)
+}
+
+func toolTraceResultStatus(rawText any) string {
+	text, _ := rawText.(string)
+	normalized := strings.TrimSpace(text)
+	if normalized == "" {
+		return redactedToolResultStatusFailed
+	}
+
+	lower := strings.ToLower(normalized)
+	if lower == "null" || lower == "undefined" {
+		return redactedToolResultStatusFailed
+	}
+	if strings.HasPrefix(lower, strings.ToLower(toolExecutionFailurePrefix)) {
+		return redactedToolResultStatusFailed
+	}
+	return redactedToolResultStatusSucceeded
 }

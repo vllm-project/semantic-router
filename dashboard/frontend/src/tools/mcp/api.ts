@@ -18,6 +18,7 @@ const API_BASE = '/api/mcp'
 
 export const OPENCLAW_MCP_SERVER_ID = '0f9f4c36-7d5b-4f13-9fe8-63f34ad37d9a'
 export const OPENCLAW_MCP_SERVER_NAME = 'OpenClaw Team & Worker MCP'
+export const OPENCLAW_MCP_TOOL_NAMESPACE = 'openclaw'
 const OPENCLAW_MCP_ENDPOINT_PATH = '/api/openclaw/mcp'
 
 function buildOpenClawEndpoint(origin?: string): string {

@@ -78,11 +78,18 @@ func (c *ExternalModelBasedEmbeddingInitializer) Init(qwen3ModelPath string, gem
 		return err
 	}
 
+	backend := "embedding_models"
 	if mmBertModelPath != "" {
-		logging.Infof("Initialized KeywordEmbedding classifier with mmBERT 2D Matryoshka support")
-	} else {
-		logging.Infof("Initialized KeywordEmbedding classifier")
+		backend = "mmbert_2d_matryoshka"
 	}
+	logging.ComponentEvent("classifier", "keyword_embedding_backend_initialized", map[string]interface{}{
+		"backend":           backend,
+		"qwen3_model_ref":   qwen3ModelPath,
+		"gemma_model_ref":   gemmaModelPath,
+		"mmbert_model_ref":  mmBertModelPath,
+		"use_cpu":           useCPU,
+		"mmbert_2d_enabled": mmBertModelPath != "",
+	})
 	return nil
 }
 
@@ -123,13 +130,25 @@ func NewEmbeddingClassifier(cfgRules []config.EmbeddingRule, optConfig config.HN
 		modelType:           optConfig.ModelType, // Use configured model type
 	}
 
-	logging.Infof("EmbeddingClassifier initialized with model type: %s", c.modelType)
+	logging.ComponentEvent("classifier", "embedding_classifier_initialized", map[string]interface{}{
+		"model_type":          c.modelType,
+		"rules":               len(cfgRules),
+		"preload_embeddings":  optConfig.PreloadEmbeddings,
+		"target_dimension":    optConfig.TargetDimension,
+		"prototype_scoring":   optConfig.PrototypeScoring.IsEnabled(),
+		"multimodal_prepared": optConfig.ModelType == "multimodal",
+	})
 
 	// If preloading is enabled, compute all candidate embeddings at startup
 	if optConfig.PreloadEmbeddings {
 		if err := c.preloadCandidateEmbeddings(); err != nil {
 			// Log warning but don't fail - fall back to runtime computation
-			logging.Warnf("Failed to preload candidate embeddings, falling back to runtime computation: %v", err)
+			logging.ComponentWarnEvent("classifier", "embedding_candidates_preload_failed", map[string]interface{}{
+				"model_type":       c.modelType,
+				"target_dimension": c.optimizationConfig.TargetDimension,
+				"error":            err.Error(),
+				"fallback":         "runtime_computation",
+			})
 			c.preloadEnabled = false
 		}
 	}
@@ -143,13 +162,18 @@ func (c *EmbeddingClassifier) preloadCandidateEmbeddings() error {
 	startTime := time.Now()
 	candidates := c.collectUniqueCandidates()
 	if len(candidates) == 0 {
-		logging.Infof("No candidates to preload")
+		logging.ComponentDebugEvent("classifier", "embedding_candidates_preload_skipped", map[string]interface{}{
+			"reason": "no_candidates",
+		})
 		return nil
 	}
 
 	modelType := c.getModelType()
-	logging.Infof("[Embedding Signal] Preloading embeddings for %d unique candidates using model: %s (dimension: %d) with concurrent processing...",
-		len(candidates), modelType, c.optimizationConfig.TargetDimension)
+	logging.ComponentDebugEvent("classifier", "embedding_candidates_preload_started", map[string]interface{}{
+		"candidates":       len(candidates),
+		"model_type":       modelType,
+		"target_dimension": c.optimizationConfig.TargetDimension,
+	})
 
 	numWorkers := c.preloadWorkerCount(len(candidates))
 	successCount, firstError := c.collectCandidateEmbeddingResults(
@@ -157,8 +181,14 @@ func (c *EmbeddingClassifier) preloadCandidateEmbeddings() error {
 	)
 
 	elapsed := time.Since(startTime)
-	logging.Infof("[Embedding Signal] Preloaded %d/%d candidate embeddings using model %s in %v (workers: %d)",
-		successCount, len(candidates), modelType, elapsed, numWorkers)
+	logging.ComponentEvent("classifier", "embedding_candidates_preloaded", map[string]interface{}{
+		"candidates":       successCount,
+		"total_candidates": len(candidates),
+		"model_type":       modelType,
+		"target_dimension": c.optimizationConfig.TargetDimension,
+		"workers":          numWorkers,
+		"elapsed_ms":       elapsed.Milliseconds(),
+	})
 
 	if firstError != nil {
 		return firstError
@@ -173,7 +203,9 @@ func (c *EmbeddingClassifier) preloadCandidateEmbeddings() error {
 func (c *EmbeddingClassifier) getModelType() string {
 	// Check for test override via environment variable
 	if model := os.Getenv("EMBEDDING_MODEL_OVERRIDE"); model != "" {
-		logging.Infof("Embedding model override from env: %s", model)
+		logging.ComponentDebugEvent("classifier", "embedding_model_override_enabled", map[string]interface{}{
+			"model_type": model,
+		})
 		return model
 	}
 	// Use the configured model type from config
@@ -201,7 +233,11 @@ func (c *Classifier) initializeKeywordEmbeddingClassifier() error {
 		if err := initMultiModalModel(mmPath, c.Config.UseCPU); err != nil {
 			return fmt.Errorf("failed to initialize multimodal model for embedding_rules: %w", err)
 		}
-		logging.Infof("Initialized KeywordEmbedding classifier with multimodal model: %s", mmPath)
+		logging.ComponentEvent("classifier", "keyword_embedding_backend_initialized", map[string]interface{}{
+			"backend":   "multimodal",
+			"model_ref": mmPath,
+			"use_cpu":   c.Config.UseCPU,
+		})
 		return nil
 	}
 

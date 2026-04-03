@@ -173,25 +173,39 @@ func NewAutoMixSelector(cfg *AutoMixConfig) *AutoMixSelector {
 			cfg.CostLambda,
 			cfg.DiscountFactor,
 		)
-		logging.Infof("[AutoMix] Initialized AdaOps POMDP solver with %d particles", cfg.BeliefParticles)
+		logging.ComponentEvent("selection", "automix_adaops_initialized", map[string]interface{}{
+			"belief_particles": cfg.BeliefParticles,
+			"cost_lambda":      cfg.CostLambda,
+			"discount_factor":  cfg.DiscountFactor,
+		})
 	}
 
 	// Initialize self-verification client if configured
 	// Requires external server: src/training/rl_model_selection/automix_verifier.py
 	if cfg.EnableSelfVerification && cfg.VerifierServerURL != "" {
 		selector.verifierClient = NewAutoMixVerifierClient(cfg.VerifierServerURL)
-		logging.Infof("[AutoMix] Self-verification enabled, server: %s", cfg.VerifierServerURL)
+		logging.ComponentEvent("selection", "automix_verifier_enabled", map[string]interface{}{
+			"server_url": cfg.VerifierServerURL,
+		})
 
 		// Verify connectivity
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
 		if err := selector.verifierClient.HealthCheck(ctx); err != nil {
-			logging.Warnf("[AutoMix] Verifier server not reachable: %v (will retry on use)", err)
+			logging.ComponentWarnEvent("selection", "automix_verifier_unreachable", map[string]interface{}{
+				"server_url":   cfg.VerifierServerURL,
+				"error":        err.Error(),
+				"retry_on_use": true,
+			})
 		} else {
-			logging.Infof("[AutoMix] Verifier server connected successfully")
+			logging.ComponentEvent("selection", "automix_verifier_connected", map[string]interface{}{
+				"server_url": cfg.VerifierServerURL,
+			})
 		}
 	} else if cfg.EnableSelfVerification {
-		logging.Warnf("[AutoMix] Self-verification enabled but no server URL configured")
+		logging.ComponentWarnEvent("selection", "automix_verifier_config_missing", map[string]interface{}{
+			"self_verification_enabled": true,
+		})
 	}
 
 	return selector
@@ -235,7 +249,9 @@ func (a *AutoMixSelector) InitializeFromConfig(modelConfig map[string]config.Mod
 		a.valueMu.Unlock()
 	}
 
-	logging.Infof("[AutoMix] Initialized capabilities for %d models", len(a.capabilities))
+	logging.ComponentEvent("selection", "automix_capabilities_initialized", map[string]interface{}{
+		"model_count": len(a.capabilities),
+	})
 }
 
 // Select chooses the best model using POMDP-based cost-quality optimization
@@ -734,7 +750,11 @@ func (a *AutoMixSelector) InitializeCascade(ctx context.Context, selCtx *Selecti
 		MaxEscalations:  a.config.MaxEscalations,
 	}
 
-	logging.Infof("[AutoMix] Initialized cascade: chain=%v, starting with %s", chain, firstModel)
+	logging.ComponentEvent("selection", "automix_cascade_initialized", map[string]interface{}{
+		"chain_length":    len(chain),
+		"starting_model":  firstModel,
+		"max_escalations": a.config.MaxEscalations,
+	})
 
 	return state, &SelectionResult{
 		SelectedModel: modelRef.Model,

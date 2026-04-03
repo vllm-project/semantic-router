@@ -13,7 +13,6 @@ import ChatTaskQueue from './ChatTaskQueue'
 import { runPlaygroundTask } from './chatTaskExecution'
 import {
   CLAW_MODE_STORAGE_KEY,
-  CLAW_TOOL_NAME_PREFIX,
   type ConversationPreview,
   generateConversationId,
   generateMessageId,
@@ -22,7 +21,7 @@ import {
   type Message,
 } from './ChatComponentTypes'
 import { useToolRegistry } from '../tools'
-import { useMCPToolSync } from '../tools/mcp'
+import { isOpenClawMCPToolName, useMCPToolSync } from '../tools/mcp'
 import { ensureOpenClawServerConnected } from '../tools/mcp/api'
 import { useConversationStorage, usePlaygroundQueue } from '../hooks'
 import { useReadonly } from '../contexts/ReadonlyContext'
@@ -257,11 +256,11 @@ const ChatComponent = ({
   })
 
   const baseOtherToolDefinitions = useMemo(
-    () => otherToolDefinitions.filter(def => !def.function.name.startsWith(CLAW_TOOL_NAME_PREFIX)),
+    () => otherToolDefinitions.filter(def => !isOpenClawMCPToolName(def.function.name)),
     [otherToolDefinitions]
   )
   const clawToolDefinitions = useMemo(
-    () => otherToolDefinitions.filter(def => def.function.name.startsWith(CLAW_TOOL_NAME_PREFIX)),
+    () => otherToolDefinitions.filter(def => isOpenClawMCPToolName(def.function.name)),
     [otherToolDefinitions]
   )
   const clawManagementDisabled = readonlyLoading || isReadonly

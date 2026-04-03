@@ -220,8 +220,7 @@
   gap: 0.25rem;
 }
 
-.signalPillCompact,
-.modalSignalPill {
+.signalPillCompact {
   display: inline-flex;
   align-items: center;
   gap: 0.35rem;
@@ -232,6 +231,23 @@
   font-family: var(--font-mono);
   color: rgba(255, 255, 255, 0.94);
   background: rgba(255, 255, 255, 0.04);
+  max-width: 100%;
+  overflow-wrap: anywhere;
+  white-space: normal;
+}
+
+.modalSignalPill {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.24rem 0.62rem;
+  border-radius: 999px;
+  border: 1.5px solid rgba(255, 255, 255, 0.78);
+  font-size: 0.75rem;
+  font-family: var(--font-mono);
+  font-weight: 700;
+  color: #ffffff;
+  background: rgba(130, 136, 142, 0.22);
   max-width: 100%;
   overflow-wrap: anywhere;
   white-space: normal;

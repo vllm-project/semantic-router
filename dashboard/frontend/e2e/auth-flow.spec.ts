@@ -60,6 +60,36 @@ const replayRecordWithDetailedToolTrace = {
   streaming: false,
 };
 
+const redactedReplayRecordWithDetailedToolTrace = {
+  ...replayRecordWithDetailedToolTrace,
+  request_body: "",
+  response_body: "",
+  tool_trace: {
+    ...replayRecordWithDetailedToolTrace.tool_trace,
+    steps: [
+      {
+        type: "user_input",
+        content_redacted: true,
+      },
+      {
+        type: "assistant_tool_call",
+        tool_name: "fetch_price",
+        content_redacted: true,
+      },
+      {
+        type: "client_tool_result",
+        tool_name: "fetch_price",
+        status: "succeeded",
+        content_redacted: true,
+      },
+      {
+        type: "assistant_final_response",
+        content_redacted: true,
+      },
+    ],
+  },
+};
+
 const transitionCopyPattern =
   /A Symbolic Analysis of Relay and Switching Circuits/i;
 
@@ -667,7 +697,7 @@ test.describe("Dashboard auth flow", () => {
     );
   });
 
-  test("read users see replay flow details blocked in record view", async ({
+  test("read users see replay flow structure with payloads redacted in record view", async ({
     page,
   }) => {
     await mockAuthenticatedAppShell(page, {
@@ -689,15 +719,20 @@ test.describe("Dashboard auth flow", () => {
       await route.fulfill({
         status: 200,
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(replayRecordWithDetailedToolTrace),
+        body: JSON.stringify(redactedReplayRecordWithDetailedToolTrace),
       });
     });
 
     await page.goto("/insights/replay-sensitive-1");
 
-    await expect(
-      page.getByText("Flow details are available to write and admin roles only"),
-    ).toBeVisible();
+    await expect(page.getByText("Tool Call Success Rate")).toBeVisible();
+    await expect(page.getByText("100%")).toBeVisible();
+    await expect(page.getByText("Tool Calling (fetch_price)")).toBeVisible();
+    await expect(page.getByText("Tool Execute (fetch_price)")).toBeVisible();
+    await expect(page.getByText("Source: User")).toBeVisible();
+    await expect(page.getByText("Source: LLM")).toHaveCount(2);
+    await expect(page.getByText("Source: Agent")).toBeVisible();
+    await expect(page.getByText("Inputs and outputs are hidden for your role")).toHaveCount(4);
     await expect(page.getByText("Confidential flow prompt 7A")).toHaveCount(0);
     await expect(page.getByText("Confidential tool result 7B")).toHaveCount(0);
     await expect(page.getByText("Confidential final answer 7C")).toHaveCount(0);
@@ -731,9 +766,9 @@ test.describe("Dashboard auth flow", () => {
 
     await page.goto("/insights/replay-sensitive-1");
 
-    await expect(
-      page.getByText("Flow details are available to write and admin roles only"),
-    ).toHaveCount(0);
+    await expect(page.getByText("Source: User")).toBeVisible();
+    await expect(page.getByText("Source: LLM")).toHaveCount(2);
+    await expect(page.getByText("Source: Agent")).toBeVisible();
     await expect(page.getByText("Confidential flow prompt 7A")).toBeVisible();
     await expect(page.getByText("Confidential tool result 7B")).toBeVisible();
     await expect(page.getByText("Confidential final answer 7C")).toBeVisible();

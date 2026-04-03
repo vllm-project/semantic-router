@@ -22,27 +22,6 @@ interface InsightsFilterState {
   decisionFilter: string
   modelFilter: string
 }
-
-const SIGNAL_TINTS: Record<string, string> = {
-  keyword: 'rgba(118, 185, 0, 0.15)',
-  embedding: 'rgba(0, 212, 255, 0.12)',
-  domain: 'rgba(147, 51, 234, 0.14)',
-  fact_check: 'rgba(34, 197, 94, 0.15)',
-  user_feedback: 'rgba(236, 72, 153, 0.12)',
-  reask: 'rgba(251, 191, 36, 0.14)',
-  preference: 'rgba(234, 179, 8, 0.15)',
-  language: 'rgba(59, 130, 246, 0.15)',
-  context: 'rgba(168, 85, 247, 0.14)',
-  structure: 'rgba(249, 115, 22, 0.14)',
-  complexity: 'rgba(245, 158, 11, 0.15)',
-  modality: 'rgba(16, 185, 129, 0.15)',
-  authz: 'rgba(14, 165, 233, 0.14)',
-  jailbreak: 'rgba(239, 68, 68, 0.14)',
-  pii: 'rgba(244, 63, 94, 0.14)',
-  kb: 'rgba(99, 102, 241, 0.15)',
-  projection: 'rgba(45, 212, 191, 0.15)',
-}
-
 export function getUniqueDecisions(records: InsightsRecord[]) {
   const decisions = new Set<string>()
   records.forEach((record) => {
@@ -465,7 +444,6 @@ function buildSignalFields(signals: Signal): ViewField[] {
               <span
                 key={`${label}-${value}`}
                 className={styles.modalSignalPill}
-                style={{ background: SIGNAL_TINTS[key] || 'rgba(255, 255, 255, 0.08)' }}
               >
                 {value}
               </span>
@@ -480,7 +458,7 @@ function buildSignalFields(signals: Signal): ViewField[] {
 
 function buildRoutingMetadataFields(record: InsightsRecord): ViewField[] {
   return [
-    buildTagField('Projection outputs', record.projections, 'projection'),
+    buildTagField('Projection outputs', record.projections),
     buildNumericMapField('Projection scores', record.projection_scores),
     buildNumericMapField('Signal confidences', record.signal_confidences),
     buildNumericMapField('Signal values', record.signal_values),
@@ -617,7 +595,6 @@ function renderReadonlyLock() {
 function buildTagField(
   label: string,
   values: string[] | undefined,
-  tintKey: string,
 ): ViewField | null {
   if (!values?.length) {
     return null
@@ -631,7 +608,6 @@ function buildTagField(
           <span
             key={`${label}-${value}`}
             className={styles.modalSignalPill}
-            style={{ background: SIGNAL_TINTS[tintKey] || 'rgba(255, 255, 255, 0.08)' }}
           >
             {value}
           </span>

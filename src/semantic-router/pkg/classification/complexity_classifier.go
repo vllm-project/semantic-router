@@ -73,14 +73,18 @@ func NewComplexityClassifier(
 		prototypeCfg:            prototypeCfg.WithDefaults(),
 	}
 
-	if c.hasImageCandidates {
-		logging.Infof("ComplexityClassifier initialized with model type: %s + multimodal (image candidates detected)", c.modelType)
-	} else {
-		logging.Infof("ComplexityClassifier initialized with model type: %s", c.modelType)
-	}
+	logging.ComponentEvent("classifier", "complexity_classifier_initialized", map[string]interface{}{
+		"model_type":       c.modelType,
+		"rules":            len(rules),
+		"image_candidates": c.hasImageCandidates,
+	})
 
 	if err := c.preloadCandidateEmbeddings(); err != nil {
-		logging.Warnf("Failed to preload complexity candidate embeddings: %v", err)
+		logging.ComponentWarnEvent("classifier", "complexity_candidates_preload_failed", map[string]interface{}{
+			"model_type":       c.modelType,
+			"image_candidates": c.hasImageCandidates,
+			"error":            err.Error(),
+		})
 		return nil, err
 	}
 
@@ -91,10 +95,15 @@ func NewComplexityClassifier(
 // Uses concurrent processing for better performance.
 func (c *ComplexityClassifier) preloadCandidateEmbeddings() error {
 	startTime := time.Now()
-	logging.Infof("[Complexity Signal] Preloading embeddings for hard/easy candidates using model: %s with concurrent processing...", c.modelType)
+	logging.ComponentDebugEvent("classifier", "complexity_candidates_preload_started", map[string]interface{}{
+		"model_type":       c.modelType,
+		"image_candidates": c.hasImageCandidates,
+	})
 	tasks := c.buildCandidateTasks()
 	if len(tasks) == 0 {
-		logging.Infof("[Complexity Signal] No candidates to preload")
+		logging.ComponentDebugEvent("classifier", "complexity_candidates_preload_skipped", map[string]interface{}{
+			"reason": "no_candidates",
+		})
 		return nil
 	}
 
@@ -102,8 +111,14 @@ func (c *ComplexityClassifier) preloadCandidateEmbeddings() error {
 	successCount, firstError := c.collectCandidateEmbeddingResults(c.startCandidateEmbeddingWorkers(tasks, numWorkers))
 
 	elapsed := time.Since(startTime)
-	logging.Infof("[Complexity Signal] Preloaded %d/%d complexity embeddings (text+image hard/easy candidates) using model %s in %v (workers: %d)",
-		successCount, len(tasks), c.modelType, elapsed, numWorkers)
+	logging.ComponentEvent("classifier", "complexity_candidates_preloaded", map[string]interface{}{
+		"candidates":       successCount,
+		"total_candidates": len(tasks),
+		"model_type":       c.modelType,
+		"image_candidates": c.hasImageCandidates,
+		"workers":          numWorkers,
+		"elapsed_ms":       elapsed.Milliseconds(),
+	})
 
 	if firstError != nil {
 		return firstError

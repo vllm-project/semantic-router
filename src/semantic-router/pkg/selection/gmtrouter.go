@@ -231,8 +231,11 @@ func (g *GMTRouterSelector) InitializeFromConfig(modelConfig map[string]config.M
 		g.loadState()
 	}
 
-	logging.Infof("[GMTRouter] Initialized with %d LLM nodes, personalization=%v",
-		len(g.llmEmbeddings), g.config.EnablePersonalization)
+	logging.ComponentEvent("selection", "gmt_router_initialized", map[string]interface{}{
+		"llm_node_count":  len(g.llmEmbeddings),
+		"personalization": g.config.EnablePersonalization,
+		"storage_enabled": g.config.StoragePath != "",
+	})
 }
 
 // Select chooses the best model using graph-based preference learning
@@ -825,7 +828,10 @@ func (g *GMTRouterSelector) loadState() {
 	data, err := os.ReadFile(g.config.StoragePath)
 	if err != nil {
 		if !os.IsNotExist(err) {
-			logging.Warnf("[GMTRouter] Failed to load state: %v", err)
+			logging.ComponentWarnEvent("selection", "gmt_router_state_load_failed", map[string]interface{}{
+				"storage_path": g.config.StoragePath,
+				"error":        err.Error(),
+			})
 		}
 		return
 	}
@@ -834,9 +840,15 @@ func (g *GMTRouterSelector) loadState() {
 	defer g.userMu.Unlock()
 
 	if err := json.Unmarshal(data, &g.userStates); err != nil {
-		logging.Warnf("[GMTRouter] Failed to unmarshal state: %v", err)
+		logging.ComponentWarnEvent("selection", "gmt_router_state_unmarshal_failed", map[string]interface{}{
+			"storage_path": g.config.StoragePath,
+			"error":        err.Error(),
+		})
 	} else {
-		logging.Infof("[GMTRouter] Loaded state with %d users", len(g.userStates))
+		logging.ComponentEvent("selection", "gmt_router_state_loaded", map[string]interface{}{
+			"storage_path": g.config.StoragePath,
+			"user_count":   len(g.userStates),
+		})
 	}
 }
 

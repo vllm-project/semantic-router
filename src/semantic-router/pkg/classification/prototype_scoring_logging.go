@@ -12,7 +12,7 @@ const prototypeMedoidPreviewLimit = 96
 func logPrototypeBankSummary(family string, owner string, bank *prototypeBank) {
 	representatives := bank.representatives()
 	if len(representatives) == 0 {
-		logging.Infof("[%s] prototype bank owner=%s prototypes=0", family, owner)
+		logging.Debugf("[%s] prototype bank owner=%s prototypes=0", family, owner)
 		return
 	}
 
@@ -25,7 +25,7 @@ func logPrototypeBankSummary(family string, owner string, bank *prototypeBank) {
 		))
 	}
 
-	logging.Infof("[%s] prototype bank owner=%s prototypes=%d medoids=[%s]",
+	logging.Debugf("[%s] prototype bank owner=%s prototypes=%d medoids=[%s]",
 		family,
 		owner,
 		len(representatives),

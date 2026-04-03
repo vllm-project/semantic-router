@@ -176,7 +176,14 @@ func buildMLSelectionConfig(cfg *config.RouterConfig) *selection.MLSelectorConfi
 		return nil
 	}
 
-	logging.Infof("[Router] ML model selection enabled with models_path=%s", mlCfg.ModelsPath)
+	logging.ComponentEvent("extproc", "ml_model_selection_enabled", map[string]interface{}{
+		"models_path":       mlCfg.ModelsPath,
+		"embedding_dim":     mlCfg.EmbeddingDim,
+		"knn_pretrained":    mlCfg.KNN.PretrainedPath != "",
+		"kmeans_pretrained": mlCfg.KMeans.PretrainedPath != "",
+		"svm_pretrained":    mlCfg.SVM.PretrainedPath != "",
+		"mlp_pretrained":    mlCfg.MLP.PretrainedPath != "",
+	})
 	return &selection.MLSelectorConfig{
 		ModelsPath:   mlCfg.ModelsPath,
 		EmbeddingDim: mlCfg.EmbeddingDim,
