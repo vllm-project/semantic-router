@@ -19,7 +19,7 @@ func buildVLLMLogoLines() []string {
 		colorWhite + `  █▄█▀ █     █     █     █` + colorReset,
 		colorWhite + `   ▀▀  ▀▀▀▀▀ ▀▀▀▀▀ ▀     ▀` + colorReset,
 		colorWhite + `  Semantic Router` + colorReset,
-		colorMuted + `  local runtime` + colorReset,
+		colorMuted + `  Intelligent Routing for Mixture-of-Models` + colorReset,
 		"",
 	}
 }

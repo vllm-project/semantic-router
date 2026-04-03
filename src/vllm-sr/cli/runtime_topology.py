@@ -1,4 +1,4 @@
-"""Helpers for selecting the local runtime topology mode."""
+"""Helpers for selecting the Intelligent Routing for Mixture-of-Models topology mode."""
 
 from __future__ import annotations
 

@@ -30,7 +30,7 @@ def test_environment_docs_explain_default_split_without_user_topology_flags() ->
         "Local runtime defaults to the split router/envoy/dashboard topology" in content
     )
     assert (
-        "Split local runtime uses the local `vllm-sr` router image directly by default"
+        "Split Intelligent Routing for Mixture-of-Models uses the local `vllm-sr` router image directly by default"
         in content
     )
     assert "VLLM_SR_TOPOLOGY=legacy" not in content

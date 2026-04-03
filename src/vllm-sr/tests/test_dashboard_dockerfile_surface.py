@@ -53,6 +53,9 @@ def test_dashboard_dockerfile_copies_model_eval_scripts_and_requirements() -> No
 def test_vllm_sr_dockerfile_stays_router_only() -> None:
     content = VLLM_SR_DOCKERFILE.read_text(encoding="utf-8")
 
+    assert "ARG RUST_RUNTIME_COMPAT_IMAGE=rustlang/rust:nightly-bullseye" in content
+    assert "ARG GO_RUNTIME_COMPAT_IMAGE=golang:1.24-bullseye" in content
+    assert "GLIBC_2.39+" in content
     assert 'ENTRYPOINT ["/app/start-router.sh"]' in content
     assert "COPY config/knowledge_bases/ /app/config/knowledge_bases/" in content
     assert "ENV VIRTUAL_ENV=/opt/vllm-sr-venv" in content
