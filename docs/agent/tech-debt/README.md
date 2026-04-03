@@ -91,6 +91,7 @@ Keep the numeric index unique within `docs/agent/tech-debt/`.
 - [TD035 Projection Partition Default Coverage Contract Is No Longer Declarative Only](td-035-signal-group-default-coverage-contract-gap.md)
 - [TD036 Decision Tree Authoring Cannot Round-Trip Through Runtime Config](td-036-decision-tree-authoring-roundtrip-gap.md)
 - [TD037 Dev Integration Environment Ownership and Shared-Suite Topology Still Diverge Across CLI, Kind, and CI](td-037-dev-integration-env-ownership-and-shared-suite-topology.md)
+- [TD038 Custom Chat Completions Structs Duplicate Official OpenAI SDK Types](td-038-custom-chat-completions-structs.md)
 
 ## Architecture Review Coverage Map
 
@@ -102,6 +103,7 @@ Use this map when turning scale-out architecture findings into debt work. Reuse 
   - extproc request and response phase collapse: [TD023](td-023-extproc-request-pipeline-phase-collapse.md), [TD029](td-029-extproc-response-pipeline-phase-collapse.md)
   - restart-sensitive runtime state and control-plane telemetry semantics: [TD034](td-034-runtime-and-dashboard-state-durability-and-telemetry-contract.md)
   - remaining hotspot-ratchet debt across router and binding hotspots: [TD006](td-006-structural-rule-target-vs-legacy-hotspots.md)
+  - remaining custom Chat Completions struct consolidation: [TD038](td-038-custom-chat-completions-structs.md)
 - Dashboard frontend and backend
   - frontend route shell, editor control plane, and large UI containers: [TD030](td-030-dashboard-frontend-config-and-interaction-slice-collapse.md)
   - dashboard backend training, evaluation, and model-research contract seams: [TD032](td-032-training-evaluation-artifact-contract-drift.md)

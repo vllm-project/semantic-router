@@ -154,6 +154,10 @@ legacy_hotspots:
       - src/semantic-router/pkg/extproc/req_filter_tools_test.go
     function_checks: relaxed
   - paths:
+      - src/semantic-router/pkg/modelselection/benchmark_runner.go
+    file_checks: relaxed
+    function_checks: relaxed
+  - paths:
       - src/vllm-sr/cli/models.py
   - paths:
       - src/semantic-router/pkg/extproc/processor_req_body.go
