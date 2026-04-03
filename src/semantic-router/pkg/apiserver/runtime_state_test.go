@@ -10,7 +10,9 @@ import (
 	"testing"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/routerruntime"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/services"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/vectorstore"
 )
 
 type fakeResolvedClassificationService struct {
@@ -279,6 +281,34 @@ func TestBuildModelsInfoResponseUsesResolvedRuntimeConfig(t *testing.T) {
 
 	if !found {
 		t.Fatalf("expected category_classifier entry, got %+v", resp.Models)
+	}
+}
+
+func TestRuntimeRegistryResolvesSharedDependencies(t *testing.T) {
+	cfg := &config.RouterConfig{}
+	memoryStore := newMockMemoryStore()
+	manager := &vectorstore.Manager{}
+	fileStore := &vectorstore.FileStore{}
+
+	registry := routerruntime.NewRegistry(cfg)
+	registry.SetMemoryStore(memoryStore)
+	registry.SetVectorStoreRuntime(&routerruntime.VectorStoreRuntime{
+		Manager:   manager,
+		FileStore: fileStore,
+	})
+
+	apiServer := &ClassificationAPIServer{
+		runtimeRegistry: registry,
+	}
+
+	if got := apiServer.currentMemoryStore(); got != memoryStore {
+		t.Fatalf("currentMemoryStore() = %v, want %v", got, memoryStore)
+	}
+	if got := apiServer.currentVectorStoreManager(); got != manager {
+		t.Fatalf("currentVectorStoreManager() = %v, want %v", got, manager)
+	}
+	if got := apiServer.currentFileStore(); got != fileStore {
+		t.Fatalf("currentFileStore() = %v, want %v", got, fileStore)
 	}
 }
 

@@ -39,6 +39,7 @@ subsystems:
     entrypoints:
       - src/vllm-sr/cli/main.py
       - src/vllm-sr/cli/core.py
+      - src/vllm-sr/cli/commands/runtime.py
       - src/vllm-sr/cli/docker_cli.py
       - tools/make/docker.mk
   - name: fleet-sim
@@ -144,6 +145,10 @@ docs:
   - docs/agent/plans/pl-0023-dashboard-dsl-natural-language-mode-loop.md
   - docs/agent/plans/pl-0024-balance-recipe-simplification-loop.md
   - docs/agent/plans/pl-0025-prototype-aware-embedding-backed-signal-scoring-loop.md
+  - docs/agent/plans/pl-0026-model-runtime-lifecycle-orchestration-loop.md
+  - docs/agent/plans/pl-0027-router-runtime-composition-root-convergence-loop.md
+  - docs/agent/plans/pl-0028-knowledge-base-seed-and-steady-state-convergence-loop.md
+  - docs/agent/plans/pl-0029-control-plane-contract-boundary-ratchet.md
   - docs/agent/state-taxonomy-and-inventory.md
   - docs/agent/tech-debt-register.md
   - docs/agent/tech-debt/README.md
@@ -185,12 +190,15 @@ docs:
   - docs/agent/tech-debt/td-036-decision-tree-authoring-roundtrip-gap.md
   - docs/agent/tech-debt/td-037-dev-integration-env-ownership-and-shared-suite-topology.md
   - docs/agent/tech-debt/td-038-custom-chat-completions-structs.md
+  - docs/agent/tech-debt/td-039-control-plane-contract-ownership-collapse.md
   - docs/agent/glossary.md
   - docs/agent/adr/README.md
   - docs/agent/adr/adr-0001-harness-layering.md
   - docs/agent/adr/adr-0002-tech-debt-index-and-entry-directory.md
   - docs/agent/adr/adr-0003-dashboard-dsl-natural-language-mode.md
   - docs/agent/adr/adr-0004-prototype-aware-label-scoring-for-embedding-backed-signals.md
+  - docs/agent/adr/adr-0005-model-runtime-lifecycle-orchestration.md
+  - docs/agent/adr/adr-0006-platform-kernel-and-contract-first-control-planes.md
   - docs/agent/change-surfaces.md
   - docs/agent/repo-map.md
   - docs/agent/environments.md
@@ -354,6 +362,18 @@ doc_governance:
     - path: docs/agent/plans/pl-0025-prototype-aware-embedding-backed-signal-scoring-loop.md
       steward: router-core
       freshness: update at the start and end of each prototype-aware embedding-backed signal scoring loop and after each completed loop task
+    - path: docs/agent/plans/pl-0026-model-runtime-lifecycle-orchestration-loop.md
+      steward: router-core
+      freshness: update at the start and end of each model runtime lifecycle orchestration loop and after each completed loop task
+    - path: docs/agent/plans/pl-0027-router-runtime-composition-root-convergence-loop.md
+      steward: router-core
+      freshness: update at the start and end of each router runtime composition-root convergence loop and after each completed loop task
+    - path: docs/agent/plans/pl-0028-knowledge-base-seed-and-steady-state-convergence-loop.md
+      steward: router-core
+      freshness: update at the start and end of each knowledge-base seed and steady-state convergence loop and after each completed loop task
+    - path: docs/agent/plans/pl-0029-control-plane-contract-boundary-ratchet.md
+      steward: agent-contract
+      freshness: update at the start and end of each control-plane contract boundary ratchet loop and after each completed loop task
     - path: docs/agent/state-taxonomy-and-inventory.md
       steward: agent-contract
       freshness: update when the runtime or dashboard state inventory, durability taxonomy, or persistence guidance changes materially
@@ -477,6 +497,9 @@ doc_governance:
     - path: docs/agent/tech-debt/td-038-custom-chat-completions-structs.md
       steward: agent-contract
       freshness: update when the TD038 debt record changes materially
+    - path: docs/agent/tech-debt/td-039-control-plane-contract-ownership-collapse.md
+      steward: agent-contract
+      freshness: update when the TD039 debt record changes materially
     - path: docs/agent/glossary.md
       steward: agent-contract
       freshness: update when harness terms or categories change
@@ -495,6 +518,12 @@ doc_governance:
     - path: docs/agent/adr/adr-0004-prototype-aware-label-scoring-for-embedding-backed-signals.md
       steward: router-core
       freshness: update only if the prototype-aware embedding-backed signal scoring decision changes materially
+    - path: docs/agent/adr/adr-0005-model-runtime-lifecycle-orchestration.md
+      steward: router-core
+      freshness: update only if the model runtime lifecycle orchestration decision changes materially
+    - path: docs/agent/adr/adr-0006-platform-kernel-and-contract-first-control-planes.md
+      steward: agent-contract
+      freshness: update only if the platform-kernel and contract-first control-plane decision changes materially
     - path: docs/agent/change-surfaces.md
       steward: agent-contract
       freshness: update when surfaces or their mappings change

@@ -17,6 +17,7 @@ def test_makefile_uses_current_cli_config_commands() -> None:
     assert "VLLM_SR_ROUTER_IMAGE=$(FULL_ROUTER_IMAGE)" in content
     assert "VLLM_SR_ENVOY_IMAGE=$(FULL_ENVOY_IMAGE)" in content
     assert "VLLM_SR_DASHBOARD_IMAGE=$(FULL_DASHBOARD_IMAGE)" in content
+    assert "VLLM_SR_TOPOLOGY" not in content
 
 
 def test_makefile_does_not_reference_removed_cli_commands() -> None:

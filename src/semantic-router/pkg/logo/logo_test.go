@@ -14,8 +14,8 @@ func TestBuildVLLMLogoLinesMatchesCurrentWordmark(t *testing.T) {
 	if !strings.Contains(rendered, "Semantic Router") {
 		t.Fatalf("expected Semantic Router wordmark in logo, got %q", rendered)
 	}
-	if !strings.Contains(rendered, "local runtime") {
-		t.Fatalf("expected local runtime tagline in logo, got %q", rendered)
+	if !strings.Contains(rendered, "Intelligent Routing for Mixture-of-Models") {
+		t.Fatalf("expected Intelligent Routing for Mixture-of-Models tagline in logo, got %q", rendered)
 	}
 	if strings.Contains(rendered, "########") {
 		t.Fatalf("expected legacy ASCII logo to be removed, got %q", rendered)
@@ -31,8 +31,8 @@ func TestPrintVLLMLogoWritesBanner(t *testing.T) {
 	if !strings.Contains(output, "Semantic Router") {
 		t.Fatalf("expected Semantic Router wordmark in output, got %q", output)
 	}
-	if !strings.Contains(output, "local runtime") {
-		t.Fatalf("expected local runtime tagline in output, got %q", output)
+	if !strings.Contains(output, "Intelligent Routing for Mixture-of-Models") {
+		t.Fatalf("expected Intelligent Routing for Mixture-of-Models tagline in output, got %q", output)
 	}
 }
 

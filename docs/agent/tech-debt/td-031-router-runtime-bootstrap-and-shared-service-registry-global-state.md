@@ -6,17 +6,19 @@ Open
 
 ## Scope
 
-`src/semantic-router/cmd/{main.go,runtime_bootstrap.go}`, `src/semantic-router/pkg/config/loader.go`, `src/semantic-router/pkg/apiserver/**`, `src/semantic-router/pkg/services/classification.go`, and adjacent runtime bootstrap or reload seams
+`src/semantic-router/cmd/{main.go,runtime_bootstrap.go}`, `src/semantic-router/pkg/config/loader.go`, `src/semantic-router/pkg/routerruntime/**`, `src/semantic-router/pkg/apiserver/**`, `src/semantic-router/pkg/services/classification.go`, and adjacent runtime bootstrap or reload seams
 
 ## Summary
 
-The router runtime no longer suffers from the stale API-server config snapshot tracked by TD011, but startup and reload behavior still depend on a shallow process-wide service registry. `main.go` and `runtime_bootstrap.go` assemble model download, tracing, metrics, binding initialization, vector-store setup, API-server startup, and Kubernetes-controller startup in one composition chain. Cross-subsystem dependencies are then published through global package state: `config.Replace`/`config.Get`, a single config-update channel, global classification service pointers, global memory store accessors, and apiserver-global vector-store, file-store, embedder, and ingestion-pipeline setters. The API server still retries against those globals during startup, which means sequencing and lifecycle are encoded in start order and package-level state instead of an explicit runtime graph.
+The common runtime path no longer suffers from the stale API-server config snapshot tracked by TD011, the single-consumer config-update channel, or implicit publication of classification, memory, vector-store, file-store, embedder, and ingestion-pipeline dependencies through constructor side effects or `cmd`-owned package globals. Those steady-state dependencies now flow through `pkg/routerruntime`. The residual gap is narrower: `config.Replace`/`config.Get` still act as a process-wide compatibility contract, legacy global service accessors still exist as fallback for non-registry callers, and startup remains the place where tracing, metrics, controller startup, and compatibility publication are coordinated. The remaining debt is therefore about fully retiring the compatibility globals and broad bootstrap ownership, not about the common runtime path lacking an explicit registry anymore.
 
 ## Evidence
 
 - [src/semantic-router/cmd/main.go](../../../src/semantic-router/cmd/main.go)
 - [src/semantic-router/cmd/runtime_bootstrap.go](../../../src/semantic-router/cmd/runtime_bootstrap.go)
 - [src/semantic-router/pkg/config/loader.go](../../../src/semantic-router/pkg/config/loader.go)
+- [src/semantic-router/pkg/routerruntime/registry.go](../../../src/semantic-router/pkg/routerruntime/registry.go)
+- [src/semantic-router/pkg/routerruntime/vectorstore_runtime.go](../../../src/semantic-router/pkg/routerruntime/vectorstore_runtime.go)
 - [src/semantic-router/pkg/apiserver/server.go](../../../src/semantic-router/pkg/apiserver/server.go)
 - [src/semantic-router/pkg/apiserver/runtime_config.go](../../../src/semantic-router/pkg/apiserver/runtime_config.go)
 - [src/semantic-router/pkg/apiserver/route_vectorstore.go](../../../src/semantic-router/pkg/apiserver/route_vectorstore.go)
@@ -27,9 +29,9 @@ The router runtime no longer suffers from the stale API-server config snapshot t
 
 ## Why It Matters
 
-- Startup and reload sequencing remain implicit. Adding a new runtime-owned service still tends to touch bootstrap, one or more global setter/getter packages, and API-server startup order in the same change.
-- Process-wide globals make multi-stack tests, hot reload, and partial-service recovery harder because dependencies cannot be constructed, swapped, or observed in isolation.
-- The single watcher channel in `config/loader.go` is an especially weak boundary for future observability, live-reload, and sidecar-style consumers because it encodes one-consumer assumptions into the core config path.
+- The common startup and reload path is now explicit enough for classification, memory, vector-store, file-store, and config-fanout ownership, but the remaining compatibility globals still make it harder to reason about which code paths are fully registry-backed versus legacy fallback.
+- Process-wide compatibility accessors still make multi-stack tests and partial-service recovery harder than they need to be because callers can still bypass the registry and touch package-global state directly.
+- `config.Replace`/`config.Get` still form a broad shared contract across startup, reload, and request-time code, so the repo still lacks a complete composition root for all runtime-owned state.
 - As the repo adds more deployment modes, background services, and observability hooks, this hidden registry becomes a concurrency and maintenance bottleneck rather than a simple bootstrap shortcut.
 
 ## Desired End State

@@ -187,16 +187,8 @@ def stop_vllm_sr():
         _stop_managed_container(
             container_name,
             container_statuses[container_name],
-            stop_message=(
-                f"Stopping {container_name}..."
-                if container_name != stack_layout.container_name
-                else None
-            ),
-            stopped_message=(
-                "vLLM Semantic Router stopped"
-                if container_name == stack_layout.container_name
-                else f"{container_name} stopped"
-            ),
+            stop_message=f"Stopping {container_name}...",
+            stopped_message=f"{container_name} stopped",
         )
         if container_statuses[container_name] != "not found":
             runtime_stopped = True
@@ -220,10 +212,7 @@ def stop_vllm_sr():
             stop_message=f"Stopping {container_name}...",
             stopped_message=f"{container_name} stopped",
         )
-    if (
-        runtime_stopped
-        and container_statuses[stack_layout.container_name] == "not found"
-    ):
+    if runtime_stopped:
         log.info("vLLM Semantic Router stopped")
     _remove_runtime_network(network_name)
 
@@ -252,10 +241,7 @@ def _runtime_container_names(stack_layout: RuntimeStackLayout) -> tuple[str, ...
 def _runtime_service_container_name(
     service: str, stack_layout: RuntimeStackLayout
 ) -> str:
-    container_name = stack_layout.service_container_name(service)
-    if docker_container_status(container_name) != "not found":
-        return container_name
-    return stack_layout.container_name
+    return stack_layout.service_container_name(service)
 
 
 def _runtime_stack_status(stack_layout: RuntimeStackLayout) -> str:

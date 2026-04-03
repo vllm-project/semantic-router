@@ -34,8 +34,8 @@
   - Done when the harness has a documented default path for the latest report plus session-stamped report captures and the directory is gitignored.
 - [x] `AR004` Clarify the governance boundary between local artifacts and canonical harness state.
   - Done when governance/context docs say that `.agent-harness/` is gitignored local state while plans, ADRs, and debt entries remain the committed source of truth.
-- [ ] `AR005` Validate the harness contract after the changes land.
-  - Done when the applicable repo-native validation commands pass and the results are recorded here.
+- [ ] `AR005` Record a clean repo-native validation rerun for the landed artifact contract.
+  - Done when the applicable repo-native validation commands pass on a clean rerun and the results are recorded here without treating transient workstation or dependency-fetch failures as durable harness state.
 
 ## Current Loop
 
@@ -46,7 +46,7 @@
 - 2026-03-26: `AR005` reached a clean lightweight validation baseline with `make agent-validate` and `make agent-ci-gate CHANGED_FILES="..."` passing for the touched harness files.
 - 2026-03-26: `AR005` also verified both new write entrypoints with `make agent-report AGENT_REPORT_WRITE=1 ...` and `make agent-report AGENT_REPORT_WRITE_PATH=.agent-harness/reports/custom.json ...`.
 - 2026-03-26: `AR005` is still open for full completion-gate closure. `make agent-feature-gate ENV=cpu CHANGED_FILES="..."` entered the expected `make agent-dev` local-build path, but the user explicitly deferred the heavy local build, serve, smoke, and affected E2E chain before it completed.
-- 2026-03-26: A later PR-baseline attempt reached `make agent-pr-gate`, but the run still did not close `AR005`: `golang-lint` failed while fetching `github.com/valkey-io/valkey-glide/go/v2@v2.2.7` from `proxy.golang.org` with `unexpected EOF`, so the remaining blocker is external dependency retrieval rather than a resolved harness assertion.
+- 2026-03-26: A later PR-baseline attempt reached `make agent-pr-gate`, but that run hit a transient `proxy.golang.org` dependency-fetch failure during `golang-lint`; treat that as historical environment noise, not as durable evidence that the landed artifact contract is still wrong.
 
 ## Decision Log
 

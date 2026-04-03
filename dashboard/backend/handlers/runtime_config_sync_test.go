@@ -8,6 +8,34 @@ import (
 	"testing"
 )
 
+func testRuntimeSyncPythonBinary(t *testing.T) string {
+	t.Helper()
+
+	repoRoot, err := filepath.Abs(filepath.Join("..", "..", ".."))
+	if err != nil {
+		t.Fatalf("resolve repo root: %v", err)
+	}
+
+	candidates := []string{
+		filepath.Join(repoRoot, ".venv-agent", "bin", "python3"),
+		"python3",
+		"python",
+	}
+	for _, candidate := range candidates {
+		resolved, err := exec.LookPath(candidate)
+		if err != nil {
+			continue
+		}
+		cmd := exec.Command(resolved, "-c", "import yaml, jinja2")
+		if err := cmd.Run(); err == nil {
+			return resolved
+		}
+	}
+
+	t.Fatal("python interpreter with yaml support not found")
+	return ""
+}
+
 func TestConfiguredRuntimeConfigPathUsesEnvOverride(t *testing.T) {
 	t.Setenv("VLLM_SR_RUNTIME_CONFIG_PATH", "/app/.vllm-sr/runtime-config.yaml")
 
@@ -40,11 +68,7 @@ global:
 
 	t.Setenv("VLLM_SR_RUNTIME_CONFIG_PATH", "/app/.vllm-sr/runtime-config.yaml")
 	t.Setenv("DASHBOARD_PLATFORM", "amd")
-	pythonBinary := "python3"
-	if _, err := exec.LookPath(pythonBinary); err != nil {
-		pythonBinary = "python"
-	}
-	t.Setenv("VLLM_SR_PYTHON_BIN", pythonBinary)
+	t.Setenv("VLLM_SR_PYTHON_BIN", testRuntimeSyncPythonBinary(t))
 	repoRoot, err := filepath.Abs(filepath.Join("..", "..", ".."))
 	if err != nil {
 		t.Fatalf("resolve repo root: %v", err)
@@ -78,10 +102,10 @@ global:
 	}
 }
 
-func TestSyncRuntimeConfigLocallyStagesKnowledgeBaseAssets(t *testing.T) {
+func TestSyncRuntimeConfigLocallySeedsKnowledgeBaseAssetsIntoRuntimeStore(t *testing.T) {
 	tempDir := t.TempDir()
 	configPath := filepath.Join(tempDir, "config.yaml")
-	kbDir := filepath.Join(tempDir, "knowledge_bases")
+	kbDir := filepath.Join(tempDir, "knowledge_bases", "privacy")
 	if err := os.MkdirAll(kbDir, 0o755); err != nil {
 		t.Fatalf("mkdir kb dir: %v", err)
 	}
@@ -99,7 +123,7 @@ global:
     kbs:
       - name: privacy_kb
         source:
-          path: knowledge_bases/
+          path: knowledge_bases/privacy/
           manifest: labels.json
 `
 	if err := os.WriteFile(configPath, []byte(configYAML), 0o644); err != nil {
@@ -107,11 +131,7 @@ global:
 	}
 
 	t.Setenv("VLLM_SR_RUNTIME_CONFIG_PATH", "/app/.vllm-sr/runtime-config.yaml")
-	pythonBinary := "python3"
-	if _, err := exec.LookPath(pythonBinary); err != nil {
-		pythonBinary = "python"
-	}
-	t.Setenv("VLLM_SR_PYTHON_BIN", pythonBinary)
+	t.Setenv("VLLM_SR_PYTHON_BIN", testRuntimeSyncPythonBinary(t))
 	repoRoot, err := filepath.Abs(filepath.Join("..", "..", ".."))
 	if err != nil {
 		t.Fatalf("resolve repo root: %v", err)
@@ -127,13 +147,59 @@ global:
 	if err != nil {
 		t.Fatalf("read runtime config: %v", err)
 	}
-	if !contains(string(runtimeData), "path: knowledge_bases/privacy_kb") {
-		t.Fatalf("expected staged runtime KB path, got:\n%s", string(runtimeData))
+	if !contains(string(runtimeData), "path: knowledge_bases/privacy/") {
+		t.Fatalf("expected runtime KB path to stay aligned with source dir, got:\n%s", string(runtimeData))
 	}
 
-	stagedManifest := filepath.Join(tempDir, ".vllm-sr", "knowledge_bases", "privacy_kb", "labels.json")
+	stagedManifest := filepath.Join(tempDir, ".vllm-sr", "knowledge_bases", "privacy", "labels.json")
 	if _, err := os.Stat(stagedManifest); err != nil {
-		t.Fatalf("expected staged knowledge base manifest, got %v", err)
+		t.Fatalf("expected seeded knowledge base manifest, got %v", err)
+	}
+}
+
+func TestSyncRuntimeConfigInManagedContainerUsesDashboardVenvPythonForSplitRuntime(t *testing.T) {
+	tempDir := t.TempDir()
+	dockerArgsPath := filepath.Join(tempDir, "docker-args.txt")
+	dockerPath := filepath.Join(tempDir, "docker")
+	dockerScript := "#!/bin/sh\n" +
+		"printf '%s\n' \"$@\" > \"" + dockerArgsPath + "\"\n" +
+		"printf '/app/.vllm-sr/runtime-config.yaml\n'\n"
+	if err := os.WriteFile(dockerPath, []byte(dockerScript), 0o755); err != nil {
+		t.Fatalf("write fake docker binary: %v", err)
+	}
+
+	t.Setenv("PATH", tempDir+string(os.PathListSeparator)+os.Getenv("PATH"))
+	t.Setenv(routerContainerNameEnv, "lane-a-vllm-sr-router-container")
+	t.Setenv(envoyContainerNameEnv, "lane-a-vllm-sr-envoy-container")
+	t.Setenv(dashboardContainerNameEnv, "lane-a-vllm-sr-dashboard-container")
+
+	runtimePath, err := syncRuntimeConfigInManagedContainer()
+	if err != nil {
+		t.Fatalf("syncRuntimeConfigInManagedContainer returned error: %v", err)
+	}
+	if runtimePath != "/app/.vllm-sr/runtime-config.yaml" {
+		t.Fatalf("runtime config path = %q", runtimePath)
+	}
+
+	argsData, err := os.ReadFile(dockerArgsPath)
+	if err != nil {
+		t.Fatalf("read fake docker args: %v", err)
+	}
+	args := strings.Split(strings.TrimSpace(string(argsData)), "\n")
+	if len(args) < 4 {
+		t.Fatalf("docker exec args too short: %#v", args)
+	}
+	if args[0] != "exec" {
+		t.Fatalf("docker exec argv[0] = %q", args[0])
+	}
+	if args[1] != "lane-a-vllm-sr-dashboard-container" {
+		t.Fatalf("managed container name = %q", args[1])
+	}
+	if args[2] != dashboardVenvPythonPath {
+		t.Fatalf("managed split python binary = %q, want %q", args[2], dashboardVenvPythonPath)
+	}
+	if args[3] != "-c" {
+		t.Fatalf("python exec flag = %q", args[3])
 	}
 }
 

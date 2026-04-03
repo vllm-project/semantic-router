@@ -156,19 +156,6 @@ func withAuthzClassifier(authzClassifier *AuthzClassifier) option {
 	}
 }
 
-// initModels initializes the models for the classifier
-func initModels(classifier *Classifier) (*Classifier, error) {
-	if err := classifier.initializeConfiguredCategoryRuntime(); err != nil {
-		return nil, err
-	}
-	if err := classifier.initializeRequiredRuntimeClassifiers(); err != nil {
-		return nil, err
-	}
-	classifier.logHeuristicClassifierInitialization()
-	classifier.initializeBestEffortRuntimeClassifiers()
-	return classifier, nil
-}
-
 // newClassifierWithOptions creates a new classifier with the given options
 func newClassifierWithOptions(cfg *config.RouterConfig, options ...option) (*Classifier, error) {
 	if cfg == nil {
@@ -189,28 +176,7 @@ func newClassifierWithOptions(cfg *config.RouterConfig, options ...option) (*Cla
 	// Build category name mappings to support generic categories in config
 	classifier.buildCategoryNameMappings()
 
-	return initModels(classifier)
-}
-
-// NewClassifier creates a new classifier with model selection and jailbreak/PII detection capabilities.
-// Both in-tree and MCP classifiers can be configured simultaneously for category classification.
-// At runtime, in-tree classifier will be tried first, with MCP as a fallback,
-// allowing flexible deployment scenarios such as gradual migration.
-func NewClassifier(cfg *config.RouterConfig, categoryMapping *CategoryMapping, piiMapping *PIIMapping, jailbreakMapping *JailbreakMapping) (*Classifier, error) {
-	jailbreakInitializer, jailbreakInference, err := buildJailbreakDependencies(cfg)
-	if err != nil {
-		return nil, err
-	}
-	piiInitializer, piiInference := buildPIIDependencies(cfg)
-	builder := newClassifierOptionBuilder(cfg, []option{
-		withJailbreak(jailbreakMapping, jailbreakInitializer, jailbreakInference),
-		withPII(piiMapping, piiInitializer, piiInference),
-	})
-	options, err := builder.build(categoryMapping)
-	if err != nil {
-		return nil, err
-	}
-	return newClassifierWithOptions(cfg, options...)
+	return classifier, nil
 }
 
 // IsCategoryEnabled checks if category classification is properly configured

@@ -13,7 +13,6 @@ from cli.consts import (
     DEFAULT_METRICS_PORT,
     DEFAULT_ROUTER_PORT,
     DEFAULT_STACK_NAME,
-    VLLM_SR_DOCKER_NAME,
     VLLM_SR_SIM_DOCKER_NAME,
 )
 
@@ -34,7 +33,6 @@ STACK_NAME_PATTERN = re.compile(r"[^A-Za-z0-9_.-]+")
 class RuntimeStackLayout:
     stack_name: str
     port_offset: int
-    container_name: str
     router_container_name: str
     envoy_container_name: str
     dashboard_container_name: str
@@ -137,7 +135,6 @@ class RuntimeStackLayout:
         return tuple(
             dict.fromkeys(
                 (
-                    self.container_name,
                     self.router_container_name,
                     self.envoy_container_name,
                     self.dashboard_container_name,
@@ -168,7 +165,6 @@ def resolve_runtime_stack(
     )
 
     if resolved_stack_name == DEFAULT_STACK_NAME:
-        container_name = VLLM_SR_DOCKER_NAME
         router_container_name = "vllm-sr-router-container"
         envoy_container_name = "vllm-sr-envoy-container"
         dashboard_container_name = "vllm-sr-dashboard-container"
@@ -180,7 +176,6 @@ def resolve_runtime_stack(
         redis_container_name = f"{DEFAULT_STACK_NAME}-redis"
         postgres_container_name = f"{DEFAULT_STACK_NAME}-postgres"
     else:
-        container_name = f"{resolved_stack_name}-vllm-sr-container"
         router_container_name = f"{resolved_stack_name}-vllm-sr-router-container"
         envoy_container_name = f"{resolved_stack_name}-vllm-sr-envoy-container"
         dashboard_container_name = f"{resolved_stack_name}-vllm-sr-dashboard-container"
@@ -195,7 +190,6 @@ def resolve_runtime_stack(
     return RuntimeStackLayout(
         stack_name=resolved_stack_name,
         port_offset=resolved_port_offset,
-        container_name=container_name,
         router_container_name=router_container_name,
         envoy_container_name=envoy_container_name,
         dashboard_container_name=dashboard_container_name,

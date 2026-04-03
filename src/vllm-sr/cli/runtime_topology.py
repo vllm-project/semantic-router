@@ -1,4 +1,4 @@
-"""Helpers for selecting the local runtime topology mode."""
+"""Helpers for selecting the Intelligent Routing for Mixture-of-Models topology mode."""
 
 from __future__ import annotations
 
@@ -7,14 +7,10 @@ import os
 from cli.consts import (
     DEFAULT_RUNTIME_TOPOLOGY,
     RUNTIME_TOPOLOGY_ENV,
-    RUNTIME_TOPOLOGY_LEGACY,
     RUNTIME_TOPOLOGY_SPLIT,
 )
 
-VALID_RUNTIME_TOPOLOGIES = (
-    RUNTIME_TOPOLOGY_LEGACY,
-    RUNTIME_TOPOLOGY_SPLIT,
-)
+VALID_RUNTIME_TOPOLOGIES = (RUNTIME_TOPOLOGY_SPLIT,)
 
 
 def resolve_runtime_topology(topology: str | None = None) -> str:
@@ -27,11 +23,13 @@ def resolve_runtime_topology(topology: str | None = None) -> str:
         return DEFAULT_RUNTIME_TOPOLOGY
     if normalized not in VALID_RUNTIME_TOPOLOGIES:
         raise ValueError(
-            f"Invalid runtime topology '{raw_value}'. "
-            f"Must be one of: {', '.join(VALID_RUNTIME_TOPOLOGIES)}"
+            f"Unsupported runtime topology '{raw_value}'. "
+            f"{RUNTIME_TOPOLOGY_ENV} may be unset or set to "
+            f"'{RUNTIME_TOPOLOGY_SPLIT}'."
         )
-    return normalized
+    return RUNTIME_TOPOLOGY_SPLIT
 
 
 def split_runtime_enabled(topology: str | None = None) -> bool:
-    return resolve_runtime_topology(topology) == RUNTIME_TOPOLOGY_SPLIT
+    resolve_runtime_topology(topology)
+    return True

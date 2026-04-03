@@ -37,7 +37,7 @@ def _coerce_timeout_stream(value: str | bytes | None) -> str:
 class CLITestBase(unittest.TestCase):
     """Base class for vLLM-SR CLI tests."""
 
-    # Legacy single-container runtime name used by older local serve flows.
+    # Historical single-container runtime name still cleaned up for local test hygiene.
     CONTAINER_NAME = "vllm-sr-container"
     ROUTER_CONTAINER_NAME = "vllm-sr-router-container"
     ENVOY_CONTAINER_NAME = "vllm-sr-envoy-container"
@@ -187,7 +187,6 @@ class CLITestBase(unittest.TestCase):
     def _runtime_container_names(self) -> tuple[str, ...]:
         """Return managed runtime containers in inspect/priority order."""
         return (
-            self.CONTAINER_NAME,
             self.ROUTER_CONTAINER_NAME,
             self.DASHBOARD_CONTAINER_NAME,
             self.ENVOY_CONTAINER_NAME,
@@ -198,7 +197,7 @@ class CLITestBase(unittest.TestCase):
         for container_name in self._runtime_container_names():
             if self._explicit_container_status(container_name) != "not found":
                 return container_name
-        return self.CONTAINER_NAME
+        return self.ROUTER_CONTAINER_NAME
 
     def run_cli(
         self,
@@ -342,23 +341,20 @@ class CLITestBase(unittest.TestCase):
             name: self._explicit_container_status(name)
             for name in self._runtime_container_names()
         }
-        if statuses[self.CONTAINER_NAME] != "not found":
-            return statuses[self.CONTAINER_NAME]
-
-        split_statuses = [
+        runtime_statuses = [
             statuses[self.ROUTER_CONTAINER_NAME],
             statuses[self.DASHBOARD_CONTAINER_NAME],
             statuses[self.ENVOY_CONTAINER_NAME],
         ]
-        if any(status == "running" for status in split_statuses):
+        if any(status == "running" for status in runtime_statuses):
             return "running"
-        if any(status == "exited" for status in split_statuses):
+        if any(status == "exited" for status in runtime_statuses):
             return "exited"
-        if any(status == "paused" for status in split_statuses):
+        if any(status == "paused" for status in runtime_statuses):
             return "paused"
-        if any(status == "error" for status in split_statuses):
+        if any(status == "error" for status in runtime_statuses):
             return "error"
-        if any(status != "not found" for status in split_statuses):
+        if any(status != "not found" for status in runtime_statuses):
             return "unknown"
         return "not found"
 

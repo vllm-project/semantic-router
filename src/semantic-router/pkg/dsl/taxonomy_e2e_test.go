@@ -14,7 +14,7 @@ func taxonomyConfigFixture(t *testing.T) *config.RouterConfig {
 			{
 				Name: "privacy_kb",
 				Source: config.KnowledgeBaseSource{
-					Path:     "kb/privacy/",
+					Path:     "knowledge_bases/privacy/",
 					Manifest: "labels.json",
 				},
 				Threshold: 0.55,

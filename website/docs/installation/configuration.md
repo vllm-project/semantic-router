@@ -47,6 +47,7 @@ The detailed background is in [Unified Config Contract v0.3](../proposals/unifie
 - `global.model_catalog` groups router-owned model assets such as embeddings, system models, external models, reusable classifiers, and model-backed modules
 - `global.model_catalog.embeddings.semantic.embedding_config.top_k` limits how many ranked embedding rules are emitted for routing after scoring; the built-in default is `1`
 - `prototype_scoring` is the shared prototype-aware scoring block for embedding-backed signal families; use it under `global.model_catalog.embeddings.semantic.embedding_config`, `global.model_catalog.modules.classifier.preference`, `global.model_catalog.kbs[]`, and `global.model_catalog.modules.complexity` when you want exemplar banks compressed into representative prototypes
+- built-in knowledge bases keep canonical source paths like `knowledge_bases/privacy/`; local runtime seeds missing KBs into `.vllm-sr/knowledge_bases/<dir>/` once and then reads the shared runtime KB store from there
 - `global.model_catalog.classifiers[]` is the reusable registry for startup-loaded classifier packages such as taxonomy classifiers
 - `global.model_catalog.modules` groups capability modules such as `prompt_guard`, `classifier`, `complexity`, and `hallucination_mitigation`
 

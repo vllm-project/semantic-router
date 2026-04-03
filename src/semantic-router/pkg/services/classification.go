@@ -15,7 +15,10 @@ import (
 )
 
 // Global classification service instance
-var globalClassificationService *ClassificationService
+var (
+	globalClassificationService *ClassificationService
+	globalClassificationMu      sync.RWMutex
+)
 
 // ClassificationService provides classification functionality
 type ClassificationService struct {
@@ -27,26 +30,28 @@ type ClassificationService struct {
 
 // NewClassificationService creates a new classification service
 func NewClassificationService(classifier *classification.Classifier, config *config.RouterConfig) *ClassificationService {
-	service := &ClassificationService{
+	return &ClassificationService{
 		classifier:        classifier,
 		unifiedClassifier: nil, // Will be initialized separately
 		config:            config,
 	}
-	// Set as global service for API access
-	globalClassificationService = service
-	return service
 }
 
 // NewUnifiedClassificationService creates a new service with unified classifier
 func NewUnifiedClassificationService(unifiedClassifier *classification.UnifiedClassifier, legacyClassifier *classification.Classifier, config *config.RouterConfig) *ClassificationService {
-	service := &ClassificationService{
+	return &ClassificationService{
 		classifier:        legacyClassifier,
 		unifiedClassifier: unifiedClassifier,
 		config:            config,
 	}
-	// Set as global service for API access
+}
+
+// SetGlobalClassificationService publishes the compatibility global service used
+// by legacy API-server startup paths that do not yet receive a runtime registry.
+func SetGlobalClassificationService(service *ClassificationService) {
+	globalClassificationMu.Lock()
 	globalClassificationService = service
-	return service
+	globalClassificationMu.Unlock()
 }
 
 // NewClassificationServiceWithAutoDiscovery creates a service with auto-discovery
@@ -142,6 +147,8 @@ func createLegacyClassifier(config *config.RouterConfig) (*classification.Classi
 
 // GetGlobalClassificationService returns the global classification service instance
 func GetGlobalClassificationService() *ClassificationService {
+	globalClassificationMu.RLock()
+	defer globalClassificationMu.RUnlock()
 	return globalClassificationService
 }
 

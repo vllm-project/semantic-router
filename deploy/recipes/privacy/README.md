@@ -28,7 +28,7 @@ Both lanes currently use the same `balance`-style mock alias catalog on the shar
 - Control reasoning mode per tier: security containment disables reasoning, privacy/standard use medium effort, frontier uses high effort.
 - Override frontier routing when contrastive organizational-sensitivity score indicates the request is private, even if individual keyword/embedding signals did not trigger the privacy band.
 
-This recipe uses only a minimal `global` section (for `model_catalog.kbs` used in KB-backed routing). The routing behavior itself is expressed in `routing.signals`, `routing.projections`, and `routing.decisions`, which keeps the recipe smaller and avoids coupling this profile to runtime-wide classifier overlays.
+This recipe relies on the built-in `privacy_kb` global default instead of redefining `global.model_catalog.kbs` locally. The routing behavior itself is expressed in `routing.signals`, `routing.projections`, and `routing.decisions`, which keeps the recipe smaller and avoids coupling this profile to runtime-wide classifier overlays.
 
 ## Route Order
 
@@ -89,7 +89,7 @@ These feed `privacy_risk_score`, which maps into:
 
 - `privacy_policy` (type: `kb`, backed by `privacy_kb`)
 
-Uses the `privacy_kb` knowledge base declared in `global.model_catalog.kbs` with a `labels.json` manifest. Computes best-match similarity per group and a `private_vs_public` group-margin metric that feeds `privacy_contrastive_score`, which maps into:
+Uses the built-in `privacy_kb` knowledge base from the canonical global defaults. It computes best-match similarity per group and a `private_vs_public` group-margin metric that feeds `privacy_contrastive_score`, which maps into:
 
 - `privacy_override_inactive`
 - `privacy_override_active`

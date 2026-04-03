@@ -41,6 +41,7 @@
 - 2026-03-19: `S005` extracted the OpenClaw route shell into `OpenClawPage.tsx`, split tab and wizard ownership across `OpenClawPageTabs.tsx`, `OpenClawArchitectureTab.tsx`, `OpenClawTeamTab.tsx`, `OpenClawWorkerTab.tsx`, and `OpenClawWorkerProvisionWizard.tsx`, moved chat transport and message support into `useClawRoomTransport.ts` and `clawRoomChatSupport.ts`, and split backend worker-chat and automation helpers into `openclaw_room_worker_chat.go` and `openclaw_room_automation.go`.
 - 2026-03-19: `S006` passed focused backend tests, `make dashboard-check`, and CPU-local smoke via `make agent-serve-local ENV=cpu AGENT_STACK_NAME=pl0007-openclaw AGENT_PORT_OFFSET=600`, `make agent-smoke-local AGENT_STACK_NAME=pl0007-openclaw AGENT_PORT_OFFSET=600`, and `make agent-stop-local ENV=cpu AGENT_STACK_NAME=pl0007-openclaw AGENT_PORT_OFFSET=600`, closing the remaining OpenClaw validation loop.
 - Completed on 2026-03-19: TD022, TD023, and TD024 are all closed, so this execution plan has no remaining open tasks.
+- 2026-04-03: ADR0006 now provides the durable cross-stack dependency direction that was still missing when this plan originally closed.
 
 ## Decision Log
 
@@ -56,4 +57,4 @@
 - [../tech-debt/td-022-cli-config-contract-boundary-collapse.md](../tech-debt/td-022-cli-config-contract-boundary-collapse.md)
 - [../tech-debt/td-023-extproc-request-pipeline-phase-collapse.md](../tech-debt/td-023-extproc-request-pipeline-phase-collapse.md)
 - [../tech-debt/td-024-openclaw-feature-slice-boundary-collapse.md](../tech-debt/td-024-openclaw-feature-slice-boundary-collapse.md)
-- [../adr/README.md](../adr/README.md) (no dedicated ADR yet)
+- [../adr/adr-0006-platform-kernel-and-contract-first-control-planes.md](../adr/adr-0006-platform-kernel-and-contract-first-control-planes.md)

@@ -36,6 +36,7 @@
 - 2026-03-19: TD029 and TD030 were added so those active hotspots are no longer only implicit structural debt.
 - 2026-03-19: shared and local AGENT rules were updated so future edits discover the response-pipeline seam and dashboard frontend app-shell/page/component boundaries before widening them further.
 - 2026-03-19: `S003` completed: usage accounting, cache persistence, and memory scheduling extracted into `processor_res_usage.go`, `processor_res_cache.go`, and `processor_res_memory.go` with targeted test suites; pipeline and streaming orchestrators slimmed to thin dispatchers; extproc-local `AGENTS.md` updated with primary phase owners; TD029 closed.
+- 2026-04-03: ADR0006 now provides the shared cross-stack dependency direction for the remaining dashboard-side work in this plan; frontend and dashboard follow-up should continue to narrow interface surfaces instead of recreating control-plane logic in route or container hotspots.
 - Next loop target: `S004` dashboard frontend route shell narrowing.
 
 ## Decision Log
@@ -50,4 +51,4 @@
 - [../tech-debt/README.md](../tech-debt/README.md)
 - [../tech-debt/td-029-extproc-response-pipeline-phase-collapse.md](../tech-debt/td-029-extproc-response-pipeline-phase-collapse.md)
 - [../tech-debt/td-030-dashboard-frontend-config-and-interaction-slice-collapse.md](../tech-debt/td-030-dashboard-frontend-config-and-interaction-slice-collapse.md)
-- [../adr/README.md](../adr/README.md) (no dedicated ADR yet)
+- [../adr/adr-0006-platform-kernel-and-contract-first-control-planes.md](../adr/adr-0006-platform-kernel-and-contract-first-control-planes.md)

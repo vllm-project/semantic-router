@@ -9,6 +9,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"slices"
 	"testing"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
@@ -78,7 +79,7 @@ func TestHandleKnowledgeBaseLifecycle(t *testing.T) {
 	created := createKnowledgeBaseDocument(t, apiServer, createPayload)
 	assertCreatedKnowledgeBase(t, created)
 
-	customDir := filepath.Join(tempDir, "kbs", "custom", "research_kb")
+	customDir := filepath.Join(tempDir, ".vllm-sr", "knowledge_bases", "research_kb")
 	assertKnowledgeBaseManifestExists(t, customDir)
 
 	updatedPayload := createPayload
@@ -149,7 +150,7 @@ func assertCreatedKnowledgeBase(t *testing.T, created knowledgeBaseDocument) {
 	if !created.Managed || !created.Editable || created.Builtin {
 		t.Fatalf("expected managed editable custom KB, got %+v", created)
 	}
-	if got := created.Source.Path; got != "kbs/custom/research_kb/" {
+	if got := created.Source.Path; got != "knowledge_bases/research_kb/" {
 		t.Fatalf("expected managed source path, got %q", got)
 	}
 }
@@ -194,9 +195,8 @@ func assertKnowledgeBaseListContainsBuiltInAndCustom(t *testing.T, apiServer *Cl
 		t.Fatalf("expected 200 OK for list, got %d: %s", listRR.Code, listRR.Body.String())
 	}
 	list := mustDecodeKnowledgeBaseList(t, listRR)
-	if len(list.Items) != 2 {
-		t.Fatalf("expected built-in + custom KBs in list, got %d", len(list.Items))
-	}
+	expected := append(defaultKnowledgeBaseNames(), "research_kb")
+	assertKnowledgeBaseNames(t, list.Items, expected)
 }
 
 func deleteKnowledgeBase(t *testing.T, apiServer *ClassificationAPIServer, name string) {
@@ -221,9 +221,7 @@ func assertKnowledgeBaseRemoved(t *testing.T, customDir string, configPath strin
 	if err != nil {
 		t.Fatalf("config.Parse after delete: %v", err)
 	}
-	if len(reloaded.KnowledgeBases) != 1 || reloaded.KnowledgeBases[0].Name != "privacy_kb" {
-		t.Fatalf("expected only built-in KB after delete, got %+v", reloaded.KnowledgeBases)
-	}
+	assertKnowledgeBaseConfigNames(t, reloaded.KnowledgeBases, defaultKnowledgeBaseNames())
 }
 
 func TestHandleKnowledgeBaseAllowsBuiltinMutationAndDeletion(t *testing.T) {
@@ -256,14 +254,14 @@ func TestHandleKnowledgeBaseAllowsBuiltinMutationAndDeletion(t *testing.T) {
 	if updated.Name != "privacy_kb" {
 		t.Fatalf("expected updated built-in KB, got %+v", updated)
 	}
-	if updated.Source.Path != "kbs/custom/privacy_kb/" {
-		t.Fatalf("expected built-in mutation to materialize managed source, got %q", updated.Source.Path)
+	if updated.Source.Path != "knowledge_bases/privacy/" {
+		t.Fatalf("expected built-in mutation to keep the canonical source dir, got %q", updated.Source.Path)
 	}
 	if !updated.Editable {
 		t.Fatalf("expected updated built-in KB to remain editable, got %+v", updated)
 	}
 
-	customDir := filepath.Join(tempDir, "kbs", "custom", "privacy_kb")
+	customDir := filepath.Join(tempDir, ".vllm-sr", "knowledge_bases", "privacy")
 	if _, manifestErr := os.Stat(filepath.Join(customDir, knowledgeBaseManifestName)); manifestErr != nil {
 		t.Fatalf("expected managed KB assets for built-in update: %v", manifestErr)
 	}
@@ -284,7 +282,41 @@ func TestHandleKnowledgeBaseAllowsBuiltinMutationAndDeletion(t *testing.T) {
 	if err != nil {
 		t.Fatalf("config.Parse after delete: %v", err)
 	}
-	if len(reloaded.KnowledgeBases) != 0 {
-		t.Fatalf("expected deleting built-in KB to persist removal, got %+v", reloaded.KnowledgeBases)
+	assertKnowledgeBaseConfigNames(t, reloaded.KnowledgeBases, []string{"mmlu_kb"})
+}
+
+func defaultKnowledgeBaseNames() []string {
+	defaults := config.DefaultCanonicalGlobal().ModelCatalog.KBs
+	names := make([]string, 0, len(defaults))
+	for _, kb := range defaults {
+		names = append(names, kb.Name)
+	}
+	slices.Sort(names)
+	return names
+}
+
+func assertKnowledgeBaseNames(t *testing.T, items []knowledgeBaseDocument, want []string) {
+	t.Helper()
+	got := make([]string, 0, len(items))
+	for _, item := range items {
+		got = append(got, item.Name)
+	}
+	slices.Sort(got)
+	slices.Sort(want)
+	if !slices.Equal(got, want) {
+		t.Fatalf("knowledge base names mismatch\nwant: %v\ngot:  %v", want, got)
+	}
+}
+
+func assertKnowledgeBaseConfigNames(t *testing.T, items []config.KnowledgeBaseConfig, want []string) {
+	t.Helper()
+	got := make([]string, 0, len(items))
+	for _, item := range items {
+		got = append(got, item.Name)
+	}
+	slices.Sort(got)
+	slices.Sort(want)
+	if !slices.Equal(got, want) {
+		t.Fatalf("knowledge base config names mismatch\nwant: %v\ngot:  %v", want, got)
 	}
 }

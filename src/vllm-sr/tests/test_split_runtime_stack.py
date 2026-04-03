@@ -201,7 +201,7 @@ def test_start_vllm_sr_creates_and_connects_shared_network_without_observability
     monkeypatch.setattr(
         runtime_lifecycle,
         "docker_container_status",
-        lambda name: "not found" if name == "vllm-sr-container" else "running",
+        lambda _name: "running",
     )
     monkeypatch.setattr(
         runtime_lifecycle, "docker_create_network", record("docker_create_network")
@@ -289,7 +289,7 @@ def test_start_vllm_sr_loads_runtime_config_for_backend_provisioning(monkeypatch
     monkeypatch.setattr(
         runtime_lifecycle,
         "docker_container_status",
-        lambda name: "not found" if name == "vllm-sr-container" else "running",
+        lambda _name: "running",
     )
     monkeypatch.setattr(
         runtime_lifecycle, "docker_create_network", record("docker_create_network")
@@ -339,7 +339,6 @@ def test_start_vllm_sr_loads_runtime_config_for_backend_provisioning(monkeypatch
 def test_resolve_runtime_stack_supports_custom_stack_name_and_port_offset():
     stack_layout = resolve_runtime_stack(stack_name="audit-a", port_offset=200)
 
-    assert stack_layout.container_name == "audit-a-vllm-sr-container"
     assert stack_layout.router_container_name == "audit-a-vllm-sr-router-container"
     assert stack_layout.envoy_container_name == "audit-a-vllm-sr-envoy-container"
     assert (
@@ -402,7 +401,7 @@ def test_start_vllm_sr_uses_state_root_override(monkeypatch):
     monkeypatch.setattr(
         runtime_lifecycle,
         "docker_container_status",
-        lambda name: "not found" if name == "vllm-sr-container" else "running",
+        lambda _name: "running",
     )
     monkeypatch.setattr(
         runtime_lifecycle, "docker_create_network", record("docker_create_network")
@@ -442,7 +441,6 @@ def test_start_vllm_sr_uses_state_root_override(monkeypatch):
 def test_resolve_runtime_stack_supports_default_role_container_names():
     stack_layout = resolve_runtime_stack()
 
-    assert stack_layout.container_name == "vllm-sr-container"
     assert stack_layout.router_container_name == "vllm-sr-router-container"
     assert stack_layout.envoy_container_name == "vllm-sr-envoy-container"
     assert stack_layout.dashboard_container_name == "vllm-sr-dashboard-container"

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import os
+import posixpath
 import shutil
 from pathlib import Path
 
@@ -60,6 +61,8 @@ ALGORITHM_HINTS = {
 }
 
 AMD_OVERRIDE_PREVIEW_LIMIT = 8
+KB_RUNTIME_ROOT = "knowledge_bases"
+KB_BOOTSTRAP_STATE_FILE = ".bootstrap-state.yaml"
 AMD_GPU_USE_CPU_PATHS: tuple[tuple[str, ...], ...] = (
     ("global", "model_catalog", "embeddings", "semantic", "use_cpu"),
     ("global", "model_catalog", "modules", "prompt_guard", "use_cpu"),
@@ -137,10 +140,55 @@ def _write_runtime_config(source_config_path: Path, config: dict[str, object]) -
     return runtime_config_path
 
 
-def _runtime_kb_asset_dir(config_path: Path) -> Path:
-    kb_dir = _runtime_config_output_dir(config_path) / "knowledge_bases"
+def _runtime_kb_state_dir(config_path: Path) -> Path:
+    kb_dir = _runtime_config_output_dir(config_path) / KB_RUNTIME_ROOT
     kb_dir.mkdir(parents=True, exist_ok=True)
     return kb_dir
+
+
+def _clean_kb_source_path(value: str) -> str:
+    cleaned = posixpath.normpath(str(value or "").strip().replace("\\", "/"))
+    if cleaned == ".":
+        return ""
+    return cleaned.rstrip("/")
+
+
+def _runtime_kb_bootstrap_state_path(config_path: Path) -> Path:
+    return _runtime_kb_state_dir(config_path) / KB_BOOTSTRAP_STATE_FILE
+
+
+def _load_runtime_kb_bootstrap_state(config_path: Path) -> set[str]:
+    state_path = _runtime_kb_bootstrap_state_path(config_path)
+    if not state_path.exists():
+        return set()
+
+    data = yaml.safe_load(state_path.read_text(encoding="utf-8")) or {}
+    processed = data.get("processed")
+    if not isinstance(processed, list):
+        return set()
+
+    return {
+        cleaned
+        for item in processed
+        if isinstance(item, str)
+        if (cleaned := _clean_kb_source_path(item))
+    }
+
+
+def _write_runtime_kb_bootstrap_state(
+    config_path: Path, processed_runtime_paths: set[str]
+) -> None:
+    state_path = _runtime_kb_bootstrap_state_path(config_path)
+    state_path.write_text(
+        yaml.safe_dump(
+            {
+                "version": 1,
+                "processed": sorted(processed_runtime_paths),
+            },
+            sort_keys=False,
+        ),
+        encoding="utf-8",
+    )
 
 
 def _candidate_kb_source_roots(config_path: Path, source_path: str) -> list[Path]:
@@ -194,72 +242,87 @@ def _kb_source_spec(
     return kb_name, source, source_path
 
 
-def _stage_runtime_kb_source(
-    *,
-    kb_name: str,
-    source: dict[str, object],
-    source_path: str,
-    config_path: Path,
-    kb_asset_dir: Path,
-) -> bool:
-    resolved_source_root = _resolve_kb_source_root(config_path, source_path)
-    if resolved_source_root is None:
-        log.warning(
-            "Runtime config sync: could not resolve KB source.path=%s for %s",
-            source_path,
-            kb_name,
-        )
-        return False
+def _runtime_kb_relative_path(source_path: str, kb_name: str) -> str:
+    cleaned = _clean_kb_source_path(source_path)
+    runtime_root = _clean_kb_source_path(KB_RUNTIME_ROOT)
 
-    staged_root = kb_asset_dir / kb_name
-    try:
-        if staged_root.resolve() != resolved_source_root.resolve():
-            if staged_root.exists():
-                shutil.rmtree(staged_root)
-            shutil.copytree(resolved_source_root, staged_root)
+    if cleaned == runtime_root:
+        return f"{runtime_root}/{kb_name}"
+    if cleaned.startswith(f"{runtime_root}/"):
+        return cleaned
 
-        staged_relative_path = staged_root.relative_to(
-            _runtime_config_output_dir(config_path)
-        ).as_posix()
-        if source.get("path") != staged_relative_path:
-            source["path"] = staged_relative_path
-        return True
-    except OSError as exc:
-        log.warning(
-            "Runtime config sync: failed to stage KB assets for %s from %s: %s",
-            kb_name,
-            resolved_source_root,
-            exc,
-        )
-        return False
+    leaf_name = Path(cleaned).name
+    if leaf_name in {"", ".", runtime_root}:
+        leaf_name = kb_name
+    return f"{runtime_root}/{leaf_name}"
 
 
-def _stage_runtime_kb_sources(
+def _runtime_kb_target_root(config_path: Path, runtime_relative_path: str) -> Path:
+    return _runtime_config_output_dir(config_path) / Path(runtime_relative_path)
+
+
+def _sync_runtime_kb_store(
     config: dict[str, object],
     config_path: Path,
-) -> bool:
+) -> tuple[bool, bool]:
     kb_configs = _configured_knowledge_bases(config)
     if not kb_configs:
-        return False
+        return False, False
 
     changed = False
-    kb_asset_dir = _runtime_kb_asset_dir(config_path)
+    state_changed = False
+    bootstrapped = _load_runtime_kb_bootstrap_state(config_path)
+
     for kb_config in kb_configs:
         kb_source_spec = _kb_source_spec(kb_config)
         if kb_source_spec is None:
             continue
+
         kb_name, source, source_path = kb_source_spec
-        changed = (
-            _stage_runtime_kb_source(
-                kb_name=kb_name,
-                source=source,
-                source_path=source_path,
-                config_path=config_path,
-                kb_asset_dir=kb_asset_dir,
+        runtime_relative_path = _runtime_kb_relative_path(source_path, kb_name)
+        runtime_target = _runtime_kb_target_root(config_path, runtime_relative_path)
+
+        normalized_source_path = f"{runtime_relative_path}/"
+        if source.get("path") != normalized_source_path:
+            source["path"] = normalized_source_path
+            changed = True
+
+        if runtime_target.exists():
+            if runtime_relative_path not in bootstrapped:
+                bootstrapped.add(runtime_relative_path)
+                state_changed = True
+            continue
+
+        if runtime_relative_path in bootstrapped:
+            continue
+
+        resolved_source_root = _resolve_kb_source_root(config_path, source_path)
+        if resolved_source_root is None:
+            log.warning(
+                "Runtime KB bootstrap: could not resolve KB source.path=%s for %s",
+                source_path,
+                kb_name,
             )
-            or changed
-        )
-    return changed
+            continue
+
+        runtime_target.parent.mkdir(parents=True, exist_ok=True)
+        try:
+            shutil.copytree(resolved_source_root, runtime_target)
+            bootstrapped.add(runtime_relative_path)
+            state_changed = True
+        except OSError as exc:
+            log.warning(
+                "Runtime KB bootstrap: failed to import %s from %s to %s: %s",
+                kb_name,
+                resolved_source_root,
+                runtime_target,
+                exc,
+            )
+
+    if state_changed:
+        _write_runtime_kb_bootstrap_state(config_path, bootstrapped)
+
+    return True, changed or state_changed
 
 
 def _set_use_cpu_false_for_amd(
@@ -545,7 +608,7 @@ def resolve_effective_config_path(
     with config_path.open() as handle:
         config = yaml.safe_load(handle) or {}
 
-    changed = _stage_runtime_kb_sources(config, config_path)
+    kb_runtime_required, changed = _sync_runtime_kb_store(config, config_path)
     if not setup_mode:
         changed = (
             inject_local_service_runtime_defaults(config, resolve_runtime_stack())
@@ -553,14 +616,23 @@ def resolve_effective_config_path(
         )
     normalized_algorithm = _normalized_algorithm_override(algorithm, setup_mode)
     apply_gpu_defaults = _platform_requires_gpu_defaults(platform)
-    if not normalized_algorithm and not apply_gpu_defaults and not changed:
+    if (
+        not kb_runtime_required
+        and not normalized_algorithm
+        and not apply_gpu_defaults
+        and not changed
+    ):
         return config_path
 
     if normalized_algorithm:
         changed = _apply_algorithm_override(config, normalized_algorithm) or changed
 
     changed = apply_platform_gpu_defaults(config, platform) or changed
-    return _finalize_runtime_config_write(config_path, config, changed)
+    return _finalize_runtime_config_write(
+        config_path,
+        config,
+        changed or kb_runtime_required,
+    )
 
 
 def sync_runtime_config(

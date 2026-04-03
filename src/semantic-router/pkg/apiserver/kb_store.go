@@ -3,7 +3,6 @@
 package apiserver
 
 import (
-	"encoding/json"
 	"fmt"
 	"os"
 	"path"
@@ -12,7 +11,6 @@ import (
 	"regexp"
 	"sort"
 	"strings"
-	"time"
 
 	"gopkg.in/yaml.v3"
 
@@ -20,7 +18,7 @@ import (
 )
 
 const (
-	knowledgeBaseCustomRoot      = "kbs/custom"
+	knowledgeBaseRuntimeRoot     = "knowledge_bases"
 	knowledgeBaseManifestName    = "labels.json"
 	knowledgeBaseManifestVersion = "1.0.0"
 	knowledgeBaseDocumentType    = "embedding_kb"
@@ -81,12 +79,6 @@ type knowledgeBaseUpsertRequest struct {
 type knowledgeBaseDeleteResponse struct {
 	Status string `json:"status" yaml:"status"`
 	Name   string `json:"name" yaml:"name"`
-}
-
-type managedKnowledgeBaseAssetsTxn struct {
-	finalDir   string
-	backupDir  string
-	removeOnly bool
 }
 
 func normalizeKnowledgeBaseRequest(payload knowledgeBaseUpsertRequest) (knowledgeBaseUpsertRequest, error) {
@@ -317,8 +309,8 @@ func isBuiltinKnowledgeBase(kb config.KnowledgeBaseConfig) bool {
 
 func isManagedKnowledgeBase(kb config.KnowledgeBaseConfig) bool {
 	cleaned := cleanKnowledgeBaseSourcePath(kb.Source.Path)
-	customRoot := cleanKnowledgeBaseSourcePath(knowledgeBaseCustomRoot)
-	return cleaned == customRoot || strings.HasPrefix(cleaned, customRoot+"/")
+	runtimeRoot := cleanKnowledgeBaseSourcePath(knowledgeBaseRuntimeRoot)
+	return cleaned == runtimeRoot || strings.HasPrefix(cleaned, runtimeRoot+"/")
 }
 
 func cleanKnowledgeBaseSourcePath(value string) string {
@@ -334,11 +326,26 @@ func cleanKnowledgeBaseSourcePath(value string) string {
 }
 
 func managedKnowledgeBaseSourcePath(name string) string {
-	return filepath.ToSlash(filepath.Join(knowledgeBaseCustomRoot, name)) + "/"
+	return filepath.ToSlash(filepath.Join(knowledgeBaseRuntimeRoot, name)) + "/"
 }
 
-func managedKnowledgeBaseDir(baseDir string, name string) string {
-	return filepath.Join(baseDir, filepath.FromSlash(cleanKnowledgeBaseSourcePath(managedKnowledgeBaseSourcePath(name))))
+func knowledgeBaseRuntimeStateBaseDir(baseDir string) string {
+	return filepath.Join(baseDir, ".vllm-sr")
+}
+
+func managedKnowledgeBaseDirForSource(baseDir string, sourcePath string, fallbackName string) string {
+	cleanedSourcePath := cleanKnowledgeBaseSourcePath(sourcePath)
+	runtimeRoot := cleanKnowledgeBaseSourcePath(knowledgeBaseRuntimeRoot)
+	if cleanedSourcePath == "" || cleanedSourcePath == runtimeRoot {
+		cleanedSourcePath = cleanKnowledgeBaseSourcePath(managedKnowledgeBaseSourcePath(fallbackName))
+	}
+	if cleanedSourcePath != runtimeRoot && !strings.HasPrefix(cleanedSourcePath, runtimeRoot+"/") {
+		cleanedSourcePath = cleanKnowledgeBaseSourcePath(managedKnowledgeBaseSourcePath(fallbackName))
+	}
+	return filepath.Join(
+		knowledgeBaseRuntimeStateBaseDir(baseDir),
+		filepath.FromSlash(cleanedSourcePath),
+	)
 }
 
 func knowledgeBaseConfigBaseDir(cfg *config.RouterConfig, configPath string) string {
@@ -550,7 +557,7 @@ func normalizeKnowledgeBaseSlice(kbs []config.KnowledgeBaseConfig) []config.Know
 	normalized := make([]config.KnowledgeBaseConfig, 0, len(kbs))
 	for _, kb := range kbs {
 		copyKB := kb
-		copyKB.Source.Path = strings.TrimSpace(copyKB.Source.Path)
+		copyKB.Source.Path = cleanKnowledgeBaseSourcePath(copyKB.Source.Path)
 		copyKB.Source.Manifest = strings.TrimSpace(copyKB.Source.Manifest)
 		copyKB.LabelThresholds = cloneLabelThresholds(copyKB.LabelThresholds)
 		copyKB.Groups = cloneKnowledgeBaseGroups(copyKB.Groups)
@@ -604,102 +611,6 @@ func persistConfigAndSync(
 		config.Replace(newCfg)
 	}
 	return nil
-}
-
-func stageManagedKnowledgeBaseAssets(baseDir string, payload knowledgeBaseUpsertRequest) (*managedKnowledgeBaseAssetsTxn, error) {
-	finalDir := managedKnowledgeBaseDir(baseDir, payload.Name)
-	parentDir := filepath.Dir(finalDir)
-	if err := os.MkdirAll(parentDir, 0o755); err != nil {
-		return nil, err
-	}
-
-	stageDir := finalDir + ".tmp-" + fmt.Sprintf("%d", time.Now().UnixNano())
-	if err := os.MkdirAll(stageDir, 0o755); err != nil {
-		return nil, err
-	}
-
-	if err := writeKnowledgeBaseAssets(stageDir, payload); err != nil {
-		_ = os.RemoveAll(stageDir)
-		return nil, err
-	}
-
-	txn := &managedKnowledgeBaseAssetsTxn{finalDir: finalDir}
-	if _, err := os.Stat(finalDir); err == nil {
-		txn.backupDir = finalDir + ".bak-" + fmt.Sprintf("%d", time.Now().UnixNano())
-		if err := os.Rename(finalDir, txn.backupDir); err != nil {
-			_ = os.RemoveAll(stageDir)
-			return nil, err
-		}
-	}
-
-	if err := os.Rename(stageDir, finalDir); err != nil {
-		if txn.backupDir != "" {
-			_ = os.Rename(txn.backupDir, finalDir)
-		}
-		_ = os.RemoveAll(stageDir)
-		return nil, err
-	}
-	return txn, nil
-}
-
-func stageManagedKnowledgeBaseRemoval(baseDir string, name string) (*managedKnowledgeBaseAssetsTxn, error) {
-	finalDir := managedKnowledgeBaseDir(baseDir, name)
-	if _, err := os.Stat(finalDir); os.IsNotExist(err) {
-		return nil, nil
-	}
-	backupDir := finalDir + ".bak-" + fmt.Sprintf("%d", time.Now().UnixNano())
-	if err := os.Rename(finalDir, backupDir); err != nil {
-		return nil, err
-	}
-	return &managedKnowledgeBaseAssetsTxn{
-		finalDir:   finalDir,
-		backupDir:  backupDir,
-		removeOnly: true,
-	}, nil
-}
-
-func (txn *managedKnowledgeBaseAssetsTxn) Commit() {
-	if txn == nil || txn.backupDir == "" {
-		return
-	}
-	_ = os.RemoveAll(txn.backupDir)
-}
-
-func (txn *managedKnowledgeBaseAssetsTxn) Rollback() {
-	if txn == nil {
-		return
-	}
-	if txn.removeOnly {
-		if txn.backupDir != "" {
-			_ = os.RemoveAll(txn.finalDir)
-			_ = os.Rename(txn.backupDir, txn.finalDir)
-		}
-		return
-	}
-	_ = os.RemoveAll(txn.finalDir)
-	if txn.backupDir != "" {
-		_ = os.Rename(txn.backupDir, txn.finalDir)
-	}
-}
-
-func writeKnowledgeBaseAssets(root string, payload knowledgeBaseUpsertRequest) error {
-	definition := config.KnowledgeBaseDefinition{
-		Version:     knowledgeBaseManifestVersion,
-		Description: payload.Description,
-		Labels:      make(map[string]config.KnowledgeBaseLabelDef, len(payload.Labels)),
-	}
-	for _, label := range payload.Labels {
-		definition.Labels[label.Name] = config.KnowledgeBaseLabelDef{
-			Description: label.Description,
-			Exemplars:   append([]string(nil), label.Exemplars...),
-		}
-	}
-
-	definitionBytes, err := json.MarshalIndent(definition, "", "  ")
-	if err != nil {
-		return err
-	}
-	return os.WriteFile(filepath.Join(root, knowledgeBaseManifestName), definitionBytes, 0o644)
 }
 
 func normalizeKnowledgeBaseMatch(value string) string {

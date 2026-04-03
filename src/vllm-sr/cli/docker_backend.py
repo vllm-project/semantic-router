@@ -62,9 +62,7 @@ class DockerBackend:
         stack_layout = resolve_runtime_stack()
         if docker_container_status(stack_layout.dashboard_container_name) == "running":
             return stack_layout.dashboard_url
-        if docker_container_status(stack_layout.container_name) != "running":
-            return None
-        return stack_layout.dashboard_url
+        return None
 
     def is_running(self) -> bool:
         stack_layout = resolve_runtime_stack()

@@ -12,7 +12,6 @@ consts = importlib.import_module("cli.consts")
 runtime_topology = importlib.import_module("cli.runtime_topology")
 
 RUNTIME_TOPOLOGY_ENV = consts.RUNTIME_TOPOLOGY_ENV
-RUNTIME_TOPOLOGY_LEGACY = consts.RUNTIME_TOPOLOGY_LEGACY
 RUNTIME_TOPOLOGY_SPLIT = consts.RUNTIME_TOPOLOGY_SPLIT
 resolve_runtime_topology = runtime_topology.resolve_runtime_topology
 split_runtime_enabled = runtime_topology.split_runtime_enabled
@@ -33,14 +32,15 @@ def test_runtime_topology_accepts_split_env(monkeypatch):
 
 
 def test_runtime_topology_explicit_arg_overrides_env(monkeypatch):
-    monkeypatch.setenv(RUNTIME_TOPOLOGY_ENV, RUNTIME_TOPOLOGY_LEGACY)
+    monkeypatch.setenv(RUNTIME_TOPOLOGY_ENV, RUNTIME_TOPOLOGY_SPLIT)
 
     assert resolve_runtime_topology(RUNTIME_TOPOLOGY_SPLIT) == RUNTIME_TOPOLOGY_SPLIT
     assert split_runtime_enabled(RUNTIME_TOPOLOGY_SPLIT) is True
 
 
-def test_runtime_topology_rejects_invalid_values(monkeypatch):
-    monkeypatch.setenv(RUNTIME_TOPOLOGY_ENV, "sidecar")
+@pytest.mark.parametrize("raw_value", ["legacy", "sidecar"])
+def test_runtime_topology_rejects_unsupported_values(monkeypatch, raw_value):
+    monkeypatch.setenv(RUNTIME_TOPOLOGY_ENV, raw_value)
 
-    with pytest.raises(ValueError, match="Invalid runtime topology"):
+    with pytest.raises(ValueError, match="Unsupported runtime topology"):
         resolve_runtime_topology()

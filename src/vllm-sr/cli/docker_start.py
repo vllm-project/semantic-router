@@ -11,7 +11,6 @@ from cli.consts import (
 )
 from cli.docker_images import (
     _normalize_platform,
-    get_docker_image,
     get_runtime_images,
 )
 from cli.docker_openclaw_support import configure_openclaw_support
@@ -31,7 +30,7 @@ from cli.docker_services import (
 )
 from cli.parser import parse_user_config
 from cli.runtime_stack import RuntimeStackLayout, resolve_runtime_stack
-from cli.runtime_topology import resolve_runtime_topology, split_runtime_enabled
+from cli.runtime_topology import resolve_runtime_topology
 from cli.utils import get_logger
 
 log = get_logger(__name__)
@@ -63,8 +62,7 @@ def docker_start_vllm_sr(
     runtime = get_container_runtime()
     env_vars = dict(env_vars or {})
     stack_layout = stack_layout or resolve_runtime_stack()
-    runtime_topology = resolve_runtime_topology(topology)
-    use_split_runtime = split_runtime_enabled(runtime_topology)
+    resolve_runtime_topology(topology)
 
     normalized_platform = _resolve_platform(env_vars)
     nofile_limit = _resolve_nofile_limit()
@@ -81,14 +79,12 @@ def docker_start_vllm_sr(
         env_vars,
         stack_layout,
         runtime_container_config=runtime_container_config,
-        split_runtime=use_split_runtime,
     )
-    if use_split_runtime:
-        _render_split_envoy_config(
-            runtime_paths["effective_config_path"],
-            runtime_paths["envoy_config_path"],
-            stack_layout,
-        )
+    _render_split_envoy_config(
+        runtime_paths["effective_config_path"],
+        runtime_paths["envoy_config_path"],
+        stack_layout,
+    )
     container_specs = _resolve_container_specs(
         runtime=runtime,
         image=image,
@@ -106,7 +102,6 @@ def docker_start_vllm_sr(
         runtime_paths=runtime_paths,
         openclaw_network_name=openclaw_network_name,
         stack_layout=stack_layout,
-        use_split_runtime=use_split_runtime,
     )
 
     log.info(f"Starting vLLM Semantic Router runtime with {runtime}...")
@@ -140,23 +135,19 @@ def _build_common_runtime_env(
     stack_layout: RuntimeStackLayout,
     *,
     runtime_container_config: str | None,
-    split_runtime: bool,
 ):
     common_env = dict(env_vars or {})
     if runtime_container_config:
         common_env.setdefault("VLLM_SR_RUNTIME_CONFIG_PATH", runtime_container_config)
-    if split_runtime:
-        common_env.setdefault(
-            "VLLM_SR_ROUTER_CONTAINER_NAME", stack_layout.router_container_name
-        )
-        common_env.setdefault(
-            "VLLM_SR_ENVOY_CONTAINER_NAME", stack_layout.envoy_container_name
-        )
-        common_env.setdefault(
-            "VLLM_SR_DASHBOARD_CONTAINER_NAME", stack_layout.dashboard_container_name
-        )
-    else:
-        _strip_split_runtime_envs(common_env)
+    common_env.setdefault(
+        "VLLM_SR_ROUTER_CONTAINER_NAME", stack_layout.router_container_name
+    )
+    common_env.setdefault(
+        "VLLM_SR_ENVOY_CONTAINER_NAME", stack_layout.envoy_container_name
+    )
+    common_env.setdefault(
+        "VLLM_SR_DASHBOARD_CONTAINER_NAME", stack_layout.dashboard_container_name
+    )
     return common_env
 
 
@@ -178,81 +169,29 @@ def _resolve_container_specs(
     runtime_paths: dict[str, str],
     openclaw_network_name: str | None,
     stack_layout: RuntimeStackLayout,
-    use_split_runtime: bool,
 ):
-    if use_split_runtime:
-        runtime_images = get_runtime_images(
-            image=image,
-            router_image=router_image,
-            envoy_image=envoy_image,
-            dashboard_image=dashboard_image,
-            pull_policy=pull_policy,
-            platform=normalized_platform,
-        )
-        return _runtime_container_specs(
-            runtime=runtime,
-            image_by_service=runtime_images,
-            nofile_limit=nofile_limit,
-            runtime_network_name=runtime_network_name,
-            normalized_platform=normalized_platform,
-            common_env=common_env,
-            listeners=listeners,
-            minimal=minimal,
-            config_dir=config_dir,
-            runtime_paths=runtime_paths,
-            openclaw_network_name=openclaw_network_name,
-            stack_layout=stack_layout,
-        )
-
-    if any(value for value in (router_image, envoy_image, dashboard_image)):
-        log.warning(
-            "Ignoring router/envoy/dashboard image overrides for legacy topology"
-        )
-
-    selected_image = get_docker_image(
+    runtime_images = get_runtime_images(
         image=image,
+        router_image=router_image,
+        envoy_image=envoy_image,
+        dashboard_image=dashboard_image,
         pull_policy=pull_policy,
         platform=normalized_platform,
     )
-    return [
-        (
-            "runtime",
-            stack_layout.container_name,
-            _build_legacy_runtime_command(
-                runtime=runtime,
-                image=selected_image,
-                container_name=stack_layout.container_name,
-                nofile_limit=nofile_limit,
-                network_name=runtime_network_name,
-                env_vars=common_env,
-                mount_specs=_legacy_runtime_mount_specs(
-                    runtime_paths,
-                    include_dashboard_data=not minimal,
-                ),
-                listeners=listeners,
-                minimal=minimal,
-                enable_amd_gpu=normalized_platform == PLATFORM_AMD,
-                config_dir=config_dir,
-                openclaw_network_name=openclaw_network_name,
-                stack_layout=stack_layout,
-            ),
-        )
-    ]
-
-
-def _strip_split_runtime_envs(env_vars: dict[str, str]) -> None:
-    for key in (
-        "VLLM_SR_ROUTER_CONTAINER_NAME",
-        "VLLM_SR_ENVOY_CONTAINER_NAME",
-        "VLLM_SR_DASHBOARD_CONTAINER_NAME",
-        "TARGET_ROUTER_API_URL",
-        "TARGET_ROUTER_METRICS_URL",
-        "TARGET_ENVOY_URL",
-        "TARGET_ENVOY_ADMIN_URL",
-        "OPENCLAW_DASHBOARD_CONTAINER_NAME",
-        "OPENCLAW_MODEL_GATEWAY_CONTAINER_NAME",
-    ):
-        env_vars.pop(key, None)
+    return _runtime_container_specs(
+        runtime=runtime,
+        image_by_service=runtime_images,
+        nofile_limit=nofile_limit,
+        runtime_network_name=runtime_network_name,
+        normalized_platform=normalized_platform,
+        common_env=common_env,
+        listeners=listeners,
+        minimal=minimal,
+        config_dir=config_dir,
+        runtime_paths=runtime_paths,
+        openclaw_network_name=openclaw_network_name,
+        stack_layout=stack_layout,
+    )
 
 
 def _runtime_container_specs(
@@ -318,65 +257,6 @@ def _runtime_container_specs(
     specs.append(("dashboard", stack_layout.dashboard_container_name, dashboard_cmd))
 
     return specs
-
-
-def _legacy_runtime_mount_specs(
-    runtime_paths: dict[str, str],
-    *,
-    include_dashboard_data: bool,
-):
-    return _runtime_mount_specs(
-        runtime_paths,
-        include_models=True,
-        include_dashboard_data=include_dashboard_data,
-    )
-
-
-def _build_legacy_runtime_command(
-    *,
-    runtime: str,
-    image: str,
-    container_name: str,
-    nofile_limit: int,
-    network_name: str,
-    env_vars: dict[str, str],
-    mount_specs: list[str],
-    listeners,
-    minimal: bool,
-    enable_amd_gpu: bool,
-    config_dir: str,
-    openclaw_network_name: str | None,
-    stack_layout: RuntimeStackLayout,
-):
-    legacy_env = _build_legacy_runtime_env(
-        env_vars=env_vars,
-        minimal=minimal,
-        mount_specs=mount_specs,
-        config_dir=config_dir,
-        openclaw_network_name=openclaw_network_name,
-        runtime=runtime,
-        stack_layout=stack_layout,
-    )
-
-    cmd = build_base_run_command(
-        runtime,
-        nofile_limit,
-        network_name,
-        container_name,
-        start_immediately=True,
-    )
-    maybe_append_amd_gpu_passthrough(cmd, enable_amd_gpu)
-    append_host_gateway(cmd, runtime)
-    append_mount_specs(cmd, mount_specs)
-    if not minimal:
-        cmd.extend(["-p", f"{stack_layout.dashboard_port}:8700"])
-    append_port_mappings(
-        cmd,
-        _legacy_runtime_port_mappings(listeners, stack_layout),
-    )
-    append_env_vars(cmd, legacy_env)
-    cmd.append(image)
-    return cmd
 
 
 def _build_router_runtime_command(
@@ -529,52 +409,6 @@ def _build_dashboard_runtime_env(
         "OPENCLAW_MODEL_GATEWAY_CONTAINER_NAME", stack_layout.envoy_container_name
     )
     return dashboard_env
-
-
-def _build_legacy_runtime_env(
-    *,
-    env_vars: dict[str, str],
-    minimal: bool,
-    mount_specs: list[str],
-    config_dir: str,
-    openclaw_network_name: str | None,
-    runtime: str,
-    stack_layout: RuntimeStackLayout,
-):
-    legacy_env = dict(env_vars)
-    if minimal:
-        return legacy_env
-
-    legacy_env.setdefault(
-        "OPENCLAW_DASHBOARD_CONTAINER_NAME", stack_layout.container_name
-    )
-    legacy_env.setdefault(
-        "OPENCLAW_MODEL_GATEWAY_CONTAINER_NAME", stack_layout.container_name
-    )
-    configure_openclaw_support(
-        mount_specs,
-        legacy_env,
-        config_dir,
-        openclaw_network_name,
-        runtime,
-        stack_layout,
-        resolve_docker_cli=resolve_docker_cli_path,
-    )
-    return legacy_env
-
-
-def _legacy_runtime_port_mappings(listeners, stack_layout: RuntimeStackLayout):
-    port_mappings = [
-        (stack_layout.router_port, 50051),
-        (stack_layout.metrics_port, 9190),
-        (stack_layout.api_port, 8080),
-    ]
-    port_mappings.extend(
-        (port + stack_layout.port_offset, port)
-        for listener in listeners
-        if (port := listener.get("port"))
-    )
-    return port_mappings
 
 
 def _resolve_platform(env_vars):

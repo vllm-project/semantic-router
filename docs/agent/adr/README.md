@@ -67,3 +67,5 @@ Keep the numeric index unique within `docs/agent/adr/`.
 - [adr-0002-tech-debt-index-and-entry-directory.md](adr-0002-tech-debt-index-and-entry-directory.md)
 - [adr-0003-dashboard-dsl-natural-language-mode.md](adr-0003-dashboard-dsl-natural-language-mode.md)
 - [adr-0004-prototype-aware-label-scoring-for-embedding-backed-signals.md](adr-0004-prototype-aware-label-scoring-for-embedding-backed-signals.md)
+- [adr-0005-model-runtime-lifecycle-orchestration.md](adr-0005-model-runtime-lifecycle-orchestration.md)
+- [adr-0006-platform-kernel-and-contract-first-control-planes.md](adr-0006-platform-kernel-and-contract-first-control-planes.md)

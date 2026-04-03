@@ -15,7 +15,7 @@ The Python CLI is strongly oriented around local container lifecycle and does no
 ## Evidence
 
 - [src/vllm-sr/cli/core.py](../../../src/vllm-sr/cli/core.py)
-- [src/vllm-sr/cli/docker_cli.py](../../../src/vllm-sr/cli/docker_cli.py)
+- [src/vllm-sr/cli/commands/runtime.py](../../../src/vllm-sr/cli/commands/runtime.py)
 - [docs/agent/environments.md](../environments.md)
 - [deploy/operator/api/v1alpha1/semanticrouter_types.go](../../../deploy/operator/api/v1alpha1/semanticrouter_types.go)
 

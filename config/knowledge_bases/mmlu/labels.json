@@ -62,8 +62,8 @@
         "A 2-liter flask maintained at 700\u00b0K contains 0.1 mole of CO and a catalyst for the reaction CO(g) + 2H_2(g) = CH_3OH(g) Hydrogen is introduced until the equilibrium total pressure is 7atm, at which point 0.06 moles of methanol are formed . (a) CalculateK_pin atm^-2 (b) What would the final pressure be were the same amounts of CO and H_2 used but with no catalyst present so that no reaction occurs?"
       ]
     },
-    "computer_science": {
-      "description": "MMLU-Pro computer_science questions",
+    "computer science": {
+      "description": "MMLU-Pro computer science questions",
       "exemplars": [
         "Suppose a convex 3d-object has k pentagonal faces and m hexagonal faces. All faces are regular. What is k?",
         "What are the port states determined by Nmap?",

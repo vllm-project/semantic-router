@@ -204,6 +204,7 @@ func TestClassificationService_BasicFunctionality(t *testing.T) {
 	t.Run("Global_service_access", func(t *testing.T) {
 		config := &config.RouterConfig{}
 		service := NewClassificationService(nil, config)
+		SetGlobalClassificationService(service)
 
 		globalService := GetGlobalClassificationService()
 		if globalService != service {
