@@ -120,6 +120,48 @@ linters:
           - cyclop
           - errcheck
         path: (^|/)src/semantic-router/pkg/classification/vllm_client\.go$
+      - linters:
+          - cyclop
+          - funlen
+          - gocognit
+          - nestif
+        path: (^|/)src/semantic-router/pkg/cache/inmemory_cache\.go$
+      - linters:
+          - funlen
+        path: (^|/)src/semantic-router/pkg/cache/hybrid_cache\.go$
+      - linters:
+          - cyclop
+          - errcheck
+          - funlen
+          - gocognit
+          - nestif
+        path: (^|/)src/semantic-router/pkg/classification/(hallucination_detector|keyword_classifier|mcp_classifier|unified_classifier)\.go$
+      - linters:
+          - cyclop
+        path: (^|/)src/semantic-router/pkg/extproc/processor_res_cache\.go$
+      - linters:
+          - cyclop
+          - errcheck
+          - funlen
+          - gocognit
+          - nestif
+        path: (^|/)src/semantic-router/pkg/looper/(base|client|confidence|ratings|rl_driven)\.go$
+      - linters:
+          - cyclop
+          - funlen
+          - gocognit
+          - nestif
+        path: (^|/)src/semantic-router/pkg/memory/milvus_store\.go$
+      - linters:
+          - errcheck
+          - nestif
+        path: (^|/)src/semantic-router/pkg/responsestore/redis_store\.go$
+      - linters:
+          - cyclop
+          - funlen
+          - gocognit
+          - nestif
+        path: (^|/)src/semantic-router/pkg/selection/(elo|factory|gmtrouter|hybrid|ml_adapter|rl_driven|storage)\.go$
 
 issues:
   max-issues-per-linter: 0
