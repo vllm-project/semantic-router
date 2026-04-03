@@ -9,6 +9,8 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/openai/openai-go"
+
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 )
@@ -45,50 +47,15 @@ func NewVLLMClientWithAuth(endpoint *config.ClassifierVLLMEndpoint, accessKey st
 	return client
 }
 
-// ChatCompletionRequest represents OpenAI-compatible chat completion request
-type ChatCompletionRequest struct {
-	Model       string                 `json:"model"`
-	Messages    []ChatMessage          `json:"messages"`
-	MaxTokens   int                    `json:"max_tokens,omitempty"`
-	Temperature float64                `json:"temperature,omitempty"`
-	Stream      bool                   `json:"stream,omitempty"`
-	ExtraBody   map[string]interface{} `json:"extra_body,omitempty"`
-}
-
-// ChatMessage represents a chat message in the request
-type ChatMessage struct {
-	Role    string `json:"role"`
-	Content string `json:"content"`
-}
-
-// ChatCompletionResponse represents OpenAI-compatible chat completion response
-type ChatCompletionResponse struct {
-	ID      string   `json:"id"`
-	Object  string   `json:"object"`
-	Created int64    `json:"created"`
-	Model   string   `json:"model"`
-	Choices []Choice `json:"choices"`
-	Usage   *Usage   `json:"usage,omitempty"`
-}
-
-// Choice represents a choice in the chat completion response
-type Choice struct {
-	Index        int     `json:"index"`
-	Message      Message `json:"message"`
-	FinishReason string  `json:"finish_reason"`
-}
-
-// Message represents a message in the response
-type Message struct {
-	Role    string `json:"role"`
-	Content string `json:"content"`
-}
-
-// Usage represents token usage information
-type Usage struct {
-	PromptTokens     int `json:"prompt_tokens"`
-	CompletionTokens int `json:"completion_tokens"`
-	TotalTokens      int `json:"total_tokens"`
+// vllmChatCompletionRequest extends openai.ChatCompletionNewParams with
+// the vLLM-specific extra_body field for guided decoding, LoRA adapters, etc.
+type vllmChatCompletionRequest struct {
+	Model       string                                   `json:"model"`
+	Messages    []openai.ChatCompletionMessageParamUnion `json:"messages"`
+	MaxTokens   int                                      `json:"max_tokens,omitempty"`
+	Temperature float64                                  `json:"temperature,omitempty"`
+	Stream      bool                                     `json:"stream,omitempty"`
+	ExtraBody   map[string]interface{}                   `json:"extra_body,omitempty"`
 }
 
 // GenerationOptions contains options for vLLM generation
@@ -99,29 +66,40 @@ type GenerationOptions struct {
 	ExtraBody   map[string]interface{}
 }
 
-// Generate sends a chat completion request to vLLM
-func (c *VLLMClient) Generate(ctx context.Context, modelName string, prompt string, options *GenerationOptions) (*ChatCompletionResponse, error) {
-	// Build messages - use chat template if configured
-	var messages []ChatMessage
+func (c *VLLMClient) buildMessages(prompt string) []openai.ChatCompletionMessageParamUnion {
 	if c.endpoint.UseChatTemplate {
-		// For models like Qwen3Guard that require chat template format
-		messages = []ChatMessage{
-			{Role: "system", Content: "You are a safety classifier."},
-			{Role: "user", Content: prompt},
+		return []openai.ChatCompletionMessageParamUnion{
+			{OfSystem: &openai.ChatCompletionSystemMessageParam{
+				Content: openai.ChatCompletionSystemMessageParamContentUnion{
+					OfString: openai.String("You are a safety classifier."),
+				},
+			}},
+			{OfUser: &openai.ChatCompletionUserMessageParam{
+				Content: openai.ChatCompletionUserMessageParamContentUnion{
+					OfString: openai.String(prompt),
+				},
+			}},
 		}
-	} else if c.endpoint.PromptTemplate != "" {
-		// Use custom prompt template if provided
-		formattedPrompt := fmt.Sprintf(c.endpoint.PromptTemplate, prompt)
-		messages = []ChatMessage{{Role: "user", Content: formattedPrompt}}
-	} else {
-		// Default: simple user message
-		messages = []ChatMessage{{Role: "user", Content: prompt}}
 	}
 
-	// Build request
-	req := ChatCompletionRequest{
+	content := prompt
+	if c.endpoint.PromptTemplate != "" {
+		content = fmt.Sprintf(c.endpoint.PromptTemplate, prompt)
+	}
+	return []openai.ChatCompletionMessageParamUnion{
+		{OfUser: &openai.ChatCompletionUserMessageParam{
+			Content: openai.ChatCompletionUserMessageParamContentUnion{
+				OfString: openai.String(content),
+			},
+		}},
+	}
+}
+
+// Generate sends a chat completion request to vLLM
+func (c *VLLMClient) Generate(ctx context.Context, modelName string, prompt string, options *GenerationOptions) (*openai.ChatCompletion, error) {
+	req := vllmChatCompletionRequest{
 		Model:    modelName,
-		Messages: messages,
+		Messages: c.buildMessages(prompt),
 	}
 
 	if options != nil {
@@ -131,21 +109,15 @@ func (c *VLLMClient) Generate(ctx context.Context, modelName string, prompt stri
 		req.ExtraBody = options.ExtraBody
 	}
 
-	// Default values
 	if req.MaxTokens == 0 {
 		req.MaxTokens = 512
 	}
-	if req.Temperature == 0 {
-		req.Temperature = 0.0 // Deterministic for safety checks
-	}
 
-	// Marshal request
 	jsonData, err := json.Marshal(req)
 	if err != nil {
 		return nil, fmt.Errorf("failed to marshal request: %w", err)
 	}
 
-	// Create HTTP request
 	url := fmt.Sprintf("%s/v1/chat/completions", c.baseURL)
 	httpReq, err := http.NewRequestWithContext(ctx, "POST", url, bytes.NewReader(jsonData))
 	if err != nil {
@@ -155,31 +127,26 @@ func (c *VLLMClient) Generate(ctx context.Context, modelName string, prompt stri
 	httpReq.Header.Set("Content-Type", "application/json")
 	httpReq.Header.Set("Accept", "application/json")
 
-	// Add Authorization header if access key is provided
 	if c.accessKey != "" {
 		httpReq.Header.Set("Authorization", fmt.Sprintf("Bearer %s", c.accessKey))
 	}
 
-	// Send request
 	resp, err := c.httpClient.Do(httpReq)
 	if err != nil {
 		return nil, fmt.Errorf("HTTP request failed: %w", err)
 	}
 	defer resp.Body.Close()
 
-	// Read response
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return nil, fmt.Errorf("failed to read response: %w", err)
 	}
 
-	// Check status code
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 		return nil, fmt.Errorf("vLLM API returned status %d: %s", resp.StatusCode, string(body))
 	}
 
-	// Parse response
-	var chatResp ChatCompletionResponse
+	var chatResp openai.ChatCompletion
 	if err := json.Unmarshal(body, &chatResp); err != nil {
 		return nil, fmt.Errorf("failed to parse response: %w", err)
 	}
