@@ -23,12 +23,6 @@ const (
 	MemoryTypeEpisodic MemoryType = "episodic"
 )
 
-// Message represents a conversation message.
-type Message struct {
-	Role    string `json:"role"`
-	Content string `json:"content"`
-}
-
 // Memory represents a stored memory unit in the agentic memory system
 type Memory struct {
 	// ID is the unique identifier for this memory

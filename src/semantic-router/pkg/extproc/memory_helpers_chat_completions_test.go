@@ -6,6 +6,8 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/memory"
 )
 
 func TestExtractMemoryInfo_ChatCompletions_Success(t *testing.T) {
@@ -28,9 +30,9 @@ func TestExtractMemoryInfo_ChatCompletions_Success(t *testing.T) {
 	assert.NotEmpty(t, sessionID, "sessionID should be derived from messages")
 	assert.True(t, strings.HasPrefix(sessionID, "cc-"), "Chat Completions sessionID should have 'cc-' prefix")
 	require.Len(t, history, 4)
-	assert.Equal(t, "system", history[0].Role)
-	assert.Equal(t, "user", history[1].Role)
-	assert.Equal(t, "Hello, my name is Alice", history[1].Content)
+	assert.NotNil(t, history[0].OfSystem, "first message should be system")
+	assert.NotNil(t, history[1].OfUser, "second message should be user")
+	assert.Equal(t, "Hello, my name is Alice", history[1].OfUser.Content.OfString.Value)
 }
 
 func TestExtractMemoryInfo_ChatCompletions_NoUserID(t *testing.T) {
@@ -88,10 +90,27 @@ func TestConvertChatCompletionMessages(t *testing.T) {
 	result := convertChatCompletionMessages(messages)
 
 	require.Len(t, result, 3)
-	assert.Equal(t, "system", result[0].Role)
-	assert.Equal(t, "System prompt", result[0].Content)
-	assert.Equal(t, "user", result[1].Role)
-	assert.Equal(t, "assistant", result[2].Role)
+	assert.NotNil(t, result[0].OfSystem)
+	assert.Equal(t, "System prompt", result[0].OfSystem.Content.OfString.Value)
+	assert.NotNil(t, result[1].OfUser)
+	assert.Equal(t, "User input", result[1].OfUser.Content.OfString.Value)
+	assert.NotNil(t, result[2].OfAssistant)
+	assert.Equal(t, "Assistant output", result[2].OfAssistant.Content.OfString.Value)
+}
+
+func TestConvertChatCompletionMessages_RoundTrip(t *testing.T) {
+	messages := []ChatCompletionMessage{
+		{Role: "user", Content: "Hello"},
+		{Role: "assistant", Content: "Hi there"},
+	}
+
+	sdkMsgs := convertChatCompletionMessages(messages)
+	require.Len(t, sdkMsgs, 2)
+
+	assert.Equal(t, "user", memory.SDKMessageRole(sdkMsgs[0]))
+	assert.Equal(t, "Hello", memory.SDKMessageContent(sdkMsgs[0]))
+	assert.Equal(t, "assistant", memory.SDKMessageRole(sdkMsgs[1]))
+	assert.Equal(t, "Hi there", memory.SDKMessageContent(sdkMsgs[1]))
 }
 
 func TestDeriveSessionIDFromMessages(t *testing.T) {
