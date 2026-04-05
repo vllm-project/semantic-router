@@ -22,6 +22,9 @@ func TestMemoryMetricsInitialization(t *testing.T) {
 		{"MemoryExtractionFactsCount", MemoryExtractionFactsCount},
 		{"MemoryStoreOperations", MemoryStoreOperations},
 		{"MemoryStoreSize", MemoryStoreSize},
+		{"MemoryCacheHits", MemoryCacheHits},
+		{"MemoryCacheMisses", MemoryCacheMisses},
+		{"MemoryCacheLatencySeconds", MemoryCacheLatencySeconds},
 	}
 
 	for _, tt := range tests {
@@ -410,6 +413,28 @@ func TestUpdateMemoryStoreSizeSetsGauge(t *testing.T) {
 	}
 }
 
+// TestRecordMemoryCacheHit_IncrementsCounter verifies that RecordMemoryCacheHit increments the hit counter and observes latency.
+func TestRecordMemoryCacheHit_IncrementsCounter(t *testing.T) {
+	backend := "milvus"
+	before := testutil.ToFloat64(MemoryCacheHits.WithLabelValues(backend))
+	RecordMemoryCacheHit(backend, 0.01)
+	after := testutil.ToFloat64(MemoryCacheHits.WithLabelValues(backend))
+	if after != before+1 {
+		t.Errorf("expected cache hits to increment by 1, got before=%.0f after=%.0f", before, after)
+	}
+}
+
+// TestRecordMemoryCacheMiss_IncrementsCounter verifies that RecordMemoryCacheMiss increments the miss counter.
+func TestRecordMemoryCacheMiss_IncrementsCounter(t *testing.T) {
+	backend := "milvus"
+	before := testutil.ToFloat64(MemoryCacheMisses.WithLabelValues(backend))
+	RecordMemoryCacheMiss(backend)
+	after := testutil.ToFloat64(MemoryCacheMisses.WithLabelValues(backend))
+	if after != before+1 {
+		t.Errorf("expected cache misses to increment by 1, got before=%.0f after=%.0f", before, after)
+	}
+}
+
 // TestMetricsExported verifies that all memory metrics are registered and exported
 func TestMetricsExported(t *testing.T) {
 	expectedNames := []string{
@@ -421,6 +446,9 @@ func TestMetricsExported(t *testing.T) {
 		"llm_memory_extraction_facts_count",
 		"llm_memory_store_operations_total",
 		"llm_memory_store_size",
+		"llm_memory_cache_hits_total",
+		"llm_memory_cache_misses_total",
+		"llm_memory_cache_latency_seconds",
 	}
 
 	mfs, err := prometheus.DefaultGatherer.Gather()

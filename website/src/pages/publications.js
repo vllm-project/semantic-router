@@ -1,7 +1,8 @@
 import React, { useState } from 'react'
 import Layout from '@theme/Layout'
 import Translate, { translate } from '@docusaurus/Translate'
-import { researchPapers, researchTalks, sortResearchEntries } from '@site/src/data/researchContent'
+import useDocusaurusContext from '@docusaurus/useDocusaurusContext'
+import { localizeResearchEntries, researchPapers, researchTalks, sortResearchEntries } from '@site/src/data/researchContent'
 import styles from './publications.module.css'
 
 // 翻译 link label
@@ -25,6 +26,13 @@ function AwardCard({ item, index }) {
   const isPaper = item.type === 'paper'
   const isFeatured = item.featured
   const isSpotlight = item.spotlight === true
+  const awardTypeLabel = item.categoryLabel || (isPaper
+    ? translate({ id: 'publications.awardType.paper', message: 'Research publication' })
+    : translate({ id: 'publications.awardType.talk', message: 'Conference presentation' }))
+  const peopleLabel = isPaper
+    ? translate({ id: 'publications.detail.authors', message: 'Authors:' })
+    : translate({ id: 'publications.detail.speakers', message: 'Speakers:' })
+  const venueLabel = translate({ id: 'publications.detail.venue', message: 'Venue:' })
 
   return (
     <div
@@ -41,7 +49,7 @@ function AwardCard({ item, index }) {
             </div>
           </div>
           <div className={styles.awardType}>
-            {item.categoryLabel || (isPaper ? 'RESEARCH PUBLICATION' : 'CONFERENCE PRESENTATION')}
+            {awardTypeLabel}
           </div>
         </div>
 
@@ -56,9 +64,7 @@ function AwardCard({ item, index }) {
 
           <div className={styles.awardDetails}>
             <div className={styles.awardAuthors}>
-              <span className={styles.authorLabel}>
-                {isPaper ? 'Authors:' : 'Speakers:'}
-              </span>
+              <span className={styles.authorLabel}>{peopleLabel}</span>
               <span className={styles.authorNames}>
                 {isPaper ? item.authors : item.speakers}
               </span>
@@ -66,7 +72,7 @@ function AwardCard({ item, index }) {
 
             {item.venue && (
               <div className={styles.awardVenue}>
-                <span className={styles.venueLabel}>Venue:</span>
+                <span className={styles.venueLabel}>{venueLabel}</span>
                 <span className={styles.venueName}>{item.venue}</span>
               </div>
             )}
@@ -114,10 +120,17 @@ function AwardCard({ item, index }) {
 }
 
 export default function Publications() {
+  const { i18n } = useDocusaurusContext()
   const [activeFilter, setActiveFilter] = useState('all')
 
-  const sortedPapers = sortResearchEntries(researchPapers)
-  const sortedTalks = sortResearchEntries(researchTalks)
+  const sortedPapers = localizeResearchEntries(
+    sortResearchEntries(researchPapers),
+    i18n.currentLocale,
+  )
+  const sortedTalks = localizeResearchEntries(
+    sortResearchEntries(researchTalks),
+    i18n.currentLocale,
+  )
 
   const allItems = [...sortedPapers, ...sortedTalks]
   const filteredItems = activeFilter === 'all'
@@ -127,11 +140,19 @@ export default function Publications() {
   const paperCount = researchPapers.length
   const talkCount = researchTalks.length
   const totalCount = paperCount + talkCount
+  const emptyMessage = activeFilter === 'all'
+    ? translate({ id: 'publications.empty.all', message: 'No items found.' })
+    : activeFilter === 'paper'
+      ? translate({ id: 'publications.empty.paper', message: 'No papers found.' })
+      : translate({ id: 'publications.empty.talk', message: 'No talks found.' })
 
   return (
     <Layout
-      title="Papers & Talks"
-      description="Latest research publications, talks, and scientific contributions from the vLLM Semantic Router project"
+      title={translate({ id: 'publications.title', message: 'Papers & Talks' })}
+      description={translate({
+        id: 'publications.meta.description',
+        message: 'Latest research publications, talks, and scientific contributions from the vLLM Semantic Router project.',
+      })}
     >
       <div className={`${styles.container} publications-page`}>
         <header className={styles.header}>
@@ -230,12 +251,7 @@ export default function Publications() {
 
           {filteredItems.length === 0 && (
             <div className={styles.emptyState}>
-              <p>
-                No
-                {activeFilter === 'all' ? 'items' : activeFilter + 's'}
-                {' '}
-                found.
-              </p>
+              <p>{emptyMessage}</p>
             </div>
           )}
         </main>

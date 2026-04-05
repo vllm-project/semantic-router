@@ -12,6 +12,7 @@ interface TestQueryResponse {
     type: string
     name: string
     confidence: number
+    value?: number
     reason?: string
   }>
   matchedDecision: string | null
@@ -21,7 +22,7 @@ interface TestQueryResponse {
   evaluatedRules?: Array<{
     decisionName: string
     ruleOperator: string
-    conditions: string[]
+    conditions?: string[] | null
     matchedCount: number
     totalCount: number
     isMatch: boolean
@@ -113,6 +114,8 @@ function convertSignals(signals: TestQueryResponse['matchedSignals']): MatchedSi
     type: s.type as SignalType,
     name: s.name,
     matched: true, // Backend only returns matched signals
+    value: s.value,
+    confidence: s.confidence,
     score: s.confidence,
     reason: s.reason,
     needsBackend: false,
@@ -125,15 +128,18 @@ function convertSignals(signals: TestQueryResponse['matchedSignals']): MatchedSi
 function convertEvaluatedRules(rules?: TestQueryResponse['evaluatedRules']): EvaluatedRule[] | undefined {
   if (!rules) return undefined
 
-  return rules.map(r => ({
-    decisionName: r.decisionName,
-    condition: `${r.ruleOperator}(${r.conditions.join(', ')})`,
-    result: r.isMatch,
-    priority: r.priority,
-    matchedConditions: r.matchedCount,
-    totalConditions: r.totalCount,
-    matchedModels: r.matchedModels,
-  }))
+  return rules.map(r => {
+    const conditions = r.conditions ?? []
+    return {
+      decisionName: r.decisionName,
+      condition: `${r.ruleOperator}(${conditions.join(', ')})`,
+      result: r.isMatch,
+      priority: r.priority,
+      matchedConditions: r.matchedCount,
+      totalConditions: r.totalCount,
+      matchedModels: r.matchedModels,
+    }
+  })
 }
 
 /**

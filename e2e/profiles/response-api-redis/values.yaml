@@ -78,6 +78,7 @@ config:
         embedding_model: mmbert
     integrations: {}
     model_catalog:
+      kbs: []
       modules:
         prompt_guard:
           enabled: false
@@ -103,3 +104,7 @@ resources:
   requests:
     cpu: 500m
     memory: 1Gi
+
+# E2E/Kind: disable PVC for reliable CI (same as other e2e profiles).
+persistence:
+  enabled: false

@@ -37,11 +37,6 @@ routing:
       modelRefs:
         - model: openai/gpt-oss-20b
           use_reasoning: false
-      plugins:
-        - type: pii
-          configuration:
-            enabled: true
-            pii_types_allowed: []
   signals:
     domains:
       - name: other

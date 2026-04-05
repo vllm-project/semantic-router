@@ -31,6 +31,7 @@ func registerProxyRoutes(mux *http.ServeMux, cfg *config.Config) {
 	registerSmartAPIRouter(mux, proxies)
 	registerMetricsRoutes(mux, cfg)
 	registerPrometheusRoutes(mux, cfg)
+	registerWizMapRoutes(mux, cfg)
 }
 
 func configureEnvoyProxy(cfg *config.Config) *httputil.ReverseProxy {
@@ -42,6 +43,7 @@ func configureEnvoyProxy(cfg *config.Config) *httputil.ReverseProxy {
 	if err != nil {
 		log.Fatalf("envoy proxy error: %v", err)
 	}
+	attachRouterReplayResponseRedaction(envoyProxy)
 	log.Printf("Envoy proxy configured: %s → /api/router/v1/chat/completions", cfg.EnvoyURL)
 	return envoyProxy
 }
@@ -94,6 +96,8 @@ func routeRouterTrafficToEnvoy(
 	}
 	if strings.HasPrefix(r.URL.Path, "/api/router/v1/router_replay") {
 		r.URL.Path = strings.TrimPrefix(r.URL.Path, "/api/router")
+		// Let the proxy transport negotiate decompression so replay JSON can be redacted safely.
+		r.Header.Del("Accept-Encoding")
 		log.Printf("Proxying router_replay to Envoy: %s %s", r.Method, r.URL.Path)
 		if middleware.HandleCORSPreflight(w, r) {
 			return true

@@ -52,7 +52,9 @@ func NewClient(cfg *config.LooperConfig) *Client {
 	}
 	if len(cfg.ModelEndpoints) > 0 {
 		c.endpointOverrides = cfg.ModelEndpoints
-		logging.Infof("[Looper] Loaded %d per-model endpoint overrides from config", len(cfg.ModelEndpoints))
+		logging.ComponentEvent("looper", "endpoint_overrides_loaded", map[string]interface{}{
+			"count": len(cfg.ModelEndpoints),
+		})
 	}
 	return c
 }
@@ -177,8 +179,14 @@ func (c *Client) CallModel(ctx context.Context, req *openai.ChatCompletionNewPar
 
 	logprobsEnabled := logprobsCfg != nil && logprobsCfg.Enabled
 	endpoint := c.resolveEndpoint(modelName)
-	logging.Infof("[Looper] Calling model %s at %s (streaming=%v, iteration=%d, logprobs=%v)",
-		modelName, endpoint, streaming, iteration, logprobsEnabled)
+	logging.ComponentDebugEvent("looper", "model_call_started", map[string]interface{}{
+		"decision":  c.decisionName,
+		"model_ref": modelName,
+		"endpoint":  endpoint,
+		"streaming": streaming,
+		"iteration": iteration,
+		"logprobs":  logprobsEnabled,
+	})
 
 	// Create HTTP request
 	httpReq, err := http.NewRequestWithContext(ctx, "POST", endpoint, bytes.NewReader(body))
@@ -263,8 +271,15 @@ func (c *Client) parseNonStreamingResponse(body []byte, modelName string) (*Mode
 	// Extract reasoning content from vLLM extra fields
 	result.ReasoningContent = extractReasoningFromRaw(body)
 
-	logging.Infof("[Looper] Model %s responded: content_len=%d, reasoning_len=%d, avg_logprob=%.4f, avg_margin=%.4f",
-		modelName, len(result.Content), len(result.ReasoningContent), result.AverageLogprob, result.AverageMargin)
+	logging.ComponentDebugEvent("looper", "model_call_completed", map[string]interface{}{
+		"decision":      c.decisionName,
+		"model_ref":     modelName,
+		"content_len":   len(result.Content),
+		"reasoning_len": len(result.ReasoningContent),
+		"avg_logprob":   result.AverageLogprob,
+		"avg_margin":    result.AverageMargin,
+		"streaming":     false,
+	})
 
 	return result, nil
 }
@@ -282,7 +297,12 @@ func (c *Client) parseStreamingResponse(body []byte, modelName string) (*ModelRe
 	result.Content = content
 	result.StreamingChunks = chunks
 
-	logging.Infof("[Looper] Model %s streaming response with content length=%d", modelName, len(content))
+	logging.ComponentDebugEvent("looper", "model_call_completed", map[string]interface{}{
+		"decision":    c.decisionName,
+		"model_ref":   modelName,
+		"content_len": len(content),
+		"streaming":   true,
+	})
 
 	return result, nil
 }

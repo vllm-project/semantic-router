@@ -3,6 +3,9 @@
 ## `cpu-local`
 
 - Build with `make vllm-sr-dev`
+- Local runtime defaults to the split router/envoy/dashboard topology
+- Split local runtime uses the local `vllm-sr` router image directly by default
+- Only if that local router image is already up to date, you can reuse it with `make vllm-sr-dev SKIP_ROUTER_IMAGE=1`
 - Start with `vllm-sr serve --image-pull-policy never`
 - Use this for the default local Docker workflow
 - Default smoke config: [config.agent-smoke.cpu.yaml](../../e2e/config/config.agent-smoke.cpu.yaml)
@@ -15,6 +18,9 @@
 ## `amd-local`
 
 - Build with `make vllm-sr-dev VLLM_SR_PLATFORM=amd`
+- Local runtime defaults to the split router/envoy/dashboard topology
+- Split local runtime uses the local `vllm-sr-rocm` router image directly by default
+- Only if that local router image is already up to date, you can reuse it with `make vllm-sr-dev VLLM_SR_PLATFORM=amd SKIP_ROUTER_IMAGE=1`
 - Start with `vllm-sr serve --image-pull-policy never --platform amd`
 - Use this for ROCm/AMD validation and platform-default image checks
 - Default smoke config: [config.agent-smoke.amd.yaml](../../e2e/config/config.agent-smoke.amd.yaml)

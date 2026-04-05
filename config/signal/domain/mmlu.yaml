@@ -1,12 +1,39 @@
 routing:
   signals:
     domains:
+      - name: biology
+        description: Biology and life-science related queries.
+        mmlu_categories: [biology]
       - name: business
         description: Business and management related queries.
         mmlu_categories: [business]
+      - name: chemistry
+        description: Chemistry and molecular science questions.
+        mmlu_categories: [chemistry]
+      - name: computer science
+        description: Computer science and software engineering prompts.
+        mmlu_categories: ["computer science"]
+      - name: economics
+        description: Economics, finance, and market-analysis questions.
+        mmlu_categories: [economics]
+      - name: engineering
+        description: Engineering design and systems-related requests.
+        mmlu_categories: [engineering]
+      - name: history
+        description: History, civics, and historical analysis topics.
+        mmlu_categories: [history]
       - name: law
         description: Legal questions and law-related topics.
         mmlu_categories: [law]
+      - name: math
+        description: Mathematics, proofs, and quantitative reasoning tasks.
+        mmlu_categories: [math]
+      - name: philosophy
+        description: Philosophy, logic, and ethics discussions.
+        mmlu_categories: [philosophy]
+      - name: physics
+        description: Physics and physical-science reasoning prompts.
+        mmlu_categories: [physics]
       - name: psychology
         description: Psychology and mental health topics.
         mmlu_categories: [psychology]

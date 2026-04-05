@@ -189,6 +189,8 @@ func StartSignalSpan(ctx context.Context, signalType string) (context.Context, t
 		spanName = SpanSignalFactCheck
 	case "user_feedback":
 		spanName = SpanSignalUserFeedback
+	case "reask":
+		spanName = SpanSignalReask
 	case "preference":
 		spanName = SpanSignalPreference
 	case "language":
@@ -362,6 +364,7 @@ const (
 	SpanSignalDomain       = "semantic_router.signal.domain"
 	SpanSignalFactCheck    = "semantic_router.signal.fact_check"
 	SpanSignalUserFeedback = "semantic_router.signal.user_feedback"
+	SpanSignalReask        = "semantic_router.signal.reask"
 	SpanSignalPreference   = "semantic_router.signal.preference"
 	SpanSignalLanguage     = "semantic_router.signal.language"
 	SpanSignalLatency      = "semantic_router.signal.latency"

@@ -27,20 +27,14 @@ func buildCredentialResolver(cfg *config.RouterConfig) *authz.CredentialResolver
 
 	if len(authzCfg.Providers) == 0 {
 		resolver := buildDefaultCredentialResolver(cfg, true)
-		logging.Infof("Authz: using default chain [header-injection(defaults) → static-config], fail_open=true (no explicit providers configured)")
-		logAuthzIdentity(cfg)
 		return resolver
 	}
 
 	validationErrors := validateAuthzProviders(authzCfg.Providers)
 	if len(validationErrors) > 0 {
 		logValidationErrors("Authz", validationErrors)
-		logging.Errorf(
-			"Authz config has %d validation error(s) — falling back to default chain to prevent startup failure. FIX YOUR CONFIG.",
-			len(validationErrors),
-		)
+		logging.Errorf("Authz config has %d validation error(s) — using default chain. FIX YOUR CONFIG.", len(validationErrors))
 		resolver := buildDefaultCredentialResolver(cfg, false)
-		logAuthzIdentity(cfg)
 		return resolver
 	}
 
@@ -48,7 +42,12 @@ func buildCredentialResolver(cfg *config.RouterConfig) *authz.CredentialResolver
 	resolver := authz.NewCredentialResolver(providers...)
 	resolver.SetFailOpen(authzCfg.FailOpen)
 
-	logCredentialResolverStatus(cfg, resolver, authzCfg.FailOpen)
+	if authzCfg.FailOpen {
+		logging.Warnf("Authz: fail_open=true — requests without credentials will pass")
+	}
+	logging.Infof("Authz: chain=%v, fail_open=%v, user_id_header=%q, user_groups_header=%q",
+		resolver.ProviderNames(), authzCfg.FailOpen,
+		cfg.Authz.Identity.GetUserIDHeader(), cfg.Authz.Identity.GetUserGroupsHeader())
 	return resolver
 }
 
@@ -113,38 +112,12 @@ func buildAuthzProvider(cfg *config.RouterConfig, provider config.AuthzProviderC
 	switch provider.Type {
 	case "header-injection":
 		headerProvider := authz.NewHeaderInjectionProvider(provider.Headers)
-		if len(provider.Headers) == 0 {
-			logging.Infof("Authz: header-injection provider using default headers: %v", authz.DefaultHeaderMap())
-		} else {
-			logging.Infof("Authz: header-injection provider using custom headers: %v", provider.Headers)
-		}
 		return []authz.Provider{headerProvider}
 	case "static-config":
-		logging.Infof("Authz: static-config provider (reads model_config.*.access_key)")
 		return []authz.Provider{authz.NewStaticConfigProvider(cfg)}
 	default:
 		return nil
 	}
-}
-
-func logCredentialResolverStatus(
-	cfg *config.RouterConfig,
-	resolver *authz.CredentialResolver,
-	failOpen bool,
-) {
-	if failOpen {
-		logging.Warnf("Authz fail_open=true — requests without valid credentials will be allowed through. Ensure this is intentional.")
-	}
-	logging.Infof("Authz: chain=%v, fail_open=%v", resolver.ProviderNames(), failOpen)
-	logAuthzIdentity(cfg)
-}
-
-func logAuthzIdentity(cfg *config.RouterConfig) {
-	logging.Infof(
-		"Authz identity: user_id_header=%q, user_groups_header=%q",
-		cfg.Authz.Identity.GetUserIDHeader(),
-		cfg.Authz.Identity.GetUserGroupsHeader(),
-	)
 }
 
 func logValidationErrors(prefix string, validationErrors []string) {
@@ -158,7 +131,9 @@ func buildRateLimitResolver(cfg *config.RouterConfig) *ratelimit.RateLimitResolv
 	rlCfg := cfg.RateLimit
 
 	if len(rlCfg.Providers) == 0 {
-		logging.Infof("RateLimit: no providers configured, rate limiting disabled")
+		logging.ComponentEvent("extproc", "rate_limit_resolver_disabled", map[string]interface{}{
+			"reason": "no_providers_configured",
+		})
 		return nil
 	}
 

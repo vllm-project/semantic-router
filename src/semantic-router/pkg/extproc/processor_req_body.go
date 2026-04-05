@@ -51,7 +51,10 @@ func (r *OpenAIRouter) handleRequestBody(v *ext_proc.ProcessingRequest_RequestBo
 		ctx.RequestModel = originalModel
 	}
 	if r.isLooperRequest(ctx) {
-		logging.Infof("[Looper] Internal request detected, executing decision plugins for model: %s", originalModel)
+		logging.ComponentDebugEvent("extproc", "looper_internal_request_detected", map[string]interface{}{
+			"request_id": ctx.RequestID,
+			"model":      originalModel,
+		})
 		return r.handleLooperInternalRequestWithPlugins(originalModel, ctx)
 	}
 
@@ -112,10 +115,13 @@ func (r *OpenAIRouter) handleModelRouting(openAIRequest *openai.ChatCompletionNe
 	// OpenAI-compatible routing
 	switch {
 	case !isAutoModel:
-		return r.handleSpecifiedModelRouting(openAIRequest, originalModel, ctx)
+		return r.handleSpecifiedModelRouting(openAIRequest, originalModel, decisionName, ctx)
 	case r.shouldUseLooper(ctx.VSRSelectedDecision):
-		logging.Infof("Using Looper for decision %s with algorithm %s",
-			ctx.VSRSelectedDecision.Name, ctx.VSRSelectedDecision.Algorithm.Type)
+		logging.ComponentDebugEvent("extproc", "looper_execution_selected", map[string]interface{}{
+			"request_id": ctx.RequestID,
+			"decision":   ctx.VSRSelectedDecision.Name,
+			"algorithm":  ctx.VSRSelectedDecision.Algorithm.Type,
+		})
 		return r.handleLooperExecution(ctx.TraceContext, openAIRequest, ctx.VSRSelectedDecision, ctx)
 	case selectedModel != "":
 		return r.handleAutoModelRouting(openAIRequest, originalModel, decisionName, reasoningDecision, selectedModel, ctx, response)
@@ -128,8 +134,12 @@ func (r *OpenAIRouter) handleModelRouting(openAIRequest *openai.ChatCompletionNe
 
 // handleAutoModelRouting handles routing for auto model selection
 func (r *OpenAIRouter) handleAutoModelRouting(openAIRequest *openai.ChatCompletionNewParams, originalModel string, decisionName string, reasoningDecision entropy.ReasoningDecision, selectedModel string, ctx *RequestContext, response *ext_proc.ProcessingResponse) (*ext_proc.ProcessingResponse, error) {
-	logging.Infof("Using Auto Model Selection (model=%s), decision=%s, selected=%s",
-		originalModel, decisionName, selectedModel)
+	logging.ComponentDebugEvent("extproc", "auto_model_routing_selected", map[string]interface{}{
+		"request_id":     ctx.RequestID,
+		"original_model": originalModel,
+		"decision":       decisionName,
+		"selected_model": selectedModel,
+	})
 
 	matchedModel := selectedModel
 
@@ -192,10 +202,14 @@ func (r *OpenAIRouter) handleAutoModelRouting(openAIRequest *openai.ChatCompleti
 }
 
 // handleSpecifiedModelRouting handles routing for explicitly specified models
-func (r *OpenAIRouter) handleSpecifiedModelRouting(openAIRequest *openai.ChatCompletionNewParams, originalModel string, ctx *RequestContext) (*ext_proc.ProcessingResponse, error) {
-	logging.Infof("Using specified model: %s", originalModel)
+func (r *OpenAIRouter) handleSpecifiedModelRouting(openAIRequest *openai.ChatCompletionNewParams, originalModel string, decisionName string, ctx *RequestContext) (*ext_proc.ProcessingResponse, error) {
+	logging.ComponentDebugEvent("extproc", "specified_model_routing_selected", map[string]interface{}{
+		"request_id": ctx.RequestID,
+		"model":      originalModel,
+	})
 
 	// Track VSR decision information for non-auto models
+	ctx.VSRSelectedDecisionName = decisionName
 	ctx.VSRSelectedModel = originalModel
 	ctx.VSRReasoningMode = "off" // Non-auto models don't use reasoning mode by default
 	// Security checks (jailbreak/PII) are handled at the signal level via fast_response plugin
@@ -219,10 +233,13 @@ func (r *OpenAIRouter) handleSpecifiedModelRouting(openAIRequest *openai.ChatCom
 	}
 
 	// Log routing decision
-	r.logRoutingDecision(ctx, "model_specified", originalModel, originalModel, "", false)
+	r.logRoutingDecision(ctx, "model_specified", originalModel, originalModel, decisionName, false)
 
 	// Save the actual model for token tracking
 	ctx.RequestModel = originalModel
+
+	// Capture router replay information if enabled even when the client pins a model.
+	r.startRouterReplay(ctx, originalModel, originalModel, decisionName)
 
 	// Handle tool selection
 	r.handleToolSelectionForRequest(openAIRequest, response, ctx)

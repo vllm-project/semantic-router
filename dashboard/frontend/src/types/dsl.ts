@@ -62,6 +62,53 @@ export interface ASTSignalDecl {
   pos: ASTPosition
 }
 
+export interface ASTProjectionPartitionDecl {
+  name: string
+  semantics?: string
+  temperature?: number
+  members: string[]
+  default?: string
+  pos: ASTPosition
+}
+
+export interface ASTProjectionScoreInput {
+  signalType: string
+  signalName: string
+  weight: number
+  valueSource?: string
+  match?: number
+  miss?: number
+}
+
+export interface ASTProjectionScoreDecl {
+  name: string
+  method?: string
+  inputs?: ASTProjectionScoreInput[]
+  pos: ASTPosition
+}
+
+export interface ASTProjectionMappingCalibration {
+  method?: string
+  slope?: number
+}
+
+export interface ASTProjectionMappingOutput {
+  name: string
+  lt?: number
+  lte?: number
+  gt?: number
+  gte?: number
+}
+
+export interface ASTProjectionMappingDecl {
+  name: string
+  source?: string
+  method?: string
+  calibration?: ASTProjectionMappingCalibration
+  outputs?: ASTProjectionMappingOutput[]
+  pos: ASTPosition
+}
+
 export interface ASTModelRef {
   model: string
   reasoning?: boolean
@@ -89,6 +136,7 @@ export interface ASTRouteDecl {
   name: string
   description?: string
   priority: number
+  tier?: number
   when: BoolExprNode | null
   models: ASTModelRef[]
   algorithm?: ASTAlgoSpec
@@ -109,11 +157,27 @@ export interface ASTPluginDecl {
   pos: ASTPosition
 }
 
+export interface ASTTestEntryDecl {
+  query: string
+  routeName: string
+  pos: ASTPosition
+}
+
+export interface ASTTestBlockDecl {
+  name: string
+  entries: ASTTestEntryDecl[]
+  pos: ASTPosition
+}
+
 export interface ASTProgram {
   signals: ASTSignalDecl[]
+  projectionPartitions?: ASTProjectionPartitionDecl[]
+  projectionScores?: ASTProjectionScoreDecl[]
+  projectionMappings?: ASTProjectionMappingDecl[]
   routes: ASTRouteDecl[]
   models?: ASTModelDecl[]
   plugins: ASTPluginDecl[]
+  testBlocks?: ASTTestBlockDecl[]
 }
 
 // ---------- WASM Result Types ----------
@@ -171,6 +235,90 @@ export interface ConfigVersion {
   timestamp: string
   source: string
   filename: string
+}
+
+// ---------- Natural Language Builder ----------
+
+export type BuilderNLConnectionMode = 'default' | 'custom'
+export type BuilderNLProviderKind = 'vllm' | 'openai-compatible' | 'anthropic'
+
+export interface BuilderNLConnection {
+  providerKind: BuilderNLProviderKind
+  modelName: string
+  baseUrl: string
+  accessKey?: string
+  endpointName?: string
+}
+
+export interface BuilderNLGenerateRequest {
+  prompt: string
+  currentDsl?: string
+  connectionMode: BuilderNLConnectionMode
+  customConnection?: BuilderNLConnection
+  temperature?: number
+  maxRetries?: number
+  timeoutSeconds?: number
+}
+
+export interface BuilderNLVerifyRequest {
+  connectionMode: BuilderNLConnectionMode
+  customConnection?: BuilderNLConnection
+  timeoutSeconds?: number
+}
+
+export interface BuilderNLReview {
+  ready: boolean
+  summary: string
+  warnings: string[]
+  checks: string[]
+}
+
+export type BuilderNLProgressLevel = 'info' | 'success' | 'warning' | 'error'
+
+export interface BuilderNLProgressEvent {
+  phase: string
+  level: BuilderNLProgressLevel
+  message: string
+  attempt?: number
+  kind?: 'stage' | 'heartbeat'
+  elapsedSeconds?: number
+  timestamp: number
+}
+
+export interface BuilderNLValidation {
+  ready: boolean
+  diagnostics: Diagnostic[]
+  errorCount: number
+  compileError?: string
+}
+
+export interface BuilderNLStagedDraft {
+  prompt: string
+  dsl: string
+  baseYaml: string
+  summary: string
+  suggestedTestQuery?: string
+  review: BuilderNLReview
+  validation: BuilderNLValidation
+}
+
+export interface BuilderNLVerifyResponse {
+  ready: boolean
+  summary: string
+  connectionMode: BuilderNLConnectionMode
+  providerKind?: BuilderNLProviderKind
+  modelName?: string
+  targetModelName?: string
+  endpoint?: string
+}
+
+export interface BuilderNLGenerateResponse {
+  dsl: string
+  baseYaml: string
+  summary: string
+  suggestedTestQuery?: string
+  review: BuilderNLReview
+  validation: BuilderNLValidation
 }
 
 // ---------- Editor State ----------

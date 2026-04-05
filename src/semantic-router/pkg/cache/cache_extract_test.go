@@ -5,6 +5,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/openai/openai-go"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -163,42 +164,52 @@ func TestExtractQuery_MissingMessages_EmptyQuery(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// extractTextContent — multimodal content parsing
+// extractUserContent — SDK-based multimodal content parsing
 // ---------------------------------------------------------------------------
 
-func TestExtractTextContent_PlainString(t *testing.T) {
-	text := extractTextContent([]byte(`"Hello world"`))
-	assert.Equal(t, "Hello world", text)
+func TestExtractUserContent_PlainString(t *testing.T) {
+	content := openai.ChatCompletionUserMessageParamContentUnion{
+		OfString: openai.String("Hello world"),
+	}
+	assert.Equal(t, "Hello world", extractUserContent(content))
 }
 
-func TestExtractTextContent_ContentArray_TextParts(t *testing.T) {
-	raw := []byte(`[{"type":"text","text":"Part A"},{"type":"text","text":"Part B"}]`)
-	text := extractTextContent(raw)
-	assert.Equal(t, "Part APart B", text)
+func TestExtractUserContent_ContentArray_TextParts(t *testing.T) {
+	content := openai.ChatCompletionUserMessageParamContentUnion{
+		OfArrayOfContentParts: []openai.ChatCompletionContentPartUnionParam{
+			{OfText: &openai.ChatCompletionContentPartTextParam{Text: "Part A"}},
+			{OfText: &openai.ChatCompletionContentPartTextParam{Text: "Part B"}},
+		},
+	}
+	assert.Equal(t, "Part APart B", extractUserContent(content))
 }
 
-func TestExtractTextContent_ContentArray_MixedParts(t *testing.T) {
-	raw := []byte(`[{"type":"text","text":"Describe: "},{"type":"image_url","image_url":{"url":"https://example.com/img.png"}}]`)
-	text := extractTextContent(raw)
-	assert.Equal(t, "Describe: ", text, "only text parts extracted, image_url ignored")
+func TestExtractUserContent_ContentArray_MixedParts(t *testing.T) {
+	content := openai.ChatCompletionUserMessageParamContentUnion{
+		OfArrayOfContentParts: []openai.ChatCompletionContentPartUnionParam{
+			{OfText: &openai.ChatCompletionContentPartTextParam{Text: "Describe: "}},
+			{OfImageURL: &openai.ChatCompletionContentPartImageParam{
+				ImageURL: openai.ChatCompletionContentPartImageImageURLParam{URL: "https://example.com/img.png"},
+			}},
+		},
+	}
+	assert.Equal(t, "Describe: ", extractUserContent(content), "only text parts extracted, image_url ignored")
 }
 
-func TestExtractTextContent_ContentArray_OnlyImage(t *testing.T) {
-	raw := []byte(`[{"type":"image_url","image_url":{"url":"data:image/png;base64,AAAA"}}]`)
-	text := extractTextContent(raw)
-	assert.Empty(t, text)
+func TestExtractUserContent_ContentArray_OnlyImage(t *testing.T) {
+	content := openai.ChatCompletionUserMessageParamContentUnion{
+		OfArrayOfContentParts: []openai.ChatCompletionContentPartUnionParam{
+			{OfImageURL: &openai.ChatCompletionContentPartImageParam{
+				ImageURL: openai.ChatCompletionContentPartImageImageURLParam{URL: "data:image/png;base64,AAAA"},
+			}},
+		},
+	}
+	assert.Empty(t, extractUserContent(content))
 }
 
-func TestExtractTextContent_EmptyInput(t *testing.T) {
-	text := extractTextContent(nil)
-	assert.Empty(t, text)
-	text = extractTextContent([]byte{})
-	assert.Empty(t, text)
-}
-
-func TestExtractTextContent_InvalidJSON(t *testing.T) {
-	text := extractTextContent([]byte(`not-json`))
-	assert.Empty(t, text)
+func TestExtractUserContent_EmptyContent(t *testing.T) {
+	content := openai.ChatCompletionUserMessageParamContentUnion{}
+	assert.Empty(t, extractUserContent(content))
 }
 
 // ---------------------------------------------------------------------------

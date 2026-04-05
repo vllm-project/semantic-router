@@ -98,6 +98,9 @@ global:
   services:
     api:
       batch_classification:
+        max_batch_size: 100
+        concurrency_threshold: 5
+        max_concurrency: 8
         metrics:
           sample_rate: 1
           duration_buckets:
@@ -223,6 +226,7 @@ global:
           pii_mapping_path: models/mmbert32k-pii-detector-merged/pii_type_mapping.json
           model_ref: pii_classifier
         preference: {}
+      complexity: {}
       hallucination_mitigation:
         fact_check:
           model_id: ""

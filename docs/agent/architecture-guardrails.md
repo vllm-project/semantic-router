@@ -18,6 +18,7 @@
 - Keep response normalization, streaming finalization, replay or cache persistence, and response-side warning shaping on separate seams
 - Keep dashboard backend handler transport, config persistence/deploy control, and runtime status collection on separate seams
 - Keep runtime config schema families, canonical import/export, semantic validation, and plugin-family contracts on separate seams
+- Keep cross-product control planes on contract-owned seams; CLI, dashboard backend, and operator code should not depend on deep router-runtime internals when a versioned contract or public service can own the boundary
 - Keep fleet-sim analytical sizing, DES verification, power or flexibility analysis, and export policy on separate seams
 - Keep operator CRD schema declaration, admission validation, controller-side canonical translation, and sample or generated contract upkeep on separate seams
 - Keep dashboard frontend route shell, page orchestration, and large interaction containers on separate seams
@@ -56,6 +57,20 @@
   - `plugin` performs post-decision or post-selection processing
   - `global` carries intentionally cross-cutting behavior
 
+## API Type Contracts
+
+- Use official SDK types for OpenAI and Anthropic request/response handling:
+  - `github.com/openai/openai-go` for OpenAI-shaped data
+  - `github.com/anthropics/anthropic-sdk-go` for Anthropic-shaped data
+- Do not define custom structs that duplicate what the SDK provides
+  (e.g., custom `ChatCompletionRequest`, `ChatCompletionResponse`)
+- Exceptions: packages that intentionally avoid the SDK dependency for
+  isolation (e.g., E2E fixtures, standalone training tools) should document
+  the reason in a comment and keep their custom types minimal
+- When the SDK type does not cover a field the router needs, extend via
+  composition (`type ExtendedReq struct { openai.ChatCompletionNewParams; Extra string }`)
+  rather than reimplementing the whole struct
+
 ## Avoid
 
 - giant managers
@@ -74,7 +89,8 @@ These files are existing debt, not acceptable targets for new growth:
 - `src/semantic-router/pkg/classification/classifier.go`
 - `src/semantic-router/pkg/extproc/processor_req_body.go`
 - `src/semantic-router/pkg/extproc/processor_res_body.go`
-- `src/vllm-sr/cli/docker_cli.py`
+- `src/vllm-sr/cli/core.py`
+- `src/vllm-sr/cli/commands/runtime.py`
 - `src/fleet-sim/fleet_sim/optimizer/base.py`
 - `deploy/operator/api/v1alpha1/semanticrouter_types.go`
 - `deploy/operator/controllers/canonical_config_builder.go`
@@ -98,7 +114,7 @@ When touching one of these files:
 - the structural gate applies a ratchet here: these files may still be over global limits, but they must not grow, and touched code should move toward the standard shape
 - for config hotspots, keep schema families, canonical conversion, plugin-family contracts, and semantic validation on separate seams
 - for classifier hotspots, keep model discovery, family-specific mapping or backend logic, and request-time orchestration on separate seams
-- for CLI orchestration hotspots, keep top-level command routing and user-facing flow in the main file but move docker/runtime helpers, container wiring, and support types into adjacent modules
+- for CLI orchestration hotspots, keep top-level command routing and user-facing flow in the main orchestration seams but move docker/runtime helpers, container wiring, and support types into adjacent modules; keep compatibility barrels such as `docker_cli.py` thin
 - for extproc response hotspots, keep provider normalization, streaming finalization, replay/cache helpers, and response warning mutations on separate seams
 - for fleet-sim optimizer hotspots, keep analytical kernels, DES verification, power/flex helpers, and package exports on separate seams
 - for operator hotspots, keep CRD schema, admission validation, controller-side canonical translation, and generated/sample upkeep on separate seams

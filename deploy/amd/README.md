@@ -1,6 +1,6 @@
 # vLLM Semantic Router on AMD ROCm
 
-This playbook documents the AMD reference profile for a single real ROCm vLLM backend that exposes multiple semantic served-model aliases. The router keeps replay and Insights signal-native: records show matched signals, selected decision, selected alias, and cost/savings, without inventing a separate runtime dimension schema.
+This playbook documents the AMD reference profile for a single real ROCm vLLM backend that exposes multiple semantic served-model aliases. The maintained `balance` profile is intentionally balance-first: it keeps a small number of real cost and risk lanes instead of treating every semantic niche as its own decision.
 
 ## Overview
 
@@ -13,21 +13,23 @@ This playbook documents the AMD reference profile for a single real ROCm vLLM ba
   - `openai/gpt5.4`
   - `anthropic/claude-opus-4.6`
 - Reference routing profile: [balance.yaml](../recipes/balance.yaml)
-  - Canonical layout: `version/listeners/providers/routing/global`
+  - canonical authoring surface: [balance.dsl](../recipes/balance.dsl)
+  - executable probe manifest: [balance.probes.yaml](../recipes/balance.probes.yaml)
   - `providers.defaults.default_model` points at the SIMPLE tier
   - `providers.models[].pricing` is example pricing for Insights cost comparison
-  - `routing.decisions` uses tier-prefixed dual-layer families
-  - `global.model_catalog.modules` only tightens learned-signal thresholds for conservative overlays
+  - `global.model_catalog.modules` can still tighten learned-signal thresholds without changing the routing-owned DSL surface
 
-The active AMD profile contains 20 routing decisions:
+The active AMD profile contains 13 routing decisions:
 
-- `simple_*`: lowest-cost FAQ and general fallback
-- `medium_*`: low-to-mid-cost domain/scenario refinement
-- `verified_*`: hard-to-hit factual overlays that still bias toward cheap models
-- `feedback_*`: explicit follow-up recovery lanes with narrow correction/clarification cues
-- `complex_*`: hard technical and STEM synthesis
-- `reasoning_*`: high-reasoning escalation
-- `premium_*`: one premium legal path only
+- `premium_*` (1): premium legal escalation only
+- `reasoning_*` (1): proofs, math, philosophy, and deep general reasoning
+- `complex_*` (1): multi-step execution, systems design, and specialist STEM
+- `feedback_*` (2): explicit correction and clarification recovery lanes
+- `verified_*` (2): evidence-sensitive health and explainer overlays
+- `medium_*` (3): low-cost coding, explainer, and creative lanes
+- `fast_*` (1): short factual lane for both plain and verified fast QA
+- `simple_*` (1): lowest-cost general fallback
+- `casual_*` (1): absolute terminal safety-net lane when no earlier decision matches
 
 ## Installation
 
@@ -93,7 +95,7 @@ Complete onboarding and import the reference profile from remote:
 
 > https://raw.githubusercontent.com/vllm-project/semantic-router/main/deploy/recipes/balance.yaml
 
-Onboarding remote import can apply the full YAML directly. If you import the same file into the DSL editor, the routing surfaces decompile from `routing.modelCards`, `routing.signals`, and `routing.decisions`, while `providers` stays YAML-native.
+Onboarding remote import can apply the full YAML directly. If you import the same file into the DSL editor, the routing surfaces decompile from `routing.modelCards`, `routing.signals`, `routing.projections`, and `routing.decisions`, while `providers` and `global` stay YAML-native.
 
 ## Architecture
 
@@ -108,15 +110,23 @@ vLLM Semantic Router (:8899)
   |   - embedding
   |   - fact_check
   |   - user_feedback
-  |   - preference
+  |   - reask
   |   - language
   |   - context
+  |   - structure
   |   - complexity
   |   - domain
   |
-  +-- dual-layer decision selection
-  |   - tier by decision family prefix
-  |   - domain/scene refinement inside the tier
+  +-- projection coordination
+  |   - domain partition winner
+  |   - intent partition winner
+  |   - difficulty band
+  |   - verification band
+  |   - urgency band
+  |
+  +-- tiered decision selection
+  |   - priority and tier choose one route
+  |   - route rules combine raw signals with projection outputs
   |
   +-- alias-forwarded OpenAI request
   |   - SIMPLE: qwen/qwen3.5-rocm
@@ -132,201 +142,106 @@ Single ROCm vLLM backend on vllm:8000
 Qwen/Qwen3.5-122B-A10B-FP8
 ```
 
-The runtime does not add a separate 15-dimension scorecard. Instead, the profile expresses those routing ideas through native vSR signals and then exposes the matched signals, chosen decision, and chosen alias in replay and Insights.
-
-The `fact_check` and `user_feedback` lanes are intentionally conservative:
-
-- they require both the learned signal and explicit lexical confirmation
-- they keep most traffic on `qwen/qwen3.5-rocm`
-- they do not add any extra route-local plugins beyond the profile's existing replay capture
+The runtime does not add a parallel “scorecard” schema. The profile expresses routing through native vSR signals and projections, then exposes the matched signals, chosen decision, and chosen alias in replay and Insights.
 
 ## Alias Catalog
 
 | Tier | Alias | Example pricing per 1M tokens | Role in the profile |
 |------|-------|-------------------------------|---------------------|
-| SIMPLE | `qwen/qwen3.5-rocm` | prompt `$0.00`, completion `$0.00` | Free self-hosted default alias for fast QA, broad fallback, and most low-cost traffic |
-| MEDIUM | `google/gemini-2.5-flash-lite` | prompt `$0.01`, completion `$0.04` | Low-cost expressive route for creative and softer medium tasks |
-| COMPLEX | `google/gemini-3.1-pro` | prompt `$0.48`, completion `$1.92` | Hard STEM and architecture design |
-| REASONING | `openai/gpt5.4` | prompt `$1.20`, completion `$4.80` | Multi-step reasoning, proofs, and philosophy |
+| SIMPLE | `qwen/qwen3.5-rocm` | prompt `$0.00`, completion `$0.00` | Free self-hosted default alias for fast QA, broad fallback, creative drafting, and most low-cost traffic |
+| MEDIUM | `google/gemini-2.5-flash-lite` | prompt `$0.01`, completion `$0.04` | Low-cost verified explanation and correction lane |
+| COMPLEX | `google/gemini-3.1-pro` | prompt `$0.48`, completion `$1.92` | Hard technical, deep reasoning, specialist STEM, and health lane |
+| REASONING | `openai/gpt5.4` | prompt `$1.20`, completion `$4.80` | Narrow formal-math proof lane |
 | PREMIUM | `anthropic/claude-opus-4.6` | prompt `$1.80`, completion `$7.20` | Reserved for legal and high-risk analysis |
 
 Pricing is intentionally exaggerated for Insights demos so savings are easy to see. These values are not intended to mirror real vendor billing.
 
 ## Active Routing Decisions
 
-| Priority | Decision | Tier | Key signals | Target alias |
-|---------:|----------|------|-------------|--------------|
-| 260 | `premium_legal` | PREMIUM | `domain:law` + `embedding:premium_legal_analysis` or `complexity:legal_risk:medium/hard` | `anthropic/claude-opus-4.6` |
-| 250 | `reasoning_math` | REASONING | `domain:math` + hard math / proof markers | `openai/gpt5.4` |
-| 245 | `reasoning_philosophy` | REASONING | `domain:philosophy` + reasoning markers | `openai/gpt5.4` |
-| 240 | `complex_architecture` | COMPLEX | CS or engineering + architecture design + multi-step or long-context | `google/gemini-3.1-pro` |
-| 235 | `complex_stem` | COMPLEX | physics/chemistry/biology/engineering + hard synthesis | `google/gemini-3.1-pro` |
-| 232 | `feedback_wrong_answer_verified` | COMPLEX | `user_feedback:wrong_answer` + explicit correction markers + evidence/high-stakes cue | `google/gemini-3.1-pro` |
-| 220 | `medium_code_general` | MEDIUM | code/domain/preference + easy or medium code complexity | `qwen/qwen3.5-rocm` |
-| 216 | `verified_business` | MEDIUM | business/economics + `fact_check:needs_fact_check` + explicit verification/source cue | `google/gemini-2.5-flash-lite` |
-| 215 | `medium_business` | MEDIUM | business/economics + business embedding or non-hard complexity | `qwen/qwen3.5-rocm` |
-| 211 | `verified_history` | MEDIUM | `domain:history` + `fact_check:needs_fact_check` + explicit verification/source cue | `google/gemini-2.5-flash-lite` |
-| 210 | `medium_history` | MEDIUM | `domain:history` + explanatory or non-hard complexity | `qwen/qwen3.5-rocm` |
-| 205 | `medium_psychology` | MEDIUM | `domain:psychology` + explanatory or non-hard complexity | `qwen/qwen3.5-rocm` |
-| 200 | `medium_creative` | MEDIUM | creative keyword / embedding / preference | `google/gemini-2.5-flash-lite` |
-| 190 | `reasoning_general` | REASONING | deep analysis markers + hard complexity or long context | `openai/gpt5.4` |
-| 185 | `feedback_need_clarification` | SIMPLE | `user_feedback:need_clarification` + explicit clarification markers | `qwen/qwen3.5-rocm` |
-| 181 | `verified_fast_qa_zh` | SIMPLE | short Chinese FAQ + `fact_check:needs_fact_check` + explicit verification/source cue | `qwen/qwen3.5-rocm` |
-| 180 | `simple_fast_qa_zh` | SIMPLE | `embedding:fast_qa_zh` + `language:zh` + `context:short_context` | `qwen/qwen3.5-rocm` |
-| 176 | `verified_fast_qa_en` | SIMPLE | short English FAQ + `fact_check:needs_fact_check` + explicit verification/source cue | `qwen/qwen3.5-rocm` |
-| 175 | `simple_fast_qa_en` | SIMPLE | `embedding:fast_qa_en` + `language:en` + `context:short_context` | `qwen/qwen3.5-rocm` |
-| 170 | `simple_general` | SIMPLE | short-context fallback for general traffic | `qwen/qwen3.5-rocm` |
+| Priority | Decision | Alias | What it is for | Match sketch |
+|---------:|----------|-------|----------------|--------------|
+| 260 | `premium_legal` | `anthropic/claude-opus-4.6` | Highest-risk legal and compliance analysis | law or explicit legal-risk cues + premium legal embedding, verification overlay, or medium/hard `legal_risk` |
+| 252 | `formal_math_proof` | `openai/gpt5.4` | Narrow premium overlay for formal math proofs and derivations | `domain:math` + explicit reasoning/proof cues, excluding verified and specialist overlays |
+| 250 | `reasoning_deep` | `google/gemini-3.1-pro` | Deep philosophy and first-principles reasoning outside the narrow math overlay | philosophy / research / general-reasoning cues, plus softer math reasoning without explicit proof markers, on medium-or-higher difficulty |
+| 242 | `complex_specialist` | `google/gemini-3.1-pro` | Multi-step execution plans, systems design, and specialist STEM synthesis | agentic workflow cues or architecture / STEM signals + medium-or-higher difficulty, excluding fast-QA and creative drafting |
+| 232 | `feedback_wrong_answer_verified` | `google/gemini-2.5-flash-lite` | Explicit correction on evidence-sensitive follow-ups | verified correction overlay + explicit correction evidence, excluding code-heavy recovery |
+| 220 | `medium_code_general` | `qwen/qwen3.5-rocm` | Low-medium cost coding and bug triage | code markers / embedding + medium/complex band, plus urgent simple bug triage, excluding creative drafting |
+| 218 | `verified_health` | `google/gemini-3.1-pro` | Evidence-sensitive health and medical guidance | `domain:health` + verification pressure + health guidance or medium+ band |
+| 214 | `verified_explainer` | `google/gemini-2.5-flash-lite` | Evidence-sensitive business, history, and psychology explanation | explainer cues + verification pressure, excluding fast-QA and correction overlays |
+| 212 | `feedback_need_clarification` | `qwen/qwen3.5-rocm` | Cheap clarification and single-turn re-ask lane | `projection:feedback_clarification_overlay`, excluding verified/correction/code overlays |
+| 208 | `medium_explainer` | `qwen/qwen3.5-rocm` | Low-cost business, history, and psychology explanation | explainer cues + medium/complex band, or strong explainer embeddings in simple traffic, excluding verified overlays |
+| 200 | `medium_creative` | `qwen/qwen3.5-rocm` | Creative writing and interpersonal drafting | creative markers / embedding + simple or medium band |
+| 184 | `fast_qa` | `qwen/qwen3.5-rocm` | Short English or Chinese factual questions, including explicit verification asks | fast-QA embeddings or simple cue + short context; verified asks can rise to `balance_medium`, plain asks stay in `balance_simple` |
+| 170 | `simple_general` | `qwen/qwen3.5-rocm` | Lowest-cost fallback for general traffic | short simple traffic or medium-context `domain:other` traffic, excluding explicit specialist and verification overlays |
 
 This ordering is intentional:
 
-- specialized premium and hard-reasoning routes win first
-- explicit correction recovery beats ordinary medium traffic, but only with strong confirmation cues
-- factual overlays sit just above their cheap base routes instead of replacing them
-- complex technical routes beat generic reasoning routes
-- medium routes only accept easy or medium complexity
-- simple routes remain the broad default landing zone
+- high-risk legal and narrow formal-math proofs win first
+- projection-driven correction recovery beats ordinary verified or explainer traffic
+- health and verified explainer overlays sit above their cheap base lanes
+- the merged complex specialist lane beats generic medium lanes
+- fast-QA stays cheap even when verification is explicit, unless a higher-risk overlay wins first
+- `simple_general` remains the broad fallback
 
-## How This Profile Maps `clawrouter` Ideas into vSR Signals
+## Signal Overview
 
-The profile does not expose the `clawrouter` ideas as runtime dimension fields. It maps them into existing signal families instead:
+The profile uses the standard vSR signal families directly under `routing.signals`:
 
-| Routing idea | vSR expression in this profile |
-|--------------|--------------------------------|
-| `token_count` | `context` via `short_context`, `medium_context`, `long_context` |
-| `code_presence` | `keyword:code_request_markers` plus `domain:computer science` |
-| `reasoning_markers` | `keyword:reasoning_request_markers` plus `complexity:*:hard` |
-| `technical_terms` | `keyword:code_request_markers` / `architecture_markers` plus `embedding:code_general` / `architecture_design` |
-| `creative_markers` | `keyword:creative_request_markers` plus `preference:creative_collaboration` |
-| `simple_indicators` | `keyword:simple_request_markers` plus `context:short_context` |
-| `multi_step_patterns` | `keyword:multi_step_markers` and `keyword:agentic_request_markers` |
-| `question_complexity` | `complexity:general_reasoning`, `complexity:code_task`, `complexity:math_task`, `complexity:legal_risk` |
-| `imperative_verbs` | `keyword:agentic_request_markers` plus `preference:agentic_execution` |
-| `constraint_count` | `keyword:constraint_markers` and structured complexity rules |
-| `output_format` | `keyword:output_format_markers` plus `preference:structured_delivery` |
-| `reference_complexity` | `keyword:reference_heavy_markers` plus domain-specific embeddings |
-| `negation_complexity` | `keyword:negation_markers` |
-| `domain_specificity` | `domain:*` plus embeddings like `business_analysis` or `history_explainer` |
-| `agentic_task` | `keyword:agentic_request_markers` plus `preference:agentic_execution` and hard complexity |
+| Signal family | Role in this profile | Representative names |
+|---------------|----------------------|----------------------|
+| `keywords` | explicit lexical confirmation for verification asks, legal risk, creative requests, coding cues, and feedback cues | `verification_markers`, `legal_risk_markers`, `code_request_markers`, `clarification_feedback_markers` |
+| `embeddings` | learned intent and specialist boundaries | `fast_qa_en`, `architecture_design`, `business_analysis`, `premium_legal_analysis`, `agentic_workflows` |
+| `fact_check` | evidence-sensitive detection that feeds verification pressure | `needs_fact_check` |
+| `user_feedbacks` | weak explicit feedback evidence that feeds projection-driven overlays | `wrong_answer`, `need_clarification` |
+| `reasks` | repeated same-question detection that strengthens clarification overlays | `likely_dissatisfied` |
+| `language` | language-aware fast-QA detection | `en`, `zh` |
+| `domains` | subject-area routing and partitioning | `law`, `math`, `history`, `health`, `computer science`, `other` |
+| `context` | token-count bands for cheap fallback versus longer tasks | `short_context`, `medium_context`, `long_context` |
+| `structure` | cheap workflow and urgency overlays | `ordered_workflow`, `numbered_steps`, `exclamation_emphasis` |
+| `complexity` | reusable difficulty boundaries for general, code, math, legal, agentic, and evidence-heavy requests | `general_reasoning`, `code_task`, `math_task`, `legal_risk`, `agentic_delivery`, `evidence_synthesis` |
 
-That keeps the profile aligned with vSR's native routing model:
+Notable profile-specific details:
 
-- heuristic signals carry explicit lexical cues
-- learned signals carry fuzzy, higher-value boundaries
-- decision names carry the tier and scene semantics
+- `context` bands are non-overlapping: `short_context` is `0-999`, `medium_context` is `1K-7999`, and `long_context` is `8K-256K`.
+- `reask("likely_dissatisfied")` is intentionally narrow and only strengthens the clarification overlay; it is not a general-purpose escalation trigger.
+- the profile no longer keeps emotion, preference, jailbreak, or PII signals in the routing-owned surface because they do not materially improve balance-driven model selection.
+- `user_feedback` is not consumed directly by routes; it stays inside feedback projections so a single learned misfire does not steal short first-turn traffic.
 
-## Usage Examples
+## Projection Overview
 
-Test these in the dashboard playground at `http://<your-server-ip>:8700`:
+The balance profile keeps only the projections that materially coordinate model selection:
 
-### Example 1: Cheapest English FAQ
+| Projection | Purpose |
+|------------|---------|
+| `balance_domain_partition` | softmax-exclusive winner over the maintained domain set |
+| `balance_intent_partition` | softmax-exclusive winner over the maintained intent embeddings |
+| `difficulty_score` -> `difficulty_band` | maps traffic into `balance_simple`, `balance_medium`, `balance_complex`, and `balance_reasoning` |
+| `verification_pressure` -> `verification_band` | marks `verification_required` traffic |
+| `feedback_correction_pressure` -> `feedback_correction_band` | fuses explicit correction, verification, and anti-code evidence into `feedback_correction_verified` |
+| `feedback_clarification_pressure` -> `feedback_clarification_band` | fuses clarification, `reask`, and anti-fast-QA evidence into `feedback_clarification_overlay` |
+| `urgency_pressure` -> `urgency_band` | catches short urgent bug triage or other elevated-short-context requests |
 
-```text
-Who are you? Answer briefly.
+The profile intentionally does not keep emotion-only projection bands. They added routing complexity without improving balance decisions.
+
+## Calibration Loop
+
+The stable examples are also maintained as machine-readable probes in [balance.probes.yaml](../recipes/balance.probes.yaml) for live `POST /api/v1/eval` calibration loops. The maintained suite currently covers the 13 calibrated non-fallback decisions with 55 probe variants, including a greeting guardrail that should stay on `simple_general` and multi-turn `messages` probes that exercise clarification and verified-correction follow-ups.
+
+Run local validation first:
+
+```bash
+cd src/semantic-router
+go run ./cmd/dsl validate ../../deploy/recipes/balance.dsl
 ```
 
-- Expected decision: `simple_fast_qa_en`
-- Expected alias: `qwen/qwen3.5-rocm`
+Then run the repo-native routing calibration loop against a live router:
 
-### Example 2: Cheapest Chinese FAQ
-
-```text
-CPU 是什么意思？请简短回答。
+```bash
+python3 tools/agent/scripts/router_calibration_loop.py run \
+  --router-url http://<router-host>:8080 \
+  --probes deploy/recipes/balance.probes.yaml \
+  --yaml deploy/recipes/balance.yaml \
+  --dsl deploy/recipes/balance.dsl
 ```
 
-- Expected decision: `simple_fast_qa_zh`
-- Expected alias: `qwen/qwen3.5-rocm`
-
-### Example 3: Low-cost coding route
-
-```text
-Debug this Python stack trace and suggest the most likely fix.
-```
-
-- Expected decision: `medium_code_general`
-- Expected alias: `qwen/qwen3.5-rocm`
-
-### Example 4: Verified Chinese FAQ overlay
-
-```text
-法国的首都是哪里？请给出处。
-```
-
-- Expected decision: `verified_fast_qa_zh`
-- Expected alias: `qwen/qwen3.5-rocm`
-
-### Example 5: Verified business overlay
-
-```text
-Compare two B2B SaaS pricing strategies and cite sources for the market-share claim.
-```
-
-- Expected decision: `verified_business`
-- Expected alias: `google/gemini-2.5-flash-lite`
-
-### Example 6: Creative mid-tier route
-
-```text
-Brainstorm three launch taglines for a premium tea brand.
-```
-
-- Expected decision: `medium_creative`
-- Expected alias: `google/gemini-2.5-flash-lite`
-
-### Example 7: Complex architecture route
-
-```text
-Design a distributed rate limiter for multi-region traffic and explain the failure modes.
-```
-
-- Expected decision: `complex_architecture`
-- Expected alias: `google/gemini-3.1-pro`
-
-### Example 8: Reasoning math route
-
-```text
-Prove rigorously that the square root of 2 is irrational.
-```
-
-- Expected decision: `reasoning_math`
-- Expected alias: `openai/gpt5.4`
-
-### Example 9: Premium legal route
-
-```text
-Analyze the indemnity and limitation-of-liability clauses in this SaaS contract and summarize the main legal risks.
-```
-
-- Expected decision: `premium_legal`
-- Expected alias: `anthropic/claude-opus-4.6`
-
-### Example 10: Wrong-answer recovery
-
-```text
-That's wrong. Cite the source and answer again.
-```
-
-- Expected decision: `feedback_wrong_answer_verified`
-- Expected alias: `google/gemini-3.1-pro`
-
-### Example 11: Clarification recovery
-
-```text
-Explain that more clearly and give one simple example.
-```
-
-- Expected decision: `feedback_need_clarification`
-- Expected alias: `qwen/qwen3.5-rocm`
-
-## Validation Checklist
-
-- `sudo docker ps --filter name=vllm` shows the single backend container as healthy.
-- `curl -s "http://localhost:${VLLM_PORT_122B:-8090}/v1/models"` lists all five tier-aware alias IDs.
-- The router is started with `vllm-sr serve --image-pull-policy never --platform amd`.
-- Requests hitting the playground show matched signals, one selected decision, one selected alias, and cost/savings in Insights.
-- `deploy/recipes/balance.yaml` remains aligned with this document's alias catalog, decision table, and examples.
-
-## Resources
-
-- [vLLM Documentation](https://docs.vllm.ai/)
-- [AMD ROCm Documentation](https://rocm.docs.amd.com/)
-- [vLLM Semantic Router GitHub](https://github.com/vllm-project/semantic-router)
+This produces versioned before / after artifacts under `.augment/router-loop/` and keeps the probe manifest, deployed YAML, and source DSL tied to the same run.

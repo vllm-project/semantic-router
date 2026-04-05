@@ -9,6 +9,7 @@ import {
   RuleCombination,
   KeywordSignalConfig,
 } from '../types'
+import { SIGNAL_COLORS, SIGNAL_ICONS, SIGNAL_TYPES } from '../constants'
 import { collectRuleSignalTypes, isRuleCombination } from './ruleTree'
 
 /**
@@ -79,7 +80,9 @@ export async function simulateSignalMatching(
     })
 
   // 3. Other signal types - mark as "needs backend verification"
-  const backendOnlyTypes: SignalType[] = ['embedding', 'domain', 'fact_check', 'user_feedback', 'preference']
+  const backendOnlyTypes: SignalType[] = SIGNAL_TYPES.filter(
+    (type) => type !== 'keyword' && type !== 'language'
+  )
   backendOnlyTypes.forEach(type => {
     topology.signals
       .filter(s => s.type === type)
@@ -181,42 +184,12 @@ function evaluateRuleNode(rule: RuleNode, matchedSignals: MatchedSignal[]): bool
  * Get signal icon by type
  */
 export function getSignalIcon(type: SignalType): string {
-  const icons: Record<SignalType, string> = {
-    keyword: '🔑',
-    embedding: '📐',
-    domain: '🎯',
-    fact_check: '✓',
-    user_feedback: '💬',
-    preference: '⚙️',
-    language: '🌐',
-    context: '📏',
-    complexity: '🧠',
-    modality: '🖼️',
-    authz: '🔐',
-    jailbreak: '🛡️',
-    pii: '🔒',
-  }
-  return icons[type] || '❓'
+  return SIGNAL_ICONS[type] || '❓'
 }
 
 /**
  * Get signal color by type
  */
 export function getSignalColor(type: SignalType): string {
-  const colors: Record<SignalType, string> = {
-    keyword: '#4CAF50',
-    embedding: '#2196F3',
-    domain: '#9C27B0',
-    fact_check: '#FF9800',
-    user_feedback: '#E91E63',
-    preference: '#00BCD4',
-    language: '#795548',
-    context: '#607D8B', // Blue Grey
-    complexity: '#4299e1', // Blue
-    modality: '#8B5CF6', // Violet
-    authz: '#059669', // Emerald
-    jailbreak: '#EF4444', // Red
-    pii: '#F59E0B', // Amber
-  }
-  return colors[type] || '#607D8B'
+  return SIGNAL_COLORS[type]?.background || '#607D8B'
 }

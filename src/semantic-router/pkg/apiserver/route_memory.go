@@ -54,7 +54,7 @@ type MemoryDeleteResponse struct {
 // requireMemoryStore checks if the memory store is available and returns an error if not.
 // Returns true if the store is available, false otherwise.
 func (s *ClassificationAPIServer) requireMemoryStore(w http.ResponseWriter) bool {
-	if s.memoryStore == nil {
+	if s.currentMemoryStore() == nil {
 		s.writeErrorResponse(w, http.StatusServiceUnavailable, "MEMORY_NOT_AVAILABLE",
 			"Memory store is not configured or not yet initialized. Enable memory in configuration.")
 		return false
@@ -191,7 +191,7 @@ func (s *ClassificationAPIServer) handleListMemories(w http.ResponseWriter, r *h
 	}
 
 	ctx := r.Context()
-	result, err := s.memoryStore.List(ctx, opts)
+	result, err := s.currentMemoryStore().List(ctx, opts)
 	if err != nil {
 		logging.Errorf("[MemoryAPI] List failed for user_id=%s: %v", userID, err)
 		s.writeErrorResponse(w, http.StatusInternalServerError, "LIST_FAILED",
@@ -233,7 +233,7 @@ func (s *ClassificationAPIServer) handleGetMemory(w http.ResponseWriter, r *http
 	}
 
 	ctx := r.Context()
-	mem, err := s.memoryStore.Get(ctx, memoryID)
+	mem, err := s.currentMemoryStore().Get(ctx, memoryID)
 	if err != nil {
 		if strings.Contains(err.Error(), "not found") {
 			s.writeErrorResponse(w, http.StatusNotFound, "NOT_FOUND",
@@ -277,7 +277,7 @@ func (s *ClassificationAPIServer) handleDeleteMemory(w http.ResponseWriter, r *h
 	ctx := r.Context()
 
 	// Verify ownership before deleting
-	mem, err := s.memoryStore.Get(ctx, memoryID)
+	mem, err := s.currentMemoryStore().Get(ctx, memoryID)
 	if err != nil {
 		if strings.Contains(err.Error(), "not found") {
 			s.writeErrorResponse(w, http.StatusNotFound, "NOT_FOUND",
@@ -296,7 +296,7 @@ func (s *ClassificationAPIServer) handleDeleteMemory(w http.ResponseWriter, r *h
 		return
 	}
 
-	if err := s.memoryStore.Forget(ctx, memoryID); err != nil {
+	if err := s.currentMemoryStore().Forget(ctx, memoryID); err != nil {
 		// Handle TOCTOU: if another request deleted this memory between Get and Forget,
 		// treat it as a successful idempotent delete rather than a 500.
 		if strings.Contains(err.Error(), "not found") {
@@ -340,7 +340,7 @@ func (s *ClassificationAPIServer) handleDeleteMemoriesByScope(w http.ResponseWri
 	scope.Types = types
 
 	ctx := r.Context()
-	if err := s.memoryStore.ForgetByScope(ctx, scope); err != nil {
+	if err := s.currentMemoryStore().ForgetByScope(ctx, scope); err != nil {
 		logging.Errorf("[MemoryAPI] DeleteByScope failed for user_id=%s: %v", userID, err)
 		s.writeErrorResponse(w, http.StatusInternalServerError, "DELETE_FAILED",
 			"Failed to delete memories")

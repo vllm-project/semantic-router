@@ -82,7 +82,9 @@ func (s *StaticSelector) InitializeFromConfig(categories []config.Category) {
 		}
 	}
 
-	logging.Infof("[StaticSelector] Initialized scores for %d categories", len(s.categoryScores))
+	logging.ComponentEvent("selection", "static_selector_initialized", map[string]interface{}{
+		"category_count": len(s.categoryScores),
+	})
 }
 
 // SetCategoryScore sets a static score for a model in a category

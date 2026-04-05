@@ -85,9 +85,6 @@ func (r *OpenAIRouter) handleLooperExecution(
 	decision *config.Decision,
 	reqCtx *RequestContext,
 ) (*ext_proc.ProcessingResponse, error) {
-	logging.Infof("[Looper] Starting looper execution for decision: %s, algorithm: %s",
-		decision.Name, decision.Algorithm.Type)
-
 	// Create looper based on algorithm type
 	l := looper.Factory(&r.Config.Looper, decision.Algorithm.Type)
 
@@ -99,6 +96,14 @@ func (r *OpenAIRouter) handleLooperExecution(
 	if isResponseAPIRequest(reqCtx) {
 		streaming = false
 	}
+	logging.ComponentEvent("extproc", "looper_execution_started", map[string]interface{}{
+		"request_id":       reqCtx.RequestID,
+		"decision":         decision.Name,
+		"algorithm":        decision.Algorithm.Type,
+		"candidate_models": len(decision.ModelRefs),
+		"streaming":        streaming,
+		"response_api":     isResponseAPIRequest(reqCtx),
+	})
 	looperReq := &looper.Request{
 		OriginalRequest: openAIRequest,
 		ModelRefs:       decision.ModelRefs,
@@ -111,12 +116,23 @@ func (r *OpenAIRouter) handleLooperExecution(
 	// Execute looper
 	resp, err := l.Execute(ctx, looperReq)
 	if err != nil {
-		logging.Errorf("[Looper] Execution failed: %v", err)
+		logging.ComponentErrorEvent("extproc", "looper_execution_failed", map[string]interface{}{
+			"request_id": reqCtx.RequestID,
+			"decision":   decision.Name,
+			"algorithm":  decision.Algorithm.Type,
+			"error":      err.Error(),
+		})
 		return r.createErrorResponse(500, "Looper execution failed: "+err.Error()), nil
 	}
 
-	logging.Infof("[Looper] Execution completed, models_used=%v, iterations=%d, algorithm=%s",
-		resp.ModelsUsed, resp.Iterations, resp.AlgorithmType)
+	logging.ComponentEvent("extproc", "looper_execution_completed", map[string]interface{}{
+		"request_id":     reqCtx.RequestID,
+		"decision":       decision.Name,
+		"algorithm":      resp.AlgorithmType,
+		"models_used":    resp.ModelsUsed,
+		"iterations":     resp.Iterations,
+		"selected_model": resp.Model,
+	})
 
 	// Update context with looper results
 	reqCtx.RequestModel = resp.Model
@@ -152,10 +168,19 @@ func (r *OpenAIRouter) handleLooperExecution(
 	if isResponseAPIRequest(reqCtx) && r.ResponseAPIFilter != nil {
 		translated, err := r.ResponseAPIFilter.TranslateResponse(ctx, reqCtx.ResponseAPICtx, resp.Body)
 		if err != nil {
-			logging.Errorf("[Looper] Response API translation failed: %v", err)
+			logging.ComponentErrorEvent("extproc", "looper_response_api_translation_failed", map[string]interface{}{
+				"request_id": reqCtx.RequestID,
+				"decision":   decision.Name,
+				"algorithm":  resp.AlgorithmType,
+				"error":      err.Error(),
+			})
 		} else {
 			resp.Body = translated
-			logging.Infof("[Looper] Translated looper response to Response API format")
+			logging.ComponentDebugEvent("extproc", "looper_response_api_translated", map[string]interface{}{
+				"request_id": reqCtx.RequestID,
+				"decision":   decision.Name,
+				"algorithm":  resp.AlgorithmType,
+			})
 		}
 	}
 

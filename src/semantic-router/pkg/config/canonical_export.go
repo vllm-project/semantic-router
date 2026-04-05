@@ -46,9 +46,10 @@ func CanonicalRoutingFromRouterConfig(cfg *RouterConfig) CanonicalRouting {
 	}
 
 	return CanonicalRouting{
-		ModelCards: routingModelsFromRouterConfig(cfg),
-		Signals:    canonicalSignalsFromRouterConfig(cfg),
-		Decisions:  copyDecisions(cfg.Decisions),
+		ModelCards:  routingModelsFromRouterConfig(cfg),
+		Signals:     canonicalSignalsFromRouterConfig(cfg),
+		Projections: canonicalProjectionsFromRouterConfig(cfg),
+		Decisions:   copyDecisions(cfg.Decisions),
 	}
 }
 
@@ -59,14 +60,25 @@ func canonicalSignalsFromRouterConfig(cfg *RouterConfig) CanonicalSignals {
 		Domains:       append([]Category(nil), cfg.Categories...),
 		FactCheck:     append([]FactCheckRule(nil), cfg.FactCheckRules...),
 		UserFeedbacks: append([]UserFeedbackRule(nil), cfg.UserFeedbackRules...),
+		Reasks:        append([]ReaskRule(nil), cfg.ReaskRules...),
 		Preferences:   append([]PreferenceRule(nil), cfg.PreferenceRules...),
 		Language:      append([]LanguageRule(nil), cfg.LanguageRules...),
 		Context:       append([]ContextRule(nil), cfg.ContextRules...),
+		Structure:     append([]StructureRule(nil), cfg.StructureRules...),
 		Complexity:    append([]ComplexityRule(nil), cfg.ComplexityRules...),
 		Modality:      append([]ModalityRule(nil), cfg.ModalityRules...),
 		RoleBindings:  append([]RoleBinding(nil), cfg.RoleBindings...),
 		Jailbreak:     append([]JailbreakRule(nil), cfg.JailbreakRules...),
 		PII:           append([]PIIRule(nil), cfg.PIIRules...),
+		KB:            append([]KBSignalRule(nil), cfg.KBRules...),
+	}
+}
+
+func canonicalProjectionsFromRouterConfig(cfg *RouterConfig) CanonicalProjections {
+	return CanonicalProjections{
+		Partitions: append([]ProjectionPartition(nil), cfg.Projections.Partitions...),
+		Scores:     append([]ProjectionScore(nil), cfg.Projections.Scores...),
+		Mappings:   append([]ProjectionMapping(nil), cfg.Projections.Mappings...),
 	}
 }
 
@@ -163,6 +175,7 @@ func CanonicalGlobalFromRouterConfig(cfg *RouterConfig) *CanonicalGlobal {
 				FeedbackDetector:       cfg.FeedbackDetector.ModelID,
 			},
 			External: append([]ExternalModelConfig(nil), cfg.ExternalModels...),
+			KBs:      append([]KnowledgeBaseConfig(nil), cfg.KnowledgeBases...),
 			Modules: CanonicalModelModules{
 				PromptCompression: cfg.PromptCompression,
 				PromptGuard: CanonicalPromptGuardModule{
@@ -181,6 +194,7 @@ func CanonicalGlobalFromRouterConfig(cfg *RouterConfig) *CanonicalGlobal {
 					},
 					Preference: cfg.PreferenceModel.WithDefaults(),
 				},
+				Complexity: cfg.ComplexityModel.WithDefaults(),
 				HallucinationMitigation: CanonicalHallucinationModule{
 					Enabled:                 cfg.HallucinationMitigation.Enabled,
 					OnHallucinationDetected: cfg.HallucinationMitigation.OnHallucinationDetected,

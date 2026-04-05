@@ -26,6 +26,7 @@ This document describes the repository's major subsystem seams and the boundarie
 - Production code must not depend on `e2e/`, `docs/agent/`, `tools/agent/`, or website content.
 - Dashboard backend must not depend on dashboard frontend source.
 - Local CLI runtime behavior belongs in `src/vllm-sr/`; router runtime behavior belongs in `src/semantic-router/`.
+- Control-plane surfaces such as the CLI, dashboard backend, and operator should depend on versioned router contracts or explicit public runtime-service seams instead of deep router-runtime internals when the dependency crosses a product boundary.
 - Native bindings stay behind runtime seams instead of leaking binding-specific setup across the codebase.
 - Dashboard backend handler files should separate HTTP transport from config persistence, deploy/rollback control, and runtime status collection.
 - Dashboard frontend should separate route-shell/auth gating from page-specific orchestration and from large chat or editor containers.

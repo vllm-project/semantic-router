@@ -223,6 +223,7 @@ export interface DecisionConfig {
 export interface RoutingConfig {
   modelCards?: RoutingModelCard[]
   signals?: ConfigSignals
+  projections?: ConfigProjections
   decisions?: DecisionConfig[]
 }
 
@@ -294,6 +295,7 @@ export interface ResponseAPIConfig {
 }
 
 export interface RouterReplayConfig {
+  enabled?: boolean
   store_backend?: string
   ttl_seconds?: number
   async_writes?: boolean
@@ -721,14 +723,23 @@ export interface ConfigSignals {
   domains?: DomainSignal[]
   fact_check?: FactCheckSignal[]
   user_feedbacks?: UserFeedbackSignal[]
+  reasks?: ReaskSignal[]
   preferences?: PreferenceSignal[]
   language?: LanguageSignal[]
   context?: ContextSignal[]
+  structure?: StructureSignal[]
   complexity?: ComplexitySignal[]
   modality?: ModalitySignal[]
   role_bindings?: RoleBindingSignal[]
   jailbreak?: JailbreakSignal[]
   pii?: PIISignal[]
+  kb?: KBSignal[]
+}
+
+export interface ConfigProjections {
+  partitions?: ProjectionPartition[]
+  scores?: ProjectionScore[]
+  mappings?: ProjectionMapping[]
 }
 
 export interface DecisionPluginConfiguration {
@@ -938,6 +949,50 @@ export interface DomainSignal {
   mmlu_categories?: string[]
 }
 
+export interface ProjectionPartition {
+  name: string
+  semantics: string
+  members: string[]
+  temperature?: number
+  default?: string
+}
+
+export interface ProjectionScoreInput {
+  type: string
+  name: string
+  weight: number
+  value_source?: string
+  match?: number
+  miss?: number
+}
+
+export interface ProjectionScore {
+  name: string
+  method: string
+  inputs: ProjectionScoreInput[]
+}
+
+export interface ProjectionMappingCalibration {
+  method: string
+  slope?: number
+}
+
+export interface ProjectionMappingOutput {
+  name: string
+  lt?: number
+  lte?: number
+  gt?: number
+  gte?: number
+}
+
+export interface ProjectionMapping {
+  name: string
+  source: string
+  method: string
+  calibration?: ProjectionMappingCalibration
+  outputs: ProjectionMappingOutput[]
+}
+
 export interface ModalitySignal {
   name: string
   description?: string
@@ -955,6 +1010,16 @@ export interface RoleBindingSignal {
   description?: string
 }
 
+export interface KBSignal {
+  name: string
+  kb: string
+  target: {
+    kind: 'label' | 'group'
+    value: string
+  }
+  match?: 'best' | 'threshold'
+}
+
 export interface FactCheckSignal {
   name: string
   description: string
@@ -963,6 +1028,13 @@ export interface FactCheckSignal {
 export interface UserFeedbackSignal {
   name: string
   description: string
+}
+
+export interface ReaskSignal {
+  name: string
+  description?: string
+  threshold?: number
+  lookback_turns?: number
 }
 
 export interface PreferenceSignal {
@@ -982,6 +1054,33 @@ export interface ContextSignal {
   min_tokens: string
   max_tokens: string
   description?: string
+}
+
+export interface StructureSource {
+  type: string
+  pattern?: string
+  keywords?: string[]
+  case_sensitive?: boolean
+  sequences?: string[][]
+}
+
+export interface StructureFeature {
+  type: string
+  source: StructureSource
+}
+
+export interface NumericPredicate {
+  gt?: number
+  gte?: number
+  lt?: number
+  lte?: number
+}
+
+export interface StructureSignal {
+  name: string
+  description?: string
+  feature: StructureFeature
+  predicate?: NumericPredicate
 }
 
 export interface ComplexitySignal {
@@ -1018,6 +1117,7 @@ export interface ConfigData {
   version?: string
   listeners?: ListenerConfig[]
   signals?: ConfigSignals
+  projections?: ConfigProjections
   decisions?: DecisionConfig[]
   providers?: ProvidersConfig
   routing?: RoutingConfig
@@ -1053,9 +1153,11 @@ export interface ConfigData {
   embedding_rules?: EmbeddingSignal[]
   fact_check_rules?: FactCheckSignal[]
   user_feedback_rules?: UserFeedbackSignal[]
+  reask_rules?: ReaskSignal[]
   preference_rules?: PreferenceSignal[]
   language_rules?: LanguageSignal[]
   context_rules?: ContextSignal[]
+  structure_rules?: StructureSignal[]
   complexity_rules?: ComplexitySignal[]
   jailbreak?: JailbreakSignal[]
   pii?: PIISignal[]
@@ -1068,13 +1170,16 @@ export type SignalType =
   | 'Preference'
   | 'Fact Check'
   | 'User Feedback'
+  | 'Reask'
   | 'Language'
   | 'Context'
+  | 'Structure'
   | 'Complexity'
   | 'Modality'
   | 'Authz'
   | 'Jailbreak'
   | 'PII'
+  | 'KB'
 
 export interface DecisionFormState {
   name: string
@@ -1101,7 +1206,10 @@ export interface AddSignalFormState {
   max_tokens?: string
   preference_examples?: string
   preference_threshold?: number
+  lookback_turns?: number
   complexity_threshold?: number
+  structure_feature?: string
+  structure_predicate?: string
   role?: string
   subjects?: string
   hard_candidates?: string
@@ -1116,6 +1224,10 @@ export interface AddSignalFormState {
   pii_threshold?: number
   pii_types_allowed?: string
   pii_include_history?: boolean
+  kb_name?: string
+  target_kind?: 'label' | 'group'
+  target_value?: string
+  kb_match?: 'best' | 'threshold'
 }
 
 export const formatThreshold = (value: number): string => {

@@ -434,6 +434,8 @@ config:
   global:
     router:
       strategy: priority
+    model_catalog:
+      kbs: []
     services:
       api:
         batch_classification:
@@ -491,9 +493,6 @@ config:
         max_entries: 1000
         ttl_seconds: 3600
         eviction_policy: fifo
-        use_hnsw: true
-        hnsw_m: 16
-        hnsw_ef_construction: 200
         embedding_model: mmbert
       memory:
         embedding_model: mmbert
@@ -513,3 +512,7 @@ resources:
   requests:
     cpu: "1"
     memory: "5Gi"
+
+# E2E/Kind: disable PVC for reliable CI (same as other e2e profiles).
+persistence:
+  enabled: false

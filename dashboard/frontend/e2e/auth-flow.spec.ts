@@ -14,6 +14,82 @@ const baseSetupState = {
   canActivate: true,
 };
 
+const replayRecordWithDetailedToolTrace = {
+  id: "replay-sensitive-1",
+  timestamp: "2026-04-02T10:00:00Z",
+  request_id: "req-sensitive-1",
+  decision: "business-route",
+  decision_tier: 1,
+  decision_priority: 210,
+  original_model: "test-model",
+  selected_model: "test-model",
+  reasoning_mode: "on",
+  selection_method: "static",
+  signals: {
+    domain: ["business"],
+  },
+  tool_trace: {
+    flow: "User Query -> Tool Calling -> Tool Execute -> LLM Answer",
+    stage: "assistant_final_response",
+    tool_names: ["fetch_price"],
+    steps: [
+      {
+        type: "user_input",
+        text: "Confidential flow prompt 7A",
+      },
+      {
+        type: "assistant_tool_call",
+        tool_name: "fetch_price",
+        arguments: "{\"ticker\":\"NVDA\",\"window\":\"90d\"}",
+      },
+      {
+        type: "client_tool_result",
+        tool_name: "fetch_price",
+        text: "Confidential tool result 7B",
+      },
+      {
+        type: "assistant_final_response",
+        text: "Confidential final answer 7C",
+      },
+    ],
+  },
+  request_body: "{\"input\":\"sensitive request\"}",
+  response_body: "{\"output\":\"sensitive response\"}",
+  response_status: 200,
+  from_cache: false,
+  streaming: false,
+};
+
+const redactedReplayRecordWithDetailedToolTrace = {
+  ...replayRecordWithDetailedToolTrace,
+  request_body: "",
+  response_body: "",
+  tool_trace: {
+    ...replayRecordWithDetailedToolTrace.tool_trace,
+    steps: [
+      {
+        type: "user_input",
+        content_redacted: true,
+      },
+      {
+        type: "assistant_tool_call",
+        tool_name: "fetch_price",
+        content_redacted: true,
+      },
+      {
+        type: "client_tool_result",
+        tool_name: "fetch_price",
+        status: "succeeded",
+        content_redacted: true,
+      },
+      {
+        type: "assistant_final_response",
+        content_redacted: true,
+      },
+    ],
+  },
+};
+
 const transitionCopyPattern =
   /A Symbolic Analysis of Relay and Switching Circuits/i;
 
@@ -601,8 +677,13 @@ test.describe("Dashboard auth flow", () => {
 
     await page.goto("/playground");
     await expect(
-      page.getByRole("button", { name: /Enable ClawOS|Disable ClawOS/i }),
+      page.getByRole("button", { name: /Enable HireClaw|Disable HireClaw/i }),
     ).toBeEnabled();
+    await expect(
+      page.getByRole("button", { name: /Open ClawRoom view|Exit ClawRoom view/i }),
+    ).toHaveCount(0);
+
+    await page.getByRole("button", { name: /Enable HireClaw/i }).click();
     await expect(
       page.getByRole("button", { name: /Open ClawRoom view|Exit ClawRoom view/i }),
     ).toBeEnabled();
@@ -614,6 +695,83 @@ test.describe("Dashboard auth flow", () => {
       "title",
       "Deploy is unavailable in read-only mode",
     );
+  });
+
+  test("read users see replay flow structure with payloads redacted in record view", async ({
+    page,
+  }) => {
+    await mockAuthenticatedAppShell(page, {
+      user: {
+        id: "user-read-1",
+        email: "reader@example.com",
+        name: "Read User",
+        role: "read",
+      },
+      settings: {
+        readonlyMode: true,
+        setupMode: false,
+        platform: "",
+        envoyUrl: "",
+      },
+    });
+
+    await page.route("**/api/router/v1/router_replay/*", async (route) => {
+      await route.fulfill({
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(redactedReplayRecordWithDetailedToolTrace),
+      });
+    });
+
+    await page.goto("/insights/replay-sensitive-1");
+
+    await expect(page.getByText("Tool Call Success Rate")).toBeVisible();
+    await expect(page.getByText("100%")).toBeVisible();
+    await expect(page.getByText("Tool Calling (fetch_price)")).toBeVisible();
+    await expect(page.getByText("Tool Execute (fetch_price)")).toBeVisible();
+    await expect(page.getByText("Source: User")).toBeVisible();
+    await expect(page.getByText("Source: LLM")).toHaveCount(2);
+    await expect(page.getByText("Source: Agent")).toBeVisible();
+    await expect(page.getByText("Inputs and outputs are hidden for your role")).toHaveCount(4);
+    await expect(page.getByText("Confidential flow prompt 7A")).toHaveCount(0);
+    await expect(page.getByText("Confidential tool result 7B")).toHaveCount(0);
+    await expect(page.getByText("Confidential final answer 7C")).toHaveCount(0);
+  });
+
+  test("write users can inspect replay flow details in record view", async ({
+    page,
+  }) => {
+    await mockAuthenticatedAppShell(page, {
+      user: {
+        id: "user-write-1",
+        email: "writer@example.com",
+        name: "Write User",
+        role: "write",
+      },
+      settings: {
+        readonlyMode: false,
+        setupMode: false,
+        platform: "",
+        envoyUrl: "",
+      },
+    });
+
+    await page.route("**/api/router/v1/router_replay/*", async (route) => {
+      await route.fulfill({
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(replayRecordWithDetailedToolTrace),
+      });
+    });
+
+    await page.goto("/insights/replay-sensitive-1");
+
+    await expect(page.getByText("Source: User")).toBeVisible();
+    await expect(page.getByText("Source: LLM")).toHaveCount(2);
+    await expect(page.getByText("Source: Agent")).toBeVisible();
+    await expect(page.getByText("Confidential flow prompt 7A")).toBeVisible();
+    await expect(page.getByText("Confidential tool result 7B")).toBeVisible();
+    await expect(page.getByText("Confidential final answer 7C")).toBeVisible();
   });
 
   test("authenticated admins can open the users page", async ({ page }) => {

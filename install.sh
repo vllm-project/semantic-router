@@ -5,7 +5,8 @@ MODE="${VLLM_SR_INSTALL_MODE:-serve}"
 REQUESTED_RUNTIME="${VLLM_SR_RUNTIME:-auto}"
 INSTALL_ROOT="${VLLM_SR_INSTALL_ROOT:-$HOME/.local/share/vllm-sr}"
 BIN_DIR="${VLLM_SR_BIN_DIR:-$HOME/.local/bin}"
-PIP_SPEC="${VLLM_SR_PIP_SPEC:-vllm-sr}"
+PIP_SPEC="${VLLM_SR_PIP_SPEC:-}"
+REQUESTED_CHANNEL="${VLLM_SR_INSTALL_CHANNEL:-dev}"
 PYTHON_BIN="${VLLM_SR_PYTHON:-}"
 REQUESTED_PLATFORM="${VLLM_SR_INSTALL_PLATFORM:-${VLLM_SR_PLATFORM:-auto}}"
 AUTO_LAUNCH="${VLLM_SR_INSTALL_AUTO_LAUNCH:-1}"
@@ -108,6 +109,31 @@ should_auto_launch() {
   [ "$REQUESTED_RUNTIME" != "skip" ] || return 1
 }
 
+describe_package_channel() {
+  if [ -n "$PIP_SPEC" ]; then
+    printf 'custom (--pip-spec override)\n'
+    return
+  fi
+
+  printf '%s\n' "$REQUESTED_CHANNEL"
+}
+
+describe_package_selection() {
+  if [ -n "$PIP_SPEC" ]; then
+    printf '%s\n' "$PIP_SPEC"
+    return
+  fi
+
+  case "$REQUESTED_CHANNEL" in
+    dev)
+      printf 'vllm-sr (--pre, latest development release)\n'
+      ;;
+    stable)
+      printf 'vllm-sr (latest stable release)\n'
+      ;;
+  esac
+}
+
 print_install_plan() {
   local requested_runtime python_cmd python_version runtime_cmd package_manager
   requested_runtime="$REQUESTED_RUNTIME"
@@ -117,7 +143,7 @@ print_install_plan() {
         requested_runtime="auto -> docker/colima"
         ;;
       linux)
-        requested_runtime="auto -> podman"
+        requested_runtime="auto -> docker"
         ;;
     esac
   fi
@@ -147,8 +173,9 @@ print_install_plan() {
   printf '  runtime      %s\n' "$requested_runtime"
   printf '  launch       %s\n' "$(if should_auto_launch; then printf 'auto first-run'; else printf 'manual'; fi)"
   printf '  platform     %s\n' "$(display_platform_plan)"
+  printf '  channel      %s\n' "$(describe_package_channel)"
   printf '  python deps  pip, setuptools, wheel\n'
-  printf '  package      %s\n' "$PIP_SPEC"
+  printf '  package      %s\n' "$(describe_package_selection)"
   printf '  system deps  %s\n' "$(describe_python_dependency_plan "$python_cmd")"
   printf '  runtime deps %s\n' "$(describe_runtime_dependency_plan "$runtime_cmd")"
   printf '  install root %s\n' "$INSTALL_ROOT"
@@ -158,8 +185,9 @@ print_install_plan() {
 
 usage() {
   cat <<'EOF'
-Usage: install.sh [--mode cli|serve] [--runtime auto|docker|podman|skip]
-                  [--install-root PATH] [--bin-dir PATH] [--pip-spec SPEC]
+Usage: install.sh [--mode cli|serve] [--runtime auto|docker|skip]
+                  [--install-root PATH] [--bin-dir PATH]
+                  [--channel stable|dev] [--pip-spec SPEC]
                   [--python PATH] [--platform PLATFORM] [--no-launch]
 
 Installs the vLLM Semantic Router CLI into an isolated virtual environment and
@@ -168,14 +196,17 @@ links a launcher into ~/.local/bin by default.
 Options:
   --mode cli|serve         Install the CLI only, or prepare a local runtime for
                            `vllm-sr serve` as well. Default: serve
-  --runtime auto|docker|podman|skip
+  --runtime auto|docker|skip
                            Runtime strategy for serve mode. Default: auto
                            macOS auto -> docker via colima
-                           Linux auto -> podman
+                           Linux auto -> docker
   --install-root PATH      Installation root. Default:
                            ~/.local/share/vllm-sr
   --bin-dir PATH           Launcher directory. Default: ~/.local/bin
-  --pip-spec SPEC          Python package spec to install. Default: vllm-sr
+  --channel stable|dev     Package channel to install when --pip-spec is not
+                           set. Default: dev
+  --pip-spec SPEC          Explicit Python package spec to install. Overrides
+                           --channel when set
   --python PATH            Explicit Python interpreter to use
   --platform PLATFORM      Platform hint for first-run serve. Use 'amd' for ROCm.
                            Default: auto
@@ -188,6 +219,7 @@ Environment overrides:
   VLLM_SR_RUNTIME
   VLLM_SR_INSTALL_ROOT
   VLLM_SR_BIN_DIR
+  VLLM_SR_INSTALL_CHANNEL
   VLLM_SR_PIP_SPEC
   VLLM_SR_PYTHON
   VLLM_SR_INSTALL_PLATFORM
@@ -465,11 +497,6 @@ detect_existing_runtime() {
     return
   fi
 
-  if podman_ready; then
-    printf 'podman\n'
-    return
-  fi
-
   return 1
 }
 
@@ -524,9 +551,6 @@ describe_runtime_dependency_plan() {
     darwin:docker)
       printf 'docker, colima via Homebrew\n'
       ;;
-    darwin:podman)
-      printf 'podman via Homebrew\n'
-      ;;
     linux:docker)
       pkg_manager="$(detect_linux_pkg_manager || true)"
       case "$pkg_manager" in
@@ -541,23 +565,6 @@ describe_runtime_dependency_plan() {
           ;;
         *)
           printf 'docker required (install manually)\n'
-          ;;
-      esac
-      ;;
-    linux:podman)
-      pkg_manager="$(detect_linux_pkg_manager || true)"
-      case "$pkg_manager" in
-        apt-get)
-          printf 'podman, uidmap, slirp4netns via apt-get\n'
-          ;;
-        dnf)
-          printf 'podman via dnf\n'
-          ;;
-        yum)
-          printf 'podman via yum\n'
-          ;;
-        *)
-          printf 'podman required (install manually)\n'
           ;;
       esac
       ;;
@@ -604,9 +611,8 @@ install_python() {
 }
 
 create_launcher() {
-  local launcher_path runtime_env_path executable_path
+  local launcher_path executable_path
   launcher_path="$BIN_DIR/vllm-sr"
-  runtime_env_path="$INSTALL_ROOT/runtime.env"
   executable_path="$INSTALL_ROOT/venv/bin/vllm-sr"
 
   mkdir -p "$BIN_DIR"
@@ -614,14 +620,31 @@ create_launcher() {
 #!/usr/bin/env bash
 set -euo pipefail
 
-if [ -f "$runtime_env_path" ]; then
-  # shellcheck disable=SC1090
-  . "$runtime_env_path"
-fi
-
 exec "$executable_path" "\$@"
 EOF
   chmod +x "$launcher_path"
+}
+
+install_requested_package() {
+  if [ -n "$PIP_SPEC" ]; then
+    run_quiet_step \
+      "Installing vLLM Semantic Router from $PIP_SPEC" \
+      "$INSTALL_ROOT/venv/bin/python" -m pip install --disable-pip-version-check --upgrade --quiet "$PIP_SPEC"
+    return
+  fi
+
+  case "$REQUESTED_CHANNEL" in
+    dev)
+      run_quiet_step \
+        "Installing latest development vLLM Semantic Router release" \
+        "$INSTALL_ROOT/venv/bin/python" -m pip install --disable-pip-version-check --upgrade --quiet --pre vllm-sr
+      ;;
+    stable)
+      run_quiet_step \
+        "Installing latest stable vLLM Semantic Router release" \
+        "$INSTALL_ROOT/venv/bin/python" -m pip install --disable-pip-version-check --upgrade --quiet vllm-sr
+      ;;
+  esac
 }
 
 install_cli() {
@@ -640,9 +663,7 @@ install_cli() {
   run_quiet_step \
     "Bootstrapping installer Python tooling" \
     "$INSTALL_ROOT/venv/bin/python" -m pip install --disable-pip-version-check --upgrade --quiet pip setuptools wheel
-  run_quiet_step \
-    "Installing vLLM Semantic Router from $PIP_SPEC" \
-    "$INSTALL_ROOT/venv/bin/python" -m pip install --disable-pip-version-check --upgrade --quiet "$PIP_SPEC"
+  install_requested_package
   step "Writing launcher to $BIN_DIR/vllm-sr"
   create_launcher
   done_step "Launcher is ready"
@@ -660,10 +681,6 @@ docker_ready() {
   has_cmd docker && docker info >/dev/null 2>&1
 }
 
-podman_ready() {
-  has_cmd podman && podman info >/dev/null 2>&1
-}
-
 choose_runtime_preference() {
   if [ "$REQUESTED_RUNTIME" != "auto" ]; then
     printf '%s\n' "$REQUESTED_RUNTIME"
@@ -675,7 +692,7 @@ choose_runtime_preference() {
       printf 'docker\n'
       ;;
     linux)
-      printf 'podman\n'
+      printf 'docker\n'
       ;;
   esac
 }
@@ -687,41 +704,6 @@ install_macos_docker_runtime() {
   step "Starting Colima"
   colima start
   done_step "Docker + Colima runtime is ready"
-}
-
-install_macos_podman_runtime() {
-  ensure_homebrew
-  step "Installing Podman via Homebrew"
-  brew install podman
-  if ! podman machine inspect >/dev/null 2>&1; then
-    step "Initializing Podman machine"
-    podman machine init
-  fi
-  step "Starting Podman machine"
-  podman machine start
-  done_step "Podman runtime is ready"
-}
-
-install_linux_podman_runtime() {
-  local pkg_manager
-  pkg_manager="$(detect_linux_pkg_manager)" || die \
-    "No supported Linux package manager found. Install Podman manually and re-run the installer."
-
-  step "Installing Podman"
-  case "$pkg_manager" in
-    apt-get)
-      run_as_root apt-get update
-      run_as_root apt-get install -y podman uidmap slirp4netns
-      ;;
-    dnf)
-      run_as_root dnf install -y podman
-      ;;
-    yum)
-      run_as_root yum install -y podman
-      ;;
-  esac
-
-  done_step "Podman runtime is ready"
 }
 
 install_linux_docker_runtime() {
@@ -755,17 +737,7 @@ install_linux_docker_runtime() {
 }
 
 write_runtime_env() {
-  local runtime_env_path
-  runtime_env_path="$INSTALL_ROOT/runtime.env"
-
-  case "$SELECTED_RUNTIME" in
-    podman)
-      printf 'export CONTAINER_RUNTIME=podman\n' >"$runtime_env_path"
-      ;;
-    docker|'')
-      rm -f "$runtime_env_path"
-      ;;
-  esac
+  rm -f "$INSTALL_ROOT/runtime.env"
 }
 
 ensure_runtime() {
@@ -780,13 +752,6 @@ ensure_runtime() {
     SELECTED_RUNTIME="docker"
     write_runtime_env
     done_step "Using existing Docker runtime"
-    return
-  fi
-
-  if podman_ready; then
-    SELECTED_RUNTIME="podman"
-    write_runtime_env
-    done_step "Using existing Podman runtime"
     return
   fi
 
@@ -807,19 +772,6 @@ ensure_runtime() {
           fi
           ;;
       esac
-      ;;
-    podman)
-      case "$OS_NAME" in
-        darwin)
-          install_macos_podman_runtime
-          podman_ready || die "Podman is installed but not reachable. Try running 'podman machine start' and then 'vllm-sr serve'."
-          ;;
-        linux)
-          install_linux_podman_runtime
-          podman_ready || die "Podman is installed but not reachable from the current shell."
-          ;;
-      esac
-      SELECTED_RUNTIME="podman"
       ;;
     *)
       die "Unsupported runtime selection: $(choose_runtime_preference)"
@@ -948,9 +900,6 @@ print_next_steps() {
         printf '  start        vllm-sr serve\n'
       fi
       printf '  open         vllm-sr dashboard\n'
-      if [ "$SELECTED_RUNTIME" = "podman" ]; then
-        printf '  runtime env  %s/runtime.env\n' "$INSTALL_ROOT"
-      fi
     fi
   fi
   printf '\n'
@@ -982,6 +931,11 @@ parse_args() {
       --pip-spec)
         [ "$#" -ge 2 ] || die "Missing value for --pip-spec"
         PIP_SPEC="$2"
+        shift 2
+        ;;
+      --channel)
+        [ "$#" -ge 2 ] || die "Missing value for --channel"
+        REQUESTED_CHANNEL="$2"
         shift 2
         ;;
       --python)
@@ -1019,10 +973,18 @@ validate_args() {
   esac
 
   case "$REQUESTED_RUNTIME" in
-    auto|docker|podman|skip)
+    auto|docker|skip)
       ;;
     *)
-      die "--runtime must be one of: auto, docker, podman, skip"
+      die "--runtime must be one of: auto, docker, skip"
+      ;;
+  esac
+
+  case "$REQUESTED_CHANNEL" in
+    stable|dev)
+      ;;
+    *)
+      die "--channel must be one of: stable, dev"
       ;;
   esac
 

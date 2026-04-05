@@ -3,6 +3,9 @@ package dsl
 import (
 	"fmt"
 	"sort"
+	"strings"
+
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 )
 
 // ---------- Level 4: Conflict Detection ----------
@@ -10,7 +13,8 @@ import (
 func (v *Validator) checkConflicts() {
 	v.checkDomainSignalOverlap()
 	v.checkSameSignalTypeGuard()
-	v.checkSignalGroups()
+	v.checkProjectionPartitions()
+	v.checkProjections()
 	v.checkTestBlocks()
 	v.checkTierConstraints()
 }
@@ -69,92 +73,6 @@ func getMMLUCategories(s *SignalDecl) []string {
 	return cats
 }
 
-// checkSameSignalTypeGuard warns when two routes reference the same signal type
-// in their WHEN clauses without a NOT guard for mutual exclusion. Without a guard,
-// both routes can match the same query, and priority alone picks the winner —
-// even if the lower-priority route's signal has higher confidence.
-// routeSignalInfo collects positive and negated signal references from a route's WHEN clause.
-type routeSignalInfo struct {
-	route        *RouteDecl
-	positiveRefs map[string][]string // signalType → [signalName, ...]
-	negatedRefs  map[string][]string // signalType → [signalName, ...] (under NOT)
-}
-
-func (v *Validator) checkSameSignalTypeGuard() {
-	infos := v.collectRouteSignalInfos()
-	for i := 0; i < len(infos); i++ {
-		for j := i + 1; j < len(infos); j++ {
-			v.checkSignalTypeGuardPair(infos[i], infos[j])
-		}
-	}
-}
-
-func (v *Validator) collectRouteSignalInfos() []routeSignalInfo {
-	var infos []routeSignalInfo
-	for _, r := range v.prog.Routes {
-		if r.When == nil {
-			continue
-		}
-		info := routeSignalInfo{
-			route:        r,
-			positiveRefs: make(map[string][]string),
-			negatedRefs:  make(map[string][]string),
-		}
-		collectSignalRefs(r.When, false, &info)
-		infos = append(infos, info)
-	}
-	return infos
-}
-
-func (v *Validator) checkSignalTypeGuardPair(a, b routeSignalInfo) {
-	for sigType, aNamesPos := range a.positiveRefs {
-		bNamesPos, ok := b.positiveRefs[sigType]
-		if !ok {
-			continue
-		}
-		for _, aName := range aNamesPos {
-			for _, bName := range bNamesPos {
-				if aName == bName {
-					continue
-				}
-				v.emitGuardDiagIfNeeded(sigType, a, b, aName, bName)
-			}
-		}
-	}
-}
-
-func (v *Validator) emitGuardDiagIfNeeded(sigType string, a, b routeSignalInfo, aName, bName string) {
-	hiRoute, loRoute, hiName, loName := a.route, b.route, aName, bName
-	if b.route.Priority > a.route.Priority ||
-		(b.route.Priority == a.route.Priority && b.route.Tier > a.route.Tier) {
-		hiRoute, loRoute, hiName, loName = b.route, a.route, bName, aName
-	}
-	loInfo := b
-	if hiRoute == b.route {
-		loInfo = a
-	}
-	if containsString(loInfo.negatedRefs[sigType], hiName) {
-		return
-	}
-
-	v.addDiag(DiagWarning, loRoute.Pos,
-		fmt.Sprintf(
-			"ROUTE %q and ROUTE %q both reference %s signals "+
-				"(%s(%q) and %s(%q)) with no mutual exclusion guard — "+
-				"both can fire on the same query",
-			hiRoute.Name, loRoute.Name,
-			sigType, sigType, hiName, sigType, loName),
-		&QuickFix{
-			Description: fmt.Sprintf(
-				"Add guard: WHEN %s(%q) AND NOT %s(%q)",
-				sigType, loName, sigType, hiName),
-			NewText: fmt.Sprintf(
-				"%s(\"%s\") AND NOT %s(\"%s\")",
-				sigType, loName, sigType, hiName),
-		},
-	)
-}
-
 // collectSignalRefs walks a boolean expression tree and classifies signal
 // references as positive (directly referenced) or negated (under a NOT).
 func collectSignalRefs(expr BoolExpr, negated bool, info *routeSignalInfo) {
@@ -185,50 +103,59 @@ func containsString(ss []string, target string) bool {
 	return false
 }
 
-// checkSignalGroups validates SIGNAL_GROUP declarations: member existence,
+// checkProjectionPartitions validates PROJECTION partition declarations: member existence,
 // MMLU category disjointness within the group, default member existence,
 // valid semantics value, and temperature range.
-func (v *Validator) checkSignalGroups() {
-	for _, sg := range v.prog.SignalGroups {
-		v.checkSignalGroup(sg)
+func (v *Validator) checkProjectionPartitions() {
+	for _, partition := range v.prog.ProjectionPartitions {
+		v.checkProjectionPartition(partition)
 	}
+	v.checkProjectionPartitionImpossibleANDs()
 }
 
-func (v *Validator) checkSignalGroup(sg *SignalGroupDecl) {
-	context := fmt.Sprintf("SIGNAL_GROUP %s", sg.Name)
+func (v *Validator) checkProjectionPartition(partition *ProjectionPartitionDecl) {
+	context := fmt.Sprintf("PROJECTION partition %s", partition.Name)
 
-	v.checkSignalGroupSemantics(sg, context)
-	v.checkSignalGroupMembers(sg, context)
-	v.checkSignalGroupDefault(sg, context)
-	v.checkSignalGroupCategoryDisjointness(sg, context)
+	v.checkProjectionPartitionSemantics(partition, context)
+	v.checkProjectionPartitionMembers(partition, context)
+	v.checkProjectionPartitionMemberTypes(partition, context)
+	v.checkProjectionPartitionDefault(partition, context)
+	v.checkProjectionPartitionCategoryDisjointness(partition, context)
+	v.checkProjectionPartitionSupportedDomainValues(partition, context)
 }
 
-func (v *Validator) checkSignalGroupSemantics(sg *SignalGroupDecl, context string) {
+func (v *Validator) checkProjectionPartitionSemantics(
+	partition *ProjectionPartitionDecl,
+	context string,
+) {
 	validSemantics := []string{"exclusive", "softmax_exclusive"}
-	if sg.Semantics != "" && !containsString(validSemantics, sg.Semantics) {
-		v.addDiag(DiagConstraint, sg.Pos,
-			fmt.Sprintf("%s: unknown semantics %q (supported: exclusive, softmax_exclusive)", context, sg.Semantics),
+	if partition.Semantics != "" && !containsString(validSemantics, partition.Semantics) {
+		v.addDiag(DiagConstraint, partition.Pos,
+			fmt.Sprintf("%s: unknown semantics %q (supported: exclusive, softmax_exclusive)", context, partition.Semantics),
 			nil,
 		)
 	}
-	if sg.Semantics == "softmax_exclusive" && sg.Temperature <= 0 {
-		v.addDiag(DiagConstraint, sg.Pos,
+	if partition.Semantics == "softmax_exclusive" && partition.Temperature <= 0 {
+		v.addDiag(DiagConstraint, partition.Pos,
 			fmt.Sprintf("%s: softmax_exclusive requires temperature > 0", context),
 			&QuickFix{Description: "Set temperature to 0.1", NewText: "0.1"},
 		)
 	}
 }
 
-func (v *Validator) checkSignalGroupMembers(sg *SignalGroupDecl, context string) {
-	if len(sg.Members) == 0 {
-		v.addDiag(DiagConstraint, sg.Pos,
+func (v *Validator) checkProjectionPartitionMembers(
+	partition *ProjectionPartitionDecl,
+	context string,
+) {
+	if len(partition.Members) == 0 {
+		v.addDiag(DiagConstraint, partition.Pos,
 			fmt.Sprintf("%s: members list is empty", context),
 			nil,
 		)
 	}
-	for _, member := range sg.Members {
+	for _, member := range partition.Members {
 		if !v.isSignalDeclaredByName(member) {
-			v.addDiag(DiagWarning, sg.Pos,
+			v.addDiag(DiagWarning, partition.Pos,
 				fmt.Sprintf("%s: member %q is not defined as a signal", context, member),
 				v.suggestSignalByName(member),
 			)
@@ -236,35 +163,85 @@ func (v *Validator) checkSignalGroupMembers(sg *SignalGroupDecl, context string)
 	}
 }
 
-func (v *Validator) checkSignalGroupDefault(sg *SignalGroupDecl, context string) {
-	if sg.Default == "" {
-		v.addDiag(DiagConstraint, sg.Pos,
+func (v *Validator) checkProjectionPartitionMemberTypes(
+	partition *ProjectionPartitionDecl,
+	context string,
+) {
+	membersByType := make(map[string][]string)
+	for _, member := range partition.Members {
+		sig := v.findSignalByName(member)
+		if sig == nil {
+			continue
+		}
+		membersByType[sig.SignalType] = append(membersByType[sig.SignalType], member)
+	}
+	if len(membersByType) == 0 {
+		return
+	}
+
+	if len(membersByType) == 1 {
+		for signalType, members := range membersByType {
+			if isSupportedProjectionPartitionType(signalType) {
+				return
+			}
+			v.addDiag(DiagConstraint, partition.Pos,
+				fmt.Sprintf(
+					"%s: members must use a supported runtime signal type (domain or embedding), found %s=%v",
+					context,
+					signalType,
+					members,
+				),
+				nil,
+			)
+			return
+		}
+	}
+
+	v.addDiag(DiagConstraint, partition.Pos,
+		fmt.Sprintf(
+			"%s: members must all share one supported runtime signal type (domain or embedding), found %s",
+			context,
+			describeProjectionPartitionMemberTypes(membersByType),
+		),
+		nil,
+	)
+}
+
+func (v *Validator) checkProjectionPartitionDefault(
+	partition *ProjectionPartitionDecl,
+	context string,
+) {
+	if partition.Default == "" {
+		v.addDiag(DiagConstraint, partition.Pos,
 			fmt.Sprintf("%s: a default member is required for coverage — every query must route somewhere", context),
 			nil,
 		)
 		return
 	}
-	if !containsString(sg.Members, sg.Default) {
-		v.addDiag(DiagWarning, sg.Pos,
-			fmt.Sprintf("%s: default %q is not listed in members", context, sg.Default),
+	if !containsString(partition.Members, partition.Default) {
+		v.addDiag(DiagWarning, partition.Pos,
+			fmt.Sprintf("%s: default %q is not listed in members", context, partition.Default),
 			nil,
 		)
 	}
 }
 
-func (v *Validator) checkSignalGroupCategoryDisjointness(sg *SignalGroupDecl, context string) {
+func (v *Validator) checkProjectionPartitionCategoryDisjointness(
+	partition *ProjectionPartitionDecl,
+	context string,
+) {
 	catOwner := make(map[string]string)
-	for _, member := range sg.Members {
+	for _, member := range partition.Members {
 		sig := v.findSignalByName(member)
 		if sig == nil {
 			continue
 		}
 		for _, cat := range getMMLUCategories(sig) {
 			if existing, clash := catOwner[cat]; clash {
-				v.addDiag(DiagWarning, sg.Pos,
+				v.addDiag(DiagWarning, partition.Pos,
 					fmt.Sprintf(
 						"%s: members %q and %q share MMLU category %q — "+
-							"violates group disjointness",
+							"violates partition disjointness",
 						context, member, existing, cat),
 					nil,
 				)
@@ -272,6 +249,80 @@ func (v *Validator) checkSignalGroupCategoryDisjointness(sg *SignalGroupDecl, co
 			catOwner[cat] = member
 		}
 	}
+}
+
+func (v *Validator) checkProjectionPartitionSupportedDomainValues(
+	partition *ProjectionPartitionDecl,
+	context string,
+) {
+	if partition.Semantics != "softmax_exclusive" {
+		return
+	}
+	for _, member := range partition.Members {
+		sig := v.findSignalByName(member)
+		if sig == nil || sig.SignalType != "domain" {
+			continue
+		}
+		mmluCategories := getMMLUCategories(sig)
+		if len(mmluCategories) == 0 {
+			if config.IsSupportedRoutingDomainName(sig.Name) {
+				continue
+			}
+			v.addDiag(
+				DiagConstraint,
+				partition.Pos,
+				fmt.Sprintf(
+					"%s: domain member %q must use a supported routing domain name (%s) or declare mmlu_categories explicitly%s",
+					context,
+					member,
+					strings.Join(config.SupportedRoutingDomainNames(), ", "),
+					formatDomainQuickFixSuffix(member),
+				),
+				domainQuickFix(member),
+			)
+			continue
+		}
+		for _, mmluCategory := range mmluCategories {
+			if config.IsSupportedRoutingDomainName(mmluCategory) {
+				continue
+			}
+			v.addDiag(
+				DiagConstraint,
+				partition.Pos,
+				fmt.Sprintf(
+					"%s: domain member %q has unsupported mmlu_categories value %q; supported values: %s%s",
+					context,
+					member,
+					mmluCategory,
+					strings.Join(config.SupportedRoutingDomainNames(), ", "),
+					formatDomainQuickFixSuffix(mmluCategory),
+				),
+				domainQuickFix(mmluCategory),
+			)
+		}
+	}
+}
+
+func isSupportedProjectionPartitionType(signalType string) bool {
+	return signalType == "domain" || signalType == "embedding"
+}
+
+func describeProjectionPartitionMemberTypes(
+	membersByType map[string][]string,
+) string {
+	keys := make([]string, 0, len(membersByType))
+	for signalType := range membersByType {
+		keys = append(keys, signalType)
+	}
+	sort.Strings(keys)
+
+	parts := make([]string, 0, len(keys))
+	for _, signalType := range keys {
+		members := append([]string(nil), membersByType[signalType]...)
+		sort.Strings(members)
+		parts = append(parts, fmt.Sprintf("%s=%v", signalType, members))
+	}
+	return strings.Join(parts, ", ")
 }
 
 func (v *Validator) isSignalDeclaredByName(name string) bool {
@@ -292,6 +343,113 @@ func (v *Validator) findSignalByName(name string) *SignalDecl {
 	return nil
 }
 
+func (v *Validator) checkProjectionPartitionImpossibleANDs() {
+	memberToPartition := v.projectionPartitionMembers()
+	if len(memberToPartition) == 0 {
+		return
+	}
+
+	for _, route := range v.prog.Routes {
+		if route.When == nil {
+			continue
+		}
+		v.checkProjectionPartitionImpossibleANDsInRoute(route, memberToPartition)
+	}
+}
+
+func (v *Validator) projectionPartitionMembers() map[string]string {
+	memberToPartition := make(map[string]string)
+	for _, partition := range v.prog.ProjectionPartitions {
+		for _, member := range partition.Members {
+			sig := v.findSignalByName(member)
+			if sig == nil || !isSupportedProjectionPartitionType(sig.SignalType) {
+				continue
+			}
+			memberToPartition[projectionPartitionMemberKey(sig.SignalType, member)] = partition.Name
+		}
+	}
+	return memberToPartition
+}
+
+func projectionPartitionMemberKey(signalType string, signalName string) string {
+	return signalType + ":" + signalName
+}
+
+func (v *Validator) checkProjectionPartitionImpossibleANDsInRoute(
+	route *RouteDecl,
+	memberToPartition map[string]string,
+) {
+	clauses := positiveConjunctionClauses(route.When)
+	seen := make(map[string]struct{})
+
+	for _, clause := range clauses {
+		partitionMembers := make(map[string]SignalRefExpr)
+		for _, ref := range clause {
+			partitionName, ok := memberToPartition[projectionPartitionMemberKey(ref.SignalType, ref.SignalName)]
+			if !ok {
+				continue
+			}
+
+			if existing, clash := partitionMembers[partitionName]; clash && existing.SignalName != ref.SignalName {
+				pair := []string{
+					projectionPartitionMemberKey(existing.SignalType, existing.SignalName),
+					projectionPartitionMemberKey(ref.SignalType, ref.SignalName),
+				}
+				sort.Strings(pair)
+				diagKey := route.Name + "|" + partitionName + "|" + strings.Join(pair, "|")
+				if _, alreadyReported := seen[diagKey]; alreadyReported {
+					continue
+				}
+				seen[diagKey] = struct{}{}
+
+				v.addDiag(DiagConstraint, route.Pos,
+					fmt.Sprintf(
+						"ROUTE %q: WHEN clause ANDs PROJECTION partition %q members %s(%q) and %s(%q), but that partition declares them mutually exclusive",
+						route.Name,
+						partitionName,
+						existing.SignalType,
+						existing.SignalName,
+						ref.SignalType,
+						ref.SignalName,
+					),
+					nil,
+				)
+				continue
+			}
+
+			partitionMembers[partitionName] = ref
+		}
+	}
+}
+
+func positiveConjunctionClauses(expr BoolExpr) [][]SignalRefExpr {
+	switch e := expr.(type) {
+	case *SignalRefExpr:
+		return [][]SignalRefExpr{{*e}}
+	case *BoolNot:
+		return [][]SignalRefExpr{{}}
+	case *BoolOr:
+		left := positiveConjunctionClauses(e.Left)
+		right := positiveConjunctionClauses(e.Right)
+		return append(left, right...)
+	case *BoolAnd:
+		left := positiveConjunctionClauses(e.Left)
+		right := positiveConjunctionClauses(e.Right)
+		clauses := make([][]SignalRefExpr, 0, len(left)*len(right))
+		for _, leftClause := range left {
+			for _, rightClause := range right {
+				clause := make([]SignalRefExpr, 0, len(leftClause)+len(rightClause))
+				clause = append(clause, leftClause...)
+				clause = append(clause, rightClause...)
+				clauses = append(clauses, clause)
+			}
+		}
+		return clauses
+	default:
+		return nil
+	}
+}
+
 func (v *Validator) suggestSignalByName(name string) *QuickFix {
 	var candidates []string
 	for _, s := range v.prog.Signals {
@@ -304,6 +462,203 @@ func (v *Validator) suggestSignalByName(name string) *QuickFix {
 	return &QuickFix{
 		Description: fmt.Sprintf("Change to %q", closest),
 		NewText:     closest,
+	}
+}
+
+func (v *Validator) checkProjections() {
+	scoreNames := make(map[string]bool, len(v.prog.ProjectionScores))
+	for _, score := range v.prog.ProjectionScores {
+		if score.Name == "" {
+			v.addDiag(DiagConstraint, score.Pos, "PROJECTION score: name cannot be empty", nil)
+			continue
+		}
+		if scoreNames[score.Name] {
+			v.addDiag(DiagConstraint, score.Pos, fmt.Sprintf("PROJECTION score %q: duplicate score name", score.Name), nil)
+			continue
+		}
+		scoreNames[score.Name] = true
+		v.checkProjectionScore(score)
+	}
+
+	outputNames := make(map[string]bool)
+	for _, mapping := range v.prog.ProjectionMappings {
+		if mapping.Name == "" {
+			v.addDiag(DiagConstraint, mapping.Pos, "PROJECTION mapping: name cannot be empty", nil)
+			continue
+		}
+		v.checkProjectionMapping(mapping, scoreNames, outputNames)
+	}
+}
+
+func (v *Validator) checkProjectionScore(score *ProjectionScoreDecl) {
+	context := fmt.Sprintf("PROJECTION score %s", score.Name)
+	if score.Method == "" {
+		score.Method = "weighted_sum"
+	}
+	if score.Method != "weighted_sum" {
+		v.addDiag(
+			DiagConstraint,
+			score.Pos,
+			fmt.Sprintf("%s: unknown method %q (supported: weighted_sum)", context, score.Method),
+			nil,
+		)
+	}
+	if len(score.Inputs) == 0 {
+		v.addDiag(DiagConstraint, score.Pos, fmt.Sprintf("%s: inputs cannot be empty", context), nil)
+		return
+	}
+
+	for _, input := range score.Inputs {
+		v.checkProjectionScoreInput(context, score.Pos, input)
+	}
+}
+
+func (v *Validator) checkProjectionScoreInput(context string, pos Position, input *ProjectionScoreInputDecl) {
+	if input == nil {
+		return
+	}
+	if !isProjectionInputTypeSupported(input.SignalType) {
+		v.addDiag(
+			DiagConstraint,
+			pos,
+			fmt.Sprintf(
+				"%s: input %s(%q) uses unsupported type %q",
+				context,
+				input.SignalType,
+				input.SignalName,
+				input.SignalType,
+			),
+			nil,
+		)
+		return
+	}
+	if !v.isSignalDefined(input.SignalType, input.SignalName) {
+		v.addDiag(
+			DiagWarning,
+			pos,
+			fmt.Sprintf("%s: input %s(%q) is not defined", context, input.SignalType, input.SignalName),
+			v.suggestSignalByName(input.SignalName),
+		)
+	}
+	switch input.ValueSource {
+	case "", "binary", "confidence":
+	default:
+		v.addDiag(
+			DiagConstraint,
+			pos,
+			fmt.Sprintf(
+				"%s: input %s(%q) has unsupported value_source %q (supported: binary, confidence)",
+				context,
+				input.SignalType,
+				input.SignalName,
+				input.ValueSource,
+			),
+			nil,
+		)
+	}
+}
+
+func isProjectionInputTypeSupported(signalType string) bool {
+	switch signalType {
+	case config.SignalTypeKeyword,
+		config.SignalTypeEmbedding,
+		config.SignalTypeDomain,
+		config.SignalTypeFactCheck,
+		config.SignalTypeUserFeedback,
+		config.SignalTypeReask,
+		config.SignalTypePreference,
+		config.SignalTypeLanguage,
+		config.SignalTypeContext,
+		config.SignalTypeStructure,
+		config.SignalTypeComplexity,
+		config.SignalTypeModality,
+		config.SignalTypeAuthz,
+		config.SignalTypeJailbreak,
+		config.SignalTypePII:
+		return true
+	default:
+		return false
+	}
+}
+
+func (v *Validator) checkProjectionMapping(mapping *ProjectionMappingDecl, scoreNames map[string]bool, outputNames map[string]bool) {
+	context := fmt.Sprintf("PROJECTION mapping %s", mapping.Name)
+	if mapping.Method == "" {
+		mapping.Method = "threshold_bands"
+	}
+	if !scoreNames[mapping.Source] {
+		v.addDiag(
+			DiagConstraint,
+			mapping.Pos,
+			fmt.Sprintf("%s: source %q is not a declared projection score", context, mapping.Source),
+			nil,
+		)
+	}
+	if mapping.Method != "threshold_bands" {
+		v.addDiag(
+			DiagConstraint,
+			mapping.Pos,
+			fmt.Sprintf("%s: unknown method %q (supported: threshold_bands)", context, mapping.Method),
+			nil,
+		)
+	}
+	if mapping.Calibration != nil {
+		switch mapping.Calibration.Method {
+		case "", "sigmoid_distance":
+		default:
+			v.addDiag(
+				DiagConstraint,
+				mapping.Pos,
+				fmt.Sprintf(
+					"%s: unsupported calibration method %q (supported: sigmoid_distance)",
+					context,
+					mapping.Calibration.Method,
+				),
+				nil,
+			)
+		}
+	}
+	if len(mapping.Outputs) == 0 {
+		v.addDiag(DiagConstraint, mapping.Pos, fmt.Sprintf("%s: outputs cannot be empty", context), nil)
+		return
+	}
+	for _, output := range mapping.Outputs {
+		v.checkProjectionMappingOutput(context, mapping.Pos, output, outputNames)
+	}
+}
+
+func (v *Validator) checkProjectionMappingOutput(
+	context string,
+	pos Position,
+	output *ProjectionMappingOutputDecl,
+	outputNames map[string]bool,
+) {
+	if output == nil {
+		return
+	}
+	if output.Name == "" {
+		v.addDiag(DiagConstraint, pos, fmt.Sprintf("%s: output name cannot be empty", context), nil)
+		return
+	}
+	if outputNames[output.Name] {
+		v.addDiag(DiagConstraint, pos, fmt.Sprintf("%s: duplicate output name %q", context, output.Name), nil)
+		return
+	}
+	outputNames[output.Name] = true
+
+	if output.GT == nil && output.GTE == nil && output.LT == nil && output.LTE == nil {
+		v.addDiag(
+			DiagConstraint,
+			pos,
+			fmt.Sprintf("%s output %q: at least one threshold bound is required", context, output.Name),
+			nil,
+		)
+	}
+	if output.GT != nil && output.GTE != nil {
+		v.addDiag(DiagConstraint, pos, fmt.Sprintf("%s output %q: cannot set both gt and gte", context, output.Name), nil)
+	}
+	if output.LT != nil && output.LTE != nil {
+		v.addDiag(DiagConstraint, pos, fmt.Sprintf("%s output %q: cannot set both lt and lte", context, output.Name), nil)
 	}
 }
 

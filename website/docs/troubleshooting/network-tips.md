@@ -34,9 +34,12 @@ The router will download embedding models on first run unless you provide them l
 2) In `config/config.yaml`, point to the local path. Example:
 
    ```yaml
-   bert_model:
-     # point to a local folder under /app/models (already mounted by compose)
-     model_id: /app/models/all-MiniLM-L12-v2
+   global:
+     model_catalog:
+       embeddings:
+         semantic:
+           # point to a local folder under /app/models (already mounted by compose)
+           bert_model_path: /app/models/all-MiniLM-L12-v2
    ```
 
 3) No extra env is required. `deploy/docker-compose/docker-compose.yml` already mounts `./models:/app/models:ro`.

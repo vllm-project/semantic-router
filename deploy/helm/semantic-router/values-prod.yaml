@@ -1,0 +1,53 @@
+# Production profile — hardened defaults for multi-replica, production clusters.
+
+replicaCount: 2
+
+image:
+  pullPolicy: IfNotPresent
+
+resources:
+  limits:
+    memory: "8Gi"
+    cpu: "4"
+  requests:
+    memory: "4Gi"
+    cpu: "2"
+
+persistence:
+  enabled: true
+  size: 20Gi
+
+dashboard:
+  enabled: true
+
+autoscaling:
+  enabled: true
+  minReplicas: 2
+  maxReplicas: 10
+  targetCPUUtilizationPercentage: 70
+
+startupProbe:
+  failureThreshold: 360  # 60 minutes
+
+livenessProbe:
+  initialDelaySeconds: 30
+  periodSeconds: 30
+  failureThreshold: 5
+
+readinessProbe:
+  initialDelaySeconds: 30
+  periodSeconds: 15
+  failureThreshold: 3
+
+securityContext:
+  runAsNonRoot: true
+  allowPrivilegeEscalation: false
+
+dependencies:
+  observability:
+    jaeger:
+      enabled: false
+    prometheus:
+      enabled: true
+    grafana:
+      enabled: true

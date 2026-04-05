@@ -20,9 +20,10 @@ type CanonicalConfig struct {
 
 // CanonicalRouting contains the DSL-owned routing surface.
 type CanonicalRouting struct {
-	ModelCards []RoutingModel   `yaml:"modelCards,omitempty"`
-	Signals    CanonicalSignals `yaml:"signals,omitempty"`
-	Decisions  []Decision       `yaml:"decisions,omitempty"`
+	ModelCards  []RoutingModel       `yaml:"modelCards,omitempty"`
+	Signals     CanonicalSignals     `yaml:"signals,omitempty"`
+	Projections CanonicalProjections `yaml:"projections,omitempty"`
+	Decisions   []Decision           `yaml:"decisions,omitempty"`
 }
 
 // CanonicalSignals groups routing signals under routing.signals.
@@ -32,14 +33,24 @@ type CanonicalSignals struct {
 	Domains       []Category         `yaml:"domains,omitempty"`
 	FactCheck     []FactCheckRule    `yaml:"fact_check,omitempty"`
 	UserFeedbacks []UserFeedbackRule `yaml:"user_feedbacks,omitempty"`
+	Reasks        []ReaskRule        `yaml:"reasks,omitempty"`
 	Preferences   []PreferenceRule   `yaml:"preferences,omitempty"`
 	Language      []LanguageRule     `yaml:"language,omitempty"`
 	Context       []ContextRule      `yaml:"context,omitempty"`
+	Structure     []StructureRule    `yaml:"structure,omitempty"`
 	Complexity    []ComplexityRule   `yaml:"complexity,omitempty"`
 	Modality      []ModalityRule     `yaml:"modality,omitempty"`
 	RoleBindings  []RoleBinding      `yaml:"role_bindings,omitempty"`
 	Jailbreak     []JailbreakRule    `yaml:"jailbreak,omitempty"`
 	PII           []PIIRule          `yaml:"pii,omitempty"`
+	KB            []KBSignalRule     `yaml:"kb,omitempty"`
+}
+
+// CanonicalProjections groups derived routing outputs under routing.projections.
+type CanonicalProjections struct {
+	Partitions []ProjectionPartition `yaml:"partitions,omitempty"`
+	Scores     []ProjectionScore     `yaml:"scores,omitempty"`
+	Mappings   []ProjectionMapping   `yaml:"mappings,omitempty"`
 }
 
 // RoutingModel defines the logical model catalog available to routing decisions.
@@ -93,6 +104,7 @@ func applyCanonicalRoutingState(cfg *RouterConfig, canonical *CanonicalConfig) {
 	cfg.Decisions = copyDecisions(canonical.Routing.Decisions)
 	ensureModelRefDefaults(cfg.Decisions)
 	cfg.Signals = normalizeSignals(canonical.Routing.Signals, cfg.Decisions)
+	cfg.Projections = normalizeProjections(canonical.Routing.Projections)
 	cfg.ModelConfig = make(map[string]ModelParams)
 
 	for _, model := range canonicalRoutingModels(canonical.Routing) {
@@ -226,14 +238,17 @@ func normalizeSignals(signals CanonicalSignals, decisions []Decision) Signals {
 		Categories:        append([]Category(nil), signals.Domains...),
 		FactCheckRules:    append([]FactCheckRule(nil), signals.FactCheck...),
 		UserFeedbackRules: append([]UserFeedbackRule(nil), signals.UserFeedbacks...),
+		ReaskRules:        append([]ReaskRule(nil), signals.Reasks...),
 		PreferenceRules:   append([]PreferenceRule(nil), signals.Preferences...),
 		LanguageRules:     append([]LanguageRule(nil), signals.Language...),
 		ContextRules:      append([]ContextRule(nil), signals.Context...),
+		StructureRules:    append([]StructureRule(nil), signals.Structure...),
 		ComplexityRules:   append([]ComplexityRule(nil), signals.Complexity...),
 		ModalityRules:     append([]ModalityRule(nil), signals.Modality...),
 		RoleBindings:      append([]RoleBinding(nil), signals.RoleBindings...),
 		JailbreakRules:    append([]JailbreakRule(nil), signals.Jailbreak...),
 		PIIRules:          append([]PIIRule(nil), signals.PII...),
+		KBRules:           append([]KBSignalRule(nil), signals.KB...),
 	}
 
 	if len(result.Categories) == 0 {
@@ -241,6 +256,14 @@ func normalizeSignals(signals CanonicalSignals, decisions []Decision) Signals {
 	}
 
 	return result
+}
+
+func normalizeProjections(projections CanonicalProjections) Projections {
+	return Projections{
+		Partitions: append([]ProjectionPartition(nil), projections.Partitions...),
+		Scores:     append([]ProjectionScore(nil), projections.Scores...),
+		Mappings:   append([]ProjectionMapping(nil), projections.Mappings...),
+	}
 }
 
 func canonicalRoutingModels(routing CanonicalRouting) []RoutingModel {
@@ -343,8 +366,11 @@ func normalizeExternalModelIDsFromProviderModel(model CanonicalProviderModel) ma
 		}
 		result[key] = model.ProviderModelID
 	}
+	// When no backend_refs are defined (metadata-only provider model),
+	// still store the provider_model_id so pricing lookups by provider
+	// model ID (e.g. from Envoy AI Gateway) can resolve to this model.
 	if len(result) == 0 {
-		return nil
+		result["default"] = model.ProviderModelID
 	}
 	return result
 }

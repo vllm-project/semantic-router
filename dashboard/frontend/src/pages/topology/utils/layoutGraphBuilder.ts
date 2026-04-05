@@ -1,112 +1,38 @@
 import { Edge, MarkerType, Node } from 'reactflow'
 import {
   CollapseState,
-  DecisionConfig,
-  ModelRefConfig,
   ParsedTopology,
   SignalType,
   TestQueryResult,
 } from '../types'
 import {
   EDGE_COLORS,
-  LAYOUT_CONFIG,
+  MODEL_NODE_WIDTH,
   SIGNAL_LATENCY,
   SIGNAL_TYPES,
 } from '../constants'
+import {
+  buildProjectionGroups,
+  buildProjectionOutputNodeMap,
+  formatProjectionInputLabel,
+  formatProjectionOutputLabel,
+  groupProjectionInputsBySignalType,
+} from './layoutProjectionSupport'
+import {
+  createFlowEdge,
+  DecisionDensityMode,
+  DENSITY_VISIBLE_DECISION_LIMIT,
+  getDecisionNodeHeight,
+  getModelConfigKey,
+  getPhysicalModelKey,
+  getPluginChainHeight,
+  getSignalGroupHeight,
+  GraphBuildResult,
+  LayoutInteractions,
+  ModelConnection,
+} from './layoutGraphBuilderSupport'
 import { groupSignalsByType } from './topologyParser'
-import { collectRuleConditions, collectRuleSignalTypes, summarizeRuleNode } from './ruleTree'
-
-interface ModelConnection {
-  modelRef: ModelRefConfig
-  decisionName: string
-  sourceId: string
-  hasReasoning: boolean
-  reasoningEffort?: string
-}
-
-type DecisionDensityMode = 'compact' | 'balanced' | 'cinematic'
-
-interface LayoutInteractions {
-  expandHiddenDecisions?: boolean
-  onExpandHiddenDecisions?: () => void
-  focusMode?: boolean
-  focusedDecisionName?: string | null
-  onFocusDecision?: (decisionName: string) => void
-}
-
-interface GraphBuildResult {
-  nodes: Node[]
-  edges: Edge[]
-  nodeDimensions: Map<string, { width: number; height: number }>
-  hiddenDecisionCount: number
-  visibleDecisionCount: number
-}
-
-const DENSITY_VISIBLE_DECISION_LIMIT: Record<DecisionDensityMode, number> = {
-  compact: 16,
-  balanced: 12,
-  cinematic: 8,
-}
-
-function createFlowEdge(baseEdge: Partial<Edge>): Edge {
-  return {
-    ...baseEdge,
-  } as Edge
-}
-
-function getDecisionNodeHeight(decision: DecisionConfig, collapsed: boolean): number {
-  const { decisionBaseHeight, decisionConditionHeight } = LAYOUT_CONFIG
-
-  if (collapsed) return 90
-
-  const visibleRuleLineCount = (decision.rules?.conditions || [])
-    .slice(0, 4)
-    .reduce((total, condition) => {
-      const wrappedLines = Math.max(1, Math.ceil(summarizeRuleNode(condition).length / 30))
-      return total + Math.min(wrappedLines, 3)
-    }, 0)
-  const hasAlgorithm = decision.algorithm && decision.algorithm.type !== 'static'
-  const hasPlugins = decision.plugins && decision.plugins.length > 0
-  const hasReasoning = decision.modelRefs?.some(m => m.use_reasoning)
-
-  let height = decisionBaseHeight
-  height += visibleRuleLineCount * decisionConditionHeight
-  if (hasAlgorithm) height += 18
-  if (hasPlugins) height += 18
-  if (hasReasoning) height += 18
-  const modelCount = Math.min(decision.modelRefs?.length || 0, 2)
-  height += modelCount * 20
-
-  return Math.max(height, 140)
-}
-
-function getSignalGroupHeight(signals: { name: string }[], collapsed: boolean): number {
-  const { signalGroupBaseHeight, signalItemHeight } = LAYOUT_CONFIG
-  if (collapsed) return 70
-  const itemCount = Math.min(signals.length, 5)
-  return signalGroupBaseHeight + itemCount * signalItemHeight
-}
-
-function getPluginChainHeight(plugins: { type: string }[], collapsed: boolean): number {
-  const { pluginChainBaseHeight, pluginItemHeight } = LAYOUT_CONFIG
-  if (collapsed) return 55
-  const itemCount = Math.min(plugins.length, 4)
-  return pluginChainBaseHeight + itemCount * pluginItemHeight
-}
-
-function getPhysicalModelKey(modelRef: ModelRefConfig): string {
-  const parts = [modelRef.model]
-  if (modelRef.lora_name) parts.push(`lora-${modelRef.lora_name}`)
-  return parts.join('|')
-}
-
-function getModelConfigKey(modelRef: ModelRefConfig): string {
-  const parts = [modelRef.model]
-  if (modelRef.use_reasoning) parts.push('reasoning')
-  if (modelRef.reasoning_effort) parts.push(`effort-${modelRef.reasoning_effort}`)
-  if (modelRef.lora_name) parts.push(`lora-${modelRef.lora_name}`)
-  return parts.join('|')
-}
+import { collectRuleConditions, collectRuleSignalTypes } from './ruleTree'
 
 export function buildLayoutGraph(
   topology: ParsedTopology,
@@ -121,7 +47,7 @@ export function buildLayoutGraph(
   const edges: Edge[] = []
 
   const signalGroups = groupSignalsByType(topology.signals)
-  const activeSignalTypes = SIGNAL_TYPES.filter(type => signalGroups[type].length > 0)
+  const activeSignalTypes = SIGNAL_TYPES.filter(type => type !== 'projection' && signalGroups[type].length > 0)
   const nodeDimensions: Map<string, { width: number; height: number }> = new Map()
 
   const clientId = 'client'
@@ -238,6 +164,55 @@ export function buildLayoutGraph(
     })
   }
 
+  const projectionGroups = buildProjectionGroups(signalGroups.projection)
+  const projectionNodeIds = projectionGroups.map((group) => group.nodeId)
+  const projectionOutputToNodeId = buildProjectionOutputNodeMap(projectionGroups)
+
+  projectionGroups.forEach((group) => {
+    const isCollapsed = collapseState.signalGroups.projection
+    const nodeHeight = getSignalGroupHeight(group.outputs, isCollapsed) + 18
+
+    nodeDimensions.set(group.nodeId, { width: 190, height: nodeHeight })
+    nodes.push({
+      id: group.nodeId,
+      type: 'signalGroupNode',
+      position: { x: 0, y: 0 },
+      data: {
+        signalType: 'projection',
+        title: group.mappingName,
+        subtitle: `score: ${group.sourceScore} · ${group.method}`,
+        latencyLabel: SIGNAL_LATENCY.projection,
+        signals: group.outputs,
+        collapsed: isCollapsed,
+        isHighlighted: isHighlighted(group.nodeId),
+      },
+    })
+
+    groupProjectionInputsBySignalType(group).forEach((inputNames, signalType) => {
+      const signalGroupId = `signal-group-${signalType}`
+      if (!nodes.find(node => node.id === signalGroupId)) {
+        return
+      }
+
+      edges.push(createFlowEdge({
+        id: `e-${signalGroupId}-${group.nodeId}`,
+        source: signalGroupId,
+        target: group.nodeId,
+        style: {
+          stroke: EDGE_COLORS.normal,
+          strokeWidth: 1.5,
+        },
+        markerEnd: {
+          type: MarkerType.ArrowClosed,
+          color: EDGE_COLORS.normal,
+        },
+        label: formatProjectionInputLabel(inputNames),
+        labelStyle: { fontSize: 9, fill: '#888' },
+        labelBgStyle: { fill: '#1a1a2e', fillOpacity: 0.8 },
+      }))
+    })
+  })
+
   const decisionFinalSources: Record<string, string> = {}
   const forcedVisibleDecisionNames = new Set<string>()
   highlightedPath
@@ -254,7 +229,7 @@ export function buildLayoutGraph(
   const hiddenDecisionCount = Math.max(0, topology.decisions.length - visibleDecisions.length)
 
   const signalGroupIds = activeSignalTypes.map(type => `signal-group-${type}`)
-  const defaultUpstream = signalGroupIds.length > 0 ? signalGroupIds[0] : lastSourceId
+  const defaultUpstream = signalGroupIds[0] ?? projectionNodeIds[0] ?? lastSourceId
   const configuredSignals = new Set(topology.signals.map(signal => `${signal.type}:${signal.name}`))
 
   visibleDecisions.forEach(decision => {
@@ -290,9 +265,27 @@ export function buildLayoutGraph(
     })
 
     const connectedSignalTypes = new Set<SignalType>(collectRuleSignalTypes(decision.rules))
+    const projectionConditionNamesByNode = new Map<string, string[]>()
     let hasConnection = false
 
+    leafConditions
+      .filter(condition => condition.type === 'projection')
+      .forEach((condition) => {
+        const projectionNodeId = projectionOutputToNodeId.get(condition.name)
+        if (!projectionNodeId) {
+          return
+        }
+        hasConnection = true
+        if (!projectionConditionNamesByNode.has(projectionNodeId)) {
+          projectionConditionNamesByNode.set(projectionNodeId, [])
+        }
+        projectionConditionNamesByNode.get(projectionNodeId)!.push(condition.name)
+      })
+
     connectedSignalTypes.forEach(signalType => {
+      if (signalType === 'projection') {
+        return
+      }
       const signalGroupId = `signal-group-${signalType}`
       if (nodes.find(node => node.id === signalGroupId)) {
         hasConnection = true
@@ -313,6 +306,25 @@ export function buildLayoutGraph(
           labelBgStyle: { fill: '#1a1a2e', fillOpacity: 0.8 },
         }))
       }
+    })
+
+    projectionConditionNamesByNode.forEach((projectionNames, projectionNodeId) => {
+      edges.push(createFlowEdge({
+        id: `e-${projectionNodeId}-${decisionId}`,
+        source: projectionNodeId,
+        target: decisionId,
+        style: {
+          stroke: EDGE_COLORS.normal,
+          strokeWidth: 1.5,
+        },
+        markerEnd: {
+          type: MarkerType.ArrowClosed,
+          color: EDGE_COLORS.normal,
+        },
+        label: formatProjectionOutputLabel(projectionNames),
+        labelStyle: { fontSize: 9, fill: '#888' },
+        labelBgStyle: { fill: '#1a1a2e', fillOpacity: 0.8 },
+      }))
     })
 
     if (!hasConnection) {
@@ -413,7 +425,7 @@ export function buildLayoutGraph(
 
   const defaultRouteId = 'default-route'
   if (topology.defaultModel) {
-    nodeDimensions.set(defaultRouteId, { width: 160, height: 80 })
+    nodeDimensions.set(defaultRouteId, { width: 200, height: 140 })
 
     nodes.push({
       id: defaultRouteId,
@@ -553,7 +565,7 @@ export function buildLayoutGraph(
     const uniqueModes = new Set(modes.map(mode => mode.hasReasoning ? 'reasoning' : 'standard'))
     const nodeHeight = 80 + (uniqueModes.size > 1 ? 30 : 0)
 
-    nodeDimensions.set(modelId, { width: 180, height: nodeHeight })
+    nodeDimensions.set(modelId, { width: MODEL_NODE_WIDTH, height: nodeHeight })
 
     const configKeys = connections.map(connection => getModelConfigKey(connection.modelRef))
     const modelHighlighted = configKeys.some(configKey => {
@@ -612,6 +624,42 @@ export function buildLayoutGraph(
     })
   })
 
+  const referencedModelNames = new Set(
+    Array.from(modelConnections.values()).flatMap((connections) =>
+      connections.map((connection) => connection.modelRef.model)
+    )
+  )
+
+  topology.models.forEach((model) => {
+    if (referencedModelNames.has(model.name)) {
+      return
+    }
+
+    const standaloneModelId = `model-${model.name.replace(/[^a-zA-Z0-9]/g, '-')}`
+    if (nodes.some((node) => node.id === standaloneModelId)) {
+      return
+    }
+
+    nodeDimensions.set(standaloneModelId, { width: MODEL_NODE_WIDTH, height: 80 })
+    nodes.push({
+      id: standaloneModelId,
+      type: 'modelNode',
+      position: { x: 0, y: 0 },
+      data: {
+        modelRef: {
+          model: model.name,
+          reasoning_family: model.reasoning_family,
+        },
+        decisionName: 'Not referenced',
+        usageLabel: 'Not referenced by any decision',
+        fromDecisions: [],
+        isHighlighted: isHighlighted(standaloneModelId),
+        modes: [],
+        hasMultipleModes: false,
+      },
+    })
+  })
+
   if (topology.defaultModel) {
     const defaultModelKey = topology.defaultModel
     const normalizedDefaultKey = defaultModelKey.replace(/[^a-zA-Z0-9]/g, '-')
@@ -643,7 +691,7 @@ export function buildLayoutGraph(
         },
       }))
     } else {
-      nodeDimensions.set(defaultModelId, { width: 180, height: 80 })
+      nodeDimensions.set(defaultModelId, { width: MODEL_NODE_WIDTH, height: 80 })
 
       const modelHighlighted = isHighlighted(defaultModelId)
 

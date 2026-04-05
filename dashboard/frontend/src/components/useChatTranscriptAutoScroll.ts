@@ -19,7 +19,7 @@ function hasLiveAssistantActivity(message: Message) {
   )
 }
 
-export function useChatTranscriptAutoScroll(messages: Message[]) {
+export function useChatTranscriptAutoScroll(messages: Message[], conversationId: string) {
   const containerRef = useRef<HTMLDivElement>(null)
   const contentRef = useRef<HTMLDivElement>(null)
   const shouldAutoFollowRef = useRef(true)
@@ -27,6 +27,7 @@ export function useChatTranscriptAutoScroll(messages: Message[]) {
   const shouldAnchorCurrentTurnRef = useRef(false)
   const isProgrammaticScrollRef = useRef(false)
   const programmaticScrollTimeoutRef = useRef<number | null>(null)
+  const lastConversationIdRef = useRef<string | null>(null)
 
   const liveAssistantActivity = useMemo(
     () => messages.some(hasLiveAssistantActivity),
@@ -143,6 +144,21 @@ export function useChatTranscriptAutoScroll(messages: Message[]) {
       }
     }
   }, [])
+
+  useEffect(() => {
+    if (lastConversationIdRef.current === conversationId) {
+      return
+    }
+
+    lastConversationIdRef.current = conversationId
+    anchoredUserMessageIdRef.current = lastUserMessage?.id ?? null
+    shouldAnchorCurrentTurnRef.current = false
+    shouldAutoFollowRef.current = true
+
+    requestAnimationFrame(() => {
+      scrollToBottom('auto')
+    })
+  }, [conversationId, lastUserMessage, scrollToBottom])
 
   useEffect(() => {
     if (messages.length === 0) {

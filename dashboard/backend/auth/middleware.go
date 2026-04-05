@@ -71,6 +71,7 @@ func RequiredPermission(method, path string) string {
 		adminPermission,
 		settingsPermission,
 		routerPermission,
+		knowledgePermission,
 		toolsPermission,
 		observabilityPermission,
 		featurePermission,
@@ -129,6 +130,15 @@ func routerPermission(method, path string) (string, bool) {
 		}
 		return PermConfigWrite, true
 	case strings.HasPrefix(path, "/api/router/"):
+		return PermConfigRead, true
+	default:
+		return "", false
+	}
+}
+
+func knowledgePermission(_ string, path string) (string, bool) {
+	switch {
+	case strings.HasPrefix(path, "/embedded/wizmap/"), path == "/embedded/wizmap":
 		return PermConfigRead, true
 	default:
 		return "", false
@@ -319,6 +329,8 @@ func requiresAuthentication(path string) bool {
 	case strings.HasPrefix(path, "/api/auth/me"):
 		return true
 	case strings.HasPrefix(path, "/api/setup/state"):
+		return false
+	case strings.HasPrefix(path, "/embedded/wizmap/assets/"):
 		return false
 	case strings.HasPrefix(path, "/api/"):
 		return true

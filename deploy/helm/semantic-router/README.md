@@ -42,9 +42,9 @@ A Helm chart for deploying Semantic Router - an intelligent routing system for L
 | config.global.integrations.tools.similarity_threshold | float | `0.2` |  |
 | config.global.integrations.tools.tools_db_path | string | `"config/tools_db.json"` |  |
 | config.global.integrations.tools.top_k | int | `3` |  |
-| config.global.model_catalog.embeddings.bert.model_id | string | `"models/mom-embedding-light"` |  |
-| config.global.model_catalog.embeddings.bert.threshold | float | `0.6` |  |
-| config.global.model_catalog.embeddings.bert.use_cpu | bool | `true` |  |
+| config.global.model_catalog.embeddings.semantic.bert_model_path | string | `"models/mom-embedding-light"` |  |
+| config.global.model_catalog.embeddings.semantic.embedding_config.min_score_threshold | float | `0.6` |  |
+| config.global.model_catalog.embeddings.semantic.use_cpu | bool | `true` |  |
 | config.global.model_catalog.system.domain_classifier | string | `"models/mmbert32k-intent-classifier-merged"` |  |
 | config.global.model_catalog.system.pii_classifier | string | `"models/mmbert32k-pii-detector-merged"` |  |
 | config.global.model_catalog.system.prompt_guard | string | `"models/mmbert32k-jailbreak-detector-merged"` |  |

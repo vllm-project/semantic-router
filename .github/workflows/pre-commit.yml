@@ -99,6 +99,27 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-precommit-
 
+      - name: Install tree-sitter for security scan
+        run: |
+          pip install \
+            tree-sitter \
+            tree-sitter-python \
+            tree-sitter-javascript \
+            tree-sitter-typescript \
+            tree-sitter-go \
+            tree-sitter-rust
+
+      - name: Run AST supply chain security scan
+        run: |
+          python3 tools/security/ast_security_scanner.py \
+            scan . --fail-on HIGH
+
+      - name: Run AST PR diff security scan
+        if: github.event_name == 'pull_request'
+        run: |
+          python3 tools/security/ast_security_scanner.py \
+            diff "origin/${{ github.base_ref }}" --fail-on HIGH
+
       - name: Run agent CI lint on changed files
         run: |
           if [ "${{ github.event_name }}" = "pull_request" ]; then
@@ -153,9 +174,11 @@ jobs:
           echo "=== Full git diff ==="
           git diff || true
           echo ""
-          echo "To reproduce the changed-file CI lint locally:"
-          echo "  make agent-ci-lint CHANGED_FILES=\"path/one,path/two\""
+          echo "To reproduce the full PR pre-commit baseline locally:"
+          echo "  make agent-pr-gate"
           echo ""
-          echo "To run full pre-commit locally:"
-          echo "  make precommit-install"
-          echo "  make precommit-check"
+          echo "To run the same local prelint gate the pre-push hook uses:"
+          echo "  make precommit-branch-gate AGENT_BASE_REF=origin/${{ github.base_ref }}"
+          echo ""
+          echo "To run only the pre-commit workflow locally:"
+          echo "  make precommit-local"

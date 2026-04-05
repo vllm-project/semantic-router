@@ -30,6 +30,10 @@ const HEADER_INFO: Record<string, { label: string; description: string }> = {
     label: 'User Feedback',
     description: 'Based on user feedback patterns',
   },
+  'x-vsr-matched-reask': {
+    label: 'Reask',
+    description: 'Detected repeated-question dissatisfaction across recent user turns',
+  },
   'x-vsr-matched-preference': {
     label: 'Preference',
     description: 'User preference match',
@@ -42,9 +46,21 @@ const HEADER_INFO: Record<string, { label: string; description: string }> = {
     label: 'Context',
     description: 'Token count-based context classification',
   },
+  'x-vsr-matched-structure': {
+    label: 'Structure',
+    description: 'Matched request-shape and structural heuristic signals',
+  },
   'x-vsr-matched-complexity': {
     label: 'Complexity',
     description: 'Query complexity classification (hard/easy/medium)',
+  },
+  'x-vsr-matched-modality': {
+    label: 'Modality',
+    description: 'Matched modality classification signal',
+  },
+  'x-vsr-matched-authz': {
+    label: 'Authz',
+    description: 'Matched authorization routing signal',
   },
   'x-vsr-matched-jailbreak': {
     label: 'Jailbreak',
@@ -53,6 +69,14 @@ const HEADER_INFO: Record<string, { label: string; description: string }> = {
   'x-vsr-matched-pii': {
     label: 'PII',
     description: 'PII detection signal matched',
+  },
+  'x-vsr-matched-kb': {
+    label: 'Knowledge Base',
+    description: 'Matched knowledge-base label or group routing signal',
+  },
+  'x-vsr-matched-projection': {
+    label: 'Projection',
+    description: 'Projection mapping output matched',
   },
   // Decision headers
   'x-vsr-selected-decision': {
@@ -63,6 +87,10 @@ const HEADER_INFO: Record<string, { label: string; description: string }> = {
   'x-vsr-selected-model': {
     label: 'Selected Model',
     description: 'The model chosen by the router',
+  },
+  'x-vsr-selected-modality': {
+    label: 'Selected Modality',
+    description: 'The modality chosen by the router',
   },
   // Plugin status headers
   'x-vsr-cache-hit': {
@@ -80,6 +108,14 @@ const HEADER_INFO: Record<string, { label: string; description: string }> = {
   'x-vsr-fast-response': {
     label: 'Fast Response',
     description: 'Request short-circuited by fast_response plugin',
+  },
+  'x-vsr-jailbreak-blocked': {
+    label: 'Jailbreak Blocked',
+    description: 'Request blocked by jailbreak protection',
+  },
+  'x-vsr-pii-violation': {
+    label: 'PII Violation',
+    description: 'Request blocked by PII protection',
   },
   'x-vsr-hallucination-detected': {
     label: 'Quality: Hallucination',
@@ -138,12 +174,14 @@ const HeaderReveal = ({ headers, onComplete, displayDuration = 2000 }: HeaderRev
     ),
     // Model selection headers: selected-model
     model: displayHeaders.filter(([key]) =>
-      key === 'x-vsr-selected-model'
+      key === 'x-vsr-selected-model' ||
+      key === 'x-vsr-selected-modality'
     ),
     // Plugin status headers: cache, reasoning, context, security, quality
     plugin: displayHeaders.filter(([key]) =>
       key === 'x-vsr-cache-hit' ||
       key === 'x-vsr-selected-reasoning' ||
+      key === 'x-vsr-fast-response' ||
       key === 'x-vsr-context-token-count' ||
       key === 'x-vsr-jailbreak-blocked' ||
       key === 'x-vsr-pii-violation' ||

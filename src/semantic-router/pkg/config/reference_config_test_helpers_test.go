@@ -50,16 +50,6 @@ func assertPluginConfigCoverage(t testingT, plugins []map[string]interface{}, ty
 	assertSliceUnionCoversStructFields(t, configs, typ, "routing.decisions[].plugins[type="+pluginType+"].configuration")
 }
 
-func requirePluginConfigKeys(t testingT, plugins []map[string]interface{}, pluginType string, keys ...string) {
-	t.Helper()
-	union := unionMapKeys(collectChildMapsFromSlice(t, plugins, "configuration", "plugins("+pluginType+")"))
-	for _, key := range keys {
-		if !union[key] {
-			t.Fatalf("routing.decisions[].plugins[type=%s].configuration is missing key %q", pluginType, key)
-		}
-	}
-}
-
 func collectRuleCoverage(t testingT, rule map[string]interface{}, operators map[string]bool, signalTypes map[string]bool) {
 	t.Helper()
 	if signalType, ok := rule["type"].(string); ok && signalType != "" {
@@ -176,16 +166,6 @@ func assertSliceUnionCoversStructFields(t testingT, items interface{}, typ refle
 			t.Fatalf("%s does not cover reference-config field %q anywhere in the slice", path, field)
 		}
 	}
-}
-
-func unionMapKeys(items []map[string]interface{}) map[string]bool {
-	union := make(map[string]bool)
-	for _, item := range items {
-		for key := range item {
-			union[key] = true
-		}
-	}
-	return union
 }
 
 func unionMapKeysFromInterfaces(t testingT, items []interface{}, path string) map[string]bool {

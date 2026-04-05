@@ -1,6 +1,9 @@
 import type { Config } from '@docusaurus/types'
 import type * as Preset from '@docusaurus/preset-classic'
 import { themes } from 'prism-react-renderer'
+import { SITE_SOCIAL_PREVIEW_IMAGE } from './src/data/socialPreview'
+import remarkMath from 'remark-math'
+import rehypeKatex from 'rehype-katex'
 
 const lightCodeTheme = themes.vsDark
 const darkCodeTheme = themes.vsDark
@@ -35,6 +38,7 @@ const config: Config = {
 
   markdown: {
     mermaid: true,
+    format: 'mdx',
     hooks: {
       onBrokenMarkdownLinks: 'warn',
     },
@@ -46,6 +50,12 @@ const config: Config = {
       'classic',
       {
         docs: {
+          beforeDefaultRemarkPlugins: [
+            [remarkMath, {}],
+          ],
+          beforeDefaultRehypePlugins: [
+            [rehypeKatex, {}],
+          ],
           sidebarPath: './sidebars.ts',
           lastVersion: 'current',
           versions: {
@@ -116,13 +126,21 @@ const config: Config = {
             from: '/docs/cli/troubleshooting',
             to: '/docs/troubleshooting/common-errors',
           },
+          {
+            from: '/docs/tutorials/signal/projections',
+            to: '/docs/tutorials/projection/overview',
+          },
+          {
+            from: '/docs/tutorials/signal/heuristic/modality',
+            to: '/docs/tutorials/signal/learned/modality',
+          },
         ],
       },
     ],
   ],
 
   themeConfig: {
-    image: 'img/docusaurus-social-card.jpg',
+    image: SITE_SOCIAL_PREVIEW_IMAGE,
     metadata: [
       { name: 'description', content: 'System Level Intelligent Router for Mixture-of-Models' },
       { name: 'keywords', content: 'LLM, Semantic Router, Mixture of Models, vLLM, Routing, AI Gateway, Envoy, ExtProc' },
@@ -167,10 +185,20 @@ const config: Config = {
           label: 'Docs',
         },
         {
-          to: '/white-paper',
+          type: 'dropdown',
           className: 'nav-primary',
-          label: 'Paper',
+          label: 'About',
           position: 'left',
+          items: [
+            {
+              label: 'White Paper',
+              to: '/white-paper',
+            },
+            {
+              label: 'Vision Paper',
+              to: '/vision-paper',
+            },
+          ],
         },
         {
           to: '/publications',
@@ -287,6 +315,10 @@ const config: Config = {
             {
               label: 'White Paper',
               to: '/white-paper',
+            },
+            {
+              label: 'Vision Paper',
+              to: '/vision-paper',
             },
 
             {

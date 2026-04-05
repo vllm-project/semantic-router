@@ -17,6 +17,7 @@ var algorithmTutorialBuckets = map[string]string{
 	"kmeans":        "selection",
 	"knn":           "selection",
 	"latency-aware": "selection",
+	"mlp":           "selection",
 	"ratings":       "looper",
 	"remom":         "looper",
 	"rl-driven":     "selection",
@@ -36,14 +37,14 @@ var pluginTutorialBuckets = map[string]string{
 	"hallucination":      "safety-and-generation",
 	"header-mutation":    "response-and-mutation",
 	"image-gen":          "response-and-mutation",
-	"jailbreak":          "safety-and-generation",
 	"memory":             "retrieval-and-memory",
-	"pii":                "safety-and-generation",
 	"rag":                "retrieval-and-memory",
+	"request-params":     "response-and-mutation",
 	"response-jailbreak": "safety-and-generation",
 	"router-replay":      "retrieval-and-memory",
 	"semantic-cache":     "retrieval-and-memory",
 	"system-prompt":      "response-and-mutation",
+	"tools":              "response-and-mutation",
 }
 
 var retiredPluginTutorialDocs = []string{

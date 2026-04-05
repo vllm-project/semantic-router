@@ -222,10 +222,6 @@ routing:
         - model: Qwen/Qwen2.5-14B-Instruct-AWQ
           use_reasoning: true
       plugins:
-        - type: pii
-          configuration:
-            enabled: true
-            pii_types_allowed: []
         - type: hallucination
           configuration:
             enabled: true
@@ -245,10 +241,6 @@ routing:
         - model: Qwen/Qwen2.5-14B-Instruct-AWQ
           use_reasoning: true
       plugins:
-        - type: pii
-          configuration:
-            enabled: true
-            pii_types_allowed: []
         - type: hallucination
           configuration:
             enabled: true
@@ -268,10 +260,6 @@ routing:
         - model: Qwen/Qwen2.5-14B-Instruct-AWQ
           use_reasoning: false
       plugins:
-        - type: pii
-          configuration:
-            enabled: true
-            pii_types_allowed: []
         - type: hallucination
           configuration:
             enabled: true
@@ -355,10 +343,6 @@ routing:
         - model: Qwen/Qwen2.5-14B-Instruct-AWQ
           use_reasoning: true
       plugins:
-        - type: pii
-          configuration:
-            enabled: true
-            pii_types_allowed: []
         - type: hallucination
           configuration:
             enabled: true
@@ -378,10 +362,6 @@ routing:
         - model: Qwen/Qwen2.5-14B-Instruct-AWQ
           use_reasoning: true
       plugins:
-        - type: pii
-          configuration:
-            enabled: true
-            pii_types_allowed: []
         - type: hallucination
           configuration:
             enabled: true
@@ -401,10 +381,6 @@ routing:
         - model: Qwen/Qwen2.5-14B-Instruct-AWQ
           use_reasoning: false
       plugins:
-        - type: pii
-          configuration:
-            enabled: true
-            pii_types_allowed: []
         - type: hallucination
           configuration:
             enabled: true
@@ -490,10 +466,6 @@ data:
             - type: system_prompt
               configuration:
                 system_prompt: You are a senior business consultant and strategic advisor.
-            - type: pii
-              configuration:
-                enabled: true
-                pii_types_allowed: []
         - name: math_decision
           description: Mathematics and quantitative reasoning
           priority: 100
@@ -509,10 +481,6 @@ data:
             - type: system_prompt
               configuration:
                 system_prompt: You are a mathematics expert.
-            - type: pii
-              configuration:
-                enabled: true
-                pii_types_allowed: []
         - name: general_decision
           description: General knowledge and miscellaneous topics
           priority: 50
@@ -532,10 +500,6 @@ data:
               configuration:
                 enabled: true
                 similarity_threshold: 0.75
-            - type: pii
-              configuration:
-                enabled: true
-                pii_types_allowed: []
       signals:
         domains:
           - name: business
@@ -706,10 +670,6 @@ data:
             - type: system_prompt
               configuration:
                 system_prompt: You are a senior business consultant and strategic advisor.
-            - type: pii
-              configuration:
-                enabled: true
-                pii_types_allowed: []
         - name: math_decision
           description: Mathematics and quantitative reasoning
           priority: 100
@@ -725,10 +685,6 @@ data:
             - type: system_prompt
               configuration:
                 system_prompt: You are a mathematics expert.
-            - type: pii
-              configuration:
-                enabled: true
-                pii_types_allowed: []
         - name: general_decision
           description: General knowledge and miscellaneous topics
           priority: 50
@@ -748,10 +704,6 @@ data:
               configuration:
                 enabled: true
                 similarity_threshold: 0.75
-            - type: pii
-              configuration:
-                enabled: true
-                pii_types_allowed: []
       signals:
         domains:
           - name: business
@@ -2984,12 +2936,6 @@ routing:
       modelRefs:
         - model: Model-A
           use_reasoning: false
-      plugins:
-        - type: pii
-          configuration:
-            enabled: true
-            pii_types_allowed:
-              - EMAIL_ADDRESS
     - name: law_decision
       description: Legal questions and law-related topics
       priority: 100
@@ -3001,17 +2947,6 @@ routing:
       modelRefs:
         - model: Model-B
           use_reasoning: false
-      plugins:
-        - type: pii
-          configuration:
-            enabled: true
-            pii_types_allowed:
-              - EMAIL_ADDRESS
-              - PERSON
-              - GPE
-              - PHONE_NUMBER
-              - US_SSN
-              - CREDIT_CARD
     - name: psychology_decision
       description: Psychology and mental health topics
       priority: 100
@@ -3023,12 +2958,6 @@ routing:
       modelRefs:
         - model: Model-A
           use_reasoning: false
-      plugins:
-        - type: pii
-          configuration:
-            enabled: true
-            pii_types_allowed:
-              - EMAIL_ADDRESS
     - name: biology_decision
       description: Biology and life sciences questions
       priority: 100
@@ -3040,12 +2969,6 @@ routing:
       modelRefs:
         - model: Model-A
           use_reasoning: false
-      plugins:
-        - type: pii
-          configuration:
-            enabled: true
-            pii_types_allowed:
-              - EMAIL_ADDRESS
     - name: chemistry_decision
       description: Chemistry and chemical sciences questions
       priority: 100
@@ -3057,12 +2980,6 @@ routing:
       modelRefs:
         - model: Model-A
           use_reasoning: true
-      plugins:
-        - type: pii
-          configuration:
-            enabled: true
-            pii_types_allowed:
-              - EMAIL_ADDRESS
     - name: history_decision
       description: Historical questions and cultural topics
       priority: 100
@@ -3074,12 +2991,6 @@ routing:
       modelRefs:
         - model: Model-A
           use_reasoning: false
-      plugins:
-        - type: pii
-          configuration:
-            enabled: true
-            pii_types_allowed:
-              - EMAIL_ADDRESS
     - name: health_decision
       description: Health and medical information queries
       priority: 100
@@ -3091,17 +3002,6 @@ routing:
       modelRefs:
         - model: Model-B
           use_reasoning: false
-      plugins:
-        - type: pii
-          configuration:
-            enabled: true
-            pii_types_allowed:
-              - EMAIL_ADDRESS
-              - PERSON
-              - GPE
-              - PHONE_NUMBER
-              - US_SSN
-              - CREDIT_CARD
     - name: economics_decision
       description: Economics and financial topics
       priority: 100
@@ -3113,17 +3013,6 @@ routing:
       modelRefs:
         - model: Model-B
           use_reasoning: false
-      plugins:
-        - type: pii
-          configuration:
-            enabled: true
-            pii_types_allowed:
-              - EMAIL_ADDRESS
-              - PERSON
-              - GPE
-              - PHONE_NUMBER
-              - US_SSN
-              - CREDIT_CARD
     - name: math_decision
       description: Mathematics and quantitative reasoning
       priority: 100
@@ -3135,17 +3024,6 @@ routing:
       modelRefs:
         - model: Model-B
           use_reasoning: true
-      plugins:
-        - type: pii
-          configuration:
-            enabled: true
-            pii_types_allowed:
-              - EMAIL_ADDRESS
-              - PERSON
-              - GPE
-              - PHONE_NUMBER
-              - US_SSN
-              - CREDIT_CARD
     - name: physics_decision
       description: Physics and physical sciences
       priority: 100
@@ -3157,17 +3035,6 @@ routing:
       modelRefs:
         - model: Model-B
           use_reasoning: true
-      plugins:
-        - type: pii
-          configuration:
-            enabled: true
-            pii_types_allowed:
-              - EMAIL_ADDRESS
-              - PERSON
-              - GPE
-              - PHONE_NUMBER
-              - US_SSN
-              - CREDIT_CARD
     - name: computer_science_decision
       description: Computer science and programming
       priority: 100
@@ -3179,17 +3046,6 @@ routing:
       modelRefs:
         - model: Model-B
           use_reasoning: false
-      plugins:
-        - type: pii
-          configuration:
-            enabled: true
-            pii_types_allowed:
-              - EMAIL_ADDRESS
-              - PERSON
-              - GPE
-              - PHONE_NUMBER
-              - US_SSN
-              - CREDIT_CARD
     - name: philosophy_decision
       description: Philosophy and ethical questions
       priority: 100
@@ -3201,12 +3057,6 @@ routing:
       modelRefs:
         - model: Model-A
           use_reasoning: false
-      plugins:
-        - type: pii
-          configuration:
-            enabled: true
-            pii_types_allowed:
-              - EMAIL_ADDRESS
     - name: engineering_decision
       description: Engineering and technical problem-solving
       priority: 100
@@ -3218,17 +3068,6 @@ routing:
       modelRefs:
         - model: Model-B
           use_reasoning: false
-      plugins:
-        - type: pii
-          configuration:
-            enabled: true
-            pii_types_allowed:
-              - EMAIL_ADDRESS
-              - PERSON
-              - GPE
-              - PHONE_NUMBER
-              - US_SSN
-              - CREDIT_CARD
     - name: general_decision
       description: General knowledge and miscellaneous topics
       priority: 50
@@ -3240,17 +3079,6 @@ routing:
       modelRefs:
         - model: Model-B
           use_reasoning: false
-      plugins:
-        - type: pii
-          configuration:
-            enabled: true
-            pii_types_allowed:
-              - EMAIL_ADDRESS
-              - PERSON
-              - GPE
-              - PHONE_NUMBER
-              - US_SSN
-              - CREDIT_CARD
     - name: default_decision
       description: Default catch-all decision - blocks all PII for safety
       priority: 1
@@ -3261,11 +3089,6 @@ routing:
       modelRefs:
         - model: Model-B
           use_reasoning: false
-      plugins:
-        - type: pii
-          configuration:
-            enabled: true
-            pii_types_allowed: []
   signals:
     domains:
       - name: business
@@ -3750,18 +3573,6 @@ routing:
         - type: system_prompt
           configuration:
             system_prompt: You are a senior software engineer. Provide clear, production-quality code with best practices.
-        - type: jailbreak
-          configuration:
-            enabled: true
-            threshold: 0.5
-        - type: pii
-          configuration:
-            enabled: true
-            threshold: 0.6
-            pii_types_allowed:
-              - GPE
-              - ORGANIZATION
-              - DATE_TIME
     - name: general_to_prod
       description: Route general/user queries to Prod (strict safety)
       priority: 50
@@ -3777,15 +3588,6 @@ routing:
         - type: system_prompt
           configuration:
             system_prompt: You are a helpful assistant operating under strict data protection policies. Never store, log, or repeat any personal information shared by the user. If a user shares personal data, remind them to avoid sharing sensitive details.
-        - type: jailbreak
-          configuration:
-            enabled: true
-            threshold: 0.9
-        - type: pii
-          configuration:
-            enabled: true
-            threshold: 0.9
-            pii_types_allowed: []
   signals:
     keywords:
       - name: code_keywords
@@ -4145,11 +3947,6 @@ routing:
       modelRefs:
         - model: openai/gpt-oss-20b
           use_reasoning: false
-      plugins:
-        - type: pii
-          configuration:
-            enabled: true
-            pii_types_allowed: []
   signals:
     domains:
       - name: other
@@ -4259,10 +4056,6 @@ routing:
         - type: system_prompt
           configuration:
             system_prompt: You are a highly responsive assistant specialized in handling urgent requests. Prioritize speed and efficiency while maintaining accuracy.
-        - type: pii
-          configuration:
-            enabled: true
-            pii_types_allowed: []
     - name: sensitive_data_decision
       description: Requests involving sensitive personal data
       priority: 150
@@ -4278,14 +4071,6 @@ routing:
         - type: system_prompt
           configuration:
             system_prompt: You are a security-conscious assistant specialized in handling sensitive data. Exercise extreme caution with personal information.
-        - type: jailbreak
-          configuration:
-            enabled: true
-            threshold: 0.6
-        - type: pii
-          configuration:
-            enabled: true
-            pii_types_allowed: []
     - name: exclude_spam_decision
       description: Potential spam or suspicious requests
       priority: 150
@@ -4301,10 +4086,6 @@ routing:
         - type: system_prompt
           configuration:
             system_prompt: You are a content moderation assistant. This request has been flagged as potential spam.
-        - type: pii
-          configuration:
-            enabled: true
-            pii_types_allowed: []
     - name: regex_pattern_match_decision
       description: Structured data and pattern-based requests
       priority: 150
@@ -4320,10 +4101,6 @@ routing:
         - type: system_prompt
           configuration:
             system_prompt: You are a technical assistant specialized in handling structured data and pattern-based requests.
-        - type: pii
-          configuration:
-            enabled: true
-            pii_types_allowed: []
     - name: ai_decision
       description: Artificial intelligence and machine learning topics
       priority: 140
@@ -4339,10 +4116,6 @@ routing:
         - type: system_prompt
           configuration:
             system_prompt: You are an AI and machine learning expert. Provide detailed, technical explanations about artificial intelligence, neural networks, and related topics.
-        - type: pii
-          configuration:
-            enabled: true
-            pii_types_allowed: []
     - name: data_science_decision
       description: Data science and analytics
       priority: 140
@@ -4358,10 +4131,6 @@ routing:
         - type: system_prompt
           configuration:
             system_prompt: You are a data science expert. Provide insights on data analysis, statistical methods, and predictive modeling.
-        - type: pii
-          configuration:
-            enabled: true
-            pii_types_allowed: []
     - name: programming_decision
       description: Programming and software development
       priority: 140
@@ -4377,10 +4146,6 @@ routing:
         - type: system_prompt
           configuration:
             system_prompt: You are a programming expert. Help with code implementation, debugging, and software development best practices.
-        - type: pii
-          configuration:
-            enabled: true
-            pii_types_allowed: []
     - name: business_decision
       description: Business and management related queries
       priority: 100
@@ -4396,10 +4161,6 @@ routing:
         - type: system_prompt
           configuration:
             system_prompt: You are a senior business consultant and strategic advisor.
-        - type: pii
-          configuration:
-            enabled: true
-            pii_types_allowed: []
     - name: math_decision
       description: Mathematics and quantitative reasoning
       priority: 100
@@ -4415,10 +4176,6 @@ routing:
         - type: system_prompt
           configuration:
             system_prompt: You are a mathematics expert. Provide step-by-step solutions.
-        - type: pii
-          configuration:
-            enabled: true
-            pii_types_allowed: []
     - name: computer_science_decision
       description: Computer science and programming
       priority: 100
@@ -4434,10 +4191,6 @@ routing:
         - type: system_prompt
           configuration:
             system_prompt: You are a computer science expert.
-        - type: pii
-          configuration:
-            enabled: true
-            pii_types_allowed: []
     - name: general_decision
       description: General knowledge and miscellaneous topics
       priority: 50
@@ -4457,10 +4210,6 @@ routing:
           configuration:
             enabled: true
             similarity_threshold: 0.75
-        - type: pii
-          configuration:
-            enabled: true
-            pii_types_allowed: []
   signals:
     keywords:
       - name: code_keywords
@@ -4810,10 +4559,6 @@ routing:
         - model: Qwen/Qwen2.5-14B-Instruct-AWQ
           use_reasoning: true
       plugins:
-        - type: pii
-          configuration:
-            enabled: true
-            pii_types_allowed: []
         - type: hallucination
           configuration:
             enabled: true
@@ -4833,10 +4578,6 @@ routing:
         - model: Qwen/Qwen2.5-14B-Instruct-AWQ
           use_reasoning: true
       plugins:
-        - type: pii
-          configuration:
-            enabled: true
-            pii_types_allowed: []
         - type: hallucination
           configuration:
             enabled: true
@@ -4856,10 +4597,6 @@ routing:
         - model: Qwen/Qwen2.5-14B-Instruct-AWQ
           use_reasoning: false
       plugins:
-        - type: pii
-          configuration:
-            enabled: true
-            pii_types_allowed: []
         - type: hallucination
           configuration:
             enabled: true
@@ -4943,10 +4680,6 @@ routing:
         - model: Qwen/Qwen2.5-14B-Instruct-AWQ
           use_reasoning: true
       plugins:
-        - type: pii
-          configuration:
-            enabled: true
-            pii_types_allowed: []
         - type: hallucination
           configuration:
             enabled: true
@@ -4966,10 +4699,6 @@ routing:
         - model: Qwen/Qwen2.5-14B-Instruct-AWQ
           use_reasoning: true
       plugins:
-        - type: pii
-          configuration:
-            enabled: true
-            pii_types_allowed: []
         - type: hallucination
           configuration:
             enabled: true
@@ -4989,10 +4718,6 @@ routing:
         - model: Qwen/Qwen2.5-14B-Instruct-AWQ
           use_reasoning: false
       plugins:
-        - type: pii
-          configuration:
-            enabled: true
-            pii_types_allowed: []
         - type: hallucination
           configuration:
             enabled: true
@@ -5078,10 +4803,6 @@ data:
             - type: system_prompt
               configuration:
                 system_prompt: You are a senior business consultant and strategic advisor.
-            - type: pii
-              configuration:
-                enabled: true
-                pii_types_allowed: []
         - name: math_decision
           description: Mathematics and quantitative reasoning
           priority: 100
@@ -5097,10 +4818,6 @@ data:
             - type: system_prompt
               configuration:
                 system_prompt: You are a mathematics expert.
-            - type: pii
-              configuration:
-                enabled: true
-                pii_types_allowed: []
         - name: general_decision
           description: General knowledge and miscellaneous topics
           priority: 50
@@ -5120,10 +4837,6 @@ data:
               configuration:
                 enabled: true
                 similarity_threshold: 0.75
-            - type: pii
-              configuration:
-                enabled: true
-                pii_types_allowed: []
       signals:
         domains:
           - name: business
@@ -5294,10 +5007,6 @@ data:
             - type: system_prompt
               configuration:
                 system_prompt: You are a senior business consultant and strategic advisor.
-            - type: pii
-              configuration:
-                enabled: true
-                pii_types_allowed: []
         - name: math_decision
           description: Mathematics and quantitative reasoning
           priority: 100
@@ -5313,10 +5022,6 @@ data:
             - type: system_prompt
               configuration:
                 system_prompt: You are a mathematics expert.
-            - type: pii
-              configuration:
-                enabled: true
-                pii_types_allowed: []
         - name: general_decision
           description: General knowledge and miscellaneous topics
           priority: 50
@@ -5336,10 +5041,6 @@ data:
               configuration:
                 enabled: true
                 similarity_threshold: 0.75
-            - type: pii
-              configuration:
-                enabled: true
-                pii_types_allowed: []
       signals:
         domains:
           - name: business
@@ -7572,12 +7273,6 @@ routing:
       modelRefs:
         - model: Model-A
           use_reasoning: false
-      plugins:
-        - type: pii
-          configuration:
-            enabled: true
-            pii_types_allowed:
-              - EMAIL_ADDRESS
     - name: law_decision
       description: Legal questions and law-related topics
       priority: 100
@@ -7589,17 +7284,6 @@ routing:
       modelRefs:
         - model: Model-B
           use_reasoning: false
-      plugins:
-        - type: pii
-          configuration:
-            enabled: true
-            pii_types_allowed:
-              - EMAIL_ADDRESS
-              - PERSON
-              - GPE
-              - PHONE_NUMBER
-              - US_SSN
-              - CREDIT_CARD
     - name: psychology_decision
       description: Psychology and mental health topics
       priority: 100
@@ -7611,12 +7295,6 @@ routing:
       modelRefs:
         - model: Model-A
           use_reasoning: false
-      plugins:
-        - type: pii
-          configuration:
-            enabled: true
-            pii_types_allowed:
-              - EMAIL_ADDRESS
     - name: biology_decision
       description: Biology and life sciences questions
       priority: 100
@@ -7628,12 +7306,6 @@ routing:
       modelRefs:
         - model: Model-A
           use_reasoning: false
-      plugins:
-        - type: pii
-          configuration:
-            enabled: true
-            pii_types_allowed:
-              - EMAIL_ADDRESS
     - name: chemistry_decision
       description: Chemistry and chemical sciences questions
       priority: 100
@@ -7645,12 +7317,6 @@ routing:
       modelRefs:
         - model: Model-A
           use_reasoning: true
-      plugins:
-        - type: pii
-          configuration:
-            enabled: true
-            pii_types_allowed:
-              - EMAIL_ADDRESS
     - name: history_decision
       description: Historical questions and cultural topics
       priority: 100
@@ -7662,12 +7328,6 @@ routing:
       modelRefs:
         - model: Model-A
           use_reasoning: false
-      plugins:
-        - type: pii
-          configuration:
-            enabled: true
-            pii_types_allowed:
-              - EMAIL_ADDRESS
     - name: health_decision
       description: Health and medical information queries
       priority: 100
@@ -7679,17 +7339,6 @@ routing:
       modelRefs:
         - model: Model-B
           use_reasoning: false
-      plugins:
-        - type: pii
-          configuration:
-            enabled: true
-            pii_types_allowed:
-              - EMAIL_ADDRESS
-              - PERSON
-              - GPE
-              - PHONE_NUMBER
-              - US_SSN
-              - CREDIT_CARD
     - name: economics_decision
       description: Economics and financial topics
       priority: 100
@@ -7701,17 +7350,6 @@ routing:
       modelRefs:
         - model: Model-B
           use_reasoning: false
-      plugins:
-        - type: pii
-          configuration:
-            enabled: true
-            pii_types_allowed:
-              - EMAIL_ADDRESS
-              - PERSON
-              - GPE
-              - PHONE_NUMBER
-              - US_SSN
-              - CREDIT_CARD
     - name: math_decision
       description: Mathematics and quantitative reasoning
       priority: 100
@@ -7723,17 +7361,6 @@ routing:
       modelRefs:
         - model: Model-B
           use_reasoning: true
-      plugins:
-        - type: pii
-          configuration:
-            enabled: true
-            pii_types_allowed:
-              - EMAIL_ADDRESS
-              - PERSON
-              - GPE
-              - PHONE_NUMBER
-              - US_SSN
-              - CREDIT_CARD
     - name: physics_decision
       description: Physics and physical sciences
       priority: 100
@@ -7745,17 +7372,6 @@ routing:
       modelRefs:
         - model: Model-B
           use_reasoning: true
-      plugins:
-        - type: pii
-          configuration:
-            enabled: true
-            pii_types_allowed:
-              - EMAIL_ADDRESS
-              - PERSON
-              - GPE
-              - PHONE_NUMBER
-              - US_SSN
-              - CREDIT_CARD
     - name: computer_science_decision
       description: Computer science and programming
       priority: 100
@@ -7767,17 +7383,6 @@ routing:
       modelRefs:
         - model: Model-B
           use_reasoning: false
-      plugins:
-        - type: pii
-          configuration:
-            enabled: true
-            pii_types_allowed:
-              - EMAIL_ADDRESS
-              - PERSON
-              - GPE
-              - PHONE_NUMBER
-              - US_SSN
-              - CREDIT_CARD
     - name: philosophy_decision
       description: Philosophy and ethical questions
       priority: 100
@@ -7789,12 +7394,6 @@ routing:
       modelRefs:
         - model: Model-A
           use_reasoning: false
-      plugins:
-        - type: pii
-          configuration:
-            enabled: true
-            pii_types_allowed:
-              - EMAIL_ADDRESS
     - name: engineering_decision
       description: Engineering and technical problem-solving
       priority: 100
@@ -7806,17 +7405,6 @@ routing:
       modelRefs:
         - model: Model-B
           use_reasoning: false
-      plugins:
-        - type: pii
-          configuration:
-            enabled: true
-            pii_types_allowed:
-              - EMAIL_ADDRESS
-              - PERSON
-              - GPE
-              - PHONE_NUMBER
-              - US_SSN
-              - CREDIT_CARD
     - name: general_decision
       description: General knowledge and miscellaneous topics
       priority: 50
@@ -7828,17 +7416,6 @@ routing:
       modelRefs:
         - model: Model-B
           use_reasoning: false
-      plugins:
-        - type: pii
-          configuration:
-            enabled: true
-            pii_types_allowed:
-              - EMAIL_ADDRESS
-              - PERSON
-              - GPE
-              - PHONE_NUMBER
-              - US_SSN
-              - CREDIT_CARD
     - name: default_decision
       description: Default catch-all decision - blocks all PII for safety
       priority: 1
@@ -7849,11 +7426,6 @@ routing:
       modelRefs:
         - model: Model-B
           use_reasoning: false
-      plugins:
-        - type: pii
-          configuration:
-            enabled: true
-            pii_types_allowed: []
   signals:
     domains:
       - name: business
@@ -8338,18 +7910,6 @@ routing:
         - type: system_prompt
           configuration:
             system_prompt: You are a senior software engineer. Provide clear, production-quality code with best practices.
-        - type: jailbreak
-          configuration:
-            enabled: true
-            threshold: 0.5
-        - type: pii
-          configuration:
-            enabled: true
-            threshold: 0.6
-            pii_types_allowed:
-              - GPE
-              - ORGANIZATION
-              - DATE_TIME
     - name: general_to_prod
       description: Route general/user queries to Prod (strict safety)
       priority: 50
@@ -8365,15 +7925,6 @@ routing:
         - type: system_prompt
           configuration:
             system_prompt: You are a helpful assistant operating under strict data protection policies. Never store, log, or repeat any personal information shared by the user. If a user shares personal data, remind them to avoid sharing sensitive details.
-        - type: jailbreak
-          configuration:
-            enabled: true
-            threshold: 0.9
-        - type: pii
-          configuration:
-            enabled: true
-            threshold: 0.9
-            pii_types_allowed: []
   signals:
     keywords:
       - name: code_keywords
@@ -8733,11 +8284,6 @@ routing:
       modelRefs:
         - model: openai/gpt-oss-20b
           use_reasoning: false
-      plugins:
-        - type: pii
-          configuration:
-            enabled: true
-            pii_types_allowed: []
   signals:
     domains:
       - name: other
@@ -8847,10 +8393,6 @@ routing:
         - type: system_prompt
           configuration:
             system_prompt: You are a highly responsive assistant specialized in handling urgent requests. Prioritize speed and efficiency while maintaining accuracy.
-        - type: pii
-          configuration:
-            enabled: true
-            pii_types_allowed: []
     - name: sensitive_data_decision
       description: Requests involving sensitive personal data
       priority: 150
@@ -8866,14 +8408,6 @@ routing:
         - type: system_prompt
           configuration:
             system_prompt: You are a security-conscious assistant specialized in handling sensitive data. Exercise extreme caution with personal information.
-        - type: jailbreak
-          configuration:
-            enabled: true
-            threshold: 0.6
-        - type: pii
-          configuration:
-            enabled: true
-            pii_types_allowed: []
     - name: exclude_spam_decision
       description: Potential spam or suspicious requests
       priority: 150
@@ -8889,10 +8423,6 @@ routing:
         - type: system_prompt
           configuration:
             system_prompt: You are a content moderation assistant. This request has been flagged as potential spam.
-        - type: pii
-          configuration:
-            enabled: true
-            pii_types_allowed: []
     - name: regex_pattern_match_decision
       description: Structured data and pattern-based requests
       priority: 150
@@ -8908,10 +8438,6 @@ routing:
         - type: system_prompt
           configuration:
             system_prompt: You are a technical assistant specialized in handling structured data and pattern-based requests.
-        - type: pii
-          configuration:
-            enabled: true
-            pii_types_allowed: []
     - name: ai_decision
       description: Artificial intelligence and machine learning topics
       priority: 140
@@ -8927,10 +8453,6 @@ routing:
         - type: system_prompt
           configuration:
             system_prompt: You are an AI and machine learning expert. Provide detailed, technical explanations about artificial intelligence, neural networks, and related topics.
-        - type: pii
-          configuration:
-            enabled: true
-            pii_types_allowed: []
     - name: data_science_decision
       description: Data science and analytics
       priority: 140
@@ -8946,10 +8468,6 @@ routing:
         - type: system_prompt
           configuration:
             system_prompt: You are a data science expert. Provide insights on data analysis, statistical methods, and predictive modeling.
-        - type: pii
-          configuration:
-            enabled: true
-            pii_types_allowed: []
     - name: programming_decision
       description: Programming and software development
       priority: 140
@@ -8965,10 +8483,6 @@ routing:
         - type: system_prompt
           configuration:
             system_prompt: You are a programming expert. Help with code implementation, debugging, and software development best practices.
-        - type: pii
-          configuration:
-            enabled: true
-            pii_types_allowed: []
     - name: business_decision
       description: Business and management related queries
       priority: 100
@@ -8984,10 +8498,6 @@ routing:
         - type: system_prompt
           configuration:
             system_prompt: You are a senior business consultant and strategic advisor.
-        - type: pii
-          configuration:
-            enabled: true
-            pii_types_allowed: []
     - name: math_decision
       description: Mathematics and quantitative reasoning
       priority: 100
@@ -9003,10 +8513,6 @@ routing:
         - type: system_prompt
           configuration:
             system_prompt: You are a mathematics expert. Provide step-by-step solutions.
-        - type: pii
-          configuration:
-            enabled: true
-            pii_types_allowed: []
     - name: computer_science_decision
       description: Computer science and programming
       priority: 100
@@ -9022,10 +8528,6 @@ routing:
         - type: system_prompt
           configuration:
             system_prompt: You are a computer science expert.
-        - type: pii
-          configuration:
-            enabled: true
-            pii_types_allowed: []
     - name: general_decision
       description: General knowledge and miscellaneous topics
       priority: 50
@@ -9045,10 +8547,6 @@ routing:
           configuration:
             enabled: true
             similarity_threshold: 0.75
-        - type: pii
-          configuration:
-            enabled: true
-            pii_types_allowed: []
   signals:
     keywords:
       - name: code_keywords

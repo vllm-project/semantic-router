@@ -248,7 +248,10 @@ func loadPretrainedSelectorFromPath(algorithmType, modelsPath string) (Selector,
 	// Construct model file path
 	modelPath := modelsPath + "/" + algorithmType + "_model.json"
 
-	logging.Infof("Loading pre-trained %s selector from %s", algorithmType, modelPath)
+	logging.ComponentEvent("modelselection", "selector_load_started", map[string]interface{}{
+		"algorithm":  algorithmType,
+		"model_path": modelPath,
+	})
 
 	// Load the model file
 	data, err := os.ReadFile(modelPath)
@@ -263,7 +266,11 @@ func loadPretrainedSelectorFromPath(algorithmType, modelsPath string) (Selector,
 		if err := selector.LoadFromJSON(data); err != nil {
 			return nil, fmt.Errorf("failed to parse KNN model: %w", err)
 		}
-		logging.Infof("Loaded KNN selector with %d training records", selector.getTrainingCount())
+		logging.ComponentEvent("modelselection", "selector_loaded", map[string]interface{}{
+			"algorithm":        "knn",
+			"model_path":       modelPath,
+			"training_records": selector.getTrainingCount(),
+		})
 		return selector, nil
 
 	case "kmeans":
@@ -271,7 +278,11 @@ func loadPretrainedSelectorFromPath(algorithmType, modelsPath string) (Selector,
 		if err := selector.LoadFromJSON(data); err != nil {
 			return nil, fmt.Errorf("failed to parse KMeans model: %w", err)
 		}
-		logging.Infof("Loaded KMeans selector with %d training records", selector.getTrainingCount())
+		logging.ComponentEvent("modelselection", "selector_loaded", map[string]interface{}{
+			"algorithm":        "kmeans",
+			"model_path":       modelPath,
+			"training_records": selector.getTrainingCount(),
+		})
 		return selector, nil
 
 	case "svm":
@@ -279,7 +290,11 @@ func loadPretrainedSelectorFromPath(algorithmType, modelsPath string) (Selector,
 		if err := selector.LoadFromJSON(data); err != nil {
 			return nil, fmt.Errorf("failed to parse SVM model: %w", err)
 		}
-		logging.Infof("Loaded SVM selector with %d training records", selector.getTrainingCount())
+		logging.ComponentEvent("modelselection", "selector_loaded", map[string]interface{}{
+			"algorithm":        "svm",
+			"model_path":       modelPath,
+			"training_records": selector.getTrainingCount(),
+		})
 		return selector, nil
 
 	case "mlp":
@@ -287,7 +302,11 @@ func loadPretrainedSelectorFromPath(algorithmType, modelsPath string) (Selector,
 		if err := selector.LoadFromJSON(data); err != nil {
 			return nil, fmt.Errorf("failed to parse MLP model: %w", err)
 		}
-		logging.Infof("Loaded MLP selector (GPU-accelerated via Candle)")
+		logging.ComponentEvent("modelselection", "selector_loaded", map[string]interface{}{
+			"algorithm":  "mlp",
+			"model_path": modelPath,
+			"backend":    "candle",
+		})
 		return selector, nil
 
 	default:

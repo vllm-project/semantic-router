@@ -4,13 +4,19 @@
 
 ##@ Linter
 
+# codespell is installed into .venv-agent by tools/make/agent.mk (agent-venv-install).
+AGENT_VENV ?= $(CURDIR)/.venv-agent
+AGENT_CODESPELL ?= $(AGENT_VENV)/bin/codespell
+
 markdown-lint: ## Lint all markdown files in the project
 	@$(LOG_TARGET)
 	markdownlint -c tools/linter/markdown/markdownlint.yaml "**/*.md" \
 		--ignore node_modules \
 		--ignore website/node_modules \
 		--ignore dashboard/frontend/node_modules \
+		--ignore dashboard/wizmap/node_modules \
 		--ignore bench \
+		--ignore e2e/config/models \
 		--ignore website/docs/api/crd-reference.md \
 		--ignore models \
 		--ignore vsr
@@ -21,7 +27,9 @@ markdown-lint-fix: ## Auto-fix markdown lint issues
 		--ignore node_modules \
 		--ignore website/node_modules \
 		--ignore dashboard/frontend/node_modules \
+		--ignore dashboard/wizmap/node_modules \
 		--ignore bench \
+		--ignore e2e/config/models \
 		--ignore models \
 		--ignore vsr \
 		--fix
@@ -33,12 +41,12 @@ yaml-lint: ## Lint all YAML files in the project
 codespell: CODESPELL_SKIP := $(shell cat tools/linter/codespell/.codespell.skip | tr \\n ',')
 codespell: ## Check for common misspellings in code and docs
 	@$(LOG_TARGET)
-	codespell --skip $(CODESPELL_SKIP) --ignore-words tools/linter/codespell/.codespell.ignorewords --check-filenames
+	"$(AGENT_CODESPELL)" --skip $(CODESPELL_SKIP) --ignore-words tools/linter/codespell/.codespell.ignorewords --check-filenames
 
 codespell-tracked: CODESPELL_SKIP := $(shell cat tools/linter/codespell/.codespell.skip | tr \\n ',')
 codespell-tracked: ## Check for common misspellings in tracked code and docs
 	@$(LOG_TARGET)
-	git ls-files -z | xargs -0 codespell --skip $(CODESPELL_SKIP) --ignore-words tools/linter/codespell/.codespell.ignorewords --check-filenames
+	git ls-files -z | xargs -0 "$(AGENT_CODESPELL)" --skip $(CODESPELL_SKIP) --ignore-words tools/linter/codespell/.codespell.ignorewords --check-filenames
 
 shellcheck: ## Lint all shell scripts in the project
 	@$(LOG_TARGET)
@@ -55,4 +63,4 @@ shellcheck: ## Lint all shell scripts in the project
 		exit 1; \
 	fi
 	@echo "Running shellcheck with config from tools/linter/shellcheck/.shellcheckrc"
-	@shellcheck -e SC2155,SC2034,SC1091,SC2011,SC2012,SC2087,SC2119,SC2120,SC2162 $(shell find . -type f -name "*.sh" -not -path "./node_modules/*" -not -path "./website/node_modules/*" -not -path "./dashboard/frontend/node_modules/*" -not -path "./models/*" -not -path "./.venv/*" -not -path "./.codex-agent-venv/*")
+	@shellcheck -e SC2155,SC2034,SC1091,SC2011,SC2012,SC2087,SC2119,SC2120,SC2162 $(shell find . -type f -name "*.sh" -not -path "./node_modules/*" -not -path "./website/node_modules/*" -not -path "./dashboard/frontend/node_modules/*" -not -path "./models/*" -not -path "./.augment/*" -not -path "./.venv/*" -not -path "./.venv-agent/*" -not -path "./.venv-codex/*" -not -path "./.codex-agent-venv/*")

@@ -115,6 +115,94 @@ global:
 	}
 }
 
+func TestParseYAMLBytesRejectsDeprecatedGlobalModelCatalogEmbeddingsBertLayout(t *testing.T) {
+	canonicalYAML := []byte(`
+version: v0.3
+listeners:
+  - name: http
+    address: 0.0.0.0
+    port: 8899
+providers:
+  defaults:
+    default_model: qwen2.5:3b
+  models:
+    - name: qwen2.5:3b
+      backend_refs:
+        - endpoint: 127.0.0.1:11434
+routing:
+  modelCards:
+    - name: qwen2.5:3b
+  decisions:
+    - name: default-route
+      description: fallback
+      priority: 100
+      rules:
+        operator: AND
+        conditions: []
+      modelRefs:
+        - model: qwen2.5:3b
+global:
+  model_catalog:
+    embeddings:
+      bert:
+        model_id: models/mom-embedding-light
+        threshold: 0.6
+        use_cpu: true
+`)
+
+	_, err := ParseYAMLBytes(canonicalYAML)
+	if err == nil {
+		t.Fatal("expected deprecated global.model_catalog.embeddings.bert layout to be rejected")
+	}
+	if !strings.Contains(err.Error(), "global.model_catalog.embeddings.bert") {
+		t.Fatalf("expected error to mention global.model_catalog.embeddings.bert, got: %v", err)
+	}
+}
+
+func TestParseYAMLBytesRejectsDeprecatedDecisionModelSelectionAlgorithmField(t *testing.T) {
+	canonicalYAML := []byte(`
+version: v0.3
+listeners:
+  - name: http
+    address: 0.0.0.0
+    port: 8899
+providers:
+  defaults:
+    default_model: qwen2.5:3b
+  models:
+    - name: qwen2.5:3b
+      backend_refs:
+        - endpoint: 127.0.0.1:11434
+routing:
+  modelCards:
+    - name: qwen2.5:3b
+  decisions:
+    - name: support-route
+      description: fallback
+      priority: 100
+      rules:
+        operator: AND
+        conditions: []
+      modelSelectionAlgorithm:
+        enabled: true
+        method: router_dc
+      modelRefs:
+        - model: qwen2.5:3b
+          use_reasoning: false
+global:
+  router:
+    strategy: priority
+`)
+
+	_, err := ParseYAMLBytes(canonicalYAML)
+	if err == nil {
+		t.Fatal("expected deprecated decision modelSelectionAlgorithm field to be rejected")
+	}
+	if !strings.Contains(err.Error(), "routing.decisions[0].modelSelectionAlgorithm") {
+		t.Fatalf("expected error to mention deprecated decision field, got: %v", err)
+	}
+}
+
 func TestParseYAMLBytesParsesNestedCanonicalModelCatalogModules(t *testing.T) {
 	canonicalYAML := []byte(`
 version: v0.3
@@ -259,11 +347,17 @@ global:
 	if !cfg.ResponseAPI.Enabled {
 		t.Fatal("expected sparse global override to preserve default response_api.enabled=true")
 	}
-	if cfg.ResponseAPI.StoreBackend != "memory" {
+	if cfg.ResponseAPI.StoreBackend != "redis" {
 		t.Fatalf("expected response api backend to keep default, got %q", cfg.ResponseAPI.StoreBackend)
 	}
 	if cfg.ResponseAPI.TTLSeconds != 86400 {
 		t.Fatalf("expected response api ttl default to be preserved, got %d", cfg.ResponseAPI.TTLSeconds)
+	}
+	if cfg.RouterReplay.StoreBackend != "postgres" {
+		t.Fatalf("expected router replay backend to keep default, got %q", cfg.RouterReplay.StoreBackend)
+	}
+	if cfg.RouterReplay.TTLSeconds != 2592000 {
+		t.Fatalf("expected router replay ttl default to be preserved, got %d", cfg.RouterReplay.TTLSeconds)
 	}
 	if !cfg.Memory.Enabled || !cfg.Memory.AutoStore {
 		t.Fatalf("expected memory override to still apply, got enabled=%v auto_store=%v", cfg.Memory.Enabled, cfg.Memory.AutoStore)
@@ -409,6 +503,60 @@ routing:
 	}
 }
 
+func TestGetModelPricingResolvesProviderModelIDFromCanonicalConfig(t *testing.T) {
+	canonicalYAML := []byte(`
+version: v0.3
+listeners:
+  - name: http
+    address: 0.0.0.0
+    port: 8888
+providers:
+  defaults:
+    default_model: claude-haiku
+  models:
+    - name: claude-haiku
+      provider_model_id: eu.anthropic.claude-haiku-4-5-20251001-v1:0
+      pricing:
+        currency: USD
+        prompt_per_1m: 1.00
+        completion_per_1m: 5.00
+routing:
+  modelCards:
+    - name: claude-haiku
+      modality: ar
+  decisions:
+    - name: default
+      priority: 1
+      rules:
+        operator: OR
+        conditions:
+          - type: domain
+            name: general
+      modelRefs:
+        - model: claude-haiku
+`)
+
+	cfg, err := ParseYAMLBytes(canonicalYAML)
+	if err != nil {
+		t.Fatalf("ParseYAMLBytes returned error: %v", err)
+	}
+
+	// Model with no backend_refs should still have ExternalModelIDs populated
+	params := cfg.ModelConfig["claude-haiku"]
+	if len(params.ExternalModelIDs) == 0 {
+		t.Fatal("expected ExternalModelIDs to be populated for metadata-only model")
+	}
+
+	// Pricing lookup by provider model ID should work
+	prompt, completion, currency, ok := cfg.GetModelPricing("eu.anthropic.claude-haiku-4-5-20251001-v1:0")
+	if !ok {
+		t.Fatal("expected pricing lookup by provider model ID to succeed")
+	}
+	if prompt != 1.00 || completion != 5.00 || currency != "USD" {
+		t.Fatalf("provider ID lookup: got prompt=%v completion=%v currency=%q", prompt, completion, currency)
+	}
+}
+
 func TestGetModelPricingTreatsExplicitZeroPricingAsConfigured(t *testing.T) {
 	cfg := &RouterConfig{
 		BackendModels: BackendModels{
@@ -435,6 +583,49 @@ func TestGetModelPricingTreatsExplicitZeroPricingAsConfigured(t *testing.T) {
 			completionPer1M,
 			currency,
 		)
+	}
+}
+
+func TestGetModelPricingResolvesProviderModelID(t *testing.T) {
+	cfg := &RouterConfig{
+		BackendModels: BackendModels{
+			ModelConfig: map[string]ModelParams{
+				"claude-opus-4-6": {
+					Pricing: ModelPricing{
+						Currency:        "USD",
+						PromptPer1M:     5.50,
+						CompletionPer1M: 27.50,
+					},
+					ExternalModelIDs: map[string]string{
+						"default": "eu.anthropic.claude-opus-4-6-v1",
+					},
+				},
+			},
+		},
+	}
+
+	// Lookup by short name should work as before
+	prompt, completion, currency, ok := cfg.GetModelPricing("claude-opus-4-6")
+	if !ok {
+		t.Fatal("expected pricing lookup by short name to succeed")
+	}
+	if prompt != 5.50 || completion != 27.50 || currency != "USD" {
+		t.Fatalf("short name lookup: got prompt=%v completion=%v currency=%q", prompt, completion, currency)
+	}
+
+	// Lookup by provider model ID (Envoy AI Gateway rewrites to this)
+	prompt, completion, currency, ok = cfg.GetModelPricing("eu.anthropic.claude-opus-4-6-v1")
+	if !ok {
+		t.Fatal("expected pricing lookup by provider model ID to succeed")
+	}
+	if prompt != 5.50 || completion != 27.50 || currency != "USD" {
+		t.Fatalf("provider ID lookup: got prompt=%v completion=%v currency=%q", prompt, completion, currency)
+	}
+
+	// Unknown model should still return false
+	_, _, _, ok = cfg.GetModelPricing("nonexistent-model")
+	if ok {
+		t.Fatal("expected pricing lookup for unknown model to return false")
 	}
 }
 

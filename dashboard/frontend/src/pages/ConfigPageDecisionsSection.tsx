@@ -224,7 +224,10 @@ export default function ConfigPageDecisionsSection({
   }
 
   const openDecisionEditor = (mode: 'add' | 'edit', decision?: DecisionRow) => {
-    const conditionTypeOptions = ['keyword', 'domain', 'preference', 'user_feedback', 'embedding', 'fact_check', 'language', 'context', 'complexity', 'modality', 'authz', 'jailbreak', 'pii'] as const
+    const conditionTypeOptions = ['keyword', 'domain', 'preference', 'user_feedback', 'reask', 'embedding', 'fact_check', 'language', 'context', 'structure', 'complexity', 'modality', 'authz', 'jailbreak', 'pii', 'projection'] as const
+    const projectionOutputs = (config?.projections?.mappings || []).flatMap((mapping) =>
+      (mapping.outputs || []).map((output) => output.name)
+    )
 
     const getConditionNameOptions = (type?: ConfigDecisionConditionType) => {
       switch (type) {
@@ -236,6 +239,8 @@ export default function ConfigPageDecisionsSection({
           return config?.signals?.preferences?.map((p) => p.name) || []
         case 'user_feedback':
           return config?.signals?.user_feedbacks?.map((u) => u.name) || []
+        case 'reask':
+          return config?.signals?.reasks?.map((r) => r.name) || []
         case 'embedding':
           return config?.signals?.embeddings?.map((e) => e.name) || []
         case 'fact_check':
@@ -244,6 +249,8 @@ export default function ConfigPageDecisionsSection({
           return config?.signals?.language?.map((l) => l.name) || []
         case 'context':
           return config?.signals?.context?.map((c) => c.name) || []
+        case 'structure':
+          return config?.signals?.structure?.map((s) => s.name) || []
         case 'complexity':
           return (config?.signals?.complexity || []).flatMap((signal) => [
             `${signal.name}:easy`,
@@ -258,6 +265,8 @@ export default function ConfigPageDecisionsSection({
           return config?.signals?.jailbreak?.map((rule) => rule.name) || []
         case 'pii':
           return config?.signals?.pii?.map((rule) => rule.name) || []
+        case 'projection':
+          return projectionOutputs
         default:
           return []
       }

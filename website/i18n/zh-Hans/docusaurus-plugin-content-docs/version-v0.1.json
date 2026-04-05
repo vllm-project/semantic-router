@@ -7,9 +7,9 @@
     "message": "概述",
     "description": "The label for category Overview in sidebar tutorialSidebar"
   },
-  "sidebar.tutorialSidebar.category.Installation": {
-    "message": "安装",
-    "description": "The label for category Installation in sidebar tutorialSidebar"
+  "sidebar.tutorialSidebar.category.Quickstart": {
+    "message": "快速开始",
+    "description": "The label for category Quickstart in sidebar tutorialSidebar"
   },
   "sidebar.tutorialSidebar.category.Install with Gateways": {
     "message": "网关集成",
@@ -22,6 +22,66 @@
   "sidebar.tutorialSidebar.category.Capacities": {
     "message": "功能特性",
     "description": "The label for category Capacities in sidebar tutorialSidebar"
+  },
+  "sidebar.tutorialSidebar.category.Signals": {
+    "message": "信号",
+    "description": "The label for category Signals in sidebar tutorialSidebar"
+  },
+  "sidebar.tutorialSidebar.category.Heuristic": {
+    "message": "启发式",
+    "description": "The label for category Heuristic in sidebar tutorialSidebar"
+  },
+  "sidebar.tutorialSidebar.category.Learned": {
+    "message": "学习型",
+    "description": "The label for category Learned in sidebar tutorialSidebar"
+  },
+  "sidebar.tutorialSidebar.category.Projections": {
+    "message": "投影",
+    "description": "The label for category Projections in sidebar tutorialSidebar"
+  },
+  "sidebar.tutorialSidebar.category.Decisions": {
+    "message": "决策",
+    "description": "The label for category Decisions in sidebar tutorialSidebar"
+  },
+  "sidebar.tutorialSidebar.category.Algorithms": {
+    "message": "算法",
+    "description": "The label for category Algorithms in sidebar tutorialSidebar"
+  },
+  "sidebar.tutorialSidebar.category.Selection": {
+    "message": "选择器",
+    "description": "The label for category Selection in sidebar tutorialSidebar"
+  },
+  "sidebar.tutorialSidebar.category.Looper": {
+    "message": "循环编排",
+    "description": "The label for category Looper in sidebar tutorialSidebar"
+  },
+  "sidebar.tutorialSidebar.category.Plugins": {
+    "message": "插件",
+    "description": "The label for category Plugins in sidebar tutorialSidebar"
+  },
+  "sidebar.tutorialSidebar.category.Response and Mutation": {
+    "message": "响应与改写",
+    "description": "The label for category Response and Mutation in sidebar tutorialSidebar"
+  },
+  "sidebar.tutorialSidebar.category.Retrieval and Memory": {
+    "message": "检索与记忆",
+    "description": "The label for category Retrieval and Memory in sidebar tutorialSidebar"
+  },
+  "sidebar.tutorialSidebar.category.Safety and Generation": {
+    "message": "安全与生成",
+    "description": "The label for category Safety and Generation in sidebar tutorialSidebar"
+  },
+  "sidebar.tutorialSidebar.category.Global": {
+    "message": "全局配置",
+    "description": "The label for category Global in sidebar tutorialSidebar"
+  },
+  "sidebar.tutorialSidebar.category.Fleet Simulator": {
+    "message": "机队模拟器",
+    "description": "The label for category Fleet Simulator in sidebar tutorialSidebar"
+  },
+  "sidebar.tutorialSidebar.link.Fleet Simulator PDF": {
+    "message": "机队模拟器 PDF",
+    "description": "The label for sidebar link Fleet Simulator PDF"
   },
   "sidebar.tutorialSidebar.category.Intelligent Route": {
     "message": "智能路由",

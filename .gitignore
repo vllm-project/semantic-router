@@ -12,6 +12,7 @@ target/
 *.pyz
 __pycache__/
 .venv/
+.venv-agent/
 pii_env/
 
 # Python build artifacts
@@ -140,6 +141,9 @@ test-results/
 # augment editor rules
 .augment
 
+# Local agent harness artifacts
+.agent-harness/
+
 # Claude Code configuration (should not be committed)
 CLAUDE.md
 
@@ -194,6 +198,7 @@ FactCHD_dataset/
 *.safetensors
 
 .vllm-sr/
+.codex-go-cache/
 
 # AWS deployment files (contain instance IPs and IDs)
 src/training/cache_embeddings/aws/vllm-instance-*.txt
@@ -203,3 +208,6 @@ src/training/cache_embeddings/aws/vllm-inventory-*.ini
 grafana/
 grafana-data/
 prometheus-data/
+
+# Local dev makefile (not committed)
+Makefile.local

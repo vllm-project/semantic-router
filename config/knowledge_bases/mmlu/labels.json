@@ -1,0 +1,286 @@
+{
+  "version": "1.0.0",
+  "description": "MMLU-Pro domain taxonomy for calibration routing evaluation.",
+  "labels": {
+    "biology": {
+      "description": "MMLU-Pro biology questions",
+      "exemplars": [
+        "Distinguish betweenapoenzymesandcofactors .",
+        "Although it is possible to categorize eye color in humans into blue or brown phenotypic classes, there are clearly many variations in hue within the two classes. What type of inheritance mechanism may be working to produce eye color?",
+        "The four-legged land vertebrates (theamphibia, reptiles, birds and mammals) are placed together in thesuperclass Tetrapoda. Which animal was the firsttetrapodand what did it give rise to?",
+        "Charles Darwin was the first person to propose",
+        "Two individuals, one with type B blood and one with type AB blood, have a child. The probability that the child has type O blood is",
+        "Which of the following statements is correct?",
+        "Which of the following statements concerning the Golgi apparatus of a eukaryote is correct?",
+        "What hormonal changes occur during the delivery of an infant (parturition)?",
+        "What are the consequences of intenseinterspecific competition?",
+        "Although mutations occur at a regular and predictable rate, which of the following statements is the LEAST likely reason the frequency of mutation appears to be low?",
+        "What is a transgenic animal? Briefly describe a few ways in which they have impacted the field of genetics.",
+        "An inexperienced nurse measures the blood pressure in the artery of the upper arm of a man. She then measures the blood pressure in the artery of the man's leg. The nurse obtains a different value. Why?",
+        "Stomata allow gases, such as H2O and CO2, to exchange between the inside of a plant leaf and the surrounding environment. Which of the following occurs under normal daytime environmental conditions?",
+        "All of the following statements are true EXCEPT",
+        "In peas, tall (D) is dominant to dwarf (d), yellow (G) is dominant to green (g), and round (W) is dominant to wrinkled (w). What fraction of the offspring of this cross would be homozygous recessive in all gene pairs? GgDdww\u00d7GgddWw"
+      ]
+    },
+    "business": {
+      "description": "MMLU-Pro business questions",
+      "exemplars": [
+        "BobGafneyand Susan Medina invested $40,000 and $50,000 respectively in a luncheonette. Since Mr.Gafneyis the manager of the luncheonette, he gets 4% of the net income. Each partner receives 6% interest on his or her investment. Any remaining net income is divided equally. If the net income for any year is $28,600, how is it divided?",
+        "George and Richard Martin, partners in a law firm, pay $6300 in annual rent. When their lease expires, their new rent will be $715 per month. What percent of increase will they be paying?",
+        "Daniel receives at 6.5% commission on all sales. If he received a $275.08 commission, what were his sales?",
+        " ____________ describes the extrinsic properties of the product (the colour, the packaging, the product consistency, associations) and level to which these satisfy customers' psychological or social needs.",
+        "On October 25 RalphMuffetaccepted a draft for $620 that was dated October 10 and due 3 months after sight. It was discounted on November 16 at 4 (1/2)%. The bank charges (1/8)% collection fee. Find the proceeds of the draft.",
+        "An automobile that cost $3,000 four years ago is now worth $1,000. What is the average yearly depreciation?",
+        "Costs for producing one widget: Materials:2 parts (a) $25.00 per part Expenses :$10.00 Labor :20 operations (a) $5.00 per operation Based on the above information, which is the only valid conclusion? (A) The selling price should be $160 per widget. (B) labor rates are excessive (C) output is labor intensive (D) material costs are low",
+        "Circle Electronics can produce and sell x number of calculators a month. If it costs x^2 dollars to produce x number of calculators and each calculator is sold wholesale at $100, how many calculators should Circle Electronics produce monthly to maximize its profit?",
+        "assume you are Indonesian. In 2010, the rupiah exchange rate was around IDR15,000/USD, and the consumer price index in Indonesia and the United States was at 100. In 2019, the exchange rate changed to IDR14,000/USD. Simultaneously, Indonesia\u2019s inflation rose 5% due to the consumer price index rising to 105. Meanwhile, the United States\u2019 inflation rate rose 10% due to the consumer price index risin",
+        "Calculate the Gross Domestic Product using the total expenditure approach:\nConsumption Expenditures | $500 billion\nWages and salaries | $400 billion\n(Gross Private) Investments Expenditures | $80 billion\nGovernment Expenditures | $100 billion\nTaxes | $70 billion\nImports | $50 billion\nExports | $30 billion\nWhat is the GDP (in billions)?",
+        "Record the maturity date for a draft dated (a) November 12 and payable 60 days after date, (b) June 10 and payable 3 months after date, (c) March 3 and payable 30 days after sight if it is accepted March 15, and (d) October 4 and payable 6 months after sight if it is acceptedOctober 25.",
+        "Mr. James is in the 50% income tax bracket. He can either buy, at par value, corporate bonds which yield 8% interest, ormunicipal bonds which yield 4(1/2)% interest. Which is the wiserinvestment?",
+        "If at the beginning of each month a deposit of $500 is made in an account that pays 8% compounded monthly, what will the final amount be after five years?",
+        "You are asked to determine the price of a European put option on a stock. Assuming the Black-Scholes framework holds, you are given: (i) The stock price is $100. (ii) The put option will expire in 6 months. (iii) The strike price is $98. (iv) The continuously compounded risk-free interest rate is r = 0.055. (v) \u03b4 = 0.01 (vi) \u03c3 = 0.50. What is the price of the put option?",
+        "The enforcement of company privacy is complex as corporations are somewhat __________, as there are few clear barriers to define their limits, it is difficult to _________ due to the number of individuals involved and much corporate activity takes place in ________."
+      ]
+    },
+    "chemistry": {
+      "description": "MMLU-Pro chemistry questions",
+      "exemplars": [
+        "Suppose that the junction between two semiconductors can be represented by a barrier of height $2.0 \\mathrm{eV}$ and length $100 \\mathrm{pm}$. Calculate the transmission probability of an electron with energy $1.5 \\mathrm{eV}$.",
+        "Frozen-core $\\mathrm{SCF} / \\mathrm{DZP}$ and CI-SD/DZP calculations on $\\mathrm{H}_2 \\mathrm{O}$ at its equilibrium geometry gave energies of -76.040542 and -76.243772 hartrees. Application of the Davidson correction brought the energy to -76.254549 hartrees. Find the coefficient of $\\Phi_0$ in the normalized CI-SD wave function.",
+        "Calculate the pH of (a) a 0.5 M solution with respect to CH_3COOH and CH_3COONa; (b) the same solution after 0.1 mole HCl per liter has been added to it. Assume that the volume is unchanged. K_a = 1.75 \u00d7 10^-5.",
+        "A sample of a gas exhibiting ideal behavior occupies a volume of 350 ml at 25.0\u00b0C and 600 torr. Determine its volume at 600\u00b0C and 25.0 torr.",
+        "The average concentration of particulate lead in a city with highly polluted air is 5\\mug/m^3. If an adult respires 8500 liters of air daily and if 50 per cent of the particles below 1\\mumin size are retained in the lungs, calculate how much lead is absorbed in the lungs each day. Of the particu-late lead in urban air, 75 per cent is less than 1\\mumin size.",
+        "Ferrous sulfate undergoes a thermal decomposition as follows: 2FeSO_4 (s) = Fe_2O_3 (s) + SO_2 (g) + SO_3 (g) At 929\u00b0K the total gas pressure is 0.9atmwith both solids present. (a) CalculateK_pfor this temperature. (b) Calculate the equilibrium total pressure that will be obtained if excess ferrous sulfate is placed in a flask at 929\u00b0K, which contains an initial SO_2 pressure of 0.6atm.",
+        "Find K_b andpK_bfor the acetate ion CH_3COO^-, The ionization constant of CH_3COOH is K_a = 1.75 \u00d7 10^-5;K_w= 1.00 \u00d7 10^-14.",
+        "Two molecules ^14N_2 and ^14N^15N have the sameinternuclear distance given as 0.1095 nm. Evaluate the molar rotational partition function at 298\u00b0K for both molecules.",
+        "Sulfurylchloride decomposes according to the equation, SO_2CI_2(g) \\rightleftarrows SO_2(g) + CI_2(g) . Given that at 300\u00b0 K and 1atmpressure, the degree of dissociation is .121, find the equilibrium constant,K_p. What will be the degree of dissociation when pressure = 10atm?",
+        "At 25\u00b0C, sucrose and water form an ideal solution and the solu-bility of sucrose in the water is 6.2molal. Calculate the heat of fusion of sucrose given that its molecular weight is 342, melting point is 200\u00b0C and the heat of fusion of water is 1400 cal/mole.",
+        "A gas at $250 \\mathrm{~K}$ and $15 \\mathrm{~atm}$ has a molar volume 12 per cent smaller than that calculated from the perfect gas law. Calculate the molar volume of the gas.",
+        "The equilibrium constant, Kc, for the dissociation of HI into hydrogen gas and iodine vapor is 21 at a certain temperature. What will be the molar concentration of iodine vapor if 15 grams of HI gas is introduced into a 12.0-L flask and allowed to come to equilibrium?",
+        "Consider the water dissociation reaction H_2O \\rightleftarrows H^+ + 0H^- in which the equilibrium is disturbed. It is found that the relaxation time for the return to equilibrium at 25\u00b0C is 37 \\mus. Calculate the rate coefficients for the forward and backward reactions.",
+        "The vapor pressure of benzene at 75\u00b0C is 640 torr. A solution of 3.68 g of a solute in 53.0 g benzene has a vapor pressure of 615 torr. Calculate the molecular weight of the solute. (MW of benzene = 78.0.)",
+        "A 2-liter flask maintained at 700\u00b0K contains 0.1 mole of CO and a catalyst for the reaction CO(g) + 2H_2(g) = CH_3OH(g) Hydrogen is introduced until the equilibrium total pressure is 7atm, at which point 0.06 moles of methanol are formed . (a) CalculateK_pin atm^-2 (b) What would the final pressure be were the same amounts of CO and H_2 used but with no catalyst present so that no reaction occurs?"
+      ]
+    },
+    "computer science": {
+      "description": "MMLU-Pro computer science questions",
+      "exemplars": [
+        "Suppose a convex 3d-object has k pentagonal faces and m hexagonal faces. All faces are regular. What is k?",
+        "What are the port states determined by Nmap?",
+        "What are the rules regarding the specification of a procedure?",
+        "What arePackedarrays? How do they differfrom conventional arrays?",
+        "In the NoNicks operating system, the time required by a single file-read operation has four nonoverlapping components:\ndisk seek time-25 msec\ndisk latency time-8 msec\ndisk transfer time- 1 msec per 1,000 bytes\noperating system overhead-1 msec per 1,000 bytes + 10 msec\nIn version 1 of the system, the file read retrieved blocks of 1,000 bytes. In version 2, the file read (along with the underlying l",
+        "Hash tables can contribute to an efficient average-case solution for all of the problems described below EXCEPT:",
+        "What tool can be used to perform SNMP enumeration?",
+        "_______________ is a popular tool used for network analysis in multiprotocol diverse network.",
+        "Statement 1| RELUs are not monotonic, but sigmoids are monotonic. Statement 2| Neural networks trained with gradient descent with high probability converge to the global optimum.",
+        "Statement 1| As of 2020, some models attain greater than 98% accuracy on CIFAR-10. Statement 2| The original ResNets were not optimized with the Adam optimizer.",
+        "A machine learning problem involves four attributes plus a class. The attributes have 3, 2, 2, and 2 possible values each. The class has 3 possible values. How many maximum possible different examples are there?",
+        "Of the following potential benefits, which is LEAST likely to be provided by the upgraded system?",
+        "Statement 1| Highway networks were introduced after ResNets and eschew max pooling in favor of convolutions. Statement 2| DenseNets usually cost more memory than ResNets.",
+        "Which of the following is LEAST likely to indicate a phishing attack?",
+        "In an IPv4 datagram, the value of the total-length field is $(00 \\mathrm{~A} 0)_{16}$ and the value of the headerlength (HLEN) is (5) $1_{16}$. How many bytes of payload are being carried by the datagram?"
+      ]
+    },
+    "economics": {
+      "description": "MMLU-Pro economics questions",
+      "exemplars": [
+        "Suppose that there are three firms, A, B, and C, in an oligopolistic industry. In analyzing the market, Firm A has come to the conclusion that B and C will follow any price change A initiates. Does the kinked demand curve apply here?",
+        "Which of the following statements is true concerning variance decomposition analysis of VARs?\n\ni) Variance decompositions measure the impact of a unit shock to each of the variables on the VAR\n\nii) Variance decompositions can be thought of as measuring the proportion of the forecast error variance that is attributable to each variable\n\niii) The ordering of the variables is important for calculating",
+        "What is the principle of diminishing marginal returns?",
+        "When the production or consumption of a good creates a positive externality, it is deemed a market failure because at the market quantity",
+        "Suppose taxes are cut in an economy that is in equilibrium at full employment. In the long run the tax cut will",
+        "Which of the following correctly illustrates why price (P) equals marginal revenue (MR) under perfect competition, and why price (P) is greater than marginal revenue under monopoly or imperfect competition? I. MR = P = demand on horizontal function for perfect competition. II. P > MR as downward sloping functions for imperfect competition. III. Demand and Price are represented as a vertical functi",
+        "Which function of money best defines $1.25 as the price of a 20-ounce bottle of pop?",
+        "If four firms in a competitive industry have supply schedules givenby the following equations: Q_1^S = 16 + 4PQ_3^S = 32 + 8P Q_2^S = 5 - 5PQ_4^S = 60 - 10P What is their combined supply?",
+        "If the economy is experiencing a recession how will a plan to decrease taxes for consumers and increase spending on government purchases affect real gross domestic product (GDP) and the price level?",
+        "Whether imposed for protective purposes or to raise revenue, tariffs can be imposed in two different ways. Define these two methods of imposing tariffs, and give an example of each.",
+        "In a given period the average price level in the country of Sherwood tripled and Robin's income increased from $30000 to $60000. What happened to Robin's nominal and real income? Nominal Income \u00a0\u00a0\u00a0 Real Income",
+        "Suppose a commercial bank's required reserves are $100,000, and the required reserve ratio is162/3%. What must its deposits be?",
+        "Using a marginal utility approach, explain why air, so vitally important to the maintenance of life, is free.",
+        "What is the main contrast between the short-run and long-run Phillips curve?",
+        "In order to hire the least-cost combination of labor and capital, the firm must do which of the following?"
+      ]
+    },
+    "engineering": {
+      "description": "MMLU-Pro engineering questions",
+      "exemplars": [
+        "A liquid at 90\u00b0F is flowing at a rate of 40 gal/min through a horizontalpipe line of constant diameter 1.61 in. The pipe length is 50 ft. The system con-tains two 90\u00b0 standard elbows, two valves and a tee joint across the flow. The density and viscosity of the fluid flowing at 90\u00b0F are 53lb_m/ft and 0.5 cp respectively. Calculate the pressure loss in the sys-tem with gate valves and then with glob",
+        "The number of output pins in 8085 microprocessors are",
+        "(a) A shunt motor is running at 1200 rpm for a load which requires an armature current of 50 amp from a 230-volt source. At no load the armature current is 5 amp. If the effect of armature reaction has reduced the air-gap flux 2 percent from no load to full load, determine the no-load speed. The armature resistance is 0.15 ohm. (b) The rated line current of a 230-volt shunt motor is 56 amp. If the",
+        "Four identical alternators each are rated for 20 MVA, 11 KV having a subtransient reactance of 16% are working in parallel. The short circuit level at the busbar is",
+        "Find the input impedance of a 50 ohm line terminated in + j50 ohms, for a line length such that \\betal = \\pi radian.",
+        "A D-flip-flop is said to be transparent when",
+        "A 120 V dc shunt motor having an armature circuit resistance of 0.2 ohm and a field circuit resistance of 60 ohms, draws a line current of 40 A at full load. The brush volt drop is 3 V and rated, full load speed is 1800 rpm. Calculate: (a) The speed at half load. (b) The speed at an overload of 125 percent.",
+        "Determine those values of s for which the improper integral G(s) = ^\\infty\\int0e^-st dt converges, and find the Laplace transform of f(t) = 1.",
+        "A piston cylinder arrangement contains saturated Freon - 12 at- 10\u00b0C. The vapor is then compressed to a final pressure of1.6MPa. If the process is assumed to be reversible and adiabaticcalculate the work per kilogram of Freon - 12 for thisprocess.",
+        "Determine the number of belts required to transmit 70 hp by a 3V large capacity belt of length 100 in., running on pulleys 12 in. in diameter and speed 2000 rpm. The maximum life of the belt, before failure, is 15,000 hrs.",
+        "(1/2)CH_4 + O_2 + 3.76N_2 \\rightharpoonup (1/2)CO_2+ H_2O + 3.76N_2 This combustion can happen as a constant pressure or constantvolume process. Calculate the maximum temperaturesof combustion for these two processes. Assume that for the temperature range of interest, the specificheats are constant. Also assume that methane reactswith astoichiometricamount of air and that initially, themethane and",
+        "Air is introduced through a nozzle into a tank of water to form astream of bubbles. If the bubbles are intended to have a diameterof 2 mm, calculate by how much the pressure of theair at the nozzle must exceed that of the surrounding water. Assume that \\sigma = 72.7 \u00d7 10^-3 N m^-1.",
+        "A punch press has a no. 308 spherical roller bearing. The mainshaft runs at 1600 rpm and the bearing experiences a radialload of 2000 lbs. and a thrust of 1400 lbs. Under steadyloading conditions and for outer bearing ring rotation evaluate (a)bearinglife for 90% reliability (b)bearinglife for 96% reliability.",
+        "A coil that has a resistance of 0.05 ohms is connected to a cellthat develops anemfof 1.5 volts. Find the current flowingif the internal resistance of the cell is (a) 0.1ohm,and (b) 0.01 ohm.",
+        "Copper has a conductivity \\sigma = 5.8 \u00d7 10^7 mhos/meter, and \\mu = 1.26 \u00d7 10^-6 Henry/meter. If a plane wave at a frequency of 200 Hz is normally incident on copper find the depth of penetration of this wave."
+      ]
+    },
+    "health": {
+      "description": "MMLU-Pro health questions",
+      "exemplars": [
+        "Genetic characteristics of the bunyavirus family include which one of the following?",
+        "Which are the FIVE main series of apoproteins that have been identified?",
+        "A previously healthy 17-year-old girl comes to the emergency department because of a 5-day history of progressive lower abdominal pain, fever, and malodorous vaginal discharge. Menarche was at the age of 12 years, and her last menstrual period was 2 weeks ago. She is sexually active with one male partner and uses a combination contraceptive patch. Her temperature is 37.8\u00b0C (100\u00b0F), pulse is 90/min",
+        "What is a tracheostomy?",
+        "What is the morphology of the Dane particle?",
+        "Over the last decade or two, which of the following causes of death has shown a huge increase?",
+        "A 49-year-old man, who is recovering in the hospital 2 days after uncomplicated left femoral-popliteal bypass grafting for claudication, has now developed increasing pain in his left foot. Until now, the patient's postoperative course had been unremarkable and he has been treated with low-dose morphine for pain control. Medical history is remarkable for type 2 diabetes mellitus controlled with met",
+        "Which of the following is NOT one of the more frequently named activities by those who are retired?",
+        "A patient comes into the hospital after being bit by a dog who he stated was \u201cacting crazy\u201d. The wound is open and bleeding. Animal control captured the dog and said that it was foaming at the mouth and extremely aggressive. Suspecting a rabies infection, the patient is given a serum that contains rabies antibodies that were grown inside a horse. This is an example of what kind of immunity?",
+        "Disease can most often be prevented by which of the following:",
+        "A 16-year-old male is brought to the emergency department with sudden-onset swelling of the right knee. He denies any trauma. Past medical history reveals cystic fibrosis. Examination of the knee reveals fluctuance on palpation of the joint but no increased warmth; mild restriction in range of motion due to the swelling is also noted. Numerous bruises are noted in various stages of resolution. Fur",
+        "A difference between the social networks of older and younger adults is that older adults have",
+        "A 22-year-old male presents to the office with a\u00a05-day\u00a0history of diarrhea after completing his third course of antibiotics for mastoiditis. Physical examination reveals vague generalized abdominal pain on palpation. Culture on hektoen enteric agar is positive. The most likely etiologic agent causing the diarrhea is",
+        "What is the biggest risk factor for infection with Ebola?",
+        "A 22-year-old woman comes to the emergency department because of a 5-day history of sore throat and fever. During the past 3 days, she also has noticed a change in her voice and has had increased pain with swallowing. She has been taking acetaminophen since her symptoms began. Medical history is unremarkable and she takes no routine medications. Vital signs are temperature 40.0\u00b0C (104.0\u00b0F), pulse "
+      ]
+    },
+    "history": {
+      "description": "MMLU-Pro history questions",
+      "exemplars": [
+        "In 1797, John Frere made a discovery that he described as:",
+        "This question refers to the following information.\nOne of the rights which the freeman has always guarded with most jealous care is that of enjoying the rewards of his own industry. Realizing that the power to tax is the power to destroy and that the power to take a certain amount of property or of income is only another way of saying that for a certain proportion of his time a citizen must work f",
+        "This question refers to the following information.\nGunpowder Weaponry: Europe vs. China\nIn Western Europe during the 1200s through the 1400s, early cannons, as heavy and as slow to fire as they were, proved useful enough in the protracted sieges that dominated warfare during this period that governments found it sufficiently worthwhile to pay for them and for the experimentation that eventually pr",
+        "This question refers to the following information.\n\"Yesterday, December 7, 1941\u2014a date which will live in infamy\u2014the United States of America was suddenly and deliberately attacked by naval and air forces of the Empire of Japan. The United States was at peace with that nation and, at the solicitation of Japan, was still in conversation with its Government and its Emperor looking toward the mainten",
+        "This question refers to the following information.\n\"Wherever I go\u2014the street, the shop, the house, or the steamboat\u2014I hear the people talk in such a way as to indicate that they are yet unable to conceive of the Negro as possessing any rights at all. Men who are honorable in their dealings with their white neighbors will cheat a Negro without feeling a single twinge of their honor. To kill a Negro",
+        "At its peak, the population of the city of Teotihuac\u00e1n may have reached:",
+        "A subsistence strategy and settlement pattern based on seasonality and planned acquisition of resources is known as:",
+        "This question refers to the following information.\nNo task is more urgent than that of preserving peace. Without peace our independence means little. The rehabilitation and upbuilding of our countries will have little meaning. Our revolutions will not be allowed to run their course. What can we do? We can do much! We can inject the voice of reason into world affairs. We can mobilize all the spirit",
+        "What does Australia have in common with the rest of the world during the Holocene epoch?",
+        "This question refers to the following information.\nI have, in conformity without resolve, put together some few points concerning the reformation of the Christian estate, with the intent of placing the same before the Christian nobility of the German nation. . . . It is not out of mere arrogance and perversity that I, an individual poor man, have taken upon me to address your lordships. The distre",
+        "How long ago did human groups begin actively controlling their food sources by artificially producing conditions under which these sources would grow?",
+        "This question refers to the following information.\nBonesteel's prime consideration was to establish a surrender zone as far north as he thought the Soviets would accept. He knew that the Russian troops could reach the southern tip of Korea before American troops could arrive. He also knew that the Russians were on the verge of moving into Korea, or were already there. The nearest American troops t",
+        "Which of the following is the Pleistocene ice mass in North America centered in the Rocky Mountains?",
+        "The ethics of conducting archaeological research on sites with human remains of indigenous North American ancestors is addressed by the Native American Graves Protection and Repatriation Act. Problems often arise when:",
+        "This question refers to the following information.\n\"Our constitution does not copy the laws of neighboring states; we are rather a pattern to others than imitators ourselves. Its administration favors the many instead of the few; this is why it is called a democracy. If we look to the laws, they afford equal justice to all in their private differences; if no social standing, advancement in public "
+      ]
+    },
+    "law": {
+      "description": "MMLU-Pro law questions",
+      "exemplars": [
+        "A defendant hated a victim and decided to kill him. The defendant put a loaded gun in his coat pocket and went outside for a walk, not sure if and when he may see the victim. The defendant passed by a bar and decided to go inside for a drink. While in the bar, he drank several bottles of beer and became intoxicated. While walking home from the bar, the defendant bumped into the victim. As soon as ",
+        "A homeowner conveyed his property to his cousin \"for life, with remainder to (the homeowner's) heirs. \" Later, the cousin conveyed the property to a farmer \"for as long as he would continue to farm the property. \" After the cousin's death, the homeowner's heirs brought suit against the farmer to quiet title. Which common law doctrine would be most applicable in the court's determination of the own",
+        "A farmer owned a 40-acre tract of farmland located in a small southern town. The farmer leased the property and building thereon to a tenant for a term of seven years commencing on February 15, 2000 and terminating at 12:00 noon on February 15, 2007. The lease contained the following provision:\"Lessee covenants to pay the rent of $5,000 per month on the 15th day of each month and to keep the build",
+        "A mechanic agreed in writing to make repairs to a landscaper's truck for $12,000. The mechanic properly made the repairs, but when the landscaper tendered payment, the mechanic refused to deliver the truck unless the landscaper promised to pay an additional $2,000. The customary charge for such work was $14,000. Because the landscaper needed the truck immediately to fulfill existing contractual ob",
+        "Hume's attack on natural law is founded on his argument that:",
+        "A doctor who was licensed to practice medicine in a particular state was convicted in state court of improperly distributing specified drugs by writing prescriptions for fictitious persons. Under state law, such an abuse of the prescription-writing privilege requires revocation of a doctor's license. After it received an official notification of the doctor's conviction, the state medical board rev",
+        "A city enacted an ordinance prohibiting the singing and chanting of songs from 1:00P. M. to 1:00A. M. by two or more persons if such noise is audible off the premises where the singing takes place. The ordinance expressly exempted from its purview the singing or chanting of religious songs. After the ordinance was enacted and went into effect, several college students were walking down the street ",
+        "A defendant, an indigent, was arrested and charged with attempted murder. The defendant, who had a history of psychiatric problems, had been diagnosed as being paranoid schizophrenic. The defendant was represented by a court-appointed attorney. In trying to prepare for trial, the attorney met with the defendant on numerous occasions. The attorney, however, found it difficult to communicate with th",
+        "A large privately owned and operated shopping mall is open to the public and includes small shops, major department stores, and restaurants that are located around a pedestrian area. It also has several movie theaters, an ice-skating rink, a small amusement park, and a branch of the local public library. The mall is advertised as \"a small town with a big-town feel.\" During shopping hours, a group ",
+        "A landlord is the owner in fee simple of a tract of land on which is situated a large office building. The landlord leases the land and building thereon to a tenant for a term of seven years, commencing on August 1, 2001, and terminating at midnight on July 31, 2008. The lease contains the following provisions\"(1) The tenant covenants to keep the building on the leased premises insured against fir",
+        "Liang, a talented student from another country, received degrees from several universities in the United States and then decided to stay in the states to teach. Could a state law requiring citizenship for teachers prevent him from doing so?",
+        "In 1993, a rancher had good record title to a 20-acre orange grove in fee simple absolute. In 1994, the rancher delivered to his son, for a sum of $1,000, a deed signed by the rancher, naming the son and his heirs as grantee, and appearing valid on its face. The son neglected to record the deed. In 1998, a farmer, aware of the existence of the rancher-to-son deed, sought out the rancher and asked ",
+        "A tenant lived in a small apartment building that was owned by a landlord. In July, the landlord was killed in an accident. In August, the tenant brought an action against the administrator of the landlord's state. The tenant alleged that he and the landlord had a contract under the terms of which the landlord was supposed to pay him $50 a week to mow the lawn and perform small maintenance repairs",
+        "A producer of widgets contacted a manufacturer of boxes about the possibility of purcIiasing specially designed boxes for shipping the widgets to customers. The producer sent the manufacturer a sheet containing the dimensions of the boxes' needs, as well as the logo to be placed on each box. After negotiations, the parties entered into a written contract whereby the manufacturer agreed to supply t",
+        "A city imposes a municipal excise tax of $200 per year on commercial artists' studios in that city. It also imposes an excise tax of $100 per year on every itinerant commercial figure drawer for the privilege of using the streets and sidewalks. A credit is allowed against this latter tax for any excise tax paid to the city by the drawer or his employer in respect to the maintenance of an artist's "
+      ]
+    },
+    "math": {
+      "description": "MMLU-Pro math questions",
+      "exemplars": [
+        "Find the work done by a force $\\mathbf{F}=8 \\mathbf{i}-6 \\mathbf{j}+9 \\mathbf{k}$ that moves an object from the point $(0,10,8)$ to the point $(6,12,20)$ along a straight line. The distance is measured in meters and the force in newtons.",
+        "What is \\lim_{x \\to 1} ((x - 1) sin((\\pi)/(x - 1))?",
+        "Six 6-sided dice are rolled. What is the probability that three of the dice show prime numbers and the rest show composite numbers?",
+        "7.3-9. Consider the following two groups of women: Group 1 consists of women who spend less than $\\$ 500$ annually on clothes; Group 2 comprises women who spend over $\\$ 1000$ annually on clothes. Let $p_1$ and $p_2$ equal the proportions of women in these two groups, respectively, who believe that clothes are too expensive. If 1009 out of a random sample of 1230 women from group 1 and 207 out of ",
+        "Let $A$ and $B$ be independent events with $P(A)=$ 0.7 and $P(B)=0.2$. Compute $P(A \\cap B)$.",
+        "A group of 9 people is split into 3 committees of 3 people. Committees are identical besides of members. In how many ways can this be done?",
+        " A typical roulette wheel used in a casino has 38 slots that are numbered $1,2,3, \\ldots, 36,0,00$, respectively. The 0 and 00 slots are colored green. Half of the remaining slots are red and half are black. Also, half of the integers between 1 and 36 inclusive are odd, half are even, and 0 and 00 are defined to be neither odd nor even. A ball is rolled around the wheel and ends up in one of the s",
+        "For a\\geq 0, we define $S_a={x | dist(x, S) \\leq a}$, where $dist(x,S)=inf_{y\\in S}||x-y||$. Suppose S is convex. Is S_a convex? Return 1 for yes and 0 for no.",
+        "What is the quotient of 1,248 / 7?",
+        "Umi created the number pattern that follows by adding the same amount each time to get the next number. 20, 40, 60, 80, ... What will be the eighth number in the pattern?",
+        "A talk show host recently reported that in response to his on-air question, 82% of the more than 2500 e-mail messages received through his publicized address supported the death penalty for anyone convicted of selling drugs to children. What does this show?",
+        "In how many ways can 8 people be seated at 5 identical round tables? Each table must have at least 1 person seated.",
+        "Let X_1, X_2,... be independent variables each taking values +1 or -1 with probabilities 1/2 and 1/2. It is know that $\\sqrt{3/n^3}*\\sum_{k=1}^n k*X_k$ converges in distribution normal distribution N(a,b) as n goes to infinity. Here a is the expectation and b is the variance. What are the values of a and b? Return the answers as a list. For example, if a=2, b=100, return [2,100].",
+        "The relation between the selling price of a car (in $1,000) and its age (in years) is estimated from a random sample of cars of a specific model. The relation is given by the following formula: Selling price = 15.9 \u2013 0.983 (age) Which of the following can we conclude from this equation?",
+        "What is the determinant of matrix [[0, 1, 2], [7, 8, 3], [6, 5, 4]]?"
+      ]
+    },
+    "other": {
+      "description": "MMLU-Pro other questions",
+      "exemplars": [
+        "A CPA has been requested by a former audit client to reissue the auditor's report for the prior period. Before reissuing the report, the CPA should",
+        "In the debate about the 'managerial revolution', John Scott (1997) argued that:",
+        "Of these, the map using the smallest map scale would be the map of",
+        "The best definition of an urban area is",
+        "In the children's game what color is 'Rover'?",
+        "As of 2017, the share of GDP spent on the military by the United States is about",
+        "How many stars are on the American flag?",
+        "Under state law Boca Co. may reimburse the state directly for actual unemployment claims or it may pay 3% of eligible gross wages. Boca believes that actual unemployment claims will be 2% of eligible gross wages and has chosen to reimburse the state. Eligible gross wages are defined as the first $15000 of gross wages paid to each employee. Boca had four employees each of whom earned $20000 during ",
+        "What seems to be the case when the folk saying \"opposites attract\" (i.e., dissimilar attitudes tend to cause liking) when it is considered in light of current research?",
+        "According to Esman (1972), which publics help an organization to exist by lending authority or assistance?",
+        "Which of the following is LEAST likely to explain low voter turnout for an election?",
+        "When it's noon in New York during daylight-saving time what time is it in Honolulu?",
+        "The fixed assets and related depreciation of a company are currently tracked on a password-protected spreadsheet. The information technology governance committee is designing a new enterprise-wide system and needs to determine whether the current fixed asset process should be included because the current system seems to be working properly. What long-term solution should the committee recommend?",
+        "The feedback loop in men which regulates the production of sex hormones includes all but which of the following?",
+        "In 1943 how many Americans believed in the Holocaust?"
+      ]
+    },
+    "philosophy": {
+      "description": "MMLU-Pro philosophy questions",
+      "exemplars": [
+        "According to Hobbes, the definition of injustice is _____.",
+        " Naturalists who concentrated on natural elements and processes are associated with which of the following?",
+        "Which of the following fallacies happen if someone argues that you are a reasonable and intelligent person, so of course you understand his claim is true?",
+        "The universe, like a watch, must have a maker.",
+        "I don't understand why everyone thinks they belong in college. After all, everyone knows that when you are intelligent you'll succeed. But so many people that elect to attend college don't have even the most basic intelligence. How do they expect to get anywhere here?",
+        " Richardson-Self argues that sexist speech",
+        " Marcia Baron argues that the artificiality of ticking bomb cases is problematic because",
+        "What does \"Mahavira\" mean?",
+        "\"The minor premise must affirm the antecedent or deny the consequent\" is a way to determine the validity of which type of argument?",
+        "Zhuangzi describes a state as ziran, which means which of the following?",
+        "Singer claims that his conclusions are similar to those of:",
+        " Mani referred to God by which of the following names?",
+        " Carens's main conclusion is that",
+        "Baier argues that genuine moral rules:",
+        "According to Parfit, the obligation to give priority to the welfare of one\u2019s children is:"
+      ]
+    },
+    "physics": {
+      "description": "MMLU-Pro physics questions",
+      "exemplars": [
+        "If Young's Modulus for steel is 19 \u00d7 10^11 dynes/cm^2, how much force will be required to stretch a sample of wire 1 sq mm in cross section by 0.2% of its original length?",
+        "A particle executing simple harmonic motion given by y = 4 sin {(2\\pit / 6) + \\alpha} is displaced +1 unit when t = 0. Find: (a) the phase angle when t = 0; (b) the difference in phase between any two positions of the particle 2 seconds apart? (c) the phase angle corresponding to a displacement of +2; (d) the time necessary to reach a displacement of +3 from the initial position.",
+        "What is the power factor of a circuit if the following meter readings prevail? Ammeter reads .15 amperes, volt-meter reads 115 volts, and wattmeter reads 15.9 watts.",
+        "An artificial satellite orbits Earth just above the atmosphere in a circle with constant speed. A small meteor collides with the satellite at point P in its orbit, increasing its speed by 1%, but not changing the instantaneous direction of the satellite\u2019s velocity. Which of the following describes the satellite\u2019s new orbit?",
+        "In Fig. 21-26, particle 1 of charge $+q$ and particle 2 of charge $+4.00 q$ are held at separation $L=9.00 \\mathrm{~cm}$ on an $x$ axis. If particle 3 of charge $q_3$ is to be located such that the three particles remain in place when released, what must be the $x$ coordinate of particle 3?",
+        "The refractive power of a thinplano-convex lens made of glass of index of refraction 1.5 is 20diopters. Find the radius of curvature of the curved surface of the lens.",
+        "Which of the following statements about bosons and/or fermions is true?",
+        "Which factor s most important in determining the history of volanism and tectonism on a planet?",
+        "In the atomic nucleus, electrical forces tend to",
+        "An oscillator which emits high frequency waves at 0.26 GHz is set up in front of a large plane metal reflector. Standing waves are formed with nodes 57.5 cm apart. Neglecting the refractive index of air, compute the velocity of light.",
+        "The circumference of a helium-filled balloon is measured for three different conditions: at room temperature, after being in a warm oven for 30 minutes, and after being in a freezer for 30 minutes. A student plotting the circumference cubed C^3 as a function of temperature T, should expect to find which of the following?",
+        "A body moving in the positive x direction passes the origin at time t = 0. Between t = 0 and t = 1 second, the body has a constant speed of 24 meters per second. At t = 1 second, the body is given a constant acceleration of 6 meters per second squared in the negative x direction. The position x of the body at t = 11 seconds is",
+        "A boy bailing a boat lifts 2.0 kg of water to a height of 1.2 m above the bilge as he pours the water over the side, (a) How much work does he perform? (b) How much work is done by the force of gravity?",
+        "Which one of these constellations is not located along the Milky Way in the sky?",
+        "If a 50 g bullet traveling at 40,000 cm/sec is stopped by a steel plate, how much heat is generated, on the assumption that the energy is completely converted into heat?"
+      ]
+    },
+    "psychology": {
+      "description": "MMLU-Pro psychology questions",
+      "exemplars": [
+        "Some contemporary intelligence researchers like Howard Gardner and Robert Sternberg complain that schools focus too much on",
+        "Dr. Ryan is a psychotherapist in a small town. She receives a phone call from a man she was sexually involved with several years ago. The relationship lasted only three months and ended amicably. The man is now married and is having problems unrelated to their past relationship. He has called to see if he can begin seeing Dr. Ryan in therapy. Dr. Ryan should:",
+        "Child abuse and neglect are most associated with which of the following attachment patterns?",
+        "Jupiter pilots his newly created perfectionism scale on a high school psychology class. He returns one month later to administer the same test to the same students, and then he correlates the two sets of results. What is Jupiter probably doing?",
+        "Xavier is beginning his first year of college. He is eager to find a few other freshmen to \"hang out\" with. Psychologists would say that Xavier is motivated by a(n)",
+        "Which of the following is not an available tool for assessing suicide risk?",
+        "Given the following set of ungrouped measurements 3, 5, 6, 6, 7, and 9, determinethe mean, median, and mode.",
+        "Which of the following statements expresses a relationship between aging and sexual functioning",
+        "How does the study of stereotyping relate to attribution theory?",
+        "Which of the following strategies would probably be least effective for reducing aggressiveness in children?",
+        "Group A consists of people whose measured interests are highly similar to the interests of engineers, Group B consists of people whose measured interests are highly dissimilar to those of engineers. Which of the following statements would be justified, given that both Group A and Group B entered engineering",
+        "The Self-Concept is the individual\u2019s belief about their own attributes. What can happen according to the OVERJUSTIFICATION HYPOTHESIS?",
+        "How is incoming sensory verbal information abstracted in terms of classification?",
+        "What are the two principal explanations for the limited capacity of short-term memory?",
+        "Have studies on learning supported the Incremental or the One-trial Theory of learning?"
+      ]
+    }
+  }
+}

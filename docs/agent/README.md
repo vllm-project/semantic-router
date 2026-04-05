@@ -7,7 +7,7 @@ This directory is the human-readable system of record for the repository's agent
 ## Start Here
 
 - [context-management.md](context-management.md)
-  - task-first progressive disclosure and `agent-report` context-pack flow
+  - task-first progressive disclosure, loop-mode guidance, and `agent-report` context-pack flow
 - [repo-map.md](repo-map.md)
   - repo layout, hotspots, entrypoints, and high-risk areas
 - [environments.md](environments.md)
@@ -26,7 +26,7 @@ This directory is the human-readable system of record for the repository's agent
 - [governance.md](governance.md)
   - rule layering, source-of-truth policy, and working-note policy
 - [plans/README.md](plans/README.md)
-  - when to use execution plans, how they differ from ADRs/debt, and the current plan inventory
+  - when to use execution plans for long-horizon completion loops, how they differ from ADRs/debt, and the current plan inventory
 - [tech-debt-register.md](tech-debt-register.md)
   - landing page and policy for repository technical debt
 - [tech-debt/README.md](tech-debt/README.md)
@@ -67,7 +67,11 @@ This directory is the human-readable system of record for the repository's agent
   - `make agent-validate`
   - `make agent-scorecard`
   - `make agent-report ENV=cpu CHANGED_FILES="..."`
-    - emits validation commands plus a task-first context pack
+    - emits validation commands, loop policy, and a compact task-first context pack by default
+  - `make agent-pr-gate`
+    - reproduces the baseline PR requirements locally
+  - `make test-and-build-local`
+    - reproduces the CI `Test And Build` job locally
 
 ## Contributor Interface
 
@@ -76,7 +80,7 @@ This directory is the human-readable system of record for the repository's agent
   - contributor workflow, validation expectations, and the `git commit -s` signoff requirement
 - [../../.github/copilot-instructions.md](../../.github/copilot-instructions.md)
 - [../../.github/PULL_REQUEST_TEMPLATE.md](../../.github/PULL_REQUEST_TEMPLATE.md)
-  - PR title classification, required change summary and validation fields, and the review checklist
+  - PR title classification, affected-module context, required validation fields, and the review checklist
 - [../../.github/ISSUE_TEMPLATE/001_feature_request.yaml](../../.github/ISSUE_TEMPLATE/001_feature_request.yaml)
 - [../../.github/ISSUE_TEMPLATE/002_bug_report.yaml](../../.github/ISSUE_TEMPLATE/002_bug_report.yaml)
 - [../../.prowlabels.yaml](../../.prowlabels.yaml)

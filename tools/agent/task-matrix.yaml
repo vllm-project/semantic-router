@@ -3,6 +3,8 @@ version: 1
 rules:
   - name: repo-docs
     doc_only: true
+    loop_mode: lightweight
+    execution_plan_policy: long_horizon
     paths:
       - docs/**
       - website/**
@@ -13,6 +15,8 @@ rules:
     requires_local_smoke: false
   - name: agent_text
     doc_only: true
+    loop_mode: lightweight
+    execution_plan_policy: long_horizon
     paths:
       - AGENTS.md
       - docs/agent/**
@@ -40,6 +44,8 @@ rules:
     requires_local_smoke: false
   - name: agent_exec
     doc_only: false
+    loop_mode: completion
+    execution_plan_policy: long_horizon
     paths:
       - tools/agent/*.yaml
       - tools/agent/scripts/**
@@ -55,6 +61,8 @@ rules:
     requires_local_smoke: false
   - name: vllm-sr-cli
     doc_only: false
+    loop_mode: completion
+    execution_plan_policy: long_horizon
     paths:
       - src/vllm-sr/**
       - src/vllm-sr/Dockerfile*
@@ -67,6 +75,8 @@ rules:
     requires_local_smoke: true
   - name: fleet-sim
     doc_only: false
+    loop_mode: completion
+    execution_plan_policy: long_horizon
     paths:
       - src/fleet-sim/**
     fast_tests:
@@ -75,6 +85,8 @@ rules:
     requires_local_smoke: false
   - name: memory-integration
     doc_only: false
+    loop_mode: completion
+    execution_plan_policy: long_horizon
     paths:
       - e2e/testing/09-memory-features-test.py
       - e2e/testing/run_memory_integration.sh
@@ -88,6 +100,8 @@ rules:
     requires_local_smoke: false
   - name: router-core
     doc_only: false
+    loop_mode: completion
+    execution_plan_policy: long_horizon
     paths:
       - src/semantic-router/**
     fast_tests:
@@ -96,6 +110,8 @@ rules:
     requires_local_smoke: true
   - name: rust-bindings
     doc_only: false
+    loop_mode: completion
+    execution_plan_policy: long_horizon
     paths:
       - candle-binding/**
       - ml-binding/**
@@ -107,6 +123,8 @@ rules:
     requires_local_smoke: false
   - name: dashboard
     doc_only: false
+    loop_mode: completion
+    execution_plan_policy: long_horizon
     paths:
       - dashboard/**
     fast_tests:
@@ -115,6 +133,8 @@ rules:
     requires_local_smoke: true
   - name: e2e-framework
     doc_only: false
+    loop_mode: completion
+    execution_plan_policy: long_horizon
     paths:
       - e2e/pkg/**
       - e2e/cmd/**
@@ -127,6 +147,8 @@ rules:
     requires_local_smoke: false
   - name: operator-stack
     doc_only: false
+    loop_mode: completion
+    execution_plan_policy: long_horizon
     paths:
       - deploy/operator/**
       - deploy/kubernetes/crds/**
@@ -137,6 +159,8 @@ rules:
     requires_local_smoke: false
   - name: training-stack
     doc_only: false
+    loop_mode: completion
+    execution_plan_policy: long_horizon
     paths:
       - src/training/**
       - tools/make/models.mk
@@ -147,6 +171,8 @@ rules:
     requires_local_smoke: false
   - name: make-and-ci
     doc_only: false
+    loop_mode: completion
+    execution_plan_policy: long_horizon
     paths:
       - Makefile
       - tools/make/**
@@ -156,6 +182,8 @@ rules:
     requires_local_smoke: true
   - name: ci-general
     doc_only: false
+    loop_mode: completion
+    execution_plan_policy: long_horizon
     paths:
       - .github/workflows/**
     fast_tests:

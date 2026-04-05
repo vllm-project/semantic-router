@@ -18,7 +18,7 @@ def build_vllm_logo_lines() -> list[str]:
         f"{COLOR_WHITE}  █▄█▀ █     █     █     █{COLOR_RESET}",
         f"{COLOR_WHITE}   ▀▀  ▀▀▀▀▀ ▀▀▀▀▀ ▀     ▀{COLOR_RESET}",
         f"{COLOR_WHITE}  Semantic Router{COLOR_RESET}",
-        f"{COLOR_MUTED}  local runtime{COLOR_RESET}",
+        f"{COLOR_MUTED}  Intelligent Routing for Mixture-of-Models{COLOR_RESET}",
         "",
     ]
 

@@ -5,6 +5,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/openai/openai-go"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -249,22 +250,22 @@ func TestGenerateMemoryID(t *testing.T) {
 // =============================================================================
 
 func TestCountTurns(t *testing.T) {
-	history := []Message{
-		{Role: "user", Content: "q1"},
-		{Role: "assistant", Content: "a1"},
-		{Role: "user", Content: "q2"},
-		{Role: "assistant", Content: "a2"},
+	history := []openai.ChatCompletionMessageParamUnion{
+		sdkUserMessage("q1"),
+		sdkAssistantMessage("a1"),
+		sdkUserMessage("q2"),
+		sdkAssistantMessage("a2"),
 	}
 	assert.Equal(t, 2, countTurns(history))
 	assert.Equal(t, 0, countTurns(nil))
 }
 
 func TestBuildSessionChunk(t *testing.T) {
-	history := []Message{
-		{Role: "user", Content: "What is Go?"},
-		{Role: "assistant", Content: "Go is a programming language."},
-		{Role: "user", Content: "Who created it?"},
-		{Role: "assistant", Content: "Rob Pike and others at Google."},
+	history := []openai.ChatCompletionMessageParamUnion{
+		sdkUserMessage("What is Go?"),
+		sdkAssistantMessage("Go is a programming language."),
+		sdkUserMessage("Who created it?"),
+		sdkAssistantMessage("Rob Pike and others at Google."),
 	}
 
 	chunk := buildSessionChunk(history, "Is it fast?", "Yes, Go is very fast.", 3)
@@ -277,9 +278,9 @@ func TestBuildSessionChunk(t *testing.T) {
 }
 
 func TestBuildSessionChunk_WindowLargerThanHistory(t *testing.T) {
-	history := []Message{
-		{Role: "user", Content: "Hi"},
-		{Role: "assistant", Content: "Hello!"},
+	history := []openai.ChatCompletionMessageParamUnion{
+		sdkUserMessage("Hi"),
+		sdkAssistantMessage("Hello!"),
 	}
 
 	chunk := buildSessionChunk(history, "Bye", "Goodbye!", 10)
@@ -294,11 +295,11 @@ func TestProcessResponseWithHistory_SessionChunkAtStride(t *testing.T) {
 	ctx := context.Background()
 
 	// Build 2 turns of history; +1 current = 3 turns total = stride triggers
-	history := []Message{
-		{Role: "user", Content: "What is your name?"},
-		{Role: "assistant", Content: "I am an AI assistant."},
-		{Role: "user", Content: "What languages do you know?"},
-		{Role: "assistant", Content: "I can help with Go, Python, and more."},
+	history := []openai.ChatCompletionMessageParamUnion{
+		sdkUserMessage("What is your name?"),
+		sdkAssistantMessage("I am an AI assistant."),
+		sdkUserMessage("What languages do you know?"),
+		sdkAssistantMessage("I can help with Go, Python, and more."),
 	}
 
 	// 3rd turn triggers session chunk (stride=3)
@@ -339,15 +340,15 @@ func TestProcessResponseWithHistory_OverlappingWindows(t *testing.T) {
 		{"Q6?", "A6"},
 	}
 
-	var history []Message
+	var history []openai.ChatCompletionMessageParamUnion
 	for i, turn := range turns {
 		err := extractor.ProcessResponseWithHistory(
 			ctx, "s1", "user1", turn.user, turn.assistant, history,
 		)
 		require.NoError(t, err, "turn %d", i+1)
 		history = append(history,
-			Message{Role: "user", Content: turn.user},
-			Message{Role: "assistant", Content: turn.assistant},
+			sdkUserMessage(turn.user),
+			sdkAssistantMessage(turn.assistant),
 		)
 	}
 
@@ -370,9 +371,9 @@ func TestProcessResponseWithHistory_NoSessionChunkBeforeStride(t *testing.T) {
 	ctx := context.Background()
 
 	// 1 turn in history + 1 current = 2 turns total (< stride=3)
-	history := []Message{
-		{Role: "user", Content: "Hello"},
-		{Role: "assistant", Content: "Hi there!"},
+	history := []openai.ChatCompletionMessageParamUnion{
+		sdkUserMessage("Hello"),
+		sdkAssistantMessage("Hi there!"),
 	}
 
 	err := extractor.ProcessResponseWithHistory(

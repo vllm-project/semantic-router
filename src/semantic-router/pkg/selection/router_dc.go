@@ -132,7 +132,9 @@ func (r *RouterDCSelector) InitializeModelEmbeddings(modelDescriptions map[strin
 		r.modelEmbeddings[model] = embedding
 	}
 
-	logging.Infof("[RouterDC] Initialized embeddings for %d models", len(r.modelEmbeddings))
+	logging.ComponentDebugEvent("selection", "router_dc_embeddings_initialized", map[string]interface{}{
+		"models": len(r.modelEmbeddings),
+	})
 	return nil
 }
 
@@ -177,11 +179,15 @@ func (r *RouterDCSelector) InitializeFromConfig(modelConfig map[string]config.Mo
 
 		r.modelEmbeddings[model] = embedding
 		modelsWithDescriptions++
-		logging.Debugf("[RouterDC] Initialized embedding for model %s", model)
+		logging.ComponentDebugEvent("selection", "router_dc_model_embedding_initialized", map[string]interface{}{
+			"model": model,
+		})
 	}
 
-	logging.Infof("[RouterDC] Initialized embeddings: %d with descriptions, %d without",
-		modelsWithDescriptions, modelsWithoutDescriptions)
+	logging.ComponentDebugEvent("selection", "router_dc_config_embeddings_initialized", map[string]interface{}{
+		"models_with_descriptions":    modelsWithDescriptions,
+		"models_without_descriptions": modelsWithoutDescriptions,
+	})
 
 	// Validate if require_descriptions is set
 	if r.config.RequireDescriptions && len(missingModels) > 0 {

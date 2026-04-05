@@ -7,8 +7,119 @@ import (
 	"strings"
 	"time"
 
+	"github.com/openai/openai-go"
+
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 )
+
+// SDKMessageRole extracts the role string from an SDK message union.
+func SDKMessageRole(msg openai.ChatCompletionMessageParamUnion) string {
+	switch {
+	case msg.OfUser != nil:
+		return "user"
+	case msg.OfSystem != nil:
+		return "system"
+	case msg.OfAssistant != nil:
+		return "assistant"
+	case msg.OfTool != nil:
+		return "tool"
+	default:
+		return ""
+	}
+}
+
+// SDKMessageContent extracts the plain-text content from an SDK message union.
+func SDKMessageContent(msg openai.ChatCompletionMessageParamUnion) string {
+	switch {
+	case msg.OfUser != nil:
+		return extractUserContentString(msg.OfUser.Content)
+	case msg.OfSystem != nil:
+		return extractSystemContentString(msg.OfSystem.Content)
+	case msg.OfAssistant != nil:
+		return extractAssistantContentString(msg.OfAssistant.Content)
+	default:
+		return ""
+	}
+}
+
+func extractUserContentString(c openai.ChatCompletionUserMessageParamContentUnion) string {
+	if c.OfString.Value != "" {
+		return c.OfString.Value
+	}
+	var parts []string
+	for _, p := range c.OfArrayOfContentParts {
+		if p.OfText != nil {
+			parts = append(parts, p.OfText.Text)
+		}
+	}
+	return strings.Join(parts, " ")
+}
+
+func extractSystemContentString(c openai.ChatCompletionSystemMessageParamContentUnion) string {
+	if c.OfString.Value != "" {
+		return c.OfString.Value
+	}
+	var parts []string
+	for _, p := range c.OfArrayOfContentParts {
+		if p.Text != "" {
+			parts = append(parts, p.Text)
+		}
+	}
+	return strings.Join(parts, " ")
+}
+
+func extractAssistantContentString(c openai.ChatCompletionAssistantMessageParamContentUnion) string {
+	if c.OfString.Value != "" {
+		return c.OfString.Value
+	}
+	var parts []string
+	for _, p := range c.OfArrayOfContentParts {
+		if p.OfText != nil {
+			parts = append(parts, p.OfText.Text)
+		}
+	}
+	return strings.Join(parts, " ")
+}
+
+// sdkUserMessage constructs an SDK user message from a plain string.
+func sdkUserMessage(content string) openai.ChatCompletionMessageParamUnion {
+	return openai.ChatCompletionMessageParamUnion{
+		OfUser: &openai.ChatCompletionUserMessageParam{
+			Content: openai.ChatCompletionUserMessageParamContentUnion{
+				OfString: openai.String(content),
+			},
+		},
+	}
+}
+
+// sdkAssistantMessage constructs an SDK assistant message from a plain string.
+func sdkAssistantMessage(content string) openai.ChatCompletionMessageParamUnion {
+	return openai.ChatCompletionMessageParamUnion{
+		OfAssistant: &openai.ChatCompletionAssistantMessageParam{
+			Content: openai.ChatCompletionAssistantMessageParamContentUnion{
+				OfString: openai.String(content),
+			},
+		},
+	}
+}
+
+// SDKMessageForRole constructs an SDK message for the given role and content.
+func SDKMessageForRole(role, content string) openai.ChatCompletionMessageParamUnion {
+	switch role {
+	case "system":
+		return openai.ChatCompletionMessageParamUnion{
+			OfSystem: &openai.ChatCompletionSystemMessageParam{
+				Content: openai.ChatCompletionSystemMessageParamContentUnion{
+					OfString: openai.String(content),
+				},
+			},
+		}
+	case "assistant":
+		return sdkAssistantMessage(content)
+	default:
+		return sdkUserMessage(content)
+	}
+}
 
 // =============================================================================
 // Memory Chunk Store
@@ -107,7 +218,7 @@ func (e *MemoryExtractor) ProcessResponseWithHistory(
 	userID string,
 	userMessage string,
 	assistantResponse string,
-	history []Message,
+	history []openai.ChatCompletionMessageParamUnion,
 ) error {
 	if e == nil || e.store == nil || !e.store.IsEnabled() {
 		logging.Infof("Memory chunk store: SKIPPED - store not enabled (store=%v)", e != nil && e.store != nil)
@@ -134,35 +245,41 @@ func (e *MemoryExtractor) ProcessResponseWithHistory(
 	}()
 
 	// --- Per-turn chunk ---
-	if !isLowEntropy(userMessage, assistantResponse) {
-		chunk := formatTurnChunk(userMessage, assistantResponse)
-		sanitized, err := sanitizeMemoryContent(chunk)
-		if err != nil {
-			logging.Debugf("Memory chunk store: REJECTED - %v (user=%s)", err, userID)
-		} else {
-			mem := &Memory{
-				ID:         generateMemoryID(),
-				Type:       MemoryTypeEpisodic,
-				Content:    sanitized,
-				UserID:     userID,
-				Source:     "conversation",
-				CreatedAt:  time.Now(),
-				Importance: 0.5,
-			}
-			if err := e.store.Store(ctx, mem); err != nil {
-				status = "error"
-				return fmt.Errorf("failed to store conversation chunk: %w", err)
-			}
-			turnStored = true
-			logging.Infof("Memory chunk store: stored turn for user=%s (len=%d)", userID, len(sanitized))
-		}
-	} else {
+	if isLowEntropy(userMessage, assistantResponse) {
 		logging.Debugf("Memory chunk store: SKIPPED low-entropy turn for user=%s", userID)
+	} else if err := e.storeTurnChunk(ctx, userMessage, assistantResponse, userID); err != nil {
+		status = "error"
+		return err
+	} else {
+		turnStored = true
 	}
 
 	// --- Session-level rolling window chunk ---
 	e.maybeStoreSessionChunk(ctx, userID, userMessage, assistantResponse, history)
 
+	return nil
+}
+
+func (e *MemoryExtractor) storeTurnChunk(ctx context.Context, userMessage, assistantResponse, userID string) error {
+	chunk := formatTurnChunk(userMessage, assistantResponse)
+	sanitized, err := sanitizeMemoryContent(chunk)
+	if err != nil {
+		logging.Debugf("Memory chunk store: REJECTED - %v (user=%s)", err, userID)
+		return nil
+	}
+	mem := &Memory{
+		ID:         generateMemoryID(),
+		Type:       MemoryTypeEpisodic,
+		Content:    sanitized,
+		UserID:     userID,
+		Source:     "conversation",
+		CreatedAt:  time.Now(),
+		Importance: 0.5,
+	}
+	if err := e.store.Store(ctx, mem); err != nil {
+		return fmt.Errorf("failed to store conversation chunk: %w", err)
+	}
+	logging.Infof("Memory chunk store: stored turn for user=%s (len=%d)", userID, len(sanitized))
 	return nil
 }
 
@@ -175,7 +292,7 @@ func (e *MemoryExtractor) maybeStoreSessionChunk(
 	userID string,
 	userMessage string,
 	assistantResponse string,
-	history []Message,
+	history []openai.ChatCompletionMessageParamUnion,
 ) {
 	if len(history) == 0 {
 		return
@@ -232,10 +349,10 @@ func (e *MemoryExtractor) maybeStoreSessionChunk(
 }
 
 // countTurns counts user turns in a message history. Each user message is one turn.
-func countTurns(history []Message) int {
+func countTurns(history []openai.ChatCompletionMessageParamUnion) int {
 	n := 0
 	for _, m := range history {
-		if m.Role == "user" {
+		if m.OfUser != nil {
 			n++
 		}
 	}
@@ -244,7 +361,7 @@ func countTurns(history []Message) int {
 
 // buildSessionChunk concatenates the last windowSize turns from history plus
 // the current turn into a single multi-turn context chunk.
-func buildSessionChunk(history []Message, userMsg, assistantResp string, windowSize int) string {
+func buildSessionChunk(history []openai.ChatCompletionMessageParamUnion, userMsg, assistantResp string, windowSize int) string {
 	// Collect the tail of history: last (windowSize-1) user-assistant pairs
 	// plus the current turn = windowSize total turns.
 	var pairs []string
@@ -254,11 +371,11 @@ func buildSessionChunk(history []Message, userMsg, assistantResp string, windowS
 	type turn struct{ user, assistant string }
 	var turns []turn
 	for i := len(history) - 1; i >= 0 && len(turns) < windowSize-1; i-- {
-		if history[i].Role == "user" {
-			t := turn{user: history[i].Content}
+		if history[i].OfUser != nil {
+			t := turn{user: SDKMessageContent(history[i])}
 			// Look ahead for the assistant response
-			if i+1 < len(history) && history[i+1].Role == "assistant" {
-				t.assistant = StripThinkTags(history[i+1].Content)
+			if i+1 < len(history) && history[i+1].OfAssistant != nil {
+				t.assistant = StripThinkTags(SDKMessageContent(history[i+1]))
 			}
 			turns = append(turns, t)
 		}

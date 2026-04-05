@@ -39,6 +39,7 @@ subsystems:
     entrypoints:
       - src/vllm-sr/cli/main.py
       - src/vllm-sr/cli/core.py
+      - src/vllm-sr/cli/commands/runtime.py
       - src/vllm-sr/cli/docker_cli.py
       - tools/make/docker.mk
   - name: fleet-sim
@@ -108,20 +109,10 @@ validation:
     router_health_path: http://localhost:8000/health
     envoy_ready_path: http://localhost:8801/ready
   e2e:
-    default_local_profile: ai-gateway
+    default_local_profile: kubernetes
     full_ci_profiles:
-      - ai-gateway
-      - aibrix
-      - routing-strategies
-      - dynamic-config
-      - llm-d
-      - istio
-      - production-stack
-      - response-api
-      - ml-model-selection
-      - multi-endpoint
-      - authz-rbac
-      - streaming
+      - kubernetes
+      - dashboard
 
 docs:
   - AGENTS.md
@@ -140,6 +131,24 @@ docs:
   - docs/agent/plans/pl-0009-fleet-sim-optimizer-and-operator-config-boundary-ratchet.md
   - docs/agent/plans/pl-0010-extproc-response-and-dashboard-frontend-boundary-ratchet.md
   - docs/agent/plans/pl-0011-runtime-and-dashboard-state-durability-and-telemetry-ratchet.md
+  - docs/agent/plans/pl-0012-dsl-conflict-free-routing-workstream.md
+  - docs/agent/plans/pl-0013-openclaw-vsr-install-import-workstream.md
+  - docs/agent/plans/pl-0014-structure-signal-family-implementation.md
+  - docs/agent/plans/pl-0015-agent-report-local-artifact-loop.md
+  - docs/agent/plans/pl-0016-harness-context-and-pr-parity-simplification.md
+  - docs/agent/plans/pl-0017-taxonomy-classifier-platform-loop.md
+  - docs/agent/plans/pl-0018-generic-embedding-kb-workstream.md
+  - docs/agent/plans/pl-0019-wizmap-knowledge-map-integration.md
+  - docs/agent/plans/pl-0020-local-runtime-topology-separation.md
+  - docs/agent/plans/pl-0021-local-runtime-three-image-rollout.md
+  - docs/agent/plans/pl-0022-dev-integration-consolidation-loop.md
+  - docs/agent/plans/pl-0023-dashboard-dsl-natural-language-mode-loop.md
+  - docs/agent/plans/pl-0024-balance-recipe-simplification-loop.md
+  - docs/agent/plans/pl-0025-prototype-aware-embedding-backed-signal-scoring-loop.md
+  - docs/agent/plans/pl-0026-model-runtime-lifecycle-orchestration-loop.md
+  - docs/agent/plans/pl-0027-router-runtime-composition-root-convergence-loop.md
+  - docs/agent/plans/pl-0028-knowledge-base-seed-and-steady-state-convergence-loop.md
+  - docs/agent/plans/pl-0029-control-plane-contract-boundary-ratchet.md
   - docs/agent/state-taxonomy-and-inventory.md
   - docs/agent/tech-debt-register.md
   - docs/agent/tech-debt/README.md
@@ -177,10 +186,19 @@ docs:
   - docs/agent/tech-debt/td-032-training-evaluation-artifact-contract-drift.md
   - docs/agent/tech-debt/td-033-native-binding-runtime-parity-and-lifecycle-gap.md
   - docs/agent/tech-debt/td-034-runtime-and-dashboard-state-durability-and-telemetry-contract.md
+  - docs/agent/tech-debt/td-035-signal-group-default-coverage-contract-gap.md
+  - docs/agent/tech-debt/td-036-decision-tree-authoring-roundtrip-gap.md
+  - docs/agent/tech-debt/td-037-dev-integration-env-ownership-and-shared-suite-topology.md
+  - docs/agent/tech-debt/td-038-custom-chat-completions-structs.md
+  - docs/agent/tech-debt/td-039-control-plane-contract-ownership-collapse.md
   - docs/agent/glossary.md
   - docs/agent/adr/README.md
   - docs/agent/adr/adr-0001-harness-layering.md
   - docs/agent/adr/adr-0002-tech-debt-index-and-entry-directory.md
+  - docs/agent/adr/adr-0003-dashboard-dsl-natural-language-mode.md
+  - docs/agent/adr/adr-0004-prototype-aware-label-scoring-for-embedding-backed-signals.md
+  - docs/agent/adr/adr-0005-model-runtime-lifecycle-orchestration.md
+  - docs/agent/adr/adr-0006-platform-kernel-and-contract-first-control-planes.md
   - docs/agent/change-surfaces.md
   - docs/agent/repo-map.md
   - docs/agent/environments.md
@@ -302,6 +320,60 @@ doc_governance:
     - path: docs/agent/plans/pl-0011-runtime-and-dashboard-state-durability-and-telemetry-ratchet.md
       steward: agent-contract
       freshness: update at the start and end of each runtime-and-dashboard state durability and telemetry ratchet loop and after each completed loop task
+    - path: docs/agent/plans/pl-0012-dsl-conflict-free-routing-workstream.md
+      steward: agent-contract
+      freshness: update at the start and end of each DSL conflict-free routing loop and after each completed loop task
+    - path: docs/agent/plans/pl-0013-openclaw-vsr-install-import-workstream.md
+      steward: agent-contract
+      freshness: update at the start and end of each OpenClaw-to-VSR install/import loop and after each completed loop task
+    - path: docs/agent/plans/pl-0014-structure-signal-family-implementation.md
+      steward: agent-contract
+      freshness: update at the start and end of each structure-signal-family implementation loop and after each completed loop task
+    - path: docs/agent/plans/pl-0015-agent-report-local-artifact-loop.md
+      steward: agent-contract
+      freshness: update at the start and end of each agent-report local artifact loop and after each completed loop task
+    - path: docs/agent/plans/pl-0016-harness-context-and-pr-parity-simplification.md
+      steward: agent-contract
+      freshness: update at the start and end of each harness context and PR parity simplification loop and after each completed loop task
+    - path: docs/agent/plans/pl-0017-taxonomy-classifier-platform-loop.md
+      steward: agent-contract
+      freshness: update at the start and end of each taxonomy-classifier platform loop and after each completed loop task
+    - path: docs/agent/plans/pl-0018-generic-embedding-kb-workstream.md
+      steward: agent-contract
+      freshness: update at the start and end of each generic embedding-kb loop and after each completed loop task
+    - path: docs/agent/plans/pl-0019-wizmap-knowledge-map-integration.md
+      steward: agent-contract
+      freshness: update at the start and end of each WizMap knowledge-map integration loop and after each completed loop task
+    - path: docs/agent/plans/pl-0020-local-runtime-topology-separation.md
+      steward: agent-contract
+      freshness: update at the start and end of each local runtime topology-separation loop and after each completed loop task
+    - path: docs/agent/plans/pl-0021-local-runtime-three-image-rollout.md
+      steward: agent-contract
+      freshness: update at the start and end of each local runtime three-image rollout loop and after each completed loop task
+    - path: docs/agent/plans/pl-0022-dev-integration-consolidation-loop.md
+      steward: agent-contract
+      freshness: update at the start and end of each dev integration consolidation loop and after each completed loop task
+    - path: docs/agent/plans/pl-0023-dashboard-dsl-natural-language-mode-loop.md
+      steward: dashboard
+      freshness: update at the start and end of each dashboard NL-to-DSL implementation loop and after each completed loop task
+    - path: docs/agent/plans/pl-0024-balance-recipe-simplification-loop.md
+      steward: amd-routing
+      freshness: update at the start and end of each balance recipe simplification loop and after each completed loop task
+    - path: docs/agent/plans/pl-0025-prototype-aware-embedding-backed-signal-scoring-loop.md
+      steward: router-core
+      freshness: update at the start and end of each prototype-aware embedding-backed signal scoring loop and after each completed loop task
+    - path: docs/agent/plans/pl-0026-model-runtime-lifecycle-orchestration-loop.md
+      steward: router-core
+      freshness: update at the start and end of each model runtime lifecycle orchestration loop and after each completed loop task
+    - path: docs/agent/plans/pl-0027-router-runtime-composition-root-convergence-loop.md
+      steward: router-core
+      freshness: update at the start and end of each router runtime composition-root convergence loop and after each completed loop task
+    - path: docs/agent/plans/pl-0028-knowledge-base-seed-and-steady-state-convergence-loop.md
+      steward: router-core
+      freshness: update at the start and end of each knowledge-base seed and steady-state convergence loop and after each completed loop task
+    - path: docs/agent/plans/pl-0029-control-plane-contract-boundary-ratchet.md
+      steward: agent-contract
+      freshness: update at the start and end of each control-plane contract boundary ratchet loop and after each completed loop task
     - path: docs/agent/state-taxonomy-and-inventory.md
       steward: agent-contract
       freshness: update when the runtime or dashboard state inventory, durability taxonomy, or persistence guidance changes materially
@@ -413,6 +485,21 @@ doc_governance:
     - path: docs/agent/tech-debt/td-034-runtime-and-dashboard-state-durability-and-telemetry-contract.md
       steward: agent-contract
       freshness: update when the TD034 debt record changes materially
+    - path: docs/agent/tech-debt/td-035-signal-group-default-coverage-contract-gap.md
+      steward: agent-contract
+      freshness: update when the TD035 debt record changes materially
+    - path: docs/agent/tech-debt/td-036-decision-tree-authoring-roundtrip-gap.md
+      steward: agent-contract
+      freshness: update when the TD036 debt record changes materially
+    - path: docs/agent/tech-debt/td-037-dev-integration-env-ownership-and-shared-suite-topology.md
+      steward: agent-contract
+      freshness: update when the TD037 debt record changes materially
+    - path: docs/agent/tech-debt/td-038-custom-chat-completions-structs.md
+      steward: agent-contract
+      freshness: update when the TD038 debt record changes materially
+    - path: docs/agent/tech-debt/td-039-control-plane-contract-ownership-collapse.md
+      steward: agent-contract
+      freshness: update when the TD039 debt record changes materially
     - path: docs/agent/glossary.md
       steward: agent-contract
       freshness: update when harness terms or categories change
@@ -425,6 +512,18 @@ doc_governance:
     - path: docs/agent/adr/adr-0002-tech-debt-index-and-entry-directory.md
       steward: agent-contract
       freshness: update only if the tech debt documentation model changes materially
+    - path: docs/agent/adr/adr-0003-dashboard-dsl-natural-language-mode.md
+      steward: dashboard
+      freshness: update only if the dashboard NL-to-DSL architecture decision changes materially
+    - path: docs/agent/adr/adr-0004-prototype-aware-label-scoring-for-embedding-backed-signals.md
+      steward: router-core
+      freshness: update only if the prototype-aware embedding-backed signal scoring decision changes materially
+    - path: docs/agent/adr/adr-0005-model-runtime-lifecycle-orchestration.md
+      steward: router-core
+      freshness: update only if the model runtime lifecycle orchestration decision changes materially
+    - path: docs/agent/adr/adr-0006-platform-kernel-and-contract-first-control-planes.md
+      steward: agent-contract
+      freshness: update only if the platform-kernel and contract-first control-plane decision changes materially
     - path: docs/agent/change-surfaces.md
       steward: agent-contract
       freshness: update when surfaces or their mappings change
@@ -472,40 +571,29 @@ skills:
   - tools/agent/skills/harness-contract-change/SKILL.md
   - tools/agent/skills/signal-end-to-end/SKILL.md
   - tools/agent/skills/plugin-end-to-end/SKILL.md
-  - tools/agent/skills/header-contract-change/SKILL.md
   - tools/agent/skills/config-platform-change/SKILL.md
-  - tools/agent/skills/decision-logic-change/SKILL.md
-  - tools/agent/skills/algorithm-selection-change/SKILL.md
+  - tools/agent/skills/routing-policy-change/SKILL.md
   - tools/agent/skills/startup-chain-change/SKILL.md
-  - tools/agent/skills/dashboard-surface-change/SKILL.md
-  - tools/agent/skills/dashboard-console-platform-change/SKILL.md
+  - tools/agent/skills/dashboard-platform-change/SKILL.md
   - tools/agent/skills/router-service-platform-change/SKILL.md
   - tools/agent/skills/fleet-sim-change/SKILL.md
-  - tools/agent/skills/k8s-operator-change/SKILL.md
-  - tools/agent/skills/deployment-profile-change/SKILL.md
+  - tools/agent/skills/k8s-platform-change/SKILL.md
   - tools/agent/skills/training-stack-change/SKILL.md
   - tools/agent/skills/cross-stack-bugfix/SKILL.md
-  - tools/agent/skills/harness-governance/SKILL.md
   - tools/agent/skills/signal-runtime/SKILL.md
-  - tools/agent/skills/decision-logic/SKILL.md
-  - tools/agent/skills/algorithm-selection/SKILL.md
+  - tools/agent/skills/routing-policy-runtime/SKILL.md
   - tools/agent/skills/plugin-runtime/SKILL.md
   - tools/agent/skills/router-service-platform/SKILL.md
   - tools/agent/skills/binding-ffi/SKILL.md
   - tools/agent/skills/python-cli-schema/SKILL.md
   - tools/agent/skills/python-cli-runtime/SKILL.md
-  - tools/agent/skills/dashboard-config-ui/SKILL.md
-  - tools/agent/skills/dashboard-console-backend/SKILL.md
-  - tools/agent/skills/topology-visualization/SKILL.md
-  - tools/agent/skills/playground-reveal/SKILL.md
-  - tools/agent/skills/dsl-crd/SKILL.md
-  - tools/agent/skills/k8s-operator/SKILL.md
-  - tools/agent/skills/deployment-profile-stack/SKILL.md
+  - tools/agent/skills/dashboard-platform-runtime/SKILL.md
+  - tools/agent/skills/k8s-platform-runtime/SKILL.md
   - tools/agent/skills/fleet-sim-runtime/SKILL.md
   - tools/agent/skills/training-stack-runtime/SKILL.md
   - tools/agent/skills/e2e-selection/SKILL.md
   - tools/agent/skills/local-dev-cpu/SKILL.md
   - tools/agent/skills/local-dev-amd/SKILL.md
-  - tools/agent/skills/feature-complete-checklist/SKILL.md
+  - tools/agent/skills/routing-calibration-loop/SKILL.md
   - tools/agent/skills/maintainer-issue-pr-management/SKILL.md
   - tools/agent/skills/architecture-guardrails/SKILL.md

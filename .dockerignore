@@ -1,0 +1,39 @@
+# Repository-root Docker builds run with context ".".
+# Keep large local assets and workspace-only caches out of image builds.
+
+# VCS and editor noise
+.git/
+.github/
+.gitlab-ci.yml
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+Thumbs.db
+
+# Python and local env caches
+__pycache__/
+*.py[cod]
+.venv/
+.venv-agent/
+.agent-harness/
+venv/
+env/
+ENV/
+
+# Local artifacts not copied by any repo Dockerfile
+models/
+e2e/
+website/
+docs/
+paper/
+perf/
+candle-binding/target/
+ml-binding/target/
+nlp-binding/target/
+onnx-binding/target/
+src/training/model_classifier/verified_single_judge_*/
+dashboard/frontend/node_modules/
+dashboard/frontend/dist/

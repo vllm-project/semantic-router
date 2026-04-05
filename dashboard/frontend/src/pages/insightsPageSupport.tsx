@@ -1,7 +1,8 @@
 import type { Column } from '../components/DataTable'
 import CollapsibleSection from '../components/CollapsibleSection'
-import type { ViewField, ViewSection } from '../components/ViewModal'
+import type { ViewField, ViewSection } from '../components/ViewPanel'
 import { formatDate } from '../types/evaluation'
+import { Link } from 'react-router-dom'
 
 import type {
   InsightsCostSummary,
@@ -9,6 +10,10 @@ import type {
   InsightsRecord,
   Signal,
 } from './insightsPageTypes'
+import {
+  buildToolTraceFields,
+  renderToolNamesCell,
+} from './insightsPageToolTrace'
 import styles from './InsightsPage.module.css'
 
 interface InsightsFilterState {
@@ -17,19 +22,6 @@ interface InsightsFilterState {
   decisionFilter: string
   modelFilter: string
 }
-
-const SIGNAL_TINTS: Record<string, string> = {
-  keyword: 'rgba(118, 185, 0, 0.15)',
-  embedding: 'rgba(0, 212, 255, 0.12)',
-  domain: 'rgba(147, 51, 234, 0.14)',
-  fact_check: 'rgba(34, 197, 94, 0.15)',
-  user_feedback: 'rgba(236, 72, 153, 0.12)',
-  preference: 'rgba(234, 179, 8, 0.15)',
-  language: 'rgba(59, 130, 246, 0.15)',
-  context: 'rgba(168, 85, 247, 0.14)',
-  complexity: 'rgba(245, 158, 11, 0.15)',
-}
-
 export function getUniqueDecisions(records: InsightsRecord[]) {
   const decisions = new Set<string>()
   records.forEach((record) => {
@@ -110,22 +102,64 @@ export function buildInsightsSummary(records: InsightsRecord[]): InsightsCostSum
   }
 }
 
+export function getInsightsRecordPath(recordId: string) {
+  return `/insights/${encodeURIComponent(recordId)}`
+}
+
+export function buildInsightsRecordTitle(record: InsightsRecord | null | undefined) {
+  if (!record) {
+    return 'Record'
+  }
+
+  if (record.request_id) {
+    return `Record: ${record.request_id.substring(0, 8)}...`
+  }
+
+  return `Record: ${record.decision || record.id}`
+}
+
+function formatCompactIdentifier(value: string) {
+  if (value.length <= 20) {
+    return value
+  }
+
+  return `${value.slice(0, 8)}…${value.slice(-8)}`
+}
+
+function buildCompactListSummary(items: string[], maxVisibleItems: number) {
+  if (items.length === 0) {
+    return '-'
+  }
+
+  const visibleItems = items.slice(0, maxVisibleItems)
+  const hiddenCount = items.length - visibleItems.length
+  return hiddenCount > 0
+    ? `${visibleItems.join(' · ')} · +${hiddenCount}`
+    : visibleItems.join(' · ')
+}
+
 export function createInsightsTableColumns(): Column<InsightsRecord>[] {
   return [
     {
       key: 'request_id',
       header: 'Request ID',
-      width: '260px',
+      width: '190px',
       render: (row) => (
-        <span className={styles.requestId} title={row.request_id || ''}>
-          {row.request_id || '-'}
-        </span>
+        <Link
+          className={styles.requestIdLink}
+          title={row.request_id || row.id}
+          to={getInsightsRecordPath(row.id)}
+        >
+          <span className={styles.requestId} title={row.request_id || row.id}>
+            {formatCompactIdentifier(row.request_id || row.id)}
+          </span>
+        </Link>
       ),
     },
     {
       key: 'timestamp',
       header: 'Created',
-      width: '130px',
+      width: '160px',
       sortable: true,
       render: (row) => <span className={styles.timestamp}>{formatDate(row.timestamp)}</span>,
     },
@@ -139,7 +173,7 @@ export function createInsightsTableColumns(): Column<InsightsRecord>[] {
     {
       key: 'signals',
       header: 'Signals',
-      width: '220px',
+      width: '180px',
       render: (row) => {
         const allSignals = collectSignals(row.signals)
         if (allSignals.length === 0) {
@@ -147,18 +181,17 @@ export function createInsightsTableColumns(): Column<InsightsRecord>[] {
         }
 
         return (
-          <div className={styles.signalList}>
-            {allSignals.slice(0, 3).map((signal) => (
-              <span key={`${row.id}-${signal}`} className={styles.signalPillCompact}>
-                {signal}
-              </span>
-            ))}
-            {allSignals.length > 3 ? (
-              <span className={styles.signalOverflow}>+{allSignals.length - 3}</span>
-            ) : null}
-          </div>
+          <span className={styles.tableSummaryText} title={allSignals.join(', ')}>
+            {buildCompactListSummary(allSignals, 2)}
+          </span>
         )
       },
+    },
+    {
+      key: 'tools',
+      header: 'Tools',
+      width: '120px',
+      render: (row) => renderToolNamesCell(row),
     },
     {
       key: 'reasoning_mode',
@@ -249,7 +282,7 @@ export function createInsightsTableColumns(): Column<InsightsRecord>[] {
 
 export function buildInsightsRecordSections(
   record: InsightsRecord,
-  options: { isReadonly: boolean },
+  options: { isReadonly: boolean; canViewReplayFlowDetails: boolean },
 ): ViewSection[] {
   const sections: ViewSection[] = []
 
@@ -257,6 +290,8 @@ export function buildInsightsRecordSections(
     title: 'Decision Information',
     fields: [
       { label: 'Decision name', value: record.decision || '-' },
+      { label: 'Decision tier', value: formatDecisionNumber(record.decision_tier) },
+      { label: 'Decision priority', value: formatDecisionNumber(record.decision_priority) },
       {
         label: 'Category',
         value: record.signals?.domain?.length ? record.signals.domain.join(', ') : record.category || '-',
@@ -280,6 +315,24 @@ export function buildInsightsRecordSections(
       { label: 'Selection method', value: record.selection_method || '-' },
     ],
   })
+
+  const routingMetadataFields = buildRoutingMetadataFields(record)
+  if (routingMetadataFields.length > 0) {
+    sections.push({
+      title: 'Routing Metadata',
+      fields: routingMetadataFields,
+    })
+  }
+
+  const toolTraceFields = buildToolTraceFields(record, {
+    canViewFlowDetails: options.canViewReplayFlowDetails,
+  })
+  if (toolTraceFields.length > 0) {
+    sections.push({
+      title: 'Tool Trace',
+      fields: toolTraceFields,
+    })
+  }
 
   sections.push({
     title: 'Usage & Cost',
@@ -331,10 +384,17 @@ export function collectSignals(signals: Signal): string[] {
   if (signals.domain?.length) allSignals.push(...signals.domain)
   if (signals.fact_check?.length) allSignals.push(...signals.fact_check)
   if (signals.user_feedback?.length) allSignals.push(...signals.user_feedback)
+  if (signals.reask?.length) allSignals.push(...signals.reask)
   if (signals.preference?.length) allSignals.push(...signals.preference)
   if (signals.language?.length) allSignals.push(...signals.language)
   if (signals.context?.length) allSignals.push(...signals.context)
+  if (signals.structure?.length) allSignals.push(...signals.structure)
   if (signals.complexity?.length) allSignals.push(...signals.complexity)
+  if (signals.modality?.length) allSignals.push(...signals.modality)
+  if (signals.authz?.length) allSignals.push(...signals.authz)
+  if (signals.jailbreak?.length) allSignals.push(...signals.jailbreak)
+  if (signals.pii?.length) allSignals.push(...signals.pii)
+  if (signals.kb?.length) allSignals.push(...signals.kb)
   return allSignals
 }
 
@@ -356,10 +416,17 @@ function buildSignalFields(signals: Signal): ViewField[] {
     ['domain', 'Domain matches'],
     ['fact_check', 'Fact check results'],
     ['user_feedback', 'User feedback'],
+    ['reask', 'Reask'],
     ['preference', 'Preference signals'],
     ['language', 'Language signals'],
     ['context', 'Context signals'],
+    ['structure', 'Structure signals'],
     ['complexity', 'Complexity signals'],
+    ['modality', 'Modality signals'],
+    ['authz', 'Authz signals'],
+    ['jailbreak', 'Jailbreak signals'],
+    ['pii', 'PII signals'],
+    ['kb', 'Knowledge base signals'],
   ]
 
   return signalEntries.flatMap(([key, label]) => {
@@ -377,7 +444,6 @@ function buildSignalFields(signals: Signal): ViewField[] {
               <span
                 key={`${label}-${value}`}
                 className={styles.modalSignalPill}
-                style={{ background: SIGNAL_TINTS[key] || 'rgba(255, 255, 255, 0.08)' }}
               >
                 {value}
               </span>
@@ -388,6 +454,15 @@ function buildSignalFields(signals: Signal): ViewField[] {
       },
     ]
   })
+}
+
+function buildRoutingMetadataFields(record: InsightsRecord): ViewField[] {
+  return [
+    buildTagField('Projection outputs', record.projections),
+    buildNumericMapField('Projection scores', record.projection_scores),
+    buildNumericMapField('Signal confidences', record.signal_confidences),
+    buildNumericMapField('Signal values', record.signal_values),
+  ].filter((field): field is ViewField => field !== null)
 }
 
 function buildGuardrailsValue(record: InsightsRecord) {
@@ -515,6 +590,64 @@ function renderReadonlyLock() {
       <span>Not available in read-only mode</span>
     </div>
   )
+}
+
+function buildTagField(
+  label: string,
+  values: string[] | undefined,
+): ViewField | null {
+  if (!values?.length) {
+    return null
+  }
+
+  return {
+    label,
+    value: (
+      <div className={styles.modalSignalList}>
+        {values.map((value) => (
+          <span
+            key={`${label}-${value}`}
+            className={styles.modalSignalPill}
+          >
+            {value}
+          </span>
+        ))}
+      </div>
+    ),
+    fullWidth: true,
+  }
+}
+
+function buildNumericMapField(
+  label: string,
+  values: Record<string, number> | undefined,
+): ViewField | null {
+  if (!values || Object.keys(values).length === 0) {
+    return null
+  }
+
+  const entries = Object.entries(values).sort(([left], [right]) => left.localeCompare(right))
+  return {
+    label,
+    value: (
+      <div className={styles.pluginStack}>
+        {entries.map(([key, value]) => (
+          <span key={`${label}-${key}`} className={styles.costSubtle}>
+            {key}: {formatNumericMetric(value)}
+          </span>
+        ))}
+      </div>
+    ),
+    fullWidth: true,
+  }
+}
+
+function formatDecisionNumber(value: number | undefined) {
+  return typeof value === 'number' ? String(value) : '-'
+}
+
+function formatNumericMetric(value: number) {
+  return Number.isInteger(value) ? String(value) : value.toFixed(3)
 }
 
 function renderCostValue(value?: number, currency?: string) {

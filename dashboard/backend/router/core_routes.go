@@ -39,7 +39,10 @@ func registerConfigRoutes(mux *http.ServeMux, cfg *config.Config) {
 	mux.HandleFunc("/api/router/config/deploy", handlers.DeployHandler(cfg.AbsConfigPath, cfg.ReadonlyMode, cfg.ConfigDir))
 	mux.HandleFunc("/api/router/config/rollback", handlers.RollbackHandler(cfg.AbsConfigPath, cfg.ReadonlyMode, cfg.ConfigDir))
 	mux.HandleFunc("/api/router/config/versions", handlers.ConfigVersionsHandler(cfg.AbsConfigPath))
-	log.Printf("Config API endpoints registered: /api/router/config/all, /api/router/config/yaml, /api/router/config/update, /api/router/config/deploy, /api/router/config/deploy/preview, /api/router/config/rollback, /api/router/config/versions")
+	mux.HandleFunc("/api/router/config/nl/verify", handlers.BuilderNLVerifyHandler(cfg.AbsConfigPath, cfg.EnvoyURL))
+	mux.HandleFunc("/api/router/config/nl/generate/stream", handlers.BuilderNLGenerateStreamHandler(cfg.AbsConfigPath, cfg.EnvoyURL))
+	mux.HandleFunc("/api/router/config/nl/generate", handlers.BuilderNLGenerateHandler(cfg.AbsConfigPath, cfg.EnvoyURL))
+	log.Printf("Config API endpoints registered: /api/router/config/all, /api/router/config/yaml, /api/router/config/update, /api/router/config/nl/verify, /api/router/config/nl/generate/stream, /api/router/config/nl/generate, /api/router/config/deploy, /api/router/config/deploy/preview, /api/router/config/rollback, /api/router/config/versions")
 
 	mux.HandleFunc("/api/router/config/global", handlers.RouterDefaultsHandler(cfg.ConfigDir))
 	mux.HandleFunc("/api/router/config/global/update", handlers.UpdateRouterDefaultsHandler(cfg.ConfigDir, cfg.ReadonlyMode))
@@ -47,6 +50,8 @@ func registerConfigRoutes(mux *http.ServeMux, cfg *config.Config) {
 	mux.HandleFunc("/api/router/config/global/raw/update", handlers.UpdateGlobalConfigYAMLHandler(cfg.AbsConfigPath, cfg.ReadonlyMode, cfg.ConfigDir))
 	mux.HandleFunc("/api/router/config/defaults", handlers.RouterDefaultsHandler(cfg.ConfigDir))
 	mux.HandleFunc("/api/router/config/defaults/update", handlers.UpdateRouterDefaultsHandler(cfg.ConfigDir, cfg.ReadonlyMode))
+	mux.HandleFunc("/api/router/config/kbs", handlers.RouterClassifierProxyHandler(cfg.RouterAPIURL, cfg.ReadonlyMode))
+	mux.HandleFunc("/api/router/config/kbs/", handlers.RouterClassifierProxyHandler(cfg.RouterAPIURL, cfg.ReadonlyMode))
 	log.Printf("Global config API endpoints registered: /api/router/config/global, /api/router/config/global/update, /api/router/config/global/raw, /api/router/config/global/raw/update (legacy aliases: /api/router/config/defaults, /api/router/config/defaults/update)")
 }
 
@@ -60,6 +65,9 @@ func registerToolRoutes(mux *http.ServeMux, cfg *config.Config) {
 
 	mux.HandleFunc("/api/tools/open-web", handlers.OpenWebHandler())
 	log.Printf("Open Web API endpoint registered: /api/tools/open-web")
+
+	mux.HandleFunc("/api/tools/weather", handlers.WeatherHandler())
+	log.Printf("Weather API endpoint registered: /api/tools/weather")
 
 	mux.HandleFunc("/api/tools/fetch-raw", handlers.FetchRawHandler())
 	log.Printf("Fetch Raw API endpoint registered: /api/tools/fetch-raw")
@@ -109,6 +117,11 @@ func registerEvaluationRoutes(mux *http.ServeMux, cfg *config.Config) {
 		return
 	}
 
+	// Recover tasks that were running before a dashboard restart so UI state is consistent
+	if err := evalDB.RecoverRunningTasks("Dashboard restarted; task interrupted"); err != nil {
+		log.Printf("Warning: failed to recover running evaluation tasks: %v", err)
+	}
+
 	runner := evaluation.NewRunner(evaluation.RunnerConfig{
 		DB:            evalDB,
 		ProjectRoot:   projectRoot,
@@ -154,11 +167,79 @@ func registerEvaluationRoutes(mux *http.ServeMux, cfg *config.Config) {
 }
 
 func resolveEvaluationProjectRoot(cfg *config.Config) string {
-	projectRoot := filepath.Dir(cfg.ConfigDir)
-	if _, err := os.Stat(filepath.Join(cfg.ConfigDir, "bench")); err == nil {
-		return cfg.ConfigDir
+	for _, candidate := range evaluationProjectRootCandidates(cfg) {
+		if root := findEvaluationProjectRoot(candidate); root != "" {
+			return root
+		}
 	}
+
+	projectRoot := filepath.Dir(cfg.ConfigDir)
+	if projectRoot != "" && projectRoot != "." {
+		return projectRoot
+	}
+
+	if wd, err := os.Getwd(); err == nil {
+		return wd
+	}
+
 	return projectRoot
+}
+
+func evaluationProjectRootCandidates(cfg *config.Config) []string {
+	candidates := []string{
+		cfg.ConfigDir,
+		filepath.Dir(cfg.ConfigDir),
+		cfg.AbsConfigPath,
+	}
+
+	if wd, err := os.Getwd(); err == nil {
+		candidates = append(candidates, wd)
+	}
+
+	return candidates
+}
+
+func findEvaluationProjectRoot(start string) string {
+	if start == "" {
+		return ""
+	}
+
+	info, err := os.Stat(start)
+	if err != nil {
+		return ""
+	}
+
+	dir := filepath.Clean(start)
+	if !info.IsDir() {
+		dir = filepath.Dir(dir)
+	}
+
+	for {
+		if isEvaluationProjectRoot(dir) {
+			return dir
+		}
+
+		parent := filepath.Dir(dir)
+		if parent == dir {
+			return ""
+		}
+		dir = parent
+	}
+}
+
+func isEvaluationProjectRoot(dir string) bool {
+	requiredPaths := []string{
+		filepath.Join("src", "training", "model_eval", "mmlu_pro_vllm_eval.py"),
+		filepath.Join("src", "training", "model_eval", "signal_eval.py"),
+	}
+
+	for _, relPath := range requiredPaths {
+		if _, err := os.Stat(filepath.Join(dir, relPath)); err != nil {
+			return false
+		}
+	}
+
+	return true
 }
 
 func registerMLPipelineRoutes(mux *http.ServeMux, cfg *config.Config) {

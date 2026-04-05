@@ -81,14 +81,18 @@ func (db *ToolsDatabase) LoadToolsFromFile(filePath string) error {
 		return fmt.Errorf("failed to parse tools JSON: %w", err)
 	}
 
-	logging.Infof("[Tool Selection] Loading tools and generating embeddings with concurrent processing (model: %s, dimension: %d)...",
-		db.modelType, db.targetDim)
-
 	// Use worker pool for concurrent embedding generation
 	numWorkers := runtime.NumCPU() * 2
 	if numWorkers > len(toolEntries) {
 		numWorkers = len(toolEntries)
 	}
+	logging.ComponentEvent("tools", "tool_database_load_started", map[string]interface{}{
+		"file_path":        filePath,
+		"model_type":       db.modelType,
+		"target_dimension": db.targetDim,
+		"tool_count":       len(toolEntries),
+		"worker_count":     numWorkers,
+	})
 
 	type result struct {
 		entry ToolEntry
@@ -138,19 +142,33 @@ func (db *ToolsDatabase) LoadToolsFromFile(filePath string) error {
 
 	for res := range resultChan {
 		if res.err != nil {
-			logging.Warnf("Failed to generate embedding for tool %s: %v", res.entry.Tool.Function.Name, res.err)
+			logging.ComponentWarnEvent("tools", "tool_embedding_failed", map[string]interface{}{
+				"tool_name": res.entry.Tool.Function.Name,
+				"error":     res.err.Error(),
+			})
 			failedCount++
 		} else {
 			// Add to the database
 			db.entries = append(db.entries, res.entry)
-			logging.Debugf("[Tool Selection] Loaded tool: %s - %s",
-				res.entry.Tool.Function.Name, res.entry.Description)
+			logging.ComponentDebugEvent("tools", "tool_loaded", map[string]interface{}{
+				"tool_name":       res.entry.Tool.Function.Name,
+				"category":        res.entry.Category,
+				"has_tags":        len(res.entry.Tags) > 0,
+				"description_len": len(res.entry.Description),
+			})
 			successCount++
 		}
 	}
 
-	logging.Infof("[Tool Selection] Loaded %d/%d tools from file: %s using model: %s (workers: %d)",
-		successCount, len(toolEntries), filePath, db.modelType, numWorkers)
+	logging.ComponentEvent("tools", "tool_database_loaded", map[string]interface{}{
+		"file_path":        filePath,
+		"model_type":       db.modelType,
+		"target_dimension": db.targetDim,
+		"tool_count":       len(toolEntries),
+		"loaded_count":     successCount,
+		"failed_count":     failedCount,
+		"worker_count":     numWorkers,
+	})
 	return nil
 }
 
@@ -172,7 +190,13 @@ func (db *ToolsDatabase) AddTool(tool openai.ChatCompletionToolParam, descriptio
 	defer db.mu.Unlock()
 
 	db.entries = append(db.entries, entry)
-	logging.Infof("Added tool: %s (%s) using model: %s", tool.Function.Name, description, db.modelType)
+	logging.ComponentEvent("tools", "tool_added", map[string]interface{}{
+		"tool_name":       tool.Function.Name,
+		"category":        category,
+		"has_tags":        len(tags) > 0,
+		"description_len": len(description),
+		"model_type":      db.modelType,
+	})
 
 	return nil
 }

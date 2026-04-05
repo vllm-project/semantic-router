@@ -1,0 +1,83 @@
+routing:
+  signals:
+    structure:
+      - name: many_questions
+        description: Prompts with many explicit questions.
+        feature:
+          type: count
+          source:
+            type: regex
+            pattern: '[?？]'
+        predicate:
+          gte: 4
+      - name: at_most_one_question
+        description: Prompts with one or fewer explicit questions.
+        feature:
+          type: count
+          source:
+            type: regex
+            pattern: '[?？]'
+        predicate:
+          lte: 1
+      - name: numbered_steps
+        description: Prompts that contain numbered list items such as "1. ..."
+        feature:
+          type: exists
+          source:
+            type: regex
+            pattern: '(?m)^\s*\d+\.\s+'
+      - name: first_then_flow
+        description: Prompts that express an ordered workflow.
+        feature:
+          type: sequence
+          source:
+            type: sequence
+            case_sensitive: false
+            sequences:
+              - ["first", "then"]
+              - ["first", "next", "finally"]
+              - ["首先", "然后"]
+              - ["先", "再"]
+      - name: constraint_dense
+        description: Constraint language is dense relative to multilingual text units.
+        feature:
+          type: density
+          source:
+            type: keyword_set
+            case_sensitive: false
+            keywords:
+              - under
+              - at most
+              - at least
+              - within
+              - no more than
+              - 不超过
+              - 至少
+              - 最多
+        predicate:
+          gt: 0.08
+      - name: format_directive_dense
+        description: Output-format directives are dense relative to multilingual text units.
+        feature:
+          type: density
+          source:
+            type: keyword_set
+            keywords:
+              - table
+              - bullet
+              - json
+              - markdown
+              - 表格
+              - 列表
+              - JSON
+        predicate:
+          gt: 0.08
+      - name: low_question_density
+        description: Prompts with very low question density relative to multilingual text units.
+        feature:
+          type: density
+          source:
+            type: regex
+            pattern: '[?？]'
+        predicate:
+          lt: 0.05

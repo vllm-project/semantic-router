@@ -1,4 +1,4 @@
-import type { KeyboardEventHandler, ReactNode, Ref } from 'react'
+import { useCallback, useState, type KeyboardEventHandler, type ReactNode, type Ref } from 'react'
 
 import styles from './ChatComponent.module.css'
 import { ClawModeToggle, ToolToggle } from './ChatComponentControls'
@@ -36,6 +36,22 @@ export default function ChatComponentInputBar({
   onToggleWebSearch,
   roomChatToggleControl,
 }: ChatComponentInputBarProps) {
+  const canSend = Boolean(inputValue.trim())
+  const [isComposing, setIsComposing] = useState(false)
+
+  const handleKeyDown = useCallback<KeyboardEventHandler<HTMLTextAreaElement>>((event) => {
+    const nativeEvent = event.nativeEvent as KeyboardEvent & {
+      isComposing?: boolean
+      keyCode?: number
+    }
+
+    if (nativeEvent.isComposing || isComposing || nativeEvent.keyCode === 229) {
+      return
+    }
+
+    onKeyDown(event)
+  }, [isComposing, onKeyDown])
+
   return (
     <div className={styles.inputContainer} data-testid="chat-composer">
       <div className={`${styles.inputWrapper} ${inputValue.trim() ? styles.hasContent : ''}`}>
@@ -43,11 +59,12 @@ export default function ChatComponentInputBar({
           ref={inputRef}
           value={inputValue}
           onChange={event => onChangeInput(event.target.value)}
-          onKeyDown={onKeyDown}
+          onCompositionStart={() => setIsComposing(true)}
+          onCompositionEnd={() => setIsComposing(false)}
+          onKeyDown={handleKeyDown}
           placeholder="Ask me anything..."
           className={styles.input}
           rows={1}
-          disabled={isLoading}
         />
         <div className={styles.inputActionsRow}>
           <div className={styles.inputActions}>
@@ -63,28 +80,31 @@ export default function ChatComponentInputBar({
             />
             {roomChatToggleControl}
           </div>
-          {isLoading ? (
-            <button
-              className={`${styles.sendButton} ${styles.stopButton}`}
-              onClick={onStop}
-              title="Stop generating"
-            >
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
-                <rect x="6" y="6" width="12" height="12" rx="2" />
-              </svg>
-            </button>
-          ) : (
+          <div className={styles.composerButtons}>
+            {isLoading ? (
+              <button
+                className={`${styles.sendButton} ${styles.stopButton}`}
+                onClick={onStop}
+                title="Stop generating"
+                aria-label="Stop generating"
+              >
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+                  <rect x="6" y="6" width="12" height="12" rx="2" />
+                </svg>
+              </button>
+            ) : null}
             <button
               className={styles.sendButton}
               onClick={onSend}
-              disabled={!inputValue.trim()}
+              disabled={!canSend}
               title="Send message"
+              aria-label="Send message"
             >
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
                 <path d="M12 19V5M5 12l7-7 7 7" strokeLinecap="round" strokeLinejoin="round" />
               </svg>
             </button>
-          )}
+          </div>
         </div>
       </div>
     </div>

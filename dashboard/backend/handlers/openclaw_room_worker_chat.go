@@ -13,21 +13,28 @@ import (
 )
 
 type openAIChatRequest struct {
-	Model    string              `json:"model"`
-	Messages []openAIChatMessage `json:"messages"`
-	Stream   bool                `json:"stream"`
-	User     string              `json:"user,omitempty"`
+	Model       string              `json:"model"`
+	Messages    []openAIChatMessage `json:"messages"`
+	Stream      bool                `json:"stream"`
+	User        string              `json:"user,omitempty"`
+	Temperature *float64            `json:"temperature,omitempty"`
+	MaxTokens   int                 `json:"max_tokens,omitempty"`
 }
 
 type openAIChatResponse struct {
-	Choices []struct {
-		Message struct {
-			Content string `json:"content"`
-		} `json:"message"`
-	} `json:"choices"`
-	Error *struct {
+	Choices []openAIChatChoice `json:"choices"`
+	Error   *struct {
 		Message string `json:"message"`
 	} `json:"error,omitempty"`
+}
+
+type openAIChatChoice struct {
+	Message openAIChatChoiceMessage `json:"message"`
+	Text    string                  `json:"text,omitempty"`
+}
+
+type openAIChatChoiceMessage struct {
+	Content json.RawMessage `json:"content"`
 }
 
 const (
@@ -159,7 +166,7 @@ func (h *OpenClawHandler) queryWorkerChatEndpoint(
 	if len(parsed.Choices) == 0 {
 		return "", resp.StatusCode, trimmedBody, fmt.Errorf("worker returned no choices")
 	}
-	content := strings.TrimSpace(parsed.Choices[0].Message.Content)
+	content := extractOpenAIChatChoiceContent(parsed.Choices[0])
 	if content == "" {
 		return "", resp.StatusCode, trimmedBody, fmt.Errorf("worker returned empty content")
 	}

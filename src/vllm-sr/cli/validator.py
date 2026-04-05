@@ -2,6 +2,7 @@
 
 from typing import Dict, Any, List
 from cli.config_contract import (
+    build_projection_reference_index,
     build_signal_reference_index,
     is_signal_condition_type,
     signal_reference_exists,
@@ -11,12 +12,16 @@ from cli.models import (
     PluginType,
     SemanticCachePluginConfig,
     FastResponsePluginConfig,
+    RequestParamsPluginConfig,
+    ResponseJailbreakPluginConfig,
+    ToolsPluginConfig,
     SystemPromptPluginConfig,
     HeaderMutationPluginConfig,
     HallucinationPluginConfig,
     RouterReplayPluginConfig,
     MemoryPluginConfig,
     RAGPluginConfig,
+    ImageGenPluginConfig,
 )
 from pydantic import ValidationError as PydanticValidationError
 from cli.utils import get_logger
@@ -212,10 +217,21 @@ def validate_signal_references(config: UserConfig) -> List[ValidationError]:
     errors = []
 
     signal_names = build_signal_reference_index(config.signals)
+    projection_names = build_projection_reference_index(config.routing.projections)
 
     # Check decision conditions
     for decision in config.decisions:
         for condition in _iter_condition_nodes(decision.rules.conditions):
+            if (condition.type or "").strip().lower() == "projection":
+                if condition.name in projection_names:
+                    continue
+                errors.append(
+                    ValidationError(
+                        f"Decision '{decision.name}' references unknown projection '{condition.name}'",
+                        field=f"decisions.{decision.name}.rules.conditions",
+                    )
+                )
+                continue
             if not is_signal_condition_type(condition.type):
                 continue
             if signal_reference_exists(signal_names, condition.type, condition.name):
@@ -383,12 +399,16 @@ def validate_plugin_configurations(config: UserConfig) -> List[ValidationError]:
     config_models = {
         PluginType.SEMANTIC_CACHE.value: SemanticCachePluginConfig,
         PluginType.FAST_RESPONSE.value: FastResponsePluginConfig,
+        PluginType.REQUEST_PARAMS.value: RequestParamsPluginConfig,
+        PluginType.RESPONSE_JAILBREAK.value: ResponseJailbreakPluginConfig,
         PluginType.SYSTEM_PROMPT.value: SystemPromptPluginConfig,
         PluginType.HEADER_MUTATION.value: HeaderMutationPluginConfig,
         PluginType.HALLUCINATION.value: HallucinationPluginConfig,
         PluginType.ROUTER_REPLAY.value: RouterReplayPluginConfig,
         PluginType.MEMORY.value: MemoryPluginConfig,
         PluginType.RAG.value: RAGPluginConfig,
+        PluginType.IMAGE_GEN.value: ImageGenPluginConfig,
+        PluginType.TOOLS.value: ToolsPluginConfig,
     }
 
     for decision in config.decisions:

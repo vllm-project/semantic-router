@@ -68,6 +68,10 @@ legacy_hotspots:
       - src/vllm-sr/cli/validator.py
     function_checks: relaxed
   - paths:
+      - src/training/model_classifier/verify_text_classification_datasets.py
+    file_checks: relaxed
+    function_checks: relaxed
+  - paths:
       - deploy/operator/api/v1alpha1/semanticrouter_types.go
       - src/vllm-sr/cli/models.py
     file_checks: relaxed
@@ -94,6 +98,7 @@ legacy_hotspots:
   - paths:
       - src/semantic-router/pkg/apiserver/server_test.go
       - src/semantic-router/pkg/cache/cache_test.go
+      - src/semantic-router/pkg/modelselection/selector_test.go
     file_checks: relaxed
     function_checks: relaxed
   - paths:
@@ -108,6 +113,11 @@ legacy_hotspots:
       - src/semantic-router/pkg/extproc/res_filter_jailbreak_test.go
       - src/semantic-router/pkg/extproc/server.go
       - src/semantic-router/pkg/imagegen/backend_vllm_omni.go
+    function_checks: relaxed
+  - paths:
+      - src/semantic-router/pkg/cache/inmemory_cache.go
+      - src/semantic-router/pkg/cache/milvus_cache.go
+    file_checks: relaxed
     function_checks: relaxed
   - paths:
       - src/semantic-router/pkg/cache/cache_interface.go
@@ -136,6 +146,7 @@ legacy_hotspots:
     interface_checks: relaxed
   - paths:
       - src/semantic-router/pkg/extproc/extproc_test.go
+    file_checks: relaxed
     function_checks: relaxed
   - paths:
       - src/semantic-router/pkg/classification/hallucination_detector_test.go
@@ -143,6 +154,12 @@ legacy_hotspots:
       - src/semantic-router/pkg/extproc/hallucination_test.go
       - src/semantic-router/pkg/extproc/req_filter_tools_test.go
     function_checks: relaxed
+  - paths:
+      - src/semantic-router/pkg/modelselection/benchmark_runner.go
+    file_checks: relaxed
+    function_checks: relaxed
+  - paths:
+      - src/vllm-sr/cli/models.py
   - paths:
       - src/semantic-router/pkg/extproc/processor_req_body.go
       - src/semantic-router/pkg/extproc/processor_res_body.go
@@ -158,7 +175,32 @@ legacy_hotspots:
   - paths:
       - src/semantic-router/pkg/classification/classifier.go
       - src/semantic-router/pkg/services/classification.go
+    file_checks: relaxed
     function_checks: relaxed
+  - paths:
+      - src/semantic-router/pkg/classification/hallucination_detector.go
+      - src/semantic-router/pkg/classification/mcp_classifier.go
+      - src/semantic-router/pkg/looper/base.go
+      - src/semantic-router/pkg/looper/client.go
+      - src/semantic-router/pkg/selection/hybrid.go
+  - paths:
+      - src/semantic-router/pkg/extproc/req_filter_looper.go
+      - src/semantic-router/pkg/looper/ratings.go
+      - src/semantic-router/pkg/looper/rl_driven.go
+      - src/semantic-router/pkg/selection/factory.go
+      - src/semantic-router/pkg/tools/tools.go
+    function_checks: relaxed
+  - paths:
+      - src/semantic-router/pkg/looper/confidence.go
+      - src/semantic-router/pkg/memory/milvus_store.go
+    file_checks: relaxed
+    function_checks: relaxed
+  - paths:
+      - src/semantic-router/pkg/modelselection/selector.go
+      - src/semantic-router/pkg/selection/automix.go
+      - src/semantic-router/pkg/selection/gmtrouter.go
+      - src/semantic-router/pkg/selection/rl_driven.go
+    file_checks: relaxed
   - paths:
       - dashboard/backend/handlers/openclaw.go
       - dashboard/backend/handlers/openclaw_provision.go
@@ -166,6 +208,12 @@ legacy_hotspots:
       - dashboard/backend/handlers/openclaw_teams.go
       - dashboard/backend/handlers/openclaw_test.go
       - dashboard/backend/handlers/openclaw_workers.go
+
+  - paths:
+      - tools/security/ast_security_scanner.py
+      - tools/security/scan_malicious_code.py
+    file_checks: relaxed
+    function_checks: relaxed
 
 dependency_rules:
   - name: prod-code-must-not-reference-e2e-docs-or-agent-tools

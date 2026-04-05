@@ -68,6 +68,11 @@ spec:
             # available in CI and the pipeline is not part of the dashboard contract.
             - name: ML_PIPELINE_ENABLED
               value: "false"
+            # Disable auth in E2E by pointing the auth DB to an impossible path.
+            # /dev/null is a char device so MkdirAll("/dev/null") fails, causing
+            # setupAuthRoutes to return nil and wrapWithAuth to skip the middleware.
+            - name: DASHBOARD_AUTH_DB_PATH
+              value: /dev/null/auth.db
           ports:
             - name: http
               containerPort: 8700

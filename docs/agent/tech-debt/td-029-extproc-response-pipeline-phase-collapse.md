@@ -2,7 +2,7 @@
 
 ## Status
 
-Open
+Closed
 
 ## Scope
 
@@ -21,7 +21,12 @@ The extproc request path now has its own subsystem-specific debt record, but the
 - [src/semantic-router/pkg/extproc/res_filter_jailbreak.go](../../../src/semantic-router/pkg/extproc/res_filter_jailbreak.go)
 - [src/semantic-router/pkg/extproc/req_filter_response_api.go](../../../src/semantic-router/pkg/extproc/req_filter_response_api.go)
 - [src/semantic-router/pkg/extproc/req_filter_looper_response.go](../../../src/semantic-router/pkg/extproc/req_filter_looper_response.go)
-- [src/semantic-router/pkg/extproc/processor_res_body_pipeline_test.go](../../../src/semantic-router/pkg/extproc/processor_res_body_pipeline_test.go)
+- [src/semantic-router/pkg/extproc/processor_res_usage.go](../../../src/semantic-router/pkg/extproc/processor_res_usage.go)
+- [src/semantic-router/pkg/extproc/processor_res_cache.go](../../../src/semantic-router/pkg/extproc/processor_res_cache.go)
+- [src/semantic-router/pkg/extproc/processor_res_memory.go](../../../src/semantic-router/pkg/extproc/processor_res_memory.go)
+- [src/semantic-router/pkg/extproc/processor_res_usage_test.go](../../../src/semantic-router/pkg/extproc/processor_res_usage_test.go)
+- [src/semantic-router/pkg/extproc/processor_res_cache_test.go](../../../src/semantic-router/pkg/extproc/processor_res_cache_test.go)
+- [src/semantic-router/pkg/extproc/processor_res_memory_test.go](../../../src/semantic-router/pkg/extproc/processor_res_memory_test.go)
 - [src/semantic-router/pkg/extproc/processor_res_body_streaming_test.go](../../../src/semantic-router/pkg/extproc/processor_res_body_streaming_test.go)
 - [src/semantic-router/pkg/extproc/AGENTS.md](../../../src/semantic-router/pkg/extproc/AGENTS.md)
 - [docs/agent/tech-debt/td-023-extproc-request-pipeline-phase-collapse.md](td-023-extproc-request-pipeline-phase-collapse.md)
@@ -44,3 +49,13 @@ The extproc request path now has its own subsystem-specific debt record, but the
 - New response-side features no longer require reopening both the streaming and non-streaming response seams unless the feature is intentionally cross-cutting.
 - Provider normalization, replay/cache persistence, and response warnings have clearer primary owners than the current broad response pipeline.
 - Extproc-local `AGENTS.md` explicitly names the response-phase hotspots and the extraction-first rules contributors should follow.
+
+## Retirement Notes
+
+- Usage accounting, token metrics, and cost recording were extracted from `processor_res_body_pipeline.go` and `processor_res_body_streaming.go` into a dedicated `processor_res_usage.go` with 7 new targeted unit tests in `processor_res_usage_test.go`.
+- Semantic cache writes, streaming response reconstruction, and cache entry management were extracted into `processor_res_cache.go`; 15 existing cache tests were consolidated from the former `processor_res_body_pipeline_test.go` and `processor_res_body_streaming_test.go` into `processor_res_cache_test.go`.
+- Memory store scheduling was extracted into `processor_res_memory.go` with 5 dedicated tests in `processor_res_memory_test.go`, including 3 new edge-case tests (jailbreak skip, global auto-store fallback, both auto-stores disabled).
+- `processor_res_body_pipeline.go` shrank from 322 to 132 lines and now only orchestrates the non-streaming response path and Response API translation.
+- `processor_res_body_streaming.go` shrank from 376 to 90 lines and now only handles streaming chunk parsing, TTFT, metadata extraction, and finalization.
+- Extproc-local `AGENTS.md` now explicitly names the primary response-phase owners so future contributors discover the narrower seams before widening them.
+- All existing tests pass without regression across the full `pkg/extproc` package.

@@ -13,10 +13,17 @@ type Signal struct {
 	Domain       []string `json:"domain,omitempty"`
 	FactCheck    []string `json:"fact_check,omitempty"`
 	UserFeedback []string `json:"user_feedback,omitempty"`
+	Reask        []string `json:"reask,omitempty"`
 	Preference   []string `json:"preference,omitempty"`
 	Language     []string `json:"language,omitempty"`
 	Context      []string `json:"context,omitempty"`
+	Structure    []string `json:"structure,omitempty"`
 	Complexity   []string `json:"complexity,omitempty"`
+	Modality     []string `json:"modality,omitempty"`
+	Authz        []string `json:"authz,omitempty"`
+	Jailbreak    []string `json:"jailbreak,omitempty"`
+	PII          []string `json:"pii,omitempty"`
+	KB           []string `json:"kb,omitempty"`
 }
 
 // UsageCost captures token usage and pricing-derived cost details for a record.
@@ -31,26 +38,52 @@ type UsageCost struct {
 	BaselineModel    *string  `json:"baseline_model,omitempty"`
 }
 
+// ToolTrace captures the request-local assistant/tool exchange timeline.
+type ToolTrace struct {
+	Flow      string          `json:"flow,omitempty"`
+	Stage     string          `json:"stage,omitempty"`
+	ToolNames []string        `json:"tool_names,omitempty"`
+	Steps     []ToolTraceStep `json:"steps,omitempty"`
+}
+
+// ToolTraceStep represents a single step in a request-local tool-calling flow.
+type ToolTraceStep struct {
+	Type       string `json:"type"`
+	Source     string `json:"source,omitempty"`
+	Role       string `json:"role,omitempty"`
+	Text       string `json:"text,omitempty"`
+	ToolName   string `json:"tool_name,omitempty"`
+	ToolCallID string `json:"tool_call_id,omitempty"`
+	Arguments  string `json:"arguments,omitempty"`
+}
+
 // Record represents a routing decision record with metadata and captured payloads.
 type Record struct {
-	ID                    string    `json:"id"`
-	Timestamp             time.Time `json:"timestamp"`
-	RequestID             string    `json:"request_id,omitempty"`
-	Decision              string    `json:"decision,omitempty"`
-	Category              string    `json:"category,omitempty"`
-	OriginalModel         string    `json:"original_model,omitempty"`
-	SelectedModel         string    `json:"selected_model,omitempty"`
-	ReasoningMode         string    `json:"reasoning_mode,omitempty"`
-	ConfidenceScore       float64   `json:"confidence_score,omitempty"`
-	SelectionMethod       string    `json:"selection_method,omitempty"`
-	Signals               Signal    `json:"signals"`
-	RequestBody           string    `json:"request_body,omitempty"`
-	ResponseBody          string    `json:"response_body,omitempty"`
-	ResponseStatus        int       `json:"response_status,omitempty"`
-	FromCache             bool      `json:"from_cache,omitempty"`
-	Streaming             bool      `json:"streaming,omitempty"`
-	RequestBodyTruncated  bool      `json:"request_body_truncated,omitempty"`
-	ResponseBodyTruncated bool      `json:"response_body_truncated,omitempty"`
+	ID                    string             `json:"id"`
+	Timestamp             time.Time          `json:"timestamp"`
+	RequestID             string             `json:"request_id,omitempty"`
+	Decision              string             `json:"decision,omitempty"`
+	DecisionTier          int                `json:"decision_tier"`
+	DecisionPriority      int                `json:"decision_priority"`
+	Category              string             `json:"category,omitempty"`
+	OriginalModel         string             `json:"original_model,omitempty"`
+	SelectedModel         string             `json:"selected_model,omitempty"`
+	ReasoningMode         string             `json:"reasoning_mode,omitempty"`
+	ConfidenceScore       float64            `json:"confidence_score,omitempty"`
+	SelectionMethod       string             `json:"selection_method,omitempty"`
+	Signals               Signal             `json:"signals"`
+	Projections           []string           `json:"projections,omitempty"`
+	ProjectionScores      map[string]float64 `json:"projection_scores,omitempty"`
+	SignalConfidences     map[string]float64 `json:"signal_confidences,omitempty"`
+	SignalValues          map[string]float64 `json:"signal_values,omitempty"`
+	ToolTrace             *ToolTrace         `json:"tool_trace,omitempty"`
+	RequestBody           string             `json:"request_body,omitempty"`
+	ResponseBody          string             `json:"response_body,omitempty"`
+	ResponseStatus        int                `json:"response_status,omitempty"`
+	FromCache             bool               `json:"from_cache,omitempty"`
+	Streaming             bool               `json:"streaming,omitempty"`
+	RequestBodyTruncated  bool               `json:"request_body_truncated,omitempty"`
+	ResponseBodyTruncated bool               `json:"response_body_truncated,omitempty"`
 
 	// Guardrails
 	GuardrailsEnabled bool `json:"guardrails_enabled,omitempty"`
@@ -126,6 +159,9 @@ type Enricher interface {
 
 	// UpdateUsageCost updates token usage and pricing-derived cost fields for an existing record.
 	UpdateUsageCost(ctx context.Context, id string, usage UsageCost) error
+
+	// UpdateToolTrace updates the request-local tool-calling timeline for an existing record.
+	UpdateToolTrace(ctx context.Context, id string, trace ToolTrace) error
 }
 
 // Storage is the interface that all storage backends must implement.
@@ -134,6 +170,83 @@ type Storage interface {
 	Reader
 	Enricher
 	io.Closer
+}
+
+func cloneStringSlice(values []string) []string {
+	if values == nil {
+		return nil
+	}
+	return append([]string(nil), values...)
+}
+
+func cloneFloat64Map(values map[string]float64) map[string]float64 {
+	if values == nil {
+		return nil
+	}
+	cloned := make(map[string]float64, len(values))
+	for key, value := range values {
+		cloned[key] = value
+	}
+	return cloned
+}
+
+func cloneToolTraceSteps(steps []ToolTraceStep) []ToolTraceStep {
+	if steps == nil {
+		return nil
+	}
+	return append([]ToolTraceStep(nil), steps...)
+}
+
+func cloneToolTrace(trace *ToolTrace) *ToolTrace {
+	if trace == nil {
+		return nil
+	}
+	cloned := *trace
+	cloned.ToolNames = cloneStringSlice(trace.ToolNames)
+	cloned.Steps = cloneToolTraceSteps(trace.Steps)
+	return &cloned
+}
+
+func cloneSignal(signal Signal) Signal {
+	return Signal{
+		Keyword:      cloneStringSlice(signal.Keyword),
+		Embedding:    cloneStringSlice(signal.Embedding),
+		Domain:       cloneStringSlice(signal.Domain),
+		FactCheck:    cloneStringSlice(signal.FactCheck),
+		UserFeedback: cloneStringSlice(signal.UserFeedback),
+		Reask:        cloneStringSlice(signal.Reask),
+		Preference:   cloneStringSlice(signal.Preference),
+		Language:     cloneStringSlice(signal.Language),
+		Context:      cloneStringSlice(signal.Context),
+		Structure:    cloneStringSlice(signal.Structure),
+		Complexity:   cloneStringSlice(signal.Complexity),
+		Modality:     cloneStringSlice(signal.Modality),
+		Authz:        cloneStringSlice(signal.Authz),
+		Jailbreak:    cloneStringSlice(signal.Jailbreak),
+		PII:          cloneStringSlice(signal.PII),
+		KB:           cloneStringSlice(signal.KB),
+	}
+}
+
+func cloneRecord(record Record) Record {
+	cloned := record
+	cloned.Signals = cloneSignal(record.Signals)
+	cloned.Projections = cloneStringSlice(record.Projections)
+	cloned.ProjectionScores = cloneFloat64Map(record.ProjectionScores)
+	cloned.SignalConfidences = cloneFloat64Map(record.SignalConfidences)
+	cloned.SignalValues = cloneFloat64Map(record.SignalValues)
+	cloned.ToolTrace = cloneToolTrace(record.ToolTrace)
+	cloned.PIIEntities = cloneStringSlice(record.PIIEntities)
+	cloned.HallucinationSpans = cloneStringSlice(record.HallucinationSpans)
+	cloned.PromptTokens = cloneIntPtr(record.PromptTokens)
+	cloned.CompletionTokens = cloneIntPtr(record.CompletionTokens)
+	cloned.TotalTokens = cloneIntPtr(record.TotalTokens)
+	cloned.ActualCost = cloneFloat64Ptr(record.ActualCost)
+	cloned.BaselineCost = cloneFloat64Ptr(record.BaselineCost)
+	cloned.CostSavings = cloneFloat64Ptr(record.CostSavings)
+	cloned.Currency = cloneStringPtr(record.Currency)
+	cloned.BaselineModel = cloneStringPtr(record.BaselineModel)
+	return cloned
 }
 
 func cloneIntPtr(value *int) *int {

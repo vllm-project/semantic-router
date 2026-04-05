@@ -14,27 +14,33 @@ type signalEvaluationInput struct {
 	allMessagesText        string
 	compressedText         string
 	skipCompressionSignals map[string]bool
+	currentUserText        string
+	priorUserMessages      []string
+	hasAssistantReply      bool
 }
 
-func (r *OpenAIRouter) prepareSignalEvaluationInput(userContent string, nonUserMessages []string) signalEvaluationInput {
+func (r *OpenAIRouter) prepareSignalEvaluationInput(history signalConversationHistory) signalEvaluationInput {
 	input := signalEvaluationInput{
-		evaluationText:  userContent,
-		compressedText:  userContent,
-		allMessagesText: strings.Join(nonUserMessages, " "),
+		evaluationText:    history.currentUserMessage,
+		compressedText:    history.currentUserMessage,
+		allMessagesText:   strings.Join(history.nonUserMessages, " "),
+		currentUserText:   history.currentUserMessage,
+		priorUserMessages: append([]string(nil), history.priorUserMessages...),
+		hasAssistantReply: history.hasAssistantReply,
 	}
 
-	if input.evaluationText == "" && len(nonUserMessages) > 0 {
-		input.evaluationText = strings.Join(nonUserMessages, " ")
+	if input.evaluationText == "" && len(history.nonUserMessages) > 0 {
+		input.evaluationText = strings.Join(history.nonUserMessages, " ")
 		input.compressedText = input.evaluationText
 	}
 
-	if userContent != "" && len(nonUserMessages) > 0 {
-		allMessages := make([]string, 0, len(nonUserMessages)+1)
-		allMessages = append(allMessages, nonUserMessages...)
-		allMessages = append(allMessages, userContent)
+	if history.currentUserMessage != "" && len(history.nonUserMessages) > 0 {
+		allMessages := make([]string, 0, len(history.nonUserMessages)+1)
+		allMessages = append(allMessages, history.nonUserMessages...)
+		allMessages = append(allMessages, history.currentUserMessage)
 		input.allMessagesText = strings.Join(allMessages, " ")
-	} else if userContent != "" {
-		input.allMessagesText = userContent
+	} else if history.currentUserMessage != "" {
+		input.allMessagesText = history.currentUserMessage
 	}
 
 	if input.evaluationText == "" {
@@ -75,15 +81,22 @@ func (r *OpenAIRouter) applySignalResultsToContext(ctx *RequestContext, signals 
 	ctx.VSRMatchedDomains = signals.MatchedDomainRules
 	ctx.VSRMatchedFactCheck = signals.MatchedFactCheckRules
 	ctx.VSRMatchedUserFeedback = signals.MatchedUserFeedbackRules
+	ctx.VSRMatchedReask = signals.MatchedReaskRules
 	ctx.VSRMatchedPreference = signals.MatchedPreferenceRules
 	ctx.VSRMatchedLanguage = signals.MatchedLanguageRules
 	ctx.VSRMatchedContext = signals.MatchedContextRules
 	ctx.VSRContextTokenCount = signals.TokenCount
+	ctx.VSRMatchedStructure = signals.MatchedStructureRules
 	ctx.VSRMatchedComplexity = signals.MatchedComplexityRules
 	ctx.VSRMatchedModality = signals.MatchedModalityRules
 	ctx.VSRMatchedAuthz = signals.MatchedAuthzRules
 	ctx.VSRMatchedJailbreak = signals.MatchedJailbreakRules
 	ctx.VSRMatchedPII = signals.MatchedPIIRules
+	ctx.VSRMatchedKB = signals.MatchedKBRules
+	ctx.VSRMatchedProjection = signals.MatchedProjectionRules
+	ctx.VSRProjectionScores = cloneReplayFloat64Map(signals.ProjectionScores)
+	ctx.VSRSignalConfidences = cloneReplayFloat64Map(signals.SignalConfidences)
+	ctx.VSRSignalValues = cloneReplayFloat64Map(signals.SignalValues)
 
 	if signals.JailbreakDetected {
 		ctx.JailbreakDetected = signals.JailbreakDetected
@@ -99,6 +112,17 @@ func (r *OpenAIRouter) applySignalResultsToContext(ctx *RequestContext, signals 
 	r.setModalityFromSignals(ctx, signals.MatchedModalityRules)
 }
 
+func cloneReplayFloat64Map(values map[string]float64) map[string]float64 {
+	if values == nil {
+		return nil
+	}
+	cloned := make(map[string]float64, len(values))
+	for key, value := range values {
+		cloned[key] = value
+	}
+	return cloned
+}
+
 func collectMatchedSignalRules(signals *classification.SignalResults) []string {
 	allMatchedRules := []string{}
 	allMatchedRules = append(allMatchedRules, signals.MatchedKeywordRules...)
@@ -106,11 +130,18 @@ func collectMatchedSignalRules(signals *classification.SignalResults) []string {
 	allMatchedRules = append(allMatchedRules, signals.MatchedDomainRules...)
 	allMatchedRules = append(allMatchedRules, signals.MatchedFactCheckRules...)
 	allMatchedRules = append(allMatchedRules, signals.MatchedUserFeedbackRules...)
+	allMatchedRules = append(allMatchedRules, signals.MatchedReaskRules...)
 	allMatchedRules = append(allMatchedRules, signals.MatchedPreferenceRules...)
 	allMatchedRules = append(allMatchedRules, signals.MatchedLanguageRules...)
+	allMatchedRules = append(allMatchedRules, signals.MatchedContextRules...)
+	allMatchedRules = append(allMatchedRules, signals.MatchedStructureRules...)
+	allMatchedRules = append(allMatchedRules, signals.MatchedComplexityRules...)
 	allMatchedRules = append(allMatchedRules, signals.MatchedModalityRules...)
+	allMatchedRules = append(allMatchedRules, signals.MatchedAuthzRules...)
 	allMatchedRules = append(allMatchedRules, signals.MatchedJailbreakRules...)
 	allMatchedRules = append(allMatchedRules, signals.MatchedPIIRules...)
+	allMatchedRules = append(allMatchedRules, signals.MatchedKBRules...)
+	allMatchedRules = append(allMatchedRules, signals.MatchedProjectionRules...)
 	return allMatchedRules
 }
 

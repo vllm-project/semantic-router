@@ -255,11 +255,6 @@ spec:
           loraName: "science-expert"
           useReasoning: false
       plugins:
-        - type: "pii"
-          configuration:
-            enabled: true
-            pii_types_allowed:
-              - "ORGANIZATION"  # Allow - scientific terms like "photosynthesis" falsely detected as ORG
         - type: "system_prompt"
           configuration:
             enabled: true
@@ -463,11 +458,6 @@ spec:
           loraName: "science-expert"
           useReasoning: false
       plugins:
-        - type: "pii"
-          configuration:
-            enabled: true
-            pii_types_allowed:
-              - "GPE"  # Allow - country/city names like "France" in general knowledge questions
         - type: "semantic-cache"
           configuration:
             enabled: true

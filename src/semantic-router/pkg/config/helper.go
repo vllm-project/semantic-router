@@ -81,10 +81,30 @@ func (c *RouterConfig) GetModelForDecisionIndex(index int) string {
 	return c.DefaultModel
 }
 
+// resolveModelConfig looks up a model by name, falling back to a reverse
+// lookup through ExternalModelIDs (provider_model_id) when the name is not
+// a direct key in ModelConfig. This handles the case where the Envoy AI
+// Gateway rewrites the model field to the provider model ID.
+func (c *RouterConfig) resolveModelConfig(modelName string) (ModelParams, bool) {
+	if params, ok := c.ModelConfig[modelName]; ok {
+		return params, true
+	}
+	for _, params := range c.ModelConfig {
+		for _, extID := range params.ExternalModelIDs {
+			if extID == modelName {
+				return params, true
+			}
+		}
+	}
+	return ModelParams{}, false
+}
+
 // GetModelPricing returns pricing per 1M tokens and its currency for the given model.
 // The currency indicates the unit of the returned rates (e.g., "USD").
+// Accepts both short names ("claude-haiku-4-5") and provider model IDs
+// ("eu.anthropic.claude-haiku-4-5-20251001-v1:0").
 func (c *RouterConfig) GetModelPricing(modelName string) (promptPer1M float64, completionPer1M float64, currency string, ok bool) {
-	if modelConfig, okc := c.ModelConfig[modelName]; okc {
+	if modelConfig, okc := c.resolveModelConfig(modelName); okc {
 		p := modelConfig.Pricing
 		// Treat an explicit zero-price entry as configured pricing when a currency is
 		// present so self-hosted/free models still produce cost=0 and savings data.
@@ -580,6 +600,7 @@ var providerTypeRegistry = map[string]providerTypeInfo{
 	"bedrock":      {AuthHeader: "Authorization", AuthPrefix: "Bearer", ChatPath: "/chat/completions"},
 	"gemini":       {AuthHeader: "Authorization", AuthPrefix: "Bearer", ChatPath: "/chat/completions"},
 	"vertex-ai":    {AuthHeader: "Authorization", AuthPrefix: "Bearer", ChatPath: "/chat/completions"},
+	"minimax":      {AuthHeader: "Authorization", AuthPrefix: "Bearer", ChatPath: "/v1/chat/completions"},
 }
 
 // ValidProviderTypes returns the set of recognised type strings (for error messages).

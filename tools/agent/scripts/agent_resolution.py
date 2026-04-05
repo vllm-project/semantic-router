@@ -9,6 +9,7 @@ import re
 import shlex
 import subprocess
 from collections.abc import Iterable
+from pathlib import Path
 
 from agent_context_pack import build_context_pack
 from agent_models import (
@@ -38,6 +39,23 @@ def normalize_changed_path(raw_path: str) -> str:
     while path.startswith("./"):
         path = path[2:]
     return path
+
+
+def load_changed_files(changed_files_path: str | None) -> str | None:
+    if not changed_files_path:
+        return None
+
+    path = Path(changed_files_path)
+    if not path.is_absolute():
+        path = REPO_ROOT / path
+
+    try:
+        return path.read_text(encoding="utf-8")
+    except OSError as exc:
+        reason = exc.strerror or str(exc)
+        raise ValueError(
+            f"unable to read changed files from '{path}': {reason}"
+        ) from exc
 
 
 def git_changed_files(base_ref: str | None) -> list[str]:
@@ -74,8 +92,16 @@ def git_changed_files(base_ref: str | None) -> list[str]:
     return split_changed_files(result.stdout)
 
 
-def get_changed_files(explicit: str | None, base_ref: str | None) -> list[str]:
-    files = split_changed_files(explicit)
+def get_changed_files(
+    explicit: str | None,
+    base_ref: str | None,
+    changed_files_path: str | None = None,
+) -> list[str]:
+    raw_changed_files = explicit
+    if raw_changed_files is None:
+        raw_changed_files = load_changed_files(changed_files_path)
+
+    files = split_changed_files(raw_changed_files)
     if files:
         return files
     return git_changed_files(base_ref)
@@ -109,6 +135,19 @@ def unique_preserve_order(values: Iterable[str]) -> list[str]:
             seen.add(value)
             result.append(value)
     return result
+
+
+DEFAULT_LOOP_MODE = "completion"
+DEFAULT_EXECUTION_PLAN_POLICY = "long_horizon"
+LOOP_MODE_PRIORITY = {
+    "lightweight": 0,
+    "completion": 1,
+}
+EXECUTION_PLAN_POLICY_PRIORITY = {
+    "none": 0,
+    "long_horizon": 1,
+    "always": 2,
+}
 
 
 def match_task_matrix_rules(
@@ -203,6 +242,27 @@ def is_doc_only_rule_set(matched_rules: list[dict]) -> bool:
     )
 
 
+def resolve_loop_mode(matched_rules: list[dict]) -> str:
+    if not matched_rules:
+        return DEFAULT_LOOP_MODE
+    return max(
+        (rule.get("loop_mode", DEFAULT_LOOP_MODE) for rule in matched_rules),
+        key=lambda mode: LOOP_MODE_PRIORITY.get(mode, -1),
+    )
+
+
+def resolve_execution_plan_policy(matched_rules: list[dict]) -> str:
+    if not matched_rules:
+        return DEFAULT_EXECUTION_PLAN_POLICY
+    return max(
+        (
+            rule.get("execution_plan_policy", DEFAULT_EXECUTION_PLAN_POLICY)
+            for rule in matched_rules
+        ),
+        key=lambda policy: EXECUTION_PLAN_POLICY_PRIORITY.get(policy, -1),
+    )
+
+
 def resolve_context(changed_files: list[str]) -> ResolvedContext:
     repo_manifest, task_matrix, e2e_map, _, _ = load_manifests()
     local_rule_path_set = local_agent_rule_paths(repo_manifest)
@@ -213,6 +273,8 @@ def resolve_context(changed_files: list[str]) -> ResolvedContext:
         resolve_e2e_profiles(changed_files, e2e_map, local_rule_path_set)
     )
     doc_only = is_doc_only_rule_set(matched_rules)
+    loop_mode = resolve_loop_mode(matched_rules)
+    execution_plan_policy = resolve_execution_plan_policy(matched_rules)
     if doc_only:
         local_profiles = []
     return ResolvedContext(
@@ -226,6 +288,8 @@ def resolve_context(changed_files: list[str]) -> ResolvedContext:
         workflow_integration_suites=unique_preserve_order(targeted_workflow_suites),
         ci_e2e_mode=ci_mode,
         doc_only=doc_only,
+        loop_mode=loop_mode,
+        execution_plan_policy=execution_plan_policy,
     )
 
 
@@ -339,7 +403,11 @@ def resolve_skill(changed_files: list[str], env_name: str | None) -> SkillResolu
     primary = resolve_primary_skill(changed_files)
     context = resolve_context(changed_files)
     impacted_surfaces = resolve_impacted_surfaces(changed_files)
-    fragment_names = list(primary.get("fragments", []))
+    fragment_names = resolve_active_fragments(
+        primary,
+        impacted_surfaces,
+        skill_lookup,
+    )
 
     if env_name:
         env = resolve_environment(env_name)
@@ -380,10 +448,35 @@ def resolve_skill(changed_files: list[str], env_name: str | None) -> SkillResolu
     )
 
 
+def resolve_active_fragments(
+    primary: dict,
+    impacted_surfaces: list[str],
+    skill_lookup: dict[str, dict],
+) -> list[str]:
+    active_fragments: list[str] = []
+    impacted_surface_set = set(impacted_surfaces)
+    if primary.get("auto_surface_fragments"):
+        for fragment_name, fragment in skill_lookup.items():
+            if fragment.get("category") != "fragments":
+                continue
+            owned_surfaces = set(fragment.get("owned_surfaces", []))
+            if not owned_surfaces or owned_surfaces.intersection(impacted_surface_set):
+                active_fragments.append(fragment_name)
+        return unique_preserve_order(active_fragments)
+
+    for fragment_name in primary.get("fragments", []):
+        fragment = skill_lookup.get(fragment_name)
+        if fragment is None:
+            continue
+        owned_surfaces = set(fragment.get("owned_surfaces", []))
+        if not owned_surfaces or owned_surfaces.intersection(impacted_surface_set):
+            active_fragments.append(fragment_name)
+    return unique_preserve_order(active_fragments)
+
+
 def build_validation_commands(
     env: EnvironmentResolution, context: ResolvedContext
 ) -> list[str]:
-    _, _, e2e_map, _, _ = load_manifests()
     commands = [*context.fast_tests, *context.feature_tests]
     if context.requires_local_smoke and env.local_env:
         commands.extend(
@@ -393,13 +486,6 @@ def build_validation_commands(
                 "make agent-smoke-local",
             ]
         )
-    for profile in context.local_e2e_profiles:
-        commands.append(f"make e2e-test E2E_PROFILE={profile} E2E_VERBOSE=true")
-    for suite_name in context.workflow_integration_suites:
-        suite = e2e_map.get("workflow_suite_rules", {}).get(suite_name, {})
-        local_command = suite.get("local_command")
-        if local_command:
-            commands.append(local_command)
     return unique_preserve_order(commands)
 
 

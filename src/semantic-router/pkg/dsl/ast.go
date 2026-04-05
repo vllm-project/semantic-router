@@ -31,20 +31,14 @@ type rawProgram struct {
 
 // rawTopLevel is a union for top-level declarations.
 type rawTopLevel struct {
-	Pos         lexer.Position
-	SignalGroup *rawSignalGroupDecl `parser:"  @@"`
-	Signal      *rawSignalDecl      `parser:"| @@"`
-	Route       *rawRouteDecl       `parser:"| @@"`
-	Model       *rawModelDecl       `parser:"| @@"`
-	Plugin      *rawPluginDecl      `parser:"| @@"`
-	TestBlock   *rawTestBlockDecl   `parser:"| @@"`
-}
-
-// rawSignalGroupDecl: SIGNAL_GROUP <name> { fields... }
-type rawSignalGroupDecl struct {
-	Pos    lexer.Position
-	Name   string        `parser:"'SIGNAL_GROUP' @(Ident | String)"`
-	Fields []*FieldEntry `parser:"'{' @@* '}'"`
+	Pos          lexer.Position
+	Signal       *rawSignalDecl       `parser:"  @@"`
+	Projection   *rawProjectionDecl   `parser:"| @@"`
+	Route        *rawRouteDecl        `parser:"| @@"`
+	DecisionTree *rawDecisionTreeDecl `parser:"| @@"`
+	Model        *rawModelDecl        `parser:"| @@"`
+	Plugin       *rawPluginDecl       `parser:"| @@"`
+	TestBlock    *rawTestBlockDecl    `parser:"| @@"`
 }
 
 // rawTestBlockDecl: TEST <name> { entries... }
@@ -69,12 +63,53 @@ type rawSignalDecl struct {
 	Fields     []*FieldEntry `parser:"'{' @@* '}'"`
 }
 
+// rawProjectionDecl: PROJECTION <partition|score|mapping> <name> { fields... }
+type rawProjectionDecl struct {
+	Pos    lexer.Position
+	Kind   string        `parser:"'PROJECTION' @('partition' | 'score' | 'mapping')"`
+	Name   string        `parser:"@(Ident | String)"`
+	Fields []*FieldEntry `parser:"'{' @@* '}'"`
+}
+
 // rawRouteDecl: ROUTE <name> (opts...) { body... }
 type rawRouteDecl struct {
 	Pos  lexer.Position
 	Name string          `parser:"'ROUTE' @(Ident | String)"`
 	Opts []*RouteOpt     `parser:"( '(' @@* ')' )?"`
 	Body []*rawRouteItem `parser:"'{' @@* '}'"`
+}
+
+// rawDecisionTreeDecl: DECISION_TREE <name> { IF ... ELSE IF ... ELSE ... }
+type rawDecisionTreeDecl struct {
+	Pos     lexer.Position
+	Name    string                     `parser:"'DECISION_TREE' @(Ident | String)"`
+	If      *rawDecisionTreeIfBranch   `parser:"'{' @@"`
+	ElseIfs []*rawDecisionTreeIfBranch `parser:"@@*"`
+	Else    *rawDecisionTreeElseBranch `parser:"@@ '}'"`
+}
+
+// rawDecisionTreeIfBranch represents IF/ELSE IF branches inside DECISION_TREE.
+type rawDecisionTreeIfBranch struct {
+	Pos       lexer.Position
+	Condition *BoolExprTop           `parser:"( 'IF' | 'ELSE' 'IF' ) @@"`
+	Body      []*rawDecisionTreeItem `parser:"'{' @@* '}'"`
+}
+
+// rawDecisionTreeElseBranch represents the terminal ELSE branch.
+type rawDecisionTreeElseBranch struct {
+	Pos  lexer.Position
+	Body []*rawDecisionTreeItem `parser:"'ELSE' '{' @@* '}'"`
+}
+
+// rawDecisionTreeItem is a route-like statement inside one DECISION_TREE branch.
+type rawDecisionTreeItem struct {
+	Pos         lexer.Position
+	Name        *string       `parser:"  'NAME' @(Ident | String)"`
+	Description *string       `parser:"| 'DESCRIPTION' @String"`
+	Tier        *int          `parser:"| 'TIER' @Int"`
+	Model       *rawModelList `parser:"| 'MODEL' @@"`
+	Algorithm   *rawAlgoSpec  `parser:"| 'ALGORITHM' @@"`
+	Plugin      *rawPluginRef `parser:"| 'PLUGIN' @@"`
 }
 
 // rawModelDecl: MODEL <name> { fields... }
@@ -93,13 +128,14 @@ type RouteOpt struct {
 
 // rawRouteItem: a single element inside a route body
 type rawRouteItem struct {
-	Pos       lexer.Position
-	Priority  *int          `parser:"  'PRIORITY' @Int"`
-	Tier      *int          `parser:"| 'TIER' @Int"`
-	When      *BoolExprTop  `parser:"| 'WHEN' @@"`
-	Model     *rawModelList `parser:"| 'MODEL' @@"`
-	Algorithm *rawAlgoSpec  `parser:"| 'ALGORITHM' @@"`
-	Plugin    *rawPluginRef `parser:"| 'PLUGIN' @@"`
+	Pos         lexer.Position
+	Priority    *int          `parser:"  'PRIORITY' @Int"`
+	Tier        *int          `parser:"| 'TIER' @Int"`
+	When        *BoolExprTop  `parser:"| 'WHEN' @@"`
+	Model       *rawModelList `parser:"| 'MODEL' @@"`
+	Algorithm   *rawAlgoSpec  `parser:"| 'ALGORITHM' @@"`
+	Plugin      *rawPluginRef `parser:"| 'PLUGIN' @@"`
+	Description *string       `parser:"| 'DESCRIPTION' @String"`
 }
 
 // rawPluginDecl: PLUGIN <name> <type> { fields... }
@@ -117,17 +153,17 @@ type rawPluginRef struct {
 	Fields []*FieldEntry `parser:"( '{' @@* '}' )?"`
 }
 
-// rawModelList: comma-separated model refs
+// rawModelList: comma-separated model refs (trailing comma tolerated)
 type rawModelList struct {
 	Pos    lexer.Position
-	Models []*rawModelRef `parser:"@@ ( ',' @@ )*"`
+	Models []*rawModelRef `parser:"@@ ( ',' @@ )* ','?"`
 }
 
-// rawModelRef: "model_name" (options...)?
+// rawModelRef: "model_name" or model_name (options...)?
 type rawModelRef struct {
 	Pos     lexer.Position
-	Model   string      `parser:"@String"`
-	Options []*ModelOpt `parser:"( '(' @@ ( ',' @@ )* ')' )?"`
+	Model   string      `parser:"@(String | Ident)"`
+	Options []*ModelOpt `parser:"( '(' @@ ( ',' @@ )* ','? ')' )?"`
 }
 
 // ModelOpt: key = value inside model options
@@ -165,11 +201,11 @@ type BoolFactor struct {
 	SignalRef *rawSignalRefExpr `parser:"| @@"`
 }
 
-// rawSignalRefExpr: signal_type("signal_name")
+// rawSignalRefExpr: signal_type("signal_name") or signal_type(signal_name)
 type rawSignalRefExpr struct {
 	Pos        lexer.Position
 	SignalType string `parser:"@Ident"`
-	SignalName string `parser:"'(' @String ')'"`
+	SignalName string `parser:"'(' @(String | Ident) ')'"`
 }
 
 // ---------- Field / Value (parsed by participle) ----------
@@ -203,18 +239,20 @@ type ArrayVal struct {
 
 // Program is the root AST node, representing a complete DSL file.
 type Program struct {
-	Signals      []*SignalDecl
-	SignalGroups []*SignalGroupDecl
-	Routes       []*RouteDecl
-	Models       []*ModelDecl
-	Plugins      []*PluginDecl
-	TestBlocks   []*TestBlockDecl
+	Signals              []*SignalDecl
+	ProjectionPartitions []*ProjectionPartitionDecl
+	ProjectionScores     []*ProjectionScoreDecl
+	ProjectionMappings   []*ProjectionMappingDecl
+	Routes               []*RouteDecl
+	Models               []*ModelDecl
+	Plugins              []*PluginDecl
+	TestBlocks           []*TestBlockDecl
 }
 
-// SignalGroupDecl declares a mutually exclusive partition of signals.
+// ProjectionPartitionDecl declares a mutually exclusive partition of signals.
 // When Semantics is "softmax_exclusive", the runtime applies Voronoi
 // normalization so that at most one member fires per query.
-type SignalGroupDecl struct {
+type ProjectionPartitionDecl struct {
 	Name        string
 	Semantics   string
 	Temperature float64
@@ -223,9 +261,54 @@ type SignalGroupDecl struct {
 	Pos         Position
 }
 
+// ProjectionScoreDecl defines a weighted derived score over base signals.
+type ProjectionScoreDecl struct {
+	Name   string
+	Method string
+	Inputs []*ProjectionScoreInputDecl
+	Pos    Position
+}
+
+// ProjectionScoreInputDecl is one weighted contribution to a projection score.
+type ProjectionScoreInputDecl struct {
+	SignalType  string
+	SignalName  string
+	KB          string
+	Metric      string
+	Weight      float64
+	ValueSource string
+	Match       float64
+	Miss        float64
+}
+
+// ProjectionMappingDecl maps one score into named routing outputs.
+type ProjectionMappingDecl struct {
+	Name        string
+	Source      string
+	Method      string
+	Calibration *ProjectionMappingCalibrationDecl
+	Outputs     []*ProjectionMappingOutputDecl
+	Pos         Position
+}
+
+// ProjectionMappingCalibrationDecl controls confidence derived from the mapped band.
+type ProjectionMappingCalibrationDecl struct {
+	Method string
+	Slope  float64
+}
+
+// ProjectionMappingOutputDecl defines one threshold band emitted by a mapping.
+type ProjectionMappingOutputDecl struct {
+	Name string
+	LT   *float64
+	LTE  *float64
+	GT   *float64
+	GTE  *float64
+}
+
 // TestBlockDecl declares expected routing outcomes for specific queries.
-// The validator runs them through the signal pipeline to catch conflicts
-// that static checks cannot find.
+// Native validation paths can run them through the routing signal pipeline
+// to catch conflicts that static checks cannot find.
 type TestBlockDecl struct {
 	Name    string
 	Entries []*TestEntry

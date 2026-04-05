@@ -413,8 +413,13 @@ func (uc *UnifiedClassifier) initializeLoRABindings() error {
 		return fmt.Errorf("loRA model paths not configured")
 	}
 
-	logging.Debugf("Initializing LoRA models: Intent=%s, PII=%s, Jailbreak=%s, Architecture=%s",
-		uc.loraModelPaths.IntentPath, uc.loraModelPaths.PIIPath, uc.loraModelPaths.SecurityPath, uc.loraModelPaths.Architecture)
+	logging.ComponentDebugEvent("classifier", "lora_bindings_init_started", map[string]interface{}{
+		"intent_model_ref":   uc.loraModelPaths.IntentPath,
+		"pii_model_ref":      uc.loraModelPaths.PIIPath,
+		"security_model_ref": uc.loraModelPaths.SecurityPath,
+		"architecture":       uc.loraModelPaths.Architecture,
+		"use_cpu":            true,
+	})
 
 	// Convert Go strings to C strings
 	cIntentPath := C.CString(uc.loraModelPaths.IntentPath)
@@ -442,7 +447,13 @@ func (uc *UnifiedClassifier) initializeLoRABindings() error {
 		return fmt.Errorf("c.init_lora_unified_classifier failed")
 	}
 
-	logging.Infof("LoRA C bindings initialized successfully")
+	logging.ComponentEvent("classifier", "lora_bindings_initialized", map[string]interface{}{
+		"intent_model_ref":   uc.loraModelPaths.IntentPath,
+		"pii_model_ref":      uc.loraModelPaths.PIIPath,
+		"security_model_ref": uc.loraModelPaths.SecurityPath,
+		"architecture":       uc.loraModelPaths.Architecture,
+		"use_cpu":            true,
+	})
 	return nil
 }
 

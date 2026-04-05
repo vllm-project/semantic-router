@@ -97,6 +97,21 @@ func validateConfigStructure(cfg *RouterConfig) error {
 	if hasLegacyLatencyRoutingConfig(cfg) {
 		return fmt.Errorf("legacy latency config is no longer supported; use decision.algorithm.type=latency_aware and remove signals.latency_rules / conditions.type=latency")
 	}
+	if err := validateDomainContracts(cfg); err != nil {
+		return err
+	}
+	if err := validateStructureContracts(cfg); err != nil {
+		return err
+	}
+	if err := validateReaskContracts(cfg); err != nil {
+		return err
+	}
+	if err := validateProjectionContracts(cfg); err != nil {
+		return err
+	}
+	if err := validateKnowledgeBaseContracts(cfg); err != nil {
+		return err
+	}
 	if err := validateDecisionContracts(cfg); err != nil {
 		return err
 	}

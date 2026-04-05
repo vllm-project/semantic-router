@@ -1,6 +1,7 @@
 import type { ToolCall } from '../tools'
 
 const TOOL_LABELS: Record<string, string> = {
+  calculate: 'Calculator',
   claw_create_team: 'Build Team',
   claw_create_worker: 'Hire Talent',
   claw_delete_team: 'Delete Team',
@@ -11,6 +12,10 @@ const TOOL_LABELS: Record<string, string> = {
   claw_list_workers: 'Browse Talent',
   claw_update_team: 'Update Team',
   claw_update_worker: 'Update Talent',
+  current_time: 'Current Time',
+  get_weather: 'Weather',
+  open_web: 'Web Page',
+  search_web: 'Web Search',
 }
 
 const STATUS_LABELS: Record<ToolCall['status'], string> = {
@@ -39,6 +44,9 @@ export function getToolSummary(toolName: string, args: Record<string, unknown> |
   const team = readStringField(args, 'team_name') || readStringField(args, 'team')
   const query = readStringField(args, 'query')
   const url = readStringField(args, 'url')
+  const location = readStringField(args, 'location')
+  const expression = readStringField(args, 'expression')
+  const timezone = readStringField(args, 'timezone')
 
   if (toolName === 'claw_create_worker') {
     return [name, role].filter(Boolean).join(' · ') || 'Preparing a talent profile'
@@ -52,12 +60,24 @@ export function getToolSummary(toolName: string, args: Record<string, unknown> |
     return `"${query}"`
   }
 
+  if (expression) {
+    return expression
+  }
+
+  if (location) {
+    return location
+  }
+
   if (url) {
     try {
       return new URL(url).hostname
     } catch {
       return url
     }
+  }
+
+  if (timezone) {
+    return timezone
   }
 
   if (team) {

@@ -334,7 +334,7 @@ const DashboardView: React.FC<DashboardViewProps> = ({
             <span className={styles.dashModeBtnIcon}>🤖</span>
             <span className={styles.dashModeBtnLabel}>Natural Language</span>
             <span className={styles.dashModeBtnDesc}>
-              AI-powered (coming soon)
+              Prompt-driven DSL draft generation
             </span>
           </button>
         </div>

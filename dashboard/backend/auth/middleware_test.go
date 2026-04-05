@@ -22,6 +22,8 @@ func TestRequiresAuthentication(t *testing.T) {
 		{path: "/api/auth/me", expected: true},
 		{path: "/api/status", expected: true},
 		{path: "/embedded/grafana/", expected: true},
+		{path: "/embedded/wizmap/", expected: true},
+		{path: "/embedded/wizmap/assets/index.js", expected: false},
 	}
 
 	for _, tc := range testCases {
@@ -79,6 +81,7 @@ func TestRequiredPermission(t *testing.T) {
 		{method: http.MethodPatch, path: "/api/admin/users/user-1", expected: PermUsersManage},
 		{method: http.MethodGet, path: "/api/status", expected: PermLogsRead},
 		{method: http.MethodGet, path: "/embedded/grafana/", expected: PermLogsRead},
+		{method: http.MethodGet, path: "/embedded/wizmap/", expected: PermConfigRead},
 		{method: http.MethodPost, path: "/api/setup/activate", expected: PermConfigWrite},
 		{method: http.MethodPost, path: "/api/setup/import-remote", expected: PermConfigWrite},
 		{method: http.MethodGet, path: "/api/mcp/servers", expected: PermMcpRead},

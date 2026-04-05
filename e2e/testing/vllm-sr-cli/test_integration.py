@@ -59,7 +59,13 @@ class TestServeIntegration(CLITestBase):
 
         if serve_process.poll() is not None:
             stdout, stderr = serve_process.communicate()
-            self.fail(f"Serve crashed: {stderr[:500] or stdout[:500]}")
+            if self.wait_for_container_running(timeout=self.CONTAINER_STARTUP_TIMEOUT):
+                print("  ✓ Serve command completed after launching the runtime")
+                return
+            self.fail(
+                "Serve exited before the runtime was ready: "
+                f"{stderr[:500] or stdout[:500]}"
+            )
 
         print(
             f"  Waiting for container (timeout: {self.CONTAINER_STARTUP_TIMEOUT}s)..."
@@ -230,7 +236,7 @@ class TestServeIntegration(CLITestBase):
 
             return_code, stdout, stderr = self.inspect_container(
                 "{{.Config.Env}}",
-                container_name=self.CONTAINER_NAME,
+                container_name=self.resolve_runtime_inspect_container_name(),
             )
             if return_code != 0:
                 self.fail(f"router container inspect failed: {stderr}")
@@ -290,7 +296,7 @@ class TestServeIntegration(CLITestBase):
         )
 
         # Step 1: Create a lean active config
-        self._create_minimal_config()
+        self.write_minimal_canonical_config()
 
         # Step 2: Try to serve with fake image and never policy
         fake_image = "fake-nonexistent-image:doesnotexist12345"
@@ -323,7 +329,7 @@ class TestServeIntegration(CLITestBase):
 
         try:
             # Step 1: Create a lean active config
-            self._create_minimal_config()
+            self.write_minimal_canonical_config()
 
             # Step 2: Run serve briefly with always policy
             # We use run_cli with a short timeout - if it accepts the flag, test passes

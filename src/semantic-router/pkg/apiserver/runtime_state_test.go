@@ -10,7 +10,9 @@ import (
 	"testing"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/routerruntime"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/services"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/vectorstore"
 )
 
 type fakeResolvedClassificationService struct {
@@ -56,6 +58,10 @@ func (s *fakeResolvedClassificationService) HasHallucinationDetector() bool  { r
 func (s *fakeResolvedClassificationService) HasHallucinationExplainer() bool { return true }
 func (s *fakeResolvedClassificationService) HasFeedbackDetector() bool       { return true }
 func (s *fakeResolvedClassificationService) UpdateConfig(newConfig *config.RouterConfig) {
+	s.updatedConfig = newConfig
+}
+
+func (s *fakeResolvedClassificationService) RefreshRuntimeConfig(newConfig *config.RouterConfig) {
 	s.updatedConfig = newConfig
 }
 
@@ -278,82 +284,31 @@ func TestBuildModelsInfoResponseUsesResolvedRuntimeConfig(t *testing.T) {
 	}
 }
 
-func TestHandleSystemPromptsUseResolvedRuntimeConfig(t *testing.T) {
-	staleCfg := testSystemPromptConfig("stale", "stale prompt", true, "replace")
-	liveCfg := testSystemPromptConfig("live", "live prompt", true, "insert")
+func TestRuntimeRegistryResolvesSharedDependencies(t *testing.T) {
+	cfg := &config.RouterConfig{}
+	memoryStore := newMockMemoryStore()
+	manager := &vectorstore.Manager{}
+	fileStore := &vectorstore.FileStore{}
+
+	registry := routerruntime.NewRegistry(cfg)
+	registry.SetMemoryStore(memoryStore)
+	registry.SetVectorStoreRuntime(&routerruntime.VectorStoreRuntime{
+		Manager:   manager,
+		FileStore: fileStore,
+	})
 
 	apiServer := &ClassificationAPIServer{
-		classificationSvc: services.NewPlaceholderClassificationService(),
-		config:            staleCfg,
-		runtimeConfig: newLiveRuntimeConfig(
-			staleCfg,
-			func() *config.RouterConfig { return liveCfg },
-			nil,
-		),
+		runtimeRegistry: registry,
 	}
 
-	req := httptest.NewRequest(http.MethodGet, "/config/system-prompts", nil)
-	rr := httptest.NewRecorder()
-	apiServer.handleGetSystemPrompts(rr, req)
-
-	if rr.Code != http.StatusOK {
-		t.Fatalf("expected status %d, got %d: %s", http.StatusOK, rr.Code, rr.Body.String())
+	if got := apiServer.currentMemoryStore(); got != memoryStore {
+		t.Fatalf("currentMemoryStore() = %v, want %v", got, memoryStore)
 	}
-
-	var resp SystemPromptsResponse
-	if err := json.Unmarshal(rr.Body.Bytes(), &resp); err != nil {
-		t.Fatalf("failed to decode response: %v", err)
+	if got := apiServer.currentVectorStoreManager(); got != manager {
+		t.Fatalf("currentVectorStoreManager() = %v, want %v", got, manager)
 	}
-
-	if len(resp.SystemPrompts) != 1 {
-		t.Fatalf("expected one system prompt, got %+v", resp.SystemPrompts)
-	}
-	if resp.SystemPrompts[0].Category != "live" || resp.SystemPrompts[0].Prompt != "live prompt" {
-		t.Fatalf("expected live prompt payload, got %+v", resp.SystemPrompts)
-	}
-}
-
-func TestHandleUpdateSystemPromptsUsesResolvedRuntimeConfig(t *testing.T) {
-	staleCfg := testSystemPromptConfig("stale", "stale prompt", true, "replace")
-	liveCfg := testSystemPromptConfig("live", "live prompt", true, "replace")
-	resolvedSvc := &fakeResolvedClassificationService{}
-
-	apiServer := &ClassificationAPIServer{
-		classificationSvc: resolvedSvc,
-		config:            staleCfg,
-		runtimeConfig: newLiveRuntimeConfig(
-			staleCfg,
-			func() *config.RouterConfig { return liveCfg },
-			resolvedSvc.UpdateConfig,
-		),
-	}
-
-	req := httptest.NewRequest(
-		http.MethodPut,
-		"/config/system-prompts",
-		bytes.NewBufferString(`{"category":"live","mode":"insert"}`),
-	)
-	req.Header.Set("Content-Type", "application/json")
-
-	rr := httptest.NewRecorder()
-	apiServer.handleUpdateSystemPrompts(rr, req)
-
-	if rr.Code != http.StatusOK {
-		t.Fatalf("expected status %d, got %d: %s", http.StatusOK, rr.Code, rr.Body.String())
-	}
-	if resolvedSvc.updatedConfig == nil {
-		t.Fatalf("expected runtime config update to be forwarded to classification service")
-	}
-
-	updatedDecision := resolvedSvc.updatedConfig.GetDecisionByName("live")
-	if updatedDecision == nil {
-		t.Fatalf("expected update to apply to live decision set")
-	}
-	if updatedDecision.GetSystemPromptMode() != "insert" {
-		t.Fatalf("expected updated mode to come from live config, got %q", updatedDecision.GetSystemPromptMode())
-	}
-	if resolvedSvc.updatedConfig.GetDecisionByName("stale") != nil {
-		t.Fatalf("did not expect stale fallback decision in updated config")
+	if got := apiServer.currentFileStore(); got != fileStore {
+		t.Fatalf("currentFileStore() = %v, want %v", got, fileStore)
 	}
 }
 
@@ -380,28 +335,6 @@ func testModelListConfig(autoModelName string, includeConfigModels bool, models 
 		RouterOptions: config.RouterOptions{
 			AutoModelName:             autoModelName,
 			IncludeConfigModelsInList: includeConfigModels,
-		},
-	}
-}
-
-func testSystemPromptConfig(category string, prompt string, enabled bool, mode string) *config.RouterConfig {
-	return &config.RouterConfig{
-		IntelligentRouting: config.IntelligentRouting{
-			Decisions: []config.Decision{
-				{
-					Name: category,
-					Plugins: []config.DecisionPlugin{
-						{
-							Type: "system_prompt",
-							Configuration: config.MustStructuredPayload(map[string]interface{}{
-								"system_prompt": prompt,
-								"enabled":       enabled,
-								"mode":          mode,
-							}),
-						},
-					},
-				},
-			},
 		},
 	}
 }

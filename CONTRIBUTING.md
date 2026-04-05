@@ -80,11 +80,16 @@ make agent-validate
 make agent-scorecard
 make agent-report ENV=cpu CHANGED_FILES="path/one,path/two"
 make agent-ci-lint CHANGED_FILES="path/one,path/two"
+make precommit-branch-gate
 make agent-ci-gate CHANGED_FILES="path/one,path/two"
+make agent-pr-gate
+make test-and-build-local
 make agent-feature-gate ENV=cpu CHANGED_FILES="path/one,path/two"
 ```
 
 Use `make agent-ci-lint` when you want to reproduce the same changed-file lint path that the CI pre-commit workflow runs, including the shared agent bootstrap toolchain and tracked-file codespell check.
+Use `make precommit-branch-gate` when you want the same local prelint gate the installed `pre-push` hook runs before a push or PR update.
+Use `make agent-pr-gate` when you want the repo-native local baseline for the PR jobs contributors most often miss: `Pre-commit / Run pre-commit hooks` and `Test And Build`.
 
 `ENV=amd` is required when platform-specific behavior changed.
 
@@ -221,11 +226,13 @@ brew install pre-commit
 **Step 2: Install pre-commit hooks for this repository**
 
 ```bash
-# Install pre-commit hooks
-pre-commit install
+# Install the repo-native pre-commit + pre-push hooks
+make precommit-install
 
 # Run all checks
 pre-commit run --all-files
+# OR
+make precommit-branch-gate
 # OR
 make precommit-local
 ```
@@ -267,10 +274,10 @@ make precommit-local
    - Unit tests for all components
 
 2. **Create a pull request** with:
-   - A classified PR title using the repository prefixes from [.github/PULL_REQUEST_TEMPLATE.md](.github/PULL_REQUEST_TEMPLATE.md), such as `[Doc] Clarify PR title guidance` or `[Router][CI/Build] Tighten affected test selection`
-   - Clear description of changes
+   - A module-aligned PR title using the repository prefixes from [.github/PULL_REQUEST_TEMPLATE.md](.github/PULL_REQUEST_TEMPLATE.md), such as `[Docs][CI/Build] Align PR template with vLLM` or `[Router][Dashboard] Tighten route visibility in the console`
+   - A clear `Purpose` section describing the change and affected module(s)
    - Reference to any related issues
-   - Test results and validation steps
+   - A `Test Plan` and `Test Result` section with the actual validation steps and outcomes
 
 3. **Address review feedback** promptly
 

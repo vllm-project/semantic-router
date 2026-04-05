@@ -74,18 +74,68 @@ func (d *decompiler) appendSignalsToProgram(prog *Program) {
 	d.appendCoreSignals(prog)
 	d.appendOperationalSignals(prog)
 	d.appendSafetySignals(prog)
-	d.appendSignalGroups(prog)
+	d.appendProjectionPartitions(prog)
+	d.appendProjectionScores(prog)
+	d.appendProjectionMappings(prog)
 }
 
-func (d *decompiler) appendSignalGroups(prog *Program) {
-	for _, sg := range d.cfg.SignalGroups {
-		prog.SignalGroups = append(prog.SignalGroups, &SignalGroupDecl{
-			Name:        sg.Name,
-			Semantics:   sg.Semantics,
-			Temperature: sg.Temperature,
-			Members:     sg.Members,
-			Default:     sg.Default,
+func (d *decompiler) appendProjectionPartitions(prog *Program) {
+	for _, partition := range d.cfg.Projections.Partitions {
+		prog.ProjectionPartitions = append(prog.ProjectionPartitions, &ProjectionPartitionDecl{
+			Name:        partition.Name,
+			Semantics:   partition.Semantics,
+			Temperature: partition.Temperature,
+			Members:     partition.Members,
+			Default:     partition.Default,
 		})
+	}
+}
+
+func (d *decompiler) appendProjectionScores(prog *Program) {
+	for _, score := range d.cfg.Projections.Scores {
+		decl := &ProjectionScoreDecl{
+			Name:   score.Name,
+			Method: score.Method,
+		}
+		for _, input := range score.Inputs {
+			decl.Inputs = append(decl.Inputs, &ProjectionScoreInputDecl{
+				SignalType:  input.Type,
+				SignalName:  input.Name,
+				KB:          input.KB,
+				Metric:      input.Metric,
+				Weight:      input.Weight,
+				ValueSource: input.ValueSource,
+				Match:       input.Match,
+				Miss:        input.Miss,
+			})
+		}
+		prog.ProjectionScores = append(prog.ProjectionScores, decl)
+	}
+}
+
+func (d *decompiler) appendProjectionMappings(prog *Program) {
+	for _, mapping := range d.cfg.Projections.Mappings {
+		decl := &ProjectionMappingDecl{
+			Name:   mapping.Name,
+			Source: mapping.Source,
+			Method: mapping.Method,
+		}
+		if mapping.Calibration != nil {
+			decl.Calibration = &ProjectionMappingCalibrationDecl{
+				Method: mapping.Calibration.Method,
+				Slope:  mapping.Calibration.Slope,
+			}
+		}
+		for _, output := range mapping.Outputs {
+			decl.Outputs = append(decl.Outputs, &ProjectionMappingOutputDecl{
+				Name: output.Name,
+				LT:   output.LT,
+				LTE:  output.LTE,
+				GT:   output.GT,
+				GTE:  output.GTE,
+			})
+		}
+		prog.ProjectionMappings = append(prog.ProjectionMappings, decl)
 	}
 }
 
@@ -105,6 +155,9 @@ func (d *decompiler) appendCoreSignals(prog *Program) {
 	for _, uf := range d.cfg.UserFeedbackRules {
 		prog.Signals = append(prog.Signals, d.userFeedbackToSignal(&uf))
 	}
+	for _, rule := range d.cfg.ReaskRules {
+		prog.Signals = append(prog.Signals, d.reaskToSignal(&rule))
+	}
 	for _, pref := range d.cfg.PreferenceRules {
 		prog.Signals = append(prog.Signals, d.preferenceToSignal(&pref))
 	}
@@ -116,6 +169,9 @@ func (d *decompiler) appendOperationalSignals(prog *Program) {
 	}
 	for _, ctx := range d.cfg.ContextRules {
 		prog.Signals = append(prog.Signals, d.contextToSignal(&ctx))
+	}
+	for _, structure := range d.cfg.StructureRules {
+		prog.Signals = append(prog.Signals, d.structureToSignal(&structure))
 	}
 	for _, comp := range d.cfg.ComplexityRules {
 		prog.Signals = append(prog.Signals, d.complexityToSignal(&comp))
@@ -134,6 +190,9 @@ func (d *decompiler) appendSafetySignals(prog *Program) {
 	}
 	for _, pii := range d.cfg.PIIRules {
 		prog.Signals = append(prog.Signals, d.piiToSignal(&pii))
+	}
+	for _, kb := range d.cfg.KBRules {
+		prog.Signals = append(prog.Signals, d.kbSignalToDecl(&kb))
 	}
 }
 

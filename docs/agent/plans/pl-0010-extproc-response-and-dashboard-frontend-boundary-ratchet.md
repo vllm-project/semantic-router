@@ -25,7 +25,7 @@
 
 - [x] `S001` Record the extproc response-pipeline and dashboard frontend boundary debts in canonical TD entries and create this execution plan.
 - [x] `S002` Tighten shared and local AGENT rules so the response-pipeline and dashboard frontend hotspot trees are explicit before code extraction starts.
-- [ ] `S003` Split extproc response ownership so provider normalization, non-streaming response shaping, replay/cache persistence, streaming finalization, and response warnings stop accumulating in the current response seams.
+- [x] `S003` Split extproc response ownership so provider normalization, non-streaming response shaping, replay/cache persistence, streaming finalization, and response warnings stop accumulating in the current response seams.
 - [ ] `S004` Narrow the dashboard frontend route shell so auth/setup gating, config-section routing, and shared layout composition stop growing in `App.tsx`.
 - [ ] `S005` Split dashboard overview/config and large interaction containers so page orchestration, helper shaping, and display fragments stop collapsing into `DashboardPage.tsx`, `ConfigPage.tsx`, `SetupWizardPage.tsx`, `ChatComponent.tsx`, and `ExpressionBuilder.tsx`.
 - [ ] `S006` Run the required harness and subsystem validation for the remaining work and close TD029 and TD030 when the narrowed seams are proven.
@@ -35,7 +35,9 @@
 - 2026-03-19: the latest design audit identified two additional subsystem-specific gaps not yet captured by TD023, TD024, or TD015: extproc response-phase collapse and dashboard frontend route/config/interaction collapse.
 - 2026-03-19: TD029 and TD030 were added so those active hotspots are no longer only implicit structural debt.
 - 2026-03-19: shared and local AGENT rules were updated so future edits discover the response-pipeline seam and dashboard frontend app-shell/page/component boundaries before widening them further.
-- Next loop target: start `S003` by separating extproc response normalization, streaming finalization, and warning/replay seams into narrower sibling modules with targeted tests.
+- 2026-03-19: `S003` completed: usage accounting, cache persistence, and memory scheduling extracted into `processor_res_usage.go`, `processor_res_cache.go`, and `processor_res_memory.go` with targeted test suites; pipeline and streaming orchestrators slimmed to thin dispatchers; extproc-local `AGENTS.md` updated with primary phase owners; TD029 closed.
+- 2026-04-03: ADR0006 now provides the shared cross-stack dependency direction for the remaining dashboard-side work in this plan; frontend and dashboard follow-up should continue to narrow interface surfaces instead of recreating control-plane logic in route or container hotspots.
+- Next loop target: `S004` dashboard frontend route shell narrowing.
 
 ## Decision Log
 
@@ -49,4 +51,4 @@
 - [../tech-debt/README.md](../tech-debt/README.md)
 - [../tech-debt/td-029-extproc-response-pipeline-phase-collapse.md](../tech-debt/td-029-extproc-response-pipeline-phase-collapse.md)
 - [../tech-debt/td-030-dashboard-frontend-config-and-interaction-slice-collapse.md](../tech-debt/td-030-dashboard-frontend-config-and-interaction-slice-collapse.md)
-- [../adr/README.md](../adr/README.md) (no dedicated ADR yet)
+- [../adr/adr-0006-platform-kernel-and-contract-first-control-planes.md](../adr/adr-0006-platform-kernel-and-contract-first-control-planes.md)

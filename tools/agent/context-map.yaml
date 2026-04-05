@@ -11,8 +11,6 @@ defaults:
   resume_refs:
     - path: docs/agent/plans/README.md
       reason: Use when the work needs a resumable execution loop across sessions or contributors.
-    - path: docs/agent/tech-debt-register.md
-      reason: Record durable code or spec gaps that remain after the change.
 
 rules:
   repo-docs:
@@ -37,6 +35,11 @@ surfaces:
   decision_logic:
     - path: docs/agent/playbooks/go-router.md
       reason: Router playbook for decision-layer changes.
+  routing_policy:
+    - path: docs/agent/playbooks/go-router.md
+      reason: Router playbook for decision and model-selection policy changes.
+    - path: docs/agent/module-boundaries.md
+      reason: Policy-layer boundaries between signal extraction, decision logic, and downstream model choice.
   algorithm_selection:
     - path: docs/agent/playbooks/go-router.md
       reason: Router playbook for model-selection changes.
@@ -60,6 +63,11 @@ surfaces:
   python_cli_runtime:
     - path: docs/agent/playbooks/vllm-sr-cli-docker.md
       reason: CLI runtime and canonical local image workflow.
+  dashboard_platform:
+    - path: docs/agent/repo-map.md
+      reason: Dashboard subsystem entrypoints and ownership.
+    - path: docs/agent/module-boundaries.md
+      reason: Dashboard frontend and backend boundary rules.
   dashboard_config_ui:
     - path: docs/agent/repo-map.md
       reason: Dashboard subsystem entrypoints and hotspots.
@@ -83,6 +91,11 @@ surfaces:
   deployment_profile_stack:
     - path: docs/agent/playbooks/e2e-selection.md
       reason: Deployment profiles are validated through the affected E2E profile map and execution policy.
+  k8s_platform:
+    - path: docs/agent/module-boundaries.md
+      reason: Kubernetes-facing control-plane and translation boundary guidance.
+    - path: docs/agent/playbooks/e2e-selection.md
+      reason: Kubernetes platform changes are validated through the affected profile map and execution policy.
   fleet_sim_runtime:
     - path: src/fleet-sim/AGENTS.md
       reason: Fleet simulator local rules and maintained package boundaries.
@@ -95,8 +108,6 @@ surfaces:
     - path: docs/agent/change-surfaces.md
       reason: Surface ownership and rule mapping for docs or example changes.
   harness_docs:
-    - path: docs/agent/skill-catalog.md
-      reason: Human-readable skill taxonomy behind task routing.
     - path: docs/agent/local-rules.md
       reason: Index of hotspot supplements that can narrow active context.
   harness_exec:

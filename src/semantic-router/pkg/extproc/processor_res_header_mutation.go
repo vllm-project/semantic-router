@@ -98,14 +98,22 @@ func buildResponseHeaderMutation(
 	builder.addJoined(headers.VSRMatchedDomains, ctx.VSRMatchedDomains)
 	builder.addJoined(headers.VSRMatchedFactCheck, ctx.VSRMatchedFactCheck)
 	builder.addJoined(headers.VSRMatchedUserFeedback, ctx.VSRMatchedUserFeedback)
+	builder.addJoined(headers.VSRMatchedReask, ctx.VSRMatchedReask)
 	builder.addJoined(headers.VSRMatchedPreference, ctx.VSRMatchedPreference)
 	builder.addJoined(headers.VSRMatchedLanguage, ctx.VSRMatchedLanguage)
 	builder.addJoined(headers.VSRMatchedContext, ctx.VSRMatchedContext)
 	builder.addInt(headers.VSRContextTokenCount, ctx.VSRContextTokenCount)
+	builder.addJoined(headers.VSRMatchedStructure, ctx.VSRMatchedStructure)
 	builder.addJoined(headers.VSRMatchedComplexity, ctx.VSRMatchedComplexity)
+	builder.addJoined(headers.VSRMatchedModality, ctx.VSRMatchedModality)
 	builder.addJoined(headers.VSRMatchedAuthz, ctx.VSRMatchedAuthz)
 	builder.addJoined(headers.VSRMatchedJailbreak, ctx.VSRMatchedJailbreak)
 	builder.addJoined(headers.VSRMatchedPII, ctx.VSRMatchedPII)
+	builder.addJoined(headers.VSRMatchedKB, ctx.VSRMatchedKB)
+	builder.addJoined(headers.VSRMatchedProjection, ctx.VSRMatchedProjection)
 	builder.addString(headers.RouterReplayID, ctx.RouterReplayID)
+	if ctx.VSRCacheSimilarity > 0 {
+		builder.addFloat("x-vsr-cache-similarity", float64(ctx.VSRCacheSimilarity))
+	}
 	return builder.mutation()
 }

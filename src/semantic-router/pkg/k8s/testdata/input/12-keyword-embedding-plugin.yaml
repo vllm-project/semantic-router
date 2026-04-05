@@ -50,7 +50,7 @@ spec:
 
   decisions:
     - name: "security_alert"
-      description: "Security-related queries with jailbreak protection"
+      description: "Security-related queries with guided handling"
       priority: 100
       signals:
         operator: "AND"
@@ -64,10 +64,6 @@ spec:
           use_reasoning: true
           reasoning_effort: "high"
       plugins:
-        - type: "jailbreak"
-          configuration:
-            enabled: true
-            threshold: 0.90
         - type: "system_prompt"
           configuration:
             system_prompt: "You are a security expert. Provide helpful security guidance while being cautious about potential misuse."
@@ -78,4 +74,3 @@ spec:
                 value: "high"
               - name: "X-Route-Type"
                 value: "keyword-embedding"
-

@@ -2,25 +2,25 @@
 
 ## Overview
 
-`router_replay` is a route-local plugin for capturing replay/debug artifacts.
+`router_replay` is a route-local plugin for overriding replay/debug capture on one route.
 
 It aligns to `config/plugin/router-replay/debug.yaml`.
 
 ## Key Advantages
 
-- Keeps replay capture local to routes under active debugging or audit.
+- Lets one route override the router-wide replay default.
 - Supports request and response body controls.
 - Makes storage limits explicit instead of hidden.
 
 ## What Problem Does It Solve?
 
-Replay capture is useful, but not every route should record the same volume of data. `router_replay` lets one route opt into replay behavior without globalizing the storage cost.
+Replay capture is useful, but some routes need different capture policy than the router-wide default. `router_replay` lets one route opt out or override request/response body capture limits without changing global replay storage settings.
 
 ## When to Use
 
-- one route is under debugging, audit, or controlled replay analysis
+- one route should override the router-wide replay policy
 - capture limits should be explicit per route
-- replay should be enabled for selected traffic only
+- replay should be disabled for a specific route while staying on elsewhere
 
 ## Configuration
 
@@ -30,9 +30,18 @@ Use this fragment under `routing.decisions[].plugins`:
 plugin:
   type: router_replay
   configuration:
+    enabled: false
+```
+
+Use this fragment when one route needs custom capture settings:
+
+```yaml
+plugin:
+  type: router_replay
+  configuration:
     enabled: true
-    max_records: 5000
+    max_records: 10000
     capture_request_body: true
-    capture_response_body: false
-    max_body_bytes: 65536
+    capture_response_body: true
+    max_body_bytes: 4096
 ```

@@ -1,13 +1,13 @@
 package extproc
 
 import (
-	"errors"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 
-	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/cache"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/routerreplay"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/routerreplay/store"
 )
 
 // TestParseStreamingChunk tests the parseStreamingChunk function
@@ -92,281 +92,114 @@ func TestParseStreamingChunk_MalformedJSON(t *testing.T) {
 	assert.Equal(t, "Existing content", ctx.StreamingContent)
 }
 
-func TestCacheReconstructedStreamingResponseUsesAddEntry(t *testing.T) {
-	mockCache := &mockStreamingCache{}
-	router := &OpenAIRouter{Cache: mockCache}
+func TestParseStreamingChunk_CapturesToolCalls(t *testing.T) {
+	router := &OpenAIRouter{}
 	ctx := &RequestContext{
-		RequestID:    "req-1",
-		RequestModel: "test-model",
-		RequestQuery: "hello",
+		StreamingMetadata:  make(map[string]interface{}),
+		StreamingToolCalls: make(map[int]*StreamingToolCallState),
 	}
 
-	err := router.cacheReconstructedStreamingResponse(ctx, []byte(`{"ok":true}`))
-	assert.NoError(t, err)
-	assert.True(t, mockCache.addEntryCalled)
-	assert.False(t, mockCache.updateCalled)
-	assert.JSONEq(t, `{}`, string(mockCache.addEntryRequestBody))
+	chunk1 := `data: {"id":"chatcmpl-123","object":"chat.completion.chunk","created":1234567890,"model":"test-model","choices":[{"index":0,"delta":{"tool_calls":[{"index":0,"id":"call_weather","type":"function","function":{"name":"get_weather","arguments":"{\"location\":\""}}]},"finish_reason":null}]}
+
+`
+	router.parseStreamingChunk(chunk1, ctx)
+
+	chunk2 := "data: {\"id\":\"chatcmpl-123\",\"object\":\"chat.completion.chunk\",\"created\":1234567890,\"model\":\"test-model\",\"choices\":[{\"index\":0,\"delta\":{\"tool_calls\":[{\"index\":0,\"function\":{\"arguments\":\"San Francisco\\\"}\"}}]},\"finish_reason\":\"tool_calls\"}]}\n\n"
+	router.parseStreamingChunk(chunk2, ctx)
+
+	if assert.Contains(t, ctx.StreamingToolCalls, 0) {
+		assert.Equal(t, "call_weather", ctx.StreamingToolCalls[0].ID)
+		assert.Equal(t, "get_weather", ctx.StreamingToolCalls[0].Name)
+		assert.JSONEq(t, `{"location":"San Francisco"}`, ctx.StreamingToolCalls[0].Arguments)
+	}
+	assert.Equal(t, "tool_calls", ctx.StreamingMetadata["finish_reason"])
 }
 
-func TestCacheReconstructedStreamingResponseFallsBackToUpdate(t *testing.T) {
-	mockCache := &mockStreamingCache{addEntryErr: errors.New("boom")}
-	router := &OpenAIRouter{Cache: mockCache}
-	ctx := &RequestContext{
-		RequestID:           "req-1",
-		RequestModel:        "test-model",
-		RequestQuery:        "hello",
-		OriginalRequestBody: []byte(`{"messages":[]}`),
+func TestFinalizeStreamingResponseRecordsReplayUsageForToolCallsOnly(t *testing.T) {
+	recorder := routerreplay.NewRecorder(store.NewMemoryStore(10, 0))
+	recorder.SetCapturePolicy(false, true, 4096)
+
+	replayID, err := recorder.AddRecord(routerreplay.RoutingRecord{
+		ID:        "replay-stream-tool-call",
+		RequestID: "req-stream-tool-call",
+		Decision:  "default_route",
+	})
+	if !assert.NoError(t, err) {
+		return
 	}
 
-	err := router.cacheReconstructedStreamingResponse(ctx, []byte(`{"ok":true}`))
-	assert.NoError(t, err)
-	assert.True(t, mockCache.addEntryCalled)
-	assert.True(t, mockCache.updateCalled)
-	assert.JSONEq(t, `{"messages":[]}`, string(mockCache.addEntryRequestBody))
-}
-
-func TestCacheReconstructedStreamingResponseUpdatesWithoutQueryMetadata(t *testing.T) {
-	mockCache := &mockStreamingCache{}
-	router := &OpenAIRouter{Cache: mockCache}
-	ctx := &RequestContext{RequestID: "req-1"}
-
-	err := router.cacheReconstructedStreamingResponse(ctx, []byte(`{"ok":true}`))
-	assert.NoError(t, err)
-	assert.False(t, mockCache.addEntryCalled)
-	assert.True(t, mockCache.updateCalled)
-}
-
-func TestCacheReconstructedStreamingResponseSkipsWithoutRequestID(t *testing.T) {
-	mockCache := &mockStreamingCache{}
-	router := &OpenAIRouter{Cache: mockCache}
-	ctx := &RequestContext{RequestModel: "test-model", RequestQuery: "hello"}
-
-	err := router.cacheReconstructedStreamingResponse(ctx, []byte(`{"ok":true}`))
-	assert.NoError(t, err)
-	assert.False(t, mockCache.addEntryCalled)
-	assert.False(t, mockCache.updateCalled)
-}
-
-type mockStreamingCache struct {
-	addEntryCalled      bool
-	updateCalled        bool
-	addEntryRequestBody []byte
-	addEntryErr         error
-	updateErr           error
-}
-
-func (m *mockStreamingCache) IsEnabled() bool { return true }
-
-func (m *mockStreamingCache) CheckConnection() error { return nil }
-
-func (m *mockStreamingCache) AddPendingRequest(
-	_ string,
-	_ string,
-	_ string,
-	_ []byte,
-	_ int,
-) error {
-	return nil
-}
-
-func (m *mockStreamingCache) UpdateWithResponse(_ string, _ []byte, _ int) error {
-	m.updateCalled = true
-	return m.updateErr
-}
-
-func (m *mockStreamingCache) AddEntry(
-	_ string,
-	_ string,
-	_ string,
-	requestBody []byte,
-	_ []byte,
-	_ int,
-) error {
-	m.addEntryCalled = true
-	m.addEntryRequestBody = append([]byte(nil), requestBody...)
-	return m.addEntryErr
-}
-
-func (m *mockStreamingCache) FindSimilar(_ string, _ string) ([]byte, bool, error) {
-	return nil, false, nil
-}
-
-func (m *mockStreamingCache) FindSimilarWithThreshold(
-	_ string,
-	_ string,
-	_ float32,
-) ([]byte, bool, error) {
-	return nil, false, nil
-}
-
-func (m *mockStreamingCache) Close() error { return nil }
-
-func (m *mockStreamingCache) GetStats() cache.CacheStats { return cache.CacheStats{} }
-
-func TestCacheReconstructedStreamingResponse_SkipsWhenDecisionCacheDisabled(t *testing.T) {
-	mockCache := &mockStreamingCache{}
-	cfg := &config.RouterConfig{
-		SemanticCache: config.SemanticCache{Enabled: true},
-		IntelligentRouting: config.IntelligentRouting{
-			Decisions: []config.Decision{
-				{
-					Name:      "no-cache-decision",
-					ModelRefs: []config.ModelRef{{Model: "test"}},
-					// No semantic-cache plugin
-				},
-			},
-		},
-	}
-	router := &OpenAIRouter{Cache: mockCache, Config: cfg}
-	ctx := &RequestContext{
-		RequestID:               "req-1",
-		RequestModel:            "test-model",
-		RequestQuery:            "hello",
-		VSRSelectedDecisionName: "no-cache-decision",
-	}
-
-	err := router.cacheReconstructedStreamingResponse(ctx, []byte(`{"ok":true}`))
-	assert.NoError(t, err)
-	assert.False(t, mockCache.addEntryCalled, "should not call AddEntry when decision has no semantic-cache plugin")
-	assert.False(t, mockCache.updateCalled, "should not call UpdateWithResponse when decision has no semantic-cache plugin")
-}
-
-func TestCacheReconstructedStreamingResponse_SkipsWhenDecisionCacheExplicitlyDisabled(t *testing.T) {
-	mockCache := &mockStreamingCache{}
-	cfg := &config.RouterConfig{
-		SemanticCache: config.SemanticCache{Enabled: true},
-		IntelligentRouting: config.IntelligentRouting{
-			Decisions: []config.Decision{
-				{
-					Name:      "disabled-cache-decision",
-					ModelRefs: []config.ModelRef{{Model: "test"}},
-					Plugins: []config.DecisionPlugin{
-						{
-							Type:          "semantic-cache",
-							Configuration: config.MustStructuredPayload(map[string]interface{}{"enabled": false}),
+	router := &OpenAIRouter{
+		ReplayRecorder: recorder,
+		Config: &config.RouterConfig{
+			BackendModels: config.BackendModels{
+				ModelConfig: map[string]config.ModelParams{
+					"test-model": {
+						Pricing: config.ModelPricing{
+							Currency:        "USD",
+							PromptPer1M:     1,
+							CompletionPer1M: 2,
+						},
+					},
+					"expensive-model": {
+						Pricing: config.ModelPricing{
+							Currency:        "USD",
+							PromptPer1M:     4,
+							CompletionPer1M: 8,
 						},
 					},
 				},
 			},
 		},
 	}
-	router := &OpenAIRouter{Cache: mockCache, Config: cfg}
 	ctx := &RequestContext{
-		RequestID:               "req-1",
-		RequestModel:            "test-model",
-		RequestQuery:            "hello",
-		VSRSelectedDecisionName: "disabled-cache-decision",
-	}
-
-	err := router.cacheReconstructedStreamingResponse(ctx, []byte(`{"ok":true}`))
-	assert.NoError(t, err)
-	assert.False(t, mockCache.addEntryCalled, "should not call AddEntry when decision has semantic-cache disabled")
-	assert.False(t, mockCache.updateCalled, "should not call UpdateWithResponse when decision has semantic-cache disabled")
-}
-
-func TestCacheReconstructedStreamingResponse_StoresWhenDecisionCacheEnabled(t *testing.T) {
-	mockCache := &mockStreamingCache{}
-	cfg := &config.RouterConfig{
-		SemanticCache: config.SemanticCache{Enabled: true},
-		IntelligentRouting: config.IntelligentRouting{
-			Decisions: []config.Decision{
-				{
-					Name:      "cache-decision",
-					ModelRefs: []config.ModelRef{{Model: "test"}},
-					Plugins: []config.DecisionPlugin{
-						{
-							Type:          "semantic-cache",
-							Configuration: config.MustStructuredPayload(map[string]interface{}{"enabled": true}),
-						},
-					},
-				},
+		RequestID:            "req-stream-tool-call",
+		RequestModel:         "test-model",
+		RouterReplayID:       replayID,
+		RouterReplayRecorder: recorder,
+		StreamingMetadata: map[string]interface{}{
+			"id":            "chatcmpl-123",
+			"model":         "test-model",
+			"created":       int64(1234567890),
+			"finish_reason": "tool_calls",
+			"usage": map[string]interface{}{
+				"prompt_tokens":     float64(10),
+				"completion_tokens": float64(2),
+				"total_tokens":      float64(12),
+			},
+		},
+		StreamingToolCalls: map[int]*StreamingToolCallState{
+			0: {
+				ID:        "call_weather",
+				Name:      "get_weather",
+				Arguments: "{\"location\":\"San Francisco\"}",
 			},
 		},
 	}
-	router := &OpenAIRouter{Cache: mockCache, Config: cfg}
-	ctx := &RequestContext{
-		RequestID:               "req-1",
-		RequestModel:            "test-model",
-		RequestQuery:            "hello",
-		VSRSelectedDecisionName: "cache-decision",
+
+	router.finalizeStreamingResponse(ctx)
+
+	record, found := recorder.GetRecord(replayID)
+	if !assert.True(t, found) {
+		return
 	}
 
-	err := router.cacheReconstructedStreamingResponse(ctx, []byte(`{"ok":true}`))
-	assert.NoError(t, err)
-	assert.True(t, mockCache.addEntryCalled, "should call AddEntry when decision has semantic-cache enabled")
-}
-
-func TestCacheStreamingSkippedWhenRAGContextPresent(t *testing.T) {
-	mockCache := &mockStreamingCache{}
-	router := &OpenAIRouter{Cache: mockCache}
-	ctx := &RequestContext{
-		RequestID:           "req-rag",
-		RequestModel:        "test-model",
-		RequestQuery:        "what is our refund policy",
-		StreamingComplete:   true,
-		StreamingContent:    "Based on your documents...",
-		StreamingMetadata:   map[string]interface{}{"id": "chatcmpl-1", "model": "test-model", "created": int64(1234567890)},
-		RAGRetrievedContext: "Internal policy doc: refunds within 30 days",
+	assert.NotEmpty(t, record.ResponseBody)
+	assert.Contains(t, record.ResponseBody, `"tool_calls"`)
+	assert.Contains(t, record.ResponseBody, `"finish_reason":"tool_calls"`)
+	if assert.NotNil(t, record.PromptTokens) {
+		assert.Equal(t, 10, *record.PromptTokens)
 	}
-
-	err := router.cacheStreamingResponse(ctx)
-	assert.NoError(t, err)
-	assert.False(t, mockCache.addEntryCalled, "cache write must be skipped when RAG context is present")
-	assert.False(t, mockCache.updateCalled, "cache update must be skipped when RAG context is present")
-}
-
-func TestCacheStreamingSkippedWhenMemoryContextPresent(t *testing.T) {
-	mockCache := &mockStreamingCache{}
-	router := &OpenAIRouter{Cache: mockCache}
-	ctx := &RequestContext{
-		RequestID:         "req-mem",
-		RequestModel:      "test-model",
-		RequestQuery:      "remind me what we discussed",
-		StreamingComplete: true,
-		StreamingContent:  "Last time you mentioned...",
-		StreamingMetadata: map[string]interface{}{"id": "chatcmpl-2", "model": "test-model", "created": int64(1234567890)},
-		MemoryContext:     "User previously discussed project deadlines",
+	if assert.NotNil(t, record.CompletionTokens) {
+		assert.Equal(t, 2, *record.CompletionTokens)
 	}
-
-	err := router.cacheStreamingResponse(ctx)
-	assert.NoError(t, err)
-	assert.False(t, mockCache.addEntryCalled, "cache write must be skipped when memory context is present")
-	assert.False(t, mockCache.updateCalled, "cache update must be skipped when memory context is present")
-}
-
-func TestCacheStreamingSkippedWhenPIIDetected(t *testing.T) {
-	mockCache := &mockStreamingCache{}
-	router := &OpenAIRouter{Cache: mockCache}
-	ctx := &RequestContext{
-		RequestID:         "req-pii",
-		RequestModel:      "test-model",
-		RequestQuery:      "parse this email",
-		StreamingComplete: true,
-		StreamingContent:  "The email contains...",
-		StreamingMetadata: map[string]interface{}{"id": "chatcmpl-3", "model": "test-model", "created": int64(1234567890)},
-		PIIDetected:       true,
+	if assert.NotNil(t, record.TotalTokens) {
+		assert.Equal(t, 12, *record.TotalTokens)
 	}
-
-	err := router.cacheStreamingResponse(ctx)
-	assert.NoError(t, err)
-	assert.False(t, mockCache.addEntryCalled, "cache write must be skipped when PII is detected")
-	assert.False(t, mockCache.updateCalled, "cache update must be skipped when PII is detected")
-}
-
-func TestCacheStreamingAllowedForGenericRequest(t *testing.T) {
-	mockCache := &mockStreamingCache{}
-	router := &OpenAIRouter{Cache: mockCache}
-	ctx := &RequestContext{
-		RequestID:         "req-generic",
-		RequestModel:      "test-model",
-		RequestQuery:      "explain quantum computing",
-		StreamingComplete: true,
-		StreamingContent:  "Quantum computing uses qubits...",
-		StreamingMetadata: map[string]interface{}{"id": "chatcmpl-4", "model": "test-model", "created": int64(1234567890)},
+	if assert.NotNil(t, record.ActualCost) {
+		assert.Greater(t, *record.ActualCost, 0.0)
 	}
-
-	err := router.cacheStreamingResponse(ctx)
-	assert.NoError(t, err)
-	assert.True(t, mockCache.addEntryCalled || mockCache.updateCalled,
-		"cache write must proceed for generic requests without personalized context")
+	if assert.NotNil(t, record.ToolTrace) {
+		assert.Equal(t, "LLM Tool Call", record.ToolTrace.Flow)
+		assert.Len(t, record.ToolTrace.Steps, 1)
+	}
 }

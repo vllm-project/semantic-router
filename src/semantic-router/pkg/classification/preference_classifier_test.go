@@ -1,6 +1,7 @@
 package classification
 
 import (
+	"errors"
 	"strings"
 	"testing"
 
@@ -151,5 +152,89 @@ func TestPreferenceClassifier_DefaultsToContrastiveWhenConfigOmitted(t *testing.
 
 	if result.Preference != "code_generation" {
 		t.Fatalf("expected code_generation, got %s", result.Preference)
+	}
+}
+
+func TestContrastivePreferenceClassifier_BelowThresholdReturnsNoMatchError(t *testing.T) {
+	reset := SetEmbeddingFuncForTests(func(text string, modelType string, targetDim int) (*candle_binding.EmbeddingOutput, error) {
+		switch text {
+		case "Writes code":
+			return &candle_binding.EmbeddingOutput{Embedding: []float32{1, 0}}, nil
+		case "please help with this task":
+			return &candle_binding.EmbeddingOutput{Embedding: []float32{0.6, 0.8}}, nil
+		default:
+			return &candle_binding.EmbeddingOutput{Embedding: []float32{0.1, 0.1}}, nil
+		}
+	})
+	defer reset()
+
+	rules := []config.PreferenceRule{{
+		Name:        "code_generation",
+		Description: "Writes code",
+		Threshold:   0.7,
+	}}
+
+	localCfg := &config.PreferenceModelConfig{
+		UseContrastive: prefBoolPtr(true),
+	}
+
+	classifier, err := NewPreferenceClassifier(nil, rules, localCfg)
+	if err != nil {
+		t.Fatalf("failed to create contrastive classifier: %v", err)
+	}
+
+	result, err := classifier.Classify(`[{"role":"user","content":"please help with this task"}]`)
+	if err == nil {
+		t.Fatal("expected below-threshold preference classification to return an error")
+	}
+	if result != nil {
+		t.Fatalf("expected nil result on below-threshold no-match, got %+v", result)
+	}
+	if !errors.Is(err, ErrPreferenceBelowThreshold) {
+		t.Fatalf("expected ErrPreferenceBelowThreshold, got %v", err)
+	}
+}
+
+func TestContrastivePreferenceClassifier_MarginThresholdRejectsAmbiguousWinner(t *testing.T) {
+	reset := SetEmbeddingFuncForTests(func(text string, modelType string, targetDim int) (*candle_binding.EmbeddingOutput, error) {
+		switch text {
+		case "Writes code":
+			return &candle_binding.EmbeddingOutput{Embedding: []float32{1, 0}}, nil
+		case "Fixes bugs":
+			return &candle_binding.EmbeddingOutput{Embedding: []float32{0.98, 0.2}}, nil
+		case "please help with implementation":
+			return &candle_binding.EmbeddingOutput{Embedding: []float32{0.99, 0.05}}, nil
+		default:
+			return &candle_binding.EmbeddingOutput{Embedding: []float32{0.1, 0.1}}, nil
+		}
+	})
+	defer reset()
+
+	classifier, err := NewContrastivePreferenceClassifierWithConfig(
+		[]config.PreferenceRule{
+			{Name: "code_generation", Description: "Writes code"},
+			{Name: "bug_fixing", Description: "Fixes bugs"},
+		},
+		"qwen3",
+		config.PrototypeScoringConfig{MarginThreshold: 0.01},
+	)
+	if err != nil {
+		t.Fatalf("failed to create contrastive classifier: %v", err)
+	}
+
+	details, err := classifier.ClassifyDetailed("please help with implementation")
+	if err != nil {
+		t.Fatalf("ClassifyDetailed failed: %v", err)
+	}
+	if details.Margin >= 0.01 {
+		t.Fatalf("expected ambiguous preference margin below threshold, got %+v", details)
+	}
+
+	result, err := classifier.Classify("please help with implementation")
+	if err == nil {
+		t.Fatalf("expected margin threshold rejection, got result %+v", result)
+	}
+	if !errors.Is(err, ErrPreferenceBelowThreshold) {
+		t.Fatalf("expected ErrPreferenceBelowThreshold, got %v", err)
 	}
 }

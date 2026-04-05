@@ -13,34 +13,30 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/memory"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/metrics"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/routerruntime"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/selection"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/services"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/startupstatus"
 )
 
-// Init starts the API server
-func Init(configPath string, port int, enableSystemPromptAPI bool) error {
+// Init starts the API server.
+func Init(configPath string, port int) error {
+	return InitWithRuntime(configPath, port, nil)
+}
+
+// InitWithRuntime starts the API server using the shared runtime registry when
+// one is available. Legacy callers can continue using Init and fall back to the
+// compatibility globals.
+func InitWithRuntime(configPath string, port int, runtimeRegistry *routerruntime.Registry) error {
 	// Get the global configuration instead of loading from file
 	// This ensures we use the same config as the rest of the application
-	cfg := config.Get()
+	cfg := resolveAPIServerConfig(runtimeRegistry)
 	if cfg == nil {
 		return fmt.Errorf("configuration not initialized")
 	}
 
-	// Create classification service - try to get global service with retry
-	classificationSvc := initClassify(5, 500*time.Millisecond)
-	if classificationSvc == nil {
-		// If no global service exists, try auto-discovery unified classifier
-		logging.Infof("No global classification service found, attempting auto-discovery...")
-		autoSvc, err := services.NewClassificationServiceWithAutoDiscovery(cfg)
-		if err != nil {
-			logging.Warnf("Auto-discovery failed: %v, using placeholder service", err)
-			classificationSvc = services.NewPlaceholderClassificationService()
-		} else {
-			logging.Infof("Auto-discovery successful, using unified classifier service")
-			classificationSvc = autoSvc
-		}
-	}
+	classificationSvc := resolveClassificationService(cfg, runtimeRegistry)
+	classificationSvc = ensureClassificationService(cfg, runtimeRegistry, classificationSvc)
 
 	// Initialize batch metrics configuration
 	if cfg.API.BatchClassification.Metrics.Enabled {
@@ -59,29 +55,42 @@ func Init(configPath string, port int, enableSystemPromptAPI bool) error {
 	// Get memory store if available (set by ExtProc router during init)
 	var memoryStore memory.Store
 	if shouldInitMemoryStore(cfg) {
-		memoryStore = initMemoryStore(5, 500*time.Millisecond)
+		memoryStore = resolveMemoryStore(cfg, runtimeRegistry)
 		if memoryStore != nil {
-			logging.Infof("Memory management API enabled")
+			logging.ComponentEvent("apiserver", "memory_api_enabled", map[string]interface{}{})
 		} else {
-			logging.Infof("Memory store not available, memory management API will return 503")
+			logging.ComponentWarnEvent("apiserver", "memory_api_degraded", map[string]interface{}{
+				"reason": "memory_store_unavailable",
+				"status": 503,
+			})
 		}
 	} else {
-		logging.Infof("Memory disabled in config, skipping memory store initialization")
+		logging.ComponentEvent("apiserver", "memory_api_disabled", map[string]interface{}{
+			"reason": "config_disabled",
+		})
 	}
 
 	liveClassificationSvc := newLiveClassificationService(
 		classificationSvc,
-		func() classificationService { return services.GetGlobalClassificationService() },
+		func() classificationService {
+			if runtimeRegistry != nil {
+				if svc := runtimeRegistry.ClassificationService(); svc != nil {
+					return svc
+				}
+			}
+			return services.GetGlobalClassificationService()
+		},
 	)
 
 	// Create server instance
 	apiServer := &ClassificationAPIServer{
 		classificationSvc:     liveClassificationSvc,
 		config:                cfg,
-		runtimeConfig:         newLiveRuntimeConfig(cfg, config.Get, liveClassificationSvc.UpdateConfig),
+		runtimeConfig:         newLiveRuntimeConfig(cfg, buildConfigResolver(runtimeRegistry), buildConfigUpdater(runtimeRegistry, liveClassificationSvc)),
+		runtimeRegistry:       runtimeRegistry,
 		configPath:            configPath,
 		memoryStore:           memoryStore,
-		enableSystemPromptAPI: enableSystemPromptAPI,
+		knowledgeBaseMapCache: newKnowledgeBaseMapCache(),
 	}
 
 	// Create HTTP server with routes
@@ -94,8 +103,84 @@ func Init(configPath string, port int, enableSystemPromptAPI bool) error {
 		IdleTimeout:  60 * time.Second,
 	}
 
-	logging.Infof("Classification API server listening on port %d", port)
+	logging.ComponentEvent("apiserver", "server_listening", map[string]interface{}{
+		"port": port,
+	})
 	return server.ListenAndServe()
+}
+
+func resolveAPIServerConfig(runtimeRegistry *routerruntime.Registry) *config.RouterConfig {
+	if runtimeRegistry != nil {
+		if cfg := runtimeRegistry.CurrentConfig(); cfg != nil {
+			return cfg
+		}
+	}
+	return config.Get()
+}
+
+func resolveClassificationService(
+	cfg *config.RouterConfig,
+	runtimeRegistry *routerruntime.Registry,
+) *services.ClassificationService {
+	if runtimeRegistry != nil {
+		if svc := runtimeRegistry.ClassificationService(); svc != nil {
+			return svc
+		}
+	}
+	return initClassify(5, 500*time.Millisecond)
+}
+
+func ensureClassificationService(
+	cfg *config.RouterConfig,
+	runtimeRegistry *routerruntime.Registry,
+	svc *services.ClassificationService,
+) *services.ClassificationService {
+	if svc != nil {
+		return svc
+	}
+
+	// If no global service exists, try auto-discovery unified classifier.
+	logging.ComponentEvent("apiserver", "classification_service_autodiscovery_started", map[string]interface{}{})
+	autoSvc, err := services.NewClassificationServiceWithAutoDiscovery(cfg)
+	if err != nil {
+		logging.ComponentWarnEvent("apiserver", "classification_service_autodiscovery_failed", map[string]interface{}{
+			"error":             err.Error(),
+			"using_placeholder": true,
+		})
+		return services.NewPlaceholderClassificationService()
+	}
+
+	logging.ComponentEvent("apiserver", "classification_service_autodiscovery_succeeded", map[string]interface{}{})
+	if runtimeRegistry != nil {
+		runtimeRegistry.SetClassificationService(autoSvc)
+	}
+	return autoSvc
+}
+
+func resolveMemoryStore(cfg *config.RouterConfig, runtimeRegistry *routerruntime.Registry) memory.Store {
+	if runtimeRegistry != nil {
+		if store := runtimeRegistry.MemoryStore(); store != nil {
+			return store
+		}
+	}
+	return initMemoryStore(5, 500*time.Millisecond)
+}
+
+func buildConfigResolver(runtimeRegistry *routerruntime.Registry) func() *config.RouterConfig {
+	if runtimeRegistry == nil {
+		return config.Get
+	}
+	return runtimeRegistry.CurrentConfig
+}
+
+func buildConfigUpdater(
+	runtimeRegistry *routerruntime.Registry,
+	liveClassificationSvc classificationService,
+) func(*config.RouterConfig) {
+	if runtimeRegistry == nil {
+		return liveClassificationSvc.RefreshRuntimeConfig
+	}
+	return runtimeRegistry.RefreshRuntimeConfig
 }
 
 // initClassify attempts to get the global classification service with retry logic
@@ -106,12 +191,18 @@ func initClassify(maxRetries int, retryInterval time.Duration) *services.Classif
 		}
 
 		if i < maxRetries-1 { // Don't sleep on the last attempt
-			logging.Infof("Global classification service not ready, retrying in %v (attempt %d/%d)", retryInterval, i+1, maxRetries)
+			logging.ComponentDebugEvent("apiserver", "classification_service_retry_pending", map[string]interface{}{
+				"retry_interval_ms": retryInterval.Milliseconds(),
+				"attempt":           i + 1,
+				"max_retries":       maxRetries,
+			})
 			time.Sleep(retryInterval)
 		}
 	}
 
-	logging.Warnf("Failed to find global classification service after %d attempts", maxRetries)
+	logging.ComponentWarnEvent("apiserver", "classification_service_unavailable", map[string]interface{}{
+		"max_retries": maxRetries,
+	})
 	return nil
 }
 
@@ -124,12 +215,18 @@ func initMemoryStore(maxRetries int, retryInterval time.Duration) memory.Store {
 		}
 
 		if i < maxRetries-1 {
-			logging.Infof("Global memory store not ready, retrying in %v (attempt %d/%d)", retryInterval, i+1, maxRetries)
+			logging.ComponentDebugEvent("apiserver", "memory_store_retry_pending", map[string]interface{}{
+				"retry_interval_ms": retryInterval.Milliseconds(),
+				"attempt":           i + 1,
+				"max_retries":       maxRetries,
+			})
 			time.Sleep(retryInterval)
 		}
 	}
 
-	logging.Warnf("Memory store not available after %d attempts", maxRetries)
+	logging.ComponentWarnEvent("apiserver", "memory_store_unavailable", map[string]interface{}{
+		"max_retries": maxRetries,
+	})
 	return nil
 }
 
@@ -216,15 +313,19 @@ func (s *ClassificationAPIServer) registerInfoRoutes(mux *http.ServeMux) {
 
 func (s *ClassificationAPIServer) registerConfigRoutes(mux *http.ServeMux) {
 	// Configuration endpoints
-	mux.HandleFunc("GET /config/classification", s.handleGetConfig)
-	mux.HandleFunc("PUT /config/classification", s.handleUpdateConfig)
-
-	// Config deploy/rollback endpoints (Router writes its own config file)
+	mux.HandleFunc("GET /config/kbs", s.handleListKnowledgeBases)
+	mux.HandleFunc("POST /config/kbs", s.handleCreateKnowledgeBase)
+	mux.HandleFunc("GET /config/kbs/{name}", s.handleGetKnowledgeBase)
+	mux.HandleFunc("GET /config/kbs/{name}/map/metadata", s.handleGetKnowledgeBaseMapMetadata)
+	mux.HandleFunc("GET /config/kbs/{name}/map/data.ndjson", s.handleGetKnowledgeBaseMapData)
+	mux.HandleFunc("PUT /config/kbs/{name}", s.handleUpdateKnowledgeBase)
+	mux.HandleFunc("DELETE /config/kbs/{name}", s.handleDeleteKnowledgeBase)
 	mux.HandleFunc("GET /config/router", s.handleConfigGet)
-	mux.HandleFunc("POST /config/deploy", s.handleConfigDeploy)
-	mux.HandleFunc("POST /config/rollback", s.handleConfigRollback)
-	mux.HandleFunc("GET /config/versions", s.handleConfigVersions)
-	s.registerOptionalSystemPromptRoutes(mux)
+	mux.HandleFunc("PATCH /config/router", s.handleConfigPatch)
+	mux.HandleFunc("PUT /config/router", s.handleConfigPut)
+	mux.HandleFunc("POST /config/router/rollback", s.handleConfigRollback)
+	mux.HandleFunc("GET /config/router/versions", s.handleConfigVersions)
+	mux.HandleFunc("GET /config/hash", s.handleConfigHash)
 }
 
 func (s *ClassificationAPIServer) registerMemoryRoutes(mux *http.ServeMux) {
@@ -233,17 +334,6 @@ func (s *ClassificationAPIServer) registerMemoryRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /v1/memory", s.handleListMemories)
 	mux.HandleFunc("DELETE /v1/memory/{id}", s.handleDeleteMemory)
 	mux.HandleFunc("DELETE /v1/memory", s.handleDeleteMemoriesByScope)
-}
-
-func (s *ClassificationAPIServer) registerOptionalSystemPromptRoutes(mux *http.ServeMux) {
-	// System prompt configuration endpoints (only if explicitly enabled)
-	if s.enableSystemPromptAPI {
-		logging.Infof("System prompt configuration endpoints enabled")
-		mux.HandleFunc("GET /config/system-prompts", s.handleGetSystemPrompts)
-		mux.HandleFunc("PUT /config/system-prompts", s.handleUpdateSystemPrompts)
-	} else {
-		logging.Infof("System prompt configuration endpoints disabled for security")
-	}
 }
 
 // handleHealth handles health check requests

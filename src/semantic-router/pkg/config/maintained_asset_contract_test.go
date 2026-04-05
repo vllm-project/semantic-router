@@ -11,6 +11,7 @@ import (
 
 var maintainedFullConfigAssets = []string{
 	"deploy/recipes/balance.yaml",
+	"deploy/recipes/feedback/feedback-router.yaml",
 	"deploy/kubernetes/istio/config.yaml",
 	"deploy/kubernetes/llmd-base/llmd+public-llm/config.yaml.local",
 	"deploy/kubernetes/llmd-base/llmd+public-llm/config.yaml.openai",
@@ -175,6 +176,7 @@ func assertNoLegacySteadyStateKeys(t *testing.T, rel string, raw map[string]inte
 		"categories",
 		"fact_check_rules",
 		"user_feedback_rules",
+		"reask_rules",
 		"preference_rules",
 		"language_rules",
 		"context_rules",

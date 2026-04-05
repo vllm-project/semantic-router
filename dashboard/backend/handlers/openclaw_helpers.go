@@ -38,6 +38,63 @@ func rewriteLoopbackHost(rawURL, containerName string) string {
 	return u.String()
 }
 
+func appendOpenClawV1Path(rawURL string) string {
+	if rawURL == "" {
+		return rawURL
+	}
+
+	u, err := url.Parse(rawURL)
+	if err != nil {
+		return rawURL
+	}
+
+	trimmedPath := strings.TrimRight(u.Path, "/")
+	if trimmedPath == "/v1" {
+		u.Path = "/v1"
+		return u.String()
+	}
+	if trimmedPath == "" {
+		u.Path = "/v1"
+		return u.String()
+	}
+
+	u.Path = trimmedPath + "/v1"
+	return u.String()
+}
+
+func openClawModelGatewayContainerName() string {
+	if candidate := strings.TrimSpace(os.Getenv("OPENCLAW_MODEL_GATEWAY_CONTAINER_NAME")); candidate != "" {
+		return candidate
+	}
+	if candidate := openClawContainerHostFromURL(strings.TrimSpace(os.Getenv("TARGET_ENVOY_URL"))); candidate != "" {
+		return candidate
+	}
+	if candidate := strings.TrimSpace(os.Getenv(envoyContainerNameEnv)); candidate != "" {
+		return candidate
+	}
+	if candidate := strings.TrimSpace(os.Getenv("OPENCLAW_DASHBOARD_CONTAINER_NAME")); candidate != "" {
+		return candidate
+	}
+	return vllmSrContainerName
+}
+
+func openClawContainerHostFromURL(rawURL string) string {
+	if rawURL == "" {
+		return ""
+	}
+
+	u, err := url.Parse(rawURL)
+	if err != nil {
+		return ""
+	}
+
+	host := strings.TrimSpace(u.Hostname())
+	if host == "" || host == "127.0.0.1" || host == "localhost" || host == "0.0.0.0" {
+		return ""
+	}
+	return host
+}
+
 // --- Helpers ---
 
 func sanitizeContainerName(raw string) string {

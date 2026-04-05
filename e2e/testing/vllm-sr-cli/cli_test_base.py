@@ -3,7 +3,7 @@
 Provides common utilities for testing CLI commands including:
 - Subprocess execution helpers
 - Temporary directory management
-- Docker/Podman container cleanup
+- Docker container cleanup
 - Logging and assertion helpers
 
 Signed-off-by: vLLM-SR Team
@@ -23,15 +23,31 @@ from urllib import request as urllib_request
 import yaml
 
 HTTP_STATUS_OK = 200
-SUPPORTED_CONTAINER_RUNTIMES = ("docker", "podman")
+
+
+def _coerce_timeout_stream(value: str | bytes | None) -> str:
+    """Normalize TimeoutExpired output/stderr values into text."""
+    if value is None:
+        return ""
+    if isinstance(value, bytes):
+        return value.decode(errors="replace")
+    return value
 
 
 class CLITestBase(unittest.TestCase):
     """Base class for vLLM-SR CLI tests."""
 
-    # Container name used by vllm-sr
+    # Historical single-container runtime name still cleaned up for local test hygiene.
     CONTAINER_NAME = "vllm-sr-container"
+    ROUTER_CONTAINER_NAME = "vllm-sr-router-container"
+    ENVOY_CONTAINER_NAME = "vllm-sr-envoy-container"
+    DASHBOARD_CONTAINER_NAME = "vllm-sr-dashboard-container"
     SIM_CONTAINER_NAME = "vllm-sr-sim-container"
+    AUXILIARY_CONTAINER_NAMES = (
+        "vllm-sr-grafana",
+        "vllm-sr-prometheus",
+        "vllm-sr-jaeger",
+    )
 
     # Default timeout for CLI commands
     DEFAULT_TIMEOUT = 60
@@ -74,21 +90,30 @@ class CLITestBase(unittest.TestCase):
 
     @classmethod
     def _detect_container_runtime(cls) -> str:
-        """Detect available container runtime (docker or podman)."""
+        """Detect the required Docker runtime for CLI tests."""
         # Check for explicit environment variable
         env_runtime = os.getenv("CONTAINER_RUNTIME")
         normalized_runtime = (env_runtime or "").lower()
-        if normalized_runtime in SUPPORTED_CONTAINER_RUNTIMES and shutil.which(
-            normalized_runtime
-        ):
-            return normalized_runtime
+        if normalized_runtime:
+            if normalized_runtime != "docker":
+                raise RuntimeError(
+                    f"CONTAINER_RUNTIME={normalized_runtime} is unsupported; "
+                    "CLI tests require Docker"
+                )
+            if shutil.which("docker"):
+                return "docker"
+            raise RuntimeError(
+                "CONTAINER_RUNTIME=docker was requested but docker is not in PATH"
+            )
 
         # Auto-detect
         if shutil.which("docker"):
             return "docker"
         if shutil.which("podman"):
-            return "podman"
-        raise RuntimeError("Neither docker nor podman found in PATH")
+            raise RuntimeError(
+                "Podman is installed but unsupported; CLI tests require Docker"
+            )
+        raise RuntimeError("Docker not found in PATH")
 
     @staticmethod
     def _run_subprocess(
@@ -114,13 +139,65 @@ class CLITestBase(unittest.TestCase):
     def _cleanup_container(cls):
         """Stop and remove any existing vllm-sr container."""
         runtime = cls.container_runtime
-        for container_name in (cls.CONTAINER_NAME, cls.SIM_CONTAINER_NAME):
+        managed_container_names = (
+            cls.CONTAINER_NAME,
+            cls.ROUTER_CONTAINER_NAME,
+            cls.ENVOY_CONTAINER_NAME,
+            cls.DASHBOARD_CONTAINER_NAME,
+            cls.SIM_CONTAINER_NAME,
+            *cls.AUXILIARY_CONTAINER_NAMES,
+        )
+        for container_name in managed_container_names:
             for command in (
                 [runtime, "stop", container_name],
                 [runtime, "rm", "-f", container_name],
             ):
                 with suppress(Exception):
                     cls._run_subprocess(command, timeout=30)
+
+    def _explicit_container_status(self, container_name: str) -> str:
+        """Get the status of one managed container."""
+        try:
+            result = self._run_subprocess(
+                [
+                    self.container_runtime,
+                    "ps",
+                    "-a",
+                    "--filter",
+                    f"name={container_name}",
+                    "--format",
+                    "{{.Status}}",
+                ],
+                timeout=10,
+            )
+            status = result.stdout.strip()
+            if not status:
+                return "not found"
+            if "Up" in status:
+                return "running"
+            if "Exited" in status:
+                return "exited"
+            if "Paused" in status:
+                return "paused"
+            return "unknown"
+        except Exception as e:
+            print(f"Failed to get container status: {e}")
+            return "error"
+
+    def _runtime_container_names(self) -> tuple[str, ...]:
+        """Return managed runtime containers in inspect/priority order."""
+        return (
+            self.ROUTER_CONTAINER_NAME,
+            self.DASHBOARD_CONTAINER_NAME,
+            self.ENVOY_CONTAINER_NAME,
+        )
+
+    def resolve_runtime_inspect_container_name(self) -> str:
+        """Pick the best runtime container for inspect/log assertions."""
+        for container_name in self._runtime_container_names():
+            if self._explicit_container_status(container_name) != "not found":
+                return container_name
+        return self.ROUTER_CONTAINER_NAME
 
     def run_cli(
         self,
@@ -176,9 +253,18 @@ class CLITestBase(unittest.TestCase):
 
             return result.returncode, stdout, stderr
 
-        except subprocess.TimeoutExpired:
+        except subprocess.TimeoutExpired as exc:
             print(f"Command timed out after {timeout}s")
-            return -1, "", f"Command timed out after {timeout} seconds"
+            stdout = _coerce_timeout_stream(
+                getattr(exc, "stdout", None) or getattr(exc, "output", None)
+            )
+            stderr = _coerce_timeout_stream(getattr(exc, "stderr", None))
+            timeout_message = f"Command timed out after {timeout} seconds"
+            if stderr:
+                stderr = f"{stderr.rstrip()}\n{timeout_message}"
+            else:
+                stderr = timeout_message
+            return -1, stdout, stderr
         except Exception as e:
             print(f"Command failed with exception: {e}")
             return -1, "", str(e)
@@ -248,33 +334,29 @@ class CLITestBase(unittest.TestCase):
         Returns:
             'running', 'exited', 'paused', 'not found', or 'error'
         """
-        container_name = container_name or self.CONTAINER_NAME
-        try:
-            result = self._run_subprocess(
-                [
-                    self.container_runtime,
-                    "ps",
-                    "-a",
-                    "--filter",
-                    f"name={container_name}",
-                    "--format",
-                    "{{.Status}}",
-                ],
-                timeout=10,
-            )
-            status = result.stdout.strip()
-            if not status:
-                return "not found"
-            if "Up" in status:
-                return "running"
-            if "Exited" in status:
-                return "exited"
-            if "Paused" in status:
-                return "paused"
-            return "unknown"
-        except Exception as e:
-            print(f"Failed to get container status: {e}")
+        if container_name is not None:
+            return self._explicit_container_status(container_name)
+
+        statuses = {
+            name: self._explicit_container_status(name)
+            for name in self._runtime_container_names()
+        }
+        runtime_statuses = [
+            statuses[self.ROUTER_CONTAINER_NAME],
+            statuses[self.DASHBOARD_CONTAINER_NAME],
+            statuses[self.ENVOY_CONTAINER_NAME],
+        ]
+        if any(status == "running" for status in runtime_statuses):
+            return "running"
+        if any(status == "exited" for status in runtime_statuses):
+            return "exited"
+        if any(status == "paused" for status in runtime_statuses):
+            return "paused"
+        if any(status == "error" for status in runtime_statuses):
             return "error"
+        if any(status != "not found" for status in runtime_statuses):
+            return "unknown"
+        return "not found"
 
     def wait_for_container_running(
         self, timeout: int = 60, container_name: str | None = None
@@ -330,7 +412,7 @@ class CLITestBase(unittest.TestCase):
                     "logs",
                     "--tail",
                     str(tail),
-                    self.CONTAINER_NAME,
+                    self.resolve_runtime_inspect_container_name(),
                 ],
                 timeout=10,
             )
@@ -345,7 +427,7 @@ class CLITestBase(unittest.TestCase):
         container_name: str | None = None,
     ) -> tuple[int, str, str]:
         """Inspect a managed container with the active runtime."""
-        container_name = container_name or self.CONTAINER_NAME
+        container_name = container_name or self.resolve_runtime_inspect_container_name()
         result = self._run_subprocess(
             [
                 self.container_runtime,

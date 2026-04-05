@@ -1,11 +1,9 @@
 package testcases
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
-	"io"
 	"net/http"
 	"os"
 	"strings"
@@ -19,7 +17,7 @@ import (
 func init() {
 	pkgtestcases.Register("pii-detection", pkgtestcases.TestCase{
 		Description: "Test PII detection and blocking functionality",
-		Tags:        []string{"ai-gateway", "security", "pii"},
+		Tags:        []string{"kubernetes", "security", "pii"},
 		Fn:          testPIIDetection,
 	})
 }
@@ -133,101 +131,40 @@ func testSinglePIIDetection(ctx context.Context, testCase PIITestCase, localPort
 		ExpectedBlocked: testCase.ExpectedBlocked,
 	}
 
-	// Create chat completion request
-	requestBody := map[string]interface{}{
-		"model": "MoM",
-		"messages": []map[string]string{
-			{"role": "user", "content": testCase.Question},
-		},
-	}
-
-	jsonData, err := json.Marshal(requestBody)
+	response, err := sendLocalChatCompletion(ctx, localPort, "MoM", testCase.Question, 30*time.Second)
 	if err != nil {
-		result.Error = fmt.Sprintf("failed to marshal request: %v", err)
+		result.Error = err.Error()
 		return result
 	}
 
-	// Send request
-	url := fmt.Sprintf("http://localhost:%s/v1/chat/completions", localPort)
-	req, err := http.NewRequestWithContext(ctx, "POST", url, bytes.NewBuffer(jsonData))
-	if err != nil {
-		result.Error = fmt.Sprintf("failed to create request: %v", err)
-		return result
-	}
-	req.Header.Set("Content-Type", "application/json")
-
-	httpClient := &http.Client{Timeout: 30 * time.Second}
-	resp, err := httpClient.Do(req)
-	if err != nil {
-		result.Error = fmt.Sprintf("failed to send request: %v", err)
-		return result
-	}
-	defer resp.Body.Close()
-
-	// Check response status (should be 200 OK even when blocked)
-	if resp.StatusCode != http.StatusOK {
-		bodyBytes, _ := io.ReadAll(resp.Body)
-
-		// Log detailed error information including headers
-		var errorMsg strings.Builder
-		errorMsg.WriteString(fmt.Sprintf("Unexpected status code: %d\n", resp.StatusCode))
-		errorMsg.WriteString(fmt.Sprintf("Response body: %s\n", string(bodyBytes)))
-		errorMsg.WriteString("Response headers:\n")
-		errorMsg.WriteString(formatResponseHeaders(resp.Header))
-
-		result.Error = errorMsg.String()
-
-		// Print detailed error to console for debugging
-		if verbose {
-			fmt.Printf("[Test] ✗ HTTP %d Error for: %s\n", resp.StatusCode, testCase.Description)
-			fmt.Printf("  Question: %s\n", testCase.Question)
-			fmt.Printf("  Response Headers:\n%s", formatResponseHeaders(resp.Header))
-			fmt.Printf("  Response Body: %s\n", string(bodyBytes))
-		}
-
+	if response.StatusCode != http.StatusOK {
+		result.Error = formatUnexpectedChatCompletionStatus(response)
+		logUnexpectedChatCompletionStatus(verbose, response, testCase.Description,
+			"Question: "+testCase.Question)
 		return result
 	}
 
-	// Check for PII detection using new signal-driven headers
-	// New architecture: when PII is detected and blocked, the fast_response plugin
-	// returns an ImmediateResponse with x-vsr-fast-response: true and
-	// x-vsr-selected-decision: <decision-name>.
-	// Note: x-vsr-matched-pii is only set in the response header phase (non-blocking path),
-	// it is NOT present in fast_response ImmediateResponse.
-	fastResponse := resp.Header.Get("x-vsr-fast-response")
-	selectedDecision := resp.Header.Get("x-vsr-selected-decision")
-	matchedPII := resp.Header.Get("x-vsr-matched-pii")
-	legacyPIIViolation := resp.Header.Get("x-vsr-pii-violation") // backward compat
-	// PII is blocked when: fast_response was triggered (ImmediateResponse),
-	// or legacy PII violation header is set, or matched-pii is present (non-blocking detection)
+	fastResponse := response.Headers.Get("x-vsr-fast-response")
+	selectedDecision := response.Headers.Get("x-vsr-selected-decision")
+	matchedPII := response.Headers.Get("x-vsr-matched-pii")
+	legacyPIIViolation := response.Headers.Get("x-vsr-pii-violation")
 	result.ActuallyBlocked = fastResponse == "true" || legacyPIIViolation == "true"
-	_ = selectedDecision // available for future decision-name based filtering
-	_ = matchedPII       // only present in non-blocking (pass-through) responses
-
-	// Verify response body contains expected message
-	bodyBytes, err := io.ReadAll(resp.Body)
-	if err != nil {
-		result.Error = fmt.Sprintf("failed to read response body: %v", err)
-		return result
-	}
+	_ = selectedDecision
+	_ = matchedPII
 
 	if result.ActuallyBlocked {
-		// In the new signal-driven architecture, the fast_response plugin returns
-		// a configurable message. We check for common PII block messages.
-		bodyStr := string(bodyBytes)
+		bodyStr := string(response.Body)
 		hasPIIMessage := strings.Contains(bodyStr, "personally identifiable information") ||
 			strings.Contains(bodyStr, "PII") ||
 			strings.Contains(bodyStr, "pii")
 		if !hasPIIMessage {
-			// Not necessarily an error in signal-driven mode, just log it
 			if verbose {
 				fmt.Printf("[Test] Note: PII blocked but response message may use custom fast_response text\n")
 			}
 		}
 	}
 
-	// Check if result matches expectation
-	result.Correct = (result.ActuallyBlocked == result.ExpectedBlocked)
+	result.Correct = result.ActuallyBlocked == result.ExpectedBlocked
 
 	if verbose {
 		if result.Correct {

@@ -31,6 +31,7 @@ const sidebars: SidebarsConfig = {
       label: 'Installation',
       items: [
         'installation/installation',
+        'installation/k8s/operator',
         'installation/configuration',
         {
           type: 'category',
@@ -70,7 +71,7 @@ const sidebars: SidebarsConfig = {
                 'tutorials/signal/heuristic/context',
                 'tutorials/signal/heuristic/keyword',
                 'tutorials/signal/heuristic/language',
-                'tutorials/signal/heuristic/modality',
+                'tutorials/signal/heuristic/structure',
               ],
             },
             {
@@ -80,13 +81,26 @@ const sidebars: SidebarsConfig = {
                 'tutorials/signal/learned/complexity',
                 'tutorials/signal/learned/domain',
                 'tutorials/signal/learned/embedding',
+                'tutorials/signal/learned/modality',
                 'tutorials/signal/learned/fact-check',
                 'tutorials/signal/learned/jailbreak',
                 'tutorials/signal/learned/pii',
                 'tutorials/signal/learned/preference',
+                'tutorials/signal/learned/reask',
+                'tutorials/signal/learned/kb',
                 'tutorials/signal/learned/user-feedback',
               ],
             },
+          ],
+        },
+        {
+          type: 'category',
+          label: 'Projections',
+          items: [
+            'tutorials/projection/overview',
+            'tutorials/projection/partitions',
+            'tutorials/projection/scores',
+            'tutorials/projection/mappings',
           ],
         },
         {
@@ -117,6 +131,7 @@ const sidebars: SidebarsConfig = {
                 'tutorials/algorithm/selection/kmeans',
                 'tutorials/algorithm/selection/knn',
                 'tutorials/algorithm/selection/latency-aware',
+                'tutorials/algorithm/selection/mlp',
                 'tutorials/algorithm/selection/rl-driven',
                 'tutorials/algorithm/selection/router-dc',
                 'tutorials/algorithm/selection/static',
@@ -146,7 +161,9 @@ const sidebars: SidebarsConfig = {
                 'tutorials/plugin/fast-response',
                 'tutorials/plugin/header-mutation',
                 'tutorials/plugin/image-gen',
+                'tutorials/plugin/request-params',
                 'tutorials/plugin/system-prompt',
+                'tutorials/plugin/tools',
               ],
             },
             {
@@ -165,8 +182,6 @@ const sidebars: SidebarsConfig = {
               items: [
                 'tutorials/plugin/content-safety',
                 'tutorials/plugin/hallucination',
-                'tutorials/plugin/jailbreak',
-                'tutorials/plugin/pii',
                 'tutorials/plugin/response-jailbreak',
               ],
             },
@@ -230,7 +245,7 @@ const sidebars: SidebarsConfig = {
       label: 'API Reference',
       items: [
         'api/router',
-        'api/classification',
+        'api/apiserver',
         'api/crd-reference',
       ],
     },
@@ -258,3 +273,5 @@ const sidebars: SidebarsConfig = {
 }
 
 export default sidebars
+
+// ci: trigger rerun

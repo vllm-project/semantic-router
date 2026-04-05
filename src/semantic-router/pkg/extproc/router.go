@@ -15,24 +15,28 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/ratelimit"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/routerreplay"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/routerruntime"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/selection"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/services"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/tools"
 )
 
 // OpenAIRouter is an Envoy ExtProc server that routes OpenAI API requests.
 type OpenAIRouter struct {
-	Config               *config.RouterConfig
-	CategoryDescriptions []string
-	Classifier           *classification.Classifier
-	Cache                cache.CacheBackend
-	ToolsDatabase        *tools.ToolsDatabase
-	ResponseAPIFilter    *ResponseAPIFilter
-	ReplayRecorder       *routerreplay.Recorder
+	Config                *config.RouterConfig
+	CategoryDescriptions  []string
+	Classifier            *classification.Classifier
+	ClassificationService *services.ClassificationService
+	Cache                 cache.CacheBackend
+	ToolsDatabase         *tools.ToolsDatabase
+	ResponseAPIFilter     *ResponseAPIFilter
+	ReplayRecorder        *routerreplay.Recorder
+	ReplayStoreShared     bool
 	// ModelSelector is the registry of advanced model selection algorithms
 	// initialized from config.IntelligentRouting.ModelSelection.
 	ModelSelector   *selection.Registry
 	ReplayRecorders map[string]*routerreplay.Recorder
-	MemoryStore     *memory.MilvusStore
+	MemoryStore     memory.Store
 	MemoryExtractor *memory.MemoryExtractor
 
 	// CredentialResolver resolves per-user LLM API keys from multiple sources
@@ -42,6 +46,10 @@ type OpenAIRouter struct {
 	// RateLimiter enforces per-user/model rate limits from multiple sources
 	// (Envoy RLS -> local limiter).
 	RateLimiter *ratelimit.RateLimitResolver
+
+	// RuntimeRegistry exposes runtime-owned services without forcing request-time
+	// paths back through package-global API-server state.
+	RuntimeRegistry *routerruntime.Registry
 }
 
 // Ensure OpenAIRouter implements the ext_proc calls.

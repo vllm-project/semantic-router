@@ -17,19 +17,36 @@ export const DefaultRouteNode = memo<NodeProps<DefaultRouteNodeData>>(({ data })
     <div
       className={`${styles.defaultRouteNode} ${isHighlighted ? styles.highlighted : ''}`}
     >
+      <Handle type="target" position={Position.Left} />
+
       <div className={styles.defaultRouteHeader}>
-        <span className={styles.defaultRouteIcon}>🔄</span>
-        <span className={styles.defaultRouteTitle}>{label}</span>
+        <span className={styles.decisionIcon}>↪</span>
+        <span className={styles.decisionName} title={label}>{label}</span>
+        <span className={styles.decisionPriority}>Default</span>
       </div>
-      <div className={styles.defaultRouteInfo}>
-        <span className={styles.defaultRouteLabel}>Fallback</span>
-        {defaultModel && (
-          <span className={styles.defaultRouteModel} title={defaultModel}>
-            → {defaultModel.length > 15 ? defaultModel.slice(0, 15) + '...' : defaultModel}
+
+      <div className={styles.rulesSection}>
+        <div className={styles.conditionTree}>
+          <div className={`${styles.conditionRow} ${styles.conditionLeafRow}`}>
+            <span className={styles.conditionText}>No decision matched</span>
+          </div>
+        </div>
+      </div>
+
+      <div className={styles.decisionMeta}>
+        <span className={styles.metaTag}>Fallback path</span>
+      </div>
+
+      <div className={styles.modelsList}>
+        {defaultModel ? (
+          <span className={styles.modelItem} title={defaultModel}>
+            {defaultModel.split('/').pop() || defaultModel}
           </span>
+        ) : (
+          <span className={styles.moreModels}>No default model</span>
         )}
       </div>
-      <Handle type="target" position={Position.Left} />
+
       <Handle type="source" position={Position.Right} />
     </div>
   )

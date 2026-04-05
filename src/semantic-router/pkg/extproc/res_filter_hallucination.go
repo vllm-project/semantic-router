@@ -8,7 +8,6 @@ import (
 
 	core "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
 	ext_proc "github.com/envoyproxy/go-control-plane/envoy/service/ext_proc/v3"
-	"github.com/openai/openai-go"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/headers"
@@ -34,14 +33,12 @@ func (r *OpenAIRouter) performHallucinationDetection(ctx *RequestContext, respon
 	// Check if NLI is enabled for this decision
 	useNLI := r.isNLIEnabledForDecision(ctx.VSRSelectedDecision)
 
-	logging.Infof("Hallucination detection: decision=%v, useNLI=%v",
+	logging.Debugf("Hallucination detection: decision=%v, useNLI=%v",
 		ctx.VSRSelectedDecision != nil, useNLI)
 
 	start := time.Now()
 
 	if useNLI {
-		// Use enhanced detection with NLI explanations
-		logging.Infof("Using NLI-enhanced hallucination detection")
 		return r.performHallucinationDetectionWithNLI(ctx, assistantContent)
 	}
 
@@ -78,15 +75,8 @@ func (r *OpenAIRouter) performHallucinationDetection(ctx *RequestContext, respon
 
 	if result.HallucinationDetected {
 		metrics.RecordPluginExecution("hallucination", decisionName, "detected", latency)
-		logging.Warnf("Hallucination detected: confidence=%.3f, unsupported_spans=%d",
-			result.Confidence, len(result.UnsupportedSpans))
-
-		// Check action from decision plugin config
-		action := r.getHallucinationActionForDecision(ctx.VSRSelectedDecision)
-
-		// For header/body/none actions, allow response through
-		// Warning will be handled in processor_res_body.go
-		logging.Infof("Hallucination detected, action is '%s'", action)
+		logging.Warnf("Hallucination detected: confidence=%.3f, unsupported_spans=%d, action=%s",
+			result.Confidence, len(result.UnsupportedSpans), r.getHallucinationActionForDecision(ctx.VSRSelectedDecision))
 	} else {
 		metrics.RecordPluginExecution("hallucination", decisionName, "not_detected", latency)
 		logging.Debugf("No hallucination detected: confidence=%.3f", result.Confidence)
@@ -151,43 +141,14 @@ func (r *OpenAIRouter) performHallucinationDetectionWithNLI(ctx *RequestContext,
 
 	if result.HallucinationDetected {
 		metrics.RecordPluginExecution("hallucination", decisionName, "detected_nli", latency)
-		logging.Warnf("Hallucination detected (NLI): confidence=%.3f, spans=%d",
-			result.Confidence, len(result.Spans))
-
-		// Check action from decision plugin config
-		action := r.getHallucinationActionForDecision(ctx.VSRSelectedDecision)
-
-		// For header/body/none actions, allow response through
-		// Warning will be handled in processor_res_body.go
-		logging.Infof("Hallucination detected (NLI), action is '%s'", action)
+		logging.Warnf("Hallucination detected (NLI): confidence=%.3f, spans=%d, action=%s",
+			result.Confidence, len(result.Spans), r.getHallucinationActionForDecision(ctx.VSRSelectedDecision))
 	} else {
 		metrics.RecordPluginExecution("hallucination", decisionName, "not_detected", latency)
 		logging.Debugf("No hallucination detected (NLI): confidence=%.3f", result.Confidence)
 	}
 
 	return nil
-}
-
-// extractAssistantContentFromResponse extracts the assistant's content from the response
-func extractAssistantContentFromResponse(responseBody []byte) string {
-	// Parse response using OpenAI SDK types
-	var completion openai.ChatCompletion
-	if err := json.Unmarshal(responseBody, &completion); err != nil {
-		logging.Debugf("Failed to parse response for hallucination detection: %v", err)
-		return ""
-	}
-
-	// Extract content from the first choice (most common case)
-	if len(completion.Choices) == 0 {
-		return ""
-	}
-
-	message := completion.Choices[0].Message
-	if message.Content != "" {
-		return message.Content
-	}
-
-	return ""
 }
 
 // isNLIEnabledForDecision checks if NLI is enabled for the given decision's hallucination plugin
@@ -224,7 +185,6 @@ func (r *OpenAIRouter) applyHallucinationWarning(response *ext_proc.ProcessingRe
 	case "body":
 		return r.prependHallucinationWarningToBody(responseBody, ctx, includeDetails), response
 	case "none":
-		logging.Infof("Hallucination detected but action is 'none', skipping warning")
 		return responseBody, response
 	default:
 		// Default to header
@@ -437,7 +397,6 @@ func (r *OpenAIRouter) applyUnverifiedFactualWarning(response *ext_proc.Processi
 	case "body":
 		return r.prependUnverifiedFactualWarningToBody(responseBody), response
 	case "none":
-		logging.Infof("Unverified factual response but action is 'none', skipping warning")
 		return responseBody, response
 	default:
 		// Default to header
