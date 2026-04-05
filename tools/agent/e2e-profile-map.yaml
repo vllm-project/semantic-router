@@ -36,11 +36,15 @@ profile_rules:
     owner: e2e
     coverage_role: dashboard-api-contract
     selection_mode: full-ci
-    summary: Dashboard API surface — health, status, config read (JSON/YAML), deploy preview, config versions, and input validation.
+    summary: Dashboard API surface — health, status, config read (JSON/YAML), deploy preview, config versions, input validation, and security policy RBAC + ratelimit apply.
     paths:
       - e2e/profiles/dashboard/**
       - e2e/testcases/dashboard_*.go
+      - e2e/testcases/security_policy_apply.go
       - deploy/kubernetes/observability/dashboard/**
+      - dashboard/backend/handlers/security_policy*.go
+      - dashboard/backend/handlers/deploy.go
+      - dashboard/backend/handlers/canonical_transport.go
   aibrix:
     owner: e2e
     coverage_role: aibrix-control-plane-and-gateway
@@ -112,13 +116,14 @@ profile_rules:
     owner: e2e
     coverage_role: authz-and-rate-limit-contracts
     selection_mode: full-ci
-    summary: Authz-driven routing and per-user rate-limiting behavior.
+    summary: Authz-driven routing and per-user rate-limiting behavior, including dashboard security policy apply.
     paths:
       - e2e/profiles/authz-rbac/**
       - e2e/config/config.authz-rbac.yaml
       - e2e/config/authz-profile-*.yaml
       - src/semantic-router/pkg/classification/authz*.go
       - src/semantic-router/pkg/authz/**
+      - dashboard/backend/handlers/security_policy*.go
   streaming:
     owner: e2e
     coverage_role: streaming-request-and-cache
