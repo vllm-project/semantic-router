@@ -17,6 +17,9 @@ import (
 // DefaultMaxTokens is the default max tokens if not specified in request
 const DefaultMaxTokens int64 = 4096
 
+// DefaultThinkingBudgetTokens is the default budget for thinking when enabled
+const DefaultThinkingBudgetTokens int64 = 10000
+
 // AnthropicAPIVersion is the version header required for Anthropic API
 const AnthropicAPIVersion = "2023-06-01"
 
@@ -47,10 +50,22 @@ func HeadersToRemove() []string {
 	return []string{"authorization", "content-length"}
 }
 
+// ThinkingConfig holds thinking/reasoning configuration for Anthropic requests.
+type ThinkingConfig struct {
+	Enabled      bool
+	BudgetTokens int64 // 0 means use DefaultThinkingBudgetTokens
+}
+
 // ToAnthropicRequestBody transforms an OpenAI-format request to Anthropic API format (JSON).
 // This is used for Envoy-routed requests where the router transforms the body
 // before forwarding to Anthropic via Envoy.
 func ToAnthropicRequestBody(openAIRequest *openai.ChatCompletionNewParams) ([]byte, error) {
+	return ToAnthropicRequestBodyWithThinking(openAIRequest, nil)
+}
+
+// ToAnthropicRequestBodyWithThinking transforms an OpenAI-format request to Anthropic API format
+// with optional extended thinking support.
+func ToAnthropicRequestBodyWithThinking(openAIRequest *openai.ChatCompletionNewParams, thinking *ThinkingConfig) ([]byte, error) {
 	var messages []anthropic.MessageParam
 	var systemPrompt string
 
@@ -82,6 +97,27 @@ func ToAnthropicRequestBody(openAIRequest *openai.ChatCompletionNewParams) ([]by
 		MaxTokens: maxTokens,
 	}
 
+	// Enable extended thinking if configured
+	if thinking != nil && thinking.Enabled {
+		budgetTokens := thinking.BudgetTokens
+		if budgetTokens <= 0 {
+			budgetTokens = DefaultThinkingBudgetTokens
+		}
+		// max_tokens must be greater than budget_tokens (Anthropic requirement)
+		if maxTokens <= budgetTokens {
+			maxTokens = budgetTokens + 4096
+			params.MaxTokens = maxTokens
+		}
+		params.Thinking = anthropic.ThinkingConfigParamOfEnabled(budgetTokens)
+		// Temperature must not be set when thinking is enabled (Anthropic requirement)
+		logging.Infof("Anthropic thinking enabled with budget_tokens=%d, max_tokens=%d", budgetTokens, maxTokens)
+	} else {
+		// Set optional parameters (only when thinking is disabled)
+		if openAIRequest.Temperature.Valid() {
+			params.Temperature = anthropic.Float(openAIRequest.Temperature.Value)
+		}
+	}
+
 	// Set system prompt if present
 	if systemPrompt != "" {
 		params.System = []anthropic.TextBlockParam{
@@ -90,9 +126,6 @@ func ToAnthropicRequestBody(openAIRequest *openai.ChatCompletionNewParams) ([]by
 	}
 
 	// Set optional parameters
-	if openAIRequest.Temperature.Valid() {
-		params.Temperature = anthropic.Float(openAIRequest.Temperature.Value)
-	}
 	if openAIRequest.TopP.Valid() {
 		params.TopP = anthropic.Float(openAIRequest.TopP.Value)
 	}
@@ -105,11 +138,46 @@ func ToAnthropicRequestBody(openAIRequest *openai.ChatCompletionNewParams) ([]by
 	return json.Marshal(params)
 }
 
+// openAIResponseWithThinking extends the OpenAI response with thinking content.
+// We use a custom struct to include the reasoning_content field which is not part
+// of the standard OpenAI SDK but is used by clients that support thinking/reasoning.
+type openAIResponseWithThinking struct {
+	ID                string                        `json:"id"`
+	Object            string                        `json:"object"`
+	Created           int64                         `json:"created"`
+	Model             string                        `json:"model"`
+	Choices           []openAIChoiceWithThinking     `json:"choices"`
+	Usage             openAIUsageWithThinking        `json:"usage"`
+}
+
+type openAIChoiceWithThinking struct {
+	Index            int                            `json:"index"`
+	Message          openAIMessageWithThinking      `json:"message"`
+	FinishReason     string                         `json:"finish_reason"`
+}
+
+type openAIMessageWithThinking struct {
+	Role             string `json:"role"`
+	Content          string `json:"content"`
+	ReasoningContent string `json:"reasoning_content,omitempty"`
+}
+
+type openAIUsageWithThinking struct {
+	PromptTokens     int64                          `json:"prompt_tokens"`
+	CompletionTokens int64                          `json:"completion_tokens"`
+	TotalTokens      int64                          `json:"total_tokens"`
+	CompletionTokensDetails *completionTokensDetails `json:"completion_tokens_details,omitempty"`
+}
+
+type completionTokensDetails struct {
+	ReasoningTokens int64 `json:"reasoning_tokens"`
+}
+
 // ToOpenAIResponseBody transforms an Anthropic API response to OpenAI format.
 // This is used for Envoy-routed requests where the router transforms the response
 // after receiving it from Anthropic via Envoy.
 func ToOpenAIResponseBody(anthropicResponse []byte, model string) ([]byte, error) {
-	logging.Debugf("Raw Anthropic response (%d bytes): %s", len(anthropicResponse), string(anthropicResponse))
+	logging.Infof("Raw Anthropic response (%d bytes): %.500s", len(anthropicResponse), string(anthropicResponse))
 
 	var resp anthropic.Message
 	if err := json.Unmarshal(anthropicResponse, &resp); err != nil {
@@ -118,11 +186,16 @@ func ToOpenAIResponseBody(anthropicResponse []byte, model string) ([]byte, error
 
 	logging.Debugf("Parsed Anthropic response - ID: %s, Content blocks: %d, StopReason: %s", resp.ID, len(resp.Content), resp.StopReason)
 
-	// Extract text content
+	// Extract text content and thinking content from content blocks
 	var content string
+	var thinkingContent string
 	for _, block := range resp.Content {
-		if block.Type == "text" {
+		switch block.Type {
+		case "text":
 			content += block.Text
+		case "thinking":
+			thinkingContent += block.Thinking
+			logging.Infof("Extracted thinking block (%d chars)", len(block.Thinking))
 		}
 	}
 
@@ -135,24 +208,43 @@ func ToOpenAIResponseBody(anthropicResponse []byte, model string) ([]byte, error
 		finishReason = "tool_calls"
 	}
 
-	openAIResp := &openai.ChatCompletion{
+	// Calculate reasoning tokens from cache_creation metadata if available
+	// The Anthropic API includes thinking token usage in the response usage
+	var reasoningTokens int64
+	if thinkingContent != "" {
+		// Estimate reasoning tokens: Anthropic doesn't report them separately in
+		// non-streaming mode, but we can infer from the total output vs text length.
+		// For now, report the output tokens as including reasoning.
+		reasoningTokens = int64(len(thinkingContent) / 4) // rough estimate
+		logging.Infof("Anthropic thinking response: %d chars thinking, %d chars text, estimated %d reasoning tokens",
+			len(thinkingContent), len(content), reasoningTokens)
+	}
+
+	openAIResp := &openAIResponseWithThinking{
 		ID:      resp.ID,
 		Object:  "chat.completion",
 		Created: time.Now().Unix(),
 		Model:   model,
-		Choices: []openai.ChatCompletionChoice{{
+		Choices: []openAIChoiceWithThinking{{
 			Index: 0,
-			Message: openai.ChatCompletionMessage{
-				Role:    "assistant",
-				Content: content,
+			Message: openAIMessageWithThinking{
+				Role:             "assistant",
+				Content:          content,
+				ReasoningContent: thinkingContent,
 			},
 			FinishReason: finishReason,
 		}},
-		Usage: openai.CompletionUsage{
+		Usage: openAIUsageWithThinking{
 			PromptTokens:     resp.Usage.InputTokens,
 			CompletionTokens: resp.Usage.OutputTokens,
 			TotalTokens:      resp.Usage.InputTokens + resp.Usage.OutputTokens,
 		},
+	}
+
+	if reasoningTokens > 0 {
+		openAIResp.Usage.CompletionTokensDetails = &completionTokensDetails{
+			ReasoningTokens: reasoningTokens,
+		}
 	}
 
 	return json.Marshal(openAIResp)

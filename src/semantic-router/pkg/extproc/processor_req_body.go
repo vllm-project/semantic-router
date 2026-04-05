@@ -109,7 +109,7 @@ func (r *OpenAIRouter) handleModelRouting(openAIRequest *openai.ChatCompletionNe
 
 	// Anthropic model routing
 	if r.Config.GetModelAPIFormat(targetModel) == config.APIFormatAnthropic {
-		return r.handleAnthropicRouting(openAIRequest, originalModel, targetModel, decisionName, ctx)
+		return r.handleAnthropicRoutingWithReasoning(openAIRequest, originalModel, targetModel, decisionName, reasoningDecision.UseReasoning, ctx)
 	}
 
 	// OpenAI-compatible routing
