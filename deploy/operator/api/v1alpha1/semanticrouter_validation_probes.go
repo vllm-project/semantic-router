@@ -6,27 +6,39 @@ func (r *SemanticRouter) validateProbeConfigs() error {
 	return r.validateProbes()
 }
 
+type namedProbeSpec struct {
+	name  string
+	probe *ProbeSpec
+}
+
 // validateProbes validates probe configurations.
 func (r *SemanticRouter) validateProbes() error {
-	if r.Spec.StartupProbe != nil && (r.Spec.StartupProbe.Enabled == nil || *r.Spec.StartupProbe.Enabled) {
-		if err := r.validateProbeSpec("startupProbe", r.Spec.StartupProbe); err != nil {
-			return err
-		}
-	}
-
-	if r.Spec.LivenessProbe != nil && (r.Spec.LivenessProbe.Enabled == nil || *r.Spec.LivenessProbe.Enabled) {
-		if err := r.validateProbeSpec("livenessProbe", r.Spec.LivenessProbe); err != nil {
-			return err
-		}
-	}
-
-	if r.Spec.ReadinessProbe != nil && (r.Spec.ReadinessProbe.Enabled == nil || *r.Spec.ReadinessProbe.Enabled) {
-		if err := r.validateProbeSpec("readinessProbe", r.Spec.ReadinessProbe); err != nil {
+	for _, probe := range r.enabledProbeSpecs() {
+		if err := r.validateProbeSpec(probe.name, probe.probe); err != nil {
 			return err
 		}
 	}
 
 	return nil
+}
+
+func (r *SemanticRouter) enabledProbeSpecs() []namedProbeSpec {
+	probes := make([]namedProbeSpec, 0, 3)
+	probes = appendEnabledProbe(probes, "startupProbe", r.Spec.StartupProbe)
+	probes = appendEnabledProbe(probes, "livenessProbe", r.Spec.LivenessProbe)
+	probes = appendEnabledProbe(probes, "readinessProbe", r.Spec.ReadinessProbe)
+	return probes
+}
+
+func appendEnabledProbe(
+	probes []namedProbeSpec,
+	name string,
+	probe *ProbeSpec,
+) []namedProbeSpec {
+	if probe == nil || (probe.Enabled != nil && !*probe.Enabled) {
+		return probes
+	}
+	return append(probes, namedProbeSpec{name: name, probe: probe})
 }
 
 // validateProbeSpec validates a single probe specification.

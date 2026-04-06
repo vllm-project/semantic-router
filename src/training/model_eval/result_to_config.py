@@ -1,11 +1,11 @@
 """Analyze MMLU-Pro results and generate a canonical v0.3 config scaffold."""
 
 import argparse
-from copy import deepcopy
 import glob
 import json
 import os
 from collections import defaultdict
+from copy import deepcopy
 from pathlib import Path
 
 import yaml

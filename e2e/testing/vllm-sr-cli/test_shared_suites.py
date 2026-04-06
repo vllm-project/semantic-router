@@ -6,7 +6,6 @@ import os
 import socket
 import subprocess
 import time
-import unittest
 from contextlib import contextmanager, suppress
 from pathlib import Path
 from urllib import error as urllib_error
@@ -34,6 +33,7 @@ LLM_KATAN_SERVED_MODEL = os.environ.get(
 )
 LLM_KATAN_MODEL = os.environ.get("VLLM_SR_LLM_KATAN_MODEL", LLM_KATAN_SERVED_MODEL)
 LLM_KATAN_BACKEND = os.environ.get("VLLM_SR_LLM_KATAN_BACKEND", "echo")
+PORT_FORWARD_READY_TIMEOUT_SECONDS = 30
 
 
 class SharedRuntimeIntegrationBase(CLITestBase):
@@ -325,19 +325,18 @@ spec:
                 raise AssertionError(
                     f"docker runtime exited before becoming healthy:\nSTDOUT:\n{stdout}\nSTDERR:\n{stderr}"
                 )
-        else:
-            if not self.wait_for_container_running(timeout=120):
-                if self._serve_process and self._serve_process.poll() is None:
-                    self._serve_process.terminate()
-                    with suppress(subprocess.TimeoutExpired):
-                        self._serve_process.wait(timeout=10)
-                stdout = ""
-                stderr = ""
-                if self._serve_process:
-                    stdout, stderr = self._serve_process.communicate(timeout=10)
-                raise AssertionError(
-                    f"docker runtime container did not start:\nSTDOUT:\n{stdout}\nSTDERR:\n{stderr}"
-                )
+        elif not self.wait_for_container_running(timeout=120):
+            if self._serve_process and self._serve_process.poll() is None:
+                self._serve_process.terminate()
+                with suppress(subprocess.TimeoutExpired):
+                    self._serve_process.wait(timeout=10)
+            stdout = ""
+            stderr = ""
+            if self._serve_process:
+                stdout, stderr = self._serve_process.communicate(timeout=10)
+            raise AssertionError(
+                f"docker runtime container did not start:\nSTDOUT:\n{stdout}\nSTDERR:\n{stderr}"
+            )
 
     def _wait_for_runtime_contracts(self) -> None:
         self._wait_for_http_json(
@@ -375,7 +374,7 @@ spec:
         )
         self._port_forwards.append(process)
         start = time.time()
-        while time.time() - start < 30:
+        while time.time() - start < PORT_FORWARD_READY_TIMEOUT_SECONDS:
             if process.poll() is not None:
                 stdout, stderr = process.communicate(timeout=5)
                 raise AssertionError(

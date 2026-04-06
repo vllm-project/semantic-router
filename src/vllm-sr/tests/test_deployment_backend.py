@@ -498,10 +498,12 @@ class TestCLITargetRouting:
             built.append((resolve_target(target), kw))
             return _FakeK8s()
 
+        def _capture_browser_open(url):
+            browser_calls.append(url)
+            return True
+
         monkeypatch.setattr(rt, "_build_backend", _fake_build)
-        monkeypatch.setattr(
-            rt.webbrowser, "open", lambda url: browser_calls.append(url)
-        )
+        monkeypatch.setattr(rt.webbrowser, "open", _capture_browser_open)
 
         runner = CliRunner()
         result = runner.invoke(
