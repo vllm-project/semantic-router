@@ -1,6 +1,7 @@
 """Unit tests for DisaggFleetOptimizer."""
 
 import pytest
+
 from fleet_sim import (
     ALPHA_DEC,
     ALPHA_PRE,

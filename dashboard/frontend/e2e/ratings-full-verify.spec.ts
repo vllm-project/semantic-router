@@ -8,9 +8,15 @@ test.describe('Ratings Page - Full Verification', () => {
   test.beforeEach(async ({ page }) => {
     test.skip(!process.env.DASHBOARD_TEST_TOKEN, 'requires DASHBOARD_TEST_TOKEN for authenticated live runs');
 
-    await page.addInitScript(({ storedToken }) => {
-      window.localStorage.setItem('vsr_auth_token', storedToken)
-    }, { storedToken: process.env.DASHBOARD_TEST_TOKEN! });
+    await page.context().addCookies([
+      {
+        name: 'vsr_session',
+        value: process.env.DASHBOARD_TEST_TOKEN!,
+        url: 'http://localhost:3001',
+        httpOnly: true,
+        sameSite: 'Lax',
+      },
+    ]);
   });
 
   test('1-2. Navigate to /ratings and verify structure', async ({ page }) => {

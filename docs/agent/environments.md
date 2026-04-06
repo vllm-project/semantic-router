@@ -32,8 +32,19 @@
 
 ## `ci-k8s`
 
-- Run local profile checks with `make e2e-test E2E_PROFILE=<profile>`
-- CI expands to the standard kind/Kubernetes matrix in [integration-test-k8s.yml](../../.github/workflows/integration-test-k8s.yml)
+- Build with `make vllm-sr-dev`
+- Start with `vllm-sr serve --target k8s --image-pull-policy never`
+- Use this for the managed Kind-backed shared-suite workflow
+- The default shared suites run through [integration-test-k8s.yml](../../.github/workflows/integration-test-k8s.yml)
+- The explicit local reproduction path is `make vllm-sr-test-integration VLLM_SR_TEST_TARGET=k8s`
+
+## Shared CLI Surface
+
+- Treat Docker and Kubernetes as deployment backends behind the same `vllm-sr` lifecycle commands rather than separate environment products.
+- Docker stays the default target for local work; switch the same commands to Kubernetes with `--target k8s`.
+- When `--target k8s` is used without an explicit `--context`, the CLI owns the default Kind cluster lifecycle for dev regression.
+- The shared control surface is `vllm-sr serve`, `vllm-sr status`, `vllm-sr logs`, `vllm-sr dashboard`, and `vllm-sr stop`.
+- Add `--namespace`, `--context`, and `--profile` only when the Kubernetes backend needs them.
 
 ## Selection Rule
 

@@ -50,6 +50,42 @@ app: semantic-router
 {{- end }}
 
 {{/*
+Router selector labels
+*/}}
+{{- define "semantic-router.routerSelectorLabels" -}}
+{{ include "semantic-router.selectorLabels" . }}
+app.kubernetes.io/component: router
+{{- end }}
+
+{{/*
+Dashboard selector labels
+*/}}
+{{- define "semantic-router.dashboardSelectorLabels" -}}
+{{ include "semantic-router.selectorLabels" . }}
+app.kubernetes.io/component: dashboard
+{{- end }}
+
+{{/*
+Envoy selector labels
+*/}}
+{{- define "semantic-router.envoySelectorLabels" -}}
+{{ include "semantic-router.selectorLabels" . }}
+app.kubernetes.io/component: envoy
+{{- end }}
+
+{{/*
+Resolve the first public listener port.
+*/}}
+{{- define "semantic-router.primaryEnvoyListenerPort" -}}
+{{- $listeners := .Values.envoy.listeners | default (list) -}}
+{{- if gt (len $listeners) 0 -}}
+{{- (index $listeners 0).port -}}
+{{- else -}}
+8888
+{{- end -}}
+{{- end }}
+
+{{/*
 Create the name of the service account to use
 */}}
 {{- define "semantic-router.serviceAccountName" -}}

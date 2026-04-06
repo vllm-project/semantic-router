@@ -1,4 +1,6 @@
 import type { EditFormData, FieldConfig } from '../components/EditModal'
+import type { ConfigTreeObject, ConfigTreeValue } from '../types/configTree'
+import { isConfigTreeObject } from '../types/configTree'
 import {
   DEFAULT_SECTIONS,
   OPTIONAL_ROUTER_KEYS,
@@ -36,7 +38,7 @@ export type RouterSystemKey =
   | 'model_selection'
   | 'api'
 
-export type RouterConfigSectionData = Partial<Record<RouterSystemKey, unknown>>
+export type RouterConfigSectionData = Partial<Record<RouterSystemKey, ConfigTreeValue>>
 
 export type RouterLayerKey =
   | 'router'
@@ -108,8 +110,8 @@ export const ROUTER_LAYER_META: Record<
   },
 }
 
-function cloneDefaultSection(key: RouterSystemKey): unknown {
-  return JSON.parse(JSON.stringify(DEFAULT_SECTIONS[key]))
+function cloneDefaultSection(key: RouterSystemKey): ConfigTreeValue {
+  return JSON.parse(JSON.stringify(DEFAULT_SECTIONS[key])) as ConfigTreeValue
 }
 
 const GLOBAL_SECTION_PATHS: Record<RouterSystemKey, string[]> = {
@@ -183,14 +185,15 @@ const LEGACY_ROOT_KEYS: Partial<Record<RouterSystemKey, keyof ConfigData>> = {
   api: 'api',
 }
 
-function asObject(value: unknown): Record<string, unknown> | undefined {
-  return value && typeof value === 'object' && !Array.isArray(value)
-    ? value as Record<string, unknown>
-    : undefined
+function asObject(value: ConfigTreeValue | unknown): ConfigTreeObject | undefined {
+  return isConfigTreeObject(value) ? value : undefined
 }
 
-function asArray(value: unknown): Array<Record<string, unknown>> | undefined {
-  return Array.isArray(value) ? value as Array<Record<string, unknown>> : undefined
+function asArray(value: ConfigTreeValue | unknown): ConfigTreeObject[] | undefined {
+  if (!Array.isArray(value)) {
+    return undefined
+  }
+  return value.filter(isConfigTreeObject)
 }
 
 function stringOrFallback(value: unknown, fallback = 'Not set'): string {
@@ -252,8 +255,8 @@ function sourceBadge(key: RouterSystemKey, routerDefaults: CanonicalGlobalConfig
   return { label: 'Router default available', tone: 'inactive' }
 }
 
-function getNestedValue(value: unknown, path: string[]): unknown {
-  let current: unknown = value
+function getNestedValue(value: ConfigTreeValue | unknown, path: string[]): ConfigTreeValue | undefined {
+  let current: ConfigTreeValue | unknown = value
   for (const segment of path) {
     const objectValue = asObject(current)
     if (!objectValue) {
@@ -261,21 +264,25 @@ function getNestedValue(value: unknown, path: string[]): unknown {
     }
     current = objectValue[segment]
   }
-  return current
+  return current as ConfigTreeValue | undefined
 }
 
-function buildNestedPatch(path: string[], value: unknown): Record<string, unknown> {
+function toConfigTreeValue(value: unknown): ConfigTreeValue {
+  return value as ConfigTreeValue
+}
+
+function buildNestedPatch(path: string[], value: unknown): ConfigTreeObject {
   if (path.length === 0) {
     return {}
   }
   if (path.length === 1) {
-    return { [path[0]]: value }
+    return { [path[0]]: toConfigTreeValue(value) }
   }
   const [head, ...tail] = path
   return { [head]: buildNestedPatch(tail, value) }
 }
 
-function getSectionValue(config: ConfigData | CanonicalGlobalConfig | null, key: RouterSystemKey): unknown {
+function getSectionValue(config: ConfigData | CanonicalGlobalConfig | null, key: RouterSystemKey): ConfigTreeValue | undefined {
   if (!config) {
     return undefined
   }
@@ -292,7 +299,7 @@ function getSectionValue(config: ConfigData | CanonicalGlobalConfig | null, key:
   }
 
   const legacyKey = LEGACY_ROOT_KEYS[key]
-  return legacyKey ? maybeConfig[legacyKey] : undefined
+  return legacyKey ? (maybeConfig[legacyKey] as ConfigTreeValue | undefined) : undefined
 }
 
 function summaryForKey(key: RouterSystemKey, data: unknown): RouterSectionSummaryItem[] {

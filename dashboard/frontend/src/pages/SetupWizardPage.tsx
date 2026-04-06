@@ -28,11 +28,14 @@ import {
   type ModelDraft,
   type ProviderKind,
   type RemoteImportState,
+  type SetupConfigPayload,
+  type SetupConfigSource,
   type SetupActivationState,
   type SetupRoutingMode,
   type SetupStep,
   type SetupValidationState,
 } from "./setupWizardSupport";
+import type { ConfigTreeObject } from "../types/configTree";
 import styles from "./SetupWizardPage.module.css";
 
 const SetupWizardPage: React.FC = () => {
@@ -58,10 +61,7 @@ const SetupWizardPage: React.FC = () => {
   const [validationState, setValidationState] =
     useState<SetupValidationState>("idle");
   const [validationError, setValidationError] = useState<string | null>(null);
-  const [validatedConfig, setValidatedConfig] = useState<Record<
-    string,
-    unknown
-  > | null>(null);
+  const [validatedConfig, setValidatedConfig] = useState<SetupConfigSource | null>(null);
   const [validatedCounts, setValidatedCounts] = useState(
     createSetupConfigCounts(),
   );
@@ -96,7 +96,7 @@ const SetupWizardPage: React.FC = () => {
     setActivationError(null);
   };
 
-  let scratchConfig: Record<string, unknown> | null = null;
+  let scratchConfig: SetupConfigPayload | null = null;
   let scratchBuildError: string | null = null;
   if (stepOneErrors.length === 0) {
     try {
@@ -109,14 +109,14 @@ const SetupWizardPage: React.FC = () => {
 
   const scratchCounts = createSetupConfigCounts({
     models: models.length,
-    decisions: Array.isArray(scratchConfig?.decisions)
-      ? scratchConfig.decisions.length
+    decisions: Array.isArray(scratchConfig?.routing?.decisions)
+      ? scratchConfig.routing.decisions.length
       : 0,
-    signals: countConfigSignals(scratchConfig?.signals),
+    signals: countConfigSignals(scratchConfig?.routing?.signals),
     canActivate:
       models.length > 0 &&
-      Array.isArray(scratchConfig?.decisions) &&
-      scratchConfig.decisions.length > 0,
+      Array.isArray(scratchConfig?.routing?.decisions) &&
+      scratchConfig.routing.decisions.length > 0,
   });
 
   const currentRouteLabel =
@@ -141,10 +141,7 @@ const SetupWizardPage: React.FC = () => {
     let cancelled = false;
     // Scratch configs are rebuilt on every render, so key auto-validation off a
     // stable serialized payload instead of object identity.
-    const validationPayload = JSON.parse(validationSignature) as Record<
-      string,
-      unknown
-    >;
+    const validationPayload = JSON.parse(validationSignature) as ConfigTreeObject;
 
     const runValidation = async () => {
       setValidationState("validating");

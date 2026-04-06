@@ -5,6 +5,7 @@ metadata:
   namespace: {{ include "semantic-router.namespace" . }}
   labels:
     {{- include "semantic-router.labels" . | nindent 4 }}
+    app.kubernetes.io/component: router
 spec:
   type: {{ .Values.service.type }}
   ports:
@@ -17,7 +18,7 @@ spec:
     protocol: {{ .Values.service.api.protocol }}
     name: classify-api
   selector:
-    {{- include "semantic-router.selectorLabels" . | nindent 4 }}
+    {{- include "semantic-router.routerSelectorLabels" . | nindent 4 }}
 ---
 {{- if .Values.service.metrics.enabled }}
 apiVersion: v1
@@ -27,6 +28,7 @@ metadata:
   namespace: {{ include "semantic-router.namespace" . }}
   labels:
     {{- include "semantic-router.labels" . | nindent 4 }}
+    app.kubernetes.io/component: router
     service: metrics
 spec:
   type: {{ .Values.service.type }}
@@ -36,5 +38,5 @@ spec:
     protocol: {{ .Values.service.metrics.protocol }}
     name: metrics
   selector:
-    {{- include "semantic-router.selectorLabels" . | nindent 4 }}
+    {{- include "semantic-router.routerSelectorLabels" . | nindent 4 }}
 {{- end }}

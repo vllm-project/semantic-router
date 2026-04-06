@@ -18,11 +18,13 @@ PIP      ?= $(PYTHON) -m pip
 PYTEST   ?= $(PYTHON) -m pytest
 BLACK    ?= $(PYTHON) -m black
 RUFF     ?= ruff
+RUFF_CONFIG ?= .ruff.toml
 
 # Source directories
 SRC_DIRS  = fleet_sim
 TEST_DIR  = tests
 ALL_DIRS  = $(SRC_DIRS) $(TEST_DIR)
+LINT_TARGETS = run_sim.py $(ALL_DIRS)
 
 # Default CDF and parameters for smoke runs
 CDF      ?= data/azure_cdf.json
@@ -60,15 +62,15 @@ test-cov:
 
 lint:
 	@echo "── ruff ──────────────────────────────────────────────────────────────"
-	$(RUFF) check $(ALL_DIRS) || true
+	$(RUFF) check --config $(RUFF_CONFIG) $(LINT_TARGETS)
 	@echo "── black (check only) ────────────────────────────────────────────────"
-	$(BLACK) --check --diff $(ALL_DIRS)
+	$(BLACK) --check --diff $(LINT_TARGETS)
 
 format:
 	@echo "── ruff --fix ────────────────────────────────────────────────────────"
-	$(RUFF) check --fix $(ALL_DIRS)
+	$(RUFF) check --config $(RUFF_CONFIG) --fix $(LINT_TARGETS)
 	@echo "── black ─────────────────────────────────────────────────────────────"
-	$(BLACK) $(ALL_DIRS)
+	$(BLACK) $(LINT_TARGETS)
 
 # ── Running ───────────────────────────────────────────────────────────────────
 

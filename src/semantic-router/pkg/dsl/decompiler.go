@@ -2,9 +2,7 @@ package dsl
 
 import (
 	"fmt"
-	"reflect"
 	"sort"
-	"strconv"
 	"strings"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
@@ -160,9 +158,9 @@ func (d *decompiler) decompileSignals() {
 		if structure.Description != "" {
 			d.write("  description: %q\n", structure.Description)
 		}
-		d.write("  feature: %s\n", formatPluginConfigValue(structureFeatureToMap(structure.Feature)))
+		d.write("  feature: %s\n", formatJSONObjectValue(structureFeatureToJSONObject(structure.Feature)))
 		if structure.Predicate != nil {
-			d.write("  predicate: %s\n", formatPluginConfigValue(structurePredicateToMap(structure.Predicate)))
+			d.write("  predicate: %s\n", formatJSONObjectValue(structurePredicateToJSONObject(structure.Predicate)))
 		}
 		d.write("}\n\n")
 	}
@@ -662,7 +660,7 @@ func decompilePluginConfig(p *config.DecisionPlugin) string {
 	// already emitted above for known plugin contracts.
 	if rawMap, ok := normalizePluginConfigMap(p.Configuration); ok {
 		extraFields := filterPluginConfigMap(rawMap, knownPluginConfigKeys(p))
-		if len(extraFields) > 0 {
+		if len(extraFields.Fields) > 0 {
 			writePluginConfigMap(&sb, extraFields, "    ")
 		}
 	}
@@ -681,16 +679,16 @@ func knownPluginConfigKeys(p *config.DecisionPlugin) map[string]struct{} {
 	return keys
 }
 
-func filterPluginConfigMap(raw map[string]interface{}, omit map[string]struct{}) map[string]interface{} {
-	if len(raw) == 0 {
-		return nil
+func filterPluginConfigMap(raw JSONObject, omit map[string]struct{}) JSONObject {
+	if len(raw.Fields) == 0 {
+		return JSONObject{}
 	}
-	filtered := make(map[string]interface{}, len(raw))
-	for key, value := range raw {
-		if _, skip := omit[key]; skip {
+	filtered := JSONObject{Fields: make([]JSONField, 0, len(raw.Fields))}
+	for _, field := range raw.Fields {
+		if _, skip := omit[field.Name]; skip {
 			continue
 		}
-		filtered[key] = value
+		filtered.Fields = append(filtered.Fields, field)
 	}
 	return filtered
 }
@@ -706,138 +704,17 @@ func decodePluginConfig[T any](p *config.DecisionPlugin) (*T, bool) {
 	return &result, true
 }
 
-func writePluginConfigMap(sb *strings.Builder, raw map[string]interface{}, indent string) {
-	keys := make([]string, 0, len(raw))
-	for key := range raw {
-		keys = append(keys, key)
-	}
-	sort.Strings(keys)
-	for _, key := range keys {
-		fmt.Fprintf(sb, "%s%s: %s\n", indent, key, formatPluginConfigValue(raw[key]))
+func writePluginConfigMap(sb *strings.Builder, raw JSONObject, indent string) {
+	for _, field := range raw.Fields {
+		fmt.Fprintf(sb, "%s%s: %s\n", indent, field.Name, formatJSONValue(field.Value))
 	}
 }
 
-func normalizePluginConfigMap(raw *config.StructuredPayload) (map[string]interface{}, bool) {
+func normalizePluginConfigMap(raw *config.StructuredPayload) (JSONObject, bool) {
 	if raw == nil {
-		return nil, false
+		return JSONObject{}, false
 	}
-	typed, err := raw.AsStringMap()
-	if err != nil {
-		return nil, false
-	}
-	normalized := make(map[string]interface{}, len(typed))
-	for key, value := range typed {
-		normalized[key] = normalizePluginConfigValue(value)
-	}
-	return normalized, true
-}
-
-func normalizePluginConfigValue(raw interface{}) interface{} {
-	switch typed := raw.(type) {
-	case map[string]interface{}:
-		normalized := make(map[string]interface{}, len(typed))
-		for key, value := range typed {
-			normalized[key] = normalizePluginConfigValue(value)
-		}
-		return normalized
-	case map[interface{}]interface{}:
-		normalized := make(map[string]interface{}, len(typed))
-		for key, value := range typed {
-			normalized[fmt.Sprintf("%v", key)] = normalizePluginConfigValue(value)
-		}
-		return normalized
-	case []interface{}:
-		normalized := make([]interface{}, len(typed))
-		for index, value := range typed {
-			normalized[index] = normalizePluginConfigValue(value)
-		}
-		return normalized
-	default:
-		return normalizePluginConfigReflectValue(raw)
-	}
-}
-
-func normalizePluginConfigReflectValue(raw interface{}) interface{} {
-	if raw == nil {
-		return nil
-	}
-	value := reflect.ValueOf(raw)
-	switch value.Kind() {
-	case reflect.Array, reflect.Slice:
-		normalized := make([]interface{}, value.Len())
-		for index := 0; index < value.Len(); index++ {
-			normalized[index] = normalizePluginConfigValue(value.Index(index).Interface())
-		}
-		return normalized
-	case reflect.Map:
-		normalized := make(map[string]interface{}, value.Len())
-		iter := value.MapRange()
-		for iter.Next() {
-			normalized[fmt.Sprintf("%v", iter.Key().Interface())] = normalizePluginConfigValue(iter.Value().Interface())
-		}
-		return normalized
-	default:
-		return raw
-	}
-}
-
-func formatPluginConfigValue(raw interface{}) string {
-	normalized := normalizePluginConfigValue(raw)
-	if scalar, ok := formatPluginConfigScalar(normalized); ok {
-		return scalar
-	}
-
-	switch typed := normalized.(type) {
-	case []interface{}:
-		return formatPluginConfigList(typed)
-	case map[string]interface{}:
-		return formatPluginConfigMap(typed)
-	case nil:
-		return "null"
-	default:
-		return fmt.Sprintf("%v", normalized)
-	}
-}
-
-func formatPluginConfigScalar(raw interface{}) (string, bool) {
-	switch typed := raw.(type) {
-	case string:
-		return fmt.Sprintf("%q", typed), true
-	case bool:
-		return strconv.FormatBool(typed), true
-	case int:
-		return fmt.Sprintf("%d", typed), true
-	case int64:
-		return fmt.Sprintf("%d", typed), true
-	case float32:
-		return fmt.Sprintf("%v", typed), true
-	case float64:
-		return fmt.Sprintf("%v", typed), true
-	default:
-		return "", false
-	}
-}
-
-func formatPluginConfigList(items []interface{}) string {
-	parts := make([]string, 0, len(items))
-	for _, item := range items {
-		parts = append(parts, formatPluginConfigValue(item))
-	}
-	return "[" + strings.Join(parts, ", ") + "]"
-}
-
-func formatPluginConfigMap(values map[string]interface{}) string {
-	keys := make([]string, 0, len(values))
-	for key := range values {
-		keys = append(keys, key)
-	}
-	sort.Strings(keys)
-
-	parts := make([]string, 0, len(keys))
-	for _, key := range keys {
-		parts = append(parts, fmt.Sprintf("%s: %s", key, formatPluginConfigValue(values[key])))
-	}
-	return "{ " + strings.Join(parts, ", ") + " }"
+	return structuredPayloadToJSONObject(raw)
 }
 
 func modelRefOptions(mr *config.ModelRef, modelConfig map[string]config.ModelParams) string {
@@ -1309,7 +1186,7 @@ func flattenRuleNodeToExprs(node *config.RuleCombination, op string) []BoolExpr 
 
 // ---------- Formatting Helpers ----------
 
-func (d *decompiler) write(format string, args ...interface{}) {
+func (d *decompiler) write(format string, args ...any) {
 	fmt.Fprintf(&d.sb, format, args...)
 }
 
@@ -1391,51 +1268,78 @@ func structurePredicateValue(predicate *config.NumericPredicate) ObjectValue {
 	return ObjectValue{Fields: fields}
 }
 
-func structureFeatureToMap(feature config.StructureFeature) map[string]interface{} {
-	values := map[string]interface{}{
-		"type":   feature.Type,
-		"source": structureSourceToMap(feature.Source),
-	}
-	return values
+func structureFeatureToJSONObject(feature config.StructureFeature) JSONObject {
+	return JSONObject{Fields: []JSONField{
+		{Name: "source", Value: JSONValue{Kind: JSONValueObject, Object: structureSourceToJSONObject(feature.Source)}},
+		{Name: "type", Value: JSONValue{Kind: JSONValueString, String: feature.Type}},
+	}}
 }
 
-func structureSourceToMap(source config.StructureSource) map[string]interface{} {
-	values := map[string]interface{}{
-		"type": source.Type,
+func structureSourceToJSONObject(source config.StructureSource) *JSONObject {
+	fields := []JSONField{
+		{Name: "type", Value: JSONValue{Kind: JSONValueString, String: source.Type}},
 	}
 	if source.Pattern != "" {
-		values["pattern"] = source.Pattern
+		fields = append(fields, JSONField{
+			Name:  "pattern",
+			Value: JSONValue{Kind: JSONValueString, String: source.Pattern},
+		})
 	}
 	if len(source.Keywords) > 0 {
-		values["keywords"] = source.Keywords
+		fields = append(fields, JSONField{
+			Name:  "keywords",
+			Value: stringArrayJSONValue(source.Keywords),
+		})
 	}
 	if source.CaseSensitive {
-		values["case_sensitive"] = true
+		fields = append(fields, JSONField{
+			Name:  "case_sensitive",
+			Value: JSONValue{Kind: JSONValueBool, Bool: true},
+		})
 	}
 	if len(source.Sequences) > 0 {
-		values["sequences"] = source.Sequences
+		fields = append(fields, JSONField{
+			Name:  "sequences",
+			Value: stringMatrixJSONValue(source.Sequences),
+		})
 	}
-	return values
+	return &JSONObject{Fields: fields}
 }
 
-func structurePredicateToMap(predicate *config.NumericPredicate) map[string]interface{} {
-	values := make(map[string]interface{})
+func structurePredicateToJSONObject(predicate *config.NumericPredicate) JSONObject {
+	fields := make([]JSONField, 0, 4)
 	if predicate == nil {
-		return values
+		return JSONObject{}
 	}
 	if predicate.GT != nil {
-		values["gt"] = *predicate.GT
+		fields = append(fields, JSONField{Name: "gt", Value: JSONValue{Kind: JSONValueFloat, Float: *predicate.GT}})
 	}
 	if predicate.GTE != nil {
-		values["gte"] = *predicate.GTE
+		fields = append(fields, JSONField{Name: "gte", Value: JSONValue{Kind: JSONValueFloat, Float: *predicate.GTE}})
 	}
 	if predicate.LT != nil {
-		values["lt"] = *predicate.LT
+		fields = append(fields, JSONField{Name: "lt", Value: JSONValue{Kind: JSONValueFloat, Float: *predicate.LT}})
 	}
 	if predicate.LTE != nil {
-		values["lte"] = *predicate.LTE
+		fields = append(fields, JSONField{Name: "lte", Value: JSONValue{Kind: JSONValueFloat, Float: *predicate.LTE}})
 	}
-	return values
+	return JSONObject{Fields: fields}
+}
+
+func stringArrayJSONValue(values []string) JSONValue {
+	items := make([]JSONValue, 0, len(values))
+	for _, value := range values {
+		items = append(items, JSONValue{Kind: JSONValueString, String: value})
+	}
+	return JSONValue{Kind: JSONValueArray, Array: items}
+}
+
+func stringMatrixJSONValue(values [][]string) JSONValue {
+	items := make([]JSONValue, 0, len(values))
+	for _, row := range values {
+		items = append(items, stringArrayJSONValue(row))
+	}
+	return JSONValue{Kind: JSONValueArray, Array: items}
 }
 
 func formatProjectionScoreInputs(inputs []config.ProjectionScoreInput) string {

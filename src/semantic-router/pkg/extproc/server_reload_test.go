@@ -302,6 +302,31 @@ func TestReloadRouterFromConfigPublishesRuntimeRegistryAfterSwap(t *testing.T) {
 	}
 }
 
+func TestServerCurrentRuntimeConfigPrefersRuntimeRegistry(t *testing.T) {
+	previousCfg := config.Get()
+	globalCfg := previousCfg
+	if globalCfg == nil {
+		globalCfg = &config.RouterConfig{}
+	}
+	config.Replace(globalCfg)
+	t.Cleanup(func() {
+		config.Replace(globalCfg)
+		if previousCfg != nil {
+			config.Replace(previousCfg)
+		}
+	})
+
+	registryCfg := &config.RouterConfig{
+		BackendModels: config.BackendModels{DefaultModel: "registry"},
+	}
+	registry := routerruntime.NewRegistry(registryCfg)
+
+	server := &Server{runtime: registry}
+	if got := server.currentRuntimeConfig(); got != registryCfg {
+		t.Fatalf("currentRuntimeConfig() = %p, want %p", got, registryCfg)
+	}
+}
+
 func stubSuccessfulReloadSequence(
 	t *testing.T,
 	configPath string,

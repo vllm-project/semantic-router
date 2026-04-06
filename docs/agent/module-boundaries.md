@@ -27,6 +27,7 @@ This document describes the repository's major subsystem seams and the boundarie
 - Dashboard backend must not depend on dashboard frontend source.
 - Local CLI runtime behavior belongs in `src/vllm-sr/`; router runtime behavior belongs in `src/semantic-router/`.
 - Control-plane surfaces such as the CLI, dashboard backend, and operator should depend on versioned router contracts or explicit public runtime-service seams instead of deep router-runtime internals when the dependency crosses a product boundary.
+- Dashboard backend and operator-side control planes should consume router config and authoring seams through `src/semantic-router/pkg/routercontract/` and `src/semantic-router/pkg/routerauthoring/` instead of importing `pkg/config` or `pkg/dsl` directly.
 - Native bindings stay behind runtime seams instead of leaking binding-specific setup across the codebase.
 - Dashboard backend handler files should separate HTTP transport from config persistence, deploy/rollback control, and runtime status collection.
 - Dashboard frontend should separate route-shell/auth gating from page-specific orchestration and from large chat or editor containers.
@@ -34,6 +35,7 @@ This document describes the repository's major subsystem seams and the boundarie
 - Router config package files should separate schema declaration, canonical conversion/export, plugin-family contracts, and semantic validation.
 - Classification runtime should separate model discovery/bootstrap, per-family inference, and service assembly instead of coupling them through one hotspot orchestrator.
 - Shared backend lifecycle policy belongs in reusable seams; domain packages should not each recreate connection, bootstrap, and retry logic for the same store technology.
+- Shared Milvus collection bootstrap, index creation or backfill, loading, and lifecycle retry policy belong in `src/semantic-router/pkg/milvuslifecycle/`; `memory`, `cache`, `vectorstore`, and `routerreplay` packages should keep only schema or query semantics on top.
 - E2E testcase files should own one externally visible contract or one explicitly named benchmark concern, not both.
 - Fleet-sim optimizer code should separate analytical sizing, simulation verification, and public export policy instead of widening one model-and-reporting hotspot.
 - Operator API and controller code should separate CRD schema declaration, webhook validation, controller-side canonical translation, and sample or generated contract upkeep.
@@ -64,22 +66,7 @@ This document describes the repository's major subsystem seams and the boundarie
 
 ## Hotspot-Specific Local Rules
 
-Before editing these areas, read the nearest local `AGENTS.md`:
-
-- `src/semantic-router/pkg/config/`
-- `src/semantic-router/pkg/classification/`
-- `src/semantic-router/pkg/extproc/`
-- `src/vllm-sr/cli/`
-- `src/fleet-sim/fleet_sim/optimizer/`
-- `deploy/operator/api/v1alpha1/`
-- `deploy/operator/controllers/`
-- `dashboard/frontend/src/`
-- `dashboard/frontend/src/pages/`
-- `dashboard/frontend/src/components/`
-- `dashboard/backend/handlers/`
-- `e2e/testcases/`
-
-See [local-rules.md](local-rules.md) for the indexed list of local harness supplements.
+Before editing hotspot areas indexed from [local-rules.md](local-rules.md), read the nearest local `AGENTS.md` for that subtree. The local-rules index is the canonical inventory for hotspot-specific harness supplements; this document should not maintain a second partial directory list.
 
 ## Source of Truth
 

@@ -313,6 +313,11 @@ func logBatchedEmbeddingNeeds(component string, semanticCacheNeedsBatched bool, 
 }
 
 func initUnifiedEmbeddingModelFactory(cfg *config.RouterConfig, paths embeddingPaths, useBatched bool) error {
+	contract := candle_binding.CurrentBackendContract()
+	if err := validateEmbeddingBackendContract(contract, paths, useBatched); err != nil {
+		return err
+	}
+
 	if !useBatched {
 		return candle_binding.InitEmbeddingModels(paths.qwen3, paths.gemma, paths.mmBert, cfg.UseCPU)
 	}
@@ -321,6 +326,51 @@ func initUnifiedEmbeddingModelFactory(cfg *config.RouterConfig, paths embeddingP
 		return err
 	}
 	return candle_binding.InitEmbeddingModels(paths.qwen3, paths.gemma, paths.mmBert, cfg.UseCPU)
+}
+
+func validateEmbeddingBackendContract(contract candle_binding.BackendContract, paths embeddingPaths, useBatched bool) error {
+	for _, requirement := range embeddingContractRequirements(paths) {
+		if err := validateEmbeddingFamilyContract(
+			contract,
+			requirement.path,
+			requirement.family,
+			useBatched,
+		); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+type embeddingContractRequirement struct {
+	path   string
+	family candle_binding.EmbeddingFamily
+}
+
+func embeddingContractRequirements(paths embeddingPaths) []embeddingContractRequirement {
+	return []embeddingContractRequirement{
+		{path: paths.qwen3, family: candle_binding.EmbeddingFamilyQwen3},
+		{path: paths.gemma, family: candle_binding.EmbeddingFamilyGemma},
+		{path: paths.mmBert, family: candle_binding.EmbeddingFamilyMMBert},
+	}
+}
+
+func validateEmbeddingFamilyContract(
+	contract candle_binding.BackendContract,
+	modelPath string,
+	family candle_binding.EmbeddingFamily,
+	useBatched bool,
+) error {
+	if modelPath == "" {
+		return nil
+	}
+	if err := contract.RequireEmbeddingFamily(family); err != nil {
+		return err
+	}
+	if !useBatched {
+		return nil
+	}
+	return contract.RequireBatchedEmbeddingFamily(family)
 }
 
 func initializeBERTModel(component string, useCPU bool, bertPath string, eventPrefix string) bool {

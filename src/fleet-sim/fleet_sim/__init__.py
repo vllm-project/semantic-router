@@ -15,6 +15,7 @@ Provides:
 from importlib.metadata import PackageNotFoundError
 from importlib.metadata import version as _pkg_version
 
+from . import optimizer as _optimizer
 from .core import Fleet, FleetConfig, PoolConfig, Request
 
 # ── GPU profiles ──────────────────────────────────────────────────────────────
@@ -63,31 +64,11 @@ from .models import (
     list_models,
 )
 
-# ── Optimizers ────────────────────────────────────────────────────────────────
-from .optimizer import (
-    A100_AVAIL_RSC1_FAST,
-    A100_AVAIL_RSC1_SLOW,
-    ALPHA_DEC,
-    ALPHA_PRE,
-    BETA_TTFT,
-    H100_AVAIL_5PCT,
-    DisaggFleetOptimizer,
-    DisaggResult,
-    DisaggSweepPoint,
-    FleetOptimizer,
-    FleetTpwResult,
-    GridFlexPoint,
-    SweepResult,
-    TpwPoint,
-    _split_cdf,
-    fleet_tpw_analysis,
-    grid_flex_analysis,
-    node_availability,
-    print_fleet_tpw,
-    print_grid_flex_table,
-    print_tpw_table,
-    tpw_analysis,
-)
+# Keep root-level optimizer exports owned by fleet_sim.optimizer.
+for _optimizer_export in _optimizer.ROOT_PUBLIC_EXPORTS:
+    globals()[_optimizer_export] = getattr(_optimizer, _optimizer_export)
+
+del _optimizer_export
 
 try:
     __version__ = _pkg_version("vllm-sr-sim")
@@ -137,25 +118,5 @@ __all__ = [
     "DEEPSEEK_V3",
     "get_model",
     "list_models",
-    # Optimizers
-    "FleetOptimizer",
-    "SweepResult",
-    "DisaggFleetOptimizer",
-    "DisaggResult",
-    "DisaggSweepPoint",
-    "ALPHA_PRE",
-    "ALPHA_DEC",
-    "BETA_TTFT",
-    # Grid flexibility
-    "GridFlexPoint",
-    "grid_flex_analysis",
-    "print_grid_flex_table",
-    # Tokens-per-watt
-    "TpwPoint",
-    "FleetTpwResult",
-    "tpw_analysis",
-    "fleet_tpw_analysis",
-    "print_tpw_table",
-    "print_fleet_tpw",
-    "_split_cdf",
 ]
+__all__.extend(_optimizer.ROOT_PUBLIC_EXPORTS)

@@ -11,6 +11,13 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 )
 
+const (
+	maintainedBalancePairedSourceMarker   = "Paired-source contract:"
+	maintainedBalanceDecisionTreeMarker   = "DECISION_TREE / IF ELSE authoring lowers into flat routing.decisions"
+	maintainedBalanceAuthoringSourceLabel = "maintained authoring source"
+	maintainedBalanceRuntimeArtifactLabel = "canonical runtime artifact"
+)
+
 func TestMaintainedBalanceRecipeHasNoUndefinedComplexitySignals(t *testing.T) {
 	assetPath := filepath.Join("..", "..", "..", "..", "deploy", "recipes", "balance.yaml")
 	data, err := os.ReadFile(assetPath)
@@ -278,35 +285,43 @@ func assertMaintainedBalanceRoute(t *testing.T, decisions []config.Decision, nam
 
 func assertMaintainedBalanceDSLMarkers(t *testing.T, dslPath, dslText string) {
 	t.Helper()
-	if !strings.Contains(dslText, "PROJECTION partition balance_intent_partition") {
-		t.Fatalf("%s must define the learned intent projection partition", dslPath)
+
+	checks := []struct {
+		needle  string
+		message string
+	}{
+		{maintainedBalancePairedSourceMarker, "must declare the paired-source contract"},
+		{maintainedBalanceDecisionTreeMarker, "must document the flat decision-tree runtime contract"},
+		{maintainedBalanceAuthoringSourceLabel, "must identify itself as the maintained authoring source"},
+		{"PROJECTION partition balance_intent_partition", "must define the learned intent projection partition"},
+		{"PROJECTION score difficulty_score", "must define the derived difficulty score"},
+		{"PROJECTION mapping verification_band", "must define the verification mapping"},
+		{"PROJECTION mapping feedback_correction_band", "must define the feedback correction mapping"},
+		{"PROJECTION mapping feedback_clarification_band", "must define the feedback clarification mapping"},
+		{"SIGNAL reask likely_dissatisfied", "must define the maintained reask helper for clarification routing"},
+		{"ROUTE formal_math_proof", "must include the narrow formal_math_proof route"},
+		{"ROUTE reasoning_deep", "must include the merged reasoning_deep route"},
+		{"ROUTE complex_specialist", "must include the merged complex_specialist route"},
+		{"ROUTE fast_qa", "must include the merged fast_qa route"},
 	}
-	if !strings.Contains(dslText, "PROJECTION score difficulty_score") {
-		t.Fatalf("%s must define the derived difficulty score", dslPath)
+
+	for _, check := range checks {
+		if !strings.Contains(dslText, check.needle) {
+			t.Fatalf("%s %s", dslPath, check.message)
+		}
 	}
-	if !strings.Contains(dslText, "PROJECTION mapping verification_band") {
-		t.Fatalf("%s must define the verification mapping", dslPath)
+}
+
+func assertMaintainedBalanceYAMLMarkers(t *testing.T, yamlPath, yamlText string) {
+	t.Helper()
+	if !strings.Contains(yamlText, maintainedBalancePairedSourceMarker) {
+		t.Fatalf("%s must declare the paired-source contract", yamlPath)
 	}
-	if !strings.Contains(dslText, "PROJECTION mapping feedback_correction_band") {
-		t.Fatalf("%s must define the feedback correction mapping", dslPath)
+	if !strings.Contains(yamlText, maintainedBalanceDecisionTreeMarker) {
+		t.Fatalf("%s must document the flat decision-tree runtime contract", yamlPath)
 	}
-	if !strings.Contains(dslText, "PROJECTION mapping feedback_clarification_band") {
-		t.Fatalf("%s must define the feedback clarification mapping", dslPath)
-	}
-	if !strings.Contains(dslText, "SIGNAL reask likely_dissatisfied") {
-		t.Fatalf("%s must define the maintained reask helper for clarification routing", dslPath)
-	}
-	if !strings.Contains(dslText, "ROUTE formal_math_proof") {
-		t.Fatalf("%s must include the narrow formal_math_proof route", dslPath)
-	}
-	if !strings.Contains(dslText, "ROUTE reasoning_deep") {
-		t.Fatalf("%s must include the merged reasoning_deep route", dslPath)
-	}
-	if !strings.Contains(dslText, "ROUTE complex_specialist") {
-		t.Fatalf("%s must include the merged complex_specialist route", dslPath)
-	}
-	if !strings.Contains(dslText, "ROUTE fast_qa") {
-		t.Fatalf("%s must include the merged fast_qa route", dslPath)
+	if !strings.Contains(yamlText, maintainedBalanceRuntimeArtifactLabel) {
+		t.Fatalf("%s must identify itself as the canonical runtime artifact", yamlPath)
 	}
 }
 
@@ -351,6 +366,7 @@ func mustLoadMaintainedBalanceRouterConfig(t *testing.T, yamlPath string) *confi
 	if err != nil {
 		t.Fatalf("failed to read %s: %v", yamlPath, err)
 	}
+	assertMaintainedBalanceYAMLMarkers(t, yamlPath, string(yamlData))
 	parsedCfg, err := config.ParseYAMLBytes(yamlData)
 	if err != nil {
 		t.Fatalf("ParseYAMLBytes error: %v", err)

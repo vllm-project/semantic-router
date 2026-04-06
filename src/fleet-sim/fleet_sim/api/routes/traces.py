@@ -16,6 +16,20 @@ from ..trace_ingest import parse_records, persist_trace_bytes
 router = APIRouter(prefix="/traces", tags=["Traces"])
 
 
+def _trace_info(meta: dict) -> TraceInfo:
+    return TraceInfo(
+        **{key: value for key, value in meta.items() if key != "stats"},
+        stats=TraceStats(**meta["stats"]) if meta.get("stats") else None,
+    )
+
+
+def _require_trace_meta(trace_id: str) -> dict:
+    meta = storage.get_trace_meta(trace_id)
+    if not meta:
+        raise HTTPException(404, "Trace not found")
+    return meta
+
+
 @router.post("", response_model=TraceInfo, summary="Upload a trace file")
 async def upload_trace(
     file: UploadFile = File(...),
@@ -26,44 +40,26 @@ async def upload_trace(
         meta = persist_trace_bytes(content, fmt, file.filename or storage.new_id())
     except Exception as exc:
         raise HTTPException(422, f"Could not parse trace: {exc}")
-
-    return TraceInfo(
-        **{k: v for k, v in meta.items() if k != "stats"},
-        stats=TraceStats(**meta["stats"]),
-    )
+    return _trace_info(meta)
 
 
 @router.get("", response_model=list[TraceInfo], summary="List all traces")
 async def list_traces():
-    return [
-        TraceInfo(
-            **{k: v for k, v in m.items() if k != "stats"},
-            stats=TraceStats(**m["stats"]) if m.get("stats") else None,
-        )
-        for m in storage.list_traces()
-    ]
+    return [_trace_info(meta) for meta in storage.list_traces()]
 
 
 @router.get("/{trace_id}", response_model=TraceInfo, summary="Get trace metadata")
 async def get_trace(trace_id: str):
-    m = storage.get_trace_meta(trace_id)
-    if not m:
-        raise HTTPException(404, "Trace not found")
-    return TraceInfo(
-        **{k: v for k, v in m.items() if k != "stats"},
-        stats=TraceStats(**m["stats"]) if m.get("stats") else None,
-    )
+    return _trace_info(_require_trace_meta(trace_id))
 
 
 @router.get(
     "/{trace_id}/sample", response_model=TraceSample, summary="Get sample records"
 )
 async def sample_trace(trace_id: str, limit: int = Query(50, ge=1, le=500)):
-    m = storage.get_trace_meta(trace_id)
-    if not m:
-        raise HTTPException(404, "Trace not found")
+    meta = _require_trace_meta(trace_id)
     path = storage.trace_upload_path(trace_id)
-    records = parse_records(path, m["format"])
+    records = parse_records(path, meta["format"])
     return TraceSample(records=records[:limit], total=len(records))
 
 

@@ -2,7 +2,7 @@
 
 ## Status
 
-Open
+Closed
 
 ## Scope
 
@@ -10,36 +10,40 @@ Open
 
 ## Summary
 
-The repository's top-level product split is coherent, but the cross-stack dependency direction is still too porous. Dashboard backend, operator, and CLI surfaces continue to co-own router-runtime contract knowledge instead of consuming a narrow contract or public-service seam. Dashboard backend imports router config and authoring internals directly. The operator's controller-side canonical translation depends directly on router canonical config types. The CLI still carries a large share of canonical config knowledge while its local hotspot rules had drifted behind the real runtime orchestration files. At the same time, router runtime bootstrap and API-server startup still publish shared dependencies through process-wide globals.
+The repository now exposes explicit control-plane seams for router config and authoring flows. `src/semantic-router/pkg/routercontract/` re-exports the normalized canonical config contract and routing-domain helpers used by dashboard backend and operator code, while `src/semantic-router/pkg/routerauthoring/` exposes the DSL validation, parse, compile, format, and decompile helpers used by dashboard authoring paths. Dashboard backend and operator controllers no longer import `pkg/config` or `pkg/dsl` directly, `pkg/routercontract/control_plane_import_test.go` now ratchets that dependency direction, and the dashboard backend Docker build copies the new seam packages into packaged builds.
 
-This is broader than the existing subsystem debts:
+This umbrella debt is now closed because the remaining cross-stack control-plane gap is gone, while the earlier local debts that fed into it were already retired:
 
-- TD022 focused on CLI-internal config ownership collapse
-- TD028 focused on operator-internal config ownership collapse
-- TD031 focused on router bootstrap and global-state runtime composition
-- TD030 focused on dashboard frontend boundary collapse
-
-Those entries remain valid, but they do not by themselves define the cross-stack problem: the repo still lacks a durable contract-owned boundary between the router kernel and its control planes.
+- TD022 closed the CLI-side config-contract collapse
+- TD028 closed the operator-internal contract-ownership collapse
+- TD031 closed the runtime bootstrap and global-state composition gap
+- TD003 closed the remaining CLI package-topology umbrella around local runtime orchestration
 
 ## Evidence
 
-- [src/semantic-router/pkg/config/loader.go](../../../src/semantic-router/pkg/config/loader.go)
-- [src/semantic-router/pkg/apiserver/server.go](../../../src/semantic-router/pkg/apiserver/server.go)
+- [src/semantic-router/pkg/routercontract/config.go](../../../src/semantic-router/pkg/routercontract/config.go)
+- [src/semantic-router/pkg/routercontract/control_plane_import_test.go](../../../src/semantic-router/pkg/routercontract/control_plane_import_test.go)
+- [src/semantic-router/pkg/routerauthoring/dsl.go](../../../src/semantic-router/pkg/routerauthoring/dsl.go)
 - [dashboard/backend/router/core_routes.go](../../../dashboard/backend/router/core_routes.go)
 - [dashboard/backend/handlers/config.go](../../../dashboard/backend/handlers/config.go)
 - [dashboard/backend/handlers/canonical_transport.go](../../../dashboard/backend/handlers/canonical_transport.go)
+- [dashboard/backend/handlers/builder_nl_validation.go](../../../dashboard/backend/handlers/builder_nl_validation.go)
+- [dashboard/backend/handlers/setup.go](../../../dashboard/backend/handlers/setup.go)
+- [dashboard/backend/handlers/topology_response.go](../../../dashboard/backend/handlers/topology_response.go)
+- [dashboard/backend/handlers/deploy.go](../../../dashboard/backend/handlers/deploy.go)
+- [dashboard/backend/handlers/deploy_test.go](../../../dashboard/backend/handlers/deploy_test.go)
 - [deploy/operator/controllers/canonical_config_builder.go](../../../deploy/operator/controllers/canonical_config_builder.go)
 - [deploy/operator/controllers/backend_discovery.go](../../../deploy/operator/controllers/backend_discovery.go)
-- [src/vllm-sr/cli/core.py](../../../src/vllm-sr/cli/core.py)
-- [src/vllm-sr/cli/commands/runtime.py](../../../src/vllm-sr/cli/commands/runtime.py)
-- [src/vllm-sr/cli/models.py](../../../src/vllm-sr/cli/models.py)
-- [src/vllm-sr/cli/validator.py](../../../src/vllm-sr/cli/validator.py)
-- [src/vllm-sr/cli/AGENTS.md](../../../src/vllm-sr/cli/AGENTS.md)
+- [dashboard/backend/Dockerfile](../../../dashboard/backend/Dockerfile)
+- [src/vllm-sr/tests/test_dashboard_dockerfile_surface.py](../../../src/vllm-sr/tests/test_dashboard_dockerfile_surface.py)
 - [docs/agent/module-boundaries.md](../module-boundaries.md)
+- [dashboard/backend/handlers/AGENTS.md](../../../dashboard/backend/handlers/AGENTS.md)
+- [deploy/operator/controllers/AGENTS.md](../../../deploy/operator/controllers/AGENTS.md)
+- [src/semantic-router/pkg/config/AGENTS.md](../../../src/semantic-router/pkg/config/AGENTS.md)
 - [docs/agent/adr/adr-0006-platform-kernel-and-contract-first-control-planes.md](../adr/adr-0006-platform-kernel-and-contract-first-control-planes.md)
+- [docs/agent/tech-debt/td-003-package-topology-hotspot-layout-debt.md](td-003-package-topology-hotspot-layout-debt.md)
 - [docs/agent/tech-debt/td-022-cli-config-contract-boundary-collapse.md](td-022-cli-config-contract-boundary-collapse.md)
 - [docs/agent/tech-debt/td-028-operator-config-contract-boundary-collapse.md](td-028-operator-config-contract-boundary-collapse.md)
-- [docs/agent/tech-debt/td-030-dashboard-frontend-config-and-interaction-slice-collapse.md](td-030-dashboard-frontend-config-and-interaction-slice-collapse.md)
 - [docs/agent/tech-debt/td-031-router-runtime-bootstrap-and-shared-service-registry-global-state.md](td-031-router-runtime-bootstrap-and-shared-service-registry-global-state.md)
 
 ## Why It Matters
@@ -60,8 +64,25 @@ Those entries remain valid, but they do not by themselves define the cross-stack
 
 ## Exit Criteria
 
-- Dashboard backend no longer depends on router-runtime implementation packages for config authoring, deploy/apply control, or transport shaping when a contract or public service seam can own that dependency.
-- Operator controller-side canonical translation no longer depends directly on router canonical config implementation types for routine feature evolution.
-- CLI contract ownership and runtime-orchestration hotspots are aligned with the current code shape, and new control-plane work does not default to deep router-runtime imports.
-- Runtime bootstrap and API-server startup paths materially reduce their reliance on process-wide shared service globals.
-- Shared harness docs, local rules, and follow-up execution plans all point at the same contract-first control-plane target rather than separate local interpretations.
+- Satisfied on 2026-04-06: dashboard backend config, deploy, topology, and authoring flows now consume `pkg/routercontract` and `pkg/routerauthoring`, and `pkg/routercontract/control_plane_import_test.go` blocks new direct `pkg/config` or `pkg/dsl` imports from dashboard/backend and operator/controller packages.
+- Satisfied on 2026-04-06: operator controller-side canonical translation and backend discovery now depend on `pkg/routercontract` aliases instead of importing router canonical config implementation types directly.
+- Satisfied on 2026-04-06: shared harness docs and nearest local rules now point cross-stack control-plane work at `pkg/routercontract` and `pkg/routerauthoring` as the contract-first seams.
+- Satisfied before umbrella closure and carried forward on 2026-04-06: CLI contract ownership and local runtime-orchestration hotspots were already ratcheted under TD022 and TD003.
+- Satisfied before umbrella closure and carried forward on 2026-04-06: runtime bootstrap and API-server global-state cleanup were already ratcheted under TD031.
+
+## Resolution
+
+- Added `src/semantic-router/pkg/routercontract/` as the public router-config seam for control-plane consumers, with canonical config aliases, parsing helpers, routing-domain helpers, and an import guard test that blocks new direct `pkg/config` and `pkg/dsl` imports from dashboard backend and operator controller packages.
+- Added `src/semantic-router/pkg/routerauthoring/` as the public DSL seam for control-plane authoring flows, with validate/parse/compile/format/decompile helpers that return the canonical public contract instead of runtime-internal config types.
+- Repointed dashboard backend config, deploy, setup, topology, transport, and builder-NL code plus the affected tests onto those public seams, and updated the dashboard backend Dockerfile so packaged builds copy the same seam packages used in local development.
+- Repointed operator controller canonical translation and backend discovery code onto `pkg/routercontract`, then updated shared module-boundary docs and nearest local `AGENTS.md` files so the dependency direction is part of the durable harness guidance instead of only living in code.
+
+## Validation
+
+- `go test ./pkg/routercontract ./pkg/routerauthoring`
+  Run in `/Users/bitliu/vs/src/semantic-router`
+- `go test -run 'Test(UpdateConfigHandler|GlobalConfigYAMLHandler_ReturnsEffectiveGlobalConfig|GlobalConfigYAMLHandler_ReturnsDefaultsWhenGlobalMissing|MergeDeployPayload_RoundTripsMaintainedCanonicalConfig|BuildEvaluatedRule_EmptyConditionsSerializeAsEmptyArray|BuildBuilderNLTaskContextIncludesSharedHints)$'`
+  Run in `/Users/bitliu/vs/dashboard/backend/handlers`
+- `go test ./controllers`
+  Run in `/Users/bitliu/vs/deploy/operator`
+- `pytest /Users/bitliu/vs/src/vllm-sr/tests/test_dashboard_dockerfile_surface.py`

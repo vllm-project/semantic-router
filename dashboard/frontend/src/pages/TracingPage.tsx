@@ -3,7 +3,6 @@ import styles from './MonitoringPage.module.css'
 import ServiceNotConfigured, {
   ServiceConfig,
 } from '../components/ServiceNotConfigured'
-import { withAuthQuery } from '../utils/authFetch'
 
 // Jaeger service configuration
 const JAEGER_SERVICE: ServiceConfig = {
@@ -57,7 +56,7 @@ const TracingPage: React.FC = () => {
     // We can only set the service and lookback time via URL
     // The theme will be inherited from the parent page's theme
     // Note: Jaeger may show light theme initially if it hasn't loaded the theme preference yet
-    return withAuthQuery(`/embedded/jaeger/search?lookback=1h&limit=20&service=vllm-sr`)
+    return `/embedded/jaeger/search?lookback=1h&limit=20&service=vllm-sr`
   }
 
   useEffect(() => {

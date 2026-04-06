@@ -10,7 +10,7 @@ import (
 
 	"gopkg.in/yaml.v3"
 
-	routerconfig "github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
+	routercontract "github.com/vllm-project/semantic-router/src/semantic-router/pkg/routercontract"
 )
 
 // GlobalConfigYAMLHandler returns the effective canonical global config as raw
@@ -101,14 +101,14 @@ func readEffectiveGlobalYAML(configPath string) ([]byte, error) {
 		return nil, err
 	}
 
-	parsed, err := routerconfig.ParseYAMLBytes(data)
+	parsed, err := routercontract.ParseYAMLBytes(data)
 	if err != nil {
 		return nil, fmt.Errorf("parse config.yaml: %w", err)
 	}
 
-	global := routerconfig.CanonicalGlobalFromRouterConfig(parsed)
+	global := parsed.Global
 	if global == nil {
-		defaults := routerconfig.DefaultCanonicalGlobal()
+		defaults := routercontract.DefaultCanonicalGlobal()
 		global = &defaults
 	}
 
@@ -145,7 +145,7 @@ func replaceGlobalOverrideYAML(existingData, rawGlobalYAML []byte) ([]byte, erro
 		return nil, fmt.Errorf("marshal updated config: %w", err)
 	}
 
-	if _, err := routerconfig.ParseYAMLBytes(updatedYAML); err != nil {
+	if _, err := routercontract.ParseYAMLBytes(updatedYAML); err != nil {
 		return nil, err
 	}
 

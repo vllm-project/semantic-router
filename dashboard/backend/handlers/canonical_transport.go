@@ -11,11 +11,11 @@ import (
 	"gopkg.in/yaml.v3"
 	sigsyaml "sigs.k8s.io/yaml"
 
-	routerconfig "github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
+	routercontract "github.com/vllm-project/semantic-router/src/semantic-router/pkg/routercontract"
 )
 
 type routingFragmentDocument struct {
-	Routing routerconfig.CanonicalRouting `yaml:"routing"`
+	Routing routercontract.CanonicalRouting `yaml:"routing"`
 }
 
 type setupModeConfig struct {
@@ -23,8 +23,8 @@ type setupModeConfig struct {
 }
 
 type setupConfigFile struct {
-	routerconfig.CanonicalConfig `yaml:",inline"`
-	Setup                        *setupModeConfig `yaml:"setup,omitempty"`
+	routercontract.CanonicalConfig `yaml:",inline"`
+	Setup                          *setupModeConfig `yaml:"setup,omitempty"`
 }
 
 func decodeYAMLTaggedBody[T any](reader io.Reader) (T, error) {
@@ -77,12 +77,12 @@ func rawJSONMessage(value any) (json.RawMessage, error) {
 	return json.RawMessage(payload), nil
 }
 
-func readCanonicalConfigFile(configPath string) (*routerconfig.CanonicalConfig, error) {
+func readCanonicalConfigFile(configPath string) (*routercontract.CanonicalConfig, error) {
 	data, err := os.ReadFile(configPath)
 	if err != nil {
 		return nil, err
 	}
-	cfg, err := decodeYAMLTaggedBytes[routerconfig.CanonicalConfig](data)
+	cfg, err := decodeYAMLTaggedBytes[routercontract.CanonicalConfig](data)
 	if err != nil {
 		return nil, err
 	}

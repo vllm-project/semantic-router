@@ -8,6 +8,7 @@ from unittest import mock
 
 import cli_test_base
 import run_cli_tests
+import test_shared_suites
 from cli_test_base import CLITestBase
 
 
@@ -181,6 +182,215 @@ class TestCLITestRunnerRuntimeDetection(unittest.TestCase):
             ),
         ):
             self.assertEqual(run_cli_tests.detect_container_runtime(), "docker")
+
+    @mock.patch.object(run_cli_tests.subprocess, "run")
+    @mock.patch.object(run_cli_tests.shutil, "which")
+    def test_prepare_k8s_chart_dependencies_uses_repo_native_target(
+        self, which, run_subprocess
+    ):
+        which.side_effect = lambda name: "/usr/bin/make" if name == "make" else None
+        run_subprocess.return_value = _completed_process(returncode=0)
+
+        self.assertTrue(run_cli_tests.prepare_k8s_chart_dependencies())
+        run_subprocess.assert_called_once_with(
+            ["make", "helm-ci-setup"],
+            cwd=run_cli_tests.REPO_ROOT,
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+
+    @mock.patch.object(run_cli_tests.subprocess, "run")
+    @mock.patch.object(run_cli_tests.shutil, "which")
+    def test_prepare_k8s_chart_dependencies_reports_failure(
+        self, which, run_subprocess
+    ):
+        which.side_effect = lambda name: "/usr/bin/make" if name == "make" else None
+        run_subprocess.return_value = _completed_process(
+            returncode=1,
+            stdout="nope",
+            stderr="broken",
+        )
+
+        self.assertFalse(run_cli_tests.prepare_k8s_chart_dependencies())
+
+
+class TestSharedSuiteK8sPortForwardContract(unittest.TestCase):
+    def setUp(self):
+        self.base = test_shared_suites.SharedRuntimeIntegrationBase(
+            methodName="runTest"
+        )
+        self.base.test_dir = os.getcwd()
+        self.base._port_forwards = []
+
+    @mock.patch.object(test_shared_suites.subprocess, "Popen")
+    @mock.patch.object(test_shared_suites.socket, "socket")
+    def test_router_port_forward_targets_envoy_service_listener(
+        self, socket_ctor, popen_mock
+    ):
+        fake_process = mock.Mock()
+        fake_process.poll.return_value = None
+        popen_mock.return_value = fake_process
+
+        fake_socket = mock.MagicMock()
+        fake_socket.__enter__.return_value.connect_ex.return_value = 0
+        socket_ctor.return_value = fake_socket
+
+        self.base._start_port_forward("service/semantic-router-envoy", 8888, 8888)
+
+        popen_mock.assert_called_once()
+        command = popen_mock.call_args.args[0]
+        self.assertIn("service/semantic-router-envoy", command)
+        self.assertIn("8888:8888", command)
+
+    @mock.patch.object(
+        test_shared_suites.SharedRuntimeIntegrationBase, "_wait_for_http_json"
+    )
+    @mock.patch.object(
+        test_shared_suites.SharedRuntimeIntegrationBase, "_start_port_forward"
+    )
+    @mock.patch.object(
+        test_shared_suites.SharedRuntimeIntegrationBase,
+        "_available_port",
+        return_value=18080,
+    )
+    @mock.patch.object(test_shared_suites.SharedRuntimeIntegrationBase, "_run_checked")
+    @mock.patch.object(test_shared_suites.subprocess, "run")
+    @mock.patch.object(
+        test_shared_suites.SharedRuntimeIntegrationBase,
+        "_integration_target",
+        return_value="k8s",
+    )
+    def test_k8s_llm_katan_fixture_waits_for_service_models(
+        self,
+        _target,
+        subprocess_run,
+        run_checked,
+        available_port,
+        start_port_forward,
+        wait_http,
+    ):
+        subprocess_run.return_value = _completed_process(returncode=0)
+
+        self.base._start_llm_katan_fixture()
+
+        subprocess_run.assert_called_once()
+        self.assertEqual(run_checked.call_count, 2)
+        available_port.assert_called_once()
+        start_port_forward.assert_called_once_with(
+            "service/llm-katan",
+            8000,
+            18080,
+            namespace="default",
+        )
+        wait_http.assert_called_once_with(
+            "http://localhost:18080/v1/models",
+            timeout=120,
+        )
+
+
+class TestSharedSuiteRuntimeShape(unittest.TestCase):
+    def setUp(self):
+        self.routing_base = test_shared_suites.SharedRuntimeIntegrationBase(
+            methodName="runTest"
+        )
+        self.routing_base.test_dir = os.getcwd()
+        self.routing_base._port_forwards = []
+        self.routing_base._llm_katan_host_port = 8000
+
+        self.dashboard_base = test_shared_suites.TestSharedDashboardSuite(
+            methodName="runTest"
+        )
+        self.dashboard_base.test_dir = os.getcwd()
+        self.dashboard_base._port_forwards = []
+        self.dashboard_base._llm_katan_host_port = 8000
+
+    @mock.patch.object(
+        test_shared_suites.SharedRuntimeIntegrationBase,
+        "_integration_target",
+        return_value="docker",
+    )
+    @mock.patch.object(
+        test_shared_suites.SharedRuntimeIntegrationBase, "_wait_for_docker_runtime"
+    )
+    @mock.patch.object(
+        test_shared_suites.SharedRuntimeIntegrationBase, "_wait_for_runtime_contracts"
+    )
+    @mock.patch.object(test_shared_suites.subprocess, "Popen")
+    def test_routing_suite_uses_minimal_docker_runtime(
+        self, popen_mock, _wait_contracts, _wait_runtime, _target
+    ):
+        popen_mock.return_value = mock.Mock(poll=lambda: None)
+        self.routing_base._start_runtime()
+
+        command = popen_mock.call_args.args[0]
+        self.assertIn("--minimal", command)
+        self.assertNotIn("--profile", command)
+
+    @mock.patch.object(test_shared_suites.SharedRuntimeIntegrationBase, "run_cli")
+    @mock.patch.object(
+        test_shared_suites.SharedRuntimeIntegrationBase,
+        "_integration_target",
+        return_value="k8s",
+    )
+    @mock.patch.object(
+        test_shared_suites.SharedRuntimeIntegrationBase, "_wait_for_runtime_contracts"
+    )
+    @mock.patch.object(
+        test_shared_suites.SharedRuntimeIntegrationBase, "_start_port_forward"
+    )
+    def test_dashboard_suite_keeps_k8s_dev_profile(
+        self, start_port_forward, _wait_contracts, _target, run_cli
+    ):
+        run_cli.return_value = (0, "", "")
+        self.dashboard_base._start_runtime()
+
+        command = run_cli.call_args.args[0]
+        self.assertIn("--profile", command)
+        self.assertIn("dev", command)
+        start_port_forward.assert_any_call("service/semantic-router-envoy", 8888, 8888)
+        start_port_forward.assert_any_call(
+            "service/semantic-router-dashboard", 8700, 8700
+        )
+
+    @mock.patch.object(
+        test_shared_suites.SharedRuntimeIntegrationBase, "wait_for_health"
+    )
+    @mock.patch.object(
+        test_shared_suites.SharedRuntimeIntegrationBase, "_wait_for_http_json"
+    )
+    def test_runtime_contract_waits_on_public_models_surface(
+        self, wait_http, wait_health
+    ):
+        self.routing_base._wait_for_runtime_contracts()
+
+        wait_health.assert_not_called()
+        wait_http.assert_called_once_with(
+            "http://localhost:8888/v1/models",
+            timeout=test_shared_suites.RUNTIME_READY_TIMEOUT,
+        )
+
+    @mock.patch.object(
+        test_shared_suites.SharedRuntimeIntegrationBase, "wait_for_health"
+    )
+    @mock.patch.object(
+        test_shared_suites.SharedRuntimeIntegrationBase, "_wait_for_http_json"
+    )
+    def test_dashboard_runtime_contract_adds_dashboard_health(
+        self, wait_http, wait_health
+    ):
+        self.dashboard_base._wait_for_runtime_contracts()
+
+        wait_health.assert_not_called()
+        self.assertEqual(wait_http.call_count, 2)
+        wait_http.assert_any_call(
+            "http://localhost:8888/v1/models",
+            timeout=test_shared_suites.RUNTIME_READY_TIMEOUT,
+        )
+        wait_http.assert_any_call(
+            "http://localhost:8700/healthz",
+            timeout=test_shared_suites.RUNTIME_READY_TIMEOUT,
+        )
 
 
 if __name__ == "__main__":

@@ -28,22 +28,35 @@ import (
 // FileStore manages uploaded files on the local filesystem and tracks
 // their metadata in memory. It is safe for concurrent use.
 type FileStore struct {
-	baseDir string
-	mu      sync.RWMutex
-	files   map[string]*FileRecord // file_id -> metadata
+	baseDir  string
+	mu       sync.RWMutex
+	files    map[string]*FileRecord // file_id -> metadata
+	registry *LocalMetadataRegistry
 }
 
 // NewFileStore creates a new FileStore rooted at the given base directory.
 // The directory is created if it does not exist.
 func NewFileStore(baseDir string) (*FileStore, error) {
+	return NewFileStoreWithRegistry(baseDir, nil)
+}
+
+// NewFileStoreWithRegistry creates a new FileStore rooted at the given base
+// directory and optionally restores file metadata from a local registry.
+func NewFileStoreWithRegistry(baseDir string, registry *LocalMetadataRegistry) (*FileStore, error) {
 	filesDir := filepath.Join(baseDir, "files")
 	if err := os.MkdirAll(filesDir, 0o755); err != nil {
 		return nil, fmt.Errorf("failed to create file storage directory: %w", err)
 	}
 
+	files := make(map[string]*FileRecord)
+	if registry != nil {
+		files = registry.Files()
+	}
+
 	return &FileStore{
-		baseDir: baseDir,
-		files:   make(map[string]*FileRecord),
+		baseDir:  baseDir,
+		files:    files,
+		registry: registry,
 	}, nil
 }
 
@@ -95,6 +108,13 @@ func (fs *FileStore) Save(filename string, content []byte, purpose string) (*Fil
 	fs.mu.Lock()
 	fs.files[fileID] = record
 	fs.mu.Unlock()
+	if err := fs.persistFileRecord(record); err != nil {
+		fs.mu.Lock()
+		delete(fs.files, fileID)
+		fs.mu.Unlock()
+		_ = os.RemoveAll(fileDir)
+		return nil, err
+	}
 
 	return record, nil
 }
@@ -121,16 +141,26 @@ func (fs *FileStore) Read(fileID string) ([]byte, error) {
 // Delete removes a file from disk and from the in-memory registry.
 func (fs *FileStore) Delete(fileID string) error {
 	fs.mu.Lock()
-	_, ok := fs.files[fileID]
+	record, ok := fs.files[fileID]
 	if !ok {
 		fs.mu.Unlock()
 		return fmt.Errorf("file not found: %s", fileID)
 	}
 	delete(fs.files, fileID)
 	fs.mu.Unlock()
+	if err := fs.deletePersistedFile(fileID); err != nil {
+		fs.mu.Lock()
+		fs.files[fileID] = cloneFileRecord(record)
+		fs.mu.Unlock()
+		return err
+	}
 
 	fileDir := filepath.Join(fs.baseDir, "files", fileID)
 	if err := os.RemoveAll(fileDir); err != nil {
+		fs.mu.Lock()
+		fs.files[fileID] = cloneFileRecord(record)
+		fs.mu.Unlock()
+		_ = fs.persistFileRecord(record)
 		return fmt.Errorf("failed to delete file directory: %w", err)
 	}
 
@@ -159,4 +189,18 @@ func (fs *FileStore) Get(fileID string) (*FileRecord, error) {
 		return nil, fmt.Errorf("file not found: %s", fileID)
 	}
 	return record, nil
+}
+
+func (fs *FileStore) persistFileRecord(record *FileRecord) error {
+	if fs.registry == nil || record == nil {
+		return nil
+	}
+	return fs.registry.UpsertFile(record)
+}
+
+func (fs *FileStore) deletePersistedFile(fileID string) error {
+	if fs.registry == nil {
+		return nil
+	}
+	return fs.registry.DeleteFile(fileID)
 }

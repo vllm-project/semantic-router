@@ -63,6 +63,7 @@ def _execute_serve(
     image_pull_policy: str,
     readonly: bool,
     minimal: bool,
+    enable_observability: bool,
     log_level: str | None,
     platform: str | None,
     algorithm: str | None,
@@ -116,8 +117,9 @@ def _execute_serve(
         router_image=router_image,
         envoy_image=envoy_image,
         dashboard_image=dashboard_image,
+        platform=platform,
         pull_policy=image_pull_policy,
-        enable_observability=not minimal,
+        enable_observability=enable_observability and not minimal,
     )
 
 
@@ -173,6 +175,11 @@ def _execute_serve(
     help="Start in minimal mode: only router + envoy, no dashboard or observability (Jaeger, Prometheus, Grafana)",
 )
 @click.option(
+    "--enable-observability/--disable-observability",
+    default=True,
+    help="Enable or disable the observability stack (Jaeger, Prometheus, Grafana).",
+)
+@click.option(
     "--log-level",
     type=click.Choice(
         ["debug", "info", "warn", "warning", "error", "dpanic", "panic", "fatal"],
@@ -220,6 +227,7 @@ def serve(
     image_pull_policy: str,
     readonly: bool,
     minimal: bool,
+    enable_observability: bool,
     log_level: str | None,
     platform: str | None,
     algorithm: str | None,
@@ -238,7 +246,7 @@ def serve(
 
     \b
     docker  - Local Docker deployment (default)
-    k8s     - Kubernetes deployment via Helm
+    k8s     - Managed Kind-backed Kubernetes deployment by default
 
     MODEL SELECTION ALGORITHMS:
 
@@ -296,6 +304,7 @@ def serve(
         image_pull_policy,
         readonly,
         minimal,
+        enable_observability,
         log_level,
         platform,
         algorithm,

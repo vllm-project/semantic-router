@@ -2,7 +2,7 @@
 
 ## Status
 
-Open
+Closed
 
 ## Scope
 
@@ -10,13 +10,15 @@ Milvus-backed runtime stores under `src/semantic-router/pkg/memory/`, `src/seman
 
 ## Summary
 
-Milvus integration logic is currently repeated across several runtime packages instead of being owned by one deep adapter seam. Multiple packages create clients, resolve collection names, bootstrap schemas, create indexes, load collections, and implement retry or flush policy independently. Each package has domain-specific behavior on top, but the backend lifecycle mechanics are largely the same. This duplicates complexity, makes failures inconsistent, and forces backend policy changes to be repeated in multiple places. The same pressure is already visible at the `responsestore` surface, which exposes Milvus as a backend type without a shared runtime implementation to inherit.
+Milvus integration logic used to be repeated across several runtime packages instead of being owned by one deep adapter seam. Multiple packages created clients, resolved collection names, bootstrapped schemas, created indexes, loaded collections, and implemented retry or flush policy independently. Each package had domain-specific behavior on top, but the backend lifecycle mechanics were largely the same. This duplicated complexity, made failures inconsistent, and forced backend policy changes to be repeated in multiple places. The gap is now resolved through the shared `pkg/milvuslifecycle` seam adopted by the main runtime packages.
 
 ## Evidence
 
 - [src/semantic-router/pkg/memory/milvus_store.go](../../../src/semantic-router/pkg/memory/milvus_store.go)
 - [src/semantic-router/pkg/cache/milvus_cache.go](../../../src/semantic-router/pkg/cache/milvus_cache.go)
 - [src/semantic-router/pkg/cache/hybrid_cache.go](../../../src/semantic-router/pkg/cache/hybrid_cache.go)
+- [src/semantic-router/pkg/milvuslifecycle/lifecycle.go](../../../src/semantic-router/pkg/milvuslifecycle/lifecycle.go)
+- [src/semantic-router/pkg/milvuslifecycle/lifecycle_test.go](../../../src/semantic-router/pkg/milvuslifecycle/lifecycle_test.go)
 - [src/semantic-router/pkg/vectorstore/milvus_backend.go](../../../src/semantic-router/pkg/vectorstore/milvus_backend.go)
 - [src/semantic-router/pkg/routerreplay/store/milvus.go](../../../src/semantic-router/pkg/routerreplay/store/milvus.go)
 - [src/semantic-router/pkg/responsestore/interface.go](../../../src/semantic-router/pkg/responsestore/interface.go)

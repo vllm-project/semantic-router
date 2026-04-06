@@ -2,7 +2,7 @@
 
 ## Status
 
-Open
+Closed
 
 ## Scope
 
@@ -10,21 +10,33 @@ Open
 
 ## Summary
 
-The repository exposes Candle and ONNX backends through a nominally compatible Go surface, but the actual runtime contract still diverges in capability, lifecycle, and failure semantics. The ONNX binding intentionally leaves parts of the unified LoRA classifier path as stubs, returns placeholder probability payloads in some classifier calls, and overloads Candle-compatible APIs such as `InitEmbeddingModelsBatched` with mmBERT-only semantics. The Candle binding, meanwhile, still relies on a large set of process-wide `OnceLock` singletons for model state while also carrying a separate `state_manager` abstraction that is not the primary owner of public initialization flows. Router bootstrap and classifier code assume a Candle-shaped API and backend parity, yet there is no typed capability registry or explicit lifecycle contract that tells the runtime which features are actually available, resettable, or safe to reload on a given backend.
+The repository now exposes Candle and ONNX through an explicit typed backend contract instead of assuming backend parity from a nominally compatible Go API. Both binding packages advertise capabilities, supported embedding families, lifecycle semantics, and reload expectations through `CurrentBackendContract()`. Router-side classification and model-runtime bootstrap paths fail early when unified classification, LoRA batch inference, or unsupported embedding families are requested on a backend that does not implement them. The ONNX Go wrapper surface has been brought back into parity for the supported feature set, and Docker build paths now copy the contract sources into runtime images so local and packaged builds see the same backend metadata.
 
 ## Evidence
 
 - [candle-binding/semantic-router.go](../../../candle-binding/semantic-router.go)
+- [candle-binding/backend_contract.go](../../../candle-binding/backend_contract.go)
+- [candle-binding/backend_contract_test.go](../../../candle-binding/backend_contract_test.go)
 - [candle-binding/src/ffi/init.rs](../../../candle-binding/src/ffi/init.rs)
 - [candle-binding/src/ffi/state_manager.rs](../../../candle-binding/src/ffi/state_manager.rs)
 - [onnx-binding/semantic-router.go](../../../onnx-binding/semantic-router.go)
+- [onnx-binding/backend_contract.go](../../../onnx-binding/backend_contract.go)
+- [onnx-binding/backend_contract_test.go](../../../onnx-binding/backend_contract_test.go)
 - [onnx-binding/src/ffi/unified.rs](../../../onnx-binding/src/ffi/unified.rs)
 - [onnx-binding/src/ffi/embedding.rs](../../../onnx-binding/src/ffi/embedding.rs)
 - [src/semantic-router/pkg/classification/unified_classifier.go](../../../src/semantic-router/pkg/classification/unified_classifier.go)
 - [src/semantic-router/pkg/classification/unified_classifier_cgo_candle.go](../../../src/semantic-router/pkg/classification/unified_classifier_cgo_candle.go)
 - [src/semantic-router/pkg/classification/unified_classifier_cgo_onnx.go](../../../src/semantic-router/pkg/classification/unified_classifier_cgo_onnx.go)
+- [src/semantic-router/pkg/classification/unified_classifier_onnx_contract_test.go](../../../src/semantic-router/pkg/classification/unified_classifier_onnx_contract_test.go)
+- [src/semantic-router/pkg/modelruntime/router_runtime.go](../../../src/semantic-router/pkg/modelruntime/router_runtime.go)
+- [src/semantic-router/pkg/modelruntime/router_runtime_onnx_contract_test.go](../../../src/semantic-router/pkg/modelruntime/router_runtime_onnx_contract_test.go)
 - [src/semantic-router/cmd/runtime_bootstrap.go](../../../src/semantic-router/cmd/runtime_bootstrap.go)
 - [e2e/config/onnx-binding/config.onnx-binding-test.yaml](../../../e2e/config/onnx-binding/config.onnx-binding-test.yaml)
+- [e2e/config/onnx-binding/config.onnx-classifiers-test.yaml](../../../e2e/config/onnx-binding/config.onnx-classifiers-test.yaml)
+- [src/vllm-sr/Dockerfile](../../../src/vllm-sr/Dockerfile)
+- [src/vllm-sr/Dockerfile.rocm](../../../src/vllm-sr/Dockerfile.rocm)
+- [tools/docker/Dockerfile.extproc](../../../tools/docker/Dockerfile.extproc)
+- [tools/docker/Dockerfile.extproc-rocm](../../../tools/docker/Dockerfile.extproc-rocm)
 
 ## Why It Matters
 
@@ -42,7 +54,34 @@ The repository exposes Candle and ONNX backends through a nominally compatible G
 
 ## Exit Criteria
 
-- Runtime code can query backend capabilities for embedding, unified classification, LoRA batch inference, multimodal support, and reload semantics without relying on build-tag knowledge.
-- Unsupported features fail early through explicit capability checks rather than late through stubbed FFI calls or backend-specific placeholder behavior.
-- Binding lifecycle tests cover init, repeated init, cleanup or reset, and degraded startup semantics for both Candle and ONNX backends.
-- Backend-selection docs and validation paths make parity gaps explicit enough that deployment-specific surprises do not surface only at runtime.
+- Satisfied on 2026-04-06: runtime code can query backend capabilities for embedding, unified classification, LoRA batch inference, multimodal support, and reload semantics without relying on build-tag knowledge.
+- Satisfied on 2026-04-06: unsupported features fail early through explicit capability checks rather than late through stubbed FFI calls or backend-specific placeholder behavior.
+- Satisfied on 2026-04-06: binding lifecycle and contract tests cover supported and unsupported init paths for both Candle and ONNX backends, including degraded-startup rejection on unsupported router/bootstrap seams.
+- Satisfied on 2026-04-06: backend-selection docs, ONNX config comments, and packaged-image build paths make parity gaps explicit enough that deployment-specific surprises do not surface only at runtime.
+
+## Resolution
+
+- `candle-binding/backend_contract.go` and `onnx-binding/backend_contract.go` now publish a shared typed backend contract, including supported embedding families, feature flags, and reload semantics, with focused tests in the adjacent `backend_contract_test.go` files.
+- `src/semantic-router/pkg/classification/unified_classifier.go`, `src/semantic-router/pkg/classification/model_discovery.go`, and `src/semantic-router/pkg/modelruntime/router_runtime.go` now gate unified classification, LoRA batch inference, and embedding-family startup through that contract instead of discovering unsupported paths only after FFI calls fail.
+- `onnx-binding/semantic-router.go` now restores missing Go wrapper surface for the supported ONNX backend contract, including consistent init-state tracking, batch embedding access, and helper methods needed by router callers and tests.
+- Docker build paths for router and extproc images now copy the backend-contract Go sources so packaged builds use the same capability metadata as local module builds.
+
+## Validation
+
+- `go test -run 'Test(CurrentBackendContract_|InitMmBertEmbeddingModel|InitEmbeddingModels|InitEmbeddingModelsBatched|GetEmbeddingsBatch|CalculateEmbeddingSimilarity|CalculateSimilarityBatch|GetMatryoshkaConfig)$' ./...`
+  Run in `/Users/bitliu/vs/onnx-binding`
+- `go test -run 'TestCurrentBackendContract_' ./...`
+  Run in `/Users/bitliu/vs/candle-binding`
+- `CGO_LDFLAGS='-L../../onnx-binding/target/release' go test -modfile=go.onnx.mod -tags=onnx ./pkg/classification ./pkg/modelruntime -run 'Test(InitializeLegacyUnifiedClassifierRejectsUnsupportedONNXBackend|InitializeLoRAUnifiedClassifierRejectsUnsupportedONNXBackend|UnifiedClassifierInitializeRejectsUnsupportedONNXBackend|UnifiedClassifierInitializeLoRABindingsRejectsUnsupportedONNXBackend|ValidateEmbeddingBackendContractRejectsUnsupportedONNXFamilies|ValidateEmbeddingBackendContractAllowsMMBertOnONNX)$'`
+  Run in `/Users/bitliu/vs/src/semantic-router`
+- `go test ./pkg/classification ./pkg/modelruntime`
+  Run in `/Users/bitliu/vs/src/semantic-router`
+- `pytest /Users/bitliu/vs/src/vllm-sr/tests/test_runtime_support.py`
+- `pytest /Users/bitliu/vs/src/vllm-sr/tests/test_cli_main.py`
+- `pytest /Users/bitliu/vs/src/vllm-sr/tests/test_openclaw_shared_network.py -k 'runtime_config or isolated_network'`
+- `make agent-validate`
+- `make test-semantic-router`
+- `make test-binding-minimal`
+- `make agent-lint AGENT_CHANGED_FILES_PATH=/tmp/vsr_td033_changed.txt`
+- `make agent-ci-gate AGENT_CHANGED_FILES_PATH=/tmp/vsr_td033_changed.txt`
+- `make agent-feature-gate ENV=cpu AGENT_CHANGED_FILES_PATH=/tmp/vsr_td033_changed.txt`

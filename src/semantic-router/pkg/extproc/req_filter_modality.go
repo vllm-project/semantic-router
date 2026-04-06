@@ -160,79 +160,23 @@ func resolveAllModalityModels(decision *config.Decision, modelConfig map[string]
 //
 //   - BOTH:      calls AR for text AND diffusion for image in parallel
 func (r *OpenAIRouter) handleModalityFromDecision(ctx *RequestContext, openAIRequest *openai.ChatCompletionNewParams) (*ext_proc.ProcessingResponse, error) {
-	cfg := config.Get()
-	if cfg == nil {
+	cfg := r.currentConfig()
+	result, decision, models, ok := resolveModalityDecisionState(ctx, cfg)
+	if !ok {
 		return nil, nil
-	}
-
-	if !cfg.ModalityDetector.Enabled {
-		return nil, nil // Modality detector not enabled — normal flow
-	}
-
-	// Check the modality classification from signal evaluation
-	if ctx.ModalityClassification == nil || ctx.ModalityClassification.Modality == "" {
-		return nil, nil // No modality signal matched — normal flow
-	}
-
-	result := *ctx.ModalityClassification
-
-	// Resolve all modality models (AR, diffusion, omni) from the decision
-	decision := ctx.VSRSelectedDecision
-	var models ModalityModels
-	if decision != nil {
-		models = resolveAllModalityModels(decision, cfg.ModelConfig)
 	}
 
 	switch result.Modality {
 	case ModalityAR:
 		logging.Infof("[ModalityRouter] AR (method=%s) — passthrough", result.Method)
 		return nil, nil
-
 	case ModalityDiffusion:
 		logging.Infof("[ModalityRouter] DIFFUSION (method=%s) — generating image", result.Method)
-
-		if decision == nil {
-			return nil, fmt.Errorf("modality DIFFUSION matched but no decision selected")
-		}
-
-		// Prefer omni model if available (can handle image generation natively)
-		if models.OmniModel != "" {
-			logging.Infof("[ModalityRouter] DIFFUSION: using omni model %s for image generation", models.OmniModel)
-			return r.executeOmni(ctx, cfg, openAIRequest, result, models.OmniModel)
-		}
-
-		if models.DiffusionModel == "" {
-			return nil, fmt.Errorf("decision %q has no diffusion or omni model in modelRefs", decision.Name)
-		}
-
-		return r.executeDiffusion(ctx, cfg, result, models.DiffusionModel)
-
+		return r.handleDiffusionModality(ctx, cfg, openAIRequest, result, decision, models)
 	case ModalityBoth:
 		logging.Infof("[ModalityRouter] BOTH (method=%s)", result.Method)
-
-		if decision == nil {
-			return nil, fmt.Errorf("modality BOTH matched but no decision selected")
-		}
-
-		// Prefer omni model: single call handles both text and image
-		if models.OmniModel != "" {
-			logging.Infof("[ModalityRouter] BOTH: using omni model %s (single call for text+image)", models.OmniModel)
-			return r.executeOmni(ctx, cfg, openAIRequest, result, models.OmniModel)
-		}
-
-		// Fallback: parallel AR + diffusion calls
-		logging.Infof("[ModalityRouter] BOTH: parallel AR + diffusion")
-		if models.ARModel == "" {
-			return nil, fmt.Errorf("decision %q has no AR or omni model in modelRefs", decision.Name)
-		}
-		if models.DiffusionModel == "" {
-			return nil, fmt.Errorf("decision %q has no diffusion or omni model in modelRefs", decision.Name)
-		}
-
-		return r.executeBoth(ctx, cfg, openAIRequest, result, models.ARModel, models.DiffusionModel)
-
+		return r.handleBothModality(ctx, cfg, openAIRequest, result, decision, models)
 	default:
-		// AR fallback for unrecognized modality
 		return nil, nil
 	}
 }
@@ -387,7 +331,7 @@ func (r *OpenAIRouter) executeOmni(ctx *RequestContext, cfg *config.RouterConfig
 	if err != nil {
 		return nil, fmt.Errorf("omni request failed: %w", err)
 	}
-	defer resp.Body.Close()
+	defer closeHTTPBodyWithLog(resp.Body, "omni response body")
 
 	body, err := io.ReadAll(resp.Body)
 	latency := time.Since(start).Seconds()
@@ -520,7 +464,7 @@ func (r *OpenAIRouter) callARModel(ctx *RequestContext, cfg *config.RouterConfig
 	if err != nil {
 		return nil, fmt.Errorf("AR request failed: %w", err)
 	}
-	defer resp.Body.Close()
+	defer closeHTTPBodyWithLog(resp.Body, "AR response body")
 
 	body, err := io.ReadAll(resp.Body)
 	latency := time.Since(start).Seconds()
@@ -561,40 +505,10 @@ func (r *OpenAIRouter) generateImage(ctx *RequestContext, cfg *config.RouterConf
 		return nil, fmt.Errorf("failed to create image generation backend: %w", err)
 	}
 
-	genReq := &imagegen.GenerateRequest{
-		Prompt: ExtractImagePrompt(ctx.UserContent, promptPrefixes),
-		Width:  pluginCfg.DefaultWidth,
-		Height: pluginCfg.DefaultHeight,
-	}
-
-	// Apply image_generation tool params if present (from Responses API)
-	if ctx.ResponseAPICtx != nil && ctx.ResponseAPICtx.ImageGenToolParams != nil {
-		params := ctx.ResponseAPICtx.ImageGenToolParams
-
-		// Override size from tool params
-		if params.Size != "" && params.Size != "auto" {
-			w, h := parseSizeString(params.Size)
-			if w > 0 && h > 0 {
-				genReq.Width = w
-				genReq.Height = h
-			}
-		}
-
-		// Pass quality through for OpenAI backend
-		if params.Quality != "" && params.Quality != "auto" {
-			genReq.Quality = params.Quality
-		}
-
-		// Override model if specified in tool params
-		if params.Model != "" {
-			genReq.Model = params.Model
-		}
-	}
-
+	genReq := buildImageGenerateRequest(ctx, pluginCfg, promptPrefixes)
 	start := time.Now()
 	genResp, err := backend.GenerateImage(ctx.TraceContext, genReq)
 	latency := time.Since(start).Seconds()
-
 	if err != nil {
 		metrics.RecordImageGenRequest(backend.Name(), "error", latency)
 		return nil, fmt.Errorf("image generation failed: %w", err)
@@ -602,7 +516,6 @@ func (r *OpenAIRouter) generateImage(ctx *RequestContext, cfg *config.RouterConf
 
 	metrics.RecordImageGenRequest(backend.Name(), "success", latency)
 	logging.Infof("[ModalityRouter] Generated image in %.2fs via %s", latency, backend.Name())
-
 	return &ImageGenResult{
 		ImageURL:      genResp.ImageURL,
 		ImageBase64:   genResp.ImageBase64,

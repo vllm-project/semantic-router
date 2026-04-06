@@ -8,6 +8,8 @@ import (
 	"strings"
 
 	"gopkg.in/yaml.v3"
+
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/trainingartifacts"
 )
 
 // GenerateConfig runs Layer 3: generates a deployment-ready YAML config.
@@ -26,7 +28,7 @@ func (r *Runner) GenerateConfig(req ConfigRequest) (string, error) {
 
 	configMap := buildConfigYAML(req)
 
-	outputPath := filepath.Join(jobDir, "ml-model-selection-values.yaml")
+	outputPath := trainingartifacts.CurrentContract().GeneratedValuesPath(jobDir)
 	var buf bytes.Buffer
 	enc := yaml.NewEncoder(&buf)
 	enc.SetIndent(2)
@@ -137,9 +139,10 @@ type yamlModelRef struct {
 
 // buildConfigYAML creates the config structure matching the semantic-router values.yaml format.
 func buildConfigYAML(req ConfigRequest) yamlConfig {
+	contract := trainingartifacts.CurrentContract()
 	modelsPath := req.ModelsPath
 	if modelsPath == "" {
-		modelsPath = "/data/ml-pipeline/ml-train"
+		modelsPath = filepath.Join("/data/ml-pipeline", contract.MLPipeline.Outputs.TrainOutputDirName)
 	}
 
 	ml := yamlML{
@@ -154,20 +157,20 @@ func buildConfigYAML(req ConfigRequest) yamlConfig {
 	if algSet["knn"] {
 		ml.KNN = &yamlKNN{
 			K:              5,
-			PretrainedPath: filepath.Join(modelsPath, "knn_model.json"),
+			PretrainedPath: filepath.Join(modelsPath, contract.MLPipeline.Outputs.ModelFiles.KNN),
 		}
 	}
 	if algSet["kmeans"] {
 		ml.KMeans = &yamlKMeans{
 			NumClusters:    8,
-			PretrainedPath: filepath.Join(modelsPath, "kmeans_model.json"),
+			PretrainedPath: filepath.Join(modelsPath, contract.MLPipeline.Outputs.ModelFiles.KMeans),
 		}
 	}
 	if algSet["svm"] {
 		ml.SVM = &yamlSVM{
 			Kernel:         "rbf",
 			Gamma:          1.0,
-			PretrainedPath: filepath.Join(modelsPath, "svm_model.json"),
+			PretrainedPath: filepath.Join(modelsPath, contract.MLPipeline.Outputs.ModelFiles.SVM),
 		}
 	}
 	if algSet["mlp"] {
@@ -177,7 +180,7 @@ func buildConfigYAML(req ConfigRequest) yamlConfig {
 		}
 		ml.MLP = &yamlMLP{
 			Device:         mlpDevice,
-			PretrainedPath: filepath.Join(modelsPath, "mlp_model.json"),
+			PretrainedPath: filepath.Join(modelsPath, contract.MLPipeline.Outputs.ModelFiles.MLP),
 		}
 	}
 

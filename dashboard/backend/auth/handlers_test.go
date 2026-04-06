@@ -9,6 +9,7 @@ import (
 	"slices"
 	"strings"
 	"testing"
+	"time"
 )
 
 func newTestAuthService(t *testing.T) *Service {
@@ -229,6 +230,29 @@ func TestLoginHandlerReturnsEffectivePermissions(t *testing.T) {
 	if !slices.Contains(payload.User.Permissions, PermToolsUse) {
 		t.Fatalf("login response permissions missing %q: %v", PermToolsUse, payload.User.Permissions)
 	}
+
+	sessionCookie := recorder.Result().Cookies()
+	if len(sessionCookie) != 1 {
+		t.Fatalf("cookie count = %d, want 1", len(sessionCookie))
+	}
+	if sessionCookie[0].Name != authSessionCookieName {
+		t.Fatalf("cookie name = %q, want %q", sessionCookie[0].Name, authSessionCookieName)
+	}
+	if !sessionCookie[0].HttpOnly {
+		t.Fatalf("expected %q cookie to be HttpOnly", authSessionCookieName)
+	}
+	if sessionCookie[0].SameSite != http.SameSiteLaxMode {
+		t.Fatalf("cookie SameSite = %v, want %v", sessionCookie[0].SameSite, http.SameSiteLaxMode)
+	}
+	if sessionCookie[0].Path != authSessionCookiePath {
+		t.Fatalf("cookie path = %q, want %q", sessionCookie[0].Path, authSessionCookiePath)
+	}
+	if sessionCookie[0].Value == "" {
+		t.Fatalf("expected %q cookie value", authSessionCookieName)
+	}
+	if time.Until(sessionCookie[0].Expires) <= 0 {
+		t.Fatalf("expected %q cookie expiry in the future", authSessionCookieName)
+	}
 }
 
 func TestMeHandlerReturnsEffectivePermissions(t *testing.T) {
@@ -273,5 +297,67 @@ func TestMeHandlerReturnsEffectivePermissions(t *testing.T) {
 	}
 	if !slices.Contains(payload.User.Permissions, PermUsersView) {
 		t.Fatalf("me response permissions missing %q: %v", PermUsersView, payload.User.Permissions)
+	}
+}
+
+func TestBootstrapRegisterHandlerSetsSessionCookie(t *testing.T) {
+	t.Parallel()
+
+	svc := newTestAuthService(t)
+
+	mux := http.NewServeMux()
+	mux.HandleFunc("/api/auth/bootstrap/register", bootstrapRegisterHandler(svc))
+
+	recorder := httptest.NewRecorder()
+	req := httptest.NewRequest(
+		http.MethodPost,
+		"/api/auth/bootstrap/register",
+		strings.NewReader(`{"email":"admin@example.com","password":"secret-password","name":"Admin"}`),
+	)
+	req.Header.Set("Content-Type", "application/json")
+	mux.ServeHTTP(recorder, req)
+
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d", recorder.Code, http.StatusOK)
+	}
+
+	cookies := recorder.Result().Cookies()
+	if len(cookies) != 1 {
+		t.Fatalf("cookie count = %d, want 1", len(cookies))
+	}
+	if cookies[0].Name != authSessionCookieName {
+		t.Fatalf("cookie name = %q, want %q", cookies[0].Name, authSessionCookieName)
+	}
+	if !cookies[0].HttpOnly {
+		t.Fatalf("expected %q cookie to be HttpOnly", authSessionCookieName)
+	}
+}
+
+func TestLogoutHandlerClearsSessionCookie(t *testing.T) {
+	t.Parallel()
+
+	mux := http.NewServeMux()
+	mux.HandleFunc("/api/auth/logout", logoutHandler(nil))
+
+	recorder := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodPost, "/api/auth/logout", nil)
+	mux.ServeHTTP(recorder, req)
+
+	if recorder.Code != http.StatusNoContent {
+		t.Fatalf("status = %d, want %d", recorder.Code, http.StatusNoContent)
+	}
+
+	cookies := recorder.Result().Cookies()
+	if len(cookies) != 1 {
+		t.Fatalf("cookie count = %d, want 1", len(cookies))
+	}
+	if cookies[0].Name != authSessionCookieName {
+		t.Fatalf("cookie name = %q, want %q", cookies[0].Name, authSessionCookieName)
+	}
+	if cookies[0].MaxAge != -1 {
+		t.Fatalf("cookie MaxAge = %d, want -1", cookies[0].MaxAge)
+	}
+	if !cookies[0].Expires.Equal(time.Unix(0, 0)) {
+		t.Fatalf("cookie Expires = %v, want Unix(0, 0)", cookies[0].Expires)
 	}
 }

@@ -193,11 +193,21 @@ def validate_workflow_suite_rules(e2e_map: dict, errors: list[str]) -> None:
                 errors.append(
                     f"tools/agent/e2e-profile-map.yaml workflow suite '{suite_name}' is missing '{field}'"
                 )
+        trigger_contract = data.get("trigger_contract", "pull_request_paths")
+        if trigger_contract not in {"pull_request_paths", "manual_or_scheduled"}:
+            errors.append(
+                f"tools/agent/e2e-profile-map.yaml workflow suite '{suite_name}' has unsupported trigger_contract '{trigger_contract}'"
+            )
+            continue
         workflow_path = data.get("workflow")
         if not workflow_path:
             continue
-        workflow_paths = load_workflow_trigger_paths(workflow_path, errors)
+        workflow_paths = load_workflow_trigger_paths(
+            workflow_path, trigger_contract, errors
+        )
         if workflow_paths is None:
+            continue
+        if trigger_contract != "pull_request_paths":
             continue
         suite_paths = set(data.get("paths", []))
         if workflow_paths != suite_paths:
@@ -207,7 +217,7 @@ def validate_workflow_suite_rules(e2e_map: dict, errors: list[str]) -> None:
 
 
 def load_workflow_trigger_paths(
-    workflow_path: str, errors: list[str]
+    workflow_path: str, trigger_contract: str, errors: list[str]
 ) -> set[str] | None:
     path = REPO_ROOT / workflow_path
     if not path.exists():
@@ -215,6 +225,25 @@ def load_workflow_trigger_paths(
         return None
     workflow = yaml.safe_load(path.read_text(encoding="utf-8"))
     workflow_on = workflow.get("on", workflow.get(True, {}))
+    if trigger_contract == "manual_or_scheduled":
+        is_valid_manual_schedule = True
+        if "workflow_dispatch" not in workflow_on:
+            errors.append(
+                f"Workflow '{workflow_path}' is missing workflow_dispatch for manual_or_scheduled trigger_contract"
+            )
+            is_valid_manual_schedule = False
+        if not workflow_on.get("schedule"):
+            errors.append(
+                f"Workflow '{workflow_path}' is missing schedule for manual_or_scheduled trigger_contract"
+            )
+            is_valid_manual_schedule = False
+        if "pull_request" in workflow_on:
+            errors.append(
+                f"Workflow '{workflow_path}' should not define pull_request for manual_or_scheduled trigger_contract"
+            )
+            is_valid_manual_schedule = False
+        return set() if is_valid_manual_schedule else None
+
     pull_request = workflow_on.get("pull_request", {})
     if not isinstance(pull_request, dict):
         errors.append(f"Workflow '{workflow_path}' is missing pull_request.paths")
@@ -222,5 +251,15 @@ def load_workflow_trigger_paths(
     paths = pull_request.get("paths")
     if not paths:
         errors.append(f"Workflow '{workflow_path}' is missing pull_request.paths")
+        return None
+    push = workflow_on.get("push", {})
+    if (
+        isinstance(push, dict)
+        and push.get("paths")
+        and set(push["paths"]) != set(paths)
+    ):
+        errors.append(
+            f"Workflow '{workflow_path}' push.paths does not match pull_request.paths"
+        )
         return None
     return set(paths)

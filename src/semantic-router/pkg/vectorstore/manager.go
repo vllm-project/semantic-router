@@ -32,15 +32,32 @@ type Manager struct {
 	stores             map[string]*VectorStore // id -> store
 	embeddingDim       int
 	defaultBackendType string
+	registry           *LocalMetadataRegistry
 }
 
 // NewManager creates a new vector store manager.
 func NewManager(backend VectorStoreBackend, embeddingDim int, backendType string) *Manager {
+	return NewManagerWithRegistry(backend, embeddingDim, backendType, nil)
+}
+
+// NewManagerWithRegistry creates a new vector store manager backed by an
+// optional local metadata registry.
+func NewManagerWithRegistry(
+	backend VectorStoreBackend,
+	embeddingDim int,
+	backendType string,
+	registry *LocalMetadataRegistry,
+) *Manager {
+	stores := make(map[string]*VectorStore)
+	if registry != nil {
+		stores = registry.Stores()
+	}
 	return &Manager{
 		backend:            backend,
-		stores:             make(map[string]*VectorStore),
+		stores:             stores,
 		embeddingDim:       embeddingDim,
 		defaultBackendType: backendType,
+		registry:           registry,
 	}
 }
 
@@ -89,6 +106,13 @@ func (m *Manager) CreateStore(ctx context.Context, req CreateStoreRequest) (*Vec
 	m.mu.Lock()
 	m.stores[id] = vs
 	m.mu.Unlock()
+	if err := m.persistStore(vs); err != nil {
+		m.mu.Lock()
+		delete(m.stores, id)
+		m.mu.Unlock()
+		_ = m.backend.DeleteCollection(ctx, id)
+		return nil, err
+	}
 
 	return vs, nil
 }
@@ -172,6 +196,9 @@ func (m *Manager) UpdateStore(id string, req UpdateStoreRequest) (*VectorStore, 
 	if req.Metadata != nil {
 		vs.Metadata = req.Metadata
 	}
+	if err := m.persistStore(vs); err != nil {
+		return nil, err
+	}
 
 	return vs, nil
 }
@@ -179,15 +206,25 @@ func (m *Manager) UpdateStore(id string, req UpdateStoreRequest) (*VectorStore, 
 // DeleteStore deletes a vector store and its backing collection.
 func (m *Manager) DeleteStore(ctx context.Context, id string) error {
 	m.mu.Lock()
-	_, ok := m.stores[id]
+	vs, ok := m.stores[id]
 	if !ok {
 		m.mu.Unlock()
 		return fmt.Errorf("vector store not found: %s", id)
 	}
 	delete(m.stores, id)
 	m.mu.Unlock()
+	if err := m.deletePersistedStore(id); err != nil {
+		m.mu.Lock()
+		m.stores[id] = vs
+		m.mu.Unlock()
+		return err
+	}
 
 	if err := m.backend.DeleteCollection(ctx, id); err != nil {
+		m.mu.Lock()
+		m.stores[id] = vs
+		m.mu.Unlock()
+		_ = m.persistStore(vs)
 		return fmt.Errorf("failed to delete backend collection: %w", err)
 	}
 
@@ -210,5 +247,82 @@ func (m *Manager) UpdateFileCounts(id string, fn func(*FileCounts)) error {
 	}
 
 	fn(&vs.FileCounts)
+	if err := m.persistStore(vs); err != nil {
+		return err
+	}
 	return nil
+}
+
+// ReconcilePersistedStores drops persisted store metadata when the underlying
+// backend no longer has the collection (for example a memory backend restart).
+func (m *Manager) ReconcilePersistedStores(ctx context.Context) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	changed := false
+	for id := range m.stores {
+		exists, err := m.backend.CollectionExists(ctx, id)
+		if err != nil {
+			return fmt.Errorf("failed to check vector store collection %s: %w", id, err)
+		}
+		if exists {
+			continue
+		}
+		delete(m.stores, id)
+		changed = true
+	}
+	if !changed {
+		return nil
+	}
+	return m.replacePersistedStoresLocked()
+}
+
+// RestoreFileCounts rebuilds store counters from the persisted vector-store
+// file status records so list/get responses remain restart-safe.
+func (m *Manager) RestoreFileCounts(statuses map[string]*VectorStoreFile) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	for _, store := range m.stores {
+		store.FileCounts = FileCounts{}
+	}
+
+	for _, status := range statuses {
+		store, ok := m.stores[status.VectorStoreID]
+		if !ok {
+			continue
+		}
+		store.FileCounts.Total++
+		switch status.Status {
+		case "completed":
+			store.FileCounts.Completed++
+		case "failed":
+			store.FileCounts.Failed++
+		case "in_progress":
+			store.FileCounts.InProgress++
+		}
+	}
+
+	return m.replacePersistedStoresLocked()
+}
+
+func (m *Manager) persistStore(store *VectorStore) error {
+	if m.registry == nil || store == nil {
+		return nil
+	}
+	return m.registry.UpsertStore(store)
+}
+
+func (m *Manager) deletePersistedStore(id string) error {
+	if m.registry == nil {
+		return nil
+	}
+	return m.registry.DeleteStore(id)
+}
+
+func (m *Manager) replacePersistedStoresLocked() error {
+	if m.registry == nil {
+		return nil
+	}
+	return m.registry.ReplaceStores(m.stores)
 }

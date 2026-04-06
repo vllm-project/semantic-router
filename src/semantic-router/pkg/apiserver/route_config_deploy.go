@@ -30,7 +30,9 @@ const maxBackups = 10
 type RouterConfigUpdateRequest struct {
 	// YAML is the router config YAML payload.
 	YAML string `json:"yaml"`
-	// DSL is the original DSL source (archived for audit trail).
+	// DSL is the original DSL source archived for audit trail only.
+	// It is not loaded back into canonical router config and does not preserve
+	// DSL-only authoring constructs such as DECISION_TREE.
 	DSL string `json:"dsl,omitempty"`
 }
 

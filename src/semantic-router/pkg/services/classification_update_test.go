@@ -36,3 +36,35 @@ func TestClassificationServiceRefreshRuntimeConfigRefreshesClassifierConfig(t *t
 		t.Fatalf("expected classifier config to be updated")
 	}
 }
+
+func TestClassificationServiceRefreshRuntimeConfigDoesNotReplaceGlobalConfig(t *testing.T) {
+	previousCfg := config.Get()
+	stableCfg := previousCfg
+	if stableCfg == nil {
+		stableCfg = &config.RouterConfig{}
+	}
+	config.Replace(stableCfg)
+	t.Cleanup(func() {
+		config.Replace(stableCfg)
+		if previousCfg != nil {
+			config.Replace(previousCfg)
+		}
+	})
+
+	service := &ClassificationService{
+		classifier: &classification.Classifier{Config: stableCfg},
+		config:     stableCfg,
+	}
+	updatedCfg := &config.RouterConfig{
+		BackendModels: config.BackendModels{DefaultModel: "service-local"},
+	}
+
+	service.RefreshRuntimeConfig(updatedCfg)
+
+	if got := config.Get(); got != stableCfg {
+		t.Fatalf("config.Get() = %p, want unchanged %p", got, stableCfg)
+	}
+	if service.config != updatedCfg {
+		t.Fatalf("service.config = %p, want %p", service.config, updatedCfg)
+	}
+}

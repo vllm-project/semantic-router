@@ -2,22 +2,32 @@
 
 ## Status
 
-Open
+Closed
 
 ## Scope
 
-`src/semantic-router/pkg/classification/**`, `src/semantic-router/pkg/services/classification.go`, and adjacent classifier bootstrap/discovery seams
+`src/semantic-router/pkg/classification/**`, `src/semantic-router/pkg/services/classification*.go`, `src/semantic-router/pkg/services/classification_bootstrap_test.go`, and `tools/agent/structure-rules.yaml`
 
 ## Summary
 
-The classification subsystem has drifted into a shallow, high-churn design where giant orchestrator files own too many unrelated responsibilities at once. `classifier.go` mixes backend selection, model initialization, category and security mapping ownership, concurrency and metrics handling, and request-time family inference. The service layer partially duplicates discovery and bootstrap work, while the unified-classifier path and legacy path are layered unclearly. The result is a hotspot that resists change: adding a new backend or signal family tends to touch the same large constructor and shared state table instead of a narrow seam.
+The classification subsystem now has narrower seams for lifecycle, service assembly, and family-specific response handling. `classifier.go` no longer needs legacy structure relief, because classifier lifecycle and family composition already live on adjacent helpers such as `classifier_lifecycle.go`, `classifier_construction.go`, and `category_classifier.go`. The remaining service hotspot has been decomposed: auto-discovery and mapping/bootstrap live in `classification_bootstrap.go`, intent evaluation stays with the signal contract in `classification_signal_contract.go`, and PII, security, unified-batch, fact-check, and user-feedback handlers each own their own response seams. The old `classifier.go` / `services/classification.go` relaxed structure entry has been removed from `tools/agent/structure-rules.yaml`.
 
 ## Evidence
 
 - [src/semantic-router/pkg/classification/classifier.go](../../../src/semantic-router/pkg/classification/classifier.go)
+- [src/semantic-router/pkg/classification/classifier_lifecycle.go](../../../src/semantic-router/pkg/classification/classifier_lifecycle.go)
+- [src/semantic-router/pkg/classification/classifier_construction.go](../../../src/semantic-router/pkg/classification/classifier_construction.go)
+- [src/semantic-router/pkg/classification/category_classifier.go](../../../src/semantic-router/pkg/classification/category_classifier.go)
 - [src/semantic-router/pkg/classification/unified_classifier.go](../../../src/semantic-router/pkg/classification/unified_classifier.go)
 - [src/semantic-router/pkg/classification/model_discovery.go](../../../src/semantic-router/pkg/classification/model_discovery.go)
 - [src/semantic-router/pkg/services/classification.go](../../../src/semantic-router/pkg/services/classification.go)
+- [src/semantic-router/pkg/services/classification_bootstrap.go](../../../src/semantic-router/pkg/services/classification_bootstrap.go)
+- [src/semantic-router/pkg/services/classification_signal_contract.go](../../../src/semantic-router/pkg/services/classification_signal_contract.go)
+- [src/semantic-router/pkg/services/classification_pii.go](../../../src/semantic-router/pkg/services/classification_pii.go)
+- [src/semantic-router/pkg/services/classification_security.go](../../../src/semantic-router/pkg/services/classification_security.go)
+- [src/semantic-router/pkg/services/classification_unified.go](../../../src/semantic-router/pkg/services/classification_unified.go)
+- [src/semantic-router/pkg/services/classification_feedback.go](../../../src/semantic-router/pkg/services/classification_feedback.go)
+- [src/semantic-router/pkg/services/classification_bootstrap_test.go](../../../src/semantic-router/pkg/services/classification_bootstrap_test.go)
 - [src/semantic-router/pkg/services/classification_test.go](../../../src/semantic-router/pkg/services/classification_test.go)
 - [tools/agent/structure-rules.yaml](../../../tools/agent/structure-rules.yaml)
 
@@ -41,3 +51,8 @@ The classification subsystem has drifted into a shallow, high-churn design where
 - New classifier backends or signal families can be added through narrow seams without editing a giant shared constructor or state table.
 - Classification tests cover the extracted seams independently enough that bootstrap, mapping, and request-time inference can fail separately.
 - The classification hotspot no longer requires relaxed structure treatment for the same responsibilities that are currently bundled together.
+
+## Validation
+
+- `go test ./pkg/services ./pkg/classification`
+- `python3 tools/agent/scripts/structure_check.py src/semantic-router/pkg/classification/classifier.go src/semantic-router/pkg/services/classification.go src/semantic-router/pkg/services/classification_bootstrap.go src/semantic-router/pkg/services/classification_pii.go src/semantic-router/pkg/services/classification_security.go src/semantic-router/pkg/services/classification_feedback.go src/semantic-router/pkg/services/classification_unified.go src/semantic-router/pkg/services/classification_signal_contract.go`

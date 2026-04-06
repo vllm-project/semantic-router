@@ -8,13 +8,14 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"runtime"
 	"testing"
 	"time"
 
 	"gopkg.in/yaml.v3"
 
-	routerconfig "github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
-	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/dsl"
+	routerauthoring "github.com/vllm-project/semantic-router/src/semantic-router/pkg/routerauthoring"
+	routercontract "github.com/vllm-project/semantic-router/src/semantic-router/pkg/routercontract"
 )
 
 // ============================================================
@@ -783,29 +784,29 @@ routing:
 	}
 }
 
-func TestMergeDeployPayload_RoundTripsMaintainedAMDConfig(t *testing.T) {
-	assetPath := filepath.Join("..", "..", "..", "deploy", "amd", "config.yaml")
+func TestMergeDeployPayload_RoundTripsMaintainedCanonicalConfig(t *testing.T) {
+	assetPath := filepath.Join(testRepoRoot(t), "deploy", "recipes", "balance.yaml")
 	originalYAML, err := os.ReadFile(assetPath)
 	if err != nil {
-		t.Fatalf("failed to read maintained AMD config: %v", err)
+		t.Fatalf("failed to read maintained canonical recipe config: %v", err)
 	}
 
-	originalCfg, err := routerconfig.ParseYAMLBytes(originalYAML)
+	originalCfg, err := routercontract.ParseYAMLBytes(originalYAML)
 	if err != nil {
 		t.Fatalf("ParseYAMLBytes(original) error: %v", err)
 	}
 
-	dslText, err := dsl.DecompileRouting(originalCfg)
+	dslText, err := routerauthoring.DecompileRouting(originalCfg)
 	if err != nil {
 		t.Fatalf("DecompileRouting error: %v", err)
 	}
 
-	compiledCfg, errs := dsl.Compile(dslText)
+	compiledCfg, errs := routerauthoring.Compile(dslText)
 	if len(errs) > 0 {
 		t.Fatalf("Compile errors: %v", errs)
 	}
 
-	routingFragment, err := dsl.EmitRoutingYAMLFromConfig(compiledCfg)
+	routingFragment, err := routerauthoring.EmitRoutingYAMLFromConfig(compiledCfg)
 	if err != nil {
 		t.Fatalf("EmitRoutingYAMLFromConfig error: %v", err)
 	}
@@ -818,24 +819,33 @@ func TestMergeDeployPayload_RoundTripsMaintainedAMDConfig(t *testing.T) {
 		t.Fatalf("mergeDeployPayload error: %v", err)
 	}
 
-	mergedCfg, err := routerconfig.ParseYAMLBytes(mergedYAML)
+	mergedCfg, err := routercontract.ParseYAMLBytes(mergedYAML)
 	if err != nil {
 		t.Fatalf("ParseYAMLBytes(merged) error: %v", err)
 	}
 
-	originalCanonical, err := yaml.Marshal(routerconfig.CanonicalConfigFromRouterConfig(originalCfg))
+	originalCanonical, err := yaml.Marshal(originalCfg)
 	if err != nil {
 		t.Fatalf("marshal original canonical config: %v", err)
 	}
 
-	mergedCanonical, err := yaml.Marshal(routerconfig.CanonicalConfigFromRouterConfig(mergedCfg))
+	mergedCanonical, err := yaml.Marshal(mergedCfg)
 	if err != nil {
 		t.Fatalf("marshal merged canonical config: %v", err)
 	}
 
 	if got, want := canonicalizeYAMLForDiff(mergedCanonical), canonicalizeYAMLForDiff(originalCanonical); got != want {
-		t.Fatalf("import/decompile/compile/merge should preserve maintained AMD config\nwant:\n%s\n\ngot:\n%s", want, got)
+		t.Fatalf("import/decompile/compile/merge should preserve maintained canonical recipe config\nwant:\n%s\n\ngot:\n%s", want, got)
 	}
+}
+
+func testRepoRoot(t *testing.T) string {
+	t.Helper()
+	_, file, _, ok := runtime.Caller(0)
+	if !ok {
+		t.Fatal("runtime.Caller failed")
+	}
+	return filepath.Clean(filepath.Join(filepath.Dir(file), "..", "..", ".."))
 }
 
 func TestDeployHandler_NoDSLSource(t *testing.T) {

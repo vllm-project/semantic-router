@@ -5,8 +5,8 @@ import (
 	"regexp"
 	"strings"
 
-	routerconfig "github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
-	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/dsl"
+	routerauthoring "github.com/vllm-project/semantic-router/src/semantic-router/pkg/routerauthoring"
+	routercontract "github.com/vllm-project/semantic-router/src/semantic-router/pkg/routercontract"
 )
 
 type builderNLMultiWordDomainPattern struct {
@@ -17,12 +17,12 @@ type builderNLMultiWordDomainPattern struct {
 
 var builderNLMultiWordDomainPatterns = compileBuilderNLMultiWordDomainPatterns()
 
-func validateBuilderNLDomainSignals(prog *dsl.Program) []BuilderNLDiagnostic {
+func validateBuilderNLDomainSignals(prog *routerauthoring.Program) []BuilderNLDiagnostic {
 	if prog == nil {
 		return nil
 	}
 
-	supported := strings.Join(routerconfig.SupportedRoutingDomainNames(), ", ")
+	supported := strings.Join(routercontract.SupportedRoutingDomainNames(), ", ")
 	diagnostics := make([]BuilderNLDiagnostic, 0)
 
 	for _, signal := range prog.Signals {
@@ -34,7 +34,7 @@ func validateBuilderNLDomainSignals(prog *dsl.Program) []BuilderNLDiagnostic {
 		if name == "" || builderNLDomainSignalHasExplicitCategories(signal) {
 			continue
 		}
-		if routerconfig.IsSupportedRoutingDomainName(name) {
+		if routercontract.IsSupportedRoutingDomainName(name) {
 			continue
 		}
 
@@ -51,7 +51,7 @@ func validateBuilderNLDomainSignals(prog *dsl.Program) []BuilderNLDiagnostic {
 			Column:  signal.Pos.Column,
 		}
 
-		if suggestion := routerconfig.SuggestSupportedRoutingDomainName(name); suggestion != "" && suggestion != name {
+		if suggestion := routercontract.SuggestSupportedRoutingDomainName(name); suggestion != "" && suggestion != name {
 			diagnostic.Message += fmt.Sprintf("; did you mean %q?", suggestion)
 			diagnostic.Fixes = []builderNLQuickFix{{
 				Description: fmt.Sprintf("Rename to %q and add explicit mmlu_categories if needed", suggestion),
@@ -111,13 +111,13 @@ func validateBuilderNLMultiWordDomainSyntax(source string) []BuilderNLDiagnostic
 	return diagnostics
 }
 
-func builderNLDomainSignalHasExplicitCategories(signal *dsl.SignalDecl) bool {
+func builderNLDomainSignalHasExplicitCategories(signal *routerauthoring.SignalDecl) bool {
 	raw, ok := signal.Fields["mmlu_categories"]
 	if !ok {
 		return false
 	}
 
-	arrayValue, ok := raw.(dsl.ArrayValue)
+	arrayValue, ok := raw.(routerauthoring.ArrayValue)
 	if !ok {
 		return true
 	}
@@ -126,7 +126,7 @@ func builderNLDomainSignalHasExplicitCategories(signal *dsl.SignalDecl) bool {
 }
 
 func compileBuilderNLMultiWordDomainPatterns() []builderNLMultiWordDomainPattern {
-	domains := routerconfig.SupportedRoutingDomainNames()
+	domains := routercontract.SupportedRoutingDomainNames()
 	patterns := make([]builderNLMultiWordDomainPattern, 0, len(domains))
 	for _, domain := range domains {
 		domain = strings.TrimSpace(domain)

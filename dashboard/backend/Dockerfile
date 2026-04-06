@@ -78,10 +78,14 @@ COPY src/semantic-router/go.mod src/semantic-router/go.sum /app/src/semantic-rou
 COPY src/semantic-router/internal/nlgen/ /app/src/semantic-router/internal/nlgen/
 COPY src/semantic-router/pkg/config/ /app/src/semantic-router/pkg/config/
 COPY src/semantic-router/pkg/dsl/ /app/src/semantic-router/pkg/dsl/
+COPY src/semantic-router/pkg/routerauthoring/ /app/src/semantic-router/pkg/routerauthoring/
+COPY src/semantic-router/pkg/routercontract/ /app/src/semantic-router/pkg/routercontract/
+COPY src/semantic-router/pkg/routerprojection/ /app/src/semantic-router/pkg/routerprojection/
 COPY src/semantic-router/pkg/modelinventory/ /app/src/semantic-router/pkg/modelinventory/
 COPY src/semantic-router/pkg/nlgen/ /app/src/semantic-router/pkg/nlgen/
 COPY src/semantic-router/pkg/observability/ /app/src/semantic-router/pkg/observability/
 COPY src/semantic-router/pkg/startupstatus/ /app/src/semantic-router/pkg/startupstatus/
+COPY src/semantic-router/pkg/trainingartifacts/ /app/src/semantic-router/pkg/trainingartifacts/
 
 # Copy go.mod and go.sum first for better caching
 COPY dashboard/backend/go.mod dashboard/backend/go.sum /app/dashboard/backend/
@@ -119,6 +123,7 @@ COPY --from=frontend-builder /app/frontend/dist /app/frontend
 COPY --from=wizmap-builder /app/wizmap-dist /app/frontend/embedded/wizmap
 COPY src/vllm-sr/requirements.txt /app/requirements.txt
 COPY src/training/model_eval/ /app/src/training/model_eval/
+COPY src/semantic-router/pkg/trainingartifacts/ /app/src/semantic-router/pkg/trainingartifacts/
 COPY src/vllm-sr/cli/ /app/cli/
 COPY src/vllm-sr/start-dashboard.sh /app/start-dashboard.sh
 COPY src/vllm-sr/cli/templates/tools_db.json /app/config/tools_db.json

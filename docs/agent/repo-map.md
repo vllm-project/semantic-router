@@ -66,7 +66,8 @@
 - Root command router: [Makefile](../../Makefile)
 - Local serve command: [src/vllm-sr/cli/main.py](../../src/vllm-sr/cli/main.py)
 - Runtime command orchestration: [src/vllm-sr/cli/commands/runtime.py](../../src/vllm-sr/cli/commands/runtime.py)
-- Local service startup/status: [src/vllm-sr/cli/core.py](../../src/vllm-sr/cli/core.py)
+- Local service startup/shutdown orchestration: [src/vllm-sr/cli/core.py](../../src/vllm-sr/cli/core.py)
+- Local service status/log support: [src/vllm-sr/cli/runtime_status.py](../../src/vllm-sr/cli/runtime_status.py)
 - Docker compatibility barrel and image/service helpers: [src/vllm-sr/cli/docker_cli.py](../../src/vllm-sr/cli/docker_cli.py)
 - E2E driver: [tools/make/e2e.mk](../../tools/make/e2e.mk)
 

@@ -29,7 +29,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/log"
 
 	vllmv1alpha1 "github.com/vllm-project/semantic-router/operator/api/v1alpha1"
-	routerconfig "github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
+	routercontract "github.com/vllm-project/semantic-router/src/semantic-router/pkg/routercontract"
 )
 
 // BackendEndpoint represents a discovered backend endpoint
@@ -45,7 +45,7 @@ type BackendEndpoint struct {
 // backend bindings and routing metadata.
 type DiscoveredProviderModel struct {
 	ReasoningFamily string `yaml:"reasoning_family,omitempty"`
-	BackendRefs     []routerconfig.CanonicalBackendRef
+	BackendRefs     []routercontract.CanonicalBackendRef
 	LoRAs           []vllmv1alpha1.LoRAAdapterSpec `yaml:"loras,omitempty"`
 }
 
@@ -242,7 +242,7 @@ func discoverVLLMBackends(ctx context.Context, c client.Client, vllmEndpoints []
 			if modelConfig.ReasoningFamily == "" {
 				modelConfig.ReasoningFamily = vllmEndpoint.ReasoningFamily
 			}
-			modelConfig.BackendRefs = append(modelConfig.BackendRefs, routerconfig.CanonicalBackendRef{
+			modelConfig.BackendRefs = append(modelConfig.BackendRefs, routercontract.CanonicalBackendRef{
 				Name:     endpoint.Name,
 				Endpoint: fmt.Sprintf("%s:%d", endpoint.Address, endpoint.Port),
 				Protocol: endpoint.Protocol,

@@ -10,6 +10,7 @@
 - Handler files should own HTTP transport concerns: method guards, request decoding, response encoding, and delegation.
 - Config persistence, backup/version inventory, runtime propagation, and status collection belong in adjacent helpers or services instead of growing inline inside handlers.
 - Keep config edit/deploy/rollback flows distinct from system-status collection; shared runtime helpers should expose narrow seams.
+- Cross-stack router config and DSL-authoring dependencies belong on the public `pkg/routercontract` and `pkg/routerauthoring` seams, not on direct `pkg/config` or `pkg/dsl` imports from handler code.
 
 ## Change Rules
 

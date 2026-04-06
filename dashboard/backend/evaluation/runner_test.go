@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/vllm-project/semantic-router/dashboard/backend/models"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/trainingartifacts"
 )
 
 func TestGetAvailableDatasets_IncludesSignalAndSystemDimensions(t *testing.T) {
@@ -87,5 +88,21 @@ func TestRunTaskMarksTaskFailedWhenSystemEvaluationCommandFails(t *testing.T) {
 	}
 	if !strings.Contains(updatedTask.ErrorMessage, "system evaluation failed") {
 		t.Fatalf("task error message = %q, want substring %q", updatedTask.ErrorMessage, "system evaluation failed")
+	}
+}
+
+func TestModelEvalScriptPathUsesSharedArtifactContract(t *testing.T) {
+	t.Parallel()
+
+	runner := NewRunner(RunnerConfig{ProjectRoot: "/repo"})
+	want, err := trainingartifacts.CurrentContract().ModelEvalScriptPath(
+		"/repo",
+		trainingartifacts.ModelEvalSignalEvalScript,
+	)
+	if err != nil {
+		t.Fatalf("ModelEvalScriptPath(): %v", err)
+	}
+	if got := runner.modelEvalScriptPath(trainingartifacts.ModelEvalSignalEvalScript); got != want {
+		t.Fatalf("modelEvalScriptPath() = %q, want %q", got, want)
 	}
 }

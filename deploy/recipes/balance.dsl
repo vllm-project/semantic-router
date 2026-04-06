@@ -1,3 +1,6 @@
+# Paired-source contract: this file is the maintained authoring source for the balance profile.
+# DECISION_TREE / IF ELSE authoring lowers into flat routing.decisions, so canonical router config and /config/router do not round-trip tree syntax.
+# Keep deploy/recipes/balance.yaml beside this DSL when the original authoring form matters.
 # =============================================================================
 # SIGNALS
 # =============================================================================

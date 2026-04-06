@@ -20,11 +20,14 @@ Use [tools/agent/e2e-profile-map.yaml](../../../tools/agent/e2e-profile-map.yaml
 ## Standard Profiles
 
 - `kubernetes`
-  - baseline router contract
-  - default local profile and part of the full CI matrix
+  - shared baseline router contract
+  - default local profile and one of the two steady-state shared suites
 - `dashboard`
-  - dashboard API contract
-  - part of the full CI matrix
+  - shared dashboard API contract
+  - one of the two steady-state shared suites
+
+## Manual-Only Profiles
+
 - `aibrix`
   - AIBrix gateway/control-plane health plus smoke routing
 - `routing-strategies`
@@ -45,9 +48,6 @@ Use [tools/agent/e2e-profile-map.yaml](../../../tools/agent/e2e-profile-map.yaml
   - authz-driven routing and rate limiting
 - `streaming`
   - streamed request-body and streaming-cache behavior
-
-## Manual-Only Profiles
-
 - `response-api`
   - memory-backed Responses API behavior, currently kept outside the standard CI matrix
 - `response-api-redis`
@@ -61,18 +61,22 @@ Use [tools/agent/e2e-profile-map.yaml](../../../tools/agent/e2e-profile-map.yaml
 
 ## Workflow-Driven Integration Suites
 
-- `vllm-sr-cli-integration`
+- `docker-shared-integration`
   - workflow: [integration-test-vllm-sr-cli.yml](../../../.github/workflows/integration-test-vllm-sr-cli.yml)
-  - local command: `make vllm-sr-test-integration`
+  - local command: `make vllm-sr-test-integration VLLM_SR_TEST_TARGET=docker`
+- `k8s-shared-integration`
+  - workflow: [integration-test-k8s.yml](../../../.github/workflows/integration-test-k8s.yml)
+  - local command: `make vllm-sr-test-integration VLLM_SR_TEST_TARGET=k8s`
 - `memory-integration`
   - workflow: [integration-test-memory.yml](../../../.github/workflows/integration-test-memory.yml)
   - local command: `make memory-test-integration`
+  - retained as a manual/nightly exception, not part of the steady-state shared-suite PR path
 
 ## Selection Rules
 
 - Common E2E framework changes trigger:
   - explicit local default profile: `kubernetes`
-  - CI standard profile matrix from `full_ci_profiles`
+  - the shared docker and k8s workflow-driven suites for `kubernetes` and `dashboard`
 - Standard profile-local changes trigger only the matching local and CI profiles.
 - Manual-only profile changes trigger the matching local profile and stay outside the standard CI profile list.
 - Workflow-driven integration changes trigger the named workflow suite command from `workflow_suite_rules`.
@@ -85,5 +89,6 @@ Use [tools/agent/e2e-profile-map.yaml](../../../tools/agent/e2e-profile-map.yaml
 - `make agent-report ENV=cpu|amd CHANGED_FILES="..."`
 - `make agent-e2e-affected CHANGED_FILES="..."`
 - `make e2e-test E2E_PROFILE=<profile>`
-- `make vllm-sr-test-integration`
+- `make vllm-sr-test-integration VLLM_SR_TEST_TARGET=docker`
+- `make vllm-sr-test-integration VLLM_SR_TEST_TARGET=k8s`
 - `make memory-test-integration`

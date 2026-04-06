@@ -203,6 +203,8 @@ persistence:
   annotations: {}
   # -- Existing claim name (if provided, will use existing PVC instead of creating new one)
   existingClaim: ""
+# -- Raw canonical router config. When set, this bypasses Helm's deep-merge on `config:`.
+configRaw: ""
 # Application configuration
 config:
   version: v0.3
@@ -514,6 +516,28 @@ dashboard:
       cpu: "500m"
     requests:
       memory: "128Mi"
+      cpu: "100m"
+
+# Envoy listener-plane configuration for public OpenAI-compatible traffic.
+envoy:
+  enabled: false
+  image:
+    repository: envoyproxy/envoy
+    tag: "v1.34-latest"
+    pullPolicy: IfNotPresent
+  service:
+    type: ClusterIP
+  admin:
+    port: 9901
+    targetPort: 9901
+  listeners: []
+  config: ""
+  resources:
+    limits:
+      memory: "256Mi"
+      cpu: "500m"
+    requests:
+      memory: "64Mi"
       cpu: "100m"
 
 dependencies:

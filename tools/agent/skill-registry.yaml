@@ -244,13 +244,28 @@ surfaces:
       - src/vllm-sr/cli/AGENTS.md
       - src/semantic-router/pkg/config/AGENTS.md
       - src/semantic-router/pkg/classification/AGENTS.md
+      - src/semantic-router/pkg/dsl/AGENTS.md
       - src/semantic-router/pkg/extproc/AGENTS.md
+      - src/semantic-router/pkg/apiserver/AGENTS.md
+      - src/semantic-router/pkg/cache/AGENTS.md
+      - src/semantic-router/pkg/memory/AGENTS.md
+      - src/semantic-router/pkg/looper/AGENTS.md
+      - src/semantic-router/pkg/modelselection/AGENTS.md
+      - src/semantic-router/pkg/selection/AGENTS.md
+      - src/semantic-router/pkg/tools/AGENTS.md
+      - src/semantic-router/pkg/responsestore/AGENTS.md
+      - src/semantic-router/pkg/imagegen/AGENTS.md
+      - src/semantic-router/pkg/promptcompression/AGENTS.md
       - deploy/operator/api/v1alpha1/AGENTS.md
       - deploy/operator/controllers/AGENTS.md
+      - deploy/addons/redis/AGENTS.md
       - dashboard/frontend/src/AGENTS.md
       - dashboard/frontend/src/pages/AGENTS.md
       - dashboard/frontend/src/components/AGENTS.md
       - dashboard/backend/handlers/AGENTS.md
+      - src/training/model_eval/AGENTS.md
+      - src/training/model_classifier/AGENTS.md
+      - candle-binding/src/core/AGENTS.md
       - e2e/testcases/AGENTS.md
     task_rules:
       - agent_text
@@ -330,13 +345,28 @@ skills:
         - src/vllm-sr/cli/AGENTS.md
         - src/semantic-router/pkg/config/AGENTS.md
         - src/semantic-router/pkg/classification/AGENTS.md
+        - src/semantic-router/pkg/dsl/AGENTS.md
         - src/semantic-router/pkg/extproc/AGENTS.md
+        - src/semantic-router/pkg/apiserver/AGENTS.md
+        - src/semantic-router/pkg/cache/AGENTS.md
+        - src/semantic-router/pkg/memory/AGENTS.md
+        - src/semantic-router/pkg/looper/AGENTS.md
+        - src/semantic-router/pkg/modelselection/AGENTS.md
+        - src/semantic-router/pkg/selection/AGENTS.md
+        - src/semantic-router/pkg/tools/AGENTS.md
+        - src/semantic-router/pkg/responsestore/AGENTS.md
+        - src/semantic-router/pkg/imagegen/AGENTS.md
+        - src/semantic-router/pkg/promptcompression/AGENTS.md
         - deploy/operator/api/v1alpha1/AGENTS.md
         - deploy/operator/controllers/AGENTS.md
+        - deploy/addons/redis/AGENTS.md
         - dashboard/frontend/src/AGENTS.md
         - dashboard/frontend/src/pages/AGENTS.md
         - dashboard/frontend/src/components/AGENTS.md
         - dashboard/backend/handlers/AGENTS.md
+        - src/training/model_eval/AGENTS.md
+        - src/training/model_classifier/AGENTS.md
+        - candle-binding/src/core/AGENTS.md
         - e2e/testcases/AGENTS.md
         - tools/agent/*.yaml
         - tools/agent/scripts/**

@@ -55,4 +55,5 @@
 - Keep maintained `deploy/` and `e2e/` router config assets under the same guard as the canonical contract so repo-owned examples and harness profiles do not regress to legacy steady-state fields.
 - Keep config-doc consistency tests adjacent to the config package too, so canonical terminology and fragment-directory guidance stay aligned with the implemented contract.
 - Keep the latest tutorial tree aligned to the canonical doc taxonomy: `signal/decision/algorithm/plugin/global`, not ad hoc feature folders.
+- External control-plane consumers should use `src/semantic-router/pkg/routercontract/` and `src/semantic-router/pkg/routerauthoring/` instead of importing `pkg/config` or `pkg/dsl` directly.
 - If a change touches `config.go`, prefer a net reduction in file size or responsibility count.

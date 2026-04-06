@@ -48,9 +48,7 @@ func (c *liveRuntimeConfig) Update(newCfg *config.RouterConfig) {
 	c.mu.Unlock()
 	if c.updater != nil {
 		c.updater(newCfg)
-		return
 	}
-	config.Replace(newCfg)
 }
 
 func (s *ClassificationAPIServer) currentConfig() *config.RouterConfig {

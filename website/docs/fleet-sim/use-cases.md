@@ -541,7 +541,8 @@ can be combined.
 ### How to apply
 
 ```python
-from fleet_sim import grid_flex_analysis, print_grid_flex_table, H100_80GB
+from fleet_sim import H100_80GB
+from fleet_sim.optimizer import grid_flex_analysis, print_grid_flex_table
 import json
 
 cdf = json.load(open("data/azure_cdf.json"))

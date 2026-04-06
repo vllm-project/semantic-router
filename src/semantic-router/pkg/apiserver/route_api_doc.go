@@ -113,9 +113,9 @@ var endpointRegistry = []EndpointMetadata{
 	{Path: "/config/kbs/{name}", Method: "GET", Description: "Read a knowledge base"},
 	{Path: "/config/kbs/{name}", Method: "PUT", Description: "Update a managed knowledge base"},
 	{Path: "/config/kbs/{name}", Method: "DELETE", Description: "Delete a managed knowledge base"},
-	{Path: "/config/router", Method: "GET", Description: "Get the current router config as JSON"},
-	{Path: "/config/router", Method: "PATCH", Description: "Merge a router config update (validates, backs up, writes, triggers hot-reload)"},
-	{Path: "/config/router", Method: "PUT", Description: "Replace the router config (validates, backs up, writes, triggers hot-reload)"},
+	{Path: "/config/router", Method: "GET", Description: "Get the current canonical router config as JSON (DSL-only authoring constructs like DECISION_TREE are flattened into routing.decisions)"},
+	{Path: "/config/router", Method: "PATCH", Description: "Merge a router config update (validates, backs up, writes, triggers hot-reload; optional dsl field is archived only)"},
+	{Path: "/config/router", Method: "PUT", Description: "Replace the router config (validates, backs up, writes, triggers hot-reload; optional dsl field is archived only)"},
 	{Path: "/config/router/rollback", Method: "POST", Description: "Rollback to a previous router config version"},
 	{Path: "/config/router/versions", Method: "GET", Description: "List available router config backup versions"},
 }

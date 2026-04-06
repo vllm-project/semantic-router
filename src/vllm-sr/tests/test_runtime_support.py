@@ -436,3 +436,39 @@ def test_resolve_effective_config_path_preserves_setup_mode_bootstrap_config(
     )
 
     assert effective_path == config_path
+
+
+def test_resolve_effective_config_path_uses_state_root_dir_override(
+    monkeypatch, tmp_path: Path
+):
+    workspace_root = tmp_path / "workspace"
+    workspace_root.mkdir()
+    config_dir = tmp_path / "configs"
+    config_dir.mkdir()
+    config_path = config_dir / "config.yaml"
+    config_path.write_text(
+        yaml.safe_dump(
+            {
+                "version": "v0.3",
+                "listeners": [
+                    {
+                        "name": "http-8899",
+                        "address": "0.0.0.0",
+                        "port": 8899,
+                    }
+                ],
+            },
+            sort_keys=False,
+        )
+    )
+    monkeypatch.setenv("VLLM_SR_STATE_ROOT_DIR", str(workspace_root))
+
+    effective_path = resolve_effective_config_path(
+        config_path=config_path,
+        algorithm=None,
+        setup_mode=False,
+        platform=None,
+    )
+
+    assert effective_path == workspace_root / ".vllm-sr" / "runtime-config.yaml"
+    assert effective_path.exists()

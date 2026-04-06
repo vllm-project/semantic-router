@@ -5243,6 +5243,52 @@ DECISION_TREE routing_policy {
 	}
 }
 
+func TestDecisionTreeDecompileStaysOnFlatRouteContract(t *testing.T) {
+	input := `
+SIGNAL jailbreak detector { method: "embedding" threshold: 0.8 }
+SIGNAL domain math { mmlu_categories: ["math"] }
+
+DECISION_TREE routing_policy {
+  IF jailbreak("detector") {
+    NAME "jailbreak_block"
+    MODEL "fast-reject"
+  }
+  ELSE IF domain("math") {
+    NAME "math_route"
+    MODEL "qwen-math"
+  }
+  ELSE {
+    NAME "default_route"
+    MODEL "qwen-default"
+  }
+}
+`
+	cfg, errs := Compile(input)
+	if len(errs) > 0 {
+		t.Fatalf("compile errors: %v", errs)
+	}
+
+	dslText, err := DecompileRouting(cfg)
+	if err != nil {
+		t.Fatalf("decompile error: %v", err)
+	}
+	if strings.Contains(dslText, "DECISION_TREE") {
+		t.Fatalf("decompiled DSL must stay on flat ROUTE contract, got:\n%s", dslText)
+	}
+	if strings.Contains(dslText, "ELSE IF") || strings.Contains(dslText, "ELSE {") {
+		t.Fatalf("decompiled DSL must not synthesize decision-tree syntax, got:\n%s", dslText)
+	}
+	for _, want := range []string{
+		"ROUTE jailbreak_block",
+		"ROUTE math_route",
+		"ROUTE default_route",
+	} {
+		if !strings.Contains(dslText, want) {
+			t.Fatalf("decompiled DSL missing %q:\n%s", want, dslText)
+		}
+	}
+}
+
 func TestParseDecisionTreeRequiresElse(t *testing.T) {
 	_, errs := Parse(`
 SIGNAL domain math { mmlu_categories: ["math"] }

@@ -25,9 +25,9 @@ supported_envs:
   ci-k8s:
     aliases:
       - ci-k8s
-    build_target: make build-e2e
-    serve_command: make e2e-test
-    description: kind/Kubernetes merge-gate workflow.
+    build_target: make vllm-sr-dev
+    serve_command: vllm-sr serve --target k8s --image-pull-policy never
+    description: Kind-backed shared-suite workflow owned by the `vllm-sr` CLI.
     local_env: false
 
 subsystems:
@@ -236,10 +236,54 @@ local_agent_rules:
     scope: src/semantic-router/pkg/classification/**
     steward: router-core
     freshness: update when classification-package boundaries, backend seams, or hotspot expectations change
+  - path: src/semantic-router/pkg/dsl/AGENTS.md
+    scope: src/semantic-router/pkg/dsl/**
+    steward: router-core
+    freshness: update when DSL grammar, compile/decompile seams, or hotspot expectations change
   - path: src/semantic-router/pkg/extproc/AGENTS.md
     scope: src/semantic-router/pkg/extproc/**
     steward: router-core
     freshness: update when extproc hotspot boundaries or phase seams change
+  - path: src/semantic-router/pkg/apiserver/AGENTS.md
+    scope: src/semantic-router/pkg/apiserver/**
+    steward: router-core
+    freshness: update when API-server bootstrap, route registration, or regression hotspot expectations change
+  - path: src/semantic-router/pkg/cache/AGENTS.md
+    scope: src/semantic-router/pkg/cache/**
+    steward: router-core
+    freshness: update when cache backends, lookup seams, or interface hotspot expectations change
+  - path: src/semantic-router/pkg/memory/AGENTS.md
+    scope: src/semantic-router/pkg/memory/**
+    steward: router-core
+    freshness: update when memory store, extraction, or Milvus hotspot expectations change
+  - path: src/semantic-router/pkg/looper/AGENTS.md
+    scope: src/semantic-router/pkg/looper/**
+    steward: router-core
+    freshness: update when looper clients, confidence or ratings, or RL-policy hotspot expectations change
+  - path: src/semantic-router/pkg/modelselection/AGENTS.md
+    scope: src/semantic-router/pkg/modelselection/**
+    steward: router-core
+    freshness: update when modelselection selector, benchmark, or persistence hotspot expectations change
+  - path: src/semantic-router/pkg/selection/AGENTS.md
+    scope: src/semantic-router/pkg/selection/**
+    steward: router-core
+    freshness: update when runtime selection policies, factory seams, or hotspot expectations change
+  - path: src/semantic-router/pkg/tools/AGENTS.md
+    scope: src/semantic-router/pkg/tools/**
+    steward: router-core
+    freshness: update when tool registry, relevance, or hotspot expectations change
+  - path: src/semantic-router/pkg/responsestore/AGENTS.md
+    scope: src/semantic-router/pkg/responsestore/**
+    steward: router-core
+    freshness: update when response-store interfaces, backend seams, or hotspot expectations change
+  - path: src/semantic-router/pkg/imagegen/AGENTS.md
+    scope: src/semantic-router/pkg/imagegen/**
+    steward: router-core
+    freshness: update when image backend adapter seams or hotspot expectations change
+  - path: src/semantic-router/pkg/promptcompression/AGENTS.md
+    scope: src/semantic-router/pkg/promptcompression/**
+    steward: router-core
+    freshness: update when prompt-compression seams or hotspot expectations change
   - path: deploy/operator/api/v1alpha1/AGENTS.md
     scope: deploy/operator/api/v1alpha1/**
     steward: operator-stack
@@ -248,6 +292,10 @@ local_agent_rules:
     scope: deploy/operator/controllers/**
     steward: operator-stack
     freshness: update when operator controller translation or discovery hotspot boundaries change
+  - path: deploy/addons/redis/AGENTS.md
+    scope: deploy/addons/redis/**
+    steward: router-core
+    freshness: update when Redis addon deployment or cache hotspot expectations change
   - path: dashboard/frontend/src/AGENTS.md
     scope: dashboard/frontend/src/**
     steward: dashboard
@@ -264,6 +312,18 @@ local_agent_rules:
     scope: dashboard/backend/handlers/**
     steward: dashboard
     freshness: update when backend handler hotspot boundaries or extraction expectations change
+  - path: src/training/model_eval/AGENTS.md
+    scope: src/training/model_eval/**
+    steward: training-stack
+    freshness: update when evaluation artifact translation or config-generation seams change
+  - path: src/training/model_classifier/AGENTS.md
+    scope: src/training/model_classifier/**
+    steward: training-stack
+    freshness: update when classifier training or dataset-verifier hotspot expectations change
+  - path: candle-binding/src/core/AGENTS.md
+    scope: candle-binding/src/core/**
+    steward: rust-bindings
+    freshness: update when binding-core config loading, tokenization, similarity, or hotspot expectations change
   - path: e2e/testcases/AGENTS.md
     scope: e2e/testcases/**
     steward: e2e

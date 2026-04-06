@@ -2,6 +2,7 @@ package services
 
 import (
 	"strings"
+	"time"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/classification"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
@@ -110,6 +111,77 @@ type Classification struct {
 	Category         string  `json:"category"`
 	Confidence       float64 `json:"confidence"`
 	ProcessingTimeMs int64   `json:"processing_time_ms"`
+}
+
+// ClassifyIntent performs intent classification using signal-driven architecture.
+func (s *ClassificationService) ClassifyIntent(req IntentRequest) (*IntentResponse, error) {
+	start := time.Now()
+
+	input, err := req.resolveSignalInput()
+	if err != nil {
+		return nil, err
+	}
+
+	if s.classifier == nil {
+		return &IntentResponse{
+			Classification: Classification{
+				Category:         "general",
+				Confidence:       0.5,
+				ProcessingTimeMs: time.Since(start).Milliseconds(),
+			},
+			RecommendedModel: "general-model",
+			RoutingDecision:  "placeholder_response",
+		}, nil
+	}
+
+	forceEvaluateAll := req.Options != nil && req.Options.EvaluateAllSignals
+	signals := s.classifier.EvaluateAllSignalsWithContext(
+		input.evaluationText,
+		input.contextText,
+		input.currentUserText,
+		input.priorUserMessages,
+		input.nonUserMessages,
+		input.hasAssistantReply,
+		forceEvaluateAll,
+		"",
+		nil,
+	)
+
+	var decisionResult *decision.DecisionResult
+	if s.config != nil && len(s.config.Decisions) > 0 {
+		decisionResult, err = s.classifier.EvaluateDecisionWithEngine(signals)
+		if err != nil && !strings.Contains(err.Error(), "no decisions configured") {
+			logging.Warnf("Decision evaluation failed, continuing with classification: %v", err)
+		}
+	}
+
+	var (
+		category   string
+		confidence float64
+	)
+	if decisionResult != nil && decisionResult.Decision != nil {
+		category = decisionResult.Decision.Name
+		confidence = decisionResult.Confidence
+	} else {
+		category, confidence, _, err = s.classifier.ClassifyCategoryWithEntropy(input.evaluationText)
+		if err != nil {
+			logging.Warnf(
+				"Classification fallback failed: %v, using default 'other' category",
+				err,
+			)
+			category = "other"
+			confidence = 0.0
+		}
+	}
+
+	return s.buildIntentResponseFromSignals(
+		signals,
+		decisionResult,
+		category,
+		confidence,
+		time.Since(start).Milliseconds(),
+		req,
+	), nil
 }
 
 // buildIntentResponseFromSignals builds an IntentResponse from signals and decision result
@@ -373,6 +445,51 @@ func (s *ClassificationService) resolveRoutingDecision(
 		return decisionResult.Decision.Name
 	}
 	return s.getRoutingDecision(confidence, options)
+}
+
+func (s *ClassificationService) getRecommendedModel(category string, _ float64) string {
+	if s.classifier != nil {
+		model := s.classifier.SelectBestModelForCategory(category)
+		if model != "" {
+			return model
+		}
+	}
+	if s.config == nil {
+		return ""
+	}
+	if model := recommendedModelFromDecisions(s.config.Decisions, category); model != "" {
+		return model
+	}
+	return s.config.DefaultModel
+}
+
+func recommendedModelFromDecisions(decisions []config.Decision, category string) string {
+	for _, decision := range decisions {
+		if !strings.EqualFold(decision.Name, category) {
+			continue
+		}
+		if len(decision.ModelRefs) == 0 {
+			return ""
+		}
+		modelRef := decision.ModelRefs[0]
+		if modelRef.LoRAName != "" {
+			return modelRef.LoRAName
+		}
+		return modelRef.Model
+	}
+	return ""
+}
+
+func (s *ClassificationService) getRoutingDecision(confidence float64, options *IntentOptions) string {
+	threshold := 0.7
+	if options != nil && options.ConfidenceThreshold > 0 {
+		threshold = options.ConfidenceThreshold
+	}
+
+	if confidence >= threshold {
+		return "high_confidence_specialized"
+	}
+	return "low_confidence_general"
 }
 
 func buildDecisionResultPayload(decisionResult *decision.DecisionResult) *DecisionResult {

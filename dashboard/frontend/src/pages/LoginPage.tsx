@@ -58,7 +58,7 @@ const BOOTSTRAP_STEPS: BootstrapStep[] = [
 
 const LoginPage: React.FC = () => {
   const { setupState, isLoading: setupLoading, refreshSetupState } = useSetup();
-  const { isAuthenticated, isLoading, login, setSession } = useAuth();
+  const { isAuthenticated, isLoading, login, refreshSession } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
   const from = (location.state as LocationState | null)?.from ?? null;
@@ -188,11 +188,7 @@ const LoginPage: React.FC = () => {
         }
         throw new Error(message || `Request failed: ${response.status}`);
       }
-      const payload = (await response.json()) as {
-        token: string;
-        user?: { id: string; email: string; name: string; role?: string };
-      };
-      setSession(payload.token, payload.user ?? null);
+      await refreshSession();
       await navigateAfterAuth(true);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Register failed.");

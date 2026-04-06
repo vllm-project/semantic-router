@@ -36,7 +36,8 @@ func TestInitMmBertEmbeddingModel(t *testing.T) {
 			t.Fatalf("Failed to initialize model: %v", err)
 		}
 
-		if !IsModelInitialized() {
+		rustState, goState := IsModelInitialized()
+		if !rustState || !goState {
 			t.Fatal("Model should be initialized")
 		}
 	})
@@ -65,7 +66,8 @@ func TestInitMmBertEmbeddingModel(t *testing.T) {
 			t.Fatalf("Second init should not fail: %v", err)
 		}
 
-		if !IsModelInitialized() {
+		rustState, goState := IsModelInitialized()
+		if !rustState || !goState {
 			t.Fatal("Model should still be initialized")
 		}
 	})
@@ -79,147 +81,142 @@ func TestGetEmbedding2DMatryoshka(t *testing.T) {
 		t.Fatalf("Failed to initialize model: %v", err)
 	}
 
-	t.Run("FullModelFullDimension", func(t *testing.T) {
-		output, err := GetEmbedding2DMatryoshka(TestText1, 0, 0)
+	t.Run("FullModelFullDimension", testGetEmbedding2DMatryoshkaFullModel)
+	t.Run("DimensionTruncation", testGetEmbedding2DMatryoshkaDimensionTruncation)
+	t.Run("LayerEarlyExit", testGetEmbedding2DMatryoshkaLayerEarlyExit)
+	t.Run("2DMatryoshkaCombinations", testGetEmbedding2DMatryoshkaCombinations)
+	t.Run("EmbeddingConsistency", testGetEmbedding2DMatryoshkaConsistency)
+	t.Run("EmbeddingNormalization", testGetEmbedding2DMatryoshkaNormalization)
+}
+
+func testGetEmbedding2DMatryoshkaFullModel(t *testing.T) {
+	output, err := GetEmbedding2DMatryoshka(TestText1, "mmbert", 0, 0)
+	if err != nil {
+		t.Fatalf("Failed to generate embedding: %v", err)
+	}
+
+	if len(output.Embedding) != 768 {
+		t.Errorf("Expected 768 dimensions, got %d", len(output.Embedding))
+	}
+	if output.ModelType != "mmbert" {
+		t.Errorf("Expected model type 'mmbert', got '%s'", output.ModelType)
+	}
+	if output.ProcessingTimeMs <= 0 {
+		t.Errorf("Processing time should be positive, got %f", output.ProcessingTimeMs)
+	}
+
+	for i, val := range output.Embedding {
+		if math.IsNaN(float64(val)) || math.IsInf(float64(val), 0) {
+			t.Fatalf("Invalid embedding value at index %d: %f", i, val)
+		}
+	}
+
+	t.Logf("Generated 768-dim embedding in %.2fms", output.ProcessingTimeMs)
+}
+
+func testGetEmbedding2DMatryoshkaDimensionTruncation(t *testing.T) {
+	for _, dim := range []int{512, 256, 128, 64} {
+		output, err := GetEmbedding2DMatryoshka(TestText1, "mmbert", 0, dim)
 		if err != nil {
-			t.Fatalf("Failed to generate embedding: %v", err)
+			t.Fatalf("Failed to generate %d-dim embedding: %v", dim, err)
 		}
-
-		if len(output.Embedding) != 768 {
-			t.Errorf("Expected 768 dimensions, got %d", len(output.Embedding))
+		if len(output.Embedding) != dim {
+			t.Errorf("Expected %d dimensions, got %d", dim, len(output.Embedding))
 		}
+		t.Logf("Generated %d-dim embedding in %.2fms", dim, output.ProcessingTimeMs)
+	}
+}
 
-		if output.ModelType != "mmbert" {
-			t.Errorf("Expected model type 'mmbert', got '%s'", output.ModelType)
-		}
-
-		if output.ProcessingTimeMs <= 0 {
-			t.Errorf("Processing time should be positive, got %f", output.ProcessingTimeMs)
-		}
-
-		// Check embedding values are valid
-		for i, val := range output.Embedding {
-			if math.IsNaN(float64(val)) || math.IsInf(float64(val), 0) {
-				t.Fatalf("Invalid embedding value at index %d: %f", i, val)
-			}
-		}
-
-		t.Logf("Generated 768-dim embedding in %.2fms", output.ProcessingTimeMs)
-	})
-
-	t.Run("DimensionTruncation", func(t *testing.T) {
-		dimensions := []int{512, 256, 128, 64}
-
-		for _, dim := range dimensions {
-			output, err := GetEmbedding2DMatryoshka(TestText1, 0, dim)
-			if err != nil {
-				t.Fatalf("Failed to generate %d-dim embedding: %v", dim, err)
-			}
-
-			if len(output.Embedding) != dim {
-				t.Errorf("Expected %d dimensions, got %d", dim, len(output.Embedding))
-			}
-
-			t.Logf("Generated %d-dim embedding in %.2fms", dim, output.ProcessingTimeMs)
-		}
-	})
-
-	t.Run("LayerEarlyExit", func(t *testing.T) {
-		// Note: Layer early exit requires separate ONNX files for each layer
-		// This test will use full model if layer files are not available
-		layers := []int{22, 11, 6, 3}
-
-		for _, layer := range layers {
-			output, err := GetEmbedding2DMatryoshka(TestText1, layer, 0)
-			if err != nil {
-				t.Fatalf("Failed to generate embedding with layer %d: %v", layer, err)
-			}
-
-			if len(output.Embedding) == 0 {
-				t.Errorf("Embedding should not be empty for layer %d", layer)
-			}
-
-			t.Logf("Generated embedding with layer %d in %.2fms", layer, output.ProcessingTimeMs)
-		}
-	})
-
-	t.Run("2DMatryoshkaCombinations", func(t *testing.T) {
-		// Test various layer/dimension combinations
-		combinations := []struct {
-			layer int
-			dim   int
-		}{
-			{22, 768},
-			{22, 256},
-			{11, 512},
-			{11, 128},
-			{6, 256},
-			{6, 64},
-			{3, 128},
-			{3, 64},
-		}
-
-		for _, combo := range combinations {
-			output, err := GetEmbedding2DMatryoshka(TestText1, combo.layer, combo.dim)
-			if err != nil {
-				t.Fatalf("Failed with layer=%d, dim=%d: %v", combo.layer, combo.dim, err)
-			}
-
-			if len(output.Embedding) != combo.dim {
-				t.Errorf("Expected %d dimensions for layer=%d, dim=%d, got %d",
-					combo.dim, combo.layer, combo.dim, len(output.Embedding))
-			}
-
-			t.Logf("L%d/D%d: %.2fms", combo.layer, combo.dim, output.ProcessingTimeMs)
-		}
-	})
-
-	t.Run("EmbeddingConsistency", func(t *testing.T) {
-		// Same input should produce same output
-		output1, err := GetEmbedding2DMatryoshka(TestText1, 0, 0)
+func testGetEmbedding2DMatryoshkaLayerEarlyExit(t *testing.T) {
+	for _, layer := range []int{22, 11, 6, 3} {
+		output, err := GetEmbedding2DMatryoshka(TestText1, "mmbert", layer, 0)
 		if err != nil {
-			t.Fatalf("First embedding failed: %v", err)
+			t.Fatalf("Failed to generate embedding with layer %d: %v", layer, err)
 		}
+		if len(output.Embedding) == 0 {
+			t.Errorf("Embedding should not be empty for layer %d", layer)
+		}
+		t.Logf("Generated embedding with layer %d in %.2fms", layer, output.ProcessingTimeMs)
+	}
+}
 
-		output2, err := GetEmbedding2DMatryoshka(TestText1, 0, 0)
+func testGetEmbedding2DMatryoshkaCombinations(t *testing.T) {
+	combinations := []struct {
+		layer int
+		dim   int
+	}{
+		{22, 768},
+		{22, 256},
+		{11, 512},
+		{11, 128},
+		{6, 256},
+		{6, 64},
+		{3, 128},
+		{3, 64},
+	}
+
+	for _, combo := range combinations {
+		output, err := GetEmbedding2DMatryoshka(TestText1, "mmbert", combo.layer, combo.dim)
 		if err != nil {
-			t.Fatalf("Second embedding failed: %v", err)
+			t.Fatalf("Failed with layer=%d, dim=%d: %v", combo.layer, combo.dim, err)
 		}
-
-		if len(output1.Embedding) != len(output2.Embedding) {
-			t.Fatalf("Embedding lengths differ: %d vs %d", len(output1.Embedding), len(output2.Embedding))
+		if len(output.Embedding) != combo.dim {
+			t.Errorf(
+				"Expected %d dimensions for layer=%d, dim=%d, got %d",
+				combo.dim,
+				combo.layer,
+				combo.dim,
+				len(output.Embedding),
+			)
 		}
+		t.Logf("L%d/D%d: %.2fms", combo.layer, combo.dim, output.ProcessingTimeMs)
+	}
+}
 
-		// Check embeddings are identical
-		for i := range output1.Embedding {
-			diff := math.Abs(float64(output1.Embedding[i] - output2.Embedding[i]))
-			if diff > TestEpsilon {
-				t.Errorf("Embedding values differ at index %d: %f vs %f",
-					i, output1.Embedding[i], output2.Embedding[i])
-				break
-			}
+func testGetEmbedding2DMatryoshkaConsistency(t *testing.T) {
+	output1, err := GetEmbedding2DMatryoshka(TestText1, "mmbert", 0, 0)
+	if err != nil {
+		t.Fatalf("First embedding failed: %v", err)
+	}
+
+	output2, err := GetEmbedding2DMatryoshka(TestText1, "mmbert", 0, 0)
+	if err != nil {
+		t.Fatalf("Second embedding failed: %v", err)
+	}
+
+	if len(output1.Embedding) != len(output2.Embedding) {
+		t.Fatalf("Embedding lengths differ: %d vs %d", len(output1.Embedding), len(output2.Embedding))
+	}
+
+	for i := range output1.Embedding {
+		diff := math.Abs(float64(output1.Embedding[i] - output2.Embedding[i]))
+		if diff > TestEpsilon {
+			t.Errorf(
+				"Embedding values differ at index %d: %f vs %f",
+				i,
+				output1.Embedding[i],
+				output2.Embedding[i],
+			)
+			break
 		}
-	})
+	}
+}
 
-	t.Run("EmbeddingNormalization", func(t *testing.T) {
-		output, err := GetEmbedding2DMatryoshka(TestText1, 0, 0)
-		if err != nil {
-			t.Fatalf("Failed to generate embedding: %v", err)
-		}
+func testGetEmbedding2DMatryoshkaNormalization(t *testing.T) {
+	output, err := GetEmbedding2DMatryoshka(TestText1, "mmbert", 0, 0)
+	if err != nil {
+		t.Fatalf("Failed to generate embedding: %v", err)
+	}
 
-		// Check L2 norm is approximately 1.0
-		var sumSquared float64
-		for _, val := range output.Embedding {
-			sumSquared += float64(val) * float64(val)
-		}
-		norm := math.Sqrt(sumSquared)
-
-		if math.Abs(norm-1.0) > 0.01 {
-			t.Errorf("Embedding should be L2 normalized (norm=1.0), got norm=%.4f", norm)
-		}
-
-		t.Logf("Embedding L2 norm: %.6f", norm)
-	})
+	var sumSquared float64
+	for _, val := range output.Embedding {
+		sumSquared += float64(val) * float64(val)
+	}
+	norm := math.Sqrt(sumSquared)
+	if math.Abs(norm-1.0) > 0.01 {
+		t.Errorf("Embedding should be L2 normalized (norm=1.0), got norm=%.4f", norm)
+	}
+	t.Logf("Embedding L2 norm: %.6f", norm)
 }
 
 // TestGetEmbedding tests the convenience function
@@ -230,13 +227,13 @@ func TestGetEmbedding(t *testing.T) {
 		t.Fatalf("Failed to initialize model: %v", err)
 	}
 
-	output, err := GetEmbedding(TestText1)
+	output, err := GetEmbedding(TestText1, 0)
 	if err != nil {
 		t.Fatalf("Failed to generate embedding: %v", err)
 	}
 
-	if len(output.Embedding) != 768 {
-		t.Errorf("Expected 768 dimensions, got %d", len(output.Embedding))
+	if len(output) != 768 {
+		t.Errorf("Expected 768 dimensions, got %d", len(output))
 	}
 }
 
@@ -248,13 +245,13 @@ func TestGetEmbeddingWithDim(t *testing.T) {
 		t.Fatalf("Failed to initialize model: %v", err)
 	}
 
-	output, err := GetEmbeddingWithDim(TestText1, 256)
+	output, err := GetEmbeddingWithDim(TestText1, 0, 0, 256)
 	if err != nil {
 		t.Fatalf("Failed to generate embedding: %v", err)
 	}
 
-	if len(output.Embedding) != 256 {
-		t.Errorf("Expected 256 dimensions, got %d", len(output.Embedding))
+	if len(output) != 256 {
+		t.Errorf("Expected 256 dimensions, got %d", len(output))
 	}
 }
 
@@ -269,47 +266,48 @@ func TestGetEmbeddingsBatch(t *testing.T) {
 	texts := []string{TestText1, TestText2, TestText3}
 
 	t.Run("BatchEmbedding", func(t *testing.T) {
-		outputs, err := GetEmbeddingsBatch(texts, 0, 0)
-		if err != nil {
-			t.Fatalf("Failed to generate batch embeddings: %v", err)
-		}
-
-		if len(outputs) != len(texts) {
-			t.Fatalf("Expected %d outputs, got %d", len(texts), len(outputs))
-		}
-
-		for i, output := range outputs {
-			if len(output.Embedding) != 768 {
-				t.Errorf("Text %d: expected 768 dimensions, got %d", i, len(output.Embedding))
-			}
-		}
-
-		totalTime := float32(0)
-		for _, output := range outputs {
-			totalTime += output.ProcessingTimeMs
-		}
-		t.Logf("Batch of %d texts: total %.2fms", len(texts), totalTime)
+		testGetEmbeddingsBatchDimensions(t, texts, 0, 0, 768)
 	})
-
 	t.Run("BatchWith2DMatryoshka", func(t *testing.T) {
-		outputs, err := GetEmbeddingsBatch(texts, 6, 256)
-		if err != nil {
-			t.Fatalf("Failed to generate batch embeddings: %v", err)
-		}
-
-		for i, output := range outputs {
-			if len(output.Embedding) != 256 {
-				t.Errorf("Text %d: expected 256 dimensions, got %d", i, len(output.Embedding))
-			}
-		}
+		testGetEmbeddingsBatchDimensions(t, texts, 6, 256, 256)
 	})
+	t.Run("EmptyBatch", testGetEmbeddingsBatchEmpty)
+}
 
-	t.Run("EmptyBatch", func(t *testing.T) {
-		_, err := GetEmbeddingsBatch([]string{}, 0, 0)
-		if err == nil {
-			t.Fatal("Expected error for empty batch")
+func testGetEmbeddingsBatchDimensions(
+	t *testing.T,
+	texts []string,
+	layer int,
+	dim int,
+	expectedDim int,
+) {
+	outputs, err := GetEmbeddingsBatch(texts, layer, dim)
+	if err != nil {
+		t.Fatalf("Failed to generate batch embeddings: %v", err)
+	}
+	if len(outputs) != len(texts) {
+		t.Fatalf("Expected %d outputs, got %d", len(texts), len(outputs))
+	}
+
+	totalTime := float32(0)
+	for i, output := range outputs {
+		if len(output.Embedding) != expectedDim {
+			t.Errorf(
+				"Text %d: expected %d dimensions, got %d",
+				i,
+				expectedDim,
+				len(output.Embedding),
+			)
 		}
-	})
+		totalTime += output.ProcessingTimeMs
+	}
+	t.Logf("Batch of %d texts: total %.2fms", len(texts), totalTime)
+}
+
+func testGetEmbeddingsBatchEmpty(t *testing.T) {
+	if _, err := GetEmbeddingsBatch([]string{}, 0, 0); err == nil {
+		t.Fatal("Expected error for empty batch")
+	}
 }
 
 // TestCalculateEmbeddingSimilarity tests similarity calculation
@@ -321,7 +319,7 @@ func TestCalculateEmbeddingSimilarity(t *testing.T) {
 	}
 
 	t.Run("SimilarTexts", func(t *testing.T) {
-		result, err := CalculateEmbeddingSimilarity(TestText1, TestText2, 0, 0)
+		result, err := CalculateEmbeddingSimilarity(TestText1, TestText2, "mmbert", 0)
 		if err != nil {
 			t.Fatalf("Failed to calculate similarity: %v", err)
 		}
@@ -335,7 +333,7 @@ func TestCalculateEmbeddingSimilarity(t *testing.T) {
 	})
 
 	t.Run("IdenticalTexts", func(t *testing.T) {
-		result, err := CalculateEmbeddingSimilarity(TestText1, TestText1, 0, 0)
+		result, err := CalculateEmbeddingSimilarity(TestText1, TestText1, "mmbert", 0)
 		if err != nil {
 			t.Fatalf("Failed to calculate similarity: %v", err)
 		}
@@ -348,7 +346,7 @@ func TestCalculateEmbeddingSimilarity(t *testing.T) {
 	})
 
 	t.Run("DifferentTexts", func(t *testing.T) {
-		result, err := CalculateEmbeddingSimilarity(TestText1, TestText3, 0, 0)
+		result, err := CalculateEmbeddingSimilarity(TestText1, TestText3, "mmbert", 0)
 		if err != nil {
 			t.Fatalf("Failed to calculate similarity: %v", err)
 		}
@@ -359,19 +357,19 @@ func TestCalculateEmbeddingSimilarity(t *testing.T) {
 	})
 
 	t.Run("SimilarityWith2DMatryoshka", func(t *testing.T) {
-		// Compare similarity calculations at different layer/dim settings
-		result1, err := CalculateEmbeddingSimilarity(TestText1, TestText2, 0, 0)
+		// Compare similarity calculations at different dimension settings.
+		result1, err := CalculateEmbeddingSimilarity(TestText1, TestText2, "mmbert", 0)
 		if err != nil {
 			t.Fatalf("Full model failed: %v", err)
 		}
 
-		result2, err := CalculateEmbeddingSimilarity(TestText1, TestText2, 6, 256)
+		result2, err := CalculateEmbeddingSimilarity(TestText1, TestText2, "mmbert", 256)
 		if err != nil {
-			t.Fatalf("L6/D256 failed: %v", err)
+			t.Fatalf("D256 failed: %v", err)
 		}
 
 		t.Logf("Full model similarity: %.4f (%.2fms)", result1.Similarity, result1.ProcessingTimeMs)
-		t.Logf("L6/D256 similarity: %.4f (%.2fms)", result2.Similarity, result2.ProcessingTimeMs)
+		t.Logf("D256 similarity: %.4f (%.2fms)", result2.Similarity, result2.ProcessingTimeMs)
 
 		// Similarities should be correlated (both should agree on similar/different)
 		if (result1.Similarity > 0.5) != (result2.Similarity > 0.5) {
@@ -398,57 +396,75 @@ func TestCalculateSimilarityBatch(t *testing.T) {
 	}
 
 	t.Run("TopKMatches", func(t *testing.T) {
-		result, err := CalculateSimilarityBatch(query, candidates, 3, 0, 0)
-		if err != nil {
-			t.Fatalf("Failed to calculate batch similarity: %v", err)
-		}
-
-		if len(result.Matches) > 3 {
-			t.Errorf("Expected at most 3 matches, got %d", len(result.Matches))
-		}
-
-		// Check matches are sorted by similarity (descending)
-		for i := 1; i < len(result.Matches); i++ {
-			if result.Matches[i].Similarity > result.Matches[i-1].Similarity {
-				t.Errorf("Matches not sorted by similarity")
-			}
-		}
-
-		t.Logf("Top %d matches (%.2fms):", len(result.Matches), result.ProcessingTimeMs)
-		for _, match := range result.Matches {
-			t.Logf("  [%d] %.4f: %s", match.Index, match.Similarity, candidates[match.Index])
-		}
+		testCalculateSimilarityBatchTopK(t, query, candidates)
 	})
-
 	t.Run("AllMatches", func(t *testing.T) {
-		result, err := CalculateSimilarityBatch(query, candidates, 0, 0, 0)
-		if err != nil {
-			t.Fatalf("Failed to calculate batch similarity: %v", err)
-		}
-
-		if len(result.Matches) != len(candidates) {
-			t.Errorf("Expected %d matches, got %d", len(candidates), len(result.Matches))
-		}
+		testCalculateSimilarityBatchAllMatches(t, query, candidates)
 	})
-
 	t.Run("BatchWith2DMatryoshka", func(t *testing.T) {
-		result, err := CalculateSimilarityBatch(query, candidates, 3, 6, 256)
-		if err != nil {
-			t.Fatalf("Failed with 2D Matryoshka: %v", err)
-		}
-
-		t.Logf("Top matches with L6/D256 (%.2fms):", result.ProcessingTimeMs)
-		for _, match := range result.Matches {
-			t.Logf("  [%d] %.4f: %s", match.Index, match.Similarity, candidates[match.Index])
-		}
+		testCalculateSimilarityBatch2DMatryoshka(t, query, candidates)
 	})
-
 	t.Run("EmptyCandidates", func(t *testing.T) {
-		_, err := CalculateSimilarityBatch(query, []string{}, 3, 0, 0)
-		if err == nil {
-			t.Fatal("Expected error for empty candidates")
-		}
+		testCalculateSimilarityBatchEmpty(t, query)
 	})
+}
+
+func testCalculateSimilarityBatchTopK(
+	t *testing.T,
+	query string,
+	candidates []string,
+) {
+	result, err := CalculateSimilarityBatch(query, candidates, 3, "mmbert", 0)
+	if err != nil {
+		t.Fatalf("Failed to calculate batch similarity: %v", err)
+	}
+	if len(result.Matches) > 3 {
+		t.Errorf("Expected at most 3 matches, got %d", len(result.Matches))
+	}
+	for i := 1; i < len(result.Matches); i++ {
+		if result.Matches[i].Similarity > result.Matches[i-1].Similarity {
+			t.Errorf("Matches not sorted by similarity")
+		}
+	}
+	t.Logf("Top %d matches (%.2fms):", len(result.Matches), result.ProcessingTimeMs)
+	for _, match := range result.Matches {
+		t.Logf("  [%d] %.4f: %s", match.Index, match.Similarity, candidates[match.Index])
+	}
+}
+
+func testCalculateSimilarityBatchAllMatches(
+	t *testing.T,
+	query string,
+	candidates []string,
+) {
+	result, err := CalculateSimilarityBatch(query, candidates, 0, "mmbert", 0)
+	if err != nil {
+		t.Fatalf("Failed to calculate batch similarity: %v", err)
+	}
+	if len(result.Matches) != len(candidates) {
+		t.Errorf("Expected %d matches, got %d", len(candidates), len(result.Matches))
+	}
+}
+
+func testCalculateSimilarityBatch2DMatryoshka(
+	t *testing.T,
+	query string,
+	candidates []string,
+) {
+	result, err := CalculateSimilarityBatch(query, candidates, 3, "mmbert", 256)
+	if err != nil {
+		t.Fatalf("Failed with D256: %v", err)
+	}
+	t.Logf("Top matches with D256 (%.2fms):", result.ProcessingTimeMs)
+	for _, match := range result.Matches {
+		t.Logf("  [%d] %.4f: %s", match.Index, match.Similarity, candidates[match.Index])
+	}
+}
+
+func testCalculateSimilarityBatchEmpty(t *testing.T, query string) {
+	if _, err := CalculateSimilarityBatch(query, []string{}, 3, "mmbert", 0); err == nil {
+		t.Fatal("Expected error for empty candidates")
+	}
 }
 
 // TestGetEmbeddingModelsInfo tests the model info retrieval
@@ -539,7 +555,7 @@ func TestConcurrentEmbeddings(t *testing.T) {
 			defer wg.Done()
 			for i := 0; i < iterationsPerGoroutine; i++ {
 				text := texts[(id+i)%len(texts)]
-				output, err := GetEmbedding2DMatryoshka(text, 0, 0)
+				output, err := GetEmbedding2DMatryoshka(text, "mmbert", 0, 0)
 				if err != nil {
 					errCh <- fmt.Errorf("goroutine %d, iter %d: %v", id, i, err)
 					return
@@ -576,19 +592,19 @@ func BenchmarkGetEmbedding2DMatryoshka(b *testing.B) {
 
 	b.Run("FullModel", func(b *testing.B) {
 		for i := 0; i < b.N; i++ {
-			_, _ = GetEmbedding2DMatryoshka(TestText1, 0, 0)
+			_, _ = GetEmbedding2DMatryoshka(TestText1, "mmbert", 0, 0)
 		}
 	})
 
 	b.Run("Layer6_Dim256", func(b *testing.B) {
 		for i := 0; i < b.N; i++ {
-			_, _ = GetEmbedding2DMatryoshka(TestText1, 6, 256)
+			_, _ = GetEmbedding2DMatryoshka(TestText1, "mmbert", 6, 256)
 		}
 	})
 
 	b.Run("Layer3_Dim64", func(b *testing.B) {
 		for i := 0; i < b.N; i++ {
-			_, _ = GetEmbedding2DMatryoshka(TestText1, 3, 64)
+			_, _ = GetEmbedding2DMatryoshka(TestText1, "mmbert", 3, 64)
 		}
 	})
 }
@@ -935,109 +951,127 @@ func TestLegacyClassifierStubs(t *testing.T) {
 
 // TestTypeDefinitions tests that all types are properly defined
 func TestTypeDefinitions(t *testing.T) {
-	t.Run("ClassResult", func(t *testing.T) {
-		result := ClassResult{
-			Class:      1,
-			Confidence: 0.95,
-			Categories: []string{"cat1", "cat2"},
-		}
-		if result.Class != 1 {
-			t.Errorf("Expected Class=1, got %d", result.Class)
-		}
-		if result.Confidence != 0.95 {
-			t.Errorf("Expected Confidence=0.95, got %f", result.Confidence)
-		}
-		if len(result.Categories) != 2 {
-			t.Errorf("Expected 2 categories, got %d", len(result.Categories))
-		}
-	})
+	cases := []struct {
+		name string
+		run  func(*testing.T)
+	}{
+		{name: "ClassResult", run: testTypeDefinitionClassResult},
+		{name: "ClassResultWithProbs", run: testTypeDefinitionClassResultWithProbs},
+		{name: "TokenEntity", run: testTypeDefinitionTokenEntity},
+		{name: "TokenClassificationResult", run: testTypeDefinitionTokenClassificationResult},
+		{name: "EmbeddingOutput", run: testTypeDefinitionEmbeddingOutput},
+		{name: "SimilarityOutput", run: testTypeDefinitionSimilarityOutput},
+		{name: "BatchSimilarityOutput", run: testTypeDefinitionBatchSimilarityOutput},
+		{name: "NLIResult", run: testTypeDefinitionNLIResult},
+	}
 
-	t.Run("ClassResultWithProbs", func(t *testing.T) {
-		result := ClassResultWithProbs{
-			Class:         0,
-			Confidence:    0.8,
-			Probabilities: []float32{0.8, 0.15, 0.05},
-		}
-		if len(result.Probabilities) != 3 {
-			t.Errorf("Expected 3 probabilities, got %d", len(result.Probabilities))
-		}
-	})
+	for _, tc := range cases {
+		t.Run(tc.name, tc.run)
+	}
+}
 
-	t.Run("TokenEntity", func(t *testing.T) {
-		entity := TokenEntity{
-			Text:       "John",
-			EntityType: "PERSON",
-			Start:      0,
-			End:        4,
-			Confidence: 0.99,
-		}
-		if entity.Text != "John" {
-			t.Errorf("Expected Text='John', got '%s'", entity.Text)
-		}
-	})
+func testTypeDefinitionClassResult(t *testing.T) {
+	result := ClassResult{
+		Class:      1,
+		Confidence: 0.95,
+		Categories: []string{"cat1", "cat2"},
+	}
+	if result.Class != 1 {
+		t.Errorf("Expected Class=1, got %d", result.Class)
+	}
+	if result.Confidence != 0.95 {
+		t.Errorf("Expected Confidence=0.95, got %f", result.Confidence)
+	}
+	if len(result.Categories) != 2 {
+		t.Errorf("Expected 2 categories, got %d", len(result.Categories))
+	}
+}
 
-	t.Run("TokenClassificationResult", func(t *testing.T) {
-		result := TokenClassificationResult{
-			Entities: []TokenEntity{
-				{Text: "test", EntityType: "ORG", Start: 0, End: 4, Confidence: 0.9},
-			},
-		}
-		if len(result.Entities) != 1 {
-			t.Errorf("Expected 1 entity, got %d", len(result.Entities))
-		}
-	})
+func testTypeDefinitionClassResultWithProbs(t *testing.T) {
+	result := ClassResultWithProbs{
+		Class:         0,
+		Confidence:    0.8,
+		Probabilities: []float32{0.8, 0.15, 0.05},
+	}
+	if len(result.Probabilities) != 3 {
+		t.Errorf("Expected 3 probabilities, got %d", len(result.Probabilities))
+	}
+}
 
-	t.Run("EmbeddingOutput", func(t *testing.T) {
-		output := EmbeddingOutput{
-			Embedding:        make([]float32, 768),
-			ModelType:        "mmbert",
-			SequenceLength:   128,
-			ProcessingTimeMs: 10.5,
-		}
-		if output.ModelType != "mmbert" {
-			t.Errorf("Expected ModelType='mmbert', got '%s'", output.ModelType)
-		}
-	})
+func testTypeDefinitionTokenEntity(t *testing.T) {
+	entity := TokenEntity{
+		Text:       "John",
+		EntityType: "PERSON",
+		Start:      0,
+		End:        4,
+		Confidence: 0.99,
+	}
+	if entity.Text != "John" {
+		t.Errorf("Expected Text='John', got '%s'", entity.Text)
+	}
+}
 
-	t.Run("SimilarityOutput", func(t *testing.T) {
-		output := SimilarityOutput{
-			Similarity:       0.85,
-			ModelType:        "mmbert",
-			ProcessingTimeMs: 5.0,
-		}
-		if output.Similarity != 0.85 {
-			t.Errorf("Expected Similarity=0.85, got %f", output.Similarity)
-		}
-	})
+func testTypeDefinitionTokenClassificationResult(t *testing.T) {
+	result := TokenClassificationResult{
+		Entities: []TokenEntity{
+			{Text: "test", EntityType: "ORG", Start: 0, End: 4, Confidence: 0.9},
+		},
+	}
+	if len(result.Entities) != 1 {
+		t.Errorf("Expected 1 entity, got %d", len(result.Entities))
+	}
+}
 
-	t.Run("BatchSimilarityOutput", func(t *testing.T) {
-		output := BatchSimilarityOutput{
-			Matches: []SimilarityMatchResult{
-				{Index: 0, Similarity: 0.9},
-				{Index: 2, Similarity: 0.8},
-			},
-			ModelType:        "mmbert",
-			ProcessingTimeMs: 15.0,
-		}
-		if len(output.Matches) != 2 {
-			t.Errorf("Expected 2 matches, got %d", len(output.Matches))
-		}
-	})
+func testTypeDefinitionEmbeddingOutput(t *testing.T) {
+	output := EmbeddingOutput{
+		Embedding:        make([]float32, 768),
+		ModelType:        "mmbert",
+		SequenceLength:   128,
+		ProcessingTimeMs: 10.5,
+	}
+	if output.ModelType != "mmbert" {
+		t.Errorf("Expected ModelType='mmbert', got '%s'", output.ModelType)
+	}
+}
 
-	t.Run("NLIResult", func(t *testing.T) {
-		result := NLIResult{
-			Label:             NLIEntailment,
-			LabelStr:          "entailment",
-			Confidence:        0.95,
-			EntailmentProb:    0.95,
-			NeutralProb:       0.03,
-			ContradictionProb: 0.02,
-			ContradictProb:    0.02,
-		}
-		if result.Label != NLIEntailment {
-			t.Errorf("Expected Label=NLIEntailment, got %d", result.Label)
-		}
-	})
+func testTypeDefinitionSimilarityOutput(t *testing.T) {
+	output := SimilarityOutput{
+		Similarity:       0.85,
+		ModelType:        "mmbert",
+		ProcessingTimeMs: 5.0,
+	}
+	if output.Similarity != 0.85 {
+		t.Errorf("Expected Similarity=0.85, got %f", output.Similarity)
+	}
+}
+
+func testTypeDefinitionBatchSimilarityOutput(t *testing.T) {
+	output := BatchSimilarityOutput{
+		Matches: []SimilarityMatchResult{
+			{Index: 0, Similarity: 0.9},
+			{Index: 2, Similarity: 0.8},
+		},
+		ModelType:        "mmbert",
+		ProcessingTimeMs: 15.0,
+	}
+	if len(output.Matches) != 2 {
+		t.Errorf("Expected 2 matches, got %d", len(output.Matches))
+	}
+}
+
+func testTypeDefinitionNLIResult(t *testing.T) {
+	result := NLIResult{
+		Label:             NLIEntailment,
+		LabelStr:          "entailment",
+		Confidence:        0.95,
+		EntailmentProb:    0.95,
+		NeutralProb:       0.03,
+		ContradictionProb: 0.02,
+		ContradictProb:    0.02,
+	}
+	if result.Label != NLIEntailment {
+		t.Errorf("Expected Label=NLIEntailment, got %d", result.Label)
+	}
 }
 
 // TestMultiModalEmbeddingOutput tests the MultiModalEmbeddingOutput struct.

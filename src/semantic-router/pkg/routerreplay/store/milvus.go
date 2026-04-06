@@ -10,6 +10,8 @@ import (
 
 	"github.com/milvus-io/milvus-sdk-go/v2/client"
 	"github.com/milvus-io/milvus-sdk-go/v2/entity"
+
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/milvuslifecycle"
 )
 
 const (
@@ -69,22 +71,17 @@ func NewMilvusStore(cfg *MilvusConfig, ttlSeconds int, asyncWrites bool) (*Milvu
 		pendingWrites:  make(map[string]struct{}),
 	}
 
-	// Create collection if not exists with retry logic
-	var collErr error
-	for i := 0; i < 3; i++ {
+	// Create collection if not exists with shared retry logic.
+	collErr := milvuslifecycle.Retry(context.Background(), milvuslifecycle.RetryPolicy{
+		Attempts: 3,
+		Backoff: func(attempt int) time.Duration {
+			return time.Duration(attempt+1) * 2 * time.Second
+		},
+	}, func() error {
 		collCtx, collCancel := context.WithTimeout(context.Background(), 20*time.Second)
-		collErr = store.createCollection(collCtx, cfg)
-		collCancel()
-
-		if collErr == nil {
-			break
-		}
-
-		// Wait before retry
-		if i < 2 {
-			time.Sleep(time.Duration(i+1) * 2 * time.Second)
-		}
-	}
+		defer collCancel()
+		return store.createCollection(collCtx, cfg)
+	})
 
 	if collErr != nil {
 		return nil, fmt.Errorf("failed to create collection after retries: %w", collErr)
@@ -98,18 +95,8 @@ func NewMilvusStore(cfg *MilvusConfig, ttlSeconds int, asyncWrites bool) (*Milvu
 	return store, nil
 }
 
-// createCollection creates the Milvus collection if it doesn't exist.
+// createCollection ensures the Milvus collection and required indexes exist.
 func (m *MilvusStore) createCollection(ctx context.Context, cfg *MilvusConfig) error {
-	// Check if collection exists
-	has, err := m.client.HasCollection(ctx, m.collectionName)
-	if err != nil {
-		return fmt.Errorf("failed to check collection: %w", err)
-	}
-
-	if has {
-		return m.loadExistingCollection(ctx)
-	}
-
 	// Create schema
 	schema := &entity.Schema{
 		CollectionName: m.collectionName,
@@ -153,59 +140,29 @@ func (m *MilvusStore) createCollection(ctx context.Context, cfg *MilvusConfig) e
 		shardNum = DefaultMilvusShardNum
 	}
 
-	// Create collection
 	//nolint:gosec // shardNum is validated to be within int32 range
-	err = m.client.CreateCollection(ctx, schema, int32(shardNum))
-	if err != nil {
-		return fmt.Errorf("failed to create collection: %w", err)
-	}
-
-	// Create vector index (required by Milvus even for dummy vectors)
-	vectorIdx, err := entity.NewIndexAUTOINDEX(entity.L2)
-	if err != nil {
-		return fmt.Errorf("failed to build vector index: %w", err)
-	}
-
-	err = m.client.CreateIndex(ctx, m.collectionName, "vector", vectorIdx, false)
-	if err != nil {
-		return fmt.Errorf("failed to create vector index: %w", err)
-	}
-
-	// Create index on timestamp for efficient querying
-	timeIdx := entity.NewGenericIndex(
-		"timestamp_idx",
-		entity.Sorted,
-		map[string]string{},
-	)
-
-	err = m.client.CreateIndex(ctx, m.collectionName, "timestamp", timeIdx, false)
-	if err != nil {
-		return fmt.Errorf("failed to create index: %w", err)
-	}
-
-	// Load collection
-	return m.client.LoadCollection(ctx, m.collectionName, false)
-}
-
-func (m *MilvusStore) loadExistingCollection(ctx context.Context) error {
-	// Ensure required vector index exists (Milvus needs one before insert)
-	idxes, err := m.client.DescribeIndex(ctx, m.collectionName, "vector")
-	if err != nil {
-		return fmt.Errorf("failed to describe vector index: %w", err)
-	}
-
-	if len(idxes) == 0 {
-		vectorIdx, err := entity.NewIndexAUTOINDEX(entity.L2)
-		if err != nil {
-			return fmt.Errorf("failed to build vector index: %w", err)
-		}
-
-		if err := m.client.CreateIndex(ctx, m.collectionName, "vector", vectorIdx, false); err != nil {
-			return fmt.Errorf("failed to create vector index: %w", err)
-		}
-	}
-
-	return m.client.LoadCollection(ctx, m.collectionName, false)
+	_, err := milvuslifecycle.EnsureCollection(ctx, m.client, milvuslifecycle.CollectionSpec{
+		Name:     m.collectionName,
+		Schema:   schema,
+		ShardNum: int32(shardNum),
+		Load:     true,
+		Indexes: []milvuslifecycle.IndexSpec{
+			{
+				FieldName:        "vector",
+				EnsureOnExisting: true,
+				Build: func() (entity.Index, error) {
+					return entity.NewIndexAUTOINDEX(entity.L2)
+				},
+			},
+			{
+				FieldName: "timestamp",
+				Build: func() (entity.Index, error) {
+					return entity.NewGenericIndex("timestamp_idx", entity.Sorted, map[string]string{}), nil
+				},
+			},
+		},
+	}, milvuslifecycle.EnsureOptions{AllowCreate: true})
+	return err
 }
 
 // asyncWriter processes async write operations.

@@ -31,26 +31,26 @@ func (s *ClassificationAPIServer) currentVectorStoreManager() *vectorstore.Manag
 	if runtime := s.currentVectorStoreRuntime(); runtime != nil {
 		return runtime.Manager
 	}
-	return GetVectorStoreManager()
+	return nil
 }
 
 func (s *ClassificationAPIServer) currentVectorStoreEmbedder() vectorstore.Embedder {
 	if runtime := s.currentVectorStoreRuntime(); runtime != nil {
 		return runtime.Embedder
 	}
-	return GetEmbedder()
+	return nil
 }
 
 func (s *ClassificationAPIServer) currentVectorStorePipeline() *vectorstore.IngestionPipeline {
 	if runtime := s.currentVectorStoreRuntime(); runtime != nil {
 		return runtime.Pipeline
 	}
-	return globalPipeline
+	return nil
 }
 
 func (s *ClassificationAPIServer) currentFileStore() *vectorstore.FileStore {
 	if runtime := s.currentVectorStoreRuntime(); runtime != nil {
 		return runtime.FileStore
 	}
-	return globalFileStore
+	return nil
 }

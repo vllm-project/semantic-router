@@ -12,6 +12,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/trainingartifacts"
 )
 
 // JobStatus represents the status of a pipeline job.
@@ -226,7 +228,7 @@ func (r *Runner) JobDir(jobID string) string {
 // TrainDir returns the fixed directory for trained model output.
 // All training runs write to the same directory so the path is stable.
 func (r *Runner) TrainDir() string {
-	return filepath.Join(r.dataDir, "ml-train")
+	return trainingartifacts.CurrentContract().TrainOutputDir(r.dataDir)
 }
 
 // ensureDir creates a directory (and parents) if it does not exist.

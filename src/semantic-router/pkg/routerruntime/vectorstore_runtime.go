@@ -1,6 +1,7 @@
 package routerruntime
 
 import (
+	"context"
 	"fmt"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
@@ -27,7 +28,12 @@ func NewVectorStoreRuntime(cfg *config.RouterConfig) (*VectorStoreRuntime, error
 	}
 	cfg.VectorStore.ApplyDefaults()
 
-	fileStore, err := vectorstore.NewFileStore(cfg.VectorStore.FileStorageDir)
+	registry, err := vectorstore.NewLocalMetadataRegistry(cfg.VectorStore.FileStorageDir)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create vector store metadata registry: %w", err)
+	}
+
+	fileStore, err := vectorstore.NewFileStoreWithRegistry(cfg.VectorStore.FileStorageDir, registry)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create vector store file store: %w", err)
 	}
@@ -37,9 +43,20 @@ func NewVectorStoreRuntime(cfg *config.RouterConfig) (*VectorStoreRuntime, error
 		return nil, fmt.Errorf("failed to create vector store backend: %w", err)
 	}
 
-	manager := vectorstore.NewManager(backend, cfg.VectorStore.EmbeddingDimension, cfg.VectorStore.BackendType)
+	manager := vectorstore.NewManagerWithRegistry(backend, cfg.VectorStore.EmbeddingDimension, cfg.VectorStore.BackendType, registry)
+	if reconcileErr := manager.ReconcilePersistedStores(context.Background()); reconcileErr != nil {
+		return nil, fmt.Errorf("failed to reconcile vector store metadata: %w", reconcileErr)
+	}
+
+	recoveredStatuses, err := registry.RecoverInterruptedStatuses("Vector-store ingestion interrupted by router restart")
+	if err != nil {
+		return nil, fmt.Errorf("failed to recover vector store metadata: %w", err)
+	}
+	if restoreErr := manager.RestoreFileCounts(recoveredStatuses); restoreErr != nil {
+		return nil, fmt.Errorf("failed to restore vector store file counts: %w", restoreErr)
+	}
 	embedder := vectorstore.NewCandleEmbedder(cfg.VectorStore.EmbeddingModel, cfg.VectorStore.EmbeddingDimension)
-	pipeline := vectorstore.NewIngestionPipeline(backend, fileStore, manager, embedder, vectorstore.PipelineConfig{
+	pipeline := vectorstore.NewIngestionPipelineWithRegistry(backend, fileStore, manager, embedder, registry, recoveredStatuses, vectorstore.PipelineConfig{
 		Workers:   cfg.VectorStore.IngestionWorkers,
 		QueueSize: 100,
 	})

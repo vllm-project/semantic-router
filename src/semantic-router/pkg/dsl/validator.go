@@ -456,10 +456,13 @@ func (v *Validator) checkSignalConstraints(s *SignalDecl) {
 }
 
 func (v *Validator) checkStructureSignalConstraints(s *SignalDecl) {
-	payload := fieldsToMap(s.Fields)
-	payload["name"] = s.Name
+	payloadFields := make(map[string]Value, len(s.Fields)+1)
+	for key, value := range s.Fields {
+		payloadFields[key] = value
+	}
+	payloadFields["name"] = StringValue{V: s.Name}
 
-	raw, err := yaml.Marshal(payload)
+	payload, err := structuredPayloadFromFields(payloadFields)
 	if err != nil {
 		v.addDiag(DiagConstraint, s.Pos,
 			fmt.Sprintf("failed to encode structure signal %q: %v", s.Name, err),
@@ -469,7 +472,7 @@ func (v *Validator) checkStructureSignalConstraints(s *SignalDecl) {
 	}
 
 	var rule config.StructureRule
-	if err := yaml.Unmarshal(raw, &rule); err != nil {
+	if err := yaml.Unmarshal(payload.Raw, &rule); err != nil {
 		v.addDiag(DiagConstraint, s.Pos,
 			fmt.Sprintf("failed to decode structure signal %q: %v", s.Name, err),
 			nil,

@@ -28,6 +28,7 @@ import (
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/trainingartifacts"
 )
 
 // RLDrivenConfig configures the RL-driven model selector
@@ -322,8 +323,7 @@ type RLDrivenSelector struct {
 	// Storage backend for persistence
 	storage EloStorage
 
-	// Router-R1 LLM client for intelligent routing
-	// Requires external Router-R1 server (see src/training/rl_model_selection/router_r1_server.py)
+	// Router-R1 LLM client for intelligent routing.
 	routerR1Client *RouterR1Client
 }
 
@@ -386,12 +386,20 @@ func NewRLDrivenSelector(cfg *RLDrivenConfig) *RLDrivenSelector {
 		}
 	}
 
-	// Initialize Router-R1 LLM client if configured
-	// Requires external server: src/training/rl_model_selection/router_r1_server.py
+	routerR1Contract, routerR1ContractErr := trainingartifacts.CurrentContract().RuntimeSelectionService(
+		trainingartifacts.RuntimeSelectionRouterR1Server,
+	)
+	if routerR1ContractErr != nil {
+		panic(fmt.Sprintf("invalid Router-R1 contract: %v", routerR1ContractErr))
+	}
+
+	// Initialize Router-R1 LLM client if configured.
 	if cfg.EnableLLMRouting && cfg.RouterR1ServerURL != "" {
 		selector.routerR1Client = NewRouterR1Client(cfg.RouterR1ServerURL)
 		logging.ComponentEvent("selection", "rl_driven_router_r1_enabled", map[string]interface{}{
 			"server_url": cfg.RouterR1ServerURL,
+			"config_key": routerR1Contract.ConfigKey,
+			"script":     routerR1Contract.RepoRelativeScript,
 		})
 
 		// Verify connectivity
@@ -411,6 +419,8 @@ func NewRLDrivenSelector(cfg *RLDrivenConfig) *RLDrivenSelector {
 	} else if cfg.EnableLLMRouting {
 		logging.ComponentWarnEvent("selection", "rl_driven_router_r1_config_missing", map[string]interface{}{
 			"llm_routing_enabled": true,
+			"config_key":          routerR1Contract.ConfigKey,
+			"script":              routerR1Contract.RepoRelativeScript,
 		})
 	}
 
@@ -619,10 +629,19 @@ func (r *RLDrivenSelector) Select(ctx context.Context, selCtx *SelectionContext)
 // This method uses an LLM to analyze the query and make intelligent routing decisions.
 // The LLM performs "think" (analyze query complexity, requirements) and "route"
 // (select the optimal model) actions as described in arXiv:2506.09033.
-// Requires external server: src/training/rl_model_selection/router_r1_server.py
 func (r *RLDrivenSelector) selectWithRouterR1(ctx context.Context, selCtx *SelectionContext) (*SelectionResult, error) {
 	if r.routerR1Client == nil {
-		return nil, fmt.Errorf("Router-R1 client not initialized - set router_r1_server_url in config")
+		routerR1Contract, err := trainingartifacts.CurrentContract().RuntimeSelectionService(
+			trainingartifacts.RuntimeSelectionRouterR1Server,
+		)
+		if err != nil {
+			return nil, err
+		}
+		return nil, fmt.Errorf(
+			"%s client not initialized - set %s in config",
+			routerR1Contract.DisplayName,
+			routerR1Contract.ConfigKey,
+		)
 	}
 
 	// Extract query from context - build a descriptive query including available models

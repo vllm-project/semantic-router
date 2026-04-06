@@ -3,6 +3,7 @@
 import math
 
 import pytest
+
 from fleet_sim.gpu_profiles import (
     A10G,
     A100_80GB,

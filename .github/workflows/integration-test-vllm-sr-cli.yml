@@ -1,4 +1,4 @@
-name: Integration Test [vLLM-SR CLI]
+name: Integration Test [Docker Shared Suites]
 
 on:
   workflow_dispatch: # Allow manual triggering
@@ -7,18 +7,42 @@ on:
     types: [opened, synchronize, reopened, ready_for_review]
     branches: [main]
     paths:
+      - 'src/semantic-router/**'
       - 'src/vllm-sr/**'
-      - 'src/vllm-sr/Dockerfile*'
+      - 'dashboard/backend/**'
+      - 'e2e/profiles/ai-gateway/**'
+      - 'deploy/kubernetes/ai-gateway/**'
+      - 'e2e/profiles/dashboard/**'
+      - 'e2e/testcases/dashboard_*.go'
+      - 'deploy/kubernetes/observability/dashboard/**'
+      - 'e2e/testing/llm-katan/**'
       - 'tools/make/docker.mk'
+      - 'tools/agent/e2e-profile-map.yaml'
+      - 'tools/agent/repo-manifest.yaml'
+      - 'tools/agent/scripts/**'
+      - '.github/workflows/ci-changes.yml'
+      - '.github/workflows/integration-test-k8s.yml'
       - 'e2e/testing/vllm-sr-cli/**'
       - '.github/workflows/integration-test-vllm-sr-cli.yml'
 
   push:
     branches: [main]
     paths:
+      - 'src/semantic-router/**'
       - 'src/vllm-sr/**'
-      - 'src/vllm-sr/Dockerfile*'
+      - 'dashboard/backend/**'
+      - 'e2e/profiles/ai-gateway/**'
+      - 'deploy/kubernetes/ai-gateway/**'
+      - 'e2e/profiles/dashboard/**'
+      - 'e2e/testcases/dashboard_*.go'
+      - 'deploy/kubernetes/observability/dashboard/**'
+      - 'e2e/testing/llm-katan/**'
       - 'tools/make/docker.mk'
+      - 'tools/agent/e2e-profile-map.yaml'
+      - 'tools/agent/repo-manifest.yaml'
+      - 'tools/agent/scripts/**'
+      - '.github/workflows/ci-changes.yml'
+      - '.github/workflows/integration-test-k8s.yml'
       - 'e2e/testing/vllm-sr-cli/**'
       - '.github/workflows/integration-test-vllm-sr-cli.yml'
 
@@ -28,10 +52,14 @@ concurrency:
 
 jobs:
   cli-tests:
-    name: CLI E2E Tests
+    name: Docker Shared Suite [${{ matrix.suite }}]
     if: github.repository == 'vllm-project/semantic-router' && !github.event.pull_request.draft
     runs-on: ubuntu-latest
     timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        suite: ["kubernetes", "dashboard"]
 
     steps:
       #######################################
@@ -58,16 +86,14 @@ jobs:
         with:
           python-version: "3.11"
 
-      - name: Install vllm-sr CLI
+      #######################################
+      # Run shared docker suites
+      #######################################
+      - name: Run Docker Shared Integration Suite (${{ matrix.suite }})
         run: |
-          pip install -e src/vllm-sr
-          vllm-sr --version
-
-      #######################################
-      # Run CLI Tests
-      #######################################
-      - name: Run CLI Integration Tests
-        run: make vllm-sr-test-integration
+          make vllm-sr-test-integration \
+            VLLM_SR_TEST_TARGET=docker \
+            VLLM_SR_SHARED_SUITE=${{ matrix.suite }}
 
       #######################################
       # Cleanup

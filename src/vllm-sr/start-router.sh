@@ -4,7 +4,11 @@
 
 set -e
 
-CONFIG_FILE="${1:-/app/config.yaml}"
+CONFIG_FILE="${VLLM_SR_RUNTIME_CONFIG_PATH:-/app/config.yaml}"
+if [ "$#" -gt 0 ] && [[ "$1" != -* ]]; then
+    CONFIG_FILE="$1"
+    shift
+fi
 echo "Starting router from canonical config..."
 echo "  Config file: $CONFIG_FILE"
 
@@ -28,4 +32,5 @@ exec /usr/local/bin/router \
     -config="$CONFIG_FILE" \
     -port=50051 \
     -enable-api=true \
-    -api-port=8080
+    -api-port=8080 \
+    "$@"

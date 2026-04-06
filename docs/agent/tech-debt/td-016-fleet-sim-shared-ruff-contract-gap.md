@@ -2,7 +2,7 @@
 
 ## Status
 
-Open
+Closed
 
 ## Scope
 
@@ -12,28 +12,34 @@ Open
 
 ## Summary
 
-The fleet simulator was moved from `bench/fleet-simulator` into the maintained `src/fleet-sim` subtree, but the codebase still carries the legacy style and naming conventions from its original standalone package. The shared harness now lint-detects that subtree because it lives under `src/`, yet the repository-wide Ruff contract is materially stricter than the simulator's historical local workflow. Diff-scoped `make agent-ci-gate` therefore re-enters hundreds of pre-existing style violations whenever any `src/fleet-sim/**/*.py` file changes, even when the branch only fixes packaging, service, or dashboard integration behavior.
+The fleet simulator was moved from `bench/fleet-simulator` into the maintained `src/fleet-sim` subtree, but the repository initially handled the resulting Ruff mismatch by parking a broad fleet-sim exception block inside the shared Python config. That kept `make agent-ci-gate` from re-reporting the subtree's historical backlog, but it also left the actual fleet-sim lint contract implicit and split across temporary shared-config relief, a non-blocking local `make lint`, and a separate `pyproject.toml` Ruff stanza.
 
-This change records that mismatch explicitly and scopes the shared Ruff gate away from the known fleet-sim legacy rule backlog so branch validation can distinguish new regressions from inherited simulator style debt.
+That gap is now resolved. Fleet-sim owns an explicit subtree-local Ruff contract in `src/fleet-sim/.ruff.toml`, the shared harness discovers and uses that local config for changed fleet-sim Python files, the global shared Ruff config no longer carries a fleet-sim-wide exception block, and the simulator-local `make lint` target now points at the same blocking Ruff contract that the harness enforces.
 
 ## Evidence
 
+- [src/fleet-sim/.ruff.toml](../../../src/fleet-sim/.ruff.toml)
+  - the subtree now owns its explicit Ruff contract by extending the shared repo policy with fleet-sim-specific ignores
 - [src/fleet-sim/Makefile](../../../src/fleet-sim/Makefile)
-  - simulator-local lint is lightweight and non-blocking today
+  - simulator-local lint now uses the same explicit Ruff config and no longer treats Ruff failures as report-only
 - [src/fleet-sim/pyproject.toml](../../../src/fleet-sim/pyproject.toml)
-  - the subtree still carries its own package-local formatting metadata
+  - the redundant package-local Ruff metadata has been removed so the subtree has one lint source of truth
+- [src/fleet-sim/AGENTS.md](../../../src/fleet-sim/AGENTS.md)
+  - local rules now tell contributors to keep the fleet-sim lint contract in `src/fleet-sim/.ruff.toml` instead of reopening shared-config carve-outs
 - [tools/linter/python/.ruff.toml](../../../tools/linter/python/.ruff.toml)
-  - shared Ruff policy is stricter than the fleet-sim subtree currently satisfies
+  - the shared Ruff policy no longer contains a fleet-sim-wide temporary exception block
 - [tools/agent/scripts/agent_support.py](../../../tools/agent/scripts/agent_support.py)
-  - diff-scoped harness lint runs shared Ruff directly on changed Python files
-- `python3 -m ruff check --config tools/linter/python/.ruff.toml --statistics src/fleet-sim`
-  - reported 551 remaining violations across the migrated subtree after mechanical autofixes, dominated by `PLC0415`, `PLR2004`, `RUF00x`, and simulator-specific naming rules
+  - diff-scoped harness lint now resolves the nearest subtree `.ruff.toml` before invoking Ruff
+- `python /Users/bitliu/vs/tools/agent/scripts/agent_gate.py run-python-lint --changed-files-path /tmp/vsr_td016_changed.txt`
+  - shared changed-file lint now runs fleet-sim files against `src/fleet-sim/.ruff.toml` instead of the global shared config
+- `cd /Users/bitliu/vs/src/fleet-sim && python -m ruff check --config .ruff.toml run_sim.py fleet_sim tests`
+  - the explicit fleet-sim-owned Ruff contract now passes on the subtree without relying on a global fleet-sim carve-out
 
 ## Why It Matters
 
 - branch-level validation loses signal when simulator integration fixes are blocked by a large inherited style backlog that predates the branch
 - reviewers cannot tell whether a `fleet-sim` PR introduced a regression or merely intersected the subtree's unretired Ruff debt
-- treating the shared Ruff contract as immediately authoritative for `src/fleet-sim` would create a second conflicting source of truth until the simulator code is intentionally converged
+- leaving fleet-sim relief inside the shared repo config makes the repo-wide policy look broader than it really is and hides who owns the simulator-specific lint contract
 
 ## Desired End State
 
@@ -43,6 +49,21 @@ This change records that mismatch explicitly and scopes the shared Ruff gate awa
 
 ## Exit Criteria
 
-- `python3 -m ruff check --config tools/linter/python/.ruff.toml src/fleet-sim` passes without the temporary subtree exceptions
-- `make agent-ci-gate CHANGED_FILES="...,src/fleet-sim/...,..."` no longer needs broad shared-Ruff relief to validate simulator changes honestly
+- the shared Ruff config no longer contains a fleet-sim-wide temporary exception block
+- changed-file Python lint resolves fleet-sim files through the explicit `src/fleet-sim/.ruff.toml` contract instead of forcing them through the repo-global Ruff config
 - the repo-native fleet-sim lint contract is documented and enforced consistently by both subtree-local commands and the shared harness
+
+## Retirement Notes
+
+- `src/fleet-sim/.ruff.toml` now extends the shared repo Ruff policy and owns the subtree-specific ignore set explicitly.
+- `tools/agent/scripts/agent_support.py` now groups changed Python files by the nearest subtree `.ruff.toml`, so diff-scoped harness lint uses the fleet-sim contract for simulator files and the shared contract elsewhere.
+- `tools/linter/python/.ruff.toml` no longer needs a broad fleet-sim-specific carve-out, and `src/fleet-sim/pyproject.toml` no longer carries a second Ruff source of truth.
+- `src/fleet-sim/Makefile` and `src/fleet-sim/AGENTS.md` now point contributors at the same blocking Ruff contract that the shared harness enforces.
+
+## Validation
+
+- `/Users/bitliu/vs/.venv-agent/bin/python -m ruff check --config /Users/bitliu/vs/tools/linter/python/.ruff.toml /Users/bitliu/vs/tools/agent/scripts/agent_support.py`
+- `cd /Users/bitliu/vs/src/fleet-sim && /Users/bitliu/vs/.venv-agent/bin/python -m ruff check --config .ruff.toml run_sim.py fleet_sim tests`
+- `cd /Users/bitliu/vs/src/fleet-sim && pytest tests/test_imports_and_profiles.py`
+- `cd /Users/bitliu/vs/src/fleet-sim && /Users/bitliu/vs/.venv-agent/bin/python -m black --check --diff run_sim.py fleet_sim/__init__.py tests/test_imports_and_profiles.py tests/test_disagg.py tests/test_hardware.py tests/test_hf_import.py tests/test_models.py tests/test_profiles.py`
+- `/Users/bitliu/vs/.venv-agent/bin/python /Users/bitliu/vs/tools/agent/scripts/agent_gate.py run-python-lint --changed-files-path /tmp/vsr_td016_changed.txt`

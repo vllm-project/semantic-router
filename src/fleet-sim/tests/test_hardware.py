@@ -1,6 +1,7 @@
 """Unit tests for fleet_sim.hardware — HardwareSpec and catalog."""
 
 import pytest
+
 from fleet_sim.hardware import (
     A100_SXM,
     B200_SXM,

@@ -5,13 +5,15 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/vllm-project/semantic-router/dashboard/backend/config"
 	"github.com/vllm-project/semantic-router/dashboard/backend/evaluation"
 	"github.com/vllm-project/semantic-router/dashboard/backend/handlers"
 	"github.com/vllm-project/semantic-router/dashboard/backend/middleware"
 	"github.com/vllm-project/semantic-router/dashboard/backend/mlpipeline"
-	routerconfig "github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
+	routercontract "github.com/vllm-project/semantic-router/src/semantic-router/pkg/routercontract"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/trainingartifacts"
 )
 
 func registerCoreRoutes(mux *http.ServeMux, cfg *config.Config) {
@@ -75,13 +77,15 @@ func registerToolRoutes(mux *http.ServeMux, cfg *config.Config) {
 
 func resolveToolsDBPath(cfg *config.Config) string {
 	toolsDBPath := filepath.Join(cfg.ConfigDir, "config", "tools_db.json")
-	parsedCfg, err := routerconfig.Parse(cfg.AbsConfigPath)
+	parsedCfg, err := routercontract.Parse(cfg.AbsConfigPath)
 	if err != nil {
 		log.Printf("Warning: failed to parse config for tools_db_path, use the default path %s: %v", toolsDBPath, err)
 		return toolsDBPath
 	}
-	if parsedCfg.ToolSelection.Tools.ToolsDBPath != "" {
-		return parsedCfg.ToolSelection.Tools.ToolsDBPath
+	if parsedCfg.Global != nil {
+		if configured := strings.TrimSpace(parsedCfg.Global.Integrations.Tools.ToolsDBPath); configured != "" {
+			return configured
+		}
 	}
 	return toolsDBPath
 }
@@ -167,10 +171,8 @@ func registerEvaluationRoutes(mux *http.ServeMux, cfg *config.Config) {
 }
 
 func resolveEvaluationProjectRoot(cfg *config.Config) string {
-	for _, candidate := range evaluationProjectRootCandidates(cfg) {
-		if root := findEvaluationProjectRoot(candidate); root != "" {
-			return root
-		}
+	if root := trainingartifacts.FindProjectRootWithModelEval(evaluationProjectRootCandidates(cfg)...); root != "" {
+		return root
 	}
 
 	projectRoot := filepath.Dir(cfg.ConfigDir)
@@ -197,49 +199,6 @@ func evaluationProjectRootCandidates(cfg *config.Config) []string {
 	}
 
 	return candidates
-}
-
-func findEvaluationProjectRoot(start string) string {
-	if start == "" {
-		return ""
-	}
-
-	info, err := os.Stat(start)
-	if err != nil {
-		return ""
-	}
-
-	dir := filepath.Clean(start)
-	if !info.IsDir() {
-		dir = filepath.Dir(dir)
-	}
-
-	for {
-		if isEvaluationProjectRoot(dir) {
-			return dir
-		}
-
-		parent := filepath.Dir(dir)
-		if parent == dir {
-			return ""
-		}
-		dir = parent
-	}
-}
-
-func isEvaluationProjectRoot(dir string) bool {
-	requiredPaths := []string{
-		filepath.Join("src", "training", "model_eval", "mmlu_pro_vllm_eval.py"),
-		filepath.Join("src", "training", "model_eval", "signal_eval.py"),
-	}
-
-	for _, relPath := range requiredPaths {
-		if _, err := os.Stat(filepath.Join(dir, relPath)); err != nil {
-			return false
-		}
-	}
-
-	return true
 }
 
 func registerMLPipelineRoutes(mux *http.ServeMux, cfg *config.Config) {
@@ -278,10 +237,8 @@ func resolveMLTrainingDir(cfg *config.Config) string {
 		return cfg.MLTrainingDir
 	}
 
-	projectRoot := filepath.Dir(cfg.ConfigDir)
-	candidate := filepath.Join(projectRoot, "src", "training", "ml_model_selection")
-	if _, err := os.Stat(candidate); err == nil {
-		return candidate
+	if projectRoot := trainingartifacts.FindProjectRootWithMLPipeline(evaluationProjectRootCandidates(cfg)...); projectRoot != "" {
+		return trainingartifacts.CurrentContract().MLPipelineDir(projectRoot)
 	}
 	return ""
 }

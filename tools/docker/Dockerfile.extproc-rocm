@@ -150,8 +150,8 @@ WORKDIR /app
 RUN mkdir -p src/semantic-router
 COPY src/semantic-router/go.mod src/semantic-router/go.sum src/semantic-router/
 COPY src/semantic-router/go.onnx.mod src/semantic-router/go.onnx.sum src/semantic-router/
-COPY candle-binding/go.mod candle-binding/semantic-router.go candle-binding/
-COPY onnx-binding/go.mod onnx-binding/semantic-router.go onnx-binding/
+COPY candle-binding/go.mod candle-binding/semantic-router.go candle-binding/backend_contract.go candle-binding/
+COPY onnx-binding/go.mod onnx-binding/semantic-router.go onnx-binding/backend_contract.go onnx-binding/
 COPY ml-binding/go.mod ml-binding/ml_binding.go ml-binding/
 COPY nlp-binding/go.mod nlp-binding/nlp_binding.go nlp-binding/nlp_binding_mock.go nlp-binding/
 
@@ -230,6 +230,7 @@ COPY onnx-binding/ort-ck-flash-attn/prebuilt/libort_ck_flash_attn.so* /app/lib/
 
 COPY config/config.yaml /app/config/
 COPY config/knowledge_bases/ /app/config/knowledge_bases/
+COPY config/knowledge_bases/ /app/config-assets/knowledge_bases/
 COPY scripts/entrypoint.sh /app/entrypoint.sh
 RUN chmod +x /app/entrypoint.sh
 

@@ -24,6 +24,8 @@ import (
 
 	"github.com/milvus-io/milvus-sdk-go/v2/client"
 	"github.com/milvus-io/milvus-sdk-go/v2/entity"
+
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/milvuslifecycle"
 )
 
 // safeIdentifierPattern matches UUIDs, prefixed IDs (file_xxx, vs_xxx), and simple alphanumeric strings.
@@ -145,22 +147,21 @@ func (m *MilvusBackend) CreateCollection(ctx context.Context, vectorStoreID stri
 		},
 	}
 
-	if err := m.client.CreateCollection(ctx, schema, 1); err != nil {
+	if err := milvuslifecycle.CreateCollection(ctx, m.client, milvuslifecycle.CollectionSpec{
+		Name:     colName,
+		Schema:   schema,
+		ShardNum: 1,
+		Load:     true,
+		Indexes: []milvuslifecycle.IndexSpec{
+			{
+				FieldName: "embedding",
+				Build: func() (entity.Index, error) {
+					return entity.NewIndexHNSW(entity.IP, m.indexM, m.indexEf)
+				},
+			},
+		},
+	}); err != nil {
 		return fmt.Errorf("failed to create collection %s: %w", colName, err)
-	}
-
-	// Create HNSW index on the embedding field.
-	index, err := entity.NewIndexHNSW(entity.IP, m.indexM, m.indexEf)
-	if err != nil {
-		return fmt.Errorf("failed to create HNSW index: %w", err)
-	}
-	if err := m.client.CreateIndex(ctx, colName, "embedding", index, false); err != nil {
-		return fmt.Errorf("failed to create index on %s: %w", colName, err)
-	}
-
-	// Load collection into memory.
-	if err := m.client.LoadCollection(ctx, colName, false); err != nil {
-		return fmt.Errorf("failed to load collection %s: %w", colName, err)
 	}
 
 	return nil
@@ -178,7 +179,7 @@ func (m *MilvusBackend) DeleteCollection(ctx context.Context, vectorStoreID stri
 // CollectionExists checks if a Milvus collection exists.
 func (m *MilvusBackend) CollectionExists(ctx context.Context, vectorStoreID string) (bool, error) {
 	colName := m.collectionName(vectorStoreID)
-	exists, err := m.client.HasCollection(ctx, colName)
+	exists, err := milvuslifecycle.CollectionExists(ctx, m.client, colName)
 	if err != nil {
 		return false, fmt.Errorf("failed to check collection %s: %w", colName, err)
 	}
@@ -255,15 +256,9 @@ func (m *MilvusBackend) Search(
 ) ([]SearchResult, error) {
 	colName := m.collectionName(vectorStoreID)
 
-	// Build filter expression with injection prevention.
-	expr := ""
-	if filter != nil {
-		if fid, ok := filter["file_id"].(string); ok && fid != "" {
-			if !safeIdentifierPattern.MatchString(fid) {
-				return nil, fmt.Errorf("invalid file_id filter: contains disallowed characters")
-			}
-			expr = fmt.Sprintf("file_id == \"%s\"", fid)
-		}
+	expr, err := buildSearchExpr(filter)
+	if err != nil {
+		return nil, err
 	}
 
 	sp, err := entity.NewIndexHNSWSearchParam(m.searchEf)
@@ -281,46 +276,75 @@ func (m *MilvusBackend) Search(
 
 	var results []SearchResult
 	for _, sr := range searchResults {
-		for i := 0; i < sr.ResultCount; i++ {
-			score := float64(sr.Scores[i])
-			if score < float64(threshold) {
-				continue
-			}
-
-			result := SearchResult{Score: score}
-
-			// Extract field values by column name.
-			for _, field := range sr.Fields {
-				switch col := field.(type) {
-				case *entity.ColumnVarChar:
-					val, err := col.ValueByIdx(i)
-					if err != nil {
-						continue
-					}
-					switch col.Name() {
-					case "file_id":
-						result.FileID = val
-					case "filename":
-						result.Filename = val
-					case "content":
-						result.Content = val
-					}
-				case *entity.ColumnInt64:
-					val, err := col.ValueByIdx(i)
-					if err != nil {
-						continue
-					}
-					if col.Name() == "chunk_index" {
-						result.ChunkIndex = int(val)
-					}
-				}
-			}
-
-			results = append(results, result)
-		}
+		results = appendSearchResultSet(results, sr, threshold)
 	}
 
 	return results, nil
+}
+
+func buildSearchExpr(filter map[string]interface{}) (string, error) {
+	if filter == nil {
+		return "", nil
+	}
+
+	fid, ok := filter["file_id"].(string)
+	if !ok || fid == "" {
+		return "", nil
+	}
+	if !safeIdentifierPattern.MatchString(fid) {
+		return "", fmt.Errorf("invalid file_id filter: contains disallowed characters")
+	}
+
+	return fmt.Sprintf("file_id == \"%s\"", fid), nil
+}
+
+func appendSearchResultSet(results []SearchResult, sr client.SearchResult, threshold float32) []SearchResult {
+	for i := 0; i < sr.ResultCount; i++ {
+		result, ok := decodeSearchResultRow(sr, i, threshold)
+		if ok {
+			results = append(results, result)
+		}
+	}
+	return results
+}
+
+func decodeSearchResultRow(sr client.SearchResult, row int, threshold float32) (SearchResult, bool) {
+	score := float64(sr.Scores[row])
+	if score < float64(threshold) {
+		return SearchResult{}, false
+	}
+
+	result := SearchResult{Score: score}
+	for _, field := range sr.Fields {
+		populateSearchResultField(&result, field, row)
+	}
+	return result, true
+}
+
+func populateSearchResultField(result *SearchResult, field entity.Column, row int) {
+	switch col := field.(type) {
+	case *entity.ColumnVarChar:
+		val, err := col.ValueByIdx(row)
+		if err != nil {
+			return
+		}
+		switch col.Name() {
+		case "file_id":
+			result.FileID = val
+		case "filename":
+			result.Filename = val
+		case "content":
+			result.Content = val
+		}
+	case *entity.ColumnInt64:
+		val, err := col.ValueByIdx(row)
+		if err != nil {
+			return
+		}
+		if col.Name() == "chunk_index" {
+			result.ChunkIndex = int(val)
+		}
+	}
 }
 
 // Close releases the Milvus client connection.

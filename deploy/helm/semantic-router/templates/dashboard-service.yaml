@@ -15,6 +15,5 @@ spec:
     protocol: TCP
     name: http
   selector:
-    {{- include "semantic-router.selectorLabels" . | nindent 4 }}
-    app.kubernetes.io/component: dashboard
+    {{- include "semantic-router.dashboardSelectorLabels" . | nindent 4 }}
 {{- end }}

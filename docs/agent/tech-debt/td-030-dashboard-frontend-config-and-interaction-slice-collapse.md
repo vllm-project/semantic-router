@@ -2,7 +2,7 @@
 
 ## Status
 
-Open
+Closed
 
 ## Scope
 
@@ -10,18 +10,33 @@ Open
 
 ## Summary
 
-The dashboard frontend now has local rules for pages and shared components, but its most active config and interaction surfaces still concentrate too much behavior into a few orchestration hotspots. `App.tsx` owns the top-level route shell, auth/setup gating, config-section routing, and repeated layout composition. `DashboardPage.tsx` combines data fetching, overview state, flow-diagram rendering, quick-action cards, and runtime inventory shaping in one page. `ConfigPage.tsx`, `SetupWizardPage.tsx`, and `BuilderPage.tsx` remain broad route-level hotspots, while `ChatComponent.tsx` and `ExpressionBuilder.tsx` still mix transport or editor orchestration with large rendering trees and helper logic. The editor-side store in `dslStore.ts` has also grown into a client-side control plane that owns WASM bootstrap, compile/validate/decompile flows, deploy-preview fetches, deploy/rollback calls, runtime health polling, and cross-page refresh events in the same module as local editor state. TD015 tracks weak typing in config and DSL helpers, and TD024 tracks OpenClaw-specific slice collapse, but the repo still lacks a dashboard-frontend-specific debt item for the non-OpenClaw route shell, editor-control, config page, and interaction-container boundaries.
+The dashboard frontend route shell, editor control plane, and overview page now sit on narrower sibling-owned seams instead of collapsing back into the same hotspot files. `App.tsx` keeps route registration plus auth/setup gating, while repeated layout wrappers, config-section routing helpers, knowledge-base route adapters, and legacy redirects now live in `appShellRouteSupport.tsx`. `dslStore.ts` keeps editor state, WASM bootstrap, and compile or validate flows, while deploy preview, deploy or rollback mutations, runtime-health polling, and version fetches now live in `dslStoreDeploySupport.ts`. `DashboardPage.tsx` keeps fetch cadence, polling, and navigation orchestration, while stats shaping, decision categorization, flow-diagram rendering, right-column actions, and lower-panel rendering moved into adjacent page modules. Together with the existing `configPage*`, `setupWizardSupport.ts`, `ChatComponent*`, and `ExpressionBuilder*` sibling modules plus the route-shell guidance in `dashboard/frontend/src/AGENTS.md`, the frontend now has a durable boundary contract for the surfaces this debt covered.
 
 ## Evidence
 
 - [dashboard/frontend/src/App.tsx](../../../dashboard/frontend/src/App.tsx)
+- [dashboard/frontend/src/appShellRouteSupport.tsx](../../../dashboard/frontend/src/appShellRouteSupport.tsx)
 - [dashboard/frontend/src/stores/dslStore.ts](../../../dashboard/frontend/src/stores/dslStore.ts)
+- [dashboard/frontend/src/stores/dslStoreSupport.ts](../../../dashboard/frontend/src/stores/dslStoreSupport.ts)
+- [dashboard/frontend/src/stores/dslStoreDeploySupport.ts](../../../dashboard/frontend/src/stores/dslStoreDeploySupport.ts)
 - [dashboard/frontend/src/pages/DashboardPage.tsx](../../../dashboard/frontend/src/pages/DashboardPage.tsx)
+- [dashboard/frontend/src/pages/dashboardPageSupport.ts](../../../dashboard/frontend/src/pages/dashboardPageSupport.ts)
+- [dashboard/frontend/src/pages/DashboardStatsCards.tsx](../../../dashboard/frontend/src/pages/DashboardStatsCards.tsx)
+- [dashboard/frontend/src/pages/DashboardMiniFlowDiagram.tsx](../../../dashboard/frontend/src/pages/DashboardMiniFlowDiagram.tsx)
+- [dashboard/frontend/src/pages/DashboardRightColumn.tsx](../../../dashboard/frontend/src/pages/DashboardRightColumn.tsx)
+- [dashboard/frontend/src/pages/DashboardBottomPanels.tsx](../../../dashboard/frontend/src/pages/DashboardBottomPanels.tsx)
 - [dashboard/frontend/src/pages/ConfigPage.tsx](../../../dashboard/frontend/src/pages/ConfigPage.tsx)
+- [dashboard/frontend/src/pages/configPageSupport.ts](../../../dashboard/frontend/src/pages/configPageSupport.ts)
 - [dashboard/frontend/src/pages/SetupWizardPage.tsx](../../../dashboard/frontend/src/pages/SetupWizardPage.tsx)
+- [dashboard/frontend/src/pages/setupWizardSupport.ts](../../../dashboard/frontend/src/pages/setupWizardSupport.ts)
 - [dashboard/frontend/src/pages/BuilderPage.tsx](../../../dashboard/frontend/src/pages/BuilderPage.tsx)
 - [dashboard/frontend/src/components/ChatComponent.tsx](../../../dashboard/frontend/src/components/ChatComponent.tsx)
+- [dashboard/frontend/src/components/ChatComponentConversationViewport.tsx](../../../dashboard/frontend/src/components/ChatComponentConversationViewport.tsx)
+- [dashboard/frontend/src/components/ChatComponentControls.tsx](../../../dashboard/frontend/src/components/ChatComponentControls.tsx)
 - [dashboard/frontend/src/components/ExpressionBuilder.tsx](../../../dashboard/frontend/src/components/ExpressionBuilder.tsx)
+- [dashboard/frontend/src/components/ExpressionBuilderSupport.ts](../../../dashboard/frontend/src/components/ExpressionBuilderSupport.ts)
+- [dashboard/frontend/src/components/ExpressionBuilderFlow.ts](../../../dashboard/frontend/src/components/ExpressionBuilderFlow.ts)
+- [dashboard/frontend/src/components/ExpressionBuilderDialogs.tsx](../../../dashboard/frontend/src/components/ExpressionBuilderDialogs.tsx)
 - [dashboard/frontend/src/pages/AGENTS.md](../../../dashboard/frontend/src/pages/AGENTS.md)
 - [dashboard/frontend/src/components/AGENTS.md](../../../dashboard/frontend/src/components/AGENTS.md)
 - [dashboard/frontend/src/AGENTS.md](../../../dashboard/frontend/src/AGENTS.md)
@@ -46,6 +61,21 @@ The dashboard frontend now has local rules for pages and shared components, but 
 
 ## Exit Criteria
 
-- New dashboard frontend features no longer require reopening `App.tsx`, `dslStore.ts`, plus one large page or interaction container for unrelated responsibilities.
-- Overview/config page support code, deploy-control orchestration, and interaction-container display logic have narrower primary owners than the current hotspots.
-- Dashboard-frontend local `AGENTS.md` coverage explicitly includes the route shell alongside the existing pages and components guidance.
+- Satisfied on 2026-04-06: new dashboard frontend work no longer needs to reopen `App.tsx`, `dslStore.ts`, and `DashboardPage.tsx` for unrelated responsibilities because route-shell wrappers, deploy-control actions, and overview render fragments now live in sibling support modules.
+- Satisfied on 2026-04-06: overview/config page support code, deploy-control orchestration, and interaction-container display logic have narrower primary owners across `dashboardPageSupport.ts`, `dslStoreDeploySupport.ts`, the existing `configPage*` and `setupWizardSupport.ts` helpers, and the extracted `ChatComponent*` or `ExpressionBuilder*` modules.
+- Satisfied on 2026-04-06: dashboard-frontend local `AGENTS.md` coverage explicitly includes the route shell alongside the existing pages and components guidance.
+
+## Retirement Notes
+
+- `dashboard/frontend/src/App.tsx` now stays focused on route registration and auth/setup gating, while `dashboard/frontend/src/appShellRouteSupport.tsx` owns repeated shell wrappers, setup status UI, config-section routing adapters, and legacy redirects.
+- `dashboard/frontend/src/stores/dslStore.ts` now centers on editor-local state plus WASM, compile, validate, and decompile actions, while `dashboard/frontend/src/stores/dslStoreDeploySupport.ts` owns deploy preview, deploy or rollback mutations, runtime-health polling, and config-version fetches.
+- `dashboard/frontend/src/pages/DashboardPage.tsx` now orchestrates fetch cadence, polling, and navigation, while `dashboard/frontend/src/pages/dashboardPageSupport.ts`, `DashboardStatsCards.tsx`, `DashboardMiniFlowDiagram.tsx`, `DashboardRightColumn.tsx`, and `DashboardBottomPanels.tsx` own the extracted overview helpers and large render sections.
+- The rest of the debt scope now follows the same local boundary pattern through existing sibling modules such as `configPageSupport.ts`, `setupWizardSupport.ts`, `ChatComponentConversationViewport.tsx`, `ChatComponentControls.tsx`, `ExpressionBuilderSupport.ts`, `ExpressionBuilderFlow.ts`, and `ExpressionBuilderDialogs.tsx`.
+
+## Validation
+
+- `cd /Users/bitliu/vs/dashboard/frontend && npm run type-check`
+- `cd /Users/bitliu/vs/dashboard/frontend && npm run lint`
+- `make agent-validate`
+- `make agent-lint AGENT_CHANGED_FILES_PATH=/tmp/vsr_td030_changed.txt`
+- `make agent-ci-gate AGENT_CHANGED_FILES_PATH=/tmp/vsr_td030_changed.txt`

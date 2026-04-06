@@ -309,17 +309,20 @@ func (c *Compiler) compileContextSignal(s *SignalDecl) {
 }
 
 func (c *Compiler) compileStructureSignal(s *SignalDecl) {
-	payload := fieldsToMap(s.Fields)
-	payload["name"] = s.Name
+	payloadFields := make(map[string]Value, len(s.Fields)+1)
+	for key, value := range s.Fields {
+		payloadFields[key] = value
+	}
+	payloadFields["name"] = StringValue{V: s.Name}
 
-	raw, err := yaml.Marshal(payload)
+	payload, err := structuredPayloadFromFields(payloadFields)
 	if err != nil {
 		c.addError(s.Pos, "failed to encode structure signal %q: %v", s.Name, err)
 		return
 	}
 
 	var rule config.StructureRule
-	if err := yaml.Unmarshal(raw, &rule); err != nil {
+	if err := yaml.Unmarshal(payload.Raw, &rule); err != nil {
 		c.addError(s.Pos, "failed to decode structure signal %q: %v", s.Name, err)
 		return
 	}
@@ -871,7 +874,7 @@ func (c *Compiler) compilePluginRef(ref *PluginRef) *config.DecisionPlugin {
 //nolint:gocognit,cyclop,funlen // Plugin decoding remains centralized so type-specific payload wiring stays consistent.
 func (c *Compiler) buildDecisionPlugin(pluginType string, fields map[string]Value) *config.DecisionPlugin {
 	dp := &config.DecisionPlugin{Type: pluginType}
-	setPluginConfig := func(value interface{}) {
+	setPluginConfig := func(value any) {
 		payload, err := config.NewStructuredPayload(value)
 		if err != nil {
 			c.addError(Position{}, "failed to encode plugin %q configuration: %v", pluginType, err)
@@ -1045,7 +1048,7 @@ func (c *Compiler) compileRAGPlugin(fields map[string]Value) config.RAGPluginCon
 	// backend_config is a nested object
 	if obj, ok := fields["backend_config"]; ok {
 		if ov, ok := obj.(ObjectValue); ok {
-			payload, err := config.NewStructuredPayload(fieldsToMap(ov.Fields))
+			payload, err := structuredPayloadFromFields(ov.Fields)
 			if err != nil {
 				c.addError(Position{}, "failed to encode rag backend_config: %v", err)
 			} else {
@@ -1084,7 +1087,7 @@ func compileComposerObj(ov ObjectValue) config.RuleCombination {
 
 // ---------- Error helpers ----------
 
-func (c *Compiler) addError(pos Position, format string, args ...interface{}) {
+func (c *Compiler) addError(pos Position, format string, args ...any) {
 	msg := fmt.Sprintf(format, args...)
 	c.errors = append(c.errors, fmt.Errorf("%s: %s", pos, msg))
 }
@@ -1234,35 +1237,4 @@ func getIntArrayField(fields map[string]Value, key string) ([]int, bool) {
 		}
 	}
 	return nil, false
-}
-
-func fieldsToMap(fields map[string]Value) map[string]interface{} {
-	result := make(map[string]interface{})
-	for k, v := range fields {
-		result[k] = valueToInterface(v)
-	}
-	return result
-}
-
-func valueToInterface(v Value) interface{} {
-	switch val := v.(type) {
-	case StringValue:
-		return val.V
-	case IntValue:
-		return val.V
-	case FloatValue:
-		return val.V
-	case BoolValue:
-		return val.V
-	case ArrayValue:
-		var arr []interface{}
-		for _, item := range val.Items {
-			arr = append(arr, valueToInterface(item))
-		}
-		return arr
-	case ObjectValue:
-		return fieldsToMap(val.Fields)
-	default:
-		return nil
-	}
 }

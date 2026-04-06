@@ -88,6 +88,7 @@ import (
 	"time"
 	"unsafe"
 
+	candle_binding "github.com/vllm-project/semantic-router/candle-binding"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 )
 
@@ -174,6 +175,9 @@ func (uc *UnifiedClassifier) Initialize(
 
 	if uc.initialized {
 		return fmt.Errorf("unified classifier already initialized")
+	}
+	if err := candle_binding.CurrentBackendContract().RequireFeature(candle_binding.FeatureUnifiedClassification); err != nil {
+		return err
 	}
 
 	// Convert Go strings to C strings for paths
@@ -411,6 +415,9 @@ func (uc *UnifiedClassifier) convertLoRAResultsToGo(result *C.LoRABatchResult) *
 func (uc *UnifiedClassifier) initializeLoRABindings() error {
 	if uc.loraModelPaths == nil {
 		return fmt.Errorf("loRA model paths not configured")
+	}
+	if err := candle_binding.CurrentBackendContract().RequireFeature(candle_binding.FeatureLoRABatchInference); err != nil {
+		return err
 	}
 
 	logging.ComponentDebugEvent("classifier", "lora_bindings_init_started", map[string]interface{}{

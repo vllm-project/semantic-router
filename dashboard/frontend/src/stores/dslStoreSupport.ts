@@ -45,9 +45,11 @@ export const initialDSLState: DSLState = {
   nlProgressEvents: [],
 }
 
-type DSLStoreSetter = (
+export type DSLStoreSetter = (
   partial: Partial<DSLStore> | ((state: DSLStore) => Partial<DSLStore>),
 ) => void
+
+export type DSLStoreGetter = () => DSLStore
 
 export function normalizeBuilderNLReview(review: BuilderNLReview | undefined): BuilderNLReview {
   return {

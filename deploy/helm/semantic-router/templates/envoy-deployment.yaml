@@ -1,0 +1,67 @@
+{{- if .Values.envoy.enabled }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "semantic-router.fullname" . }}-envoy
+  namespace: {{ include "semantic-router.namespace" . }}
+  labels:
+    {{- include "semantic-router.labels" . | nindent 4 }}
+    app.kubernetes.io/component: envoy
+spec:
+  replicas: {{ .Values.replicaCount }}
+  selector:
+    matchLabels:
+      {{- include "semantic-router.envoySelectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      annotations:
+        checksum/config: {{ include (print $.Template.BasePath "/envoy-configmap.yaml") . | sha256sum }}
+      labels:
+        {{- include "semantic-router.envoySelectorLabels" . | nindent 8 }}
+    spec:
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      containers:
+      - name: envoy
+        image: "{{ .Values.envoy.image.repository }}:{{ .Values.envoy.image.tag }}"
+        imagePullPolicy: {{ .Values.envoy.image.pullPolicy }}
+        args:
+        - -c
+        - /etc/envoy/envoy.yaml
+        - --log-level
+        - debug
+        ports:
+        - containerPort: {{ .Values.envoy.admin.targetPort }}
+          name: admin
+          protocol: TCP
+        {{- range $index, $listener := .Values.envoy.listeners }}
+        - containerPort: {{ $listener.port }}
+          name: listener-{{ $index }}
+          protocol: TCP
+        {{- end }}
+        volumeMounts:
+        - name: envoy-config
+          mountPath: /etc/envoy/envoy.yaml
+          subPath: envoy.yaml
+          readOnly: true
+        readinessProbe:
+          httpGet:
+            path: /ready
+            port: admin
+          initialDelaySeconds: 5
+          periodSeconds: 10
+        livenessProbe:
+          httpGet:
+            path: /ready
+            port: admin
+          initialDelaySeconds: 10
+          periodSeconds: 30
+        resources:
+          {{- toYaml .Values.envoy.resources | nindent 10 }}
+      volumes:
+      - name: envoy-config
+        configMap:
+          name: {{ include "semantic-router.fullname" . }}-envoy-config
+{{- end }}

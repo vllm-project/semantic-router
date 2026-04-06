@@ -315,7 +315,7 @@ func extractAccessToken(r *http.Request) string {
 		}
 	}
 
-	return strings.TrimSpace(r.URL.Query().Get("authToken"))
+	return ""
 }
 
 func requiresAuthentication(path string) bool {
@@ -325,6 +325,8 @@ func requiresAuthentication(path string) bool {
 	case strings.HasPrefix(path, "/api/auth/login"):
 		return false
 	case strings.HasPrefix(path, "/api/auth/bootstrap/"):
+		return false
+	case strings.HasPrefix(path, "/api/auth/logout"):
 		return false
 	case strings.HasPrefix(path, "/api/auth/me"):
 		return true

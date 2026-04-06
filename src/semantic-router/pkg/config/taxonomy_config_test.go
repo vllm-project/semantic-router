@@ -219,6 +219,47 @@ func TestKnowledgeBaseSourceResolveManifestPathFallsBackWhenLocalManifestMissing
 	}
 }
 
+func TestKnowledgeBaseSourceResolveManifestPathUsesStableRuntimeStoreForProjectedConfigMapBaseDir(t *testing.T) {
+	tempDir := t.TempDir()
+	projectedRoot := filepath.Join(tempDir, "config")
+	projectedRevisionDir := filepath.Join(projectedRoot, "..2026_04_06_06_11_18.1323063199")
+	if err := os.MkdirAll(projectedRevisionDir, 0o755); err != nil {
+		t.Fatalf("mkdir projected revision dir: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(projectedRoot, "..data"), []byte(""), 0o644); err != nil {
+		t.Fatalf("write projected ..data marker: %v", err)
+	}
+
+	runtimeManifest := filepath.Join(
+		tempDir,
+		".vllm-sr",
+		"knowledge_bases",
+		"privacy",
+		"labels.json",
+	)
+	if err := os.MkdirAll(filepath.Dir(runtimeManifest), 0o755); err != nil {
+		t.Fatalf("mkdir runtime kb dir: %v", err)
+	}
+	if err := os.WriteFile(runtimeManifest, []byte(`{"labels":{}}`), 0o644); err != nil {
+		t.Fatalf("write runtime manifest: %v", err)
+	}
+
+	source := KnowledgeBaseSource{
+		Path:     "knowledge_bases/privacy/",
+		Manifest: "labels.json",
+	}
+
+	manifestPath := source.ResolveManifestPath(projectedRevisionDir)
+	if manifestPath != runtimeManifest {
+		t.Fatalf("ResolveManifestPath() = %q, want %q", manifestPath, runtimeManifest)
+	}
+
+	resolvedRoot := source.ResolvePath(projectedRevisionDir)
+	if resolvedRoot != filepath.Dir(runtimeManifest) {
+		t.Fatalf("ResolvePath() = %q, want %q", resolvedRoot, filepath.Dir(runtimeManifest))
+	}
+}
+
 func TestCanonicalSignalsKBRoundTrip(t *testing.T) {
 	signals := CanonicalSignals{
 		KB: []KBSignalRule{

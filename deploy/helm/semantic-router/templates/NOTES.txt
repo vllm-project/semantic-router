@@ -1,3 +1,4 @@
+{{- $publicPort := include "semantic-router.primaryEnvoyListenerPort" . -}}
 1. Get the application URL by running these commands:
 {{- if .Values.ingress.enabled }}
 {{- range $host := .Values.ingress.hosts }}
@@ -11,17 +12,24 @@
   echo http://$NODE_IP:$NODE_PORT
 {{- else if contains "LoadBalancer" .Values.service.type }}
      NOTE: It may take a few minutes for the LoadBalancer IP to be available.
-           You can watch the status of by running 'kubectl get --namespace {{ include "semantic-router.namespace" . }} svc -w {{ include "semantic-router.fullname" . }}'
-  export SERVICE_IP=$(kubectl get svc --namespace {{ include "semantic-router.namespace" . }} {{ include "semantic-router.fullname" . }} --template "{{"{{ range (index .status.loadBalancer.ingress 0) }}{{.}}{{ end }}"}}")
-  echo http://$SERVICE_IP:{{ .Values.service.api.port }}
+           You can watch the status of by running 'kubectl get --namespace {{ include "semantic-router.namespace" . }} svc -w {{ include "semantic-router.fullname" . }}{{ if .Values.envoy.enabled }}-envoy{{ end }}'
+  export SERVICE_IP=$(kubectl get svc --namespace {{ include "semantic-router.namespace" . }} {{ include "semantic-router.fullname" . }}{{ if .Values.envoy.enabled }}-envoy{{ end }} --template "{{"{{ range (index .status.loadBalancer.ingress 0) }}{{.}}{{ end }}"}}")
+  echo http://$SERVICE_IP:{{ if .Values.envoy.enabled }}{{ $publicPort }}{{ else }}{{ .Values.service.api.port }}{{ end }}
 {{- else if contains "ClusterIP" .Values.service.type }}
-  export POD_NAME=$(kubectl get pods --namespace {{ include "semantic-router.namespace" . }} -l "app.kubernetes.io/name={{ include "semantic-router.name" . }},app.kubernetes.io/instance={{ .Release.Name }}" -o jsonpath="{.items[0].metadata.name}")
-  export CONTAINER_PORT=$(kubectl get pod --namespace {{ include "semantic-router.namespace" . }} $POD_NAME -o jsonpath="{.spec.containers[0].ports[0].containerPort}")
-  echo "Visit http://127.0.0.1:8080 to use your application"
-  kubectl --namespace {{ include "semantic-router.namespace" . }} port-forward $POD_NAME 8080:$CONTAINER_PORT
+  echo "Visit http://127.0.0.1:{{ if .Values.envoy.enabled }}{{ $publicPort }}{{ else }}8080{{ end }} to use your application"
+  kubectl --namespace {{ include "semantic-router.namespace" . }} port-forward {{ if .Values.envoy.enabled }}svc/{{ include "semantic-router.fullname" . }}-envoy {{ $publicPort }}:{{ $publicPort }}{{ else }}svc/{{ include "semantic-router.fullname" . }} 8080:8080{{ end }}
 {{- end }}
 
-2. Test the Classification API:
+2. Test the public API:
+{{- if .Values.envoy.enabled }}
+  # Model discovery
+  curl http://localhost:{{ $publicPort }}/v1/models
+
+  # Chat completions
+  curl -X POST http://localhost:{{ $publicPort }}/v1/chat/completions \
+    -H "Content-Type: application/json" \
+    -d '{"model":"replace-with-your-model","messages":[{"role":"user","content":"Say hello"}]}'
+{{- else }}
   # Health check
   curl http://localhost:8080/health
 
@@ -29,6 +37,7 @@
   curl -X POST http://localhost:8080/api/v1/classify/intent \
     -H "Content-Type: application/json" \
     -d '{"text": "What is machine learning?"}'
+{{- end }}
 
 3. Access metrics:
   kubectl --namespace {{ include "semantic-router.namespace" . }} port-forward svc/{{ include "semantic-router.fullname" . }}-metrics 9190:9190

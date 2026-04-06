@@ -5,13 +5,14 @@ metadata:
   namespace: {{ include "semantic-router.namespace" . }}
   labels:
     {{- include "semantic-router.labels" . | nindent 4 }}
+    app.kubernetes.io/component: router
 spec:
   {{- if not .Values.autoscaling.enabled }}
   replicas: {{ .Values.replicaCount }}
   {{- end }}
   selector:
     matchLabels:
-      {{- include "semantic-router.selectorLabels" . | nindent 6 }}
+      {{- include "semantic-router.routerSelectorLabels" . | nindent 6 }}
   template:
     metadata:
       annotations:
@@ -20,7 +21,7 @@ spec:
         {{- toYaml . | nindent 8 }}
       {{- end }}
       labels:
-        {{- include "semantic-router.selectorLabels" . | nindent 8 }}
+        {{- include "semantic-router.routerSelectorLabels" . | nindent 8 }}
     spec:
       {{- with .Values.imagePullSecrets }}
       imagePullSecrets:
@@ -75,6 +76,10 @@ spec:
           {{- end }}
         {{- end }}
         volumeMounts:
+        - name: config-volume
+          mountPath: /app/config.yaml
+          subPath: config.yaml
+          readOnly: true
         - name: config-volume
           mountPath: /app/config/config.yaml
           subPath: config.yaml

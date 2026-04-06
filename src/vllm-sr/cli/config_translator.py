@@ -10,23 +10,31 @@ from __future__ import annotations
 
 import os
 import tempfile
+from copy import deepcopy
 
 import yaml
 
+from cli.config_generator import render_envoy_config_from_user_config
+from cli.consts import DEFAULT_LISTENER_PORT
+from cli.parser import parse_user_config
 from cli.utils import get_logger, load_config
 
 log = get_logger(__name__)
+DEFAULT_K8S_ROUTER_SERVICE_HOST = "semantic-router"
 
 
 def translate_config_to_helm_values(
     config_file: str,
     *,
     image: str | None = None,
+    envoy_image: str | None = None,
+    dashboard_image: str | None = None,
     pull_policy: str | None = None,
     enable_observability: bool = True,
     profile_values: dict | None = None,
     env_vars: dict[str, str] | None = None,
     env_secret_name: str | None = None,
+    router_service_host: str | None = None,
 ) -> dict:
     """Build a Helm values dict from the user's ``config.yaml``.
 
@@ -37,11 +45,19 @@ def translate_config_to_helm_values(
     values: dict = {}
 
     if image:
-        repo, _, tag = image.rpartition(":")
-        if repo:
-            values.setdefault("image", {})["repository"] = repo
-        if tag:
-            values.setdefault("image", {})["tag"] = tag
+        _translate_image_override(image, values.setdefault("image", {}))
+
+    if envoy_image:
+        _translate_image_override(
+            envoy_image,
+            values.setdefault("envoy", {}).setdefault("image", {}),
+        )
+
+    if dashboard_image:
+        _translate_image_override(
+            dashboard_image,
+            values.setdefault("dashboard", {}).setdefault("image", {}),
+        )
 
     if pull_policy:
         policy_map = {
@@ -51,8 +67,17 @@ def translate_config_to_helm_values(
         }
         mapped = policy_map.get(pull_policy.lower(), pull_policy)
         values.setdefault("image", {})["pullPolicy"] = mapped
+        values.setdefault("envoy", {}).setdefault("image", {})["pullPolicy"] = mapped
+        values.setdefault("dashboard", {}).setdefault("image", {})[
+            "pullPolicy"
+        ] = mapped
 
     _translate_config_section(user_config, values)
+    _translate_envoy_section(
+        config_file,
+        values,
+        router_service_host=router_service_host or DEFAULT_K8S_ROUTER_SERVICE_HOST,
+    )
     _translate_observability(enable_observability, values)
     _translate_env_vars(env_vars, values, secret_name=env_secret_name)
 
@@ -60,6 +85,15 @@ def translate_config_to_helm_values(
         values = _deep_merge(profile_values, values)
 
     return values
+
+
+def _translate_image_override(image_name: str, image_values: dict) -> None:
+    """Split an OCI image reference into repository and tag fields."""
+    repo, _, tag = image_name.rpartition(":")
+    if repo:
+        image_values["repository"] = repo
+    if tag:
+        image_values["tag"] = tag
 
 
 def write_helm_values_file(values: dict, dest_dir: str | None = None) -> str:
@@ -87,30 +121,47 @@ def load_profile_values(profile: str | None, chart_dir: str) -> dict | None:
 
 
 def _translate_config_section(user_config: dict, values: dict) -> None:
-    """Map router config.yaml keys into the Helm values ``config:`` block."""
-    helm_config = values.setdefault("config", {})
+    """Map the canonical router config tree into the Helm values ``config:`` block."""
+    config = deepcopy(user_config or {})
+    values["config"] = config
+    values["configRaw"] = yaml.safe_dump(config, sort_keys=False)
 
-    passthrough_keys = [
-        "bert_model",
-        "semantic_cache",
-        "response_api",
-        "tools",
-        "prompt_guard",
-        "classifier",
-        "reasoning_families",
-        "default_reasoning_effort",
-        "api",
+
+def _translate_envoy_section(
+    config_file: str,
+    values: dict,
+    *,
+    router_service_host: str,
+) -> None:
+    """Generate the shared listener-plane config for the k8s Helm path."""
+    user_config = parse_user_config(config_file)
+    listeners = [
+        {
+            "name": listener.name,
+            "address": listener.address,
+            "port": listener.port,
+            "timeout": listener.timeout or "300s",
+        }
+        for listener in user_config.listeners
     ]
-    for key in passthrough_keys:
-        if key in user_config:
-            helm_config[key] = user_config[key]
+    if not listeners:
+        listeners = [
+            {
+                "name": "listener_0",
+                "address": "0.0.0.0",
+                "port": DEFAULT_LISTENER_PORT,
+                "timeout": "300s",
+            }
+        ]
 
-    if "listeners" in user_config:
-        helm_config["listeners"] = user_config["listeners"]
-    if "decisions" in user_config:
-        helm_config["decisions"] = user_config["decisions"]
-    if "mom_registry" in user_config:
-        helm_config["mom_registry"] = user_config["mom_registry"]
+    envoy_values = values.setdefault("envoy", {})
+    envoy_values["enabled"] = True
+    envoy_values["listeners"] = listeners
+    envoy_values["config"] = render_envoy_config_from_user_config(
+        user_config,
+        extproc_host=router_service_host,
+        router_api_host=router_service_host,
+    )
 
 
 def _translate_env_vars(
