@@ -73,12 +73,29 @@ func assertActiveConfigRoutingProjection(
 ) {
 	t.Helper()
 
+	assertActiveConfigProjectionMetadata(t, projection)
+	assertProjectedModelsAndSignals(t, projection)
+	assertProjectedDecisionsAndDSLSnapshot(t, projection)
+}
+
+func assertActiveConfigProjectionMetadata(
+	t *testing.T, projection *ActiveConfigProjection,
+) {
+	t.Helper()
+
 	if !projection.Validation.Valid {
 		t.Fatalf("expected valid projection, got %+v", projection.Validation)
 	}
 	if projection.SchemaVersion != projectionSchemaVersion {
 		t.Fatalf("schema_version = %q, want %q", projection.SchemaVersion, projectionSchemaVersion)
 	}
+}
+
+func assertProjectedModelsAndSignals(
+	t *testing.T, projection *ActiveConfigProjection,
+) {
+	t.Helper()
+
 	if len(projection.Models) != 1 || projection.Models[0].Name != "general" {
 		t.Fatalf("models = %+v, want one general model", projection.Models)
 	}
@@ -88,6 +105,13 @@ func assertActiveConfigRoutingProjection(
 	if len(projection.Signals) != 2 {
 		t.Fatalf("signals = %+v, want 2 named signals", projection.Signals)
 	}
+}
+
+func assertProjectedDecisionsAndDSLSnapshot(
+	t *testing.T, projection *ActiveConfigProjection,
+) {
+	t.Helper()
+
 	if len(projection.Decisions) != 1 || projection.Decisions[0].Name != "business-default" {
 		t.Fatalf("decisions = %+v, want business-default", projection.Decisions)
 	}
