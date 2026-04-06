@@ -98,6 +98,8 @@ def test_vllm_sr_rocm_dockerfile_stays_router_only() -> None:
     assert "python3-venv" in content
     assert 'python3 -m venv "${VIRTUAL_ENV}"' in content
     assert "huggingface_hub[cli]==1.5.0" in content
+    assert "COPY candle-binding/go.mod candle-binding/semantic-router.go candle-binding/backend_contract.go ./" in content
+    assert "COPY onnx-binding/go.mod onnx-binding/semantic-router.go onnx-binding/backend_contract.go ./" in content
     assert "COPY --from=dashboard-builder" not in content
     assert "COPY --from=frontend-builder" not in content
     assert "COPY --from=wizmap-builder" not in content
