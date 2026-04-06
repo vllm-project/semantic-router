@@ -17,7 +17,6 @@ if str(PROJECT_ROOT) not in sys.path:
 from cli.commands import runtime as rt  # noqa: E402
 from cli.config_translator import translate_config_to_helm_values  # noqa: E402
 from cli.k8s_backend import (  # noqa: E402
-    HELM_WAIT_TIMEOUT,
     K8S_SERVICE_TO_LABEL,
     K8sBackend,
 )
@@ -338,6 +337,26 @@ class TestKindClusterManager:
         ]
 
 
+class TestHelmWaitTimeoutBudget:
+    def test_helm_wait_timeout_defaults_to_startup_and_readiness_budget(self):
+        assert K8sBackend._helm_wait_timeout_for_values({}) == "65m"
+
+    def test_helm_wait_timeout_honors_profile_probe_overrides(self):
+        assert (
+            K8sBackend._helm_wait_timeout_for_values(
+                {
+                    "startupProbe": {"failureThreshold": 180},
+                    "readinessProbe": {
+                        "initialDelaySeconds": 15,
+                        "periodSeconds": 15,
+                        "failureThreshold": 5,
+                    },
+                }
+            )
+            == "34m"
+        )
+
+
 class TestManagedKindBackend:
     def test_managed_kind_deploy_ensures_cluster_and_loads_images(
         self, monkeypatch, tmp_path
@@ -425,7 +444,10 @@ class TestManagedKindBackend:
             "kind-vllm-sr",
             "upgrade",
         ]
-        assert helm_runs[0][0][-2:] == ["--timeout", HELM_WAIT_TIMEOUT]
+        assert helm_runs[0][0][-2:] == [
+            "--timeout",
+            K8sBackend._helm_wait_timeout_for_values({"dashboard": {"enabled": True}}),
+        ]
 
     def test_managed_kind_skips_dashboard_image_when_profile_does_not_enable_it(
         self, monkeypatch, tmp_path

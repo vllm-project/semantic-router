@@ -25,13 +25,41 @@ CHART_REL_PATH = os.path.join("deploy", "helm", "semantic-router")
 CHART_NAME = "semantic-router"
 ENV_SECRET_NAME = "vllm-sr-env-secrets"
 CHART_CONFIG_PATH = "/app/config.yaml"
-HELM_WAIT_TIMEOUT = "20m"
+HELM_WAIT_TIMEOUT_MINUTES = 20
+HELM_WAIT_TIMEOUT = f"{HELM_WAIT_TIMEOUT_MINUTES}m"
+HELM_WAIT_BUFFER_SECONDS = 120
+DEFAULT_STARTUP_PROBE_PERIOD_SECONDS = 10
+DEFAULT_STARTUP_PROBE_FAILURE_THRESHOLD = 360
+DEFAULT_READINESS_PROBE_INITIAL_DELAY_SECONDS = 30
+DEFAULT_READINESS_PROBE_PERIOD_SECONDS = 30
+DEFAULT_READINESS_PROBE_FAILURE_THRESHOLD = 5
 
 K8S_SERVICE_TO_LABEL: dict[str, str] = {
     "router": "app.kubernetes.io/component=router",
     "dashboard": "app.kubernetes.io/component=dashboard",
     "envoy": "app.kubernetes.io/component=envoy",
 }
+
+
+def _probe_config(values: dict[str, Any], key: str) -> dict[str, Any]:
+    probe = values.get(key)
+    if isinstance(probe, dict):
+        return probe
+    return {}
+
+
+def _probe_enabled(probe: dict[str, Any], *, default: bool = True) -> bool:
+    enabled = probe.get("enabled")
+    if enabled is None:
+        return default
+    return bool(enabled)
+
+
+def _probe_int(probe: dict[str, Any], key: str, default: int) -> int:
+    try:
+        return int(probe.get(key, default))
+    except (TypeError, ValueError):
+        return default
 
 
 class K8sBackend:
@@ -119,6 +147,7 @@ class K8sBackend:
         )
         self.primary_listener_port = self._primary_envoy_listener_port(values)
         values_path = write_helm_values_file(values)
+        helm_wait_timeout = self._helm_wait_timeout_for_values(values)
 
         cmd = [
             *self._helm_base_cmd(),
@@ -133,10 +162,10 @@ class K8sBackend:
             values_path,
             "--wait",
             "--timeout",
-            HELM_WAIT_TIMEOUT,
+            helm_wait_timeout,
         ]
 
-        log.info("Running helm upgrade --install ...")
+        log.info(f"Running helm upgrade --install ... (timeout: {helm_wait_timeout})")
         self._run(cmd)
         log.info("Helm release deployed successfully")
 
@@ -438,6 +467,47 @@ class K8sBackend:
         if listeners:
             return int(listeners[0].get("port") or 8888)
         return 8888
+
+    @staticmethod
+    def _helm_wait_timeout_for_values(values: dict[str, Any]) -> str:
+        startup_probe = _probe_config(values, "startupProbe")
+        readiness_probe = _probe_config(values, "readinessProbe")
+
+        startup_window_seconds = 0
+        if _probe_enabled(startup_probe):
+            startup_window_seconds = _probe_int(
+                startup_probe,
+                "periodSeconds",
+                DEFAULT_STARTUP_PROBE_PERIOD_SECONDS,
+            ) * _probe_int(
+                startup_probe,
+                "failureThreshold",
+                DEFAULT_STARTUP_PROBE_FAILURE_THRESHOLD,
+            )
+
+        readiness_window_seconds = 0
+        if _probe_enabled(readiness_probe):
+            readiness_window_seconds = _probe_int(
+                readiness_probe,
+                "initialDelaySeconds",
+                DEFAULT_READINESS_PROBE_INITIAL_DELAY_SECONDS,
+            ) + _probe_int(
+                readiness_probe,
+                "periodSeconds",
+                DEFAULT_READINESS_PROBE_PERIOD_SECONDS,
+            ) * _probe_int(
+                readiness_probe,
+                "failureThreshold",
+                DEFAULT_READINESS_PROBE_FAILURE_THRESHOLD,
+            )
+
+        total_seconds = max(
+            HELM_WAIT_TIMEOUT_MINUTES * 60,
+            startup_window_seconds
+            + readiness_window_seconds
+            + HELM_WAIT_BUFFER_SECONDS,
+        )
+        return f"{(total_seconds + 59) // 60}m"
 
     @staticmethod
     def _dashboard_enabled(profile_values: dict | None) -> bool:

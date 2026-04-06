@@ -306,6 +306,11 @@ class TestSharedSuiteRuntimeShape(unittest.TestCase):
         self.dashboard_base._llm_katan_host_port = 8000
 
     @mock.patch.object(
+        test_shared_suites.SharedRuntimeIntegrationBase,
+        "_integration_target",
+        return_value="docker",
+    )
+    @mock.patch.object(
         test_shared_suites.SharedRuntimeIntegrationBase, "_wait_for_docker_runtime"
     )
     @mock.patch.object(
@@ -313,7 +318,7 @@ class TestSharedSuiteRuntimeShape(unittest.TestCase):
     )
     @mock.patch.object(test_shared_suites.subprocess, "Popen")
     def test_routing_suite_uses_minimal_docker_runtime(
-        self, popen_mock, _wait_contracts, _wait_runtime
+        self, popen_mock, _wait_contracts, _wait_runtime, _target
     ):
         popen_mock.return_value = mock.Mock(poll=lambda: None)
         self.routing_base._start_runtime()

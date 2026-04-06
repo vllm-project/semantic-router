@@ -89,84 +89,26 @@ func addSystemPromptToRequestBody(requestBody []byte, systemPrompt string, mode 
 		return requestBody, false, nil
 	}
 
-	// Parse the JSON request body
 	var requestMap map[string]interface{}
 	if err := json.Unmarshal(requestBody, &requestMap); err != nil {
 		return nil, false, err
 	}
 
-	// Get the messages array
 	messagesInterface, ok := requestMap["messages"]
 	if !ok {
-		return requestBody, false, nil // No messages array, return original
+		return requestBody, false, nil
 	}
-
 	messages, ok := messagesInterface.([]interface{})
 	if !ok {
-		return requestBody, false, nil // Messages is not an array, return original
+		return requestBody, false, nil
 	}
 
-	// Check if there's already a system message at the beginning
-	hasSystemMessage := false
-	var existingSystemContent string
-	if len(messages) > 0 {
-		if firstMsg, ok := messages[0].(map[string]interface{}); ok {
-			if role, ok := firstMsg["role"].(string); ok && role == "system" {
-				hasSystemMessage = true
-				if content, ok := firstMsg["content"].(string); ok {
-					existingSystemContent = content
-				}
-			}
-		}
-	}
-
-	// Handle different injection modes
-	var finalSystemContent string
-	var logMessage string
-
-	switch mode {
-	case "insert":
-		if hasSystemMessage {
-			// Insert mode: prepend category prompt to existing system message
-			finalSystemContent = systemPrompt + "\n\n" + existingSystemContent
-			logMessage = "Inserted category-specific system prompt before existing system message"
-		} else {
-			// No existing system message, just use the category prompt
-			finalSystemContent = systemPrompt
-			logMessage = "Added category-specific system prompt (insert mode, no existing system message)"
-		}
-	case "replace":
-		fallthrough
-	default:
-		// Replace mode: use only the category prompt
-		finalSystemContent = systemPrompt
-		if hasSystemMessage {
-			logMessage = "Replaced existing system message with category-specific system prompt"
-		} else {
-			logMessage = "Added category-specific system prompt to the beginning of messages"
-		}
-	}
-
-	// Create the final system message
-	systemMessage := map[string]interface{}{
-		"role":    "system",
-		"content": finalSystemContent,
-	}
-
-	if hasSystemMessage {
-		// Update the existing system message
-		messages[0] = systemMessage
-	} else {
-		// Prepend the system message to the beginning of the messages array
-		messages = append([]interface{}{systemMessage}, messages...)
-	}
+	existingSystemContent, hasSystemMessage := extractExistingSystemMessage(messages)
+	finalSystemContent, logMessage := resolveSystemPromptInjection(systemPrompt, mode, existingSystemContent, hasSystemMessage)
+	messages = upsertLeadingSystemMessage(messages, finalSystemContent, hasSystemMessage)
 
 	logging.Infof("%s (mode: %s)", logMessage, mode)
-
-	// Update the messages in the request map
 	requestMap["messages"] = messages
-
-	// Marshal back to JSON
 	modifiedBody, err := json.Marshal(requestMap)
 	return modifiedBody, true, err
 }
