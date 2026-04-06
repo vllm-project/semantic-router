@@ -264,16 +264,16 @@ before running the slower DES.
 ### Flow
 
 ```
-CDF  →  _calibrate(gpu, max_ctx, alpha)
+CDF  →  analytical.calibrate(gpu, max_ctx, alpha)
          ↓
     (μ_gpu, cv², n_slots, mean_prefill)
          ↓
-    _min_gpus_analytical(λ_eff, μ_gpu, cv², slo_budget, n_slots)
+    analytical.min_gpus_analytical(λ_eff, μ_gpu, cv², slo_budget, n_slots)
          ↓
     n_gpus  [minimum GPUs satisfying P99_TTFT = P99_wait + mean_prefill ≤ SLO]
 ```
 
-### `_calibrate`
+### `analytical.calibrate`
 
 Samples `N` requests from the workload CDF (filtered to the pool's traffic
 fraction α), computes `service_time(l_in, l_out, max_ctx)` for each, and
@@ -286,7 +286,7 @@ n_slots      = gpu.n_slots(max_ctx)    (KV-cache concurrency per GPU)
 mean_prefill = E[ceil(l_in/chunk) × iter_t(1)]   (mean prefill time)
 ```
 
-### `_min_gpus_analytical`
+### `analytical.min_gpus_analytical`
 
 Uses the **slot-level Kimura M/G/c approximation** for P99 queue wait.
 Each GPU has `n_slots` KV-cache slots that act as parallel servers.
@@ -486,7 +486,7 @@ cheaper point whose worst-case P99 is _also_ lower than even cheaper
 
 ### Calibration fix for accurate savings
 
-`_calibrate()` uses `gpu.service_time(l_in, l_out, pool_max)` (seq-len-aware)
+`analytical.calibrate()` uses `gpu.service_time(l_in, l_out, pool_max)` (seq-len-aware)
 rather than a fixed `iter_t`.  This ensures the M/G/c service-time distribution
 correctly reflects the attention cost of the actual sequence lengths in each CDF
 slice, not just the worst-case `max_ctx`.

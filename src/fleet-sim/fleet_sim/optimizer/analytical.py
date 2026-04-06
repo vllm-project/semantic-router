@@ -16,6 +16,7 @@ min_gpus_analytical : Minimum GPU count such that P99 wait ≤ t_slo AND
 """
 
 import math
+import random
 
 from ..gpu_profiles import GpuProfile
 
@@ -96,8 +97,6 @@ def calibrate(
     lo_clamp : minimum token length to sample (pass gamma*B_short+1 for the
                long pool so short-side lengths are excluded from calibration).
     """
-    import random
-
     rng = random.Random(42)
     n_slots = gpu.n_slots(pool_max)
     raw_samples = []

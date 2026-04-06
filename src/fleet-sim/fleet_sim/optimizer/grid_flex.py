@@ -59,6 +59,8 @@ Examples
 ...           f"  DES={des}  {'OK' if pt.slo_met else 'BREACH'}")
 """
 
+import math
+import dataclasses
 from dataclasses import dataclass
 
 from ..core.fleet import Fleet, FleetConfig, PoolConfig
@@ -106,8 +108,6 @@ def _throttled_profile(gpu, n_max_cap: int, max_ctx: int):
     Used by grid_flex_analysis() DES verification to simulate a fleet with
     a batch-size cap applied (the G2G max_num_seqs curtailment mechanism).
     """
-    import dataclasses
-    import math
 
     blks_per_seq = math.ceil(max_ctx / gpu.blk_size)
     # Force both KV-memory limit and compute limit to equal n_max_cap
