@@ -47,6 +47,7 @@ func (s KnowledgeBaseSource) manifestFileName() string {
 }
 
 func (s KnowledgeBaseSource) ResolvePath(baseDir string) string {
+	normalizedBaseDir := normalizeKnowledgeBaseBaseDir(baseDir)
 	if s.Path == "" {
 		return ""
 	}
@@ -54,29 +55,30 @@ func (s KnowledgeBaseSource) ResolvePath(baseDir string) string {
 		return filepath.Clean(s.Path)
 	}
 
-	for _, candidate := range s.candidateRoots(baseDir) {
+	for _, candidate := range s.candidateRoots(normalizedBaseDir) {
 		cleaned := filepath.Clean(candidate)
 		if pathExists(cleaned) {
 			return cleaned
 		}
 	}
 
-	if baseDir == "" {
+	if normalizedBaseDir == "" {
 		return filepath.Clean(s.Path)
 	}
-	return filepath.Clean(filepath.Join(baseDir, s.Path))
+	return filepath.Clean(filepath.Join(normalizedBaseDir, s.Path))
 }
 
 func (s KnowledgeBaseSource) ResolveManifestPath(baseDir string) string {
+	normalizedBaseDir := normalizeKnowledgeBaseBaseDir(baseDir)
 	manifestFile := s.manifestFileName()
-	for _, candidate := range s.candidateRoots(baseDir) {
+	for _, candidate := range s.candidateRoots(normalizedBaseDir) {
 		manifestPath := filepath.Join(filepath.Clean(candidate), manifestFile)
 		if pathExists(manifestPath) {
 			return manifestPath
 		}
 	}
 
-	root := s.ResolvePath(baseDir)
+	root := s.ResolvePath(normalizedBaseDir)
 	if root == "" {
 		return ""
 	}
@@ -88,12 +90,13 @@ func (s KnowledgeBaseSource) ResolveManifestBaseName() string {
 }
 
 func (s KnowledgeBaseSource) candidateRoots(baseDir string) []string {
+	normalizedBaseDir := normalizeKnowledgeBaseBaseDir(baseDir)
 	candidates := make([]string, 0, 4)
-	if baseDir != "" {
-		if runtimeRoot := s.runtimeStateCandidateRoot(baseDir); runtimeRoot != "" {
+	if normalizedBaseDir != "" {
+		if runtimeRoot := s.runtimeStateCandidateRoot(normalizedBaseDir); runtimeRoot != "" {
 			candidates = append(candidates, runtimeRoot)
 		}
-		candidates = append(candidates, filepath.Join(baseDir, s.Path))
+		candidates = append(candidates, filepath.Join(normalizedBaseDir, s.Path))
 	}
 	for _, root := range builtinConfigAssetRoots() {
 		candidates = append(candidates, filepath.Join(root, s.Path))
@@ -102,7 +105,7 @@ func (s KnowledgeBaseSource) candidateRoots(baseDir string) []string {
 }
 
 func (s KnowledgeBaseSource) runtimeStateCandidateRoot(baseDir string) string {
-	cleanBaseDir := filepath.Clean(strings.TrimSpace(baseDir))
+	cleanBaseDir := normalizeKnowledgeBaseBaseDir(baseDir)
 	cleanSourcePath := cleanKnowledgeBaseSourcePath(s.Path)
 	if cleanBaseDir == "" || cleanSourcePath == "" || filepath.IsAbs(cleanSourcePath) {
 		return ""
@@ -114,6 +117,30 @@ func (s KnowledgeBaseSource) runtimeStateCandidateRoot(baseDir string) string {
 		return ""
 	}
 	return filepath.Join(cleanBaseDir, ".vllm-sr", filepath.FromSlash(cleanSourcePath))
+}
+
+func normalizeKnowledgeBaseBaseDir(baseDir string) string {
+	cleanBaseDir := filepath.Clean(strings.TrimSpace(baseDir))
+	if cleanBaseDir == "" {
+		return ""
+	}
+
+	baseName := filepath.Base(cleanBaseDir)
+	if !strings.HasPrefix(baseName, "..") {
+		return cleanBaseDir
+	}
+
+	parentDir := filepath.Dir(cleanBaseDir)
+	if parentDir == cleanBaseDir {
+		return cleanBaseDir
+	}
+	if _, err := os.Lstat(filepath.Join(parentDir, "..data")); err != nil {
+		return cleanBaseDir
+	}
+	if filepath.Base(parentDir) == "config" {
+		return filepath.Dir(parentDir)
+	}
+	return parentDir
 }
 
 // KBSignalRule binds one KB output to a normal routing signal.
@@ -174,11 +201,12 @@ func LoadKnowledgeBaseDefinition(baseDir string, source KnowledgeBaseSource) (Kn
 }
 
 func builtinConfigAssetRoots() []string {
-	roots := make([]string, 0, 3)
+	roots := make([]string, 0, 4)
 	if envRoot := strings.TrimSpace(os.Getenv("VLLM_SR_CONFIG_ASSET_ROOT")); envRoot != "" {
 		roots = append(roots, envRoot)
 	}
 	roots = append(roots, "/app/config")
+	roots = append(roots, "/app/config-assets")
 	if _, file, _, ok := runtime.Caller(0); ok {
 		roots = append(roots, filepath.Join(filepath.Dir(file), "..", "..", "..", "..", "config"))
 	}

@@ -329,37 +329,48 @@ func initUnifiedEmbeddingModelFactory(cfg *config.RouterConfig, paths embeddingP
 }
 
 func validateEmbeddingBackendContract(contract candle_binding.BackendContract, paths embeddingPaths, useBatched bool) error {
-	if paths.qwen3 != "" {
-		if err := contract.RequireEmbeddingFamily(candle_binding.EmbeddingFamilyQwen3); err != nil {
+	for _, requirement := range embeddingContractRequirements(paths) {
+		if err := validateEmbeddingFamilyContract(
+			contract,
+			requirement.path,
+			requirement.family,
+			useBatched,
+		); err != nil {
 			return err
-		}
-		if useBatched {
-			if err := contract.RequireBatchedEmbeddingFamily(candle_binding.EmbeddingFamilyQwen3); err != nil {
-				return err
-			}
-		}
-	}
-	if paths.gemma != "" {
-		if err := contract.RequireEmbeddingFamily(candle_binding.EmbeddingFamilyGemma); err != nil {
-			return err
-		}
-		if useBatched {
-			if err := contract.RequireBatchedEmbeddingFamily(candle_binding.EmbeddingFamilyGemma); err != nil {
-				return err
-			}
-		}
-	}
-	if paths.mmBert != "" {
-		if err := contract.RequireEmbeddingFamily(candle_binding.EmbeddingFamilyMMBert); err != nil {
-			return err
-		}
-		if useBatched {
-			if err := contract.RequireBatchedEmbeddingFamily(candle_binding.EmbeddingFamilyMMBert); err != nil {
-				return err
-			}
 		}
 	}
 	return nil
+}
+
+type embeddingContractRequirement struct {
+	path   string
+	family candle_binding.EmbeddingFamily
+}
+
+func embeddingContractRequirements(paths embeddingPaths) []embeddingContractRequirement {
+	return []embeddingContractRequirement{
+		{path: paths.qwen3, family: candle_binding.EmbeddingFamilyQwen3},
+		{path: paths.gemma, family: candle_binding.EmbeddingFamilyGemma},
+		{path: paths.mmBert, family: candle_binding.EmbeddingFamilyMMBert},
+	}
+}
+
+func validateEmbeddingFamilyContract(
+	contract candle_binding.BackendContract,
+	modelPath string,
+	family candle_binding.EmbeddingFamily,
+	useBatched bool,
+) error {
+	if modelPath == "" {
+		return nil
+	}
+	if err := contract.RequireEmbeddingFamily(family); err != nil {
+		return err
+	}
+	if !useBatched {
+		return nil
+	}
+	return contract.RequireBatchedEmbeddingFamily(family)
 }
 
 func initializeBERTModel(component string, useCPU bool, bertPath string, eventPrefix string) bool {

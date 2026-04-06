@@ -274,9 +274,10 @@ COPY --from=nlp-builder /build/out/libnlp_binding.so /usr/local/lib/
 ENV LD_LIBRARY_PATH=/usr/local/lib
 
 WORKDIR /app
-RUN mkdir -p /app /app/.vllm-sr /app/config /app/models
+RUN mkdir -p /app /app/.vllm-sr /app/config /app/config-assets /app/models
 
 COPY config/knowledge_bases/ /app/config/knowledge_bases/
+COPY config/knowledge_bases/ /app/config-assets/knowledge_bases/
 COPY src/vllm-sr/start-router.sh /app/start-router.sh
 RUN chmod +x /app/start-router.sh
 

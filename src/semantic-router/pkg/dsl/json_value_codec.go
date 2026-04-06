@@ -67,56 +67,77 @@ func unmarshalJSONValueBytes(data []byte) (JSONValue, error) {
 
 	switch trimmed[0] {
 	case '{':
-		obj, err := unmarshalJSONObjectBytes(trimmed)
-		if err != nil {
-			return JSONValue{}, err
-		}
-		return JSONValue{Kind: JSONValueObject, Object: &obj}, nil
+		return unmarshalJSONObjectValue(trimmed)
 	case '[':
-		var rawItems []json.RawMessage
-		if err := json.Unmarshal(trimmed, &rawItems); err != nil {
-			return JSONValue{}, err
-		}
-		items := make([]JSONValue, 0, len(rawItems))
-		for _, rawItem := range rawItems {
-			item, err := unmarshalJSONValueBytes(rawItem)
-			if err != nil {
-				return JSONValue{}, err
-			}
-			items = append(items, item)
-		}
-		return JSONValue{Kind: JSONValueArray, Array: items}, nil
+		return unmarshalJSONArrayValue(trimmed)
 	case '"':
-		var value string
-		if err := json.Unmarshal(trimmed, &value); err != nil {
-			return JSONValue{}, err
-		}
-		return JSONValue{Kind: JSONValueString, String: value}, nil
+		return unmarshalJSONStringValue(trimmed)
 	case 't', 'f':
-		var value bool
-		if err := json.Unmarshal(trimmed, &value); err != nil {
-			return JSONValue{}, err
-		}
-		return JSONValue{Kind: JSONValueBool, Bool: value}, nil
+		return unmarshalJSONBoolValue(trimmed)
 	default:
-		number, err := decodeJSONNumber(trimmed)
+		return unmarshalJSONNumberValue(trimmed)
+	}
+}
+
+func unmarshalJSONObjectValue(data []byte) (JSONValue, error) {
+	obj, err := unmarshalJSONObjectBytes(data)
+	if err != nil {
+		return JSONValue{}, err
+	}
+	return JSONValue{Kind: JSONValueObject, Object: &obj}, nil
+}
+
+func unmarshalJSONArrayValue(data []byte) (JSONValue, error) {
+	var rawItems []json.RawMessage
+	if err := json.Unmarshal(data, &rawItems); err != nil {
+		return JSONValue{}, err
+	}
+
+	items := make([]JSONValue, 0, len(rawItems))
+	for _, rawItem := range rawItems {
+		item, err := unmarshalJSONValueBytes(rawItem)
 		if err != nil {
 			return JSONValue{}, err
 		}
-		if strings.ContainsAny(number, ".eE") {
-			var value float64
-			if err := json.Unmarshal(trimmed, &value); err != nil {
-				return JSONValue{}, err
-			}
-			return JSONValue{Kind: JSONValueFloat, Float: value}, nil
-		}
+		items = append(items, item)
+	}
+	return JSONValue{Kind: JSONValueArray, Array: items}, nil
+}
 
-		var value int
-		if err := json.Unmarshal(trimmed, &value); err != nil {
+func unmarshalJSONStringValue(data []byte) (JSONValue, error) {
+	var value string
+	if err := json.Unmarshal(data, &value); err != nil {
+		return JSONValue{}, err
+	}
+	return JSONValue{Kind: JSONValueString, String: value}, nil
+}
+
+func unmarshalJSONBoolValue(data []byte) (JSONValue, error) {
+	var value bool
+	if err := json.Unmarshal(data, &value); err != nil {
+		return JSONValue{}, err
+	}
+	return JSONValue{Kind: JSONValueBool, Bool: value}, nil
+}
+
+func unmarshalJSONNumberValue(data []byte) (JSONValue, error) {
+	number, err := decodeJSONNumber(data)
+	if err != nil {
+		return JSONValue{}, err
+	}
+	if strings.ContainsAny(number, ".eE") {
+		var value float64
+		if err := json.Unmarshal(data, &value); err != nil {
 			return JSONValue{}, err
 		}
-		return JSONValue{Kind: JSONValueInt, Int: value}, nil
+		return JSONValue{Kind: JSONValueFloat, Float: value}, nil
 	}
+
+	var value int
+	if err := json.Unmarshal(data, &value); err != nil {
+		return JSONValue{}, err
+	}
+	return JSONValue{Kind: JSONValueInt, Int: value}, nil
 }
 
 func decodeJSONNumber(data []byte) (string, error) {

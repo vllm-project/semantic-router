@@ -8,6 +8,11 @@ EXTPROC_DOCKERFILE = REPO_ROOT / "tools" / "docker" / "Dockerfile.extproc"
 EXTPROC_ROCM_DOCKERFILE = REPO_ROOT / "tools" / "docker" / "Dockerfile.extproc-rocm"
 
 
+def assert_builtin_knowledge_base_copy_paths(content: str) -> None:
+    assert "COPY config/knowledge_bases/ /app/config/knowledge_bases/" in content
+    assert "COPY config/knowledge_bases/ /app/config-assets/knowledge_bases/" in content
+
+
 def test_dashboard_dockerfile_uses_glibc_builder_for_cgo_backend() -> None:
     content = DASHBOARD_DOCKERFILE.read_text(encoding="utf-8")
 
@@ -69,7 +74,7 @@ def test_vllm_sr_dockerfile_stays_router_only() -> None:
     assert "ARG GO_RUNTIME_COMPAT_IMAGE=golang:1.24-bullseye" in content
     assert "GLIBC_2.39+" in content
     assert 'ENTRYPOINT ["/app/start-router.sh"]' in content
-    assert "COPY config/knowledge_bases/ /app/config/knowledge_bases/" in content
+    assert_builtin_knowledge_base_copy_paths(content)
     assert "ENV VIRTUAL_ENV=/opt/vllm-sr-venv" in content
     assert "python3-yaml" in content
     assert "python3-venv" in content
@@ -87,7 +92,7 @@ def test_vllm_sr_rocm_dockerfile_stays_router_only() -> None:
     content = VLLM_SR_ROCM_DOCKERFILE.read_text(encoding="utf-8")
 
     assert 'ENTRYPOINT ["/app/start-router.sh"]' in content
-    assert "COPY config/knowledge_bases/ /app/config/knowledge_bases/" in content
+    assert_builtin_knowledge_base_copy_paths(content)
     assert "ENV VIRTUAL_ENV=/opt/vllm-sr-venv" in content
     assert "python3-yaml" in content
     assert "python3-venv" in content
@@ -104,12 +109,12 @@ def test_vllm_sr_rocm_dockerfile_stays_router_only() -> None:
 def test_extproc_dockerfile_copies_built_in_knowledge_bases() -> None:
     content = EXTPROC_DOCKERFILE.read_text(encoding="utf-8")
 
-    assert "COPY config/knowledge_bases/ /app/config/knowledge_bases/" in content
+    assert_builtin_knowledge_base_copy_paths(content)
     assert "COPY config/kb/ /app/config/kb/" not in content
 
 
 def test_extproc_rocm_dockerfile_copies_built_in_knowledge_bases() -> None:
     content = EXTPROC_ROCM_DOCKERFILE.read_text(encoding="utf-8")
 
-    assert "COPY config/knowledge_bases/ /app/config/knowledge_bases/" in content
+    assert_builtin_knowledge_base_copy_paths(content)
     assert "COPY config/kb/ /app/config/kb/" not in content
