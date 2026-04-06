@@ -112,36 +112,73 @@ DECISION_TREE routing_policy {
 
 	assertDeployedDecisionNames(t, sourcePath, "math_route", "fallback_route")
 	assertDeployedDecisionNames(t, runtimePath, "math_route", "fallback_route")
+	assertArchivedDecisionTreeDSL(t, tempDir, decisionTreeDSL)
+	assertConfigGetStaysCanonical(t, apiServer, "math_route", "fallback_route")
+}
+
+func assertArchivedDecisionTreeDSL(t *testing.T, tempDir string, want string) {
+	t.Helper()
 
 	dslPath := filepath.Join(tempDir, ".vllm-sr", "config.dsl")
 	archived, err := os.ReadFile(dslPath)
 	if err != nil {
 		t.Fatalf("expected archived DSL at %s: %v", dslPath, err)
 	}
-	if got := strings.TrimSpace(string(archived)); got != decisionTreeDSL {
-		t.Fatalf("archived DSL mismatch\nwant:\n%s\n\ngot:\n%s", decisionTreeDSL, got)
+	if got := strings.TrimSpace(string(archived)); got != want {
+		t.Fatalf("archived DSL mismatch\nwant:\n%s\n\ngot:\n%s", want, got)
 	}
 	if !strings.Contains(string(archived), "DECISION_TREE routing_policy") {
 		t.Fatalf("expected archived DSL to preserve DECISION_TREE authoring, got:\n%s", string(archived))
 	}
+}
+
+func assertConfigGetStaysCanonical(
+	t *testing.T,
+	apiServer *ClassificationAPIServer,
+	wantDecisions ...string,
+) {
+	t.Helper()
+
+	bodyText, doc := readRouterConfigDocument(t, apiServer)
+	assertCanonicalRouterConfigResponse(t, bodyText)
+	assertCanonicalRouterConfigDecisions(t, doc, wantDecisions...)
+}
+
+func readRouterConfigDocument(
+	t *testing.T, apiServer *ClassificationAPIServer,
+) (string, map[string]any) {
+	t.Helper()
 
 	getReq := httptest.NewRequest(http.MethodGet, "/config/router", nil)
 	getRR := httptest.NewRecorder()
 	apiServer.handleConfigGet(getRR, getReq)
-
 	if getRR.Code != http.StatusOK {
 		t.Fatalf("expected GET /config/router to return 200 OK, got %d: %s", getRR.Code, getRR.Body.String())
 	}
 
 	bodyText := getRR.Body.String()
-	if strings.Contains(bodyText, "DECISION_TREE") || strings.Contains(bodyText, "ELSE IF") {
-		t.Fatalf("expected /config/router to stay on canonical flat config, got:\n%s", bodyText)
-	}
-
 	var doc map[string]any
 	if err := json.Unmarshal(getRR.Body.Bytes(), &doc); err != nil {
 		t.Fatalf("json.Unmarshal GET /config/router: %v", err)
 	}
+	return bodyText, doc
+}
+
+func assertCanonicalRouterConfigResponse(t *testing.T, bodyText string) {
+	t.Helper()
+
+	if strings.Contains(bodyText, "DECISION_TREE") || strings.Contains(bodyText, "ELSE IF") {
+		t.Fatalf("expected /config/router to stay on canonical flat config, got:\n%s", bodyText)
+	}
+}
+
+func assertCanonicalRouterConfigDecisions(
+	t *testing.T,
+	doc map[string]any,
+	wantDecisions ...string,
+) {
+	t.Helper()
+
 	routing, ok := doc["routing"].(map[string]any)
 	if !ok {
 		t.Fatalf("expected routing object in GET /config/router response, got %#v", doc["routing"])
@@ -153,8 +190,9 @@ DECISION_TREE routing_policy {
 	if len(decisions) != 2 {
 		t.Fatalf("expected 2 flattened routing.decisions entries, got %d", len(decisions))
 	}
-	requireNamedDecision(t, decisions[0], "math_route")
-	requireNamedDecision(t, decisions[1], "fallback_route")
+	for index, wantDecision := range wantDecisions {
+		requireNamedDecision(t, decisions[index], wantDecision)
+	}
 }
 
 func TestHandleConfigRollbackReadsSourceBackupDirAndSyncsRuntimeOverride(t *testing.T) {

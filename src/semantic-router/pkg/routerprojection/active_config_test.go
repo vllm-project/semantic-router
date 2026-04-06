@@ -6,7 +6,18 @@ import (
 )
 
 func TestBuildActiveConfigProjectionIncludesRoutingReadModel(t *testing.T) {
-	configYAML := []byte(`
+	projection, err := BuildActiveConfigProjection(
+		activeConfigProjectionFixtureYAML(),
+		[]byte("ROUTE business-default { }"),
+	)
+	if err != nil {
+		t.Fatalf("BuildActiveConfigProjection() error = %v", err)
+	}
+	assertActiveConfigRoutingProjection(t, projection)
+}
+
+func activeConfigProjectionFixtureYAML() []byte {
+	return []byte(`
 version: v0.3
 listeners:
   - name: public
@@ -55,11 +66,12 @@ routing:
           configuration:
             enabled: true
 `)
+}
 
-	projection, err := BuildActiveConfigProjection(configYAML, []byte("ROUTE business-default { }"))
-	if err != nil {
-		t.Fatalf("BuildActiveConfigProjection() error = %v", err)
-	}
+func assertActiveConfigRoutingProjection(
+	t *testing.T, projection *ActiveConfigProjection,
+) {
+	t.Helper()
 
 	if !projection.Validation.Valid {
 		t.Fatalf("expected valid projection, got %+v", projection.Validation)

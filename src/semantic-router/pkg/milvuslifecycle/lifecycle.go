@@ -141,7 +141,6 @@ func EnsureCollection(
 	ctx context.Context, lifecycleClient EnsureClient, spec CollectionSpec, options EnsureOptions,
 ) (EnsureResult, error) {
 	var result EnsureResult
-
 	collectionName, err := validateCollectionSpec(spec)
 	if err != nil {
 		return result, err
@@ -151,45 +150,74 @@ func EnsureCollection(
 	if err != nil {
 		return result, err
 	}
+	result.Existed = exists
 
-	if exists {
-		result.Existed = true
-	}
-
-	if options.DropExisting && exists {
-		if err := lifecycleClient.DropCollection(ctx, collectionName); err != nil {
-			return result, fmt.Errorf("failed to drop collection: %w", err)
-		}
-		result.Dropped = true
-		result.Existed = false
-		exists = false
-	}
-
-	if !exists {
-		if !options.AllowCreate {
-			return result, fmt.Errorf("collection %s does not exist and auto-creation is disabled", collectionName)
-		}
-		if err := CreateCollection(ctx, lifecycleClient, spec); err != nil {
-			return result, err
-		}
-		result.Created = true
-		return result, nil
-	}
-
-	if err := ensureExistingIndexes(ctx, lifecycleClient, collectionName, spec.Indexes); err != nil {
+	exists, err = dropCollectionIfRequested(ctx, lifecycleClient, collectionName, options, exists, &result)
+	if err != nil {
 		return result, err
 	}
-
-	if spec.Load {
-		if err := lifecycleClient.LoadCollection(ctx, collectionName, false); err != nil {
-			if spec.IgnoreLoadErrorOnExisting {
-				return result, nil
-			}
-			return result, fmt.Errorf("failed to load collection: %w", err)
-		}
+	if !exists {
+		return createCollectionIfAllowed(ctx, lifecycleClient, collectionName, spec, options, result)
 	}
+	return result, ensureExistingCollection(ctx, lifecycleClient, collectionName, spec)
+}
 
+func dropCollectionIfRequested(
+	ctx context.Context,
+	lifecycleClient EnsureClient,
+	collectionName string,
+	options EnsureOptions,
+	exists bool,
+	result *EnsureResult,
+) (bool, error) {
+	if !options.DropExisting || !exists {
+		return exists, nil
+	}
+	if err := lifecycleClient.DropCollection(ctx, collectionName); err != nil {
+		return exists, fmt.Errorf("failed to drop collection: %w", err)
+	}
+	result.Dropped = true
+	result.Existed = false
+	return false, nil
+}
+
+func createCollectionIfAllowed(
+	ctx context.Context,
+	lifecycleClient EnsureClient,
+	collectionName string,
+	spec CollectionSpec,
+	options EnsureOptions,
+	result EnsureResult,
+) (EnsureResult, error) {
+	if !options.AllowCreate {
+		return result, fmt.Errorf("collection %s does not exist and auto-creation is disabled", collectionName)
+	}
+	if err := CreateCollection(ctx, lifecycleClient, spec); err != nil {
+		return result, err
+	}
+	result.Created = true
 	return result, nil
+}
+
+func ensureExistingCollection(
+	ctx context.Context,
+	lifecycleClient EnsureClient,
+	collectionName string,
+	spec CollectionSpec,
+) error {
+	if err := ensureExistingIndexes(ctx, lifecycleClient, collectionName, spec.Indexes); err != nil {
+		return err
+	}
+	if !spec.Load {
+		return nil
+	}
+	if err := lifecycleClient.LoadCollection(ctx, collectionName, false); err != nil {
+		if spec.IgnoreLoadErrorOnExisting {
+			return nil
+		}
+		return fmt.Errorf("failed to load collection: %w", err)
+	}
+	return nil
 }
 
 // Retry runs a small reusable retry loop with context cancellation support.

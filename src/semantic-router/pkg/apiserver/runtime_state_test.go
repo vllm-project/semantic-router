@@ -344,6 +344,48 @@ func TestLiveRuntimeConfigUpdateDoesNotReplaceGlobalConfig(t *testing.T) {
 }
 
 func TestNewLegacyRuntimeRegistryBridgesCompatibilityGlobalsIntoRegistry(t *testing.T) {
+	initialCfg := resetLegacyRuntimeCompatibilityGlobals(t)
+	initialSvc := services.NewPlaceholderClassificationService()
+	initialStore := newMockMemoryStore()
+	initialManager := &vectorstore.Manager{}
+	initialFileStore := &vectorstore.FileStore{}
+	installLegacyRuntimeCompatibilitySnapshot(initialCfg, initialSvc, initialStore, initialManager, initialFileStore)
+
+	registry, cleanup, err := newLegacyRuntimeRegistry("/unused/config.yaml")
+	if err != nil {
+		t.Fatalf("newLegacyRuntimeRegistry() error = %v", err)
+	}
+	defer cleanup()
+	assertLegacyRuntimeRegistrySnapshot(t, registry, initialCfg, initialSvc, initialStore, initialManager, initialFileStore)
+
+	if got := registry.CurrentConfig(); got != initialCfg {
+		t.Fatalf("CurrentConfig() = %p, want %p", got, initialCfg)
+	}
+
+	updatedCfg := &config.RouterConfig{
+		BackendModels: config.BackendModels{DefaultModel: "updated"},
+	}
+	updatedSvc := services.NewPlaceholderClassificationService()
+	updatedStore := newMockMemoryStore()
+	updatedManager := &vectorstore.Manager{}
+	updatedFileStore := &vectorstore.FileStore{}
+
+	installLegacyRuntimeCompatibilitySnapshot(updatedCfg, updatedSvc, updatedStore, updatedManager, updatedFileStore)
+
+	waitForRegistryState(t, func() bool {
+		runtime := registry.VectorStoreRuntime()
+		return registry.CurrentConfig() == updatedCfg &&
+			registry.ClassificationService() == updatedSvc &&
+			registry.MemoryStore() == updatedStore &&
+			runtime != nil &&
+			runtime.Manager == updatedManager &&
+			runtime.FileStore == updatedFileStore
+	})
+}
+
+func resetLegacyRuntimeCompatibilityGlobals(t *testing.T) *config.RouterConfig {
+	t.Helper()
+
 	previousCfg := config.Get()
 	initialCfg := previousCfg
 	if initialCfg == nil {
@@ -380,57 +422,46 @@ func TestNewLegacyRuntimeRegistryBridgesCompatibilityGlobalsIntoRegistry(t *test
 		globalFileStore = previousFileStore
 	})
 
-	initialSvc := services.NewPlaceholderClassificationService()
-	initialStore := newMockMemoryStore()
-	initialManager := &vectorstore.Manager{}
-	initialFileStore := &vectorstore.FileStore{}
-	services.SetGlobalClassificationService(initialSvc)
-	memory.SetGlobalMemoryStore(initialStore)
-	vectorStoreManager = initialManager
-	globalFileStore = initialFileStore
+	return initialCfg
+}
 
-	registry, cleanup, err := newLegacyRuntimeRegistry("/unused/config.yaml")
-	if err != nil {
-		t.Fatalf("newLegacyRuntimeRegistry() error = %v", err)
-	}
-	defer cleanup()
+func installLegacyRuntimeCompatibilitySnapshot(
+	cfg *config.RouterConfig,
+	svc *services.ClassificationService,
+	store memory.Store,
+	manager *vectorstore.Manager,
+	fileStore *vectorstore.FileStore,
+) {
+	services.SetGlobalClassificationService(svc)
+	memory.SetGlobalMemoryStore(store)
+	vectorStoreManager = manager
+	globalFileStore = fileStore
+	config.Replace(cfg)
+}
 
-	if got := registry.CurrentConfig(); got != initialCfg {
-		t.Fatalf("CurrentConfig() = %p, want %p", got, initialCfg)
+func assertLegacyRuntimeRegistrySnapshot(
+	t *testing.T,
+	registry *routerruntime.Registry,
+	wantCfg *config.RouterConfig,
+	wantSvc *services.ClassificationService,
+	wantStore memory.Store,
+	wantManager *vectorstore.Manager,
+	wantFileStore *vectorstore.FileStore,
+) {
+	t.Helper()
+
+	if got := registry.CurrentConfig(); got != wantCfg {
+		t.Fatalf("CurrentConfig() = %p, want %p", got, wantCfg)
 	}
-	if got := registry.ClassificationService(); got != initialSvc {
-		t.Fatalf("ClassificationService() = %p, want %p", got, initialSvc)
+	if got := registry.ClassificationService(); got != wantSvc {
+		t.Fatalf("ClassificationService() = %p, want %p", got, wantSvc)
 	}
-	if got := registry.MemoryStore(); got != initialStore {
-		t.Fatalf("MemoryStore() = %v, want %v", got, initialStore)
+	if got := registry.MemoryStore(); got != wantStore {
+		t.Fatalf("MemoryStore() = %v, want %v", got, wantStore)
 	}
-	if runtime := registry.VectorStoreRuntime(); runtime == nil || runtime.Manager != initialManager || runtime.FileStore != initialFileStore {
+	if runtime := registry.VectorStoreRuntime(); runtime == nil || runtime.Manager != wantManager || runtime.FileStore != wantFileStore {
 		t.Fatalf("VectorStoreRuntime() = %+v, want manager/file store snapshot", runtime)
 	}
-
-	updatedCfg := &config.RouterConfig{
-		BackendModels: config.BackendModels{DefaultModel: "updated"},
-	}
-	updatedSvc := services.NewPlaceholderClassificationService()
-	updatedStore := newMockMemoryStore()
-	updatedManager := &vectorstore.Manager{}
-	updatedFileStore := &vectorstore.FileStore{}
-
-	services.SetGlobalClassificationService(updatedSvc)
-	memory.SetGlobalMemoryStore(updatedStore)
-	vectorStoreManager = updatedManager
-	globalFileStore = updatedFileStore
-	config.Replace(updatedCfg)
-
-	waitForRegistryState(t, func() bool {
-		runtime := registry.VectorStoreRuntime()
-		return registry.CurrentConfig() == updatedCfg &&
-			registry.ClassificationService() == updatedSvc &&
-			registry.MemoryStore() == updatedStore &&
-			runtime != nil &&
-			runtime.Manager == updatedManager &&
-			runtime.FileStore == updatedFileStore
-	})
 }
 
 func waitForRegistryState(t *testing.T, ready func() bool) {
