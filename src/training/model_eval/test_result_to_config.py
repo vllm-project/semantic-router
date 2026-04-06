@@ -27,6 +27,33 @@ def test_parse_args_defaults_to_eval_config(monkeypatch):
     assert args.api_format == "openai"
 
 
+def assert_generated_config_uses_shared_runtime_defaults(config, artifact_contract):
+    assert (
+        config["global"]["stores"]["semantic_cache"]["similarity_threshold"]
+        == EXPECTED_SIMILARITY_THRESHOLD
+    )
+    assert (
+        config["global"]["integrations"]["tools"]
+        == artifact_contract["runtime_defaults"]["tools"]
+    )
+    assert (
+        config["global"]["model_catalog"]["embeddings"]
+        == artifact_contract["runtime_defaults"]["embeddings"]
+    )
+    assert (
+        config["global"]["model_catalog"]["modules"]["prompt_guard"]
+        == artifact_contract["runtime_defaults"]["prompt_guard"]
+    )
+    assert (
+        config["global"]["model_catalog"]["modules"]["classifier"]["domain"]
+        == artifact_contract["runtime_defaults"]["domain_classifier"]
+    )
+    assert (
+        config["global"]["model_catalog"]["modules"]["classifier"]["pii"]
+        == artifact_contract["runtime_defaults"]["pii_classifier"]
+    )
+
+
 def test_generate_config_yaml_emits_canonical_v03_layout():
     artifact_contract = load_shared_artifact_contract()
     category_accuracies = {
@@ -86,35 +113,12 @@ def test_generate_config_yaml_emits_canonical_v03_layout():
     assert domains["law"]["model_scores"][0]["use_reasoning"] is False
     assert config["routing"]["decisions"] == []
 
-    assert (
-        config["global"]["stores"]["semantic_cache"]["similarity_threshold"]
-        == EXPECTED_SIMILARITY_THRESHOLD
-    )
-    assert (
-        config["global"]["integrations"]["tools"]
-        == artifact_contract["runtime_defaults"]["tools"]
-    )
-    assert (
-        config["global"]["model_catalog"]["embeddings"]
-        == artifact_contract["runtime_defaults"]["embeddings"]
-    )
-    assert (
-        config["global"]["model_catalog"]["modules"]["prompt_guard"]
-        == artifact_contract["runtime_defaults"]["prompt_guard"]
-    )
+    assert_generated_config_uses_shared_runtime_defaults(config, artifact_contract)
     assert (
         config["global"]["model_catalog"]["modules"]["classifier"]["domain"][
             "fallback_category"
         ]
         == "other"
-    )
-    assert (
-        config["global"]["model_catalog"]["modules"]["classifier"]["domain"]
-        == artifact_contract["runtime_defaults"]["domain_classifier"]
-    )
-    assert (
-        config["global"]["model_catalog"]["modules"]["classifier"]["pii"]
-        == artifact_contract["runtime_defaults"]["pii_classifier"]
     )
 
     for legacy_key in (

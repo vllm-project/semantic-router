@@ -123,9 +123,8 @@ class SharedRuntimeIntegrationBase(CLITestBase):
         with urllib_request.urlopen(request, timeout=30) as response:
             return response.status, json.loads(response.read().decode("utf-8"))
 
-    def _start_llm_katan_fixture(self) -> None:
-        target = self._integration_target()
-        llm_katan_args = [
+    def _llm_katan_args(self) -> list[str]:
+        return [
             "llm-katan",
             "--model",
             LLM_KATAN_MODEL,
@@ -138,44 +137,34 @@ class SharedRuntimeIntegrationBase(CLITestBase):
             "--port",
             "8000",
         ]
-        if target == "docker":
-            self._llm_katan_host_port = self._available_port()
-            self._run_subprocess(
-                [self.container_runtime, "rm", "-f", LLM_KATAN_CONTAINER],
-                timeout=30,
-            )
-            self._run_checked(
-                [
-                    self.container_runtime,
-                    "run",
-                    "-d",
-                    "--rm",
-                    "--name",
-                    LLM_KATAN_CONTAINER,
-                    "-p",
-                    f"{self._llm_katan_host_port}:8000",
-                    LLM_KATAN_IMAGE,
-                    *llm_katan_args,
-                ],
-                timeout=60,
-            )
-            self._wait_for_http_json(
-                f"http://localhost:{self._llm_katan_host_port}/v1/models", timeout=120
-            )
-            return
 
+    def _start_docker_llm_katan_fixture(self, llm_katan_args: list[str]) -> None:
+        self._llm_katan_host_port = self._available_port()
+        self._run_subprocess(
+            [self.container_runtime, "rm", "-f", LLM_KATAN_CONTAINER],
+            timeout=30,
+        )
         self._run_checked(
             [
-                "kind",
-                "load",
-                "docker-image",
-                LLM_KATAN_IMAGE,
+                self.container_runtime,
+                "run",
+                "-d",
+                "--rm",
                 "--name",
-                DEFAULT_KIND_CLUSTER,
+                LLM_KATAN_CONTAINER,
+                "-p",
+                f"{self._llm_katan_host_port}:8000",
+                LLM_KATAN_IMAGE,
+                *llm_katan_args,
             ],
-            timeout=120,
+            timeout=60,
         )
-        manifest = f"""
+        self._wait_for_http_json(
+            f"http://localhost:{self._llm_katan_host_port}/v1/models", timeout=120
+        )
+
+    def _llm_katan_manifest(self) -> str:
+        return f"""
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -222,6 +211,19 @@ spec:
     - port: 8000
       targetPort: 8000
 """
+
+    def _start_k8s_llm_katan_fixture(self) -> None:
+        self._run_checked(
+            [
+                "kind",
+                "load",
+                "docker-image",
+                LLM_KATAN_IMAGE,
+                "--name",
+                DEFAULT_KIND_CLUSTER,
+            ],
+            timeout=120,
+        )
         apply = subprocess.run(
             [
                 "kubectl",
@@ -231,7 +233,7 @@ spec:
                 "-f",
                 "-",
             ],
-            input=manifest,
+            input=self._llm_katan_manifest(),
             text=True,
             capture_output=True,
             check=False,
@@ -265,6 +267,12 @@ spec:
             f"http://localhost:{llm_katan_local_port}/v1/models",
             timeout=120,
         )
+
+    def _start_llm_katan_fixture(self) -> None:
+        if self._integration_target() == "docker":
+            self._start_docker_llm_katan_fixture(self._llm_katan_args())
+            return
+        self._start_k8s_llm_katan_fixture()
 
     def _stop_llm_katan_fixture(self) -> None:
         target = self._integration_target()

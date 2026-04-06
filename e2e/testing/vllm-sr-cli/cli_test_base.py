@@ -12,6 +12,7 @@ Signed-off-by: vLLM-SR Team
 import os
 import shutil
 import subprocess
+import sys
 import tempfile
 import time
 import unittest
@@ -32,6 +33,16 @@ def _coerce_timeout_stream(value: str | bytes | None) -> str:
     if isinstance(value, bytes):
         return value.decode(errors="replace")
     return value
+
+
+def _prepend_current_python_scripts_dir(env: dict[str, str]) -> dict[str, str]:
+    """Prefer console scripts installed into the active Python environment."""
+    scripts_dir = str(Path(sys.executable).resolve().parent)
+    current_path = env.get("PATH", "")
+    env["PATH"] = (
+        f"{scripts_dir}{os.pathsep}{current_path}" if current_path else scripts_dir
+    )
+    return env
 
 
 class CLITestBase(unittest.TestCase):
@@ -230,6 +241,7 @@ class CLITestBase(unittest.TestCase):
         full_env = os.environ.copy()
         if env:
             full_env.update(env)
+        full_env = _prepend_current_python_scripts_dir(full_env)
 
         print(f"\nRunning: {' '.join(cmd)}")
 
@@ -269,16 +281,56 @@ class CLITestBase(unittest.TestCase):
             print(f"Command failed with exception: {e}")
             return -1, "", str(e)
 
-    def write_minimal_canonical_config(
+    def _minimal_model_catalog(self) -> dict:
+        return {
+            "embeddings": {
+                "semantic": {
+                    "mmbert_model_path": "",
+                    "qwen3_model_path": "",
+                    "gemma_model_path": "",
+                    "bert_model_path": "",
+                    "multimodal_model_path": "",
+                }
+            },
+            "modules": {
+                "prompt_guard": {
+                    "enabled": False,
+                    "model_ref": "",
+                    "model_id": "",
+                    "jailbreak_mapping_path": "",
+                    "use_mmbert_32k": False,
+                },
+                "classifier": {
+                    "domain": {
+                        "model_ref": "",
+                        "model_id": "",
+                        "category_mapping_path": "",
+                        "use_mmbert_32k": False,
+                    },
+                    "pii": {
+                        "model_ref": "",
+                        "model_id": "",
+                        "pii_mapping_path": "",
+                        "use_mmbert_32k": False,
+                    },
+                },
+                "feedback_detector": {
+                    "enabled": False,
+                    "model_ref": "",
+                    "model_id": "",
+                    "use_mmbert_32k": False,
+                },
+            },
+        }
+
+    def _minimal_canonical_config(
         self,
         *,
-        port: int = 8888,
-        model_name: str = "test-model",
-        endpoint: str = "host.docker.internal:8000",
-    ) -> str:
-        """Write a minimal runnable canonical v0.3 config into the temp workspace."""
-        config_path = Path(self.test_dir) / "config.yaml"
-        config = {
+        port: int,
+        model_name: str,
+        endpoint: str,
+    ) -> dict:
+        return {
             "version": "v0.3",
             "listeners": [
                 {
@@ -321,56 +373,27 @@ class CLITestBase(unittest.TestCase):
                 ],
             },
             "global": {
-                "stores": {
-                    "semantic_cache": {
-                        "enabled": False,
-                    }
-                },
-                "model_catalog": {
-                    "embeddings": {
-                        "semantic": {
-                            "mmbert_model_path": "",
-                            "qwen3_model_path": "",
-                            "gemma_model_path": "",
-                            "bert_model_path": "",
-                            "multimodal_model_path": "",
-                        }
-                    },
-                    "modules": {
-                        "prompt_guard": {
-                            "enabled": False,
-                            "model_ref": "",
-                            "model_id": "",
-                            "jailbreak_mapping_path": "",
-                            "use_mmbert_32k": False,
-                        },
-                        "classifier": {
-                            "domain": {
-                                "model_ref": "",
-                                "model_id": "",
-                                "category_mapping_path": "",
-                                "use_mmbert_32k": False,
-                            },
-                            "pii": {
-                                "model_ref": "",
-                                "model_id": "",
-                                "pii_mapping_path": "",
-                                "use_mmbert_32k": False,
-                            },
-                        },
-                        "feedback_detector": {
-                            "enabled": False,
-                            "model_ref": "",
-                            "model_id": "",
-                            "use_mmbert_32k": False,
-                        },
-                    },
-                },
+                "stores": {"semantic_cache": {"enabled": False}},
+                "model_catalog": self._minimal_model_catalog(),
             },
         }
+
+    def write_minimal_canonical_config(
+        self,
+        *,
+        port: int = 8888,
+        model_name: str = "test-model",
+        endpoint: str = "host.docker.internal:8000",
+    ) -> str:
+        """Write a minimal runnable canonical v0.3 config into the temp workspace."""
+        config_path = Path(self.test_dir) / "config.yaml"
+        config = self._minimal_canonical_config(
+            port=port,
+            model_name=model_name,
+            endpoint=endpoint,
+        )
         config_path.write_text(
-            yaml.safe_dump(config, sort_keys=False),
-            encoding="utf-8",
+            yaml.safe_dump(config, sort_keys=False), encoding="utf-8"
         )
         return str(config_path)
 

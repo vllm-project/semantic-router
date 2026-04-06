@@ -36,6 +36,29 @@ from cli.utils import get_logger
 log = get_logger(__name__)
 
 
+def preflight_runtime_images(
+    *,
+    env_vars: dict[str, str] | None,
+    image: str | None = None,
+    router_image: str | None = None,
+    envoy_image: str | None = None,
+    dashboard_image: str | None = None,
+    pull_policy: str | None = None,
+    minimal: bool = False,
+) -> None:
+    """Validate runtime image availability before any side-effectful startup work."""
+    normalized_platform = _resolve_platform(env_vars or {})
+    get_runtime_images(
+        image=image,
+        router_image=router_image,
+        envoy_image=envoy_image,
+        dashboard_image=dashboard_image,
+        pull_policy=pull_policy,
+        platform=normalized_platform,
+        include_dashboard=not minimal,
+    )
+
+
 def docker_start_vllm_sr(
     config_file,
     env_vars,

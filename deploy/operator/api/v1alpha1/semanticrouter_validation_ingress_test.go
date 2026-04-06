@@ -2,14 +2,14 @@ package v1alpha1
 
 import "testing"
 
-func TestValidateIngress(t *testing.T) {
-	pathType := ingressPathTypePrefix()
+type ingressValidationCase struct {
+	name    string
+	sr      *SemanticRouter
+	wantErr bool
+}
 
-	tests := []struct {
-		name    string
-		sr      *SemanticRouter
-		wantErr bool
-	}{
+func ingressValidationCases(pathType string) []ingressValidationCase {
+	return []ingressValidationCase{
 		{
 			name: "valid ingress",
 			sr: &SemanticRouter{
@@ -17,10 +17,8 @@ func TestValidateIngress(t *testing.T) {
 					Ingress: IngressSpec{
 						Hosts: []IngressHost{
 							{
-								Host: "example.com",
-								Paths: []IngressPath{
-									{Path: "/", PathType: pathType},
-								},
+								Host:  "example.com",
+								Paths: []IngressPath{{Path: "/", PathType: pathType}},
 							},
 						},
 					},
@@ -29,12 +27,8 @@ func TestValidateIngress(t *testing.T) {
 			wantErr: false,
 		},
 		{
-			name: "no hosts",
-			sr: &SemanticRouter{
-				Spec: SemanticRouterSpec{
-					Ingress: IngressSpec{Hosts: []IngressHost{}},
-				},
-			},
+			name:    "no hosts",
+			sr:      &SemanticRouter{Spec: SemanticRouterSpec{Ingress: IngressSpec{Hosts: []IngressHost{}}}},
 			wantErr: true,
 		},
 		{
@@ -42,14 +36,7 @@ func TestValidateIngress(t *testing.T) {
 			sr: &SemanticRouter{
 				Spec: SemanticRouterSpec{
 					Ingress: IngressSpec{
-						Hosts: []IngressHost{
-							{
-								Host: "",
-								Paths: []IngressPath{
-									{Path: "/", PathType: pathType},
-								},
-							},
-						},
+						Hosts: []IngressHost{{Host: "", Paths: []IngressPath{{Path: "/", PathType: pathType}}}},
 					},
 				},
 			},
@@ -59,11 +46,7 @@ func TestValidateIngress(t *testing.T) {
 			name: "no paths",
 			sr: &SemanticRouter{
 				Spec: SemanticRouterSpec{
-					Ingress: IngressSpec{
-						Hosts: []IngressHost{
-							{Host: "example.com", Paths: []IngressPath{}},
-						},
-					},
+					Ingress: IngressSpec{Hosts: []IngressHost{{Host: "example.com", Paths: []IngressPath{}}}},
 				},
 			},
 			wantErr: true,
@@ -74,18 +57,8 @@ func TestValidateIngress(t *testing.T) {
 				Spec: SemanticRouterSpec{
 					Ingress: IngressSpec{
 						Hosts: []IngressHost{
-							{
-								Host: "example.com",
-								Paths: []IngressPath{
-									{Path: "/", PathType: pathType},
-								},
-							},
-							{
-								Host: "api.example.com",
-								Paths: []IngressPath{
-									{Path: "/api", PathType: pathType},
-								},
-							},
+							{Host: "example.com", Paths: []IngressPath{{Path: "/", PathType: pathType}}},
+							{Host: "api.example.com", Paths: []IngressPath{{Path: "/api", PathType: pathType}}},
 						},
 					},
 				},
@@ -93,8 +66,12 @@ func TestValidateIngress(t *testing.T) {
 			wantErr: false,
 		},
 	}
+}
 
-	for _, tt := range tests {
+func TestValidateIngress(t *testing.T) {
+	pathType := ingressPathTypePrefix()
+
+	for _, tt := range ingressValidationCases(pathType) {
 		t.Run(tt.name, func(t *testing.T) {
 			err := tt.sr.validateIngress()
 			if (err != nil) != tt.wantErr {

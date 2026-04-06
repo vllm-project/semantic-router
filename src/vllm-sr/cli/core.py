@@ -14,6 +14,7 @@ from cli.docker_cli import (
     docker_stop_container,
     load_openclaw_registry,
 )
+from cli.docker_start import preflight_runtime_images
 from cli.logo import print_vllm_logo
 from cli.runtime_lifecycle import (
     connect_runtime_container,
@@ -48,6 +49,112 @@ def _resolve_state_root_dir(
     return os.path.dirname(os.path.abspath(source_config_file))
 
 
+def _load_runtime_startup_inputs(
+    config_file,
+    source_config_file,
+    runtime_config_file,
+    stack_layout: RuntimeStackLayout,
+):
+    source_config_file = source_config_file or config_file
+    runtime_config_file = runtime_config_file or config_file
+    user_config = load_config(runtime_config_file) or {}
+    listeners = user_config.get("listeners", [])
+    if not listeners:
+        log.error("No listeners configured in config.yaml")
+        raise SystemExit(1)
+    log_startup_banner(source_config_file, listeners, stack_layout)
+    return source_config_file, runtime_config_file, user_config, listeners
+
+
+def _prepare_runtime_startup(
+    *,
+    env_vars,
+    image,
+    router_image,
+    envoy_image,
+    dashboard_image,
+    pull_policy,
+    enable_observability,
+    source_config_file,
+    user_config,
+    stack_layout: RuntimeStackLayout,
+):
+    dashboard_disabled = env_vars.get("DISABLE_DASHBOARD") == "true"
+    preflight_runtime_images(
+        env_vars=env_vars,
+        image=image,
+        router_image=router_image,
+        envoy_image=envoy_image,
+        dashboard_image=dashboard_image,
+        pull_policy=pull_policy,
+        minimal=dashboard_disabled,
+    )
+    for container_name in stack_layout.runtime_container_names:
+        ensure_clean_runtime_container(container_name)
+
+    shared_network_name = stack_layout.network_name
+    state_root_dir = _resolve_state_root_dir(source_config_file, env_vars)
+    ensure_shared_network(shared_network_name)
+
+    started_backends = provision_storage_backends(
+        user_config, shared_network_name, stack_layout
+    )
+    observability_network_name = start_observability_stack(
+        enable_observability,
+        shared_network_name,
+        state_root_dir,
+        env_vars,
+        stack_layout,
+    )
+    runtime_network_name = observability_network_name or shared_network_name
+    fleet_sim_enabled = start_fleet_sim_sidecar(
+        state_root_dir,
+        env_vars,
+        stack_layout,
+        pull_policy=pull_policy,
+    )
+    if fleet_sim_enabled:
+        env_vars.setdefault("TARGET_FLEET_SIM_URL", stack_layout.fleet_sim_service_url)
+    return (
+        dashboard_disabled,
+        shared_network_name,
+        state_root_dir,
+        started_backends,
+        runtime_network_name,
+        fleet_sim_enabled,
+    )
+
+
+def _finalize_runtime_startup(
+    *,
+    listeners,
+    env_vars,
+    stack_layout: RuntimeStackLayout,
+    dashboard_disabled: bool,
+    enable_observability: bool,
+    fleet_sim_enabled: bool,
+    shared_network_name: str,
+    state_root_dir: str,
+    started_backends: set[str],
+) -> None:
+    setup_mode = str(env_vars.get("VLLM_SR_SETUP_MODE", "")).lower() == "true"
+    log.info("vLLM Semantic Router container started successfully")
+    connect_runtime_container(shared_network_name, stack_layout)
+    if maybe_finish_setup_mode(setup_mode, dashboard_disabled, stack_layout):
+        return
+
+    _wait_and_verify_runtime(stack_layout, dashboard_disabled)
+    recover_openclaw_containers(state_root_dir, env_vars, shared_network_name)
+    log_runtime_summary(
+        listeners,
+        stack_layout,
+        dashboard_disabled,
+        enable_observability,
+        fleet_sim_enabled,
+        started_backends=started_backends,
+    )
+
+
 def start_vllm_sr(
     config_file,
     env_vars=None,
@@ -68,46 +175,35 @@ def start_vllm_sr(
     runtime_topology = resolve_runtime_topology(topology)
 
     print_vllm_logo()
-    source_config_file = source_config_file or config_file
-    runtime_config_file = runtime_config_file or config_file
-    user_config = load_config(runtime_config_file) or {}
-    listeners = user_config.get("listeners", [])
-    if not listeners:
-        log.error("No listeners configured in config.yaml")
-        raise SystemExit(1)
-
-    log_startup_banner(source_config_file, listeners, stack_layout)
-    log.info(f"Runtime topology: {runtime_topology}")
-    for container_name in stack_layout.runtime_container_names:
-        ensure_clean_runtime_container(container_name)
-
-    shared_network_name = stack_layout.network_name
-    state_root_dir = _resolve_state_root_dir(source_config_file, env_vars)
-    ensure_shared_network(shared_network_name)
-
-    started_backends = provision_storage_backends(
-        user_config, shared_network_name, stack_layout
+    source_config_file, runtime_config_file, user_config, listeners = (
+        _load_runtime_startup_inputs(
+            config_file,
+            source_config_file,
+            runtime_config_file,
+            stack_layout,
+        )
     )
-
-    observability_network_name = start_observability_stack(
-        enable_observability,
+    log.info(f"Runtime topology: {runtime_topology}")
+    (
+        dashboard_disabled,
         shared_network_name,
         state_root_dir,
-        env_vars,
-        stack_layout,
-    )
-    runtime_network_name = observability_network_name or shared_network_name
-    fleet_sim_enabled = start_fleet_sim_sidecar(
-        state_root_dir,
-        env_vars,
-        stack_layout,
+        started_backends,
+        runtime_network_name,
+        fleet_sim_enabled,
+    ) = _prepare_runtime_startup(
+        env_vars=env_vars,
+        image=image,
+        router_image=router_image,
+        envoy_image=envoy_image,
+        dashboard_image=dashboard_image,
         pull_policy=pull_policy,
+        enable_observability=enable_observability,
+        source_config_file=source_config_file,
+        user_config=user_config,
+        stack_layout=stack_layout,
     )
-    if fleet_sim_enabled:
-        env_vars.setdefault("TARGET_FLEET_SIM_URL", stack_layout.fleet_sim_service_url)
 
-    dashboard_disabled = env_vars.get("DISABLE_DASHBOARD") == "true"
-    setup_mode = str(env_vars.get("VLLM_SR_SETUP_MODE", "")).lower() == "true"
     return_code, _stdout, stderr = docker_start_vllm_sr(
         config_file=source_config_file,
         env_vars=env_vars,
@@ -129,19 +225,15 @@ def start_vllm_sr(
         log.error(f"Failed to start container: {stderr}")
         raise SystemExit(1)
 
-    log.info("vLLM Semantic Router container started successfully")
-    connect_runtime_container(shared_network_name, stack_layout)
-    if maybe_finish_setup_mode(setup_mode, dashboard_disabled, stack_layout):
-        return
-
-    _wait_and_verify_runtime(stack_layout, dashboard_disabled)
-    recover_openclaw_containers(state_root_dir, env_vars, shared_network_name)
-    log_runtime_summary(
-        listeners,
-        stack_layout,
-        dashboard_disabled,
-        enable_observability,
-        fleet_sim_enabled,
+    _finalize_runtime_startup(
+        listeners=listeners,
+        env_vars=env_vars,
+        stack_layout=stack_layout,
+        dashboard_disabled=dashboard_disabled,
+        enable_observability=enable_observability,
+        fleet_sim_enabled=fleet_sim_enabled,
+        shared_network_name=shared_network_name,
+        state_root_dir=state_root_dir,
         started_backends=started_backends,
     )
 

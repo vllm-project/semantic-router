@@ -399,7 +399,7 @@ vllm-sr-start: vllm-sr-dev
 
 vllm-sr-install-cli: ## Install vLLM-SR CLI in editable mode for local test execution
 vllm-sr-install-cli:
-	@python3 -m pip install -e src/vllm-sr
+	@python -m pip install -e src/vllm-sr
 
 vllm-sr-sim-install-cli: ## Install vLLM-SR-Sim with dev extras for local execution
 vllm-sr-sim-install-cli:

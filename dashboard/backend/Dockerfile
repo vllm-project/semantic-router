@@ -80,6 +80,7 @@ COPY src/semantic-router/pkg/config/ /app/src/semantic-router/pkg/config/
 COPY src/semantic-router/pkg/dsl/ /app/src/semantic-router/pkg/dsl/
 COPY src/semantic-router/pkg/routerauthoring/ /app/src/semantic-router/pkg/routerauthoring/
 COPY src/semantic-router/pkg/routercontract/ /app/src/semantic-router/pkg/routercontract/
+COPY src/semantic-router/pkg/routerprojection/ /app/src/semantic-router/pkg/routerprojection/
 COPY src/semantic-router/pkg/modelinventory/ /app/src/semantic-router/pkg/modelinventory/
 COPY src/semantic-router/pkg/nlgen/ /app/src/semantic-router/pkg/nlgen/
 COPY src/semantic-router/pkg/observability/ /app/src/semantic-router/pkg/observability/
