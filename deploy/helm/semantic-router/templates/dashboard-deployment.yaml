@@ -11,13 +11,11 @@ spec:
   replicas: 1
   selector:
     matchLabels:
-      {{- include "semantic-router.selectorLabels" . | nindent 6 }}
-      app.kubernetes.io/component: dashboard
+      {{- include "semantic-router.dashboardSelectorLabels" . | nindent 6 }}
   template:
     metadata:
       labels:
-        {{- include "semantic-router.selectorLabels" . | nindent 8 }}
-        app.kubernetes.io/component: dashboard
+        {{- include "semantic-router.dashboardSelectorLabels" . | nindent 8 }}
     spec:
       {{- with .Values.imagePullSecrets }}
       imagePullSecrets:
@@ -32,8 +30,18 @@ spec:
           name: http
           protocol: TCP
         env:
-        - name: ROUTER_API_URL
+        - name: TARGET_ROUTER_API_URL
           value: "http://{{ include "semantic-router.fullname" . }}:{{ .Values.service.api.port }}"
+        {{- if .Values.service.metrics.enabled }}
+        - name: TARGET_ROUTER_METRICS_URL
+          value: "http://{{ include "semantic-router.fullname" . }}-metrics:{{ .Values.service.metrics.port }}/metrics"
+        {{- end }}
+        {{- if .Values.envoy.enabled }}
+        - name: TARGET_ENVOY_URL
+          value: "http://{{ include "semantic-router.fullname" . }}-envoy:{{ include "semantic-router.primaryEnvoyListenerPort" . }}"
+        - name: TARGET_ENVOY_ADMIN_URL
+          value: "http://{{ include "semantic-router.fullname" . }}-envoy:{{ .Values.envoy.admin.port }}"
+        {{- end }}
         {{- if .Values.dashboard.readonly }}
         - name: DASHBOARD_READONLY
           value: "true"
@@ -51,6 +59,10 @@ spec:
           value: "http://{{ .Release.Name }}-jaeger-query:16686"
         {{- end }}
         volumeMounts:
+        - name: config-volume
+          mountPath: /app/config.yaml
+          subPath: config.yaml
+          readOnly: true
         - name: config-volume
           mountPath: /app/config/config.yaml
           subPath: config.yaml

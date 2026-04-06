@@ -41,11 +41,12 @@ var allowedExtensions = map[string]bool{
 	".htm":  true,
 }
 
-// globalFileStore is the global file store instance.
-// It is set during initialization via SetFileStore.
+// globalFileStore is a legacy compatibility hook used only to seed the
+// API-server legacy runtime registry when no explicit routerruntime.Registry is
+// supplied.
 var globalFileStore *vectorstore.FileStore
 
-// SetFileStore sets the global file store for the API server.
+// SetFileStore sets the legacy compatibility file store snapshot.
 func SetFileStore(fs *vectorstore.FileStore) {
 	globalFileStore = fs
 }

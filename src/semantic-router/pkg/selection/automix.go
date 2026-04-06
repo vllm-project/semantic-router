@@ -27,6 +27,7 @@ import (
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/trainingartifacts"
 )
 
 // AutoMixConfig configures the AutoMix POMDP-based selector
@@ -148,8 +149,7 @@ type AutoMixSelector struct {
 	// AdaOps POMDP solver with particle filtering (full paper implementation)
 	adaOpsSolver *AdaOpsSolver
 
-	// Self-verification client for LLM-based verification
-	// Requires external server: src/training/rl_model_selection/automix_verifier.py
+	// Self-verification client for LLM-based verification.
 	verifierClient *AutoMixVerifierClient
 }
 
@@ -180,12 +180,20 @@ func NewAutoMixSelector(cfg *AutoMixConfig) *AutoMixSelector {
 		})
 	}
 
-	// Initialize self-verification client if configured
-	// Requires external server: src/training/rl_model_selection/automix_verifier.py
+	verifierContract, verifierContractErr := trainingartifacts.CurrentContract().RuntimeSelectionService(
+		trainingartifacts.RuntimeSelectionAutoMixVerifier,
+	)
+	if verifierContractErr != nil {
+		panic(fmt.Sprintf("invalid automix verifier contract: %v", verifierContractErr))
+	}
+
+	// Initialize self-verification client if configured.
 	if cfg.EnableSelfVerification && cfg.VerifierServerURL != "" {
 		selector.verifierClient = NewAutoMixVerifierClient(cfg.VerifierServerURL)
 		logging.ComponentEvent("selection", "automix_verifier_enabled", map[string]interface{}{
 			"server_url": cfg.VerifierServerURL,
+			"config_key": verifierContract.ConfigKey,
+			"script":     verifierContract.RepoRelativeScript,
 		})
 
 		// Verify connectivity
@@ -205,6 +213,8 @@ func NewAutoMixSelector(cfg *AutoMixConfig) *AutoMixSelector {
 	} else if cfg.EnableSelfVerification {
 		logging.ComponentWarnEvent("selection", "automix_verifier_config_missing", map[string]interface{}{
 			"self_verification_enabled": true,
+			"config_key":                verifierContract.ConfigKey,
+			"script":                    verifierContract.RepoRelativeScript,
 		})
 	}
 
@@ -625,10 +635,19 @@ type VerificationResult struct {
 // Given a question and answer from a model, this uses entailment-based
 // verification to estimate answer confidence and recommend escalation.
 // This implements Section 3.2 of arXiv:2310.12963
-// Requires external server: src/training/rl_model_selection/automix_verifier.py
 func (a *AutoMixSelector) VerifyAnswer(ctx context.Context, question, answer, currentModel string, escalationChain []string) (*VerificationResult, error) {
 	if a.verifierClient == nil {
-		return nil, fmt.Errorf("verifier client not initialized - set verifier_server_url in config")
+		verifierContract, err := trainingartifacts.CurrentContract().RuntimeSelectionService(
+			trainingartifacts.RuntimeSelectionAutoMixVerifier,
+		)
+		if err != nil {
+			return nil, err
+		}
+		return nil, fmt.Errorf(
+			"%s client not initialized - set %s in config",
+			verifierContract.DisplayName,
+			verifierContract.ConfigKey,
+		)
 	}
 
 	// Call the verification server

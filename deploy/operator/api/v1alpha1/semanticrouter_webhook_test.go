@@ -20,352 +20,11 @@ import (
 	"context"
 	"testing"
 
-	networkingv1 "k8s.io/api/networking/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
-func TestValidateAutoscaling(t *testing.T) {
-	tests := []struct {
-		name    string
-		sr      *SemanticRouter
-		wantErr bool
-	}{
-		{
-			name: "valid autoscaling",
-			sr: &SemanticRouter{
-				Spec: SemanticRouterSpec{
-					Autoscaling: AutoscalingSpec{
-						MinReplicas:                    func() *int32 { i := int32(2); return &i }(),
-						MaxReplicas:                    func() *int32 { i := int32(10); return &i }(),
-						TargetCPUUtilizationPercentage: func() *int32 { i := int32(80); return &i }(),
-					},
-				},
-			},
-			wantErr: false,
-		},
-		{
-			name: "minReplicas greater than maxReplicas",
-			sr: &SemanticRouter{
-				Spec: SemanticRouterSpec{
-					Autoscaling: AutoscalingSpec{
-						MinReplicas:                    func() *int32 { i := int32(10); return &i }(),
-						MaxReplicas:                    func() *int32 { i := int32(2); return &i }(),
-						TargetCPUUtilizationPercentage: func() *int32 { i := int32(80); return &i }(),
-					},
-				},
-			},
-			wantErr: true,
-		},
-		{
-			name: "no metrics specified",
-			sr: &SemanticRouter{
-				Spec: SemanticRouterSpec{
-					Autoscaling: AutoscalingSpec{
-						MinReplicas: func() *int32 { i := int32(2); return &i }(),
-						MaxReplicas: func() *int32 { i := int32(10); return &i }(),
-					},
-				},
-			},
-			wantErr: true,
-		},
-		{
-			name: "CPU metric only",
-			sr: &SemanticRouter{
-				Spec: SemanticRouterSpec{
-					Autoscaling: AutoscalingSpec{
-						TargetCPUUtilizationPercentage: func() *int32 { i := int32(80); return &i }(),
-					},
-				},
-			},
-			wantErr: false,
-		},
-		{
-			name: "Memory metric only",
-			sr: &SemanticRouter{
-				Spec: SemanticRouterSpec{
-					Autoscaling: AutoscalingSpec{
-						TargetMemoryUtilizationPercentage: func() *int32 { i := int32(80); return &i }(),
-					},
-				},
-			},
-			wantErr: false,
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			err := tt.sr.validateAutoscaling()
-			if (err != nil) != tt.wantErr {
-				t.Errorf("validateAutoscaling() error = %v, wantErr %v", err, tt.wantErr)
-			}
-		})
-	}
-}
-
-func TestValidatePersistence(t *testing.T) {
-	tests := []struct {
-		name    string
-		sr      *SemanticRouter
-		wantErr bool
-	}{
-		{
-			name: "valid persistence",
-			sr: &SemanticRouter{
-				Spec: SemanticRouterSpec{
-					Persistence: PersistenceSpec{
-						Enabled:          func() *bool { b := true; return &b }(),
-						Size:             "10Gi",
-						StorageClassName: "standard",
-					},
-				},
-			},
-			wantErr: false,
-		},
-		{
-			name: "both existingClaim and storageClassName",
-			sr: &SemanticRouter{
-				Spec: SemanticRouterSpec{
-					Persistence: PersistenceSpec{
-						Enabled:          func() *bool { b := true; return &b }(),
-						ExistingClaim:    "my-claim",
-						StorageClassName: "standard",
-					},
-				},
-			},
-			wantErr: true,
-		},
-		{
-			name: "existingClaim only",
-			sr: &SemanticRouter{
-				Spec: SemanticRouterSpec{
-					Persistence: PersistenceSpec{
-						Enabled:       func() *bool { b := true; return &b }(),
-						ExistingClaim: "my-claim",
-					},
-				},
-			},
-			wantErr: false,
-		},
-		{
-			name: "persistence disabled",
-			sr: &SemanticRouter{
-				Spec: SemanticRouterSpec{
-					Persistence: PersistenceSpec{
-						Enabled:          func() *bool { b := false; return &b }(),
-						ExistingClaim:    "my-claim",
-						StorageClassName: "standard",
-					},
-				},
-			},
-			wantErr: false, // Should not validate when disabled
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			err := tt.sr.validatePersistence()
-			if (err != nil) != tt.wantErr {
-				t.Errorf("validatePersistence() error = %v, wantErr %v", err, tt.wantErr)
-			}
-		})
-	}
-}
-
-func TestValidateProbes(t *testing.T) {
-	tests := []struct {
-		name    string
-		sr      *SemanticRouter
-		wantErr bool
-	}{
-		{
-			name: "valid probe",
-			sr: &SemanticRouter{
-				Spec: SemanticRouterSpec{
-					StartupProbe: &ProbeSpec{
-						Enabled:          func() *bool { b := true; return &b }(),
-						TimeoutSeconds:   func() *int32 { i := int32(5); return &i }(),
-						PeriodSeconds:    func() *int32 { i := int32(10); return &i }(),
-						FailureThreshold: func() *int32 { i := int32(3); return &i }(),
-					},
-				},
-			},
-			wantErr: false,
-		},
-		{
-			name: "invalid timeout",
-			sr: &SemanticRouter{
-				Spec: SemanticRouterSpec{
-					StartupProbe: &ProbeSpec{
-						Enabled:        func() *bool { b := true; return &b }(),
-						TimeoutSeconds: func() *int32 { i := int32(0); return &i }(),
-					},
-				},
-			},
-			wantErr: true,
-		},
-		{
-			name: "invalid period",
-			sr: &SemanticRouter{
-				Spec: SemanticRouterSpec{
-					LivenessProbe: &ProbeSpec{
-						Enabled:       func() *bool { b := true; return &b }(),
-						PeriodSeconds: func() *int32 { i := int32(-1); return &i }(),
-					},
-				},
-			},
-			wantErr: true,
-		},
-		{
-			name: "invalid failure threshold",
-			sr: &SemanticRouter{
-				Spec: SemanticRouterSpec{
-					ReadinessProbe: &ProbeSpec{
-						Enabled:          func() *bool { b := true; return &b }(),
-						FailureThreshold: func() *int32 { i := int32(0); return &i }(),
-					},
-				},
-			},
-			wantErr: true,
-		},
-		{
-			name: "probe disabled",
-			sr: &SemanticRouter{
-				Spec: SemanticRouterSpec{
-					StartupProbe: &ProbeSpec{
-						Enabled:        func() *bool { b := false; return &b }(),
-						TimeoutSeconds: func() *int32 { i := int32(-5); return &i }(), // Invalid but disabled
-					},
-				},
-			},
-			wantErr: false, // Should not validate when disabled
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			err := tt.sr.validateProbes()
-			if (err != nil) != tt.wantErr {
-				t.Errorf("validateProbes() error = %v, wantErr %v", err, tt.wantErr)
-			}
-		})
-	}
-}
-
-func TestValidateIngress(t *testing.T) {
-	pathType := string(networkingv1.PathTypePrefix)
-
-	tests := []struct {
-		name    string
-		sr      *SemanticRouter
-		wantErr bool
-	}{
-		{
-			name: "valid ingress",
-			sr: &SemanticRouter{
-				Spec: SemanticRouterSpec{
-					Ingress: IngressSpec{
-						Hosts: []IngressHost{
-							{
-								Host: "example.com",
-								Paths: []IngressPath{
-									{
-										Path:     "/",
-										PathType: pathType,
-									},
-								},
-							},
-						},
-					},
-				},
-			},
-			wantErr: false,
-		},
-		{
-			name: "no hosts",
-			sr: &SemanticRouter{
-				Spec: SemanticRouterSpec{
-					Ingress: IngressSpec{
-						Hosts: []IngressHost{},
-					},
-				},
-			},
-			wantErr: true,
-		},
-		{
-			name: "empty host",
-			sr: &SemanticRouter{
-				Spec: SemanticRouterSpec{
-					Ingress: IngressSpec{
-						Hosts: []IngressHost{
-							{
-								Host: "",
-								Paths: []IngressPath{
-									{
-										Path:     "/",
-										PathType: pathType,
-									},
-								},
-							},
-						},
-					},
-				},
-			},
-			wantErr: true,
-		},
-		{
-			name: "no paths",
-			sr: &SemanticRouter{
-				Spec: SemanticRouterSpec{
-					Ingress: IngressSpec{
-						Hosts: []IngressHost{
-							{
-								Host:  "example.com",
-								Paths: []IngressPath{},
-							},
-						},
-					},
-				},
-			},
-			wantErr: true,
-		},
-		{
-			name: "multiple hosts",
-			sr: &SemanticRouter{
-				Spec: SemanticRouterSpec{
-					Ingress: IngressSpec{
-						Hosts: []IngressHost{
-							{
-								Host: "example.com",
-								Paths: []IngressPath{
-									{Path: "/", PathType: pathType},
-								},
-							},
-							{
-								Host: "api.example.com",
-								Paths: []IngressPath{
-									{Path: "/api", PathType: pathType},
-								},
-							},
-						},
-					},
-				},
-			},
-			wantErr: false,
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			err := tt.sr.validateIngress()
-			if (err != nil) != tt.wantErr {
-				t.Errorf("validateIngress() error = %v, wantErr %v", err, tt.wantErr)
-			}
-		})
-	}
-}
-
 func TestValidateCreate(t *testing.T) {
-	pathType := string(networkingv1.PathTypePrefix)
+	pathType := ingressPathTypePrefix()
 
 	tests := []struct {
 		name    string
@@ -380,7 +39,7 @@ func TestValidateCreate(t *testing.T) {
 					Namespace: "default",
 				},
 				Spec: SemanticRouterSpec{
-					Replicas: func() *int32 { i := int32(2); return &i }(),
+					Replicas: int32Ptr(2),
 				},
 			},
 			wantErr: false,
@@ -394,10 +53,10 @@ func TestValidateCreate(t *testing.T) {
 				},
 				Spec: SemanticRouterSpec{
 					Autoscaling: AutoscalingSpec{
-						Enabled:                        func() *bool { b := true; return &b }(),
-						MinReplicas:                    func() *int32 { i := int32(2); return &i }(),
-						MaxReplicas:                    func() *int32 { i := int32(10); return &i }(),
-						TargetCPUUtilizationPercentage: func() *int32 { i := int32(80); return &i }(),
+						Enabled:                        boolPtr(true),
+						MinReplicas:                    int32Ptr(2),
+						MaxReplicas:                    int32Ptr(10),
+						TargetCPUUtilizationPercentage: int32Ptr(80),
 					},
 				},
 			},
@@ -412,9 +71,9 @@ func TestValidateCreate(t *testing.T) {
 				},
 				Spec: SemanticRouterSpec{
 					Autoscaling: AutoscalingSpec{
-						Enabled:     func() *bool { b := true; return &b }(),
-						MinReplicas: func() *int32 { i := int32(10); return &i }(),
-						MaxReplicas: func() *int32 { i := int32(2); return &i }(),
+						Enabled:     boolPtr(true),
+						MinReplicas: int32Ptr(10),
+						MaxReplicas: int32Ptr(2),
 					},
 				},
 			},
@@ -429,7 +88,7 @@ func TestValidateCreate(t *testing.T) {
 				},
 				Spec: SemanticRouterSpec{
 					Persistence: PersistenceSpec{
-						Enabled:          func() *bool { b := true; return &b }(),
+						Enabled:          boolPtr(true),
 						ExistingClaim:    "claim",
 						StorageClassName: "standard",
 					},
@@ -446,7 +105,7 @@ func TestValidateCreate(t *testing.T) {
 				},
 				Spec: SemanticRouterSpec{
 					Ingress: IngressSpec{
-						Enabled: func() *bool { b := true; return &b }(),
+						Enabled: boolPtr(true),
 						Hosts:   []IngressHost{},
 					},
 				},
@@ -461,20 +120,20 @@ func TestValidateCreate(t *testing.T) {
 					Namespace: "default",
 				},
 				Spec: SemanticRouterSpec{
-					Replicas: func() *int32 { i := int32(2); return &i }(),
+					Replicas: int32Ptr(2),
 					Autoscaling: AutoscalingSpec{
-						Enabled:                        func() *bool { b := true; return &b }(),
-						MinReplicas:                    func() *int32 { i := int32(2); return &i }(),
-						MaxReplicas:                    func() *int32 { i := int32(10); return &i }(),
-						TargetCPUUtilizationPercentage: func() *int32 { i := int32(80); return &i }(),
+						Enabled:                        boolPtr(true),
+						MinReplicas:                    int32Ptr(2),
+						MaxReplicas:                    int32Ptr(10),
+						TargetCPUUtilizationPercentage: int32Ptr(80),
 					},
 					Persistence: PersistenceSpec{
-						Enabled:          func() *bool { b := true; return &b }(),
+						Enabled:          boolPtr(true),
 						Size:             "10Gi",
 						StorageClassName: "standard",
 					},
 					Ingress: IngressSpec{
-						Enabled: func() *bool { b := true; return &b }(),
+						Enabled: boolPtr(true),
 						Hosts: []IngressHost{
 							{
 								Host: "example.com",
@@ -485,10 +144,10 @@ func TestValidateCreate(t *testing.T) {
 						},
 					},
 					StartupProbe: &ProbeSpec{
-						Enabled:          func() *bool { b := true; return &b }(),
-						TimeoutSeconds:   func() *int32 { i := int32(5); return &i }(),
-						PeriodSeconds:    func() *int32 { i := int32(10); return &i }(),
-						FailureThreshold: func() *int32 { i := int32(3); return &i }(),
+						Enabled:          boolPtr(true),
+						TimeoutSeconds:   int32Ptr(5),
+						PeriodSeconds:    int32Ptr(10),
+						FailureThreshold: int32Ptr(3),
 					},
 				},
 			},
@@ -507,7 +166,7 @@ func TestValidateCreate(t *testing.T) {
 }
 
 func TestValidateUpdate(t *testing.T) {
-	pathType := string(networkingv1.PathTypePrefix)
+	pathType := ingressPathTypePrefix()
 
 	old := &SemanticRouter{
 		ObjectMeta: metav1.ObjectMeta{
@@ -515,7 +174,7 @@ func TestValidateUpdate(t *testing.T) {
 			Namespace: "default",
 		},
 		Spec: SemanticRouterSpec{
-			Replicas: func() *int32 { i := int32(1); return &i }(),
+			Replicas: int32Ptr(1),
 		},
 	}
 
@@ -532,7 +191,7 @@ func TestValidateUpdate(t *testing.T) {
 					Namespace: "default",
 				},
 				Spec: SemanticRouterSpec{
-					Replicas: func() *int32 { i := int32(3); return &i }(),
+					Replicas: int32Ptr(3),
 				},
 			},
 			wantErr: false,
@@ -546,9 +205,9 @@ func TestValidateUpdate(t *testing.T) {
 				},
 				Spec: SemanticRouterSpec{
 					Autoscaling: AutoscalingSpec{
-						Enabled:     func() *bool { b := true; return &b }(),
-						MinReplicas: func() *int32 { i := int32(10); return &i }(),
-						MaxReplicas: func() *int32 { i := int32(2); return &i }(),
+						Enabled:     boolPtr(true),
+						MinReplicas: int32Ptr(10),
+						MaxReplicas: int32Ptr(2),
 					},
 				},
 			},
@@ -563,7 +222,7 @@ func TestValidateUpdate(t *testing.T) {
 				},
 				Spec: SemanticRouterSpec{
 					Ingress: IngressSpec{
-						Enabled: func() *bool { b := true; return &b }(),
+						Enabled: boolPtr(true),
 						Hosts: []IngressHost{
 							{
 								Host: "example.com",

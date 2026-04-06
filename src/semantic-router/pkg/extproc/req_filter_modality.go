@@ -160,7 +160,7 @@ func resolveAllModalityModels(decision *config.Decision, modelConfig map[string]
 //
 //   - BOTH:      calls AR for text AND diffusion for image in parallel
 func (r *OpenAIRouter) handleModalityFromDecision(ctx *RequestContext, openAIRequest *openai.ChatCompletionNewParams) (*ext_proc.ProcessingResponse, error) {
-	cfg := config.Get()
+	cfg := r.currentConfig()
 	if cfg == nil {
 		return nil, nil
 	}

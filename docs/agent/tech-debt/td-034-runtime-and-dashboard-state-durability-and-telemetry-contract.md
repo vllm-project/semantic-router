@@ -2,7 +2,7 @@
 
 ## Status
 
-Open
+Closed
 
 ## Scope
 
@@ -10,7 +10,7 @@ Open
 
 ## Summary
 
-The repository now exposes several user-visible stateful product surfaces beyond request-time routing, but the persistence and recovery contract for those surfaces is still implicit and fragmented. Router defaults still present memory-backed behavior for core runtime facilities such as semantic cache, Response API storage, router replay, and vector-store metadata, while the dashboard defaults surface the same in-memory or workspace-local expectations to operators. Dashboard features then split their own state across SQLite databases, JSON files under workspace-local directories, in-memory job maps and event channels, log-derived status collectors, and browser localStorage for chat history and auth propagation. Model-selection learning state follows the same pattern with in-memory maps or local JSON autosave rather than a shared durable store. The CLI mounts `.vllm-sr` and `dashboard-data` into the local container, but the repo still lacks one cross-stack contract that says which state is ephemeral, which must survive restart, which belongs in shared storage, and which telemetry or progress signals are durable enough to drive recovery.
+The repository now has one contributor-visible state taxonomy for restart-sensitive router and dashboard surfaces, plus concrete restart-aware seams for the two biggest gaps this debt was tracking. Router-side vector-store metadata, uploaded-file records, and ingestion statuses now persist under the configured file-storage root and recover cleanly across restart, while dashboard config apply and setup activation now persist a hash-guarded active-config projection under `.vllm-sr/active-config-projection.json` instead of forcing each query path to reparse YAML or DSL on demand. Response API and router replay defaults, dashboard defaults, and user-facing docs now describe Redis and Postgres as the durable defaults and fence `memory` to local development. The enterprise-console concerns that originally remained under [TD005](td-005-dashboard-enterprise-console-foundations.md) are now resolved or explicitly classified: browser auth uses server-owned `HttpOnly` sessions, and playground chat history is documented as browser-local convenience state rather than shared control-plane state.
 
 ## Evidence
 
@@ -22,6 +22,10 @@ The repository now exposes several user-visible stateful product surfaces beyond
 - [src/semantic-router/pkg/routerreplay/store/memory.go](../../../src/semantic-router/pkg/routerreplay/store/memory.go)
 - [src/semantic-router/pkg/vectorstore/manager.go](../../../src/semantic-router/pkg/vectorstore/manager.go)
 - [src/semantic-router/pkg/vectorstore/filestore.go](../../../src/semantic-router/pkg/vectorstore/filestore.go)
+- [src/semantic-router/pkg/vectorstore/pipeline.go](../../../src/semantic-router/pkg/vectorstore/pipeline.go)
+- [src/semantic-router/pkg/vectorstore/local_metadata_registry.go](../../../src/semantic-router/pkg/vectorstore/local_metadata_registry.go)
+- [src/semantic-router/pkg/vectorstore/persistence_test.go](../../../src/semantic-router/pkg/vectorstore/persistence_test.go)
+- [src/semantic-router/pkg/routerruntime/vectorstore_runtime.go](../../../src/semantic-router/pkg/routerruntime/vectorstore_runtime.go)
 - [src/semantic-router/pkg/startupstatus/status.go](../../../src/semantic-router/pkg/startupstatus/status.go)
 - [src/semantic-router/pkg/selection/elo.go](../../../src/semantic-router/pkg/selection/elo.go)
 - [src/semantic-router/pkg/selection/rl_driven.go](../../../src/semantic-router/pkg/selection/rl_driven.go)
@@ -30,13 +34,19 @@ The repository now exposes several user-visible stateful product surfaces beyond
 - [dashboard/backend/mlpipeline/runner.go](../../../dashboard/backend/mlpipeline/runner.go)
 - [dashboard/backend/modelresearch/manager.go](../../../dashboard/backend/modelresearch/manager.go)
 - [dashboard/backend/auth/store.go](../../../dashboard/backend/auth/store.go)
+- [dashboard/backend/handlers/config_projection.go](../../../dashboard/backend/handlers/config_projection.go)
+- [dashboard/backend/handlers/config_projection_test.go](../../../dashboard/backend/handlers/config_projection_test.go)
 - [dashboard/backend/handlers/mlpipeline.go](../../../dashboard/backend/handlers/mlpipeline.go)
 - [dashboard/backend/handlers/evaluation.go](../../../dashboard/backend/handlers/evaluation.go)
 - [dashboard/backend/handlers/modelresearch.go](../../../dashboard/backend/handlers/modelresearch.go)
 - [dashboard/backend/handlers/status_collectors.go](../../../dashboard/backend/handlers/status_collectors.go)
 - [dashboard/backend/handlers/openclaw.go](../../../dashboard/backend/handlers/openclaw.go)
 - [dashboard/backend/handlers/openclaw_rooms.go](../../../dashboard/backend/handlers/openclaw_rooms.go)
+- [dashboard/backend/handlers/runtime_config_apply.go](../../../dashboard/backend/handlers/runtime_config_apply.go)
+- [dashboard/backend/handlers/setup.go](../../../dashboard/backend/handlers/setup.go)
 - [dashboard/frontend/src/hooks/useConversationStorage.ts](../../../dashboard/frontend/src/hooks/useConversationStorage.ts)
+- [dashboard/frontend/src/pages/configPageRouterDefaultsCatalog.ts](../../../dashboard/frontend/src/pages/configPageRouterDefaultsCatalog.ts)
+- [dashboard/frontend/src/pages/InsightsPage.tsx](../../../dashboard/frontend/src/pages/InsightsPage.tsx)
 - [dashboard/frontend/src/utils/authFetch.ts](../../../dashboard/frontend/src/utils/authFetch.ts)
 - [src/vllm-sr/cli/docker_start.py](../../../src/vllm-sr/cli/docker_start.py)
 - [src/vllm-sr/cli/commands/runtime_support.py](../../../src/vllm-sr/cli/commands/runtime_support.py)
@@ -67,9 +77,35 @@ The repository now exposes several user-visible stateful product surfaces beyond
 
 ## Exit Criteria
 
-- The repo has one indexed, contributor-visible inventory that classifies the major runtime and dashboard state surfaces by owner, backend, restart behavior, and intended durability level.
-- Canonical defaults, dashboard defaults, and docs no longer imply memory-backed retention for user-visible product surfaces unless the feature is explicitly marked ephemeral.
-- Router-side metadata for vector stores, files, replay, and response records can survive restart through a documented persistence seam rather than process memory alone.
-- Dashboard workflow state for at least one long-running subsystem is restart-safe and server-owned, with progress and terminal state observable without relying on localStorage or log scraping.
-- The active YAML or DSL deployment can be projected into a persisted read model for models, signals, decisions, plugins, and validation state without creating a second mutable primary config source.
-- Validation or E2E coverage includes at least one restart-recovery contract for a stateful router or dashboard workflow.
+- Satisfied on 2026-04-06: [state-taxonomy-and-inventory.md](../state-taxonomy-and-inventory.md) is now the indexed inventory for restart-sensitive router and dashboard state, classifying ownership, backend, restart behavior, and intended durability level.
+- Satisfied on 2026-04-06: canonical defaults, dashboard defaults, Insights examples, and API or observability docs describe Redis and Postgres as the durable defaults for Response API and router replay, while `memory` is explicitly marked local-development-only.
+- Satisfied on 2026-04-06: router-side vector-store metadata, uploaded-file records, and ingestion statuses now survive restart through the documented local metadata registry seam under `${file_storage_dir}/.vectorstore-metadata.json`, with startup reconciliation and interrupted-ingestion recovery.
+- Satisfied before umbrella closure and reaffirmed on 2026-04-06: dashboard evaluation task metadata remains server-owned and restart-safe through SQLite-backed state under TD032, so at least one long-running dashboard workflow already meets the restart-safe requirement without relying on browser storage.
+- Satisfied on 2026-04-06: the active YAML or DSL deployment can now be projected into a persisted read model at `.vllm-sr/active-config-projection.json` for models, signals, decisions, plugins, validation state, and DSL snapshot without introducing a second mutable primary config source.
+- Satisfied on 2026-04-06: restart-recovery coverage now includes vector-store metadata persistence and interrupted-ingestion recovery in `pkg/vectorstore/persistence_test.go`, alongside the existing restart-aware workflow coverage carried by TD032 and response API recovery E2E.
+
+## Retirement Notes
+
+- `src/semantic-router/pkg/vectorstore/local_metadata_registry.go` now persists vector-store store metadata, uploaded-file records, and file-ingestion status records under the configured file-storage root, while `pkg/routerruntime/vectorstore_runtime.go` reconciles persisted metadata against the live backend, restores file counts, and marks interrupted ingestions as failed with a typed `interrupted` error.
+- `src/semantic-router/pkg/routerprojection/active_config.go` and `dashboard/backend/handlers/config_projection.go` now define a derived, hash-guarded read model for models, signals, decisions, plugins, validation, and DSL snapshot, and `runtime_config_apply.go` plus `setup.go` persist or consume that projection during apply, restore, and setup activation flows.
+- `docs/agent/state-taxonomy-and-inventory.md`, `dashboard/frontend/src/pages/configPageRouterDefaultsCatalog.ts`, `dashboard/frontend/src/pages/InsightsPage.tsx`, and the API or observability docs now describe which surfaces are ephemeral, which are restart-safe local state, and which durable defaults operators should expect.
+- The browser-auth and chat-history concerns that originally remained under TD005 are now explicitly resolved or classified: browser auth is server-owned through `HttpOnly` same-origin session cookies, while playground chat history stays browser-local convenience state unless a future product decision promotes it into shared workflow storage. This umbrella debt stays closed because the taxonomy now distinguishes those states instead of leaving them ambiguous.
+
+## Validation
+
+- `make agent-validate`
+  Run in `/Users/bitliu/vs`
+- `make test-semantic-router`
+  Run in `/Users/bitliu/vs`
+- `make agent-ci-gate AGENT_CHANGED_FILES_PATH=/tmp/vsr_td034_changed.txt`
+  Run in `/Users/bitliu/vs`
+- `make agent-dev ENV=cpu`
+  Run in `/Users/bitliu/vs`
+- `make agent-serve-local ENV=cpu`
+  Run in `/Users/bitliu/vs`
+- `make agent-smoke-local`
+  Run in `/Users/bitliu/vs`
+- `go test ./pkg/vectorstore ./pkg/routerprojection ./pkg/routerruntime`
+  Run in `/Users/bitliu/vs/src/semantic-router`
+- `go test ./handlers -run 'TestPersistActiveConfigProjectionWritesReadModel|TestApplyWrittenConfigPersistsActiveConfigProjection|TestSetupStateHandler|TestSetupValidateHandler'`
+  Run in `/Users/bitliu/vs/dashboard/backend`

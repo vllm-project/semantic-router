@@ -608,7 +608,6 @@ func persistConfigAndSync(
 		s.runtimeConfig.Update(newCfg)
 	} else {
 		s.config = newCfg
-		config.Replace(newCfg)
 	}
 	return nil
 }

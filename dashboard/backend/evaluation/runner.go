@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/vllm-project/semantic-router/dashboard/backend/models"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/trainingartifacts"
 )
 
 // Runner executes evaluation benchmarks.
@@ -231,14 +232,15 @@ func getDefaultDataset(dimension models.EvaluationDimension) string {
 
 // runSignalEvaluation runs the signal evaluation for a specific dataset.
 func (r *Runner) runSignalEvaluation(ctx context.Context, taskID string, cfg models.EvaluationConfig, dimension, datasetID, outputDir string) (*models.EvaluationResult, error) {
-	outputPath := filepath.Join(outputDir, fmt.Sprintf("signal_eval_%s.json", datasetID))
+	contract := trainingartifacts.CurrentContract()
+	outputPath := contract.SignalEvalOutputPath(outputDir, datasetID)
 
 	// Use endpoint as-is for eval API
 	endpoint := strings.TrimSuffix(cfg.Endpoint, "/")
 
 	// Build command arguments
 	args := []string{
-		r.modelEvalScriptPath("signal_eval.py"),
+		r.modelEvalScriptPath(trainingartifacts.ModelEvalSignalEvalScript),
 		"--dataset", datasetID,
 		"--endpoint", endpoint,
 		"--output", outputPath,
@@ -288,7 +290,8 @@ func (r *Runner) runSystemEvaluation(ctx context.Context, taskID string, cfg mod
 		datasetID = "mmlu-pro"
 	}
 
-	outDir := filepath.Join(outputDir, "system_eval_accuracy")
+	contract := trainingartifacts.CurrentContract()
+	outDir := contract.SystemAccuracyOutputDir(outputDir)
 	if err := os.MkdirAll(outDir, 0o755); err != nil {
 		return nil, fmt.Errorf("failed to create output dir: %w", err)
 	}
@@ -299,7 +302,7 @@ func (r *Runner) runSystemEvaluation(ctx context.Context, taskID string, cfg mod
 		samplesPerCat = 5
 	}
 	args := []string{
-		r.modelEvalScriptPath("mmlu_pro_vllm_eval.py"),
+		r.modelEvalScriptPath(trainingartifacts.ModelEvalMMLUProVLLMEval),
 		"--endpoint", endpoint,
 		"--output-dir", outDir,
 		"--samples-per-category", fmt.Sprintf("%d", samplesPerCat),
@@ -390,8 +393,12 @@ func (r *Runner) runCommandWithProgress(ctx context.Context, cmd *exec.Cmd, task
 	return output.String(), nil
 }
 
-func (r *Runner) modelEvalScriptPath(scriptName string) string {
-	return filepath.Join(r.projectRoot, "src", "training", "model_eval", scriptName)
+func (r *Runner) modelEvalScriptPath(script trainingartifacts.ModelEvalScript) string {
+	path, err := trainingartifacts.CurrentContract().ModelEvalScriptPath(r.projectRoot, script)
+	if err != nil {
+		panic(fmt.Sprintf("invalid model-eval script contract lookup: %v", err))
+	}
+	return path
 }
 
 func (r *Runner) pythonEnv() []string {

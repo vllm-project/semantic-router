@@ -12,6 +12,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/trainingartifacts"
 )
 
 // runBenchmarkSubprocess runs Layer 1: benchmark.py as a local subprocess.
@@ -32,7 +34,7 @@ func (r *Runner) runBenchmarkSubprocess(ctx context.Context, modelsYAMLPath, que
 
 func (r *Runner) executeBenchmarkSubprocess(ctx context.Context, jobID, jobDir, modelsYAMLPath, queryJSONLPath string, req BenchmarkRequest) {
 	r.sendProgress(jobID, 5, "Starting benchmark", "Preparing benchmark run")
-	outputFile := filepath.Join(jobDir, "benchmark_output.jsonl")
+	outputFile := trainingartifacts.CurrentContract().BenchmarkOutputPath(jobDir)
 	args, concurrency := r.buildBenchmarkArgs(req, modelsYAMLPath, queryJSONLPath, outputFile)
 	r.sendProgress(jobID, 10, "Running benchmark", fmt.Sprintf("Running benchmark.py with concurrency=%d", concurrency))
 
@@ -64,8 +66,9 @@ func (r *Runner) buildBenchmarkArgs(req BenchmarkRequest, modelsYAMLPath, queryJ
 	if concurrency <= 0 {
 		concurrency = 4
 	}
+	contract := trainingartifacts.CurrentContract()
 	args := []string{
-		filepath.Join(r.trainingDir, "benchmark.py"),
+		contract.BenchmarkScriptPath(r.trainingDir),
 		"--queries", queryJSONLPath,
 		"--model-config", modelsYAMLPath,
 		"--output", outputFile,
@@ -247,7 +250,7 @@ func (r *Runner) buildTrainExecutionPlan(jobDir string, req TrainRequest) trainE
 		algorithms: algorithms,
 		runs:       runs,
 		// Shared cache dir so embeddings are computed once and reused across runs
-		cacheDir: filepath.Join(jobDir, ".cache"),
+		cacheDir: trainingartifacts.CurrentContract().CacheDir(jobDir),
 		// Environment for all Python invocations
 		pythonEnv:    trainPythonEnv(),
 		commonArgs:   buildTrainCommonArgs(req),

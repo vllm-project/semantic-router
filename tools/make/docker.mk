@@ -204,6 +204,8 @@ VLLM_SR_SIM_CONTAINER ?= vllm-sr-sim-container
 VLLM_SR_SIM_DOCKERFILE ?= src/fleet-sim/Dockerfile
 VLLM_SR_SIM_DIR ?= src/fleet-sim
 VLLM_SR_SIM_PORT ?= 8810
+VLLM_SR_TEST_TARGET ?= docker
+VLLM_SR_SHARED_SUITE ?=
 SKIP_ROUTER_IMAGE_SOURCE := $(origin SKIP_ROUTER_IMAGE)
 SKIP_COMPAT_IMAGE_SOURCE := $(origin SKIP_COMPAT_IMAGE)
 SKIP_ROUTER_IMAGE_DEFAULT := 0
@@ -425,10 +427,14 @@ vllm-sr-test: vllm-sr-install-cli
 	@$(LOG_TARGET)
 	@cd e2e/testing/vllm-sr-cli && python run_cli_tests.py --verbose
 
-vllm-sr-test-integration: ## Run CLI unit + integration tests (requires local router + simulator images)
-vllm-sr-test-integration: vllm-sr-build vllm-sr-envoy-build vllm-sr-dashboard-build vllm-sr-sim-build vllm-sr-install-cli
+vllm-sr-test-integration: ## Run shared docker/k8s integration suites (requires local images)
+vllm-sr-test-integration: vllm-sr-build vllm-sr-envoy-build vllm-sr-dashboard-build vllm-sr-sim-build vllm-sr-install-cli docker-build-llm-katan
 	@$(LOG_TARGET)
-	@cd e2e/testing/vllm-sr-cli && CONTAINER_RUNTIME=$(CONTAINER_RUNTIME) VLLM_SR_IMAGE=$(VLLM_SR_IMAGE) VLLM_SR_ROUTER_IMAGE=$(VLLM_SR_ROUTER_IMAGE) VLLM_SR_ENVOY_IMAGE=$(VLLM_SR_ENVOY_IMAGE) VLLM_SR_DASHBOARD_IMAGE=$(VLLM_SR_DASHBOARD_IMAGE) VLLM_SR_SIM_IMAGE=$(VLLM_SR_SIM_IMAGE) RUN_INTEGRATION_TESTS=true python run_cli_tests.py --verbose --integration
+	@cd e2e/testing/vllm-sr-cli && CONTAINER_RUNTIME=$(CONTAINER_RUNTIME) VLLM_SR_IMAGE=$(VLLM_SR_IMAGE) VLLM_SR_ROUTER_IMAGE=$(VLLM_SR_ROUTER_IMAGE) VLLM_SR_ENVOY_IMAGE=$(VLLM_SR_ENVOY_IMAGE) VLLM_SR_DASHBOARD_IMAGE=$(VLLM_SR_DASHBOARD_IMAGE) VLLM_SR_SIM_IMAGE=$(VLLM_SR_SIM_IMAGE) VLLM_SR_TEST_TARGET=$(VLLM_SR_TEST_TARGET) VLLM_SR_SHARED_SUITE=$(VLLM_SR_SHARED_SUITE) RUN_INTEGRATION_TESTS=true python run_cli_tests.py --verbose --integration
+
+vllm-sr-test-integration-k8s: ## Run shared integration suites against the managed k8s target
+vllm-sr-test-integration-k8s: VLLM_SR_TEST_TARGET=k8s
+vllm-sr-test-integration-k8s: vllm-sr-test-integration
 
 memory-test-integration: ## Run memory integration tests with local Milvus, llm-katan, and vllm-sr serve
 memory-test-integration: vllm-sr-build vllm-sr-envoy-build vllm-sr-dashboard-build vllm-sr-sim-build vllm-sr-install-cli docker-build-llm-katan

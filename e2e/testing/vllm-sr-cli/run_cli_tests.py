@@ -25,7 +25,13 @@ import unittest
 from pathlib import Path
 
 DEFAULT_IMAGE = "ghcr.io/vllm-project/semantic-router/vllm-sr:latest"
+REPO_ROOT = Path(__file__).resolve().parents[3]
 SECTION_DIVIDER = "=" * 60
+
+
+def integration_target() -> str:
+    """Return the shared integration target selected for this run."""
+    return (os.getenv("VLLM_SR_TEST_TARGET") or "docker").strip().lower()
 
 
 def print_section_header(title: str) -> None:
@@ -138,6 +144,32 @@ def report_local_image_status(container_runtime: str) -> None:
     print("   Some tests may need to pull the image")
 
 
+def prepare_k8s_chart_dependencies() -> bool:
+    """Prepare Helm chart dependencies through the repo-native CI setup target."""
+    if not shutil.which("make"):
+        print("❌ Missing Kubernetes integration prerequisite: make")
+        return False
+
+    print("🔧 Preparing Helm chart dependencies via `make helm-ci-setup`")
+    result = subprocess.run(
+        ["make", "helm-ci-setup"],
+        cwd=REPO_ROOT,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    if result.returncode == 0:
+        print("✅ Helm chart dependencies are ready")
+        return True
+
+    print("❌ Failed to prepare Helm chart dependencies")
+    if result.stdout.strip():
+        print(result.stdout.rstrip())
+    if result.stderr.strip():
+        print(result.stderr.rstrip())
+    return False
+
+
 def configure_integration_mode(integration: bool) -> None:
     """Set the integration-test environment toggle for the test suite."""
     if integration:
@@ -192,6 +224,19 @@ def check_prerequisites(*, require_runtime_access: bool) -> bool:
             and all_ok
         )
         report_local_image_status(container_runtime)
+        if require_runtime_access and integration_target() == "k8s":
+            missing_tools = [
+                tool for tool in ("kind", "kubectl", "helm") if not shutil.which(tool)
+            ]
+            if missing_tools:
+                print(
+                    "❌ Missing Kubernetes integration prerequisites: "
+                    + ", ".join(missing_tools)
+                )
+                all_ok = False
+            else:
+                print("✅ Kubernetes integration tooling is installed")
+                all_ok = prepare_k8s_chart_dependencies() and all_ok
 
     all_ok = check_cli_installation() and all_ok
     print(SECTION_DIVIDER)

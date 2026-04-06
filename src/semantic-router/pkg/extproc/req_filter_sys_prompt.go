@@ -20,8 +20,9 @@ func (r *OpenAIRouter) addSystemPromptIfConfigured(modifiedBody []byte, category
 		return modifiedBody, nil
 	}
 
-	// Try to get the most up-to-date decision configuration from global config first
-	globalConfig := config.Get()
+	// Prefer the runtime-owned router config when available so request-time
+	// system-prompt resolution tracks reloads without routing through globals.
+	globalConfig := r.currentConfig()
 	var decision *config.Decision
 	if globalConfig != nil {
 		decision = globalConfig.GetDecisionByName(categoryName)

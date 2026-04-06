@@ -1,0 +1,598 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Deep Dive into vLLM Semantic Router — Appendix</title>
+    <style>
+      :root {
+        --bg: #f8f8f4;
+        --bg-strong: #ffffff;
+        --ink: #111111;
+        --ink-soft: #414141;
+        --ink-faint: #727272;
+        --line: rgba(17, 17, 17, 0.12);
+        --panel: rgba(255, 255, 255, 0.84);
+        --shadow: 0 24px 64px rgba(17, 17, 17, 0.08);
+        --radius-xl: 32px;
+        --radius-lg: 22px;
+        --gap: clamp(14px, 2vw, 24px);
+        --font-sans: "Soehne", "Avenir Next", "Helvetica Neue", "Segoe UI",
+          sans-serif;
+        --font-mono: "SFMono-Regular", "JetBrains Mono", "IBM Plex Mono",
+          "Menlo", monospace;
+      }
+
+      * { box-sizing: border-box; }
+
+      html,
+      body {
+        margin: 0;
+        min-height: 100%;
+        background:
+          radial-gradient(circle at top right, rgba(17, 17, 17, 0.05), transparent 28%),
+          linear-gradient(180deg, #fbfbf9 0%, #f4f4ef 100%);
+        color: var(--ink);
+        font-family: var(--font-sans);
+      }
+
+      body { overflow: hidden; }
+
+      .app { position: relative; width: 100vw; height: 100vh; }
+
+      .topbar {
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        z-index: 20;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 20px clamp(20px, 4vw, 48px);
+        pointer-events: none;
+      }
+
+      .topbar > * { pointer-events: auto; }
+
+      .deck-mark,
+      .slide-counter {
+        display: inline-flex;
+        align-items: center;
+        gap: 12px;
+        padding: 10px 14px;
+        border: 1px solid var(--line);
+        border-radius: 999px;
+        background: rgba(255, 255, 255, 0.82);
+        backdrop-filter: blur(12px);
+        box-shadow: 0 8px 24px rgba(17, 17, 17, 0.04);
+        font-size: 12px;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+      }
+
+      .deck-mark::before {
+        content: "";
+        width: 10px;
+        height: 10px;
+        border-radius: 50%;
+        background: var(--ink);
+        display: inline-block;
+      }
+
+      .slide-counter { font-family: var(--font-mono); }
+
+      .slides { position: relative; width: 100%; height: 100%; }
+
+      .slide {
+        position: absolute;
+        inset: 0;
+        display: grid;
+        place-items: center;
+        padding: clamp(74px, 9vh, 120px) clamp(18px, 3vw, 42px)
+          clamp(84px, 11vh, 120px);
+        opacity: 0;
+        transform: translateX(36px) scale(0.985);
+        transition: opacity 0.34s ease, transform 0.34s ease;
+        pointer-events: none;
+      }
+
+      .slide.active {
+        opacity: 1;
+        transform: translateX(0) scale(1);
+        pointer-events: auto;
+      }
+
+      .slide-shell {
+        position: relative;
+        width: min(1280px, 100%);
+        height: min(780px, 100%);
+        padding: clamp(28px, 3vw, 40px);
+        border-radius: var(--radius-xl);
+        border: 1px solid var(--line);
+        background:
+          linear-gradient(180deg, rgba(255, 255, 255, 0.94), rgba(255, 255, 255, 0.82)),
+          var(--bg-strong);
+        box-shadow: var(--shadow);
+        overflow: hidden;
+      }
+
+      .slide-number {
+        position: absolute;
+        top: 28px;
+        right: 30px;
+        font-family: var(--font-mono);
+        font-size: 12px;
+        color: var(--ink-faint);
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+      }
+
+      .slide-body {
+        display: grid;
+        gap: var(--gap);
+        height: 100%;
+      }
+
+      .eyebrow {
+        display: inline-flex;
+        align-items: center;
+        gap: 10px;
+        margin-bottom: 8px;
+        font-family: var(--font-mono);
+        font-size: 12px;
+        color: var(--ink-faint);
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+      }
+
+      .eyebrow::before {
+        content: "";
+        width: 26px;
+        height: 1px;
+        background: var(--ink);
+        display: inline-block;
+      }
+
+      h1,
+      h2,
+      h3,
+      p { margin: 0; }
+
+      .hero {
+        display: grid;
+        align-content: space-between;
+        gap: 26px;
+        height: 100%;
+      }
+
+      .hero h1 {
+        max-width: 980px;
+        font-size: clamp(48px, 7vw, 92px);
+        line-height: 0.95;
+        letter-spacing: -0.05em;
+      }
+
+      .statement {
+        font-size: clamp(34px, 4vw, 60px);
+        line-height: 1;
+        letter-spacing: -0.045em;
+        max-width: 960px;
+      }
+
+      .layout { display: grid; gap: var(--gap); height: 100%; }
+      .grid-2,
+      .grid-3,
+      .grid-4 {
+        display: grid;
+        gap: var(--gap);
+      }
+
+      .grid-2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+      .grid-3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+      .grid-4 { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+
+      .card {
+        display: grid;
+        gap: 12px;
+        padding: 18px 20px;
+        border-radius: var(--radius-lg);
+        border: 1px solid var(--line);
+        background: var(--panel);
+      }
+
+      .card p,
+      .card li {
+        color: var(--ink-soft);
+        line-height: 1.42;
+        font-size: clamp(15px, 1.45vw, 18px);
+      }
+
+      .card ul {
+        margin: 0;
+        padding-left: 18px;
+        display: grid;
+        gap: 8px;
+      }
+
+      .label {
+        font-family: var(--font-mono);
+        font-size: 12px;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+        color: var(--ink-faint);
+      }
+
+      .mono-list {
+        display: grid;
+        gap: 8px;
+        font-family: var(--font-mono);
+        font-size: clamp(13px, 1.15vw, 15px);
+        color: var(--ink-soft);
+      }
+
+      pre {
+        margin: 0;
+        padding: 18px;
+        border-radius: var(--radius-lg);
+        border: 1px solid var(--line);
+        background: #101010;
+        color: #f6f6f6;
+        font-family: var(--font-mono);
+        font-size: clamp(12px, 1.1vw, 15px);
+        line-height: 1.5;
+        overflow: auto;
+      }
+
+      code { font-family: var(--font-mono); }
+
+      .source-line {
+        display: none;
+      }
+
+      .controls {
+        position: fixed;
+        right: clamp(18px, 2vw, 32px);
+        bottom: clamp(18px, 2vw, 32px);
+        z-index: 20;
+        display: flex;
+        align-items: center;
+        gap: 12px;
+      }
+
+      .controls button {
+        border: 1px solid rgba(17, 17, 17, 0.2);
+        border-radius: 999px;
+        background: rgba(255, 255, 255, 0.86);
+        color: var(--ink);
+        padding: 12px 16px;
+        font-size: 14px;
+        cursor: pointer;
+      }
+
+      .controls button:disabled { opacity: 0.45; cursor: not-allowed; }
+
+      .progress-wrap {
+        position: fixed;
+        left: clamp(18px, 2vw, 32px);
+        right: clamp(18px, 2vw, 32px);
+        bottom: 24px;
+        z-index: 15;
+        height: 4px;
+        border-radius: 999px;
+        background: rgba(17, 17, 17, 0.08);
+        overflow: hidden;
+      }
+
+      .progress {
+        height: 100%;
+        width: 0%;
+        background: var(--ink);
+        transition: width 0.28s ease;
+      }
+
+      @media (max-width: 1100px) {
+        .grid-2,
+        .grid-3,
+        .grid-4 { grid-template-columns: 1fr; }
+        .slide-shell { height: 100%; max-height: none; }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="app">
+      <div class="topbar">
+        <div class="deck-mark">Appendix Deck</div>
+        <div class="slide-counter" id="slideCounter">01 / 09</div>
+      </div>
+
+      <main class="slides" id="slides"></main>
+
+      <div class="controls">
+        <button id="prevBtn" type="button">← Prev</button>
+        <button id="nextBtn" type="button">Next →</button>
+      </div>
+
+      <div class="progress-wrap" aria-hidden="true">
+        <div class="progress" id="progressBar"></div>
+      </div>
+    </div>
+
+    <script>
+      const slides = [
+        {
+          title: "Appendix Cover",
+          eyebrow: "Backup Slides",
+          sources: ["source_map.md"],
+          body: `
+            <div class="hero">
+              <div>
+                <div class="eyebrow">Backup Slides</div>
+                <h1>Appendix</h1>
+                <p class="statement" style="font-size: clamp(28px, 3vw, 44px);">补充 slides 用于 Q&A、源事实核对和更细的架构展开。</p>
+              </div>
+              <div class="card">
+                <span class="label">Use It For</span>
+                <p>算法细节、配置 ownership、operator discovery、AMD aliases、环境命令和 repo hotspots。</p>
+              </div>
+            </div>
+          `,
+        },
+        {
+          title: "Signal Count Drift",
+          eyebrow: "Known Source Drift",
+          sources: ["website/docs/intro.md", "website/docs/tutorials/signal/overview.md", "website/docs/overview/signal-driven-decisions.md"],
+          body: `
+            <div class="layout">
+              <div>
+                <div class="eyebrow">Known Source Drift</div>
+                <p class="statement">为什么主 deck 采用 16 个 signal families，而不是 15。</p>
+              </div>
+              <div class="grid-2">
+                <div class="card">
+                  <span class="label">Current Maintained Sources</span>
+                  <p><code>website/docs/intro.md</code> 和 <code>website/docs/tutorials/signal/overview.md</code> 都明确支持当前的 16-family 口径。</p>
+                </div>
+                <div class="card">
+                  <span class="label">Stale Source</span>
+                  <p><code>website/docs/overview/signal-driven-decisions.md</code> 仍保留旧的 15-count 表述，因此只拿来做机制说明，不拿来做计数依据。</p>
+                </div>
+              </div>
+            </div>
+          `,
+        },
+        {
+          title: "Config Ownership",
+          eyebrow: "Section Ownership",
+          sources: ["website/docs/installation/configuration.md"],
+          body: `
+            <div class="layout">
+              <div><div class="eyebrow">Section Ownership</div><p class="statement">canonical config 的价值，在于每一节都有明确 owner。</p></div>
+              <div class="grid-4">
+                <div class="card"><span class="label">version</span><p>schema version</p></div>
+                <div class="card"><span class="label">listeners</span><p>ports, timeouts, ingress bindings</p></div>
+                <div class="card"><span class="label">providers</span><p>backend refs, defaults, reasoning families</p></div>
+                <div class="card"><span class="label">routing</span><p>signals, projections, decisions, algorithms, plugins</p></div>
+              </div>
+              <div class="card"><span class="label">global</span><p>稀疏 runtime overrides、shared services 和 capability modules；不应该吞掉 route-local behavior。</p></div>
+            </div>
+          `,
+        },
+        {
+          title: "Plugin Catalog",
+          eyebrow: "Plugin Snapshot",
+          sources: ["website/docs/tutorials/plugin/overview.md", "src/vllm-sr/README.md"],
+          body: `
+            <div class="layout">
+              <div><div class="eyebrow">Plugin Snapshot</div><p class="statement">常见问题：plugins 到底覆盖哪些能力？</p></div>
+              <div class="grid-3">
+                <div class="card"><span class="label">Response / Mutation</span><p><code>fast_response</code>、<code>header_mutation</code>、<code>system_prompt</code>、<code>request_params</code>、<code>tools</code></p></div>
+                <div class="card"><span class="label">Retrieval / Memory</span><p><code>memory</code>、<code>rag</code>、<code>router_replay</code>、<code>semantic-cache</code></p></div>
+                <div class="card"><span class="label">Safety / Generation</span><p><code>content-safety</code>、<code>hallucination</code>、<code>response_jailbreak</code>、<code>image_gen</code></p></div>
+              </div>
+            </div>
+          `,
+        },
+        {
+          title: "Algorithm Catalog",
+          eyebrow: "Algorithm Snapshot",
+          sources: ["website/docs/tutorials/algorithm/overview.md"],
+          body: `
+            <div class="layout">
+              <div><div class="eyebrow">Algorithm Snapshot</div><p class="statement">Algorithm layer 不是一个点功能，而是一整个 post-match policy family。</p></div>
+              <div class="grid-2">
+                <div class="card">
+                  <span class="label">Selection</span>
+                  <div class="mono-list">
+                    <div><code>static</code> · <code>elo</code> · <code>router_dc</code> · <code>automix</code></div>
+                    <div><code>hybrid</code> · <code>rl-driven</code> · <code>gmtrouter</code></div>
+                    <div><code>knn</code> · <code>kmeans</code> · <code>svm</code> · <code>mlp</code> · <code>latency-aware</code></div>
+                  </div>
+                </div>
+                <div class="card">
+                  <span class="label">Looper</span>
+                  <div class="mono-list">
+                    <div><code>confidence</code></div>
+                    <div><code>ratings</code></div>
+                    <div><code>remom</code></div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          `,
+        },
+        {
+          title: "Operator Discovery",
+          eyebrow: "Cluster Discovery Modes",
+          sources: ["deploy/operator/README.md"],
+          body: `
+            <div class="layout">
+              <div><div class="eyebrow">Cluster Discovery Modes</div><p class="statement">Operator 的关键价值之一，是把 backend discovery 变成第一等合同。</p></div>
+              <div class="grid-3">
+                <div class="card"><span class="label">KServe</span><p>自动发现 predictor service，适合 RHOAI 或 standalone KServe。</p></div>
+                <div class="card"><span class="label">Llama Stack</span><p>通过 labels 发现不同 serving instances。</p></div>
+                <div class="card"><span class="label">Service</span><p>最通用的 direct Kubernetes Service path。</p></div>
+              </div>
+            </div>
+          `,
+        },
+        {
+          title: "AMD Aliases",
+          eyebrow: "Alias Catalog",
+          sources: ["deploy/amd/README.md"],
+          body: `
+            <div class="layout">
+              <div><div class="eyebrow">Alias Catalog</div><p class="statement">一个 physical backend 可以同时暴露多个 semantic served-model aliases。</p></div>
+              <div class="grid-2">
+                <div class="card">
+                  <span class="label">Aliases</span>
+                  <div class="mono-list">
+                    <div><code>qwen/qwen3.5-rocm</code></div>
+                    <div><code>google/gemini-2.5-flash-lite</code></div>
+                    <div><code>google/gemini-3.1-pro</code></div>
+                    <div><code>openai/gpt5.4</code></div>
+                    <div><code>anthropic/claude-opus-4.6</code></div>
+                  </div>
+                </div>
+                <div class="card">
+                  <span class="label">Meaning</span>
+                  <p>router 用 semantic alias 对外表达策略层，而不是把物理 backend 细节直接暴露给调用方。</p>
+                </div>
+              </div>
+            </div>
+          `,
+        },
+        {
+          title: "Commands",
+          eyebrow: "Environment Cheat Sheet",
+          sources: ["src/vllm-sr/README.md", "docs/agent/environments.md"],
+          body: `
+            <div class="layout">
+              <div><div class="eyebrow">Environment Cheat Sheet</div><p class="statement">适合现场 Q&A 的几个命令和环境口径。</p></div>
+              <pre>vllm-sr serve --image-pull-policy never
+vllm-sr serve --target k8s --profile dev --config config.yaml
+vllm-sr status
+vllm-sr logs router
+vllm-sr dashboard
+vllm-sr stop</pre>
+              <div class="grid-3">
+                <div class="card"><span class="label">cpu-local</span><p>默认本地 Docker workflow。</p></div>
+                <div class="card"><span class="label">amd-local</span><p>平台行为、ROCm 默认值和真实 AMD 验证。</p></div>
+                <div class="card"><span class="label">ci-k8s</span><p>merge-gate coverage 与 profile-sensitive behavior。</p></div>
+              </div>
+            </div>
+          `,
+        },
+        {
+          title: "Repo Hotspots",
+          eyebrow: "Subsystem and Harness Map",
+          sources: ["docs/agent/repo-map.md", "docs/agent/context-management.md"],
+          body: `
+            <div class="layout">
+              <div><div class="eyebrow">Subsystem and Harness Map</div><p class="statement">为什么这个 repo 需要 explicit harness 和 context-pack flow。</p></div>
+              <div class="grid-4">
+                <div class="card"><span class="label">Go Runtime</span><p><code>src/semantic-router/</code></p></div>
+                <div class="card"><span class="label">Python CLI</span><p><code>src/vllm-sr/</code></p></div>
+                <div class="card"><span class="label">Dashboard</span><p><code>dashboard/</code></p></div>
+                <div class="card"><span class="label">Operator</span><p><code>deploy/operator/</code></p></div>
+                <div class="card"><span class="label">Fleet Sim</span><p><code>src/fleet-sim/</code></p></div>
+                <div class="card"><span class="label">Training</span><p><code>src/training/</code></p></div>
+                <div class="card"><span class="label">E2E</span><p><code>e2e/</code></p></div>
+                <div class="card"><span class="label">Harness</span><p><code>docs/agent/</code> + <code>tools/agent/</code></p></div>
+              </div>
+            </div>
+          `,
+        },
+      ];
+
+      function renderSlides() {
+        const root = document.getElementById("slides");
+        root.innerHTML = slides
+          .map((slide, index) => {
+            const number = String(index + 1).padStart(2, "0");
+            const sources = slide.sources.map((source) => `<code>${source}</code>`).join(" · ");
+            return `
+              <section class="slide${index === 0 ? " active" : ""}" id="slide-${index + 1}">
+                <div class="slide-shell">
+                  <div class="slide-number">${number}</div>
+                  <div class="slide-body">
+                    ${slide.body}
+                    <div class="source-line">Anchors · ${sources}</div>
+                  </div>
+                </div>
+              </section>
+            `;
+          })
+          .join("");
+      }
+
+      renderSlides();
+
+      const slideNodes = Array.from(document.querySelectorAll(".slide"));
+      const counter = document.getElementById("slideCounter");
+      const progress = document.getElementById("progressBar");
+      const prevBtn = document.getElementById("prevBtn");
+      const nextBtn = document.getElementById("nextBtn");
+      let index = 0;
+
+      function formatIndex(value) {
+        return String(value + 1).padStart(2, "0");
+      }
+
+      function readHashIndex() {
+        const match = window.location.hash.match(/^#slide-(\d+)$/);
+        if (!match) return null;
+        const candidate = Number(match[1]) - 1;
+        if (Number.isNaN(candidate) || candidate < 0 || candidate >= slideNodes.length) return null;
+        return candidate;
+      }
+
+      function render() {
+        slideNodes.forEach((slide, slideIndex) => {
+          slide.classList.toggle("active", slideIndex === index);
+        });
+        counter.textContent = `${formatIndex(index)} / ${formatIndex(slideNodes.length - 1)}`;
+        progress.style.width = `${((index + 1) / slideNodes.length) * 100}%`;
+        prevBtn.disabled = index === 0;
+        nextBtn.disabled = index === slideNodes.length - 1;
+        history.replaceState(null, "", `#slide-${index + 1}`);
+      }
+
+      function goTo(nextIndex) {
+        index = Math.max(0, Math.min(nextIndex, slideNodes.length - 1));
+        render();
+      }
+
+      function next() { goTo(index + 1); }
+      function prev() { goTo(index - 1); }
+
+      window.addEventListener("keydown", (event) => {
+        if (event.key === "ArrowRight" || event.key === "PageDown" || event.key === " ") {
+          event.preventDefault();
+          next();
+        } else if (event.key === "ArrowLeft" || event.key === "PageUp") {
+          event.preventDefault();
+          prev();
+        } else if (event.key === "Home") {
+          event.preventDefault();
+          goTo(0);
+        } else if (event.key === "End") {
+          event.preventDefault();
+          goTo(slideNodes.length - 1);
+        }
+      });
+
+      window.addEventListener("hashchange", () => {
+        const hashIndex = readHashIndex();
+        if (hashIndex !== null) goTo(hashIndex);
+      });
+
+      prevBtn.addEventListener("click", prev);
+      nextBtn.addEventListener("click", next);
+
+      const initialIndex = readHashIndex();
+      if (initialIndex !== null) index = initialIndex;
+      render();
+    </script>
+  </body>
+</html>

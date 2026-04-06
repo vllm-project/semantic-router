@@ -1,10 +1,6 @@
 import React, { createContext, ReactNode, useContext, useEffect, useState } from 'react'
 import {
-  clearStoredAuthToken,
-  getStoredAuthToken,
   installAuthenticatedFetch,
-  notifyUnauthorized,
-  storeAuthToken,
   UNAUTHORIZED_EVENT,
 } from '../utils/authFetch'
 
@@ -17,12 +13,10 @@ interface AuthUser {
 }
 
 interface AuthContextValue {
-  token: string | null
   user: AuthUser | null
   isLoading: boolean
   isAuthenticated: boolean
   login: (email: string, password: string) => Promise<void>
-  setSession: (token: string, user?: AuthUser | null) => void
   logout: () => void
   refreshSession: () => Promise<void>
 }
@@ -46,73 +40,46 @@ const readErrorMessage = async (response: Response): Promise<string> => {
 installAuthenticatedFetch()
 
 export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
-  const [token, setToken] = useState<string | null>(() => getStoredAuthToken())
   const [user, setUser] = useState<AuthUser | null>(null)
-  const [isLoading, setIsLoading] = useState(() => Boolean(getStoredAuthToken()))
+  const [isLoading, setIsLoading] = useState(true)
 
-  const clearSession = () => {
-    setToken(null)
+  const clearSessionState = () => {
     setUser(null)
-    clearStoredAuthToken()
   }
-
-  const setSession = (nextToken: string, nextUser?: AuthUser | null) => {
-    storeAuthToken(nextToken)
-    setToken(nextToken)
-    setUser(nextUser ?? null)
-  }
-
-  useEffect(() => {
-    if (token) {
-      storeAuthToken(token)
-    }
-  }, [token])
-
-  useEffect(() => {
-    if (!token) {
-      setUser(null)
-      setIsLoading(false)
-      return
-    }
-
-    void refreshSession()
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [token])
-
-  useEffect(() => {
-    const handleUnauthorized = () => {
-      clearSession()
-      setIsLoading(false)
-    }
-
-    window.addEventListener(UNAUTHORIZED_EVENT, handleUnauthorized)
-    return () => window.removeEventListener(UNAUTHORIZED_EVENT, handleUnauthorized)
-  }, [])
 
   const refreshSession = async () => {
-    if (!token) {
-      setUser(null)
-      setIsLoading(false)
-      return
-    }
-
     setIsLoading(true)
     try {
       const response = await fetch('/api/auth/me')
       if (!response.ok) {
         if (response.status === 401) {
-          clearSession()
+          clearSessionState()
         }
         return
       }
       const payload = (await response.json()) as { user?: AuthUser }
       setUser(payload?.user ?? null)
     } catch {
-      notifyUnauthorized()
+      clearSessionState()
     } finally {
       setIsLoading(false)
     }
   }
+
+  useEffect(() => {
+    void refreshSession()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  useEffect(() => {
+    const handleUnauthorized = () => {
+      clearSessionState()
+      setIsLoading(false)
+    }
+
+    window.addEventListener(UNAUTHORIZED_EVENT, handleUnauthorized)
+    return () => window.removeEventListener(UNAUTHORIZED_EVENT, handleUnauthorized)
+  }, [])
 
   const login = async (email: string, password: string) => {
     setIsLoading(true)
@@ -127,26 +94,31 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         throw new Error(await readErrorMessage(response))
       }
 
-      const payload = (await response.json()) as { token: string; user?: AuthUser }
-      setSession(payload.token, payload.user ?? null)
+      const payload = (await response.json()) as { user?: AuthUser }
+      if (payload.user) {
+        setUser(payload.user)
+        return
+      }
+
+      await refreshSession()
     } finally {
       setIsLoading(false)
     }
   }
 
   const logout = () => {
-    clearSession()
+    clearSessionState()
+    setIsLoading(false)
+    void fetch('/api/auth/logout', { method: 'POST' }).catch(() => undefined)
   }
 
   return (
     <AuthContext.Provider
       value={{
-        token,
         user,
         isLoading,
-        isAuthenticated: Boolean(token),
+        isAuthenticated: Boolean(user),
         login,
-        setSession,
         logout,
         refreshSession,
       }}

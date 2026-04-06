@@ -28,7 +28,6 @@ import type {
   UserFeedbackSignal,
 } from './configPageSupport'
 import { formatThreshold } from './configPageSupport'
-import { hasFlatSignals } from '../types/config'
 import type { OpenEditModal, OpenViewModal } from './configPageRouterSectionSupport'
 import { cloneConfigData } from './configPageCanonicalization'
 
@@ -83,29 +82,7 @@ export default function ConfigPageSignalsSection({
   listInputToArray,
   removeSignalByName,
 }: ConfigPageSignalsSectionProps) {
-  const signals = config?.signals
-  const flatSignals: ConfigData['signals'] | null = !signals && hasFlatSignals(config) ? {
-    keywords: config?.keyword_rules,
-    embeddings: config?.embedding_rules,
-    domains: (config?.categories || []).map((category) => ({
-      name: category.name,
-      description: category.description || '',
-      mmlu_categories: category.mmlu_categories,
-    })),
-    fact_check: config?.fact_check_rules,
-    user_feedbacks: config?.user_feedback_rules,
-    reasks: config?.reask_rules,
-    preferences: config?.preference_rules,
-    language: config?.language_rules,
-    context: config?.context_rules,
-    structure: config?.structure_rules,
-    complexity: config?.complexity_rules,
-    modality: undefined,
-    role_bindings: undefined,
-    jailbreak: config?.jailbreak,
-    pii: config?.pii,
-  } : null
-  const effectiveSignals = signals || flatSignals
+  const effectiveSignals = config?.signals
 
   const allSignals: UnifiedSignal[] = []
 

@@ -6,6 +6,17 @@ This document covers the configuration and experimental results for ML-based mod
 
 ML-based model selection uses machine learning algorithms to intelligently route queries to the most appropriate LLM based on query characteristics and historical performance data. This approach provides significant improvements over random or single-model routing strategies.
 
+Dashboard-managed ML pipeline artifacts are contract-owned in
+`src/semantic-router/pkg/trainingartifacts/contract.json`. The production
+output names from that contract are:
+
+- benchmark output: `benchmark_output.jsonl`
+- trained model directory: `ml-train/`
+- generated values file: `ml-model-selection-values.yaml`
+
+Other files or notebooks under `src/training/**` remain experimental unless
+they are added to that shared contract.
+
 ### Supported Algorithms
 
 | Algorithm | Description | Best For |

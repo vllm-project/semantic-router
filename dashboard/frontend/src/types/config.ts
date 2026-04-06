@@ -8,6 +8,8 @@
  * routing-owned data for editing and legacy read-only fallback handling.
  */
 
+import type { ConfigTreeObject } from './configTree'
+
 // =============================================================================
 // PROVIDERS - Model and endpoint configuration
 // =============================================================================
@@ -255,7 +257,7 @@ export interface PluginConfig {
     | 'tools'
     | 'request_params'
     | 'response_jailbreak'
-  configuration: Record<string, unknown>
+  configuration: ConfigTreeObject
 }
 
 export interface Decision {
@@ -290,69 +292,6 @@ export interface PythonCLIConfig {
   providers: Providers
 }
 
-// =============================================================================
-// LEGACY CONFIG - Go router format (for backward compatibility)
-// =============================================================================
-
-export interface LegacyVLLMEndpoint {
-  name: string
-  address: string
-  port: number
-  weight: number
-  health_check_path?: string
-}
-
-export interface LegacyModelConfig {
-  model_id: string
-  use_modernbert?: boolean
-  threshold: number
-  use_cpu: boolean
-  category_mapping_path?: string
-  pii_mapping_path?: string
-  jailbreak_mapping_path?: string
-}
-
-export interface LegacyCategory {
-  name: string
-  description?: string
-  system_prompt?: string
-  mmlu_categories?: string[]
-}
-
-export interface LegacyConfig {
-  vllm_endpoints?: LegacyVLLMEndpoint[]
-  model_config?: Record<string, unknown>
-  categories?: LegacyCategory[]
-  classifier?: {
-    category_model?: LegacyModelConfig
-    pii_model?: LegacyModelConfig
-  }
-  prompt_guard?: LegacyModelConfig & { enabled: boolean }
-  semantic_cache?: {
-    enabled: boolean
-    backend_type?: string
-    similarity_threshold: number
-    max_entries: number
-    ttl_seconds: number
-    eviction_policy?: string
-  }
-  tools?: {
-    enabled: boolean
-    top_k: number
-    similarity_threshold: number
-    tools_db_path: string
-    fallback_to_empty: boolean
-  }
-  default_model?: string
-  reasoning_families?: Record<string, ReasoningFamily>
-  default_reasoning_effort?: string
-  observability?: {
-    tracing?: TracingConfig
-    metrics?: { enabled: boolean }
-  }
-  api?: APIConfig
-}
-
 export interface TracingConfig {
   enabled: boolean
   provider: string
@@ -384,105 +323,4 @@ export interface APIConfig {
       sample_rate?: number
     }
   }
-}
-
-// =============================================================================
-// UNIFIED CONFIG - Supports both formats
-// =============================================================================
-
-export type ConfigFormat = 'python-cli' | 'legacy'
-
-type UnknownConfigRecord = Record<string, unknown>
-
-export interface UnifiedConfig extends Partial<PythonCLIConfig>, Partial<LegacyConfig> {
-  // Both formats can have these at root level
-  version?: string
-  default_model?: string
-  default_reasoning_effort?: string
-  reasoning_families?: Record<string, ReasoningFamily>
-  observability?: {
-    tracing?: TracingConfig
-    metrics?: { enabled: boolean }
-  }
-  api?: APIConfig
-  tools?: {
-    enabled: boolean
-    top_k: number
-    similarity_threshold: number
-    tools_db_path: string
-    fallback_to_empty: boolean
-  }
-}
-
-// =============================================================================
-// FORMAT DETECTION
-// =============================================================================
-
-/**
- * Detect the config format based on key indicators
- */
-const asUnknownConfigRecord = (value: unknown): UnknownConfigRecord | null =>
-  value && typeof value === 'object' ? value as UnknownConfigRecord : null
-
-export function detectConfigFormat(config: unknown): ConfigFormat {
-  const root = asUnknownConfigRecord(config)
-  // Python CLI format has providers.models
-  const providers = asUnknownConfigRecord(root?.providers)
-  if (providers?.models) {
-    return 'python-cli'
-  }
-  // Legacy format has vllm_endpoints or model_config at root
-  if (root?.vllm_endpoints || root?.model_config) {
-    return 'legacy'
-  }
-  // Default to python-cli as that's the future
-  return 'python-cli'
-}
-
-/**
- * Check if config has decisions, regardless of format.
- * After deploy, the Router flattens Python CLI format to legacy struct fields
- * (vllm_endpoints, model_config, keyword_rules, etc.) but preserves the `decisions` array.
- * This helper detects that hybrid state so the UI can still render decisions.
- */
-export function hasDecisions(config: unknown): boolean {
-  const root = asUnknownConfigRecord(config)
-  return Array.isArray(root?.decisions) && root.decisions.length > 0
-}
-
-/**
- * Check if config has flat signal fields (keyword_rules, embedding_rules, etc.)
- * that result from deploy flattening. These map to the nested signals.* structure.
- */
-export function hasFlatSignals(config: unknown): boolean {
-  const root = asUnknownConfigRecord(config)
-  return !!(
-    (Array.isArray(root?.keyword_rules) && root.keyword_rules.length > 0) ||
-    (Array.isArray(root?.embedding_rules) && root.embedding_rules.length > 0) ||
-    (Array.isArray(root?.categories) && root.categories.length > 0) ||
-    (Array.isArray(root?.fact_check_rules) && root.fact_check_rules.length > 0) ||
-    (Array.isArray(root?.user_feedback_rules) && root.user_feedback_rules.length > 0) ||
-    (Array.isArray(root?.reask_rules) && root.reask_rules.length > 0) ||
-    (Array.isArray(root?.preference_rules) && root.preference_rules.length > 0) ||
-    (Array.isArray(root?.language_rules) && root.language_rules.length > 0) ||
-    (Array.isArray(root?.context_rules) && root.context_rules.length > 0) ||
-    (Array.isArray(root?.structure_rules) && root.structure_rules.length > 0) ||
-    (Array.isArray(root?.complexity_rules) && root.complexity_rules.length > 0) ||
-    (Array.isArray(root?.jailbreak) && root.jailbreak.length > 0) ||
-    (Array.isArray(root?.pii) && root.pii.length > 0)
-  )
-}
-
-/**
- * Check if config is in Python CLI format
- */
-export function isPythonCLIFormat(config: unknown): config is PythonCLIConfig {
-  return detectConfigFormat(config) === 'python-cli'
-}
-
-/**
- * Check if config is in legacy format
- */
-export function isLegacyFormat(config: unknown): config is LegacyConfig {
-  return detectConfigFormat(config) === 'legacy'
 }

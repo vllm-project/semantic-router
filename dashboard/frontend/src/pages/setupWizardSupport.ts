@@ -1,3 +1,6 @@
+import type { ConfigData } from "./configPageSupport";
+import type { ConfigTreeObject } from "../types/configTree";
+
 export type SetupStep = 0 | 1 | 2;
 export type ProviderKind = "vllm" | "openai-compatible" | "anthropic";
 export type SetupValidationState = "idle" | "validating" | "valid" | "error";
@@ -43,8 +46,15 @@ export interface SetupConfigCounts {
   canActivate: boolean;
 }
 
+export interface SetupConfigPayload {
+  providers: NonNullable<ConfigData["providers"]>;
+  routing: NonNullable<ConfigData["routing"]>;
+}
+
+export type SetupConfigSource = SetupConfigPayload | ConfigTreeObject;
+
 export interface ImportedSetupConfig {
-  config: Record<string, unknown>;
+  config: ConfigTreeObject;
   sourceUrl: string;
   counts: SetupConfigCounts;
 }
@@ -229,7 +239,7 @@ export function getStepOneErrors(
   return errors;
 }
 
-export function countConfigSignals(rawSignals: unknown): number {
+export function countConfigSignals(rawSignals: ConfigTreeObject | unknown): number {
   if (
     !rawSignals ||
     typeof rawSignals !== "object" ||
@@ -238,7 +248,8 @@ export function countConfigSignals(rawSignals: unknown): number {
     return 0;
   }
 
-  return Object.values(rawSignals as Record<string, unknown>).reduce<number>(
+  const signalSections = rawSignals as ConfigTreeObject;
+  return Object.values(signalSections).reduce<number>(
     (total, value) => {
       return total + (Array.isArray(value) ? value.length : 0);
     },
@@ -249,7 +260,7 @@ export function countConfigSignals(rawSignals: unknown): number {
 export function buildSetupConfig(
   models: ModelDraft[],
   defaultModelId: string,
-): Record<string, unknown> {
+): SetupConfigPayload {
   const builtModels: BuiltModel[] = models.map((model, index) => {
     const { protocol, endpoint } = parseBaseUrl(
       model.baseUrl,
@@ -296,7 +307,7 @@ export function buildSetupConfig(
     throw new Error("Default model selection is invalid.");
   }
 
-  const catchAllDecision = {
+  const catchAllDecision: NonNullable<NonNullable<ConfigData["routing"]>["decisions"]>[number] = {
     name: "default-route",
     description:
       "Generated during setup to route all requests to the default model.",
@@ -313,7 +324,7 @@ export function buildSetupConfig(
     ],
   };
 
-  const config: Record<string, unknown> = {
+  const config: SetupConfigPayload = {
     providers: {
       models: builtModels,
       defaults: {
@@ -332,7 +343,7 @@ export function buildSetupConfig(
   return config;
 }
 
-export function maskSecrets(config: Record<string, unknown> | null): string {
+export function maskSecrets(config: SetupConfigSource | null): string {
   if (!config) {
     return "";
   }

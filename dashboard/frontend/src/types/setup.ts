@@ -1,3 +1,5 @@
+import type { ConfigTreeObject } from "./configTree";
+
 export interface SetupState {
   setupMode: boolean;
   listenerPort: number;
@@ -10,7 +12,7 @@ export interface SetupState {
 
 export interface SetupValidateResponse {
   valid: boolean;
-  config?: Record<string, unknown>;
+  config?: ConfigTreeObject;
   models: number;
   decisions: number;
   signals: number;
@@ -24,7 +26,7 @@ export interface SetupActivateResponse {
 }
 
 export interface SetupImportRemoteResponse {
-  config: Record<string, unknown>;
+  config: ConfigTreeObject;
   models: number;
   decisions: number;
   signals: number;

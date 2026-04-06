@@ -18,7 +18,7 @@ type BootstrapRegistrationRequest struct {
 }
 
 type LoginResponse struct {
-	Token string `json:"token"`
+	Token string `json:"token,omitempty"`
 	User  *User  `json:"user"`
 }
 
@@ -41,6 +41,8 @@ func AuthRoutes(svc *Service) *http.ServeMux {
 	mux.HandleFunc("/api/auth/bootstrap/register", bootstrapRegisterHandler(svc))
 	mux.HandleFunc("/api/auth/login", loginHandler(svc))
 	mux.HandleFunc("/api/auth/login/", loginHandler(svc))
+	mux.HandleFunc("/api/auth/logout", logoutHandler(svc))
+	mux.HandleFunc("/api/auth/logout/", logoutHandler(svc))
 	mux.HandleFunc("/api/auth/me", meHandler(svc))
 	mux.HandleFunc("/api/auth/me/", meHandler(svc))
 

@@ -17,6 +17,7 @@ func TestRequiresAuthentication(t *testing.T) {
 		{path: "/dashboard", expected: false},
 		{path: "/login", expected: false},
 		{path: "/api/auth/login", expected: false},
+		{path: "/api/auth/logout", expected: false},
 		{path: "/api/auth/bootstrap/can-register", expected: false},
 		{path: "/api/setup/state", expected: false},
 		{path: "/api/auth/me", expected: true},
@@ -49,16 +50,16 @@ func TestExtractAccessToken(t *testing.T) {
 		}
 	})
 
-	t.Run("falls back to query token", func(t *testing.T) {
+	t.Run("does not fall back to query token", func(t *testing.T) {
 		t.Parallel()
 		req := httptest.NewRequest(http.MethodGet, "/embedded/grafana/?authToken=query-token", nil)
 
-		if token := extractAccessToken(req); token != "query-token" {
-			t.Fatalf("extractAccessToken() = %q, want query-token", token)
+		if token := extractAccessToken(req); token != "" {
+			t.Fatalf("extractAccessToken() = %q, want empty", token)
 		}
 	})
 
-	t.Run("falls back to cookie token before query token", func(t *testing.T) {
+	t.Run("falls back to cookie token", func(t *testing.T) {
 		t.Parallel()
 		req := httptest.NewRequest(http.MethodGet, "/embedded/grafana/?authToken=query-token", nil)
 		req.AddCookie(&http.Cookie{Name: authSessionCookieName, Value: "cookie-token"})

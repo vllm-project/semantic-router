@@ -59,7 +59,7 @@ RUN [ "$GIT_SSL_NO_VERIFY" = "1" ] && git config --global http.sslVerify false |
 
 # Copy real source and rebuild (dependencies are cached from above)
 COPY candle-binding/src/ ./src/
-COPY candle-binding/go.mod candle-binding/semantic-router.go ./
+COPY candle-binding/go.mod candle-binding/semantic-router.go candle-binding/backend_contract.go ./
 
 # Delete stale library from dummy build so cargo relinks with real FFI symbols
 RUN find target -name "libcandle_semantic_router.so" -delete 2>/dev/null; \
@@ -210,7 +210,7 @@ COPY --from=nlp-builder /build/out/ /usr/local/lib/
 ENV LD_LIBRARY_PATH=/usr/local/lib
 
 # Copy candle-binding Go files (needed for go.mod replace directive)
-COPY --from=rust-builder /build/go.mod /build/semantic-router.go /build/../candle-binding/
+COPY --from=rust-builder /build/go.mod /build/semantic-router.go /build/backend_contract.go /build/../candle-binding/
 
 # Copy ml-binding Go files (needed for go.mod replace directive)
 # Also copy the built library to ml-binding/target/release/ for CGO linking

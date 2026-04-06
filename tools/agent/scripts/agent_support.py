@@ -390,24 +390,46 @@ def run_rust_lint(changed_files: list[str]) -> int:
     return 0
 
 
+def resolve_python_ruff_config(path: Path) -> tuple[Path, Path]:
+    current = path.parent
+    while current != REPO_ROOT.parent:
+        config_path = current / ".ruff.toml"
+        if config_path.exists():
+            return current, config_path
+        if current == REPO_ROOT:
+            break
+        current = current.parent
+    return REPO_ROOT, RUFF_CONFIG
+
+
 def run_python_lint(changed_files: list[str]) -> int:
-    files = [
-        str(REPO_ROOT / changed)
-        for changed in changed_files
-        if changed.endswith(".py") and (REPO_ROOT / changed).exists()
-    ]
-    if not files:
+    grouped: dict[tuple[Path, Path], list[Path]] = {}
+    for changed in changed_files:
+        path = REPO_ROOT / changed
+        if path.suffix != ".py" or not path.exists():
+            continue
+        config_root, config_path = resolve_python_ruff_config(path)
+        grouped.setdefault((config_root, config_path), []).append(path)
+
+    if not grouped:
         print("No changed Python files detected.")
         return 0
-    command = [
-        sys.executable,
-        "-m",
-        "ruff",
-        "check",
-        "--config",
-        str(RUFF_CONFIG),
-        *files,
-    ]
-    print(f"+ {' '.join(command)}")
-    subprocess.run(command, cwd=REPO_ROOT, check=True)
+
+    for (config_root, config_path), files in sorted(
+        grouped.items(), key=lambda item: str(item[0][0])
+    ):
+        relative_files = [
+            file.relative_to(config_root).as_posix() for file in sorted(files)
+        ]
+        command = [
+            sys.executable,
+            "-m",
+            "ruff",
+            "check",
+            "--config",
+            str(config_path),
+            *relative_files,
+        ]
+        print(f"+ {' '.join(command)} (cwd={config_root})")
+        subprocess.run(command, cwd=config_root, check=True)
     return 0

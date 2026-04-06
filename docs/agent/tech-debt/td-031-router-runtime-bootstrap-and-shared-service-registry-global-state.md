@@ -2,7 +2,7 @@
 
 ## Status
 
-Open
+Closed
 
 ## Scope
 
@@ -10,7 +10,7 @@ Open
 
 ## Summary
 
-The common runtime path no longer suffers from the stale API-server config snapshot tracked by TD011, the single-consumer config-update channel, or implicit publication of classification, memory, vector-store, file-store, embedder, and ingestion-pipeline dependencies through constructor side effects or `cmd`-owned package globals. Those steady-state dependencies now flow through `pkg/routerruntime`. The residual gap is narrower: `config.Replace`/`config.Get` still act as a process-wide compatibility contract, legacy global service accessors still exist as fallback for non-registry callers, and startup remains the place where tracing, metrics, controller startup, and compatibility publication are coordinated. The remaining debt is therefore about fully retiring the compatibility globals and broad bootstrap ownership, not about the common runtime path lacking an explicit registry anymore.
+The common runtime path no longer suffers from the stale API-server config snapshot tracked by TD011, the single-consumer config-update channel, or implicit publication of classification, memory, vector-store, file-store, embedder, and ingestion-pipeline dependencies through constructor side effects or `cmd`-owned package globals. Those steady-state dependencies now flow through `pkg/routerruntime`, and the remaining compatibility globals are quarantined behind a narrow legacy API-server bootstrap adapter instead of being consulted during steady-state request handling or runtime config refresh.
 
 ## Evidence
 
@@ -20,10 +20,16 @@ The common runtime path no longer suffers from the stale API-server config snaps
 - [src/semantic-router/pkg/routerruntime/registry.go](../../../src/semantic-router/pkg/routerruntime/registry.go)
 - [src/semantic-router/pkg/routerruntime/vectorstore_runtime.go](../../../src/semantic-router/pkg/routerruntime/vectorstore_runtime.go)
 - [src/semantic-router/pkg/apiserver/server.go](../../../src/semantic-router/pkg/apiserver/server.go)
+- [src/semantic-router/pkg/apiserver/legacy_runtime_registry.go](../../../src/semantic-router/pkg/apiserver/legacy_runtime_registry.go)
 - [src/semantic-router/pkg/apiserver/runtime_config.go](../../../src/semantic-router/pkg/apiserver/runtime_config.go)
 - [src/semantic-router/pkg/apiserver/route_vectorstore.go](../../../src/semantic-router/pkg/apiserver/route_vectorstore.go)
 - [src/semantic-router/pkg/apiserver/route_files.go](../../../src/semantic-router/pkg/apiserver/route_files.go)
 - [src/semantic-router/pkg/services/classification.go](../../../src/semantic-router/pkg/services/classification.go)
+- [src/semantic-router/pkg/services/classification_runtime_config.go](../../../src/semantic-router/pkg/services/classification_runtime_config.go)
+- [src/semantic-router/pkg/extproc/router_runtime_services.go](../../../src/semantic-router/pkg/extproc/router_runtime_services.go)
+- [src/semantic-router/pkg/apiserver/runtime_state_test.go](../../../src/semantic-router/pkg/apiserver/runtime_state_test.go)
+- [src/semantic-router/pkg/services/classification_update_test.go](../../../src/semantic-router/pkg/services/classification_update_test.go)
+- [src/semantic-router/pkg/extproc/server_reload_test.go](../../../src/semantic-router/pkg/extproc/server_reload_test.go)
 - [src/semantic-router/pkg/memory/store.go](../../../src/semantic-router/pkg/memory/store.go)
 - [docs/agent/tech-debt/td-011-apiserver-runtime-state-split.md](td-011-apiserver-runtime-state-split.md)
 
@@ -47,3 +53,18 @@ The common runtime path no longer suffers from the stale API-server config snaps
 - `apiserver` no longer depends on package-global store/embedder/pipeline setters for its steady-state runtime behavior.
 - Config reload and service-update paths support more than one observer without relying on a single global channel.
 - Targeted tests can exercise bootstrap ordering, degraded startup, and runtime reload behavior without mutating process-wide globals across unrelated packages.
+
+## Retirement Notes
+
+- `apiserver.Init` now bridges legacy globals through [legacy_runtime_registry.go](../../../src/semantic-router/pkg/apiserver/legacy_runtime_registry.go) and then runs the same registry-backed startup path as `InitWithRuntime`; the steady-state server no longer falls back to `config.Get()`, `GetGlobalClassificationService()`, `GetGlobalMemoryStore()`, or package-global vector/file-store handles.
+- `runtime_dependencies.go`, `route_vectorstore.go`, and `route_files.go` now treat package-global vector/file-store setters as legacy compatibility snapshots only; request-time API handlers resolve runtime services from `routerruntime.Registry`.
+- `liveRuntimeConfig.Update`, `ClassificationService.UpdateConfig`, and `ClassificationService.RefreshRuntimeConfig` no longer write back through `config.Replace`, which keeps request-time and API-driven config refresh local to the explicit runtime owner.
+- `extproc` request and startup paths now prefer runtime-owned config through `Server.currentRuntimeConfig()` and `OpenAIRouter.currentConfig()` instead of reading `config.Get()` directly in steady-state request handling.
+- Targeted regressions now cover the legacy registry bridge, registry-backed shared dependency resolution, no-global-write runtime config refresh, and extproc config preference for the live runtime registry.
+
+## Validation
+
+- `cd /Users/bitliu/vs/src/semantic-router && go test ./pkg/apiserver ./pkg/services ./pkg/extproc ./pkg/routerruntime`
+- `make agent-validate`
+- `make agent-lint AGENT_CHANGED_FILES_PATH=/tmp/vsr_td031_changed.txt`
+- `make agent-ci-gate AGENT_CHANGED_FILES_PATH=/tmp/vsr_td031_changed.txt`

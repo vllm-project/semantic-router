@@ -5,6 +5,8 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+
+	candle_binding "github.com/vllm-project/semantic-router/candle-binding"
 )
 
 // ModelPaths holds the discovered model paths
@@ -387,6 +389,10 @@ func AutoInitializeUnifiedClassifierWithRegistry(modelsDir string, modelRegistry
 
 // initializeLoRAUnifiedClassifier initializes with LoRA models
 func initializeLoRAUnifiedClassifier(paths *ModelPaths) (*UnifiedClassifier, error) {
+	if err := candle_binding.CurrentBackendContract().RequireFeature(candle_binding.FeatureLoRABatchInference); err != nil {
+		return nil, err
+	}
+
 	// Create unified classifier instance with LoRA mode
 	classifier := &UnifiedClassifier{
 		initialized: false,
@@ -416,6 +422,10 @@ func initializeLoRAUnifiedClassifier(paths *ModelPaths) (*UnifiedClassifier, err
 
 // initializeLegacyUnifiedClassifier initializes with legacy ModernBERT models
 func initializeLegacyUnifiedClassifier(paths *ModelPaths) (*UnifiedClassifier, error) {
+	if err := candle_binding.CurrentBackendContract().RequireFeature(candle_binding.FeatureUnifiedClassification); err != nil {
+		return nil, err
+	}
+
 	// Load intent labels from the actual model's mapping file
 	categoryMappingPath := filepath.Join(paths.IntentClassifier, "category_mapping.json")
 	categoryMapping, err := LoadCategoryMapping(categoryMappingPath)

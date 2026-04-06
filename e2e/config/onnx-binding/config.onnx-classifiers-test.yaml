@@ -1,3 +1,5 @@
+# ONNX classifier profile: per-family mmBERT classifiers are supported.
+# Unified classifier and LoRA batch inference remain unsupported on this backend.
 version: v0.3
 listeners: []
 providers:

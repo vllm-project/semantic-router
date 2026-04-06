@@ -1,5 +1,7 @@
 import type { Page } from '@playwright/test'
 
+const DASHBOARD_BASE_URL = 'http://localhost:3001'
+
 type SessionUser = {
   id: string
   email: string
@@ -58,9 +60,15 @@ export async function mockAuthenticatedSession(
   page: Page,
   { token = 'test-auth-token', user = defaultUser }: BootstrapOptions = {},
 ): Promise<{ token: string; user: SessionUser }> {
-  await page.addInitScript(({ storedToken }) => {
-    window.localStorage.setItem('vsr_auth_token', storedToken)
-  }, { storedToken: token })
+  await page.context().addCookies([
+    {
+      name: 'vsr_session',
+      value: token,
+      url: DASHBOARD_BASE_URL,
+      httpOnly: true,
+      sameSite: 'Lax',
+    },
+  ])
 
   await page.route('**/api/auth/me', async (route) => {
     await route.fulfill({

@@ -12,6 +12,7 @@ import (
 	"github.com/milvus-io/milvus-sdk-go/v2/entity"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/milvuslifecycle"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/vectorstore"
 )
@@ -111,24 +112,9 @@ func NewMilvusStore(options MilvusStoreOptions) (*MilvusStore, error) {
 
 // ensureCollection checks if the collection exists and creates it if not
 func (m *MilvusStore) ensureCollection(ctx context.Context) error {
-	hasCollection, err := m.client.HasCollection(ctx, m.collectionName)
+	hasCollection, err := milvuslifecycle.CollectionExists(ctx, m.client, m.collectionName)
 	if err != nil {
-		return fmt.Errorf("failed to check collection existence: %w", err)
-	}
-
-	if hasCollection {
-		logging.ComponentDebugEvent("memory", "milvus_collection_present", map[string]interface{}{
-			"collection_name": m.collectionName,
-		})
-		// Load collection to make it queryable
-		if loadErr := m.client.LoadCollection(ctx, m.collectionName, false); loadErr != nil {
-			logging.ComponentWarnEvent("memory", "milvus_collection_load_failed", map[string]interface{}{
-				"collection_name":       m.collectionName,
-				"error":                 loadErr.Error(),
-				"may_already_be_loaded": true,
-			})
-		}
-		return nil
+		return err
 	}
 
 	// Define schema for agentic memory
@@ -206,34 +192,54 @@ func (m *MilvusStore) ensureCollection(ctx context.Context) error {
 	if m.config.Milvus.NumPartitions > 0 {
 		numPartitions = int64(m.config.Milvus.NumPartitions)
 	}
-	logging.ComponentEvent("memory", "milvus_collection_create_started", map[string]interface{}{
-		"collection_name": m.collectionName,
-		"dimension":       m.config.Milvus.Dimension,
-		"num_partitions":  numPartitions,
-		"partition_key":   "user_id",
-	})
 
-	if createErr := m.client.CreateCollection(ctx, schema, 1, client.WithPartitionNum(numPartitions)); createErr != nil {
-		return fmt.Errorf("failed to create collection: %w", createErr)
+	if !hasCollection {
+		logging.ComponentEvent("memory", "milvus_collection_create_started", map[string]interface{}{
+			"collection_name": m.collectionName,
+			"dimension":       m.config.Milvus.Dimension,
+			"num_partitions":  numPartitions,
+			"partition_key":   "user_id",
+		})
 	}
 
-	// Create HNSW index for vector search
-	index, err := entity.NewIndexHNSW(entity.COSINE, 16, 256) // M=16, efConstruction=256
+	result, err := milvuslifecycle.EnsureCollection(ctx, m.client, milvuslifecycle.CollectionSpec{
+		Name:          m.collectionName,
+		Schema:        schema,
+		ShardNum:      1,
+		Load:          true,
+		CreateOptions: []client.CreateCollectionOption{client.WithPartitionNum(numPartitions)},
+		Indexes: []milvuslifecycle.IndexSpec{
+			{
+				FieldName: "embedding",
+				Build: func() (entity.Index, error) {
+					return entity.NewIndexHNSW(entity.COSINE, 16, 256)
+				},
+			},
+		},
+	}, milvuslifecycle.EnsureOptions{AllowCreate: true})
 	if err != nil {
-		return fmt.Errorf("failed to create HNSW index: %w", err)
-	}
-	if err := m.client.CreateIndex(ctx, m.collectionName, "embedding", index, false); err != nil {
-		return fmt.Errorf("failed to create index: %w", err)
+		if result.Existed && strings.Contains(err.Error(), "failed to load collection") {
+			logging.ComponentWarnEvent("memory", "milvus_collection_load_failed", map[string]interface{}{
+				"collection_name":       m.collectionName,
+				"error":                 err.Error(),
+				"may_already_be_loaded": true,
+			})
+			return nil
+		}
+		return err
 	}
 
-	// Load collection to make it queryable
-	if err := m.client.LoadCollection(ctx, m.collectionName, false); err != nil {
-		return fmt.Errorf("failed to load collection: %w", err)
+	if result.Existed {
+		logging.ComponentDebugEvent("memory", "milvus_collection_present", map[string]interface{}{
+			"collection_name": m.collectionName,
+		})
+	}
+	if result.Created {
+		logging.ComponentEvent("memory", "milvus_collection_created", map[string]interface{}{
+			"collection_name": m.collectionName,
+		})
 	}
 
-	logging.ComponentEvent("memory", "milvus_collection_created", map[string]interface{}{
-		"collection_name": m.collectionName,
-	})
 	return nil
 }
 
@@ -1460,43 +1466,21 @@ func isTransientError(err error) bool {
 
 // retryWithBackoff retries an operation with exponential backoff for transient errors
 func (m *MilvusStore) retryWithBackoff(ctx context.Context, operation func() error) error {
-	var lastErr error
-
-	for attempt := 0; attempt < m.maxRetries; attempt++ {
-		lastErr = operation()
-
-		// If no error or non-transient error, return immediately
-		if lastErr == nil || !isTransientError(lastErr) {
-			return lastErr
-		}
-
-		// If this is the last attempt, return the error
-		if attempt == m.maxRetries-1 {
-			logging.Warnf("MilvusStore: operation failed after %d retries: %v", m.maxRetries, lastErr)
-			return lastErr
-		}
-
-		// Calculate exponential backoff delay
-		// Cap the exponent to avoid overflow (max 30 for safety)
-		exponent := attempt
-		if exponent < 0 {
-			exponent = 0
-		} else if exponent > 30 {
-			exponent = 30
-		}
-		delay := m.retryBaseDelay * time.Duration(1<<exponent) // 2^attempt * baseDelay
-
-		logging.Debugf("MilvusStore: transient error on attempt %d/%d, retrying in %v: %v",
-			attempt+1, m.maxRetries, delay, lastErr)
-
-		// Wait with context cancellation support
-		select {
-		case <-ctx.Done():
-			return fmt.Errorf("context cancelled during retry: %w", ctx.Err())
-		case <-time.After(delay):
-			// Continue to next retry
-		}
+	err := milvuslifecycle.Retry(ctx, milvuslifecycle.RetryPolicy{
+		Attempts: m.maxRetries,
+		Backoff: func(attempt int) time.Duration {
+			exponent := attempt
+			if exponent < 0 {
+				exponent = 0
+			} else if exponent > 30 {
+				exponent = 30
+			}
+			return m.retryBaseDelay * time.Duration(1<<exponent)
+		},
+		ShouldRetry: isTransientError,
+	}, operation)
+	if err != nil && isTransientError(err) {
+		logging.Warnf("MilvusStore: operation failed after %d retries: %v", m.maxRetries, err)
 	}
-
-	return lastErr
+	return err
 }

@@ -40,27 +40,28 @@ func limitBody(r *http.Request) {
 	r.Body = http.MaxBytesReader(nil, r.Body, maxJSONBodySize)
 }
 
-// vectorStoreManager is the global vector store manager instance.
-// It is set during initialization via SetVectorStoreManager.
+// vectorStoreManager is a legacy compatibility hook used only to seed the
+// API-server legacy runtime registry when no explicit routerruntime.Registry is
+// supplied.
 var vectorStoreManager *vectorstore.Manager
 
-// globalPipeline is the global ingestion pipeline instance.
+// globalPipeline is the legacy compatibility ingestion pipeline snapshot.
 var globalPipeline *vectorstore.IngestionPipeline
 
-// globalEmbedder is the global embedder instance for search queries.
+// globalEmbedder is the legacy compatibility embedder snapshot.
 var globalEmbedder vectorstore.Embedder
 
-// SetVectorStoreManager sets the global vector store manager for the API server.
+// SetVectorStoreManager sets the legacy compatibility vector-store manager snapshot.
 func SetVectorStoreManager(mgr *vectorstore.Manager) {
 	vectorStoreManager = mgr
 }
 
-// SetIngestionPipeline sets the global ingestion pipeline for the API server.
+// SetIngestionPipeline sets the legacy compatibility ingestion pipeline snapshot.
 func SetIngestionPipeline(p *vectorstore.IngestionPipeline) {
 	globalPipeline = p
 }
 
-// SetEmbedder sets the global embedder for search queries.
+// SetEmbedder sets the legacy compatibility embedder snapshot.
 func SetEmbedder(e vectorstore.Embedder) {
 	globalEmbedder = e
 }

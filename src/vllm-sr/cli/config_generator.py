@@ -31,23 +31,26 @@ def _is_ip_address(host: str) -> bool:
         return False
 
 
-def generate_envoy_config_from_user_config(
+def render_envoy_config_from_user_config(
     user_config: UserConfig,
-    output_file: str,
     template_file: str | None = None,
     template_root: str | None = None,
-) -> Path:
+    *,
+    extproc_host: str | None = None,
+    router_api_host: str | None = None,
+) -> str:
     """
-    Generate Envoy configuration from user config.
+    Render Envoy configuration from user config and return the YAML text.
 
     Args:
         user_config: Parsed user configuration
-        output_file: Output file path for Envoy config
         template_file: Path to Envoy template (optional)
         template_root: Template root directory (optional)
+        extproc_host: Hostname for the extproc/router gRPC service
+        router_api_host: Hostname for the router admin API service
 
     Returns:
-        Path: Path to generated Envoy config
+        str: Rendered Envoy configuration
     """
     # Default template paths - templates are now in cli/templates/
     if template_file is None:
@@ -191,8 +194,10 @@ def generate_envoy_config_from_user_config(
             }
         )
 
-    extproc_host = os.getenv("ENVOY_EXTPROC_ADDRESS", "127.0.0.1")
-    router_api_host = os.getenv("ENVOY_ROUTER_API_ADDRESS", "127.0.0.1")
+    extproc_host = extproc_host or os.getenv("ENVOY_EXTPROC_ADDRESS", "127.0.0.1")
+    router_api_host = router_api_host or os.getenv(
+        "ENVOY_ROUTER_API_ADDRESS", "127.0.0.1"
+    )
     extproc_host_is_domain = not _is_ip_address(extproc_host)
     router_api_host_is_domain = not _is_ip_address(router_api_host)
 
@@ -241,10 +246,42 @@ def generate_envoy_config_from_user_config(
     try:
         env = Environment(loader=FileSystemLoader(template_root))
         template = env.get_template(template_file)
-        rendered = template.render(template_data)
+        return template.render(template_data)
     except Exception as e:
         log.error(f"Failed to render template: {e}")
         raise
+
+
+def generate_envoy_config_from_user_config(
+    user_config: UserConfig,
+    output_file: str,
+    template_file: str | None = None,
+    template_root: str | None = None,
+    *,
+    extproc_host: str | None = None,
+    router_api_host: str | None = None,
+) -> Path:
+    """
+    Generate Envoy configuration from user config.
+
+    Args:
+        user_config: Parsed user configuration
+        output_file: Output file path for Envoy config
+        template_file: Path to Envoy template (optional)
+        template_root: Template root directory (optional)
+        extproc_host: Hostname for the extproc/router gRPC service
+        router_api_host: Hostname for the router admin API service
+
+    Returns:
+        Path: Path to generated Envoy config
+    """
+    rendered = render_envoy_config_from_user_config(
+        user_config,
+        template_file=template_file,
+        template_root=template_root,
+        extproc_host=extproc_host,
+        router_api_host=router_api_host,
+    )
 
     # Ensure output directory exists
     output_path = Path(output_file)

@@ -15,10 +15,6 @@ import {
   projectCanonicalConfigForManager,
 } from './configPageCanonicalization'
 import {
-  ConfigFormat,
-  detectConfigFormat,
-} from '../types/config'
-import {
   CanonicalGlobalConfig,
   ConfigData,
   SignalType,
@@ -40,7 +36,6 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'global-config'
   const [config, setConfig] = useState<ConfigData | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
-  const [configFormat, setConfigFormat] = useState<ConfigFormat>('python-cli')
 
   // Effective global runtime config resolved from router defaults + config.yaml overrides
   const [routerDefaults, setRouterDefaults] = useState<CanonicalGlobalConfig | null>(null)
@@ -104,14 +99,7 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'global-config'
         throw new Error(`HTTP ${response.status}: ${response.statusText}`)
       }
       const data = await response.json()
-      const normalized = projectCanonicalConfigForManager(data)
-      setConfig(normalized)
-      // Detect config format
-      const format = detectConfigFormat(normalized)
-      setConfigFormat(format)
-      if (format === 'legacy') {
-        console.warn('Legacy config format detected. Consider migrating to Python CLI format.')
-      }
+      setConfig(projectCanonicalConfigForManager(data))
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to fetch config')
       setConfig(null)
@@ -305,7 +293,7 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'global-config'
   // ============================================================================
 
   // Helper: Check if using Python CLI format
-  const isPythonCLI = configFormat === 'python-cli'
+  const isPythonCLI = true
   const models = getNormalizedModels(config, isPythonCLI)
   const defaultModel = getDefaultModelName(config, isPythonCLI)
   const reasoningFamilies = getReasoningFamiliesMap(config, isPythonCLI)

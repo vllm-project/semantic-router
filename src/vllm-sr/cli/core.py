@@ -1,9 +1,8 @@
 """Core management functions for vLLM Semantic Router."""
 
 import os
-import subprocess
 
-from cli.consts import DEFAULT_API_PORT, DEFAULT_ENVOY_PORT
+from cli import runtime_status as runtime_status_support
 from cli.docker_cli import (
     docker_container_status,
     docker_exec,
@@ -37,15 +36,6 @@ from cli.utils import get_logger, load_config
 
 log = get_logger(__name__)
 STATE_ROOT_DIR_ENV = "VLLM_SR_STATE_ROOT_DIR"
-
-SERVICE_LOG_PATTERNS = {
-    "router": r'"caller"|spawned: \'router\'|success: router|cli\.commands',
-    "dashboard": r"dashboard|Dashboard|spawned: 'dashboard'|success: dashboard|:8700",
-    "envoy": (
-        r"\[2[0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9].*\]\[.*\]"
-        r"|spawned: 'envoy'|success: envoy"
-    ),
-}
 
 
 def _resolve_state_root_dir(
@@ -241,18 +231,14 @@ def _runtime_container_names(stack_layout: RuntimeStackLayout) -> tuple[str, ...
 def _runtime_service_container_name(
     service: str, stack_layout: RuntimeStackLayout
 ) -> str:
-    return stack_layout.service_container_name(service)
+    return runtime_status_support.runtime_service_container_name(service, stack_layout)
 
 
 def _runtime_stack_status(stack_layout: RuntimeStackLayout) -> str:
-    fallback_status = "not found"
-    for container_name in _runtime_container_names(stack_layout):
-        status = docker_container_status(container_name)
-        if status == "running":
-            return status
-        if status != "not found" and fallback_status == "not found":
-            fallback_status = status
-    return fallback_status
+    return runtime_status_support.runtime_stack_status(
+        stack_layout,
+        docker_container_status=docker_container_status,
+    )
 
 
 def _disconnect_openclaw_registry_containers(
@@ -313,251 +299,114 @@ def _remove_runtime_network(network_name: str) -> None:
 
 
 def show_logs(service: str, follow: bool = False):
-    """Show logs from a runtime service."""
-    _validate_runtime_service(service)
-    stack_layout = resolve_runtime_stack()
-    if service == "simulator":
-        _ensure_runtime_container_available(stack_layout.fleet_sim_container_name)
-        docker_logs(stack_layout.fleet_sim_container_name, follow=follow, tail=200)
-        return
-
-    container_name = _runtime_service_container_name(service, stack_layout)
-    _ensure_runtime_container_available(container_name)
-
-    if follow:
-        log.info(f"Following {service} logs (Ctrl+C to stop)...")
-        log.info("")
-
-    grep_pattern = SERVICE_LOG_PATTERNS[service]
-    command = _log_command(container_name, grep_pattern, follow)
-    try:
-        if follow:
-            subprocess.run(command, shell=True, check=False)
-            return
-
-        result = subprocess.run(
-            command,
-            shell=True,
-            capture_output=True,
-            text=True,
-            check=False,
-        )
-        if result.stdout:
-            print(result.stdout)
-        else:
-            log.info(f"No recent {service} logs found")
-    except KeyboardInterrupt:
-        log.info("\nStopped following logs")
-    except Exception as exc:
-        log.error(f"Failed to get {service} logs: {exc}")
-        raise SystemExit(1) from exc
+    return runtime_status_support.show_logs(
+        service,
+        follow=follow,
+        validate_runtime_service=_validate_runtime_service,
+        resolve_runtime_stack=resolve_runtime_stack,
+        ensure_runtime_container_available=_ensure_runtime_container_available,
+        docker_logs=docker_logs,
+        runtime_service_container_name=_runtime_service_container_name,
+        log_command=_log_command,
+        log=log,
+    )
 
 
 def show_status(service: str = "all"):
-    """Show runtime service status."""
-    stack_layout = resolve_runtime_stack()
-    status, sim_status = _resolve_runtime_status_snapshot(stack_layout)
-    if status == "not found":
-        if sim_status == "running":
-            log.info(
-                "Status: Router stack not running, but simulator sidecar is still running"
-            )
-            log.info(f"Simulator: Running ({stack_layout.fleet_sim_url})")
-            log.info("Stop it with: vllm-sr stop")
-            return
-        log.info("Status: Not running")
-        log.info("Start with: vllm-sr serve")
-        return
-    if status == "exited":
-        log.info("Status: Container exited (error)")
-        log.info("View logs with: vllm-sr logs <envoy|router>")
-        return
-    if status != "running":
-        log.info(f"Status: {status}")
-        return
-
-    log.info("=" * 60)
-    log.info("Container Status: Running")
-    log.info("")
-
-    for requested_service in _requested_services(service):
-        _report_service_status(requested_service, stack_layout)
-
-    log.info("")
-    log.info("For detailed logs: vllm-sr logs <envoy|router|dashboard|simulator>")
-    log.info("=" * 60)
+    return runtime_status_support.show_status(
+        service,
+        resolve_runtime_stack=resolve_runtime_stack,
+        resolve_runtime_status_snapshot=_resolve_runtime_status_snapshot,
+        requested_services=_requested_services,
+        report_service_status=_report_service_status,
+        log=log,
+    )
 
 
 def _resolve_runtime_status_snapshot(
     stack_layout: RuntimeStackLayout,
 ) -> tuple[str, str]:
-    try:
-        return (
-            _runtime_stack_status(stack_layout),
-            docker_container_status(stack_layout.fleet_sim_container_name),
-        )
-    except SystemExit:
-        log.info("Status: Not running")
-        log.info(
-            "Docker daemon is not reachable, so local container status cannot be inspected"
-        )
-        log.info("Start with: vllm-sr serve")
-        return "not found", "not found"
+    return runtime_status_support.resolve_runtime_status_snapshot(
+        stack_layout,
+        runtime_stack_status=_runtime_stack_status,
+        docker_container_status=docker_container_status,
+        log=log,
+    )
 
 
 def _validate_runtime_service(service: str) -> None:
-    if service == "simulator" or service in SERVICE_LOG_PATTERNS:
-        return
-    log.error(f"Invalid service: {service}")
-    log.error("Must be 'envoy', 'router', 'dashboard', or 'simulator'")
-    raise SystemExit(1)
+    runtime_status_support.validate_runtime_service(service, log=log)
 
 
 def _requested_services(service: str) -> list[str]:
-    if service == "all":
-        return ["router", "envoy", "dashboard", "simulator"]
-    _validate_runtime_service(service)
-    return [service]
+    return runtime_status_support.requested_services(
+        service,
+        validate_runtime_service=_validate_runtime_service,
+    )
 
 
 def _ensure_runtime_container_available(container_name: str) -> None:
-    if docker_container_status(container_name) != "not found":
-        return
-    log.error("Container not found. Is vLLM Semantic Router running?")
-    log.info("Start it with: vllm-sr serve")
-    raise SystemExit(1)
+    runtime_status_support.ensure_runtime_container_available(
+        container_name,
+        docker_container_status=docker_container_status,
+        log=log,
+    )
 
 
 def _log_command(container_name: str, grep_pattern: str, follow: bool) -> str:
-    if follow:
-        return f'docker logs -f {container_name} 2>&1 | grep -E "{grep_pattern}"'
-    return (
-        f'docker logs --tail 200 {container_name} 2>&1 | grep -E "{grep_pattern}" '
-        "| tail -50"
-    )
+    return runtime_status_support.log_command(container_name, grep_pattern, follow)
 
 
 def _report_service_status(service: str, stack_layout) -> None:
-    checkers = {
-        "router": ("Router", _check_router_status, None),
-        "envoy": (
-            "Envoy",
-            lambda container_name: _check_envoy_status(container_name, stack_layout),
-            None,
-        ),
-        "dashboard": (
-            "Dashboard",
-            _check_dashboard_status,
-            stack_layout.dashboard_url,
-        ),
-        "simulator": (
-            "Fleet Sim",
-            _check_fleet_sim_status,
-            stack_layout.fleet_sim_url,
-        ),
-    }
-    label, checker, detail = checkers[service]
-    try:
-        container_name = (
-            stack_layout.fleet_sim_container_name
-            if service == "simulator"
-            else _runtime_service_container_name(service, stack_layout)
-        )
-        is_running = checker(container_name)
-        _log_service_status(label, is_running, detail if is_running else None)
-    except Exception as exc:
-        log.error(f"Failed to check {service} status: {exc}")
+    runtime_status_support.report_service_status(
+        service,
+        stack_layout,
+        runtime_service_container_name=_runtime_service_container_name,
+        check_router_status=_check_router_status,
+        check_envoy_status=_check_envoy_status,
+        check_dashboard_status=_check_dashboard_status,
+        check_fleet_sim_status=_check_fleet_sim_status,
+        log_service_status=_log_service_status,
+        log=log,
+    )
 
 
 def _check_router_status(container_name: str) -> bool:
-    return_code, _stdout, _stderr = docker_exec(
+    return runtime_status_support.check_router_status(
         container_name,
-        ["curl", "-f", "-s", f"http://localhost:{DEFAULT_API_PORT}/health"],
+        docker_exec=docker_exec,
     )
-    return return_code == 0
 
 
 def _check_envoy_status(container_name: str, stack_layout: RuntimeStackLayout) -> bool:
-    return_code, stdout, _stderr = docker_exec(
+    return runtime_status_support.check_envoy_status(
         container_name,
-        [
-            "curl",
-            "-f",
-            "-s",
-            "-o",
-            "/dev/null",
-            "-w",
-            "%{http_code}",
-            f"http://localhost:{DEFAULT_ENVOY_PORT}/ready",
-        ],
+        stack_layout,
+        docker_exec=docker_exec,
+        docker_container_status=docker_container_status,
     )
-    if return_code == 0 and stdout.strip() == "200":
-        return True
-
-    return _fallback_check_envoy_status(container_name, stack_layout)
-
-
-def _fallback_check_envoy_status(
-    container_name: str, stack_layout: RuntimeStackLayout
-) -> bool:
-    if container_name != stack_layout.envoy_container_name:
-        return False
-    if docker_container_status(container_name) != "running":
-        return False
-
-    return_code, _stdout, _stderr = docker_exec(
-        container_name,
-        [
-            "/usr/local/bin/envoy",
-            "--mode",
-            "validate",
-            "-c",
-            "/etc/envoy/envoy.yaml",
-        ],
-    )
-    return return_code == 0
 
 
 def _check_dashboard_status(container_name: str) -> bool:
-    return_code, stdout, _stderr = docker_exec(
+    return runtime_status_support.check_dashboard_status(
         container_name,
-        [
-            "curl",
-            "-f",
-            "-s",
-            "-o",
-            "/dev/null",
-            "-w",
-            "%{http_code}",
-            "http://localhost:8700",
-        ],
+        docker_exec=docker_exec,
     )
-    return return_code == 0 and stdout.strip() in {"200", "301", "302"}
 
 
 def _check_fleet_sim_status(container_name: str) -> bool:
-    return_code, stdout, _stderr = docker_exec(
+    return runtime_status_support.check_fleet_sim_status(
         container_name,
-        [
-            "python",
-            "-c",
-            (
-                "import sys, urllib.request; "
-                "resp = urllib.request.urlopen('http://localhost:8000/healthz', timeout=3); "
-                "sys.stdout.write(str(resp.getcode()))"
-            ),
-        ],
+        docker_exec=docker_exec,
     )
-    return return_code == 0 and stdout.strip() == "200"
 
 
 def _log_service_status(
     label: str, is_running: bool, detail: str | None = None
 ) -> None:
-    if not is_running:
-        log.info(f"WARNING {label}: Status unknown")
-        return
-    if detail:
-        log.info(f"{label}: Running ({detail})")
-        return
-    log.info(f"{label}: Running")
+    runtime_status_support.log_service_status(
+        label,
+        is_running,
+        detail,
+        log=log,
+    )

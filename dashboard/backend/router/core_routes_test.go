@@ -98,3 +98,52 @@ func TestResolveEvaluationProjectRootRecognizesRuntimeAppLayout(t *testing.T) {
 		t.Fatalf("resolveEvaluationProjectRoot() = %q, want %q", got, appRoot)
 	}
 }
+
+func TestResolveMLTrainingDirUsesSharedContractPath(t *testing.T) {
+	repoRoot := t.TempDir()
+	trainingDir := filepath.Join(repoRoot, "src", "training", "model_selection", "ml_model_selection")
+	if err := os.MkdirAll(trainingDir, 0o755); err != nil {
+		t.Fatalf("MkdirAll(training dir): %v", err)
+	}
+	benchmarkPath := filepath.Join(trainingDir, "benchmark.py")
+	if err := os.WriteFile(benchmarkPath, []byte("print('ok')\n"), 0o644); err != nil {
+		t.Fatalf("WriteFile(benchmark): %v", err)
+	}
+
+	workDir := filepath.Join(repoRoot, "dashboard", "backend")
+	if err := os.MkdirAll(workDir, 0o755); err != nil {
+		t.Fatalf("MkdirAll(dashboard/backend): %v", err)
+	}
+
+	previousWD, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("Getwd(): %v", err)
+	}
+	chdirErr := os.Chdir(workDir)
+	if chdirErr != nil {
+		t.Fatalf("Chdir(%s): %v", workDir, chdirErr)
+	}
+	t.Cleanup(func() {
+		_ = os.Chdir(previousWD)
+	})
+
+	externalConfigDir := filepath.Join(t.TempDir(), "config")
+	mkdirErr := os.MkdirAll(externalConfigDir, 0o755)
+	if mkdirErr != nil {
+		t.Fatalf("MkdirAll(config dir): %v", mkdirErr)
+	}
+
+	cfg := &config.Config{ConfigDir: externalConfigDir}
+	got := resolveMLTrainingDir(cfg)
+	gotResolved, err := filepath.EvalSymlinks(got)
+	if err != nil {
+		t.Fatalf("EvalSymlinks(got): %v", err)
+	}
+	wantResolved, err := filepath.EvalSymlinks(trainingDir)
+	if err != nil {
+		t.Fatalf("EvalSymlinks(trainingDir): %v", err)
+	}
+	if gotResolved != wantResolved {
+		t.Fatalf("resolveMLTrainingDir() = %q, want %q", got, trainingDir)
+	}
+}

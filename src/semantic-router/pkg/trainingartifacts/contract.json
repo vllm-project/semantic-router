@@ -1,0 +1,120 @@
+{
+  "version": "v1",
+  "model_eval": {
+    "repo_relative_dir": "src/training/model_eval",
+    "scripts": {
+      "signal_eval": "signal_eval.py",
+      "mmlu_pro_vllm_eval": "mmlu_pro_vllm_eval.py",
+      "result_to_config": "result_to_config.py"
+    },
+    "outputs": {
+      "default_config_output_file": "config/config.eval.yaml",
+      "signal_eval_prefix": "signal_eval_",
+      "signal_eval_extension": ".json",
+      "system_accuracy_dir_name": "system_eval_accuracy"
+    }
+  },
+  "ml_pipeline": {
+    "repo_relative_dir": "src/training/model_selection/ml_model_selection",
+    "scripts": {
+      "benchmark": "benchmark.py",
+      "server": "server.py"
+    },
+    "outputs": {
+      "benchmark_output_file": "benchmark_output.jsonl",
+      "train_output_dir_name": "ml-train",
+      "generated_values_file": "ml-model-selection-values.yaml",
+      "cache_dir_name": ".cache",
+      "model_files": {
+        "knn": "knn_model.json",
+        "kmeans": "kmeans_model.json",
+        "svm": "svm_model.json",
+        "mlp": "mlp_model.json"
+      }
+    }
+  },
+  "runtime_selection": {
+    "services": {
+      "automix_verifier": {
+        "display_name": "AutoMix verifier",
+        "repo_relative_script": "src/training/model_selection/rl_model_selection/automix_verifier.py",
+        "config_key": "routing.decisions[].algorithm.automix.verifier_server_url"
+      },
+      "router_r1_server": {
+        "display_name": "Router-R1 server",
+        "repo_relative_script": "src/training/model_selection/rl_model_selection/router_r1_server.py",
+        "config_key": "routing.decisions[].algorithm.rl_driven.router_r1_server_url"
+      }
+    }
+  },
+  "runtime_defaults": {
+    "providers": {
+      "default_reasoning_effort": "medium"
+    },
+    "embeddings": {
+      "semantic": {
+        "mmbert_model_path": "models/mom-embedding-ultra",
+        "use_cpu": true,
+        "embedding_config": {
+          "model_type": "mmbert",
+          "preload_embeddings": true,
+          "target_dimension": 768,
+          "target_layer": 22,
+          "min_score_threshold": 0.5
+        }
+      }
+    },
+    "semantic_cache": {
+      "enabled": true,
+      "embedding_model": "mmbert",
+      "max_entries": 1000,
+      "ttl_seconds": 3600
+    },
+    "tools": {
+      "enabled": true,
+      "top_k": 3,
+      "similarity_threshold": 0.2,
+      "tools_db_path": "deploy/examples/runtime/tools/tools_db.json",
+      "fallback_to_empty": true
+    },
+    "prompt_guard": {
+      "enabled": true,
+      "model_id": "models/mmbert32k-jailbreak-detector-merged",
+      "threshold": 0.7,
+      "use_cpu": true,
+      "use_mmbert_32k": true,
+      "jailbreak_mapping_path": "models/mmbert32k-jailbreak-detector-merged/jailbreak_type_mapping.json"
+    },
+    "domain_classifier": {
+      "model_id": "models/mmbert32k-intent-classifier-merged",
+      "threshold": 0.5,
+      "use_cpu": true,
+      "use_mmbert_32k": true,
+      "category_mapping_path": "models/mmbert32k-intent-classifier-merged/category_mapping.json",
+      "fallback_category": "other"
+    },
+    "pii_classifier": {
+      "model_id": "models/mmbert32k-pii-detector-merged",
+      "threshold": 0.9,
+      "use_cpu": true,
+      "use_mmbert_32k": true,
+      "pii_mapping_path": "models/mmbert32k-pii-detector-merged/pii_type_mapping.json"
+    },
+    "category_reasoning": {
+      "math": true,
+      "physics": true,
+      "chemistry": true,
+      "computer science": true,
+      "engineering": true,
+      "biology": true,
+      "business": false,
+      "law": false,
+      "psychology": false,
+      "history": false,
+      "economics": false,
+      "philosophy": false,
+      "health": false,
+      "other": false
+    }
+  }
+}

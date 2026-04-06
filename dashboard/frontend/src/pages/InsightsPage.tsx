@@ -309,7 +309,7 @@ export default function InsightsPage() {
   services:
     router_replay:
       enabled: true
-      store_backend: memory  # or redis, postgres, milvus
+      store_backend: postgres  # default; use redis or milvus when those backends fit better, memory only for local dev
 
 routing:
   decisions:

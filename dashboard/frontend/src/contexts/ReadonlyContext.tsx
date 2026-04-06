@@ -26,7 +26,7 @@ interface ReadonlyProviderProps {
 }
 
 export const ReadonlyProvider: React.FC<ReadonlyProviderProps> = ({ children }) => {
-  const { token } = useAuth()
+  const { isAuthenticated } = useAuth()
   const [isReadonly, setIsReadonly] = useState(false)
   const [isLoading, setIsLoading] = useState(true)
   const [platform, setPlatform] = useState('')
@@ -34,6 +34,15 @@ export const ReadonlyProvider: React.FC<ReadonlyProviderProps> = ({ children }) 
   const [fleetSimEnabled, setFleetSimEnabled] = useState(false)
 
   useEffect(() => {
+    if (!isAuthenticated) {
+      setIsReadonly(false)
+      setPlatform('')
+      setEnvoyUrl('')
+      setFleetSimEnabled(false)
+      setIsLoading(false)
+      return
+    }
+
     const fetchSettings = async () => {
       setIsLoading(true)
       try {
@@ -56,7 +65,7 @@ export const ReadonlyProvider: React.FC<ReadonlyProviderProps> = ({ children }) 
     }
 
     fetchSettings()
-  }, [token])
+  }, [isAuthenticated])
 
   return (
     <ReadonlyContext.Provider value={{ isReadonly, isLoading, platform, envoyUrl, fleetSimEnabled }}>

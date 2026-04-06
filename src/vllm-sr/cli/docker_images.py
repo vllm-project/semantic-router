@@ -340,6 +340,7 @@ def get_runtime_images(
     dashboard_image=None,
     pull_policy=None,
     platform=None,
+    include_dashboard=True,
 ):
     """Resolve role-specific runtime images with backward-compatible fallback."""
     if pull_policy is None:
@@ -363,16 +364,22 @@ def get_runtime_images(
             base_image=base_image,
             normalized_platform=normalized_platform,
         ),
-        "dashboard": _resolve_runtime_service_image(
-            "dashboard",
-            explicit_image=dashboard_image,
-            base_image_is_explicit=base_image_is_explicit,
-            base_image=base_image,
-            normalized_platform=normalized_platform,
+        "dashboard": (
+            _resolve_runtime_service_image(
+                "dashboard",
+                explicit_image=dashboard_image,
+                base_image_is_explicit=base_image_is_explicit,
+                base_image=base_image,
+                normalized_platform=normalized_platform,
+            )
+            if include_dashboard
+            else ""
         ),
     }
 
-    for unique_image in dict.fromkeys(selected_images.values()):
+    for unique_image in dict.fromkeys(
+        image_name for image_name in selected_images.values() if image_name
+    ):
         _ensure_image_available(unique_image, pull_policy)
 
     return selected_images

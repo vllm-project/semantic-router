@@ -4,8 +4,46 @@ import type {
   ModelConfigEntry,
   RoutingModelCard,
 } from './configPageSupport'
+import type { ConfigTreeObject, ConfigTreeValue } from '../types/configTree'
+import { isConfigTreeObject } from '../types/configTree'
 
 type CanonicalSignalSections = NonNullable<NonNullable<ConfigData['routing']>['signals']>
+type MutableCanonicalGlobalConfig = NonNullable<ConfigData['global']> & ConfigTreeObject & {
+  models?: LegacyGlobalModels
+  modules?: ConfigTreeObject
+  runtime?: LegacyRuntimeConfig
+}
+type LegacyConfigCarrier = ConfigData & ConfigTreeObject & {
+  provider_profiles?: Record<string, LegacyProviderProfile>
+  bert_model?: LegacyBertModelConfig
+  global?: MutableCanonicalGlobalConfig
+}
+
+interface LegacyProviderProfile extends ConfigTreeObject {
+  type?: string
+  base_url?: string
+  auth_header?: string
+  auth_prefix?: string
+  extra_headers?: ConfigTreeObject
+  api_version?: string
+  chat_path?: string
+}
+
+interface LegacyBertModelConfig extends ConfigTreeObject {
+  model_id?: string
+  use_cpu?: boolean
+  threshold?: number | string
+}
+
+interface LegacyGlobalModels extends ConfigTreeObject {
+  embeddings?: ConfigTreeObject
+  system?: ConfigTreeObject
+  external?: ConfigTreeValue
+}
+
+interface LegacyRuntimeConfig extends ConfigTreeObject {
+  router?: ConfigTreeObject
+}
 
 const LEGACY_SIGNAL_SECTIONS = [
   ['keyword_rules', 'keywords'],
@@ -45,19 +83,14 @@ const LEGACY_GLOBAL_ROOT_KEYS = [
   'feedback_detector',
 ] as const
 
-type MutableRecord = Record<string, unknown>
-
-const asRecord = (value: unknown): MutableRecord | undefined => {
-  if (!value || Array.isArray(value) || typeof value !== 'object') {
-    return undefined
-  }
-  return value as MutableRecord
+const asConfigTreeObject = (value: ConfigTreeValue | unknown): ConfigTreeObject | undefined => {
+  return isConfigTreeObject(value) ? value : undefined
 }
 
-const assignIfMissing = <K extends keyof MutableRecord>(
-  target: MutableRecord,
+const assignIfMissing = <T extends object, K extends keyof T>(
+  target: T,
   key: K,
-  value: unknown,
+  value: T[K] | null | undefined,
 ) => {
   if (value === undefined || value === null) {
     return
@@ -68,15 +101,15 @@ const assignIfMissing = <K extends keyof MutableRecord>(
   }
 }
 
-const ensureNestedRecord = (root: MutableRecord, path: string[]): MutableRecord => {
+const ensureNestedObject = (root: ConfigTreeObject, path: string[]): ConfigTreeObject => {
   let current = root
   for (const segment of path) {
-    const existing = asRecord(current[segment])
+    const existing = asConfigTreeObject(current[segment])
     if (existing) {
       current = existing
       continue
     }
-    const created: MutableRecord = {}
+    const created: ConfigTreeObject = {}
     current[segment] = created
     current = created
   }
@@ -136,10 +169,17 @@ export const removeRoutingModelCard = (cfg: ConfigData, name: string) => {
   routing.modelCards = (routing.modelCards || []).filter((card) => card.name !== name)
 }
 
+const setCanonicalSignalSection = <K extends keyof CanonicalSignalSections>(
+  signals: CanonicalSignalSections,
+  key: K,
+  value: CanonicalSignalSections[K],
+) => {
+  signals[key] = value
+}
+
 const promoteLegacySignals = (cfg: ConfigData) => {
   const routing = ensureRoutingConfig(cfg)
-  const signals = { ...(routing.signals || {}) }
-  const mutableSignals = signals as MutableRecord
+  const signals: CanonicalSignalSections = { ...(routing.signals || {}) }
   let changed = false
 
   for (const [legacyKey, canonicalKey] of LEGACY_SIGNAL_SECTIONS) {
@@ -148,7 +188,11 @@ const promoteLegacySignals = (cfg: ConfigData) => {
       continue
     }
     if (!signals[canonicalKey] || signals[canonicalKey]?.length === 0) {
-      mutableSignals[canonicalKey] = cloneUnknown(legacyValue)
+      setCanonicalSignalSection(
+        signals,
+        canonicalKey,
+        cloneUnknown(legacyValue) as CanonicalSignalSections[typeof canonicalKey],
+      )
       changed = true
     }
   }
@@ -160,8 +204,8 @@ const promoteLegacySignals = (cfg: ConfigData) => {
 
 const buildLegacyBackendCatalog = (cfg: ConfigData): Record<string, BackendRefEntry> => {
   const catalog: Record<string, BackendRefEntry> = {}
-  const rawConfig = cfg as MutableRecord
-  const providerProfiles = asRecord(rawConfig.provider_profiles) || {}
+  const legacyRoot = cfg as LegacyConfigCarrier
+  const providerProfiles = legacyRoot.provider_profiles || {}
 
   for (const endpoint of cfg.vllm_endpoints || []) {
     const name = endpoint.name?.trim()
@@ -172,16 +216,16 @@ const buildLegacyBackendCatalog = (cfg: ConfigData): Record<string, BackendRefEn
     const backendRef: BackendRefEntry = { name }
     const profileName =
       typeof endpoint.provider_profile === 'string' ? endpoint.provider_profile.trim() : ''
-    const profile = profileName ? asRecord(providerProfiles[profileName]) : undefined
+    const profile = profileName ? providerProfiles[profileName] : undefined
 
     if (profile) {
-      assignIfMissing(backendRef as MutableRecord, 'base_url', profile.base_url)
-      assignIfMissing(backendRef as MutableRecord, 'provider', profile.type)
-      assignIfMissing(backendRef as MutableRecord, 'auth_header', profile.auth_header)
-      assignIfMissing(backendRef as MutableRecord, 'auth_prefix', profile.auth_prefix)
-      assignIfMissing(backendRef as MutableRecord, 'extra_headers', profile.extra_headers)
-      assignIfMissing(backendRef as MutableRecord, 'api_version', profile.api_version)
-      assignIfMissing(backendRef as MutableRecord, 'chat_path', profile.chat_path)
+      assignIfMissing(backendRef, 'base_url', profile.base_url)
+      assignIfMissing(backendRef, 'provider', profile.type)
+      assignIfMissing(backendRef, 'auth_header', profile.auth_header)
+      assignIfMissing(backendRef, 'auth_prefix', profile.auth_prefix)
+      assignIfMissing(backendRef, 'extra_headers', profile.extra_headers as BackendRefEntry['extra_headers'])
+      assignIfMissing(backendRef, 'api_version', profile.api_version)
+      assignIfMissing(backendRef, 'chat_path', profile.chat_path)
     }
 
     const address = endpoint.address?.trim()
@@ -331,29 +375,29 @@ const promoteLegacyGlobalBlocks = (cfg: ConfigData) => {
     cfg.global = {}
   }
 
-  const globalRoot = cfg.global as MutableRecord
-  const rawConfig = cfg as MutableRecord
+  const legacyRoot = cfg as LegacyConfigCarrier
+  const globalRoot = cfg.global as MutableCanonicalGlobalConfig
 
-  const placeBlockIfMissing = (path: string[], value: unknown) => {
+  const placeBlockIfMissing = (path: string[], value: ConfigTreeValue | unknown) => {
     if (value === undefined || value === null) {
       return
     }
-    const parent = ensureNestedRecord(globalRoot, path.slice(0, -1))
-    assignIfMissing(parent, path[path.length - 1], cloneUnknown(value))
+    const parent = ensureNestedObject(globalRoot, path.slice(0, -1))
+    assignIfMissing(parent, path[path.length - 1], cloneUnknown(value) as ConfigTreeValue)
   }
 
-  const placeLegacyBertEmbeddingIfMissing = (value: unknown) => {
-    const legacy = asRecord(value)
+  const placeLegacyBertEmbeddingIfMissing = (value: LegacyBertModelConfig | ConfigTreeValue | unknown) => {
+    const legacy = asConfigTreeObject(value) as LegacyBertModelConfig | undefined
     if (!legacy) {
       return
     }
-    const semantic = ensureNestedRecord(globalRoot, ['model_catalog', 'embeddings', 'semantic'])
-    assignIfMissing(semantic, 'bert_model_path', cloneUnknown(legacy.model_id))
-    assignIfMissing(semantic, 'use_cpu', cloneUnknown(legacy.use_cpu))
+    const semantic = ensureNestedObject(globalRoot, ['model_catalog', 'embeddings', 'semantic'])
+    assignIfMissing(semantic, 'bert_model_path', cloneUnknown(legacy.model_id) as ConfigTreeValue)
+    assignIfMissing(semantic, 'use_cpu', cloneUnknown(legacy.use_cpu) as ConfigTreeValue)
 
     if (legacy.threshold !== undefined && legacy.threshold !== null && legacy.threshold !== '') {
-      const embeddingConfig = ensureNestedRecord(semantic, ['embedding_config'])
-      assignIfMissing(embeddingConfig, 'min_score_threshold', cloneUnknown(legacy.threshold))
+      const embeddingConfig = ensureNestedObject(semantic, ['embedding_config'])
+      assignIfMissing(embeddingConfig, 'min_score_threshold', cloneUnknown(legacy.threshold) as ConfigTreeValue)
     }
   }
 
@@ -368,7 +412,7 @@ const promoteLegacyGlobalBlocks = (cfg: ConfigData) => {
   placeBlockIfMissing(['router', 'clear_route_cache'], cfg.clear_route_cache)
   placeBlockIfMissing(['router', 'model_selection'], cfg.model_selection)
   placeBlockIfMissing(['model_catalog', 'embeddings', 'semantic'], cfg.embedding_models)
-  placeLegacyBertEmbeddingIfMissing((cfg as MutableRecord).bert_model)
+  placeLegacyBertEmbeddingIfMissing(legacyRoot.bert_model)
   placeBlockIfMissing(['model_catalog', 'external'], cfg.external_models)
   placeBlockIfMissing(['model_catalog', 'modules', 'prompt_guard'], cfg.prompt_guard)
   placeBlockIfMissing(['model_catalog', 'modules', 'classifier'], cfg.classifier)
@@ -378,9 +422,9 @@ const promoteLegacyGlobalBlocks = (cfg: ConfigData) => {
   )
   placeBlockIfMissing(['model_catalog', 'modules', 'feedback_detector'], cfg.feedback_detector)
 
-  const legacyGlobalModels = asRecord(globalRoot.models)
+  const legacyGlobalModels = asConfigTreeObject(globalRoot.models) as LegacyGlobalModels | undefined
   if (legacyGlobalModels) {
-    const embeddings = asRecord(legacyGlobalModels.embeddings)
+    const embeddings = asConfigTreeObject(legacyGlobalModels.embeddings)
     if (embeddings) {
       placeBlockIfMissing(['model_catalog', 'embeddings', 'semantic'], embeddings.semantic)
     }
@@ -389,15 +433,15 @@ const promoteLegacyGlobalBlocks = (cfg: ConfigData) => {
     delete globalRoot.models
   }
 
-  const legacyGlobalModules = asRecord(globalRoot.modules)
+  const legacyGlobalModules = asConfigTreeObject(globalRoot.modules)
   if (legacyGlobalModules) {
     placeBlockIfMissing(['model_catalog', 'modules'], legacyGlobalModules)
     delete globalRoot.modules
   }
 
-  const legacyRuntime = asRecord(globalRoot.runtime)
+  const legacyRuntime = asConfigTreeObject(globalRoot.runtime) as LegacyRuntimeConfig | undefined
   if (legacyRuntime) {
-    const legacyRuntimeRouter = asRecord(legacyRuntime.router)
+    const legacyRuntimeRouter = asConfigTreeObject(legacyRuntime.router)
     if (legacyRuntimeRouter) {
       for (const [key, value] of Object.entries(legacyRuntimeRouter)) {
         placeBlockIfMissing(['router', key], value)
@@ -445,33 +489,34 @@ const promoteLegacyGlobalBlocks = (cfg: ConfigData) => {
     delete globalRoot.runtime
   }
 
-  const modelCatalog = ensureNestedRecord(globalRoot, ['model_catalog'])
-  const legacyModules = asRecord(modelCatalog.modules)
+  const modelCatalog = ensureNestedObject(globalRoot, ['model_catalog'])
+  const legacyModules = asConfigTreeObject(modelCatalog.modules)
   if (legacyModules) {
     modelCatalog.modules = legacyModules
   }
 
-  const rawGlobal = asRecord(rawConfig.global)
+  const rawGlobal = asConfigTreeObject(legacyRoot.global)
   if (rawGlobal) {
     delete rawGlobal.modules
   }
 }
 
 const stripLegacyRootFields = (cfg: ConfigData) => {
-  const rawConfig = cfg as MutableRecord
+  const legacyRoot = cfg as LegacyConfigCarrier
   for (const [legacyKey] of LEGACY_SIGNAL_SECTIONS) {
-    delete rawConfig[legacyKey]
+    delete cfg[legacyKey]
   }
-  delete rawConfig.categories
-  delete rawConfig.default_model
-  delete rawConfig.reasoning_families
-  delete rawConfig.default_reasoning_effort
-  delete rawConfig.model_config
-  delete rawConfig.vllm_endpoints
+  delete cfg.categories
+  delete cfg.default_model
+  delete cfg.reasoning_families
+  delete cfg.default_reasoning_effort
+  delete cfg.model_config
+  delete cfg.vllm_endpoints
   for (const key of LEGACY_GLOBAL_ROOT_KEYS) {
-    delete rawConfig[key]
+    delete legacyRoot[key]
   }
-  delete rawConfig.provider_profiles
+  delete legacyRoot.provider_profiles
+  delete legacyRoot.bert_model
 }
 
 export const canonicalizeConfigForManagerSave = (updatedConfig: ConfigData): ConfigData => {

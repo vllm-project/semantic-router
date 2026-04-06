@@ -223,7 +223,7 @@ RUN [ "$GIT_SSL_NO_VERIFY" = "1" ] && git config --global http.sslVerify false |
     rm -rf src
 
 COPY onnx-binding/src/ ./src/
-COPY onnx-binding/go.mod onnx-binding/semantic-router.go ./
+COPY onnx-binding/go.mod onnx-binding/semantic-router.go onnx-binding/backend_contract.go ./
 
 RUN find target -name "libonnx_semantic_router.so" -delete 2>/dev/null; \
     find target -name "libonnx_semantic_router.a" -delete 2>/dev/null; \
@@ -251,10 +251,10 @@ COPY --from=nlp-builder /build/out/ /usr/local/lib/
 ENV LD_LIBRARY_PATH=/usr/local/lib
 
 # Copy candle-binding Go files (needed for go.mod replace directive)
-COPY --from=rust-builder /build/go.mod /build/semantic-router.go /build/../candle-binding/
+COPY --from=rust-builder /build/go.mod /build/semantic-router.go /build/backend_contract.go /build/../candle-binding/
 
 # Copy onnx-binding Go files (needed for go.onnx.mod replace directive)
-COPY --from=onnx-builder /build/go.mod /build/semantic-router.go /build/../onnx-binding/
+COPY --from=onnx-builder /build/go.mod /build/semantic-router.go /build/backend_contract.go /build/../onnx-binding/
 COPY --from=onnx-builder /build/out/ /build/../onnx-binding/target/release/
 
 # Copy ml-binding Go files (needed for go.mod replace directive)

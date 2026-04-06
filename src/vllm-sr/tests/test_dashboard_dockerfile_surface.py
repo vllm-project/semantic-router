@@ -31,6 +31,14 @@ def test_dashboard_dockerfile_copies_router_dsl_package_for_backend_builds() -> 
         "COPY src/semantic-router/pkg/dsl/ /app/src/semantic-router/pkg/dsl/" in content
     )
     assert (
+        "COPY src/semantic-router/pkg/routerauthoring/ "
+        "/app/src/semantic-router/pkg/routerauthoring/" in content
+    )
+    assert (
+        "COPY src/semantic-router/pkg/routercontract/ "
+        "/app/src/semantic-router/pkg/routercontract/" in content
+    )
+    assert (
         "COPY src/semantic-router/pkg/nlgen/ /app/src/semantic-router/pkg/nlgen/"
         in content
     )
@@ -44,6 +52,10 @@ def test_dashboard_dockerfile_copies_model_eval_scripts_and_requirements() -> No
     content = DASHBOARD_DOCKERFILE.read_text(encoding="utf-8")
 
     assert "COPY src/training/model_eval/ /app/src/training/model_eval/" in content
+    assert (
+        "COPY src/semantic-router/pkg/trainingartifacts/ "
+        "/app/src/semantic-router/pkg/trainingartifacts/" in content
+    )
     assert (
         '"${VIRTUAL_ENV}/bin/pip" install --no-cache-dir -r /app/src/training/model_eval/requirements.txt'
         in content

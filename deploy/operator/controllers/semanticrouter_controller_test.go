@@ -21,7 +21,7 @@ import (
 	"testing"
 
 	vllmv1alpha1 "github.com/vllm-project/semantic-router/operator/api/v1alpha1"
-	routerconfig "github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
+	routercontract "github.com/vllm-project/semantic-router/src/semantic-router/pkg/routercontract"
 	"gopkg.in/yaml.v3"
 	appsv1 "k8s.io/api/apps/v1"
 	autoscalingv2 "k8s.io/api/autoscaling/v2"
@@ -81,7 +81,7 @@ func TestGenerateConfigYAMLIncludesLoRACatalogFromVLLMEndpoints(t *testing.T) {
 		t.Fatalf("generateConfigYAML failed: %v", err)
 	}
 
-	var parsed routerconfig.CanonicalConfig
+	var parsed routercontract.CanonicalConfig
 	if err := yaml.Unmarshal([]byte(configYAML), &parsed); err != nil {
 		t.Fatalf("failed to parse generated YAML: %v", err)
 	}

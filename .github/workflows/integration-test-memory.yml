@@ -1,22 +1,8 @@
 name: Integration Test [Memory]
 description: Integration tests for memory features with Milvus storage backend
 on:
-  pull_request:
-    branches:
-      - main
-    paths:
-      - 'src/semantic-router/pkg/memory/**'
-      - 'src/semantic-router/pkg/extproc/*memory*'
-      - 'src/semantic-router/pkg/responseapi/**'
-      - 'src/vllm-sr/**'
-      - 'src/vllm-sr/Dockerfile*'
-      - 'tools/make/docker.mk'
-      - 'tools/make/milvus.mk'
-      - 'e2e/testing/09-memory-features-test.py'
-      - 'e2e/testing/run_memory_integration.sh'
-      - 'e2e/testing/llm-katan/**'
-      - 'e2e/config/config.memory*.yaml'
-      - '.github/workflows/integration-test-memory.yml'
+  schedule:
+    - cron: '0 8 * * 1'
   workflow_dispatch:
 
 concurrency:

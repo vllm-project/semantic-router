@@ -66,8 +66,9 @@ See [environments.md](environments.md) for the concrete commands.
 - Local E2E remains available, but it is an explicit manual path instead of part of the default `agent-feature-gate`.
 - Workflow-driven integration suites are part of the canonical validation story when they are listed in `tools/agent/e2e-profile-map.yaml`.
 - The current workflow-driven suites are:
-  - `vllm-sr-cli-integration` via `make vllm-sr-test-integration`
-  - `memory-integration` via `make memory-test-integration`
+  - `docker-shared-integration` via `make vllm-sr-test-integration VLLM_SR_TEST_TARGET=docker`
+  - `k8s-shared-integration` via `make vllm-sr-test-integration VLLM_SR_TEST_TARGET=k8s`
+  - `memory-integration` via `make memory-test-integration` as a manual/nightly exception
 - Manual-only Go profiles are valid durable suites, but they must be named in `manual_profile_rules` instead of existing as undocumented runner-only paths.
 
 ## Acceptance Versus Reporting

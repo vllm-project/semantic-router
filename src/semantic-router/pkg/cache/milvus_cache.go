@@ -15,6 +15,7 @@ import (
 
 	candle_binding "github.com/vllm-project/semantic-router/candle-binding"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/milvuslifecycle"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/metrics"
 )
@@ -200,20 +201,21 @@ func loadMilvusConfig(configPath string) (*config.MilvusConfig, error) {
 // initializeCollection sets up the Milvus collection and index structures
 func (c *MilvusCache) initializeCollection() error {
 	ctx := context.Background()
-
-	// Verify collection existence
-	hasCollection, err := c.client.HasCollection(ctx, c.collectionName)
+	spec, err := c.collectionSpec()
 	if err != nil {
-		return fmt.Errorf("failed to check collection existence: %w", err)
+		return err
 	}
 
-	// Handle development mode collection reset
-	if c.config.Development.DropCollectionOnStartup && hasCollection {
-		if err := c.client.DropCollection(ctx, c.collectionName); err != nil {
-			logging.Debugf("MilvusCache: failed to drop collection: %v", err)
-			return fmt.Errorf("failed to drop collection: %w", err)
-		}
-		hasCollection = false
+	result, err := milvuslifecycle.EnsureCollection(ctx, c.client, spec, milvuslifecycle.EnsureOptions{
+		AllowCreate:  c.config.Development.AutoCreateCollection,
+		DropExisting: c.config.Development.DropCollectionOnStartup,
+	})
+	if err != nil {
+		logging.Debugf("MilvusCache: failed to initialize collection lifecycle: %v", err)
+		return err
+	}
+
+	if result.Dropped {
 		logging.Debugf("MilvusCache: dropped existing collection '%s' for development", c.collectionName)
 		logging.LogEvent("collection_dropped", map[string]interface{}{
 			"backend":    "milvus",
@@ -221,19 +223,7 @@ func (c *MilvusCache) initializeCollection() error {
 			"reason":     "development_mode",
 		})
 	}
-
-	// Create collection if it doesn't exist
-	if !hasCollection {
-		fmt.Printf("[DEBUG] Collection '%s' does not exist. AutoCreateCollection=%v\n",
-			c.collectionName, c.config.Development.AutoCreateCollection)
-		if !c.config.Development.AutoCreateCollection {
-			return fmt.Errorf("collection %s does not exist and auto-creation is disabled", c.collectionName)
-		}
-
-		if err := c.createCollection(); err != nil {
-			logging.Debugf("MilvusCache: failed to create collection: %v", err)
-			return fmt.Errorf("failed to create collection: %w", err)
-		}
+	if result.Created {
 		logging.Debugf("MilvusCache: created new collection '%s' with dimension %d",
 			c.collectionName, c.config.Collection.VectorField.Dimension)
 		logging.LogEvent("collection_created", map[string]interface{}{
@@ -241,13 +231,6 @@ func (c *MilvusCache) initializeCollection() error {
 			"collection": c.collectionName,
 			"dimension":  c.config.Collection.VectorField.Dimension,
 		})
-	}
-
-	// Load collection into memory for queries
-	logging.Debugf("MilvusCache: loading collection '%s' into memory", c.collectionName)
-	if err := c.client.LoadCollection(ctx, c.collectionName, false); err != nil {
-		logging.Debugf("MilvusCache: failed to load collection: %v", err)
-		return fmt.Errorf("failed to load collection: %w", err)
 	}
 	logging.Debugf("MilvusCache: collection loaded successfully")
 
@@ -298,14 +281,12 @@ func (c *MilvusCache) getEmbedding(text string) ([]float32, error) {
 	}
 }
 
-// createCollection builds the Milvus collection with the appropriate schema
-func (c *MilvusCache) createCollection() error {
-	ctx := context.Background()
-
+// collectionSpec builds the shared Milvus lifecycle spec for the cache collection.
+func (c *MilvusCache) collectionSpec() (milvuslifecycle.CollectionSpec, error) {
 	// Determine embedding dimension automatically
 	testEmbedding, err := c.getEmbedding("test")
 	if err != nil {
-		return fmt.Errorf("failed to detect embedding dimension: %w", err)
+		return milvuslifecycle.CollectionSpec{}, fmt.Errorf("failed to detect embedding dimension: %w", err)
 	}
 	actualDimension := len(testEmbedding)
 
@@ -369,21 +350,24 @@ func (c *MilvusCache) createCollection() error {
 		},
 	}
 
-	// Create collection
-	if createErr := c.client.CreateCollection(ctx, schema, 1); createErr != nil {
-		return createErr
-	}
-
-	// Create index with updated API
-	index, err := entity.NewIndexHNSW(entity.MetricType(c.config.Collection.VectorField.MetricType), c.config.Collection.Index.Params.M, c.config.Collection.Index.Params.EfConstruction)
-	if err != nil {
-		return fmt.Errorf("failed to create HNSW index: %w", err)
-	}
-	if err := c.client.CreateIndex(ctx, c.collectionName, c.config.Collection.VectorField.Name, index, false); err != nil {
-		return err
-	}
-
-	return nil
+	return milvuslifecycle.CollectionSpec{
+		Name:     c.collectionName,
+		Schema:   schema,
+		ShardNum: 1,
+		Load:     true,
+		Indexes: []milvuslifecycle.IndexSpec{
+			{
+				FieldName: c.config.Collection.VectorField.Name,
+				Build: func() (entity.Index, error) {
+					return entity.NewIndexHNSW(
+						entity.MetricType(c.config.Collection.VectorField.MetricType),
+						c.config.Collection.Index.Params.M,
+						c.config.Collection.Index.Params.EfConstruction,
+					)
+				},
+			},
+		},
+	}, nil
 }
 
 // IsEnabled returns the current cache activation status

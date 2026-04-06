@@ -1,0 +1,13 @@
+{{- if .Values.envoy.enabled }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "semantic-router.fullname" . }}-envoy-config
+  namespace: {{ include "semantic-router.namespace" . }}
+  labels:
+    {{- include "semantic-router.labels" . | nindent 4 }}
+    app.kubernetes.io/component: envoy
+data:
+  envoy.yaml: |
+    {{- .Values.envoy.config | nindent 4 }}
+{{- end }}

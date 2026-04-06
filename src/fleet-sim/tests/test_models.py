@@ -1,6 +1,7 @@
 """Unit tests for fleet_sim.models — ModelSpec and catalog."""
 
 import pytest
+
 from fleet_sim.models import (
     DEEPSEEK_V3,
     LLAMA_3_1_8B,

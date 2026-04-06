@@ -2,7 +2,7 @@
 
 ## Status
 
-Open
+Closed
 
 ## Scope
 
@@ -46,32 +46,36 @@ Open
 
 ## Summary
 
-The branch has already removed the worst contract-level weak typing from the router config package: plugin payloads now use `StructuredPayload`, RAG/image-generation backends use typed accessors, canonical global sparse overrides no longer hang off a raw `interface{}`, Hugging Face card unions use explicit string-list wrappers, and the DSL AST JSON bridge exports named recursive node types instead of raw field maps.
+The branch has now removed the remaining contract-level weak typing that was still leaking through the dashboard config editor seams and the DSL compile/decompile/export helpers. The steady-state dashboard editor model now treats the fetched config as canonical `v0.3` config instead of preserving a long-lived hybrid format adapter, setup/canonicalization helpers use named config-tree payloads instead of mutable record bags, and the DSL compiler/decompiler/emitter now route arbitrary payload shaping through named `StructuredPayload`, `JSONObject` / `JSONValue`, and `YAMLObject` / `YAMLList` abstractions instead of raw `map[string]interface{}` field bags.
 
-The dashboard visual builder and global-editor mutation layer now also uses named recursive field types (`DSLFieldObject` / `DSLFieldValue`) instead of passing `Record<string, unknown>` through the store, page orchestration, and shared editors.
-
-The remaining gaps are narrower and now cluster around three places:
-
-- the Go DSL YAML compile/decompile/emit helpers still fall back to raw `map[string]interface{}` / `interface{}` while formatting arbitrary field bags
-- dashboard config type adapters still carry a hybrid canonical-versus-legacy view model and format-detection seam for editor and fallback rendering
-- dashboard setup/canonicalization utilities still manipulate open-ended config fragments as mutable record bags instead of named helper payloads
+The earlier branch work that retired transport-level weak typing in router config structs, backend handlers, and the dashboard visual builder remains intact; this change closes the last editor/setup/export seams that kept reopening raw field-bag questions.
 
 ## Evidence
 
 - [compiler.go](../../../src/semantic-router/pkg/dsl/compiler.go)
-  - compiler field lowering still emits `map[string]interface{}` / `interface{}` through `fieldsToMap` and `valueToInterface`
+- structure/rag payload lowering now uses `StructuredPayload` helpers instead of raw field-bag conversion
 - [decompiler.go](../../../src/semantic-router/pkg/dsl/decompiler.go)
-  - plugin config normalization still formats through `map[string]interface{}`
+  - plugin config normalization now formats through `JSONObject` / `JSONValue`
 - [emitter_yaml.go](../../../src/semantic-router/pkg/dsl/emitter_yaml.go)
-  - canonical/CRD emit paths still assemble YAML through raw infra maps
+  - user/ordered/CRD/Helm emit paths now use named YAML tree abstractions
+- [json_value_codec.go](../../../src/semantic-router/pkg/dsl/json_value_codec.go)
+  - shared structured-payload and `JSONValue` formatting codec now owns recursive DSL payload encoding
+- [yaml_tree.go](../../../src/semantic-router/pkg/dsl/yaml_tree.go)
+  - emit helpers now share named YAML tree abstractions instead of raw YAML maps
 - [config.ts](../../../dashboard/frontend/src/types/config.ts)
-  - dashboard config typing still carries `LegacyConfig`, `UnifiedConfig`, and format-detection helpers as a hybrid adapter seam around the canonical contract
+  - the dashboard config type surface no longer carries `LegacyConfig`, `UnifiedConfig`, or format-detection helpers
+- [configTree.ts](../../../dashboard/frontend/src/types/configTree.ts)
+  - recursive config-tree payloads now have a named dashboard-side contract
 - [configPageCanonicalization.ts](../../../dashboard/frontend/src/pages/configPageCanonicalization.ts)
-  - legacy-to-canonical promotion still mutates config through `MutableRecord`
+  - legacy-to-canonical promotion now isolates compatibility behind named legacy carrier/helper payloads
 - [configPageRouterDefaultsSupport.ts](../../../dashboard/frontend/src/pages/configPageRouterDefaultsSupport.ts)
-  - router-default/global-section helpers still traverse mutable `Record<string, unknown>` trees
+  - router-default/global-section helpers now traverse named config-tree payloads
 - [setupWizardSupport.ts](../../../dashboard/frontend/src/pages/setupWizardSupport.ts)
-  - first-run setup scaffolding still builds and masks config through open-ended record bags
+  - first-run setup scaffolding now builds named setup payloads and keeps canonical routing ownership explicit
+- [ConfigPage.tsx](../../../dashboard/frontend/src/pages/ConfigPage.tsx)
+  - the page now treats manager state as canonical config instead of preserving a legacy-vs-canonical format mode
+- [ConfigPageSignalsSection.tsx](../../../dashboard/frontend/src/pages/ConfigPageSignalsSection.tsx)
+  - signal rendering now consumes canonical `config.signals` instead of a flat legacy fallback
 - This change already retired the worst transport-level weak typing in:
   - [canonical_config.go](../../../src/semantic-router/pkg/config/canonical_config.go)
   - [canonical_global.go](../../../src/semantic-router/pkg/config/canonical_global.go)
@@ -122,3 +126,20 @@ The remaining gaps are narrower and now cluster around three places:
 - dashboard config typing no longer keeps long-lived hybrid `UnifiedConfig` or legacy-only fallback semantics on the same primary editor seam
 - DSL compiler/decompile/export hotspots no longer require raw `map[string]interface{}` / `interface{}` field bags
 - active config/dashboard/DSL branch diffs can pass harness lint without new weak-typing exemptions for these surfaces
+
+## Retirement Notes
+
+- `dashboard/frontend/src/types/config.ts` no longer carries the hybrid `LegacyConfig` / `UnifiedConfig` adapter seam, and `ConfigPage.tsx` now treats fetched manager config as canonicalized `v0.3` state.
+- `dashboard/frontend/src/types/configTree.ts`, `configPageCanonicalization.ts`, `configPageRouterDefaultsSupport.ts`, and `setupWizardSupport.ts` now share named config-tree/setup payloads, so legacy import and global-default shaping no longer depend on anonymous mutable record bags.
+- `ConfigPageSignalsSection.tsx` now renders the canonical `config.signals` view only; the legacy flat-signal fallback remains isolated inside canonicalization instead of the steady-state editor surface.
+- `src/semantic-router/pkg/dsl/compiler.go`, `validator.go`, and `json_value_codec.go` now encode structure and plugin payloads through `StructuredPayload` plus `JSONObject` / `JSONValue` helpers rather than `fieldsToMap` / `valueToInterface`.
+- `src/semantic-router/pkg/dsl/decompiler.go`, `emitter_yaml.go`, and `yaml_tree.go` now format exported DSL/YAML through named JSON/YAML tree abstractions instead of raw `map[string]interface{}` / `interface{}` field bags.
+
+## Validation
+
+- `cd /Users/bitliu/vs/dashboard/frontend && npm run type-check`
+- `cd /Users/bitliu/vs/dashboard/frontend && npm run lint`
+- `cd /Users/bitliu/vs/src/semantic-router && go test ./pkg/dsl`
+- `make agent-validate`
+- `make agent-lint AGENT_CHANGED_FILES_PATH=/tmp/vsr_td015_changed.txt`
+- `make agent-ci-gate AGENT_CHANGED_FILES_PATH=/tmp/vsr_td015_changed.txt`

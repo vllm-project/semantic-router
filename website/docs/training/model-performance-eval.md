@@ -222,6 +222,21 @@ python src/training/model_eval/plot_category_accuracies.py \
 ## 5.Generate performance-based routing config
 see script in [result_to_config.py](https://github.com/vllm-project/semantic-router/blob/main/src/training/model_eval/result_to_config.py)
 
+### Shared artifact contract
+
+Production-consumable training outputs for this flow are owned by the shared
+artifact contract at `src/semantic-router/pkg/trainingartifacts/contract.json`.
+That contract defines:
+
+- which `src/training/model_eval/**` scripts are dashboard/runtime-facing
+- the default scaffold output path (`config/config.eval.yaml`)
+- the runtime override defaults injected into generated `global` sections
+- the benchmark/train artifacts and external verifier services that other
+  control planes may reference
+
+Anything else under `src/training/**` should be treated as experimental unless
+the contract is explicitly extended.
+
 ### Example usage patterns
 
 ```bash
@@ -279,6 +294,7 @@ python src/training/model_eval/result_to_config.py \
 
 - This script only works with results from **MMLU_Pro** Evaluation.
 - The default output path is `config/config.eval.yaml` so the exhaustive reference file at `config/config.yaml` is not overwritten.
+- The script reads runtime-facing scaffold defaults from `src/semantic-router/pkg/trainingartifacts/contract.json` instead of maintaining a second hard-coded default catalog.
 - The generated file is canonical, but it is still an evaluation scaffold. Review `listeners`, `providers.models[].backend_refs[]`, and any runtime overrides before serving it in production.
 - If your production config carries **environment-specific settings (multi-endpoint weights, secrets, pricing, policies)**, merge the generated `providers/routing/global` sections into that deployment-specific config instead of replacing it wholesale.
 

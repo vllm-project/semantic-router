@@ -65,6 +65,25 @@ class TestImports:
 
         assert DisaggFleetOptimizer is not None
 
+    def test_import_optimizer_analysis_submodules(self):
+        from fleet_sim.optimizer.grid_flex import GridFlexPoint, grid_flex_analysis
+        from fleet_sim.optimizer.tpw import FleetTpwResult, TpwPoint, _split_cdf
+
+        assert GridFlexPoint is not None
+        assert grid_flex_analysis is not None
+        assert TpwPoint is not None
+        assert FleetTpwResult is not None
+        assert _split_cdf is not None
+
+    def test_root_optimizer_surface_is_curated(self):
+        import fleet_sim
+        from fleet_sim import optimizer
+
+        assert hasattr(fleet_sim, "FleetOptimizer")
+        assert hasattr(fleet_sim, "grid_flex_analysis")
+        assert hasattr(optimizer, "_split_cdf")
+        assert not hasattr(fleet_sim, "_split_cdf")
+
     def test_custom_factory(self):
         from fleet_sim.gpu_profiles import CUSTOM
 

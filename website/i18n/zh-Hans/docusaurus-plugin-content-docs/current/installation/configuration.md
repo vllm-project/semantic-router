@@ -271,6 +271,8 @@ vllm-sr serve --config config.yaml
 - 引导远程导入接受完整的 `version/listeners/providers/routing/global` 文件
 - 配置页编辑同一 canonical 契约
 - DSL 编辑器可导入同一 YAML，但**仅将 `routing` 反编译为 DSL**
+- `DECISION_TREE` / `IF ELSE` 仍只是 DSL 编写期语法糖：canonical config 与 `/config/router` 只保留扁平 `routing.decisions`，反编译也会输出扁平 `ROUTE`，不会重建树语法
+- 若你需要保留原始 DSL 编写形态，请将 `.dsl` 源文件与 canonical YAML 一起保存，或在配置更新请求里附带可选的归档 `dsl` 字段
 - 决策中的 `modelRefs` 可带 `lora_name`，名称解析到 `routing.modelCards[].loras`
 
 ### Helm
@@ -346,6 +348,8 @@ DSL 编辑器可导入：
 - 仅路由的 YAML 片段
 
 两种情况下，**仅 `routing` 节**会被反编译为 DSL。
+
+该反编译路径是刻意保持扁平的。`DECISION_TREE` / `IF ELSE` 在编译时会下沉为 `routing.decisions`，因此任何基于 config 的工具都会导出普通 `ROUTE` 块；若要保留原始树形写法，必须单独保留 `.dsl` 源文件。
 
 ### 迁移旧配置
 

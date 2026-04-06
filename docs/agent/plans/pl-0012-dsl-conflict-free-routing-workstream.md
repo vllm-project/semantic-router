@@ -157,6 +157,7 @@
 - 2026-03-22: the final `PROJECTION partition` audit must distinguish active migration misses from intentional leftovers. `codebase-retrieval` confirmed that dashboard topology `signalGroups` names are generic UI grouping state, while `classifier_signal_groups*.go` remains an internal runtime filename; neither is part of the public authoring contract migration.
 - 2026-03-22: `EmitUserYAML` should not keep denormalizing the removed `signal_groups` key. The smallest safe cleanup was to delete that mapping, add a focused regression test, and extract helpers from `buildModelsFromEndpoints` so changed-file structural lint still passes.
 - 2026-03-22: by explicit user direction, this PR-audit loop stops at `make agent-lint` after the codebase-retrieval cleanup pass; local smoke and E2E reruns are not required for this incremental PR update.
+- 2026-04-06: the narrower `DECISION_TREE` contract is now enforced directly in contributor docs, maintained recipe comments, `/config/router` archive/runtime tests, and DSL decompile tests, so `TD036` is retired without adding tree metadata to canonical config.
 
 ## Follow-up Debt / ADR Links
 

@@ -139,7 +139,7 @@ func (s *Server) Start() error {
 		serverOpts = append(serverOpts, grpc.Creds(creds))
 	}
 
-	maxMsgSize := config.Get().Looper.GetGRPCMaxMsgSize()
+	maxMsgSize := s.currentRuntimeConfig().Looper.GetGRPCMaxMsgSize()
 	serverOpts = append(serverOpts,
 		grpc.MaxRecvMsgSize(maxMsgSize),
 		grpc.MaxSendMsgSize(maxMsgSize),
@@ -297,6 +297,15 @@ func (s *Server) reloadRouterFromConfig(
 	return nil
 }
 
+func (s *Server) currentRuntimeConfig() *config.RouterConfig {
+	if s != nil && s.runtime != nil {
+		if cfg := s.runtime.CurrentConfig(); cfg != nil {
+			return cfg
+		}
+	}
+	return config.Get()
+}
+
 func logReloadRuntimeLifecycleEvent(event modelruntime.Event) {
 	if event.Status != modelruntime.TaskFailed && event.Status != modelruntime.TaskSkipped {
 		return
@@ -323,7 +332,7 @@ func logReloadRuntimeLifecycleEvent(event modelruntime.Event) {
 // watchConfigAndReload watches the config file and reloads router on changes.
 func (s *Server) watchConfigAndReload(ctx context.Context) {
 	// Check if we're using Kubernetes config source
-	cfg := config.Get()
+	cfg := s.currentRuntimeConfig()
 	if cfg != nil && cfg.ConfigSource == config.ConfigSourceKubernetes {
 		logging.ComponentEvent("extproc", "config_update_watch_started", map[string]interface{}{
 			"source": "kubernetes",

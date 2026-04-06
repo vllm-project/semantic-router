@@ -61,6 +61,12 @@ typedef struct {
     bool error;
 } EmbeddingModelsInfoResult;
 
+typedef struct {
+    char* dimensions;
+    char* layers;
+    bool supports_2d;
+} MatryoshkaInfo;
+
 // ============================================================================
 // Classification Types
 // ============================================================================
@@ -104,9 +110,11 @@ extern int get_embeddings_batch(const char** texts, int num_texts, int target_la
 extern int calculate_embedding_similarity(const char* text1, const char* text2, int target_layer, int target_dim, EmbeddingSimilarityResult* result);
 extern int calculate_similarity_batch(const char* query, const char** candidates, int num_candidates, int top_k, int target_layer, int target_dim, BatchSimilarityResult* result);
 extern int get_embedding_models_info(EmbeddingModelsInfoResult* result);
+extern int get_matryoshka_info(MatryoshkaInfo* result);
 extern void free_embedding(float* data, int length);
 extern void free_batch_similarity_result(BatchSimilarityResult* result);
 extern void free_embedding_models_info(EmbeddingModelsInfoResult* result);
+extern void free_matryoshka_info(MatryoshkaInfo* result);
 
 // ============================================================================
 // Classification Functions
@@ -201,6 +209,7 @@ type ClassResultWithProbs struct {
 	Class         int
 	Confidence    float32
 	Probabilities []float32
+	NumClasses    int
 }
 
 // TokenEntity represents a detected PII entity (candle_binding compatible)
@@ -228,6 +237,13 @@ type ModelsInfoOutput struct {
 	Models []ModelInfo
 }
 
+// MatryoshkaConfig contains supported ONNX Matryoshka dimensions and layers.
+type MatryoshkaConfig struct {
+	Dimensions string
+	Layers     string
+	Supports2D bool
+}
+
 // ModelInfo contains info about a single model
 type ModelInfo struct {
 	ModelName         string
@@ -244,7 +260,9 @@ type ModelInfo struct {
 // ============================================================================
 
 var (
-	initMu sync.Mutex
+	initMu           sync.Mutex
+	initOnce         sync.Once
+	modelInitialized bool
 )
 
 // InitMmBertEmbeddingModel initializes the mmBERT embedding model
@@ -253,13 +271,35 @@ func InitMmBertEmbeddingModel(modelPath string, useCPU bool) error {
 	initMu.Lock()
 	defer initMu.Unlock()
 
-	cPath := C.CString(modelPath)
-	defer C.free(unsafe.Pointer(cPath))
-
-	if !C.init_mmbert_embedding_model(cPath, C.bool(useCPU)) {
-		return fmt.Errorf("failed to initialize mmBERT embedding model from %s", modelPath)
+	if modelPath == "" {
+		initOnce = sync.Once{}
+		modelInitialized = false
+		return fmt.Errorf("mmBERT model path is required")
 	}
-	return nil
+
+	if IsMmBertModelInitialized() {
+		modelInitialized = true
+		return nil
+	}
+
+	var err error
+	initOnce.Do(func() {
+		cPath := C.CString(modelPath)
+		defer C.free(unsafe.Pointer(cPath))
+
+		if !C.init_mmbert_embedding_model(cPath, C.bool(useCPU)) {
+			err = fmt.Errorf("failed to initialize mmBERT embedding model from %s", modelPath)
+			return
+		}
+		modelInitialized = true
+	})
+
+	if err != nil {
+		initOnce = sync.Once{}
+		modelInitialized = false
+	}
+
+	return err
 }
 
 // IsMmBertModelInitialized checks if the embedding model is loaded
@@ -301,7 +341,10 @@ func InitModel(modelID string, useCPU bool) error {
 // IsModelInitialized returns whether the model is initialized (rust state, go state)
 func IsModelInitialized() (bool, bool) {
 	initialized := IsMmBertModelInitialized()
-	return initialized, initialized
+	if initialized {
+		modelInitialized = true
+	}
+	return initialized, modelInitialized
 }
 
 // InitMmBert32KIntentClassifier initializes the intent classifier
@@ -671,6 +714,22 @@ func GetEmbeddingModelsInfo() (*ModelsInfoOutput, error) {
 	return &ModelsInfoOutput{Models: models}, nil
 }
 
+// GetMatryoshkaConfig returns supported Matryoshka dimensions and layers.
+func GetMatryoshkaConfig() (*MatryoshkaConfig, error) {
+	var result C.MatryoshkaInfo
+	status := C.get_matryoshka_info(&result)
+	if status != 0 {
+		return nil, errors.New("failed to get matryoshka config")
+	}
+	defer C.free_matryoshka_info(&result)
+
+	return &MatryoshkaConfig{
+		Dimensions: C.GoString(result.dimensions),
+		Layers:     C.GoString(result.layers),
+		Supports2D: bool(result.supports_2d),
+	}, nil
+}
+
 // IsClassifierLoaded checks if a classifier is loaded
 func IsClassifierLoaded(name string) bool {
 	cName := C.CString(name)
@@ -681,6 +740,53 @@ func IsClassifierLoaded(name string) bool {
 // ============================================================================
 // Batched Embedding Functions (candle_binding compatible)
 // ============================================================================
+
+// GetEmbeddingsBatch generates embeddings for multiple texts in one FFI call.
+func GetEmbeddingsBatch(texts []string, targetLayer int, targetDim int) ([]EmbeddingOutput, error) {
+	if len(texts) == 0 {
+		return nil, errors.New("no texts provided")
+	}
+
+	cTexts := make([]*C.char, len(texts))
+	for i, text := range texts {
+		cTexts[i] = C.CString(text)
+		defer C.free(unsafe.Pointer(cTexts[i]))
+	}
+
+	results := make([]C.EmbeddingResult, len(texts))
+	status := C.get_embeddings_batch(
+		(**C.char)(unsafe.Pointer(&cTexts[0])),
+		C.int(len(texts)),
+		C.int(targetLayer),
+		C.int(targetDim),
+		&results[0],
+	)
+	if status != 0 {
+		return nil, errors.New("batch embedding generation failed")
+	}
+
+	outputs := make([]EmbeddingOutput, len(texts))
+	for i, result := range results {
+		if result.error {
+			return nil, errors.New("batch embedding generation failed")
+		}
+
+		defer C.free_embedding(result.data, result.length)
+
+		embedding := make([]float32, int(result.length))
+		cData := (*[1 << 30]float32)(unsafe.Pointer(result.data))[:result.length:result.length]
+		copy(embedding, cData)
+
+		outputs[i] = EmbeddingOutput{
+			Embedding:        embedding,
+			ModelType:        modelTypeToString(int(result.model_type)),
+			SequenceLength:   int(result.sequence_length),
+			ProcessingTimeMs: float32(result.processing_time_ms),
+		}
+	}
+
+	return outputs, nil
+}
 
 // GetEmbeddingBatched generates embedding using batched inference
 // In onnx_binding, batching is handled transparently
@@ -804,6 +910,19 @@ const (
 	// NLIError means an error occurred during classification
 	NLIError NLILabel = -1
 )
+
+func (l NLILabel) String() string {
+	switch l {
+	case NLIEntailment:
+		return "ENTAILMENT"
+	case NLINeutral:
+		return "NEUTRAL"
+	case NLIContradiction:
+		return "CONTRADICTION"
+	default:
+		return "ERROR"
+	}
+}
 
 // ============================================================================
 // Hallucination Detection (stub - not implemented in onnx_binding)

@@ -272,6 +272,8 @@ Use the dashboard when you want to import or edit the full canonical YAML direct
 - onboarding remote import accepts a complete `version/listeners/providers/routing/global` file
 - the config page edits the same canonical contract
 - the DSL editor can import the same YAML, but it only decompiles `routing`
+- `DECISION_TREE` / `IF ELSE` remain DSL authoring sugar only: canonical config and `/config/router` keep flat `routing.decisions`, and routing decompile exports flat `ROUTE` blocks rather than tree syntax
+- if the original DSL authoring form matters, keep the `.dsl` source beside the canonical YAML or send it as the optional archived `dsl` field in config update requests
 - decision model refs can carry `lora_name`, and those names resolve against `routing.modelCards[].loras`
 
 ### Helm
@@ -347,6 +349,8 @@ The DSL editor can import:
 - a routing-only YAML fragment
 
 In both cases, only the `routing` section is decompiled into DSL.
+
+That decompile path is intentionally flat. `DECISION_TREE` / `IF ELSE` lower into `routing.decisions` during compile, so config-backed tooling exports plain `ROUTE` blocks unless you keep the original `.dsl` source separately.
 
 ### Migrate old configs
 

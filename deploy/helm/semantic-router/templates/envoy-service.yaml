@@ -1,0 +1,25 @@
+{{- if .Values.envoy.enabled }}
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "semantic-router.fullname" . }}-envoy
+  namespace: {{ include "semantic-router.namespace" . }}
+  labels:
+    {{- include "semantic-router.labels" . | nindent 4 }}
+    app.kubernetes.io/component: envoy
+spec:
+  type: {{ .Values.envoy.service.type }}
+  ports:
+  {{- range $index, $listener := .Values.envoy.listeners }}
+  - port: {{ $listener.port }}
+    targetPort: {{ $listener.port }}
+    protocol: TCP
+    name: listener-{{ $index }}
+  {{- end }}
+  - port: {{ .Values.envoy.admin.port }}
+    targetPort: {{ .Values.envoy.admin.targetPort }}
+    protocol: TCP
+    name: admin
+  selector:
+    {{- include "semantic-router.envoySelectorLabels" . | nindent 4 }}
+{{- end }}

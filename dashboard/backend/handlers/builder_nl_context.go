@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"strings"
 
-	routerconfig "github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
+	routercontract "github.com/vllm-project/semantic-router/src/semantic-router/pkg/routercontract"
 )
 
 type builderNLGenerationContext struct {
@@ -88,18 +88,18 @@ func reportBuilderNLResolvedModels(
 	reportBuilderNLProgress(reporter, "context", builderNLProgressWarning, contextMessage, 0)
 }
 
-func readBuilderNLBaseConfig(configPath string) (*routerconfig.CanonicalConfig, error) {
+func readBuilderNLBaseConfig(configPath string) (*routercontract.CanonicalConfig, error) {
 	cfg, err := readCanonicalConfigFile(configPath)
 	if err == nil {
 		return cfg, nil
 	}
 	if strings.Contains(strings.ToLower(err.Error()), "no such file") {
-		return &routerconfig.CanonicalConfig{}, nil
+		return &routercontract.CanonicalConfig{}, nil
 	}
 	return nil, fmt.Errorf("failed to read builder deploy base: %w", err)
 }
 
-func builderNLConfiguredModelNames(config *routerconfig.CanonicalConfig) []string {
+func builderNLConfiguredModelNames(config *routercontract.CanonicalConfig) []string {
 	if config == nil {
 		return nil
 	}
@@ -128,7 +128,7 @@ func builderNLConfiguredModelNames(config *routerconfig.CanonicalConfig) []strin
 	return names
 }
 
-func builderNLDraftTargetModelName(config *routerconfig.CanonicalConfig) string {
+func builderNLDraftTargetModelName(config *routercontract.CanonicalConfig) string {
 	names := builderNLConfiguredModelNames(config)
 	if len(names) > 0 {
 		return names[0]
@@ -173,7 +173,7 @@ func buildBuilderNLTaskContext(
 		fmt.Sprintf("Known current router model cards: %s", builderNLKnownModelList(knownModelNames)),
 		fmt.Sprintf(
 			"If you emit SIGNAL domain declarations without mmlu_categories, the signal name must be one of these supported routing domains: %s.",
-			strings.Join(routerconfig.SupportedRoutingDomainNames(), ", "),
+			strings.Join(routercontract.SupportedRoutingDomainNames(), ", "),
 		),
 		`If a DSL signal name or route reference contains spaces, quote it, for example SIGNAL domain "computer science" { ... } and WHEN domain("computer science").`,
 		`If you prefer an identifier-style signal name such as computer_science, declare mmlu_categories explicitly, for example mmlu_categories: ["computer science"].`,

@@ -112,7 +112,13 @@ def _normalize_platform(value: str | None) -> str:
 
 
 def _runtime_config_output_dir(config_path: Path) -> Path:
-    runtime_dir = config_path.parent / ".vllm-sr"
+    state_root_override = os.getenv("VLLM_SR_STATE_ROOT_DIR", "").strip()
+    if state_root_override:
+        runtime_root = Path(state_root_override).expanduser().resolve()
+    else:
+        runtime_root = config_path.parent
+
+    runtime_dir = runtime_root / ".vllm-sr"
     runtime_dir.mkdir(parents=True, exist_ok=True)
     return runtime_dir
 

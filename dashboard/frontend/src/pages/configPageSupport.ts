@@ -1,5 +1,6 @@
 import type { Endpoint } from '../components/EndpointsEditor'
 import type { DecisionConditionType } from '../types/config'
+import type { ConfigTreeObject } from '../types/configTree'
 
 export interface ListenerConfig {
   name: string
@@ -742,9 +743,7 @@ export interface ConfigProjections {
   mappings?: ProjectionMapping[]
 }
 
-export interface DecisionPluginConfiguration {
-  [key: string]: unknown
-}
+export type DecisionPluginConfiguration = ConfigTreeObject
 
 export interface MemoryQualityScoringConfig {
   initial_strength_days?: number

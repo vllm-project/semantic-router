@@ -1,88 +1,46 @@
 """Analyze MMLU-Pro results and generate a canonical v0.3 config scaffold."""
 
 import argparse
+from copy import deepcopy
 import glob
 import json
 import os
 from collections import defaultdict
+from pathlib import Path
 
 import yaml
 
-DEFAULT_OUTPUT_FILE = "config/config.eval.yaml"
 
-DEFAULT_EMBEDDINGS = {
-    "semantic": {
-        "mmbert_model_path": "models/mom-embedding-ultra",
-        "use_cpu": True,
-        "embedding_config": {
-            "model_type": "mmbert",
-            "preload_embeddings": True,
-            "target_dimension": 768,
-            "target_layer": 22,
-            "min_score_threshold": 0.5,
-        },
-    }
-}
+def artifact_contract_path():
+    """Return the shared training artifact contract path."""
+    return (
+        Path(__file__).resolve().parents[2]
+        / "semantic-router"
+        / "pkg"
+        / "trainingartifacts"
+        / "contract.json"
+    )
 
-DEFAULT_SEMANTIC_CACHE = {
-    "enabled": True,
-    "embedding_model": "mmbert",
-    "max_entries": 1000,
-    "ttl_seconds": 3600,
-}
 
-DEFAULT_TOOLS = {
-    "enabled": True,
-    "top_k": 3,
-    "similarity_threshold": 0.2,
-    "tools_db_path": "deploy/examples/runtime/tools/tools_db.json",
-    "fallback_to_empty": True,
-}
+def load_artifact_contract():
+    """Load the shared training artifact contract."""
+    with artifact_contract_path().open(encoding="utf-8") as handle:
+        return json.load(handle)
 
-DEFAULT_PROMPT_GUARD = {
-    "enabled": True,
-    "model_id": "models/mmbert32k-jailbreak-detector-merged",
-    "threshold": 0.7,
-    "use_cpu": True,
-    "use_mmbert_32k": True,
-    "jailbreak_mapping_path": (
-        "models/mmbert32k-jailbreak-detector-merged/jailbreak_type_mapping.json"
-    ),
-}
 
-DEFAULT_DOMAIN_CLASSIFIER = {
-    "model_id": "models/mmbert32k-intent-classifier-merged",
-    "threshold": 0.5,
-    "use_cpu": True,
-    "use_mmbert_32k": True,
-    "category_mapping_path": "models/mmbert32k-intent-classifier-merged/category_mapping.json",
-    "fallback_category": "other",
-}
-
-DEFAULT_PII_CLASSIFIER = {
-    "model_id": "models/mmbert32k-pii-detector-merged",
-    "threshold": 0.9,
-    "use_cpu": True,
-    "use_mmbert_32k": True,
-    "pii_mapping_path": "models/mmbert32k-pii-detector-merged/pii_type_mapping.json",
-}
-
-CATEGORY_REASONING = {
-    "math": True,
-    "physics": True,
-    "chemistry": True,
-    "computer science": True,
-    "engineering": True,
-    "biology": True,
-    "business": False,
-    "law": False,
-    "psychology": False,
-    "history": False,
-    "economics": False,
-    "philosophy": False,
-    "health": False,
-    "other": False,
-}
+SHARED_ARTIFACT_CONTRACT = load_artifact_contract()
+RUNTIME_DEFAULTS = SHARED_ARTIFACT_CONTRACT["runtime_defaults"]
+DEFAULT_OUTPUT_FILE = SHARED_ARTIFACT_CONTRACT["model_eval"]["outputs"][
+    "default_config_output_file"
+]
+DEFAULT_REASONING_EFFORT = RUNTIME_DEFAULTS["providers"]["default_reasoning_effort"]
+DEFAULT_EMBEDDINGS = RUNTIME_DEFAULTS["embeddings"]
+DEFAULT_SEMANTIC_CACHE = RUNTIME_DEFAULTS["semantic_cache"]
+DEFAULT_TOOLS = RUNTIME_DEFAULTS["tools"]
+DEFAULT_PROMPT_GUARD = RUNTIME_DEFAULTS["prompt_guard"]
+DEFAULT_DOMAIN_CLASSIFIER = RUNTIME_DEFAULTS["domain_classifier"]
+DEFAULT_PII_CLASSIFIER = RUNTIME_DEFAULTS["pii_classifier"]
+CATEGORY_REASONING = RUNTIME_DEFAULTS["category_reasoning"]
 
 
 def parse_args():
@@ -293,7 +251,7 @@ def generate_config_yaml(
         "providers": {
             "defaults": {
                 "default_model": default_model,
-                "default_reasoning_effort": "medium",
+                "default_reasoning_effort": DEFAULT_REASONING_EFFORT,
             },
             "models": build_provider_models(
                 ranked_models,
@@ -314,20 +272,20 @@ def generate_config_yaml(
         "global": {
             "stores": {
                 "semantic_cache": {
-                    **DEFAULT_SEMANTIC_CACHE,
+                    **deepcopy(DEFAULT_SEMANTIC_CACHE),
                     "similarity_threshold": similarity_threshold,
                 }
             },
             "integrations": {
-                "tools": DEFAULT_TOOLS,
+                "tools": deepcopy(DEFAULT_TOOLS),
             },
             "model_catalog": {
-                "embeddings": DEFAULT_EMBEDDINGS,
+                "embeddings": deepcopy(DEFAULT_EMBEDDINGS),
                 "modules": {
-                    "prompt_guard": DEFAULT_PROMPT_GUARD,
+                    "prompt_guard": deepcopy(DEFAULT_PROMPT_GUARD),
                     "classifier": {
-                        "domain": DEFAULT_DOMAIN_CLASSIFIER,
-                        "pii": DEFAULT_PII_CLASSIFIER,
+                        "domain": deepcopy(DEFAULT_DOMAIN_CLASSIFIER),
+                        "pii": deepcopy(DEFAULT_PII_CLASSIFIER),
                     },
                 },
             },

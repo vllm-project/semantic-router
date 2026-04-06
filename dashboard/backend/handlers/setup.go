@@ -12,7 +12,8 @@ import (
 	"strings"
 	"time"
 
-	routerconfig "github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
+	routercontract "github.com/vllm-project/semantic-router/src/semantic-router/pkg/routercontract"
+	routerprojection "github.com/vllm-project/semantic-router/src/semantic-router/pkg/routerprojection"
 )
 
 type SetupStateResponse struct {
@@ -77,6 +78,9 @@ func SetupStateHandler(configPath string) http.HandlerFunc {
 		}
 
 		summary := summarizeSetupConfig(&configFile.CanonicalConfig)
+		if projected, ok := summarizeProjectedConfig(configPath); ok {
+			summary = projected
+		}
 		resp := SetupStateResponse{
 			SetupMode:    hasSetupMode(configFile),
 			ListenerPort: firstListenerPort(configFile),
@@ -92,6 +96,24 @@ func SetupStateHandler(configPath string) http.HandlerFunc {
 			http.Error(w, "Failed to encode response", http.StatusInternalServerError)
 		}
 	}
+}
+
+func summarizeProjectedConfig(configPath string) (setupConfigSummary, bool) {
+	configDir := filepath.Dir(configPath)
+	projection, err := readActiveConfigProjection(configDir)
+	if err != nil || projection == nil || !projection.Validation.Valid {
+		return setupConfigSummary{}, false
+	}
+	configData, err := os.ReadFile(configPath)
+	if err != nil || projection.ConfigHash != routerprojection.HashConfigBytes(configData) {
+		return setupConfigSummary{}, false
+	}
+
+	return setupConfigSummary{
+		Models:    len(projection.Models),
+		Decisions: len(projection.Decisions),
+		Signals:   len(projection.Signals),
+	}, true
 }
 
 func SetupValidateHandler(configPath string) http.HandlerFunc {
@@ -197,7 +219,7 @@ func SetupActivateHandler(configPath string, readonlyMode bool, configDir string
 			}
 		}
 
-		if _, parseErr := routerconfig.Parse(configPath); parseErr != nil {
+		if _, parseErr := routercontract.Parse(configPath); parseErr != nil {
 			http.Error(w, fmt.Sprintf("Failed to validate activated config: %v", parseErr), http.StatusInternalServerError)
 			return
 		}
@@ -210,6 +232,10 @@ func SetupActivateHandler(configPath string, readonlyMode bool, configDir string
 
 		if err := restartSetupRuntimeServices(configPath, effectiveConfigPath); err != nil {
 			log.Printf("Warning: failed to restart router/envoy after activation: %v", err)
+		}
+		if err := persistActiveConfigProjection(configPath, configDir); err != nil {
+			http.Error(w, fmt.Sprintf("Failed to persist config projection: %v", err), http.StatusInternalServerError)
+			return
 		}
 
 		w.Header().Set("Content-Type", "application/json")
@@ -228,7 +254,7 @@ func ensureSetupGlobalDefaults(configFile *setupConfigFile) {
 		return
 	}
 
-	defaults := routerconfig.DefaultCanonicalGlobal()
+	defaults := routercontract.DefaultCanonicalGlobal()
 	configFile.Global = &defaults
 }
 
@@ -318,29 +344,7 @@ func hasSetupMode(configFile *setupConfigFile) bool {
 	return configFile != nil && configFile.Setup != nil && configFile.Setup.Mode
 }
 
-func summarizeSetupConfig(configData *routerconfig.CanonicalConfig) setupConfigSummary {
-	cfg, err := parseSetupRouterConfig(configData)
-	if err != nil {
-		return summarizeSetupConfigFallback(configData)
-	}
-
-	routing := routerconfig.CanonicalRoutingFromRouterConfig(cfg)
-	return setupConfigSummary{
-		Models:    len(routing.ModelCards),
-		Decisions: len(routing.Decisions),
-		Signals:   countCanonicalSignals(routing.Signals),
-	}
-}
-
-func parseSetupRouterConfig(configData *routerconfig.CanonicalConfig) (*routerconfig.RouterConfig, error) {
-	yamlData, err := marshalYAMLBytes(configData)
-	if err != nil {
-		return nil, err
-	}
-	return routerconfig.ParseYAMLBytes(yamlData)
-}
-
-func summarizeSetupConfigFallback(configData *routerconfig.CanonicalConfig) setupConfigSummary {
+func summarizeSetupConfig(configData *routercontract.CanonicalConfig) setupConfigSummary {
 	return setupConfigSummary{
 		Models:    countConfiguredModelsFallback(configData),
 		Decisions: countConfiguredDecisionsFallback(configData),
@@ -348,7 +352,7 @@ func summarizeSetupConfigFallback(configData *routerconfig.CanonicalConfig) setu
 	}
 }
 
-func countConfiguredModelsFallback(configData *routerconfig.CanonicalConfig) int {
+func countConfiguredModelsFallback(configData *routercontract.CanonicalConfig) int {
 	if configData == nil {
 		return 0
 	}
@@ -358,21 +362,21 @@ func countConfiguredModelsFallback(configData *routerconfig.CanonicalConfig) int
 	return len(configData.Providers.Models)
 }
 
-func countConfiguredDecisionsFallback(configData *routerconfig.CanonicalConfig) int {
+func countConfiguredDecisionsFallback(configData *routercontract.CanonicalConfig) int {
 	if configData == nil {
 		return 0
 	}
 	return len(configData.Routing.Decisions)
 }
 
-func countConfiguredSignalsFallback(configData *routerconfig.CanonicalConfig) int {
+func countConfiguredSignalsFallback(configData *routercontract.CanonicalConfig) int {
 	if configData == nil {
 		return 0
 	}
 	return countCanonicalSignals(configData.Routing.Signals)
 }
 
-func countCanonicalSignals(signals routerconfig.CanonicalSignals) int {
+func countCanonicalSignals(signals routercontract.CanonicalSignals) int {
 	return len(signals.Keywords) +
 		len(signals.Embeddings) +
 		len(signals.Domains) +
@@ -409,7 +413,7 @@ func buildSetupCandidateConfig(configPath string, bodyReader io.Reader) (*setupC
 		return nil, fmt.Errorf("config is required")
 	}
 
-	requestConfig, err := decodeYAMLTaggedBytes[routerconfig.CanonicalConfig](req.Config)
+	requestConfig, err := decodeYAMLTaggedBytes[routercontract.CanonicalConfig](req.Config)
 	if err != nil {
 		return nil, fmt.Errorf("invalid config payload: %w", err)
 	}
@@ -481,46 +485,14 @@ func validateSetupCandidate(configPath string, configData *setupConfigFile) erro
 	if err != nil {
 		return err
 	}
-
-	tempDir := filepath.Dir(filepath.Clean(configPath))
-	if tempDir == "." || tempDir == "" {
-		tempDir = ""
-	}
-	tempConfigFile, err := os.CreateTemp(tempDir, "vllm-sr-setup-*.yaml")
-	if err != nil {
+	if _, err := routercontract.ParseYAMLBytes(yamlData); err != nil {
 		return err
-	}
-	tempConfigPath := tempConfigFile.Name()
-	if closeErr := tempConfigFile.Close(); closeErr != nil {
-		return closeErr
-	}
-	defer func() {
-		_ = os.Remove(tempConfigPath)
-	}()
-
-	if writeErr := os.WriteFile(tempConfigPath, yamlData, 0o644); writeErr != nil {
-		return writeErr
-	}
-
-	parsedConfig, err := routerconfig.Parse(tempConfigPath)
-	if err != nil {
-		return err
-	}
-	if len(parsedConfig.VLLMEndpoints) > 0 {
-		for _, endpoint := range parsedConfig.VLLMEndpoints {
-			if endpoint.ProviderProfileName != "" && endpoint.Address == "" {
-				continue
-			}
-			if endpointErr := validateEndpointAddress(endpoint.Address); endpointErr != nil {
-				return endpointErr
-			}
-		}
 	}
 
 	return nil
 }
 
-func mergeSetupCanonicalConfig(base, patch routerconfig.CanonicalConfig) routerconfig.CanonicalConfig {
+func mergeSetupCanonicalConfig(base, patch routercontract.CanonicalConfig) routercontract.CanonicalConfig {
 	merged := base
 	if patch.Version != "" {
 		merged.Version = patch.Version

@@ -2,24 +2,29 @@
 
 ## Status
 
-Open
+Closed
 
 ## Scope
 
-`spec/dsl.md`, `deploy/recipes/{balance.dsl,balance.yaml}`, `src/semantic-router/pkg/dsl/{decision_tree.go,decompiler.go}`, and any API or tooling surface that claims round-trip fidelity between DSL authoring and canonical router config
+`deploy/recipes/{balance.dsl,balance.yaml}`, `src/semantic-router/pkg/dsl/{decision_tree.go,decompiler.go,dsl_test.go,maintained_asset_roundtrip_test.go}`, `src/semantic-router/pkg/apiserver/{route_api_doc.go,route_config_deploy.go,route_config_runtime_sync_test.go}`, and contributor-facing docs that define the DSL/config/API contract
 
 ## Summary
 
-The repository now supports `DECISION_TREE` / `IF ELSE` authoring by lowering tree branches into flat `config.Decision` entries at parse time. That keeps runtime routing, the config API, and canonical router config on one existing model, but it also means the original tree structure is discarded before decompile and API consumers ever see it. `DecompileRouting()` still reconstructs plain `ROUTE` blocks from `config.Decision`, so a DSL file authored as a decision tree cannot be losslessly recovered from runtime config or from the core config endpoints. The maintained `balance` recipe pair is therefore the current explicit paired-source model for showcasing richer DSL authoring without claiming runtime-config tree round-trip.
+The repository now has one explicit paired-source contract for `DECISION_TREE` / `IF ELSE`: tree syntax is DSL authoring sugar only, compile lowers it into flat `routing.decisions`, `DecompileRouting()` exports flat `ROUTE` blocks, `/config/router` exposes canonical config only, and any optional API `dsl` payload is archived as source text rather than treated as runtime metadata. The maintained `balance` DSL/YAML pair and focused regression tests now enforce that narrower contract directly.
 
 ## Evidence
 
-- [spec/dsl.md](../../../spec/dsl.md)
 - [deploy/recipes/balance.dsl](../../../deploy/recipes/balance.dsl)
 - [deploy/recipes/balance.yaml](../../../deploy/recipes/balance.yaml)
 - [src/semantic-router/pkg/dsl/decision_tree.go](../../../src/semantic-router/pkg/dsl/decision_tree.go)
 - [src/semantic-router/pkg/dsl/decompiler.go](../../../src/semantic-router/pkg/dsl/decompiler.go)
-- [src/semantic-router/pkg/apiserver/route_classification_config.go](../../../src/semantic-router/pkg/apiserver/route_classification_config.go)
+- [src/semantic-router/pkg/dsl/dsl_test.go](../../../src/semantic-router/pkg/dsl/dsl_test.go)
+- [src/semantic-router/pkg/dsl/maintained_asset_roundtrip_test.go](../../../src/semantic-router/pkg/dsl/maintained_asset_roundtrip_test.go)
+- [src/semantic-router/pkg/apiserver/route_api_doc.go](../../../src/semantic-router/pkg/apiserver/route_api_doc.go)
+- [src/semantic-router/pkg/apiserver/route_config_deploy.go](../../../src/semantic-router/pkg/apiserver/route_config_deploy.go)
+- [src/semantic-router/pkg/apiserver/route_config_runtime_sync_test.go](../../../src/semantic-router/pkg/apiserver/route_config_runtime_sync_test.go)
+- [website/docs/installation/configuration.md](../../../website/docs/installation/configuration.md)
+- [website/docs/api/apiserver.md](../../../website/docs/api/apiserver.md)
 
 ## Why It Matters
 
@@ -36,6 +41,13 @@ The repository now supports `DECISION_TREE` / `IF ELSE` authoring by lowering tr
 
 ## Exit Criteria
 
-- Canonical router config and the related API/tooling surfaces either preserve or explicitly disclaim decision-tree authoring metadata in one contributor-visible contract.
-- `DecompileRouting()` or an equivalent supported export path can reproduce `DECISION_TREE` syntax when the repo claims tree round-trip support.
-- Maintained examples, tests, and docs no longer rely on an implicit assumption that tree-authored DSL can be losslessly recovered from runtime config when it cannot.
+- Satisfied on 2026-04-06: canonical router config, `/config/router`, and the contributor-facing API/config docs now explicitly disclaim decision-tree metadata preservation and state that tree syntax lowers into flat `routing.decisions`.
+- Satisfied on 2026-04-06: `DecompileRouting()` is covered by regression tests that lock the current flat `ROUTE` export contract for tree-authored input instead of implying round-trip support.
+- Satisfied on 2026-04-06: the maintained `balance` recipe pair declares the paired-source model directly, and tests enforce those markers so examples and docs do not imply lossless tree recovery from runtime config.
+
+## Retirement Notes
+
+- `RouterConfigUpdateRequest.DSL` is now documented and tested as an archived authoring source only, not as canonical config metadata.
+- `GET /config/router` and the router apiserver docs now describe the canonical flat-config contract explicitly for tree-authored DSL.
+- The maintained `balance` DSL/YAML assets now declare their paired-source responsibilities in-file, and regression tests fail if that contract drifts.
+- Future work should reopen this item only if the repository decides to preserve decision-tree metadata inside canonical config or to support a separate round-tripping export path.

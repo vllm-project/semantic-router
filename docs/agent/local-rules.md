@@ -14,12 +14,36 @@ These local `AGENTS.md` files are first-class supplements to the shared harness.
   - config schema and `config.go` hotspot rules
 - [../../src/semantic-router/pkg/classification/AGENTS.md](../../src/semantic-router/pkg/classification/AGENTS.md)
   - classification bootstrap, family-boundary, and hotspot rules
+- [../../src/semantic-router/pkg/dsl/AGENTS.md](../../src/semantic-router/pkg/dsl/AGENTS.md)
+  - DSL grammar, compile/decompile, and regression-suite hotspot rules
 - [../../src/semantic-router/pkg/extproc/AGENTS.md](../../src/semantic-router/pkg/extproc/AGENTS.md)
   - extproc processor and router hotspot rules
+- [../../src/semantic-router/pkg/apiserver/AGENTS.md](../../src/semantic-router/pkg/apiserver/AGENTS.md)
+  - API server bootstrap, route registration, and regression-suite hotspot rules
+- [../../src/semantic-router/pkg/cache/AGENTS.md](../../src/semantic-router/pkg/cache/AGENTS.md)
+  - cache backend, lookup, and interface hotspot rules
+- [../../src/semantic-router/pkg/memory/AGENTS.md](../../src/semantic-router/pkg/memory/AGENTS.md)
+  - memory extraction, store, and Milvus hotspot rules
+- [../../src/semantic-router/pkg/looper/AGENTS.md](../../src/semantic-router/pkg/looper/AGENTS.md)
+  - looper client, confidence, and RL-policy hotspot rules
+- [../../src/semantic-router/pkg/modelselection/AGENTS.md](../../src/semantic-router/pkg/modelselection/AGENTS.md)
+  - modelselection selector, benchmark, and persistence hotspot rules
+- [../../src/semantic-router/pkg/selection/AGENTS.md](../../src/semantic-router/pkg/selection/AGENTS.md)
+  - runtime selection policy, factory, and storage hotspot rules
+- [../../src/semantic-router/pkg/tools/AGENTS.md](../../src/semantic-router/pkg/tools/AGENTS.md)
+  - tool registry and relevance-scoring hotspot rules
+- [../../src/semantic-router/pkg/responsestore/AGENTS.md](../../src/semantic-router/pkg/responsestore/AGENTS.md)
+  - response-store interface, backend, and TTL/index hotspot rules
+- [../../src/semantic-router/pkg/imagegen/AGENTS.md](../../src/semantic-router/pkg/imagegen/AGENTS.md)
+  - image backend adapter and provider hotspot rules
+- [../../src/semantic-router/pkg/promptcompression/AGENTS.md](../../src/semantic-router/pkg/promptcompression/AGENTS.md)
+  - prompt-compression seam and regression-suite hotspot rules
 - [../../deploy/operator/api/v1alpha1/AGENTS.md](../../deploy/operator/api/v1alpha1/AGENTS.md)
   - operator CRD schema and admission-validation hotspot rules
 - [../../deploy/operator/controllers/AGENTS.md](../../deploy/operator/controllers/AGENTS.md)
   - operator controller translation and discovery hotspot rules
+- [../../deploy/addons/redis/AGENTS.md](../../deploy/addons/redis/AGENTS.md)
+  - Redis addon wiring and cache deployment hotspot rules
 - [../../dashboard/frontend/src/AGENTS.md](../../dashboard/frontend/src/AGENTS.md)
   - dashboard frontend app-shell, auth/setup routing, and layout-boundary rules
 - [../../dashboard/frontend/src/pages/AGENTS.md](../../dashboard/frontend/src/pages/AGENTS.md)
@@ -28,6 +52,12 @@ These local `AGENTS.md` files are first-class supplements to the shared harness.
   - dashboard component-level hotspot rules
 - [../../dashboard/backend/handlers/AGENTS.md](../../dashboard/backend/handlers/AGENTS.md)
   - dashboard backend handler transport and runtime-control hotspot rules
+- [../../src/training/model_eval/AGENTS.md](../../src/training/model_eval/AGENTS.md)
+  - evaluation artifact-to-config translation hotspot rules
+- [../../src/training/model_classifier/AGENTS.md](../../src/training/model_classifier/AGENTS.md)
+  - classifier training and dataset-verifier hotspot rules
+- [../../candle-binding/src/core/AGENTS.md](../../candle-binding/src/core/AGENTS.md)
+  - binding-core config-loader, tokenization, and similarity hotspot rules
 - [../../e2e/testcases/AGENTS.md](../../e2e/testcases/AGENTS.md)
   - testcase contract and acceptance-threshold rules
 

@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"strings"
 
-	routerconfig "github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
+	routercontract "github.com/vllm-project/semantic-router/src/semantic-router/pkg/routercontract"
 )
 
 type topologySignalMapping struct {
@@ -169,13 +169,13 @@ func applyRecommendedModels(result *TestQueryResult, recommendedModels []string)
 }
 
 func appendEvaluatedRulesFromConfig(result *TestQueryResult, configPath string) {
-	parsedConfig, err := routerconfig.Parse(configPath)
+	parsedConfig, err := readCanonicalConfigFile(configPath)
 	if err != nil || parsedConfig == nil {
 		return
 	}
 
 	matchedSignalNames := buildMatchedSignalNameSet(result.MatchedSignals)
-	for _, decision := range parsedConfig.IntelligentRouting.Decisions {
+	for _, decision := range parsedConfig.Routing.Decisions {
 		if result.MatchedDecision != "" && decision.Name == result.MatchedDecision {
 			continue
 		}
@@ -194,7 +194,7 @@ func buildMatchedSignalNameSet(signals []MatchedSignal) map[string]bool {
 	return matchedSignalNames
 }
 
-func buildEvaluatedRule(decision routerconfig.Decision, matchedSignalNames map[string]bool) EvaluatedRule {
+func buildEvaluatedRule(decision routercontract.Decision, matchedSignalNames map[string]bool) EvaluatedRule {
 	rule := EvaluatedRule{
 		DecisionName: decision.Name,
 		RuleOperator: strings.ToUpper(decision.Rules.Operator),

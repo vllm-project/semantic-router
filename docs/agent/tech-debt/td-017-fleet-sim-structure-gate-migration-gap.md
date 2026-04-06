@@ -2,37 +2,47 @@
 
 ## Status
 
-Open
+Closed
 
 ## Scope
 
 - `src/fleet-sim/fleet_sim/optimizer/base.py`
+- `src/fleet-sim/fleet_sim/optimizer/{pareto.py,reporting.py}`
 - `src/fleet-sim/run_sim.py`
+- `src/fleet-sim/fleet_sim/cli_{common,core,advanced,parser}.py`
 - `src/fleet-sim/fleet_sim/api/routes/traces.py`
-- `src/fleet-sim/tests/test_api.py`
+- `src/fleet-sim/tests/{api_test_support.py,conftest.py,test_api.py,test_api_routes.py,test_api_runner_contract.py,test_api_job_lifecycle.py}`
 - `tools/agent/structure-rules.yaml`
-- `tools/agent/scripts/structure_check.py`
 
 ## Summary
 
-Moving the fleet simulator from `bench/fleet-simulator` into the maintained `src/fleet-sim` subtree brought several legacy monolith files under the shared structure gate for the first time. Those files already exceeded the repository-wide file-size, function-size, and nesting targets before the migration, so diff-scoped `make agent-lint` and `make agent-ci-gate` started failing on inherited simulator architecture debt instead of on branch-local regressions.
-
-This change records that mismatch explicitly and adds narrow legacy-hotspot relaxations for the specific migrated files that still exceed the shared structure contract. The relaxations are limited to the known monoliths so new fleet-sim modules continue to inherit the default structure rules.
+Moving the fleet simulator from `bench/fleet-simulator` into the maintained `src/fleet-sim` subtree had left four migrated hotspots behind relaxed structure gates. That gap is now resolved. `run_sim.py` is a thin entrypoint over dedicated CLI support modules, the aggregated optimizer keeps Pareto and reporting helpers on sibling seams, trace-route response shaping is handled through small helpers, and the old monolithic API regression suite is split across focused test modules with shared support fixtures. The fleet-sim-specific legacy hotspot relaxations have been removed from `tools/agent/structure-rules.yaml`, so the shared structure contract now applies directly.
 
 ## Evidence
 
 - [src/fleet-sim/fleet_sim/optimizer/base.py](../../../src/fleet-sim/fleet_sim/optimizer/base.py)
-  - migrated optimizer orchestrator still exceeds shared file/function thresholds materially
+  - aggregated optimizer hotspot now stays under the shared thresholds and keeps only analytical sizing plus DES orchestration
+- [src/fleet-sim/fleet_sim/optimizer/pareto.py](../../../src/fleet-sim/fleet_sim/optimizer/pareto.py)
+  - threshold-frontier dataclass and rendering moved behind a sibling seam
+- [src/fleet-sim/fleet_sim/optimizer/reporting.py](../../../src/fleet-sim/fleet_sim/optimizer/reporting.py)
+  - optimization-report printing moved out of the analytical hotspot
 - [src/fleet-sim/run_sim.py](../../../src/fleet-sim/run_sim.py)
-  - migrated CLI entrypoint still combines command parsing, workflow orchestration, and report rendering in one file
+  - CLI entrypoint is now a thin wrapper around dedicated parser and command modules
+- [src/fleet-sim/fleet_sim/cli_common.py](../../../src/fleet-sim/fleet_sim/cli_common.py)
+- [src/fleet-sim/fleet_sim/cli_core.py](../../../src/fleet-sim/fleet_sim/cli_core.py)
+- [src/fleet-sim/fleet_sim/cli_advanced.py](../../../src/fleet-sim/fleet_sim/cli_advanced.py)
+- [src/fleet-sim/fleet_sim/cli_parser.py](../../../src/fleet-sim/fleet_sim/cli_parser.py)
 - [src/fleet-sim/fleet_sim/api/routes/traces.py](../../../src/fleet-sim/fleet_sim/api/routes/traces.py)
-  - trace upload flow still exceeds the shared nesting limit
+  - trace upload and lookup helpers now keep route handlers under the shared nesting target
 - [src/fleet-sim/tests/test_api.py](../../../src/fleet-sim/tests/test_api.py)
-  - migrated API regression suite still exceeds the shared file-size limit
+  - the old API suite is now just the compatibility anchor for smaller sibling test modules
+- [src/fleet-sim/tests/test_api_routes.py](../../../src/fleet-sim/tests/test_api_routes.py)
+- [src/fleet-sim/tests/test_api_runner_contract.py](../../../src/fleet-sim/tests/test_api_runner_contract.py)
+- [src/fleet-sim/tests/test_api_job_lifecycle.py](../../../src/fleet-sim/tests/test_api_job_lifecycle.py)
+- [src/fleet-sim/tests/api_test_support.py](../../../src/fleet-sim/tests/api_test_support.py)
+- [src/fleet-sim/tests/conftest.py](../../../src/fleet-sim/tests/conftest.py)
 - [tools/agent/structure-rules.yaml](../../../tools/agent/structure-rules.yaml)
-  - shared structure gate now needs explicit fleet-sim hotspot entries to avoid misreporting inherited monolith debt as new regressions
-- `make agent-lint`
-  - reported structure-check failures on the four migrated files immediately after the subtree moved under `src/`
+  - the fleet-sim-specific legacy hotspot entries for `base.py`, `run_sim.py`, `traces.py`, and `test_api.py` have been removed
 
 ## Why It Matters
 
@@ -51,3 +61,8 @@ This change records that mismatch explicitly and adds narrow legacy-hotspot rela
 - `make agent-lint CHANGED_FILES="...,src/fleet-sim/...,..."` passes without the fleet-sim legacy-hotspot relaxations in `tools/agent/structure-rules.yaml`
 - `src/fleet-sim/fleet_sim/optimizer/base.py`, `src/fleet-sim/run_sim.py`, `src/fleet-sim/fleet_sim/api/routes/traces.py`, and `src/fleet-sim/tests/test_api.py` meet the shared file/function/nesting thresholds directly
 - the remaining fleet-sim structure contract is documented and enforced consistently by the shared harness without migration-specific carve-outs
+
+## Validation
+
+- `python3 /Users/bitliu/vs/tools/agent/scripts/structure_check.py /Users/bitliu/vs/src/fleet-sim/fleet_sim/optimizer/base.py /Users/bitliu/vs/src/fleet-sim/run_sim.py /Users/bitliu/vs/src/fleet-sim/fleet_sim/api/routes/traces.py /Users/bitliu/vs/src/fleet-sim/tests/test_api.py /Users/bitliu/vs/src/fleet-sim/fleet_sim/cli_common.py /Users/bitliu/vs/src/fleet-sim/fleet_sim/cli_core.py /Users/bitliu/vs/src/fleet-sim/fleet_sim/cli_advanced.py /Users/bitliu/vs/src/fleet-sim/fleet_sim/cli_parser.py /Users/bitliu/vs/src/fleet-sim/tests/test_api_routes.py /Users/bitliu/vs/src/fleet-sim/tests/test_api_runner_contract.py /Users/bitliu/vs/src/fleet-sim/tests/test_api_job_lifecycle.py`
+- `cd /Users/bitliu/vs/src/fleet-sim && pytest tests/test_api.py tests/test_api_routes.py tests/test_api_runner_contract.py tests/test_api_job_lifecycle.py tests/test_optimizer.py tests/test_imports_and_profiles.py`

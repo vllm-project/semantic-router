@@ -53,6 +53,7 @@ type IngestionPipeline struct {
 	wg           sync.WaitGroup
 	stopCh       chan struct{}
 	running      bool
+	registry     *LocalMetadataRegistry
 }
 
 // PipelineConfig holds configuration for the ingestion pipeline.
@@ -63,6 +64,20 @@ type PipelineConfig struct {
 
 // NewIngestionPipeline creates a new ingestion pipeline.
 func NewIngestionPipeline(backend VectorStoreBackend, fileStore *FileStore, manager *Manager, embedder Embedder, cfg PipelineConfig) *IngestionPipeline {
+	return NewIngestionPipelineWithRegistry(backend, fileStore, manager, embedder, nil, nil, cfg)
+}
+
+// NewIngestionPipelineWithRegistry creates an ingestion pipeline and seeds it
+// with any recovered status records from the shared local metadata registry.
+func NewIngestionPipelineWithRegistry(
+	backend VectorStoreBackend,
+	fileStore *FileStore,
+	manager *Manager,
+	embedder Embedder,
+	registry *LocalMetadataRegistry,
+	recoveredStatuses map[string]*VectorStoreFile,
+	cfg PipelineConfig,
+) *IngestionPipeline {
 	workers := cfg.Workers
 	if workers <= 0 {
 		workers = 2
@@ -79,8 +94,9 @@ func NewIngestionPipeline(backend VectorStoreBackend, fileStore *FileStore, mana
 		embedder:     embedder,
 		jobQueue:     make(chan IngestionJob, queueSize),
 		workers:      workers,
-		fileStatuses: make(map[string]*VectorStoreFile),
+		fileStatuses: cloneStatusMap(recoveredStatuses),
 		stopCh:       make(chan struct{}),
+		registry:     registry,
 	}
 }
 
@@ -142,6 +158,12 @@ func (p *IngestionPipeline) AttachFile(vectorStoreID, fileID string, strategy *C
 	p.mu.Lock()
 	p.fileStatuses[vsfID] = vsf
 	p.mu.Unlock()
+	if err := p.persistStatus(vsf); err != nil {
+		p.mu.Lock()
+		delete(p.fileStatuses, vsfID)
+		p.mu.Unlock()
+		return nil, err
+	}
 
 	// Update file counts.
 	_ = p.manager.UpdateFileCounts(vectorStoreID, func(fc *FileCounts) {
@@ -165,7 +187,7 @@ func (p *IngestionPipeline) AttachFile(vectorStoreID, fileID string, strategy *C
 		return &snapshot, nil
 	default:
 		// Queue is full.
-		p.setFileStatus(vsfID, "failed", &FileError{
+		_ = p.setFileStatus(vsfID, "failed", &FileError{
 			Code:    "queue_full",
 			Message: "ingestion queue is full, try again later",
 		})
@@ -218,8 +240,18 @@ func (p *IngestionPipeline) DetachFile(ctx context.Context, vectorStoreID, vsfID
 	fileID := vsf.FileID
 	delete(p.fileStatuses, vsfID)
 	p.mu.Unlock()
+	if err := p.deletePersistedStatus(vsfID); err != nil {
+		p.mu.Lock()
+		p.fileStatuses[vsfID] = cloneVectorStoreFile(vsf)
+		p.mu.Unlock()
+		return err
+	}
 
 	if err := p.backend.DeleteByFileID(ctx, vectorStoreID, fileID); err != nil {
+		p.mu.Lock()
+		p.fileStatuses[vsfID] = cloneVectorStoreFile(vsf)
+		p.mu.Unlock()
+		_ = p.persistStatus(vsf)
 		return fmt.Errorf("failed to delete chunks: %w", err)
 	}
 
@@ -315,7 +347,7 @@ func (p *IngestionPipeline) processJob(job IngestionJob) {
 	}
 
 	// Mark as completed.
-	p.setFileStatus(job.VectorStoreFileID, "completed", nil)
+	_ = p.setFileStatus(job.VectorStoreFileID, "completed", nil)
 	_ = p.manager.UpdateFileCounts(job.VectorStoreID, func(fc *FileCounts) {
 		fc.InProgress--
 		fc.Completed++
@@ -324,7 +356,7 @@ func (p *IngestionPipeline) processJob(job IngestionJob) {
 
 // failJob marks a job as failed and updates file counts.
 func (p *IngestionPipeline) failJob(job IngestionJob, code, message string) {
-	p.setFileStatus(job.VectorStoreFileID, "failed", &FileError{
+	_ = p.setFileStatus(job.VectorStoreFileID, "failed", &FileError{
 		Code:    code,
 		Message: message,
 	})
@@ -335,12 +367,28 @@ func (p *IngestionPipeline) failJob(job IngestionJob, code, message string) {
 }
 
 // setFileStatus updates the status and error of a vector store file.
-func (p *IngestionPipeline) setFileStatus(vsfID, status string, lastError *FileError) {
+func (p *IngestionPipeline) setFileStatus(vsfID, status string, lastError *FileError) error {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 
 	if vsf, ok := p.fileStatuses[vsfID]; ok {
 		vsf.Status = status
 		vsf.LastError = lastError
+		return p.persistStatus(vsf)
 	}
+	return nil
+}
+
+func (p *IngestionPipeline) persistStatus(status *VectorStoreFile) error {
+	if p.registry == nil || status == nil {
+		return nil
+	}
+	return p.registry.UpsertStatus(status)
+}
+
+func (p *IngestionPipeline) deletePersistedStatus(statusID string) error {
+	if p.registry == nil {
+		return nil
+	}
+	return p.registry.DeleteStatus(statusID)
 }

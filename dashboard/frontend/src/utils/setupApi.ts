@@ -21,7 +21,7 @@ async function readErrorMessage(response: Response): Promise<string> {
 
 async function postSetupConfig<T>(
   path: string,
-  config: Record<string, unknown>,
+  config: object,
 ): Promise<T> {
   const response = await fetch(path, {
     method: "POST",
@@ -47,13 +47,13 @@ export async function fetchSetupState(): Promise<SetupState> {
 }
 
 export async function validateSetupConfig(
-  config: Record<string, unknown>,
+  config: object,
 ): Promise<SetupValidateResponse> {
   return postSetupConfig<SetupValidateResponse>("/api/setup/validate", config);
 }
 
 export async function activateSetupConfig(
-  config: Record<string, unknown>,
+  config: object,
 ): Promise<SetupActivateResponse> {
   return postSetupConfig<SetupActivateResponse>("/api/setup/activate", config);
 }

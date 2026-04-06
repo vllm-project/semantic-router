@@ -13,7 +13,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	routerconfig "github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
+	routercontract "github.com/vllm-project/semantic-router/src/semantic-router/pkg/routercontract"
 )
 
 // Sample config for testing - uses raw config fallback since full parsing requires more dependencies
@@ -436,7 +436,7 @@ func TestTopologyTestQueryHandler_EvaluatedRules(t *testing.T) {
 
 func TestBuildEvaluatedRule_EmptyConditionsSerializeAsEmptyArray(t *testing.T) {
 	rule := buildEvaluatedRule(
-		routerconfig.Decision{
+		routercontract.Decision{
 			Name:     "casual_chat",
 			Priority: 10,
 		},

@@ -9,8 +9,9 @@ import (
 	"io"
 	"log"
 	"net/http"
-	"path/filepath"
 	"strings"
+
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/trainingartifacts"
 )
 
 // sseEvent represents a single SSE event from the ML service.
@@ -172,7 +173,7 @@ func (r *Runner) runTrainHTTP(ctx context.Context, benchmarkDataPath string, req
 			"algorithms":        algorithms,
 			"device":            device,
 			"embedding_model":   req.EmbeddingModel,
-			"cache_dir":         filepath.Join(jobDir, ".cache"),
+			"cache_dir":         trainingartifacts.CurrentContract().CacheDir(jobDir),
 			"quality_weight":    req.QualityWeight,
 			"batch_size":        req.BatchSize,
 			"knn_k":             req.KnnK,

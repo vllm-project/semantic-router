@@ -117,6 +117,10 @@ test.describe("Dashboard auth flow", () => {
       });
     });
 
+    await page.route("**/api/auth/me", async (route) => {
+      await route.fulfill({ status: 401, body: "Unauthorized" });
+    });
+
     await page.goto("/playground", { waitUntil: "domcontentloaded" });
 
     await expect(page).toHaveURL(/\/login$/);
@@ -133,7 +137,9 @@ test.describe("Dashboard auth flow", () => {
   }) => {
     test.slow();
     const issuedToken = "issued-dashboard-token";
+    let settingsCookieHeader = "";
     let settingsAuthHeader = "";
+    let statusCookieHeader = "";
     let statusAuthHeader = "";
 
     await page.route("**/api/setup/state", async (route) => {
@@ -155,7 +161,10 @@ test.describe("Dashboard auth flow", () => {
     await page.route("**/api/auth/login", async (route) => {
       await route.fulfill({
         status: 200,
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          "Set-Cookie": `vsr_session=${issuedToken}; Path=/; HttpOnly; SameSite=Lax`,
+        },
         body: JSON.stringify({
           token: issuedToken,
           user: {
@@ -184,9 +193,9 @@ test.describe("Dashboard auth flow", () => {
     });
 
     await page.route("**/api/settings", async (route) => {
-      settingsAuthHeader =
-        route.request().headers().authorization ?? settingsAuthHeader;
-      if (!route.request().headers().authorization) {
+      settingsCookieHeader = route.request().headers().cookie ?? settingsCookieHeader;
+      settingsAuthHeader = route.request().headers().authorization ?? settingsAuthHeader;
+      if (!(route.request().headers().cookie ?? "").includes(`vsr_session=${issuedToken}`)) {
         await route.fulfill({ status: 401, body: "Unauthorized" });
         return;
       }
@@ -204,6 +213,7 @@ test.describe("Dashboard auth flow", () => {
     });
 
     await page.route("**/api/status", async (route) => {
+      statusCookieHeader = route.request().headers().cookie ?? "";
       statusAuthHeader = route.request().headers().authorization ?? "";
       await route.fulfill({
         status: 200,
@@ -253,8 +263,10 @@ test.describe("Dashboard auth flow", () => {
     await expect(page).toHaveURL(/\/auth\/transition\?to=%2Fdashboard$/);
     await expect(page.getByText(transitionCopyPattern)).toBeVisible();
     await expect(page).toHaveURL(/\/dashboard$/, { timeout: 12000 });
-    await expect.poll(() => settingsAuthHeader).toBe(`Bearer ${issuedToken}`);
-    await expect.poll(() => statusAuthHeader).toBe(`Bearer ${issuedToken}`);
+    await expect.poll(() => settingsCookieHeader).toContain(`vsr_session=${issuedToken}`);
+    await expect.poll(() => statusCookieHeader).toContain(`vsr_session=${issuedToken}`);
+    await expect.poll(() => settingsAuthHeader).toBe("");
+    await expect.poll(() => statusAuthHeader).toBe("");
   });
 
   test("bootstrap registration passes through the transition loader", async ({
@@ -264,6 +276,7 @@ test.describe("Dashboard auth flow", () => {
     const issuedToken = "bootstrap-dashboard-token";
     let registerPayload: Record<string, unknown> | null = null;
     let setupStateRequestCount = 0;
+    let sessionReady = false;
 
     await page.route("**/api/setup/state", async (route) => {
       setupStateRequestCount += 1;
@@ -299,9 +312,13 @@ test.describe("Dashboard auth flow", () => {
         string,
         unknown
       >;
+      sessionReady = true;
       await route.fulfill({
         status: 200,
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          "Set-Cookie": `vsr_session=${issuedToken}; Path=/; HttpOnly; SameSite=Lax`,
+        },
         body: JSON.stringify({
           token: issuedToken,
           user: {
@@ -315,6 +332,11 @@ test.describe("Dashboard auth flow", () => {
     });
 
     await page.route("**/api/auth/me", async (route) => {
+      if (!sessionReady) {
+        await route.fulfill({ status: 401, body: "Unauthorized" });
+        return;
+      }
+
       await route.fulfill({
         status: 200,
         headers: { "Content-Type": "application/json" },
@@ -412,6 +434,7 @@ test.describe("Dashboard auth flow", () => {
     page,
   }) => {
     test.slow();
+    let sessionReady = false;
 
     await page.route("**/api/setup/state", async (route) => {
       await route.fulfill({
@@ -430,9 +453,13 @@ test.describe("Dashboard auth flow", () => {
     });
 
     await page.route("**/api/auth/login", async (route) => {
+      sessionReady = true;
       await route.fulfill({
         status: 200,
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          "Set-Cookie": "vsr_session=status-flow-token; Path=/; HttpOnly; SameSite=Lax",
+        },
         body: JSON.stringify({
           token: "status-flow-token",
           user: {
@@ -446,6 +473,11 @@ test.describe("Dashboard auth flow", () => {
     });
 
     await page.route("**/api/auth/me", async (route) => {
+      if (!sessionReady) {
+        await route.fulfill({ status: 401, body: "Unauthorized" });
+        return;
+      }
+
       await route.fulfill({
         status: 200,
         headers: { "Content-Type": "application/json" },
@@ -925,12 +957,13 @@ test.describe("Dashboard auth flow", () => {
     ).toBeVisible();
   });
 
-  test("protected browser transports append auth query tokens", async ({
+  test("protected browser transports stay on same-origin URLs and rely on HttpOnly cookies", async ({
     page,
   }) => {
     const { token } = await mockAuthenticatedAppShell(page, {
       token: "transport-auth-token",
     });
+    let iframeCookieHeader = "";
 
     await page.route("**/api/admin/users", async (route) => {
       await route.fulfill({
@@ -940,12 +973,30 @@ test.describe("Dashboard auth flow", () => {
       });
     });
 
+    await page.route("**/embedded/openclaw/demo/", async (route) => {
+      iframeCookieHeader = route.request().headers().cookie ?? "";
+      await route.fulfill({
+        status: 200,
+        headers: { "Content-Type": "text/html" },
+        body: "<!doctype html><html><body>demo</body></html>",
+      });
+    });
+
+    await page.route("**/api/openclaw/rooms/room-1/stream", async (route) => {
+      await route.fulfill({
+        status: 200,
+        headers: { "Content-Type": "text/event-stream" },
+        body: "event: ready\ndata: ok\n\n",
+      });
+    });
+
     await page.goto("/users");
     await expect(page).toHaveURL(/\/users$/);
 
     const urls = await page.evaluate(() => {
       const iframe = document.createElement("iframe");
       iframe.src = "/embedded/openclaw/demo/";
+      document.body.appendChild(iframe);
 
       const source = new EventSource("/api/openclaw/rooms/room-1/stream");
       const sourceUrl = source.url;
@@ -959,6 +1010,7 @@ test.describe("Dashboard auth flow", () => {
       socket.close();
 
       return {
+        browserToken: window.localStorage.getItem("vsr_auth_token"),
         cookie: document.cookie,
         iframeUrl: iframe.src,
         sourceUrl,
@@ -966,9 +1018,11 @@ test.describe("Dashboard auth flow", () => {
       };
     });
 
-    expect(urls.cookie).toContain(`vsr_session=${token}`);
-    expect(urls.iframeUrl).toContain(`authToken=${token}`);
-    expect(urls.sourceUrl).toContain(`authToken=${token}`);
-    expect(urls.socketUrl).toContain(`authToken=${token}`);
+    await expect.poll(() => iframeCookieHeader).toContain(`vsr_session=${token}`);
+    expect(urls.browserToken).toBeNull();
+    expect(urls.cookie).not.toContain("vsr_session=");
+    expect(urls.iframeUrl).not.toContain("authToken=");
+    expect(urls.sourceUrl).not.toContain("authToken=");
+    expect(urls.socketUrl).not.toContain("authToken=");
   });
 });

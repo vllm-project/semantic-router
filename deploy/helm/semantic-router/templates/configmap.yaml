@@ -1,4 +1,4 @@
-{{- $config := deepCopy .Values.config -}}
+{{- $config := (fromYaml (.Values.configRaw | default "")) | default (deepCopy .Values.config) -}}
 {{- $global := (get $config "global") | default (dict) -}}
 {{- $stores := (get $global "stores") | default (dict) -}}
 {{- $services := (get $global "services") | default (dict) -}}
@@ -53,14 +53,42 @@
 {{- if gt (len $tracingResource) 0 -}}
 {{- $_ := set $tracing "resource" $tracingResource -}}
 {{- end -}}
+{{- if gt (len $tracing) 0 -}}
 {{- $_ := set $observability "tracing" $tracing -}}
+{{- else -}}
+{{- $_ := unset $observability "tracing" -}}
+{{- end -}}
 
+{{- if gt (len $semanticCache) 0 -}}
 {{- $_ := set $stores "semantic_cache" $semanticCache -}}
+{{- else -}}
+{{- $_ := unset $stores "semantic_cache" -}}
+{{- end -}}
+{{- if gt (len $responseAPI) 0 -}}
 {{- $_ := set $services "response_api" $responseAPI -}}
+{{- else -}}
+{{- $_ := unset $services "response_api" -}}
+{{- end -}}
+{{- if gt (len $observability) 0 -}}
 {{- $_ := set $services "observability" $observability -}}
+{{- else -}}
+{{- $_ := unset $services "observability" -}}
+{{- end -}}
+{{- if gt (len $stores) 0 -}}
 {{- $_ := set $global "stores" $stores -}}
+{{- else -}}
+{{- $_ := unset $global "stores" -}}
+{{- end -}}
+{{- if gt (len $services) 0 -}}
 {{- $_ := set $global "services" $services -}}
+{{- else -}}
+{{- $_ := unset $global "services" -}}
+{{- end -}}
+{{- if gt (len $global) 0 -}}
 {{- $_ := set $config "global" $global -}}
+{{- else -}}
+{{- $_ := unset $config "global" -}}
+{{- end -}}
 {{- if not (get $config "version") -}}
 {{- $_ := set $config "version" "v0.3" -}}
 {{- end -}}

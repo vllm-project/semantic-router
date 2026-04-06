@@ -58,9 +58,11 @@ Use `/openapi.json` or `/docs` for the exact live request and response schema. T
 ## Config Semantics
 
 - `GET /config/router` returns the current router config document.
+- `GET /config/router` returns canonical config only. DSL-only authoring constructs such as `DECISION_TREE` / `IF ELSE` are already lowered into flat `routing.decisions`.
 - `PATCH /config/router` uses merge semantics.
 - `PUT /config/router` uses replace semantics.
 - `PATCH` and `PUT` both validate, back up, write, and hot-reload before returning.
+- The optional `dsl` field on `PATCH` / `PUT` requests is archived as source text for audit trail only. It does not extend the runtime config schema or restore tree metadata on later reads.
 
 ## Notes
 

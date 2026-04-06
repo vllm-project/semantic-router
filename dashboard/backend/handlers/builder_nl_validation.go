@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/dsl"
+	routerauthoring "github.com/vllm-project/semantic-router/src/semantic-router/pkg/routerauthoring"
 )
 
 func reviewValidatedBuilderNLDraft(
@@ -46,15 +46,15 @@ func reviewValidatedBuilderNLDraft(
 }
 
 func validateBuilderNLDraft(source string) BuilderNLValidation {
-	diags, _, valErrs := dsl.ValidateWithSymbols(source)
+	diags, _, valErrs := routerauthoring.ValidateWithSymbols(source)
 	diagnostics := convertBuilderNLDiagnostics(diags)
 	diagnostics = append(diagnostics, validateBuilderNLMultiWordDomainSyntax(source)...)
-	if prog, parseErrs := dsl.Parse(source); len(parseErrs) == 0 {
+	if prog, parseErrs := routerauthoring.Parse(source); len(parseErrs) == 0 {
 		diagnostics = append(diagnostics, validateBuilderNLDomainSignals(prog)...)
 	}
 
 	compileError := ""
-	if _, compileErrs := dsl.Compile(source); len(compileErrs) > 0 {
+	if _, compileErrs := routerauthoring.Compile(source); len(compileErrs) > 0 {
 		compileError = joinBuilderNLErrors(compileErrs)
 	}
 	if compileError == "" && len(valErrs) > 0 {
@@ -75,14 +75,14 @@ func validateBuilderNLDraft(source string) BuilderNLValidation {
 		CompileError: strings.TrimSpace(compileError),
 	}
 	if validation.Ready {
-		if formatted, err := dsl.Format(source); err == nil {
+		if formatted, err := routerauthoring.Format(source); err == nil {
 			validation.draftDSL = formatted
 		}
 	}
 	return validation
 }
 
-func convertBuilderNLDiagnostics(diags []dsl.Diagnostic) []BuilderNLDiagnostic {
+func convertBuilderNLDiagnostics(diags []routerauthoring.Diagnostic) []BuilderNLDiagnostic {
 	result := make([]BuilderNLDiagnostic, len(diags))
 	for i, diag := range diags {
 		var fixes []builderNLQuickFix

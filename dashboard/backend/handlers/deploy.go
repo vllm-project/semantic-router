@@ -9,7 +9,7 @@ import (
 	"strings"
 	"sync"
 
-	routerconfig "github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
+	routercontract "github.com/vllm-project/semantic-router/src/semantic-router/pkg/routercontract"
 )
 
 // deployMu ensures only one deploy operation at a time
@@ -240,7 +240,7 @@ func deployDirectWrite(w http.ResponseWriter, configPath string, configDir strin
 		return
 	}
 
-	if _, err := routerconfig.ParseYAMLBytes(yamlBytes); err != nil {
+	if _, err := routercontract.ParseYAMLBytes(yamlBytes); err != nil {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusBadRequest)
 		_ = json.NewEncoder(w).Encode(map[string]string{
@@ -291,7 +291,7 @@ func mergeDeployPayload(currentData []byte, req DeployRequest) ([]byte, error) {
 		return fragmentBytes, nil
 	}
 
-	baseConfig, err := decodeYAMLTaggedBytes[routerconfig.CanonicalConfig](baseData)
+	baseConfig, err := decodeYAMLTaggedBytes[routercontract.CanonicalConfig](baseData)
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse deploy base config: %w", err)
 	}
@@ -309,7 +309,7 @@ func mergeDeployPayload(currentData []byte, req DeployRequest) ([]byte, error) {
 	return mergedYAML, nil
 }
 
-func mergeCanonicalRouting(base, patch routerconfig.CanonicalRouting) routerconfig.CanonicalRouting {
+func mergeCanonicalRouting(base, patch routercontract.CanonicalRouting) routercontract.CanonicalRouting {
 	merged := base
 	if len(patch.ModelCards) > 0 {
 		merged.ModelCards = patch.ModelCards
@@ -321,7 +321,7 @@ func mergeCanonicalRouting(base, patch routerconfig.CanonicalRouting) routerconf
 	return merged
 }
 
-func mergeCanonicalSignals(base, patch routerconfig.CanonicalSignals) routerconfig.CanonicalSignals {
+func mergeCanonicalSignals(base, patch routercontract.CanonicalSignals) routercontract.CanonicalSignals {
 	merged := base
 	if len(patch.Keywords) > 0 {
 		merged.Keywords = patch.Keywords
@@ -477,7 +477,7 @@ func canonicalizeYAMLForDiff(raw []byte) string {
 	}
 
 	if looksLikeFullBase, err := looksLikeFullCanonicalDeployBase(raw); err == nil && looksLikeFullBase {
-		if configData, decodeErr := decodeYAMLTaggedBytes[routerconfig.CanonicalConfig](raw); decodeErr == nil {
+		if configData, decodeErr := decodeYAMLTaggedBytes[routercontract.CanonicalConfig](raw); decodeErr == nil {
 			if canonical, marshalErr := marshalYAMLBytes(configData); marshalErr == nil {
 				return string(canonical)
 			}

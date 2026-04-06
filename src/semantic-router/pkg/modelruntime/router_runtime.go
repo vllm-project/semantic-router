@@ -313,6 +313,11 @@ func logBatchedEmbeddingNeeds(component string, semanticCacheNeedsBatched bool, 
 }
 
 func initUnifiedEmbeddingModelFactory(cfg *config.RouterConfig, paths embeddingPaths, useBatched bool) error {
+	contract := candle_binding.CurrentBackendContract()
+	if err := validateEmbeddingBackendContract(contract, paths, useBatched); err != nil {
+		return err
+	}
+
 	if !useBatched {
 		return candle_binding.InitEmbeddingModels(paths.qwen3, paths.gemma, paths.mmBert, cfg.UseCPU)
 	}
@@ -321,6 +326,40 @@ func initUnifiedEmbeddingModelFactory(cfg *config.RouterConfig, paths embeddingP
 		return err
 	}
 	return candle_binding.InitEmbeddingModels(paths.qwen3, paths.gemma, paths.mmBert, cfg.UseCPU)
+}
+
+func validateEmbeddingBackendContract(contract candle_binding.BackendContract, paths embeddingPaths, useBatched bool) error {
+	if paths.qwen3 != "" {
+		if err := contract.RequireEmbeddingFamily(candle_binding.EmbeddingFamilyQwen3); err != nil {
+			return err
+		}
+		if useBatched {
+			if err := contract.RequireBatchedEmbeddingFamily(candle_binding.EmbeddingFamilyQwen3); err != nil {
+				return err
+			}
+		}
+	}
+	if paths.gemma != "" {
+		if err := contract.RequireEmbeddingFamily(candle_binding.EmbeddingFamilyGemma); err != nil {
+			return err
+		}
+		if useBatched {
+			if err := contract.RequireBatchedEmbeddingFamily(candle_binding.EmbeddingFamilyGemma); err != nil {
+				return err
+			}
+		}
+	}
+	if paths.mmBert != "" {
+		if err := contract.RequireEmbeddingFamily(candle_binding.EmbeddingFamilyMMBert); err != nil {
+			return err
+		}
+		if useBatched {
+			if err := contract.RequireBatchedEmbeddingFamily(candle_binding.EmbeddingFamilyMMBert); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
 }
 
 func initializeBERTModel(component string, useCPU bool, bertPath string, eventPrefix string) bool {

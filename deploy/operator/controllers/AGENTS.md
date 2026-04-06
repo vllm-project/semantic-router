@@ -9,6 +9,7 @@
 - Keep reconciler orchestration, backend discovery, platform integration, and canonical config translation on separate seams.
 - Treat `canonical_config_builder.go` as the operator-to-router translation hotspot, not as the default home for all controller-side helper logic.
 - Keep Kubernetes discovery or platform-specific wiring outside family-specific canonical config translation when possible.
+- Keep controller-side router config translation on the public `src/semantic-router/pkg/routercontract/` seam instead of importing `pkg/config` implementation packages directly.
 
 ## Change Rules
 

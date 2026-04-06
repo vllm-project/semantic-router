@@ -340,6 +340,131 @@ class TestCLITargetRouting:
 
         assert built and built[0] == "docker"
 
+    def test_serve_target_k8s_builds_k8s_backend_with_k8s_options(self, monkeypatch):
+        built = []
+        deployed = {}
+
+        class _FakeK8s:
+            def deploy(self, **kw):
+                deployed.update(kw)
+
+        def _fake_build(target, **kw):
+            built.append((resolve_target(target), kw))
+            return _FakeK8s()
+
+        monkeypatch.setattr(rt, "_build_backend", _fake_build)
+        monkeypatch.setattr(
+            rt,
+            "ensure_bootstrap_workspace",
+            lambda _: MagicMock(config_path=Path("/dev/null"), setup_mode=False),
+        )
+        monkeypatch.setattr(
+            rt,
+            "resolve_effective_config_path",
+            lambda *a: Path("/dev/null"),
+        )
+
+        runner = CliRunner()
+        result = runner.invoke(
+            main,
+            [
+                "serve",
+                "--config",
+                "/dev/null",
+                "--target",
+                "k8s",
+                "--namespace",
+                "test-ns",
+                "--context",
+                "kind-vllm-sr",
+                "--profile",
+                "dev",
+                "--image-pull-policy",
+                "never",
+            ],
+        )
+
+        assert result.exit_code == 0
+        assert built == [
+            (
+                "k8s",
+                {
+                    "namespace": "test-ns",
+                    "context": "kind-vllm-sr",
+                    "profile": "dev",
+                    "chart_dir": None,
+                },
+            )
+        ]
+        assert deployed["config_file"] == str(Path("/dev/null").absolute())
+
+    def test_status_target_k8s_builds_k8s_backend(self, monkeypatch):
+        built = []
+        status_calls = []
+
+        class _FakeK8s:
+            def status(self, service):
+                status_calls.append(service)
+
+        def _fake_build(target, **kw):
+            built.append((resolve_target(target), kw))
+            return _FakeK8s()
+
+        monkeypatch.setattr(rt, "_build_backend", _fake_build)
+
+        runner = CliRunner()
+        result = runner.invoke(
+            main,
+            [
+                "status",
+                "router",
+                "--target",
+                "k8s",
+                "--namespace",
+                "test-ns",
+                "--context",
+                "kind-vllm-sr",
+            ],
+        )
+
+        assert result.exit_code == 0
+        assert built == [("k8s", {"namespace": "test-ns", "context": "kind-vllm-sr"})]
+        assert status_calls == ["router"]
+
+    def test_logs_target_k8s_builds_k8s_backend(self, monkeypatch):
+        built = []
+        log_calls = []
+
+        class _FakeK8s:
+            def logs(self, service, follow=False):
+                log_calls.append((service, follow))
+
+        def _fake_build(target, **kw):
+            built.append((resolve_target(target), kw))
+            return _FakeK8s()
+
+        monkeypatch.setattr(rt, "_build_backend", _fake_build)
+
+        runner = CliRunner()
+        result = runner.invoke(
+            main,
+            [
+                "logs",
+                "router",
+                "--target",
+                "k8s",
+                "--namespace",
+                "test-ns",
+                "--context",
+                "kind-vllm-sr",
+                "-f",
+            ],
+        )
+
+        assert result.exit_code == 0
+        assert built == [("k8s", {"namespace": "test-ns", "context": "kind-vllm-sr"})]
+        assert log_calls == [("router", True)]
+
     def test_stop_target_k8s_builds_k8s_backend(self, monkeypatch):
         built = []
 
@@ -357,3 +482,42 @@ class TestCLITargetRouting:
         runner.invoke(main, ["stop", "--target", "k8s"])
 
         assert built and built[0] == "k8s"
+
+    def test_dashboard_target_k8s_builds_k8s_backend(self, monkeypatch):
+        built = []
+        browser_calls = []
+
+        class _FakeK8s:
+            def is_running(self):
+                return True
+
+            def get_dashboard_url(self):
+                return "http://k8s-dashboard.local"
+
+        def _fake_build(target, **kw):
+            built.append((resolve_target(target), kw))
+            return _FakeK8s()
+
+        monkeypatch.setattr(rt, "_build_backend", _fake_build)
+        monkeypatch.setattr(
+            rt.webbrowser, "open", lambda url: browser_calls.append(url)
+        )
+
+        runner = CliRunner()
+        result = runner.invoke(
+            main,
+            [
+                "dashboard",
+                "--target",
+                "k8s",
+                "--namespace",
+                "test-ns",
+                "--context",
+                "kind-vllm-sr",
+                "--no-open",
+            ],
+        )
+
+        assert result.exit_code == 0
+        assert built == [("k8s", {"namespace": "test-ns", "context": "kind-vllm-sr"})]
+        assert browser_calls == []

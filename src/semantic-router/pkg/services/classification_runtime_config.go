@@ -21,6 +21,4 @@ func (s *ClassificationService) RefreshRuntimeConfig(newConfig *config.RouterCon
 			s.classifier = rebuiltClassifier
 		}
 	}
-
-	config.Replace(newConfig)
 }

@@ -41,50 +41,52 @@ profile_rules:
       - e2e/profiles/dashboard/**
       - e2e/testcases/dashboard_*.go
       - deploy/kubernetes/observability/dashboard/**
+
+manual_profile_rules:
   aibrix:
     owner: e2e
     coverage_role: aibrix-control-plane-and-gateway
-    selection_mode: full-ci
-    summary: AIBrix-specific gateway and control-plane health plus a minimal router smoke path.
+    selection_mode: manual-only
+    summary: AIBrix-specific gateway and control-plane health plus a minimal router smoke path, kept outside the steady-state shared-suite PR path.
     paths:
       - e2e/profiles/aibrix/**
       - deploy/kubernetes/aibrix/**
   routing-strategies:
     owner: e2e
     coverage_role: routing-strategy-contracts
-    selection_mode: full-ci
-    summary: Keyword, entropy, and fallback routing strategy behavior.
+    selection_mode: manual-only
+    summary: Keyword, entropy, and fallback routing strategy behavior, retained as a manual debug path after the shared docker|k8s baseline reduction.
     paths:
       - e2e/profiles/routing-strategies/**
       - deploy/kubernetes/routing-strategies/**
   dynamic-config:
     owner: e2e
     coverage_role: dynamic-crd-routing-contracts
-    selection_mode: full-ci
-    summary: CRD-driven routing semantics and embedding-signal behavior.
+    selection_mode: manual-only
+    summary: CRD-driven routing semantics and embedding-signal behavior, retained as manual-only feature coverage.
     paths:
       - e2e/profiles/dynamic-config/**
   llm-d:
     owner: e2e
     coverage_role: llm-d-inference-gateway-health
-    selection_mode: full-ci
-    summary: LLM-D inference-gateway health with a minimal router smoke path.
+    selection_mode: manual-only
+    summary: LLM-D inference-gateway health with a minimal router smoke path, kept outside the default shared-suite PR contract.
     paths:
       - e2e/profiles/llm-d/**
       - deploy/kubernetes/llmd-base/**
   istio:
     owner: e2e
     coverage_role: istio-service-mesh-contracts
-    selection_mode: full-ci
-    summary: Istio sidecar, traffic, mTLS, and tracing behavior through the router.
+    selection_mode: manual-only
+    summary: Istio sidecar, traffic, mTLS, and tracing behavior through the router, retained for explicit mesh debugging only.
     paths:
       - e2e/profiles/istio/**
       - deploy/kubernetes/istio/**
   production-stack:
     owner: e2e
     coverage_role: production-ha-load-observability
-    selection_mode: full-ci
-    summary: HA, load-balancing, failover, and performance checks for the production stack.
+    selection_mode: manual-only
+    summary: HA, load-balancing, failover, and performance checks for the production stack, no longer part of the steady-state PR topology.
     paths:
       - e2e/profiles/production-stack/**
       - deploy/kubernetes/ai-gateway/aigw-resources/base-model.yaml
@@ -92,8 +94,8 @@ profile_rules:
   ml-model-selection:
     owner: e2e
     coverage_role: ml-model-selection-contracts
-    selection_mode: full-ci
-    summary: ML-based model-selection behavior across trained selector backends.
+    selection_mode: manual-only
+    summary: ML-based model-selection behavior across trained selector backends, retained as feature-specific manual coverage.
     paths:
       - e2e/profiles/ml-model-selection/**
       - src/semantic-router/pkg/modelselection/**
@@ -102,8 +104,8 @@ profile_rules:
   multi-endpoint:
     owner: e2e
     coverage_role: environment-policy-routing
-    selection_mode: full-ci
-    summary: Environment-specific routing and safety policy enforcement across multiple backends.
+    selection_mode: manual-only
+    summary: Environment-specific routing and safety policy enforcement across multiple backends, retained as an explicit manual path.
     paths:
       - e2e/profiles/multi-endpoint/**
       - e2e/config/config.multi-endpoint.yaml
@@ -111,8 +113,8 @@ profile_rules:
   authz-rbac:
     owner: e2e
     coverage_role: authz-and-rate-limit-contracts
-    selection_mode: full-ci
-    summary: Authz-driven routing and per-user rate-limiting behavior.
+    selection_mode: manual-only
+    summary: Authz-driven routing and per-user rate-limiting behavior, retained outside the steady-state shared-suite PR matrix.
     paths:
       - e2e/profiles/authz-rbac/**
       - e2e/config/config.authz-rbac.yaml
@@ -122,14 +124,12 @@ profile_rules:
   streaming:
     owner: e2e
     coverage_role: streaming-request-and-cache
-    selection_mode: full-ci
-    summary: Streamed request-body routing and streaming cache round-trip behavior.
+    selection_mode: manual-only
+    summary: Streamed request-body routing and streaming cache round-trip behavior, kept as manual-only feature coverage.
     paths:
       - e2e/profiles/streaming/**
       - deploy/kubernetes/streaming/**
       - src/semantic-router/pkg/extproc/processor_req_body_streamed*.go
-
-manual_profile_rules:
   response-api:
     owner: e2e
     coverage_role: responses-api-memory
@@ -181,22 +181,62 @@ manual_profile_rules:
       - e2e/profiles/rag-hybrid-search/**
 
 workflow_suite_rules:
-  vllm-sr-cli-integration:
+  docker-shared-integration:
     owner: vllm-sr-cli
     kind: workflow-integration
-    summary: Real-container CLI integration coverage for serve, status, logs, stop, and image-pull behavior.
+    trigger_contract: pull_request_paths
+    summary: Default docker-backed shared-suite regression for the `kubernetes` and `dashboard` contracts through `vllm-sr`.
     workflow: .github/workflows/integration-test-vllm-sr-cli.yml
-    local_command: make vllm-sr-test-integration
+    local_command: make vllm-sr-test-integration VLLM_SR_TEST_TARGET=docker
     paths:
+      - src/semantic-router/**
       - src/vllm-sr/**
-      - src/vllm-sr/Dockerfile*
+      - dashboard/backend/**
+      - e2e/profiles/ai-gateway/**
+      - deploy/kubernetes/ai-gateway/**
+      - e2e/profiles/dashboard/**
+      - e2e/testcases/dashboard_*.go
+      - deploy/kubernetes/observability/dashboard/**
+      - e2e/testing/llm-katan/**
       - tools/make/docker.mk
+      - tools/agent/e2e-profile-map.yaml
+      - tools/agent/repo-manifest.yaml
+      - tools/agent/scripts/**
+      - .github/workflows/ci-changes.yml
+      - .github/workflows/integration-test-k8s.yml
       - e2e/testing/vllm-sr-cli/**
       - .github/workflows/integration-test-vllm-sr-cli.yml
+  k8s-shared-integration:
+    owner: vllm-sr-cli
+    kind: workflow-integration
+    trigger_contract: pull_request_paths
+    summary: Default Kind-backed shared-suite regression for the `kubernetes` and `dashboard` contracts through `vllm-sr --target k8s`.
+    workflow: .github/workflows/integration-test-k8s.yml
+    local_command: make vllm-sr-test-integration VLLM_SR_TEST_TARGET=k8s
+    paths:
+      - src/semantic-router/**
+      - src/vllm-sr/**
+      - dashboard/backend/**
+      - e2e/profiles/ai-gateway/**
+      - deploy/kubernetes/ai-gateway/**
+      - e2e/profiles/dashboard/**
+      - e2e/testcases/dashboard_*.go
+      - deploy/kubernetes/observability/dashboard/**
+      - e2e/testing/llm-katan/**
+      - deploy/helm/semantic-router/**
+      - tools/make/docker.mk
+      - tools/agent/e2e-profile-map.yaml
+      - tools/agent/repo-manifest.yaml
+      - tools/agent/scripts/**
+      - .github/workflows/ci-changes.yml
+      - .github/workflows/integration-test-vllm-sr-cli.yml
+      - e2e/testing/vllm-sr-cli/**
+      - .github/workflows/integration-test-k8s.yml
   memory-integration:
     owner: router-core
     kind: workflow-integration
-    summary: Memory extraction, Milvus persistence, and injection behavior through the served router stack.
+    trigger_contract: manual_or_scheduled
+    summary: Memory extraction, Milvus persistence, and injection behavior through the served router stack; retained as a manual/nightly exception outside the steady-state shared-suite PR path.
     workflow: .github/workflows/integration-test-memory.yml
     local_command: make memory-test-integration
     paths:

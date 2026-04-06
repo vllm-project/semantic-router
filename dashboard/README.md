@@ -212,10 +212,10 @@ Recommended upstream settings for embedding:
 
 ## Security & access control
 
-- Dashboard auth uses JWTs from `Authorization: Bearer <token>` for protected `/api/*` and `/embedded/*` requests.
-- Protected embedded entry URLs may also carry `authToken=<token>`, and the frontend mirrors the active token into a same-origin `vsr_session` cookie so Grafana/Jaeger iframe redirects and in-frame `/api/*` calls stay authenticated.
+- Dashboard browser auth uses a server-set, same-origin, `HttpOnly` `vsr_session` cookie for protected `/api/*` and `/embedded/*` requests.
+- `Authorization: Bearer <token>` remains available for API-style callers and test harnesses, but the dashboard frontend no longer stores auth tokens in `localStorage`, mirrors them into JS-readable cookies, or appends `authToken=<token>` query parameters to iframe, EventSource, or WebSocket URLs.
 - Frame embedding: backend strips/overrides `X-Frame-Options` and `Content-Security-Policy` headers from upstreams to permit `frame-ancestors 'self'` only.
-- Future: OIDC login on dashboard, stronger session-cookie handling, per-route RBAC, and signed proxy sessions to embedded services.
+- Future: OIDC login on dashboard, shared production auth storage beyond the local SQLite default, and signed proxy sessions to embedded services.
 
 Write access warning for config updates:
 

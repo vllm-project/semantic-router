@@ -58,9 +58,11 @@ Router Apiserver 是运行在 `:8080` 上的 HTTP 控制面。
 ## Config 语义
 
 - `GET /config/router` 返回当前 router config 文档。
+- `GET /config/router` 只返回 canonical config。`DECISION_TREE` / `IF ELSE` 这类仅限 DSL 的编写期结构，读取时已经下沉为扁平 `routing.decisions`。
 - `PATCH /config/router` 使用 merge 语义。
 - `PUT /config/router` 使用 replace 语义。
 - `PATCH` 和 `PUT` 都会在返回前完成校验、备份、写入和 hot-reload。
+- `PATCH` / `PUT` 请求里的可选 `dsl` 字段只会作为源码文本归档，便于审计；它不会扩展运行时 config schema，也不会在后续读取时恢复树元数据。
 
 ## 说明
 

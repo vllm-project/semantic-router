@@ -16,6 +16,7 @@ type authRouteSpec struct {
 
 var dashboardAuthRouteSpecs = []authRouteSpec{
 	{path: "/api/auth/login", method: http.MethodPost},
+	{path: "/api/auth/logout", method: http.MethodPost},
 	{path: "/api/auth/me", method: http.MethodGet},
 	{path: "/api/auth/bootstrap/can-register", method: http.MethodGet},
 	{path: "/api/auth/bootstrap/register", method: http.MethodPost},

@@ -1,0 +1,1472 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Deep Dive into vLLM Semantic Router</title>
+    <style>
+      :root {
+        --bg: #f8f8f4;
+        --bg-strong: #ffffff;
+        --ink: #111111;
+        --ink-soft: #414141;
+        --ink-faint: #727272;
+        --line: rgba(17, 17, 17, 0.12);
+        --line-strong: rgba(17, 17, 17, 0.2);
+        --panel: rgba(255, 255, 255, 0.84);
+        --shadow: 0 24px 64px rgba(17, 17, 17, 0.08);
+        --radius-xl: 32px;
+        --radius-lg: 22px;
+        --radius-md: 16px;
+        --gap: clamp(14px, 2vw, 24px);
+        --font-sans: "Soehne", "Avenir Next", "Helvetica Neue", "Segoe UI",
+          sans-serif;
+        --font-mono: "SFMono-Regular", "JetBrains Mono", "IBM Plex Mono",
+          "Menlo", monospace;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      html,
+      body {
+        margin: 0;
+        min-height: 100%;
+        background:
+          radial-gradient(circle at top right, rgba(17, 17, 17, 0.05), transparent 28%),
+          linear-gradient(180deg, #fbfbf9 0%, #f4f4ef 100%);
+        color: var(--ink);
+        font-family: var(--font-sans);
+      }
+
+      body {
+        overflow: hidden;
+      }
+
+      .app {
+        position: relative;
+        width: 100vw;
+        height: 100vh;
+      }
+
+      .topbar {
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        z-index: 20;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 20px clamp(20px, 4vw, 48px);
+        pointer-events: none;
+      }
+
+      .topbar > * {
+        pointer-events: auto;
+      }
+
+      .deck-mark,
+      .slide-counter {
+        display: inline-flex;
+        align-items: center;
+        gap: 12px;
+        padding: 10px 14px;
+        border: 1px solid var(--line);
+        border-radius: 999px;
+        background: rgba(255, 255, 255, 0.82);
+        backdrop-filter: blur(12px);
+        box-shadow: 0 8px 24px rgba(17, 17, 17, 0.04);
+        font-size: 12px;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+      }
+
+      .deck-mark::before {
+        content: "";
+        width: 10px;
+        height: 10px;
+        border-radius: 50%;
+        background: var(--ink);
+        display: inline-block;
+      }
+
+      .slide-counter {
+        font-family: var(--font-mono);
+      }
+
+      .slides {
+        position: relative;
+        width: 100%;
+        height: 100%;
+      }
+
+      .slide {
+        position: absolute;
+        inset: 0;
+        display: grid;
+        place-items: center;
+        padding: clamp(74px, 9vh, 120px) clamp(18px, 3vw, 42px)
+          clamp(84px, 11vh, 120px);
+        opacity: 0;
+        transform: translateX(36px) scale(0.985);
+        transition: opacity 0.34s ease, transform 0.34s ease;
+        pointer-events: none;
+      }
+
+      .slide.active {
+        opacity: 1;
+        transform: translateX(0) scale(1);
+        pointer-events: auto;
+      }
+
+      .slide-shell {
+        position: relative;
+        width: min(1280px, 100%);
+        height: min(780px, 100%);
+        padding: clamp(28px, 3vw, 40px);
+        border-radius: var(--radius-xl);
+        border: 1px solid var(--line);
+        background:
+          linear-gradient(180deg, rgba(255, 255, 255, 0.94), rgba(255, 255, 255, 0.82)),
+          var(--bg-strong);
+        box-shadow: var(--shadow);
+        overflow: hidden;
+      }
+
+      .slide-shell::before {
+        content: "";
+        position: absolute;
+        top: -140px;
+        right: -140px;
+        width: 380px;
+        height: 380px;
+        border-radius: 50%;
+        background: radial-gradient(circle, rgba(17, 17, 17, 0.06), transparent 70%);
+        pointer-events: none;
+      }
+
+      .slide-number {
+        position: absolute;
+        top: 28px;
+        right: 30px;
+        font-family: var(--font-mono);
+        font-size: 12px;
+        color: var(--ink-faint);
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+      }
+
+      .slide-body {
+        display: grid;
+        gap: var(--gap);
+        height: 100%;
+      }
+
+      .eyebrow {
+        display: inline-flex;
+        align-items: center;
+        gap: 10px;
+        margin-bottom: 8px;
+        font-family: var(--font-mono);
+        font-size: 12px;
+        color: var(--ink-faint);
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+      }
+
+      .eyebrow::before {
+        content: "";
+        width: 26px;
+        height: 1px;
+        background: var(--ink);
+        display: inline-block;
+      }
+
+      h1,
+      h2,
+      h3,
+      p {
+        margin: 0;
+      }
+
+      .hero {
+        display: grid;
+        align-content: space-between;
+        gap: 26px;
+        height: 100%;
+      }
+
+      .hero h1 {
+        max-width: 980px;
+        font-size: clamp(48px, 7vw, 92px);
+        line-height: 0.95;
+        letter-spacing: -0.05em;
+      }
+
+      .subtitle {
+        max-width: 820px;
+        margin-top: 18px;
+        font-size: clamp(18px, 2.4vw, 30px);
+        line-height: 1.2;
+        color: var(--ink-soft);
+      }
+
+      .statement {
+        font-size: clamp(34px, 4vw, 60px);
+        line-height: 1;
+        letter-spacing: -0.045em;
+        max-width: 960px;
+      }
+
+      .lede {
+        max-width: 860px;
+        font-size: clamp(18px, 2vw, 24px);
+        line-height: 1.45;
+        color: var(--ink-soft);
+      }
+
+      .layout {
+        display: grid;
+        gap: var(--gap);
+        height: 100%;
+      }
+
+      .stack {
+        display: grid;
+        gap: var(--gap);
+      }
+
+      .grid-2,
+      .grid-3,
+      .grid-4,
+      .grid-5 {
+        display: grid;
+        gap: var(--gap);
+      }
+
+      .grid-2 {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+      }
+
+      .grid-3 {
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+      }
+
+      .grid-4 {
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+      }
+
+      .grid-5 {
+        grid-template-columns: repeat(5, minmax(0, 1fr));
+      }
+
+      .card {
+        display: grid;
+        gap: 12px;
+        padding: 18px 20px;
+        border-radius: var(--radius-lg);
+        border: 1px solid var(--line);
+        background: var(--panel);
+        min-height: 0;
+      }
+
+      .card h3,
+      .card strong {
+        font-size: clamp(18px, 2vw, 24px);
+        line-height: 1.1;
+      }
+
+      .card p,
+      .card li {
+        color: var(--ink-soft);
+        line-height: 1.42;
+        font-size: clamp(15px, 1.45vw, 18px);
+      }
+
+      .card ul {
+        margin: 0;
+        padding-left: 18px;
+        display: grid;
+        gap: 8px;
+      }
+
+      .label {
+        font-family: var(--font-mono);
+        font-size: 12px;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+        color: var(--ink-faint);
+      }
+
+      .chip-row {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 12px;
+      }
+
+      .chip {
+        display: inline-flex;
+        align-items: center;
+        padding: 10px 14px;
+        border: 1px solid var(--line);
+        border-radius: 999px;
+        background: rgba(255, 255, 255, 0.72);
+        font-size: 14px;
+      }
+
+      .mono-list {
+        display: grid;
+        gap: 8px;
+        font-family: var(--font-mono);
+        font-size: clamp(13px, 1.15vw, 15px);
+        color: var(--ink-soft);
+      }
+
+      .flowline {
+        display: grid;
+        grid-template-columns: repeat(5, minmax(0, 1fr));
+        gap: 12px;
+        align-items: center;
+      }
+
+      .flowline.short {
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+      }
+
+      .flow-box {
+        display: grid;
+        align-content: center;
+        gap: 8px;
+        min-height: 132px;
+        padding: 18px;
+        border-radius: var(--radius-lg);
+        border: 1px solid var(--line);
+        background: rgba(255, 255, 255, 0.78);
+      }
+
+      .flow-box strong {
+        font-size: clamp(18px, 2vw, 26px);
+        line-height: 1.05;
+      }
+
+      .flow-box p {
+        color: var(--ink-soft);
+        line-height: 1.34;
+        font-size: clamp(14px, 1.25vw, 16px);
+      }
+
+      .arrow {
+        display: grid;
+        place-items: center;
+        font-size: clamp(22px, 3vw, 36px);
+        color: var(--ink-faint);
+      }
+
+      pre {
+        margin: 0;
+        padding: 18px;
+        border-radius: var(--radius-lg);
+        border: 1px solid var(--line);
+        background: #101010;
+        color: #f6f6f6;
+        font-family: var(--font-mono);
+        font-size: clamp(12px, 1.1vw, 15px);
+        line-height: 1.5;
+        overflow: auto;
+      }
+
+      code {
+        font-family: var(--font-mono);
+      }
+
+      .source-line {
+        display: none;
+      }
+
+      .controls {
+        position: fixed;
+        right: clamp(18px, 2vw, 32px);
+        bottom: clamp(18px, 2vw, 32px);
+        z-index: 20;
+        display: flex;
+        align-items: center;
+        gap: 12px;
+      }
+
+      .controls button {
+        border: 1px solid var(--line-strong);
+        border-radius: 999px;
+        background: rgba(255, 255, 255, 0.86);
+        color: var(--ink);
+        padding: 12px 16px;
+        font-size: 14px;
+        cursor: pointer;
+        backdrop-filter: blur(12px);
+        box-shadow: 0 10px 26px rgba(17, 17, 17, 0.06);
+      }
+
+      .controls button:disabled {
+        opacity: 0.45;
+        cursor: not-allowed;
+      }
+
+      .progress-wrap {
+        position: fixed;
+        left: clamp(18px, 2vw, 32px);
+        right: clamp(18px, 2vw, 32px);
+        bottom: 24px;
+        z-index: 15;
+        height: 4px;
+        border-radius: 999px;
+        background: rgba(17, 17, 17, 0.08);
+        overflow: hidden;
+      }
+
+      .progress {
+        height: 100%;
+        width: 0%;
+        background: var(--ink);
+        transition: width 0.28s ease;
+      }
+
+      @media (max-width: 1100px) {
+        .grid-2,
+        .grid-3,
+        .grid-4,
+        .grid-5,
+        .flowline,
+        .flowline.short {
+          grid-template-columns: 1fr;
+        }
+
+        .slide-shell {
+          height: 100%;
+          max-height: none;
+        }
+      }
+
+      @media (prefers-reduced-motion: reduce) {
+        .slide,
+        .progress {
+          transition: none;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="app">
+      <div class="topbar">
+        <div class="deck-mark">Long-Form Deep Dive</div>
+        <div class="slide-counter" id="slideCounter">01 / 27</div>
+      </div>
+
+      <main class="slides" id="slides"></main>
+
+      <div class="controls">
+        <button id="prevBtn" type="button" aria-label="Previous slide">← Prev</button>
+        <button id="nextBtn" type="button" aria-label="Next slide">Next →</button>
+      </div>
+
+      <div class="progress-wrap" aria-hidden="true">
+        <div class="progress" id="progressBar"></div>
+      </div>
+    </div>
+
+    <script>
+      const slides = [
+        {
+          title: "Cover",
+          eyebrow: "vLLM Semantic Router · Long-Form Deep Dive",
+          sources: ["website/docs/intro.md", "docs/agent/repo-map.md"],
+          body: `
+            <div class="hero">
+              <div>
+                <div class="eyebrow">vLLM Semantic Router · Long-Form Deep Dive</div>
+                <h1>Deep Dive into<br />vLLM Semantic Router</h1>
+                <p class="subtitle">从 Signal-Driven Routing 到 Mixture-of-Models Control Plane</p>
+              </div>
+              <p class="lede">
+                今天看的不是一个分类器拼盘，而是一套完整的多模型控制面：
+                从为什么需要 semantic router，到 routing pipeline、config surface、
+                local runtime、dashboard、operator、AMD profile 和 deployment contracts。
+              </p>
+              <div class="chip-row">
+                <span class="chip">control plane, not glue code</span>
+                <span class="chip">signals + policy + deployment</span>
+                <span class="chip">concrete case study included</span>
+                <span class="chip">runtime + control plane + deployment</span>
+              </div>
+            </div>
+          `,
+        },
+        {
+          title: "Agenda",
+          eyebrow: "Act Map",
+          sources: ["deck_brief.md", "docs/agent/repo-map.md"],
+          body: `
+            <div class="layout">
+              <div>
+                <div class="eyebrow">Act Map</div>
+                <p class="statement">今天回答四个问题。</p>
+              </div>
+              <div class="grid-4">
+                <div class="card">
+                  <span class="label">Act 1</span>
+                  <strong>Why This Exists</strong>
+                  <p>问题定义、系统位置、请求生命周期。</p>
+                </div>
+                <div class="card">
+                  <span class="label">Act 2</span>
+                  <strong>How It Works</strong>
+                  <p>signals、projections、decisions、algorithms、plugins、config。</p>
+                </div>
+                <div class="card">
+                  <span class="label">Act 3</span>
+                  <strong>How It Runs</strong>
+                  <p>CLI、本地 topology、dashboard、fleet-sim、Kubernetes、operator、AMD。</p>
+                </div>
+                <div class="card">
+                  <span class="label">Act 4</span>
+                  <strong>Why The System Is Shaped This Way</strong>
+                  <p>training stack、boundary contracts、platform surfaces、demo path。</p>
+                </div>
+              </div>
+              <div class="card">
+                <span class="label">Session Shape</span>
+                <p>前半段建立系统心智模型，后半段落到运行面、具体案例和设计边界。</p>
+              </div>
+            </div>
+          `,
+        },
+        {
+          title: "Why Semantic Routing",
+          eyebrow: "Problem Shape",
+          sources: ["website/docs/intro.md", "website/docs/overview/semantic-router-overview.md"],
+          body: `
+            <div class="layout">
+              <div>
+                <div class="eyebrow">Problem Shape</div>
+                <p class="statement">从 one-model-fits-all，转到系统级 routing policy。</p>
+              </div>
+              <div class="grid-2">
+                <div class="card">
+                  <span class="label">Before</span>
+                  <strong>Single endpoint, hidden tradeoffs</strong>
+                  <ul>
+                    <li>简单流量也会消耗昂贵模型。</li>
+                    <li>specialist traffic 缺乏专用路径。</li>
+                    <li>安全、缓存、验证逻辑散落在应用层。</li>
+                  </ul>
+                </div>
+                <div class="card">
+                  <span class="label">After</span>
+                  <strong>Shared control plane</strong>
+                  <ul>
+                    <li>路由决策变成显式政策。</li>
+                    <li>模型选择与成本预算可观测。</li>
+                    <li>治理和运行时行为可复用。</li>
+                  </ul>
+                </div>
+              </div>
+              <div class="grid-4">
+                <div class="card">
+                  <span class="label">Claim 1</span>
+                  <strong>Control Plane</strong>
+                  <p>routing 从应用分支提升为可配置、可观测、可审计的共享控制面。</p>
+                </div>
+                <div class="card">
+                  <span class="label">Claim 2</span>
+                  <strong>Token Economy</strong>
+                  <p>把贵的模型、长上下文和工具调用留给真正需要它们的请求。</p>
+                </div>
+                <div class="card">
+                  <span class="label">Claim 3</span>
+                  <strong>Governance</strong>
+                  <p>把 safety、PII、hallucination 和 header controls 放回请求路径本身。</p>
+                </div>
+                <div class="card">
+                  <span class="label">Claim 4</span>
+                  <strong>Research Surface</strong>
+                  <p>新 signals、algorithms 和 plugins 可以在一个可部署系统里被实验和验证。</p>
+                </div>
+              </div>
+            </div>
+          `,
+        },
+        {
+          title: "Five Questions",
+          eyebrow: "Project Thesis",
+          sources: ["website/docs/overview/goals.md", "website/docs/intro.md"],
+          body: `
+            <div class="layout">
+              <div>
+                <div class="eyebrow">Project Thesis</div>
+                <p class="statement">这套系统不是从 feature list 出发，而是从五个系统问题出发。</p>
+              </div>
+              <div class="grid-5">
+                <div class="card"><strong>Capture signals</strong><p>请求、响应、用户和运行时上下文里还有哪些“缺失信息”？</p></div>
+                <div class="card"><strong>Combine signals</strong><p>如何把多个弱证据变成可复用的 routing facts？</p></div>
+                <div class="card"><strong>Collaborate models</strong><p>如何让多个模型作为系统协作，而不是孤立 endpoints？</p></div>
+                <div class="card"><strong>Secure the path</strong><p>如何把 safety、PII、hallucination 控制放在请求路径上？</p></div>
+                <div class="card"><strong>Learn over time</strong><p>如何把反馈和观测再回灌到路由系统？</p></div>
+              </div>
+              <div class="card">
+                <span class="label">Why These Questions Matter</span>
+                <p>它们最后会压缩成四个对外可讲的价值：更好的 routing、可控的 token spend、更强的治理、以及一个可以持续演化的系统平台。</p>
+              </div>
+            </div>
+          `,
+        },
+        {
+          title: "System Position",
+          eyebrow: "Where It Lives",
+          sources: ["website/docs/intro.md", "deploy/local/envoy.yaml"],
+          body: `
+            <div class="layout">
+              <div>
+                <div class="eyebrow">Where It Lives</div>
+                <p class="statement">它位于客户端与模型后端之间，把 routing 从应用代码里抽出来。</p>
+              </div>
+              <div class="flowline">
+                <div class="flow-box"><span class="label">Client</span><strong>App / SDK / User</strong><p>请求以 OpenAI-compatible 形式进入。</p></div>
+                <div class="arrow">→</div>
+                <div class="flow-box"><span class="label">Gateway</span><strong>Envoy / Gateway</strong><p>通过 <code>ext_proc</code> 把外部处理接入实时流量。</p></div>
+                <div class="arrow">→</div>
+                <div class="flow-box"><span class="label">Router</span><strong>Semantic Router</strong><p>提取 signals、协调 projections、匹配 decisions、执行 plugins。</p></div>
+              </div>
+              <div class="grid-2">
+                <div class="card">
+                  <span class="label">Backends</span>
+                  <p>后端模型依然保持独立，可以是 vLLM、KServe、Llama Stack 或其他 OpenAI-compatible 服务。</p>
+                </div>
+                <div class="card">
+                  <span class="label">Architectural Win</span>
+                  <p>团队不必把 routing、safety、header、cache 逻辑复制到每个调用者里。</p>
+                </div>
+              </div>
+            </div>
+          `,
+        },
+        {
+          title: "Request Lifecycle",
+          eyebrow: "One Request",
+          sources: ["website/docs/overview/semantic-router-overview.md", "dashboard/README.md", "deploy/recipes/balance.yaml", "deploy/recipes/balance.probes.yaml"],
+          body: `
+            <div class="layout">
+              <div>
+                <div class="eyebrow">One Request</div>
+                <p class="statement">一条请求经过的不是单个分类器，而是一条多层控制链。</p>
+              </div>
+              <div class="grid-3">
+                <div class="card"><span class="label">01</span><strong>Ingress</strong><p>客户端通过 gateway 或 proxy 把请求送入服务栈。</p></div>
+                <div class="card"><span class="label">02</span><strong>Signal Extraction</strong><p>提取 heuristic 与 learned signals。</p></div>
+                <div class="card"><span class="label">03</span><strong>Projection Coordination</strong><p>把竞争或弱证据转成可复用 routing facts。</p></div>
+                <div class="card"><span class="label">04</span><strong>Decision Match</strong><p>布尔规则选择 route owner。</p></div>
+                <div class="card"><span class="label">05</span><strong>Plugins + Dispatch</strong><p>执行 cache、prompt、safety、headers，然后选择 backend。</p></div>
+                <div class="card"><span class="label">06</span><strong>Response + Observability</strong><p>响应侧控制、metrics、replay、dashboard 与监控视图承接结果。</p></div>
+              </div>
+              <div class="card">
+                <span class="label">One Maintained Example</span>
+                <p><code>Verify the claim and answer with citations: why did the Roman Republic collapse?</code></p>
+                <p>在维护中的 <code>balance</code> probes 里，这类请求会命中 history / verification 相关信号，投影出 <code>verification_required</code>，匹配 <code>verified_explainer</code>，再走到期望 alias <code>google/gemini-2.5-flash-lite</code>，同时保留 <code>router_replay</code> 这类运行时可观测行为。</p>
+              </div>
+            </div>
+          `,
+        },
+        {
+          title: "Routing Stack",
+          eyebrow: "Vocabulary",
+          sources: ["website/docs/tutorials/signal/overview.md", "website/docs/tutorials/projection/overview.md", "website/docs/tutorials/algorithm/overview.md", "website/docs/tutorials/plugin/overview.md", "docs/agent/architecture-guardrails.md"],
+          body: `
+            <div class="layout">
+              <div>
+                <div class="eyebrow">Vocabulary</div>
+                <p class="statement">理解这套系统，先要把 layer ownership 讲清楚。</p>
+              </div>
+              <div class="grid-3">
+                <div class="card"><span class="label">Signals</span><strong>Extract facts</strong><p>负责 detection，不直接声明 routing outcome。</p></div>
+                <div class="card"><span class="label">Projections</span><strong>Coordinate facts</strong><p>处理 winner selection、weighted aggregation、threshold bands。</p></div>
+                <div class="card"><span class="label">Decisions</span><strong>Choose route</strong><p>用布尔规则表达“何时这条路胜出”。</p></div>
+                <div class="card"><span class="label">Algorithms</span><strong>Choose candidates</strong><p>当 route 拥有多个 modelRefs 时再做选择或 orchestration。</p></div>
+                <div class="card"><span class="label">Plugins</span><strong>Route-local behavior</strong><p>缓存、检索、safety、mutation、response handling。</p></div>
+                <div class="card"><span class="label">Dispatch</span><strong>Hit backend</strong><p>把最终请求送到 matched backend 或 semantic alias。</p></div>
+              </div>
+              <div class="card">
+                <span class="label">Three Distinctions</span>
+                <ul>
+                  <li>detector output 不是 route policy</li>
+                  <li>route policy 不是 candidate selection</li>
+                  <li>candidate selection 不是 request / response behavior</li>
+                </ul>
+              </div>
+            </div>
+          `,
+        },
+        {
+          title: "Signal Families",
+          eyebrow: "Signal Catalog",
+          sources: ["website/docs/intro.md", "website/docs/tutorials/signal/overview.md"],
+          body: `
+            <div class="layout">
+              <div>
+                <div class="eyebrow">Signal Catalog</div>
+                <p class="statement">当前维护中的 catalog 是 16 个 signal families。</p>
+              </div>
+              <div class="grid-2">
+                <div class="card">
+                  <span class="label">5 Heuristic Families</span>
+                  <div class="mono-list">
+                    <div><code>authz</code></div>
+                    <div><code>context</code></div>
+                    <div><code>keyword</code></div>
+                    <div><code>language</code></div>
+                    <div><code>structure</code></div>
+                  </div>
+                  <p>快、便宜、确定性强，适合 request shape、locale、identity、lexical gating。</p>
+                </div>
+                <div class="card">
+                  <span class="label">11 Learned Families</span>
+                  <div class="mono-list">
+                    <div><code>complexity</code> · <code>domain</code> · <code>embedding</code> · <code>kb</code></div>
+                    <div><code>modality</code> · <code>fact-check</code> · <code>jailbreak</code></div>
+                    <div><code>pii</code> · <code>preference</code> · <code>reask</code> · <code>user-feedback</code></div>
+                  </div>
+                  <p>更强的语义、follow-up、safety 与 modality understanding，但更依赖模型资产。</p>
+                </div>
+              </div>
+              <div class="card">
+                <span class="label">Caveat</span>
+                <p>有一页旧文档还保留 <code>15</code> 的旧计数；这里统一按当前维护中的 <code>16</code> 个 signal families 理解。</p>
+              </div>
+            </div>
+          `,
+        },
+        {
+          title: "Signal Tradeoffs",
+          eyebrow: "Why One Signal Is Not Enough",
+          sources: ["website/docs/overview/signal-driven-decisions.md", "website/docs/tutorials/signal/overview.md", "website/docs/overview/collective-intelligence.md"],
+          body: `
+            <div class="layout">
+              <div>
+                <div class="eyebrow">Why One Signal Is Not Enough</div>
+                <p class="statement">semantic routing 的核心不是“加一个 classifier”，而是把不同代价和能力的 detectors 组合起来。</p>
+              </div>
+              <div class="grid-3">
+                <div class="card">
+                  <span class="label">Heuristic</span>
+                  <strong>Cheap and explicit</strong>
+                  <p>毫秒级，适合强规则、词法、语言、token 范围和身份 gating。</p>
+                </div>
+                <div class="card">
+                  <span class="label">Learned</span>
+                  <strong>Richer semantics</strong>
+                  <p>更能处理 paraphrase、difficulty、modality、safety pressure 和 follow-up patterns。</p>
+                </div>
+                <div class="card">
+                  <span class="label">System Benefit</span>
+                  <strong>Better than either alone</strong>
+                  <p>多个 signals 共同投票，减少 false positives，也降低对单一 detector 的依赖。</p>
+                </div>
+              </div>
+            </div>
+          `,
+        },
+        {
+          title: "Projections",
+          eyebrow: "Coordination Layer",
+          sources: ["website/docs/tutorials/projection/overview.md", "deploy/amd/README.md"],
+          body: `
+            <div class="layout">
+              <div>
+                <div class="eyebrow">Coordination Layer</div>
+                <p class="statement"><code>routing.projections</code> 的作用，是阻止 decisions 退化成数字逻辑的垃圾场。</p>
+              </div>
+              <div class="grid-3">
+                <div class="card">
+                  <span class="label">Partitions</span>
+                  <strong>Choose one winner</strong>
+                  <p>在 competing domains 或 embedding lanes 里只保留一个 winner。</p>
+                </div>
+                <div class="card">
+                  <span class="label">Scores</span>
+                  <strong>Aggregate evidence</strong>
+                  <p>把 context、structure、complexity、embedding 等证据加权成连续值。</p>
+                </div>
+                <div class="card">
+                  <span class="label">Mappings</span>
+                  <strong>Name the result</strong>
+                  <p>把 numeric score 变成 <code>balance_reasoning</code> 这类决策可见 facts。</p>
+                </div>
+              </div>
+              <div class="card">
+                <span class="label">Why It Matters</span>
+                <p>没有 projections，threshold policy 会分散到每一条 route 规则里，难以复用，也难以校准。</p>
+              </div>
+            </div>
+          `,
+        },
+        {
+          title: "Decisions",
+          eyebrow: "Boolean Policy",
+          sources: ["website/docs/overview/semantic-router-overview.md"],
+          body: `
+            <div class="layout">
+              <div class="grid-2">
+                <div class="stack">
+                  <div>
+                    <div class="eyebrow">Boolean Policy</div>
+                    <p class="statement">Decisions 负责声明 route policy，而不是重写 detector math。</p>
+                  </div>
+                  <pre>decisions:
+  - name: math_routing
+    rules:
+      operator: AND
+      conditions:
+        - type: domain
+          name: mathematics
+        - type: projection
+          name: balance_reasoning</pre>
+                </div>
+                <div class="stack">
+                  <div class="card">
+                    <span class="label">Boundary</span>
+                    <p>Signals 负责“发现了什么”，projections 负责“这些事实如何协调”，decisions 负责“哪条 route 应该赢”。</p>
+                  </div>
+                  <div class="card">
+                    <span class="label">Benefit</span>
+                    <p>route rules 变得可审阅、可解释，也更适合和产品或安全规则对齐。</p>
+                  </div>
+                </div>
+              </div>
+            </div>
+          `,
+        },
+        {
+          title: "Algorithms",
+          eyebrow: "Post-Match Model Policy",
+          sources: ["website/docs/tutorials/algorithm/overview.md"],
+          body: `
+            <div class="layout">
+              <div>
+                <div class="eyebrow">Post-Match Model Policy</div>
+                <p class="statement">当 route 已经匹配成功，系统还要回答另一个问题：到底哪一个 candidate model 应该执行？</p>
+              </div>
+              <div class="grid-2">
+                <div class="card">
+                  <span class="label">Selection Algorithms</span>
+                  <div class="mono-list">
+                    <div><code>static</code> · <code>router_dc</code> · <code>automix</code></div>
+                    <div><code>hybrid</code> · <code>rl-driven</code> · <code>gmtrouter</code></div>
+                    <div><code>knn</code> · <code>kmeans</code> · <code>svm</code> · <code>mlp</code></div>
+                  </div>
+                  <p>在多个 candidates 里选出一个胜者。</p>
+                </div>
+                <div class="card">
+                  <span class="label">Looper Algorithms</span>
+                  <div class="mono-list">
+                    <div><code>confidence</code></div>
+                    <div><code>ratings</code></div>
+                    <div><code>remom</code></div>
+                  </div>
+                  <p>不是只选一个，而是编排多个模型的执行与升级路径。</p>
+                </div>
+              </div>
+              <div class="card">
+                <span class="label">Architectural Point</span>
+                <p>route eligibility 和 model selection policy 必须拆开，否则每个 decision 都会重新发明 ranking logic。</p>
+              </div>
+            </div>
+          `,
+        },
+        {
+          title: "Plugins",
+          eyebrow: "Route-Local Behavior",
+          sources: ["website/docs/tutorials/plugin/overview.md", "src/vllm-sr/README.md"],
+          body: `
+            <div class="layout">
+              <div>
+                <div class="eyebrow">Route-Local Behavior</div>
+                <p class="statement">Plugins 让“匹配到哪条 route”不仅影响模型，还影响这条路上的行为。</p>
+              </div>
+              <div class="grid-3">
+                <div class="card">
+                  <span class="label">Mutation / Response</span>
+                  <p><code>fast_response</code>、<code>header_mutation</code>、<code>system_prompt</code>、<code>request_params</code>、<code>tools</code></p>
+                </div>
+                <div class="card">
+                  <span class="label">Retrieval / Memory</span>
+                  <p><code>memory</code>、<code>rag</code>、<code>router_replay</code>、<code>semantic-cache</code></p>
+                </div>
+                <div class="card">
+                  <span class="label">Safety / Generation</span>
+                  <p><code>content-safety</code>、<code>hallucination</code>、<code>response_jailbreak</code>、<code>image_gen</code></p>
+                </div>
+              </div>
+              <div class="card">
+                <span class="label">Why This Layer Exists</span>
+                <p>不是每一条 route 都需要相同的 cache、retrieval、prompt 或 safety policy；plugins 把这些差异显式挂到 route 上。</p>
+              </div>
+            </div>
+          `,
+        },
+        {
+          title: "Collective Intelligence",
+          eyebrow: "System-Level Intelligence",
+          sources: ["website/docs/overview/collective-intelligence.md"],
+          body: `
+            <div class="layout">
+              <div>
+                <div class="eyebrow">System-Level Intelligence</div>
+                <p class="statement">repo 所说的 collective intelligence，不是一个模型更聪明，而是系统组合之后更聪明。</p>
+              </div>
+              <div class="grid-4">
+                <div class="card"><span class="label">Signal Diversity</span><p>不同 detectors 看见不同事实。</p></div>
+                <div class="card"><span class="label">Projection Coordination</span><p>弱证据被压成更稳定的中间事实。</p></div>
+                <div class="card"><span class="label">Model Specialization</span><p>不同模型在不同任务和成本区间发光。</p></div>
+                <div class="card"><span class="label">Plugin Collaboration</span><p>cache、safety、verification 和 mutation 形成多层行为。</p></div>
+              </div>
+              <div class="card">
+                <span class="label">Key Message</span>
+                <p>系统能力来自 layering 和 composition，而不是一个“大而全”的 routing classifier。</p>
+              </div>
+            </div>
+          `,
+        },
+        {
+          title: "Canonical Config",
+          eyebrow: "Config Is a Product Surface",
+          sources: ["website/docs/installation/configuration.md"],
+          body: `
+            <div class="layout">
+              <div class="grid-2">
+                <div class="stack">
+                  <div>
+                    <div class="eyebrow">Config Is a Product Surface</div>
+                    <p class="statement">一个 canonical YAML contract 跨越本地 CLI、dashboard、Helm 和 operator。</p>
+                  </div>
+                  <pre>version:
+listeners:
+providers:
+routing:
+global:</pre>
+                </div>
+                <div class="grid-2">
+                  <div class="card"><span class="label">version</span><p>schema version，当前使用 <code>v0.3</code>。</p></div>
+                  <div class="card"><span class="label">listeners</span><p>router listener ports、timeouts 与入口绑定。</p></div>
+                  <div class="card"><span class="label">providers</span><p>backend bindings、provider defaults、served model contracts。</p></div>
+                  <div class="card"><span class="label">routing</span><p>signals、projections、decisions、algorithms、plugins 的主战场。</p></div>
+                </div>
+              </div>
+              <div class="card">
+                <span class="label">global</span>
+                <p>只放稀疏 runtime overrides 和 shared services；不要把 route-local logic 全塞进这里。</p>
+              </div>
+            </div>
+          `,
+        },
+        {
+          title: "Authoring Flow",
+          eyebrow: "YAML, DSL, Dashboard, Validation",
+          sources: ["website/docs/installation/configuration.md", "src/vllm-sr/README.md", "dashboard/README.md"],
+          body: `
+            <div class="layout">
+              <div>
+                <div class="eyebrow">YAML, DSL, Dashboard, Validation</div>
+                <p class="statement">这套系统不仅有 runtime code，还有一条严肃的 authoring and review path。</p>
+              </div>
+              <div class="flowline">
+                <div class="flow-box"><span class="label">Author</span><strong>Canonical YAML</strong><p>稳定的控制面 contract。</p></div>
+                <div class="arrow">→</div>
+                <div class="flow-box"><span class="label">Roundtrip</span><strong>DSL</strong><p>维护中的 routing authoring surface。</p></div>
+                <div class="arrow">→</div>
+                <div class="flow-box"><span class="label">Operate</span><strong>Dashboard</strong><p>Config、DSL、topology、ML setup 都挂在这里。</p></div>
+              </div>
+              <div class="grid-2">
+                <div class="card">
+                  <span class="label">Fragment Catalog</span>
+                  <p><code>config/signal</code>、<code>config/decision</code>、<code>config/algorithm</code>、<code>config/plugin</code> 作为可复用片段树被维护。</p>
+                </div>
+                <div class="card">
+                  <span class="label">Validation</span>
+                  <p><code>vllm-sr validate</code>、<code>config migrate</code>、<code>config import</code> 与 repo tests 共同收紧 authoring contract。</p>
+                </div>
+              </div>
+            </div>
+          `,
+        },
+        {
+          title: "Local Runtime CLI",
+          eyebrow: "Unified Lifecycle",
+          sources: ["src/vllm-sr/README.md"],
+          body: `
+            <div class="layout">
+              <div>
+                <div class="eyebrow">Unified Lifecycle</div>
+                <p class="statement">本地开发体验不是一组分散脚本，而是一套可记忆、可讲解的 CLI lifecycle。</p>
+              </div>
+              <div class="grid-2">
+                <div class="card">
+                  <span class="label">Primary Commands</span>
+                  <div class="mono-list">
+                    <div><code>vllm-sr serve</code></div>
+                    <div><code>vllm-sr status</code></div>
+                    <div><code>vllm-sr logs router|envoy|dashboard|simulator</code></div>
+                    <div><code>vllm-sr dashboard</code></div>
+                    <div><code>vllm-sr stop</code></div>
+                  </div>
+                </div>
+                <div class="card">
+                  <span class="label">State and Isolation</span>
+                  <p>Dashboard state 默认持久化在 <code>.vllm-sr/dashboard-data/</code>。多 stack 通过 <code>VLLM_SR_STACK_NAME</code> 和 <code>VLLM_SR_PORT_OFFSET</code> 隔离。</p>
+                </div>
+              </div>
+              <div class="grid-3">
+                <div class="card"><span class="label">8700</span><p>Dashboard</p></div>
+                <div class="card"><span class="label">8888</span><p>API listener 默认端口</p></div>
+                <div class="card"><span class="label">9190</span><p>Router metrics</p></div>
+              </div>
+            </div>
+          `,
+        },
+        {
+          title: "Split Topology",
+          eyebrow: "Local Runtime Topology",
+          sources: ["docs/agent/environments.md", "docs/agent/plans/pl-0020-local-runtime-topology-separation.md", "dashboard/README.md"],
+          body: `
+            <div class="layout">
+              <div>
+                <div class="eyebrow">Local Runtime Topology</div>
+                <p class="statement">本地默认 topology 已经不是单容器幻想，而是更接近真实系统的 split runtime。</p>
+              </div>
+              <div class="grid-4">
+                <div class="card"><span class="label">Dashboard</span><p>统一产品壳层，代理 config、monitoring、playground、fleet-sim。</p></div>
+                <div class="card"><span class="label">Router</span><p>核心 runtime、extproc 与 route decision path。</p></div>
+                <div class="card"><span class="label">Envoy</span><p>入口 proxy，连接 extproc 与 backend routing。</p></div>
+                <div class="card"><span class="label">Sidecars</span><p>observability 与 fleet-sim 等共享网络上的 sibling services。</p></div>
+              </div>
+              <div class="card">
+                <span class="label">Why This Matters</span>
+                <p>shared network、service URLs、status collection 和 runtime apply 逻辑都更贴近真实多服务部署，而不是偷偷依赖同容器 loopback。</p>
+              </div>
+            </div>
+          `,
+        },
+        {
+          title: "Dashboard",
+          eyebrow: "Dashboard As Control Plane",
+          sources: ["dashboard/README.md"],
+          body: `
+            <div class="layout">
+              <div>
+                <div class="eyebrow">Dashboard As Control Plane</div>
+                <p class="statement">Dashboard 不是 demo shell，而是把配置、拓扑、观测和验证串到一起的控制面。</p>
+              </div>
+              <div class="grid-3">
+                <div class="card"><span class="label">Config</span><p>读写 canonical config，暴露 editor、section panels 和 write APIs。</p></div>
+                <div class="card"><span class="label">Topology</span><p>把 request flow 和 model selection 用 React Flow 可视化。</p></div>
+                <div class="card"><span class="label">Playground</span><p>从同一壳层直接打路由路径，测试真实服务行为。</p></div>
+                <div class="card"><span class="label">Monitoring</span><p>代理并嵌入 Grafana、Prometheus 等观测面。</p></div>
+                <div class="card"><span class="label">ML Setup</span><p>benchmark、train、generate config 的三步 wizard。</p></div>
+                <div class="card"><span class="label">Fleet Sim</span><p>让容量与策略评估也回到同一产品壳层。</p></div>
+              </div>
+            </div>
+          `,
+        },
+        {
+          title: "Fleet Sim",
+          eyebrow: "Planning Surface",
+          sources: ["website/docs/fleet-sim/overview.md", "website/docs/fleet-sim/dashboard-integration.md"],
+          body: `
+            <div class="layout">
+              <div>
+                <div class="eyebrow">Planning Surface</div>
+                <p class="statement">Fleet Sim 不在 live path 里，但它决定你如何从容量、成本和阈值视角评估路由策略。</p>
+              </div>
+              <div class="grid-2">
+                <div class="card">
+                  <span class="label">What It Is For</span>
+                  <ul>
+                    <li>fleet sizing</li>
+                    <li>cost comparison</li>
+                    <li>routing and threshold what-if analysis</li>
+                    <li>dashboard-proxied planning workflows</li>
+                  </ul>
+                </div>
+                <div class="card">
+                  <span class="label">What It Is Not</span>
+                  <ul>
+                    <li>not the live request path</li>
+                    <li>not a runtime autoscaler</li>
+                    <li>not a per-kernel profiler</li>
+                    <li>not a replacement for router config docs</li>
+                  </ul>
+                </div>
+              </div>
+              <div class="card">
+                <span class="label">Integration</span>
+                <p>默认本地行为是 <code>vllm-sr serve</code> 启动 simulator sibling container，并通过 dashboard backend 代理到 <code>/api/fleet-sim/*</code>。</p>
+              </div>
+            </div>
+          `,
+        },
+        {
+          title: "Kubernetes via CLI",
+          eyebrow: "Same Verbs, Different Backend",
+          sources: ["src/vllm-sr/README.md", "docs/agent/environments.md"],
+          body: `
+            <div class="layout">
+              <div>
+                <div class="eyebrow">Same Verbs, Different Backend</div>
+                <p class="statement">目标不是两套割裂的体验，而是同一套 lifecycle verbs 切到不同 deployment backends。</p>
+              </div>
+              <div class="grid-3">
+                <div class="card">
+                  <span class="label">Local</span>
+                  <p><code>vllm-sr serve --image-pull-policy never</code></p>
+                </div>
+                <div class="card">
+                  <span class="label">Kubernetes</span>
+                  <p><code>vllm-sr serve --target k8s --profile dev --config config.yaml</code></p>
+                </div>
+                <div class="card">
+                  <span class="label">Shared Verbs</span>
+                  <p><code>serve</code>、<code>status</code>、<code>logs</code>、<code>stop</code></p>
+                </div>
+              </div>
+              <div class="card">
+                <span class="label">Operational Detail</span>
+                <p>敏感变量如 <code>HF_TOKEN</code>、<code>OPENAI_API_KEY</code> 会被存入 Kubernetes Secret，而不是直接暴露在 Helm overrides 里。</p>
+              </div>
+            </div>
+          `,
+        },
+        {
+          title: "Operator",
+          eyebrow: "Cluster-Native Contract",
+          sources: ["deploy/operator/README.md"],
+          body: `
+            <div class="layout">
+              <div>
+                <div class="eyebrow">Cluster-Native Contract</div>
+                <p class="statement">Operator 把集群部署变成 CRD-driven config and discovery problem，而不是手拼 manifests。</p>
+              </div>
+              <div class="grid-3">
+                <div class="card">
+                  <span class="label">Discovery 1</span>
+                  <strong>KServe</strong>
+                  <p>根据 InferenceService 自动发现 predictor service。</p>
+                </div>
+                <div class="card">
+                  <span class="label">Discovery 2</span>
+                  <strong>Llama Stack</strong>
+                  <p>根据 label selectors 发现对应 serving stack。</p>
+                </div>
+                <div class="card">
+                  <span class="label">Discovery 3</span>
+                  <strong>Direct Service</strong>
+                  <p>直接指向任意 Kubernetes Service，包括跨 namespace 服务。</p>
+                </div>
+              </div>
+              <div class="grid-2">
+                <div class="card">
+                  <span class="label">Cache Backends</span>
+                  <p>operator 负责配置 memory、Redis、Milvus 等语义缓存后端，但不替你部署所有外部依赖。</p>
+                </div>
+                <div class="card">
+                  <span class="label">Architectural Role</span>
+                  <p>它把 cluster-facing deployment schema 和 runtime config translation 收敛成更稳定的 operator boundary。</p>
+                </div>
+              </div>
+            </div>
+          `,
+        },
+        {
+          title: "AMD Balance Profile",
+          eyebrow: "Concrete Architecture",
+          sources: ["deploy/amd/README.md", "deploy/recipes/balance.yaml"],
+          body: `
+            <div class="layout">
+              <div>
+                <div class="eyebrow">Concrete Architecture</div>
+                <p class="statement">如果只看一个具体案例，就看 AMD 的 <code>balance</code> profile。</p>
+              </div>
+              <div class="grid-2">
+                <div class="card">
+                  <span class="label">Profile Shape</span>
+                  <div class="mono-list">
+                    <div>1 physical ROCm backend</div>
+                    <div>multiple served-model aliases</div>
+                    <div>5 semantic tiers</div>
+                    <div>13 routing decisions</div>
+                  </div>
+                </div>
+                <div class="card">
+                  <span class="label">Semantic Tiers</span>
+                  <div class="mono-list">
+                    <div><code>SIMPLE</code> → qwen/qwen3.5-rocm</div>
+                    <div><code>MEDIUM</code> → gemini-2.5-flash-lite</div>
+                    <div><code>COMPLEX</code> → gemini-3.1-pro</div>
+                    <div><code>REASONING</code> → openai/gpt5.4</div>
+                    <div><code>PREMIUM</code> → claude-opus-4.6</div>
+                  </div>
+                </div>
+              </div>
+              <div class="card">
+                <span class="label">Why It Is So Good for Teaching</span>
+                <p>一个相对简单的物理 serving substrate，被 router 重塑成更丰富的 semantic policy surface，特别适合解释 control-plane 思路。</p>
+              </div>
+            </div>
+          `,
+        },
+        {
+          title: "AMD Calibration",
+          eyebrow: "Maintained Decisions, Not Marketing",
+          sources: ["deploy/amd/README.md", "deploy/recipes/balance.dsl"],
+          body: `
+            <div class="layout">
+              <div>
+                <div class="eyebrow">Maintained Decisions, Not Marketing</div>
+                <p class="statement">AMD profile 的价值不只在 tier names，而在它把 authoring、decision ordering 和 live calibration 连到了一起。</p>
+              </div>
+              <div class="grid-4">
+                <div class="card"><span class="label">Signals</span><p>keyword、embedding、fact_check、feedback、reask、language、context、structure、complexity、domain</p></div>
+                <div class="card"><span class="label">Projections</span><p>domain partition、intent partition、difficulty band、verification band、feedback bands</p></div>
+                <div class="card"><span class="label">Decisions</span><p>13 个 calibrated non-fallback decisions 按优先级排序。</p></div>
+                <div class="card"><span class="label">Probes</span><p><code>balance.probes.yaml</code> 驱动 live calibration loop。</p></div>
+              </div>
+              <pre>python3 tools/agent/scripts/router_calibration_loop.py run \
+  --router-url http://&lt;router-host&gt;:8080 \
+  --probes deploy/recipes/balance.probes.yaml \
+  --yaml deploy/recipes/balance.yaml \
+  --dsl deploy/recipes/balance.dsl</pre>
+            </div>
+          `,
+        },
+        {
+          title: "Training Stack",
+          eyebrow: "Learned Assets Need a Lifecycle",
+          sources: ["website/docs/training/training-overview.md", "docs/agent/repo-map.md"],
+          body: `
+            <div class="layout">
+              <div>
+                <div class="eyebrow">Learned Assets Need a Lifecycle</div>
+                <p class="statement">很多 routing surfaces 依赖 learned models，所以 repo 里有完整 training stack 并不意外。</p>
+              </div>
+              <div class="grid-2">
+                <div class="card">
+                  <span class="label">Why ModernBERT</span>
+                  <ul>
+                    <li>classification latency 更低</li>
+                    <li>可自托管</li>
+                    <li>适合 specialized routing tasks</li>
+                    <li>比通用 API LLM 更稳定、便宜</li>
+                  </ul>
+                </div>
+                <div class="card">
+                  <span class="label">Training Targets</span>
+                  <p>category、PII、jailbreak、intent 等分类任务作为 routing pipeline 的 learned detectors 资产来源。</p>
+                </div>
+              </div>
+              <div class="card">
+                <span class="label">Architectural Implication</span>
+                <p>router 不是只吃静态规则；它还吃训练产物、模型目录和 capability modules，所以 training stack 是第一等公民。</p>
+              </div>
+            </div>
+          `,
+        },
+        {
+          title: "Core Design Principles",
+          eyebrow: "Architecture Guardrails",
+          sources: ["docs/agent/architecture-guardrails.md", "website/docs/intro.md"],
+          body: `
+            <div class="layout">
+              <div>
+                <div class="eyebrow">Architecture Guardrails</div>
+                <p class="statement">repo 的核心设计原则不是“哪里方便改哪里”，而是按 capability placement 和 narrow seams 组织系统。</p>
+              </div>
+              <div class="grid-3">
+                <div class="card">
+                  <span class="label">Capability Placement</span>
+                  <ul>
+                    <li><code>signal</code> extracts facts</li>
+                    <li><code>decision</code> combines facts</li>
+                    <li><code>algorithm</code> chooses among candidates</li>
+                    <li><code>plugin</code> owns post-decision behavior</li>
+                    <li><code>global</code> only for intentionally cross-cutting behavior</li>
+                  </ul>
+                </div>
+                <div class="card">
+                  <span class="label">Seam Rules</span>
+                  <ul>
+                    <li>one file, one main responsibility</li>
+                    <li>deep modules, narrow entrypoints</li>
+                    <li>schema, migration, and validation have distinct owners</li>
+                    <li>CLI, dashboard, and operator should depend on contract-owned seams, not deep runtime internals</li>
+                  </ul>
+                </div>
+                <div class="card">
+                  <span class="label">If You Collapse Layers</span>
+                  <ul>
+                    <li>detector logic leaks into route policy and becomes hard to debug</li>
+                    <li>config evolution slows down because schema and validation move together</li>
+                    <li>dashboard and operator inherit unstable runtime internals instead of stable contracts</li>
+                  </ul>
+                </div>
+              </div>
+              <div class="card">
+                <span class="label">Why It Matters</span>
+                <p>这些 guardrails 决定了 repo 能不能在不打碎请求路径的前提下，同时推进 routing research、runtime implementation、control-plane product 和 deployment integration。</p>
+              </div>
+            </div>
+          `,
+        },
+        {
+          title: "Platform Shape and Close",
+          eyebrow: "Platform Monorepo",
+          sources: ["docs/agent/repo-map.md", "docs/agent/context-management.md", "src/vllm-sr/README.md", "dashboard/README.md", "deploy/amd/README.md"],
+          body: `
+            <div class="layout">
+              <div>
+                <div class="eyebrow">Platform Monorepo</div>
+                <p class="statement">之所以需要明确边界、契约和工具链，是因为这本来就是一个跨多产品面的平台系统。</p>
+              </div>
+              <div class="grid-3">
+                <div class="card"><span class="label">Runtime</span><p>gateway-adjacent routing and request execution</p></div>
+                <div class="card"><span class="label">CLI</span><p>local and cluster lifecycle surface</p></div>
+                <div class="card"><span class="label">Dashboard</span><p>config, topology, playground, monitoring</p></div>
+                <div class="card"><span class="label">Operator</span><p>CRD-driven deployment and discovery boundary</p></div>
+                <div class="card"><span class="label">Planning + Training</span><p>capacity planning and learned routing assets</p></div>
+                <div class="card"><span class="label">Contracts</span><p>schema, validation, docs, and boundary rules</p></div>
+              </div>
+              <div class="grid-2">
+                <div class="card">
+                  <span class="label">Takeaways</span>
+                  <ul>
+                    <li>routing 是 policy surface，不是胶水代码</li>
+                    <li>MoM 需要 layered control plane，而不只是一个 classifier</li>
+                    <li>dashboard、CLI、operator 和 training stack 都是这套系统的一部分</li>
+                  </ul>
+                </div>
+                <div class="card">
+                  <span class="label">Demo Bridge</span>
+                  <div class="chip-row">
+                    <span class="chip"><code>vllm-sr serve</code></span>
+                    <span class="chip">dashboard</span>
+                    <span class="chip">topology</span>
+                    <span class="chip">playground</span>
+                    <span class="chip"><code>balance.yaml</code></span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          `,
+        },
+      ];
+
+      function renderSlides() {
+        const root = document.getElementById("slides");
+        root.innerHTML = slides
+          .map((slide, index) => {
+            const number = String(index + 1).padStart(2, "0");
+            const sources = slide.sources
+              .map((source) => `<code>${source}</code>`)
+              .join(" · ");
+            return `
+              <section class="slide${index === 0 ? " active" : ""}" data-title="${slide.title}" id="slide-${index + 1}">
+                <div class="slide-shell">
+                  <div class="slide-number">${number}</div>
+                  <div class="slide-body">
+                    ${slide.body}
+                    <div class="source-line">Anchors · ${sources}</div>
+                  </div>
+                </div>
+              </section>
+            `;
+          })
+          .join("");
+      }
+
+      renderSlides();
+
+      const slideNodes = Array.from(document.querySelectorAll(".slide"));
+      const counter = document.getElementById("slideCounter");
+      const progress = document.getElementById("progressBar");
+      const prevBtn = document.getElementById("prevBtn");
+      const nextBtn = document.getElementById("nextBtn");
+      let index = 0;
+
+      function formatIndex(value) {
+        return String(value + 1).padStart(2, "0");
+      }
+
+      function readHashIndex() {
+        const match = window.location.hash.match(/^#slide-(\d+)$/);
+        if (!match) return null;
+        const candidate = Number(match[1]) - 1;
+        if (Number.isNaN(candidate) || candidate < 0 || candidate >= slideNodes.length) {
+          return null;
+        }
+        return candidate;
+      }
+
+      function render() {
+        slideNodes.forEach((slide, slideIndex) => {
+          slide.classList.toggle("active", slideIndex === index);
+        });
+
+        counter.textContent = `${formatIndex(index)} / ${formatIndex(slideNodes.length - 1)}`;
+        progress.style.width = `${((index + 1) / slideNodes.length) * 100}%`;
+        prevBtn.disabled = index === 0;
+        nextBtn.disabled = index === slideNodes.length - 1;
+        history.replaceState(null, "", `#slide-${index + 1}`);
+      }
+
+      function goTo(nextIndex) {
+        index = Math.max(0, Math.min(nextIndex, slideNodes.length - 1));
+        render();
+      }
+
+      function next() {
+        goTo(index + 1);
+      }
+
+      function prev() {
+        goTo(index - 1);
+      }
+
+      window.addEventListener("keydown", (event) => {
+        if (event.key === "ArrowRight" || event.key === "PageDown" || event.key === " ") {
+          event.preventDefault();
+          next();
+        } else if (event.key === "ArrowLeft" || event.key === "PageUp") {
+          event.preventDefault();
+          prev();
+        } else if (event.key === "Home") {
+          event.preventDefault();
+          goTo(0);
+        } else if (event.key === "End") {
+          event.preventDefault();
+          goTo(slideNodes.length - 1);
+        }
+      });
+
+      window.addEventListener("hashchange", () => {
+        const hashIndex = readHashIndex();
+        if (hashIndex !== null) {
+          goTo(hashIndex);
+        }
+      });
+
+      prevBtn.addEventListener("click", prev);
+      nextBtn.addEventListener("click", next);
+
+      const initialIndex = readHashIndex();
+      if (initialIndex !== null) {
+        index = initialIndex;
+      }
+      render();
+    </script>
+  </body>
+</html>

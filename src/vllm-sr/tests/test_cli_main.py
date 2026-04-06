@@ -168,6 +168,55 @@ def test_serve_keeps_observability_enabled_in_setup_mode(monkeypatch, tmp_path: 
     assert captured["enable_observability"] is True
 
 
+def test_serve_can_disable_observability_without_minimal(monkeypatch, tmp_path: Path):
+    config_path = tmp_path / "config.yaml"
+    config_path.write_text(
+        yaml.safe_dump(
+            {
+                "version": "v0.3",
+                "listeners": [
+                    {"name": "http-8899", "address": "0.0.0.0", "port": 8899}
+                ],
+                "routing": {"decisions": [{"name": "default"}]},
+            },
+            sort_keys=False,
+        )
+    )
+    bootstrap = BootstrapResult(
+        config_path=config_path,
+        output_dir=tmp_path / ".vllm-sr",
+        setup_mode=False,
+    )
+    captured: dict[str, object] = {}
+
+    class _StubBackend:
+        def deploy(self, **kwargs):
+            captured.update(kwargs)
+
+    monkeypatch.setattr(
+        runtime_commands, "ensure_bootstrap_workspace", lambda _: bootstrap
+    )
+    monkeypatch.setattr(
+        runtime_commands, "_build_backend", lambda *a, **kw: _StubBackend()
+    )
+
+    runner = CliRunner()
+    result = runner.invoke(
+        main,
+        [
+            "serve",
+            "--config",
+            str(config_path),
+            "--disable-observability",
+            "--image-pull-policy",
+            "never",
+        ],
+    )
+
+    assert result.exit_code == 0
+    assert captured["enable_observability"] is False
+
+
 def test_inject_algorithm_into_config_updates_all_decisions(tmp_path: Path):
     config_path = tmp_path / "config.yaml"
     config_path.write_text(

@@ -1,3 +1,6 @@
+# Paired-source contract: this file is the canonical runtime artifact for the balance profile.
+# DECISION_TREE / IF ELSE authoring lowers into flat routing.decisions, so /config/router and routing decompile expose flat ROUTE blocks instead of tree syntax.
+# Keep deploy/recipes/balance.dsl beside this YAML when the original authoring form matters.
 version: v0.3
 listeners:
   - address: 0.0.0.0

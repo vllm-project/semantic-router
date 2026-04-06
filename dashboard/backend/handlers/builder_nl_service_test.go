@@ -9,7 +9,7 @@ import (
 	"sync/atomic"
 	"testing"
 
-	routerconfig "github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
+	routercontract "github.com/vllm-project/semantic-router/src/semantic-router/pkg/routercontract"
 )
 
 func TestBuildBuilderNLTaskContextIncludesSharedHints(t *testing.T) {
@@ -514,14 +514,14 @@ type CanonicalTestConfigBuilder struct {
 	ProviderModels []string
 }
 
-func (b *CanonicalTestConfigBuilder) Build() *routerconfig.CanonicalConfig {
-	config := &routerconfig.CanonicalConfig{}
+func (b *CanonicalTestConfigBuilder) Build() *routercontract.CanonicalConfig {
+	config := &routercontract.CanonicalConfig{}
 	config.Providers.Defaults.DefaultModel = b.DefaultModel
 	for _, name := range b.ModelCards {
-		config.Routing.ModelCards = append(config.Routing.ModelCards, routerconfig.RoutingModel{Name: name})
+		config.Routing.ModelCards = append(config.Routing.ModelCards, routercontract.RoutingModel{Name: name})
 	}
 	for _, name := range b.ProviderModels {
-		config.Providers.Models = append(config.Providers.Models, routerconfig.CanonicalProviderModel{Name: name})
+		config.Providers.Models = append(config.Providers.Models, routercontract.CanonicalProviderModel{Name: name})
 	}
 	return config
 }

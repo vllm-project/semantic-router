@@ -62,13 +62,13 @@ export const DEFAULT_SECTIONS: Record<RouterSystemKey, unknown> = {
   } satisfies RouterCoreConfig,
   response_api: {
     enabled: true,
-    store_backend: 'memory',
+    store_backend: 'redis',
     ttl_seconds: 86400,
     max_responses: 1000,
   } satisfies ResponseAPIConfig,
   router_replay: {
     enabled: true,
-    store_backend: 'memory',
+    store_backend: 'postgres',
     ttl_seconds: 2592000,
     async_writes: false,
   } satisfies RouterReplayConfig,

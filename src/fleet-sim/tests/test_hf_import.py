@@ -9,6 +9,7 @@ import json
 import urllib.error
 
 import pytest
+
 from fleet_sim.models.spec import ModelSpec
 
 # ── Sample config dicts (matching real HF config.json structure) ──────────────

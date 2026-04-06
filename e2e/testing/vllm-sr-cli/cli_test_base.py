@@ -320,6 +320,53 @@ class CLITestBase(unittest.TestCase):
                     }
                 ],
             },
+            "global": {
+                "stores": {
+                    "semantic_cache": {
+                        "enabled": False,
+                    }
+                },
+                "model_catalog": {
+                    "embeddings": {
+                        "semantic": {
+                            "mmbert_model_path": "",
+                            "qwen3_model_path": "",
+                            "gemma_model_path": "",
+                            "bert_model_path": "",
+                            "multimodal_model_path": "",
+                        }
+                    },
+                    "modules": {
+                        "prompt_guard": {
+                            "enabled": False,
+                            "model_ref": "",
+                            "model_id": "",
+                            "jailbreak_mapping_path": "",
+                            "use_mmbert_32k": False,
+                        },
+                        "classifier": {
+                            "domain": {
+                                "model_ref": "",
+                                "model_id": "",
+                                "category_mapping_path": "",
+                                "use_mmbert_32k": False,
+                            },
+                            "pii": {
+                                "model_ref": "",
+                                "model_id": "",
+                                "pii_mapping_path": "",
+                                "use_mmbert_32k": False,
+                            },
+                        },
+                        "feedback_detector": {
+                            "enabled": False,
+                            "model_ref": "",
+                            "model_id": "",
+                            "use_mmbert_32k": False,
+                        },
+                    },
+                },
+            },
         }
         config_path.write_text(
             yaml.safe_dump(config, sort_keys=False),

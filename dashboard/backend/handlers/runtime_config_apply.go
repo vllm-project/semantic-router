@@ -50,6 +50,15 @@ func applyWrittenConfig(configPath string, configDir string, previousData []byte
 		}
 		return &runtimeConfigApplyError{applyErr: err}
 	}
+	if err := persistActiveConfigProjection(configPath, configDir); err != nil {
+		if !restoreOnFailure || len(previousData) == 0 {
+			return err
+		}
+		if restoreErr := restorePreviousRuntimeConfig(configPath, configDir, previousData); restoreErr != nil {
+			return &runtimeConfigApplyError{applyErr: err, restoreErr: restoreErr}
+		}
+		return &runtimeConfigApplyError{applyErr: err}
+	}
 
 	return nil
 }
@@ -86,7 +95,10 @@ func restorePreviousRuntimeConfig(configPath string, configDir string, previousD
 	if err := writeConfigAtomically(configPath, previousData); err != nil {
 		return err
 	}
-	return propagateConfigToRuntime(configPath, configDir)
+	if err := propagateConfigToRuntime(configPath, configDir); err != nil {
+		return err
+	}
+	return persistActiveConfigProjection(configPath, configDir)
 }
 
 func propagateConfigToRuntime(configPath string, configDir string) error {

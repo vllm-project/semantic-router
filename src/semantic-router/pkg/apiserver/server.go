@@ -21,21 +21,33 @@ import (
 
 // Init starts the API server.
 func Init(configPath string, port int) error {
-	return InitWithRuntime(configPath, port, nil)
+	runtimeRegistry, cleanup, err := newLegacyRuntimeRegistry(configPath)
+	if err != nil {
+		return err
+	}
+	if cleanup != nil {
+		defer cleanup()
+	}
+	return initWithRuntimeRegistry(configPath, port, runtimeRegistry)
 }
 
-// InitWithRuntime starts the API server using the shared runtime registry when
-// one is available. Legacy callers can continue using Init and fall back to the
-// compatibility globals.
+// InitWithRuntime starts the API server with an explicit runtime registry.
+// Legacy callers should prefer Init, which bridges the remaining compatibility
+// globals into a narrow registry once at startup.
 func InitWithRuntime(configPath string, port int, runtimeRegistry *routerruntime.Registry) error {
-	// Get the global configuration instead of loading from file
-	// This ensures we use the same config as the rest of the application
+	if runtimeRegistry == nil {
+		return Init(configPath, port)
+	}
+	return initWithRuntimeRegistry(configPath, port, runtimeRegistry)
+}
+
+func initWithRuntimeRegistry(configPath string, port int, runtimeRegistry *routerruntime.Registry) error {
 	cfg := resolveAPIServerConfig(runtimeRegistry)
 	if cfg == nil {
 		return fmt.Errorf("configuration not initialized")
 	}
 
-	classificationSvc := resolveClassificationService(cfg, runtimeRegistry)
+	classificationSvc := resolveClassificationService(runtimeRegistry)
 	classificationSvc = ensureClassificationService(cfg, runtimeRegistry, classificationSvc)
 
 	// Initialize batch metrics configuration
@@ -73,12 +85,10 @@ func InitWithRuntime(configPath string, port int, runtimeRegistry *routerruntime
 	liveClassificationSvc := newLiveClassificationService(
 		classificationSvc,
 		func() classificationService {
-			if runtimeRegistry != nil {
-				if svc := runtimeRegistry.ClassificationService(); svc != nil {
-					return svc
-				}
+			if runtimeRegistry == nil {
+				return nil
 			}
-			return services.GetGlobalClassificationService()
+			return runtimeRegistry.ClassificationService()
 		},
 	)
 
@@ -86,7 +96,7 @@ func InitWithRuntime(configPath string, port int, runtimeRegistry *routerruntime
 	apiServer := &ClassificationAPIServer{
 		classificationSvc:     liveClassificationSvc,
 		config:                cfg,
-		runtimeConfig:         newLiveRuntimeConfig(cfg, buildConfigResolver(runtimeRegistry), buildConfigUpdater(runtimeRegistry, liveClassificationSvc)),
+		runtimeConfig:         newLiveRuntimeConfig(cfg, runtimeRegistry.CurrentConfig, runtimeRegistry.RefreshRuntimeConfig),
 		runtimeRegistry:       runtimeRegistry,
 		configPath:            configPath,
 		memoryStore:           memoryStore,
@@ -110,24 +120,17 @@ func InitWithRuntime(configPath string, port int, runtimeRegistry *routerruntime
 }
 
 func resolveAPIServerConfig(runtimeRegistry *routerruntime.Registry) *config.RouterConfig {
-	if runtimeRegistry != nil {
-		if cfg := runtimeRegistry.CurrentConfig(); cfg != nil {
-			return cfg
-		}
+	if runtimeRegistry == nil {
+		return nil
 	}
-	return config.Get()
+	return runtimeRegistry.CurrentConfig()
 }
 
-func resolveClassificationService(
-	cfg *config.RouterConfig,
-	runtimeRegistry *routerruntime.Registry,
-) *services.ClassificationService {
-	if runtimeRegistry != nil {
-		if svc := runtimeRegistry.ClassificationService(); svc != nil {
-			return svc
-		}
+func resolveClassificationService(runtimeRegistry *routerruntime.Registry) *services.ClassificationService {
+	if runtimeRegistry == nil {
+		return nil
 	}
-	return initClassify(5, 500*time.Millisecond)
+	return runtimeRegistry.ClassificationService()
 }
 
 func ensureClassificationService(
@@ -158,76 +161,10 @@ func ensureClassificationService(
 }
 
 func resolveMemoryStore(cfg *config.RouterConfig, runtimeRegistry *routerruntime.Registry) memory.Store {
-	if runtimeRegistry != nil {
-		if store := runtimeRegistry.MemoryStore(); store != nil {
-			return store
-		}
-	}
-	return initMemoryStore(5, 500*time.Millisecond)
-}
-
-func buildConfigResolver(runtimeRegistry *routerruntime.Registry) func() *config.RouterConfig {
 	if runtimeRegistry == nil {
-		return config.Get
+		return nil
 	}
-	return runtimeRegistry.CurrentConfig
-}
-
-func buildConfigUpdater(
-	runtimeRegistry *routerruntime.Registry,
-	liveClassificationSvc classificationService,
-) func(*config.RouterConfig) {
-	if runtimeRegistry == nil {
-		return liveClassificationSvc.RefreshRuntimeConfig
-	}
-	return runtimeRegistry.RefreshRuntimeConfig
-}
-
-// initClassify attempts to get the global classification service with retry logic
-func initClassify(maxRetries int, retryInterval time.Duration) *services.ClassificationService {
-	for i := 0; i < maxRetries; i++ {
-		if svc := services.GetGlobalClassificationService(); svc != nil {
-			return svc
-		}
-
-		if i < maxRetries-1 { // Don't sleep on the last attempt
-			logging.ComponentDebugEvent("apiserver", "classification_service_retry_pending", map[string]interface{}{
-				"retry_interval_ms": retryInterval.Milliseconds(),
-				"attempt":           i + 1,
-				"max_retries":       maxRetries,
-			})
-			time.Sleep(retryInterval)
-		}
-	}
-
-	logging.ComponentWarnEvent("apiserver", "classification_service_unavailable", map[string]interface{}{
-		"max_retries": maxRetries,
-	})
-	return nil
-}
-
-// initMemoryStore attempts to get the global memory store with retry logic.
-// The memory store is created by the ExtProc router which may start concurrently.
-func initMemoryStore(maxRetries int, retryInterval time.Duration) memory.Store {
-	for i := 0; i < maxRetries; i++ {
-		if store := memory.GetGlobalMemoryStore(); store != nil {
-			return store
-		}
-
-		if i < maxRetries-1 {
-			logging.ComponentDebugEvent("apiserver", "memory_store_retry_pending", map[string]interface{}{
-				"retry_interval_ms": retryInterval.Milliseconds(),
-				"attempt":           i + 1,
-				"max_retries":       maxRetries,
-			})
-			time.Sleep(retryInterval)
-		}
-	}
-
-	logging.ComponentWarnEvent("apiserver", "memory_store_unavailable", map[string]interface{}{
-		"max_retries": maxRetries,
-	})
-	return nil
+	return runtimeRegistry.MemoryStore()
 }
 
 func shouldInitMemoryStore(cfg *config.RouterConfig) bool {
