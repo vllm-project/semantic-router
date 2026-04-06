@@ -59,8 +59,8 @@ Examples
 ...           f"  DES={des}  {'OK' if pt.slo_met else 'BREACH'}")
 """
 
-import math
 import dataclasses
+import math
 from dataclasses import dataclass
 
 from ..core.fleet import Fleet, FleetConfig, PoolConfig
