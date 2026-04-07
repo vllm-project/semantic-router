@@ -36,7 +36,7 @@ func (r *OpenAIRouter) handleAnthropicRoutingWithReasoning(
 	useReasoning bool,
 	ctx *RequestContext,
 ) (*ext_proc.ProcessingResponse, error) {
-	logging.Infof("Routing to Anthropic API via Envoy for model: %s (original: %s, reasoning: %v)", targetModel, originalModel, useReasoning)
+	logging.Debugf("Routing to Anthropic API via Envoy for model: %s (original: %s, reasoning: %v)", targetModel, originalModel, useReasoning)
 	if ctx.ExpectStreamingResponse {
 		logging.Warnf("Streaming not supported for Anthropic backend, rejecting request for model: %s", targetModel)
 		return r.createErrorResponse(
@@ -55,7 +55,7 @@ func (r *OpenAIRouter) handleAnthropicRoutingWithReasoning(
 	if errorResponse != nil {
 		return errorResponse, nil
 	}
-	logging.Infof("Transformed request for Anthropic API, body size: %d bytes", len(anthropicBody))
+	logging.Debugf("Transformed request for Anthropic API, body size: %d bytes", len(anthropicBody))
 	return r.buildAnthropicRoutingResponse(targetModel, accessKey, anthropicBody, ctx), nil
 }
 
@@ -86,7 +86,7 @@ func (r *OpenAIRouter) prepareAnthropicRoutingRequest(
 			Enabled:      true,
 			BudgetTokens: anthropic_pkg.DefaultThinkingBudgetTokens,
 		}
-		logging.Infof("Enabling Anthropic thinking for model %s (decision: %s)", targetModel, decisionName)
+		logging.Debugf("Enabling Anthropic thinking for model %s (decision: %s)", targetModel, decisionName)
 	}
 
 	anthropicBody, err := anthropic_pkg.ToAnthropicRequestBodyWithThinking(openAIRequest, thinkingConfig)

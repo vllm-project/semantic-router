@@ -177,7 +177,7 @@ type completionTokensDetails struct {
 // This is used for Envoy-routed requests where the router transforms the response
 // after receiving it from Anthropic via Envoy.
 func ToOpenAIResponseBody(anthropicResponse []byte, model string) ([]byte, error) {
-	logging.Infof("Raw Anthropic response (%d bytes): %.500s", len(anthropicResponse), string(anthropicResponse))
+	logging.Debugf("Raw Anthropic response (%d bytes): %.500s", len(anthropicResponse), string(anthropicResponse))
 
 	var resp anthropic.Message
 	if err := json.Unmarshal(anthropicResponse, &resp); err != nil {
@@ -195,7 +195,7 @@ func ToOpenAIResponseBody(anthropicResponse []byte, model string) ([]byte, error
 			content += block.Text
 		case "thinking":
 			thinkingContent += block.Thinking
-			logging.Infof("Extracted thinking block (%d chars)", len(block.Thinking))
+			logging.Debugf("Extracted thinking block (%d chars)", len(block.Thinking))
 		}
 	}
 
@@ -216,7 +216,7 @@ func ToOpenAIResponseBody(anthropicResponse []byte, model string) ([]byte, error
 		// non-streaming mode, but we can infer from the total output vs text length.
 		// For now, report the output tokens as including reasoning.
 		reasoningTokens = int64(len(thinkingContent) / 4) // rough estimate
-		logging.Infof("Anthropic thinking response: %d chars thinking, %d chars text, estimated %d reasoning tokens",
+		logging.Debugf("Anthropic thinking response: %d chars thinking, %d chars text, estimated %d reasoning tokens",
 			len(thinkingContent), len(content), reasoningTokens)
 	}
 
