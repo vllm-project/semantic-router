@@ -152,8 +152,8 @@ def test_inject_local_store_runtime_defaults_populates_milvus_connection():
     assert cache["backend_type"] == "milvus"
     milvus = cache["milvus"]
     conn = milvus["connection"]
-    assert conn["host"] == "host.docker.internal"
-    assert conn["port"] == 19530  # DEFAULT_MILVUS_PORT
+    assert conn["host"] == "vllm-sr-milvus"
+    assert conn["port"] == 19530  # container gRPC port
     assert conn["database"] == "default"
     assert conn["timeout"] == 30
     coll = milvus["collection"]
