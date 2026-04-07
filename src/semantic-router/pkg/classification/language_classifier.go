@@ -81,6 +81,17 @@ func (c *LanguageClassifier) Classify(text string) (*LanguageResult, error) {
 
 	confidence := detector.ComputeLanguageConfidence(text, lang)
 
+	// lingua-go distributes probability across all 75+ supported languages, so
+	// the raw per-language confidence is typically low for short or ambiguous
+	// text. A value below 0.3 means insufficient signal — analogous to
+	// whatlanggo's IsReliable() check — so fall back to English.
+	if confidence < 0.3 {
+		return &LanguageResult{
+			LanguageCode: "en",
+			Confidence:   0.5,
+		}, nil
+	}
+
 	logging.Infof("Language classification: code=%s, confidence=%.2f (lingua-go: %s)",
 		code, confidence, lang.String())
 
