@@ -121,6 +121,60 @@ function LanguageGlyph(): JSX.Element {
   )
 }
 
+function EconomicsGlyph(): JSX.Element {
+  return (
+    <>
+      <path d="M18 26h20m-20 22h28m-20 22h20" {...strokeProps} opacity="0.52" />
+      <path d="M38 26c16 0 24 7 30 22m-22 0h22m-30 22c14 0 24-9 30-22" {...strokeProps} opacity="0.72" />
+      <circle cx="72" cy="48" r="11" {...strokeProps} />
+      <circle cx="72" cy="48" r="3" fill="currentColor" opacity="0.24" />
+      <path d="M83 48h10" {...strokeProps} />
+      <path d="M93 48c7-6 13-11 21-14m-21 14h26m-26 0c7 6 13 11 21 14" {...strokeProps} />
+      <rect x="116" y="29" width="10" height="10" rx="5" {...strokeProps} opacity="0.62" />
+      <rect x="120" y="43" width="14" height="10" rx="5" {...strokeProps} />
+      <rect x="116" y="57" width="10" height="10" rx="5" {...strokeProps} opacity="0.62" />
+      <path d="M68 31l4-8 4 8" {...strokeProps} opacity="0.4" />
+    </>
+  )
+}
+
+function SafetyGlyph(): JSX.Element {
+  return (
+    <>
+      <path d="M18 48h18m-14-14h10m-10 28h10" {...strokeProps} opacity="0.46" />
+      <rect x="42" y="24" width="24" height="48" rx="12" {...strokeProps} />
+      <path d="M54 31v34" {...strokeProps} opacity="0.58" />
+      <circle cx="54" cy="48" r="4" fill="currentColor" opacity="0.18" />
+      <path d="M66 48h10" {...strokeProps} />
+      <path d="M88 24l15 6v16c0 13-6 21-15 27-9-6-15-14-15-27V30l15-6z" {...strokeProps} />
+      <path d="M81 48l5 5 10-12" {...strokeProps} />
+      <rect x="108" y="38" width="16" height="20" rx="6" {...strokeProps} opacity="0.82" />
+      <path d="M116 42v12m-5-6h10" {...strokeProps} opacity="0.46" />
+      <circle cx="88" cy="36" r="2.4" fill="currentColor" opacity="0.22" />
+    </>
+  )
+}
+
+function MeshGlyph(): JSX.Element {
+  return (
+    <>
+      <rect x="18" y="36" width="20" height="16" rx="6" {...strokeProps} opacity="0.82" />
+      <path d="M24 58v8h8" {...strokeProps} opacity="0.42" />
+      <circle cx="58" cy="28" r="5" {...strokeProps} opacity="0.72" />
+      <circle cx="54" cy="48" r="5" {...strokeProps} />
+      <circle cx="58" cy="68" r="5" {...strokeProps} opacity="0.72" />
+      <circle cx="82" cy="38" r="5" {...strokeProps} />
+      <circle cx="82" cy="58" r="5" {...strokeProps} />
+      <path d="M38 44h11m9-12 20 8m-24 8h23m-19 16 20-8m4-18v16" {...strokeProps} />
+      <path d="M88 48h10" {...strokeProps} />
+      <path d="M101 60h21a8 8 0 0 0 0-16 10 10 0 0 0-18-4 7 7 0 0 0-3 20z" {...strokeProps} />
+      <circle cx="106" cy="48" r="2.6" fill="currentColor" opacity="0.22" />
+      <circle cx="114" cy="48" r="2.6" fill="currentColor" opacity="0.3" />
+      <circle cx="122" cy="48" r="2.6" fill="currentColor" opacity="0.18" />
+    </>
+  )
+}
+
 function SelectionGlyph(): JSX.Element {
   return (
     <>
@@ -179,6 +233,12 @@ function renderGlyph(kind: CapabilityGlyphKind): JSX.Element {
       return <LanguageGlyph />
     case 'selection':
       return <SelectionGlyph />
+    case 'economics':
+      return <EconomicsGlyph />
+    case 'safety':
+      return <SafetyGlyph />
+    case 'mesh':
+      return <MeshGlyph />
     case 'docs':
       return <DocsGlyph />
     default:

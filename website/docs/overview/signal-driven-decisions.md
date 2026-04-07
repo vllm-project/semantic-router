@@ -1,5 +1,6 @@
 ---
 sidebar_position: 4
+description: Core architecture guide to signal-driven decisions, showing how Semantic Router combines multiple signals into better routing outcomes.
 ---
 
 # What is Signal-Driven Decision?

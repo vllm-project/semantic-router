@@ -1,12 +1,24 @@
-import React from 'react'
+import React, { useEffect, useMemo } from 'react'
 import Root from '@theme-original/Root'
-import ScrollToTop from '../components/ScrollToTop'
 import Head from '@docusaurus/Head'
 import { useLocation } from '@docusaurus/router'
-import { useEffect, useMemo } from 'react'
+import ScrollToTop from '../components/ScrollToTop'
+
+function normalizePath(pathname: string): string {
+  const normalized = pathname.replace(/\/+$/, '')
+  return normalized === '' ? '/' : normalized
+}
+
+function stripLocalePrefix(pathname: string): string {
+  return normalizePath(pathname.replace(/^\/zh-Hans(?=\/|$)/, ''))
+}
+
+function toAbsoluteUrl(base: string, pathname: string): string {
+  return pathname === '/' ? base : `${base}${pathname}`
+}
 
 function resolveRouteState(pathname: string): { pageKey: string, routeKind: string } {
-  const normalized = pathname.replace(/^\/zh-Hans(?=\/|$)/, '') || '/'
+  const normalized = stripLocalePrefix(pathname)
 
   if (normalized === '/') {
     return { pageKey: 'home', routeKind: 'home' }
@@ -38,8 +50,12 @@ function resolveRouteState(pathname: string): { pageKey: string, routeKind: stri
 export default function RootWrapper(props: React.ComponentProps<typeof Root>): React.ReactElement {
   const location = useLocation()
   const base = 'https://vllm-semantic-router.com'
-  const canonicalUrl = `${base}${location.pathname}`.replace(/\/$/, '')
-  const routeState = useMemo(() => resolveRouteState(location.pathname), [location.pathname])
+  const pathname = normalizePath(location.pathname || '/')
+  const localeNeutralPath = stripLocalePrefix(pathname)
+  const canonicalUrl = toAbsoluteUrl(base, pathname)
+  const englishUrl = toAbsoluteUrl(base, localeNeutralPath)
+  const chineseUrl = toAbsoluteUrl(base, localeNeutralPath === '/' ? '/zh-Hans' : `/zh-Hans${localeNeutralPath}`)
+  const routeState = useMemo(() => resolveRouteState(pathname), [pathname])
 
   useEffect(() => {
     document.documentElement.dataset.routeKind = routeState.routeKind
@@ -59,6 +75,9 @@ export default function RootWrapper(props: React.ComponentProps<typeof Root>): R
     <>
       <Head>
         <link rel="canonical" href={canonicalUrl} />
+        <link rel="alternate" hrefLang="en" href={englishUrl} />
+        <link rel="alternate" hrefLang="zh-Hans" href={chineseUrl} />
+        <link rel="alternate" hrefLang="x-default" href={englishUrl} />
         <meta property="og:url" content={canonicalUrl} />
         <meta name="twitter:url" content={canonicalUrl} />
       </Head>

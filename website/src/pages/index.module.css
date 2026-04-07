@@ -131,7 +131,22 @@
 }
 
 .capabilitySection {
+  position: relative;
+  overflow: hidden;
   padding: 5rem 0;
+}
+
+.capabilitySection::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background:
+    radial-gradient(circle at 15% 18%, rgba(255, 255, 255, 0.07), transparent 30%),
+    linear-gradient(90deg, rgba(255, 255, 255, 0.018) 1px, transparent 1px),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.018) 1px, transparent 1px);
+  background-size: auto, 32px 32px, 32px 32px;
+  opacity: 0.42;
 }
 
 .encoderSection {
@@ -173,94 +188,310 @@
   font-size: 1rem;
 }
 
-.capabilityGrid {
+.capabilityFrame {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  gap: 1.15rem;
+}
+
+.problemPanel {
+  display: grid;
+  grid-template-columns: minmax(0, 0.64fr) minmax(280px, 0.36fr);
+  align-items: stretch;
+  gap: 1rem;
+}
+
+.problemIntro,
+.problemChecklist,
+.valueCard {
+  border: 1px solid var(--site-border);
+  background: var(--site-surface);
+}
+
+.problemIntro {
+  padding: 1.8rem;
+  border-radius: 1.45rem;
+  background:
+    radial-gradient(circle at 0% 0%, rgba(255, 255, 255, 0.06), transparent 36%),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.02), transparent 44%),
+    var(--site-surface);
+}
+
+.problemIntro h2 {
+  max-width: 10ch;
+  margin: 0.8rem 0 0;
+  font-size: clamp(2.6rem, 5vw, 4.5rem);
+  line-height: 0.92;
+}
+
+.problemIntro p {
+  max-width: 42rem;
+  margin: 1rem 0 0;
+  font-size: 1.03rem;
+  line-height: 1.7;
+  color: var(--site-muted-bright);
+}
+
+.problemAxes {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.68rem;
+  margin-top: 1.4rem;
+}
+
+.problemAxis {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.46rem 0.8rem;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--site-muted-bright);
+  font-size: 0.78rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.problemChecklist {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  height: 100%;
+  padding: 1.6rem;
+  border-radius: 1.45rem;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.024), rgba(255, 255, 255, 0.01)),
+    var(--site-surface-alt);
+}
+
+.problemChecklistHeader {
+  display: grid;
+  gap: 0.7rem;
+}
+
+.problemChecklistHeader p {
+  margin: 0;
+  color: var(--site-muted-bright);
+  font-size: 0.92rem;
+  line-height: 1.6;
+}
+
+.problemChecklistList {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 0.72rem;
+  counter-reset: system-job;
+}
+
+.problemChecklistItem {
+  position: relative;
+  min-height: 4.15rem;
+  display: flex;
+  align-items: center;
+  padding: 0.9rem 0.95rem 0.9rem 3.05rem;
+  border: 1px solid rgba(255, 255, 255, 0.07);
+  border-radius: 1rem;
+  background: rgba(255, 255, 255, 0.035);
+  color: var(--site-muted-bright);
+  font-size: 0.95rem;
+  line-height: 1.55;
+}
+
+.problemChecklistItem::before {
+  counter-increment: system-job;
+  content: '0' counter(system-job);
+  position: absolute;
+  left: 0.95rem;
+  top: 0.9rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.5rem;
+  height: 1.5rem;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.05);
+  color: var(--site-muted);
+  font-family: var(--ifm-font-family-monospace);
+  font-size: 0.72rem;
+  letter-spacing: 0.08em;
+}
+
+.problemChecklistFooter {
+  display: grid;
+  gap: 0.85rem;
+  margin-top: auto;
+  padding-top: 1rem;
+  border-top: 1px solid rgba(255, 255, 255, 0.07);
+}
+
+.problemChecklistFooter p {
+  max-width: 18rem;
+  margin: 0;
+  color: var(--site-muted);
+  font-size: 0.82rem;
+  line-height: 1.55;
+}
+
+.problemChecklistMeta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.55rem;
+}
+
+.problemChecklistMetaItem {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.42rem 0.72rem;
+  border: 1px solid rgba(255, 255, 255, 0.07);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.03);
+  color: var(--site-muted);
+  font-size: 0.74rem;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.valueIntro {
+  display: grid;
+  grid-template-columns: minmax(220px, 0.32fr) minmax(0, 0.68fr);
+  gap: 2rem;
+  align-items: end;
+  margin-top: 0.2rem;
+}
+
+.valueIntro p {
+  max-width: 34rem;
+  margin: 0;
+  color: var(--site-muted-bright);
+}
+
+.valueGrid {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 1.1rem;
 }
 
-.capabilityCard {
+.valueCard {
   position: relative;
   overflow: hidden;
-  min-height: 15.75rem;
   display: grid;
-  grid-template-rows: auto 1fr;
-  justify-items: center;
-  gap: 1.25rem;
-  padding: 1.5rem;
-  border: 1px solid var(--site-border);
-  border-radius: 1.2rem;
+  grid-template-rows: auto 1fr auto;
+  gap: 1rem;
+  min-height: 18rem;
+  padding: 1.45rem;
+  border-radius: 1.3rem;
   background:
-    radial-gradient(circle at 50% 0%, rgba(255, 255, 255, 0.035), transparent 30%),
-    linear-gradient(180deg, rgba(255, 255, 255, 0.016), transparent 34%),
+    radial-gradient(circle at 100% 0%, rgba(255, 255, 255, 0.04), transparent 34%),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.02), transparent 36%),
     var(--site-surface);
-  text-align: center;
   transition:
     border-color 180ms ease,
     transform 180ms ease,
     background 180ms ease;
 }
 
-.capabilityCardHead {
-  display: grid;
-  width: 100%;
-  justify-items: center;
-  align-content: start;
-  gap: 1.05rem;
+.valueCardHeader {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
 }
 
-.capabilityVisual {
-  display: flex;
-  width: 100%;
-  min-height: 6.35rem;
+.valueCardIndex {
+  display: inline-flex;
   align-items: center;
   justify-content: center;
-  padding: 1rem 1.2rem;
-  border: 1px solid rgba(255, 255, 255, 0.06);
+  width: 2rem;
+  height: 2rem;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--site-muted);
+  font-family: var(--ifm-font-family-monospace);
+  font-size: 0.74rem;
+  letter-spacing: 0.08em;
+}
+
+.valueGlyphShell {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 6.8rem;
+  min-height: 4.4rem;
+  padding: 0.72rem 0.85rem;
+  border: 1px solid rgba(255, 255, 255, 0.07);
   border-radius: 1rem;
   background:
-    radial-gradient(circle at 50% 50%, rgba(255, 255, 255, 0.028), transparent 58%),
-    linear-gradient(135deg, rgba(255, 255, 255, 0.022), rgba(255, 255, 255, 0.006)),
-    rgba(255, 255, 255, 0.008);
-  color: rgba(255, 255, 255, 0.52);
+    radial-gradient(circle at 50% 50%, rgba(255, 255, 255, 0.04), transparent 58%),
+    linear-gradient(135deg, rgba(255, 255, 255, 0.02), rgba(255, 255, 255, 0.008)),
+    rgba(255, 255, 255, 0.02);
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.03);
 }
 
-.capabilityGlyph {
-  width: min(100%, 11rem);
+.valueGlyph {
+  width: 5.2rem;
   height: auto;
-  opacity: 0.94;
+  color: rgba(255, 255, 255, 0.46);
+  opacity: 0.96;
   transition:
     transform 180ms ease,
     color 180ms ease,
     opacity 180ms ease;
 }
 
-.capabilityCard p {
-  margin: 0;
-  font-size: 0.96rem;
-  line-height: 1.6;
-  max-width: 17rem;
-  margin-inline: auto;
-  color: var(--site-muted-bright);
-  text-wrap: balance;
+.valueCardCopy {
+  display: grid;
+  gap: 0.8rem;
 }
 
-.capabilityCard:hover {
+.valueCardCopy h3 {
+  margin: 0;
+  font-size: 1.35rem;
+  line-height: 1.05;
+}
+
+.valueCardCopy p {
+  margin: 0;
+  color: var(--site-muted-bright);
+  font-size: 0.98rem;
+  line-height: 1.68;
+}
+
+.valueCardDetail {
+  margin: 0;
+  padding-top: 0.9rem;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  color: var(--site-muted);
+  font-size: 0.77rem;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.valueCard:hover {
   transform: translateY(-3px);
   border-color: var(--site-border-strong);
   background:
-    radial-gradient(circle at 50% 0%, rgba(255, 255, 255, 0.04), transparent 30%),
-    linear-gradient(180deg, rgba(255, 255, 255, 0.02), transparent 34%),
+    radial-gradient(circle at 100% 0%, rgba(255, 255, 255, 0.05), transparent 34%),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.025), transparent 36%),
     var(--site-surface-alt);
 }
 
-.capabilityCard:hover .capabilityVisual {
-  color: rgba(255, 255, 255, 0.78);
+.valueCard:hover .valueGlyphShell {
+  border-color: rgba(255, 255, 255, 0.12);
+  background:
+    radial-gradient(circle at 50% 50%, rgba(255, 255, 255, 0.05), transparent 58%),
+    linear-gradient(135deg, rgba(255, 255, 255, 0.026), rgba(255, 255, 255, 0.01)),
+    rgba(255, 255, 255, 0.028);
 }
 
-.capabilityCard:hover .capabilityGlyph {
-  transform: translateY(-2px) scale(1.01);
+.valueCard:hover .valueGlyph {
+  transform: translateY(-2px) scale(1.02);
+  color: rgba(255, 255, 255, 0.72);
 }
 
 .encoderShowcase {
@@ -467,7 +698,9 @@
   .sectionHeading,
   .encoderShowcase,
   .bandGrid,
-  .capabilityGrid {
+  .problemPanel,
+  .valueIntro,
+  .valueGrid {
     grid-template-columns: 1fr;
   }
 
@@ -480,12 +713,12 @@
     padding: 3rem 0 2rem;
   }
 
-  .capabilityVisual {
-    min-height: 5.2rem;
+  .problemIntro h2 {
+    max-width: 12ch;
   }
 
-  .capabilityGlyph {
-    width: min(100%, 10rem);
+  .valueGlyph {
+    width: 5rem;
   }
 
   .encoderLeadStack {
@@ -515,6 +748,7 @@
     font-size: 0.98rem;
   }
 
+  .capabilitySection,
   .encoderSection {
     padding: 3.5rem 0;
   }
@@ -529,11 +763,22 @@
     grid-template-columns: 1fr;
   }
 
+  .problemChecklistItem {
+    min-height: auto;
+    padding-left: 3rem;
+  }
+
+  .valueCard {
+    min-height: auto;
+  }
+
   .band,
+  .problemIntro,
+  .problemChecklist,
+  .valueCard,
   .encoderLead,
   .encoderPipelineFrame,
-  .encoderCard,
-  .capabilityCard {
+  .encoderCard {
     padding: 1.15rem;
   }
 }

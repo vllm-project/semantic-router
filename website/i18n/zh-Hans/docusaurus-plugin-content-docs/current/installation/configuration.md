@@ -1,5 +1,6 @@
 ---
 sidebar_position: 4
+description: v0.3 canonical YAML 配置契约实用指南，覆盖 CLI、控制台、Helm 与 Operator 的统一配置方式。
 translation:
   source_commit: "baa07413"
   source_file: "docs/installation/configuration.md"
