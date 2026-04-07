@@ -1,8 +1,10 @@
 ---
 slug: vllm-sr-amd
 title: "AMD × vLLM Semantic Router: Building the System Intelligence Together"
+description: How AMD and vLLM Semantic Router are building system intelligence for mixture-of-model routing, governance, and inference on AMD GPUs.
 authors: [Xunzhuo]
 tags: [amd, collaboration, hardware, vllm, semantic-router]
+image: /img/amd-0.png
 ---
 
 Over the past several months, AMD and the vLLM SR Team have been collaborating to bring vLLM Semantic Router (VSR) to AMD GPUs—not just as a performance optimization, but as a fundamental shift in how we think about AI system architecture.

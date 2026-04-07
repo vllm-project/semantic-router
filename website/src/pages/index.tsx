@@ -1,4 +1,5 @@
 import React from 'react'
+import Head from '@docusaurus/Head'
 import Layout from '@theme/Layout'
 import Translate, { translate } from '@docusaurus/Translate'
 import useDocusaurusContext from '@docusaurus/useDocusaurusContext'
@@ -8,6 +9,7 @@ import PaperFigureShowcase from '@site/src/components/PaperFigureShowcase'
 import ResearchPaperCarousel from '@site/src/components/ResearchPaperCarousel'
 import TeamCarousel from '@site/src/components/TeamCarousel'
 import { researchPapers } from '@site/src/data/researchContent'
+import { SITE_SOCIAL_PREVIEW_IMAGE_PATH } from '@site/src/data/socialPreview'
 import TransformerPipelineAnimation from '@site/src/components/TransformerPipelineAnimation'
 import CapabilityGlyph, { type CapabilityGlyphKind } from '@site/src/components/site/CapabilityGlyph'
 import DitherField from '@site/src/components/site/DitherField'
@@ -15,6 +17,18 @@ import { PageIntro, PillLink, SectionLabel, StatStrip } from '@site/src/componen
 import styles from './index.module.css'
 
 const paperCount = researchPapers.length
+const homepageMetaTitle = translate({
+  id: 'homepage.meta.title',
+  message: 'LLM Routing Control Plane for Mixture-of-Models',
+})
+const homepageMetaDescription = translate({
+  id: 'homepage.meta.description',
+  message: 'Signal-driven LLM routing and model selection for mixture-of-model serving, AI gateways, and policy-aware control planes.',
+})
+const homepageSocialTitle = translate({
+  id: 'homepage.meta.socialTitle',
+  message: 'vLLM Semantic Router — Signal-Driven LLM Routing',
+})
 
 const heroStats = [
   {
@@ -46,59 +60,80 @@ const heroStats = [
   },
 ]
 
-interface CapabilityCard {
+interface ValueCard {
+  detail: string
+  index: string
   kind: CapabilityGlyphKind
   text: string
   title: string
 }
 
-const capabilityCards: CapabilityCard[] = [
+const problemAxes = [
+  translate({ id: 'homepage.capabilities.axis.capability', message: 'Capability' }),
+  translate({ id: 'homepage.capabilities.axis.cost', message: 'Cost' }),
+  translate({ id: 'homepage.capabilities.axis.privacy', message: 'Privacy' }),
+  translate({ id: 'homepage.capabilities.axis.latency', message: 'Latency' }),
+]
+
+const problemTasks = [
+  translate({
+    id: 'homepage.capabilities.task.choose',
+    message: 'Choose the right model lane for each request.',
+  }),
+  translate({
+    id: 'homepage.capabilities.task.connect',
+    message: 'Connect edge, private, and frontier models without fragmenting the product.',
+  }),
+  translate({
+    id: 'homepage.capabilities.task.govern',
+    message: 'Govern cost, safety, and privacy at routing time.',
+  }),
+]
+
+const problemMeta = [
+  translate({ id: 'homepage.capabilities.meta.selection', message: 'Selection' }),
+  translate({ id: 'homepage.capabilities.meta.connection', message: 'Connection' }),
+  translate({ id: 'homepage.capabilities.meta.governance', message: 'Governance' }),
+]
+
+const valueCards: ValueCard[] = [
   {
-    kind: 'signal',
-    title: translate({ id: 'homepage.capabilities.signal.title', message: 'Signal extraction' }),
+    index: '01',
+    kind: 'economics',
+    title: translate({ id: 'homepage.capabilities.value1.title', message: 'Token economics' }),
     text: translate({
-      id: 'homepage.capabilities.signal.text',
-      message: 'Heuristic rules, learned classifiers, history-aware reasks, and knowledge base signals turn raw requests into typed routing state.',
+      id: 'homepage.capabilities.value1.text',
+      message: 'Send routine traffic to efficient lanes, reserve frontier reasoning for the moments that pay back, and turn model choice into compounding ROI.',
+    }),
+    detail: translate({
+      id: 'homepage.capabilities.value1.detail',
+      message: 'More useful output per token.',
     }),
   },
   {
-    kind: 'projection',
-    title: translate({ id: 'homepage.capabilities.projection.title', message: 'Projection coordination' }),
+    index: '02',
+    kind: 'safety',
+    title: translate({ id: 'homepage.capabilities.value2.title', message: 'LLM safety' }),
     text: translate({
-      id: 'homepage.capabilities.projection.text',
-      message: 'Partitions, scores, and mappings coordinate matched evidence into reusable routing facts.',
+      id: 'homepage.capabilities.value2.text',
+      message: 'Move jailbreak, PII, and hallucination handling into the decision path so unsafe traffic is intercepted before it becomes product behavior.',
+    }),
+    detail: translate({
+      id: 'homepage.capabilities.value2.detail',
+      message: 'Safety becomes a control layer, not a patch.',
     }),
   },
   {
-    kind: 'decision',
-    title: translate({ id: 'homepage.capabilities.decision.title', message: 'Decision engine' }),
+    index: '03',
+    kind: 'mesh',
+    title: translate({ id: 'homepage.capabilities.value3.title', message: 'Fullmesh intelligence' }),
     text: translate({
-      id: 'homepage.capabilities.decision.text',
-      message: 'Signals and projection outputs meet symbolic rules in auditable routing logic.',
+      id: 'homepage.capabilities.value3.text',
+      message: 'Coordinate local, private, and frontier models as one adaptive mesh for personal AI at the edge and intelligent MaaS in the cloud.',
     }),
-  },
-  {
-    kind: 'plugin',
-    title: translate({ id: 'homepage.capabilities.plugins.title', message: 'Plugin chain' }),
-    text: translate({
-      id: 'homepage.capabilities.plugins.text',
-      message: 'Cache, safety, rewrite, and tracing attach as composable behaviors.',
-    }),
-  },
-  {
-    kind: 'selection',
-    title: translate({ id: 'homepage.capabilities.research.title', message: 'Frontier LLM systems' }),
-    text: translate({
-      id: 'homepage.capabilities.research.text',
-      message: 'Research drives the stack itself, exploring frontier LLM systems beyond settled patterns.',
-    }),
-  },
-  {
-    kind: 'docs',
-    title: translate({ id: 'homepage.capabilities.docs.title', message: 'Full dashboard support' }),
-    text: translate({
-      id: 'homepage.capabilities.docs.text',
-      message: 'Operate routing, topology, controls, and runtime feedback from one integrated dashboard.',
+    detail: translate({
+      id: 'homepage.capabilities.value3.detail',
+      message: 'One architecture from device to managed service.',
     }),
   },
 ]
@@ -239,37 +274,96 @@ function CapabilitySection(): JSX.Element {
   return (
     <section className={styles.capabilitySection}>
       <div className="site-shell-container">
-        <div className={styles.sectionHeading}>
-          <SectionLabel>
-            <Translate id="homepage.capabilities.label">Core logic</Translate>
-          </SectionLabel>
-          <div>
-            <h2>
-              <Translate id="homepage.capabilities.heading">
-                Charting the LLM system brain.
-              </Translate>
-            </h2>
+        <div className={styles.capabilityFrame}>
+          <div className={styles.problemPanel}>
+            <div className={styles.problemIntro}>
+              <SectionLabel>
+                <Translate id="homepage.capabilities.label">Why this matters</Translate>
+              </SectionLabel>
+              <h2>
+                <Translate id="homepage.capabilities.heading">
+                  Too many models. Too many boundaries.
+                </Translate>
+              </h2>
+              <p>
+                <Translate id="homepage.capabilities.copy">
+                  Models now vary across capability, cost, privacy, and latency. Once you operate more
+                  than one lane, the hard part is no longer prompting a single model. It is selecting,
+                  connecting, and governing the right model system for every request.
+                </Translate>
+              </p>
+              <div className={styles.problemAxes}>
+                {problemAxes.map(axis => (
+                  <span key={axis} className={styles.problemAxis}>
+                    {axis}
+                  </span>
+                ))}
+              </div>
+            </div>
+
+            <aside className={styles.problemChecklist}>
+              <div className={styles.problemChecklistHeader}>
+                <SectionLabel>
+                  <Translate id="homepage.capabilities.checklist.label">The system job</Translate>
+                </SectionLabel>
+                <p>
+                  <Translate id="homepage.capabilities.checklist.copy">
+                    Every request crosses the same operating questions before it becomes product behavior.
+                  </Translate>
+                </p>
+              </div>
+              <ul className={styles.problemChecklistList}>
+                {problemTasks.map(task => (
+                  <li key={task} className={styles.problemChecklistItem}>
+                    {task}
+                  </li>
+                ))}
+              </ul>
+              <div className={styles.problemChecklistFooter}>
+                <p>
+                  <Translate id="homepage.capabilities.checklist.footer">
+                    Selection, connection, and governance have to move together.
+                  </Translate>
+                </p>
+                <div className={styles.problemChecklistMeta}>
+                  {problemMeta.map(item => (
+                    <span key={item} className={styles.problemChecklistMetaItem}>
+                      {item}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            </aside>
+          </div>
+
+          <div className={styles.valueIntro}>
+            <SectionLabel>
+              <Translate id="homepage.capabilities.values.label">What vLLM Semantic Router enables</Translate>
+            </SectionLabel>
             <p>
-              <Translate id="homepage.capabilities.copy">
-                A research-driven stack for uncharted territory, probing the frontier where signals,
-                projections, policies, and models converge into one intelligence layer.
+              <Translate id="homepage.capabilities.values.copy">
+                Routing becomes the control plane.
               </Translate>
             </p>
           </div>
-        </div>
 
-        <div className={styles.capabilityGrid}>
-          {capabilityCards.map(card => (
-            <article key={card.title} className={styles.capabilityCard}>
-              <div className={styles.capabilityCardHead}>
-                <SectionLabel>{card.title}</SectionLabel>
-                <div className={styles.capabilityVisual}>
-                  <CapabilityGlyph kind={card.kind} className={styles.capabilityGlyph} />
+          <div className={styles.valueGrid}>
+            {valueCards.map(card => (
+              <article key={card.title} className={styles.valueCard}>
+                <div className={styles.valueCardHeader}>
+                  <span className={styles.valueCardIndex}>{card.index}</span>
+                  <div className={styles.valueGlyphShell}>
+                    <CapabilityGlyph kind={card.kind} className={styles.valueGlyph} />
+                  </div>
                 </div>
-              </div>
-              <p>{card.text}</p>
-            </article>
-          ))}
+                <div className={styles.valueCardCopy}>
+                  <h3>{card.title}</h3>
+                  <p>{card.text}</p>
+                </div>
+                <p className={styles.valueCardDetail}>{card.detail}</p>
+              </article>
+            ))}
+          </div>
         </div>
       </div>
     </section>
@@ -408,15 +502,46 @@ function ClosingBands(): JSX.Element {
 
 export default function Home(): JSX.Element {
   const { siteConfig } = useDocusaurusContext()
+  const ogImage = new URL(SITE_SOCIAL_PREVIEW_IMAGE_PATH, siteConfig.url).toString()
+  const homepageStructuredData = {
+    '@context': 'https://schema.org',
+    '@type': 'WebSite',
+    'name': 'vLLM Semantic Router',
+    'url': siteConfig.url,
+    'description': homepageMetaDescription,
+    'inLanguage': ['en-US', 'zh-Hans'],
+    'publisher': {
+      '@type': 'Organization',
+      'name': 'vLLM Semantic Router Team',
+      'url': 'https://github.com/vllm-project/semantic-router',
+    },
+    'sameAs': [
+      'https://github.com/vllm-project/semantic-router',
+      'https://huggingface.co/LLM-Semantic-Router',
+    ],
+  }
 
   return (
     <Layout
-      title={siteConfig.title}
-      description={translate({
-        id: 'homepage.meta.description',
-        message: 'Signal-driven decision routing for mixture-of-model serving.',
-      })}
+      title={homepageMetaTitle}
+      description={homepageMetaDescription}
     >
+      <Head>
+        <meta property="og:title" content={homepageSocialTitle} />
+        <meta property="og:description" content={homepageMetaDescription} />
+        <meta property="og:image" content={ogImage} />
+        <meta property="og:image:alt" content="vLLM Semantic Router social preview" />
+        <meta property="og:type" content="website" />
+        <meta name="twitter:card" content="summary_large_image" />
+        <meta name="twitter:title" content={homepageSocialTitle} />
+        <meta name="twitter:description" content={homepageMetaDescription} />
+        <meta name="twitter:image" content={ogImage} />
+        <meta name="twitter:image:alt" content="vLLM Semantic Router social preview" />
+        <script
+          type="application/ld+json"
+          dangerouslySetInnerHTML={{ __html: JSON.stringify(homepageStructuredData) }}
+        />
+      </Head>
       <main className={styles.page}>
         <DitherHero />
 

@@ -1,6 +1,7 @@
 ---
 slug: v0-3-themis-roadmap
 title: "v0.3 Themis Roadmap: Stability at Scale"
+description: The v0.3 Themis roadmap for vLLM Semantic Router, focused on production stability, safer operations, and a stronger platform contract at scale.
 authors: [Xunzhuo, rootfs]
 tags: [roadmap, themis, v0.3, stability, semantic-router]
 image: /img/blog/themis.png

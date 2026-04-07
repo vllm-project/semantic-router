@@ -1,8 +1,10 @@
 ---
 slug: mom-on-amd-gpu
 title: "Building Mixture-of-Models on AMD GPUs with vLLM-SR"
+description: How to run mixture-of-model workloads on AMD GPUs with coordinated routing, governance, and inference using vLLM Semantic Router.
 authors: [Xunzhuo]
 tags: [amd, mom, hardware, vllm, semantic-router]
+image: /img/blog/mom-3.png
 ---
 
 <div align="center">

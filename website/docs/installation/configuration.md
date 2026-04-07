@@ -1,5 +1,6 @@
 ---
 sidebar_position: 4
+description: Practical guide to the v0.3 canonical YAML configuration contract across CLI, dashboard, Helm, and operator deployments.
 ---
 
 # Configuration
