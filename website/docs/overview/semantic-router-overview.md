@@ -1,5 +1,6 @@
 ---
 sidebar_position: 2
+description: Overview of Semantic Router, explaining how multi-signal model selection improves cost, quality, safety, and flexibility in LLM systems.
 ---
 
 # What is Semantic Router?

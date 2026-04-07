@@ -1,8 +1,10 @@
 ---
 slug: vllm-sr-on-amd-developer-cloud
 title: "Deploying vLLM Semantic Router on AMD Developer Cloud"
+description: A practical guide to deploying vLLM Semantic Router on AMD Developer Cloud with ROCm, reference profiles, and end-to-end validation.
 authors: [Xunzhuo]
 tags: [amd, rocm, deployment, hardware, vllm, semantic-router]
+image: /img/amd-deploy-0.png
 ---
 
 <div align="center">

@@ -26,7 +26,7 @@ It delivers three core values:
 
 - **Token economics**: reduce wasted tokens, increase effective output, and maximize the value of every token.
 - **LLM safety**: detect jailbreaks, sensitive leakage, and hallucinations so agents remain controllable, trustworthy, and auditable.
-- **Cloud-edge intelligence**: route between local models and frontier models based on cost, privacy, and capability to build controllable personal AI.
+- **Fullmesh intelligence**: build personal AI at the edge and intelligent MaaS in the cloud by coordinating local, private, and frontier models across cost, privacy, and capability boundaries.
 
 ## Getting Started
 

@@ -1,8 +1,10 @@
 ---
 slug: signal-decision
 title: "Signal-Decision Driven Architecture: Reshaping Semantic Routing at Scale"
+description: Why vLLM Semantic Router moved from single-classification routing to a signal-decision architecture for scalable, production AI systems.
 authors: [Xunzhuo]
 tags: [architecture, signal-decision, routing, vllm, semantic-router]
+image: /img/signal-0.png
 ---
 
 The earlier versions of vLLM Semantic Router relied on classification-based routing, a straightforward approach where user queries are classified into one of 14 MMLU domain categories, and then routed to corresponding models. While this worked for basic scenarios, we quickly discovered its limitations when building production AI systems for enterprises.

@@ -1,4 +1,5 @@
 ---
+description: 语义路由器概览，说明多信号模型选择如何在 LLM 系统中提升成本、质量、安全与灵活性。
 translation:
   source_commit: "ab2aa160"
   source_file: "docs/overview/semantic-router-overview.md"
