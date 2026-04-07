@@ -31,7 +31,7 @@ def agent_cdf():
     return _load_cdf("agent_heavy")
 
 
-# ── _calibrate uses seq-len-aware service_time ────────────────────────────────
+# ── calibrate uses seq-len-aware service_time ─────────────────────────────────
 
 
 class TestCalibrateSeqLenAware:
@@ -39,17 +39,17 @@ class TestCalibrateSeqLenAware:
         """Short pool should have higher service rate (μ) than long pool
         for the same workload slice, because requests are shorter."""
         from fleet_sim.gpu_profiles.profiles import A100_80GB
-        from fleet_sim.optimizer.base import _calibrate
+        from fleet_sim.optimizer.analytical import calibrate
 
-        mu_short, _, _, _ = _calibrate(lmsys_cdf, pool_max=2048, gpu=A100_80GB)
-        mu_long, _, _, _ = _calibrate(lmsys_cdf, pool_max=65536, gpu=A100_80GB)
+        mu_short, _, _, _ = calibrate(lmsys_cdf, pool_max=2048, gpu=A100_80GB)
+        mu_long, _, _, _ = calibrate(lmsys_cdf, pool_max=65536, gpu=A100_80GB)
         assert mu_short > mu_long
 
     def test_cv2_positive(self, azure_cdf):
         from fleet_sim.gpu_profiles.profiles import A100_80GB
-        from fleet_sim.optimizer.base import _calibrate
+        from fleet_sim.optimizer.analytical import calibrate
 
-        _, cv2, _, _ = _calibrate(azure_cdf, pool_max=8192, gpu=A100_80GB)
+        _, cv2, _, _ = calibrate(azure_cdf, pool_max=8192, gpu=A100_80GB)
         assert cv2 > 0
 
 
