@@ -317,8 +317,8 @@ def inject_local_store_runtime_defaults(
         cache_config["backend_type"] = "milvus"
 
     connection_defaults = {
-        "host": "host.docker.internal",
-        "port": stack_layout.milvus_port,
+        "host": stack_layout.milvus_container_name,
+        "port": 19530,
         "database": "default",
         "timeout": 30,
     }
