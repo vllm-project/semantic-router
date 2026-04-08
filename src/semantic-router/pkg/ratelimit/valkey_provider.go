@@ -294,17 +294,7 @@ func (p *ValkeyLimiterProvider) valkeyKey(userID string, unit time.Duration) str
 func (p *ValkeyLimiterProvider) calculateCELCost(model string, usage TokenUsage) int64 {
 	// Try full pricing first (includes cache rates)
 	if p.pricingFullFunc != nil {
-		rates, ok := p.pricingFullFunc(model)
-		if ok {
-			inputRate := int64(rates.PromptPer1M * 100)
-			outputRate := int64(rates.CompletionPer1M * 100)
-			cost := int64(usage.InputTokens)*inputRate + int64(usage.OutputTokens)*outputRate
-			if usage.CachedInputTokens > 0 && rates.CacheReadPer1M > 0 {
-				cost += int64(usage.CachedInputTokens) * int64(rates.CacheReadPer1M*100)
-			}
-			if usage.CacheCreationTokens > 0 && rates.CacheWritePer1M > 0 {
-				cost += int64(usage.CacheCreationTokens) * int64(rates.CacheWritePer1M*100)
-			}
+		if cost, ok := p.calculateCELCostFull(model, usage); ok {
 			return cost
 		}
 	}
@@ -322,6 +312,24 @@ func (p *ValkeyLimiterProvider) calculateCELCost(model string, usage TokenUsage)
 	inputRate := int64(promptPer1M * 100)
 	outputRate := int64(completionPer1M * 100)
 	return int64(usage.InputTokens)*inputRate + int64(usage.OutputTokens)*outputRate
+}
+
+// calculateCELCostFull computes CEL cost using full pricing rates (including cache).
+func (p *ValkeyLimiterProvider) calculateCELCostFull(model string, usage TokenUsage) (int64, bool) {
+	rates, ok := p.pricingFullFunc(model)
+	if !ok {
+		return 0, false
+	}
+	inputRate := int64(rates.PromptPer1M * 100)
+	outputRate := int64(rates.CompletionPer1M * 100)
+	cost := int64(usage.InputTokens)*inputRate + int64(usage.OutputTokens)*outputRate
+	if usage.CachedInputTokens > 0 && rates.CacheReadPer1M > 0 {
+		cost += int64(usage.CachedInputTokens) * int64(rates.CacheReadPer1M*100)
+	}
+	if usage.CacheCreationTokens > 0 && rates.CacheWritePer1M > 0 {
+		cost += int64(usage.CacheCreationTokens) * int64(rates.CacheWritePer1M*100)
+	}
+	return cost, true
 }
 
 func unitLabel(d time.Duration) string {
