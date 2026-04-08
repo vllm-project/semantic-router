@@ -116,11 +116,16 @@ except Exception as e:
 done
 
 cp "${REPO_ROOT}/e2e/config/config.memory-user.yaml" "${CONFIG_FILE}"
-python3 -c 'from pathlib import Path; path = Path("'"${CONFIG_FILE}"'"); path.write_text(path.read_text().replace("host.docker.internal:8000", "llm-katan:8000"))'
+python3 -c 'from pathlib import Path; path = Path("'"${CONFIG_FILE}"'"); t = path.read_text(); t = t.replace("host.docker.internal:8000", "llm-katan:8000"); t = t.replace("host.docker.internal:19530", "vllm-sr-milvus:19530"); path.write_text(t)'
 
 if ! "${CONTAINER_RUNTIME}" network inspect "${VLLM_SR_NETWORK}" >/dev/null 2>&1; then
     "${CONTAINER_RUNTIME}" network create "${VLLM_SR_NETWORK}" >/dev/null
 fi
+
+# Connect the externally-started Milvus to the vllm-sr network so the router
+# container can reach it by the name vllm-sr serve expects.
+"${CONTAINER_RUNTIME}" network connect --alias vllm-sr-milvus "${VLLM_SR_NETWORK}" milvus-semantic-cache 2>/dev/null || true
+echo "Milvus connected to ${VLLM_SR_NETWORK} as vllm-sr-milvus"
 
 "${CONTAINER_RUNTIME}" run -d --name llm-katan \
     --network "${VLLM_SR_NETWORK}" \
@@ -164,7 +169,7 @@ fi
 
 VLLM_SR_PID="$(cat "${PID_FILE}")"
 
-for _ in $(seq 1 180); do
+for _ in $(seq 1 300); do
     http_code="$(curl -s -o /dev/null -w "%{http_code}" "${ROUTER_API_HEALTH_URL}" 2>/dev/null || echo "000")"
     if [[ "${http_code}" == "200" ]]; then
         echo "vllm-sr router API ready"
