@@ -322,15 +322,28 @@ func (c *ValkeyCache) AddPendingRequest(requestID string, model string, query st
 		return nil
 	}
 
-	err := c.addEntry("", requestID, model, query, requestBody, nil, ttlSeconds)
+	id := fmt.Sprintf("%x", md5.Sum(fmt.Appendf(nil, "%s_%s_%d", model, query, time.Now().UnixNano())))
+	err := c.addEntry(id, requestID, model, query, requestBody, nil, ttlSeconds)
 
 	if err != nil {
 		metrics.RecordCacheOperation("valkey", "add_pending", "error", time.Since(start).Seconds())
-	} else {
-		metrics.RecordCacheOperation("valkey", "add_pending", "success", time.Since(start).Seconds())
+		return err
 	}
 
-	return err
+	// Store reverse lookup: request_id -> doc key for direct retrieval in UpdateWithResponse
+	ctx := context.Background()
+	docKey := c.config.Index.Prefix + id
+	pendingKey := c.config.Index.Prefix + "pending:" + requestID
+	setCmd := []string{"SET", pendingKey, docKey}
+	if _, err := c.client.CustomCommand(ctx, setCmd); err != nil {
+		logging.Warnf("ValkeyCache.AddPendingRequest: failed to store pending lookup key: %v", err)
+	} else if ttlSeconds > 0 {
+		expireCmd := []string{"EXPIRE", pendingKey, fmt.Sprintf("%d", ttlSeconds)}
+		_, _ = c.client.CustomCommand(ctx, expireCmd)
+	}
+
+	metrics.RecordCacheOperation("valkey", "add_pending", "success", time.Since(start).Seconds())
+	return nil
 }
 
 func (c *ValkeyCache) UpdateWithResponse(requestID string, responseBody []byte, ttlSeconds int) error {
@@ -345,34 +358,44 @@ func (c *ValkeyCache) UpdateWithResponse(requestID string, responseBody []byte, 
 
 	ctx := context.Background()
 
-	query := fmt.Sprintf("@request_id:{%s}", escapeTagValue(requestID))
-	logging.Debugf("UpdateWithResponse: searching with TAG query: %s", query)
-
-	searchCmd := []string{
-		"FT.SEARCH", c.indexName, query,
-		"RETURN", "3", "model", "query", "request_body",
-		"LIMIT", "0", "1",
-	}
-
-	results, err := c.client.CustomCommand(ctx, searchCmd)
-	if err != nil {
-		logging.Infof("ValkeyCache.UpdateWithResponse: TAG search failed: %v", err)
+	// Look up the doc key via the reverse lookup set in AddPendingRequest
+	pendingKey := c.config.Index.Prefix + "pending:" + requestID
+	docKeyResult, err := c.client.CustomCommand(ctx, []string{"GET", pendingKey})
+	if err != nil || docKeyResult == nil {
+		logging.Infof("ValkeyCache.UpdateWithResponse: no pending lookup key for request_id=%s: %v", requestID, err)
 		metrics.RecordCacheOperation("valkey", "update_response", "error", time.Since(start).Seconds())
-		return fmt.Errorf("failed to search pending entry: %w", err)
+		return fmt.Errorf("no pending entry found for request_id=%s", requestID)
 	}
 
-	logging.Debugf("UpdateWithResponse: search results type=%T, value=%v", results, results)
+	docKey := fmt.Sprint(docKeyResult)
+	logging.Debugf("UpdateWithResponse: resolved pending key %s -> %s", pendingKey, docKey)
 
-	entry, err := parsePendingSearchResult(results, requestID, c.config.Index.Prefix)
+	// Fetch the pending entry fields directly
+	hgetCmd := []string{"HMGET", docKey, "model", "query", "request_body"}
+	fieldsResult, err := c.client.CustomCommand(ctx, hgetCmd)
 	if err != nil {
+		logging.Infof("ValkeyCache.UpdateWithResponse: HMGET failed for %s: %v", docKey, err)
 		metrics.RecordCacheOperation("valkey", "update_response", "error", time.Since(start).Seconds())
-		return err
+		return fmt.Errorf("failed to fetch pending entry: %w", err)
 	}
 
-	logging.Debugf("ValkeyCache.UpdateWithResponse: found pending entry, updating (id: %s, model: %s)", entry.docID, entry.model)
+	fields, ok := fieldsResult.([]interface{})
+	if !ok || len(fields) < 3 || fields[0] == nil {
+		metrics.RecordCacheOperation("valkey", "update_response", "error", time.Since(start).Seconds())
+		return fmt.Errorf("pending entry not found or expired for request_id=%s", requestID)
+	}
+
+	model := fmt.Sprint(fields[0])
+	query := fmt.Sprint(fields[1])
+	requestBodyStr := fmt.Sprint(fields[2])
+
+	logging.Debugf("ValkeyCache.UpdateWithResponse: found pending entry, updating (key: %s, model: %s)", docKey, model)
+
+	// Clean up the pending lookup key
+	_, _ = c.client.CustomCommand(ctx, []string{"DEL", pendingKey})
 
 	// Update the document with response body and TTL
-	err = c.addEntry(entry.docID, requestID, entry.model, entry.query, []byte(entry.requestBodyStr), responseBody, ttlSeconds)
+	err = c.addEntry(docKey, requestID, model, query, []byte(requestBodyStr), responseBody, ttlSeconds)
 	if err != nil {
 		metrics.RecordCacheOperation("valkey", "update_response", "error", time.Since(start).Seconds())
 		return fmt.Errorf("failed to update entry: %w", err)
