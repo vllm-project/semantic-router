@@ -68,7 +68,7 @@ func testFullPricingFunc(model string) (ModelPricingRates, bool) {
 // ---------------------------------------------------------------------------
 
 func TestCELParity_InputOutputOnly(t *testing.T) {
-	p := &RedisLimiterProvider{
+	p := &ValkeyLimiterProvider{
 		pricingFullFunc: testFullPricingFunc,
 	}
 
@@ -99,7 +99,7 @@ func TestCELParity_InputOutputOnly(t *testing.T) {
 // ---------------------------------------------------------------------------
 
 func TestCELParity_WithCachedInputTokens(t *testing.T) {
-	p := &RedisLimiterProvider{
+	p := &ValkeyLimiterProvider{
 		pricingFullFunc: testFullPricingFunc,
 	}
 
@@ -128,7 +128,7 @@ func TestCELParity_WithCachedInputTokens(t *testing.T) {
 // ---------------------------------------------------------------------------
 
 func TestCELParity_WithCacheCreationTokens(t *testing.T) {
-	p := &RedisLimiterProvider{
+	p := &ValkeyLimiterProvider{
 		pricingFullFunc: testFullPricingFunc,
 	}
 
@@ -156,7 +156,7 @@ func TestCELParity_WithCacheCreationTokens(t *testing.T) {
 // ---------------------------------------------------------------------------
 
 func TestCELParity_FullFormula(t *testing.T) {
-	p := &RedisLimiterProvider{
+	p := &ValkeyLimiterProvider{
 		pricingFullFunc: testFullPricingFunc,
 	}
 
@@ -187,7 +187,7 @@ func TestCELParity_FullFormula(t *testing.T) {
 func TestCELParity_Sonnet46_ExactGatewayFormula(t *testing.T) {
 	// From cuebiq-gw-phase2.yaml:
 	// cel: "input_tokens * uint(330) + output_tokens * uint(1650) + cached_input_tokens * uint(33) + cache_creation_input_tokens * uint(412)"
-	p := &RedisLimiterProvider{
+	p := &ValkeyLimiterProvider{
 		pricingFullFunc: testFullPricingFunc,
 	}
 
@@ -209,7 +209,7 @@ func TestCELParity_Sonnet46_ExactGatewayFormula(t *testing.T) {
 
 func TestCELParity_Opus46_ExactGatewayFormula(t *testing.T) {
 	// cel: "input_tokens * uint(550) + output_tokens * uint(2750) + cached_input_tokens * uint(55) + cache_creation_input_tokens * uint(687)"
-	p := &RedisLimiterProvider{
+	p := &ValkeyLimiterProvider{
 		pricingFullFunc: testFullPricingFunc,
 	}
 
@@ -229,7 +229,7 @@ func TestCELParity_Opus46_ExactGatewayFormula(t *testing.T) {
 
 func TestCELParity_Haiku45_ExactGatewayFormula(t *testing.T) {
 	// cel: "input_tokens * uint(100) + output_tokens * uint(500) + cached_input_tokens * uint(10) + cache_creation_input_tokens * uint(125)"
-	p := &RedisLimiterProvider{
+	p := &ValkeyLimiterProvider{
 		pricingFullFunc: testFullPricingFunc,
 	}
 
@@ -250,7 +250,7 @@ func TestCELParity_Haiku45_ExactGatewayFormula(t *testing.T) {
 func TestCELParity_Llama_NoCacheTokens(t *testing.T) {
 	// cel: "input_tokens * uint(10) + output_tokens * uint(10)"
 	// No cache token support for Meta models
-	p := &RedisLimiterProvider{
+	p := &ValkeyLimiterProvider{
 		pricingFullFunc: testFullPricingFunc,
 	}
 
@@ -267,13 +267,13 @@ func TestCELParity_Llama_NoCacheTokens(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// Test: Cross-model budget accumulation with cache tokens (e2e with Redis)
+// Test: Cross-model budget accumulation with cache tokens (e2e with Valkey)
 // ---------------------------------------------------------------------------
 
 func TestCELParity_CrossModelBudget_WithCacheTokens(t *testing.T) {
-	mr, client := setupMiniredis(t)
+	mock := newMockValkeyClient()
 
-	rules := []RedisLimiterRule{
+	rules := []ValkeyLimiterRule{
 		{
 			Name:          "power-user-budget",
 			Match:         RuleMatch{Group: "ai-power-user"},
@@ -282,8 +282,8 @@ func TestCELParity_CrossModelBudget_WithCacheTokens(t *testing.T) {
 		},
 	}
 
-	p := NewRedisLimiterProvider(client, rules, testPricingFunc,
-		WithFullPricingFunc(testFullPricingFunc))
+	p := NewValkeyLimiterProvider(mock, rules, testValkeyPricingFunc,
+		WithValkeyFullPricingFunc(testFullPricingFunc))
 
 	ctx := Context{
 		UserID: "alice@example.com",
@@ -329,9 +329,9 @@ func TestCELParity_CrossModelBudget_WithCacheTokens(t *testing.T) {
 	expectedTotal := int64(1_254_000 + 7_285_000 + 1_500_000)
 
 	key := "sr:budget:alice@example.com:month"
-	got, err := mr.Get(key)
-	if err != nil {
-		t.Fatalf("key not found: %v", err)
+	got, ok := mock.get(key)
+	if !ok {
+		t.Fatalf("key not found")
 	}
 	if got != fmt.Sprintf("%d", expectedTotal) {
 		t.Errorf("total spend = %s, want %d", got, expectedTotal)
@@ -356,9 +356,9 @@ func TestCELParity_CrossModelBudget_WithCacheTokens(t *testing.T) {
 // ---------------------------------------------------------------------------
 
 func TestCELParity_BudgetExhaustion_CacheHeavy(t *testing.T) {
-	mr, client := setupMiniredis(t)
+	mock := newMockValkeyClient()
 
-	rules := []RedisLimiterRule{
+	rules := []ValkeyLimiterRule{
 		{
 			Name:          "standard-user-budget",
 			Match:         RuleMatch{Group: "ai-standard-user"},
@@ -367,8 +367,8 @@ func TestCELParity_BudgetExhaustion_CacheHeavy(t *testing.T) {
 		},
 	}
 
-	p := NewRedisLimiterProvider(client, rules, testPricingFunc,
-		WithFullPricingFunc(testFullPricingFunc))
+	p := NewValkeyLimiterProvider(mock, rules, testValkeyPricingFunc,
+		WithValkeyFullPricingFunc(testFullPricingFunc))
 
 	ctx := Context{
 		UserID: "bob@example.com",
@@ -378,7 +378,7 @@ func TestCELParity_BudgetExhaustion_CacheHeavy(t *testing.T) {
 
 	// Pre-populate: user already spent $14.90 (1_490_000_000 CEL units)
 	key := "sr:budget:bob@example.com:month"
-	mr.Set(key, "1490000000")
+	mock.set(key, "1490000000")
 
 	// Still allowed (under $15)
 	d, err := p.Check(ctx)
@@ -410,7 +410,7 @@ func TestCELParity_BudgetExhaustion_CacheHeavy(t *testing.T) {
 	}
 
 	// Push over: add $0.10 more (10_000_000 CEL units)
-	mr.Set(key, "1500000001")
+	mock.set(key, "1500000001")
 
 	d, err = p.Check(ctx)
 	if err != nil {
@@ -430,8 +430,8 @@ func TestCELParity_BudgetExhaustion_CacheHeavy(t *testing.T) {
 
 func TestCELParity_FallbackToBasicPricing(t *testing.T) {
 	// Provider with basic pricing only (no full pricing func)
-	p := &RedisLimiterProvider{
-		pricingFunc: testPricingFunc,
+	p := &ValkeyLimiterProvider{
+		pricingFunc: testValkeyPricingFunc,
 	}
 
 	usage := TokenUsage{
@@ -480,8 +480,8 @@ func TestCELParity_DollarToCELConversion(t *testing.T) {
 // ---------------------------------------------------------------------------
 
 func TestCELParity_ZeroCacheTokens_MatchesBasicFormula(t *testing.T) {
-	pFull := &RedisLimiterProvider{pricingFullFunc: testFullPricingFunc}
-	pBasic := &RedisLimiterProvider{pricingFunc: testPricingFunc}
+	pFull := &ValkeyLimiterProvider{pricingFullFunc: testFullPricingFunc}
+	pBasic := &ValkeyLimiterProvider{pricingFunc: testValkeyPricingFunc}
 
 	usage := TokenUsage{
 		InputTokens:  1000,
@@ -502,13 +502,13 @@ func TestCELParity_ZeroCacheTokens_MatchesBasicFormula(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// Test: End-to-end Redis integration with month unit and cache tokens
+// Test: End-to-end Valkey integration with month unit and cache tokens
 // ---------------------------------------------------------------------------
 
 func TestCELParity_E2E_MonthlyBudget_MultiModel(t *testing.T) {
-	_, client := setupMiniredis(t)
+	mock := newMockValkeyClient()
 
-	rules := []RedisLimiterRule{
+	rules := []ValkeyLimiterRule{
 		{
 			Name:          "power-user-budget",
 			Match:         RuleMatch{Group: "ai-power-user"},
@@ -523,8 +523,8 @@ func TestCELParity_E2E_MonthlyBudget_MultiModel(t *testing.T) {
 		},
 	}
 
-	p := NewRedisLimiterProvider(client, rules, testPricingFunc,
-		WithFullPricingFunc(testFullPricingFunc))
+	p := NewValkeyLimiterProvider(mock, rules, testValkeyPricingFunc,
+		WithValkeyFullPricingFunc(testFullPricingFunc))
 
 	// Power user: allowed, then accumulates across models
 	powerCtx := Context{

@@ -92,7 +92,7 @@ global:
     ratelimit:
       fail_open: false
       providers:
-        - type: redis-limiter
+        - type: valkey-limiter
           address: "redis.default.svc.cluster.local:6379"
           rules:
             - name: power-user-budget
