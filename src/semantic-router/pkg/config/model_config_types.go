@@ -277,11 +277,11 @@ type ProviderProfile struct {
 }
 
 type ModelPricing struct {
-	Currency          string  `yaml:"currency,omitempty"`
-	PromptPer1M       float64 `yaml:"prompt_per_1m,omitempty"`
-	CompletionPer1M   float64 `yaml:"completion_per_1m,omitempty"`
-	CacheReadPer1M    float64 `yaml:"cache_read_per_1m,omitempty"`
-	CacheWritePer1M   float64 `yaml:"cache_write_per_1m,omitempty"`
+	Currency        string  `yaml:"currency,omitempty"`
+	PromptPer1M     float64 `yaml:"prompt_per_1m,omitempty"`
+	CompletionPer1M float64 `yaml:"completion_per_1m,omitempty"`
+	CacheReadPer1M  float64 `yaml:"cache_read_per_1m,omitempty"`
+	CacheWritePer1M float64 `yaml:"cache_write_per_1m,omitempty"`
 }
 
 type ModelParams struct {
