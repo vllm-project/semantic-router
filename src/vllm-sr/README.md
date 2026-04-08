@@ -42,6 +42,12 @@ vllm-sr logs simulator
 # Check status
 vllm-sr status
 
+# Send a one-shot chat completion through Envoy (default model: MoM)
+vllm-sr chat "hello"
+vllm-sr chat --json "hello"
+# Remote or port-forwarded stack
+vllm-sr chat --base-url http://localhost:8080 "hello"
+
 # Stop
 vllm-sr stop
 ```
@@ -61,6 +67,9 @@ HF_TOKEN=hf_xxx vllm-sr serve --target k8s --namespace production --context prod
 vllm-sr status --target k8s
 vllm-sr logs router --target k8s -f
 vllm-sr stop --target k8s
+
+# Chat completion against a port-forwarded or ingress URL (requires --base-url)
+vllm-sr chat --base-url http://localhost:8080 "hello"
 ```
 
 **Credential handling:** Sensitive environment variables (`HF_TOKEN`, `OPENAI_API_KEY`,
