@@ -19,15 +19,15 @@ import styles from './index.module.css'
 const paperCount = researchPapers.length
 const homepageMetaTitle = translate({
   id: 'homepage.meta.title',
-  message: 'LLM Routing Control Plane for Mixture-of-Models',
+  message: 'Open-Source LLM Router for Mixture-of-Models',
 })
 const homepageMetaDescription = translate({
   id: 'homepage.meta.description',
-  message: 'Signal-driven LLM routing and model selection for mixture-of-model serving, AI gateways, and policy-aware control planes.',
+  message: 'Open-source LLM router for Mixture-of-Models. Route each request by cost, latency, privacy, safety, and modality across local, private, and frontier models.',
 })
 const homepageSocialTitle = translate({
   id: 'homepage.meta.socialTitle',
-  message: 'vLLM Semantic Router — Signal-Driven LLM Routing',
+  message: 'vLLM Semantic Router | Open-Source LLM Router',
 })
 
 const heroStats = [
@@ -36,7 +36,7 @@ const heroStats = [
     value: '16',
     description: translate({
       id: 'homepage.stats.signals.description',
-      message: '16 signal families across 5 heuristic and 11 learned detectors, including knowledge base routing and history-aware reasks.',
+      message: '16 signal families across heuristic and learned detectors, from knowledge base routing to history-aware reasks.',
     }),
   },
   {
@@ -44,7 +44,7 @@ const heroStats = [
     value: '12',
     description: translate({
       id: 'homepage.stats.algorithms.description',
-      message: '12 selectors across symbolic policy, latency heuristics, reinforcement learning, and ML routing.',
+      message: '12 routing strategies spanning rules, latency heuristics, reinforcement learning, and ML selection.',
     }),
   },
   {
@@ -82,11 +82,11 @@ const problemTasks = [
   }),
   translate({
     id: 'homepage.capabilities.task.connect',
-    message: 'Connect edge, private, and frontier models without fragmenting the product.',
+    message: 'Connect local, private, and frontier models without fragmenting the product.',
   }),
   translate({
     id: 'homepage.capabilities.task.govern',
-    message: 'Govern cost, safety, and privacy at routing time.',
+    message: 'Enforce cost, safety, and privacy at routing time.',
   }),
 ]
 
@@ -100,40 +100,40 @@ const valueCards: ValueCard[] = [
   {
     index: '01',
     kind: 'economics',
-    title: translate({ id: 'homepage.capabilities.value1.title', message: 'Token economics' }),
+    title: translate({ id: 'homepage.capabilities.value1.title', message: 'Lower cost per request' }),
     text: translate({
       id: 'homepage.capabilities.value1.text',
-      message: 'Send routine traffic to efficient lanes, reserve frontier reasoning for the moments that pay back, and turn model choice into compounding ROI.',
+      message: 'Send routine traffic to efficient lanes, reserve frontier reasoning for the requests that need it, and turn model choice into measurable ROI.',
     }),
     detail: translate({
       id: 'homepage.capabilities.value1.detail',
-      message: 'More useful output per token.',
+      message: 'More useful output per dollar.',
     }),
   },
   {
     index: '02',
     kind: 'safety',
-    title: translate({ id: 'homepage.capabilities.value2.title', message: 'LLM safety' }),
+    title: translate({ id: 'homepage.capabilities.value2.title', message: 'Safer model decisions' }),
     text: translate({
       id: 'homepage.capabilities.value2.text',
-      message: 'Move jailbreak, PII, and hallucination handling into the decision path so unsafe traffic is intercepted before it becomes product behavior.',
+      message: 'Move jailbreak, PII, and hallucination handling into the routing path so risky traffic is intercepted before it becomes product behavior.',
     }),
     detail: translate({
       id: 'homepage.capabilities.value2.detail',
-      message: 'Safety becomes a control layer, not a patch.',
+      message: 'Safety becomes part of the request path.',
     }),
   },
   {
     index: '03',
     kind: 'mesh',
-    title: translate({ id: 'homepage.capabilities.value3.title', message: 'Fullmesh intelligence' }),
+    title: translate({ id: 'homepage.capabilities.value3.title', message: 'One router across every model' }),
     text: translate({
       id: 'homepage.capabilities.value3.text',
-      message: 'Coordinate local, private, and frontier models as one adaptive mesh for personal AI at the edge and intelligent MaaS in the cloud.',
+      message: 'Coordinate local, private, and frontier models through one layer that works from edge deployment to managed cloud.',
     }),
     detail: translate({
       id: 'homepage.capabilities.value3.detail',
-      message: 'One architecture from device to managed service.',
+      message: 'One system across device, VPC, and cloud.',
     }),
   },
 ]
@@ -231,13 +231,19 @@ function DitherHero(): JSX.Element {
           <div className={styles.heroStack}>
             <PageIntro
               className={styles.heroIntro}
-              label={<Translate id="homepage.hero.label">System-level intelligence</Translate>}
+              label={<Translate id="homepage.hero.label">Open-source LLM router</Translate>}
               title={(
                 <>
-                  <Translate id="homepage.hero.line1">Signal</Translate>
+                  <Translate id="homepage.hero.line1">Route each request</Translate>
                   <br />
-                  <Translate id="homepage.hero.line2">before scale</Translate>
+                  <Translate id="homepage.hero.line2">to the best model</Translate>
                 </>
+              )}
+              description={(
+                <Translate id="homepage.hero.description">
+                  vLLM Semantic Router routes every request across local, private, and frontier
+                  models using cost, latency, privacy, safety, and modality signals.
+                </Translate>
               )}
               actions={(
                 <>
@@ -247,22 +253,14 @@ function DitherHero(): JSX.Element {
                     rel="noreferrer"
                     target="_blank"
                   >
-                    <Translate id="homepage.hero.publicBeta">Public Beta</Translate>
+                    <Translate id="homepage.hero.primaryCta">Try the demo</Translate>
                   </PillLink>
                   <PillLink className={styles.heroSecondaryCta} to="/white-paper" muted>
-                    <Translate id="homepage.hero.secondaryCta">Open white paper</Translate>
+                    <Translate id="homepage.hero.secondaryCta">Read white paper</Translate>
                   </PillLink>
                 </>
               )}
             />
-
-            <p className={styles.heroManifesto}>
-              <span className={styles.heroManifestoText}>
-                <Translate id="homepage.hero.manifesto">
-                  System-brain routing: signal-led, entropy-aware, ruthlessly clear.
-                </Translate>
-              </span>
-            </p>
           </div>
         </div>
       </div>
@@ -278,18 +276,18 @@ function CapabilitySection(): JSX.Element {
           <div className={styles.problemPanel}>
             <div className={styles.problemIntro}>
               <SectionLabel>
-                <Translate id="homepage.capabilities.label">Why this matters</Translate>
+                <Translate id="homepage.capabilities.label">Why routing matters</Translate>
               </SectionLabel>
               <h2>
                 <Translate id="homepage.capabilities.heading">
-                  Too many models. Too many boundaries.
+                  One request. Many model choices.
                 </Translate>
               </h2>
               <p>
                 <Translate id="homepage.capabilities.copy">
-                  Models now vary across capability, cost, privacy, and latency. Once you operate more
-                  than one lane, the hard part is no longer prompting a single model. It is selecting,
-                  connecting, and governing the right model system for every request.
+                  Models now differ on quality, cost, latency, privacy, and modality. Once you run
+                  more than one model, the hard part is no longer calling an LLM. It is routing every
+                  request to the right model system.
                 </Translate>
               </p>
               <div className={styles.problemAxes}>
@@ -304,11 +302,12 @@ function CapabilitySection(): JSX.Element {
             <aside className={styles.problemChecklist}>
               <div className={styles.problemChecklistHeader}>
                 <SectionLabel>
-                  <Translate id="homepage.capabilities.checklist.label">The system job</Translate>
+                  <Translate id="homepage.capabilities.checklist.label">What the router decides</Translate>
                 </SectionLabel>
                 <p>
                   <Translate id="homepage.capabilities.checklist.copy">
-                    Every request crosses the same operating questions before it becomes product behavior.
+                    Before a response reaches the user, the router has to answer the same operating
+                    questions every time.
                   </Translate>
                 </p>
               </div>
@@ -322,7 +321,7 @@ function CapabilitySection(): JSX.Element {
               <div className={styles.problemChecklistFooter}>
                 <p>
                   <Translate id="homepage.capabilities.checklist.footer">
-                    Selection, connection, and governance have to move together.
+                    Cost control, safety, and model choice have to happen in one step.
                   </Translate>
                 </p>
                 <div className={styles.problemChecklistMeta}>
@@ -338,11 +337,11 @@ function CapabilitySection(): JSX.Element {
 
           <div className={styles.valueIntro}>
             <SectionLabel>
-              <Translate id="homepage.capabilities.values.label">What vLLM Semantic Router enables</Translate>
+              <Translate id="homepage.capabilities.values.label">Why teams deploy it</Translate>
             </SectionLabel>
             <p>
               <Translate id="homepage.capabilities.values.copy">
-                Routing becomes the control plane.
+                A single routing layer for cost, quality, and policy decisions.
               </Translate>
             </p>
           </div>
@@ -532,6 +531,10 @@ export default function Home(): JSX.Element {
         <meta property="og:image" content={ogImage} />
         <meta property="og:image:alt" content="vLLM Semantic Router social preview" />
         <meta property="og:type" content="website" />
+        <meta
+          name="keywords"
+          content="open-source LLM router, multi-model routing, AI gateway, model selection, semantic router, inference routing, policy-aware routing, vLLM"
+        />
         <meta name="twitter:card" content="summary_large_image" />
         <meta name="twitter:title" content={homepageSocialTitle} />
         <meta name="twitter:description" content={homepageMetaDescription} />

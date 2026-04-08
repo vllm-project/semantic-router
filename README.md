@@ -20,7 +20,9 @@
 
 In the LLM era, the number of models is exploding. Different models vary across capability, scale, cost, and privacy boundaries. Choosing and connecting the right models to build semantic AI infrastructure is a system problem.
 
-vLLM Semantic Router is a signal-driven intelligent router for that problem. It helps teams build model systems that are more efficient, safer, and more adaptive across cloud, data center, and edge environments.
+**vLLM Semantic Router** is a **signal-driven** intelligent router for that problem. It helps teams build model systems that are more **efficient**, **safer**, and more **adaptive** across cloud, data center, and edge environments.
+
+![system](website/static/img/system.png)
 
 It delivers three core values:
 
