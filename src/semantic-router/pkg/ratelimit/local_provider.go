@@ -1,6 +1,7 @@
 package ratelimit
 
 import (
+	"slices"
 	"strings"
 	"sync"
 	"time"
@@ -102,10 +103,7 @@ func (l *LocalLimiter) Check(ctx Context) (*Decision, error) {
 		if rule.TokensPerUnit > 0 {
 			key := l.bucketKey(rule.Name, ctx.UserID, ctx.Model, "tpm")
 			b := l.getOrCreateBucket(key, int64(rule.TokensPerUnit), rule.Unit)
-			cost := int64(ctx.TokenCount)
-			if cost <= 0 {
-				cost = 0
-			}
+			cost := max(int64(ctx.TokenCount), 0)
 			allowed, remaining, resetAt := b.tryConsume(cost, now)
 			if !allowed {
 				return &Decision{
@@ -177,17 +175,8 @@ func (l *LocalLimiter) ruleMatches(rule *Rule, ctx Context) bool {
 	if rule.Match.Model != "" && rule.Match.Model != "*" && rule.Match.Model != ctx.Model {
 		return false
 	}
-	if rule.Match.Group != "" && rule.Match.Group != "*" {
-		matched := false
-		for _, g := range ctx.Groups {
-			if g == rule.Match.Group {
-				matched = true
-				break
-			}
-		}
-		if !matched {
-			return false
-		}
+	if rule.Match.Group != "" && rule.Match.Group != "*" && !slices.Contains(ctx.Groups, rule.Match.Group) {
+		return false
 	}
 	return true
 }
@@ -250,6 +239,8 @@ func ParseUnit(unit string) time.Duration {
 		return time.Hour
 	case "day":
 		return 24 * time.Hour
+	case "month":
+		return 30 * 24 * time.Hour
 	default:
 		return time.Minute
 	}
