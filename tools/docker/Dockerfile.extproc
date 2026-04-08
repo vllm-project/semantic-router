@@ -350,6 +350,7 @@ COPY src/semantic-router/ src/semantic-router/
 
 # Copy the built candle Rust library from rust-cross-builder
 ARG TARGETARCH
+ARG BUILDARCH
 
 COPY --from=rust-cross-builder /app/candle-binding/target/ /tmp/rust-target/
 RUN mkdir -p /app/candle-binding/target/release && \
@@ -427,13 +428,18 @@ RUN mkdir -p bin && cd src/semantic-router && \
         CGO_LDFLAGS="-L/app/candle-binding/target/release -L/app/ml-binding/target/release -L/app/nlp-binding/target/release -L/usr/lib/aarch64-linux-gnu -lcandle_semantic_router -lml_semantic_router -lnlp_binding -lssl -lcrypto" \
         GOOS=linux GOARCH=arm64 \
         go build -ldflags="-w -s" -o ../../bin/router-candle ./cmd; \
-    else \
+    elif [ "$BUILDARCH" != "amd64" ]; then \
         echo "Building candle binary for AMD64 with cross-compilation..." && \
         CC=x86_64-linux-gnu-gcc \
         CXX=x86_64-linux-gnu-g++ \
         CGO_CFLAGS="-I/app/candle-binding" \
         CGO_LDFLAGS="-L/app/candle-binding/target/release -L/app/ml-binding/target/release -L/app/nlp-binding/target/release -lcandle_semantic_router -lml_semantic_router -lnlp_binding" \
         GOOS=linux GOARCH=amd64 \
+        go build -ldflags="-w -s" -o ../../bin/router-candle ./cmd; \
+    else \
+        echo "Building candle binary for AMD64 (native)..." && \
+        CGO_CFLAGS="-I/app/candle-binding" \
+        CGO_LDFLAGS="-L/app/candle-binding/target/release -L/app/ml-binding/target/release -L/app/nlp-binding/target/release -lcandle_semantic_router -lml_semantic_router -lnlp_binding" \
         go build -ldflags="-w -s" -o ../../bin/router-candle ./cmd; \
     fi
 
@@ -454,13 +460,18 @@ RUN mkdir -p /app/lib && \
 RUN cd src/semantic-router && \
     if [ "$TARGETARCH" = "arm64" ]; then \
         echo "Skipping onnx router build on arm64."; \
-    else \
+    elif [ "$BUILDARCH" != "amd64" ]; then \
         echo "Building onnx binary for AMD64 with cross-compilation..." && \
         CC=x86_64-linux-gnu-gcc \
         CXX=x86_64-linux-gnu-g++ \
         CGO_CFLAGS="-I/app/onnx-binding" \
         CGO_LDFLAGS="-L/app/onnx-binding/target/release -L/app/ml-binding/target/release -L/app/nlp-binding/target/release -lonnx_semantic_router -lml_semantic_router -lnlp_binding" \
         GOOS=linux GOARCH=amd64 \
+        go build -modfile=go.onnx.mod -tags=onnx -ldflags="-w -s" -o ../../bin/router-onnx ./cmd; \
+    else \
+        echo "Building onnx binary for AMD64 (native)..." && \
+        CGO_CFLAGS="-I/app/onnx-binding" \
+        CGO_LDFLAGS="-L/app/onnx-binding/target/release -L/app/ml-binding/target/release -L/app/nlp-binding/target/release -lonnx_semantic_router -lml_semantic_router -lnlp_binding" \
         go build -modfile=go.onnx.mod -tags=onnx -ldflags="-w -s" -o ../../bin/router-onnx ./cmd; \
     fi
 
