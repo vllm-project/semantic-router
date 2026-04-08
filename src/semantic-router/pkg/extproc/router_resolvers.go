@@ -19,6 +19,7 @@ var knownAuthzProviderTypes = map[string]bool{
 var knownRateLimitProviderTypes = map[string]bool{
 	"envoy-ratelimit": true,
 	"local-limiter":   true,
+	"valkey-limiter":  true,
 }
 
 // buildCredentialResolver constructs the credential provider chain from config.
@@ -147,7 +148,7 @@ func buildRateLimitResolver(cfg *config.RouterConfig) *ratelimit.RateLimitResolv
 		return nil
 	}
 
-	providers := createRateLimitProviders(rlCfg.Providers)
+	providers := createRateLimitProviders(cfg, rlCfg.Providers)
 	if len(providers) == 0 {
 		logging.Warnf("RateLimit: no valid providers after construction, rate limiting disabled")
 		return nil
@@ -176,7 +177,7 @@ func validateRateLimitProvider(index int, provider config.RateLimitProviderConfi
 		validationErrors = append(
 			validationErrors,
 			fmt.Sprintf(
-				"ratelimit.providers[%d]: unknown type %q (valid types: envoy-ratelimit, local-limiter)",
+				"ratelimit.providers[%d]: unknown type %q (valid types: envoy-ratelimit, local-limiter, valkey-limiter)",
 				index,
 				provider.Type,
 			),
@@ -194,13 +195,27 @@ func validateRateLimitProvider(index int, provider config.RateLimitProviderConfi
 			fmt.Sprintf("ratelimit.providers[%d]: local-limiter requires at least one rule", index),
 		)
 	}
+	if provider.Type == "valkey-limiter" {
+		if provider.Address == "" {
+			validationErrors = append(
+				validationErrors,
+				fmt.Sprintf("ratelimit.providers[%d]: valkey-limiter requires 'address'", index),
+			)
+		}
+		if len(provider.Rules) == 0 {
+			validationErrors = append(
+				validationErrors,
+				fmt.Sprintf("ratelimit.providers[%d]: valkey-limiter requires at least one rule", index),
+			)
+		}
+	}
 	return validationErrors
 }
 
-func createRateLimitProviders(providersCfg []config.RateLimitProviderConfig) []ratelimit.Provider {
+func createRateLimitProviders(cfg *config.RouterConfig, providersCfg []config.RateLimitProviderConfig) []ratelimit.Provider {
 	providers := make([]ratelimit.Provider, 0, len(providersCfg))
 	for _, providerCfg := range providersCfg {
-		provider := buildRateLimitProvider(providerCfg)
+		provider := buildRateLimitProvider(cfg, providerCfg)
 		if provider != nil {
 			providers = append(providers, provider)
 		}
@@ -208,12 +223,14 @@ func createRateLimitProviders(providersCfg []config.RateLimitProviderConfig) []r
 	return providers
 }
 
-func buildRateLimitProvider(providerCfg config.RateLimitProviderConfig) ratelimit.Provider {
+func buildRateLimitProvider(cfg *config.RouterConfig, providerCfg config.RateLimitProviderConfig) ratelimit.Provider {
 	switch providerCfg.Type {
 	case "envoy-ratelimit":
 		return buildEnvoyRateLimitProvider(providerCfg)
 	case "local-limiter":
 		return buildLocalRateLimitProvider(providerCfg)
+	case "valkey-limiter":
+		return buildValkeyLimiterProvider(cfg, providerCfg)
 	default:
 		return nil
 	}
@@ -258,15 +275,16 @@ func buildLocalRateLimitRules(rulesCfg []config.RateLimitRule) []ratelimit.Rule 
 	return rules
 }
 
-func buildRedisLimiterProvider(cfg *config.RouterConfig, providerCfg config.RateLimitProviderConfig) ratelimit.Provider {
-	client := redis.NewClient(&redis.Options{
-		Addr: providerCfg.Address,
-		DB:   providerCfg.DB,
-	})
+func buildValkeyLimiterProvider(cfg *config.RouterConfig, providerCfg config.RateLimitProviderConfig) ratelimit.Provider {
+	client, err := ratelimit.NewGlideClient(providerCfg.Address, providerCfg.DB)
+	if err != nil {
+		logging.Errorf("RateLimit: failed to create valkey-limiter client: %v", err)
+		return nil
+	}
 
-	rules := make([]ratelimit.RedisLimiterRule, 0, len(providerCfg.Rules))
+	rules := make([]ratelimit.ValkeyLimiterRule, 0, len(providerCfg.Rules))
 	for _, rule := range providerCfg.Rules {
-		rules = append(rules, ratelimit.RedisLimiterRule{
+		rules = append(rules, ratelimit.ValkeyLimiterRule{
 			Name: rule.Name,
 			Match: ratelimit.RuleMatch{
 				User:  rule.Match.User,
@@ -295,7 +313,7 @@ func buildRedisLimiterProvider(cfg *config.RouterConfig, providerCfg config.Rate
 		}, true
 	}
 
-	logging.Infof("RateLimit: redis-limiter provider at %s with %d rules", providerCfg.Address, len(rules))
-	return ratelimit.NewRedisLimiterProvider(client, rules, pricingFunc,
-		ratelimit.WithFullPricingFunc(pricingFullFunc))
+	logging.Infof("RateLimit: valkey-limiter provider at %s with %d rules", providerCfg.Address, len(rules))
+	return ratelimit.NewValkeyLimiterProvider(client, rules, pricingFunc,
+		ratelimit.WithValkeyFullPricingFunc(pricingFullFunc))
 }
