@@ -281,6 +281,12 @@ func TestValkeyCacheIntegration_UpdateWithResponse(t *testing.T) {
 	require.True(t, hit, "Should find the updated entry after retries")
 	assert.NotNil(t, foundResponse)
 	assert.Contains(t, string(foundResponse), "Python", "Updated response should be findable")
+
+	// Verify the pending lookup key was cleaned up
+	pendingKey := cache.config.Index.Prefix + "pending:" + requestID
+	result, err := cache.client.CustomCommand(context.Background(), []string{"GET", pendingKey})
+	assert.NoError(t, err)
+	assert.Nil(t, result, "Pending lookup key should be deleted after UpdateWithResponse")
 }
 
 func TestValkeyCacheIntegration_UpdateWithResponseSpecialChars(t *testing.T) {
@@ -332,6 +338,15 @@ func TestValkeyCacheIntegration_UpdateWithResponseSpecialChars(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestValkeyCacheIntegration_UpdateWithResponseUnknownRequestID(t *testing.T) {
+	cache := setupValkeyCacheIntegration(t)
+	defer func() { _ = cache.Close() }()
+
+	err := cache.UpdateWithResponse("nonexistent-request-id", []byte(`{"response":"test"}`), 300)
+	assert.Error(t, err, "UpdateWithResponse should fail for unknown request ID")
+	assert.Contains(t, err.Error(), "no pending entry found")
 }
 
 func TestValkeyCacheIntegration_TTLExpiration(t *testing.T) {
