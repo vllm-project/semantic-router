@@ -324,7 +324,6 @@ func (c *ValkeyCache) AddPendingRequest(requestID string, model string, query st
 
 	id := fmt.Sprintf("%x", md5.Sum(fmt.Appendf(nil, "%s_%s_%d", model, query, time.Now().UnixNano())))
 	err := c.addEntry(id, requestID, model, query, requestBody, nil, ttlSeconds)
-
 	if err != nil {
 		metrics.RecordCacheOperation("valkey", "add_pending", "error", time.Since(start).Seconds())
 		return err
