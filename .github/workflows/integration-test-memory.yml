@@ -61,6 +61,9 @@ jobs:
           echo "=== Disk space after cleanup ==="
           df -h /
 
+      - name: Pre-pull Milvus image
+        run: docker pull milvusdb/milvus:v2.3.3
+
       - name: Run memory integration tests
         run: |
           make memory-test-integration DOCKER_TAG=ci VLLM_SR_IMAGE=vllm-sr:ci

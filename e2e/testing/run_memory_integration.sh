@@ -92,6 +92,29 @@ HF_HUB_ENABLE_HF_TRANSFER=1 \
 python3 -c "from huggingface_hub import snapshot_download; snapshot_download('sentence-transformers/all-MiniLM-L12-v2', local_dir='${TEST_DIR}/models/mom-embedding-light', local_dir_use_symlinks=False)"
 
 make -C "${REPO_ROOT}" start-milvus
+
+# Double-check Milvus readiness with pymilvus probe (gRPC-level, not just HTTP)
+echo "Verifying Milvus gRPC readiness via pymilvus..."
+for attempt in $(seq 1 30); do
+    if python3 -c "
+from pymilvus import connections
+try:
+    connections.connect('default', host='localhost', port='19530', timeout=5)
+    connections.disconnect('default')
+    print('Milvus gRPC connection verified')
+except Exception as e:
+    raise SystemExit(1)
+" 2>/dev/null; then
+        break
+    fi
+    if [ "${attempt}" -eq 30 ]; then
+        echo "ERROR: Milvus gRPC not ready after 30 attempts"
+        "${CONTAINER_RUNTIME}" logs milvus-semantic-cache 2>&1 | tail -30 || true
+        exit 1
+    fi
+    sleep 2
+done
+
 cp "${REPO_ROOT}/e2e/config/config.memory-user.yaml" "${CONFIG_FILE}"
 python3 -c 'from pathlib import Path; path = Path("'"${CONFIG_FILE}"'"); path.write_text(path.read_text().replace("host.docker.internal:8000", "llm-katan:8000"))'
 
