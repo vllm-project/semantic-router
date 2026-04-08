@@ -670,7 +670,7 @@ const Figure4Panel: React.FC = () => {
       <p className={styles.taxonomyNote}>
         {translate({
           id: 'homepage.paperFigures.figure4.summaryText',
-          message: '14 total signals. Active signal: {signal}. {groupNote}',
+          message: '16 total signals. Active signal: {signal}. {groupNote}',
           values: {
             signal: activeSignal,
             groupNote: FIGURE4_GROUPS[activeGroup].note,
