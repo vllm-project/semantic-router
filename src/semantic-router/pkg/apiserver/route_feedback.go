@@ -51,7 +51,9 @@ type FeedbackResponse struct {
 	Timestamp string `json:"timestamp"`
 }
 
-// handleFeedback handles POST /api/v1/feedback for submitting model selection feedback
+// handleFeedback handles POST /api/v1/feedback for submitting model selection feedback.
+// Requires user identity via x-authz-user-id header (injected by auth backend) or
+// user_id in the request body. Anonymous feedback is rejected to prevent Elo rating manipulation.
 func (s *ClassificationAPIServer) handleFeedback(w http.ResponseWriter, r *http.Request) {
 	var req FeedbackRequest
 	if err := s.parseJSONRequest(r, &req); err != nil {
@@ -65,20 +67,33 @@ func (s *ClassificationAPIServer) handleFeedback(w http.ResponseWriter, r *http.
 		return
 	}
 
+	// Resolve user identity: auth header takes precedence over request body.
+	// Without user identity, feedback is rejected to prevent anonymous Elo manipulation.
+	userID := r.Header.Get(s.config.Authz.Identity.GetUserIDHeader())
+	if userID == "" {
+		userID = req.UserID // fallback to request body for dev/testing
+	}
+	if userID == "" {
+		s.writeErrorResponse(w, http.StatusUnauthorized, "USER_ID_REQUIRED",
+			"User identity required for feedback submission. "+
+				"Set the auth header or include user_id in the request body.")
+		return
+	}
+
 	// Resolve category/decision name
 	decisionName := req.DecisionName
 	if decisionName == "" && req.Category != "" {
 		decisionName = req.Category
 	}
 
-	// Create feedback object with all fields
+	// Create feedback object with all fields — use resolved userID
 	feedback := &selection.Feedback{
 		Query:        req.Query,
 		WinnerModel:  req.WinnerModel,
 		LoserModel:   req.LoserModel,
 		Tie:          req.Tie,
 		DecisionName: decisionName,
-		UserID:       req.UserID,
+		UserID:       userID,
 		SessionID:    req.SessionID,
 		FeedbackType: req.FeedbackType,
 		Confidence:   req.Confidence,
