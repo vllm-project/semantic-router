@@ -63,7 +63,7 @@
 }
 
 .pageTitle {
-  max-width: 14ch;
+  max-width: 18ch;
   margin: 0;
   font-size: clamp(3rem, 9vw, 7rem);
   line-height: 0.9;
