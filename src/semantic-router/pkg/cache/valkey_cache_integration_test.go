@@ -223,6 +223,41 @@ func TestValkeyCacheIntegration_AddPendingRequest(t *testing.T) {
 	time.Sleep(100 * time.Millisecond)
 }
 
+// retryUpdateWithResponse retries UpdateWithResponse up to maxRetries times with backoff.
+func retryUpdateWithResponse(t *testing.T, cache *ValkeyCache, requestID string, responseBody []byte, ttlSeconds int) {
+	t.Helper()
+	var updateErr error
+	for i := 0; i < 5; i++ {
+		if i > 0 {
+			t.Logf("Retry %d/5 for UpdateWithResponse", i+1)
+			time.Sleep(time.Duration(200*(i+1)) * time.Millisecond)
+		}
+		updateErr = cache.UpdateWithResponse(requestID, responseBody, ttlSeconds)
+		if updateErr == nil {
+			return
+		}
+		t.Logf("UpdateWithResponse attempt %d failed: %v", i+1, updateErr)
+	}
+	require.NoError(t, updateErr, "UpdateWithResponse should succeed after retries")
+}
+
+// retryFindSimilar retries FindSimilar until a hit is found or retries are exhausted.
+func retryFindSimilar(t *testing.T, cache *ValkeyCache, model, query string) ([]byte, bool) {
+	t.Helper()
+	for i := 0; i < 5; i++ {
+		if i > 0 {
+			t.Logf("Search retry %d/5 for updated entry", i+1)
+		}
+		time.Sleep(time.Duration(200*(i+1)) * time.Millisecond)
+		foundResponse, hit, err := cache.FindSimilar(model, query)
+		require.NoError(t, err)
+		if hit {
+			return foundResponse, true
+		}
+	}
+	return nil, false
+}
+
 func TestValkeyCacheIntegration_UpdateWithResponse(t *testing.T) {
 	cache := setupValkeyCacheIntegration(t)
 	defer func() { _ = cache.Close() }()
@@ -236,48 +271,12 @@ func TestValkeyCacheIntegration_UpdateWithResponse(t *testing.T) {
 	err := cache.AddPendingRequest(requestID, model, query, requestBody, ttlSeconds)
 	require.NoError(t, err)
 
-	// Wait for indexing with retry logic
 	time.Sleep(200 * time.Millisecond)
 
 	responseBody := []byte(`{"choices":[{"message":{"content":"Python is a programming language."}}]}`)
+	retryUpdateWithResponse(t, cache, requestID, responseBody, ttlSeconds)
 
-	// Retry UpdateWithResponse to handle indexing delays
-	var updateErr error
-	maxRetries := 5
-	for i := 0; i < maxRetries; i++ {
-		if i > 0 {
-			t.Logf("Retry %d/%d for UpdateWithResponse", i+1, maxRetries)
-			time.Sleep(time.Duration(200*(i+1)) * time.Millisecond)
-		}
-
-		updateErr = cache.UpdateWithResponse(requestID, responseBody, ttlSeconds)
-		if updateErr == nil {
-			break
-		}
-		t.Logf("UpdateWithResponse attempt %d failed: %v", i+1, updateErr)
-	}
-
-	require.NoError(t, updateErr, "UpdateWithResponse should succeed after retries")
-
-	// Wait longer for vector index to update with the new response and retry search
-	var foundResponse []byte
-	var hit bool
-	searchRetries := 5
-
-	for i := 0; i < searchRetries; i++ {
-		if i > 0 {
-			t.Logf("Search retry %d/%d for updated entry", i+1, searchRetries)
-		}
-		time.Sleep(time.Duration(200*(i+1)) * time.Millisecond)
-
-		foundResponse, hit, err = cache.FindSimilar(model, query)
-		require.NoError(t, err)
-
-		if hit {
-			break
-		}
-	}
-
+	foundResponse, hit := retryFindSimilar(t, cache, model, query)
 	require.True(t, hit, "Should find the updated entry after retries")
 	assert.NotNil(t, foundResponse)
 	assert.Contains(t, string(foundResponse), "Python", "Updated response should be findable")
