@@ -18,9 +18,9 @@ type turnState struct {
 }
 
 var (
-	mu     sync.Mutex
-	store  = make(map[string]*turnState)
-	nowFn  = time.Now // overridden in tests
+	mu    sync.Mutex
+	store = make(map[string]*turnState)
+	nowFn = time.Now // overridden in tests
 )
 
 // ResetForTesting clears in-memory session state (tests only).
