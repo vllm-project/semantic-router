@@ -132,7 +132,7 @@ func (c *RouterConfig) GetModelPricing(modelName string) (promptPer1M float64, c
 func (c *RouterConfig) GetModelPricingFull(modelName string) (ModelPricingResult, bool) {
 	if modelConfig, okc := c.resolveModelConfig(modelName); okc {
 		p := modelConfig.Pricing
-		if p.PromptPer1M != 0 || p.CompletionPer1M != 0 || p.Currency != "" {
+		if p.PromptPer1M != 0 || p.CompletionPer1M != 0 || p.CacheReadPer1M != 0 || p.CacheWritePer1M != 0 || p.Currency != "" {
 			cur := p.Currency
 			if cur == "" {
 				cur = "USD"

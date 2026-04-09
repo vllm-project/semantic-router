@@ -3,6 +3,7 @@ package ratelimit
 import (
 	"context"
 	"fmt"
+	"math"
 	"slices"
 	"strconv"
 	"time"
@@ -309,8 +310,9 @@ func (p *ValkeyLimiterProvider) calculateCELCost(model string, usage TokenUsage)
 		return int64(usage.InputTokens + usage.OutputTokens)
 	}
 
-	inputRate := int64(promptPer1M * 100)
-	outputRate := int64(completionPer1M * 100)
+	// Round before truncating to avoid float precision errors (e.g. 3.3 * 100 = 329.999… → 329).
+	inputRate := int64(math.Round(promptPer1M * 100))
+	outputRate := int64(math.Round(completionPer1M * 100))
 	return int64(usage.InputTokens)*inputRate + int64(usage.OutputTokens)*outputRate
 }
 
@@ -320,14 +322,15 @@ func (p *ValkeyLimiterProvider) calculateCELCostFull(model string, usage TokenUs
 	if !ok {
 		return 0, false
 	}
-	inputRate := int64(rates.PromptPer1M * 100)
-	outputRate := int64(rates.CompletionPer1M * 100)
+	// Round before truncating to avoid float precision errors (e.g. 3.3 * 100 = 329.999… → 329).
+	inputRate := int64(math.Round(rates.PromptPer1M * 100))
+	outputRate := int64(math.Round(rates.CompletionPer1M * 100))
 	cost := int64(usage.InputTokens)*inputRate + int64(usage.OutputTokens)*outputRate
 	if usage.CachedInputTokens > 0 && rates.CacheReadPer1M > 0 {
-		cost += int64(usage.CachedInputTokens) * int64(rates.CacheReadPer1M*100)
+		cost += int64(usage.CachedInputTokens) * int64(math.Round(rates.CacheReadPer1M*100))
 	}
 	if usage.CacheCreationTokens > 0 && rates.CacheWritePer1M > 0 {
-		cost += int64(usage.CacheCreationTokens) * int64(rates.CacheWritePer1M*100)
+		cost += int64(usage.CacheCreationTokens) * int64(math.Round(rates.CacheWritePer1M*100))
 	}
 	return cost, true
 }

@@ -16,6 +16,7 @@ import (
 type responseUsageMetrics struct {
 	promptTokens        int
 	completionTokens    int
+	totalTokens         int
 	cachedInputTokens   int
 	cacheCreationTokens int
 }
@@ -49,9 +50,18 @@ func parseResponseUsage(responseBody []byte, model string) responseUsageMetrics 
 	}
 	cacheCreation := gjson.GetBytes(responseBody, "usage.cache_creation_input_tokens")
 
+	// Prefer the provider's total_tokens when available (works for both
+	// OpenAI and Anthropic semantics). Fall back to prompt + completion.
+	total := gjson.GetBytes(responseBody, "usage.total_tokens")
+	totalTokens := int(total.Int())
+	if totalTokens == 0 {
+		totalTokens = int(promptTokens.Int()) + int(completionTokens.Int())
+	}
+
 	return responseUsageMetrics{
 		promptTokens:        int(promptTokens.Int()),
 		completionTokens:    int(completionTokens.Int()),
+		totalTokens:         totalTokens,
 		cachedInputTokens:   int(cachedInput.Int()),
 		cacheCreationTokens: int(cacheCreation.Int()),
 	}
@@ -62,13 +72,11 @@ func (r *OpenAIRouter) reportNonStreamingUsage(
 	completionLatency time.Duration,
 	usage responseUsageMetrics,
 ) {
-	totalTokens := usage.promptTokens + usage.completionTokens
-
 	if r.RateLimiter != nil && ctx.RateLimitCtx != nil {
 		r.RateLimiter.Report(*ctx.RateLimitCtx, ratelimit.TokenUsage{
 			InputTokens:         usage.promptTokens,
 			OutputTokens:        usage.completionTokens,
-			TotalTokens:         totalTokens,
+			TotalTokens:         usage.totalTokens,
 			CachedInputTokens:   usage.cachedInputTokens,
 			CacheCreationTokens: usage.cacheCreationTokens,
 		})
@@ -109,14 +117,13 @@ func (r *OpenAIRouter) recordResponseCost(
 	completionLatency time.Duration,
 	usage responseUsageMetrics,
 ) routerreplay.UsageCost {
-	totalTokens := usage.promptTokens + usage.completionTokens
 	replayUsage := r.buildReplayUsageCost(ctx, usage)
 	eventFields := map[string]interface{}{
 		"request_id":            ctx.RequestID,
 		"model":                 ctx.RequestModel,
 		"prompt_tokens":         usage.promptTokens,
 		"completion_tokens":     usage.completionTokens,
-		"total_tokens":          totalTokens,
+		"total_tokens":          usage.totalTokens,
 		"completion_latency_ms": completionLatency.Milliseconds(),
 	}
 
