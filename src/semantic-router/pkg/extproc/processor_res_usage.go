@@ -59,6 +59,10 @@ func (r *OpenAIRouter) reportNonStreamingUsage(
 		})
 	}
 
+	if totalTokens > 0 {
+		recordSessionTurn(ctx, usage)
+	}
+
 	if ctx.RequestModel == "" {
 		return
 	}
@@ -164,6 +168,13 @@ func (r *OpenAIRouter) reportStreamingUsageMetrics(
 			InputTokens:  int(usage.PromptTokens),
 			OutputTokens: int(usage.CompletionTokens),
 			TotalTokens:  int(usage.TotalTokens),
+		})
+	}
+
+	if usage.PromptTokens > 0 || usage.CompletionTokens > 0 {
+		recordSessionTurn(ctx, responseUsageMetrics{
+			promptTokens:     int(usage.PromptTokens),
+			completionTokens: int(usage.CompletionTokens),
 		})
 	}
 
