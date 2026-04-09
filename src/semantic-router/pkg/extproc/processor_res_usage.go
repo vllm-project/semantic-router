@@ -159,6 +159,16 @@ func extractStreamingUsage(ctx *RequestContext) openai.CompletionUsage {
 	return usage
 }
 
+func recordSessionTurnFromStreamingUsage(ctx *RequestContext, usage openai.CompletionUsage) {
+	if usage.PromptTokens <= 0 && usage.CompletionTokens <= 0 {
+		return
+	}
+	recordSessionTurn(ctx, responseUsageMetrics{
+		promptTokens:     int(usage.PromptTokens),
+		completionTokens: int(usage.CompletionTokens),
+	})
+}
+
 func (r *OpenAIRouter) reportStreamingUsageMetrics(
 	ctx *RequestContext,
 	usage openai.CompletionUsage,
@@ -171,12 +181,7 @@ func (r *OpenAIRouter) reportStreamingUsageMetrics(
 		})
 	}
 
-	if usage.PromptTokens > 0 || usage.CompletionTokens > 0 {
-		recordSessionTurn(ctx, responseUsageMetrics{
-			promptTokens:     int(usage.PromptTokens),
-			completionTokens: int(usage.CompletionTokens),
-		})
-	}
+	recordSessionTurnFromStreamingUsage(ctx, usage)
 
 	if ctx.RequestModel == "" || (usage.PromptTokens == 0 && usage.CompletionTokens == 0) {
 		return
