@@ -41,7 +41,7 @@ html[data-route-kind='blog'] .hero--primary + main article {
   border: 1px solid var(--site-border);
   border-radius: 1.5rem;
   background:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.025), transparent 18%),
+    linear-gradient(180deg, rgba(17, 17, 17, 0.025), transparent 18%),
     var(--site-surface);
   box-shadow: var(--site-shadow);
 }
@@ -54,8 +54,9 @@ html[data-route-kind='blog'] .hero--primary + main article {
 .site-blog-shell .theme-blog-sidebar .thin-scrollbar {
   border: 1px solid var(--site-border);
   border-radius: 1.3rem;
-  background: rgba(23, 23, 23, 0.9);
+  background: rgba(255, 253, 248, 0.92);
   padding: 1rem;
+  box-shadow: var(--site-shadow);
 }
 
 .site-blog-shell .theme-blog-sidebar-item-link {
@@ -64,7 +65,7 @@ html[data-route-kind='blog'] .hero--primary + main article {
 
 .site-blog-shell .theme-blog-sidebar-item-link:hover,
 .site-blog-shell .theme-blog-sidebar-item-link--active {
-  background: rgba(255, 255, 255, 0.06);
+  background: rgba(17, 17, 17, 0.06);
 }
 
 .site-blog-shell .margin-bottom--xl {

@@ -374,14 +374,29 @@
   "homepage.hero.label": {
     "message": "开源 LLM 路由器"
   },
-  "homepage.hero.line1": {
-    "message": "把每个请求"
+  "homepage.hero.line1Accent": {
+    "message": "路由"
   },
-  "homepage.hero.line2": {
-    "message": "路由到最佳模型"
+  "homepage.hero.line1Suffix": {
+    "message": "每一个请求"
+  },
+  "homepage.hero.line2Prefix": {
+    "message": "用一个系统"
+  },
+  "homepage.hero.line2Accent": {
+    "message": "大脑"
+  },
+  "homepage.hero.line3Prefix": {
+    "message": "到"
+  },
+  "homepage.hero.line3Accent": {
+    "message": "最合适的"
+  },
+  "homepage.hero.line3Suffix": {
+    "message": "模型"
   },
   "homepage.hero.description": {
-    "message": "vLLM Semantic Router 用成本、时延、隐私、安全和模态信号，在本地、私有和前沿模型之间为每个请求选择最合适的模型。"
+    "message": "在本地、私有与前沿模型之间统一路由，由成本、时延、隐私与安全共同驱动。"
   },
   "homepage.hero.primaryCta": {
     "message": "试用演示"
