@@ -1222,6 +1222,7 @@ global:
           max_models: 50
     authz:
       fail_open: false
+      trust_identity_headers: true
       identity:
         user_id_header: x-user-id
         user_groups_header: x-user-groups

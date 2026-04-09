@@ -83,6 +83,27 @@ type AuthzConfig struct {
 	FailOpen  bool                  `yaml:"fail_open,omitempty"`
 	Identity  IdentityConfig        `yaml:"identity,omitempty"`
 	Providers []AuthzProviderConfig `yaml:"providers,omitempty"`
+
+	// TrustIdentityHeaders controls whether identity headers (user_id_header,
+	// user_groups_header) are trusted from incoming requests.
+	//   true (default): trust identity headers — assumes an auth backend
+	//                   (ext_authz, Envoy Gateway JWT, etc.) injects them.
+	//   false:          strip identity headers from client requests to prevent
+	//                   spoofing. Use when no auth backend is configured.
+	//
+	// When false, the router strips identity headers on every request and logs
+	// a warning. This prevents user impersonation via role_bindings, rate limits,
+	// and memory isolation.
+	TrustIdentityHeaders *bool `yaml:"trust_identity_headers,omitempty"`
+}
+
+// ShouldTrustIdentityHeaders returns whether identity headers should be trusted.
+// Defaults to true for backward compatibility with existing auth backend deployments.
+func (ac AuthzConfig) ShouldTrustIdentityHeaders() bool {
+	if ac.TrustIdentityHeaders == nil {
+		return true // default: trust (assumes auth backend is present)
+	}
+	return *ac.TrustIdentityHeaders
 }
 
 // IdentityConfig controls how the router reads user identity from request headers.

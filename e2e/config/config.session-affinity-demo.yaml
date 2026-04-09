@@ -1,0 +1,189 @@
+# Session Affinity Demo Config
+# Demonstrates the route-bouncing problem in multi-turn conversations.
+#
+# Setup:
+#   - "expensive" model: Claude via claude-code-proxy on port 11480
+#   - "cheap" model: qwen2.5:0.5b (0.5B params) on Ollama port 11434
+#
+# Routing logic:
+#   - Complex queries (complexity signal "hard") → Claude (expensive)
+#   - Simple queries (complexity signal "easy") → qwen2.5:0.5b (cheap)
+#
+# The demo scenario:
+#   1. User sends complex coding question → routes to Claude (expensive)
+#   2. Claude responds with great code and asks "want me to add tests?"
+#   3. User says "yes" → VSR sees only "yes" → classifies as easy
+#   4. Routes to qwen2.5:0.5b (cheap) → 0.5B model has NO IDEA what "yes" means
+
+# Disable features we don't need for the demo
+semantic_cache:
+  enabled: false
+
+tools:
+  enabled: false
+
+prompt_guard:
+  enabled: true
+  model_id: "models/mom-jailbreak-classifier"
+  threshold: 0.7
+  use_cpu: true
+jailbreak_mapping_path: "models/mom-jailbreak-classifier/label_mapping.json"
+
+# Jailbreak rules for signal-based detection
+jailbreak_rules:
+  - name: "jailbreak_high"
+    threshold: 0.7
+    description: "High-confidence jailbreak detection"
+
+hallucination_mitigation:
+  enabled: false
+
+# Domain classifier (required by VSR startup)
+classifier:
+  category_model:
+    model_id: "models/mom-domain-classifier"
+    threshold: 0.6
+    use_cpu: true
+    category_mapping_path: "models/mom-domain-classifier/category_mapping.json"
+
+# Embedding models for complexity signal
+embedding_models:
+  qwen3_model_path: "models/mom-embedding-pro"
+  use_cpu: true
+  hnsw_config:
+    model_type: "qwen3"
+    preload_embeddings: true
+    target_dimension: 1024
+    enable_soft_matching: true
+    min_score_threshold: 0.5
+
+# Two backends
+vllm_endpoints:
+  - name: "ollama"
+    address: "127.0.0.1"
+    port: 11434
+    weight: 1
+  - name: "claude-proxy"
+    address: "127.0.0.1"
+    port: 11480
+    weight: 1
+
+# Model-to-endpoint mapping
+model_config:
+  "expensive-model":
+    preferred_endpoints: ["claude-proxy"]
+  "qwen2.5:0.5b":
+    preferred_endpoints: ["ollama"]
+
+# Complexity signal: distinguish hard vs easy prompts
+complexity_rules:
+  - name: "prompt_complexity"
+    threshold: 0.15
+    description: "Classify prompt complexity for routing decisions"
+    hard:
+      candidates:
+        - "Implement a concurrent lock-free data structure with memory ordering guarantees"
+        - "Design a distributed consensus algorithm for fault-tolerant systems"
+        - "Write a compiler optimization pass for loop vectorization"
+        - "Build a real-time stream processing pipeline with exactly-once semantics"
+        - "Implement a B+ tree with concurrent readers and writers"
+        - "Design a garbage collector with generational collection and compaction"
+        - "Write an optimized matrix multiplication kernel with cache tiling"
+        - "Implement a raft consensus protocol with log compaction"
+        - "Explain the mathematical proof of the P vs NP problem"
+        - "Analyze the time complexity of this recursive algorithm with memoization"
+    easy:
+      candidates:
+        - "yes"
+        - "no"
+        - "ok"
+        - "sure"
+        - "thanks"
+        - "got it"
+        - "sounds good"
+        - "please do"
+        - "go ahead"
+        - "that works"
+        - "hello"
+        - "hi"
+        - "what is a variable"
+        - "how do I print hello world"
+        - "what does this error mean"
+
+# Categories (minimal, required by classifier)
+categories:
+  - name: computer_science
+    description: "Computer science and programming"
+    mmlu_categories: ["computer_science"]
+  - name: other
+    description: "General topics"
+    mmlu_categories: ["other"]
+
+# Routing strategy
+strategy: "priority"
+
+# Two decisions: complex → expensive, simple → cheap
+decisions:
+  - name: "jailbreak_block"
+    description: "Block jailbreak attempts"
+    priority: 999
+    rules:
+      operator: "AND"
+      conditions:
+        - type: "jailbreak"
+          name: "jailbreak_high"
+    modelRefs:
+      - model: "qwen2.5:0.5b"
+        use_reasoning: false
+    plugins:
+      - type: "fast_response"
+        configuration:
+          enabled: true
+          message: "Request blocked: jailbreak attempt detected."
+          status_code: 403
+
+  - name: "complex_query"
+    description: "Complex queries that need a powerful model"
+    priority: 200
+    rules:
+      operator: "AND"
+      conditions:
+        - type: "complexity"
+          name: "prompt_complexity:hard"
+    modelRefs:
+      - model: "expensive-model"
+        use_reasoning: false
+
+  - name: "simple_query"
+    description: "Simple queries that a cheap model can handle"
+    priority: 100
+    rules:
+      operator: "AND"
+      conditions:
+        - type: "complexity"
+          name: "prompt_complexity:easy"
+    modelRefs:
+      - model: "qwen2.5:0.5b"
+        use_reasoning: false
+
+  - name: "fallback"
+    description: "Fallback for unmatched queries"
+    priority: 1
+    rules:
+      operator: "AND"
+      conditions:
+        - type: "domain"
+          name: "other"
+    modelRefs:
+      - model: "qwen2.5:0.5b"
+        use_reasoning: false
+
+# Default model when no decision matches
+default_model: "qwen2.5:0.5b"
+
+# Observability
+observability:
+  metrics:
+    enabled: true
+  tracing:
+    enabled: false

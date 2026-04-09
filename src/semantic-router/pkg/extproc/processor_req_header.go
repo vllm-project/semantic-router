@@ -22,6 +22,7 @@ func (r *OpenAIRouter) handleRequestHeaders(v *ext_proc.ProcessingRequest_Reques
 	defer span.End()
 
 	method, path := captureRequestHeaders(v, ctx)
+	r.stripUntrustedIdentityHeaders(ctx)
 	setRequestHeaderSpanAttributes(span, ctx, method, path)
 
 	if replayResp := r.handleRouterReplayAPI(method, path); replayResp != nil {
@@ -89,6 +90,24 @@ func captureRequestHeaders(
 	})
 
 	return method, path
+}
+
+// stripUntrustedIdentityHeaders removes identity headers when trust_identity_headers
+// is false, preventing clients from spoofing user identity for role-based routing,
+// per-user rate limits, and memory isolation.
+func (r *OpenAIRouter) stripUntrustedIdentityHeaders(ctx *RequestContext) {
+	if r.Config == nil || r.Config.Authz.ShouldTrustIdentityHeaders() {
+		return
+	}
+	userIDHeader := r.Config.Authz.Identity.GetUserIDHeader()
+	userGroupsHeader := r.Config.Authz.Identity.GetUserGroupsHeader()
+	if ctx.Headers[userIDHeader] != "" || ctx.Headers[userGroupsHeader] != "" {
+		logging.Warnf("Stripped untrusted identity headers (%s, %s) — trust_identity_headers is false. "+
+			"Set authz.trust_identity_headers: true if an auth backend injects these headers.",
+			userIDHeader, userGroupsHeader)
+		delete(ctx.Headers, userIDHeader)
+		delete(ctx.Headers, userGroupsHeader)
+	}
 }
 
 func setRequestHeaderSpanAttributes(
