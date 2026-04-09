@@ -239,7 +239,7 @@ func ParseUnit(unit string) time.Duration {
 	case "day":
 		return 24 * time.Hour
 	case "month":
-		return 30 * 24 * time.Hour
+		return 30 * 24 * time.Hour // approximation: fixed 30-day window, not calendar month
 	default:
 		return time.Minute
 	}

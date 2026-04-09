@@ -333,12 +333,9 @@ func (c *ValkeyCache) AddPendingRequest(requestID string, model string, query st
 	ctx := context.Background()
 	docKey := c.config.Index.Prefix + id
 	pendingKey := c.config.Index.Prefix + "pending:" + requestID
-	setCmd := []string{"SET", pendingKey, docKey}
+	setCmd := []string{"SET", pendingKey, docKey, "EX", fmt.Sprintf("%d", ttlSeconds)}
 	if _, err := c.client.CustomCommand(ctx, setCmd); err != nil {
 		logging.Warnf("ValkeyCache.AddPendingRequest: failed to store pending lookup key: %v", err)
-	} else if ttlSeconds > 0 {
-		expireCmd := []string{"EXPIRE", pendingKey, fmt.Sprintf("%d", ttlSeconds)}
-		_, _ = c.client.CustomCommand(ctx, expireCmd)
 	}
 
 	metrics.RecordCacheOperation("valkey", "add_pending", "success", time.Since(start).Seconds())
@@ -357,9 +354,9 @@ func (c *ValkeyCache) UpdateWithResponse(requestID string, responseBody []byte, 
 
 	ctx := context.Background()
 
-	// Look up the doc key via the reverse lookup set in AddPendingRequest
+	// Look up and atomically delete the reverse lookup key set in AddPendingRequest
 	pendingKey := c.config.Index.Prefix + "pending:" + requestID
-	docKeyResult, err := c.client.CustomCommand(ctx, []string{"GET", pendingKey})
+	docKeyResult, err := c.client.CustomCommand(ctx, []string{"GETDEL", pendingKey})
 	if err != nil || docKeyResult == nil {
 		logging.Infof("ValkeyCache.UpdateWithResponse: no pending lookup key for request_id=%s: %v", requestID, err)
 		metrics.RecordCacheOperation("valkey", "update_response", "error", time.Since(start).Seconds())
@@ -388,10 +385,13 @@ func (c *ValkeyCache) UpdateWithResponse(requestID string, responseBody []byte, 
 	query := fmt.Sprint(fields[1])
 	requestBodyStr := fmt.Sprint(fields[2])
 
-	logging.Debugf("ValkeyCache.UpdateWithResponse: found pending entry, updating (key: %s, model: %s)", docKey, model)
+	if model == "" || query == "" {
+		logging.Debugf("ValkeyCache.UpdateWithResponse: missing required fields (key: %s, model: %q, query_len: %d)", docKey, model, len(query))
+		metrics.RecordCacheOperation("valkey", "update_response", "error", time.Since(start).Seconds())
+		return fmt.Errorf("incomplete pending entry for request_id=%s: missing required fields", requestID)
+	}
 
-	// Clean up the pending lookup key
-	_, _ = c.client.CustomCommand(ctx, []string{"DEL", pendingKey})
+	logging.Debugf("ValkeyCache.UpdateWithResponse: found pending entry, updating (key: %s, model: %s)", docKey, model)
 
 	// Update the document with response body and TTL
 	err = c.addEntry(docKey, requestID, model, query, []byte(requestBodyStr), responseBody, ttlSeconds)

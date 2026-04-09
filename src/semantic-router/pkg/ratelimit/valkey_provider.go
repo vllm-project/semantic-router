@@ -38,6 +38,7 @@ type ValkeyClient interface {
 	IncrBy(ctx context.Context, key string, amount int64) (int64, error)
 	Expire(ctx context.Context, key string, d time.Duration) (bool, error)
 	TTL(ctx context.Context, key string) (int64, error)
+	CustomCommand(ctx context.Context, args []string) (interface{}, error)
 	Close()
 }
 
@@ -63,6 +64,10 @@ func (a *glideAdapter) IncrBy(ctx context.Context, key string, amount int64) (in
 
 func (a *glideAdapter) Expire(ctx context.Context, key string, d time.Duration) (bool, error) {
 	return a.client.Expire(ctx, key, d)
+}
+
+func (a *glideAdapter) CustomCommand(ctx context.Context, args []string) (interface{}, error) {
+	return a.client.CustomCommand(ctx, args)
 }
 
 func (a *glideAdapter) TTL(ctx context.Context, key string) (int64, error) {
@@ -245,16 +250,21 @@ func (p *ValkeyLimiterProvider) Report(ctx Context, usage TokenUsage) error {
 	key := p.valkeyKey(ctx.UserID, rule.Unit)
 	bg := context.Background()
 
-	newTotal, err := p.client.IncrBy(bg, key, cost)
+	// Atomic INCRBY + conditional EXPIRE via Lua to prevent TTL race
+	ttlSec := int64(rule.Unit.Seconds())
+	luaScript := `local v = redis.call('INCRBY', KEYS[1], ARGV[1])
+if v == tonumber(ARGV[1]) then redis.call('EXPIRE', KEYS[1], ARGV[2]) end
+return v`
+	result, err := p.client.CustomCommand(bg, []string{
+		"EVAL", luaScript, "1", key,
+		fmt.Sprintf("%d", cost), fmt.Sprintf("%d", ttlSec),
+	})
 	if err != nil {
-		return fmt.Errorf("valkey INCRBY %s: %w", key, err)
+		return fmt.Errorf("valkey EVAL incrby-expire %s: %w", key, err)
 	}
-
-	// Set expiry if this is a new key (value equals the cost we just added).
-	if newTotal == cost {
-		if _, err := p.client.Expire(bg, key, rule.Unit); err != nil {
-			logging.Warnf("valkey-limiter: failed to set TTL on %s: %v", key, err)
-		}
+	newTotal, ok := result.(int64)
+	if !ok {
+		return fmt.Errorf("valkey EVAL incrby-expire %s: unexpected result type %T", key, result)
 	}
 
 	logging.Debugf("valkey-limiter: report user=%s model=%s cost=%d new_total=%d limit=%d",
