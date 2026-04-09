@@ -92,12 +92,40 @@ HF_HUB_ENABLE_HF_TRANSFER=1 \
 python3 -c "from huggingface_hub import snapshot_download; snapshot_download('sentence-transformers/all-MiniLM-L12-v2', local_dir='${TEST_DIR}/models/mom-embedding-light', local_dir_use_symlinks=False)"
 
 make -C "${REPO_ROOT}" start-milvus
+
+# Double-check Milvus readiness with pymilvus probe (gRPC-level, not just HTTP)
+echo "Verifying Milvus gRPC readiness via pymilvus..."
+for attempt in $(seq 1 30); do
+    if python3 -c "
+from pymilvus import connections
+try:
+    connections.connect('default', host='localhost', port='19530', timeout=5)
+    connections.disconnect('default')
+    print('Milvus gRPC connection verified')
+except Exception as e:
+    raise SystemExit(1)
+" 2>/dev/null; then
+        break
+    fi
+    if [ "${attempt}" -eq 30 ]; then
+        echo "ERROR: Milvus gRPC not ready after 30 attempts"
+        "${CONTAINER_RUNTIME}" logs milvus-semantic-cache 2>&1 | tail -30 || true
+        exit 1
+    fi
+    sleep 2
+done
+
 cp "${REPO_ROOT}/e2e/config/config.memory-user.yaml" "${CONFIG_FILE}"
-python3 -c 'from pathlib import Path; path = Path("'"${CONFIG_FILE}"'"); path.write_text(path.read_text().replace("host.docker.internal:8000", "llm-katan:8000"))'
+python3 -c 'from pathlib import Path; path = Path("'"${CONFIG_FILE}"'"); t = path.read_text(); t = t.replace("host.docker.internal:8000", "llm-katan:8000"); t = t.replace("host.docker.internal:19530", "vllm-sr-milvus:19530"); path.write_text(t)'
 
 if ! "${CONTAINER_RUNTIME}" network inspect "${VLLM_SR_NETWORK}" >/dev/null 2>&1; then
     "${CONTAINER_RUNTIME}" network create "${VLLM_SR_NETWORK}" >/dev/null
 fi
+
+# Connect the externally-started Milvus to the vllm-sr network so the router
+# container can reach it by the name vllm-sr serve expects.
+"${CONTAINER_RUNTIME}" network connect --alias vllm-sr-milvus "${VLLM_SR_NETWORK}" milvus-semantic-cache 2>/dev/null || true
+echo "Milvus connected to ${VLLM_SR_NETWORK} as vllm-sr-milvus"
 
 "${CONTAINER_RUNTIME}" run -d --name llm-katan \
     --network "${VLLM_SR_NETWORK}" \
@@ -141,7 +169,7 @@ fi
 
 VLLM_SR_PID="$(cat "${PID_FILE}")"
 
-for _ in $(seq 1 180); do
+for _ in $(seq 1 300); do
     http_code="$(curl -s -o /dev/null -w "%{http_code}" "${ROUTER_API_HEALTH_URL}" 2>/dev/null || echo "000")"
     if [[ "${http_code}" == "200" ]]; then
         echo "vllm-sr router API ready"
