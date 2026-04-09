@@ -673,9 +673,13 @@ func (v *ValkeyStore) ForgetByScope(ctx context.Context, scope MemoryScope) erro
 		filterExpr = fmt.Sprintf("%s @memory_type:{%s}", filterExpr, strings.Join(typeValues, " | "))
 	}
 
-	// Delete in batches: search at offset 0, delete found keys, repeat until
-	// none remain. This follows the same pattern as ValkeyBackend.DeleteByFileID
-	// in pkg/vectorstore/valkey_backend.go.
+	// Delete in batches: always search from offset 0, delete found keys, repeat
+	// until none remain. We intentionally re-query at offset 0 each iteration
+	// because the previous batch's DEL removes those keys from the index, so the
+	// next FT.SEARCH at offset 0 naturally returns the next page of results.
+	// Incrementing the offset would skip keys that shifted forward after deletion.
+	// This follows the same pattern as ValkeyBackend.DeleteByFileID in
+	// pkg/vectorstore/valkey_backend.go.
 	const pageSize = 1000
 	totalDeleted := 0
 

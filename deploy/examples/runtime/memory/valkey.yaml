@@ -27,6 +27,11 @@ metric_type: "COSINE"       # Distance metric: COSINE, L2, or IP
 index_m: 16                 # Bi-directional links per node (higher = more accurate, more RAM)
 index_ef_construction: 256  # Build-time search width (higher = better recall, slower build)
 
+# TLS settings
+tls_enabled: false                 # Enable TLS for the Valkey connection
+tls_ca_path: ""                    # Path to PEM-encoded CA cert (empty = system trust store)
+tls_insecure_skip_verify: false    # Skip server cert verification (development only)
+
 # Full canonical config.yaml usage example:
 #
 # global:
@@ -46,6 +51,9 @@ index_ef_construction: 256  # Build-time search width (higher = better recall, s
 #         metric_type: COSINE
 #         index_m: 16
 #         index_ef_construction: 256
+#         tls_enabled: false
+#         tls_ca_path: ""
+#         tls_insecure_skip_verify: false
 #       embedding_model: bert
 #       default_retrieval_limit: 5
 #       default_similarity_threshold: 0.70
@@ -77,7 +85,9 @@ index_ef_construction: 256  # Build-time search width (higher = better recall, s
 #   index_m: 32                        # higher recall for production
 #   index_ef_construction: 512
 #
-# Kubernetes with TLS (future):
+# Kubernetes with TLS:
 #   host: "valkey-tls.valkey-system.svc.cluster.local"
 #   port: 6380
 #   password: "${VALKEY_PASSWORD}"
+#   tls_enabled: true
+#   tls_ca_path: "/etc/valkey/certs/ca.pem"   # mounted from secret

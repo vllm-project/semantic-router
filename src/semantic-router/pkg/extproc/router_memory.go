@@ -203,6 +203,26 @@ func createValkeyMemoryStore(cfg *config.RouterConfig) (memory.Store, error) {
 		clientConfig = clientConfig.WithRequestTimeout(timeout)
 	}
 
+	if vc.TLSEnabled {
+		clientConfig = clientConfig.WithUseTLS(true)
+		tlsConfig := glideconfig.NewTlsConfiguration()
+		if vc.TLSCAPath != "" {
+			caCert, caErr := glideconfig.LoadRootCertificatesFromFile(vc.TLSCAPath)
+			if caErr != nil {
+				return nil, fmt.Errorf("failed to load TLS CA certificate from %s: %w", vc.TLSCAPath, caErr)
+			}
+			tlsConfig = tlsConfig.WithRootCertificates(caCert)
+		}
+		if vc.TLSInsecureSkipVerify {
+			tlsConfig = tlsConfig.WithInsecureTLS(true)
+			logging.Warnf("Memory: Valkey TLS certificate verification is DISABLED — do not use in production")
+		}
+		advancedConfig := glideconfig.NewAdvancedClientConfiguration().
+			WithTlsConfiguration(tlsConfig)
+		clientConfig = clientConfig.WithAdvancedConfiguration(advancedConfig)
+		logging.Infof("Memory: Valkey TLS enabled (ca_path=%q, insecure_skip_verify=%v)", vc.TLSCAPath, vc.TLSInsecureSkipVerify)
+	}
+
 	valkeyClient, err := glide.NewClient(clientConfig)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create Valkey client: %w", err)

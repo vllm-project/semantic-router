@@ -1448,6 +1448,9 @@ global:
         metric_type: COSINE
         index_m: 16
         index_ef_construction: 200
+        tls_enabled: false
+        tls_ca_path: ""
+        tls_insecure_skip_verify: false
       milvus:
         address: milvus:19530
         collection: agentic_memory

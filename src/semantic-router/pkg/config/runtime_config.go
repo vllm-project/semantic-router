@@ -289,6 +289,13 @@ type MemoryValkeyConfig struct {
 	IndexM int `yaml:"index_m,omitempty"`
 	// IndexEfConstruction is the HNSW efConstruction parameter (default 256).
 	IndexEfConstruction int `yaml:"index_ef_construction,omitempty"`
+	// TLSEnabled enables TLS for the Valkey connection.
+	TLSEnabled bool `yaml:"tls_enabled,omitempty"`
+	// TLSCAPath is the path to a PEM-encoded CA certificate file for server verification.
+	// When empty and TLS is enabled, the system's default trust store is used.
+	TLSCAPath string `yaml:"tls_ca_path,omitempty"`
+	// TLSInsecureSkipVerify skips server certificate verification (development only).
+	TLSInsecureSkipVerify bool `yaml:"tls_insecure_skip_verify,omitempty"`
 }
 
 // ResponseAPIConfig controls response and conversation history storage.

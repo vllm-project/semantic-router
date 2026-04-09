@@ -33,14 +33,19 @@ func (v *ValkeyStore) recordRetrievalBatch(ids []string) {
 }
 
 // recordRetrieval updates LastAccessed and AccessCount for a single memory (reinforcement: S += 1, t = 0).
-// Uses targeted HINCRBY for access_count and HSET for timestamps instead of a full Get+Update cycle.
+//
+// The authoritative access_count and updated_at live as top-level HASH fields and are updated
+// atomically via HINCRBY / HSET. The metadata JSON blob also carries copies of these values for
+// convenience during result parsing. Rather than doing a racy read-modify-write on the JSON
+// (which could lose concurrent increments), we read the current access_count HASH field after
+// the atomic increment and rebuild the metadata JSON from that single source of truth.
 func (v *ValkeyStore) recordRetrieval(ctx context.Context, id string) error {
 	key := v.hashKey(id)
 	now := time.Now()
 	nowUnix := strconv.FormatInt(now.Unix(), 10)
 
 	// Increment access_count atomically.
-	_, err := v.client.CustomCommand(ctx, []string{"HINCRBY", key, "access_count", "1"})
+	newCount, err := v.client.CustomCommand(ctx, []string{"HINCRBY", key, "access_count", "1"})
 	if err != nil {
 		return fmt.Errorf("HINCRBY access_count failed: %w", err)
 	}
@@ -53,19 +58,23 @@ func (v *ValkeyStore) recordRetrieval(ctx context.Context, id string) error {
 		return fmt.Errorf("HSET timestamps failed: %w", err)
 	}
 
-	// Also update last_accessed inside the metadata JSON.
-	// Read current metadata, update, write back.
+	// Sync metadata JSON with the authoritative HASH fields.
+	// We read the current metadata, overwrite access_count and last_accessed
+	// with the values we just wrote atomically above, and write it back.
+	// This avoids the previous read-modify-write race: even if two goroutines
+	// run concurrently, each writes the post-increment count it received from
+	// HINCRBY, so the JSON converges to the correct value.
 	fields, err := v.client.HGetAll(ctx, key)
 	if err != nil {
-		return nil // Non-critical: timestamps are already updated
+		return nil // Non-critical: top-level HASH fields are already updated
 	}
 	if metadataStr, ok := fields["metadata"]; ok && metadataStr != "" {
 		var metadata map[string]interface{}
 		if jsonErr := json.Unmarshal([]byte(metadataStr), &metadata); jsonErr == nil {
 			metadata["last_accessed"] = now.Unix()
-			if ac, acOk := metadata["access_count"].(float64); acOk {
-				metadata["access_count"] = ac + 1
-			}
+			// Use the authoritative count returned by HINCRBY instead of
+			// incrementing the stale JSON value.
+			metadata["access_count"] = valkeyToInt64(newCount)
 			if updated, mErr := json.Marshal(metadata); mErr == nil {
 				_, _ = v.client.HSet(ctx, key, map[string]string{"metadata": string(updated)})
 			}

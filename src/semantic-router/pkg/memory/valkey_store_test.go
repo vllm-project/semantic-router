@@ -15,6 +15,71 @@ import (
 var _ Store = (*ValkeyStore)(nil)
 
 // ---------------------------------------------------------------------------
+// TLS configuration (config struct tests — no live Valkey required)
+// ---------------------------------------------------------------------------
+
+func TestMemoryValkeyConfig_TLSFields(t *testing.T) {
+	t.Parallel()
+
+	t.Run("defaults are zero-values", func(t *testing.T) {
+		t.Parallel()
+		cfg := config.MemoryValkeyConfig{}
+		assert.False(t, cfg.TLSEnabled)
+		assert.Empty(t, cfg.TLSCAPath)
+		assert.False(t, cfg.TLSInsecureSkipVerify)
+	})
+
+	t.Run("all fields populated", func(t *testing.T) {
+		t.Parallel()
+		cfg := config.MemoryValkeyConfig{
+			TLSEnabled:            true,
+			TLSCAPath:             "/etc/certs/ca.pem",
+			TLSInsecureSkipVerify: false,
+		}
+		assert.True(t, cfg.TLSEnabled)
+		assert.Equal(t, "/etc/certs/ca.pem", cfg.TLSCAPath)
+		assert.False(t, cfg.TLSInsecureSkipVerify)
+	})
+
+	t.Run("insecure skip verify", func(t *testing.T) {
+		t.Parallel()
+		cfg := config.MemoryValkeyConfig{
+			TLSEnabled:            true,
+			TLSInsecureSkipVerify: true,
+		}
+		assert.True(t, cfg.TLSEnabled)
+		assert.True(t, cfg.TLSInsecureSkipVerify)
+	})
+}
+
+func TestNewValkeyStore_DisabledWithTLS(t *testing.T) {
+	t.Parallel()
+	// TLS fields should not matter when the store is disabled.
+	store, err := NewValkeyStore(ValkeyStoreOptions{
+		Enabled: false,
+		ValkeyConfig: &config.MemoryValkeyConfig{
+			TLSEnabled: true,
+			TLSCAPath:  "/nonexistent/ca.pem",
+		},
+	})
+	require.NoError(t, err)
+	assert.False(t, store.IsEnabled())
+}
+
+func TestNewValkeyStore_RequiresClient(t *testing.T) {
+	t.Parallel()
+	// Enabled store with TLS but no client should fail with clear error.
+	_, err := NewValkeyStore(ValkeyStoreOptions{
+		Enabled: true,
+		ValkeyConfig: &config.MemoryValkeyConfig{
+			TLSEnabled: true,
+		},
+	})
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "valkey client is required")
+}
+
+// ---------------------------------------------------------------------------
 // valkeyFloat32ToBytes / valkeyBytesToFloat32
 // ---------------------------------------------------------------------------
 

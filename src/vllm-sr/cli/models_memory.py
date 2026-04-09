@@ -25,6 +25,9 @@ class MemoryValkeyConfig(BaseModel):
     metric_type: str = "COSINE"
     index_m: int = 16
     index_ef_construction: int = 256
+    tls_enabled: bool = False
+    tls_ca_path: str | None = None
+    tls_insecure_skip_verify: bool = False
 
 
 class MemoryRedisCacheConfig(BaseModel):
