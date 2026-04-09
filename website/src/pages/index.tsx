@@ -2,7 +2,19 @@ import React from 'react'
 import Head from '@docusaurus/Head'
 import Layout from '@theme/Layout'
 import Translate, { translate } from '@docusaurus/Translate'
+import useBaseUrl from '@docusaurus/useBaseUrl'
 import useDocusaurusContext from '@docusaurus/useDocusaurusContext'
+import Claude from '@lobehub/icons/es/Claude/components/Mono'
+import DeepSeek from '@lobehub/icons/es/DeepSeek/components/Mono'
+import Gemini from '@lobehub/icons/es/Gemini/components/Mono'
+import Grok from '@lobehub/icons/es/Grok/components/Mono'
+import Kimi from '@lobehub/icons/es/Kimi/components/Mono'
+import Meta from '@lobehub/icons/es/Meta/components/Mono'
+import Minimax from '@lobehub/icons/es/Minimax/components/Mono'
+import Mistral from '@lobehub/icons/es/Mistral/components/Mono'
+import OpenAI from '@lobehub/icons/es/OpenAI/components/Mono'
+import Qwen from '@lobehub/icons/es/Qwen/components/Mono'
+import Zhipu from '@lobehub/icons/es/Zhipu/components/Mono'
 import AcknowledgementsSection from '@site/src/components/AcknowledgementsSection'
 import InstallQuickStartSection from '@site/src/components/InstallQuickStartSection'
 import PaperFigureShowcase from '@site/src/components/PaperFigureShowcase'
@@ -29,6 +41,25 @@ const homepageSocialTitle = translate({
   id: 'homepage.meta.socialTitle',
   message: 'vLLM Semantic Router | Open-Source LLM Router',
 })
+
+type HeroModelLogo = {
+  label: string
+  Icon: React.ElementType
+}
+
+const heroModelLogos: HeroModelLogo[] = [
+  { label: 'Kimi', Icon: Kimi },
+  { label: 'Zhipu', Icon: Zhipu },
+  { label: 'MiniMax', Icon: Minimax },
+  { label: 'ChatGPT', Icon: OpenAI },
+  { label: 'Claude', Icon: Claude },
+  { label: 'Gemini', Icon: Gemini },
+  { label: 'DeepSeek', Icon: DeepSeek },
+  { label: 'Qwen', Icon: Qwen },
+  { label: 'Llama', Icon: Meta },
+  { label: 'Mistral', Icon: Mistral },
+  { label: 'Grok', Icon: Grok },
+]
 
 const heroStats = [
   {
@@ -223,48 +254,134 @@ const encoderCards = [
 ]
 
 function DitherHero(): JSX.Element {
+  const marqueeCopies = [0, 1]
+  const marqueeRepeats = [0, 1, 2]
+  const heroLogoSrc = useBaseUrl('/img/artworks/vllm-sr-logo.dark.svg')
+  const heroLogoAlt = translate({
+    id: 'homepage.hero.logoAlt',
+    message: 'vLLM Semantic Router logo',
+  })
+
   return (
-    <header className={styles.hero}>
-      <DitherField className={styles.heroNoise} />
-      <div className="site-shell-container">
-        <div className={styles.heroGrid}>
-          <div className={styles.heroStack}>
-            <PageIntro
-              className={styles.heroIntro}
-              label={<Translate id="homepage.hero.label">Open-source LLM router</Translate>}
-              title={(
-                <>
-                  <Translate id="homepage.hero.line1">Route each request</Translate>
-                  <br />
-                  <Translate id="homepage.hero.line2">to the best model</Translate>
-                </>
-              )}
-              description={(
-                <Translate id="homepage.hero.description">
-                  vLLM Semantic Router routes every request across local, private, and frontier
-                  models using cost, latency, privacy, safety, and modality signals.
-                </Translate>
-              )}
-              actions={(
-                <>
-                  <PillLink
-                    className={styles.heroPrimaryCta}
-                    href="https://play.vllm-semantic-router.com/"
-                    rel="noreferrer"
-                    target="_blank"
-                  >
-                    <Translate id="homepage.hero.primaryCta">Try the demo</Translate>
-                  </PillLink>
-                  <PillLink className={styles.heroSecondaryCta} to="/white-paper" muted>
-                    <Translate id="homepage.hero.secondaryCta">Read white paper</Translate>
-                  </PillLink>
-                </>
-              )}
-            />
+    <section className={styles.heroStage}>
+      <header className={styles.hero}>
+        <DitherField className={styles.heroNoise} />
+        <div className="site-shell-container">
+          <div className={styles.heroGrid}>
+            <div className={styles.heroIntro}>
+              <div className={styles.heroBrandLockup}>
+                <img
+                  src={heroLogoSrc}
+                  alt={heroLogoAlt}
+                  className={styles.heroBrandLogo}
+                  decoding="async"
+                  loading="eager"
+                />
+              </div>
+
+              <PageIntro
+                align="center"
+                className={styles.heroIntroPanel}
+                label={<Translate id="homepage.hero.label">Open-source LLM router</Translate>}
+                title={(
+                  <span className={styles.heroTitle}>
+                    <span className={styles.heroTitleLine}>
+                      <span className={styles.heroTitleAccent}>
+                        <Translate id="homepage.hero.line1Accent">Route</Translate>
+                      </span>
+                      {' '}
+                      <Translate id="homepage.hero.line1Suffix">every request</Translate>
+                    </span>
+                    <span className={styles.heroTitleLine}>
+                      <Translate id="homepage.hero.line2Prefix">with one system</Translate>
+                      {' '}
+                      <span className={styles.heroTitleAccent}>
+                        <Translate id="homepage.hero.line2Accent">brain</Translate>
+                      </span>
+                    </span>
+                    <span className={styles.heroTitleLine}>
+                      <Translate id="homepage.hero.line3Prefix">to the</Translate>
+                      {' '}
+                      <span className={styles.heroTitleAccent}>
+                        <Translate id="homepage.hero.line3Accent">best</Translate>
+                      </span>
+                      {' '}
+                      <Translate id="homepage.hero.line3Suffix">model</Translate>
+                    </span>
+                  </span>
+                )}
+                description={(
+                  <span className={styles.heroDescriptionText}>
+                    <Translate id="homepage.hero.description">
+                      Unified routing across local, private, and frontier models—guided by
+                      cost, latency, privacy, and safety.
+                    </Translate>
+                  </span>
+                )}
+                actions={(
+                  <>
+                    <PillLink
+                      className={styles.heroPrimaryCta}
+                      href="https://play.vllm-semantic-router.com/"
+                      rel="noreferrer"
+                      target="_blank"
+                    >
+                      <Translate id="homepage.hero.primaryCta">Public Beta</Translate>
+                    </PillLink>
+                    <PillLink className={styles.heroSecondaryCta} to="/white-paper" muted>
+                      <Translate id="homepage.hero.secondaryCta">Read white paper</Translate>
+                    </PillLink>
+                  </>
+                )}
+              />
+            </div>
           </div>
         </div>
-      </div>
-    </header>
+      </header>
+
+      <section
+        className={styles.heroModelSection}
+        aria-label={translate({
+          id: 'homepage.hero.modelBand.aria',
+          message: 'Supported model ecosystem',
+        })}
+      >
+        <div className={styles.heroModelBand}>
+          <div className={styles.heroModelBandHeader}>
+            <span className={styles.heroModelBandEyebrow}>
+              <Translate id="homepage.hero.modelBand.eyebrow">System brain</Translate>
+            </span>
+            <p className={styles.heroModelBandCopy}>
+              <Translate id="homepage.hero.modelBand.copy">
+                Connect all models with system brain
+              </Translate>
+            </p>
+          </div>
+
+          <div className={styles.heroModelBandViewport} aria-hidden="true">
+            <div className={styles.heroModelBandTrack}>
+              {marqueeCopies.map(copyIndex => (
+                <div
+                  key={`hero-model-sequence-${copyIndex}`}
+                  className={styles.heroModelBandSequence}
+                >
+                  {marqueeRepeats.map(repeatIndex =>
+                    heroModelLogos.map(({ label, Icon }) => (
+                      <div key={`${copyIndex}-${repeatIndex}-${label}`} className={styles.heroModelChip}>
+                        <span className={styles.heroModelChipIcon} aria-hidden="true">
+                          <Icon size={20} className={styles.heroModelGlyph} />
+                        </span>
+                        <span className={styles.heroModelChipLabel}>{label}</span>
+                      </div>
+                    )),
+                  )}
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      </section>
+    </section>
   )
 }
 

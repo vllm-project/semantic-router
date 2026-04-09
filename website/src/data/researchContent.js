@@ -177,7 +177,7 @@ export const researchPapers = [
     categoryLabel: 'RAG VERIFICATION',
     title: 'Fast and Faithful: Real-Time Verification for Long-Document Retrieval-Augmented Generation Systems',
     authors: 'Xunzhuo Liu, Bowei He, Xue Liu, Haichen Zhang, Huamin Chen',
-    venue: 'arXiv Technical Report',
+    venue: 'SIGIR 2026 Industry Track',
     year: '2026',
     abstract: 'We present a real-time verification component for long-document RAG that processes contexts up to 32K tokens, balancing latency and grounding coverage so interactive systems can detect unsupported answers without falling back to truncated checks.',
     links: [

@@ -28,6 +28,7 @@ interface PillButtonProps {
 
 interface PageIntroProps {
   actions?: React.ReactNode
+  align?: 'start' | 'center'
   className?: string
   description?: React.ReactNode
   label?: React.ReactNode
@@ -91,17 +92,24 @@ export function PillButton({
 
 export function PageIntro({
   actions,
+  align = 'start',
   className,
   description,
   label,
   title,
 }: PageIntroProps): JSX.Element {
+  const centered = align === 'center'
+
   return (
-    <div className={clsx(styles.pageIntro, className)}>
-      {label && <SectionLabel>{label}</SectionLabel>}
-      <h1 className={styles.pageTitle}>{title}</h1>
-      {description && <p className={styles.pageDescription}>{description}</p>}
-      {actions && <div className={styles.pageActions}>{actions}</div>}
+    <div className={clsx(styles.pageIntro, centered && styles.pageIntroCenter, className)}>
+      {label && <SectionLabel className={centered ? styles.labelCenter : undefined}>{label}</SectionLabel>}
+      <h1 className={clsx(styles.pageTitle, centered && styles.pageTitleCenter)}>{title}</h1>
+      {description && (
+        <p className={clsx(styles.pageDescription, centered && styles.pageDescriptionCenter)}>
+          {description}
+        </p>
+      )}
+      {actions && <div className={clsx(styles.pageActions, centered && styles.pageActionsCenter)}>{actions}</div>}
     </div>
   )
 }
