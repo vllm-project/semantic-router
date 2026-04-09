@@ -52,6 +52,13 @@ const sidebars: SidebarsConfig = {
             'installation/k8s/dynamo',
           ],
         },
+        {
+          type: 'category',
+          label: 'Backend Stores',
+          items: [
+            'installation/valkey-memory',
+          ],
+        },
       ],
     },
     {
