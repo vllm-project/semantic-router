@@ -21,9 +21,28 @@ start-milvus: ## Start Milvus container for testing
 		-v /tmp/milvus-data:/var/lib/milvus:z \
 		milvusdb/milvus:v2.3.3 \
 		milvus run standalone
-	@echo "Waiting for Milvus to be ready..."
-	@sleep 15
-	@echo "Milvus should be available at localhost:19530"
+	@echo "Waiting for Milvus to be ready (up to 120s)..."
+	@elapsed=0; \
+	while [ $$elapsed -lt 120 ]; do \
+		if curl -sf http://localhost:9091/healthz >/dev/null 2>&1; then \
+			echo "Milvus healthy after $${elapsed}s"; \
+			break; \
+		fi; \
+		if ! $(CONTAINER_RUNTIME) ps --filter "name=milvus-semantic-cache" --format '{{.Names}}' | grep -q milvus-semantic-cache; then \
+			echo "ERROR: Milvus container exited unexpectedly"; \
+			$(CONTAINER_RUNTIME) logs milvus-semantic-cache 2>&1 | tail -20 || true; \
+			exit 1; \
+		fi; \
+		sleep 5; \
+		elapsed=$$((elapsed + 5)); \
+		echo "  ... still waiting ($${elapsed}s elapsed)"; \
+	done; \
+	if [ $$elapsed -ge 120 ]; then \
+		echo "ERROR: Milvus did not become healthy within 120s"; \
+		$(CONTAINER_RUNTIME) logs milvus-semantic-cache 2>&1 | tail -30 || true; \
+		exit 1; \
+	fi
+	@echo "Milvus available at localhost:19530"
 
 stop-milvus: ## Stop and remove Milvus container
 	@$(LOG_TARGET)
