@@ -213,6 +213,19 @@ func (m *MilvusStore) ensureCollection(ctx context.Context) error {
 	return nil
 }
 
+// buildTypeFilter returns a Milvus filter fragment matching any of the given
+// memory types, e.g. `(memory_type == "short_term" || memory_type == "long_term")`.
+func buildTypeFilter(types []MemoryType) string {
+	if len(types) == 0 {
+		return ""
+	}
+	parts := make([]string, len(types))
+	for i, t := range types {
+		parts[i] = fmt.Sprintf("memory_type == %q", string(t))
+	}
+	return "(" + strings.Join(parts, " || ") + ")"
+}
+
 // Retrieve searches for memories in Milvus with similarity threshold filtering
 func (m *MilvusStore) Retrieve(ctx context.Context, opts RetrieveOptions) ([]*RetrieveResult, error) {
 	startTime := time.Now()
@@ -270,16 +283,8 @@ func (m *MilvusStore) Retrieve(ctx context.Context, opts RetrieveOptions) ([]*Re
 	filterExpr := fmt.Sprintf("user_id == \"%s\"", opts.UserID)
 
 	// Add memory type filter if specified
-	if len(opts.Types) > 0 {
-		typeFilter := "("
-		for i, memType := range opts.Types {
-			if i > 0 {
-				typeFilter += " || "
-			}
-			typeFilter += fmt.Sprintf("memory_type == \"%s\"", string(memType))
-		}
-		typeFilter += ")"
-		filterExpr = fmt.Sprintf("%s && %s", filterExpr, typeFilter)
+	if tf := buildTypeFilter(opts.Types); tf != "" {
+		filterExpr = fmt.Sprintf("%s && %s", filterExpr, tf)
 	}
 
 	logging.Debugf("MilvusStore.Retrieve: filter expression: %s", filterExpr)
@@ -937,16 +942,8 @@ func (m *MilvusStore) List(ctx context.Context, opts ListOptions) (*ListResult, 
 	// Build filter expression
 	filterExpr := fmt.Sprintf("user_id == \"%s\"", opts.UserID)
 
-	if len(opts.Types) > 0 {
-		typeFilter := "("
-		for i, memType := range opts.Types {
-			if i > 0 {
-				typeFilter += " || "
-			}
-			typeFilter += fmt.Sprintf("memory_type == \"%s\"", string(memType))
-		}
-		typeFilter += ")"
-		filterExpr = fmt.Sprintf("%s && %s", filterExpr, typeFilter)
+	if tf := buildTypeFilter(opts.Types); tf != "" {
+		filterExpr = fmt.Sprintf("%s && %s", filterExpr, tf)
 	}
 
 	outputFields := []string{"id", "content", "user_id", "memory_type", "metadata", "created_at", "updated_at"}
@@ -1273,16 +1270,8 @@ func (m *MilvusStore) ForgetByScope(ctx context.Context, scope MemoryScope) erro
 	}
 
 	// Add type filter if specified
-	if len(scope.Types) > 0 {
-		typeFilter := "("
-		for i, memType := range scope.Types {
-			if i > 0 {
-				typeFilter += " || "
-			}
-			typeFilter += fmt.Sprintf("memory_type == \"%s\"", string(memType))
-		}
-		typeFilter += ")"
-		filterExpr = fmt.Sprintf("%s && %s", filterExpr, typeFilter)
+	if tf := buildTypeFilter(scope.Types); tf != "" {
+		filterExpr = fmt.Sprintf("%s && %s", filterExpr, tf)
 	}
 
 	logging.Debugf("MilvusStore.ForgetByScope: delete expression: %s", filterExpr)
@@ -1311,16 +1300,8 @@ func (m *MilvusStore) forgetByScopeWithQuery(ctx context.Context, scope MemorySc
 	filterExpr := fmt.Sprintf("user_id == \"%s\"", scope.UserID)
 
 	// Add type filter if specified
-	if len(scope.Types) > 0 {
-		typeFilter := "("
-		for i, memType := range scope.Types {
-			if i > 0 {
-				typeFilter += " || "
-			}
-			typeFilter += fmt.Sprintf("memory_type == \"%s\"", string(memType))
-		}
-		typeFilter += ")"
-		filterExpr = fmt.Sprintf("%s && %s", filterExpr, typeFilter)
+	if tf := buildTypeFilter(scope.Types); tf != "" {
+		filterExpr = fmt.Sprintf("%s && %s", filterExpr, tf)
 	}
 
 	outputFields := []string{"id", "metadata"}
