@@ -10,6 +10,23 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+func labelsMatchModelDomain(labels []*dto.LabelPair, model, domain string) bool {
+	var hasModel, hasDomain bool
+	for _, l := range labels {
+		switch l.GetName() {
+		case "model":
+			if l.GetValue() == model {
+				hasModel = true
+			}
+		case "domain":
+			if l.GetValue() == domain {
+				hasDomain = true
+			}
+		}
+	}
+	return hasModel && hasDomain
+}
+
 func histogramSampleCount(metricName, model, domain string) uint64 {
 	mf, _ := prometheus.DefaultGatherer.Gather()
 	for _, fam := range mf {
@@ -17,20 +34,14 @@ func histogramSampleCount(metricName, model, domain string) uint64 {
 			continue
 		}
 		for _, m := range fam.GetMetric() {
-			matchModel, matchDomain := false, false
-			for _, l := range m.GetLabel() {
-				if l.GetName() == "model" && l.GetValue() == model {
-					matchModel = true
-				}
-				if l.GetName() == "domain" && l.GetValue() == domain {
-					matchDomain = true
-				}
+			if !labelsMatchModelDomain(m.GetLabel(), model, domain) {
+				continue
 			}
-			if matchModel && matchDomain {
-				if h := m.GetHistogram(); h != nil && h.SampleCount != nil {
-					return h.GetSampleCount()
-				}
+			h := m.GetHistogram()
+			if h == nil || h.SampleCount == nil {
+				continue
 			}
+			return h.GetSampleCount()
 		}
 	}
 	return 0
