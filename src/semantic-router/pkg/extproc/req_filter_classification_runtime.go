@@ -221,6 +221,7 @@ func (r *OpenAIRouter) selectDecisionRuntimeModel(
 		userContent,
 		result.Decision.Algorithm,
 		categoryName,
+		ctx,
 	)
 	selectedModel := selectedModelRef.Model
 	selectionFields := map[string]interface{}{
