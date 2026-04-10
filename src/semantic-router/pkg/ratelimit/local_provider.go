@@ -127,6 +127,7 @@ func (l *LocalLimiter) Check(ctx Context) (*Decision, error) {
 	}
 
 	if bs.remaining < 0 {
+		logging.Debugf("LocalLimiter.Check: no matching rule for user=%s model=%s — allowing request (fail-open)", ctx.UserID, ctx.Model)
 		bs.remaining = 0
 	}
 	if bs.limit < 0 {

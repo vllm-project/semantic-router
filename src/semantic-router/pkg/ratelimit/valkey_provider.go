@@ -3,6 +3,7 @@ package ratelimit
 import (
 	"context"
 	"fmt"
+	"net"
 	"slices"
 	"strconv"
 	"time"
@@ -106,18 +107,14 @@ func NewGlideClient(addr string, db int) (ValkeyClient, error) {
 
 // parseHostPort splits "host:port" into its parts.
 func parseHostPort(addr string) (string, int, error) {
-	host := addr
-	port := 6379
-	for i := len(addr) - 1; i >= 0; i-- {
-		if addr[i] == ':' {
-			host = addr[:i]
-			p, err := strconv.Atoi(addr[i+1:])
-			if err != nil {
-				return "", 0, fmt.Errorf("invalid port in %q: %w", addr, err)
-			}
-			port = p
-			break
-		}
+	host, portStr, err := net.SplitHostPort(addr)
+	if err != nil {
+		// No port specified — use default.
+		return addr, 6379, nil
+	}
+	port, err := strconv.Atoi(portStr)
+	if err != nil {
+		return "", 0, fmt.Errorf("invalid port in %q: %w", addr, err)
 	}
 	return host, port, nil
 }
@@ -189,6 +186,7 @@ func (p *ValkeyLimiterProvider) Name() string {
 func (p *ValkeyLimiterProvider) Check(ctx Context) (*Decision, error) {
 	rule := p.findMatchingRule(ctx)
 	if rule == nil {
+		logging.Debugf("ValkeyLimiterProvider.Check: no matching rule for user=%s model=%s — allowing request (fail-open)", ctx.UserID, ctx.Model)
 		return &Decision{
 			Allowed:  true,
 			Provider: p.Name(),
@@ -244,6 +242,7 @@ func (p *ValkeyLimiterProvider) Check(ctx Context) (*Decision, error) {
 func (p *ValkeyLimiterProvider) Report(ctx Context, usage TokenUsage) error {
 	rule := p.findMatchingRule(ctx)
 	if rule == nil {
+		logging.Debugf("ValkeyLimiterProvider.Report: no matching rule for user=%s model=%s — skipping report", ctx.UserID, ctx.Model)
 		return nil
 	}
 
