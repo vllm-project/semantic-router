@@ -277,9 +277,10 @@ type ProviderProfile struct {
 }
 
 type ModelPricing struct {
-	Currency        string  `yaml:"currency,omitempty"`
-	PromptPer1M     float64 `yaml:"prompt_per_1m,omitempty"`
-	CompletionPer1M float64 `yaml:"completion_per_1m,omitempty"`
+	Currency         string  `yaml:"currency,omitempty"`
+	PromptPer1M      float64 `yaml:"prompt_per_1m,omitempty"`
+	CompletionPer1M  float64 `yaml:"completion_per_1m,omitempty"`
+	CachedInputPer1M float64 `yaml:"cached_input_per_1m,omitempty"`
 }
 
 type ModelParams struct {
