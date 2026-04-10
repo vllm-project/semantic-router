@@ -398,7 +398,7 @@ func TestValkeyStoreInteg_UpdateNotFound(t *testing.T) {
 	ctx := context.Background()
 
 	err := store.Update(ctx, "nonexistent_update_id", &Memory{
-		Content: "wont work", UserID: "u1",
+		Content: "will not work", UserID: "u1",
 	})
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "memory not found")
