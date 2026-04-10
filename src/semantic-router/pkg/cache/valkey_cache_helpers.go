@@ -104,16 +104,12 @@ type searchMatch struct {
 // Returns nil when no valid match is found.
 func parseBestMatch(searchResult interface{}) *searchMatch {
 	resultsArray, ok := searchResult.([]interface{})
-	if !ok || len(resultsArray) < 1 {
+	if !ok || len(resultsArray) < 2 {
 		return nil
 	}
 
 	totalResults, ok := resultsArray[0].(int64)
 	if !ok || totalResults == 0 {
-		return nil
-	}
-
-	if len(resultsArray) < 2 {
 		return nil
 	}
 
