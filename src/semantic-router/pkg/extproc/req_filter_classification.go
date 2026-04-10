@@ -128,6 +128,8 @@ func (r *OpenAIRouter) buildSelectionContext(
 	costWeight, qualityWeight := r.getSelectionWeights(algorithm)
 	latencyAwareTPOTPercentile, latencyAwareTTFTPercentile := r.getLatencyAwarePercentiles(algorithm)
 
+	sessionID, userID, conversationHistory := r.extractSessionContext(reqCtx)
+
 	return &selection.SelectionContext{
 		Query:                      query,
 		DecisionName:               decisionName,
@@ -138,6 +140,9 @@ func (r *OpenAIRouter) buildSelectionContext(
 		QualityWeight:              qualityWeight,
 		LatencyAwareTPOTPercentile: latencyAwareTPOTPercentile,
 		LatencyAwareTTFTPercentile: latencyAwareTTFTPercentile,
+		UserID:                     userID,
+		SessionID:                  sessionID,
+		ConversationHistory:        conversationHistory,
 		CacheAffinityCtx:           r.buildCacheAffinityContext(reqCtx, modelRefs),
 	}
 }
@@ -283,4 +288,48 @@ func (r *OpenAIRouter) processUserFeedbackForElo(userFeedbackSignals []string, m
 			logging.Warnf("[AutoFeedback] Failed to update Elo: %v", err)
 		}
 	}
+}
+
+// extractSessionContext extracts session ID, user ID, and conversation history from the RequestContext.
+func (r *OpenAIRouter) extractSessionContext(ctx *RequestContext) (sessionID, userID string, conversationHistory []string) {
+	if ctx == nil {
+		return "", "", nil
+	}
+	userID = extractUserID(ctx)
+	if ctx.ResponseAPICtx != nil && ctx.ResponseAPICtx.IsResponseAPIRequest {
+		return r.extractResponseAPISessionContext(ctx, userID)
+	}
+	if len(ctx.ChatCompletionMessages) > 0 {
+		return r.extractChatCompletionSessionContext(ctx, userID)
+	}
+	return "", userID, nil
+}
+
+func (r *OpenAIRouter) extractResponseAPISessionContext(ctx *RequestContext, userID string) (sessionID, userIDOut string, conversationHistory []string) {
+	sessionID = ctx.ResponseAPICtx.ConversationID
+	if ctx.ResponseAPICtx.ConversationHistory != nil {
+		for _, r := range ctx.ResponseAPICtx.ConversationHistory {
+			for _, inItem := range r.Input {
+				if content := extractContentFromInputItem(inItem); content != "" {
+					conversationHistory = append(conversationHistory, content)
+				}
+			}
+			for _, outItem := range r.Output {
+				if content := extractContentFromOutputItem(outItem); content != "" {
+					conversationHistory = append(conversationHistory, content)
+				}
+			}
+		}
+	}
+	return sessionID, userID, conversationHistory
+}
+
+func (r *OpenAIRouter) extractChatCompletionSessionContext(ctx *RequestContext, userID string) (sessionID, userIDOut string, conversationHistory []string) {
+	sessionID = deriveSessionIDFromMessages(ctx.ChatCompletionMessages, userID)
+	for i, msg := range ctx.ChatCompletionMessages {
+		if msg.Content != "" && i < len(ctx.ChatCompletionMessages)-1 {
+			conversationHistory = append(conversationHistory, msg.Content)
+		}
+	}
+	return sessionID, userID, conversationHistory
 }
