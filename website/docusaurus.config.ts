@@ -5,7 +5,7 @@ import { SITE_SOCIAL_PREVIEW_IMAGE } from './src/data/socialPreview'
 import remarkMath from 'remark-math'
 import rehypeKatex from 'rehype-katex'
 
-const lightCodeTheme = themes.vsDark
+const lightCodeTheme = themes.github
 const darkCodeTheme = themes.vsDark
 const siteUrl = 'https://vllm-semantic-router.com'
 const siteDefaultDescription = 'Open-source LLM router for Mixture-of-Models. Route requests by cost, latency, privacy, safety, and modality across local, private, and frontier models.'
@@ -269,7 +269,7 @@ const config: Config = {
       ],
     },
     footer: {
-      style: 'dark',
+      style: 'light',
       links: [
         {
           title: 'Documentation',
@@ -344,7 +344,7 @@ const config: Config = {
       additionalLanguages: ['bash', 'json', 'yaml', 'go', 'rust', 'python'],
     },
     colorMode: {
-      defaultMode: 'dark',
+      defaultMode: 'light',
       disableSwitch: true,
       respectPrefersColorScheme: false,
     },

@@ -110,31 +110,39 @@
 
 .awardsGrid {
   display: grid;
-  gap: 1rem;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  align-items: stretch;
+  gap: 1.2rem;
 }
 
 .awardCard {
   display: grid;
   gap: 1rem;
-  padding: 1.35rem;
-  border: 1px solid var(--site-border);
-  background: var(--site-surface);
+  min-height: 100%;
+  padding: 1.5rem;
+  border: 1px solid rgba(15, 23, 42, 0.12);
+  border-radius: 1.35rem;
+  background:
+    linear-gradient(180deg, rgba(15, 23, 42, 0.018), transparent 36%),
+    var(--site-surface);
+  box-shadow: 0 16px 34px rgba(15, 23, 42, 0.05);
   transition:
     transform 180ms ease,
     border-color 180ms ease,
-    background 180ms ease;
+    background 180ms ease,
+    box-shadow 180ms ease;
 }
 
 .spotlightCard {
   position: relative;
   isolation: isolate;
   overflow: hidden;
-  border-color: var(--site-border-strong);
+  border-color: rgba(15, 23, 42, 0.18);
   background:
-    radial-gradient(circle at top right, rgba(255, 255, 255, 0.08), transparent 34%),
-    linear-gradient(180deg, rgba(255, 255, 255, 0.03), transparent 32%),
+    radial-gradient(circle at top right, rgba(79, 70, 229, 0.08), transparent 34%),
+    linear-gradient(180deg, rgba(15, 23, 42, 0.03), transparent 32%),
     var(--site-surface);
-  box-shadow: var(--site-shadow);
+  box-shadow: 0 22px 48px rgba(15, 23, 42, 0.08);
 }
 
 .spotlightCard::before {
@@ -142,15 +150,18 @@
   position: absolute;
   inset: 0;
   border-radius: inherit;
-  border: 1px solid rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(15, 23, 42, 0.08);
   z-index: 0;
   pointer-events: none;
 }
 
 .awardCard:hover {
-  transform: translateY(-2px);
-  border-color: var(--site-border-strong);
-  background: var(--site-surface-alt);
+  transform: translateY(-3px);
+  border-color: rgba(15, 23, 42, 0.18);
+  background:
+    linear-gradient(180deg, rgba(15, 23, 42, 0.022), transparent 36%),
+    var(--site-surface-alt);
+  box-shadow: 0 22px 42px rgba(15, 23, 42, 0.08);
 }
 
 .featuredAward {
@@ -159,14 +170,16 @@
 
 .paperAward,
 .talkAward {
-  background-image: linear-gradient(180deg, rgba(255, 255, 255, 0.02), transparent 35%);
+  background-image: linear-gradient(180deg, rgba(15, 23, 42, 0.02), transparent 35%);
 }
 
 .awardFrame {
   position: relative;
   z-index: 1;
   display: grid;
+  grid-template-rows: auto auto 1fr auto auto;
   gap: 1rem;
+  min-height: 100%;
 }
 
 .awardHeader {
@@ -243,7 +256,9 @@
 .awardTitle {
   margin: 0;
   font-size: 1.45rem;
-  line-height: 1.1;
+  line-height: 1.14;
+  letter-spacing: -0.02em;
+  text-wrap: balance;
 }
 
 .spotlightCard .awardTitle {
@@ -275,7 +290,8 @@
 
 .awardDescription {
   margin: 0;
-  line-height: 1.7;
+  color: var(--site-muted-bright);
+  line-height: 1.72;
 }
 
 .yearAndActions {
@@ -283,6 +299,8 @@
   flex-wrap: wrap;
   gap: 0.75rem;
   align-items: center;
+  margin-top: auto;
+  padding-top: 0.15rem;
 }
 
 .awardYear {
@@ -347,6 +365,12 @@
   color: var(--site-muted-bright);
 }
 
+@media (max-width: 996px) {
+  .awardsGrid {
+    grid-template-columns: 1fr;
+  }
+}
+
 @media (max-width: 768px) {
   .container {
     width: min(100% - 1.4rem, var(--site-grid-max));
@@ -356,6 +380,10 @@
   .filterButtons {
     display: grid;
     border-radius: 1.1rem;
+  }
+
+  .awardCard {
+    padding: 1.2rem;
   }
 
   .awardHeader {

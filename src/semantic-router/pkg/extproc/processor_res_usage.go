@@ -59,6 +59,10 @@ func (r *OpenAIRouter) reportNonStreamingUsage(
 		})
 	}
 
+	if totalTokens > 0 {
+		recordSessionTurn(ctx, usage)
+	}
+
 	if ctx.RequestModel == "" {
 		return
 	}
@@ -155,6 +159,16 @@ func extractStreamingUsage(ctx *RequestContext) openai.CompletionUsage {
 	return usage
 }
 
+func recordSessionTurnFromStreamingUsage(ctx *RequestContext, usage openai.CompletionUsage) {
+	if usage.PromptTokens <= 0 && usage.CompletionTokens <= 0 {
+		return
+	}
+	recordSessionTurn(ctx, responseUsageMetrics{
+		promptTokens:     int(usage.PromptTokens),
+		completionTokens: int(usage.CompletionTokens),
+	})
+}
+
 func (r *OpenAIRouter) reportStreamingUsageMetrics(
 	ctx *RequestContext,
 	usage openai.CompletionUsage,
@@ -166,6 +180,8 @@ func (r *OpenAIRouter) reportStreamingUsageMetrics(
 			TotalTokens:  int(usage.TotalTokens),
 		})
 	}
+
+	recordSessionTurnFromStreamingUsage(ctx, usage)
 
 	if ctx.RequestModel == "" || (usage.PromptTokens == 0 && usage.CompletionTokens == 0) {
 		return
