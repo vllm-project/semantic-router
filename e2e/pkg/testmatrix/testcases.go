@@ -21,6 +21,10 @@ var BaselineRouterContract = []string{
 	"decision-fallback-behavior",
 	"plugin-config-variations",
 	"chat-completions-progressive-stress",
+	// Session observability
+	"session-telemetry-metrics",
+	"session-pricing-chat-completions",
+	"session-pricing-response-api",
 }
 
 // DashboardContract is the canonical E2E contract for the dashboard API surface.

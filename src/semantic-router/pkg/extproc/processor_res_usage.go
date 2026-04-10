@@ -11,6 +11,7 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/metrics"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/ratelimit"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/routerreplay"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/sessiontelemetry"
 )
 
 type responseUsageMetrics struct {
@@ -82,8 +83,8 @@ func (r *OpenAIRouter) reportNonStreamingUsage(
 		})
 	}
 
-	if usage.totalTokens > 0 {
-		recordSessionTurn(ctx, usage)
+	if totalTokens > 0 {
+		recordSessionTurn(ctx, usage, r.sessionTurnPricing(ctx.RequestModel))
 	}
 
 	if ctx.RequestModel == "" {
@@ -201,14 +202,14 @@ func extractStreamingUsage(ctx *RequestContext) (openai.CompletionUsage, streami
 	return usage, cacheUsage
 }
 
-func recordSessionTurnFromStreamingUsage(ctx *RequestContext, usage openai.CompletionUsage) {
+func recordSessionTurnFromStreamingUsage(ctx *RequestContext, usage openai.CompletionUsage, pricing sessiontelemetry.TurnPricing) {
 	if usage.PromptTokens <= 0 && usage.CompletionTokens <= 0 {
 		return
 	}
 	recordSessionTurn(ctx, responseUsageMetrics{
 		promptTokens:     int(usage.PromptTokens),
 		completionTokens: int(usage.CompletionTokens),
-	})
+	}, pricing)
 }
 
 func (r *OpenAIRouter) reportStreamingUsageMetrics(
@@ -226,7 +227,7 @@ func (r *OpenAIRouter) reportStreamingUsageMetrics(
 		})
 	}
 
-	recordSessionTurnFromStreamingUsage(ctx, usage)
+	recordSessionTurnFromStreamingUsage(ctx, usage, r.sessionTurnPricing(ctx.RequestModel))
 
 	if ctx.RequestModel == "" || (usage.PromptTokens == 0 && usage.CompletionTokens == 0) {
 		return

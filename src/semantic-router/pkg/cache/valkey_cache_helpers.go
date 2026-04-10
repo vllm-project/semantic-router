@@ -17,16 +17,12 @@ type searchMatch struct {
 // Returns nil when no valid match is found.
 func parseBestMatch(searchResult interface{}) *searchMatch {
 	resultsArray, ok := searchResult.([]interface{})
-	if !ok || len(resultsArray) < 1 {
+	if !ok || len(resultsArray) < 2 {
 		return nil
 	}
 
 	totalResults, ok := resultsArray[0].(int64)
 	if !ok || totalResults == 0 {
-		return nil
-	}
-
-	if len(resultsArray) < 2 {
 		return nil
 	}
 
@@ -36,29 +32,37 @@ func parseBestMatch(searchResult interface{}) *searchMatch {
 		return nil
 	}
 
+	// FT.SEARCH returns results ordered by distance, but Go map iteration
+	// in the valkey-glide response loses that ordering. Iterate all docs and
+	// pick the best one.
+	var best *searchMatch
 	for _, docValue := range docMap {
 		fieldsMap, mapOk := docValue.(map[string]interface{})
 		if !mapOk {
 			logging.Debugf("ValkeyCache.FindSimilarWithThreshold: invalid fields format, expected map, got %T", docValue)
-			return nil
+			continue
 		}
 
-		match := &searchMatch{}
 		distanceVal, exists := fieldsMap["vector_distance"]
 		if !exists {
-			return nil
+			continue
 		}
 
-		if _, err := fmt.Sscanf(fmt.Sprint(distanceVal), "%f", &match.distance); err != nil {
+		var distance float64
+		if _, err := fmt.Sscanf(fmt.Sprint(distanceVal), "%f", &distance); err != nil {
 			logging.Debugf("ValkeyCache.FindSimilarWithThreshold: failed to parse distance value: %v", err)
-			return nil
+			continue
 		}
 
-		match.responseBody = fieldsMap["response_body"]
-		return match // Only process the first (best) document
+		if best == nil || distance < best.distance {
+			best = &searchMatch{
+				distance:     distance,
+				responseBody: fieldsMap["response_body"],
+			}
+		}
 	}
 
-	return nil
+	return best
 }
 
 // escapeTagValue escapes punctuation and whitespace in a string so it can be
