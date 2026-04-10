@@ -44,6 +44,7 @@ func TestParseResponseUsage_ExtractsUsageFields(t *testing.T) {
 	assert.Equal(t, responseUsageMetrics{
 		promptTokens:     11,
 		completionTokens: 7,
+		totalTokens:      18,
 	}, usage)
 }
 

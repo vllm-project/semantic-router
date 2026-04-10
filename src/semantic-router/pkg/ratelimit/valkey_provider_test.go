@@ -30,23 +30,16 @@ func (m *mockValkeyClient) Get(_ context.Context, key string) (string, bool, err
 	return val, ok, nil
 }
 
-func (m *mockValkeyClient) IncrBy(_ context.Context, key string, amount int64) (int64, error) {
+func (m *mockValkeyClient) IncrByWithExpiry(_ context.Context, key string, amount int64, ttl time.Duration) (int64, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	cur, _ := strconv.ParseInt(m.data[key], 10, 64)
 	cur += amount
 	m.data[key] = strconv.FormatInt(cur, 10)
-	return cur, nil
-}
-
-func (m *mockValkeyClient) Expire(_ context.Context, key string, d time.Duration) (bool, error) {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	if _, ok := m.data[key]; !ok {
-		return false, nil
+	if cur == amount {
+		m.ttls[key] = time.Now().Add(ttl)
 	}
-	m.ttls[key] = time.Now().Add(d)
-	return true, nil
+	return cur, nil
 }
 
 func (m *mockValkeyClient) TTL(_ context.Context, key string) (int64, error) {
@@ -61,25 +54,6 @@ func (m *mockValkeyClient) TTL(_ context.Context, key string) (int64, error) {
 		return -2, nil
 	}
 	return int64(rem.Seconds()), nil
-}
-
-func (m *mockValkeyClient) CustomCommand(_ context.Context, args []string) (interface{}, error) {
-	// Simulate the atomic INCRBY+EXPIRE Lua script used by ReportUsage
-	if len(args) >= 6 && args[0] == "EVAL" {
-		key := args[3]
-		amount, _ := strconv.ParseInt(args[4], 10, 64)
-		ttlSec, _ := strconv.ParseInt(args[5], 10, 64)
-		m.mu.Lock()
-		defer m.mu.Unlock()
-		cur, _ := strconv.ParseInt(m.data[key], 10, 64)
-		cur += amount
-		m.data[key] = strconv.FormatInt(cur, 10)
-		if cur == amount {
-			m.ttls[key] = time.Now().Add(time.Duration(ttlSec) * time.Second)
-		}
-		return cur, nil
-	}
-	return nil, fmt.Errorf("unsupported custom command: %v", args)
 }
 
 func (m *mockValkeyClient) Close() {}

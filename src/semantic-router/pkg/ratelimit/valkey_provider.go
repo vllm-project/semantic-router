@@ -3,7 +3,6 @@ package ratelimit
 import (
 	"context"
 	"fmt"
-	"math"
 	"slices"
 	"strconv"
 	"time"
@@ -35,10 +34,8 @@ type ModelPricingRates struct {
 // allowing *glide.Client in production and a mock in tests.
 type ValkeyClient interface {
 	Get(ctx context.Context, key string) (string, bool, error)
-	IncrBy(ctx context.Context, key string, amount int64) (int64, error)
-	Expire(ctx context.Context, key string, d time.Duration) (bool, error)
+	IncrByWithExpiry(ctx context.Context, key string, amount int64, ttl time.Duration) (int64, error)
 	TTL(ctx context.Context, key string) (int64, error)
-	CustomCommand(ctx context.Context, args []string) (interface{}, error)
 	Close()
 }
 
@@ -58,16 +55,24 @@ func (a *glideAdapter) Get(ctx context.Context, key string) (string, bool, error
 	return result.Value(), true, nil
 }
 
-func (a *glideAdapter) IncrBy(ctx context.Context, key string, amount int64) (int64, error) {
-	return a.client.IncrBy(ctx, key, amount)
-}
-
-func (a *glideAdapter) Expire(ctx context.Context, key string, d time.Duration) (bool, error) {
-	return a.client.Expire(ctx, key, d)
-}
-
-func (a *glideAdapter) CustomCommand(ctx context.Context, args []string) (interface{}, error) {
-	return a.client.CustomCommand(ctx, args)
+// IncrByWithExpiry atomically increments a key and sets TTL on first write via Lua script.
+func (a *glideAdapter) IncrByWithExpiry(ctx context.Context, key string, amount int64, ttl time.Duration) (int64, error) {
+	ttlSec := int64(ttl.Seconds())
+	luaScript := `local v = redis.call('INCRBY', KEYS[1], ARGV[1])
+if v == tonumber(ARGV[1]) then redis.call('EXPIRE', KEYS[1], ARGV[2]) end
+return v`
+	result, err := a.client.CustomCommand(ctx, []string{
+		"EVAL", luaScript, "1", key,
+		fmt.Sprintf("%d", amount), fmt.Sprintf("%d", ttlSec),
+	})
+	if err != nil {
+		return 0, err
+	}
+	val, ok := result.(int64)
+	if !ok {
+		return 0, fmt.Errorf("unexpected EVAL result type %T", result)
+	}
+	return val, nil
 }
 
 func (a *glideAdapter) TTL(ctx context.Context, key string) (int64, error) {
@@ -250,21 +255,9 @@ func (p *ValkeyLimiterProvider) Report(ctx Context, usage TokenUsage) error {
 	key := p.valkeyKey(ctx.UserID, rule.Unit)
 	bg := context.Background()
 
-	// Atomic INCRBY + conditional EXPIRE via Lua to prevent TTL race
-	ttlSec := int64(rule.Unit.Seconds())
-	luaScript := `local v = redis.call('INCRBY', KEYS[1], ARGV[1])
-if v == tonumber(ARGV[1]) then redis.call('EXPIRE', KEYS[1], ARGV[2]) end
-return v`
-	result, err := p.client.CustomCommand(bg, []string{
-		"EVAL", luaScript, "1", key,
-		fmt.Sprintf("%d", cost), fmt.Sprintf("%d", ttlSec),
-	})
+	newTotal, err := p.client.IncrByWithExpiry(bg, key, cost, rule.Unit)
 	if err != nil {
-		return fmt.Errorf("valkey EVAL incrby-expire %s: %w", key, err)
-	}
-	newTotal, ok := result.(int64)
-	if !ok {
-		return fmt.Errorf("valkey EVAL incrby-expire %s: unexpected result type %T", key, result)
+		return fmt.Errorf("valkey IncrByWithExpiry %s: %w", key, err)
 	}
 
 	logging.Debugf("valkey-limiter: report user=%s model=%s cost=%d new_total=%d limit=%d",
@@ -320,9 +313,9 @@ func (p *ValkeyLimiterProvider) calculateCELCost(model string, usage TokenUsage)
 		return int64(usage.InputTokens + usage.OutputTokens)
 	}
 
-	// Round before truncating to avoid float precision errors (e.g. 3.3 * 100 = 329.999… → 329).
-	inputRate := int64(math.Round(promptPer1M * 100))
-	outputRate := int64(math.Round(completionPer1M * 100))
+	// Truncate with epsilon to match Envoy CEL uint() semantics (e.g. 3.3 * 100 = 329.999… → 330).
+	inputRate := int64(promptPer1M*100 + 0.0001)
+	outputRate := int64(completionPer1M*100 + 0.0001)
 	return int64(usage.InputTokens)*inputRate + int64(usage.OutputTokens)*outputRate
 }
 
@@ -332,15 +325,16 @@ func (p *ValkeyLimiterProvider) calculateCELCostFull(model string, usage TokenUs
 	if !ok {
 		return 0, false
 	}
-	// Round before truncating to avoid float precision errors (e.g. 3.3 * 100 = 329.999… → 329).
-	inputRate := int64(math.Round(rates.PromptPer1M * 100))
-	outputRate := int64(math.Round(rates.CompletionPer1M * 100))
+	// Truncate after adding epsilon to handle float imprecision (e.g. 3.3 * 100 = 329.999… → 330).
+	// This matches Envoy AI Gateway CEL uint() truncation semantics.
+	inputRate := int64(rates.PromptPer1M*100 + 0.0001)
+	outputRate := int64(rates.CompletionPer1M*100 + 0.0001)
 	cost := int64(usage.InputTokens)*inputRate + int64(usage.OutputTokens)*outputRate
 	if usage.CachedInputTokens > 0 && rates.CacheReadPer1M > 0 {
-		cost += int64(usage.CachedInputTokens) * int64(math.Round(rates.CacheReadPer1M*100))
+		cost += int64(usage.CachedInputTokens) * int64(rates.CacheReadPer1M*100+0.0001)
 	}
 	if usage.CacheCreationTokens > 0 && rates.CacheWritePer1M > 0 {
-		cost += int64(usage.CacheCreationTokens) * int64(math.Round(rates.CacheWritePer1M*100))
+		cost += int64(usage.CacheCreationTokens) * int64(rates.CacheWritePer1M*100+0.0001)
 	}
 	return cost, true
 }
