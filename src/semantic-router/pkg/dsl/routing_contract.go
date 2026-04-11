@@ -41,6 +41,7 @@ func DecompileRouting(cfg *config.RouterConfig) (string, error) {
 	d.extractPluginTemplates()
 
 	if len(cfg.SessionStates) > 0 {
+		d.writeSection("SESSION_STATES")
 		d.decompileSessionStates()
 	}
 
