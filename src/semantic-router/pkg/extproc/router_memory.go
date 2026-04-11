@@ -204,22 +204,14 @@ func createValkeyMemoryStore(cfg *config.RouterConfig) (memory.Store, error) {
 	}
 
 	if vc.TLSEnabled {
-		clientConfig = clientConfig.WithUseTLS(true)
-		tlsConfig := glideconfig.NewTlsConfiguration()
-		if vc.TLSCAPath != "" {
-			caCert, caErr := glideconfig.LoadRootCertificatesFromFile(vc.TLSCAPath)
-			if caErr != nil {
-				return nil, fmt.Errorf("failed to load TLS CA certificate from %s: %w", vc.TLSCAPath, caErr)
-			}
-			tlsConfig = tlsConfig.WithRootCertificates(caCert)
+		tlsCfg, tlsErr := buildValkeyTLSConfig(vc)
+		if tlsErr != nil {
+			return nil, tlsErr
 		}
-		if vc.TLSInsecureSkipVerify {
-			tlsConfig = tlsConfig.WithInsecureTLS(true)
-			logging.Warnf("Memory: Valkey TLS certificate verification is DISABLED — do not use in production")
-		}
-		advancedConfig := glideconfig.NewAdvancedClientConfiguration().
-			WithTlsConfiguration(tlsConfig)
-		clientConfig = clientConfig.WithAdvancedConfiguration(advancedConfig)
+		clientConfig = clientConfig.WithUseTLS(true).
+			WithAdvancedConfiguration(
+				glideconfig.NewAdvancedClientConfiguration().WithTlsConfiguration(tlsCfg),
+			)
 		logging.Infof("Memory: Valkey TLS enabled (ca_path=%q, insecure_skip_verify=%v)", vc.TLSCAPath, vc.TLSInsecureSkipVerify)
 	}
 
@@ -244,6 +236,23 @@ func createValkeyMemoryStore(cfg *config.RouterConfig) (memory.Store, error) {
 		host, port, embeddingConfig.Model)
 
 	return store, nil
+}
+
+// buildValkeyTLSConfig constructs a glide TLS configuration from the Valkey config.
+func buildValkeyTLSConfig(vc *config.MemoryValkeyConfig) (*glideconfig.TlsConfiguration, error) {
+	tlsConfig := glideconfig.NewTlsConfiguration()
+	if vc.TLSCAPath != "" {
+		caCert, err := glideconfig.LoadRootCertificatesFromFile(vc.TLSCAPath)
+		if err != nil {
+			return nil, fmt.Errorf("failed to load TLS CA certificate from %s: %w", vc.TLSCAPath, err)
+		}
+		tlsConfig = tlsConfig.WithRootCertificates(caCert)
+	}
+	if vc.TLSInsecureSkipVerify {
+		tlsConfig = tlsConfig.WithInsecureTLS(true)
+		logging.Warnf("Memory: Valkey TLS certificate verification is DISABLED — do not use in production")
+	}
+	return tlsConfig, nil
 }
 
 func detectMemoryEmbeddingModel(cfg *config.RouterConfig) string {
