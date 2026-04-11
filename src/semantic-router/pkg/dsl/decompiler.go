@@ -32,6 +32,18 @@ type pluginTemplate struct {
 	usageCount int
 }
 
+// ---------- Session State Decompilation ----------
+
+func (d *decompiler) decompileSessionStates() {
+	for _, ss := range d.cfg.SessionStates {
+		d.write("SESSION_STATE %s {\n", quoteName(ss.Name))
+		for _, f := range ss.Fields {
+			d.write("  %s: %s\n", f.Name, f.TypeName)
+		}
+		d.write("}\n\n")
+	}
+}
+
 // ---------- Signal Decompilation ----------
 
 func (d *decompiler) decompileSignals() {
