@@ -190,7 +190,7 @@ routing:
             auto_store: true
 ```
 
-See the [Memory plugin tutorial](../tutorials/plugin/memory.md) for details.
+See the [Memory plugin tutorial](/docs/tutorials/plugin/memory) for details.
 
 ## Performance Tuning
 

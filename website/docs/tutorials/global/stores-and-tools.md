@@ -74,6 +74,7 @@ global:
 ```
 
 For full deployment instructions, see:
+
 - [Valkey Agentic Memory](../../installation/valkey-memory.md) — Docker, Kubernetes, config reference, tuning, and troubleshooting
 - `deploy/examples/runtime/memory/` for backend-specific configuration references
 
