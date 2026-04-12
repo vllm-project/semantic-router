@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/latency"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/sessiontelemetry"
 )
 
 // TestSmokeModelTransitionLog is a smoke check that verifies the full path from
@@ -22,7 +23,7 @@ import (
 //	}
 func TestSmokeModelTransitionLog(t *testing.T) {
 	latency.ResetTTFT()
-	latency.ResetTransitionLog()
+	sessiontelemetry.ResetTransitionsForTesting()
 
 	// ── Seed TTFT history ─────────────────────────────────────────────────
 	// 50 observations from 0.2s to 1.0s to give stable percentile anchors.
@@ -53,7 +54,7 @@ func TestSmokeModelTransitionLog(t *testing.T) {
 	maybeEmitTransitionEvent(ctx)
 
 	// ── Verify: TransitionLog ─────────────────────────────────────────────
-	events := latency.GetTransitions("sess_123")
+	events := sessiontelemetry.GetTransitions("sess_123")
 
 	t.Logf("── GetTransitions(\"sess_123\") ───────────────────────")
 	t.Logf("  event count      : %d  (want 1)", len(events))
@@ -99,7 +100,7 @@ func TestSmokeModelTransitionLog(t *testing.T) {
 }
 
 func TestMaybeEmitTransitionEvent_NoOpCases(t *testing.T) {
-	latency.ResetTransitionLog()
+	sessiontelemetry.ResetTransitionsForTesting()
 
 	tests := []struct {
 		name string
@@ -114,7 +115,7 @@ func TestMaybeEmitTransitionEvent_NoOpCases(t *testing.T) {
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			maybeEmitTransitionEvent(tc.ctx)
-			got := latency.GetTransitions("s")
+			got := sessiontelemetry.GetTransitions("s")
 			if len(got) != 0 {
 				t.Errorf("expected no transition event, got %d", len(got))
 			}

@@ -1,4 +1,4 @@
-package latency
+package sessiontelemetry
 
 import (
 	"sync"
@@ -20,43 +20,44 @@ type ModelTransitionEvent struct {
 // MaxTransitionEventsPerSession limits stored events per session.
 const MaxTransitionEventsPerSession = 200
 
-// TransitionLog stores transition events by session ID.
-type TransitionLog struct {
+// transitionStore holds in-memory transition events by session ID (test and debug use).
+type transitionStore struct {
 	mu     sync.RWMutex
 	events map[string][]ModelTransitionEvent
 }
 
-var globalTransitionLog = &TransitionLog{
+var globalTransitionStore = &transitionStore{
 	events: make(map[string][]ModelTransitionEvent),
 }
 
-// RecordTransition records evt and drops the oldest entries after the per-session cap.
+// RecordTransition appends evt to the in-memory store and drops the oldest
+// entries once the per-session cap is reached.
 func RecordTransition(evt ModelTransitionEvent) {
-	globalTransitionLog.mu.Lock()
-	defer globalTransitionLog.mu.Unlock()
-	list := globalTransitionLog.events[evt.SessionID]
+	globalTransitionStore.mu.Lock()
+	defer globalTransitionStore.mu.Unlock()
+	list := globalTransitionStore.events[evt.SessionID]
 	list = append(list, evt)
 	if len(list) > MaxTransitionEventsPerSession {
 		trimmed := make([]ModelTransitionEvent, MaxTransitionEventsPerSession)
 		copy(trimmed, list[len(list)-MaxTransitionEventsPerSession:])
 		list = trimmed
 	}
-	globalTransitionLog.events[evt.SessionID] = list
+	globalTransitionStore.events[evt.SessionID] = list
 }
 
 // GetTransitions returns a copy of the transition events for sessionID.
 func GetTransitions(sessionID string) []ModelTransitionEvent {
-	globalTransitionLog.mu.RLock()
-	defer globalTransitionLog.mu.RUnlock()
-	src := globalTransitionLog.events[sessionID]
+	globalTransitionStore.mu.RLock()
+	defer globalTransitionStore.mu.RUnlock()
+	src := globalTransitionStore.events[sessionID]
 	out := make([]ModelTransitionEvent, len(src))
 	copy(out, src)
 	return out
 }
 
-// ResetTransitionLog clears the transition log.
-func ResetTransitionLog() {
-	globalTransitionLog.mu.Lock()
-	defer globalTransitionLog.mu.Unlock()
-	globalTransitionLog.events = make(map[string][]ModelTransitionEvent)
+// ResetTransitionsForTesting clears the in-memory transition store.
+func ResetTransitionsForTesting() {
+	globalTransitionStore.mu.Lock()
+	defer globalTransitionStore.mu.Unlock()
+	globalTransitionStore.events = make(map[string][]ModelTransitionEvent)
 }
