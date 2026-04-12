@@ -1266,6 +1266,8 @@ global:
               requests_per_unit: 1000
               tokens_per_unit: 2000000
               unit: hour
+    startup_status:
+      store_backend: file
     router_replay:
       enabled: true
       store_backend: postgres

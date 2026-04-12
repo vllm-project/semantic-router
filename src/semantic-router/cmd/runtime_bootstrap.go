@@ -93,8 +93,8 @@ func loadRuntimeConfigOrFatal(configPath string) *config.RouterConfig {
 	return cfg
 }
 
-func newStartupWriter(configPath string) *startupstatus.Writer {
-	writer := startupstatus.NewWriter(configPath)
+func newStartupWriter(cfg *config.RouterConfig, configPath string) startupstatus.StatusWriter {
+	writer := buildStartupWriter(cfg, configPath)
 	writeStartupState(writer, startupstatus.State{
 		Phase:   "starting",
 		Ready:   false,
@@ -103,7 +103,35 @@ func newStartupWriter(configPath string) *startupstatus.Writer {
 	return writer
 }
 
-func writeStartupState(writer *startupstatus.Writer, state startupstatus.State, warning string) {
+func buildStartupWriter(cfg *config.RouterConfig, configPath string) startupstatus.StatusWriter {
+	if cfg.StartupStatus.StoreBackend == "redis" && cfg.StartupStatus.Redis != nil {
+		rw, err := startupstatus.NewRedisWriter(startupstatus.RedisWriterConfig{
+			Address:  cfg.StartupStatus.Redis.Address,
+			Password: cfg.StartupStatus.Redis.Password,
+			DB:       cfg.StartupStatus.Redis.DB,
+		})
+		if err != nil {
+			logging.ComponentWarnEvent("router", "startup_status_redis_fallback", map[string]interface{}{
+				"error":    err.Error(),
+				"fallback": "file",
+			})
+			return startupstatus.NewFileWriter(configPath)
+		}
+		logging.ComponentEvent("router", "startup_status_backend", map[string]interface{}{
+			"backend": "redis",
+			"address": cfg.StartupStatus.Redis.Address,
+		})
+		return rw
+	}
+
+	logging.ComponentWarnEvent("router", "startup_status_file_backend", map[string]interface{}{
+		"backend": "file",
+		"message": "Startup status using local file backend. Status is not shared across replicas or visible to the dashboard in containerized deployments. Set startup_status.backend: redis for production use.",
+	})
+	return startupstatus.NewFileWriter(configPath)
+}
+
+func writeStartupState(writer startupstatus.StatusWriter, state startupstatus.State, warning string) {
 	if err := writer.Write(state); err != nil {
 		logging.ComponentWarnEvent("router", "startup_state_write_failed", map[string]interface{}{
 			"warning": warning,
@@ -114,7 +142,7 @@ func writeStartupState(writer *startupstatus.Writer, state startupstatus.State, 
 	}
 }
 
-func failStartup(writer *startupstatus.Writer, format string, args ...interface{}) {
+func failStartup(writer startupstatus.StatusWriter, format string, args ...interface{}) {
 	message := fmt.Sprintf(format, args...)
 	_ = writer.Write(startupstatus.State{
 		Phase:   "error",
@@ -126,7 +154,7 @@ func failStartup(writer *startupstatus.Writer, format string, args ...interface{
 	})
 }
 
-func ensureModelsDownloadedOrFatal(cfg *config.RouterConfig, writer *startupstatus.Writer) {
+func ensureModelsDownloadedOrFatal(cfg *config.RouterConfig, writer startupstatus.StatusWriter) {
 	if err := ensureModelsDownloaded(cfg, writer); err != nil {
 		failStartup(writer, "Failed to ensure models are downloaded: %v", err)
 	}
@@ -246,7 +274,7 @@ func startMetricsServerIfEnabled(cfg *config.RouterConfig, metricsPort int) {
 
 func initializeRuntimeDependencies(
 	cfg *config.RouterConfig,
-	writer *startupstatus.Writer,
+	writer startupstatus.StatusWriter,
 	shutdownHooks *[]func(),
 	runtimeRegistry *routerruntime.Registry,
 ) modelruntime.EmbeddingRuntimeState {
@@ -340,7 +368,7 @@ func registerVectorStoreShutdownHook(
 
 func newExtProcServerOrFatal(
 	opts runtimeOptions,
-	writer *startupstatus.Writer,
+	writer startupstatus.StatusWriter,
 	runtimeRegistry *routerruntime.Registry,
 ) *extproc.Server {
 	server, err := extproc.NewServer(opts.configPath, opts.port, opts.secure, opts.certPath, runtimeRegistry)
@@ -381,7 +409,7 @@ func startAPIServerIfEnabled(opts runtimeOptions, runtimeRegistry *routerruntime
 	}()
 }
 
-func markRouterReady(writer *startupstatus.Writer) {
+func markRouterReady(writer startupstatus.StatusWriter) {
 	writeStartupState(writer, startupstatus.State{
 		Phase:   "ready",
 		Ready:   true,
@@ -395,7 +423,7 @@ func startKubernetesControllerIfNeeded(cfg *config.RouterConfig, kubeconfig, nam
 	}
 }
 
-func startExtProcServerOrFatal(server *extproc.Server, writer *startupstatus.Writer) {
+func startExtProcServerOrFatal(server *extproc.Server, writer startupstatus.StatusWriter) {
 	if err := server.Start(); err != nil {
 		failStartup(writer, "ExtProc server error: %v", err)
 	}

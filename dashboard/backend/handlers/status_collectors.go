@@ -15,7 +15,7 @@ func collectInContainerStatus(runtimePath, routerAPIURL string) SystemStatus {
 	dashboardHealthy := true
 	dashboardMsg := "Running"
 
-	status.RouterRuntime = resolveRouterRuntimeStatus(runtimePath, routerAPIURL, routerHealthy, readRouterLogContentInContainer())
+	status.RouterRuntime = resolveRouterRuntimeStatus(runtimePath, routerAPIURL, routerHealthy)
 	routerMsg = applyRuntimeMessage(routerMsg, status.RouterRuntime)
 	status.Models = fetchModelsWhenReady(routerAPIURL, routerHealthy)
 	status.Services = append(status.Services,
@@ -74,7 +74,7 @@ func collectManagedDockerStatus(runtimePath, routerAPIURL string) SystemStatus {
 	envoyHealthy, envoyMsg := resolveManagedEnvoyStatus()
 	dashboardHealthy, dashboardMsg := resolveManagedDashboardStatus()
 
-	status.RouterRuntime = resolveRouterRuntimeStatus(runtimePath, routerAPIURL, routerHealthy, routerLogContent)
+	status.RouterRuntime = resolveRouterRuntimeStatus(runtimePath, routerAPIURL, routerHealthy)
 	routerMsg = applyRuntimeMessage(routerMsg, status.RouterRuntime)
 	status.Models = fetchModelsWhenReady(routerAPIURL, routerHealthy)
 	status.Services = append(status.Services,
@@ -98,7 +98,7 @@ func collectRunningDockerStatus(runtimePath, routerAPIURL string) SystemStatus {
 	envoyHealthy, envoyMsg := checkServiceInLogContent("envoy", logContent)
 	dashboardHealthy, dashboardMsg := checkServiceInLogContent("dashboard", logContent)
 
-	status.RouterRuntime = resolveRouterRuntimeStatus(runtimePath, routerAPIURL, routerHealthy, logContent)
+	status.RouterRuntime = resolveRouterRuntimeStatus(runtimePath, routerAPIURL, routerHealthy)
 	routerMsg = applyRuntimeMessage(routerMsg, status.RouterRuntime)
 	status.Models = fetchModelsWhenReady(routerAPIURL, routerHealthy)
 	status.Services = append(status.Services,
@@ -150,7 +150,7 @@ func collectDirectStatus(runtimePath, routerAPIURL string) (SystemStatus, bool) 
 	status.DeploymentType = "local (direct)"
 	status.Overall = "healthy"
 	status.Endpoints = []string{routerAPIURL}
-	status.RouterRuntime = resolveRouterRuntimeStatus(runtimePath, routerAPIURL, routerHealthy, "")
+	status.RouterRuntime = resolveRouterRuntimeStatus(runtimePath, routerAPIURL, routerHealthy)
 	routerMsg = applyRuntimeMessage(routerMsg, status.RouterRuntime)
 	status.Models = fetchModelsWhenReady(routerAPIURL, true)
 	status.Services = append(status.Services, buildServiceStatus("Router", "running", true, routerMsg, "process"))
