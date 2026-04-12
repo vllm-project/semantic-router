@@ -4,7 +4,7 @@
 
 ##@ Helm
 
-# Configuration
+# ── Configuration ────────────────────────────────────────────────────────────
 HELM_RELEASE_NAME ?= semantic-router
 HELM_NAMESPACE ?= vllm-semantic-router-system
 HELM_CHART_PATH ?= deploy/helm/semantic-router
@@ -12,6 +12,23 @@ HELM_VALUES_FILE ?=
 HELM_SET_VALUES ?=
 HELM_TIMEOUT ?= 10m
 HELM_TEMPLATE_OUTPUT ?= dist/helm/default-template.yaml
+
+# ── Remote OCI chart registry ────────────────────────────────────────────────
+# Used by helm-install-version, helm-upgrade-version, and related targets.
+# Override to point at a fork or mirror.
+HELM_OCI_REGISTRY ?= ghcr.io/vllm-project/charts
+HELM_OCI_CHART    ?= $(HELM_OCI_REGISTRY)/semantic-router
+
+# CHART_VERSION: pin to an exact chart version for remote install/upgrade.
+#
+# Release channels:
+#   CHART_VERSION=0.3.0              specific release — recommended for production
+#   CHART_VERSION=0.0.0-latest       latest main-branch build
+#   CHART_VERSION=0.0.0-nightly.YYYYMMDD  specific nightly
+#
+# When CHART_VERSION is empty, targets that require a remote chart will fail
+# with a clear error rather than silently pulling an unintended version.
+CHART_VERSION ?=
 
 # Colors for output (reuse from common.mk if available, otherwise define)
 BLUE ?= \033[0;34m
@@ -24,7 +41,67 @@ NC ?= \033[0m
 	helm-uninstall helm-status helm-list helm-history helm-rollback helm-test \
 	helm-package helm-dev helm-prod helm-values helm-manifest \
 	helm-port-forward-api helm-port-forward-grpc helm-port-forward-metrics \
-	helm-logs helm-clean helm-setup helm-cleanup helm-reinstall help-helm _check-k8s
+	helm-logs helm-clean helm-setup helm-cleanup helm-reinstall help-helm _check-k8s \
+	helm-install-version helm-upgrade-version helm-check-version _assert-chart-version
+
+##@ Helm — Remote (OCI) Version-Pinned Operations
+
+# Internal guard: fail early with a helpful message if CHART_VERSION is unset.
+_assert-chart-version:
+	@if [ -z "$(CHART_VERSION)" ]; then \
+		echo "$(RED)[ERROR]$(NC) CHART_VERSION is required for this target."; \
+		echo "$(BLUE)[INFO]$(NC) Set it to a specific release, e.g.:"; \
+		echo "  make helm-install-version  CHART_VERSION=0.3.0"; \
+		echo "  make helm-upgrade-version  CHART_VERSION=0.3.0"; \
+		echo "  make helm-install-version  CHART_VERSION=0.0.0-nightly.20260115"; \
+		exit 1; \
+	fi
+
+helm-install-version: ## Install a specific chart version from OCI — requires CHART_VERSION=x.y.z
+helm-install-version: _check-k8s _assert-chart-version
+	@$(LOG_TARGET)
+	@echo "$(BLUE)[INFO]$(NC) Installing $(HELM_OCI_CHART) version $(CHART_VERSION)"
+	@kubectl get namespace $(HELM_NAMESPACE) &>/dev/null \
+		|| kubectl create namespace $(HELM_NAMESPACE)
+	@helm install $(HELM_RELEASE_NAME) "oci://$(HELM_OCI_CHART)" \
+		--version "$(CHART_VERSION)" \
+		$(if $(HELM_VALUES_FILE),-f $(HELM_VALUES_FILE)) \
+		$(if $(HELM_SET_VALUES),--set $(HELM_SET_VALUES)) \
+		--namespace $(HELM_NAMESPACE) \
+		--wait \
+		--timeout $(HELM_TIMEOUT)
+	@echo "$(GREEN)[SUCCESS]$(NC) Installed $(HELM_RELEASE_NAME) at chart version $(CHART_VERSION)"
+	@$(MAKE) helm-status
+
+helm-upgrade-version: ## Upgrade to a specific chart version from OCI — requires CHART_VERSION=x.y.z
+helm-upgrade-version: _check-k8s _assert-chart-version
+	@$(LOG_TARGET)
+	@echo "$(BLUE)[INFO]$(NC) Upgrading $(HELM_RELEASE_NAME) → $(HELM_OCI_CHART):$(CHART_VERSION)"
+	@helm upgrade $(HELM_RELEASE_NAME) "oci://$(HELM_OCI_CHART)" \
+		--version "$(CHART_VERSION)" \
+		$(if $(HELM_VALUES_FILE),-f $(HELM_VALUES_FILE)) \
+		$(if $(HELM_SET_VALUES),--set $(HELM_SET_VALUES)) \
+		--namespace $(HELM_NAMESPACE) \
+		--reset-then-reuse-values \
+		--wait \
+		--timeout $(HELM_TIMEOUT)
+	@echo "$(GREEN)[SUCCESS]$(NC) Upgraded $(HELM_RELEASE_NAME) to chart version $(CHART_VERSION)"
+	@$(MAKE) helm-status
+
+helm-check-version: ## Show the currently deployed chart version and available remote versions
+helm-check-version: _check-k8s
+	@$(LOG_TARGET)
+	@echo "$(BLUE)[INFO]$(NC) Deployed release:"
+	@helm list -n $(HELM_NAMESPACE) \
+		--filter "^$(HELM_RELEASE_NAME)$$" \
+		--output table 2>/dev/null \
+		|| echo "  (no release found in namespace $(HELM_NAMESPACE))"
+	@echo ""
+	@echo "$(BLUE)[INFO]$(NC) Release history:"
+	@helm history $(HELM_RELEASE_NAME) -n $(HELM_NAMESPACE) 2>/dev/null \
+		|| echo "  (no history found)"
+
+##@ Helm — Local Chart Operations
 
 helm-lint: ## Lint the Helm chart
 helm-lint:
