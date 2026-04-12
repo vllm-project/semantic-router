@@ -161,8 +161,12 @@ func (r *Runner) sendProgress(jobID string, percent int, step, message string) {
 	case r.progressChan <- update:
 	default:
 	}
-	_ = r.wf.UpdateMLJobProgress(jobID, percent, step)
-	_ = r.wf.AppendMLProgressEvent(jobID, step, percent, message)
+	if err := r.wf.UpdateMLJobProgress(jobID, percent, step); err != nil {
+		log.Printf("[ml-pipeline] persist progress for %s: %v", jobID, err)
+	}
+	if err := r.wf.AppendMLProgressEvent(jobID, step, percent, message); err != nil {
+		log.Printf("[ml-pipeline] append progress event for %s: %v", jobID, err)
+	}
 }
 
 func (r *Runner) persistJob(j *Job) error {
@@ -172,7 +176,9 @@ func (r *Runner) persistJob(j *Job) error {
 
 func (r *Runner) setJobRunning(j *Job) {
 	j.Status = StatusRunning
-	_ = r.persistJob(j)
+	if err := r.persistJob(j); err != nil {
+		log.Printf("[ml-pipeline] persist running state for %s: %v", j.ID, err)
+	}
 }
 
 func (r *Runner) createJob(jobType string) *Job {
@@ -183,7 +189,9 @@ func (r *Runner) createJob(jobType string) *Job {
 		Status:    StatusPending,
 		CreatedAt: time.Now(),
 	}
-	_ = r.persistJob(job)
+	if err := r.persistJob(job); err != nil {
+		log.Printf("[ml-pipeline] persist new job %s: %v", id, err)
+	}
 	return job
 }
 
@@ -219,7 +227,9 @@ func (r *Runner) failJob(jobID, errMsg string) {
 	rec.Status = string(StatusFailed)
 	rec.Error = errMsg
 	rec.CompletedAt = time.Now()
-	_ = r.wf.PutMLJob(*rec)
+	if err := r.wf.PutMLJob(*rec); err != nil {
+		log.Printf("[ml-pipeline] persist failed state for %s: %v", jobID, err)
+	}
 }
 
 func (r *Runner) completeJob(jobID string, outputFiles []string) {
@@ -231,7 +241,9 @@ func (r *Runner) completeJob(jobID string, outputFiles []string) {
 	rec.OutputFiles = outputFiles
 	rec.CompletedAt = time.Now()
 	rec.Progress = 100
-	_ = r.wf.PutMLJob(*rec)
+	if err := r.wf.PutMLJob(*rec); err != nil {
+		log.Printf("[ml-pipeline] persist completed state for %s: %v", jobID, err)
+	}
 }
 
 func jobToRecord(j *Job) workflowstore.MLJobRecord {

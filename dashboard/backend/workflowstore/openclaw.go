@@ -154,7 +154,7 @@ func (s *Store) AppendOpenClawRoomMessage(roomID, messageID, messageJSON string)
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	_, err := s.db.Exec(
-		`INSERT OR REPLACE INTO openclaw_room_message (room_id, message_id, json) VALUES (?, ?, ?)`,
+		`INSERT OR IGNORE INTO openclaw_room_message (room_id, message_id, json) VALUES (?, ?, ?)`,
 		roomID, messageID, messageJSON)
 	return err
 }
