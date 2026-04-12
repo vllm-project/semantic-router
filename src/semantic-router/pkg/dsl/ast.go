@@ -39,6 +39,7 @@ type rawTopLevel struct {
 	Model        *rawModelDecl        `parser:"| @@"`
 	Plugin       *rawPluginDecl       `parser:"| @@"`
 	TestBlock    *rawTestBlockDecl    `parser:"| @@"`
+	SessionState *rawSessionStateDecl `parser:"| @@"`
 }
 
 // rawTestBlockDecl: TEST <name> { entries... }
@@ -53,6 +54,13 @@ type rawTestEntryDecl struct {
 	Pos       lexer.Position
 	Query     string `parser:"@String"`
 	RouteName string `parser:"Arrow @(Ident | String)"`
+}
+
+// rawSessionStateDecl: SESSION_STATE <name> { fields... }
+type rawSessionStateDecl struct {
+	Pos    lexer.Position
+	Name   string        `parser:"'SESSION_STATE' @(Ident | String)"`
+	Fields []*FieldEntry `parser:"'{' @@* '}'"`
 }
 
 // rawSignalDecl: SIGNAL <type> <name> { fields... }
@@ -247,6 +255,20 @@ type Program struct {
 	Models               []*ModelDecl
 	Plugins              []*PluginDecl
 	TestBlocks           []*TestBlockDecl
+	SessionStates        []*SessionStateDecl
+}
+
+// SessionStateField is one typed field in a SessionStateDecl.
+type SessionStateField struct {
+	Name     string
+	TypeName string // "int", "string", or "float"
+}
+
+// SessionStateDecl represents a SESSION_STATE top-level declaration.
+type SessionStateDecl struct {
+	Name   string
+	Fields []SessionStateField
+	Pos    Position
 }
 
 // ProjectionPartitionDecl declares a mutually exclusive partition of signals.

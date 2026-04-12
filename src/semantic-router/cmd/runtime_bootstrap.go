@@ -7,21 +7,20 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
-	"strings"
 	"syscall"
 	"time"
 
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 
-	candle_binding "github.com/vllm-project/semantic-router/candle-binding"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/apiserver"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/extproc"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelruntime"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/metrics"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/tracing"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/routerruntime"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/startupstatus"
-	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/vectorstore"
 )
 
 type runtimeOptions struct {
@@ -35,14 +34,6 @@ type runtimeOptions struct {
 	enableAPI    bool
 	secure       bool
 	downloadOnly bool
-}
-
-type embeddingPaths struct {
-	qwen3      string
-	gemma      string
-	mmBert     string
-	multiModal string
-	bert       string
 }
 
 func parseRuntimeOptions() runtimeOptions {
@@ -257,222 +248,55 @@ func initializeRuntimeDependencies(
 	cfg *config.RouterConfig,
 	writer *startupstatus.Writer,
 	shutdownHooks *[]func(),
-) bool {
+	runtimeRegistry *routerruntime.Registry,
+) modelruntime.EmbeddingRuntimeState {
 	writeStartupState(writer, startupstatus.State{
 		Phase:   "initializing_models",
 		Ready:   false,
 		Message: "Initializing embedding models and router dependencies...",
 	}, "Failed to write initialization startup status")
 
-	embeddingModelsInitialized := initializeEmbeddingModels(cfg)
-	initializeSemanticCacheBERTIfNeeded(cfg)
-	initializeVectorStoreIfEnabled(cfg, shutdownHooks)
-	initializeModalityClassifierIfEnabled(cfg)
-	return embeddingModelsInitialized
-}
-
-func initializeEmbeddingModels(cfg *config.RouterConfig) bool {
-	paths := resolveEmbeddingPaths(cfg)
-	if !paths.hasConfiguredModels() {
-		logMissingEmbeddingModelsConfig()
-		return false
-	}
-
-	logging.ComponentEvent("router", "embedding_models_init_started", map[string]interface{}{
-		"use_cpu":               cfg.UseCPU,
-		"qwen3_configured":      paths.qwen3 != "",
-		"gemma_configured":      paths.gemma != "",
-		"mmbert_configured":     paths.mmBert != "",
-		"multimodal_configured": paths.multiModal != "",
-		"bert_configured":       paths.bert != "",
+	embeddingState, err := modelruntime.PrepareRouterRuntime(context.Background(), cfg, modelruntime.PrepareRouterRuntimeOptions{
+		Component:                  "router",
+		MaxParallelism:             modelruntime.DefaultParallelism(5),
+		OnEvent:                    logRuntimeLifecycleEvent,
+		InitModalityClassifierFunc: extproc.InitModalityClassifier,
 	})
-
-	initialized := initializeUnifiedEmbeddingModels(cfg, paths)
-	if initializeBERTModelIfConfigured(cfg, paths.bert) {
-		initialized = true
-	}
-	if initializeMultiModalEmbeddingModelIfConfigured(cfg, paths.multiModal) {
-		initialized = true
-	}
-	return initialized
-}
-
-func resolveEmbeddingPaths(cfg *config.RouterConfig) embeddingPaths {
-	return embeddingPaths{
-		qwen3:      config.ResolveModelPath(cfg.Qwen3ModelPath),
-		gemma:      config.ResolveModelPath(cfg.GemmaModelPath),
-		mmBert:     config.ResolveModelPath(cfg.MmBertModelPath),
-		multiModal: config.ResolveModelPath(cfg.MultiModalModelPath),
-		bert:       config.ResolveModelPath(cfg.BertModelPath),
-	}
-}
-
-func (p embeddingPaths) hasConfiguredModels() bool {
-	return p.hasUnifiedModels() || p.multiModal != "" || p.bert != ""
-}
-
-func (p embeddingPaths) hasUnifiedModels() bool {
-	return p.qwen3 != "" || p.gemma != "" || p.mmBert != ""
-}
-
-func initializeUnifiedEmbeddingModels(cfg *config.RouterConfig, paths embeddingPaths) bool {
-	if !paths.hasUnifiedModels() {
-		return false
+	if err != nil {
+		failStartup(writer, "Failed to initialize runtime dependencies: %v", err)
 	}
 
-	semanticCacheNeedsBatched, mlSelectionNeedsBatched := batchedEmbeddingNeeds(cfg, paths.qwen3)
-	useBatched := semanticCacheNeedsBatched || mlSelectionNeedsBatched
-	logBatchedEmbeddingNeeds(semanticCacheNeedsBatched, mlSelectionNeedsBatched)
-	if err := initUnifiedEmbeddingModelFactory(cfg, paths, useBatched); err != nil {
-		logging.ComponentErrorEvent("router", "embedding_models_init_failed", map[string]interface{}{
-			"use_batched": useBatched,
-			"error":       err.Error(),
-		})
-		logging.ComponentWarnEvent("router", "embedding_runtime_degraded", map[string]interface{}{
-			"embedding_api_placeholder": true,
-			"tools_database_disabled":   true,
-		})
-		return false
-	}
-
-	logging.ComponentEvent("router", "embedding_models_initialized", map[string]interface{}{
-		"use_batched": useBatched,
-	})
-	return true
+	initializeVectorStoreIfEnabled(cfg, shutdownHooks, runtimeRegistry)
+	return embeddingState
 }
 
-func batchedEmbeddingNeeds(cfg *config.RouterConfig, qwen3Path string) (bool, bool) {
-	semanticCacheNeedsBatched := cfg.Enabled &&
-		strings.ToLower(strings.TrimSpace(cfg.EmbeddingModel)) == "qwen3" &&
-		qwen3Path != ""
-	mlSelectionNeedsBatched := cfg.ModelSelection.Enabled &&
-		cfg.ModelSelection.ML.ModelsPath != "" &&
-		cfg.Qwen3ModelPath != ""
-	return semanticCacheNeedsBatched, mlSelectionNeedsBatched
-}
-
-func logBatchedEmbeddingNeeds(semanticCacheNeedsBatched bool, mlSelectionNeedsBatched bool) {
-	if !semanticCacheNeedsBatched && !mlSelectionNeedsBatched {
+func logRuntimeLifecycleEvent(event modelruntime.Event) {
+	if event.Status != modelruntime.TaskFailed && event.Status != modelruntime.TaskSkipped {
 		return
 	}
-	logging.ComponentDebugEvent("router", "batched_embedding_mode_required", map[string]interface{}{
-		"semantic_cache":  semanticCacheNeedsBatched,
-		"model_selection": mlSelectionNeedsBatched,
-	})
-}
-
-func initUnifiedEmbeddingModelFactory(cfg *config.RouterConfig, paths embeddingPaths, useBatched bool) error {
-	if !useBatched {
-		return candle_binding.InitEmbeddingModels(paths.qwen3, paths.gemma, paths.mmBert, cfg.UseCPU)
+	payload := map[string]interface{}{
+		"task":        event.Task,
+		"best_effort": event.BestEffort,
 	}
-
-	if err := candle_binding.InitEmbeddingModelsBatched(paths.qwen3, 64, 10, cfg.UseCPU); err != nil {
-		return err
+	if event.Error != nil {
+		payload["error"] = event.Error.Error()
 	}
-	return candle_binding.InitEmbeddingModels(paths.qwen3, paths.gemma, paths.mmBert, cfg.UseCPU)
-}
-
-func initializeBERTModelIfConfigured(cfg *config.RouterConfig, bertPath string) bool {
-	if bertPath == "" {
-		return false
-	}
-
-	logging.ComponentEvent("router", "memory_bert_init_started", map[string]interface{}{
-		"model_ref": bertPath,
-		"use_cpu":   cfg.UseCPU,
-	})
-	if err := candle_binding.InitModel(bertPath, cfg.UseCPU); err != nil {
-		logging.ComponentWarnEvent("router", "memory_bert_init_failed", map[string]interface{}{
-			"model_ref":              bertPath,
-			"error":                  err.Error(),
-			"memory_retrieval_ready": false,
-		})
-		return false
-	}
-	logging.ComponentEvent("router", "memory_bert_initialized", map[string]interface{}{
-		"model_ref": bertPath,
-	})
-	return true
-}
-
-func initializeMultiModalEmbeddingModelIfConfigured(cfg *config.RouterConfig, multiModalPath string) bool {
-	if multiModalPath == "" {
-		return false
-	}
-
-	logging.ComponentEvent("router", "multimodal_embedding_init_started", map[string]interface{}{
-		"model_ref": multiModalPath,
-		"use_cpu":   cfg.UseCPU,
-	})
-	if err := candle_binding.InitMultiModalEmbeddingModel(multiModalPath, cfg.UseCPU); err != nil {
-		logging.ComponentWarnEvent("router", "multimodal_embedding_init_failed", map[string]interface{}{
-			"model_ref":               multiModalPath,
-			"error":                   err.Error(),
-			"multimodal_routes_ready": false,
-		})
-		return false
-	}
-	logging.ComponentEvent("router", "multimodal_embedding_initialized", map[string]interface{}{
-		"model_ref": multiModalPath,
-	})
-	return true
-}
-
-func logMissingEmbeddingModelsConfig() {
-	logging.ComponentEvent("router", "embedding_models_not_configured", map[string]interface{}{
-		"hint": "model_catalog.embeddings.semantic",
-	})
-}
-
-func initializeSemanticCacheBERTIfNeeded(cfg *config.RouterConfig) {
-	if !cfg.Enabled || resolveSemanticCacheEmbeddingModel(cfg) != "bert" {
+	if event.Status == modelruntime.TaskSkipped {
+		logging.ComponentWarnEvent("router", "runtime_lifecycle_task_skipped", payload)
 		return
 	}
-
-	bertModelID := resolveBertModelID(cfg.BertModelPath)
-	logging.ComponentEvent("router", "semantic_cache_bert_init_started", map[string]interface{}{
-		"model_ref": bertModelID,
-		"use_cpu":   cfg.UseCPU,
-	})
-	if err := candle_binding.InitModel(bertModelID, cfg.UseCPU); err != nil {
-		logging.ComponentFatalEvent("router", "semantic_cache_bert_init_failed", map[string]interface{}{
-			"model_ref": bertModelID,
-			"error":     err.Error(),
-		})
+	if event.BestEffort {
+		logging.ComponentWarnEvent("router", "runtime_lifecycle_task_failed", payload)
+		return
 	}
-	logging.ComponentEvent("router", "semantic_cache_bert_initialized", map[string]interface{}{
-		"model_ref": bertModelID,
-	})
+	logging.ComponentErrorEvent("router", "runtime_lifecycle_task_failed", payload)
 }
 
-func resolveSemanticCacheEmbeddingModel(cfg *config.RouterConfig) string {
-	embeddingModel := strings.ToLower(strings.TrimSpace(cfg.EmbeddingModel))
-	if embeddingModel != "" {
-		return embeddingModel
-	}
-
-	switch {
-	case cfg.MmBertModelPath != "":
-		return "mmbert"
-	case cfg.MultiModalModelPath != "":
-		return "multimodal"
-	case cfg.Qwen3ModelPath != "":
-		return "qwen3"
-	case cfg.GemmaModelPath != "":
-		return "gemma"
-	default:
-		return "bert"
-	}
-}
-
-func resolveBertModelID(modelID string) string {
-	if modelID == "" {
-		modelID = "sentence-transformers/all-MiniLM-L6-v2"
-	}
-	return config.ResolveModelPath(modelID)
-}
-
-func initializeVectorStoreIfEnabled(cfg *config.RouterConfig, shutdownHooks *[]func()) {
+func initializeVectorStoreIfEnabled(
+	cfg *config.RouterConfig,
+	shutdownHooks *[]func(),
+	runtimeRegistry *routerruntime.Registry,
+) {
 	if cfg.VectorStore == nil || !cfg.VectorStore.Enabled {
 		return
 	}
@@ -486,143 +310,27 @@ func initializeVectorStoreIfEnabled(cfg *config.RouterConfig, shutdownHooks *[]f
 			"error":   err.Error(),
 		})
 	}
-	cfg.VectorStore.ApplyDefaults()
-	ensureVectorStoreBERTIfNeeded(cfg)
-
-	vsFileStore := newVectorStoreFileStoreOrFatal(cfg)
-	vsBackend := newVectorStoreBackendOrFatal(cfg)
-	vsPipeline := configureVectorStoreRuntime(cfg, vsBackend, vsFileStore)
-	registerVectorStoreShutdownHook(shutdownHooks, vsPipeline, vsBackend)
-
-	logging.ComponentEvent("router", "vector_store_initialized", map[string]interface{}{
-		"backend": cfg.VectorStore.BackendType,
-		"model":   cfg.VectorStore.EmbeddingModel,
-		"dim":     cfg.VectorStore.EmbeddingDimension,
-		"workers": cfg.VectorStore.IngestionWorkers,
-	})
-}
-
-func ensureVectorStoreBERTIfNeeded(cfg *config.RouterConfig) {
-	if cfg.VectorStore.EmbeddingModel != "bert" || cfg.Enabled {
-		return
-	}
-
-	bertModelID := resolveBertModelID(cfg.BertModelPath)
-	logging.ComponentEvent("router", "vector_store_bert_init_started", map[string]interface{}{
-		"model_ref": bertModelID,
-		"use_cpu":   cfg.UseCPU,
-	})
-	if err := candle_binding.InitModel(bertModelID, cfg.UseCPU); err != nil {
-		logging.ComponentFatalEvent("router", "vector_store_bert_init_failed", map[string]interface{}{
-			"model_ref": bertModelID,
-			"error":     err.Error(),
-		})
-	}
-	logging.ComponentEvent("router", "vector_store_bert_initialized", map[string]interface{}{
-		"model_ref": bertModelID,
-	})
-}
-
-func newVectorStoreFileStoreOrFatal(cfg *config.RouterConfig) *vectorstore.FileStore {
-	fileStore, err := vectorstore.NewFileStore(cfg.VectorStore.FileStorageDir)
+	vectorStoreRuntime, err := routerruntime.NewVectorStoreRuntime(cfg)
 	if err != nil {
-		logging.ComponentFatalEvent("router", "vector_store_filestore_create_failed", map[string]interface{}{
-			"storage_dir": cfg.VectorStore.FileStorageDir,
-			"error":       err.Error(),
-		})
-	}
-	apiserver.SetFileStore(fileStore)
-	return fileStore
-}
-
-func newVectorStoreBackendOrFatal(cfg *config.RouterConfig) vectorstore.VectorStoreBackend {
-	backend, err := vectorstore.NewBackend(cfg.VectorStore.BackendType, buildVectorStoreBackendConfigs(cfg))
-	if err != nil {
-		logging.ComponentFatalEvent("router", "vector_store_backend_create_failed", map[string]interface{}{
+		logging.ComponentFatalEvent("router", "vector_store_runtime_create_failed", map[string]interface{}{
 			"backend": cfg.VectorStore.BackendType,
 			"error":   err.Error(),
 		})
 	}
-	return backend
-}
-
-func buildVectorStoreBackendConfigs(cfg *config.RouterConfig) vectorstore.BackendConfigs {
-	switch cfg.VectorStore.BackendType {
-	case "memory":
-		maxEntries := 100000
-		if cfg.VectorStore.Memory != nil && cfg.VectorStore.Memory.MaxEntriesPerStore > 0 {
-			maxEntries = cfg.VectorStore.Memory.MaxEntriesPerStore
-		}
-		return vectorstore.BackendConfigs{
-			Memory: vectorstore.MemoryBackendConfig{MaxEntriesPerStore: maxEntries},
-		}
-	case "milvus":
-		return vectorstore.BackendConfigs{
-			Milvus: vectorstore.MilvusBackendConfig{
-				Address: fmt.Sprintf("%s:%d", cfg.VectorStore.Milvus.Connection.Host, cfg.VectorStore.Milvus.Connection.Port),
-			},
-		}
-	case "llama_stack":
-		lsCfg := cfg.VectorStore.LlamaStack
-		return vectorstore.BackendConfigs{
-			LlamaStack: vectorstore.LlamaStackBackendConfig{
-				Endpoint:              lsCfg.Endpoint,
-				AuthToken:             lsCfg.AuthToken,
-				EmbeddingModel:        lsCfg.EmbeddingModel,
-				EmbeddingDimension:    cfg.VectorStore.EmbeddingDimension,
-				RequestTimeoutSeconds: lsCfg.RequestTimeoutSeconds,
-				SearchType:            lsCfg.SearchType,
-			},
-		}
-	case "valkey":
-		vCfg := cfg.VectorStore.Valkey
-		return vectorstore.BackendConfigs{
-			Valkey: vectorstore.ValkeyBackendConfig{
-				Host:             vCfg.Host,
-				Port:             vCfg.Port,
-				Password:         vCfg.Password,
-				Database:         vCfg.Database,
-				CollectionPrefix: vCfg.CollectionPrefix,
-				MetricType:       vCfg.MetricType,
-				IndexM:           vCfg.IndexM,
-				IndexEf:          vCfg.IndexEfConstruction,
-				ConnectTimeout:   vCfg.ConnectTimeout,
-			},
-		}
-	default:
-		return vectorstore.BackendConfigs{}
+	if runtimeRegistry != nil {
+		runtimeRegistry.SetVectorStoreRuntime(vectorStoreRuntime)
 	}
-}
-
-func configureVectorStoreRuntime(
-	cfg *config.RouterConfig,
-	vsBackend vectorstore.VectorStoreBackend,
-	vsFileStore *vectorstore.FileStore,
-) *vectorstore.IngestionPipeline {
-	vsMgr := vectorstore.NewManager(vsBackend, cfg.VectorStore.EmbeddingDimension, cfg.VectorStore.BackendType)
-	apiserver.SetVectorStoreManager(vsMgr)
-
-	vsEmbedder := vectorstore.NewCandleEmbedder(cfg.VectorStore.EmbeddingModel, cfg.VectorStore.EmbeddingDimension)
-	apiserver.SetEmbedder(vsEmbedder)
-
-	vsPipeline := vectorstore.NewIngestionPipeline(vsBackend, vsFileStore, vsMgr, vsEmbedder, vectorstore.PipelineConfig{
-		Workers:   cfg.VectorStore.IngestionWorkers,
-		QueueSize: 100,
-	})
-	vsPipeline.Start()
-	apiserver.SetIngestionPipeline(vsPipeline)
-	return vsPipeline
+	vectorStoreRuntime.LogInitialized("router", cfg)
+	registerVectorStoreShutdownHook(shutdownHooks, vectorStoreRuntime)
 }
 
 func registerVectorStoreShutdownHook(
 	shutdownHooks *[]func(),
-	vsPipeline *vectorstore.IngestionPipeline,
-	vsBackend vectorstore.VectorStoreBackend,
+	vectorStoreRuntime *routerruntime.VectorStoreRuntime,
 ) {
 	*shutdownHooks = append(*shutdownHooks, func() {
 		logging.ComponentEvent("router", "vector_store_shutdown_started", map[string]interface{}{})
-		vsPipeline.Stop()
-		if err := vsBackend.Close(); err != nil {
+		if err := vectorStoreRuntime.Shutdown(); err != nil {
 			logging.ComponentErrorEvent("router", "vector_store_shutdown_failed", map[string]interface{}{
 				"error": err.Error(),
 			})
@@ -630,49 +338,12 @@ func registerVectorStoreShutdownHook(
 	})
 }
 
-func initializeModalityClassifierIfEnabled(cfg *config.RouterConfig) {
-	md := &cfg.ModalityDetector
-	if !md.Enabled {
-		return
-	}
-
-	method := md.GetMethod()
-	if method != config.ModalityDetectionClassifier && method != config.ModalityDetectionHybrid {
-		return
-	}
-	if md.Classifier == nil || md.Classifier.ModelPath == "" {
-		return
-	}
-
-	modelPath := config.ResolveModelPath(md.Classifier.ModelPath)
-	logging.ComponentEvent("router", "modality_classifier_init_started", map[string]interface{}{
-		"method":    method,
-		"model_ref": modelPath,
-		"use_cpu":   md.Classifier.UseCPU,
-	})
-	if err := extproc.InitModalityClassifier(modelPath, md.Classifier.UseCPU); err != nil {
-		if method == config.ModalityDetectionClassifier {
-			logging.ComponentFatalEvent("router", "modality_classifier_init_failed", map[string]interface{}{
-				"method":    method,
-				"model_ref": modelPath,
-				"error":     err.Error(),
-			})
-		}
-		logging.ComponentWarnEvent("router", "modality_classifier_init_failed", map[string]interface{}{
-			"method":               method,
-			"model_ref":            modelPath,
-			"error":                err.Error(),
-			"fallback_to_keywords": true,
-		})
-		return
-	}
-	logging.ComponentEvent("router", "modality_classifier_initialized", map[string]interface{}{
-		"method": method,
-	})
-}
-
-func newExtProcServerOrFatal(opts runtimeOptions, writer *startupstatus.Writer) *extproc.Server {
-	server, err := extproc.NewServer(opts.configPath, opts.port, opts.secure, opts.certPath)
+func newExtProcServerOrFatal(
+	opts runtimeOptions,
+	writer *startupstatus.Writer,
+	runtimeRegistry *routerruntime.Registry,
+) *extproc.Server {
+	server, err := extproc.NewServer(opts.configPath, opts.port, opts.secure, opts.certPath, runtimeRegistry)
 	if err != nil {
 		failStartup(writer, "Failed to create ExtProc server: %v", err)
 	}
@@ -680,29 +351,19 @@ func newExtProcServerOrFatal(opts runtimeOptions, writer *startupstatus.Writer) 
 	return server
 }
 
-func loadToolsDatabaseIfReady(server *extproc.Server, embeddingModelsInitialized bool) {
+func warmupRouterRuntime(server *extproc.Server, embeddingState modelruntime.EmbeddingRuntimeState) {
 	router := server.GetRouter()
 	if router == nil {
 		return
 	}
-	if !embeddingModelsInitialized {
-		logging.ComponentEvent("router", "tools_database_load_skipped", map[string]interface{}{
-			"reason": "embedding_models_not_initialized",
-		})
-		return
-	}
-
-	logging.ComponentEvent("router", "tools_database_load_started", map[string]interface{}{})
-	if err := router.LoadToolsDatabase(); err != nil {
-		logging.ComponentWarnEvent("router", "tools_database_load_failed", map[string]interface{}{
-			"error": err.Error(),
-		})
-		return
-	}
-	logging.ComponentEvent("router", "tools_database_loaded", map[string]interface{}{})
+	_, _ = modelruntime.WarmupToolsDatabase(context.Background(), embeddingState.ToolsReady, router.LoadToolsDatabase, modelruntime.WarmupToolsOptions{
+		Component:      "router",
+		MaxParallelism: 1,
+		OnEvent:        logRuntimeLifecycleEvent,
+	})
 }
 
-func startAPIServerIfEnabled(opts runtimeOptions) {
+func startAPIServerIfEnabled(opts runtimeOptions, runtimeRegistry *routerruntime.Registry) {
 	if !opts.enableAPI {
 		return
 	}
@@ -711,7 +372,7 @@ func startAPIServerIfEnabled(opts runtimeOptions) {
 		logging.ComponentEvent("router", "api_server_starting", map[string]interface{}{
 			"api_port": opts.apiPort,
 		})
-		if err := apiserver.Init(opts.configPath, opts.apiPort); err != nil {
+		if err := apiserver.InitWithRuntime(opts.configPath, opts.apiPort, runtimeRegistry); err != nil {
 			logging.ComponentErrorEvent("router", "api_server_failed", map[string]interface{}{
 				"api_port": opts.apiPort,
 				"error":    err.Error(),

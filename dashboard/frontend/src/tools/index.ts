@@ -54,11 +54,20 @@ export type {
   WebSearchResult,
   OpenWebArgs,
   OpenWebResult,
+  CurrentTimeArgs,
+  CurrentTimeResult,
+  CalculateArgs,
+  CalculateResult,
+  WeatherArgs,
+  WeatherResult,
 } from './types'
 
 // Built-in tools
 export { webSearchTool } from './executors/webSearch'
 export { openWebTool } from './executors/openWeb'
+export { currentTimeTool } from './executors/currentTime'
+export { calculateTool } from './executors/calculate'
+export { weatherTool } from './executors/weather'
 
 // MCP (Model Context Protocol) support
 export * from './mcp'
@@ -70,7 +79,13 @@ export { useToolRegistry } from './hooks/useToolRegistry'
 import { toolRegistry } from './registry'
 import { webSearchTool } from './executors/webSearch'
 import { openWebTool } from './executors/openWeb'
+import { currentTimeTool } from './executors/currentTime'
+import { calculateTool } from './executors/calculate'
+import { weatherTool } from './executors/weather'
 
 // Auto-register built-in tools
 toolRegistry.register(webSearchTool)
 toolRegistry.register(openWebTool)
+toolRegistry.register(currentTimeTool)
+toolRegistry.register(calculateTool)
+toolRegistry.register(weatherTool)

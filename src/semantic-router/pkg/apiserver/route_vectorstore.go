@@ -19,6 +19,8 @@ limitations under the License.
 package apiserver
 
 import (
+	"context"
+	"fmt"
 	"net/http"
 	"strconv"
 	"strings"
@@ -87,6 +89,13 @@ type RankingOptions struct {
 	ScoreThreshold float32 `json:"score_threshold,omitempty"`
 }
 
+type vectorStoreSearchParams struct {
+	storeID   string
+	request   SearchRequest
+	topK      int
+	threshold float32
+}
+
 // AttachFileRequest represents a request to attach a file to a vector store.
 type AttachFileRequest struct {
 	FileID           string                        `json:"file_id"`
@@ -107,7 +116,8 @@ func registerVectorStoreRoutes(mux *http.ServeMux, s *ClassificationAPIServer) {
 }
 
 func (s *ClassificationAPIServer) handleCreateVectorStore(w http.ResponseWriter, r *http.Request) {
-	if vectorStoreManager == nil {
+	manager := s.currentVectorStoreManager()
+	if manager == nil {
 		s.writeErrorResponse(w, http.StatusServiceUnavailable, "VECTOR_STORE_DISABLED", "vector store feature is not enabled")
 		return
 	}
@@ -119,7 +129,7 @@ func (s *ClassificationAPIServer) handleCreateVectorStore(w http.ResponseWriter,
 		return
 	}
 
-	vs, err := vectorStoreManager.CreateStore(r.Context(), req)
+	vs, err := manager.CreateStore(r.Context(), req)
 	if err != nil {
 		s.writeErrorResponse(w, http.StatusInternalServerError, "CREATE_FAILED", "failed to create vector store")
 		return
@@ -129,7 +139,8 @@ func (s *ClassificationAPIServer) handleCreateVectorStore(w http.ResponseWriter,
 }
 
 func (s *ClassificationAPIServer) handleListVectorStores(w http.ResponseWriter, r *http.Request) {
-	if vectorStoreManager == nil {
+	manager := s.currentVectorStoreManager()
+	if manager == nil {
 		s.writeErrorResponse(w, http.StatusServiceUnavailable, "VECTOR_STORE_DISABLED", "vector store feature is not enabled")
 		return
 	}
@@ -143,7 +154,7 @@ func (s *ClassificationAPIServer) handleListVectorStores(w http.ResponseWriter, 
 		Before: query.Get("before"),
 	}
 
-	stores := vectorStoreManager.ListStores(params)
+	stores := manager.ListStores(params)
 
 	response := map[string]interface{}{
 		"object": "list",
@@ -153,7 +164,8 @@ func (s *ClassificationAPIServer) handleListVectorStores(w http.ResponseWriter, 
 }
 
 func (s *ClassificationAPIServer) handleGetVectorStore(w http.ResponseWriter, r *http.Request) {
-	if vectorStoreManager == nil {
+	manager := s.currentVectorStoreManager()
+	if manager == nil {
 		s.writeErrorResponse(w, http.StatusServiceUnavailable, "VECTOR_STORE_DISABLED", "vector store feature is not enabled")
 		return
 	}
@@ -164,7 +176,7 @@ func (s *ClassificationAPIServer) handleGetVectorStore(w http.ResponseWriter, r 
 		return
 	}
 
-	vs, err := vectorStoreManager.GetStore(id)
+	vs, err := manager.GetStore(id)
 	if err != nil {
 		s.writeErrorResponse(w, http.StatusNotFound, "NOT_FOUND", err.Error())
 		return
@@ -174,7 +186,8 @@ func (s *ClassificationAPIServer) handleGetVectorStore(w http.ResponseWriter, r 
 }
 
 func (s *ClassificationAPIServer) handleUpdateVectorStore(w http.ResponseWriter, r *http.Request) {
-	if vectorStoreManager == nil {
+	manager := s.currentVectorStoreManager()
+	if manager == nil {
 		s.writeErrorResponse(w, http.StatusServiceUnavailable, "VECTOR_STORE_DISABLED", "vector store feature is not enabled")
 		return
 	}
@@ -192,7 +205,7 @@ func (s *ClassificationAPIServer) handleUpdateVectorStore(w http.ResponseWriter,
 		return
 	}
 
-	vs, err := vectorStoreManager.UpdateStore(id, req)
+	vs, err := manager.UpdateStore(id, req)
 	if err != nil {
 		s.writeErrorResponse(w, http.StatusNotFound, "NOT_FOUND", "vector store not found")
 		return
@@ -202,7 +215,8 @@ func (s *ClassificationAPIServer) handleUpdateVectorStore(w http.ResponseWriter,
 }
 
 func (s *ClassificationAPIServer) handleDeleteVectorStore(w http.ResponseWriter, r *http.Request) {
-	if vectorStoreManager == nil {
+	manager := s.currentVectorStoreManager()
+	if manager == nil {
 		s.writeErrorResponse(w, http.StatusServiceUnavailable, "VECTOR_STORE_DISABLED", "vector store feature is not enabled")
 		return
 	}
@@ -213,7 +227,7 @@ func (s *ClassificationAPIServer) handleDeleteVectorStore(w http.ResponseWriter,
 		return
 	}
 
-	if err := vectorStoreManager.DeleteStore(r.Context(), id); err != nil {
+	if err := manager.DeleteStore(r.Context(), id); err != nil {
 		s.writeErrorResponse(w, http.StatusNotFound, "NOT_FOUND", err.Error())
 		return
 	}
@@ -226,7 +240,9 @@ func (s *ClassificationAPIServer) handleDeleteVectorStore(w http.ResponseWriter,
 }
 
 func (s *ClassificationAPIServer) handleSearchVectorStore(w http.ResponseWriter, r *http.Request) {
-	if vectorStoreManager == nil || globalEmbedder == nil {
+	manager := s.currentVectorStoreManager()
+	embedder := s.currentVectorStoreEmbedder()
+	if manager == nil || embedder == nil {
 		s.writeErrorResponse(w, http.StatusServiceUnavailable, "VECTOR_STORE_DISABLED", "vector store feature is not enabled")
 		return
 	}
@@ -236,66 +252,20 @@ func (s *ClassificationAPIServer) handleSearchVectorStore(w http.ResponseWriter,
 	rc := http.NewResponseController(w)
 	_ = rc.SetWriteDeadline(time.Now().Add(180 * time.Second))
 
-	// Extract vector store ID from /v1/vector_stores/{id}/search
-	path := strings.TrimPrefix(r.URL.Path, "/v1/vector_stores/")
-	id := strings.TrimSuffix(path, "/search")
-	if id == "" || id == path {
-		s.writeErrorResponse(w, http.StatusBadRequest, "INVALID_INPUT", "vector store ID is required")
-		return
-	}
-
-	limitBody(r)
-	var req SearchRequest
-	if err := s.parseJSONRequest(r, &req); err != nil {
+	params, err := s.parseVectorStoreSearchParams(r)
+	if err != nil {
 		s.writeErrorResponse(w, http.StatusBadRequest, "INVALID_INPUT", err.Error())
 		return
 	}
 
-	if req.Query == "" {
-		s.writeErrorResponse(w, http.StatusBadRequest, "INVALID_INPUT", "query is required")
-		return
-	}
-
-	topK := req.MaxNumResults
-	if topK <= 0 {
-		topK = 10
-	}
-	if topK > maxSearchResults {
-		topK = maxSearchResults
-	}
-
-	var threshold float32
-	if req.RankingOptions != nil {
-		threshold = req.RankingOptions.ScoreThreshold
-	}
-
 	// Generate query embedding.
-	queryEmbedding, err := globalEmbedder.Embed(req.Query)
+	queryEmbedding, err := embedder.Embed(params.request.Query)
 	if err != nil {
 		s.writeErrorResponse(w, http.StatusInternalServerError, "EMBEDDING_ERROR", "failed to generate query embedding")
 		return
 	}
 
-	// Llama Stack searches by text, not embedding. Pass the query text via
-	// the filter map so it can use it. Other backends safely ignore this key.
-	if req.Filters == nil {
-		req.Filters = make(map[string]interface{})
-	}
-	req.Filters["_query_text"] = req.Query
-
-	var results []vectorstore.SearchResult
-	if req.Hybrid != nil {
-		backend := vectorStoreManager.Backend()
-		if hs, ok := backend.(vectorstore.HybridSearcher); ok {
-			// Native hybrid search (e.g. in-memory backend with full-collection BM25/n-gram indexes).
-			results, err = hs.HybridSearch(r.Context(), id, req.Query, queryEmbedding, topK, threshold, req.Filters, req.Hybrid)
-		} else {
-			// Generic fallback: fetch expanded vector candidates, then re-rank with BM25 + n-gram.
-			results, err = vectorstore.GenericHybridRerank(r.Context(), backend, id, req.Query, queryEmbedding, topK, threshold, req.Filters, req.Hybrid)
-		}
-	} else {
-		results, err = vectorStoreManager.Backend().Search(r.Context(), id, queryEmbedding, topK, threshold, req.Filters)
-	}
+	results, err := performVectorStoreSearch(r.Context(), manager, params, queryEmbedding)
 	if err != nil {
 		s.writeErrorResponse(w, http.StatusInternalServerError, "SEARCH_ERROR", "search failed")
 		return
@@ -308,8 +278,109 @@ func (s *ClassificationAPIServer) handleSearchVectorStore(w http.ResponseWriter,
 	s.writeJSONResponse(w, http.StatusOK, response)
 }
 
+func (s *ClassificationAPIServer) parseVectorStoreSearchParams(r *http.Request) (vectorStoreSearchParams, error) {
+	path := strings.TrimPrefix(r.URL.Path, "/v1/vector_stores/")
+	storeID := strings.TrimSuffix(path, "/search")
+	if storeID == "" || storeID == path {
+		return vectorStoreSearchParams{}, fmt.Errorf("vector store ID is required")
+	}
+
+	limitBody(r)
+
+	var req SearchRequest
+	if err := s.parseJSONRequest(r, &req); err != nil {
+		return vectorStoreSearchParams{}, err
+	}
+	if req.Query == "" {
+		return vectorStoreSearchParams{}, fmt.Errorf("query is required")
+	}
+
+	req.Filters = ensureVectorStoreSearchFilters(req.Filters, req.Query)
+	return vectorStoreSearchParams{
+		storeID:   storeID,
+		request:   req,
+		topK:      normalizeVectorStoreSearchLimit(req.MaxNumResults),
+		threshold: vectorStoreSearchThreshold(req.RankingOptions),
+	}, nil
+}
+
+func normalizeVectorStoreSearchLimit(limit int) int {
+	if limit <= 0 {
+		return 10
+	}
+	if limit > maxSearchResults {
+		return maxSearchResults
+	}
+	return limit
+}
+
+func vectorStoreSearchThreshold(options *RankingOptions) float32 {
+	if options == nil {
+		return 0
+	}
+	return options.ScoreThreshold
+}
+
+func ensureVectorStoreSearchFilters(filters map[string]interface{}, query string) map[string]interface{} {
+	if filters == nil {
+		filters = make(map[string]interface{})
+	}
+
+	// Llama Stack searches by text, not embedding. Pass the query text via
+	// the filter map so it can use it. Other backends safely ignore this key.
+	filters["_query_text"] = query
+	return filters
+}
+
+func performVectorStoreSearch(
+	ctx context.Context,
+	manager *vectorstore.Manager,
+	params vectorStoreSearchParams,
+	queryEmbedding []float32,
+) ([]vectorstore.SearchResult, error) {
+	if params.request.Hybrid == nil {
+		return manager.Backend().Search(
+			ctx,
+			params.storeID,
+			queryEmbedding,
+			params.topK,
+			params.threshold,
+			params.request.Filters,
+		)
+	}
+
+	backend := manager.Backend()
+	if searcher, ok := backend.(vectorstore.HybridSearcher); ok {
+		// Native hybrid search (e.g. in-memory backend with full-collection BM25/n-gram indexes).
+		return searcher.HybridSearch(
+			ctx,
+			params.storeID,
+			params.request.Query,
+			queryEmbedding,
+			params.topK,
+			params.threshold,
+			params.request.Filters,
+			params.request.Hybrid,
+		)
+	}
+
+	// Generic fallback: fetch expanded vector candidates, then re-rank with BM25 + n-gram.
+	return vectorstore.GenericHybridRerank(
+		ctx,
+		backend,
+		params.storeID,
+		params.request.Query,
+		queryEmbedding,
+		params.topK,
+		params.threshold,
+		params.request.Filters,
+		params.request.Hybrid,
+	)
+}
+
 func (s *ClassificationAPIServer) handleAttachFile(w http.ResponseWriter, r *http.Request) {
-	if globalPipeline == nil {
+	pipeline := s.currentVectorStorePipeline()
+	if pipeline == nil {
 		s.writeErrorResponse(w, http.StatusServiceUnavailable, "VECTOR_STORE_DISABLED", "vector store feature is not enabled")
 		return
 	}
@@ -334,7 +405,7 @@ func (s *ClassificationAPIServer) handleAttachFile(w http.ResponseWriter, r *htt
 		return
 	}
 
-	vsf, err := globalPipeline.AttachFile(id, req.FileID, req.ChunkingStrategy)
+	vsf, err := pipeline.AttachFile(id, req.FileID, req.ChunkingStrategy)
 	if err != nil {
 		s.writeErrorResponse(w, http.StatusBadRequest, "ATTACH_ERROR", "failed to attach file")
 		return
@@ -344,7 +415,8 @@ func (s *ClassificationAPIServer) handleAttachFile(w http.ResponseWriter, r *htt
 }
 
 func (s *ClassificationAPIServer) handleListVectorStoreFiles(w http.ResponseWriter, r *http.Request) {
-	if globalPipeline == nil {
+	pipeline := s.currentVectorStorePipeline()
+	if pipeline == nil {
 		s.writeErrorResponse(w, http.StatusServiceUnavailable, "VECTOR_STORE_DISABLED", "vector store feature is not enabled")
 		return
 	}
@@ -357,7 +429,7 @@ func (s *ClassificationAPIServer) handleListVectorStoreFiles(w http.ResponseWrit
 		return
 	}
 
-	files := globalPipeline.ListFileStatuses(id)
+	files := pipeline.ListFileStatuses(id)
 
 	response := map[string]interface{}{
 		"object": "list",
@@ -367,7 +439,8 @@ func (s *ClassificationAPIServer) handleListVectorStoreFiles(w http.ResponseWrit
 }
 
 func (s *ClassificationAPIServer) handleDetachFile(w http.ResponseWriter, r *http.Request) {
-	if globalPipeline == nil {
+	pipeline := s.currentVectorStorePipeline()
+	if pipeline == nil {
 		s.writeErrorResponse(w, http.StatusServiceUnavailable, "VECTOR_STORE_DISABLED", "vector store feature is not enabled")
 		return
 	}
@@ -383,7 +456,7 @@ func (s *ClassificationAPIServer) handleDetachFile(w http.ResponseWriter, r *htt
 	storeID := parts[0]
 	vsfID := parts[1]
 
-	if err := globalPipeline.DetachFile(r.Context(), storeID, vsfID); err != nil {
+	if err := pipeline.DetachFile(r.Context(), storeID, vsfID); err != nil {
 		s.writeErrorResponse(w, http.StatusNotFound, "NOT_FOUND", err.Error())
 		return
 	}

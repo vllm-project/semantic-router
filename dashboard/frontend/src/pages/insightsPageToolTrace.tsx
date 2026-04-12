@@ -4,6 +4,7 @@ import MarkdownRenderer from '../components/MarkdownRenderer'
 import type { ViewField } from '../components/ViewModal'
 
 import type { InsightsRecord, ToolTrace, ToolTraceStep } from './insightsPageTypes'
+import { hasMeaningfulToolResultText } from '../tools/toolResultSupport'
 import styles from './InsightsPage.module.css'
 
 const TOOL_TRACE_STYLES: Record<string, { tint: string; accent: string }> = {
@@ -44,24 +45,34 @@ export function renderToolNamesCell(record: InsightsRecord): ReactNode {
   )
 }
 
-export function buildToolTraceFields(record: InsightsRecord): ViewField[] {
+export function buildToolTraceFields(
+  record: InsightsRecord,
+  options: { canViewFlowDetails: boolean },
+): ViewField[] {
   const trace = record.tool_trace
   if (!trace || !hasToolTraceContent(trace)) {
     return []
   }
 
-  return [
+  return buildToolTraceFieldList(trace, options.canViewFlowDetails)
+}
+
+function buildToolTraceFieldList(trace: ToolTrace, canViewFlowDetails: boolean): ViewField[] {
+  const fields: ViewField[] = [
     {
       label: 'Overview',
       value: renderToolTraceOverview(trace),
       fullWidth: true,
     },
-    {
-      label: 'Flow',
-      value: renderToolTraceFlow(trace),
-      fullWidth: true,
-    },
   ]
+
+  fields.push({
+    label: 'Flow',
+    value: renderToolTraceFlow(trace, canViewFlowDetails),
+    fullWidth: true,
+  })
+
+  return fields
 }
 
 function renderToolTraceOverview(trace: ToolTrace) {
@@ -127,7 +138,7 @@ function renderToolTraceOverview(trace: ToolTrace) {
   )
 }
 
-function renderToolTraceFlow(trace: ToolTrace) {
+function renderToolTraceFlow(trace: ToolTrace, canViewFlowDetails: boolean) {
   const steps = trace.steps ?? []
   if (steps.length === 0) {
     return (
@@ -177,7 +188,9 @@ function renderToolTraceFlow(trace: ToolTrace) {
               {step.tool_name ? (
                 <span className={styles.signalPillCompact}>{step.tool_name}</span>
               ) : null}
-              {step.source ? <span className={styles.costSubtle}>Source: {step.source}</span> : null}
+              {formatToolTraceSource(step) ? (
+                <span className={styles.costSubtle}>Source: {formatToolTraceSource(step)}</span>
+              ) : null}
             </div>
 
             <div className={styles.toolTraceTitleRow}>
@@ -203,11 +216,14 @@ function renderToolTraceFlow(trace: ToolTrace) {
                 Null or empty tool result returned to the model
               </span>
             ) : null}
-            {step.arguments ? (
+            {canViewFlowDetails && step.arguments ? (
               <pre className={styles.toolTraceBlock}>{formatTraceBlock(step.arguments)}</pre>
             ) : null}
-            {step.text ? (
+            {canViewFlowDetails && step.text ? (
               renderToolTraceContent(step)
+            ) : null}
+            {!canViewFlowDetails && step.content_redacted ? (
+              <span className={styles.toolTraceMeta}>Inputs and outputs are hidden for your role</span>
             ) : null}
           </article>
         </div>
@@ -315,11 +331,20 @@ function findMatchingToolResultIndex(
 }
 
 function isSuccessfulToolResult(step: ToolTraceStep) {
-  return step.type === 'client_tool_result' && hasMeaningfulToolResult(step.text)
+  return getToolResultStatus(step) === 'succeeded'
 }
 
-function hasMeaningfulToolResult(text?: string) {
-  return Boolean(text && text.trim().length > 0)
+function getToolResultStatus(step: ToolTraceStep) {
+  if (step.type !== 'client_tool_result') {
+    return null
+  }
+
+  const normalizedStatus = step.status?.trim().toLowerCase()
+  if (normalizedStatus === 'succeeded' || normalizedStatus === 'failed') {
+    return normalizedStatus
+  }
+
+  return hasMeaningfulToolResultText(step.text) ? 'succeeded' : 'failed'
 }
 
 function getTraceToolNames(trace?: ToolTrace) {
@@ -362,6 +387,38 @@ function formatToolTraceStage(stage?: string, fallbackStepType?: string) {
 
 function hasToolTraceContent(trace?: ToolTrace) {
   return Boolean(trace?.steps?.length || trace?.tool_names?.length || trace?.stage || trace?.flow)
+}
+
+function formatToolTraceSource(step: ToolTraceStep) {
+  switch (step.type) {
+    case 'user_input':
+      return 'User'
+    case 'assistant_tool_call':
+    case 'assistant_final_response':
+      return 'LLM'
+    case 'client_tool_result':
+      return 'Agent'
+    default:
+      return formatToolTraceSourceFallback(step.source)
+  }
+}
+
+function formatToolTraceSourceFallback(source?: string) {
+  const normalized = source?.trim().toLowerCase()
+  if (!normalized) {
+    return null
+  }
+
+  switch (normalized) {
+    case 'request':
+      return 'Request'
+    case 'response':
+      return 'Response'
+    case 'stream':
+      return 'Stream'
+    default:
+      return source
+  }
 }
 
 function toolTraceTintStyle(stepType: string): CSSProperties {

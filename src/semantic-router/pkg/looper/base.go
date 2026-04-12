@@ -59,8 +59,12 @@ func (l *BaseLooper) Execute(ctx context.Context, req *Request) (*Response, erro
 	// Set decision name in client for header transmission
 	l.client.SetDecisionName(req.DecisionName)
 
-	logging.Infof("[BaseLooper] Starting execution with %d models, streaming=%v",
-		len(req.ModelRefs), req.IsStreaming)
+	logging.ComponentEvent("looper", "execution_started", map[string]interface{}{
+		"looper":           "base",
+		"decision":         req.DecisionName,
+		"candidate_models": len(req.ModelRefs),
+		"streaming":        req.IsStreaming,
+	})
 
 	var responses []*ModelResponse
 	var modelsUsed []string
@@ -82,12 +86,23 @@ func (l *BaseLooper) Execute(ctx context.Context, req *Request) (*Response, erro
 			}
 		}
 
-		logging.Infof("[BaseLooper] Calling model: %s (iteration=%d)", modelName, iteration)
+		logging.ComponentDebugEvent("looper", "model_dispatch_started", map[string]interface{}{
+			"looper":    "base",
+			"decision":  req.DecisionName,
+			"model_ref": modelName,
+			"iteration": iteration,
+		})
 
 		// BaseLooper doesn't need logprobs (no confidence-based routing)
 		resp, err := l.client.CallModel(ctx, req.OriginalRequest, modelName, false, iteration, nil, accessKey)
 		if err != nil {
-			logging.Errorf("[BaseLooper] Model %s failed: %v", modelName, err)
+			logging.ComponentWarnEvent("looper", "model_dispatch_failed", map[string]interface{}{
+				"looper":    "base",
+				"decision":  req.DecisionName,
+				"model_ref": modelName,
+				"iteration": iteration,
+				"error":     err.Error(),
+			})
 			continue
 		}
 
@@ -135,8 +150,13 @@ func (l *BaseLooper) aggregateResponses(responses []*ModelResponse, models []str
 		result.HasToolCalls = lastResp.HasToolCalls
 	}
 
-	logging.Infof("[BaseLooper] Aggregated %d responses, total content length=%d",
-		len(responses), len(combinedContent))
+	logging.ComponentEvent("looper", "execution_completed", map[string]interface{}{
+		"looper":               "base",
+		"responses":            len(responses),
+		"models_used":          models,
+		"selected_model":       result.FinalModel,
+		"combined_content_len": len(combinedContent),
+	})
 
 	return result
 }

@@ -16,12 +16,14 @@ type kbLabelData struct {
 	Description string
 	Exemplars   []string
 	Embeddings  [][]float32
+	Prototype   *prototypeBank
 }
 
 // KBClassifyResult contains the structured output of one embedding KB evaluation.
 type KBClassifyResult struct {
 	BestLabel             string
 	BestSimilarity        float64
+	BestLabelMargin       float64
 	BestMatchedLabel      string
 	BestMatchedSimilarity float64
 	BestGroup             string
@@ -29,6 +31,8 @@ type KBClassifyResult struct {
 	MatchedLabels         []string
 	MatchedGroups         []string
 	LabelConfidences      map[string]float64
+	LabelBestScores       map[string]float64
+	LabelSupportScores    map[string]float64
 	GroupScores           map[string]float64
 	MetricValues          map[string]float64
 }
@@ -43,6 +47,7 @@ type KnowledgeBaseClassifier struct {
 }
 
 func NewKnowledgeBaseClassifier(rule config.KnowledgeBaseConfig, modelType string, baseDir string) (*KnowledgeBaseClassifier, error) {
+	rule = rule.WithDefaults()
 	c := &KnowledgeBaseClassifier{
 		rule:      rule,
 		labels:    make(map[string]*kbLabelData),
@@ -173,22 +178,17 @@ func (c *KnowledgeBaseClassifier) preloadEmbeddings() error {
 		"labels":         len(c.labels),
 		"latency_ms":     time.Since(startTime).Milliseconds(),
 	})
+	c.rebuildLabelPrototypeBanks()
 	return nil
 }
 
-func (c *KnowledgeBaseClassifier) computeLabelSimilarities(queryEmb []float32) map[string]float64 {
-	labelScores := make(map[string]float64, len(c.labels))
+func (c *KnowledgeBaseClassifier) computeLabelScores(queryEmb []float32) map[string]prototypeBankScore {
+	labelScores := make(map[string]prototypeBankScore, len(c.labels))
 	for labelName, data := range c.labels {
-		maxSim := float32(0)
-		for _, emb := range data.Embeddings {
-			if emb == nil {
-				continue
-			}
-			if sim := cosineSimilarity(queryEmb, emb); sim > maxSim {
-				maxSim = sim
-			}
+		if data.Prototype == nil {
+			continue
 		}
-		labelScores[labelName] = float64(maxSim)
+		labelScores[labelName] = data.Prototype.score(queryEmb, defaultPrototypeScoreOptions(c.rule.PrototypeScoring))
 	}
 	return labelScores
 }
@@ -292,8 +292,28 @@ func (c *KnowledgeBaseClassifier) Classify(text string) (*KBClassifyResult, erro
 		return nil, fmt.Errorf("failed to compute query embedding: %w", err)
 	}
 
-	labelScores := c.computeLabelSimilarities(queryOutput.Embedding)
+	labelBankScores := c.computeLabelScores(queryOutput.Embedding)
+	labelScores := make(map[string]float64, len(labelBankScores))
+	labelBestScores := make(map[string]float64, len(labelBankScores))
+	labelSupportScores := make(map[string]float64, len(labelBankScores))
+	for label, score := range labelBankScores {
+		labelScores[label] = score.Score
+		labelBestScores[label] = score.Best
+		labelSupportScores[label] = score.Support
+	}
+
 	bestLabel, bestScore := bestScoredName(labelScores)
+	runnerUpScore := 0.0
+	if bestLabel != "" {
+		for label, score := range labelScores {
+			if label == bestLabel {
+				continue
+			}
+			if score > runnerUpScore {
+				runnerUpScore = score
+			}
+		}
+	}
 	matchedLabels := c.buildMatchedLabels(labelScores)
 	matchedLabelScores := make(map[string]float64, len(matchedLabels))
 	for _, label := range matchedLabels {
@@ -325,6 +345,7 @@ func (c *KnowledgeBaseClassifier) Classify(text string) (*KBClassifyResult, erro
 	return &KBClassifyResult{
 		BestLabel:             bestLabel,
 		BestSimilarity:        bestScore,
+		BestLabelMargin:       bestScore - runnerUpScore,
 		BestMatchedLabel:      bestMatchedLabel,
 		BestMatchedSimilarity: bestMatchedScore,
 		BestGroup:             bestGroup,
@@ -332,6 +353,8 @@ func (c *KnowledgeBaseClassifier) Classify(text string) (*KBClassifyResult, erro
 		MatchedLabels:         matchedLabels,
 		MatchedGroups:         matchedGroups,
 		LabelConfidences:      labelScores,
+		LabelBestScores:       labelBestScores,
+		LabelSupportScores:    labelSupportScores,
 		GroupScores:           groupScores,
 		MetricValues:          metricValues,
 	}, nil
@@ -339,4 +362,23 @@ func (c *KnowledgeBaseClassifier) Classify(text string) (*KBClassifyResult, erro
 
 func (c *KnowledgeBaseClassifier) LabelCount() int {
 	return len(c.labels)
+}
+
+func (c *KnowledgeBaseClassifier) rebuildLabelPrototypeBanks() {
+	for labelName, data := range c.labels {
+		examples := make([]prototypeExample, 0, len(data.Exemplars))
+		for i, text := range data.Exemplars {
+			if i >= len(data.Embeddings) || len(data.Embeddings[i]) == 0 {
+				continue
+			}
+			examples = append(examples, prototypeExample{
+				Key:       fmt.Sprintf("%s:%d", labelName, i),
+				Text:      text,
+				Embedding: data.Embeddings[i],
+			})
+		}
+		bank := newPrototypeBank(examples, c.rule.PrototypeScoring)
+		data.Prototype = bank
+		logPrototypeBankSummary("Knowledge Base "+c.rule.Name, labelName, bank)
+	}
 }

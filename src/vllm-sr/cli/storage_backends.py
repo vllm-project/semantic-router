@@ -2,7 +2,11 @@
 
 from __future__ import annotations
 
-from cli.docker_services import docker_start_postgres, docker_start_redis
+from cli.docker_services import (
+    docker_start_milvus,
+    docker_start_postgres,
+    docker_start_redis,
+)
 from cli.runtime_stack import RuntimeStackLayout
 from cli.service_defaults import detect_canonical_storage_backends
 from cli.utils import get_logger
@@ -46,6 +50,12 @@ def start_storage_backends(
             "Postgres", lambda: docker_start_postgres(network_name, stack_layout)
         )
         started.add("postgres")
+
+    if "milvus" in required_backends:
+        _start_backend(
+            "Milvus", lambda: docker_start_milvus(network_name, stack_layout)
+        )
+        started.add("milvus")
 
     return started
 

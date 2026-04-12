@@ -10,6 +10,7 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/logo"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modeldownload"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/routerruntime"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/startupstatus"
 )
 
@@ -20,6 +21,7 @@ func main() {
 
 	cfg := loadRuntimeConfigOrFatal(opts.configPath)
 	config.Replace(cfg)
+	runtimeRegistry := routerruntime.NewRegistry(cfg)
 
 	startupWriter := newStartupWriter(opts.configPath)
 	ensureModelsDownloadedOrFatal(cfg, startupWriter)
@@ -32,13 +34,13 @@ func main() {
 	registerSignalHandler(&shutdownHooks)
 	startMetricsServerIfEnabled(cfg, opts.metricsPort)
 
-	embeddingModelsInitialized := initializeRuntimeDependencies(cfg, startupWriter, &shutdownHooks)
-	server := newExtProcServerOrFatal(opts, startupWriter)
+	embeddingRuntime := initializeRuntimeDependencies(cfg, startupWriter, &shutdownHooks, runtimeRegistry)
+	server := newExtProcServerOrFatal(opts, startupWriter, runtimeRegistry)
 
-	loadToolsDatabaseIfReady(server, embeddingModelsInitialized)
-	startAPIServerIfEnabled(opts)
+	warmupRouterRuntime(server, embeddingRuntime)
+	startAPIServerIfEnabled(opts, runtimeRegistry)
 	markRouterReady(startupWriter)
-	logStartupSummary(cfg, opts, embeddingModelsInitialized)
+	logStartupSummary(cfg, opts, embeddingRuntime.AnyReady)
 	startKubernetesControllerIfNeeded(cfg, opts.kubeconfig, opts.namespace)
 	startExtProcServerOrFatal(server, startupWriter)
 }

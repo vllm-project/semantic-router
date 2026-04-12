@@ -57,7 +57,10 @@ func NewRLDrivenLooper(cfg *config.LooperConfig) *RLDrivenLooper {
 		rlCfg := selection.DefaultRLDrivenConfig()
 		rlCfg.EnableMultiRoundAggregation = true
 		rlSelector = selection.NewRLDrivenSelector(rlCfg)
-		logging.Infof("[RLDrivenLooper] Created new RLDrivenSelector with multi-round enabled")
+		logging.ComponentEvent("looper", "rl_driven_selector_initialized", map[string]interface{}{
+			"multi_round_aggregation": true,
+			"source":                  "default_config",
+		})
 	}
 
 	return &RLDrivenLooper{
@@ -79,8 +82,12 @@ func (l *RLDrivenLooper) Execute(ctx context.Context, req *Request) (*Response, 
 		return nil, fmt.Errorf("no models configured")
 	}
 
-	logging.Infof("[RLDrivenLooper] Starting multi-round execution with %d candidate models, streaming=%v",
-		len(req.ModelRefs), req.IsStreaming)
+	logging.ComponentEvent("looper", "execution_started", map[string]interface{}{
+		"looper":           "rl_driven",
+		"decision":         req.DecisionName,
+		"candidate_models": len(req.ModelRefs),
+		"streaming":        req.IsStreaming,
+	})
 
 	// Build selection context from request
 	selCtx := l.buildSelectionContext(req)
@@ -88,13 +95,22 @@ func (l *RLDrivenLooper) Execute(ctx context.Context, req *Request) (*Response, 
 	// Use SelectMultiRound to determine which models to call
 	multiRoundResult, err := l.selector.SelectMultiRound(ctx, selCtx)
 	if err != nil {
-		logging.Warnf("[RLDrivenLooper] SelectMultiRound failed, falling back to all models: %v", err)
+		logging.ComponentWarnEvent("looper", "selection_fallback", map[string]interface{}{
+			"looper":   "rl_driven",
+			"decision": req.DecisionName,
+			"reason":   "select_multi_round_failed",
+			"error":    err.Error(),
+		})
 		// Fallback: use all models if multi-round selection fails
 		return l.executeAllModels(ctx, req)
 	}
 
-	logging.Infof("[RLDrivenLooper] Multi-round selected %d models: %v",
-		len(multiRoundResult.SelectedModels), multiRoundResult.SelectedModels)
+	logging.ComponentDebugEvent("looper", "selection_completed", map[string]interface{}{
+		"looper":          "rl_driven",
+		"decision":        req.DecisionName,
+		"selected_count":  len(multiRoundResult.SelectedModels),
+		"selected_models": multiRoundResult.SelectedModels,
+	})
 
 	// Call each selected model
 	responses := make(map[string]string)
@@ -115,7 +131,12 @@ func (l *RLDrivenLooper) Execute(ctx context.Context, req *Request) (*Response, 
 		}
 
 		if modelRef == nil {
-			logging.Warnf("[RLDrivenLooper] Model %s not found in ModelRefs, skipping", modelName)
+			logging.ComponentWarnEvent("looper", "model_dispatch_skipped", map[string]interface{}{
+				"looper":    "rl_driven",
+				"decision":  req.DecisionName,
+				"model_ref": modelName,
+				"reason":    "model_ref_missing",
+			})
 			continue
 		}
 
@@ -138,13 +159,24 @@ func (l *RLDrivenLooper) Execute(ctx context.Context, req *Request) (*Response, 
 			score = multiRoundResult.Scores[modelName]
 		}
 
-		logging.Infof("[RLDrivenLooper] Calling model: %s (iteration=%d, score=%.3f)",
-			displayName, iteration, score)
+		logging.ComponentDebugEvent("looper", "model_dispatch_started", map[string]interface{}{
+			"looper":    "rl_driven",
+			"decision":  req.DecisionName,
+			"model_ref": displayName,
+			"iteration": iteration,
+			"score":     score,
+		})
 
 		// Call the model
 		resp, callErr := l.client.CallModel(ctx, req.OriginalRequest, displayName, false, iteration, nil, accessKey)
 		if callErr != nil {
-			logging.Errorf("[RLDrivenLooper] Model %s failed: %v", displayName, callErr)
+			logging.ComponentWarnEvent("looper", "model_dispatch_failed", map[string]interface{}{
+				"looper":    "rl_driven",
+				"decision":  req.DecisionName,
+				"model_ref": displayName,
+				"iteration": iteration,
+				"error":     callErr.Error(),
+			})
 			continue
 		}
 
@@ -160,7 +192,12 @@ func (l *RLDrivenLooper) Execute(ctx context.Context, req *Request) (*Response, 
 	// Use the selector's AggregateResponses to combine results
 	aggregatedContent, bestModel, err := l.selector.AggregateResponses(responses, scores)
 	if err != nil {
-		logging.Warnf("[RLDrivenLooper] AggregateResponses failed, using first response: %v", err)
+		logging.ComponentWarnEvent("looper", "aggregation_fallback", map[string]interface{}{
+			"looper":   "rl_driven",
+			"decision": req.DecisionName,
+			"reason":   "aggregate_responses_failed",
+			"error":    err.Error(),
+		})
 		// Fallback: use first response
 		for model, content := range responses {
 			aggregatedContent = content
@@ -169,8 +206,15 @@ func (l *RLDrivenLooper) Execute(ctx context.Context, req *Request) (*Response, 
 		}
 	}
 
-	logging.Infof("[RLDrivenLooper] Aggregated %d responses, best model: %s, content length: %d",
-		len(responses), bestModel, len(aggregatedContent))
+	logging.ComponentEvent("looper", "execution_completed", map[string]interface{}{
+		"looper":               "rl_driven",
+		"decision":             req.DecisionName,
+		"responses":            len(responses),
+		"models_used":          modelsUsed,
+		"iterations":           iteration,
+		"selected_model":       bestModel,
+		"combined_content_len": len(aggregatedContent),
+	})
 
 	// Format output
 	if req.IsStreaming {
@@ -212,11 +256,24 @@ func (l *RLDrivenLooper) executeAllModels(ctx context.Context, req *Request) (*R
 			}
 		}
 
-		logging.Infof("[RLDrivenLooper] Fallback: Calling model: %s (iteration=%d)", modelName, iteration)
+		logging.ComponentDebugEvent("looper", "model_dispatch_started", map[string]interface{}{
+			"looper":    "rl_driven",
+			"decision":  req.DecisionName,
+			"phase":     "fallback",
+			"model_ref": modelName,
+			"iteration": iteration,
+		})
 
 		resp, err := l.client.CallModel(ctx, req.OriginalRequest, modelName, false, iteration, nil, accessKey)
 		if err != nil {
-			logging.Errorf("[RLDrivenLooper] Model %s failed: %v", modelName, err)
+			logging.ComponentWarnEvent("looper", "model_dispatch_failed", map[string]interface{}{
+				"looper":    "rl_driven",
+				"decision":  req.DecisionName,
+				"phase":     "fallback",
+				"model_ref": modelName,
+				"iteration": iteration,
+				"error":     err.Error(),
+			})
 			continue
 		}
 

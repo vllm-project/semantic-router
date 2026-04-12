@@ -48,13 +48,14 @@ func (e EmbeddingModels) MinSimilarityThreshold() float32 {
 
 // HNSWConfig contains settings for optimizing embedding-backed classification.
 type HNSWConfig struct {
-	ModelType          string  `yaml:"model_type,omitempty"`
-	PreloadEmbeddings  bool    `yaml:"preload_embeddings"`
-	TargetDimension    int     `yaml:"target_dimension,omitempty"`
-	TargetLayer        int     `yaml:"target_layer,omitempty"`
-	EnableSoftMatching *bool   `yaml:"enable_soft_matching,omitempty"`
-	TopK               *int    `yaml:"top_k,omitempty"`
-	MinScoreThreshold  float32 `yaml:"min_score_threshold,omitempty"`
+	ModelType          string                 `yaml:"model_type,omitempty"`
+	PreloadEmbeddings  bool                   `yaml:"preload_embeddings"`
+	TargetDimension    int                    `yaml:"target_dimension,omitempty"`
+	TargetLayer        int                    `yaml:"target_layer,omitempty"`
+	EnableSoftMatching *bool                  `yaml:"enable_soft_matching,omitempty"`
+	TopK               *int                   `yaml:"top_k,omitempty"`
+	MinScoreThreshold  float32                `yaml:"min_score_threshold,omitempty"`
+	PrototypeScoring   PrototypeScoringConfig `yaml:"prototype_scoring,omitempty"`
 }
 
 func (c HNSWConfig) WithDefaults() HNSWConfig {
@@ -79,6 +80,7 @@ func (c HNSWConfig) WithDefaults() HNSWConfig {
 	if result.MinScoreThreshold <= 0 {
 		result.MinScoreThreshold = 0.5
 	}
+	result.PrototypeScoring = result.PrototypeScoring.WithDefaults()
 	return result
 }
 
@@ -140,8 +142,9 @@ type FeedbackDetectorConfig struct {
 }
 
 type PreferenceModelConfig struct {
-	UseContrastive *bool  `yaml:"use_contrastive,omitempty"`
-	EmbeddingModel string `yaml:"embedding_model,omitempty"`
+	UseContrastive   *bool                  `yaml:"use_contrastive,omitempty"`
+	EmbeddingModel   string                 `yaml:"embedding_model,omitempty"`
+	PrototypeScoring PrototypeScoringConfig `yaml:"prototype_scoring,omitempty"`
 }
 
 func (c PreferenceModelConfig) WithDefaults() PreferenceModelConfig {
@@ -150,11 +153,22 @@ func (c PreferenceModelConfig) WithDefaults() PreferenceModelConfig {
 		defaultEnabled := true
 		result.UseContrastive = &defaultEnabled
 	}
+	result.PrototypeScoring = result.PrototypeScoring.WithDefaults()
 	return result
 }
 
 func (c PreferenceModelConfig) ContrastiveEnabled() bool {
 	return *c.WithDefaults().UseContrastive
+}
+
+type ComplexityModelConfig struct {
+	PrototypeScoring PrototypeScoringConfig `yaml:"prototype_scoring,omitempty"`
+}
+
+func (c ComplexityModelConfig) WithDefaults() ComplexityModelConfig {
+	result := c
+	result.PrototypeScoring = result.PrototypeScoring.WithDefaults()
+	return result
 }
 
 type ExternalModelConfig struct {
@@ -263,9 +277,10 @@ type ProviderProfile struct {
 }
 
 type ModelPricing struct {
-	Currency        string  `yaml:"currency,omitempty"`
-	PromptPer1M     float64 `yaml:"prompt_per_1m,omitempty"`
-	CompletionPer1M float64 `yaml:"completion_per_1m,omitempty"`
+	Currency         string  `yaml:"currency,omitempty"`
+	PromptPer1M      float64 `yaml:"prompt_per_1m,omitempty"`
+	CompletionPer1M  float64 `yaml:"completion_per_1m,omitempty"`
+	CachedInputPer1M float64 `yaml:"cached_input_per_1m,omitempty"`
 }
 
 type ModelParams struct {

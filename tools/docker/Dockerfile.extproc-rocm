@@ -229,7 +229,7 @@ COPY --from=go-builder /app/lib/ /app/lib/
 COPY onnx-binding/ort-ck-flash-attn/prebuilt/libort_ck_flash_attn.so* /app/lib/
 
 COPY config/config.yaml /app/config/
-COPY config/kb/ /app/config/kb/
+COPY config/knowledge_bases/ /app/config/knowledge_bases/
 COPY scripts/entrypoint.sh /app/entrypoint.sh
 RUN chmod +x /app/entrypoint.sh
 

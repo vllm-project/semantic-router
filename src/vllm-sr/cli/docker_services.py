@@ -2,6 +2,7 @@
 
 import json
 import os
+import socket
 import subprocess
 from pathlib import Path
 
@@ -327,6 +328,14 @@ def docker_start_redis(
     if _reuse_running_storage_container(container_name, "Redis"):
         return 0, "", ""
 
+    if _is_port_in_use(stack_layout.redis_port):
+        log.info(
+            "Redis port %d is already in use — assuming an external Redis "
+            "instance is available, skipping container provisioning",
+            stack_layout.redis_port,
+        )
+        return 0, "", ""
+
     _replace_existing_container(container_name)
     cmd = [
         runtime,
@@ -360,6 +369,14 @@ def docker_start_postgres(
     if _reuse_running_storage_container(container_name, "Postgres"):
         return 0, "", ""
 
+    if _is_port_in_use(stack_layout.postgres_port):
+        log.info(
+            "Postgres port %d is already in use — assuming an external Postgres "
+            "instance is available, skipping container provisioning",
+            stack_layout.postgres_port,
+        )
+        return 0, "", ""
+
     _replace_existing_container(container_name)
     cmd = [
         runtime,
@@ -382,6 +399,69 @@ def docker_start_postgres(
         "postgres:16-alpine",
     ]
     return _run_service_start(cmd, "Postgres")
+
+
+def docker_start_milvus(
+    network_name=None, stack_layout: RuntimeStackLayout | None = None
+):
+    """Start a Milvus container for the semantic cache backend.
+
+    Reuses an already-running container to preserve data across router restarts.
+    """
+    runtime = get_container_runtime()
+    stack_layout = stack_layout or resolve_runtime_stack()
+    container_name = stack_layout.milvus_container_name
+    network_name = network_name or stack_layout.network_name
+
+    if _reuse_running_storage_container(container_name, "Milvus"):
+        return 0, "", ""
+
+    if _is_port_in_use(stack_layout.milvus_port):
+        log.info(
+            "Milvus port %d is already in use — assuming an external Milvus "
+            "instance is available, skipping container provisioning",
+            stack_layout.milvus_port,
+        )
+        return 0, "", ""
+
+    _replace_existing_container(container_name)
+
+    config_dir = _ensure_hidden_config_dir(None)
+    milvus_data_dir = os.path.join(config_dir, "milvus-data")
+    os.makedirs(milvus_data_dir, exist_ok=True)
+
+    cmd = [
+        runtime,
+        "run",
+        "-d",
+        "--name",
+        container_name,
+        "--hostname",
+        "milvus",
+        "--network",
+        network_name,
+        "--security-opt",
+        "seccomp:unconfined",
+        "-e",
+        "ETCD_USE_EMBED=true",
+        "-e",
+        "ETCD_DATA_DIR=/var/lib/milvus/etcd",
+        "-e",
+        "ETCD_CONFIG_PATH=/milvus/configs/advanced/etcd.yaml",
+        "-e",
+        "COMMON_STORAGETYPE=local",
+        "-e",
+        "CLUSTER_ENABLED=false",
+        "-p",
+        f"{stack_layout.milvus_port}:19530",
+        "-v",
+        f"{os.path.abspath(milvus_data_dir)}:/var/lib/milvus:z",
+        "milvusdb/milvus:v2.3.3",
+        "milvus",
+        "run",
+        "standalone",
+    ]
+    return _run_service_start(cmd, "Milvus")
 
 
 def docker_start_fleet_sim(
@@ -487,6 +567,13 @@ def _reuse_running_storage_container(container_name: str, label: str) -> bool:
     return False
 
 
+def _is_port_in_use(port: int) -> bool:
+    """Return True if a TCP port is already bound on localhost."""
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
+        sock.settimeout(1)
+        return sock.connect_ex(("127.0.0.1", port)) == 0
+
+
 def _replace_existing_container(container_name):
     status = docker_container_status(container_name)
     if status != "not found":
@@ -518,7 +605,7 @@ def render_observability_template(
 ) -> str:
     replacements = (
         ("vllm-sr-container:9190", f"{stack_layout.router_container_name}:9190"),
-        ("vllm-sr-container", stack_layout.container_name),
+        ("vllm-sr-container", stack_layout.router_container_name),
         ("vllm-sr-prometheus", stack_layout.prometheus_container_name),
         ("vllm-sr-jaeger", stack_layout.jaeger_container_name),
     )

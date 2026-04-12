@@ -5,7 +5,7 @@ These local `AGENTS.md` files are first-class supplements to the shared harness.
 ## Indexed Local `AGENTS.md` Files
 
 - [../../src/vllm-sr/cli/AGENTS.md](../../src/vllm-sr/cli/AGENTS.md)
-  - CLI orchestration and `docker_cli.py` hotspot rules
+  - CLI runtime orchestration in `core.py` and `commands/runtime.py`, plus config-contract hotspot rules
 - [../../src/fleet-sim/AGENTS.md](../../src/fleet-sim/AGENTS.md)
   - simulator package boundaries, service surface, and public export rules
 - [../../src/fleet-sim/fleet_sim/optimizer/AGENTS.md](../../src/fleet-sim/fleet_sim/optimizer/AGENTS.md)

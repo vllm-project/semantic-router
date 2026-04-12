@@ -23,7 +23,6 @@ func createMemoryRuntime(cfg *config.RouterConfig) (memory.Store, *memory.Memory
 		return nil, nil
 	}
 
-	memory.SetGlobalMemoryStore(memoryStore)
 	if rc := cfg.Memory.RedisCache; rc != nil && rc.Enabled && rc.Address != "" {
 		logging.Infof("Memory enabled with Milvus backend and Redis hot cache")
 	} else {

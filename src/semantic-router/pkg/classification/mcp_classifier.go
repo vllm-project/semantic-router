@@ -118,7 +118,10 @@ func (m *MCPCategoryClassifier) Init(cfg *config.RouterConfig) error {
 		return fmt.Errorf("failed to discover classification tool: %w", err)
 	}
 
-	logging.Infof("Successfully initialized MCP category classifier with tool '%s'", m.toolName)
+	logging.ComponentEvent("classifier", "mcp_category_classifier_initialized", map[string]interface{}{
+		"tool_name":      m.toolName,
+		"transport_type": cfg.TransportType,
+	})
 	return nil
 }
 
@@ -127,7 +130,10 @@ func (m *MCPCategoryClassifier) discoverClassificationTool() error {
 	// If tool name is explicitly specified, use it
 	if m.config.ToolName != "" {
 		m.toolName = m.config.ToolName
-		logging.Infof("Using explicitly configured tool: %s", m.toolName)
+		logging.ComponentEvent("classifier", "mcp_category_tool_selected", map[string]interface{}{
+			"tool_name":      m.toolName,
+			"selection_mode": "configured",
+		})
 		return nil
 	}
 
@@ -149,7 +155,10 @@ func (m *MCPCategoryClassifier) discoverClassificationTool() error {
 		for _, tool := range tools {
 			if tool.Name == toolName {
 				m.toolName = tool.Name
-				logging.Infof("Auto-discovered classification tool: %s - %s", m.toolName, tool.Description)
+				logging.ComponentEvent("classifier", "mcp_category_tool_selected", map[string]interface{}{
+					"tool_name":      m.toolName,
+					"selection_mode": "auto_name_match",
+				})
 				return nil
 			}
 		}
@@ -161,7 +170,10 @@ func (m *MCPCategoryClassifier) discoverClassificationTool() error {
 		lowerDesc := strings.ToLower(tool.Description)
 		if strings.Contains(lowerName, "classif") || strings.Contains(lowerDesc, "classif") {
 			m.toolName = tool.Name
-			logging.Infof("Auto-discovered classification tool by pattern match: %s - %s", m.toolName, tool.Description)
+			logging.ComponentEvent("classifier", "mcp_category_tool_selected", map[string]interface{}{
+				"tool_name":      m.toolName,
+				"selection_mode": "auto_pattern_match",
+			})
 			return nil
 		}
 	}
@@ -330,12 +342,12 @@ func (m *MCPCategoryClassifier) ListCategories(ctx context.Context) (*CategoryMa
 		mapping.IdxToCategory[fmt.Sprintf("%d", idx)] = category
 	}
 
-	if len(response.CategorySystemPrompts) > 0 {
-		logging.Infof("Loaded %d categories with %d system prompts from MCP server: %v",
-			len(response.Categories), len(response.CategorySystemPrompts), response.Categories)
-	} else {
-		logging.Infof("Loaded %d categories from MCP server: %v", len(response.Categories), response.Categories)
-	}
+	logging.ComponentEvent("classifier", "mcp_category_mapping_loaded", map[string]interface{}{
+		"tool_name":               m.toolName,
+		"categories":              len(response.Categories),
+		"system_prompt_count":     len(response.CategorySystemPrompts),
+		"categories_with_prompts": len(response.CategorySystemPrompts) > 0,
+	})
 
 	return mapping, nil
 }
@@ -376,7 +388,13 @@ func (c *Classifier) initializeMCPCategoryClassifier() error {
 	// If no in-tree category model is configured and no category mapping exists,
 	// load categories from the MCP server
 	if c.Config.CategoryModel.ModelID == "" && c.CategoryMapping == nil {
-		logging.Infof("Loading category mapping from MCP server...")
+		toolName := ""
+		if classifier, ok := c.mcpCategoryInitializer.(*MCPCategoryClassifier); ok {
+			toolName = classifier.toolName
+		}
+		logging.ComponentDebugEvent("classifier", "mcp_category_mapping_load_started", map[string]interface{}{
+			"tool_name": toolName,
+		})
 
 		// Create a context with timeout for the list_categories call
 		ctx := context.Background()
@@ -394,10 +412,10 @@ func (c *Classifier) initializeMCPCategoryClassifier() error {
 
 		// Store the category mapping
 		c.CategoryMapping = categoryMapping
-		logging.Infof("Successfully loaded %d categories from MCP server", c.CategoryMapping.GetCategoryCount())
+		logging.ComponentEvent("classifier", "mcp_category_mapping_attached", map[string]interface{}{
+			"categories": c.CategoryMapping.GetCategoryCount(),
+		})
 	}
-
-	logging.Infof("Successfully initialized MCP category classifier")
 	return nil
 }
 

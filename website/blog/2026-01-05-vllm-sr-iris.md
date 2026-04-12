@@ -1,8 +1,10 @@
 ---
 slug: vllm-sr-iris
 title: "vLLM Semantic Router v0.1 Iris: The First Major Release"
+description: Announcing vLLM Semantic Router v0.1 Iris, the first major release for intelligent LLM routing across diverse models and providers.
 authors: [Xunzhuo]
 tags: [release, v0.1, iris, announcement, vllm, semantic-router]
+image: /img/iris-0.png
 ---
 
 We are thrilled to announce the release of **vLLM Semantic Router v0.1, codename Iris**—our first major release that marks a transformative milestone for intelligent LLM routing. Since our experimental launch in September 2025, we've witnessed extraordinary community growth: over 600 Pull Requests merged, 300+ Issues addressed, and contributions from more than 50 outstanding engineers worldwide.

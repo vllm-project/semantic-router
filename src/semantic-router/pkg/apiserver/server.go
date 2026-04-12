@@ -13,6 +13,7 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/memory"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/metrics"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/routerruntime"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/selection"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/services"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/startupstatus"
@@ -20,30 +21,22 @@ import (
 
 // Init starts the API server.
 func Init(configPath string, port int) error {
+	return InitWithRuntime(configPath, port, nil)
+}
+
+// InitWithRuntime starts the API server using the shared runtime registry when
+// one is available. Legacy callers can continue using Init and fall back to the
+// compatibility globals.
+func InitWithRuntime(configPath string, port int, runtimeRegistry *routerruntime.Registry) error {
 	// Get the global configuration instead of loading from file
 	// This ensures we use the same config as the rest of the application
-	cfg := config.Get()
+	cfg := resolveAPIServerConfig(runtimeRegistry)
 	if cfg == nil {
 		return fmt.Errorf("configuration not initialized")
 	}
 
-	// Create classification service - try to get global service with retry
-	classificationSvc := initClassify(5, 500*time.Millisecond)
-	if classificationSvc == nil {
-		// If no global service exists, try auto-discovery unified classifier
-		logging.ComponentEvent("apiserver", "classification_service_autodiscovery_started", map[string]interface{}{})
-		autoSvc, err := services.NewClassificationServiceWithAutoDiscovery(cfg)
-		if err != nil {
-			logging.ComponentWarnEvent("apiserver", "classification_service_autodiscovery_failed", map[string]interface{}{
-				"error":             err.Error(),
-				"using_placeholder": true,
-			})
-			classificationSvc = services.NewPlaceholderClassificationService()
-		} else {
-			logging.ComponentEvent("apiserver", "classification_service_autodiscovery_succeeded", map[string]interface{}{})
-			classificationSvc = autoSvc
-		}
-	}
+	classificationSvc := resolveClassificationService(cfg, runtimeRegistry)
+	classificationSvc = ensureClassificationService(cfg, runtimeRegistry, classificationSvc)
 
 	// Initialize batch metrics configuration
 	if cfg.API.BatchClassification.Metrics.Enabled {
@@ -62,7 +55,7 @@ func Init(configPath string, port int) error {
 	// Get memory store if available (set by ExtProc router during init)
 	var memoryStore memory.Store
 	if shouldInitMemoryStore(cfg) {
-		memoryStore = initMemoryStore(5, 500*time.Millisecond)
+		memoryStore = resolveMemoryStore(cfg, runtimeRegistry)
 		if memoryStore != nil {
 			logging.ComponentEvent("apiserver", "memory_api_enabled", map[string]interface{}{})
 		} else {
@@ -79,14 +72,22 @@ func Init(configPath string, port int) error {
 
 	liveClassificationSvc := newLiveClassificationService(
 		classificationSvc,
-		func() classificationService { return services.GetGlobalClassificationService() },
+		func() classificationService {
+			if runtimeRegistry != nil {
+				if svc := runtimeRegistry.ClassificationService(); svc != nil {
+					return svc
+				}
+			}
+			return services.GetGlobalClassificationService()
+		},
 	)
 
 	// Create server instance
 	apiServer := &ClassificationAPIServer{
 		classificationSvc:     liveClassificationSvc,
 		config:                cfg,
-		runtimeConfig:         newLiveRuntimeConfig(cfg, config.Get, liveClassificationSvc.RefreshRuntimeConfig),
+		runtimeConfig:         newLiveRuntimeConfig(cfg, buildConfigResolver(runtimeRegistry), buildConfigUpdater(runtimeRegistry, liveClassificationSvc)),
+		runtimeRegistry:       runtimeRegistry,
 		configPath:            configPath,
 		memoryStore:           memoryStore,
 		knowledgeBaseMapCache: newKnowledgeBaseMapCache(),
@@ -106,6 +107,80 @@ func Init(configPath string, port int) error {
 		"port": port,
 	})
 	return server.ListenAndServe()
+}
+
+func resolveAPIServerConfig(runtimeRegistry *routerruntime.Registry) *config.RouterConfig {
+	if runtimeRegistry != nil {
+		if cfg := runtimeRegistry.CurrentConfig(); cfg != nil {
+			return cfg
+		}
+	}
+	return config.Get()
+}
+
+func resolveClassificationService(
+	cfg *config.RouterConfig,
+	runtimeRegistry *routerruntime.Registry,
+) *services.ClassificationService {
+	if runtimeRegistry != nil {
+		if svc := runtimeRegistry.ClassificationService(); svc != nil {
+			return svc
+		}
+	}
+	return initClassify(5, 500*time.Millisecond)
+}
+
+func ensureClassificationService(
+	cfg *config.RouterConfig,
+	runtimeRegistry *routerruntime.Registry,
+	svc *services.ClassificationService,
+) *services.ClassificationService {
+	if svc != nil {
+		return svc
+	}
+
+	// If no global service exists, try auto-discovery unified classifier.
+	logging.ComponentEvent("apiserver", "classification_service_autodiscovery_started", map[string]interface{}{})
+	autoSvc, err := services.NewClassificationServiceWithAutoDiscovery(cfg)
+	if err != nil {
+		logging.ComponentWarnEvent("apiserver", "classification_service_autodiscovery_failed", map[string]interface{}{
+			"error":             err.Error(),
+			"using_placeholder": true,
+		})
+		return services.NewPlaceholderClassificationService()
+	}
+
+	logging.ComponentEvent("apiserver", "classification_service_autodiscovery_succeeded", map[string]interface{}{})
+	if runtimeRegistry != nil {
+		runtimeRegistry.SetClassificationService(autoSvc)
+	}
+	return autoSvc
+}
+
+func resolveMemoryStore(cfg *config.RouterConfig, runtimeRegistry *routerruntime.Registry) memory.Store {
+	if runtimeRegistry != nil {
+		if store := runtimeRegistry.MemoryStore(); store != nil {
+			return store
+		}
+	}
+	return initMemoryStore(5, 500*time.Millisecond)
+}
+
+func buildConfigResolver(runtimeRegistry *routerruntime.Registry) func() *config.RouterConfig {
+	if runtimeRegistry == nil {
+		return config.Get
+	}
+	return runtimeRegistry.CurrentConfig
+}
+
+func buildConfigUpdater(
+	runtimeRegistry *routerruntime.Registry,
+	liveClassificationSvc classificationService,
+) func(*config.RouterConfig) {
+	if runtimeRegistry == nil {
+		return liveClassificationSvc.RefreshRuntimeConfig
+	}
+	return runtimeRegistry.RefreshRuntimeConfig
 }
 
 // initClassify attempts to get the global classification service with retry logic

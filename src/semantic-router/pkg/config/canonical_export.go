@@ -46,10 +46,11 @@ func CanonicalRoutingFromRouterConfig(cfg *RouterConfig) CanonicalRouting {
 	}
 
 	return CanonicalRouting{
-		ModelCards:  routingModelsFromRouterConfig(cfg),
-		Signals:     canonicalSignalsFromRouterConfig(cfg),
-		Projections: canonicalProjectionsFromRouterConfig(cfg),
-		Decisions:   copyDecisions(cfg.Decisions),
+		ModelCards:    routingModelsFromRouterConfig(cfg),
+		Signals:       canonicalSignalsFromRouterConfig(cfg),
+		Projections:   canonicalProjectionsFromRouterConfig(cfg),
+		Decisions:     copyDecisions(cfg.Decisions),
+		SessionStates: append([]SessionStateConfig(nil), cfg.SessionStates...),
 	}
 }
 
@@ -194,6 +195,7 @@ func CanonicalGlobalFromRouterConfig(cfg *RouterConfig) *CanonicalGlobal {
 					},
 					Preference: cfg.PreferenceModel.WithDefaults(),
 				},
+				Complexity: cfg.ComplexityModel.WithDefaults(),
 				HallucinationMitigation: CanonicalHallucinationModule{
 					Enabled:                 cfg.HallucinationMitigation.Enabled,
 					OnHallucinationDetected: cfg.HallucinationMitigation.OnHallucinationDetected,

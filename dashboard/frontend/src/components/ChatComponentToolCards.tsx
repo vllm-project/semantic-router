@@ -1,7 +1,7 @@
 import { useMemo } from 'react'
 
 import type { ToolCall, ToolResult } from '../tools'
-import { parseMCPToolName } from '../tools/mcp'
+import { isOpenClawMCPToolName, parseMCPToolName } from '../tools/mcp'
 
 import styles from './ChatComponent.module.css'
 import {
@@ -23,6 +23,22 @@ const TOOL_STATUS_CLASS_NAMES: Record<ToolCall['status'], string> = {
   failed: styles.toolStatusFailed,
 }
 
+function buildResultPreview(toolResult?: ToolResult) {
+  if (!toolResult || toolResult.error) {
+    return ''
+  }
+
+  if (typeof toolResult.content === 'string') {
+    return toolResult.content
+  }
+
+  try {
+    return JSON.stringify(toolResult.content, null, 2)
+  } catch {
+    return String(toolResult.content ?? '')
+  }
+}
+
 export const ToolCard = ({
   toolCall,
   toolResult,
@@ -36,9 +52,9 @@ export const ToolCard = ({
 }) => {
   const toolName = toolCall.function.name
   const parsedMCPTool = parseMCPToolName(toolName)
-  const clawToolName = parsedMCPTool?.toolName || ''
+  const isClawMCPToolCall = isOpenClawMCPToolName(toolName)
+  const clawToolName = isClawMCPToolCall ? parsedMCPTool?.toolName || '' : ''
   const displayToolName = getToolDisplayName(clawToolName || toolName)
-  const isClawMCPToolCall = clawToolName.startsWith('claw_')
   const isClawCreateToolCall = clawToolName === 'claw_create_team' || clawToolName === 'claw_create_worker'
   const rawArgs = toolCall.function.arguments || ''
   const parsedArgs = useMemo(() => {
@@ -61,6 +77,7 @@ export const ToolCard = ({
   const showResultHighlights = isClawCreateToolCall && (toolCall.status === 'completed' || toolCall.status === 'failed')
   const statusLabel = getToolStatusLabel(toolCall.status)
   const summary = getToolSummary(clawToolName || toolName, parsedArgs, isClawMCPToolCall)
+  const resultPreview = useMemo(() => buildResultPreview(toolResult), [toolResult])
 
   if (toolName === 'search_web') {
     return (
@@ -168,6 +185,15 @@ export const ToolCard = ({
               <p className={styles.sourceItemSnippet} style={{ color: 'var(--color-error)' }}>
                 {toolResult.error}
               </p>
+            </div>
+          </div>
+        </div>
+      )}
+      {isExpanded && toolCall.status === 'completed' && !isClawCreateToolCall && resultPreview && (
+        <div className={styles.webSearchResults}>
+          <div className={styles.sourceDetails}>
+            <div className={styles.sourceItem}>
+              <pre className={styles.openWebContent}>{resultPreview}</pre>
             </div>
           </div>
         </div>

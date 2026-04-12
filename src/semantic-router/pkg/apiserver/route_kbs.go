@@ -120,9 +120,17 @@ func (s *ClassificationAPIServer) handleUpdateKnowledgeBase(w http.ResponseWrite
 	updatedKB.LabelThresholds = cloneLabelThresholds(payload.LabelThresholds)
 	updatedKB.Groups = cloneKnowledgeBaseGroups(payload.Groups)
 	updatedKB.Metrics = cloneKnowledgeBaseMetrics(payload.Metrics)
+	sourcePath := strings.TrimSpace(existingKB.Source.Path)
+	if sourcePath == "" || !isManagedKnowledgeBase(existingKB) {
+		sourcePath = managedKnowledgeBaseSourcePath(name)
+	}
+	sourceManifest := strings.TrimSpace(existingKB.Source.Manifest)
+	if sourceManifest == "" {
+		sourceManifest = knowledgeBaseManifestName
+	}
 	updatedKB.Source = config.KnowledgeBaseSource{
-		Path:     managedKnowledgeBaseSourcePath(name),
-		Manifest: knowledgeBaseManifestName,
+		Path:     sourcePath,
+		Manifest: sourceManifest,
 	}
 
 	if err := s.persistManagedKnowledgeBase(w, cfg, payload, updatedKB, desiredKnowledgeBases(cfg.KnowledgeBases, updatedKB), http.StatusOK); err != nil {
@@ -155,7 +163,7 @@ func (s *ClassificationAPIServer) handleDeleteKnowledgeBase(w http.ResponseWrite
 		return
 	}
 
-	removeTxn, err := stageManagedKnowledgeBaseRemoval(baseDir, name)
+	removeTxn, err := stageManagedKnowledgeBaseRemoval(baseDir, existingKB.Source.Path, name)
 	if err != nil {
 		s.writeErrorResponse(w, http.StatusInternalServerError, "ASSET_STAGE_ERROR", err.Error())
 		return
@@ -225,7 +233,7 @@ func (s *ClassificationAPIServer) persistManagedKnowledgeBase(
 		return err
 	}
 
-	assetTxn, err := stageManagedKnowledgeBaseAssets(baseDir, payload)
+	assetTxn, err := stageManagedKnowledgeBaseAssets(baseDir, kb.Source.Path, payload)
 	if err != nil {
 		s.writeErrorResponse(w, http.StatusInternalServerError, "ASSET_STAGE_ERROR", err.Error())
 		return err

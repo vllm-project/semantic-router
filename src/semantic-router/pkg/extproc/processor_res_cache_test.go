@@ -4,6 +4,7 @@ import (
 	"errors"
 	"testing"
 
+	"github.com/openai/openai-go"
 	"github.com/stretchr/testify/assert"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/cache"
@@ -431,4 +432,80 @@ func TestCacheStreamingAllowedForGenericRequest(t *testing.T) {
 	assert.NoError(t, err)
 	assert.True(t, mockCache.addEntryCalled || mockCache.updateCalled,
 		"cache write must proceed for generic requests without personalized context")
+}
+
+func TestBuildReconstructedStreamingResponseIncludesToolCallsForReplay(t *testing.T) {
+	ctx := &RequestContext{
+		StreamingMetadata: map[string]interface{}{
+			"id":            "chatcmpl-123",
+			"model":         "test-model",
+			"created":       int64(1234567890),
+			"finish_reason": "tool_calls",
+		},
+		StreamingToolCalls: map[int]*StreamingToolCallState{
+			0: {
+				ID:        "call_weather",
+				Name:      "get_weather",
+				Arguments: "{\"location\":\"San Francisco\"}",
+			},
+		},
+	}
+
+	body, err := buildReconstructedStreamingResponse(ctx, openai.CompletionUsage{
+		PromptTokens:     10,
+		CompletionTokens: 2,
+		TotalTokens:      12,
+	}, true)
+	assert.NoError(t, err)
+	assert.JSONEq(t, `{
+		"id": "chatcmpl-123",
+		"object": "chat.completion",
+		"created": 1234567890,
+		"model": "test-model",
+		"choices": [
+			{
+				"index": 0,
+				"message": {
+					"role": "assistant",
+					"content": null,
+					"tool_calls": [
+						{
+							"id": "call_weather",
+							"type": "function",
+							"function": {
+								"name": "get_weather",
+								"arguments": "{\"location\":\"San Francisco\"}"
+							}
+						}
+					]
+				},
+				"finish_reason": "tool_calls"
+			}
+		],
+		"usage": {
+			"prompt_tokens": 10,
+			"completion_tokens": 2,
+			"total_tokens": 12
+		}
+	}`, string(body))
+}
+
+func TestBuildReconstructedStreamingResponseSkipsToolCallsOnlyForCache(t *testing.T) {
+	ctx := &RequestContext{
+		StreamingMetadata: map[string]interface{}{
+			"id":      "chatcmpl-123",
+			"model":   "test-model",
+			"created": int64(1234567890),
+		},
+		StreamingToolCalls: map[int]*StreamingToolCallState{
+			0: {
+				ID:        "call_weather",
+				Name:      "get_weather",
+				Arguments: "{\"location\":\"San Francisco\"}",
+			},
+		},
+	}
+
+	_, err := buildReconstructedStreamingResponse(ctx, openai.CompletionUsage{}, false)
+	assert.ErrorIs(t, err, errSkipStreamingCache)
 }

@@ -9,6 +9,7 @@ import (
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/headers"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/memory"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/responseapi"
 )
 
@@ -379,22 +380,14 @@ func TestExtractMemoryInfo_WithConversationHistory(t *testing.T) {
 	assert.Equal(t, "conv_456", sessionID)
 	assert.Equal(t, "user_789", userID)
 	require.Len(t, history, 4, "should convert 2 stored responses to 4 messages (2 user + 2 assistant)")
-
-	// Check first user message
-	assert.Equal(t, "user", history[0].Role)
-	assert.Equal(t, "Hello", history[0].Content)
-
-	// Check first assistant message
-	assert.Equal(t, "assistant", history[1].Role)
-	assert.Equal(t, "Hi there!", history[1].Content)
-
-	// Check second user message
-	assert.Equal(t, "user", history[2].Role)
-	assert.Equal(t, "What's my budget?", history[2].Content)
-
-	// Check second assistant message
-	assert.Equal(t, "assistant", history[3].Role)
-	assert.Equal(t, "Your budget is $10,000", history[3].Content)
+	assert.Equal(t, "user", memory.SDKMessageRole(history[0]))
+	assert.Equal(t, "Hello", memory.SDKMessageContent(history[0]))
+	assert.Equal(t, "assistant", memory.SDKMessageRole(history[1]))
+	assert.Equal(t, "Hi there!", memory.SDKMessageContent(history[1]))
+	assert.Equal(t, "user", memory.SDKMessageRole(history[2]))
+	assert.Equal(t, "What's my budget?", memory.SDKMessageContent(history[2]))
+	assert.Equal(t, "assistant", memory.SDKMessageRole(history[3]))
+	assert.Equal(t, "Your budget is $10,000", memory.SDKMessageContent(history[3]))
 }
 
 func TestExtractMemoryInfo_NoHistoryAvailable(t *testing.T) {
@@ -443,10 +436,10 @@ func TestConvertStoredResponsesToMessages_WithOutputText(t *testing.T) {
 	result := convertStoredResponsesToMessages(stored)
 
 	require.Len(t, result, 2)
-	assert.Equal(t, "user", result[0].Role)
-	assert.Equal(t, "Hello", result[0].Content)
-	assert.Equal(t, "assistant", result[1].Role)
-	assert.Equal(t, "Hi there!", result[1].Content)
+	assert.Equal(t, "user", memory.SDKMessageRole(result[0]))
+	assert.Equal(t, "Hello", memory.SDKMessageContent(result[0]))
+	assert.Equal(t, "assistant", memory.SDKMessageRole(result[1]))
+	assert.Equal(t, "Hi there!", memory.SDKMessageContent(result[1]))
 }
 
 func TestConvertStoredResponsesToMessages_WithoutOutputText_WithOutputItems(t *testing.T) {
@@ -477,10 +470,10 @@ func TestConvertStoredResponsesToMessages_WithoutOutputText_WithOutputItems(t *t
 	result := convertStoredResponsesToMessages(stored)
 
 	require.Len(t, result, 2)
-	assert.Equal(t, "user", result[0].Role)
-	assert.Equal(t, "What's the weather?", result[0].Content)
-	assert.Equal(t, "assistant", result[1].Role)
-	assert.Equal(t, "It's sunny today!", result[1].Content)
+	assert.Equal(t, "user", memory.SDKMessageRole(result[0]))
+	assert.Equal(t, "What's the weather?", memory.SDKMessageContent(result[0]))
+	assert.Equal(t, "assistant", memory.SDKMessageRole(result[1]))
+	assert.Equal(t, "It's sunny today!", memory.SDKMessageContent(result[1]))
 }
 
 func TestConvertStoredResponsesToMessages_MultipleResponses(t *testing.T) {
@@ -510,10 +503,10 @@ func TestConvertStoredResponsesToMessages_MultipleResponses(t *testing.T) {
 	result := convertStoredResponsesToMessages(stored)
 
 	require.Len(t, result, 4)
-	assert.Equal(t, "First message", result[0].Content)
-	assert.Equal(t, "First response", result[1].Content)
-	assert.Equal(t, "Second message", result[2].Content)
-	assert.Equal(t, "Second response", result[3].Content)
+	assert.Equal(t, "First message", memory.SDKMessageContent(result[0]))
+	assert.Equal(t, "First response", memory.SDKMessageContent(result[1]))
+	assert.Equal(t, "Second message", memory.SDKMessageContent(result[2]))
+	assert.Equal(t, "Second response", memory.SDKMessageContent(result[3]))
 }
 
 func TestConvertStoredResponsesToMessages_SkipsNonMessageTypes(t *testing.T) {
@@ -538,8 +531,8 @@ func TestConvertStoredResponsesToMessages_SkipsNonMessageTypes(t *testing.T) {
 	result := convertStoredResponsesToMessages(stored)
 
 	require.Len(t, result, 2, "should skip non-message input items")
-	assert.Equal(t, "Hello", result[0].Content)
-	assert.Equal(t, "Hi!", result[1].Content)
+	assert.Equal(t, "Hello", memory.SDKMessageContent(result[0]))
+	assert.Equal(t, "Hi!", memory.SDKMessageContent(result[1]))
 }
 
 func TestConvertStoredResponsesToMessages_EmptyContent(t *testing.T) {
@@ -559,8 +552,8 @@ func TestConvertStoredResponsesToMessages_EmptyContent(t *testing.T) {
 	result := convertStoredResponsesToMessages(stored)
 
 	require.Len(t, result, 1, "should skip empty content")
-	assert.Equal(t, "assistant", result[0].Role)
-	assert.Equal(t, "Response", result[0].Content)
+	assert.Equal(t, "assistant", memory.SDKMessageRole(result[0]))
+	assert.Equal(t, "Response", memory.SDKMessageContent(result[0]))
 }
 
 func TestConvertStoredResponsesToMessages_DefaultRole(t *testing.T) {
@@ -591,8 +584,8 @@ func TestConvertStoredResponsesToMessages_DefaultRole(t *testing.T) {
 	result := convertStoredResponsesToMessages(stored)
 
 	require.Len(t, result, 2)
-	assert.Equal(t, "user", result[0].Role, "should default to 'user' for input items")
-	assert.Equal(t, "assistant", result[1].Role, "should default to 'assistant' for output items")
+	assert.Equal(t, "user", memory.SDKMessageRole(result[0]), "should default to 'user' for input items")
+	assert.Equal(t, "assistant", memory.SDKMessageRole(result[1]), "should default to 'assistant' for output items")
 }
 
 // =============================================================================
@@ -888,10 +881,10 @@ func TestExtractMemoryInfo_RealisticScenario(t *testing.T) {
 	require.Len(t, history, 6, "should have 6 messages (3 user + 3 assistant)")
 
 	// Verify conversation flow
-	assert.Equal(t, "I want to plan a trip to Hawaii", history[0].Content)
-	assert.Equal(t, "Great choice! Hawaii is beautiful. What's your budget?", history[1].Content)
-	assert.Equal(t, "My budget is $10,000", history[2].Content)
-	assert.Equal(t, "Perfect! With $10,000 you can have an amazing trip to Hawaii.", history[3].Content)
-	assert.Equal(t, "What did I say my budget was?", history[4].Content)
-	assert.Equal(t, "You said your budget is $10,000 for the Hawaii trip.", history[5].Content)
+	assert.Equal(t, "I want to plan a trip to Hawaii", memory.SDKMessageContent(history[0]))
+	assert.Equal(t, "Great choice! Hawaii is beautiful. What's your budget?", memory.SDKMessageContent(history[1]))
+	assert.Equal(t, "My budget is $10,000", memory.SDKMessageContent(history[2]))
+	assert.Equal(t, "Perfect! With $10,000 you can have an amazing trip to Hawaii.", memory.SDKMessageContent(history[3]))
+	assert.Equal(t, "What did I say my budget was?", memory.SDKMessageContent(history[4]))
+	assert.Equal(t, "You said your budget is $10,000 for the Hawaii trip.", memory.SDKMessageContent(history[5]))
 }

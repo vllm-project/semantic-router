@@ -259,8 +259,10 @@ def test_configure_runtime_override_env_vars_sets_internal_runtime_path(tmp_path
     )
 
 
-def test_resolve_effective_config_path_stages_relative_kb_assets(tmp_path: Path):
-    kb_root = tmp_path / "knowledge_bases"
+def test_resolve_effective_config_path_seeds_relative_kb_assets_into_runtime_store(
+    tmp_path: Path,
+):
+    kb_root = tmp_path / "knowledge_bases" / "privacy"
     kb_root.mkdir(parents=True)
     (kb_root / "labels.json").write_text(
         '{"labels":{"safe":{"exemplars":["hello"]}}}', encoding="utf-8"
@@ -277,7 +279,7 @@ def test_resolve_effective_config_path_stages_relative_kb_assets(tmp_path: Path)
                             {
                                 "name": "privacy_kb",
                                 "source": {
-                                    "path": "knowledge_bases/",
+                                    "path": "knowledge_bases/privacy/",
                                     "manifest": "labels.json",
                                 },
                             }
@@ -300,57 +302,78 @@ def test_resolve_effective_config_path_stages_relative_kb_assets(tmp_path: Path)
     effective = yaml.safe_load(effective_path.read_text())
     assert (
         effective["global"]["model_catalog"]["kbs"][0]["source"]["path"]
-        == "knowledge_bases/privacy_kb"
+        == "knowledge_bases/privacy/"
     )
     assert (
-        effective_path.parent / "knowledge_bases" / "privacy_kb" / "labels.json"
+        effective_path.parent / "knowledge_bases" / "privacy" / "labels.json"
     ).exists()
 
 
-def test_resolve_effective_config_path_stages_builtin_kb_assets(tmp_path: Path):
-    builtin_manifest = REPO_ROOT / "config" / "kb" / "privacy" / "labels.json"
-    assert builtin_manifest.exists()
+def test_resolve_effective_config_path_seeds_builtin_kb_assets_once(tmp_path: Path):
+    test_cases = [
+        ("privacy_kb", "knowledge_bases/privacy/", "privacy"),
+        ("mmlu_kb", "knowledge_bases/mmlu/", "mmlu"),
+    ]
 
-    config_path = tmp_path / "config.yaml"
-    config_path.write_text(
-        yaml.safe_dump(
-            {
-                "version": "v0.3",
-                "global": {
-                    "model_catalog": {
-                        "kbs": [
-                            {
-                                "name": "privacy_kb",
-                                "source": {
-                                    "path": "kb/privacy/",
-                                    "manifest": "labels.json",
-                                },
-                            }
-                        ]
-                    }
-                },
-            },
-            sort_keys=False,
+    for kb_name, source_path, bundled_dir in test_cases:
+        case_dir = tmp_path / kb_name
+        case_dir.mkdir(parents=True, exist_ok=True)
+        builtin_manifest = (
+            REPO_ROOT / "config" / "knowledge_bases" / bundled_dir / "labels.json"
         )
-    )
+        assert builtin_manifest.exists()
 
-    effective_path = resolve_effective_config_path(
-        config_path=config_path,
-        algorithm=None,
-        setup_mode=False,
-        platform=None,
-    )
+        config_path = case_dir / "config.yaml"
+        config_path.write_text(
+            yaml.safe_dump(
+                {
+                    "version": "v0.3",
+                    "global": {
+                        "model_catalog": {
+                            "kbs": [
+                                {
+                                    "name": kb_name,
+                                    "source": {
+                                        "path": source_path,
+                                        "manifest": "labels.json",
+                                    },
+                                }
+                            ]
+                        }
+                    },
+                },
+                sort_keys=False,
+            )
+        )
 
-    assert effective_path == tmp_path / ".vllm-sr" / "runtime-config.yaml"
-    staged_manifest = (
-        effective_path.parent / "knowledge_bases" / "privacy_kb" / "labels.json"
-    )
-    assert staged_manifest.exists()
-    effective = yaml.safe_load(effective_path.read_text())
-    assert (
-        effective["global"]["model_catalog"]["kbs"][0]["source"]["path"]
-        == "knowledge_bases/privacy_kb"
-    )
+        effective_path = resolve_effective_config_path(
+            config_path=config_path,
+            algorithm=None,
+            setup_mode=False,
+            platform=None,
+        )
+
+        assert effective_path == case_dir / ".vllm-sr" / "runtime-config.yaml"
+        staged_manifest = (
+            effective_path.parent / "knowledge_bases" / bundled_dir / "labels.json"
+        )
+        assert staged_manifest.exists()
+        effective = yaml.safe_load(effective_path.read_text())
+        assert (
+            effective["global"]["model_catalog"]["kbs"][0]["source"]["path"]
+            == source_path
+        )
+
+        staged_manifest.unlink()
+        staged_manifest.parent.rmdir()
+        effective_path = resolve_effective_config_path(
+            config_path=config_path,
+            algorithm=None,
+            setup_mode=False,
+            platform=None,
+        )
+        assert effective_path == case_dir / ".vllm-sr" / "runtime-config.yaml"
+        assert not staged_manifest.exists()
 
 
 def test_resolve_effective_config_path_injects_local_service_runtime_defaults(

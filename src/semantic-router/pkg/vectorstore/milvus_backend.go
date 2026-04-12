@@ -24,6 +24,8 @@ import (
 
 	"github.com/milvus-io/milvus-sdk-go/v2/client"
 	"github.com/milvus-io/milvus-sdk-go/v2/entity"
+
+	milvuslifecycle "github.com/vllm-project/semantic-router/src/semantic-router/pkg/milvus"
 )
 
 // safeIdentifierPattern matches UUIDs, prefixed IDs (file_xxx, vs_xxx), and simple alphanumeric strings.
@@ -77,12 +79,13 @@ func NewMilvusBackend(cfg MilvusBackendConfig) (*MilvusBackend, error) {
 		timeout = 10
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), time.Duration(timeout)*time.Second)
-	defer cancel()
-
-	milvusClient, err := client.NewGrpcClient(ctx, cfg.Address)
+	milvusClient, err := milvuslifecycle.ConnectGRPC(
+		context.Background(),
+		cfg.Address,
+		time.Duration(timeout)*time.Second,
+	)
 	if err != nil {
-		return nil, fmt.Errorf("failed to connect to Milvus at %s: %w", cfg.Address, err)
+		return nil, err
 	}
 
 	return &MilvusBackend{
@@ -102,68 +105,73 @@ func (m *MilvusBackend) collectionName(vectorStoreID string) string {
 func (m *MilvusBackend) CreateCollection(ctx context.Context, vectorStoreID string, dimension int) error {
 	colName := m.collectionName(vectorStoreID)
 
-	schema := &entity.Schema{
-		CollectionName: colName,
-		Description:    fmt.Sprintf("Vector store: %s", vectorStoreID),
-		Fields: []*entity.Field{
-			{
-				Name:       "id",
-				DataType:   entity.FieldTypeVarChar,
-				PrimaryKey: true,
-				TypeParams: map[string]string{"max_length": "128"},
-			},
-			{
-				Name:       "file_id",
-				DataType:   entity.FieldTypeVarChar,
-				TypeParams: map[string]string{"max_length": "128"},
-			},
-			{
-				Name:       "filename",
-				DataType:   entity.FieldTypeVarChar,
-				TypeParams: map[string]string{"max_length": "512"},
-			},
-			{
-				Name:       "content",
-				DataType:   entity.FieldTypeVarChar,
-				TypeParams: map[string]string{"max_length": "65535"},
-			},
-			{
-				Name:     "embedding",
-				DataType: entity.FieldTypeFloatVector,
-				TypeParams: map[string]string{
-					"dim": fmt.Sprintf("%d", dimension),
+	// Keep CreateCollection semantics strict across backends.
+	exists, err := m.client.HasCollection(ctx, colName)
+	if err != nil {
+		return fmt.Errorf("failed to check existence of collection %q: %w", colName, err)
+	}
+	if exists {
+		return fmt.Errorf("collection %q already exists", colName)
+	}
+
+	return milvuslifecycle.EnsureCollectionLoaded(ctx, m.client, colName, func(innerCtx context.Context) error {
+		schema := &entity.Schema{
+			CollectionName: colName,
+			Description:    fmt.Sprintf("Vector store: %s", vectorStoreID),
+			Fields: []*entity.Field{
+				{
+					Name:       "id",
+					DataType:   entity.FieldTypeVarChar,
+					PrimaryKey: true,
+					TypeParams: map[string]string{"max_length": "128"},
+				},
+				{
+					Name:       "file_id",
+					DataType:   entity.FieldTypeVarChar,
+					TypeParams: map[string]string{"max_length": "128"},
+				},
+				{
+					Name:       "filename",
+					DataType:   entity.FieldTypeVarChar,
+					TypeParams: map[string]string{"max_length": "512"},
+				},
+				{
+					Name:       "content",
+					DataType:   entity.FieldTypeVarChar,
+					TypeParams: map[string]string{"max_length": "65535"},
+				},
+				{
+					Name:     "embedding",
+					DataType: entity.FieldTypeFloatVector,
+					TypeParams: map[string]string{
+						"dim": fmt.Sprintf("%d", dimension),
+					},
+				},
+				{
+					Name:     "chunk_index",
+					DataType: entity.FieldTypeInt64,
+				},
+				{
+					Name:     "created_at",
+					DataType: entity.FieldTypeInt64,
 				},
 			},
-			{
-				Name:     "chunk_index",
-				DataType: entity.FieldTypeInt64,
-			},
-			{
-				Name:     "created_at",
-				DataType: entity.FieldTypeInt64,
-			},
-		},
-	}
+		}
 
-	if err := m.client.CreateCollection(ctx, schema, 1); err != nil {
-		return fmt.Errorf("failed to create collection %s: %w", colName, err)
-	}
+		if err := m.client.CreateCollection(innerCtx, schema, 1); err != nil {
+			return err
+		}
 
-	// Create HNSW index on the embedding field.
-	index, err := entity.NewIndexHNSW(entity.IP, m.indexM, m.indexEf)
-	if err != nil {
-		return fmt.Errorf("failed to create HNSW index: %w", err)
-	}
-	if err := m.client.CreateIndex(ctx, colName, "embedding", index, false); err != nil {
-		return fmt.Errorf("failed to create index on %s: %w", colName, err)
-	}
-
-	// Load collection into memory.
-	if err := m.client.LoadCollection(ctx, colName, false); err != nil {
-		return fmt.Errorf("failed to load collection %s: %w", colName, err)
-	}
-
-	return nil
+		// Create HNSW index on the embedding field.
+		index, err := entity.NewIndexHNSW(entity.IP, m.indexM, m.indexEf)
+		if err != nil {
+			return fmt.Errorf("failed to create HNSW index: %w", err)
+		}
+		if err := m.client.CreateIndex(innerCtx, colName, "embedding", index, false); err != nil {
+			return fmt.Errorf("failed to create index on %s: %w", colName, err)
+		}
+		return nil
+	})
 }
 
 // DeleteCollection drops a Milvus collection.
@@ -249,6 +257,8 @@ func (m *MilvusBackend) DeleteByFileID(ctx context.Context, vectorStoreID string
 }
 
 // Search performs vector similarity search in a Milvus collection.
+//
+//nolint:gocognit,cyclop,funlen
 func (m *MilvusBackend) Search(
 	ctx context.Context, vectorStoreID string, queryEmbedding []float32,
 	topK int, threshold float32, filter map[string]interface{},

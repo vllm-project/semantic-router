@@ -28,6 +28,8 @@ import (
 	"sync"
 	"time"
 
+	"github.com/openai/openai-go"
+
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 )
@@ -295,26 +297,19 @@ func (r *BenchmarkRunner) LoadQueriesFromTrainingData(trainingDataPath string) e
 	return nil
 }
 
-// ChatCompletionRequest represents an OpenAI-compatible chat request
-type ChatCompletionRequest struct {
-	Model     string        `json:"model"`
-	Messages  []ChatMessage `json:"messages"`
-	MaxTokens int           `json:"max_tokens,omitempty"`
+// benchmarkRequest is a minimal OpenAI-compatible request body for benchmarking.
+// Uses SDK message types for wire-format compatibility.
+type benchmarkRequest struct {
+	Model     string                                   `json:"model"`
+	Messages  []openai.ChatCompletionMessageParamUnion `json:"messages"`
+	MaxTokens int                                      `json:"max_tokens,omitempty"`
 }
 
-// ChatMessage represents a chat message
-type ChatMessage struct {
-	Role    string `json:"role"`
-	Content string `json:"content"`
-}
-
-// ChatCompletionResponse represents an OpenAI-compatible response
-type ChatCompletionResponse struct {
-	Choices []struct {
-		Message struct {
-			Content string `json:"content"`
-		} `json:"message"`
-	} `json:"choices"`
+// apiErrorEnvelope checks for provider errors returned in the JSON body
+// (e.g., rate-limit or auth failures) instead of HTTP status codes.
+// Checked before SDK deserialization because openai.ChatCompletion has a
+// custom UnmarshalJSON that would silently ignore this field.
+type apiErrorEnvelope struct {
 	Error *struct {
 		Message string `json:"message"`
 	} `json:"error,omitempty"`
@@ -435,23 +430,31 @@ func (r *BenchmarkRunner) callOllamaModel(ctx context.Context, modelName, endpoi
 	return ollamaResp.Message.Content, latencyMs, nil
 }
 
+// resolveRequestModel maps a model name to the provider-specific identifier
+// based on the endpoint URL.
+func (r *BenchmarkRunner) resolveRequestModel(modelName, endpoint string) string {
+	if strings.Contains(endpoint, "huggingface.co") {
+		return r.getHuggingFaceModel(modelName)
+	}
+	if strings.Contains(endpoint, "openrouter.ai") {
+		return r.getOpenRouterModel(modelName)
+	}
+	if strings.Contains(endpoint, "nvidia.com") {
+		return r.getExternalModelID(modelName, "nvidia")
+	}
+	return modelName
+}
+
 // callOpenAICompatibleModel handles OpenAI-compatible API calls (vLLM, HuggingFace, NVIDIA NIM, etc.)
 func (r *BenchmarkRunner) callOpenAICompatibleModel(ctx context.Context, modelName, endpoint, query string, startTime time.Time) (string, float64, error) {
-	// Determine which model name to use in the request based on endpoint type
-	requestModel := modelName
-	if strings.Contains(endpoint, "huggingface.co") {
-		requestModel = r.getHuggingFaceModel(modelName)
-	} else if strings.Contains(endpoint, "openrouter.ai") {
-		requestModel = r.getOpenRouterModel(modelName)
-	} else if strings.Contains(endpoint, "nvidia.com") {
-		// NVIDIA NIM uses model IDs like "meta/llama-3.1-8b-instruct"
-		requestModel = r.getExternalModelID(modelName, "nvidia")
-	}
-
-	reqBody := ChatCompletionRequest{
-		Model: requestModel,
-		Messages: []ChatMessage{
-			{Role: "user", Content: query},
+	reqBody := benchmarkRequest{
+		Model: r.resolveRequestModel(modelName, endpoint),
+		Messages: []openai.ChatCompletionMessageParamUnion{
+			{OfUser: &openai.ChatCompletionUserMessageParam{
+				Content: openai.ChatCompletionUserMessageParamContentUnion{
+					OfString: openai.String(query),
+				},
+			}},
 		},
 		MaxTokens: 512,
 	}
@@ -488,13 +491,14 @@ func (r *BenchmarkRunner) callOpenAICompatibleModel(ctx context.Context, modelNa
 		return "", latencyMs, fmt.Errorf("non-200 status: %d - %s", resp.StatusCode, string(body))
 	}
 
-	var chatResp ChatCompletionResponse
-	if err := json.Unmarshal(body, &chatResp); err != nil {
-		return "", latencyMs, fmt.Errorf("failed to parse response: %w", err)
+	var envelope apiErrorEnvelope
+	if json.Unmarshal(body, &envelope) == nil && envelope.Error != nil {
+		return "", latencyMs, fmt.Errorf("API error: %s", envelope.Error.Message)
 	}
 
-	if chatResp.Error != nil {
-		return "", latencyMs, fmt.Errorf("API error: %s", chatResp.Error.Message)
+	var chatResp openai.ChatCompletion
+	if err := json.Unmarshal(body, &chatResp); err != nil {
+		return "", latencyMs, fmt.Errorf("failed to parse response: %w", err)
 	}
 
 	if len(chatResp.Choices) == 0 {

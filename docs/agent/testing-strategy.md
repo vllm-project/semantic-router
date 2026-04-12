@@ -15,6 +15,9 @@ This document defines the harness-side validation ladder for repository changes.
 - `make agent-ci-lint CHANGED_FILES="..."`
   - reproduces the CI changed-file lint path locally
   - runs `make codespell-tracked` and `make agent-fast-gate` with the same agent bootstrap toolchain used by CI
+- `make precommit-branch-gate`
+  - reproduces the local prelint gate that the repo installs as a `pre-push` hook
+  - runs `make agent-ci-lint` followed by `make precommit-check`
 - `make agent-ci-gate CHANGED_FILES="..."`
   - runs `agent-report`, `agent-fast-gate`, and rule-driven fast tests
 - `make agent-pr-gate`
@@ -33,6 +36,7 @@ This document defines the harness-side validation ladder for repository changes.
 - Code changes start with `make agent-report` to resolve primary skill, impacted surfaces, and validation commands.
 - Use the smallest gate that matches the change.
 - Use `make agent-ci-lint CHANGED_FILES="..."` when you want the same changed-file lint path that the pre-commit workflow runs in CI.
+- Use `make precommit-branch-gate` when you want the same local prelint gate the installed `pre-push` hook runs before a push or PR update.
 - Use `make agent-pr-gate` before opening or updating a PR when you want the repo-native local baseline for the same CI jobs contributors most often miss.
 - Use `ENV=amd` when platform behavior, AMD defaults, or ROCm image selection are affected.
 

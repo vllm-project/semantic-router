@@ -11,9 +11,9 @@ from cli.consts import (
     DEFAULT_DASHBOARD_PORT,
     DEFAULT_FLEET_SIM_PORT,
     DEFAULT_METRICS_PORT,
+    DEFAULT_MILVUS_PORT,
     DEFAULT_ROUTER_PORT,
     DEFAULT_STACK_NAME,
-    VLLM_SR_DOCKER_NAME,
     VLLM_SR_SIM_DOCKER_NAME,
 )
 
@@ -34,7 +34,6 @@ STACK_NAME_PATTERN = re.compile(r"[^A-Za-z0-9_.-]+")
 class RuntimeStackLayout:
     stack_name: str
     port_offset: int
-    container_name: str
     router_container_name: str
     envoy_container_name: str
     dashboard_container_name: str
@@ -45,6 +44,7 @@ class RuntimeStackLayout:
     grafana_container_name: str
     redis_container_name: str
     postgres_container_name: str
+    milvus_container_name: str
     router_port: int
     metrics_port: int
     dashboard_port: int
@@ -56,6 +56,7 @@ class RuntimeStackLayout:
     grafana_port: int
     redis_port: int
     postgres_port: int
+    milvus_port: int
 
     @property
     def dashboard_url(self) -> str:
@@ -129,15 +130,26 @@ class RuntimeStackLayout:
         return f"localhost:{self.postgres_port}"
 
     @property
+    def milvus_url(self) -> str:
+        return f"localhost:{self.milvus_port}"
+
+    @property
+    def milvus_service_url(self) -> str:
+        return f"{self.milvus_container_name}:19530"
+
+    @property
     def storage_container_names(self) -> tuple[str, ...]:
-        return (self.redis_container_name, self.postgres_container_name)
+        return (
+            self.redis_container_name,
+            self.postgres_container_name,
+            self.milvus_container_name,
+        )
 
     @property
     def runtime_container_names(self) -> tuple[str, ...]:
         return tuple(
             dict.fromkeys(
                 (
-                    self.container_name,
                     self.router_container_name,
                     self.envoy_container_name,
                     self.dashboard_container_name,
@@ -168,7 +180,6 @@ def resolve_runtime_stack(
     )
 
     if resolved_stack_name == DEFAULT_STACK_NAME:
-        container_name = VLLM_SR_DOCKER_NAME
         router_container_name = "vllm-sr-router-container"
         envoy_container_name = "vllm-sr-envoy-container"
         dashboard_container_name = "vllm-sr-dashboard-container"
@@ -179,8 +190,8 @@ def resolve_runtime_stack(
         grafana_container_name = f"{DEFAULT_STACK_NAME}-grafana"
         redis_container_name = f"{DEFAULT_STACK_NAME}-redis"
         postgres_container_name = f"{DEFAULT_STACK_NAME}-postgres"
+        milvus_container_name = f"{DEFAULT_STACK_NAME}-milvus"
     else:
-        container_name = f"{resolved_stack_name}-vllm-sr-container"
         router_container_name = f"{resolved_stack_name}-vllm-sr-router-container"
         envoy_container_name = f"{resolved_stack_name}-vllm-sr-envoy-container"
         dashboard_container_name = f"{resolved_stack_name}-vllm-sr-dashboard-container"
@@ -191,11 +202,11 @@ def resolve_runtime_stack(
         grafana_container_name = f"{resolved_stack_name}-vllm-sr-grafana"
         redis_container_name = f"{resolved_stack_name}-vllm-sr-redis"
         postgres_container_name = f"{resolved_stack_name}-vllm-sr-postgres"
+        milvus_container_name = f"{resolved_stack_name}-vllm-sr-milvus"
 
     return RuntimeStackLayout(
         stack_name=resolved_stack_name,
         port_offset=resolved_port_offset,
-        container_name=container_name,
         router_container_name=router_container_name,
         envoy_container_name=envoy_container_name,
         dashboard_container_name=dashboard_container_name,
@@ -206,6 +217,7 @@ def resolve_runtime_stack(
         grafana_container_name=grafana_container_name,
         redis_container_name=redis_container_name,
         postgres_container_name=postgres_container_name,
+        milvus_container_name=milvus_container_name,
         router_port=DEFAULT_ROUTER_PORT + resolved_port_offset,
         metrics_port=DEFAULT_METRICS_PORT + resolved_port_offset,
         dashboard_port=DEFAULT_DASHBOARD_PORT + resolved_port_offset,
@@ -217,6 +229,7 @@ def resolve_runtime_stack(
         grafana_port=DEFAULT_GRAFANA_PORT + resolved_port_offset,
         redis_port=DEFAULT_REDIS_PORT + resolved_port_offset,
         postgres_port=DEFAULT_POSTGRES_PORT + resolved_port_offset,
+        milvus_port=DEFAULT_MILVUS_PORT + resolved_port_offset,
     )
 
 

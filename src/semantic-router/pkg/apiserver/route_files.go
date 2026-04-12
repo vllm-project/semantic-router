@@ -25,6 +25,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/vectorstore"
 )
 
@@ -59,7 +60,8 @@ func registerFileRoutes(mux *http.ServeMux, s *ClassificationAPIServer) {
 }
 
 func (s *ClassificationAPIServer) handleUploadFile(w http.ResponseWriter, r *http.Request) {
-	if globalFileStore == nil {
+	fileStore := s.currentFileStore()
+	if fileStore == nil {
 		s.writeErrorResponse(w, http.StatusServiceUnavailable, "FILE_STORE_DISABLED", "file storage is not enabled")
 		return
 	}
@@ -78,7 +80,14 @@ func (s *ClassificationAPIServer) handleUploadFile(w http.ResponseWriter, r *htt
 		s.writeErrorResponse(w, http.StatusBadRequest, "INVALID_INPUT", "file field is required")
 		return
 	}
-	defer file.Close()
+	defer func() {
+		if closeErr := file.Close(); closeErr != nil {
+			logging.ComponentWarnEvent("apiserver", "file_upload_close_failed", map[string]interface{}{
+				"filename": header.Filename,
+				"error":    closeErr.Error(),
+			})
+		}
+	}()
 
 	purpose := r.FormValue("purpose")
 	if purpose == "" {
@@ -99,7 +108,7 @@ func (s *ClassificationAPIServer) handleUploadFile(w http.ResponseWriter, r *htt
 		return
 	}
 
-	record, err := globalFileStore.Save(header.Filename, content, purpose)
+	record, err := fileStore.Save(header.Filename, content, purpose)
 	if err != nil {
 		s.writeErrorResponse(w, http.StatusInternalServerError, "SAVE_ERROR", "failed to save file")
 		return
@@ -109,13 +118,14 @@ func (s *ClassificationAPIServer) handleUploadFile(w http.ResponseWriter, r *htt
 }
 
 func (s *ClassificationAPIServer) handleListFiles(w http.ResponseWriter, r *http.Request) {
-	if globalFileStore == nil {
+	fileStore := s.currentFileStore()
+	if fileStore == nil {
 		s.writeErrorResponse(w, http.StatusServiceUnavailable, "FILE_STORE_DISABLED", "file storage is not enabled")
 		return
 	}
 
 	purposeFilter := r.URL.Query().Get("purpose")
-	records := globalFileStore.List()
+	records := fileStore.List()
 
 	// Filter by purpose if specified.
 	if purposeFilter != "" {
@@ -136,7 +146,8 @@ func (s *ClassificationAPIServer) handleListFiles(w http.ResponseWriter, r *http
 }
 
 func (s *ClassificationAPIServer) handleGetFile(w http.ResponseWriter, r *http.Request) {
-	if globalFileStore == nil {
+	fileStore := s.currentFileStore()
+	if fileStore == nil {
 		s.writeErrorResponse(w, http.StatusServiceUnavailable, "FILE_STORE_DISABLED", "file storage is not enabled")
 		return
 	}
@@ -147,7 +158,7 @@ func (s *ClassificationAPIServer) handleGetFile(w http.ResponseWriter, r *http.R
 		return
 	}
 
-	record, err := globalFileStore.Get(id)
+	record, err := fileStore.Get(id)
 	if err != nil {
 		s.writeErrorResponse(w, http.StatusNotFound, "NOT_FOUND", err.Error())
 		return
@@ -157,7 +168,8 @@ func (s *ClassificationAPIServer) handleGetFile(w http.ResponseWriter, r *http.R
 }
 
 func (s *ClassificationAPIServer) handleDeleteFile(w http.ResponseWriter, r *http.Request) {
-	if globalFileStore == nil {
+	fileStore := s.currentFileStore()
+	if fileStore == nil {
 		s.writeErrorResponse(w, http.StatusServiceUnavailable, "FILE_STORE_DISABLED", "file storage is not enabled")
 		return
 	}
@@ -168,7 +180,7 @@ func (s *ClassificationAPIServer) handleDeleteFile(w http.ResponseWriter, r *htt
 		return
 	}
 
-	if err := globalFileStore.Delete(id); err != nil {
+	if err := fileStore.Delete(id); err != nil {
 		s.writeErrorResponse(w, http.StatusNotFound, "NOT_FOUND", err.Error())
 		return
 	}
@@ -181,7 +193,8 @@ func (s *ClassificationAPIServer) handleDeleteFile(w http.ResponseWriter, r *htt
 }
 
 func (s *ClassificationAPIServer) handleGetFileContent(w http.ResponseWriter, r *http.Request) {
-	if globalFileStore == nil {
+	fileStore := s.currentFileStore()
+	if fileStore == nil {
 		s.writeErrorResponse(w, http.StatusServiceUnavailable, "FILE_STORE_DISABLED", "file storage is not enabled")
 		return
 	}
@@ -194,13 +207,13 @@ func (s *ClassificationAPIServer) handleGetFileContent(w http.ResponseWriter, r 
 		return
 	}
 
-	record, err := globalFileStore.Get(id)
+	record, err := fileStore.Get(id)
 	if err != nil {
 		s.writeErrorResponse(w, http.StatusNotFound, "NOT_FOUND", "file not found")
 		return
 	}
 
-	content, err := globalFileStore.Read(id)
+	content, err := fileStore.Read(id)
 	if err != nil {
 		s.writeErrorResponse(w, http.StatusInternalServerError, "READ_ERROR", "failed to read file content")
 		return

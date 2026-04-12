@@ -1,8 +1,10 @@
 ---
 slug: modular-lora
 title: "From Monolithic to Modular: Scaling Semantic Routing with Extensible LoRA"
+description: How vLLM Semantic Router refactored its Rust classification stack with modular architecture, extensible LoRA, and concurrency to scale semantic routing.
 authors: [ivar, onezero, rootfs, Xunzhuo]
 tags: [LoRA, Candle, vllm, semantic-router]
+image: /img/vllm-sr-logo.social.png
 ---
 
 

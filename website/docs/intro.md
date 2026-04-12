@@ -1,5 +1,6 @@
 ---
 sidebar_position: 1
+description: Research-driven introduction to vLLM Semantic Router, an Envoy-based control plane for signal-aware LLM routing, policy enforcement, and token efficiency.
 ---
 
 # vLLM Semantic Router

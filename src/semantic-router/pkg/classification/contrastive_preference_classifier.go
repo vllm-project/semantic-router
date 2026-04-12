@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"runtime"
+	"sort"
 	"strings"
 	"sync"
 	"time"
@@ -35,10 +36,30 @@ type ContrastivePreferenceClassifier struct {
 
 	// ruleEmbeddings maps rule name to its support embeddings
 	ruleEmbeddings map[string][][]float32
+	ruleBanks      map[string]*prototypeBank
 	// ruleThresholds stores per-preference similarity thresholds
 	ruleThresholds map[string]float32
+	prototypeCfg   config.PrototypeScoringConfig
 
 	mu sync.RWMutex
+}
+
+type PreferenceRuleScore struct {
+	Name           string
+	Score          float32
+	Best           float32
+	Support        float32
+	Threshold      float32
+	PrototypeCount int
+}
+
+type PreferenceClassificationDetails struct {
+	Scores       []PreferenceRuleScore
+	BestRule     string
+	BestScore    float32
+	RunnerUpRule string
+	RunnerUp     float32
+	Margin       float32
 }
 
 // NewContrastivePreferenceClassifier builds a contrastive preference classifier.
@@ -61,7 +82,9 @@ func NewContrastivePreferenceClassifier(rules []config.PreferenceRule, modelType
 		modelType:      modelType,
 		rules:          rules,
 		ruleEmbeddings: make(map[string][][]float32),
+		ruleBanks:      make(map[string]*prototypeBank),
 		ruleThresholds: ruleThresholds,
+		prototypeCfg:   config.PrototypeScoringConfig{}.WithDefaults(),
 	}
 
 	if err := c.preloadRuleEmbeddings(); err != nil {
@@ -69,6 +92,20 @@ func NewContrastivePreferenceClassifier(rules []config.PreferenceRule, modelType
 	}
 
 	return c, nil
+}
+
+func NewContrastivePreferenceClassifierWithConfig(
+	rules []config.PreferenceRule,
+	modelType string,
+	prototypeCfg config.PrototypeScoringConfig,
+) (*ContrastivePreferenceClassifier, error) {
+	classifier, err := NewContrastivePreferenceClassifier(rules, modelType)
+	if err != nil {
+		return nil, err
+	}
+	classifier.prototypeCfg = prototypeCfg.WithDefaults()
+	classifier.rebuildRuleBanks()
+	return classifier, nil
 }
 
 // preloadRuleEmbeddings computes embeddings for all rule examples concurrently.
@@ -87,6 +124,8 @@ func (c *ContrastivePreferenceClassifier) preloadRuleEmbeddings() error {
 	if firstErr != nil {
 		return firstErr
 	}
+
+	c.rebuildRuleBanks()
 
 	return nil
 }
@@ -179,12 +218,44 @@ func (c *ContrastivePreferenceClassifier) embeddingWorkerCount(taskCount int) in
 
 // Classify picks the preference with the highest similarity to the query.
 func (c *ContrastivePreferenceClassifier) Classify(text string) (*PreferenceResult, error) {
+	details, err := c.ClassifyDetailed(text)
+	if err != nil {
+		return nil, err
+	}
+	if details.BestRule == "" {
+		return nil, fmt.Errorf("no preference matched by contrastive classifier")
+	}
+	threshold := c.ruleThresholds[details.BestRule]
+	if threshold > 0 && details.BestScore < threshold {
+		return nil, fmt.Errorf(
+			"%w: preference similarity %.3f below threshold %.3f",
+			ErrPreferenceBelowThreshold,
+			details.BestScore,
+			threshold,
+		)
+	}
+	if c.prototypeCfg.WithDefaults().MarginThreshold > 0 && details.Margin < c.prototypeCfg.WithDefaults().MarginThreshold {
+		return nil, fmt.Errorf(
+			"%w: preference margin %.3f below threshold %.3f",
+			ErrPreferenceBelowThreshold,
+			details.Margin,
+			c.prototypeCfg.WithDefaults().MarginThreshold,
+		)
+	}
+	return &PreferenceResult{
+		Preference: details.BestRule,
+		Confidence: details.BestScore,
+		Margin:     details.Margin,
+	}, nil
+}
+
+func (c *ContrastivePreferenceClassifier) ClassifyDetailed(text string) (*PreferenceClassificationDetails, error) {
 	if strings.TrimSpace(text) == "" {
 		return nil, fmt.Errorf("text is empty")
 	}
 
 	c.mu.RLock()
-	if len(c.ruleEmbeddings) == 0 {
+	if len(c.ruleBanks) == 0 {
 		c.mu.RUnlock()
 		return nil, fmt.Errorf("no embeddings loaded for contrastive preference classifier")
 	}
@@ -196,48 +267,52 @@ func (c *ContrastivePreferenceClassifier) Classify(text string) (*PreferenceResu
 	}
 	queryEmbedding := out.Embedding
 
-	var (
-		bestRule  string
-		bestScore float32 = -1
-	)
-
 	c.mu.RLock()
 	defer c.mu.RUnlock()
 
-	for ruleName, embeddings := range c.ruleEmbeddings {
-		if len(embeddings) == 0 {
+	scores := make([]PreferenceRuleScore, 0, len(c.ruleBanks))
+	for _, rule := range c.rules {
+		bank, ok := c.ruleBanks[rule.Name]
+		if !ok || bank == nil || len(bank.prototypes) == 0 {
 			continue
 		}
-		var maxSim float32
-		for _, emb := range embeddings {
-			sim := cosineSimilarity(queryEmbedding, emb)
-			if sim > maxSim {
-				maxSim = sim
-			}
+		bankScore := bank.score(queryEmbedding, defaultPrototypeScoreOptions(c.prototypeCfg))
+		score := PreferenceRuleScore{
+			Name:           rule.Name,
+			Score:          float32(bankScore.Score),
+			Best:           float32(bankScore.Best),
+			Support:        float32(bankScore.Support),
+			Threshold:      c.ruleThresholds[rule.Name],
+			PrototypeCount: bankScore.PrototypeCount,
 		}
-		logging.Debugf("[Preference Contrastive] rule=%s similarity=%.4f", ruleName, maxSim)
-		if maxSim > bestScore {
-			bestScore = maxSim
-			bestRule = ruleName
-		}
+		logging.Debugf("[Preference Contrastive] rule=%s score=%.4f best=%.4f support=%.4f prototypes=%d",
+			rule.Name, score.Score, score.Best, score.Support, score.PrototypeCount)
+		scores = append(scores, score)
 	}
 
-	if bestRule == "" {
+	if len(scores) == 0 {
 		return nil, fmt.Errorf("no preference matched by contrastive classifier")
 	}
-	threshold := c.ruleThresholds[bestRule]
-	if threshold > 0 && bestScore < threshold {
-		return nil, fmt.Errorf(
-			"%w: preference similarity %.3f below threshold %.3f",
-			ErrPreferenceBelowThreshold,
-			bestScore,
-			threshold,
-		)
+
+	sort.Slice(scores, func(i, j int) bool {
+		if scores[i].Score == scores[j].Score {
+			return scores[i].Name < scores[j].Name
+		}
+		return scores[i].Score > scores[j].Score
+	})
+
+	details := &PreferenceClassificationDetails{
+		Scores:    scores,
+		BestRule:  scores[0].Name,
+		BestScore: scores[0].Score,
 	}
-	return &PreferenceResult{
-		Preference: bestRule,
-		Confidence: bestScore,
-	}, nil
+	if len(scores) > 1 {
+		details.RunnerUpRule = scores[1].Name
+		details.RunnerUp = scores[1].Score
+		details.Margin = scores[0].Score - scores[1].Score
+	}
+
+	return details, nil
 }
 
 func (c *ContrastivePreferenceClassifier) collectExamples(rule config.PreferenceRule) []string {
@@ -252,4 +327,30 @@ func (c *ContrastivePreferenceClassifier) collectExamples(rule config.Preference
 	}
 
 	return examples
+}
+
+func (c *ContrastivePreferenceClassifier) rebuildRuleBanks() {
+	c.ruleBanks = make(map[string]*prototypeBank, len(c.rules))
+	for _, rule := range c.rules {
+		embeddings := c.ruleEmbeddings[rule.Name]
+		examples := c.collectExamples(rule)
+		prototypeExamples := make([]prototypeExample, 0, len(embeddings))
+		for i, embedding := range embeddings {
+			if len(embedding) == 0 {
+				continue
+			}
+			text := rule.Name
+			if i < len(examples) {
+				text = examples[i]
+			}
+			prototypeExamples = append(prototypeExamples, prototypeExample{
+				Key:       fmt.Sprintf("%s:%d", rule.Name, i),
+				Text:      text,
+				Embedding: embedding,
+			})
+		}
+		bank := newPrototypeBank(prototypeExamples, c.prototypeCfg)
+		c.ruleBanks[rule.Name] = bank
+		logPrototypeBankSummary("Preference Contrastive", rule.Name, bank)
+	}
 }

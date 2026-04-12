@@ -8,6 +8,8 @@ import (
 	core "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
 	ext_proc "github.com/envoyproxy/go-control-plane/envoy/service/ext_proc/v3"
 	typev3 "github.com/envoyproxy/go-control-plane/envoy/type/v3"
+	"github.com/openai/openai-go"
+	"github.com/tidwall/sjson"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/responseapi"
@@ -76,34 +78,9 @@ type ResponseAPIContext struct {
 	ImageGenToolParams *responseapi.ImageGenerationToolParams
 }
 
-// TranslateRequest translates a Response API request to Chat Completions format.
-// Returns the translated request body and context, or nil if not a Response API request.
-func (f *ResponseAPIFilter) TranslateRequest(ctx context.Context, body []byte) (*ResponseAPIContext, []byte, error) {
-	if !f.enabled {
-		return nil, nil, nil
-	}
-
-	// Parse Response API request
-	var req responseapi.ResponseAPIRequest
-	if err := json.Unmarshal(body, &req); err != nil {
-		return nil, nil, nil // Not a valid Response API request, pass through
-	}
-
-	// Check if this looks like a Response API request (has input field)
-	if len(req.Input) == 0 {
-		return nil, nil, nil // Not a Response API request
-	}
-
-	// Create context for this request
-	respCtx := &ResponseAPIContext{
-		IsResponseAPIRequest: true,
-		OriginalRequest:      &req,
-		PreviousResponseID:   req.PreviousResponseID,
-		GeneratedResponseID:  responseapi.GenerateResponseID(),
-	}
-
-	// Detect image_generation tool in the request tools list.
-	// This is an explicit signal that the client wants image generation.
+// detectImageGenTool scans the request tools for an image_generation entry and
+// populates the context accordingly.
+func detectImageGenTool(req *responseapi.ResponseAPIRequest, respCtx *ResponseAPIContext) {
 	for i := range req.Tools {
 		if req.Tools[i].Type == responseapi.ToolTypeImageGeneration {
 			respCtx.HasImageGenerationTool = true
@@ -111,37 +88,65 @@ func (f *ResponseAPIFilter) TranslateRequest(ctx context.Context, body []byte) (
 			if respCtx.ImageGenToolParams != nil {
 				logging.Debugf("Response API: image_generation tool (model=%s, size=%s)", respCtx.ImageGenToolParams.Model, respCtx.ImageGenToolParams.Size)
 			}
-			break
+			return
 		}
 	}
+}
 
-	// Fetch conversation history if previous_response_id is provided
+// TranslateRequest translates a Response API request to Chat Completions format.
+// Returns the translated request body and context, or nil if not a Response API request.
+func (f *ResponseAPIFilter) TranslateRequest(ctx context.Context, body []byte) (*ResponseAPIContext, []byte, error) {
+	if !f.enabled {
+		return nil, nil, nil
+	}
+
+	var req responseapi.ResponseAPIRequest
+	if err := json.Unmarshal(body, &req); err != nil {
+		return nil, nil, nil
+	}
+
+	if len(req.Input) == 0 {
+		return nil, nil, nil
+	}
+
+	respCtx := &ResponseAPIContext{
+		IsResponseAPIRequest: true,
+		OriginalRequest:      &req,
+		PreviousResponseID:   req.PreviousResponseID,
+		GeneratedResponseID:  responseapi.GenerateResponseID(),
+	}
+
+	detectImageGenTool(&req, respCtx)
+
 	if req.PreviousResponseID != "" {
 		history, err := f.store.GetConversationChain(ctx, req.PreviousResponseID)
 		if err != nil && !errors.Is(err, responsestore.ErrNotFound) {
 			logging.Warnf("Failed to fetch conversation history for %s: %v", req.PreviousResponseID, err)
-			// Continue without history - don't fail the request
 		}
 		respCtx.ConversationHistory = history
 	}
 
-	// Determine ConversationID early for consistent tracking across the request lifecycle.
-	// This ensures memory extraction can correctly track turns per conversation.
 	respCtx.ConversationID = f.determineConversationID(&req, respCtx.ConversationHistory)
 
-	// Translate to Chat Completions request
 	completionReq, err := f.translator.TranslateToCompletionRequest(&req, respCtx.ConversationHistory)
 	if err != nil {
 		return nil, nil, err
 	}
 
-	// Marshal translated request
 	translatedBody, err := json.Marshal(completionReq)
 	if err != nil {
 		return nil, nil, err
 	}
 
-	// Store translated body in context for later use
+	// The SDK struct doesn't expose a Stream field (the SDK sets it via
+	// request options internally). We inject it so the downstream pipeline
+	// and the upstream backend see the correct "stream" flag.
+	if req.Stream {
+		if b, err := sjson.SetBytes(translatedBody, "stream", true); err == nil {
+			translatedBody = b
+		}
+	}
+
 	respCtx.TranslatedBody = translatedBody
 
 	return respCtx, translatedBody, nil
@@ -183,8 +188,8 @@ func isResponseAPIErrorBody(body []byte) bool {
 	return hasError
 }
 
-func parseChatCompletionResponse(body []byte) (*responseapi.ChatCompletionResponse, bool) {
-	var completionResp responseapi.ChatCompletionResponse
+func parseChatCompletionResponse(body []byte) (*openai.ChatCompletion, bool) {
+	var completionResp openai.ChatCompletion
 	if err := json.Unmarshal(body, &completionResp); err != nil {
 		logging.Errorf("Response API: Failed to parse completion response: %v", err)
 		return nil, false
@@ -200,7 +205,7 @@ func parseChatCompletionResponse(body []byte) (*responseapi.ChatCompletionRespon
 
 func (f *ResponseAPIFilter) buildTranslatedResponse(
 	respCtx *ResponseAPIContext,
-	completionResp *responseapi.ChatCompletionResponse,
+	completionResp *openai.ChatCompletion,
 ) *responseapi.ResponseAPIResponse {
 	responseAPIResp := f.translator.TranslateToResponseAPIResponse(
 		respCtx.OriginalRequest,

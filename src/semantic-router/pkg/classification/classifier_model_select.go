@@ -200,9 +200,12 @@ func (c *Classifier) initializeHallucinationDetector() error {
 		detector.SetNLIConfig(&c.Config.HallucinationMitigation.NLIModel)
 		if err := detector.InitializeNLI(); err != nil {
 			// NLI is optional - log warning but don't fail
-			logging.Warnf("Failed to initialize NLI model: %v (NLI-enhanced detection will be unavailable)", err)
-		} else {
-			logging.Infof("NLI model initialized for enhanced hallucination detection")
+			logging.ComponentWarnEvent("classifier", "hallucination_nli_init_failed", map[string]interface{}{
+				"model_ref":          c.Config.HallucinationMitigation.NLIModel.ModelID,
+				"error":              err.Error(),
+				"enhanced_detection": false,
+				"fallback_detection": "basic",
+			})
 		}
 	}
 
@@ -265,7 +268,19 @@ func (c *Classifier) initializePreferenceClassifier() error {
 	}
 
 	c.preferenceClassifier = classifier
-	logging.Infof("Preference classifier initialized: %d routes", len(c.Config.PreferenceRules))
+	mode := "external_llm"
+	modelRef := ""
+	if preferenceCfg.ContrastiveEnabled() {
+		mode = "contrastive"
+		modelRef = preferenceCfg.EmbeddingModel
+	} else if externalCfg != nil {
+		modelRef = externalCfg.ModelName
+	}
+	logging.ComponentEvent("classifier", "preference_classifier_initialized", map[string]interface{}{
+		"mode":      mode,
+		"model_ref": modelRef,
+		"routes":    len(c.Config.PreferenceRules),
+	})
 	return nil
 }
 

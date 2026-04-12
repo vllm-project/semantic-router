@@ -467,6 +467,22 @@ routing:
           - name: support_escalated
             gte: 0.45
 
+  session_states:
+    - name: session_routing
+      fields:
+        - name: turn_number
+          type: int
+        - name: current_model
+          type: string
+        - name: cumulative_cost_usd
+          type: float
+        - name: retry_count_ema
+          type: float
+        - name: quality_score_ema
+          type: float
+        - name: kv_cache_warm
+          type: float
+
   decisions:
     - name: static_business_route
       description: Static fallback for standard business traffic.
@@ -1585,6 +1601,13 @@ global:
           enable_soft_matching: true
           top_k: 1
           min_score_threshold: 0.45
+          prototype_scoring:
+            enabled: true
+            cluster_similarity_threshold: 0.9
+            max_prototypes: 8
+            best_weight: 0.75
+            top_m: 2
+            margin_threshold: 0.0
     system:
       prompt_guard: models/mmbert32k-jailbreak-detector-merged
       domain_classifier: models/mmbert32k-intent-classifier-merged
@@ -1613,9 +1636,16 @@ global:
     kbs:
       - name: privacy_kb
         source:
-          path: kb/privacy/
+          path: knowledge_bases/privacy/
           manifest: labels.json
         threshold: 0.55
+        prototype_scoring:
+          enabled: true
+          cluster_similarity_threshold: 0.9
+          max_prototypes: 8
+          best_weight: 0.75
+          top_m: 2
+          margin_threshold: 0.0
         label_thresholds:
           prompt_injection: 0.7
         groups:
@@ -1666,6 +1696,33 @@ global:
             type: group_margin
             positive_group: private
             negative_group: public
+      - name: mmlu_kb
+        source:
+          path: knowledge_bases/mmlu/
+          manifest: labels.json
+        threshold: 0.25
+        groups:
+          escalate:
+            - biology
+            - business
+            - computer science
+            - economics
+            - history
+            - math
+            - other
+            - philosophy
+            - psychology
+          keep:
+            - chemistry
+            - engineering
+            - health
+            - law
+            - physics
+        metrics:
+          - name: escalate_vs_keep
+            type: group_margin
+            positive_group: escalate
+            negative_group: keep
     modules:
       prompt_compression:
         enabled: true
@@ -1717,6 +1774,21 @@ global:
         preference:
           use_contrastive: true
           embedding_model: models/preference-encoder
+          prototype_scoring:
+            enabled: true
+            cluster_similarity_threshold: 0.9
+            max_prototypes: 8
+            best_weight: 0.75
+            top_m: 2
+            margin_threshold: 0.0
+      complexity:
+        prototype_scoring:
+          enabled: true
+          cluster_similarity_threshold: 0.9
+          max_prototypes: 6
+          best_weight: 0.75
+          top_m: 2
+          margin_threshold: 0.0
       hallucination_mitigation:
         enabled: true
         on_hallucination_detected: annotate

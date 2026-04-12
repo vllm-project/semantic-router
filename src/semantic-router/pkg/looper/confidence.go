@@ -487,24 +487,49 @@ func (l *ConfidenceLooper) Execute(ctx context.Context, req *Request) (*Response
 	case "cost":
 		// AutoMix-style: order by pricing (cheapest first)
 		sortedRefs = sortModelRefsByCost(req.ModelRefs, req.ModelParams)
-		logging.Infof("[ConfidenceLooper] Using cost-based escalation order (cheapest first)")
+		logging.ComponentDebugEvent("looper", "confidence_escalation_order_selected", map[string]interface{}{
+			"looper":           "confidence",
+			"decision":         req.DecisionName,
+			"escalation_order": escalationOrder,
+			"strategy":         "cost",
+		})
 	case "automix":
 		// POMDP-optimized: cost-quality tradeoff
 		tradeoff := getCostQualityTradeoff(sizeAwareCfg)
 		sortedRefs = sortModelRefsByAutoMix(req.ModelRefs, req.ModelParams, tradeoff)
-		logging.Infof("[ConfidenceLooper] Using AutoMix escalation order (tradeoff=%.2f)", tradeoff)
+		logging.ComponentDebugEvent("looper", "confidence_escalation_order_selected", map[string]interface{}{
+			"looper":           "confidence",
+			"decision":         req.DecisionName,
+			"escalation_order": escalationOrder,
+			"strategy":         "automix",
+			"tradeoff":         tradeoff,
+		})
 	default:
 		// Default: order by param_size (smallest first)
 		sortedRefs = sortModelRefsBySize(req.ModelRefs, req.ModelParams)
-		logging.Infof("[ConfidenceLooper] Using size-based escalation order (smallest first)")
+		logging.ComponentDebugEvent("looper", "confidence_escalation_order_selected", map[string]interface{}{
+			"looper":           "confidence",
+			"decision":         req.DecisionName,
+			"escalation_order": escalationOrder,
+			"strategy":         "size",
+		})
 	}
 
 	tokenFilterLabel := "all"
 	if evaluator.TokenFilter != "" {
 		tokenFilterLabel = evaluator.TokenFilter
 	}
-	logging.Infof("[ConfidenceLooper] Starting with %d models, method=%s, threshold=%.4f, token_filter=%s, on_error=%s, streaming=%v, escalation=%s",
-		len(sortedRefs), evaluator.Method, evaluator.Threshold, tokenFilterLabel, onError, req.IsStreaming, escalationOrder)
+	logging.ComponentEvent("looper", "execution_started", map[string]interface{}{
+		"looper":           "confidence",
+		"decision":         req.DecisionName,
+		"candidate_models": len(sortedRefs),
+		"method":           evaluator.Method,
+		"threshold":        evaluator.Threshold,
+		"token_filter":     tokenFilterLabel,
+		"on_error":         onError,
+		"streaming":        req.IsStreaming,
+		"escalation_order": escalationOrder,
+	})
 
 	// Helper to get param_size for logging
 	getParamSize := func(modelName string) string {
@@ -522,7 +547,13 @@ func (l *ConfidenceLooper) Execute(ctx context.Context, req *Request) (*Response
 		if ref.LoRAName != "" {
 			modelName = ref.LoRAName
 		}
-		logging.Debugf("[ConfidenceLooper] Model order[%d]: %s (param_size=%s)", i, modelName, getParamSize(ref.Model))
+		logging.ComponentDebugEvent("looper", "confidence_model_order", map[string]interface{}{
+			"looper":     "confidence",
+			"decision":   req.DecisionName,
+			"index":      i,
+			"model_ref":  modelName,
+			"param_size": getParamSize(ref.Model),
+		})
 	}
 
 	var lastResponse *ModelResponse
@@ -544,11 +575,22 @@ func (l *ConfidenceLooper) Execute(ctx context.Context, req *Request) (*Response
 			}
 		}
 
-		logging.Infof("[ConfidenceLooper] Trying model: %s (iteration=%d)", modelName, iteration)
+		logging.ComponentDebugEvent("looper", "model_dispatch_started", map[string]interface{}{
+			"looper":    "confidence",
+			"decision":  req.DecisionName,
+			"model_ref": modelName,
+			"iteration": iteration,
+		})
 
 		resp, err := l.client.CallModel(ctx, req.OriginalRequest, modelName, false, iteration, logprobsCfg, accessKey)
 		if err != nil {
-			logging.Errorf("[ConfidenceLooper] Model %s failed: %v", modelName, err)
+			logging.ComponentWarnEvent("looper", "model_dispatch_failed", map[string]interface{}{
+				"looper":    "confidence",
+				"decision":  req.DecisionName,
+				"model_ref": modelName,
+				"iteration": iteration,
+				"error":     err.Error(),
+			})
 			if onError == "fail" {
 				return nil, fmt.Errorf("model %s failed: %w", modelName, err)
 			}
@@ -568,25 +610,60 @@ func (l *ConfidenceLooper) Execute(ctx context.Context, req *Request) (*Response
 		if evaluator.IsSelfVerify() {
 			// AutoMix self-verification: ask the model to evaluate its own answer
 			confidence, meetsThreshold = l.performSelfVerification(ctx, req, modelName, resp.Content, accessKey, evaluator.Threshold)
-			logging.Infof("[ConfidenceLooper] Model %s: self-verification confidence=%.4f, threshold=%.4f, meets=%v",
-				modelName, confidence, evaluator.Threshold, meetsThreshold)
+			logging.ComponentDebugEvent("looper", "self_verification_completed", map[string]interface{}{
+				"looper":     "confidence",
+				"decision":   req.DecisionName,
+				"model_ref":  modelName,
+				"confidence": confidence,
+				"threshold":  evaluator.Threshold,
+				"accepted":   meetsThreshold,
+			})
 		} else {
 			confidence, meetsThreshold = evaluator.Evaluate(resp)
 			if evaluator.TokenFilter != "" && evaluator.TokenFilter != "all" && resp.FilteredAverageLogprob != 0 {
-				logging.Infof("[ConfidenceLooper] Model %s: confidence=%.4f (method=%s, filter=%s), threshold=%.4f, meets=%v (unfiltered_logprob=%.4f)",
-					modelName, confidence, evaluator.Method, evaluator.TokenFilter, evaluator.Threshold, meetsThreshold, resp.AverageLogprob)
+				logging.ComponentDebugEvent("looper", "confidence_evaluated", map[string]interface{}{
+					"looper":             "confidence",
+					"decision":           req.DecisionName,
+					"model_ref":          modelName,
+					"confidence":         confidence,
+					"method":             evaluator.Method,
+					"token_filter":       evaluator.TokenFilter,
+					"threshold":          evaluator.Threshold,
+					"accepted":           meetsThreshold,
+					"unfiltered_logprob": resp.AverageLogprob,
+				})
 			} else {
-				logging.Infof("[ConfidenceLooper] Model %s: confidence=%.4f (method=%s), threshold=%.4f, meets=%v",
-					modelName, confidence, evaluator.Method, evaluator.Threshold, meetsThreshold)
+				logging.ComponentDebugEvent("looper", "confidence_evaluated", map[string]interface{}{
+					"looper":     "confidence",
+					"decision":   req.DecisionName,
+					"model_ref":  modelName,
+					"confidence": confidence,
+					"method":     evaluator.Method,
+					"threshold":  evaluator.Threshold,
+					"accepted":   meetsThreshold,
+				})
 			}
 		}
 
 		if meetsThreshold {
-			logging.Infof("[ConfidenceLooper] Confidence acceptable, using model %s", modelName)
+			logging.ComponentEvent("looper", "execution_completed", map[string]interface{}{
+				"looper":         "confidence",
+				"decision":       req.DecisionName,
+				"models_used":    modelsUsed,
+				"iterations":     iteration,
+				"selected_model": modelName,
+				"reason":         "threshold_met",
+			})
 			break
 		}
 
-		logging.Infof("[ConfidenceLooper] Confidence below threshold, trying next model")
+		logging.ComponentDebugEvent("looper", "confidence_threshold_not_met", map[string]interface{}{
+			"looper":     "confidence",
+			"decision":   req.DecisionName,
+			"model_ref":  modelName,
+			"confidence": confidence,
+			"threshold":  evaluator.Threshold,
+		})
 	}
 
 	if lastResponse == nil {
@@ -637,7 +714,10 @@ func (l *ConfidenceLooper) performSelfVerification(
 		return 0.5, false
 	}
 
-	logging.Infof("[SelfVerify] Asking %s to verify its own response", modelName)
+	logging.ComponentDebugEvent("looper", "self_verification_started", map[string]interface{}{
+		"looper":    "confidence",
+		"model_ref": modelName,
+	})
 
 	// Call the same model to evaluate its answer
 	verifyResp, err := l.client.CallModel(ctx, verifyRequest, modelName, false, 0, nil, accessKey)
@@ -658,8 +738,12 @@ func (l *ConfidenceLooper) performSelfVerification(
 		return 0.5, false
 	}
 
-	logging.Infof("[SelfVerify] Model self-assessment: confidence=%.2f, reason=%s",
-		result.Confidence, result.Reason)
+	logging.ComponentDebugEvent("looper", "self_verification_result_parsed", map[string]interface{}{
+		"looper":     "confidence",
+		"model_ref":  modelName,
+		"confidence": result.Confidence,
+		"reason":     result.Reason,
+	})
 
 	return result.Confidence, result.Confidence >= threshold
 }

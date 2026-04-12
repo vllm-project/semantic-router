@@ -33,6 +33,17 @@ Use `complexity` when:
 Source fragment family: `config/signal/complexity/`
 
 ```yaml
+global:
+  model_catalog:
+    modules:
+      complexity:
+        prototype_scoring:
+          enabled: true
+          cluster_similarity_threshold: 0.9
+          max_prototypes: 8
+          best_weight: 0.75
+          top_m: 2
+          margin_threshold: 0.0
 routing:
   signals:
     complexity:
@@ -51,4 +62,4 @@ routing:
             - simple rewrite
 ```
 
-Use `complexity` with representative hard and easy examples so the learned boundary matches your real routing cost profile.
+Use `complexity` with representative hard and easy examples so the learned boundary matches your real routing cost profile. `prototype_scoring` is a family-level config under `global.model_catalog.modules.complexity`, so every complexity rule shares the same prototype-bank construction and label-scoring policy. Each rule still builds separate hard and easy prototype banks before computing the hard-vs-easy margin.

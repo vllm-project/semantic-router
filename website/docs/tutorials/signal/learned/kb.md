@@ -40,11 +40,18 @@ Source fragment family: `config/signal/kb/`
 global:
   model_catalog:
     kbs:
-      - name: privacy_knowledge_base
+      - name: privacy_kb
         source:
-          path: kb/privacy/
+          path: knowledge_bases/privacy/
           manifest: labels.json
         threshold: 0.55
+        prototype_scoring:
+          enabled: true
+          cluster_similarity_threshold: 0.9
+          max_prototypes: 8
+          best_weight: 0.75
+          top_m: 2
+          margin_threshold: 0.05
         label_thresholds:
           prompt_injection: 0.7
         groups:
@@ -61,8 +68,8 @@ global:
 routing:
   signals:
     kb:
-      - name: privacy_policy
-        kb: privacy_knowledge_base
+    - name: privacy_policy
+      kb: privacy_kb
         target:
           kind: group
           value: privacy_policy
@@ -76,6 +83,8 @@ routing:
 ```
 
 Keep knowledge base names stable because `kb` signals bind to those names directly.
+
+When `prototype_scoring` is enabled, the KB builds per-label prototype banks from the label exemplars. Runtime classification then scores labels from those label-owned prototypes instead of letting one raw exemplar dominate the whole label forever.
 
 ## Match Semantics
 

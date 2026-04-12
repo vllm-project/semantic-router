@@ -12,6 +12,7 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/ratelimit"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/routerreplay"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/selection"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/services"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/tools"
 )
 
@@ -25,6 +26,7 @@ type routerComponents struct {
 	cfg                  *config.RouterConfig
 	categoryDescriptions []string
 	classifier           *classification.Classifier
+	classificationSvc    *services.ClassificationService
 	semanticCache        cache.CacheBackend
 	toolsDatabase        *tools.ToolsDatabase
 	responseAPIFilter    *ResponseAPIFilter
@@ -114,7 +116,7 @@ func buildRouterComponents(cfg *config.RouterConfig) (*routerComponents, error) 
 	}
 
 	toolsDatabase := createToolsDatabase(cfg)
-	classifier, err := createRouterClassifier(cfg, mappings)
+	classifier, classificationSvc, err := createRouterClassifier(cfg, mappings)
 	if err != nil {
 		return nil, err
 	}
@@ -141,6 +143,7 @@ func buildRouterComponents(cfg *config.RouterConfig) (*routerComponents, error) 
 		cfg:                  cfg,
 		categoryDescriptions: categoryDescriptions,
 		classifier:           classifier,
+		classificationSvc:    classificationSvc,
 		semanticCache:        semanticCache,
 		toolsDatabase:        toolsDatabase,
 		responseAPIFilter:    responseAPIFilter,
@@ -157,19 +160,20 @@ func buildRouterComponents(cfg *config.RouterConfig) (*routerComponents, error) 
 
 func (components *routerComponents) buildRouter() *OpenAIRouter {
 	return &OpenAIRouter{
-		Config:               components.cfg,
-		CategoryDescriptions: components.categoryDescriptions,
-		Classifier:           components.classifier,
-		Cache:                components.semanticCache,
-		ToolsDatabase:        components.toolsDatabase,
-		ResponseAPIFilter:    components.responseAPIFilter,
-		ReplayRecorder:       components.replayRecorder,
-		ReplayStoreShared:    components.replayStoreShared,
-		ModelSelector:        components.modelSelector,
-		ReplayRecorders:      components.replayRecorders,
-		MemoryStore:          components.memoryStore,
-		MemoryExtractor:      components.memoryExtractor,
-		CredentialResolver:   components.credentialResolver,
-		RateLimiter:          components.rateLimiter,
+		Config:                components.cfg,
+		CategoryDescriptions:  components.categoryDescriptions,
+		Classifier:            components.classifier,
+		ClassificationService: components.classificationSvc,
+		Cache:                 components.semanticCache,
+		ToolsDatabase:         components.toolsDatabase,
+		ResponseAPIFilter:     components.responseAPIFilter,
+		ReplayRecorder:        components.replayRecorder,
+		ReplayStoreShared:     components.replayStoreShared,
+		ModelSelector:         components.modelSelector,
+		ReplayRecorders:       components.replayRecorders,
+		MemoryStore:           components.memoryStore,
+		MemoryExtractor:       components.memoryExtractor,
+		CredentialResolver:    components.credentialResolver,
+		RateLimiter:           components.rateLimiter,
 	}
 }

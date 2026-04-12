@@ -1,5 +1,6 @@
 ---
 sidebar_position: 4
+description: v0.3 canonical YAML 配置契约实用指南，覆盖 CLI、控制台、Helm 与 Operator 的统一配置方式。
 translation:
   source_commit: "baa07413"
   source_file: "docs/installation/configuration.md"
@@ -49,8 +50,9 @@ global:
 - `global.integrations` 聚合辅助运行时集成，如 `tools`、`looper`
 - `global.model_catalog` 聚合路由器持有的模型资产，如嵌入、系统模型、外部模型、可复用分类器与模型支撑模块
 - `global.model_catalog.embeddings.semantic.embedding_config.top_k` 限制打分后路由要输出的嵌入规则条数上限；内置默认为 `1`
+- `prototype_scoring` 是嵌入驱动 signal 家族共用的 prototype-aware 打分块；需要把 exemplar bank 压缩成代表性 prototypes 时，可放在 `global.model_catalog.embeddings.semantic.embedding_config`、`global.model_catalog.modules.classifier.preference`、`global.model_catalog.kbs[]` 以及 `global.model_catalog.modules.complexity`
 - `global.model_catalog.classifiers[]` 为启动时加载的分类器包（如分类体系分类器）的可复用注册表
-- `global.model_catalog.modules` 聚合能力模块，如 `prompt_guard`、`classifier`、`hallucination_mitigation`
+- `global.model_catalog.modules` 聚合能力模块，如 `prompt_guard`、`classifier`、`complexity`、`hallucination_mitigation`
 
 ## Canonical 示例
 

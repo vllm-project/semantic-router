@@ -102,6 +102,7 @@ func (c *Classifier) EvaluateAllSignalsWithContext(text string, contextText stri
 	wg.Wait()
 	results = c.applySignalGroups(results)
 	results = c.applySignalComposers(results)
+	results = c.applySignalOutputPolicies(results)
 	results = c.applyProjections(results)
 	return results
 }
@@ -135,7 +136,7 @@ func (c *Classifier) evaluateKeywordSignal(results *SignalResults, mu *sync.Mute
 
 func (c *Classifier) evaluateEmbeddingSignal(results *SignalResults, mu *sync.Mutex, text string) {
 	start := time.Now()
-	matchedRules, err := c.keywordEmbeddingClassifier.ClassifyAll(text)
+	detailedResult, err := c.keywordEmbeddingClassifier.ClassifyDetailed(text)
 	elapsed := time.Since(start)
 
 	// Record metrics
@@ -144,33 +145,37 @@ func (c *Classifier) evaluateEmbeddingSignal(results *SignalResults, mu *sync.Mu
 	logging.Debugf("[Signal Computation] Embedding signal evaluation completed in %v", elapsed)
 	if err != nil {
 		logging.Errorf("embedding rule evaluation failed: %v", err)
-	} else if len(matchedRules) > 0 {
-		// Record the highest confidence for metrics display
-		var bestConfidence float64
-		for _, mr := range matchedRules {
-			if mr.Score > bestConfidence {
-				bestConfidence = mr.Score
-			}
-		}
-		results.Metrics.Embedding.Confidence = bestConfidence
-
-		mu.Lock()
-		// Add the configured top-k matched rules.
-		for _, mr := range matchedRules {
-			// Record signal extraction and match metrics for each matched rule
-			metrics.RecordSignalExtraction(config.SignalTypeEmbedding, mr.RuleName, elapsed.Seconds())
-			metrics.RecordSignalMatch(config.SignalTypeEmbedding, mr.RuleName)
-
-			// Append rule name to the matched list
-			results.MatchedEmbeddingRules = append(results.MatchedEmbeddingRules, mr.RuleName)
-
-			results.SignalConfidences["embedding:"+mr.RuleName] = mr.Score
-
-			logging.Debugf("[Signal Computation] Embedding match: rule=%q, score=%.4f, method=%s",
-				mr.RuleName, mr.Score, mr.Method)
-		}
-		mu.Unlock()
+		return
 	}
+	if detailedResult == nil {
+		return
+	}
+
+	var bestConfidence float64
+	for _, score := range detailedResult.Scores {
+		if score.Score > bestConfidence {
+			bestConfidence = score.Score
+		}
+	}
+	results.Metrics.Embedding.Confidence = bestConfidence
+
+	mu.Lock()
+	for _, score := range detailedResult.Scores {
+		results.SignalValues["embedding:"+score.Name] = score.Score
+		results.SignalValues["embedding:"+score.Name+":best"] = score.Best
+		results.SignalValues["embedding:"+score.Name+":support"] = score.Support
+		results.SignalValues["embedding:"+score.Name+":prototype_count"] = float64(score.PrototypeCount)
+	}
+	for _, mr := range detailedResult.Matches {
+		metrics.RecordSignalExtraction(config.SignalTypeEmbedding, mr.RuleName, elapsed.Seconds())
+		metrics.RecordSignalMatch(config.SignalTypeEmbedding, mr.RuleName)
+		results.MatchedEmbeddingRules = append(results.MatchedEmbeddingRules, mr.RuleName)
+		results.SignalConfidences["embedding:"+mr.RuleName] = mr.Score
+
+		logging.Debugf("[Signal Computation] Embedding match: rule=%q, score=%.4f, method=%s",
+			mr.RuleName, mr.Score, mr.Method)
+	}
+	mu.Unlock()
 }
 
 func (c *Classifier) evaluateDomainSignal(results *SignalResults, mu *sync.Mutex, text string) {
@@ -371,21 +376,20 @@ func (c *Classifier) evaluatePreferenceSignal(results *SignalResults, mu *sync.M
 			return
 		}
 		logging.Errorf("preference rule evaluation failed: %v", err)
-	} else if preferenceResult != nil {
-		// Check if this preference is defined in preference_rules
-		for _, rule := range c.Config.PreferenceRules {
-			if rule.Name == preferenceName {
-				// Record signal match
-				metrics.RecordSignalMatch(config.SignalTypePreference, rule.Name)
-
-				mu.Lock()
-				results.MatchedPreferenceRules = append(results.MatchedPreferenceRules, rule.Name)
-				mu.Unlock()
-				logging.Debugf("Preference rule matched: %s", rule.Name)
-				break
-			}
-		}
+		return
 	}
+	if preferenceResult == nil || preferenceName == "" || !c.hasConfiguredPreferenceRule(preferenceName) {
+		return
+	}
+
+	recordPreferenceMatchMetrics(preferenceName)
+	details := c.contrastivePreferenceDetails(text)
+
+	mu.Lock()
+	recordPreferenceSignalValues(results, preferenceResult, details)
+	mu.Unlock()
+
+	logging.Debugf("Preference rule matched: %s", preferenceName)
 }
 
 func (c *Classifier) evaluateLanguageSignal(results *SignalResults, mu *sync.Mutex, text string) {
@@ -450,28 +454,40 @@ func (c *Classifier) evaluateContextSignal(results *SignalResults, mu *sync.Mute
 
 func (c *Classifier) evaluateComplexitySignal(results *SignalResults, mu *sync.Mutex, text string, imageURL string) {
 	start := time.Now()
-	matchedRules, err := c.complexityClassifier.ClassifyWithImage(text, imageURL)
+	classifyResults, err := c.complexityClassifier.ClassifyDetailedWithImage(text, imageURL)
 	elapsed := time.Since(start)
 	latencySeconds := elapsed.Seconds()
 
 	// Record signal extraction metrics for each matched rule
-	for _, ruleName := range matchedRules {
-		metrics.RecordSignalExtraction(config.SignalTypeComplexity, ruleName, latencySeconds)
-		metrics.RecordSignalMatch(config.SignalTypeComplexity, ruleName)
-	}
-
-	// Record metrics (use microseconds for better precision)
 	results.Metrics.Complexity.ExecutionTimeMs = float64(elapsed.Microseconds()) / 1000.0
-	results.Metrics.Complexity.Confidence = 1.0 // Rule-based, always 1.0
 
 	logging.Debugf("[Signal Computation] Complexity signal evaluation completed in %v", elapsed)
 	if err != nil {
 		logging.Errorf("complexity rule evaluation failed: %v", err)
-	} else {
-		mu.Lock()
-		results.MatchedComplexityRules = matchedRules
-		mu.Unlock()
+		return
 	}
+
+	bestConfidence := 0.0
+	mu.Lock()
+	for _, result := range classifyResults {
+		matchName := fmt.Sprintf("%s:%s", result.RuleName, result.Difficulty)
+		metrics.RecordSignalExtraction(config.SignalTypeComplexity, matchName, latencySeconds)
+		metrics.RecordSignalMatch(config.SignalTypeComplexity, matchName)
+		results.MatchedComplexityRules = append(results.MatchedComplexityRules, matchName)
+		results.SignalConfidences["complexity:"+matchName] = result.Confidence
+		results.SignalValues["complexity:"+result.RuleName+":text_hard_score"] = result.TextHardScore
+		results.SignalValues["complexity:"+result.RuleName+":text_easy_score"] = result.TextEasyScore
+		results.SignalValues["complexity:"+result.RuleName+":text_margin"] = result.TextMargin
+		results.SignalValues["complexity:"+result.RuleName+":image_hard_score"] = result.ImageHardScore
+		results.SignalValues["complexity:"+result.RuleName+":image_easy_score"] = result.ImageEasyScore
+		results.SignalValues["complexity:"+result.RuleName+":image_margin"] = result.ImageMargin
+		results.SignalValues["complexity:"+result.RuleName+":margin"] = result.FusedMargin
+		if result.Confidence > bestConfidence {
+			bestConfidence = result.Confidence
+		}
+	}
+	results.Metrics.Complexity.Confidence = bestConfidence
+	mu.Unlock()
 }
 
 func (c *Classifier) evaluateModalitySignal(results *SignalResults, mu *sync.Mutex, text string) {

@@ -109,8 +109,17 @@ const MarkdownRenderer = ({ content }: MarkdownRendererProps) => {
     },
     // Customize links to open in new tab
     a({ children, href, ...props }) {
+      const linkText = extractTextContent(children).trim()
+      const isCitationLink = /^\[\d+\]$/.test(linkText)
+
       return (
-        <a href={href} target="_blank" rel="noopener noreferrer" {...props}>
+        <a
+          href={href}
+          target="_blank"
+          rel="noopener noreferrer"
+          className={isCitationLink ? styles.citationLink : undefined}
+          {...props}
+        >
           {children}
         </a>
       )
@@ -139,4 +148,3 @@ const MarkdownRenderer = ({ content }: MarkdownRendererProps) => {
 }
 
 export default MarkdownRenderer
-

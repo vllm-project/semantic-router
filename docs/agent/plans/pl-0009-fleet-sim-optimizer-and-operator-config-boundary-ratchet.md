@@ -35,6 +35,7 @@
 - 2026-03-19: the latest design audit identified two additional subsystem-specific boundary gaps not yet captured by TD016/TD017 or TD006: fleet-sim optimizer/public-surface collapse and operator config-contract collapse.
 - 2026-03-19: TD027 and TD028 were added so those active hotspots are no longer only implicit structural debt.
 - 2026-03-19: shared and local AGENT rules were updated so future edits discover the fleet-sim optimizer and operator API/controller hotspot trees before widening them further.
+- 2026-04-03: ADR0006 now provides the shared cross-stack dependency direction for the remaining operator-side work in this plan; operator follow-up should converge on contract-owned seams rather than deeper router-runtime dependencies.
 - Next loop target: start `S003` by separating optimizer analytical sizing, DES verification, and report-oriented helpers into narrower sibling modules with stable exports.
 
 ## Decision Log
@@ -49,4 +50,4 @@
 - [../tech-debt/README.md](../tech-debt/README.md)
 - [../tech-debt/td-027-fleet-sim-optimizer-and-public-surface-boundary-collapse.md](../tech-debt/td-027-fleet-sim-optimizer-and-public-surface-boundary-collapse.md)
 - [../tech-debt/td-028-operator-config-contract-boundary-collapse.md](../tech-debt/td-028-operator-config-contract-boundary-collapse.md)
-- [../adr/README.md](../adr/README.md) (no dedicated ADR yet)
+- [../adr/adr-0006-platform-kernel-and-contract-first-control-planes.md](../adr/adr-0006-platform-kernel-and-contract-first-control-planes.md)

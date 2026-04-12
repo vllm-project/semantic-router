@@ -130,13 +130,19 @@ func NewEloSelector(cfg *EloConfig) *EloSelector {
 	if cfg.StoragePath != "" {
 		storage, err := NewFileEloStorage(cfg.StoragePath)
 		if err != nil {
-			logging.Errorf("[EloSelector] Failed to initialize storage: %v", err)
+			logging.ComponentErrorEvent("selection", "elo_storage_init_failed", map[string]interface{}{
+				"storage_path": cfg.StoragePath,
+				"error":        err.Error(),
+			})
 		} else {
 			selector.storage = storage
 
 			// Load existing ratings from storage
 			if err := selector.loadFromStorage(); err != nil {
-				logging.Warnf("[EloSelector] Failed to load ratings from storage: %v", err)
+				logging.ComponentWarnEvent("selection", "elo_storage_load_failed", map[string]interface{}{
+					"storage_path": cfg.StoragePath,
+					"error":        err.Error(),
+				})
 			}
 
 			// Start auto-save with configurable interval
@@ -148,7 +154,10 @@ func NewEloSelector(cfg *EloConfig) *EloSelector {
 			}
 
 			storage.StartAutoSave(interval, selector.getAllRatingsForStorage)
-			logging.Infof("[EloSelector] Storage initialized with auto-save interval: %v", interval)
+			logging.ComponentEvent("selection", "elo_storage_initialized", map[string]interface{}{
+				"storage_path":            cfg.StoragePath,
+				"auto_save_interval_secs": interval.Seconds(),
+			})
 		}
 	}
 
@@ -191,7 +200,9 @@ func (e *EloSelector) loadFromStorage() error {
 		}
 	}
 
-	logging.Infof("[EloSelector] Loaded %d categories from storage", len(allRatings))
+	logging.ComponentEvent("selection", "elo_ratings_loaded", map[string]interface{}{
+		"categories_loaded": len(allRatings),
+	})
 	return nil
 }
 

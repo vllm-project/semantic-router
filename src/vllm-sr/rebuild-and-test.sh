@@ -6,7 +6,6 @@ ROUTER_IMAGE="${IMAGE}"
 ENVOY_IMAGE="envoyproxy/envoy:v1.34-latest"
 DASHBOARD_IMAGE="ghcr.io/vllm-project/semantic-router/dashboard:latest"
 RUNTIME_CONTAINERS=(
-  vllm-sr-container
   vllm-sr-router-container
   vllm-sr-envoy-container
   vllm-sr-dashboard-container
@@ -26,10 +25,10 @@ echo "  2. Rebuild Docker images with all dependencies"
 echo "  3. Start the service"
 echo "  4. Verify multi-listener support"
 echo ""
-echo "Dependencies included in the image:"
-echo "  ✓ pydantic>=2.0.0"
-echo "  ✓ huggingface_hub[cli]>=0.20.0"
-echo "  ✓ Multi-listener support"
+echo "Router image checks:"
+echo "  ✓ router binary"
+echo "  ✓ setup-mode YAML helper"
+echo "  ✓ router health probe tooling"
 echo ""
 read -r -p "Press Enter to continue or Ctrl+C to cancel..."
 echo ""
@@ -51,21 +50,12 @@ docker build -t "${DASHBOARD_IMAGE}" -f dashboard/backend/Dockerfile .
 cd src/vllm-sr
 echo ""
 echo "✓ Router image built: ${IMAGE}"
-echo "✓ Router role reuses compatibility image: ${ROUTER_IMAGE}"
 echo "✓ Official Envoy image available: ${ENVOY_IMAGE}"
 echo "✓ Dashboard image built: ${DASHBOARD_IMAGE}"
 echo ""
 
 # Verify dependencies in images
 echo "3. Verifying dependencies in images..."
-docker run --rm "${IMAGE}" /bin/sh -c "
-    echo '  Checking pydantic...'
-    python -c 'import pydantic; print(f\"    ✓ pydantic {pydantic.__version__}\")'
-    echo '  Checking huggingface_hub...'
-    python -c 'import huggingface_hub; print(f\"    ✓ huggingface_hub {huggingface_hub.__version__}\")'
-    echo '  Checking huggingface-cli...'
-    huggingface-cli --version | sed 's/^/    ✓ /'
-"
 docker run --rm --entrypoint /bin/sh "${ROUTER_IMAGE}" -c "
     echo '  Checking router binary...'
     test -x /usr/local/bin/router && echo '    ✓ router binary present'

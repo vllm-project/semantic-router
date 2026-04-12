@@ -169,6 +169,7 @@ type RouterOptions struct {
 type InlineModels struct {
 	EmbeddingModels         `yaml:"embedding_models"`
 	Classifier              `yaml:"classifier"`
+	ComplexityModel         ComplexityModelConfig         `yaml:"complexity_model,omitempty"`
 	PromptCompression       PromptCompressionConfig       `yaml:"prompt_compression"`
 	PromptGuard             PromptGuardConfig             `yaml:"prompt_guard"`
 	HallucinationMitigation HallucinationMitigationConfig `yaml:"hallucination_mitigation"`
@@ -184,6 +185,7 @@ type IntelligentRouting struct {
 	Strategy        string               `yaml:"strategy,omitempty"`
 	ModelSelection  ModelSelectionConfig `yaml:"model_selection,omitempty"`
 	ReasoningConfig `yaml:",inline"`
+	SessionStates   []SessionStateConfig `yaml:"session_states,omitempty"`
 }
 
 // BackendModels captures configured backend endpoints and model metadata.

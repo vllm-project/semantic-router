@@ -20,8 +20,12 @@ import (
 	"google.golang.org/grpc/credentials"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/memory"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modeldownload"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelruntime"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/routerruntime"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/services"
 	tlsutil "github.com/vllm-project/semantic-router/src/semantic-router/pkg/utils/tls"
 )
 
@@ -30,6 +34,25 @@ var (
 	ensureReloadConfigModels = modeldownload.EnsureModelsForConfig
 	buildReloadRouter        = buildOpenAIRouterFromConfig
 	replaceReloadConfig      = config.Replace
+	prepareReloadRuntime     = func(cfg *config.RouterConfig) (modelruntime.EmbeddingRuntimeState, error) {
+		return modelruntime.PrepareRouterRuntime(context.Background(), cfg, modelruntime.PrepareRouterRuntimeOptions{
+			Component:                  "extproc",
+			MaxParallelism:             modelruntime.DefaultParallelism(5),
+			OnEvent:                    logReloadRuntimeLifecycleEvent,
+			InitModalityClassifierFunc: InitModalityClassifier,
+		})
+	}
+	warmupReloadRouter = func(router *OpenAIRouter, state modelruntime.EmbeddingRuntimeState) error {
+		if router == nil {
+			return nil
+		}
+		_, err := modelruntime.WarmupToolsDatabase(context.Background(), state.ToolsReady, router.LoadToolsDatabase, modelruntime.WarmupToolsOptions{
+			Component:      "extproc",
+			MaxParallelism: 1,
+			OnEvent:        logReloadRuntimeLifecycleEvent,
+		})
+		return err
+	}
 )
 
 // Server represents a gRPC server for the Envoy ExtProc
@@ -40,14 +63,23 @@ type Server struct {
 	port       int
 	secure     bool
 	certPath   string
+	runtime    *routerruntime.Registry
 }
 
 // NewServer creates a new ExtProc gRPC server
-func NewServer(configPath string, port int, secure bool, certPath string) (*Server, error) {
+func NewServer(
+	configPath string,
+	port int,
+	secure bool,
+	certPath string,
+	runtimeRegistry *routerruntime.Registry,
+) (*Server, error) {
 	router, err := NewOpenAIRouter(configPath)
 	if err != nil {
 		return nil, err
 	}
+	attachRuntimeRegistry(router, runtimeRegistry)
+	publishRouterState(router.Config, router, runtimeRegistry)
 
 	service := NewRouterService(router)
 	return &Server{
@@ -56,6 +88,7 @@ func NewServer(configPath string, port int, secure bool, certPath string) (*Serv
 		port:       port,
 		secure:     secure,
 		certPath:   certPath,
+		runtime:    runtimeRegistry,
 	}, nil
 }
 
@@ -238,9 +271,18 @@ func (s *Server) reloadRouterFromConfig(
 		}
 	}
 
+	runtimeState, err := prepareReloadRuntime(candidateCfg)
+	if err != nil {
+		return fmt.Errorf("runtime dependency init failed: %w", err)
+	}
+
 	newRouter, err := buildReloadRouter(candidateCfg)
 	if err != nil {
 		return err
+	}
+	attachRuntimeRegistry(newRouter, s.runtime)
+	if err := warmupReloadRouter(newRouter, runtimeState); err != nil {
+		return fmt.Errorf("runtime warmup failed: %w", err)
 	}
 
 	// Kubernetes updates are already published through config.Replace in the
@@ -251,7 +293,31 @@ func (s *Server) reloadRouterFromConfig(
 	}
 	logLoadedRouterConfig(configPath, candidateCfg)
 	s.service.Swap(newRouter)
+	publishRouterState(candidateCfg, newRouter, s.runtime)
 	return nil
+}
+
+func logReloadRuntimeLifecycleEvent(event modelruntime.Event) {
+	if event.Status != modelruntime.TaskFailed && event.Status != modelruntime.TaskSkipped {
+		return
+	}
+
+	payload := map[string]interface{}{
+		"task":        event.Task,
+		"best_effort": event.BestEffort,
+	}
+	if event.Error != nil {
+		payload["error"] = event.Error.Error()
+	}
+	if event.Status == modelruntime.TaskSkipped {
+		logging.ComponentWarnEvent("extproc", "runtime_lifecycle_task_skipped", payload)
+		return
+	}
+	if event.BestEffort {
+		logging.ComponentWarnEvent("extproc", "runtime_lifecycle_task_failed", payload)
+		return
+	}
+	logging.ComponentErrorEvent("extproc", "runtime_lifecycle_task_failed", payload)
 }
 
 // watchConfigAndReload watches the config file and reloads router on changes.
@@ -385,7 +451,9 @@ func (s *Server) watchConfigAndReload(ctx context.Context) {
 
 // watchKubernetesConfigUpdates watches for config updates from the Kubernetes controller
 func (s *Server) watchKubernetesConfigUpdates(ctx context.Context) {
-	updateCh := config.WatchConfigUpdates()
+	subscription := config.SubscribeConfigUpdates(1)
+	defer subscription.Close()
+	updateCh := subscription.Updates()
 
 	for {
 		select {
@@ -411,4 +479,27 @@ func (s *Server) watchKubernetesConfigUpdates(ctx context.Context) {
 			})
 		}
 	}
+}
+
+func attachRuntimeRegistry(router *OpenAIRouter, runtimeRegistry *routerruntime.Registry) {
+	if router == nil {
+		return
+	}
+	router.RuntimeRegistry = runtimeRegistry
+}
+
+func publishRouterState(
+	cfg *config.RouterConfig,
+	router *OpenAIRouter,
+	runtimeRegistry *routerruntime.Registry,
+) {
+	if router == nil {
+		return
+	}
+	if runtimeRegistry != nil {
+		runtimeRegistry.PublishRouterRuntime(cfg, router.ClassificationService, router.MemoryStore)
+		return
+	}
+	services.SetGlobalClassificationService(router.ClassificationService)
+	memory.SetGlobalMemoryStore(router.MemoryStore)
 }

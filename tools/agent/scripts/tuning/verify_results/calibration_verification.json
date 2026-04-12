@@ -4,7 +4,7 @@
   "pipeline": "engine.py \u2014 observe \u2192 diagnose \u2192 fix \u2192 verify",
   "timestamp": "2026-03-26T18:15:51",
   "router_endpoint": "http://localhost:8080",
-  "config_path": "deploy/recipes/calibration/config-broken.yaml",
+  "config_path": "deploy/recipes/mmlu/config-broken.yaml",
   "num_probes": 140,
   "iterations": [
     {

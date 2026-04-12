@@ -503,6 +503,60 @@ routing:
 	}
 }
 
+func TestGetModelPricingResolvesProviderModelIDFromCanonicalConfig(t *testing.T) {
+	canonicalYAML := []byte(`
+version: v0.3
+listeners:
+  - name: http
+    address: 0.0.0.0
+    port: 8888
+providers:
+  defaults:
+    default_model: claude-haiku
+  models:
+    - name: claude-haiku
+      provider_model_id: eu.anthropic.claude-haiku-4-5-20251001-v1:0
+      pricing:
+        currency: USD
+        prompt_per_1m: 1.00
+        completion_per_1m: 5.00
+routing:
+  modelCards:
+    - name: claude-haiku
+      modality: ar
+  decisions:
+    - name: default
+      priority: 1
+      rules:
+        operator: OR
+        conditions:
+          - type: domain
+            name: general
+      modelRefs:
+        - model: claude-haiku
+`)
+
+	cfg, err := ParseYAMLBytes(canonicalYAML)
+	if err != nil {
+		t.Fatalf("ParseYAMLBytes returned error: %v", err)
+	}
+
+	// Model with no backend_refs should still have ExternalModelIDs populated
+	params := cfg.ModelConfig["claude-haiku"]
+	if len(params.ExternalModelIDs) == 0 {
+		t.Fatal("expected ExternalModelIDs to be populated for metadata-only model")
+	}
+
+	// Pricing lookup by provider model ID should work
+	prompt, completion, currency, ok := cfg.GetModelPricing("eu.anthropic.claude-haiku-4-5-20251001-v1:0")
+	if !ok {
+		t.Fatal("expected pricing lookup by provider model ID to succeed")
+	}
+	if prompt != 1.00 || completion != 5.00 || currency != "USD" {
+		t.Fatalf("provider ID lookup: got prompt=%v completion=%v currency=%q", prompt, completion, currency)
+	}
+}
+
 func TestGetModelPricingTreatsExplicitZeroPricingAsConfigured(t *testing.T) {
 	cfg := &RouterConfig{
 		BackendModels: BackendModels{
@@ -529,6 +583,49 @@ func TestGetModelPricingTreatsExplicitZeroPricingAsConfigured(t *testing.T) {
 			completionPer1M,
 			currency,
 		)
+	}
+}
+
+func TestGetModelPricingResolvesProviderModelID(t *testing.T) {
+	cfg := &RouterConfig{
+		BackendModels: BackendModels{
+			ModelConfig: map[string]ModelParams{
+				"claude-opus-4-6": {
+					Pricing: ModelPricing{
+						Currency:        "USD",
+						PromptPer1M:     5.50,
+						CompletionPer1M: 27.50,
+					},
+					ExternalModelIDs: map[string]string{
+						"default": "eu.anthropic.claude-opus-4-6-v1",
+					},
+				},
+			},
+		},
+	}
+
+	// Lookup by short name should work as before
+	prompt, completion, currency, ok := cfg.GetModelPricing("claude-opus-4-6")
+	if !ok {
+		t.Fatal("expected pricing lookup by short name to succeed")
+	}
+	if prompt != 5.50 || completion != 27.50 || currency != "USD" {
+		t.Fatalf("short name lookup: got prompt=%v completion=%v currency=%q", prompt, completion, currency)
+	}
+
+	// Lookup by provider model ID (Envoy AI Gateway rewrites to this)
+	prompt, completion, currency, ok = cfg.GetModelPricing("eu.anthropic.claude-opus-4-6-v1")
+	if !ok {
+		t.Fatal("expected pricing lookup by provider model ID to succeed")
+	}
+	if prompt != 5.50 || completion != 27.50 || currency != "USD" {
+		t.Fatalf("provider ID lookup: got prompt=%v completion=%v currency=%q", prompt, completion, currency)
+	}
+
+	// Unknown model should still return false
+	_, _, _, ok = cfg.GetModelPricing("nonexistent-model")
+	if ok {
+		t.Fatal("expected pricing lookup for unknown model to return false")
 	}
 }
 

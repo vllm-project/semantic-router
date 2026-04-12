@@ -116,6 +116,8 @@ func (s *KNNSelector) IsTrained() bool {
 
 // ToJSON serializes the model to JSON
 func (s *KNNSelector) ToJSON() (string, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
 	if s.handle == nil {
 		return "", errors.New("selector not initialized")
 	}
@@ -206,6 +208,8 @@ func (s *KMeansSelector) IsTrained() bool {
 
 // ToJSON serializes the model to JSON
 func (s *KMeansSelector) ToJSON() (string, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
 	if s.handle == nil {
 		return "", errors.New("selector not initialized")
 	}
@@ -317,6 +321,8 @@ func (s *SVMSelector) IsTrained() bool {
 
 // ToJSON serializes the model to JSON
 func (s *SVMSelector) ToJSON() (string, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
 	if s.handle == nil {
 		return "", errors.New("selector not initialized")
 	}

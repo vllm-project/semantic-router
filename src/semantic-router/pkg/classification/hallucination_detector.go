@@ -98,15 +98,16 @@ func (d *HallucinationDetector) Initialize() error {
 		return nil
 	}
 
-	logging.Infof("Initializing hallucination detection model from: %s", d.config.ModelID)
-
 	err := candle.InitHallucinationModel(d.config.ModelID, d.config.UseCPU)
 	if err != nil {
 		return fmt.Errorf("failed to initialize hallucination detection model from %s: %w", d.config.ModelID, err)
 	}
 
 	d.initialized = true
-	logging.Infof("Hallucination detection model initialized successfully")
+	logging.ComponentEvent("classifier", "hallucination_detector_initialized", map[string]interface{}{
+		"backend":   "candle",
+		"model_ref": d.config.ModelID,
+	})
 
 	return nil
 }
@@ -223,15 +224,16 @@ func (d *HallucinationDetector) InitializeNLI() error {
 		return fmt.Errorf("NLI model config not set")
 	}
 
-	logging.Infof("Initializing NLI model from: %s", d.nliConfig.ModelID)
-
 	err := candle.InitNLIModel(d.nliConfig.ModelID, d.nliConfig.UseCPU)
 	if err != nil {
 		return fmt.Errorf("failed to initialize NLI model from %s: %w", d.nliConfig.ModelID, err)
 	}
 
 	d.nliInitialized = true
-	logging.Infof("NLI model initialized successfully")
+	logging.ComponentEvent("classifier", "hallucination_nli_initialized", map[string]interface{}{
+		"backend":   "candle",
+		"model_ref": d.nliConfig.ModelID,
+	})
 
 	return nil
 }
