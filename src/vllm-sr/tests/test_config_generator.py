@@ -84,6 +84,138 @@ routing:
     assert endpoint["hostname"] == "vllm-sr-router-container"
 
 
+def _model_route(rendered_config, model_name):
+    """Find the route entry whose x-selected-model header matches *model_name*."""
+    listener = rendered_config["static_resources"]["listeners"][0]
+    hcm = listener["filter_chains"][0]["filters"][0]["typed_config"]
+    routes = hcm["route_config"]["virtual_hosts"][0]["routes"]
+    for route in routes:
+        headers = route.get("match", {}).get("headers", [])
+        for h in headers:
+            if h.get("name") == "x-selected-model":
+                if h.get("string_match", {}).get("exact") == model_name:
+                    return route
+    raise AssertionError(f"route for model {model_name!r} not found")
+
+
+def test_backend_ref_ip_port_path_produces_correct_envoy_cluster_and_route(
+    tmp_path, monkeypatch
+):
+    """Backend ref http://10.0.0.1:8000/v1 should split into address=10.0.0.1,
+    port=8000, host_authority=10.0.0.1:8000, path_prefix=/v1, and the route
+    should use regex ^/v1(.*)$ to avoid duplicating /v1."""
+    rendered = _render_envoy_config(
+        tmp_path,
+        monkeypatch,
+        """
+version: v0.3
+listeners:
+  - name: "http-8899"
+    address: "0.0.0.0"
+    port: 8899
+providers:
+  defaults:
+    default_model: "test-model"
+  models:
+    - name: "test-model"
+      backend_refs:
+        - name: "primary"
+          endpoint: "http://10.0.0.1:8000/v1"
+          weight: 100
+routing:
+  modelCards:
+    - name: "test-model"
+  decisions:
+    - name: "default-route"
+      description: "default route"
+      priority: 100
+      rules:
+        operator: "AND"
+        conditions: []
+      modelRefs:
+        - model: "test-model"
+          use_reasoning: false
+""",
+        extproc_host="localhost",
+        router_api_host="localhost",
+    )
+
+    # --- cluster assertions ---
+    cluster = _cluster_by_name(rendered, "test_model_cluster")
+    assert cluster["type"] == "STATIC"
+    ep = cluster["load_assignment"]["endpoints"][0]["lb_endpoints"][0]["endpoint"]
+    assert ep["address"]["socket_address"]["address"] == "10.0.0.1"
+    assert ep["address"]["socket_address"]["port_value"] == 8000
+
+    # --- route assertions ---
+    route = _model_route(rendered, "test-model")
+    route_action = route["route"]
+    assert route_action["host_rewrite_literal"] == "10.0.0.1:8000"
+    assert route_action["regex_rewrite"]["pattern"]["regex"] == "^/v1(.*)$"
+    assert route_action["regex_rewrite"]["substitution"] == "/v1\\1"
+
+
+def test_backend_ref_domain_with_path_produces_correct_envoy_cluster_and_route(
+    tmp_path, monkeypatch
+):
+    """Backend ref https://api.example.com/compatible-mode/v1 should produce
+    address=api.example.com, port=443, host_authority=api.example.com (standard
+    port omitted), LOGICAL_DNS cluster, and regex_rewrite for path prefix."""
+    rendered = _render_envoy_config(
+        tmp_path,
+        monkeypatch,
+        """
+version: v0.3
+listeners:
+  - name: "http-8899"
+    address: "0.0.0.0"
+    port: 8899
+providers:
+  defaults:
+    default_model: "test-model"
+  models:
+    - name: "test-model"
+      backend_refs:
+        - name: "primary"
+          endpoint: "https://api.example.com/compatible-mode/v1/"
+          weight: 100
+routing:
+  modelCards:
+    - name: "test-model"
+  decisions:
+    - name: "default-route"
+      description: "default route"
+      priority: 100
+      rules:
+        operator: "AND"
+        conditions: []
+      modelRefs:
+        - model: "test-model"
+          use_reasoning: false
+""",
+        extproc_host="localhost",
+        router_api_host="localhost",
+    )
+
+    # --- cluster assertions ---
+    cluster = _cluster_by_name(rendered, "test_model_cluster")
+    assert cluster["type"] == "LOGICAL_DNS"
+    assert cluster["dns_lookup_family"] == "V4_ONLY"
+    ep = cluster["load_assignment"]["endpoints"][0]["lb_endpoints"][0]["endpoint"]
+    assert ep["address"]["socket_address"]["address"] == "api.example.com"
+    assert ep["address"]["socket_address"]["port_value"] == 443
+    assert ep["hostname"] == "api.example.com"
+
+    # --- route assertions ---
+    route = _model_route(rendered, "test-model")
+    route_action = route["route"]
+    # standard port 443 → host_authority should omit port
+    assert route_action["host_rewrite_literal"] == "api.example.com"
+    assert route_action["regex_rewrite"]["pattern"]["regex"] == "^/v1(.*)$"
+    assert route_action["regex_rewrite"]["substitution"] == "/compatible-mode/v1\\1"
+
+
+
 def test_generate_envoy_config_uses_logical_dns_for_api_only_router_fallback(
     tmp_path, monkeypatch
 ):
