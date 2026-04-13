@@ -29,7 +29,7 @@ var SessionModelTransitions = promauto.NewCounterVec(
 )
 
 // RecordCacheWarmthEstimate records one warmth estimate observation for model.
-// No-ops for out-of-range values or an empty model name.
+// No-ops for out-of-range values and falls back to the unknown label when model is empty.
 func RecordCacheWarmthEstimate(model string, warmth float64) {
 	if warmth < 0 || warmth > 1 {
 		return

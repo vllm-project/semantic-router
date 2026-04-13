@@ -2,6 +2,7 @@ package extproc
 
 import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/sessiontelemetry"
 )
 
 // populateSessionTransitionFields derives session-aware metadata from the
@@ -30,7 +31,18 @@ func populateSessionTransitionFields(ctx *RequestContext) {
 		} else {
 			ctx.SessionID = deriveSessionIDFromMessages(ctx.ChatCompletionMessages, userID)
 		}
-		ctx.TurnIndex = len(ctx.ChatCompletionMessages) / 2
+		ctx.TurnIndex = sessiontelemetry.ChatTurnNumber(sessionTransitionChatMessages(ctx.ChatCompletionMessages)) - 1
 		// TODO: populate PreviousModel for Chat Completions once per-turn model history is available.
 	}
+}
+
+func sessionTransitionChatMessages(messages []ChatCompletionMessage) []sessiontelemetry.ChatMessage {
+	converted := make([]sessiontelemetry.ChatMessage, len(messages))
+	for i := range messages {
+		converted[i] = sessiontelemetry.ChatMessage{
+			Role:    messages[i].Role,
+			Content: messages[i].Content,
+		}
+	}
+	return converted
 }

@@ -36,6 +36,14 @@ func TestGetTransitions_EmptyForUnknownSession(t *testing.T) {
 	}
 }
 
+func TestRecordTransition_DropsEmptySessionID(t *testing.T) {
+	ResetTransitionsForTesting()
+	RecordTransition(ModelTransitionEvent{SessionID: "", FromModel: "a", ToModel: "b"})
+	if got := GetTransitions(""); len(got) != 0 {
+		t.Errorf("expected no events for empty session ID, got %d", len(got))
+	}
+}
+
 func TestRecordTransition_CapsAtMaxPerSession(t *testing.T) {
 	ResetTransitionsForTesting()
 	for i := 0; i < MaxTransitionEventsPerSession+50; i++ {

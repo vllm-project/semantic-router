@@ -33,6 +33,9 @@ var globalTransitionStore = &transitionStore{
 // RecordTransition appends evt to the in-memory store and drops the oldest
 // entries once the per-session cap is reached.
 func RecordTransition(evt ModelTransitionEvent) {
+	if evt.SessionID == "" {
+		return
+	}
 	globalTransitionStore.mu.Lock()
 	defer globalTransitionStore.mu.Unlock()
 	list := globalTransitionStore.events[evt.SessionID]
