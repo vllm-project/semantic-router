@@ -116,8 +116,7 @@ func (r *OpenAIRouter) selectModelFromCandidates(modelRefs []config.ModelRef, de
 			modelRefs[i].LoRAName == result.SelectedModel {
 			logging.Infof("[ModelSelection] Selected %s (method=%s, score=%.4f, confidence=%.2f): %s",
 				result.SelectedModel, method, result.Score, result.Confidence, result.Reasoning)
-			// Record selection metrics
-			selection.RecordSelection(string(method), decisionName, result.SelectedModel, result.Score)
+			selection.RecordSelection(string(method), decisionName, result.SelectedModel, result.Tier, result.Score)
 			return &modelRefs[i], string(method)
 		}
 	}
