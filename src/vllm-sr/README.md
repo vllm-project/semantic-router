@@ -39,6 +39,48 @@ vllm-sr logs envoy
 vllm-sr logs dashboard
 vllm-sr logs simulator
 
+# Evaluate how signals fire for a prompt (requires: vllm-sr serve)
+# Single prompt — readable summary (default)
+vllm-sr eval --prompt "Explain inflation vs recession in plain English."
+# decision: economics
+# used signals: 3
+#   - domain:economics
+#   - keyword:inflation
+#   - embedding:price_movement
+# matched signals: 3
+#   - domains:economics
+#   - keywords:inflation
+#   - embeddings:price_movement
+# unmatched signals: 3
+# signal confidences:
+#   - domain:economics: 0.95
+#   - keyword:inflation: 0.87
+#   - embedding:price_movement: 0.82
+# routing: economics
+
+# Single prompt — full JSON payload
+vllm-sr eval --prompt "Explain inflation vs recession in plain English." --json
+
+# Multi-turn messages array (OpenAI chat format) — readable summary
+vllm-sr eval --messages '[{"role":"system","content":"You are a careful tutor."},{"role":"user","content":"Explain inflation vs recession in plain English."}]'
+
+# Multi-turn messages array — full JSON payload
+vllm-sr eval --messages '[{"role":"system","content":"You are a careful tutor."},{"role":"user","content":"Explain inflation vs recession in plain English."}]' --json
+
+# Override endpoint (e.g. remote stack or non-default port)
+vllm-sr eval --prompt "hello" --endpoint http://localhost:8080
+
+# Common errors:
+#   Router not started:
+#     ERROR - Router is not running at http://localhost:8080/api/v1/eval. Start the router with 'vllm-sr serve' and retry.
+#   Wrong port (hitting a proxy instead of the router API):
+#     ERROR - Router returned 403 from http://localhost:8080/api/v1/eval. This looks like a proxy or gateway —
+#             check that --endpoint points directly to the router API port (default: 8080), not to Envoy or another proxy.
+#   Invalid request body (400):
+#     ERROR - Router returned 400 INVALID_INPUT: text cannot be empty
+#   Service unavailable (503):
+#     ERROR - Router returned 503 SERVICE_UNAVAILABLE: classifier not ready
+
 # Check status
 vllm-sr status
 
