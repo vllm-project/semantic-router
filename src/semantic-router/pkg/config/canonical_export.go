@@ -46,10 +46,11 @@ func CanonicalRoutingFromRouterConfig(cfg *RouterConfig) CanonicalRouting {
 	}
 
 	return CanonicalRouting{
-		ModelCards:  routingModelsFromRouterConfig(cfg),
-		Signals:     canonicalSignalsFromRouterConfig(cfg),
-		Projections: canonicalProjectionsFromRouterConfig(cfg),
-		Decisions:   copyDecisions(cfg.Decisions),
+		ModelCards:    routingModelsFromRouterConfig(cfg),
+		Signals:       canonicalSignalsFromRouterConfig(cfg),
+		Projections:   canonicalProjectionsFromRouterConfig(cfg),
+		Decisions:     copyDecisions(cfg.Decisions),
+		SessionStates: append([]SessionStateConfig(nil), cfg.SessionStates...),
 	}
 }
 
