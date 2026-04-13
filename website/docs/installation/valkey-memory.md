@@ -23,8 +23,14 @@ Valkey is optional. The default memory backend is Milvus. Use Valkey when you wa
 ## Prerequisites
 
 - Valkey 8.0+ **with the Search module** enabled
-- The `valkey/valkey-bundle` Docker image includes Search out of the box
+- Text support for vector search was added in **Search module version 1.2.0**
+- The `valkey/valkey-bundle` Docker image includes Search out of the box. Search module 1.2.0 is available in the `unstable` and `9.1.0-rc1` valkey-bundle versions
+- If your Valkey deployment does not include the Search module, you can [add it manually](https://github.com/valkey-io/valkey-search/blob/main/README.md)
 - For Kubernetes: Helm 3.x and `kubectl` configured
+
+:::info Trouble with the Search module?
+If you run into issues loading or using the Search module, please [open an issue](https://github.com/vllm-project/semantic-router/issues/new) so we can help.
+:::
 
 ## Deploy with Docker
 
