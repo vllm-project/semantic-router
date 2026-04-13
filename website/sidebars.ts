@@ -33,6 +33,7 @@ const sidebars: SidebarsConfig = {
         'installation/installation',
         'installation/k8s/operator',
         'installation/configuration',
+        'installation/upgrade-rollback',
         {
           type: 'category',
           label: 'Install with Gateways',

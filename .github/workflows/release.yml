@@ -1,0 +1,222 @@
+name: Release Validation
+
+# This workflow is the release guard: it validates that all versioned surfaces
+# (Python package, Rust crate) agree with the pushed tag before any of the
+# independent publish workflows can drift.  It also produces a single, unified
+# GitHub Release note that links every published artifact.
+#
+# Individual publish workflows (docker-release, helm-publish, pypi-publish,
+# publish-crate) still trigger independently on v* tags so they remain
+# self-contained.  This workflow adds the cross-surface sanity check on top.
+
+on:
+  push:
+    tags:
+      - "v*"
+  # Allow running the validation step manually against any ref for pre-release
+  # testing (e.g. before actually pushing the tag).
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Version to validate (e.g. 0.3.0) — no leading 'v'"
+        required: true
+        type: string
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+permissions:
+  contents: write # needed to create/update the GitHub Release
+
+jobs:
+  # ─────────────────────────────────────────────────────────────────────────────
+  # validate: check that every versioned source file matches the git tag.
+  # A mismatch here means a developer forgot to bump a version before tagging —
+  # fail loudly so it is caught before artifacts land in production registries.
+  # ─────────────────────────────────────────────────────────────────────────────
+  validate:
+    name: Cross-Surface Version Validation
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.extract.outputs.version }}
+      tag: ${{ steps.extract.outputs.tag }}
+      sim_version: ${{ steps.check_sim.outputs.sim_version }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      # ── Derive version ────────────────────────────────────────────────────────
+      - name: Extract version
+        id: extract
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            VERSION="${{ inputs.version }}"
+            TAG="v${VERSION}"
+          else
+            TAG="${GITHUB_REF#refs/tags/}"
+            VERSION="${TAG#v}"
+          fi
+          echo "tag=${TAG}"     >> "$GITHUB_OUTPUT"
+          echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
+          echo "Validating release: ${TAG} (version: ${VERSION})"
+
+      # ── vllm-sr Python package ────────────────────────────────────────────────
+      - name: Validate vllm-sr pyproject.toml
+        id: check_pyproject
+        run: |
+          VERSION="${{ steps.extract.outputs.version }}"
+          PKG_VERSION=$(grep '^version = ' src/vllm-sr/pyproject.toml \
+            | head -1 | sed 's/version = "\(.*\)"/\1/')
+          echo "  vllm-sr version in pyproject.toml: ${PKG_VERSION}"
+          if [ "${PKG_VERSION}" != "${VERSION}" ]; then
+            echo "::error file=src/vllm-sr/pyproject.toml,title=Version mismatch::\
+          src/vllm-sr/pyproject.toml has '${PKG_VERSION}' but the tag is '${VERSION}'. \
+          Update the file and re-tag."
+            echo "ok=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "ok=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      # ── candle-binding Rust crate ─────────────────────────────────────────────
+      # Parse Cargo.toml with Python to avoid installing a full Rust toolchain
+      # just for a version check.
+      - name: Validate candle-binding Cargo.toml
+        id: check_cargo
+        run: |
+          VERSION="${{ steps.extract.outputs.version }}"
+          CARGO_VERSION=$(python3 - <<'EOF'
+          import re, sys
+          content = open("candle-binding/Cargo.toml").read()
+          # Isolate the [package] section (ends at the next bare [section] header)
+          pkg_section = re.split(r"^\[(?!package)", content, maxsplit=1, flags=re.MULTILINE)[0]
+          m = re.search(r'^version\s*=\s*"([^"]+)"', pkg_section, re.MULTILINE)
+          print(m.group(1) if m else "")
+          EOF
+          )
+          echo "  candle-binding version in Cargo.toml: ${CARGO_VERSION}"
+          if [ "${CARGO_VERSION}" != "${VERSION}" ]; then
+            echo "::error file=candle-binding/Cargo.toml,title=Version mismatch::\
+          candle-binding/Cargo.toml has '${CARGO_VERSION}' but the tag is '${VERSION}'. \
+          Update the file and re-tag."
+            echo "ok=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "ok=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      # ── vllm-sr-sim (informational — uses its own tag scheme) ─────────────────
+      - name: Read vllm-sr-sim version
+        id: check_sim
+        run: |
+          SIM_VERSION=$(grep '^version = ' src/fleet-sim/pyproject.toml \
+            | head -1 | sed 's/version = "\(.*\)"/\1/')
+          echo "  vllm-sr-sim version: ${SIM_VERSION} (ships on its own vllm-sr-sim-v* tag)"
+          echo "sim_version=${SIM_VERSION}" >> "$GITHUB_OUTPUT"
+
+      # ── Fail if anything is mismatched ────────────────────────────────────────
+      - name: Assert no mismatches
+        run: |
+          FAILED=false
+          [ "${{ steps.check_pyproject.outputs.ok }}" = "false" ] && FAILED=true
+          [ "${{ steps.check_cargo.outputs.ok }}"    = "false" ] && FAILED=true
+          if [ "${FAILED}" = "true" ]; then
+            echo ""
+            echo "One or more versioned files do not match tag ${{ steps.extract.outputs.tag }}."
+            echo "Fix the mismatches listed above, then delete and re-push the tag:"
+            echo "  git tag -d ${{ steps.extract.outputs.tag }}"
+            echo "  git push origin :${{ steps.extract.outputs.tag }}"
+            echo "  # (bump files, commit)"
+            echo "  git tag ${{ steps.extract.outputs.tag }}"
+            echo "  git push origin ${{ steps.extract.outputs.tag }}"
+            exit 1
+          fi
+          echo "All surfaces consistent with ${{ steps.extract.outputs.tag }}."
+
+  # ─────────────────────────────────────────────────────────────────────────────
+  # release-notes: create or update the GitHub Release with a cross-surface
+  # summary so operators can find every artifact from one place.
+  # Runs only on actual tag pushes (not workflow_dispatch test runs).
+  # ─────────────────────────────────────────────────────────────────────────────
+  release-notes:
+    name: Publish GitHub Release Notes
+    needs: validate
+    if: github.event_name == 'push'
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Resolve GHCR owner (lowercase)
+        id: owner
+        run: |
+          echo "lower=$(echo '${{ github.repository_owner }}' | tr '[:upper:]' '[:lower:]')" \
+            >> "$GITHUB_OUTPUT"
+
+      - name: Create or update GitHub Release
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: ${{ needs.validate.outputs.tag }}
+          name: "Release ${{ needs.validate.outputs.tag }}"
+          draft: false
+          prerelease: false
+          generate_release_notes: true
+          body: |
+            ## Release ${{ needs.validate.outputs.tag }}
+
+            ### Container Images (GHCR)
+
+            Always pin to a version tag in production — it is immutable.
+
+            ```bash
+            docker pull ghcr.io/${{ steps.owner.outputs.lower }}/semantic-router/extproc:${{ needs.validate.outputs.tag }}
+            docker pull ghcr.io/${{ steps.owner.outputs.lower }}/semantic-router/vllm-sr:${{ needs.validate.outputs.tag }}
+            docker pull ghcr.io/${{ steps.owner.outputs.lower }}/semantic-router/dashboard:${{ needs.validate.outputs.tag }}
+            ```
+
+            | Image | Tags pushed |
+            |-------|-------------|
+            | `extproc` | `${{ needs.validate.outputs.tag }}` · `latest` |
+            | `vllm-sr` | `${{ needs.validate.outputs.tag }}` · `latest` |
+            | `extproc-rocm` | `${{ needs.validate.outputs.tag }}` · `latest` |
+            | `vllm-sr-rocm` | `${{ needs.validate.outputs.tag }}` · `latest` |
+            | `llm-katan` | `${{ needs.validate.outputs.tag }}` · `latest` |
+            | `dashboard` | `${{ needs.validate.outputs.tag }}` · `latest` |
+
+            ### Helm Chart
+
+            ```bash
+            # Install a specific version
+            helm install semantic-router \
+              oci://ghcr.io/${{ steps.owner.outputs.lower }}/charts/semantic-router \
+              --version ${{ needs.validate.outputs.version }} \
+              --namespace vllm-semantic-router-system --create-namespace
+
+            # Upgrade to this version
+            helm upgrade semantic-router \
+              oci://ghcr.io/${{ steps.owner.outputs.lower }}/charts/semantic-router \
+              --version ${{ needs.validate.outputs.version }} \
+              --namespace vllm-semantic-router-system
+            ```
+
+            ### Python Package (PyPI)
+
+            ```bash
+            pip install vllm-sr==${{ needs.validate.outputs.version }}
+            ```
+
+            ### Rust Crate (crates.io)
+
+            ```toml
+            [dependencies]
+            candle-semantic-router = "${{ needs.validate.outputs.version }}"
+            ```
+
+            ---
+
+            **vllm-sr-sim** ships on its own `vllm-sr-sim-v*` tag and is currently at
+            `${{ needs.validate.outputs.sim_version }}`.
+
+            See the [upgrade and rollback runbook](https://github.com/${{ github.repository }}/blob/main/website/docs/installation/upgrade-rollback.md)
+            for step-by-step upgrade and rollback instructions.
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
