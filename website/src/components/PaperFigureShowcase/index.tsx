@@ -457,8 +457,8 @@ const Figure1Panel: React.FC = () => {
               onClick={() => setActiveColumn(idx)}
               aria-pressed={isActive}
               animate={inView
-                ? { opacity: isActive ? 1 : 0.55, y: 0, scale: isActive ? 1 : 0.98 }
-                : { opacity: 0.45, y: 8, scale: 0.98 }}
+                ? { opacity: isActive ? 1 : 0.74, y: 0, scale: isActive ? 1 : 0.98 }
+                : { opacity: 0.54, y: 8, scale: 0.98 }}
               transition={{ duration: 0.25 }}
               whileHover={{ scale: 1.01 }}
             >
@@ -523,8 +523,8 @@ const Figure2Panel: React.FC = () => {
               <motion.div
                 className={styles.entropyBar}
                 animate={inView
-                  ? { height: `${bar.value}%`, opacity: isActive ? 1 : 0.55, scaleX: isActive ? 1 : 0.93 }
-                  : { height: '0%', opacity: 0.4, scaleX: 0.9 }}
+                  ? { height: `${bar.value}%`, opacity: isActive ? 1 : 0.74, scaleX: isActive ? 1 : 0.95 }
+                  : { height: '0%', opacity: 0.5, scaleX: 0.92 }}
                 transition={{ delay: i * 0.08, duration: 0.35 }}
               />
               <span className={`${styles.entropyLabel} ${isActive ? styles.entropyLabelActive : ''}`}>
@@ -571,8 +571,8 @@ const Figure3Panel: React.FC = () => {
                 onClick={() => setActiveLayer(layer.key)}
                 onFocus={() => setActiveLayer(layer.key)}
                 animate={inView
-                  ? { opacity: isActive ? 1 : 0.6, y: 0, scale: isActive ? 1 : 0.98 }
-                  : { opacity: 0.45, y: 8, scale: 0.98 }}
+                  ? { opacity: isActive ? 1 : 0.76, y: 0, scale: isActive ? 1 : 0.98 }
+                  : { opacity: 0.54, y: 8, scale: 0.98 }}
                 transition={{ duration: 0.25 }}
                 whileHover={{ scale: 1.01 }}
               >
@@ -637,8 +637,8 @@ const Figure4Panel: React.FC = () => {
                   }
                 }}
                 animate={inView
-                  ? { opacity: isActiveGroup ? 1 : 0.62, y: 0, scale: isActiveGroup ? 1 : 0.98 }
-                  : { opacity: 0.45, y: 8, scale: 0.98 }}
+                  ? { opacity: isActiveGroup ? 1 : 0.76, y: 0, scale: isActiveGroup ? 1 : 0.98 }
+                  : { opacity: 0.54, y: 8, scale: 0.98 }}
                 transition={{ duration: 0.25 }}
               >
                 <span className={styles.taxonomyTitle}>{groupMeta.title}</span>
@@ -720,8 +720,8 @@ const Figure14Panel: React.FC = () => {
                 onClick={() => setActiveNode(step.key)}
                 onFocus={() => setActiveNode(step.key)}
                 animate={inView
-                  ? { opacity: isActive ? 1 : 0.62, y: 0, scale: isActive ? 1 : 0.98 }
-                  : { opacity: 0.45, y: 8, scale: 0.98 }}
+                  ? { opacity: isActive ? 1 : 0.78, y: 0, scale: isActive ? 1 : 0.98 }
+                  : { opacity: 0.54, y: 8, scale: 0.98 }}
                 transition={{ duration: 0.22 }}
               >
                 {isSpecNode && (
@@ -853,8 +853,8 @@ const Figure9Panel: React.FC = () => {
                 className={`${styles.transformerBlock} ${isActive ? styles.transformerBlockActive : styles.transformerBlockMuted} ${isDecisionLayer ? styles.transformerBlockDecision : ''}`}
                 onClick={() => setActiveLayer(index)}
                 animate={inView
-                  ? { opacity: isActive ? 1 : 0.64, y: 0, scale: isActive ? 1 : 0.98 }
-                  : { opacity: 0.45, y: 8, scale: 0.98 }}
+                  ? { opacity: isActive ? 1 : 0.78, y: 0, scale: isActive ? 1 : 0.98 }
+                  : { opacity: 0.54, y: 8, scale: 0.98 }}
                 transition={{ duration: 0.24 }}
               >
                 <span className={styles.transformerBlockTag}>{layer.tag}</span>

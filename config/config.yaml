@@ -467,6 +467,22 @@ routing:
           - name: support_escalated
             gte: 0.45
 
+  session_states:
+    - name: session_routing
+      fields:
+        - name: turn_number
+          type: int
+        - name: current_model
+          type: string
+        - name: cumulative_cost_usd
+          type: float
+        - name: retry_count_ema
+          type: float
+        - name: quality_score_ema
+          type: float
+        - name: kv_cache_warm
+          type: float
+
   decisions:
     - name: static_business_route
       description: Static fallback for standard business traffic.

@@ -38,8 +38,9 @@
   margin-left: 0;
   border: 1px solid var(--site-border);
   border-radius: 1.35rem;
-  background: rgba(23, 23, 23, 0.92);
+  background: rgba(255, 253, 248, 0.9);
   backdrop-filter: blur(12px);
+  box-shadow: var(--site-shadow);
 }
 
 .theme-doc-sidebar-menu {
@@ -47,7 +48,7 @@
 }
 
 .theme-doc-version-badge {
-  background: rgba(255, 255, 255, 0.08);
+  background: rgba(17, 17, 17, 0.08);
   color: var(--site-text);
 }
 
@@ -66,7 +67,7 @@
   border: 1px solid var(--site-border);
   border-radius: 1.6rem;
   background:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.025), transparent 18%),
+    linear-gradient(180deg, rgba(17, 17, 17, 0.025), transparent 18%),
     var(--site-surface);
   box-shadow: var(--site-shadow);
 }
@@ -98,27 +99,27 @@
 }
 
 .theme-doc-markdown thead tr {
-  background: rgba(255, 255, 255, 0.04);
+  background: rgba(17, 17, 17, 0.04);
 }
 
 .theme-doc-markdown tr:nth-child(2n) {
-  background: rgba(255, 255, 255, 0.02);
+  background: rgba(17, 17, 17, 0.02);
 }
 
 .theme-doc-markdown pre,
 .theme-doc-markdown .prism-code {
-  background: #0d0d0d !important;
+  background: #f6f2ea !important;
 }
 
 .theme-doc-markdown .theme-admonition {
   border: 1px solid var(--site-border);
   border-radius: 1.1rem;
-  background: rgba(255, 255, 255, 0.03);
+  background: rgba(17, 17, 17, 0.025);
   box-shadow: none;
 }
 
 .theme-doc-markdown .theme-admonition-heading {
-  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+  border-bottom: 1px solid rgba(17, 17, 17, 0.08);
 }
 
 .theme-doc-toc-desktop {
@@ -129,7 +130,8 @@
   padding: 1.2rem;
   border: 1px solid var(--site-border);
   border-radius: 1.2rem;
-  background: rgba(21, 21, 21, 0.9);
+  background: rgba(255, 253, 248, 0.92);
+  box-shadow: var(--site-shadow);
 }
 
 .theme-doc-footer .pagination-nav {
@@ -144,7 +146,7 @@
 .menu__link:hover,
 .menu__link--active {
   color: var(--site-text);
-  background: rgba(255, 255, 255, 0.06);
+  background: rgba(17, 17, 17, 0.06);
 }
 
 .menu__caret:before {
@@ -155,7 +157,7 @@
 .theme-doc-markdown [class*='zoomContainer'] {
   border: 1px solid var(--site-border);
   border-radius: 1.25rem;
-  background: rgba(0, 0, 0, 0.16);
+  background: rgba(255, 255, 255, 0.72);
 }
 
 @media (min-width: 997px) {

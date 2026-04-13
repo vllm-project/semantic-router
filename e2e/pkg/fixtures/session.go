@@ -54,6 +54,30 @@ func OpenServiceSession(ctx context.Context, client *kubernetes.Clientset, opts 
 	return newSession(localPort, stop), nil
 }
 
+// OpenSemanticRouterMetricsSession establishes a port-forward to the router Prometheus /metrics endpoint (port 9190).
+func OpenSemanticRouterMetricsSession(ctx context.Context, client *kubernetes.Clientset, opts pkgtestcases.TestCaseOptions) (*ServiceSession, error) {
+	localPort, err := getAvailablePort()
+	if err != nil {
+		return nil, fmt.Errorf("failed to get available port: %w", err)
+	}
+
+	stop, err := helpers.StartPortForward(
+		ctx,
+		client,
+		opts.RestConfig,
+		"vllm-semantic-router-system",
+		"semantic-router",
+		fmt.Sprintf("%s:9190", localPort),
+		opts.Verbose,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("metrics port-forward failed: %w", err)
+	}
+
+	time.Sleep(2 * time.Second)
+	return newSession(localPort, stop), nil
+}
+
 // OpenRouterAPISession establishes a port-forward to the semantic-router API service.
 func OpenRouterAPISession(ctx context.Context, client *kubernetes.Clientset, opts pkgtestcases.TestCaseOptions) (*ServiceSession, error) {
 	localPort, err := getAvailablePort()

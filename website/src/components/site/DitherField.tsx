@@ -43,7 +43,7 @@ export default function DitherField({ className }: DitherFieldProps): JSX.Elemen
     }
 
     const draw = () => {
-      context.fillStyle = '#111111'
+      context.fillStyle = '#ffffff'
       context.fillRect(0, 0, width, height)
 
       const cell = 6
@@ -64,7 +64,7 @@ export default function DitherField({ className }: DitherFieldProps): JSX.Elemen
           intensity += (Math.random() - 0.5) * 0.08
 
           if (intensity + getThreshold(x, y) > 0.5) {
-            context.fillStyle = '#ecece7'
+            context.fillStyle = '#101214'
             context.fillRect(x * cell, y * cell, cell - 1, cell - 1)
           }
         }

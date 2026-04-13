@@ -42,6 +42,7 @@ def test_cli_help_lists_registered_commands():
         "logs",
         "stop",
         "dashboard",
+        "chat",
     ):
         assert command_name in result.output
     assert " init" not in result.output

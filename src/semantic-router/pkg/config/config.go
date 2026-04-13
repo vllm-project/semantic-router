@@ -185,6 +185,7 @@ type IntelligentRouting struct {
 	Strategy        string               `yaml:"strategy,omitempty"`
 	ModelSelection  ModelSelectionConfig `yaml:"model_selection,omitempty"`
 	ReasoningConfig `yaml:",inline"`
+	SessionStates   []SessionStateConfig `yaml:"session_states,omitempty"`
 }
 
 // BackendModels captures configured backend endpoints and model metadata.
