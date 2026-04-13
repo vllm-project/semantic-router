@@ -271,7 +271,7 @@ func (f *FileStorage) writeFile(entries map[string]Entry) error {
 	}
 
 	tmpPath := f.path + ".tmp"
-	if err := os.WriteFile(tmpPath, data, 0o644); err != nil {
+	if err := os.WriteFile(tmpPath, data, 0o600); err != nil {
 		return fmt.Errorf("lookuptable: failed to write temp file: %w", err)
 	}
 

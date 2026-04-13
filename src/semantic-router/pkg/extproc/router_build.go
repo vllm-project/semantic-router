@@ -11,6 +11,7 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/ratelimit"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/routerreplay"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/routerreplay/store"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/selection"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/services"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/tools"
@@ -38,6 +39,7 @@ type routerComponents struct {
 	memoryExtractor      *memory.MemoryExtractor
 	credentialResolver   *authz.CredentialResolver
 	rateLimiter          *ratelimit.RateLimitResolver
+	lookupTableCancel    func()
 }
 
 // NewOpenAIRouter creates a new OpenAI API router instance.
@@ -123,7 +125,11 @@ func buildRouterComponents(cfg *config.RouterConfig) (*routerComponents, error) 
 
 	responseAPIFilter := createResponseAPIFilter(cfg)
 	replayRecorders, replayRecorder, replayStoreShared := createReplayRuntime(cfg)
-	modelSelector := createModelSelectorRegistry(cfg)
+	var replayReaderForLookup store.Reader
+	if replayRecorder != nil {
+		replayReaderForLookup = replayRecorder.Reader()
+	}
+	modelSelector, _, lookupTableCancel := createModelSelectorRegistry(cfg, replayReaderForLookup)
 	memoryStore, memoryExtractor := createMemoryRuntime(cfg)
 	credentialResolver := buildCredentialResolver(cfg)
 	rateLimiter := buildRateLimitResolver(cfg)
@@ -155,6 +161,7 @@ func buildRouterComponents(cfg *config.RouterConfig) (*routerComponents, error) 
 		memoryExtractor:      memoryExtractor,
 		credentialResolver:   credentialResolver,
 		rateLimiter:          rateLimiter,
+		lookupTableCancel:    lookupTableCancel,
 	}, nil
 }
 
@@ -175,5 +182,6 @@ func (components *routerComponents) buildRouter() *OpenAIRouter {
 		MemoryExtractor:       components.memoryExtractor,
 		CredentialResolver:    components.credentialResolver,
 		RateLimiter:           components.rateLimiter,
+		lookupTableCancel:     components.lookupTableCancel,
 	}
 }

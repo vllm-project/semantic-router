@@ -282,6 +282,7 @@ func (s *Server) reloadRouterFromConfig(
 	}
 	attachRuntimeRegistry(newRouter, s.runtime)
 	if err := warmupReloadRouter(newRouter, runtimeState); err != nil {
+		_ = newRouter.Close()
 		return fmt.Errorf("runtime warmup failed: %w", err)
 	}
 
@@ -292,7 +293,11 @@ func (s *Server) reloadRouterFromConfig(
 		replaceReloadConfig(candidateCfg)
 	}
 	logLoadedRouterConfig(configPath, candidateCfg)
+	oldRouter := s.service.GetRouter()
 	s.service.Swap(newRouter)
+	if oldRouter != nil {
+		_ = oldRouter.Close()
+	}
 	publishRouterState(candidateCfg, newRouter, s.runtime)
 	return nil
 }

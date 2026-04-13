@@ -12,7 +12,7 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/selection/lookuptable"
 )
 
-func createModelSelectorRegistry(cfg *config.RouterConfig, replayReader store.Reader) *selection.Registry {
+func createModelSelectorRegistry(cfg *config.RouterConfig, replayReader store.Reader) (*selection.Registry, lookuptable.LookupTableStorage, func()) {
 	modelSelectionCfg := buildModelSelectionConfig(cfg)
 	backendModels := cfg.BackendModels
 	selectionFactory := selection.NewFactory(modelSelectionCfg)
@@ -31,7 +31,8 @@ func createModelSelectorRegistry(cfg *config.RouterConfig, replayReader store.Re
 		return output.Embedding, nil
 	})
 
-	if lt := buildLookupTable(cfg, replayReader); lt != nil {
+	lt, cancel := buildLookupTable(cfg, replayReader)
+	if lt != nil {
 		selectionFactory = selectionFactory.WithLookupTable(lt)
 	}
 
@@ -40,7 +41,7 @@ func createModelSelectorRegistry(cfg *config.RouterConfig, replayReader store.Re
 	logging.ComponentEvent("extproc", "model_selection_registry_initialized", map[string]interface{}{
 		"mode": "per_decision_algorithm_config",
 	})
-	return registry
+	return registry, lt, cancel
 }
 
 func buildModelSelectionConfig(cfg *config.RouterConfig) *selection.ModelSelectionConfig {
@@ -218,21 +219,19 @@ func buildMLSelectionConfig(cfg *config.RouterConfig) *selection.MLSelectorConfi
 }
 
 // buildLookupTable constructs a LookupTable from the router config.
-// Returns nil when lookup tables are disabled or not configured.
+// Returns (nil, nil) when lookup tables are disabled or not configured.
 //
-// Initialization order:
-//  1. Create file or memory storage backend.
-//  2. Load any persisted data from disk (file backend only).
-//  3. If populate_from_replay is true, derive entries from replayReader immediately.
-//  4. Apply YAML config overrides on top (always take precedence).
-//  5. Start background auto-save and/or periodic re-population goroutines.
-func buildLookupTable(cfg *config.RouterConfig, replayReader store.Reader) lookuptable.LookupTable {
+// The returned cancel function stops background auto-save and periodic
+// re-population goroutines. Callers should invoke it when the router is
+// being shut down or reloaded.
+func buildLookupTable(cfg *config.RouterConfig, replayReader store.Reader) (lookuptable.LookupTableStorage, func()) {
 	ltCfg := cfg.IntelligentRouting.ModelSelection.LookupTables
 	if !ltCfg.Enabled {
-		return nil
+		return nil, nil
 	}
 
 	var storage lookuptable.LookupTableStorage
+	var cancelFuncs []func()
 
 	if ltCfg.StoragePath != "" {
 		fs, err := lookuptable.NewFileStorage(ltCfg.StoragePath)
@@ -246,9 +245,12 @@ func buildLookupTable(cfg *config.RouterConfig, replayReader store.Reader) looku
 			if ltCfg.AutoSaveInterval != "" {
 				if interval, err := time.ParseDuration(ltCfg.AutoSaveInterval); err == nil {
 					fs.StartAutoSave(interval)
+					cancelFuncs = append(cancelFuncs, func() { _ = fs.Close() })
 				} else {
 					logging.Warnf("[RouterSelection] Invalid lookup table auto_save_interval %q: %v", ltCfg.AutoSaveInterval, err)
 				}
+			} else {
+				cancelFuncs = append(cancelFuncs, func() { _ = fs.Close() })
 			}
 			storage = fs
 		}
@@ -256,13 +258,13 @@ func buildLookupTable(cfg *config.RouterConfig, replayReader store.Reader) looku
 		storage = lookuptable.NewMemoryStorage()
 	}
 
-	// Derive entries from replay records if configured.
+	// Derive entries from replay records asynchronously so startup is not blocked.
 	if ltCfg.PopulateFromReplay && replayReader != nil {
-		populateFromReplay(storage, replayReader)
+		go populateFromReplay(storage, replayReader)
 
 		if ltCfg.PopulateInterval != "" {
 			if interval, err := time.ParseDuration(ltCfg.PopulateInterval); err == nil {
-				startLookupTablePopulator(storage, replayReader, interval)
+				cancelFuncs = append(cancelFuncs, startLookupTablePopulator(storage, replayReader, interval))
 			} else {
 				logging.Warnf("[RouterSelection] Invalid lookup table populate_interval %q: %v", ltCfg.PopulateInterval, err)
 			}
@@ -291,7 +293,12 @@ func buildLookupTable(cfg *config.RouterConfig, replayReader store.Reader) looku
 		"has_overrides":        len(ltCfg.QualityGaps)+len(ltCfg.HandoffPenalties)+len(ltCfg.RemainingTurnPriors) > 0,
 	})
 
-	return storage
+	cancel := func() {
+		for _, f := range cancelFuncs {
+			f()
+		}
+	}
+	return storage, cancel
 }
 
 // populateFromReplay fetches all records from the replay reader and runs the
@@ -318,17 +325,24 @@ func populateFromReplay(storage lookuptable.LookupTableStorage, reader store.Rea
 }
 
 // startLookupTablePopulator launches a background goroutine that periodically
-// re-derives lookup table entries from the replay store. It runs until the
-// process exits (no shutdown signal needed — the goroutine is fire-and-forget).
-func startLookupTablePopulator(storage lookuptable.LookupTableStorage, reader store.Reader, interval time.Duration) {
+// re-derives lookup table entries from the replay store.
+// The returned cancel function stops the goroutine.
+func startLookupTablePopulator(storage lookuptable.LookupTableStorage, reader store.Reader, interval time.Duration) func() {
+	ctx, cancel := context.WithCancel(context.Background())
 	go func() {
 		ticker := time.NewTicker(interval)
 		defer ticker.Stop()
-		for range ticker.C {
-			populateFromReplay(storage, reader)
+		for {
+			select {
+			case <-ticker.C:
+				populateFromReplay(storage, reader)
+			case <-ctx.Done():
+				return
+			}
 		}
 	}()
 	logging.ComponentEvent("extproc", "lookuptable_populator_started", map[string]interface{}{
 		"interval": interval.String(),
 	})
+	return cancel
 }
