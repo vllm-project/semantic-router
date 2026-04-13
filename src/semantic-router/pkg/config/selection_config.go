@@ -14,6 +14,64 @@ type ModelSelectionConfig struct {
 	AutoMix  AutoMixSelectionConfig  `yaml:"automix,omitempty"`
 	Hybrid   HybridSelectionConfig   `yaml:"hybrid,omitempty"`
 	ML       MLSelectionConfig       `yaml:"ml,omitempty"`
+
+	// LookupTables configures persisted lookup tables for session-aware routing.
+	LookupTables LookupTableConfig `yaml:"lookup_tables,omitempty"`
+}
+
+// LookupTableConfig configures session-routing lookup tables that replace
+// hardcoded constants with data-driven values.
+type LookupTableConfig struct {
+	// Enabled activates lookup table resolution during model selection.
+	Enabled bool `yaml:"enabled,omitempty"`
+
+	// StoragePath is the path to the JSON file used for persistence.
+	// When empty, an in-memory backend is used (data lost on restart).
+	StoragePath string `yaml:"storage_path,omitempty"`
+
+	// AutoSaveInterval is the interval at which dirty entries are flushed to
+	// disk (e.g. "5m"). Requires StoragePath to be set.
+	AutoSaveInterval string `yaml:"auto_save_interval,omitempty"`
+
+	// PopulateFromReplay enables automatic derivation of lookup table entries
+	// from router replay records. Requires a replay store to be configured.
+	PopulateFromReplay bool `yaml:"populate_from_replay,omitempty"`
+
+	// PopulateInterval is how often to re-derive entries from the replay store
+	// (e.g. "15m"). When empty, entries are only derived once at startup.
+	// Requires PopulateFromReplay to be true.
+	PopulateInterval string `yaml:"populate_interval,omitempty"`
+
+	// QualityGaps are manual overrides for quality_gap entries.
+	// Override values take precedence over replay-derived values.
+	QualityGaps []QualityGapOverride `yaml:"quality_gaps,omitempty"`
+
+	// HandoffPenalties are manual overrides for handoff_penalty entries.
+	HandoffPenalties []HandoffPenaltyOverride `yaml:"handoff_penalties,omitempty"`
+
+	// RemainingTurnPriors are manual overrides for remaining_turn_prior entries.
+	RemainingTurnPriors []RemainingTurnPriorOverride `yaml:"remaining_turn_priors,omitempty"`
+}
+
+// QualityGapOverride manually sets a quality_gap entry.
+type QualityGapOverride struct {
+	TaskFamily     string  `yaml:"task_family"`
+	CurrentModel   string  `yaml:"current_model"`
+	CandidateModel string  `yaml:"candidate_model"`
+	Value          float64 `yaml:"value"`
+}
+
+// HandoffPenaltyOverride manually sets a handoff_penalty entry.
+type HandoffPenaltyOverride struct {
+	FromModel string  `yaml:"from_model"`
+	ToModel   string  `yaml:"to_model"`
+	Value     float64 `yaml:"value"`
+}
+
+// RemainingTurnPriorOverride manually sets a remaining_turn_prior entry.
+type RemainingTurnPriorOverride struct {
+	IntentOrDomain string  `yaml:"intent_or_domain"`
+	Value          float64 `yaml:"value"`
 }
 
 // MLSelectionConfig holds configuration for the shared ML-based selectors.

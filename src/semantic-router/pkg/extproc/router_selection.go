@@ -1,13 +1,18 @@
 package extproc
 
 import (
+	"context"
+	"time"
+
 	candle_binding "github.com/vllm-project/semantic-router/candle-binding"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/routerreplay/store"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/selection"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/selection/lookuptable"
 )
 
-func createModelSelectorRegistry(cfg *config.RouterConfig) *selection.Registry {
+func createModelSelectorRegistry(cfg *config.RouterConfig, replayReader store.Reader) *selection.Registry {
 	modelSelectionCfg := buildModelSelectionConfig(cfg)
 	backendModels := cfg.BackendModels
 	selectionFactory := selection.NewFactory(modelSelectionCfg)
@@ -25,6 +30,10 @@ func createModelSelectorRegistry(cfg *config.RouterConfig) *selection.Registry {
 		}
 		return output.Embedding, nil
 	})
+
+	if lt := buildLookupTable(cfg, replayReader); lt != nil {
+		selectionFactory = selectionFactory.WithLookupTable(lt)
+	}
 
 	registry := selectionFactory.CreateAll()
 	selection.GlobalRegistry = registry
@@ -206,4 +215,120 @@ func buildMLSelectionConfig(cfg *config.RouterConfig) *selection.MLSelectorConfi
 			PretrainedPath: mlCfg.MLP.PretrainedPath,
 		},
 	}
+}
+
+// buildLookupTable constructs a LookupTable from the router config.
+// Returns nil when lookup tables are disabled or not configured.
+//
+// Initialization order:
+//  1. Create file or memory storage backend.
+//  2. Load any persisted data from disk (file backend only).
+//  3. If populate_from_replay is true, derive entries from replayReader immediately.
+//  4. Apply YAML config overrides on top (always take precedence).
+//  5. Start background auto-save and/or periodic re-population goroutines.
+func buildLookupTable(cfg *config.RouterConfig, replayReader store.Reader) lookuptable.LookupTable {
+	ltCfg := cfg.IntelligentRouting.ModelSelection.LookupTables
+	if !ltCfg.Enabled {
+		return nil
+	}
+
+	var storage lookuptable.LookupTableStorage
+
+	if ltCfg.StoragePath != "" {
+		fs, err := lookuptable.NewFileStorage(ltCfg.StoragePath)
+		if err != nil {
+			logging.Errorf("[RouterSelection] Failed to create lookup table file storage: %v", err)
+			storage = lookuptable.NewMemoryStorage()
+		} else {
+			if err := fs.Load(); err != nil {
+				logging.Warnf("[RouterSelection] Failed to load lookup table from %s: %v", ltCfg.StoragePath, err)
+			}
+			if ltCfg.AutoSaveInterval != "" {
+				if interval, err := time.ParseDuration(ltCfg.AutoSaveInterval); err == nil {
+					fs.StartAutoSave(interval)
+				} else {
+					logging.Warnf("[RouterSelection] Invalid lookup table auto_save_interval %q: %v", ltCfg.AutoSaveInterval, err)
+				}
+			}
+			storage = fs
+		}
+	} else {
+		storage = lookuptable.NewMemoryStorage()
+	}
+
+	// Derive entries from replay records if configured.
+	if ltCfg.PopulateFromReplay && replayReader != nil {
+		populateFromReplay(storage, replayReader)
+
+		if ltCfg.PopulateInterval != "" {
+			if interval, err := time.ParseDuration(ltCfg.PopulateInterval); err == nil {
+				startLookupTablePopulator(storage, replayReader, interval)
+			} else {
+				logging.Warnf("[RouterSelection] Invalid lookup table populate_interval %q: %v", ltCfg.PopulateInterval, err)
+			}
+		}
+	}
+
+	// Apply YAML config overrides — these always take precedence over derived values.
+	now := time.Now()
+	for _, o := range ltCfg.QualityGaps {
+		_ = storage.Set(lookuptable.QualityGapKey(o.TaskFamily, o.CurrentModel, o.CandidateModel),
+			lookuptable.Entry{Value: o.Value, Source: lookuptable.SourceConfigOverride, UpdatedAt: now})
+	}
+	for _, o := range ltCfg.HandoffPenalties {
+		_ = storage.Set(lookuptable.HandoffPenaltyKey(o.FromModel, o.ToModel),
+			lookuptable.Entry{Value: o.Value, Source: lookuptable.SourceConfigOverride, UpdatedAt: now})
+	}
+	for _, o := range ltCfg.RemainingTurnPriors {
+		_ = storage.Set(lookuptable.RemainingTurnPriorKey(o.IntentOrDomain),
+			lookuptable.Entry{Value: o.Value, Source: lookuptable.SourceConfigOverride, UpdatedAt: now})
+	}
+
+	logging.ComponentEvent("extproc", "lookuptable_initialized", map[string]interface{}{
+		"storage_path":         ltCfg.StoragePath,
+		"entry_count":          len(storage.All()),
+		"populate_from_replay": ltCfg.PopulateFromReplay,
+		"has_overrides":        len(ltCfg.QualityGaps)+len(ltCfg.HandoffPenalties)+len(ltCfg.RemainingTurnPriors) > 0,
+	})
+
+	return storage
+}
+
+// populateFromReplay fetches all records from the replay reader and runs the
+// builder synchronously. Errors are logged but do not prevent startup.
+func populateFromReplay(storage lookuptable.LookupTableStorage, reader store.Reader) {
+	records, err := reader.List(context.Background())
+	if err != nil {
+		logging.Errorf("[RouterSelection] Failed to list replay records for lookup table population: %v", err)
+		return
+	}
+	if len(records) == 0 {
+		logging.Debugf("[RouterSelection] No replay records available for lookup table population")
+		return
+	}
+	builder := lookuptable.NewBuilder(storage)
+	if err := builder.PopulateFromRecords(records); err != nil {
+		logging.Errorf("[RouterSelection] Failed to populate lookup table from replay records: %v", err)
+		return
+	}
+	logging.ComponentEvent("extproc", "lookuptable_populated_from_replay", map[string]interface{}{
+		"record_count": len(records),
+		"entry_count":  len(storage.All()),
+	})
+}
+
+// startLookupTablePopulator launches a background goroutine that periodically
+// re-derives lookup table entries from the replay store. It runs until the
+// process exits (no shutdown signal needed — the goroutine is fire-and-forget).
+func startLookupTablePopulator(storage lookuptable.LookupTableStorage, reader store.Reader, interval time.Duration) {
+	go func() {
+		ticker := time.NewTicker(interval)
+		defer ticker.Stop()
+		for range ticker.C {
+			populateFromReplay(storage, reader)
+		}
+	}()
+	logging.ComponentEvent("extproc", "lookuptable_populator_started", map[string]interface{}{
+		"interval": interval.String(),
+	})
 }
