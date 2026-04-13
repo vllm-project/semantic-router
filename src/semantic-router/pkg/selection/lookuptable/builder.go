@@ -17,6 +17,7 @@ limitations under the License.
 package lookuptable
 
 import (
+	"fmt"
 	"sort"
 	"time"
 
@@ -74,11 +75,12 @@ func (b *Builder) PopulateFromRecords(records []store.Record) error {
 		return nil
 	}
 
+	window := aggregationWindow(records)
 	batch := make(map[Key]Entry)
 
-	b.deriveQualityGaps(records, batch)
-	b.deriveHandoffPenalties(records, batch)
-	b.deriveRemainingTurnPriors(records, batch)
+	b.deriveQualityGaps(records, batch, window)
+	b.deriveHandoffPenalties(records, batch, window)
+	b.deriveRemainingTurnPriors(records, batch, window)
 
 	// Respect existing config overrides: skip keys already set that way.
 	for k := range batch {
@@ -99,7 +101,7 @@ func (b *Builder) PopulateFromRecords(records []store.Record) error {
 }
 
 // deriveQualityGaps populates quality_gap entries from per-category model scores.
-func (b *Builder) deriveQualityGaps(records []store.Record, batch map[Key]Entry) {
+func (b *Builder) deriveQualityGaps(records []store.Record, batch map[Key]Entry, window string) {
 	// category → model → (sum of confidence scores, count)
 	type scoreAcc struct{ sum float64; n int }
 	acc := make(map[string]map[string]*scoreAcc) // category → model → acc
@@ -137,10 +139,11 @@ func (b *Builder) deriveQualityGaps(records []store.Record, batch map[Key]Entry)
 				gap := avgs[candidate] - avgs[current]
 				key := QualityGapKey(category, current, candidate)
 				batch[key] = Entry{
-					Value:       gap,
-					Source:      SourceReplayDerived,
-					UpdatedAt:   time.Now(),
-					SampleCount: counts[current] + counts[candidate],
+					Value:             gap,
+					Source:            SourceReplayDerived,
+					UpdatedAt:         time.Now(),
+					SampleCount:       counts[current] + counts[candidate],
+					AggregationWindow: window,
 				}
 			}
 		}
@@ -182,7 +185,7 @@ func groupIntoSessions(records []store.Record) [][]store.Record {
 
 // deriveHandoffPenalties detects model switches within pseudo-sessions and
 // computes the associated cost delta via EMA.
-func (b *Builder) deriveHandoffPenalties(records []store.Record, batch map[Key]Entry) {
+func (b *Builder) deriveHandoffPenalties(records []store.Record, batch map[Key]Entry, window string) {
 	sessions := groupIntoSessions(records)
 
 	// (from, to) → EMA value + sample count
@@ -220,10 +223,11 @@ func (b *Builder) deriveHandoffPenalties(records []store.Record, batch map[Key]E
 	for pair, a := range acc {
 		key := HandoffPenaltyKey(pair[0], pair[1])
 		batch[key] = Entry{
-			Value:       a.ema,
-			Source:      SourceReplayDerived,
-			UpdatedAt:   time.Now(),
-			SampleCount: a.n,
+			Value:             a.ema,
+			Source:            SourceReplayDerived,
+			UpdatedAt:         time.Now(),
+			SampleCount:       a.n,
+			AggregationWindow: window,
 		}
 	}
 }
@@ -238,7 +242,7 @@ func (b *Builder) deriveHandoffPenalties(records []store.Record, batch map[Key]E
 //
 // Example: if coding sessions average 5 turns, the stored value is 4.0,
 // meaning that at turn 1 the router expects 4 more turns to follow.
-func (b *Builder) deriveRemainingTurnPriors(records []store.Record, batch map[Key]Entry) {
+func (b *Builder) deriveRemainingTurnPriors(records []store.Record, batch map[Key]Entry, window string) {
 	sessions := groupIntoSessions(records)
 
 	// category → list of session lengths (in turns)
@@ -274,10 +278,11 @@ func (b *Builder) deriveRemainingTurnPriors(records []store.Record, batch map[Ke
 		}
 		key := RemainingTurnPriorKey(category)
 		batch[key] = Entry{
-			Value:       prior,
-			Source:      SourceReplayDerived,
-			UpdatedAt:   time.Now(),
-			SampleCount: len(lengths),
+			Value:             prior,
+			Source:            SourceReplayDerived,
+			UpdatedAt:         time.Now(),
+			SampleCount:       len(lengths),
+			AggregationWindow: window,
 		}
 	}
 }
@@ -291,6 +296,36 @@ func costDelta(prev, cur store.Record) (float64, bool) {
 		return 0, false
 	}
 	return *cur.ActualCost - *prev.ActualCost, true
+}
+
+// aggregationWindow computes a human-readable duration string (e.g. "7d", "3h")
+// representing the time span between the earliest and latest record timestamps.
+// Returns "" if fewer than 2 records have non-zero timestamps.
+func aggregationWindow(records []store.Record) string {
+	var earliest, latest time.Time
+	for _, r := range records {
+		if r.Timestamp.IsZero() {
+			continue
+		}
+		if earliest.IsZero() || r.Timestamp.Before(earliest) {
+			earliest = r.Timestamp
+		}
+		if latest.IsZero() || r.Timestamp.After(latest) {
+			latest = r.Timestamp
+		}
+	}
+	if earliest.IsZero() || latest.IsZero() {
+		return ""
+	}
+	d := latest.Sub(earliest)
+	if d < time.Minute {
+		return ""
+	}
+	if d >= 24*time.Hour {
+		days := int(d.Hours() / 24)
+		return fmt.Sprintf("%dd", days)
+	}
+	return fmt.Sprintf("%dh", int(d.Hours()))
 }
 
 // sortedKeys returns the sorted keys of a string→float64 map.

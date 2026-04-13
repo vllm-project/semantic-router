@@ -162,6 +162,10 @@ type Entry struct {
 	// SampleCount is the number of replay records that contributed to this
 	// entry's value (0 for manually set entries).
 	SampleCount int `json:"sample_count,omitempty"`
+
+	// AggregationWindow describes the time span of data used to derive this
+	// entry (e.g. "7d", "30d"). Empty for config overrides or manual entries.
+	AggregationWindow string `json:"aggregation_window,omitempty"`
 }
 
 const (
