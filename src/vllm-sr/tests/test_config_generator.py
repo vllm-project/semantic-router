@@ -92,9 +92,10 @@ def _model_route(rendered_config, model_name):
     for route in routes:
         headers = route.get("match", {}).get("headers", [])
         for h in headers:
-            if h.get("name") == "x-selected-model":
-                if h.get("string_match", {}).get("exact") == model_name:
-                    return route
+            if h.get("name") == "x-selected-model" and h.get(
+                "string_match", {}
+            ).get("exact") == model_name:
+                return route
     raise AssertionError(f"route for model {model_name!r} not found")
 
 
