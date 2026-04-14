@@ -205,7 +205,7 @@ func (s *ClassificationAPIServer) handleUpdateVectorStore(w http.ResponseWriter,
 		return
 	}
 
-	vs, err := manager.UpdateStore(id, req)
+	vs, err := manager.UpdateStore(r.Context(), id, req)
 	if err != nil {
 		s.writeErrorResponse(w, http.StatusNotFound, "NOT_FOUND", "vector store not found")
 		return
