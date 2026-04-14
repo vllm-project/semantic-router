@@ -153,7 +153,9 @@ def generate_envoy_config_from_user_config(
                     "name": backend.name or f"backend-{index + 1}",
                     "address": host,
                     "port": int(port),
-                    "host_authority": f"{host}:{port}" if int(port) not in (80, 443) else host,
+                    "host_authority": (
+                        f"{host}:{port}" if int(port) not in (80, 443) else host
+                    ),
                     "path": path,
                     "weight": backend.weight,
                     "protocol": protocol,

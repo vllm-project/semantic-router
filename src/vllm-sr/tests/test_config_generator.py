@@ -215,7 +215,6 @@ routing:
     assert route_action["regex_rewrite"]["substitution"] == "/compatible-mode/v1\\1"
 
 
-
 def test_generate_envoy_config_uses_logical_dns_for_api_only_router_fallback(
     tmp_path, monkeypatch
 ):
