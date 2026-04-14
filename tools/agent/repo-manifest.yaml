@@ -119,6 +119,7 @@ docs:
   - docs/agent/README.md
   - docs/agent/context-management.md
   - docs/agent/governance.md
+  - docs/agent/lookup-tables.md
   - docs/agent/plans/README.md
   - docs/agent/plans/pl-0001-harness-roadmap.md
   - docs/agent/plans/pl-0002-e2e-rationalization-roadmap.md
