@@ -34,7 +34,7 @@ func TestHandleReadyReturns503WhenStatusFileMissing(t *testing.T) {
 func TestHandleReadyReturns200WhenStartupReady(t *testing.T) {
 	tmpDir := t.TempDir()
 	configPath := filepath.Join(tmpDir, "router-config.yaml")
-	if err := startupstatus.NewWriter(configPath).Write(startupstatus.State{
+	if err := startupstatus.NewFileWriter(configPath).Write(startupstatus.State{
 		Phase:   "ready",
 		Ready:   true,
 		Message: "Router startup complete",

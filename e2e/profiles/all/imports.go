@@ -20,6 +20,7 @@ import (
 	routerreplay "github.com/vllm-project/semantic-router/e2e/profiles/router-replay"
 	routingstrategies "github.com/vllm-project/semantic-router/e2e/profiles/routing-strategies"
 	streaming "github.com/vllm-project/semantic-router/e2e/profiles/streaming"
+	vectorstoreregistry "github.com/vllm-project/semantic-router/e2e/profiles/vectorstore-registry"
 )
 
 var mockVLLMLocalImages = []framework.LocalImageBuild{
@@ -69,6 +70,11 @@ func init() {
 	)
 	register("routing-strategies", func() framework.Profile { return routingstrategies.NewProfile() }, framework.ProfileCapabilities{})
 	register("streaming", func() framework.Profile { return streaming.NewProfile() }, framework.ProfileCapabilities{})
+	register(
+		"vectorstore-registry",
+		func() framework.Profile { return vectorstoreregistry.NewProfile() },
+		framework.ProfileCapabilities{LocalImages: mockVLLMLocalImages},
+	)
 }
 
 func register(

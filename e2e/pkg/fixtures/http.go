@@ -29,6 +29,16 @@ func DoGETRequest(ctx context.Context, httpClient *http.Client, url string) (*HT
 	return doJSONRequest(ctx, httpClient, http.MethodGet, url, nil, nil)
 }
 
+// DoPOSTRequest sends a POST request with a JSON payload and returns the raw HTTP response.
+func DoPOSTRequest(ctx context.Context, httpClient *http.Client, url string, payload any) (*HTTPResponse, error) {
+	return doJSONRequest(ctx, httpClient, http.MethodPost, url, payload, nil)
+}
+
+// DoDELETERequest sends a DELETE request and returns the raw HTTP response.
+func DoDELETERequest(ctx context.Context, httpClient *http.Client, url string) (*HTTPResponse, error) {
+	return doJSONRequest(ctx, httpClient, http.MethodDelete, url, nil, nil)
+}
+
 func doJSONRequest(
 	ctx context.Context,
 	httpClient *http.Client,

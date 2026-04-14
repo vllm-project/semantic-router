@@ -24,10 +24,12 @@ import (
 	"time"
 )
 
-// Manager orchestrates vector store CRUD operations and coordinates
-// between the in-memory store registry and the backend.
+// Manager orchestrates vector store CRUD operations, coordinates between
+// the metadata registry and the vector backend, and keeps an in-memory
+// index for fast lookups.
 type Manager struct {
 	backend            VectorStoreBackend
+	registry           StoreRegistry
 	mu                 sync.RWMutex
 	stores             map[string]*VectorStore // id -> store
 	embeddingDim       int
@@ -35,13 +37,30 @@ type Manager struct {
 }
 
 // NewManager creates a new vector store manager.
-func NewManager(backend VectorStoreBackend, embeddingDim int, backendType string) *Manager {
+func NewManager(backend VectorStoreBackend, registry StoreRegistry, embeddingDim int, backendType string) *Manager {
 	return &Manager{
 		backend:            backend,
+		registry:           registry,
 		stores:             make(map[string]*VectorStore),
 		embeddingDim:       embeddingDim,
 		defaultBackendType: backendType,
 	}
+}
+
+// LoadFromRegistry populates the in-memory index from the durable
+// StoreRegistry. Call once during startup.
+func (m *Manager) LoadFromRegistry(ctx context.Context) error {
+	stores, err := m.registry.ListStores(ctx)
+	if err != nil {
+		return fmt.Errorf("load vector store registry: %w", err)
+	}
+
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	for _, vs := range stores {
+		m.stores[vs.ID] = vs
+	}
+	return nil
 }
 
 // CreateStoreRequest holds parameters for creating a vector store.
@@ -90,6 +109,9 @@ func (m *Manager) CreateStore(ctx context.Context, req CreateStoreRequest) (*Vec
 	m.stores[id] = vs
 	m.mu.Unlock()
 
+	if err := m.registry.SaveStore(ctx, vs); err != nil {
+		return vs, fmt.Errorf("persist vector store metadata: %w", err)
+	}
 	return vs, nil
 }
 
@@ -154,12 +176,11 @@ func (m *Manager) ListStores(params ListStoresParams) []*VectorStore {
 }
 
 // UpdateStore updates a vector store's metadata.
-func (m *Manager) UpdateStore(id string, req UpdateStoreRequest) (*VectorStore, error) {
+func (m *Manager) UpdateStore(ctx context.Context, id string, req UpdateStoreRequest) (*VectorStore, error) {
 	m.mu.Lock()
-	defer m.mu.Unlock()
-
 	vs, ok := m.stores[id]
 	if !ok {
+		m.mu.Unlock()
 		return nil, fmt.Errorf("vector store not found: %s", id)
 	}
 
@@ -172,7 +193,12 @@ func (m *Manager) UpdateStore(id string, req UpdateStoreRequest) (*VectorStore, 
 	if req.Metadata != nil {
 		vs.Metadata = req.Metadata
 	}
+	snapshot := *vs
+	m.mu.Unlock()
 
+	if err := m.registry.SaveStore(ctx, &snapshot); err != nil {
+		return vs, fmt.Errorf("persist vector store metadata: %w", err)
+	}
 	return vs, nil
 }
 
@@ -187,10 +213,12 @@ func (m *Manager) DeleteStore(ctx context.Context, id string) error {
 	delete(m.stores, id)
 	m.mu.Unlock()
 
+	if err := m.registry.DeleteStore(ctx, id); err != nil {
+		return fmt.Errorf("delete vector store metadata: %w", err)
+	}
 	if err := m.backend.DeleteCollection(ctx, id); err != nil {
 		return fmt.Errorf("failed to delete backend collection: %w", err)
 	}
-
 	return nil
 }
 
@@ -200,15 +228,19 @@ func (m *Manager) Backend() VectorStoreBackend {
 }
 
 // UpdateFileCounts updates the file counts for a vector store.
-func (m *Manager) UpdateFileCounts(id string, fn func(*FileCounts)) error {
+func (m *Manager) UpdateFileCounts(ctx context.Context, id string, fn func(*FileCounts)) error {
 	m.mu.Lock()
-	defer m.mu.Unlock()
-
 	vs, ok := m.stores[id]
 	if !ok {
+		m.mu.Unlock()
 		return fmt.Errorf("vector store not found: %s", id)
 	}
-
 	fn(&vs.FileCounts)
+	snapshot := *vs
+	m.mu.Unlock()
+
+	if err := m.registry.SaveStore(ctx, &snapshot); err != nil {
+		return fmt.Errorf("persist vector store metadata: %w", err)
+	}
 	return nil
 }
