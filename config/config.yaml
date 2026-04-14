@@ -1036,6 +1036,20 @@ routing:
                 endpoint: https://search.example.com/query
                 request_format: pinecone
 
+    - name: mlp_experimental_route
+      description: Experimental MLP-based model selection route.
+      priority: 103
+      rules:
+        operator: AND
+        conditions:
+          - type: keyword
+            name: machine_learning
+      modelRefs:
+        - model: qwen3-8b
+          use_reasoning: false
+      algorithm:
+        type: mlp
+
     - name: image_generation_route
       description: Dedicated image-generation route using the OpenAI image backend.
       priority: 105
