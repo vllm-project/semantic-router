@@ -1,7 +1,11 @@
 package extproc
 
 import (
+	"time"
+
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/consts"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/metrics"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/sessiontelemetry"
 )
 
@@ -62,4 +66,42 @@ func recordSessionTurn(ctx *RequestContext, usage responseUsageMetrics, pricing 
 		p.Chat = &sessiontelemetry.ChatInput{UserID: userID, Messages: msgs}
 	}
 	sessiontelemetry.RecordTurn(p)
+}
+
+// maybeEmitTransitionEvent records a ModelTransitionEvent on model change.
+// Must be called after ctx.TTFTSeconds and ctx.CacheWarmthEstimate are set.
+func maybeEmitTransitionEvent(ctx *RequestContext) {
+	if ctx == nil || ctx.SessionID == "" || ctx.RequestModel == "" {
+		return
+	}
+	if ctx.PreviousModel == "" || ctx.PreviousModel == ctx.RequestModel {
+		return
+	}
+
+	previousResponseID := ""
+	if ctx.ResponseAPICtx != nil {
+		previousResponseID = ctx.ResponseAPICtx.PreviousResponseID
+	}
+
+	evt := sessiontelemetry.ModelTransitionEvent{
+		SessionID:           ctx.SessionID,
+		TurnIndex:           ctx.TurnIndex,
+		FromModel:           ctx.PreviousModel,
+		ToModel:             ctx.RequestModel,
+		TTFTMs:              ctx.TTFTSeconds * 1000,
+		CacheWarmthEstimate: ctx.CacheWarmthEstimate,
+		PreviousResponseID:  previousResponseID,
+		Timestamp:           time.Now(),
+	}
+	sessiontelemetry.RecordTransition(evt)
+	metrics.RecordSessionModelTransition(evt.FromModel, evt.ToModel)
+	metrics.RecordCacheWarmthEstimate(evt.ToModel, evt.CacheWarmthEstimate)
+	logging.ComponentDebugEvent("session", "model_transition", map[string]interface{}{
+		"session_id":            evt.SessionID,
+		"turn_index":            evt.TurnIndex,
+		"from_model":            evt.FromModel,
+		"to_model":              evt.ToModel,
+		"ttft_ms":               evt.TTFTMs,
+		"cache_warmth_estimate": evt.CacheWarmthEstimate,
+	})
 }
