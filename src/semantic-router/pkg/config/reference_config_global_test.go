@@ -129,6 +129,7 @@ func assertReferenceConfigVectorStoreCoverage(t testingT, vectorStore map[string
 	assertMapCoversStructFields(t, mustMapAt(t, vectorStore, "llama_stack"), reflect.TypeOf(LlamaStackVectorStoreConfig{}), "global.stores.vector_store.llama_stack")
 	assertMapCoversStructFields(t, mustMapAt(t, vectorStore, "milvus"), reflect.TypeOf(MilvusConfig{}), "global.stores.vector_store.milvus")
 	assertMapCoversStructFields(t, mustMapAt(t, vectorStore, "valkey"), reflect.TypeOf(ValkeyVectorStoreConfig{}), "global.stores.vector_store.valkey")
+	assertMapCoversStructFields(t, mustMapAt(t, vectorStore, "metadata_postgres"), reflect.TypeOf(VectorStoreMetadataPostgresConfig{}), "global.stores.vector_store.metadata_postgres")
 }
 
 func assertReferenceConfigIntegrationGlobalCoverage(t testingT, integrations map[string]interface{}) {

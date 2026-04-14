@@ -31,7 +31,8 @@ var _ = Describe("Manager", func() {
 
 	BeforeEach(func() {
 		backend := NewMemoryBackend(MemoryBackendConfig{})
-		mgr = NewManager(backend, 768, BackendTypeMemory)
+		registry := NewMemoryMetadataRegistry()
+		mgr = NewManager(backend, registry, 768, BackendTypeMemory)
 		ctx = context.Background()
 	})
 
@@ -123,7 +124,7 @@ var _ = Describe("Manager", func() {
 		})
 
 		It("should handle empty result", func() {
-			emptyMgr := NewManager(NewMemoryBackend(MemoryBackendConfig{}), 768, BackendTypeMemory)
+			emptyMgr := NewManager(NewMemoryBackend(MemoryBackendConfig{}), NewMemoryMetadataRegistry(), 768, BackendTypeMemory)
 			stores := emptyMgr.ListStores(ListStoresParams{})
 			Expect(stores).To(BeEmpty())
 		})
@@ -135,7 +136,7 @@ var _ = Describe("Manager", func() {
 			Expect(err).NotTo(HaveOccurred())
 
 			newName := "updated"
-			updated, err := mgr.UpdateStore(vs.ID, UpdateStoreRequest{Name: &newName})
+			updated, err := mgr.UpdateStore(ctx, vs.ID, UpdateStoreRequest{Name: &newName})
 			Expect(err).NotTo(HaveOccurred())
 			Expect(updated.Name).To(Equal("updated"))
 		})
@@ -144,7 +145,7 @@ var _ = Describe("Manager", func() {
 			vs, err := mgr.CreateStore(ctx, CreateStoreRequest{Name: "meta"})
 			Expect(err).NotTo(HaveOccurred())
 
-			updated, err := mgr.UpdateStore(vs.ID, UpdateStoreRequest{
+			updated, err := mgr.UpdateStore(ctx, vs.ID, UpdateStoreRequest{
 				Metadata: map[string]interface{}{"key": "val"},
 			})
 			Expect(err).NotTo(HaveOccurred())
@@ -152,7 +153,7 @@ var _ = Describe("Manager", func() {
 		})
 
 		It("should return error for non-existent store", func() {
-			_, err := mgr.UpdateStore("vs_nonexistent", UpdateStoreRequest{})
+			_, err := mgr.UpdateStore(ctx, "vs_nonexistent", UpdateStoreRequest{})
 			Expect(err).To(HaveOccurred())
 		})
 	})
@@ -192,7 +193,7 @@ var _ = Describe("Manager", func() {
 			vs, err := mgr.CreateStore(ctx, CreateStoreRequest{Name: "counts"})
 			Expect(err).NotTo(HaveOccurred())
 
-			err = mgr.UpdateFileCounts(vs.ID, func(fc *FileCounts) {
+			err = mgr.UpdateFileCounts(ctx, vs.ID, func(fc *FileCounts) {
 				fc.Completed++
 				fc.Total++
 			})
@@ -205,7 +206,7 @@ var _ = Describe("Manager", func() {
 		})
 
 		It("should return error for non-existent store", func() {
-			err := mgr.UpdateFileCounts("vs_nonexistent", func(fc *FileCounts) {})
+			err := mgr.UpdateFileCounts(ctx, "vs_nonexistent", func(fc *FileCounts) {})
 			Expect(err).To(HaveOccurred())
 		})
 	})
