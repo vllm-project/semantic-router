@@ -198,18 +198,8 @@ type LookupTable interface {
 	RemainingTurnPrior(intentOrDomain string) (float64, bool)
 }
 
-// LookupTableStorage extends LookupTable with write and persistence operations.
-// Implementations must be safe for concurrent use.
-type LookupTableStorage interface {
-	LookupTable
-
-	// Set writes or overwrites a single entry.
-	Set(key Key, entry Entry) error
-
-	// All returns a snapshot of all entries keyed by their canonical string.
-	// The returned map is a copy; callers may mutate it freely.
-	All() map[string]Entry
-
+// LookupTablePersistence groups lifecycle methods for lookup-table storage.
+type LookupTablePersistence interface {
 	// Load loads persisted state from the backing store (no-op for memory).
 	Load() error
 
@@ -218,4 +208,18 @@ type LookupTableStorage interface {
 
 	// Close releases any resources held by the storage backend.
 	Close() error
+}
+
+// LookupTableStorage extends LookupTable with write and persistence operations.
+// Implementations must be safe for concurrent use.
+type LookupTableStorage interface {
+	LookupTable
+	LookupTablePersistence
+
+	// Set writes or overwrites a single entry.
+	Set(key Key, entry Entry) error
+
+	// All returns a snapshot of all entries keyed by their canonical string.
+	// The returned map is a copy; callers may mutate it freely.
+	All() map[string]Entry
 }
