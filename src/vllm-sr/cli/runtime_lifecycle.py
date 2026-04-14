@@ -205,8 +205,8 @@ def maybe_finish_setup_mode(
 
 
 def wait_for_router_health(stack_layout: RuntimeStackLayout) -> None:
-    """Block until the router health endpoint responds or the timeout elapses."""
-    log.info("Waiting for Router to become healthy...")
+    """Block until the router readiness endpoint responds or the timeout elapses."""
+    log.info("Waiting for Router to become ready...")
     log.info(f"Health check timeout: {HEALTH_CHECK_TIMEOUT}s")
     log.info("Showing Router logs during startup:")
     log.info("-" * 60)
@@ -223,12 +223,12 @@ def wait_for_router_health(stack_layout: RuntimeStackLayout) -> None:
 
         return_code, _stdout, _stderr = docker_exec(
             router_container,
-            ["curl", "-f", "-s", f"http://localhost:{DEFAULT_API_PORT}/health"],
+            ["curl", "-f", "-s", f"http://localhost:{DEFAULT_API_PORT}/ready"],
         )
         if return_code == 0:
             elapsed = int(time.time() - start_time)
             log.info("-" * 60)
-            log.info(f"Router is healthy (after {elapsed}s, {check_count} checks)")
+            log.info(f"Router is ready (after {elapsed}s, {check_count} checks)")
             return
 
         if check_count % 10 == 0:

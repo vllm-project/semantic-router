@@ -19,6 +19,9 @@ CANONICAL_SERVICE_DEFAULTS: dict[str, dict[str, object]] = {
         "enabled": True,
         "store_backend": "postgres",
     },
+    "startup_status": {
+        "store_backend": "file",
+    },
 }
 
 CANONICAL_STORE_DEFAULTS: dict[str, dict[str, object]] = {
