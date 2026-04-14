@@ -220,71 +220,20 @@ func buildMLSelectionConfig(cfg *config.RouterConfig) *selection.MLSelectorConfi
 
 // buildLookupTable constructs a LookupTable from the router config.
 // Returns (nil, nil) when lookup tables are disabled or not configured.
-//
-// The returned cancel function stops background auto-save and periodic
-// re-population goroutines. Callers should invoke it when the router is
-// being shut down or reloaded.
 func buildLookupTable(cfg *config.RouterConfig, replayReader store.Reader) (lookuptable.LookupTableStorage, func()) {
-	ltCfg := cfg.IntelligentRouting.ModelSelection.LookupTables
+	ltCfg := cfg.ModelSelection.LookupTables
 	if !ltCfg.Enabled {
 		return nil, nil
 	}
 
-	var storage lookuptable.LookupTableStorage
+	storage, cancelStorage := buildLookupTableStorage(ltCfg)
 	var cancelFuncs []func()
-
-	if ltCfg.StoragePath != "" {
-		fs, err := lookuptable.NewFileStorage(ltCfg.StoragePath)
-		if err != nil {
-			logging.Errorf("[RouterSelection] Failed to create lookup table file storage: %v", err)
-			storage = lookuptable.NewMemoryStorage()
-		} else {
-			if err := fs.Load(); err != nil {
-				logging.Warnf("[RouterSelection] Failed to load lookup table from %s: %v", ltCfg.StoragePath, err)
-			}
-			if ltCfg.AutoSaveInterval != "" {
-				if interval, err := time.ParseDuration(ltCfg.AutoSaveInterval); err == nil {
-					fs.StartAutoSave(interval)
-					cancelFuncs = append(cancelFuncs, func() { _ = fs.Close() })
-				} else {
-					logging.Warnf("[RouterSelection] Invalid lookup table auto_save_interval %q: %v", ltCfg.AutoSaveInterval, err)
-				}
-			} else {
-				cancelFuncs = append(cancelFuncs, func() { _ = fs.Close() })
-			}
-			storage = fs
-		}
-	} else {
-		storage = lookuptable.NewMemoryStorage()
+	if cancelStorage != nil {
+		cancelFuncs = append(cancelFuncs, cancelStorage)
 	}
 
-	// Derive entries from replay records asynchronously so startup is not blocked.
-	if ltCfg.PopulateFromReplay && replayReader != nil {
-		go populateFromReplay(storage, replayReader)
-
-		if ltCfg.PopulateInterval != "" {
-			if interval, err := time.ParseDuration(ltCfg.PopulateInterval); err == nil {
-				cancelFuncs = append(cancelFuncs, startLookupTablePopulator(storage, replayReader, interval))
-			} else {
-				logging.Warnf("[RouterSelection] Invalid lookup table populate_interval %q: %v", ltCfg.PopulateInterval, err)
-			}
-		}
-	}
-
-	// Apply YAML config overrides — these always take precedence over derived values.
-	now := time.Now()
-	for _, o := range ltCfg.QualityGaps {
-		_ = storage.Set(lookuptable.QualityGapKey(o.TaskFamily, o.CurrentModel, o.CandidateModel),
-			lookuptable.Entry{Value: o.Value, Source: lookuptable.SourceConfigOverride, UpdatedAt: now})
-	}
-	for _, o := range ltCfg.HandoffPenalties {
-		_ = storage.Set(lookuptable.HandoffPenaltyKey(o.FromModel, o.ToModel),
-			lookuptable.Entry{Value: o.Value, Source: lookuptable.SourceConfigOverride, UpdatedAt: now})
-	}
-	for _, o := range ltCfg.RemainingTurnPriors {
-		_ = storage.Set(lookuptable.RemainingTurnPriorKey(o.IntentOrDomain),
-			lookuptable.Entry{Value: o.Value, Source: lookuptable.SourceConfigOverride, UpdatedAt: now})
-	}
+	maybePopulateFromReplay(ltCfg, storage, replayReader, &cancelFuncs)
+	applyLookupTableOverrides(ltCfg, storage)
 
 	logging.ComponentEvent("extproc", "lookuptable_initialized", map[string]interface{}{
 		"storage_path":         ltCfg.StoragePath,
@@ -299,6 +248,75 @@ func buildLookupTable(cfg *config.RouterConfig, replayReader store.Reader) (look
 		}
 	}
 	return storage, cancel
+}
+
+// buildLookupTableStorage creates the storage backend (file or memory) and
+// returns a cancel function for any background goroutines it starts.
+func buildLookupTableStorage(ltCfg config.LookupTableConfig) (lookuptable.LookupTableStorage, func()) {
+	if ltCfg.StoragePath == "" {
+		return lookuptable.NewMemoryStorage(), nil
+	}
+
+	fs, err := lookuptable.NewFileStorage(ltCfg.StoragePath)
+	if err != nil {
+		logging.Errorf("[RouterSelection] Failed to create lookup table file storage: %v", err)
+		return lookuptable.NewMemoryStorage(), nil
+	}
+
+	if err := fs.Load(); err != nil {
+		logging.Warnf("[RouterSelection] Failed to load lookup table from %s: %v", ltCfg.StoragePath, err)
+	}
+
+	cancel := func() { _ = fs.Close() }
+	if ltCfg.AutoSaveInterval != "" {
+		if interval, err := time.ParseDuration(ltCfg.AutoSaveInterval); err == nil {
+			fs.StartAutoSave(interval)
+		} else {
+			logging.Warnf("[RouterSelection] Invalid lookup table auto_save_interval %q: %v", ltCfg.AutoSaveInterval, err)
+		}
+	}
+	return fs, cancel
+}
+
+// maybePopulateFromReplay starts async replay derivation and periodic
+// re-population when configured.
+func maybePopulateFromReplay(
+	ltCfg config.LookupTableConfig,
+	storage lookuptable.LookupTableStorage,
+	reader store.Reader,
+	cancelFuncs *[]func(),
+) {
+	if !ltCfg.PopulateFromReplay || reader == nil {
+		return
+	}
+	go populateFromReplay(storage, reader)
+
+	if ltCfg.PopulateInterval == "" {
+		return
+	}
+	interval, err := time.ParseDuration(ltCfg.PopulateInterval)
+	if err != nil {
+		logging.Warnf("[RouterSelection] Invalid lookup table populate_interval %q: %v", ltCfg.PopulateInterval, err)
+		return
+	}
+	*cancelFuncs = append(*cancelFuncs, startLookupTablePopulator(storage, reader, interval))
+}
+
+// applyLookupTableOverrides writes manual config values on top of derived ones.
+func applyLookupTableOverrides(ltCfg config.LookupTableConfig, storage lookuptable.LookupTableStorage) {
+	now := time.Now()
+	for _, o := range ltCfg.QualityGaps {
+		_ = storage.Set(lookuptable.QualityGapKey(o.TaskFamily, o.CurrentModel, o.CandidateModel),
+			lookuptable.Entry{Value: o.Value, Source: lookuptable.SourceConfigOverride, UpdatedAt: now})
+	}
+	for _, o := range ltCfg.HandoffPenalties {
+		_ = storage.Set(lookuptable.HandoffPenaltyKey(o.FromModel, o.ToModel),
+			lookuptable.Entry{Value: o.Value, Source: lookuptable.SourceConfigOverride, UpdatedAt: now})
+	}
+	for _, o := range ltCfg.RemainingTurnPriors {
+		_ = storage.Set(lookuptable.RemainingTurnPriorKey(o.IntentOrDomain),
+			lookuptable.Entry{Value: o.Value, Source: lookuptable.SourceConfigOverride, UpdatedAt: now})
+	}
 }
 
 // populateFromReplay fetches all records from the replay reader and runs the

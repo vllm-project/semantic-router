@@ -89,8 +89,10 @@ func (b *Builder) PopulateFromRecords(records []store.Record) error {
 		}
 	}
 
-	if err := b.storage.SetBatch(batch); err != nil {
-		return err
+	for k, v := range batch {
+		if err := b.storage.Set(k, v); err != nil {
+			return err
+		}
 	}
 
 	logging.ComponentEvent("selection", "lookuptable_populated", map[string]interface{}{
@@ -103,7 +105,10 @@ func (b *Builder) PopulateFromRecords(records []store.Record) error {
 // deriveQualityGaps populates quality_gap entries from per-category model scores.
 func (b *Builder) deriveQualityGaps(records []store.Record, batch map[Key]Entry, window string) {
 	// category → model → (sum of confidence scores, count)
-	type scoreAcc struct{ sum float64; n int }
+	type scoreAcc struct {
+		sum float64
+		n   int
+	}
 	acc := make(map[string]map[string]*scoreAcc) // category → model → acc
 
 	for _, r := range records {

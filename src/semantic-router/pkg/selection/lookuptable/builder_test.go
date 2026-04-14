@@ -210,8 +210,8 @@ func TestBuilder_HandoffPenalty_CrossWindowNotMerged(t *testing.T) {
 
 func TestBuilder_SkipsRecordsWithoutRequiredFields(t *testing.T) {
 	records := []store.Record{
-		{Category: "", SelectedModel: "small", ConfidenceScore: 0.8, RequestID: "a-1"}, // no category
-		{Category: "coding", SelectedModel: "", ConfidenceScore: 0.8, RequestID: "b-1"}, // no model
+		{Category: "", SelectedModel: "small", ConfidenceScore: 0.8, RequestID: "a-1"},     // no category
+		{Category: "coding", SelectedModel: "", ConfidenceScore: 0.8, RequestID: "b-1"},    // no model
 		{Category: "coding", SelectedModel: "large", ConfidenceScore: 0, RequestID: "c-1"}, // zero confidence
 	}
 

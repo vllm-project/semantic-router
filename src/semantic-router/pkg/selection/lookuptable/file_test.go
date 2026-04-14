@@ -38,7 +38,7 @@ func newTempFileStorage(t *testing.T) (*lookuptable.FileStorage, string) {
 
 func TestFileStorage_SaveAndLoad(t *testing.T) {
 	s, path := newTempFileStorage(t)
-	defer s.Close()
+	defer func() { _ = s.Close() }()
 
 	key := lookuptable.QualityGapKey("coding", "gpt-4", "claude-3")
 	entry := lookuptable.Entry{Value: 0.12, Source: lookuptable.SourceReplayDerived, UpdatedAt: time.Now(), SampleCount: 50}
@@ -54,7 +54,7 @@ func TestFileStorage_SaveAndLoad(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewFileStorage (2nd): %v", err)
 	}
-	defer s2.Close()
+	defer func() { _ = s2.Close() }()
 	if err := s2.Load(); err != nil {
 		t.Fatalf("Load: %v", err)
 	}
@@ -73,7 +73,7 @@ func TestFileStorage_SaveAndLoad(t *testing.T) {
 
 func TestFileStorage_NonExistentFile(t *testing.T) {
 	s, _ := newTempFileStorage(t)
-	defer s.Close()
+	defer func() { _ = s.Close() }()
 	// File does not exist yet; Load should succeed with empty state.
 	if err := s.Load(); err != nil {
 		t.Errorf("Load on non-existent file should return nil, got: %v", err)
@@ -95,7 +95,7 @@ func TestFileStorage_EmptyFile(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewFileStorage: %v", err)
 	}
-	defer s.Close()
+	defer func() { _ = s.Close() }()
 
 	if err := s.Load(); err != nil {
 		t.Errorf("Load on empty file should return nil, got: %v", err)
@@ -113,7 +113,7 @@ func TestFileStorage_CorruptFile(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewFileStorage: %v", err)
 	}
-	defer s.Close()
+	defer func() { _ = s.Close() }()
 
 	if err := s.Load(); err == nil {
 		t.Error("Load on corrupt file should return an error")
@@ -127,7 +127,7 @@ func TestFileStorage_CorruptFile(t *testing.T) {
 
 func TestFileStorage_AtomicWrite(t *testing.T) {
 	s, path := newTempFileStorage(t)
-	defer s.Close()
+	defer func() { _ = s.Close() }()
 
 	_ = s.Set(lookuptable.HandoffPenaltyKey("a", "b"), lookuptable.Entry{Value: 0.05})
 	if err := s.Save(); err != nil {
@@ -150,7 +150,7 @@ func TestFileStorage_StartAutoSave_IdempotentNoPanic(t *testing.T) {
 	// Calling StartAutoSave twice must not panic (second call is a no-op).
 	s.StartAutoSave(50 * time.Millisecond)
 	s.StartAutoSave(50 * time.Millisecond) // must not panic
-	s.Close()
+	_ = s.Close()
 }
 
 func TestFileStorage_AutoSave(t *testing.T) {
@@ -161,7 +161,7 @@ func TestFileStorage_AutoSave(t *testing.T) {
 
 	// Wait for at least one auto-save tick.
 	time.Sleep(200 * time.Millisecond)
-	s.Close()
+	_ = s.Close()
 
 	if _, err := os.Stat(path); os.IsNotExist(err) {
 		t.Error("file should exist after auto-save")

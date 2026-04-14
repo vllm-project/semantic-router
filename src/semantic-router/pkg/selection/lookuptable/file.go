@@ -112,26 +112,6 @@ func (f *FileStorage) Set(key Key, entry Entry) error {
 	return nil
 }
 
-// SetBatch implements LookupTableStorage.
-func (f *FileStorage) SetBatch(entries map[Key]Entry) error {
-	f.mu.Lock()
-	for k, v := range entries {
-		f.entries[k.String()] = v
-	}
-	f.mu.Unlock()
-	f.dirty.Store(true)
-	return nil
-}
-
-// Delete implements LookupTableStorage.
-func (f *FileStorage) Delete(key Key) error {
-	f.mu.Lock()
-	delete(f.entries, key.String())
-	f.mu.Unlock()
-	f.dirty.Store(true)
-	return nil
-}
-
 // All implements LookupTableStorage.
 func (f *FileStorage) All() map[string]Entry {
 	f.mu.RLock()
@@ -189,23 +169,32 @@ func (f *FileStorage) StartAutoSave(interval time.Duration) {
 		for {
 			select {
 			case <-f.stopChan:
-				// Final save before shutdown.
-				if f.dirty.Swap(false) {
-					if err := f.Save(); err != nil {
-						logging.Errorf("[LookupTableStorage] Final save failed: %v", err)
-					}
-				}
+				f.finalSave()
 				return
 			case <-ticker.C:
-				if f.dirty.Swap(false) {
-					if err := f.Save(); err != nil {
-						f.dirty.Store(true)
-						logging.Errorf("[LookupTableStorage] Auto-save failed: %v", err)
-					}
-				}
+				f.autoSaveTick()
 			}
 		}
 	}()
+}
+
+func (f *FileStorage) finalSave() {
+	if !f.dirty.Swap(false) {
+		return
+	}
+	if err := f.Save(); err != nil {
+		logging.Errorf("[LookupTableStorage] Final save failed: %v", err)
+	}
+}
+
+func (f *FileStorage) autoSaveTick() {
+	if !f.dirty.Swap(false) {
+		return
+	}
+	if err := f.Save(); err != nil {
+		f.dirty.Store(true)
+		logging.Errorf("[LookupTableStorage] Auto-save failed: %v", err)
+	}
 }
 
 // Close stops the auto-save goroutine (if running) and releases resources.

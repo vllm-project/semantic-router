@@ -49,36 +49,6 @@ func TestMemoryStorage_GetMissing(t *testing.T) {
 	}
 }
 
-func TestMemoryStorage_Delete(t *testing.T) {
-	m := lookuptable.NewMemoryStorage()
-	key := lookuptable.HandoffPenaltyKey("gpt-4", "claude-3")
-	_ = m.Set(key, lookuptable.Entry{Value: 0.05})
-
-	if err := m.Delete(key); err != nil {
-		t.Fatalf("Delete: %v", err)
-	}
-	if _, ok := m.Get(key); ok {
-		t.Error("entry still present after Delete")
-	}
-}
-
-func TestMemoryStorage_SetBatch(t *testing.T) {
-	m := lookuptable.NewMemoryStorage()
-	batch := map[lookuptable.Key]lookuptable.Entry{
-		lookuptable.QualityGapKey("coding", "a", "b"):    {Value: 0.10},
-		lookuptable.HandoffPenaltyKey("a", "b"):           {Value: 0.05},
-		lookuptable.RemainingTurnPriorKey("support"):      {Value: 3.0},
-	}
-
-	if err := m.SetBatch(batch); err != nil {
-		t.Fatalf("SetBatch: %v", err)
-	}
-
-	if len(m.All()) != 3 {
-		t.Errorf("All() len = %d, want 3", len(m.All()))
-	}
-}
-
 func TestMemoryStorage_ConvenienceMethods(t *testing.T) {
 	m := lookuptable.NewMemoryStorage()
 	_ = m.Set(lookuptable.QualityGapKey("coding", "gpt-4", "claude-3"), lookuptable.Entry{Value: 0.15})

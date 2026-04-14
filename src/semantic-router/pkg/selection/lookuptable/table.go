@@ -206,13 +206,6 @@ type LookupTableStorage interface {
 	// Set writes or overwrites a single entry.
 	Set(key Key, entry Entry) error
 
-	// SetBatch writes multiple entries. Implementations should make this atomic
-	// where possible.
-	SetBatch(entries map[Key]Entry) error
-
-	// Delete removes an entry. It is not an error to delete a non-existent key.
-	Delete(key Key) error
-
 	// All returns a snapshot of all entries keyed by their canonical string.
 	// The returned map is a copy; callers may mutate it freely.
 	All() map[string]Entry

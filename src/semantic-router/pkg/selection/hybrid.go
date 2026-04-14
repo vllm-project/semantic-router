@@ -152,6 +152,10 @@ func (h *HybridSelector) SetLookupTable(lt lookuptable.LookupTable) {
 // resolveQualityGap returns the quality-gap threshold between currentModel and
 // candidateModel for the given task family. It first checks the lookup table;
 // if no entry is found it falls back to config.QualityGapThreshold.
+//
+// TODO: integrate into model upgrade decision logic in Select.
+//
+//nolint:unused // Reserved for upcoming lookup-table consumption.
 func (h *HybridSelector) resolveQualityGap(taskFamily, currentModel, candidateModel string) float64 {
 	if h.lookupTable != nil && taskFamily != "" && currentModel != "" && candidateModel != "" {
 		if gap, ok := h.lookupTable.QualityGap(taskFamily, currentModel, candidateModel); ok {
@@ -246,21 +250,6 @@ func (h *HybridSelector) Select(ctx context.Context, selCtx *SelectionContext) (
 
 	if bestModel == nil {
 		return nil, fmt.Errorf("could not select a model")
-	}
-
-	// If a quality-gap lookup is available, log the resolved threshold for
-	// observability. The gap is resolved between the current top scorer and
-	// each alternative so callers can inspect whether an upgrade is warranted.
-	if h.lookupTable != nil && selCtx.CategoryName != "" {
-		for i := range selCtx.CandidateModels {
-			candidate := &selCtx.CandidateModels[i]
-			if candidate.Model == bestModel.Model {
-				continue
-			}
-			gap := h.resolveQualityGap(selCtx.CategoryName, bestModel.Model, candidate.Model)
-			logging.Debugf("[HybridSelector] quality_gap(%s→%s, task=%s) = %.4f",
-				bestModel.Model, candidate.Model, selCtx.CategoryName, gap)
-		}
 	}
 
 	// Calculate confidence from component agreement

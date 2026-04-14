@@ -67,24 +67,6 @@ func (m *MemoryStorage) Set(key Key, entry Entry) error {
 	return nil
 }
 
-// SetBatch implements LookupTableStorage.
-func (m *MemoryStorage) SetBatch(entries map[Key]Entry) error {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	for k, v := range entries {
-		m.entries[k.String()] = v
-	}
-	return nil
-}
-
-// Delete implements LookupTableStorage.
-func (m *MemoryStorage) Delete(key Key) error {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	delete(m.entries, key.String())
-	return nil
-}
-
 // All implements LookupTableStorage.
 func (m *MemoryStorage) All() map[string]Entry {
 	m.mu.RLock()
