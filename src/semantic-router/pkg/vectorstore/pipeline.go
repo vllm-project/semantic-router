@@ -144,7 +144,7 @@ func (p *IngestionPipeline) AttachFile(vectorStoreID, fileID string, strategy *C
 	p.mu.Unlock()
 
 	// Update file counts.
-	_ = p.manager.UpdateFileCounts(vectorStoreID, func(fc *FileCounts) {
+	_ = p.manager.UpdateFileCounts(context.Background(), vectorStoreID, func(fc *FileCounts) {
 		fc.InProgress++
 		fc.Total++
 	})
@@ -169,7 +169,7 @@ func (p *IngestionPipeline) AttachFile(vectorStoreID, fileID string, strategy *C
 			Code:    "queue_full",
 			Message: "ingestion queue is full, try again later",
 		})
-		_ = p.manager.UpdateFileCounts(vectorStoreID, func(fc *FileCounts) {
+		_ = p.manager.UpdateFileCounts(context.Background(), vectorStoreID, func(fc *FileCounts) {
 			fc.InProgress--
 			fc.Failed++
 		})
@@ -223,7 +223,7 @@ func (p *IngestionPipeline) DetachFile(ctx context.Context, vectorStoreID, vsfID
 		return fmt.Errorf("failed to delete chunks: %w", err)
 	}
 
-	_ = p.manager.UpdateFileCounts(vectorStoreID, func(fc *FileCounts) {
+	_ = p.manager.UpdateFileCounts(context.Background(), vectorStoreID, func(fc *FileCounts) {
 		switch vsf.Status {
 		case "completed":
 			fc.Completed--
@@ -316,7 +316,7 @@ func (p *IngestionPipeline) processJob(job IngestionJob) {
 
 	// Mark as completed.
 	p.setFileStatus(job.VectorStoreFileID, "completed", nil)
-	_ = p.manager.UpdateFileCounts(job.VectorStoreID, func(fc *FileCounts) {
+	_ = p.manager.UpdateFileCounts(context.Background(), job.VectorStoreID, func(fc *FileCounts) {
 		fc.InProgress--
 		fc.Completed++
 	})
@@ -328,7 +328,7 @@ func (p *IngestionPipeline) failJob(job IngestionJob, code, message string) {
 		Code:    code,
 		Message: message,
 	})
-	_ = p.manager.UpdateFileCounts(job.VectorStoreID, func(fc *FileCounts) {
+	_ = p.manager.UpdateFileCounts(context.Background(), job.VectorStoreID, func(fc *FileCounts) {
 		fc.InProgress--
 		fc.Failed++
 	})

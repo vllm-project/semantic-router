@@ -35,6 +35,7 @@ Manual-only profiles:
 - **response-api-redis**: Responses API endpoints with Redis storage backend and TTL coverage for direct backend debugging
 - **response-api-redis-cluster**: Responses API endpoints with Redis Cluster backend and TTL coverage for direct backend debugging
 - **router-replay**: Router Replay restart-recovery with Postgres backend, validating that replay records survive pod restarts
+- **vectorstore-registry**: Vector Store Registry restart-recovery with Postgres metadata backend, validating that store and file metadata survive pod restarts
 - **dynamo**: NVIDIA Dynamo deployment, batching, and GPU-health coverage
 - **rag-hybrid-search**: Llama Stack-backed RAG vector-store and hybrid-search coverage
 

@@ -17,6 +17,7 @@ limitations under the License.
 package vectorstore
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -26,25 +27,43 @@ import (
 )
 
 // FileStore manages uploaded files on the local filesystem and tracks
-// their metadata in memory. It is safe for concurrent use.
+// their metadata in memory, backed by a FileRegistry for durability.
 type FileStore struct {
-	baseDir string
-	mu      sync.RWMutex
-	files   map[string]*FileRecord // file_id -> metadata
+	baseDir  string
+	registry FileRegistry
+	mu       sync.RWMutex
+	files    map[string]*FileRecord // file_id -> metadata
 }
 
 // NewFileStore creates a new FileStore rooted at the given base directory.
 // The directory is created if it does not exist.
-func NewFileStore(baseDir string) (*FileStore, error) {
+func NewFileStore(baseDir string, registry FileRegistry) (*FileStore, error) {
 	filesDir := filepath.Join(baseDir, "files")
 	if err := os.MkdirAll(filesDir, 0o755); err != nil {
 		return nil, fmt.Errorf("failed to create file storage directory: %w", err)
 	}
 
 	return &FileStore{
-		baseDir: baseDir,
-		files:   make(map[string]*FileRecord),
+		baseDir:  baseDir,
+		registry: registry,
+		files:    make(map[string]*FileRecord),
 	}, nil
+}
+
+// LoadFromRegistry populates the in-memory file index from the durable
+// FileRegistry. Call once during startup.
+func (fs *FileStore) LoadFromRegistry(ctx context.Context) error {
+	records, err := fs.registry.ListFiles(ctx)
+	if err != nil {
+		return fmt.Errorf("load file registry: %w", err)
+	}
+
+	fs.mu.Lock()
+	defer fs.mu.Unlock()
+	for _, fr := range records {
+		fs.files[fr.ID] = fr
+	}
+	return nil
 }
 
 // Save stores file content on disk and records its metadata.
@@ -96,6 +115,9 @@ func (fs *FileStore) Save(filename string, content []byte, purpose string) (*Fil
 	fs.files[fileID] = record
 	fs.mu.Unlock()
 
+	if err := fs.registry.SaveFile(context.Background(), record); err != nil {
+		return record, fmt.Errorf("persist file metadata: %w", err)
+	}
 	return record, nil
 }
 
@@ -129,11 +151,14 @@ func (fs *FileStore) Delete(fileID string) error {
 	delete(fs.files, fileID)
 	fs.mu.Unlock()
 
+	if err := fs.registry.DeleteFile(context.Background(), fileID); err != nil {
+		return fmt.Errorf("delete file metadata: %w", err)
+	}
+
 	fileDir := filepath.Join(fs.baseDir, "files", fileID)
 	if err := os.RemoveAll(fileDir); err != nil {
 		return fmt.Errorf("failed to delete file directory: %w", err)
 	}
-
 	return nil
 }
 
