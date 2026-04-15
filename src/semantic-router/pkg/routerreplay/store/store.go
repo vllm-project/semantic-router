@@ -4,6 +4,8 @@ import (
 	"context"
 	"io"
 	"time"
+
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/postgres"
 )
 
 // Signal represents various routing signals captured during a request.
@@ -299,20 +301,8 @@ type RedisConfig struct {
 	KeyPrefix     string `json:"key_prefix,omitempty" yaml:"key_prefix,omitempty"`
 }
 
-// PostgresConfig holds PostgreSQL-specific configuration.
-type PostgresConfig struct {
-	Host     string `json:"host" yaml:"host"`
-	Port     int    `json:"port" yaml:"port"`
-	Database string `json:"database" yaml:"database"`
-	User     string `json:"user" yaml:"user"`
-	Password string `json:"password" yaml:"password"`
-	SSLMode  string `json:"ssl_mode,omitempty" yaml:"ssl_mode,omitempty"` // disable, require, verify-ca, verify-full
-	// Connection pool settings
-	MaxOpenConns    int    `json:"max_open_conns,omitempty" yaml:"max_open_conns,omitempty"`
-	MaxIdleConns    int    `json:"max_idle_conns,omitempty" yaml:"max_idle_conns,omitempty"`
-	ConnMaxLifetime int    `json:"conn_max_lifetime,omitempty" yaml:"conn_max_lifetime,omitempty"` // seconds
-	TableName       string `json:"table_name,omitempty" yaml:"table_name,omitempty"`
-}
+// PostgresConfig is an alias for the shared postgres.Config type.
+type PostgresConfig = postgres.Config
 
 // MilvusConfig holds Milvus-specific configuration.
 type MilvusConfig struct {

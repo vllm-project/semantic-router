@@ -99,6 +99,11 @@ func maybeRecordResponseHeaderTTFT(ctx *RequestContext) {
 	ctx.TTFTSeconds = ttft
 	ctx.TTFTRecorded = true
 	latency.UpdateTTFT(ctx.RequestModel, ttft)
+	ctx.CacheWarmthEstimate = latency.EstimateCacheProbability(latency.CacheEstimationInput{
+		Model:       ctx.RequestModel,
+		TTFTSeconds: ttft,
+	})
+	maybeEmitTransitionEvent(ctx)
 }
 
 func buildResponseHeadersContinueResponse(

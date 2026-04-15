@@ -187,6 +187,20 @@ export const researchPapers = [
     sortOrder: 59.5,
   },
   {
+    id: 'token-budget-aware-pool-routing',
+    type: 'paper',
+    title: 'Token-Budget-Aware Pool Routing for Cost-Efficient LLM Inference',
+    authors: 'Huamin Chen, Xunzhuo Liu, Junchen Jiang, Bowei He, Xue Liu',
+    venue: 'arXiv Technical Report',
+    year: '2026',
+    abstract: 'We propose token-budget-aware pool routing, which estimates each request’s total token budget using a self-calibrating bytes-per-token ratio and dispatches it to short or long vLLM pools to cut fleet cost while avoiding KV-cache failures.',
+    links: [
+      { type: 'paper', url: 'https://arxiv.org/abs/2604.09613', label: 'Paper' },
+    ],
+    featured: true,
+    sortOrder: 59.75,
+  },
+  {
     id: 'when-to-reason',
     type: 'paper',
     title: 'When to Reason: Semantic Router for vLLM',
