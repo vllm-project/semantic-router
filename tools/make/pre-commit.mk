@@ -4,13 +4,13 @@ PRECOMMIT_CONTAINER := ghcr.io/vllm-project/semantic-router/precommit:latest
 
 AGENT_PRE_COMMIT ?= $(CURDIR)/.venv-agent/bin/pre-commit
 
-precommit-install: ## Install pre-commit into the agent harness venv
+precommit-install: ## Install the repo-local pre-commit hook into the agent harness venv
 precommit-install:
 	@$(MAKE) agent-venv-install
-	@echo "Installing repo-local git hooks (pre-commit + pre-push)..."
-	@"$(AGENT_PRE_COMMIT)" install --hook-type pre-commit --hook-type pre-push
+	@echo "Installing repo-local git hooks (pre-commit)..."
+	@"$(AGENT_PRE_COMMIT)" install --hook-type pre-commit
 
-precommit-branch-gate: agent-venv-install ## Run the local prelint gate used by the pre-push hook
+precommit-branch-gate: agent-venv-install ## Run the local branch prelint bundle on demand
 	@$(MAKE) agent-ci-lint AGENT_BASE_REF="$(AGENT_BASE_REF)"
 	@$(MAKE) precommit-check
 
