@@ -1,6 +1,7 @@
 package extproc
 
 import (
+	"encoding/json"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -165,10 +166,17 @@ func TestParseChatCompletionRequestToolTracePreservesNullToolResult(t *testing.T
 
 	if assert.NotNil(t, trace) {
 		assert.Len(t, trace.Steps, 3)
+
+		// Chat Completions tool call step should preserve RawArguments.
+		assert.Equal(t, replayToolStepAssistantToolCall, trace.Steps[1].Type)
+		assert.JSONEq(t, "{\"location\":\"San Francisco\"}", trace.Steps[1].RawArguments)
+
+		// Null tool result: Text, RawOutput should both be empty.
 		assert.Equal(t, replayToolStepClientToolResult, trace.Steps[2].Type)
 		assert.Equal(t, "get_weather", trace.Steps[2].ToolName)
 		assert.Equal(t, "call_weather", trace.Steps[2].ToolCallID)
 		assert.Empty(t, trace.Steps[2].Text)
+		assert.Empty(t, trace.Steps[2].RawOutput)
 	}
 }
 
@@ -190,5 +198,221 @@ func TestBuildReplayStreamingToolTrace(t *testing.T) {
 		assert.Equal(t, "LLM Final Response", trace.Stage)
 		assert.Equal(t, []string{"get_weather"}, trace.ToolNames)
 		assert.Len(t, trace.Steps, 2)
+
+		// Streaming tool call step should preserve RawArguments.
+		assert.Equal(t, replayToolStepAssistantToolCall, trace.Steps[0].Type)
+		assert.JSONEq(t, "{\"location\":\"San Francisco\"}", trace.Steps[0].RawArguments)
+	}
+}
+
+func TestParseResponseAPIResponseToolTraceWithComplexContent(t *testing.T) {
+	trace := parseResponseAPIResponseToolTrace([]byte(`{
+		"output": [
+			{
+				"type": "function_call",
+				"call_id": "call_weather",
+				"name": "get_weather",
+				"arguments": "{\"location\":\"San Francisco\"}"
+			},
+			{
+				"type": "message",
+				"role": "assistant",
+				"content": [
+					{"type": "output_text", "text": "The weather is sunny."}
+				]
+			}
+		]
+	}`))
+
+	if assert.NotNil(t, trace) {
+		assert.Equal(t, "LLM Tool Call -> LLM Final Response", trace.Flow)
+		assert.Len(t, trace.Steps, 2)
+		assert.Equal(t, replayToolStepAssistantToolCall, trace.Steps[0].Type)
+		assert.Equal(t, "call_weather", trace.Steps[0].ToolCallID)
+		assert.Equal(t, "get_weather", trace.Steps[0].ToolName)
+		assert.JSONEq(t, "{\"location\":\"San Francisco\"}", trace.Steps[0].RawArguments)
+		assert.Equal(t, replayToolStepAssistantFinalResponse, trace.Steps[1].Type)
+		assert.Equal(t, "The weather is sunny.", trace.Steps[1].Text)
+	}
+}
+
+func TestParseResponseAPIRequestToolTraceMultiToolStructuredOutput(t *testing.T) {
+	trace := parseResponseAPIRequestToolTrace([]byte(`[
+		{
+			"type": "message",
+			"role": "user",
+			"content": "Find weather and news."
+		},
+		{
+			"type": "function_call",
+			"call_id": "call_weather",
+			"name": "get_weather",
+			"arguments": "{\"location\":\"San Francisco\"}"
+		},
+		{
+			"type": "function_call_output",
+			"call_id": "call_weather",
+			"output": {"temperature": "18C", "condition": "sunny"}
+		},
+		{
+			"type": "function_call",
+			"call_id": "call_news",
+			"name": "get_news",
+			"arguments": "{\"topic\":\"tech\"}"
+		},
+		{
+			"type": "function_call_output",
+			"call_id": "call_news",
+			"output": [{"headline": "AI advances", "source": "TechDaily"}]
+		}
+	]`))
+
+	if assert.NotNil(t, trace) {
+		assert.Equal(t, "User Query -> LLM Tool Call -> Client Tool Result -> LLM Tool Call -> Client Tool Result", trace.Flow)
+		assert.Len(t, trace.Steps, 5)
+
+		// First tool call
+		assert.Equal(t, replayToolStepAssistantToolCall, trace.Steps[1].Type)
+		assert.Equal(t, "call_weather", trace.Steps[1].ToolCallID)
+		assert.Equal(t, "get_weather", trace.Steps[1].ToolName)
+		assert.JSONEq(t, "{\"location\":\"San Francisco\"}", trace.Steps[1].RawArguments)
+
+		// First structured output
+		assert.Equal(t, replayToolStepClientToolResult, trace.Steps[2].Type)
+		assert.Equal(t, "call_weather", trace.Steps[2].ToolCallID)
+		assert.Equal(t, "get_weather", trace.Steps[2].ToolName)
+		assert.JSONEq(t, `{"temperature":"18C","condition":"sunny"}`, trace.Steps[2].RawOutput)
+		assert.Contains(t, trace.Steps[2].Text, "temperature")
+
+		// Second tool call
+		assert.Equal(t, replayToolStepAssistantToolCall, trace.Steps[3].Type)
+		assert.Equal(t, "call_news", trace.Steps[3].ToolCallID)
+		assert.Equal(t, "get_news", trace.Steps[3].ToolName)
+		assert.JSONEq(t, "{\"topic\":\"tech\"}", trace.Steps[3].RawArguments)
+
+		// Second structured output (array)
+		assert.Equal(t, replayToolStepClientToolResult, trace.Steps[4].Type)
+		assert.Equal(t, "call_news", trace.Steps[4].ToolCallID)
+		assert.Equal(t, "get_news", trace.Steps[4].ToolName)
+		assert.JSONEq(t, `[{"headline":"AI advances","source":"TechDaily"}]`, trace.Steps[4].RawOutput)
+	}
+}
+
+func TestResponseAPIToolTraceRoundTrip(t *testing.T) {
+	requestTrace := parseResponseAPIRequestToolTrace([]byte(`[
+		{
+			"type": "message",
+			"role": "user",
+			"content": "What's the weather?"
+		},
+		{
+			"type": "function_call",
+			"call_id": "call_weather_123",
+			"name": "get_weather",
+			"arguments": "{\"city\":\"Berlin\"}"
+		},
+		{
+			"type": "function_call_output",
+			"call_id": "call_weather_123",
+			"output": {"temp": 22, "unit": "C"}
+		}
+	]`))
+
+	responseTrace := parseResponseAPIResponseToolTrace([]byte(`{
+		"output": [
+			{
+				"type": "message",
+				"role": "assistant",
+				"content": "It is 22C in Berlin."
+			}
+		]
+	}`))
+
+	merged := mergeReplayToolTraces(requestTrace, responseTrace)
+	if !assert.NotNil(t, merged) {
+		return
+	}
+	assert.Len(t, merged.Steps, 4)
+
+	// Round-trip through JSON marshal/unmarshal to verify persistence fidelity.
+	serialized, err := json.Marshal(merged)
+	if !assert.NoError(t, err) {
+		return
+	}
+
+	var restored routerreplay.ToolTrace
+	if !assert.NoError(t, json.Unmarshal(serialized, &restored)) {
+		return
+	}
+
+	if !assert.Len(t, restored.Steps, 4) {
+		return
+	}
+
+	// Verify call_id -> ToolCallID survives round-trip.
+	assert.Equal(t, "call_weather_123", restored.Steps[1].ToolCallID)
+	assert.Equal(t, "call_weather_123", restored.Steps[2].ToolCallID)
+
+	// Verify raw arguments preserved as exact string through round-trip.
+	assert.JSONEq(t, "{\"city\":\"Berlin\"}", restored.Steps[1].RawArguments)
+
+	// Verify raw structured output preserved as exact string through round-trip.
+	// This confirms that RawOutput (a string field) is not altered by JSON
+	// marshal/unmarshal — e.g. numeric values like 22 stay as "22" not "22.0".
+	assert.Equal(t, restored.Steps[2].RawOutput, merged.Steps[2].RawOutput)
+	assert.JSONEq(t, `{"temp":22,"unit":"C"}`, restored.Steps[2].RawOutput)
+
+	// Verify text extracted from structured output is present.
+	assert.Contains(t, restored.Steps[2].Text, "temp")
+
+	// Verify flow and stage survive round-trip.
+	assert.Equal(t, merged.Flow, restored.Flow)
+	assert.Equal(t, merged.Stage, restored.Stage)
+	assert.Equal(t, merged.ToolNames, restored.ToolNames)
+}
+
+func TestBuildReplayStreamingToolTracePreservesResponseAPICallID(t *testing.T) {
+	ctx := &RequestContext{
+		ResponseAPICtx: &ResponseAPIContext{
+			IsResponseAPIRequest: true,
+		},
+		StreamingContent: "It is 18C and sunny in San Francisco.",
+		StreamingToolCalls: map[int]*StreamingToolCallState{
+			0: {
+				ID:        "call_weather_123",
+				Name:      "get_weather",
+				Arguments: "{\"location\":\"San Francisco\"}",
+			},
+			1: {
+				ID:        "call_news_456",
+				Name:      "get_news",
+				Arguments: "{\"topic\":\"tech\"}",
+			},
+		},
+	}
+
+	trace := buildReplayStreamingToolTrace(ctx)
+	if assert.NotNil(t, trace) {
+		// Flow deduplicates consecutive identical step labels, so two assistant_tool_calls
+		// collapse into a single "LLM Tool Call" label.
+		assert.Equal(t, "LLM Tool Call -> LLM Final Response", trace.Flow)
+		assert.Equal(t, []string{"get_weather", "get_news"}, trace.ToolNames)
+		assert.Len(t, trace.Steps, 3)
+
+		// First streamed tool call should preserve call_id as ToolCallID.
+		assert.Equal(t, replayToolStepAssistantToolCall, trace.Steps[0].Type)
+		assert.Equal(t, "call_weather_123", trace.Steps[0].ToolCallID)
+		assert.Equal(t, "get_weather", trace.Steps[0].ToolName)
+		assert.JSONEq(t, "{\"location\":\"San Francisco\"}", trace.Steps[0].RawArguments)
+
+		// Second streamed tool call should preserve call_id as ToolCallID.
+		assert.Equal(t, replayToolStepAssistantToolCall, trace.Steps[1].Type)
+		assert.Equal(t, "call_news_456", trace.Steps[1].ToolCallID)
+		assert.Equal(t, "get_news", trace.Steps[1].ToolName)
+		assert.JSONEq(t, "{\"topic\":\"tech\"}", trace.Steps[1].RawArguments)
+
+		// Final assistant response.
+		assert.Equal(t, replayToolStepAssistantFinalResponse, trace.Steps[2].Type)
+		assert.Equal(t, "It is 18C and sunny in San Francisco.", trace.Steps[2].Text)
 	}
 }

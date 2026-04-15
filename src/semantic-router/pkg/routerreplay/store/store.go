@@ -57,6 +57,11 @@ type ToolTraceStep struct {
 	ToolName   string `json:"tool_name,omitempty"`
 	ToolCallID string `json:"tool_call_id,omitempty"`
 	Arguments  string `json:"arguments,omitempty"`
+	// RawArguments preserves the original arguments JSON.
+	// Currently identical to Arguments because no normalization is performed,
+	// but retained for fidelity in case future processing diverges.
+	RawArguments string `json:"raw_arguments,omitempty"`
+	RawOutput    string `json:"raw_output,omitempty"`
 }
 
 // Record represents a routing decision record with metadata and captured payloads.
