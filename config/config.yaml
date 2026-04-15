@@ -1471,9 +1471,25 @@ global:
           enable_metrics: true
     memory:
       enabled: true
+      backend: milvus
       auto_store: true
       disabled_routes: []
       disabled_models: []
+      valkey:
+        host: valkey
+        port: 6379
+        database: 0
+        password: valkey-secret
+        timeout: 10
+        collection_prefix: "mem:"
+        index_name: mem_idx
+        dimension: 384
+        metric_type: COSINE
+        index_m: 16
+        index_ef_construction: 200
+        tls_enabled: false
+        tls_ca_path: ""
+        tls_insecure_skip_verify: false
       milvus:
         address: milvus:19530
         collection: agentic_memory

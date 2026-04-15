@@ -20,15 +20,16 @@ const (
 // deleted. This reduces redundancy and improves retrieval quality over time.
 //
 // Designed to be called from a background goroutine on a schedule.
-func (m *MilvusStore) ConsolidateUser(ctx context.Context, userID string) (merged int, deleted int, err error) {
-	if !m.enabled {
-		return 0, 0, fmt.Errorf("milvus store is not enabled")
+// Accepts any Store implementation so it works with both Milvus and Valkey backends.
+func ConsolidateUser(ctx context.Context, store Store, userID string) (merged int, deleted int, err error) {
+	if !store.IsEnabled() {
+		return 0, 0, fmt.Errorf("memory store is not enabled")
 	}
 	if userID == "" {
 		return 0, 0, fmt.Errorf("user ID is required")
 	}
 
-	result, err := m.List(ctx, ListOptions{
+	result, err := store.List(ctx, ListOptions{
 		UserID: userID,
 		Limit:  consolidationMaxListLimit,
 	})
@@ -58,13 +59,13 @@ func (m *MilvusStore) ConsolidateUser(ctx context.Context, userID string) (merge
 			Importance: maxImportance(group),
 		}
 
-		if err := m.Store(ctx, summaryMem); err != nil {
+		if err := store.Store(ctx, summaryMem); err != nil {
 			logging.Warnf("ConsolidateUser: failed to store merged memory: %v", err)
 			continue
 		}
 
 		for _, old := range group {
-			if ferr := m.Forget(ctx, old.ID); ferr != nil {
+			if ferr := store.Forget(ctx, old.ID); ferr != nil {
 				logging.Warnf("ConsolidateUser: failed to delete original memory id=%s: %v", old.ID, ferr)
 			} else {
 				deleted++

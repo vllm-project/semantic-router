@@ -24,6 +24,13 @@ Not every route should pay the complexity or privacy cost of memory. `memory` le
 
 ## Configuration
 
+The memory plugin requires a backing store configured under `global.stores.memory`. The router supports two backends:
+
+- **Milvus** (default) — distributed vector database, best for large-scale production
+- **Valkey** — lightweight single-binary option using the Search module, best for dev/test or existing Valkey infra
+
+See the [Stores and Tools](../global/stores-and-tools.md) tutorial for global memory configuration, or the [Valkey Memory deployment guide](../../installation/valkey-memory.md) for Valkey-specific setup.
+
 Use this fragment under `routing.decisions[].plugins`:
 
 ```yaml
