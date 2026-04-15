@@ -35,10 +35,10 @@ func (v *ValkeyStore) recordRetrievalBatch(ids []string) {
 // recordRetrieval updates LastAccessed and AccessCount for a single memory (reinforcement: S += 1, t = 0).
 //
 // The authoritative access_count and updated_at live as top-level HASH fields and are updated
-// atomically via HINCRBY / HSET. The metadata JSON blob also carries copies of these values for
-// convenience during result parsing. Rather than doing a racy read-modify-write on the JSON
-// (which could lose concurrent increments), we read the current access_count HASH field after
-// the atomic increment and rebuild the metadata JSON from that single source of truth.
+// atomically via HINCRBY / HSET. Do not rewrite duplicated values inside the metadata JSON blob
+// here: a separate read-modify-write of metadata can race with concurrent retrievals and move
+// access_count / last_accessed backwards. Callers should use the top-level HASH fields as the
+// source of truth for these mutable values.
 func (v *ValkeyStore) recordRetrieval(ctx context.Context, id string) error {
 	key := v.hashKey(id)
 	now := time.Now()
@@ -56,28 +56,6 @@ func (v *ValkeyStore) recordRetrieval(ctx context.Context, id string) error {
 	})
 	if err != nil {
 		return fmt.Errorf("HSET timestamps failed: %w", err)
-	}
-
-	// Sync metadata JSON: update last_accessed timestamp only.
-	// access_count is intentionally NOT synced back into metadata here — the
-	// authoritative value lives in the top-level HASH field (updated atomically
-	// by HINCRBY above). Writing access_count into metadata would reintroduce
-	// the race where a slower goroutine overwrites a newer count. Callers that
-	// need access_count should read the HASH field directly.
-	fields, err := v.client.HGetAll(ctx, key)
-	if err != nil {
-		return nil // Non-critical: top-level HASH fields are already updated
-	}
-	if metadataStr, ok := fields["metadata"]; ok && metadataStr != "" {
-		var metadata map[string]interface{}
-		if jsonErr := json.Unmarshal([]byte(metadataStr), &metadata); jsonErr == nil {
-			metadata["last_accessed"] = now.Unix()
-			// Do NOT write access_count here — keep it in the HASH field only.
-			delete(metadata, "access_count")
-			if updated, mErr := json.Marshal(metadata); mErr == nil {
-				_, _ = v.client.HSet(ctx, key, map[string]string{"metadata": string(updated)})
-			}
-		}
 	}
 
 	return nil

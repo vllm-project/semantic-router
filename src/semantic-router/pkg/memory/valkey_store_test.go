@@ -3,6 +3,7 @@ package memory
 import (
 	"encoding/binary"
 	"encoding/json"
+	"fmt"
 	"math"
 	"testing"
 
@@ -740,4 +741,24 @@ func TestValkeyBuildHashFields_AccessCountNotInMetadata(t *testing.T) {
 	require.NoError(t, json.Unmarshal([]byte(metadataStr), &metadata))
 	_, hasAccessCount := metadata["access_count"]
 	assert.False(t, hasAccessCount, "access_count must NOT be stored in metadata JSON to prevent concurrent write races")
+}
+
+// ---------------------------------------------------------------------------
+// errValkeyMemoryAlreadyExists sentinel error
+// ---------------------------------------------------------------------------
+
+// TestErrValkeyMemoryAlreadyExists verifies that the sentinel error works with
+// errors.Is and fmt.Errorf wrapping, so callers can reliably detect duplicates.
+func TestErrValkeyMemoryAlreadyExists(t *testing.T) {
+	t.Parallel()
+
+	// Wrapped with fmt.Errorf %w
+	wrapped := fmt.Errorf("%w: memory id=test123", errValkeyMemoryAlreadyExists)
+	assert.ErrorIs(t, wrapped, errValkeyMemoryAlreadyExists)
+	assert.Contains(t, wrapped.Error(), "valkey memory already exists")
+	assert.Contains(t, wrapped.Error(), "test123")
+
+	// Double-wrapped
+	doubleWrapped := fmt.Errorf("valkey store failed: %w", wrapped)
+	assert.ErrorIs(t, doubleWrapped, errValkeyMemoryAlreadyExists)
 }

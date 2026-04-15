@@ -2,6 +2,7 @@ package memory
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strconv"
 	"strings"
@@ -12,6 +13,9 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 )
+
+// errValkeyMemoryAlreadyExists is returned by Store when a memory with the same ID already exists.
+var errValkeyMemoryAlreadyExists = errors.New("valkey memory already exists")
 
 // ValkeyStore provides memory storage and retrieval using Valkey with the Search module.
 // Implements the Store interface with HASH-based storage and FT.SEARCH for vector similarity.
@@ -231,21 +235,25 @@ func (v *ValkeyStore) Store(ctx context.Context, memory *Memory) error {
 
 	key := v.hashKey(memory.ID)
 
-	// Enforce uniqueness: return an error if the key already exists.
-	// This matches the Store interface contract and the behaviour of other backends.
+	// Enforce uniqueness atomically using HSetNX as a reservation on the "id" field.
+	// HSetNX is atomic: if the key already exists, it returns false without writing.
+	// This avoids the TOCTOU race of a separate EXISTS check.
 	err = v.retryWithBackoff(ctx, func() error {
-		exists, existsErr := v.client.CustomCommand(ctx, []string{"EXISTS", key})
-		if existsErr != nil {
-			return existsErr
+		reserved, hsetNXErr := v.client.HSetNX(ctx, key, "id", memory.ID)
+		if hsetNXErr != nil {
+			return hsetNXErr
 		}
-		if valkeyToInt64(exists) > 0 {
-			return fmt.Errorf("memory already exists: %s", memory.ID)
+		if !reserved {
+			return fmt.Errorf("%w: memory id=%s", errValkeyMemoryAlreadyExists, memory.ID)
 		}
 		_, hsetErr := v.client.HSet(ctx, key, fields)
 		return hsetErr
 	})
 	if err != nil {
 		status = "error"
+		if errors.Is(err, errValkeyMemoryAlreadyExists) {
+			return err
+		}
 		return fmt.Errorf("valkey store failed for memory id=%s: %w", memory.ID, err)
 	}
 

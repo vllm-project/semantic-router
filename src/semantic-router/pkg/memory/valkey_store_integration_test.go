@@ -587,7 +587,7 @@ func TestValkeyStoreInteg_DuplicateKeys(t *testing.T) {
 		Content: "Second version", UserID: "dup_user",
 	})
 	require.Error(t, err, "storing a duplicate ID should return an error")
-	assert.Contains(t, err.Error(), "memory already exists")
+	assert.Contains(t, err.Error(), "valkey memory already exists")
 
 	// Verify original content is unchanged.
 	retrieved, err := store.Get(ctx, id)
