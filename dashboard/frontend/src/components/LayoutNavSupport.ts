@@ -49,6 +49,7 @@ export const MANAGER_MENU_SECTIONS: LayoutMenuSection[] = [
   {
     items: [
       { kind: 'route', label: 'Users', to: '/users' },
+      { kind: 'route', label: 'Security Policy', to: '/security' },
       { kind: 'route', label: 'ClawOS', to: '/clawos' },
     ],
   },

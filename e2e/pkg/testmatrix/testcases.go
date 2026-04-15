@@ -39,6 +39,8 @@ var DashboardContract = []string{
 	"dashboard-deploy-invalid-yaml",
 	// Evaluation endpoints (tasks/CRUD require CGO — only datasets works without it)
 	"dashboard-eval-datasets",
+	// Security Policy RBAC + ratelimit apply
+	"security-policy-apply",
 }
 
 // Combine preserves order while removing duplicate testcase names.

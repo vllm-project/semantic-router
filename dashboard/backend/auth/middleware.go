@@ -188,9 +188,18 @@ func featurePermission(method, path string) (string, bool) {
 		return openclawPermission(method, path)
 	case strings.HasPrefix(path, "/api/ml-pipeline/"):
 		return PermMlPipeline, true
+	case strings.HasPrefix(path, "/api/security/"):
+		return securityPermission(method), true
 	default:
 		return "", false
 	}
+}
+
+func securityPermission(method string) string {
+	if method == http.MethodGet {
+		return PermConfigRead
+	}
+	return PermSecurityManage
 }
 
 func openclawPermission(method, path string) (string, bool) {

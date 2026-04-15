@@ -41,6 +41,7 @@ Pages:
 - **Topology** (`/topology`): Visual topology of request flow and model selection using React Flow
 - **Playground** (`/playground`): Built-in chat playground for testing
 - **ML Setup** (`/ml-setup`): 3-step wizard for ML model selection — benchmark, train, and generate deployment config
+- **Security Policy** (`/security`): RBAC-to-router integration — map roles/groups to models and rate-limit tiers, preview generated router config fragments
 
 Features:
 
@@ -100,6 +101,9 @@ Read-only dashboard mode:
   - `GET /api/ml-pipeline/jobs/{id}` → Get job status and output files
   - `GET /api/ml-pipeline/stream/{id}` → SSE stream for real-time job progress
   - `GET /api/ml-pipeline/download/{id}/{filename}` → Download job output files
+  - `GET /api/security/policy` → Get current security policy config
+  - `PUT /api/security/policy` → Update security policy, generate router config fragment, and auto-apply to router config
+  - `POST /api/security/policy/preview` → Preview generated fragment without saving
 - Normalizes headers for iframe embedding: strips/overrides `X-Frame-Options` and `Content-Security-Policy` frame-ancestors as needed
 - SPA routing support: serves `index.html` for all non-asset routes
 - Central point for JWT/OIDC in the future (forward or exchange tokens to upstreams)
@@ -124,6 +128,7 @@ dashboard/
 │   │   │   ├── ConfigPage.tsx      # Config viewer with API fetch
 │   │   │   ├── PlaygroundPage.tsx  # Built-in chat playground
 │   │   │   ├── MLSetupPage.tsx     # ML model selection 3-step wizard
+│   │   │   ├── SecurityPolicyPage.tsx # RBAC role-to-model & rate-limit management
 │   │   │   └── *.module.css        # Scoped styles per page
 │   │   ├── hooks/
 │   │   │   └── useMLPipeline.ts    # ML pipeline state management & API hooks
@@ -138,6 +143,7 @@ dashboard/
 ├── backend/                         # Go reverse proxy server
 │   ├── main.go                     # Proxy routes & static file server
 │   ├── handlers/mlpipeline.go      # ML pipeline HTTP handlers & SSE streaming
+│   ├── handlers/security_policy.go # Security policy API & config fragment generation
 │   ├── mlpipeline/runner.go        # ML job orchestration (benchmark, train, config gen)
 │   ├── go.mod                      # Go module (minimal dependencies)
 │   └── Dockerfile                  # Multi-stage build (Node + Go + Alpine)
@@ -215,7 +221,9 @@ Recommended upstream settings for embedding:
 - Dashboard auth uses JWTs from `Authorization: Bearer <token>` for protected `/api/*` and `/embedded/*` requests.
 - Protected embedded entry URLs may also carry `authToken=<token>`, and the frontend mirrors the active token into a same-origin `vsr_session` cookie so Grafana/Jaeger iframe redirects and in-frame `/api/*` calls stay authenticated.
 - Frame embedding: backend strips/overrides `X-Frame-Options` and `Content-Security-Policy` headers from upstreams to permit `frame-ancestors 'self'` only.
-- Future: OIDC login on dashboard, stronger session-cookie handling, per-route RBAC, and signed proxy sessions to embedded services.
+- **Security Policy page** (`/security`, accessible via Manager dropdown): allows admins to define role-to-model RBAC mappings and per-role rate-limit tiers. On save, the dashboard translates these into canonical router config (`routing.signals.role_bindings`, `routing.decisions`, and `global.services.ratelimit`), merges them into the running `config.yaml`, and triggers a hot-reload so the router enforces the new policy immediately. Requires the `security.manage` permission for writes; `config.read` is sufficient for viewing. See [docs/security-hardening.md](../docs/security-hardening.md) for full details.
+- **Dashboard RBAC permissions**: `feedback.submit`, `replay.read`, and `security.manage` extend the built-in role/permission matrix. Only admin-role users receive `security.manage` by default.
+- Future: OIDC login on dashboard, stronger session-cookie handling, and signed proxy sessions to embedded services.
 
 Write access warning for config updates:
 

@@ -88,48 +88,35 @@ func (collector *replayToolTraceCollector) addUserText(source string, role strin
 	collector.addTextStep(replayToolStepUserInput, source, role, text)
 }
 
-func (collector *replayToolTraceCollector) addAssistantToolCall(
-	source string,
-	role string,
-	toolName string,
-	toolCallID string,
-	arguments string,
-) {
-	collector.steps = append(collector.steps, routerreplay.ToolTraceStep{
-		Type:       replayToolStepAssistantToolCall,
-		Source:     source,
-		Role:       role,
-		ToolName:   toolName,
-		ToolCallID: toolCallID,
-		Arguments:  arguments,
-	})
-	if toolCallID != "" && toolName != "" {
-		collector.toolNamesByCallID[toolCallID] = toolName
+func (collector *replayToolTraceCollector) addAssistantToolCall(step routerreplay.ToolTraceStep) {
+	step.Type = replayToolStepAssistantToolCall
+	collector.steps = append(collector.steps, step)
+	if step.ToolCallID != "" && step.ToolName != "" {
+		collector.toolNamesByCallID[step.ToolCallID] = step.ToolName
 	}
 }
 
 func (collector *replayToolTraceCollector) addToolResult(source string, role string, raw json.RawMessage, toolCallID string) {
-	collector.addToolResultText(source, role, extractReplayJSONText(raw), collector.toolNamesByCallID[toolCallID], toolCallID)
-}
-
-func (collector *replayToolTraceCollector) addToolResultText(
-	source string,
-	role string,
-	text string,
-	toolName string,
-	toolCallID string,
-) {
-	if text == "" && toolName == "" && toolCallID == "" {
-		return
+	rawOutput := ""
+	if len(raw) > 0 && string(raw) != "null" {
+		rawOutput = string(raw)
 	}
-	collector.steps = append(collector.steps, routerreplay.ToolTraceStep{
-		Type:       replayToolStepClientToolResult,
+	collector.addToolResultStep(routerreplay.ToolTraceStep{
 		Source:     source,
 		Role:       role,
-		Text:       text,
-		ToolName:   toolName,
+		Text:       extractReplayJSONText(raw),
+		ToolName:   collector.toolNamesByCallID[toolCallID],
 		ToolCallID: toolCallID,
+		RawOutput:  rawOutput,
 	})
+}
+
+func (collector *replayToolTraceCollector) addToolResultStep(step routerreplay.ToolTraceStep) {
+	if step.Text == "" && step.ToolName == "" && step.ToolCallID == "" && step.RawOutput == "" {
+		return
+	}
+	step.Type = replayToolStepClientToolResult
+	collector.steps = append(collector.steps, step)
 }
 
 func (collector *replayToolTraceCollector) addAssistantFinalResponse(source string, role string, raw json.RawMessage) {
@@ -222,12 +209,13 @@ func buildReplayStreamingToolTrace(ctx *RequestContext) *routerreplay.ToolTrace 
 				continue
 			}
 			steps = append(steps, routerreplay.ToolTraceStep{
-				Type:       replayToolStepAssistantToolCall,
-				Source:     replayToolSourceStream,
-				Role:       "assistant",
-				ToolName:   call.Name,
-				ToolCallID: call.ID,
-				Arguments:  call.Arguments,
+				Type:         replayToolStepAssistantToolCall,
+				Source:       replayToolSourceStream,
+				Role:         "assistant",
+				ToolName:     call.Name,
+				ToolCallID:   call.ID,
+				Arguments:    call.Arguments,
+				RawArguments: call.Arguments,
 			})
 		}
 	}
@@ -276,7 +264,14 @@ func buildReplayTraceFromChatMessage(
 ) *routerreplay.ToolTrace {
 	collector := newReplayToolTraceCollector(len(message.ToolCalls) + 1)
 	for _, toolCall := range message.ToolCalls {
-		collector.addAssistantToolCall(source, message.Role, toolCall.Function.Name, toolCall.ID, toolCall.Function.Arguments)
+		collector.addAssistantToolCall(routerreplay.ToolTraceStep{
+			Source:       source,
+			Role:         message.Role,
+			ToolName:     toolCall.Function.Name,
+			ToolCallID:   toolCall.ID,
+			Arguments:    toolCall.Function.Arguments,
+			RawArguments: toolCall.Function.Arguments,
+		})
 	}
 	collector.addAssistantFinalResponse(source, message.Role, message.Content)
 	return collector.trace()
@@ -375,7 +370,9 @@ func replayToolTraceStepsEqual(
 		left.Text == right.Text &&
 		left.ToolName == right.ToolName &&
 		left.ToolCallID == right.ToolCallID &&
-		left.Arguments == right.Arguments
+		left.Arguments == right.Arguments &&
+		left.RawArguments == right.RawArguments &&
+		left.RawOutput == right.RawOutput
 }
 
 func replayToolTraceStepLabel(stepType string) string {
@@ -504,13 +501,14 @@ func appendReplayChatRequestMessage(collector *replayToolTraceCollector, message
 		collector.addUserInput(replayToolSourceRequest, message.Role, message.Content)
 	case "assistant":
 		for _, toolCall := range message.ToolCalls {
-			collector.addAssistantToolCall(
-				replayToolSourceRequest,
-				message.Role,
-				toolCall.Function.Name,
-				toolCall.ID,
-				toolCall.Function.Arguments,
-			)
+			collector.addAssistantToolCall(routerreplay.ToolTraceStep{
+				Source:       replayToolSourceRequest,
+				Role:         message.Role,
+				ToolName:     toolCall.Function.Name,
+				ToolCallID:   toolCall.ID,
+				Arguments:    toolCall.Function.Arguments,
+				RawArguments: toolCall.Function.Arguments,
+			})
 		}
 	case "tool":
 		collector.addToolResult(replayToolSourceRequest, message.Role, message.Content, message.ToolCallID)
@@ -549,7 +547,14 @@ func appendReplayResponseAPIRequestItem(collector *replayToolTraceCollector, ite
 	case "message":
 		appendReplayResponseAPIUserMessage(collector, item)
 	case "function_call":
-		collector.addAssistantToolCall(replayToolSourceRequest, "assistant", item.Name, item.CallID, item.Arguments)
+		collector.addAssistantToolCall(routerreplay.ToolTraceStep{
+			Source:       replayToolSourceRequest,
+			Role:         "assistant",
+			ToolName:     item.Name,
+			ToolCallID:   item.CallID,
+			Arguments:    item.Arguments,
+			RawArguments: item.Arguments,
+		})
 	case "function_call_output":
 		collector.addToolResult(replayToolSourceRequest, "tool", item.Output, item.CallID)
 	}
@@ -558,7 +563,14 @@ func appendReplayResponseAPIRequestItem(collector *replayToolTraceCollector, ite
 func appendReplayResponseAPIResponseItem(collector *replayToolTraceCollector, item replayToolTraceResponseAPIItem) {
 	switch item.Type {
 	case "function_call":
-		collector.addAssistantToolCall(replayToolSourceResponse, "assistant", item.Name, item.CallID, item.Arguments)
+		collector.addAssistantToolCall(routerreplay.ToolTraceStep{
+			Source:       replayToolSourceResponse,
+			Role:         "assistant",
+			ToolName:     item.Name,
+			ToolCallID:   item.CallID,
+			Arguments:    item.Arguments,
+			RawArguments: item.Arguments,
+		})
 	case "function_call_output":
 		collector.addToolResult(replayToolSourceResponse, "tool", item.Output, item.CallID)
 	case "message":

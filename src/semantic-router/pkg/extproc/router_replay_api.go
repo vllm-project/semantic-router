@@ -51,6 +51,10 @@ func (r *OpenAIRouter) handleRouterReplayAPI(method string, path string) *ext_pr
 	}
 
 	normalizedPath, rawQuery := splitRouterReplayRequestPath(path)
+	if !isRouterReplayPath(normalizedPath) {
+		return nil
+	}
+
 	switch {
 	case isRouterReplayListPath(normalizedPath):
 		return r.handleRouterReplayListAPI(method, rawQuery)
@@ -62,6 +66,12 @@ func (r *OpenAIRouter) handleRouterReplayAPI(method string, path string) *ext_pr
 	default:
 		return nil
 	}
+}
+
+func isRouterReplayPath(path string) bool {
+	return isRouterReplayListPath(path) ||
+		path == routerReplayAggregatePath ||
+		strings.HasPrefix(path, routerReplayAPIBasePath+"/")
 }
 
 func (r *OpenAIRouter) hasRouterReplayRecorders() bool {
