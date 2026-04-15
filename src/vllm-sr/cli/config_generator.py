@@ -114,12 +114,10 @@ def generate_envoy_config_from_user_config(
 
             if "://" in endpoint_str:
                 parsed = urlparse(endpoint_str)
-                host = parsed.netloc
+                host = parsed.hostname or parsed.netloc
                 path = parsed.path.rstrip("/")
                 protocol = parsed.scheme or backend.protocol
                 port = parsed.port or (443 if protocol == "https" else 80)
-                if parsed.port is None and ":" in host:
-                    host = parsed.hostname or host
             else:
                 protocol = backend.protocol
 
@@ -155,6 +153,9 @@ def generate_envoy_config_from_user_config(
                     "name": backend.name or f"backend-{index + 1}",
                     "address": host,
                     "port": int(port),
+                    "host_authority": (
+                        f"{host}:{port}" if int(port) not in (80, 443) else host
+                    ),
                     "path": path,
                     "weight": backend.weight,
                     "protocol": protocol,

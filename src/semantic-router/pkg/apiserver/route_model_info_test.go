@@ -136,7 +136,7 @@ func TestBuildModelsInfoResponseIncludesRuntimeSummaryAndRegistryMetadata(t *tes
 	}
 
 	configPath := filepath.Join(t.TempDir(), "router-config.yaml")
-	if err := startupstatus.NewWriter(configPath).Write(startupstatus.State{
+	if err := startupstatus.NewFileWriter(configPath).Write(startupstatus.State{
 		Phase:            "downloading_models",
 		Ready:            false,
 		Message:          "Downloading model models/mmbert32k-intent-classifier-merged",

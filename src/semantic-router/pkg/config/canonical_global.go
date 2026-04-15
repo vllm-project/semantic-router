@@ -43,6 +43,7 @@ type CanonicalServiceGlobal struct {
 	Authz         AuthzConfig         `yaml:"authz"`
 	RateLimit     RateLimitConfig     `yaml:"ratelimit"`
 	RouterReplay  RouterReplayConfig  `yaml:"router_replay"`
+	StartupStatus StartupStatusConfig `yaml:"startup_status"`
 }
 
 // CanonicalStoreGlobal groups storage-backed runtime facilities.
@@ -219,6 +220,7 @@ func applyCanonicalGlobal(cfg *RouterConfig, global *CanonicalGlobal) error {
 	cfg.Authz = global.Services.Authz
 	cfg.RateLimit = global.Services.RateLimit
 	cfg.RouterReplay = global.Services.RouterReplay
+	cfg.StartupStatus = global.Services.StartupStatus
 
 	cfg.SemanticCache = global.Stores.SemanticCache
 	cfg.Memory = global.Stores.Memory

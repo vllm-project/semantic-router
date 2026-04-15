@@ -19,6 +19,9 @@ CANONICAL_SERVICE_DEFAULTS: dict[str, dict[str, object]] = {
         "enabled": True,
         "store_backend": "postgres",
     },
+    "startup_status": {
+        "store_backend": "file",
+    },
 }
 
 CANONICAL_STORE_DEFAULTS: dict[str, dict[str, object]] = {
@@ -53,6 +56,10 @@ def detect_canonical_storage_backends(config: Mapping[str, Any]) -> set[str]:
     store_backend = _effective_store_backend(config, "semantic_cache", "backend_type")
     if store_backend == "milvus":
         backends.add("milvus")
+
+    vs_metadata = _vector_store_metadata_backend(config)
+    if vs_metadata == "postgres":
+        backends.add("postgres")
 
     return backends
 
@@ -420,6 +427,20 @@ def _effective_store_backend(
     if raw is not None:
         return str(raw).strip().lower() or None
     return str(defaults.get(backend_field) or "").strip().lower() or None
+
+
+def _vector_store_metadata_backend(config: Mapping[str, Any]) -> str | None:
+    """Return the metadata_store value from global.stores.vector_store, if set."""
+    stores = _stores_mapping(config)
+    if stores is _INVALID_MAPPING:
+        return None
+    vs_config = stores.get("vector_store")
+    if not isinstance(vs_config, Mapping):
+        return None
+    raw = vs_config.get("metadata_store")
+    if raw is None:
+        return None
+    return str(raw).strip().lower() or None
 
 
 def _stores_mapping(config: Mapping[str, Any]) -> Mapping[str, Any] | object:

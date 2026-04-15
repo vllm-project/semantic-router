@@ -172,6 +172,16 @@ manual_profile_rules:
     summary: NVIDIA Dynamo deployment, batching, and GPU-health checks that require a manual execution path.
     paths:
       - e2e/profiles/dynamo/**
+  vectorstore-registry:
+    owner: e2e
+    coverage_role: vectorstore-registry-restart-recovery
+    selection_mode: manual-only
+    summary: Vector Store Registry restart-recovery coverage with Postgres metadata backend, validating that store and file metadata survive pod restarts.
+    paths:
+      - e2e/profiles/vectorstore-registry/**
+      - deploy/kubernetes/router-replay/postgres.yaml
+      - src/semantic-router/pkg/vectorstore/metadata_registry*.go
+      - src/semantic-router/pkg/postgres/**
   rag-hybrid-search:
     owner: e2e
     coverage_role: rag-hybrid-search

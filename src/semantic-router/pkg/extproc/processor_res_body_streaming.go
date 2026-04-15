@@ -44,6 +44,11 @@ func recordStreamingTTFT(ctx *RequestContext) {
 	ctx.TTFTSeconds = ttft
 	ctx.TTFTRecorded = true
 	latency.UpdateTTFT(ctx.RequestModel, ttft)
+	ctx.CacheWarmthEstimate = latency.EstimateCacheProbability(latency.CacheEstimationInput{
+		Model:       ctx.RequestModel,
+		TTFTSeconds: ttft,
+	})
+	maybeEmitTransitionEvent(ctx)
 	logging.Debugf("Recorded TTFT on first streamed body chunk: model=%q, TTFT=%.4fs", ctx.RequestModel, ttft)
 }
 
