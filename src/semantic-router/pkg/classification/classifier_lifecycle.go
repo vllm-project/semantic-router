@@ -99,9 +99,9 @@ func (c *Classifier) runtimeTasks() []modelruntime.Task {
 		})
 	}
 
-	appendTask("classifier.category", false, c.IsCategoryEnabled() || c.IsMCPCategoryEnabled(), c.initializeConfiguredCategoryRuntime)
-	appendTask("classifier.jailbreak", false, c.IsJailbreakEnabled(), c.initializeJailbreakClassifier)
-	appendTask("classifier.pii", false, c.IsPIIEnabled(), c.initializePIIClassifier)
+	appendTask("classifier.category", false, c.usesRoutingSignalType(config.SignalTypeDomain) && (c.IsCategoryEnabled() || c.IsMCPCategoryEnabled()), c.initializeConfiguredCategoryRuntime)
+	appendTask("classifier.jailbreak", false, c.usesRoutingSignalType(config.SignalTypeJailbreak) && c.IsJailbreakEnabled(), c.initializeJailbreakClassifier)
+	appendTask("classifier.pii", false, c.usesRoutingSignalType(config.SignalTypePII) && c.IsPIIEnabled(), c.initializePIIClassifier)
 	appendTask("classifier.keyword_embedding", false, c.IsKeywordEmbeddingClassifierEnabled(), c.initializeKeywordEmbeddingClassifier)
 	appendTask("classifier.fact_check", true, c.IsFactCheckEnabled(), c.initializeFactCheckClassifier)
 	appendTask("classifier.hallucination", true, c.IsHallucinationDetectionEnabled(), c.initializeHallucinationDetector)
@@ -110,6 +110,10 @@ func (c *Classifier) runtimeTasks() []modelruntime.Task {
 	appendTask("classifier.language", true, len(c.Config.LanguageRules) > 0, c.initializeLanguageClassifier)
 
 	return tasks
+}
+
+func (c *Classifier) usesRoutingSignalType(signalType string) bool {
+	return c != nil && c.Config != nil && c.Config.UsesSignalTypeInRouting(signalType)
 }
 
 func (c *Classifier) initializeConfiguredCategoryRuntime() error {

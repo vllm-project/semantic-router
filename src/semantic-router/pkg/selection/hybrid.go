@@ -24,6 +24,7 @@ import (
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/selection/lookuptable"
 )
 
 // HybridConfig configures the Hybrid selector that combines multiple methods
@@ -77,6 +78,10 @@ type HybridSelector struct {
 
 	// Model costs for cost-aware selection
 	modelCosts map[string]float64
+
+	// lookupTable provides data-driven values (e.g. quality-gap estimates)
+	// that replace hardcoded config constants. May be nil.
+	lookupTable lookuptable.LookupTable
 }
 
 // NewHybridSelector creates a new Hybrid selector
@@ -137,6 +142,27 @@ func (h *HybridSelector) SetAutoMixSelector(autoMix *AutoMixSelector) {
 // SetModelCost sets the cost for a model
 func (h *HybridSelector) SetModelCost(model string, cost float64) {
 	h.modelCosts[model] = cost
+}
+
+// SetLookupTable attaches a lookup table for data-driven constant resolution.
+func (h *HybridSelector) SetLookupTable(lt lookuptable.LookupTable) {
+	h.lookupTable = lt
+}
+
+// resolveQualityGap returns the quality-gap threshold between currentModel and
+// candidateModel for the given task family. It first checks the lookup table;
+// if no entry is found it falls back to config.QualityGapThreshold.
+//
+// TODO: integrate into model upgrade decision logic in Select.
+//
+//nolint:unused // Reserved for upcoming lookup-table consumption.
+func (h *HybridSelector) resolveQualityGap(taskFamily, currentModel, candidateModel string) float64 {
+	if h.lookupTable != nil && taskFamily != "" && currentModel != "" && candidateModel != "" {
+		if gap, ok := h.lookupTable.QualityGap(taskFamily, currentModel, candidateModel); ok {
+			return gap
+		}
+	}
+	return h.config.QualityGapThreshold
 }
 
 // Select chooses the best model by combining multiple selection methods

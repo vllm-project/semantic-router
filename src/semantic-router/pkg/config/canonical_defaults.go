@@ -180,7 +180,7 @@ func defaultCalibrationKnowledgeBase() KnowledgeBaseConfig {
 func defaultCanonicalEmbeddingModels() CanonicalEmbeddingModels {
 	return CanonicalEmbeddingModels{
 		Semantic: EmbeddingModels{
-			MmBertModelPath: "models/mom-embedding-ultra",
+			MmBertModelPath: "models/mmbert-embed-32k-2d-matryoshka",
 			UseCPU:          true,
 			EmbeddingConfig: HNSWConfig{
 				ModelType:         "mmbert",

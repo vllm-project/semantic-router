@@ -214,28 +214,6 @@ func (d *Decision) GetDecisionPIIPolicy(piiRules []PIIRule) PIIPolicy {
 	}
 }
 
-// HasSignalType returns true if the decision's rules tree references at least
-// one signal of the given type (e.g., "jailbreak", "pii").
-func (d *Decision) HasSignalType(signalType string) bool {
-	return len(collectSignalNames(&d.Rules, signalType)) > 0
-}
-
-// collectSignalNames traverses a RuleNode tree and returns all leaf signal names
-// of the given signal type.
-func collectSignalNames(node *RuleNode, signalType string) []string {
-	if node == nil {
-		return nil
-	}
-	if node.Type == signalType && node.Name != "" {
-		return []string{node.Name}
-	}
-	var names []string
-	for i := range node.Conditions {
-		names = append(names, collectSignalNames(&node.Conditions[i], signalType)...)
-	}
-	return names
-}
-
 // IsDecisionAllowedForPIIType checks if a decision is allowed to process a specific PII type
 func (d *Decision) IsDecisionAllowedForPIIType(piiType string, piiRules []PIIRule) bool {
 	policy := d.GetDecisionPIIPolicy(piiRules)

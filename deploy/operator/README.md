@@ -691,7 +691,7 @@ Deploys semantic router with an **Envoy sidecar container** that acts as an ingr
 
 **Architecture:**
 
-```
+```text
 Client → Service (port 8080) → Envoy Sidecar → ExtProc (semantic router) → vLLM Backend
 ```
 
@@ -718,12 +718,14 @@ spec:
 
 ### Gateway Integration Mode
 
-Reuses an **existing Gateway** (Istio, Envoy Gateway, etc.) and creates an HTTPRoute. The operator skips deploying the Envoy sidecar container.
+Reuses an **existing Gateway** (Istio, Envoy Gateway, etc.) and expects you to manage the matching HTTPRoute separately. The operator skips deploying the Envoy sidecar container.
+
+Current status: the controller resolves the referenced Gateway and switches the deployment into gateway mode, but automatic HTTPRoute creation is still a placeholder.
 
 **Architecture:**
 
-```
-Client → Gateway → HTTPRoute → Service (port 8080) → Semantic Router API → vLLM Backend
+```text
+Client → Gateway → user-managed HTTPRoute → Service (port 8080) → Semantic Router API → vLLM Backend
 ```
 
 **When to use:**
@@ -752,10 +754,13 @@ spec:
 
 **Operator behavior in gateway mode:**
 
-1. Creates HTTPRoute resource pointing to the specified Gateway
-2. Skips Envoy sidecar container in pod spec
-3. Sets `status.gatewayMode: "gateway-integration"`
-4. Semantic router operates in pure API mode (no ExtProc)
+1. Resolves the referenced Gateway and enters gateway integration mode
+2. Does not create an HTTPRoute yet; you must apply and manage the route separately
+3. Skips Envoy sidecar container in pod spec
+4. Sets `status.gatewayMode: "gateway-integration"`
+5. Semantic router operates in pure API mode (no ExtProc)
+
+The gateway sample configures the `SemanticRouter` resource for gateway mode only. It does not install the Gateway or HTTPRoute resources for you.
 
 ## OpenShift Routes
 

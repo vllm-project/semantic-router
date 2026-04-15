@@ -192,7 +192,7 @@ export const DEFAULT_SECTIONS: Record<RouterSystemKey, unknown> = {
   embedding_models: {
     qwen3_model_path: '',
     gemma_model_path: '',
-    mmbert_model_path: 'models/mom-embedding-ultra',
+    mmbert_model_path: 'models/mmbert-embed-32k-2d-matryoshka',
     multimodal_model_path: '',
     bert_model_path: '',
     use_cpu: true,

@@ -25,6 +25,7 @@ import (
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/selection/lookuptable"
 )
 
 // ModelSelectionConfig represents the configuration for model selection
@@ -69,6 +70,7 @@ type Factory struct {
 	modelConfig   map[string]config.ModelParams
 	categories    []config.Category
 	embeddingFunc func(string) ([]float32, error)
+	lookupTable   lookuptable.LookupTable
 }
 
 // NewFactory creates a new selector factory
@@ -96,6 +98,13 @@ func (f *Factory) WithCategories(categories []config.Category) *Factory {
 // WithEmbeddingFunc sets the embedding function for RouterDC
 func (f *Factory) WithEmbeddingFunc(fn func(string) ([]float32, error)) *Factory {
 	f.embeddingFunc = fn
+	return f
+}
+
+// WithLookupTable sets the lookup table used by selectors that support data-driven
+// constant resolution (e.g. HybridSelector's quality-gap threshold).
+func (f *Factory) WithLookupTable(lt lookuptable.LookupTable) *Factory {
+	f.lookupTable = lt
 	return f
 }
 
@@ -140,6 +149,9 @@ func (f *Factory) Create() Selector {
 		}
 		if f.embeddingFunc != nil && hybridSelector.routerDCSelector != nil {
 			hybridSelector.routerDCSelector.SetEmbeddingFunc(f.embeddingFunc)
+		}
+		if f.lookupTable != nil {
+			hybridSelector.SetLookupTable(f.lookupTable)
 		}
 		selector = hybridSelector
 
@@ -237,6 +249,9 @@ func (f *Factory) CreateAll() *Registry {
 	hybridSelector := NewHybridSelectorWithComponents(hybridCfg, eloSelector, routerDCSelector, autoMixSelector)
 	if f.modelConfig != nil {
 		hybridSelector.InitializeFromConfig(f.modelConfig, f.categories)
+	}
+	if f.lookupTable != nil {
+		hybridSelector.SetLookupTable(f.lookupTable)
 	}
 	registry.Register(MethodHybrid, hybridSelector)
 

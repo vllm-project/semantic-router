@@ -1165,6 +1165,11 @@ global:
         cost_weight: 0.1
         quality_gap_threshold: 0.08
         normalize_scores: true
+      momentum:
+        enabled: false
+        attack: 0.7
+        release: 0.3
+        threshold: 0.6
       ml:
         models_path: models/model-selection
         embedding_dim: 384
@@ -1182,6 +1187,24 @@ global:
         mlp:
           device: cpu
           pretrained_path: models/model-selection/mlp.pt
+      lookup_tables:
+        enabled: false
+        storage_path: ""
+        auto_save_interval: ""
+        populate_from_replay: false
+        populate_interval: ""
+        quality_gaps:
+          - task_family: coding
+            current_model: small
+            candidate_model: large
+            value: 0.15
+        handoff_penalties:
+          - from_model: small
+            to_model: large
+            value: 0.02
+        remaining_turn_priors:
+          - intent_or_domain: support
+            value: 3.5
 
   services:
     api:
@@ -1633,7 +1656,7 @@ global:
       semantic:
         qwen3_model_path: models/mom-embedding-pro
         gemma_model_path: models/mom-embedding-flash
-        mmbert_model_path: models/mom-embedding-ultra
+        mmbert_model_path: models/mmbert-embed-32k-2d-matryoshka
         multimodal_model_path: models/mom-embedding-multimodal
         bert_model_path: models/mom-embedding-light
         use_cpu: true

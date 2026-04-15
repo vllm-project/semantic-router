@@ -105,9 +105,9 @@ const routerModels = [
     type: 'embedding',
     loaded: true,
     state: 'ready',
-    model_path: 'models/mom-embedding-ultra',
+    model_path: 'models/mmbert-embed-32k-2d-matryoshka',
     registry: {
-      local_path: 'models/mom-embedding-ultra',
+      local_path: 'models/mmbert-embed-32k-2d-matryoshka',
       repo_id: 'llm-semantic-router/mmbert-embed-32k-2d-matryoshka',
       purpose: 'embedding',
       description: 'Multilingual 2D Matryoshka embedding model with long-context support.',
@@ -219,7 +219,7 @@ test.describe('Router model inventory surfaces', () => {
     await expect(previewGrid.locator('[data-testid^="router-model-preview-"]')).toHaveCount(6)
 
     const embeddingPreview = page.getByTestId('router-model-preview-mmbert_embedding_model')
-    await expect(embeddingPreview).toContainText('models/mom-embedding-ultra')
+    await expect(embeddingPreview).toContainText('models/mmbert-embed-32k-2d-matryoshka')
     await expect(embeddingPreview).toContainText('Embedding')
     await expect(embeddingPreview).not.toContainText('MmBertEmbeddingModel(')
     await expect(previewGrid.getByAltText('AMD platform')).toHaveCount(6)
@@ -231,7 +231,7 @@ test.describe('Router model inventory surfaces', () => {
     await expect(fullCard).toContainText('Identity')
     await expect(fullCard).toContainText('Capabilities')
     await expect(fullCard).toContainText('Runtime & Config')
-    await expect(fullCard).toContainText('models/mom-embedding-ultra')
+    await expect(fullCard).toContainText('models/mmbert-embed-32k-2d-matryoshka')
     await expect(fullCard).not.toContainText('MmBertEmbeddingModel(')
     await expect(fullCard.getByAltText('AMD platform')).toBeVisible()
   })

@@ -88,7 +88,7 @@ make agent-feature-gate ENV=cpu CHANGED_FILES="path/one,path/two"
 ```
 
 Use `make agent-ci-lint` when you want to reproduce the same changed-file lint path that the CI pre-commit workflow runs, including the shared agent bootstrap toolchain and tracked-file codespell check.
-Use `make precommit-branch-gate` when you want the same local prelint gate the installed `pre-push` hook runs before a push or PR update.
+Use `make precommit-branch-gate` when you want to run the local branch prelint bundle on demand before a push or PR update.
 Use `make agent-pr-gate` when you want the repo-native local baseline for the PR jobs contributors most often miss: `Pre-commit / Run pre-commit hooks` and `Test And Build`.
 
 `ENV=amd` is required when platform-specific behavior changed.

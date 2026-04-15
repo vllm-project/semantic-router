@@ -77,7 +77,7 @@ const configResponse = {
       },
       embeddings: {
         semantic: {
-          mmbert_model_path: 'models/mom-embedding-ultra',
+          mmbert_model_path: 'models/mmbert-embed-32k-2d-matryoshka',
           bert_model_path: 'models/mom-embedding-bert',
           use_cpu: true,
           embedding_config: {
@@ -110,7 +110,7 @@ model_catalog:
     pii_classifier: models/mmbert32k-pii-detector-merged
   embeddings:
     semantic:
-      mmbert_model_path: models/mom-embedding-ultra
+      mmbert_model_path: models/mmbert-embed-32k-2d-matryoshka
       bert_model_path: models/mom-embedding-bert
       use_cpu: true
 `;
@@ -358,7 +358,7 @@ test.describe('Config surface layout regressions', () => {
     await expect(systemBindingsCard).toBeVisible();
     await expect(embeddingsCard).toBeVisible();
     await expect(systemBindingsCard.getByText('models/.../mmbert32k-jailbreak-detector-merged')).toBeVisible();
-    await expect(embeddingsCard.getByText('models/mom-embedding-ultra')).toBeVisible();
+    await expect(embeddingsCard.getByText('models/mmbert-embed-32k-2d-matryoshka')).toBeVisible();
 
     const systemPath = systemBindingsCard.getByText('global.model_catalog.system');
     const systemButton = systemBindingsCard.getByRole('button', { name: 'Edit Section' });

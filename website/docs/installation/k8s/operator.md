@@ -558,7 +558,7 @@ Deploys semantic router with an **Envoy sidecar container** that acts as an ingr
 
 **Architecture:**
 
-```
+```text
 Client → Service (8080) → Envoy Sidecar → ExtProc gRPC → Semantic Router → vLLM
 ```
 
@@ -591,12 +591,14 @@ spec:
 
 ### Gateway Integration Mode
 
-Reuses an **existing Gateway** (Istio, Envoy Gateway, etc.) and creates an HTTPRoute.
+Reuses an **existing Gateway** (Istio, Envoy Gateway, etc.) and expects you to manage the matching HTTPRoute separately.
+
+Current status: the controller resolves the referenced Gateway and switches the deployment into gateway mode, but automatic HTTPRoute creation is still a placeholder.
 
 **Architecture:**
 
-```
-Client → Gateway (Istio/Envoy) → HTTPRoute → Service (8080) → Semantic Router API → vLLM
+```text
+Client → Gateway (Istio/Envoy) → user-managed HTTPRoute → Service (8080) → Semantic Router API → vLLM
 ```
 
 **When to use:**
@@ -625,12 +627,15 @@ spec:
 
 **Operator behavior:**
 
-1. Creates HTTPRoute resource pointing to the specified Gateway
-2. Skips Envoy sidecar container in pod spec
-3. Sets `status.gatewayMode: "gateway-integration"`
-4. Semantic router operates in pure API mode (no ExtProc)
+1. Resolves the referenced Gateway and enters gateway integration mode
+2. Does not create an HTTPRoute yet; you must apply and manage the route separately
+3. Skips Envoy sidecar container in pod spec
+4. Sets `status.gatewayMode: "gateway-integration"`
+5. Semantic router operates in pure API mode (no ExtProc)
 
 **Example:** See [`vllm.ai_v1alpha1_semanticrouter_gateway.yaml`](https://github.com/vllm-project/semantic-router/blob/main/deploy/operator/config/samples/vllm.ai_v1alpha1_semanticrouter_gateway.yaml)
+
+That sample configures the `SemanticRouter` resource for gateway mode only. It does not install the Gateway or HTTPRoute resources for you.
 
 ## OpenShift Routes
 
@@ -1687,13 +1692,15 @@ kubectl get service vllm-deepseek -n vllm-serving -o jsonpath='{.spec.ports[0]}'
 
 #### Gateway Integration Issues
 
-**Symptom:** HTTPRoute not created or traffic not reaching semantic router
+**Symptom:** No HTTPRoute exists yet, or traffic is not reaching semantic router
+
+The current operator implementation does not create HTTPRoute resources automatically. If you have not applied an HTTPRoute manifest yourself, that is expected behavior rather than a failed reconcile.
 
 ```bash
 # Verify Gateway exists
 kubectl get gateway istio-ingressgateway -n istio-system
 
-# Check HTTPRoute was created
+# Check whether you created an HTTPRoute yourself
 kubectl get httproute -l app.kubernetes.io/instance=my-router
 
 # Verify Gateway supports HTTPRoute (Gateway API v1)
@@ -1702,7 +1709,12 @@ kubectl get gateway istio-ingressgateway -n istio-system -o yaml | grep -A5 list
 # Check operator status
 kubectl get semanticrouter my-router -o jsonpath='{.status.gatewayMode}'
 # Should show: "gateway-integration"
+
+# Check operator logs for the current placeholder message
+kubectl logs deployment/semantic-router-operator-controller-manager -n semantic-router-system | grep 'HTTPRoute creation placeholder'
 ```
+
+If the operator logs show `HTTPRoute creation placeholder - requires Gateway API version-specific implementation`, the controller recognized gateway mode but did not create a route. Apply an HTTPRoute manifest manually and verify that it targets the semantic router service on port 8080.
 
 #### OpenShift Route Issues
 
