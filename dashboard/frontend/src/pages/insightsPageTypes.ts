@@ -25,6 +25,8 @@ export interface ToolTraceStep {
   tool_name?: string
   tool_call_id?: string
   arguments?: string
+  raw_arguments?: string
+  raw_output?: string
   status?: string
   content_redacted?: boolean
 }

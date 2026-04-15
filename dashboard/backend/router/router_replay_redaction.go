@@ -196,6 +196,16 @@ func redactToolTraceMap(toolTrace map[string]any) bool {
 			step["content_redacted"] = true
 			changed = true
 		}
+		if rawArguments, ok := step["raw_arguments"].(string); ok && strings.TrimSpace(rawArguments) != "" {
+			step["raw_arguments"] = ""
+			step["content_redacted"] = true
+			changed = true
+		}
+		if rawOutput, ok := step["raw_output"].(string); ok && strings.TrimSpace(rawOutput) != "" {
+			step["raw_output"] = ""
+			step["content_redacted"] = true
+			changed = true
+		}
 	}
 
 	return changed
