@@ -58,6 +58,7 @@ func createSemanticCache(cfg *config.RouterConfig) (cache.CacheBackend, error) {
 		TTLSeconds:          semanticCacheCfg.TTLSeconds,
 		EvictionPolicy:      cache.EvictionPolicyType(semanticCacheCfg.EvictionPolicy),
 		Redis:               semanticCacheCfg.Redis,
+		Valkey:              semanticCacheCfg.Valkey,
 		Milvus:              semanticCacheCfg.Milvus,
 		EmbeddingModel:      detectSemanticCacheEmbeddingModel(cfg),
 	}

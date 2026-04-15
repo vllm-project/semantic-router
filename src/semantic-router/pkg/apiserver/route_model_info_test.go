@@ -136,7 +136,7 @@ func TestBuildModelsInfoResponseIncludesRuntimeSummaryAndRegistryMetadata(t *tes
 	}
 
 	configPath := filepath.Join(t.TempDir(), "router-config.yaml")
-	if err := startupstatus.NewWriter(configPath).Write(startupstatus.State{
+	if err := startupstatus.NewFileWriter(configPath).Write(startupstatus.State{
 		Phase:            "downloading_models",
 		Ready:            false,
 		Message:          "Downloading model models/mmbert32k-intent-classifier-merged",
@@ -273,8 +273,8 @@ func TestBuildModelsInfoResponseIncludesConfiguredAuxiliaryModels(t *testing.T) 
 func TestNormalizeEmbeddingModelPathExtractsRegistryPathFromRuntimeString(t *testing.T) {
 	t.Parallel()
 
-	runtimePath := "MmBertEmbeddingModel(path=models/mom-embedding-ultra, hidden_size=768, layers=22)"
-	if got := normalizeEmbeddingModelPath(runtimePath, "mmbert"); got != "models/mom-embedding-ultra" {
+	runtimePath := "MmBertEmbeddingModel(path=models/mmbert-embed-32k-2d-matryoshka, hidden_size=768, layers=22)"
+	if got := normalizeEmbeddingModelPath(runtimePath, "mmbert"); got != "models/mmbert-embed-32k-2d-matryoshka" {
 		t.Fatalf("expected normalized embedding path, got %q", got)
 	}
 }

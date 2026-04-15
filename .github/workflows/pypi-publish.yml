@@ -175,24 +175,17 @@ jobs:
           echo "Publishing to PyPI..."
           twine upload dist/* --skip-existing --verbose
 
-      - name: Create GitHub Release
+      # Attach the built wheel/sdist to the GitHub Release that release.yml creates.
+      # We intentionally omit body/generate_release_notes here: release.yml is the
+      # canonical release-notes creator to avoid a race condition where multiple
+      # workflows overwrite each other's release body.
+      - name: Attach artifacts to GitHub Release
         if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/')
         uses: softprops/action-gh-release@v1
         with:
           tag_name: ${{ steps.extract_version.outputs.tag }}
-          name: vllm-sr ${{ steps.extract_version.outputs.tag }}
           draft: false
           prerelease: false
-          generate_release_notes: true
-          body: |
-            ## Installation
-
-            ```bash
-            pip install vllm-sr==${{ steps.extract_version.outputs.version }}
-            ```
-
-            ## What's Changed
-            See the full changelog below.
           files: |
             src/vllm-sr/dist/*
         env:

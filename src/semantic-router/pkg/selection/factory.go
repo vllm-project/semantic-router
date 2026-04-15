@@ -17,6 +17,12 @@ limitations under the License.
 package selection
 
 import (
+	"context"
+	"fmt"
+	"net/http"
+	"strings"
+	"time"
+
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/selection/lookuptable"
@@ -316,10 +322,94 @@ func (f *Factory) CreateAll() *Registry {
 	latencyAwareSelector := NewLatencyAwareSelector(nil)
 	registry.Register(MethodLatencyAware, latencyAwareSelector)
 
+	LogRegisteredAlgorithms(registry)
 	logging.ComponentEvent("selection", "selection_factory_initialized", map[string]interface{}{
 		"selector_count": len(registry.selectors),
 	})
 	return registry
+}
+
+// LogRegisteredAlgorithms logs the tier and dependencies of each registered algorithm
+func LogRegisteredAlgorithms(registry *Registry) {
+	registry.mu.RLock()
+	defer registry.mu.RUnlock()
+
+	for method, selector := range registry.selectors {
+		deps := selector.ExternalDependencies()
+		if len(deps) == 0 {
+			logging.Infof("[Selection] Registered algorithm: %s (tier=%s, dependencies=none)", method, selector.Tier())
+		} else {
+			depNames := make([]string, len(deps))
+			for i, dep := range deps {
+				depNames[i] = fmt.Sprintf("%s (%s)", dep.Name, dep.Type)
+			}
+			logging.Infof("[Selection] Registered algorithm: %s (tier=%s, dependencies=[%s])",
+				method, selector.Tier(), strings.Join(depNames, ", "))
+		}
+	}
+}
+
+// WarnExperimentalAlgorithms logs prominent warnings for experimental algorithms
+// that are actually configured in operator decisions
+func WarnExperimentalAlgorithms(registry *Registry, configuredMethods []SelectionMethod) {
+	for _, method := range configuredMethods {
+		selector, ok := registry.Get(method)
+		if !ok {
+			continue
+		}
+		if selector.Tier() != TierExperimental {
+			continue
+		}
+
+		deps := selector.ExternalDependencies()
+		logging.Warnf("[Selection] WARNING: Algorithm %q is EXPERIMENTAL and not recommended for production use", method)
+		for _, dep := range deps {
+			if dep.HealthURL != "" {
+				logging.Warnf("[Selection]   External dependency: %s (%s)", dep.Name, dep.HealthURL)
+			} else {
+				logging.Warnf("[Selection]   Dependency: %s — %s", dep.Name, dep.Description)
+			}
+		}
+	}
+}
+
+// CheckDependencyHealth checks reachability of external service dependencies
+// for the given algorithms. Logs results but never fails.
+func CheckDependencyHealth(registry *Registry, configuredMethods []SelectionMethod) {
+	for _, method := range configuredMethods {
+		selector, ok := registry.Get(method)
+		if !ok {
+			continue
+		}
+
+		for _, dep := range selector.ExternalDependencies() {
+			if dep.Type != DependencyExternalService || dep.HealthURL == "" {
+				continue
+			}
+
+			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+			client := &http.Client{Timeout: 5 * time.Second}
+			req, err := http.NewRequestWithContext(ctx, "GET", dep.HealthURL, nil)
+			if err != nil {
+				logging.Warnf("[Selection] Dependency check: %s — UNREACHABLE (bad URL: %v)", dep.Name, err)
+				cancel()
+				continue
+			}
+
+			resp, err := client.Do(req)
+			cancel()
+			if err != nil {
+				logging.Warnf("[Selection] Dependency check: %s at %s — UNREACHABLE (will degrade at runtime)", dep.Name, dep.HealthURL)
+			} else {
+				_ = resp.Body.Close()
+				if resp.StatusCode == http.StatusOK {
+					logging.Infof("[Selection] Dependency check: %s at %s — OK", dep.Name, dep.HealthURL)
+				} else {
+					logging.Warnf("[Selection] Dependency check: %s at %s — unhealthy (status %d)", dep.Name, dep.HealthURL, resp.StatusCode)
+				}
+			}
+		}
+	}
 }
 
 // Initialize sets up the global registry with all selectors

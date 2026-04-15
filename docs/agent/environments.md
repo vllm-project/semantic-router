@@ -5,6 +5,7 @@
 - Build with `make vllm-sr-dev`
 - Local runtime defaults to the split router/envoy/dashboard topology
 - Split local runtime uses the local `vllm-sr` router image directly by default
+- Split Intelligent Routing for Mixture-of-Models uses the local `vllm-sr` router image directly by default
 - Only if that local router image is already up to date, you can reuse it with `make vllm-sr-dev SKIP_ROUTER_IMAGE=1`
 - Start with `vllm-sr serve --image-pull-policy never`
 - Use this for the default local Docker workflow

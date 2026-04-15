@@ -56,11 +56,12 @@ type RouterConfig struct {
 	InlineModels     `yaml:",inline"`
 	ExternalModels   []ExternalModelConfig `yaml:"external_models,omitempty"`
 	SemanticCache    `yaml:"semantic_cache"`
-	Memory           MemoryConfig       `yaml:"memory"`
-	VectorStore      *VectorStoreConfig `yaml:"vector_store,omitempty"`
-	ResponseAPI      ResponseAPIConfig  `yaml:"response_api"`
-	RouterReplay     RouterReplayConfig `yaml:"router_replay"`
-	Looper           LooperConfig       `yaml:"looper,omitempty"`
+	Memory           MemoryConfig        `yaml:"memory"`
+	VectorStore      *VectorStoreConfig  `yaml:"vector_store,omitempty"`
+	ResponseAPI      ResponseAPIConfig   `yaml:"response_api"`
+	RouterReplay     RouterReplayConfig  `yaml:"router_replay"`
+	StartupStatus    StartupStatusConfig `yaml:"startup_status"`
+	Looper           LooperConfig        `yaml:"looper,omitempty"`
 	LLMObservability `yaml:",inline"`
 	APIServer        `yaml:",inline"`
 	RouterOptions    `yaml:",inline"`
@@ -185,6 +186,7 @@ type IntelligentRouting struct {
 	Strategy        string               `yaml:"strategy,omitempty"`
 	ModelSelection  ModelSelectionConfig `yaml:"model_selection,omitempty"`
 	ReasoningConfig `yaml:",inline"`
+	SessionStates   []SessionStateConfig `yaml:"session_states,omitempty"`
 }
 
 // BackendModels captures configured backend endpoints and model metadata.

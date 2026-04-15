@@ -14,7 +14,8 @@ type ModelSelectionConfig struct {
 	AutoMix  AutoMixSelectionConfig  `yaml:"automix,omitempty"`
 	Hybrid   HybridSelectionConfig   `yaml:"hybrid,omitempty"`
 	ML       MLSelectionConfig       `yaml:"ml,omitempty"`
-
+  
+	Momentum MomentumSelectionConfig `yaml:"momentum,omitempty"`
 	// LookupTables configures persisted lookup tables for session-aware routing.
 	LookupTables LookupTableConfig `yaml:"lookup_tables,omitempty"`
 }
@@ -72,6 +73,14 @@ type HandoffPenaltyOverride struct {
 type RemainingTurnPriorOverride struct {
 	IntentOrDomain string  `yaml:"intent_or_domain"`
 	Value          float64 `yaml:"value"`
+}
+
+// MomentumSelectionConfig configures Conversational Routing Momentum (CRM).
+type MomentumSelectionConfig struct {
+	Enabled   bool    `yaml:"enabled,omitempty"`
+	Attack    float64 `yaml:"attack,omitempty"`
+	Release   float64 `yaml:"release,omitempty"`
+	Threshold float64 `yaml:"threshold,omitempty"`
 }
 
 // MLSelectionConfig holds configuration for the shared ML-based selectors.

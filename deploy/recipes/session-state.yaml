@@ -1,0 +1,16 @@
+routing:
+  session_states:
+    - name: session_routing
+      fields:
+        - name: turn_number
+          type: int
+        - name: current_model
+          type: string
+        - name: cumulative_cost_usd
+          type: float
+        - name: retry_count_ema
+          type: float
+        - name: quality_score_ema
+          type: float
+        - name: kv_cache_warm
+          type: float

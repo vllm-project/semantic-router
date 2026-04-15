@@ -59,8 +59,24 @@ func (c *Compiler) compile() {
 	// 5. Compile top-level model catalog
 	c.compileModels()
 
-	// 6. Compile routes (decisions)
+	// 6. Compile session state declarations
+	c.compileSessionStates()
+
+	// 7. Compile routes (decisions)
 	c.compileRoutes()
+}
+
+func (c *Compiler) compileSessionStates() {
+	for _, decl := range c.prog.SessionStates {
+		ss := config.SessionStateConfig{Name: decl.Name}
+		for _, f := range decl.Fields {
+			ss.Fields = append(ss.Fields, config.SessionStateFieldConfig{
+				Name:     f.Name,
+				TypeName: f.TypeName,
+			})
+		}
+		c.config.SessionStates = append(c.config.SessionStates, ss)
+	}
 }
 
 func (c *Compiler) compileProjectionPartitions() {

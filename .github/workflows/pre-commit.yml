@@ -177,7 +177,7 @@ jobs:
           echo "To reproduce the full PR pre-commit baseline locally:"
           echo "  make agent-pr-gate"
           echo ""
-          echo "To run the same local prelint gate the pre-push hook uses:"
+          echo "To run the local branch prelint bundle manually:"
           echo "  make precommit-branch-gate AGENT_BASE_REF=origin/${{ github.base_ref }}"
           echo ""
           echo "To run only the pre-commit workflow locally:"

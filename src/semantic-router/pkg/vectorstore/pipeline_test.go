@@ -66,10 +66,10 @@ var _ = Describe("IngestionPipeline", func() {
 		Expect(err).NotTo(HaveOccurred())
 
 		backend = NewMemoryBackend(MemoryBackendConfig{})
-		store, err = NewFileStore(tempDir)
+		store, err = NewFileStore(tempDir, NewMemoryMetadataRegistry())
 		Expect(err).NotTo(HaveOccurred())
 
-		mgr = NewManager(backend, 3, BackendTypeMemory)
+		mgr = NewManager(backend, NewMemoryMetadataRegistry(), 3, BackendTypeMemory)
 		embedder = &mockEmbedder{dim: 3}
 		pipeline = NewIngestionPipeline(backend, store, mgr, embedder, PipelineConfig{
 			Workers:   1,
@@ -81,7 +81,7 @@ var _ = Describe("IngestionPipeline", func() {
 
 	AfterEach(func() {
 		pipeline.Stop()
-		os.RemoveAll(tempDir)
+		_ = os.RemoveAll(tempDir)
 	})
 
 	Context("AttachFile", func() {

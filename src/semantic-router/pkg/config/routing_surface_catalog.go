@@ -50,22 +50,38 @@ var supportedDecisionPluginTypes = []string{
 	DecisionPluginTools,
 }
 
-var supportedDecisionAlgorithmTypes = []string{
-	"automix",
-	"confidence",
-	"elo",
-	"gmtrouter",
-	"hybrid",
-	"kmeans",
-	"knn",
-	"latency_aware",
-	"ratings",
-	"remom",
-	"rl_driven",
-	"router_dc",
-	"static",
-	"svm",
+// AlgorithmCatalogEntry describes a model-selection algorithm and its tier
+type AlgorithmCatalogEntry struct {
+	Type string // algorithm type name (e.g., "elo")
+	Tier string // "supported" or "experimental"
 }
+
+var decisionAlgorithmCatalog = []AlgorithmCatalogEntry{
+	{Type: "automix", Tier: "experimental"},
+	{Type: "confidence", Tier: "supported"},
+	{Type: "elo", Tier: "supported"},
+	{Type: "gmtrouter", Tier: "experimental"},
+	{Type: "hybrid", Tier: "supported"},
+	{Type: "kmeans", Tier: "experimental"},
+	{Type: "knn", Tier: "experimental"},
+	{Type: "latency_aware", Tier: "supported"},
+	{Type: "mlp", Tier: "experimental"},
+	{Type: "ratings", Tier: "supported"},
+	{Type: "remom", Tier: "supported"},
+	{Type: "rl_driven", Tier: "experimental"},
+	{Type: "router_dc", Tier: "supported"},
+	{Type: "static", Tier: "supported"},
+	{Type: "svm", Tier: "experimental"},
+}
+
+// supportedDecisionAlgorithmTypes is derived from the catalog for backwards compatibility
+var supportedDecisionAlgorithmTypes = func() []string {
+	types := make([]string, len(decisionAlgorithmCatalog))
+	for i, entry := range decisionAlgorithmCatalog {
+		types[i] = entry.Type
+	}
+	return types
+}()
 
 var pluginTypeAliases = map[string]string{
 	"semantic_cache": DecisionPluginSemanticCache,
@@ -116,6 +132,23 @@ func IsSupportedDecisionAlgorithmType(algorithmType string) bool {
 		}
 	}
 	return false
+}
+
+// DecisionAlgorithmCatalog returns the full structured catalog of algorithm types and tiers
+func DecisionAlgorithmCatalog() []AlgorithmCatalogEntry {
+	result := make([]AlgorithmCatalogEntry, len(decisionAlgorithmCatalog))
+	copy(result, decisionAlgorithmCatalog)
+	return result
+}
+
+// GetAlgorithmTier returns the tier for a given algorithm type, or empty string if unknown
+func GetAlgorithmTier(algorithmType string) string {
+	for _, entry := range decisionAlgorithmCatalog {
+		if entry.Type == algorithmType {
+			return entry.Tier
+		}
+	}
+	return ""
 }
 
 func cloneSortedStrings(values []string) []string {

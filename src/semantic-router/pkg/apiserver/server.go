@@ -263,6 +263,7 @@ func (s *ClassificationAPIServer) registerCoreRoutes(mux *http.ServeMux) {
 	// Health check endpoint
 	mux.HandleFunc("GET /health", s.handleHealth)
 	mux.HandleFunc("GET /ready", s.handleReady)
+	mux.HandleFunc("GET /startup-status", s.handleStartupStatus)
 
 	// API discovery endpoint
 	mux.HandleFunc("GET /api/v1", s.handleAPIOverview)

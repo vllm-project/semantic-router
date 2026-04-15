@@ -467,6 +467,22 @@ routing:
           - name: support_escalated
             gte: 0.45
 
+  session_states:
+    - name: session_routing
+      fields:
+        - name: turn_number
+          type: int
+        - name: current_model
+          type: string
+        - name: cumulative_cost_usd
+          type: float
+        - name: retry_count_ema
+          type: float
+        - name: quality_score_ema
+          type: float
+        - name: kv_cache_warm
+          type: float
+
   decisions:
     - name: static_business_route
       description: Static fallback for standard business traffic.
@@ -1020,6 +1036,20 @@ routing:
                 endpoint: https://search.example.com/query
                 request_format: pinecone
 
+    - name: mlp_experimental_route
+      description: Experimental MLP-based model selection route.
+      priority: 103
+      rules:
+        operator: AND
+        conditions:
+          - type: keyword
+            name: machine_learning
+      modelRefs:
+        - model: qwen3-8b
+          use_reasoning: false
+      algorithm:
+        type: mlp
+
     - name: image_generation_route
       description: Dedicated image-generation route using the OpenAI image backend.
       priority: 105
@@ -1268,6 +1298,8 @@ global:
               requests_per_unit: 1000
               tokens_per_unit: 2000000
               unit: hour
+    startup_status:
+      store_backend: file
     router_replay:
       enabled: true
       store_backend: postgres
@@ -1552,6 +1584,18 @@ global:
         metric_type: COSINE
         index_m: 16
         index_ef_construction: 200
+      metadata_store: memory
+      metadata_postgres:
+        host: postgres
+        port: 5432
+        database: vsr
+        user: router
+        password: router-secret
+        ssl_mode: disable
+        max_open_conns: 25
+        max_idle_conns: 5
+        conn_max_lifetime: 300
+        table_name: vector_store_registry
 
   integrations:
     tools:
@@ -1591,7 +1635,7 @@ global:
       semantic:
         qwen3_model_path: models/mom-embedding-pro
         gemma_model_path: models/mom-embedding-flash
-        mmbert_model_path: models/mom-embedding-ultra
+        mmbert_model_path: models/mmbert-embed-32k-2d-matryoshka
         multimodal_model_path: models/mom-embedding-multimodal
         bert_model_path: models/mom-embedding-light
         use_cpu: true
