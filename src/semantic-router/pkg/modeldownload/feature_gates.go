@@ -10,7 +10,7 @@ type modelFeatureGate struct {
 var optionalModelFeatureGates = []modelFeatureGate{
 	{
 		enabled: func(cfg *config.RouterConfig) bool {
-			return cfg.IsCategoryClassifierEnabled() && cfg.UsesSignalTypeInRouting(config.SignalTypeDomain)
+			return cfg.NeedsCategoryMappingForRouting()
 		},
 		paths: func(cfg *config.RouterConfig) []string {
 			return []string{cfg.CategoryModel.ModelID}
@@ -18,7 +18,7 @@ var optionalModelFeatureGates = []modelFeatureGate{
 	},
 	{
 		enabled: func(cfg *config.RouterConfig) bool {
-			return cfg.IsPIIClassifierEnabled() && cfg.UsesSignalTypeInRouting(config.SignalTypePII)
+			return cfg.NeedsPIIMappingForRouting()
 		},
 		paths: func(cfg *config.RouterConfig) []string {
 			return []string{cfg.PIIModel.ModelID}
@@ -26,7 +26,7 @@ var optionalModelFeatureGates = []modelFeatureGate{
 	},
 	{
 		enabled: func(cfg *config.RouterConfig) bool {
-			return cfg.IsPromptGuardEnabled() && cfg.UsesSignalTypeInRouting(config.SignalTypeJailbreak)
+			return cfg.NeedsJailbreakMappingForRouting()
 		},
 		paths: func(cfg *config.RouterConfig) []string {
 			return []string{cfg.PromptGuard.ModelID}

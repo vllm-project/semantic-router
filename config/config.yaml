@@ -1165,6 +1165,11 @@ global:
         cost_weight: 0.1
         quality_gap_threshold: 0.08
         normalize_scores: true
+      momentum:
+        enabled: false
+        attack: 0.7
+        release: 0.3
+        threshold: 0.6
       ml:
         models_path: models/model-selection
         embedding_dim: 384

@@ -37,6 +37,24 @@ func (c *RouterConfig) UsesSignalTypeInRouting(signalType string) bool {
 	return projectionsReferenceSignalType(c.Projections, projectionOutputs, normalizedType)
 }
 
+// NeedsCategoryMappingForRouting returns true when routing actually depends on
+// the local file-backed category classifier assets.
+func (c *RouterConfig) NeedsCategoryMappingForRouting() bool {
+	return c != nil && c.IsCategoryClassifierEnabled() && c.UsesSignalTypeInRouting(SignalTypeDomain)
+}
+
+// NeedsPIIMappingForRouting returns true when routing actually depends on the
+// local file-backed PII classifier assets.
+func (c *RouterConfig) NeedsPIIMappingForRouting() bool {
+	return c != nil && c.IsPIIClassifierEnabled() && c.UsesSignalTypeInRouting(SignalTypePII)
+}
+
+// NeedsJailbreakMappingForRouting returns true when routing actually depends on
+// the local file-backed jailbreak classifier assets.
+func (c *RouterConfig) NeedsJailbreakMappingForRouting() bool {
+	return c != nil && c.IsPromptGuardEnabled() && c.UsesSignalTypeInRouting(SignalTypeJailbreak)
+}
+
 func projectionsReferenceSignalType(projections Projections, outputs map[string]struct{}, signalType string) bool {
 	if len(outputs) == 0 || len(projections.Scores) == 0 || len(projections.Mappings) == 0 {
 		return false

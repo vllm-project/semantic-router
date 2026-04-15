@@ -14,7 +14,7 @@ type ModelSelectionConfig struct {
 	AutoMix  AutoMixSelectionConfig  `yaml:"automix,omitempty"`
 	Hybrid   HybridSelectionConfig   `yaml:"hybrid,omitempty"`
 	ML       MLSelectionConfig       `yaml:"ml,omitempty"`
-  
+
 	Momentum MomentumSelectionConfig `yaml:"momentum,omitempty"`
 	// LookupTables configures persisted lookup tables for session-aware routing.
 	LookupTables LookupTableConfig `yaml:"lookup_tables,omitempty"`
