@@ -142,6 +142,10 @@ func TestLogFieldsIncludesOptionalReplayMetadata(t *testing.T) {
 	assertFieldValue(t, fields, "decision_tier", 2)
 	assertFieldValue(t, fields, "decision_priority", 100)
 	assertFieldValue(t, fields, "selection_method", "router_dc")
+	assertFieldValue(t, fields, "session_id", "session-123")
+	assertFieldValue(t, fields, "turn_index", 4)
+	assertFieldValue(t, fields, "previous_model", "model-a")
+	assertFieldValue(t, fields, "cache_warmth_estimate", 0.84)
 	assertFieldValue(t, fields, "guardrails_enabled", true)
 	assertFieldValue(t, fields, "jailbreak_type", "prompt_injection")
 	assertFieldValue(t, fields, "pii_entities", []string{"email"})
@@ -168,25 +172,29 @@ func richReplayRoutingRecord(
 	baselineModel *string,
 ) RoutingRecord {
 	return RoutingRecord{
-		ID:                "replay-1",
-		Decision:          "decision-a",
-		DecisionTier:      2,
-		DecisionPriority:  100,
-		Category:          "math",
-		OriginalModel:     "model-a",
-		SelectedModel:     "model-b",
-		ReasoningMode:     "cot",
-		ConfidenceScore:   0.91,
-		SelectionMethod:   "router_dc",
-		RequestID:         "req-1",
-		Timestamp:         timestamp,
-		FromCache:         true,
-		Streaming:         true,
-		ResponseStatus:    200,
-		Projections:       []string{"balance_reasoning"},
-		ProjectionScores:  map[string]float64{"reasoning_pressure": 0.73},
-		SignalConfidences: map[string]float64{"projection:balance_reasoning": 0.73},
-		SignalValues:      map[string]float64{"reask:likely_dissatisfied": 2},
+		ID:                  "replay-1",
+		Decision:            "decision-a",
+		DecisionTier:        2,
+		DecisionPriority:    100,
+		Category:            "math",
+		OriginalModel:       "model-a",
+		SelectedModel:       "model-b",
+		ReasoningMode:       "cot",
+		ConfidenceScore:     0.91,
+		SelectionMethod:     "router_dc",
+		SessionID:           "session-123",
+		TurnIndex:           4,
+		PreviousModel:       "model-a",
+		CacheWarmthEstimate: 0.84,
+		RequestID:           "req-1",
+		Timestamp:           timestamp,
+		FromCache:           true,
+		Streaming:           true,
+		ResponseStatus:      200,
+		Projections:         []string{"balance_reasoning"},
+		ProjectionScores:    map[string]float64{"reasoning_pressure": 0.73},
+		SignalConfidences:   map[string]float64{"projection:balance_reasoning": 0.73},
+		SignalValues:        map[string]float64{"reask:likely_dissatisfied": 2},
 		ToolTrace: &ToolTrace{
 			Flow:      "User Query -> LLM Tool Call -> Client Tool Result -> LLM Final Response",
 			Stage:     "LLM Final Response",
@@ -203,6 +211,7 @@ func richReplayRoutingRecord(
 			Reask:      []string{"likely_dissatisfied"},
 			Complexity: []string{"complex"},
 			Modality:   []string{"AR"},
+			Session:    []string{"session_present"},
 			Authz:      []string{"premium_tier"},
 			Jailbreak:  []string{"prompt_attack"},
 			PII:        []string{"email"},
@@ -249,6 +258,7 @@ func assertSignalLogFields(t *testing.T, fields map[string]interface{}) {
 	assertFieldValue(t, signals, "reask", []string{"likely_dissatisfied"})
 	assertFieldValue(t, signals, "complexity", []string{"complex"})
 	assertFieldValue(t, signals, "modality", []string{"AR"})
+	assertFieldValue(t, signals, "session", []string{"session_present"})
 	assertFieldValue(t, signals, "authz", []string{"premium_tier"})
 	assertFieldValue(t, signals, "jailbreak", []string{"prompt_attack"})
 	assertFieldValue(t, signals, "pii", []string{"email"})

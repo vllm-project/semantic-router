@@ -349,6 +349,7 @@ class AlgorithmConfig(BaseModel):
     router_dc: RouterDCSelectionConfig | None = None
     automix: AutoMixSelectionConfig | None = None
     hybrid: HybridSelectionConfig | None = None
+    session_aware: SessionAwareSelectionConfig | None = None
 
     # RL-driven selection algorithms (from PR #1196, issue #994)
     thompson: ThompsonSamplingConfig | None = None

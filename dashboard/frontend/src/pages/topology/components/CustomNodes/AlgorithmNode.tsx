@@ -35,6 +35,19 @@ export const AlgorithmNode = memo<NodeProps<AlgorithmNodeData>>(({ data }) => {
       }
       return parts.length > 0 ? parts.join(', ') : null
     }
+    if (algorithm.type === 'session_aware' && algorithm.session_aware) {
+      const parts: string[] = []
+      if (algorithm.session_aware.fallback_method) {
+        parts.push(`fallback ${algorithm.session_aware.fallback_method}`)
+      }
+      if (algorithm.session_aware.min_turns_before_switch !== undefined) {
+        parts.push(`min turns ${algorithm.session_aware.min_turns_before_switch}`)
+      }
+      if (algorithm.session_aware.stay_bias !== undefined) {
+        parts.push(`stay bias ${algorithm.session_aware.stay_bias}`)
+      }
+      return parts.length > 0 ? parts.join(', ') : null
+    }
     return null
   }
 

@@ -20,11 +20,10 @@ type CanonicalConfig struct {
 
 // CanonicalRouting contains the DSL-owned routing surface.
 type CanonicalRouting struct {
-	ModelCards    []RoutingModel       `yaml:"modelCards,omitempty"`
-	Signals       CanonicalSignals     `yaml:"signals,omitempty"`
-	Projections   CanonicalProjections `yaml:"projections,omitempty"`
-	Decisions     []Decision           `yaml:"decisions,omitempty"`
-	SessionStates []SessionStateConfig `yaml:"session_states,omitempty"`
+	ModelCards  []RoutingModel       `yaml:"modelCards,omitempty"`
+	Signals     CanonicalSignals     `yaml:"signals,omitempty"`
+	Projections CanonicalProjections `yaml:"projections,omitempty"`
+	Decisions   []Decision           `yaml:"decisions,omitempty"`
 }
 
 // CanonicalSignals groups routing signals under routing.signals.
@@ -41,6 +40,7 @@ type CanonicalSignals struct {
 	Structure     []StructureRule    `yaml:"structure,omitempty"`
 	Complexity    []ComplexityRule   `yaml:"complexity,omitempty"`
 	Modality      []ModalityRule     `yaml:"modality,omitempty"`
+	Session       []SessionRule      `yaml:"session,omitempty"`
 	RoleBindings  []RoleBinding      `yaml:"role_bindings,omitempty"`
 	Jailbreak     []JailbreakRule    `yaml:"jailbreak,omitempty"`
 	PII           []PIIRule          `yaml:"pii,omitempty"`
@@ -106,7 +106,6 @@ func applyCanonicalRoutingState(cfg *RouterConfig, canonical *CanonicalConfig) {
 	ensureModelRefDefaults(cfg.Decisions)
 	cfg.Signals = normalizeSignals(canonical.Routing.Signals, cfg.Decisions)
 	cfg.Projections = normalizeProjections(canonical.Routing.Projections)
-	cfg.SessionStates = append([]SessionStateConfig(nil), canonical.Routing.SessionStates...)
 	cfg.ModelConfig = make(map[string]ModelParams)
 
 	for _, model := range canonicalRoutingModels(canonical.Routing) {
@@ -247,6 +246,7 @@ func normalizeSignals(signals CanonicalSignals, decisions []Decision) Signals {
 		StructureRules:    append([]StructureRule(nil), signals.Structure...),
 		ComplexityRules:   append([]ComplexityRule(nil), signals.Complexity...),
 		ModalityRules:     append([]ModalityRule(nil), signals.Modality...),
+		SessionRules:      append([]SessionRule(nil), signals.Session...),
 		RoleBindings:      append([]RoleBinding(nil), signals.RoleBindings...),
 		JailbreakRules:    append([]JailbreakRule(nil), signals.Jailbreak...),
 		PIIRules:          append([]PIIRule(nil), signals.PII...),

@@ -77,6 +77,12 @@ def _is_latency_aware_algorithm(decision) -> bool:
     return (decision.algorithm.type or "").strip().lower() == "latency_aware"
 
 
+def _is_session_aware_algorithm(decision) -> bool:
+    if not decision.algorithm:
+        return False
+    return (decision.algorithm.type or "").strip().lower() == "session_aware"
+
+
 def validate_latency_compatibility(config: UserConfig) -> List[ValidationError]:
     errors = []
     has_legacy_conditions = any(
@@ -475,6 +481,7 @@ def validate_algorithm_configurations(config: UserConfig) -> List[ValidationErro
         "router_dc",
         "automix",
         "hybrid",
+        "session_aware",
         "latency_aware",
         "thompson",
         "gmtrouter",
@@ -560,6 +567,7 @@ def validate_user_config(config: UserConfig) -> List[ValidationError]:
     errors.extend(validate_latency_compatibility(config))
     errors.extend(validate_algorithm_one_of(config))
     errors.extend(validate_latency_aware_algorithm_config(config))
+    errors.extend(validate_session_aware_algorithm_config(config))
 
     # Validate domain references
     errors.extend(validate_domain_references(config))

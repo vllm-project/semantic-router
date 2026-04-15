@@ -622,6 +622,14 @@ export interface ModelSelectionConfig {
     quality_gap_threshold?: number
     normalize_scores?: boolean
   }
+  session_aware?: {
+    fallback_method?: string
+    min_turns_before_switch?: number
+    stay_bias?: number
+    quality_gap_multiplier?: number
+    handoff_penalty_weight?: number
+    remaining_turn_weight?: number
+  }
   ml?: {
     models_path?: string
     embedding_dim?: number
@@ -1176,6 +1184,7 @@ export type SignalType =
   | 'Structure'
   | 'Complexity'
   | 'Modality'
+  | 'Session'
   | 'Authz'
   | 'Jailbreak'
   | 'PII'

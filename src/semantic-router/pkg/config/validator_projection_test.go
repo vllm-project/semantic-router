@@ -94,3 +94,45 @@ routing:
 		t.Fatalf("unexpected error: %v", err)
 	}
 }
+
+func TestParseRoutingYAMLBytesAcceptsSessionProjectionScoreInput(t *testing.T) {
+	yaml := []byte(`
+routing:
+  signals:
+    session:
+      - name: session_present
+        fact: session_present
+        predicate:
+          gte: 1
+  projections:
+    scores:
+      - name: continuity_score
+        method: weighted_sum
+        inputs:
+          - type: session
+            name: session_present
+            weight: 0.6
+    mappings:
+      - name: continuity_band
+        source: continuity_score
+        method: threshold_bands
+        outputs:
+          - name: continue_session
+            gte: 0.5
+  decisions:
+    - name: session_route
+      rules:
+        operator: AND
+        conditions:
+          - type: projection
+            name: continue_session
+      modelRefs:
+        - model: qwen3-8b
+`)
+
+	_, err := ParseRoutingYAMLBytes(yaml)
+	if err != nil {
+		fatalf := t.Fatalf
+		fatalf("expected session projection input to validate, got: %v", err)
+	}
+}

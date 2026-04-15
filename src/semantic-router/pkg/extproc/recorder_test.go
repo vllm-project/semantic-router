@@ -16,6 +16,10 @@ func TestBuildReplayRoutingRecordCapturesRoutingMetadata(t *testing.T) {
 		VSRSelectionMethod:            "router_dc",
 		VSRCacheHit:                   true,
 		ExpectStreamingResponse:       true,
+		SessionID:                     "session-123",
+		TurnIndex:                     4,
+		PreviousModel:                 "model-a",
+		CacheWarmthEstimate:           0.84,
 		VSRSelectedDecision: &config.Decision{
 			Name:     "balance",
 			Tier:     3,
@@ -23,6 +27,7 @@ func TestBuildReplayRoutingRecordCapturesRoutingMetadata(t *testing.T) {
 		},
 		VSRMatchedKeywords:   []string{"math_keyword"},
 		VSRMatchedModality:   []string{"AR"},
+		VSRMatchedSession:    []string{"session_present"},
 		VSRMatchedAuthz:      []string{"premium_tier"},
 		VSRMatchedJailbreak:  []string{"jailbreak_detector"},
 		VSRMatchedPII:        []string{"email_block"},
@@ -58,8 +63,23 @@ func TestBuildReplayRoutingRecordCapturesRoutingMetadata(t *testing.T) {
 	if got := record.SignalValues["reask:persistently_dissatisfied"]; got != 2 {
 		t.Fatalf("expected signal value 2, got %v", got)
 	}
+	if record.SessionID != "session-123" {
+		t.Fatalf("expected session ID=session-123, got %q", record.SessionID)
+	}
+	if record.TurnIndex != 4 {
+		t.Fatalf("expected turn index=4, got %d", record.TurnIndex)
+	}
+	if record.PreviousModel != "model-a" {
+		t.Fatalf("expected previous model=model-a, got %q", record.PreviousModel)
+	}
+	if record.CacheWarmthEstimate != 0.84 {
+		t.Fatalf("expected cache warmth=0.84, got %v", record.CacheWarmthEstimate)
+	}
 	if !reflect.DeepEqual(record.Signals.Modality, []string{"AR"}) {
 		t.Fatalf("unexpected modality signals: %#v", record.Signals.Modality)
+	}
+	if !reflect.DeepEqual(record.Signals.Session, []string{"session_present"}) {
+		t.Fatalf("unexpected session signals: %#v", record.Signals.Session)
 	}
 	if !reflect.DeepEqual(record.Signals.Authz, []string{"premium_tier"}) {
 		t.Fatalf("unexpected authz signals: %#v", record.Signals.Authz)

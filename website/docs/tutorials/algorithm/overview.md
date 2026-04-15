@@ -120,6 +120,7 @@ flowchart TD
 - [KNN](./selection/knn)
 - [Latency Aware](./selection/latency-aware)
 - [MLP](./selection/mlp)
+- [Session Aware](./selection/session-aware)
 - [RL Driven](./selection/rl-driven)
 - [Router DC](./selection/router-dc)
 - [Static](./selection/static)

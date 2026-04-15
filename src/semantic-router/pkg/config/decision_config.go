@@ -22,6 +22,7 @@ type AlgorithmConfig struct {
 	RouterDC     *RouterDCSelectionConfig     `yaml:"router_dc,omitempty"`
 	AutoMix      *AutoMixSelectionConfig      `yaml:"automix,omitempty"`
 	Hybrid       *HybridSelectionConfig       `yaml:"hybrid,omitempty"`
+	SessionAware *SessionAwareSelectionConfig `yaml:"session_aware,omitempty"`
 	RLDriven     *RLDrivenSelectionConfig     `yaml:"rl_driven,omitempty"`
 	GMTRouter    *GMTRouterSelectionConfig    `yaml:"gmtrouter,omitempty"`
 	LatencyAware *LatencyAwareAlgorithmConfig `yaml:"latency_aware,omitempty"`

@@ -346,6 +346,7 @@ class Signals(BaseModel):
     structure: Optional[List[StructureRule]] = []
     complexity: Optional[List[ComplexityRule]] = []
     modality: Optional[List[ModalityRule]] = []
+    session: Optional[List[SessionRule]] = []
     role_bindings: Optional[List[RoleBindingRule]] = []
     jailbreak: Optional[List[JailbreakRule]] = []
     pii: Optional[List[PIIRule]] = []

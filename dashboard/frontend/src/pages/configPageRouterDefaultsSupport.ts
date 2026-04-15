@@ -700,7 +700,7 @@ function fieldsForKey(key: RouterSystemKey): FieldConfig[] {
     case 'model_selection':
       return [
         { name: 'enabled', label: 'Enable Model Selection', type: 'boolean' },
-        { name: 'default_algorithm', label: 'Method', type: 'select', options: ['knn', 'kmeans', 'svm', 'elo', 'router_dc', 'automix', 'hybrid'], required: true },
+        { name: 'default_algorithm', label: 'Method', type: 'select', options: ['knn', 'kmeans', 'svm', 'elo', 'router_dc', 'automix', 'hybrid', 'session_aware'], required: true },
         { name: 'models_path', label: 'ML Models Path', type: 'text', placeholder: 'models/model_selection' },
         { name: 'knn', label: 'KNN Config (JSON)', type: 'json' },
         { name: 'kmeans', label: 'KMeans Config (JSON)', type: 'json' },
@@ -709,6 +709,7 @@ function fieldsForKey(key: RouterSystemKey): FieldConfig[] {
         { name: 'router_dc', label: 'RouterDC Config (JSON)', type: 'json' },
         { name: 'automix', label: 'AutoMix Config (JSON)', type: 'json' },
         { name: 'hybrid', label: 'Hybrid Config (JSON)', type: 'json' },
+        { name: 'session_aware', label: 'Session-Aware Config (JSON)', type: 'json' },
       ]
     case 'api':
       return [{ name: 'batch_classification', label: 'Batch Classification (JSON)', type: 'json', placeholder: '{"metrics":{"enabled":true}}' }]
@@ -775,6 +776,7 @@ function editDataForKey(key: RouterSystemKey, data: unknown): EditFormData {
       router_dc: asObject(selection?.router_dc) || {},
       automix: asObject(selection?.automix) || {},
       hybrid: asObject(selection?.hybrid) || {},
+      session_aware: asObject(selection?.session_aware) || {},
     }
   }
   const objectData = asObject(data)
@@ -829,6 +831,7 @@ function saveForKey(key: RouterSystemKey, data: EditFormData): Partial<ConfigDat
       router_dc: asObject(data.router_dc) || {},
       automix: asObject(data.automix) || {},
       hybrid: asObject(data.hybrid) || {},
+      session_aware: asObject(data.session_aware) || {},
       ml: {
         models_path: data.models_path,
         knn: asObject(data.knn) || {},

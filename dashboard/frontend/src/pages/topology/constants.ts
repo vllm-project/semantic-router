@@ -16,6 +16,7 @@ export const SIGNAL_ICONS: Record<SignalType, string> = {
   structure: 'STR',
   complexity: 'CPX',
   modality: 'MOD',
+  session: 'SES',
   authz: 'AUTH',
   jailbreak: 'JB',
   pii: 'PII',
@@ -124,6 +125,7 @@ export const ALGORITHM_COLORS: Record<AlgorithmType, { background: string; borde
   remom: { background: '#76b900', border: '#5a8f00' },         // NVIDIA Green (same as plugins)
   automix: { background: '#5d6d7e', border: '#3d4a59' },       // Steel Gray
   hybrid: { background: '#4a5568', border: '#2d3748' },        // Dark Gray
+  session_aware: { background: '#5a6c7d', border: '#3d4a59' }, // Blue Gray
   latency_aware: { background: '#5a6c7d', border: '#3d4a59' }, // Blue Gray
 }
 

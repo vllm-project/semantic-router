@@ -89,6 +89,7 @@ func (r *OpenAIRouter) applySignalResultsToContext(ctx *RequestContext, signals 
 	ctx.VSRMatchedStructure = signals.MatchedStructureRules
 	ctx.VSRMatchedComplexity = signals.MatchedComplexityRules
 	ctx.VSRMatchedModality = signals.MatchedModalityRules
+	ctx.VSRMatchedSession = signals.MatchedSessionRules
 	ctx.VSRMatchedAuthz = signals.MatchedAuthzRules
 	ctx.VSRMatchedJailbreak = signals.MatchedJailbreakRules
 	ctx.VSRMatchedPII = signals.MatchedPIIRules
@@ -137,6 +138,7 @@ func collectMatchedSignalRules(signals *classification.SignalResults) []string {
 	allMatchedRules = append(allMatchedRules, signals.MatchedStructureRules...)
 	allMatchedRules = append(allMatchedRules, signals.MatchedComplexityRules...)
 	allMatchedRules = append(allMatchedRules, signals.MatchedModalityRules...)
+	allMatchedRules = append(allMatchedRules, signals.MatchedSessionRules...)
 	allMatchedRules = append(allMatchedRules, signals.MatchedAuthzRules...)
 	allMatchedRules = append(allMatchedRules, signals.MatchedJailbreakRules...)
 	allMatchedRules = append(allMatchedRules, signals.MatchedPIIRules...)

@@ -259,8 +259,12 @@ export default function ConfigPageDecisionsSection({
           ])
         case 'modality':
           return config?.signals?.modality?.map((m) => m.name) || []
+        case 'session':
+          return config?.signals?.session?.map((rule) => rule.name) || []
         case 'authz':
           return config?.signals?.role_bindings?.map((binding) => binding.name) || []
+        case 'kb':
+          return config?.signals?.kb?.map((rule) => rule.name) || []
         case 'jailbreak':
           return config?.signals?.jailbreak?.map((rule) => rule.name) || []
         case 'pii':

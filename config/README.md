@@ -41,7 +41,7 @@ Decision fragments may reference `modelRefs[].lora_name`, but those adapter name
 `config/algorithm/` is organized by routing policy:
 
 - `looper/`: multi-model execution policies such as `confidence`, `ratings`, and `remom`
-- `selection/`: candidate-selection policies such as `elo`, `router_dc`, `automix`, and `latency_aware`
+- `selection/`: candidate-selection policies such as `elo`, `router_dc`, `automix`, `session_aware`, and `latency_aware`
 
 Each supported algorithm now has its own tutorial page under `website/docs/tutorials/algorithm/`.
 

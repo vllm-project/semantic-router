@@ -155,27 +155,33 @@ func (b *Builder) deriveQualityGaps(records []store.Record, batch map[Key]Entry,
 	}
 }
 
-// groupIntoSessions groups records into pseudo-sessions using Decision name and
-// a time-window heuristic: records with the same Decision are sorted by
-// timestamp, then split into sessions whenever consecutive records are more than
-// sessionWindowDuration apart. This is more semantically stable than a RequestID
-// prefix because it does not depend on external ID conventions.
+// groupIntoSessions groups records into sessions using persisted SessionID when
+// available, and falls back to Decision+time-window heuristics for older replay
+// records that lack session metadata.
 func groupIntoSessions(records []store.Record) [][]store.Record {
-	// Group by Decision first.
+	bySession := make(map[string][]store.Record)
 	byDecision := make(map[string][]store.Record)
 	for _, r := range records {
+		if r.SessionID != "" {
+			bySession[r.SessionID] = append(bySession[r.SessionID], r)
+			continue
+		}
 		byDecision[r.Decision] = append(byDecision[r.Decision], r)
 	}
 
 	var sessions [][]store.Record
+	for _, recs := range bySession {
+		sort.Slice(recs, func(i, j int) bool {
+			return recs[i].Timestamp.Before(recs[j].Timestamp)
+		})
+		sessions = append(sessions, recs)
+	}
+
 	for _, recs := range byDecision {
-		// Sort chronologically within each Decision group.
 		sort.Slice(recs, func(i, j int) bool {
 			return recs[i].Timestamp.Before(recs[j].Timestamp)
 		})
 
-		// Split into windows: a new session starts when the gap between
-		// consecutive records exceeds sessionWindowDuration.
 		start := 0
 		for i := 1; i < len(recs); i++ {
 			if recs[i].Timestamp.Sub(recs[i-1].Timestamp) > sessionWindowDuration {

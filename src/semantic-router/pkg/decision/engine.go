@@ -71,6 +71,7 @@ type SignalMatches struct {
 	StructureRules    []string // Structure rule names matched (e.g. "many_questions")
 	ComplexityRules   []string // Complexity rules with difficulty level (e.g. "code_complexity:hard")
 	ModalityRules     []string // Modality classification: "AR", "DIFFUSION", or "BOTH"
+	SessionRules      []string // Runtime-derived session signals (e.g. warm cache / continuation risk)
 	AuthzRules        []string // Authz rule names matched for user-level routing (e.g. "premium_tier")
 	JailbreakRules    []string // Jailbreak rule names matched (confidence >= threshold)
 	PIIRules          []string // PII rule names matched (denied PII types detected)

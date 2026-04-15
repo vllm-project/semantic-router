@@ -85,6 +85,7 @@ SIGNAL_FAMILY_SPECS = (
         ("easy", "medium", "hard"),
     ),
     SignalFamilySpec("modality", "modality", "modality", "modality_rules"),
+    SignalFamilySpec("session", "session", "session"),
     SignalFamilySpec("role_bindings", "role_bindings", "authz", "role_bindings"),
     SignalFamilySpec("jailbreak", "jailbreak", "jailbreak", "jailbreak"),
     SignalFamilySpec("pii", "pii", "pii", "pii"),

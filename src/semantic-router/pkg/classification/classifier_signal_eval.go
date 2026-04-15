@@ -86,6 +86,7 @@ type SignalResults struct {
 	MatchedStructureRules    []string // Matched structure rule names (e.g. "many_questions")
 	MatchedComplexityRules   []string // Matched complexity rules with difficulty level (e.g. "code_complexity:hard")
 	MatchedModalityRules     []string // Matched modality: "AR", "DIFFUSION", or "BOTH"
+	MatchedSessionRules      []string // Runtime-derived session signals injected after classifier evaluation
 	MatchedAuthzRules        []string // Matched authz role names for user-level RBAC routing
 	MatchedJailbreakRules    []string // Matched jailbreak rule names (confidence >= threshold)
 	MatchedPIIRules          []string // Matched PII rule names (denied PII types detected)
@@ -299,11 +300,11 @@ func (c *Classifier) evaluateDecisionInternal(signals *SignalResults, trace bool
 		return nil, nil, fmt.Errorf("no decisions configured")
 	}
 
-	logging.Debugf("Signal evaluation results: keyword=%v, embedding=%v, domain=%v, fact_check=%v, user_feedback=%v, reask=%v, preference=%v, language=%v, context=%v, structure=%v, complexity=%v, modality=%v, authz=%v, jailbreak=%v, pii=%v, kb=%v",
+	logging.Debugf("Signal evaluation results: keyword=%v, embedding=%v, domain=%v, fact_check=%v, user_feedback=%v, reask=%v, preference=%v, language=%v, context=%v, structure=%v, complexity=%v, modality=%v, session=%v, authz=%v, jailbreak=%v, pii=%v, kb=%v",
 		signals.MatchedKeywordRules, signals.MatchedEmbeddingRules, signals.MatchedDomainRules,
 		signals.MatchedFactCheckRules, signals.MatchedUserFeedbackRules, signals.MatchedReaskRules, signals.MatchedPreferenceRules,
 		signals.MatchedLanguageRules, signals.MatchedContextRules, signals.MatchedStructureRules,
-		signals.MatchedComplexityRules, signals.MatchedModalityRules, signals.MatchedAuthzRules,
+		signals.MatchedComplexityRules, signals.MatchedModalityRules, signals.MatchedSessionRules, signals.MatchedAuthzRules,
 		signals.MatchedJailbreakRules, signals.MatchedPIIRules, signals.MatchedKBRules)
 
 	engine := decision.NewDecisionEngine(
@@ -327,6 +328,7 @@ func (c *Classifier) evaluateDecisionInternal(signals *SignalResults, trace bool
 		StructureRules:    signals.MatchedStructureRules,
 		ComplexityRules:   signals.MatchedComplexityRules,
 		ModalityRules:     signals.MatchedModalityRules,
+		SessionRules:      signals.MatchedSessionRules,
 		SignalConfidences: signals.SignalConfidences,
 		AuthzRules:        signals.MatchedAuthzRules,
 		JailbreakRules:    signals.MatchedJailbreakRules,

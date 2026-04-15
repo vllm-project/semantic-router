@@ -19,6 +19,7 @@ var selectionMethodByAlgorithmType = map[string]selection.SelectionMethod{
 	"router_dc":     selection.MethodRouterDC,
 	"automix":       selection.MethodAutoMix,
 	"hybrid":        selection.MethodHybrid,
+	"session_aware": selection.MethodSessionAware,
 	"rl_driven":     selection.MethodRLDriven,
 	"gmtrouter":     selection.MethodGMTRouter,
 	"latency_aware": selection.MethodLatencyAware,
@@ -61,6 +62,7 @@ func (r *OpenAIRouter) evaluateSignalsForDecision(
 	}
 
 	signalLatency := time.Since(signalStart).Milliseconds()
+	r.applyRuntimeSessionSignals(ctx, signals)
 	r.applySignalResultsToContext(ctx, signals)
 	logSignalEvaluationResults(ctx, signalLatency, signals)
 	tracing.EndSignalSpan(signalSpan, collectMatchedSignalRules(signals), 1.0, signalLatency)
@@ -85,6 +87,7 @@ func logSignalEvaluationResults(ctx *RequestContext, signalLatencyMs int64, sign
 		"structure":      signals.MatchedStructureRules,
 		"complexity":     signals.MatchedComplexityRules,
 		"modality":       signals.MatchedModalityRules,
+		"session":        signals.MatchedSessionRules,
 		"authz":          signals.MatchedAuthzRules,
 		"jailbreak":      signals.MatchedJailbreakRules,
 		"pii":            signals.MatchedPIIRules,
@@ -216,9 +219,11 @@ func (r *OpenAIRouter) selectDecisionRuntimeModel(
 	}
 
 	selectedModelRef, usedMethod := r.selectModelFromCandidates(
+		ctx,
 		result.Decision.ModelRefs,
 		decisionName,
 		userContent,
+		ctx.RequestModel,
 		result.Decision.Algorithm,
 		categoryName,
 	)

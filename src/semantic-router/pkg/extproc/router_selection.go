@@ -74,9 +74,10 @@ func buildModelSelectionConfig(cfg *config.RouterConfig) *selection.ModelSelecti
 		Method: "static",
 	}
 
-	eloFromDecision, routerDCFromDecision := findDecisionScopedSelectionConfigs(cfg)
+	eloFromDecision, routerDCFromDecision, sessionAwareFromDecision := findDecisionScopedSelectionConfigs(cfg)
 	modelSelectionCfg.Elo = buildEloSelectionConfig(cfg, eloFromDecision)
 	modelSelectionCfg.RouterDC = buildRouterDCSelectionConfig(cfg, routerDCFromDecision)
+	modelSelectionCfg.SessionAware = buildSessionAwareSelectionConfig(cfg, sessionAwareFromDecision)
 	modelSelectionCfg.AutoMix = buildAutoMixSelectionConfig(cfg)
 	modelSelectionCfg.Hybrid = buildHybridSelectionConfig(cfg)
 	modelSelectionCfg.ML = buildMLSelectionConfig(cfg)
@@ -85,10 +86,11 @@ func buildModelSelectionConfig(cfg *config.RouterConfig) *selection.ModelSelecti
 
 func findDecisionScopedSelectionConfigs(
 	cfg *config.RouterConfig,
-) (*config.EloSelectionConfig, *config.RouterDCSelectionConfig) {
+) (*config.EloSelectionConfig, *config.RouterDCSelectionConfig, *config.SessionAwareSelectionConfig) {
 	intelligentRouting := cfg.IntelligentRouting
 	var eloFromDecision *config.EloSelectionConfig
 	var routerDCFromDecision *config.RouterDCSelectionConfig
+	var sessionAwareFromDecision *config.SessionAwareSelectionConfig
 
 	for _, decision := range intelligentRouting.Decisions {
 		if decision.Algorithm == nil {
@@ -104,9 +106,14 @@ func findDecisionScopedSelectionConfigs(
 			routerDCFromDecision == nil {
 			routerDCFromDecision = decision.Algorithm.RouterDC
 		}
+		if decision.Algorithm.Type == "session_aware" &&
+			decision.Algorithm.SessionAware != nil &&
+			sessionAwareFromDecision == nil {
+			sessionAwareFromDecision = decision.Algorithm.SessionAware
+		}
 	}
 
-	return eloFromDecision, routerDCFromDecision
+	return eloFromDecision, routerDCFromDecision, sessionAwareFromDecision
 }
 
 func buildEloSelectionConfig(
@@ -198,6 +205,44 @@ func buildHybridSelectionConfig(cfg *config.RouterConfig) *selection.HybridConfi
 		QualityGapThreshold: hybridCfg.QualityGapThreshold,
 		NormalizeScores:     hybridCfg.NormalizeScores,
 	}
+}
+
+func buildSessionAwareSelectionConfig(
+	cfg *config.RouterConfig,
+	decisionCfg *config.SessionAwareSelectionConfig,
+) *selection.SessionAwareConfig {
+	intelligentRouting := cfg.IntelligentRouting
+	sessionCfg := intelligentRouting.ModelSelection.SessionAware
+	result := &selection.SessionAwareConfig{
+		FallbackMethod:       sessionCfg.FallbackMethod,
+		MinTurnsBeforeSwitch: sessionCfg.MinTurnsBeforeSwitch,
+		StayBias:             sessionCfg.StayBias,
+		QualityGapMultiplier: sessionCfg.QualityGapMultiplier,
+		HandoffPenaltyWeight: sessionCfg.HandoffPenaltyWeight,
+		RemainingTurnWeight:  sessionCfg.RemainingTurnWeight,
+	}
+	if decisionCfg == nil {
+		return result
+	}
+	if decisionCfg.FallbackMethod != "" {
+		result.FallbackMethod = decisionCfg.FallbackMethod
+	}
+	if decisionCfg.MinTurnsBeforeSwitch != 0 {
+		result.MinTurnsBeforeSwitch = decisionCfg.MinTurnsBeforeSwitch
+	}
+	if decisionCfg.StayBias != 0 {
+		result.StayBias = decisionCfg.StayBias
+	}
+	if decisionCfg.QualityGapMultiplier != 0 {
+		result.QualityGapMultiplier = decisionCfg.QualityGapMultiplier
+	}
+	if decisionCfg.HandoffPenaltyWeight != 0 {
+		result.HandoffPenaltyWeight = decisionCfg.HandoffPenaltyWeight
+	}
+	if decisionCfg.RemainingTurnWeight != 0 {
+		result.RemainingTurnWeight = decisionCfg.RemainingTurnWeight
+	}
+	return result
 }
 
 func buildMLSelectionConfig(cfg *config.RouterConfig) *selection.MLSelectorConfig {

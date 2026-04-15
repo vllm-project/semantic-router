@@ -51,17 +51,6 @@ func assertReferenceConfigRoutingCoverage(t testingT, root map[string]interface{
 	assertReferenceConfigSignalCoverage(t, mustMapAt(t, routing, "signals"))
 	assertReferenceConfigProjectionCoverage(t, mustMapAt(t, routing, "projections"))
 	assertReferenceConfigDecisionCoverage(t, mustSliceAt(t, routing, "decisions"))
-	assertReferenceConfigSessionStateCoverage(t, mustSliceAt(t, routing, "session_states"))
-}
-
-func assertReferenceConfigSessionStateCoverage(t testingT, sessionStates []interface{}) {
-	assertSliceUnionCoversStructFields(t, sessionStates, reflect.TypeOf(SessionStateConfig{}), "routing.session_states")
-	assertSliceUnionCoversStructFields(
-		t,
-		collectNestedSliceItems(t, sessionStates, "fields", "routing.session_states"),
-		reflect.TypeOf(SessionStateFieldConfig{}),
-		"routing.session_states[].fields",
-	)
 }
 
 func assertReferenceConfigSignalCoverage(t testingT, signals map[string]interface{}) {
@@ -84,6 +73,7 @@ func assertReferenceConfigSignalCoverage(t testingT, signals map[string]interfac
 	assertReferenceConfigStructureCoverage(t, mustSliceAt(t, signals, "structure"))
 	assertReferenceConfigComplexityCoverage(t, mustSliceAt(t, signals, "complexity"))
 	assertSliceUnionCoversStructFields(t, mustSliceAt(t, signals, "modality"), reflect.TypeOf(ModalityRule{}), "routing.signals.modality")
+	assertReferenceConfigSessionSignalCoverage(t, mustSliceAt(t, signals, "session"))
 	assertReferenceConfigRoleBindingCoverage(t, mustSliceAt(t, signals, "role_bindings"))
 	assertSliceUnionCoversStructFields(t, mustSliceAt(t, signals, "jailbreak"), reflect.TypeOf(JailbreakRule{}), "routing.signals.jailbreak")
 	assertSliceUnionCoversStructFields(t, mustSliceAt(t, signals, "pii"), reflect.TypeOf(PIIRule{}), "routing.signals.pii")
@@ -170,6 +160,16 @@ func assertReferenceConfigStructureCoverage(t testingT, structure []interface{})
 		),
 		reflect.TypeOf(StructureSource{}),
 		"routing.signals.structure[].feature.source",
+	)
+}
+
+func assertReferenceConfigSessionSignalCoverage(t testingT, session []interface{}) {
+	assertSliceUnionCoversStructFields(t, session, reflect.TypeOf(SessionRule{}), "routing.signals.session")
+	assertSliceUnionCoversStructFields(
+		t,
+		collectChildMapsFromSlice(t, session, "predicate", "routing.signals.session"),
+		reflect.TypeOf(NumericPredicate{}),
+		"routing.signals.session[].predicate",
 	)
 }
 

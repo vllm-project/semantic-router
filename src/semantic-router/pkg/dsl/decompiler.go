@@ -32,18 +32,6 @@ type pluginTemplate struct {
 	usageCount int
 }
 
-// ---------- Session State Decompilation ----------
-
-func (d *decompiler) decompileSessionStates() {
-	for _, ss := range d.cfg.SessionStates {
-		d.write("SESSION_STATE %s {\n", quoteName(ss.Name))
-		for _, f := range ss.Fields {
-			d.write("  %s: %s\n", f.Name, f.TypeName)
-		}
-		d.write("}\n\n")
-	}
-}
-
 // ---------- Signal Decompilation ----------
 
 func (d *decompiler) decompileSignals() {
@@ -203,6 +191,44 @@ func (d *decompiler) decompileSignals() {
 		d.write("SIGNAL modality %s {\n", quoteName(mod.Name))
 		if mod.Description != "" {
 			d.write("  description: %q\n", mod.Description)
+		}
+		d.write("}\n\n")
+	}
+
+	for _, session := range d.cfg.SessionRules {
+		d.write("SIGNAL session %s {\n", quoteName(session.Name))
+		if session.Description != "" {
+			d.write("  description: %q\n", session.Description)
+		}
+		if session.Fact != "" {
+			d.write("  fact: %q\n", session.Fact)
+		}
+		if session.IntentOrDomain != "" {
+			d.write("  intent_or_domain: %q\n", session.IntentOrDomain)
+		}
+		if session.PreviousModel != "" {
+			d.write("  previous_model: %q\n", session.PreviousModel)
+		}
+		if session.CandidateModel != "" {
+			d.write("  candidate_model: %q\n", session.CandidateModel)
+		}
+		if session.Predicate != nil {
+			parts := make([]string, 0, 4)
+			if session.Predicate.GT != nil {
+				parts = append(parts, fmt.Sprintf("gt: %g", *session.Predicate.GT))
+			}
+			if session.Predicate.GTE != nil {
+				parts = append(parts, fmt.Sprintf("gte: %g", *session.Predicate.GTE))
+			}
+			if session.Predicate.LT != nil {
+				parts = append(parts, fmt.Sprintf("lt: %g", *session.Predicate.LT))
+			}
+			if session.Predicate.LTE != nil {
+				parts = append(parts, fmt.Sprintf("lte: %g", *session.Predicate.LTE))
+			}
+			if len(parts) > 0 {
+				d.write("  predicate: { %s }\n", strings.Join(parts, ", "))
+			}
 		}
 		d.write("}\n\n")
 	}
@@ -989,6 +1015,27 @@ func (d *decompiler) decompileAlgorithmFields(algo *config.AlgorithmConfig) stri
 				fmt.Fprintf(&sb, "    max_escalations: %d\n", a.MaxEscalations)
 			}
 		}
+	case "session_aware":
+		if s := algo.SessionAware; s != nil {
+			if s.FallbackMethod != "" {
+				fmt.Fprintf(&sb, "    fallback_method: %q\n", s.FallbackMethod)
+			}
+			if s.MinTurnsBeforeSwitch != 0 {
+				fmt.Fprintf(&sb, "    min_turns_before_switch: %d\n", s.MinTurnsBeforeSwitch)
+			}
+			if s.StayBias != 0 {
+				fmt.Fprintf(&sb, "    stay_bias: %v\n", s.StayBias)
+			}
+			if s.QualityGapMultiplier != 0 {
+				fmt.Fprintf(&sb, "    quality_gap_multiplier: %v\n", s.QualityGapMultiplier)
+			}
+			if s.HandoffPenaltyWeight != 0 {
+				fmt.Fprintf(&sb, "    handoff_penalty_weight: %v\n", s.HandoffPenaltyWeight)
+			}
+			if s.RemainingTurnWeight != 0 {
+				fmt.Fprintf(&sb, "    remaining_turn_weight: %v\n", s.RemainingTurnWeight)
+			}
+		}
 	case "latency_aware":
 		if l := algo.LatencyAware; l != nil {
 			if l.TPOTPercentile != 0 {
@@ -1149,6 +1196,44 @@ func (d *decompiler) modalityToSignal(mod *config.ModalityRule) *SignalDecl {
 		fields["description"] = StringValue{V: mod.Description}
 	}
 	return &SignalDecl{SignalType: "modality", Name: mod.Name, Fields: fields}
+}
+
+func (d *decompiler) sessionToSignal(rule *config.SessionRule) *SignalDecl {
+	fields := make(map[string]Value)
+	if rule.Description != "" {
+		fields["description"] = StringValue{V: rule.Description}
+	}
+	if rule.Fact != "" {
+		fields["fact"] = StringValue{V: rule.Fact}
+	}
+	if rule.IntentOrDomain != "" {
+		fields["intent_or_domain"] = StringValue{V: rule.IntentOrDomain}
+	}
+	if rule.PreviousModel != "" {
+		fields["previous_model"] = StringValue{V: rule.PreviousModel}
+	}
+	if rule.CandidateModel != "" {
+		fields["candidate_model"] = StringValue{V: rule.CandidateModel}
+	}
+	if rule.Predicate != nil {
+		predicateFields := make(map[string]Value)
+		if rule.Predicate.GT != nil {
+			predicateFields["gt"] = FloatValue{V: *rule.Predicate.GT}
+		}
+		if rule.Predicate.GTE != nil {
+			predicateFields["gte"] = FloatValue{V: *rule.Predicate.GTE}
+		}
+		if rule.Predicate.LT != nil {
+			predicateFields["lt"] = FloatValue{V: *rule.Predicate.LT}
+		}
+		if rule.Predicate.LTE != nil {
+			predicateFields["lte"] = FloatValue{V: *rule.Predicate.LTE}
+		}
+		if len(predicateFields) > 0 {
+			fields["predicate"] = ObjectValue{Fields: predicateFields}
+		}
+	}
+	return &SignalDecl{SignalType: "session", Name: rule.Name, Fields: fields}
 }
 
 func (d *decompiler) roleBindingToSignal(rb *config.RoleBinding) *SignalDecl {
@@ -1560,6 +1645,27 @@ func (d *decompiler) algorithmToFields(algo *config.AlgorithmConfig) map[string]
 			}
 			if l.TTFTPercentile != 0 {
 				fields["ttft_percentile"] = IntValue{V: l.TTFTPercentile}
+			}
+		}
+	case "session_aware":
+		if s := algo.SessionAware; s != nil {
+			if s.FallbackMethod != "" {
+				fields["fallback_method"] = StringValue{V: s.FallbackMethod}
+			}
+			if s.MinTurnsBeforeSwitch != 0 {
+				fields["min_turns_before_switch"] = IntValue{V: s.MinTurnsBeforeSwitch}
+			}
+			if s.StayBias != 0 {
+				fields["stay_bias"] = FloatValue{V: s.StayBias}
+			}
+			if s.QualityGapMultiplier != 0 {
+				fields["quality_gap_multiplier"] = FloatValue{V: s.QualityGapMultiplier}
+			}
+			if s.HandoffPenaltyWeight != 0 {
+				fields["handoff_penalty_weight"] = FloatValue{V: s.HandoffPenaltyWeight}
+			}
+			if s.RemainingTurnWeight != 0 {
+				fields["remaining_turn_weight"] = FloatValue{V: s.RemainingTurnWeight}
 			}
 		}
 	case "confidence":
