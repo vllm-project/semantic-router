@@ -97,7 +97,11 @@ func createMemoryStore(cfg *config.RouterConfig) (memory.Store, error) {
 		if err != nil {
 			logging.Warnf("Memory: Redis cache disabled (connection failed: %v)", err)
 		} else {
-			result = memory.NewCachingStore(store, redisCache)
+			backendLabel := backend
+			if backendLabel == "" {
+				backendLabel = "milvus"
+			}
+			result = memory.NewCachingStore(store, redisCache, backendLabel)
 		}
 	}
 
@@ -175,8 +179,23 @@ func createValkeyMemoryStore(cfg *config.RouterConfig) (memory.Store, error) {
 		port = 6379
 	}
 
+	embeddingModel := memory.EmbeddingModelType(detectMemoryEmbeddingModel(cfg))
+
+	// Normalize dimension: if not explicitly set, derive the default from the embedding model
+	// so the index dimension and the embedding dimension always agree.
+	// mmbert defaults to 256, all other models default to 384.
+	if vc.Dimension <= 0 {
+		switch embeddingModel {
+		case memory.EmbeddingModelMMBERT:
+			vc.Dimension = 256
+		default:
+			vc.Dimension = 384
+		}
+		logging.Infof("Memory: Valkey dimension not set, defaulting to %d for model %s", vc.Dimension, embeddingModel)
+	}
+
 	embeddingConfig := &memory.EmbeddingConfig{
-		Model:     memory.EmbeddingModelType(detectMemoryEmbeddingModel(cfg)),
+		Model:     embeddingModel,
 		Dimension: vc.Dimension,
 	}
 

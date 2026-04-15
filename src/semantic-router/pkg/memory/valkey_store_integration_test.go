@@ -566,30 +566,33 @@ func TestValkeyStoreInteg_List_MissingUserID(t *testing.T) {
 // Duplicate keys (overwrite behavior)
 // ---------------------------------------------------------------------------
 
+// TestValkeyStoreInteg_DuplicateKeys verifies that storing a memory with an
+// already-existing ID returns an error, matching the Store interface contract.
 func TestValkeyStoreInteg_DuplicateKeys(t *testing.T) {
 	store, _ := setupValkeyMemoryIntegration(t)
 	ctx := context.Background()
 
 	id := fmt.Sprintf("mem_dup_%d", time.Now().UnixNano())
 
-	// Store first version
+	// Store first version — should succeed.
 	require.NoError(t, store.Store(ctx, &Memory{
 		ID: id, Type: MemoryTypeSemantic,
 		Content: "First version", UserID: "dup_user",
 	}))
 	time.Sleep(200 * time.Millisecond)
 
-	// Store again with same ID (HSET overwrites)
-	require.NoError(t, store.Store(ctx, &Memory{
+	// Store again with same ID — should return an error.
+	err := store.Store(ctx, &Memory{
 		ID: id, Type: MemoryTypeSemantic,
 		Content: "Second version", UserID: "dup_user",
-	}))
-	time.Sleep(200 * time.Millisecond)
+	})
+	require.Error(t, err, "storing a duplicate ID should return an error")
+	assert.Contains(t, err.Error(), "memory already exists")
 
-	// Verify latest content
+	// Verify original content is unchanged.
 	retrieved, err := store.Get(ctx, id)
 	require.NoError(t, err)
-	assert.Equal(t, "Second version", retrieved.Content)
+	assert.Equal(t, "First version", retrieved.Content)
 }
 
 // ---------------------------------------------------------------------------

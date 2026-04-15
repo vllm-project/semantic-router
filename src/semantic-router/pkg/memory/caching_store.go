@@ -5,36 +5,42 @@ import (
 	"time"
 )
 
-const cacheBackendLabel = "milvus" // backend label for cache metrics (cache sits in front of Milvus)
+const defaultCacheBackendLabel = "milvus" // fallback label when none is provided
 
 // CachingStore wraps a Store and adds a Redis hot cache for Retrieve.
 // Retrieve: check cache first; on miss, call underlying store and populate cache.
 // Store/Update/Forget/ForgetByScope: call underlying then invalidate cache for affected user(s).
 type CachingStore struct {
-	store Store
-	cache *RedisCache
+	store        Store
+	cache        *RedisCache
+	backendLabel string
 }
 
 // NewCachingStore returns a Store that caches retrieval results in Redis.
 // If cache is nil, all operations delegate to store with no caching.
-func NewCachingStore(store Store, cache *RedisCache) Store {
+// backendLabel is used for cache hit/miss metrics (e.g. "milvus", "valkey").
+func NewCachingStore(store Store, cache *RedisCache, backendLabel string) Store {
 	if cache == nil {
 		return store
 	}
-	return &CachingStore{store: store, cache: cache}
+	return &CachingStore{store: store, cache: cache, backendLabel: backendLabel}
 }
 
 // Retrieve implements Store. It checks the cache first; on miss, calls the underlying store and caches the result.
 func (c *CachingStore) Retrieve(ctx context.Context, opts RetrieveOptions) ([]*RetrieveResult, error) {
+	label := c.backendLabel
+	if label == "" {
+		label = defaultCacheBackendLabel
+	}
 	if c.cache != nil {
 		start := time.Now()
 		results, ok := c.cache.Get(ctx, opts)
 		elapsed := time.Since(start).Seconds()
 		if ok {
-			RecordMemoryCacheHit(cacheBackendLabel, elapsed)
+			RecordMemoryCacheHit(label, elapsed)
 			return results, nil
 		}
-		RecordMemoryCacheMiss(cacheBackendLabel)
+		RecordMemoryCacheMiss(label)
 	}
 	results, err := c.store.Retrieve(ctx, opts)
 	if err != nil {

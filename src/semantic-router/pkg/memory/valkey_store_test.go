@@ -2,6 +2,7 @@ package memory
 
 import (
 	"encoding/binary"
+	"encoding/json"
 	"math"
 	"testing"
 
@@ -704,4 +705,39 @@ func TestValkeyStore_ExtractTotalCount(t *testing.T) {
 		t.Parallel()
 		assert.Equal(t, 0, store.extractTotalCount("not an array"))
 	})
+}
+
+// ---------------------------------------------------------------------------
+// recordRetrieval metadata sync — access_count must NOT appear in metadata JSON
+// ---------------------------------------------------------------------------
+
+// TestValkeyBuildHashFields_AccessCountNotInMetadata verifies that valkeyBuildHashFields
+// stores access_count as a top-level HASH field only, not inside the metadata JSON blob.
+// This is the invariant that prevents the recordRetrieval race where a slower goroutine
+// could overwrite a newer access_count value in the JSON.
+func TestValkeyBuildHashFields_AccessCountNotInMetadata(t *testing.T) {
+	t.Parallel()
+
+	mem := &Memory{
+		ID:          "mem_race_test",
+		Content:     "test content",
+		UserID:      "u1",
+		AccessCount: 5,
+		Importance:  0.8,
+	}
+	embedding := []float32{0.1, 0.2, 0.3}
+
+	fields, err := valkeyBuildHashFields(mem, embedding)
+	require.NoError(t, err)
+
+	// access_count must be a top-level HASH field
+	assert.Equal(t, "5", fields["access_count"], "access_count should be a top-level HASH field")
+
+	// access_count must NOT be in the metadata JSON (to avoid the concurrent write race)
+	metadataStr, ok := fields["metadata"]
+	require.True(t, ok, "metadata field must exist")
+	var metadata map[string]interface{}
+	require.NoError(t, json.Unmarshal([]byte(metadataStr), &metadata))
+	_, hasAccessCount := metadata["access_count"]
+	assert.False(t, hasAccessCount, "access_count must NOT be stored in metadata JSON to prevent concurrent write races")
 }

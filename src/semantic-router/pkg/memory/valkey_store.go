@@ -3,7 +3,6 @@ package memory
 import (
 	"context"
 	"fmt"
-	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -232,13 +231,22 @@ func (v *ValkeyStore) Store(ctx context.Context, memory *Memory) error {
 
 	key := v.hashKey(memory.ID)
 
+	// Enforce uniqueness: return an error if the key already exists.
+	// This matches the Store interface contract and the behaviour of other backends.
 	err = v.retryWithBackoff(ctx, func() error {
+		exists, existsErr := v.client.CustomCommand(ctx, []string{"EXISTS", key})
+		if existsErr != nil {
+			return existsErr
+		}
+		if valkeyToInt64(exists) > 0 {
+			return fmt.Errorf("memory already exists: %s", memory.ID)
+		}
 		_, hsetErr := v.client.HSet(ctx, key, fields)
 		return hsetErr
 	})
 	if err != nil {
 		status = "error"
-		return fmt.Errorf("valkey HSET failed for memory id=%s: %w", memory.ID, err)
+		return fmt.Errorf("valkey store failed for memory id=%s: %w", memory.ID, err)
 	}
 
 	logging.Debugf("ValkeyStore.Store: successfully stored memory id=%s", memory.ID)
@@ -535,23 +543,14 @@ func (v *ValkeyStore) List(ctx context.Context, opts ListOptions) (*ListResult, 
 		filterExpr = fmt.Sprintf("%s @memory_type:{%s}", filterExpr, strings.Join(typeValues, " | "))
 	}
 
-	// Fetch limit+1 pages worth of data so we can sort client-side and still
-	// respect the limit. We over-fetch by a factor to allow client-side sorting
-	// by created_at (FT.SEARCH does not support ORDER BY on NUMERIC fields
-	// without SORTABLE in all Valkey Search versions).
-	// The total count comes from the FT.SEARCH header element.
-	fetchLimit := limit * 5
-	if fetchLimit < 100 {
-		fetchLimit = 100
-	}
-	if fetchLimit > 10000 {
-		fetchLimit = 10000
-	}
-
+	// Use SORTBY created_at DESC since created_at is declared SORTABLE in the index schema.
+	// This avoids the over-fetch + client-side sort and returns correct ordering even when
+	// the user has more memories than the fetch limit.
 	searchCmd := []string{
 		"FT.SEARCH", v.indexName, filterExpr,
 		"RETURN", "7", "id", "content", "user_id", "memory_type", "metadata", "created_at", "updated_at",
-		"LIMIT", "0", strconv.Itoa(fetchLimit),
+		"SORTBY", "created_at", "DESC",
+		"LIMIT", "0", strconv.Itoa(limit),
 		"DIALECT", "2",
 	}
 
@@ -564,15 +563,6 @@ func (v *ValkeyStore) List(ctx context.Context, opts ListOptions) (*ListResult, 
 	total := v.extractTotalCount(result)
 
 	memories := v.parseListSearchResults(result)
-
-	// Sort by created_at descending for deterministic results.
-	sort.Slice(memories, func(i, j int) bool {
-		return memories[i].CreatedAt.After(memories[j].CreatedAt)
-	})
-
-	if limit < len(memories) {
-		memories = memories[:limit]
-	}
 
 	logging.Debugf("ValkeyStore.List: found %d total, returning %d (limit=%d)",
 		total, len(memories), limit)

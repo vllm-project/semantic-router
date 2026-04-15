@@ -45,7 +45,7 @@ func (v *ValkeyStore) recordRetrieval(ctx context.Context, id string) error {
 	nowUnix := strconv.FormatInt(now.Unix(), 10)
 
 	// Increment access_count atomically.
-	newCount, err := v.client.CustomCommand(ctx, []string{"HINCRBY", key, "access_count", "1"})
+	_, err := v.client.CustomCommand(ctx, []string{"HINCRBY", key, "access_count", "1"})
 	if err != nil {
 		return fmt.Errorf("HINCRBY access_count failed: %w", err)
 	}
@@ -58,12 +58,12 @@ func (v *ValkeyStore) recordRetrieval(ctx context.Context, id string) error {
 		return fmt.Errorf("HSET timestamps failed: %w", err)
 	}
 
-	// Sync metadata JSON with the authoritative HASH fields.
-	// We read the current metadata, overwrite access_count and last_accessed
-	// with the values we just wrote atomically above, and write it back.
-	// This avoids the previous read-modify-write race: even if two goroutines
-	// run concurrently, each writes the post-increment count it received from
-	// HINCRBY, so the JSON converges to the correct value.
+	// Sync metadata JSON: update last_accessed timestamp only.
+	// access_count is intentionally NOT synced back into metadata here — the
+	// authoritative value lives in the top-level HASH field (updated atomically
+	// by HINCRBY above). Writing access_count into metadata would reintroduce
+	// the race where a slower goroutine overwrites a newer count. Callers that
+	// need access_count should read the HASH field directly.
 	fields, err := v.client.HGetAll(ctx, key)
 	if err != nil {
 		return nil // Non-critical: top-level HASH fields are already updated
@@ -72,9 +72,8 @@ func (v *ValkeyStore) recordRetrieval(ctx context.Context, id string) error {
 		var metadata map[string]interface{}
 		if jsonErr := json.Unmarshal([]byte(metadataStr), &metadata); jsonErr == nil {
 			metadata["last_accessed"] = now.Unix()
-			// Use the authoritative count returned by HINCRBY instead of
-			// incrementing the stale JSON value.
-			metadata["access_count"] = valkeyToInt64(newCount)
+			// Do NOT write access_count here — keep it in the HASH field only.
+			delete(metadata, "access_count")
 			if updated, mErr := json.Marshal(metadata); mErr == nil {
 				_, _ = v.client.HSet(ctx, key, map[string]string{"metadata": string(updated)})
 			}
@@ -429,12 +428,14 @@ func valkeyParseScoreFromMap(fields map[string]interface{}, key string, metricTy
 
 // valkeyBuildHashFields builds the HSET field map for storing a memory in Valkey.
 func valkeyBuildHashFields(memory *Memory, embedding []float32) (map[string]string, error) {
+	// access_count is stored as a top-level HASH field only (updated atomically via HINCRBY).
+	// It is intentionally excluded from the metadata JSON blob to prevent concurrent
+	// recordRetrieval goroutines from overwriting each other's incremented counts.
 	metadata := map[string]interface{}{
 		"user_id":       memory.UserID,
 		"project_id":    memory.ProjectID,
 		"source":        memory.Source,
 		"importance":    memory.Importance,
-		"access_count":  memory.AccessCount,
 		"last_accessed": memory.LastAccessed.Unix(),
 	}
 	metadataJSON, err := json.Marshal(metadata)
@@ -521,9 +522,8 @@ func valkeyApplyMetadata(mem *Memory, metadata map[string]interface{}) {
 	if importance, ok := metadata["importance"].(float64); ok {
 		mem.Importance = float32(importance)
 	}
-	if accessCount, ok := metadata["access_count"].(float64); ok {
-		mem.AccessCount = int(accessCount)
-	}
+	// access_count is NOT in metadata JSON — it lives in the top-level HASH field only.
+	// Read it via valkeyFieldsToMemory from the "access_count" HASH field instead.
 	if lastAccessed, ok := metadata["last_accessed"].(float64); ok {
 		mem.LastAccessed = time.Unix(int64(lastAccessed), 0)
 	}
@@ -550,6 +550,14 @@ func valkeyFieldsToMemory(fields map[string]string) *Memory {
 	}
 
 	valkeyParseMetadata(mem, fields["metadata"])
+
+	// access_count is authoritative in the top-level HASH field (updated atomically
+	// via HINCRBY). Override whatever valkeyParseMetadata may have set.
+	if acStr := fields["access_count"]; acStr != "" {
+		if ac, err := strconv.Atoi(acStr); err == nil {
+			mem.AccessCount = ac
+		}
+	}
 
 	if createdAtStr := fields["created_at"]; createdAtStr != "" {
 		if ts, err := strconv.ParseInt(createdAtStr, 10, 64); err == nil {
