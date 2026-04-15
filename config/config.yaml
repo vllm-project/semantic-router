@@ -1182,6 +1182,24 @@ global:
         mlp:
           device: cpu
           pretrained_path: models/model-selection/mlp.pt
+      lookup_tables:
+        enabled: false
+        storage_path: ""
+        auto_save_interval: ""
+        populate_from_replay: false
+        populate_interval: ""
+        quality_gaps:
+          - task_family: coding
+            current_model: small
+            candidate_model: large
+            value: 0.15
+        handoff_penalties:
+          - from_model: small
+            to_model: large
+            value: 0.02
+        remaining_turn_priors:
+          - intent_or_domain: support
+            value: 3.5
 
   services:
     api:
