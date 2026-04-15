@@ -184,11 +184,10 @@ type IntelligentRouting struct {
 	Signals         `yaml:",inline"`
 	Projections     Projections          `yaml:"projections,omitempty"`
 	Decisions       []Decision           `yaml:"decisions,omitempty"`
-		Strategy        string               `yaml:"strategy,omitempty"`
-		ModelSelection  ModelSelectionConfig `yaml:"model_selection,omitempty"`
-		ReasoningConfig `yaml:",inline"`
-	}
-
+	Strategy        string               `yaml:"strategy,omitempty"`
+	ModelSelection  ModelSelectionConfig `yaml:"model_selection,omitempty"`
+	ReasoningConfig `yaml:",inline"`
+}
 
 // BackendModels captures configured backend endpoints and model metadata.
 type BackendModels struct {

@@ -157,6 +157,7 @@ def validate_algorithm_one_of(config: UserConfig) -> List[ValidationError]:
         "concurrent": "concurrent",
         "remom": "remom",
         "latency_aware": "latency_aware",
+        "session_aware": "session_aware",
     }
 
     for decision in config.decisions:
@@ -173,6 +174,8 @@ def validate_algorithm_one_of(config: UserConfig) -> List[ValidationError]:
             configured_blocks.append("remom")
         if algorithm.latency_aware is not None:
             configured_blocks.append("latency_aware")
+        if algorithm.session_aware is not None:
+            configured_blocks.append("session_aware")
 
         display_type = (algorithm.type or "").strip() or "<empty>"
         normalized_type = (algorithm.type or "").strip().lower()

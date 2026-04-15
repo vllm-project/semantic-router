@@ -38,6 +38,7 @@ export const SIGNAL_COLORS: Record<SignalType, { background: string; border: str
   structure: { background: '#4a5568', border: '#2d3748' },    // Dark Gray
   complexity: { background: '#4a5568', border: '#2d3748' },   // Dark Gray
   modality: { background: '#4a5568', border: '#2d3748' },     // Dark Gray
+  session: { background: '#4a5568', border: '#2d3748' },      // Dark Gray
   authz: { background: '#4a5568', border: '#2d3748' },        // Dark Gray
   jailbreak: { background: '#4a5568', border: '#2d3748' },    // Dark Gray
   pii: { background: '#4a5568', border: '#2d3748' },          // Dark Gray
@@ -110,6 +111,7 @@ export const ALGORITHM_ICONS: Record<AlgorithmType, string> = {
   automix: 'AM',
   hybrid: 'HY',
   remom: 'RM',
+  session_aware: 'SES',
   latency_aware: 'LAT',
 }
 
@@ -281,6 +283,7 @@ export const SIGNAL_TYPES: SignalType[] = [
   'structure',
   'complexity',
   'modality',
+  'session',
   'authz',
   'jailbreak',
   'pii',

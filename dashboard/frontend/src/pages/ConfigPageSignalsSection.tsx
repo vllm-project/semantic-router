@@ -18,7 +18,6 @@ import type {
   KeywordSignal,
   LanguageSignal,
   ModalitySignal,
-  SessionSignal,
   PIISignal,
   PreferenceSignal,
   ReaskSignal,

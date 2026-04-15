@@ -16,6 +16,7 @@ export type SignalType =
   | 'structure'
   | 'complexity'
   | 'modality'
+  | 'session'
   | 'authz'
   | 'jailbreak'
   | 'pii'
@@ -187,6 +188,7 @@ export type AlgorithmType =
   | 'automix'
   | 'hybrid'
   | 'remom'
+  | 'session_aware'
   | 'latency_aware'
 
 export interface AlgorithmConfig {
@@ -194,6 +196,7 @@ export interface AlgorithmConfig {
   confidence?: ConfidenceAlgorithmConfig
   concurrent?: ConcurrentAlgorithmConfig
   latency_aware?: LatencyAwareAlgorithmConfig
+  session_aware?: SessionAwareAlgorithmConfig
   autoMix?: AutoMixConfig
 }
 
@@ -619,6 +622,15 @@ export interface ConfigData {
     modality?: Array<{
       name: string
       description?: string
+    }>
+    session?: Array<{
+      name: string
+      description?: string
+      fact: string
+      predicate?: NumericPredicateConfig
+      intent_or_domain?: string
+      previous_model?: string
+      candidate_model?: string
     }>
     role_bindings?: Array<{
       name: string

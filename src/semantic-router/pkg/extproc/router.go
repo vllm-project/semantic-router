@@ -35,8 +35,8 @@ type OpenAIRouter struct {
 	ReplayStoreShared     bool
 	// ModelSelector is the registry of advanced model selection algorithms
 	// initialized from config.IntelligentRouting.ModelSelection.
-	ModelSelector *selection.Registry
-	LookupTable   lookuptable.LookupTable
+	ModelSelector   *selection.Registry
+	LookupTable     lookuptable.LookupTable
 	ReplayRecorders map[string]*routerreplay.Recorder
 	MemoryStore     memory.Store
 	MemoryExtractor *memory.MemoryExtractor

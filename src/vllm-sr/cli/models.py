@@ -285,6 +285,18 @@ class ModalityRule(BaseModel):
     description: Optional[str] = None
 
 
+class SessionRule(BaseModel):
+    """Session-derived routing signal configuration."""
+
+    name: str
+    description: Optional[str] = None
+    fact: str
+    predicate: Optional[NumericPredicate] = None
+    intent_or_domain: Optional[str] = None
+    previous_model: Optional[str] = None
+    candidate_model: Optional[str] = None
+
+
 class Subject(BaseModel):
     """RBAC subject (user or group) for role binding."""
 
