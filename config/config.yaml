@@ -1617,7 +1617,7 @@ global:
       semantic:
         qwen3_model_path: models/mom-embedding-pro
         gemma_model_path: models/mom-embedding-flash
-        mmbert_model_path: models/mom-embedding-ultra
+        mmbert_model_path: models/mmbert-embed-32k-2d-matryoshka
         multimodal_model_path: models/mom-embedding-multimodal
         bert_model_path: models/mom-embedding-light
         use_cpu: true

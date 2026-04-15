@@ -273,8 +273,8 @@ func TestBuildModelsInfoResponseIncludesConfiguredAuxiliaryModels(t *testing.T) 
 func TestNormalizeEmbeddingModelPathExtractsRegistryPathFromRuntimeString(t *testing.T) {
 	t.Parallel()
 
-	runtimePath := "MmBertEmbeddingModel(path=models/mom-embedding-ultra, hidden_size=768, layers=22)"
-	if got := normalizeEmbeddingModelPath(runtimePath, "mmbert"); got != "models/mom-embedding-ultra" {
+	runtimePath := "MmBertEmbeddingModel(path=models/mmbert-embed-32k-2d-matryoshka, hidden_size=768, layers=22)"
+	if got := normalizeEmbeddingModelPath(runtimePath, "mmbert"); got != "models/mmbert-embed-32k-2d-matryoshka" {
 		t.Fatalf("expected normalized embedding path, got %q", got)
 	}
 }
