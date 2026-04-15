@@ -41,6 +41,13 @@ func TestToLegacyRegistry_IncludesAliases(t *testing.T) {
 		"models/jailbreak-detector",
 		"jailbreak-detector",
 	)
+	assertRegistryAliases(t, registry,
+		"llm-semantic-router/mmbert-embed-32k-2d-matryoshka",
+		"models/mmbert-embed-32k-2d-matryoshka",
+		"models/mom-embedding-ultra",
+		"models/mmbert-embed-32k-2d-matryoshka",
+		"mmbert-embed-32k-2d-matryoshka",
+	)
 }
 
 func assertRegistryAliases(t *testing.T, registry map[string]string, wantRepo string, aliases ...string) {

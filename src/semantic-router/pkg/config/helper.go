@@ -220,6 +220,78 @@ func (d *Decision) HasSignalType(signalType string) bool {
 	return len(collectSignalNames(&d.Rules, signalType)) > 0
 }
 
+// UsesSignalTypeInRouting returns true when any routing decision uses the given
+// signal type directly or indirectly via projection outputs.
+func (c *RouterConfig) UsesSignalTypeInRouting(signalType string) bool {
+	if c == nil {
+		return false
+	}
+
+	normalizedType := strings.ToLower(strings.TrimSpace(signalType))
+	if normalizedType == "" {
+		return false
+	}
+
+	projectionOutputs := make(map[string]struct{})
+	for i := range c.Decisions {
+		decision := &c.Decisions[i]
+		if decision.HasSignalType(normalizedType) {
+			return true
+		}
+		for _, name := range collectSignalNames(&decision.Rules, SignalTypeProjection) {
+			normalizedName := strings.ToLower(strings.TrimSpace(name))
+			if normalizedName != "" {
+				projectionOutputs[normalizedName] = struct{}{}
+			}
+		}
+	}
+
+	return projectionsReferenceSignalType(c.Projections, projectionOutputs, normalizedType)
+}
+
+func projectionsReferenceSignalType(projections Projections, outputs map[string]struct{}, signalType string) bool {
+	if len(outputs) == 0 || len(projections.Scores) == 0 || len(projections.Mappings) == 0 {
+		return false
+	}
+
+	scoreByName := make(map[string]ProjectionScore, len(projections.Scores))
+	for _, score := range projections.Scores {
+		scoreByName[strings.ToLower(strings.TrimSpace(score.Name))] = score
+	}
+
+	sourceByOutput := make(map[string]string)
+	for _, mapping := range projections.Mappings {
+		normalizedSource := strings.ToLower(strings.TrimSpace(mapping.Source))
+		for _, output := range mapping.Outputs {
+			normalizedOutput := strings.ToLower(strings.TrimSpace(output.Name))
+			if normalizedOutput != "" {
+				sourceByOutput[normalizedOutput] = normalizedSource
+			}
+		}
+	}
+
+	for outputName := range outputs {
+		scoreName, ok := sourceByOutput[outputName]
+		if !ok {
+			continue
+		}
+		score, ok := scoreByName[scoreName]
+		if !ok {
+			continue
+		}
+		for _, input := range score.Inputs {
+			if strings.EqualFold(input.Type, ProjectionInputKBMetric) {
+				continue
+			}
+			if strings.EqualFold(strings.TrimSpace(input.Type), signalType) {
+				return true
+			}
+		}
+	}
+
+	return false
+}
+
 // collectSignalNames traverses a RuleNode tree and returns all leaf signal names
 // of the given signal type.
 func collectSignalNames(node *RuleNode, signalType string) []string {
