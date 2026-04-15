@@ -139,6 +139,7 @@ runs the following steps:
 ### Shutdown
 
 The returned `cancel` function:
+
 - Stops the periodic populator goroutine
 - Calls `FileStorage.Close()`, which stops auto-save and performs a final flush
 
@@ -322,6 +323,7 @@ model_selection:
 ```
 
 The system:
+
 1. Loads any previously persisted entries from `/data/lookup_tables.json`
 2. Fetches all replay records and runs the Builder
 3. Writes derived entries (quality gaps, handoff penalties, remaining turn priors)
