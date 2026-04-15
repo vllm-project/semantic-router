@@ -152,6 +152,7 @@ func CanonicalGlobalFromRouterConfig(cfg *RouterConfig) *CanonicalGlobal {
 			Authz:         cfg.Authz,
 			RateLimit:     cfg.RateLimit,
 			RouterReplay:  cfg.RouterReplay,
+			StartupStatus: cfg.StartupStatus,
 		},
 		Stores: CanonicalStoreGlobal{
 			SemanticCache: cfg.SemanticCache,

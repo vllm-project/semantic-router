@@ -17,6 +17,19 @@ on:
       - "deploy/helm/**"
       - ".github/workflows/helm-publish.yml"
   workflow_dispatch:
+  # Called from nightly-build.yml to publish a nightly chart version.
+  workflow_call:
+    inputs:
+      is_nightly:
+        description: "Publish a nightly chart (version 0.0.0-nightly.YYYYMMDD)"
+        required: false
+        type: boolean
+        default: false
+      nightly_date:
+        description: "Override date (YYYYMMDD) for nightly version. Defaults to today."
+        required: false
+        type: string
+        default: ""
 
 env:
   HELM_VERSION: v3.14.0
@@ -48,15 +61,33 @@ jobs:
         id: versions
         run: |
           if [[ "${GITHUB_REF}" == refs/tags/v* ]]; then
-            echo "chart_version=${GITHUB_REF#refs/tags/v}" >> $GITHUB_OUTPUT
-            echo "app_version=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
+            # Tagged release — chart version mirrors the semver tag (without leading v)
+            CHART_VERSION="${GITHUB_REF#refs/tags/v}"
+            APP_VERSION="${GITHUB_REF#refs/tags/}"
+            echo "is_release=true" >> $GITHUB_OUTPUT
+          elif [[ "${{ inputs.is_nightly }}" == "true" ]]; then
+            # Nightly — use the supplied date or today's UTC date
+            if [[ -n "${{ inputs.nightly_date }}" ]]; then
+              DATE="${{ inputs.nightly_date }}"
+            else
+              DATE="$(date -u +'%Y%m%d')"
+            fi
+            # 0.0.0-nightly.YYYYMMDD is valid semver (pre-release identifier)
+            CHART_VERSION="0.0.0-nightly.${DATE}"
+            APP_VERSION="nightly-${DATE}"
+            echo "is_release=false" >> $GITHUB_OUTPUT
           elif [[ "${GITHUB_EVENT_NAME}" == "pull_request" ]]; then
-            echo "chart_version=0.0.0-pr.${{ github.event.number }}" >> $GITHUB_OUTPUT
-            echo "app_version=pr-${{ github.event.number }}" >> $GITHUB_OUTPUT
+            CHART_VERSION="0.0.0-pr.${{ github.event.number }}"
+            APP_VERSION="pr-${{ github.event.number }}"
+            echo "is_release=false" >> $GITHUB_OUTPUT
           else
-            echo "chart_version=0.0.0-latest" >> $GITHUB_OUTPUT
-            echo "app_version=latest" >> $GITHUB_OUTPUT
+            # Push to main without a tag
+            CHART_VERSION="0.0.0-latest"
+            APP_VERSION="latest"
+            echo "is_release=false" >> $GITHUB_OUTPUT
           fi
+          echo "chart_version=${CHART_VERSION}" >> $GITHUB_OUTPUT
+          echo "app_version=${APP_VERSION}"     >> $GITHUB_OUTPUT
 
       - name: Package chart
         id: package
@@ -119,24 +150,23 @@ jobs:
 
       - name: Create release summary
         run: |
-          REPOSITORY_OWNER_LOWER="$(echo '${{ github.repository_owner }}' | tr '[:upper:]' '[:lower:]')"
+          OWNER="$(echo '${{ github.repository_owner }}' | tr '[:upper:]' '[:lower:]')"
+          CHART_VERSION="${{ needs.validate-and-package.outputs.chart-version }}"
+          REPO="${{ env.REGISTRY }}/${OWNER}/charts/${{ env.CHART_NAME }}"
+
           cat >> $GITHUB_STEP_SUMMARY << EOF
-          ## 📦 Helm Chart Published
+          ## Helm Chart Published
 
           **Chart:** \`${{ env.CHART_NAME }}\`
-          **Version:** \`${{ needs.validate-and-package.outputs.chart-version }}\`
+          **Version:** \`${CHART_VERSION}\`
           **App Version:** \`${{ needs.validate-and-package.outputs.chart-app-version }}\`
-          **Registry:** \`${{ env.REGISTRY }}/$REPOSITORY_OWNER_LOWER/charts\`
+          **Registry:** \`${{ env.REGISTRY }}/${OWNER}/charts\`
 
           ### Installation
 
           \`\`\`bash
-          # Pull the chart
-          helm pull oci://${{ env.REGISTRY }}/$REPOSITORY_OWNER_LOWER/charts/${{ env.CHART_NAME }} --version ${{ needs.validate-and-package.outputs.chart-version }}
-
-          # Install directly
-          helm install semantic-router oci://${{ env.REGISTRY }}/$REPOSITORY_OWNER_LOWER/charts/${{ env.CHART_NAME }} \\
-            --version ${{ needs.validate-and-package.outputs.chart-version }} \\
+          helm install semantic-router oci://${REPO} \\
+            --version ${CHART_VERSION} \\
             --namespace vllm-semantic-router-system \\
             --create-namespace
           \`\`\`
@@ -144,8 +174,9 @@ jobs:
           ### Upgrade
 
           \`\`\`bash
-          helm upgrade semantic-router oci://${{ env.REGISTRY }}/$REPOSITORY_OWNER_LOWER/charts/${{ env.CHART_NAME }} \\
-            --version ${{ needs.validate-and-package.outputs.chart-version }} \\
-            --namespace vllm-semantic-router-system
+          helm upgrade semantic-router oci://${REPO} \\
+            --version ${CHART_VERSION} \\
+            --namespace vllm-semantic-router-system \\
+            --reuse-values
           \`\`\`
           EOF

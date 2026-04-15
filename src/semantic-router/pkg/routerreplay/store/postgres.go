@@ -6,20 +6,12 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"regexp"
 	"time"
 
 	_ "github.com/lib/pq"
 )
 
-const (
-	DefaultPostgresTableName       = "router_replay_records"
-	DefaultPostgresMaxOpenConns    = 25
-	DefaultPostgresMaxIdleConns    = 5
-	DefaultPostgresConnMaxLifetime = 300 // 5 minutes
-)
-
-var postgresIdentifierPattern = regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_]*$`)
+const DefaultPostgresTableName = "router_replay_records"
 
 // PostgresStore implements Storage using PostgreSQL as the backend.
 type PostgresStore struct {
@@ -45,7 +37,7 @@ func NewPostgresStore(cfg *PostgresConfig, ttlSeconds int, asyncWrites bool) (*P
 		return nil, err
 	}
 
-	store := newPostgresStoreWithDB(db, runtimeCfg.tableName, ttlSeconds, asyncWrites)
+	store := newPostgresStoreWithDB(db, runtimeCfg.TableName, ttlSeconds, asyncWrites)
 	if err := store.createTable(ctx); err != nil {
 		_ = db.Close()
 		return nil, fmt.Errorf("failed to create table: %w", err)
@@ -70,13 +62,6 @@ func startPostgresAsyncWriter(store *PostgresStore) {
 	}
 	store.asyncChan = make(chan asyncOp, 100)
 	go store.asyncWriter()
-}
-
-func validatePostgresIdentifier(name string) error {
-	if !postgresIdentifierPattern.MatchString(name) {
-		return fmt.Errorf("invalid postgres identifier %q", name)
-	}
-	return nil
 }
 
 // createTable creates the records table if it doesn't exist.
