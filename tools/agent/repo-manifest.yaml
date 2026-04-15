@@ -285,6 +285,9 @@ doc_governance:
     - path: docs/agent/governance.md
       steward: agent-contract
       freshness: update when source-of-truth policy or rule layering changes
+    - path: docs/agent/lookup-tables.md
+      steward: agent-contract
+      freshness: update when lookup table storage, derivation, or consumption contracts change
     - path: docs/agent/plans/README.md
       steward: agent-contract
       freshness: update when canonical execution plans are added, removed, or reorganized
