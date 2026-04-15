@@ -14,6 +14,15 @@ type ModelSelectionConfig struct {
 	AutoMix  AutoMixSelectionConfig  `yaml:"automix,omitempty"`
 	Hybrid   HybridSelectionConfig   `yaml:"hybrid,omitempty"`
 	ML       MLSelectionConfig       `yaml:"ml,omitempty"`
+	Momentum MomentumSelectionConfig `yaml:"momentum,omitempty"`
+}
+
+// MomentumSelectionConfig configures Conversational Routing Momentum (CRM).
+type MomentumSelectionConfig struct {
+	Enabled   bool    `yaml:"enabled,omitempty"`
+	Attack    float64 `yaml:"attack,omitempty"`
+	Release   float64 `yaml:"release,omitempty"`
+	Threshold float64 `yaml:"threshold,omitempty"`
 }
 
 // MLSelectionConfig holds configuration for the shared ML-based selectors.
