@@ -22,6 +22,7 @@ func (r *OpenAIRouter) handleRequestHeaders(v *ext_proc.ProcessingRequest_Reques
 	defer span.End()
 
 	method, path := captureRequestHeaders(v, ctx)
+
 	setRequestHeaderSpanAttributes(span, ctx, method, path)
 
 	if replayResp := r.handleRouterReplayAPI(method, path); replayResp != nil {

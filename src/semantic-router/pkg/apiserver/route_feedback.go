@@ -51,7 +51,7 @@ type FeedbackResponse struct {
 	Timestamp string `json:"timestamp"`
 }
 
-// handleFeedback handles POST /api/v1/feedback for submitting model selection feedback
+// handleFeedback handles POST /api/v1/feedback for submitting model selection feedback.
 func (s *ClassificationAPIServer) handleFeedback(w http.ResponseWriter, r *http.Request) {
 	var req FeedbackRequest
 	if err := s.parseJSONRequest(r, &req); err != nil {

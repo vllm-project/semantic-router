@@ -90,6 +90,9 @@ func TestRequiredPermission(t *testing.T) {
 		{method: http.MethodPost, path: "/api/openclaw/teams", expected: PermOpenClaw},
 		{method: http.MethodPost, path: "/api/openclaw/rooms/room-1/messages", expected: PermOpenClawRead},
 		{method: http.MethodPost, path: "/api/router/v1/chat/completions", expected: PermConfigRead},
+		{method: http.MethodGet, path: "/api/security/policy", expected: PermConfigRead},
+		{method: http.MethodPut, path: "/api/security/policy", expected: PermSecurityManage},
+		{method: http.MethodPost, path: "/api/security/policy/preview", expected: PermSecurityManage},
 	}
 
 	for _, tc := range testCases {

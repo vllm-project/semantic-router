@@ -302,6 +302,7 @@ func mergeDeployPayload(currentData []byte, req DeployRequest) ([]byte, error) {
 	}
 
 	baseConfig.Routing = mergeCanonicalRouting(baseConfig.Routing, fragmentConfig.Routing)
+	mergeFragmentGlobal(&baseConfig, fragmentConfig.Global)
 	mergedYAML, err := marshalYAMLBytes(baseConfig)
 	if err != nil {
 		return nil, fmt.Errorf("failed to marshal merged config: %w", err)
@@ -363,6 +364,16 @@ func mergeCanonicalSignals(base, patch routerconfig.CanonicalSignals) routerconf
 		merged.PII = patch.PII
 	}
 	return merged
+}
+
+func mergeFragmentGlobal(base *routerconfig.CanonicalConfig, frag *globalFragment) {
+	if frag == nil || frag.Services == nil || frag.Services.RateLimit == nil {
+		return
+	}
+	if base.Global == nil {
+		base.Global = &routerconfig.CanonicalGlobal{}
+	}
+	base.Global.Services.RateLimit = *frag.Services.RateLimit
 }
 
 func resolveDeployBaseYAML(currentData []byte, providedBase string) ([]byte, error) {

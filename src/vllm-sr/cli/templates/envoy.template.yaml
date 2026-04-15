@@ -25,6 +25,15 @@ static_resources:
             virtual_hosts:
             - name: local_service
               domains: ["*"]
+              # Security: strip internal headers from client requests to prevent
+              # looper bypass, identity spoofing, and credential leakage.
+              request_headers_to_remove:
+              - "x-vsr-looper-request"
+              - "x-vsr-looper-secret"
+              - "x-vsr-looper-decision"
+              - "x-vsr-looper-iteration"
+              - "x-authz-user-id"
+              - "x-authz-user-groups"
               routes:
               {% for model in models %}
               # Route for model: {{ model.name }}
