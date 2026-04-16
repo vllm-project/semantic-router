@@ -12,9 +12,9 @@ func (s *Store) ReplaceOpenClawContainers(jsonRows [][2]string) error {
 	if err != nil {
 		return err
 	}
-	if _, err := tx.Exec(`DELETE FROM openclaw_container`); err != nil {
+	if _, execErr := tx.Exec(`DELETE FROM openclaw_container`); execErr != nil {
 		_ = tx.Rollback()
-		return err
+		return execErr
 	}
 	stmt, err := tx.Prepare(`INSERT INTO openclaw_container (name, json) VALUES (?, ?)`)
 	if err != nil {
@@ -40,9 +40,9 @@ func (s *Store) ReplaceOpenClawTeams(jsonRows [][2]string) error {
 	if err != nil {
 		return err
 	}
-	if _, err := tx.Exec(`DELETE FROM openclaw_team`); err != nil {
+	if _, execErr := tx.Exec(`DELETE FROM openclaw_team`); execErr != nil {
 		_ = tx.Rollback()
-		return err
+		return execErr
 	}
 	stmt, err := tx.Prepare(`INSERT INTO openclaw_team (id, json) VALUES (?, ?)`)
 	if err != nil {
@@ -68,9 +68,9 @@ func (s *Store) ReplaceOpenClawRooms(jsonRows [][2]string) error {
 	if err != nil {
 		return err
 	}
-	if _, err := tx.Exec(`DELETE FROM openclaw_room`); err != nil {
+	if _, execErr := tx.Exec(`DELETE FROM openclaw_room`); execErr != nil {
 		_ = tx.Rollback()
-		return err
+		return execErr
 	}
 	stmt, err := tx.Prepare(`INSERT INTO openclaw_room (id, json) VALUES (?, ?)`)
 	if err != nil {
@@ -167,9 +167,9 @@ func (s *Store) ReplaceOpenClawRoomMessages(roomID string, messageIDAndJSON [][2
 	if err != nil {
 		return err
 	}
-	if _, err := tx.Exec(`DELETE FROM openclaw_room_message WHERE room_id = ?`, roomID); err != nil {
+	if _, execErr := tx.Exec(`DELETE FROM openclaw_room_message WHERE room_id = ?`, roomID); execErr != nil {
 		_ = tx.Rollback()
-		return err
+		return execErr
 	}
 	stmt, err := tx.Prepare(`INSERT INTO openclaw_room_message (room_id, message_id, json) VALUES (?, ?, ?)`)
 	if err != nil {
@@ -227,16 +227,16 @@ func (s *Store) OpenClawEntityCounts() (containers, teams, rooms, messages int, 
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if err = s.db.QueryRow(`SELECT COUNT(*) FROM openclaw_container`).Scan(&containers); err != nil {
-		return
+		return 0, 0, 0, 0, err
 	}
 	if err = s.db.QueryRow(`SELECT COUNT(*) FROM openclaw_team`).Scan(&teams); err != nil {
-		return
+		return 0, 0, 0, 0, err
 	}
 	if err = s.db.QueryRow(`SELECT COUNT(*) FROM openclaw_room`).Scan(&rooms); err != nil {
-		return
+		return 0, 0, 0, 0, err
 	}
 	if err = s.db.QueryRow(`SELECT COUNT(*) FROM openclaw_room_message`).Scan(&messages); err != nil {
-		return
+		return 0, 0, 0, 0, err
 	}
-	return
+	return containers, teams, rooms, messages, nil
 }

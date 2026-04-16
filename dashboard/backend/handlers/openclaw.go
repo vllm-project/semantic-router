@@ -14,8 +14,9 @@ import (
 	"sync"
 	"time"
 
-	"github.com/vllm-project/semantic-router/dashboard/backend/workflowstore"
 	"gopkg.in/yaml.v3"
+
+	"github.com/vllm-project/semantic-router/dashboard/backend/workflowstore"
 )
 
 var containerNameInvalidChars = regexp.MustCompile(`[^a-z0-9_.-]+`)

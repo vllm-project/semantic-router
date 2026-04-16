@@ -24,11 +24,11 @@ func TestMLJobSurvivesStoreReopen(t *testing.T) {
 		Progress:    42,
 		CurrentStep: "Running benchmark",
 	}
-	if err := s1.PutMLJob(job); err != nil {
-		t.Fatal(err)
+	if putErr := s1.PutMLJob(job); putErr != nil {
+		t.Fatal(putErr)
 	}
-	if err := s1.AppendMLProgressEvent(job.ID, job.CurrentStep, job.Progress, "typed progress"); err != nil {
-		t.Fatal(err)
+	if appendErr := s1.AppendMLProgressEvent(job.ID, job.CurrentStep, job.Progress, "typed progress"); appendErr != nil {
+		t.Fatal(appendErr)
 	}
 	_ = s1.Close()
 
@@ -91,11 +91,11 @@ func TestOpenClawMessageAppendIncremental(t *testing.T) {
 	room := "team-alpha"
 	m1 := `{"id":"m1","roomId":"` + room + `","content":"a"}`
 	m2 := `{"id":"m2","roomId":"` + room + `","content":"b"}`
-	if err := s.AppendOpenClawRoomMessage(room, "m1", m1); err != nil {
-		t.Fatal(err)
+	if appendErr := s.AppendOpenClawRoomMessage(room, "m1", m1); appendErr != nil {
+		t.Fatal(appendErr)
 	}
-	if err := s.AppendOpenClawRoomMessage(room, "m2", m2); err != nil {
-		t.Fatal(err)
+	if appendErr := s.AppendOpenClawRoomMessage(room, "m2", m2); appendErr != nil {
+		t.Fatal(appendErr)
 	}
 	lines, err := s.ListOpenClawRoomMessages(room)
 	if err != nil || len(lines) != 2 {
