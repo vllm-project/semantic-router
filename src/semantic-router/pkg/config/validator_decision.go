@@ -22,6 +22,9 @@ func validateDecisionModelContracts(cfg *RouterConfig) error {
 		if err := validateDecisionAlgorithmConfig(decision.Name, decision.Algorithm); err != nil {
 			return err
 		}
+		if err := validateDecisionCandidateIterations(decision); err != nil {
+			return err
+		}
 	}
 	return nil
 }
@@ -39,6 +42,64 @@ func validateDecisionModelRefs(cfg *RouterConfig, decision Decision) error {
 		}
 		if err := validateLoRAName(cfg, modelRef.Model, modelRef.LoRAName); err != nil {
 			return fmt.Errorf("decision '%s', model '%s': %w", decision.Name, modelRef.Model, err)
+		}
+	}
+	return nil
+}
+
+func validateDecisionCandidateIterations(decision Decision) error {
+	for i, iter := range decision.CandidateIterations {
+		context := fmt.Sprintf("decision '%s', candidateIterations[%d]", decision.Name, i)
+		if err := validateDecisionCandidateIteration(decision, iter, context); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func validateDecisionCandidateIteration(decision Decision, iter CandidateIterationConfig, context string) error {
+	if strings.TrimSpace(iter.Variable) == "" {
+		return fmt.Errorf("%s: variable cannot be empty", context)
+	}
+	if err := validateDecisionCandidateIterationSource(decision, iter, context); err != nil {
+		return err
+	}
+	return validateDecisionCandidateIterationOutputs(iter, context)
+}
+
+func validateDecisionCandidateIterationSource(decision Decision, iter CandidateIterationConfig, context string) error {
+	switch strings.TrimSpace(iter.Source) {
+	case "decision.candidates":
+		if len(decision.ModelRefs) == 0 {
+			return fmt.Errorf("%s: source decision.candidates requires non-empty modelRefs", context)
+		}
+	case "models":
+		return validateDecisionCandidateIterationModels(iter.Models, context)
+	default:
+		return fmt.Errorf("%s: unsupported source %q", context, iter.Source)
+	}
+	return nil
+}
+
+func validateDecisionCandidateIterationModels(models []ModelRef, context string) error {
+	if len(models) == 0 {
+		return fmt.Errorf("%s: source models requires at least one model", context)
+	}
+	for j, modelRef := range models {
+		if strings.TrimSpace(modelRef.Model) == "" {
+			return fmt.Errorf("%s, models[%d]: model name cannot be empty", context, j)
+		}
+	}
+	return nil
+}
+
+func validateDecisionCandidateIterationOutputs(iter CandidateIterationConfig, context string) error {
+	for j, output := range iter.Outputs {
+		if output.Type != "model" {
+			return fmt.Errorf("%s, outputs[%d]: unsupported output type %q", context, j, output.Type)
+		}
+		if output.Value != iter.Variable {
+			return fmt.Errorf("%s, outputs[%d]: model output must reference variable %q", context, j, iter.Variable)
 		}
 	}
 	return nil

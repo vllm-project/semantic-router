@@ -229,11 +229,7 @@ func (v *Validator) extractSymbolTable() *SymbolTable {
 		modelSet[name] = true
 	}
 	for _, route := range v.prog.Routes {
-		for _, m := range route.Models {
-			if m.Model != "" {
-				modelSet[m.Model] = true
-			}
-		}
+		addRouteModelsToSymbolSet(modelSet, route)
 	}
 	st.Models = keysOfBool(modelSet)
 
@@ -271,7 +267,11 @@ func (v *Validator) checkRouteReferences(route *RouteDecl) {
 		}
 	}
 
-	if len(route.Models) == 0 {
+	for _, iter := range route.CandidateIterations {
+		v.checkCandidateIterationReferences(route, iter)
+	}
+
+	if !routeHasModelCandidates(route) {
 		v.addDiag(DiagWarning, route.Pos,
 			fmt.Sprintf("Route %q has no MODEL specified. Add MODEL \"<model_name>\" inside the route body", route.Name),
 			nil,
@@ -496,6 +496,10 @@ func (v *Validator) checkRouteConstraints(r *RouteDecl) {
 	// Check algorithm constraints
 	if r.Algorithm != nil {
 		v.checkAlgorithmConstraints(r.Algorithm, context)
+	}
+
+	for _, iter := range r.CandidateIterations {
+		v.checkCandidateIterationConstraints(r, iter, context)
 	}
 }
 

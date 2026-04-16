@@ -410,6 +410,8 @@ func rawToRoute(r *rawRouteDecl) *RouteDecl {
 			route.Plugins = append(route.Plugins, rawToPluginRef(item.Plugin))
 		case item.Description != nil:
 			route.Description = unquote(*item.Description)
+		case item.CandidateFor != nil:
+			route.CandidateIterations = append(route.CandidateIterations, rawToCandidateIteration(item.CandidateFor))
 		}
 	}
 
@@ -639,6 +641,8 @@ const (
 	TOKEN_WHEN
 	TOKEN_MODEL
 	TOKEN_ALGORITHM
+	TOKEN_FOR
+	TOKEN_IN
 	TOKEN_AND
 	TOKEN_OR
 	TOKEN_NOT
@@ -660,7 +664,8 @@ func (t TokenType) String() string {
 		TOKEN_BOOL: "BOOL", TOKEN_COMMENT: "COMMENT", TOKEN_SIGNAL: "SIGNAL",
 		TOKEN_ROUTE: "ROUTE", TOKEN_PLUGIN: "PLUGIN", TOKEN_PRIORITY: "PRIORITY",
 		TOKEN_WHEN: "WHEN", TOKEN_MODEL: "MODEL", TOKEN_ALGORITHM: "ALGORITHM",
-		TOKEN_AND: "AND", TOKEN_OR: "OR", TOKEN_NOT: "NOT", TOKEN_LBRACE: "{", TOKEN_RBRACE: "}",
+		TOKEN_FOR: "FOR", TOKEN_IN: "IN", TOKEN_AND: "AND", TOKEN_OR: "OR", TOKEN_NOT: "NOT",
+		TOKEN_LBRACE: "{", TOKEN_RBRACE: "}",
 		TOKEN_LPAREN: "(", TOKEN_RPAREN: ")", TOKEN_LBRACKET: "[",
 		TOKEN_RBRACKET: "]", TOKEN_COLON: ":", TOKEN_COMMA: ",", TOKEN_EQUALS: "=",
 	}
@@ -693,6 +698,7 @@ func Lex(input string) ([]Token, []error) {
 		"PLUGIN": TOKEN_PLUGIN, "TEST": TOKEN_IDENT,
 		"PRIORITY": TOKEN_PRIORITY, "TIER": TOKEN_IDENT, "WHEN": TOKEN_WHEN,
 		"MODEL": TOKEN_MODEL, "ALGORITHM": TOKEN_ALGORITHM,
+		"FOR": TOKEN_FOR, "IN": TOKEN_IN,
 		"AND": TOKEN_AND, "OR": TOKEN_OR, "NOT": TOKEN_NOT,
 		"true": TOKEN_BOOL, "false": TOKEN_BOOL,
 	}
@@ -772,6 +778,7 @@ func LookupIdent(ident string) TokenType {
 		"PLUGIN": TOKEN_PLUGIN, "TEST": TOKEN_IDENT,
 		"PRIORITY": TOKEN_PRIORITY, "TIER": TOKEN_IDENT, "WHEN": TOKEN_WHEN,
 		"MODEL": TOKEN_MODEL, "ALGORITHM": TOKEN_ALGORITHM,
+		"FOR": TOKEN_FOR, "IN": TOKEN_IN,
 		"AND": TOKEN_AND, "OR": TOKEN_OR, "NOT": TOKEN_NOT,
 		"true": TOKEN_BOOL, "false": TOKEN_BOOL,
 	}

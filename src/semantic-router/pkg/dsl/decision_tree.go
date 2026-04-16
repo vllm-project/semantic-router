@@ -70,22 +70,7 @@ func decisionTreeBranchToRoute(
 	}
 
 	for _, item := range branch.body {
-		switch {
-		case item.Name != nil:
-			route.Name = unquoteIdent(*item.Name)
-		case item.Description != nil:
-			route.Description = unquote(*item.Description)
-		case item.Tier != nil:
-			route.Tier = *item.Tier
-		case item.Model != nil:
-			for _, model := range item.Model.Models {
-				route.Models = append(route.Models, rawToModelRef(model))
-			}
-		case item.Algorithm != nil:
-			route.Algorithm = rawToAlgo(item.Algorithm)
-		case item.Plugin != nil:
-			route.Plugins = append(route.Plugins, rawToPluginRef(item.Plugin))
-		}
+		applyDecisionTreeItemToRoute(route, item)
 	}
 
 	if len(route.Models) == 0 {
@@ -105,6 +90,27 @@ func decisionTreeBranchToRoute(
 	route.When = andExprs(conditions)
 
 	return route, nil
+}
+
+func applyDecisionTreeItemToRoute(route *RouteDecl, item *rawDecisionTreeItem) {
+	switch {
+	case item.Name != nil:
+		route.Name = unquoteIdent(*item.Name)
+	case item.Description != nil:
+		route.Description = unquote(*item.Description)
+	case item.Tier != nil:
+		route.Tier = *item.Tier
+	case item.Model != nil:
+		for _, model := range item.Model.Models {
+			route.Models = append(route.Models, rawToModelRef(model))
+		}
+	case item.Algorithm != nil:
+		route.Algorithm = rawToAlgo(item.Algorithm)
+	case item.Plugin != nil:
+		route.Plugins = append(route.Plugins, rawToPluginRef(item.Plugin))
+	case item.CandidateFor != nil:
+		route.CandidateIterations = append(route.CandidateIterations, rawToCandidateIteration(item.CandidateFor))
+	}
 }
 
 func generatedDecisionTreeBranchName(treeName string, branchIndex int) string {

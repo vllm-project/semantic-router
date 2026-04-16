@@ -111,13 +111,14 @@ type rawDecisionTreeElseBranch struct {
 
 // rawDecisionTreeItem is a route-like statement inside one DECISION_TREE branch.
 type rawDecisionTreeItem struct {
-	Pos         lexer.Position
-	Name        *string       `parser:"  'NAME' @(Ident | String)"`
-	Description *string       `parser:"| 'DESCRIPTION' @String"`
-	Tier        *int          `parser:"| 'TIER' @Int"`
-	Model       *rawModelList `parser:"| 'MODEL' @@"`
-	Algorithm   *rawAlgoSpec  `parser:"| 'ALGORITHM' @@"`
-	Plugin      *rawPluginRef `parser:"| 'PLUGIN' @@"`
+	Pos          lexer.Position
+	Name         *string              `parser:"  'NAME' @(Ident | String)"`
+	Description  *string              `parser:"| 'DESCRIPTION' @String"`
+	Tier         *int                 `parser:"| 'TIER' @Int"`
+	Model        *rawModelList        `parser:"| 'MODEL' @@"`
+	Algorithm    *rawAlgoSpec         `parser:"| 'ALGORITHM' @@"`
+	Plugin       *rawPluginRef        `parser:"| 'PLUGIN' @@"`
+	CandidateFor *rawCandidateForDecl `parser:"| @@"`
 }
 
 // rawModelDecl: MODEL <name> { fields... }
@@ -136,14 +137,38 @@ type RouteOpt struct {
 
 // rawRouteItem: a single element inside a route body
 type rawRouteItem struct {
-	Pos         lexer.Position
-	Priority    *int          `parser:"  'PRIORITY' @Int"`
-	Tier        *int          `parser:"| 'TIER' @Int"`
-	When        *BoolExprTop  `parser:"| 'WHEN' @@"`
-	Model       *rawModelList `parser:"| 'MODEL' @@"`
-	Algorithm   *rawAlgoSpec  `parser:"| 'ALGORITHM' @@"`
-	Plugin      *rawPluginRef `parser:"| 'PLUGIN' @@"`
-	Description *string       `parser:"| 'DESCRIPTION' @String"`
+	Pos          lexer.Position
+	Priority     *int                 `parser:"  'PRIORITY' @Int"`
+	Tier         *int                 `parser:"| 'TIER' @Int"`
+	When         *BoolExprTop         `parser:"| 'WHEN' @@"`
+	Model        *rawModelList        `parser:"| 'MODEL' @@"`
+	Algorithm    *rawAlgoSpec         `parser:"| 'ALGORITHM' @@"`
+	Plugin       *rawPluginRef        `parser:"| 'PLUGIN' @@"`
+	Description  *string              `parser:"| 'DESCRIPTION' @String"`
+	CandidateFor *rawCandidateForDecl `parser:"| @@"`
+}
+
+// rawCandidateForDecl: FOR <var> IN decision.candidates|[models...] { body... }
+type rawCandidateForDecl struct {
+	Pos    lexer.Position
+	Var    string                       `parser:"'FOR' @Ident"`
+	Source *rawCandidateIterationSource `parser:"'IN' @@"`
+	Body   []*rawCandidateIterationItem `parser:"'{' @@* '}'"`
+}
+
+// rawCandidateIterationSource is either the current decision candidate set or
+// an explicit bounded model list.
+type rawCandidateIterationSource struct {
+	Ref    *string       `parser:"  @(Ident | String)"`
+	Models *rawModelList `parser:"| '[' @@ ']'"`
+}
+
+// rawCandidateIterationItem is a structured output inside a bounded candidate
+// iteration block. The initial surface only feeds MODEL outputs back into the
+// existing decision model-ref contract.
+type rawCandidateIterationItem struct {
+	Pos   lexer.Position
+	Model *rawModelList `parser:"'MODEL' @@"`
 }
 
 // rawPluginDecl: PLUGIN <name> <type> { fields... }
@@ -354,15 +379,36 @@ type SignalDecl struct {
 
 // RouteDecl represents a ROUTE declaration.
 type RouteDecl struct {
-	Name        string
-	Description string
-	Priority    int
-	Tier        int
-	When        BoolExpr
-	Models      []*ModelRef
-	Algorithm   *AlgoSpec
-	Plugins     []*PluginRef
-	Pos         Position
+	Name                string
+	Description         string
+	Priority            int
+	Tier                int
+	When                BoolExpr
+	Models              []*ModelRef
+	Algorithm           *AlgoSpec
+	Plugins             []*PluginRef
+	CandidateIterations []*CandidateIterationDecl
+	Pos                 Position
+}
+
+// CandidateIterationDecl represents a bounded FOR ... IN block over candidate
+// models. Source is either "decision.candidates" or "models".
+type CandidateIterationDecl struct {
+	Variable string
+	Source   string
+	Models   []*ModelRef
+	Outputs  []*CandidateIterationOutputDecl
+	Pos      Position
+}
+
+// CandidateIterationOutputDecl describes how the iteration feeds an existing
+// routing construct. The initial output type is "model" with Value equal to the
+// iteration variable.
+type CandidateIterationOutputDecl struct {
+	Type   string
+	Value  string
+	Models []*ModelRef
+	Pos    Position
 }
 
 // ModelDecl represents a top-level model catalog entry.

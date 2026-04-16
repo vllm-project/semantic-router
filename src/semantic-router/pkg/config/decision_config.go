@@ -2,14 +2,32 @@ package config
 
 // Decision represents a routing decision that combines multiple rules with boolean logic.
 type Decision struct {
-	Name        string           `yaml:"name"`
-	Description string           `yaml:"description,omitempty"`
-	Priority    int              `yaml:"priority,omitempty"`
-	Tier        int              `yaml:"tier,omitempty"`
-	Rules       RuleCombination  `yaml:"rules"`
-	ModelRefs   []ModelRef       `yaml:"modelRefs,omitempty"`
-	Algorithm   *AlgorithmConfig `yaml:"algorithm,omitempty"`
-	Plugins     []DecisionPlugin `yaml:"plugins,omitempty"`
+	Name                string                     `yaml:"name"`
+	Description         string                     `yaml:"description,omitempty"`
+	Priority            int                        `yaml:"priority,omitempty"`
+	Tier                int                        `yaml:"tier,omitempty"`
+	Rules               RuleCombination            `yaml:"rules"`
+	ModelRefs           []ModelRef                 `yaml:"modelRefs,omitempty"`
+	Algorithm           *AlgorithmConfig           `yaml:"algorithm,omitempty"`
+	Plugins             []DecisionPlugin           `yaml:"plugins,omitempty"`
+	CandidateIterations []CandidateIterationConfig `yaml:"candidateIterations,omitempty"`
+}
+
+// CandidateIterationConfig is the canonical, bounded representation of a DSL
+// FOR ... IN block over candidate models. It is declarative metadata consumed
+// by selection/policy layers, not a runtime script.
+type CandidateIterationConfig struct {
+	Variable string                           `yaml:"variable"`
+	Source   string                           `yaml:"source"`
+	Models   []ModelRef                       `yaml:"models,omitempty"`
+	Outputs  []CandidateIterationOutputConfig `yaml:"outputs,omitempty"`
+}
+
+// CandidateIterationOutputConfig describes how an iteration feeds an existing
+// routing construct. The initial supported output is type=model, value=<var>.
+type CandidateIterationOutputConfig struct {
+	Type  string `yaml:"type"`
+	Value string `yaml:"value,omitempty"`
 }
 
 // AlgorithmConfig defines how multiple models should be executed and aggregated.
