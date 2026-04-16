@@ -42,7 +42,7 @@ func (v *ValkeyStore) recordRetrievalBatch(ids []string) {
 func (v *ValkeyStore) recordRetrieval(ctx context.Context, id string) error {
 	key := v.hashKey(id)
 	now := time.Now()
-	nowUnix := strconv.FormatInt(now.Unix(), 10)
+	nowUnix := strconv.FormatInt(now.UnixMilli(), 10)
 
 	// Increment access_count atomically.
 	_, err := v.client.CustomCommand(ctx, []string{"HINCRBY", key, "access_count", "1"})
@@ -439,8 +439,8 @@ func valkeyBuildHashFields(memory *Memory, embedding []float32) (map[string]stri
 		"source":       source,
 		"metadata":     string(metadataJSON),
 		"embedding":    string(valkeyFloat32ToBytes(embedding)),
-		"created_at":   strconv.FormatInt(memory.CreatedAt.Unix(), 10),
-		"updated_at":   strconv.FormatInt(memory.UpdatedAt.Unix(), 10),
+		"created_at":   strconv.FormatInt(memory.CreatedAt.UnixMilli(), 10),
+		"updated_at":   strconv.FormatInt(memory.UpdatedAt.UnixMilli(), 10),
 		"access_count": strconv.Itoa(memory.AccessCount),
 		"importance":   strconv.FormatFloat(float64(memory.Importance), 'f', -1, 32),
 	}, nil
@@ -539,16 +539,14 @@ func valkeyFieldsToMemory(fields map[string]string) *Memory {
 
 	if createdAtStr := fields["created_at"]; createdAtStr != "" {
 		if ts, err := strconv.ParseInt(createdAtStr, 10, 64); err == nil {
-			mem.CreatedAt = time.Unix(ts, 0)
+			mem.CreatedAt = time.UnixMilli(ts)
 		}
 	}
 	if updatedAtStr := fields["updated_at"]; updatedAtStr != "" {
 		if ts, err := strconv.ParseInt(updatedAtStr, 10, 64); err == nil {
-			mem.UpdatedAt = time.Unix(ts, 0)
+			mem.UpdatedAt = time.UnixMilli(ts)
 		}
 	}
-
-	// Restore embedding from binary blob
 	if embStr := fields["embedding"]; embStr != "" {
 		mem.Embedding = valkeyBytesToFloat32([]byte(embStr))
 	}
@@ -579,12 +577,12 @@ func valkeyFieldsMapToMemory(fields map[string]interface{}) *Memory {
 
 	if createdAtStr, ok := fields["created_at"].(string); ok && createdAtStr != "" {
 		if ts, err := strconv.ParseInt(createdAtStr, 10, 64); err == nil {
-			mem.CreatedAt = time.Unix(ts, 0)
+			mem.CreatedAt = time.UnixMilli(ts)
 		}
 	}
 	if updatedAtStr, ok := fields["updated_at"].(string); ok && updatedAtStr != "" {
 		if ts, err := strconv.ParseInt(updatedAtStr, 10, 64); err == nil {
-			mem.UpdatedAt = time.Unix(ts, 0)
+			mem.UpdatedAt = time.UnixMilli(ts)
 		}
 	}
 

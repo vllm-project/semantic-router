@@ -526,14 +526,19 @@ func TestValkeyStoreInteg_List(t *testing.T) {
 	ctx := context.Background()
 
 	userID := fmt.Sprintf("list_user_%d", time.Now().UnixNano())
+	// Use explicit staggered timestamps with 100ms gaps to guarantee distinct
+	// created_at values. This is deterministic regardless of Store() execution
+	// speed or Valkey version.
+	baseTime := time.Now().Add(-5 * time.Second)
 	for i := 0; i < 5; i++ {
-		require.NoError(t, store.Store(ctx, &Memory{
-			ID:      fmt.Sprintf("mem_list_%s_%d", userID, i),
-			Type:    MemoryTypeSemantic,
-			Content: fmt.Sprintf("List test memory number %d", i),
-			UserID:  userID,
-		}))
-		time.Sleep(50 * time.Millisecond) // ensure different timestamps
+		mem := &Memory{
+			ID:        fmt.Sprintf("mem_list_%s_%d", userID, i),
+			Type:      MemoryTypeSemantic,
+			Content:   fmt.Sprintf("List test memory number %d", i),
+			UserID:    userID,
+			CreatedAt: baseTime.Add(time.Duration(i) * 100 * time.Millisecond),
+		}
+		require.NoError(t, store.Store(ctx, mem))
 	}
 	time.Sleep(500 * time.Millisecond)
 
