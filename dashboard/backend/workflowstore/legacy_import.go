@@ -15,65 +15,17 @@ func (s *Store) maybeImportLegacyOpenClaw(dir string) error {
 		return nil
 	}
 
-	regPath := filepath.Join(dir, "containers.json")
-	teamPath := filepath.Join(dir, "teams.json")
-	roomPath := filepath.Join(dir, "rooms.json")
-
-	var containers [][2]string
-	if data, err := os.ReadFile(regPath); err == nil && len(data) > 0 {
-		var raw []map[string]any
-		if err := json.Unmarshal(data, &raw); err != nil {
-			return err
-		}
-		for _, m := range raw {
-			name, _ := m["name"].(string)
-			if name == "" {
-				continue
-			}
-			b, err := json.Marshal(m)
-			if err != nil {
-				return err
-			}
-			containers = append(containers, [2]string{name, string(b)})
-		}
+	containers, err := readLegacyJSONPairs(filepath.Join(dir, "containers.json"), "name")
+	if err != nil {
+		return err
 	}
-
-	var teams [][2]string
-	if data, err := os.ReadFile(teamPath); err == nil && len(data) > 0 {
-		var raw []map[string]any
-		if err := json.Unmarshal(data, &raw); err != nil {
-			return err
-		}
-		for _, m := range raw {
-			id, _ := m["id"].(string)
-			if id == "" {
-				continue
-			}
-			b, err := json.Marshal(m)
-			if err != nil {
-				return err
-			}
-			teams = append(teams, [2]string{id, string(b)})
-		}
+	teams, err := readLegacyJSONPairs(filepath.Join(dir, "teams.json"), "id")
+	if err != nil {
+		return err
 	}
-
-	var rooms [][2]string
-	if data, err := os.ReadFile(roomPath); err == nil && len(data) > 0 {
-		var raw []map[string]any
-		if err := json.Unmarshal(data, &raw); err != nil {
-			return err
-		}
-		for _, m := range raw {
-			id, _ := m["id"].(string)
-			if id == "" {
-				continue
-			}
-			b, err := json.Marshal(m)
-			if err != nil {
-				return err
-			}
-			rooms = append(rooms, [2]string{id, string(b)})
-		}
+	rooms, err := readLegacyJSONPairs(filepath.Join(dir, "rooms.json"), "id")
+	if err != nil {
+		return err
 	}
 
 	if len(containers) > 0 {
@@ -92,13 +44,38 @@ func (s *Store) maybeImportLegacyOpenClaw(dir string) error {
 		}
 	}
 
-	msgDir := filepath.Join(dir, "room-messages")
-	entries, _ := os.ReadDir(msgDir)
-	for _, e := range entries {
-		if e.IsDir() {
+	s.importLegacyRoomMessages(filepath.Join(dir, "room-messages"))
+	return nil
+}
+
+func readLegacyJSONPairs(path, keyField string) ([][2]string, error) {
+	data, err := os.ReadFile(path)
+	if err != nil || len(data) == 0 {
+		return nil, nil
+	}
+	var raw []map[string]any
+	if err := json.Unmarshal(data, &raw); err != nil {
+		return nil, err
+	}
+	var pairs [][2]string
+	for _, m := range raw {
+		key, _ := m[keyField].(string)
+		if key == "" {
 			continue
 		}
-		if filepath.Ext(e.Name()) != ".json" {
+		b, err := json.Marshal(m)
+		if err != nil {
+			return nil, err
+		}
+		pairs = append(pairs, [2]string{key, string(b)})
+	}
+	return pairs, nil
+}
+
+func (s *Store) importLegacyRoomMessages(msgDir string) {
+	entries, _ := os.ReadDir(msgDir)
+	for _, e := range entries {
+		if e.IsDir() || filepath.Ext(e.Name()) != ".json" {
 			continue
 		}
 		roomID := e.Name()[:len(e.Name())-len(".json")]
@@ -122,6 +99,4 @@ func (s *Store) maybeImportLegacyOpenClaw(dir string) error {
 			_ = s.AppendOpenClawRoomMessage(roomID, mid, string(b))
 		}
 	}
-
-	return nil
 }

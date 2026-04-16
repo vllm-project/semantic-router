@@ -12,7 +12,6 @@ import (
 	"strings"
 	"sync"
 	"time"
-	"unicode"
 )
 
 type ClawRoomEntry struct {
@@ -357,331 +356,131 @@ func (h *OpenClawHandler) appendRoomMessage(roomID string, message ClawRoomMessa
 	return nil
 }
 
-func teamWorkers(entries []ContainerEntry, teamID string) []ContainerEntry {
-	workers := make([]ContainerEntry, 0)
-	for _, entry := range entries {
-		if entry.TeamID != teamID {
-			continue
-		}
-		entry.RoleKind = normalizeRoleKind(entry.RoleKind)
-		workers = append(workers, enrichContainerIdentity(entry))
-	}
-	sort.Slice(workers, func(i, j int) bool { return workers[i].Name < workers[j].Name })
-	return workers
-}
-
-func resolveTeamLeader(team TeamEntry, workers []ContainerEntry) *ContainerEntry {
-	leaderID := strings.TrimSpace(team.LeaderID)
-	if leaderID != "" {
-		for i := range workers {
-			if workers[i].Name == leaderID {
-				return &workers[i]
-			}
-		}
-	}
-	for i := range workers {
-		if normalizeRoleKind(workers[i].RoleKind) == "leader" {
-			return &workers[i]
-		}
-	}
-	return nil
-}
-
-func workerAliases(worker ContainerEntry) []string {
-	aliases := []string{strings.ToLower(strings.TrimSpace(worker.Name))}
-	if alias := strings.ToLower(strings.TrimSpace(sanitizeRoomID(worker.AgentName))); alias != "" {
-		aliases = append(aliases, alias)
-	}
-	return aliases
-}
-
-func resolveMentionTargetsWithFallback(
-	mentions []string,
-	team TeamEntry,
-	workers []ContainerEntry,
-	defaultToLeader bool,
-) []ContainerEntry {
-	if len(workers) == 0 {
-		return nil
-	}
-
-	leader := resolveTeamLeader(team, workers)
-	lookup := map[string]ContainerEntry{}
-	for _, worker := range workers {
-		for _, alias := range workerAliases(worker) {
-			lookup[alias] = worker
-		}
-	}
-
-	picked := map[string]ContainerEntry{}
-	for _, mention := range mentions {
-		token := strings.ToLower(strings.TrimSpace(mention))
-		if token == "" {
-			continue
-		}
-		if token == "all" {
-			for _, worker := range workers {
-				picked[worker.Name] = worker
-			}
-			continue
-		}
-		if token == "leader" {
-			if leader != nil {
-				picked[leader.Name] = *leader
-			}
-			continue
-		}
-		if worker, ok := lookup[token]; ok {
-			picked[worker.Name] = worker
-		}
-	}
-
-	if len(picked) == 0 && defaultToLeader && leader != nil {
-		picked[leader.Name] = *leader
-	}
-
-	out := make([]ContainerEntry, 0, len(picked))
-	for _, worker := range picked {
-		out = append(out, worker)
-	}
-	sort.Slice(out, func(i, j int) bool { return out[i].Name < out[j].Name })
-	return out
-}
-
-func stripLeadingMentions(content string) string {
-	rawRunes := []rune(strings.TrimSpace(content))
-	if len(rawRunes) == 0 {
-		return ""
-	}
-
-	// Remove addressing prefixes like:
-	// "@a @b task", "@leader，安排一下", "@x,@y do this"
-	i := 0
-	consumedMention := false
-	for i < len(rawRunes) {
-		if rawRunes[i] != '@' {
-			break
-		}
-
-		j := i + 1
-		for j < len(rawRunes) {
-			ch := rawRunes[j]
-			if unicode.IsLetter(ch) || unicode.IsDigit(ch) || ch == '_' || ch == '.' || ch == '-' {
-				j++
-				continue
-			}
-			break
-		}
-
-		// Invalid mention token, keep original content.
-		if j == i+1 {
-			return string(rawRunes)
-		}
-
-		consumedMention = true
-		i = j
-		for i < len(rawRunes) {
-			ch := rawRunes[i]
-			if unicode.IsSpace(ch) || ch == ',' || ch == ';' || ch == '，' || ch == '；' || ch == '、' {
-				i++
-				continue
-			}
-			break
-		}
-	}
-
-	if !consumedMention {
-		return string(rawRunes)
-	}
-
-	trimmed := strings.TrimSpace(string(rawRunes[i:]))
-	if trimmed == "" {
-		return string(rawRunes)
-	}
-	return trimmed
-}
-
-func buildTeamMentionGuide(team TeamEntry, workers []ContainerEntry, self ContainerEntry) string {
-	if len(workers) == 0 {
-		return "No teammates registered."
-	}
-
-	sorted := append([]ContainerEntry(nil), workers...)
-	sort.Slice(sorted, func(i, j int) bool { return sorted[i].Name < sorted[j].Name })
-
-	leader := resolveTeamLeader(team, workers)
-	lines := make([]string, 0, len(sorted)+5)
-	if leader != nil {
-		leaderRole := strings.TrimSpace(leader.AgentRole)
-		if leaderRole == "" {
-			leaderRole = "leader"
-		}
-		lines = append(
-			lines,
-			fmt.Sprintf(
-				"Leader aliases: @leader and @%s = %s (%s)",
-				leader.Name,
-				workerDisplayName(*leader),
-				leaderRole,
-			),
-		)
-		if leader.Name == self.Name {
-			lines = append(lines, "You are the leader. Delegate with @worker-id mentions and keep the team aligned.")
-			lines = append(lines, "Hard rule: do not delegate with @mentions until the user gives an explicit executable task.")
-		} else {
-			lines = append(
-				lines,
-				fmt.Sprintf("Your leader is @leader (same as @%s).", leader.Name),
-			)
-			lines = append(lines, "Hard rule: workers cannot use @mentions. Report progress in plain text without @leader or @worker-id.")
-		}
-	} else {
-		lines = append(lines, "No leader is assigned yet. Coordinate directly with @worker-id aliases.")
-	}
-
-	lines = append(lines, "Team member aliases for delegation:")
-	for _, member := range sorted {
-		roleKind := normalizeRoleKind(member.RoleKind)
-		if roleKind != "leader" {
-			roleKind = "worker"
-		}
-		roleText := strings.TrimSpace(member.AgentRole)
-		if roleText == "" {
-			roleText = roleKind
-		}
-		displayName := workerDisplayName(member)
-		line := fmt.Sprintf("- @%s = %s (%s)", member.Name, displayName, roleText)
-		if member.Name == self.Name {
-			line += " [you]"
-		}
-		lines = append(lines, line)
-	}
-	lines = append(lines, "Only leader can delegate with @worker-id, and only after explicit user task confirmation.")
-	return strings.Join(lines, "\n")
-}
-
-type openAIChatMessage struct {
-	Role    string `json:"role"`
-	Content string `json:"content"`
-}
-
 func (h *OpenClawHandler) RoomsHandler() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		switch r.Method {
 		case http.MethodGet:
-			teamID := sanitizeTeamID(r.URL.Query().Get("teamId"))
-
-			if teamID != "" {
-				h.mu.Lock()
-				teams, err := h.loadTeams()
-				if err == nil {
-					if team := findTeamByID(teams, teamID); team != nil {
-						if _, ensureErr := h.ensureDefaultRoomLocked(*team); ensureErr != nil {
-							log.Printf("openclaw: failed to ensure default room for team %s: %v", teamID, ensureErr)
-						}
-					}
-				}
-				h.mu.Unlock()
-			}
-
-			h.mu.RLock()
-			rooms, err := h.loadRooms()
-			h.mu.RUnlock()
-			if err != nil {
-				writeJSONError(w, fmt.Sprintf("Failed to load rooms: %v", err), http.StatusInternalServerError)
-				return
-			}
-
-			filtered := make([]ClawRoomEntry, 0, len(rooms))
-			for _, room := range rooms {
-				if teamID != "" && room.TeamID != teamID {
-					continue
-				}
-				filtered = append(filtered, room)
-			}
-			sort.Slice(filtered, func(i, j int) bool { return filtered[i].Name < filtered[j].Name })
-			w.Header().Set("Content-Type", "application/json")
-			if err := json.NewEncoder(w).Encode(filtered); err != nil {
-				log.Printf("openclaw: rooms encode error: %v", err)
-			}
+			h.handleListRooms(w, r)
 		case http.MethodPost:
-			if !h.canManageOpenClaw() {
-				h.writeReadOnlyError(w)
-				return
-			}
-			var req clawRoomPayload
-			if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-				writeJSONError(w, fmt.Sprintf("invalid request body: %v", err), http.StatusBadRequest)
-				return
-			}
-			teamID := sanitizeTeamID(req.TeamID)
-			if teamID == "" {
-				writeJSONError(w, "teamId is required", http.StatusBadRequest)
-				return
-			}
-			roomName := strings.TrimSpace(req.Name)
-			if roomName == "" {
-				roomName = defaultRoomNameForTeam(teamID)
-			}
-			requestedRoomID := sanitizeRoomID(req.ID)
-
-			h.mu.Lock()
-			defer h.mu.Unlock()
-			teams, err := h.loadTeams()
-			if err != nil {
-				writeJSONError(w, fmt.Sprintf("Failed to load teams: %v", err), http.StatusInternalServerError)
-				return
-			}
-			if findTeamByID(teams, teamID) == nil {
-				writeJSONError(w, fmt.Sprintf("team %q not found", teamID), http.StatusNotFound)
-				return
-			}
-			rooms, err := h.loadRooms()
-			if err != nil {
-				writeJSONError(w, fmt.Sprintf("Failed to load rooms: %v", err), http.StatusInternalServerError)
-				return
-			}
-
-			roomID := requestedRoomID
-			if roomID == "" {
-				baseRoomID := sanitizeRoomID(roomName)
-				if baseRoomID == "" {
-					baseRoomID = defaultRoomIDForTeam(teamID)
-				}
-				roomID = nextAvailableRoomID(baseRoomID, rooms)
-			}
-			if roomID == "" {
-				roomID = generateRoomEntityID("room")
-			}
-
-			if requestedRoomID != "" && findRoomByID(rooms, roomID) != nil {
-				writeJSONError(w, fmt.Sprintf("room %q already exists", roomID), http.StatusConflict)
-				return
-			}
-			if findRoomByID(rooms, roomID) != nil {
-				roomID = nextAvailableRoomID(roomID, rooms)
-			}
-			if roomID == "" || findRoomByID(rooms, roomID) != nil {
-				writeJSONError(w, "failed to generate unique room id", http.StatusInternalServerError)
-				return
-			}
-
-			now := time.Now().UTC().Format(time.RFC3339)
-			created := ClawRoomEntry{ID: roomID, TeamID: teamID, Name: roomName, CreatedAt: now, UpdatedAt: now}
-			rooms = append(rooms, created)
-			sort.Slice(rooms, func(i, j int) bool { return rooms[i].Name < rooms[j].Name })
-			if err := h.saveRooms(rooms); err != nil {
-				writeJSONError(w, fmt.Sprintf("Failed to save rooms: %v", err), http.StatusInternalServerError)
-				return
-			}
-			w.Header().Set("Content-Type", "application/json")
-			w.WriteHeader(http.StatusCreated)
-			if err := json.NewEncoder(w).Encode(created); err != nil {
-				log.Printf("openclaw: create room encode error: %v", err)
-			}
+			h.handleCreateRoom(w, r)
 		default:
 			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		}
+	}
+}
+
+func (h *OpenClawHandler) handleListRooms(w http.ResponseWriter, r *http.Request) {
+	teamID := sanitizeTeamID(r.URL.Query().Get("teamId"))
+
+	if teamID != "" {
+		h.mu.Lock()
+		teams, err := h.loadTeams()
+		if err == nil {
+			if team := findTeamByID(teams, teamID); team != nil {
+				if _, ensureErr := h.ensureDefaultRoomLocked(*team); ensureErr != nil {
+					log.Printf("openclaw: failed to ensure default room for team %s: %v", teamID, ensureErr)
+				}
+			}
+		}
+		h.mu.Unlock()
+	}
+
+	h.mu.RLock()
+	rooms, err := h.loadRooms()
+	h.mu.RUnlock()
+	if err != nil {
+		writeJSONError(w, fmt.Sprintf("Failed to load rooms: %v", err), http.StatusInternalServerError)
+		return
+	}
+
+	filtered := make([]ClawRoomEntry, 0, len(rooms))
+	for _, room := range rooms {
+		if teamID != "" && room.TeamID != teamID {
+			continue
+		}
+		filtered = append(filtered, room)
+	}
+	sort.Slice(filtered, func(i, j int) bool { return filtered[i].Name < filtered[j].Name })
+	w.Header().Set("Content-Type", "application/json")
+	if err := json.NewEncoder(w).Encode(filtered); err != nil {
+		log.Printf("openclaw: rooms encode error: %v", err)
+	}
+}
+
+func (h *OpenClawHandler) handleCreateRoom(w http.ResponseWriter, r *http.Request) {
+	if !h.canManageOpenClaw() {
+		h.writeReadOnlyError(w)
+		return
+	}
+	var req clawRoomPayload
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeJSONError(w, fmt.Sprintf("invalid request body: %v", err), http.StatusBadRequest)
+		return
+	}
+	teamID := sanitizeTeamID(req.TeamID)
+	if teamID == "" {
+		writeJSONError(w, "teamId is required", http.StatusBadRequest)
+		return
+	}
+	roomName := strings.TrimSpace(req.Name)
+	if roomName == "" {
+		roomName = defaultRoomNameForTeam(teamID)
+	}
+	requestedRoomID := sanitizeRoomID(req.ID)
+
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	teams, err := h.loadTeams()
+	if err != nil {
+		writeJSONError(w, fmt.Sprintf("Failed to load teams: %v", err), http.StatusInternalServerError)
+		return
+	}
+	if findTeamByID(teams, teamID) == nil {
+		writeJSONError(w, fmt.Sprintf("team %q not found", teamID), http.StatusNotFound)
+		return
+	}
+	rooms, err := h.loadRooms()
+	if err != nil {
+		writeJSONError(w, fmt.Sprintf("Failed to load rooms: %v", err), http.StatusInternalServerError)
+		return
+	}
+
+	roomID := requestedRoomID
+	if roomID == "" {
+		baseRoomID := sanitizeRoomID(roomName)
+		if baseRoomID == "" {
+			baseRoomID = defaultRoomIDForTeam(teamID)
+		}
+		roomID = nextAvailableRoomID(baseRoomID, rooms)
+	}
+	if roomID == "" {
+		roomID = generateRoomEntityID("room")
+	}
+
+	if requestedRoomID != "" && findRoomByID(rooms, roomID) != nil {
+		writeJSONError(w, fmt.Sprintf("room %q already exists", roomID), http.StatusConflict)
+		return
+	}
+	if findRoomByID(rooms, roomID) != nil {
+		roomID = nextAvailableRoomID(roomID, rooms)
+	}
+	if roomID == "" || findRoomByID(rooms, roomID) != nil {
+		writeJSONError(w, "failed to generate unique room id", http.StatusInternalServerError)
+		return
+	}
+
+	now := time.Now().UTC().Format(time.RFC3339)
+	created := ClawRoomEntry{ID: roomID, TeamID: teamID, Name: roomName, CreatedAt: now, UpdatedAt: now}
+	rooms = append(rooms, created)
+	sort.Slice(rooms, func(i, j int) bool { return rooms[i].Name < rooms[j].Name })
+	if err := h.saveRooms(rooms); err != nil {
+		writeJSONError(w, fmt.Sprintf("Failed to save rooms: %v", err), http.StatusInternalServerError)
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusCreated)
+	if err := json.NewEncoder(w).Encode(created); err != nil {
+		log.Printf("openclaw: create room encode error: %v", err)
 	}
 }
 
@@ -692,89 +491,23 @@ func (h *OpenClawHandler) RoomByIDHandler() http.HandlerFunc {
 			writeJSONError(w, "room id required in path", http.StatusBadRequest)
 			return
 		}
-
 		parts := strings.Split(rest, "/")
 		roomID := sanitizeRoomID(parts[0])
 		if roomID == "" {
 			writeJSONError(w, "room id is invalid", http.StatusBadRequest)
 			return
 		}
-
 		if len(parts) == 1 {
 			switch r.Method {
 			case http.MethodGet:
-				h.mu.RLock()
-				rooms, err := h.loadRooms()
-				h.mu.RUnlock()
-				if err != nil {
-					writeJSONError(w, fmt.Sprintf("Failed to load rooms: %v", err), http.StatusInternalServerError)
-					return
-				}
-				room := findRoomByID(rooms, roomID)
-				if room == nil {
-					writeJSONError(w, "room not found", http.StatusNotFound)
-					return
-				}
-				w.Header().Set("Content-Type", "application/json")
-				if err := json.NewEncoder(w).Encode(room); err != nil {
-					log.Printf("openclaw: room encode error: %v", err)
-				}
+				h.handleGetRoom(w, roomID)
 			case http.MethodDelete:
-				if !h.canManageOpenClaw() {
-					h.writeReadOnlyError(w)
-					return
-				}
-
-				h.mu.Lock()
-				rooms, err := h.loadRooms()
-				if err != nil {
-					h.mu.Unlock()
-					writeJSONError(w, fmt.Sprintf("Failed to load rooms: %v", err), http.StatusInternalServerError)
-					return
-				}
-
-				index := -1
-				var removed ClawRoomEntry
-				for i := range rooms {
-					if rooms[i].ID == roomID {
-						index = i
-						removed = rooms[i]
-						break
-					}
-				}
-				if index < 0 {
-					h.mu.Unlock()
-					writeJSONError(w, "room not found", http.StatusNotFound)
-					return
-				}
-
-				rooms = append(rooms[:index], rooms[index+1:]...)
-				if err := h.saveRooms(rooms); err != nil {
-					h.mu.Unlock()
-					writeJSONError(w, fmt.Sprintf("Failed to save rooms: %v", err), http.StatusInternalServerError)
-					return
-				}
-
-				_ = os.Remove(h.roomMessagesPath(roomID))
-				h.roomSSEClients.Delete(roomID)
-				h.roomSSELastEvent.Delete(roomID)
-				h.roomAutomationMu.Delete(roomID)
-				h.mu.Unlock()
-
-				w.Header().Set("Content-Type", "application/json")
-				if err := json.NewEncoder(w).Encode(map[string]any{
-					"deleted": true,
-					"roomId":  roomID,
-					"room":    removed,
-				}); err != nil {
-					log.Printf("openclaw: delete room encode error: %v", err)
-				}
+				h.handleDeleteRoom(w, roomID)
 			default:
 				http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 			}
 			return
 		}
-
 		sub := strings.ToLower(strings.TrimSpace(parts[1]))
 		switch sub {
 		case "messages":
@@ -789,115 +522,201 @@ func (h *OpenClawHandler) RoomByIDHandler() http.HandlerFunc {
 	}
 }
 
+func (h *OpenClawHandler) handleGetRoom(w http.ResponseWriter, roomID string) {
+	h.mu.RLock()
+	rooms, err := h.loadRooms()
+	h.mu.RUnlock()
+	if err != nil {
+		writeJSONError(w, fmt.Sprintf("Failed to load rooms: %v", err), http.StatusInternalServerError)
+		return
+	}
+	room := findRoomByID(rooms, roomID)
+	if room == nil {
+		writeJSONError(w, "room not found", http.StatusNotFound)
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	if err := json.NewEncoder(w).Encode(room); err != nil {
+		log.Printf("openclaw: room encode error: %v", err)
+	}
+}
+
+func (h *OpenClawHandler) handleDeleteRoom(w http.ResponseWriter, roomID string) {
+	if !h.canManageOpenClaw() {
+		h.writeReadOnlyError(w)
+		return
+	}
+
+	h.mu.Lock()
+	rooms, err := h.loadRooms()
+	if err != nil {
+		h.mu.Unlock()
+		writeJSONError(w, fmt.Sprintf("Failed to load rooms: %v", err), http.StatusInternalServerError)
+		return
+	}
+
+	index := -1
+	var removed ClawRoomEntry
+	for i := range rooms {
+		if rooms[i].ID == roomID {
+			index = i
+			removed = rooms[i]
+			break
+		}
+	}
+	if index < 0 {
+		h.mu.Unlock()
+		writeJSONError(w, "room not found", http.StatusNotFound)
+		return
+	}
+
+	rooms = append(rooms[:index], rooms[index+1:]...)
+	if err := h.saveRooms(rooms); err != nil {
+		h.mu.Unlock()
+		writeJSONError(w, fmt.Sprintf("Failed to save rooms: %v", err), http.StatusInternalServerError)
+		return
+	}
+
+	_ = os.Remove(h.roomMessagesPath(roomID))
+	h.roomSSEClients.Delete(roomID)
+	h.roomSSELastEvent.Delete(roomID)
+	h.roomAutomationMu.Delete(roomID)
+	h.mu.Unlock()
+
+	w.Header().Set("Content-Type", "application/json")
+	if err := json.NewEncoder(w).Encode(map[string]any{
+		"deleted": true,
+		"roomId":  roomID,
+		"room":    removed,
+	}); err != nil {
+		log.Printf("openclaw: delete room encode error: %v", err)
+	}
+}
+
 func (h *OpenClawHandler) handleRoomMessages(w http.ResponseWriter, r *http.Request, roomID string) {
 	switch r.Method {
 	case http.MethodGet:
-		h.mu.RLock()
-		rooms, roomErr := h.loadRooms()
-		messages, msgErr := h.loadRoomMessages(roomID)
-		h.mu.RUnlock()
-		if roomErr != nil {
-			writeJSONError(w, fmt.Sprintf("Failed to load rooms: %v", roomErr), http.StatusInternalServerError)
-			return
-		}
-		if msgErr != nil {
-			writeJSONError(w, fmt.Sprintf("Failed to load room messages: %v", msgErr), http.StatusInternalServerError)
-			return
-		}
-		if findRoomByID(rooms, roomID) == nil {
-			writeJSONError(w, "room not found", http.StatusNotFound)
-			return
-		}
-
-		limit := 200
-		if raw := strings.TrimSpace(r.URL.Query().Get("limit")); raw != "" {
-			if n, err := strconv.Atoi(raw); err == nil && n > 0 {
-				if n > 1000 {
-					n = 1000
-				}
-				limit = n
-			}
-		}
-		if len(messages) > limit {
-			messages = messages[len(messages)-limit:]
-		}
-		w.Header().Set("Content-Type", "application/json")
-		if err := json.NewEncoder(w).Encode(messages); err != nil {
-			log.Printf("openclaw: room messages encode error: %v", err)
-		}
+		h.handleGetRoomMessages(w, r, roomID)
 	case http.MethodPost:
-		if !h.canSendRoomMessages() {
-			h.writeReadOnlyError(w)
-			return
-		}
-		var req clawRoomMessagePayload
-		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-			writeJSONError(w, fmt.Sprintf("invalid request body: %v", err), http.StatusBadRequest)
-			return
-		}
-		content := strings.TrimSpace(req.Content)
-		if content == "" {
-			writeJSONError(w, "content is required", http.StatusBadRequest)
-			return
-		}
-
-		h.mu.RLock()
-		rooms, err := h.loadRooms()
-		h.mu.RUnlock()
-		if err != nil {
-			writeJSONError(w, fmt.Sprintf("Failed to load rooms: %v", err), http.StatusInternalServerError)
-			return
-		}
-		room := findRoomByID(rooms, roomID)
-		if room == nil {
-			writeJSONError(w, "room not found", http.StatusNotFound)
-			return
-		}
-
-		senderType := normalizeRoomSenderType(req.SenderType)
-		if senderType != "user" && senderType != "leader" && senderType != "worker" && senderType != "system" {
-			senderType = "user"
-		}
-		senderName := strings.TrimSpace(req.SenderName)
-		if senderName == "" {
-			switch senderType {
-			case "leader":
-				senderName = "Leader"
-			case "worker":
-				senderName = "Worker"
-			case "system":
-				senderName = "System"
-			default:
-				senderName = "You"
-			}
-		}
-		senderID := strings.TrimSpace(req.SenderID)
-		if senderID == "" {
-			switch senderType {
-			case "user":
-				senderID = "playground-user"
-			case "leader", "worker":
-				senderID = sanitizeContainerName(senderName)
-			}
-		}
-
-		created := newRoomMessage(*room, senderType, senderID, senderName, content, nil)
-		if err := h.appendRoomMessage(room.ID, created); err != nil {
-			writeJSONError(w, fmt.Sprintf("Failed to save room message: %v", err), http.StatusInternalServerError)
-			return
-		}
-
-		if senderType != "system" {
-			go h.processRoomUserMessage(room.ID, created.ID)
-		}
-
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusCreated)
-		if err := json.NewEncoder(w).Encode(created); err != nil {
-			log.Printf("openclaw: room message encode error: %v", err)
-		}
+		h.handlePostRoomMessage(w, r, roomID)
 	default:
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+	}
+}
+
+func (h *OpenClawHandler) handleGetRoomMessages(w http.ResponseWriter, r *http.Request, roomID string) {
+	h.mu.RLock()
+	rooms, roomErr := h.loadRooms()
+	messages, msgErr := h.loadRoomMessages(roomID)
+	h.mu.RUnlock()
+	if roomErr != nil {
+		writeJSONError(w, fmt.Sprintf("Failed to load rooms: %v", roomErr), http.StatusInternalServerError)
+		return
+	}
+	if msgErr != nil {
+		writeJSONError(w, fmt.Sprintf("Failed to load room messages: %v", msgErr), http.StatusInternalServerError)
+		return
+	}
+	if findRoomByID(rooms, roomID) == nil {
+		writeJSONError(w, "room not found", http.StatusNotFound)
+		return
+	}
+
+	limit := 200
+	if raw := strings.TrimSpace(r.URL.Query().Get("limit")); raw != "" {
+		if n, err := strconv.Atoi(raw); err == nil && n > 0 {
+			if n > 1000 {
+				n = 1000
+			}
+			limit = n
+		}
+	}
+	if len(messages) > limit {
+		messages = messages[len(messages)-limit:]
+	}
+	w.Header().Set("Content-Type", "application/json")
+	if err := json.NewEncoder(w).Encode(messages); err != nil {
+		log.Printf("openclaw: room messages encode error: %v", err)
+	}
+}
+
+func (h *OpenClawHandler) handlePostRoomMessage(w http.ResponseWriter, r *http.Request, roomID string) {
+	if !h.canSendRoomMessages() {
+		h.writeReadOnlyError(w)
+		return
+	}
+	var req clawRoomMessagePayload
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeJSONError(w, fmt.Sprintf("invalid request body: %v", err), http.StatusBadRequest)
+		return
+	}
+	content := strings.TrimSpace(req.Content)
+	if content == "" {
+		writeJSONError(w, "content is required", http.StatusBadRequest)
+		return
+	}
+
+	h.mu.RLock()
+	rooms, err := h.loadRooms()
+	h.mu.RUnlock()
+	if err != nil {
+		writeJSONError(w, fmt.Sprintf("Failed to load rooms: %v", err), http.StatusInternalServerError)
+		return
+	}
+	room := findRoomByID(rooms, roomID)
+	if room == nil {
+		writeJSONError(w, "room not found", http.StatusNotFound)
+		return
+	}
+
+	senderType := normalizeRoomSenderType(req.SenderType)
+	senderName := strings.TrimSpace(req.SenderName)
+	if senderName == "" {
+		senderName = defaultSenderName(senderType)
+	}
+	senderID := strings.TrimSpace(req.SenderID)
+	if senderID == "" {
+		senderID = defaultSenderID(senderType, senderName)
+	}
+
+	created := newRoomMessage(*room, senderType, senderID, senderName, content, nil)
+	if err := h.appendRoomMessage(room.ID, created); err != nil {
+		writeJSONError(w, fmt.Sprintf("Failed to save room message: %v", err), http.StatusInternalServerError)
+		return
+	}
+
+	if senderType != "system" {
+		go h.processRoomUserMessage(room.ID, created.ID)
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusCreated)
+	if err := json.NewEncoder(w).Encode(created); err != nil {
+		log.Printf("openclaw: room message encode error: %v", err)
+	}
+}
+
+func defaultSenderName(senderType string) string {
+	switch senderType {
+	case "leader":
+		return "Leader"
+	case "worker":
+		return "Worker"
+	case "system":
+		return "System"
+	default:
+		return "You"
+	}
+}
+
+func defaultSenderID(senderType, senderName string) string {
+	switch senderType {
+	case "user":
+		return "playground-user"
+	case "leader", "worker":
+		return sanitizeContainerName(senderName)
+	default:
+		return ""
 	}
 }
 
