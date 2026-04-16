@@ -510,29 +510,20 @@ func (c *Compiler) compileRoutes() {
 
 		// Compile MODEL list
 		for _, m := range r.Models {
-			ref := config.ModelRef{
-				Model:    m.Model,
-				LoRAName: m.LoRA,
-				Weight:   m.Weight,
-			}
-			if m.Reasoning != nil {
-				ref.UseReasoning = m.Reasoning
-			}
-			if m.Effort != "" {
-				ref.ReasoningEffort = m.Effort
-			}
-			decision.ModelRefs = append(decision.ModelRefs, ref)
+			c.appendModelRef(&decision, m)
+		}
 
-			// Populate model_config for route-local model metadata fields.
-			if m.ParamSize != "" {
-				if c.config.ModelConfig == nil {
-					c.config.ModelConfig = make(map[string]config.ModelParams)
+		// Compile bounded candidate iteration blocks. Explicit model sources
+		// that emit MODEL <variable> feed the existing decision ModelRefs
+		// contract so selectors still receive candidates through the canonical
+		// SelectionContext.CandidateModels path.
+		for _, iter := range r.CandidateIterations {
+			compiled := c.compileCandidateIteration(iter)
+			decision.CandidateIterations = append(decision.CandidateIterations, compiled)
+			if compiled.Source == "models" && iterEmitsVariable(compiled) {
+				for _, model := range iter.Models {
+					c.appendModelRefIfMissing(&decision, model)
 				}
-				mc := c.config.ModelConfig[m.Model]
-				if m.ParamSize != "" {
-					mc.ParamSize = m.ParamSize
-				}
-				c.config.ModelConfig[m.Model] = mc
 			}
 		}
 
@@ -552,6 +543,78 @@ func (c *Compiler) compileRoutes() {
 		c.config.Decisions = append(c.config.Decisions, decision)
 	}
 }
+
+func (c *Compiler) appendModelRef(decision *config.Decision, m *ModelRef) {
+	if decision == nil || m == nil {
+		return
+	}
+	ref := config.ModelRef{
+		Model:    m.Model,
+		LoRAName: m.LoRA,
+		Weight:   m.Weight,
+	}
+	if m.Reasoning != nil {
+		ref.UseReasoning = m.Reasoning
+	}
+	if m.Effort != "" {
+		ref.ReasoningEffort = m.Effort
+	}
+	decision.ModelRefs = append(decision.ModelRefs, ref)
+
+	// Populate model_config for route-local model metadata fields.
+	if m.ParamSize != "" {
+		if c.config.ModelConfig == nil {
+			c.config.ModelConfig = make(map[string]config.ModelParams)
+		}
+		mc := c.config.ModelConfig[m.Model]
+		mc.ParamSize = m.ParamSize
+		c.config.ModelConfig[m.Model] = mc
+	}
+}
+
+func (c *Compiler) appendModelRefIfMissing(decision *config.Decision, m *ModelRef) {
+	if decision == nil || m == nil {
+		return
+	}
+	for _, existing := range decision.ModelRefs {
+		if existing.Model == m.Model && existing.LoRAName == m.LoRA {
+			return
+		}
+	}
+	c.appendModelRef(decision, m)
+}
+
+func (c *Compiler) compileCandidateIteration(iter *CandidateIterationDecl) config.CandidateIterationConfig {
+	if iter == nil {
+		return config.CandidateIterationConfig{}
+	}
+	compiled := config.CandidateIterationConfig{
+		Variable: iter.Variable,
+		Source:   iter.Source,
+	}
+	for _, model := range iter.Models {
+		ref := config.ModelRef{
+			Model:    model.Model,
+			LoRAName: model.LoRA,
+			Weight:   model.Weight,
+		}
+		if model.Reasoning != nil {
+			ref.UseReasoning = model.Reasoning
+		}
+		if model.Effort != "" {
+			ref.ReasoningEffort = model.Effort
+		}
+		compiled.Models = append(compiled.Models, ref)
+	}
+	for _, output := range iter.Outputs {
+		compiled.Outputs = append(compiled.Outputs, config.CandidateIterationOutputConfig{
+			Type:  output.Type,
+			Value: output.Value,
+		})
+	}
+	return compiled
+}
+
 
 func (c *Compiler) compileBoolExpr(expr BoolExpr) config.RuleCombination {
 	switch e := expr.(type) {

@@ -497,6 +497,19 @@ routing:
         - model: qwen3-8b
           use_reasoning: false
           reasoning_description: Prefer fast, direct business answers.
+      candidateIterations:
+        - variable: candidate
+          source: models
+          models:
+            - model: qwen3-8b
+              lora_name: business-adapter
+              weight: 1.0
+              use_reasoning: false
+              reasoning_description: Candidate iteration reference model for DSL authoring coverage.
+              reasoning_effort: low
+          outputs:
+            - type: model
+              value: candidate
       algorithm:
         type: static
       plugins:
