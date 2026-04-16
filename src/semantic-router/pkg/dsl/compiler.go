@@ -615,7 +615,6 @@ func (c *Compiler) compileCandidateIteration(iter *CandidateIterationDecl) confi
 	return compiled
 }
 
-
 func (c *Compiler) compileBoolExpr(expr BoolExpr) config.RuleCombination {
 	switch e := expr.(type) {
 	case *BoolAnd:
