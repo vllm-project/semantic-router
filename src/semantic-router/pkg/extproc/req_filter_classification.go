@@ -63,7 +63,7 @@ func (r *OpenAIRouter) performDecisionEvaluation(originalModel string, history s
 // The algorithm parameter allows per-decision algorithm override (aligned with looper pattern).
 // The categoryName parameter is the detected domain category (e.g., "physics", "math") for ML feature vectors.
 // Returns the selected model and the method name used for logging.
-func (r *OpenAIRouter) selectModelFromCandidates(modelRefs []config.ModelRef, decisionName string, query string, algorithm *config.AlgorithmConfig, categoryName string) (*config.ModelRef, string) {
+func (r *OpenAIRouter) selectModelFromCandidates(modelRefs []config.ModelRef, decisionName string, query string, algorithm *config.AlgorithmConfig, categoryName string, ctx *RequestContext) (*config.ModelRef, string) {
 	if len(modelRefs) == 0 {
 		return nil, ""
 	}
@@ -92,6 +92,8 @@ func (r *OpenAIRouter) selectModelFromCandidates(modelRefs []config.ModelRef, de
 	costWeight, qualityWeight := r.getSelectionWeights(algorithm)
 	latencyAwareTPOTPercentile, latencyAwareTTFTPercentile := r.getLatencyAwarePercentiles(algorithm)
 
+	sessionID, userID, conversationHistory := r.extractSessionContext(ctx)
+
 	selCtx := &selection.SelectionContext{
 		Query:                      query,
 		DecisionName:               decisionName,
@@ -101,6 +103,9 @@ func (r *OpenAIRouter) selectModelFromCandidates(modelRefs []config.ModelRef, de
 		QualityWeight:              qualityWeight,
 		LatencyAwareTPOTPercentile: latencyAwareTPOTPercentile,
 		LatencyAwareTTFTPercentile: latencyAwareTTFTPercentile,
+		UserID:                     userID,
+		SessionID:                  sessionID,
+		ConversationHistory:        conversationHistory,
 	}
 
 	// Perform selection
@@ -239,3 +244,48 @@ func (r *OpenAIRouter) processUserFeedbackForElo(userFeedbackSignals []string, m
 		}
 	}
 }
+
+// extractSessionContext extracts session ID, user ID, and conversation history from the RequestContext.
+func (r *OpenAIRouter) extractSessionContext(ctx *RequestContext) (sessionID, userID string, conversationHistory []string) {
+	if ctx == nil {
+		return "", "", nil
+	}
+	userID = extractUserID(ctx)
+	if ctx.ResponseAPICtx != nil && ctx.ResponseAPICtx.IsResponseAPIRequest {
+		return r.extractResponseAPISessionContext(ctx, userID)
+	}
+	if len(ctx.ChatCompletionMessages) > 0 {
+		return r.extractChatCompletionSessionContext(ctx, userID)
+	}
+	return "", userID, nil
+}
+
+func (r *OpenAIRouter) extractResponseAPISessionContext(ctx *RequestContext, userID string) (sessionID, userIDOut string, conversationHistory []string) {
+	sessionID = ctx.ResponseAPICtx.ConversationID
+	if ctx.ResponseAPICtx.ConversationHistory != nil {
+		for _, r := range ctx.ResponseAPICtx.ConversationHistory {
+			for _, inItem := range r.Input {
+				if content := extractContentFromInputItem(inItem); content != "" {
+					conversationHistory = append(conversationHistory, content)
+				}
+			}
+			for _, outItem := range r.Output {
+				if content := extractContentFromOutputItem(outItem); content != "" {
+					conversationHistory = append(conversationHistory, content)
+				}
+			}
+		}
+	}
+	return sessionID, userID, conversationHistory
+}
+
+func (r *OpenAIRouter) extractChatCompletionSessionContext(ctx *RequestContext, userID string) (sessionID, userIDOut string, conversationHistory []string) {
+	sessionID = deriveSessionIDFromMessages(ctx.ChatCompletionMessages, userID)
+	for i, msg := range ctx.ChatCompletionMessages {
+		if msg.Content != "" && i < len(ctx.ChatCompletionMessages)-1 {
+			conversationHistory = append(conversationHistory, msg.Content)
+		}
+	}
+	return sessionID, userID, conversationHistory
+}
+
