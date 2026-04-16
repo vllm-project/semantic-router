@@ -19,6 +19,7 @@ type Signals struct {
 	StructureRules    []StructureRule    `yaml:"structure_rules,omitempty"`
 	ComplexityRules   []ComplexityRule   `yaml:"complexity_rules,omitempty"`
 	ModalityRules     []ModalityRule     `yaml:"modality_rules,omitempty"`
+	SessionRules      []SessionRule      `yaml:"session,omitempty"`
 	RoleBindings      []RoleBinding      `yaml:"role_bindings,omitempty"`
 	JailbreakRules    []JailbreakRule    `yaml:"jailbreak,omitempty"`
 	PIIRules          []PIIRule          `yaml:"pii,omitempty"`

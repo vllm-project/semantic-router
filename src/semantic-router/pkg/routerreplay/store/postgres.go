@@ -78,6 +78,12 @@ func (p *PostgresStore) createTable(ctx context.Context) error {
 			original_model VARCHAR(255),
 			selected_model VARCHAR(255),
 			reasoning_mode VARCHAR(255),
+			confidence_score DOUBLE PRECISION DEFAULT 0,
+			selection_method VARCHAR(255),
+			session_id VARCHAR(255),
+			turn_index INTEGER DEFAULT 0,
+			previous_model VARCHAR(255),
+			cache_warmth_estimate DOUBLE PRECISION DEFAULT 0,
 			signals JSONB,
 			projections JSONB,
 			projection_scores JSONB,
@@ -114,6 +120,12 @@ func (p *PostgresStore) createTable(ctx context.Context) error {
 		);
 		ALTER TABLE %s ADD COLUMN IF NOT EXISTS decision_tier INTEGER DEFAULT 0;
 		ALTER TABLE %s ADD COLUMN IF NOT EXISTS decision_priority INTEGER DEFAULT 0;
+		ALTER TABLE %s ADD COLUMN IF NOT EXISTS confidence_score DOUBLE PRECISION DEFAULT 0;
+		ALTER TABLE %s ADD COLUMN IF NOT EXISTS selection_method VARCHAR(255);
+		ALTER TABLE %s ADD COLUMN IF NOT EXISTS session_id VARCHAR(255);
+		ALTER TABLE %s ADD COLUMN IF NOT EXISTS turn_index INTEGER DEFAULT 0;
+		ALTER TABLE %s ADD COLUMN IF NOT EXISTS previous_model VARCHAR(255);
+		ALTER TABLE %s ADD COLUMN IF NOT EXISTS cache_warmth_estimate DOUBLE PRECISION DEFAULT 0;
 		ALTER TABLE %s ADD COLUMN IF NOT EXISTS projections JSONB;
 		ALTER TABLE %s ADD COLUMN IF NOT EXISTS projection_scores JSONB;
 		ALTER TABLE %s ADD COLUMN IF NOT EXISTS signal_confidences JSONB;
@@ -130,12 +142,45 @@ func (p *PostgresStore) createTable(ctx context.Context) error {
 		CREATE INDEX IF NOT EXISTS idx_%s_timestamp ON %s (timestamp DESC);
 		CREATE INDEX IF NOT EXISTS idx_%s_created_at ON %s (created_at);
 		CREATE INDEX IF NOT EXISTS idx_%s_request_id ON %s (request_id);
+		CREATE INDEX IF NOT EXISTS idx_%s_session_timestamp ON %s (session_id, timestamp DESC);
 		CREATE INDEX IF NOT EXISTS idx_%s_decision_timestamp ON %s (decision, timestamp DESC);
 		CREATE INDEX IF NOT EXISTS idx_%s_selected_model_timestamp ON %s (selected_model, timestamp DESC);
-	`, p.tableName,
-		p.tableName, p.tableName, p.tableName, p.tableName, p.tableName, p.tableName, p.tableName,
-		p.tableName, p.tableName, p.tableName, p.tableName, p.tableName, p.tableName, p.tableName, p.tableName,
-		p.tableName, p.tableName, p.tableName, p.tableName, p.tableName, p.tableName, p.tableName, p.tableName, p.tableName, p.tableName)
+	`,
+		p.tableName,
+		p.tableName,
+		p.tableName,
+		p.tableName,
+		p.tableName,
+		p.tableName,
+		p.tableName,
+		p.tableName,
+		p.tableName,
+		p.tableName,
+		p.tableName,
+		p.tableName,
+		p.tableName,
+		p.tableName,
+		p.tableName,
+		p.tableName,
+		p.tableName,
+		p.tableName,
+		p.tableName,
+		p.tableName,
+		p.tableName,
+		p.tableName,
+		p.tableName,
+		p.tableName,
+		p.tableName,
+		p.tableName,
+		p.tableName,
+		p.tableName,
+		p.tableName,
+		p.tableName,
+		p.tableName,
+		p.tableName,
+		p.tableName,
+		p.tableName,
+	)
 
 	_, err := p.db.ExecContext(ctx, query)
 	return err
@@ -167,7 +212,8 @@ func (p *PostgresStore) Add(ctx context.Context, record Record) (string, error) 
 	query := fmt.Sprintf(`
 		INSERT INTO %s (
 			id, timestamp, request_id, decision, decision_tier, decision_priority, category,
-			original_model, selected_model, reasoning_mode,
+			original_model, selected_model, reasoning_mode, confidence_score, selection_method,
+			session_id, turn_index, previous_model, cache_warmth_estimate,
 			signals, projections, projection_scores, signal_confidences, signal_values, tool_trace,
 			request_body, response_body, response_status,
 			from_cache, streaming, request_body_truncated, response_body_truncated,
@@ -176,7 +222,7 @@ func (p *PostgresStore) Add(ctx context.Context, record Record) (string, error) 
 			hallucination_enabled, hallucination_detected, hallucination_confidence, hallucination_spans,
 			prompt_tokens, completion_tokens, total_tokens,
 			actual_cost, baseline_cost, cost_savings, currency, baseline_model
-		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27, $28, $29, $30, $31, $32, $33, $34, $35, $36, $37, $38, $39, $40, $41, $42)
+		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27, $28, $29, $30, $31, $32, $33, $34, $35, $36, $37, $38, $39, $40, $41, $42, $43, $44, $45, $46, $47, $48)
 	`, p.tableName)
 
 	fn := func() error {

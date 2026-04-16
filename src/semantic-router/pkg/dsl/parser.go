@@ -75,7 +75,6 @@ func Parse(input string) (*Program, []error) {
 		prog.Models = append(prog.Models, resolved.Models...)
 		prog.Plugins = append(prog.Plugins, resolved.Plugins...)
 		prog.TestBlocks = append(prog.TestBlocks, resolved.TestBlocks...)
-		prog.SessionStates = append(prog.SessionStates, resolved.SessionStates...)
 		allErrors = append(allErrors, lowerErrs...)
 	}
 
@@ -92,7 +91,7 @@ func splitTopLevelBlocks(input string) []string {
 	var blocks []string
 	depth := 0
 	start := 0
-	keywords := []string{"SESSION_STATE", "DECISION_TREE", "PROJECTION", "SIGNAL", "ROUTE", "MODEL", "PLUGIN", "TEST"}
+	keywords := []string{"DECISION_TREE", "PROJECTION", "SIGNAL", "ROUTE", "MODEL", "PLUGIN", "TEST"}
 
 	for i := 0; i < len(input); i++ {
 		ch := input[i]
@@ -182,8 +181,6 @@ func rawToProgram(raw *rawProgram) (*Program, []error) {
 			prog.Plugins = append(prog.Plugins, rawToPlugin(entry.Plugin))
 		case entry.TestBlock != nil:
 			prog.TestBlocks = append(prog.TestBlocks, rawToTestBlock(entry.TestBlock))
-		case entry.SessionState != nil:
-			prog.SessionStates = append(prog.SessionStates, rawToSessionState(entry.SessionState))
 		}
 	}
 	if hasDirectRoutes && treeCount > 0 {
@@ -343,30 +340,6 @@ func rawToTestBlock(r *rawTestBlockDecl) *TestBlockDecl {
 		})
 	}
 	return tb
-}
-
-func rawToSessionState(r *rawSessionStateDecl) *SessionStateDecl {
-	decl := &SessionStateDecl{
-		Name: unquoteIdent(r.Name),
-		Pos:  posFromLexer(r.Pos),
-	}
-	for _, entry := range r.Fields {
-		if entry == nil || entry.Value == nil {
-			continue
-		}
-		typeName := ""
-		// Bare identifiers (int, string, float) arrive via Val.BareStr.
-		if entry.Value.BareStr != nil {
-			typeName = *entry.Value.BareStr
-		} else if entry.Value.Str != nil {
-			typeName = unquote(*entry.Value.Str)
-		}
-		decl.Fields = append(decl.Fields, SessionStateField{
-			Name:     entry.Key,
-			TypeName: typeName,
-		})
-	}
-	return decl
 }
 
 func rawToSignal(r *rawSignalDecl) *SignalDecl {

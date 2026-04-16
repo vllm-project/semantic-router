@@ -16,6 +16,7 @@ export type SignalType =
   | 'structure'
   | 'complexity'
   | 'modality'
+  | 'session'
   | 'authz'
   | 'jailbreak'
   | 'pii'
@@ -96,6 +97,14 @@ export interface JailbreakSignalConfig {
 
 // Modality is detected by the modality_detector inline model; no extra params needed.
 export type ModalitySignalConfig = Record<string, never>
+
+export interface SessionSignalConfig {
+  fact?: string
+  predicate?: NumericPredicateConfig
+  intent_or_domain?: string
+  previous_model?: string
+  candidate_model?: string
+}
 
 export interface AuthzSignalConfig {
   role?: string
@@ -179,6 +188,7 @@ export type AlgorithmType =
   | 'automix'
   | 'hybrid'
   | 'remom'
+  | 'session_aware'
   | 'latency_aware'
 
 export interface AlgorithmConfig {
@@ -186,6 +196,7 @@ export interface AlgorithmConfig {
   confidence?: ConfidenceAlgorithmConfig
   concurrent?: ConcurrentAlgorithmConfig
   latency_aware?: LatencyAwareAlgorithmConfig
+  session_aware?: SessionAwareAlgorithmConfig
   autoMix?: AutoMixConfig
 }
 
@@ -206,6 +217,15 @@ export interface LatencyAwareAlgorithmConfig {
   tpot_percentile?: number
   ttft_percentile?: number
   description?: string
+}
+
+export interface SessionAwareAlgorithmConfig {
+  fallback_method?: string
+  min_turns_before_switch?: number
+  stay_bias?: number
+  quality_gap_multiplier?: number
+  handoff_penalty_weight?: number
+  remaining_turn_weight?: number
 }
 
 export interface AutoMixConfig {
@@ -603,6 +623,15 @@ export interface ConfigData {
       name: string
       description?: string
     }>
+    session?: Array<{
+      name: string
+      description?: string
+      fact: string
+      predicate?: NumericPredicateConfig
+      intent_or_domain?: string
+      previous_model?: string
+      candidate_model?: string
+    }>
     role_bindings?: Array<{
       name: string
       role: string
@@ -653,6 +682,14 @@ export interface ConfigData {
         tpot_percentile?: number
         ttft_percentile?: number
         description?: string
+      }
+      session_aware?: {
+        fallback_method?: string
+        min_turns_before_switch?: number
+        stay_bias?: number
+        quality_gap_multiplier?: number
+        handoff_penalty_weight?: number
+        remaining_turn_weight?: number
       }
     }
     modelRefs?: Array<{

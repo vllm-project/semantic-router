@@ -17,47 +17,6 @@ func (v *Validator) checkConflicts() {
 	v.checkProjections()
 	v.checkTestBlocks()
 	v.checkTierConstraints()
-	v.checkSessionStates()
-}
-
-// checkSessionStates validates SESSION_STATE declarations for duplicate names,
-// invalid field types, duplicate field names, and empty names.
-func (v *Validator) checkSessionStates() {
-	seen := make(map[string]bool)
-	validTypes := map[string]bool{"int": true, "string": true, "float": true}
-
-	for _, ss := range v.prog.SessionStates {
-		if ss.Name == "" {
-			v.addDiag(DiagConstraint, ss.Pos, "SESSION_STATE: name cannot be empty", nil)
-			continue
-		}
-		if seen[ss.Name] {
-			v.addDiag(DiagConstraint, ss.Pos,
-				fmt.Sprintf("SESSION_STATE %q: duplicate declaration name", ss.Name), nil)
-			continue
-		}
-		seen[ss.Name] = true
-
-		fieldsSeen := make(map[string]bool)
-		for _, f := range ss.Fields {
-			if f.Name == "" {
-				v.addDiag(DiagConstraint, ss.Pos,
-					fmt.Sprintf("SESSION_STATE %q: field name cannot be empty", ss.Name), nil)
-				continue
-			}
-			if fieldsSeen[f.Name] {
-				v.addDiag(DiagConstraint, ss.Pos,
-					fmt.Sprintf("SESSION_STATE %q: duplicate field name %q", ss.Name, f.Name), nil)
-				continue
-			}
-			fieldsSeen[f.Name] = true
-			if !validTypes[f.TypeName] {
-				v.addDiag(DiagConstraint, ss.Pos,
-					fmt.Sprintf("SESSION_STATE %q: field %q has invalid type %q (supported: int, string, float)",
-						ss.Name, f.Name, f.TypeName), nil)
-			}
-		}
-	}
 }
 
 // checkDomainSignalOverlap detects MMLU category strings shared by two or more

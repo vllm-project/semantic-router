@@ -374,29 +374,6 @@ func ruleTreeContainsNegatedSignal(node *config.RuleCombination, signalType stri
 	return ruleTreeContainsSignal(node, false, signalType, name)
 }
 
-func TestMaintainedSessionStateRecipeAssetsStayInSync(t *testing.T) {
-	dslPath := filepath.Join("..", "..", "..", "..", "deploy", "recipes", "session-state.dsl")
-	yamlPath := filepath.Join("..", "..", "..", "..", "deploy", "recipes", "session-state.yaml")
-
-	dslData, err := os.ReadFile(dslPath)
-	if err != nil {
-		t.Fatalf("failed to read session-state.dsl: %v", err)
-	}
-	want, errs := Compile(string(dslData))
-	if len(errs) > 0 {
-		t.Fatalf("Compile errors for session-state.dsl: %v", errs)
-	}
-
-	got, err := config.Parse(yamlPath)
-	if err != nil {
-		t.Fatalf("failed to parse session-state.yaml: %v", err)
-	}
-
-	if !reflect.DeepEqual(got.SessionStates, want.SessionStates) {
-		t.Fatalf("session-state DSL/YAML assets diverged\nwant: %+v\ngot:  %+v", want.SessionStates, got.SessionStates)
-	}
-}
-
 func ruleTreeContainsSignal(node *config.RuleCombination, negated bool, signalType string, name string) bool {
 	if node == nil {
 		return false

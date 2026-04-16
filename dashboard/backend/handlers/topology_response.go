@@ -71,6 +71,7 @@ func topologySignalMappings(matchedSignals *RouterMatchedSignals) []topologySign
 		{signalType: "structure", names: matchedSignals.Structure, defaultConfidence: 1.0, reason: "Structure rule matched", addPath: true},
 		{signalType: "complexity", names: matchedSignals.Complexity, defaultConfidence: 0.9, reason: "Complexity level matched", addPath: true},
 		{signalType: "modality", names: matchedSignals.Modality, defaultConfidence: 1.0, reason: "Modality signal matched", addPath: true},
+		{signalType: "session", names: matchedSignals.Session, defaultConfidence: 1.0, reason: "Session signal matched", addPath: true},
 		{signalType: "authz", names: matchedSignals.Authz, defaultConfidence: 1.0, reason: "Authorization signal matched", addPath: true},
 		{signalType: "jailbreak", names: matchedSignals.Jailbreak, defaultConfidence: 1.0, reason: "Jailbreak signal matched", addPath: true},
 		{signalType: "pii", names: matchedSignals.PII, defaultConfidence: 1.0, reason: "PII signal matched", addPath: true},

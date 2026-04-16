@@ -467,22 +467,6 @@ routing:
           - name: support_escalated
             gte: 0.45
 
-  session_states:
-    - name: session_routing
-      fields:
-        - name: turn_number
-          type: int
-        - name: current_model
-          type: string
-        - name: cumulative_cost_usd
-          type: float
-        - name: retry_count_ema
-          type: float
-        - name: quality_score_ema
-          type: float
-        - name: kv_cache_warm
-          type: float
-
   decisions:
     - name: static_business_route
       description: Static fallback for standard business traffic.
@@ -787,6 +771,32 @@ routing:
           cost_weight: 0.1
           quality_gap_threshold: 0.08
           normalize_scores: true
+    - name: session_continuation_route
+      description: Session-aware route that prefers staying on the current technical model mid-conversation.
+      priority: 136
+      rules:
+        operator: AND
+        conditions:
+          - type: session
+            name: session_present
+          - type: domain
+            name: "computer science"
+      modelRefs:
+        - model: qwen3-8b
+          use_reasoning: false
+        - model: qwen3-32b
+          lora_name: computer-science-expert
+          use_reasoning: true
+      algorithm:
+        type: session_aware
+        session_aware:
+          fallback_method: hybrid
+          min_turns_before_switch: 2
+          stay_bias: 0.3
+          quality_gap_multiplier: 1.15
+          handoff_penalty_weight: 0.9
+          remaining_turn_weight: 0.45
+
     - name: spanish_rl_route
       description: RL-driven route for Spanish-language traffic with Milvus RAG.
       priority: 135

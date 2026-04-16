@@ -132,9 +132,11 @@ const SIGNAL_COLORS: Record<string, string> = {
   context: '#D7BA7D',
   complexity: '#569CD6',
   modality: '#D4D4D4',
+  session: '#7AA2F7',
   authz: '#F48771',
   jailbreak: '#F48771',
   pii: '#FF6B6B',
+  kb: '#9A7BFF',
 }
 
 const MiniFlowDiagram: React.FC<FlowProps> = React.memo(({ signals, decisions, models, plugins }) => {

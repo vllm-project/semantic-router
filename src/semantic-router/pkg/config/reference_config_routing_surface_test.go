@@ -13,6 +13,7 @@ var referenceSignalKeyByType = map[string]string{
 	SignalTypeKeyword:      "keywords",
 	SignalTypeLanguage:     "language",
 	SignalTypeModality:     "modality",
+	SignalTypeSession:      "session",
 	SignalTypePII:          "pii",
 	SignalTypePreference:   "preferences",
 	SignalTypeReask:        "reasks",
@@ -48,6 +49,7 @@ func assertSupportedAlgorithmsInReferenceConfig(t testingT, decisions []interfac
 	assertMapCoversStructFields(t, mustMapAt(t, algorithmsByType["router_dc"], "router_dc"), reflect.TypeOf(RouterDCSelectionConfig{}), "routing.decisions[].algorithm.router_dc")
 	assertMapCoversStructFields(t, mustMapAt(t, algorithmsByType["automix"], "automix"), reflect.TypeOf(AutoMixSelectionConfig{}), "routing.decisions[].algorithm.automix")
 	assertMapCoversStructFields(t, mustMapAt(t, algorithmsByType["hybrid"], "hybrid"), reflect.TypeOf(HybridSelectionConfig{}), "routing.decisions[].algorithm.hybrid")
+	assertMapCoversStructFields(t, mustMapAt(t, algorithmsByType["session_aware"], "session_aware"), reflect.TypeOf(SessionAwareSelectionConfig{}), "routing.decisions[].algorithm.session_aware")
 	assertMapCoversStructFields(t, mustMapAt(t, algorithmsByType["rl_driven"], "rl_driven"), reflect.TypeOf(RLDrivenSelectionConfig{}), "routing.decisions[].algorithm.rl_driven")
 	assertMapCoversStructFields(t, mustMapAt(t, algorithmsByType["gmtrouter"], "gmtrouter"), reflect.TypeOf(GMTRouterSelectionConfig{}), "routing.decisions[].algorithm.gmtrouter")
 	assertMapCoversStructFields(t, mustMapAt(t, algorithmsByType["latency_aware"], "latency_aware"), reflect.TypeOf(LatencyAwareAlgorithmConfig{}), "routing.decisions[].algorithm.latency_aware")

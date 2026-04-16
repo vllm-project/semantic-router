@@ -16,6 +16,7 @@ export const SIGNAL_ICONS: Record<SignalType, string> = {
   structure: 'STR',
   complexity: 'CPX',
   modality: 'MOD',
+  session: 'SES',
   authz: 'AUTH',
   jailbreak: 'JB',
   pii: 'PII',
@@ -37,6 +38,7 @@ export const SIGNAL_COLORS: Record<SignalType, { background: string; border: str
   structure: { background: '#4a5568', border: '#2d3748' },    // Dark Gray
   complexity: { background: '#4a5568', border: '#2d3748' },   // Dark Gray
   modality: { background: '#4a5568', border: '#2d3748' },     // Dark Gray
+  session: { background: '#4a5568', border: '#2d3748' },      // Dark Gray
   authz: { background: '#4a5568', border: '#2d3748' },        // Dark Gray
   jailbreak: { background: '#4a5568', border: '#2d3748' },    // Dark Gray
   pii: { background: '#4a5568', border: '#2d3748' },          // Dark Gray
@@ -109,6 +111,7 @@ export const ALGORITHM_ICONS: Record<AlgorithmType, string> = {
   automix: 'AM',
   hybrid: 'HY',
   remom: 'RM',
+  session_aware: 'SES',
   latency_aware: 'LAT',
 }
 
@@ -124,6 +127,7 @@ export const ALGORITHM_COLORS: Record<AlgorithmType, { background: string; borde
   remom: { background: '#76b900', border: '#5a8f00' },         // NVIDIA Green (same as plugins)
   automix: { background: '#5d6d7e', border: '#3d4a59' },       // Steel Gray
   hybrid: { background: '#4a5568', border: '#2d3748' },        // Dark Gray
+  session_aware: { background: '#5a6c7d', border: '#3d4a59' }, // Blue Gray
   latency_aware: { background: '#5a6c7d', border: '#3d4a59' }, // Blue Gray
 }
 
@@ -279,6 +283,7 @@ export const SIGNAL_TYPES: SignalType[] = [
   'structure',
   'complexity',
   'modality',
+  'session',
   'authz',
   'jailbreak',
   'pii',

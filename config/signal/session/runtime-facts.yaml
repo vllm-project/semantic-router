@@ -1,0 +1,22 @@
+routing:
+  signals:
+    session:
+      - name: session_present
+        description: Requests that belong to an existing multi-turn conversation.
+        fact: session_present
+        predicate:
+          gte: 1
+      - name: warm_cache_continuation
+        description: Prefer staying on the warmed model when the same conversation continues.
+        fact: cache_warmth
+        previous_model: qwen3-8b
+        predicate:
+          gte: 0.6
+      - name: expensive_handoff
+        description: Detect costly mid-session upgrades into the premium coding model.
+        fact: handoff_penalty
+        intent_or_domain: computer science
+        previous_model: qwen3-8b
+        candidate_model: qwen3-32b
+        predicate:
+          gte: 0.15

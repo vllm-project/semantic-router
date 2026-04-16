@@ -34,6 +34,7 @@ const (
 	SignalTypeStructure    = "structure"
 	SignalTypeComplexity   = "complexity"
 	SignalTypeModality     = "modality"
+	SignalTypeSession      = "session"
 	SignalTypeAuthz        = "authz"
 	SignalTypeJailbreak    = "jailbreak"
 	SignalTypePII          = "pii"
@@ -186,7 +187,6 @@ type IntelligentRouting struct {
 	Strategy        string               `yaml:"strategy,omitempty"`
 	ModelSelection  ModelSelectionConfig `yaml:"model_selection,omitempty"`
 	ReasoningConfig `yaml:",inline"`
-	SessionStates   []SessionStateConfig `yaml:"session_states,omitempty"`
 }
 
 // BackendModels captures configured backend endpoints and model metadata.

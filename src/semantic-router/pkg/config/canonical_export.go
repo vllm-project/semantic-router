@@ -46,11 +46,10 @@ func CanonicalRoutingFromRouterConfig(cfg *RouterConfig) CanonicalRouting {
 	}
 
 	return CanonicalRouting{
-		ModelCards:    routingModelsFromRouterConfig(cfg),
-		Signals:       canonicalSignalsFromRouterConfig(cfg),
-		Projections:   canonicalProjectionsFromRouterConfig(cfg),
-		Decisions:     copyDecisions(cfg.Decisions),
-		SessionStates: append([]SessionStateConfig(nil), cfg.SessionStates...),
+		ModelCards:  routingModelsFromRouterConfig(cfg),
+		Signals:     canonicalSignalsFromRouterConfig(cfg),
+		Projections: canonicalProjectionsFromRouterConfig(cfg),
+		Decisions:   copyDecisions(cfg.Decisions),
 	}
 }
 
@@ -68,6 +67,7 @@ func canonicalSignalsFromRouterConfig(cfg *RouterConfig) CanonicalSignals {
 		Structure:     append([]StructureRule(nil), cfg.StructureRules...),
 		Complexity:    append([]ComplexityRule(nil), cfg.ComplexityRules...),
 		Modality:      append([]ModalityRule(nil), cfg.ModalityRules...),
+		Session:       append([]SessionRule(nil), cfg.SessionRules...),
 		RoleBindings:  append([]RoleBinding(nil), cfg.RoleBindings...),
 		Jailbreak:     append([]JailbreakRule(nil), cfg.JailbreakRules...),
 		PII:           append([]PIIRule(nil), cfg.PIIRules...),

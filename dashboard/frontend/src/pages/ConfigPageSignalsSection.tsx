@@ -225,6 +225,18 @@ export default function ConfigPageSignalsSection({
     })
   })
 
+  effectiveSignals?.session?.forEach(session => {
+    const scope = [session.fact, session.previous_model, session.candidate_model]
+      .filter(Boolean)
+      .join(' • ')
+    allSignals.push({
+      name: session.name,
+      type: 'Session',
+      summary: scope || session.description || 'Session-derived runtime fact',
+      rawData: session,
+    })
+  })
+
   effectiveSignals?.role_bindings?.forEach(binding => {
     const subjectCount = binding.subjects?.length || 0
     allSignals.push({
@@ -519,6 +531,22 @@ export default function ConfigPageSignalsSection({
           { label: 'Description', value: signal.rawData.description || 'N/A', fullWidth: true },
         ]
       })
+    } else if (signal.type === 'Session') {
+      sections.push({
+        title: 'Session Signal',
+        fields: [
+          { label: 'Fact', value: signal.rawData.fact || 'N/A' },
+          { label: 'Intent / Domain', value: signal.rawData.intent_or_domain || 'Any' },
+          { label: 'Previous Model', value: signal.rawData.previous_model || 'Any' },
+          { label: 'Candidate Model', value: signal.rawData.candidate_model || 'Any' },
+          {
+            label: 'Predicate',
+            value: signal.rawData.predicate ? JSON.stringify(signal.rawData.predicate, null, 2) : 'Always match',
+            fullWidth: true,
+          },
+          { label: 'Description', value: signal.rawData.description || 'N/A', fullWidth: true },
+        ]
+      })
     } else if (signal.type === 'Authz') {
       sections.push({
         title: 'Role Binding',
@@ -617,6 +645,11 @@ export default function ConfigPageSignalsSection({
       easy_candidates: '',
       composer_operator: 'AND',
       composer_conditions: '',
+      session_fact: '',
+      session_predicate: JSON.stringify({ gte: 1 }, null, 2),
+      session_intent_or_domain: '',
+      session_previous_model: '',
+      session_candidate_model: '',
       jailbreak_threshold: 0.65,
       jailbreak_method: 'classifier',
       include_history: false,
@@ -658,6 +691,11 @@ export default function ConfigPageSignalsSection({
       easy_candidates: (signal.rawData.easy?.candidates || []).join('\n'),
       composer_operator: signal.rawData.composer?.operator || 'AND',
       composer_conditions: signal.rawData.composer?.conditions?.map((c: { type: string; name: string }) => `${c.type}:${c.name}`).join('\n') || '',
+      session_fact: signal.type === 'Session' ? signal.rawData.fact || '' : '',
+      session_predicate: signal.type === 'Session' && signal.rawData.predicate ? JSON.stringify(signal.rawData.predicate, null, 2) : defaultForm.session_predicate,
+      session_intent_or_domain: signal.type === 'Session' ? signal.rawData.intent_or_domain || '' : '',
+      session_previous_model: signal.type === 'Session' ? signal.rawData.previous_model || '' : '',
+      session_candidate_model: signal.type === 'Session' ? signal.rawData.candidate_model || '' : '',
       jailbreak_threshold: signal.rawData.threshold ?? 0.65,
       jailbreak_method: signal.rawData.method || 'classifier',
       include_history: !!signal.rawData.include_history,
@@ -681,7 +719,7 @@ export default function ConfigPageSignalsSection({
         name: 'type',
         label: 'Type',
         type: 'select',
-        options: ['Keywords', 'Embeddings', 'Domain', 'Preference', 'Fact Check', 'User Feedback', 'Reask', 'Language', 'Context', 'Structure', 'Complexity', 'Modality', 'Authz', 'Jailbreak', 'PII', 'KB'],
+        options: ['Keywords', 'Embeddings', 'Domain', 'Preference', 'Fact Check', 'User Feedback', 'Reask', 'Language', 'Context', 'Structure', 'Complexity', 'Modality', 'Session', 'Authz', 'Jailbreak', 'PII', 'KB'],
         required: true,
         description: 'Fields are validated based on the selected type.'
       },
@@ -860,6 +898,43 @@ export default function ConfigPageSignalsSection({
         placeholder: 'One candidate per line, e.g.:\nprint hello world\nloop through array',
         description: 'Phrases representing easy/simple queries',
         shouldHide: conditionallyHideFieldExceptType('Complexity')
+      },
+      {
+        name: 'session_fact',
+        label: 'Fact (session only)',
+        type: 'text',
+        placeholder: 'session_present',
+        description: 'Runtime-derived session fact name consumed by the router.',
+        shouldHide: conditionallyHideFieldExceptType('Session')
+      },
+      {
+        name: 'session_predicate',
+        label: 'Predicate (session only)',
+        type: 'textarea',
+        placeholder: '{\n  "gte": 1\n}',
+        description: 'Optional numeric predicate JSON applied to the runtime fact value.',
+        shouldHide: conditionallyHideFieldExceptType('Session')
+      },
+      {
+        name: 'session_intent_or_domain',
+        label: 'Intent / Domain (session only)',
+        type: 'text',
+        placeholder: 'computer science',
+        shouldHide: conditionallyHideFieldExceptType('Session')
+      },
+      {
+        name: 'session_previous_model',
+        label: 'Previous Model (session only)',
+        type: 'text',
+        placeholder: 'qwen3-8b',
+        shouldHide: conditionallyHideFieldExceptType('Session')
+      },
+      {
+        name: 'session_candidate_model',
+        label: 'Candidate Model (session only)',
+        type: 'text',
+        placeholder: 'qwen3-32b',
+        shouldHide: conditionallyHideFieldExceptType('Session')
       },
       {
         name: 'role',
@@ -1227,6 +1302,27 @@ export default function ConfigPageSignalsSection({
             {
               name,
               description: formData.description || undefined,
+            }
+          ]
+          break
+        }
+        case 'Session': {
+          const fact = (formData.session_fact || '').trim()
+          if (!fact) {
+            throw new Error('Fact is required for session signals.')
+          }
+          const predicateText = (formData.session_predicate || '').trim()
+          const predicate = predicateText ? JSON.parse(predicateText) : undefined
+          newConfig.signals.session = [
+            ...(newConfig.signals.session || []),
+            {
+              name,
+              description: formData.description || undefined,
+              fact,
+              predicate,
+              intent_or_domain: (formData.session_intent_or_domain || '').trim() || undefined,
+              previous_model: (formData.session_previous_model || '').trim() || undefined,
+              candidate_model: (formData.session_candidate_model || '').trim() || undefined,
             }
           ]
           break

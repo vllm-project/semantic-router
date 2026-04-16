@@ -421,7 +421,24 @@ function extractSignals(config: ConfigData): SignalConfig[] {
     })
   })
 
-  // 12. Authz / RBAC Role Bindings
+  // 12. Session Rules
+  routingSignals?.session?.forEach(rule => {
+    addSignal({
+      type: 'session',
+      name: rule.name,
+      description: rule.description,
+      latency: SIGNAL_LATENCY.session,
+      config: {
+        fact: rule.fact,
+        predicate: rule.predicate,
+        intent_or_domain: rule.intent_or_domain,
+        previous_model: rule.previous_model,
+        candidate_model: rule.candidate_model,
+      },
+    })
+  })
+
+  // 13. Authz / RBAC Role Bindings
   // From role_bindings (Go/Router format)
   config.role_bindings?.forEach(rule => {
     addSignal({
@@ -578,6 +595,7 @@ function extractDecisions(config: ConfigData): DecisionConfig[] {
           confidence: decision.algorithm.confidence,
           concurrent: decision.algorithm.concurrent,
           latency_aware: decision.algorithm.latency_aware,
+          session_aware: decision.algorithm.session_aware,
         }
         : undefined
 

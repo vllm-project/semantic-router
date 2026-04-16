@@ -59,24 +59,8 @@ func (c *Compiler) compile() {
 	// 5. Compile top-level model catalog
 	c.compileModels()
 
-	// 6. Compile session state declarations
-	c.compileSessionStates()
-
-	// 7. Compile routes (decisions)
+	// 6. Compile routes (decisions)
 	c.compileRoutes()
-}
-
-func (c *Compiler) compileSessionStates() {
-	for _, decl := range c.prog.SessionStates {
-		ss := config.SessionStateConfig{Name: decl.Name}
-		for _, f := range decl.Fields {
-			ss.Fields = append(ss.Fields, config.SessionStateFieldConfig{
-				Name:     f.Name,
-				TypeName: f.TypeName,
-			})
-		}
-		c.config.SessionStates = append(c.config.SessionStates, ss)
-	}
 }
 
 func (c *Compiler) compileProjectionPartitions() {
@@ -172,6 +156,8 @@ func (c *Compiler) compileSignals() {
 			c.compileComplexitySignal(s)
 		case "modality":
 			c.compileModalitySignal(s)
+		case "session":
+			c.compileSessionSignal(s)
 		case "authz":
 			c.compileAuthzSignal(s)
 		case "jailbreak":
@@ -384,6 +370,24 @@ func (c *Compiler) compileModalitySignal(s *SignalDecl) {
 		rule.Description = v
 	}
 	c.config.ModalityRules = append(c.config.ModalityRules, rule)
+}
+
+func (c *Compiler) compileSessionSignal(s *SignalDecl) {
+	payload := fieldsToMap(s.Fields)
+	payload["name"] = s.Name
+
+	raw, err := yaml.Marshal(payload)
+	if err != nil {
+		c.addError(s.Pos, "failed to encode session signal %q: %v", s.Name, err)
+		return
+	}
+
+	var rule config.SessionRule
+	if err := yaml.Unmarshal(raw, &rule); err != nil {
+		c.addError(s.Pos, "failed to decode session signal %q: %v", s.Name, err)
+		return
+	}
+	c.config.SessionRules = append(c.config.SessionRules, rule)
 }
 
 func (c *Compiler) compileJailbreakSignal(s *SignalDecl) {
@@ -636,6 +640,8 @@ func (c *Compiler) compileAlgorithm(spec *AlgoSpec) *config.AlgorithmConfig {
 		algo.AutoMix = c.compileAutoMixAlgo(spec.Fields)
 	case "hybrid":
 		algo.Hybrid = c.compileHybridAlgo(spec.Fields)
+	case "session_aware":
+		algo.SessionAware = c.compileSessionAwareAlgo(spec.Fields)
 	case "rl_driven":
 		algo.RLDriven = c.compileRLDrivenAlgo(spec.Fields)
 	case "gmtrouter":
@@ -815,6 +821,29 @@ func (c *Compiler) compileHybridAlgo(fields map[string]Value) *config.HybridSele
 	}
 	if v, ok := getFloat64Field(fields, "cost_weight"); ok {
 		cfg.CostWeight = v
+	}
+	return cfg
+}
+
+func (c *Compiler) compileSessionAwareAlgo(fields map[string]Value) *config.SessionAwareSelectionConfig {
+	cfg := &config.SessionAwareSelectionConfig{}
+	if v, ok := getStringField(fields, "fallback_method"); ok {
+		cfg.FallbackMethod = v
+	}
+	if v, ok := getIntField(fields, "min_turns_before_switch"); ok {
+		cfg.MinTurnsBeforeSwitch = v
+	}
+	if v, ok := getFloat64Field(fields, "stay_bias"); ok {
+		cfg.StayBias = v
+	}
+	if v, ok := getFloat64Field(fields, "quality_gap_multiplier"); ok {
+		cfg.QualityGapMultiplier = v
+	}
+	if v, ok := getFloat64Field(fields, "handoff_penalty_weight"); ok {
+		cfg.HandoffPenaltyWeight = v
+	}
+	if v, ok := getFloat64Field(fields, "remaining_turn_weight"); ok {
+		cfg.RemainingTurnWeight = v
 	}
 	return cfg
 }

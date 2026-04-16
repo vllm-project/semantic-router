@@ -45,6 +45,9 @@ type ModelSelectionConfig struct {
 	// Hybrid configuration (used when method is "hybrid")
 	Hybrid *HybridConfig `yaml:"hybrid,omitempty"`
 
+	// SessionAware configuration (used when method is "session_aware")
+	SessionAware *SessionAwareConfig `yaml:"session_aware,omitempty"`
+
 	// ML configuration (used for knn, kmeans, svm methods)
 	ML *MLSelectorConfig `yaml:"ml,omitempty"`
 
@@ -155,6 +158,13 @@ func (f *Factory) Create() Selector {
 		}
 		selector = hybridSelector
 
+	case MethodSessionAware:
+		sessionAwareSelector := NewSessionAwareSelector(f.cfg.SessionAware)
+		if f.lookupTable != nil {
+			sessionAwareSelector.SetLookupTable(f.lookupTable)
+		}
+		selector = sessionAwareSelector
+
 	case MethodGMTRouter:
 		gmtRouterSelector := NewGMTRouterSelector(f.cfg.GMTRouter)
 		if f.modelConfig != nil {
@@ -254,6 +264,17 @@ func (f *Factory) CreateAll() *Registry {
 		hybridSelector.SetLookupTable(f.lookupTable)
 	}
 	registry.Register(MethodHybrid, hybridSelector)
+
+	// Create SessionAware selector
+	sessionAwareCfg := f.cfg.SessionAware
+	if sessionAwareCfg == nil {
+		sessionAwareCfg = DefaultSessionAwareConfig()
+	}
+	sessionAwareSelector := NewSessionAwareSelector(sessionAwareCfg)
+	if f.lookupTable != nil {
+		sessionAwareSelector.SetLookupTable(f.lookupTable)
+	}
+	registry.Register(MethodSessionAware, sessionAwareSelector)
 
 	// Create ML-based selectors (KNN, KMeans, SVM)
 	mlCfg := f.cfg.ML

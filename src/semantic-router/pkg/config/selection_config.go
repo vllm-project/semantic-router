@@ -9,11 +9,12 @@ type ModelSelectionConfig struct {
 	Enabled bool `yaml:"enabled,omitempty"`
 
 	// Family-specific configuration blocks.
-	Elo      EloSelectionConfig      `yaml:"elo,omitempty"`
-	RouterDC RouterDCSelectionConfig `yaml:"router_dc,omitempty"`
-	AutoMix  AutoMixSelectionConfig  `yaml:"automix,omitempty"`
-	Hybrid   HybridSelectionConfig   `yaml:"hybrid,omitempty"`
-	ML       MLSelectionConfig       `yaml:"ml,omitempty"`
+	Elo          EloSelectionConfig          `yaml:"elo,omitempty"`
+	RouterDC     RouterDCSelectionConfig     `yaml:"router_dc,omitempty"`
+	AutoMix      AutoMixSelectionConfig      `yaml:"automix,omitempty"`
+	Hybrid       HybridSelectionConfig       `yaml:"hybrid,omitempty"`
+	SessionAware SessionAwareSelectionConfig `yaml:"session_aware,omitempty"`
+	ML           MLSelectionConfig           `yaml:"ml,omitempty"`
 
 	Momentum MomentumSelectionConfig `yaml:"momentum,omitempty"`
 	// LookupTables configures persisted lookup tables for session-aware routing.

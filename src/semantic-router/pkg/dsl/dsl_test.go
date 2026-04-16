@@ -1484,6 +1484,25 @@ func TestCompileAllAlgorithmTypes(t *testing.T) {
 			},
 		},
 		{
+			name:     "session_aware",
+			algoType: "session_aware",
+			body:     `fallback_method: "static" min_turns_before_switch: 2 stay_bias: 0.4 quality_gap_multiplier: 1.2 handoff_penalty_weight: 0.8 remaining_turn_weight: 0.6`,
+			verify: func(t *testing.T, algo *config.AlgorithmConfig) {
+				if algo.SessionAware == nil {
+					t.Fatal("expected session_aware config")
+				}
+				if algo.SessionAware.MinTurnsBeforeSwitch != 2 {
+					t.Errorf("min_turns_before_switch = %d, want 2", algo.SessionAware.MinTurnsBeforeSwitch)
+				}
+				if algo.SessionAware.FallbackMethod != "static" {
+					t.Errorf("fallback_method = %q, want static", algo.SessionAware.FallbackMethod)
+				}
+				if algo.SessionAware.StayBias != 0.4 {
+					t.Errorf("stay_bias = %v, want 0.4", algo.SessionAware.StayBias)
+				}
+			},
+		},
+		{
 			name:     "rl_driven",
 			algoType: "rl_driven",
 			body:     `exploration_rate: 0.1 use_thompson_sampling: true enable_personalization: false`,
@@ -3262,6 +3281,48 @@ ROUTE test {
 	}
 	if !strings.Contains(dslText, "confidence_method") {
 		t.Error("missing confidence_method in decompiled output")
+	}
+}
+
+func TestDecompileSessionAwareAlgorithmFields(t *testing.T) {
+	input := `
+SIGNAL domain test { description: "test" }
+ROUTE test {
+  PRIORITY 1
+  WHEN domain("test")
+  MODEL "m1:7b", "m2:3b"
+  ALGORITHM session_aware {
+    fallback_method: "static"
+    min_turns_before_switch: 2
+    stay_bias: 0.4
+    quality_gap_multiplier: 1.2
+    handoff_penalty_weight: 0.8
+    remaining_turn_weight: 0.6
+  }
+}
+`
+	cfg, errs := Compile(input)
+	if len(errs) > 0 {
+		t.Fatalf("compile errors: %v", errs)
+	}
+
+	dslText, err := Decompile(cfg)
+	if err != nil {
+		t.Fatalf("decompile error: %v", err)
+	}
+
+	for _, expected := range []string{
+		"ALGORITHM session_aware",
+		"fallback_method",
+		"min_turns_before_switch",
+		"stay_bias",
+		"quality_gap_multiplier",
+		"handoff_penalty_weight",
+		"remaining_turn_weight",
+	} {
+		if !strings.Contains(dslText, expected) {
+			t.Errorf("missing %q in decompiled output", expected)
+		}
 	}
 }
 
@@ -5560,155 +5621,5 @@ func assertConflictFreeRoundTrip(t *testing.T, cfg *config.RouterConfig) {
 	}
 	if len(prog2.ProjectionPartitions) != 1 {
 		t.Errorf("re-parsed projection partitions = %d, want 1", len(prog2.ProjectionPartitions))
-	}
-}
-
-// ---------- SESSION_STATE Tests ----------
-
-const sessionStateDSL = `SESSION_STATE session_routing {
-  turn_number: int
-  current_model: string
-  cumulative_cost_usd: float
-  retry_count_ema: float
-  quality_score_ema: float
-  kv_cache_warm: float
-}`
-
-func TestCompileSessionState(t *testing.T) {
-	cfg, errs := Compile(sessionStateDSL)
-	if len(errs) > 0 {
-		t.Fatalf("compile errors: %v", errs)
-	}
-	if len(cfg.SessionStates) != 1 {
-		t.Fatalf("expected 1 SessionState in config, got %d", len(cfg.SessionStates))
-	}
-	ss := cfg.SessionStates[0]
-	if ss.Name != "session_routing" {
-		t.Errorf("name: expected %q, got %q", "session_routing", ss.Name)
-	}
-	wantFields := []struct{ name, typeName string }{
-		{"turn_number", "int"},
-		{"current_model", "string"},
-		{"cumulative_cost_usd", "float"},
-		{"retry_count_ema", "float"},
-		{"quality_score_ema", "float"},
-		{"kv_cache_warm", "float"},
-	}
-	if len(ss.Fields) != len(wantFields) {
-		t.Fatalf("expected %d fields, got %d", len(wantFields), len(ss.Fields))
-	}
-	for i, w := range wantFields {
-		if ss.Fields[i].Name != w.name || ss.Fields[i].TypeName != w.typeName {
-			t.Errorf("field[%d]: expected {%s: %s}, got {%s: %s}",
-				i, w.name, w.typeName, ss.Fields[i].Name, ss.Fields[i].TypeName)
-		}
-	}
-}
-
-func TestSessionStateRoundTrip(t *testing.T) {
-	cfg, errs := Compile(sessionStateDSL)
-	if len(errs) > 0 {
-		t.Fatalf("compile errors: %v", errs)
-	}
-	dslText, err := DecompileRouting(cfg)
-	if err != nil {
-		t.Fatalf("decompile error: %v", err)
-	}
-	if !strings.Contains(dslText, "SESSION_STATE session_routing") {
-		t.Errorf("round-trip lost SESSION_STATE declaration\nDSL:\n%s", dslText)
-	}
-	// Types must survive as bare identifiers, not quoted strings.
-	for _, typeName := range []string{"int", "string", "float"} {
-		if !strings.Contains(dslText, ": "+typeName) {
-			t.Errorf("round-trip DSL missing bare type %q\nDSL:\n%s", typeName, dslText)
-		}
-	}
-	prog2, errs2 := Parse(dslText)
-	if len(errs2) > 0 {
-		t.Fatalf("re-parse errors after round-trip: %v\nDSL:\n%s", errs2, dslText)
-	}
-	if len(prog2.SessionStates) != 1 {
-		t.Fatalf("re-parsed session states = %d, want 1\nDSL:\n%s", len(prog2.SessionStates), dslText)
-	}
-	if prog2.SessionStates[0].Name != "session_routing" {
-		t.Errorf("round-trip name: expected %q, got %q", "session_routing", prog2.SessionStates[0].Name)
-	}
-}
-
-func TestSessionStateRoundTripAST(t *testing.T) {
-	cfg, errs := Compile(sessionStateDSL)
-	if len(errs) > 0 {
-		t.Fatalf("compile errors: %v", errs)
-	}
-	prog := DecompileToAST(cfg)
-	if len(prog.SessionStates) != 1 {
-		t.Fatalf("expected 1 SessionState in AST round-trip, got %d", len(prog.SessionStates))
-	}
-	ss := prog.SessionStates[0]
-	if ss.Name != "session_routing" {
-		t.Errorf("AST round-trip name: expected %q, got %q", "session_routing", ss.Name)
-	}
-	if len(ss.Fields) != 6 {
-		t.Errorf("AST round-trip field count: expected 6, got %d", len(ss.Fields))
-	}
-}
-
-func TestValidateSessionStateDuplicateName(t *testing.T) {
-	input := `
-SESSION_STATE foo { x: int }
-SESSION_STATE foo { y: string }
-`
-	diags, _ := Validate(input)
-	found := false
-	for _, d := range diags {
-		if d.Level == DiagConstraint && strings.Contains(d.Message, "duplicate") {
-			found = true
-			break
-		}
-	}
-	if !found {
-		t.Errorf("expected DiagConstraint for duplicate SESSION_STATE name, got: %v", diags)
-	}
-}
-
-func TestValidateSessionStateInvalidType(t *testing.T) {
-	input := `SESSION_STATE foo { x: bool }`
-	diags, _ := Validate(input)
-	found := false
-	for _, d := range diags {
-		if d.Level == DiagConstraint &&
-			strings.Contains(d.Message, "invalid type") &&
-			strings.Contains(d.Message, "bool") {
-			found = true
-			break
-		}
-	}
-	if !found {
-		t.Errorf("expected DiagConstraint for invalid type %q, got: %v", "bool", diags)
-	}
-}
-
-func TestValidateSessionStateDuplicateField(t *testing.T) {
-	input := `SESSION_STATE foo { x: int, x: string }`
-	diags, _ := Validate(input)
-	found := false
-	for _, d := range diags {
-		if d.Level == DiagConstraint && strings.Contains(d.Message, "duplicate field") {
-			found = true
-			break
-		}
-	}
-	if !found {
-		t.Errorf("expected DiagConstraint for duplicate field name, got: %v", diags)
-	}
-}
-
-func TestValidateSessionStateValidTypes(t *testing.T) {
-	input := `SESSION_STATE ok { a: int, b: string, c: float }`
-	diags, _ := Validate(input)
-	for _, d := range diags {
-		if d.Level == DiagConstraint {
-			t.Errorf("unexpected constraint diagnostic for valid types: %v", d)
-		}
 	}
 }

@@ -1,0 +1,9 @@
+algorithm:
+  type: session_aware
+  session_aware:
+    fallback_method: hybrid
+    min_turns_before_switch: 2
+    stay_bias: 0.3
+    quality_gap_multiplier: 1.15
+    handoff_penalty_weight: 0.9
+    remaining_turn_weight: 0.45

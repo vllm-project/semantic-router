@@ -137,6 +137,7 @@ type RouterMatchedSignals struct {
 	Structure    []string `json:"structure,omitempty"`
 	Complexity   []string `json:"complexity,omitempty"`
 	Modality     []string `json:"modality,omitempty"`
+	Session      []string `json:"session,omitempty"`
 	Authz        []string `json:"authz,omitempty"`
 	Jailbreak    []string `json:"jailbreak,omitempty"`
 	PII          []string `json:"pii,omitempty"`

@@ -272,6 +272,9 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'global-config'
       case 'Modality':
         cfg.signals.modality = (cfg.signals.modality || []).filter(s => s.name !== targetName)
         break
+      case 'Session':
+        cfg.signals.session = (cfg.signals.session || []).filter(s => s.name !== targetName)
+        break
       case 'Authz':
         cfg.signals.role_bindings = (cfg.signals.role_bindings || []).filter(s => s.name !== targetName)
         break

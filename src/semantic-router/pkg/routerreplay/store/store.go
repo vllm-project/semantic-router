@@ -22,6 +22,7 @@ type Signal struct {
 	Structure    []string `json:"structure,omitempty"`
 	Complexity   []string `json:"complexity,omitempty"`
 	Modality     []string `json:"modality,omitempty"`
+	Session      []string `json:"session,omitempty"`
 	Authz        []string `json:"authz,omitempty"`
 	Jailbreak    []string `json:"jailbreak,omitempty"`
 	PII          []string `json:"pii,omitempty"`
@@ -78,6 +79,10 @@ type Record struct {
 	ReasoningMode         string             `json:"reasoning_mode,omitempty"`
 	ConfidenceScore       float64            `json:"confidence_score,omitempty"`
 	SelectionMethod       string             `json:"selection_method,omitempty"`
+	SessionID             string             `json:"session_id,omitempty"`
+	TurnIndex             int                `json:"turn_index,omitempty"`
+	PreviousModel         string             `json:"previous_model,omitempty"`
+	CacheWarmthEstimate   float64            `json:"cache_warmth_estimate,omitempty"`
 	Signals               Signal             `json:"signals"`
 	Projections           []string           `json:"projections,omitempty"`
 	ProjectionScores      map[string]float64 `json:"projection_scores,omitempty"`
@@ -228,6 +233,7 @@ func cloneSignal(signal Signal) Signal {
 		Structure:    cloneStringSlice(signal.Structure),
 		Complexity:   cloneStringSlice(signal.Complexity),
 		Modality:     cloneStringSlice(signal.Modality),
+		Session:      cloneStringSlice(signal.Session),
 		Authz:        cloneStringSlice(signal.Authz),
 		Jailbreak:    cloneStringSlice(signal.Jailbreak),
 		PII:          cloneStringSlice(signal.PII),

@@ -139,6 +139,7 @@ func validateDecisionAlgorithmConfig(decisionName string, algorithm *AlgorithmCo
 	addBlock("router_dc", algorithm.RouterDC != nil)
 	addBlock("automix", algorithm.AutoMix != nil)
 	addBlock("hybrid", algorithm.Hybrid != nil)
+	addBlock("session_aware", algorithm.SessionAware != nil)
 	addBlock("rl_driven", algorithm.RLDriven != nil)
 	addBlock("gmtrouter", algorithm.GMTRouter != nil)
 	addBlock("latency_aware", algorithm.LatencyAware != nil)
@@ -160,6 +161,7 @@ func validateDecisionAlgorithmConfig(decisionName string, algorithm *AlgorithmCo
 		"router_dc":     "router_dc",
 		"automix":       "automix",
 		"hybrid":        "hybrid",
+		"session_aware": "session_aware",
 		"rl_driven":     "rl_driven",
 		"gmtrouter":     "gmtrouter",
 		"latency_aware": "latency_aware",
@@ -186,6 +188,15 @@ func validateDecisionAlgorithmConfig(decisionName string, algorithm *AlgorithmCo
 			expectedBlock,
 			configuredBlocks[0],
 		)
+	}
+
+	if normalizedType == "session_aware" {
+		if algorithm.SessionAware == nil {
+			return fmt.Errorf("decision '%s': algorithm.type=session_aware requires algorithm.session_aware configuration", decisionName)
+		}
+		if err := validateSessionAwareAlgorithmConfig(algorithm.SessionAware); err != nil {
+			return fmt.Errorf("decision '%s', algorithm.session_aware: %w", decisionName, err)
+		}
 	}
 
 	if normalizedType == "latency_aware" {

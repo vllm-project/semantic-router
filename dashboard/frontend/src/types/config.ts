@@ -168,6 +168,16 @@ export interface ModalitySignal {
   description?: string
 }
 
+export interface SessionSignal {
+  name: string
+  description?: string
+  fact: string
+  predicate?: NumericPredicate
+  intent_or_domain?: string
+  previous_model?: string
+  candidate_model?: string
+}
+
 export interface Subject {
   kind: 'User' | 'Group'
   name: string
@@ -221,7 +231,7 @@ export interface Signals {
 // =============================================================================
 
 
-export type DecisionConditionType = 'keyword' | 'domain' | 'preference' | 'user_feedback' | 'reask' | 'embedding' | 'fact_check' | 'language' | 'context' | 'structure' | 'complexity' | 'modality' | 'authz' | 'jailbreak' | 'pii' | 'projection'
+export type DecisionConditionType = 'keyword' | 'domain' | 'preference' | 'user_feedback' | 'reask' | 'embedding' | 'fact_check' | 'language' | 'context' | 'structure' | 'complexity' | 'modality' | 'session' | 'authz' | 'jailbreak' | 'pii' | 'projection' | 'kb'
 export interface DecisionCondition {
   type: DecisionConditionType
   name: string

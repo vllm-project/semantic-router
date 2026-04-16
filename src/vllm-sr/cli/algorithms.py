@@ -233,6 +233,21 @@ class HybridSelectionConfig(BaseModel):
     normalize_scores: bool | None = True
 
 
+class SessionAwareSelectionConfig(BaseModel):
+    """Configuration for session-aware model selection.
+
+    Balances stay-versus-switch decisions using runtime session facts and
+    replay-backed priors.
+    """
+
+    fallback_method: str | None = "static"
+    min_turns_before_switch: int | None = Field(default=1, ge=0)
+    stay_bias: float | None = Field(default=0.25, ge=0)
+    quality_gap_multiplier: float | None = Field(default=1.0, ge=0)
+    handoff_penalty_weight: float | None = Field(default=1.0, ge=0)
+    remaining_turn_weight: float | None = Field(default=0.15, ge=0)
+
+
 # =============================================================================
 # RL-Driven Model Selection Algorithm Configs (from PR #1196 / Issue #994)
 # Reference papers:
@@ -349,6 +364,7 @@ class AlgorithmConfig(BaseModel):
     router_dc: RouterDCSelectionConfig | None = None
     automix: AutoMixSelectionConfig | None = None
     hybrid: HybridSelectionConfig | None = None
+    session_aware: SessionAwareSelectionConfig | None = None
 
     # RL-driven selection algorithms (from PR #1196, issue #994)
     thompson: ThompsonSamplingConfig | None = None

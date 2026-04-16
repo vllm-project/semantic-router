@@ -58,6 +58,16 @@ func (h *HybridSelector) ExternalDependencies() []Dependency {
 	return []Dependency{}
 }
 
+// Tier returns the production readiness tier
+func (s *SessionAwareSelector) Tier() AlgorithmTier {
+	return TierSupported
+}
+
+// ExternalDependencies returns external dependencies (none for session-aware)
+func (s *SessionAwareSelector) ExternalDependencies() []Dependency {
+	return []Dependency{}
+}
+
 // --- Experimental-tier algorithms ---
 
 // Tier returns the production readiness tier

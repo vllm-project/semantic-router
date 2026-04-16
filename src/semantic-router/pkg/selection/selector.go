@@ -52,6 +52,10 @@ const (
 	// Allows blending Elo, embedding similarity, and cost considerations
 	MethodHybrid SelectionMethod = "hybrid"
 
+	// MethodSessionAware uses runtime session facts and replay-derived priors to
+	// decide whether to stay on the current model or switch mid-session.
+	MethodSessionAware SelectionMethod = "session_aware"
+
 	// MethodStatic uses static scores from configuration (default behavior)
 	MethodStatic SelectionMethod = "static"
 
@@ -171,6 +175,30 @@ type SelectionContext struct {
 	// SessionID identifies the conversation session for multi-turn context (optional)
 	// Used to track within-session model performance
 	SessionID string
+
+	// TurnIndex is the zero-based count of prior user turns in the active session.
+	TurnIndex int
+
+	// PreviousModel is the model used on the immediately preceding turn.
+	PreviousModel string
+
+	// CurrentModel is the model the session is currently anchored to for stay-vs-switch decisions.
+	CurrentModel string
+
+	// OriginalModel is the model requested before routing rewrites were applied.
+	OriginalModel string
+
+	// CacheWarmthEstimate is a replay/runtime-derived [0,1] estimate of cache warmth for the current model.
+	CacheWarmthEstimate float64
+
+	// RemainingTurnsEstimate is the replay-derived estimate of how many turns remain after this request.
+	RemainingTurnsEstimate float64
+
+	// QualityGapByCandidate stores replay-derived quality-gap estimates keyed by candidate model.
+	QualityGapByCandidate map[string]float64
+
+	// HandoffPenaltyByCandidate stores replay-derived switch-penalty estimates keyed by candidate model.
+	HandoffPenaltyByCandidate map[string]float64
 
 	// LatencyAwareTPOTPercentile is the configured TPOT percentile (1-100) for latency_aware selection
 	LatencyAwareTPOTPercentile int
