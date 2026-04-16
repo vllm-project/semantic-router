@@ -76,18 +76,6 @@ func (h *OpenClawHandler) SetRouterConfigPath(configPath string) {
 	h.routerConfigPath = strings.TrimSpace(configPath)
 }
 
-func (h *OpenClawHandler) registryPath() string {
-	return filepath.Join(h.dataDir, "containers.json")
-}
-
-func (h *OpenClawHandler) teamsPath() string {
-	return filepath.Join(h.dataDir, "teams.json")
-}
-
-func (h *OpenClawHandler) roomsPath() string {
-	return filepath.Join(h.dataDir, "rooms.json")
-}
-
 func (h *OpenClawHandler) roomMessagesPath(roomID string) string {
 	return filepath.Join(h.dataDir, "room-messages", sanitizeRoomID(roomID)+".json")
 }
