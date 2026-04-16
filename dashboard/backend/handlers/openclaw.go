@@ -15,6 +15,8 @@ import (
 	"time"
 
 	"gopkg.in/yaml.v3"
+
+	"github.com/vllm-project/semantic-router/dashboard/backend/workflowstore"
 )
 
 var containerNameInvalidChars = regexp.MustCompile(`[^a-z0-9_.-]+`)
@@ -54,30 +56,24 @@ type OpenClawHandler struct {
 	dataDir          string
 	readOnly         bool
 	routerConfigPath string
+	wf               *workflowstore.Store
 	mu               sync.RWMutex
 	roomSSEClients   sync.Map
 	roomSSELastEvent sync.Map
 	roomAutomationMu sync.Map
 }
 
-func NewOpenClawHandler(dataDir string, readOnly bool) *OpenClawHandler {
-	return &OpenClawHandler{dataDir: dataDir, readOnly: readOnly}
+// NewOpenClawHandler constructs the OpenClaw HTTP handler. wf holds durable registry,
+// team, room, and message state; live SSE/WebSocket client maps stay on the handler.
+func NewOpenClawHandler(dataDir string, readOnly bool, wf *workflowstore.Store) *OpenClawHandler {
+	if wf == nil {
+		panic("openclaw: workflow store is required")
+	}
+	return &OpenClawHandler{dataDir: dataDir, readOnly: readOnly, wf: wf}
 }
 
 func (h *OpenClawHandler) SetRouterConfigPath(configPath string) {
 	h.routerConfigPath = strings.TrimSpace(configPath)
-}
-
-func (h *OpenClawHandler) registryPath() string {
-	return filepath.Join(h.dataDir, "containers.json")
-}
-
-func (h *OpenClawHandler) teamsPath() string {
-	return filepath.Join(h.dataDir, "teams.json")
-}
-
-func (h *OpenClawHandler) roomsPath() string {
-	return filepath.Join(h.dataDir, "rooms.json")
 }
 
 func (h *OpenClawHandler) roomMessagesPath(roomID string) string {
@@ -85,55 +81,65 @@ func (h *OpenClawHandler) roomMessagesPath(roomID string) string {
 }
 
 func (h *OpenClawHandler) loadRegistry() ([]ContainerEntry, error) {
-	data, err := os.ReadFile(h.registryPath())
+	lines, err := h.wf.ListOpenClawContainerJSON()
 	if err != nil {
-		if os.IsNotExist(err) {
-			return []ContainerEntry{}, nil
+		return nil, err
+	}
+	out := make([]ContainerEntry, 0, len(lines))
+	for _, line := range lines {
+		var e ContainerEntry
+		if err := json.Unmarshal([]byte(line), &e); err != nil {
+			return nil, err
 		}
-		return nil, err
+		out = append(out, e)
 	}
-	var entries []ContainerEntry
-	if err := json.Unmarshal(data, &entries); err != nil {
-		return nil, err
-	}
-	return entries, nil
+	return out, nil
 }
 
 func (h *OpenClawHandler) saveRegistry(entries []ContainerEntry) error {
-	data, err := json.MarshalIndent(entries, "", "  ")
-	if err != nil {
-		return err
+	rows := make([][2]string, 0, len(entries))
+	for i := range entries {
+		b, err := json.Marshal(entries[i])
+		if err != nil {
+			return err
+		}
+		if strings.TrimSpace(entries[i].Name) == "" {
+			return fmt.Errorf("container entry missing name")
+		}
+		rows = append(rows, [2]string{entries[i].Name, string(b)})
 	}
-	if err := os.MkdirAll(filepath.Dir(h.registryPath()), 0o755); err != nil {
-		return err
-	}
-	return os.WriteFile(h.registryPath(), data, 0o644)
+	return h.wf.ReplaceOpenClawContainers(rows)
 }
 
 func (h *OpenClawHandler) loadTeams() ([]TeamEntry, error) {
-	data, err := os.ReadFile(h.teamsPath())
+	lines, err := h.wf.ListOpenClawTeamJSON()
 	if err != nil {
-		if os.IsNotExist(err) {
-			return []TeamEntry{}, nil
+		return nil, err
+	}
+	out := make([]TeamEntry, 0, len(lines))
+	for _, line := range lines {
+		var e TeamEntry
+		if err := json.Unmarshal([]byte(line), &e); err != nil {
+			return nil, err
 		}
-		return nil, err
+		out = append(out, e)
 	}
-	var entries []TeamEntry
-	if err := json.Unmarshal(data, &entries); err != nil {
-		return nil, err
-	}
-	return entries, nil
+	return out, nil
 }
 
 func (h *OpenClawHandler) saveTeams(entries []TeamEntry) error {
-	data, err := json.MarshalIndent(entries, "", "  ")
-	if err != nil {
-		return err
+	rows := make([][2]string, 0, len(entries))
+	for i := range entries {
+		b, err := json.Marshal(entries[i])
+		if err != nil {
+			return err
+		}
+		if strings.TrimSpace(entries[i].ID) == "" {
+			return fmt.Errorf("team entry missing id")
+		}
+		rows = append(rows, [2]string{entries[i].ID, string(b)})
 	}
-	if err := os.MkdirAll(filepath.Dir(h.teamsPath()), 0o755); err != nil {
-		return err
-	}
-	return os.WriteFile(h.teamsPath(), data, 0o644)
+	return h.wf.ReplaceOpenClawTeams(rows)
 }
 
 func findTeamByID(entries []TeamEntry, id string) *TeamEntry {

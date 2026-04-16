@@ -784,10 +784,16 @@ routing:
 }
 
 func TestMergeDeployPayload_RoundTripsMaintainedAMDConfig(t *testing.T) {
-	assetPath := filepath.Join("..", "..", "..", "deploy", "amd", "config.yaml")
+	// deploy/amd/README.md documents the AMD reference profile as deploy/recipes/balance.yaml
+	// (there is no separate deploy/amd/config.yaml in-tree).
+	repoRoot, err := filepath.Abs(filepath.Join("..", "..", ".."))
+	if err != nil {
+		t.Fatalf("resolve repo root: %v", err)
+	}
+	assetPath := filepath.Join(repoRoot, "deploy", "recipes", "balance.yaml")
 	originalYAML, err := os.ReadFile(assetPath)
 	if err != nil {
-		t.Fatalf("failed to read maintained AMD config: %v", err)
+		t.Fatalf("failed to read AMD reference recipe config: %v", err)
 	}
 
 	originalCfg, err := routerconfig.ParseYAMLBytes(originalYAML)

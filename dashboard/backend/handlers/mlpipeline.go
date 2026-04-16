@@ -15,6 +15,7 @@ import (
 
 	"github.com/vllm-project/semantic-router/dashboard/backend/middleware"
 	"github.com/vllm-project/semantic-router/dashboard/backend/mlpipeline"
+	"github.com/vllm-project/semantic-router/dashboard/backend/workflowstore"
 )
 
 // MLPipelineHandler holds dependencies for ML pipeline endpoints.
@@ -82,7 +83,7 @@ func (h *MLPipelineHandler) ListJobsHandler() http.HandlerFunc {
 	}
 }
 
-// GetJobHandler returns a specific job by ID.
+// GetJobHandler returns a specific job by ID, or GET .../jobs/{id}/events for typed progress history.
 func (h *MLPipelineHandler) GetJobHandler() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if middleware.HandleCORSPreflight(w, r) {
@@ -93,12 +94,26 @@ func (h *MLPipelineHandler) GetJobHandler() http.HandlerFunc {
 			return
 		}
 
-		pathParts := strings.Split(strings.TrimPrefix(r.URL.Path, "/api/ml-pipeline/jobs/"), "/")
+		pathParts := strings.Split(strings.Trim(strings.TrimPrefix(r.URL.Path, "/api/ml-pipeline/jobs/"), "/"), "/")
 		if len(pathParts) == 0 || pathParts[0] == "" {
 			http.Error(w, "Job ID required", http.StatusBadRequest)
 			return
 		}
 		jobID := pathParts[0]
+
+		if len(pathParts) >= 2 && pathParts[1] == "events" {
+			events, err := h.runner.ListProgressEvents(jobID, 500)
+			if err != nil {
+				http.Error(w, "Failed to load progress events", http.StatusInternalServerError)
+				return
+			}
+			w.Header().Set("Content-Type", "application/json")
+			_ = json.NewEncoder(w).Encode(struct {
+				JobID  string                          `json:"job_id"`
+				Events []workflowstore.MLProgressEvent `json:"events"`
+			}{JobID: jobID, Events: events})
+			return
+		}
 
 		job := h.runner.GetJob(jobID)
 		if job == nil {

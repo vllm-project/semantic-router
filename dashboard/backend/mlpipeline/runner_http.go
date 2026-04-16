@@ -77,9 +77,7 @@ func (r *Runner) runBenchmarkHTTP(ctx context.Context, modelsYAMLPath, queryJSON
 		return "", fmt.Errorf("failed to create job dir: %w", err)
 	}
 
-	r.mu.Lock()
-	job.Status = StatusRunning
-	r.mu.Unlock()
+	r.setJobRunning(job)
 
 	go func() {
 		r.sendProgress(job.ID, 5, "Starting benchmark", "Sending request to ML service")
@@ -150,9 +148,7 @@ func (r *Runner) runTrainHTTP(ctx context.Context, benchmarkDataPath string, req
 		return "", fmt.Errorf("failed to create job dir: %w", err)
 	}
 
-	r.mu.Lock()
-	job.Status = StatusRunning
-	r.mu.Unlock()
+	r.setJobRunning(job)
 
 	go func() {
 		r.sendProgress(job.ID, 5, "Starting training", "Sending request to ML service")

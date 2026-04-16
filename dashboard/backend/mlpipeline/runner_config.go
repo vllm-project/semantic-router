@@ -18,9 +18,7 @@ func (r *Runner) GenerateConfig(req ConfigRequest) (string, error) {
 		return "", fmt.Errorf("failed to create job dir: %w", err)
 	}
 
-	r.mu.Lock()
-	job.Status = StatusRunning
-	r.mu.Unlock()
+	r.setJobRunning(job)
 
 	r.sendProgress(job.ID, 10, "Generating config", "Building deployment configuration")
 
