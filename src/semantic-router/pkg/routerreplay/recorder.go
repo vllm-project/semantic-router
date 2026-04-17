@@ -8,9 +8,9 @@ import (
 )
 
 const (
-	DefaultMaxRecords         = 200
-	DefaultMaxBodyBytes       = 4096 // 4KB
-	DefaultMaxToolTraceBytes  = 0    // No limit — structured fields are typically small
+	DefaultMaxRecords        = 200
+	DefaultMaxBodyBytes      = 4096 // 4KB
+	DefaultMaxToolTraceBytes = 0    // No limit — structured fields are typically small
 )
 
 type (

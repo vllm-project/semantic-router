@@ -305,11 +305,11 @@ func cloneStringPtr(value *string) *string {
 
 // Config holds common configuration options for all storage backends.
 type Config struct {
-	Backend      string // "memory", "redis", "postgres", "milvus"
-	TTLSeconds   int    // Time-to-live for records (0 = no expiration)
-	AsyncWrites  bool   // Enable asynchronous writes
-	MaxBodyBytes      int // Maximum bytes to store for request/response bodies
-	MaxToolTraceBytes int // Maximum bytes for each structured tool-trace field (0 = no limit)
+	Backend           string // "memory", "redis", "postgres", "milvus"
+	TTLSeconds        int    // Time-to-live for records (0 = no expiration)
+	AsyncWrites       bool   // Enable asynchronous writes
+	MaxBodyBytes      int    // Maximum bytes to store for request/response bodies
+	MaxToolTraceBytes int    // Maximum bytes for each structured tool-trace field (0 = no limit)
 
 	// Backend-specific configurations
 	Redis    *RedisConfig
