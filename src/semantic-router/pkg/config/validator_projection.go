@@ -17,6 +17,10 @@ func validateProjectionContracts(cfg *RouterConfig) error {
 	if err != nil {
 		return err
 	}
+	err = validateProjectionScoreDependencyOrder(cfg.Projections.Scores, cfg.Projections.Mappings)
+	if err != nil {
+		return err
+	}
 	for _, decision := range cfg.Decisions {
 		if err := validateDecisionProjectionReferences(decision.Name, &decision.Rules, outputNames); err != nil {
 			return err
@@ -145,12 +149,116 @@ func containsProjectionMember(members []string, target string) bool {
 func validateProjectionScores(cfg *RouterConfig) (map[string]struct{}, error) {
 	names := make(map[string]struct{}, len(cfg.Projections.Scores))
 	declaredSignals := projectionDeclaredSignals(cfg)
+	outputToSource := projectionOutputToSourceScore(cfg.Projections.Mappings)
 	for _, score := range cfg.Projections.Scores {
-		if err := validateProjectionScore(score, names, declaredSignals, cfg); err != nil {
+		if err := validateProjectionScore(score, names, declaredSignals, cfg, outputToSource); err != nil {
 			return nil, err
 		}
 	}
 	return names, nil
+}
+
+func projectionOutputToSourceScore(mappings []ProjectionMapping) map[string]string {
+	m := make(map[string]string)
+	for _, mapping := range mappings {
+		for _, output := range mapping.Outputs {
+			if output.Name != "" {
+				m[output.Name] = mapping.Source
+			}
+		}
+	}
+	return m
+}
+
+func buildProjectionScoreAdj(scores []ProjectionScore, outputToSource map[string]string) map[string][]string {
+	adj := make(map[string][]string, len(scores))
+	for _, score := range scores {
+		for _, input := range score.Inputs {
+			if !strings.EqualFold(input.Type, SignalTypeProjection) {
+				continue
+			}
+			vs := strings.ToLower(strings.TrimSpace(input.ValueSource))
+			if vs == "confidence" {
+				if src, ok := outputToSource[input.Name]; ok {
+					adj[score.Name] = append(adj[score.Name], src)
+				}
+			} else {
+				adj[score.Name] = append(adj[score.Name], input.Name)
+			}
+		}
+	}
+	return adj
+}
+
+func formatCyclePath(path []string, name string) string {
+	cycle := make([]string, len(path)+1)
+	copy(cycle, path)
+	cycle[len(path)] = name
+	for i, n := range cycle {
+		if n == name {
+			return strings.Join(cycle[i:], " -> ")
+		}
+	}
+	return strings.Join(cycle, " -> ")
+}
+
+func validateProjectionScoreDependencyOrder(scores []ProjectionScore, mappings []ProjectionMapping) error {
+	nameIndex := make(map[string]int, len(scores))
+	for i, s := range scores {
+		nameIndex[s.Name] = i
+	}
+
+	outputToSource := projectionOutputToSourceScore(mappings)
+	adj := buildProjectionScoreAdj(scores, outputToSource)
+	if len(adj) == 0 {
+		return nil
+	}
+
+	const (
+		unvisited = 0
+		visiting  = 1
+		visited   = 2
+	)
+	state := make(map[string]int, len(scores))
+	var path []string
+
+	var visit func(name string) error
+	visit = func(name string) error {
+		if state[name] == visited {
+			return nil
+		}
+		if state[name] == visiting {
+			return fmt.Errorf(
+				"routing.projections.scores: dependency cycle detected: %s",
+				formatCyclePath(path, name),
+			)
+		}
+		state[name] = visiting
+		path = append(path, name)
+		for _, dep := range adj[name] {
+			if _, ok := nameIndex[dep]; !ok {
+				return fmt.Errorf(
+					"routing.projections.scores[%q]: projection input references undefined score %q",
+					name, dep,
+				)
+			}
+			if err := visit(dep); err != nil {
+				return err
+			}
+		}
+		path = path[:len(path)-1]
+		state[name] = visited
+		return nil
+	}
+
+	for _, score := range scores {
+		if state[score.Name] == unvisited {
+			if err := visit(score.Name); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
 }
 
 func validateProjectionScore(
@@ -158,6 +266,7 @@ func validateProjectionScore(
 	names map[string]struct{},
 	declaredSignals map[string]map[string]struct{},
 	cfg *RouterConfig,
+	outputToSource map[string]string,
 ) error {
 	if score.Name == "" {
 		return fmt.Errorf("routing.projections.scores: name cannot be empty")
@@ -173,7 +282,7 @@ func validateProjectionScore(
 		return fmt.Errorf("routing.projections.scores[%q]: inputs cannot be empty", score.Name)
 	}
 	for _, input := range score.Inputs {
-		if err := validateProjectionScoreInput(score.Name, input, declaredSignals, cfg); err != nil {
+		if err := validateProjectionScoreInput(score.Name, input, declaredSignals, cfg, outputToSource); err != nil {
 			return err
 		}
 	}
@@ -185,6 +294,7 @@ func validateProjectionScoreInput(
 	input ProjectionScoreInput,
 	declaredSignals map[string]map[string]struct{},
 	cfg *RouterConfig,
+	outputToSource map[string]string,
 ) error {
 	if !isProjectionInputTypeSupported(input.Type) {
 		return fmt.Errorf(
@@ -198,6 +308,9 @@ func validateProjectionScoreInput(
 	if strings.EqualFold(input.Type, ProjectionInputKBMetric) {
 		return validateKBMetricProjectionInput(cfg, scoreName, input)
 	}
+	if strings.EqualFold(input.Type, SignalTypeProjection) {
+		return validateProjectionInputProjectionRef(scoreName, input, outputToSource)
+	}
 	if !projectionInputDeclared(declaredSignals, input.Type, input.Name) {
 		return fmt.Errorf(
 			"routing.projections.scores[%q]: input %s(%q) is not declared in routing.signals",
@@ -207,6 +320,35 @@ func validateProjectionScoreInput(
 		)
 	}
 	return validateProjectionInputValueSource(scoreName, input)
+}
+
+func validateProjectionInputProjectionRef(scoreName string, input ProjectionScoreInput, outputToSource map[string]string) error {
+	if input.Name == "" {
+		return fmt.Errorf(
+			"routing.projections.scores[%q]: projection input requires a name referencing a declared score or mapping output",
+			scoreName,
+		)
+	}
+	switch strings.ToLower(strings.TrimSpace(input.ValueSource)) {
+	case "", "score":
+		return nil
+	case "confidence":
+		if _, ok := outputToSource[input.Name]; !ok {
+			return fmt.Errorf(
+				"routing.projections.scores[%q]: projection input %q with value_source \"confidence\" references undefined mapping output",
+				scoreName,
+				input.Name,
+			)
+		}
+		return nil
+	default:
+		return fmt.Errorf(
+			"routing.projections.scores[%q]: projection input %q has unsupported value_source %q (supported: score, confidence)",
+			scoreName,
+			input.Name,
+			input.ValueSource,
+		)
+	}
 }
 
 func validateProjectionInputValueSource(scoreName string, input ProjectionScoreInput) error {
@@ -244,7 +386,8 @@ func isProjectionInputTypeSupported(signalType string) bool {
 		SignalTypeKB,
 		SignalTypeConversation,
 		SignalTypeSessionMetric,
-		ProjectionInputKBMetric:
+		ProjectionInputKBMetric,
+		SignalTypeProjection:
 		return true
 	default:
 		return false

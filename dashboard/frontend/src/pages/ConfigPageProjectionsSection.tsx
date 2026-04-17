@@ -196,7 +196,7 @@ export default function ConfigPageProjectionsSection({
       type: 'json',
       required: true,
       description:
-        'JSON array of { type, name, weight, value_source?, match?, miss? } objects. Supported value_source: "binary" (default), "confidence", "raw".',
+        'JSON array of { type, name, weight, value_source?, match?, miss? } objects. Supported value_source: "binary" (default), "confidence", "raw". Use type "projection" with value_source "score" to reference earlier projection scores, or value_source "confidence" to reference mapping output confidences.',
       placeholder:
         '[{"type":"embedding","name":"technical_support","weight":0.18,"value_source":"confidence"}]',
     },
