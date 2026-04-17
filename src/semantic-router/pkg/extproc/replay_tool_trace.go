@@ -17,10 +17,18 @@ const (
 	replayToolSourceRequest  = "request"
 	replayToolSourceResponse = "response"
 	replayToolSourceStream   = "stream"
+
+	// replayAPITypeChatCompletions and replayAPITypeResponses are the two API
+	// variants that tool-trace steps can originate from.  The value is stored
+	// in ToolTraceStep.APIType so downstream consumers know how to interpret
+	// the Arguments / Output fields.
+	replayAPITypeChatCompletions = "chat_completions"
+	replayAPITypeResponses       = "responses"
 )
 
 type replayToolTraceChatRequest struct {
 	Messages []replayToolTraceChatMessage `json:"messages"`
+	Tools    []json.RawMessage            `json:"tools,omitempty"`
 }
 
 type replayToolTraceChatResponse struct {
@@ -108,6 +116,26 @@ func (collector *replayToolTraceCollector) addToolResult(source string, role str
 		ToolName:   collector.toolNamesByCallID[toolCallID],
 		ToolCallID: toolCallID,
 		RawOutput:  rawOutput,
+		Output:     rawOutput,
+	})
+}
+
+// addToolResultWithAPIType is like addToolResult but also stamps the APIType
+// on the step so consumers know which API variant produced the result.
+func (collector *replayToolTraceCollector) addToolResultWithAPIType(source string, role string, raw json.RawMessage, toolCallID string, apiType string) {
+	rawOutput := ""
+	if len(raw) > 0 && string(raw) != "null" {
+		rawOutput = string(raw)
+	}
+	collector.addToolResultStep(routerreplay.ToolTraceStep{
+		Source:     source,
+		Role:       role,
+		Text:       extractReplayJSONText(raw),
+		ToolName:   collector.toolNamesByCallID[toolCallID],
+		ToolCallID: toolCallID,
+		RawOutput:  rawOutput,
+		Output:     rawOutput,
+		APIType:    apiType,
 	})
 }
 
@@ -137,6 +165,71 @@ func (collector *replayToolTraceCollector) addTextStep(stepType string, source s
 
 func (collector *replayToolTraceCollector) trace() *routerreplay.ToolTrace {
 	return newReplayToolTrace(collector.steps)
+}
+
+// extractChatCompletionPromptAndTools parses a Chat Completions request body
+// and returns the last user-message text and the raw JSON of the tools array.
+// Both values are extracted from the full body before any truncation occurs.
+func extractChatCompletionPromptAndTools(body []byte) (prompt string, toolDefs string) {
+	if len(body) == 0 {
+		return "", ""
+	}
+	var req replayToolTraceChatRequest
+	if err := json.Unmarshal(body, &req); err != nil {
+		return "", ""
+	}
+
+	// Last user message becomes the prompt.
+	for i := len(req.Messages) - 1; i >= 0; i-- {
+		if req.Messages[i].Role == "user" {
+			prompt = extractReplayJSONText(req.Messages[i].Content)
+			break
+		}
+	}
+
+	// Serialize the tools array if present.
+	if len(req.Tools) > 0 {
+		if raw, err := json.Marshal(req.Tools); err == nil {
+			toolDefs = string(raw)
+		}
+	}
+	return prompt, toolDefs
+}
+
+// extractResponseAPIPromptAndTools extracts the prompt and tool definitions
+// from a Responses API request.  The prompt is taken from a plain string input
+// or from the last user message in the input items array.
+func extractResponseAPIPromptAndTools(ctx *RequestContext) (prompt string, toolDefs string) {
+	if ctx == nil || ctx.ResponseAPICtx == nil || ctx.ResponseAPICtx.OriginalRequest == nil {
+		return "", ""
+	}
+	req := ctx.ResponseAPICtx.OriginalRequest
+
+	// Try plain string input first.
+	var inputText string
+	if err := json.Unmarshal(req.Input, &inputText); err == nil && inputText != "" {
+		prompt = inputText
+	} else {
+		// Walk input items to find the last user message.
+		var items []replayToolTraceResponseAPIItem
+		if err := json.Unmarshal(req.Input, &items); err == nil {
+			for i := len(items) - 1; i >= 0; i-- {
+				item := items[i]
+				if item.Type == "message" && (item.Role == "" || item.Role == "user") {
+					prompt = extractReplayJSONText(item.Content)
+					break
+				}
+			}
+		}
+	}
+
+	// Serialize the tools array if present.
+	if len(req.Tools) > 0 {
+		if raw, err := json.Marshal(req.Tools); err == nil {
+			toolDefs = string(raw)
+		}
+	}
+	return prompt, toolDefs
 }
 
 func buildReplayRequestToolTrace(ctx *RequestContext) *routerreplay.ToolTrace {
@@ -372,7 +465,10 @@ func replayToolTraceStepsEqual(
 		left.ToolCallID == right.ToolCallID &&
 		left.Arguments == right.Arguments &&
 		left.RawArguments == right.RawArguments &&
-		left.RawOutput == right.RawOutput
+		left.RawOutput == right.RawOutput &&
+		left.Output == right.Output &&
+		left.APIType == right.APIType &&
+		left.Truncated == right.Truncated
 }
 
 func replayToolTraceStepLabel(stepType string) string {
@@ -508,10 +604,11 @@ func appendReplayChatRequestMessage(collector *replayToolTraceCollector, message
 				ToolCallID:   toolCall.ID,
 				Arguments:    toolCall.Function.Arguments,
 				RawArguments: toolCall.Function.Arguments,
+				APIType:      replayAPITypeChatCompletions,
 			})
 		}
 	case "tool":
-		collector.addToolResult(replayToolSourceRequest, message.Role, message.Content, message.ToolCallID)
+		collector.addToolResultWithAPIType(replayToolSourceRequest, message.Role, message.Content, message.ToolCallID, replayAPITypeChatCompletions)
 	}
 }
 
@@ -554,9 +651,10 @@ func appendReplayResponseAPIRequestItem(collector *replayToolTraceCollector, ite
 			ToolCallID:   item.CallID,
 			Arguments:    item.Arguments,
 			RawArguments: item.Arguments,
+			APIType:      replayAPITypeResponses,
 		})
 	case "function_call_output":
-		collector.addToolResult(replayToolSourceRequest, "tool", item.Output, item.CallID)
+		collector.addToolResultWithAPIType(replayToolSourceRequest, "tool", item.Output, item.CallID, replayAPITypeResponses)
 	}
 }
 
@@ -570,9 +668,10 @@ func appendReplayResponseAPIResponseItem(collector *replayToolTraceCollector, it
 			ToolCallID:   item.CallID,
 			Arguments:    item.Arguments,
 			RawArguments: item.Arguments,
+			APIType:      replayAPITypeResponses,
 		})
 	case "function_call_output":
-		collector.addToolResult(replayToolSourceResponse, "tool", item.Output, item.CallID)
+		collector.addToolResultWithAPIType(replayToolSourceResponse, "tool", item.Output, item.CallID, replayAPITypeResponses)
 	case "message":
 		if item.Role != "" && item.Role != "assistant" {
 			return

@@ -8,8 +8,9 @@ import (
 )
 
 const (
-	DefaultMaxRecords   = 200
-	DefaultMaxBodyBytes = 4096 // 4KB
+	DefaultMaxRecords         = 200
+	DefaultMaxBodyBytes       = 4096 // 4KB
+	DefaultMaxToolTraceBytes  = 0    // No limit — structured fields are typically small
 )
 
 type (
@@ -23,7 +24,8 @@ type (
 type Recorder struct {
 	storage store.Storage
 
-	maxBodyBytes int
+	maxBodyBytes      int
+	maxToolTraceBytes int // 0 = no limit
 
 	captureRequestBody  bool
 	captureResponseBody bool
@@ -32,8 +34,9 @@ type Recorder struct {
 // NewRecorder creates a new Recorder with the specified storage backend.
 func NewRecorder(storage store.Storage) *Recorder {
 	return &Recorder{
-		storage:      storage,
-		maxBodyBytes: DefaultMaxBodyBytes,
+		storage:           storage,
+		maxBodyBytes:      DefaultMaxBodyBytes,
+		maxToolTraceBytes: DefaultMaxToolTraceBytes,
 	}
 }
 
@@ -45,6 +48,15 @@ func (r *Recorder) SetCapturePolicy(captureRequest, captureResponse bool, maxBod
 		r.maxBodyBytes = maxBodyBytes
 	} else {
 		r.maxBodyBytes = DefaultMaxBodyBytes
+	}
+}
+
+// SetMaxToolTraceBytes sets the per-field byte limit for structured tool-trace
+// fields (Prompt, ToolDefinitions, ToolTraceStep.Arguments, ToolTraceStep.Output).
+// A value of 0 disables truncation for those fields.
+func (r *Recorder) SetMaxToolTraceBytes(max int) {
+	if max >= 0 {
+		r.maxToolTraceBytes = max
 	}
 }
 
@@ -75,6 +87,34 @@ func (r *Recorder) AddRecord(rec RoutingRecord) (string, error) {
 	if r.captureResponseBody && len(rec.ResponseBody) > r.maxBodyBytes {
 		rec.ResponseBody = rec.ResponseBody[:r.maxBodyBytes]
 		rec.ResponseBodyTruncated = true
+	}
+
+	// Apply MaxToolTraceBytes to structured tool-trace fields.
+	// These are truncated independently of the raw body fields so that
+	// callers can keep MaxBodyBytes small without losing structured data.
+	if r.maxToolTraceBytes > 0 {
+		if len(rec.Prompt) > r.maxToolTraceBytes {
+			rec.Prompt = rec.Prompt[:r.maxToolTraceBytes]
+			rec.PromptTruncated = true
+		}
+		if len(rec.ToolDefinitions) > r.maxToolTraceBytes {
+			rec.ToolDefinitions = rec.ToolDefinitions[:r.maxToolTraceBytes]
+		}
+		if rec.ToolTrace != nil {
+			for i := range rec.ToolTrace.Steps {
+				step := &rec.ToolTrace.Steps[i]
+				if len(step.Arguments) > r.maxToolTraceBytes {
+					step.Arguments = step.Arguments[:r.maxToolTraceBytes]
+					step.RawArguments = step.Arguments
+					step.Truncated = true
+				}
+				if len(step.Output) > r.maxToolTraceBytes {
+					step.Output = step.Output[:r.maxToolTraceBytes]
+					step.RawOutput = step.Output
+					step.Truncated = true
+				}
+			}
+		}
 	}
 
 	ctx := context.Background()

@@ -295,3 +295,100 @@ func assertFieldValue(
 		t.Fatalf("expected field %q=%#v, got %#v", key, expected, value)
 	}
 }
+
+func TestRecorderMaxToolTraceBytesPromptTruncation(t *testing.T) {
+	recorder := NewRecorder(store.NewMemoryStore(10, 0))
+	recorder.SetCapturePolicy(false, false, 4096)
+	recorder.SetMaxToolTraceBytes(15)
+
+	id, err := recorder.AddRecord(RoutingRecord{
+		RequestID:       "req-trunc-prompt",
+		Prompt:          "This prompt exceeds fifteen bytes",
+		ToolDefinitions: `[{"type":"function"}]`,
+	})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	rec, found := recorder.GetRecord(id)
+	if !found {
+		t.Fatal("record not found")
+	}
+
+	if len(rec.Prompt) != 15 {
+		t.Errorf("expected Prompt len=15, got %d", len(rec.Prompt))
+	}
+	if !rec.PromptTruncated {
+		t.Error("expected PromptTruncated=true")
+	}
+	// ToolDefinitions is shorter than 15 bytes only if json is short enough;
+	// here `[{"type":"function"}]` is 22 bytes so it should be truncated too.
+	if len(rec.ToolDefinitions) != 15 {
+		t.Errorf("expected ToolDefinitions len=15, got %d", len(rec.ToolDefinitions))
+	}
+}
+
+func TestRecorderMaxToolTraceBytesStepTruncation(t *testing.T) {
+	recorder := NewRecorder(store.NewMemoryStore(10, 0))
+	recorder.SetCapturePolicy(false, false, 4096)
+	recorder.SetMaxToolTraceBytes(8)
+
+	trace := &ToolTrace{
+		Steps: []ToolTraceStep{
+			{Type: "assistant_tool_call", Arguments: `{"city":"New York"}`, Output: ""},
+			{Type: "client_tool_result", Arguments: "", Output: `{"temp":"22C"}`},
+		},
+	}
+	id, err := recorder.AddRecord(RoutingRecord{
+		RequestID: "req-trunc-steps",
+		ToolTrace: trace,
+	})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	rec, found := recorder.GetRecord(id)
+	if !found {
+		t.Fatal("record not found")
+	}
+
+	if len(rec.ToolTrace.Steps[0].Arguments) != 8 {
+		t.Errorf("expected Arguments len=8, got %d", len(rec.ToolTrace.Steps[0].Arguments))
+	}
+	if !rec.ToolTrace.Steps[0].Truncated {
+		t.Error("expected step[0].Truncated=true")
+	}
+	if len(rec.ToolTrace.Steps[1].Output) != 8 {
+		t.Errorf("expected Output len=8, got %d", len(rec.ToolTrace.Steps[1].Output))
+	}
+	if !rec.ToolTrace.Steps[1].Truncated {
+		t.Error("expected step[1].Truncated=true")
+	}
+}
+
+func TestRecorderSetMaxToolTraceBytesZeroNoTruncation(t *testing.T) {
+	recorder := NewRecorder(store.NewMemoryStore(10, 0))
+	recorder.SetCapturePolicy(false, false, 4096)
+	recorder.SetMaxToolTraceBytes(0) // no limit
+
+	longPrompt := "This is a very long prompt that would be truncated if the limit were active."
+	id, err := recorder.AddRecord(RoutingRecord{
+		RequestID: "req-no-trunc",
+		Prompt:    longPrompt,
+	})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	rec, found := recorder.GetRecord(id)
+	if !found {
+		t.Fatal("record not found")
+	}
+
+	if rec.Prompt != longPrompt {
+		t.Errorf("expected full prompt, got %q", rec.Prompt)
+	}
+	if rec.PromptTruncated {
+		t.Error("expected PromptTruncated=false")
+	}
+}
