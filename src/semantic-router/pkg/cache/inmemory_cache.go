@@ -1174,12 +1174,15 @@ func (h *HNSWIndex) addNode(entryIndex int, embedding []float32, entries []Cache
 	for lc := min(level, h.maxLayer); lc >= 0; lc-- {
 		candidates := h.searchLayer(embedding, currentEntryPoint, h.efConstruction, lc, entries)
 
-		// Select M nearest neighbors
+		// Select M nearest neighbors from sorted candidates returned from searchLayer (nearest first, farthest last)
 		M := h.Mmax
 		if lc == 0 {
 			M = h.Mmax0
 		}
-		neighbors := h.selectOrderedNeighborIndices(candidates, M)
+		neighbors := candidates
+		if len(neighbors) > M {
+			neighbors = neighbors[:M]
+		}
 
 		// Add bidirectional links
 		node.neighbors[lc] = neighbors
@@ -1235,7 +1238,7 @@ func (h *HNSWIndex) searchKNN(queryEmbedding []float32, k, ef int, entries []Cac
 
 // searchLayer searches for nearest neighbors at a specific layer.
 //
-// It returns candidate entry indices ordered by ascending distance(nearest first, farthest last).
+// It returns candidate entry indices ordered by ascending distance (nearest first, farthest last).
 func (h *HNSWIndex) searchLayer(queryEmbedding []float32, entryPoint, ef, layer int, entries []CacheEntry) []int {
 	visited := make(map[int]bool)
 	candidates := newMinHeap() // set of candidates, explore closest candidate first
@@ -1288,22 +1291,6 @@ func (h *HNSWIndex) searchLayer(queryEmbedding []float32, entryPoint, ef, layer 
 	}
 
 	return results.sortedIndicesAsc()
-}
-
-// selectOrderedNeighborIndices truncates an already distance-ordered result without recomputing distances.
-// The input must be ordered nearest-first.
-func (h *HNSWIndex) selectOrderedNeighborIndices(candidates []int, m int) []int {
-	if len(candidates) == 0 || m <= 0 {
-		return []int{}
-	}
-
-	if len(candidates) > m {
-		candidates = candidates[:m]
-	}
-
-	result := make([]int, 0, len(candidates))
-	result = append(result, candidates...)
-	return result
 }
 
 // selectNeighbors selects the best neighbors by sorting by distance
