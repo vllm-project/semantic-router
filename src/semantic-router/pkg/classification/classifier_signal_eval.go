@@ -175,17 +175,42 @@ func (c *Classifier) expandProjectionDependencies(usedSignals map[string]bool) {
 		if !ok {
 			continue
 		}
-		score, ok := scoreByName[scoreName]
-		if !ok {
+		c.expandScoreInputs(scoreName, scoreByName, sourceByOutput, usedSignals, make(map[string]bool))
+	}
+}
+
+func (c *Classifier) expandScoreInputs(
+	scoreName string,
+	scoreByName map[string]config.ProjectionScore,
+	sourceByOutput map[string]string,
+	usedSignals map[string]bool,
+	visited map[string]bool,
+) {
+	if visited[scoreName] {
+		return
+	}
+	visited[scoreName] = true
+
+	score, ok := scoreByName[scoreName]
+	if !ok {
+		return
+	}
+	for _, input := range score.Inputs {
+		if strings.EqualFold(input.Type, config.ProjectionInputKBMetric) {
+			usedSignals[strings.ToLower(config.SignalTypeKB+":"+input.KB)] = true
 			continue
 		}
-		for _, input := range score.Inputs {
-			if strings.EqualFold(input.Type, config.ProjectionInputKBMetric) {
-				usedSignals[strings.ToLower(config.SignalTypeKB+":"+input.KB)] = true
-				continue
+		if strings.EqualFold(input.Type, config.SignalTypeProjection) {
+			dep := input.Name
+			if strings.EqualFold(strings.TrimSpace(input.ValueSource), "confidence") {
+				if src, ok := sourceByOutput[strings.ToLower(dep)]; ok {
+					dep = src
+				}
 			}
-			usedSignals[strings.ToLower(input.Type+":"+input.Name)] = true
+			c.expandScoreInputs(dep, scoreByName, sourceByOutput, usedSignals, visited)
+			continue
 		}
+		usedSignals[strings.ToLower(input.Type+":"+input.Name)] = true
 	}
 }
 
