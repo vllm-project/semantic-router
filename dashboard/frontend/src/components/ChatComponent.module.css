@@ -917,7 +917,6 @@ body.playground-fullscreen .container {
   background: rgba(44, 45, 49, 0.82);
   border: none;
   border-radius: 28px;
-  /* visible so composer tooltips (e.g. Web Search) can sit outside the pill */
   overflow: visible;
   transition: all var(--transition-base);
   position: relative;
