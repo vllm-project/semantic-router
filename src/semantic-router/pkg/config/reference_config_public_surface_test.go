@@ -201,6 +201,25 @@ func assertReferenceConfigDecisionCoverage(t testingT, decisions []interface{}) 
 		reflect.TypeOf(ModelRef{}),
 		"routing.decisions[].modelRefs",
 	)
+	candidateIterations := collectNestedSliceItems(t, decisions, "candidateIterations", "routing.decisions")
+	assertSliceUnionCoversStructFields(
+		t,
+		candidateIterations,
+		reflect.TypeOf(CandidateIterationConfig{}),
+		"routing.decisions[].candidateIterations",
+	)
+	assertSliceUnionCoversStructFields(
+		t,
+		collectNestedSliceItems(t, candidateIterations, "models", "routing.decisions[].candidateIterations"),
+		reflect.TypeOf(ModelRef{}),
+		"routing.decisions[].candidateIterations[].models",
+	)
+	assertSliceUnionCoversStructFields(
+		t,
+		collectNestedSliceItems(t, candidateIterations, "outputs", "routing.decisions[].candidateIterations"),
+		reflect.TypeOf(CandidateIterationOutputConfig{}),
+		"routing.decisions[].candidateIterations[].outputs",
+	)
 	assertSliceUnionCoversStructFields(
 		t,
 		collectChildMapsFromSlice(t, decisions, "algorithm", "routing.decisions"),

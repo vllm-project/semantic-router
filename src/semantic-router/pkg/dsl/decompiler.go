@@ -387,8 +387,10 @@ func (d *decompiler) decompileDecisions() {
 			d.write("  WHEN %s\n", ruleExpr)
 		}
 
+		omitModelList := candidateIterationsCoverModelRefs(dec)
+
 		// MODEL list
-		if len(dec.ModelRefs) > 0 {
+		if len(dec.ModelRefs) > 0 && !omitModelList {
 			d.write("  MODEL ")
 			for i, mr := range dec.ModelRefs {
 				if i > 0 {
@@ -401,6 +403,11 @@ func (d *decompiler) decompileDecisions() {
 				}
 			}
 			d.write("\n")
+		}
+
+		// Bounded candidate iteration
+		for _, iter := range dec.CandidateIterations {
+			d.decompileCandidateIteration(iter)
 		}
 
 		// ALGORITHM
@@ -426,6 +433,82 @@ func (d *decompiler) decompileDecisions() {
 
 		d.write("}\n\n")
 	}
+}
+
+func (d *decompiler) decompileCandidateIteration(iter config.CandidateIterationConfig) {
+	source := iter.Source
+	if source == "models" {
+		source = decompileCandidateIterationModelSource(iter.Models)
+	}
+	d.write("  FOR %s IN %s {\n", sanitizeName(iter.Variable), source)
+	for _, output := range iter.Outputs {
+		if output.Type == "model" {
+			d.write("    MODEL %s\n", sanitizeName(output.Value))
+		}
+	}
+	d.write("  }\n")
+}
+
+func decompileCandidateIterationModelSource(models []config.ModelRef) string {
+	if len(models) == 0 {
+		return "[]"
+	}
+	var sb strings.Builder
+	sb.WriteString("[")
+	for i, model := range models {
+		if i > 0 {
+			sb.WriteString(", ")
+		}
+		sb.WriteString(strconv.Quote(model.Model))
+		opts := candidateIterationModelRefOptions(&model)
+		if opts != "" {
+			sb.WriteString(" (")
+			sb.WriteString(opts)
+			sb.WriteString(")")
+		}
+	}
+	sb.WriteString("]")
+	return sb.String()
+}
+
+func candidateIterationModelRefOptions(model *config.ModelRef) string {
+	var opts []string
+	if model.UseReasoning != nil {
+		opts = append(opts, fmt.Sprintf("reasoning = %t", *model.UseReasoning))
+	}
+	if model.ReasoningEffort != "" {
+		opts = append(opts, fmt.Sprintf("effort = %q", model.ReasoningEffort))
+	}
+	if model.LoRAName != "" {
+		opts = append(opts, fmt.Sprintf("lora = %q", model.LoRAName))
+	}
+	if model.Weight != 0 {
+		opts = append(opts, fmt.Sprintf("weight = %s", strconv.FormatFloat(model.Weight, 'f', -1, 64)))
+	}
+	return strings.Join(opts, ", ")
+}
+
+func candidateIterationsCoverModelRefs(dec config.Decision) bool {
+	// The MODEL omission optimization is only proven for one explicit-model
+	// iteration that emits MODEL <iterator>. Multiple iterations require a
+	// merge/order/dedup contract before they can safely cover ModelRefs.
+	if len(dec.CandidateIterations) != 1 {
+		return false
+	}
+	iter := dec.CandidateIterations[0]
+	if iter.Source != "models" || !iterEmitsVariable(iter) {
+		return false
+	}
+	if len(dec.ModelRefs) != len(iter.Models) {
+		return false
+	}
+	for i := range dec.ModelRefs {
+		if dec.ModelRefs[i].Model != iter.Models[i].Model ||
+			dec.ModelRefs[i].LoRAName != iter.Models[i].LoRAName {
+			return false
+		}
+	}
+	return true
 }
 
 func decompileRuleNode(node *config.RuleCombination) string {
@@ -1268,7 +1351,38 @@ func (d *decompiler) decisionToRoute(dec *config.Decision) *RouteDecl {
 		route.Plugins = append(route.Plugins, ref)
 	}
 
+	for _, iter := range dec.CandidateIterations {
+		route.CandidateIterations = append(route.CandidateIterations, candidateIterationConfigToDecl(iter))
+	}
+
 	return route
+}
+
+func candidateIterationConfigToDecl(iter config.CandidateIterationConfig) *CandidateIterationDecl {
+	decl := &CandidateIterationDecl{
+		Variable: iter.Variable,
+		Source:   iter.Source,
+	}
+	for _, model := range iter.Models {
+		decl.Models = append(decl.Models, configModelRefToDSLModelRef(model))
+	}
+	for _, output := range iter.Outputs {
+		decl.Outputs = append(decl.Outputs, &CandidateIterationOutputDecl{
+			Type:  output.Type,
+			Value: output.Value,
+		})
+	}
+	return decl
+}
+
+func configModelRefToDSLModelRef(model config.ModelRef) *ModelRef {
+	return &ModelRef{
+		Model:     model.Model,
+		Reasoning: model.UseReasoning,
+		Effort:    model.ReasoningEffort,
+		LoRA:      model.LoRAName,
+		Weight:    model.Weight,
+	}
 }
 
 func decompileRuleNodeToExpr(node *config.RuleCombination) BoolExpr {

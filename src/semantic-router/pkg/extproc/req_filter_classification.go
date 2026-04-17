@@ -63,7 +63,7 @@ func (r *OpenAIRouter) performDecisionEvaluation(originalModel string, history s
 // The algorithm parameter allows per-decision algorithm override (aligned with looper pattern).
 // The categoryName parameter is the detected domain category (e.g., "physics", "math") for ML feature vectors.
 // Returns the selected model and the method name used for logging.
-func (r *OpenAIRouter) selectModelFromCandidates(modelRefs []config.ModelRef, decisionName string, query string, algorithm *config.AlgorithmConfig, categoryName string) (*config.ModelRef, string) {
+func (r *OpenAIRouter) selectModelFromCandidates(modelRefs []config.ModelRef, decisionName string, query string, algorithm *config.AlgorithmConfig, categoryName string, candidateIterations []config.CandidateIterationConfig) (*config.ModelRef, string) {
 	if len(modelRefs) == 0 {
 		return nil, ""
 	}
@@ -97,6 +97,7 @@ func (r *OpenAIRouter) selectModelFromCandidates(modelRefs []config.ModelRef, de
 		DecisionName:               decisionName,
 		CategoryName:               categoryName,
 		CandidateModels:            modelRefs,
+		CandidateIterations:        candidateIterations,
 		CostWeight:                 costWeight,
 		QualityWeight:              qualityWeight,
 		LatencyAwareTPOTPercentile: latencyAwareTPOTPercentile,

@@ -156,6 +156,10 @@ type SelectionContext struct {
 	// CandidateModels is the list of models to select from
 	CandidateModels []config.ModelRef
 
+	// CandidateIterations carries bounded DSL FOR ... IN metadata for selectors
+	// that opt into session-aware candidate policy evaluation.
+	CandidateIterations []config.CandidateIterationConfig
+
 	// CostWeight indicates how much to weight cost in selection (0.0-1.0)
 	// Higher values prefer cheaper models
 	CostWeight float64
