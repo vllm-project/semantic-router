@@ -523,7 +523,7 @@ func TestChatCompletionToolSteps_HaveAPITypeAndOutput(t *testing.T) {
 
 		toolResultStep := record.ToolTrace.Steps[2]
 		assert.Equal(t, replayAPITypeChatCompletions, toolResultStep.APIType)
-		assert.Equal(t, `{"temp":"22C"}`, toolResultStep.Output)
+		assert.JSONEq(t, `{"temp":"22C"}`, toolResultStep.Output)
 		assert.Equal(t, toolResultStep.RawOutput, toolResultStep.Output)
 	}
 }

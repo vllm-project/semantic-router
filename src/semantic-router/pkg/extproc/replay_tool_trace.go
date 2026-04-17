@@ -104,24 +104,6 @@ func (collector *replayToolTraceCollector) addAssistantToolCall(step routerrepla
 	}
 }
 
-func (collector *replayToolTraceCollector) addToolResult(source string, role string, raw json.RawMessage, toolCallID string) {
-	rawOutput := ""
-	if len(raw) > 0 && string(raw) != "null" {
-		rawOutput = string(raw)
-	}
-	collector.addToolResultStep(routerreplay.ToolTraceStep{
-		Source:     source,
-		Role:       role,
-		Text:       extractReplayJSONText(raw),
-		ToolName:   collector.toolNamesByCallID[toolCallID],
-		ToolCallID: toolCallID,
-		RawOutput:  rawOutput,
-		Output:     rawOutput,
-	})
-}
-
-// addToolResultWithAPIType is like addToolResult but also stamps the APIType
-// on the step so consumers know which API variant produced the result.
 func (collector *replayToolTraceCollector) addToolResultWithAPIType(source string, role string, raw json.RawMessage, toolCallID string, apiType string) {
 	rawOutput := ""
 	if len(raw) > 0 && string(raw) != "null" {
