@@ -16,6 +16,10 @@ type ModelSelectionConfig struct {
 	ML       MLSelectionConfig       `yaml:"ml,omitempty"`
 
 	Momentum MomentumSelectionConfig `yaml:"momentum,omitempty"`
+
+	// ModelSwitchGate configures session-aware stay-vs-switch evaluation.
+	ModelSwitchGate ModelSwitchGateConfig `yaml:"model_switch_gate,omitempty"`
+
 	// LookupTables configures persisted lookup tables for session-aware routing.
 	LookupTables LookupTableConfig `yaml:"lookup_tables,omitempty"`
 }
@@ -81,6 +85,25 @@ type MomentumSelectionConfig struct {
 	Attack    float64 `yaml:"attack,omitempty"`
 	Release   float64 `yaml:"release,omitempty"`
 	Threshold float64 `yaml:"threshold,omitempty"`
+}
+
+// ModelSwitchGateConfig configures auditable session-aware model switching.
+type ModelSwitchGateConfig struct {
+	// Enabled activates stay-vs-switch evaluation after the configured selector runs.
+	Enabled bool `yaml:"enabled,omitempty"`
+
+	// Mode controls whether the gate only audits decisions ("shadow") or applies
+	// them to keep the current model ("enforce"). Empty defaults to shadow.
+	Mode string `yaml:"mode,omitempty"`
+
+	// MinSwitchAdvantage is the minimum net advantage required to allow switching.
+	MinSwitchAdvantage float64 `yaml:"min_switch_advantage,omitempty"`
+
+	// DefaultHandoffPenalty is used when lookup_tables has no handoff_penalty entry.
+	DefaultHandoffPenalty float64 `yaml:"default_handoff_penalty,omitempty"`
+
+	// CacheWarmthWeight turns cache warmth into a switch penalty.
+	CacheWarmthWeight float64 `yaml:"cache_warmth_weight,omitempty"`
 }
 
 // MLSelectionConfig holds configuration for the shared ML-based selectors.

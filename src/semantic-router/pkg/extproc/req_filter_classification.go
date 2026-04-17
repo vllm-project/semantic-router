@@ -64,7 +64,7 @@ func (r *OpenAIRouter) performDecisionEvaluation(originalModel string, history s
 // The selCtx parameter carries the pre-built SelectionContext, including request-time
 // inputs such as query text, candidate models, and cache-affinity signals.
 // Returns the selected model and the method name used for logging.
-func (r *OpenAIRouter) selectModelFromCandidates(selCtx *selection.SelectionContext, algorithm *config.AlgorithmConfig) (*config.ModelRef, string) {
+func (r *OpenAIRouter) selectModelFromCandidates(selCtx *selection.SelectionContext, algorithm *config.AlgorithmConfig, ctx *RequestContext) (*config.ModelRef, string) {
 	if selCtx == nil || len(selCtx.CandidateModels) == 0 {
 		return nil, ""
 	}
@@ -100,10 +100,15 @@ func (r *OpenAIRouter) selectModelFromCandidates(selCtx *selection.SelectionCont
 	for i := range selCtx.CandidateModels {
 		if selCtx.CandidateModels[i].Model == result.SelectedModel ||
 			selCtx.CandidateModels[i].LoRAName == result.SelectedModel {
+			selectedModelRef := &selCtx.CandidateModels[i]
+			selectedModelRef, gateApplied := r.applyModelSwitchGate(selCtx, result, selectedModelRef, ctx)
 			logging.Infof("[ModelSelection] Selected %s (method=%s, score=%.4f, confidence=%.2f): %s",
-				result.SelectedModel, method, result.Score, result.Confidence, result.Reasoning)
-			selection.RecordSelection(string(method), selCtx.DecisionName, result.SelectedModel, result.Tier, result.Score)
-			return &selCtx.CandidateModels[i], string(method)
+				selectedModelRef.Model, method, result.Score, result.Confidence, result.Reasoning)
+			selection.RecordSelection(string(method), selCtx.DecisionName, selectedModelRef.Model, result.Tier, result.Score)
+			if gateApplied {
+				return selectedModelRef, string(method) + "+model_switch_gate"
+			}
+			return selectedModelRef, string(method)
 		}
 	}
 

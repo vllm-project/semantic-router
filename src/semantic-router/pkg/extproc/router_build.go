@@ -13,6 +13,7 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/routerreplay"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/routerreplay/store"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/selection"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/selection/lookuptable"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/services"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/tools"
 )
@@ -35,6 +36,7 @@ type routerComponents struct {
 	replayStoreShared    bool
 	replayRecorders      map[string]*routerreplay.Recorder
 	modelSelector        *selection.Registry
+	lookupTable          lookuptable.LookupTable
 	memoryStore          memory.Store
 	memoryExtractor      *memory.MemoryExtractor
 	credentialResolver   *authz.CredentialResolver
@@ -129,7 +131,7 @@ func buildRouterComponents(cfg *config.RouterConfig) (*routerComponents, error) 
 	if replayRecorder != nil {
 		replayReaderForLookup = replayRecorder.Reader()
 	}
-	modelSelector, _, lookupTableCancel := createModelSelectorRegistry(cfg, replayReaderForLookup)
+	modelSelector, lookupTable, lookupTableCancel := createModelSelectorRegistry(cfg, replayReaderForLookup)
 	memoryStore, memoryExtractor := createMemoryRuntime(cfg)
 	credentialResolver := buildCredentialResolver(cfg)
 	rateLimiter := buildRateLimitResolver(cfg)
@@ -157,6 +159,7 @@ func buildRouterComponents(cfg *config.RouterConfig) (*routerComponents, error) 
 		replayStoreShared:    replayStoreShared,
 		replayRecorders:      replayRecorders,
 		modelSelector:        modelSelector,
+		lookupTable:          lookupTable,
 		memoryStore:          memoryStore,
 		memoryExtractor:      memoryExtractor,
 		credentialResolver:   credentialResolver,
@@ -177,6 +180,7 @@ func (components *routerComponents) buildRouter() *OpenAIRouter {
 		ReplayRecorder:        components.replayRecorder,
 		ReplayStoreShared:     components.replayStoreShared,
 		ModelSelector:         components.modelSelector,
+		LookupTable:           components.lookupTable,
 		ReplayRecorders:       components.replayRecorders,
 		MemoryStore:           components.memoryStore,
 		MemoryExtractor:       components.memoryExtractor,
