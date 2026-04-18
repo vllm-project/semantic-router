@@ -10,6 +10,8 @@ import (
 func TestBuildReplayRoutingRecordCapturesRoutingMetadata(t *testing.T) {
 	ctx := &RequestContext{
 		RequestID:                     "req-1",
+		SessionID:                     "sess-replay-test",
+		TurnIndex:                     2,
 		VSRSelectedCategory:           "math",
 		VSRReasoningMode:              "on",
 		VSRSelectedDecisionConfidence: 0.91,
@@ -40,6 +42,12 @@ func TestBuildReplayRoutingRecordCapturesRoutingMetadata(t *testing.T) {
 	}
 
 	record := buildReplayRoutingRecord(ctx, "model-a", "model-b", "balance")
+	if record.SessionID != "sess-replay-test" {
+		t.Fatalf("expected session_id copied, got %q", record.SessionID)
+	}
+	if record.TurnIndex != 2 {
+		t.Fatalf("expected turn_index=2, got %d", record.TurnIndex)
+	}
 	if record.DecisionTier != 3 {
 		t.Fatalf("expected decision tier=3, got %d", record.DecisionTier)
 	}
@@ -72,5 +80,26 @@ func TestBuildReplayRoutingRecordCapturesRoutingMetadata(t *testing.T) {
 	}
 	if !reflect.DeepEqual(record.Signals.KB, []string{"privacy_kb"}) {
 		t.Fatalf("unexpected kb signals: %#v", record.Signals.KB)
+	}
+}
+
+func TestBuildReplayRoutingRecord_ResponseAPIChainFields(t *testing.T) {
+	ctx := &RequestContext{
+		RequestID: "req-resp-1",
+		SessionID: "conv-chain",
+		TurnIndex: 2,
+		ResponseAPICtx: &ResponseAPIContext{
+			IsResponseAPIRequest: true,
+			ConversationID:       "conv-chain",
+			PreviousResponseID:   "resp_prev_1",
+		},
+	}
+	record := buildReplayRoutingRecord(ctx, "model-a", "model-b", "balance")
+	if record.SessionID != "conv-chain" || record.TurnIndex != 2 {
+		t.Fatalf("unexpected session fields: session_id=%q turn_index=%d", record.SessionID, record.TurnIndex)
+	}
+	if record.ConversationID != "conv-chain" || record.PreviousResponseID != "resp_prev_1" {
+		t.Fatalf("unexpected response API persistence: conversation_id=%q previous_response_id=%q",
+			record.ConversationID, record.PreviousResponseID)
 	}
 }

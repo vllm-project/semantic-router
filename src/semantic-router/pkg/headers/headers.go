@@ -18,6 +18,10 @@ const (
 	// This header is case-insensitive when read from incoming requests.
 	RequestID = "x-request-id"
 
+	// XSessionID allows clients to pin a stable session identifier for Chat Completions
+	// when router-derived session IDs are insufficient.
+	XSessionID = "x-session-id"
+
 	// DisableRouterMemory allows clients to opt-out of router-managed memory injection.
 	// This prevents "silent double injection" when applications use SDK-managed memory
 	// systems like Mem0, LangMem, LangGraph, or OpenClaw.
