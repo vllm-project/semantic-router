@@ -260,7 +260,7 @@ export default function ConfigPageProjectionsSection({
           semantics: data.semantics,
           members: parseJSONField<string[]>(data.members, 'Members'),
           temperature: data.temperature,
-          default: data.default?.trim() || undefined,
+          default: data.default?.trim() ?? '',
         }
         await withClonedConfig((next) => {
           const projectionConfig = ensureProjectionConfig(next)
@@ -288,7 +288,7 @@ export default function ConfigPageProjectionsSection({
           semantics: data.semantics,
           members: parseJSONField<string[]>(data.members, 'Members'),
           temperature: data.temperature,
-          default: data.default?.trim() || undefined,
+          default: data.default?.trim() ?? '',
         }
         await withClonedConfig((next) => {
           const projectionConfig = ensureProjectionConfig(next)
