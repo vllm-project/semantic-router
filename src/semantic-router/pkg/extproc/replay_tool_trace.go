@@ -106,10 +106,7 @@ func (collector *replayToolTraceCollector) addAssistantToolCall(step routerrepla
 }
 
 func (collector *replayToolTraceCollector) addToolResultWithAPIType(source string, role string, raw json.RawMessage, toolCallID string, apiType string) {
-	rawOutput := ""
-	if len(raw) > 0 && string(raw) != "null" {
-		rawOutput = string(raw)
-	}
+	rawOutput := normalizeReplayToolOutput(raw)
 	collector.addToolResultStep(routerreplay.ToolTraceStep{
 		Source:     source,
 		Role:       role,
@@ -120,6 +117,22 @@ func (collector *replayToolTraceCollector) addToolResultWithAPIType(source strin
 		Output:     rawOutput,
 		APIType:    apiType,
 	})
+}
+
+// normalizeReplayToolOutput returns a tool result's content as a string.
+// Chat Completions tool-role messages carry `content` as a JSON-encoded
+// string (per the OpenAI spec), so the outer quotes/escapes are stripped
+// to recover the inner payload (which may itself be JSON). Non-string
+// JSON values (objects, arrays) are returned as their raw JSON bytes.
+func normalizeReplayToolOutput(raw json.RawMessage) string {
+	if len(raw) == 0 || string(raw) == "null" {
+		return ""
+	}
+	var s string
+	if err := json.Unmarshal(raw, &s); err == nil {
+		return s
+	}
+	return strings.TrimSpace(string(raw))
 }
 
 func (collector *replayToolTraceCollector) addToolResultStep(step routerreplay.ToolTraceStep) {
