@@ -3759,8 +3759,8 @@ func BenchmarkHNSWRebuild(b *testing.B) {
 	}
 }
 
-func TestSearchLayerHeapManagement(t *testing.T) {
-	t.Run("retains the closest neighbor when ef is saturated", func(t *testing.T) {
+func TestHNSWSearchLayerAndInsertionRegressions(t *testing.T) {
+	t.Run("searchLayer returns nearest-first results after ef trimming", func(t *testing.T) {
 		// Regression fixture: with the previous max-heap candidates/min-heap results
 		// mix, trimming to ef would evict the best element instead of the worst.
 		queryEmbedding := []float32{1.0}
@@ -3803,15 +3803,12 @@ func TestSearchLayerHeapManagement(t *testing.T) {
 
 		results := index.searchLayer(queryEmbedding, index.entryPoint, 1, 0, entries)
 
-		if !slices.Contains(results, 1) {
-			t.Fatalf("expected results to contain best neighbor 1, got %v", results)
-		}
-		if slices.Contains(results, 0) {
-			t.Fatalf("expected results to drop entry point 0 once ef trimmed, got %v", results)
+		if !slices.Equal(results, []int{1}) {
+			t.Fatalf("expected nearest-first results [1] after ef trimming, got %v", results)
 		}
 	})
 
-	t.Run("continues exploring even when next candidate looks worse", func(t *testing.T) {
+	t.Run("searchLayer returns nearest-first results after exploring through a worse intermediate candidate", func(t *testing.T) {
 		// Regression fixture: the break condition used the wrong polarity so the
 		// search stopped before expanding the intermediate (worse) vertex, making
 		// the actual best neighbor unreachable.
@@ -3865,8 +3862,85 @@ func TestSearchLayerHeapManagement(t *testing.T) {
 
 		results := index.searchLayer(queryEmbedding, index.entryPoint, 2, 0, entries)
 
-		if !slices.Contains(results, 2) {
-			t.Fatalf("expected results to reach best neighbor 2 via intermediate node, got %v", results)
+		if !slices.Equal(results, []int{2, 0}) {
+			t.Fatalf("expected nearest-first results [2 0] after exploring through intermediate node, got %v", results)
+		}
+	})
+
+	t.Run("addNode carries the upper-layer entry point into lower-layer neighbor selection", func(t *testing.T) {
+		// Graph layout:
+		//   layer 1: A <-> B
+		//   layer 0: A <-> C, B <-> D
+		//
+		// New node F is inserted at level 0. Its embedding is much closer to B/D
+		// than to A/C, so the correct insertion flow must first descend from the
+		// global entry point A to B on layer 1, then start the layer 0 search from
+		// B and connect F to D. The previous implementation incorrectly restarted
+		// layer 0 from A and linked F to C instead.
+		entries := []CacheEntry{
+			{Embedding: []float32{0.30}}, // A: global entry point
+			{Embedding: []float32{0.95}}, // B: better upper-layer entry point for F
+			{Embedding: []float32{0.35}}, // C: layer-0 neighbor reachable from A
+			{Embedding: []float32{1.00}}, // D: layer-0 neighbor reachable from B
+			{Embedding: []float32{1.00}}, // F: new node to insert
+		}
+
+		nodeA := &HNSWNode{
+			entryIndex: 0,
+			neighbors: map[int][]int{
+				1: {1},
+				0: {2},
+			},
+			maxLayer: 1,
+		}
+		nodeB := &HNSWNode{
+			entryIndex: 1,
+			neighbors: map[int][]int{
+				1: {0},
+				0: {3},
+			},
+			maxLayer: 1,
+		}
+		nodeC := &HNSWNode{
+			entryIndex: 2,
+			neighbors: map[int][]int{
+				0: {0},
+			},
+			maxLayer: 0,
+		}
+		nodeD := &HNSWNode{
+			entryIndex: 3,
+			neighbors: map[int][]int{
+				0: {1},
+			},
+			maxLayer: 0,
+		}
+
+		index := &HNSWIndex{
+			nodes: []*HNSWNode{nodeA, nodeB, nodeC, nodeD},
+			nodeIndex: map[int]*HNSWNode{
+				0: nodeA,
+				1: nodeB,
+				2: nodeC,
+				3: nodeD,
+			},
+			entryPoint:     0,
+			maxLayer:       1,
+			efConstruction: 1,
+			M:              1,
+			Mmax:           1,
+			Mmax0:          1,
+			ml:             0, // Force the inserted node F to level 0 deterministically.
+		}
+
+		index.addNode(4, entries[4].Embedding, entries)
+
+		inserted := index.nodeIndex[4]
+		if inserted == nil {
+			t.Fatal("expected inserted node 4 to be present in nodeIndex")
+		}
+		if !slices.Equal(inserted.neighbors[0], []int{3}) {
+			t.Fatalf("expected inserted node 4 to connect to D via carried entry point, got %v", inserted.neighbors[0])
 		}
 	})
 }
