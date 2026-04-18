@@ -127,15 +127,23 @@ func (p *PostgresStore) createTable(ctx context.Context) error {
 		ALTER TABLE %s ADD COLUMN IF NOT EXISTS cost_savings DOUBLE PRECISION;
 		ALTER TABLE %s ADD COLUMN IF NOT EXISTS currency VARCHAR(32);
 		ALTER TABLE %s ADD COLUMN IF NOT EXISTS baseline_model VARCHAR(255);
+		ALTER TABLE %s ADD COLUMN IF NOT EXISTS session_id VARCHAR(255);
+		ALTER TABLE %s ADD COLUMN IF NOT EXISTS turn_index INTEGER;
+		ALTER TABLE %s ADD COLUMN IF NOT EXISTS previous_response_id VARCHAR(255);
+		ALTER TABLE %s ADD COLUMN IF NOT EXISTS conversation_id VARCHAR(255);
 		CREATE INDEX IF NOT EXISTS idx_%s_timestamp ON %s (timestamp DESC);
 		CREATE INDEX IF NOT EXISTS idx_%s_created_at ON %s (created_at);
 		CREATE INDEX IF NOT EXISTS idx_%s_request_id ON %s (request_id);
 		CREATE INDEX IF NOT EXISTS idx_%s_decision_timestamp ON %s (decision, timestamp DESC);
 		CREATE INDEX IF NOT EXISTS idx_%s_selected_model_timestamp ON %s (selected_model, timestamp DESC);
+		CREATE INDEX IF NOT EXISTS idx_%s_session_timestamp ON %s (session_id, timestamp DESC);
 	`, p.tableName,
-		p.tableName, p.tableName, p.tableName, p.tableName, p.tableName, p.tableName, p.tableName,
 		p.tableName, p.tableName, p.tableName, p.tableName, p.tableName, p.tableName, p.tableName, p.tableName,
-		p.tableName, p.tableName, p.tableName, p.tableName, p.tableName, p.tableName, p.tableName, p.tableName, p.tableName, p.tableName)
+		p.tableName, p.tableName, p.tableName, p.tableName, p.tableName, p.tableName, p.tableName, p.tableName,
+		p.tableName, p.tableName, p.tableName,
+		p.tableName, p.tableName, p.tableName, p.tableName,
+		p.tableName, p.tableName, p.tableName, p.tableName,
+		p.tableName, p.tableName, p.tableName, p.tableName)
 
 	_, err := p.db.ExecContext(ctx, query)
 	return err
@@ -175,8 +183,9 @@ func (p *PostgresStore) Add(ctx context.Context, record Record) (string, error) 
 			rag_enabled, rag_backend, rag_context_length, rag_similarity_score,
 			hallucination_enabled, hallucination_detected, hallucination_confidence, hallucination_spans,
 			prompt_tokens, completion_tokens, total_tokens,
-			actual_cost, baseline_cost, cost_savings, currency, baseline_model
-		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27, $28, $29, $30, $31, $32, $33, $34, $35, $36, $37, $38, $39, $40, $41, $42)
+			actual_cost, baseline_cost, cost_savings, currency, baseline_model,
+			session_id, turn_index, previous_response_id, conversation_id
+		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27, $28, $29, $30, $31, $32, $33, $34, $35, $36, $37, $38, $39, $40, $41, $42, $43, $44, $45, $46)
 	`, p.tableName)
 
 	fn := func() error {

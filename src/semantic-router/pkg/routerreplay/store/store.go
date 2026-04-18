@@ -69,6 +69,10 @@ type Record struct {
 	ID                    string             `json:"id"`
 	Timestamp             time.Time          `json:"timestamp"`
 	RequestID             string             `json:"request_id,omitempty"`
+	SessionID             string             `json:"session_id,omitempty"`
+	TurnIndex             int                `json:"turn_index"`
+	PreviousResponseID    string             `json:"previous_response_id,omitempty"`
+	ConversationID        string             `json:"conversation_id,omitempty"`
 	Decision              string             `json:"decision,omitempty"`
 	DecisionTier          int                `json:"decision_tier"`
 	DecisionPriority      int                `json:"decision_priority"`

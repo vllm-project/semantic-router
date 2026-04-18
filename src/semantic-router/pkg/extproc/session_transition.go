@@ -1,6 +1,9 @@
 package extproc
 
 import (
+	"strings"
+
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/headers"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/sessiontelemetry"
 )
@@ -24,16 +27,34 @@ func populateSessionTransitionFields(ctx *RequestContext) {
 		return
 	}
 
-	if len(ctx.ChatCompletionMessages) > 0 {
-		userID := extractUserID(ctx)
-		if userID == "" {
-			logging.Debugf("Session: no user ID, skipping session ID derivation")
-		} else {
-			ctx.SessionID = deriveSessionIDFromMessages(ctx.ChatCompletionMessages, userID)
-		}
-		ctx.TurnIndex = sessiontelemetry.ChatTurnNumber(sessionTransitionChatMessages(ctx.ChatCompletionMessages)) - 1
-		// TODO: populate PreviousModel for Chat Completions once per-turn model history is available.
+	if sid := strings.TrimSpace(headerValueCI(ctx, headers.XSessionID)); sid != "" {
+		ctx.SessionID = sid
 	}
+
+	if len(ctx.ChatCompletionMessages) == 0 {
+		if ctx.SessionID == "" {
+			ctx.SessionID = deriveSessionIDFromRequestID(ctx)
+		}
+		return
+	}
+
+	if ctx.SessionID == "" {
+		userID := extractUserID(ctx)
+		if userID != "" {
+			ctx.SessionID = deriveSessionIDFromMessages(ctx.ChatCompletionMessages, userID)
+		} else {
+			ctx.SessionID = deriveSessionIDFromMessagesStructure(ctx.ChatCompletionMessages)
+			if ctx.SessionID == "" {
+				ctx.SessionID = deriveSessionIDFromRequestID(ctx)
+			}
+			if ctx.SessionID == "" {
+				logging.Debugf("Session: could not derive session ID for chat completion request")
+			}
+		}
+	}
+
+	ctx.TurnIndex = sessiontelemetry.ChatTurnNumber(sessionTransitionChatMessages(ctx.ChatCompletionMessages)) - 1
+	// TODO: populate PreviousModel for Chat Completions once per-turn model history is available.
 }
 
 func sessionTransitionChatMessages(messages []ChatCompletionMessage) []sessiontelemetry.ChatMessage {

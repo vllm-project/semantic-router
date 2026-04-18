@@ -18,7 +18,8 @@ const postgresRecordSelectColumns = `
 	rag_enabled, rag_backend, rag_context_length, rag_similarity_score,
 	hallucination_enabled, hallucination_detected, hallucination_confidence, hallucination_spans,
 	prompt_tokens, completion_tokens, total_tokens,
-	actual_cost, baseline_cost, cost_savings, currency, baseline_model
+	actual_cost, baseline_cost, cost_savings, currency, baseline_model,
+	session_id, turn_index, previous_response_id, conversation_id
 `
 
 type postgresRowScanner interface {
@@ -53,6 +54,10 @@ type postgresRecordRow struct {
 	costSavings            sql.NullFloat64
 	currency               sql.NullString
 	baselineModel          sql.NullString
+	sessionID              sql.NullString
+	turnIndex              sql.NullInt64
+	previousResponseID     sql.NullString
+	conversationID         sql.NullString
 }
 
 func newPostgresInsertRecord(record Record) (postgresInsertRecord, error) {
@@ -160,6 +165,10 @@ func (record postgresInsertRecord) args() []interface{} {
 		nullableFloat64Arg(record.record.CostSavings),
 		nullableStringArg(record.record.Currency),
 		nullableStringArg(record.record.BaselineModel),
+		emptyStringSQL(record.record.SessionID),
+		record.record.TurnIndex,
+		emptyStringSQL(record.record.PreviousResponseID),
+		emptyStringSQL(record.record.ConversationID),
 	}
 }
 
@@ -234,6 +243,10 @@ func (row *postgresRecordRow) scanDestinations() []interface{} {
 		&row.costSavings,
 		&row.currency,
 		&row.baselineModel,
+		&row.sessionID,
+		&row.turnIndex,
+		&row.previousResponseID,
+		&row.conversationID,
 	}
 }
 
@@ -270,5 +283,17 @@ func (row *postgresRecordRow) decode() (Record, error) {
 		row.currency,
 		row.baselineModel,
 	)
+	if row.sessionID.Valid {
+		row.record.SessionID = row.sessionID.String
+	}
+	if row.turnIndex.Valid {
+		row.record.TurnIndex = int(row.turnIndex.Int64)
+	}
+	if row.previousResponseID.Valid {
+		row.record.PreviousResponseID = row.previousResponseID.String
+	}
+	if row.conversationID.Valid {
+		row.record.ConversationID = row.conversationID.String
+	}
 	return row.record, nil
 }

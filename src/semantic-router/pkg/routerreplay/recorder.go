@@ -272,10 +272,20 @@ func LogFields(r RoutingRecord, event string) map[string]interface{} {
 		"selection_method":  r.SelectionMethod,
 		"request_id":        r.RequestID,
 		"timestamp":         r.Timestamp,
+		"turn_index":        r.TurnIndex,
 		"from_cache":        r.FromCache,
 		"streaming":         r.Streaming,
 		"response_status":   r.ResponseStatus,
 		"signals":           logSignalFields(r.Signals),
+	}
+	if r.SessionID != "" {
+		fields["session_id"] = r.SessionID
+	}
+	if r.ConversationID != "" {
+		fields["conversation_id"] = r.ConversationID
+	}
+	if r.PreviousResponseID != "" {
+		fields["previous_response_id"] = r.PreviousResponseID
 	}
 	if len(r.Projections) > 0 {
 		fields["projections"] = r.Projections

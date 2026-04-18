@@ -138,6 +138,8 @@ func TestLogFieldsIncludesOptionalReplayMetadata(t *testing.T) {
 
 	fields := LogFields(record, "router_replay_complete")
 	assertFieldValue(t, fields, "event", "router_replay_complete")
+	assertFieldValue(t, fields, "session_id", "sess-log-test")
+	assertFieldValue(t, fields, "turn_index", 5)
 	assertFieldValue(t, fields, "replay_id", record.ID)
 	assertFieldValue(t, fields, "decision_tier", 2)
 	assertFieldValue(t, fields, "decision_priority", 100)
@@ -179,6 +181,8 @@ func richReplayRoutingRecord(
 		ConfidenceScore:   0.91,
 		SelectionMethod:   "router_dc",
 		RequestID:         "req-1",
+		SessionID:         "sess-log-test",
+		TurnIndex:         5,
 		Timestamp:         timestamp,
 		FromCache:         true,
 		Streaming:         true,
