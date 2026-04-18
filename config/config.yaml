@@ -605,6 +605,7 @@ routing:
             capture_request_body: true
             capture_response_body: true
             max_body_bytes: 4096
+            max_tool_trace_bytes: 16384
 
     - name: computer-science-remom-route
       description: ReMoM route for complex computer science prompts.

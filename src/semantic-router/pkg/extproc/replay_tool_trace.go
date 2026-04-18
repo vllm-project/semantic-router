@@ -2,6 +2,7 @@ package extproc
 
 import (
 	"encoding/json"
+	"reflect"
 	"sort"
 	"strings"
 
@@ -169,13 +170,7 @@ func extractChatCompletionPromptAndTools(body []byte) (prompt string, toolDefs s
 		}
 	}
 
-	// Serialize the tools array if present.
-	if len(req.Tools) > 0 {
-		if raw, err := json.Marshal(req.Tools); err == nil {
-			toolDefs = string(raw)
-		}
-	}
-	return prompt, toolDefs
+	return prompt, marshalReplayTools(req.Tools)
 }
 
 // extractResponseAPIPromptAndTools extracts the prompt and tool definitions
@@ -186,32 +181,68 @@ func extractResponseAPIPromptAndTools(ctx *RequestContext) (prompt string, toolD
 		return "", ""
 	}
 	req := ctx.ResponseAPICtx.OriginalRequest
+	return extractResponseAPIPrompt(req.Input), marshalReplayTools(req.Tools)
+}
 
-	// Try plain string input first.
+// extractResponseAPIPrompt returns the prompt text from a Responses API input
+// payload. A plain-string input is returned verbatim; otherwise the input is
+// parsed as an item list and the last user message's text is returned.
+func extractResponseAPIPrompt(input json.RawMessage) string {
 	var inputText string
-	if err := json.Unmarshal(req.Input, &inputText); err == nil && inputText != "" {
-		prompt = inputText
-	} else {
-		// Walk input items to find the last user message.
-		var items []replayToolTraceResponseAPIItem
-		if err := json.Unmarshal(req.Input, &items); err == nil {
-			for i := len(items) - 1; i >= 0; i-- {
-				item := items[i]
-				if item.Type == "message" && (item.Role == "" || item.Role == "user") {
-					prompt = extractReplayJSONText(item.Content)
-					break
-				}
-			}
-		}
+	if err := json.Unmarshal(input, &inputText); err == nil && inputText != "" {
+		return inputText
 	}
+	return extractResponseAPIPromptFromItems(input)
+}
 
-	// Serialize the tools array if present.
-	if len(req.Tools) > 0 {
-		if raw, err := json.Marshal(req.Tools); err == nil {
-			toolDefs = string(raw)
+// extractResponseAPIPromptFromItems walks a Responses API input item array
+// and returns the text of the last user message (role "" or "user").
+func extractResponseAPIPromptFromItems(input json.RawMessage) string {
+	var items []replayToolTraceResponseAPIItem
+	if err := json.Unmarshal(input, &items); err != nil {
+		return ""
+	}
+	for i := len(items) - 1; i >= 0; i-- {
+		item := items[i]
+		if item.Type == "message" && isResponseAPIUserRole(item.Role) {
+			return extractReplayJSONText(item.Content)
 		}
 	}
-	return prompt, toolDefs
+	return ""
+}
+
+// isResponseAPIUserRole returns true for a role value that identifies a user
+// message in the Responses API (empty or "user").
+func isResponseAPIUserRole(role string) bool {
+	return role == "" || role == "user"
+}
+
+// marshalReplayTools serializes the tools array from a request body as JSON.
+// Accepts any slice type (Chat Completions uses []json.RawMessage, Responses
+// API uses []responseapi.Tool). Returns an empty string when tools is empty
+// or serialization fails.
+func marshalReplayTools(tools any) string {
+	if isEmptyReplayToolsSlice(tools) {
+		return ""
+	}
+	raw, err := json.Marshal(tools)
+	if err != nil {
+		return ""
+	}
+	return string(raw)
+}
+
+// isEmptyReplayToolsSlice reports whether tools is a nil slice or zero-length
+// slice using reflection. This avoids generics for broader Go version support.
+func isEmptyReplayToolsSlice(tools any) bool {
+	if tools == nil {
+		return true
+	}
+	v := reflect.ValueOf(tools)
+	if v.Kind() != reflect.Slice {
+		return false
+	}
+	return v.Len() == 0
 }
 
 func buildReplayRequestToolTrace(ctx *RequestContext) *routerreplay.ToolTrace {

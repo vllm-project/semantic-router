@@ -92,33 +92,51 @@ func (r *Recorder) AddRecord(rec RoutingRecord) (string, error) {
 	// Apply MaxToolTraceBytes to structured tool-trace fields.
 	// These are truncated independently of the raw body fields so that
 	// callers can keep MaxBodyBytes small without losing structured data.
-	if r.maxToolTraceBytes > 0 {
-		if len(rec.Prompt) > r.maxToolTraceBytes {
-			rec.Prompt = rec.Prompt[:r.maxToolTraceBytes]
-			rec.PromptTruncated = true
-		}
-		if len(rec.ToolDefinitions) > r.maxToolTraceBytes {
-			rec.ToolDefinitions = rec.ToolDefinitions[:r.maxToolTraceBytes]
-		}
-		if rec.ToolTrace != nil {
-			for i := range rec.ToolTrace.Steps {
-				step := &rec.ToolTrace.Steps[i]
-				if len(step.Arguments) > r.maxToolTraceBytes {
-					step.Arguments = step.Arguments[:r.maxToolTraceBytes]
-					step.RawArguments = step.Arguments
-					step.Truncated = true
-				}
-				if len(step.Output) > r.maxToolTraceBytes {
-					step.Output = step.Output[:r.maxToolTraceBytes]
-					step.RawOutput = step.Output
-					step.Truncated = true
-				}
-			}
-		}
-	}
+	applyMaxToolTraceBytes(&rec, r.maxToolTraceBytes)
 
 	ctx := context.Background()
 	return r.storage.Add(ctx, rec)
+}
+
+// applyMaxToolTraceBytes truncates structured tool-trace text fields to max
+// bytes. A non-positive max disables truncation.
+func applyMaxToolTraceBytes(rec *RoutingRecord, max int) {
+	if max <= 0 {
+		return
+	}
+	if len(rec.Prompt) > max {
+		rec.Prompt = rec.Prompt[:max]
+		rec.PromptTruncated = true
+	}
+	if len(rec.ToolDefinitions) > max {
+		rec.ToolDefinitions = rec.ToolDefinitions[:max]
+	}
+	truncateToolTraceSteps(rec.ToolTrace, max)
+}
+
+// truncateToolTraceSteps applies the byte limit to each step's Arguments and
+// Output fields.
+func truncateToolTraceSteps(trace *ToolTrace, max int) {
+	if trace == nil {
+		return
+	}
+	for i := range trace.Steps {
+		truncateToolTraceStep(&trace.Steps[i], max)
+	}
+}
+
+// truncateToolTraceStep applies the byte limit to a single step's fields.
+func truncateToolTraceStep(step *ToolTraceStep, max int) {
+	if len(step.Arguments) > max {
+		step.Arguments = step.Arguments[:max]
+		step.RawArguments = step.Arguments
+		step.Truncated = true
+	}
+	if len(step.Output) > max {
+		step.Output = step.Output[:max]
+		step.RawOutput = step.Output
+		step.Truncated = true
+	}
 }
 
 func (r *Recorder) UpdateStatus(id string, status int, fromCache bool, streaming bool) error {
