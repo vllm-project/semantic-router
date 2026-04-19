@@ -7,8 +7,8 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 )
 
-func TestBuildReplayRoutingRecordCapturesRoutingMetadata(t *testing.T) {
-	ctx := &RequestContext{
+func replayRoutingRecordMetadataTestContext() *RequestContext {
+	return &RequestContext{
 		RequestID:                     "req-1",
 		SessionID:                     "sess-replay-test",
 		TurnIndex:                     2,
@@ -40,8 +40,10 @@ func TestBuildReplayRoutingRecordCapturesRoutingMetadata(t *testing.T) {
 			"reask:persistently_dissatisfied": 2,
 		},
 	}
+}
 
-	record := buildReplayRoutingRecord(ctx, "model-a", "model-b", "balance")
+func TestBuildReplayRoutingRecordCapturesSessionAndDecisionMetadata(t *testing.T) {
+	record := buildReplayRoutingRecord(replayRoutingRecordMetadataTestContext(), "model-a", "model-b", "balance")
 	if record.SessionID != "sess-replay-test" {
 		t.Fatalf("expected session_id copied, got %q", record.SessionID)
 	}
@@ -66,6 +68,10 @@ func TestBuildReplayRoutingRecordCapturesRoutingMetadata(t *testing.T) {
 	if got := record.SignalValues["reask:persistently_dissatisfied"]; got != 2 {
 		t.Fatalf("expected signal value 2, got %v", got)
 	}
+}
+
+func TestBuildReplayRoutingRecordCapturesSignalMetadata(t *testing.T) {
+	record := buildReplayRoutingRecord(replayRoutingRecordMetadataTestContext(), "model-a", "model-b", "balance")
 	if !reflect.DeepEqual(record.Signals.Modality, []string{"AR"}) {
 		t.Fatalf("unexpected modality signals: %#v", record.Signals.Modality)
 	}
