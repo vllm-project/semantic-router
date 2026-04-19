@@ -155,6 +155,9 @@ const (
 	// Example: "privacy_policy,security_containment"
 	VSRMatchedKB = "x-vsr-matched-kb"
 
+	// VSRMatchedConversation contains comma-separated list of matched conversation-shape signal names.
+	VSRMatchedConversation = "x-vsr-matched-conversation"
+
 	// VSRMatchedProjection contains comma-separated list of matched projection outputs.
 	// Example: "balance_medium,verification_required"
 	VSRMatchedProjection = "x-vsr-matched-projection"

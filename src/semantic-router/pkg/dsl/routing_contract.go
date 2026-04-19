@@ -201,6 +201,9 @@ func (d *decompiler) appendOperationalSignals(prog *Program) {
 	for _, rb := range d.cfg.RoleBindings {
 		prog.Signals = append(prog.Signals, d.roleBindingToSignal(&rb))
 	}
+	for i := range d.cfg.ConversationRules {
+		prog.Signals = append(prog.Signals, d.conversationToSignal(&d.cfg.ConversationRules[i]))
+	}
 }
 
 func (d *decompiler) appendSafetySignals(prog *Program) {

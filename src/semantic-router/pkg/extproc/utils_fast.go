@@ -19,6 +19,16 @@ type FastExtractResult struct {
 	NonUserMessages   []string
 	HasAssistantReply bool
 	FirstImageURL     string
+
+	// Conversation-shape fields for the conversation signal family.
+	HasDeveloperMessage    bool
+	UserMessageCount       int
+	AssistantMessageCount  int
+	SystemMessageCount     int
+	ToolMessageCount       int
+	ToolDefinitionCount    int
+	AssistantToolCallCount int
+	CompletedToolCycles    int
 }
 
 // extractContentFast extracts model, stream, message content, and the first
@@ -37,8 +47,20 @@ func extractContentFast(body []byte) (*FastExtractResult, error) {
 	}
 
 	populateFastExtractMessages(messages, r)
+	countFastToolDefinitions(body, r)
 
 	return r, nil
+}
+
+func countFastToolDefinitions(body []byte, result *FastExtractResult) {
+	tools := gjson.GetBytes(body, "tools")
+	if !tools.Exists() || !tools.IsArray() {
+		return
+	}
+	tools.ForEach(func(_, _ gjson.Result) bool {
+		result.ToolDefinitionCount++
+		return true
+	})
 }
 
 func extractModelAndStreamFast(body []byte, result *FastExtractResult) error {
@@ -76,10 +98,33 @@ func consumeFastExtractMessage(msg gjson.Result, result *FastExtractResult) {
 
 	switch role {
 	case "user":
+		result.UserMessageCount++
 		recordFastExtractUserMessage(result, text, content)
-	case "system", "assistant":
+	case "system":
+		result.SystemMessageCount++
 		recordFastExtractNonUserMessage(result, role, text)
+	case "assistant":
+		result.AssistantMessageCount++
+		recordFastExtractNonUserMessage(result, role, text)
+		countAssistantToolCalls(msg, result)
+	case "developer":
+		result.HasDeveloperMessage = true
+		recordFastExtractNonUserMessage(result, role, text)
+	case "tool":
+		result.ToolMessageCount++
+		result.CompletedToolCycles++
 	}
+}
+
+func countAssistantToolCalls(msg gjson.Result, result *FastExtractResult) {
+	toolCalls := msg.Get("tool_calls")
+	if !toolCalls.Exists() || !toolCalls.IsArray() {
+		return
+	}
+	toolCalls.ForEach(func(_, _ gjson.Result) bool {
+		result.AssistantToolCallCount++
+		return true
+	})
 }
 
 func recordFastExtractUserMessage(result *FastExtractResult, text string, content gjson.Result) {

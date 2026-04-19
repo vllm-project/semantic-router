@@ -72,6 +72,7 @@ func canonicalSignalsFromRouterConfig(cfg *RouterConfig) CanonicalSignals {
 		Jailbreak:     append([]JailbreakRule(nil), cfg.JailbreakRules...),
 		PII:           append([]PIIRule(nil), cfg.PIIRules...),
 		KB:            append([]KBSignalRule(nil), cfg.KBRules...),
+		Conversation:  append([]ConversationRule(nil), cfg.ConversationRules...),
 	}
 }
 

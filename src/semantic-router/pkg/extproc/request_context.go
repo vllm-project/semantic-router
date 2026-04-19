@@ -112,6 +112,7 @@ type RequestContext struct {
 	VSRMatchedJailbreak    []string // Matched jailbreak rule names (confidence >= threshold)
 	VSRMatchedPII          []string // Matched PII rule names (denied PII types detected)
 	VSRMatchedKB           []string // Matched knowledge-base signal names
+	VSRMatchedConversation []string // Matched conversation-shape signal names
 	VSRMatchedProjection   []string // Matched projection mapping outputs
 	VSRProjectionScores    map[string]float64
 	VSRSignalConfidences   map[string]float64

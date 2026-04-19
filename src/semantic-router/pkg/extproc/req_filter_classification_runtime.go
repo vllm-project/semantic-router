@@ -49,6 +49,7 @@ func (r *OpenAIRouter) evaluateSignalsForDecision(
 		ctx.RequestImageURL,
 		signalInput.evaluationText,
 		signalInput.skipCompressionSignals,
+		signalInput.conversationFacts,
 	)
 	if authzErr != nil {
 		signalSpan.End()
@@ -89,6 +90,7 @@ func logSignalEvaluationResults(ctx *RequestContext, signalLatencyMs int64, sign
 		"jailbreak":      signals.MatchedJailbreakRules,
 		"pii":            signals.MatchedPIIRules,
 		"kb":             signals.MatchedKBRules,
+		"conversation":   signals.MatchedConversationRules,
 		"projection":     signals.MatchedProjectionRules,
 		"context_tokens": signals.TokenCount,
 	})

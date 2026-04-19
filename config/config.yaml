@@ -408,6 +408,42 @@ routing:
           value: local_standard
         match: best
 
+    conversation:
+      - name: multi_turn_user
+        description: At least two user messages.
+        feature:
+          type: count
+          source:
+            type: message
+            role: user
+        predicate:
+          gte: 2
+      - name: has_tools
+        description: Request defines at least one tool.
+        feature:
+          type: count
+          source:
+            type: tool_definition
+        predicate:
+          gte: 1
+      - name: has_developer_msg
+        description: Request contains a developer message.
+        feature:
+          type: exists
+          source:
+            type: message
+            role: developer
+      - name: heavy_non_user
+        description: Non-user messages exceed threshold.
+        feature:
+          type: count
+          source:
+            type: message
+            role: non_user
+        predicate:
+          gt: 5
+          lte: 99
+
   projections:
     partitions:
       - name: support_intents

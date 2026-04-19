@@ -177,6 +177,7 @@ func logSignalFields(signals Signal) map[string]interface{} {
 		"jailbreak":     signals.Jailbreak,
 		"pii":           signals.PII,
 		"kb":            signals.KB,
+		"conversation":  signals.Conversation,
 	}
 }
 
