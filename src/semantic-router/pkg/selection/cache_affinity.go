@@ -98,16 +98,17 @@ type CacheAffinityResult struct {
 	LambdaReq float64
 }
 
-// ComputeCacheAffinityAdjustments applies a bounded pre-dispatch cache-affinity
-// bias during hybrid model selection.
+// ComputeCacheAffinityAdjustments returns per-model score adjustments for
+// pre-dispatch cache-affinity bias during hybrid model selection.
 //
-// The estimator produces a signed affinity effect A_m in (-1,1) and combines
-// it with evidence confidence C_m and an ambiguity-gated lambda so that:
+// Each adjustment is an additive delta the caller applies to the base score:
 //
-//	final_score(m) = base_score(m) + lambda_req * C_m * A_m
+//	Adjustments[m] = lambda_req * C_m * A_m
 //
-// |adjustment| is bounded by affinityMaxLambda, keeping cache-affinity as a
-// tie-breaker that cannot override strong quality or cost signals.
+// where A_m is a signed affinity effect in (-1,1), C_m is evidence confidence,
+// and lambda_req is an ambiguity-gated multiplier. |Adjustments[m]| is bounded
+// by affinityMaxLambda, keeping cache-affinity as a tie-breaker that cannot
+// override strong quality or cost signals.
 func ComputeCacheAffinityAdjustments(
 	ctx *CacheAffinityContext,
 	candidates []config.ModelRef,
