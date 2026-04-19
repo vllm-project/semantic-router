@@ -366,6 +366,127 @@ func TestRecorderMaxToolTraceBytesStepTruncation(t *testing.T) {
 	}
 }
 
+func TestRecorderMaxToolTraceBytesPreservesRawFields(t *testing.T) {
+	recorder := NewRecorder(store.NewMemoryStore(10, 0))
+	recorder.SetCapturePolicy(false, false, 4096)
+	recorder.SetMaxToolTraceBytes(5)
+
+	fullArgs := `{"city":"San Francisco"}`
+	fullOutput := `{"temp":"22C","condition":"sunny"}`
+	trace := &ToolTrace{
+		Steps: []ToolTraceStep{
+			{
+				Type:         "assistant_tool_call",
+				Arguments:    fullArgs,
+				RawArguments: fullArgs,
+			},
+			{
+				Type:      "client_tool_result",
+				Output:    fullOutput,
+				RawOutput: fullOutput,
+			},
+		},
+	}
+	id, err := recorder.AddRecord(RoutingRecord{
+		RequestID: "req-raw-fidelity",
+		ToolTrace: trace,
+	})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	rec, found := recorder.GetRecord(id)
+	if !found {
+		t.Fatal("record not found")
+	}
+
+	if got := rec.ToolTrace.Steps[0].Arguments; len(got) != 5 {
+		t.Errorf("expected Arguments truncated to len=5, got len=%d (%q)", len(got), got)
+	}
+	if got := rec.ToolTrace.Steps[0].RawArguments; got != fullArgs {
+		t.Errorf("expected RawArguments preserved at full fidelity; got %q, want %q", got, fullArgs)
+	}
+	if got := rec.ToolTrace.Steps[1].Output; len(got) != 5 {
+		t.Errorf("expected Output truncated to len=5, got len=%d (%q)", len(got), got)
+	}
+	if got := rec.ToolTrace.Steps[1].RawOutput; got != fullOutput {
+		t.Errorf("expected RawOutput preserved at full fidelity; got %q, want %q", got, fullOutput)
+	}
+}
+
+func TestRecorderMaxToolTraceBytesFlagsToolDefinitionsTruncation(t *testing.T) {
+	recorder := NewRecorder(store.NewMemoryStore(10, 0))
+	recorder.SetCapturePolicy(false, false, 4096)
+	recorder.SetMaxToolTraceBytes(10)
+
+	longToolDefs := `[{"type":"function","function":{"name":"really_long_tool_name","description":"truncate me"}}]`
+	id, err := recorder.AddRecord(RoutingRecord{
+		RequestID:       "req-tooldefs-truncated",
+		ToolDefinitions: longToolDefs,
+	})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	rec, found := recorder.GetRecord(id)
+	if !found {
+		t.Fatal("record not found")
+	}
+
+	if len(rec.ToolDefinitions) != 10 {
+		t.Errorf("expected ToolDefinitions len=10, got %d", len(rec.ToolDefinitions))
+	}
+	if !rec.ToolDefinitionsTruncated {
+		t.Error("expected ToolDefinitionsTruncated=true after truncation")
+	}
+}
+
+func TestRecorderUpdateToolTraceAppliesMaxToolTraceBytes(t *testing.T) {
+	recorder := NewRecorder(store.NewMemoryStore(10, 0))
+	recorder.SetCapturePolicy(false, false, 4096)
+	recorder.SetMaxToolTraceBytes(6)
+
+	id, err := recorder.AddRecord(RoutingRecord{
+		ID:        "replay-update-trunc",
+		RequestID: "req-update-trunc",
+	})
+	if err != nil {
+		t.Fatalf("failed to add record: %v", err)
+	}
+
+	// UpdateToolTrace is the path response-side traces take
+	// (see extproc.attachRouterReplayResponse). This exchange must also be
+	// capped by MaxToolTraceBytes or responses could silently blow past it.
+	fullOutput := `{"temperature":"22C","condition":"sunny"}`
+	trace := ToolTrace{
+		Steps: []ToolTraceStep{
+			{
+				Type:      "client_tool_result",
+				Output:    fullOutput,
+				RawOutput: fullOutput,
+			},
+		},
+	}
+	if err := recorder.UpdateToolTrace(id, trace); err != nil {
+		t.Fatalf("UpdateToolTrace: %v", err)
+	}
+
+	rec, found := recorder.GetRecord(id)
+	if !found || rec.ToolTrace == nil || len(rec.ToolTrace.Steps) != 1 {
+		t.Fatalf("unexpected stored record: found=%v, trace=%#v", found, rec.ToolTrace)
+	}
+	step := rec.ToolTrace.Steps[0]
+	if len(step.Output) != 6 {
+		t.Errorf("expected Output truncated to 6 bytes through UpdateToolTrace, got len=%d (%q)", len(step.Output), step.Output)
+	}
+	if !step.Truncated {
+		t.Error("expected Truncated=true after UpdateToolTrace truncation")
+	}
+	if step.RawOutput != fullOutput {
+		t.Errorf("expected RawOutput preserved on UpdateToolTrace; got %q, want %q", step.RawOutput, fullOutput)
+	}
+}
+
 func TestRecorderSetMaxToolTraceBytesZeroNoTruncation(t *testing.T) {
 	recorder := NewRecorder(store.NewMemoryStore(10, 0))
 	recorder.SetCapturePolicy(false, false, 4096)

@@ -528,7 +528,7 @@ func TestChatCompletionToolSteps_HaveAPITypeAndOutput(t *testing.T) {
 	}
 }
 
-func TestMaxToolTraceBytesPrompTruncation(t *testing.T) {
+func TestMaxToolTraceBytesPromptTruncation(t *testing.T) {
 	storage := store.NewMemoryStore(10, 0)
 	recorder := routerreplay.NewRecorder(storage)
 	recorder.SetCapturePolicy(false, false, 4096)

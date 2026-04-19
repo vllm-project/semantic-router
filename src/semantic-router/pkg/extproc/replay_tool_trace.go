@@ -75,6 +75,10 @@ type replayToolTraceResponseAPIItem struct {
 type replayToolTraceCollector struct {
 	steps             []routerreplay.ToolTraceStep
 	toolNamesByCallID map[string]string
+	// apiType, when non-empty, is stamped on every step that doesn't already
+	// specify one. Lets call-sites declare the API variant once at
+	// construction time instead of on every step.
+	apiType string
 }
 
 type replayStreamingIndexedToolCall struct {
@@ -89,6 +93,20 @@ func newReplayToolTraceCollector(capacity int) *replayToolTraceCollector {
 	}
 }
 
+func newReplayToolTraceCollectorForAPI(capacity int, apiType string) *replayToolTraceCollector {
+	collector := newReplayToolTraceCollector(capacity)
+	collector.apiType = apiType
+	return collector
+}
+
+// applyDefaultAPIType stamps the collector's apiType on the step when the step
+// doesn't already declare one. No-op when the collector has no default.
+func (collector *replayToolTraceCollector) applyDefaultAPIType(step *routerreplay.ToolTraceStep) {
+	if step.APIType == "" && collector.apiType != "" {
+		step.APIType = collector.apiType
+	}
+}
+
 func (collector *replayToolTraceCollector) addUserInput(source string, role string, raw json.RawMessage) {
 	collector.addTextStep(replayToolStepUserInput, source, role, extractReplayJSONText(raw))
 }
@@ -99,6 +117,7 @@ func (collector *replayToolTraceCollector) addUserText(source string, role strin
 
 func (collector *replayToolTraceCollector) addAssistantToolCall(step routerreplay.ToolTraceStep) {
 	step.Type = replayToolStepAssistantToolCall
+	collector.applyDefaultAPIType(&step)
 	collector.steps = append(collector.steps, step)
 	if step.ToolCallID != "" && step.ToolName != "" {
 		collector.toolNamesByCallID[step.ToolCallID] = step.ToolName
@@ -140,6 +159,7 @@ func (collector *replayToolTraceCollector) addToolResultStep(step routerreplay.T
 		return
 	}
 	step.Type = replayToolStepClientToolResult
+	collector.applyDefaultAPIType(&step)
 	collector.steps = append(collector.steps, step)
 }
 
@@ -151,12 +171,14 @@ func (collector *replayToolTraceCollector) addTextStep(stepType string, source s
 	if text == "" {
 		return
 	}
-	collector.steps = append(collector.steps, routerreplay.ToolTraceStep{
+	step := routerreplay.ToolTraceStep{
 		Type:   stepType,
 		Source: source,
 		Role:   role,
 		Text:   text,
-	})
+	}
+	collector.applyDefaultAPIType(&step)
+	collector.steps = append(collector.steps, step)
 }
 
 func (collector *replayToolTraceCollector) trace() *routerreplay.ToolTrace {
@@ -335,16 +357,18 @@ func buildReplayStreamingToolTrace(ctx *RequestContext) *routerreplay.ToolTrace 
 				ToolCallID:   call.ID,
 				Arguments:    call.Arguments,
 				RawArguments: call.Arguments,
+				APIType:      replayAPITypeChatCompletions,
 			})
 		}
 	}
 
 	if content := strings.TrimSpace(ctx.StreamingContent); content != "" {
 		steps = append(steps, routerreplay.ToolTraceStep{
-			Type:   replayToolStepAssistantFinalResponse,
-			Source: replayToolSourceStream,
-			Role:   "assistant",
-			Text:   content,
+			Type:    replayToolStepAssistantFinalResponse,
+			Source:  replayToolSourceStream,
+			Role:    "assistant",
+			Text:    content,
+			APIType: replayAPITypeChatCompletions,
 		})
 	}
 
@@ -357,7 +381,7 @@ func parseChatCompletionRequestToolTrace(body []byte) *routerreplay.ToolTrace {
 		return nil
 	}
 
-	collector := newReplayToolTraceCollector(len(messages))
+	collector := newReplayToolTraceCollectorForAPI(len(messages), replayAPITypeChatCompletions)
 	for _, message := range replayChatMessagesSinceLastUser(messages) {
 		appendReplayChatRequestMessage(collector, message)
 	}
@@ -381,7 +405,7 @@ func buildReplayTraceFromChatMessage(
 	message replayToolTraceChatMessage,
 	source string,
 ) *routerreplay.ToolTrace {
-	collector := newReplayToolTraceCollector(len(message.ToolCalls) + 1)
+	collector := newReplayToolTraceCollectorForAPI(len(message.ToolCalls)+1, replayAPITypeChatCompletions)
 	for _, toolCall := range message.ToolCalls {
 		collector.addAssistantToolCall(routerreplay.ToolTraceStep{
 			Source:       source,
@@ -390,6 +414,7 @@ func buildReplayTraceFromChatMessage(
 			ToolCallID:   toolCall.ID,
 			Arguments:    toolCall.Function.Arguments,
 			RawArguments: toolCall.Function.Arguments,
+			APIType:      replayAPITypeChatCompletions,
 		})
 	}
 	collector.addAssistantFinalResponse(source, message.Role, message.Content)
@@ -410,7 +435,7 @@ func parseResponseAPIRequestToolTrace(input json.RawMessage) *routerreplay.ToolT
 		return nil
 	}
 
-	collector := newReplayToolTraceCollector(len(items))
+	collector := newReplayToolTraceCollectorForAPI(len(items), replayAPITypeResponses)
 	for _, item := range replayResponseAPIItemsSinceLastUser(items) {
 		appendReplayResponseAPIRequestItem(collector, item)
 	}
@@ -427,7 +452,7 @@ func parseResponseAPIResponseToolTrace(body []byte) *routerreplay.ToolTrace {
 		return nil
 	}
 
-	collector := newReplayToolTraceCollector(len(response.Output))
+	collector := newReplayToolTraceCollectorForAPI(len(response.Output), replayAPITypeResponses)
 	for _, item := range response.Output {
 		appendReplayResponseAPIResponseItem(collector, item)
 	}
@@ -644,7 +669,7 @@ func parseReplayResponseAPITextInput(input json.RawMessage) *routerreplay.ToolTr
 		return nil
 	}
 
-	collector := newReplayToolTraceCollector(1)
+	collector := newReplayToolTraceCollectorForAPI(1, replayAPITypeResponses)
 	collector.addUserText(replayToolSourceRequest, "user", inputText)
 	return collector.trace()
 }

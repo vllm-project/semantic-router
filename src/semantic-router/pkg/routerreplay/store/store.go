@@ -134,6 +134,10 @@ type Record struct {
 	// ToolDefinitions is the JSON array of tool schemas from the request
 	// (the "tools" field in Chat Completions, or ResponseAPIRequest.Tools).
 	ToolDefinitions string `json:"tool_definitions,omitempty"`
+	// ToolDefinitionsTruncated is true when ToolDefinitions was cut to
+	// MaxToolTraceBytes. Mirrors PromptTruncated / ToolTraceStep.Truncated
+	// so truncation of tool schemas is never silent.
+	ToolDefinitionsTruncated bool `json:"tool_definitions_truncated,omitempty"`
 
 	// RAG (Retrieval-Augmented Generation)
 	RAGEnabled         bool    `json:"rag_enabled,omitempty"`

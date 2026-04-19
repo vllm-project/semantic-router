@@ -110,6 +110,7 @@ func applyMaxToolTraceBytes(rec *RoutingRecord, max int) {
 	}
 	if len(rec.ToolDefinitions) > max {
 		rec.ToolDefinitions = rec.ToolDefinitions[:max]
+		rec.ToolDefinitionsTruncated = true
 	}
 	truncateToolTraceSteps(rec.ToolTrace, max)
 }
@@ -117,7 +118,7 @@ func applyMaxToolTraceBytes(rec *RoutingRecord, max int) {
 // truncateToolTraceSteps applies the byte limit to each step's Arguments and
 // Output fields.
 func truncateToolTraceSteps(trace *ToolTrace, max int) {
-	if trace == nil {
+	if trace == nil || max <= 0 {
 		return
 	}
 	for i := range trace.Steps {
@@ -125,16 +126,19 @@ func truncateToolTraceSteps(trace *ToolTrace, max int) {
 	}
 }
 
-// truncateToolTraceStep applies the byte limit to a single step's fields.
+// truncateToolTraceStep applies the byte limit to a single step's Arguments
+// and Output fields. RawArguments and RawOutput are intentionally preserved at
+// their original full-fidelity values so that downstream consumers that need
+// to replay the exchange byte-for-byte can still recover the untruncated
+// payload (see #1781). Only the "normalized" Arguments/Output fields are cut,
+// and Truncated is set to signal that truncation happened.
 func truncateToolTraceStep(step *ToolTraceStep, max int) {
 	if len(step.Arguments) > max {
 		step.Arguments = step.Arguments[:max]
-		step.RawArguments = step.Arguments
 		step.Truncated = true
 	}
 	if len(step.Output) > max {
 		step.Output = step.Output[:max]
-		step.RawOutput = step.Output
 		step.Truncated = true
 	}
 }
@@ -176,6 +180,10 @@ func (r *Recorder) UpdateUsageCost(id string, usage UsageCost) error {
 }
 
 func (r *Recorder) UpdateToolTrace(id string, trace ToolTrace) error {
+	// Apply MaxToolTraceBytes here too: response-side traces are attached via
+	// this update path (see extproc.attachRouterReplayResponse) and therefore
+	// bypass the AddRecord truncation unless we cap them again.
+	truncateToolTraceSteps(&trace, r.maxToolTraceBytes)
 	ctx := context.Background()
 	return r.storage.UpdateToolTrace(ctx, id, trace)
 }
