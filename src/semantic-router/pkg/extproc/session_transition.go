@@ -38,23 +38,31 @@ func populateSessionTransitionFields(ctx *RequestContext) {
 		return
 	}
 
-	if ctx.SessionID == "" {
-		userID := extractUserID(ctx)
-		if userID != "" {
-			ctx.SessionID = deriveSessionIDFromMessages(ctx.ChatCompletionMessages, userID)
-		} else {
-			ctx.SessionID = deriveSessionIDFromMessagesStructure(ctx.ChatCompletionMessages)
-			if ctx.SessionID == "" {
-				ctx.SessionID = deriveSessionIDFromRequestID(ctx)
-			}
-			if ctx.SessionID == "" {
-				logging.Debugf("Session: could not derive session ID for chat completion request")
-			}
-		}
-	}
+	populateChatCompletionSessionIDIfNeeded(ctx)
 
 	ctx.TurnIndex = sessiontelemetry.ChatTurnNumber(sessionTransitionChatMessages(ctx.ChatCompletionMessages)) - 1
 	// TODO: populate PreviousModel for Chat Completions once per-turn model history is available.
+}
+
+// populateChatCompletionSessionIDIfNeeded sets ctx.SessionID when not already
+// pinned (e.g. by x-session-id). Kept separate to avoid deep nesting in
+// populateSessionTransitionFields (nestif).
+func populateChatCompletionSessionIDIfNeeded(ctx *RequestContext) {
+	if ctx.SessionID != "" {
+		return
+	}
+	userID := extractUserID(ctx)
+	if userID != "" {
+		ctx.SessionID = deriveSessionIDFromMessages(ctx.ChatCompletionMessages, userID)
+		return
+	}
+	ctx.SessionID = deriveSessionIDFromMessagesStructure(ctx.ChatCompletionMessages)
+	if ctx.SessionID == "" {
+		ctx.SessionID = deriveSessionIDFromRequestID(ctx)
+	}
+	if ctx.SessionID == "" {
+		logging.Debugf("Session: could not derive session ID for chat completion request")
+	}
 }
 
 func sessionTransitionChatMessages(messages []ChatCompletionMessage) []sessiontelemetry.ChatMessage {
