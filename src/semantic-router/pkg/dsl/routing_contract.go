@@ -138,6 +138,13 @@ func (d *decompiler) appendProjectionMappings(prog *Program) {
 			Name:   mapping.Name,
 			Source: mapping.Source,
 			Method: mapping.Method,
+			TopK:   mapping.TopK,
+		}
+		if mapping.Hysteresis != nil {
+			decl.Hysteresis = &ProjectionMappingHysteresisDecl{
+				UpThreshold:   mapping.Hysteresis.UpThreshold,
+				DownThreshold: mapping.Hysteresis.DownThreshold,
+			}
 		}
 		if mapping.Calibration != nil {
 			decl.Calibration = &ProjectionMappingCalibrationDecl{

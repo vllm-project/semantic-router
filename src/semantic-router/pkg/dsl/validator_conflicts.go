@@ -635,14 +635,56 @@ func (v *Validator) checkProjectionMapping(mapping *ProjectionMappingDecl, score
 			nil,
 		)
 	}
-	if mapping.Method != "threshold_bands" {
+	switch mapping.Method {
+	case "threshold_bands", "multi_emit", "top_k", "hysteresis":
+		// valid
+	default:
 		v.addDiag(
 			DiagConstraint,
 			mapping.Pos,
-			fmt.Sprintf("%s: unknown method %q (supported: threshold_bands)", context, mapping.Method),
+			fmt.Sprintf("%s: unknown method %q (supported: threshold_bands, multi_emit, top_k, hysteresis)", context, mapping.Method),
 			nil,
 		)
 	}
+
+	// Validate method-specific parameters
+	if mapping.Method == "top_k" {
+		if mapping.TopK <= 0 {
+			v.addDiag(
+				DiagConstraint,
+				mapping.Pos,
+				fmt.Sprintf("%s: top_k method requires top_k > 0, got %d", context, mapping.TopK),
+				nil,
+			)
+		}
+		if mapping.TopK > len(mapping.Outputs) {
+			v.addDiag(
+				DiagConstraint,
+				mapping.Pos,
+				fmt.Sprintf("%s: top_k (%d) cannot exceed number of outputs (%d)", context, mapping.TopK, len(mapping.Outputs)),
+				nil,
+			)
+		}
+	}
+
+	if mapping.Method == "hysteresis" {
+		if mapping.Hysteresis == nil {
+			v.addDiag(
+				DiagConstraint,
+				mapping.Pos,
+				fmt.Sprintf("%s: hysteresis method requires hysteresis config", context),
+				nil,
+			)
+		} else if mapping.Hysteresis.DownThreshold >= mapping.Hysteresis.UpThreshold {
+			v.addDiag(
+				DiagConstraint,
+				mapping.Pos,
+				fmt.Sprintf("%s: hysteresis down_threshold (%.3f) must be less than up_threshold (%.3f)", context, mapping.Hysteresis.DownThreshold, mapping.Hysteresis.UpThreshold),
+				nil,
+			)
+		}
+	}
+
 	if mapping.Calibration != nil {
 		switch mapping.Calibration.Method {
 		case "", "sigmoid_distance":

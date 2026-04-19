@@ -316,9 +316,34 @@ func validateProjectionMapping(
 	if _, exists := scoreNames[mapping.Source]; !exists {
 		return fmt.Errorf("routing.projections.mappings[%q]: source %q is not a declared projection score", mapping.Name, mapping.Source)
 	}
-	if mapping.Method != "threshold_bands" {
-		return fmt.Errorf("routing.projections.mappings[%q]: unsupported method %q (supported: threshold_bands)", mapping.Name, mapping.Method)
+
+	// Validate method
+	switch mapping.Method {
+	case "threshold_bands", "multi_emit", "top_k", "hysteresis":
+		// valid
+	default:
+		return fmt.Errorf("routing.projections.mappings[%q]: unsupported method %q (supported: threshold_bands, multi_emit, top_k, hysteresis)", mapping.Name, mapping.Method)
 	}
+
+	// Validate method-specific parameters
+	if mapping.Method == "top_k" {
+		if mapping.TopK <= 0 {
+			return fmt.Errorf("routing.projections.mappings[%q]: top_k method requires top_k > 0, got %d", mapping.Name, mapping.TopK)
+		}
+		if mapping.TopK > len(mapping.Outputs) {
+			return fmt.Errorf("routing.projections.mappings[%q]: top_k (%d) cannot exceed number of outputs (%d)", mapping.Name, mapping.TopK, len(mapping.Outputs))
+		}
+	}
+
+	if mapping.Method == "hysteresis" {
+		if mapping.Hysteresis == nil {
+			return fmt.Errorf("routing.projections.mappings[%q]: hysteresis method requires hysteresis config", mapping.Name)
+		}
+		if mapping.Hysteresis.DownThreshold >= mapping.Hysteresis.UpThreshold {
+			return fmt.Errorf("routing.projections.mappings[%q]: hysteresis down_threshold (%.3f) must be less than up_threshold (%.3f)", mapping.Name, mapping.Hysteresis.DownThreshold, mapping.Hysteresis.UpThreshold)
+		}
+	}
+
 	if len(mapping.Outputs) == 0 {
 		return fmt.Errorf("routing.projections.mappings[%q]: outputs cannot be empty", mapping.Name)
 	}

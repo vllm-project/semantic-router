@@ -288,6 +288,19 @@ func rawToProjectionMapping(r *rawProjectionDecl) *ProjectionMappingDecl {
 	if method, ok := getStringField(fields, "method"); ok {
 		mapping.Method = method
 	}
+	if topK, ok := getIntField(fields, "top_k"); ok {
+		mapping.TopK = topK
+	}
+	if hysteresisObj, ok := fields["hysteresis"].(ObjectValue); ok {
+		hysteresis := &ProjectionMappingHysteresisDecl{}
+		if upThreshold, ok := getFloat64Field(hysteresisObj.Fields, "up_threshold"); ok {
+			hysteresis.UpThreshold = upThreshold
+		}
+		if downThreshold, ok := getFloat64Field(hysteresisObj.Fields, "down_threshold"); ok {
+			hysteresis.DownThreshold = downThreshold
+		}
+		mapping.Hysteresis = hysteresis
+	}
 	if calibrationObj, ok := fields["calibration"].(ObjectValue); ok {
 		calibration := &ProjectionMappingCalibrationDecl{}
 		if method, ok := getStringField(calibrationObj.Fields, "method"); ok {

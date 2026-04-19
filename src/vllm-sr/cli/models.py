@@ -73,6 +73,13 @@ class ProjectionMappingCalibration(BaseModel):
     slope: Optional[float] = None
 
 
+class HysteresisConfig(BaseModel):
+    """Hysteresis configuration for stable band transitions in projection mappings."""
+
+    up_threshold: float
+    down_threshold: float
+
+
 class ProjectionMappingOutput(BaseModel):
     """One named threshold band emitted by a projection mapping."""
 
@@ -89,6 +96,8 @@ class ProjectionMapping(BaseModel):
     name: str
     source: str
     method: str
+    top_k: Optional[int] = None
+    hysteresis: Optional[HysteresisConfig] = None
     calibration: Optional[ProjectionMappingCalibration] = None
     outputs: List[ProjectionMappingOutput]
 

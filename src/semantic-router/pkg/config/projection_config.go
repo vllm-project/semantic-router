@@ -42,6 +42,8 @@ type ProjectionMapping struct {
 	Name        string                        `yaml:"name"`
 	Source      string                        `yaml:"source"`
 	Method      string                        `yaml:"method"`
+	TopK        int                           `yaml:"top_k,omitempty"`
+	Hysteresis  *HysteresisConfig             `yaml:"hysteresis,omitempty"`
 	Calibration *ProjectionMappingCalibration `yaml:"calibration,omitempty"`
 	Outputs     []ProjectionMappingOutput     `yaml:"outputs"`
 }
@@ -60,4 +62,10 @@ type ProjectionMappingOutput struct {
 	LTE  *float64 `yaml:"lte,omitempty"`
 	GT   *float64 `yaml:"gt,omitempty"`
 	GTE  *float64 `yaml:"gte,omitempty"`
+}
+
+// HysteresisConfig defines up/down thresholds for hysteresis mapping method.
+type HysteresisConfig struct {
+	UpThreshold   float64 `yaml:"up_threshold"`
+	DownThreshold float64 `yaml:"down_threshold"`
 }
