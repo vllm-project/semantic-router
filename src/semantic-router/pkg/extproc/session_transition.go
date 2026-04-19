@@ -23,8 +23,11 @@ func populateSessionTransitionFields(ctx *RequestContext) {
 		ctx.PreviousResponseID = ctx.ResponseAPICtx.PreviousResponseID
 		history := ctx.ResponseAPICtx.ConversationHistory
 		ctx.TurnIndex = len(history)
-		if len(history) > 0 {
-			ctx.PreviousModel = history[len(history)-1].Model
+		for i := len(history) - 1; i >= 0; i-- {
+			if history[i] != nil {
+				ctx.PreviousModel = history[i].Model
+				break
+			}
 		}
 		ctx.HistoryTokenCount = historyTokensFromStoredResponses(history)
 		return
@@ -90,6 +93,9 @@ func historyTokensFromStoredResponses(history []*responseapi.StoredResponse) int
 			total += resp.Usage.InputTokens + resp.Usage.OutputTokens
 		} else {
 			total += estimateStoredResponseTokens(resp)
+		}
+		if total >= historyTokensCap {
+			return historyTokensCap
 		}
 	}
 	return total

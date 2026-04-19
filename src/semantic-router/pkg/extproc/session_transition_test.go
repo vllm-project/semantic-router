@@ -96,6 +96,33 @@ func TestPopulateSessionTransitionFields_ResponseAPI_NilResponseInHistory(t *tes
 	assert.Equal(t, 70, ctx.HistoryTokenCount)
 }
 
+func TestPopulateSessionTransitionFields_ResponseAPI_NilLastEntryDoesNotPanic(t *testing.T) {
+	ctx := &RequestContext{
+		ResponseAPICtx: &ResponseAPIContext{
+			IsResponseAPIRequest: true,
+			ConversationID:       "conv-nil-last",
+			ConversationHistory: []*responseapi.StoredResponse{
+				{Model: "model-a", Usage: &responseapi.Usage{InputTokens: 50, OutputTokens: 20}},
+				nil,
+			},
+		},
+	}
+
+	require.NotPanics(t, func() { populateSessionTransitionFields(ctx) })
+	assert.Equal(t, "model-a", ctx.PreviousModel)
+	assert.Equal(t, 70, ctx.HistoryTokenCount)
+}
+
+func TestHistoryTokensFromStoredResponses_CapsAtHistoryTokensCap(t *testing.T) {
+	bigUsage := &responseapi.Usage{InputTokens: 5000, OutputTokens: 4000}
+	history := []*responseapi.StoredResponse{
+		{Model: "m", Usage: bigUsage},
+		{Model: "m", Usage: bigUsage},
+		{Model: "m", Usage: bigUsage},
+	}
+	assert.Equal(t, historyTokensCap, historyTokensFromStoredResponses(history))
+}
+
 func TestPopulateSessionTransitionFields_ChatCompletionsFirstTurnIgnoresSystemMessages(t *testing.T) {
 	ctx := &RequestContext{
 		Headers: map[string]string{

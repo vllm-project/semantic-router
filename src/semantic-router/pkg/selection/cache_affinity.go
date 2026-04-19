@@ -9,10 +9,6 @@ import (
 
 // CacheAffinityContext carries the request-time session signals used by the
 // pre-dispatch cache-affinity estimator.
-//
-// These fields capture runtime evidence for the current request. The selection
-// request path carries them directly, while AlgorithmConfig remains available
-// for future tunable weights if we choose to expose them.
 type CacheAffinityContext struct {
 	// TurnIndex is the number of prior turns in this session (0 = first turn).
 	TurnIndex int
@@ -56,9 +52,6 @@ const (
 	turnDepthNorm = 4.0
 )
 
-// These constants implement the heuristic from "Pre-Dispatch Cache-Affinity
-// Estimator — Final". Keep them explicit so the bounded scoring behavior is
-// easy to audit and compare against the design note.
 const (
 	// W_req weights combine request-level continuation evidence. They should sum
 	// to 1.0 so the normalized signal remains easy to reason about.
@@ -105,33 +98,26 @@ type CacheAffinityResult struct {
 	LambdaReq float64
 }
 
-// ComputeCacheAffinityAdjustments applies a bounded pre-dispatch cache-
-// affinity bias during hybrid model selection.
+// ComputeCacheAffinityAdjustments applies a bounded pre-dispatch cache-affinity
+// bias during hybrid model selection.
 //
 // The estimator produces a signed affinity effect A_m in (-1,1) and combines
 // it with evidence confidence C_m and an ambiguity-gated lambda so that:
 //
 //	final_score(m) = base_score(m) + lambda_req * C_m * A_m
 //
-// Production contract:
-//   - inputs come from request-time session and candidate metadata
-//   - zero adjustment cleanly preserves the base score for first-turn,
-//     single-candidate, or unambiguous requests
-//   - |adjustment| stays bounded by affinityMaxLambda, keeping cache-affinity
-//     as a tie-breaker or gentle bias on close calls
+// |adjustment| is bounded by affinityMaxLambda, keeping cache-affinity as a
+// tie-breaker that cannot override strong quality or cost signals.
 func ComputeCacheAffinityAdjustments(
 	ctx *CacheAffinityContext,
 	candidates []config.ModelRef,
 	baseScores map[string]float64,
 ) CacheAffinityResult {
-	// Fast paths for requests with minimal runtime context or with a single
-	// effective candidate.
 	if ctx == nil || len(candidates) < 2 {
 		return CacheAffinityResult{}
 	}
 
-	// hasContinuation is the coarse gate from Step 1. Continuation requests
-	// activate the request-level sensitivity calculation below.
+	// Requests without prior context do not benefit from cache affinity.
 	hasContinuation := ctx.TurnIndex > 0 ||
 		ctx.HistoryTokens > 0 ||
 		ctx.PreviousResponseID != ""
@@ -141,7 +127,7 @@ func ComputeCacheAffinityAdjustments(
 
 	result := CacheAffinityResult{}
 
-	// Step 1: request continuation sensitivity W_req.
+	// W_req: request-level continuation sensitivity in [0,1].
 	contextTokens := math.Max(float64(ctx.ContextTokens), 1)
 	reuseRatio := clampF(float64(ctx.HistoryTokens)/contextTokens, 0, 1)
 	historyMass := clampF(float64(ctx.HistoryTokens)/historyMassNorm, 0, 1)
@@ -153,20 +139,18 @@ func ComputeCacheAffinityAdjustments(
 	}
 	result.WReq = wReq
 
-	// Step 4: ambiguity-gated lambda over the current base scores.
-	// gap12 is best_score - second_best_score across the candidate set.
+	// lambda_req: ambiguity-gated multiplier. Computed before the per-candidate
+	// loop so a clear base winner can exit without allocating per-candidate state.
 	gap12 := computeGap12(baseScores, candidates)
 	ambiguity := clampF(1.0-gap12/affinityGapThreshold, 0, 1)
 	lambdaReq := affinityMaxLambda * wReq * ambiguity
 	result.LambdaReq = lambdaReq
 
-	// A strong base winner keeps the diagnostics while preserving the base
-	// scores as-is.
 	if lambdaReq == 0 {
 		return result
 	}
 
-	// Step 2/3/5: per-candidate signed affinity, evidence confidence, then the
+	// Per-candidate: signed affinity A_m, evidence confidence C_m, and the
 	// bounded additive adjustment.
 	result.Adjustments = make(map[string]float64, len(candidates))
 	hasPrev := boolToFloat64(ctx.PreviousModel != "")
@@ -178,7 +162,7 @@ func ComputeCacheAffinityAdjustments(
 		windowSize := ctx.ModelContextWindows[name]
 		fitM := computeFitM(ctx.ContextTokens, windowSize)
 
-		// A_m is a signed effect size that captures the direction and strength of
+		// A_m: signed effect size capturing the direction and strength of
 		// cache-affinity for this candidate.
 		eM := emSameBase*sameModel +
 			emSameReuse*sameModel*reuseRatio +
@@ -187,7 +171,7 @@ func ComputeCacheAffinityAdjustments(
 			emFit*(fitM-0.5)
 		aM := math.Tanh(eM)
 
-		// C_m captures how much evidence supports using the affinity signal.
+		// C_m: evidence confidence gating how much to trust the affinity signal.
 		cRaw := clampF(
 			cmBase+
 				cmReuse*reuseRatio+
@@ -202,7 +186,6 @@ func ComputeCacheAffinityAdjustments(
 			cM = cmNoPrevScale * cRaw
 		}
 
-		// cache_adjustment(m) = lambda_req * C_m * A_m
 		result.Adjustments[name] = lambdaReq * cM * aM
 	}
 
@@ -216,8 +199,8 @@ func ComputeCacheAffinityAdjustments(
 	return result
 }
 
-// computeFitM implements the per-candidate context-window fit from the design
-// note. A missing window size contributes the neutral fit score of 0.5.
+// computeFitM returns a per-candidate context-window fit in {0.0, 0.3, 0.7, 1.0}.
+// A missing or zero window size returns the neutral score of 0.5.
 func computeFitM(contextTokens, windowSize int) float64 {
 	if windowSize <= 0 {
 		return 0.5
@@ -236,9 +219,9 @@ func computeFitM(contextTokens, windowSize int) float64 {
 	}
 }
 
-// computeGap12 returns best_score - second_best_score over the active
-// candidate set. Hybrid selection uses it to decide whether the base result is
-// ambiguous enough for cache-affinity to matter.
+// computeGap12 returns best_score - second_best_score over the candidate set.
+// A large gap means the base scorer already has a clear winner and cache-affinity
+// should not interfere.
 func computeGap12(baseScores map[string]float64, candidates []config.ModelRef) float64 {
 	best := -math.MaxFloat64
 	second := -math.MaxFloat64
@@ -257,8 +240,7 @@ func computeGap12(baseScores map[string]float64, candidates []config.ModelRef) f
 	return best - second
 }
 
-// boolToFloat64 keeps the estimator formulas close to the math notation from
-// the design doc, where indicator terms are written as 0/1 variables.
+// boolToFloat64 converts a bool to a 0/1 float64 for use in scoring formulas.
 func boolToFloat64(b bool) float64 {
 	if b {
 		return 1.0
