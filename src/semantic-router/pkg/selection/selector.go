@@ -181,6 +181,9 @@ type SelectionContext struct {
 
 	// LatencyAwareTTFTPercentile is the configured TTFT percentile (1-100) for latency_aware selection
 	LatencyAwareTTFTPercentile int
+
+	// CacheAffinityCtx carries request-time session signals for cache-affinity estimation.
+	CacheAffinityCtx *CacheAffinityContext
 }
 
 // SelectionResult contains the result of a model selection decision

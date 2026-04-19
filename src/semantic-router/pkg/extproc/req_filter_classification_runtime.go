@@ -215,14 +215,16 @@ func (r *OpenAIRouter) selectDecisionRuntimeModel(
 		return selectedModel, entropy.ReasoningDecision{}
 	}
 
-	selectedModelRef, usedMethod := r.selectModelFromCandidates(
+	selCtx := r.buildSelectionContext(
 		result.Decision.ModelRefs,
 		decisionName,
 		userContent,
 		result.Decision.Algorithm,
 		categoryName,
 		result.Decision.CandidateIterations,
+		ctx,
 	)
+	selectedModelRef, usedMethod := r.selectModelFromCandidates(selCtx, result.Decision.Algorithm)
 	selectedModel := selectedModelRef.Model
 	selectionFields := map[string]interface{}{
 		"request_id":        ctx.RequestID,
