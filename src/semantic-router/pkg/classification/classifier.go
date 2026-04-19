@@ -73,6 +73,9 @@ type Classifier struct {
 	MMLUToGeneric map[string]string
 	// Maps generic category names -> MMLU-Pro category names
 	GenericToMMLU map[string][]string
+
+	// Projection hysteresis state tracking (mapping name -> last emitted output name)
+	projectionHysteresisState map[string]string
 }
 
 type option func(*Classifier)
@@ -168,6 +171,9 @@ func newClassifierWithOptions(cfg *config.RouterConfig, options ...option) (*Cla
 	classifier.authzUserIDHeader = cfg.Authz.Identity.GetUserIDHeader()
 	classifier.authzUserGroupsHeader = cfg.Authz.Identity.GetUserGroupsHeader()
 	classifier.authzFailOpen = cfg.Authz.FailOpen
+
+	// Initialize projection hysteresis state
+	classifier.projectionHysteresisState = make(map[string]string)
 
 	for _, option := range options {
 		option(classifier)
