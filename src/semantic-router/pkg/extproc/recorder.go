@@ -175,6 +175,7 @@ func configureReplayRecorder(
 		cfg.CaptureResponseBody,
 		resolveReplayMaxBodyBytes(cfg.MaxBodyBytes),
 	)
+	recorder.SetMaxToolTraceBytes(cfg.MaxToolTraceBytes)
 }
 
 func buildReplayRoutingRecord(
@@ -236,6 +237,15 @@ func buildReplayRoutingRecord(
 	if len(ctx.OriginalRequestBody) > 0 {
 		record.RequestBody = string(ctx.OriginalRequestBody)
 	}
+
+	// Extract structured prompt and tool-definition fields from the full
+	// request body *before* body truncation occurs in AddRecord.
+	if isResponseAPIRequest(ctx) {
+		record.Prompt, record.ToolDefinitions = extractResponseAPIPromptAndTools(ctx)
+	} else {
+		record.Prompt, record.ToolDefinitions = extractChatCompletionPromptAndTools(ctx.OriginalRequestBody)
+	}
+
 	return record
 }
 
