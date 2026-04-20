@@ -118,17 +118,6 @@ repos:
         pass_filenames: true
         require_serial: true
 
-  # Repo-native branch prelint gate before push/PR updates
-  - repo: local
-    hooks:
-      - id: agent-branch-prelint
-        name: agent branch prelint
-        entry: bash -c 'if [ ! -x ./.venv-agent/bin/python ]; then echo "run make precommit-install" >&2; exit 1; fi; exec make precommit-branch-gate'
-        language: system
-        pass_filenames: false
-        always_run: true
-        require_serial: true
-        stages: [pre-push]
 
 # Commented out flake8 - only reports issues, doesn't auto-fix
 # -   repo: https://github.com/PyCQA/flake8

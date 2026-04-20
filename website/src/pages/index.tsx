@@ -1,13 +1,27 @@
 import React from 'react'
+import Head from '@docusaurus/Head'
 import Layout from '@theme/Layout'
 import Translate, { translate } from '@docusaurus/Translate'
+import useBaseUrl from '@docusaurus/useBaseUrl'
 import useDocusaurusContext from '@docusaurus/useDocusaurusContext'
+import Claude from '@lobehub/icons/es/Claude/components/Mono'
+import DeepSeek from '@lobehub/icons/es/DeepSeek/components/Mono'
+import Gemini from '@lobehub/icons/es/Gemini/components/Mono'
+import Grok from '@lobehub/icons/es/Grok/components/Mono'
+import Kimi from '@lobehub/icons/es/Kimi/components/Mono'
+import Meta from '@lobehub/icons/es/Meta/components/Mono'
+import Minimax from '@lobehub/icons/es/Minimax/components/Mono'
+import Mistral from '@lobehub/icons/es/Mistral/components/Mono'
+import OpenAI from '@lobehub/icons/es/OpenAI/components/Mono'
+import Qwen from '@lobehub/icons/es/Qwen/components/Mono'
+import Zhipu from '@lobehub/icons/es/Zhipu/components/Mono'
 import AcknowledgementsSection from '@site/src/components/AcknowledgementsSection'
 import InstallQuickStartSection from '@site/src/components/InstallQuickStartSection'
 import PaperFigureShowcase from '@site/src/components/PaperFigureShowcase'
 import ResearchPaperCarousel from '@site/src/components/ResearchPaperCarousel'
 import TeamCarousel from '@site/src/components/TeamCarousel'
 import { researchPapers } from '@site/src/data/researchContent'
+import { SITE_SOCIAL_PREVIEW_IMAGE_PATH } from '@site/src/data/socialPreview'
 import TransformerPipelineAnimation from '@site/src/components/TransformerPipelineAnimation'
 import CapabilityGlyph, { type CapabilityGlyphKind } from '@site/src/components/site/CapabilityGlyph'
 import DitherField from '@site/src/components/site/DitherField'
@@ -15,6 +29,37 @@ import { PageIntro, PillLink, SectionLabel, StatStrip } from '@site/src/componen
 import styles from './index.module.css'
 
 const paperCount = researchPapers.length
+const homepageMetaTitle = translate({
+  id: 'homepage.meta.title',
+  message: 'Open-Source LLM Router for Mixture-of-Models',
+})
+const homepageMetaDescription = translate({
+  id: 'homepage.meta.description',
+  message: 'Open-source LLM router for Mixture-of-Models. Route each request by cost, latency, privacy, safety, and modality across local, private, and frontier models.',
+})
+const homepageSocialTitle = translate({
+  id: 'homepage.meta.socialTitle',
+  message: 'vLLM Semantic Router | Open-Source LLM Router',
+})
+
+type HeroModelLogo = {
+  label: string
+  Icon: React.ElementType
+}
+
+const heroModelLogos: HeroModelLogo[] = [
+  { label: 'Kimi', Icon: Kimi },
+  { label: 'Zhipu', Icon: Zhipu },
+  { label: 'MiniMax', Icon: Minimax },
+  { label: 'ChatGPT', Icon: OpenAI },
+  { label: 'Claude', Icon: Claude },
+  { label: 'Gemini', Icon: Gemini },
+  { label: 'DeepSeek', Icon: DeepSeek },
+  { label: 'Qwen', Icon: Qwen },
+  { label: 'Llama', Icon: Meta },
+  { label: 'Mistral', Icon: Mistral },
+  { label: 'Grok', Icon: Grok },
+]
 
 const heroStats = [
   {
@@ -22,7 +67,7 @@ const heroStats = [
     value: '16',
     description: translate({
       id: 'homepage.stats.signals.description',
-      message: '16 signal families across 5 heuristic and 11 learned detectors, including knowledge base routing and history-aware reasks.',
+      message: '16 signal families across heuristic and learned detectors, from knowledge base routing to history-aware reasks.',
     }),
   },
   {
@@ -30,7 +75,7 @@ const heroStats = [
     value: '12',
     description: translate({
       id: 'homepage.stats.algorithms.description',
-      message: '12 selectors across symbolic policy, latency heuristics, reinforcement learning, and ML routing.',
+      message: '12 routing strategies spanning rules, latency heuristics, reinforcement learning, and ML selection.',
     }),
   },
   {
@@ -46,59 +91,80 @@ const heroStats = [
   },
 ]
 
-interface CapabilityCard {
+interface ValueCard {
+  detail: string
+  index: string
   kind: CapabilityGlyphKind
   text: string
   title: string
 }
 
-const capabilityCards: CapabilityCard[] = [
+const problemAxes = [
+  translate({ id: 'homepage.capabilities.axis.capability', message: 'Capability' }),
+  translate({ id: 'homepage.capabilities.axis.cost', message: 'Cost' }),
+  translate({ id: 'homepage.capabilities.axis.privacy', message: 'Privacy' }),
+  translate({ id: 'homepage.capabilities.axis.latency', message: 'Latency' }),
+]
+
+const problemTasks = [
+  translate({
+    id: 'homepage.capabilities.task.choose',
+    message: 'Choose the right model lane for each request.',
+  }),
+  translate({
+    id: 'homepage.capabilities.task.connect',
+    message: 'Connect local, private, and frontier models without fragmenting the product.',
+  }),
+  translate({
+    id: 'homepage.capabilities.task.govern',
+    message: 'Enforce cost, safety, and privacy at routing time.',
+  }),
+]
+
+const problemMeta = [
+  translate({ id: 'homepage.capabilities.meta.selection', message: 'Selection' }),
+  translate({ id: 'homepage.capabilities.meta.connection', message: 'Connection' }),
+  translate({ id: 'homepage.capabilities.meta.governance', message: 'Governance' }),
+]
+
+const valueCards: ValueCard[] = [
   {
-    kind: 'signal',
-    title: translate({ id: 'homepage.capabilities.signal.title', message: 'Signal extraction' }),
+    index: '01',
+    kind: 'economics',
+    title: translate({ id: 'homepage.capabilities.value1.title', message: 'Lower cost per request' }),
     text: translate({
-      id: 'homepage.capabilities.signal.text',
-      message: 'Heuristic rules, learned classifiers, history-aware reasks, and knowledge base signals turn raw requests into typed routing state.',
+      id: 'homepage.capabilities.value1.text',
+      message: 'Send routine traffic to efficient lanes, reserve frontier reasoning for the requests that need it, and turn model choice into measurable ROI.',
+    }),
+    detail: translate({
+      id: 'homepage.capabilities.value1.detail',
+      message: 'More useful output per dollar.',
     }),
   },
   {
-    kind: 'projection',
-    title: translate({ id: 'homepage.capabilities.projection.title', message: 'Projection coordination' }),
+    index: '02',
+    kind: 'safety',
+    title: translate({ id: 'homepage.capabilities.value2.title', message: 'Safer model decisions' }),
     text: translate({
-      id: 'homepage.capabilities.projection.text',
-      message: 'Partitions, scores, and mappings coordinate matched evidence into reusable routing facts.',
+      id: 'homepage.capabilities.value2.text',
+      message: 'Move jailbreak, PII, and hallucination handling into the routing path so risky traffic is intercepted before it becomes product behavior.',
+    }),
+    detail: translate({
+      id: 'homepage.capabilities.value2.detail',
+      message: 'Safety becomes part of the request path.',
     }),
   },
   {
-    kind: 'decision',
-    title: translate({ id: 'homepage.capabilities.decision.title', message: 'Decision engine' }),
+    index: '03',
+    kind: 'mesh',
+    title: translate({ id: 'homepage.capabilities.value3.title', message: 'One router across every model' }),
     text: translate({
-      id: 'homepage.capabilities.decision.text',
-      message: 'Signals and projection outputs meet symbolic rules in auditable routing logic.',
+      id: 'homepage.capabilities.value3.text',
+      message: 'Coordinate local, private, and frontier models through one layer that works from edge deployment to managed cloud.',
     }),
-  },
-  {
-    kind: 'plugin',
-    title: translate({ id: 'homepage.capabilities.plugins.title', message: 'Plugin chain' }),
-    text: translate({
-      id: 'homepage.capabilities.plugins.text',
-      message: 'Cache, safety, rewrite, and tracing attach as composable behaviors.',
-    }),
-  },
-  {
-    kind: 'selection',
-    title: translate({ id: 'homepage.capabilities.research.title', message: 'Frontier LLM systems' }),
-    text: translate({
-      id: 'homepage.capabilities.research.text',
-      message: 'Research drives the stack itself, exploring frontier LLM systems beyond settled patterns.',
-    }),
-  },
-  {
-    kind: 'docs',
-    title: translate({ id: 'homepage.capabilities.docs.title', message: 'Full dashboard support' }),
-    text: translate({
-      id: 'homepage.capabilities.docs.text',
-      message: 'Operate routing, topology, controls, and runtime feedback from one integrated dashboard.',
+    detail: translate({
+      id: 'homepage.capabilities.value3.detail',
+      message: 'One system across device, VPC, and cloud.',
     }),
   },
 ]
@@ -188,50 +254,134 @@ const encoderCards = [
 ]
 
 function DitherHero(): JSX.Element {
-  return (
-    <header className={styles.hero}>
-      <DitherField className={styles.heroNoise} />
-      <div className="site-shell-container">
-        <div className={styles.heroGrid}>
-          <div className={styles.heroStack}>
-            <PageIntro
-              className={styles.heroIntro}
-              label={<Translate id="homepage.hero.label">System-level intelligence</Translate>}
-              title={(
-                <>
-                  <Translate id="homepage.hero.line1">Signal</Translate>
-                  <br />
-                  <Translate id="homepage.hero.line2">before scale</Translate>
-                </>
-              )}
-              actions={(
-                <>
-                  <PillLink
-                    className={styles.heroPrimaryCta}
-                    href="https://play.vllm-semantic-router.com/"
-                    rel="noreferrer"
-                    target="_blank"
-                  >
-                    <Translate id="homepage.hero.publicBeta">Public Beta</Translate>
-                  </PillLink>
-                  <PillLink className={styles.heroSecondaryCta} to="/white-paper" muted>
-                    <Translate id="homepage.hero.secondaryCta">Open white paper</Translate>
-                  </PillLink>
-                </>
-              )}
-            />
+  const marqueeCopies = [0, 1]
+  const marqueeRepeats = [0, 1, 2]
+  const heroLogoSrc = useBaseUrl('/img/artworks/vllm-sr-logo.dark.svg')
+  const heroLogoAlt = translate({
+    id: 'homepage.hero.logoAlt',
+    message: 'vLLM Semantic Router logo',
+  })
 
-            <p className={styles.heroManifesto}>
-              <span className={styles.heroManifestoText}>
-                <Translate id="homepage.hero.manifesto">
-                  System-brain routing: signal-led, entropy-aware, ruthlessly clear.
-                </Translate>
-              </span>
-            </p>
+  return (
+    <section className={styles.heroStage}>
+      <header className={styles.hero}>
+        <DitherField className={styles.heroNoise} />
+        <div className="site-shell-container">
+          <div className={styles.heroGrid}>
+            <div className={styles.heroIntro}>
+              <div className={styles.heroBrandLockup}>
+                <img
+                  src={heroLogoSrc}
+                  alt={heroLogoAlt}
+                  className={styles.heroBrandLogo}
+                  decoding="async"
+                  loading="eager"
+                />
+              </div>
+
+              <PageIntro
+                align="center"
+                className={styles.heroIntroPanel}
+                label={<Translate id="homepage.hero.label">Open-source LLM router</Translate>}
+                title={(
+                  <span className={styles.heroTitle}>
+                    <span className={styles.heroTitleLine}>
+                      <span className={styles.heroTitleAccent}>
+                        <Translate id="homepage.hero.line1Accent">Route</Translate>
+                      </span>
+                      {' '}
+                      <Translate id="homepage.hero.line1Suffix">every request</Translate>
+                    </span>
+                    <span className={styles.heroTitleLine}>
+                      <Translate id="homepage.hero.line2Prefix">with one system</Translate>
+                      {' '}
+                      <span className={styles.heroTitleAccent}>
+                        <Translate id="homepage.hero.line2Accent">brain</Translate>
+                      </span>
+                    </span>
+                    <span className={styles.heroTitleLine}>
+                      <Translate id="homepage.hero.line3Prefix">to the</Translate>
+                      {' '}
+                      <span className={styles.heroTitleAccent}>
+                        <Translate id="homepage.hero.line3Accent">best</Translate>
+                      </span>
+                      {' '}
+                      <Translate id="homepage.hero.line3Suffix">model</Translate>
+                    </span>
+                  </span>
+                )}
+                description={(
+                  <span className={styles.heroDescriptionText}>
+                    <Translate id="homepage.hero.description">
+                      Unified routing across local, private, and frontier models—guided by
+                      cost, latency, privacy, and safety.
+                    </Translate>
+                  </span>
+                )}
+                actions={(
+                  <>
+                    <PillLink
+                      className={styles.heroPrimaryCta}
+                      href="https://play.vllm-semantic-router.com/"
+                      rel="noreferrer"
+                      target="_blank"
+                    >
+                      <Translate id="homepage.hero.primaryCta">Public Beta</Translate>
+                    </PillLink>
+                    <PillLink className={styles.heroSecondaryCta} to="/white-paper" muted>
+                      <Translate id="homepage.hero.secondaryCta">Read white paper</Translate>
+                    </PillLink>
+                  </>
+                )}
+              />
+            </div>
           </div>
         </div>
-      </div>
-    </header>
+      </header>
+
+      <section
+        className={styles.heroModelSection}
+        aria-label={translate({
+          id: 'homepage.hero.modelBand.aria',
+          message: 'Supported model ecosystem',
+        })}
+      >
+        <div className={styles.heroModelBand}>
+          <div className={styles.heroModelBandHeader}>
+            <span className={styles.heroModelBandEyebrow}>
+              <Translate id="homepage.hero.modelBand.eyebrow">System brain</Translate>
+            </span>
+            <p className={styles.heroModelBandCopy}>
+              <Translate id="homepage.hero.modelBand.copy">
+                Connect all models with system brain
+              </Translate>
+            </p>
+          </div>
+
+          <div className={styles.heroModelBandViewport} aria-hidden="true">
+            <div className={styles.heroModelBandTrack}>
+              {marqueeCopies.map(copyIndex => (
+                <div
+                  key={`hero-model-sequence-${copyIndex}`}
+                  className={styles.heroModelBandSequence}
+                >
+                  {marqueeRepeats.map(repeatIndex =>
+                    heroModelLogos.map(({ label, Icon }) => (
+                      <div key={`${copyIndex}-${repeatIndex}-${label}`} className={styles.heroModelChip}>
+                        <span className={styles.heroModelChipIcon} aria-hidden="true">
+                          <Icon size={20} className={styles.heroModelGlyph} />
+                        </span>
+                        <span className={styles.heroModelChipLabel}>{label}</span>
+                      </div>
+                    )),
+                  )}
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      </section>
+    </section>
   )
 }
 
@@ -239,37 +389,97 @@ function CapabilitySection(): JSX.Element {
   return (
     <section className={styles.capabilitySection}>
       <div className="site-shell-container">
-        <div className={styles.sectionHeading}>
-          <SectionLabel>
-            <Translate id="homepage.capabilities.label">Core logic</Translate>
-          </SectionLabel>
-          <div>
-            <h2>
-              <Translate id="homepage.capabilities.heading">
-                Charting the LLM system brain.
-              </Translate>
-            </h2>
+        <div className={styles.capabilityFrame}>
+          <div className={styles.problemPanel}>
+            <div className={styles.problemIntro}>
+              <SectionLabel>
+                <Translate id="homepage.capabilities.label">Why routing matters</Translate>
+              </SectionLabel>
+              <h2>
+                <Translate id="homepage.capabilities.heading">
+                  One request. Many model choices.
+                </Translate>
+              </h2>
+              <p>
+                <Translate id="homepage.capabilities.copy">
+                  Models now differ on quality, cost, latency, privacy, and modality. Once you run
+                  more than one model, the hard part is no longer calling an LLM. It is routing every
+                  request to the right model system.
+                </Translate>
+              </p>
+              <div className={styles.problemAxes}>
+                {problemAxes.map(axis => (
+                  <span key={axis} className={styles.problemAxis}>
+                    {axis}
+                  </span>
+                ))}
+              </div>
+            </div>
+
+            <aside className={styles.problemChecklist}>
+              <div className={styles.problemChecklistHeader}>
+                <SectionLabel>
+                  <Translate id="homepage.capabilities.checklist.label">What the router decides</Translate>
+                </SectionLabel>
+                <p>
+                  <Translate id="homepage.capabilities.checklist.copy">
+                    Before a response reaches the user, the router has to answer the same operating
+                    questions every time.
+                  </Translate>
+                </p>
+              </div>
+              <ul className={styles.problemChecklistList}>
+                {problemTasks.map(task => (
+                  <li key={task} className={styles.problemChecklistItem}>
+                    {task}
+                  </li>
+                ))}
+              </ul>
+              <div className={styles.problemChecklistFooter}>
+                <p>
+                  <Translate id="homepage.capabilities.checklist.footer">
+                    Cost control, safety, and model choice have to happen in one step.
+                  </Translate>
+                </p>
+                <div className={styles.problemChecklistMeta}>
+                  {problemMeta.map(item => (
+                    <span key={item} className={styles.problemChecklistMetaItem}>
+                      {item}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            </aside>
+          </div>
+
+          <div className={styles.valueIntro}>
+            <SectionLabel>
+              <Translate id="homepage.capabilities.values.label">Why teams deploy it</Translate>
+            </SectionLabel>
             <p>
-              <Translate id="homepage.capabilities.copy">
-                A research-driven stack for uncharted territory, probing the frontier where signals,
-                projections, policies, and models converge into one intelligence layer.
+              <Translate id="homepage.capabilities.values.copy">
+                A single routing layer for cost, quality, and policy decisions.
               </Translate>
             </p>
           </div>
-        </div>
 
-        <div className={styles.capabilityGrid}>
-          {capabilityCards.map(card => (
-            <article key={card.title} className={styles.capabilityCard}>
-              <div className={styles.capabilityCardHead}>
-                <SectionLabel>{card.title}</SectionLabel>
-                <div className={styles.capabilityVisual}>
-                  <CapabilityGlyph kind={card.kind} className={styles.capabilityGlyph} />
+          <div className={styles.valueGrid}>
+            {valueCards.map(card => (
+              <article key={card.title} className={styles.valueCard}>
+                <div className={styles.valueCardHeader}>
+                  <span className={styles.valueCardIndex}>{card.index}</span>
+                  <div className={styles.valueGlyphShell}>
+                    <CapabilityGlyph kind={card.kind} className={styles.valueGlyph} />
+                  </div>
                 </div>
-              </div>
-              <p>{card.text}</p>
-            </article>
-          ))}
+                <div className={styles.valueCardCopy}>
+                  <h3>{card.title}</h3>
+                  <p>{card.text}</p>
+                </div>
+                <p className={styles.valueCardDetail}>{card.detail}</p>
+              </article>
+            ))}
+          </div>
         </div>
       </div>
     </section>
@@ -408,15 +618,50 @@ function ClosingBands(): JSX.Element {
 
 export default function Home(): JSX.Element {
   const { siteConfig } = useDocusaurusContext()
+  const ogImage = new URL(SITE_SOCIAL_PREVIEW_IMAGE_PATH, siteConfig.url).toString()
+  const homepageStructuredData = {
+    '@context': 'https://schema.org',
+    '@type': 'WebSite',
+    'name': 'vLLM Semantic Router',
+    'url': siteConfig.url,
+    'description': homepageMetaDescription,
+    'inLanguage': ['en-US', 'zh-Hans'],
+    'publisher': {
+      '@type': 'Organization',
+      'name': 'vLLM Semantic Router Team',
+      'url': 'https://github.com/vllm-project/semantic-router',
+    },
+    'sameAs': [
+      'https://github.com/vllm-project/semantic-router',
+      'https://huggingface.co/LLM-Semantic-Router',
+    ],
+  }
 
   return (
     <Layout
-      title={siteConfig.title}
-      description={translate({
-        id: 'homepage.meta.description',
-        message: 'Signal-driven decision routing for mixture-of-model serving.',
-      })}
+      title={homepageMetaTitle}
+      description={homepageMetaDescription}
     >
+      <Head>
+        <meta property="og:title" content={homepageSocialTitle} />
+        <meta property="og:description" content={homepageMetaDescription} />
+        <meta property="og:image" content={ogImage} />
+        <meta property="og:image:alt" content="vLLM Semantic Router social preview" />
+        <meta property="og:type" content="website" />
+        <meta
+          name="keywords"
+          content="open-source LLM router, multi-model routing, AI gateway, model selection, semantic router, inference routing, policy-aware routing, vLLM"
+        />
+        <meta name="twitter:card" content="summary_large_image" />
+        <meta name="twitter:title" content={homepageSocialTitle} />
+        <meta name="twitter:description" content={homepageMetaDescription} />
+        <meta name="twitter:image" content={ogImage} />
+        <meta name="twitter:image:alt" content="vLLM Semantic Router social preview" />
+        <script
+          type="application/ld+json"
+          dangerouslySetInnerHTML={{ __html: JSON.stringify(homepageStructuredData) }}
+        />
+      </Head>
       <main className={styles.page}>
         <DitherHero />
 

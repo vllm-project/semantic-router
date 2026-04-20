@@ -28,7 +28,7 @@
   padding: 0.5rem 0.85rem;
   border-radius: 999px;
   border: 1px solid var(--site-border);
-  background: rgba(255, 255, 255, 0.03);
+  background: rgba(17, 17, 17, 0.04);
   color: var(--site-muted);
   font-size: 0.78rem;
   font-weight: 600;
@@ -78,7 +78,7 @@
 .downArrowLine {
   width: 1px;
   height: 30px;
-  background: linear-gradient(180deg, rgba(255, 255, 255, 0.2), rgba(255, 255, 255, 0.75));
+  background: linear-gradient(180deg, rgba(79, 70, 229, 0.24), rgba(15, 23, 42, 0.78));
   position: relative;
 }
 
@@ -87,7 +87,7 @@
   position: absolute;
   bottom: -5px;
   left: -3px;
-  border: solid rgba(255, 255, 255, 0.74);
+  border: solid rgba(15, 23, 42, 0.76);
   border-width: 0 1px 1px 0;
   padding: 3px;
   transform: rotate(45deg);
@@ -145,12 +145,12 @@
 }
 
 .tokenSpecial {
-  background: rgba(255, 255, 255, 0.08);
+  background: rgba(17, 17, 17, 0.08);
   color: var(--site-text);
 }
 
 .tokenNormal {
-  background: rgba(255, 255, 255, 0.03);
+  background: rgba(17, 17, 17, 0.03);
   color: var(--site-muted);
 }
 
@@ -168,19 +168,19 @@
 }
 
 .embBarToken {
-  background: linear-gradient(90deg, rgba(255, 255, 255, 0.22), rgba(255, 255, 255, 0.8));
+  background: linear-gradient(90deg, rgba(79, 70, 229, 0.24), rgba(15, 23, 42, 0.84));
 }
 
 .embBarSeg {
-  background: linear-gradient(90deg, rgba(255, 255, 255, 0.18), rgba(255, 255, 255, 0.65));
+  background: linear-gradient(90deg, rgba(79, 70, 229, 0.18), rgba(15, 23, 42, 0.7));
 }
 
 .embBarPos {
-  background: linear-gradient(90deg, rgba(255, 255, 255, 0.16), rgba(255, 255, 255, 0.5));
+  background: linear-gradient(90deg, rgba(79, 70, 229, 0.14), rgba(15, 23, 42, 0.58));
 }
 
 .embBarSum {
-  background: linear-gradient(90deg, rgba(255, 255, 255, 0.9), rgba(255, 255, 255, 0.3));
+  background: linear-gradient(90deg, rgba(15, 23, 42, 0.94), rgba(79, 70, 229, 0.36));
 }
 
 .embLabel {
@@ -205,7 +205,7 @@
   display: inline-flex;
   padding: 0.14rem 0.42rem;
   border: 1px solid var(--site-border);
-  background: #090909;
+  background: var(--site-surface-alt);
   color: var(--site-muted-bright);
   font-size: 0.56rem;
   font-family: var(--ifm-font-family-monospace);
@@ -232,7 +232,7 @@
   min-width: 2.8rem;
   padding: 0.2rem 0.34rem;
   border: 1px solid var(--site-border);
-  background: rgba(255, 255, 255, 0.05);
+  background: rgba(17, 17, 17, 0.05);
   color: var(--site-muted-bright);
   font-family: var(--ifm-font-family-monospace);
   font-size: 0.56rem;

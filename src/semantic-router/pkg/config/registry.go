@@ -230,9 +230,9 @@ var DefaultModelRegistry = []ModelSpec{
 
 	// Embedding Models - mmBERT 2D Matryoshka (Multilingual)
 	{
-		LocalPath:        "models/mom-embedding-ultra",
+		LocalPath:        "models/mmbert-embed-32k-2d-matryoshka",
 		RepoID:           "llm-semantic-router/mmbert-embed-32k-2d-matryoshka",
-		Aliases:          []string{"mmbert-embed-32k-2d-matryoshka", "mmbert-embedding", "embedding-mmbert", "mmbert", "embedding-ultra"},
+		Aliases:          []string{"mom-embedding-ultra", "mmbert-embed-32k-2d-matryoshka", "mmbert-embedding", "embedding-mmbert", "mmbert", "embedding-ultra"},
 		Purpose:          PurposeEmbedding,
 		Description:      "Multilingual 2D Matryoshka embedding model with 32K context, 64-768 dimension truncation, and 1800+ language coverage.",
 		ParameterSize:    "307M",

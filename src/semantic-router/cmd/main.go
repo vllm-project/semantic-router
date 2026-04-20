@@ -23,7 +23,12 @@ func main() {
 	config.Replace(cfg)
 	runtimeRegistry := routerruntime.NewRegistry(cfg)
 
-	startupWriter := newStartupWriter(opts.configPath)
+	startupWriter := newStartupWriter(cfg, opts.configPath)
+
+	// Start the API server early so /startup-status is available during
+	// model downloads and initialization.
+	startAPIServerIfEnabled(opts, runtimeRegistry)
+
 	ensureModelsDownloadedOrFatal(cfg, startupWriter)
 	exitIfDownloadOnly(opts.downloadOnly)
 
@@ -38,7 +43,6 @@ func main() {
 	server := newExtProcServerOrFatal(opts, startupWriter, runtimeRegistry)
 
 	warmupRouterRuntime(server, embeddingRuntime)
-	startAPIServerIfEnabled(opts, runtimeRegistry)
 	markRouterReady(startupWriter)
 	logStartupSummary(cfg, opts, embeddingRuntime.AnyReady)
 	startKubernetesControllerIfNeeded(cfg, opts.kubeconfig, opts.namespace)
@@ -50,7 +54,7 @@ var (
 	replaceKubernetesRuntimeConfig = config.Replace
 )
 
-func ensureModelsDownloaded(cfg *config.RouterConfig, startupWriter *startupstatus.Writer) error {
+func ensureModelsDownloaded(cfg *config.RouterConfig, startupWriter startupstatus.StatusWriter) error {
 	reporter := func(progress modeldownload.ProgressState) {
 		state := startupstatus.State{
 			Ready:            false,

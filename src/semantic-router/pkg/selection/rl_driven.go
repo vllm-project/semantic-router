@@ -601,8 +601,7 @@ func (r *RLDrivenSelector) Select(ctx context.Context, selCtx *SelectionContext)
 	logging.Infof("[RLDrivenSelector] Selected %s (score=%.4f, confidence=%.2f)",
 		selectedModel.Model, selectedScore, confidence)
 
-	// Record metrics
-	RecordRLSelection(selectedModel.Model, selCtx.DecisionName, selCtx.UserID, selectedScore)
+	RecordRLSelection(selectedModel.Model, selCtx.DecisionName, selCtx.UserID, r.Tier(), selectedScore)
 
 	return &SelectionResult{
 		SelectedModel: selectedModel.Model,
@@ -676,8 +675,7 @@ func (r *RLDrivenSelector) selectWithRouterR1(ctx context.Context, selCtx *Selec
 	logging.Infof("[RLDrivenSelector] Router-R1 selected %s (thinking: %s)",
 		selectedModel.Model, truncateString(response.Thinking, 100))
 
-	// Record metrics
-	RecordRLSelection(selectedModel.Model, selCtx.DecisionName, selCtx.UserID, 1.0)
+	RecordRLSelection(selectedModel.Model, selCtx.DecisionName, selCtx.UserID, r.Tier(), 1.0)
 
 	return &SelectionResult{
 		SelectedModel: selectedModel.Model,

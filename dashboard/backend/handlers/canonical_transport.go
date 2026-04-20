@@ -14,8 +14,17 @@ import (
 	routerconfig "github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 )
 
+type globalServicesFragment struct {
+	RateLimit *routerconfig.RateLimitConfig `yaml:"ratelimit,omitempty"`
+}
+
+type globalFragment struct {
+	Services *globalServicesFragment `yaml:"services,omitempty"`
+}
+
 type routingFragmentDocument struct {
 	Routing routerconfig.CanonicalRouting `yaml:"routing"`
+	Global  *globalFragment               `yaml:"global,omitempty"`
 }
 
 type setupModeConfig struct {

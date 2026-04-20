@@ -1,13 +1,18 @@
 package extproc
 
 import (
+	"context"
+	"time"
+
 	candle_binding "github.com/vllm-project/semantic-router/candle-binding"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/routerreplay/store"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/selection"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/selection/lookuptable"
 )
 
-func createModelSelectorRegistry(cfg *config.RouterConfig) *selection.Registry {
+func createModelSelectorRegistry(cfg *config.RouterConfig, replayReader store.Reader) (*selection.Registry, lookuptable.LookupTableStorage, func()) {
 	modelSelectionCfg := buildModelSelectionConfig(cfg)
 	backendModels := cfg.BackendModels
 	selectionFactory := selection.NewFactory(modelSelectionCfg)
@@ -26,12 +31,42 @@ func createModelSelectorRegistry(cfg *config.RouterConfig) *selection.Registry {
 		return output.Embedding, nil
 	})
 
+	lt, cancel := buildLookupTable(cfg, replayReader)
+	if lt != nil {
+		selectionFactory = selectionFactory.WithLookupTable(lt)
+	}
+
 	registry := selectionFactory.CreateAll()
 	selection.GlobalRegistry = registry
+
+	// Collect algorithm methods actually configured in decisions
+	configuredMethods := collectConfiguredAlgorithmMethods(cfg)
+
+	// Warn about experimental algorithms and check dependency health
+	selection.WarnExperimentalAlgorithms(registry, configuredMethods)
+	selection.CheckDependencyHealth(registry, configuredMethods)
+
 	logging.ComponentEvent("extproc", "model_selection_registry_initialized", map[string]interface{}{
 		"mode": "per_decision_algorithm_config",
 	})
-	return registry
+	return registry, lt, cancel
+}
+
+func collectConfiguredAlgorithmMethods(cfg *config.RouterConfig) []selection.SelectionMethod {
+	seen := make(map[string]bool)
+	var methods []selection.SelectionMethod
+
+	for _, decision := range cfg.Decisions {
+		if decision.Algorithm == nil || decision.Algorithm.Type == "" {
+			continue
+		}
+		if !seen[decision.Algorithm.Type] {
+			seen[decision.Algorithm.Type] = true
+			methods = append(methods, selection.SelectionMethod(decision.Algorithm.Type))
+		}
+	}
+
+	return methods
 }
 
 func buildModelSelectionConfig(cfg *config.RouterConfig) *selection.ModelSelectionConfig {
@@ -206,4 +241,151 @@ func buildMLSelectionConfig(cfg *config.RouterConfig) *selection.MLSelectorConfi
 			PretrainedPath: mlCfg.MLP.PretrainedPath,
 		},
 	}
+}
+
+// buildLookupTable constructs a LookupTable from the router config.
+// Returns (nil, nil) when lookup tables are disabled or not configured.
+func buildLookupTable(cfg *config.RouterConfig, replayReader store.Reader) (lookuptable.LookupTableStorage, func()) {
+	ltCfg := cfg.ModelSelection.LookupTables
+	if !ltCfg.Enabled {
+		return nil, nil
+	}
+
+	storage, cancelStorage := buildLookupTableStorage(ltCfg)
+	var cancelFuncs []func()
+	if cancelStorage != nil {
+		cancelFuncs = append(cancelFuncs, cancelStorage)
+	}
+
+	maybePopulateFromReplay(ltCfg, storage, replayReader, &cancelFuncs)
+	applyLookupTableOverrides(ltCfg, storage)
+
+	logging.ComponentEvent("extproc", "lookuptable_initialized", map[string]interface{}{
+		"storage_path":         ltCfg.StoragePath,
+		"entry_count":          len(storage.All()),
+		"populate_from_replay": ltCfg.PopulateFromReplay,
+		"has_overrides":        len(ltCfg.QualityGaps)+len(ltCfg.HandoffPenalties)+len(ltCfg.RemainingTurnPriors) > 0,
+	})
+
+	cancel := func() {
+		for _, f := range cancelFuncs {
+			f()
+		}
+	}
+	return storage, cancel
+}
+
+// buildLookupTableStorage creates the storage backend (file or memory) and
+// returns a cancel function for any background goroutines it starts.
+func buildLookupTableStorage(ltCfg config.LookupTableConfig) (lookuptable.LookupTableStorage, func()) {
+	if ltCfg.StoragePath == "" {
+		return lookuptable.NewMemoryStorage(), nil
+	}
+
+	fs, err := lookuptable.NewFileStorage(ltCfg.StoragePath)
+	if err != nil {
+		logging.Errorf("[RouterSelection] Failed to create lookup table file storage: %v", err)
+		return lookuptable.NewMemoryStorage(), nil
+	}
+
+	if err := fs.Load(); err != nil {
+		logging.Warnf("[RouterSelection] Failed to load lookup table from %s: %v", ltCfg.StoragePath, err)
+	}
+
+	cancel := func() { _ = fs.Close() }
+	if ltCfg.AutoSaveInterval != "" {
+		if interval, err := time.ParseDuration(ltCfg.AutoSaveInterval); err == nil {
+			fs.StartAutoSave(interval)
+		} else {
+			logging.Warnf("[RouterSelection] Invalid lookup table auto_save_interval %q: %v", ltCfg.AutoSaveInterval, err)
+		}
+	}
+	return fs, cancel
+}
+
+// maybePopulateFromReplay starts async replay derivation and periodic
+// re-population when configured.
+func maybePopulateFromReplay(
+	ltCfg config.LookupTableConfig,
+	storage lookuptable.LookupTableStorage,
+	reader store.Reader,
+	cancelFuncs *[]func(),
+) {
+	if !ltCfg.PopulateFromReplay || reader == nil {
+		return
+	}
+	go populateFromReplay(storage, reader)
+
+	if ltCfg.PopulateInterval == "" {
+		return
+	}
+	interval, err := time.ParseDuration(ltCfg.PopulateInterval)
+	if err != nil {
+		logging.Warnf("[RouterSelection] Invalid lookup table populate_interval %q: %v", ltCfg.PopulateInterval, err)
+		return
+	}
+	*cancelFuncs = append(*cancelFuncs, startLookupTablePopulator(storage, reader, interval))
+}
+
+// applyLookupTableOverrides writes manual config values on top of derived ones.
+func applyLookupTableOverrides(ltCfg config.LookupTableConfig, storage lookuptable.LookupTableStorage) {
+	now := time.Now()
+	for _, o := range ltCfg.QualityGaps {
+		_ = storage.Set(lookuptable.QualityGapKey(o.TaskFamily, o.CurrentModel, o.CandidateModel),
+			lookuptable.Entry{Value: o.Value, Source: lookuptable.SourceConfigOverride, UpdatedAt: now})
+	}
+	for _, o := range ltCfg.HandoffPenalties {
+		_ = storage.Set(lookuptable.HandoffPenaltyKey(o.FromModel, o.ToModel),
+			lookuptable.Entry{Value: o.Value, Source: lookuptable.SourceConfigOverride, UpdatedAt: now})
+	}
+	for _, o := range ltCfg.RemainingTurnPriors {
+		_ = storage.Set(lookuptable.RemainingTurnPriorKey(o.IntentOrDomain),
+			lookuptable.Entry{Value: o.Value, Source: lookuptable.SourceConfigOverride, UpdatedAt: now})
+	}
+}
+
+// populateFromReplay fetches all records from the replay reader and runs the
+// builder synchronously. Errors are logged but do not prevent startup.
+func populateFromReplay(storage lookuptable.LookupTableStorage, reader store.Reader) {
+	records, err := reader.List(context.Background())
+	if err != nil {
+		logging.Errorf("[RouterSelection] Failed to list replay records for lookup table population: %v", err)
+		return
+	}
+	if len(records) == 0 {
+		logging.Debugf("[RouterSelection] No replay records available for lookup table population")
+		return
+	}
+	builder := lookuptable.NewBuilder(storage)
+	if err := builder.PopulateFromRecords(records); err != nil {
+		logging.Errorf("[RouterSelection] Failed to populate lookup table from replay records: %v", err)
+		return
+	}
+	logging.ComponentEvent("extproc", "lookuptable_populated_from_replay", map[string]interface{}{
+		"record_count": len(records),
+		"entry_count":  len(storage.All()),
+	})
+}
+
+// startLookupTablePopulator launches a background goroutine that periodically
+// re-derives lookup table entries from the replay store.
+// The returned cancel function stops the goroutine.
+func startLookupTablePopulator(storage lookuptable.LookupTableStorage, reader store.Reader, interval time.Duration) func() {
+	ctx, cancel := context.WithCancel(context.Background())
+	go func() {
+		ticker := time.NewTicker(interval)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-ticker.C:
+				populateFromReplay(storage, reader)
+			case <-ctx.Done():
+				return
+			}
+		}
+	}()
+	logging.ComponentEvent("extproc", "lookuptable_populator_started", map[string]interface{}{
+		"interval": interval.String(),
+	})
+	return cancel
 }

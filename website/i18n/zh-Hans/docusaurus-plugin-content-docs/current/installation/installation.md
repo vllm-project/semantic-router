@@ -1,5 +1,6 @@
 ---
 sidebar_position: 2
+description: vLLM Semantic Router 快速开始指南，涵盖 CPU + Docker 的安装要求、启动流程与首次运行路径。
 translation:
   source_commit: "0ee41b5f"
   source_file: "docs/installation/installation.md"

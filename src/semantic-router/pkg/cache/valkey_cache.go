@@ -63,11 +63,13 @@ func NewValkeyCache(options ValkeyCacheOptions) (*ValkeyCache, error) {
 	logging.Debugf("ValkeyCache: config loaded - host=%s:%d, index=%s, dimension=auto-detect",
 		valkeyConfig.Connection.Host, valkeyConfig.Connection.Port, valkeyConfig.Index.Name)
 
-	logging.Debugf("ValkeyCache: connecting to Valkey at %s:%d", valkeyConfig.Connection.Host, valkeyConfig.Connection.Port)
+	resolvedHost := normalizeLocalHostForContainerRuntimes(valkeyConfig.Connection.Host)
+	logging.Debugf("ValkeyCache: connecting to Valkey at %s:%d (configured host=%s)",
+		resolvedHost, valkeyConfig.Connection.Port, valkeyConfig.Connection.Host)
 
 	clientConfig := config.NewClientConfiguration().
 		WithAddress(&config.NodeAddress{
-			Host: valkeyConfig.Connection.Host,
+			Host: resolvedHost,
 			Port: valkeyConfig.Connection.Port,
 		})
 

@@ -40,6 +40,9 @@ func defaultCanonicalServiceGlobal() CanonicalServiceGlobal {
 			TTLSeconds:   2592000,
 			AsyncWrites:  false,
 		},
+		StartupStatus: StartupStatusConfig{
+			StoreBackend: "file",
+		},
 		Observability: ObservabilityConfig{
 			Metrics: MetricsConfig{
 				Enabled: canonicalBoolPtr(true),
@@ -177,7 +180,7 @@ func defaultCalibrationKnowledgeBase() KnowledgeBaseConfig {
 func defaultCanonicalEmbeddingModels() CanonicalEmbeddingModels {
 	return CanonicalEmbeddingModels{
 		Semantic: EmbeddingModels{
-			MmBertModelPath: "models/mom-embedding-ultra",
+			MmBertModelPath: "models/mmbert-embed-32k-2d-matryoshka",
 			UseCPU:          true,
 			EmbeddingConfig: HNSWConfig{
 				ModelType:         "mmbert",

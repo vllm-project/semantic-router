@@ -138,6 +138,8 @@ func TestLogFieldsIncludesOptionalReplayMetadata(t *testing.T) {
 
 	fields := LogFields(record, "router_replay_complete")
 	assertFieldValue(t, fields, "event", "router_replay_complete")
+	assertFieldValue(t, fields, "session_id", "sess-log-test")
+	assertFieldValue(t, fields, "turn_index", 5)
 	assertFieldValue(t, fields, "replay_id", record.ID)
 	assertFieldValue(t, fields, "decision_tier", 2)
 	assertFieldValue(t, fields, "decision_priority", 100)
@@ -179,6 +181,8 @@ func richReplayRoutingRecord(
 		ConfidenceScore:   0.91,
 		SelectionMethod:   "router_dc",
 		RequestID:         "req-1",
+		SessionID:         "sess-log-test",
+		TurnIndex:         5,
 		Timestamp:         timestamp,
 		FromCache:         true,
 		Streaming:         true,
@@ -289,5 +293,223 @@ func assertFieldValue(
 	}
 	if !reflect.DeepEqual(value, expected) {
 		t.Fatalf("expected field %q=%#v, got %#v", key, expected, value)
+	}
+}
+
+func TestRecorderMaxToolTraceBytesPromptTruncation(t *testing.T) {
+	recorder := NewRecorder(store.NewMemoryStore(10, 0))
+	recorder.SetCapturePolicy(false, false, 4096)
+	recorder.SetMaxToolTraceBytes(15)
+
+	id, err := recorder.AddRecord(RoutingRecord{
+		RequestID:       "req-trunc-prompt",
+		Prompt:          "This prompt exceeds fifteen bytes",
+		ToolDefinitions: `[{"type":"function"}]`,
+	})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	rec, found := recorder.GetRecord(id)
+	if !found {
+		t.Fatal("record not found")
+	}
+
+	if len(rec.Prompt) != 15 {
+		t.Errorf("expected Prompt len=15, got %d", len(rec.Prompt))
+	}
+	if !rec.PromptTruncated {
+		t.Error("expected PromptTruncated=true")
+	}
+	// ToolDefinitions is shorter than 15 bytes only if json is short enough;
+	// here `[{"type":"function"}]` is 22 bytes so it should be truncated too.
+	if len(rec.ToolDefinitions) != 15 {
+		t.Errorf("expected ToolDefinitions len=15, got %d", len(rec.ToolDefinitions))
+	}
+}
+
+func TestRecorderMaxToolTraceBytesStepTruncation(t *testing.T) {
+	recorder := NewRecorder(store.NewMemoryStore(10, 0))
+	recorder.SetCapturePolicy(false, false, 4096)
+	recorder.SetMaxToolTraceBytes(8)
+
+	trace := &ToolTrace{
+		Steps: []ToolTraceStep{
+			{Type: "assistant_tool_call", Arguments: `{"city":"New York"}`, Output: ""},
+			{Type: "client_tool_result", Arguments: "", Output: `{"temp":"22C"}`},
+		},
+	}
+	id, err := recorder.AddRecord(RoutingRecord{
+		RequestID: "req-trunc-steps",
+		ToolTrace: trace,
+	})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	rec, found := recorder.GetRecord(id)
+	if !found {
+		t.Fatal("record not found")
+	}
+
+	if len(rec.ToolTrace.Steps[0].Arguments) != 8 {
+		t.Errorf("expected Arguments len=8, got %d", len(rec.ToolTrace.Steps[0].Arguments))
+	}
+	if !rec.ToolTrace.Steps[0].Truncated {
+		t.Error("expected step[0].Truncated=true")
+	}
+	if len(rec.ToolTrace.Steps[1].Output) != 8 {
+		t.Errorf("expected Output len=8, got %d", len(rec.ToolTrace.Steps[1].Output))
+	}
+	if !rec.ToolTrace.Steps[1].Truncated {
+		t.Error("expected step[1].Truncated=true")
+	}
+}
+
+func TestRecorderMaxToolTraceBytesPreservesRawFields(t *testing.T) {
+	recorder := NewRecorder(store.NewMemoryStore(10, 0))
+	recorder.SetCapturePolicy(false, false, 4096)
+	recorder.SetMaxToolTraceBytes(5)
+
+	fullArgs := `{"city":"San Francisco"}`
+	fullOutput := `{"temp":"22C","condition":"sunny"}`
+	trace := &ToolTrace{
+		Steps: []ToolTraceStep{
+			{
+				Type:         "assistant_tool_call",
+				Arguments:    fullArgs,
+				RawArguments: fullArgs,
+			},
+			{
+				Type:      "client_tool_result",
+				Output:    fullOutput,
+				RawOutput: fullOutput,
+			},
+		},
+	}
+	id, err := recorder.AddRecord(RoutingRecord{
+		RequestID: "req-raw-fidelity",
+		ToolTrace: trace,
+	})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	rec, found := recorder.GetRecord(id)
+	if !found {
+		t.Fatal("record not found")
+	}
+
+	if got := rec.ToolTrace.Steps[0].Arguments; len(got) != 5 {
+		t.Errorf("expected Arguments truncated to len=5, got len=%d (%q)", len(got), got)
+	}
+	if got := rec.ToolTrace.Steps[0].RawArguments; got != fullArgs {
+		t.Errorf("expected RawArguments preserved at full fidelity; got %q, want %q", got, fullArgs)
+	}
+	if got := rec.ToolTrace.Steps[1].Output; len(got) != 5 {
+		t.Errorf("expected Output truncated to len=5, got len=%d (%q)", len(got), got)
+	}
+	if got := rec.ToolTrace.Steps[1].RawOutput; got != fullOutput {
+		t.Errorf("expected RawOutput preserved at full fidelity; got %q, want %q", got, fullOutput)
+	}
+}
+
+func TestRecorderMaxToolTraceBytesFlagsToolDefinitionsTruncation(t *testing.T) {
+	recorder := NewRecorder(store.NewMemoryStore(10, 0))
+	recorder.SetCapturePolicy(false, false, 4096)
+	recorder.SetMaxToolTraceBytes(10)
+
+	longToolDefs := `[{"type":"function","function":{"name":"really_long_tool_name","description":"truncate me"}}]`
+	id, err := recorder.AddRecord(RoutingRecord{
+		RequestID:       "req-tooldefs-truncated",
+		ToolDefinitions: longToolDefs,
+	})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	rec, found := recorder.GetRecord(id)
+	if !found {
+		t.Fatal("record not found")
+	}
+
+	if len(rec.ToolDefinitions) != 10 {
+		t.Errorf("expected ToolDefinitions len=10, got %d", len(rec.ToolDefinitions))
+	}
+	if !rec.ToolDefinitionsTruncated {
+		t.Error("expected ToolDefinitionsTruncated=true after truncation")
+	}
+}
+
+func TestRecorderUpdateToolTraceAppliesMaxToolTraceBytes(t *testing.T) {
+	recorder := NewRecorder(store.NewMemoryStore(10, 0))
+	recorder.SetCapturePolicy(false, false, 4096)
+	recorder.SetMaxToolTraceBytes(6)
+
+	id, err := recorder.AddRecord(RoutingRecord{
+		ID:        "replay-update-trunc",
+		RequestID: "req-update-trunc",
+	})
+	if err != nil {
+		t.Fatalf("failed to add record: %v", err)
+	}
+
+	// UpdateToolTrace is the path response-side traces take
+	// (see extproc.attachRouterReplayResponse). This exchange must also be
+	// capped by MaxToolTraceBytes or responses could silently blow past it.
+	fullOutput := `{"temperature":"22C","condition":"sunny"}`
+	trace := ToolTrace{
+		Steps: []ToolTraceStep{
+			{
+				Type:      "client_tool_result",
+				Output:    fullOutput,
+				RawOutput: fullOutput,
+			},
+		},
+	}
+	if err := recorder.UpdateToolTrace(id, trace); err != nil {
+		t.Fatalf("UpdateToolTrace: %v", err)
+	}
+
+	rec, found := recorder.GetRecord(id)
+	if !found || rec.ToolTrace == nil || len(rec.ToolTrace.Steps) != 1 {
+		t.Fatalf("unexpected stored record: found=%v, trace=%#v", found, rec.ToolTrace)
+	}
+	step := rec.ToolTrace.Steps[0]
+	if len(step.Output) != 6 {
+		t.Errorf("expected Output truncated to 6 bytes through UpdateToolTrace, got len=%d (%q)", len(step.Output), step.Output)
+	}
+	if !step.Truncated {
+		t.Error("expected Truncated=true after UpdateToolTrace truncation")
+	}
+	if step.RawOutput != fullOutput {
+		t.Errorf("expected RawOutput preserved on UpdateToolTrace; got %q, want %q", step.RawOutput, fullOutput)
+	}
+}
+
+func TestRecorderSetMaxToolTraceBytesZeroNoTruncation(t *testing.T) {
+	recorder := NewRecorder(store.NewMemoryStore(10, 0))
+	recorder.SetCapturePolicy(false, false, 4096)
+	recorder.SetMaxToolTraceBytes(0) // no limit
+
+	longPrompt := "This is a very long prompt that would be truncated if the limit were active."
+	id, err := recorder.AddRecord(RoutingRecord{
+		RequestID: "req-no-trunc",
+		Prompt:    longPrompt,
+	})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	rec, found := recorder.GetRecord(id)
+	if !found {
+		t.Fatal("record not found")
+	}
+
+	if rec.Prompt != longPrompt {
+		t.Errorf("expected full prompt, got %q", rec.Prompt)
+	}
+	if rec.PromptTruncated {
+		t.Error("expected PromptTruncated=false")
 	}
 }

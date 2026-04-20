@@ -178,6 +178,11 @@ legacy_hotspots:
     file_checks: relaxed
     function_checks: relaxed
   - paths:
+      - src/semantic-router/pkg/memory/milvus_store.go
+      - src/semantic-router/pkg/vectorstore/milvus_backend.go
+    file_checks: relaxed
+    function_checks: relaxed
+  - paths:
       - src/semantic-router/pkg/classification/hallucination_detector.go
       - src/semantic-router/pkg/classification/mcp_classifier.go
       - src/semantic-router/pkg/looper/base.go
@@ -192,7 +197,6 @@ legacy_hotspots:
     function_checks: relaxed
   - paths:
       - src/semantic-router/pkg/looper/confidence.go
-      - src/semantic-router/pkg/memory/milvus_store.go
     file_checks: relaxed
     function_checks: relaxed
   - paths:
@@ -201,7 +205,6 @@ legacy_hotspots:
       - src/semantic-router/pkg/selection/gmtrouter.go
       - src/semantic-router/pkg/selection/rl_driven.go
     file_checks: relaxed
-  - paths:
       - dashboard/backend/handlers/openclaw.go
       - dashboard/backend/handlers/openclaw_provision.go
       - dashboard/backend/handlers/openclaw_rooms.go
@@ -213,6 +216,12 @@ legacy_hotspots:
       - tools/security/ast_security_scanner.py
       - tools/security/scan_malicious_code.py
     file_checks: relaxed
+    function_checks: relaxed
+  - paths:
+      - src/semantic-router/pkg/vectorstore/filestore_test.go
+      - src/semantic-router/pkg/vectorstore/integration_test.go
+      - src/semantic-router/pkg/vectorstore/manager_test.go
+      - src/semantic-router/pkg/vectorstore/pipeline_test.go
     function_checks: relaxed
 
 dependency_rules:

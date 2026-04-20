@@ -65,7 +65,7 @@ func TestEnsureImageAvailable_AlwaysPullsRemoteImage(t *testing.T) {
 	t.Setenv("TEST_IMAGE_INSPECT_OK", "1")
 	t.Setenv("TEST_PULL_OK", "1")
 
-	h := NewOpenClawHandler(t.TempDir(), false)
+	h := newTestOpenClawHandler(t, t.TempDir(), false)
 	image := "ghcr.io/openclaw/openclaw:latest"
 	if err := h.ensureImageAvailable(image); err != nil {
 		t.Fatalf("ensureImageAvailable failed: %v", err)
@@ -83,7 +83,7 @@ func TestResolveBaseImage_KeepsDefaultInsteadOfAutoSelectingLocalFallback(t *tes
 	t.Setenv("TEST_RUNTIME_LOG", logPath)
 	t.Setenv("TEST_IMAGE_LS_OUTPUT", "local/openclaw:dev")
 
-	h := NewOpenClawHandler(t.TempDir(), false)
+	h := newTestOpenClawHandler(t, t.TempDir(), false)
 	if got := h.resolveBaseImage(""); got != "ghcr.io/openclaw/openclaw:latest" {
 		t.Fatalf("expected default image, got %q", got)
 	}
@@ -99,7 +99,7 @@ func TestEnsureImageAvailable_LocalTagStillRequiresLocalImage(t *testing.T) {
 	t.Setenv("OPENCLAW_CONTAINER_RUNTIME", runtimePath)
 	t.Setenv("TEST_RUNTIME_LOG", logPath)
 
-	h := NewOpenClawHandler(t.TempDir(), false)
+	h := newTestOpenClawHandler(t, t.TempDir(), false)
 	err := h.ensureImageAvailable("demo/openclaw:local")
 	if err == nil {
 		t.Fatalf("expected local-only image check to fail")

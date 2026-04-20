@@ -75,6 +75,7 @@ type SignalMatches struct {
 	JailbreakRules    []string // Jailbreak rule names matched (confidence >= threshold)
 	PIIRules          []string // PII rule names matched (denied PII types detected)
 	KBRules           []string // KB signal names matched from global.model_catalog.kbs bindings
+	ConversationRules []string // Conversation-shape signal names matched
 	ProjectionRules   []string // Derived routing outputs from routing.projections.mappings
 
 	SignalConfidences map[string]float64 // "signalType:ruleName" → real score (0.0-1.0), e.g. {"embedding:ai": 0.88}. Defaults to 1.0 if missing
@@ -221,6 +222,7 @@ func (e *DecisionEngine) matchesSignalType(
 		"jailbreak":     signals.JailbreakRules,
 		"pii":           signals.PIIRules,
 		"kb":            signals.KBRules,
+		"conversation":  signals.ConversationRules,
 		"projection":    signals.ProjectionRules,
 	}
 

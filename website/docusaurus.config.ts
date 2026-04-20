@@ -5,16 +5,19 @@ import { SITE_SOCIAL_PREVIEW_IMAGE } from './src/data/socialPreview'
 import remarkMath from 'remark-math'
 import rehypeKatex from 'rehype-katex'
 
-const lightCodeTheme = themes.vsDark
+const lightCodeTheme = themes.github
 const darkCodeTheme = themes.vsDark
+const siteUrl = 'https://vllm-semantic-router.com'
+const siteDefaultDescription = 'Open-source LLM router for Mixture-of-Models. Route requests by cost, latency, privacy, safety, and modality across local, private, and frontier models.'
+const siteSocialPreviewImageUrl = `${siteUrl}/${SITE_SOCIAL_PREVIEW_IMAGE}`
 
 const config: Config = {
   title: 'vLLM Semantic Router',
-  tagline: 'System Level Intelligent Router for Mixture-of-Models',
+  tagline: 'Open-source LLM router for Mixture-of-Models',
   favicon: 'img/vllm.png',
 
   // Set the production url of your site here
-  url: 'https://vllm-semantic-router.com',
+  url: siteUrl,
   // Set the /<baseUrl>/ pathname under which your site is served
   // For GitHub pages deployment, it is often '/<projectName>/'
   baseUrl: '/',
@@ -142,16 +145,21 @@ const config: Config = {
   themeConfig: {
     image: SITE_SOCIAL_PREVIEW_IMAGE,
     metadata: [
-      { name: 'description', content: 'System Level Intelligent Router for Mixture-of-Models' },
-      { name: 'keywords', content: 'LLM, Semantic Router, Mixture of Models, vLLM, Routing, AI Gateway, Envoy, ExtProc' },
+      { name: 'description', content: siteDefaultDescription },
+      { name: 'keywords', content: 'open-source LLM router, multi-model routing, semantic router, model selection, AI gateway, vLLM, Envoy, inference routing, policy-aware routing, privacy-aware routing, safety routing' },
       { name: 'author', content: 'vLLM Semantic Router Team' },
-      { property: 'og:title', content: 'vLLM Semantic Router' },
-      { property: 'og:description', content: 'System Level Intelligent Router for Mixture-of-Models' },
+      { name: 'application-name', content: 'vLLM Semantic Router' },
+      { property: 'og:title', content: 'vLLM Semantic Router | Open-Source LLM Router' },
+      { property: 'og:description', content: siteDefaultDescription },
       { property: 'og:type', content: 'website' },
       { property: 'og:site_name', content: 'vLLM Semantic Router' },
+      { property: 'og:image', content: siteSocialPreviewImageUrl },
+      { property: 'og:image:alt', content: 'vLLM Semantic Router social preview' },
       { name: 'twitter:card', content: 'summary_large_image' },
-      { name: 'twitter:title', content: 'vLLM Semantic Router' },
-      { name: 'twitter:description', content: 'System Level Intelligent Router for Mixture-of-Models' },
+      { name: 'twitter:title', content: 'vLLM Semantic Router | Open-Source LLM Router' },
+      { name: 'twitter:description', content: siteDefaultDescription },
+      { name: 'twitter:image', content: siteSocialPreviewImageUrl },
+      { name: 'twitter:image:alt', content: 'vLLM Semantic Router social preview' },
 
       // GEO metadata config
       { name: 'geo.region', content: 'US-CA' },
@@ -261,7 +269,7 @@ const config: Config = {
       ],
     },
     footer: {
-      style: 'dark',
+      style: 'light',
       links: [
         {
           title: 'Documentation',
@@ -336,28 +344,12 @@ const config: Config = {
       additionalLanguages: ['bash', 'json', 'yaml', 'go', 'rust', 'python'],
     },
     colorMode: {
-      defaultMode: 'dark',
+      defaultMode: 'light',
       disableSwitch: true,
       respectPrefersColorScheme: false,
     },
   } satisfies Preset.ThemeConfig,
   headTags: [
-    {
-      tagName: 'link',
-      attributes: {
-        rel: 'alternate',
-        hreflang: 'en',
-        href: 'https://vllm-semantic-router.com/',
-      },
-    },
-    {
-      tagName: 'link',
-      attributes: {
-        rel: 'alternate',
-        hreflang: 'zh-Hans',
-        href: 'https://vllm-semantic-router.com/zh-Hans/',
-      },
-    },
     {
       tagName: 'script',
       attributes: { type: 'application/ld+json' },
@@ -367,7 +359,7 @@ const config: Config = {
         'name': 'vLLM Semantic Router',
         'applicationCategory': 'AIInfrastructure',
         'operatingSystem': 'Cross-platform',
-        'description': 'System Level Intelligent Router for Mixture-of-Models',
+        'description': 'Open-source LLM router for Mixture-of-Models',
         'url': 'https://vllm-semantic-router.com',
         'publisher': {
           '@type': 'Organization',

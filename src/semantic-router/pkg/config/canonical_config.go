@@ -20,10 +20,11 @@ type CanonicalConfig struct {
 
 // CanonicalRouting contains the DSL-owned routing surface.
 type CanonicalRouting struct {
-	ModelCards  []RoutingModel       `yaml:"modelCards,omitempty"`
-	Signals     CanonicalSignals     `yaml:"signals,omitempty"`
-	Projections CanonicalProjections `yaml:"projections,omitempty"`
-	Decisions   []Decision           `yaml:"decisions,omitempty"`
+	ModelCards    []RoutingModel       `yaml:"modelCards,omitempty"`
+	Signals       CanonicalSignals     `yaml:"signals,omitempty"`
+	Projections   CanonicalProjections `yaml:"projections,omitempty"`
+	Decisions     []Decision           `yaml:"decisions,omitempty"`
+	SessionStates []SessionStateConfig `yaml:"session_states,omitempty"`
 }
 
 // CanonicalSignals groups routing signals under routing.signals.
@@ -44,6 +45,7 @@ type CanonicalSignals struct {
 	Jailbreak     []JailbreakRule    `yaml:"jailbreak,omitempty"`
 	PII           []PIIRule          `yaml:"pii,omitempty"`
 	KB            []KBSignalRule     `yaml:"kb,omitempty"`
+	Conversation  []ConversationRule `yaml:"conversation,omitempty"`
 }
 
 // CanonicalProjections groups derived routing outputs under routing.projections.
@@ -105,6 +107,7 @@ func applyCanonicalRoutingState(cfg *RouterConfig, canonical *CanonicalConfig) {
 	ensureModelRefDefaults(cfg.Decisions)
 	cfg.Signals = normalizeSignals(canonical.Routing.Signals, cfg.Decisions)
 	cfg.Projections = normalizeProjections(canonical.Routing.Projections)
+	cfg.SessionStates = append([]SessionStateConfig(nil), canonical.Routing.SessionStates...)
 	cfg.ModelConfig = make(map[string]ModelParams)
 
 	for _, model := range canonicalRoutingModels(canonical.Routing) {
@@ -249,6 +252,7 @@ func normalizeSignals(signals CanonicalSignals, decisions []Decision) Signals {
 		JailbreakRules:    append([]JailbreakRule(nil), signals.Jailbreak...),
 		PIIRules:          append([]PIIRule(nil), signals.PII...),
 		KBRules:           append([]KBSignalRule(nil), signals.KB...),
+		ConversationRules: append([]ConversationRule(nil), signals.Conversation...),
 	}
 
 	if len(result.Categories) == 0 {

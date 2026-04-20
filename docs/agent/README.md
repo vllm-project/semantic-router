@@ -25,6 +25,8 @@ This directory is the human-readable system of record for the repository's agent
 
 - [governance.md](governance.md)
   - rule layering, source-of-truth policy, and working-note policy
+- [lookup-tables.md](lookup-tables.md)
+  - data-driven lookup tables for session-aware routing decisions
 - [plans/README.md](plans/README.md)
   - when to use execution plans for long-horizon completion loops, how they differ from ADRs/debt, and the current plan inventory
 - [tech-debt-register.md](tech-debt-register.md)

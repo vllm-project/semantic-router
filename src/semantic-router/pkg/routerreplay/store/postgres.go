@@ -6,20 +6,12 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"regexp"
 	"time"
 
 	_ "github.com/lib/pq"
 )
 
-const (
-	DefaultPostgresTableName       = "router_replay_records"
-	DefaultPostgresMaxOpenConns    = 25
-	DefaultPostgresMaxIdleConns    = 5
-	DefaultPostgresConnMaxLifetime = 300 // 5 minutes
-)
-
-var postgresIdentifierPattern = regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_]*$`)
+const DefaultPostgresTableName = "router_replay_records"
 
 // PostgresStore implements Storage using PostgreSQL as the backend.
 type PostgresStore struct {
@@ -45,7 +37,7 @@ func NewPostgresStore(cfg *PostgresConfig, ttlSeconds int, asyncWrites bool) (*P
 		return nil, err
 	}
 
-	store := newPostgresStoreWithDB(db, runtimeCfg.tableName, ttlSeconds, asyncWrites)
+	store := newPostgresStoreWithDB(db, runtimeCfg.TableName, ttlSeconds, asyncWrites)
 	if err := store.createTable(ctx); err != nil {
 		_ = db.Close()
 		return nil, fmt.Errorf("failed to create table: %w", err)
@@ -70,13 +62,6 @@ func startPostgresAsyncWriter(store *PostgresStore) {
 	}
 	store.asyncChan = make(chan asyncOp, 100)
 	go store.asyncWriter()
-}
-
-func validatePostgresIdentifier(name string) error {
-	if !postgresIdentifierPattern.MatchString(name) {
-		return fmt.Errorf("invalid postgres identifier %q", name)
-	}
-	return nil
 }
 
 // createTable creates the records table if it doesn't exist.
@@ -109,6 +94,10 @@ func (p *PostgresStore) createTable(ctx context.Context) error {
 			guardrails_enabled BOOLEAN DEFAULT FALSE,
 			jailbreak_enabled BOOLEAN DEFAULT FALSE,
 			pii_enabled BOOLEAN DEFAULT FALSE,
+			prompt TEXT,
+			prompt_truncated BOOLEAN DEFAULT FALSE,
+			tool_definitions TEXT,
+			tool_definitions_truncated BOOLEAN DEFAULT FALSE,
 			rag_enabled BOOLEAN DEFAULT FALSE,
 			rag_backend VARCHAR(255),
 			rag_context_length INTEGER DEFAULT 0,
@@ -134,6 +123,10 @@ func (p *PostgresStore) createTable(ctx context.Context) error {
 		ALTER TABLE %s ADD COLUMN IF NOT EXISTS signal_confidences JSONB;
 		ALTER TABLE %s ADD COLUMN IF NOT EXISTS signal_values JSONB;
 		ALTER TABLE %s ADD COLUMN IF NOT EXISTS tool_trace JSONB;
+		ALTER TABLE %s ADD COLUMN IF NOT EXISTS prompt TEXT;
+		ALTER TABLE %s ADD COLUMN IF NOT EXISTS prompt_truncated BOOLEAN DEFAULT FALSE;
+		ALTER TABLE %s ADD COLUMN IF NOT EXISTS tool_definitions TEXT;
+		ALTER TABLE %s ADD COLUMN IF NOT EXISTS tool_definitions_truncated BOOLEAN DEFAULT FALSE;
 		ALTER TABLE %s ADD COLUMN IF NOT EXISTS prompt_tokens INTEGER;
 		ALTER TABLE %s ADD COLUMN IF NOT EXISTS completion_tokens INTEGER;
 		ALTER TABLE %s ADD COLUMN IF NOT EXISTS total_tokens INTEGER;
@@ -142,15 +135,23 @@ func (p *PostgresStore) createTable(ctx context.Context) error {
 		ALTER TABLE %s ADD COLUMN IF NOT EXISTS cost_savings DOUBLE PRECISION;
 		ALTER TABLE %s ADD COLUMN IF NOT EXISTS currency VARCHAR(32);
 		ALTER TABLE %s ADD COLUMN IF NOT EXISTS baseline_model VARCHAR(255);
+		ALTER TABLE %s ADD COLUMN IF NOT EXISTS session_id VARCHAR(255);
+		ALTER TABLE %s ADD COLUMN IF NOT EXISTS turn_index INTEGER;
+		ALTER TABLE %s ADD COLUMN IF NOT EXISTS previous_response_id VARCHAR(255);
+		ALTER TABLE %s ADD COLUMN IF NOT EXISTS conversation_id VARCHAR(255);
 		CREATE INDEX IF NOT EXISTS idx_%s_timestamp ON %s (timestamp DESC);
 		CREATE INDEX IF NOT EXISTS idx_%s_created_at ON %s (created_at);
 		CREATE INDEX IF NOT EXISTS idx_%s_request_id ON %s (request_id);
 		CREATE INDEX IF NOT EXISTS idx_%s_decision_timestamp ON %s (decision, timestamp DESC);
 		CREATE INDEX IF NOT EXISTS idx_%s_selected_model_timestamp ON %s (selected_model, timestamp DESC);
+		CREATE INDEX IF NOT EXISTS idx_%s_session_timestamp ON %s (session_id, timestamp DESC);
 	`, p.tableName,
 		p.tableName, p.tableName, p.tableName, p.tableName, p.tableName, p.tableName, p.tableName,
 		p.tableName, p.tableName, p.tableName, p.tableName, p.tableName, p.tableName, p.tableName, p.tableName,
-		p.tableName, p.tableName, p.tableName, p.tableName, p.tableName, p.tableName, p.tableName, p.tableName, p.tableName, p.tableName)
+		p.tableName, p.tableName, p.tableName, p.tableName, p.tableName, p.tableName, p.tableName, p.tableName,
+		p.tableName, p.tableName, p.tableName, p.tableName,
+		p.tableName, p.tableName, p.tableName, p.tableName,
+		p.tableName, p.tableName, p.tableName, p.tableName)
 
 	_, err := p.db.ExecContext(ctx, query)
 	return err
@@ -187,11 +188,13 @@ func (p *PostgresStore) Add(ctx context.Context, record Record) (string, error) 
 			request_body, response_body, response_status,
 			from_cache, streaming, request_body_truncated, response_body_truncated,
 			guardrails_enabled, jailbreak_enabled, pii_enabled,
+			prompt, prompt_truncated, tool_definitions, tool_definitions_truncated,
 			rag_enabled, rag_backend, rag_context_length, rag_similarity_score,
 			hallucination_enabled, hallucination_detected, hallucination_confidence, hallucination_spans,
 			prompt_tokens, completion_tokens, total_tokens,
-			actual_cost, baseline_cost, cost_savings, currency, baseline_model
-		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27, $28, $29, $30, $31, $32, $33, $34, $35, $36, $37, $38, $39, $40, $41, $42)
+			actual_cost, baseline_cost, cost_savings, currency, baseline_model,
+			session_id, turn_index, previous_response_id, conversation_id
+		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27, $28, $29, $30, $31, $32, $33, $34, $35, $36, $37, $38, $39, $40, $41, $42, $43, $44, $45, $46, $47, $48, $49, $50)
 	`, p.tableName)
 
 	fn := func() error {

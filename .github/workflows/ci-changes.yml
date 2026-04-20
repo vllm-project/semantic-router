@@ -182,7 +182,11 @@ jobs:
             e2e_dashboard:
               - 'e2e/profiles/dashboard/**'
               - 'e2e/testcases/dashboard_*.go'
+              - 'e2e/testcases/security_policy_apply.go'
               - 'deploy/kubernetes/observability/dashboard/**'
+              - 'dashboard/backend/handlers/security_policy*.go'
+              - 'dashboard/backend/handlers/deploy.go'
+              - 'dashboard/backend/handlers/canonical_transport.go'
             e2e_dynamic_config:
               - 'e2e/profiles/dynamic-config/**'
             e2e_llm_d:
@@ -221,6 +225,7 @@ jobs:
               - 'e2e/config/authz-profile-*.yaml'
               - 'src/semantic-router/pkg/classification/authz*.go'
               - 'src/semantic-router/pkg/authz/**'
+              - 'dashboard/backend/handlers/security_policy*.go'
             e2e_streaming:
               - 'e2e/profiles/streaming/**'
               - 'deploy/kubernetes/streaming/**'

@@ -52,13 +52,17 @@ Before you begin, ensure you have the following installed:
 
 3. **Install Python dependencies (Optional):**
 
+   There is no repository-root `requirements.txt`. Use the file for the area you are working in, for example:
+
    ```bash
-   # For training and development
-   pip install -r requirements.txt
-   
-   # For end-to-end testing
+   # vllm-sr CLI and its Python dependencies (typical for local dev)
+   pip install -r src/vllm-sr/requirements.txt
+
+   # End-to-end testing
    pip install -r e2e/testing/requirements.txt
    ```
+
+   Training, benchmarks, and other subprojects each have their own `requirements.txt` under their directories (for example `bench/`, `src/training/**/`).
 
 ## Running Tests
 
@@ -88,7 +92,7 @@ make agent-feature-gate ENV=cpu CHANGED_FILES="path/one,path/two"
 ```
 
 Use `make agent-ci-lint` when you want to reproduce the same changed-file lint path that the CI pre-commit workflow runs, including the shared agent bootstrap toolchain and tracked-file codespell check.
-Use `make precommit-branch-gate` when you want the same local prelint gate the installed `pre-push` hook runs before a push or PR update.
+Use `make precommit-branch-gate` when you want to run the local branch prelint bundle on demand before a push or PR update.
 Use `make agent-pr-gate` when you want the repo-native local baseline for the PR jobs contributors most often miss: `Pre-commit / Run pre-commit hooks` and `Test And Build`.
 
 `ENV=amd` is required when platform-specific behavior changed.
@@ -284,22 +288,28 @@ make precommit-local
 ## Project Structure
 
 ```
+├── bench/                   # Benchmarking tools and workloads
 ├── candle-binding/          # Rust library for BERT classification
-├── src/semantic-router/     # Go implementation of the router
-├── src/training/           # Model training scripts
-├── e2e/testing/              # End-to-end test suite
-├── config/                 # Configuration files
-├── docs/                   # Documentation
-├── deploy/                 # Deployment configurations
-├── Makefile               # Build automation
-└── requirements.txt       # Python dependencies
+├── config/                  # Sample and reference configuration
+├── dashboard/               # Web UI and backend API
+├── deploy/                  # Kubernetes, operators, Helm charts, etc.
+├── docs/                    # Contributor docs (see also docs/agent)
+├── e2e/                     # End-to-end test harness
+├── src/semantic-router/     # Go router (Envoy ExtProc)
+├── src/vllm-sr/             # Python CLI (`requirements.txt` for its deps)
+├── src/training/            # Model training scripts
+├── tools/                   # Agent harness, scripts, automation
+├── website/                 # Documentation site (Docusaurus)
+└── Makefile                 # Build automation
 ```
 
 ### Key Components
 
 - **Candle Binding:** Rust library providing BERT-based classification
 - **Semantic Router:** Go service implementing the Envoy ExtProc interface
+- **vllm-sr CLI:** Python tooling and local dev workflow (`src/vllm-sr/`)
 - **Training Scripts:** Python scripts for fine-tuning classification models
+- **Dashboard:** Web console for operations and playground traffic
 - **Configuration:** YAML files defining routing rules and model endpoints
 
 ## Getting Help

@@ -132,6 +132,34 @@ func TestHandleRouterReplayAPIListRespectsOffset(t *testing.T) {
 	}
 }
 
+func TestHandleRouterReplayAPIListFiltersBySessionID(t *testing.T) {
+	recorder := routerreplay.NewRecorder(store.NewMemoryStore(20, 0))
+	ts := time.Unix(1000, 0).UTC()
+	for _, rec := range []routerreplay.RoutingRecord{
+		{ID: "replay-s1-a", Decision: "decision-a", RequestID: "r1", SessionID: "sess-alpha", Timestamp: ts},
+		{ID: "replay-s2", Decision: "decision-a", RequestID: "r2", SessionID: "sess-beta", Timestamp: ts.Add(time.Minute)},
+		{ID: "replay-s1-b", Decision: "decision-a", RequestID: "r3", SessionID: "sess-alpha", Timestamp: ts.Add(2 * time.Minute)},
+	} {
+		if _, err := recorder.AddRecord(rec); err != nil {
+			t.Fatalf("failed to add replay record: %v", err)
+		}
+	}
+	router := &OpenAIRouter{
+		ReplayRecorders: map[string]*routerreplay.Recorder{
+			"decision-a": recorder,
+		},
+	}
+
+	body := mustReplayListBody(t, router, "/v1/router_replay?session_id=sess-alpha&limit=10")
+	assertReplayPage(t, body, 2, 2, 10, 0)
+	data := mustReplayData(t, body["data"])
+	for _, row := range data {
+		if row["session_id"] != "sess-alpha" {
+			t.Fatalf("expected session_id=sess-alpha, got %#v", row["session_id"])
+		}
+	}
+}
+
 func TestHandleRouterReplayAPIListRejectsInvalidQuery(t *testing.T) {
 	router, _ := newReplayAPITestRouter(t)
 

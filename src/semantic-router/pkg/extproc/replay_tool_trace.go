@@ -2,6 +2,7 @@ package extproc
 
 import (
 	"encoding/json"
+	"reflect"
 	"sort"
 	"strings"
 
@@ -17,10 +18,18 @@ const (
 	replayToolSourceRequest  = "request"
 	replayToolSourceResponse = "response"
 	replayToolSourceStream   = "stream"
+
+	// replayAPITypeChatCompletions and replayAPITypeResponses are the two API
+	// variants that tool-trace steps can originate from.  The value is stored
+	// in ToolTraceStep.APIType so downstream consumers know how to interpret
+	// the Arguments / Output fields.
+	replayAPITypeChatCompletions = "chat_completions"
+	replayAPITypeResponses       = "responses"
 )
 
 type replayToolTraceChatRequest struct {
 	Messages []replayToolTraceChatMessage `json:"messages"`
+	Tools    []json.RawMessage            `json:"tools,omitempty"`
 }
 
 type replayToolTraceChatResponse struct {
@@ -66,6 +75,10 @@ type replayToolTraceResponseAPIItem struct {
 type replayToolTraceCollector struct {
 	steps             []routerreplay.ToolTraceStep
 	toolNamesByCallID map[string]string
+	// apiType, when non-empty, is stamped on every step that doesn't already
+	// specify one. Lets call-sites declare the API variant once at
+	// construction time instead of on every step.
+	apiType string
 }
 
 type replayStreamingIndexedToolCall struct {
@@ -80,6 +93,20 @@ func newReplayToolTraceCollector(capacity int) *replayToolTraceCollector {
 	}
 }
 
+func newReplayToolTraceCollectorForAPI(capacity int, apiType string) *replayToolTraceCollector {
+	collector := newReplayToolTraceCollector(capacity)
+	collector.apiType = apiType
+	return collector
+}
+
+// applyDefaultAPIType stamps the collector's apiType on the step when the step
+// doesn't already declare one. No-op when the collector has no default.
+func (collector *replayToolTraceCollector) applyDefaultAPIType(step *routerreplay.ToolTraceStep) {
+	if step.APIType == "" && collector.apiType != "" {
+		step.APIType = collector.apiType
+	}
+}
+
 func (collector *replayToolTraceCollector) addUserInput(source string, role string, raw json.RawMessage) {
 	collector.addTextStep(replayToolStepUserInput, source, role, extractReplayJSONText(raw))
 }
@@ -88,48 +115,52 @@ func (collector *replayToolTraceCollector) addUserText(source string, role strin
 	collector.addTextStep(replayToolStepUserInput, source, role, text)
 }
 
-func (collector *replayToolTraceCollector) addAssistantToolCall(
-	source string,
-	role string,
-	toolName string,
-	toolCallID string,
-	arguments string,
-) {
-	collector.steps = append(collector.steps, routerreplay.ToolTraceStep{
-		Type:       replayToolStepAssistantToolCall,
-		Source:     source,
-		Role:       role,
-		ToolName:   toolName,
-		ToolCallID: toolCallID,
-		Arguments:  arguments,
-	})
-	if toolCallID != "" && toolName != "" {
-		collector.toolNamesByCallID[toolCallID] = toolName
+func (collector *replayToolTraceCollector) addAssistantToolCall(step routerreplay.ToolTraceStep) {
+	step.Type = replayToolStepAssistantToolCall
+	collector.applyDefaultAPIType(&step)
+	collector.steps = append(collector.steps, step)
+	if step.ToolCallID != "" && step.ToolName != "" {
+		collector.toolNamesByCallID[step.ToolCallID] = step.ToolName
 	}
 }
 
-func (collector *replayToolTraceCollector) addToolResult(source string, role string, raw json.RawMessage, toolCallID string) {
-	collector.addToolResultText(source, role, extractReplayJSONText(raw), collector.toolNamesByCallID[toolCallID], toolCallID)
+func (collector *replayToolTraceCollector) addToolResultWithAPIType(source string, role string, raw json.RawMessage, toolCallID string, apiType string) {
+	rawOutput := normalizeReplayToolOutput(raw)
+	collector.addToolResultStep(routerreplay.ToolTraceStep{
+		Source:     source,
+		Role:       role,
+		Text:       extractReplayJSONText(raw),
+		ToolName:   collector.toolNamesByCallID[toolCallID],
+		ToolCallID: toolCallID,
+		RawOutput:  rawOutput,
+		Output:     rawOutput,
+		APIType:    apiType,
+	})
 }
 
-func (collector *replayToolTraceCollector) addToolResultText(
-	source string,
-	role string,
-	text string,
-	toolName string,
-	toolCallID string,
-) {
-	if text == "" && toolName == "" && toolCallID == "" {
+// normalizeReplayToolOutput returns a tool result's content as a string.
+// Chat Completions tool-role messages carry `content` as a JSON-encoded
+// string (per the OpenAI spec), so the outer quotes/escapes are stripped
+// to recover the inner payload (which may itself be JSON). Non-string
+// JSON values (objects, arrays) are returned as their raw JSON bytes.
+func normalizeReplayToolOutput(raw json.RawMessage) string {
+	if len(raw) == 0 || string(raw) == "null" {
+		return ""
+	}
+	var s string
+	if err := json.Unmarshal(raw, &s); err == nil {
+		return s
+	}
+	return strings.TrimSpace(string(raw))
+}
+
+func (collector *replayToolTraceCollector) addToolResultStep(step routerreplay.ToolTraceStep) {
+	if step.Text == "" && step.ToolName == "" && step.ToolCallID == "" && step.RawOutput == "" {
 		return
 	}
-	collector.steps = append(collector.steps, routerreplay.ToolTraceStep{
-		Type:       replayToolStepClientToolResult,
-		Source:     source,
-		Role:       role,
-		Text:       text,
-		ToolName:   toolName,
-		ToolCallID: toolCallID,
-	})
+	step.Type = replayToolStepClientToolResult
+	collector.applyDefaultAPIType(&step)
+	collector.steps = append(collector.steps, step)
 }
 
 func (collector *replayToolTraceCollector) addAssistantFinalResponse(source string, role string, raw json.RawMessage) {
@@ -140,16 +171,113 @@ func (collector *replayToolTraceCollector) addTextStep(stepType string, source s
 	if text == "" {
 		return
 	}
-	collector.steps = append(collector.steps, routerreplay.ToolTraceStep{
+	step := routerreplay.ToolTraceStep{
 		Type:   stepType,
 		Source: source,
 		Role:   role,
 		Text:   text,
-	})
+	}
+	collector.applyDefaultAPIType(&step)
+	collector.steps = append(collector.steps, step)
 }
 
 func (collector *replayToolTraceCollector) trace() *routerreplay.ToolTrace {
 	return newReplayToolTrace(collector.steps)
+}
+
+// extractChatCompletionPromptAndTools parses a Chat Completions request body
+// and returns the last user-message text and the raw JSON of the tools array.
+// Both values are extracted from the full body before any truncation occurs.
+func extractChatCompletionPromptAndTools(body []byte) (prompt string, toolDefs string) {
+	if len(body) == 0 {
+		return "", ""
+	}
+	var req replayToolTraceChatRequest
+	if err := json.Unmarshal(body, &req); err != nil {
+		return "", ""
+	}
+
+	// Last user message becomes the prompt.
+	for i := len(req.Messages) - 1; i >= 0; i-- {
+		if req.Messages[i].Role == "user" {
+			prompt = extractReplayJSONText(req.Messages[i].Content)
+			break
+		}
+	}
+
+	return prompt, marshalReplayTools(req.Tools)
+}
+
+// extractResponseAPIPromptAndTools extracts the prompt and tool definitions
+// from a Responses API request.  The prompt is taken from a plain string input
+// or from the last user message in the input items array.
+func extractResponseAPIPromptAndTools(ctx *RequestContext) (prompt string, toolDefs string) {
+	if ctx == nil || ctx.ResponseAPICtx == nil || ctx.ResponseAPICtx.OriginalRequest == nil {
+		return "", ""
+	}
+	req := ctx.ResponseAPICtx.OriginalRequest
+	return extractResponseAPIPrompt(req.Input), marshalReplayTools(req.Tools)
+}
+
+// extractResponseAPIPrompt returns the prompt text from a Responses API input
+// payload. A plain-string input is returned verbatim; otherwise the input is
+// parsed as an item list and the last user message's text is returned.
+func extractResponseAPIPrompt(input json.RawMessage) string {
+	var inputText string
+	if err := json.Unmarshal(input, &inputText); err == nil && inputText != "" {
+		return inputText
+	}
+	return extractResponseAPIPromptFromItems(input)
+}
+
+// extractResponseAPIPromptFromItems walks a Responses API input item array
+// and returns the text of the last user message (role "" or "user").
+func extractResponseAPIPromptFromItems(input json.RawMessage) string {
+	var items []replayToolTraceResponseAPIItem
+	if err := json.Unmarshal(input, &items); err != nil {
+		return ""
+	}
+	for i := len(items) - 1; i >= 0; i-- {
+		item := items[i]
+		if item.Type == "message" && isResponseAPIUserRole(item.Role) {
+			return extractReplayJSONText(item.Content)
+		}
+	}
+	return ""
+}
+
+// isResponseAPIUserRole returns true for a role value that identifies a user
+// message in the Responses API (empty or "user").
+func isResponseAPIUserRole(role string) bool {
+	return role == "" || role == "user"
+}
+
+// marshalReplayTools serializes the tools array from a request body as JSON.
+// Accepts any slice type (Chat Completions uses []json.RawMessage, Responses
+// API uses []responseapi.Tool). Returns an empty string when tools is empty
+// or serialization fails.
+func marshalReplayTools(tools any) string {
+	if isEmptyReplayToolsSlice(tools) {
+		return ""
+	}
+	raw, err := json.Marshal(tools)
+	if err != nil {
+		return ""
+	}
+	return string(raw)
+}
+
+// isEmptyReplayToolsSlice reports whether tools is a nil slice or zero-length
+// slice using reflection. This avoids generics for broader Go version support.
+func isEmptyReplayToolsSlice(tools any) bool {
+	if tools == nil {
+		return true
+	}
+	v := reflect.ValueOf(tools)
+	if v.Kind() != reflect.Slice {
+		return false
+	}
+	return v.Len() == 0
 }
 
 func buildReplayRequestToolTrace(ctx *RequestContext) *routerreplay.ToolTrace {
@@ -222,22 +350,25 @@ func buildReplayStreamingToolTrace(ctx *RequestContext) *routerreplay.ToolTrace 
 				continue
 			}
 			steps = append(steps, routerreplay.ToolTraceStep{
-				Type:       replayToolStepAssistantToolCall,
-				Source:     replayToolSourceStream,
-				Role:       "assistant",
-				ToolName:   call.Name,
-				ToolCallID: call.ID,
-				Arguments:  call.Arguments,
+				Type:         replayToolStepAssistantToolCall,
+				Source:       replayToolSourceStream,
+				Role:         "assistant",
+				ToolName:     call.Name,
+				ToolCallID:   call.ID,
+				Arguments:    call.Arguments,
+				RawArguments: call.Arguments,
+				APIType:      replayAPITypeChatCompletions,
 			})
 		}
 	}
 
 	if content := strings.TrimSpace(ctx.StreamingContent); content != "" {
 		steps = append(steps, routerreplay.ToolTraceStep{
-			Type:   replayToolStepAssistantFinalResponse,
-			Source: replayToolSourceStream,
-			Role:   "assistant",
-			Text:   content,
+			Type:    replayToolStepAssistantFinalResponse,
+			Source:  replayToolSourceStream,
+			Role:    "assistant",
+			Text:    content,
+			APIType: replayAPITypeChatCompletions,
 		})
 	}
 
@@ -250,7 +381,7 @@ func parseChatCompletionRequestToolTrace(body []byte) *routerreplay.ToolTrace {
 		return nil
 	}
 
-	collector := newReplayToolTraceCollector(len(messages))
+	collector := newReplayToolTraceCollectorForAPI(len(messages), replayAPITypeChatCompletions)
 	for _, message := range replayChatMessagesSinceLastUser(messages) {
 		appendReplayChatRequestMessage(collector, message)
 	}
@@ -274,9 +405,17 @@ func buildReplayTraceFromChatMessage(
 	message replayToolTraceChatMessage,
 	source string,
 ) *routerreplay.ToolTrace {
-	collector := newReplayToolTraceCollector(len(message.ToolCalls) + 1)
+	collector := newReplayToolTraceCollectorForAPI(len(message.ToolCalls)+1, replayAPITypeChatCompletions)
 	for _, toolCall := range message.ToolCalls {
-		collector.addAssistantToolCall(source, message.Role, toolCall.Function.Name, toolCall.ID, toolCall.Function.Arguments)
+		collector.addAssistantToolCall(routerreplay.ToolTraceStep{
+			Source:       source,
+			Role:         message.Role,
+			ToolName:     toolCall.Function.Name,
+			ToolCallID:   toolCall.ID,
+			Arguments:    toolCall.Function.Arguments,
+			RawArguments: toolCall.Function.Arguments,
+			APIType:      replayAPITypeChatCompletions,
+		})
 	}
 	collector.addAssistantFinalResponse(source, message.Role, message.Content)
 	return collector.trace()
@@ -296,7 +435,7 @@ func parseResponseAPIRequestToolTrace(input json.RawMessage) *routerreplay.ToolT
 		return nil
 	}
 
-	collector := newReplayToolTraceCollector(len(items))
+	collector := newReplayToolTraceCollectorForAPI(len(items), replayAPITypeResponses)
 	for _, item := range replayResponseAPIItemsSinceLastUser(items) {
 		appendReplayResponseAPIRequestItem(collector, item)
 	}
@@ -313,7 +452,7 @@ func parseResponseAPIResponseToolTrace(body []byte) *routerreplay.ToolTrace {
 		return nil
 	}
 
-	collector := newReplayToolTraceCollector(len(response.Output))
+	collector := newReplayToolTraceCollectorForAPI(len(response.Output), replayAPITypeResponses)
 	for _, item := range response.Output {
 		appendReplayResponseAPIResponseItem(collector, item)
 	}
@@ -375,7 +514,12 @@ func replayToolTraceStepsEqual(
 		left.Text == right.Text &&
 		left.ToolName == right.ToolName &&
 		left.ToolCallID == right.ToolCallID &&
-		left.Arguments == right.Arguments
+		left.Arguments == right.Arguments &&
+		left.RawArguments == right.RawArguments &&
+		left.RawOutput == right.RawOutput &&
+		left.Output == right.Output &&
+		left.APIType == right.APIType &&
+		left.Truncated == right.Truncated
 }
 
 func replayToolTraceStepLabel(stepType string) string {
@@ -504,16 +648,18 @@ func appendReplayChatRequestMessage(collector *replayToolTraceCollector, message
 		collector.addUserInput(replayToolSourceRequest, message.Role, message.Content)
 	case "assistant":
 		for _, toolCall := range message.ToolCalls {
-			collector.addAssistantToolCall(
-				replayToolSourceRequest,
-				message.Role,
-				toolCall.Function.Name,
-				toolCall.ID,
-				toolCall.Function.Arguments,
-			)
+			collector.addAssistantToolCall(routerreplay.ToolTraceStep{
+				Source:       replayToolSourceRequest,
+				Role:         message.Role,
+				ToolName:     toolCall.Function.Name,
+				ToolCallID:   toolCall.ID,
+				Arguments:    toolCall.Function.Arguments,
+				RawArguments: toolCall.Function.Arguments,
+				APIType:      replayAPITypeChatCompletions,
+			})
 		}
 	case "tool":
-		collector.addToolResult(replayToolSourceRequest, message.Role, message.Content, message.ToolCallID)
+		collector.addToolResultWithAPIType(replayToolSourceRequest, message.Role, message.Content, message.ToolCallID, replayAPITypeChatCompletions)
 	}
 }
 
@@ -523,7 +669,7 @@ func parseReplayResponseAPITextInput(input json.RawMessage) *routerreplay.ToolTr
 		return nil
 	}
 
-	collector := newReplayToolTraceCollector(1)
+	collector := newReplayToolTraceCollectorForAPI(1, replayAPITypeResponses)
 	collector.addUserText(replayToolSourceRequest, "user", inputText)
 	return collector.trace()
 }
@@ -549,18 +695,34 @@ func appendReplayResponseAPIRequestItem(collector *replayToolTraceCollector, ite
 	case "message":
 		appendReplayResponseAPIUserMessage(collector, item)
 	case "function_call":
-		collector.addAssistantToolCall(replayToolSourceRequest, "assistant", item.Name, item.CallID, item.Arguments)
+		collector.addAssistantToolCall(routerreplay.ToolTraceStep{
+			Source:       replayToolSourceRequest,
+			Role:         "assistant",
+			ToolName:     item.Name,
+			ToolCallID:   item.CallID,
+			Arguments:    item.Arguments,
+			RawArguments: item.Arguments,
+			APIType:      replayAPITypeResponses,
+		})
 	case "function_call_output":
-		collector.addToolResult(replayToolSourceRequest, "tool", item.Output, item.CallID)
+		collector.addToolResultWithAPIType(replayToolSourceRequest, "tool", item.Output, item.CallID, replayAPITypeResponses)
 	}
 }
 
 func appendReplayResponseAPIResponseItem(collector *replayToolTraceCollector, item replayToolTraceResponseAPIItem) {
 	switch item.Type {
 	case "function_call":
-		collector.addAssistantToolCall(replayToolSourceResponse, "assistant", item.Name, item.CallID, item.Arguments)
+		collector.addAssistantToolCall(routerreplay.ToolTraceStep{
+			Source:       replayToolSourceResponse,
+			Role:         "assistant",
+			ToolName:     item.Name,
+			ToolCallID:   item.CallID,
+			Arguments:    item.Arguments,
+			RawArguments: item.Arguments,
+			APIType:      replayAPITypeResponses,
+		})
 	case "function_call_output":
-		collector.addToolResult(replayToolSourceResponse, "tool", item.Output, item.CallID)
+		collector.addToolResultWithAPIType(replayToolSourceResponse, "tool", item.Output, item.CallID, replayAPITypeResponses)
 	case "message":
 		if item.Role != "" && item.Role != "assistant" {
 			return
@@ -578,98 +740,4 @@ func appendReplayResponseAPIUserMessage(collector *replayToolTraceCollector, ite
 		return
 	}
 	collector.addUserInput(replayToolSourceRequest, role, item.Content)
-}
-
-func replayStreamingChoices(chunkData map[string]interface{}) []map[string]interface{} {
-	rawChoices, ok := chunkData["choices"].([]interface{})
-	if !ok || len(rawChoices) == 0 {
-		return nil
-	}
-
-	choices := make([]map[string]interface{}, 0, len(rawChoices))
-	for _, rawChoice := range rawChoices {
-		choice, ok := rawChoice.(map[string]interface{})
-		if ok {
-			choices = append(choices, choice)
-		}
-	}
-	return choices
-}
-
-func replayStreamingToolCalls(choice map[string]interface{}) []replayStreamingIndexedToolCall {
-	delta, ok := choice["delta"].(map[string]interface{})
-	if !ok {
-		return nil
-	}
-	rawToolCalls, ok := delta["tool_calls"].([]interface{})
-	if !ok {
-		return nil
-	}
-
-	toolCalls := make([]replayStreamingIndexedToolCall, 0, len(rawToolCalls))
-	for rawIndex, rawToolCall := range rawToolCalls {
-		toolCall, ok := rawToolCall.(map[string]interface{})
-		if ok {
-			toolCalls = append(toolCalls, replayStreamingIndexedToolCall{
-				rawIndex: rawIndex,
-				toolCall: toolCall,
-			})
-		}
-	}
-	return toolCalls
-}
-
-func mergeReplayStreamingToolCall(ctx *RequestContext, rawIndex int, toolCall map[string]interface{}) {
-	index := replayStreamingToolCallIndex(rawIndex, toolCall)
-	state := replayStreamingToolCallState(ctx, index)
-
-	if id, ok := toolCall["id"].(string); ok && id != "" {
-		state.ID = mergeReplayStreamingFragment(state.ID, id)
-	}
-	if fn, ok := toolCall["function"].(map[string]interface{}); ok {
-		mergeReplayStreamingFunctionFragment(state, fn)
-	}
-}
-
-func replayStreamingToolCallIndex(rawIndex int, toolCall map[string]interface{}) int {
-	if value, ok := toolCall["index"].(float64); ok {
-		return int(value)
-	}
-	return rawIndex
-}
-
-func replayStreamingToolCallState(ctx *RequestContext, index int) *StreamingToolCallState {
-	state := ctx.StreamingToolCalls[index]
-	if state != nil {
-		return state
-	}
-
-	state = &StreamingToolCallState{}
-	ctx.StreamingToolCalls[index] = state
-	return state
-}
-
-func mergeReplayStreamingFunctionFragment(state *StreamingToolCallState, fn map[string]interface{}) {
-	if name, ok := fn["name"].(string); ok && name != "" {
-		state.Name = mergeReplayStreamingFragment(state.Name, name)
-	}
-	if arguments, ok := fn["arguments"].(string); ok && arguments != "" {
-		state.Arguments = mergeReplayStreamingFragment(state.Arguments, arguments)
-	}
-}
-
-func mergeReplayStreamingFragment(current string, fragment string) string {
-	if fragment == "" {
-		return current
-	}
-	if current == "" {
-		return fragment
-	}
-	if strings.HasPrefix(fragment, current) {
-		return fragment
-	}
-	if strings.HasPrefix(current, fragment) {
-		return current
-	}
-	return current + fragment
 }

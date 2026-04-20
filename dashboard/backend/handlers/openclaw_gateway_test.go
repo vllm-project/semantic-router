@@ -73,7 +73,7 @@ listeners:
 		t.Fatalf("failed to write config file: %v", err)
 	}
 
-	h := NewOpenClawHandler(tempDir, false)
+	h := newTestOpenClawHandler(t, tempDir, false)
 	h.SetRouterConfigPath(configPath)
 	t.Setenv("OPENCLAW_MODEL_BASE_URL", "")
 	t.Setenv("TARGET_ENVOY_URL", "http://vllm-sr-envoy-container:8899")

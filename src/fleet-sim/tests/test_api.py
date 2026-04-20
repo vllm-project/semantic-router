@@ -1001,9 +1001,9 @@ class TestSimulatorApiContract:
 
     def test_calibrate_returns_four_tuple(self, azure_cdf):
         from fleet_sim import A100_80GB
-        from fleet_sim.optimizer.base import _calibrate
+        from fleet_sim.optimizer.analytical import calibrate
 
-        result = _calibrate(azure_cdf, pool_max=4096, gpu=A100_80GB)
+        result = calibrate(azure_cdf, pool_max=4096, gpu=A100_80GB)
         assert len(result) == 4
         mu_gpu, cv2, n_slots, mean_prefill = result
         assert mu_gpu > 0

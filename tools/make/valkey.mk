@@ -82,6 +82,41 @@ test-valkey-vectorstore-no-container: rust ## Test vector store against existing
 		cd src/semantic-router && CGO_ENABLED=1 go test -v ./pkg/vectorstore/ -run TestVectorStore -- --focus="ValkeyBackend"
 
 # ---------------------------------------------------------------------------
+# Memory Tests
+# ---------------------------------------------------------------------------
+
+# Test Valkey memory store (unit tests only, no container needed)
+test-valkey-memory-unit: rust ## Run ValkeyStore unit tests (no live Valkey required)
+	@$(LOG_TARGET)
+	@echo "Running ValkeyStore unit tests..."
+	@export LD_LIBRARY_PATH=${PWD}/candle-binding/target/release:${PWD}/nlp-binding/target/release && \
+	export SR_TEST_MODE=true && \
+		cd src/semantic-router && CGO_ENABLED=1 go test -v ./pkg/memory/ -run "TestValkey|TestMemoryValkeyConfig|TestNewValkeyStore|TestCachingStore|TestNewCachingStore" -count=1
+
+# Test Valkey memory store integration (requires live Valkey with Search module)
+test-valkey-memory: start-valkey rust ## Test ValkeyStore integration against containerised Valkey
+	@$(LOG_TARGET)
+	@echo "Testing Valkey memory store integration..."
+	@export LD_LIBRARY_PATH=${PWD}/candle-binding/target/release:${PWD}/nlp-binding/target/release && \
+	export SR_TEST_MODE=true && \
+	export VALKEY_HOST=localhost && \
+	export VALKEY_PORT=6380 && \
+	export SKIP_VALKEY_TESTS=false && \
+		cd src/semantic-router && CGO_ENABLED=1 go test -v ./pkg/memory/ -run "TestValkeyStoreInteg" -count=1 -timeout 120s
+	@echo "Consider running 'make stop-valkey' when done testing"
+
+# Test Valkey memory store against an already-running Valkey instance
+test-valkey-memory-no-container: rust ## Test ValkeyStore integration against existing Valkey (VALKEY_PORT=6379)
+	@$(LOG_TARGET)
+	@echo "Testing Valkey memory store against existing Valkey on port ${VALKEY_PORT:-6379}..."
+	@export LD_LIBRARY_PATH=${PWD}/candle-binding/target/release:${PWD}/nlp-binding/target/release && \
+	export SR_TEST_MODE=true && \
+	export VALKEY_HOST=${VALKEY_HOST:-localhost} && \
+	export VALKEY_PORT=${VALKEY_PORT:-6379} && \
+	export SKIP_VALKEY_TESTS=false && \
+		cd src/semantic-router && CGO_ENABLED=1 go test -v ./pkg/memory/ -run "TestValkeyStoreInteg" -count=1 -timeout 120s
+
+# ---------------------------------------------------------------------------
 # Cache Tests
 # ---------------------------------------------------------------------------
 
@@ -111,7 +146,7 @@ test-semantic-router-valkey: build-router start-valkey ## Test semantic-router w
 # Combined Tests
 # ---------------------------------------------------------------------------
 
-# Test all Valkey backends (cache + vector store)
+# Test all Valkey backends (cache + vector store + memory)
 test-valkey-all: start-valkey rust ## Test all Valkey backends
 	@$(LOG_TARGET)
 	@echo "Testing all Valkey backends..."
@@ -121,7 +156,8 @@ test-valkey-all: start-valkey rust ## Test all Valkey backends
 	export VALKEY_PORT=6380 && \
 	export SKIP_VALKEY_TESTS=false && \
 		cd src/semantic-router && CGO_ENABLED=1 go test -v ./pkg/vectorstore/ -run TestVectorStore -- --focus="ValkeyBackend" && \
-		cd src/semantic-router && CGO_ENABLED=1 go test -v ./pkg/cache/ -run TestValkeyCache
+		cd src/semantic-router && CGO_ENABLED=1 go test -v ./pkg/cache/ -run TestValkeyCache && \
+		cd src/semantic-router && CGO_ENABLED=1 go test -v ./pkg/memory/ -run "TestValkeyStoreInteg" -count=1 -timeout 120s
 	@echo "Consider running 'make stop-valkey' when done testing"
 
 # ---------------------------------------------------------------------------

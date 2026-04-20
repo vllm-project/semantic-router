@@ -67,6 +67,29 @@ type VectorStoreConfig struct {
 	// When backend_type is "valkey", vSR uses Valkey with the valkey-search
 	// module for vector storage via the valkey-glide Go client.
 	Valkey *ValkeyVectorStoreConfig `json:"valkey,omitempty" yaml:"valkey,omitempty"`
+
+	// MetadataStore selects the backend for persisting vector store and file
+	// metadata across restarts: "memory" (default, ephemeral) or "postgres".
+	MetadataStore string `json:"metadata_store,omitempty" yaml:"metadata_store,omitempty"`
+
+	// MetadataPostgres holds Postgres connection parameters for the metadata
+	// registry when metadata_store is "postgres".
+	MetadataPostgres *VectorStoreMetadataPostgresConfig `json:"metadata_postgres,omitempty" yaml:"metadata_postgres,omitempty"`
+}
+
+// VectorStoreMetadataPostgresConfig holds connection parameters for the
+// Postgres-backed vector store metadata registry.
+type VectorStoreMetadataPostgresConfig struct {
+	Host            string `json:"host" yaml:"host"`
+	Port            int    `json:"port" yaml:"port"`
+	Database        string `json:"database" yaml:"database"`
+	User            string `json:"user" yaml:"user"`
+	Password        string `json:"password" yaml:"password"`
+	SSLMode         string `json:"ssl_mode,omitempty" yaml:"ssl_mode,omitempty"`
+	MaxOpenConns    int    `json:"max_open_conns,omitempty" yaml:"max_open_conns,omitempty"`
+	MaxIdleConns    int    `json:"max_idle_conns,omitempty" yaml:"max_idle_conns,omitempty"`
+	ConnMaxLifetime int    `json:"conn_max_lifetime,omitempty" yaml:"conn_max_lifetime,omitempty"`
+	TableName       string `json:"table_name,omitempty" yaml:"table_name,omitempty"`
 }
 
 // VectorStoreMemoryConfig holds configuration for the in-memory backend.
@@ -137,6 +160,9 @@ func (c *VectorStoreConfig) Validate() error {
 	if err := validateVectorStoreBackendType(c.BackendType); err != nil {
 		return err
 	}
+	if err := validateVectorStoreMetadataStore(c); err != nil {
+		return err
+	}
 	return validateVectorStoreBackendConfig(c)
 }
 
@@ -201,6 +227,20 @@ func validateLlamaStackVectorStoreSearchType(searchType string) error {
 	return fmt.Errorf("vector_store.llama_stack.search_type must be 'vector' or 'hybrid', got '%s'", searchType)
 }
 
+func validateVectorStoreMetadataStore(c *VectorStoreConfig) error {
+	switch c.MetadataStore {
+	case "", "memory":
+		return nil
+	case "postgres":
+		if c.MetadataPostgres == nil {
+			return fmt.Errorf("vector_store.metadata_postgres is required when metadata_store is 'postgres'")
+		}
+		return nil
+	default:
+		return fmt.Errorf("vector_store.metadata_store must be 'memory' or 'postgres', got '%s'", c.MetadataStore)
+	}
+}
+
 // ApplyDefaults fills in default values for unset fields.
 func (c *VectorStoreConfig) ApplyDefaults() {
 	if c.FileStorageDir == "" {
@@ -227,5 +267,8 @@ func (c *VectorStoreConfig) ApplyDefaults() {
 	}
 	if len(c.SupportedFormats) == 0 {
 		c.SupportedFormats = []string{".txt", ".md", ".json", ".csv", ".html"}
+	}
+	if c.MetadataStore == "" {
+		c.MetadataStore = "memory"
 	}
 }

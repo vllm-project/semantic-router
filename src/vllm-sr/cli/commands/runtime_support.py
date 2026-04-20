@@ -16,7 +16,10 @@ from cli.bootstrap import (
     is_setup_mode_config,
 )
 from cli.runtime_stack import resolve_runtime_stack
-from cli.service_defaults import inject_local_service_runtime_defaults
+from cli.service_defaults import (
+    inject_local_service_runtime_defaults,
+    inject_local_store_runtime_defaults,
+)
 from cli.utils import get_logger
 
 log = get_logger(__name__)
@@ -610,10 +613,9 @@ def resolve_effective_config_path(
 
     kb_runtime_required, changed = _sync_runtime_kb_store(config, config_path)
     if not setup_mode:
-        changed = (
-            inject_local_service_runtime_defaults(config, resolve_runtime_stack())
-            or changed
-        )
+        stack = resolve_runtime_stack()
+        changed = inject_local_service_runtime_defaults(config, stack) or changed
+        changed = inject_local_store_runtime_defaults(config, stack) or changed
     normalized_algorithm = _normalized_algorithm_override(algorithm, setup_mode)
     apply_gpu_defaults = _platform_requires_gpu_defaults(platform)
     if (

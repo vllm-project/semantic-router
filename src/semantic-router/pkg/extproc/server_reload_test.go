@@ -17,10 +17,8 @@ import (
 )
 
 var expectedAMDModelPaths = []string{
-	"models/mom-embedding-ultra",
+	"models/mmbert-embed-32k-2d-matryoshka",
 	"models/mmbert32k-intent-classifier-merged",
-	"models/mmbert32k-pii-detector-merged",
-	"models/mmbert32k-jailbreak-detector-merged",
 	"models/mmbert32k-factcheck-classifier-merged",
 	"models/mmbert32k-feedback-detector-merged",
 }

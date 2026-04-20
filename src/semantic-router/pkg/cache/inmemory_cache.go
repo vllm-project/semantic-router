@@ -5,6 +5,7 @@ package cache
 import (
 	"fmt"
 	"math"
+	"sort"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -1161,16 +1162,27 @@ func (h *HNSWIndex) addNode(entryIndex int, embedding []float32, entries []Cache
 		return
 	}
 
+	currentEntryPoint := h.entryPoint
+	for lc := h.maxLayer; lc > level; lc-- {
+		candidates := h.searchLayer(embedding, currentEntryPoint, 1, lc, entries)
+		if len(candidates) > 0 {
+			currentEntryPoint = candidates[0]
+		}
+	}
+
 	// Find nearest neighbors and connect
 	for lc := min(level, h.maxLayer); lc >= 0; lc-- {
-		candidates := h.searchLayer(embedding, h.entryPoint, h.efConstruction, lc, entries)
+		candidates := h.searchLayer(embedding, currentEntryPoint, h.efConstruction, lc, entries)
 
-		// Select M nearest neighbors
+		// Select M nearest neighbors from sorted candidates returned from searchLayer (nearest first, farthest last)
 		M := h.Mmax
 		if lc == 0 {
 			M = h.Mmax0
 		}
-		neighbors := h.selectNeighbors(candidates, M, embedding, entries)
+		neighbors := candidates
+		if len(neighbors) > M {
+			neighbors = neighbors[:M]
+		}
 
 		// Add bidirectional links
 		node.neighbors[lc] = neighbors
@@ -1188,6 +1200,10 @@ func (h *HNSWIndex) addNode(entryIndex int, embedding []float32, entries []Cache
 					n.neighbors[lc] = h.selectNeighbors(n.neighbors[lc], M, entries[neighborIdx].Embedding, entries)
 				}
 			}
+		}
+
+		if len(candidates) > 0 {
+			currentEntryPoint = candidates[0]
 		}
 	}
 
@@ -1220,7 +1236,9 @@ func (h *HNSWIndex) searchKNN(queryEmbedding []float32, k, ef int, entries []Cac
 	return h.searchLayer(queryEmbedding, currentNearest, ef, 0, entries)
 }
 
-// searchLayer searches for nearest neighbors at a specific layer
+// searchLayer searches for nearest neighbors at a specific layer.
+//
+// It returns candidate entry indices ordered by ascending distance (nearest first, farthest last).
 func (h *HNSWIndex) searchLayer(queryEmbedding []float32, entryPoint, ef, layer int, entries []CacheEntry) []int {
 	visited := make(map[int]bool)
 	candidates := newMinHeap() // set of candidates, explore closest candidate first
@@ -1272,7 +1290,7 @@ func (h *HNSWIndex) searchLayer(queryEmbedding []float32, entryPoint, ef, layer 
 		}
 	}
 
-	return results.items()
+	return results.sortedIndicesAsc()
 }
 
 // selectNeighbors selects the best neighbors by sorting by distance
@@ -1448,12 +1466,21 @@ func (h *maxHeap) peekDist() float32 {
 	return h.data[0].dist
 }
 
-func (h *maxHeap) items() []int {
-	result := make([]int, len(h.data))
-	for i, item := range h.data {
-		result[i] = item.index
+// sortedIndicesAsc exports the heap contents as entry indices ordered by ascending distance (nearest first).
+func (h *maxHeap) sortedIndicesAsc() []int {
+	result := make([]heapItem, len(h.data))
+	copy(result, h.data)
+
+	sort.Slice(result, func(i, j int) bool {
+		return result[i].dist < result[j].dist
+	})
+
+	indices := make([]int, len(result))
+	for i, item := range result {
+		indices[i] = item.index
 	}
-	return result
+
+	return indices
 }
 
 func (h *maxHeap) bubbleUp(i int) {

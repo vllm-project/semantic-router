@@ -132,11 +132,11 @@ var _ = Describe("Integration: Full Ingest-to-Search Pipeline", func() {
 		Expect(err).NotTo(HaveOccurred())
 
 		backend = NewMemoryBackend(MemoryBackendConfig{})
-		store, err = NewFileStore(tempDir)
+		store, err = NewFileStore(tempDir, NewMemoryMetadataRegistry())
 		Expect(err).NotTo(HaveOccurred())
 
 		embedder = newDeterministicEmbedder(8)
-		mgr = NewManager(backend, embedder.Dimension(), BackendTypeMemory)
+		mgr = NewManager(backend, NewMemoryMetadataRegistry(), embedder.Dimension(), BackendTypeMemory)
 		pipeline = NewIngestionPipeline(backend, store, mgr, embedder, PipelineConfig{
 			Workers:   2,
 			QueueSize: 10,
@@ -147,7 +147,7 @@ var _ = Describe("Integration: Full Ingest-to-Search Pipeline", func() {
 
 	AfterEach(func() {
 		pipeline.Stop()
-		os.RemoveAll(tempDir)
+		_ = os.RemoveAll(tempDir)
 	})
 
 	It("should ingest a document and find it via semantic search", func() {

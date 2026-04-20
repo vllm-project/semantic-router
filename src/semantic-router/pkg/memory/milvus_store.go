@@ -12,6 +12,7 @@ import (
 	"github.com/milvus-io/milvus-sdk-go/v2/entity"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
+	milvuslifecycle "github.com/vllm-project/semantic-router/src/semantic-router/pkg/milvus"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/vectorstore"
 )
@@ -111,130 +112,118 @@ func NewMilvusStore(options MilvusStoreOptions) (*MilvusStore, error) {
 
 // ensureCollection checks if the collection exists and creates it if not
 func (m *MilvusStore) ensureCollection(ctx context.Context) error {
-	hasCollection, err := m.client.HasCollection(ctx, m.collectionName)
-	if err != nil {
-		return fmt.Errorf("failed to check collection existence: %w", err)
-	}
+	logging.Infof("MilvusStore: ensuring collection '%s' (dimension=%d)", m.collectionName, m.config.Milvus.Dimension)
 
-	if hasCollection {
-		logging.ComponentDebugEvent("memory", "milvus_collection_present", map[string]interface{}{
-			"collection_name": m.collectionName,
-		})
-		// Load collection to make it queryable
-		if loadErr := m.client.LoadCollection(ctx, m.collectionName, false); loadErr != nil {
-			logging.ComponentWarnEvent("memory", "milvus_collection_load_failed", map[string]interface{}{
-				"collection_name":       m.collectionName,
-				"error":                 loadErr.Error(),
-				"may_already_be_loaded": true,
-			})
-		}
-		return nil
-	}
-
-	// Define schema for agentic memory
-	schema := &entity.Schema{
-		CollectionName: m.collectionName,
-		Description:    "Agentic Memory storage for cross-session context",
-		AutoID:         false,
-		Fields: []*entity.Field{
-			{
-				Name:       "id",
-				DataType:   entity.FieldTypeVarChar,
-				PrimaryKey: true,
-				TypeParams: map[string]string{"max_length": "64"},
-			},
-			{
-				Name:           "user_id",
-				DataType:       entity.FieldTypeVarChar,
-				TypeParams:     map[string]string{"max_length": "256"},
-				IsPartitionKey: true, // Enables efficient per-user queries
-			},
-			{
-				Name:       "project_id",
-				DataType:   entity.FieldTypeVarChar,
-				TypeParams: map[string]string{"max_length": "256"},
-			},
-			{
-				Name:       "memory_type",
-				DataType:   entity.FieldTypeVarChar,
-				TypeParams: map[string]string{"max_length": "32"},
-			},
-			{
-				Name:       "content",
-				DataType:   entity.FieldTypeVarChar,
-				TypeParams: map[string]string{"max_length": "65535"},
-			},
-			{
-				Name:       "source",
-				DataType:   entity.FieldTypeVarChar,
-				TypeParams: map[string]string{"max_length": "256"},
-			},
-			{
-				Name:       "metadata",
-				DataType:   entity.FieldTypeVarChar,
-				TypeParams: map[string]string{"max_length": "65535"},
-			},
-			{
-				Name:     "embedding",
-				DataType: entity.FieldTypeFloatVector,
-				TypeParams: map[string]string{
-					"dim": fmt.Sprintf("%d", m.config.Milvus.Dimension),
+	err := milvuslifecycle.EnsureCollectionLoaded(ctx, m.client, m.collectionName, func(innerCtx context.Context) error {
+		// Define schema for agentic memory
+		schema := &entity.Schema{
+			CollectionName: m.collectionName,
+			Description:    "Agentic Memory storage for cross-session context",
+			AutoID:         false,
+			Fields: []*entity.Field{
+				{
+					Name:       "id",
+					DataType:   entity.FieldTypeVarChar,
+					PrimaryKey: true,
+					TypeParams: map[string]string{"max_length": "64"},
+				},
+				{
+					Name:           "user_id",
+					DataType:       entity.FieldTypeVarChar,
+					TypeParams:     map[string]string{"max_length": "256"},
+					IsPartitionKey: true, // Enables efficient per-user queries
+				},
+				{
+					Name:       "project_id",
+					DataType:   entity.FieldTypeVarChar,
+					TypeParams: map[string]string{"max_length": "256"},
+				},
+				{
+					Name:       "memory_type",
+					DataType:   entity.FieldTypeVarChar,
+					TypeParams: map[string]string{"max_length": "32"},
+				},
+				{
+					Name:       "content",
+					DataType:   entity.FieldTypeVarChar,
+					TypeParams: map[string]string{"max_length": "65535"},
+				},
+				{
+					Name:       "source",
+					DataType:   entity.FieldTypeVarChar,
+					TypeParams: map[string]string{"max_length": "256"},
+				},
+				{
+					Name:       "metadata",
+					DataType:   entity.FieldTypeVarChar,
+					TypeParams: map[string]string{"max_length": "65535"},
+				},
+				{
+					Name:     "embedding",
+					DataType: entity.FieldTypeFloatVector,
+					TypeParams: map[string]string{
+						"dim": fmt.Sprintf("%d", m.config.Milvus.Dimension),
+					},
+				},
+				{
+					Name:     "created_at",
+					DataType: entity.FieldTypeInt64,
+				},
+				{
+					Name:     "updated_at",
+					DataType: entity.FieldTypeInt64,
+				},
+				{
+					Name:     "access_count",
+					DataType: entity.FieldTypeInt64,
+				},
+				{
+					Name:     "importance",
+					DataType: entity.FieldTypeFloat,
 				},
 			},
-			{
-				Name:     "created_at",
-				DataType: entity.FieldTypeInt64,
-			},
-			{
-				Name:     "updated_at",
-				DataType: entity.FieldTypeInt64,
-			},
-			{
-				Name:     "access_count",
-				DataType: entity.FieldTypeInt64,
-			},
-			{
-				Name:     "importance",
-				DataType: entity.FieldTypeFloat,
-			},
-		},
-	}
+		}
 
-	// Create collection with partition key support
-	// NumPartitions determines how partition key values are distributed (default: 16)
-	numPartitions := int64(16) // Milvus default
-	if m.config.Milvus.NumPartitions > 0 {
-		numPartitions = int64(m.config.Milvus.NumPartitions)
-	}
-	logging.ComponentEvent("memory", "milvus_collection_create_started", map[string]interface{}{
-		"collection_name": m.collectionName,
-		"dimension":       m.config.Milvus.Dimension,
-		"num_partitions":  numPartitions,
-		"partition_key":   "user_id",
+		// Create collection with partition key support
+		numPartitions := int64(16) // Milvus default
+		if m.config.Milvus.NumPartitions > 0 {
+			numPartitions = int64(m.config.Milvus.NumPartitions)
+		}
+		logging.Infof("MilvusStore: creating collection with %d partitions (partition key: user_id)", numPartitions)
+
+		if createErr := m.client.CreateCollection(innerCtx, schema, 1, client.WithPartitionNum(numPartitions)); createErr != nil {
+			return createErr
+		}
+
+		// Create HNSW index for vector search
+		index, err := entity.NewIndexHNSW(entity.COSINE, 16, 256) // M=16, efConstruction=256
+		if err != nil {
+			return fmt.Errorf("failed to create HNSW index: %w", err)
+		}
+		if err := m.client.CreateIndex(innerCtx, m.collectionName, "embedding", index, false); err != nil {
+			return fmt.Errorf("failed to create index: %w", err)
+		}
+		return nil
 	})
-
-	if createErr := m.client.CreateCollection(ctx, schema, 1, client.WithPartitionNum(numPartitions)); createErr != nil {
-		return fmt.Errorf("failed to create collection: %w", createErr)
-	}
-
-	// Create HNSW index for vector search
-	index, err := entity.NewIndexHNSW(entity.COSINE, 16, 256) // M=16, efConstruction=256
 	if err != nil {
-		return fmt.Errorf("failed to create HNSW index: %w", err)
-	}
-	if err := m.client.CreateIndex(ctx, m.collectionName, "embedding", index, false); err != nil {
-		return fmt.Errorf("failed to create index: %w", err)
+		return err
 	}
 
-	// Load collection to make it queryable
-	if err := m.client.LoadCollection(ctx, m.collectionName, false); err != nil {
-		return fmt.Errorf("failed to load collection: %w", err)
-	}
-
-	logging.ComponentEvent("memory", "milvus_collection_created", map[string]interface{}{
-		"collection_name": m.collectionName,
-	})
+	logging.Infof("MilvusStore: collection '%s' ensured and loaded successfully", m.collectionName)
 	return nil
+}
+
+// buildTypeFilter returns a Milvus filter fragment matching any of the given
+// memory types, e.g. `(memory_type == "short_term" || memory_type == "long_term")`.
+func buildTypeFilter(types []MemoryType) string {
+	if len(types) == 0 {
+		return ""
+	}
+	parts := make([]string, len(types))
+	for i, t := range types {
+		parts[i] = fmt.Sprintf("memory_type == %q", string(t))
+	}
+	return "(" + strings.Join(parts, " || ") + ")"
 }
 
 // Retrieve searches for memories in Milvus with similarity threshold filtering
@@ -294,16 +283,8 @@ func (m *MilvusStore) Retrieve(ctx context.Context, opts RetrieveOptions) ([]*Re
 	filterExpr := fmt.Sprintf("user_id == \"%s\"", opts.UserID)
 
 	// Add memory type filter if specified
-	if len(opts.Types) > 0 {
-		typeFilter := "("
-		for i, memType := range opts.Types {
-			if i > 0 {
-				typeFilter += " || "
-			}
-			typeFilter += fmt.Sprintf("memory_type == \"%s\"", string(memType))
-		}
-		typeFilter += ")"
-		filterExpr = fmt.Sprintf("%s && %s", filterExpr, typeFilter)
+	if tf := buildTypeFilter(opts.Types); tf != "" {
+		filterExpr = fmt.Sprintf("%s && %s", filterExpr, tf)
 	}
 
 	logging.Debugf("MilvusStore.Retrieve: filter expression: %s", filterExpr)
@@ -961,16 +942,8 @@ func (m *MilvusStore) List(ctx context.Context, opts ListOptions) (*ListResult, 
 	// Build filter expression
 	filterExpr := fmt.Sprintf("user_id == \"%s\"", opts.UserID)
 
-	if len(opts.Types) > 0 {
-		typeFilter := "("
-		for i, memType := range opts.Types {
-			if i > 0 {
-				typeFilter += " || "
-			}
-			typeFilter += fmt.Sprintf("memory_type == \"%s\"", string(memType))
-		}
-		typeFilter += ")"
-		filterExpr = fmt.Sprintf("%s && %s", filterExpr, typeFilter)
+	if tf := buildTypeFilter(opts.Types); tf != "" {
+		filterExpr = fmt.Sprintf("%s && %s", filterExpr, tf)
 	}
 
 	outputFields := []string{"id", "content", "user_id", "memory_type", "metadata", "created_at", "updated_at"}
@@ -1297,16 +1270,8 @@ func (m *MilvusStore) ForgetByScope(ctx context.Context, scope MemoryScope) erro
 	}
 
 	// Add type filter if specified
-	if len(scope.Types) > 0 {
-		typeFilter := "("
-		for i, memType := range scope.Types {
-			if i > 0 {
-				typeFilter += " || "
-			}
-			typeFilter += fmt.Sprintf("memory_type == \"%s\"", string(memType))
-		}
-		typeFilter += ")"
-		filterExpr = fmt.Sprintf("%s && %s", filterExpr, typeFilter)
+	if tf := buildTypeFilter(scope.Types); tf != "" {
+		filterExpr = fmt.Sprintf("%s && %s", filterExpr, tf)
 	}
 
 	logging.Debugf("MilvusStore.ForgetByScope: delete expression: %s", filterExpr)
@@ -1335,16 +1300,8 @@ func (m *MilvusStore) forgetByScopeWithQuery(ctx context.Context, scope MemorySc
 	filterExpr := fmt.Sprintf("user_id == \"%s\"", scope.UserID)
 
 	// Add type filter if specified
-	if len(scope.Types) > 0 {
-		typeFilter := "("
-		for i, memType := range scope.Types {
-			if i > 0 {
-				typeFilter += " || "
-			}
-			typeFilter += fmt.Sprintf("memory_type == \"%s\"", string(memType))
-		}
-		typeFilter += ")"
-		filterExpr = fmt.Sprintf("%s && %s", filterExpr, typeFilter)
+	if tf := buildTypeFilter(scope.Types); tf != "" {
+		filterExpr = fmt.Sprintf("%s && %s", filterExpr, tf)
 	}
 
 	outputFields := []string{"id", "metadata"}

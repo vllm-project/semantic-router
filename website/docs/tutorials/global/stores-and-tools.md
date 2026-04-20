@@ -41,12 +41,42 @@ global:
 
 ### Memory
 
+The memory store supports two backends: `milvus` (default) and `valkey`.
+
+**Milvus backend** (default):
+
 ```yaml
 global:
   stores:
     memory:
       enabled: true
+      milvus:
+        address: milvus:19530
+        collection: agentic_memory
+        dimension: 384
 ```
+
+**Valkey backend** (requires Valkey with Search module):
+
+```yaml
+global:
+  stores:
+    memory:
+      enabled: true
+      backend: valkey
+      valkey:
+        host: valkey
+        port: 6379
+        dimension: 384
+        collection_prefix: "mem:"
+        index_name: mem_idx
+        metric_type: COSINE
+```
+
+For full deployment instructions, see:
+
+- [Valkey Agentic Memory](../../installation/valkey-memory.md) — Docker, Kubernetes, config reference, tuning, and troubleshooting
+- `deploy/examples/runtime/memory/` for backend-specific configuration references
 
 ### Vector Store
 

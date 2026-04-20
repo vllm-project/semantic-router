@@ -1,4 +1,5 @@
 ---
+description: 信号驱动决策核心架构指南，说明 Semantic Router 如何组合多种信号并输出更优的路由结果。
 translation:
   source_commit: "71b0e522"
   source_file: "docs/overview/signal-driven-decisions.md"

@@ -18,6 +18,10 @@ const (
 	// This header is case-insensitive when read from incoming requests.
 	RequestID = "x-request-id"
 
+	// XSessionID allows clients to pin a stable session identifier for Chat Completions
+	// when router-derived session IDs are insufficient.
+	XSessionID = "x-session-id"
+
 	// DisableRouterMemory allows clients to opt-out of router-managed memory injection.
 	// This prevents "silent double injection" when applications use SDK-managed memory
 	// systems like Mem0, LangMem, LangGraph, or OpenClaw.
@@ -150,6 +154,9 @@ const (
 	// VSRMatchedKB contains comma-separated list of matched knowledge-base signal names.
 	// Example: "privacy_policy,security_containment"
 	VSRMatchedKB = "x-vsr-matched-kb"
+
+	// VSRMatchedConversation contains comma-separated list of matched conversation-shape signal names.
+	VSRMatchedConversation = "x-vsr-matched-conversation"
 
 	// VSRMatchedProjection contains comma-separated list of matched projection outputs.
 	// Example: "balance_medium,verification_required"

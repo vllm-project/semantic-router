@@ -229,11 +229,7 @@ func (v *Validator) extractSymbolTable() *SymbolTable {
 		modelSet[name] = true
 	}
 	for _, route := range v.prog.Routes {
-		for _, m := range route.Models {
-			if m.Model != "" {
-				modelSet[m.Model] = true
-			}
-		}
+		addRouteModelsToSymbolSet(modelSet, route)
 	}
 	st.Models = keysOfBool(modelSet)
 
@@ -271,7 +267,11 @@ func (v *Validator) checkRouteReferences(route *RouteDecl) {
 		}
 	}
 
-	if len(route.Models) == 0 {
+	for _, iter := range route.CandidateIterations {
+		v.checkCandidateIterationReferences(route, iter)
+	}
+
+	if !routeHasModelCandidates(route) {
 		v.addDiag(DiagWarning, route.Pos,
 			fmt.Sprintf("Route %q has no MODEL specified. Add MODEL \"<model_name>\" inside the route body", route.Name),
 			nil,
@@ -418,7 +418,7 @@ func (v *Validator) checkSignalConstraints(s *SignalDecl) {
 	// Check valid signal types
 	if !config.IsSupportedSignalType(s.SignalType) {
 		v.addDiag(DiagConstraint, s.Pos,
-			fmt.Sprintf("Unknown signal type %q in %s. Supported signal types: keyword, embedding, domain, fact_check, user_feedback, preference, language, context, structure, complexity, modality, authz, jailbreak, pii, kb", s.SignalType, context),
+			fmt.Sprintf("Unknown signal type %q in %s. Supported signal types: keyword, embedding, domain, fact_check, user_feedback, preference, language, context, structure, conversation, complexity, modality, authz, jailbreak, pii, kb", s.SignalType, context),
 			nil,
 		)
 	}
@@ -452,6 +452,8 @@ func (v *Validator) checkSignalConstraints(s *SignalDecl) {
 		v.checkDomainSignalConstraints(s, context)
 	case "structure":
 		v.checkStructureSignalConstraints(s)
+	case "conversation":
+		v.checkConversationSignalConstraints(s)
 	}
 }
 
@@ -482,6 +484,33 @@ func (v *Validator) checkStructureSignalConstraints(s *SignalDecl) {
 	}
 }
 
+func (v *Validator) checkConversationSignalConstraints(s *SignalDecl) {
+	payload := fieldsToMap(s.Fields)
+	payload["name"] = s.Name
+
+	raw, err := yaml.Marshal(payload)
+	if err != nil {
+		v.addDiag(DiagConstraint, s.Pos,
+			fmt.Sprintf("failed to encode conversation signal %q: %v", s.Name, err),
+			nil,
+		)
+		return
+	}
+
+	var rule config.ConversationRule
+	if err := yaml.Unmarshal(raw, &rule); err != nil {
+		v.addDiag(DiagConstraint, s.Pos,
+			fmt.Sprintf("failed to decode conversation signal %q: %v", s.Name, err),
+			nil,
+		)
+		return
+	}
+	rule.Name = s.Name
+	if err := config.ValidateConversationRuleContract(rule); err != nil {
+		v.addDiag(DiagConstraint, s.Pos, err.Error(), nil)
+	}
+}
+
 func (v *Validator) checkRouteConstraints(r *RouteDecl) {
 	context := fmt.Sprintf("ROUTE %s", r.Name)
 
@@ -496,6 +525,10 @@ func (v *Validator) checkRouteConstraints(r *RouteDecl) {
 	// Check algorithm constraints
 	if r.Algorithm != nil {
 		v.checkAlgorithmConstraints(r.Algorithm, context)
+	}
+
+	for _, iter := range r.CandidateIterations {
+		v.checkCandidateIterationConstraints(r, iter, context)
 	}
 }
 

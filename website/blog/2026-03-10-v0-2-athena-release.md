@@ -1,8 +1,10 @@
 ---
 slug: v0-2-athena-release
 title: "vLLM Semantic Router v0.2 Athena: ClawOS, Model Refresh, and the System Brain"
+description: Announcing vLLM Semantic Router v0.2 Athena, the release that hardens the system brain with safer routing, model refresh, and better operations.
 authors: [Xunzhuo, rootfs]
 tags: [release, athena, v0.2, vllm, semantic-router]
+image: /img/blog/athena-0.png
 ---
 
 <div align="center">

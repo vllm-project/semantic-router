@@ -5562,3 +5562,381 @@ func assertConflictFreeRoundTrip(t *testing.T, cfg *config.RouterConfig) {
 		t.Errorf("re-parsed projection partitions = %d, want 1", len(prog2.ProjectionPartitions))
 	}
 }
+
+// ---------- SESSION_STATE Tests ----------
+
+const sessionStateDSL = `SESSION_STATE session_routing {
+  turn_number: int
+  current_model: string
+  cumulative_cost_usd: float
+  retry_count_ema: float
+  quality_score_ema: float
+  kv_cache_warm: float
+}`
+
+func TestCompileSessionState(t *testing.T) {
+	cfg, errs := Compile(sessionStateDSL)
+	if len(errs) > 0 {
+		t.Fatalf("compile errors: %v", errs)
+	}
+	if len(cfg.SessionStates) != 1 {
+		t.Fatalf("expected 1 SessionState in config, got %d", len(cfg.SessionStates))
+	}
+	ss := cfg.SessionStates[0]
+	if ss.Name != "session_routing" {
+		t.Errorf("name: expected %q, got %q", "session_routing", ss.Name)
+	}
+	wantFields := []struct{ name, typeName string }{
+		{"turn_number", "int"},
+		{"current_model", "string"},
+		{"cumulative_cost_usd", "float"},
+		{"retry_count_ema", "float"},
+		{"quality_score_ema", "float"},
+		{"kv_cache_warm", "float"},
+	}
+	if len(ss.Fields) != len(wantFields) {
+		t.Fatalf("expected %d fields, got %d", len(wantFields), len(ss.Fields))
+	}
+	for i, w := range wantFields {
+		if ss.Fields[i].Name != w.name || ss.Fields[i].TypeName != w.typeName {
+			t.Errorf("field[%d]: expected {%s: %s}, got {%s: %s}",
+				i, w.name, w.typeName, ss.Fields[i].Name, ss.Fields[i].TypeName)
+		}
+	}
+}
+
+func TestSessionStateRoundTrip(t *testing.T) {
+	cfg, errs := Compile(sessionStateDSL)
+	if len(errs) > 0 {
+		t.Fatalf("compile errors: %v", errs)
+	}
+	dslText, err := DecompileRouting(cfg)
+	if err != nil {
+		t.Fatalf("decompile error: %v", err)
+	}
+	if !strings.Contains(dslText, "SESSION_STATE session_routing") {
+		t.Errorf("round-trip lost SESSION_STATE declaration\nDSL:\n%s", dslText)
+	}
+	// Types must survive as bare identifiers, not quoted strings.
+	for _, typeName := range []string{"int", "string", "float"} {
+		if !strings.Contains(dslText, ": "+typeName) {
+			t.Errorf("round-trip DSL missing bare type %q\nDSL:\n%s", typeName, dslText)
+		}
+	}
+	prog2, errs2 := Parse(dslText)
+	if len(errs2) > 0 {
+		t.Fatalf("re-parse errors after round-trip: %v\nDSL:\n%s", errs2, dslText)
+	}
+	if len(prog2.SessionStates) != 1 {
+		t.Fatalf("re-parsed session states = %d, want 1\nDSL:\n%s", len(prog2.SessionStates), dslText)
+	}
+	if prog2.SessionStates[0].Name != "session_routing" {
+		t.Errorf("round-trip name: expected %q, got %q", "session_routing", prog2.SessionStates[0].Name)
+	}
+}
+
+func TestSessionStateRoundTripAST(t *testing.T) {
+	cfg, errs := Compile(sessionStateDSL)
+	if len(errs) > 0 {
+		t.Fatalf("compile errors: %v", errs)
+	}
+	prog := DecompileToAST(cfg)
+	if len(prog.SessionStates) != 1 {
+		t.Fatalf("expected 1 SessionState in AST round-trip, got %d", len(prog.SessionStates))
+	}
+	ss := prog.SessionStates[0]
+	if ss.Name != "session_routing" {
+		t.Errorf("AST round-trip name: expected %q, got %q", "session_routing", ss.Name)
+	}
+	if len(ss.Fields) != 6 {
+		t.Errorf("AST round-trip field count: expected 6, got %d", len(ss.Fields))
+	}
+}
+
+func TestValidateSessionStateDuplicateName(t *testing.T) {
+	input := `
+SESSION_STATE foo { x: int }
+SESSION_STATE foo { y: string }
+`
+	diags, _ := Validate(input)
+	found := false
+	for _, d := range diags {
+		if d.Level == DiagConstraint && strings.Contains(d.Message, "duplicate") {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Errorf("expected DiagConstraint for duplicate SESSION_STATE name, got: %v", diags)
+	}
+}
+
+func TestValidateSessionStateInvalidType(t *testing.T) {
+	input := `SESSION_STATE foo { x: bool }`
+	diags, _ := Validate(input)
+	found := false
+	for _, d := range diags {
+		if d.Level == DiagConstraint &&
+			strings.Contains(d.Message, "invalid type") &&
+			strings.Contains(d.Message, "bool") {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Errorf("expected DiagConstraint for invalid type %q, got: %v", "bool", diags)
+	}
+}
+
+func TestValidateSessionStateDuplicateField(t *testing.T) {
+	input := `SESSION_STATE foo { x: int, x: string }`
+	diags, _ := Validate(input)
+	found := false
+	for _, d := range diags {
+		if d.Level == DiagConstraint && strings.Contains(d.Message, "duplicate field") {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Errorf("expected DiagConstraint for duplicate field name, got: %v", diags)
+	}
+}
+
+func TestValidateSessionStateValidTypes(t *testing.T) {
+	input := `SESSION_STATE ok { a: int, b: string, c: float }`
+	diags, _ := Validate(input)
+	for _, d := range diags {
+		if d.Level == DiagConstraint {
+			t.Errorf("unexpected constraint diagnostic for valid types: %v", d)
+		}
+	}
+}
+
+func TestParseCandidateIterationOverDecisionCandidates(t *testing.T) {
+	input := `ROUTE switch_gate {
+  MODEL "small-model", "large-model"
+  FOR candidate IN decision.candidates {
+    MODEL candidate
+  }
+}`
+
+	prog, errs := Parse(input)
+	if len(errs) > 0 {
+		t.Fatalf("parse errors: %v", errs)
+	}
+	if len(prog.Routes) != 1 {
+		t.Fatalf("routes = %d, want 1", len(prog.Routes))
+	}
+	route := prog.Routes[0]
+	if len(route.CandidateIterations) != 1 {
+		t.Fatalf("candidate iterations = %d, want 1", len(route.CandidateIterations))
+	}
+	iter := route.CandidateIterations[0]
+	if iter.Variable != "candidate" || iter.Source != "decision.candidates" {
+		t.Fatalf("iteration = variable %q source %q, want candidate decision.candidates", iter.Variable, iter.Source)
+	}
+	if len(iter.Outputs) != 1 || iter.Outputs[0].Type != "model" || iter.Outputs[0].Value != "candidate" {
+		t.Fatalf("unexpected iteration outputs: %+v", iter.Outputs)
+	}
+}
+
+func TestCompileExplicitCandidateIterationFeedsModelRefs(t *testing.T) {
+	input := `ROUTE switch_gate {
+  FOR candidate IN ["small-model", "large-model"] {
+    MODEL candidate
+  }
+}`
+
+	cfg, errs := Compile(input)
+	if len(errs) > 0 {
+		t.Fatalf("compile errors: %v", errs)
+	}
+	if len(cfg.Decisions) != 1 {
+		t.Fatalf("decisions = %d, want 1", len(cfg.Decisions))
+	}
+	decision := cfg.Decisions[0]
+	if len(decision.ModelRefs) != 2 {
+		t.Fatalf("model refs = %d, want 2", len(decision.ModelRefs))
+	}
+	if decision.ModelRefs[0].Model != "small-model" || decision.ModelRefs[1].Model != "large-model" {
+		t.Fatalf("model refs = %+v, want small-model, large-model", decision.ModelRefs)
+	}
+	if len(decision.CandidateIterations) != 1 {
+		t.Fatalf("candidate iterations = %d, want 1", len(decision.CandidateIterations))
+	}
+	if decision.CandidateIterations[0].Source != "models" {
+		t.Fatalf("candidate source = %q, want models", decision.CandidateIterations[0].Source)
+	}
+}
+
+func TestCandidateIterationRoundTrip(t *testing.T) {
+	input := `ROUTE switch_gate {
+  MODEL "small-model", "large-model"
+  FOR candidate IN decision.candidates {
+    MODEL candidate
+  }
+}`
+
+	cfg, errs := Compile(input)
+	if len(errs) > 0 {
+		t.Fatalf("compile errors: %v", errs)
+	}
+	dslText, err := Decompile(cfg)
+	if err != nil {
+		t.Fatalf("decompile error: %v", err)
+	}
+	if !strings.Contains(dslText, "FOR candidate IN decision.candidates") {
+		t.Fatalf("decompiled DSL missing candidate iteration:\n%s", dslText)
+	}
+	if !strings.Contains(dslText, "MODEL candidate") {
+		t.Fatalf("decompiled DSL missing candidate MODEL output:\n%s", dslText)
+	}
+	recompiled, errs := Compile(dslText)
+	if len(errs) > 0 {
+		t.Fatalf("recompile errors: %v\nDSL:\n%s", errs, dslText)
+	}
+	if len(recompiled.Decisions) != 1 || len(recompiled.Decisions[0].CandidateIterations) != 1 {
+		t.Fatalf("recompiled candidate iteration missing: %+v", recompiled.Decisions)
+	}
+}
+
+func TestValidateCandidateIterationRejectsUnboundedSource(t *testing.T) {
+	input := `ROUTE switch_gate {
+  MODEL "small-model"
+  FOR candidate IN runtime.models {
+    MODEL candidate
+  }
+}`
+
+	diagnostics, errs := Validate(input)
+	if len(errs) > 0 {
+		t.Fatalf("parse errors: %v", errs)
+	}
+	for _, diag := range diagnostics {
+		if strings.Contains(diag.Message, "unsupported candidate iteration source") {
+			return
+		}
+	}
+	t.Fatalf("expected unsupported candidate iteration source diagnostic, got: %+v", diagnostics)
+}
+
+// TestDecisionTreeCandidateIteration verifies that a FOR ... IN block inside a
+// DECISION_TREE branch is parsed and compiled correctly. The branch still
+// requires at least one MODEL directive; the iteration is additive metadata.
+func TestDecisionTreeCandidateIteration(t *testing.T) {
+	input := `SIGNAL keyword kw_fast { keywords: ["fast"] }
+DECISION_TREE session_switch {
+  IF keyword("kw_fast") {
+    MODEL "fast-model"
+    FOR candidate IN decision.candidates {
+      MODEL candidate
+    }
+  } ELSE {
+    MODEL "slow-model"
+  }
+}`
+
+	cfg, errs := Compile(input)
+	if len(errs) > 0 {
+		t.Fatalf("compile errors: %v", errs)
+	}
+	if len(cfg.Decisions) != 2 {
+		t.Fatalf("decisions = %d, want 2", len(cfg.Decisions))
+	}
+	// Branch 01 has the iteration; branch 02 (ELSE) does not.
+	ifBranch := cfg.Decisions[0]
+	if len(ifBranch.CandidateIterations) != 1 {
+		t.Fatalf("if-branch candidate iterations = %d, want 1", len(ifBranch.CandidateIterations))
+	}
+	iter := ifBranch.CandidateIterations[0]
+	if iter.Variable != "candidate" || iter.Source != "decision.candidates" {
+		t.Fatalf("iteration variable=%q source=%q, want candidate decision.candidates", iter.Variable, iter.Source)
+	}
+	elseBranch := cfg.Decisions[1]
+	if len(elseBranch.CandidateIterations) != 0 {
+		t.Fatalf("else-branch candidate iterations = %d, want 0", len(elseBranch.CandidateIterations))
+	}
+}
+
+// TestCandidateIterationEmptyBodyIsValid confirms that a FOR block with no
+// outputs parses and validates without a hard error (it carries no outputs, so
+// the validator emits no constraint diagnostic for empty output lists).
+func TestCandidateIterationEmptyBodyIsValid(t *testing.T) {
+	input := `ROUTE switch_gate {
+  MODEL "small-model", "large-model"
+  FOR candidate IN decision.candidates {
+  }
+}`
+
+	prog, errs := Parse(input)
+	if len(errs) > 0 {
+		t.Fatalf("parse errors: %v", errs)
+	}
+	iter := prog.Routes[0].CandidateIterations[0]
+	if len(iter.Outputs) != 0 {
+		t.Fatalf("expected 0 outputs for empty FOR body, got %d", len(iter.Outputs))
+	}
+
+	// Validate must not produce a constraint diagnostic for the empty body itself.
+	diagnostics, errs := Validate(input)
+	if len(errs) > 0 {
+		t.Fatalf("validate errors: %v", errs)
+	}
+	for _, diag := range diagnostics {
+		if diag.Level == DiagConstraint && strings.Contains(diag.Message, "FOR candidate") {
+			t.Fatalf("unexpected constraint diagnostic for empty body: %s", diag.Message)
+		}
+	}
+}
+
+// TestExplicitModelListRoundTripOmitsModelDirective verifies that when an
+// explicit model-list iteration covers exactly the same models as ModelRefs,
+// the decompiler suppresses the redundant MODEL directive and the round-trip
+// still produces a valid, compilable DSL with the iteration intact.
+func TestExplicitModelListRoundTripOmitsModelDirective(t *testing.T) {
+	input := `ROUTE switch_gate {
+  FOR candidate IN ["small-model", "large-model"] {
+    MODEL candidate
+  }
+}`
+
+	cfg, errs := Compile(input)
+	if len(errs) > 0 {
+		t.Fatalf("compile errors: %v", errs)
+	}
+
+	dslText, err := Decompile(cfg)
+	if err != nil {
+		t.Fatalf("decompile error: %v", err)
+	}
+
+	// The standalone MODEL directive must be absent because the iteration covers it.
+	lines := strings.Split(dslText, "\n")
+	for _, line := range lines {
+		trimmed := strings.TrimSpace(line)
+		if strings.HasPrefix(trimmed, "MODEL") && !strings.Contains(line, "FOR") && trimmed == "MODEL \"small-model\", \"large-model\"" {
+			t.Fatalf("decompiled DSL contains redundant MODEL directive that should have been omitted:\n%s", dslText)
+		}
+	}
+
+	// The iteration must be present.
+	if !strings.Contains(dslText, "FOR candidate IN") {
+		t.Fatalf("decompiled DSL missing candidate iteration:\n%s", dslText)
+	}
+
+	// Round-trip must recompile cleanly and preserve the iteration.
+	recompiled, errs := Compile(dslText)
+	if len(errs) > 0 {
+		t.Fatalf("recompile errors: %v\nDSL:\n%s", errs, dslText)
+	}
+	if len(recompiled.Decisions) != 1 {
+		t.Fatalf("recompiled decisions = %d, want 1", len(recompiled.Decisions))
+	}
+	if len(recompiled.Decisions[0].CandidateIterations) != 1 {
+		t.Fatalf("recompiled candidate iterations = %d, want 1", len(recompiled.Decisions[0].CandidateIterations))
+	}
+	if len(recompiled.Decisions[0].ModelRefs) != 2 {
+		t.Fatalf("recompiled model refs = %d, want 2", len(recompiled.Decisions[0].ModelRefs))
+	}
+}

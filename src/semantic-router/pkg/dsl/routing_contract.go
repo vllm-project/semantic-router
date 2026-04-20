@@ -40,6 +40,11 @@ func DecompileRouting(cfg *config.RouterConfig) (string, error) {
 	d.pluginTemplates = make(map[string]*pluginTemplate)
 	d.extractPluginTemplates()
 
+	if len(cfg.SessionStates) > 0 {
+		d.writeSection("SESSION_STATES")
+		d.decompileSessionStates()
+	}
+
 	d.writeSection("SIGNALS")
 	d.decompileSignals()
 
@@ -64,10 +69,24 @@ func DecompileRouting(cfg *config.RouterConfig) (string, error) {
 func DecompileRoutingToAST(cfg *config.RouterConfig) *Program {
 	d := &decompiler{cfg: cfg}
 	prog := &Program{}
+	d.appendSessionStatesToProgram(prog)
 	d.appendSignalsToProgram(prog)
 	d.appendModelsToProgram(prog)
 	d.appendRoutesToProgram(prog)
 	return prog
+}
+
+func (d *decompiler) appendSessionStatesToProgram(prog *Program) {
+	for _, ss := range d.cfg.SessionStates {
+		decl := &SessionStateDecl{Name: ss.Name}
+		for _, f := range ss.Fields {
+			decl.Fields = append(decl.Fields, SessionStateField{
+				Name:     f.Name,
+				TypeName: f.TypeName,
+			})
+		}
+		prog.SessionStates = append(prog.SessionStates, decl)
+	}
 }
 
 func (d *decompiler) appendSignalsToProgram(prog *Program) {
@@ -181,6 +200,9 @@ func (d *decompiler) appendOperationalSignals(prog *Program) {
 	}
 	for _, rb := range d.cfg.RoleBindings {
 		prog.Signals = append(prog.Signals, d.roleBindingToSignal(&rb))
+	}
+	for i := range d.cfg.ConversationRules {
+		prog.Signals = append(prog.Signals, d.conversationToSignal(&d.cfg.ConversationRules[i]))
 	}
 }
 

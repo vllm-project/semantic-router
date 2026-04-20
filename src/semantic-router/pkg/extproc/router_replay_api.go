@@ -25,6 +25,7 @@ type routerReplayFilters struct {
 	decision    string
 	model       string
 	cacheStatus string
+	sessionID   string
 }
 
 type routerReplayListQuery struct {
@@ -51,17 +52,29 @@ func (r *OpenAIRouter) handleRouterReplayAPI(method string, path string) *ext_pr
 	}
 
 	normalizedPath, rawQuery := splitRouterReplayRequestPath(path)
+	if !isRouterReplayPath(normalizedPath) {
+		return nil
+	}
+
 	switch {
 	case isRouterReplayListPath(normalizedPath):
 		return r.handleRouterReplayListAPI(method, rawQuery)
 	case normalizedPath == routerReplayAggregatePath:
 		return r.handleRouterReplayAggregateAPI(method, rawQuery)
+	case normalizedPath == routerReplayTrajectoryPath:
+		return r.handleRouterReplayTrajectoryAPI(method, rawQuery)
 	case strings.HasPrefix(normalizedPath, routerReplayAPIBasePath+"/"):
 		replayID := strings.TrimPrefix(normalizedPath, routerReplayAPIBasePath+"/")
 		return r.handleRouterReplayRecordAPI(method, replayID)
 	default:
 		return nil
 	}
+}
+
+func isRouterReplayPath(path string) bool {
+	return isRouterReplayListPath(path) ||
+		path == routerReplayAggregatePath ||
+		strings.HasPrefix(path, routerReplayAPIBasePath+"/")
 }
 
 func (r *OpenAIRouter) hasRouterReplayRecorders() bool {
@@ -190,9 +203,10 @@ func parseRouterReplayListQuery(rawQuery string) (routerReplayListQuery, error) 
 
 func parseRouterReplayFilters(values url.Values) (routerReplayFilters, error) {
 	filters := routerReplayFilters{
-		search:   strings.TrimSpace(values.Get("search")),
-		decision: strings.TrimSpace(values.Get("decision")),
-		model:    strings.TrimSpace(values.Get("model")),
+		search:    strings.TrimSpace(values.Get("search")),
+		decision:  strings.TrimSpace(values.Get("decision")),
+		model:     strings.TrimSpace(values.Get("model")),
+		sessionID: strings.TrimSpace(values.Get("session_id")),
 	}
 
 	cacheStatus := strings.TrimSpace(values.Get("cache_status"))
@@ -253,6 +267,9 @@ func doesRouterReplayRecordMatchFilters(
 		return false
 	}
 	if filters.model != "" && !doesModelMatch(record, filters.model) {
+		return false
+	}
+	if filters.sessionID != "" && record.SessionID != filters.sessionID {
 		return false
 	}
 	if search != "" && !strings.Contains(strings.ToLower(record.RequestID), search) {

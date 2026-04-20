@@ -17,6 +17,7 @@ type signalEvaluationInput struct {
 	currentUserText        string
 	priorUserMessages      []string
 	hasAssistantReply      bool
+	conversationFacts      classification.ConversationFacts
 }
 
 func (r *OpenAIRouter) prepareSignalEvaluationInput(history signalConversationHistory) signalEvaluationInput {
@@ -27,6 +28,16 @@ func (r *OpenAIRouter) prepareSignalEvaluationInput(history signalConversationHi
 		currentUserText:   history.currentUserMessage,
 		priorUserMessages: append([]string(nil), history.priorUserMessages...),
 		hasAssistantReply: history.hasAssistantReply,
+		conversationFacts: classification.ConversationFacts{
+			HasDeveloperMessage:    history.hasDeveloperMessage,
+			UserMessageCount:       history.userMessageCount,
+			AssistantMessageCount:  history.assistantMessageCount,
+			SystemMessageCount:     history.systemMessageCount,
+			ToolMessageCount:       history.toolMessageCount,
+			ToolDefinitionCount:    history.toolDefinitionCount,
+			AssistantToolCallCount: history.assistantToolCallCount,
+			CompletedToolCycles:    history.completedToolCycles,
+		},
 	}
 
 	if input.evaluationText == "" && len(history.nonUserMessages) > 0 {
@@ -93,6 +104,7 @@ func (r *OpenAIRouter) applySignalResultsToContext(ctx *RequestContext, signals 
 	ctx.VSRMatchedJailbreak = signals.MatchedJailbreakRules
 	ctx.VSRMatchedPII = signals.MatchedPIIRules
 	ctx.VSRMatchedKB = signals.MatchedKBRules
+	ctx.VSRMatchedConversation = signals.MatchedConversationRules
 	ctx.VSRMatchedProjection = signals.MatchedProjectionRules
 	ctx.VSRProjectionScores = cloneReplayFloat64Map(signals.ProjectionScores)
 	ctx.VSRSignalConfidences = cloneReplayFloat64Map(signals.SignalConfidences)
@@ -141,6 +153,7 @@ func collectMatchedSignalRules(signals *classification.SignalResults) []string {
 	allMatchedRules = append(allMatchedRules, signals.MatchedJailbreakRules...)
 	allMatchedRules = append(allMatchedRules, signals.MatchedPIIRules...)
 	allMatchedRules = append(allMatchedRules, signals.MatchedKBRules...)
+	allMatchedRules = append(allMatchedRules, signals.MatchedConversationRules...)
 	allMatchedRules = append(allMatchedRules, signals.MatchedProjectionRules...)
 	return allMatchedRules
 }

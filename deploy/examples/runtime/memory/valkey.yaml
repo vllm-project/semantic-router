@@ -1,0 +1,93 @@
+# Valkey Memory Store Configuration for Agentic Memory
+# This configuration file contains settings for using Valkey (with the Search
+# module) as the agentic memory backend.
+#
+# To use this configuration:
+# 1. Set backend: "valkey" in global.stores.memory in your config.yaml
+# 2. Inline the valkey settings from this file into global.stores.memory.valkey
+# 3. Ensure Valkey server with the Search module is running and accessible
+#
+# Valkey Search module is required for FT.CREATE / FT.SEARCH vector operations.
+# Use the valkey/valkey-bundle image or compile Valkey with --enable-search.
+
+# Connection settings
+host: "localhost"        # For production: use your Valkey cluster endpoint
+port: 6379               # Standard Valkey port
+database: 0              # Database number (0-15)
+password: ""             # Authentication password (leave empty if not required)
+timeout: 10              # Connection/request timeout in seconds
+
+# Index and storage settings
+collection_prefix: "mem:"   # Key prefix for HASH documents
+index_name: "mem_idx"       # FT.CREATE index name
+dimension: 384              # Embedding vector dimension (must match model)
+metric_type: "COSINE"       # Distance metric: COSINE, L2, or IP
+
+# HNSW index tuning
+index_m: 16                 # Bi-directional links per node (higher = more accurate, more RAM)
+index_ef_construction: 256  # Build-time search width (higher = better recall, slower build)
+
+# TLS settings
+tls_enabled: false                 # Enable TLS for the Valkey connection
+tls_ca_path: ""                    # Path to PEM-encoded CA cert (empty = system trust store)
+tls_insecure_skip_verify: false    # Skip server cert verification (development only)
+
+# Full canonical config.yaml usage example:
+#
+# global:
+#   stores:
+#     memory:
+#       enabled: true
+#       backend: valkey                       # <-- select Valkey backend
+#       auto_store: true
+#       valkey:                               # <-- Valkey-specific settings
+#         host: valkey
+#         port: 6379
+#         database: 0
+#         timeout: 10
+#         collection_prefix: "mem:"
+#         index_name: mem_idx
+#         dimension: 384
+#         metric_type: COSINE
+#         index_m: 16
+#         index_ef_construction: 256
+#         tls_enabled: false
+#         tls_ca_path: ""
+#         tls_insecure_skip_verify: false
+#       embedding_model: bert
+#       default_retrieval_limit: 5
+#       default_similarity_threshold: 0.70
+#       hybrid_search: true
+#       hybrid_mode: rerank
+#       adaptive_threshold: true
+#       quality_scoring:
+#         initial_strength_days: 30
+#         prune_threshold: 0.15
+#         max_memories_per_user: 200
+#       reflection:
+#         enabled: true
+#         algorithm: recency_semantic
+#         max_inject_tokens: 512
+#         recency_decay_days: 14
+#         dedup_threshold: 0.9
+#
+# Example configurations for different environments:
+#
+# Local Development (Docker):
+#   host: "localhost"
+#   port: 6379
+#   password: ""
+#
+# Production (Docker / Kubernetes):
+#   host: "valkey-service.valkey-system.svc.cluster.local"
+#   port: 6379
+#   password: "${VALKEY_PASSWORD}"     # from secret
+#   index_m: 32                        # higher recall for production
+#   index_ef_construction: 512
+#
+# Kubernetes with TLS:
+#   host: "valkey-tls.valkey-system.svc.cluster.local"
+#   port: 6380
+#   password: "${VALKEY_PASSWORD}"
+#   tls_enabled: true
+#   tls_ca_path: "/etc/valkey/certs/ca.pem"   # mounted from secret

@@ -213,10 +213,12 @@ type SemanticCache struct {
 
 type MemoryConfig struct {
 	Enabled                    bool                       `yaml:"enabled,omitempty"`
+	Backend                    string                     `yaml:"backend,omitempty"`
 	AutoStore                  bool                       `yaml:"auto_store,omitempty"`
 	DisabledRoutes             []string                   `yaml:"disabled_routes,omitempty"`
 	DisabledModels             []string                   `yaml:"disabled_models,omitempty"`
 	Milvus                     MemoryMilvusConfig         `yaml:"milvus,omitempty"`
+	Valkey                     *MemoryValkeyConfig        `yaml:"valkey,omitempty"`
 	RedisCache                 *MemoryRedisCacheConfig    `yaml:"redis_cache,omitempty"`
 	EmbeddingModel             string                     `yaml:"embedding_model,omitempty"`
 	ExtractionBatchSize        int                        `yaml:"extraction_batch_size,omitempty"`
@@ -266,6 +268,40 @@ type MemoryMilvusConfig struct {
 	Collection    string `yaml:"collection,omitempty"`
 	Dimension     int    `yaml:"dimension,omitempty"`
 	NumPartitions int    `yaml:"num_partitions,omitempty"`
+}
+
+// MemoryValkeyConfig holds configuration for the Valkey memory store backend.
+// Uses Valkey with the Search module for vector similarity operations.
+type MemoryValkeyConfig struct {
+	// Host is the Valkey server hostname (default "localhost").
+	Host string `yaml:"host"`
+	// Port is the Valkey server port (default 6379).
+	Port int `yaml:"port"`
+	// Database number (default 0).
+	Database int `yaml:"database"`
+	// Password for Valkey authentication (optional).
+	Password string `yaml:"password,omitempty"`
+	// Timeout is the connection/request timeout in seconds (default 10).
+	Timeout int `yaml:"timeout"`
+	// CollectionPrefix is the prefix for hash keys (default "mem:").
+	CollectionPrefix string `yaml:"collection_prefix,omitempty"`
+	// IndexName is the FT index name (default "mem_idx").
+	IndexName string `yaml:"index_name,omitempty"`
+	// Dimension is the embedding vector dimension (default 384).
+	Dimension int `yaml:"dimension,omitempty"`
+	// MetricType is the distance metric: "COSINE", "L2", or "IP" (default "COSINE").
+	MetricType string `yaml:"metric_type,omitempty"`
+	// IndexM is the HNSW M parameter (default 16).
+	IndexM int `yaml:"index_m,omitempty"`
+	// IndexEfConstruction is the HNSW efConstruction parameter (default 256).
+	IndexEfConstruction int `yaml:"index_ef_construction,omitempty"`
+	// TLSEnabled enables TLS for the Valkey connection.
+	TLSEnabled bool `yaml:"tls_enabled,omitempty"`
+	// TLSCAPath is the path to a PEM-encoded CA certificate file for server verification.
+	// When empty and TLS is enabled, the system's default trust store is used.
+	TLSCAPath string `yaml:"tls_ca_path,omitempty"`
+	// TLSInsecureSkipVerify skips server certificate verification (development only).
+	TLSInsecureSkipVerify bool `yaml:"tls_insecure_skip_verify,omitempty"`
 }
 
 // ResponseAPIConfig controls response and conversation history storage.

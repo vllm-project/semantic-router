@@ -11,6 +11,7 @@ import (
 	"github.com/vllm-project/semantic-router/dashboard/backend/handlers"
 	"github.com/vllm-project/semantic-router/dashboard/backend/middleware"
 	"github.com/vllm-project/semantic-router/dashboard/backend/mlpipeline"
+	"github.com/vllm-project/semantic-router/dashboard/backend/workflowstore"
 	routerconfig "github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 )
 
@@ -20,6 +21,34 @@ func registerCoreRoutes(mux *http.ServeMux, cfg *config.Config) {
 	registerToolRoutes(mux, cfg)
 	registerStatusRoutes(mux, cfg)
 	registerTopologyRoutes(mux, cfg)
+	registerSecurityPolicyRoutes(mux, cfg)
+}
+
+func registerSecurityPolicyRoutes(mux *http.ServeMux, cfg *config.Config) {
+	handlers.SetSecurityPolicyConfigPaths(cfg.AbsConfigPath, cfg.ConfigDir)
+	mux.HandleFunc("/api/security/policy", func(w http.ResponseWriter, r *http.Request) {
+		switch r.Method {
+		case http.MethodGet:
+			handlers.HandleGetSecurityPolicy(w, r)
+		case http.MethodPut:
+			if cfg.ReadonlyMode {
+				http.Error(w, "Dashboard is in read-only mode", http.StatusForbidden)
+				return
+			}
+			handlers.HandleUpdateSecurityPolicy(w, r)
+		default:
+			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		}
+	})
+	mux.HandleFunc("/api/security/policy/preview", func(w http.ResponseWriter, r *http.Request) {
+		switch r.Method {
+		case http.MethodPost:
+			handlers.HandlePreviewSecurityFragment(w, r)
+		default:
+			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		}
+	})
+	log.Printf("Security Policy API endpoints registered: /api/security/policy, /api/security/policy/preview")
 }
 
 func registerHealthAndSetupRoutes(mux *http.ServeMux, cfg *config.Config) {
@@ -242,19 +271,26 @@ func isEvaluationProjectRoot(dir string) bool {
 	return true
 }
 
-func registerMLPipelineRoutes(mux *http.ServeMux, cfg *config.Config) {
+func registerMLPipelineRoutes(mux *http.ServeMux, cfg *config.Config, wf *workflowstore.Store) {
 	if !cfg.MLPipelineEnabled {
 		log.Printf("ML Pipeline feature disabled")
 		return
 	}
 
 	trainingDir := resolveMLTrainingDir(cfg)
-	mlRunner := mlpipeline.NewRunner(mlpipeline.RunnerConfig{
+	mlRunner, err := mlpipeline.NewRunner(mlpipeline.RunnerConfig{
 		DataDir:      cfg.MLPipelineDataDir,
 		TrainingDir:  trainingDir,
 		PythonPath:   cfg.PythonPath,
 		MLServiceURL: cfg.MLServiceURL,
+		Workflow:     wf,
 	})
+	if err != nil {
+		log.Fatalf("ML pipeline runner: %v", err)
+	}
+	if err := wf.RecoverInterruptedMLJobs("interrupted by dashboard restart"); err != nil {
+		log.Printf("ML pipeline: recover running jobs: %v", err)
+	}
 	mlHandler := handlers.NewMLPipelineHandler(mlRunner)
 
 	mux.HandleFunc("/api/ml-pipeline/jobs", mlHandler.ListJobsHandler())

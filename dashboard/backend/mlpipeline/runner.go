@@ -10,8 +10,9 @@ import (
 	"path/filepath"
 	"runtime"
 	"strings"
-	"sync"
 	"time"
+
+	"github.com/vllm-project/semantic-router/dashboard/backend/workflowstore"
 )
 
 // JobStatus represents the status of a pipeline job.
@@ -94,8 +95,7 @@ type DecisionEntry struct {
 
 // Runner orchestrates benchmark, train, and config generation steps.
 type Runner struct {
-	mu           sync.Mutex
-	jobs         map[string]*Job
+	wf           *workflowstore.Store
 	dataDir      string // directory for uploads and outputs
 	trainingDir  string // path to src/training/model_selection/ml_model_selection
 	pythonPath   string
@@ -108,11 +108,15 @@ type RunnerConfig struct {
 	DataDir      string
 	TrainingDir  string
 	PythonPath   string
-	MLServiceURL string // e.g. "http://ml-service:8686" (empty = subprocess mode)
+	MLServiceURL string               // e.g. "http://ml-service:8686" (empty = subprocess mode)
+	Workflow     *workflowstore.Store // required; durable job and progress state
 }
 
 // NewRunner creates a new ML onboarding runner.
-func NewRunner(cfg RunnerConfig) *Runner {
+func NewRunner(cfg RunnerConfig) (*Runner, error) {
+	if cfg.Workflow == nil {
+		return nil, fmt.Errorf("mlpipeline: Workflow store is required")
+	}
 	if cfg.PythonPath == "" {
 		// On Windows, "python3" typically doesn't exist; use "python" instead
 		if runtime.GOOS == "windows" {
@@ -137,13 +141,13 @@ func NewRunner(cfg RunnerConfig) *Runner {
 		log.Printf("[ml-pipeline] No ML_SERVICE_URL set; using subprocess mode (python=%s)", cfg.PythonPath)
 	}
 	return &Runner{
-		jobs:         make(map[string]*Job),
+		wf:           cfg.Workflow,
 		dataDir:      cfg.DataDir,
 		trainingDir:  cfg.TrainingDir,
 		pythonPath:   cfg.PythonPath,
 		mlServiceURL: strings.TrimRight(cfg.MLServiceURL, "/"),
 		progressChan: make(chan ProgressUpdate, 100),
-	}
+	}, nil
 }
 
 // ProgressUpdates returns the channel for SSE streaming.
@@ -157,17 +161,27 @@ func (r *Runner) sendProgress(jobID string, percent int, step, message string) {
 	case r.progressChan <- update:
 	default:
 	}
-	r.mu.Lock()
-	if j, ok := r.jobs[jobID]; ok {
-		j.Progress = percent
-		j.CurrentStep = step
+	if err := r.wf.UpdateMLJobProgress(jobID, percent, step); err != nil {
+		log.Printf("[ml-pipeline] persist progress for %s: %v", jobID, err)
 	}
-	r.mu.Unlock()
+	if err := r.wf.AppendMLProgressEvent(jobID, step, percent, message); err != nil {
+		log.Printf("[ml-pipeline] append progress event for %s: %v", jobID, err)
+	}
+}
+
+func (r *Runner) persistJob(j *Job) error {
+	rec := jobToRecord(j)
+	return r.wf.PutMLJob(rec)
+}
+
+func (r *Runner) setJobRunning(j *Job) {
+	j.Status = StatusRunning
+	if err := r.persistJob(j); err != nil {
+		log.Printf("[ml-pipeline] persist running state for %s: %v", j.ID, err)
+	}
 }
 
 func (r *Runner) createJob(jobType string) *Job {
-	r.mu.Lock()
-	defer r.mu.Unlock()
 	id := fmt.Sprintf("ml-%s-%d", jobType, time.Now().UnixMilli())
 	job := &Job{
 		ID:        id,
@@ -175,47 +189,94 @@ func (r *Runner) createJob(jobType string) *Job {
 		Status:    StatusPending,
 		CreatedAt: time.Now(),
 	}
-	r.jobs[id] = job
+	if err := r.persistJob(job); err != nil {
+		log.Printf("[ml-pipeline] persist new job %s: %v", id, err)
+	}
 	return job
 }
 
 // GetJob returns a job by ID.
 func (r *Runner) GetJob(id string) *Job {
-	r.mu.Lock()
-	defer r.mu.Unlock()
-	return r.jobs[id]
+	rec, err := r.wf.GetMLJob(id)
+	if err != nil || rec == nil {
+		return nil
+	}
+	j := recordToJob(rec)
+	return j
 }
 
 // ListJobs returns all jobs.
 func (r *Runner) ListJobs() []*Job {
-	r.mu.Lock()
-	defer r.mu.Unlock()
-	result := make([]*Job, 0, len(r.jobs))
-	for _, j := range r.jobs {
+	recs, err := r.wf.ListMLJobs()
+	if err != nil {
+		return []*Job{}
+	}
+	result := make([]*Job, 0, len(recs))
+	for i := range recs {
+		j := recordToJob(&recs[i])
 		result = append(result, j)
 	}
 	return result
 }
 
 func (r *Runner) failJob(jobID, errMsg string) {
-	r.mu.Lock()
-	defer r.mu.Unlock()
-	if j, ok := r.jobs[jobID]; ok {
-		j.Status = StatusFailed
-		j.Error = errMsg
-		j.CompletedAt = time.Now()
+	rec, err := r.wf.GetMLJob(jobID)
+	if err != nil || rec == nil {
+		return
+	}
+	rec.Status = string(StatusFailed)
+	rec.Error = errMsg
+	rec.CompletedAt = time.Now()
+	if err := r.wf.PutMLJob(*rec); err != nil {
+		log.Printf("[ml-pipeline] persist failed state for %s: %v", jobID, err)
 	}
 }
 
 func (r *Runner) completeJob(jobID string, outputFiles []string) {
-	r.mu.Lock()
-	defer r.mu.Unlock()
-	if j, ok := r.jobs[jobID]; ok {
-		j.Status = StatusCompleted
-		j.OutputFiles = outputFiles
-		j.CompletedAt = time.Now()
-		j.Progress = 100
+	rec, err := r.wf.GetMLJob(jobID)
+	if err != nil || rec == nil {
+		return
 	}
+	rec.Status = string(StatusCompleted)
+	rec.OutputFiles = outputFiles
+	rec.CompletedAt = time.Now()
+	rec.Progress = 100
+	if err := r.wf.PutMLJob(*rec); err != nil {
+		log.Printf("[ml-pipeline] persist completed state for %s: %v", jobID, err)
+	}
+}
+
+func jobToRecord(j *Job) workflowstore.MLJobRecord {
+	return workflowstore.MLJobRecord{
+		ID:          j.ID,
+		Type:        j.Type,
+		Status:      string(j.Status),
+		CreatedAt:   j.CreatedAt,
+		CompletedAt: j.CompletedAt,
+		Error:       j.Error,
+		OutputFiles: j.OutputFiles,
+		Progress:    j.Progress,
+		CurrentStep: j.CurrentStep,
+	}
+}
+
+func recordToJob(rec *workflowstore.MLJobRecord) *Job {
+	return &Job{
+		ID:          rec.ID,
+		Type:        rec.Type,
+		Status:      JobStatus(rec.Status),
+		CreatedAt:   rec.CreatedAt,
+		CompletedAt: rec.CompletedAt,
+		Error:       rec.Error,
+		OutputFiles: rec.OutputFiles,
+		Progress:    rec.Progress,
+		CurrentStep: rec.CurrentStep,
+	}
+}
+
+// ListProgressEvents returns durable typed progress records for a job.
+func (r *Runner) ListProgressEvents(jobID string, limit int) ([]workflowstore.MLProgressEvent, error) {
+	return r.wf.ListMLProgressEvents(jobID, limit)
 }
 
 // JobDir returns the working directory for a given job.

@@ -1,5 +1,6 @@
 ---
 sidebar_position: 2
+description: Quickstart guide for installing and running vLLM Semantic Router on CPU with Docker, from system requirements to first local launch.
 ---
 
 # Quickstart

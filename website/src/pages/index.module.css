@@ -3,14 +3,22 @@
   gap: 0;
 }
 
+.heroStage {
+  position: relative;
+  display: grid;
+  gap: clamp(1.25rem, 3vh, 2rem);
+  min-height: calc(100vh - var(--site-header-height));
+  padding: clamp(2.25rem, 5vh, 4rem) 0 2rem;
+  border-bottom: 1px solid var(--site-border);
+}
+
 .hero {
   position: relative;
   overflow: hidden;
-  min-height: calc(100vh - var(--site-header-height));
   display: flex;
   align-items: center;
-  padding: 4rem 0 3rem;
-  border-bottom: 1px solid var(--site-border);
+  min-height: 0;
+  padding: 0;
 }
 
 .heroNoise {
@@ -18,25 +26,93 @@
   inset: 0;
   width: 100%;
   height: 100%;
-  opacity: 0.74;
+  opacity: 0.46;
 }
 
 .heroGrid {
   position: relative;
   z-index: 1;
   display: grid;
-  width: min(100%, 72rem);
-  grid-template-columns: minmax(0, 1fr);
-  align-items: start;
-}
-
-.heroStack {
-  display: grid;
-  gap: 1.4rem;
+  width: min(100%, 76rem);
+  margin: 0 auto;
+  justify-items: center;
 }
 
 .heroIntro {
-  max-width: 46rem;
+  position: relative;
+  display: grid;
+  width: min(100%, 56rem);
+  gap: clamp(1.05rem, 2vh, 1.65rem);
+  justify-items: center;
+  text-align: center;
+}
+
+.heroIntroPanel {
+  width: min(100%, 56rem);
+}
+
+.heroIntroPanel :global(h1) {
+  max-width: none;
+  font-size: clamp(3.2rem, 7.3vw, 6.1rem);
+  line-height: 0.93;
+  letter-spacing: -0.055em;
+}
+
+.heroIntroPanel :global(p) {
+  max-width: 31rem;
+  line-height: 1.5;
+}
+
+.heroBrandLockup {
+  display: inline-flex;
+  width: fit-content;
+  max-width: min(100%, 16rem);
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 0.35rem;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+  backdrop-filter: none;
+}
+
+.heroBrandLogo {
+  display: block;
+  width: clamp(11.5rem, 16vw, 14rem);
+  max-width: 100%;
+  height: auto;
+}
+
+.heroTitle {
+  display: grid;
+  gap: 0.03em;
+  justify-items: center;
+}
+
+.heroTitleLine {
+  display: block;
+  white-space: nowrap;
+}
+
+.heroTitleAccent {
+  display: inline-block;
+  white-space: nowrap;
+  color: #30A2FF;
+  font-size: 1.08em;
+  font-weight: 760;
+  letter-spacing: -0.045em;
+}
+
+.heroDescriptionText {
+  display: inline-block;
+  max-width: 28rem;
+  color: var(--site-muted-bright);
+  font-size: clamp(1rem, 1.15vw, 1.12rem);
+  font-weight: 520;
+  letter-spacing: -0.01em;
+  text-wrap: balance;
 }
 
 .heroPrimaryCta,
@@ -48,43 +124,39 @@
   font-weight: 650;
   letter-spacing: 0.1em;
   box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.06),
-    0 14px 28px rgba(0, 0, 0, 0.18);
+    inset 0 1px 0 rgba(255, 255, 255, 0.6),
+    0 14px 28px rgba(15, 23, 42, 0.08);
   backdrop-filter: blur(10px);
 }
 
 .heroPrimaryCta {
-  border-color: rgba(255, 255, 255, 0.4);
-  background: rgba(255, 255, 255, 0.92);
-  color: #0f0f0f;
+  border-color: rgba(15, 23, 42, 0.16);
+  background: linear-gradient(180deg, rgba(17, 17, 17, 0.96), rgba(5, 5, 5, 0.98));
+  color: #fffdf8;
 }
 
 .heroPrimaryCta:hover {
-  background: #ffffff;
-  border-color: #ffffff;
-  color: #080808;
+  background: linear-gradient(180deg, rgba(5, 5, 5, 0.98), rgba(0, 0, 0, 1));
+  border-color: rgba(5, 5, 5, 0.95);
+  color: #fffdf8;
   box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.08),
-    0 18px 34px rgba(255, 255, 255, 0.12);
+    inset 0 1px 0 rgba(255, 255, 255, 0.14),
+    0 18px 34px rgba(15, 23, 42, 0.14);
 }
 
 .heroSecondaryCta {
-  border-color: rgba(255, 255, 255, 0.26);
-  background:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.08), rgba(255, 255, 255, 0.03)),
-    rgba(14, 14, 14, 0.78);
+  border-color: var(--site-border);
+  background: var(--site-surface-glass);
   color: var(--site-text-strong);
 }
 
 .heroSecondaryCta:hover {
-  border-color: rgba(255, 255, 255, 0.4);
-  background:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.12), rgba(255, 255, 255, 0.05)),
-    rgba(18, 18, 18, 0.9);
+  border-color: var(--site-border-strong);
+  background: rgba(255, 255, 255, 0.92);
   color: var(--site-text-strong);
   box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.1),
-    0 18px 34px rgba(0, 0, 0, 0.22);
+    inset 0 1px 0 rgba(255, 255, 255, 0.72),
+    0 18px 34px rgba(15, 23, 42, 0.08);
 }
 
 .heroManifesto {
@@ -100,23 +172,213 @@
   height: 0.5rem;
   margin-bottom: 0.56rem;
   border-radius: 999px;
-  background: rgba(255, 255, 255, 0.82);
-  box-shadow: 0 0 0 6px rgba(255, 255, 255, 0.04);
+  background: rgba(17, 17, 17, 0.72);
+  box-shadow: 0 0 0 6px rgba(17, 17, 17, 0.05);
 }
 
 .heroManifestoText {
   display: inline-block;
   max-width: 34rem;
   padding: 0.08rem 0.9rem 0.12rem 1rem;
-  border-left: 1px solid rgba(255, 255, 255, 0.24);
-  background: linear-gradient(90deg, rgba(0, 0, 0, 0.36), rgba(0, 0, 0, 0.12) 72%, transparent);
-  color: rgba(255, 255, 255, 0.9);
+  border-left: 1px solid rgba(17, 17, 17, 0.2);
+  background: linear-gradient(90deg, rgba(17, 17, 17, 0.08), rgba(17, 17, 17, 0.03) 72%, transparent);
+  color: rgba(17, 17, 17, 0.92);
   font-size: clamp(1rem, 1.2vw, 1.12rem);
   font-weight: 540;
   line-height: 1.55;
   letter-spacing: -0.012em;
-  text-shadow: 0 1px 14px rgba(0, 0, 0, 0.28);
   text-wrap: pretty;
+}
+
+.heroModelSection {
+  position: relative;
+  z-index: 1;
+  width: 100%;
+  padding: 0 clamp(0.7rem, 1.6vw, 1.35rem);
+}
+
+.heroModelBand {
+  position: relative;
+  overflow: hidden;
+  display: grid;
+  gap: 1.2rem;
+  width: 100%;
+  margin: 0;
+  padding: 1.45rem 0 1.35rem;
+  border: 1px solid rgba(15, 23, 42, 0.1);
+  border-radius: 1.35rem;
+  background:
+    linear-gradient(180deg, rgba(17, 17, 17, 0.055), rgba(17, 17, 17, 0.015)),
+    rgba(255, 255, 255, 0.72);
+  box-shadow: 0 18px 40px rgba(15, 23, 42, 0.06);
+  backdrop-filter: blur(14px);
+}
+
+.heroModelBand::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: linear-gradient(90deg, rgba(17, 17, 17, 0.05), transparent 14%, transparent 86%, rgba(17, 17, 17, 0.05));
+  opacity: 0.48;
+}
+
+.heroModelBandHeader {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  gap: 0.28rem;
+  max-width: 36rem;
+  margin: 0 auto;
+  padding: 0 1.4rem;
+  justify-items: center;
+  text-align: center;
+}
+
+.heroModelBandEyebrow {
+  display: inline-flex;
+  width: fit-content;
+  align-items: center;
+  padding: 0;
+  color: var(--site-muted);
+  font-family: var(--ifm-font-family-monospace);
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+}
+
+.heroModelBandCopy {
+  max-width: 30rem;
+  margin: 0;
+  color: var(--site-text-strong);
+  font-size: clamp(1.08rem, 1.35vw, 1.24rem);
+  font-weight: 550;
+  line-height: 1.42;
+  letter-spacing: -0.02em;
+}
+
+.heroModelBandViewport {
+  --hero-model-gap: 1.55rem;
+  position: relative;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  overflow: hidden;
+  width: 100%;
+  min-width: 0;
+  padding: 0 1.45rem;
+  -webkit-mask-image: linear-gradient(90deg, transparent, #000 8%, #000 92%, transparent);
+  mask-image: linear-gradient(90deg, transparent, #000 8%, #000 92%, transparent);
+}
+
+.heroModelBandTrack {
+  display: flex;
+  align-items: center;
+  gap: var(--hero-model-gap);
+  width: max-content;
+  min-width: max-content;
+  flex-wrap: nowrap;
+  will-change: transform;
+  animation: heroModelBandScroll 36s linear infinite;
+}
+
+.heroModelBandSequence {
+  display: flex;
+  align-items: center;
+  gap: var(--hero-model-gap);
+  flex: 0 0 auto;
+  min-width: max-content;
+}
+
+.heroModelBand:hover .heroModelBandTrack {
+  animation-play-state: paused;
+}
+
+.heroModelChip {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.78rem;
+  min-height: 2.7rem;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  color: rgba(17, 17, 17, 0.86);
+  white-space: nowrap;
+  opacity: 0.9;
+  transition:
+    opacity 180ms ease,
+    color 180ms ease,
+    transform 180ms ease;
+}
+
+.heroModelBand:hover .heroModelChip {
+  opacity: 0.98;
+}
+
+.heroModelChipIcon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.35rem;
+  height: 1.35rem;
+  color: rgba(17, 17, 17, 0.66);
+}
+
+.heroModelGlyph {
+  width: 1.35rem;
+  height: 1.35rem;
+  opacity: 0.9;
+}
+
+.heroModelChipLabel {
+  font-size: 1rem;
+  font-weight: 580;
+  letter-spacing: -0.012em;
+}
+
+@keyframes heroModelBandScroll {
+  from {
+    transform: translate3d(0, 0, 0);
+  }
+
+  to {
+    transform: translate3d(calc(-50% - (var(--hero-model-gap) / 2)), 0, 0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .heroModelBandTrack {
+    animation: none;
+  }
+}
+
+[data-theme='dark'] .heroBrandLockup {
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+[data-theme='dark'] .heroModelBand {
+  border-color: rgba(255, 255, 255, 0.1);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.08), rgba(255, 255, 255, 0.02)),
+    rgba(12, 12, 12, 0.54);
+  box-shadow: 0 18px 40px rgba(0, 0, 0, 0.2);
+}
+
+[data-theme='dark'] .heroModelBand::before {
+  background: linear-gradient(90deg, rgba(255, 255, 255, 0.08), transparent 14%, transparent 86%, rgba(255, 255, 255, 0.08));
+}
+
+[data-theme='dark'] .heroModelChip {
+  color: rgba(255, 255, 255, 0.88);
+}
+
+[data-theme='dark'] .heroModelChipIcon {
+  color: rgba(255, 255, 255, 0.62);
 }
 
 .statsSection,
@@ -131,13 +393,34 @@
 }
 
 .capabilitySection {
+  position: relative;
+  overflow: hidden;
   padding: 5rem 0;
+  background:
+    linear-gradient(180deg, rgba(15, 23, 42, 0.018), transparent 38%),
+    var(--site-bg);
+}
+
+.capabilitySection::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background:
+    radial-gradient(circle at 15% 18%, rgba(15, 23, 42, 0.045), transparent 30%),
+    linear-gradient(90deg, rgba(15, 23, 42, 0.025) 1px, transparent 1px),
+    linear-gradient(180deg, rgba(15, 23, 42, 0.025) 1px, transparent 1px);
+  background-size: auto, 32px 32px, 32px 32px;
+  opacity: 0.28;
 }
 
 .encoderSection {
   position: relative;
   overflow: hidden;
   padding: 5rem 0;
+  background:
+    linear-gradient(180deg, rgba(15, 23, 42, 0.018), transparent 42%),
+    linear-gradient(180deg, #ffffff 0%, var(--site-bg-alt) 100%);
 }
 
 .encoderSection::before {
@@ -146,11 +429,11 @@
   inset: 0;
   pointer-events: none;
   background:
-    radial-gradient(circle at 18% 18%, rgba(255, 255, 255, 0.08), transparent 30%),
-    linear-gradient(90deg, rgba(255, 255, 255, 0.02) 1px, transparent 1px),
-    linear-gradient(180deg, rgba(255, 255, 255, 0.02) 1px, transparent 1px);
+    radial-gradient(circle at 18% 18%, rgba(15, 23, 42, 0.045), transparent 30%),
+    linear-gradient(90deg, rgba(15, 23, 42, 0.024) 1px, transparent 1px),
+    linear-gradient(180deg, rgba(15, 23, 42, 0.024) 1px, transparent 1px);
   background-size: auto, 36px 36px, 36px 36px;
-  opacity: 0.48;
+  opacity: 0.3;
 }
 
 .sectionHeading {
@@ -173,94 +456,314 @@
   font-size: 1rem;
 }
 
-.capabilityGrid {
+.capabilityFrame {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  gap: 1.15rem;
+}
+
+.problemPanel {
+  display: grid;
+  grid-template-columns: minmax(0, 0.64fr) minmax(280px, 0.36fr);
+  align-items: stretch;
+  gap: 1rem;
+}
+
+.problemIntro,
+.problemChecklist,
+.valueCard {
+  border: 1px solid var(--site-border);
+  background: var(--site-surface);
+}
+
+.problemIntro {
+  padding: 1.8rem;
+  border-radius: 1.45rem;
+  border-color: rgba(15, 23, 42, 0.14);
+  background:
+    radial-gradient(circle at 0% 0%, rgba(15, 23, 42, 0.055), transparent 36%),
+    linear-gradient(180deg, rgba(15, 23, 42, 0.024), transparent 44%),
+    var(--site-surface);
+}
+
+.problemIntro h2 {
+  max-width: 10ch;
+  margin: 0.8rem 0 0;
+  font-size: clamp(2.6rem, 5vw, 4.5rem);
+  line-height: 0.92;
+}
+
+.problemIntro p {
+  max-width: 42rem;
+  margin: 1rem 0 0;
+  font-size: 1.03rem;
+  line-height: 1.7;
+  color: var(--site-muted-bright);
+}
+
+.problemAxes {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.68rem;
+  margin-top: 1.4rem;
+}
+
+.problemAxis {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.46rem 0.8rem;
+  border: 1px solid rgba(15, 23, 42, 0.12);
+  border-radius: 999px;
+  background: rgba(15, 23, 42, 0.04);
+  color: var(--site-muted-bright);
+  font-size: 0.78rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.problemChecklist {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  height: 100%;
+  padding: 1.6rem;
+  border-radius: 1.45rem;
+  border-color: rgba(15, 23, 42, 0.14);
+  background:
+    linear-gradient(180deg, rgba(15, 23, 42, 0.03), rgba(15, 23, 42, 0.012)),
+    var(--site-surface-alt);
+}
+
+.problemChecklistHeader {
+  display: grid;
+  gap: 0.7rem;
+}
+
+.problemChecklistHeader p {
+  margin: 0;
+  color: var(--site-muted-bright);
+  font-size: 0.92rem;
+  line-height: 1.6;
+}
+
+.problemChecklistList {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 0.72rem;
+  counter-reset: system-job;
+}
+
+.problemChecklistItem {
+  position: relative;
+  min-height: 4.15rem;
+  display: flex;
+  align-items: center;
+  padding: 0.9rem 0.95rem 0.9rem 3.05rem;
+  border: 1px solid rgba(15, 23, 42, 0.12);
+  border-radius: 1rem;
+  background:
+    linear-gradient(180deg, rgba(15, 23, 42, 0.018), transparent 100%),
+    rgba(255, 255, 255, 0.82);
+  color: var(--site-muted-bright);
+  font-size: 0.95rem;
+  line-height: 1.55;
+}
+
+.problemChecklistItem::before {
+  counter-increment: system-job;
+  content: '0' counter(system-job);
+  position: absolute;
+  left: 0.95rem;
+  top: 0.9rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.5rem;
+  height: 1.5rem;
+  border: 1px solid rgba(15, 23, 42, 0.12);
+  background: rgba(15, 23, 42, 0.05);
+  color: var(--site-muted-bright);
+  font-family: var(--ifm-font-family-monospace);
+  font-size: 0.72rem;
+  letter-spacing: 0.08em;
+}
+
+.problemChecklistFooter {
+  display: grid;
+  gap: 0.85rem;
+  margin-top: auto;
+  padding-top: 1rem;
+  border-top: 1px solid rgba(15, 23, 42, 0.1);
+}
+
+.problemChecklistFooter p {
+  max-width: 18rem;
+  margin: 0;
+  color: var(--site-muted);
+  font-size: 0.82rem;
+  line-height: 1.55;
+}
+
+.problemChecklistMeta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.55rem;
+}
+
+.problemChecklistMetaItem {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.42rem 0.72rem;
+  border: 1px solid rgba(15, 23, 42, 0.11);
+  border-radius: 999px;
+  background: rgba(15, 23, 42, 0.04);
+  color: var(--site-muted-bright);
+  font-size: 0.74rem;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.valueIntro {
+  display: grid;
+  grid-template-columns: minmax(220px, 0.32fr) minmax(0, 0.68fr);
+  gap: 2rem;
+  align-items: end;
+  margin-top: 0.2rem;
+}
+
+.valueIntro p {
+  max-width: 34rem;
+  margin: 0;
+  color: var(--site-muted-bright);
+}
+
+.valueGrid {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 1.1rem;
 }
 
-.capabilityCard {
+.valueCard {
   position: relative;
   overflow: hidden;
-  min-height: 15.75rem;
   display: grid;
-  grid-template-rows: auto 1fr;
-  justify-items: center;
-  gap: 1.25rem;
-  padding: 1.5rem;
-  border: 1px solid var(--site-border);
-  border-radius: 1.2rem;
+  grid-template-rows: auto 1fr auto;
+  gap: 1rem;
+  min-height: 18rem;
+  padding: 1.45rem;
+  border-radius: 1.3rem;
   background:
-    radial-gradient(circle at 50% 0%, rgba(255, 255, 255, 0.035), transparent 30%),
-    linear-gradient(180deg, rgba(255, 255, 255, 0.016), transparent 34%),
+    radial-gradient(circle at 100% 0%, rgba(255, 255, 255, 0.04), transparent 34%),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.02), transparent 36%),
     var(--site-surface);
-  text-align: center;
   transition:
     border-color 180ms ease,
     transform 180ms ease,
     background 180ms ease;
 }
 
-.capabilityCardHead {
-  display: grid;
-  width: 100%;
-  justify-items: center;
-  align-content: start;
-  gap: 1.05rem;
+.valueCardHeader {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
 }
 
-.capabilityVisual {
-  display: flex;
-  width: 100%;
-  min-height: 6.35rem;
+.valueCardIndex {
+  display: inline-flex;
   align-items: center;
   justify-content: center;
-  padding: 1rem 1.2rem;
-  border: 1px solid rgba(255, 255, 255, 0.06);
+  width: 2rem;
+  height: 2rem;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--site-muted);
+  font-family: var(--ifm-font-family-monospace);
+  font-size: 0.74rem;
+  letter-spacing: 0.08em;
+}
+
+.valueGlyphShell {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 6.8rem;
+  min-height: 4.4rem;
+  padding: 0.72rem 0.85rem;
+  border: 1px solid rgba(255, 255, 255, 0.07);
   border-radius: 1rem;
   background:
-    radial-gradient(circle at 50% 50%, rgba(255, 255, 255, 0.028), transparent 58%),
-    linear-gradient(135deg, rgba(255, 255, 255, 0.022), rgba(255, 255, 255, 0.006)),
-    rgba(255, 255, 255, 0.008);
-  color: rgba(255, 255, 255, 0.52);
+    radial-gradient(circle at 50% 50%, rgba(255, 255, 255, 0.04), transparent 58%),
+    linear-gradient(135deg, rgba(255, 255, 255, 0.02), rgba(255, 255, 255, 0.008)),
+    rgba(255, 255, 255, 0.02);
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.03);
 }
 
-.capabilityGlyph {
-  width: min(100%, 11rem);
+.valueGlyph {
+  width: 5.2rem;
   height: auto;
-  opacity: 0.94;
+  color: rgba(17, 17, 17, 0.46);
+  opacity: 0.96;
   transition:
     transform 180ms ease,
     color 180ms ease,
     opacity 180ms ease;
 }
 
-.capabilityCard p {
-  margin: 0;
-  font-size: 0.96rem;
-  line-height: 1.6;
-  max-width: 17rem;
-  margin-inline: auto;
-  color: var(--site-muted-bright);
-  text-wrap: balance;
+.valueCardCopy {
+  display: grid;
+  gap: 0.8rem;
 }
 
-.capabilityCard:hover {
+.valueCardCopy h3 {
+  margin: 0;
+  font-size: 1.35rem;
+  line-height: 1.05;
+}
+
+.valueCardCopy p {
+  margin: 0;
+  color: var(--site-muted-bright);
+  font-size: 0.98rem;
+  line-height: 1.68;
+}
+
+.valueCardDetail {
+  margin: 0;
+  padding-top: 0.9rem;
+  border-top: 1px solid rgba(17, 17, 17, 0.08);
+  color: var(--site-muted);
+  font-size: 0.77rem;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.valueCard:hover {
   transform: translateY(-3px);
   border-color: var(--site-border-strong);
   background:
-    radial-gradient(circle at 50% 0%, rgba(255, 255, 255, 0.04), transparent 30%),
-    linear-gradient(180deg, rgba(255, 255, 255, 0.02), transparent 34%),
+    radial-gradient(circle at 100% 0%, rgba(255, 255, 255, 0.05), transparent 34%),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.025), transparent 36%),
     var(--site-surface-alt);
 }
 
-.capabilityCard:hover .capabilityVisual {
-  color: rgba(255, 255, 255, 0.78);
+.valueCard:hover .valueGlyphShell {
+  border-color: rgba(17, 17, 17, 0.12);
+  background:
+    radial-gradient(circle at 50% 50%, rgba(17, 17, 17, 0.05), transparent 58%),
+    linear-gradient(135deg, rgba(17, 17, 17, 0.026), rgba(17, 17, 17, 0.01)),
+    rgba(17, 17, 17, 0.028);
 }
 
-.capabilityCard:hover .capabilityGlyph {
-  transform: translateY(-2px) scale(1.01);
+.valueCard:hover .valueGlyph {
+  transform: translateY(-2px) scale(1.02);
+  color: rgba(17, 17, 17, 0.72);
 }
 
 .encoderShowcase {
@@ -350,8 +853,9 @@
   align-items: flex-start;
   padding: 1.4rem;
   background:
-    radial-gradient(circle at top, rgba(255, 255, 255, 0.05), transparent 34%),
-    #090909;
+    radial-gradient(circle at top, rgba(15, 23, 42, 0.06), transparent 34%),
+    linear-gradient(180deg, rgba(15, 23, 42, 0.022), transparent 42%),
+    rgba(255, 255, 255, 0.9);
 }
 
 .encoderPipelineFrame::before {
@@ -359,10 +863,10 @@
   position: absolute;
   inset: 0;
   background:
-    linear-gradient(90deg, rgba(255, 255, 255, 0.03) 1px, transparent 1px),
-    linear-gradient(180deg, rgba(255, 255, 255, 0.03) 1px, transparent 1px);
+    linear-gradient(90deg, rgba(15, 23, 42, 0.05) 1px, transparent 1px),
+    linear-gradient(180deg, rgba(15, 23, 42, 0.05) 1px, transparent 1px);
   background-size: 38px 38px;
-  mask-image: linear-gradient(180deg, rgba(0, 0, 0, 0.86), transparent 96%);
+  mask-image: linear-gradient(180deg, rgba(0, 0, 0, 0.9), transparent 96%);
 }
 
 .encoderPipelineFrame > * {
@@ -467,7 +971,9 @@
   .sectionHeading,
   .encoderShowcase,
   .bandGrid,
-  .capabilityGrid {
+  .problemPanel,
+  .valueIntro,
+  .valueGrid {
     grid-template-columns: 1fr;
   }
 
@@ -475,17 +981,17 @@
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
-  .hero {
+  .heroStage {
     min-height: auto;
     padding: 3rem 0 2rem;
   }
 
-  .capabilityVisual {
-    min-height: 5.2rem;
+  .problemIntro h2 {
+    max-width: 12ch;
   }
 
-  .capabilityGlyph {
-    width: min(100%, 10rem);
+  .valueGlyph {
+    width: 5rem;
   }
 
   .encoderLeadStack {
@@ -494,10 +1000,69 @@
 }
 
 @media (max-width: 768px) {
+  .heroStage {
+    gap: 1rem;
+    padding: 2.35rem 0 1.5rem;
+  }
+
+  .heroIntro,
+  .heroIntroPanel {
+    width: min(100%, 32rem);
+  }
+
+  .heroBrandLockup {
+    max-width: 100%;
+    margin-bottom: 0.15rem;
+  }
+
+  .heroBrandLogo {
+    width: min(11rem, 100%);
+  }
+
+  .heroTitleLine {
+    white-space: normal;
+  }
+
+  .heroTitleAccent {
+    font-size: 1.04em;
+  }
+
   .heroPrimaryCta,
   .heroSecondaryCta {
     min-width: 100%;
     font-size: 0.8rem;
+  }
+
+  .heroModelBand {
+    gap: 0.96rem;
+    padding: 1.12rem 0 1.04rem;
+  }
+
+  .heroModelBandHeader {
+    margin-bottom: 0.38rem;
+    padding: 0 1rem;
+  }
+
+  .heroModelBandCopy {
+    max-width: 20rem;
+    font-size: 0.94rem;
+    line-height: 1.5;
+  }
+
+  .heroModelBandViewport {
+    --hero-model-gap: 1rem;
+    padding: 0 1rem;
+    -webkit-mask-image: none;
+    mask-image: none;
+  }
+
+  .heroModelBandTrack {
+    animation-duration: 30s;
+  }
+
+  .heroModelChip {
+    gap: 0.62rem;
+    min-height: 2.28rem;
   }
 
   .heroManifesto {
@@ -515,6 +1080,7 @@
     font-size: 0.98rem;
   }
 
+  .capabilitySection,
   .encoderSection {
     padding: 3.5rem 0;
   }
@@ -529,11 +1095,22 @@
     grid-template-columns: 1fr;
   }
 
+  .problemChecklistItem {
+    min-height: auto;
+    padding-left: 3rem;
+  }
+
+  .valueCard {
+    min-height: auto;
+  }
+
   .band,
+  .problemIntro,
+  .problemChecklist,
+  .valueCard,
   .encoderLead,
   .encoderPipelineFrame,
-  .encoderCard,
-  .capabilityCard {
+  .encoderCard {
     padding: 1.15rem;
   }
 }
