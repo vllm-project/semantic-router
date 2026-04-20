@@ -41,8 +41,8 @@ class ProjectionPartition(BaseModel):
     name: str
     semantics: str
     members: List[str]
-    temperature: Optional[float] = None
-    default: Optional[str] = None
+    temperature: Optional[float] = Field(default=None, gt=0)
+    default: str
 
 
 class ProjectionScoreInput(BaseModel):
@@ -50,7 +50,7 @@ class ProjectionScoreInput(BaseModel):
 
     type: str
     name: Optional[str] = None
-    classifier: Optional[str] = None
+    kb: Optional[str] = None
     metric: Optional[str] = None
     weight: float
     value_source: Optional[str] = None

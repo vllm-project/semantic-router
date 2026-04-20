@@ -954,12 +954,14 @@ export interface ProjectionPartition {
   semantics: string
   members: string[]
   temperature?: number
-  default?: string
+  default: string
 }
 
 export interface ProjectionScoreInput {
   type: string
-  name: string
+  name?: string
+  kb?: string
+  metric?: string
   weight: number
   value_source?: string
   match?: number
