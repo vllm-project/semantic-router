@@ -582,13 +582,13 @@ func (v *Validator) checkProjectionScoreInput(context string, pos Position, inpu
 		)
 	}
 	switch input.ValueSource {
-	case "", "binary", "confidence":
+	case "", "binary", "confidence", "raw":
 	default:
 		v.addDiag(
 			DiagConstraint,
 			pos,
 			fmt.Sprintf(
-				"%s: input %s(%q) has unsupported value_source %q (supported: binary, confidence)",
+				"%s: input %s(%q) has unsupported value_source %q (supported: binary, confidence, raw)",
 				context,
 				input.SignalType,
 				input.SignalName,

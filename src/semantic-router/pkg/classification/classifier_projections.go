@@ -80,28 +80,40 @@ func projectionInputValue(input config.ProjectionScoreInput, results *SignalResu
 		return results.KBMetricValues[kbMetricKey(input.KB, input.Metric)]
 	}
 	switch strings.ToLower(strings.TrimSpace(input.ValueSource)) {
-	case "confidence":
-		if !projectionInputMatched(input.Type, input.Name, results) {
+	case "raw":
+		if results.SignalValues == nil {
 			return 0
 		}
-		if results.SignalConfidences == nil {
-			return 1.0
-		}
-		if score, ok := results.SignalConfidences[strings.ToLower(input.Type)+":"+input.Name]; ok && score > 0 {
-			return score
-		}
-		return 1.0
+		return results.SignalValues[strings.ToLower(input.Type)+":"+input.Name]
+	case "confidence":
+		return projectionInputConfidenceValue(input, results)
 	default:
-		matchValue := input.Match
-		missValue := input.Miss
-		if matchValue == 0 {
-			matchValue = 1.0
-		}
-		if projectionInputMatched(input.Type, input.Name, results) {
-			return matchValue
-		}
-		return missValue
+		return projectionInputBinaryValue(input, results)
 	}
+}
+
+func projectionInputConfidenceValue(input config.ProjectionScoreInput, results *SignalResults) float64 {
+	if !projectionInputMatched(input.Type, input.Name, results) {
+		return 0
+	}
+	if results.SignalConfidences == nil {
+		return 1.0
+	}
+	if score, ok := results.SignalConfidences[strings.ToLower(input.Type)+":"+input.Name]; ok && score > 0 {
+		return score
+	}
+	return 1.0
+}
+
+func projectionInputBinaryValue(input config.ProjectionScoreInput, results *SignalResults) float64 {
+	matchValue := input.Match
+	if matchValue == 0 {
+		matchValue = 1.0
+	}
+	if projectionInputMatched(input.Type, input.Name, results) {
+		return matchValue
+	}
+	return input.Miss
 }
 
 func kbMetricKey(kbName, metric string) string {

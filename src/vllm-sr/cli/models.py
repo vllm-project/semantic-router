@@ -46,14 +46,20 @@ class ProjectionPartition(BaseModel):
 
 
 class ProjectionScoreInput(BaseModel):
-    """One weighted signal contribution to a derived projection score."""
+    """One weighted signal contribution to a derived projection score.
+
+    Supported value_source modes:
+      - "binary" (default): contributes match/miss fixed values.
+      - "confidence": contributes the signal confidence when matched.
+      - "raw": contributes the raw numeric value from SignalValues.
+    """
 
     type: str
     name: Optional[str] = None
     classifier: Optional[str] = None
     metric: Optional[str] = None
     weight: float
-    value_source: Optional[str] = None
+    value_source: Optional[Literal["binary", "confidence", "raw"]] = None
     match: Optional[float] = None
     miss: Optional[float] = None
 
