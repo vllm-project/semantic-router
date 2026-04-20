@@ -195,6 +195,38 @@ class StructureRule(BaseModel):
         extra = "forbid"
 
 
+class ConversationSource(BaseModel):
+    """Source selector for conversation-shape signals."""
+
+    type: str
+    role: Optional[str] = None
+
+    class Config:
+        extra = "forbid"
+
+
+class ConversationFeature(BaseModel):
+    """Typed conversation-shape feature extractor."""
+
+    type: str
+    source: ConversationSource
+
+    class Config:
+        extra = "forbid"
+
+
+class ConversationRule(BaseModel):
+    """Conversation-shape routing signal configuration."""
+
+    name: str
+    description: Optional[str] = None
+    feature: ConversationFeature
+    predicate: Optional[NumericPredicate] = None
+
+    class Config:
+        extra = "forbid"
+
+
 class ComplexityCandidates(BaseModel):
     """Complexity candidates configuration."""
 
@@ -350,6 +382,7 @@ class Signals(BaseModel):
     jailbreak: Optional[List[JailbreakRule]] = []
     pii: Optional[List[PIIRule]] = []
     kb: Optional[List[KBSignal]] = []
+    conversation: Optional[List[ConversationRule]] = []
 
 
 class Condition(BaseModel):

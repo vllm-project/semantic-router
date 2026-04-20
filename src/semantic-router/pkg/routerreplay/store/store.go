@@ -26,6 +26,7 @@ type Signal struct {
 	Jailbreak    []string `json:"jailbreak,omitempty"`
 	PII          []string `json:"pii,omitempty"`
 	KB           []string `json:"kb,omitempty"`
+	Conversation []string `json:"conversation,omitempty"`
 }
 
 // UsageCost captures token usage and pricing-derived cost details for a record.
@@ -62,6 +63,16 @@ type ToolTraceStep struct {
 	// but retained for fidelity in case future processing diverges.
 	RawArguments string `json:"raw_arguments,omitempty"`
 	RawOutput    string `json:"raw_output,omitempty"`
+
+	// Output preserves the raw tool result (string or JSON array for the
+	// Responses API). Mirrors RawOutput but is explicitly named for
+	// alignment with the OpenAI API spec.
+	Output string `json:"output,omitempty"`
+	// APIType indicates the API variant this step was extracted from:
+	// "chat_completions" or "responses".
+	APIType string `json:"api_type,omitempty"`
+	// Truncated is true when Arguments or Output was cut to MaxToolTraceBytes.
+	Truncated bool `json:"truncated,omitempty"`
 }
 
 // Record represents a routing decision record with metadata and captured payloads.
@@ -69,6 +80,10 @@ type Record struct {
 	ID                    string             `json:"id"`
 	Timestamp             time.Time          `json:"timestamp"`
 	RequestID             string             `json:"request_id,omitempty"`
+	SessionID             string             `json:"session_id,omitempty"`
+	TurnIndex             int                `json:"turn_index"`
+	PreviousResponseID    string             `json:"previous_response_id,omitempty"`
+	ConversationID        string             `json:"conversation_id,omitempty"`
 	Decision              string             `json:"decision,omitempty"`
 	DecisionTier          int                `json:"decision_tier"`
 	DecisionPriority      int                `json:"decision_priority"`
@@ -111,6 +126,19 @@ type Record struct {
 	PIIDetected bool     `json:"pii_detected,omitempty"`
 	PIIEntities []string `json:"pii_entities,omitempty"`
 	PIIBlocked  bool     `json:"pii_blocked,omitempty"`
+
+	// Structured tool-call fields (extracted from the full request before body truncation).
+	// These fields are stored independently of RequestBody / ResponseBody so
+	// that they are complete even when the raw body is truncated by MaxBodyBytes.
+	Prompt          string `json:"prompt,omitempty"`
+	PromptTruncated bool   `json:"prompt_truncated,omitempty"`
+	// ToolDefinitions is the JSON array of tool schemas from the request
+	// (the "tools" field in Chat Completions, or ResponseAPIRequest.Tools).
+	ToolDefinitions string `json:"tool_definitions,omitempty"`
+	// ToolDefinitionsTruncated is true when ToolDefinitions was cut to
+	// MaxToolTraceBytes. Mirrors PromptTruncated / ToolTraceStep.Truncated
+	// so truncation of tool schemas is never silent.
+	ToolDefinitionsTruncated bool `json:"tool_definitions_truncated,omitempty"`
 
 	// RAG (Retrieval-Augmented Generation)
 	RAGEnabled         bool    `json:"rag_enabled,omitempty"`
@@ -282,10 +310,11 @@ func cloneStringPtr(value *string) *string {
 
 // Config holds common configuration options for all storage backends.
 type Config struct {
-	Backend      string // "memory", "redis", "postgres", "milvus"
-	TTLSeconds   int    // Time-to-live for records (0 = no expiration)
-	AsyncWrites  bool   // Enable asynchronous writes
-	MaxBodyBytes int    // Maximum bytes to store for request/response bodies
+	Backend           string // "memory", "redis", "postgres", "milvus"
+	TTLSeconds        int    // Time-to-live for records (0 = no expiration)
+	AsyncWrites       bool   // Enable asynchronous writes
+	MaxBodyBytes      int    // Maximum bytes to store for request/response bodies
+	MaxToolTraceBytes int    // Maximum bytes for each structured tool-trace field (0 = no limit)
 
 	// Backend-specific configurations
 	Redis    *RedisConfig

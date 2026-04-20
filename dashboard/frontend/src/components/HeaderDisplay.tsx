@@ -114,6 +114,10 @@ const HEADER_INFO: Record<string, { label: string; type: 'info' | 'success' | 'w
     label: 'Knowledge Base',
     type: 'info',
   },
+  'x-vsr-matched-conversation': {
+    label: 'Conversation Signal',
+    type: 'info',
+  },
   'x-vsr-matched-projection': {
     label: 'Projection',
     type: 'info',

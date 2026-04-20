@@ -23,6 +23,7 @@ type Signals struct {
 	JailbreakRules    []JailbreakRule    `yaml:"jailbreak,omitempty"`
 	PIIRules          []PIIRule          `yaml:"pii,omitempty"`
 	KBRules           []KBSignalRule     `yaml:"kb,omitempty"`
+	ConversationRules []ConversationRule `yaml:"conversation,omitempty"`
 }
 
 type KeywordRule struct {
@@ -165,6 +166,23 @@ type StructureSource struct {
 	Keywords      []string   `yaml:"keywords,omitempty"`
 	CaseSensitive bool       `yaml:"case_sensitive,omitempty"`
 	Sequences     [][]string `yaml:"sequences,omitempty"`
+}
+
+type ConversationRule struct {
+	Name        string              `yaml:"name"`
+	Description string              `yaml:"description,omitempty"`
+	Feature     ConversationFeature `yaml:"feature"`
+	Predicate   *NumericPredicate   `yaml:"predicate,omitempty"`
+}
+
+type ConversationFeature struct {
+	Type   string             `yaml:"type"`
+	Source ConversationSource `yaml:"source"`
+}
+
+type ConversationSource struct {
+	Type string `yaml:"type"`
+	Role string `yaml:"role,omitempty"`
 }
 
 type NumericPredicate struct {

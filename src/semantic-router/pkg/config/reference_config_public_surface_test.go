@@ -88,6 +88,7 @@ func assertReferenceConfigSignalCoverage(t testingT, signals map[string]interfac
 	assertSliceUnionCoversStructFields(t, mustSliceAt(t, signals, "jailbreak"), reflect.TypeOf(JailbreakRule{}), "routing.signals.jailbreak")
 	assertSliceUnionCoversStructFields(t, mustSliceAt(t, signals, "pii"), reflect.TypeOf(PIIRule{}), "routing.signals.pii")
 	assertReferenceConfigKBSignalCoverage(t, mustSliceAt(t, signals, "kb"))
+	assertReferenceConfigConversationSignalCoverage(t, mustSliceAt(t, signals, "conversation"))
 }
 
 func assertReferenceConfigProjectionCoverage(t testingT, projections map[string]interface{}) {
@@ -190,6 +191,26 @@ func assertReferenceConfigKBSignalCoverage(t testingT, kb []interface{}) {
 		collectChildMapsFromSlice(t, kb, "target", "routing.signals.kb"),
 		reflect.TypeOf(KBSignalTarget{}),
 		"routing.signals.kb[].target",
+	)
+}
+
+func assertReferenceConfigConversationSignalCoverage(t testingT, conv []interface{}) {
+	assertSliceUnionCoversStructFields(t, conv, reflect.TypeOf(ConversationRule{}), "routing.signals.conversation")
+	assertSliceUnionCoversStructFields(
+		t,
+		collectChildMapsFromSlice(t, conv, "feature", "routing.signals.conversation"),
+		reflect.TypeOf(ConversationFeature{}),
+		"routing.signals.conversation[].feature",
+	)
+	assertSliceUnionCoversStructFields(
+		t,
+		collectChildMapsFromSlice(
+			t,
+			collectChildMapsFromSlice(t, conv, "feature", "routing.signals.conversation"),
+			"source", "routing.signals.conversation[].feature",
+		),
+		reflect.TypeOf(ConversationSource{}),
+		"routing.signals.conversation[].feature.source",
 	)
 }
 

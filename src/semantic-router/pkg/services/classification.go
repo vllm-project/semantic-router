@@ -202,6 +202,7 @@ func (s *ClassificationService) ClassifyIntent(req IntentRequest) (*IntentRespon
 		forceEvaluateAll,
 		"",
 		nil,
+		classification.ConversationFacts{},
 	)
 
 	// Evaluate decision with engine (if decisions are configured)
