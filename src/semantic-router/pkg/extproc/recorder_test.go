@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/routerreplay"
 )
 
 func replayRoutingRecordMetadataTestContext() *RequestContext {
@@ -23,13 +24,14 @@ func replayRoutingRecordMetadataTestContext() *RequestContext {
 			Tier:     3,
 			Priority: 120,
 		},
-		VSRMatchedKeywords:   []string{"math_keyword"},
-		VSRMatchedModality:   []string{"AR"},
-		VSRMatchedAuthz:      []string{"premium_tier"},
-		VSRMatchedJailbreak:  []string{"jailbreak_detector"},
-		VSRMatchedPII:        []string{"email_block"},
-		VSRMatchedKB:         []string{"privacy_kb"},
-		VSRMatchedProjection: []string{"balance_reasoning"},
+		VSRMatchedKeywords:     []string{"math_keyword"},
+		VSRMatchedModality:     []string{"AR"},
+		VSRMatchedAuthz:        []string{"premium_tier"},
+		VSRMatchedJailbreak:    []string{"jailbreak_detector"},
+		VSRMatchedPII:          []string{"email_block"},
+		VSRMatchedKB:           []string{"privacy_kb"},
+		VSRMatchedConversation: []string{"multi_turn_user"},
+		VSRMatchedProjection:   []string{"balance_reasoning"},
 		VSRProjectionScores: map[string]float64{
 			"reasoning_pressure": 0.73,
 		},
@@ -43,7 +45,15 @@ func replayRoutingRecordMetadataTestContext() *RequestContext {
 }
 
 func TestBuildReplayRoutingRecordCapturesSessionAndDecisionMetadata(t *testing.T) {
-	record := buildReplayRoutingRecord(replayRoutingRecordMetadataTestContext(), "model-a", "model-b", "balance")
+	ctx := replayRoutingRecordMetadataTestContext()
+	record := buildReplayRoutingRecord(ctx, "model-a", "model-b", "balance")
+
+	assertReplayRoutingMetadata(t, record)
+	assertReplayMatchedSignals(t, record)
+}
+
+func assertReplayRoutingMetadata(t *testing.T, record routerreplay.RoutingRecord) {
+	t.Helper()
 	if record.SessionID != "sess-replay-test" {
 		t.Fatalf("expected session_id copied, got %q", record.SessionID)
 	}
@@ -70,8 +80,8 @@ func TestBuildReplayRoutingRecordCapturesSessionAndDecisionMetadata(t *testing.T
 	}
 }
 
-func TestBuildReplayRoutingRecordCapturesSignalMetadata(t *testing.T) {
-	record := buildReplayRoutingRecord(replayRoutingRecordMetadataTestContext(), "model-a", "model-b", "balance")
+func assertReplayMatchedSignals(t *testing.T, record routerreplay.RoutingRecord) {
+	t.Helper()
 	if !reflect.DeepEqual(record.Signals.Modality, []string{"AR"}) {
 		t.Fatalf("unexpected modality signals: %#v", record.Signals.Modality)
 	}
@@ -86,6 +96,9 @@ func TestBuildReplayRoutingRecordCapturesSignalMetadata(t *testing.T) {
 	}
 	if !reflect.DeepEqual(record.Signals.KB, []string{"privacy_kb"}) {
 		t.Fatalf("unexpected kb signals: %#v", record.Signals.KB)
+	}
+	if !reflect.DeepEqual(record.Signals.Conversation, []string{"multi_turn_user"}) {
+		t.Fatalf("unexpected conversation signals: %#v", record.Signals.Conversation)
 	}
 }
 

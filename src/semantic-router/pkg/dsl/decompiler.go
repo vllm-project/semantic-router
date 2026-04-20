@@ -179,6 +179,18 @@ func (d *decompiler) decompileSignals() {
 		d.write("}\n\n")
 	}
 
+	for _, conv := range d.cfg.ConversationRules {
+		d.write("SIGNAL conversation %s {\n", quoteName(conv.Name))
+		if conv.Description != "" {
+			d.write("  description: %q\n", conv.Description)
+		}
+		d.write("  feature: %s\n", formatPluginConfigValue(conversationFeatureToMap(conv.Feature)))
+		if conv.Predicate != nil {
+			d.write("  predicate: %s\n", formatPluginConfigValue(structurePredicateToMap(conv.Predicate)))
+		}
+		d.write("}\n\n")
+	}
+
 	for _, comp := range d.cfg.ComplexityRules {
 		d.write("SIGNAL complexity %s {\n", quoteName(comp.Name))
 		if comp.Threshold != 0 {
@@ -1205,6 +1217,18 @@ func (d *decompiler) structureToSignal(rule *config.StructureRule) *SignalDecl {
 	return &SignalDecl{SignalType: "structure", Name: rule.Name, Fields: fields}
 }
 
+func (d *decompiler) conversationToSignal(rule *config.ConversationRule) *SignalDecl {
+	fields := make(map[string]Value)
+	if rule.Description != "" {
+		fields["description"] = StringValue{V: rule.Description}
+	}
+	fields["feature"] = conversationFeatureValue(rule.Feature)
+	if rule.Predicate != nil {
+		fields["predicate"] = structurePredicateValue(rule.Predicate)
+	}
+	return &SignalDecl{SignalType: "conversation", Name: rule.Name, Fields: fields}
+}
+
 func (d *decompiler) complexityToSignal(comp *config.ComplexityRule) *SignalDecl {
 	fields := make(map[string]Value)
 	if comp.Threshold != 0 {
@@ -1540,6 +1564,41 @@ func structureSourceToMap(source config.StructureSource) map[string]interface{} 
 	}
 	if len(source.Sequences) > 0 {
 		values["sequences"] = source.Sequences
+	}
+	return values
+}
+
+func conversationFeatureValue(feature config.ConversationFeature) ObjectValue {
+	fields := map[string]Value{
+		"type":   StringValue{V: feature.Type},
+		"source": conversationSourceValue(feature.Source),
+	}
+	return ObjectValue{Fields: fields}
+}
+
+func conversationSourceValue(source config.ConversationSource) ObjectValue {
+	fields := map[string]Value{
+		"type": StringValue{V: source.Type},
+	}
+	if source.Role != "" {
+		fields["role"] = StringValue{V: source.Role}
+	}
+	return ObjectValue{Fields: fields}
+}
+
+func conversationFeatureToMap(feature config.ConversationFeature) map[string]interface{} {
+	return map[string]interface{}{
+		"type":   feature.Type,
+		"source": conversationSourceToMap(feature.Source),
+	}
+}
+
+func conversationSourceToMap(source config.ConversationSource) map[string]interface{} {
+	values := map[string]interface{}{
+		"type": source.Type,
+	}
+	if source.Role != "" {
+		values["role"] = source.Role
 	}
 	return values
 }

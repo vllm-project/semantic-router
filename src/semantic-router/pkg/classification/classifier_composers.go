@@ -155,6 +155,7 @@ func composerLeafMatches(signals *SignalResults) map[string][]string {
 		"structure":     signals.MatchedStructureRules,
 		"modality":      signals.MatchedModalityRules,
 		"kb":            signals.MatchedKBRules,
+		"conversation":  signals.MatchedConversationRules,
 	}
 }
 

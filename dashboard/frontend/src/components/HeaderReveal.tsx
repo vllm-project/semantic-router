@@ -74,6 +74,10 @@ const HEADER_INFO: Record<string, { label: string; description: string }> = {
     label: 'Knowledge Base',
     description: 'Matched knowledge-base label or group routing signal',
   },
+  'x-vsr-matched-conversation': {
+    label: 'Conversation',
+    description: 'Conversation structure signal matched (e.g. multi-turn, tool usage)',
+  },
   'x-vsr-matched-projection': {
     label: 'Projection',
     description: 'Projection mapping output matched',
