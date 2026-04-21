@@ -2,7 +2,7 @@
 slug: vllm-sr-on-amd-developer-cloud
 title: "Deploying vLLM Semantic Router on AMD Developer Cloud"
 description: A practical guide to deploying vLLM Semantic Router on AMD Developer Cloud with ROCm, reference profiles, and end-to-end validation.
-authors: [Xunzhuo]
+authors: [Xunzhuo,haichen,andyluo]
 tags: [amd, rocm, deployment, hardware, vllm, semantic-router]
 image: /img/amd-deploy-0.png
 ---
@@ -60,16 +60,18 @@ At a high level, this deployment consists of:
 The reference alias layout is:
 
 - `qwen/qwen3.5-rocm` for the SIMPLE lane
-- `google/gemini-2.5-flash-lite` for lower-cost verified explanation and correction tasks
-- `google/gemini-3.1-pro` for complex technical, deep reasoning, STEM, or health-sensitive tasks
-- `openai/gpt5.4` for narrow formal-proof escalation
+- `google/gemini-2.5-flash-lite` for lower-cost expressive medium tasks
+- `google/gemini-3.1-pro` for complex technical or architecture-heavy tasks
+- `openai/gpt5.4` for high-reasoning escalation
 - `anthropic/claude-opus-4.6` for the premium legal lane
 
 Pricing in the profile is intentionally exaggerated so Insights can make tier differences and savings easy to see. It is a demo-friendly routing profile, not a mirror of vendor billing.
 
 ## Why This Matters for AMD
 
-This architecture opens up a particularly interesting opportunity for AMD, because AMD hardware does not have to be framed as “just another accelerator target.” With Semantic Router in front of it, an AMD deployment can become the control plane for system intelligence.
+This architecture creates a compelling opportunity for AMD. Rather than being positioned as just another accelerator target, AMD hardware can take on a more strategic role. With a Semantic Router layered in front, an AMD deployment can serve as the control plane for system intelligence.
+
+Notably, this approach spans the entire AMD data center GPU lineup, including the MI300X, MI325X, MI355X, and beyond.
 
 ### 1. Intelligent Routing on AMD
 
@@ -134,10 +136,8 @@ sudo docker run -d \
   -v "$HOME:/myhome" \
   -w /myhome \
   -e VLLM_ROCM_USE_AITER=1 \
-  -e VLLM_USE_AITER_UNIFIED_ATTENTION=1 \
-  -e VLLM_ROCM_USE_AITER_MHA=0 \
   --entrypoint python3 \
-  vllm/vllm-openai-rocm:v0.17.0 \
+  vllm/vllm-openai-rocm:latest \
   -m vllm.entrypoints.openai.api_server \
     --model Qwen/Qwen3.5-122B-A10B-FP8 \
     --host 0.0.0.0 \
@@ -160,7 +160,15 @@ This is the core of the deployment. The backend is still one Qwen model, but it 
 
 With the backend up, install vLLM Semantic Router:
 
+**prerequisites**
+
+Python version: python3.12
+
 ```bash
+
+# Create a virtual environment (recommended)
+python3 -m venv vsr
+source vsr/bin/activate 
 curl -fsSL https://vllm-semantic-router.com/install.sh | bash
 ```
 
@@ -186,17 +194,16 @@ The remote import path applies the full YAML directly during onboarding. If you 
 
 ## What the Reference Profile Is Doing
 
-The imported profile expresses a complete AMD routing story with 13 active decisions across:
+The imported profile expresses a complete AMD routing story with 23 active decisions across:
 
+- simple fallback lanes
+- medium domain lanes
+- verified overlays
+- feedback recovery lanes
+- complex technical lanes
+- reasoning escalation lanes
+- one emotionally engaged general lane
 - one premium legal lane
-- one reasoning lane for proofs, philosophy, and deep general reasoning
-- one complex specialist lane for multi-step execution, systems design, and specialist STEM work
-- two feedback recovery lanes
-- two verified overlays
-- three medium-cost lanes
-- one fast factual lane
-- one simple general lane
-- one terminal casual fallback lane
 
 This is useful because replay and Insights stay signal-native. Instead of inventing a separate runtime dimension schema, the system shows what actually happened during routing: which signals matched, which projection outputs fired, which decision won, and which alias received the request.
 
@@ -221,13 +228,13 @@ Debug this Python stack trace and suggest the most likely fix.
 
 This should land on the cheaper coding lane backed by `qwen/qwen3.5-rocm`.
 
-### Formal Math Proof
+### Deep Reasoning
 
 ```text
 Prove rigorously that the square root of 2 is irrational.
 ```
 
-This should hit the narrow formal-proof overlay and map to the `openai/gpt5.4` alias.
+This should escalate into the reasoning tier and map to the `openai/gpt5.4` alias.
 
 ### Premium Legal Analysis
 
@@ -266,3 +273,23 @@ And you can design a very complex boolean expression in a single route, to expre
 Deploying vLLM Semantic Router on AMD Developer Cloud gives you more than a working endpoint. It gives you a compact routed system: one or more ROCm-hosted backend, multiple semantic tiers, visible routing logic, and a dashboard experience that makes the behavior understandable instead of opaque.
 
 That is what makes this reference profile useful. You can start with a single real AMD backend, import a complete routing policy, inspect how decisions are made, and then iterate from there without first building a large multi-backend fleet. For teams exploring cost-aware routing, replay-driven debugging, or AMD-based MoM patterns, it is a practical and reproducible starting point.
+
+Acknowledgements
+----------------
+
+We would like to thank the following teams and individuals for their contributions to this work:
+
+- **AMD AIG Team**: Andy Luo, Haichen Zhang
+- **vLLM Semantic Router OSS team**: Xunzhuo Liu, Huamin Chen
+
+Join Us
+------
+
+**Looking for Collaborations!** Calling all passionate community developers and researchers: join us in building the system intelligence on AMD GPUs.
+
+Interested? Reach out to us:
+
+- Haichen Zhang: [haichzha@amd.com](mailto:haichzha@amd.com)
+- Xunzhuo Liu: [xunzhuo@vllm-semantic-router.ai](mailto:xunzhuo@vllm-semantic-router.ai)
+
+Share your use cases and feedback in **#semantic-router** channel on [vLLM Slack](https://vllm-dev.slack.com/archives/C09CTGF8KCN)
