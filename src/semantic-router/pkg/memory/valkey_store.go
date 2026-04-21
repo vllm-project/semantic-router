@@ -12,6 +12,7 @@ import (
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
+	valkeyutil "github.com/vllm-project/semantic-router/src/semantic-router/pkg/utils/valkey"
 )
 
 // errValkeyMemoryAlreadyExists is returned by Store when a memory with the same ID already exists.
@@ -114,6 +115,13 @@ func NewValkeyStore(options ValkeyStoreOptions) (*ValkeyStore, error) {
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), indexTimeout)
 	defer cancel()
+
+	versionCtx, versionCancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer versionCancel()
+	if err := valkeyutil.EnsureSearchModuleVersion(versionCtx, store.client, valkeyutil.SearchModuleMinVersion); err != nil {
+		return nil, err
+	}
+
 	if err := store.ensureIndex(ctx); err != nil {
 		return nil, fmt.Errorf("failed to ensure index exists: %w", err)
 	}
