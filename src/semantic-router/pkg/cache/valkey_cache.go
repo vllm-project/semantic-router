@@ -16,6 +16,7 @@ import (
 	routerconfig "github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/metrics"
+	valkeyutil "github.com/vllm-project/semantic-router/src/semantic-router/pkg/utils/valkey"
 )
 
 // ValkeyCache provides a scalable semantic cache implementation using Valkey with vector search
@@ -114,6 +115,13 @@ func NewValkeyCache(options ValkeyCacheOptions) (*ValkeyCache, error) {
 		return nil, err
 	}
 	logging.Debugf("ValkeyCache: successfully connected to Valkey")
+
+	versionCtx, versionCancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer versionCancel()
+	if err := valkeyutil.EnsureSearchModuleVersion(versionCtx, valkeyClient, valkeyutil.SearchModuleMinVersion); err != nil {
+		valkeyClient.Close()
+		return nil, err
+	}
 
 	logging.Debugf("ValkeyCache: initializing index '%s'", valkeyConfig.Index.Name)
 	if err := cache.initializeIndex(); err != nil {
