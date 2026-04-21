@@ -211,11 +211,11 @@ func validateProjectionScoreInput(
 
 func validateProjectionInputValueSource(scoreName string, input ProjectionScoreInput) error {
 	switch input.ValueSource {
-	case "", "binary", "confidence":
+	case "", "binary", "confidence", "raw":
 		return nil
 	default:
 		return fmt.Errorf(
-			"routing.projections.scores[%q]: input %s(%q) has unsupported value_source %q (supported: binary, confidence)",
+			"routing.projections.scores[%q]: input %s(%q) has unsupported value_source %q (supported: binary, confidence, raw)",
 			scoreName,
 			input.Type,
 			input.Name,
