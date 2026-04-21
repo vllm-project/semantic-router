@@ -407,6 +407,12 @@
   "homepage.hero.secondaryCta": {
     "message": "阅读白皮书"
   },
+  "homepage.hero.modelBand.eyebrow": {
+    "message": "系统大脑"
+  },
+  "homepage.hero.modelBand.copy": {
+    "message": "用系统大脑连接所有模型"
+  },    
   "homepage.stats.signals.label": {
     "message": "信号"
   },
