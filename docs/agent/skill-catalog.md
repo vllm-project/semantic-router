@@ -49,6 +49,7 @@ Skills stay intentionally concise. Keep deep reference material in the linked pl
 - `routing-calibration-loop`
 - `maintainer-issue-pr-management`
 - `architecture-guardrails`
+- `claude-code-install`
 
 ## Source of Truth
 

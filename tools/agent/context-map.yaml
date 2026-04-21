@@ -145,6 +145,9 @@ surfaces:
   ci_e2e:
     - path: docs/agent/playbooks/e2e-selection.md
       reason: CI E2E profile fanout and targeted-versus-full selection rules.
+  cli_install:
+    - path: docs/agent/playbooks/vllm-sr-cli-docker.md
+      reason: CLI install workflow and session-scoped directory conventions.
 
 envs:
   cpu-local:
@@ -168,3 +171,7 @@ skills:
     resume_refs:
       - path: docs/agent/tech-debt-register.md
         reason: Record remaining cross-surface architecture gaps if they stay open.
+  claude-code-install:
+    resume_refs:
+      - path: docs/agent/playbooks/vllm-sr-cli-docker.md
+        reason: CLI install workflow and session-scoped directory conventions.
