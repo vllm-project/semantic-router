@@ -575,6 +575,7 @@ skills:
   - tools/agent/skills/harness-contract-change/SKILL.md
   - tools/agent/skills/signal-end-to-end/SKILL.md
   - tools/agent/skills/plugin-end-to-end/SKILL.md
+  - tools/agent/skills/claude-code-install/SKILL.md
   - tools/agent/skills/config-platform-change/SKILL.md
   - tools/agent/skills/routing-policy-change/SKILL.md
   - tools/agent/skills/startup-chain-change/SKILL.md

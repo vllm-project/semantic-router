@@ -170,6 +170,12 @@ This document defines the project-level surfaces used by skills, reports, and va
 - Typical paths: `tools/agent/e2e-profile-map.yaml`, `e2e/profiles/**`, `e2e/config/**`, `deploy/kubernetes/**`
 - Task rules: `e2e-framework`
 
+## `cli_install`
+
+- Session-isolated CLI install wrapper and coding-agent skill for quick, disposable vllm-sr installs.
+- Typical paths: `install.sh`, `tools/agent/scripts/cc-install.sh`, `tools/agent/skills/claude-code-install/**`
+- Task rules: `vllm-sr-cli`
+
 ## `ci_e2e`
 
 - CI fanout, change classification, and standard profile-matrix execution for the merge gate.
