@@ -9,14 +9,68 @@ This module provides common functions to avoid code duplication and ensure consi
 import gc
 import logging
 import os
-from typing import Dict, List, Optional, Tuple
 
 import torch
 
 logger = logging.getLogger(__name__)
 
 
-def get_target_modules_for_model(model_name: str) -> List[str]:
+def select_training_split(
+    dataset_splits, dataset_name: str, preferred_splits: list[str] | None = None
+) -> tuple[str, object]:
+    """
+    Select the safest available split for training data.
+
+    Preference order is train-like splits first. The test split is only used as a
+    last resort when the dataset exposes no better option.
+
+    Args:
+        dataset_splits: Hugging Face dataset dict or similar mapping of split names to data
+        dataset_name: Dataset identifier for logging
+        preferred_splits: Optional ordered list of preferred split names
+
+    Returns:
+        Tuple of (split_name, split_data)
+
+    Raises:
+        ValueError: If the dataset exposes no usable splits
+    """
+    split_names = list(dataset_splits.keys())
+    priorities = preferred_splits or ["train", "validation", "dev"]
+
+    for split_name in priorities:
+        if split_name in dataset_splits:
+            logger.info(
+                "Using %s split from %s for training data", split_name, dataset_name
+            )
+            return split_name, dataset_splits[split_name]
+
+    non_test_splits = sorted(
+        split_name for split_name in split_names if split_name != "test"
+    )
+    if non_test_splits:
+        selected_split = non_test_splits[0]
+        logger.warning(
+            "No preferred training split found for %s. Falling back to non-test split %s from available splits %s",
+            dataset_name,
+            selected_split,
+            split_names,
+        )
+        return selected_split, dataset_splits[selected_split]
+
+    if "test" in dataset_splits:
+        logger.warning(
+            "Falling back to test split for %s because no train-like split is available. Do not use this path for final quality claims.",
+            dataset_name,
+        )
+        return "test", dataset_splits["test"]
+
+    raise ValueError(
+        f"No usable dataset splits found for {dataset_name}: {split_names}"
+    )
+
+
+def get_target_modules_for_model(model_name: str) -> list[str]:
     """
     Get appropriate target_modules for LoRA based on model architecture.
 
@@ -87,7 +141,7 @@ def get_target_modules_for_model(model_name: str) -> List[str]:
         )
 
 
-def validate_lora_config(lora_config: Dict) -> Dict:
+def validate_lora_config(lora_config: dict) -> dict:
     """
     Validate and normalize LoRA configuration parameters.
 
@@ -106,7 +160,7 @@ def validate_lora_config(lora_config: Dict) -> Dict:
     rank = validated_config.get("rank", 8)
     if not isinstance(rank, int) or rank <= 0:
         raise ValueError(f"LoRA rank must be a positive integer, got: {rank}")
-    if rank > 256:
+    if rank > 256:  # noqa: PLR2004
         logger.warning(
             f"LoRA rank {rank} is very large, consider using smaller values (8-64)"
         )
@@ -127,7 +181,7 @@ def validate_lora_config(lora_config: Dict) -> Dict:
         raise ValueError("target_modules must be a non-empty list")
 
     # Log configuration
-    logger.info(f"LoRA Configuration validated:")
+    logger.info("LoRA Configuration validated:")
     logger.info(f"  Rank: {rank}")
     logger.info(f"  Alpha: {alpha}")
     logger.info(f"  Dropout: {dropout}")
@@ -136,7 +190,7 @@ def validate_lora_config(lora_config: Dict) -> Dict:
     return validated_config
 
 
-def get_all_gpu_info() -> List[Dict]:
+def get_all_gpu_info() -> list[dict]:
     """
     Get information about all available GPUs.
 
@@ -178,7 +232,7 @@ def get_all_gpu_info() -> List[Dict]:
     return gpu_info
 
 
-def find_free_gpu(min_free_memory_gb: float = 2.0) -> Optional[int]:
+def find_free_gpu(min_free_memory_gb: float = 2.0) -> int | None:
     """
     Find the GPU with the most free memory.
 
@@ -223,8 +277,8 @@ def find_free_gpu(min_free_memory_gb: float = 2.0) -> Optional[int]:
 
 
 def set_gpu_device(
-    gpu_id: Optional[int] = None, auto_select: bool = True
-) -> Tuple[str, int]:
+    gpu_id: int | None = None, auto_select: bool = True
+) -> tuple[str, int]:
     """
     Set the GPU device to use for training.
 
@@ -289,7 +343,7 @@ def clear_gpu_memory():
         logger.info("GPU memory cache cleared")
 
 
-def get_memory_usage() -> Dict:
+def get_memory_usage() -> dict:
     """
     Get current memory usage information.
 
@@ -307,7 +361,7 @@ def get_memory_usage() -> Dict:
     else:
         # For CPU, we can use psutil if available, otherwise return empty
         try:
-            import psutil
+            import psutil  # noqa: PLC0415
 
             memory_info = {
                 "system_memory_gb": psutil.virtual_memory().total / 1024**3,
@@ -330,17 +384,16 @@ def log_memory_usage(stage: str = ""):
                 f"{stage_prefix}GPU Memory - Allocated: {memory_info['allocated_gb']:.2f}GB, "
                 f"Reserved: {memory_info['reserved_gb']:.2f}GB"
             )
-        else:
-            if "system_memory_gb" in memory_info:
-                logger.info(
-                    f"{stage_prefix}System Memory - Used: {memory_info['used_memory_gb']:.2f}GB, "
-                    f"Available: {memory_info['available_memory_gb']:.2f}GB"
-                )
+        elif "system_memory_gb" in memory_info:
+            logger.info(
+                f"{stage_prefix}System Memory - Used: {memory_info['used_memory_gb']:.2f}GB, "
+                f"Available: {memory_info['available_memory_gb']:.2f}GB"
+            )
 
 
 def create_lora_config(
     model_name: str, rank: int = 8, alpha: int = 16, dropout: float = 0.1
-) -> Dict:
+) -> dict:
     """
     Create a complete LoRA configuration for a given model.
 
@@ -371,7 +424,7 @@ def create_lora_config(
     return validated_config
 
 
-def get_model_mapping() -> Dict[str, str]:
+def get_model_mapping() -> dict[str, str]:
     """
     Get mapping from short model names to full HuggingFace model paths.
 
@@ -439,7 +492,7 @@ def resolve_model_path(model_name: str) -> str:
     return resolved_path
 
 
-def verify_target_modules(model, target_modules: List[str]) -> bool:
+def verify_target_modules(model, target_modules: list[str]) -> bool:
     """
     Verify that target_modules exist in the model architecture.
 
@@ -456,13 +509,13 @@ def verify_target_modules(model, target_modules: List[str]) -> bool:
         if "encoder.layer" in name:
             # Convert encoder.layer.0.attention.self.query -> attention.self.query
             parts = name.split(".")
-            if len(parts) >= 4 and parts[2].isdigit():
+            if len(parts) >= 4 and parts[2].isdigit():  # noqa: PLR2004
                 pattern = ".".join(parts[3:])
                 model_module_names.add(pattern)
         elif "layers." in name:  # ModernBERT style
             # Convert layers.0.attn.Wqkv -> attn.Wqkv
             parts = name.split(".")
-            if len(parts) >= 3 and parts[1].isdigit():
+            if len(parts) >= 3 and parts[1].isdigit():  # noqa: PLR2004
                 pattern = ".".join(parts[2:])
                 model_module_names.add(pattern)
 
