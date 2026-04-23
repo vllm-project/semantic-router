@@ -38,6 +38,7 @@ const (
 	SignalTypeJailbreak    = "jailbreak"
 	SignalTypePII          = "pii"
 	SignalTypeKB           = "kb"
+	SignalTypeConversation = "conversation"
 	SignalTypeProjection   = "projection"
 )
 

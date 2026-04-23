@@ -26,6 +26,14 @@ func nullableStringArg(value *string) interface{} {
 	return *value
 }
 
+// emptyStringSQL maps "" to SQL NULL for optional VARCHAR columns.
+func emptyStringSQL(s string) interface{} {
+	if s == "" {
+		return nil
+	}
+	return s
+}
+
 func assignUsageCostFields(
 	record *Record,
 	promptTokens sql.NullInt64,

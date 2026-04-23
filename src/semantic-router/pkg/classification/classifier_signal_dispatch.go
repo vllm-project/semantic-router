@@ -23,6 +23,7 @@ func (c *Classifier) buildSignalDispatchers(
 	nonUserMessages []string,
 	hasPriorAssistantReply bool,
 	imgArg string,
+	convFacts ConversationFacts,
 ) []signalDispatch {
 	return []signalDispatch{
 		{
@@ -93,6 +94,10 @@ func (c *Classifier) buildSignalDispatchers(
 		{
 			config.SignalTypeKB, "KB",
 			func() { c.evaluateKBSignals(results, mu, textForSignal(config.SignalTypeKB)) },
+		},
+		{
+			config.SignalTypeConversation, "Conversation",
+			func() { c.evaluateConversationSignal(results, mu, convFacts) },
 		},
 	}
 }

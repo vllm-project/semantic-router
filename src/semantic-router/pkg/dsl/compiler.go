@@ -181,6 +181,8 @@ func (c *Compiler) compileSignals() {
 			c.compilePIISignal(s)
 		case "kb":
 			c.compileKBSignal(s)
+		case "conversation":
+			c.compileConversationSignal(s)
 		default:
 			c.addError(s.Pos, "unknown signal type %q", s.SignalType)
 		}
@@ -425,6 +427,29 @@ func (c *Compiler) compilePIISignal(s *SignalDecl) {
 		rule.Description = v
 	}
 	c.config.PIIRules = append(c.config.PIIRules, rule)
+}
+
+func (c *Compiler) compileConversationSignal(s *SignalDecl) {
+	payload := fieldsToMap(s.Fields)
+	payload["name"] = s.Name
+
+	raw, err := yaml.Marshal(payload)
+	if err != nil {
+		c.addError(s.Pos, "failed to encode conversation signal %q: %v", s.Name, err)
+		return
+	}
+
+	var rule config.ConversationRule
+	if err := yaml.Unmarshal(raw, &rule); err != nil {
+		c.addError(s.Pos, "failed to decode conversation signal %q: %v", s.Name, err)
+		return
+	}
+	rule.Name = s.Name
+	if err := config.ValidateConversationRuleContract(rule); err != nil {
+		c.addError(s.Pos, "%v", err)
+		return
+	}
+	c.config.ConversationRules = append(c.config.ConversationRules, rule)
 }
 
 func (c *Compiler) compileKBSignal(s *SignalDecl) {

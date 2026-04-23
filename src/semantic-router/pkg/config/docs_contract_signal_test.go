@@ -12,6 +12,7 @@ var signalTutorialBuckets = map[string]string{
 	"authz":         "heuristic",
 	"complexity":    "learned",
 	"context":       "heuristic",
+	"conversation":  "heuristic",
 	"domain":        "learned",
 	"embedding":     "learned",
 	"fact-check":    "learned",

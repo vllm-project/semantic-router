@@ -77,6 +77,7 @@ const sidebars: SidebarsConfig = {
               items: [
                 'tutorials/signal/heuristic/authz',
                 'tutorials/signal/heuristic/context',
+                'tutorials/signal/heuristic/conversation',
                 'tutorials/signal/heuristic/keyword',
                 'tutorials/signal/heuristic/language',
                 'tutorials/signal/heuristic/structure',

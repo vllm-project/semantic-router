@@ -211,11 +211,11 @@ func validateProjectionScoreInput(
 
 func validateProjectionInputValueSource(scoreName string, input ProjectionScoreInput) error {
 	switch input.ValueSource {
-	case "", "binary", "confidence":
+	case "", "binary", "confidence", "raw":
 		return nil
 	default:
 		return fmt.Errorf(
-			"routing.projections.scores[%q]: input %s(%q) has unsupported value_source %q (supported: binary, confidence)",
+			"routing.projections.scores[%q]: input %s(%q) has unsupported value_source %q (supported: binary, confidence, raw)",
 			scoreName,
 			input.Type,
 			input.Name,
@@ -242,6 +242,7 @@ func isProjectionInputTypeSupported(signalType string) bool {
 		SignalTypeJailbreak,
 		SignalTypePII,
 		SignalTypeKB,
+		SignalTypeConversation,
 		ProjectionInputKBMetric:
 		return true
 	default:
@@ -267,6 +268,7 @@ func projectionDeclaredSignals(cfg *RouterConfig) map[string]map[string]struct{}
 		SignalTypeJailbreak:    collectJailbreakRuleNames(cfg.JailbreakRules),
 		SignalTypePII:          collectPIIRuleNames(cfg.PIIRules),
 		SignalTypeKB:           collectKBRuleNames(cfg.KBRules),
+		SignalTypeConversation: collectConversationRuleNames(cfg.ConversationRules),
 	}
 	return declared
 }
@@ -523,6 +525,14 @@ func collectPIIRuleNames(rules []PIIRule) map[string]struct{} {
 }
 
 func collectKBRuleNames(rules []KBSignalRule) map[string]struct{} {
+	names := make(map[string]struct{}, len(rules))
+	for _, rule := range rules {
+		names[rule.Name] = struct{}{}
+	}
+	return names
+}
+
+func collectConversationRuleNames(rules []ConversationRule) map[string]struct{} {
 	names := make(map[string]struct{}, len(rules))
 	for _, rule := range rules {
 		names[rule.Name] = struct{}{}

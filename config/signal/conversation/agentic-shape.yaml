@@ -1,0 +1,43 @@
+routing:
+  signals:
+    conversation:
+      - name: multi_turn_user
+        description: At least two user messages — the conversation has history.
+        feature:
+          type: count
+          source:
+            type: message
+            role: user
+        predicate:
+          gte: 2
+      - name: has_developer_message
+        description: Request includes a developer (system-like) message.
+        feature:
+          type: exists
+          source:
+            type: message
+            role: developer
+      - name: tool_heavy
+        description: Three or more tool definitions — indicates an agentic workflow.
+        feature:
+          type: count
+          source:
+            type: tool_definition
+        predicate:
+          gte: 3
+      - name: active_tool_use
+        description: At least one assistant tool call has been made.
+        feature:
+          type: count
+          source:
+            type: assistant_tool_call
+        predicate:
+          gte: 1
+      - name: completed_tool_cycle
+        description: At least one tool result has been returned.
+        feature:
+          type: count
+          source:
+            type: assistant_tool_cycle
+        predicate:
+          gte: 1

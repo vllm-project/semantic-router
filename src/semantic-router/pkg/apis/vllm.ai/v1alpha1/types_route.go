@@ -64,6 +64,11 @@ type Signals struct {
 
 	// +optional
 	FactCheckRules []FactCheckRule `json:"factCheckRules,omitempty" yaml:"fact_check_rules,omitempty"`
+
+	// Conversation defines conversation-shape routing signals.
+	// +optional
+	// +kubebuilder:validation:MaxItems=100
+	Conversation []ConversationSignal `json:"conversation,omitempty" yaml:"conversation,omitempty"`
 }
 
 // FactCheckRule defines a rule for fact-check signal classification
@@ -122,6 +127,28 @@ type StructureSource struct {
 	Keywords      []string   `json:"keywords,omitempty" yaml:"keywords,omitempty"`
 	CaseSensitive bool       `json:"caseSensitive,omitempty" yaml:"case_sensitive,omitempty"`
 	Sequences     [][]string `json:"sequences,omitempty" yaml:"sequences,omitempty"`
+}
+
+// ConversationSignal defines a conversation-shape routing signal.
+// It detects multi-turn history, developer instructions, tool presence, and
+// assistant-tool interaction patterns in the request.
+type ConversationSignal struct {
+	Name        string                 `json:"name" yaml:"name"`
+	Description string                 `json:"description,omitempty" yaml:"description,omitempty"`
+	Feature     ConversationCRDFeature `json:"feature" yaml:"feature"`
+	Predicate   *NumericPredicate      `json:"predicate,omitempty" yaml:"predicate,omitempty"`
+}
+
+// ConversationCRDFeature selects what to measure (count / exists) and where.
+type ConversationCRDFeature struct {
+	Type   string                `json:"type" yaml:"type"`
+	Source ConversationCRDSource `json:"source" yaml:"source"`
+}
+
+// ConversationCRDSource identifies the message role or tool-related entity to measure.
+type ConversationCRDSource struct {
+	Type string `json:"type" yaml:"type"`
+	Role string `json:"role,omitempty" yaml:"role,omitempty"`
 }
 
 type NumericPredicate struct {
@@ -251,9 +278,9 @@ type SignalCombination struct {
 
 // SignalCondition defines a single signal condition
 type SignalCondition struct {
-	// Type defines the type of signal (keyword/embedding/domain/fact_check/context/structure)
+	// Type defines the type of signal (keyword/embedding/domain/fact_check/context/structure/conversation)
 	// +kubebuilder:validation:Required
-	// +kubebuilder:validation:Enum=keyword;embedding;domain;fact_check;context;structure
+	// +kubebuilder:validation:Enum=keyword;embedding;domain;fact_check;context;structure;conversation
 	Type string `json:"type" yaml:"type"`
 
 	// Name is the name of the signal to reference

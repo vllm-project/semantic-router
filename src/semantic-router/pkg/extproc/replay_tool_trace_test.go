@@ -416,3 +416,183 @@ func TestBuildReplayStreamingToolTracePreservesResponseAPICallID(t *testing.T) {
 		assert.Equal(t, "It is 18C and sunny in San Francisco.", trace.Steps[2].Text)
 	}
 }
+
+// ---------------------------------------------------------------------------
+// Tests for issue #1780 – structured tool-call fields
+// ---------------------------------------------------------------------------
+
+func TestExtractChatCompletionPromptAndTools(t *testing.T) {
+	body := []byte(`{
+		"model": "auto",
+		"messages": [
+			{"role": "system", "content": "You are helpful."},
+			{"role": "user", "content": "What is the weather in Paris?"}
+		],
+		"tools": [
+			{"type": "function", "function": {"name": "get_weather", "description": "Get weather", "parameters": {}}}
+		]
+	}`)
+
+	prompt, toolDefs := extractChatCompletionPromptAndTools(body)
+
+	assert.Equal(t, "What is the weather in Paris?", prompt)
+	assert.NotEmpty(t, toolDefs)
+	assert.Contains(t, toolDefs, "get_weather")
+}
+
+func TestExtractChatCompletionPromptAndTools_NoTools(t *testing.T) {
+	body := []byte(`{
+		"model": "auto",
+		"messages": [
+			{"role": "user", "content": "Hello"}
+		]
+	}`)
+
+	prompt, toolDefs := extractChatCompletionPromptAndTools(body)
+
+	assert.Equal(t, "Hello", prompt)
+	assert.Empty(t, toolDefs)
+}
+
+func TestExtractChatCompletionPromptAndTools_Empty(t *testing.T) {
+	prompt, toolDefs := extractChatCompletionPromptAndTools(nil)
+	assert.Empty(t, prompt)
+	assert.Empty(t, toolDefs)
+}
+
+func TestBuildReplayRoutingRecord_PopulatesPromptAndToolDefs(t *testing.T) {
+	ctx := &RequestContext{
+		RequestID: "req-structured-1",
+		OriginalRequestBody: []byte(`{
+			"model": "auto",
+			"messages": [
+				{"role": "system", "content": "Be helpful."},
+				{"role": "user", "content": "Find the weather in Tokyo."}
+			],
+			"tools": [
+				{"type": "function", "function": {"name": "get_weather", "description": "Returns weather", "parameters": {}}}
+			]
+		}`),
+	}
+
+	record := buildReplayRoutingRecord(ctx, "MoM", "model-a", "default")
+
+	assert.Equal(t, "Find the weather in Tokyo.", record.Prompt)
+	assert.False(t, record.PromptTruncated)
+	assert.NotEmpty(t, record.ToolDefinitions)
+	assert.Contains(t, record.ToolDefinitions, "get_weather")
+}
+
+func TestBuildReplayRoutingRecord_NoTools_EmptyToolDefs(t *testing.T) {
+	ctx := &RequestContext{
+		RequestID: "req-structured-2",
+		OriginalRequestBody: []byte(`{
+			"model": "auto",
+			"messages": [{"role": "user", "content": "Hello world"}]
+		}`),
+	}
+
+	record := buildReplayRoutingRecord(ctx, "MoM", "model-a", "default")
+
+	assert.Equal(t, "Hello world", record.Prompt)
+	assert.Empty(t, record.ToolDefinitions)
+}
+
+func TestChatCompletionToolSteps_HaveAPITypeAndOutput(t *testing.T) {
+	ctx := &RequestContext{
+		RequestID: "req-apitype-chat",
+		OriginalRequestBody: []byte(`{
+			"model": "auto",
+			"messages": [
+				{"role": "user", "content": "Get weather."},
+				{
+					"role": "assistant",
+					"content": null,
+					"tool_calls": [{"id": "call_1", "type": "function", "function": {"name": "get_weather", "arguments": "{\"city\":\"NYC\"}"}}]
+				},
+				{"role": "tool", "tool_call_id": "call_1", "content": "{\"temp\":\"22C\"}"}
+			]
+		}`),
+	}
+
+	record := buildReplayRoutingRecord(ctx, "MoM", "model-a", "default")
+
+	if assert.NotNil(t, record.ToolTrace) && assert.Len(t, record.ToolTrace.Steps, 3) {
+		toolCallStep := record.ToolTrace.Steps[1]
+		assert.Equal(t, replayAPITypeChatCompletions, toolCallStep.APIType)
+
+		toolResultStep := record.ToolTrace.Steps[2]
+		assert.Equal(t, replayAPITypeChatCompletions, toolResultStep.APIType)
+		assert.JSONEq(t, `{"temp":"22C"}`, toolResultStep.Output)
+		assert.Equal(t, toolResultStep.RawOutput, toolResultStep.Output)
+	}
+}
+
+func TestMaxToolTraceBytesPromptTruncation(t *testing.T) {
+	storage := store.NewMemoryStore(10, 0)
+	recorder := routerreplay.NewRecorder(storage)
+	recorder.SetCapturePolicy(false, false, 4096)
+	recorder.SetMaxToolTraceBytes(10) // very small limit
+
+	record := routerreplay.RoutingRecord{
+		RequestID:       "req-trunc-1",
+		Prompt:          "This is a prompt longer than ten bytes",
+		ToolDefinitions: `[{"type":"function","function":{"name":"long_tool"}}]`,
+	}
+
+	id, err := recorder.AddRecord(record)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	stored, found := recorder.GetRecord(id)
+	if !found {
+		t.Fatal("record not found")
+	}
+	assert.Len(t, stored.Prompt, 10)
+	assert.True(t, stored.PromptTruncated)
+	assert.Len(t, stored.ToolDefinitions, 10)
+}
+
+func TestMaxToolTraceBytesStepTruncation(t *testing.T) {
+	storage := store.NewMemoryStore(10, 0)
+	recorder := routerreplay.NewRecorder(storage)
+	recorder.SetCapturePolicy(false, false, 4096)
+	recorder.SetMaxToolTraceBytes(5)
+
+	trace := &routerreplay.ToolTrace{
+		Steps: []routerreplay.ToolTraceStep{
+			{
+				Type:      replayToolStepAssistantToolCall,
+				Arguments: `{"city":"New York"}`,
+				Output:    "",
+			},
+			{
+				Type:   replayToolStepClientToolResult,
+				Output: `{"temperature":"22C","condition":"sunny"}`,
+			},
+		},
+	}
+	record := routerreplay.RoutingRecord{
+		RequestID: "req-trunc-2",
+		ToolTrace: trace,
+	}
+
+	id, err := recorder.AddRecord(record)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	stored, found := recorder.GetRecord(id)
+	if !found {
+		t.Fatal("record not found")
+	}
+
+	if assert.Len(t, stored.ToolTrace.Steps, 2) {
+		assert.Len(t, stored.ToolTrace.Steps[0].Arguments, 5)
+		assert.True(t, stored.ToolTrace.Steps[0].Truncated)
+
+		assert.Len(t, stored.ToolTrace.Steps[1].Output, 5)
+		assert.True(t, stored.ToolTrace.Steps[1].Truncated)
+	}
+}

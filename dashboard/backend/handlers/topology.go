@@ -141,6 +141,7 @@ type RouterMatchedSignals struct {
 	Jailbreak    []string `json:"jailbreak,omitempty"`
 	PII          []string `json:"pii,omitempty"`
 	KB           []string `json:"kb,omitempty"`
+	Conversation []string `json:"conversation,omitempty"`
 	Projection   []string `json:"projection,omitempty"`
 }
 

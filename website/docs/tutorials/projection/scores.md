@@ -18,7 +18,7 @@ Use scores when:
 
 - Aggregates several weak signals into one continuous numeric value for routing.
 - Keeps weighted blending logic in a single, auditable place.
-- Supports both binary and confidence-based value sources.
+- Supports binary, confidence, and raw numeric value sources.
 - Negative weights let a matched signal actively lower the score (e.g., obvious simple requests).
 
 ## What Problem Does It Solve?
@@ -46,6 +46,7 @@ How `input_value` is computed depends on `value_source`:
 
 - omitted or `binary`: use `match` when the signal matched and `miss` when it did not
 - `confidence`: use the matched signal confidence, or `0` when the signal did not match
+- `raw`: use the raw numeric value from `SignalValues` (e.g., a count or measurement), or `0` when absent
 
 Current defaults:
 
@@ -102,6 +103,29 @@ routing:
             weight: 0.22
 ```
 
+### Raw value source
+
+When a signal family exposes numeric measurements (counts, distances, token totals) through `SignalValues`, use `value_source: raw` to feed them directly into the weighted sum instead of reducing them to binary or confidence scalars.
+
+```yaml
+routing:
+  projections:
+    scores:
+      - name: workload_pressure
+        method: weighted_sum
+        inputs:
+          - type: structure
+            name: many_questions
+            weight: 0.2
+            value_source: raw
+          - type: structure
+            name: nested_depth
+            weight: 0.4
+            value_source: raw
+```
+
+Raw values can differ in scale across signal families. Choose weights carefully or use threshold bands that account for the expected numeric range.
+
 ## DSL
 
 ```dsl
@@ -126,7 +150,7 @@ PROJECTION score difficulty_score {
 | `inputs[].type` | signal family to read from |
 | `inputs[].name` | declared signal name |
 | `inputs[].weight` | contribution multiplier; negative weights lower the score |
-| `inputs[].value_source` | `binary` or `confidence` behavior |
+| `inputs[].value_source` | `binary`, `confidence`, or `raw` behavior |
 | `inputs[].match` / `inputs[].miss` | explicit values for binary mode |
 
 ## Configuration

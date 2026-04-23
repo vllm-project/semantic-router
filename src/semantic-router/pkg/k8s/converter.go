@@ -153,12 +153,13 @@ func convertRoutingModelCards(models []v1alpha1.ModelConfig) []config.RoutingMod
 
 func convertSignals(signals v1alpha1.Signals) config.CanonicalSignals {
 	converted := config.CanonicalSignals{
-		Keywords:   make([]config.KeywordRule, 0, len(signals.Keywords)),
-		Embeddings: make([]config.EmbeddingRule, 0, len(signals.Embeddings)),
-		Domains:    make([]config.Category, 0, len(signals.Domains)),
-		Context:    make([]config.ContextRule, 0, len(signals.ContextRules)),
-		Structure:  make([]config.StructureRule, 0, len(signals.Structure)),
-		FactCheck:  make([]config.FactCheckRule, 0, len(signals.FactCheckRules)),
+		Keywords:     make([]config.KeywordRule, 0, len(signals.Keywords)),
+		Embeddings:   make([]config.EmbeddingRule, 0, len(signals.Embeddings)),
+		Domains:      make([]config.Category, 0, len(signals.Domains)),
+		Context:      make([]config.ContextRule, 0, len(signals.ContextRules)),
+		Structure:    make([]config.StructureRule, 0, len(signals.Structure)),
+		FactCheck:    make([]config.FactCheckRule, 0, len(signals.FactCheckRules)),
+		Conversation: make([]config.ConversationRule, 0, len(signals.Conversation)),
 	}
 
 	for _, signal := range signals.Keywords {
@@ -220,6 +221,21 @@ func convertSignals(signals v1alpha1.Signals) config.CanonicalSignals {
 		converted.FactCheck = append(converted.FactCheck, config.FactCheckRule{
 			Name:        rule.Name,
 			Description: rule.Description,
+		})
+	}
+
+	for _, rule := range signals.Conversation {
+		converted.Conversation = append(converted.Conversation, config.ConversationRule{
+			Name:        rule.Name,
+			Description: rule.Description,
+			Feature: config.ConversationFeature{
+				Type: rule.Feature.Type,
+				Source: config.ConversationSource{
+					Type: rule.Feature.Source.Type,
+					Role: rule.Feature.Source.Role,
+				},
+			},
+			Predicate: convertNumericPredicate(rule.Predicate),
 		})
 	}
 
