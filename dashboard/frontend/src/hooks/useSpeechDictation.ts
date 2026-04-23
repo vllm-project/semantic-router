@@ -180,7 +180,7 @@ export function useSpeechDictation(onChangeInput: (value: string) => void) {
         try {
           recognitionRef.current?.stop()
         } catch {
-          // ignore
+          // ignore the code
         }
         return
       }
