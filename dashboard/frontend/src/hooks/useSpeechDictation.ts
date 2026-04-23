@@ -30,32 +30,66 @@ interface WebSpeechRecognition extends EventTarget {
 
 type WebSpeechRecognitionCtor = new () => WebSpeechRecognition
 
-function getSpeechRecognitionCtor(): WebSpeechRecognitionCtor | null {
+/**
+ * Lazily resolved once `window` exists. Do not cache `null` from SSR or the ctor
+ * would stay unavailable after hydration.
+ */
+let speechRecognitionCtor: WebSpeechRecognitionCtor | null | undefined
+
+function resolveSpeechRecognitionCtor(): WebSpeechRecognitionCtor | null {
   if (typeof window === 'undefined') {
     return null
+  }
+  if (speechRecognitionCtor !== undefined) {
+    return speechRecognitionCtor
   }
   const w = window as Window &
     typeof globalThis & {
       SpeechRecognition?: WebSpeechRecognitionCtor
       webkitSpeechRecognition?: WebSpeechRecognitionCtor
     }
-  return w.SpeechRecognition ?? w.webkitSpeechRecognition ?? null
+  speechRecognitionCtor = w.SpeechRecognition ?? w.webkitSpeechRecognition ?? null
+  return speechRecognitionCtor
+}
+
+function detachRecognitionHandlers(instance: WebSpeechRecognition) {
+  instance.onresult = null
+  instance.onerror = null
+  instance.onend = null
+}
+
+function abortRecognitionSilently(instance: WebSpeechRecognition) {
+  detachRecognitionHandlers(instance)
+  try {
+    instance.abort()
+  } catch {
+    try {
+      instance.stop()
+    } catch {
+      // ignore
+    }
+  }
 }
 
 export function useSpeechDictation(onChangeInput: (value: string) => void) {
   const [isListening, setIsListening] = useState(false)
   const recognitionRef = useRef<WebSpeechRecognition | null>(null)
   const prefixRef = useRef('')
-  const finalsRef = useRef<string[]>([])
+  /** Accumulated final transcripts (append avoids O(n) join each result). */
+  const finalsAccRef = useRef('')
   const onChangeInputRef = useRef(onChangeInput)
+  const lastEmittedRef = useRef('')
+
   onChangeInputRef.current = onChangeInput
 
-  const isSupported = useMemo(() => Boolean(getSpeechRecognitionCtor()), [])
+  const isSupported = useMemo(() => Boolean(resolveSpeechRecognitionCtor()), [])
 
-  const detachRecognition = useCallback((instance: WebSpeechRecognition) => {
-    instance.onresult = null
-    instance.onerror = null
-    instance.onend = null
+  const emitIfChanged = useCallback((full: string) => {
+    if (full === lastEmittedRef.current) {
+      return
+    }
+    lastEmittedRef.current = full
+    onChangeInputRef.current(full)
   }, [])
 
   const stopListening = useCallback(() => {
@@ -65,78 +99,58 @@ export function useSpeechDictation(onChangeInput: (value: string) => void) {
       return
     }
     recognitionRef.current = null
-    detachRecognition(instance)
-    try {
-      instance.abort()
-    } catch {
-      try {
-        instance.stop()
-      } catch {
-        // ignore
-      }
-    }
+    abortRecognitionSilently(instance)
     setIsListening(false)
-  }, [detachRecognition])
+  }, [])
 
   const startListening = useCallback(() => {
-    const Ctor = getSpeechRecognitionCtor()
+    const Ctor = resolveSpeechRecognitionCtor()
     if (!Ctor) {
       return
     }
 
     const existing = recognitionRef.current
     if (existing) {
-      detachRecognition(existing)
-      try {
-        existing.abort()
-      } catch {
-        try {
-          existing.stop()
-        } catch {
-          // ignore
-        }
-      }
       recognitionRef.current = null
+      abortRecognitionSilently(existing)
     }
 
     const recognition = new Ctor()
     recognition.continuous = true
     recognition.interimResults = true
-    recognition.lang = typeof navigator !== 'undefined' && navigator.language
-      ? navigator.language
-      : 'en-US'
+    recognition.lang =
+      typeof navigator !== 'undefined' && navigator.language ? navigator.language : 'en-US'
+
+    const finishActive = (instance: WebSpeechRecognition) => {
+      if (recognitionRef.current !== instance) {
+        return
+      }
+      recognitionRef.current = null
+      detachRecognitionHandlers(instance)
+      setIsListening(false)
+    }
 
     recognition.onresult = (event: WebSpeechRecognitionEvent) => {
       let interim = ''
-      for (let i = event.resultIndex; i < event.results.length; i += 1) {
-        const result = event.results[i]
+      const results = event.results
+      for (let i = event.resultIndex; i < results.length; i += 1) {
+        const result = results[i]
         const text = result[0]?.transcript ?? ''
         if (result.isFinal) {
-          finalsRef.current.push(text)
+          finalsAccRef.current += text
         } else {
           interim += text
         }
       }
-      const finals = finalsRef.current.join('')
-      onChangeInputRef.current(prefixRef.current + finals + interim)
+      emitIfChanged(prefixRef.current + finalsAccRef.current + interim)
     }
 
     recognition.onerror = () => {
-      if (recognitionRef.current !== recognition) {
-        return
-      }
-      recognitionRef.current = null
-      detachRecognition(recognition)
-      setIsListening(false)
+      finishActive(recognition)
     }
 
     recognition.onend = () => {
-      if (recognitionRef.current !== recognition) {
-        return
-      }
-      recognitionRef.current = null
-      detachRecognition(recognition)
-      setIsListening(false)
+      finishActive(recognition)
     }
 
     try {
@@ -144,16 +158,17 @@ export function useSpeechDictation(onChangeInput: (value: string) => void) {
       recognitionRef.current = recognition
       setIsListening(true)
     } catch {
-      detachRecognition(recognition)
+      detachRecognitionHandlers(recognition)
       recognitionRef.current = null
       setIsListening(false)
     }
-  }, [detachRecognition])
+  }, [emitIfChanged])
 
   const beginListeningFromInput = useCallback(
     (currentText: string) => {
       prefixRef.current = currentText.length === 0 ? '' : `${currentText.replace(/\s+$/, ' ')} `
-      finalsRef.current = []
+      finalsAccRef.current = ''
+      lastEmittedRef.current = ''
       startListening()
     },
     [startListening],
