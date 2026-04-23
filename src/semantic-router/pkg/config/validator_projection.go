@@ -318,8 +318,7 @@ func validateProjectionMapping(
 	}
 
 	switch mapping.Method {
-	case "threshold_bands", "multi_emit", "top_k":
-		// valid
+	case "", "threshold_bands", "multi_emit", "top_k":
 	default:
 		return fmt.Errorf("routing.projections.mappings[%q]: unsupported method %q (supported: threshold_bands, multi_emit, top_k)", mapping.Name, mapping.Method)
 	}

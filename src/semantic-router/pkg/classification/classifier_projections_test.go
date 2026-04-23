@@ -219,3 +219,52 @@ func TestApplyTopKSelectsClosestBands(t *testing.T) {
 	}
 }
 
+func TestApplyTopKWithOverlappingBands(t *testing.T) {
+	classifier := &Classifier{
+		Config: &config.RouterConfig{
+			IntelligentRouting: config.IntelligentRouting{
+				Projections: config.Projections{
+					Scores: []config.ProjectionScore{{
+						Name:   "topk_score",
+						Method: "weighted_sum",
+						Inputs: []config.ProjectionScoreInput{{
+							Type:        config.SignalTypeKeyword,
+							Name:        "test_signal",
+							Weight:      1.0,
+							ValueSource: "confidence",
+						}},
+					}},
+					Mappings: []config.ProjectionMapping{{
+						Name:   "topk_mapping",
+						Source: "topk_score",
+						Method: "top_k",
+						TopK:   2,
+						Outputs: []config.ProjectionMappingOutput{
+							{Name: "narrow", GTE: float64Ptr(0.4), LT: float64Ptr(0.6)},  // center: 0.5
+							{Name: "wide", GTE: float64Ptr(0.2), LT: float64Ptr(0.9)},    // center: 0.55
+							{Name: "shifted", GTE: float64Ptr(0.3), LT: float64Ptr(0.8)}, // center: 0.55
+						},
+					}},
+				},
+			},
+		},
+	}
+
+	// Score = 0.5: all three bands match.
+	// |0.5 - 0.5| = 0.0 (narrow), |0.5 - 0.55| = 0.05 (wide, shifted)
+	// Top 2 should be narrow first, then one of wide/shifted (stable order → wide).
+	results := &SignalResults{
+		MatchedKeywordRules: []string{"test_signal"},
+		SignalConfidences:   map[string]float64{"keyword:test_signal": 0.5},
+	}
+
+	got := classifier.applyProjections(results)
+	matched := got.MatchedProjectionRules
+	if len(matched) != 2 {
+		t.Fatalf("expected 2 matched rules, got %d: %v", len(matched), matched)
+	}
+	if matched[0] != "narrow" {
+		t.Fatalf("expected narrow as closest band, got %v", matched)
+	}
+}
+

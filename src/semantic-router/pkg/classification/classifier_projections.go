@@ -226,7 +226,9 @@ func (c *Classifier) applyMultiEmit(
 	}
 }
 
-// applyTopK emits the top K matching outputs closest to the score by band center.
+// applyTopK emits up to K matching outputs, ranked by proximity to the band center
+// (smallest |score − center| first). Useful when bands overlap and only the most
+// relevant matches should propagate.
 func (c *Classifier) applyTopK(
 	mapping config.ProjectionMapping,
 	scoreValue float64,
