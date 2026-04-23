@@ -124,12 +124,6 @@ func (c *Compiler) compileProjectionMappings() {
 			Method: mappingDecl.Method,
 			TopK:   mappingDecl.TopK,
 		}
-		if mappingDecl.Hysteresis != nil {
-			mapping.Hysteresis = &config.HysteresisConfig{
-				UpThreshold:   mappingDecl.Hysteresis.UpThreshold,
-				DownThreshold: mappingDecl.Hysteresis.DownThreshold,
-			}
-		}
 		if mappingDecl.Calibration != nil {
 			mapping.Calibration = &config.ProjectionMappingCalibration{
 				Method: mappingDecl.Calibration.Method,
