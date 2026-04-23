@@ -62,4 +62,3 @@ type ProjectionMappingOutput struct {
 	GT   *float64 `yaml:"gt,omitempty"`
 	GTE  *float64 `yaml:"gte,omitempty"`
 }
-

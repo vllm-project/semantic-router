@@ -429,9 +429,9 @@ func TestApplyTopKSelectsClosestBands(t *testing.T) {
 						Method: "top_k",
 						TopK:   2,
 						Outputs: []config.ProjectionMappingOutput{
-							{Name: "band_0_4", GTE: float64Ptr(0.0), LT: float64Ptr(0.4)},  // center: 0.2
-							{Name: "band_4_7", GTE: float64Ptr(0.4), LT: float64Ptr(0.7)},  // center: 0.55
-							{Name: "band_7_1", GTE: float64Ptr(0.7)},                        // center: 0.7
+							{Name: "band_0_4", GTE: float64Ptr(0.0), LT: float64Ptr(0.4)}, // center: 0.2
+							{Name: "band_4_7", GTE: float64Ptr(0.4), LT: float64Ptr(0.7)}, // center: 0.55
+							{Name: "band_7_1", GTE: float64Ptr(0.7)},                      // center: 0.7
 						},
 					}},
 				},
@@ -507,4 +507,3 @@ func TestApplyTopKWithOverlappingBands(t *testing.T) {
 		t.Fatalf("expected narrow as closest band, got %v", matched)
 	}
 }
-

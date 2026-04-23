@@ -8,8 +8,10 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 )
 
-type projectionMatchAccessor func(*SignalResults) []string
-type mappingApplyFunc func(*Classifier, config.ProjectionMapping, float64, *SignalResults)
+type (
+	projectionMatchAccessor func(*SignalResults) []string
+	mappingApplyFunc        func(*Classifier, config.ProjectionMapping, float64, *SignalResults)
+)
 
 var projectionMatchAccessors = map[string]projectionMatchAccessor{
 	config.SignalTypeKeyword:      func(results *SignalResults) []string { return results.MatchedKeywordRules },
@@ -326,4 +328,3 @@ func projectionOutputBandCenter(output config.ProjectionMappingOutput) float64 {
 	}
 	return 0
 }
-
