@@ -647,7 +647,6 @@ func (v *Validator) checkProjectionMapping(mapping *ProjectionMappingDecl, score
 		)
 	}
 
-	// Validate method-specific parameters
 	if mapping.Method == "top_k" {
 		if mapping.TopK <= 0 {
 			v.addDiag(

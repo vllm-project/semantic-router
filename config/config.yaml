@@ -455,7 +455,6 @@ routing:
       - name: request_band
         source: request_difficulty
         method: threshold_bands
-        top_k: 1
         calibration:
           method: sigmoid_distance
           slope: 10.0
