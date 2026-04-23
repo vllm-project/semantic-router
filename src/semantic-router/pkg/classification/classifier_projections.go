@@ -34,7 +34,6 @@ var mappingStrategies = map[string]mappingApplyFunc{
 	"threshold_bands": (*Classifier).applyThresholdBands,
 	"multi_emit":      (*Classifier).applyMultiEmit,
 	"top_k":           (*Classifier).applyTopK,
-	"hysteresis":      (*Classifier).applyHysteresis,
 }
 
 func (c *Classifier) applyProjections(results *SignalResults) *SignalResults {
@@ -253,7 +252,6 @@ func (c *Classifier) applyTopK(
 		return
 	}
 
-	// Sort by distance ascending
 	slices.SortFunc(matches, func(a, b bandDistance) int {
 		if a.distance < b.distance {
 			return -1
@@ -264,7 +262,6 @@ func (c *Classifier) applyTopK(
 		return 0
 	})
 
-	// Take top K
 	k := mapping.TopK
 	if k <= 0 || k > len(matches) {
 		k = len(matches)
@@ -277,85 +274,6 @@ func (c *Classifier) applyTopK(
 	}
 }
 
-// applyHysteresis applies hysteresis to prevent thrashing near band boundaries.
-func (c *Classifier) applyHysteresis(
-	mapping config.ProjectionMapping,
-	scoreValue float64,
-	results *SignalResults,
-) {
-	if mapping.Hysteresis == nil {
-		// Fallback to threshold_bands if no hysteresis config
-		output, matched := matchProjectionOutput(mapping, scoreValue)
-		if matched {
-			results.MatchedProjectionRules = append(results.MatchedProjectionRules, output.Name)
-			results.SignalConfidences[signalConfidenceKey(config.SignalTypeProjection, output.Name)] = projectionOutputConfidence(mapping, output, scoreValue)
-		}
-		return
-	}
-
-	// Find current band (first-hit)
-	currentOutput, matched := matchProjectionOutput(mapping, scoreValue)
-	if !matched {
-		return
-	}
-
-	// Check prior state
-	lastOutput, hasPrior := c.projectionHysteresisState[mapping.Name]
-	if !hasPrior || lastOutput == "" {
-		// Initial evaluation: use current band
-		c.projectionHysteresisState[mapping.Name] = currentOutput.Name
-		results.MatchedProjectionRules = append(results.MatchedProjectionRules, currentOutput.Name)
-		results.SignalConfidences[signalConfidenceKey(config.SignalTypeProjection, currentOutput.Name)] = projectionOutputConfidence(mapping, currentOutput, scoreValue)
-		return
-	}
-
-	if currentOutput.Name == lastOutput {
-		// No change, emit last output
-		results.MatchedProjectionRules = append(results.MatchedProjectionRules, lastOutput)
-		results.SignalConfidences[signalConfidenceKey(config.SignalTypeProjection, lastOutput)] = projectionOutputConfidence(mapping, currentOutput, scoreValue)
-		return
-	}
-
-	// Determine if we should transition
-	lastBandCenter := findOutputBandCenter(mapping.Outputs, lastOutput)
-	currentBandCenter := projectionOutputBandCenter(currentOutput)
-
-	var nextOutput string
-	if currentBandCenter > lastBandCenter {
-		// Upgrading: require score >= UpThreshold
-		if scoreValue >= mapping.Hysteresis.UpThreshold {
-			nextOutput = currentOutput.Name
-		} else {
-			nextOutput = lastOutput
-		}
-	} else {
-		// Downgrading: require score < DownThreshold
-		if scoreValue < mapping.Hysteresis.DownThreshold {
-			nextOutput = currentOutput.Name
-		} else {
-			nextOutput = lastOutput
-		}
-	}
-
-	c.projectionHysteresisState[mapping.Name] = nextOutput
-	results.MatchedProjectionRules = append(results.MatchedProjectionRules, nextOutput)
-
-	// Use the actual output struct for confidence computation
-	var actualOutput config.ProjectionMappingOutput
-	if nextOutput == currentOutput.Name {
-		actualOutput = currentOutput
-	} else {
-		for _, output := range mapping.Outputs {
-			if output.Name == nextOutput {
-				actualOutput = output
-				break
-			}
-		}
-	}
-	results.SignalConfidences[signalConfidenceKey(config.SignalTypeProjection, nextOutput)] = projectionOutputConfidence(mapping, actualOutput, scoreValue)
-}
-
-// projectionOutputBandCenter computes the center of a band from its bounds.
 func projectionOutputBandCenter(output config.ProjectionMappingOutput) float64 {
 	var lower, upper float64
 	hasLower, hasUpper := false, false
@@ -394,12 +312,3 @@ func projectionOutputBandCenter(output config.ProjectionMappingOutput) float64 {
 	return 0
 }
 
-// findOutputBandCenter finds the band center for a named output.
-func findOutputBandCenter(outputs []config.ProjectionMappingOutput, name string) float64 {
-	for _, output := range outputs {
-		if output.Name == name {
-			return projectionOutputBandCenter(output)
-		}
-	}
-	return 0
-}

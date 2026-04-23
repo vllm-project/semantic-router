@@ -334,7 +334,6 @@ type ProjectionMappingDecl struct {
 	Source      string
 	Method      string
 	TopK        int
-	Hysteresis  *ProjectionMappingHysteresisDecl
 	Calibration *ProjectionMappingCalibrationDecl
 	Outputs     []*ProjectionMappingOutputDecl
 	Pos         Position
@@ -344,12 +343,6 @@ type ProjectionMappingDecl struct {
 type ProjectionMappingCalibrationDecl struct {
 	Method string
 	Slope  float64
-}
-
-// ProjectionMappingHysteresisDecl defines hysteresis thresholds for stable band transitions.
-type ProjectionMappingHysteresisDecl struct {
-	UpThreshold   float64
-	DownThreshold float64
 }
 
 // ProjectionMappingOutputDecl defines one threshold band emitted by a mapping.
