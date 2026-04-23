@@ -181,7 +181,7 @@ spec:
                                 minLength: 1
                                 type: string
                               type:
-                                description: Type defines the type of signal (keyword/embedding/domain/fact_check/context/structure)
+                                description: Type defines the type of signal (keyword/embedding/domain/fact_check/context/structure/conversation)
                                 enum:
                                 - keyword
                                 - embedding
@@ -189,6 +189,7 @@ spec:
                                 - fact_check
                                 - context
                                 - structure
+                                - conversation
                                 type: string
                             required:
                             - name
@@ -254,6 +255,56 @@ spec:
                       - minTokens
                       - name
                       type: object
+                    type: array
+                  conversation:
+                    description: Conversation defines conversation-shape routing signals.
+                    items:
+                      description: |-
+                        ConversationSignal defines a conversation-shape routing signal.
+                        It detects multi-turn history, developer instructions, tool presence, and
+                        assistant-tool interaction patterns in the request.
+                      properties:
+                        description:
+                          type: string
+                        feature:
+                          description: ConversationCRDFeature selects what to measure
+                            (count / exists) and where.
+                          properties:
+                            source:
+                              description: ConversationCRDSource identifies the message
+                                role or tool-related entity to measure.
+                              properties:
+                                role:
+                                  type: string
+                                type:
+                                  type: string
+                              required:
+                              - type
+                              type: object
+                            type:
+                              type: string
+                          required:
+                          - source
+                          - type
+                          type: object
+                        name:
+                          type: string
+                        predicate:
+                          properties:
+                            gt:
+                              type: number
+                            gte:
+                              type: number
+                            lt:
+                              type: number
+                            lte:
+                              type: number
+                          type: object
+                      required:
+                      - feature
+                      - name
+                      type: object
+                    maxItems: 100
                     type: array
                   domains:
                     description: Domains defines MMLU domain categories for classification

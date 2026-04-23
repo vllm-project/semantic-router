@@ -20,6 +20,7 @@ var supportedSignalTypes = []string{
 	SignalTypeAuthz,
 	SignalTypeComplexity,
 	SignalTypeContext,
+	SignalTypeConversation,
 	SignalTypeDomain,
 	SignalTypeEmbedding,
 	SignalTypeFactCheck,

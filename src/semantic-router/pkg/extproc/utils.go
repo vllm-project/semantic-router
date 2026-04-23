@@ -80,6 +80,10 @@ func extractMessageRoleAndContent(msg openai.ChatCompletionMessageParamUnion) (s
 		return "system", extractSystemMessageContent(msg.OfSystem.Content)
 	case msg.OfAssistant != nil:
 		return "assistant", extractAssistantMessageContent(msg.OfAssistant.Content)
+	case msg.OfDeveloper != nil:
+		return "developer", extractDeveloperMessageContent(msg.OfDeveloper.Content)
+	case msg.OfTool != nil:
+		return "tool", extractToolMessageContent(msg.OfTool.Content)
 	default:
 		return "", ""
 	}
@@ -106,6 +110,20 @@ func extractAssistantMessageContent(
 		return content.OfString.Value
 	}
 	return joinAssistantContentParts(content.OfArrayOfContentParts)
+}
+
+func extractDeveloperMessageContent(content openai.ChatCompletionDeveloperMessageParamContentUnion) string {
+	if content.OfString.Value != "" {
+		return content.OfString.Value
+	}
+	return joinSystemContentParts(content.OfArrayOfContentParts)
+}
+
+func extractToolMessageContent(content openai.ChatCompletionToolMessageParamContentUnion) string {
+	if content.OfString.Value != "" {
+		return content.OfString.Value
+	}
+	return joinSystemContentParts(content.OfArrayOfContentParts)
 }
 
 func joinUserContentParts(parts []openai.ChatCompletionContentPartUnionParam) string {
@@ -140,36 +158,26 @@ func joinAssistantContentParts(
 	return strings.Join(textParts, " ")
 }
 
-// statusCodeToEnum converts HTTP status code to typev3.StatusCode enum
+var httpStatusToEnvoyCode = map[int]typev3.StatusCode{
+	200: typev3.StatusCode_OK,
+	400: typev3.StatusCode_BadRequest,
+	401: typev3.StatusCode_Unauthorized,
+	403: typev3.StatusCode_Forbidden,
+	404: typev3.StatusCode_NotFound,
+	405: typev3.StatusCode_MethodNotAllowed,
+	413: typev3.StatusCode_PayloadTooLarge,
+	422: typev3.StatusCode_UnprocessableEntity,
+	429: typev3.StatusCode_TooManyRequests,
+	500: typev3.StatusCode_InternalServerError,
+	502: typev3.StatusCode_BadGateway,
+	503: typev3.StatusCode_ServiceUnavailable,
+}
+
 func statusCodeToEnum(statusCode int) typev3.StatusCode {
-	switch statusCode {
-	case 200:
-		return typev3.StatusCode_OK
-	case 401:
-		return typev3.StatusCode_Unauthorized
-	case 403:
-		return typev3.StatusCode_Forbidden
-	case 400:
-		return typev3.StatusCode_BadRequest
-	case 404:
-		return typev3.StatusCode_NotFound
-	case 405:
-		return typev3.StatusCode_MethodNotAllowed
-	case 413:
-		return typev3.StatusCode_PayloadTooLarge
-	case 422:
-		return typev3.StatusCode_UnprocessableEntity
-	case 429:
-		return typev3.StatusCode_TooManyRequests
-	case 500:
-		return typev3.StatusCode_InternalServerError
-	case 502:
-		return typev3.StatusCode_BadGateway
-	case 503:
-		return typev3.StatusCode_ServiceUnavailable
-	default:
-		return typev3.StatusCode_OK
+	if code, ok := httpStatusToEnvoyCode[statusCode]; ok {
+		return code
 	}
+	return typev3.StatusCode_OK
 }
 
 // isSafeImageDataURL returns true only for inline base64-encoded image data URIs
@@ -227,6 +235,12 @@ func extractChatMessageRoleAndText(msg openai.ChatCompletionMessageParamUnion) (
 	}
 	if msg.OfAssistant != nil {
 		return "assistant", extractAssistantMessageText(msg.OfAssistant)
+	}
+	if msg.OfDeveloper != nil {
+		return "developer", extractDeveloperMessageContent(msg.OfDeveloper.Content)
+	}
+	if msg.OfTool != nil {
+		return "tool", extractToolMessageContent(msg.OfTool.Content)
 	}
 	return "", ""
 }

@@ -616,3 +616,41 @@ func BenchmarkRewriteModel_Fast_16K(b *testing.B) {
 		rewriteModelInBodyFast(body, "new-model") //nolint:errcheck
 	}
 }
+
+func TestExtractContentFast_ConversationFacts(t *testing.T) {
+	body := []byte(`{
+		"model": "auto",
+		"messages": [
+			{"role": "developer", "content": "Fix bugs methodically."},
+			{"role": "user", "content": "The login endpoint returns 500."},
+			{"role": "assistant", "content": null, "tool_calls": [
+				{"id": "c1", "type": "function", "function": {"name": "read_file", "arguments": "{}"}},
+				{"id": "c2", "type": "function", "function": {"name": "list_dir", "arguments": "{}"}}
+			]},
+			{"role": "tool", "tool_call_id": "c1", "content": "file contents"},
+			{"role": "tool", "tool_call_id": "c2", "content": "dir listing"},
+			{"role": "assistant", "content": null, "tool_calls": [
+				{"id": "c3", "type": "function", "function": {"name": "write_file", "arguments": "{}"}}
+			]},
+			{"role": "tool", "tool_call_id": "c3", "content": "done"},
+			{"role": "user", "content": "Now run the tests."},
+			{"role": "system", "content": "Session context."}
+		],
+		"tools": [
+			{"type": "function", "function": {"name": "read_file"}},
+			{"type": "function", "function": {"name": "write_file"}},
+			{"type": "function", "function": {"name": "run_tests"}}
+		]
+	}`)
+	r, err := extractContentFast(body)
+	require.NoError(t, err)
+
+	assert.True(t, r.HasDeveloperMessage, "developer message should be detected")
+	assert.Equal(t, 2, r.UserMessageCount, "two user messages")
+	assert.Equal(t, 2, r.AssistantMessageCount, "two assistant messages")
+	assert.Equal(t, 1, r.SystemMessageCount, "one system message")
+	assert.Equal(t, 3, r.ToolMessageCount, "three tool messages")
+	assert.Equal(t, 3, r.ToolDefinitionCount, "three tool definitions")
+	assert.Equal(t, 3, r.AssistantToolCallCount, "three tool_calls total (2+1)")
+	assert.Equal(t, 3, r.CompletedToolCycles, "three completed tool cycles")
+}

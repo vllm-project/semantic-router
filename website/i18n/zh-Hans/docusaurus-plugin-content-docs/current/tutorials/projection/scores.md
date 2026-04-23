@@ -2,7 +2,7 @@
 translation:
   source_commit: "45bfd49e"
   source_file: "docs/tutorials/projection/scores.md"
-  outdated: false
+  outdated: true
 sidebar_position: 3
 ---
 
@@ -22,7 +22,7 @@ sidebar_position: 3
 
 - 将多个弱信号聚合成单一连续数值供路由使用。
 - 加权混合逻辑集中在一处，便于审计。
-- 支持二值与基于置信度的值源。
+- 支持二值、置信度与原始数值三种值源。
 - 负权重可在信号匹配时主动拉低分数（例如明显简单请求）。
 
 ## 解决什么问题？
@@ -50,6 +50,7 @@ sidebar_position: 3
 
 - 省略或 `binary`：信号匹配用 `match`，未匹配用 `miss`
 - `confidence`：使用匹配置信度，未匹配为 `0`
+- `raw`：使用 `SignalValues` 中的原始数值（如计数或度量值），缺失时为 `0`
 
 当前默认：
 
@@ -116,7 +117,7 @@ PROJECTION score difficulty_score {
 | `inputs[].type` | 读取的信号族 |
 | `inputs[].name` | 已声明的信号名 |
 | `inputs[].weight` | 贡献系数；负权重降低分数 |
-| `inputs[].value_source` | `binary` 或 `confidence` 行为 |
+| `inputs[].value_source` | `binary`、`confidence` 或 `raw` 行为 |
 | `inputs[].match` / `inputs[].miss` | 二值模式下的显式取值 |
 
 ## 配置

@@ -49,6 +49,7 @@ func (r *OpenAIRouter) evaluateSignalsForDecision(
 		ctx.RequestImageURL,
 		signalInput.evaluationText,
 		signalInput.skipCompressionSignals,
+		signalInput.conversationFacts,
 	)
 	if authzErr != nil {
 		signalSpan.End()
@@ -89,6 +90,7 @@ func logSignalEvaluationResults(ctx *RequestContext, signalLatencyMs int64, sign
 		"jailbreak":      signals.MatchedJailbreakRules,
 		"pii":            signals.MatchedPIIRules,
 		"kb":             signals.MatchedKBRules,
+		"conversation":   signals.MatchedConversationRules,
 		"projection":     signals.MatchedProjectionRules,
 		"context_tokens": signals.TokenCount,
 	})
@@ -215,14 +217,16 @@ func (r *OpenAIRouter) selectDecisionRuntimeModel(
 		return selectedModel, entropy.ReasoningDecision{}
 	}
 
-	selectedModelRef, usedMethod := r.selectModelFromCandidates(
+	selCtx := r.buildSelectionContext(
 		result.Decision.ModelRefs,
 		decisionName,
 		userContent,
 		result.Decision.Algorithm,
 		categoryName,
 		result.Decision.CandidateIterations,
+		ctx,
 	)
+	selectedModelRef, usedMethod := r.selectModelFromCandidates(selCtx, result.Decision.Algorithm)
 	selectedModel := selectedModelRef.Model
 	selectionFields := map[string]interface{}{
 		"request_id":        ctx.RequestID,

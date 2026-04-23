@@ -4945,6 +4945,179 @@ ROUTE reasoning_route {
 	}
 }
 
+func TestParseProjectionRawValueSource(t *testing.T) {
+	input := `
+SIGNAL keyword reasoning_markers {
+  operator: "OR"
+  keywords: ["reason"]
+}
+SIGNAL structure many_questions {
+  operator: "OR"
+  patterns: ["\\?"]
+}
+
+PROJECTION score workload_pressure {
+  method: "weighted_sum"
+  inputs: [
+    { type: "keyword", name: "reasoning_markers", weight: 0.3, value_source: "confidence" },
+    { type: "structure", name: "many_questions", weight: 0.5, value_source: "raw" }
+  ]
+}
+
+PROJECTION mapping pressure_band {
+  source: "workload_pressure"
+  method: "threshold_bands"
+  outputs: [
+    { name: "low_pressure", lt: 2.0 },
+    { name: "high_pressure", gte: 2.0 }
+  ]
+}
+
+ROUTE heavy_route {
+  PRIORITY 100
+  WHEN projection("high_pressure")
+  MODEL "m1"
+}
+`
+	prog, errs := Parse(input)
+	if len(errs) > 0 {
+		t.Fatalf("parse errors: %v", errs)
+	}
+	if len(prog.ProjectionScores) != 1 {
+		t.Fatalf("expected 1 projection score, got %d", len(prog.ProjectionScores))
+	}
+	inputs := prog.ProjectionScores[0].Inputs
+	if len(inputs) != 2 {
+		t.Fatalf("expected 2 inputs, got %d", len(inputs))
+	}
+	if inputs[0].ValueSource != "confidence" {
+		t.Fatalf("input[0] value_source = %q, want confidence", inputs[0].ValueSource)
+	}
+	if inputs[1].ValueSource != "raw" {
+		t.Fatalf("input[1] value_source = %q, want raw", inputs[1].ValueSource)
+	}
+}
+
+func TestCompileProjectionRawValueSource(t *testing.T) {
+	input := `
+SIGNAL keyword question_markers {
+  operator: "OR"
+  keywords: ["how many", "what is"]
+}
+
+PROJECTION score pressure {
+  method: "weighted_sum"
+  inputs: [
+    { type: "keyword", name: "question_markers", weight: 0.5, value_source: "raw" }
+  ]
+}
+
+PROJECTION mapping pressure_band {
+  source: "pressure"
+  method: "threshold_bands"
+  outputs: [
+    { name: "high_pressure", gte: 2.0 }
+  ]
+}
+
+ROUTE heavy {
+  PRIORITY 100
+  WHEN projection("high_pressure")
+  MODEL "m1"
+}
+`
+	cfg, errs := Compile(input)
+	if len(errs) > 0 {
+		t.Fatalf("compile errors: %v", errs)
+	}
+	if len(cfg.Projections.Scores) != 1 {
+		t.Fatalf("expected 1 score, got %d", len(cfg.Projections.Scores))
+	}
+	if got := cfg.Projections.Scores[0].Inputs[0].ValueSource; got != "raw" {
+		t.Fatalf("compiled value_source = %q, want raw", got)
+	}
+}
+
+func TestValidateProjectionRejectsInvalidValueSource(t *testing.T) {
+	input := `
+SIGNAL keyword reasoning_markers {
+  operator: "OR"
+  keywords: ["reason"]
+}
+
+PROJECTION score difficulty_score {
+  method: "weighted_sum"
+  inputs: [
+    { type: "keyword", name: "reasoning_markers", weight: 0.6, value_source: "bogus" }
+  ]
+}
+
+PROJECTION mapping difficulty_band {
+  source: "difficulty_score"
+  method: "threshold_bands"
+  outputs: [
+    { name: "balance_medium", lt: 0.7 }
+  ]
+}
+
+ROUTE r {
+  PRIORITY 100
+  WHEN projection("balance_medium")
+  MODEL "m1"
+}
+`
+	diags, _ := Validate(input)
+	found := false
+	for _, d := range diags {
+		if strings.Contains(d.Message, "unsupported value_source") &&
+			strings.Contains(d.Message, "bogus") {
+			found = true
+			if !strings.Contains(d.Message, "raw") {
+				t.Fatalf("diagnostic should list 'raw' as supported: %s", d.Message)
+			}
+		}
+	}
+	if !found {
+		t.Fatal("expected diagnostic for unsupported value_source \"bogus\"")
+	}
+}
+
+func TestValidateProjectionAcceptsRawValueSource(t *testing.T) {
+	input := `
+SIGNAL structure many_questions {
+  operator: "OR"
+  patterns: ["\\?"]
+}
+
+PROJECTION score workload {
+  method: "weighted_sum"
+  inputs: [
+    { type: "structure", name: "many_questions", weight: 0.5, value_source: "raw" }
+  ]
+}
+
+PROJECTION mapping workload_band {
+  source: "workload"
+  method: "threshold_bands"
+  outputs: [
+    { name: "heavy", gte: 2.0 }
+  ]
+}
+
+ROUTE heavy_route {
+  PRIORITY 100
+  WHEN projection("heavy")
+  MODEL "m1"
+}
+`
+	diags, _ := Validate(input)
+	for _, d := range diags {
+		if strings.Contains(d.Message, "value_source") {
+			t.Fatalf("unexpected value_source diagnostic: %s", d.Message)
+		}
+	}
+}
+
 // ---------- TEST Block Tests ----------
 
 func TestParseTestBlock(t *testing.T) {

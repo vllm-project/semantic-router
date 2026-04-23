@@ -217,6 +217,8 @@ func (h *HybridSelector) Select(ctx context.Context, selCtx *SelectionContext) (
 		h.applyCostAdjustment(combinedScores, selCtx.CostWeight)
 	}
 
+	h.applyCacheAffinity(combinedScores, selCtx)
+
 	logging.Infof("[HybridSelector] Combining scores (weights: elo=%.2f, dc=%.2f, am=%.2f, cost=%.2f):",
 		h.config.EloWeight, h.config.RouterDCWeight, h.config.AutoMixWeight, h.config.CostWeight)
 	for _, model := range selCtx.CandidateModels {
@@ -234,19 +236,7 @@ func (h *HybridSelector) Select(ctx context.Context, selCtx *SelectionContext) (
 			model.Model, eloScore, dcScore, amScore, combinedScores[model.Model])
 	}
 
-	// Find best model
-	var bestModel *config.ModelRef
-	var bestScore float64
-
-	for i := range selCtx.CandidateModels {
-		model := &selCtx.CandidateModels[i]
-		score := combinedScores[model.Model]
-
-		if score > bestScore || bestModel == nil {
-			bestScore = score
-			bestModel = model
-		}
-	}
+	bestModel, bestScore := h.selectBestModel(selCtx.CandidateModels, combinedScores)
 
 	if bestModel == nil {
 		return nil, fmt.Errorf("could not select a model")
@@ -255,17 +245,7 @@ func (h *HybridSelector) Select(ctx context.Context, selCtx *SelectionContext) (
 	// Calculate confidence from component agreement
 	confidence := h.calculateConfidence(componentResults, bestModel.Model)
 
-	// Record component agreement metric for evolution tracking
-	if len(componentResults) > 1 {
-		agreementRatio := float64(0)
-		for _, r := range componentResults {
-			if r.SelectedModel == bestModel.Model {
-				agreementRatio++
-			}
-		}
-		agreementRatio /= float64(len(componentResults))
-		RecordComponentAgreement(agreementRatio)
-	}
+	h.recordComponentAgreement(componentResults, bestModel.Model)
 
 	// Build reasoning
 	reasoning := h.buildReasoning(componentScores, bestModel.Model)
@@ -282,6 +262,52 @@ func (h *HybridSelector) Select(ctx context.Context, selCtx *SelectionContext) (
 		Reasoning:     reasoning,
 		AllScores:     combinedScores,
 	}, nil
+}
+
+func (h *HybridSelector) applyCacheAffinity(combinedScores map[string]float64, selCtx *SelectionContext) {
+	if selCtx.CacheAffinityCtx == nil {
+		return
+	}
+
+	affinityResult := ComputeCacheAffinityAdjustments(
+		selCtx.CacheAffinityCtx, selCtx.CandidateModels, combinedScores)
+	for model, adj := range affinityResult.Adjustments {
+		if adj != 0 {
+			combinedScores[model] += adj
+		}
+	}
+}
+
+func (h *HybridSelector) selectBestModel(candidates []config.ModelRef, combinedScores map[string]float64) (*config.ModelRef, float64) {
+	var bestModel *config.ModelRef
+	var bestScore float64
+
+	for i := range candidates {
+		model := &candidates[i]
+		score := combinedScores[model.Model]
+
+		if score > bestScore || bestModel == nil {
+			bestScore = score
+			bestModel = model
+		}
+	}
+
+	return bestModel, bestScore
+}
+
+func (h *HybridSelector) recordComponentAgreement(componentResults []*SelectionResult, bestModel string) {
+	if len(componentResults) <= 1 {
+		return
+	}
+
+	agreementRatio := float64(0)
+	for _, r := range componentResults {
+		if r.SelectedModel == bestModel {
+			agreementRatio++
+		}
+	}
+	agreementRatio /= float64(len(componentResults))
+	RecordComponentAgreement(agreementRatio)
 }
 
 // UpdateFeedback propagates feedback to all component selectors

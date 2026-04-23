@@ -418,7 +418,7 @@ func (v *Validator) checkSignalConstraints(s *SignalDecl) {
 	// Check valid signal types
 	if !config.IsSupportedSignalType(s.SignalType) {
 		v.addDiag(DiagConstraint, s.Pos,
-			fmt.Sprintf("Unknown signal type %q in %s. Supported signal types: keyword, embedding, domain, fact_check, user_feedback, preference, language, context, structure, complexity, modality, authz, jailbreak, pii, kb", s.SignalType, context),
+			fmt.Sprintf("Unknown signal type %q in %s. Supported signal types: keyword, embedding, domain, fact_check, user_feedback, preference, language, context, structure, conversation, complexity, modality, authz, jailbreak, pii, kb", s.SignalType, context),
 			nil,
 		)
 	}
@@ -452,6 +452,8 @@ func (v *Validator) checkSignalConstraints(s *SignalDecl) {
 		v.checkDomainSignalConstraints(s, context)
 	case "structure":
 		v.checkStructureSignalConstraints(s)
+	case "conversation":
+		v.checkConversationSignalConstraints(s)
 	}
 }
 
@@ -478,6 +480,33 @@ func (v *Validator) checkStructureSignalConstraints(s *SignalDecl) {
 	}
 	rule.Name = s.Name
 	if err := config.ValidateStructureRuleContract(rule); err != nil {
+		v.addDiag(DiagConstraint, s.Pos, err.Error(), nil)
+	}
+}
+
+func (v *Validator) checkConversationSignalConstraints(s *SignalDecl) {
+	payload := fieldsToMap(s.Fields)
+	payload["name"] = s.Name
+
+	raw, err := yaml.Marshal(payload)
+	if err != nil {
+		v.addDiag(DiagConstraint, s.Pos,
+			fmt.Sprintf("failed to encode conversation signal %q: %v", s.Name, err),
+			nil,
+		)
+		return
+	}
+
+	var rule config.ConversationRule
+	if err := yaml.Unmarshal(raw, &rule); err != nil {
+		v.addDiag(DiagConstraint, s.Pos,
+			fmt.Sprintf("failed to decode conversation signal %q: %v", s.Name, err),
+			nil,
+		)
+		return
+	}
+	rule.Name = s.Name
+	if err := config.ValidateConversationRuleContract(rule); err != nil {
 		v.addDiag(DiagConstraint, s.Pos, err.Error(), nil)
 	}
 }

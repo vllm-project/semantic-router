@@ -524,6 +524,9 @@ func TestValkeyStore_ParseListSearchResults(t *testing.T) {
 
 		memories := store.parseListSearchResults(result)
 		require.Len(t, memories, 2)
+		// Newer created_at first (client-side sort; map iteration order is undefined).
+		assert.Equal(t, "mem_2", memories[0].ID)
+		assert.Equal(t, "mem_1", memories[1].ID)
 	})
 }
 

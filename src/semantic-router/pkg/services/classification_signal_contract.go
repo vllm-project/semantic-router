@@ -26,6 +26,7 @@ var matchedSignalResolvers = map[string]func(*MatchedSignals) *[]string{
 	config.SignalTypeJailbreak:    func(target *MatchedSignals) *[]string { return &target.Jailbreak },
 	config.SignalTypePII:          func(target *MatchedSignals) *[]string { return &target.PII },
 	config.SignalTypeKB:           func(target *MatchedSignals) *[]string { return &target.KB },
+	config.SignalTypeConversation: func(target *MatchedSignals) *[]string { return &target.Conversation },
 	config.SignalTypeProjection:   func(target *MatchedSignals) *[]string { return &target.Projection },
 }
 
@@ -63,6 +64,7 @@ type MatchedSignals struct {
 	Jailbreak    []string `json:"jailbreak,omitempty"`
 	PII          []string `json:"pii,omitempty"`
 	KB           []string `json:"kb,omitempty"`
+	Conversation []string `json:"conversation,omitempty"`
 	Projection   []string `json:"projection,omitempty"`
 }
 
@@ -168,6 +170,7 @@ func (s *ClassificationService) ClassifyIntentForEval(req IntentRequest) (*EvalR
 		true,
 		"",
 		nil,
+		classification.ConversationFacts{},
 	)
 
 	var decisionResult *decision.DecisionResult
@@ -222,6 +225,7 @@ func buildMatchedSignals(signals *classification.SignalResults) *MatchedSignals 
 		Jailbreak:    signals.MatchedJailbreakRules,
 		PII:          signals.MatchedPIIRules,
 		KB:           signals.MatchedKBRules,
+		Conversation: signals.MatchedConversationRules,
 		Projection:   signals.MatchedProjectionRules,
 	}
 }

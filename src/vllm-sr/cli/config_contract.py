@@ -89,6 +89,7 @@ SIGNAL_FAMILY_SPECS = (
     SignalFamilySpec("jailbreak", "jailbreak", "jailbreak", "jailbreak"),
     SignalFamilySpec("pii", "pii", "pii", "pii"),
     SignalFamilySpec("kb", "kb", "kb", "kb"),
+    SignalFamilySpec("conversation", "conversation", "conversation", "conversation"),
 )
 
 LEGACY_SIGNAL_KEY_TO_CANONICAL = {

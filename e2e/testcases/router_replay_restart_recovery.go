@@ -58,10 +58,13 @@ func triggerReplayRecordBeforeRestart(ctx context.Context, client *kubernetes.Cl
 	chatClient := fixtures.NewChatCompletionsClient(session, 30*time.Second)
 	resp, err := chatClient.Create(ctx, fixtures.ChatCompletionsRequest{
 		Model: "auto",
+		User:  "e2e-replay-user",
 		Messages: []fixtures.ChatMessage{
 			{Role: "user", Content: "What is 2+2? Reply with just the number."},
 		},
-	}, nil)
+	}, map[string]string{
+		"x-authz-user-id": "e2e-replay-user",
+	})
 	if err != nil {
 		return "", fmt.Errorf("chat completion failed: %w", err)
 	}
@@ -82,6 +85,9 @@ func triggerReplayRecordBeforeRestart(ctx context.Context, client *kubernetes.Cl
 	if err := assertPostgresReplayRecordStored(ctx, client, recordID, opts); err != nil {
 		return "", fmt.Errorf("replay record not confirmed in Postgres before restart: %w", err)
 	}
+	if err := assertReplayRecordHasSessionMetadata(session, recordID, opts.Verbose); err != nil {
+		return "", err
+	}
 	return recordID, nil
 }
 
@@ -92,9 +98,11 @@ type replayListResponse struct {
 	Data   json.RawMessage `json:"data"`
 }
 
-// replayRecordSummary captures only the id field from a replay record.
+// replayRecordSummary captures fields read from replay API JSON.
 type replayRecordSummary struct {
-	ID string `json:"id"`
+	ID        string `json:"id"`
+	SessionID string `json:"session_id"`
+	TurnIndex int    `json:"turn_index"`
 }
 
 // fetchFirstReplayRecordID calls GET /v1/router_replay?limit=1 and returns the
@@ -129,6 +137,28 @@ func fetchFirstReplayRecordID(session *fixtures.ServiceSession, verbose bool) (s
 		return "", fmt.Errorf("replay record has empty ID")
 	}
 	return records[0].ID, nil
+}
+
+func assertReplayRecordHasSessionMetadata(session *fixtures.ServiceSession, recordID string, verbose bool) error {
+	httpClient := session.HTTPClient(30 * time.Second)
+	raw, err := fixtures.DoGETRequest(context.Background(), httpClient, session.BaseURL()+"/v1/router_replay/"+recordID)
+	if err != nil {
+		return fmt.Errorf("GET replay record for session metadata: %w", err)
+	}
+	if raw.StatusCode != http.StatusOK {
+		return fmt.Errorf("GET replay record returned status %d: %s", raw.StatusCode, string(raw.Body))
+	}
+	var rec replayRecordSummary
+	if err := raw.DecodeJSON(&rec); err != nil {
+		return fmt.Errorf("decode replay record: %w", err)
+	}
+	if rec.SessionID == "" {
+		return fmt.Errorf("replay record %s missing session_id", recordID)
+	}
+	if verbose {
+		fmt.Printf("[Test] Replay session_id=%q turn_index=%d\n", rec.SessionID, rec.TurnIndex)
+	}
+	return nil
 }
 
 func prettyJSON(data []byte) string {
@@ -260,6 +290,9 @@ func fetchReplayRecordOnce(ctx context.Context, client *kubernetes.Clientset, op
 	}
 	if record.ID != recordID {
 		return fmt.Errorf("replay record ID mismatch: got %s, expected %s", record.ID, recordID)
+	}
+	if record.SessionID == "" {
+		return fmt.Errorf("replay record %s missing session_id after restart", recordID)
 	}
 
 	if opts.Verbose {

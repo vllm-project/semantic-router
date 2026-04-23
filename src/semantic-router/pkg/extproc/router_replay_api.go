@@ -25,6 +25,7 @@ type routerReplayFilters struct {
 	decision    string
 	model       string
 	cacheStatus string
+	sessionID   string
 }
 
 type routerReplayListQuery struct {
@@ -202,9 +203,10 @@ func parseRouterReplayListQuery(rawQuery string) (routerReplayListQuery, error) 
 
 func parseRouterReplayFilters(values url.Values) (routerReplayFilters, error) {
 	filters := routerReplayFilters{
-		search:   strings.TrimSpace(values.Get("search")),
-		decision: strings.TrimSpace(values.Get("decision")),
-		model:    strings.TrimSpace(values.Get("model")),
+		search:    strings.TrimSpace(values.Get("search")),
+		decision:  strings.TrimSpace(values.Get("decision")),
+		model:     strings.TrimSpace(values.Get("model")),
+		sessionID: strings.TrimSpace(values.Get("session_id")),
 	}
 
 	cacheStatus := strings.TrimSpace(values.Get("cache_status"))
@@ -265,6 +267,9 @@ func doesRouterReplayRecordMatchFilters(
 		return false
 	}
 	if filters.model != "" && !doesModelMatch(record, filters.model) {
+		return false
+	}
+	if filters.sessionID != "" && record.SessionID != filters.sessionID {
 		return false
 	}
 	if search != "" && !strings.Contains(strings.ToLower(record.RequestID), search) {

@@ -206,6 +206,17 @@ func (v *ValkeyStore) parseListSearchResults(result any) []*Memory {
 		memories = append(memories, mem)
 	}
 
+	// valkey-glide returns matched docs in a single map; iterating that map in
+	// Go does not preserve FT.SEARCH SORTBY order (same issue as vectorstore
+	// parseSearchResults). Re-sort client-side by created_at descending.
+	sort.SliceStable(memories, func(i, j int) bool {
+		ti, tj := memories[i].CreatedAt, memories[j].CreatedAt
+		if ti.Equal(tj) {
+			return memories[i].ID > memories[j].ID
+		}
+		return ti.After(tj)
+	})
+
 	return memories
 }
 

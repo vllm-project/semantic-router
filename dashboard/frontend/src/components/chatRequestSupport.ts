@@ -42,6 +42,7 @@ const RESPONSE_HEADER_KEYS = [
   'x-vsr-matched-jailbreak',
   'x-vsr-matched-pii',
   'x-vsr-matched-kb',
+  'x-vsr-matched-conversation',
   'x-vsr-matched-projection',
   'x-vsr-looper-model',
   'x-vsr-looper-models-used',

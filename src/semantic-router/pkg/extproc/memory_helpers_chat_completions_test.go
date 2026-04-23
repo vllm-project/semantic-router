@@ -126,3 +126,20 @@ func TestDeriveSessionIDFromMessages(t *testing.T) {
 	assert.NotEqual(t, sessionID1, sessionID3)
 	assert.True(t, strings.HasPrefix(sessionID1, "cc-"))
 }
+
+func TestDeriveSessionIDFromMessagesStructure(t *testing.T) {
+	msgs := []ChatCompletionMessage{
+		{Role: "system", Content: "sys"},
+		{Role: "user", Content: "Hello"},
+	}
+	a := deriveSessionIDFromMessagesStructure(msgs)
+	b := deriveSessionIDFromMessagesStructure(msgs)
+	c := deriveSessionIDFromMessagesStructure([]ChatCompletionMessage{
+		{Role: "user", Content: "Different"},
+	})
+
+	assert.True(t, strings.HasPrefix(a, "cc-full-"))
+	assert.Equal(t, a, b)
+	assert.NotEqual(t, a, c)
+	assert.Empty(t, deriveSessionIDFromMessagesStructure(nil))
+}

@@ -54,6 +54,7 @@ func (c *Classifier) getAllSignalTypes() map[string]bool {
 	collectSignalKeys(allSignals, config.SignalTypeJailbreak, c.Config.JailbreakRules, func(r config.JailbreakRule) string { return r.Name })
 	collectSignalKeys(allSignals, config.SignalTypePII, c.Config.PIIRules, func(r config.PIIRule) string { return r.Name })
 	collectSignalKeys(allSignals, config.SignalTypeKB, c.Config.KBRules, func(r config.KBSignalRule) string { return r.Name })
+	collectSignalKeys(allSignals, config.SignalTypeConversation, c.Config.ConversationRules, func(r config.ConversationRule) string { return r.Name })
 	for _, mapping := range c.Config.Projections.Mappings {
 		for _, output := range mapping.Outputs {
 			allSignals[strings.ToLower(config.SignalTypeProjection+":"+output.Name)] = true
@@ -92,6 +93,7 @@ type SignalResults struct {
 	MatchedKBRules           []string
 	KBClassifierResults      map[string]*KBClassifyResult
 	KBMetricValues           map[string]float64
+	MatchedConversationRules []string
 	MatchedProjectionRules   []string // Matched derived routing outputs from routing.projections.mappings
 	ProjectionScores         map[string]float64
 
@@ -129,6 +131,7 @@ type SignalMetricsCollection struct {
 	Jailbreak    SignalMetrics `json:"jailbreak"`
 	PII          SignalMetrics `json:"pii"`
 	KB           SignalMetrics `json:"kb"`
+	Conversation SignalMetrics `json:"conversation"`
 }
 
 // analyzeRuleCombination recursively traverses a rule tree to collect all referenced signals.
@@ -202,7 +205,7 @@ func isSignalTypeUsed(usedSignals map[string]bool, signalType string) bool {
 // EvaluateAllSignals evaluates all signal types and returns SignalResults
 // This is the new method that includes fact_check signals
 func (c *Classifier) EvaluateAllSignals(text string) *SignalResults {
-	return c.EvaluateAllSignalsWithContext(text, text, text, nil, nil, false, false, "", nil)
+	return c.EvaluateAllSignalsWithContext(text, text, text, nil, nil, false, false, "", nil, ConversationFacts{})
 }
 
 // EvaluateAllSignalsWithHeaders evaluates all signal types including the authz signal.
@@ -222,6 +225,7 @@ func (c *Classifier) EvaluateAllSignals(text string) *SignalResults {
 func (c *Classifier) EvaluateAllSignalsWithHeaders(text string, contextText string, currentUserText string, priorUserMessages []string, nonUserMessages []string, hasPriorAssistantReply bool, headers map[string]string, forceEvaluateAll bool, imageURL string, extra ...interface{}) (*SignalResults, error) {
 	var uncompressedText string
 	var skipCompressionSignals map[string]bool
+	var convFacts ConversationFacts
 	if len(extra) >= 2 {
 		if s, ok := extra[0].(string); ok {
 			uncompressedText = s
@@ -230,7 +234,12 @@ func (c *Classifier) EvaluateAllSignalsWithHeaders(text string, contextText stri
 			skipCompressionSignals = m
 		}
 	}
-	results := c.EvaluateAllSignalsWithContext(text, contextText, currentUserText, priorUserMessages, nonUserMessages, hasPriorAssistantReply, forceEvaluateAll, uncompressedText, skipCompressionSignals, imageURL)
+	if len(extra) >= 3 {
+		if cf, ok := extra[2].(ConversationFacts); ok {
+			convFacts = cf
+		}
+	}
+	results := c.EvaluateAllSignalsWithContext(text, contextText, currentUserText, priorUserMessages, nonUserMessages, hasPriorAssistantReply, forceEvaluateAll, uncompressedText, skipCompressionSignals, convFacts, imageURL)
 
 	// Evaluate authz signal if role bindings are configured and the signal type is used
 	usedSignals := c.getUsedSignals()
@@ -278,7 +287,7 @@ func (c *Classifier) EvaluateAllSignalsWithHeaders(text string, contextText stri
 // EvaluateAllSignalsWithForceOption evaluates signals with option to force evaluate all
 // forceEvaluateAll: if true, evaluates all configured signals regardless of decision usage
 func (c *Classifier) EvaluateAllSignalsWithForceOption(text string, forceEvaluateAll bool) *SignalResults {
-	return c.EvaluateAllSignalsWithContext(text, text, text, nil, nil, false, forceEvaluateAll, "", nil)
+	return c.EvaluateAllSignalsWithContext(text, text, text, nil, nil, false, forceEvaluateAll, "", nil, ConversationFacts{})
 }
 
 // EvaluateDecisionWithEngine evaluates all decisions using pre-computed signals
@@ -332,6 +341,7 @@ func (c *Classifier) evaluateDecisionInternal(signals *SignalResults, trace bool
 		JailbreakRules:    signals.MatchedJailbreakRules,
 		PIIRules:          signals.MatchedPIIRules,
 		KBRules:           signals.MatchedKBRules,
+		ConversationRules: signals.MatchedConversationRules,
 		ProjectionRules:   signals.MatchedProjectionRules,
 	}
 

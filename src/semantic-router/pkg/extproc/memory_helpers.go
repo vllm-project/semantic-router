@@ -10,6 +10,7 @@ import (
 	"github.com/openai/openai-go"
 	"github.com/tidwall/gjson"
 
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/headers"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/memory"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/responseapi"
@@ -115,6 +116,49 @@ func deriveSessionIDFromMessages(messages []ChatCompletionMessage, userID string
 	// Create SHA256 hash and take first 16 chars
 	hash := sha256.Sum256([]byte(builder.String()))
 	return "cc-" + hex.EncodeToString(hash[:])[:16]
+}
+
+const sessionMessageFingerprintMaxRunes = 100
+
+// deriveSessionIDFromMessagesStructure builds a session ID from the full message
+// list (roles + truncated content). Used when no stable user ID is available.
+// Prefix "cc-full-" distinguishes IDs from deriveSessionIDFromMessages (cc-).
+func deriveSessionIDFromMessagesStructure(messages []ChatCompletionMessage) string {
+	if len(messages) == 0 {
+		return ""
+	}
+	var b strings.Builder
+	for i := range messages {
+		if i > 0 {
+			b.WriteByte('|')
+		}
+		b.WriteString(messages[i].Role)
+		b.WriteByte(':')
+		content := messages[i].Content
+		if len(content) > sessionMessageFingerprintMaxRunes {
+			content = content[:sessionMessageFingerprintMaxRunes]
+		}
+		b.WriteString(content)
+	}
+	hash := sha256.Sum256([]byte(b.String()))
+	return "cc-full-" + hex.EncodeToString(hash[:])[:16]
+}
+
+// deriveSessionIDFromRequestID returns a deterministic pseudo-session from
+// RequestID (or x-request-id header) when no message-based session exists.
+func deriveSessionIDFromRequestID(ctx *RequestContext) string {
+	if ctx == nil {
+		return ""
+	}
+	rid := strings.TrimSpace(ctx.RequestID)
+	if rid == "" {
+		rid = strings.TrimSpace(headerValueCI(ctx, headers.RequestID))
+	}
+	if rid == "" {
+		return ""
+	}
+	hash := sha256.Sum256([]byte("rid:" + rid))
+	return "rid-" + hex.EncodeToString(hash[:])[:16]
 }
 
 // convertChatCompletionMessages converts ChatCompletionMessage[] to SDK message unions.

@@ -61,16 +61,17 @@ func (r *OpenAIRouter) performDecisionEvaluation(originalModel string, history s
 // selectModelFromCandidates uses the configured selection algorithm to choose the best model
 // from the decision's candidate models. Falls back to first model if selection fails.
 // The algorithm parameter allows per-decision algorithm override (aligned with looper pattern).
-// The categoryName parameter is the detected domain category (e.g., "physics", "math") for ML feature vectors.
+// The selCtx parameter carries the pre-built SelectionContext, including request-time
+// inputs such as query text, candidate models, and cache-affinity signals.
 // Returns the selected model and the method name used for logging.
-func (r *OpenAIRouter) selectModelFromCandidates(modelRefs []config.ModelRef, decisionName string, query string, algorithm *config.AlgorithmConfig, categoryName string, candidateIterations []config.CandidateIterationConfig) (*config.ModelRef, string) {
-	if len(modelRefs) == 0 {
+func (r *OpenAIRouter) selectModelFromCandidates(selCtx *selection.SelectionContext, algorithm *config.AlgorithmConfig) (*config.ModelRef, string) {
+	if selCtx == nil || len(selCtx.CandidateModels) == 0 {
 		return nil, ""
 	}
 
 	// If only one model, no need for selection algorithm
-	if len(modelRefs) == 1 {
-		return &modelRefs[0], "single"
+	if len(selCtx.CandidateModels) == 1 {
+		return &selCtx.CandidateModels[0], "single"
 	}
 
 	// Determine selection method: per-decision algorithm takes precedence over global config
@@ -85,14 +86,49 @@ func (r *OpenAIRouter) selectModelFromCandidates(modelRefs []config.ModelRef, de
 	// Fallback to first model if no selector available
 	if selector == nil {
 		logging.Warnf("[ModelSelection] No selector available for method %s, using first model", method)
-		return &modelRefs[0], string(method)
+		return &selCtx.CandidateModels[0], string(method)
 	}
 
-	// Build selection context with cost/quality weights
+	// Perform selection
+	result, err := selector.Select(context.Background(), selCtx)
+	if err != nil {
+		logging.Warnf("[ModelSelection] Selection failed: %v, using first model", err)
+		return &selCtx.CandidateModels[0], string(method)
+	}
+
+	// Find the selected model in the candidates
+	for i := range selCtx.CandidateModels {
+		if selCtx.CandidateModels[i].Model == result.SelectedModel ||
+			selCtx.CandidateModels[i].LoRAName == result.SelectedModel {
+			logging.Infof("[ModelSelection] Selected %s (method=%s, score=%.4f, confidence=%.2f): %s",
+				result.SelectedModel, method, result.Score, result.Confidence, result.Reasoning)
+			selection.RecordSelection(string(method), selCtx.DecisionName, result.SelectedModel, result.Tier, result.Score)
+			return &selCtx.CandidateModels[i], string(method)
+		}
+	}
+
+	// Fallback if selected model not found in candidates (shouldn't happen)
+	logging.Warnf("[ModelSelection] Selected model %s not found in candidates, using first model", result.SelectedModel)
+	return &selCtx.CandidateModels[0], string(method)
+}
+
+// buildSelectionContext assembles the runtime inputs shared by selection
+// algorithms. Static policy comes from AlgorithmConfig; dynamic request-time
+// signals stay in SelectionContext so selectors do not need to reach back into
+// extproc state.
+func (r *OpenAIRouter) buildSelectionContext(
+	modelRefs []config.ModelRef,
+	decisionName string,
+	query string,
+	algorithm *config.AlgorithmConfig,
+	categoryName string,
+	candidateIterations []config.CandidateIterationConfig,
+	reqCtx *RequestContext,
+) *selection.SelectionContext {
 	costWeight, qualityWeight := r.getSelectionWeights(algorithm)
 	latencyAwareTPOTPercentile, latencyAwareTTFTPercentile := r.getLatencyAwarePercentiles(algorithm)
 
-	selCtx := &selection.SelectionContext{
+	return &selection.SelectionContext{
 		Query:                      query,
 		DecisionName:               decisionName,
 		CategoryName:               categoryName,
@@ -102,29 +138,37 @@ func (r *OpenAIRouter) selectModelFromCandidates(modelRefs []config.ModelRef, de
 		QualityWeight:              qualityWeight,
 		LatencyAwareTPOTPercentile: latencyAwareTPOTPercentile,
 		LatencyAwareTTFTPercentile: latencyAwareTTFTPercentile,
+		CacheAffinityCtx:           r.buildCacheAffinityContext(reqCtx, modelRefs),
+	}
+}
+
+// buildCacheAffinityContext extracts the pre-dispatch continuation signals used
+// by the cache-affinity estimator. Nil request context cleanly disables the
+// estimator without forcing call sites to add extra branching.
+func (r *OpenAIRouter) buildCacheAffinityContext(reqCtx *RequestContext, modelRefs []config.ModelRef) *selection.CacheAffinityContext {
+	if reqCtx == nil {
+		return nil
 	}
 
-	// Perform selection
-	result, err := selector.Select(context.Background(), selCtx)
-	if err != nil {
-		logging.Warnf("[ModelSelection] Selection failed: %v, using first model", err)
-		return &modelRefs[0], string(method)
-	}
-
-	// Find the selected model in the candidates
-	for i := range modelRefs {
-		if modelRefs[i].Model == result.SelectedModel ||
-			modelRefs[i].LoRAName == result.SelectedModel {
-			logging.Infof("[ModelSelection] Selected %s (method=%s, score=%.4f, confidence=%.2f): %s",
-				result.SelectedModel, method, result.Score, result.Confidence, result.Reasoning)
-			selection.RecordSelection(string(method), decisionName, result.SelectedModel, result.Tier, result.Score)
-			return &modelRefs[i], string(method)
+	// Missing model window metadata is valid; the estimator treats it as a
+	// neutral fit score rather than as an error.
+	var windows map[string]int
+	if r.Config != nil && r.Config.ModelConfig != nil {
+		windows = make(map[string]int, len(modelRefs))
+		for _, ref := range modelRefs {
+			if params, ok := r.Config.ModelConfig[ref.Model]; ok {
+				windows[ref.Model] = params.ContextWindowSize
+			}
 		}
 	}
-
-	// Fallback if selected model not found in candidates (shouldn't happen)
-	logging.Warnf("[ModelSelection] Selected model %s not found in candidates, using first model", result.SelectedModel)
-	return &modelRefs[0], string(method)
+	return &selection.CacheAffinityContext{
+		TurnIndex:           reqCtx.TurnIndex,
+		PreviousModel:       reqCtx.PreviousModel,
+		PreviousResponseID:  reqCtx.PreviousResponseID,
+		HistoryTokens:       reqCtx.HistoryTokenCount,
+		ContextTokens:       reqCtx.VSRContextTokenCount,
+		ModelContextWindows: windows,
+	}
 }
 
 // getSelectionMethod determines which selection algorithm to use.
@@ -195,13 +239,13 @@ func (r *OpenAIRouter) processUserFeedbackForElo(userFeedbackSignals []string, m
 		return
 	}
 
-	// Process each feedback signal
 	// Get decision name safely
 	decisionName := ""
 	if ctx.VSRSelectedDecision != nil {
 		decisionName = ctx.VSRSelectedDecision.Name
 	}
 
+	// Process each feedback signal
 	for _, signal := range userFeedbackSignals {
 		var feedback *selection.Feedback
 
