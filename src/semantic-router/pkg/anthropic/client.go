@@ -135,6 +135,36 @@ func ToAnthropicRequestBodyWithThinking(openAIRequest *openai.ChatCompletionNewP
 		params.StopSequences = []string{openAIRequest.Stop.OfString.Value}
 	}
 
+	// Convert OpenAI tools to Anthropic format
+	if len(openAIRequest.Tools) > 0 {
+		var tools []anthropic.ToolUnionParam
+		for _, t := range openAIRequest.Tools {
+			schema := anthropic.ToolInputSchemaParam{}
+			if params := t.Function.Parameters; params != nil {
+				if props, ok := params["properties"]; ok {
+					schema.Properties = props
+				}
+				if req, ok := params["required"]; ok {
+					if reqSlice, ok := req.([]any); ok {
+						for _, r := range reqSlice {
+							if s, ok := r.(string); ok {
+								schema.Required = append(schema.Required, s)
+							}
+						}
+					} else if reqStrSlice, ok := req.([]string); ok {
+						schema.Required = reqStrSlice
+					}
+				}
+			}
+			tool := anthropic.ToolUnionParamOfTool(schema, t.Function.Name)
+			if t.Function.Description.Value != "" {
+				tool.OfTool.Description = anthropic.String(t.Function.Description.Value)
+			}
+			tools = append(tools, tool)
+		}
+		params.Tools = tools
+	}
+
 	return json.Marshal(params)
 }
 

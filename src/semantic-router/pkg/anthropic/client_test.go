@@ -6,6 +6,7 @@ import (
 
 	"github.com/anthropics/anthropic-sdk-go"
 	"github.com/openai/openai-go"
+	"github.com/openai/openai-go/shared"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -307,4 +308,56 @@ func TestExtractAssistantContent_StringContent(t *testing.T) {
 	result := extractAssistantContent(msg)
 
 	assert.Equal(t, "Hi! How can I help?", result)
+}
+
+func TestToAnthropicRequestBody_WithTools(t *testing.T) {
+	req := &openai.ChatCompletionNewParams{
+		Model: "claude-sonnet-4-6",
+		Messages: []openai.ChatCompletionMessageParamUnion{
+			{OfUser: &openai.ChatCompletionUserMessageParam{
+				Content: openai.ChatCompletionUserMessageParamContentUnion{
+					OfString: openai.String("What's the weather?"),
+				},
+			}},
+		},
+		Tools: []openai.ChatCompletionToolParam{
+			{
+				Function: shared.FunctionDefinitionParam{
+					Name:        "get_weather",
+					Description: openai.String("Get current weather"),
+					Parameters: shared.FunctionParameters{
+						"type": "object",
+						"properties": map[string]any{
+							"location": map[string]any{
+								"type":        "string",
+								"description": "City name",
+							},
+						},
+						"required": []any{"location"},
+					},
+				},
+			},
+		},
+	}
+
+	body, err := ToAnthropicRequestBody(req)
+	require.NoError(t, err)
+
+	var raw map[string]any
+	err = json.Unmarshal(body, &raw)
+	require.NoError(t, err)
+
+	tools, ok := raw["tools"].([]any)
+	require.True(t, ok, "tools should be an array")
+	require.Len(t, tools, 1)
+
+	tool := tools[0].(map[string]any)
+	assert.Equal(t, "get_weather", tool["name"])
+	assert.Equal(t, "Get current weather", tool["description"])
+
+	inputSchema := tool["input_schema"].(map[string]any)
+	assert.Equal(t, "object", inputSchema["type"])
+	props := inputSchema["properties"].(map[string]any)
+	loc := props["location"].(map[string]any)
+	assert.Equal(t, "string", loc["type"])
 }
