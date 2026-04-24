@@ -78,8 +78,13 @@ func ToAnthropicRequestBodyWithThinking(openAIRequest *openai.ChatCompletionNewP
 			content := extractUserContent(msg.OfUser)
 			messages = append(messages, anthropic.NewUserMessage(anthropic.NewTextBlock(content)))
 		case msg.OfAssistant != nil:
-			content := extractAssistantContent(msg.OfAssistant)
-			messages = append(messages, anthropic.NewAssistantMessage(anthropic.NewTextBlock(content)))
+			blocks := buildAssistantContentBlocks(msg.OfAssistant)
+			messages = append(messages, anthropic.NewAssistantMessage(blocks...))
+		case msg.OfTool != nil:
+			content := extractToolContent(msg.OfTool)
+			messages = append(messages, anthropic.NewUserMessage(
+				anthropic.NewToolResultBlock(msg.OfTool.ToolCallID, content, false),
+			))
 		}
 	}
 
@@ -320,4 +325,43 @@ func extractAssistantContent(msg *openai.ChatCompletionAssistantMessageParam) st
 		}
 	}
 	return strings.Join(parts, " ")
+}
+
+// buildAssistantContentBlocks builds Anthropic content blocks from an OpenAI assistant message,
+// including both text and tool_use blocks when tool calls are present.
+func buildAssistantContentBlocks(msg *openai.ChatCompletionAssistantMessageParam) []anthropic.ContentBlockParamUnion {
+	var blocks []anthropic.ContentBlockParamUnion
+
+	text := extractAssistantContent(msg)
+	if text != "" {
+		blocks = append(blocks, anthropic.NewTextBlock(text))
+	}
+
+	for _, tc := range msg.ToolCalls {
+		var input any
+		if err := json.Unmarshal([]byte(tc.Function.Arguments), &input); err != nil {
+			input = map[string]any{}
+		}
+		blocks = append(blocks, anthropic.NewToolUseBlock(tc.ID, input, tc.Function.Name))
+	}
+
+	if len(blocks) == 0 {
+		blocks = append(blocks, anthropic.NewTextBlock(""))
+	}
+
+	return blocks
+}
+
+// extractToolContent extracts text content from a tool result message.
+func extractToolContent(msg *openai.ChatCompletionToolMessageParam) string {
+	if msg.Content.OfString.Value != "" {
+		return msg.Content.OfString.Value
+	}
+	var parts []string
+	for _, part := range msg.Content.OfArrayOfContentParts {
+		if part.Text != "" {
+			parts = append(parts, part.Text)
+		}
+	}
+	return strings.Join(parts, "\n")
 }

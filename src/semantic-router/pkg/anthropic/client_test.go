@@ -310,6 +310,85 @@ func TestExtractAssistantContent_StringContent(t *testing.T) {
 	assert.Equal(t, "Hi! How can I help?", result)
 }
 
+func TestToAnthropicRequestBody_WithToolCallsAndResults(t *testing.T) {
+	req := &openai.ChatCompletionNewParams{
+		Model: "claude-sonnet-4-6",
+		Messages: []openai.ChatCompletionMessageParamUnion{
+			{OfUser: &openai.ChatCompletionUserMessageParam{
+				Content: openai.ChatCompletionUserMessageParamContentUnion{
+					OfString: openai.String("What's the weather?"),
+				},
+			}},
+			{OfAssistant: &openai.ChatCompletionAssistantMessageParam{
+				Content: openai.ChatCompletionAssistantMessageParamContentUnion{
+					OfString: openai.String("Let me check."),
+				},
+				ToolCalls: []openai.ChatCompletionMessageToolCallParam{
+					{
+						ID: "call_123",
+						Function: openai.ChatCompletionMessageToolCallFunctionParam{
+							Name:      "get_weather",
+							Arguments: `{"location":"London"}`,
+						},
+					},
+				},
+			}},
+			{OfTool: &openai.ChatCompletionToolMessageParam{
+				ToolCallID: "call_123",
+				Content: openai.ChatCompletionToolMessageParamContentUnion{
+					OfString: openai.String("72F and sunny"),
+				},
+			}},
+			{OfUser: &openai.ChatCompletionUserMessageParam{
+				Content: openai.ChatCompletionUserMessageParamContentUnion{
+					OfString: openai.String("Thanks!"),
+				},
+			}},
+		},
+	}
+
+	body, err := ToAnthropicRequestBody(req)
+	require.NoError(t, err)
+
+	var raw map[string]any
+	err = json.Unmarshal(body, &raw)
+	require.NoError(t, err)
+
+	msgs := raw["messages"].([]any)
+	require.GreaterOrEqual(t, len(msgs), 3)
+
+	// Check assistant message has tool_use content blocks
+	assistantMsg := msgs[1].(map[string]any)
+	assert.Equal(t, "assistant", assistantMsg["role"])
+	assistantContent := assistantMsg["content"].([]any)
+	foundToolUse := false
+	for _, block := range assistantContent {
+		b := block.(map[string]any)
+		if b["type"] == "tool_use" {
+			foundToolUse = true
+			assert.Equal(t, "call_123", b["id"])
+			assert.Equal(t, "get_weather", b["name"])
+			input := b["input"].(map[string]any)
+			assert.Equal(t, "London", input["location"])
+		}
+	}
+	assert.True(t, foundToolUse, "assistant message should contain tool_use block")
+
+	// Check tool result is in a user message
+	toolResultMsg := msgs[2].(map[string]any)
+	assert.Equal(t, "user", toolResultMsg["role"])
+	toolResultContent := toolResultMsg["content"].([]any)
+	foundToolResult := false
+	for _, block := range toolResultContent {
+		b := block.(map[string]any)
+		if b["type"] == "tool_result" {
+			foundToolResult = true
+			assert.Equal(t, "call_123", b["tool_use_id"])
+		}
+	}
+	assert.True(t, foundToolResult, "should have tool_result block in user message")
+}
+
 func TestToAnthropicRequestBody_WithTools(t *testing.T) {
 	req := &openai.ChatCompletionNewParams{
 		Model: "claude-sonnet-4-6",
