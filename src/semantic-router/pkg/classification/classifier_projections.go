@@ -292,39 +292,33 @@ func (c *Classifier) applyTopK(
 }
 
 func projectionOutputBandCenter(output config.ProjectionMappingOutput) float64 {
-	var lower, upper float64
-	hasLower, hasUpper := false, false
+	lower := math.Inf(-1)
+	upper := math.Inf(1)
 
 	if output.GT != nil {
 		lower = *output.GT
-		hasLower = true
 	}
-	if output.GTE != nil {
-		if !hasLower || *output.GTE > lower {
-			lower = *output.GTE
-			hasLower = true
-		}
+	if output.GTE != nil && *output.GTE > lower {
+		lower = *output.GTE
 	}
-
 	if output.LT != nil {
 		upper = *output.LT
-		hasUpper = true
 	}
-	if output.LTE != nil {
-		if !hasUpper || *output.LTE < upper {
-			upper = *output.LTE
-			hasUpper = true
-		}
+	if output.LTE != nil && *output.LTE < upper {
+		upper = *output.LTE
 	}
 
-	if hasLower && hasUpper {
+	hasLower := !math.IsInf(lower, -1)
+	hasUpper := !math.IsInf(upper, 1)
+
+	switch {
+	case hasLower && hasUpper:
 		return (lower + upper) / 2.0
-	}
-	if hasLower {
+	case hasLower:
 		return lower
-	}
-	if hasUpper {
+	case hasUpper:
 		return upper
+	default:
+		return 0
 	}
-	return 0
 }
