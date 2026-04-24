@@ -192,9 +192,21 @@ type openAIChoiceWithThinking struct {
 }
 
 type openAIMessageWithThinking struct {
-	Role             string `json:"role"`
-	Content          string `json:"content"`
-	ReasoningContent string `json:"reasoning_content,omitempty"`
+	Role             string           `json:"role"`
+	Content          string           `json:"content"`
+	ReasoningContent string           `json:"reasoning_content,omitempty"`
+	ToolCalls        []openAIToolCall `json:"tool_calls,omitempty"`
+}
+
+type openAIToolCall struct {
+	ID       string             `json:"id"`
+	Type     string             `json:"type"`
+	Function openAIToolCallFunc `json:"function"`
+}
+
+type openAIToolCallFunc struct {
+	Name      string `json:"name"`
+	Arguments string `json:"arguments"`
 }
 
 type openAIUsageWithThinking struct {
@@ -221,9 +233,10 @@ func ToOpenAIResponseBody(anthropicResponse []byte, model string) ([]byte, error
 
 	logging.Debugf("Parsed Anthropic response - ID: %s, Content blocks: %d, StopReason: %s", resp.ID, len(resp.Content), resp.StopReason)
 
-	// Extract text content and thinking content from content blocks
+	// Extract text content, thinking content, and tool calls from content blocks
 	var content string
 	var thinkingContent string
+	var toolCalls []openAIToolCall
 	for _, block := range resp.Content {
 		switch block.Type {
 		case "text":
@@ -231,6 +244,16 @@ func ToOpenAIResponseBody(anthropicResponse []byte, model string) ([]byte, error
 		case "thinking":
 			thinkingContent += block.Thinking
 			logging.Debugf("Extracted thinking block (%d chars)", len(block.Thinking))
+		case "tool_use":
+			tc := block.AsToolUse()
+			toolCalls = append(toolCalls, openAIToolCall{
+				ID:   tc.ID,
+				Type: "function",
+				Function: openAIToolCallFunc{
+					Name:      tc.Name,
+					Arguments: string(tc.Input),
+				},
+			})
 		}
 	}
 
@@ -266,6 +289,7 @@ func ToOpenAIResponseBody(anthropicResponse []byte, model string) ([]byte, error
 				Role:             "assistant",
 				Content:          content,
 				ReasoningContent: thinkingContent,
+				ToolCalls:        toolCalls,
 			},
 			FinishReason: finishReason,
 		}},

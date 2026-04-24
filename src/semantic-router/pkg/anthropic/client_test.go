@@ -389,6 +389,60 @@ func TestToAnthropicRequestBody_WithToolCallsAndResults(t *testing.T) {
 	assert.True(t, foundToolResult, "should have tool_result block in user message")
 }
 
+func TestToOpenAIResponseBody_WithToolUse(t *testing.T) {
+	anthropicResp := map[string]any{
+		"id":   "msg_456",
+		"type": "message",
+		"role": "assistant",
+		"content": []map[string]any{
+			{"type": "text", "text": "Let me check the weather."},
+			{
+				"type":  "tool_use",
+				"id":    "toolu_abc",
+				"name":  "get_weather",
+				"input": map[string]any{"location": "London"},
+			},
+		},
+		"stop_reason": "tool_use",
+		"usage": map[string]any{
+			"input_tokens":  15,
+			"output_tokens": 25,
+		},
+	}
+
+	anthropicJSON, err := json.Marshal(anthropicResp)
+	require.NoError(t, err)
+
+	resultJSON, err := ToOpenAIResponseBody(anthropicJSON, "claude-sonnet-4-6")
+	require.NoError(t, err)
+
+	var raw map[string]any
+	err = json.Unmarshal(resultJSON, &raw)
+	require.NoError(t, err)
+
+	choices := raw["choices"].([]any)
+	choice := choices[0].(map[string]any)
+	assert.Equal(t, "tool_calls", choice["finish_reason"])
+
+	message := choice["message"].(map[string]any)
+	assert.Equal(t, "Let me check the weather.", message["content"])
+
+	toolCalls := message["tool_calls"].([]any)
+	require.Len(t, toolCalls, 1)
+
+	tc := toolCalls[0].(map[string]any)
+	assert.Equal(t, "toolu_abc", tc["id"])
+	assert.Equal(t, "function", tc["type"])
+
+	fn := tc["function"].(map[string]any)
+	assert.Equal(t, "get_weather", fn["name"])
+
+	var args map[string]any
+	err = json.Unmarshal([]byte(fn["arguments"].(string)), &args)
+	require.NoError(t, err)
+	assert.Equal(t, "London", args["location"])
+}
+
 func TestToAnthropicRequestBody_WithTools(t *testing.T) {
 	req := &openai.ChatCompletionNewParams{
 		Model: "claude-sonnet-4-6",
