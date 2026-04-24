@@ -10,7 +10,7 @@ require (
 	github.com/mattn/go-sqlite3 v1.14.33
 	github.com/stretchr/testify v1.11.1
 	github.com/vllm-project/semantic-router/src/semantic-router v0.0.0
-	golang.org/x/crypto v0.30.0
+	golang.org/x/crypto v0.45.0
 	gopkg.in/yaml.v3 v3.0.1
 	sigs.k8s.io/yaml v1.6.0
 )
@@ -18,7 +18,7 @@ require (
 require (
 	github.com/alecthomas/participle/v2 v2.1.4 // indirect
 	github.com/bahlo/generic-list-go v0.2.0 // indirect
-	github.com/buger/jsonparser v1.1.1 // indirect
+	github.com/buger/jsonparser v1.1.2 // indirect
 	github.com/cespare/xxhash/v2 v2.3.0 // indirect
 	github.com/davecgh/go-spew v1.1.2-0.20180830191138-d8f796af33cc // indirect
 	github.com/dgryski/go-rendezvous v0.0.0-20200823014737-9f7001d12a5f // indirect
