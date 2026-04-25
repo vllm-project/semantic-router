@@ -444,6 +444,20 @@ routing:
           gt: 5
           lte: 99
 
+    session_metrics:
+      - name: session_cost_pressure
+        kind: state
+        state: session_routing.cumulative_cost_usd
+        normalize: minmax
+        min: 0
+        max: 10
+      - name: handoff_penalty
+        kind: lookup
+        table: handoff_penalties
+        key:
+          - session_routing.current_model
+          - session_routing.candidate_model
+
   projections:
     partitions:
       - name: support_intents
@@ -518,6 +532,8 @@ routing:
           type: float
         - name: kv_cache_warm
           type: float
+        - name: candidate_model
+          type: string
 
   decisions:
     - name: static_business_route

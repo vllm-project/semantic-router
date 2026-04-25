@@ -617,6 +617,7 @@ func isProjectionInputTypeSupported(signalType string) bool {
 		config.SignalTypeJailbreak,
 		config.SignalTypePII,
 		config.SignalTypeKB,
+		config.SignalTypeSessionMetric,
 		config.ProjectionInputKBMetric:
 		return true
 	default:
