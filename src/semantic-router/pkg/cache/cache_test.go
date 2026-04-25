@@ -4,6 +4,7 @@ package cache
 
 import (
 	"fmt"
+	"math"
 	"math/rand/v2"
 	"os"
 	"path/filepath"
@@ -4604,4 +4605,356 @@ func abs(x float32) float32 {
 		return -x
 	}
 	return x
+}
+
+// TestHNSWSelectLevelBatchRandomness verifies selectLevel() produces
+// varied levels across rapid-fire calls, not degenerate to a single level due to
+// timestamp-based fake randomness.
+func TestHNSWSelectLevelBatchRandomness(t *testing.T) {
+	idx := newHNSWIndex(16, 200)
+	const iterations = 1000
+
+	levels := make(map[int]int)
+	for i := 0; i < iterations; i++ {
+		lvl := idx.selectLevel()
+		levels[lvl]++
+	}
+
+	uniqueLevels := len(levels)
+	if uniqueLevels < 2 {
+		t.Errorf("selectLevel() returned only %d unique level(s) over %d calls; "+
+			"expected >= 2. All nodes got same level → graph degenerates to linear search. "+
+			"Levels seen: %v", uniqueLevels, iterations, levels)
+	}
+	t.Logf("Level distribution (n=%d, M=16): %v (unique levels: %d)", iterations, levels, uniqueLevels)
+}
+
+// TestHNSWSelectLevelDistribution checks that selectLevel() approximates the
+// expected geometric distribution P(level >= l) ≈ (1/M)^l.
+func TestHNSWSelectLevelDistribution(t *testing.T) {
+	const M = 16
+	idx := newHNSWIndex(M, 200)
+	const iterations = 10000
+
+	levelCounts := make(map[int]int)
+	maxSeen := 0
+	for i := 0; i < iterations; i++ {
+		lvl := idx.selectLevel()
+		levelCounts[lvl]++
+		if lvl > maxSeen {
+			maxSeen = lvl
+		}
+	}
+
+	frac0 := float64(levelCounts[0]) / float64(iterations)
+	if frac0 < 0.85 || frac0 > 0.99 {
+		t.Errorf("level 0 fraction = %.3f, want ~0.9375 (range 0.85-0.99). Distribution may be broken. Levels: %v",
+			frac0, levelCounts)
+	}
+	t.Logf("Level distribution (n=%d, M=%d): %v (max level seen: %d)",
+		iterations, M, levelCounts, maxSeen)
+}
+
+// TestRandFloatVariety verifies randFloat() produces varied values
+// across calls, not a repeating pattern from timestamp%1000.
+func TestRandFloatVariety(t *testing.T) {
+	const iterations = 10000
+	seen := make(map[float64]bool)
+	for i := 0; i < iterations; i++ {
+		seen[randFloat()] = true
+	}
+
+	uniqueCount := len(seen)
+	if uniqueCount < 9000 {
+		t.Errorf("randFloat() produced only %d unique values out of %d calls; "+
+			"expected >= 9000. Low entropy randomness.", uniqueCount, iterations)
+	}
+	t.Logf("randFloat() unique values: %d / %d", uniqueCount, iterations)
+}
+
+// TestHNSWSelectLevelConcurrent verifies selectLevel() is safe under concurrent
+// use — math/rand/v2 is concurrency-safe by default.
+func TestHNSWSelectLevelConcurrent(t *testing.T) {
+	idx := newHNSWIndex(16, 200)
+	const goroutines = 10
+	const callsPerGoroutine = 500
+
+	var wg sync.WaitGroup
+	results := make([][]int, goroutines)
+	for g := 0; g < goroutines; g++ {
+		wg.Add(1)
+		go func(gid int) {
+			defer wg.Done()
+			results[gid] = make([]int, callsPerGoroutine)
+			for i := 0; i < callsPerGoroutine; i++ {
+				results[gid][i] = idx.selectLevel()
+			}
+		}(g)
+	}
+	wg.Wait()
+
+	for g := 0; g < goroutines; g++ {
+		unique := make(map[int]bool)
+		for _, lvl := range results[g] {
+			unique[lvl] = true
+		}
+		if len(unique) < 2 {
+			t.Errorf("goroutine %d: all %d calls returned same level; concurrent randomness broken", g, callsPerGoroutine)
+		}
+	}
+}
+
+// BenchmarkHNSWvsLinear measures the speedup of HNSW search over brute-force
+// linear scan. Verifies that the fixed selectLevel() produces a proper
+// hierarchical graph delivering the expected 5-10x speedup.
+//
+// Run with: go test -bench=BenchmarkHNSWvsLinear -benchtime=1x -count=1
+func BenchmarkHNSWvsLinear(b *testing.B) {
+	dims := 384
+	sizes := []int{500, 1000, 5000, 10000}
+
+	for _, n := range sizes {
+		// Generate N random unit vectors
+		rng := rand.New(rand.NewPCG(42, 42))
+		embeddings := make([][]float32, n)
+		for i := range embeddings {
+			embeddings[i] = randomUnitVector(rng, dims)
+		}
+
+		entries := make([]CacheEntry, n)
+		for i := range entries {
+			entries[i] = CacheEntry{
+				RequestID: fmt.Sprintf("req-%d", i),
+				Query:     fmt.Sprintf("query-%d", i),
+				Embedding: embeddings[i],
+			}
+		}
+
+		// Build HNSW index
+		idx := newHNSWIndex(16, 200)
+		buildStart := time.Now()
+		for i := range entries {
+			idx.addNode(i, embeddings[i], entries)
+		}
+		buildDur := time.Since(buildStart)
+
+		// Build layer histogram for diagnostics
+		layerCounts := make(map[int]int)
+		for _, node := range idx.nodes {
+			layerCounts[node.maxLayer]++
+		}
+
+		// Generate query vectors (different from inserted)
+		queryVectors := make([][]float32, 50)
+		for i := range queryVectors {
+			queryVectors[i] = randomUnitVector(rng, dims)
+		}
+
+		// Benchmark HNSW search (k=10)
+		hnswStart := time.Now()
+		for _, q := range queryVectors {
+			idx.searchKNN(q, 10, 50, entries)
+		}
+		hnswDur := time.Since(hnswStart)
+		hnswPerQuery := hnswDur / time.Duration(len(queryVectors))
+
+		// Benchmark linear scan (same k=10)
+		linearStart := time.Now()
+		for _, q := range queryVectors {
+			bruteForceKNN(q, embeddings, 10)
+		}
+		linearDur := time.Since(linearStart)
+		linearPerQuery := linearDur / time.Duration(len(queryVectors))
+
+		speedup := float64(linearDur) / float64(hnswDur)
+
+		b.Logf("N=%d | layers: %v | build: %v | HNSW/query: %v | linear/query: %v | speedup: %.1fx",
+			n, layerCounts, buildDur.Round(time.Microsecond),
+			hnswPerQuery.Round(time.Microsecond),
+			linearPerQuery.Round(time.Microsecond),
+			speedup)
+	}
+}
+
+// bruteForceKNN performs a brute-force linear scan for k nearest neighbors by
+// dot-product similarity (higher = closer).
+func bruteForceKNN(query []float32, candidates [][]float32, k int) []int {
+	type scored struct {
+		idx int
+		sim float32
+	}
+	scores := make([]scored, len(candidates))
+	for i, emb := range candidates {
+		scores[i] = scored{idx: i, sim: dotProductScalar(query, emb)}
+	}
+	// Partial sort: only need top k
+	for i := 0; i < k && i < len(scores); i++ {
+		best := i
+		for j := i + 1; j < len(scores); j++ {
+			if scores[j].sim > scores[best].sim {
+				best = j
+			}
+		}
+		scores[i], scores[best] = scores[best], scores[i]
+	}
+	result := make([]int, k)
+	for i := 0; i < k && i < len(scores); i++ {
+		result[i] = scores[i].idx
+	}
+	return result
+}
+
+// BenchmarkHNSWFixComparison compares old broken behavior (all nodes level 0,
+// graph degenerates to linear search) vs fixed behavior (proper multi-level
+// HNSW). Provides the before/after data for PR description.
+//
+// Run with: go test -bench=BenchmarkHNSWFixComparison -benchtime=1x -count=1
+func BenchmarkHNSWFixComparison(b *testing.B) {
+	dims := 384
+	sizes := []int{1000, 5000, 10000, 20000}
+
+	b.Logf("| N | 修复前层级 | 修复后层级 | 修复前/query | 修复后/query | 线性/query | 修复前加速比 | 修复后加速比 |")
+	b.Logf("|---|-----------|-----------|-------------|-------------|-----------|-------------|-------------|")
+
+	for _, n := range sizes {
+		rng := rand.New(rand.NewPCG(uint64(n), 42)) // #nosec G115 -- n is positive and bounded by sizes slice
+
+		embeddings := make([][]float32, n)
+		for i := range embeddings {
+			embeddings[i] = randomUnitVector(rng, dims)
+		}
+
+		entries := make([]CacheEntry, n)
+		for i := range entries {
+			entries[i] = CacheEntry{
+				RequestID: fmt.Sprintf("req-%d", i),
+				Embedding: embeddings[i],
+			}
+		}
+
+		// --- Degenerate mode (simulates old broken selectLevel: all level 0) ---
+		degenIdx := newHNSWIndex(16, 200)
+		for i := range entries {
+			degenIdx.addNodeDegenerate(i, embeddings[i], entries)
+		}
+		degenLayers := countLayers(degenIdx)
+
+		// --- Fixed mode (proper multi-level HNSW) ---
+		fixedIdx := newHNSWIndex(16, 200)
+		for i := range entries {
+			fixedIdx.addNode(i, embeddings[i], entries)
+		}
+		fixedLayers := countLayers(fixedIdx)
+
+		// Query vectors
+		numQueries := 30
+		queryVectors := make([][]float32, numQueries)
+		for i := range queryVectors {
+			queryVectors[i] = randomUnitVector(rng, dims)
+		}
+
+		// Degenerate HNSW search
+		degenStart := time.Now()
+		for _, q := range queryVectors {
+			degenIdx.searchKNN(q, 10, 50, entries)
+		}
+		degenPerQuery := time.Since(degenStart) / time.Duration(numQueries)
+
+		// Fixed HNSW search
+		fixedStart := time.Now()
+		for _, q := range queryVectors {
+			fixedIdx.searchKNN(q, 10, 50, entries)
+		}
+		fixedPerQuery := time.Since(fixedStart) / time.Duration(numQueries)
+
+		// Linear scan baseline
+		linearStart := time.Now()
+		for _, q := range queryVectors {
+			bruteForceKNN(q, embeddings, 10)
+		}
+		linearPerQuery := time.Since(linearStart) / time.Duration(numQueries)
+
+		degenSpeedup := float64(linearPerQuery) / float64(degenPerQuery)
+		fixedSpeedup := float64(linearPerQuery) / float64(fixedPerQuery)
+
+		b.Logf("| %d | %d层 | %d层 | %v | %v | %v | **%.1fx** | **%.1fx** |",
+			n, len(degenLayers), len(fixedLayers),
+			degenPerQuery.Round(time.Microsecond),
+			fixedPerQuery.Round(time.Microsecond),
+			linearPerQuery.Round(time.Microsecond),
+			degenSpeedup, fixedSpeedup)
+	}
+}
+
+// countLayers returns a map of layer -> node count for diagnostics.
+func countLayers(idx *HNSWIndex) map[int]int {
+	m := make(map[int]int)
+	for _, node := range idx.nodes {
+		m[node.maxLayer]++
+	}
+	return m
+}
+
+// addNodeDegenerate adds a node forced to level 0, simulating the old broken
+// selectLevel() that used timestamp-based fake randomness.
+func (h *HNSWIndex) addNodeDegenerate(entryIndex int, embedding []float32, entries []CacheEntry) {
+	level := 0 // old broken behavior: all nodes at level 0
+
+	node := &HNSWNode{
+		entryIndex: entryIndex,
+		neighbors:  make(map[int][]int),
+		maxLayer:   level,
+	}
+
+	if h.entryPoint == -1 {
+		h.entryPoint = entryIndex
+		h.maxLayer = level
+		h.nodes = append(h.nodes, node)
+		h.nodeIndex[entryIndex] = node
+		return
+	}
+
+	currentEntryPoint := h.entryPoint
+	// maxLayer is always 0 for degenerate mode, so loop body never executes
+	for lc := h.maxLayer; lc > level; lc-- {
+		candidates := h.searchLayer(embedding, currentEntryPoint, 1, lc, entries)
+		if len(candidates) > 0 {
+			currentEntryPoint = candidates[0]
+		}
+	}
+
+	// Connect at layer 0 only
+	neighbors := h.searchLayer(embedding, currentEntryPoint, h.efConstruction, 0, entries)
+	selectedNeighbors := h.selectNeighbors(neighbors, h.Mmax0, embedding, entries)
+
+	node.neighbors[0] = make([]int, 0, len(selectedNeighbors))
+	for _, neighborID := range selectedNeighbors {
+		node.neighbors[0] = append(node.neighbors[0], neighborID)
+		neighborNode := h.nodeIndex[neighborID]
+		if neighborNode != nil {
+			if neighborNode.neighbors[0] == nil {
+				neighborNode.neighbors[0] = make([]int, 0)
+			}
+			neighborNode.neighbors[0] = append(neighborNode.neighbors[0], entryIndex)
+		}
+	}
+
+	h.nodes = append(h.nodes, node)
+	h.nodeIndex[entryIndex] = node
+}
+
+// randomUnitVector generates a random vector with unit norm (uniform on
+// hypersphere). Uses rand/v2 for proper randomness.
+func randomUnitVector(rng *rand.Rand, dims int) []float32 {
+	v := make([]float32, dims)
+	var norm float64
+	for i := range v {
+		v[i] = rng.Float32()*2 - 1 // [-1, 1)
+		norm += float64(v[i]) * float64(v[i])
+	}
+	scale := float32(1.0 / math.Sqrt(norm))
+	for i := range v {
+		v[i] *= scale
+	}
+	return v
 }
