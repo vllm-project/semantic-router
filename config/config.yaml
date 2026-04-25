@@ -1342,6 +1342,7 @@ global:
       providers:
         - type: redis
           address: redis:6379
+          db: 0
           domain: api
           rules:
             - name: premium-per-minute

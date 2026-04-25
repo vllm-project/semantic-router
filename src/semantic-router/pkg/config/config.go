@@ -120,6 +120,7 @@ type RateLimitConfig struct {
 type RateLimitProviderConfig struct {
 	Type    string          `yaml:"type"`
 	Address string          `yaml:"address,omitempty"`
+	DB      int             `yaml:"db,omitempty"`
 	Domain  string          `yaml:"domain,omitempty"`
 	Rules   []RateLimitRule `yaml:"rules,omitempty"`
 }

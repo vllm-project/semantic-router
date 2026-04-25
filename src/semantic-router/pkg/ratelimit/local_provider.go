@@ -1,6 +1,7 @@
 package ratelimit
 
 import (
+	"slices"
 	"strings"
 	"sync"
 	"time"
@@ -59,14 +60,49 @@ func (l *LocalLimiter) Name() string {
 	return "local-limiter"
 }
 
+// budgetState tracks the most restrictive quota seen across evaluated rules.
+type budgetState struct {
+	remaining int64
+	limit     int64
+	resetAt   time.Time
+}
+
+func (bs *budgetState) update(remaining int64, limit int64, resetAt time.Time) {
+	if bs.remaining < 0 || remaining < bs.remaining {
+		bs.remaining = remaining
+	}
+	if bs.limit < 0 || limit < bs.limit {
+		bs.limit = limit
+	}
+	if bs.resetAt.IsZero() || resetAt.Before(bs.resetAt) {
+		bs.resetAt = resetAt
+	}
+}
+
+// checkBucket consumes from a bucket and returns a deny Decision if the budget is exhausted.
+// On success it updates the budget state and returns nil.
+func (l *LocalLimiter) checkBucket(key string, capacity int64, unit time.Duration, cost int64, now time.Time, bs *budgetState) *Decision {
+	b := l.getOrCreateBucket(key, capacity, unit)
+	allowed, remaining, resetAt := b.tryConsume(cost, now)
+	if !allowed {
+		return &Decision{
+			Allowed:    false,
+			Remaining:  remaining,
+			Limit:      capacity,
+			ResetAt:    resetAt,
+			RetryAfter: time.Until(resetAt),
+			Provider:   l.Name(),
+		}
+	}
+	bs.update(remaining, capacity, resetAt)
+	return nil
+}
+
 // Check evaluates all matching rules. If any rule's budget is exhausted,
 // the request is denied.
 func (l *LocalLimiter) Check(ctx Context) (*Decision, error) {
 	now := time.Now()
-
-	var mostRestrictiveRemaining int64 = -1
-	var mostRestrictiveLimit int64 = -1
-	var earliestReset time.Time
+	bs := budgetState{remaining: -1, limit: -1}
 
 	for i := range l.rules {
 		rule := &l.rules[i]
@@ -76,71 +112,33 @@ func (l *LocalLimiter) Check(ctx Context) (*Decision, error) {
 
 		if rule.RequestsPerUnit > 0 {
 			key := l.bucketKey(rule.Name, ctx.UserID, ctx.Model, "rpm")
-			b := l.getOrCreateBucket(key, int64(rule.RequestsPerUnit), rule.Unit)
-			allowed, remaining, resetAt := b.tryConsume(1, now)
-			if !allowed {
-				return &Decision{
-					Allowed:    false,
-					Remaining:  remaining,
-					Limit:      int64(rule.RequestsPerUnit),
-					ResetAt:    resetAt,
-					RetryAfter: time.Until(resetAt),
-					Provider:   l.Name(),
-				}, nil
-			}
-			if mostRestrictiveRemaining < 0 || remaining < mostRestrictiveRemaining {
-				mostRestrictiveRemaining = remaining
-			}
-			if mostRestrictiveLimit < 0 || int64(rule.RequestsPerUnit) < mostRestrictiveLimit {
-				mostRestrictiveLimit = int64(rule.RequestsPerUnit)
-			}
-			if earliestReset.IsZero() || resetAt.Before(earliestReset) {
-				earliestReset = resetAt
+			if deny := l.checkBucket(key, int64(rule.RequestsPerUnit), rule.Unit, 1, now, &bs); deny != nil {
+				return deny, nil
 			}
 		}
 
 		if rule.TokensPerUnit > 0 {
 			key := l.bucketKey(rule.Name, ctx.UserID, ctx.Model, "tpm")
-			b := l.getOrCreateBucket(key, int64(rule.TokensPerUnit), rule.Unit)
-			cost := int64(ctx.TokenCount)
-			if cost <= 0 {
-				cost = 0
-			}
-			allowed, remaining, resetAt := b.tryConsume(cost, now)
-			if !allowed {
-				return &Decision{
-					Allowed:    false,
-					Remaining:  remaining,
-					Limit:      int64(rule.TokensPerUnit),
-					ResetAt:    resetAt,
-					RetryAfter: time.Until(resetAt),
-					Provider:   l.Name(),
-				}, nil
-			}
-			if mostRestrictiveRemaining < 0 || remaining < mostRestrictiveRemaining {
-				mostRestrictiveRemaining = remaining
-			}
-			if mostRestrictiveLimit < 0 || int64(rule.TokensPerUnit) < mostRestrictiveLimit {
-				mostRestrictiveLimit = int64(rule.TokensPerUnit)
-			}
-			if earliestReset.IsZero() || resetAt.Before(earliestReset) {
-				earliestReset = resetAt
+			cost := max(int64(ctx.TokenCount), 0)
+			if deny := l.checkBucket(key, int64(rule.TokensPerUnit), rule.Unit, cost, now, &bs); deny != nil {
+				return deny, nil
 			}
 		}
 	}
 
-	if mostRestrictiveRemaining < 0 {
-		mostRestrictiveRemaining = 0
+	if bs.remaining < 0 {
+		logging.Debugf("LocalLimiter.Check: no matching rule for user=%s model=%s — allowing request (fail-open)", ctx.UserID, ctx.Model)
+		bs.remaining = 0
 	}
-	if mostRestrictiveLimit < 0 {
-		mostRestrictiveLimit = 0
+	if bs.limit < 0 {
+		bs.limit = 0
 	}
 
 	return &Decision{
 		Allowed:   true,
-		Remaining: mostRestrictiveRemaining,
-		Limit:     mostRestrictiveLimit,
-		ResetAt:   earliestReset,
+		Remaining: bs.remaining,
+		Limit:     bs.limit,
+		ResetAt:   bs.resetAt,
 		Provider:  l.Name(),
 	}, nil
 }
@@ -177,17 +175,8 @@ func (l *LocalLimiter) ruleMatches(rule *Rule, ctx Context) bool {
 	if rule.Match.Model != "" && rule.Match.Model != "*" && rule.Match.Model != ctx.Model {
 		return false
 	}
-	if rule.Match.Group != "" && rule.Match.Group != "*" {
-		matched := false
-		for _, g := range ctx.Groups {
-			if g == rule.Match.Group {
-				matched = true
-				break
-			}
-		}
-		if !matched {
-			return false
-		}
+	if rule.Match.Group != "" && rule.Match.Group != "*" && !slices.Contains(ctx.Groups, rule.Match.Group) {
+		return false
 	}
 	return true
 }
@@ -250,6 +239,8 @@ func ParseUnit(unit string) time.Duration {
 		return time.Hour
 	case "day":
 		return 24 * time.Hour
+	case "month":
+		return 30 * 24 * time.Hour // approximation: fixed 30-day window, not calendar month
 	default:
 		return time.Minute
 	}
