@@ -418,7 +418,7 @@ func (v *Validator) checkSignalConstraints(s *SignalDecl) {
 	// Check valid signal types
 	if !config.IsSupportedSignalType(s.SignalType) {
 		v.addDiag(DiagConstraint, s.Pos,
-			fmt.Sprintf("Unknown signal type %q in %s. Supported signal types: keyword, embedding, domain, fact_check, user_feedback, preference, language, context, structure, conversation, complexity, modality, authz, jailbreak, pii, kb", s.SignalType, context),
+			fmt.Sprintf("Unknown signal type %q in %s. Supported signal types: %s", s.SignalType, context, strings.Join(config.SupportedSignalTypes(), ", ")),
 			nil,
 		)
 	}
@@ -454,6 +454,8 @@ func (v *Validator) checkSignalConstraints(s *SignalDecl) {
 		v.checkStructureSignalConstraints(s)
 	case "conversation":
 		v.checkConversationSignalConstraints(s)
+	case "session_metric":
+		v.checkSessionMetricRuleConstraints(s, context)
 	}
 }
 

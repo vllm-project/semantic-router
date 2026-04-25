@@ -144,47 +144,79 @@ func (c *Compiler) compileProjectionMappings() {
 
 // ---------- Signals ----------
 
-//nolint:cyclop // Flat dispatch keeps signal-type ownership explicit at the compile entrypoint.
 func (c *Compiler) compileSignals() {
 	for _, s := range c.prog.Signals {
-		switch s.SignalType {
-		case "keyword":
-			c.compileKeywordSignal(s)
-		case "embedding":
-			c.compileEmbeddingSignal(s)
-		case "domain":
-			c.compileDomainSignal(s)
-		case "fact_check":
-			c.compileFactCheckSignal(s)
-		case "user_feedback":
-			c.compileUserFeedbackSignal(s)
-		case "reask":
-			c.compileReaskSignal(s)
-		case "preference":
-			c.compilePreferenceSignal(s)
-		case "language":
-			c.compileLanguageSignal(s)
-		case "context":
-			c.compileContextSignal(s)
-		case "structure":
-			c.compileStructureSignal(s)
-		case "complexity":
-			c.compileComplexitySignal(s)
-		case "modality":
-			c.compileModalitySignal(s)
-		case "authz":
-			c.compileAuthzSignal(s)
-		case "jailbreak":
-			c.compileJailbreakSignal(s)
-		case "pii":
-			c.compilePIISignal(s)
-		case "kb":
-			c.compileKBSignal(s)
-		case "conversation":
-			c.compileConversationSignal(s)
-		default:
+		fn, ok := signalCompilerByType[s.SignalType]
+		if !ok {
 			c.addError(s.Pos, "unknown signal type %q", s.SignalType)
+			continue
 		}
+		fn(c, s)
+	}
+}
+
+func (c *Compiler) compileSessionMetricRule(s *SignalDecl) {
+	rule := config.SessionMetricRule{Name: s.Name}
+	kind := inferSessionMetricKindFromDecl(s)
+	rule.Kind = kind
+	switch kind {
+	case "state":
+		fillSessionMetricStateRule(&rule, s.Fields)
+	case "lookup":
+		fillSessionMetricLookupRule(&rule, s)
+	default:
+		c.addError(s.Pos, "session_metric %q: kind must be state or lookup (or omit kind and set state or table)", s.Name)
+		return
+	}
+	c.config.SessionMetricRules = append(c.config.SessionMetricRules, rule)
+}
+
+func inferSessionMetricKindFromDecl(s *SignalDecl) string {
+	kind := strings.ToLower(strings.TrimSpace(getStringFieldOrEmpty(s.Fields, "kind")))
+	if kind != "" {
+		return kind
+	}
+	if _, ok := getStringField(s.Fields, "table"); ok {
+		return "lookup"
+	}
+	return "state"
+}
+
+func fillSessionMetricStateRule(rule *config.SessionMetricRule, fields map[string]Value) {
+	if v, ok := getStringField(fields, "state"); ok {
+		rule.State = v
+	}
+	if v, ok := getStringField(fields, "normalize"); ok {
+		rule.Normalize = v
+	}
+	if v, ok := getFloat64Field(fields, "min"); ok {
+		x := v
+		rule.Min = &x
+	}
+	if v, ok := getFloat64Field(fields, "max"); ok {
+		x := v
+		rule.Max = &x
+	}
+}
+
+func fillSessionMetricLookupRule(rule *config.SessionMetricRule, s *SignalDecl) {
+	if v, ok := getStringField(s.Fields, "table"); ok {
+		rule.Table = v
+	}
+	raw, ok := s.Fields["key"]
+	if !ok {
+		return
+	}
+	av, ok := raw.(ArrayValue)
+	if !ok {
+		return
+	}
+	for _, item := range av.Items {
+		sv, ok := item.(StringValue)
+		if !ok {
+			continue
+		}
+		rule.Key = append(rule.Key, sv.V)
 	}
 }
 

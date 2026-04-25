@@ -59,24 +59,25 @@ func NewDecisionEngine(
 
 // SignalMatches contains all matched signals for decision evaluation
 type SignalMatches struct {
-	KeywordRules      []string
-	EmbeddingRules    []string
-	DomainRules       []string
-	FactCheckRules    []string // "needs_fact_check" or "no_fact_check_needed"
-	UserFeedbackRules []string // "need_clarification", "satisfied", "want_different", "wrong_answer"
-	ReaskRules        []string // History-aware dissatisfaction signals from repeated user turns
-	PreferenceRules   []string // Route preference names matched via external LLM
-	LanguageRules     []string // Language codes: "en", "es", "zh", "fr", etc.
-	ContextRules      []string // Context rule names matched (e.g. "low_token_count")
-	StructureRules    []string // Structure rule names matched (e.g. "many_questions")
-	ComplexityRules   []string // Complexity rules with difficulty level (e.g. "code_complexity:hard")
-	ModalityRules     []string // Modality classification: "AR", "DIFFUSION", or "BOTH"
-	AuthzRules        []string // Authz rule names matched for user-level routing (e.g. "premium_tier")
-	JailbreakRules    []string // Jailbreak rule names matched (confidence >= threshold)
-	PIIRules          []string // PII rule names matched (denied PII types detected)
-	KBRules           []string // KB signal names matched from global.model_catalog.kbs bindings
-	ConversationRules []string // Conversation-shape signal names matched
-	ProjectionRules   []string // Derived routing outputs from routing.projections.mappings
+	KeywordRules       []string
+	EmbeddingRules     []string
+	DomainRules        []string
+	FactCheckRules     []string // "needs_fact_check" or "no_fact_check_needed"
+	UserFeedbackRules  []string // "need_clarification", "satisfied", "want_different", "wrong_answer"
+	ReaskRules         []string // History-aware dissatisfaction signals from repeated user turns
+	PreferenceRules    []string // Route preference names matched via external LLM
+	LanguageRules      []string // Language codes: "en", "es", "zh", "fr", etc.
+	ContextRules       []string // Context rule names matched (e.g. "low_token_count")
+	StructureRules     []string // Structure rule names matched (e.g. "many_questions")
+	ComplexityRules    []string // Complexity rules with difficulty level (e.g. "code_complexity:hard")
+	ModalityRules      []string // Modality classification: "AR", "DIFFUSION", or "BOTH"
+	AuthzRules         []string // Authz rule names matched for user-level routing (e.g. "premium_tier")
+	JailbreakRules     []string // Jailbreak rule names matched (confidence >= threshold)
+	PIIRules           []string // PII rule names matched (denied PII types detected)
+	KBRules            []string // KB signal names matched from global.model_catalog.kbs bindings
+	ConversationRules  []string // Conversation-shape signal names matched
+	SessionMetricRules []string // session_metric rule names (state or lookup-backed)
+	ProjectionRules    []string // Derived routing outputs from routing.projections.mappings
 
 	SignalConfidences map[string]float64 // "signalType:ruleName" → real score (0.0-1.0), e.g. {"embedding:ai": 0.88}. Defaults to 1.0 if missing
 }
@@ -207,23 +208,27 @@ func (e *DecisionEngine) matchesSignalType(
 	}
 
 	ruleSets := map[string][]string{
-		"keyword":       signals.KeywordRules,
-		"embedding":     signals.EmbeddingRules,
-		"fact_check":    signals.FactCheckRules,
-		"user_feedback": signals.UserFeedbackRules,
-		"reask":         signals.ReaskRules,
-		"preference":    signals.PreferenceRules,
-		"language":      signals.LanguageRules,
-		"context":       signals.ContextRules,
-		"structure":     signals.StructureRules,
-		"complexity":    signals.ComplexityRules,
-		"modality":      signals.ModalityRules,
-		"authz":         signals.AuthzRules,
-		"jailbreak":     signals.JailbreakRules,
-		"pii":           signals.PIIRules,
-		"kb":            signals.KBRules,
-		"conversation":  signals.ConversationRules,
-		"projection":    signals.ProjectionRules,
+		"keyword":        signals.KeywordRules,
+		"embedding":      signals.EmbeddingRules,
+		"fact_check":     signals.FactCheckRules,
+		"user_feedback":  signals.UserFeedbackRules,
+		"reask":          signals.ReaskRules,
+		"preference":     signals.PreferenceRules,
+		"language":       signals.LanguageRules,
+		"context":        signals.ContextRules,
+		"structure":      signals.StructureRules,
+		"complexity":     signals.ComplexityRules,
+		"modality":       signals.ModalityRules,
+		"authz":          signals.AuthzRules,
+		"jailbreak":      signals.JailbreakRules,
+		"pii":            signals.PIIRules,
+		"kb":             signals.KBRules,
+		"conversation":   signals.ConversationRules,
+		"session_metric": signals.SessionMetricRules,
+		// Legacy decision leaves still seen in older configs.
+		"session":    signals.SessionMetricRules,
+		"lookup":     signals.SessionMetricRules,
+		"projection": signals.ProjectionRules,
 	}
 
 	rules, ok := ruleSets[normalizedType]
@@ -241,6 +246,14 @@ func signalConfidence(confidences map[string]float64, signalType string, name st
 	signalKey := fmt.Sprintf("%s:%s", signalType, name)
 	if score, ok := confidences[signalKey]; ok && score > 0 {
 		return score
+	}
+	// Hydration stores confidences under session_metric:<name> even when decisions
+	// still reference legacy session:/lookup: leaves.
+	if signalType == "session" || signalType == "lookup" {
+		alt := fmt.Sprintf("session_metric:%s", name)
+		if score, ok := confidences[alt]; ok && score > 0 {
+			return score
+		}
 	}
 	return 1.0
 }
