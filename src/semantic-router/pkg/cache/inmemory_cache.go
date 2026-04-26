@@ -5,6 +5,7 @@ package cache
 import (
 	"fmt"
 	"math"
+	"math/rand/v2"
 	"sort"
 	"strings"
 	"sync"
@@ -1134,11 +1135,13 @@ func (h *HNSWIndex) markStale() {
 	h.maxLayer = -1
 }
 
-// selectLevel randomly selects a level for a new node
+// selectLevel randomly selects a level for a new node using exponential decay.
 func (h *HNSWIndex) selectLevel() int {
-	// Use exponential decay probability
-	r := -math.Log(math.Max(1e-9, 1.0-float64(time.Now().UnixNano()%1000000)/1000000.0))
-	return int(r * h.ml)
+	r := rand.Float64()
+	if r == 0.0 {
+		r = 1e-9
+	}
+	return int(-math.Log(r) * h.ml)
 }
 
 // addNode adds a new node to the HNSW index.
