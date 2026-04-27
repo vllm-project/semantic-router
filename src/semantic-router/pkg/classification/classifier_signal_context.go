@@ -70,7 +70,7 @@ func textForSignalFunc(text, uncompressedText string, skipCompressionSignals map
 	}
 }
 
-func (c *Classifier) EvaluateAllSignalsWithContext(text string, contextText string, currentUserText string, priorUserMessages []string, nonUserMessages []string, hasPriorAssistantReply bool, forceEvaluateAll bool, uncompressedText string, skipCompressionSignals map[string]bool, convFacts ConversationFacts, imageURL ...string) *SignalResults {
+func (c *Classifier) EvaluateAllSignalsWithContext(text string, contextText string, currentUserText string, priorUserMessages []string, nonUserMessages []string, hasPriorAssistantReply bool, forceEvaluateAll bool, uncompressedText string, skipCompressionSignals map[string]bool, convFacts ConversationFacts, sessionCtx *SignalSessionContext, imageURL ...string) *SignalResults {
 	defer c.enterSignalEvaluationLoadGate()()
 	// Determine which signals (type:name) should be evaluated
 	var usedSignals map[string]bool
@@ -104,6 +104,7 @@ func (c *Classifier) EvaluateAllSignalsWithContext(text string, contextText stri
 	results = c.applySignalGroups(results)
 	results = c.applySignalComposers(results)
 	results = c.applySignalOutputPolicies(results)
+	_ = c.hydrateSessionLookupRulesForProjections(results, sessionCtx)
 	results = c.applyProjections(results)
 	return results
 }

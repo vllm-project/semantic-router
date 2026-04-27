@@ -12,6 +12,7 @@ import (
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
+	valkeyutil "github.com/vllm-project/semantic-router/src/semantic-router/pkg/utils/valkey"
 )
 
 // errValkeyMemoryAlreadyExists is returned by Store when a memory with the same ID already exists.
@@ -114,14 +115,29 @@ func NewValkeyStore(options ValkeyStoreOptions) (*ValkeyStore, error) {
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), indexTimeout)
 	defer cancel()
-	if err := store.ensureIndex(ctx); err != nil {
-		return nil, fmt.Errorf("failed to ensure index exists: %w", err)
+
+	if err := store.initializeSearchIndex(ctx); err != nil {
+		return nil, err
 	}
 
 	logging.Infof("ValkeyStore: initialized with index='%s', prefix='%s', embedding_model='%s', dimension=%d",
 		store.indexName, store.collectionPrefix, store.embeddingConfig.Model, store.dimension)
 
 	return store, nil
+}
+
+// initializeSearchIndex runs the valkey-search module version pre-check and then
+// ensures the FT index exists.
+func (v *ValkeyStore) initializeSearchIndex(ctx context.Context) error {
+	versionCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
+	defer cancel()
+	if err := valkeyutil.EnsureSearchModuleVersion(versionCtx, v.client, valkeyutil.SearchModuleMinVersion); err != nil {
+		return err
+	}
+	if err := v.ensureIndex(ctx); err != nil {
+		return fmt.Errorf("failed to ensure index exists: %w", err)
+	}
+	return nil
 }
 
 // ensureIndex checks if the FT index exists and creates it if not.

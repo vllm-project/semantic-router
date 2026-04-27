@@ -16,6 +16,7 @@ import (
 	routerconfig "github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/metrics"
+	valkeyutil "github.com/vllm-project/semantic-router/src/semantic-router/pkg/utils/valkey"
 )
 
 // ValkeyCache provides a scalable semantic cache implementation using Valkey with vector search
@@ -116,14 +117,28 @@ func NewValkeyCache(options ValkeyCacheOptions) (*ValkeyCache, error) {
 	logging.Debugf("ValkeyCache: successfully connected to Valkey")
 
 	logging.Debugf("ValkeyCache: initializing index '%s'", valkeyConfig.Index.Name)
-	if err := cache.initializeIndex(); err != nil {
-		logging.Debugf("ValkeyCache: failed to initialize index: %v", err)
+	if err := cache.initializeSearchIndex(); err != nil {
+		logging.Debugf("ValkeyCache: initialization failed: %v", err)
 		valkeyClient.Close()
-		return nil, fmt.Errorf("failed to initialize index: %w", err)
+		return nil, err
 	}
 	logging.Debugf("ValkeyCache: initialization complete")
 
 	return cache, nil
+}
+
+// initializeSearchIndex runs the valkey-search module version pre-check and
+// then sets up the FT index.
+func (c *ValkeyCache) initializeSearchIndex() error {
+	versionCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	if err := valkeyutil.EnsureSearchModuleVersion(versionCtx, c.client, valkeyutil.SearchModuleMinVersion); err != nil {
+		return err
+	}
+	if err := c.initializeIndex(); err != nil {
+		return fmt.Errorf("failed to initialize index: %w", err)
+	}
+	return nil
 }
 
 // initializeIndex sets up the Valkey index for vector search
