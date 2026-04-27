@@ -181,7 +181,7 @@ func (l *ReMoMLooper) Execute(ctx context.Context, req *Request) (*Response, err
 		modelCalls := l.distributeCallsToModels(cfg, numCalls, req.ModelRefs)
 
 		// Execute parallel calls
-		responses, err := l.executeParallelCalls(ctx, cfg, modelCalls, currentMessages)
+		responses, err := l.executeParallelCalls(ctx, cfg, modelCalls, currentMessages, req.IsStreaming)
 		if err != nil {
 			if cfg.OnError == "fail" {
 				return nil, fmt.Errorf("round %d failed: %w", roundIdx+1, err)
@@ -481,7 +481,7 @@ func distributeFirstOnly(numCalls int, modelRefs []config.ModelRef) []ModelCall 
 }
 
 // executeParallelCalls executes model calls in parallel with concurrency control
-func (l *ReMoMLooper) executeParallelCalls(ctx context.Context, cfg *config.ReMoMAlgorithmConfig, modelCalls []ModelCall, messages *openai.ChatCompletionNewParams) ([]*ModelResponse, error) {
+func (l *ReMoMLooper) executeParallelCalls(ctx context.Context, cfg *config.ReMoMAlgorithmConfig, modelCalls []ModelCall, messages *openai.ChatCompletionNewParams, streaming bool) ([]*ModelResponse, error) {
 	numCalls := len(modelCalls)
 
 	// Determine max concurrent
@@ -525,7 +525,7 @@ func (l *ReMoMLooper) executeParallelCalls(ctx context.Context, cfg *config.ReMo
 				ctx,
 				msgCopy,
 				modelName,
-				false, // streaming
+				streaming,
 				idx+1, // iteration
 				nil,   // logprobs config
 				"",    // accessKey - not used in ReMoM

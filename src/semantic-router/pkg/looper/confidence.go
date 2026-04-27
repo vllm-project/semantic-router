@@ -582,7 +582,7 @@ func (l *ConfidenceLooper) Execute(ctx context.Context, req *Request) (*Response
 			"iteration": iteration,
 		})
 
-		resp, err := l.client.CallModel(ctx, req.OriginalRequest, modelName, false, iteration, logprobsCfg, accessKey)
+		resp, err := l.client.CallModel(ctx, req.OriginalRequest, modelName, req.IsStreaming, iteration, logprobsCfg, accessKey)
 		if err != nil {
 			logging.ComponentWarnEvent("looper", "model_dispatch_failed", map[string]interface{}{
 				"looper":    "confidence",

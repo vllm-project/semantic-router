@@ -168,7 +168,7 @@ func (l *RLDrivenLooper) Execute(ctx context.Context, req *Request) (*Response, 
 		})
 
 		// Call the model
-		resp, callErr := l.client.CallModel(ctx, req.OriginalRequest, displayName, false, iteration, nil, accessKey)
+		resp, callErr := l.client.CallModel(ctx, req.OriginalRequest, displayName, req.IsStreaming, iteration, nil, accessKey)
 		if callErr != nil {
 			logging.ComponentWarnEvent("looper", "model_dispatch_failed", map[string]interface{}{
 				"looper":    "rl_driven",
@@ -264,7 +264,7 @@ func (l *RLDrivenLooper) executeAllModels(ctx context.Context, req *Request) (*R
 			"iteration": iteration,
 		})
 
-		resp, err := l.client.CallModel(ctx, req.OriginalRequest, modelName, false, iteration, nil, accessKey)
+		resp, err := l.client.CallModel(ctx, req.OriginalRequest, modelName, req.IsStreaming, iteration, nil, accessKey)
 		if err != nil {
 			logging.ComponentWarnEvent("looper", "model_dispatch_failed", map[string]interface{}{
 				"looper":    "rl_driven",
