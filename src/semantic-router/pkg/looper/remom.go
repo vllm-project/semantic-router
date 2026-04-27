@@ -51,6 +51,99 @@ type ModelCall struct {
 	LoRAName string
 }
 
+// remomParallelResult is one completed parallel model call in a ReMoM round.
+type remomParallelResult struct {
+	resp  *ModelResponse
+	err   error
+	index int
+}
+
+func remomParallelMaxConcurrent(numCalls, maxFromCfg int) int {
+	if maxFromCfg > 0 && maxFromCfg < numCalls {
+		return maxFromCfg
+	}
+	return numCalls
+}
+
+// remomRunOneParallelCall performs a single gated CallModel for ReMoM parallel rounds.
+func (l *ReMoMLooper) remomRunOneParallelCall(
+	ctx context.Context,
+	idx, numCalls int,
+	mc ModelCall,
+	messages *openai.ChatCompletionNewParams,
+	cfg *config.ReMoMAlgorithmConfig,
+	streaming bool,
+	sem chan struct{},
+) remomParallelResult {
+	modelName := mc.Model
+	if mc.LoRAName != "" {
+		modelName = mc.LoRAName
+	}
+
+	logging.Infof("[ReMoM] Goroutine %d/%d started for model %s", idx+1, numCalls, modelName)
+
+	sem <- struct{}{}
+	defer func() { <-sem }()
+
+	msgCopy := cloneRequest(messages)
+	if cfg.Temperature > 0 {
+		msgCopy.Temperature = openai.Float(cfg.Temperature)
+	}
+
+	startTime := time.Now()
+	resp, err := l.client.CallModel(
+		ctx,
+		msgCopy,
+		modelName,
+		streaming,
+		idx+1,
+		nil,
+		"",
+	)
+	elapsed := time.Since(startTime)
+
+	if err != nil {
+		logging.Warnf("[ReMoM] Goroutine %d/%d failed for model %s after %v: %v", idx+1, numCalls, modelName, elapsed, err)
+	} else {
+		logging.Infof("[ReMoM] Goroutine %d/%d completed for model %s in %v", idx+1, numCalls, modelName, elapsed)
+	}
+
+	return remomParallelResult{resp: resp, err: err, index: idx}
+}
+
+func collectRemomParallelResults(
+	ctx context.Context,
+	numCalls int,
+	results <-chan remomParallelResult,
+	cfg *config.ReMoMAlgorithmConfig,
+) ([]*ModelResponse, error) {
+	var responses []*ModelResponse
+	var errs []error
+
+	for range numCalls {
+		select {
+		case res := <-results:
+			if res.err == nil {
+				responses = append(responses, res.resp)
+				continue
+			}
+			errs = append(errs, res.err)
+			if cfg.OnError == "fail" {
+				return nil, fmt.Errorf("model call %d failed: %w", res.index, res.err)
+			}
+		case <-ctx.Done():
+			return nil, ctx.Err()
+		}
+	}
+
+	if len(responses) == 0 {
+		return nil, fmt.Errorf("all %d model calls failed: %v", numCalls, errs)
+	}
+
+	logging.Infof("[ReMoM] Collected %d/%d successful responses", len(responses), numCalls)
+	return responses, nil
+}
+
 // ReferenceResponse represents a response used as reference in synthesis
 type ReferenceResponse struct {
 	Content   string
@@ -480,94 +573,26 @@ func distributeFirstOnly(numCalls int, modelRefs []config.ModelRef) []ModelCall 
 	return calls
 }
 
-// executeParallelCalls executes model calls in parallel with concurrency control
-func (l *ReMoMLooper) executeParallelCalls(ctx context.Context, cfg *config.ReMoMAlgorithmConfig, modelCalls []ModelCall, messages *openai.ChatCompletionNewParams, streaming bool) ([]*ModelResponse, error) {
+// executeParallelCalls executes model calls in parallel with concurrency control.
+func (l *ReMoMLooper) executeParallelCalls(
+	ctx context.Context,
+	cfg *config.ReMoMAlgorithmConfig,
+	modelCalls []ModelCall,
+	messages *openai.ChatCompletionNewParams,
+	streaming bool,
+) ([]*ModelResponse, error) {
 	numCalls := len(modelCalls)
-
-	// Determine max concurrent
-	maxConcurrent := numCalls
-	if cfg.MaxConcurrent > 0 && cfg.MaxConcurrent < numCalls {
-		maxConcurrent = cfg.MaxConcurrent
-	}
-
-	// Semaphore for concurrency control
+	maxConcurrent := remomParallelMaxConcurrent(numCalls, cfg.MaxConcurrent)
 	sem := make(chan struct{}, maxConcurrent)
+	results := make(chan remomParallelResult, numCalls)
 
-	// Result channel
-	type result struct {
-		resp  *ModelResponse
-		err   error
-		index int
-	}
-	results := make(chan result, numCalls)
-
-	// Launch goroutines
 	for i, call := range modelCalls {
 		go func(idx int, mc ModelCall) {
-			modelName := mc.Model
-			if mc.LoRAName != "" {
-				modelName = mc.LoRAName
-			}
-
-			logging.Infof("[ReMoM] Goroutine %d/%d started for model %s", idx+1, numCalls, modelName)
-
-			sem <- struct{}{}
-			defer func() { <-sem }()
-
-			// Clone request and set temperature
-			msgCopy := cloneRequest(messages)
-			if cfg.Temperature > 0 {
-				msgCopy.Temperature = openai.Float(cfg.Temperature)
-			}
-
-			startTime := time.Now()
-			resp, err := l.client.CallModel(
-				ctx,
-				msgCopy,
-				modelName,
-				streaming,
-				idx+1, // iteration
-				nil,   // logprobs config
-				"",    // accessKey - not used in ReMoM
-			)
-			elapsed := time.Since(startTime)
-
-			if err != nil {
-				logging.Warnf("[ReMoM] Goroutine %d/%d failed for model %s after %v: %v", idx+1, numCalls, modelName, elapsed, err)
-			} else {
-				logging.Infof("[ReMoM] Goroutine %d/%d completed for model %s in %v", idx+1, numCalls, modelName, elapsed)
-			}
-
-			results <- result{resp: resp, err: err, index: idx}
+			results <- l.remomRunOneParallelCall(ctx, idx, numCalls, mc, messages, cfg, streaming, sem)
 		}(i, call)
 	}
 
-	// Collect results
-	var responses []*ModelResponse
-	var errs []error
-
-	for i := 0; i < numCalls; i++ {
-		select {
-		case res := <-results:
-			if res.err != nil {
-				errs = append(errs, res.err)
-				if cfg.OnError == "fail" {
-					return nil, fmt.Errorf("model call %d failed: %w", res.index, res.err)
-				}
-			} else {
-				responses = append(responses, res.resp)
-			}
-		case <-ctx.Done():
-			return nil, ctx.Err()
-		}
-	}
-
-	if len(responses) == 0 {
-		return nil, fmt.Errorf("all %d model calls failed: %v", numCalls, errs)
-	}
-
-	logging.Infof("[ReMoM] Collected %d/%d successful responses", len(responses), numCalls)
-	return responses, nil
+	return collectRemomParallelResults(ctx, numCalls, results, cfg)
 }
 
 // buildSynthesisPrompt builds the synthesis prompt using template
