@@ -216,6 +216,9 @@ func (d *decompiler) appendSafetySignals(prog *Program) {
 	for _, kb := range d.cfg.KBRules {
 		prog.Signals = append(prog.Signals, d.kbSignalToDecl(&kb))
 	}
+	for i := range d.cfg.SessionMetricRules {
+		prog.Signals = append(prog.Signals, d.sessionMetricRuleToDecl(&d.cfg.SessionMetricRules[i]))
+	}
 }
 
 func (d *decompiler) appendModelsToProgram(prog *Program) {

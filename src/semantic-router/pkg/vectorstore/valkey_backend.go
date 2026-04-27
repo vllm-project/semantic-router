@@ -28,6 +28,8 @@ import (
 
 	glide "github.com/valkey-io/valkey-glide/go/v2"
 	glideconfig "github.com/valkey-io/valkey-glide/go/v2/config"
+
+	valkeyutil "github.com/vllm-project/semantic-router/src/semantic-router/pkg/utils/valkey"
 )
 
 // ValkeyBackendConfig holds configuration for the Valkey vector store backend.
@@ -136,6 +138,13 @@ func NewValkeyBackend(cfg ValkeyBackendConfig) (*ValkeyBackend, error) {
 	if err != nil {
 		client.Close()
 		return nil, fmt.Errorf("failed to ping Valkey at %s:%d: %w", host, port, err)
+	}
+
+	versionCtx, versionCancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer versionCancel()
+	if err := valkeyutil.EnsureSearchModuleVersion(versionCtx, client, valkeyutil.SearchModuleMinVersion); err != nil {
+		client.Close()
+		return nil, err
 	}
 
 	return &ValkeyBackend{

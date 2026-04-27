@@ -29,23 +29,24 @@ type CanonicalRouting struct {
 
 // CanonicalSignals groups routing signals under routing.signals.
 type CanonicalSignals struct {
-	Keywords      []KeywordRule      `yaml:"keywords,omitempty"`
-	Embeddings    []EmbeddingRule    `yaml:"embeddings,omitempty"`
-	Domains       []Category         `yaml:"domains,omitempty"`
-	FactCheck     []FactCheckRule    `yaml:"fact_check,omitempty"`
-	UserFeedbacks []UserFeedbackRule `yaml:"user_feedbacks,omitempty"`
-	Reasks        []ReaskRule        `yaml:"reasks,omitempty"`
-	Preferences   []PreferenceRule   `yaml:"preferences,omitempty"`
-	Language      []LanguageRule     `yaml:"language,omitempty"`
-	Context       []ContextRule      `yaml:"context,omitempty"`
-	Structure     []StructureRule    `yaml:"structure,omitempty"`
-	Complexity    []ComplexityRule   `yaml:"complexity,omitempty"`
-	Modality      []ModalityRule     `yaml:"modality,omitempty"`
-	RoleBindings  []RoleBinding      `yaml:"role_bindings,omitempty"`
-	Jailbreak     []JailbreakRule    `yaml:"jailbreak,omitempty"`
-	PII           []PIIRule          `yaml:"pii,omitempty"`
-	KB            []KBSignalRule     `yaml:"kb,omitempty"`
-	Conversation  []ConversationRule `yaml:"conversation,omitempty"`
+	Keywords           []KeywordRule       `yaml:"keywords,omitempty"`
+	Embeddings         []EmbeddingRule     `yaml:"embeddings,omitempty"`
+	Domains            []Category          `yaml:"domains,omitempty"`
+	FactCheck          []FactCheckRule     `yaml:"fact_check,omitempty"`
+	UserFeedbacks      []UserFeedbackRule  `yaml:"user_feedbacks,omitempty"`
+	Reasks             []ReaskRule         `yaml:"reasks,omitempty"`
+	Preferences        []PreferenceRule    `yaml:"preferences,omitempty"`
+	Language           []LanguageRule      `yaml:"language,omitempty"`
+	Context            []ContextRule       `yaml:"context,omitempty"`
+	Structure          []StructureRule     `yaml:"structure,omitempty"`
+	Complexity         []ComplexityRule    `yaml:"complexity,omitempty"`
+	Modality           []ModalityRule      `yaml:"modality,omitempty"`
+	RoleBindings       []RoleBinding       `yaml:"role_bindings,omitempty"`
+	Jailbreak          []JailbreakRule     `yaml:"jailbreak,omitempty"`
+	PII                []PIIRule           `yaml:"pii,omitempty"`
+	KB                 []KBSignalRule      `yaml:"kb,omitempty"`
+	Conversation       []ConversationRule  `yaml:"conversation,omitempty"`
+	SessionMetricRules []SessionMetricRule `yaml:"session_metrics,omitempty"`
 }
 
 // CanonicalProjections groups derived routing outputs under routing.projections.
@@ -236,23 +237,24 @@ func validateCanonicalContract(canonical *CanonicalConfig) error {
 
 func normalizeSignals(signals CanonicalSignals, decisions []Decision) Signals {
 	result := Signals{
-		KeywordRules:      append([]KeywordRule(nil), signals.Keywords...),
-		EmbeddingRules:    append([]EmbeddingRule(nil), signals.Embeddings...),
-		Categories:        append([]Category(nil), signals.Domains...),
-		FactCheckRules:    append([]FactCheckRule(nil), signals.FactCheck...),
-		UserFeedbackRules: append([]UserFeedbackRule(nil), signals.UserFeedbacks...),
-		ReaskRules:        append([]ReaskRule(nil), signals.Reasks...),
-		PreferenceRules:   append([]PreferenceRule(nil), signals.Preferences...),
-		LanguageRules:     append([]LanguageRule(nil), signals.Language...),
-		ContextRules:      append([]ContextRule(nil), signals.Context...),
-		StructureRules:    append([]StructureRule(nil), signals.Structure...),
-		ComplexityRules:   append([]ComplexityRule(nil), signals.Complexity...),
-		ModalityRules:     append([]ModalityRule(nil), signals.Modality...),
-		RoleBindings:      append([]RoleBinding(nil), signals.RoleBindings...),
-		JailbreakRules:    append([]JailbreakRule(nil), signals.Jailbreak...),
-		PIIRules:          append([]PIIRule(nil), signals.PII...),
-		KBRules:           append([]KBSignalRule(nil), signals.KB...),
-		ConversationRules: append([]ConversationRule(nil), signals.Conversation...),
+		KeywordRules:       append([]KeywordRule(nil), signals.Keywords...),
+		EmbeddingRules:     append([]EmbeddingRule(nil), signals.Embeddings...),
+		Categories:         append([]Category(nil), signals.Domains...),
+		FactCheckRules:     append([]FactCheckRule(nil), signals.FactCheck...),
+		UserFeedbackRules:  append([]UserFeedbackRule(nil), signals.UserFeedbacks...),
+		ReaskRules:         append([]ReaskRule(nil), signals.Reasks...),
+		PreferenceRules:    append([]PreferenceRule(nil), signals.Preferences...),
+		LanguageRules:      append([]LanguageRule(nil), signals.Language...),
+		ContextRules:       append([]ContextRule(nil), signals.Context...),
+		StructureRules:     append([]StructureRule(nil), signals.Structure...),
+		ComplexityRules:    append([]ComplexityRule(nil), signals.Complexity...),
+		ModalityRules:      append([]ModalityRule(nil), signals.Modality...),
+		RoleBindings:       append([]RoleBinding(nil), signals.RoleBindings...),
+		JailbreakRules:     append([]JailbreakRule(nil), signals.Jailbreak...),
+		PIIRules:           append([]PIIRule(nil), signals.PII...),
+		KBRules:            append([]KBSignalRule(nil), signals.KB...),
+		ConversationRules:  append([]ConversationRule(nil), signals.Conversation...),
+		SessionMetricRules: append([]SessionMetricRule(nil), signals.SessionMetricRules...),
 	}
 
 	if len(result.Categories) == 0 {
