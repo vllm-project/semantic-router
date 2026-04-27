@@ -129,7 +129,7 @@ func NewValkeyStore(options ValkeyStoreOptions) (*ValkeyStore, error) {
 // initializeSearchIndex runs the valkey-search module version pre-check and then
 // ensures the FT index exists.
 func (v *ValkeyStore) initializeSearchIndex(ctx context.Context) error {
-	versionCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	versionCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
 	defer cancel()
 	if err := valkeyutil.EnsureSearchModuleVersion(versionCtx, v.client, valkeyutil.SearchModuleMinVersion); err != nil {
 		return err
