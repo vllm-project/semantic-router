@@ -548,7 +548,12 @@ func validateKBMetricProjectionInput(
 	if input.KB == "" {
 		return fmt.Errorf("routing.projections.scores[%q]: kb_metric inputs require kb", scoreName)
 	}
-	kbs, _, err := knowledgeBaseDefinitions(cfg)
+	// Projection validation needs the KB config map but not the on-disk manifest;
+	// treat any kb_metric-referenced KB as referenced so its config flows through
+	// without forcing us to load asset files for unrelated KBs. See #1829.
+	referenced := referencedKnowledgeBaseNames(cfg)
+	referenced[input.KB] = struct{}{}
+	kbs, _, err := knowledgeBaseDefinitions(cfg, referenced)
 	if err != nil {
 		return err
 	}
