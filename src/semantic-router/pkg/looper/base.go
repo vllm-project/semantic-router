@@ -17,6 +17,7 @@ limitations under the License.
 package looper
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -93,8 +94,8 @@ func (l *BaseLooper) Execute(ctx context.Context, req *Request) (*Response, erro
 			"iteration": iteration,
 		})
 
-		// BaseLooper doesn't need logprobs (no confidence-based routing)
-		resp, err := l.client.CallModel(ctx, req.OriginalRequest, modelName, false, iteration, nil, accessKey)
+		// BaseLooper doesn't need logprobs (no confidence-based routing).
+		resp, err := l.client.CallModel(ctx, req.OriginalRequest, modelName, req.IsStreaming, iteration, nil, accessKey)
 		if err != nil {
 			logging.ComponentWarnEvent("looper", "model_dispatch_failed", map[string]interface{}{
 				"looper":    "base",
@@ -117,7 +118,7 @@ func (l *BaseLooper) Execute(ctx context.Context, req *Request) (*Response, erro
 	// Aggregate responses
 	aggregated := l.aggregateResponses(responses, modelsUsed)
 
-	// Format output based on streaming preference
+	// Format output based on streaming preference.
 	if req.IsStreaming {
 		return l.formatStreamingResponse(aggregated, modelsUsed, iteration)
 	}
@@ -344,6 +345,21 @@ func parseTaggedToolCall(content string) (string, string, bool) {
 
 // formatStreamingResponse creates an SSE streaming response
 func (l *BaseLooper) formatStreamingResponse(agg *AggregatedResponse, modelsUsed []string, iterations int) (*Response, error) {
+	// If we have real SSE streams from the underlying model(s), preserve the SSE
+	// framing instead of simulating it. This still returns a single response body,
+	// but avoids the "fake streaming" behavior where we pre-split text.
+	if len(agg.Responses) > 0 && agg.Responses[0].IsStreaming {
+		body := concatModelSSEStreams(agg.Responses)
+		return &Response{
+			Body:          body,
+			ContentType:   "text/event-stream",
+			Model:         agg.FinalModel,
+			ModelsUsed:    modelsUsed,
+			Iterations:    iterations,
+			AlgorithmType: "simple",
+		}, nil
+	}
+
 	timestamp := time.Now().Unix()
 	id := fmt.Sprintf("chatcmpl-looper-%d", timestamp)
 
@@ -456,6 +472,31 @@ func (l *BaseLooper) formatStreamingResponse(agg *AggregatedResponse, modelsUsed
 		Iterations:    iterations,
 		AlgorithmType: "simple",
 	}, nil
+}
+
+func concatModelSSEStreams(responses []*ModelResponse) []byte {
+	if len(responses) == 0 {
+		return []byte("data: [DONE]\n\n")
+	}
+
+	// Join the raw SSE streams sequentially, stripping intermediate [DONE] markers
+	// so the client sees a single terminal [DONE].
+	var out []byte
+	for i, resp := range responses {
+		if resp == nil || len(resp.Raw) == 0 {
+			continue
+		}
+		body := resp.Raw
+		if i < len(responses)-1 {
+			body = bytes.ReplaceAll(body, []byte("data: [DONE]\n\n"), []byte{})
+			body = bytes.ReplaceAll(body, []byte("data: [DONE]\r\n\r\n"), []byte{})
+		}
+		out = append(out, body...)
+	}
+	if !bytes.Contains(out, []byte("data: [DONE]")) {
+		out = append(out, []byte("data: [DONE]\n\n")...)
+	}
+	return out
 }
 
 func resolveToolCallForStreaming(agg *AggregatedResponse) (string, string, string, bool) {
