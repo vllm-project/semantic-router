@@ -136,13 +136,17 @@ func candidateModelFromInput(input ModelSwitchGateInput) string {
 }
 
 func newModelSwitchGateDecision(g *ModelSwitchGate, input ModelSwitchGateInput, candidateModel string) ModelSwitchGateDecision {
+	cacheWarmth := 0.0
+	if input.CacheWarmthOK {
+		cacheWarmth = clamp01(input.CacheWarmth)
+	}
 	return ModelSwitchGateDecision{
 		Enabled:        g != nil && g.config.Enabled,
 		Mode:           normalizeModelSwitchGateMode(gateConfig(g).Mode),
 		CurrentModel:   input.CurrentModel,
 		CandidateModel: candidateModel,
 		FinalModel:     candidateModel,
-		CacheWarmth:    clamp01(input.CacheWarmth),
+		CacheWarmth:    cacheWarmth,
 	}
 }
 
