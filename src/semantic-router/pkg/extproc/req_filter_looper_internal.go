@@ -142,6 +142,7 @@ func (r *OpenAIRouter) buildHeaderMutationsForLooper(
 	modelName string,
 ) ([]*core.HeaderValueOption, []string) {
 	setHeaders := []*core.HeaderValueOption{
+		newHeaderValueOption(headers.SelectedModel, modelName),
 		newHeaderValueOption(headers.VSRSelectedModel, modelName),
 	}
 	removeHeaders := []string{"content-length"}
