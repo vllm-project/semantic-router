@@ -34,7 +34,7 @@ fn test_modernbert_traditional_modernbert_classifier_new(
                 );
 
                 // Validate cached model output
-                assert!(confidence >= 0.0 && confidence <= 1.0);
+                assert!((0.0..=1.0).contains(&confidence));
                 assert!(class_id < 100); // Reasonable upper bound
             }
             Err(e) => {
@@ -82,7 +82,7 @@ fn test_modernbert_traditional_modernbert_token_classifier_new(
 
                         // Validate each result
                         assert!(!token.is_empty());
-                        assert!(confidence >= &0.0 && confidence <= &1.0);
+                        assert!((0.0..=1.0).contains(confidence));
                         assert!(start_pos <= end_pos);
                     }
 
@@ -165,7 +165,7 @@ fn test_modernbert_traditional_modernbert_classifier_output_format(
 
                     // Validate cached output format
                     assert!(predicted_class < 100); // Reasonable upper bound for real models
-                    assert!(confidence >= 0.0 && confidence <= 1.0);
+                    assert!((0.0..=1.0).contains(&confidence));
 
                     // Test that output is the expected tuple format (usize, f32)
                     let output: (usize, f32) = (predicted_class, confidence);
@@ -675,7 +675,7 @@ fn test_mmbert_32k_integration_with_model() {
     // For classification, you would need a fine-tuned version
     // Here we just verify the config detection and loading works
 
-    println!("");
+    println!();
     println!("mmBERT-32K model config validation passed");
     println!("   Model supports 32K context with YaRN RoPE scaling");
 }
@@ -1121,13 +1121,13 @@ fn test_rope_sin_cos_computation_32k() {
 
     for (i, (&s, &c)) in sin_data.iter().zip(cos_data.iter()).enumerate() {
         assert!(
-            s >= -1.0 && s <= 1.0,
+            (-1.0..=1.0).contains(&s),
             "Sin value {} at index {} out of range",
             s,
             i
         );
         assert!(
-            c >= -1.0 && c <= 1.0,
+            (-1.0..=1.0).contains(&c),
             "Cos value {} at index {} out of range",
             c,
             i
