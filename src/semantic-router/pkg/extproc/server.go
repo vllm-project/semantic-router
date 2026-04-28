@@ -9,7 +9,6 @@ import (
 	"os"
 	"os/signal"
 	"path/filepath"
-	"runtime/debug"
 	"strings"
 	"sync/atomic"
 	"syscall"
@@ -434,16 +433,14 @@ func (s *Server) watchConfigAndReload(ctx context.Context) {
 							"event":    ev.Op.String(),
 							"delay_ms": 300,
 						})
-						// Slight delay to let file settle
-						go func() {
-							defer func() {
-								if rec := recover(); rec != nil {
-									logging.Errorf("Config reload goroutine: recovered panic: %v\n%s", rec, debug.Stack())
-								}
-							}()
+						// Slight delay to let file settle. Wrap with
+						// goSafely so a panic inside reload() is logged
+						// via the structured `extproc:goroutine_panic`
+						// event instead of crashing the process (#1843).
+						goSafely("config_reload_debouncer", func() {
 							time.Sleep(300 * time.Millisecond)
 							reload()
-						}()
+						})
 					} else {
 						logging.ComponentDebugEvent("extproc", "config_reload_debounced", map[string]interface{}{
 							"file": ev.Name,

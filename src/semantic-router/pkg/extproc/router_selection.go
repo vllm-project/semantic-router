@@ -2,7 +2,6 @@ package extproc
 
 import (
 	"context"
-	"runtime/debug"
 	"time"
 
 	candle_binding "github.com/vllm-project/semantic-router/candle-binding"
@@ -373,12 +372,10 @@ func populateFromReplay(storage lookuptable.LookupTableStorage, reader store.Rea
 // The returned cancel function stops the goroutine.
 func startLookupTablePopulator(storage lookuptable.LookupTableStorage, reader store.Reader, interval time.Duration) func() {
 	ctx, cancel := context.WithCancel(context.Background())
-	go func() {
-		defer func() {
-			if rec := recover(); rec != nil {
-				logging.Errorf("Lookup table populator goroutine: recovered panic: %v\n%s", rec, debug.Stack())
-			}
-		}()
+	// goSafely so a panic in populateFromReplay (e.g. malformed
+	// replay-store entry) is logged instead of crashing the whole
+	// router process — see #1843.
+	goSafely("lookup_table_populator", func() {
 		ticker := time.NewTicker(interval)
 		defer ticker.Stop()
 		for {
@@ -389,7 +386,7 @@ func startLookupTablePopulator(storage lookuptable.LookupTableStorage, reader st
 				return
 			}
 		}
-	}()
+	})
 	logging.ComponentEvent("extproc", "lookuptable_populator_started", map[string]interface{}{
 		"interval": interval.String(),
 	})
