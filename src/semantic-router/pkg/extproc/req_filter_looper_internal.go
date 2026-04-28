@@ -220,6 +220,11 @@ func (r *OpenAIRouter) handleLooperInternalRequestWithPlugins(
 		return response, nil
 	}
 
+	if r.Config.GetModelAPIFormat(modelName) == config.APIFormatAnthropic {
+		r.startLooperInternalReplay(ctx, modelName, decisionName)
+		return r.handleAnthropicRoutingWithReasoning(openAIRequest, modelName, modelName, decisionName, useReasoning, ctx)
+	}
+
 	modifiedBody, err := r.modifyRequestBodyForLooper(
 		openAIRequest,
 		modelName,
