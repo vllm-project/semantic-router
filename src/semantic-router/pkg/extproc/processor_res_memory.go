@@ -2,6 +2,7 @@ package extproc
 
 import (
 	"context"
+	"runtime/debug"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 )
@@ -27,7 +28,7 @@ func (r *OpenAIRouter) scheduleResponseMemoryStore(ctx *RequestContext, response
 	go func() {
 		defer func() {
 			if rec := recover(); rec != nil {
-				logging.Errorf("Memory store goroutine: recovered panic: %v", rec)
+				logging.Errorf("Memory store goroutine: recovered panic: %v\n%s", rec, debug.Stack())
 			}
 		}()
 		bgCtx := context.Background()

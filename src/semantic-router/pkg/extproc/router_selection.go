@@ -2,6 +2,7 @@ package extproc
 
 import (
 	"context"
+	"runtime/debug"
 	"time"
 
 	candle_binding "github.com/vllm-project/semantic-router/candle-binding"
@@ -375,7 +376,7 @@ func startLookupTablePopulator(storage lookuptable.LookupTableStorage, reader st
 	go func() {
 		defer func() {
 			if rec := recover(); rec != nil {
-				logging.Errorf("Lookup table populator goroutine: recovered panic: %v", rec)
+				logging.Errorf("Lookup table populator goroutine: recovered panic: %v\n%s", rec, debug.Stack())
 			}
 		}()
 		ticker := time.NewTicker(interval)
