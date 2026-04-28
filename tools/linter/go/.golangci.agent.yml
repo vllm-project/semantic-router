@@ -4,6 +4,10 @@ run:
   timeout: "5m"
 
 linters:
+  # Only run the explicit complexity/size linters below. Without this, golangci-lint v2
+  # also enables the default preset (errcheck, govet, staticcheck, ...), which flags
+  # hundreds of issues on any large PR diff and defeats the changed-files gate.
+  default: none
   enable:
     - cyclop
     - funlen
@@ -52,7 +56,7 @@ linters:
           - funlen
           - gocognit
           - nestif
-        path: (^|/)src/semantic-router/pkg/extproc/(req_filter_rag_external|req_filter_rag_hybrid|req_filter_rag_mcp|req_filter_rag_milvus|server)\.go$
+        path: (^|/)src/semantic-router/pkg/extproc/(req_filter_rag_external|req_filter_rag_hybrid|req_filter_rag_mcp|req_filter_rag_milvus|req_filter_modality|req_filter_rag_openai|router_replay_aggregate|server)\.go$
       - linters:
           - cyclop
           - funlen
