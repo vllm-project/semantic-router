@@ -300,12 +300,10 @@ impl MmBertSequenceClassifier {
             if let Ok(entries) = std::fs::read_dir(base_dir) {
                 for entry in entries.flatten() {
                     let path = entry.path();
-                    if let Some(ext) = path.extension() {
-                        if ext == "onnx" {
-                            if !results.iter().any(|p| p == &path) {
-                                results.push(path);
-                            }
-                        }
+                    if path.extension().is_some_and(|ext| ext == "onnx")
+                        && !results.iter().any(|p| p == &path)
+                    {
+                        results.push(path);
                     }
                 }
             }
@@ -990,7 +988,7 @@ fn bio_decode_entities(
         let label = config.get_label(label_id as i32);
 
         // Parse BIO tag
-        if label.starts_with("B-") {
+        if let Some(stripped) = label.strip_prefix("B-") {
             // Save current entity if any
             if let Some((entity_type, ent_start, ent_end, ent_conf)) = current_entity.take() {
                 if ent_start < text.len() && ent_end <= text.len() {
@@ -1005,12 +1003,12 @@ fn bio_decode_entities(
             }
 
             // Start new entity
-            let entity_type = label[2..].to_string();
+            let entity_type = stripped.to_string();
             current_entity = Some((entity_type, start, end, confidence));
-        } else if label.starts_with("I-") {
+        } else if let Some(stripped) = label.strip_prefix("I-") {
             // Continue current entity
             if let Some((ref entity_type, ent_start, _, ref mut ent_conf)) = current_entity {
-                let expected_type = &label[2..];
+                let expected_type = stripped;
                 if entity_type == expected_type {
                     current_entity = Some((
                         entity_type.clone(),
@@ -1155,8 +1153,10 @@ mod tests {
 
     #[test]
     fn test_config_with_labels() {
-        let mut config = MmBertClassifierConfig::default();
-        config.num_labels = 3;
+        let mut config = MmBertClassifierConfig {
+            num_labels: 3,
+            ..Default::default()
+        };
         config.id2label.insert(0, "negative".to_string());
         config.id2label.insert(1, "neutral".to_string());
         config.id2label.insert(2, "positive".to_string());
