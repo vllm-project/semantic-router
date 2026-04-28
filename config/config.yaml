@@ -1883,6 +1883,10 @@ global:
         position_weight: 0.2
         tfidf_weight: 0.3
         position_depth: 0.1
+        # Hard safety limit applied before any signal processing, independent of
+        # the quality-aware compression above. 0 = no limit (default).
+        # Recommended production value: 8192 (~2K tokens).
+        max_evaluation_chars: 0
       prompt_guard:
         enabled: true
         model_ref: prompt_guard

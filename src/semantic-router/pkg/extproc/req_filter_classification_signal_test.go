@@ -1,6 +1,7 @@
 package extproc
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -134,4 +135,64 @@ func TestCollectMatchedSignalRules_PreservesFamilyOrder(t *testing.T) {
 		"pii:l",
 		"projection:m",
 	}, collectMatchedSignalRules(signals))
+}
+
+// --- Tests for max_evaluation_chars (#1454) ---
+
+func routerWithEvalLimit(limit int) *OpenAIRouter {
+	return &OpenAIRouter{
+		Config: &config.RouterConfig{
+			InlineModels: config.InlineModels{
+				PromptCompression: config.PromptCompressionConfig{
+					MaxEvaluationChars: limit,
+				},
+			},
+		},
+	}
+}
+
+func TestApplyMaxEvaluationCharsNoLimit(t *testing.T) {
+	r := routerWithEvalLimit(0)
+	text := strings.Repeat("a", 50000)
+	got := r.applyMaxEvaluationChars(text)
+	assert.Equal(t, 50000, len(got), "limit=0 should not truncate")
+}
+
+func TestApplyMaxEvaluationCharsNegativeNoLimit(t *testing.T) {
+	r := routerWithEvalLimit(-1)
+	text := strings.Repeat("b", 20000)
+	got := r.applyMaxEvaluationChars(text)
+	assert.Equal(t, 20000, len(got), "limit=-1 should not truncate")
+}
+
+func TestApplyMaxEvaluationCharsTruncates(t *testing.T) {
+	const limit = 8192
+	r := routerWithEvalLimit(limit)
+	text := strings.Repeat("x", 25000)
+	got := r.applyMaxEvaluationChars(text)
+	assert.Equal(t, limit, len(got), "giant prompt must be capped to limit")
+}
+
+func TestApplyMaxEvaluationCharsBelowLimitUnchanged(t *testing.T) {
+	r := routerWithEvalLimit(8192)
+	got := r.applyMaxEvaluationChars("short prompt")
+	assert.Equal(t, "short prompt", got)
+}
+
+func TestApplyMaxEvaluationCharsExactLimit(t *testing.T) {
+	const limit = 100
+	r := routerWithEvalLimit(limit)
+	text := strings.Repeat("z", limit)
+	got := r.applyMaxEvaluationChars(text)
+	assert.Equal(t, limit, len(got), "text at exactly the limit should not be truncated")
+}
+
+func TestPrepareSignalEvaluationInputRespectsEvalLimit(t *testing.T) {
+	const limit = 500
+	r := routerWithEvalLimit(limit)
+	input := r.prepareSignalEvaluationInput(signalConversationHistory{
+		currentUserMessage: strings.Repeat("q", 5000),
+	})
+	require.Equal(t, limit, len(input.evaluationText), "evaluationText must be capped at max_evaluation_chars")
+	assert.LessOrEqual(t, len(input.compressedText), limit, "compressedText must not exceed cap")
 }
