@@ -221,6 +221,7 @@ func (r *OpenAIRouter) handleLooperInternalRequestWithPlugins(
 	}
 
 	if r.Config.GetModelAPIFormat(modelName) == config.APIFormatAnthropic {
+		ctx.ExpectStreamingResponse = false
 		r.startLooperInternalReplay(ctx, modelName, decisionName)
 		return r.handleAnthropicRoutingWithReasoning(openAIRequest, modelName, modelName, decisionName, useReasoning, ctx)
 	}
