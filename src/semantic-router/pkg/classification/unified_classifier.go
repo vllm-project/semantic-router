@@ -118,6 +118,11 @@ type UnifiedClassifier struct {
 	useLoRA         bool            // True if using high-confidence LoRA models (solves PR 71)
 	loraModelPaths  *LoRAModelPaths // Paths to LoRA models
 	loraInitialized bool            // True if LoRA C bindings are initialized
+
+	// Test hooks let unit tests exercise concurrency behavior without real CGO calls.
+	testClassifyBatchWithLoRA func([]string) (*UnifiedBatchResults, error)
+	testClassifyBatchLegacy   func([]string) (*UnifiedBatchResults, error)
+	testInitializeLoRA        func() error
 }
 
 // UnifiedBatchResults contains results from all classification tasks
@@ -253,32 +258,36 @@ func (uc *UnifiedClassifier) ClassifyBatch(texts []string) (*UnifiedBatchResults
 	// Record start time for performance monitoring
 	startTime := time.Now()
 
-	uc.mu.Lock()
-	defer uc.mu.Unlock()
-
-	if !uc.initialized {
-		return nil, fmt.Errorf("unified classifier not initialized")
+	useLoRA, err := uc.classificationMode()
+	if err != nil {
+		return nil, err
 	}
 
 	// Choose implementation based on model type
-	if uc.useLoRA {
-		return uc.classifyBatchWithLoRA(texts, startTime)
+	var results *UnifiedBatchResults
+	if useLoRA {
+		if initErr := uc.ensureLoRAInitialized(); initErr != nil {
+			return nil, fmt.Errorf("failed to initialize loRA bindings: %w", initErr)
+		}
+		results, err = uc.classifyBatchWithLoRA(texts)
 	} else {
-		return uc.classifyBatchLegacy(texts, startTime)
+		results, err = uc.classifyBatchLegacy(texts)
 	}
+	if err != nil {
+		return nil, err
+	}
+
+	uc.updateStats(len(texts), time.Since(startTime))
+	return results, nil
 }
 
 // classifyBatchWithLoRA uses high-confidence LoRA models
-func (uc *UnifiedClassifier) classifyBatchWithLoRA(texts []string, startTime time.Time) (*UnifiedBatchResults, error) {
-	logging.Infof("Using LoRA models for batch classification, batch size: %d", len(texts))
-
-	// Lazy initialization of LoRA C bindings
-	if !uc.loraInitialized {
-		if err := uc.initializeLoRABindings(); err != nil {
-			return nil, fmt.Errorf("failed to initialize loRA bindings: %w", err)
-		}
-		uc.loraInitialized = true
+func (uc *UnifiedClassifier) classifyBatchWithLoRA(texts []string) (*UnifiedBatchResults, error) {
+	if uc.testClassifyBatchWithLoRA != nil {
+		return uc.testClassifyBatchWithLoRA(texts)
 	}
+
+	logging.Infof("Using LoRA models for batch classification, batch size: %d", len(texts))
 
 	// Convert Go strings to C string array
 	cTexts := make([]*C.char, len(texts))
@@ -303,15 +312,15 @@ func (uc *UnifiedClassifier) classifyBatchWithLoRA(texts []string, startTime tim
 
 	// Convert LoRA results to unified format
 	results := uc.convertLoRAResultsToGo(&result)
-
-	// Update performance statistics
-	processingTime := time.Since(startTime)
-	uc.updateStats(len(texts), processingTime)
 	return results, nil
 }
 
 // classifyBatchLegacy uses legacy ModernBERT models (lower confidence)
-func (uc *UnifiedClassifier) classifyBatchLegacy(texts []string, startTime time.Time) (*UnifiedBatchResults, error) {
+func (uc *UnifiedClassifier) classifyBatchLegacy(texts []string) (*UnifiedBatchResults, error) {
+	if uc.testClassifyBatchLegacy != nil {
+		return uc.testClassifyBatchLegacy(texts)
+	}
+
 	// Convert Go strings to C string array
 	cTexts := make([]*C.char, len(texts))
 	for i, text := range texts {
@@ -340,11 +349,6 @@ func (uc *UnifiedClassifier) classifyBatchLegacy(texts []string, startTime time.
 
 	// Convert C results to Go structures
 	results := uc.convertCResultsToGo(&result)
-
-	// Update performance statistics
-	processingTime := time.Since(startTime)
-	uc.updateStats(len(texts), processingTime)
-
 	return results, nil
 }
 
@@ -409,6 +413,10 @@ func (uc *UnifiedClassifier) convertLoRAResultsToGo(result *C.LoRABatchResult) *
 
 // initializeLoRABindings initializes the LoRA C bindings lazily
 func (uc *UnifiedClassifier) initializeLoRABindings() error {
+	if uc.testInitializeLoRA != nil {
+		return uc.testInitializeLoRA()
+	}
+
 	if uc.loraModelPaths == nil {
 		return fmt.Errorf("loRA model paths not configured")
 	}
@@ -454,6 +462,40 @@ func (uc *UnifiedClassifier) initializeLoRABindings() error {
 		"architecture":       uc.loraModelPaths.Architecture,
 		"use_cpu":            true,
 	})
+	return nil
+}
+
+func (uc *UnifiedClassifier) classificationMode() (bool, error) {
+	uc.mu.Lock()
+	defer uc.mu.Unlock()
+
+	if !uc.initialized {
+		return false, fmt.Errorf("unified classifier not initialized")
+	}
+
+	return uc.useLoRA, nil
+}
+
+func (uc *UnifiedClassifier) ensureLoRAInitialized() error {
+	uc.mu.Lock()
+	if uc.loraInitialized {
+		uc.mu.Unlock()
+		return nil
+	}
+	uc.mu.Unlock()
+
+	uc.mu.Lock()
+	defer uc.mu.Unlock()
+
+	if uc.loraInitialized {
+		return nil
+	}
+
+	if err := uc.initializeLoRABindings(); err != nil {
+		return err
+	}
+
+	uc.loraInitialized = true
 	return nil
 }
 
@@ -569,8 +611,11 @@ func (uc *UnifiedClassifier) IsInitialized() bool {
 	return uc.initialized
 }
 
-// updateStats updates performance statistics (must be called with mutex held)
+// updateStats updates performance statistics after a successful batch classification.
 func (uc *UnifiedClassifier) updateStats(batchSize int, processingTime time.Duration) {
+	uc.mu.Lock()
+	defer uc.mu.Unlock()
+
 	uc.stats.TotalBatches++
 	uc.stats.TotalTexts += int64(batchSize)
 	uc.stats.TotalProcessingMs += processingTime.Milliseconds()

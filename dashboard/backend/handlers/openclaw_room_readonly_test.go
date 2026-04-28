@@ -131,7 +131,7 @@ func waitForWSOutboundMessage(
 
 func TestRoomMessagesPost_LeaderSenderTypeTriggersAutomation(t *testing.T) {
 	tempDir := t.TempDir()
-	h := NewOpenClawHandler(tempDir, false)
+	h := newTestOpenClawHandler(t, tempDir, false)
 
 	workerSrv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/v1/chat/completions" {
@@ -165,7 +165,7 @@ func TestRoomMessagesPost_LeaderSenderTypeTriggersAutomation(t *testing.T) {
 
 func TestRoomMessagesPost_ReadOnlyAllowsChatAndAutomation(t *testing.T) {
 	tempDir := t.TempDir()
-	h := NewOpenClawHandler(tempDir, true)
+	h := newTestOpenClawHandler(t, tempDir, true)
 
 	workerSrv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/v1/chat/completions" {
@@ -194,7 +194,7 @@ func TestRoomMessagesPost_ReadOnlyAllowsChatAndAutomation(t *testing.T) {
 
 func TestRoomMessagesWebSocket_ReadOnlyAllowsSend(t *testing.T) {
 	tempDir := t.TempDir()
-	h := NewOpenClawHandler(tempDir, true)
+	h := newTestOpenClawHandler(t, tempDir, true)
 	room := ClawRoomEntry{
 		ID:        "room-readonly-ws",
 		TeamID:    "team-a",
@@ -251,7 +251,7 @@ func TestRoomMessagesWebSocket_ReadOnlyAllowsSend(t *testing.T) {
 
 func TestQueryWorkerChat_ReadOnlySkipsEndpointRepair(t *testing.T) {
 	tempDir := t.TempDir()
-	h := NewOpenClawHandler(tempDir, true)
+	h := newTestOpenClawHandler(t, tempDir, true)
 
 	workerSrv := httptest.NewServer(http.NotFoundHandler())
 	defer workerSrv.Close()

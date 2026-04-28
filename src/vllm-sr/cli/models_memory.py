@@ -11,6 +11,25 @@ class MemoryMilvusConfig(BaseModel):
     dimension: int = 384
 
 
+class MemoryValkeyConfig(BaseModel):
+    """Valkey configuration for memory storage using the Search module."""
+
+    host: str = "localhost"
+    port: int = 6379
+    database: int = 0
+    password: str | None = None
+    timeout: int = 10
+    collection_prefix: str = "mem:"
+    index_name: str = "mem_idx"
+    dimension: int = 384
+    metric_type: str = "COSINE"
+    index_m: int = 16
+    index_ef_construction: int = 256
+    tls_enabled: bool = False
+    tls_ca_path: str | None = None
+    tls_insecure_skip_verify: bool = False
+
+
 class MemoryRedisCacheConfig(BaseModel):
     """Redis hot-cache configuration for memory retrieval."""
 
@@ -34,8 +53,10 @@ class MemoryConfig(BaseModel):
     """
 
     enabled: bool = True
+    backend: str = ""  # "" or "milvus" → Milvus (default); "valkey" → Valkey
     auto_store: bool = False  # Auto-store extracted facts after each response
     milvus: MemoryMilvusConfig | None = None
+    valkey: MemoryValkeyConfig | None = None
     redis_cache: MemoryRedisCacheConfig | None = None
     # Embedding model to use for memory vectors
     # Options: "bert", "mmbert", "multimodal", "qwen3", "gemma"

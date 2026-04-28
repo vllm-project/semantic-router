@@ -7,7 +7,8 @@ import (
 )
 
 func validateKnowledgeBaseContracts(cfg *RouterConfig) error {
-	kbs, definitions, err := knowledgeBaseDefinitions(cfg)
+	referenced := referencedKnowledgeBaseNames(cfg)
+	kbs, definitions, err := knowledgeBaseDefinitions(cfg, referenced)
 	if err != nil {
 		return err
 	}
@@ -20,6 +21,19 @@ func validateKnowledgeBaseContracts(cfg *RouterConfig) error {
 	}
 
 	return nil
+}
+
+// referencedKnowledgeBaseNames returns the set of knowledge-base names that
+// are actually referenced by a routing.signals.kb[] rule. Default KBs that
+// nobody references can skip the on-disk manifest load below — see #1829.
+func referencedKnowledgeBaseNames(cfg *RouterConfig) map[string]struct{} {
+	out := make(map[string]struct{}, len(cfg.KBRules))
+	for _, rule := range cfg.KBRules {
+		if rule.KB != "" {
+			out[rule.KB] = struct{}{}
+		}
+	}
+	return out
 }
 
 func validateKnowledgeBaseSignalRule(
@@ -72,7 +86,7 @@ func validateKnowledgeBaseSignalTarget(rule KBSignalRule, kb KnowledgeBaseConfig
 	}
 }
 
-func knowledgeBaseDefinitions(cfg *RouterConfig) (map[string]KnowledgeBaseConfig, map[string]KnowledgeBaseDefinition, error) {
+func knowledgeBaseDefinitions(cfg *RouterConfig, referenced map[string]struct{}) (map[string]KnowledgeBaseConfig, map[string]KnowledgeBaseDefinition, error) {
 	kbs := make(map[string]KnowledgeBaseConfig, len(cfg.KnowledgeBases))
 	definitions := make(map[string]KnowledgeBaseDefinition, len(cfg.KnowledgeBases))
 	for _, kb := range cfg.KnowledgeBases {
@@ -89,6 +103,18 @@ func knowledgeBaseDefinitions(cfg *RouterConfig) (map[string]KnowledgeBaseConfig
 			return nil, nil, fmt.Errorf("global.model_catalog.kbs[%q]: threshold must be between 0 and 1", kb.Name)
 		}
 		if cfg.ConfigBaseDir == "" && !filepath.IsAbs(kb.Source.Path) {
+			kbs[kb.Name] = kb
+			continue
+		}
+
+		// #1829: defaults like privacy_kb and mmlu_kb get merged into every router
+		// config via canonical defaults. Stock Helm/operator deployments without
+		// bundled KB assets shouldn't fatal at startup just because nobody asked
+		// the router to use those KBs. Only load the on-disk labels manifest for
+		// KBs that a routing.signals.kb[] rule actually references; unreferenced
+		// KBs keep the basic config validation above (name, source.path,
+		// threshold) but skip the manifest read.
+		if _, isReferenced := referenced[kb.Name]; !isReferenced {
 			kbs[kb.Name] = kb
 			continue
 		}

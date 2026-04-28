@@ -25,6 +25,15 @@ static_resources:
             virtual_hosts:
             - name: local_service
               domains: ["*"]
+              # Security: strip internal headers from client requests to prevent
+              # looper bypass, identity spoofing, and credential leakage.
+              request_headers_to_remove:
+              - "x-vsr-looper-request"
+              - "x-vsr-looper-secret"
+              - "x-vsr-looper-decision"
+              - "x-vsr-looper-iteration"
+              - "x-authz-user-id"
+              - "x-authz-user-groups"
               routes:
               {% for model in models %}
               # Route for model: {{ model.name }}
@@ -39,13 +48,13 @@ static_resources:
                   timeout: {{ listener.timeout | default('1200s') }}
                   idleTimeout: 1200s
                   # Rewrite Host header to match upstream server
-                  host_rewrite_literal: "{{ model.endpoints[0].address }}"
+                  host_rewrite_literal: "{{ model.endpoints[0].host_authority }}"
                   {% if model.path_prefix %}
                   # Prepend path prefix to all requests (e.g., /compatible-mode + /v1/chat/completions = /compatible-mode/v1/chat/completions)
                   regex_rewrite:
                     pattern:
                       google_re2: {}
-                      regex: "^(.*)$"
+                      regex: "^/v1(.*)$"
                     substitution: "{{ model.path_prefix }}\\1"
                   {% endif %}
               {% endfor %}
@@ -76,14 +85,14 @@ static_resources:
                   timeout: {{ listener.timeout | default('1200s') }}
                   {% if models %}
                   # Rewrite Host header to match upstream server
-                  host_rewrite_literal: "{{ models[0].endpoints[0].address }}"
+                  host_rewrite_literal: "{{ models[0].endpoints[0].host_authority }}"
                   {% endif %}
                   {% if models and models[0].path_prefix %}
                   # Prepend path prefix to all requests (e.g., /compatible-mode + /v1/chat/completions = /compatible-mode/v1/chat/completions)
                   regex_rewrite:
                     pattern:
                       google_re2: {}
-                      regex: "^(.*)$"
+                      regex: "^/v1(.*)$"
                     substitution: "{{ models[0].path_prefix }}\\1"
                   {% endif %}
           http_filters:

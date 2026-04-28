@@ -1,0 +1,134 @@
+# Same routing as config.memory-user.yaml but uses the Valkey memory backend
+# instead of Milvus.  Requires a Valkey instance with the Search module on the
+# same Docker network (e.g. semantic-router-valkey:6379).
+#
+# Usage: point your router's CONFIG_FILE to this file.
+
+version: v0.3
+listeners:
+  - name: http-8888
+    address: 0.0.0.0
+    port: 8888
+    timeout: 300s
+providers:
+  defaults:
+    default_model: qwen3
+  models:
+    - name: qwen3
+      provider_model_id: qwen3
+      backend_refs:
+        - name: llm_katan
+          weight: 1
+          endpoint: host.docker.internal:8000
+          protocol: http
+routing:
+  modelCards:
+    - name: qwen3
+      modality: text
+  signals:
+    domains:
+      - name: general
+        description: General queries for memory testing
+        mmlu_categories: [other]
+    keywords:
+      - name: no_memory_trigger
+        operator: OR
+        keywords: [NOMEM_MARKER]
+      - name: custom_threshold_trigger
+        operator: OR
+        keywords: [THRESHOLD_MARKER]
+  decisions:
+    - name: no_memory_route
+      description: Route with memory explicitly disabled for per-decision testing
+      priority: 200
+      rules:
+        operator: OR
+        conditions:
+          - type: keyword
+            name: no_memory_trigger
+      modelRefs:
+        - model: qwen3
+          use_reasoning: false
+      plugins:
+        - type: system_prompt
+          configuration:
+            system_prompt: You are a helpful assistant. Memory access is disabled for this route.
+            mode: insert
+        - type: memory
+          configuration:
+            enabled: false
+
+    - name: custom_threshold_route
+      description: Route with high similarity threshold for per-decision testing
+      priority: 150
+      rules:
+        operator: OR
+        conditions:
+          - type: keyword
+            name: custom_threshold_trigger
+      modelRefs:
+        - model: qwen3
+          use_reasoning: false
+      plugins:
+        - type: system_prompt
+          configuration:
+            system_prompt: You are a helpful assistant with strict memory matching.
+            mode: insert
+        - type: memory
+          configuration:
+            enabled: true
+            retrieval_limit: 5
+            similarity_threshold: 0.99
+            auto_store: true
+
+    - name: default_route
+      description: Default route for memory testing
+      priority: 1
+      rules:
+        operator: OR
+        conditions:
+          - type: domain
+            name: general
+      modelRefs:
+        - model: qwen3
+          use_reasoning: false
+      plugins:
+        - type: system_prompt
+          configuration:
+            system_prompt: You are MoM, a helpful AI assistant with memory. You remember important facts about users and use this context to provide personalized assistance.
+            mode: insert
+        - type: memory
+          configuration:
+            enabled: true
+            retrieval_limit: 5
+            similarity_threshold: 0.45
+            auto_store: true
+global:
+  services:
+    response_api:
+      enabled: true
+      store_backend: memory
+      ttl_seconds: 86400
+  stores:
+    memory:
+      enabled: true
+      backend: valkey
+      auto_store: true
+      valkey:
+        host: semantic-router-valkey
+        port: 6379
+        database: 0
+        timeout: 10
+        collection_prefix: "mem:"
+        index_name: mem_idx
+        dimension: 384
+        metric_type: COSINE
+        index_m: 16
+        index_ef_construction: 256
+      embedding_model: mmbert
+      default_retrieval_limit: 5
+      default_similarity_threshold: 0.45
+    semantic_cache:
+      embedding_model: mmbert
+    vector_store:
+      embedding_model: mmbert

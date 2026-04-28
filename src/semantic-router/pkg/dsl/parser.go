@@ -75,6 +75,7 @@ func Parse(input string) (*Program, []error) {
 		prog.Models = append(prog.Models, resolved.Models...)
 		prog.Plugins = append(prog.Plugins, resolved.Plugins...)
 		prog.TestBlocks = append(prog.TestBlocks, resolved.TestBlocks...)
+		prog.SessionStates = append(prog.SessionStates, resolved.SessionStates...)
 		allErrors = append(allErrors, lowerErrs...)
 	}
 
@@ -91,7 +92,7 @@ func splitTopLevelBlocks(input string) []string {
 	var blocks []string
 	depth := 0
 	start := 0
-	keywords := []string{"DECISION_TREE", "PROJECTION", "SIGNAL", "ROUTE", "MODEL", "PLUGIN", "TEST"}
+	keywords := []string{"SESSION_STATE", "DECISION_TREE", "PROJECTION", "SIGNAL", "ROUTE", "MODEL", "PLUGIN", "TEST"}
 
 	for i := 0; i < len(input); i++ {
 		ch := input[i]
@@ -181,6 +182,8 @@ func rawToProgram(raw *rawProgram) (*Program, []error) {
 			prog.Plugins = append(prog.Plugins, rawToPlugin(entry.Plugin))
 		case entry.TestBlock != nil:
 			prog.TestBlocks = append(prog.TestBlocks, rawToTestBlock(entry.TestBlock))
+		case entry.SessionState != nil:
+			prog.SessionStates = append(prog.SessionStates, rawToSessionState(entry.SessionState))
 		}
 	}
 	if hasDirectRoutes && treeCount > 0 {
@@ -342,6 +345,30 @@ func rawToTestBlock(r *rawTestBlockDecl) *TestBlockDecl {
 	return tb
 }
 
+func rawToSessionState(r *rawSessionStateDecl) *SessionStateDecl {
+	decl := &SessionStateDecl{
+		Name: unquoteIdent(r.Name),
+		Pos:  posFromLexer(r.Pos),
+	}
+	for _, entry := range r.Fields {
+		if entry == nil || entry.Value == nil {
+			continue
+		}
+		typeName := ""
+		// Bare identifiers (int, string, float) arrive via Val.BareStr.
+		if entry.Value.BareStr != nil {
+			typeName = *entry.Value.BareStr
+		} else if entry.Value.Str != nil {
+			typeName = unquote(*entry.Value.Str)
+		}
+		decl.Fields = append(decl.Fields, SessionStateField{
+			Name:     entry.Key,
+			TypeName: typeName,
+		})
+	}
+	return decl
+}
+
 func rawToSignal(r *rawSignalDecl) *SignalDecl {
 	return &SignalDecl{
 		SignalType: r.SignalType,
@@ -383,6 +410,8 @@ func rawToRoute(r *rawRouteDecl) *RouteDecl {
 			route.Plugins = append(route.Plugins, rawToPluginRef(item.Plugin))
 		case item.Description != nil:
 			route.Description = unquote(*item.Description)
+		case item.CandidateFor != nil:
+			route.CandidateIterations = append(route.CandidateIterations, rawToCandidateIteration(item.CandidateFor))
 		}
 	}
 
@@ -612,6 +641,8 @@ const (
 	TOKEN_WHEN
 	TOKEN_MODEL
 	TOKEN_ALGORITHM
+	TOKEN_FOR
+	TOKEN_IN
 	TOKEN_AND
 	TOKEN_OR
 	TOKEN_NOT
@@ -633,7 +664,8 @@ func (t TokenType) String() string {
 		TOKEN_BOOL: "BOOL", TOKEN_COMMENT: "COMMENT", TOKEN_SIGNAL: "SIGNAL",
 		TOKEN_ROUTE: "ROUTE", TOKEN_PLUGIN: "PLUGIN", TOKEN_PRIORITY: "PRIORITY",
 		TOKEN_WHEN: "WHEN", TOKEN_MODEL: "MODEL", TOKEN_ALGORITHM: "ALGORITHM",
-		TOKEN_AND: "AND", TOKEN_OR: "OR", TOKEN_NOT: "NOT", TOKEN_LBRACE: "{", TOKEN_RBRACE: "}",
+		TOKEN_FOR: "FOR", TOKEN_IN: "IN", TOKEN_AND: "AND", TOKEN_OR: "OR", TOKEN_NOT: "NOT",
+		TOKEN_LBRACE: "{", TOKEN_RBRACE: "}",
 		TOKEN_LPAREN: "(", TOKEN_RPAREN: ")", TOKEN_LBRACKET: "[",
 		TOKEN_RBRACKET: "]", TOKEN_COLON: ":", TOKEN_COMMA: ",", TOKEN_EQUALS: "=",
 	}
@@ -666,6 +698,7 @@ func Lex(input string) ([]Token, []error) {
 		"PLUGIN": TOKEN_PLUGIN, "TEST": TOKEN_IDENT,
 		"PRIORITY": TOKEN_PRIORITY, "TIER": TOKEN_IDENT, "WHEN": TOKEN_WHEN,
 		"MODEL": TOKEN_MODEL, "ALGORITHM": TOKEN_ALGORITHM,
+		"FOR": TOKEN_FOR, "IN": TOKEN_IN,
 		"AND": TOKEN_AND, "OR": TOKEN_OR, "NOT": TOKEN_NOT,
 		"true": TOKEN_BOOL, "false": TOKEN_BOOL,
 	}
@@ -745,6 +778,7 @@ func LookupIdent(ident string) TokenType {
 		"PLUGIN": TOKEN_PLUGIN, "TEST": TOKEN_IDENT,
 		"PRIORITY": TOKEN_PRIORITY, "TIER": TOKEN_IDENT, "WHEN": TOKEN_WHEN,
 		"MODEL": TOKEN_MODEL, "ALGORITHM": TOKEN_ALGORITHM,
+		"FOR": TOKEN_FOR, "IN": TOKEN_IN,
 		"AND": TOKEN_AND, "OR": TOKEN_OR, "NOT": TOKEN_NOT,
 		"true": TOKEN_BOOL, "false": TOKEN_BOOL,
 	}

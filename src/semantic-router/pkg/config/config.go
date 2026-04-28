@@ -22,23 +22,25 @@ const (
 
 // Signal type constants for rule conditions.
 const (
-	SignalTypeKeyword      = "keyword"
-	SignalTypeEmbedding    = "embedding"
-	SignalTypeDomain       = "domain"
-	SignalTypeFactCheck    = "fact_check"
-	SignalTypeUserFeedback = "user_feedback"
-	SignalTypeReask        = "reask"
-	SignalTypePreference   = "preference"
-	SignalTypeLanguage     = "language"
-	SignalTypeContext      = "context"
-	SignalTypeStructure    = "structure"
-	SignalTypeComplexity   = "complexity"
-	SignalTypeModality     = "modality"
-	SignalTypeAuthz        = "authz"
-	SignalTypeJailbreak    = "jailbreak"
-	SignalTypePII          = "pii"
-	SignalTypeKB           = "kb"
-	SignalTypeProjection   = "projection"
+	SignalTypeKeyword       = "keyword"
+	SignalTypeEmbedding     = "embedding"
+	SignalTypeDomain        = "domain"
+	SignalTypeFactCheck     = "fact_check"
+	SignalTypeUserFeedback  = "user_feedback"
+	SignalTypeReask         = "reask"
+	SignalTypePreference    = "preference"
+	SignalTypeLanguage      = "language"
+	SignalTypeContext       = "context"
+	SignalTypeStructure     = "structure"
+	SignalTypeComplexity    = "complexity"
+	SignalTypeModality      = "modality"
+	SignalTypeAuthz         = "authz"
+	SignalTypeJailbreak     = "jailbreak"
+	SignalTypePII           = "pii"
+	SignalTypeKB            = "kb"
+	SignalTypeConversation  = "conversation"
+	SignalTypeSessionMetric = "session_metric"
+	SignalTypeProjection    = "projection"
 )
 
 // API format constants for model backends.
@@ -56,11 +58,12 @@ type RouterConfig struct {
 	InlineModels     `yaml:",inline"`
 	ExternalModels   []ExternalModelConfig `yaml:"external_models,omitempty"`
 	SemanticCache    `yaml:"semantic_cache"`
-	Memory           MemoryConfig       `yaml:"memory"`
-	VectorStore      *VectorStoreConfig `yaml:"vector_store,omitempty"`
-	ResponseAPI      ResponseAPIConfig  `yaml:"response_api"`
-	RouterReplay     RouterReplayConfig `yaml:"router_replay"`
-	Looper           LooperConfig       `yaml:"looper,omitempty"`
+	Memory           MemoryConfig        `yaml:"memory"`
+	VectorStore      *VectorStoreConfig  `yaml:"vector_store,omitempty"`
+	ResponseAPI      ResponseAPIConfig   `yaml:"response_api"`
+	RouterReplay     RouterReplayConfig  `yaml:"router_replay"`
+	StartupStatus    StartupStatusConfig `yaml:"startup_status"`
+	Looper           LooperConfig        `yaml:"looper,omitempty"`
 	LLMObservability `yaml:",inline"`
 	APIServer        `yaml:",inline"`
 	RouterOptions    `yaml:",inline"`
@@ -185,6 +188,7 @@ type IntelligentRouting struct {
 	Strategy        string               `yaml:"strategy,omitempty"`
 	ModelSelection  ModelSelectionConfig `yaml:"model_selection,omitempty"`
 	ReasoningConfig `yaml:",inline"`
+	SessionStates   []SessionStateConfig `yaml:"session_states,omitempty"`
 }
 
 // BackendModels captures configured backend endpoints and model metadata.

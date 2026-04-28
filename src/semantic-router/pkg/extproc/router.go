@@ -50,6 +50,20 @@ type OpenAIRouter struct {
 	// RuntimeRegistry exposes runtime-owned services without forcing request-time
 	// paths back through package-global API-server state.
 	RuntimeRegistry *routerruntime.Registry
+
+	lookupTableCancel func()
+}
+
+// Close releases background resources held by the router (e.g. lookup table
+// auto-save and periodic re-population goroutines).
+func (r *OpenAIRouter) Close() error {
+	if r == nil {
+		return nil
+	}
+	if r.lookupTableCancel != nil {
+		r.lookupTableCancel()
+	}
+	return nil
 }
 
 // Ensure OpenAIRouter implements the ext_proc calls.

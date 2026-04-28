@@ -211,11 +211,11 @@ func validateProjectionScoreInput(
 
 func validateProjectionInputValueSource(scoreName string, input ProjectionScoreInput) error {
 	switch input.ValueSource {
-	case "", "binary", "confidence":
+	case "", "binary", "confidence", "raw":
 		return nil
 	default:
 		return fmt.Errorf(
-			"routing.projections.scores[%q]: input %s(%q) has unsupported value_source %q (supported: binary, confidence)",
+			"routing.projections.scores[%q]: input %s(%q) has unsupported value_source %q (supported: binary, confidence, raw)",
 			scoreName,
 			input.Type,
 			input.Name,
@@ -242,6 +242,8 @@ func isProjectionInputTypeSupported(signalType string) bool {
 		SignalTypeJailbreak,
 		SignalTypePII,
 		SignalTypeKB,
+		SignalTypeConversation,
+		SignalTypeSessionMetric,
 		ProjectionInputKBMetric:
 		return true
 	default:
@@ -251,24 +253,37 @@ func isProjectionInputTypeSupported(signalType string) bool {
 
 func projectionDeclaredSignals(cfg *RouterConfig) map[string]map[string]struct{} {
 	declared := map[string]map[string]struct{}{
-		SignalTypeKeyword:      collectKeywordRuleNames(cfg.KeywordRules),
-		SignalTypeEmbedding:    collectEmbeddingRuleNames(cfg.EmbeddingRules),
-		SignalTypeDomain:       collectDomainNames(cfg.Categories),
-		SignalTypeFactCheck:    collectFactCheckRuleNames(cfg.FactCheckRules),
-		SignalTypeUserFeedback: collectUserFeedbackRuleNames(cfg.UserFeedbackRules),
-		SignalTypeReask:        collectReaskRuleNames(cfg.ReaskRules),
-		SignalTypePreference:   collectPreferenceRuleNames(cfg.PreferenceRules),
-		SignalTypeLanguage:     collectLanguageRuleNames(cfg.LanguageRules),
-		SignalTypeContext:      collectContextRuleNames(cfg.ContextRules),
-		SignalTypeStructure:    collectStructureRuleNames(cfg.StructureRules),
-		SignalTypeComplexity:   collectComplexityRuleNames(cfg.ComplexityRules),
-		SignalTypeModality:     collectModalityRuleNames(cfg.ModalityRules),
-		SignalTypeAuthz:        collectRoleBindingNames(cfg.GetRoleBindings()),
-		SignalTypeJailbreak:    collectJailbreakRuleNames(cfg.JailbreakRules),
-		SignalTypePII:          collectPIIRuleNames(cfg.PIIRules),
-		SignalTypeKB:           collectKBRuleNames(cfg.KBRules),
+		SignalTypeKeyword:       collectKeywordRuleNames(cfg.KeywordRules),
+		SignalTypeEmbedding:     collectEmbeddingRuleNames(cfg.EmbeddingRules),
+		SignalTypeDomain:        collectDomainNames(cfg.Categories),
+		SignalTypeFactCheck:     collectFactCheckRuleNames(cfg.FactCheckRules),
+		SignalTypeUserFeedback:  collectUserFeedbackRuleNames(cfg.UserFeedbackRules),
+		SignalTypeReask:         collectReaskRuleNames(cfg.ReaskRules),
+		SignalTypePreference:    collectPreferenceRuleNames(cfg.PreferenceRules),
+		SignalTypeLanguage:      collectLanguageRuleNames(cfg.LanguageRules),
+		SignalTypeContext:       collectContextRuleNames(cfg.ContextRules),
+		SignalTypeStructure:     collectStructureRuleNames(cfg.StructureRules),
+		SignalTypeComplexity:    collectComplexityRuleNames(cfg.ComplexityRules),
+		SignalTypeModality:      collectModalityRuleNames(cfg.ModalityRules),
+		SignalTypeAuthz:         collectRoleBindingNames(cfg.GetRoleBindings()),
+		SignalTypeJailbreak:     collectJailbreakRuleNames(cfg.JailbreakRules),
+		SignalTypePII:           collectPIIRuleNames(cfg.PIIRules),
+		SignalTypeKB:            collectKBRuleNames(cfg.KBRules),
+		SignalTypeConversation:  collectConversationRuleNames(cfg.ConversationRules),
+		SignalTypeSessionMetric: collectSessionMetricRuleNames(cfg.SessionMetricRules),
 	}
 	return declared
+}
+
+func collectSessionMetricRuleNames(rules []SessionMetricRule) map[string]struct{} {
+	out := make(map[string]struct{}, len(rules))
+	for _, r := range rules {
+		if r.Name == "" {
+			continue
+		}
+		out[r.Name] = struct{}{}
+	}
+	return out
 }
 
 func projectionInputDeclared(declared map[string]map[string]struct{}, signalType string, name string) bool {
@@ -517,6 +532,14 @@ func collectKBRuleNames(rules []KBSignalRule) map[string]struct{} {
 	return names
 }
 
+func collectConversationRuleNames(rules []ConversationRule) map[string]struct{} {
+	names := make(map[string]struct{}, len(rules))
+	for _, rule := range rules {
+		names[rule.Name] = struct{}{}
+	}
+	return names
+}
+
 func validateKBMetricProjectionInput(
 	cfg *RouterConfig,
 	scoreName string,
@@ -525,7 +548,12 @@ func validateKBMetricProjectionInput(
 	if input.KB == "" {
 		return fmt.Errorf("routing.projections.scores[%q]: kb_metric inputs require kb", scoreName)
 	}
-	kbs, _, err := knowledgeBaseDefinitions(cfg)
+	// Projection validation needs the KB config map but not the on-disk manifest;
+	// treat any kb_metric-referenced KB as referenced so its config flows through
+	// without forcing us to load asset files for unrelated KBs. See #1829.
+	referenced := referencedKnowledgeBaseNames(cfg)
+	referenced[input.KB] = struct{}{}
+	kbs, _, err := knowledgeBaseDefinitions(cfg, referenced)
 	if err != nil {
 		return err
 	}

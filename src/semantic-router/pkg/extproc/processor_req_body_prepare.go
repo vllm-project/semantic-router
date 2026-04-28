@@ -34,6 +34,7 @@ func (r *OpenAIRouter) translateResponseAPIRequest(
 	}
 
 	ctx.ResponseAPICtx = respCtx
+	populateSessionTransitionFields(ctx)
 	logging.ComponentDebugEvent("extproc", "response_api_request_translated", map[string]interface{}{
 		"request_id": ctx.RequestID,
 	})
@@ -160,6 +161,7 @@ func (r *OpenAIRouter) prepareRequestForModelRouting(
 		// In production, user ID comes ONLY from the trusted auth header (x-authz-user-id).
 		// We store the raw request body to allow dev builds to extract it later.
 		ctx.ChatCompletionRequestBody = requestBody
+		populateSessionTransitionFields(ctx)
 	}
 
 	if resp, err := r.handleModalityFromDecision(ctx, openAIRequest); err != nil {

@@ -66,7 +66,7 @@ DSL now owns only:
 - `routing.modelCards`
 - `routing.signals`
 - `routing.projections` for signal coordination and derived routing outputs
-- `routing.decisions`
+- `routing.decisions`, including bounded candidate-iteration metadata used by DSL `FOR ... IN` authoring
 
 It no longer owns endpoints, API keys, listeners, or router-global runtime settings.
 
@@ -80,6 +80,7 @@ Model semantics and deployment bindings are now separated explicitly:
 - `providers.models` carries per-model access bindings directly
 - each `providers.models[].backend_refs[]` item carries its own transport and auth fields such as `endpoint`, `base_url`, `protocol`, `auth_header`, `auth_prefix`, `api_key`, and `api_key_env`
 - `routing.decisions[].modelRefs[].lora_name` resolves against the matching `routing.modelCards[].loras` entry, so `lora_name` is now part of the supported routing contract instead of a runtime-only escape hatch
+- `routing.decisions[].candidateIterations` is bounded to `decision.candidates` or explicit model lists and remains declarative metadata for the selection layer, not a second policy interpreter
 
 ## Global defaults
 

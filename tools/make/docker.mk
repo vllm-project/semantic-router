@@ -4,7 +4,19 @@
 
 ##@ Docker
 
-# Docker image tags
+# ── Image registry and tag configuration ────────────────────────────────────
+# Override DOCKER_REGISTRY and DOCKER_TAG on the command line or via environment
+# variables to target a different registry or release channel.
+#
+# Release channels:
+#   DOCKER_TAG=latest              (default) most recent build pushed to main
+#   DOCKER_TAG=v0.3.0              specific immutable release tag — recommended for production
+#   DOCKER_TAG=nightly-20260115    nightly build from a specific date
+#
+# Examples:
+#   make docker-build-extproc DOCKER_TAG=v0.3.0
+#   make docker-pull-release  DOCKER_TAG=v0.3.0
+# ────────────────────────────────────────────────────────────────────────────
 DOCKER_REGISTRY ?= ghcr.io/vllm-project/semantic-router
 DOCKER_TAG ?= latest
 
@@ -101,6 +113,20 @@ docker-run-llm-katan-custom:
 	@$(CONTAINER_RUNTIME) run --rm -p 8000:8000 $(DOCKER_REGISTRY)/llm-katan:$(DOCKER_TAG) \
 		llm-katan --model "Qwen/Qwen3-0.6B" --served-model-name "$(SERVED_NAME)" --host 0.0.0.0 --port 8000
 
+# Pull a specific release of all production images
+# Usage: make docker-pull-release DOCKER_TAG=v0.3.0
+docker-pull-release: ## Pull all production images at a specific DOCKER_TAG (default: latest)
+docker-pull-release:
+	@$(LOG_TARGET)
+	@if [ "$(DOCKER_TAG)" = "latest" ]; then \
+		echo "WARNING: pulling :latest — consider pinning with DOCKER_TAG=v<version> or DOCKER_TAG=nightly-YYYYMMDD"; \
+	fi
+	@echo "Pulling images at tag: $(DOCKER_TAG)"
+	@$(CONTAINER_RUNTIME) pull $(DOCKER_REGISTRY)/extproc:$(DOCKER_TAG)
+	@$(CONTAINER_RUNTIME) pull $(DOCKER_REGISTRY)/vllm-sr:$(DOCKER_TAG)
+	@$(CONTAINER_RUNTIME) pull $(DOCKER_REGISTRY)/dashboard:$(DOCKER_TAG)
+	@echo "All images pulled at $(DOCKER_TAG)"
+
 # Clean up Docker images
 docker-clean: ## Clean up Docker images
 docker-clean:
@@ -177,13 +203,14 @@ docker-help: ## Show help for Docker-related make targets and environment variab
 
 ##@ vLLM-SR (Semantic Router CLI)
 
-# vLLM-SR specific variables
-VLLM_SR_IMAGE ?= ghcr.io/vllm-project/semantic-router/vllm-sr:latest
-VLLM_SR_IMAGE_ROCM ?= ghcr.io/vllm-project/semantic-router/vllm-sr-rocm:latest
+# vLLM-SR specific variables — image tags default to DOCKER_TAG so that a
+# single `DOCKER_TAG=v0.3.0` on the command line pins every image at once.
+VLLM_SR_IMAGE ?= ghcr.io/vllm-project/semantic-router/vllm-sr:$(DOCKER_TAG)
+VLLM_SR_IMAGE_ROCM ?= ghcr.io/vllm-project/semantic-router/vllm-sr-rocm:$(DOCKER_TAG)
 VLLM_SR_ROUTER_IMAGE_DEFAULT ?= $(VLLM_SR_IMAGE)
 VLLM_SR_ROUTER_IMAGE_ROCM ?= $(VLLM_SR_IMAGE_ROCM)
 VLLM_SR_ENVOY_IMAGE_DEFAULT ?= envoyproxy/envoy:v1.34-latest
-VLLM_SR_DASHBOARD_IMAGE_DEFAULT ?= ghcr.io/vllm-project/semantic-router/dashboard:latest
+VLLM_SR_DASHBOARD_IMAGE_DEFAULT ?= ghcr.io/vllm-project/semantic-router/dashboard:$(DOCKER_TAG)
 VLLM_SR_ROUTER_IMAGE ?= $(VLLM_SR_ROUTER_IMAGE_DEFAULT)
 VLLM_SR_ENVOY_IMAGE ?= $(VLLM_SR_ENVOY_IMAGE_DEFAULT)
 VLLM_SR_DASHBOARD_IMAGE ?= $(VLLM_SR_DASHBOARD_IMAGE_DEFAULT)

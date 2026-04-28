@@ -119,6 +119,7 @@ docs:
   - docs/agent/README.md
   - docs/agent/context-management.md
   - docs/agent/governance.md
+  - docs/agent/lookup-tables.md
   - docs/agent/plans/README.md
   - docs/agent/plans/pl-0001-harness-roadmap.md
   - docs/agent/plans/pl-0002-e2e-rationalization-roadmap.md
@@ -284,6 +285,9 @@ doc_governance:
     - path: docs/agent/governance.md
       steward: agent-contract
       freshness: update when source-of-truth policy or rule layering changes
+    - path: docs/agent/lookup-tables.md
+      steward: agent-contract
+      freshness: update when lookup table storage, derivation, or consumption contracts change
     - path: docs/agent/plans/README.md
       steward: agent-contract
       freshness: update when canonical execution plans are added, removed, or reorganized
@@ -571,6 +575,7 @@ skills:
   - tools/agent/skills/harness-contract-change/SKILL.md
   - tools/agent/skills/signal-end-to-end/SKILL.md
   - tools/agent/skills/plugin-end-to-end/SKILL.md
+  - tools/agent/skills/claude-code-install/SKILL.md
   - tools/agent/skills/config-platform-change/SKILL.md
   - tools/agent/skills/routing-policy-change/SKILL.md
   - tools/agent/skills/startup-chain-change/SKILL.md

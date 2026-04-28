@@ -29,6 +29,7 @@ import FleetSimFleetsPage from './pages/FleetSimFleetsPage'
 import FleetSimRunsPage from './pages/FleetSimRunsPage'
 import OpenClawPage from './pages/OpenClawPage'
 import UsersPage from './pages/UsersPage'
+import SecurityPolicyPage from './pages/SecurityPolicyPage'
 import InsightsPage from './pages/InsightsPage'
 import InsightsRecordPage from './pages/InsightsRecordPage'
 import TaxonomyPage, { type KnowledgeBaseView } from './pages/TaxonomyPage'
@@ -519,6 +520,17 @@ const AppRouter: React.FC = () => {
                   onConfigSectionChange={(section) => setConfigSection(section as ConfigSection)}
                 >
                   <UsersPage />
+                </Layout>
+              }
+            />
+            <Route
+              path="/security"
+              element={
+                <Layout
+                  configSection={configSection}
+                  onConfigSectionChange={(section) => setConfigSection(section as ConfigSection)}
+                >
+                  <SecurityPolicyPage />
                 </Layout>
               }
             />

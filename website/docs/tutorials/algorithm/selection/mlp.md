@@ -102,3 +102,7 @@ model_selection:
 ## Feedback
 
 MLP does not support online `UpdateFeedback()`. To improve selection quality, retrain the model with new query-to-model assignment data using the training pipeline.
+
+## Experimental Status
+
+This algorithm is marked as **experimental**. The API may change in future releases.

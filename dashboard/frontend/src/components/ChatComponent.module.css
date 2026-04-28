@@ -917,7 +917,7 @@ body.playground-fullscreen .container {
   background: rgba(44, 45, 49, 0.82);
   border: none;
   border-radius: 28px;
-  overflow: hidden;
+  overflow: visible;
   transition: all var(--transition-base);
   position: relative;
   z-index: 1;
@@ -975,6 +975,13 @@ body.playground-fullscreen .container {
   display: flex;
   align-items: center;
   gap: 0.4rem;
+}
+
+.inputActionsEnd {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  flex-shrink: 0;
 }
 
 .composerButtons {
@@ -1097,6 +1104,16 @@ body.playground-fullscreen .container {
   visibility: visible;
 }
 
+.inputActionButton.inputActionButtonTooltipEnd::before {
+  bottom: auto;
+  top: 50%;
+  left: auto;
+  right: 100%;
+  transform: translateY(calc(-50% - 5px));
+  margin-bottom: 0;
+  margin-right: 10px;
+}
+
 /* Search Toggle Active State */
 .searchToggleActive {
   color: #22c55e;
@@ -1200,6 +1217,22 @@ body.playground-fullscreen .container {
   opacity: 0.3;
   cursor: not-allowed;
   background-color: var(--color-text-muted);
+}
+
+.sendButtonVoiceListening {
+  animation: voiceMicPulse 1.1s ease-in-out infinite;
+}
+
+@keyframes voiceMicPulse {
+
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.35);
+  }
+
+  50% {
+    box-shadow: 0 0 0 4px rgba(239, 68, 68, 0.12);
+  }
 }
 
 .stopButton {

@@ -777,6 +777,7 @@ const ChatComponent = ({
                   isLoading={isCurrentConversationRunning}
                   isTogglingClawMode={isTogglingClawMode}
                   modeToggleDisabled={modeToggleDisabled}
+                  voiceInputDisabled={isCurrentConversationRunning || readonlyLoading || isReadonly}
                   onChangeInput={setInputValue}
                   onKeyDown={handleKeyDown}
                   onSend={handleSend}

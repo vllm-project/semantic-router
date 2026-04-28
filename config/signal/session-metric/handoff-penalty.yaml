@@ -1,0 +1,9 @@
+routing:
+  signals:
+    session_metrics:
+      - name: handoff_penalty
+        kind: lookup
+        table: handoff_penalties
+        key:
+          - session_routing.current_model
+          - session_routing.candidate_model

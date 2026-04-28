@@ -23,8 +23,8 @@ func TestRedactReplayResponseBodyRemovesSensitiveFields(t *testing.T) {
 			"tool_names":["lookup_price"],
 			"steps":[
 				{"type":"user_input","text":"sensitive user prompt"},
-				{"type":"assistant_tool_call","tool_name":"lookup_price","arguments":"{\"ticker\":\"NVDA\"}"},
-				{"type":"client_tool_result","tool_name":"lookup_price","text":"sensitive tool result"},
+				{"type":"assistant_tool_call","tool_name":"lookup_price","arguments":"{\"ticker\":\"NVDA\"}","raw_arguments":"{\"ticker\":\"NVDA\"}"},
+				{"type":"client_tool_result","tool_name":"lookup_price","text":"sensitive tool result","raw_output":"{\"price\":950.25}"},
 				{"type":"assistant_final_response","text":"sensitive final answer"}
 			]
 		}
@@ -73,6 +73,12 @@ func TestRedactReplayResponseBodyRemovesSensitiveFields(t *testing.T) {
 		}
 		if got, ok := step["arguments"]; ok && got != "" {
 			t.Fatalf("step %d arguments = %#v, want empty string", index, got)
+		}
+		if got, ok := step["raw_arguments"]; ok && got != "" {
+			t.Fatalf("step %d raw_arguments = %#v, want empty string", index, got)
+		}
+		if got, ok := step["raw_output"]; ok && got != "" {
+			t.Fatalf("step %d raw_output = %#v, want empty string", index, got)
 		}
 	}
 

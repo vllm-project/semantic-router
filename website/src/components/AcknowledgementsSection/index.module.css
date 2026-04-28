@@ -4,8 +4,8 @@
   padding: 5rem 0;
   border-bottom: 1px solid var(--site-border);
   background:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.02), transparent 42%),
-    #050505;
+    linear-gradient(180deg, rgba(15, 23, 42, 0.018), transparent 42%),
+    linear-gradient(180deg, #ffffff 0%, var(--site-bg-alt) 100%);
 }
 
 .section::before {
@@ -14,9 +14,9 @@
   inset: 0;
   pointer-events: none;
   background:
-    radial-gradient(circle at 18% 18%, rgba(255, 255, 255, 0.08), transparent 28%),
-    radial-gradient(circle at 82% 70%, rgba(255, 255, 255, 0.05), transparent 26%);
-  opacity: 0.45;
+    radial-gradient(circle at 18% 18%, rgba(15, 23, 42, 0.045), transparent 28%),
+    radial-gradient(circle at 82% 70%, rgba(15, 23, 42, 0.03), transparent 26%);
+  opacity: 0.32;
 }
 
 .header {
@@ -91,7 +91,7 @@
   align-items: center;
   justify-content: center;
   border: 1px solid var(--site-border);
-  background: rgba(255, 255, 255, 0.04);
+  background: var(--site-surface-alt);
 }
 
 .projectCard[data-project-id='amd'] .projectLogoWrapper {

@@ -32,6 +32,18 @@ type pluginTemplate struct {
 	usageCount int
 }
 
+// ---------- Session State Decompilation ----------
+
+func (d *decompiler) decompileSessionStates() {
+	for _, ss := range d.cfg.SessionStates {
+		d.write("SESSION_STATE %s {\n", quoteName(ss.Name))
+		for _, f := range ss.Fields {
+			d.write("  %s: %s\n", f.Name, f.TypeName)
+		}
+		d.write("}\n\n")
+	}
+}
+
 // ---------- Signal Decompilation ----------
 
 func (d *decompiler) decompileSignals() {
@@ -167,6 +179,18 @@ func (d *decompiler) decompileSignals() {
 		d.write("}\n\n")
 	}
 
+	for _, conv := range d.cfg.ConversationRules {
+		d.write("SIGNAL conversation %s {\n", quoteName(conv.Name))
+		if conv.Description != "" {
+			d.write("  description: %q\n", conv.Description)
+		}
+		d.write("  feature: %s\n", formatPluginConfigValue(conversationFeatureToMap(conv.Feature)))
+		if conv.Predicate != nil {
+			d.write("  predicate: %s\n", formatPluginConfigValue(structurePredicateToMap(conv.Predicate)))
+		}
+		d.write("}\n\n")
+	}
+
 	for _, comp := range d.cfg.ComplexityRules {
 		d.write("SIGNAL complexity %s {\n", quoteName(comp.Name))
 		if comp.Threshold != 0 {
@@ -261,6 +285,41 @@ func (d *decompiler) decompileSignals() {
 		d.write("  target: { kind: %q, value: %q }\n", kb.Target.Kind, kb.Target.Value)
 		if kb.Match != "" {
 			d.write("  match: %q\n", kb.Match)
+		}
+		d.write("}\n\n")
+	}
+
+	for _, m := range d.cfg.SessionMetricRules {
+		d.write("SIGNAL session_metric %s {\n", quoteName(m.Name))
+		kind := strings.ToLower(strings.TrimSpace(m.Kind))
+		if kind == "" {
+			if strings.TrimSpace(m.Table) != "" {
+				kind = "lookup"
+			} else {
+				kind = "state"
+			}
+		}
+		d.write("  kind: %q\n", kind)
+		if kind == "state" {
+			if m.State != "" {
+				d.write("  state: %q\n", m.State)
+			}
+			if m.Normalize != "" {
+				d.write("  normalize: %q\n", m.Normalize)
+			}
+			if m.Min != nil {
+				d.write("  min: %v\n", *m.Min)
+			}
+			if m.Max != nil {
+				d.write("  max: %v\n", *m.Max)
+			}
+		} else {
+			if m.Table != "" {
+				d.write("  table: %q\n", m.Table)
+			}
+			if len(m.Key) > 0 {
+				d.write("  key: %s\n", formatStringArray(m.Key))
+			}
 		}
 		d.write("}\n\n")
 	}
@@ -375,8 +434,10 @@ func (d *decompiler) decompileDecisions() {
 			d.write("  WHEN %s\n", ruleExpr)
 		}
 
+		omitModelList := candidateIterationsCoverModelRefs(dec)
+
 		// MODEL list
-		if len(dec.ModelRefs) > 0 {
+		if len(dec.ModelRefs) > 0 && !omitModelList {
 			d.write("  MODEL ")
 			for i, mr := range dec.ModelRefs {
 				if i > 0 {
@@ -389,6 +450,11 @@ func (d *decompiler) decompileDecisions() {
 				}
 			}
 			d.write("\n")
+		}
+
+		// Bounded candidate iteration
+		for _, iter := range dec.CandidateIterations {
+			d.decompileCandidateIteration(iter)
 		}
 
 		// ALGORITHM
@@ -414,6 +480,82 @@ func (d *decompiler) decompileDecisions() {
 
 		d.write("}\n\n")
 	}
+}
+
+func (d *decompiler) decompileCandidateIteration(iter config.CandidateIterationConfig) {
+	source := iter.Source
+	if source == "models" {
+		source = decompileCandidateIterationModelSource(iter.Models)
+	}
+	d.write("  FOR %s IN %s {\n", sanitizeName(iter.Variable), source)
+	for _, output := range iter.Outputs {
+		if output.Type == "model" {
+			d.write("    MODEL %s\n", sanitizeName(output.Value))
+		}
+	}
+	d.write("  }\n")
+}
+
+func decompileCandidateIterationModelSource(models []config.ModelRef) string {
+	if len(models) == 0 {
+		return "[]"
+	}
+	var sb strings.Builder
+	sb.WriteString("[")
+	for i, model := range models {
+		if i > 0 {
+			sb.WriteString(", ")
+		}
+		sb.WriteString(strconv.Quote(model.Model))
+		opts := candidateIterationModelRefOptions(&model)
+		if opts != "" {
+			sb.WriteString(" (")
+			sb.WriteString(opts)
+			sb.WriteString(")")
+		}
+	}
+	sb.WriteString("]")
+	return sb.String()
+}
+
+func candidateIterationModelRefOptions(model *config.ModelRef) string {
+	var opts []string
+	if model.UseReasoning != nil {
+		opts = append(opts, fmt.Sprintf("reasoning = %t", *model.UseReasoning))
+	}
+	if model.ReasoningEffort != "" {
+		opts = append(opts, fmt.Sprintf("effort = %q", model.ReasoningEffort))
+	}
+	if model.LoRAName != "" {
+		opts = append(opts, fmt.Sprintf("lora = %q", model.LoRAName))
+	}
+	if model.Weight != 0 {
+		opts = append(opts, fmt.Sprintf("weight = %s", strconv.FormatFloat(model.Weight, 'f', -1, 64)))
+	}
+	return strings.Join(opts, ", ")
+}
+
+func candidateIterationsCoverModelRefs(dec config.Decision) bool {
+	// The MODEL omission optimization is only proven for one explicit-model
+	// iteration that emits MODEL <iterator>. Multiple iterations require a
+	// merge/order/dedup contract before they can safely cover ModelRefs.
+	if len(dec.CandidateIterations) != 1 {
+		return false
+	}
+	iter := dec.CandidateIterations[0]
+	if iter.Source != "models" || !iterEmitsVariable(iter) {
+		return false
+	}
+	if len(dec.ModelRefs) != len(iter.Models) {
+		return false
+	}
+	for i := range dec.ModelRefs {
+		if dec.ModelRefs[i].Model != iter.Models[i].Model ||
+			dec.ModelRefs[i].LoRAName != iter.Models[i].LoRAName {
+			return false
+		}
+	}
+	return true
 }
 
 func decompileRuleNode(node *config.RuleCombination) string {
@@ -1110,6 +1252,18 @@ func (d *decompiler) structureToSignal(rule *config.StructureRule) *SignalDecl {
 	return &SignalDecl{SignalType: "structure", Name: rule.Name, Fields: fields}
 }
 
+func (d *decompiler) conversationToSignal(rule *config.ConversationRule) *SignalDecl {
+	fields := make(map[string]Value)
+	if rule.Description != "" {
+		fields["description"] = StringValue{V: rule.Description}
+	}
+	fields["feature"] = conversationFeatureValue(rule.Feature)
+	if rule.Predicate != nil {
+		fields["predicate"] = structurePredicateValue(rule.Predicate)
+	}
+	return &SignalDecl{SignalType: "conversation", Name: rule.Name, Fields: fields}
+}
+
 func (d *decompiler) complexityToSignal(comp *config.ComplexityRule) *SignalDecl {
 	fields := make(map[string]Value)
 	if comp.Threshold != 0 {
@@ -1212,6 +1366,45 @@ func (d *decompiler) kbSignalToDecl(rule *config.KBSignalRule) *SignalDecl {
 	return &SignalDecl{SignalType: "kb", Name: rule.Name, Fields: fields}
 }
 
+func (d *decompiler) sessionMetricRuleToDecl(rule *config.SessionMetricRule) *SignalDecl {
+	fields := make(map[string]Value)
+	kind := strings.ToLower(strings.TrimSpace(rule.Kind))
+	if kind == "" {
+		if strings.TrimSpace(rule.Table) != "" {
+			kind = "lookup"
+		} else {
+			kind = "state"
+		}
+	}
+	fields["kind"] = StringValue{V: kind}
+	if kind == "state" {
+		if rule.State != "" {
+			fields["state"] = StringValue{V: rule.State}
+		}
+		if rule.Normalize != "" {
+			fields["normalize"] = StringValue{V: rule.Normalize}
+		}
+		if rule.Min != nil {
+			fields["min"] = FloatValue{V: *rule.Min}
+		}
+		if rule.Max != nil {
+			fields["max"] = FloatValue{V: *rule.Max}
+		}
+	} else {
+		if rule.Table != "" {
+			fields["table"] = StringValue{V: rule.Table}
+		}
+		items := make([]Value, 0, len(rule.Key))
+		for _, k := range rule.Key {
+			items = append(items, StringValue{V: k})
+		}
+		if len(items) > 0 {
+			fields["key"] = ArrayValue{Items: items}
+		}
+	}
+	return &SignalDecl{SignalType: "session_metric", Name: rule.Name, Fields: fields}
+}
+
 func (d *decompiler) decisionToRoute(dec *config.Decision) *RouteDecl {
 	route := &RouteDecl{
 		Name:        dec.Name,
@@ -1256,7 +1449,38 @@ func (d *decompiler) decisionToRoute(dec *config.Decision) *RouteDecl {
 		route.Plugins = append(route.Plugins, ref)
 	}
 
+	for _, iter := range dec.CandidateIterations {
+		route.CandidateIterations = append(route.CandidateIterations, candidateIterationConfigToDecl(iter))
+	}
+
 	return route
+}
+
+func candidateIterationConfigToDecl(iter config.CandidateIterationConfig) *CandidateIterationDecl {
+	decl := &CandidateIterationDecl{
+		Variable: iter.Variable,
+		Source:   iter.Source,
+	}
+	for _, model := range iter.Models {
+		decl.Models = append(decl.Models, configModelRefToDSLModelRef(model))
+	}
+	for _, output := range iter.Outputs {
+		decl.Outputs = append(decl.Outputs, &CandidateIterationOutputDecl{
+			Type:  output.Type,
+			Value: output.Value,
+		})
+	}
+	return decl
+}
+
+func configModelRefToDSLModelRef(model config.ModelRef) *ModelRef {
+	return &ModelRef{
+		Model:     model.Model,
+		Reasoning: model.UseReasoning,
+		Effort:    model.ReasoningEffort,
+		LoRA:      model.LoRAName,
+		Weight:    model.Weight,
+	}
 }
 
 func decompileRuleNodeToExpr(node *config.RuleCombination) BoolExpr {
@@ -1414,6 +1638,41 @@ func structureSourceToMap(source config.StructureSource) map[string]interface{} 
 	}
 	if len(source.Sequences) > 0 {
 		values["sequences"] = source.Sequences
+	}
+	return values
+}
+
+func conversationFeatureValue(feature config.ConversationFeature) ObjectValue {
+	fields := map[string]Value{
+		"type":   StringValue{V: feature.Type},
+		"source": conversationSourceValue(feature.Source),
+	}
+	return ObjectValue{Fields: fields}
+}
+
+func conversationSourceValue(source config.ConversationSource) ObjectValue {
+	fields := map[string]Value{
+		"type": StringValue{V: source.Type},
+	}
+	if source.Role != "" {
+		fields["role"] = StringValue{V: source.Role}
+	}
+	return ObjectValue{Fields: fields}
+}
+
+func conversationFeatureToMap(feature config.ConversationFeature) map[string]interface{} {
+	return map[string]interface{}{
+		"type":   feature.Type,
+		"source": conversationSourceToMap(feature.Source),
+	}
+}
+
+func conversationSourceToMap(source config.ConversationSource) map[string]interface{} {
+	values := map[string]interface{}{
+		"type": source.Type,
+	}
+	if source.Role != "" {
+		values["role"] = source.Role
 	}
 	return values
 }

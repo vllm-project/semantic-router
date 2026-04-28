@@ -20,28 +20,31 @@ const (
 )
 
 const (
-	PermUsersManage  = "users.manage"
-	PermUsersView    = "users.view"
-	PermConfigRead   = "config.read"
-	PermConfigWrite  = "config.write"
-	PermConfigDeploy = "config.deploy"
-	PermEvalRead     = "evaluation.read"
-	PermEvalWrite    = "evaluation.write"
-	PermEvalRun      = "evaluation.run"
-	PermTopologyRead = "topology.read"
-	PermLogsRead     = "logs.read"
-	PermOpenClawRead = "openclaw.read"
-	PermOpenClaw     = "openclaw.manage"
-	PermMcpRead      = "mcp.read"
-	PermMcpManage    = "mcp.manage"
-	PermToolsUse     = "tools.use"
-	PermMlPipeline   = "mlpipeline.manage"
+	PermUsersManage    = "users.manage"
+	PermUsersView      = "users.view"
+	PermConfigRead     = "config.read"
+	PermConfigWrite    = "config.write"
+	PermConfigDeploy   = "config.deploy"
+	PermEvalRead       = "evaluation.read"
+	PermEvalWrite      = "evaluation.write"
+	PermEvalRun        = "evaluation.run"
+	PermTopologyRead   = "topology.read"
+	PermLogsRead       = "logs.read"
+	PermOpenClawRead   = "openclaw.read"
+	PermOpenClaw       = "openclaw.manage"
+	PermMcpRead        = "mcp.read"
+	PermMcpManage      = "mcp.manage"
+	PermToolsUse       = "tools.use"
+	PermMlPipeline     = "mlpipeline.manage"
+	PermFeedbackSubmit = "feedback.submit"
+	PermReplayRead     = "replay.read"
+	PermSecurityManage = "security.manage"
 )
 
 var DefaultRolePermissions = map[string][]string{
-	RoleAdmin: {PermUsersManage, PermUsersView, PermConfigRead, PermConfigWrite, PermConfigDeploy, PermEvalRead, PermEvalWrite, PermEvalRun, PermTopologyRead, PermLogsRead, PermOpenClawRead, PermOpenClaw, PermMcpRead, PermMcpManage, PermToolsUse, PermMlPipeline},
-	RoleWrite: {PermConfigRead, PermConfigWrite, PermConfigDeploy, PermEvalRead, PermEvalWrite, PermEvalRun, PermTopologyRead, PermLogsRead, PermOpenClawRead, PermOpenClaw, PermMcpRead, PermMcpManage, PermToolsUse, PermMlPipeline},
-	RoleRead:  {PermConfigRead, PermEvalRead, PermTopologyRead, PermLogsRead, PermOpenClawRead, PermMcpRead, PermToolsUse},
+	RoleAdmin: {PermUsersManage, PermUsersView, PermConfigRead, PermConfigWrite, PermConfigDeploy, PermEvalRead, PermEvalWrite, PermEvalRun, PermTopologyRead, PermLogsRead, PermOpenClawRead, PermOpenClaw, PermMcpRead, PermMcpManage, PermToolsUse, PermMlPipeline, PermFeedbackSubmit, PermReplayRead, PermSecurityManage},
+	RoleWrite: {PermConfigRead, PermConfigWrite, PermConfigDeploy, PermEvalRead, PermEvalWrite, PermEvalRun, PermTopologyRead, PermLogsRead, PermOpenClawRead, PermOpenClaw, PermMcpRead, PermMcpManage, PermToolsUse, PermMlPipeline, PermFeedbackSubmit, PermReplayRead},
+	RoleRead:  {PermConfigRead, PermEvalRead, PermTopologyRead, PermLogsRead, PermOpenClawRead, PermMcpRead, PermToolsUse, PermFeedbackSubmit, PermReplayRead},
 }
 
 var SupportedRoles = []string{RoleAdmin, RoleWrite, RoleRead}
@@ -57,6 +60,7 @@ var AllPermissions = []string{
 	PermUsersManage, PermUsersView, PermConfigRead, PermConfigWrite, PermConfigDeploy,
 	PermEvalRead, PermEvalWrite, PermEvalRun, PermTopologyRead, PermLogsRead, PermOpenClawRead,
 	PermOpenClaw, PermMcpRead, PermMcpManage, PermToolsUse, PermMlPipeline,
+	PermFeedbackSubmit, PermReplayRead, PermSecurityManage,
 }
 
 func normalizeRole(raw string) (string, error) {

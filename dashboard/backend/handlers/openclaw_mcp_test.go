@@ -54,7 +54,7 @@ func decodeMCPToolTextResult(t *testing.T, result *mcp.CallToolResult) string {
 }
 
 func TestOpenClawMCP_CreateAndListTeams(t *testing.T) {
-	oc := NewOpenClawHandler(t.TempDir(), false)
+	oc := newTestOpenClawHandler(t, t.TempDir(), false)
 	handler := &OpenClawMCPHandler{openClaw: oc}
 
 	createReq := mcp.CallToolRequest{
@@ -97,7 +97,7 @@ func TestOpenClawMCP_CreateAndListTeams(t *testing.T) {
 }
 
 func TestOpenClawMCP_UpdateWorkerMergesIdentityFields(t *testing.T) {
-	oc := NewOpenClawHandler(t.TempDir(), false)
+	oc := newTestOpenClawHandler(t, t.TempDir(), false)
 	handler := &OpenClawMCPHandler{openClaw: oc}
 
 	team := TeamEntry{
@@ -157,7 +157,7 @@ func TestOpenClawMCP_UpdateWorkerMergesIdentityFields(t *testing.T) {
 }
 
 func TestOpenClawMCP_CreateWorkerRequiresIdentityFields(t *testing.T) {
-	handler := &OpenClawMCPHandler{openClaw: NewOpenClawHandler(t.TempDir(), false)}
+	handler := &OpenClawMCPHandler{openClaw: newTestOpenClawHandler(t, t.TempDir(), false)}
 
 	testCases := []struct {
 		name      string
@@ -225,7 +225,7 @@ func TestOpenClawMCP_CreateWorkerRequiresIdentityFields(t *testing.T) {
 }
 
 func TestOpenClawMCP_CreateWorkerUsesServerDefaultsForRuntimeFields(t *testing.T) {
-	oc := NewOpenClawHandler(t.TempDir(), true)
+	oc := newTestOpenClawHandler(t, t.TempDir(), true)
 	handler := &OpenClawMCPHandler{openClaw: oc}
 
 	result, err := handler.createWorkerTool(context.Background(), mcp.CallToolRequest{
@@ -295,7 +295,7 @@ func TestClawCreateWorkerToolDefinition_HireClawGuidance(t *testing.T) {
 }
 
 func TestOpenClawMCP_UpdateWorkerRoleKindPromotesLeader(t *testing.T) {
-	oc := NewOpenClawHandler(t.TempDir(), false)
+	oc := newTestOpenClawHandler(t, t.TempDir(), false)
 	handler := &OpenClawMCPHandler{openClaw: oc}
 
 	team := TeamEntry{

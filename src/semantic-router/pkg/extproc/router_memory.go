@@ -6,6 +6,8 @@ import (
 	"time"
 
 	"github.com/milvus-io/milvus-sdk-go/v2/client"
+	glide "github.com/valkey-io/valkey-glide/go/v2"
+	glideconfig "github.com/valkey-io/valkey-glide/go/v2/config"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/memory"
@@ -23,10 +25,15 @@ func createMemoryRuntime(cfg *config.RouterConfig) (memory.Store, *memory.Memory
 		return nil, nil
 	}
 
+	memory.SetGlobalMemoryStore(memoryStore)
+	backend := cfg.Memory.Backend
+	if backend == "" {
+		backend = "milvus"
+	}
 	if rc := cfg.Memory.RedisCache; rc != nil && rc.Enabled && rc.Address != "" {
-		logging.Infof("Memory enabled with Milvus backend and Redis hot cache")
+		logging.Infof("Memory enabled with %s backend and Redis hot cache", backend)
 	} else {
-		logging.Infof("Memory enabled with Milvus backend")
+		logging.Infof("Memory enabled with %s backend", backend)
 	}
 
 	memoryExtractor := memory.NewMemoryChunkStore(memoryStore)
@@ -53,7 +60,62 @@ func isMemoryEnabled(cfg *config.RouterConfig) bool {
 }
 
 // createMemoryStore creates a memory store based on configuration.
+// Switches on cfg.Memory.Backend: "valkey" creates a ValkeyStore, "milvus" (or empty) creates a MilvusStore.
 func createMemoryStore(cfg *config.RouterConfig) (memory.Store, error) {
+	backend := cfg.Memory.Backend
+	if backend == "" {
+		backend = "milvus"
+	}
+
+	var store memory.Store
+	var err error
+
+	switch backend {
+	case "valkey":
+		store, err = createValkeyMemoryStore(cfg)
+	case "milvus":
+		store, err = createMilvusMemoryStore(cfg)
+	default:
+		return nil, fmt.Errorf("unsupported memory backend: %q (supported: milvus, valkey)", backend)
+	}
+
+	if err != nil {
+		return nil, err
+	}
+
+	// Optionally wrap with Redis hot cache
+	result := wrapWithRedisCache(store, cfg, backend)
+	return result, nil
+}
+
+// wrapWithRedisCache optionally wraps a memory store with a Redis hot cache.
+// Returns the original store if caching is not configured or connection fails.
+func wrapWithRedisCache(store memory.Store, cfg *config.RouterConfig, backend string) memory.Store {
+	rc := cfg.Memory.RedisCache
+	if rc == nil || !rc.Enabled || rc.Address == "" {
+		return store
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	cacheCfg := &memory.RedisCacheConfig{
+		Address:    rc.Address,
+		Password:   rc.Password,
+		DB:         rc.DB,
+		KeyPrefix:  rc.KeyPrefix,
+		TTLSeconds: rc.TTLSeconds,
+	}
+	redisCache, err := memory.NewRedisCache(ctx, cacheCfg)
+	if err != nil {
+		logging.Warnf("Memory: Redis cache disabled (connection failed: %v)", err)
+		return store
+	}
+	return memory.NewCachingStore(store, redisCache, backend)
+}
+
+// createMilvusMemoryStore creates a MilvusStore backend.
+func createMilvusMemoryStore(cfg *config.RouterConfig) (memory.Store, error) {
 	milvusAddress := cfg.Memory.Milvus.Address
 	if milvusAddress == "" {
 		milvusAddress = "localhost:19530"
@@ -101,31 +163,133 @@ func createMemoryStore(cfg *config.RouterConfig) (memory.Store, error) {
 		return nil, fmt.Errorf("failed to create memory store: %w", err)
 	}
 
-	logging.Infof(
-		"Memory store initialized: address=%s, collection=%s, embedding=%s",
-		milvusAddress,
-		collectionName,
-		embeddingConfig.Model,
-	)
+	logging.Infof("Memory store initialized: backend=milvus, address=%s, collection=%s, embedding=%s",
+		milvusAddress, collectionName, embeddingConfig.Model)
 
-	var result memory.Store = store
-	if rc := cfg.Memory.RedisCache; rc != nil && rc.Enabled && rc.Address != "" {
-		cacheCfg := &memory.RedisCacheConfig{
-			Address:    rc.Address,
-			Password:   rc.Password,
-			DB:         rc.DB,
-			KeyPrefix:  rc.KeyPrefix,
-			TTLSeconds: rc.TTLSeconds,
-		}
-		redisCache, err := memory.NewRedisCache(ctx, cacheCfg)
-		if err != nil {
-			logging.Warnf("Memory: Redis cache disabled (connection failed: %v)", err)
-		} else {
-			result = memory.NewCachingStore(store, redisCache)
-		}
+	return store, nil
+}
+
+// createValkeyMemoryStore creates a ValkeyStore backend.
+func createValkeyMemoryStore(cfg *config.RouterConfig) (memory.Store, error) {
+	vc := cfg.Memory.Valkey
+	if vc == nil {
+		return nil, fmt.Errorf("memory.valkey configuration is required when backend is 'valkey'")
 	}
 
-	return result, nil
+	host := vc.Host
+	if host == "" {
+		host = "localhost"
+	}
+	port := vc.Port
+	if port <= 0 {
+		port = 6379
+	}
+
+	embeddingModel := memory.EmbeddingModelType(detectMemoryEmbeddingModel(cfg))
+	normalizeValkeyDimension(vc, embeddingModel)
+
+	embeddingConfig := &memory.EmbeddingConfig{
+		Model:     embeddingModel,
+		Dimension: vc.Dimension,
+	}
+
+	logging.Infof("Memory: connecting to Valkey at %s:%d, embedding=%s", host, port, embeddingConfig.Model)
+
+	clientConfig, err := buildValkeyClientConfig(vc, host, port)
+	if err != nil {
+		return nil, err
+	}
+
+	valkeyClient, err := glide.NewClient(clientConfig)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create Valkey client: %w", err)
+	}
+
+	store, err := memory.NewValkeyStore(memory.ValkeyStoreOptions{
+		Client:          valkeyClient,
+		Config:          cfg.Memory,
+		ValkeyConfig:    vc,
+		Enabled:         true,
+		EmbeddingConfig: embeddingConfig,
+	})
+	if err != nil {
+		valkeyClient.Close()
+		return nil, fmt.Errorf("failed to create Valkey memory store: %w", err)
+	}
+
+	logging.Infof("Memory store initialized: backend=valkey, address=%s:%d, embedding=%s",
+		host, port, embeddingConfig.Model)
+
+	return store, nil
+}
+
+// normalizeValkeyDimension sets vc.Dimension to the model's default if not explicitly configured.
+func normalizeValkeyDimension(vc *config.MemoryValkeyConfig, model memory.EmbeddingModelType) {
+	if vc.Dimension > 0 {
+		return
+	}
+	switch model {
+	case memory.EmbeddingModelMMBERT:
+		vc.Dimension = 256
+	default:
+		vc.Dimension = 384
+	}
+	logging.Infof("Memory: Valkey dimension not set, defaulting to %d for model %s", vc.Dimension, model)
+}
+
+// buildValkeyClientConfig constructs the valkey-glide client configuration.
+func buildValkeyClientConfig(vc *config.MemoryValkeyConfig, host string, port int) (*glideconfig.ClientConfiguration, error) {
+	clientConfig := glideconfig.NewClientConfiguration().
+		WithAddress(&glideconfig.NodeAddress{
+			Host: host,
+			Port: port,
+		})
+
+	if vc.Password != "" {
+		clientConfig = clientConfig.WithCredentials(
+			glideconfig.NewServerCredentials("", vc.Password),
+		)
+	}
+
+	if vc.Database != 0 {
+		clientConfig = clientConfig.WithDatabaseId(vc.Database)
+	}
+
+	if vc.Timeout > 0 {
+		timeout := time.Duration(vc.Timeout) * time.Second
+		clientConfig = clientConfig.WithRequestTimeout(timeout)
+	}
+
+	if vc.TLSEnabled {
+		tlsCfg, tlsErr := buildValkeyTLSConfig(vc)
+		if tlsErr != nil {
+			return nil, tlsErr
+		}
+		clientConfig = clientConfig.WithUseTLS(true).
+			WithAdvancedConfiguration(
+				glideconfig.NewAdvancedClientConfiguration().WithTlsConfiguration(tlsCfg),
+			)
+		logging.Infof("Memory: Valkey TLS enabled (ca_path=%q, insecure_skip_verify=%v)", vc.TLSCAPath, vc.TLSInsecureSkipVerify)
+	}
+
+	return clientConfig, nil
+}
+
+// buildValkeyTLSConfig constructs a glide TLS configuration from the Valkey config.
+func buildValkeyTLSConfig(vc *config.MemoryValkeyConfig) (*glideconfig.TlsConfiguration, error) {
+	tlsConfig := glideconfig.NewTlsConfiguration()
+	if vc.TLSCAPath != "" {
+		caCert, err := glideconfig.LoadRootCertificatesFromFile(vc.TLSCAPath)
+		if err != nil {
+			return nil, fmt.Errorf("failed to load TLS CA certificate from %s: %w", vc.TLSCAPath, err)
+		}
+		tlsConfig = tlsConfig.WithRootCertificates(caCert)
+	}
+	if vc.TLSInsecureSkipVerify {
+		tlsConfig = tlsConfig.WithInsecureTLS(true)
+		logging.Warnf("Memory: Valkey TLS certificate verification is DISABLED — do not use in production")
+	}
+	return tlsConfig, nil
 }
 
 func detectMemoryEmbeddingModel(cfg *config.RouterConfig) string {

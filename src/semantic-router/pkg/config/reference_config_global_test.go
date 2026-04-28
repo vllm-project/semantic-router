@@ -21,6 +21,12 @@ func assertReferenceConfigRouterSelectionCoverage(t testingT, modelSelection map
 	assertMapCoversStructFields(t, mustMapAt(t, modelSelection, "ml", "kmeans"), reflect.TypeOf(MLKMeansConfig{}), "global.router.model_selection.ml.kmeans")
 	assertMapCoversStructFields(t, mustMapAt(t, modelSelection, "ml", "svm"), reflect.TypeOf(MLSVMConfig{}), "global.router.model_selection.ml.svm")
 	assertMapCoversStructFields(t, mustMapAt(t, modelSelection, "ml", "mlp"), reflect.TypeOf(MLMLPConfig{}), "global.router.model_selection.ml.mlp")
+
+	lookupTables := mustMapAt(t, modelSelection, "lookup_tables")
+	assertMapCoversStructFields(t, lookupTables, reflect.TypeOf(LookupTableConfig{}), "global.router.model_selection.lookup_tables")
+	assertSliceUnionCoversStructFields(t, mustSliceAt(t, lookupTables, "quality_gaps"), reflect.TypeOf(QualityGapOverride{}), "global.router.model_selection.lookup_tables.quality_gaps")
+	assertSliceUnionCoversStructFields(t, mustSliceAt(t, lookupTables, "handoff_penalties"), reflect.TypeOf(HandoffPenaltyOverride{}), "global.router.model_selection.lookup_tables.handoff_penalties")
+	assertSliceUnionCoversStructFields(t, mustSliceAt(t, lookupTables, "remaining_turn_priors"), reflect.TypeOf(RemainingTurnPriorOverride{}), "global.router.model_selection.lookup_tables.remaining_turn_priors")
 }
 
 func assertReferenceConfigServiceGlobalCoverage(t testingT, services map[string]interface{}) {
@@ -119,6 +125,7 @@ func assertReferenceConfigSemanticCacheCoverage(t testingT, semanticCache map[st
 func assertReferenceConfigMemoryCoverage(t testingT, memory map[string]interface{}) {
 	assertMapCoversStructFields(t, memory, reflect.TypeOf(MemoryConfig{}), "global.stores.memory")
 	assertMapCoversStructFields(t, mustMapAt(t, memory, "milvus"), reflect.TypeOf(MemoryMilvusConfig{}), "global.stores.memory.milvus")
+	assertMapCoversStructFields(t, mustMapAt(t, memory, "valkey"), reflect.TypeOf(MemoryValkeyConfig{}), "global.stores.memory.valkey")
 	assertMapCoversStructFields(t, mustMapAt(t, memory, "quality_scoring"), reflect.TypeOf(MemoryQualityScoringConfig{}), "global.stores.memory.quality_scoring")
 	assertMapCoversStructFields(t, mustMapAt(t, memory, "reflection"), reflect.TypeOf(MemoryReflectionConfig{}), "global.stores.memory.reflection")
 }
@@ -129,6 +136,7 @@ func assertReferenceConfigVectorStoreCoverage(t testingT, vectorStore map[string
 	assertMapCoversStructFields(t, mustMapAt(t, vectorStore, "llama_stack"), reflect.TypeOf(LlamaStackVectorStoreConfig{}), "global.stores.vector_store.llama_stack")
 	assertMapCoversStructFields(t, mustMapAt(t, vectorStore, "milvus"), reflect.TypeOf(MilvusConfig{}), "global.stores.vector_store.milvus")
 	assertMapCoversStructFields(t, mustMapAt(t, vectorStore, "valkey"), reflect.TypeOf(ValkeyVectorStoreConfig{}), "global.stores.vector_store.valkey")
+	assertMapCoversStructFields(t, mustMapAt(t, vectorStore, "metadata_postgres"), reflect.TypeOf(VectorStoreMetadataPostgresConfig{}), "global.stores.vector_store.metadata_postgres")
 }
 
 func assertReferenceConfigIntegrationGlobalCoverage(t testingT, integrations map[string]interface{}) {

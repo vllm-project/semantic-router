@@ -295,6 +295,14 @@ surfaces:
       - deploy/kubernetes/**
     task_rules:
       - e2e-framework
+  cli_install:
+    description: Session-isolated CLI install wrapper and coding-agent skill for quick, disposable vllm-sr installs.
+    paths:
+      - install.sh
+      - tools/agent/scripts/cc-install.sh
+      - tools/agent/skills/claude-code-install/**
+    task_rules:
+      - vllm-sr-cli
   ci_e2e:
     description: CI fanout, workflow-driven integration suites, and standard profile-matrix execution for the merge gate.
     paths:
@@ -911,3 +919,11 @@ skills:
       description: Manual structural review for boundary-sensitive edits that need an explicit architecture pass instead of always expanding the default context pack.
       acceptance_criteria:
         - Boundary-sensitive edits that opt into the support skill check structure rules, interface placement, and dependency direction explicitly.
+    - name: claude-code-install
+      path: tools/agent/skills/claude-code-install/SKILL.md
+      description: Session-isolated vllm-sr CLI install for coding agents. Installs to a temp directory so the user's system is untouched.
+      owned_surfaces:
+        - cli_install
+      acceptance_criteria:
+        - vllm-sr --version succeeds after running the wrapper and exporting PATH.
+        - No files are written outside the session-scoped temp directory.

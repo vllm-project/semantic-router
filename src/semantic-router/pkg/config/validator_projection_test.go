@@ -1,6 +1,7 @@
 package config
 
 import (
+	"fmt"
 	"strings"
 	"testing"
 )
@@ -92,5 +93,85 @@ routing:
 	}
 	if !strings.Contains(err.Error(), `input keyword("missing_signal") is not declared`) {
 		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
+func TestValidateProjectionInputValueSourceAcceptsAllModes(t *testing.T) {
+	for _, vs := range []string{"", "binary", "confidence", "raw"} {
+		t.Run(fmt.Sprintf("value_source=%q", vs), func(t *testing.T) {
+			err := validateProjectionInputValueSource("test_score", ProjectionScoreInput{
+				Type:        "keyword",
+				Name:        "sig",
+				Weight:      1.0,
+				ValueSource: vs,
+			})
+			if err != nil {
+				t.Fatalf("expected no error for value_source %q, got: %v", vs, err)
+			}
+		})
+	}
+}
+
+func TestValidateProjectionInputValueSourceRejectsUnknown(t *testing.T) {
+	err := validateProjectionInputValueSource("test_score", ProjectionScoreInput{
+		Type:        "keyword",
+		Name:        "sig",
+		Weight:      1.0,
+		ValueSource: "unknown_mode",
+	})
+	if err == nil {
+		t.Fatal("expected error for unsupported value_source")
+	}
+	if !strings.Contains(err.Error(), "unsupported value_source") {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !strings.Contains(err.Error(), "raw") {
+		t.Fatalf("error message should list 'raw' as a supported mode: %v", err)
+	}
+}
+
+func TestParseRoutingYAMLBytesAcceptsRawValueSource(t *testing.T) {
+	yaml := []byte(`
+routing:
+  signals:
+    structure:
+      - name: many_questions
+        operator: OR
+        patterns: ["\\?"]
+  projections:
+    scores:
+      - name: workload_pressure
+        method: weighted_sum
+        inputs:
+          - type: structure
+            name: many_questions
+            weight: 0.5
+            value_source: raw
+    mappings:
+      - name: pressure_band
+        source: workload_pressure
+        method: threshold_bands
+        outputs:
+          - name: high_pressure
+            gte: 2.0
+  decisions:
+    - name: heavy_route
+      rules:
+        operator: AND
+        conditions:
+          - type: projection
+            name: high_pressure
+      modelRefs:
+        - model: qwen3-8b
+`)
+	cfg, err := ParseRoutingYAMLBytes(yaml)
+	if err != nil {
+		t.Fatalf("expected valid config with value_source: raw, got: %v", err)
+	}
+	if len(cfg.Projections.Scores) != 1 {
+		t.Fatalf("expected 1 projection score, got %d", len(cfg.Projections.Scores))
+	}
+	if cfg.Projections.Scores[0].Inputs[0].ValueSource != "raw" {
+		t.Fatalf("value_source = %q, want %q", cfg.Projections.Scores[0].Inputs[0].ValueSource, "raw")
 	}
 }

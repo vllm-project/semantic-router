@@ -168,6 +168,26 @@ var (
 		[]string{"model"},
 	)
 
+	// SessionTurnPromptTokens tracks per-turn prompt tokens for a logical session (labeled by model and VSR domain/category).
+	SessionTurnPromptTokens = promauto.NewHistogramVec(
+		prometheus.HistogramOpts{
+			Name:    "llm_session_turn_prompt_tokens",
+			Help:    "Distribution of prompt tokens per turn, attributed to a logical session (model + domain category)",
+			Buckets: []float64{0, 8, 16, 32, 64, 128, 256, 512, 1024, 2048, 4096, 8192, 16384},
+		},
+		[]string{"model", "domain"},
+	)
+
+	// SessionTurnCompletionTokens tracks per-turn completion tokens for a logical session (labeled by model and VSR domain/category).
+	SessionTurnCompletionTokens = promauto.NewHistogramVec(
+		prometheus.HistogramOpts{
+			Name:    "llm_session_turn_completion_tokens",
+			Help:    "Distribution of completion tokens per turn, attributed to a logical session (model + domain category)",
+			Buckets: []float64{0, 8, 16, 32, 64, 128, 256, 512, 1024, 2048, 4096, 8192, 16384},
+		},
+		[]string{"model", "domain"},
+	)
+
 	// ModelRoutingModifications tracks when a model is changed from one to another
 	ModelRoutingModifications = promauto.NewCounterVec(
 		prometheus.CounterOpts{
@@ -368,6 +388,18 @@ func RecordRoutingReasonCode(reasonCode, model string) {
 		model = consts.UnknownLabel
 	}
 	RoutingReasonCodes.WithLabelValues(reasonCode, model).Inc()
+}
+
+// RecordSessionTurnTokens records per-turn token histograms for session-scoped telemetry (multi-turn agents).
+func RecordSessionTurnTokens(model, domain string, promptTokens, completionTokens float64) {
+	if model == "" {
+		model = consts.UnknownLabel
+	}
+	if domain == "" {
+		domain = consts.UnknownLabel
+	}
+	SessionTurnPromptTokens.WithLabelValues(model, domain).Observe(promptTokens)
+	SessionTurnCompletionTokens.WithLabelValues(model, domain).Observe(completionTokens)
 }
 
 // RecordModelTokensDetailed records detailed token usage (prompt and completion)

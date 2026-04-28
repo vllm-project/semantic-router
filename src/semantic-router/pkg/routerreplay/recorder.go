@@ -8,8 +8,9 @@ import (
 )
 
 const (
-	DefaultMaxRecords   = 200
-	DefaultMaxBodyBytes = 4096 // 4KB
+	DefaultMaxRecords        = 200
+	DefaultMaxBodyBytes      = 4096 // 4KB
+	DefaultMaxToolTraceBytes = 0    // No limit — structured fields are typically small
 )
 
 type (
@@ -23,7 +24,8 @@ type (
 type Recorder struct {
 	storage store.Storage
 
-	maxBodyBytes int
+	maxBodyBytes      int
+	maxToolTraceBytes int // 0 = no limit
 
 	captureRequestBody  bool
 	captureResponseBody bool
@@ -32,8 +34,9 @@ type Recorder struct {
 // NewRecorder creates a new Recorder with the specified storage backend.
 func NewRecorder(storage store.Storage) *Recorder {
 	return &Recorder{
-		storage:      storage,
-		maxBodyBytes: DefaultMaxBodyBytes,
+		storage:           storage,
+		maxBodyBytes:      DefaultMaxBodyBytes,
+		maxToolTraceBytes: DefaultMaxToolTraceBytes,
 	}
 }
 
@@ -45,6 +48,15 @@ func (r *Recorder) SetCapturePolicy(captureRequest, captureResponse bool, maxBod
 		r.maxBodyBytes = maxBodyBytes
 	} else {
 		r.maxBodyBytes = DefaultMaxBodyBytes
+	}
+}
+
+// SetMaxToolTraceBytes sets the per-field byte limit for structured tool-trace
+// fields (Prompt, ToolDefinitions, ToolTraceStep.Arguments, ToolTraceStep.Output).
+// A value of 0 disables truncation for those fields.
+func (r *Recorder) SetMaxToolTraceBytes(max int) {
+	if max >= 0 {
+		r.maxToolTraceBytes = max
 	}
 }
 
@@ -77,8 +89,58 @@ func (r *Recorder) AddRecord(rec RoutingRecord) (string, error) {
 		rec.ResponseBodyTruncated = true
 	}
 
+	// Apply MaxToolTraceBytes to structured tool-trace fields.
+	// These are truncated independently of the raw body fields so that
+	// callers can keep MaxBodyBytes small without losing structured data.
+	applyMaxToolTraceBytes(&rec, r.maxToolTraceBytes)
+
 	ctx := context.Background()
 	return r.storage.Add(ctx, rec)
+}
+
+// applyMaxToolTraceBytes truncates structured tool-trace text fields to max
+// bytes. A non-positive max disables truncation.
+func applyMaxToolTraceBytes(rec *RoutingRecord, max int) {
+	if max <= 0 {
+		return
+	}
+	if len(rec.Prompt) > max {
+		rec.Prompt = rec.Prompt[:max]
+		rec.PromptTruncated = true
+	}
+	if len(rec.ToolDefinitions) > max {
+		rec.ToolDefinitions = rec.ToolDefinitions[:max]
+		rec.ToolDefinitionsTruncated = true
+	}
+	truncateToolTraceSteps(rec.ToolTrace, max)
+}
+
+// truncateToolTraceSteps applies the byte limit to each step's Arguments and
+// Output fields.
+func truncateToolTraceSteps(trace *ToolTrace, max int) {
+	if trace == nil || max <= 0 {
+		return
+	}
+	for i := range trace.Steps {
+		truncateToolTraceStep(&trace.Steps[i], max)
+	}
+}
+
+// truncateToolTraceStep applies the byte limit to a single step's Arguments
+// and Output fields. RawArguments and RawOutput are intentionally preserved at
+// their original full-fidelity values so that downstream consumers that need
+// to replay the exchange byte-for-byte can still recover the untruncated
+// payload (see #1781). Only the "normalized" Arguments/Output fields are cut,
+// and Truncated is set to signal that truncation happened.
+func truncateToolTraceStep(step *ToolTraceStep, max int) {
+	if len(step.Arguments) > max {
+		step.Arguments = step.Arguments[:max]
+		step.Truncated = true
+	}
+	if len(step.Output) > max {
+		step.Output = step.Output[:max]
+		step.Truncated = true
+	}
 }
 
 func (r *Recorder) UpdateStatus(id string, status int, fromCache bool, streaming bool) error {
@@ -118,8 +180,18 @@ func (r *Recorder) UpdateUsageCost(id string, usage UsageCost) error {
 }
 
 func (r *Recorder) UpdateToolTrace(id string, trace ToolTrace) error {
+	// Apply MaxToolTraceBytes here too: response-side traces are attached via
+	// this update path (see extproc.attachRouterReplayResponse) and therefore
+	// bypass the AddRecord truncation unless we cap them again.
+	truncateToolTraceSteps(&trace, r.maxToolTraceBytes)
 	ctx := context.Background()
 	return r.storage.UpdateToolTrace(ctx, id, trace)
+}
+
+// Reader returns the underlying store.Reader so that read-only consumers (e.g.
+// lookup table builders) can query historical records without needing write access.
+func (r *Recorder) Reader() store.Reader {
+	return r.storage
 }
 
 // GetRecord returns a copy of the record with the given ID.
@@ -171,6 +243,7 @@ func logSignalFields(signals Signal) map[string]interface{} {
 		"jailbreak":     signals.Jailbreak,
 		"pii":           signals.PII,
 		"kb":            signals.KB,
+		"conversation":  signals.Conversation,
 	}
 }
 
@@ -266,10 +339,20 @@ func LogFields(r RoutingRecord, event string) map[string]interface{} {
 		"selection_method":  r.SelectionMethod,
 		"request_id":        r.RequestID,
 		"timestamp":         r.Timestamp,
+		"turn_index":        r.TurnIndex,
 		"from_cache":        r.FromCache,
 		"streaming":         r.Streaming,
 		"response_status":   r.ResponseStatus,
 		"signals":           logSignalFields(r.Signals),
+	}
+	if r.SessionID != "" {
+		fields["session_id"] = r.SessionID
+	}
+	if r.ConversationID != "" {
+		fields["conversation_id"] = r.ConversationID
+	}
+	if r.PreviousResponseID != "" {
+		fields["previous_response_id"] = r.PreviousResponseID
 	}
 	if len(r.Projections) > 0 {
 		fields["projections"] = r.Projections

@@ -110,6 +110,8 @@ func (r *OpenAIRouter) startRouterReplay(
 		return
 	}
 
+	populateReplaySessionIfNeeded(ctx)
+
 	recorder := r.resolveReplayRecorder(decisionName)
 	if recorder == nil {
 		return
@@ -129,6 +131,33 @@ func shouldStartRouterReplay(ctx *RequestContext) bool {
 	return ctx.RouterReplayID == ""
 }
 
+// populateReplaySessionIfNeeded fills ChatCompletionMessages and session fields
+// when startRouterReplay runs before prepareRequestForModelRouting (e.g.
+// fast_response, semantic-cache hit, looper-internal).
+func populateReplaySessionIfNeeded(ctx *RequestContext) {
+	if ctx == nil {
+		return
+	}
+	if ctx.ResponseAPICtx != nil && ctx.ResponseAPICtx.IsResponseAPIRequest {
+		populateSessionTransitionFields(ctx)
+		return
+	}
+	if len(ctx.ChatCompletionMessages) > 0 {
+		populateSessionTransitionFields(ctx)
+		return
+	}
+	body := ctx.OriginalRequestBody
+	if len(body) == 0 {
+		return
+	}
+	openAIRequest, err := parseOpenAIRequest(body)
+	if err != nil {
+		return
+	}
+	ctx.ChatCompletionMessages = extractChatCompletionMessages(openAIRequest)
+	populateSessionTransitionFields(ctx)
+}
+
 func (r *OpenAIRouter) resolveReplayRecorder(decisionName string) *routerreplay.Recorder {
 	recorder := r.ReplayRecorders[decisionName]
 	if recorder != nil {
@@ -146,6 +175,7 @@ func configureReplayRecorder(
 		cfg.CaptureResponseBody,
 		resolveReplayMaxBodyBytes(cfg.MaxBodyBytes),
 	)
+	recorder.SetMaxToolTraceBytes(cfg.MaxToolTraceBytes)
 }
 
 func buildReplayRoutingRecord(
@@ -158,6 +188,8 @@ func buildReplayRoutingRecord(
 	decisionTier, decisionPriority := replayDecisionMetadata(ctx)
 	record := routerreplay.RoutingRecord{
 		RequestID:         ctx.RequestID,
+		SessionID:         ctx.SessionID,
+		TurnIndex:         ctx.TurnIndex,
 		Decision:          decisionName,
 		DecisionTier:      decisionTier,
 		DecisionPriority:  decisionPriority,
@@ -198,9 +230,22 @@ func buildReplayRoutingRecord(
 		RAGSimilarityScore:   ctx.RAGSimilarityScore,
 		HallucinationEnabled: hallucinationEnabled,
 	}
+	if ctx.ResponseAPICtx != nil && ctx.ResponseAPICtx.IsResponseAPIRequest {
+		record.PreviousResponseID = ctx.ResponseAPICtx.PreviousResponseID
+		record.ConversationID = ctx.ResponseAPICtx.ConversationID
+	}
 	if len(ctx.OriginalRequestBody) > 0 {
 		record.RequestBody = string(ctx.OriginalRequestBody)
 	}
+
+	// Extract structured prompt and tool-definition fields from the full
+	// request body *before* body truncation occurs in AddRecord.
+	if isResponseAPIRequest(ctx) {
+		record.Prompt, record.ToolDefinitions = extractResponseAPIPromptAndTools(ctx)
+	} else {
+		record.Prompt, record.ToolDefinitions = extractChatCompletionPromptAndTools(ctx.OriginalRequestBody)
+	}
+
 	return record
 }
 
@@ -243,6 +288,7 @@ func replaySignalState(ctx *RequestContext) routerreplay.Signal {
 		Jailbreak:    ctx.VSRMatchedJailbreak,
 		PII:          ctx.VSRMatchedPII,
 		KB:           ctx.VSRMatchedKB,
+		Conversation: ctx.VSRMatchedConversation,
 	}
 }
 

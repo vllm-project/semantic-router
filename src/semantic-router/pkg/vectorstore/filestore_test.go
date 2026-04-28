@@ -35,12 +35,12 @@ var _ = Describe("FileStore", func() {
 		tempDir, err = os.MkdirTemp("", "filestore-test-*")
 		Expect(err).NotTo(HaveOccurred())
 
-		store, err = NewFileStore(tempDir)
+		store, err = NewFileStore(tempDir, NewMemoryMetadataRegistry())
 		Expect(err).NotTo(HaveOccurred())
 	})
 
 	AfterEach(func() {
-		os.RemoveAll(tempDir)
+		_ = os.RemoveAll(tempDir)
 	})
 
 	Context("NewFileStore", func() {
@@ -51,7 +51,7 @@ var _ = Describe("FileStore", func() {
 		})
 
 		It("should return error for invalid path", func() {
-			_, err := NewFileStore("/dev/null/invalid")
+			_, err := NewFileStore("/dev/null/invalid", NewMemoryMetadataRegistry())
 			Expect(err).To(HaveOccurred())
 		})
 	})

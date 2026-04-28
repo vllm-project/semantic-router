@@ -90,6 +90,50 @@ const (
 	MethodLatencyAware SelectionMethod = "latency_aware"
 )
 
+// AlgorithmTier classifies algorithms by production readiness
+type AlgorithmTier string
+
+const (
+	// TierSupported indicates a production-ready algorithm with no surprise dependencies
+	TierSupported AlgorithmTier = "supported"
+
+	// TierExperimental indicates a research-grade algorithm that may require
+	// external services or has limited production validation
+	TierExperimental AlgorithmTier = "experimental"
+)
+
+// DependencyType classifies external dependencies
+type DependencyType string
+
+const (
+	// DependencyExternalService requires a separate running service (HTTP server, etc.)
+	DependencyExternalService DependencyType = "external_service"
+
+	// DependencyPretrainedModel requires pre-trained model artifacts on disk
+	DependencyPretrainedModel DependencyType = "pretrained_model"
+
+	// DependencyEmbeddingFunc requires an embedding function (provided by the router)
+	DependencyEmbeddingFunc DependencyType = "embedding_function"
+)
+
+// Dependency describes an external dependency required by an algorithm
+type Dependency struct {
+	// Name is a human-readable name (e.g., "AutoMix Verifier Server")
+	Name string
+
+	// Type classifies the dependency
+	Type DependencyType
+
+	// Description explains what the dependency is used for
+	Description string
+
+	// HealthURL is an optional URL to check at startup (for external services)
+	HealthURL string
+
+	// Required indicates the algorithm degrades without this dependency
+	Required bool
+}
+
 // SelectionContext provides context for model selection decisions
 type SelectionContext struct {
 	// Query is the user's input query text
@@ -112,6 +156,10 @@ type SelectionContext struct {
 	// CandidateModels is the list of models to select from
 	CandidateModels []config.ModelRef
 
+	// CandidateIterations carries bounded DSL FOR ... IN metadata for selectors
+	// that opt into session-aware candidate policy evaluation.
+	CandidateIterations []config.CandidateIterationConfig
+
 	// CostWeight indicates how much to weight cost in selection (0.0-1.0)
 	// Higher values prefer cheaper models
 	CostWeight float64
@@ -133,6 +181,9 @@ type SelectionContext struct {
 
 	// LatencyAwareTTFTPercentile is the configured TTFT percentile (1-100) for latency_aware selection
 	LatencyAwareTTFTPercentile int
+
+	// CacheAffinityCtx carries request-time session signals for cache-affinity estimation.
+	CacheAffinityCtx *CacheAffinityContext
 }
 
 // SelectionResult contains the result of a model selection decision
@@ -152,6 +203,9 @@ type SelectionResult struct {
 	// Method indicates which selection method was used
 	Method SelectionMethod
 
+	// Tier indicates the production readiness of the algorithm that made this selection
+	Tier AlgorithmTier
+
 	// Reasoning provides human-readable explanation for the selection
 	Reasoning string
 
@@ -170,6 +224,12 @@ type Selector interface {
 	// UpdateFeedback allows the selector to learn from user feedback
 	// This is primarily used by Elo and learning-based methods
 	UpdateFeedback(ctx context.Context, feedback *Feedback) error
+
+	// Tier returns the production readiness classification of this algorithm
+	Tier() AlgorithmTier
+
+	// ExternalDependencies returns the list of external dependencies this algorithm requires
+	ExternalDependencies() []Dependency
 }
 
 // Feedback represents user feedback for model comparison
@@ -258,8 +318,14 @@ func Select(ctx context.Context, method SelectionMethod, selCtx *SelectionContex
 			Score:         1.0,
 			Confidence:    1.0,
 			Method:        MethodStatic,
+			Tier:          TierSupported,
 			Reasoning:     "No selector available, using first candidate",
 		}, nil
 	}
-	return selector.Select(ctx, selCtx)
+	result, err := selector.Select(ctx, selCtx)
+	if err != nil {
+		return nil, err
+	}
+	result.Tier = selector.Tier()
+	return result, nil
 }

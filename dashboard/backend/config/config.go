@@ -58,6 +58,9 @@ type Config struct {
 	OpenClawURL     string // URL of OpenClaw gateway (default: http://localhost:18788)
 	OpenClawDataDir string // workspace generation directory
 	OpenClawToken   string // auth token for OpenClaw gateway
+
+	// Durable workflow state (ML pipeline jobs, OpenClaw entities)
+	WorkflowDBPath string
 }
 
 // env returns the env var or default
@@ -134,6 +137,7 @@ type parsedFlags struct {
 	mlPipelineDataDir    *string
 	mlTrainingDir        *string
 	mlServiceURL         *string
+	workflowDBPath       *string
 	auth                 authFlags
 	openClaw             openClawFlags
 }
@@ -164,6 +168,7 @@ func applyFeatureConfig(cfg *Config, flags parsedFlags) {
 	cfg.MLPipelineDataDir = *flags.mlPipelineDataDir
 	cfg.MLTrainingDir = *flags.mlTrainingDir
 	cfg.MLServiceURL = *flags.mlServiceURL
+	cfg.WorkflowDBPath = *flags.workflowDBPath
 }
 
 func applyAuthConfig(cfg *Config, flags authFlags) error {
@@ -237,6 +242,7 @@ func LoadConfig() (*Config, error) {
 	mlPipelineDataDir := flag.String("ml-pipeline-data", env("ML_PIPELINE_DATA_DIR", "./data/ml-pipeline"), "ML pipeline data directory")
 	mlTrainingDir := flag.String("ml-training-dir", env("ML_TRAINING_DIR", ""), "path to src/training/model_selection/ml_model_selection")
 	mlServiceURL := flag.String("ml-service-url", env("ML_SERVICE_URL", ""), "URL of Python ML service sidecar (empty = subprocess mode)")
+	workflowDBPath := flag.String("workflow-db", env("DASHBOARD_WORKFLOW_DB_PATH", "./data/workflow.sqlite"), "SQLite path for durable dashboard workflow state")
 
 	// Authentication configuration
 	auth := bindAuthFlags()
@@ -267,6 +273,7 @@ func LoadConfig() (*Config, error) {
 		mlPipelineDataDir:    mlPipelineDataDir,
 		mlTrainingDir:        mlTrainingDir,
 		mlServiceURL:         mlServiceURL,
+		workflowDBPath:       workflowDBPath,
 		auth:                 auth,
 		openClaw:             openClaw,
 	}

@@ -16,6 +16,8 @@ type ChatMessage struct {
 type ChatCompletionsRequest struct {
 	Model    string        `json:"model"`
 	Messages []ChatMessage `json:"messages"`
+	// User is optional; forwarded for per-user routing and session correlation in tests.
+	User string `json:"user,omitempty"`
 }
 
 // ChatCompletionsClient talks to the routed chat-completions API.

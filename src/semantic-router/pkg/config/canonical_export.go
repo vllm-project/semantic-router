@@ -46,31 +46,34 @@ func CanonicalRoutingFromRouterConfig(cfg *RouterConfig) CanonicalRouting {
 	}
 
 	return CanonicalRouting{
-		ModelCards:  routingModelsFromRouterConfig(cfg),
-		Signals:     canonicalSignalsFromRouterConfig(cfg),
-		Projections: canonicalProjectionsFromRouterConfig(cfg),
-		Decisions:   copyDecisions(cfg.Decisions),
+		ModelCards:    routingModelsFromRouterConfig(cfg),
+		Signals:       canonicalSignalsFromRouterConfig(cfg),
+		Projections:   canonicalProjectionsFromRouterConfig(cfg),
+		Decisions:     copyDecisions(cfg.Decisions),
+		SessionStates: append([]SessionStateConfig(nil), cfg.SessionStates...),
 	}
 }
 
 func canonicalSignalsFromRouterConfig(cfg *RouterConfig) CanonicalSignals {
 	return CanonicalSignals{
-		Keywords:      append([]KeywordRule(nil), cfg.KeywordRules...),
-		Embeddings:    append([]EmbeddingRule(nil), cfg.EmbeddingRules...),
-		Domains:       append([]Category(nil), cfg.Categories...),
-		FactCheck:     append([]FactCheckRule(nil), cfg.FactCheckRules...),
-		UserFeedbacks: append([]UserFeedbackRule(nil), cfg.UserFeedbackRules...),
-		Reasks:        append([]ReaskRule(nil), cfg.ReaskRules...),
-		Preferences:   append([]PreferenceRule(nil), cfg.PreferenceRules...),
-		Language:      append([]LanguageRule(nil), cfg.LanguageRules...),
-		Context:       append([]ContextRule(nil), cfg.ContextRules...),
-		Structure:     append([]StructureRule(nil), cfg.StructureRules...),
-		Complexity:    append([]ComplexityRule(nil), cfg.ComplexityRules...),
-		Modality:      append([]ModalityRule(nil), cfg.ModalityRules...),
-		RoleBindings:  append([]RoleBinding(nil), cfg.RoleBindings...),
-		Jailbreak:     append([]JailbreakRule(nil), cfg.JailbreakRules...),
-		PII:           append([]PIIRule(nil), cfg.PIIRules...),
-		KB:            append([]KBSignalRule(nil), cfg.KBRules...),
+		Keywords:           append([]KeywordRule(nil), cfg.KeywordRules...),
+		Embeddings:         append([]EmbeddingRule(nil), cfg.EmbeddingRules...),
+		Domains:            append([]Category(nil), cfg.Categories...),
+		FactCheck:          append([]FactCheckRule(nil), cfg.FactCheckRules...),
+		UserFeedbacks:      append([]UserFeedbackRule(nil), cfg.UserFeedbackRules...),
+		Reasks:             append([]ReaskRule(nil), cfg.ReaskRules...),
+		Preferences:        append([]PreferenceRule(nil), cfg.PreferenceRules...),
+		Language:           append([]LanguageRule(nil), cfg.LanguageRules...),
+		Context:            append([]ContextRule(nil), cfg.ContextRules...),
+		Structure:          append([]StructureRule(nil), cfg.StructureRules...),
+		Complexity:         append([]ComplexityRule(nil), cfg.ComplexityRules...),
+		Modality:           append([]ModalityRule(nil), cfg.ModalityRules...),
+		RoleBindings:       append([]RoleBinding(nil), cfg.RoleBindings...),
+		Jailbreak:          append([]JailbreakRule(nil), cfg.JailbreakRules...),
+		PII:                append([]PIIRule(nil), cfg.PIIRules...),
+		KB:                 append([]KBSignalRule(nil), cfg.KBRules...),
+		Conversation:       append([]ConversationRule(nil), cfg.ConversationRules...),
+		SessionMetricRules: append([]SessionMetricRule(nil), cfg.SessionMetricRules...),
 	}
 }
 
@@ -151,6 +154,7 @@ func CanonicalGlobalFromRouterConfig(cfg *RouterConfig) *CanonicalGlobal {
 			Authz:         cfg.Authz,
 			RateLimit:     cfg.RateLimit,
 			RouterReplay:  cfg.RouterReplay,
+			StartupStatus: cfg.StartupStatus,
 		},
 		Stores: CanonicalStoreGlobal{
 			SemanticCache: cfg.SemanticCache,

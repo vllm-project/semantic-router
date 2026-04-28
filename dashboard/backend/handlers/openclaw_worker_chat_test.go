@@ -18,7 +18,7 @@ func TestNewOpenClawWorkerChatHTTPClient_UsesTenMinuteTimeout(t *testing.T) {
 
 func TestQueryWorkerChat_UsesConfiguredPrimaryAgentID(t *testing.T) {
 	tempDir := t.TempDir()
-	h := NewOpenClawHandler(tempDir, false)
+	h := newTestOpenClawHandler(t, tempDir, false)
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if got := r.Header.Get("X-OpenClaw-Agent-Id"); got != openClawPrimaryAgentID {
@@ -58,7 +58,7 @@ func TestQueryWorkerChat_UsesConfiguredPrimaryAgentID(t *testing.T) {
 
 func TestQueryWorkerChat_ReportsActualEndpointFailures(t *testing.T) {
 	tempDir := t.TempDir()
-	h := NewOpenClawHandler(tempDir, false)
+	h := newTestOpenClawHandler(t, tempDir, false)
 
 	attemptedPaths := make([]string, 0, len(workerChatEndpointCandidates))
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -106,7 +106,7 @@ func TestQueryWorkerChat_ReportsActualEndpointFailures(t *testing.T) {
 
 func TestQueryWorkerChatStream_ReportsActualEndpointFailures(t *testing.T) {
 	tempDir := t.TempDir()
-	h := NewOpenClawHandler(tempDir, false)
+	h := newTestOpenClawHandler(t, tempDir, false)
 
 	attemptedPaths := make([]string, 0, len(workerChatEndpointCandidates))
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

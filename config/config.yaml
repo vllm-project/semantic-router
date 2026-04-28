@@ -408,6 +408,56 @@ routing:
           value: local_standard
         match: best
 
+    conversation:
+      - name: multi_turn_user
+        description: At least two user messages.
+        feature:
+          type: count
+          source:
+            type: message
+            role: user
+        predicate:
+          gte: 2
+      - name: has_tools
+        description: Request defines at least one tool.
+        feature:
+          type: count
+          source:
+            type: tool_definition
+        predicate:
+          gte: 1
+      - name: has_developer_msg
+        description: Request contains a developer message.
+        feature:
+          type: exists
+          source:
+            type: message
+            role: developer
+      - name: heavy_non_user
+        description: Non-user messages exceed threshold.
+        feature:
+          type: count
+          source:
+            type: message
+            role: non_user
+        predicate:
+          gt: 5
+          lte: 99
+
+    session_metrics:
+      - name: session_cost_pressure
+        kind: state
+        state: session_routing.cumulative_cost_usd
+        normalize: minmax
+        min: 0
+        max: 10
+      - name: handoff_penalty
+        kind: lookup
+        table: handoff_penalties
+        key:
+          - session_routing.current_model
+          - session_routing.candidate_model
+
   projections:
     partitions:
       - name: support_intents
@@ -467,6 +517,24 @@ routing:
           - name: support_escalated
             gte: 0.45
 
+  session_states:
+    - name: session_routing
+      fields:
+        - name: turn_number
+          type: int
+        - name: current_model
+          type: string
+        - name: cumulative_cost_usd
+          type: float
+        - name: retry_count_ema
+          type: float
+        - name: quality_score_ema
+          type: float
+        - name: kv_cache_warm
+          type: float
+        - name: candidate_model
+          type: string
+
   decisions:
     - name: static_business_route
       description: Static fallback for standard business traffic.
@@ -481,6 +549,19 @@ routing:
         - model: qwen3-8b
           use_reasoning: false
           reasoning_description: Prefer fast, direct business answers.
+      candidateIterations:
+        - variable: candidate
+          source: models
+          models:
+            - model: qwen3-8b
+              lora_name: business-adapter
+              weight: 1.0
+              use_reasoning: false
+              reasoning_description: Candidate iteration reference model for DSL authoring coverage.
+              reasoning_effort: low
+          outputs:
+            - type: model
+              value: candidate
       algorithm:
         type: static
       plugins:
@@ -576,6 +657,11 @@ routing:
             capture_request_body: true
             capture_response_body: true
             max_body_bytes: 4096
+            # 0 = no truncation (the documented default). Set to a positive
+            # byte cap to independently limit structured tool-trace fields
+            # (prompt, tool_definitions, and each tool-call's arguments/output)
+            # without having to shrink max_body_bytes.
+            max_tool_trace_bytes: 0
 
     - name: computer-science-remom-route
       description: ReMoM route for complex computer science prompts.
@@ -1020,6 +1106,20 @@ routing:
                 endpoint: https://search.example.com/query
                 request_format: pinecone
 
+    - name: mlp_experimental_route
+      description: Experimental MLP-based model selection route.
+      priority: 103
+      rules:
+        operator: AND
+        conditions:
+          - type: keyword
+            name: machine_learning
+      modelRefs:
+        - model: qwen3-8b
+          use_reasoning: false
+      algorithm:
+        type: mlp
+
     - name: image_generation_route
       description: Dedicated image-generation route using the OpenAI image backend.
       priority: 105
@@ -1135,6 +1235,11 @@ global:
         cost_weight: 0.1
         quality_gap_threshold: 0.08
         normalize_scores: true
+      momentum:
+        enabled: false
+        attack: 0.7
+        release: 0.3
+        threshold: 0.6
       ml:
         models_path: models/model-selection
         embedding_dim: 384
@@ -1152,6 +1257,24 @@ global:
         mlp:
           device: cpu
           pretrained_path: models/model-selection/mlp.pt
+      lookup_tables:
+        enabled: false
+        storage_path: ""
+        auto_save_interval: ""
+        populate_from_replay: false
+        populate_interval: ""
+        quality_gaps:
+          - task_family: coding
+            current_model: small
+            candidate_model: large
+            value: 0.15
+        handoff_penalties:
+          - from_model: small
+            to_model: large
+            value: 0.02
+        remaining_turn_priors:
+          - intent_or_domain: support
+            value: 3.5
 
   services:
     api:
@@ -1250,6 +1373,8 @@ global:
               requests_per_unit: 1000
               tokens_per_unit: 2000000
               unit: hour
+    startup_status:
+      store_backend: file
     router_replay:
       enabled: true
       store_backend: postgres
@@ -1416,9 +1541,25 @@ global:
           enable_metrics: true
     memory:
       enabled: true
+      backend: milvus
       auto_store: true
       disabled_routes: []
       disabled_models: []
+      valkey:
+        host: valkey
+        port: 6379
+        database: 0
+        password: valkey-secret
+        timeout: 10
+        collection_prefix: "mem:"
+        index_name: mem_idx
+        dimension: 384
+        metric_type: COSINE
+        index_m: 16
+        index_ef_construction: 200
+        tls_enabled: false
+        tls_ca_path: ""
+        tls_insecure_skip_verify: false
       milvus:
         address: milvus:19530
         collection: agentic_memory
@@ -1534,6 +1675,18 @@ global:
         metric_type: COSINE
         index_m: 16
         index_ef_construction: 200
+      metadata_store: memory
+      metadata_postgres:
+        host: postgres
+        port: 5432
+        database: vsr
+        user: router
+        password: router-secret
+        ssl_mode: disable
+        max_open_conns: 25
+        max_idle_conns: 5
+        conn_max_lifetime: 300
+        table_name: vector_store_registry
 
   integrations:
     tools:
@@ -1573,7 +1726,7 @@ global:
       semantic:
         qwen3_model_path: models/mom-embedding-pro
         gemma_model_path: models/mom-embedding-flash
-        mmbert_model_path: models/mom-embedding-ultra
+        mmbert_model_path: models/mmbert-embed-32k-2d-matryoshka
         multimodal_model_path: models/mom-embedding-multimodal
         bert_model_path: models/mom-embedding-light
         use_cpu: true

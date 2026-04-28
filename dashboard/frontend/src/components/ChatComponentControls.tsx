@@ -108,10 +108,10 @@ export const ToolToggle = ({
 }) => {
   return (
     <button
-      className={`${styles.inputActionButton} ${enabled ? styles.searchToggleActive : ''}`}
+      className={`${styles.inputActionButton} ${styles.inputActionButtonTooltipEnd} ${enabled ? styles.searchToggleActive : ''}`}
       onClick={onToggle}
       disabled={disabled}
-      data-tooltip={enabled ? 'Web Search enabled' : 'Enable Web Search'}
+      data-tooltip={enabled ? 'Web Search Enabled' : 'Enable Web Search'}
     >
       <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
         <circle cx="12" cy="12" r="10" />

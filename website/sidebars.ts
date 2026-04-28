@@ -33,6 +33,7 @@ const sidebars: SidebarsConfig = {
         'installation/installation',
         'installation/k8s/operator',
         'installation/configuration',
+        'installation/upgrade-rollback',
         {
           type: 'category',
           label: 'Install with Gateways',
@@ -52,6 +53,13 @@ const sidebars: SidebarsConfig = {
             'installation/k8s/dynamo',
           ],
         },
+        {
+          type: 'category',
+          label: 'Backend Stores',
+          items: [
+            'installation/valkey-memory',
+          ],
+        },
       ],
     },
     {
@@ -69,8 +77,10 @@ const sidebars: SidebarsConfig = {
               items: [
                 'tutorials/signal/heuristic/authz',
                 'tutorials/signal/heuristic/context',
+                'tutorials/signal/heuristic/conversation',
                 'tutorials/signal/heuristic/keyword',
                 'tutorials/signal/heuristic/language',
+                'tutorials/signal/heuristic/session-metric',
                 'tutorials/signal/heuristic/structure',
               ],
             },

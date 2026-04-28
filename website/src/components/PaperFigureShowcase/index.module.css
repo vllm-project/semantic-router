@@ -1441,19 +1441,19 @@
   padding: 5rem 0;
   border-bottom: 1px solid var(--site-border);
   background:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.02), transparent 38%),
-    #050505;
+    linear-gradient(180deg, rgba(15, 23, 42, 0.02), transparent 40%),
+    linear-gradient(180deg, #ffffff 0%, var(--site-bg-alt) 100%);
 }
 
 .paperFigureSection::before,
 [data-theme='dark'] .paperFigureSection::before {
   background:
-    radial-gradient(circle at 16% 18%, rgba(255, 255, 255, 0.08), transparent 34%),
-    radial-gradient(circle at 82% 78%, rgba(255, 255, 255, 0.05), transparent 32%),
-    linear-gradient(90deg, rgba(255, 255, 255, 0.025) 1px, transparent 1px),
-    linear-gradient(180deg, rgba(255, 255, 255, 0.025) 1px, transparent 1px);
+    radial-gradient(circle at 16% 18%, rgba(15, 23, 42, 0.05), transparent 34%),
+    radial-gradient(circle at 82% 78%, rgba(15, 23, 42, 0.03), transparent 32%),
+    linear-gradient(90deg, rgba(15, 23, 42, 0.03) 1px, transparent 1px),
+    linear-gradient(180deg, rgba(15, 23, 42, 0.03) 1px, transparent 1px);
   background-size: auto, auto, 30px 30px, 30px 30px;
-  opacity: 0.45;
+  opacity: 0.34;
 }
 
 .paperHeader,
@@ -1666,7 +1666,7 @@
 [data-theme='dark'] .agentNodeMuted,
 .transformerBlockMuted,
 [data-theme='dark'] .transformerBlockMuted {
-  opacity: 0.6;
+  opacity: 0.74;
 }
 
 .mappingBridge,
@@ -1683,7 +1683,8 @@
 [data-theme='dark'] .agentLoopReturnArrow,
 .transformerArrow,
 [data-theme='dark'] .transformerArrow {
-  color: rgba(255, 255, 255, 0.74);
+  color: rgba(15, 23, 42, 0.78);
+  text-shadow: 0 0 0.01px rgba(15, 23, 42, 0.45);
 }
 
 .entropyLabelActive,
@@ -1697,7 +1698,19 @@
 [data-theme='dark'] .transformerEntropyBar,
 .transformerDepthBars span,
 [data-theme='dark'] .transformerDepthBars span {
-  background: linear-gradient(180deg, rgba(255, 255, 255, 0.82), rgba(255, 255, 255, 0.18));
+  background: linear-gradient(180deg, rgba(15, 23, 42, 0.72), rgba(79, 70, 229, 0.24));
+}
+
+.agentLoopTrack,
+[data-theme='dark'] .agentLoopTrack,
+.transformerBus,
+[data-theme='dark'] .transformerBus,
+.transformerExitLane,
+[data-theme='dark'] .transformerExitLane,
+.transformerEntropyTrack,
+[data-theme='dark'] .transformerEntropyTrack {
+  border-color: rgba(15, 23, 42, 0.18);
+  background: rgba(15, 23, 42, 0.035);
 }
 
 .figureCanvas,

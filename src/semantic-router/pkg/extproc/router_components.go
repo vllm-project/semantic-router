@@ -15,7 +15,7 @@ func loadClassifierMappings(cfg *config.RouterConfig) (*classifierMappings, erro
 	mappings := &classifierMappings{}
 	var err error
 
-	if cfg.CategoryMappingPath != "" {
+	if cfg.NeedsCategoryMappingForRouting() {
 		mappings.categoryMapping, err = classification.LoadCategoryMapping(cfg.CategoryMappingPath)
 		if err != nil {
 			return nil, fmt.Errorf("failed to load category mapping: %w", err)
@@ -25,7 +25,7 @@ func loadClassifierMappings(cfg *config.RouterConfig) (*classifierMappings, erro
 		})
 	}
 
-	if cfg.PIIMappingPath != "" {
+	if cfg.NeedsPIIMappingForRouting() {
 		mappings.piiMapping, err = classification.LoadPIIMapping(cfg.PIIMappingPath)
 		if err != nil {
 			return nil, fmt.Errorf("failed to load PII mapping: %w", err)
@@ -35,7 +35,7 @@ func loadClassifierMappings(cfg *config.RouterConfig) (*classifierMappings, erro
 		})
 	}
 
-	if cfg.IsPromptGuardEnabled() {
+	if cfg.NeedsJailbreakMappingForRouting() {
 		mappings.jailbreakMapping, err = classification.LoadJailbreakMapping(cfg.PromptGuard.JailbreakMappingPath)
 		if err != nil {
 			return nil, fmt.Errorf("failed to load jailbreak mapping: %w", err)
@@ -58,6 +58,7 @@ func createSemanticCache(cfg *config.RouterConfig) (cache.CacheBackend, error) {
 		TTLSeconds:          semanticCacheCfg.TTLSeconds,
 		EvictionPolicy:      cache.EvictionPolicyType(semanticCacheCfg.EvictionPolicy),
 		Redis:               semanticCacheCfg.Redis,
+		Valkey:              semanticCacheCfg.Valkey,
 		Milvus:              semanticCacheCfg.Milvus,
 		EmbeddingModel:      detectSemanticCacheEmbeddingModel(cfg),
 	}

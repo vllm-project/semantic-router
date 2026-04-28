@@ -1,0 +1,9 @@
+routing:
+  signals:
+    session_metrics:
+      - name: session_cost_pressure
+        kind: state
+        state: session_routing.cumulative_cost_usd
+        normalize: minmax
+        min: 0
+        max: 10

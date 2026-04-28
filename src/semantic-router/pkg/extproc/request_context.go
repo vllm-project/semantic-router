@@ -73,6 +73,22 @@ type RequestContext struct {
 	TTFTRecorded bool
 	TTFTSeconds  float64
 
+	// Session-aware transition metadata
+	SessionID           string  // Derived from ConversationID (Response API) or message hash (Chat Completions)
+	TurnIndex           int     // Number of prior turns in this session (0 = first turn)
+	PreviousModel       string  // Model used in the immediately preceding turn; empty on first turn
+	CacheWarmthEstimate float64 // [0,1] from EstimateCacheProbability; 0.5 = unknown
+
+	// HistoryTokenCount is the estimated token count of conversation history,
+	// excluding the current turn. Source priority: provider usage accumulation
+	// (resp.Usage.InputTokens + OutputTokens) > char/4 text fallback.
+	HistoryTokenCount int
+
+	// PreviousResponseID is the Response API previous_response_id field.
+	// Non-empty value is a strong explicit continuation signal even when
+	// HistoryTokenCount is zero (server-side conversation state).
+	PreviousResponseID string
+
 	// VSR decision tracking
 	VSRSelectedCategory           string           // The category from domain classification (MMLU category)
 	VSRSelectedDecisionName       string           // The decision name from DecisionEngine evaluation
@@ -106,6 +122,7 @@ type RequestContext struct {
 	VSRMatchedJailbreak    []string // Matched jailbreak rule names (confidence >= threshold)
 	VSRMatchedPII          []string // Matched PII rule names (denied PII types detected)
 	VSRMatchedKB           []string // Matched knowledge-base signal names
+	VSRMatchedConversation []string // Matched conversation-shape signal names
 	VSRMatchedProjection   []string // Matched projection mapping outputs
 	VSRProjectionScores    map[string]float64
 	VSRSignalConfidences   map[string]float64

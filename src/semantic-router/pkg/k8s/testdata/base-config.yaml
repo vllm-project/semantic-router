@@ -69,7 +69,7 @@ global:
   model_catalog:
     embeddings:
       semantic:
-        mmbert_model_path: models/mom-embedding-ultra
+        mmbert_model_path: models/mmbert-embed-32k-2d-matryoshka
         use_cpu: true
         embedding_config:
           model_type: mmbert

@@ -1,14 +1,15 @@
 html {
   background: var(--site-bg);
   color: var(--site-text);
+  color-scheme: light;
   scroll-behavior: smooth;
 }
 
 body {
   margin: 0;
   background:
-    radial-gradient(circle at top, rgba(255, 255, 255, 0.045), transparent 28%),
-    linear-gradient(180deg, #151515 0%, var(--site-bg) 32%, #0d0d0d 100%);
+    radial-gradient(circle at top, rgba(15, 23, 42, 0.035), transparent 30%),
+    linear-gradient(180deg, #ffffff 0%, var(--site-bg) 42%, var(--site-bg-alt) 100%);
   color: var(--site-text);
   font-family: var(--ifm-font-family-base);
   line-height: 1.5;

@@ -278,6 +278,50 @@ routing:
 	}
 }
 
+// Regression test for vllm-project/semantic-router#1829: stock Helm/operator
+// deployments without bundled KB asset files would fatal at startup because
+// canonical defaults (privacy_kb, mmlu_kb) get merged into every router config
+// and the validator unconditionally tried to open their labels manifests.
+//
+// Fix: only load the on-disk manifest for KBs that are actually referenced by
+// a routing.signals.kb[] rule. Defaults that nobody references skip the load.
+func TestValidateKnowledgeBaseContractsAcceptsUnreferencedDefaultKBsWithoutAssets(t *testing.T) {
+	missingAssetsRoot := t.TempDir() // exists, but contains no labels manifest
+
+	cfg := &RouterConfig{
+		ConfigBaseDir: missingAssetsRoot,
+		KnowledgeBases: []KnowledgeBaseConfig{
+			{
+				Name: "privacy_kb",
+				Source: KnowledgeBaseSource{
+					Path:     "knowledge_bases/privacy/",
+					Manifest: "labels.json",
+				},
+				Threshold: 0.55,
+			},
+			{
+				Name: "mmlu_kb",
+				Source: KnowledgeBaseSource{
+					Path:     "knowledge_bases/mmlu/",
+					Manifest: "labels.json",
+				},
+				Threshold: 0.25,
+			},
+		},
+		// No KBRules — neither default KB is referenced, so neither manifest
+		// should be loaded. Pre-fix this would have errored with
+		// "failed to load labels manifest: open .../labels.json: no such file".
+	}
+
+	if err := validateKnowledgeBaseContracts(cfg); err != nil {
+		t.Fatalf(
+			"unreferenced default KBs without bundled assets must not fail "+
+				"validation, got: %v",
+			err,
+		)
+	}
+}
+
 func TestValidateKnowledgeBaseContractsRejectsUnknownKB(t *testing.T) {
 	cfg := &RouterConfig{
 		IntelligentRouting: IntelligentRouting{

@@ -4,8 +4,8 @@
   padding: 5rem 0;
   border-bottom: 1px solid var(--site-border);
   background:
-    radial-gradient(circle at 82% 20%, rgba(255, 255, 255, 0.06), transparent 26%),
-    #070707;
+    linear-gradient(180deg, rgba(15, 23, 42, 0.018), transparent 42%),
+    linear-gradient(180deg, #ffffff 0%, var(--site-bg-alt) 100%);
 }
 
 .teamSection::before {
@@ -14,10 +14,11 @@
   inset: 0;
   pointer-events: none;
   background:
-    linear-gradient(90deg, rgba(255, 255, 255, 0.025) 1px, transparent 1px),
-    linear-gradient(180deg, rgba(255, 255, 255, 0.025) 1px, transparent 1px);
-  background-size: 34px 34px;
-  opacity: 0.4;
+    radial-gradient(circle at 82% 20%, rgba(15, 23, 42, 0.045), transparent 26%),
+    linear-gradient(90deg, rgba(15, 23, 42, 0.028) 1px, transparent 1px),
+    linear-gradient(180deg, rgba(15, 23, 42, 0.028) 1px, transparent 1px);
+  background-size: auto, 34px 34px, 34px 34px;
+  opacity: 0.3;
 }
 
 .teamHeader,
@@ -55,7 +56,9 @@
   position: relative;
   z-index: 1;
   border: 1px solid var(--site-border);
-  background: var(--site-surface);
+  background:
+    linear-gradient(180deg, rgba(15, 23, 42, 0.028), transparent 34%),
+    var(--site-surface);
   overflow: hidden;
 }
 
@@ -81,7 +84,9 @@
   gap: 0.8rem;
   padding: 1.15rem;
   border: 1px solid var(--site-border);
-  background: rgba(255, 255, 255, 0.03);
+  background:
+    linear-gradient(180deg, rgba(15, 23, 42, 0.02), transparent 36%),
+    var(--site-surface-alt);
   transition:
     border-color 180ms ease,
     transform 180ms ease,
@@ -91,7 +96,7 @@
 .memberCard:hover {
   transform: translateY(-2px);
   border-color: var(--site-border-strong);
-  background: var(--site-surface-alt);
+  background: var(--site-surface);
 }
 
 .avatarWrapper {
@@ -115,7 +120,7 @@
   width: fit-content;
   padding: 0.18rem 0.46rem;
   border: 1px solid var(--site-border);
-  background: rgba(255, 255, 255, 0.05);
+  background: rgba(15, 23, 42, 0.045);
   color: var(--site-muted-bright);
   font-size: 0.62rem;
   font-weight: 600;
@@ -125,16 +130,16 @@
 }
 
 .maintainer {
-  background: rgba(255, 255, 255, 0.1);
+  background: rgba(15, 23, 42, 0.08);
   color: var(--site-text);
 }
 
 .committer {
-  background: rgba(255, 255, 255, 0.06);
+  background: rgba(15, 23, 42, 0.05);
 }
 
 .contributor {
-  background: rgba(255, 255, 255, 0.03);
+  background: rgba(15, 23, 42, 0.035);
 }
 
 .memberName {

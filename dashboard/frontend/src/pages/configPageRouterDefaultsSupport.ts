@@ -655,7 +655,7 @@ function fieldsForKey(key: RouterSystemKey): FieldConfig[] {
       return [
         { name: 'qwen3_model_path', label: 'Qwen3 Model Path', type: 'text', placeholder: 'models/mom-embedding-pro' },
         { name: 'gemma_model_path', label: 'Gemma Model Path', type: 'text', placeholder: 'models/mom-embedding-flash' },
-        { name: 'mmbert_model_path', label: 'mmBERT Model Path', type: 'text', placeholder: 'models/mom-embedding-ultra' },
+        { name: 'mmbert_model_path', label: 'mmBERT Model Path', type: 'text', placeholder: 'models/mmbert-embed-32k-2d-matryoshka' },
         { name: 'multimodal_model_path', label: 'Multimodal Model Path', type: 'text', placeholder: 'models/mom-embedding-multimodal' },
         { name: 'bert_model_path', label: 'BERT Model Path', type: 'text', placeholder: 'models/mom-embedding-bert' },
         { name: 'use_cpu', label: 'Use CPU', type: 'boolean' },

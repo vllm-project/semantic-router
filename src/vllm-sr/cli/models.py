@@ -41,19 +41,25 @@ class ProjectionPartition(BaseModel):
     name: str
     semantics: str
     members: List[str]
-    temperature: Optional[float] = None
-    default: Optional[str] = None
+    temperature: Optional[float] = Field(default=None, gt=0)
+    default: str
 
 
 class ProjectionScoreInput(BaseModel):
-    """One weighted signal contribution to a derived projection score."""
+    """One weighted signal contribution to a derived projection score.
+
+    Supported value_source modes:
+      - "binary" (default): contributes match/miss fixed values.
+      - "confidence": contributes the signal confidence when matched.
+      - "raw": contributes the raw numeric value from SignalValues.
+    """
 
     type: str
     name: Optional[str] = None
-    classifier: Optional[str] = None
+    kb: Optional[str] = None
     metric: Optional[str] = None
     weight: float
-    value_source: Optional[str] = None
+    value_source: Optional[Literal["binary", "confidence", "raw"]] = None
     match: Optional[float] = None
     miss: Optional[float] = None
 
@@ -189,6 +195,38 @@ class StructureRule(BaseModel):
     name: str
     description: Optional[str] = None
     feature: StructureFeature
+    predicate: Optional[NumericPredicate] = None
+
+    class Config:
+        extra = "forbid"
+
+
+class ConversationSource(BaseModel):
+    """Source selector for conversation-shape signals."""
+
+    type: str
+    role: Optional[str] = None
+
+    class Config:
+        extra = "forbid"
+
+
+class ConversationFeature(BaseModel):
+    """Typed conversation-shape feature extractor."""
+
+    type: str
+    source: ConversationSource
+
+    class Config:
+        extra = "forbid"
+
+
+class ConversationRule(BaseModel):
+    """Conversation-shape routing signal configuration."""
+
+    name: str
+    description: Optional[str] = None
+    feature: ConversationFeature
     predicate: Optional[NumericPredicate] = None
 
     class Config:
@@ -350,6 +388,7 @@ class Signals(BaseModel):
     jailbreak: Optional[List[JailbreakRule]] = []
     pii: Optional[List[PIIRule]] = []
     kb: Optional[List[KBSignal]] = []
+    conversation: Optional[List[ConversationRule]] = []
 
 
 class Condition(BaseModel):

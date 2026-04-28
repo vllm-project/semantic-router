@@ -11,14 +11,15 @@ import (
 	"github.com/vllm-project/semantic-router/dashboard/backend/handlers"
 	"github.com/vllm-project/semantic-router/dashboard/backend/middleware"
 	"github.com/vllm-project/semantic-router/dashboard/backend/proxy"
+	"github.com/vllm-project/semantic-router/dashboard/backend/workflowstore"
 )
 
-func newOpenClawHandler(cfg *config.Config) *handlers.OpenClawHandler {
+func newOpenClawHandler(cfg *config.Config, wf *workflowstore.Store) *handlers.OpenClawHandler {
 	if !cfg.OpenClawEnabled {
 		return nil
 	}
 
-	openClawHandler := handlers.NewOpenClawHandler(cfg.OpenClawDataDir, cfg.ReadonlyMode)
+	openClawHandler := handlers.NewOpenClawHandler(cfg.OpenClawDataDir, cfg.ReadonlyMode, wf)
 	openClawHandler.SetRouterConfigPath(cfg.AbsConfigPath)
 	return openClawHandler
 }

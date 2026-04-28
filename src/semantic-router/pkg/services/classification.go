@@ -93,51 +93,51 @@ func NewClassificationServiceWithAutoDiscovery(config *config.RouterConfig) (*Cl
 }
 
 // createLegacyClassifier creates a legacy classifier with proper model loading
-func createLegacyClassifier(config *config.RouterConfig) (*classification.Classifier, error) {
+func createLegacyClassifier(cfg *config.RouterConfig) (*classification.Classifier, error) {
 	// Load category mapping
 	var categoryMapping *classification.CategoryMapping
 
 	// Check if we should load categories from MCP server
 	// Note: tool_name is optional and will be auto-discovered if not specified
-	useMCPCategories := config.CategoryModel.ModelID == "" &&
-		config.MCPCategoryModel.Enabled
+	useMCPCategories := cfg.CategoryModel.ModelID == "" &&
+		cfg.MCPCategoryModel.Enabled
 
-	if useMCPCategories {
+	if useMCPCategories && cfg.UsesSignalTypeInRouting(config.SignalTypeDomain) {
 		// Categories will be loaded from MCP server during initialization
 		logging.Infof("Category mapping will be loaded from MCP server")
 		// Create empty mapping initially - will be populated during initialization
 		categoryMapping = nil
-	} else if config.CategoryMappingPath != "" {
-		// Load from file as usual
+	} else if cfg.NeedsCategoryMappingForRouting() {
+		// Load from file only when routing actually needs domain classification
 		var err error
-		categoryMapping, err = classification.LoadCategoryMapping(config.CategoryMappingPath)
+		categoryMapping, err = classification.LoadCategoryMapping(cfg.CategoryMappingPath)
 		if err != nil {
 			return nil, fmt.Errorf("failed to load category mapping: %w", err)
 		}
 	}
 
-	// Load PII mapping
+	// Load PII mapping only when routing actually needs PII classification
 	var piiMapping *classification.PIIMapping
-	if config.PIIMappingPath != "" {
+	if cfg.NeedsPIIMappingForRouting() {
 		var err error
-		piiMapping, err = classification.LoadPIIMapping(config.PIIMappingPath)
+		piiMapping, err = classification.LoadPIIMapping(cfg.PIIMappingPath)
 		if err != nil {
 			return nil, fmt.Errorf("failed to load PII mapping: %w", err)
 		}
 	}
 
-	// Load jailbreak mapping
+	// Load jailbreak mapping only when routing actually needs jailbreak classification
 	var jailbreakMapping *classification.JailbreakMapping
-	if config.PromptGuard.JailbreakMappingPath != "" {
+	if cfg.NeedsJailbreakMappingForRouting() {
 		var err error
-		jailbreakMapping, err = classification.LoadJailbreakMapping(config.PromptGuard.JailbreakMappingPath)
+		jailbreakMapping, err = classification.LoadJailbreakMapping(cfg.PromptGuard.JailbreakMappingPath)
 		if err != nil {
 			return nil, fmt.Errorf("failed to load jailbreak mapping: %w", err)
 		}
 	}
 
 	// Create classifier
-	classifier, err := classification.NewClassifier(config, categoryMapping, piiMapping, jailbreakMapping)
+	classifier, err := classification.NewClassifier(cfg, categoryMapping, piiMapping, jailbreakMapping)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create classifier: %w", err)
 	}
@@ -201,6 +201,8 @@ func (s *ClassificationService) ClassifyIntent(req IntentRequest) (*IntentRespon
 		input.hasAssistantReply,
 		forceEvaluateAll,
 		"",
+		nil,
+		classification.ConversationFacts{},
 		nil,
 	)
 
