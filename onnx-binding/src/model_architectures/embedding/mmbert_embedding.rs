@@ -400,12 +400,10 @@ impl MmBertEmbeddingModel {
             if let Ok(entries) = std::fs::read_dir(base_dir) {
                 for entry in entries.flatten() {
                     let path = entry.path();
-                    if let Some(ext) = path.extension() {
-                        if ext == "onnx" {
-                            if !results.iter().any(|p| p == &path) {
-                                results.push(path);
-                            }
-                        }
+                    if path.extension().is_some_and(|ext| ext == "onnx")
+                        && !results.iter().any(|p| p == &path)
+                    {
+                        results.push(path);
                     }
                 }
             }
@@ -614,7 +612,7 @@ impl MmBertEmbeddingModel {
                     if self
                         .layer_sessions
                         .get(i)
-                        .map_or(false, |s: &Option<Session>| s.is_some())
+                        .is_some_and(|s: &Option<Session>| s.is_some())
                     {
                         Some(layer)
                     } else {
@@ -716,7 +714,7 @@ impl MmBertEmbeddingModel {
                     .layers
                     .iter()
                     .position(|&l| l == layer)
-                    .filter(|&idx| self.layer_sessions.get(idx).map_or(false, |s| s.is_some()))
+                    .filter(|&idx| self.layer_sessions.get(idx).is_some_and(|s| s.is_some()))
             } else {
                 None
             }
@@ -807,7 +805,7 @@ impl MmBertEmbeddingModel {
         for name in &output_names {
             if let Some(output_value) = outputs.get(*name) {
                 if let Some((dims, flat)) = try_extract_f32!(output_value) {
-                    return process_output(&dims, flat, &attention_mask);
+                    return process_output(&dims, flat, attention_mask);
                 }
             }
         }
@@ -815,7 +813,7 @@ impl MmBertEmbeddingModel {
         // Try first output if named outputs not found
         if let Some((_, output_value)) = outputs.iter().next() {
             if let Some((dims, flat)) = try_extract_f32!(output_value) {
-                return process_output(&dims, flat, &attention_mask);
+                return process_output(&dims, flat, attention_mask);
             }
         }
 
