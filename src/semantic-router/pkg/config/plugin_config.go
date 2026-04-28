@@ -100,6 +100,13 @@ type RouterReplayPluginConfig struct {
 	// 0 means no limit. Configurable independently of MaxBodyBytes so that
 	// structured fields remain complete even when the raw body is truncated.
 	MaxToolTraceBytes int `json:"max_tool_trace_bytes,omitempty" yaml:"max_tool_trace_bytes,omitempty"`
+	// MaxToolTraceSteps caps the number of ToolTraceStep entries retained per
+	// record. Long agent sessions produce one step per tool-call turn, so an
+	// unbounded chain (e.g. a runaway hermes-style loop) can otherwise grow
+	// without limit and OOM the router process. When the cap is exceeded the
+	// oldest steps are dropped and ToolTrace.StepsTruncated is set so callers
+	// can see that a cap was applied. 0 means no limit.
+	MaxToolTraceSteps int `json:"max_tool_trace_steps,omitempty" yaml:"max_tool_trace_steps,omitempty"`
 }
 
 // GetPlugin returns the plugin entry for a specific plugin type.

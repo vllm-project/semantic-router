@@ -487,6 +487,115 @@ func TestRecorderUpdateToolTraceAppliesMaxToolTraceBytes(t *testing.T) {
 	}
 }
 
+func makeStepsWithToolNames(names []string) []ToolTraceStep {
+	steps := make([]ToolTraceStep, len(names))
+	for i, n := range names {
+		steps[i] = ToolTraceStep{Type: "assistant_tool_call", ToolName: n}
+	}
+	return steps
+}
+
+func TestRecorderMaxToolTraceStepsDropsOldestOnAddRecord(t *testing.T) {
+	// Regression test for #1835: an unbounded agent session that produced
+	// hundreds of tool-call steps per record was OOMing the router. With
+	// MaxToolTraceSteps set, AddRecord must drop the oldest steps so memory
+	// stays bounded while the most recent timeline is preserved.
+	recorder := NewRecorder(store.NewMemoryStore(10, 0))
+	recorder.SetCapturePolicy(false, false, 4096)
+	recorder.SetMaxToolTraceSteps(3)
+
+	steps := makeStepsWithToolNames([]string{"a", "b", "c", "d", "e"})
+	id, err := recorder.AddRecord(RoutingRecord{
+		ID:        "replay-step-cap",
+		RequestID: "req-step-cap",
+		ToolTrace: &ToolTrace{Steps: steps},
+	})
+	if err != nil {
+		t.Fatalf("AddRecord: %v", err)
+	}
+
+	rec, found := recorder.GetRecord(id)
+	if !found || rec.ToolTrace == nil {
+		t.Fatalf("unexpected stored record: found=%v, trace=%#v", found, rec.ToolTrace)
+	}
+	if got := len(rec.ToolTrace.Steps); got != 3 {
+		t.Fatalf("expected 3 retained steps, got %d", got)
+	}
+	wantNames := []string{"c", "d", "e"}
+	for i, name := range wantNames {
+		if rec.ToolTrace.Steps[i].ToolName != name {
+			t.Errorf("step[%d]: expected ToolName=%q, got %q", i, name, rec.ToolTrace.Steps[i].ToolName)
+		}
+	}
+	if !rec.ToolTrace.StepsTruncated {
+		t.Error("expected StepsTruncated=true after step-count cap")
+	}
+	if rec.ToolTrace.DroppedStepCount != 2 {
+		t.Errorf("expected DroppedStepCount=2, got %d", rec.ToolTrace.DroppedStepCount)
+	}
+}
+
+func TestRecorderMaxToolTraceStepsZeroDisablesCap(t *testing.T) {
+	recorder := NewRecorder(store.NewMemoryStore(10, 0))
+	recorder.SetCapturePolicy(false, false, 4096)
+	// 0 = no cap. The default for NewRecorder is also 0 to preserve
+	// backwards-compatible behaviour for external callers; the
+	// plugin-level config supplies a sane non-zero default.
+	recorder.SetMaxToolTraceSteps(0)
+
+	steps := makeStepsWithToolNames([]string{"a", "b", "c", "d", "e"})
+	id, err := recorder.AddRecord(RoutingRecord{
+		ID:        "replay-step-no-cap",
+		RequestID: "req-step-no-cap",
+		ToolTrace: &ToolTrace{Steps: steps},
+	})
+	if err != nil {
+		t.Fatalf("AddRecord: %v", err)
+	}
+
+	rec, _ := recorder.GetRecord(id)
+	if rec.ToolTrace == nil || len(rec.ToolTrace.Steps) != 5 {
+		t.Fatalf("expected all 5 steps retained without a cap, got %#v", rec.ToolTrace)
+	}
+	if rec.ToolTrace.StepsTruncated {
+		t.Error("expected StepsTruncated=false when cap is 0")
+	}
+}
+
+func TestRecorderUpdateToolTraceAppliesMaxToolTraceSteps(t *testing.T) {
+	// Response-side tool traces flow through UpdateToolTrace
+	// (see extproc.attachRouterReplayResponse). They must also respect the
+	// step cap or a long streaming response could re-introduce the OOM.
+	recorder := NewRecorder(store.NewMemoryStore(10, 0))
+	recorder.SetCapturePolicy(false, false, 4096)
+	recorder.SetMaxToolTraceSteps(2)
+
+	id, err := recorder.AddRecord(RoutingRecord{
+		ID:        "replay-update-step-cap",
+		RequestID: "req-update-step-cap",
+	})
+	if err != nil {
+		t.Fatalf("AddRecord: %v", err)
+	}
+
+	steps := makeStepsWithToolNames([]string{"a", "b", "c", "d"})
+	if err := recorder.UpdateToolTrace(id, ToolTrace{Steps: steps}); err != nil {
+		t.Fatalf("UpdateToolTrace: %v", err)
+	}
+
+	rec, _ := recorder.GetRecord(id)
+	if rec.ToolTrace == nil || len(rec.ToolTrace.Steps) != 2 {
+		t.Fatalf("expected step cap enforced on UpdateToolTrace, got %#v", rec.ToolTrace)
+	}
+	if rec.ToolTrace.Steps[0].ToolName != "c" || rec.ToolTrace.Steps[1].ToolName != "d" {
+		t.Errorf("expected newest steps preserved (c,d), got %+v", rec.ToolTrace.Steps)
+	}
+	if !rec.ToolTrace.StepsTruncated || rec.ToolTrace.DroppedStepCount != 2 {
+		t.Errorf("expected StepsTruncated=true, DroppedStepCount=2; got %v / %d",
+			rec.ToolTrace.StepsTruncated, rec.ToolTrace.DroppedStepCount)
+	}
+}
+
 func TestRecorderSetMaxToolTraceBytesZeroNoTruncation(t *testing.T) {
 	recorder := NewRecorder(store.NewMemoryStore(10, 0))
 	recorder.SetCapturePolicy(false, false, 4096)
