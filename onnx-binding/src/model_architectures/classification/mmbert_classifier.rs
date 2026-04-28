@@ -18,7 +18,7 @@ use ort::value::Tensor;
 use std::collections::HashMap;
 use std::path::Path;
 use std::sync::Arc;
-use tokenizers::{Tokenizer, TruncationParams, TruncationDirection, TruncationStrategy};
+use tokenizers::{Tokenizer, TruncationDirection, TruncationParams, TruncationStrategy};
 
 /// Maximum sequence length for classification inference.
 ///
@@ -256,11 +256,26 @@ impl MmBertSequenceClassifier {
         let search_dirs = [dir, onnx_subdir.as_path()];
 
         // Prefer FA-optimized variant when CK Flash Attention is available.
-        let has_fa = std::env::var("ORT_CK_FLASH_ATTN_LIB").ok().filter(|s| !s.is_empty()).is_some();
+        let has_fa = std::env::var("ORT_CK_FLASH_ATTN_LIB")
+            .ok()
+            .filter(|s| !s.is_empty())
+            .is_some();
         let candidates: &[&str] = if has_fa {
-            &["model_fa_fp16.onnx", "model_fa.onnx", "model_sdpa_fp16.onnx", "model.onnx", "classifier.onnx", "model_optimized.onnx"]
+            &[
+                "model_fa_fp16.onnx",
+                "model_fa.onnx",
+                "model_sdpa_fp16.onnx",
+                "model.onnx",
+                "classifier.onnx",
+                "model_optimized.onnx",
+            ]
         } else {
-            &["model_sdpa_fp16.onnx", "model.onnx", "classifier.onnx", "model_optimized.onnx"]
+            &[
+                "model_sdpa_fp16.onnx",
+                "model.onnx",
+                "classifier.onnx",
+                "model_optimized.onnx",
+            ]
         };
 
         let mut results: Vec<std::path::PathBuf> = Vec::new();
@@ -353,7 +368,9 @@ impl MmBertSequenceClassifier {
                         ArenaExtendStrategy, MIGraphXExecutionProvider, ROCmExecutionProvider,
                     };
 
-                    let ck_fa_lib = std::env::var("ORT_CK_FLASH_ATTN_LIB").ok().filter(|s| !s.is_empty());
+                    let ck_fa_lib = std::env::var("ORT_CK_FLASH_ATTN_LIB")
+                        .ok()
+                        .filter(|s| !s.is_empty());
                     if let Some(ref lib) = ck_fa_lib {
                         println!("INFO: CK Flash Attention custom op library: {}", lib);
                     }
@@ -664,8 +681,11 @@ fn extract_token_logits_from_outputs(outputs: &SessionOutputs<'_>) -> UnifiedRes
                         ),
                     ));
                 }
-                Array2::from_shape_vec((*seq_len, *num_labels), flat.into_iter().take(expected).collect())
-                    .map_err(|e| errors::inference_error("reshape_token_logits", &e.to_string()))
+                Array2::from_shape_vec(
+                    (*seq_len, *num_labels),
+                    flat.into_iter().take(expected).collect(),
+                )
+                .map_err(|e| errors::inference_error("reshape_token_logits", &e.to_string()))
             }
             // [batch, seq_len, num_labels] or [seq_len, 1, num_labels]
             [a, b, c] => {
@@ -720,7 +740,13 @@ fn extract_token_logits_from_outputs(outputs: &SessionOutputs<'_>) -> UnifiedRes
         }
     }
 
-    let output_names = ["logits", "output", "predictions", "output_0", "token_logits"];
+    let output_names = [
+        "logits",
+        "output",
+        "predictions",
+        "output_0",
+        "token_logits",
+    ];
     let mut inspected_shapes: Vec<String> = Vec::new();
 
     macro_rules! try_output {
@@ -1235,7 +1261,9 @@ mod tests {
     #[test]
     fn test_onnx_tokenizer_truncates_long_prompt() {
         if std::env::var("CI").is_ok() {
-            eprintln!("skipping test_onnx_tokenizer_truncates_long_prompt: CI environment detected");
+            eprintln!(
+                "skipping test_onnx_tokenizer_truncates_long_prompt: CI environment detected"
+            );
             return;
         }
 
@@ -1252,8 +1280,8 @@ mod tests {
         let prompts = fixtures["prompts"].as_array().expect("prompts array");
 
         // Load and configure the tokenizer the same way MmBertSequenceClassifier::load does.
-        let mut tokenizer = tokenizers::Tokenizer::from_file(&tokenizer_path)
-            .expect("failed to load tokenizer");
+        let mut tokenizer =
+            tokenizers::Tokenizer::from_file(&tokenizer_path).expect("failed to load tokenizer");
         tokenizer
             .with_truncation(Some(tokenizers::TruncationParams {
                 max_length: MAX_CLASSIFICATION_SEQ_LEN,
@@ -1322,8 +1350,8 @@ mod tests {
         );
 
         // Configure tokenizer as the classifier does.
-        let mut tokenizer = tokenizers::Tokenizer::from_file(&tokenizer_path)
-            .expect("load tokenizer");
+        let mut tokenizer =
+            tokenizers::Tokenizer::from_file(&tokenizer_path).expect("load tokenizer");
         tokenizer
             .with_truncation(Some(tokenizers::TruncationParams {
                 max_length: MAX_CLASSIFICATION_SEQ_LEN,
@@ -1370,13 +1398,13 @@ mod tests {
         let text = short["text"].as_str().expect("text");
 
         // Tokenizer without truncation limit to get the "true" token count.
-        let baseline_tokenizer = tokenizers::Tokenizer::from_file(&tokenizer_path)
-            .expect("load tokenizer");
+        let baseline_tokenizer =
+            tokenizers::Tokenizer::from_file(&tokenizer_path).expect("load tokenizer");
         let baseline_count = token_count_after_encode(&baseline_tokenizer, text);
 
         // Tokenizer with the production truncation limit.
-        let mut truncating_tokenizer = tokenizers::Tokenizer::from_file(&tokenizer_path)
-            .expect("load tokenizer");
+        let mut truncating_tokenizer =
+            tokenizers::Tokenizer::from_file(&tokenizer_path).expect("load tokenizer");
         truncating_tokenizer
             .with_truncation(Some(tokenizers::TruncationParams {
                 max_length: MAX_CLASSIFICATION_SEQ_LEN,

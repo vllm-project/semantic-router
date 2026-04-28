@@ -702,16 +702,20 @@ impl TraditionalModernBertClassifier {
         }
 
         let vb = unsafe {
-            VarBuilder::from_mmaped_safetensors(std::slice::from_ref(&weights_path), DType::F32, &device)
-                .map_err(|e| {
-                    let unified_err = model_error!(
-                        ModelErrorType::ModernBERT,
-                        "weights loading",
-                        format!("Failed to load weights from {}: {}", weights_path, e),
-                        &weights_path
-                    );
-                    candle_core::Error::from(unified_err)
-                })?
+            VarBuilder::from_mmaped_safetensors(
+                std::slice::from_ref(&weights_path),
+                DType::F32,
+                &device,
+            )
+            .map_err(|e| {
+                let unified_err = model_error!(
+                    ModelErrorType::ModernBERT,
+                    "weights loading",
+                    format!("Failed to load weights from {}: {}", weights_path, e),
+                    &weights_path
+                );
+                candle_core::Error::from(unified_err)
+            })?
         };
 
         // 6. Create ModernBERT model - try both with and without prefix
@@ -908,8 +912,12 @@ impl TraditionalModernBertClassifier {
         }
 
         let base_vb = unsafe {
-            VarBuilder::from_mmaped_safetensors(std::slice::from_ref(&base_weights_path), DType::F32, &device)
-                .map_err(|e| {
+            VarBuilder::from_mmaped_safetensors(
+                std::slice::from_ref(&base_weights_path),
+                DType::F32,
+                &device,
+            )
+            .map_err(|e| {
                 let unified_err = model_error!(
                     ModelErrorType::ModernBERT,
                     "base model weights loading",
