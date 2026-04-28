@@ -15,6 +15,12 @@ class Listener(BaseModel):
     address: str
     port: int
     timeout: Optional[str] = "300s"
+    api_keys: Optional[List[str]] = Field(
+        default=None,
+        description="Bearer tokens required to call this listener. "
+        "If set, requests without 'Authorization: Bearer <key>' matching one of these "
+        "values are rejected with HTTP 401.",
+    )
 
 
 class KeywordSignal(BaseModel):

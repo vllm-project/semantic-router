@@ -357,7 +357,12 @@ vllm-sr-dev:
 	else \
 		echo "4. Installing vLLM-SR and vLLM-SR-Sim CLIs in development mode..."; \
 	fi
-	@python3 -m pip install -e src/vllm-sr -e "$(VLLM_SR_SIM_DIR)[dev]"
+	@if [ -x "$(AGENT_VENV)/bin/pip" ]; then \
+		"$(AGENT_VENV)/bin/pip" install -q -e src/vllm-sr -e "$(VLLM_SR_SIM_DIR)[dev]"; \
+	else \
+		python3 -m pip install --break-system-packages -e src/vllm-sr -e "$(VLLM_SR_SIM_DIR)[dev]" 2>/dev/null || \
+		python3 -m pip install -e src/vllm-sr -e "$(VLLM_SR_SIM_DIR)[dev]"; \
+	fi
 	@echo "vLLM-SR CLI and vLLM-SR-Sim installed"
 	@echo ""
 	@echo "=========================================="

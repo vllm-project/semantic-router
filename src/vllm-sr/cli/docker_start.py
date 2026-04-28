@@ -8,6 +8,7 @@ from cli.consts import (
     DEFAULT_NOFILE_LIMIT,
     MIN_NOFILE_LIMIT,
     PLATFORM_AMD,
+    PLATFORM_NVIDIA,
 )
 from cli.docker_images import (
     _normalize_platform,
@@ -21,6 +22,7 @@ from cli.docker_run_command import (
     append_port_mappings,
     build_base_run_command,
     maybe_append_amd_gpu_passthrough,
+    maybe_append_nvidia_gpu_passthrough,
 )
 from cli.docker_runtime import get_container_runtime, resolve_docker_cli_path
 from cli.docker_services import (
@@ -290,6 +292,7 @@ def _build_router_runtime_command(
             "/app/.vllm-sr",
         ],
         enable_amd_gpu=normalized_platform == PLATFORM_AMD,
+        enable_nvidia_gpu=normalized_platform == PLATFORM_NVIDIA,
         start_immediately=not setup_mode,
     )
 
@@ -550,6 +553,7 @@ def _build_service_run_command(
     entrypoint: str,
     command_args: list[str],
     enable_amd_gpu: bool = False,
+    enable_nvidia_gpu: bool = False,
     start_immediately: bool = True,
 ):
     cmd = build_base_run_command(
@@ -560,6 +564,7 @@ def _build_service_run_command(
         start_immediately=start_immediately,
     )
     maybe_append_amd_gpu_passthrough(cmd, enable_amd_gpu)
+    maybe_append_nvidia_gpu_passthrough(cmd, enable_nvidia_gpu)
     append_host_gateway(cmd, runtime)
     append_mount_specs(cmd, mount_specs)
     append_port_mappings(cmd, port_mappings)
