@@ -46,8 +46,8 @@ type CanonicalSignals struct {
 	PII                []PIIRule           `yaml:"pii,omitempty"`
 	KB                 []KBSignalRule      `yaml:"kb,omitempty"`
 	Conversation       []ConversationRule  `yaml:"conversation,omitempty"`
-	SessionMetricRules  []SessionMetricRule  `yaml:"session_metrics,omitempty"`
-	EventContextRules   []EventContextRule   `yaml:"event_context_rules,omitempty"`
+	SessionMetricRules []SessionMetricRule `yaml:"session_metrics,omitempty"`
+	EventContextRules  []EventContextRule  `yaml:"event_context_rules,omitempty"`
 }
 
 // CanonicalProjections groups derived routing outputs under routing.projections.
@@ -255,8 +255,8 @@ func normalizeSignals(signals CanonicalSignals, decisions []Decision) Signals {
 		PIIRules:           append([]PIIRule(nil), signals.PII...),
 		KBRules:            append([]KBSignalRule(nil), signals.KB...),
 		ConversationRules:  append([]ConversationRule(nil), signals.Conversation...),
-		SessionMetricRules:  append([]SessionMetricRule(nil), signals.SessionMetricRules...),
-		EventContextRules:   append([]EventContextRule(nil), signals.EventContextRules...),
+		SessionMetricRules: append([]SessionMetricRule(nil), signals.SessionMetricRules...),
+		EventContextRules:  append([]EventContextRule(nil), signals.EventContextRules...),
 	}
 
 	if len(result.Categories) == 0 {

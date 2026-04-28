@@ -96,9 +96,9 @@ type SignalResults struct {
 	KBClassifierResults       map[string]*KBClassifyResult
 	KBMetricValues            map[string]float64
 	MatchedConversationRules  []string
-	MatchedSessionMetricRules  []string
-	MatchedEventContextRules   []string // Matched event_context rule names (event type, severity, temporal, action codes)
-	MatchedProjectionRules     []string // Matched derived routing outputs from routing.projections.mappings
+	MatchedSessionMetricRules []string
+	MatchedEventContextRules  []string // Matched event_context rule names (event type, severity, temporal, action codes)
+	MatchedProjectionRules    []string // Matched derived routing outputs from routing.projections.mappings
 	ProjectionScores          map[string]float64
 
 	// Jailbreak detection metadata (populated when jailbreak signal is evaluated)
@@ -373,9 +373,9 @@ func (c *Classifier) evaluateDecisionInternal(signals *SignalResults, trace bool
 		PIIRules:           signals.MatchedPIIRules,
 		KBRules:            signals.MatchedKBRules,
 		ConversationRules:  signals.MatchedConversationRules,
-		SessionMetricRules:  signals.MatchedSessionMetricRules,
-		EventContextRules:   signals.MatchedEventContextRules,
-		ProjectionRules:     signals.MatchedProjectionRules,
+		SessionMetricRules: signals.MatchedSessionMetricRules,
+		EventContextRules:  signals.MatchedEventContextRules,
+		ProjectionRules:    signals.MatchedProjectionRules,
 	}
 
 	var result *decision.DecisionResult
