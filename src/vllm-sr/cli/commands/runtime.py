@@ -184,7 +184,8 @@ def _execute_serve(
 @click.option(
     "--platform",
     default=None,
-    help="Platform branding (e.g., 'amd' for AMD GPU deployments). "
+    help="Platform for GPU deployments: 'amd' enables ROCm passthrough, "
+    "'nvidia' enables NVIDIA GPU passthrough (--gpus all). "
     "When set to amd, serve defaults to the ROCm image unless --image or VLLM_SR_IMAGE is provided.",
 )
 @click.option(

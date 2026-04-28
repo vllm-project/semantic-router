@@ -2,7 +2,7 @@
 
 import os
 
-from cli.consts import PLATFORM_AMD
+from cli.consts import PLATFORM_AMD, PLATFORM_NVIDIA
 from cli.docker_images import _normalize_platform
 from cli.utils import get_logger
 
@@ -89,3 +89,21 @@ def append_env_vars(cmd, env_vars: dict[str, str]):
 def maybe_append_amd_gpu_passthrough(cmd, enable_amd_gpu: bool):
     if enable_amd_gpu:
         append_amd_gpu_passthrough(cmd, _normalize_platform(PLATFORM_AMD))
+
+
+def append_nvidia_gpu_passthrough(cmd):
+    passthrough_enabled = os.getenv("VLLM_SR_NVIDIA_GPU_PASSTHROUGH", "1").lower()
+    if passthrough_enabled in ["0", "false", "no", "off"]:
+        log.info(
+            "NVIDIA GPU passthrough disabled by VLLM_SR_NVIDIA_GPU_PASSTHROUGH environment variable"
+        )
+        return
+
+    cmd.extend(["--gpus", "all"])
+    cmd.extend(["--runtime", "nvidia"])
+    log.info("NVIDIA GPU passthrough enabled (--gpus all --runtime nvidia)")
+
+
+def maybe_append_nvidia_gpu_passthrough(cmd, enable_nvidia_gpu: bool):
+    if enable_nvidia_gpu:
+        append_nvidia_gpu_passthrough(cmd)

@@ -96,6 +96,34 @@ static_resources:
                     substitution: "{{ models[0].path_prefix }}\\1"
                   {% endif %}
           http_filters:
+          {% if listener.api_keys %}
+          - name: envoy.filters.http.lua
+            typed_config:
+              "@type": type.googleapis.com/envoy.extensions.filters.http.lua.v3.LuaPerRoute
+          - name: envoy.filters.http.lua
+            typed_config:
+              "@type": type.googleapis.com/envoy.extensions.filters.http.lua.v3.Lua
+              inline_code: |
+                local VALID_KEYS = {
+                {% for key in listener.api_keys %}
+                  ["{{ key }}"] = true,
+                {% endfor %}
+                }
+                function envoy_on_request(request_handle)
+                  local auth = request_handle:headers():get("authorization") or
+                               request_handle:headers():get("Authorization") or ""
+                  local token = string.match(auth, "^[Bb]earer%s+(.+)$")
+                  if token and VALID_KEYS[token] then
+                    return
+                  end
+                  request_handle:respond(
+                    {[":status"] = "401",
+                     ["content-type"] = "application/json",
+                     ["www-authenticate"] = "Bearer realm=\"vllm-semantic-router\""},
+                    "{\"error\":{\"message\":\"Unauthorized: missing or invalid API key\",\"type\":\"authentication_error\",\"code\":\"invalid_api_key\"}}"
+                  )
+                end
+          {% endif %}
           - name: envoy.filters.http.ext_proc
             typed_config:
               "@type": type.googleapis.com/envoy.extensions.filters.http.ext_proc.v3.ExternalProcessor
