@@ -1,6 +1,10 @@
 package extproc
 
-import "github.com/openai/openai-go"
+import (
+	"strings"
+
+	"github.com/openai/openai-go"
+)
 
 type signalConversationHistory struct {
 	currentUserMessage string
@@ -87,4 +91,28 @@ func countSDKToolDefinitions(req *openai.ChatCompletionNewParams) int {
 		return 0
 	}
 	return len(req.Tools)
+}
+
+// extractRecentAssistantToolCallNames returns the last horizon assistant function names in chat order
+// (tool_calls across messages appended in request message order).
+func extractRecentAssistantToolCallNames(req *openai.ChatCompletionNewParams, horizon int) []string {
+	if req == nil || horizon <= 0 {
+		return nil
+	}
+	var names []string
+	for _, msg := range req.Messages {
+		if msg.OfAssistant == nil {
+			continue
+		}
+		for _, tc := range msg.OfAssistant.ToolCalls {
+			n := strings.TrimSpace(tc.Function.Name)
+			if n != "" {
+				names = append(names, n)
+			}
+		}
+	}
+	if len(names) > horizon {
+		names = names[len(names)-horizon:]
+	}
+	return names
 }

@@ -44,21 +44,9 @@ func (r *OpenAIRouter) handleToolSelection(openAIRequest *openai.ChatCompletionN
 		return nil
 	}
 
-	switch toolsCfg.EffectiveMode() {
-	case config.ToolsPluginModeNone:
-		logging.Infof("[ToolsPlugin] Decision %q has mode=none, stripping all tools", ctx.VSRSelectedDecision.Name)
-		openAIRequest.Tools = nil
-		return r.updateRequestWithTools(openAIRequest, response, ctx)
-	case config.ToolsPluginModeFiltered:
-		openAIRequest.Tools = filterToolsByDecisionPolicy(openAIRequest.Tools, toolsCfg.AllowTools, toolsCfg.BlockTools)
-		if openAIRequest.ToolChoice.OfAuto.Value != "auto" {
-			logging.Infof("[ToolsPlugin] Decision %q filtered explicit tools to %d entries", ctx.VSRSelectedDecision.Name, len(openAIRequest.Tools))
-			return r.updateRequestWithTools(openAIRequest, response, ctx)
-		}
-	case config.ToolsPluginModePassthrough:
-		// No explicit-tool filtering; semantic selection may still run below.
-	default:
-		return fmt.Errorf("tools plugin: unsupported mode %q", toolsCfg.Mode)
+	finished, err := r.applyDecisionToolsPluginMode(openAIRequest, response, ctx, toolsCfg)
+	if err != nil || finished {
+		return err
 	}
 
 	if openAIRequest.ToolChoice.OfAuto.Value != "auto" {
@@ -68,14 +56,7 @@ func (r *OpenAIRouter) handleToolSelection(openAIRequest *openai.ChatCompletionN
 		return r.updateRequestWithTools(openAIRequest, response, ctx)
 	}
 
-	// Get text for tools classification
-	var classificationText string
-	if len(userContent) > 0 {
-		classificationText = userContent
-	} else if len(nonUserMessages) > 0 {
-		classificationText = strings.Join(nonUserMessages, " ")
-	}
-
+	classificationText := toolClassificationText(userContent, nonUserMessages)
 	if classificationText == "" {
 		logging.Infof("No content available for tool classification")
 		return nil
@@ -86,41 +67,113 @@ func (r *OpenAIRouter) handleToolSelection(openAIRequest *openai.ChatCompletionN
 		return nil
 	}
 
-	selectedTools, toolErr := r.findToolsForQuery(classificationText, ctx, toolsCfg)
+	return r.runSemanticToolSelectionAndUpdate(openAIRequest, response, ctx, toolsCfg, classificationText)
+}
+
+// applyDecisionToolsPluginMode enforces per-decision none / filtered / passthrough. The boolean is
+// true when the request body has already been finalized for this path (caller returns).
+func (r *OpenAIRouter) applyDecisionToolsPluginMode(
+	openAIRequest *openai.ChatCompletionNewParams,
+	response **ext_proc.ProcessingResponse,
+	ctx *RequestContext,
+	toolsCfg *config.ToolsPluginConfig,
+) (bool, error) {
+	switch toolsCfg.EffectiveMode() {
+	case config.ToolsPluginModeNone:
+		logging.Infof("[ToolsPlugin] Decision %q has mode=none, stripping all tools", ctx.VSRSelectedDecision.Name)
+		openAIRequest.Tools = nil
+		return true, r.updateRequestWithTools(openAIRequest, response, ctx)
+	case config.ToolsPluginModeFiltered:
+		openAIRequest.Tools = filterToolsByDecisionPolicy(openAIRequest.Tools, toolsCfg.AllowTools, toolsCfg.BlockTools)
+		if openAIRequest.ToolChoice.OfAuto.Value != "auto" {
+			logging.Infof("[ToolsPlugin] Decision %q filtered explicit tools to %d entries", ctx.VSRSelectedDecision.Name, len(openAIRequest.Tools))
+			return true, r.updateRequestWithTools(openAIRequest, response, ctx)
+		}
+	case config.ToolsPluginModePassthrough:
+		// Semantic selection may run below.
+	default:
+		return false, fmt.Errorf("tools plugin: unsupported mode %q", toolsCfg.Mode)
+	}
+	return false, nil
+}
+
+func toolClassificationText(userContent string, nonUserMessages []string) string {
+	if len(userContent) > 0 {
+		return userContent
+	}
+	if len(nonUserMessages) > 0 {
+		return strings.Join(nonUserMessages, " ")
+	}
+	return ""
+}
+
+func (r *OpenAIRouter) runSemanticToolSelectionAndUpdate(
+	openAIRequest *openai.ChatCompletionNewParams,
+	response **ext_proc.ProcessingResponse,
+	ctx *RequestContext,
+	toolsCfg *config.ToolsPluginConfig,
+	classificationText string,
+) error {
+	selectedTools, toolErr := r.findToolsForQuery(classificationText, ctx, toolsCfg, openAIRequest)
 	if toolErr != nil {
-		if r.Config.Tools.FallbackToEmpty {
-			logging.Warnf("Tool selection failed, falling back to no tools: %v", toolErr)
-			openAIRequest.Tools = nil
-			return r.updateRequestWithTools(openAIRequest, response, ctx)
-		}
-		metrics.RecordRequestError(getModelFromCtx(ctx), "classification_failed")
-		return toolErr
+		return r.handleToolSelectionError(openAIRequest, response, ctx, toolErr)
 	}
 
-	if len(selectedTools) == 0 {
-		if r.Config.Tools.FallbackToEmpty {
-			logging.Infof("No suitable tools found, falling back to no tools")
-			openAIRequest.Tools = nil
-		} else {
-			logging.Infof("No suitable tools found above threshold")
-			openAIRequest.Tools = []openai.ChatCompletionToolParam{}
-		}
-	} else {
-		sdkTools, err := convertToSDKTools(selectedTools)
-		if err != nil {
-			metrics.RecordRequestError(getModelFromCtx(ctx), "serialization_error")
-			return err
-		}
-		openAIRequest.Tools = sdkTools
-		logging.Infof("Auto-selected %d tools for query: %s", len(sdkTools), classificationText)
+	if err := applySelectedToolsToOpenAIRequest(r, openAIRequest, selectedTools, classificationText, ctx); err != nil {
+		return err
 	}
-
 	return r.updateRequestWithTools(openAIRequest, response, ctx)
+}
+
+func (r *OpenAIRouter) handleToolSelectionError(
+	openAIRequest *openai.ChatCompletionNewParams,
+	response **ext_proc.ProcessingResponse,
+	ctx *RequestContext,
+	toolErr error,
+) error {
+	if r.Config.Tools.FallbackToEmpty {
+		logging.Warnf("Tool selection failed, falling back to no tools: %v", toolErr)
+		openAIRequest.Tools = nil
+		return r.updateRequestWithTools(openAIRequest, response, ctx)
+	}
+	metrics.RecordRequestError(getModelFromCtx(ctx), "classification_failed")
+	return toolErr
+}
+
+func applySelectedToolsToOpenAIRequest(
+	r *OpenAIRouter,
+	openAIRequest *openai.ChatCompletionNewParams,
+	selectedTools []openai.ChatCompletionToolParam,
+	classificationText string,
+	ctx *RequestContext,
+) error {
+	if len(selectedTools) == 0 {
+		applyNoToolsFromSelection(r, openAIRequest)
+		return nil
+	}
+	sdkTools, err := convertToSDKTools(selectedTools)
+	if err != nil {
+		metrics.RecordRequestError(getModelFromCtx(ctx), "serialization_error")
+		return err
+	}
+	openAIRequest.Tools = sdkTools
+	logging.Infof("Auto-selected %d tools for query: %s", len(sdkTools), classificationText)
+	return nil
+}
+
+func applyNoToolsFromSelection(r *OpenAIRouter, openAIRequest *openai.ChatCompletionNewParams) {
+	if r.Config.Tools.FallbackToEmpty {
+		logging.Infof("No suitable tools found, falling back to no tools")
+		openAIRequest.Tools = nil
+		return
+	}
+	logging.Infof("No suitable tools found above threshold")
+	openAIRequest.Tools = []openai.ChatCompletionToolParam{}
 }
 
 // findToolsForQuery discovers candidate tools via semantic similarity, applying
 // advanced filtering when configured.
-func (r *OpenAIRouter) findToolsForQuery(query string, ctx *RequestContext, toolsCfg *config.ToolsPluginConfig) ([]openai.ChatCompletionToolParam, error) {
+func (r *OpenAIRouter) findToolsForQuery(query string, ctx *RequestContext, toolsCfg *config.ToolsPluginConfig, openAIRequest *openai.ChatCompletionNewParams) ([]openai.ChatCompletionToolParam, error) {
 	topK := r.Config.Tools.TopK
 	if topK <= 0 {
 		topK = 3
@@ -136,7 +189,17 @@ func (r *OpenAIRouter) findToolsForQuery(query string, ctx *RequestContext, tool
 		return nil, err
 	}
 
-	return tools.FilterAndRankTools(query, candidates, topK, advanced, resolveCategory(advanced, ctx)), nil
+	category := resolveCategory(advanced, ctx)
+	if config.IsHybridHistoryRetrieval(advanced) {
+		hz := config.ResolveHybridHistoryHorizon(advanced)
+		toolNames := extractRecentAssistantToolCallNames(openAIRequest, hz)
+		dec := 0.0
+		if ctx != nil {
+			dec = ctx.VSRSelectedDecisionConfidence
+		}
+		return tools.FilterAndRankToolsWithConversation(query, candidates, topK, advanced, category, toolNames, dec), nil
+	}
+	return tools.FilterAndRankTools(query, candidates, topK, advanced, category), nil
 }
 
 func resolveCandidatePoolSize(advanced *config.AdvancedToolFilteringConfig, topK int) int {

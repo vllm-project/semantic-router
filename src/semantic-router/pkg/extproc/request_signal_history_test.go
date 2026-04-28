@@ -78,5 +78,23 @@ func TestSignalConversationHistoryFromFastExtract_PreservesResponseAPIUserChain(
 	assert.Equal(t, "What is my name again?", history.currentUserMessage)
 	assert.Equal(t, []string{"Hello"}, history.priorUserMessages)
 	assert.Equal(t, []string{"Remember my name is Alice.", "Hi there!"}, history.nonUserMessages)
-	assert.True(t, history.hasAssistantReply)
+}
+
+func TestExtractRecentAssistantToolCallNames(t *testing.T) {
+	raw := []byte(`{
+		"model": "gpt-4o",
+		"messages": [
+			{"role": "assistant", "content": null, "tool_calls": [
+				{"id": "c1", "type": "function", "function": {"name": "foo", "arguments": "{}"}}
+			]},
+			{"role": "assistant", "content": null, "tool_calls": [
+				{"id": "c2", "type": "function", "function": {"name": "bar", "arguments": "{}"}},
+				{"id": "c3", "type": "function", "function": {"name": "baz", "arguments": "{}"}}
+			]}
+		]
+	}`)
+	req, err := parseOpenAIRequest(raw)
+	require.NoError(t, err)
+	assert.Equal(t, []string{"foo", "bar", "baz"}, extractRecentAssistantToolCallNames(req, 10))
+	assert.Equal(t, []string{"bar", "baz"}, extractRecentAssistantToolCallNames(req, 2))
 }

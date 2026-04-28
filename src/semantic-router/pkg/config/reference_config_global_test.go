@@ -147,6 +147,12 @@ func assertReferenceConfigIntegrationGlobalCoverage(t testingT, integrations map
 	assertMapCoversStructFields(t, mustMapAt(t, tools, "advanced_filtering"), reflect.TypeOf(AdvancedToolFilteringConfig{}), "global.integrations.tools.advanced_filtering")
 	assertMapCoversStructFields(
 		t,
+		mustMapAt(t, tools, "advanced_filtering", "hybrid_history"),
+		reflect.TypeOf(HybridHistoryToolRetrievalConfig{}),
+		"global.integrations.tools.advanced_filtering.hybrid_history",
+	)
+	assertMapCoversStructFields(
+		t,
 		mustMapAt(t, tools, "advanced_filtering", "weights"),
 		reflect.TypeOf(ToolFilteringWeights{}),
 		"global.integrations.tools.advanced_filtering.weights",
