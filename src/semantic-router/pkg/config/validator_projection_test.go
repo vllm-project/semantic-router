@@ -96,6 +96,93 @@ routing:
 	}
 }
 
+func TestValidateProjectionMappingAcceptsNewMethods(t *testing.T) {
+	tests := []struct {
+		name   string
+		method string
+		valid  bool
+	}{
+		{"threshold_bands", "threshold_bands", true},
+		{"multi_emit", "multi_emit", true},
+		{"top_k", "top_k", true},
+		{"unknown", "unknown_method", false},
+	}
+
+	scoreNames := map[string]struct{}{"test_score": {}}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			outputNames := make(map[string]struct{})
+
+			mapping := ProjectionMapping{
+				Name:   "test_mapping",
+				Source: "test_score",
+				Method: tt.method,
+				TopK:   2,
+				Outputs: []ProjectionMappingOutput{
+					{Name: "output1", LT: float64Ptr(0.5)},
+					{Name: "output2", GTE: float64Ptr(0.5)},
+				},
+			}
+
+			err := validateProjectionMapping(mapping, scoreNames, outputNames)
+			if tt.valid && err != nil {
+				t.Errorf("expected valid, got error: %v", err)
+			}
+			if !tt.valid && err == nil {
+				t.Errorf("expected error for invalid method")
+			}
+		})
+	}
+}
+
+func TestValidateProjectionMappingTopKRequiresTopKField(t *testing.T) {
+	scoreNames := map[string]struct{}{"test_score": {}}
+	outputNames := make(map[string]struct{})
+
+	mapping := ProjectionMapping{
+		Name:   "test_mapping",
+		Source: "test_score",
+		Method: "top_k",
+		TopK:   0,
+		Outputs: []ProjectionMappingOutput{
+			{Name: "output1", LT: float64Ptr(0.5)},
+		},
+	}
+
+	err := validateProjectionMapping(mapping, scoreNames, outputNames)
+	if err == nil {
+		t.Fatal("expected error for top_k without valid TopK field")
+	}
+	if !strings.Contains(err.Error(), "top_k > 0") {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
+func TestValidateProjectionMappingTopKExceedsOutputs(t *testing.T) {
+	scoreNames := map[string]struct{}{"test_score": {}}
+	outputNames := make(map[string]struct{})
+
+	mapping := ProjectionMapping{
+		Name:   "test_mapping",
+		Source: "test_score",
+		Method: "top_k",
+		TopK:   5,
+		Outputs: []ProjectionMappingOutput{
+			{Name: "output1", LT: float64Ptr(0.5)},
+			{Name: "output2", GTE: float64Ptr(0.5)},
+		},
+	}
+
+	err := validateProjectionMapping(mapping, scoreNames, outputNames)
+	if err == nil {
+		t.Fatal("expected error for TopK exceeding outputs")
+	}
+	if !strings.Contains(err.Error(), "cannot exceed number of outputs") {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
 func TestValidateProjectionInputValueSourceAcceptsAllModes(t *testing.T) {
 	for _, vs := range []string{"", "binary", "confidence", "raw"} {
 		t.Run(fmt.Sprintf("value_source=%q", vs), func(t *testing.T) {
@@ -174,4 +261,8 @@ routing:
 	if cfg.Projections.Scores[0].Inputs[0].ValueSource != "raw" {
 		t.Fatalf("value_source = %q, want %q", cfg.Projections.Scores[0].Inputs[0].ValueSource, "raw")
 	}
+}
+
+func float64Ptr(v float64) *float64 {
+	return &v
 }

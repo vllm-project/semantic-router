@@ -95,6 +95,7 @@ class ProjectionMapping(BaseModel):
     name: str
     source: str
     method: str
+    top_k: Optional[int] = None
     calibration: Optional[ProjectionMappingCalibration] = None
     outputs: List[ProjectionMappingOutput]
 

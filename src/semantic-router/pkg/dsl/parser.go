@@ -288,6 +288,9 @@ func rawToProjectionMapping(r *rawProjectionDecl) *ProjectionMappingDecl {
 	if method, ok := getStringField(fields, "method"); ok {
 		mapping.Method = method
 	}
+	if topK, ok := getIntField(fields, "top_k"); ok {
+		mapping.TopK = topK
+	}
 	if calibrationObj, ok := fields["calibration"].(ObjectValue); ok {
 		calibration := &ProjectionMappingCalibrationDecl{}
 		if method, ok := getStringField(calibrationObj.Fields, "method"); ok {

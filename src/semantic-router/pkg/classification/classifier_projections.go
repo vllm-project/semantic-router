@@ -8,7 +8,10 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 )
 
-type projectionMatchAccessor func(*SignalResults) []string
+type (
+	projectionMatchAccessor func(*SignalResults) []string
+	mappingApplyFunc        func(*Classifier, config.ProjectionMapping, float64, *SignalResults)
+)
 
 var projectionMatchAccessors = map[string]projectionMatchAccessor{
 	config.SignalTypeKeyword:       func(results *SignalResults) []string { return results.MatchedKeywordRules },
@@ -29,6 +32,12 @@ var projectionMatchAccessors = map[string]projectionMatchAccessor{
 	config.SignalTypeKB:            func(results *SignalResults) []string { return results.MatchedKBRules },
 	config.SignalTypeConversation:  func(results *SignalResults) []string { return results.MatchedConversationRules },
 	config.SignalTypeSessionMetric: func(results *SignalResults) []string { return results.MatchedSessionMetricRules },
+}
+
+var mappingStrategies = map[string]mappingApplyFunc{
+	"threshold_bands": (*Classifier).applyThresholdBands,
+	"multi_emit":      (*Classifier).applyMultiEmit,
+	"top_k":           (*Classifier).applyTopK,
 }
 
 func (c *Classifier) applyProjections(results *SignalResults) *SignalResults {
@@ -55,12 +64,13 @@ func (c *Classifier) applyProjections(results *SignalResults) *SignalResults {
 		if !ok {
 			continue
 		}
-		output, matched := matchProjectionOutput(mapping, scoreValue)
-		if !matched {
-			continue
+
+		if applyFunc, ok := mappingStrategies[mapping.Method]; ok {
+			applyFunc(c, mapping, scoreValue, results)
+		} else {
+			// Fallback to threshold_bands for unknown methods
+			c.applyThresholdBands(mapping, scoreValue, results)
 		}
-		results.MatchedProjectionRules = append(results.MatchedProjectionRules, output.Name)
-		results.SignalConfidences[signalConfidenceKey(config.SignalTypeProjection, output.Name)] = projectionOutputConfidence(mapping, output, scoreValue)
 	}
 
 	return results
@@ -202,4 +212,114 @@ func projectionBoundaryDistance(output config.ProjectionMappingOutput, scoreValu
 		}
 	}
 	return best
+}
+
+// applyThresholdBands emits the first matching output band (first-hit behavior).
+func (c *Classifier) applyThresholdBands(
+	mapping config.ProjectionMapping,
+	scoreValue float64,
+	results *SignalResults,
+) {
+	output, matched := matchProjectionOutput(mapping, scoreValue)
+	if !matched {
+		return
+	}
+	results.MatchedProjectionRules = append(results.MatchedProjectionRules, output.Name)
+	results.SignalConfidences[signalConfidenceKey(config.SignalTypeProjection, output.Name)] = projectionOutputConfidence(mapping, output, scoreValue)
+}
+
+// applyMultiEmit emits ALL matching output bands.
+func (c *Classifier) applyMultiEmit(
+	mapping config.ProjectionMapping,
+	scoreValue float64,
+	results *SignalResults,
+) {
+	for _, output := range mapping.Outputs {
+		if projectionOutputMatches(output, scoreValue) {
+			results.MatchedProjectionRules = append(results.MatchedProjectionRules, output.Name)
+			results.SignalConfidences[signalConfidenceKey(config.SignalTypeProjection, output.Name)] = projectionOutputConfidence(mapping, output, scoreValue)
+		}
+	}
+}
+
+// applyTopK emits up to K matching outputs, ranked by proximity to the band center
+// (smallest |score − center| first). Useful when bands overlap and only the most
+// relevant matches should propagate.
+func (c *Classifier) applyTopK(
+	mapping config.ProjectionMapping,
+	scoreValue float64,
+	results *SignalResults,
+) {
+	type bandDistance struct {
+		output   config.ProjectionMappingOutput
+		distance float64
+	}
+
+	var matches []bandDistance
+	for _, output := range mapping.Outputs {
+		if projectionOutputMatches(output, scoreValue) {
+			center := projectionOutputBandCenter(output)
+			matches = append(matches, bandDistance{
+				output:   output,
+				distance: math.Abs(scoreValue - center),
+			})
+		}
+	}
+
+	if len(matches) == 0 {
+		return
+	}
+
+	slices.SortFunc(matches, func(a, b bandDistance) int {
+		if a.distance < b.distance {
+			return -1
+		}
+		if a.distance > b.distance {
+			return 1
+		}
+		return 0
+	})
+
+	k := mapping.TopK
+	if k <= 0 || k > len(matches) {
+		k = len(matches)
+	}
+
+	for i := 0; i < k; i++ {
+		output := matches[i].output
+		results.MatchedProjectionRules = append(results.MatchedProjectionRules, output.Name)
+		results.SignalConfidences[signalConfidenceKey(config.SignalTypeProjection, output.Name)] = projectionOutputConfidence(mapping, output, scoreValue)
+	}
+}
+
+func projectionOutputBandCenter(output config.ProjectionMappingOutput) float64 {
+	lower := math.Inf(-1)
+	upper := math.Inf(1)
+
+	if output.GT != nil {
+		lower = *output.GT
+	}
+	if output.GTE != nil && *output.GTE > lower {
+		lower = *output.GTE
+	}
+	if output.LT != nil {
+		upper = *output.LT
+	}
+	if output.LTE != nil && *output.LTE < upper {
+		upper = *output.LTE
+	}
+
+	hasLower := !math.IsInf(lower, -1)
+	hasUpper := !math.IsInf(upper, 1)
+
+	switch {
+	case hasLower && hasUpper:
+		return (lower + upper) / 2.0
+	case hasLower:
+		return lower
+	case hasUpper:
+		return upper
+	default:
+		return 0
+	}
 }
