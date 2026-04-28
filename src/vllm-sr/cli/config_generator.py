@@ -72,6 +72,11 @@ def generate_envoy_config_from_user_config(
                     "timeout": (
                         listener.timeout if hasattr(listener, "timeout") else "300s"
                     ),
+                    "api_keys": (
+                        list(listener.api_keys)
+                        if getattr(listener, "api_keys", None)
+                        else []
+                    ),
                 }
             )
     else:
@@ -82,6 +87,7 @@ def generate_envoy_config_from_user_config(
                 "address": "0.0.0.0",
                 "port": DEFAULT_LISTENER_PORT,
                 "timeout": "300s",
+                "api_keys": [],
             }
         )
 
