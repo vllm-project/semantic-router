@@ -6,6 +6,7 @@ import (
 
 	"github.com/anthropics/anthropic-sdk-go"
 	"github.com/openai/openai-go"
+	"github.com/openai/openai-go/shared"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -29,9 +30,15 @@ func TestToAnthropicRequestBody_BasicConversion(t *testing.T) {
 	err = json.Unmarshal(body, &result)
 	require.NoError(t, err)
 
-	assert.Equal(t, anthropic.Model("claude-sonnet-4-5"), result.Model)
+	assert.Empty(t, result.Model, "model field should be stripped for Vertex AI compatibility")
 	assert.Equal(t, DefaultMaxTokens, result.MaxTokens)
 	assert.Len(t, result.Messages, 1)
+
+	// Verify model key is absent from raw JSON (Vertex AI rejects it)
+	var raw map[string]json.RawMessage
+	require.NoError(t, json.Unmarshal(body, &raw))
+	_, hasModel := raw["model"]
+	assert.False(t, hasModel, "model key must not appear in Anthropic body for Vertex AI")
 }
 
 func TestToAnthropicRequestBody_WithSystemPrompt(t *testing.T) {
@@ -307,4 +314,298 @@ func TestExtractAssistantContent_StringContent(t *testing.T) {
 	result := extractAssistantContent(msg)
 
 	assert.Equal(t, "Hi! How can I help?", result)
+}
+
+func TestToAnthropicRequestBody_WithToolCallsAndResults(t *testing.T) {
+	req := &openai.ChatCompletionNewParams{
+		Model: "claude-sonnet-4-6",
+		Messages: []openai.ChatCompletionMessageParamUnion{
+			{OfUser: &openai.ChatCompletionUserMessageParam{
+				Content: openai.ChatCompletionUserMessageParamContentUnion{
+					OfString: openai.String("What's the weather?"),
+				},
+			}},
+			{OfAssistant: &openai.ChatCompletionAssistantMessageParam{
+				Content: openai.ChatCompletionAssistantMessageParamContentUnion{
+					OfString: openai.String("Let me check."),
+				},
+				ToolCalls: []openai.ChatCompletionMessageToolCallParam{
+					{
+						ID: "call_123",
+						Function: openai.ChatCompletionMessageToolCallFunctionParam{
+							Name:      "get_weather",
+							Arguments: `{"location":"London"}`,
+						},
+					},
+				},
+			}},
+			{OfTool: &openai.ChatCompletionToolMessageParam{
+				ToolCallID: "call_123",
+				Content: openai.ChatCompletionToolMessageParamContentUnion{
+					OfString: openai.String("72F and sunny"),
+				},
+			}},
+			{OfUser: &openai.ChatCompletionUserMessageParam{
+				Content: openai.ChatCompletionUserMessageParamContentUnion{
+					OfString: openai.String("Thanks!"),
+				},
+			}},
+		},
+	}
+
+	body, err := ToAnthropicRequestBody(req)
+	require.NoError(t, err)
+
+	var raw map[string]any
+	err = json.Unmarshal(body, &raw)
+	require.NoError(t, err)
+
+	msgs := raw["messages"].([]any)
+	require.GreaterOrEqual(t, len(msgs), 3)
+
+	// Check assistant message has tool_use content blocks
+	assistantMsg := msgs[1].(map[string]any)
+	assert.Equal(t, "assistant", assistantMsg["role"])
+	assistantContent := assistantMsg["content"].([]any)
+	foundToolUse := false
+	for _, block := range assistantContent {
+		b := block.(map[string]any)
+		if b["type"] == "tool_use" {
+			foundToolUse = true
+			assert.Equal(t, "call_123", b["id"])
+			assert.Equal(t, "get_weather", b["name"])
+			input := b["input"].(map[string]any)
+			assert.Equal(t, "London", input["location"])
+		}
+	}
+	assert.True(t, foundToolUse, "assistant message should contain tool_use block")
+
+	// Check tool result is in a user message
+	toolResultMsg := msgs[2].(map[string]any)
+	assert.Equal(t, "user", toolResultMsg["role"])
+	toolResultContent := toolResultMsg["content"].([]any)
+	foundToolResult := false
+	for _, block := range toolResultContent {
+		b := block.(map[string]any)
+		if b["type"] == "tool_result" {
+			foundToolResult = true
+			assert.Equal(t, "call_123", b["tool_use_id"])
+		}
+	}
+	assert.True(t, foundToolResult, "should have tool_result block in user message")
+}
+
+func TestToOpenAIResponseBody_WithToolUse(t *testing.T) {
+	anthropicResp := map[string]any{
+		"id":   "msg_456",
+		"type": "message",
+		"role": "assistant",
+		"content": []map[string]any{
+			{"type": "text", "text": "Let me check the weather."},
+			{
+				"type":  "tool_use",
+				"id":    "toolu_abc",
+				"name":  "get_weather",
+				"input": map[string]any{"location": "London"},
+			},
+		},
+		"stop_reason": "tool_use",
+		"usage": map[string]any{
+			"input_tokens":  15,
+			"output_tokens": 25,
+		},
+	}
+
+	anthropicJSON, err := json.Marshal(anthropicResp)
+	require.NoError(t, err)
+
+	resultJSON, err := ToOpenAIResponseBody(anthropicJSON, "claude-sonnet-4-6")
+	require.NoError(t, err)
+
+	var raw map[string]any
+	err = json.Unmarshal(resultJSON, &raw)
+	require.NoError(t, err)
+
+	choices := raw["choices"].([]any)
+	choice := choices[0].(map[string]any)
+	assert.Equal(t, "tool_calls", choice["finish_reason"])
+
+	message := choice["message"].(map[string]any)
+	assert.Equal(t, "Let me check the weather.", message["content"])
+
+	toolCalls := message["tool_calls"].([]any)
+	require.Len(t, toolCalls, 1)
+
+	tc := toolCalls[0].(map[string]any)
+	assert.Equal(t, "toolu_abc", tc["id"])
+	assert.Equal(t, "function", tc["type"])
+
+	fn := tc["function"].(map[string]any)
+	assert.Equal(t, "get_weather", fn["name"])
+
+	var args map[string]any
+	err = json.Unmarshal([]byte(fn["arguments"].(string)), &args)
+	require.NoError(t, err)
+	assert.Equal(t, "London", args["location"])
+}
+
+func TestToAnthropicRequestBody_WithTools(t *testing.T) {
+	req := &openai.ChatCompletionNewParams{
+		Model: "claude-sonnet-4-6",
+		Messages: []openai.ChatCompletionMessageParamUnion{
+			{OfUser: &openai.ChatCompletionUserMessageParam{
+				Content: openai.ChatCompletionUserMessageParamContentUnion{
+					OfString: openai.String("What's the weather?"),
+				},
+			}},
+		},
+		Tools: []openai.ChatCompletionToolParam{
+			{
+				Function: shared.FunctionDefinitionParam{
+					Name:        "get_weather",
+					Description: openai.String("Get current weather"),
+					Parameters: shared.FunctionParameters{
+						"type": "object",
+						"properties": map[string]any{
+							"location": map[string]any{
+								"type":        "string",
+								"description": "City name",
+							},
+						},
+						"required": []any{"location"},
+					},
+				},
+			},
+		},
+	}
+
+	body, err := ToAnthropicRequestBody(req)
+	require.NoError(t, err)
+
+	var raw map[string]any
+	err = json.Unmarshal(body, &raw)
+	require.NoError(t, err)
+
+	tools, ok := raw["tools"].([]any)
+	require.True(t, ok, "tools should be an array")
+	require.Len(t, tools, 1)
+
+	tool := tools[0].(map[string]any)
+	assert.Equal(t, "get_weather", tool["name"])
+	assert.Equal(t, "Get current weather", tool["description"])
+
+	inputSchema := tool["input_schema"].(map[string]any)
+	assert.Equal(t, "object", inputSchema["type"])
+	props := inputSchema["properties"].(map[string]any)
+	loc := props["location"].(map[string]any)
+	assert.Equal(t, "string", loc["type"])
+}
+
+func TestToOpenAIResponseBody_ProviderError(t *testing.T) {
+	// Vertex AI error response format
+	errorResp := `{"type":"error","error":{"type":"invalid_request_error","message":"model: Extra inputs are not permitted"},"request_id":"req_vrtx_test123"}`
+
+	_, err := ToOpenAIResponseBody([]byte(errorResp), "claude-sonnet")
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "provider error")
+	assert.Contains(t, err.Error(), "Extra inputs are not permitted")
+}
+
+func TestToOpenAIResponseBody_EmptyProviderResponse(t *testing.T) {
+	// Empty/unknown response
+	emptyResp := `{"some_unknown_field":"value"}`
+
+	_, err := ToOpenAIResponseBody([]byte(emptyResp), "claude-sonnet")
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "provider returned empty response")
+}
+
+func TestEnsureToolResultPairing_AlreadyCorrect(t *testing.T) {
+	messages := []anthropic.MessageParam{
+		anthropic.NewUserMessage(anthropic.NewTextBlock("hi")),
+		anthropic.NewAssistantMessage(
+			anthropic.NewTextBlock("checking"),
+			anthropic.NewToolUseBlock("tool_1", map[string]any{}, "read"),
+		),
+		anthropic.NewUserMessage(
+			anthropic.NewToolResultBlock("tool_1", "contents", false),
+		),
+		anthropic.NewAssistantMessage(anthropic.NewTextBlock("done")),
+	}
+
+	result := ensureToolResultPairing(messages)
+	assert.Len(t, result, 4)
+}
+
+func TestEnsureToolResultPairing_MisplacedToolResult(t *testing.T) {
+	// Simulate: assistant(tool_use) → user(text) → user(tool_result)
+	// After merge the user messages combine, but test the pairing fix directly
+	// on an un-merged sequence where user text is between assistant and tool_result
+	messages := []anthropic.MessageParam{
+		anthropic.NewUserMessage(anthropic.NewTextBlock("hi")),
+		anthropic.NewAssistantMessage(
+			anthropic.NewTextBlock("let me check"),
+			anthropic.NewToolUseBlock("tool_A", map[string]any{}, "read"),
+		),
+		// User text ended up here (from proxy insert(0))
+		anthropic.NewUserMessage(anthropic.NewTextBlock("sure")),
+		// Next assistant (tool_result for tool_A is NOT adjacent)
+		anthropic.NewAssistantMessage(anthropic.NewTextBlock("next step")),
+		// tool_result ended up in a later user message
+		anthropic.NewUserMessage(
+			anthropic.NewToolResultBlock("tool_A", "file contents", false),
+		),
+	}
+
+	result := ensureToolResultPairing(messages)
+
+	// The tool_result should have been moved to msg[2] (immediately after assistant with tool_use)
+	// Verify the assistant at index 1 is followed by a user with tool_result
+	assert.Equal(t, anthropic.MessageParamRole("assistant"), result[1].Role)
+	foundToolResult := false
+	for _, block := range result[2].Content {
+		if block.OfToolResult != nil && block.OfToolResult.ToolUseID == "tool_A" {
+			foundToolResult = true
+		}
+	}
+	assert.True(t, foundToolResult, "tool_result(tool_A) should be in the user message immediately after the assistant")
+}
+
+func TestEnsureToolResultPairing_MultipleToolCalls(t *testing.T) {
+	messages := []anthropic.MessageParam{
+		anthropic.NewUserMessage(anthropic.NewTextBlock("do stuff")),
+		anthropic.NewAssistantMessage(
+			anthropic.NewToolUseBlock("t1", map[string]any{}, "read"),
+			anthropic.NewToolUseBlock("t2", map[string]any{}, "write"),
+		),
+		anthropic.NewUserMessage(
+			anthropic.NewToolResultBlock("t1", "read result", false),
+			anthropic.NewToolResultBlock("t2", "write result", false),
+		),
+	}
+
+	result := ensureToolResultPairing(messages)
+	assert.Len(t, result, 3)
+
+	// Both tool_results in the right place
+	trCount := 0
+	for _, block := range result[2].Content {
+		if block.OfToolResult != nil {
+			trCount++
+		}
+	}
+	assert.Equal(t, 2, trCount)
+}
+
+func TestDescribeContentBlocks(t *testing.T) {
+	blocks := []anthropic.ContentBlockParamUnion{
+		anthropic.NewTextBlock("hello"),
+		anthropic.NewToolUseBlock("t1", map[string]any{}, "read"),
+		anthropic.NewToolResultBlock("t1", "ok", false),
+	}
+
+	desc := describeContentBlocks(blocks)
+	assert.Contains(t, desc, "1xtext")
+	assert.Contains(t, desc, "1xtool_use")
+	assert.Contains(t, desc, "1xtool_result")
 }

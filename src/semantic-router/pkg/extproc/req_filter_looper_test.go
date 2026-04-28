@@ -204,6 +204,7 @@ func TestBuildHeaderMutationsForLooperIncludesAuthorizationAndPluginHeaders(t *t
 	setHeaders, removeHeaders := router.buildHeaderMutationsForLooper(decision, "model-a")
 	headerMap := headerValuesByName(setHeaders)
 
+	assert.Equal(t, "model-a", headerMap[headers.SelectedModel])
 	assert.Equal(t, "model-a", headerMap[headers.VSRSelectedModel])
 	assert.Equal(t, "Bearer secret", headerMap["Authorization"])
 	assert.Equal(t, "1", headerMap["x-extra"])

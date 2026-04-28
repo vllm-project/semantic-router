@@ -7,7 +7,7 @@ import (
 	ext_proc "github.com/envoyproxy/go-control-plane/envoy/service/ext_proc/v3"
 	"github.com/openai/openai-go"
 
-	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/anthropic"
+	anthropic_pkg "github.com/vllm-project/semantic-router/src/semantic-router/pkg/anthropic"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/authz"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/headers"
@@ -24,7 +24,19 @@ func (r *OpenAIRouter) handleAnthropicRouting(
 	decisionName string,
 	ctx *RequestContext,
 ) (*ext_proc.ProcessingResponse, error) {
-	logging.Infof("Routing to Anthropic API via Envoy for model: %s (original: %s)", targetModel, originalModel)
+	return r.handleAnthropicRoutingWithReasoning(openAIRequest, originalModel, targetModel, decisionName, false, ctx)
+}
+
+// handleAnthropicRoutingWithReasoning handles routing to Anthropic Claude API with optional thinking/reasoning.
+func (r *OpenAIRouter) handleAnthropicRoutingWithReasoning(
+	openAIRequest *openai.ChatCompletionNewParams,
+	originalModel string,
+	targetModel string,
+	decisionName string,
+	useReasoning bool,
+	ctx *RequestContext,
+) (*ext_proc.ProcessingResponse, error) {
+	logging.Debugf("Routing to Anthropic API via Envoy for model: %s (original: %s, reasoning: %v)", targetModel, originalModel, useReasoning)
 	if ctx.ExpectStreamingResponse {
 		logging.Warnf("Streaming not supported for Anthropic backend, rejecting request for model: %s", targetModel)
 		return r.createErrorResponse(
@@ -37,12 +49,13 @@ func (r *OpenAIRouter) handleAnthropicRouting(
 		openAIRequest,
 		targetModel,
 		decisionName,
+		useReasoning,
 		ctx,
 	)
 	if errorResponse != nil {
 		return errorResponse, nil
 	}
-	logging.Infof("Transformed request for Anthropic API, body size: %d bytes", len(anthropicBody))
+	logging.Debugf("Transformed request for Anthropic API, body size: %d bytes", len(anthropicBody))
 	return r.buildAnthropicRoutingResponse(targetModel, accessKey, anthropicBody, ctx), nil
 }
 
@@ -50,6 +63,7 @@ func (r *OpenAIRouter) prepareAnthropicRoutingRequest(
 	openAIRequest *openai.ChatCompletionNewParams,
 	targetModel string,
 	decisionName string,
+	useReasoning bool,
 	ctx *RequestContext,
 ) (string, []byte, *ext_proc.ProcessingResponse) {
 	accessKey, err := r.CredentialResolver.KeyForProvider(authz.ProviderAnthropic, targetModel, ctx.Headers)
@@ -64,7 +78,18 @@ func (r *OpenAIRouter) prepareAnthropicRoutingRequest(
 	}
 
 	openAIRequest.Model = targetModel
-	anthropicBody, err := anthropic.ToAnthropicRequestBody(openAIRequest)
+
+	// Build thinking config from routing decision
+	var thinkingConfig *anthropic_pkg.ThinkingConfig
+	if useReasoning {
+		thinkingConfig = &anthropic_pkg.ThinkingConfig{
+			Enabled:      true,
+			BudgetTokens: anthropic_pkg.DefaultThinkingBudgetTokens,
+		}
+		logging.Debugf("Enabling Anthropic thinking for model %s (decision: %s)", targetModel, decisionName)
+	}
+
+	anthropicBody, err := anthropic_pkg.ToAnthropicRequestBodyWithThinking(openAIRequest, thinkingConfig)
 	if err != nil {
 		logging.Errorf("Failed to transform request to Anthropic format: %v", err)
 		return "", nil, r.createErrorResponse(500, fmt.Sprintf("Request transformation error: %v", err))
@@ -86,7 +111,7 @@ func (r *OpenAIRouter) buildAnthropicRoutingResponse(
 	anthropicBody []byte,
 	ctx *RequestContext,
 ) *ext_proc.ProcessingResponse {
-	anthropicHeaders := anthropic.BuildRequestHeaders(accessKey, len(anthropicBody))
+	anthropicHeaders := anthropic_pkg.BuildRequestHeaders(accessKey, len(anthropicBody))
 	setHeaders := make([]*core.HeaderValueOption, 0, len(anthropicHeaders)+2)
 	for _, header := range anthropicHeaders {
 		setHeaders = append(setHeaders, &core.HeaderValueOption{
@@ -113,7 +138,7 @@ func (r *OpenAIRouter) buildAnthropicRoutingResponse(
 					ClearRouteCache: true,
 					HeaderMutation: &ext_proc.HeaderMutation{
 						SetHeaders:    setHeaders,
-						RemoveHeaders: append(anthropic.HeadersToRemove(), r.CredentialResolver.HeadersToStrip()...),
+						RemoveHeaders: append(anthropic_pkg.HeadersToRemove(), r.CredentialResolver.HeadersToStrip()...),
 					},
 					BodyMutation: &ext_proc.BodyMutation{
 						Mutation: &ext_proc.BodyMutation_Body{

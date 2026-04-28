@@ -77,6 +77,9 @@ func (r *OpenAIRouter) runRequestPreRoutingStages(
 		return requestDecisionState{}, r.createErrorResponse(403, authzErr.Error())
 	}
 
+	if selectedModel == "" {
+		selectedModel = originalModel
+	}
 	metrics.RecordModelRequest(selectedModel)
 	if resp := r.handleFastResponse(ctx, decisionName); resp != nil {
 		r.startRouterReplay(ctx, originalModel, selectedModel, decisionName)
