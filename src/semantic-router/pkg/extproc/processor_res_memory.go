@@ -25,6 +25,11 @@ func (r *OpenAIRouter) scheduleResponseMemoryStore(ctx *RequestContext, response
 	currentUserMessage := extractCurrentUserMessage(ctx)
 	currentAssistantResponse := extractAssistantResponseText(responseBody)
 	go func() {
+		defer func() {
+			if rec := recover(); rec != nil {
+				logging.Errorf("Memory store goroutine: recovered panic: %v", rec)
+			}
+		}()
 		bgCtx := context.Background()
 		sessionID, userID, history, err := extractMemoryInfo(ctx)
 		if err != nil {

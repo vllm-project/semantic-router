@@ -373,6 +373,11 @@ func populateFromReplay(storage lookuptable.LookupTableStorage, reader store.Rea
 func startLookupTablePopulator(storage lookuptable.LookupTableStorage, reader store.Reader, interval time.Duration) func() {
 	ctx, cancel := context.WithCancel(context.Background())
 	go func() {
+		defer func() {
+			if rec := recover(); rec != nil {
+				logging.Errorf("Lookup table populator goroutine: recovered panic: %v", rec)
+			}
+		}()
 		ticker := time.NewTicker(interval)
 		defer ticker.Stop()
 		for {

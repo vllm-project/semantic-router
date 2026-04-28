@@ -9,6 +9,16 @@
 //!
 //! The variant is auto-detected from config.json or can be explicitly specified.
 
+/// Maximum input length (in tokens) used for classification inference.
+///
+/// ModernBERT-32K and mmBERT-32K use global attention (full quadratic O(n²))
+/// every `global_attn_every_n_layers` layers (≈7–8 out of 22). At 4000 tokens
+/// those layers allocate ~6–8 GB of activation memory per batch item, which
+/// reliably triggers an OOM kill with no container logs. Classification tasks
+/// (intent, jailbreak, PII, feedback, fact-check) don't benefit from sequences
+/// longer than 512 tokens. This cap matches `max_length` in tokenizer_config.json.
+pub(crate) const MAX_CLASSIFICATION_SEQ_LEN: usize = 512;
+
 use crate::core::{config_errors, processing_errors, ModelErrorType, UnifiedError};
 use crate::model_error;
 use anyhow::{Error as E, Result};
@@ -740,9 +750,12 @@ impl TraditionalModernBertClassifier {
             candle_core::Error::from(unified_err)
         })?;
 
-        // 9. Load training_config.json for 32K models to get actual max_length
-        // For Extended32K variant, check training_config.json for model_max_length
-        let effective_max_length = if variant == ModernBertVariant::Extended32K {
+        // 9. Load training_config.json for 32K models to get actual max_length.
+        // The architectural max from training_config is recorded but then capped at
+        // MAX_CLASSIFICATION_SEQ_LEN. ModernBERT-32K / mmBERT-32K have global-attention
+        // layers that scale O(n²); at 4000 tokens they OOM the container with no logs.
+        // Classification tasks don't benefit from sequences longer than 512 tokens.
+        let model_max_length = if variant == ModernBertVariant::Extended32K {
             let training_config_path = format!("{}/training_config.json", model_path);
             if let Ok(training_config_str) = std::fs::read_to_string(&training_config_path) {
                 if let Ok(training_config_json) =
@@ -763,6 +776,7 @@ impl TraditionalModernBertClassifier {
         } else {
             variant.max_length()
         };
+        let effective_max_length = model_max_length.min(MAX_CLASSIFICATION_SEQ_LEN);
 
         // 10. Create unified tokenizer wrapper with variant-specific config
         let tokenizer_config = crate::core::tokenization::TokenizationConfig {
@@ -970,8 +984,9 @@ impl TraditionalModernBertClassifier {
             candle_core::Error::from(unified_err)
         })?;
 
-        // 9. Determine effective max length (for Extended32K, check training_config.json)
-        let effective_max_length = if variant == ModernBertVariant::Extended32K {
+        // 9. Determine effective max length (for Extended32K, check training_config.json).
+        // Always cap at MAX_CLASSIFICATION_SEQ_LEN — see comment in load_from_directory_with_variant.
+        let model_max_length_custom = if variant == ModernBertVariant::Extended32K {
             let training_config_path = format!("{}/training_config.json", base_model_path);
             if let Ok(training_config_str) = std::fs::read_to_string(&training_config_path) {
                 if let Ok(training_config_json) =
@@ -981,21 +996,17 @@ impl TraditionalModernBertClassifier {
                         .get("model_max_length")
                         .and_then(|v| v.as_u64())
                         .map(|v| v as usize)
-                        .unwrap_or_else(|| {
-                            // Warning: training_config.json found but model_max_length not set, using variant default
-                            variant.max_length()
-                        })
+                        .unwrap_or_else(|| variant.max_length())
                 } else {
-                    // Warning: Failed to parse training_config.json for Extended32K variant, using variant default
                     variant.max_length()
                 }
             } else {
-                // Warning: training_config.json not found for Extended32K variant, using variant default
                 variant.max_length()
             }
         } else {
             variant.max_length()
         };
+        let effective_max_length = model_max_length_custom.min(MAX_CLASSIFICATION_SEQ_LEN);
 
         // 10. Create unified tokenizer wrapper with variant-specific config
         let tokenizer_config = crate::core::tokenization::TokenizationConfig {
@@ -1249,12 +1260,14 @@ impl TraditionalModernBertTokenClassifier {
         let base_tokenizer = Tokenizer::from_file(&tokenizer_path)
             .map_err(|e| E::msg(format!("Failed to load tokenizer: {}", e)))?;
 
-        // Create dual-path compatible tokenizer based on variant
+        // Create dual-path compatible tokenizer based on variant.
+        // Always cap at MAX_CLASSIFICATION_SEQ_LEN — see comment at the top of this file.
         let tokenizer = match variant {
             ModernBertVariant::Multilingual | ModernBertVariant::Multilingual32K => {
-                crate::core::tokenization::create_mmbert_compatibility_tokenizer(
+                crate::core::tokenization::create_mmbert_compatibility_tokenizer_with_max_length(
                     base_tokenizer,
                     device.clone(),
+                    MAX_CLASSIFICATION_SEQ_LEN,
                 )?
             }
             ModernBertVariant::Standard | ModernBertVariant::Extended32K => {
