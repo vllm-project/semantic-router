@@ -178,29 +178,6 @@ func TestProcessPanicRecovery_ErrorPanic(t *testing.T) {
 		t.Fatalf("CreateTestRouter: %v", err)
 	}
 
-	type errorPanicStream struct {
-		MockStream
-	}
-	stream := &struct {
-		MockStream
-	}{
-		MockStream: MockStream{Ctx: t.Context()},
-	}
-
-	// Override Recv to panic with an error value.
-	type recvPanicker struct {
-		MockStream
-	}
-
-	// Use a custom adapter since we can't inline method overrides in Go.
-	panicStream := &recvPanicker{
-		MockStream: MockStream{Ctx: t.Context()},
-	}
-	_ = panicStream
-	_ = stream
-
-	// For the error-panic case we reuse panicOnRecvStream — any non-nil panic
-	// payload is sufficient.
 	ep := &panicOnRecvStream{
 		MockStream: MockStream{Ctx: t.Context()},
 		panicMsg:   fmt.Sprintf("%v", fmt.Errorf("candle OOM: alloc failed")),
