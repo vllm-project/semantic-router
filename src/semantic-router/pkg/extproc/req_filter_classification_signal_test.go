@@ -155,14 +155,14 @@ func TestApplyMaxEvaluationCharsNoLimit(t *testing.T) {
 	r := routerWithEvalLimit(0)
 	text := strings.Repeat("a", 50000)
 	got := r.applyMaxEvaluationChars(text)
-	assert.Equal(t, 50000, len(got), "limit=0 should not truncate")
+	assert.Len(t, got, 50000, "limit=0 should not truncate")
 }
 
 func TestApplyMaxEvaluationCharsNegativeNoLimit(t *testing.T) {
 	r := routerWithEvalLimit(-1)
 	text := strings.Repeat("b", 20000)
 	got := r.applyMaxEvaluationChars(text)
-	assert.Equal(t, 20000, len(got), "limit=-1 should not truncate")
+	assert.Len(t, got, 20000, "limit=-1 should not truncate")
 }
 
 func TestApplyMaxEvaluationCharsTruncates(t *testing.T) {
@@ -170,7 +170,7 @@ func TestApplyMaxEvaluationCharsTruncates(t *testing.T) {
 	r := routerWithEvalLimit(limit)
 	text := strings.Repeat("x", 25000)
 	got := r.applyMaxEvaluationChars(text)
-	assert.Equal(t, limit, len(got), "giant prompt must be capped to limit")
+	assert.Len(t, got, limit, "giant prompt must be capped to limit")
 }
 
 func TestApplyMaxEvaluationCharsBelowLimitUnchanged(t *testing.T) {
@@ -184,7 +184,7 @@ func TestApplyMaxEvaluationCharsExactLimit(t *testing.T) {
 	r := routerWithEvalLimit(limit)
 	text := strings.Repeat("z", limit)
 	got := r.applyMaxEvaluationChars(text)
-	assert.Equal(t, limit, len(got), "text at exactly the limit should not be truncated")
+	assert.Len(t, got, limit, "text at exactly the limit should not be truncated")
 }
 
 func TestPrepareSignalEvaluationInputRespectsEvalLimit(t *testing.T) {
@@ -193,6 +193,6 @@ func TestPrepareSignalEvaluationInputRespectsEvalLimit(t *testing.T) {
 	input := r.prepareSignalEvaluationInput(signalConversationHistory{
 		currentUserMessage: strings.Repeat("q", 5000),
 	})
-	require.Equal(t, limit, len(input.evaluationText), "evaluationText must be capped at max_evaluation_chars")
+	require.Len(t, input.evaluationText, limit, "evaluationText must be capped at max_evaluation_chars")
 	assert.LessOrEqual(t, len(input.compressedText), limit, "compressedText must not exceed cap")
 }
