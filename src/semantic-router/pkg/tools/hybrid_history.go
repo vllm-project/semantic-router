@@ -77,12 +77,18 @@ func filterAndRankHybridHistory(
 ) []openai.ChatCompletionToolParam {
 	cfg := resolveHybridHistoryParams(advanced.HybridHistory)
 	names := trimToolHistory(toolHistory, cfg.historyHorizon)
+	a := newHybridRankArgs(query, names, cfg, advanced, selectedCategory, decisionConfidence)
 
 	if shouldFallbackHybridToSemantic(names, cfg) {
-		return selectTopKBySimilarity(filtered, topK)
+		passing := make([]ToolSimilarity, 0, len(filtered))
+		for _, candidate := range filtered {
+			if _, ok := hybridCandidateScore(candidate, a); ok {
+				passing = append(passing, candidate)
+			}
+		}
+		return selectTopKBySimilarity(passing, topK)
 	}
 
-	a := newHybridRankArgs(query, names, cfg, advanced, selectedCategory, decisionConfidence)
 	scored := make([]scoredCandidate, 0, len(filtered))
 	for _, candidate := range filtered {
 		if h, ok := hybridCandidateScore(candidate, a); ok {
@@ -91,7 +97,7 @@ func filterAndRankHybridHistory(
 	}
 
 	if len(scored) == 0 {
-		return selectTopKBySimilarity(filtered, topK)
+		return []openai.ChatCompletionToolParam{}
 	}
 	sortScoredCandidatesByCombinedThenSimilarity(scored)
 	return topKToolsFromScored(scored, topK)
