@@ -18,7 +18,17 @@ use ort::value::Tensor;
 use std::collections::HashMap;
 use std::path::Path;
 use std::sync::Arc;
-use tokenizers::Tokenizer;
+use tokenizers::{Tokenizer, TruncationParams, TruncationDirection, TruncationStrategy};
+
+/// Maximum sequence length for classification inference.
+///
+/// ModernBERT-32k has global attention layers (every 3 layers = 7–8 out of 22)
+/// that scale quadratically with sequence length. At ~4000 tokens the global-attention
+/// layers require roughly 6–8 GB of activation memory per batch item, reliably
+/// triggering an OOM kill with no container logs. Classification tasks (intent,
+/// jailbreak, PII) only need the first few hundred tokens to produce a reliable
+/// signal, so we cap at 512 — matching the `max_length` field in tokenizer_config.json.
+const MAX_CLASSIFICATION_SEQ_LEN: usize = 512;
 
 // ============================================================================
 // Classification Types
@@ -206,7 +216,20 @@ impl MmBertSequenceClassifier {
             ));
         }
 
-        let tokenizer = Tokenizer::from_file(&tokenizer_path)
+        let mut tokenizer = Tokenizer::from_file(&tokenizer_path)
+            .map_err(|e| errors::tokenization_error(&e.to_string()))?;
+
+        // Apply truncation at load time so encode_batch never produces sequences
+        // longer than MAX_CLASSIFICATION_SEQ_LEN. The tokenizer.json loaded above
+        // has no truncation set (tokenizer_config.json max_length=512 is Python-side
+        // metadata that the Rust tokenizers crate does not apply automatically).
+        tokenizer
+            .with_truncation(Some(TruncationParams {
+                max_length: MAX_CLASSIFICATION_SEQ_LEN,
+                strategy: TruncationStrategy::LongestFirst,
+                direction: TruncationDirection::Right,
+                stride: 0,
+            }))
             .map_err(|e| errors::tokenization_error(&e.to_string()))?;
 
         // Find ONNX model candidates and initialize with fallback.
@@ -489,9 +512,14 @@ impl MmBertSequenceClassifier {
             .encode_batch(texts.to_vec(), true)
             .map_err(|e| errors::tokenization_error(&e.to_string()))?;
 
-        // Find max sequence length
+        // Find max sequence length; apply both the model's architectural limit and
+        // the classification safety cap. The tokenizer already enforces
+        // MAX_CLASSIFICATION_SEQ_LEN via truncation, but this second guard ensures
+        // correctness even if the tokenizer is replaced or called without truncation.
         let max_len = encodings.iter().map(|e| e.len()).max().unwrap_or(0);
-        let max_len = max_len.min(self.config.max_position_embeddings);
+        let max_len = max_len
+            .min(self.config.max_position_embeddings)
+            .min(MAX_CLASSIFICATION_SEQ_LEN);
 
         // Prepare input tensors
         let batch_size = texts.len();
@@ -805,7 +833,16 @@ impl MmBertTokenClassifier {
             ));
         }
 
-        let tokenizer = Tokenizer::from_file(&tokenizer_path)
+        let mut tokenizer = Tokenizer::from_file(&tokenizer_path)
+            .map_err(|e| errors::tokenization_error(&e.to_string()))?;
+
+        tokenizer
+            .with_truncation(Some(TruncationParams {
+                max_length: MAX_CLASSIFICATION_SEQ_LEN,
+                strategy: TruncationStrategy::LongestFirst,
+                direction: TruncationDirection::Right,
+                stride: 0,
+            }))
             .map_err(|e| errors::tokenization_error(&e.to_string()))?;
 
         let onnx_candidates = MmBertSequenceClassifier::find_onnx_models(&model_path)?;
@@ -835,7 +872,10 @@ impl MmBertTokenClassifier {
             .encode(text, true)
             .map_err(|e| errors::tokenization_error(&e.to_string()))?;
 
-        let seq_len = encoding.len().min(self.config.max_position_embeddings);
+        let seq_len = encoding
+            .len()
+            .min(self.config.max_position_embeddings)
+            .min(MAX_CLASSIFICATION_SEQ_LEN);
 
         // Prepare inputs
         let mut input_ids = vec![self.config.pad_token_id as i64; seq_len];
@@ -1137,5 +1177,225 @@ mod tests {
         assert_eq!(cloned.start, entity.start);
         assert_eq!(cloned.end, entity.end);
         assert_eq!(cloned.confidence, entity.confidence);
+    }
+
+    // =========================================================================
+    // Long-prompt truncation tests
+    //
+    // These tests verify that the tokenizer enforces MAX_CLASSIFICATION_SEQ_LEN
+    // (512) regardless of raw input length, preventing the quadratic global-
+    // attention OOM that was observed at ~4 000 tokens (GitHub issue #1843).
+    //
+    // The tests load tokenizer.json from the mmBERT-32K model on disk and are
+    // therefore skipped automatically when running in CI (where model files are
+    // not present) by checking the `CI` environment variable.
+    // =========================================================================
+
+    /// Return the path to the mmBERT-32K ONNX tokenizer, relative to the
+    /// `onnx-binding` workspace root.
+    fn mmbert_onnx_tokenizer_path() -> std::path::PathBuf {
+        std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .parent()
+            .unwrap()
+            .join("models/mmbert32k-intent-classifier-merged/onnx/tokenizer.json")
+    }
+
+    /// Load the long-prompt fixture JSON bundled in `test_data/`.
+    fn load_long_prompt_fixtures() -> serde_json::Value {
+        let fixture_path = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .join("test_data/long_prompt_fixtures.json");
+        let raw = std::fs::read_to_string(&fixture_path)
+            .unwrap_or_else(|_| panic!("fixture not found at {:?}", fixture_path));
+        serde_json::from_str(&raw).expect("invalid fixture JSON")
+    }
+
+    /// Helper: tokenize `text` with the given `Tokenizer` and return the
+    /// token count after the tokenizer's internal truncation has been applied.
+    fn token_count_after_encode(tokenizer: &tokenizers::Tokenizer, text: &str) -> usize {
+        tokenizer
+            .encode(text, true)
+            .expect("encode failed")
+            .get_ids()
+            .len()
+    }
+
+    /// Confirm the constant value that guards against OOM.
+    #[test]
+    fn test_max_classification_seq_len_is_512() {
+        assert_eq!(
+            MAX_CLASSIFICATION_SEQ_LEN, 512,
+            "MAX_CLASSIFICATION_SEQ_LEN must be 512 to prevent quadratic-attention OOM"
+        );
+    }
+
+    /// Verify that MmBertSequenceClassifier::load configures the tokenizer so
+    /// that a ~4 000-token prompt is truncated to ≤ 512 tokens.
+    ///
+    /// Skipped in CI (`CI` env var set) because model files are not present.
+    #[test]
+    fn test_onnx_tokenizer_truncates_long_prompt() {
+        if std::env::var("CI").is_ok() {
+            eprintln!("skipping test_onnx_tokenizer_truncates_long_prompt: CI environment detected");
+            return;
+        }
+
+        let tokenizer_path = mmbert_onnx_tokenizer_path();
+        if !tokenizer_path.exists() {
+            eprintln!(
+                "skipping test_onnx_tokenizer_truncates_long_prompt: tokenizer not found at {:?}",
+                tokenizer_path
+            );
+            return;
+        }
+
+        let fixtures = load_long_prompt_fixtures();
+        let prompts = fixtures["prompts"].as_array().expect("prompts array");
+
+        // Load and configure the tokenizer the same way MmBertSequenceClassifier::load does.
+        let mut tokenizer = tokenizers::Tokenizer::from_file(&tokenizer_path)
+            .expect("failed to load tokenizer");
+        tokenizer
+            .with_truncation(Some(tokenizers::TruncationParams {
+                max_length: MAX_CLASSIFICATION_SEQ_LEN,
+                strategy: TruncationStrategy::LongestFirst,
+                direction: TruncationDirection::Right,
+                stride: 0,
+            }))
+            .expect("truncation config failed");
+
+        for prompt in prompts {
+            let id = prompt["id"].as_str().unwrap_or("?");
+            let text = prompt["text"].as_str().expect("text field");
+            let approx_untruncated = prompt["approx_tokens_untruncated"].as_u64().unwrap_or(0);
+
+            let count = token_count_after_encode(&tokenizer, text);
+
+            assert!(
+                count <= MAX_CLASSIFICATION_SEQ_LEN,
+                "prompt '{}' produced {} tokens (approx untruncated: {}); expected ≤ {}",
+                id,
+                count,
+                approx_untruncated,
+                MAX_CLASSIFICATION_SEQ_LEN,
+            );
+        }
+    }
+
+    /// Verify that a prompt long enough to OOM the model (≥ 4 000 raw tokens)
+    /// does NOT reach the model with more than MAX_CLASSIFICATION_SEQ_LEN tokens.
+    ///
+    /// This is the direct regression test for GitHub issue #1843.
+    ///
+    /// Skipped in CI.
+    #[test]
+    fn test_onnx_4k_prompt_truncated_to_safe_length() {
+        if std::env::var("CI").is_ok() {
+            eprintln!("skipping test_onnx_4k_prompt_truncated_to_safe_length: CI environment");
+            return;
+        }
+
+        let tokenizer_path = mmbert_onnx_tokenizer_path();
+        if !tokenizer_path.exists() {
+            eprintln!(
+                "skipping test_onnx_4k_prompt_truncated_to_safe_length: tokenizer not found at {:?}",
+                tokenizer_path
+            );
+            return;
+        }
+
+        let fixtures = load_long_prompt_fixtures();
+        let long_prompt = fixtures["prompts"]
+            .as_array()
+            .and_then(|p| p.iter().find(|x| x["id"] == "long_4k"))
+            .expect("long_4k fixture missing");
+
+        let text = long_prompt["text"].as_str().expect("text");
+        let approx_raw = long_prompt["approx_tokens_untruncated"]
+            .as_u64()
+            .unwrap_or(0);
+
+        // Confirm the fixture is actually long enough to trigger the OOM without the fix.
+        assert!(
+            approx_raw > 2048,
+            "fixture too short ({} est. tokens); update long_prompt_fixtures.json",
+            approx_raw
+        );
+
+        // Configure tokenizer as the classifier does.
+        let mut tokenizer = tokenizers::Tokenizer::from_file(&tokenizer_path)
+            .expect("load tokenizer");
+        tokenizer
+            .with_truncation(Some(tokenizers::TruncationParams {
+                max_length: MAX_CLASSIFICATION_SEQ_LEN,
+                strategy: TruncationStrategy::LongestFirst,
+                direction: TruncationDirection::Right,
+                stride: 0,
+            }))
+            .expect("truncation config");
+
+        let count = token_count_after_encode(&tokenizer, text);
+        assert_eq!(
+            count, MAX_CLASSIFICATION_SEQ_LEN,
+            "4k prompt must produce exactly MAX_CLASSIFICATION_SEQ_LEN={} tokens after truncation, got {}",
+            MAX_CLASSIFICATION_SEQ_LEN, count
+        );
+    }
+
+    /// Verify that a short prompt is NOT over-truncated: a normal user message
+    /// must keep all its tokens.
+    ///
+    /// Skipped in CI.
+    #[test]
+    fn test_onnx_short_prompt_not_truncated() {
+        if std::env::var("CI").is_ok() {
+            eprintln!("skipping test_onnx_short_prompt_not_truncated: CI environment");
+            return;
+        }
+
+        let tokenizer_path = mmbert_onnx_tokenizer_path();
+        if !tokenizer_path.exists() {
+            eprintln!(
+                "skipping test_onnx_short_prompt_not_truncated: tokenizer not found at {:?}",
+                tokenizer_path
+            );
+            return;
+        }
+
+        let fixtures = load_long_prompt_fixtures();
+        let short = fixtures["prompts"]
+            .as_array()
+            .and_then(|p| p.iter().find(|x| x["id"] == "short_baseline"))
+            .expect("short_baseline fixture missing");
+
+        let text = short["text"].as_str().expect("text");
+
+        // Tokenizer without truncation limit to get the "true" token count.
+        let baseline_tokenizer = tokenizers::Tokenizer::from_file(&tokenizer_path)
+            .expect("load tokenizer");
+        let baseline_count = token_count_after_encode(&baseline_tokenizer, text);
+
+        // Tokenizer with the production truncation limit.
+        let mut truncating_tokenizer = tokenizers::Tokenizer::from_file(&tokenizer_path)
+            .expect("load tokenizer");
+        truncating_tokenizer
+            .with_truncation(Some(tokenizers::TruncationParams {
+                max_length: MAX_CLASSIFICATION_SEQ_LEN,
+                strategy: TruncationStrategy::LongestFirst,
+                direction: TruncationDirection::Right,
+                stride: 0,
+            }))
+            .expect("truncation config");
+        let truncated_count = token_count_after_encode(&truncating_tokenizer, text);
+
+        assert_eq!(
+            baseline_count, truncated_count,
+            "short prompt ({} tokens) should not be truncated by MAX_CLASSIFICATION_SEQ_LEN={}",
+            baseline_count, MAX_CLASSIFICATION_SEQ_LEN
+        );
+        assert!(
+            truncated_count < MAX_CLASSIFICATION_SEQ_LEN,
+            "short prompt unexpectedly long: {} tokens",
+            truncated_count
+        );
     }
 }

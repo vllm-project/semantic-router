@@ -269,6 +269,12 @@ func (r *OpenAIRouter) executeBoth(ctx *RequestContext, cfg *config.RouterConfig
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
+		defer func() {
+			if rec := recover(); rec != nil {
+				logging.Errorf("AR text goroutine: recovered panic: %v", rec)
+				textErr = fmt.Errorf("AR text call panicked: %v", rec)
+			}
+		}()
 		textResp, textErr = r.callARModel(ctx, cfg, openAIRequest, arModel)
 	}()
 
@@ -276,6 +282,12 @@ func (r *OpenAIRouter) executeBoth(ctx *RequestContext, cfg *config.RouterConfig
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
+		defer func() {
+			if rec := recover(); rec != nil {
+				logging.Errorf("Diffusion image goroutine: recovered panic: %v", rec)
+				imgErr = fmt.Errorf("diffusion call panicked: %v", rec)
+			}
+		}()
 		imgRes, imgErr = r.generateImage(ctx, cfg, diffusionModel)
 	}()
 

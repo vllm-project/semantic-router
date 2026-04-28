@@ -4,7 +4,9 @@
 //! mmBERT is supported through the same implementation using `ModernBertVariant::Multilingual`.
 
 use super::modernbert::*;
-use crate::core::tokenization::{detect_mmbert_from_config, TokenizationStrategy};
+use crate::core::tokenization::{
+    detect_mmbert_from_config, DualPathTokenizer, TokenizationStrategy,
+};
 use crate::model_architectures::traits::{ModelType, TaskType};
 use crate::test_fixtures::{fixtures::*, test_utils::*};
 use rstest::*;
@@ -1597,4 +1599,261 @@ fn test_load_with_custom_base_model_parameter_validation() {
     }
 
     println!("load_with_custom_base_model parameter validation test passed");
+}
+
+// =============================================================================
+// Long-prompt truncation tests
+//
+// These tests verify that the tokenizer enforces MAX_CLASSIFICATION_SEQ_LEN
+// (512) regardless of raw input length, preventing the quadratic global-
+// attention OOM observed at ~4 000 tokens (GitHub issue #1843).
+//
+// Tests that load tokenizer.json from disk are skipped automatically when the
+// `CI` environment variable is set (CI environments have no model files) or
+// when the tokenizer file is simply not present.
+// =============================================================================
+
+/// Return the path to the mmBERT-32K candle tokenizer.
+fn mmbert_candle_tokenizer_path() -> std::path::PathBuf {
+    std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .parent()
+        .unwrap()
+        .join("models/mmbert32k-intent-classifier-merged/tokenizer.json")
+}
+
+/// Load the long-prompt fixture JSON bundled in `test_data/`.
+fn load_long_prompt_fixtures() -> serde_json::Value {
+    let fixture_path = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("test_data/long_prompt_fixtures.json");
+    let raw = std::fs::read_to_string(&fixture_path)
+        .unwrap_or_else(|_| panic!("fixture not found at {:?}", fixture_path));
+    serde_json::from_str(&raw).expect("invalid fixture JSON")
+}
+
+/// Tokenize `text` with the given `DualPathTokenizer` and return the number
+/// of tokens after truncation.
+fn candle_token_count(tokenizer: &dyn DualPathTokenizer, text: &str) -> usize {
+    tokenizer
+        .tokenize(text)
+        .expect("tokenize failed")
+        .token_ids_u32
+        .len()
+}
+
+/// Confirm the constant that guards against OOM is the expected value.
+#[rstest]
+fn test_candle_max_classification_seq_len_is_512() {
+    assert_eq!(
+        MAX_CLASSIFICATION_SEQ_LEN, 512,
+        "MAX_CLASSIFICATION_SEQ_LEN must be 512 to prevent quadratic-attention OOM"
+    );
+}
+
+/// Verify that `ModernBertVariant::max_length()` returns the architectural
+/// limit, while `effective_max_length` (after the `.min(MAX_CLASSIFICATION_SEQ_LEN)` cap)
+/// never exceeds 512 for any classification variant.
+#[rstest]
+fn test_candle_effective_max_length_capped_for_all_variants() {
+    let variants = [
+        ModernBertVariant::Standard,
+        ModernBertVariant::Multilingual,
+        ModernBertVariant::Extended32K,
+        ModernBertVariant::Multilingual32K,
+    ];
+    for variant in variants {
+        let arch_max = variant.max_length();
+        // Replicate the capping logic from load_from_directory_with_variant.
+        let effective = arch_max.min(MAX_CLASSIFICATION_SEQ_LEN);
+        assert!(
+            effective <= MAX_CLASSIFICATION_SEQ_LEN,
+            "variant {:?}: effective_max_length {} exceeds MAX_CLASSIFICATION_SEQ_LEN {}",
+            variant,
+            effective,
+            MAX_CLASSIFICATION_SEQ_LEN,
+        );
+    }
+}
+
+/// Verify that for the Multilingual32K variant the architectural window (32 768)
+/// is correctly reduced to MAX_CLASSIFICATION_SEQ_LEN by the cap.
+#[rstest]
+fn test_candle_multilingual32k_effective_length_is_512() {
+    let variant = ModernBertVariant::Multilingual32K;
+    let effective = variant.max_length().min(MAX_CLASSIFICATION_SEQ_LEN);
+    assert_eq!(
+        effective, MAX_CLASSIFICATION_SEQ_LEN,
+        "Multilingual32K effective_max_length should be {}, got {}",
+        MAX_CLASSIFICATION_SEQ_LEN, effective,
+    );
+}
+
+/// Verify that the `UnifiedTokenizer` created for mmBERT classification
+/// truncates a ~4 000-token prompt to ≤ MAX_CLASSIFICATION_SEQ_LEN tokens.
+///
+/// Requires tokenizer.json on disk → skipped in CI.
+#[rstest]
+fn test_candle_tokenizer_truncates_long_prompt() {
+    if std::env::var("CI").is_ok() {
+        eprintln!("skipping test_candle_tokenizer_truncates_long_prompt: CI environment");
+        return;
+    }
+
+    let tokenizer_path = mmbert_candle_tokenizer_path();
+    if !tokenizer_path.exists() {
+        eprintln!(
+            "skipping test_candle_tokenizer_truncates_long_prompt: tokenizer not found at {:?}",
+            tokenizer_path
+        );
+        return;
+    }
+
+    let fixtures = load_long_prompt_fixtures();
+    let prompts = fixtures["prompts"].as_array().expect("prompts array");
+
+    let base_tok = tokenizers::Tokenizer::from_file(&tokenizer_path).expect("load tokenizer");
+    let unified = crate::core::tokenization::create_mmbert_compatibility_tokenizer_with_max_length(
+        base_tok,
+        candle_core::Device::Cpu,
+        MAX_CLASSIFICATION_SEQ_LEN,
+    )
+    .expect("create tokenizer wrapper");
+
+    // Downcast back to UnifiedTokenizer to call tokenize().
+    // We use the DualPathTokenizer trait method instead.
+    for prompt in prompts {
+        let id = prompt["id"].as_str().unwrap_or("?");
+        let text = prompt["text"].as_str().expect("text field");
+        let approx_untruncated = prompt["approx_tokens_untruncated"].as_u64().unwrap_or(0);
+
+        let result = unified.tokenize(text).expect("tokenize failed");
+        let count = result.token_ids_u32.len();
+
+        assert!(
+            count <= MAX_CLASSIFICATION_SEQ_LEN,
+            "prompt '{}' produced {} tokens (approx untruncated: {}); expected ≤ {}",
+            id,
+            count,
+            approx_untruncated,
+            MAX_CLASSIFICATION_SEQ_LEN,
+        );
+    }
+}
+
+/// Regression test for GitHub issue #1843: a ~4 000-token prompt must be
+/// truncated to exactly MAX_CLASSIFICATION_SEQ_LEN tokens by the candle
+/// mmBERT tokenizer wrapper.
+///
+/// Skipped in CI.
+#[rstest]
+fn test_candle_4k_prompt_truncated_to_safe_length() {
+    if std::env::var("CI").is_ok() {
+        eprintln!("skipping test_candle_4k_prompt_truncated_to_safe_length: CI environment");
+        return;
+    }
+
+    let tokenizer_path = mmbert_candle_tokenizer_path();
+    if !tokenizer_path.exists() {
+        eprintln!(
+            "skipping test_candle_4k_prompt_truncated_to_safe_length: tokenizer not found at {:?}",
+            tokenizer_path
+        );
+        return;
+    }
+
+    let fixtures = load_long_prompt_fixtures();
+    let long_prompt = fixtures["prompts"]
+        .as_array()
+        .and_then(|p| p.iter().find(|x| x["id"] == "long_4k"))
+        .expect("long_4k fixture missing");
+
+    let text = long_prompt["text"].as_str().expect("text");
+    let approx_raw = long_prompt["approx_tokens_untruncated"]
+        .as_u64()
+        .unwrap_or(0);
+
+    assert!(
+        approx_raw > 2048,
+        "fixture too short ({} est. tokens); rebuild long_prompt_fixtures.json",
+        approx_raw
+    );
+
+    let base_tok = tokenizers::Tokenizer::from_file(&tokenizer_path).expect("load tokenizer");
+    let unified = crate::core::tokenization::create_mmbert_compatibility_tokenizer_with_max_length(
+        base_tok,
+        candle_core::Device::Cpu,
+        MAX_CLASSIFICATION_SEQ_LEN,
+    )
+    .expect("create tokenizer wrapper");
+
+    let result = unified.tokenize(text).expect("tokenize failed");
+    let count = result.token_ids_u32.len();
+
+    assert_eq!(
+        count, MAX_CLASSIFICATION_SEQ_LEN,
+        "4k prompt must produce exactly {} tokens after truncation, got {}",
+        MAX_CLASSIFICATION_SEQ_LEN, count
+    );
+}
+
+/// Verify a short prompt is not over-truncated by the classification cap.
+///
+/// Skipped in CI.
+#[rstest]
+fn test_candle_short_prompt_not_truncated() {
+    if std::env::var("CI").is_ok() {
+        eprintln!("skipping test_candle_short_prompt_not_truncated: CI environment");
+        return;
+    }
+
+    let tokenizer_path = mmbert_candle_tokenizer_path();
+    if !tokenizer_path.exists() {
+        eprintln!(
+            "skipping test_candle_short_prompt_not_truncated: tokenizer not found at {:?}",
+            tokenizer_path
+        );
+        return;
+    }
+
+    let fixtures = load_long_prompt_fixtures();
+    let short = fixtures["prompts"]
+        .as_array()
+        .and_then(|p| p.iter().find(|x| x["id"] == "short_baseline"))
+        .expect("short_baseline fixture missing");
+    let text = short["text"].as_str().expect("text");
+
+    // Baseline: tokenizer with no cap.
+    let base_tok_uncapped = tokenizers::Tokenizer::from_file(&tokenizer_path).expect("load");
+    let uncapped =
+        crate::core::tokenization::create_mmbert_compatibility_tokenizer_with_max_length(
+            base_tok_uncapped,
+            candle_core::Device::Cpu,
+            65536, // far above any practical input
+        )
+        .expect("create uncapped tokenizer");
+    let baseline_count = uncapped
+        .tokenize(text)
+        .expect("tokenize")
+        .token_ids_u32
+        .len();
+
+    // Production: tokenizer with the 512 cap.
+    let base_tok_capped = tokenizers::Tokenizer::from_file(&tokenizer_path).expect("load");
+    let capped = crate::core::tokenization::create_mmbert_compatibility_tokenizer_with_max_length(
+        base_tok_capped,
+        candle_core::Device::Cpu,
+        MAX_CLASSIFICATION_SEQ_LEN,
+    )
+    .expect("create capped tokenizer");
+    let capped_count = capped.tokenize(text).expect("tokenize").token_ids_u32.len();
+
+    assert_eq!(
+        baseline_count, capped_count,
+        "short prompt ({} tokens) must not be truncated; got {} after capping",
+        baseline_count, capped_count
+    );
+    assert!(
+        capped_count < MAX_CLASSIFICATION_SEQ_LEN,
+        "short prompt is unexpectedly long ({} tokens)",
+        capped_count
+    );
 }

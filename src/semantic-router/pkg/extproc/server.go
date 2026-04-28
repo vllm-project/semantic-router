@@ -434,7 +434,15 @@ func (s *Server) watchConfigAndReload(ctx context.Context) {
 							"delay_ms": 300,
 						})
 						// Slight delay to let file settle
-						go func() { time.Sleep(300 * time.Millisecond); reload() }()
+						go func() {
+							defer func() {
+								if rec := recover(); rec != nil {
+									logging.Errorf("Config reload goroutine: recovered panic: %v", rec)
+								}
+							}()
+							time.Sleep(300 * time.Millisecond)
+							reload()
+						}()
 					} else {
 						logging.ComponentDebugEvent("extproc", "config_reload_debounced", map[string]interface{}{
 							"file": ev.Name,

@@ -3,6 +3,7 @@ package candle_binding
 import (
 	"context"
 	"encoding/base64"
+	"encoding/json"
 	"fmt"
 	"io"
 	"math"
@@ -4472,3 +4473,219 @@ func TestMultiModalInputValidation(t *testing.T) {
 // ================================================================================================
 // END OF MULTI-MODAL EMBEDDING TESTS
 // ================================================================================================
+
+// ================================================================================================
+// LONG-PROMPT OOM REGRESSION TESTS (GitHub issue #1843)
+//
+// These tests verify that the Go→CGO→Rust pipeline does NOT crash (OOM or panic)
+// when classifying prompts that are much longer than the model's practical input
+// limit. The Rust layer is responsible for truncation; these tests confirm that
+// the full stack stays stable end-to-end at the Go CGO boundary.
+//
+// All tests that require a loaded model skip automatically when:
+//   - the CI environment variable is set (no model files in CI), or
+//   - the model directory is absent on the local filesystem.
+//
+// The fixture file at test_data/long_prompt_fixtures.json contains three prompts:
+//   "long_4k"       — ~3 600 estimated tokens (regression target for #1843)
+//   "long_8k_stress"— ~7 300 estimated tokens (stress-tests the old 8K mmBERT path)
+//   "short_baseline"— ~21 estimated tokens   (must classify without truncation)
+// ================================================================================================
+
+// longPromptFixtures loads the shared fixture file once.
+func longPromptFixtures(t *testing.T) map[string]string {
+	t.Helper()
+	raw, err := os.ReadFile("test_data/long_prompt_fixtures.json")
+	if err != nil {
+		t.Skipf("long_prompt_fixtures.json not found (%v) – skipping long-prompt tests", err)
+	}
+	type prompt struct {
+		ID   string `json:"id"`
+		Text string `json:"text"`
+	}
+	var data struct {
+		Prompts []prompt `json:"prompts"`
+	}
+	if err := json.Unmarshal(raw, &data); err != nil {
+		t.Fatalf("invalid long_prompt_fixtures.json: %v", err)
+	}
+	m := make(map[string]string, len(data.Prompts))
+	for _, p := range data.Prompts {
+		m[p.ID] = p.Text
+	}
+	return m
+}
+
+// TestMmBert32KLongPromptNoOOM is the Go-layer regression test for issue #1843.
+// It passes a ~4 000-token prompt all the way through CGO to the Rust classifier
+// and verifies that the process does not crash (OOM or panic) and returns a
+// valid classification result.
+func TestMmBert32KLongPromptNoOOM(t *testing.T) {
+	if os.Getenv("CI") != "" {
+		t.Skip("skipping long-prompt OOM test in CI (no model files)")
+	}
+
+	modelPath := getMmBert32KModelPath("intent-classifier")
+	if _, err := os.Stat(modelPath); os.IsNotExist(err) {
+		t.Skipf("mmBERT-32K intent model not found at %s", modelPath)
+	}
+
+	if err := InitMmBert32KIntentClassifier(modelPath, true); err != nil {
+		t.Skipf("failed to initialise mmBERT-32K intent classifier: %v", err)
+	}
+
+	fixtures := longPromptFixtures(t)
+
+	cases := []struct{ name, key string }{
+		{"4k_tokens", "long_4k"},
+		{"8k_stress", "long_8k_stress"},
+		{"short_baseline", "short_baseline"},
+	}
+
+	for _, tc := range cases {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			text, ok := fixtures[tc.key]
+			if !ok {
+				t.Skipf("fixture %q not found in long_prompt_fixtures.json", tc.key)
+			}
+
+			// This call must NOT crash, panic, or OOM the process.
+			result, err := ClassifyMmBert32KIntent(text)
+			if err != nil {
+				t.Errorf("ClassifyMmBert32KIntent(%s): unexpected error: %v", tc.name, err)
+				return
+			}
+
+			if result.Confidence < 0.0 || result.Confidence > 1.0 {
+				t.Errorf("ClassifyMmBert32KIntent(%s): confidence %f out of [0,1]",
+					tc.name, result.Confidence)
+			}
+			t.Logf("%s => class=%d confidence=%.2f%%", tc.name, result.Class, result.Confidence*100)
+		})
+	}
+}
+
+// TestMmBert32KAllClassifiersLongPrompt exercises every mmBERT-32K classify
+// function (intent, jailbreak, factcheck, feedback, modality, PII) with the
+// long prompt to verify that no single entry point OOMs the process.
+func TestMmBert32KAllClassifiersLongPrompt(t *testing.T) {
+	if os.Getenv("CI") != "" {
+		t.Skip("skipping long-prompt OOM test in CI (no model files)")
+	}
+
+	fixtures := longPromptFixtures(t)
+	longText, ok := fixtures["long_4k"]
+	if !ok {
+		t.Skip("long_4k fixture missing")
+	}
+
+	// Sequence classifiers that return (ClassResult, error).
+	type seqCase struct {
+		name string
+		init func() error
+		call func(string) (ClassResult, error)
+	}
+
+	seqCases := []seqCase{
+		{
+			name: "intent",
+			init: func() error {
+				p := getMmBert32KModelPath("intent-classifier")
+				if _, err := os.Stat(p); os.IsNotExist(err) {
+					return err
+				}
+				return InitMmBert32KIntentClassifier(p, true)
+			},
+			call: ClassifyMmBert32KIntent,
+		},
+		{
+			name: "jailbreak",
+			init: func() error {
+				p := getMmBert32KModelPath("jailbreak-detector")
+				if _, err := os.Stat(p); os.IsNotExist(err) {
+					return err
+				}
+				return InitMmBert32KJailbreakClassifier(p, true)
+			},
+			call: ClassifyMmBert32KJailbreak,
+		},
+		{
+			name: "factcheck",
+			init: func() error {
+				p := getMmBert32KModelPath("factcheck-classifier")
+				if _, err := os.Stat(p); os.IsNotExist(err) {
+					return err
+				}
+				return InitMmBert32KFactcheckClassifier(p, true)
+			},
+			call: ClassifyMmBert32KFactcheck,
+		},
+		{
+			name: "feedback",
+			init: func() error {
+				p := getMmBert32KModelPath("feedback-detector")
+				if _, err := os.Stat(p); os.IsNotExist(err) {
+					return err
+				}
+				return InitMmBert32KFeedbackClassifier(p, true)
+			},
+			call: ClassifyMmBert32KFeedback,
+		},
+	}
+
+	for _, clf := range seqCases {
+		clf := clf
+		t.Run(clf.name, func(t *testing.T) {
+			if err := clf.init(); err != nil {
+				t.Skipf("%s classifier not available: %v", clf.name, err)
+			}
+			result, err := clf.call(longText)
+			if err != nil {
+				t.Errorf("%s long-prompt classification failed: %v", clf.name, err)
+				return
+			}
+			if result.Confidence < 0 || result.Confidence > 1.0 {
+				t.Errorf("%s: confidence %f out of [0,1]", clf.name, result.Confidence)
+			}
+			t.Logf("%s => class=%d confidence=%.2f%%", clf.name, result.Class, result.Confidence*100)
+		})
+	}
+
+	// Modality classifier returns ModalityResult.
+	t.Run("modality", func(t *testing.T) {
+		p := getMmBert32KModelPath("modality-router")
+		if _, err := os.Stat(p); os.IsNotExist(err) {
+			t.Skipf("modality classifier not available at %s", p)
+		}
+		if err := InitMmBert32KModalityClassifier(p, true); err != nil {
+			t.Skipf("modality classifier init failed: %v", err)
+		}
+		result, err := ClassifyMmBert32KModality(longText)
+		if err != nil {
+			t.Errorf("modality long-prompt classification failed: %v", err)
+			return
+		}
+		if result.Confidence < 0 || result.Confidence > 1.0 {
+			t.Errorf("modality: confidence %f out of [0,1]", result.Confidence)
+		}
+		t.Logf("modality => modality=%s confidence=%.2f%%", result.Modality, result.Confidence*100)
+	})
+
+	// PII token classifier returns ([]TokenEntity, error) — just verify no crash.
+	t.Run("pii_tokens", func(t *testing.T) {
+		p := getMmBert32KModelPath("pii-detector")
+		if _, err := os.Stat(p); os.IsNotExist(err) {
+			t.Skipf("PII classifier not available at %s", p)
+		}
+		if err := InitMmBert32KPIIClassifier(p, true); err != nil {
+			t.Skipf("PII classifier init failed: %v", err)
+		}
+		entities, err := ClassifyMmBert32KPII(longText)
+		if err != nil {
+			t.Errorf("PII long-prompt classification failed: %v", err)
+			return
+		}
+		t.Logf("pii_tokens => %d entities detected in long prompt", len(entities))
+	})
+}
