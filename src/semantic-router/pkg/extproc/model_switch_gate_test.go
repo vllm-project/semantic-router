@@ -2,6 +2,7 @@ package extproc
 
 import (
 	"testing"
+	"time"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/selection"
@@ -14,9 +15,8 @@ func TestApplyModelSwitchGateEnforcesStay(t *testing.T) {
 	selected := &selCtx.CandidateModels[1]
 
 	got, applied := router.applyModelSwitchGate(selCtx, result, selected, &RequestContext{
-		RequestID:           "req-1",
-		PreviousModel:       "current",
-		CacheWarmthEstimate: 0.8,
+		RequestID:     "req-1",
+		PreviousModel: "current",
 	})
 
 	if !applied {
@@ -33,9 +33,8 @@ func TestApplyModelSwitchGateShadowDoesNotOverride(t *testing.T) {
 	selected := &selCtx.CandidateModels[1]
 
 	got, applied := router.applyModelSwitchGate(selCtx, result, selected, &RequestContext{
-		RequestID:           "req-1",
-		PreviousModel:       "current",
-		CacheWarmthEstimate: 0.8,
+		RequestID:     "req-1",
+		PreviousModel: "current",
 	})
 
 	if applied {
@@ -43,6 +42,42 @@ func TestApplyModelSwitchGateShadowDoesNotOverride(t *testing.T) {
 	}
 	if got.Model != "candidate" {
 		t.Fatalf("expected candidate model, got %q", got.Model)
+	}
+}
+
+func TestApplyModelSwitchGateChatCompletionsAuditOnly(t *testing.T) {
+	// Chat Completions traffic has no per-turn model history yet; gate must
+	// fall back to audit-only and never override the selector even in enforce.
+	router := routerWithModelSwitchGate(selection.ModelSwitchGateModeEnforce)
+	selCtx, result := modelSwitchGateSelectionInput()
+	selCtx.SessionID = "" // simulate Chat Completions: no session derived yet
+	selected := &selCtx.CandidateModels[1]
+
+	got, applied := router.applyModelSwitchGate(selCtx, result, selected, &RequestContext{
+		RequestID:     "req-cc",
+		PreviousModel: "", // unavailable for Chat Completions today
+	})
+	if applied {
+		t.Fatalf("enforce must not override when previous_model is missing")
+	}
+	if got.Model != "candidate" {
+		t.Fatalf("expected candidate model unchanged, got %q", got.Model)
+	}
+}
+
+func TestEstimateGateCacheWarmthMissingHistoryReturnsFalse(t *testing.T) {
+	warmth, ok := estimateGateCacheWarmth("model-with-no-history-xyz", time.Now())
+	if ok {
+		t.Fatalf("expected ok=false with no history, got warmth=%v", warmth)
+	}
+	if warmth != 0 {
+		t.Fatalf("expected warmth=0 when missing, got %v", warmth)
+	}
+}
+
+func TestEstimateGateCacheWarmthEmptyModel(t *testing.T) {
+	if _, ok := estimateGateCacheWarmth("", time.Now()); ok {
+		t.Fatalf("empty model must return ok=false")
 	}
 }
 

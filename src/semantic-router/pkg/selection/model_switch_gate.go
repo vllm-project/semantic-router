@@ -25,7 +25,15 @@ type ModelSwitchGateInput struct {
 	SelectionResult  *SelectionResult
 	CurrentModel     string
 	CandidateModel   string
-	CacheWarmth      float64
+
+	// CacheWarmth is the current-model cache warmth prior (0=cold, 1=warm).
+	// Producers should compute this from latency history at request time, not
+	// from a response-side TTFT estimate.
+	CacheWarmth float64
+	// CacheWarmthOK indicates whether CacheWarmth is backed by reliable evidence.
+	// When false the gate records cache_warmth as a missing signal but still
+	// evaluates evidence (cache warmth contributes zero penalty in that case).
+	CacheWarmthOK bool
 }
 
 // ModelSwitchGateDecision is the auditable stay-vs-switch decision.
@@ -48,6 +56,9 @@ type ModelSwitchGateDecision struct {
 	CacheWarmth        float64
 	CacheWarmthPenalty float64
 	NetSwitchAdvantage float64
+	// NetSwitchAdvantageOK is true when evidence collection ran and
+	// NetSwitchAdvantage reflects a real comparison (not a fallback default).
+	NetSwitchAdvantageOK bool
 
 	StayCostEstimate   float64
 	SwitchCostEstimate float64
@@ -70,22 +81,25 @@ func (g *ModelSwitchGate) Evaluate(input ModelSwitchGateInput) ModelSwitchGateDe
 		return decision
 	}
 
-	if missing := requiredModelSwitchSignals(input, candidateModel); len(missing) > 0 {
-		return decision.withMissingFallback(missing)
+	blocking, informational := classifyModelSwitchSignals(input, candidateModel)
+	if len(blocking) > 0 {
+		return decision.withMissingFallback(append(blocking, informational...))
 	}
 	if input.CurrentModel == candidateModel {
 		decision.Reason = "candidate_is_current_model"
 		decision.FinalModel = input.CurrentModel
+		decision.MissingSignals = append(decision.MissingSignals, informational...)
 		return decision
 	}
 	if !candidateSetContains(input.SelectionContext.CandidateModels, input.CurrentModel) {
-		return decision.withMissingFallback([]string{"current_model_candidate"})
+		return decision.withMissingFallback(append([]string{"previous_model_not_in_candidates"}, informational...))
 	}
 
-	evidence, missing, ok := g.collectSwitchEvidence(input, candidateModel)
+	evidence, evidenceMissing, ok := g.collectSwitchEvidence(input, candidateModel)
 	if !ok {
-		return decision.withMissingFallback([]string{"selector_score_or_quality_gap"})
+		return decision.withMissingFallback(append([]string{"selector_score_or_quality_gap"}, informational...))
 	}
+	missing := append(informational, evidenceMissing...)
 	decision.applyEvidence(evidence, missing, gateConfig(g))
 
 	if decision.WouldSwitch {
@@ -132,20 +146,24 @@ func newModelSwitchGateDecision(g *ModelSwitchGate, input ModelSwitchGateInput, 
 	}
 }
 
-func requiredModelSwitchSignals(input ModelSwitchGateInput, candidateModel string) []string {
-	missing := make([]string, 0, 4)
+// classifyModelSwitchSignals splits gate input signals into blocking (gate falls
+// back without evaluating evidence) and informational (recorded but evidence
+// still runs). previous_model is blocking because there is no current-model
+// reference to compare against; session_id is informational so Chat Completions
+// traffic without per-turn history can still be observed in shadow mode.
+func classifyModelSwitchSignals(input ModelSwitchGateInput, candidateModel string) (blocking, informational []string) {
 	if input.SelectionContext == nil {
-		missing = append(missing, "selection_context")
+		blocking = append(blocking, "selection_context")
 	} else if input.SelectionContext.SessionID == "" {
-		missing = append(missing, "session_id")
+		informational = append(informational, "session_id")
 	}
 	if input.CurrentModel == "" {
-		missing = append(missing, "current_model")
+		blocking = append(blocking, "previous_model")
 	}
 	if candidateModel == "" {
-		missing = append(missing, "candidate_model")
+		blocking = append(blocking, "candidate_model")
 	}
-	return missing
+	return blocking, informational
 }
 
 func (g *ModelSwitchGate) collectSwitchEvidence(input ModelSwitchGateInput, candidateModel string) (modelSwitchGateEvidence, []string, bool) {
@@ -168,13 +186,16 @@ func (g *ModelSwitchGate) collectSwitchEvidence(input ModelSwitchGateInput, cand
 		return evidence, nil, false
 	}
 
-	missing := make([]string, 0, 1)
+	missing := make([]string, 0, 2)
 	handoffPenalty, handoffPenaltyOK := g.lookupHandoffPenalty(input.CurrentModel, candidateModel)
 	if !handoffPenaltyOK {
 		missing = append(missing, "handoff_penalty")
 		handoffPenalty = gateConfig(g).DefaultHandoffPenalty
 	}
 	evidence.HandoffPenalty = handoffPenalty
+	if !input.CacheWarmthOK {
+		missing = append(missing, "cache_warmth")
+	}
 	return evidence, missing, true
 }
 
@@ -196,44 +217,50 @@ func (d *ModelSwitchGateDecision) applyEvidence(
 	d.HandoffPenalty = evidence.HandoffPenalty
 	d.CacheWarmthPenalty = d.CacheWarmth * cfg.CacheWarmthWeight
 	d.NetSwitchAdvantage = evidence.switchBenefit() - d.HandoffPenalty - d.CacheWarmthPenalty
-	d.SwitchCostEstimate += d.HandoffPenalty + d.CacheWarmthPenalty
+	d.NetSwitchAdvantageOK = true
+	d.SwitchCostEstimate = clamp01(d.SwitchCostEstimate + d.HandoffPenalty + d.CacheWarmthPenalty)
 	d.WouldSwitch = d.NetSwitchAdvantage > cfg.MinSwitchAdvantage
 	d.MissingSignals = missing
 }
 
+// switchBenefit returns the quality benefit of switching to the candidate.
+// QualityGap (lookup-table evidence keyed on task family) is preferred when
+// available; SelectorScoreDelta is the fallback. The two are NOT summed —
+// many selectors already incorporate quality into their score, so adding
+// QualityGap on top would double-count.
 func (e modelSwitchGateEvidence) switchBenefit() float64 {
-	benefit := 0.0
-	if e.ScoreDeltaOK {
-		benefit += e.SelectorScoreDelta
-	}
 	if e.QualityGapOK {
-		benefit += e.QualityGap
+		return e.QualityGap
 	}
-	return benefit
+	if e.ScoreDeltaOK {
+		return e.SelectorScoreDelta
+	}
+	return 0
 }
 
 // LogFields returns stable structured fields for audit logs.
 func (d ModelSwitchGateDecision) LogFields() map[string]interface{} {
 	return map[string]interface{}{
-		"enabled":              d.Enabled,
-		"mode":                 d.Mode,
-		"would_switch":         d.WouldSwitch,
-		"enforced_stay":        d.EnforcedStay,
-		"current_model":        d.CurrentModel,
-		"candidate_model":      d.CandidateModel,
-		"final_model":          d.FinalModel,
-		"current_score":        d.CurrentScore,
-		"candidate_score":      d.CandidateScore,
-		"selector_score_delta": d.SelectorScoreDelta,
-		"quality_gap":          d.QualityGap,
-		"handoff_penalty":      d.HandoffPenalty,
-		"cache_warmth":         d.CacheWarmth,
-		"cache_warmth_penalty": d.CacheWarmthPenalty,
-		"net_switch_advantage": d.NetSwitchAdvantage,
-		"stay_cost_estimate":   d.StayCostEstimate,
-		"switch_cost_estimate": d.SwitchCostEstimate,
-		"missing_signals":      d.MissingSignals,
-		"reason":               d.Reason,
+		"enabled":                 d.Enabled,
+		"mode":                    d.Mode,
+		"would_switch":            d.WouldSwitch,
+		"enforced_stay":           d.EnforcedStay,
+		"current_model":           d.CurrentModel,
+		"candidate_model":         d.CandidateModel,
+		"final_model":             d.FinalModel,
+		"current_score":           d.CurrentScore,
+		"candidate_score":         d.CandidateScore,
+		"selector_score_delta":    d.SelectorScoreDelta,
+		"quality_gap":             d.QualityGap,
+		"handoff_penalty":         d.HandoffPenalty,
+		"cache_warmth":            d.CacheWarmth,
+		"cache_warmth_penalty":    d.CacheWarmthPenalty,
+		"net_switch_advantage":    d.NetSwitchAdvantage,
+		"net_switch_advantage_ok": d.NetSwitchAdvantageOK,
+		"stay_cost_estimate":      d.StayCostEstimate,
+		"switch_cost_estimate":    d.SwitchCostEstimate,
+		"missing_signals":         d.MissingSignals,
+		"reason":                  d.Reason,
 	}
 }
 

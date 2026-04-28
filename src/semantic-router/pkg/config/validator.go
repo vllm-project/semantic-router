@@ -124,5 +124,9 @@ func validateConfigStructure(cfg *RouterConfig) error {
 	if err := validateVLLMClassifierConfig(&cfg.PromptGuard); err != nil {
 		return err
 	}
+	if err := validateModelSwitchGate(cfg.ModelSelection.ModelSwitchGate); err != nil {
+		return err
+	}
+	warnModelSwitchGateEnforceWithoutCostSignals(cfg.ModelSelection)
 	return validateAdvancedToolFilteringConfig(cfg)
 }

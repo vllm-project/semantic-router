@@ -41,7 +41,7 @@ The detailed background is in [Unified Config Contract v0.3](../proposals/unifie
 - `global` owns router-wide runtime overrides.
   - `global.router` groups router-engine control knobs such as config-source selection, route-cache, and model-selection defaults
   - `global.router.config_source` selects whether runtime config comes from the canonical YAML file (`file`) or from in-process Kubernetes CRD reconciliation (`kubernetes`)
-  - `global.router.model_selection.model_switch_gate` enables optional shadow or enforce-mode auditing for session-aware stay-vs-switch decisions after a selector chooses a candidate model
+  - `global.router.model_selection.model_switch_gate` enables optional shadow or enforce-mode auditing for session-aware stay-vs-switch decisions after a selector chooses a candidate model. `mode: enforce` only takes effect on Response API requests with conversation history; Chat Completions traffic is observed in shadow regardless of mode until per-turn model history persistence ships, and a `model_switch_gate_enforce_unavailable` warning is logged whenever enforce was configured but the gate had to fall back to audit-only.
   - `global.services` groups shared APIs and control-plane services such as `response_api`, `router_replay`, `observability`, `authz`, and `ratelimit`
   - `global.services.router_replay.enabled` acts as the default replay switch for every decision; route-local `router_replay.enabled: false` is the explicit opt-out
   - `global.stores` groups shared storage-backed services such as `semantic_cache`, `memory`, and `vector_store`

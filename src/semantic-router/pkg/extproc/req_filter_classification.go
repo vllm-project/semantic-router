@@ -102,12 +102,14 @@ func (r *OpenAIRouter) selectModelFromCandidates(selCtx *selection.SelectionCont
 			selCtx.CandidateModels[i].LoRAName == result.SelectedModel {
 			selectedModelRef := &selCtx.CandidateModels[i]
 			selectedModelRef, gateApplied := r.applyModelSwitchGate(selCtx, result, selectedModelRef, ctx)
-			logging.Infof("[ModelSelection] Selected %s (method=%s, score=%.4f, confidence=%.2f): %s",
-				selectedModelRef.Model, method, result.Score, result.Confidence, result.Reasoning)
-			selection.RecordSelection(string(method), selCtx.DecisionName, selectedModelRef.Model, result.Tier, result.Score)
 			if gateApplied {
-				return selectedModelRef, string(method) + "+model_switch_gate"
+				logging.Infof("[ModelSelection] Gate enforced stay on %s (method=%s, score=%.4f, confidence=%.2f): %s",
+					selectedModelRef.Model, method, result.Score, result.Confidence, result.Reasoning)
+			} else {
+				logging.Infof("[ModelSelection] Selected %s (method=%s, score=%.4f, confidence=%.2f): %s",
+					selectedModelRef.Model, method, result.Score, result.Confidence, result.Reasoning)
 			}
+			selection.RecordSelection(string(method), selCtx.DecisionName, selectedModelRef.Model, result.Tier, result.Score)
 			return selectedModelRef, string(method)
 		}
 	}
@@ -313,13 +315,13 @@ func (r *OpenAIRouter) extractSessionContext(ctx *RequestContext) (sessionID, us
 func (r *OpenAIRouter) extractResponseAPISessionContext(ctx *RequestContext, userID string) (sessionID, userIDOut string, conversationHistory []string) {
 	sessionID = ctx.ResponseAPICtx.ConversationID
 	if ctx.ResponseAPICtx.ConversationHistory != nil {
-		for _, r := range ctx.ResponseAPICtx.ConversationHistory {
-			for _, inItem := range r.Input {
+		for _, storedResp := range ctx.ResponseAPICtx.ConversationHistory {
+			for _, inItem := range storedResp.Input {
 				if content := extractContentFromInputItem(inItem); content != "" {
 					conversationHistory = append(conversationHistory, content)
 				}
 			}
-			for _, outItem := range r.Output {
+			for _, outItem := range storedResp.Output {
 				if content := extractContentFromOutputItem(outItem); content != "" {
 					conversationHistory = append(conversationHistory, content)
 				}
