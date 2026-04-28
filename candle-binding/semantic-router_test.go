@@ -4566,6 +4566,103 @@ func TestMmBert32KLongPromptNoOOM(t *testing.T) {
 	}
 }
 
+// mmbert32kSeqCase describes a sequence classifier entry point for long-prompt testing.
+type mmbert32kSeqCase struct {
+	name string
+	init func() error
+	call func(string) (ClassResult, error)
+}
+
+// mmbert32kSeqCases returns the sequence classifiers that share the (ClassResult, error) signature.
+func mmbert32kSeqCases() []mmbert32kSeqCase {
+	initOrErr := func(path string, fn func(string, bool) error) func() error {
+		return func() error {
+			if _, err := os.Stat(path); os.IsNotExist(err) {
+				return err
+			}
+			return fn(path, true)
+		}
+	}
+	return []mmbert32kSeqCase{
+		{
+			name: "intent",
+			init: initOrErr(getMmBert32KModelPath("intent-classifier"), InitMmBert32KIntentClassifier),
+			call: ClassifyMmBert32KIntent,
+		},
+		{
+			name: "jailbreak",
+			init: initOrErr(getMmBert32KModelPath("jailbreak-detector"), InitMmBert32KJailbreakClassifier),
+			call: ClassifyMmBert32KJailbreak,
+		},
+		{
+			name: "factcheck",
+			init: initOrErr(getMmBert32KModelPath("factcheck-classifier"), InitMmBert32KFactcheckClassifier),
+			call: ClassifyMmBert32KFactcheck,
+		},
+		{
+			name: "feedback",
+			init: initOrErr(getMmBert32KModelPath("feedback-detector"), InitMmBert32KFeedbackClassifier),
+			call: ClassifyMmBert32KFeedback,
+		},
+	}
+}
+
+// runSeqClassifierLongPrompt is the shared body for each sequence-classifier sub-test.
+func runSeqClassifierLongPrompt(t *testing.T, clf mmbert32kSeqCase, text string) {
+	t.Helper()
+	if err := clf.init(); err != nil {
+		t.Skipf("%s classifier not available: %v", clf.name, err)
+	}
+	result, err := clf.call(text)
+	if err != nil {
+		t.Errorf("%s long-prompt classification failed: %v", clf.name, err)
+		return
+	}
+	if result.Confidence < 0 || result.Confidence > 1.0 {
+		t.Errorf("%s: confidence %f out of [0,1]", clf.name, result.Confidence)
+	}
+	t.Logf("%s => class=%d confidence=%.2f%%", clf.name, result.Class, result.Confidence*100)
+}
+
+// runModalityLongPrompt is the sub-test body for the modality classifier (ModalityResult return type).
+func runModalityLongPrompt(t *testing.T, text string) {
+	t.Helper()
+	p := getMmBert32KModelPath("modality-router")
+	if _, err := os.Stat(p); os.IsNotExist(err) {
+		t.Skipf("modality classifier not available at %s", p)
+	}
+	if err := InitMmBert32KModalityClassifier(p, true); err != nil {
+		t.Skipf("modality classifier init failed: %v", err)
+	}
+	result, err := ClassifyMmBert32KModality(text)
+	if err != nil {
+		t.Errorf("modality long-prompt classification failed: %v", err)
+		return
+	}
+	if result.Confidence < 0 || result.Confidence > 1.0 {
+		t.Errorf("modality: confidence %f out of [0,1]", result.Confidence)
+	}
+	t.Logf("modality => modality=%s confidence=%.2f%%", result.Modality, result.Confidence*100)
+}
+
+// runPIILongPrompt is the sub-test body for the PII token classifier ([]TokenEntity return type).
+func runPIILongPrompt(t *testing.T, text string) {
+	t.Helper()
+	p := getMmBert32KModelPath("pii-detector")
+	if _, err := os.Stat(p); os.IsNotExist(err) {
+		t.Skipf("PII classifier not available at %s", p)
+	}
+	if err := InitMmBert32KPIIClassifier(p, true); err != nil {
+		t.Skipf("PII classifier init failed: %v", err)
+	}
+	entities, err := ClassifyMmBert32KPII(text)
+	if err != nil {
+		t.Errorf("PII long-prompt classification failed: %v", err)
+		return
+	}
+	t.Logf("pii_tokens => %d entities detected in long prompt", len(entities))
+}
+
 // TestMmBert32KAllClassifiersLongPrompt exercises every mmBERT-32K classify
 // function (intent, jailbreak, factcheck, feedback, modality, PII) with the
 // long prompt to verify that no single entry point OOMs the process.
@@ -4573,119 +4670,16 @@ func TestMmBert32KAllClassifiersLongPrompt(t *testing.T) {
 	if os.Getenv("CI") != "" {
 		t.Skip("skipping long-prompt OOM test in CI (no model files)")
 	}
-
 	fixtures := longPromptFixtures(t)
 	longText, ok := fixtures["long_4k"]
 	if !ok {
 		t.Skip("long_4k fixture missing")
 	}
 
-	// Sequence classifiers that return (ClassResult, error).
-	type seqCase struct {
-		name string
-		init func() error
-		call func(string) (ClassResult, error)
-	}
-
-	seqCases := []seqCase{
-		{
-			name: "intent",
-			init: func() error {
-				p := getMmBert32KModelPath("intent-classifier")
-				if _, err := os.Stat(p); os.IsNotExist(err) {
-					return err
-				}
-				return InitMmBert32KIntentClassifier(p, true)
-			},
-			call: ClassifyMmBert32KIntent,
-		},
-		{
-			name: "jailbreak",
-			init: func() error {
-				p := getMmBert32KModelPath("jailbreak-detector")
-				if _, err := os.Stat(p); os.IsNotExist(err) {
-					return err
-				}
-				return InitMmBert32KJailbreakClassifier(p, true)
-			},
-			call: ClassifyMmBert32KJailbreak,
-		},
-		{
-			name: "factcheck",
-			init: func() error {
-				p := getMmBert32KModelPath("factcheck-classifier")
-				if _, err := os.Stat(p); os.IsNotExist(err) {
-					return err
-				}
-				return InitMmBert32KFactcheckClassifier(p, true)
-			},
-			call: ClassifyMmBert32KFactcheck,
-		},
-		{
-			name: "feedback",
-			init: func() error {
-				p := getMmBert32KModelPath("feedback-detector")
-				if _, err := os.Stat(p); os.IsNotExist(err) {
-					return err
-				}
-				return InitMmBert32KFeedbackClassifier(p, true)
-			},
-			call: ClassifyMmBert32KFeedback,
-		},
-	}
-
-	for _, clf := range seqCases {
+	for _, clf := range mmbert32kSeqCases() {
 		clf := clf
-		t.Run(clf.name, func(t *testing.T) {
-			if err := clf.init(); err != nil {
-				t.Skipf("%s classifier not available: %v", clf.name, err)
-			}
-			result, err := clf.call(longText)
-			if err != nil {
-				t.Errorf("%s long-prompt classification failed: %v", clf.name, err)
-				return
-			}
-			if result.Confidence < 0 || result.Confidence > 1.0 {
-				t.Errorf("%s: confidence %f out of [0,1]", clf.name, result.Confidence)
-			}
-			t.Logf("%s => class=%d confidence=%.2f%%", clf.name, result.Class, result.Confidence*100)
-		})
+		t.Run(clf.name, func(t *testing.T) { runSeqClassifierLongPrompt(t, clf, longText) })
 	}
-
-	// Modality classifier returns ModalityResult.
-	t.Run("modality", func(t *testing.T) {
-		p := getMmBert32KModelPath("modality-router")
-		if _, err := os.Stat(p); os.IsNotExist(err) {
-			t.Skipf("modality classifier not available at %s", p)
-		}
-		if err := InitMmBert32KModalityClassifier(p, true); err != nil {
-			t.Skipf("modality classifier init failed: %v", err)
-		}
-		result, err := ClassifyMmBert32KModality(longText)
-		if err != nil {
-			t.Errorf("modality long-prompt classification failed: %v", err)
-			return
-		}
-		if result.Confidence < 0 || result.Confidence > 1.0 {
-			t.Errorf("modality: confidence %f out of [0,1]", result.Confidence)
-		}
-		t.Logf("modality => modality=%s confidence=%.2f%%", result.Modality, result.Confidence*100)
-	})
-
-	// PII token classifier returns ([]TokenEntity, error) — just verify no crash.
-	t.Run("pii_tokens", func(t *testing.T) {
-		p := getMmBert32KModelPath("pii-detector")
-		if _, err := os.Stat(p); os.IsNotExist(err) {
-			t.Skipf("PII classifier not available at %s", p)
-		}
-		if err := InitMmBert32KPIIClassifier(p, true); err != nil {
-			t.Skipf("PII classifier init failed: %v", err)
-		}
-		entities, err := ClassifyMmBert32KPII(longText)
-		if err != nil {
-			t.Errorf("PII long-prompt classification failed: %v", err)
-			return
-		}
-		t.Logf("pii_tokens => %d entities detected in long prompt", len(entities))
-	})
+	t.Run("modality", func(t *testing.T) { runModalityLongPrompt(t, longText) })
+	t.Run("pii_tokens", func(t *testing.T) { runPIILongPrompt(t, longText) })
 }
