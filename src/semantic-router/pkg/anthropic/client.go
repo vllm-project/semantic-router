@@ -70,7 +70,7 @@ func ToAnthropicRequestBodyWithThinking(openAIRequest *openai.ChatCompletionNewP
 	var systemPrompt string
 
 	// Process messages - extract system prompt separately (Anthropic requirement)
-	for _, msg := range openAIRequest.Messages {
+	for i, msg := range openAIRequest.Messages {
 		switch {
 		case msg.OfSystem != nil:
 			systemPrompt = extractSystemContent(msg.OfSystem)
@@ -85,7 +85,37 @@ func ToAnthropicRequestBodyWithThinking(openAIRequest *openai.ChatCompletionNewP
 			messages = append(messages, anthropic.NewUserMessage(
 				anthropic.NewToolResultBlock(msg.OfTool.ToolCallID, content, false),
 			))
+		default:
+			logging.Warnf("OpenAI msg[%d]: unrecognized message type (no OfSystem/OfUser/OfAssistant/OfTool)", i)
 		}
+	}
+
+	// Log message structure before merge for debugging
+	preMergeCount := len(messages)
+	var preMergeRoles []string
+	for _, m := range messages {
+		preMergeRoles = append(preMergeRoles, fmt.Sprintf("%s(%s)", m.Role, describeContentBlocks(m.Content)))
+	}
+	logging.Infof("Pre-merge messages (%d): %v", preMergeCount, preMergeRoles)
+
+	// Merge consecutive same-role messages. The OpenAI→Anthropic conversion
+	// can produce adjacent user messages (e.g., a user text message followed
+	// by tool result messages). Anthropic requires tool_result blocks to be
+	// in the same user message immediately after the assistant's tool_use.
+	messages = mergeConsecutiveSameRoleMessages(messages)
+
+	// Validate and repair tool_use/tool_result pairing
+	messages = ensureToolResultPairing(messages)
+
+	// Reorder content blocks: tool_result must come before text in user messages
+	reorderToolResultFirst(messages)
+
+	if len(messages) != preMergeCount {
+		var postFixRoles []string
+		for _, m := range messages {
+			postFixRoles = append(postFixRoles, fmt.Sprintf("%s(%s)", m.Role, describeContentBlocks(m.Content)))
+		}
+		logging.Infof("Post-fix messages (%d): %v", len(messages), postFixRoles)
 	}
 
 	// Determine max tokens (required for Anthropic)
@@ -144,7 +174,9 @@ func ToAnthropicRequestBodyWithThinking(openAIRequest *openai.ChatCompletionNewP
 	if len(openAIRequest.Tools) > 0 {
 		var tools []anthropic.ToolUnionParam
 		for _, t := range openAIRequest.Tools {
-			schema := anthropic.ToolInputSchemaParam{}
+			schema := anthropic.ToolInputSchemaParam{
+				Properties: map[string]any{},
+			}
 			if params := t.Function.Parameters; params != nil {
 				if props, ok := params["properties"]; ok {
 					schema.Properties = props
@@ -170,7 +202,33 @@ func ToAnthropicRequestBodyWithThinking(openAIRequest *openai.ChatCompletionNewP
 		params.Tools = tools
 	}
 
-	return json.Marshal(params)
+	data, err := json.Marshal(params)
+	if err != nil {
+		return nil, err
+	}
+
+	// Patch for Vertex AI rawPredict: strip "model" (specified in URL path,
+	// not body) and add "anthropic_version" (required by Vertex).
+	var raw map[string]json.RawMessage
+	if err := json.Unmarshal(data, &raw); err != nil {
+		return data, nil
+	}
+	delete(raw, "model")
+	raw["anthropic_version"] = json.RawMessage(`"vertex-2023-10-16"`)
+
+	// Log all top-level keys being sent to the provider for debugging
+	keys := make([]string, 0, len(raw))
+	for k := range raw {
+		keys = append(keys, k)
+	}
+	logging.Infof("Anthropic request body keys: %v, body size: %d bytes", keys, len(data))
+
+	// Dump full messages JSON for debugging
+	if msgsRaw, ok := raw["messages"]; ok {
+		logging.Infof("Anthropic messages JSON (%d bytes): %s", len(msgsRaw), string(msgsRaw))
+	}
+
+	return json.Marshal(raw)
 }
 
 // openAIResponseWithThinking extends the OpenAI response with thinking content.
@@ -229,6 +287,21 @@ func ToOpenAIResponseBody(anthropicResponse []byte, model string) ([]byte, error
 	var resp anthropic.Message
 	if err := json.Unmarshal(anthropicResponse, &resp); err != nil {
 		return nil, fmt.Errorf("failed to parse Anthropic response: %w", err)
+	}
+
+	// Detect provider error responses (Vertex AI returns {"type":"error",...})
+	// which unmarshal into an empty Message with no ID or content.
+	if resp.ID == "" && len(resp.Content) == 0 {
+		logging.Warnf("Provider returned error response (%d bytes): %s", len(anthropicResponse), string(anthropicResponse))
+		var errResp struct {
+			Error struct {
+				Message string `json:"message"`
+			} `json:"error"`
+		}
+		if json.Unmarshal(anthropicResponse, &errResp) == nil && errResp.Error.Message != "" {
+			return nil, fmt.Errorf("provider error: %s", errResp.Error.Message)
+		}
+		return nil, fmt.Errorf("provider returned empty response (%d bytes)", len(anthropicResponse))
 	}
 
 	logging.Debugf("Parsed Anthropic response - ID: %s, Content blocks: %d, StopReason: %s", resp.ID, len(resp.Content), resp.StopReason)
@@ -388,4 +461,185 @@ func extractToolContent(msg *openai.ChatCompletionToolMessageParam) string {
 		}
 	}
 	return strings.Join(parts, "\n")
+}
+
+// reorderToolResultFirst ensures tool_result blocks appear before text blocks
+// in user messages. Anthropic requires tool_result blocks to be the first
+// content blocks in a user message that follows an assistant tool_use.
+func reorderToolResultFirst(messages []anthropic.MessageParam) {
+	for i := range messages {
+		if messages[i].Role != "user" {
+			continue
+		}
+		content := messages[i].Content
+		hasToolResult := false
+		for _, b := range content {
+			if b.OfToolResult != nil {
+				hasToolResult = true
+				break
+			}
+		}
+		if !hasToolResult {
+			continue
+		}
+
+		// Partition: tool_result blocks first, then everything else
+		var toolResults, other []anthropic.ContentBlockParamUnion
+		for _, b := range content {
+			if b.OfToolResult != nil {
+				toolResults = append(toolResults, b)
+			} else {
+				other = append(other, b)
+			}
+		}
+		messages[i].Content = append(toolResults, other...)
+	}
+}
+
+// describeContentBlocks returns a compact summary of block types for logging.
+func describeContentBlocks(blocks []anthropic.ContentBlockParamUnion) string {
+	counts := map[string]int{}
+	for _, b := range blocks {
+		switch {
+		case b.OfText != nil:
+			counts["text"]++
+		case b.OfToolUse != nil:
+			counts["tool_use"]++
+		case b.OfToolResult != nil:
+			counts["tool_result"]++
+		case b.OfThinking != nil:
+			counts["thinking"]++
+		default:
+			counts["other"]++
+		}
+	}
+	var parts []string
+	for _, k := range []string{"text", "tool_use", "tool_result", "thinking", "other"} {
+		if c := counts[k]; c > 0 {
+			parts = append(parts, fmt.Sprintf("%dx%s", c, k))
+		}
+	}
+	return strings.Join(parts, ",")
+}
+
+// mergeConsecutiveSameRoleMessages combines adjacent messages with the same role
+// into a single message by appending their content blocks. This is required
+// because the OpenAI format uses separate "tool" messages that become separate
+// "user" messages in Anthropic format, but Anthropic requires all tool_result
+// blocks to be in one user message immediately after the assistant's tool_use.
+func mergeConsecutiveSameRoleMessages(messages []anthropic.MessageParam) []anthropic.MessageParam {
+	if len(messages) <= 1 {
+		return messages
+	}
+	merged := []anthropic.MessageParam{messages[0]}
+	for i := 1; i < len(messages); i++ {
+		last := &merged[len(merged)-1]
+		if messages[i].Role == last.Role {
+			last.Content = append(last.Content, messages[i].Content...)
+		} else {
+			merged = append(merged, messages[i])
+		}
+	}
+	return merged
+}
+
+// ensureToolResultPairing validates and repairs tool_use/tool_result pairing.
+// Anthropic requires that every tool_use block in an assistant message has a
+// corresponding tool_result in the immediately following user message. After the
+// OpenAI→Anthropic conversion and merge, this invariant can be broken if the
+// proxy reordered messages or if content blocks ended up in the wrong position.
+func ensureToolResultPairing(messages []anthropic.MessageParam) []anthropic.MessageParam {
+	if len(messages) < 2 {
+		return messages
+	}
+
+	repaired := false
+	for i := 0; i < len(messages)-1; i++ {
+		if messages[i].Role != "assistant" {
+			continue
+		}
+
+		// Collect tool_use IDs from this assistant message
+		var toolUseIDs []string
+		for _, block := range messages[i].Content {
+			if block.OfToolUse != nil {
+				toolUseIDs = append(toolUseIDs, block.OfToolUse.ID)
+			}
+		}
+		if len(toolUseIDs) == 0 {
+			continue
+		}
+
+		// Check the next message — must be a user message
+		if i+1 >= len(messages) || messages[i+1].Role != "user" {
+			// No user message follows the assistant — insert an empty one
+			logging.Warnf("ensureToolResultPairing: assistant msg[%d] has %d tool_use blocks but no user message follows; inserting one", i, len(toolUseIDs))
+			emptyUser := anthropic.MessageParam{
+				Role:    "user",
+				Content: nil,
+			}
+			// Insert at i+1
+			messages = append(messages[:i+1+1], messages[i+1:]...)
+			messages[i+1] = emptyUser
+			repaired = true
+		}
+
+		// Collect tool_result IDs already present in the next user message
+		nextUser := &messages[i+1]
+		presentIDs := make(map[string]bool)
+		for _, block := range nextUser.Content {
+			if block.OfToolResult != nil {
+				presentIDs[block.OfToolResult.ToolUseID] = true
+			}
+		}
+
+		// Find missing tool_results
+		for _, tuID := range toolUseIDs {
+			if presentIDs[tuID] {
+				continue
+			}
+
+			// Search later user messages for this tool_result
+			found := false
+			for j := i + 2; j < len(messages); j++ {
+				if messages[j].Role != "user" {
+					continue
+				}
+				for k := 0; k < len(messages[j].Content); k++ {
+					block := messages[j].Content[k]
+					if block.OfToolResult != nil && block.OfToolResult.ToolUseID == tuID {
+						// Move this block to the correct user message
+						logging.Warnf("ensureToolResultPairing: moving tool_result(%s) from msg[%d] to msg[%d]", tuID, j, i+1)
+						nextUser.Content = append(nextUser.Content, block)
+						messages[j].Content = append(messages[j].Content[:k], messages[j].Content[k+1:]...)
+						found = true
+						repaired = true
+						break
+					}
+				}
+				if found {
+					break
+				}
+			}
+
+			if !found {
+				logging.Errorf("ensureToolResultPairing: tool_use(%s) in msg[%d] has NO matching tool_result anywhere", tuID, i)
+			}
+		}
+	}
+
+	// Remove any user messages that became empty after block relocation
+	if repaired {
+		var cleaned []anthropic.MessageParam
+		for _, m := range messages {
+			if m.Role == "user" && len(m.Content) == 0 {
+				continue
+			}
+			cleaned = append(cleaned, m)
+		}
+		// Re-merge in case removal created consecutive same-role messages
+		return mergeConsecutiveSameRoleMessages(cleaned)
+	}
+
+	return messages
 }

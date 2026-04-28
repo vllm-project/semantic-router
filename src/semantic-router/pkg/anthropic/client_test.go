@@ -30,9 +30,15 @@ func TestToAnthropicRequestBody_BasicConversion(t *testing.T) {
 	err = json.Unmarshal(body, &result)
 	require.NoError(t, err)
 
-	assert.Equal(t, anthropic.Model("claude-sonnet-4-5"), result.Model)
+	assert.Empty(t, result.Model, "model field should be stripped for Vertex AI compatibility")
 	assert.Equal(t, DefaultMaxTokens, result.MaxTokens)
 	assert.Len(t, result.Messages, 1)
+
+	// Verify model key is absent from raw JSON (Vertex AI rejects it)
+	var raw map[string]json.RawMessage
+	require.NoError(t, json.Unmarshal(body, &raw))
+	_, hasModel := raw["model"]
+	assert.False(t, hasModel, "model key must not appear in Anthropic body for Vertex AI")
 }
 
 func TestToAnthropicRequestBody_WithSystemPrompt(t *testing.T) {
@@ -493,4 +499,113 @@ func TestToAnthropicRequestBody_WithTools(t *testing.T) {
 	props := inputSchema["properties"].(map[string]any)
 	loc := props["location"].(map[string]any)
 	assert.Equal(t, "string", loc["type"])
+}
+
+func TestToOpenAIResponseBody_ProviderError(t *testing.T) {
+	// Vertex AI error response format
+	errorResp := `{"type":"error","error":{"type":"invalid_request_error","message":"model: Extra inputs are not permitted"},"request_id":"req_vrtx_test123"}`
+
+	_, err := ToOpenAIResponseBody([]byte(errorResp), "claude-sonnet")
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "provider error")
+	assert.Contains(t, err.Error(), "Extra inputs are not permitted")
+}
+
+func TestToOpenAIResponseBody_EmptyProviderResponse(t *testing.T) {
+	// Empty/unknown response
+	emptyResp := `{"some_unknown_field":"value"}`
+
+	_, err := ToOpenAIResponseBody([]byte(emptyResp), "claude-sonnet")
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "provider returned empty response")
+}
+
+func TestEnsureToolResultPairing_AlreadyCorrect(t *testing.T) {
+	messages := []anthropic.MessageParam{
+		anthropic.NewUserMessage(anthropic.NewTextBlock("hi")),
+		anthropic.NewAssistantMessage(
+			anthropic.NewTextBlock("checking"),
+			anthropic.NewToolUseBlock("tool_1", map[string]any{}, "read"),
+		),
+		anthropic.NewUserMessage(
+			anthropic.NewToolResultBlock("tool_1", "contents", false),
+		),
+		anthropic.NewAssistantMessage(anthropic.NewTextBlock("done")),
+	}
+
+	result := ensureToolResultPairing(messages)
+	assert.Len(t, result, 4)
+}
+
+func TestEnsureToolResultPairing_MisplacedToolResult(t *testing.T) {
+	// Simulate: assistant(tool_use) → user(text) → user(tool_result)
+	// After merge the user messages combine, but test the pairing fix directly
+	// on an un-merged sequence where user text is between assistant and tool_result
+	messages := []anthropic.MessageParam{
+		anthropic.NewUserMessage(anthropic.NewTextBlock("hi")),
+		anthropic.NewAssistantMessage(
+			anthropic.NewTextBlock("let me check"),
+			anthropic.NewToolUseBlock("tool_A", map[string]any{}, "read"),
+		),
+		// User text ended up here (from proxy insert(0))
+		anthropic.NewUserMessage(anthropic.NewTextBlock("sure")),
+		// Next assistant (tool_result for tool_A is NOT adjacent)
+		anthropic.NewAssistantMessage(anthropic.NewTextBlock("next step")),
+		// tool_result ended up in a later user message
+		anthropic.NewUserMessage(
+			anthropic.NewToolResultBlock("tool_A", "file contents", false),
+		),
+	}
+
+	result := ensureToolResultPairing(messages)
+
+	// The tool_result should have been moved to msg[2] (immediately after assistant with tool_use)
+	// Verify the assistant at index 1 is followed by a user with tool_result
+	assert.Equal(t, anthropic.MessageParamRole("assistant"), result[1].Role)
+	foundToolResult := false
+	for _, block := range result[2].Content {
+		if block.OfToolResult != nil && block.OfToolResult.ToolUseID == "tool_A" {
+			foundToolResult = true
+		}
+	}
+	assert.True(t, foundToolResult, "tool_result(tool_A) should be in the user message immediately after the assistant")
+}
+
+func TestEnsureToolResultPairing_MultipleToolCalls(t *testing.T) {
+	messages := []anthropic.MessageParam{
+		anthropic.NewUserMessage(anthropic.NewTextBlock("do stuff")),
+		anthropic.NewAssistantMessage(
+			anthropic.NewToolUseBlock("t1", map[string]any{}, "read"),
+			anthropic.NewToolUseBlock("t2", map[string]any{}, "write"),
+		),
+		anthropic.NewUserMessage(
+			anthropic.NewToolResultBlock("t1", "read result", false),
+			anthropic.NewToolResultBlock("t2", "write result", false),
+		),
+	}
+
+	result := ensureToolResultPairing(messages)
+	assert.Len(t, result, 3)
+
+	// Both tool_results in the right place
+	trCount := 0
+	for _, block := range result[2].Content {
+		if block.OfToolResult != nil {
+			trCount++
+		}
+	}
+	assert.Equal(t, 2, trCount)
+}
+
+func TestDescribeContentBlocks(t *testing.T) {
+	blocks := []anthropic.ContentBlockParamUnion{
+		anthropic.NewTextBlock("hello"),
+		anthropic.NewToolUseBlock("t1", map[string]any{}, "read"),
+		anthropic.NewToolResultBlock("t1", "ok", false),
+	}
+
+	desc := describeContentBlocks(blocks)
+	assert.Contains(t, desc, "1xtext")
+	assert.Contains(t, desc, "1xtool_use")
+	assert.Contains(t, desc, "1xtool_result")
 }
