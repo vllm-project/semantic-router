@@ -9,6 +9,7 @@ import (
 	"os"
 	"os/signal"
 	"path/filepath"
+	"runtime/debug"
 	"strings"
 	"sync/atomic"
 	"syscall"
@@ -437,7 +438,7 @@ func (s *Server) watchConfigAndReload(ctx context.Context) {
 						go func() {
 							defer func() {
 								if rec := recover(); rec != nil {
-									logging.Errorf("Config reload goroutine: recovered panic: %v", rec)
+									logging.Errorf("Config reload goroutine: recovered panic: %v\n%s", rec, debug.Stack())
 								}
 							}()
 							time.Sleep(300 * time.Millisecond)

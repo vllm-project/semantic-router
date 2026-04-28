@@ -56,16 +56,17 @@ func (p *panicOnSendStream) Send(_ *ext_proc.ProcessingResponse) error {
 // panicOnRecvStream panics during the first Recv() call — simulating a panic
 // that fires before any response is sent (e.g. inside a CGO classify call
 // reached from handleRequestBody).
+// panicVal may be any type (string, error, etc.) to test different panic payloads.
 type panicOnRecvStream struct {
 	MockStream
-	panicMsg  string
+	panicVal  any
 	callCount int
 }
 
 func (p *panicOnRecvStream) Recv() (*ext_proc.ProcessingRequest, error) {
 	p.callCount++
 	if p.callCount == 1 {
-		panic(p.panicMsg)
+		panic(p.panicVal)
 	}
 	return nil, io.EOF
 }
@@ -83,7 +84,7 @@ func TestProcessPanicRecovery_RecvPanic(t *testing.T) {
 	const wantMsg = "simulated CGO OOM panic"
 	stream := &panicOnRecvStream{
 		MockStream: MockStream{Ctx: t.Context()},
-		panicMsg:   wantMsg,
+		panicVal:   wantMsg,
 	}
 
 	err = router.Process(stream)
@@ -152,7 +153,7 @@ func TestProcessPanicRecovery_StringPanic(t *testing.T) {
 
 	stream := &panicOnRecvStream{
 		MockStream: MockStream{Ctx: t.Context()},
-		panicMsg:   "runtime: out of memory",
+		panicVal:   "runtime: out of memory",
 	}
 
 	err = router.Process(stream)
@@ -169,8 +170,10 @@ func TestProcessPanicRecovery_StringPanic(t *testing.T) {
 	}
 }
 
-// TestProcessPanicRecovery_ErrorPanic verifies that an error-typed panic
-// (e.g. fmt.Errorf("...")) is also handled correctly.
+// TestProcessPanicRecovery_ErrorPanic verifies that an error-typed panic value
+// (i.e. panic(err) where err is a non-nil error) is also handled correctly.
+// This is distinct from a string panic and exercises the %v formatting path of
+// the status.Errorf call in Process()'s recover block.
 func TestProcessPanicRecovery_ErrorPanic(t *testing.T) {
 	cfg := CreateTestConfig()
 	router, err := CreateTestRouter(cfg)
@@ -180,7 +183,7 @@ func TestProcessPanicRecovery_ErrorPanic(t *testing.T) {
 
 	ep := &panicOnRecvStream{
 		MockStream: MockStream{Ctx: t.Context()},
-		panicMsg:   fmt.Sprintf("%v", fmt.Errorf("candle OOM: alloc failed")),
+		panicVal:   fmt.Errorf("candle OOM: alloc failed"),
 	}
 
 	err = router.Process(ep)

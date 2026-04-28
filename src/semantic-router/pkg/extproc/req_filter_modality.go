@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"runtime/debug"
 	"strconv"
 	"strings"
 	"sync"
@@ -271,7 +272,7 @@ func (r *OpenAIRouter) executeBoth(ctx *RequestContext, cfg *config.RouterConfig
 		defer wg.Done()
 		defer func() {
 			if rec := recover(); rec != nil {
-				logging.Errorf("AR text goroutine: recovered panic: %v", rec)
+				logging.Errorf("AR text goroutine: recovered panic: %v\n%s", rec, debug.Stack())
 				textErr = fmt.Errorf("AR text call panicked: %v", rec)
 			}
 		}()
@@ -284,7 +285,7 @@ func (r *OpenAIRouter) executeBoth(ctx *RequestContext, cfg *config.RouterConfig
 		defer wg.Done()
 		defer func() {
 			if rec := recover(); rec != nil {
-				logging.Errorf("Diffusion image goroutine: recovered panic: %v", rec)
+				logging.Errorf("Diffusion image goroutine: recovered panic: %v\n%s", rec, debug.Stack())
 				imgErr = fmt.Errorf("diffusion call panicked: %v", rec)
 			}
 		}()
