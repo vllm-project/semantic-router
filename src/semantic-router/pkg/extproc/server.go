@@ -433,8 +433,13 @@ func (s *Server) watchConfigAndReload(ctx context.Context) {
 							"event":    ev.Op.String(),
 							"delay_ms": 300,
 						})
-						// Slight delay to let file settle
-						go func() { time.Sleep(300 * time.Millisecond); reload() }()
+						// Slight delay to let file settle. Wrap with
+						// goSafely so a panic inside reload() is logged
+						// instead of crashing the process (#1843).
+						goSafely("config_reload_debouncer", func() {
+							time.Sleep(300 * time.Millisecond)
+							reload()
+						})
 					} else {
 						logging.ComponentDebugEvent("extproc", "config_reload_debounced", map[string]interface{}{
 							"file": ev.Name,

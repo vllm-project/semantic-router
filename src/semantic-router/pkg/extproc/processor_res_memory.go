@@ -24,7 +24,11 @@ func (r *OpenAIRouter) scheduleResponseMemoryStore(ctx *RequestContext, response
 
 	currentUserMessage := extractCurrentUserMessage(ctx)
 	currentAssistantResponse := extractAssistantResponseText(responseBody)
-	go func() {
+	// goSafely wraps the goroutine in a deferred recover so a panic in
+	// the memory-store path (e.g. an unexpected payload shape) is
+	// logged via observability rather than aborting the router
+	// process (#1843).
+	goSafely("memory_store", func() {
 		bgCtx := context.Background()
 		sessionID, userID, history, err := extractMemoryInfo(ctx)
 		if err != nil {
@@ -51,5 +55,5 @@ func (r *OpenAIRouter) scheduleResponseMemoryStore(ctx *RequestContext, response
 		); err != nil {
 			logging.Warnf("Memory store failed: %v", err)
 		}
-	}()
+	})
 }
