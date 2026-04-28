@@ -90,32 +90,14 @@ func ToAnthropicRequestBodyWithThinking(openAIRequest *openai.ChatCompletionNewP
 		}
 	}
 
-	// Log message structure before merge for debugging
 	preMergeCount := len(messages)
-	var preMergeRoles []string
-	for _, m := range messages {
-		preMergeRoles = append(preMergeRoles, fmt.Sprintf("%s(%s)", m.Role, describeContentBlocks(m.Content)))
-	}
-	logging.Infof("Pre-merge messages (%d): %v", preMergeCount, preMergeRoles)
 
-	// Merge consecutive same-role messages. The OpenAI→Anthropic conversion
-	// can produce adjacent user messages (e.g., a user text message followed
-	// by tool result messages). Anthropic requires tool_result blocks to be
-	// in the same user message immediately after the assistant's tool_use.
 	messages = mergeConsecutiveSameRoleMessages(messages)
-
-	// Validate and repair tool_use/tool_result pairing
 	messages = ensureToolResultPairing(messages)
-
-	// Reorder content blocks: tool_result must come before text in user messages
 	reorderToolResultFirst(messages)
 
 	if len(messages) != preMergeCount {
-		var postFixRoles []string
-		for _, m := range messages {
-			postFixRoles = append(postFixRoles, fmt.Sprintf("%s(%s)", m.Role, describeContentBlocks(m.Content)))
-		}
-		logging.Infof("Post-fix messages (%d): %v", len(messages), postFixRoles)
+		logging.Debugf("Message fixup: %d → %d messages", preMergeCount, len(messages))
 	}
 
 	// Determine max tokens (required for Anthropic)
@@ -216,17 +198,7 @@ func ToAnthropicRequestBodyWithThinking(openAIRequest *openai.ChatCompletionNewP
 	delete(raw, "model")
 	raw["anthropic_version"] = json.RawMessage(`"vertex-2023-10-16"`)
 
-	// Log all top-level keys being sent to the provider for debugging
-	keys := make([]string, 0, len(raw))
-	for k := range raw {
-		keys = append(keys, k)
-	}
-	logging.Infof("Anthropic request body keys: %v, body size: %d bytes", keys, len(data))
-
-	// Dump full messages JSON for debugging
-	if msgsRaw, ok := raw["messages"]; ok {
-		logging.Infof("Anthropic messages JSON (%d bytes): %s", len(msgsRaw), string(msgsRaw))
-	}
+	logging.Debugf("Anthropic request body size: %d bytes", len(data))
 
 	return json.Marshal(raw)
 }
