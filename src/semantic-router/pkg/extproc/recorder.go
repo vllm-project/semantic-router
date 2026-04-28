@@ -176,6 +176,7 @@ func configureReplayRecorder(
 		resolveReplayMaxBodyBytes(cfg.MaxBodyBytes),
 	)
 	recorder.SetMaxToolTraceBytes(cfg.MaxToolTraceBytes)
+	recorder.SetMaxToolTraceSteps(cfg.MaxToolTraceSteps)
 }
 
 func buildReplayRoutingRecord(

@@ -315,6 +315,7 @@ type Config struct {
 	AsyncWrites       bool   // Enable asynchronous writes
 	MaxBodyBytes      int    // Maximum bytes to store for request/response bodies
 	MaxToolTraceBytes int    // Maximum bytes for each structured tool-trace field (0 = no limit)
+	MaxToolTraceSteps int    // Maximum number of tool-call steps to retain per record (0 = no limit)
 
 	// Backend-specific configurations
 	Redis    *RedisConfig

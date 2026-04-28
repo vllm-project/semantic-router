@@ -8,6 +8,17 @@ import (
 )
 
 var (
+	// SignalPanicTotal tracks panics recovered inside signal evaluator goroutines.
+	// A non-zero value indicates a classifier crashed mid-evaluation; the router
+	// continued serving but that signal was skipped for the affected request.
+	SignalPanicTotal = promauto.NewCounterVec(
+		prometheus.CounterOpts{
+			Name: "llm_signal_panic_total",
+			Help: "Total number of panics recovered in signal evaluator goroutines",
+		},
+		[]string{"signal_type", "signal_name"},
+	)
+
 	// SignalExtractionTotal tracks the total number of signal extractions by type and name
 	SignalExtractionTotal = promauto.NewCounterVec(
 		prometheus.CounterOpts{
@@ -100,6 +111,17 @@ var (
 		[]string{"plugin_type", "error_reason"},
 	)
 )
+
+// RecordSignalPanic records a recovered panic from a signal evaluator goroutine.
+func RecordSignalPanic(signalType, signalName string) {
+	if signalType == "" {
+		signalType = consts.UnknownLabel
+	}
+	if signalName == "" {
+		signalName = consts.UnknownLabel
+	}
+	SignalPanicTotal.WithLabelValues(signalType, signalName).Inc()
+}
 
 // RecordSignalExtraction records a signal extraction event
 func RecordSignalExtraction(signalType, signalName string, latencySeconds float64) {

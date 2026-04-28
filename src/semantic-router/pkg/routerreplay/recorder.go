@@ -11,6 +11,7 @@ const (
 	DefaultMaxRecords        = 200
 	DefaultMaxBodyBytes      = 4096 // 4KB
 	DefaultMaxToolTraceBytes = 0    // No limit — structured fields are typically small
+	DefaultMaxToolTraceSteps = 0    // No limit by default; set to ~50 in production to prevent OOM
 )
 
 type (
@@ -26,6 +27,7 @@ type Recorder struct {
 
 	maxBodyBytes      int
 	maxToolTraceBytes int // 0 = no limit
+	maxToolTraceSteps int // 0 = no limit
 
 	captureRequestBody  bool
 	captureResponseBody bool
@@ -48,6 +50,16 @@ func (r *Recorder) SetCapturePolicy(captureRequest, captureResponse bool, maxBod
 		r.maxBodyBytes = maxBodyBytes
 	} else {
 		r.maxBodyBytes = DefaultMaxBodyBytes
+	}
+}
+
+// SetMaxToolTraceSteps sets the maximum number of tool-call steps retained per
+// record. Steps beyond the cap are silently dropped (oldest kept, newest dropped)
+// so that long agentic sessions do not accumulate unbounded memory.
+// A value of 0 disables the cap.
+func (r *Recorder) SetMaxToolTraceSteps(max int) {
+	if max >= 0 {
+		r.maxToolTraceSteps = max
 	}
 }
 
@@ -89,6 +101,10 @@ func (r *Recorder) AddRecord(rec RoutingRecord) (string, error) {
 		rec.ResponseBodyTruncated = true
 	}
 
+	// Cap tool-trace steps before any other field truncation so that
+	// Flow / ToolNames derived from the steps slice are also bounded.
+	capToolTraceSteps(&rec, r.maxToolTraceSteps)
+
 	// Apply MaxToolTraceBytes to structured tool-trace fields.
 	// These are truncated independently of the raw body fields so that
 	// callers can keep MaxBodyBytes small without losing structured data.
@@ -96,6 +112,18 @@ func (r *Recorder) AddRecord(rec RoutingRecord) (string, error) {
 
 	ctx := context.Background()
 	return r.storage.Add(ctx, rec)
+}
+
+// capToolTraceSteps limits the number of steps retained in a record's ToolTrace.
+// When an agentic session accumulates hundreds of tool calls the Steps slice grows
+// linearly per turn and is held in memory for every concurrent session. Keeping only
+// the first max steps bounds memory growth without losing the earliest context.
+// A non-positive max disables the cap.
+func capToolTraceSteps(rec *RoutingRecord, max int) {
+	if max <= 0 || rec.ToolTrace == nil || len(rec.ToolTrace.Steps) <= max {
+		return
+	}
+	rec.ToolTrace.Steps = rec.ToolTrace.Steps[:max]
 }
 
 // applyMaxToolTraceBytes truncates structured tool-trace text fields to max
@@ -180,6 +208,10 @@ func (r *Recorder) UpdateUsageCost(id string, usage UsageCost) error {
 }
 
 func (r *Recorder) UpdateToolTrace(id string, trace ToolTrace) error {
+	// Cap steps first so Flow / ToolNames derived from them are also bounded.
+	if r.maxToolTraceSteps > 0 && len(trace.Steps) > r.maxToolTraceSteps {
+		trace.Steps = trace.Steps[:r.maxToolTraceSteps]
+	}
 	// Apply MaxToolTraceBytes here too: response-side traces are attached via
 	// this update path (see extproc.attachRouterReplayResponse) and therefore
 	// bypass the AddRecord truncation unless we cap them again.

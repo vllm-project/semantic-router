@@ -1,10 +1,12 @@
 package classification
 
 import (
+	"fmt"
 	"sync"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/metrics"
 )
 
 type signalDispatch struct {
@@ -108,6 +110,7 @@ func runSignalDispatchers(dispatchers []signalDispatch, usedSignals map[string]b
 			wg.Add(1)
 			go func(dispatch signalDispatch) {
 				defer wg.Done()
+				defer recoverSignalPanic(dispatch.signalType, dispatch.name)
 				dispatch.evaluate()
 			}(d)
 			continue
@@ -117,4 +120,19 @@ func runSignalDispatchers(dispatchers []signalDispatch, usedSignals map[string]b
 			logging.Debugf("[Signal Computation] %s signal not used in any decision, skipping evaluation", d.name)
 		}
 	}
+}
+
+// recoverSignalPanic recovers from a panic in a signal evaluator goroutine,
+// logs the incident, and records a metric so operators can alert on it.
+// Without this, a classifier panic (e.g. triggered by an unusually long prompt
+// causing an out-of-bounds access in a Rust binding) would propagate up through
+// the goroutine scheduler and crash the entire router process silently.
+func recoverSignalPanic(signalType, signalName string) {
+	r := recover()
+	if r == nil {
+		return
+	}
+	msg := fmt.Sprintf("%v", r)
+	logging.Errorf("[Signal Computation] panic recovered in %s signal (%s): %s", signalName, signalType, msg)
+	metrics.RecordSignalPanic(signalType, signalName)
 }

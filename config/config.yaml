@@ -662,6 +662,10 @@ routing:
             # (prompt, tool_definitions, and each tool-call's arguments/output)
             # without having to shrink max_body_bytes.
             max_tool_trace_bytes: 0
+            # 0 = no step limit. Set to a positive integer (e.g. 50) to bound
+            # memory usage in long-running agentic sessions where each tool-call
+            # turn appends to the Steps slice and the derived Flow string.
+            max_tool_trace_steps: 0
 
     - name: computer-science-remom-route
       description: ReMoM route for complex computer science prompts.
