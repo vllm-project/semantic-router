@@ -106,6 +106,12 @@ type PromptCompressionConfig struct {
 	PositionWeight float64  `yaml:"position_weight,omitempty"`
 	TFIDFWeight    float64  `yaml:"tfidf_weight,omitempty"`
 	PositionDepth  float64  `yaml:"position_depth,omitempty"`
+	// MaxEvaluationChars is a hard safety limit applied to evaluationText before
+	// any signal processing. Unlike prompt_compression (which is quality-aware and
+	// optional), this truncation always runs when set to a positive value.
+	// Default 0 means no limit. Recommended production value: 8192 (~2K tokens).
+	// Set to -1 to explicitly disable even if a future default is introduced.
+	MaxEvaluationChars int `yaml:"max_evaluation_chars,omitempty"`
 }
 
 func (pc PromptCompressionConfig) SkipSignalsSet() map[string]bool {
