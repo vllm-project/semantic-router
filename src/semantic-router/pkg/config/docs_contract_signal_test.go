@@ -26,7 +26,8 @@ var signalTutorialBuckets = map[string]string{
 	"reask":          "learned",
 	"kb":             "learned",
 	"user-feedback":  "learned",
-	"session-metric": "heuristic",
+	"session-metric":  "heuristic",
+	"event-context":   "heuristic",
 }
 
 var retiredSignalTutorialDocs = []string{

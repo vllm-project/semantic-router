@@ -1,0 +1,149 @@
+/*
+Copyright 2025 vLLM Semantic Router.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
+
+package classification
+
+import (
+	"regexp"
+	"strings"
+
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
+)
+
+// severityKeywords are the well-known severity level terms used in event payloads
+// and structured logs. Matched case-insensitively against request text.
+var severityKeywords = map[string]*regexp.Regexp{
+	"critical": regexp.MustCompile(`(?i)\bcritical\b`),
+	"high":     regexp.MustCompile(`(?i)\bhigh\b`),
+	"medium":   regexp.MustCompile(`(?i)\bmedium\b`),
+	"low":      regexp.MustCompile(`(?i)\blow\b`),
+}
+
+// temporalMarkers matches urgency indicators common in incident and alert payloads.
+var temporalMarkers = regexp.MustCompile(`(?i)\b(urgent|immediate|asap|deadline|time.sensitive|now|critical.window)\b`)
+
+// EventContextClassifier evaluates EventContextRules against request text.
+// It extracts structured event metadata — event type, severity, temporal urgency,
+// and domain-specific action codes — without requiring an ML model.
+type EventContextClassifier struct {
+	rules []compiledEventContextRule
+}
+
+type compiledEventContextRule struct {
+	name        string
+	eventTypes  []*regexp.Regexp
+	severities  []string // matched against severityKeywords
+	actionCodes []*regexp.Regexp
+	temporal    bool
+}
+
+// NewEventContextClassifier compiles EventContextRules into regex patterns.
+func NewEventContextClassifier(rules []config.EventContextRule) *EventContextClassifier {
+	compiled := make([]compiledEventContextRule, 0, len(rules))
+	for _, r := range rules {
+		cr := compiledEventContextRule{
+			name:       r.Name,
+			severities: r.Severities,
+			temporal:   r.Temporal,
+		}
+		for _, et := range r.EventTypes {
+			pattern := regexp.MustCompile(`(?i)\b` + regexp.QuoteMeta(et) + `\b`)
+			cr.eventTypes = append(cr.eventTypes, pattern)
+		}
+		for _, ac := range r.ActionCodes {
+			pattern := regexp.MustCompile(`(?i)\b` + regexp.QuoteMeta(ac) + `\b`)
+			cr.actionCodes = append(cr.actionCodes, pattern)
+		}
+		compiled = append(compiled, cr)
+	}
+	return &EventContextClassifier{rules: compiled}
+}
+
+// EventContextMatch holds the details of a single rule match.
+type EventContextMatch struct {
+	RuleName        string
+	MatchedSeverity string
+	TemporalMatch   bool
+	Confidence      float64
+}
+
+// Classify evaluates all rules against text and returns matches.
+// A rule matches when at least one of its configured criteria is satisfied.
+// Confidence is proportional to how many criteria matched (0.5 base + bonus per criterion).
+func (ec *EventContextClassifier) Classify(text string) []EventContextMatch {
+	var matches []EventContextMatch
+	for _, rule := range ec.rules {
+		match, ok := ec.evaluateRule(rule, text)
+		if ok {
+			matches = append(matches, match)
+		}
+	}
+	return matches
+}
+
+func (ec *EventContextClassifier) evaluateRule(rule compiledEventContextRule, text string) (EventContextMatch, bool) {
+	criteriaCount := 0
+	matchedCount := 0
+	match := EventContextMatch{RuleName: rule.name}
+
+	if len(rule.eventTypes) > 0 {
+		criteriaCount++
+		for _, re := range rule.eventTypes {
+			if re.MatchString(text) {
+				matchedCount++
+				break
+			}
+		}
+	}
+
+	if len(rule.severities) > 0 {
+		criteriaCount++
+		for _, sev := range rule.severities {
+			key := strings.ToLower(sev)
+			if re, ok := severityKeywords[key]; ok && re.MatchString(text) {
+				matchedCount++
+				match.MatchedSeverity = key
+				break
+			}
+		}
+	}
+
+	if len(rule.actionCodes) > 0 {
+		criteriaCount++
+		for _, re := range rule.actionCodes {
+			if re.MatchString(text) {
+				matchedCount++
+				break
+			}
+		}
+	}
+
+	if rule.temporal {
+		criteriaCount++
+		if temporalMarkers.MatchString(text) {
+			matchedCount++
+			match.TemporalMatch = true
+		}
+	}
+
+	if criteriaCount == 0 || matchedCount == 0 {
+		return EventContextMatch{}, false
+	}
+
+	// Confidence: 0.5 base + up to 0.5 proportional to matched criteria.
+	match.Confidence = 0.5 + 0.5*float64(matchedCount)/float64(criteriaCount)
+	return match, true
+}

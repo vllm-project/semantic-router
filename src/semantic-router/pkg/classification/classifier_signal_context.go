@@ -56,6 +56,7 @@ func (c *Classifier) signalReadiness() map[string]bool {
 		config.SignalTypePII:          len(c.Config.PIIRules) > 0 && c.IsPIIEnabled(),
 		config.SignalTypeKB:           len(c.kbClassifiers) > 0,
 		config.SignalTypeConversation: len(c.Config.ConversationRules) > 0,
+		config.SignalTypeEventContext: c.eventContextClassifier != nil,
 	}
 }
 
@@ -778,4 +779,35 @@ func (c *Classifier) evaluatePIIRule(rule config.PIIRule, piiText string, nonUse
 		}
 		mu.Unlock()
 	}
+}
+
+func (c *Classifier) evaluateEventContextSignal(results *SignalResults, mu *sync.Mutex, text string) {
+	start := time.Now()
+	matches := c.eventContextClassifier.Classify(text)
+	elapsed := time.Since(start)
+	latencySeconds := elapsed.Seconds()
+
+	results.Metrics.EventContext.ExecutionTimeMs = float64(elapsed.Microseconds()) / 1000.0
+
+	logging.Debugf("[Signal Computation] EventContext signal evaluation completed in %v", elapsed)
+
+	bestConfidence := 0.0
+	mu.Lock()
+	for _, match := range matches {
+		metrics.RecordSignalExtraction(config.SignalTypeEventContext, match.RuleName, latencySeconds)
+		metrics.RecordSignalMatch(config.SignalTypeEventContext, match.RuleName)
+		results.MatchedEventContextRules = append(results.MatchedEventContextRules, match.RuleName)
+		results.SignalConfidences["event_context:"+match.RuleName] = match.Confidence
+		if match.MatchedSeverity != "" {
+			results.SignalValues["event_context:"+match.RuleName+":severity"] = 1.0
+		}
+		if match.TemporalMatch {
+			results.SignalValues["event_context:"+match.RuleName+":temporal"] = 1.0
+		}
+		if match.Confidence > bestConfidence {
+			bestConfidence = match.Confidence
+		}
+	}
+	results.Metrics.EventContext.Confidence = bestConfidence
+	mu.Unlock()
 }

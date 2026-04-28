@@ -24,7 +24,8 @@ type Signals struct {
 	PIIRules           []PIIRule           `yaml:"pii,omitempty"`
 	KBRules            []KBSignalRule      `yaml:"kb,omitempty"`
 	ConversationRules  []ConversationRule  `yaml:"conversation,omitempty"`
-	SessionMetricRules []SessionMetricRule `yaml:"session_metrics,omitempty"`
+	SessionMetricRules  []SessionMetricRule  `yaml:"session_metrics,omitempty"`
+	EventContextRules   []EventContextRule   `yaml:"event_context_rules,omitempty"`
 }
 
 // SessionMetricRule is a unified session-context routing metric.
@@ -39,6 +40,17 @@ type SessionMetricRule struct {
 	Max       *float64 `yaml:"max,omitempty"`
 	Table     string   `yaml:"table,omitempty"`
 	Key       []string `yaml:"key,omitempty"`
+}
+
+// EventContextRule matches structured event metadata extracted from request text.
+// It routes event-driven requests (error alerts, audit logs, incident payloads)
+// to specialized model pools based on event type, severity, and temporal urgency.
+type EventContextRule struct {
+	Name        string   `yaml:"name"`
+	EventTypes  []string `yaml:"event_types,omitempty"`   // e.g. ["payment_failed", "auth_error"]
+	Severities  []string `yaml:"severities,omitempty"`    // e.g. ["critical", "high"]
+	ActionCodes []string `yaml:"action_codes,omitempty"`  // domain-specific codes, e.g. ["TXN_DECLINE"]
+	Temporal    bool     `yaml:"temporal,omitempty"`      // match time-sensitive markers (urgent, immediate)
 }
 
 type KeywordRule struct {

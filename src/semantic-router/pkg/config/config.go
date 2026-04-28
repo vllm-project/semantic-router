@@ -41,6 +41,7 @@ const (
 	SignalTypeConversation  = "conversation"
 	SignalTypeSessionMetric = "session_metric"
 	SignalTypeProjection    = "projection"
+	SignalTypeEventContext  = "event_context"
 )
 
 // API format constants for model backends.
