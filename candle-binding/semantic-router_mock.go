@@ -750,9 +750,8 @@ func InitMmBert32KPIIClassifier(modelPath string, useCPU bool) error {
 }
 
 // ClassifyMmBert32KPII classifies text with mmBERT-32K PII classifier
-func ClassifyMmBert32KPII(text string, modelConfigPath string) ([]TokenEntity, error) {
+func ClassifyMmBert32KPII(text string) ([]TokenEntity, error) {
 	_ = text
-	_ = modelConfigPath
 	return []TokenEntity{}, nil
 }
 

@@ -9,8 +9,10 @@ package extproc
 // is caught, logged, and returned to the caller as a gRPC Internal error rather
 // than crashing the entire server. (GitHub issue #1843)
 //
-// These tests exercise the Go-level panic recovery without requiring any model
-// files; they run in all environments including CI.
+// These tests exercise the Go-level panic recovery on mocked ext_proc streams.
+// They use CreateTestConfig/CreateTestRouter like other extproc tests; when CGO
+// and model assets are available that may perform real initialization, but the
+// panic/assertion path does not depend on mmBERT or long-prompt fixtures.
 
 import (
 	"fmt"
