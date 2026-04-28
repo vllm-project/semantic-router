@@ -266,18 +266,22 @@ func (r *OpenAIRouter) executeBoth(ctx *RequestContext, cfg *config.RouterConfig
 	)
 
 	// --- AR text call (parallel) ---
+	// goSafely catches panics in the upstream model client so a
+	// crash there does not take the whole router process down.
+	// wg.Done() is registered before the model call, so it still
+	// fires on panic via the inner defer (#1843).
 	wg.Add(1)
-	go func() {
+	goSafely("modality_ar_text", func() {
 		defer wg.Done()
 		textResp, textErr = r.callARModel(ctx, cfg, openAIRequest, arModel)
-	}()
+	})
 
 	// --- Diffusion image call (parallel) ---
 	wg.Add(1)
-	go func() {
+	goSafely("modality_diffusion", func() {
 		defer wg.Done()
 		imgRes, imgErr = r.generateImage(ctx, cfg, diffusionModel)
-	}()
+	})
 
 	wg.Wait()
 
