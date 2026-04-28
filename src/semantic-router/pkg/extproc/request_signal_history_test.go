@@ -78,6 +78,7 @@ func TestSignalConversationHistoryFromFastExtract_PreservesResponseAPIUserChain(
 	assert.Equal(t, "What is my name again?", history.currentUserMessage)
 	assert.Equal(t, []string{"Hello"}, history.priorUserMessages)
 	assert.Equal(t, []string{"Remember my name is Alice.", "Hi there!"}, history.nonUserMessages)
+	assert.True(t, history.hasAssistantReply)
 }
 
 func TestExtractRecentAssistantToolCallNames(t *testing.T) {
