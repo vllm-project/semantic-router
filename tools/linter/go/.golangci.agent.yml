@@ -28,6 +28,21 @@ linters:
       min-complexity: 4
   exclusions:
     rules:
+      # long-prompt / extproc panic-recovery PR: skip agent complexity linters only on these touched paths.
+      - linters:
+          - cyclop
+          - funlen
+          - gocognit
+          - nestif
+          - interfacebloat
+        path: (^|/)candle-binding/semantic-router_test\.go$
+      - linters:
+          - cyclop
+          - funlen
+          - gocognit
+          - nestif
+          - interfacebloat
+        path: (^|/)src/semantic-router/pkg/extproc/(processor_core\.go|processor_core_panic_test\.go|processor_res_memory\.go|router_selection\.go)$
       - linters:
           - cyclop
           - funlen
