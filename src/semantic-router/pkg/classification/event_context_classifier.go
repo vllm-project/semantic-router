@@ -95,49 +95,13 @@ func (ec *EventContextClassifier) Classify(text string) []EventContextMatch {
 }
 
 func (ec *EventContextClassifier) evaluateRule(rule compiledEventContextRule, text string) (EventContextMatch, bool) {
-	criteriaCount := 0
-	matchedCount := 0
 	match := EventContextMatch{RuleName: rule.name}
+	criteriaCount, matchedCount := 0, 0
 
-	if len(rule.eventTypes) > 0 {
-		criteriaCount++
-		for _, re := range rule.eventTypes {
-			if re.MatchString(text) {
-				matchedCount++
-				break
-			}
-		}
-	}
-
-	if len(rule.severities) > 0 {
-		criteriaCount++
-		for _, sev := range rule.severities {
-			key := strings.ToLower(sev)
-			if re, ok := severityKeywords[key]; ok && re.MatchString(text) {
-				matchedCount++
-				match.MatchedSeverity = key
-				break
-			}
-		}
-	}
-
-	if len(rule.actionCodes) > 0 {
-		criteriaCount++
-		for _, re := range rule.actionCodes {
-			if re.MatchString(text) {
-				matchedCount++
-				break
-			}
-		}
-	}
-
-	if rule.temporal {
-		criteriaCount++
-		if temporalMarkers.MatchString(text) {
-			matchedCount++
-			match.TemporalMatch = true
-		}
-	}
+	criteriaCount, matchedCount = matchEventTypes(rule, text, criteriaCount, matchedCount)
+	criteriaCount, matchedCount, match.MatchedSeverity = matchSeverities(rule, text, criteriaCount, matchedCount)
+	criteriaCount, matchedCount = matchActionCodes(rule, text, criteriaCount, matchedCount)
+	criteriaCount, matchedCount, match.TemporalMatch = matchTemporal(rule, text, criteriaCount, matchedCount)
 
 	if criteriaCount == 0 || matchedCount == 0 {
 		return EventContextMatch{}, false
@@ -146,4 +110,55 @@ func (ec *EventContextClassifier) evaluateRule(rule compiledEventContextRule, te
 	// Confidence: 0.5 base + up to 0.5 proportional to matched criteria.
 	match.Confidence = 0.5 + 0.5*float64(matchedCount)/float64(criteriaCount)
 	return match, true
+}
+
+func matchEventTypes(rule compiledEventContextRule, text string, criteria, matched int) (int, int) {
+	if len(rule.eventTypes) == 0 {
+		return criteria, matched
+	}
+	criteria++
+	for _, re := range rule.eventTypes {
+		if re.MatchString(text) {
+			return criteria, matched + 1
+		}
+	}
+	return criteria, matched
+}
+
+func matchSeverities(rule compiledEventContextRule, text string, criteria, matched int) (int, int, string) {
+	if len(rule.severities) == 0 {
+		return criteria, matched, ""
+	}
+	criteria++
+	for _, sev := range rule.severities {
+		key := strings.ToLower(sev)
+		if re, ok := severityKeywords[key]; ok && re.MatchString(text) {
+			return criteria, matched + 1, key
+		}
+	}
+	return criteria, matched, ""
+}
+
+func matchActionCodes(rule compiledEventContextRule, text string, criteria, matched int) (int, int) {
+	if len(rule.actionCodes) == 0 {
+		return criteria, matched
+	}
+	criteria++
+	for _, re := range rule.actionCodes {
+		if re.MatchString(text) {
+			return criteria, matched + 1
+		}
+	}
+	return criteria, matched
+}
+
+func matchTemporal(rule compiledEventContextRule, text string, criteria, matched int) (int, int, bool) {
+	if !rule.temporal {
+		return criteria, matched, false
+	}
+	criteria++
+	if temporalMarkers.MatchString(text) {
+		return criteria, matched + 1, true
+	}
+	return criteria, matched, false
 }
