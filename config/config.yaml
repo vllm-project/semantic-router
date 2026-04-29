@@ -458,6 +458,18 @@ routing:
           - session_routing.current_model
           - session_routing.candidate_model
 
+    event_context_rules:
+      - name: critical_payment_event
+        event_types:
+          - payment_failed
+          - transaction_declined
+        severities:
+          - critical
+          - high
+        action_codes:
+          - TXN_DECLINE
+        temporal: true
+
   projections:
     partitions:
       - name: support_intents

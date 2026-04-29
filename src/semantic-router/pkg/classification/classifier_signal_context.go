@@ -56,6 +56,7 @@ func (c *Classifier) signalReadiness() map[string]bool {
 		config.SignalTypePII:          len(c.Config.PIIRules) > 0 && c.IsPIIEnabled(),
 		config.SignalTypeKB:           len(c.kbClassifiers) > 0,
 		config.SignalTypeConversation: len(c.Config.ConversationRules) > 0,
+		config.SignalTypeEventContext: c.eventContextClassifier != nil,
 	}
 }
 

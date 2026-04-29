@@ -34,6 +34,7 @@ func (b *classifierOptionBuilder) build(categoryMapping *CategoryMapping) ([]opt
 		b.buildContrastiveJailbreakClassifiersOption,
 		b.buildAuthzClassifierOption,
 		b.buildKBClassifiersOption,
+		b.buildEventContextClassifierOption,
 	}
 	parallelOptions, err := b.buildParallelOptions(steps)
 	if err != nil {
@@ -146,6 +147,13 @@ func (b *classifierOptionBuilder) buildStructureClassifierOption() (option, erro
 		return nil, err
 	}
 	return withStructureClassifier(structureClassifier), nil
+}
+
+func (b *classifierOptionBuilder) buildEventContextClassifierOption() (option, error) {
+	if len(b.cfg.EventContextRules) == 0 {
+		return nil, nil
+	}
+	return withEventContextClassifier(NewEventContextClassifier(b.cfg.EventContextRules)), nil
 }
 
 func (b *classifierOptionBuilder) buildReaskClassifierOption() (option, error) {

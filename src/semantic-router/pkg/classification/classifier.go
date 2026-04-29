@@ -46,6 +46,9 @@ type Classifier struct {
 	// Complexity classifier for complexity-based routing using embedding similarity
 	complexityClassifier *ComplexityClassifier
 
+	// Event context classifier for event-driven request routing
+	eventContextClassifier *EventContextClassifier
+
 	// Contrastive jailbreak classifiers keyed by rule name.
 	// Only populated for JailbreakRules with Method == "contrastive".
 	contrastiveJailbreakClassifiers map[string]*ContrastiveJailbreakClassifier
@@ -141,6 +144,12 @@ func withStructureClassifier(structureClassifier *StructureClassifier) option {
 func withComplexityClassifier(complexityClassifier *ComplexityClassifier) option {
 	return func(c *Classifier) {
 		c.complexityClassifier = complexityClassifier
+	}
+}
+
+func withEventContextClassifier(eventContextClassifier *EventContextClassifier) option {
+	return func(c *Classifier) {
+		c.eventContextClassifier = eventContextClassifier
 	}
 }
 
