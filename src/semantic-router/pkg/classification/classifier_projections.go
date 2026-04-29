@@ -29,6 +29,7 @@ var projectionMatchAccessors = map[string]projectionMatchAccessor{
 	config.SignalTypeKB:            func(results *SignalResults) []string { return results.MatchedKBRules },
 	config.SignalTypeConversation:  func(results *SignalResults) []string { return results.MatchedConversationRules },
 	config.SignalTypeSessionMetric: func(results *SignalResults) []string { return results.MatchedSessionMetricRules },
+	config.SignalTypeProjection:    func(results *SignalResults) []string { return results.MatchedProjectionRules },
 }
 
 func (c *Classifier) applyProjections(results *SignalResults) *SignalResults {
@@ -46,24 +47,105 @@ func (c *Classifier) applyProjections(results *SignalResults) *SignalResults {
 		results.SignalConfidences = make(map[string]float64)
 	}
 
-	for _, score := range c.Config.Projections.Scores {
-		results.ProjectionScores[score.Name] = projectionScoreValue(score, results)
+	orderedScores := topologicalScoreOrder(c.Config.Projections.Scores, c.Config.Projections.Mappings)
+
+	mappingBySource := make(map[string][]config.ProjectionMapping, len(c.Config.Projections.Mappings))
+	for _, mapping := range c.Config.Projections.Mappings {
+		mappingBySource[mapping.Source] = append(mappingBySource[mapping.Source], mapping)
 	}
 
-	for _, mapping := range c.Config.Projections.Mappings {
-		scoreValue, ok := results.ProjectionScores[mapping.Source]
-		if !ok {
-			continue
+	for _, score := range orderedScores {
+		results.ProjectionScores[score.Name] = projectionScoreValue(score, results)
+
+		for _, mapping := range mappingBySource[score.Name] {
+			scoreValue := results.ProjectionScores[mapping.Source]
+			output, matched := matchProjectionOutput(mapping, scoreValue)
+			if !matched {
+				continue
+			}
+			results.MatchedProjectionRules = append(results.MatchedProjectionRules, output.Name)
+			results.SignalConfidences[signalConfidenceKey(config.SignalTypeProjection, output.Name)] = projectionOutputConfidence(mapping, output, scoreValue)
 		}
-		output, matched := matchProjectionOutput(mapping, scoreValue)
-		if !matched {
-			continue
-		}
-		results.MatchedProjectionRules = append(results.MatchedProjectionRules, output.Name)
-		results.SignalConfidences[signalConfidenceKey(config.SignalTypeProjection, output.Name)] = projectionOutputConfidence(mapping, output, scoreValue)
 	}
 
 	return results
+}
+
+func hasProjectionDependency(scores []config.ProjectionScore) bool {
+	for _, s := range scores {
+		for _, inp := range s.Inputs {
+			if strings.EqualFold(strings.TrimSpace(inp.Type), config.SignalTypeProjection) {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+func buildScoreAdjacency(scores []config.ProjectionScore, outputToSource map[string]string) map[string][]string {
+	adj := make(map[string][]string, len(scores))
+	for _, s := range scores {
+		for _, inp := range s.Inputs {
+			if !strings.EqualFold(strings.TrimSpace(inp.Type), config.SignalTypeProjection) {
+				continue
+			}
+			vs := strings.ToLower(strings.TrimSpace(inp.ValueSource))
+			if vs == "confidence" {
+				if src, ok := outputToSource[inp.Name]; ok {
+					adj[s.Name] = append(adj[s.Name], src)
+				}
+			} else {
+				adj[s.Name] = append(adj[s.Name], inp.Name)
+			}
+		}
+	}
+	return adj
+}
+
+func topologicalScoreOrder(scores []config.ProjectionScore, mappings []config.ProjectionMapping) []config.ProjectionScore {
+	if !hasProjectionDependency(scores) {
+		return scores
+	}
+
+	byName := make(map[string]config.ProjectionScore, len(scores))
+	for _, s := range scores {
+		byName[s.Name] = s
+	}
+
+	outputToSource := make(map[string]string)
+	for _, m := range mappings {
+		for _, out := range m.Outputs {
+			if out.Name != "" {
+				outputToSource[out.Name] = m.Source
+			}
+		}
+	}
+
+	adj := buildScoreAdjacency(scores, outputToSource)
+	state := make(map[string]int, len(scores))
+	ordered := make([]config.ProjectionScore, 0, len(scores))
+
+	var visit func(name string)
+	visit = func(name string) {
+		if state[name] != 0 {
+			return
+		}
+		state[name] = 1
+		for _, dep := range adj[name] {
+			if _, ok := byName[dep]; ok {
+				visit(dep)
+			}
+		}
+		if s, ok := byName[name]; ok {
+			ordered = append(ordered, s)
+		}
+	}
+
+	for _, s := range scores {
+		visit(s.Name)
+	}
+
+	return ordered
 }
 
 func projectionScoreValue(score config.ProjectionScore, results *SignalResults) float64 {
@@ -75,11 +157,15 @@ func projectionScoreValue(score config.ProjectionScore, results *SignalResults) 
 }
 
 func projectionInputValue(input config.ProjectionScoreInput, results *SignalResults) float64 {
-	if strings.EqualFold(strings.TrimSpace(input.Type), config.ProjectionInputKBMetric) {
+	normalizedType := strings.ToLower(strings.TrimSpace(input.Type))
+	if normalizedType == config.ProjectionInputKBMetric {
 		if results.KBMetricValues == nil {
 			return 0
 		}
 		return results.KBMetricValues[kbMetricKey(input.KB, input.Metric)]
+	}
+	if normalizedType == config.SignalTypeProjection {
+		return projectionInputProjectionValue(input, results)
 	}
 	switch strings.ToLower(strings.TrimSpace(input.ValueSource)) {
 	case "raw":
@@ -116,6 +202,22 @@ func projectionInputBinaryValue(input config.ProjectionScoreInput, results *Sign
 		return matchValue
 	}
 	return input.Miss
+}
+
+func projectionInputProjectionValue(input config.ProjectionScoreInput, results *SignalResults) float64 {
+	switch strings.ToLower(strings.TrimSpace(input.ValueSource)) {
+	case "confidence":
+		if results.SignalConfidences == nil {
+			return 0
+		}
+		key := signalConfidenceKey(config.SignalTypeProjection, input.Name)
+		return results.SignalConfidences[key]
+	default:
+		if results.ProjectionScores == nil {
+			return 0
+		}
+		return results.ProjectionScores[input.Name]
+	}
 }
 
 func kbMetricKey(kbName, metric string) string {

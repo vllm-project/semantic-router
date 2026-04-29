@@ -147,10 +147,10 @@ PROJECTION score difficulty_score {
 |-------|---------|
 | `name` | score identifier |
 | `method` | currently `weighted_sum` |
-| `inputs[].type` | signal family to read from |
-| `inputs[].name` | declared signal name |
+| `inputs[].type` | signal family to read from, or `projection` to reference an earlier score or mapping output |
+| `inputs[].name` | declared signal name; for `type: projection` with `value_source: score` (default) this is a score name, with `value_source: confidence` this is a mapping output name |
 | `inputs[].weight` | contribution multiplier; negative weights lower the score |
-| `inputs[].value_source` | `binary`, `confidence`, or `raw` behavior |
+| `inputs[].value_source` | `binary`, `confidence`, `raw`, or `score` (for projection inputs); `confidence` on a `projection` input reads a mapping output's calibrated confidence |
 | `inputs[].match` / `inputs[].miss` | explicit values for binary mode |
 
 ## Configuration
@@ -179,6 +179,72 @@ Do not use scores when:
 - Document why each weight exists, especially when mixing confidence-bearing learned signals with heuristic signals.
 - Prefer scores for numeric aggregation and keep `routing.decisions` focused on readable boolean composition.
 - Use negative weights when a matched signal should actively lower the tier, as `balance` does for obviously simple requests.
+
+## Hierarchical Composition
+
+Scores can reference earlier projection scores or mapping output confidences using `type: projection`. This enables layered routing constructs where one score builds on another.
+
+### Score-to-Score Reference
+
+Use `value_source: score` (or omit `value_source`) to read a previously computed score value:
+
+```yaml
+routing:
+  projections:
+    scores:
+      - name: difficulty_score
+        method: weighted_sum
+        inputs:
+          - type: keyword
+            name: reasoning_request_markers
+            weight: 0.6
+            value_source: confidence
+
+      - name: verification_pressure
+        method: weighted_sum
+        inputs:
+          - type: projection
+            name: difficulty_score
+            value_source: score
+            weight: 0.8
+          - type: fact_check
+            name: needs_fact_check
+            weight: 0.4
+
+    mappings:
+      - name: verification_band
+        source: verification_pressure
+        method: threshold_bands
+        outputs:
+          - name: needs_deep_verify
+            gte: 0.7
+          - name: standard_verify
+            lt: 0.7
+```
+
+### Confidence Reference
+
+Use `value_source: confidence` to read the calibrated confidence from a mapping output band:
+
+```yaml
+- type: projection
+  name: needs_deep_verify
+  value_source: confidence
+  weight: 0.5
+```
+
+### Dependency Ordering
+
+Scores can be declared in any order. The runtime evaluates them in topological order so that dependencies are always resolved before dependents. Cycles are rejected at config validation time.
+
+### Config Fields for Projection Inputs
+
+| Field | Meaning |
+|-------|---------|
+| `type` | `projection` |
+| `name` | declared score name (for `value_source: score`) or mapping output name (for `value_source: confidence`) |
+| `value_source` | `score` (read raw score value) or `confidence` (read mapping output confidence) |
+| `weight` | contribution multiplier |
 
 ## Next Steps
 

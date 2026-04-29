@@ -124,13 +124,13 @@ func TestProjectionInputValueRawReadsSignalValues(t *testing.T) {
 						Method: "weighted_sum",
 						Inputs: []config.ProjectionScoreInput{
 							{
-								Type:        "structure",
+								Type:        config.SignalTypeStructure,
 								Name:        "many_questions",
 								Weight:      0.5,
 								ValueSource: "raw",
 							},
 							{
-								Type:        "conversation",
+								Type:        config.SignalTypeConversation,
 								Name:        "tool_loop_deep",
 								Weight:      0.3,
 								ValueSource: "raw",
@@ -172,6 +172,66 @@ func TestProjectionInputValueRawReadsSignalValues(t *testing.T) {
 	}
 }
 
+func TestApplyProjectionsScoreConsumesEarlierScore(t *testing.T) {
+	classifier := &Classifier{
+		Config: &config.RouterConfig{
+			IntelligentRouting: config.IntelligentRouting{
+				Projections: config.Projections{
+					Scores: []config.ProjectionScore{
+						{
+							Name:   "difficulty_score",
+							Method: "weighted_sum",
+							Inputs: []config.ProjectionScoreInput{
+								{Type: config.SignalTypeKeyword, Name: "markers", Weight: 1.0},
+							},
+						},
+						{
+							Name:   "verification_pressure",
+							Method: "weighted_sum",
+							Inputs: []config.ProjectionScoreInput{
+								{Type: config.SignalTypeProjection, Name: "difficulty_score", Weight: 0.5, ValueSource: "score"},
+								{Type: config.SignalTypeFactCheck, Name: "needs_check", Weight: 0.5},
+							},
+						},
+					},
+					Mappings: []config.ProjectionMapping{
+						{
+							Name:   "pressure_band",
+							Source: "verification_pressure",
+							Method: "threshold_bands",
+							Outputs: []config.ProjectionMappingOutput{
+								{Name: "low_pressure", LT: float64Ptr(0.5)},
+								{Name: "high_pressure", GTE: float64Ptr(0.5)},
+							},
+						},
+					},
+				},
+			},
+		},
+	}
+
+	results := &SignalResults{
+		MatchedKeywordRules:   []string{"markers"},
+		MatchedFactCheckRules: []string{"needs_check"},
+	}
+
+	got := classifier.applyProjections(results)
+	if got == nil {
+		t.Fatal("applyProjections returned nil")
+	}
+	diffScore := got.ProjectionScores["difficulty_score"]
+	if diffScore != 1.0 {
+		t.Fatalf("difficulty_score = %.3f, want 1.0", diffScore)
+	}
+	vpScore := got.ProjectionScores["verification_pressure"]
+	if vpScore != 1.0 {
+		t.Fatalf("verification_pressure = %.3f, want 1.0 (0.5*1.0 + 0.5*1.0)", vpScore)
+	}
+	if len(got.MatchedProjectionRules) != 1 || got.MatchedProjectionRules[0] != "high_pressure" {
+		t.Fatalf("matched projection rules = %v, want [high_pressure]", got.MatchedProjectionRules)
+	}
+}
+
 func TestProjectionInputValueRawReturnsZeroWhenMissing(t *testing.T) {
 	classifier := &Classifier{
 		Config: &config.RouterConfig{
@@ -181,7 +241,7 @@ func TestProjectionInputValueRawReturnsZeroWhenMissing(t *testing.T) {
 						Name:   "absent_score",
 						Method: "weighted_sum",
 						Inputs: []config.ProjectionScoreInput{{
-							Type:        "structure",
+							Type:        config.SignalTypeStructure,
 							Name:        "nonexistent_signal",
 							Weight:      1.0,
 							ValueSource: "raw",
@@ -211,9 +271,71 @@ func TestProjectionInputValueRawReturnsZeroWhenMissing(t *testing.T) {
 	}
 }
 
+func TestApplyProjectionsScoreConsumesConfidence(t *testing.T) {
+	classifier := &Classifier{
+		Config: &config.RouterConfig{
+			IntelligentRouting: config.IntelligentRouting{
+				Projections: config.Projections{
+					Scores: []config.ProjectionScore{
+						{
+							Name:   "base_score",
+							Method: "weighted_sum",
+							Inputs: []config.ProjectionScoreInput{
+								{Type: config.SignalTypeKeyword, Name: "k1", Weight: 1.0},
+							},
+						},
+						{
+							Name:   "combo_score",
+							Method: "weighted_sum",
+							Inputs: []config.ProjectionScoreInput{
+								{Type: config.SignalTypeProjection, Name: "base_band_high", Weight: 1.0, ValueSource: "confidence"},
+							},
+						},
+					},
+					Mappings: []config.ProjectionMapping{
+						{
+							Name:   "base_mapping",
+							Source: "base_score",
+							Method: "threshold_bands",
+							Outputs: []config.ProjectionMappingOutput{
+								{Name: "base_band_high", GTE: float64Ptr(0.5)},
+							},
+						},
+						{
+							Name:   "combo_mapping",
+							Source: "combo_score",
+							Method: "threshold_bands",
+							Outputs: []config.ProjectionMappingOutput{
+								{Name: "combo_high", GTE: float64Ptr(0.1)},
+							},
+						},
+					},
+				},
+			},
+		},
+	}
+
+	results := &SignalResults{
+		MatchedKeywordRules: []string{"k1"},
+	}
+
+	got := classifier.applyProjections(results)
+	if got == nil {
+		t.Fatal("applyProjections returned nil")
+	}
+	confidence, ok := got.SignalConfidences["projection:base_band_high"]
+	if !ok || confidence <= 0 {
+		t.Fatalf("expected positive confidence for base_band_high, got %.3f (ok=%v)", confidence, ok)
+	}
+	comboScore := got.ProjectionScores["combo_score"]
+	if comboScore <= 0 {
+		t.Fatalf("combo_score = %.3f, want positive (fed by base_band_high confidence)", comboScore)
+	}
+}
+
 func TestProjectionInputValueRawReturnsZeroWhenNilMap(t *testing.T) {
 	result := projectionInputValue(config.ProjectionScoreInput{
-		Type:        "structure",
+		Type:        config.SignalTypeStructure,
 		Name:        "any",
 		Weight:      1.0,
 		ValueSource: "raw",
@@ -234,7 +356,7 @@ func TestProjectionMixedRawAndConfidenceInputs(t *testing.T) {
 						Method: "weighted_sum",
 						Inputs: []config.ProjectionScoreInput{
 							{
-								Type:        "structure",
+								Type:        config.SignalTypeStructure,
 								Name:        "many_questions",
 								Weight:      0.4,
 								ValueSource: "raw",
@@ -287,7 +409,7 @@ func TestProjectionMixedRawAndConfidenceInputs(t *testing.T) {
 
 func TestProjectionInputValueRawNegativeValues(t *testing.T) {
 	result := projectionInputValue(config.ProjectionScoreInput{
-		Type:        "structure",
+		Type:        config.SignalTypeStructure,
 		Name:        "neg_signal",
 		Weight:      1.0,
 		ValueSource: "raw",
@@ -322,7 +444,7 @@ func TestProjectionInputValueRawCaseInsensitive(t *testing.T) {
 
 func TestProjectionInputValueRawExplicitZero(t *testing.T) {
 	result := projectionInputValue(config.ProjectionScoreInput{
-		Type:        "structure",
+		Type:        config.SignalTypeStructure,
 		Name:        "zero_signal",
 		Weight:      1.0,
 		ValueSource: "raw",
@@ -339,7 +461,7 @@ func TestProjectionInputValueRawExplicitZero(t *testing.T) {
 
 func TestProjectionInputValueRawLargeValues(t *testing.T) {
 	result := projectionInputValue(config.ProjectionScoreInput{
-		Type:        "structure",
+		Type:        config.SignalTypeStructure,
 		Name:        "token_count",
 		Weight:      1.0,
 		ValueSource: "raw",
@@ -351,6 +473,150 @@ func TestProjectionInputValueRawLargeValues(t *testing.T) {
 
 	if result != 128000.0 {
 		t.Fatalf("expected 128000 for large raw value, got %.1f", result)
+	}
+}
+
+func TestApplyProjectionsThreeLevelChain(t *testing.T) {
+	classifier := &Classifier{
+		Config: &config.RouterConfig{
+			IntelligentRouting: config.IntelligentRouting{
+				Projections: config.Projections{
+					Scores: []config.ProjectionScore{
+						{
+							Name:   "level_1",
+							Method: "weighted_sum",
+							Inputs: []config.ProjectionScoreInput{
+								{Type: config.SignalTypeKeyword, Name: "k1", Weight: 1.0},
+							},
+						},
+						{
+							Name:   "level_2",
+							Method: "weighted_sum",
+							Inputs: []config.ProjectionScoreInput{
+								{Type: config.SignalTypeProjection, Name: "level_1", Weight: 0.5, ValueSource: "score"},
+							},
+						},
+						{
+							Name:   "level_3",
+							Method: "weighted_sum",
+							Inputs: []config.ProjectionScoreInput{
+								{Type: config.SignalTypeProjection, Name: "level_2", Weight: 0.5, ValueSource: "score"},
+							},
+						},
+					},
+					Mappings: []config.ProjectionMapping{
+						{
+							Name:   "final_band",
+							Source: "level_3",
+							Method: "threshold_bands",
+							Outputs: []config.ProjectionMappingOutput{
+								{Name: "final_high", GTE: float64Ptr(0.1)},
+							},
+						},
+					},
+				},
+			},
+		},
+	}
+
+	results := &SignalResults{
+		MatchedKeywordRules: []string{"k1"},
+	}
+
+	got := classifier.applyProjections(results)
+	if got == nil {
+		t.Fatal("applyProjections returned nil")
+	}
+	if got.ProjectionScores["level_1"] != 1.0 {
+		t.Fatalf("level_1 = %.3f, want 1.0", got.ProjectionScores["level_1"])
+	}
+	if got.ProjectionScores["level_2"] != 0.5 {
+		t.Fatalf("level_2 = %.3f, want 0.5", got.ProjectionScores["level_2"])
+	}
+	if got.ProjectionScores["level_3"] != 0.25 {
+		t.Fatalf("level_3 = %.3f, want 0.25", got.ProjectionScores["level_3"])
+	}
+}
+
+func TestTopologicalScoreOrderIndependentOfDeclaration(t *testing.T) {
+	scores := []config.ProjectionScore{
+		{
+			Name:   "derived",
+			Method: "weighted_sum",
+			Inputs: []config.ProjectionScoreInput{
+				{Type: config.SignalTypeProjection, Name: "base", Weight: 1.0, ValueSource: "score"},
+			},
+		},
+		{
+			Name:   "base",
+			Method: "weighted_sum",
+			Inputs: []config.ProjectionScoreInput{
+				{Type: config.SignalTypeKeyword, Name: "k1", Weight: 1.0},
+			},
+		},
+	}
+
+	ordered := topologicalScoreOrder(scores, nil)
+	if len(ordered) != 2 {
+		t.Fatalf("expected 2 scores, got %d", len(ordered))
+	}
+	if ordered[0].Name != "base" {
+		t.Fatalf("expected base first in topological order, got %s", ordered[0].Name)
+	}
+	if ordered[1].Name != "derived" {
+		t.Fatalf("expected derived second in topological order, got %s", ordered[1].Name)
+	}
+}
+
+func TestApplyProjectionsReverseDeclarationOrder(t *testing.T) {
+	classifier := &Classifier{
+		Config: &config.RouterConfig{
+			IntelligentRouting: config.IntelligentRouting{
+				Projections: config.Projections{
+					Scores: []config.ProjectionScore{
+						{
+							Name:   "derived",
+							Method: "weighted_sum",
+							Inputs: []config.ProjectionScoreInput{
+								{Type: config.SignalTypeProjection, Name: "base", Weight: 1.0, ValueSource: "score"},
+							},
+						},
+						{
+							Name:   "base",
+							Method: "weighted_sum",
+							Inputs: []config.ProjectionScoreInput{
+								{Type: config.SignalTypeKeyword, Name: "k1", Weight: 1.0},
+							},
+						},
+					},
+					Mappings: []config.ProjectionMapping{
+						{
+							Name:   "band",
+							Source: "derived",
+							Method: "threshold_bands",
+							Outputs: []config.ProjectionMappingOutput{
+								{Name: "band_high", GTE: float64Ptr(0.5)},
+							},
+						},
+					},
+				},
+			},
+		},
+	}
+
+	results := &SignalResults{MatchedKeywordRules: []string{"k1"}}
+	got := classifier.applyProjections(results)
+	if got == nil {
+		t.Fatal("applyProjections returned nil")
+	}
+	if got.ProjectionScores["base"] != 1.0 {
+		t.Fatalf("base = %.3f, want 1.0", got.ProjectionScores["base"])
+	}
+	if got.ProjectionScores["derived"] != 1.0 {
+		t.Fatalf("derived = %.3f, want 1.0", got.ProjectionScores["derived"])
+	}
+	if len(got.MatchedProjectionRules) != 1 || got.MatchedProjectionRules[0] != "band_high" {
+		t.Fatalf("matched = %v, want [band_high]", got.MatchedProjectionRules)
 	}
 }
 
