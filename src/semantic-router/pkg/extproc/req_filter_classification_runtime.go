@@ -226,7 +226,7 @@ func (r *OpenAIRouter) selectDecisionRuntimeModel(
 		result.Decision.CandidateIterations,
 		ctx,
 	)
-	selectedModelRef, usedMethod := r.selectModelFromCandidates(selCtx, result.Decision.Algorithm)
+	selectedModelRef, usedMethod := r.selectModelFromCandidates(selCtx, result.Decision.Algorithm, ctx)
 	selectedModel := selectedModelRef.Model
 	selectionFields := map[string]interface{}{
 		"request_id":        ctx.RequestID,

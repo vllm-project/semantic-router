@@ -64,7 +64,7 @@ func (r *OpenAIRouter) performDecisionEvaluation(originalModel string, history s
 // The selCtx parameter carries the pre-built SelectionContext, including request-time
 // inputs such as query text, candidate models, and cache-affinity signals.
 // Returns the selected model and the method name used for logging.
-func (r *OpenAIRouter) selectModelFromCandidates(selCtx *selection.SelectionContext, algorithm *config.AlgorithmConfig) (*config.ModelRef, string) {
+func (r *OpenAIRouter) selectModelFromCandidates(selCtx *selection.SelectionContext, algorithm *config.AlgorithmConfig, ctx *RequestContext) (*config.ModelRef, string) {
 	if selCtx == nil || len(selCtx.CandidateModels) == 0 {
 		return nil, ""
 	}
@@ -100,10 +100,17 @@ func (r *OpenAIRouter) selectModelFromCandidates(selCtx *selection.SelectionCont
 	for i := range selCtx.CandidateModels {
 		if selCtx.CandidateModels[i].Model == result.SelectedModel ||
 			selCtx.CandidateModels[i].LoRAName == result.SelectedModel {
-			logging.Infof("[ModelSelection] Selected %s (method=%s, score=%.4f, confidence=%.2f): %s",
-				result.SelectedModel, method, result.Score, result.Confidence, result.Reasoning)
-			selection.RecordSelection(string(method), selCtx.DecisionName, result.SelectedModel, result.Tier, result.Score)
-			return &selCtx.CandidateModels[i], string(method)
+			selectedModelRef := &selCtx.CandidateModels[i]
+			selectedModelRef, gateApplied := r.applyModelSwitchGate(selCtx, result, selectedModelRef, ctx)
+			if gateApplied {
+				logging.Infof("[ModelSelection] Gate enforced stay on %s (method=%s, score=%.4f, confidence=%.2f): %s",
+					selectedModelRef.Model, method, result.Score, result.Confidence, result.Reasoning)
+			} else {
+				logging.Infof("[ModelSelection] Selected %s (method=%s, score=%.4f, confidence=%.2f): %s",
+					selectedModelRef.Model, method, result.Score, result.Confidence, result.Reasoning)
+			}
+			selection.RecordSelection(string(method), selCtx.DecisionName, selectedModelRef.Model, result.Tier, result.Score)
+			return selectedModelRef, string(method)
 		}
 	}
 
@@ -128,6 +135,8 @@ func (r *OpenAIRouter) buildSelectionContext(
 	costWeight, qualityWeight := r.getSelectionWeights(algorithm)
 	latencyAwareTPOTPercentile, latencyAwareTTFTPercentile := r.getLatencyAwarePercentiles(algorithm)
 
+	sessionID, userID, conversationHistory := r.extractSessionContext(reqCtx)
+
 	return &selection.SelectionContext{
 		Query:                      query,
 		DecisionName:               decisionName,
@@ -138,6 +147,9 @@ func (r *OpenAIRouter) buildSelectionContext(
 		QualityWeight:              qualityWeight,
 		LatencyAwareTPOTPercentile: latencyAwareTPOTPercentile,
 		LatencyAwareTTFTPercentile: latencyAwareTTFTPercentile,
+		UserID:                     userID,
+		SessionID:                  sessionID,
+		ConversationHistory:        conversationHistory,
 		CacheAffinityCtx:           r.buildCacheAffinityContext(reqCtx, modelRefs),
 	}
 }
@@ -283,4 +295,48 @@ func (r *OpenAIRouter) processUserFeedbackForElo(userFeedbackSignals []string, m
 			logging.Warnf("[AutoFeedback] Failed to update Elo: %v", err)
 		}
 	}
+}
+
+// extractSessionContext extracts session ID, user ID, and conversation history from the RequestContext.
+func (r *OpenAIRouter) extractSessionContext(ctx *RequestContext) (sessionID, userID string, conversationHistory []string) {
+	if ctx == nil {
+		return "", "", nil
+	}
+	userID = extractUserID(ctx)
+	if ctx.ResponseAPICtx != nil && ctx.ResponseAPICtx.IsResponseAPIRequest {
+		return r.extractResponseAPISessionContext(ctx, userID)
+	}
+	if len(ctx.ChatCompletionMessages) > 0 {
+		return r.extractChatCompletionSessionContext(ctx, userID)
+	}
+	return "", userID, nil
+}
+
+func (r *OpenAIRouter) extractResponseAPISessionContext(ctx *RequestContext, userID string) (sessionID, userIDOut string, conversationHistory []string) {
+	sessionID = ctx.ResponseAPICtx.ConversationID
+	if ctx.ResponseAPICtx.ConversationHistory != nil {
+		for _, storedResp := range ctx.ResponseAPICtx.ConversationHistory {
+			for _, inItem := range storedResp.Input {
+				if content := extractContentFromInputItem(inItem); content != "" {
+					conversationHistory = append(conversationHistory, content)
+				}
+			}
+			for _, outItem := range storedResp.Output {
+				if content := extractContentFromOutputItem(outItem); content != "" {
+					conversationHistory = append(conversationHistory, content)
+				}
+			}
+		}
+	}
+	return sessionID, userID, conversationHistory
+}
+
+func (r *OpenAIRouter) extractChatCompletionSessionContext(ctx *RequestContext, userID string) (sessionID, userIDOut string, conversationHistory []string) {
+	sessionID = deriveSessionIDFromMessages(ctx.ChatCompletionMessages, userID)
+	for i, msg := range ctx.ChatCompletionMessages {
+		if msg.Content != "" && i < len(ctx.ChatCompletionMessages)-1 {
+			conversationHistory = append(conversationHistory, msg.Content)
+		}
+	}
+	return sessionID, userID, conversationHistory
 }
