@@ -99,7 +99,9 @@ func (g *ModelSwitchGate) Evaluate(input ModelSwitchGateInput) ModelSwitchGateDe
 	if !ok {
 		return decision.withMissingFallback(append([]string{"selector_score_or_quality_gap"}, informational...))
 	}
-	missing := append(informational, evidenceMissing...)
+	missing := make([]string, len(informational), len(informational)+len(evidenceMissing))
+	copy(missing, informational)
+	missing = append(missing, evidenceMissing...)
 	decision.applyEvidence(evidence, missing, gateConfig(g))
 
 	if decision.WouldSwitch {
