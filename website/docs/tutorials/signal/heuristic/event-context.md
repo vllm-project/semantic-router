@@ -11,7 +11,7 @@ It maps to `config/signal/event-context/` and is declared under `routing.signals
 - Zero ML inference — all matching is regex-based, running in sub-millisecond time.
 - Routes enterprise event-driven payloads (error alerts, audit logs, incident reports) to specialized model pools without requiring a domain classifier.
 - Confidence is proportional to the number of matched criteria, giving the decision engine a graded signal.
-- Temporal urgency detection (`urgent`, `immediate`, `asap`) routes time-sensitive events independently of event type.
+- Temporal urgency detection (`urgent`, `immediate`, `asap`, `deadline`, `time-sensitive`, `now`, `critical.window`) routes time-sensitive events independently of event type.
 
 ## What Problem Does It Solve?
 
@@ -52,9 +52,9 @@ routing:
 | `event_types` | list of strings | Event type patterns to match (case-insensitive word boundary) |
 | `severities` | list of strings | Severity keywords: `critical`, `high`, `medium`, `low` |
 | `action_codes` | list of strings | Domain-specific action codes (case-insensitive word boundary) |
-| `temporal` | bool | When `true`, matches urgency markers: `urgent`, `immediate`, `asap`, `deadline`, `time-sensitive` |
+| `temporal` | bool | When `true`, matches urgency markers: `urgent`, `immediate`, `asap`, `deadline`, `time-sensitive`, `now`, `critical.window` |
 
-A rule matches when at least one configured criterion is satisfied. **Confidence** is `0.5 + 0.5 × (matched_criteria / total_criteria)`, ranging from 0.75 (one of two criteria) to 1.0 (all criteria).
+A rule matches when at least one configured criterion is satisfied. **Confidence** is `0.5 + 0.5 × (matched_criteria / total_criteria)`. With up to four criteria (`event_types`, `severities`, `action_codes`, `temporal`), a single-criterion match on a four-criterion rule yields `0.625`; a full match always yields `1.0`. A rule with only one configured criterion that matches also yields `1.0`.
 
 ## Example Decision
 

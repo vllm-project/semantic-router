@@ -51,21 +51,39 @@ type compiledEventContextRule struct {
 }
 
 // NewEventContextClassifier compiles EventContextRules into regex patterns.
+// Empty or whitespace-only event type and action code strings are skipped to
+// prevent the degenerate pattern \b\b from matching unintended text.
+// Severity values are normalised (trimmed, lowercased) at compile time; unknown
+// severities are dropped and do not count as a configured criterion.
 func NewEventContextClassifier(rules []config.EventContextRule) *EventContextClassifier {
 	compiled := make([]compiledEventContextRule, 0, len(rules))
 	for _, r := range rules {
 		cr := compiledEventContextRule{
-			name:       r.Name,
-			severities: r.Severities,
-			temporal:   r.Temporal,
+			name:     r.Name,
+			temporal: r.Temporal,
 		}
 		for _, et := range r.EventTypes {
+			et = strings.TrimSpace(et)
+			if et == "" {
+				continue
+			}
 			pattern := regexp.MustCompile(`(?i)\b` + regexp.QuoteMeta(et) + `\b`)
 			cr.eventTypes = append(cr.eventTypes, pattern)
 		}
 		for _, ac := range r.ActionCodes {
+			ac = strings.TrimSpace(ac)
+			if ac == "" {
+				continue
+			}
 			pattern := regexp.MustCompile(`(?i)\b` + regexp.QuoteMeta(ac) + `\b`)
 			cr.actionCodes = append(cr.actionCodes, pattern)
+		}
+		// Normalise severities at compile time — trim, lowercase, drop unknowns.
+		for _, sev := range r.Severities {
+			key := strings.ToLower(strings.TrimSpace(sev))
+			if _, ok := severityKeywords[key]; ok {
+				cr.severities = append(cr.severities, key)
+			}
 		}
 		compiled = append(compiled, cr)
 	}
@@ -126,13 +144,14 @@ func matchEventTypes(rule compiledEventContextRule, text string, criteria, match
 }
 
 func matchSeverities(rule compiledEventContextRule, text string, criteria, matched int) (int, int, string) {
+	// Severities are already normalised (trimmed, lowercased, validated) at
+	// compile time in NewEventContextClassifier; unknown values were dropped.
 	if len(rule.severities) == 0 {
 		return criteria, matched, ""
 	}
 	criteria++
-	for _, sev := range rule.severities {
-		key := strings.ToLower(sev)
-		if re, ok := severityKeywords[key]; ok && re.MatchString(text) {
+	for _, key := range rule.severities {
+		if re := severityKeywords[key]; re.MatchString(text) {
 			return criteria, matched + 1, key
 		}
 	}
