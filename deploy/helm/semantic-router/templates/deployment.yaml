@@ -83,6 +83,11 @@ spec:
           mountPath: /app/config/tools_db.json
           subPath: tools_db.json
           readOnly: true
+        {{- if and .Values.knowledgeBases.enabled .Values.knowledgeBases.existingConfigMap }}
+        - name: knowledge-bases-volume
+          mountPath: {{ .Values.knowledgeBases.mountPath | quote }}
+          readOnly: true
+        {{- end }}
         {{- with .Values.extraVolumeMounts }}
         {{- toYaml . | nindent 8 }}
         {{- end }}
@@ -123,6 +128,11 @@ spec:
       - name: config-volume
         configMap:
           name: {{ include "semantic-router.fullname" . }}-config
+      {{- if and .Values.knowledgeBases.enabled .Values.knowledgeBases.existingConfigMap }}
+      - name: knowledge-bases-volume
+        configMap:
+          name: {{ .Values.knowledgeBases.existingConfigMap | quote }}
+      {{- end }}
       {{- if .Values.persistence.enabled }}
       - name: models-volume
         persistentVolumeClaim:
