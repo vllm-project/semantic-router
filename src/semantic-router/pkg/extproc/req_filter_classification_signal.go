@@ -58,8 +58,27 @@ func (r *OpenAIRouter) prepareSignalEvaluationInput(history signalConversationHi
 		return input
 	}
 
+	// Hard safety limit: truncate before any signal processing, independently of
+	// prompt_compression. Keeps embedding and classifier inference bounded even
+	// when compression is disabled, preventing super-linear latency blowup on
+	// giant prompts (see issue #1454).
+	input.evaluationText = r.applyMaxEvaluationChars(input.evaluationText)
+	input.compressedText = input.evaluationText
+
 	input.compressedText, input.skipCompressionSignals = r.compressSignalEvaluationText(input.evaluationText)
 	return input
+}
+
+// applyMaxEvaluationChars truncates evaluationText to the configured hard limit.
+// A limit <= 0 means no truncation. Only the routing-decision text is affected;
+// the actual request body forwarded to the model is never modified.
+func (r *OpenAIRouter) applyMaxEvaluationChars(text string) string {
+	limit := r.Config.PromptCompression.MaxEvaluationChars
+	if limit <= 0 || len(text) <= limit {
+		return text
+	}
+	logging.Infof("[SignalEval] evaluationText truncated by max_evaluation_chars: %d -> %d chars", len(text), limit)
+	return text[:limit]
 }
 
 func (r *OpenAIRouter) compressSignalEvaluationText(evaluationText string) (string, map[string]bool) {

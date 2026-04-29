@@ -342,11 +342,28 @@ impl MmBertEmbeddingModel {
         let dir = model_path.as_ref();
         let onnx_subdir = dir.join("onnx");
 
-        let has_fa = std::env::var("ORT_CK_FLASH_ATTN_LIB").ok().filter(|s| !s.is_empty()).is_some();
+        let has_fa = std::env::var("ORT_CK_FLASH_ATTN_LIB")
+            .ok()
+            .filter(|s| !s.is_empty())
+            .is_some();
         let candidates: &[&str] = if has_fa {
-            &["model_fa_fp16.onnx", "model_fa.onnx", "model_sdpa_fp16.onnx", "model.onnx", "encoder.onnx", "mmbert.onnx", "model_optimized.onnx"]
+            &[
+                "model_fa_fp16.onnx",
+                "model_fa.onnx",
+                "model_sdpa_fp16.onnx",
+                "model.onnx",
+                "encoder.onnx",
+                "mmbert.onnx",
+                "model_optimized.onnx",
+            ]
         } else {
-            &["model_sdpa_fp16.onnx", "model.onnx", "encoder.onnx", "mmbert.onnx", "model_optimized.onnx"]
+            &[
+                "model_sdpa_fp16.onnx",
+                "model.onnx",
+                "encoder.onnx",
+                "mmbert.onnx",
+                "model_optimized.onnx",
+            ]
         };
 
         let mut search_dirs: Vec<std::path::PathBuf> = vec![dir.to_path_buf(), onnx_subdir.clone()];
@@ -383,12 +400,10 @@ impl MmBertEmbeddingModel {
             if let Ok(entries) = std::fs::read_dir(base_dir) {
                 for entry in entries.flatten() {
                     let path = entry.path();
-                    if let Some(ext) = path.extension() {
-                        if ext == "onnx" {
-                            if !results.iter().any(|p| p == &path) {
-                                results.push(path);
-                            }
-                        }
+                    if path.extension().is_some_and(|ext| ext == "onnx")
+                        && !results.iter().any(|p| p == &path)
+                    {
+                        results.push(path);
                     }
                 }
             }
@@ -419,11 +434,16 @@ impl MmBertEmbeddingModel {
                 use crate::core::gpu_memory;
                 use ort::execution_providers::{ArenaExtendStrategy, ROCmExecutionProvider};
                 let mem_limit = gpu_memory::get_gpu_mem_limit();
-                let ck_fa_lib = std::env::var("ORT_CK_FLASH_ATTN_LIB").ok().filter(|s| !s.is_empty());
+                let ck_fa_lib = std::env::var("ORT_CK_FLASH_ATTN_LIB")
+                    .ok()
+                    .filter(|s| !s.is_empty());
                 if let Some(ref lib) = ck_fa_lib {
                     println!("INFO: CK Flash Attention custom op library: {}", lib);
                 }
-                let maybe_register_custom_ops = |builder: ort::session::builder::SessionBuilder| -> Result<ort::session::builder::SessionBuilder, ort::Error> {
+                let maybe_register_custom_ops = |builder: ort::session::builder::SessionBuilder| -> Result<
+                    ort::session::builder::SessionBuilder,
+                    ort::Error,
+                > {
                     if let Some(ref lib) = ck_fa_lib {
                         builder.with_operator_library(lib)
                     } else {
@@ -515,7 +535,10 @@ impl MmBertEmbeddingModel {
         let model_dir = model_path.as_ref();
         let onnx_dir = model_dir.join("onnx");
 
-        let has_fa = std::env::var("ORT_CK_FLASH_ATTN_LIB").ok().filter(|s| !s.is_empty()).is_some();
+        let has_fa = std::env::var("ORT_CK_FLASH_ATTN_LIB")
+            .ok()
+            .filter(|s| !s.is_empty())
+            .is_some();
 
         for layer in &matryoshka.layers {
             let layer_filename = format!("model_layer_{}.onnx", layer);
@@ -535,7 +558,11 @@ impl MmBertEmbeddingModel {
             let found = candidates.iter().find(|p| p.exists()).cloned();
 
             if let Some(ref layer_path) = found {
-                println!("INFO: Loading layer-{} from {}", layer, layer_path.display());
+                println!(
+                    "INFO: Loading layer-{} from {}",
+                    layer,
+                    layer_path.display()
+                );
                 match Self::create_session(layer_path, use_cpu) {
                     Ok(session) => {
                         sessions.push(Some(session));
@@ -585,7 +612,7 @@ impl MmBertEmbeddingModel {
                     if self
                         .layer_sessions
                         .get(i)
-                        .map_or(false, |s: &Option<Session>| s.is_some())
+                        .is_some_and(|s: &Option<Session>| s.is_some())
                     {
                         Some(layer)
                     } else {
@@ -687,7 +714,7 @@ impl MmBertEmbeddingModel {
                     .layers
                     .iter()
                     .position(|&l| l == layer)
-                    .filter(|&idx| self.layer_sessions.get(idx).map_or(false, |s| s.is_some()))
+                    .filter(|&idx| self.layer_sessions.get(idx).is_some_and(|s| s.is_some()))
             } else {
                 None
             }
@@ -755,25 +782,30 @@ impl MmBertEmbeddingModel {
             }};
         }
 
-        let process_output = |dims: &[usize], flat: Vec<f32>, mask: &Array2<i64>| -> UnifiedResult<Array2<f32>> {
-            if dims.len() == 2 {
-                Array2::from_shape_vec((dims[0], dims[1]), flat)
-                    .map_err(|e| errors::inference_error("reshape_output", &e.to_string()))
-            } else if dims.len() == 3 {
-                let (b, s, h) = (dims[0], dims[1], dims[2]);
-                let hidden = Array3::from_shape_vec((b, s, h), flat)
-                    .map_err(|e| errors::inference_error("reshape_hidden_states", &e.to_string()))?;
-                let mask_f32: Array2<f32> = mask.mapv(|x| x as f32);
-                Ok(mean_pool_3d(&hidden, &mask_f32))
-            } else {
-                Err(errors::inference_error("extract_output", &format!("Unexpected tensor rank: {}", dims.len())))
-            }
-        };
+        let process_output =
+            |dims: &[usize], flat: Vec<f32>, mask: &Array2<i64>| -> UnifiedResult<Array2<f32>> {
+                if dims.len() == 2 {
+                    Array2::from_shape_vec((dims[0], dims[1]), flat)
+                        .map_err(|e| errors::inference_error("reshape_output", &e.to_string()))
+                } else if dims.len() == 3 {
+                    let (b, s, h) = (dims[0], dims[1], dims[2]);
+                    let hidden = Array3::from_shape_vec((b, s, h), flat).map_err(|e| {
+                        errors::inference_error("reshape_hidden_states", &e.to_string())
+                    })?;
+                    let mask_f32: Array2<f32> = mask.mapv(|x| x as f32);
+                    Ok(mean_pool_3d(&hidden, &mask_f32))
+                } else {
+                    Err(errors::inference_error(
+                        "extract_output",
+                        &format!("Unexpected tensor rank: {}", dims.len()),
+                    ))
+                }
+            };
 
         for name in &output_names {
             if let Some(output_value) = outputs.get(*name) {
                 if let Some((dims, flat)) = try_extract_f32!(output_value) {
-                    return process_output(&dims, flat, &attention_mask);
+                    return process_output(&dims, flat, attention_mask);
                 }
             }
         }
@@ -781,7 +813,7 @@ impl MmBertEmbeddingModel {
         // Try first output if named outputs not found
         if let Some((_, output_value)) = outputs.iter().next() {
             if let Some((dims, flat)) = try_extract_f32!(output_value) {
-                return process_output(&dims, flat, &attention_mask);
+                return process_output(&dims, flat, attention_mask);
             }
         }
 

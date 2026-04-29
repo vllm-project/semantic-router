@@ -6,6 +6,10 @@ const (
 	ToolsPluginModeNone        = "none"
 	ToolsPluginModePassthrough = "passthrough"
 	ToolsPluginModeFiltered    = "filtered"
+
+	// ToolsStrategyDefault is the strategy name used when no explicit strategy
+	// is configured.  It resolves to the embedding-similarity retriever.
+	ToolsStrategyDefault = "default"
 )
 
 // ToolsPluginConfig represents per-decision tool handling.
@@ -16,6 +20,10 @@ type ToolsPluginConfig struct {
 	SemanticSelection *bool    `json:"semantic_selection,omitempty" yaml:"semantic_selection,omitempty"`
 	AllowTools        []string `json:"allow_tools,omitempty" yaml:"allow_tools,omitempty"`
 	BlockTools        []string `json:"block_tools,omitempty" yaml:"block_tools,omitempty"`
+	// Strategy names the retriever strategy to use for semantic tool selection.
+	// When empty, EffectiveStrategy returns ToolsStrategyDefault.
+	// The value must match a name registered in the router's tools.Registry.
+	Strategy string `json:"strategy,omitempty" yaml:"strategy,omitempty"`
 }
 
 // GetToolsConfig returns the tools plugin configuration.
@@ -30,6 +38,15 @@ func (c *ToolsPluginConfig) EffectiveMode() string {
 		return ToolsPluginModePassthrough
 	}
 	return c.Mode
+}
+
+// EffectiveStrategy returns the retriever strategy name, defaulting to
+// ToolsStrategyDefault when none is configured.
+func (c *ToolsPluginConfig) EffectiveStrategy() string {
+	if c == nil || c.Strategy == "" {
+		return ToolsStrategyDefault
+	}
+	return c.Strategy
 }
 
 // SelectionEnabled reports whether semantic tool selection is allowed for this plugin.

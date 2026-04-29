@@ -89,6 +89,7 @@ func assertReferenceConfigSignalCoverage(t testingT, signals map[string]interfac
 	assertSliceUnionCoversStructFields(t, mustSliceAt(t, signals, "pii"), reflect.TypeOf(PIIRule{}), "routing.signals.pii")
 	assertReferenceConfigKBSignalCoverage(t, mustSliceAt(t, signals, "kb"))
 	assertReferenceConfigConversationSignalCoverage(t, mustSliceAt(t, signals, "conversation"))
+	assertSliceUnionCoversStructFields(t, mustSliceAt(t, signals, "session_metrics"), reflect.TypeOf(SessionMetricRule{}), "routing.signals.session_metrics")
 }
 
 func assertReferenceConfigProjectionCoverage(t testingT, projections map[string]interface{}) {

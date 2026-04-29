@@ -326,6 +326,18 @@ var (
 		},
 		[]string{"fallback_reason", "fallback_strategy"},
 	)
+
+	// toolsRetrievalDuration tracks wall-clock time spent inside the retriever
+	// per request, partitioned by strategy name.  Use RecordToolsRetrieval to
+	// observe values.
+	toolsRetrievalDuration = promauto.NewHistogramVec(
+		prometheus.HistogramOpts{
+			Name:    "vsr_tools_retrieval_duration_seconds",
+			Help:    "Wall-clock time spent in the tool retriever, by strategy.",
+			Buckets: []float64{0.0001, 0.0005, 0.001, 0.005, 0.01, 0.05, 0.1, 0.5, 1},
+		},
+		[]string{"strategy"},
+	)
 )
 
 // RecordModelRequest increments the counter for requests to a specific model
@@ -776,4 +788,10 @@ func RecordEntropyClassificationMetrics(
 	if latencySeconds > 0 {
 		RecordEntropyClassificationLatency(latencySeconds)
 	}
+}
+
+// RecordToolsRetrieval records the retrieval latency for the given strategy.
+// strategyID must match the value returned in RetrievalResult.StrategyID.
+func RecordToolsRetrieval(strategyID string, durationSeconds float64) {
+	toolsRetrievalDuration.WithLabelValues(strategyID).Observe(durationSeconds)
 }

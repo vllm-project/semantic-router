@@ -47,6 +47,14 @@ type ToolTrace struct {
 	Stage     string          `json:"stage,omitempty"`
 	ToolNames []string        `json:"tool_names,omitempty"`
 	Steps     []ToolTraceStep `json:"steps,omitempty"`
+	// StepsTruncated is true when older Steps were dropped to enforce the
+	// MaxToolTraceSteps cap. Long agent sessions can otherwise produce
+	// hundreds of steps per record and OOM the router (see issue #1835).
+	StepsTruncated bool `json:"steps_truncated,omitempty"`
+	// DroppedStepCount records how many steps were dropped from the head of
+	// the timeline when StepsTruncated is true. Zero when no truncation
+	// happened.
+	DroppedStepCount int `json:"dropped_step_count,omitempty"`
 }
 
 // ToolTraceStep represents a single step in a request-local tool-calling flow.

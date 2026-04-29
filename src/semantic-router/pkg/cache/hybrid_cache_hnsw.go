@@ -2,7 +2,7 @@
 
 package cache
 
-import "time"
+import "math/rand/v2"
 
 // searchResult holds a candidate with its similarity score.
 type searchResult struct {
@@ -166,7 +166,7 @@ func (h *HybridCache) selectLevelHybrid() int {
 
 // randFloat returns a random float between 0 and 1.
 func randFloat() float64 {
-	return float64(time.Now().UnixNano()%1000) / 1000.0
+	return rand.Float64()
 }
 
 // searchLayerHybrid searches for nearest neighbors at a specific layer.

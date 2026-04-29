@@ -171,6 +171,7 @@ func (s *ClassificationService) ClassifyIntentForEval(req IntentRequest) (*EvalR
 		"",
 		nil,
 		classification.ConversationFacts{},
+		nil,
 	)
 
 	var decisionResult *decision.DecisionResult

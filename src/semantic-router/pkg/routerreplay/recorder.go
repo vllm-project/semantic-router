@@ -11,6 +11,14 @@ const (
 	DefaultMaxRecords        = 200
 	DefaultMaxBodyBytes      = 4096 // 4KB
 	DefaultMaxToolTraceBytes = 0    // No limit — structured fields are typically small
+	// DefaultMaxToolTraceSteps caps the number of ToolTraceStep entries kept
+	// per record. Long agent sessions can otherwise produce hundreds of
+	// steps and OOM the router process (see issue #1835). 0 means no limit;
+	// callers using NewRecorder directly opt out of step-count truncation by
+	// default and configure it via SetMaxToolTraceSteps. The plugin-level
+	// default in pkg/config sets this to 100 so the router is safe out of
+	// the box.
+	DefaultMaxToolTraceSteps = 0
 )
 
 type (
@@ -26,6 +34,7 @@ type Recorder struct {
 
 	maxBodyBytes      int
 	maxToolTraceBytes int // 0 = no limit
+	maxToolTraceSteps int // 0 = no limit
 
 	captureRequestBody  bool
 	captureResponseBody bool
@@ -37,6 +46,7 @@ func NewRecorder(storage store.Storage) *Recorder {
 		storage:           storage,
 		maxBodyBytes:      DefaultMaxBodyBytes,
 		maxToolTraceBytes: DefaultMaxToolTraceBytes,
+		maxToolTraceSteps: DefaultMaxToolTraceSteps,
 	}
 }
 
@@ -57,6 +67,16 @@ func (r *Recorder) SetCapturePolicy(captureRequest, captureResponse bool, maxBod
 func (r *Recorder) SetMaxToolTraceBytes(max int) {
 	if max >= 0 {
 		r.maxToolTraceBytes = max
+	}
+}
+
+// SetMaxToolTraceSteps caps the number of ToolTraceStep entries retained per
+// record. When the cap is exceeded the oldest steps are dropped (preserving
+// the most recent timeline) and ToolTrace.StepsTruncated is set. A value of
+// 0 disables step-count truncation. Negative values are ignored.
+func (r *Recorder) SetMaxToolTraceSteps(max int) {
+	if max >= 0 {
+		r.maxToolTraceSteps = max
 	}
 }
 
@@ -93,6 +113,10 @@ func (r *Recorder) AddRecord(rec RoutingRecord) (string, error) {
 	// These are truncated independently of the raw body fields so that
 	// callers can keep MaxBodyBytes small without losing structured data.
 	applyMaxToolTraceBytes(&rec, r.maxToolTraceBytes)
+	// MaxToolTraceSteps is enforced separately so that an unbounded agent
+	// session that produces hundreds of steps per record can't keep growing
+	// the slice and OOM the router (see issue #1835).
+	capToolTraceStepCount(rec.ToolTrace, r.maxToolTraceSteps)
 
 	ctx := context.Background()
 	return r.storage.Add(ctx, rec)
@@ -124,6 +148,29 @@ func truncateToolTraceSteps(trace *ToolTrace, max int) {
 	for i := range trace.Steps {
 		truncateToolTraceStep(&trace.Steps[i], max)
 	}
+}
+
+// capToolTraceStepCount drops the oldest steps so that no more than max
+// remain on trace.Steps. The most recent steps are preserved because they
+// carry the current state of the agent timeline; dropping from the head
+// means an unbounded loop cannot exhaust memory while we still see what
+// the agent is currently doing. A non-positive max disables the cap.
+func capToolTraceStepCount(trace *ToolTrace, max int) {
+	if trace == nil || max <= 0 {
+		return
+	}
+	if len(trace.Steps) <= max {
+		return
+	}
+	dropped := len(trace.Steps) - max
+	// Allocate a fresh slice so the original (possibly large) backing array
+	// can be garbage-collected immediately rather than being kept alive by a
+	// length-trimmed reslice.
+	kept := make([]ToolTraceStep, max)
+	copy(kept, trace.Steps[dropped:])
+	trace.Steps = kept
+	trace.StepsTruncated = true
+	trace.DroppedStepCount += dropped
 }
 
 // truncateToolTraceStep applies the byte limit to a single step's Arguments
@@ -182,8 +229,12 @@ func (r *Recorder) UpdateUsageCost(id string, usage UsageCost) error {
 func (r *Recorder) UpdateToolTrace(id string, trace ToolTrace) error {
 	// Apply MaxToolTraceBytes here too: response-side traces are attached via
 	// this update path (see extproc.attachRouterReplayResponse) and therefore
-	// bypass the AddRecord truncation unless we cap them again.
+	// bypass the AddRecord truncation unless we cap them again. The same
+	// reasoning applies to MaxToolTraceSteps — a long agent session updates
+	// the trace through this method, so without a cap here the OOM scenario
+	// from #1835 can still happen even when AddRecord truncates correctly.
 	truncateToolTraceSteps(&trace, r.maxToolTraceBytes)
+	capToolTraceStepCount(&trace, r.maxToolTraceSteps)
 	ctx := context.Background()
 	return r.storage.UpdateToolTrace(ctx, id, trace)
 }
