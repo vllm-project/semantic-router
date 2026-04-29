@@ -4,7 +4,7 @@ sidebar_label: VSR Header
 translation:
   source_commit: "c7d360e"
   source_file: "docs/troubleshooting/vsr-headers.md"
-  outdated: false
+  outdated: true
 ---
 
 # VSR 决策追踪 Header

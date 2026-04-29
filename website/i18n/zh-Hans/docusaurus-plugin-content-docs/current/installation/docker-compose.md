@@ -2,7 +2,7 @@
 translation:
   source_commit: "8e37ee0"
   source_file: "docs/installation/docker-compose.md"
-  outdated: false
+  outdated: true
 sidebar_position: 3
 ---
 

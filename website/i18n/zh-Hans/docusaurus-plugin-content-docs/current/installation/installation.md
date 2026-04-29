@@ -4,7 +4,7 @@ description: vLLM Semantic Router 快速开始指南，涵盖 CPU + Docker 的�
 translation:
   source_commit: "0ee41b5f"
   source_file: "docs/installation/installation.md"
-  outdated: false
+  outdated: true
 ---
 
 # 快速开始

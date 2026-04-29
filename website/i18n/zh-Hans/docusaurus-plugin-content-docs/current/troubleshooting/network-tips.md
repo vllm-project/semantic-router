@@ -4,7 +4,7 @@ sidebar_label: 网络技巧
 translation:
   source_commit: "aa7b7cb"
   source_file: "docs/troubleshooting/network-tips.md"
-  outdated: false
+  outdated: true
 ---
 
 本指南展示如何在受限或慢速网络环境中构建和运行，而无需修改仓库文件。您将使用小型本地覆盖文件和 compose 覆盖，以保持代码库整洁。

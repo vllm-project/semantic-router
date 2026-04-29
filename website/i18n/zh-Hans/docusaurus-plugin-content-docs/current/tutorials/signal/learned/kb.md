@@ -2,7 +2,7 @@
 translation:
   source_commit: "baa07413"
   source_file: "docs/tutorials/signal/learned/kb.md"
-  outdated: false
+  outdated: true
 ---
 
 # Knowledge Base 信号

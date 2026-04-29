@@ -2,7 +2,7 @@
 translation:
   source_commit: "0ee41b5f"
   source_file: "docs/tutorials/global/stores-and-tools.md"
-  outdated: false
+  outdated: true
 ---
 
 # 存储与工具
