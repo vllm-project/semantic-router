@@ -9,29 +9,42 @@ type RetrievalResult struct {
 	StrategyID string
 }
 
-// Retriever is the interface every tool-retrieval strategy must satisfy.
-type Retriever interface {
-	Retrieve(ctx context.Context, query string, topK int) (RetrievalResult, error)
+// ToolRetriever is the pluggable interface for tool-candidate retrieval.
+// Implementations are registered by name on Registry and selected from
+// plugin config (e.g. tools strategy on a matched decision).
+type ToolRetriever interface {
+	Retrieve(ctx context.Context, in RetrievalInput) (RetrievalResult, error)
 }
 
-// Registry maps strategy names to Retriever implementations.
+// Retriever is a type alias for ToolRetriever.
+type Retriever = ToolRetriever
+
+// Registry maps strategy names to ToolRetriever implementations.
 type Registry struct {
-	strategies map[string]Retriever
+	strategies map[string]ToolRetriever
 }
 
 func NewRegistry() *Registry {
-	return &Registry{strategies: make(map[string]Retriever)}
+	return &Registry{strategies: make(map[string]ToolRetriever)}
 }
 
-func (r *Registry) Register(name string, s Retriever) {
+// NewDefaultRegistry returns a registry with the embedding-similarity strategy
+// registered as StrategyDefault.
+func NewDefaultRegistry(db *ToolsDatabase) *Registry {
+	r := NewRegistry()
+	r.Register(StrategyDefault, NewEmbeddingRetriever(db))
+	return r
+}
+
+func (r *Registry) Register(name string, s ToolRetriever) {
 	if s == nil {
-		panic("tools: Register called with nil Retriever for strategy " + name)
+		panic("tools: Register called with nil ToolRetriever for strategy " + name)
 	}
 	r.strategies[name] = s
 }
 
-// Get returns the named strategy, falling back to "default" if not found.
-func (r *Registry) Get(name string) (Retriever, bool) {
+// Get returns the named strategy.
+func (r *Registry) Get(name string) (ToolRetriever, bool) {
 	s, ok := r.strategies[name]
 	return s, ok
 }
