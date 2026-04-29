@@ -126,6 +126,31 @@ Projected `ManualProfile` anchored to the H100 calibration:
 
 No direct silicon power measurements for B200 are available as of March 2026.
 
+### Optional B200 measured-power mode
+If you have real B200 node measurements, you can rerun the study with an
+empirical B200 power curve while keeping the same roofline/KV-capacity model:
+
+```bash
+FLEETSIM_B200_POWER_MODE=measured_b1 python3 scripts/table1_ctx_nmax.py
+FLEETSIM_B200_POWER_MODE=measured_b1 python3 scripts/table2_arch_tpw.py
+FLEETSIM_B200_POWER_MODE=measured_b1 python3 scripts/table3_fleet_tpw.py
+FLEETSIM_B200_POWER_MODE=measured_b1 python3 scripts/table5_gen_compare.py
+```
+
+The bundled measured mode is calibrated from one 8×B200 vLLM run of
+Llama-3.1-70B at 8K context with `max_num_seqs=1`:
+
+- true unloaded idle: `191.2 W/GPU`
+- model loaded, no inference: `251.3 W/GPU`
+- inference active: `512.9 W` mean, `606.3 W` p95
+
+Because the simulator assumes the model is already resident, it maps the
+`251.3 W` loaded state to `power_idle_w` and uses the `606.3 W` p95 active
+power as a workload-specific nominal ceiling. This is more realistic for
+single-request serving than the original `430/860 W` TDP-fraction projection,
+but it is still only a partial calibration until you sweep multiple
+concurrency levels.
+
 ### H200 and GB200 (FAIR quality)
 First-principles `ComputedProfile` only; used for the GPU generation
 comparison table (Table 5).

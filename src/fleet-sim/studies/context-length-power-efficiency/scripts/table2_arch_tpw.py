@@ -40,6 +40,7 @@ from fleet_sim.models.catalog       import (LLAMA_3_1_8B, LLAMA_3_1_70B,
                                              LLAMA_3_1_405B, QWEN3_235B_A22B,
                                              DEEPSEEK_V3)
 from fleet_sim.gpu_profiles.builder import ProfileBuilder, ServingConfig
+from profiles import B200_POWER_MODE, B200_PROFILE_QUALITY, power_for_profile
 
 builder = ProfileBuilder()
 CTX = 8192
@@ -75,7 +76,7 @@ def compute_tpw(hw, model, tp, dtype_bytes, active_params_B=None):
            if hasattr(prof, "iter_latency_w_override") \
            else (W_override or prof.W) + prof.H * (mean / prof.calibration_ctx) * n_max
     tps  = n_max / il
-    p    = prof.power_at_concurrency(n_max)
+    p    = power_for_profile(prof, n_max, mean_ctx=CTX // 2)
     return n_max, tps, tps / p
 
 print("Table 2: Single-GPU tok/W at n_max (8K context window)")
@@ -99,4 +100,4 @@ print("* MoE W = active_param_bytes_per_gpu / hw.mem_bw  "
       "(excludes MoE dispatch overhead).")
 print("  DeepSeek-V3 active params: ~37B estimated (671B total, 256 experts, top-8).")
 print("H100 power quality: HIGH (ComputedProfile calibrated to ML.ENERGY v3.0).")
-print("B200 power quality: FAIR (TDP-fraction projection, ±20%).")
+print(f"B200 power mode: {B200_POWER_MODE} ({B200_PROFILE_QUALITY}).")
