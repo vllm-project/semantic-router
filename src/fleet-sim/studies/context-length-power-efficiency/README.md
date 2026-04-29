@@ -137,19 +137,80 @@ FLEETSIM_B200_POWER_MODE=measured_b1 python3 scripts/table3_fleet_tpw.py
 FLEETSIM_B200_POWER_MODE=measured_b1 python3 scripts/table5_gen_compare.py
 ```
 
-The bundled measured mode is calibrated from one 8×B200 vLLM run of
-Llama-3.1-70B at 8K context with `max_num_seqs=1`:
+The bundled measured mode was calibrated from one 8×B200 vLLM run of
+Llama-3.1-70B at 8K context with `max_num_seqs=1`.
+
+#### Inputs
+
+The calibration expects three summary files produced by
+`scripts/summarize_power.py` over `nvidia-smi` traces:
 
 - true unloaded idle: `191.2 W/GPU`
 - model loaded, no inference: `251.3 W/GPU`
 - inference active: `512.9 W` mean, `606.3 W` p95
 
-Because the simulator assumes the model is already resident, it maps the
-`251.3 W` loaded state to `power_idle_w` and uses the `606.3 W` p95 active
-power as a workload-specific nominal ceiling. This is more realistic for
-single-request serving than the original `430/860 W` TDP-fraction projection,
-but it is still only a partial calibration until you sweep multiple
-concurrency levels.
+In the reference run these came from:
+
+- `summary_idle_5min.txt`
+- `summary_loaded_70b_8k_b1_5min.txt`
+- `summary_run_70b_8k_b1.txt`
+
+You can regenerate the derived parameters from those summaries with:
+
+```bash
+python3 scripts/calibrate_b200_power.py \
+  --idle /path/to/summary_idle_5min.txt \
+  --loaded /path/to/summary_loaded_70b_8k_b1_5min.txt \
+  --run /path/to/summary_run_70b_8k_b1.txt
+```
+
+#### Mapping from measurements to `ManualProfile`
+
+Only the power terms are replaced. The latency and KV-capacity terms still
+come from the projected B200 roofline model:
+
+1. Reuse `W`, `H`, `total_kv_blks`, and `max_slots` from the projected B200
+   profile so the hardware/model scaling stays comparable to the original study.
+2. Treat the fully unloaded idle power as informational only. It reflects bare
+   device power, but the simulator's serving model assumes the model weights are
+   already resident on the GPU.
+3. Map the "model loaded, no inference" measurement to `power_idle_w`, because
+   this is the closest simulator analogue to a serving instance waiting for work.
+4. Map the active-run `p95` power to `power_nominal_w`. With only a single
+   concurrency point available, this is used as a conservative serving ceiling
+   instead of assuming the B200 reaches `0.86 × TDP = 860 W`.
+5. Fit the logistic midpoint `power_logistic_x0` from the `b=1` active mean:
+
+```text
+frac = (P(b=1) - P_idle) / (P_nominal - P_idle)
+x0   = ln(1 / frac - 1) / k
+```
+
+with `k = 1.0`, matching the H100 study fit.
+
+For the reference run this yields:
+
+- `power_idle_w = 251.33`
+- `power_nominal_w = 606.33`
+- `power_logistic_k = 1.0`
+- `power_logistic_x0 = -1.0296`
+
+#### Interpretation
+
+This measured mode is more realistic for low-concurrency serving than the
+original `430/860 W` TDP-fraction projection, because it is anchored to an
+actual B200 node under vLLM. It should still be treated as a partial
+calibration rather than a final production curve:
+
+- it is specific to `vLLM 0.19.1`, `Llama-3.1-70B`, `TP=8`, `max_model_len=8192`
+  and `max_num_seqs=1`
+- it does not yet constrain the high-concurrency tail of the logistic curve
+- fleet-level tok/W may still shift once you add measurements at
+  `b ∈ {2, 4, 8, 16, ...}`
+
+If you collect a batch sweep later, the intended next step is to keep the same
+`power_idle_w` baseline and refit `power_nominal_w`, `k`, and `x0` directly
+from the multi-concurrency measurements.
 
 ### H200 and GB200 (FAIR quality)
 First-principles `ComputedProfile` only; used for the GPU generation
