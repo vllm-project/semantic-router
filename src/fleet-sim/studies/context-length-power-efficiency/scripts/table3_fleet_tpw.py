@@ -31,7 +31,7 @@ from _sim_path import add_sim_to_syspath
 
 SIM_ROOT = add_sim_to_syspath()
 
-from profiles import H100_PROFILE, B200_PROFILE
+from profiles import B200_POWER_MODE, B200_PROFILE_QUALITY, B200_PROFILE, H100_PROFILE
 from fleet_sim.optimizer import fleet_tpw_analysis, _split_cdf
 
 # ── Workload CDFs ─────────────────────────────────────────────────────────────
@@ -111,4 +111,5 @@ for wname, cdf, B, gamma in WORKLOADS:
 print(f"Short-context fraction: Azure ≤4K = {_cdf_eval(_load_cdf('azure_cdf.json'), 4096):.1%}, "
       f"LMSYS ≤1.5K = {_cdf_eval(_load_cdf('lmsys_multiturn_cdf.json'), 1536):.1%}")
 print("'GPUs' = number of TP=8 serving instances (×8 physical GPUs each).")
-print("B200 results are FAIR quality (±20%); H100 results are HIGH quality.")
+print(f"B200 power mode: {B200_POWER_MODE} ({B200_PROFILE_QUALITY}).")
+print("H100 results are HIGH quality.")

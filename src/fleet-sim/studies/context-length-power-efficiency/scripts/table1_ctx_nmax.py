@@ -12,7 +12,7 @@ from _sim_path import add_sim_to_syspath
 
 SIM_ROOT = add_sim_to_syspath()
 
-from profiles import H100_PROFILE, B200_PROFILE
+from profiles import B200_POWER_MODE, B200_PROFILE_QUALITY, B200_PROFILE, H100_PROFILE
 
 CONTEXT_WINDOWS = [2048, 4096, 8192, 16384, 32768, 65536, 131072]
 
@@ -41,3 +41,4 @@ for ctx in CONTEXT_WINDOWS:
 
 print("\nNote: The 1/W law — tok/W halves each time context window doubles.")
 print("      Both H100 and B200 follow the same slope; B200 is ~1.5–1.75× higher.")
+print(f"      B200 power mode: {B200_POWER_MODE} ({B200_PROFILE_QUALITY}).")

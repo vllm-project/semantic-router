@@ -16,7 +16,7 @@ from _sim_path import add_sim_to_syspath
 
 SIM_ROOT = add_sim_to_syspath()
 
-from profiles import GPU_SPECS
+from profiles import B200_POWER_MODE, B200_PROFILE_QUALITY, GPU_SPECS, power_for_profile
 
 CTX      = 8192
 MEAN_CTX = CTX // 2
@@ -31,7 +31,7 @@ for gpu_name, (hw, cp, tdp, p_idle, cost_hr) in GPU_SPECS.items():
     n_max = int(cp.total_kv_blks * 16 // CTX)
     if n_max < 1:
         n_max = 1
-    p_sat = cp.power_at_concurrency(n_max)
+    p_sat = power_for_profile(cp, n_max, mean_ctx=MEAN_CTX)
     il    = cp.iter_latency(n_max, float(MEAN_CTX))
     tpw   = n_max / il / p_sat
     tps   = n_max / il
@@ -48,3 +48,4 @@ print("Note: All profiles use ComputedProfile (first-principles, non-TP-sharded 
 print("      n_max here is lower than in fleet analysis because fleet analysis uses")
 print("      the empirically calibrated H100 profile (TP-sharded KV) as the anchor.")
 print("      The generation *ratios* are consistent between the two methodologies.")
+print(f"      B200 power mode: {B200_POWER_MODE} ({B200_PROFILE_QUALITY}).")
