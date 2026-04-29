@@ -502,6 +502,18 @@ routing:
             lt: 0.45
           - name: support_escalated
             gte: 0.45
+      - name: privacy_topk
+        source: privacy_kb_bias
+        method: top_k
+        top_k: 2
+        outputs:
+          - name: privacy_low
+            lt: 0.3
+          - name: privacy_mid
+            gte: 0.3
+            lt: 0.7
+          - name: privacy_high
+            gte: 0.7
 
   session_states:
     - name: session_routing

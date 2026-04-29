@@ -116,7 +116,6 @@ func assertReferenceConfigProjectionCoverage(t testingT, projections map[string]
 		mustSliceAt(t, projections, "mappings"),
 		reflect.TypeOf(ProjectionMapping{}),
 		"routing.projections.mappings",
-		"top_k",
 	)
 	assertSliceUnionCoversStructFields(
 		t,
