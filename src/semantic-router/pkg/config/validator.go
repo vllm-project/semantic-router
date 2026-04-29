@@ -93,34 +93,31 @@ func validateConfigStructure(cfg *RouterConfig) error {
 	if cfg.ConfigSource == ConfigSourceKubernetes {
 		return nil
 	}
-
 	if hasLegacyLatencyRoutingConfig(cfg) {
 		return fmt.Errorf("legacy latency config is no longer supported; use decision.algorithm.type=latency_aware and remove signals.latency_rules / conditions.type=latency")
 	}
-	if err := validateDomainContracts(cfg); err != nil {
-		return err
+
+	validators := []func(*RouterConfig) error{
+		validateDomainContracts,
+		validateStructureContracts,
+		validateReaskContracts,
+		validateProjectionContracts,
+		validateKnowledgeBaseContracts,
+		validateConversationContracts,
+		validateDecisionContracts,
+		validateModalityContracts,
+		validateModelSelectionConfig,
+		validateAdvancedToolFilteringConfig,
 	}
-	if err := validateStructureContracts(cfg); err != nil {
-		return err
+	for _, validate := range validators {
+		if err := validate(cfg); err != nil {
+			return err
+		}
 	}
-	if err := validateReaskContracts(cfg); err != nil {
-		return err
-	}
-	if err := validateProjectionContracts(cfg); err != nil {
-		return err
-	}
-	if err := validateKnowledgeBaseContracts(cfg); err != nil {
-		return err
-	}
-	if err := validateConversationContracts(cfg); err != nil {
-		return err
-	}
-	if err := validateDecisionContracts(cfg); err != nil {
-		return err
-	}
-	if err := validateModalityContracts(cfg); err != nil {
-		return err
-	}
+	return nil
+}
+
+func validateModelSelectionConfig(cfg *RouterConfig) error {
 	if err := validateVLLMClassifierConfig(&cfg.PromptGuard); err != nil {
 		return err
 	}
@@ -128,5 +125,5 @@ func validateConfigStructure(cfg *RouterConfig) error {
 		return err
 	}
 	warnModelSwitchGateEnforceWithoutCostSignals(cfg.ModelSelection)
-	return validateAdvancedToolFilteringConfig(cfg)
+	return nil
 }
