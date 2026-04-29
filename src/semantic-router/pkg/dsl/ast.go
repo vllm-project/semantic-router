@@ -333,6 +333,7 @@ type ProjectionMappingDecl struct {
 	Name        string
 	Source      string
 	Method      string
+	TopK        int
 	Calibration *ProjectionMappingCalibrationDecl
 	Outputs     []*ProjectionMappingOutputDecl
 	Pos         Position

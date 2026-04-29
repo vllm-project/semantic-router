@@ -138,6 +138,7 @@ func (d *decompiler) appendProjectionMappings(prog *Program) {
 			Name:   mapping.Name,
 			Source: mapping.Source,
 			Method: mapping.Method,
+			TopK:   mapping.TopK,
 		}
 		if mapping.Calibration != nil {
 			decl.Calibration = &ProjectionMappingCalibrationDecl{

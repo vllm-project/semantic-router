@@ -42,6 +42,7 @@ type ProjectionMapping struct {
 	Name        string                        `yaml:"name"`
 	Source      string                        `yaml:"source"`
 	Method      string                        `yaml:"method"`
+	TopK        int                           `yaml:"top_k,omitempty"`
 	Calibration *ProjectionMappingCalibration `yaml:"calibration,omitempty"`
 	Outputs     []ProjectionMappingOutput     `yaml:"outputs"`
 }

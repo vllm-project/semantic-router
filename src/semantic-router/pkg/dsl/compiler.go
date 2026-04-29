@@ -122,6 +122,7 @@ func (c *Compiler) compileProjectionMappings() {
 			Name:   mappingDecl.Name,
 			Source: mappingDecl.Source,
 			Method: mappingDecl.Method,
+			TopK:   mappingDecl.TopK,
 		}
 		if mappingDecl.Calibration != nil {
 			mapping.Calibration = &config.ProjectionMappingCalibration{

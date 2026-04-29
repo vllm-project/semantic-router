@@ -94,7 +94,8 @@ class ProjectionMapping(BaseModel):
 
     name: str
     source: str
-    method: str
+    method: str = "threshold_bands"
+    top_k: Optional[int] = None
     calibration: Optional[ProjectionMappingCalibration] = None
     outputs: List[ProjectionMappingOutput]
 
