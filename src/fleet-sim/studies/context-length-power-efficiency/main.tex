@@ -73,18 +73,20 @@ context, an H100 holds 16 sequences in flight (tok/W $= 1.5$); at 4K context,
 the same H100 holds 256 sequences (tok/W $= 17.6$).
 
 Routing topology---which determines the effective context window each GPU
-services---is a more powerful energy lever than buying newer hardware.
+services---remains a stronger energy lever than buying newer hardware.
 Working from published H100 power measurements~\citep{chung2026mlenergy}, a
-calibrated logistic power model~\citep{liang2026g2g}, and a roofline throughput
-model~\citep{xu2026aiconfigurator}, we derive these results analytically using
-the inference-fleet-sim framework~\citep{chen2026fleetsim}; no new hardware
-experiments were conducted.  Two-pool context-length routing
-(FleetOpt~\citep{chen2026fleetopt}) delivers roughly $2.5\times$ better tok/W
-over a homogeneous fleet, while upgrading from H100 to B200 delivers roughly
-$1.7\times$.  The gains are independent: combining FleetOpt with B200 yields
-$4.25\times$ over the H100 homogeneous baseline.  B200/H200 numbers are
-analytical projections ($\pm$20\% uncertainty); H100 results are calibrated
-to published measurements.
+calibrated logistic power model~\citep{liang2026g2g}, a roofline throughput
+model~\citep{xu2026aiconfigurator}, and a low-concurrency B200 calibration
+from one 8$\times$B200 vLLM serving run, we derive these results analytically
+using the inference-fleet-sim framework~\citep{chen2026fleetsim}.  Two-pool
+context-length routing (FleetOpt~\citep{chen2026fleetopt}) still delivers
+roughly $2.5\times$ over a homogeneous H100 fleet, while the calibrated B200
+generation gain rises to roughly $2\times$ at fixed topology.  On the
+short-context-dominant Azure trace, combining FleetOpt with calibrated B200
+reaches $5.76\times$ over the H100 homogeneous baseline.  H100 results are
+anchored to published measurements; B200 remains \textbf{FAIR quality} because
+the calibration uses only a single-concurrency serving point rather than a full
+power-vs-batch sweep.
 
 For MoE models, active-parameter weight streaming adds a third lever.
 Qwen3-235B-A22B (22B active) reaches roughly 37.8 tok/W at 8K context on
@@ -132,10 +134,12 @@ while power stays flat.  This makes the context window---not the GPU---the
 primary energy knob.
 
 From there we show (Section~\ref{sec:topo-effects}) that topology and hardware
-generation are independent levers.  FleetOpt routing gives roughly $2.5\times$
-over homogeneous on both H100 and B200; B200 gives roughly $1.7\times$ over H100
-at any topology.  Because the gains are orthogonal they multiply, reaching
-$4.25\times$ combined.  Neither lever alone gets you half of that.
+generation remain approximately multiplicative levers after calibration.
+FleetOpt routing gives roughly $2.5\times$ over homogeneous on H100 and
+$2.8\times$ on calibrated B200 for Azure; upgrading from H100 to calibrated
+B200 gives roughly $2\times$ at fixed topology.  On short-context-dominant
+workloads the two effects combine to roughly $5.8\times$.  Neither lever alone
+gets you close to that total.
 Section~\ref{sec:arch-effects} examines MoE models, where sparse activation
 collapses the per-iteration weight-streaming time and adds a third, architecture-level
 efficiency dimension.
@@ -162,13 +166,18 @@ $\Pnom = 600$~W at $b{=}128$, both within 3\% fit error.  The fitted logistic
 parameters are $k = 1.0$ and $x_0 = 4.2$, meaning power saturates around
 $2^{4.2} \approx 18$ concurrent sequences.
 
-For B200-SXM, no published power-vs-concurrency curves existed as of March
-2026.  We apply the same TDP fractions validated on H100
-($P_{\text{idle}}/\text{TDP} = 0.43$, $P_{\text{nom}}/\text{TDP} = 0.86$)
-to B200's 1{,}000~W TDP, giving $\Pidle = 430$~W and $\Pnom = 860$~W.
-Throughout the paper, we label H100 power estimates \textbf{HIGH quality}
-(directly measured) and B200 power estimates \textbf{FAIR quality} (projected;
-$\pm$20\% uncertainty on absolute values).
+For B200-SXM, we now use a partial empirical calibration from one
+8$\times$B200 node running vLLM 0.19.1 with Llama-3.1-70B at 8K context and
+\texttt{max\_num\_seqs}$=1$.  The measured states are: true unloaded idle
+$\approx 191$~W/GPU, model loaded but not serving $\approx 251$~W/GPU, and
+active inference $\approx 513$~W mean / $606$~W p95 per GPU.  Because the
+simulator assumes model weights are already resident, we map the loaded-idle
+state to $\Pidle = 251$~W and the p95 active state to
+$\Pnom = 606$~W.  With $k=1.0$, fitting Eq.~\eqref{eq:power} to the $b{=}1$
+active mean gives $x_0 \approx -1.03$.  Throughout the paper, H100 power
+estimates remain \textbf{HIGH quality} (directly measured), while B200 power
+estimates are \textbf{FAIR quality}: empirically anchored at one serving point,
+but not yet constrained by a full power-vs-concurrency sweep.
 
 \paragraph{KV-cache storage assumption.}
 Fleet results assume tensor-parallel sharding of KV heads: with TP=8 and
@@ -241,8 +250,8 @@ model~\citep{xu2026aiconfigurator,chen2026fleetsim}.
 \begin{table}[htbp]
 \centering
 \caption{$\nmax$ and tok/W vs.\ context window for Llama-3.1-70B (TP=8, fp16).
-  H100 power is directly measured (HIGH quality); B200 power is a first-principles
-  projection (FAIR quality).}
+  H100 power is directly measured (HIGH quality); B200 power uses a
+  single-concurrency empirical anchor plus analytical scaling (FAIR quality).}
 \label{tab:ctx-nmax}
 \small
 \begin{tabular}{rrrrrrrr}
@@ -252,13 +261,13 @@ model~\citep{xu2026aiconfigurator,chen2026fleetsim}.
 Context (K) & $\nmax$ & $P_{\text{sat}}$ & tok/W &
             & $\nmax$ & $P_{\text{sat}}$ & tok/W \\
 \midrule
- 2  &   512 & 598\,W & 35.0 && 1343 & 859\,W &  61.4 \\
- 4  &   256 & 593\,W & 17.6 &&  671 & 857\,W &  30.8 \\
- 8  &   128 & 583\,W &  8.97 &&  335 & 852\,W &  15.5 \\
-16  &    64 & 557\,W &  4.69 &&  167 & 838\,W &   7.87 \\
-32  &    32 & 507\,W &  2.58 &&   83 & 805\,W &   4.09 \\
-64  &    16 & 435\,W &  1.50 &&   41 & 735\,W &   2.24 \\
-128 &     8 & 369\,W &  0.88 &&   20 & 630\,W &   1.30 \\
+ 2  &   512 & 598\,W & 35.0 && 1343 & 606\,W &  87.0 \\
+ 4  &   256 & 593\,W & 17.6 &&  671 & 606\,W &  43.5 \\
+ 8  &   128 & 583\,W &  8.97 &&  335 & 606\,W &  21.8 \\
+16  &    64 & 557\,W &  4.69 &&  167 & 606\,W &  10.9 \\
+32  &    32 & 507\,W &  2.58 &&   83 & 606\,W &   5.43 \\
+64  &    16 & 435\,W &  1.50 &&   41 & 606\,W &   2.71 \\
+128 &     8 & 369\,W &  0.88 &&   20 & 605\,W &   1.36 \\
 \bottomrule
 \end{tabular}
 \end{table}
@@ -271,20 +280,22 @@ it is not approximate: doubling $\mathcal{W}$ halves $\nmax$
 burns the same watts whether it holds 512 sequences or 8; the difference is
 entirely how much work it delivers per joule.
 
-B200 shifts the curve up but does not change the slope.  B200 achieves
-roughly $1.5$--$1.8\times$ higher tok/W than H100 at matching context windows,
+B200 shifts the curve up but does not change the slope.  Under the calibrated
+power model, B200 achieves roughly $1.5$--$2.5\times$ higher tok/W than H100
+at matching context windows,
 driven by a larger KV-cache budget (156~GB free vs.\ 60~GB on H100), faster
 weight streaming ($W = 2.95$~ms vs.\ 6.72~ms for 70B at TP=8), and correspondingly
 higher $\nmax$.  But the halving-per-doubling relationship holds just as
 tightly on B200.
 
 B200's advantage narrows at long context.  At 64K, B200 is only
-$1.49\times$ better than H100 (2.24 vs.\ 1.50 tok/W), down from $1.75\times$
-at 4K.  The culprit is idle power: B200's $\Pidle = 430$~W represents a
-larger fraction of the total bill when $\nmax$ is small (41 sequences at 64K
-vs.\ 671 at 4K).  At 4K context both GPUs run near power saturation and the
-idle-power gap barely matters; at 64K a significant share of each GPU's watt
-budget goes to just staying powered on.  We return to the fleet-level
+$1.81\times$ better than H100 (2.71 vs.\ 1.50 tok/W), down from $2.47\times$
+at 4K.  The reason is no longer a large projected idle penalty; instead, the
+calibrated B200 serving curve is already near its active ceiling across these
+operating points, staying close to 606~W while H100 power falls more noticeably
+at low batch.  At 64K, the B200 still has far more concurrency (41 sequences
+vs.\ 16), but the watt denominator no longer drops with context length the way
+it does on H100.  We return to the fleet-level
 implications in Section~\ref{sec:fleet-topology}.
 
 \subsection{Model Architecture Effects}
@@ -297,7 +308,8 @@ families for an 8K context window.
 \centering
 \caption{Single-GPU tok/W at $\nmax$ (8K context).  Dense model values
   use ComputedProfile throughout (H100 cross-validated against ML.ENERGY
-  v3.0, HIGH quality; B200 TDP-fraction projection, FAIR quality).
+  v3.0, HIGH quality; B200 uses a single-concurrency measured power anchor,
+  FAIR quality).
   Models: Llama-3.1 family~\citep{meta2024llama3};
   Qwen3-235B-A22B~\citep{qwen2025qwen3};
   DeepSeek-V3~\citep{deepseekai2025v3}.
@@ -315,11 +327,11 @@ families for an 8K context window.
 \cmidrule{3-5} \cmidrule{7-9}
 Model & TP & $\nmax$ & tok/s & tok/W & & $\nmax$ & tok/s & tok/W \\
 \midrule
-Llama-3.1-8B         & 1 &  58 & 3{,}350 &  6.46 &&  148 &  9{,}962 & 12.18 \\
-Llama-3.1-70B        & 8 &  22 & 2{,}716 &  7.41 &&   58 & 12{,}960 & 20.93 \\
-Llama-3.1-405B       & 8 &   1 &      26 &  0.09 &&   17 &  1{,}009 &  2.16 \\
-Qwen3-235B-A22B$^\dagger$ & 8 & 24 & 11{,}521 & 37.82 && 146 & 80{,}584 & 177.73 \\
-DeepSeek-V3$^\dagger$ (fp8) & 8 & 1 & 646 & 2.14 &&   11 &  8{,}162 & 18.37 \\
+Llama-3.1-8B         & 1 &  58 & 3{,}350 &  6.46 &&  148 &  9{,}962 & 16.43 \\
+Llama-3.1-70B        & 8 &  22 & 2{,}716 &  7.41 &&   58 & 12{,}960 & 21.39 \\
+Llama-3.1-405B       & 8 &   1 &      26 &  0.09 &&   17 &  1{,}009 &  1.67 \\
+Qwen3-235B-A22B$^\dagger$ & 8 & 24 & 11{,}521 & 37.82 && 146 & 80{,}584 & 132.93 \\
+DeepSeek-V3$^\dagger$ (fp8) & 8 & 1 & 646 & 2.14 &&   11 &  8{,}162 & 13.55 \\
 \bottomrule
 \end{tabular}
 \end{table}
@@ -354,10 +366,11 @@ $W$; empirical measurements on real hardware would substantially narrow the
 range.
 
 Looking at B200 across models, the generation multiplier is anything but
-uniform.  For sub-100B dense models it ranges from $1.6\times$ to $2.8\times$,
+uniform.  Under the calibrated power model, for sub-100B dense models it
+ranges from $2.5\times$ to $2.9\times$,
 which is consistent with the bandwidth and memory improvements.  But for
 models previously stuck at $\nmax \approx 1$---the 405B case---the jump is
-dramatic: from 0.09 to 2.16 tok/W, a 24$\times$ improvement.  This happens
+dramatic: from 0.09 to 1.67 tok/W, an $\approx 19\times$ improvement.  This happens
 not because B200 is fundamentally more efficient at that operating point, but
 because the added VRAM lets the GPU escape the near-idle serving regime where
 it was burning nearly $\Pidle$ watts to deliver essentially nothing.
@@ -390,8 +403,8 @@ B200 across two production workload traces.
 \centering
 \caption{Fleet token efficiency at $\lambda = 1{,}000$ req/s.  H100
   profile: empirically calibrated (HIGH quality); B200 profile: scaled
-  from H100 by the 2.62$\times$ KV-budget ratio (FAIR quality, $\pm$20\%
-  on absolute values).  Topology: Homo = homogeneous 64K fleet; Pool =
+  from H100 by the 2.62$\times$ KV-budget ratio with a single-concurrency
+  measured power anchor (FAIR quality).  Topology: Homo = homogeneous 64K fleet; Pool =
   two-pool context routing; FleetOpt = optimal $\gamma^*$ from~\citet{chen2026fleetopt}.
   Workload traces: Azure = Azure LLM Inference Trace~\citep{patel2023splitwise};
   LMSYS = LMSYS-Chat-1M~\citep{zheng2023lmsys}.}
@@ -405,17 +418,17 @@ Workload & $B_{\text{short}}$ & Topology & GPU & GPUs & kW & tok/W & vs H100 Hom
   & ---         & Homo 64K       & H100 &  141 &  58.3 &  5.58 & --- \\
   & 4K          & Pool routing   & H100 &   68 &  32.0 &  9.16 & +64\% \\
   & 4K/$\gamma^*{=}2$ & FleetOpt & H100 &   40 &  23.1 & 14.08 & +152\% \\
-  & ---         & Homo 64K       & B200 &   47 &  33.4 &  9.74 & +75\% \\
-  & 4K          & Pool routing   & B200 &   25 &  19.1 & 15.39 & +176\% \\
-  & 4K/$\gamma^*{=}2$ & FleetOpt & B200 &   17 &  13.7 & 23.71 & \textbf{+325\%} \\
+  & ---         & Homo 64K       & B200 &   47 &  28.5 & 11.42 & +105\% \\
+  & 4K          & Pool routing   & B200 &   25 &  15.1 & 19.37 & +247\% \\
+  & 4K/$\gamma^*{=}2$ & FleetOpt & B200 &   17 &  10.1 & 32.12 & \textbf{+476\%} \\
 \midrule
 \multirow{6}{*}{\makecell[l]{LMSYS\\(Arch.\ I)}}
   & ---         & Homo 64K       & H100 &   69 &  28.5 &  4.77 & --- \\
   & 1.5K        & Pool routing   & H100 &   38 &  16.4 &  7.91 & +66\% \\
   & 1.5K/$\gamma^*{=}2$ & FleetOpt & H100 &  29 &  12.9 & 10.30 & +116\% \\
-  & ---         & Homo 64K       & B200 &   24 &  17.0 &  7.98 & +67\% \\
-  & 1.5K        & Pool routing   & B200 &   16 &  11.7 & 11.12 & +133\% \\
-  & 1.5K/$\gamma^*{=}2$ & FleetOpt & B200 &  12 &   9.0 & 14.82 & \textbf{+211\%} \\
+  & ---         & Homo 64K       & B200 &   24 &  14.5 &  9.36 & +96\% \\
+  & 1.5K        & Pool routing   & B200 &   16 &   9.7 & 13.42 & +181\% \\
+  & 1.5K/$\gamma^*{=}2$ & FleetOpt & B200 &  12 &   7.3 & 18.28 & \textbf{+283\%} \\
 \bottomrule
 \end{tabular}
 \end{table}
@@ -426,29 +439,30 @@ topology improvement for GPU $G$ as $\tpw_{\text{FleetOpt}}(G) /
 $\tpw_{\text{B200}}(T) / \tpw_{\text{H100}}(T)$.  For Azure:
 \[
   \Delta_{\text{topo}}(\text{H100}) = 14.08 / 5.58 = 2.52, \quad
-  \Delta_{\text{topo}}(\text{B200}) = 23.71 / 9.74 = 2.44.
+  \Delta_{\text{topo}}(\text{B200}) = 32.12 / 11.42 = 2.81.
 \]
 \[
-  \Delta_{\text{gen}}(\text{Homo}) = 9.74 / 5.58 = 1.75, \quad
-  \Delta_{\text{gen}}(\text{FleetOpt}) = 23.71 / 14.08 = 1.68.
+  \Delta_{\text{gen}}(\text{Homo}) = 11.42 / 5.58 = 2.05, \quad
+  \Delta_{\text{gen}}(\text{FleetOpt}) = 32.12 / 14.08 = 2.28.
 \]
 
-The topology gain barely changes between H100 and B200 ($2.52$ vs.\ $2.44$),
-and the generation gain barely changes between homogeneous and FleetOpt
-($1.75$ vs.\ $1.68$).  The two levers operate on different dimensions and
-don't interact.  That independence means the gains multiply: B200
-FleetOpt delivers $2.52 \times 1.75 \approx 4.4\times$, matching the measured
-$23.71 / 5.58 = 4.25\times$.  Neither lever alone gets you close---FleetOpt
-with H100 gives $2.52\times$ and B200 with a homogeneous fleet gives
-$1.75\times$, each less than half the combined improvement.
+The topology gain stays in the same ballpark between H100 and calibrated B200
+($2.52$ vs.\ $2.81$), and the generation gain stays near $2\times$ between
+homogeneous and FleetOpt ($2.05$ vs.\ $2.28$).  The two levers still operate
+on largely different dimensions, though the calibrated B200 power floor makes
+the generation effect somewhat stronger for short-context-heavy topologies.
+For Azure, calibrated B200 FleetOpt delivers $32.12 / 5.58 = 5.76\times$ over
+the H100 homogeneous baseline.  Neither lever alone gets you close---FleetOpt
+with H100 gives $2.52\times$ and calibrated B200 with a homogeneous fleet gives
+$2.05\times$.
 
 In practice, topology work and hardware upgrades are complementary
 investments, not substitutes.  Operators who only buy better
-GPUs without rethinking topology capture $1.75\times$ and leave the other
-$2.4\times$ on the table.  Operators who invest in two-pool routing on
-H100 capture $2.52\times$ and then can stack another $1.7\times$ on top with
-a future hardware upgrade---arriving at a fleet that delivers 4.25$\times$
-better energy efficiency than where most operators start today.
+GPUs without rethinking topology capture about $2\times$ and still leave a large
+topology gain on the table.  Operators who invest in two-pool routing on
+H100 capture $2.52\times$ and then can stack another $\approx 2.3\times$ on top
+with a calibrated B200 upgrade in the Azure setting---arriving at a fleet that
+delivers 5.76$\times$ better energy efficiency than the H100 homogeneous baseline.
 
 \section{Routing Topology Design Space}
 \label{sec:design-space}
@@ -523,7 +537,8 @@ impact on tok/W for Llama-3.1-70B (TP=8, fp16).
 \begin{table}[htbp]
 \centering
 \caption{GPU generation comparison for Llama-3.1-70B (TP=8, fp16) at 8K context.
-  Power quality: H100 = HIGH (measured); others = FAIR (projected, $\pm$15\%).}
+  Power quality: H100 = HIGH (measured); B200 = FAIR (single-concurrency measured
+  anchor); H200/GB200 = FAIR (projected, $\pm$15\%).}
 \label{tab:gen-compare}
 \small
 \begin{tabular}{lrrrrrrrr}
@@ -533,7 +548,7 @@ GPU & TDP (W) & $\Pidle$ & $W$ (ms) & $\nmax$@8K & $P_{\text{sat}}$ (W) &
 \midrule
 H100-SXM5 &  700 & 300 & 6.72 &  22 &  367 &  7.41 & 32.2 &  0.30M \\
 H200-SXM  &  700 & 300 & 4.76 &  44 &  422 & 15.58 & 48.0 &  0.49M \\
-B200-SXM  & 1000 & 430 & 2.95 &  58 &  619 & 20.93 & 64.0 &  0.73M \\
+B200-SXM  & 1000 & 251 & 2.95 &  58 &  606 & 21.39 & 64.0 &  0.73M \\
 GB200-NVL & 1200 & 516 & 2.95 &  65 &  755 & 18.49 & 80.0 &  0.63M \\
 \bottomrule
 \end{tabular}
@@ -545,16 +560,17 @@ It doubles $\nmax$ over H100 (44 vs.\ 22) via 4.8~TB/s HBM3e bandwidth
 TDP and idle power floor as H100.  The result is a $2.1\times$ tok/W
 improvement over H100 (15.58 vs.\ 7.41) at a rental cost roughly 50\% higher.
 
-B200 pushes further in absolute tok/W (20.93 vs.\ 15.58) by fitting still
-more sequences in flight ($\nmax = 58$ vs.\ 44).  Higher idle power
-(430~W vs.\ 300~W) raises the power floor, but the $2.62\times$ larger memory
-budget more than compensates.  On a tok/\$M basis, B200 comes out ahead:
+B200 pushes further in absolute tok/W (21.39 vs.\ 15.58) by fitting still
+more sequences in flight ($\nmax = 58$ vs.\ 44).  Under the calibrated serving
+model its effective idle floor is actually lower than the old TDP-fraction
+projection (251~W vs.\ the previous 430~W), while the $2.62\times$ larger memory
+budget more than compensates for the higher TDP.  On a tok/\$M basis, B200 comes out ahead:
 $0.73$M vs.\ $0.49$M tok/\$M/hr, because the throughput gain more than
 offsets the cost premium.  At 8K context, B200 is the better choice on
 both absolute efficiency and cost efficiency.
 
 GB200-NVL is a bit of a surprise.  Despite having the same compute specs as
-B200-SXM, its per-GPU tok/W is lower (18.49 vs.\ 20.93) because the higher
+B200-SXM, its per-GPU tok/W is lower (18.49 vs.\ 21.39) because the higher
 TDP (1{,}200~W per GPU equivalent) adds more power to the denominator than
 the slightly larger memory (200~GiB vs.\ 180~GiB) adds to the numerator.
 GB200's advantage shows up not in this configuration but for very large models
@@ -571,9 +587,10 @@ fleet average.
 \paragraph{Short-context-dominant workloads (e.g., Azure).}
 89\% of Azure Conversations requests fit within 4K tokens.  The short pool
 handles nearly all traffic at high concurrency; the long pool is small and
-lightly loaded.  FleetOpt on B200 reaches 23.7 tok/W---a +325\% improvement
-over the H100 homogeneous baseline, composed of a $1.75\times$ generation gain
-and a $2.44\times$ topology gain that multiply to $4.25\times$.  This is the
+lightly loaded.  FleetOpt on calibrated B200 reaches 32.1 tok/W---a +476\%
+improvement over the H100 homogeneous baseline, composed of a $2.28\times$
+generation gain and a $2.81\times$ topology gain that combine to $5.76\times$.
+This is the
 scenario where two-pool routing pays off most.
 
 \paragraph{Dispersed workloads (e.g., agent-heavy).}
@@ -674,9 +691,10 @@ The $1/\mathcal{W}$ law explains why topology matters so much.  Because tok/W
 halves every time the serving context window doubles, a routing strategy that
 confines short requests to a small-context pool effectively cuts the context
 window for the bulk of traffic.  FleetOpt delivers roughly $2.5\times$ over
-a homogeneous fleet, and B200 delivers roughly $1.7\times$ over H100.  These
-two improvements multiply, giving roughly $4.25\times$ total when combined---
-$2.5 + 1.7 \neq 4.25$ because the gains stack on orthogonal dimensions.
+a homogeneous fleet, and calibrated B200 delivers roughly $2\times$ over H100
+at fixed topology.  On the Azure trace these two improvements combine to
+$5.76\times$---$2.5 + 2.0 \neq 5.76$ because the gains stack on orthogonal
+dimensions and are only approximately constant across topologies.
 
 MoE models have a natural tok/W edge from fast weight streaming---only the
 active experts get loaded per step---but putting a reliable number on that
@@ -685,9 +703,10 @@ values in Table~\ref{tab:arch-tpw} are upper bounds.
 
 All results are computed analytically via
 \texttt{inference-fleet-sim}~\citep{chen2026fleetsim}, with H100 power
-validated against ML.ENERGY v3.0.  B200 numbers are projections with stated
-uncertainty.  As measurement data for B200 and H200 becomes available, we
-expect the absolute numbers to shift somewhat while the qualitative picture---
+validated against ML.ENERGY v3.0 and B200 re-anchored to one low-concurrency
+serving calibration.  H200 and GB200 remain projections.  As fuller
+multi-concurrency measurement data for B200 and H200 becomes available, we
+expect the absolute numbers to shift further while the qualitative picture---
 topology first, generation second, architecture third---holds.
 
 \section{Limitations, Assumptions, and Future Work}
@@ -722,12 +741,12 @@ reduces average utilization and therefore tok/W.  The reported values are
 attainable only under smooth, sustained load.
 
 \paragraph{B200 power model quality.}
-B200 power parameters are derived from TDP-fraction heuristics calibrated on
-H100 data, then applied to B200's 1{,}000~W TDP.  No direct
-power-vs-concurrency measurements are available.  We estimate $\pm$20\%
-uncertainty on absolute B200 tok/W; the generation-gain ratios ($\approx
-1.7\times$) are more robust because systematic errors partially cancel in
-the ratio.
+B200 power parameters are no longer pure TDP-fraction projections: they are
+anchored to one 8$\times$B200 serving run at $b{=}1$, then extrapolated with
+the same logistic functional form used for H100.  This substantially improves
+the low-concurrency estimate, but it is still not a full $P(b)$ calibration.
+We therefore keep a FAIR-quality label and expect the high-batch tail to remain
+uncertain until a proper concurrency sweep is measured.
 
 \paragraph{Fixed TP=8, single model per pool.}
 All experiments use TP=8 instances of the same model in each pool.  Smaller
@@ -743,12 +762,13 @@ efficiency.
 
 \subsection{Limitations}
 
-\paragraph{No empirical validation on B200/H200.}
-The B200 and H200 results are projections.  We have not measured vLLM or any
-production serving stack on B200 or H200, and cannot confirm that the
-power-vs-concurrency curve follows a logistic shape with the projected
-parameters.  Researchers with access to these platforms should measure and
-publish the $P(b)$ curve to fill this gap.
+\paragraph{Only partial empirical validation on B200; none on H200.}
+The B200 results now include a direct low-concurrency serving anchor, but we
+still have not measured the full vLLM power-vs-concurrency curve on B200, and
+we have no corresponding serving measurements on H200.  We therefore cannot
+confirm that the calibrated B200 logistic shape remains correct at higher batch
+sizes, nor can we validate the H200 projection.  Researchers with access to
+these platforms should measure and publish the full $P(b)$ curve to fill this gap.
 
 \paragraph{Two-pool topology only.}
 FleetOpt defines a single split boundary with one overflow parameter.  Real
@@ -770,9 +790,10 @@ overflow $\gamma^*$ would need to be re-estimated as the workload shifts.
 \subsection{Future Work}
 
 \paragraph{Empirical B200/H200 power calibration.}
-The most immediate follow-on is measuring the logistic $P(b)$ curve for
-B200-SXM and H200-SXM using the ML.ENERGY methodology~\citep{chung2026mlenergy}
-and updating the fleet projections with HIGH-quality data.
+The most immediate follow-on is extending the current B200 $b{=}1$ anchor to a
+full logistic $P(b)$ sweep and collecting the same data for H200-SXM using the
+ML.ENERGY methodology~\citep{chung2026mlenergy}.  That would upgrade the B200
+results from FAIR to HIGH quality and replace the remaining H200 projection.
 
 \paragraph{Prefill-decode disaggregation.}
 Splitwise-style separation~\citep{patel2023splitwise} assigns prefill and
@@ -816,14 +837,15 @@ distribution shift.
 Table~\ref{tab:power-params} summarizes power model parameters for each GPU.
 H100-SXM5 parameters are fitted to ML.ENERGY data~\citep{chung2026mlenergy}
 Figure~2 data (H100-SXM5, vLLM, Llama-3.1-class, $b \in \{1, 2, 4, 8, 16,
-32, 64, 128, 256\}$; fit error $<$3\%).  All others are first-principles
-projections.
+32, 64, 128, 256\}$; fit error $<$3\%).  B200-SXM uses a single-concurrency
+empirical anchor from one 8$\times$B200 serving run.  H200 and GB200 remain
+first-principles projections.
 
 \begin{table}[htbp]
 \centering
-\caption{GPU power model parameters.  HIGH = directly measured; FAIR = projected
-  from TDP fractions ($P_{\text{idle}} = 0.43 \times \text{TDP}$, $P_{\text{nom}}
-  = 0.86 \times \text{TDP}$), calibrated to H100 ML.ENERGY data~\citep{chung2026mlenergy}.}
+\caption{GPU power model parameters.  HIGH = directly measured; FAIR = either
+  a single-concurrency empirical anchor (B200) or a TDP-fraction projection
+  calibrated to H100 ML.ENERGY data~\citep{chung2026mlenergy}.}
 \label{tab:power-params}
 \small
 \begin{tabular}{lrrrrrrl}
@@ -832,7 +854,7 @@ GPU & TDP (W) & $\Pidle$ (W) & $\Pnom$ (W) & $k$ & $x_0$ & Source & Quality \\
 \midrule
 H100-SXM5 &  700 & 300 & 600 & 1.0 & 4.2 & G2G Fig.~2 + ML.ENERGY & HIGH \\
 H200-SXM  &  700 & 300 & 600 & 1.0 & 5.5\textsuperscript{†} & TDP fraction & FAIR \\
-B200-SXM  & 1000 & 430 & 860 & 1.0 & 6.8\textsuperscript{†} & TDP fraction & FAIR \\
+B200-SXM  & 1000 & 251 & 606 & 1.0 & -1.03 & 8$\times$B200 vLLM b=1 anchor & FAIR \\
 GB200-NVL & 1200 & 516 & 1032 & 1.0 & 6.8\textsuperscript{†} & TDP fraction & FAIR \\
 \bottomrule
 \end{tabular}
