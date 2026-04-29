@@ -6,3 +6,7 @@ plugin:
     capture_request_body: true
     capture_response_body: true
     max_body_bytes: 4096
+    # Cap the number of tool-trace steps retained per record. Long agent
+    # sessions can otherwise grow the trace unbounded and OOM the router
+    # (#1835). 0 = no cap.
+    max_tool_trace_steps: 100

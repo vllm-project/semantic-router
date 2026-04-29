@@ -1,9 +1,12 @@
 package extproc
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
+	"strconv"
 	"strings"
+	"time"
 
 	core "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
 	ext_proc "github.com/envoyproxy/go-control-plane/envoy/service/ext_proc/v3"
@@ -11,6 +14,7 @@ import (
 	"github.com/openai/openai-go/packages/param"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/headers"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/metrics"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/tools"
@@ -21,15 +25,13 @@ const (
 	candidatePoolMinSize    = 20
 )
 
-// handleToolSelectionForRequest handles tool selection for the request
+// handleToolSelectionForRequest handles tool selection for the request.
 func (r *OpenAIRouter) handleToolSelectionForRequest(openAIRequest *openai.ChatCompletionNewParams, response *ext_proc.ProcessingResponse, ctx *RequestContext) {
 	userContent, nonUserMessages := extractUserAndNonUserContent(openAIRequest)
-
 	if err := r.handleToolSelection(openAIRequest, userContent, nonUserMessages, &response, ctx); err != nil {
 		logging.Errorf("Error in tool selection: %v", err)
 		// Continue without failing the request
 	}
-
 	if clearToolChoiceWhenNoTools(openAIRequest) {
 		if err := r.updateRequestWithTools(openAIRequest, &response, ctx); err != nil {
 			logging.Errorf("Error clearing invalid tool_choice without tools: %v", err)
@@ -37,42 +39,39 @@ func (r *OpenAIRouter) handleToolSelectionForRequest(openAIRequest *openai.ChatC
 	}
 }
 
-// handleToolSelection handles automatic tool selection based on semantic similarity
-func (r *OpenAIRouter) handleToolSelection(openAIRequest *openai.ChatCompletionNewParams, userContent string, nonUserMessages []string, response **ext_proc.ProcessingResponse, ctx *RequestContext) error {
-	toolsCfg := resolveDecisionToolsConfig(ctx)
-	if toolsCfg == nil || !toolsCfg.Enabled {
+func (r *OpenAIRouter) applySelectedTools(
+	openAIRequest *openai.ChatCompletionNewParams,
+	selectedTools []openai.ChatCompletionToolParam,
+	strategyID string,
+	confidence float32,
+	latency time.Duration,
+	classificationText string,
+) error {
+	if len(selectedTools) == 0 {
+		if r.Config.Tools.FallbackToEmpty {
+			logging.Infof("No suitable tools found, falling back to no tools")
+			openAIRequest.Tools = nil
+		} else {
+			logging.Infof("No suitable tools found above threshold")
+			openAIRequest.Tools = []openai.ChatCompletionToolParam{}
+		}
 		return nil
 	}
-
-	finished, err := r.applyDecisionToolsPluginMode(openAIRequest, response, ctx, toolsCfg)
-	if err != nil || finished {
+	sdkTools, err := convertToSDKTools(selectedTools)
+	if err != nil {
+		metrics.RecordRequestError(openAIRequest.Model, "serialization_error")
 		return err
 	}
-
-	if openAIRequest.ToolChoice.OfAuto.Value != "auto" {
-		return nil
-	}
-	if !toolsCfg.SelectionEnabled() {
-		return r.updateRequestWithTools(openAIRequest, response, ctx)
-	}
-
-	classificationText := toolClassificationText(userContent, nonUserMessages)
-	if classificationText == "" {
-		logging.Infof("No content available for tool classification")
-		return nil
-	}
-
-	if !r.ToolsDatabase.IsEnabled() {
-		logging.Infof("Tools database is disabled")
-		return nil
-	}
-
-	return r.runSemanticToolSelectionAndUpdate(openAIRequest, response, ctx, toolsCfg, classificationText)
+	openAIRequest.Tools = sdkTools
+	logging.Infof("Auto-selected %d tools via strategy %q (confidence=%.3f, latency=%s) for query: %s",
+		len(sdkTools), strategyID, confidence, latency.Round(time.Millisecond), classificationText)
+	return nil
 }
 
-// applyDecisionToolsPluginMode enforces per-decision none / filtered / passthrough. The boolean is
-// true when the request body has already been finalized for this path (caller returns).
-func (r *OpenAIRouter) applyDecisionToolsPluginMode(
+// handleEarlyToolModes applies the tool plugin mode (none, filtered, passthrough)
+// and returns true if the caller should proceed to semantic tool selection.
+// If it returns false, the request has already been updated and the caller must return nil.
+func (r *OpenAIRouter) handleEarlyToolModes(
 	openAIRequest *openai.ChatCompletionNewParams,
 	response **ext_proc.ProcessingResponse,
 	ctx *RequestContext,
@@ -82,44 +81,50 @@ func (r *OpenAIRouter) applyDecisionToolsPluginMode(
 	case config.ToolsPluginModeNone:
 		logging.Infof("[ToolsPlugin] Decision %q has mode=none, stripping all tools", ctx.VSRSelectedDecision.Name)
 		openAIRequest.Tools = nil
-		return true, r.updateRequestWithTools(openAIRequest, response, ctx)
+		if err := r.updateRequestWithTools(openAIRequest, response, ctx); err != nil {
+			return false, err
+		}
+		return false, nil
+
 	case config.ToolsPluginModeFiltered:
 		openAIRequest.Tools = filterToolsByDecisionPolicy(openAIRequest.Tools, toolsCfg.AllowTools, toolsCfg.BlockTools)
 		if openAIRequest.ToolChoice.OfAuto.Value != "auto" {
 			logging.Infof("[ToolsPlugin] Decision %q filtered explicit tools to %d entries", ctx.VSRSelectedDecision.Name, len(openAIRequest.Tools))
-			return true, r.updateRequestWithTools(openAIRequest, response, ctx)
+			if err := r.updateRequestWithTools(openAIRequest, response, ctx); err != nil {
+				return false, err
+			}
+			return false, nil
 		}
+		return true, nil
+
 	case config.ToolsPluginModePassthrough:
-		// Semantic selection may run below.
+		return openAIRequest.ToolChoice.OfAuto.Value == "auto", nil
+
 	default:
 		return false, fmt.Errorf("tools plugin: unsupported mode %q", toolsCfg.Mode)
 	}
-	return false, nil
 }
 
-func toolClassificationText(userContent string, nonUserMessages []string) string {
-	if len(userContent) > 0 {
-		return userContent
-	}
-	if len(nonUserMessages) > 0 {
-		return strings.Join(nonUserMessages, " ")
-	}
-	return ""
-}
-
-func (r *OpenAIRouter) runSemanticToolSelectionAndUpdate(
+// runSemanticToolSelection performs the retrieval, observability reporting,
+// fallback handling and final tool application after the earlier mode checks
+// have determined that semantic selection should run.
+func (r *OpenAIRouter) runSemanticToolSelection(
 	openAIRequest *openai.ChatCompletionNewParams,
+	classificationText string,
 	response **ext_proc.ProcessingResponse,
 	ctx *RequestContext,
 	toolsCfg *config.ToolsPluginConfig,
-	classificationText string,
 ) error {
-	selectedTools, toolErr := r.findToolsForQuery(classificationText, ctx, toolsCfg, openAIRequest)
+	selectedTools, strategyID, confidence, latency, toolErr := r.findToolsForQuery(classificationText, ctx, toolsCfg)
+
+	emitToolObservability(response, strategyID, confidence, latency)
+	metrics.RecordToolsRetrieval(strategyID, latency.Seconds())
+
 	if toolErr != nil {
 		return r.handleToolSelectionError(openAIRequest, response, ctx, toolErr)
 	}
 
-	if err := applySelectedToolsToOpenAIRequest(r, openAIRequest, selectedTools, classificationText, ctx); err != nil {
+	if err := r.applySelectedTools(openAIRequest, selectedTools, strategyID, confidence, latency, classificationText); err != nil {
 		return err
 	}
 	return r.updateRequestWithTools(openAIRequest, response, ctx)
@@ -140,66 +145,155 @@ func (r *OpenAIRouter) handleToolSelectionError(
 	return toolErr
 }
 
-func applySelectedToolsToOpenAIRequest(
-	r *OpenAIRouter,
+// handleToolSelection handles automatic tool selection based on semantic similarity.
+func (r *OpenAIRouter) handleToolSelection(
 	openAIRequest *openai.ChatCompletionNewParams,
-	selectedTools []openai.ChatCompletionToolParam,
-	classificationText string,
+	userContent string,
+	nonUserMessages []string,
+	response **ext_proc.ProcessingResponse,
 	ctx *RequestContext,
 ) error {
-	if len(selectedTools) == 0 {
-		applyNoToolsFromSelection(r, openAIRequest)
+	toolsCfg := resolveDecisionToolsConfig(ctx)
+	if toolsCfg == nil || !toolsCfg.Enabled {
 		return nil
 	}
-	sdkTools, err := convertToSDKTools(selectedTools)
+
+	shouldContinue, err := r.handleEarlyToolModes(openAIRequest, response, ctx, toolsCfg)
 	if err != nil {
-		metrics.RecordRequestError(getModelFromCtx(ctx), "serialization_error")
 		return err
 	}
-	openAIRequest.Tools = sdkTools
-	logging.Infof("Auto-selected %d tools for query: %s", len(sdkTools), classificationText)
-	return nil
-}
-
-func applyNoToolsFromSelection(r *OpenAIRouter, openAIRequest *openai.ChatCompletionNewParams) {
-	if r.Config.Tools.FallbackToEmpty {
-		logging.Infof("No suitable tools found, falling back to no tools")
-		openAIRequest.Tools = nil
-		return
+	if !shouldContinue {
+		return nil
 	}
-	logging.Infof("No suitable tools found above threshold")
-	openAIRequest.Tools = []openai.ChatCompletionToolParam{}
+
+	if !toolsCfg.SelectionEnabled() {
+		return r.updateRequestWithTools(openAIRequest, response, ctx)
+	}
+
+	// Build classification text.
+	var classificationText string
+	if len(userContent) > 0 {
+		classificationText = userContent
+	} else if len(nonUserMessages) > 0 {
+		classificationText = strings.Join(nonUserMessages, " ")
+	}
+	if classificationText == "" {
+		logging.Infof("No content available for tool classification")
+		return nil
+	}
+
+	if !r.ToolsDatabase.IsEnabled() {
+		logging.Infof("Tools database is disabled")
+		return nil
+	}
+
+	return r.runSemanticToolSelection(openAIRequest, classificationText, response, ctx, toolsCfg)
 }
 
-// findToolsForQuery discovers candidate tools via semantic similarity, applying
-// advanced filtering when configured.
-func (r *OpenAIRouter) findToolsForQuery(query string, ctx *RequestContext, toolsCfg *config.ToolsPluginConfig, openAIRequest *openai.ChatCompletionNewParams) ([]openai.ChatCompletionToolParam, error) {
+// executeRetrieval resolves the retriever for strategyID from the registry and
+// runs it. If the registry is nil or the strategy is not found, it falls back
+// to ToolsDatabase directly and marks the returned StrategyID with "-fallback".
+func (r *OpenAIRouter) executeRetrieval(ctx context.Context, query, strategyID string, topK int) (tools.RetrievalResult, error) {
+	if r.ToolsRegistry != nil {
+		if retriever, ok := r.ToolsRegistry.Get(strategyID); ok {
+			return retriever.Retrieve(ctx, query, topK)
+		}
+
+		// Named strategy not found — try "default" before falling back to DB
+		if retriever, ok := r.ToolsRegistry.Get("default"); ok {
+			logging.Warnf("[ToolsPlugin] strategy %q not found, falling back to default", strategyID)
+			result, err := retriever.Retrieve(ctx, query, topK)
+			result.StrategyID = strategyID + "-fallback"
+			return result, err
+		}
+
+		logging.Warnf("[ToolsPlugin] strategy %q not found in registry, using ToolsDatabase directly", strategyID)
+	} else {
+		logging.Warnf("[ToolsPlugin] registry not initialized for strategy %q, using ToolsDatabase directly", strategyID)
+	}
+
+	results, err := r.ToolsDatabase.FindSimilarToolsWithScores(query, topK)
+	if err != nil {
+		return tools.RetrievalResult{StrategyID: strategyID + "-fallback"}, err
+	}
+
+	confidence := float32(0)
+	if len(results) > 0 {
+		confidence = results[0].Similarity
+	}
+
+	return tools.RetrievalResult{
+		Tools:      results,
+		Confidence: confidence,
+		StrategyID: strategyID + "-fallback",
+	}, nil
+}
+
+// findToolsForQuery resolves the retriever strategy from the registry, executes
+// retrieval, applies advanced filtering, and returns the final tool list together
+// with the strategy name, top-1 confidence score, and retrieval wall-clock time.
+func (r *OpenAIRouter) findToolsForQuery(query string, ctx *RequestContext, toolsCfg *config.ToolsPluginConfig) ([]openai.ChatCompletionToolParam, string, float32, time.Duration, error) {
 	topK := r.Config.Tools.TopK
 	if topK <= 0 {
 		topK = 3
 	}
 
+	strategyID := toolsCfg.EffectiveStrategy()
+	poolSize := resolveCandidatePoolSize(r.Config.Tools.AdvancedFiltering, topK)
 	advanced := mergeAdvancedToolFiltering(r.Config.Tools.AdvancedFiltering, toolsCfg)
-	if advanced == nil || !advanced.Enabled {
-		return r.ToolsDatabase.FindSimilarTools(query, topK)
+
+	if advanced != nil && advanced.Enabled {
+		poolSize = resolveCandidatePoolSize(advanced, topK)
 	}
 
-	candidates, err := r.ToolsDatabase.FindSimilarToolsWithScores(query, resolveCandidatePoolSize(advanced, topK))
+	retrievalCtx := context.Background()
+	if ctx != nil && ctx.TraceContext != nil {
+		retrievalCtx = ctx.TraceContext
+	}
+
+	start := time.Now()
+	retrieved, err := r.executeRetrieval(retrievalCtx, query, strategyID, poolSize)
+	latency := time.Since(start)
+
 	if err != nil {
-		return nil, err
+		return nil, retrieved.StrategyID, 0, latency, err
 	}
 
-	category := resolveCategory(advanced, ctx)
-	if config.IsHybridHistoryRetrieval(advanced) {
-		hz := config.ResolveHybridHistoryHorizon(advanced)
-		toolNames := extractRecentAssistantToolCallNames(openAIRequest, hz)
-		dec := 0.0
-		if ctx != nil {
-			dec = ctx.VSRSelectedDecisionConfidence
-		}
-		return tools.FilterAndRankToolsWithConversation(query, candidates, topK, advanced, category, toolNames, dec), nil
+	if advanced == nil || !advanced.Enabled {
+		return selectTopKTools(retrieved.Tools, topK), retrieved.StrategyID, retrieved.Confidence, latency, nil
 	}
-	return tools.FilterAndRankTools(query, candidates, topK, advanced, category), nil
+
+	selected := tools.FilterAndRankTools(query, retrieved.Tools, topK, advanced, resolveCategory(advanced, ctx))
+	return selected, retrieved.StrategyID, retrieved.Confidence, latency, nil
+}
+
+// emitToolObservability writes the three x-vsr-tools-* headers into the
+// in-flight ProcessingResponse so they reach the client as response headers.
+func emitToolObservability(response **ext_proc.ProcessingResponse, strategyID string, confidence float32, latency time.Duration) {
+	if response == nil || *response == nil {
+		return
+	}
+	commonResponse := ensureRequestBodyCommonResponse(response)
+	if commonResponse.HeaderMutation == nil {
+		commonResponse.HeaderMutation = &ext_proc.HeaderMutation{}
+	}
+	setHeaderValue(commonResponse.HeaderMutation, headers.VSRToolsStrategy, strategyID)
+	setHeaderValue(commonResponse.HeaderMutation, headers.VSRToolsConfidence, strconv.FormatFloat(float64(confidence), 'f', 4, 32))
+	setHeaderValue(commonResponse.HeaderMutation, headers.VSRToolsLatencyMs, strconv.FormatInt(latency.Milliseconds(), 10))
+}
+
+// selectTopKTools returns the top-K entries from candidates by similarity
+// without applying advanced filtering.
+func selectTopKTools(candidates []tools.ToolSimilarity, topK int) []openai.ChatCompletionToolParam {
+	limit := topK
+	if limit <= 0 || limit > len(candidates) {
+		limit = len(candidates)
+	}
+	selected := make([]openai.ChatCompletionToolParam, 0, limit)
+	for i := 0; i < limit; i++ {
+		selected = append(selected, candidates[i].Entry.Tool)
+	}
+	return selected
 }
 
 func resolveCandidatePoolSize(advanced *config.AdvancedToolFilteringConfig, topK int) int {
@@ -244,7 +338,6 @@ func mergeAdvancedToolFiltering(base *config.AdvancedToolFilteringConfig, toolsC
 	if toolsCfg == nil || toolsCfg.EffectiveMode() != config.ToolsPluginModeFiltered {
 		return base
 	}
-
 	allowTools, blockTools := mergeToolFilters(base, toolsCfg)
 	if base == nil {
 		return &config.AdvancedToolFilteringConfig{
@@ -253,7 +346,6 @@ func mergeAdvancedToolFiltering(base *config.AdvancedToolFilteringConfig, toolsC
 			BlockTools: blockTools,
 		}
 	}
-
 	merged := *base
 	merged.AllowTools = allowTools
 	merged.BlockTools = blockTools
@@ -269,7 +361,6 @@ func mergeToolFilters(base *config.AdvancedToolFilteringConfig, toolsCfg *config
 	}
 	pluginAllow := append([]string(nil), toolsCfg.AllowTools...)
 	pluginBlock := append([]string(nil), toolsCfg.BlockTools...)
-
 	return intersectToolAllowLists(globalAllow, pluginAllow), unionToolBlockLists(globalBlock, pluginBlock)
 }
 
@@ -280,12 +371,10 @@ func intersectToolAllowLists(left, right []string) []string {
 	case len(right) == 0:
 		return append([]string(nil), left...)
 	}
-
 	rightSet := make(map[string]struct{}, len(right))
 	for _, value := range right {
 		rightSet[strings.ToLower(strings.TrimSpace(value))] = struct{}{}
 	}
-
 	result := make([]string, 0, min(len(left), len(right)))
 	seen := make(map[string]struct{})
 	for _, value := range left {
@@ -351,7 +440,6 @@ func filterToolsByDecisionPolicy(tools []openai.ChatCompletionToolParam, allowTo
 	for _, t := range blockTools {
 		blockSet[t] = true
 	}
-
 	filtered := make([]openai.ChatCompletionToolParam, 0, len(tools))
 	for _, tool := range tools {
 		name := tool.Function.Name
@@ -366,37 +454,29 @@ func filterToolsByDecisionPolicy(tools []openai.ChatCompletionToolParam, allowTo
 	return filtered
 }
 
-// updateRequestWithTools updates the request body with the selected tools
+// updateRequestWithTools updates the request body with the selected tools.
 func (r *OpenAIRouter) updateRequestWithTools(openAIRequest *openai.ChatCompletionNewParams, response **ext_proc.ProcessingResponse, ctx *RequestContext) error {
-	// Re-serialize the request with modified tools and preserved stream parameter
 	modifiedBody, err := serializeOpenAIRequestWithStream(openAIRequest, ctx.ExpectStreamingResponse)
 	if err != nil {
 		return err
 	}
-
-	// Create body mutation with the modified body
 	bodyMutation := &ext_proc.BodyMutation{
 		Mutation: &ext_proc.BodyMutation_Body{
 			Body: modifiedBody,
 		},
 	}
-
 	commonResponse := ensureRequestBodyCommonResponse(response)
 	commonResponse.Status = ext_proc.CommonResponse_CONTINUE
 	commonResponse.BodyMutation = bodyMutation
 	if commonResponse.HeaderMutation == nil {
 		commonResponse.HeaderMutation = &ext_proc.HeaderMutation{}
 	}
-
 	ensureHeaderRemoved(commonResponse.HeaderMutation, "content-length")
 	setHeaderValue(commonResponse.HeaderMutation, "content-length", fmt.Sprintf("%d", len(modifiedBody)))
-
-	// Check if route cache should be cleared
 	if r.shouldClearRouteCache() {
 		commonResponse.ClearRouteCache = true
 		logging.Debugf("Setting ClearRouteCache=true (feature enabled) in updateRequestWithTools")
 	}
-
 	return nil
 }
 
@@ -428,7 +508,6 @@ func clearToolChoiceWhenNoTools(openAIRequest *openai.ChatCompletionNewParams) b
 	if openAIRequest == nil || len(openAIRequest.Tools) > 0 || !hasToolChoice(openAIRequest) {
 		return false
 	}
-
 	logging.Infof("[ToolsPlugin] Clearing tool_choice because no tools are present in the upstream request")
 	openAIRequest.ToolChoice = openai.ChatCompletionToolChoiceOptionUnionParam{}
 	return true
@@ -438,7 +517,6 @@ func hasToolChoice(openAIRequest *openai.ChatCompletionNewParams) bool {
 	if openAIRequest == nil {
 		return false
 	}
-
 	return !param.IsOmitted(openAIRequest.ToolChoice.OfAuto) ||
 		openAIRequest.ToolChoice.OfChatCompletionNamedToolChoice != nil
 }

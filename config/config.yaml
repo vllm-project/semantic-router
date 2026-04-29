@@ -674,6 +674,10 @@ routing:
             # (prompt, tool_definitions, and each tool-call's arguments/output)
             # without having to shrink max_body_bytes.
             max_tool_trace_bytes: 0
+            # Cap the number of tool-trace steps retained per record. Long
+            # agent sessions (many sequential tool calls) can otherwise grow
+            # the trace unbounded and OOM the router (#1835). 0 = no cap.
+            max_tool_trace_steps: 100
 
     - name: computer-science-remom-route
       description: ReMoM route for complex computer science prompts.
@@ -1891,6 +1895,10 @@ global:
         position_weight: 0.2
         tfidf_weight: 0.3
         position_depth: 0.1
+        # Hard safety limit applied before any signal processing, independent of
+        # the quality-aware compression above. 0 = no limit (default).
+        # Recommended production value: 8192 (~2K tokens).
+        max_evaluation_chars: 0
       prompt_guard:
         enabled: true
         model_ref: prompt_guard
