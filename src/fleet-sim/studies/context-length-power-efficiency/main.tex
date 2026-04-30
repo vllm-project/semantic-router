@@ -51,11 +51,13 @@
   Junchen Jiang$^{3}$ \quad
   Bowei He$^{4}$\thanks{Corresponding author: \texttt{Bowei.He@mbzuai.ac.ae}} \quad
   Xue Liu$^{4}$
+  Chenxu Niu$^{5}$
   \\[6pt]
   $^{1}$vLLM Semantic Router Project \\[1pt]
   $^{2}$University of Chicago \quad
   $^{3}$Tensormesh Inc / University of Chicago \\[1pt]
   $^{4}$MBZUAI / McGill University
+  $^{5}$NVIDIA
 }
 \date{2026}
 
@@ -256,18 +258,18 @@ model~\citep{xu2026aiconfigurator,chen2026fleetsim}.
 \small
 \begin{tabular}{rrrrrrrr}
 \toprule
-& \multicolumn{3}{c}{H100-SXM5} & \phantom{ab} & \multicolumn{3}{c}{B200-SXM} \\
+& \multicolumn{3}{c}{H100-SXM5} & \phantom{ab} & \multicolumn{3}{c}{B200-SXM6} \\
 \cmidrule{2-4} \cmidrule{6-8}
 Context (K) & $\nmax$ & $P_{\text{sat}}$ & tok/W &
             & $\nmax$ & $P_{\text{sat}}$ & tok/W \\
 \midrule
- 2  &   512 & 598\,W & 35.0 && 1343 & 606\,W &  87.0 \\
- 4  &   256 & 593\,W & 17.6 &&  671 & 606\,W &  43.5 \\
- 8  &   128 & 583\,W &  8.97 &&  335 & 606\,W &  21.8 \\
-16  &    64 & 557\,W &  4.69 &&  167 & 606\,W &  10.9 \\
-32  &    32 & 507\,W &  2.58 &&   83 & 606\,W &   5.43 \\
-64  &    16 & 435\,W &  1.50 &&   41 & 606\,W &   2.71 \\
-128 &     8 & 369\,W &  0.88 &&   20 & 605\,W &   1.36 \\
+ 2  &   512 & 598\,W & 35.0 && 1725 & 795\,W &  37.09 \\
+ 4  &   256 & 593\,W & 17.6 &&  872 & 713\,W &  30.34 \\
+ 8  &   128 & 583\,W &  8.97 &&  439 & 655\,W &  20.55 \\
+16  &    64 & 557\,W &  4.69 &&  220 & 596\,W &  13.02 \\
+32  &    32 & 507\,W &  2.58 &&  110 & 590\,W &   7.89 \\
+64  &    16 & 435\,W &  1.50 &&   55 & 637\,W &   4.30 \\
+128 &     8 & 369\,W &  0.88 &&   28 & 723\,W &   1.14 \\
 \bottomrule
 \end{tabular}
 \end{table}
