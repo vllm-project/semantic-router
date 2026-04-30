@@ -18,7 +18,7 @@ type stubRetriever struct {
 	confidence float32
 }
 
-func (s *stubRetriever) Retrieve(_ context.Context, _ string, _ int) (tools.RetrievalResult, error) {
+func (s *stubRetriever) Retrieve(_ context.Context, _ tools.RetrievalInput) (tools.RetrievalResult, error) {
 	return tools.RetrievalResult{
 		Tools:      s.results,
 		Confidence: s.confidence,

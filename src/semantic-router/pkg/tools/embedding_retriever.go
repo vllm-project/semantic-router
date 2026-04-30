@@ -4,7 +4,7 @@ package tools
 
 import "context"
 
-// EmbeddingRetriever implements Retriever using cosine-similarity search
+// EmbeddingRetriever implements ToolRetriever using cosine-similarity search
 // against the in-process ToolsDatabase.  It is registered as the "default"
 // strategy and requires no external dependencies beyond the database that the
 // router already initialises at startup.
@@ -21,13 +21,15 @@ func NewEmbeddingRetriever(db *ToolsDatabase) *EmbeddingRetriever {
 	return &EmbeddingRetriever{db: db}
 }
 
-// Retrieve returns up to topK tools ranked by embedding similarity.
+// Retrieve returns up to in.EffectivePoolSize() tools ranked by embedding
+// similarity. HistorySummary, category, and decision fields are ignored.
 // The Confidence field of the result is the similarity score of the
 // highest-ranked tool, or 0 when no tools are returned.
-func (e *EmbeddingRetriever) Retrieve(_ context.Context, query string, topK int) (RetrievalResult, error) {
-	candidates, err := e.db.FindSimilarToolsWithScores(query, topK)
+func (e *EmbeddingRetriever) Retrieve(_ context.Context, in RetrievalInput) (RetrievalResult, error) {
+	pool := in.EffectivePoolSize()
+	candidates, err := e.db.FindSimilarToolsWithScores(in.Query, pool)
 	if err != nil {
-		return RetrievalResult{StrategyID: "default"}, err
+		return RetrievalResult{StrategyID: StrategyDefault}, err
 	}
 
 	confidence := float32(0)
@@ -38,6 +40,6 @@ func (e *EmbeddingRetriever) Retrieve(_ context.Context, query string, topK int)
 	return RetrievalResult{
 		Tools:      candidates,
 		Confidence: confidence,
-		StrategyID: "default",
+		StrategyID: StrategyDefault,
 	}, nil
 }

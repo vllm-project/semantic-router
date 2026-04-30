@@ -20,11 +20,6 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/tools"
 )
 
-const (
-	candidatePoolMultiplier = 5
-	candidatePoolMinSize    = 20
-)
-
 // handleToolSelectionForRequest handles tool selection for the request.
 func (r *OpenAIRouter) handleToolSelectionForRequest(openAIRequest *openai.ChatCompletionNewParams, response *ext_proc.ProcessingResponse, ctx *RequestContext) {
 	userContent, nonUserMessages := extractUserAndNonUserContent(openAIRequest)
@@ -111,11 +106,12 @@ func (r *OpenAIRouter) handleEarlyToolModes(
 func (r *OpenAIRouter) runSemanticToolSelection(
 	openAIRequest *openai.ChatCompletionNewParams,
 	classificationText string,
+	historySummary string,
 	response **ext_proc.ProcessingResponse,
 	ctx *RequestContext,
 	toolsCfg *config.ToolsPluginConfig,
 ) error {
-	selectedTools, strategyID, confidence, latency, toolErr := r.findToolsForQuery(classificationText, ctx, toolsCfg)
+	selectedTools, strategyID, confidence, latency, toolErr := r.findToolsForQuery(classificationText, historySummary, ctx, toolsCfg)
 
 	emitToolObservability(response, strategyID, confidence, latency)
 	metrics.RecordToolsRetrieval(strategyID, latency.Seconds())
@@ -170,12 +166,19 @@ func (r *OpenAIRouter) handleToolSelection(
 		return r.updateRequestWithTools(openAIRequest, response, ctx)
 	}
 
-	// Build classification text.
+	// Build classification text and a compact history summary for retrieval.
 	var classificationText string
 	if len(userContent) > 0 {
 		classificationText = userContent
 	} else if len(nonUserMessages) > 0 {
 		classificationText = strings.Join(nonUserMessages, " ")
+	}
+	var historySummary string
+	if len(nonUserMessages) > 0 {
+		historySummary = strings.Join(nonUserMessages, " ")
+	}
+	if historySummary == classificationText {
+		historySummary = ""
 	}
 	if classificationText == "" {
 		logging.Infof("No content available for tool classification")
@@ -187,22 +190,22 @@ func (r *OpenAIRouter) handleToolSelection(
 		return nil
 	}
 
-	return r.runSemanticToolSelection(openAIRequest, classificationText, response, ctx, toolsCfg)
+	return r.runSemanticToolSelection(openAIRequest, classificationText, historySummary, response, ctx, toolsCfg)
 }
 
 // executeRetrieval resolves the retriever for strategyID from the registry and
-// runs it. If the registry is nil or the strategy is not found, it falls back
-// to ToolsDatabase directly and marks the returned StrategyID with "-fallback".
-func (r *OpenAIRouter) executeRetrieval(ctx context.Context, query, strategyID string, topK int) (tools.RetrievalResult, error) {
+// runs it with in. If the registry is nil or the strategy is not found, it falls
+// back to ToolsDatabase directly and marks the returned StrategyID with "-fallback".
+func (r *OpenAIRouter) executeRetrieval(ctx context.Context, strategyID string, in tools.RetrievalInput) (tools.RetrievalResult, error) {
 	if r.ToolsRegistry != nil {
 		if retriever, ok := r.ToolsRegistry.Get(strategyID); ok {
-			return retriever.Retrieve(ctx, query, topK)
+			return retriever.Retrieve(ctx, in)
 		}
 
 		// Named strategy not found — try "default" before falling back to DB
-		if retriever, ok := r.ToolsRegistry.Get("default"); ok {
+		if retriever, ok := r.ToolsRegistry.Get(tools.StrategyDefault); ok {
 			logging.Warnf("[ToolsPlugin] strategy %q not found, falling back to default", strategyID)
-			result, err := retriever.Retrieve(ctx, query, topK)
+			result, err := retriever.Retrieve(ctx, in)
 			result.StrategyID = strategyID + "-fallback"
 			return result, err
 		}
@@ -212,7 +215,8 @@ func (r *OpenAIRouter) executeRetrieval(ctx context.Context, query, strategyID s
 		logging.Warnf("[ToolsPlugin] registry not initialized for strategy %q, using ToolsDatabase directly", strategyID)
 	}
 
-	results, err := r.ToolsDatabase.FindSimilarToolsWithScores(query, topK)
+	pool := in.EffectivePoolSize()
+	results, err := r.ToolsDatabase.FindSimilarToolsWithScores(in.Query, pool)
 	if err != nil {
 		return tools.RetrievalResult{StrategyID: strategyID + "-fallback"}, err
 	}
@@ -232,7 +236,11 @@ func (r *OpenAIRouter) executeRetrieval(ctx context.Context, query, strategyID s
 // findToolsForQuery resolves the retriever strategy from the registry, executes
 // retrieval, applies advanced filtering, and returns the final tool list together
 // with the strategy name, top-1 confidence score, and retrieval wall-clock time.
-func (r *OpenAIRouter) findToolsForQuery(query string, ctx *RequestContext, toolsCfg *config.ToolsPluginConfig) ([]openai.ChatCompletionToolParam, string, float32, time.Duration, error) {
+func (r *OpenAIRouter) findToolsForQuery(
+	query, historySummary string,
+	ctx *RequestContext,
+	toolsCfg *config.ToolsPluginConfig,
+) ([]openai.ChatCompletionToolParam, string, float32, time.Duration, error) {
 	topK := r.Config.Tools.TopK
 	if topK <= 0 {
 		topK = 3
@@ -246,13 +254,15 @@ func (r *OpenAIRouter) findToolsForQuery(query string, ctx *RequestContext, tool
 		poolSize = resolveCandidatePoolSize(advanced, topK)
 	}
 
+	retrievalIn := newToolRetrievalInput(query, historySummary, topK, poolSize, ctx)
+
 	retrievalCtx := context.Background()
 	if ctx != nil && ctx.TraceContext != nil {
 		retrievalCtx = ctx.TraceContext
 	}
 
 	start := time.Now()
-	retrieved, err := r.executeRetrieval(retrievalCtx, query, strategyID, poolSize)
+	retrieved, err := r.executeRetrieval(retrievalCtx, strategyID, retrievalIn)
 	latency := time.Since(start)
 
 	if err != nil {
@@ -298,14 +308,14 @@ func selectTopKTools(candidates []tools.ToolSimilarity, topK int) []openai.ChatC
 
 func resolveCandidatePoolSize(advanced *config.AdvancedToolFilteringConfig, topK int) int {
 	if advanced == nil {
-		return max(topK*candidatePoolMultiplier, candidatePoolMinSize)
+		return max(topK*tools.DefaultCandidatePoolMultiplier, tools.DefaultCandidatePoolMin)
 	}
 	var size int
 	switch {
 	case advanced.CandidatePoolSize != nil && *advanced.CandidatePoolSize > 0:
 		size = *advanced.CandidatePoolSize
 	case advanced.CandidatePoolSize == nil:
-		size = max(topK*candidatePoolMultiplier, candidatePoolMinSize)
+		size = max(topK*tools.DefaultCandidatePoolMultiplier, tools.DefaultCandidatePoolMin)
 	default:
 		size = topK
 	}
@@ -313,6 +323,29 @@ func resolveCandidatePoolSize(advanced *config.AdvancedToolFilteringConfig, topK
 		size = topK
 	}
 	return size
+}
+
+func newToolRetrievalInput(
+	query, historySummary string,
+	topK, poolSize int,
+	ctx *RequestContext,
+) tools.RetrievalInput {
+	in := tools.RetrievalInput{
+		Query:          query,
+		HistorySummary: historySummary,
+		TopK:           topK,
+		PoolSize:       poolSize,
+	}
+	if ctx == nil {
+		return in
+	}
+	in.Category = ctx.VSRSelectedCategory
+	in.DecisionName = ctx.VSRSelectedDecisionName
+	if ctx.VSRSelectedDecision != nil && in.DecisionName == "" {
+		in.DecisionName = ctx.VSRSelectedDecision.Name
+	}
+	in.DecisionConfidence = ctx.VSRSelectedDecisionConfidence
+	return in
 }
 
 func resolveCategory(advanced *config.AdvancedToolFilteringConfig, ctx *RequestContext) string {

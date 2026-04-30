@@ -21,6 +21,7 @@ var referenceSignalKeyByType = map[string]string{
 	SignalTypeKB:            "kb",
 	SignalTypeUserFeedback:  "user_feedbacks",
 	SignalTypeSessionMetric: "session_metrics",
+	SignalTypeEventContext:  "event_context_rules",
 }
 
 func assertSupportedSignalTypesInReferenceConfig(t testingT, root map[string]interface{}) {

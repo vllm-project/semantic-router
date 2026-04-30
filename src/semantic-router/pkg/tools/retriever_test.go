@@ -10,16 +10,44 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/tools"
 )
 
-// fakeRetriever is a test double for the Retriever interface.
+// fakeRetriever is a test double for the ToolRetriever interface.
 type fakeRetriever struct {
 	id     string
 	result tools.RetrievalResult
 	err    error
 }
 
-func (f *fakeRetriever) Retrieve(_ context.Context, _ string, _ int) (tools.RetrievalResult, error) {
+func (f *fakeRetriever) Retrieve(_ context.Context, _ tools.RetrievalInput) (tools.RetrievalResult, error) {
 	return f.result, f.err
 }
+
+var _ = Describe("RetrievalInput.EffectivePoolSize", func() {
+	It("uses PoolSize when set", func() {
+		in := tools.RetrievalInput{PoolSize: 42, TopK: 2}
+		Expect(in.EffectivePoolSize()).To(Equal(42))
+	})
+
+	It("derives from TopK when PoolSize is zero", func() {
+		in := tools.RetrievalInput{TopK: 10}
+		Expect(in.EffectivePoolSize()).To(Equal(50)) // 10*5
+	})
+
+	It("floors to DefaultCandidatePoolMin for small TopK", func() {
+		in := tools.RetrievalInput{TopK: 1}
+		Expect(in.EffectivePoolSize()).To(Equal(tools.DefaultCandidatePoolMin))
+	})
+})
+
+var _ = Describe("NewDefaultRegistry", func() {
+	It("registers the embedding strategy", func() {
+		db := tools.NewToolsDatabase(tools.ToolsDatabaseOptions{Enabled: false, SimilarityThreshold: 0.5})
+		reg := tools.NewDefaultRegistry(db)
+		r, ok := reg.Get(tools.StrategyDefault)
+		Expect(ok).To(BeTrue())
+		_, err := r.Retrieve(context.Background(), tools.RetrievalInput{Query: "q", TopK: 1, PoolSize: 1})
+		Expect(err).NotTo(HaveOccurred())
+	})
+})
 
 var _ = Describe("Registry", func() {
 	var reg *tools.Registry
@@ -64,7 +92,7 @@ var _ = Describe("Registry", func() {
 	})
 
 	Describe("Register", func() {
-		It("panics when given a nil Retriever", func() {
+		It("panics when given a nil ToolRetriever", func() {
 			Expect(func() { reg.Register("bad", nil) }).To(Panic())
 		})
 	})
@@ -81,11 +109,11 @@ var _ = Describe("EmbeddingRetriever", func() {
 			SimilarityThreshold: 0.5,
 		})
 		r := tools.NewEmbeddingRetriever(db)
-		result, err := r.Retrieve(context.Background(), "weather", 3)
+		result, err := r.Retrieve(context.Background(), tools.RetrievalInput{Query: "weather", TopK: 3, PoolSize: 3})
 		// disabled DB returns empty slice, not an error
 		Expect(err).NotTo(HaveOccurred())
 		Expect(result.Confidence).To(Equal(float32(0)))
-		Expect(result.StrategyID).To(Equal("default"))
+		Expect(result.StrategyID).To(Equal(tools.StrategyDefault))
 	})
 })
 
@@ -93,7 +121,7 @@ var _ = Describe("fakeRetriever propagates errors", func() {
 	It("surfaces the error returned by the underlying retriever", func() {
 		boom := errors.New("retrieval failed")
 		r := &fakeRetriever{err: boom}
-		_, err := r.Retrieve(context.Background(), "query", 3)
+		_, err := r.Retrieve(context.Background(), tools.RetrievalInput{Query: "query", TopK: 3, PoolSize: 3})
 		Expect(err).To(MatchError(boom))
 	})
 })

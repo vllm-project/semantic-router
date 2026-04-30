@@ -151,13 +151,12 @@ func (r *OpenAIRouter) LoadToolsDatabase() error {
 
 	// Wire the default embedding retriever into the registry now that
 	// the database is loaded and embeddings are available.
-	r.ToolsRegistry = tools.NewRegistry()
-	r.ToolsRegistry.Register("default", tools.NewEmbeddingRetriever(r.ToolsDatabase))
+	r.ToolsRegistry = tools.NewDefaultRegistry(r.ToolsDatabase)
 
 	return nil
 }
 
-func (r *OpenAIRouter) RegisterToolStrategy(name string, retriever tools.Retriever) {
+func (r *OpenAIRouter) RegisterToolStrategy(name string, retriever tools.ToolRetriever) {
 	if r.ToolsRegistry == nil {
 		r.ToolsRegistry = tools.NewRegistry()
 	}

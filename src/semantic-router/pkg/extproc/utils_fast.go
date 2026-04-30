@@ -28,7 +28,8 @@ type FastExtractResult struct {
 	ToolMessageCount       int
 	ToolDefinitionCount    int
 	AssistantToolCallCount int
-	CompletedToolCycles    int
+	ToolResultCount        int
+	AssistantToolNames     []string
 }
 
 // extractContentFast extracts model, stream, message content, and the first
@@ -112,7 +113,7 @@ func consumeFastExtractMessage(msg gjson.Result, result *FastExtractResult) {
 		recordFastExtractNonUserMessage(result, role, text)
 	case "tool":
 		result.ToolMessageCount++
-		result.CompletedToolCycles++
+		result.ToolResultCount++
 	}
 }
 
@@ -121,8 +122,11 @@ func countAssistantToolCalls(msg gjson.Result, result *FastExtractResult) {
 	if !toolCalls.Exists() || !toolCalls.IsArray() {
 		return
 	}
-	toolCalls.ForEach(func(_, _ gjson.Result) bool {
+	toolCalls.ForEach(func(_, toolCall gjson.Result) bool {
 		result.AssistantToolCallCount++
+		if name := toolCall.Get("function.name").String(); name != "" {
+			result.AssistantToolNames = append(result.AssistantToolNames, name)
+		}
 		return true
 	})
 }
