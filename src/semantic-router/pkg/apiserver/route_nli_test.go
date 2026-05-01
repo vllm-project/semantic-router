@@ -29,18 +29,23 @@ func (s *nliTestService) IsNLIReady() bool { return s.nliReady }
 func (s *nliTestService) ClassifyNLI(req services.NLIRequest) (*services.NLIResponse, error) {
 	return s.result, s.err
 }
+
 func (s *nliTestService) ClassifyIntent(_ services.IntentRequest) (*services.IntentResponse, error) {
 	panic("not implemented")
 }
+
 func (s *nliTestService) ClassifyIntentForEval(_ services.IntentRequest) (*services.EvalResponse, error) {
 	panic("not implemented")
 }
+
 func (s *nliTestService) DetectPII(_ services.PIIRequest) (*services.PIIResponse, error) {
 	panic("not implemented")
 }
+
 func (s *nliTestService) CheckSecurity(_ services.SecurityRequest) (*services.SecurityResponse, error) {
 	panic("not implemented")
 }
+
 func (s *nliTestService) ClassifyBatchUnifiedWithOptions(_ []string, _ interface{}) (*services.UnifiedBatchResponse, error) {
 	panic("not implemented")
 }
@@ -48,6 +53,7 @@ func (s *nliTestService) HasUnifiedClassifier() bool { return false }
 func (s *nliTestService) ClassifyFactCheck(_ services.FactCheckRequest) (*services.FactCheckResponse, error) {
 	panic("not implemented")
 }
+
 func (s *nliTestService) ClassifyUserFeedback(_ services.UserFeedbackRequest) (*services.UserFeedbackResponse, error) {
 	panic("not implemented")
 }
