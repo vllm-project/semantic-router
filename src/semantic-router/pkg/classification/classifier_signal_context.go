@@ -394,45 +394,7 @@ func (c *Classifier) evaluatePreferenceSignal(results *SignalResults, mu *sync.M
 	logging.Debugf("Preference rule matched: %s", preferenceName)
 }
 
-func (c *Classifier) evaluateLanguageSignal(results *SignalResults, mu *sync.Mutex, text string) {
-	start := time.Now()
-	languageResult, err := c.languageClassifier.Classify(text)
-	elapsed := time.Since(start)
-	latencySeconds := elapsed.Seconds()
-
-	// Use the language code directly as the signal name
-	languageCode := ""
-	if err == nil && languageResult != nil {
-		languageCode = languageResult.LanguageCode
-	}
-
-	// Record signal extraction metrics
-	metrics.RecordSignalExtraction(config.SignalTypeLanguage, languageCode, latencySeconds)
-
-	// Record metrics (use microseconds for better precision)
-	results.Metrics.Language.ExecutionTimeMs = float64(elapsed.Microseconds()) / 1000.0
-	if languageCode != "" && err == nil && languageResult != nil {
-		results.Metrics.Language.Confidence = languageResult.Confidence
-	}
-
-	logging.Debugf("[Signal Computation] Language signal evaluation completed in %v", elapsed)
-	if err != nil {
-		logging.Errorf("language rule evaluation failed: %v", err)
-	} else if languageResult != nil {
-		// Check if this language code is defined in language_rules
-		for _, rule := range c.Config.LanguageRules {
-			if rule.Name == languageCode {
-				// Record signal match
-				metrics.RecordSignalMatch(config.SignalTypeLanguage, rule.Name)
-
-				mu.Lock()
-				results.MatchedLanguageRules = append(results.MatchedLanguageRules, rule.Name)
-				mu.Unlock()
-				break
-			}
-		}
-	}
-}
+// evaluateLanguageSignal is implemented in classifier_signal_language.go
 
 func (c *Classifier) evaluateContextSignal(results *SignalResults, mu *sync.Mutex, contextText string) {
 	start := time.Now()

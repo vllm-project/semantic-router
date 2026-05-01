@@ -32,6 +32,15 @@ func getDetector() lingua.LanguageDetector {
 	return linguaDetector
 }
 
+const (
+	// defaultLanguageThreshold is the minimum lingua-go per-language confidence
+	// used when a LanguageRule does not specify an explicit threshold.
+	// lingua-go distributes probability across 75+ languages, so raw scores are
+	// lower than single-language classifiers; 0.3 is the practical reliability
+	// floor analogous to whatlanggo's IsReliable() check.
+	defaultLanguageThreshold = 0.3
+)
+
 // LanguageClassifier implements language detection using lingua-go library.
 // lingua-go provides higher accuracy than whatlanggo, particularly for short
 // texts in non-English languages where correct detection drives allow/block
@@ -53,8 +62,22 @@ func NewLanguageClassifier(cfgRules []config.LanguageRule) (*LanguageClassifier,
 	}, nil
 }
 
-// Classify detects the language of the query using lingua-go.
+// Classify detects the language of the query using lingua-go with the
+// built-in default confidence threshold (0.3).
 func (c *LanguageClassifier) Classify(text string) (*LanguageResult, error) {
+	return c.ClassifyWithThreshold(text, 0)
+}
+
+// ClassifyWithThreshold detects the language of the query using a caller-supplied
+// minimum confidence threshold. A threshold of 0 uses defaultLanguageThreshold.
+// This is the primary entry point used by evaluateLanguageSignal so that
+// per-rule thresholds configured in LanguageRule.Threshold are honoured.
+func (c *LanguageClassifier) ClassifyWithThreshold(text string, threshold float32) (*LanguageResult, error) {
+	minConfidence := float64(threshold)
+	if minConfidence <= 0 {
+		minConfidence = defaultLanguageThreshold
+	}
+
 	if strings.TrimSpace(text) == "" {
 		return &LanguageResult{
 			LanguageCode: "en", // Default to English
@@ -81,19 +104,18 @@ func (c *LanguageClassifier) Classify(text string) (*LanguageResult, error) {
 
 	confidence := detector.ComputeLanguageConfidence(text, lang)
 
-	// lingua-go distributes probability across all 75+ supported languages, so
-	// the raw per-language confidence is typically low for short or ambiguous
-	// text. A value below 0.3 means insufficient signal — analogous to
-	// whatlanggo's IsReliable() check — so fall back to English.
-	if confidence < 0.3 {
+	// Insufficient signal: fall back to English when confidence is below
+	// the configured threshold (default 0.3, configurable per rule via
+	// LanguageRule.Threshold to tune for deployment-specific accuracy needs).
+	if confidence < minConfidence {
 		return &LanguageResult{
 			LanguageCode: "en",
 			Confidence:   0.5,
 		}, nil
 	}
 
-	logging.Infof("Language classification: code=%s, confidence=%.2f (lingua-go: %s)",
-		code, confidence, lang.String())
+	logging.Infof("Language classification: code=%s, confidence=%.2f (lingua-go: %s, threshold=%.2f)",
+		code, confidence, lang.String(), minConfidence)
 
 	return &LanguageResult{
 		LanguageCode: code,

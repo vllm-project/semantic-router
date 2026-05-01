@@ -130,6 +130,11 @@ type PreferenceRule struct {
 type LanguageRule struct {
 	Name        string `yaml:"name"`
 	Description string `yaml:"description,omitempty"`
+	// Threshold is the minimum lingua-go confidence score required to accept a
+	// language detection result for this rule. When unset (0), the classifier
+	// uses its built-in default of 0.3. Setting a higher value (e.g. 0.6)
+	// reduces false-positive language matches on short or ambiguous text.
+	Threshold float32 `yaml:"threshold,omitempty"`
 }
 
 type TokenCount string

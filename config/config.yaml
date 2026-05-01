@@ -228,6 +228,8 @@ routing:
     language:
       - name: zh
         description: Chinese-language requests.
+        # threshold: minimum lingua-go confidence required (0 = built-in default 0.3)
+        threshold: 0.0
       - name: es
         description: Spanish-language requests.
 
