@@ -808,3 +808,62 @@ func (s *ClassificationService) UpdateConfig(newConfig *config.RouterConfig) {
 	// Update the global config as well
 	config.Replace(newConfig)
 }
+
+// NLIRequest represents a request for Natural Language Inference classification.
+type NLIRequest struct {
+	Premise    string `json:"premise"`    // Text to evaluate (the source text or claim)
+	Hypothesis string `json:"hypothesis"` // Policy or hypothesis to check against the premise
+}
+
+// NLIResponse represents the result of NLI classification.
+type NLIResponse struct {
+	Label             string  `json:"label"`              // "entailment", "neutral", or "contradiction"
+	Confidence        float32 `json:"confidence"`         // Confidence of the predicted label (0.0-1.0)
+	EntailmentProb    float32 `json:"entailment_prob"`    // Probability that premise entails hypothesis
+	NeutralProb       float32 `json:"neutral_prob"`       // Probability that relationship is neutral
+	ContradictionProb float32 `json:"contradiction_prob"` // Probability that premise contradicts hypothesis
+	ProcessingTimeMs  int64   `json:"processing_time_ms"`
+}
+
+// ClassifyNLI performs Natural Language Inference between a premise and hypothesis.
+// Returns ENTAILMENT when the premise supports the hypothesis, NEUTRAL when it
+// neither supports nor contradicts, and CONTRADICTION when it conflicts.
+func (s *ClassificationService) ClassifyNLI(req NLIRequest) (*NLIResponse, error) {
+	start := time.Now()
+
+	if req.Premise == "" || req.Hypothesis == "" {
+		return nil, fmt.Errorf("both premise and hypothesis must be provided")
+	}
+
+	if s.classifier == nil {
+		return nil, fmt.Errorf("classification service not available")
+	}
+
+	det := s.classifier.GetHallucinationDetector()
+	if det == nil || !det.IsNLIInitialized() {
+		return nil, fmt.Errorf("NLI model not initialized — configure hallucination_mitigation.nli_model in your router config")
+	}
+
+	result, err := det.ClassifyNLI(req.Premise, req.Hypothesis)
+	if err != nil {
+		return nil, fmt.Errorf("NLI classification failed: %w", err)
+	}
+
+	return &NLIResponse{
+		Label:             result.LabelStr,
+		Confidence:        result.Confidence,
+		EntailmentProb:    result.EntailmentProb,
+		NeutralProb:       result.NeutralProb,
+		ContradictionProb: result.ContradictProb,
+		ProcessingTimeMs:  time.Since(start).Milliseconds(),
+	}, nil
+}
+
+// IsNLIReady reports whether the NLI model is loaded and ready for inference.
+func (s *ClassificationService) IsNLIReady() bool {
+	if s.classifier == nil {
+		return false
+	}
+	det := s.classifier.GetHallucinationDetector()
+	return det != nil && det.IsNLIInitialized()
+}
