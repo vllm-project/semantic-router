@@ -518,8 +518,17 @@ func (v *Validator) checkProjections() {
 			continue
 		}
 		scoreNames[score.Name] = true
-		v.checkProjectionScore(score)
 	}
+	validated := make(map[string]bool, len(scoreNames))
+	for _, score := range v.prog.ProjectionScores {
+		if score.Name == "" || !scoreNames[score.Name] || validated[score.Name] {
+			continue
+		}
+		validated[score.Name] = true
+		v.checkProjectionScore(score, scoreNames)
+	}
+
+	v.checkProjectionScoreCycles()
 
 	outputNames := make(map[string]bool)
 	for _, mapping := range v.prog.ProjectionMappings {
@@ -531,7 +540,7 @@ func (v *Validator) checkProjections() {
 	}
 }
 
-func (v *Validator) checkProjectionScore(score *ProjectionScoreDecl) {
+func (v *Validator) checkProjectionScore(score *ProjectionScoreDecl, scoreNames map[string]bool) {
 	context := fmt.Sprintf("PROJECTION score %s", score.Name)
 	if score.Method == "" {
 		score.Method = "weighted_sum"
@@ -550,11 +559,35 @@ func (v *Validator) checkProjectionScore(score *ProjectionScoreDecl) {
 	}
 
 	for _, input := range score.Inputs {
-		v.checkProjectionScoreInput(context, score.Pos, input)
+		v.checkProjectionScoreInput(context, score.Pos, input, scoreNames)
 	}
 }
 
-func (v *Validator) checkProjectionScoreInput(context string, pos Position, input *ProjectionScoreInputDecl) {
+func (v *Validator) checkProjectionScoreInputProjectionRef(context string, pos Position, input *ProjectionScoreInputDecl, scoreNames map[string]bool) {
+	if input.SignalName == "" {
+		v.addDiag(DiagConstraint, pos,
+			fmt.Sprintf("%s: projection input requires a name referencing a declared score or mapping output", context), nil)
+		return
+	}
+	switch input.ValueSource {
+	case "", "score":
+		if !scoreNames[input.SignalName] {
+			v.addDiag(DiagWarning, pos,
+				fmt.Sprintf("%s: projection input %q references undeclared score", context, input.SignalName), nil)
+		}
+	case "confidence":
+		if !v.isProjectionOutputDefined(input.SignalName) {
+			v.addDiag(DiagWarning, pos,
+				fmt.Sprintf("%s: projection input %q with value_source \"confidence\" references undeclared mapping output", context, input.SignalName), nil)
+		}
+	default:
+		v.addDiag(DiagConstraint, pos,
+			fmt.Sprintf("%s: projection input %q has unsupported value_source %q (supported: score, confidence)",
+				context, input.SignalName, input.ValueSource), nil)
+	}
+}
+
+func (v *Validator) checkProjectionScoreInput(context string, pos Position, input *ProjectionScoreInputDecl, scoreNames map[string]bool) {
 	if input == nil {
 		return
 	}
@@ -571,6 +604,10 @@ func (v *Validator) checkProjectionScoreInput(context string, pos Position, inpu
 			),
 			nil,
 		)
+		return
+	}
+	if strings.EqualFold(input.SignalType, config.SignalTypeProjection) {
+		v.checkProjectionScoreInputProjectionRef(context, pos, input, scoreNames)
 		return
 	}
 	if !v.isSignalDefined(input.SignalType, input.SignalName) {
@@ -618,7 +655,8 @@ func isProjectionInputTypeSupported(signalType string) bool {
 		config.SignalTypePII,
 		config.SignalTypeKB,
 		config.SignalTypeSessionMetric,
-		config.ProjectionInputKBMetric:
+		config.ProjectionInputKBMetric,
+		config.SignalTypeProjection:
 		return true
 	default:
 		return false

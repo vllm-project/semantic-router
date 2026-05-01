@@ -541,6 +541,93 @@ def validate_algorithm_configurations(config: UserConfig) -> List[ValidationErro
     return errors
 
 
+def validate_projection_score_dependencies(
+    config: UserConfig,
+) -> List[ValidationError]:
+    """Validate that projection scores have no dependency cycles."""
+    errors: List[ValidationError] = []
+    projections = getattr(getattr(config, "routing", None), "projections", None)
+    if not projections:
+        return errors
+
+    scores = getattr(projections, "scores", None) or []
+    score_names = {s.name for s in scores if s.name}
+
+    output_to_source: dict[str, str] = {}
+    for mapping in getattr(projections, "mappings", None) or []:
+        source_score = getattr(mapping, "source", None)
+        if not source_score:
+            continue
+        for output in getattr(mapping, "outputs", None) or []:
+            output_name = getattr(output, "name", None)
+            if output_name:
+                output_to_source[output_name] = source_score
+
+    adj: dict[str, list[str]] = {}
+    for score in scores:
+        deps: list[str] = []
+        for inp in getattr(score, "inputs", None) or []:
+            if (getattr(inp, "type", "") or "").lower() != "projection":
+                continue
+            dep_name = getattr(inp, "name", None)
+            if not dep_name:
+                continue
+            vs = (getattr(inp, "value_source", "") or "").strip().lower()
+            if vs == "confidence":
+                src = output_to_source.get(dep_name)
+                if not src:
+                    errors.append(
+                        ValidationError(
+                            field=f"routing.projections.scores[{score.name}]",
+                            message=f'projection input references undefined mapping output "{dep_name}"',
+                        )
+                    )
+                    continue
+                deps.append(src)
+            else:
+                if dep_name not in score_names:
+                    errors.append(
+                        ValidationError(
+                            field=f"routing.projections.scores[{score.name}]",
+                            message=f'projection input references undefined score "{dep_name}"',
+                        )
+                    )
+                    continue
+                deps.append(dep_name)
+        adj[score.name] = deps
+
+    unvisited, visiting, visited = 0, 1, 2
+    state: dict[str, int] = {s.name: unvisited for s in scores}
+    path: list[str] = []
+
+    def visit(name: str) -> None:
+        if state.get(name) == visited:
+            return
+        if state.get(name) == visiting:
+            cycle = [*list(path), name]
+            start = cycle.index(name)
+            cycle_str = " -> ".join(cycle[start:])
+            errors.append(
+                ValidationError(
+                    field="routing.projections.scores",
+                    message=f"dependency cycle detected: {cycle_str}",
+                )
+            )
+            return
+        state[name] = visiting
+        path.append(name)
+        for dep in adj.get(name, []):
+            visit(dep)
+        path.pop()
+        state[name] = visited
+
+    for score in scores:
+        if state.get(score.name) == unvisited:
+            visit(score.name)
+
+    return errors
+
+
 def validate_user_config(config: UserConfig) -> List[ValidationError]:
     """
     Validate user configuration.
@@ -572,6 +659,9 @@ def validate_user_config(config: UserConfig) -> List[ValidationError]:
 
     # Validate algorithm configurations
     errors.extend(validate_algorithm_configurations(config))
+
+    # Validate projection score dependency ordering
+    errors.extend(validate_projection_score_dependencies(config))
 
     if errors:
         log.warning(f"Found {len(errors)} validation error(s)")

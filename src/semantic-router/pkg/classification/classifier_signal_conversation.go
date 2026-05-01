@@ -19,7 +19,7 @@ type ConversationFacts struct {
 	ToolMessageCount       int
 	ToolDefinitionCount    int
 	AssistantToolCallCount int
-	CompletedToolCycles    int
+	ToolResultCount        int
 }
 
 func (c *Classifier) evaluateConversationSignal(results *SignalResults, mu *sync.Mutex, facts ConversationFacts) {
@@ -77,7 +77,7 @@ func resolveConversationRawCount(feature config.ConversationFeature, facts Conve
 	case "assistant_tool_call":
 		return facts.AssistantToolCallCount
 	case "assistant_tool_cycle":
-		return facts.CompletedToolCycles
+		return facts.ToolResultCount
 	default:
 		return 0
 	}

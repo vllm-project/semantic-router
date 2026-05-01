@@ -17,6 +17,7 @@ func assertReferenceConfigRouterSelectionCoverage(t testingT, modelSelection map
 	assertMapCoversStructFields(t, mustMapAt(t, modelSelection, "router_dc"), reflect.TypeOf(RouterDCSelectionConfig{}), "global.router.model_selection.router_dc")
 	assertMapCoversStructFields(t, mustMapAt(t, modelSelection, "automix"), reflect.TypeOf(AutoMixSelectionConfig{}), "global.router.model_selection.automix")
 	assertMapCoversStructFields(t, mustMapAt(t, modelSelection, "hybrid"), reflect.TypeOf(HybridSelectionConfig{}), "global.router.model_selection.hybrid")
+	assertMapCoversStructFields(t, mustMapAt(t, modelSelection, "model_switch_gate"), reflect.TypeOf(ModelSwitchGateConfig{}), "global.router.model_selection.model_switch_gate")
 	assertMapCoversStructFields(t, mustMapAt(t, modelSelection, "ml", "knn"), reflect.TypeOf(MLKNNConfig{}), "global.router.model_selection.ml.knn")
 	assertMapCoversStructFields(t, mustMapAt(t, modelSelection, "ml", "kmeans"), reflect.TypeOf(MLKMeansConfig{}), "global.router.model_selection.ml.kmeans")
 	assertMapCoversStructFields(t, mustMapAt(t, modelSelection, "ml", "svm"), reflect.TypeOf(MLSVMConfig{}), "global.router.model_selection.ml.svm")

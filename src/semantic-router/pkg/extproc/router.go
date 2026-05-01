@@ -17,6 +17,7 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/routerreplay"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/routerruntime"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/selection"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/selection/lookuptable"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/services"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/tools"
 )
@@ -29,12 +30,14 @@ type OpenAIRouter struct {
 	ClassificationService *services.ClassificationService
 	Cache                 cache.CacheBackend
 	ToolsDatabase         *tools.ToolsDatabase
+	ToolsRegistry         *tools.Registry // retriever strategy registry
 	ResponseAPIFilter     *ResponseAPIFilter
 	ReplayRecorder        *routerreplay.Recorder
 	ReplayStoreShared     bool
 	// ModelSelector is the registry of advanced model selection algorithms
 	// initialized from config.IntelligentRouting.ModelSelection.
 	ModelSelector   *selection.Registry
+	LookupTable     lookuptable.LookupTable
 	ReplayRecorders map[string]*routerreplay.Recorder
 	MemoryStore     memory.Store
 	MemoryExtractor *memory.MemoryExtractor
@@ -138,7 +141,7 @@ func (r *OpenAIRouter) LoadToolsDatabase() error {
 	}
 
 	if r.Config.Tools.ToolsDBPath == "" {
-		logging.Warnf("Tools database enabled but no tools file path configured")
+		logging.Warnf("Tools database enabled but no tools file path configured; skipping load")
 		return nil
 	}
 
@@ -146,6 +149,16 @@ func (r *OpenAIRouter) LoadToolsDatabase() error {
 		return err
 	}
 
-	logging.Infof("Tools database loaded successfully from: %s", r.Config.Tools.ToolsDBPath)
+	// Wire the default embedding retriever into the registry now that
+	// the database is loaded and embeddings are available.
+	r.ToolsRegistry = tools.NewDefaultRegistry(r.ToolsDatabase)
+
 	return nil
+}
+
+func (r *OpenAIRouter) RegisterToolStrategy(name string, retriever tools.ToolRetriever) {
+	if r.ToolsRegistry == nil {
+		r.ToolsRegistry = tools.NewRegistry()
+	}
+	r.ToolsRegistry.Register(name, retriever)
 }
