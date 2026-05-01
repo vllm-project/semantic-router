@@ -59,7 +59,7 @@ class ProjectionScoreInput(BaseModel):
     kb: Optional[str] = None
     metric: Optional[str] = None
     weight: float
-    value_source: Optional[Literal["binary", "confidence", "raw"]] = None
+    value_source: Optional[Literal["binary", "confidence", "raw", "score"]] = None
     match: Optional[float] = None
     miss: Optional[float] = None
 

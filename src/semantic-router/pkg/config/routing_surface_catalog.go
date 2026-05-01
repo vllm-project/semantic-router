@@ -35,6 +35,7 @@ var supportedSignalTypes = []string{
 	SignalTypeKB,
 	SignalTypeUserFeedback,
 	SignalTypeSessionMetric,
+	SignalTypeEventContext,
 }
 
 var supportedDecisionPluginTypes = []string{

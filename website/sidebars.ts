@@ -80,6 +80,7 @@ const sidebars: SidebarsConfig = {
                 'tutorials/signal/heuristic/conversation',
                 'tutorials/signal/heuristic/keyword',
                 'tutorials/signal/heuristic/language',
+                'tutorials/signal/heuristic/event-context',
                 'tutorials/signal/heuristic/session-metric',
                 'tutorials/signal/heuristic/structure',
               ],
