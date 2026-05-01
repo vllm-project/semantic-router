@@ -219,3 +219,4 @@ For raw import/export, the DSL page still decompiles the current router YAML int
 - Read [Partitions](./partitions) for exclusive domain or embedding winner selection.
 - Read [Scores](./scores) for weighted aggregation over matched signals.
 - Read [Mappings](./mappings) for named routing bands and `type: projection` decision references.
+- Read [Traces](./traces) for replay and dashboard explainability of projection scores and mappings.

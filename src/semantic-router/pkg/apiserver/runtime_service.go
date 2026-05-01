@@ -22,6 +22,8 @@ type batchClassificationService interface {
 type auxiliaryClassificationService interface {
 	ClassifyFactCheck(req services.FactCheckRequest) (*services.FactCheckResponse, error)
 	ClassifyUserFeedback(req services.UserFeedbackRequest) (*services.UserFeedbackResponse, error)
+	ClassifyNLI(req services.NLIRequest) (*services.NLIResponse, error)
+	IsNLIReady() bool
 	HasClassifier() bool
 }
 
@@ -103,6 +105,14 @@ func (s *liveClassificationService) ClassifyUserFeedback(
 	req services.UserFeedbackRequest,
 ) (*services.UserFeedbackResponse, error) {
 	return s.current().ClassifyUserFeedback(req)
+}
+
+func (s *liveClassificationService) ClassifyNLI(req services.NLIRequest) (*services.NLIResponse, error) {
+	return s.current().ClassifyNLI(req)
+}
+
+func (s *liveClassificationService) IsNLIReady() bool {
+	return s.current().IsNLIReady()
 }
 
 func (s *liveClassificationService) HasUnifiedClassifier() bool {

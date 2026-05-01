@@ -90,6 +90,9 @@ linters:
           - interfacebloat
         path: (^|/)src/semantic-router/pkg/cache/cache_interface\.go$
       - linters:
+          - interfacebloat
+        path: (^|/)src/semantic-router/pkg/responsestore/interface\.go$
+      - linters:
           - cyclop
           - staticcheck
         path: (^|/)src/semantic-router/pkg/config/canonical_loader_test\.go$

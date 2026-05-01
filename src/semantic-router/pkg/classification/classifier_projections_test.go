@@ -73,6 +73,27 @@ func TestApplyProjectionsAddsDerivedOutputsAndScores(t *testing.T) {
 	if confidence <= 0 || confidence > 1 {
 		t.Fatalf("projection confidence = %.3f, want (0,1]", confidence)
 	}
+	assertDifficultyProjectionTrace(t, got)
+}
+
+func assertDifficultyProjectionTrace(t *testing.T, got *SignalResults) {
+	t.Helper()
+	tr := got.ProjectionTrace
+	if tr == nil || tr.SchemaVersion == "" {
+		t.Fatalf("expected projection trace with schema version, got %+v", tr)
+	}
+	if len(tr.Scores) != 1 || tr.Scores[0].Name != "difficulty_score" {
+		t.Fatalf("trace scores = %+v", tr.Scores)
+	}
+	if len(tr.Scores[0].Inputs) != 2 {
+		t.Fatalf("trace score inputs = %+v", tr.Scores[0].Inputs)
+	}
+	if len(tr.Mappings) != 1 || tr.Mappings[0].SelectedOutput != "balance_reasoning" {
+		t.Fatalf("trace mappings = %+v", tr.Mappings)
+	}
+	if len(tr.Mappings[0].Outputs) != 2 {
+		t.Fatalf("trace mapping outputs = %+v", tr.Mappings[0].Outputs)
+	}
 }
 
 func TestApplyProjectionsInitializesSignalConfidenceMap(t *testing.T) {

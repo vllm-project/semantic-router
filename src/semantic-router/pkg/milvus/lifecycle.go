@@ -1,3 +1,7 @@
+// Package milvus provides shared connection, collection ensure/load, and retry
+// helpers for Milvus-backed runtime stores (memory, cache, vectorstore,
+// routerreplay, etc.). Domain packages keep schema and query semantics; use
+// this package for duplicated lifecycle mechanics (see GitHub issue #1601).
 package milvus
 
 import (

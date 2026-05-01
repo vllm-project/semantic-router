@@ -67,7 +67,6 @@ Keep the numeric index unique within `docs/agent/tech-debt/`.
 - [TD016 Fleet Sim Subtree Still Diverges from the Shared Ruff Contract](td-016-fleet-sim-shared-ruff-contract-gap.md)
 - [TD017 Fleet Sim Migration Still Depends on Relaxed Structure Gates](td-017-fleet-sim-structure-gate-migration-gap.md)
 - [TD020 Classification Subsystem Boundaries Have Collapsed Into Hotspot Orchestrators](td-020-classification-subsystem-boundary-collapse.md)
-- [TD021 Milvus Lifecycle Logic Is Duplicated Across Runtime Stores](td-021-milvus-adapter-duplication-across-runtime-stores.md)
 - [TD027 Fleet Sim Optimizer and Public Surface Boundaries Still Collapse Analytical Sizing, DES Verification, and Export Policy](td-027-fleet-sim-optimizer-and-public-surface-boundary-collapse.md)
 - [TD028 Operator Config Contract Still Collapses Across CRD Schema, Webhook Validation, Canonical Translation, and Sample Fixtures](td-028-operator-config-contract-boundary-collapse.md)
 - [TD030 Dashboard Frontend Config and Interaction Surfaces Still Collapse Route Shell, Page Orchestration, and Large UI Containers](td-030-dashboard-frontend-config-and-interaction-slice-collapse.md)
@@ -91,6 +90,7 @@ Use this map when turning scale-out architecture findings into debt work. Reuse 
   - restart-sensitive runtime state and control-plane telemetry semantics: [TD034](td-034-runtime-and-dashboard-state-durability-and-telemetry-contract.md)
   - remaining hotspot-ratchet debt across router and binding hotspots: [TD006](td-006-structural-rule-target-vs-legacy-hotspots.md)
   - remaining custom Chat Completions struct consolidation: [TD038](td-038-custom-chat-completions-structs.md)
+  - resolved shared Milvus lifecycle duplication across runtime stores: [TD021](td-021-milvus-adapter-duplication-across-runtime-stores.md)
 - Dashboard frontend and backend
   - frontend route shell, editor control plane, and large UI containers: [TD030](td-030-dashboard-frontend-config-and-interaction-slice-collapse.md)
   - dashboard backend training, evaluation, and model-research contract seams: [TD032](td-032-training-evaluation-artifact-contract-drift.md)
@@ -122,6 +122,7 @@ Use this map when turning scale-out architecture findings into debt work. Reuse 
 
 ## Closed / Historical Debt Entries
 
+- [TD021 Milvus Lifecycle Logic Is Duplicated Across Runtime Stores](td-021-milvus-adapter-duplication-across-runtime-stores.md)
 - [TD001 Config Surface Fragmentation Across Router, CLI, K8s, and Dashboard](td-001-config-surface-fragmentation.md)
 - [TD002 Config Portability Gap Between Local Docker and Kubernetes Deployments](td-002-config-portability-gap-local-vs-k8s.md)
 - [TD007 End-to-End and Integration Test Surfaces Are Split Across Parallel Frameworks](td-007-e2e-integration-surfaces-split-across-frameworks.md)

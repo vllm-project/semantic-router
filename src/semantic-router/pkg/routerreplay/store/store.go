@@ -2,10 +2,12 @@ package store
 
 import (
 	"context"
+	"encoding/json"
 	"io"
 	"time"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/postgres"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/projectiontrace"
 )
 
 // Signal represents various routing signals captured during a request.
@@ -85,35 +87,36 @@ type ToolTraceStep struct {
 
 // Record represents a routing decision record with metadata and captured payloads.
 type Record struct {
-	ID                    string             `json:"id"`
-	Timestamp             time.Time          `json:"timestamp"`
-	RequestID             string             `json:"request_id,omitempty"`
-	SessionID             string             `json:"session_id,omitempty"`
-	TurnIndex             int                `json:"turn_index"`
-	PreviousResponseID    string             `json:"previous_response_id,omitempty"`
-	ConversationID        string             `json:"conversation_id,omitempty"`
-	Decision              string             `json:"decision,omitempty"`
-	DecisionTier          int                `json:"decision_tier"`
-	DecisionPriority      int                `json:"decision_priority"`
-	Category              string             `json:"category,omitempty"`
-	OriginalModel         string             `json:"original_model,omitempty"`
-	SelectedModel         string             `json:"selected_model,omitempty"`
-	ReasoningMode         string             `json:"reasoning_mode,omitempty"`
-	ConfidenceScore       float64            `json:"confidence_score,omitempty"`
-	SelectionMethod       string             `json:"selection_method,omitempty"`
-	Signals               Signal             `json:"signals"`
-	Projections           []string           `json:"projections,omitempty"`
-	ProjectionScores      map[string]float64 `json:"projection_scores,omitempty"`
-	SignalConfidences     map[string]float64 `json:"signal_confidences,omitempty"`
-	SignalValues          map[string]float64 `json:"signal_values,omitempty"`
-	ToolTrace             *ToolTrace         `json:"tool_trace,omitempty"`
-	RequestBody           string             `json:"request_body,omitempty"`
-	ResponseBody          string             `json:"response_body,omitempty"`
-	ResponseStatus        int                `json:"response_status,omitempty"`
-	FromCache             bool               `json:"from_cache,omitempty"`
-	Streaming             bool               `json:"streaming,omitempty"`
-	RequestBodyTruncated  bool               `json:"request_body_truncated,omitempty"`
-	ResponseBodyTruncated bool               `json:"response_body_truncated,omitempty"`
+	ID                    string                 `json:"id"`
+	Timestamp             time.Time              `json:"timestamp"`
+	RequestID             string                 `json:"request_id,omitempty"`
+	SessionID             string                 `json:"session_id,omitempty"`
+	TurnIndex             int                    `json:"turn_index"`
+	PreviousResponseID    string                 `json:"previous_response_id,omitempty"`
+	ConversationID        string                 `json:"conversation_id,omitempty"`
+	Decision              string                 `json:"decision,omitempty"`
+	DecisionTier          int                    `json:"decision_tier"`
+	DecisionPriority      int                    `json:"decision_priority"`
+	Category              string                 `json:"category,omitempty"`
+	OriginalModel         string                 `json:"original_model,omitempty"`
+	SelectedModel         string                 `json:"selected_model,omitempty"`
+	ReasoningMode         string                 `json:"reasoning_mode,omitempty"`
+	ConfidenceScore       float64                `json:"confidence_score,omitempty"`
+	SelectionMethod       string                 `json:"selection_method,omitempty"`
+	Signals               Signal                 `json:"signals"`
+	Projections           []string               `json:"projections,omitempty"`
+	ProjectionScores      map[string]float64     `json:"projection_scores,omitempty"`
+	ProjectionTrace       *projectiontrace.Trace `json:"projection_trace,omitempty"`
+	SignalConfidences     map[string]float64     `json:"signal_confidences,omitempty"`
+	SignalValues          map[string]float64     `json:"signal_values,omitempty"`
+	ToolTrace             *ToolTrace             `json:"tool_trace,omitempty"`
+	RequestBody           string                 `json:"request_body,omitempty"`
+	ResponseBody          string                 `json:"response_body,omitempty"`
+	ResponseStatus        int                    `json:"response_status,omitempty"`
+	FromCache             bool                   `json:"from_cache,omitempty"`
+	Streaming             bool                   `json:"streaming,omitempty"`
+	RequestBodyTruncated  bool                   `json:"request_body_truncated,omitempty"`
+	ResponseBodyTruncated bool                   `json:"response_body_truncated,omitempty"`
 
 	// Guardrails
 	GuardrailsEnabled bool `json:"guardrails_enabled,omitempty"`
@@ -233,6 +236,21 @@ func cloneFloat64Map(values map[string]float64) map[string]float64 {
 	return cloned
 }
 
+func cloneProjectionTraceRecord(t *projectiontrace.Trace) *projectiontrace.Trace {
+	if t == nil {
+		return nil
+	}
+	b, err := json.Marshal(t)
+	if err != nil {
+		return nil
+	}
+	var out projectiontrace.Trace
+	if err := json.Unmarshal(b, &out); err != nil {
+		return nil
+	}
+	return &out
+}
+
 func cloneToolTraceSteps(steps []ToolTraceStep) []ToolTraceStep {
 	if steps == nil {
 		return nil
@@ -276,6 +294,7 @@ func cloneRecord(record Record) Record {
 	cloned.Signals = cloneSignal(record.Signals)
 	cloned.Projections = cloneStringSlice(record.Projections)
 	cloned.ProjectionScores = cloneFloat64Map(record.ProjectionScores)
+	cloned.ProjectionTrace = cloneProjectionTraceRecord(record.ProjectionTrace)
 	cloned.SignalConfidences = cloneFloat64Map(record.SignalConfidences)
 	cloned.SignalValues = cloneFloat64Map(record.SignalValues)
 	cloned.ToolTrace = cloneToolTrace(record.ToolTrace)

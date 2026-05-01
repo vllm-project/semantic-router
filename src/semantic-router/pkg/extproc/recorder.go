@@ -203,6 +203,7 @@ func buildReplayRoutingRecord(
 		Signals:           replaySignalState(ctx),
 		Projections:       replayProjectionState(ctx),
 		ProjectionScores:  cloneReplayFloat64Map(ctx.VSRProjectionScores),
+		ProjectionTrace:   cloneProjectionTraceForReplay(ctx.VSRProjectionTrace),
 		SignalConfidences: cloneReplayFloat64Map(ctx.VSRSignalConfidences),
 		SignalValues:      cloneReplayFloat64Map(ctx.VSRSignalValues),
 		ToolTrace:         buildReplayRequestToolTrace(ctx),

@@ -9,6 +9,7 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/decision"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/metrics"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/projectiontrace"
 )
 
 // getUsedSignals analyzes all decisions and returns which signals (type:name) are actually used
@@ -100,6 +101,7 @@ type SignalResults struct {
 	MatchedEventContextRules  []string // Matched event_context rule names (event type, severity, temporal, action codes)
 	MatchedProjectionRules    []string // Matched derived routing outputs from routing.projections.mappings
 	ProjectionScores          map[string]float64
+	ProjectionTrace           *projectiontrace.Trace // Explainability payload for projections (replay / dashboard)
 
 	// Jailbreak detection metadata (populated when jailbreak signal is evaluated)
 	JailbreakDetected   bool    // Whether any jailbreak was detected (across all rules)
