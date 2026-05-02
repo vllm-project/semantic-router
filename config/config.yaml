@@ -169,6 +169,21 @@ routing:
           - account settings
           - billing information
           - subscription management
+      # query_modality declares which modality of incoming request payload the
+      # embedding rule's query is computed from. Defaults to "text" when
+      # omitted. Setting it to "image" or "audio" requires
+      # embedding_models.embedding_config.model_type=multimodal so the query
+      # and candidate embeddings land in the same shared space; see
+      # website/docs/tutorials/signal/learned/embedding.md for the worked
+      # multimodal example.
+      - name: clinical_query_intent
+        query_modality: text
+        threshold: 0.72
+        aggregation_method: max
+        candidates:
+          - patient symptoms or clinical question
+          - medication interaction or dosage question
+          - test result interpretation request
 
     domains:
       - name: business

@@ -628,6 +628,94 @@ def validate_projection_score_dependencies(
     return errors
 
 
+def validate_embedding_modality_compatibility(
+    config: UserConfig,
+) -> List[ValidationError]:
+    """
+    Validate that image/audio query_modality embedding rules are paired with a
+    multimodal embedding model. Mirrors the Go-side ``validateEmbeddingContracts``
+    so the CLI catches the same misconfiguration the router would reject at load.
+
+    Rules:
+      - ``text`` (or unset): always allowed.
+      - ``image``: requires
+        ``global.model_catalog.embeddings.semantic.embedding_config.model_type=multimodal``.
+      - ``audio``: rejected with a "planned" message — the audio FFI is not
+        yet exposed by candle-binding.
+      - any other value: rejected as unknown (defense-in-depth; Pydantic's
+        ``Literal`` type enforces the same constraint at parse time).
+
+    Args:
+        config: User configuration
+
+    Returns:
+        list: List of validation errors
+    """
+    errors: List[ValidationError] = []
+    embeddings = config.signals.embeddings or []
+    if not embeddings:
+        return errors
+
+    # Resolve embedding model_type from the canonical v0.3 path
+    # (global.model_catalog.embeddings.semantic.embedding_config.model_type).
+    # Falls back to "" if the path is absent; the Go side defaults to "qwen3"
+    # for an empty value, which keeps image/audio rules from being accepted
+    # without an explicit multimodal opt-in.
+    model_type = ""
+    if isinstance(config.global_, dict):
+        try:
+            model_type = (
+                config.global_.get("model_catalog", {})
+                .get("embeddings", {})
+                .get("semantic", {})
+                .get("embedding_config", {})
+                .get("model_type", "")
+            ) or ""
+        except (AttributeError, TypeError):
+            model_type = ""
+
+    normalized = model_type.strip().lower() if isinstance(model_type, str) else ""
+
+    for rule in embeddings:
+        raw = (rule.query_modality or "").strip().lower() if rule.query_modality else ""
+        if raw in ("", "text"):
+            continue
+        if raw == "image":
+            if normalized != "multimodal":
+                errors.append(
+                    ValidationError(
+                        f"Embedding rule '{rule.name}' declares query_modality=image, "
+                        f"which requires global.model_catalog.embeddings.semantic."
+                        f"embedding_config.model_type=multimodal (current: "
+                        f"'{model_type}'). Remove the rule, set query_modality to "
+                        f"text, or change the embedding model_type to multimodal.",
+                        field=f"signals.embeddings.{rule.name}",
+                    )
+                )
+        elif raw == "audio":
+            errors.append(
+                ValidationError(
+                    f"Embedding rule '{rule.name}' declares query_modality=audio, "
+                    f"but the audio FFI (MultiModalEncodeAudioFromBase64) is not "
+                    f"yet exposed by candle-binding. Audio query support is "
+                    f"planned; remove the rule or set query_modality to "
+                    f"text/image until the FFI lands.",
+                    field=f"signals.embeddings.{rule.name}",
+                )
+            )
+        else:
+            errors.append(
+                ValidationError(
+                    f"Embedding rule '{rule.name}' declares unknown "
+                    f"query_modality='{rule.query_modality}' "
+                    f"(allowed values: text, image, audio).",
+                    field=f"signals.embeddings.{rule.name}",
+                )
+            )
+
+    return errors
+
+
 def validate_user_config(config: UserConfig) -> List[ValidationError]:
     """
     Validate user configuration.
@@ -662,6 +750,9 @@ def validate_user_config(config: UserConfig) -> List[ValidationError]:
 
     # Validate projection score dependency ordering
     errors.extend(validate_projection_score_dependencies(config))
+
+    # Validate embedding query_modality compatibility with embedding model
+    errors.extend(validate_embedding_modality_compatibility(config))
 
     if errors:
         log.warning(f"Found {len(errors)} validation error(s)")

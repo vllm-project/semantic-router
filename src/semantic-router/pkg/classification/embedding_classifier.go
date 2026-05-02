@@ -104,6 +104,13 @@ func createEmbeddingInitializer() EmbeddingClassifierInitializer {
 type EmbeddingClassifier struct {
 	rules []config.EmbeddingRule
 
+	// rulesByModality is a precomputed lookup keyed by EffectiveQueryModality.
+	// Rules do not mutate at runtime so this is populated once in
+	// NewEmbeddingClassifier and shared by every classify call. Empty entries
+	// for unconfigured modalities let the multimodal path early-return without
+	// paying the FFI cost when no rule will fire.
+	rulesByModality map[config.QueryModality][]config.EmbeddingRule
+
 	// Optimization: preloaded candidate embeddings
 	candidateEmbeddings map[string][]float32 // candidate text -> embedding vector
 	rulePrototypeBanks  map[string]*prototypeBank
@@ -123,6 +130,7 @@ func NewEmbeddingClassifier(cfgRules []config.EmbeddingRule, optConfig config.HN
 
 	c := &EmbeddingClassifier{
 		rules:               cfgRules,
+		rulesByModality:     buildRulesByModality(cfgRules),
 		candidateEmbeddings: make(map[string][]float32),
 		rulePrototypeBanks:  make(map[string]*prototypeBank),
 		optimizationConfig:  optConfig,
@@ -282,8 +290,10 @@ func (c *EmbeddingClassifier) ClassifyAll(text string) ([]MatchedRule, error) {
 	return c.sortAndLimitMatches(result.Matches), nil
 }
 
-// ClassifyDetailed performs full label scoring and returns the complete score
-// distribution plus all accepted matches before top-k output shaping.
+// ClassifyDetailed performs full label scoring on a TEXT query and returns
+// the complete score distribution plus all accepted matches before top-k
+// output shaping. Only rules whose effective QueryModality is "text"
+// participate. For image/audio queries, use ClassifyDetailedMultimodal.
 func (c *EmbeddingClassifier) ClassifyDetailed(text string) (*EmbeddingClassificationResult, error) {
 	if len(c.rules) == 0 {
 		return &EmbeddingClassificationResult{}, nil
@@ -296,7 +306,20 @@ func (c *EmbeddingClassifier) ClassifyDetailed(text string) (*EmbeddingClassific
 
 	startTime := time.Now()
 
-	// Step 1: Compute query embedding once
+	// Step 1: Filter to text-modality rules. Rules that target image or
+	// audio queries do not participate in text classification: including
+	// them would surface false positives where a text query happens to land
+	// near an image-anchor set in the shared multimodal space. Done before
+	// computing the embedding so a classifier with only image rules does
+	// not pay the embedding cost when called on the text path.
+	textRules := c.rulesByModality[config.QueryModalityText]
+	if len(textRules) == 0 {
+		logging.Infof("No embedding rules configured for text-modality queries (text rules: %d / total: %d)",
+			0, len(c.rules))
+		return &EmbeddingClassificationResult{}, nil
+	}
+
+	// Step 2: Compute query embedding once
 	modelType := c.getModelType()
 	queryOutput, err := getEmbeddingWithModelType(text, modelType, c.optimizationConfig.TargetDimension)
 	if err != nil {
@@ -306,25 +329,123 @@ func (c *EmbeddingClassifier) ClassifyDetailed(text string) (*EmbeddingClassific
 
 	logging.Infof("Computed query embedding (model: %s, dimension: %d)", modelType, len(queryEmbedding))
 
-	// Step 2: Ensure candidate embeddings and prototype banks exist
+	// Step 3: Ensure candidate embeddings and prototype banks exist
 	if ensureErr := c.ensureCandidateEmbeddings(); ensureErr != nil {
 		return nil, ensureErr
 	}
 
-	// Step 3: Score all rules against their prototype banks
-	scoredRules, err := c.scoreRules(queryEmbedding)
+	// Step 4: Score the matching rules against their prototype banks
+	scoredRules, err := c.scoreRulesSlice(queryEmbedding, textRules)
 	if err != nil {
 		return nil, err
 	}
 	matched := c.findAllMatchedRules(scoredRules)
 
 	elapsed := time.Since(startTime)
-	logging.Infof("ClassifyAll completed in %v: %d rules matched out of %d", elapsed, len(matched), len(c.rules))
+	logging.Infof("ClassifyDetailed completed in %v: %d rules matched out of %d (modality=text)",
+		elapsed, len(matched), len(textRules))
 
 	return &EmbeddingClassificationResult{
 		Scores:  scoredRules,
 		Matches: matched,
 	}, nil
+}
+
+// ClassifyDetailedMultimodal performs full label scoring on a non-text query
+// (image or audio) against rules whose effective QueryModality matches.
+// payload is a base64 string, a data-URI ("data:image/png;base64,..."), or
+// a local file path; the same accepted forms as the underlying multimodal
+// FFI helpers.
+//
+// Use this when the request carries an image or audio attachment that
+// should be classified against text anchors in the shared multimodal space.
+// For text queries, use ClassifyDetailed.
+func (c *EmbeddingClassifier) ClassifyDetailedMultimodal(modality config.QueryModality, payload string) (*EmbeddingClassificationResult, error) {
+	if len(c.rules) == 0 {
+		return &EmbeddingClassificationResult{}, nil
+	}
+	if payload == "" {
+		return nil, fmt.Errorf("embedding similarity classification: query payload must be provided")
+	}
+
+	effective := config.QueryModality(strings.ToLower(strings.TrimSpace(string(modality))))
+	if effective == "" || effective == config.QueryModalityText {
+		return nil, fmt.Errorf("ClassifyDetailedMultimodal: modality must be %q or %q (got %q); use ClassifyDetailed for text",
+			config.QueryModalityImage, config.QueryModalityAudio, modality)
+	}
+
+	// Defense in depth: configs declaring query_modality=audio are rejected
+	// at validateEmbeddingContracts time, so a classifier that successfully
+	// constructed cannot have audio rules. This branch only fires when a Go
+	// caller passes config.QueryModalityAudio programmatically. Returning a
+	// clear error keeps that footgun explicit; the candle-binding
+	// MultiModalEncodeAudioFromBase64 FFI is not yet exposed and this branch
+	// will compute the audio embedding once it lands.
+	if effective == config.QueryModalityAudio {
+		return nil, fmt.Errorf("audio modality is not yet supported by ClassifyDetailedMultimodal; pass %q instead",
+			config.QueryModalityImage)
+	}
+	if effective != config.QueryModalityImage {
+		return nil, fmt.Errorf("unsupported query modality %q (supported: %q, %q)",
+			modality, config.QueryModalityImage, config.QueryModalityAudio)
+	}
+
+	startTime := time.Now()
+
+	// Step 1: Filter to rules whose query_modality matches the incoming
+	// query. Done before computing the embedding so a request that no rule
+	// would have matched does not pay the FFI cost. For high-volume image
+	// gateways this is the difference between zero work and full embedding
+	// for every "no rule will fire" request.
+	matchingRules := c.rulesByModality[effective]
+	if len(matchingRules) == 0 {
+		logging.Infof("No embedding rules configured for modality=%s (total rules: %d)",
+			effective, len(c.rules))
+		return &EmbeddingClassificationResult{}, nil
+	}
+
+	// Step 2: Compute query embedding via the multimodal image path.
+	queryEmbedding, err := getMultiModalImageEmbedding(payload, c.optimizationConfig.TargetDimension)
+	if err != nil {
+		return nil, fmt.Errorf("failed to compute multimodal query embedding (modality=%s): %w", effective, err)
+	}
+
+	logging.Infof("Computed multimodal query embedding (modality: %s, dimension: %d)",
+		effective, len(queryEmbedding))
+
+	// Step 3: Ensure candidate embeddings and prototype banks exist.
+	if ensureErr := c.ensureCandidateEmbeddings(); ensureErr != nil {
+		return nil, ensureErr
+	}
+
+	// Step 4: Score the matching rules.
+	scoredRules, err := c.scoreRulesSlice(queryEmbedding, matchingRules)
+	if err != nil {
+		return nil, err
+	}
+	matched := c.findAllMatchedRules(scoredRules)
+
+	elapsed := time.Since(startTime)
+	logging.Infof("ClassifyDetailedMultimodal(%s) completed in %v: %d rules matched out of %d",
+		effective, elapsed, len(matched), len(matchingRules))
+
+	return &EmbeddingClassificationResult{
+		Scores:  scoredRules,
+		Matches: matched,
+	}, nil
+}
+
+// buildRulesByModality groups rules by their effective query modality so
+// the classifier can dispatch each request to the correct subset without
+// per-call allocation. Rules with an unset modality are bucketed under
+// QueryModalityText to preserve backward-compatible behavior.
+func buildRulesByModality(rules []config.EmbeddingRule) map[config.QueryModality][]config.EmbeddingRule {
+	byModality := make(map[config.QueryModality][]config.EmbeddingRule, 3)
+	for _, rule := range rules {
+		modality := rule.EffectiveQueryModality()
+		byModality[modality] = append(byModality[modality], rule)
+	}
+	return byModality
 }
 
 // MatchedRule holds the result for a matched embedding rule
@@ -396,13 +517,16 @@ func (c *EmbeddingClassifier) findAllMatchedRules(scoredRules []EmbeddingRuleSco
 	return c.sortMatches(softMatches)
 }
 
-func (c *EmbeddingClassifier) scoreRules(queryEmbedding []float32) ([]EmbeddingRuleScore, error) {
+// scoreRulesSlice scores an explicit subset of rules against a query
+// embedding. Used by both the text and multimodal classification paths
+// after each filters c.rules down to the rules eligible for its modality.
+func (c *EmbeddingClassifier) scoreRulesSlice(queryEmbedding []float32, rules []config.EmbeddingRule) ([]EmbeddingRuleScore, error) {
 	if err := c.ensureCandidateEmbeddings(); err != nil {
 		return nil, err
 	}
 
-	scoredRules := make([]EmbeddingRuleScore, 0, len(c.rules))
-	for _, rule := range c.rules {
+	scoredRules := make([]EmbeddingRuleScore, 0, len(rules))
+	for _, rule := range rules {
 		bank, ok := c.rulePrototypeBanks[rule.Name]
 		if !ok || bank == nil || len(bank.prototypes) == 0 {
 			continue

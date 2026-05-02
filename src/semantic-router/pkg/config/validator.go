@@ -105,6 +105,7 @@ func validateConfigStructure(cfg *RouterConfig) error {
 		validateKnowledgeBaseContracts,
 		validateConversationContracts,
 		validateDecisionContracts,
+		validateEmbeddingContracts,
 		validateModalityContracts,
 		validateModelSelectionConfig,
 		validateAdvancedToolFilteringConfig,

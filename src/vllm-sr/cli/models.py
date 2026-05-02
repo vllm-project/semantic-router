@@ -27,12 +27,21 @@ class KeywordSignal(BaseModel):
 
 
 class EmbeddingSignal(BaseModel):
-    """Embedding-based signal configuration."""
+    """Embedding-based signal configuration.
+
+    The ``query_modality`` field declares which modality of incoming request
+    payload the embedding rule's query is computed from. It defaults to
+    ``"text"`` when omitted, preserving existing behavior. ``"image"`` and
+    ``"audio"`` require ``embedding_models.embedding_config.model_type=multimodal``
+    in the router config so the query and candidate embeddings land in the same
+    shared space.
+    """
 
     name: str
     threshold: float
     candidates: List[str]
     aggregation_method: str = "max"
+    query_modality: Optional[Literal["text", "image", "audio"]] = None
 
 
 class ProjectionPartition(BaseModel):

@@ -74,11 +74,44 @@ const (
 	AggregationMethodAny  AggregationMethod = "any"
 )
 
+// QueryModality declares which modality of incoming request payload the
+// embedding rule's query is computed from. The candidates remain text in
+// every case: the rule cosine-matches a text-anchor set against a query
+// embedding from the declared modality, all in the shared multimodal space.
+//
+// "text"  (default, backward-compatible): query embedded from request text.
+// "image": query embedded from an image attachment (base64, data-URI, or path).
+// "audio": query embedded from an audio attachment (base64, data-URI, or path).
+//
+// "image" and "audio" require model_type=multimodal in embedding_models.
+type QueryModality string
+
+const (
+	QueryModalityText  QueryModality = "text"
+	QueryModalityImage QueryModality = "image"
+	QueryModalityAudio QueryModality = "audio"
+)
+
 type EmbeddingRule struct {
 	Name                      string            `yaml:"name"`
 	SimilarityThreshold       float32           `yaml:"threshold"`
 	Candidates                []string          `yaml:"candidates"`
 	AggregationMethodConfiged AggregationMethod `yaml:"aggregation_method"`
+	// QueryModality controls which modality of the incoming request payload
+	// the query embedding is computed from. Defaults to "text" when omitted,
+	// preserving existing behavior.
+	QueryModality QueryModality `yaml:"query_modality,omitempty"`
+}
+
+// EffectiveQueryModality returns the rule's declared query modality, or
+// QueryModalityText when unset. Comparison should always go through this
+// helper so default behavior stays consistent across call sites.
+func (r EmbeddingRule) EffectiveQueryModality() QueryModality {
+	m := QueryModality(strings.ToLower(strings.TrimSpace(string(r.QueryModality))))
+	if m == "" {
+		return QueryModalityText
+	}
+	return m
 }
 
 type FactCheckRule struct {
