@@ -4813,7 +4813,7 @@ func BenchmarkHNSWFixComparison(b *testing.B) {
 	dims := 384
 	sizes := []int{1000, 5000, 10000, 20000}
 
-	b.Logf("| N | 修复前层级 | 修复后层级 | 修复前/query | 修复后/query | 线性/query | 修复前加速比 | 修复后加速比 |")
+	b.Logf("| N | Degen layers | Fixed layers | Degen/query | Fixed/query | Linear/query | Degen speedup | Fixed speedup |")
 	b.Logf("|---|-----------|-----------|-------------|-------------|-----------|-------------|-------------|")
 
 	for _, n := range sizes {
@@ -4877,7 +4877,7 @@ func BenchmarkHNSWFixComparison(b *testing.B) {
 		degenSpeedup := float64(linearPerQuery) / float64(degenPerQuery)
 		fixedSpeedup := float64(linearPerQuery) / float64(fixedPerQuery)
 
-		b.Logf("| %d | %d层 | %d层 | %v | %v | %v | **%.1fx** | **%.1fx** |",
+		b.Logf("| %d | %d layers | %d layers | %v | %v | %v | **%.1fx** | **%.1fx** |",
 			n, len(degenLayers), len(fixedLayers),
 			degenPerQuery.Round(time.Microsecond),
 			fixedPerQuery.Round(time.Microsecond),

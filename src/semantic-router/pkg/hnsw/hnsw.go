@@ -15,8 +15,8 @@ package hnsw
 
 import (
 	"math"
+	"math/rand/v2"
 	"sync"
-	"time"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 )
@@ -238,8 +238,7 @@ func (h *Index) Clear() {
 
 // selectLevel randomly selects a level for a new node
 func (h *Index) selectLevel() int {
-	// Use exponential decay probability
-	r := -math.Log(math.Max(1e-9, 1.0-float64(time.Now().UnixNano()%1000000)/1000000.0))
+	r := -math.Log(math.Max(1e-9, 1.0-rand.Float64()))
 	return int(r * h.ml)
 }
 
@@ -335,19 +334,20 @@ func (h *Index) searchLayer(queryEmbedding []float32, entryPoint, ef, layer int)
 			}
 			visited[neighborID] = true
 
-			if neighborNode, ok := h.nodes[neighborID]; ok {
-				dist := h.distance(queryEmbedding, neighborNode.Embedding)
+			neighborNode, ok := h.nodes[neighborID]
+			if !ok {
+				continue
+			}
+			dist := h.distance(queryEmbedding, neighborNode.Embedding)
 
-				if results.len() < ef {
-					candidates.push(neighborID, dist)
-					results.push(neighborID, dist)
-				} else if dist < results.peekDist() {
-					candidates.push(neighborID, dist)
-					results.push(neighborID, dist)
-					if results.len() > ef {
-						results.pop()
-					}
-				}
+			if results.len() >= ef && dist >= results.peekDist() {
+				continue
+			}
+
+			candidates.push(neighborID, dist)
+			results.push(neighborID, dist)
+			if results.len() > ef {
+				results.pop()
 			}
 		}
 	}
