@@ -137,48 +137,53 @@ func (c *Classifier) evaluateKeywordSignal(results *SignalResults, mu *sync.Mute
 	}
 }
 
-func (c *Classifier) evaluateEmbeddingSignal(results *SignalResults, mu *sync.Mutex, text string) {
+func (c *Classifier) evaluateEmbeddingSignal(results *SignalResults, mu *sync.Mutex, text string, imageURL string) {
 	start := time.Now()
-	detailedResult, err := c.keywordEmbeddingClassifier.ClassifyDetailed(text)
+
+	// Text-modality evaluation: scores rules whose query_modality is unset
+	// or "text". Existing behavior; preserved for backward compatibility.
+	textResult, textErr := c.keywordEmbeddingClassifier.ClassifyDetailed(text)
+
+	// Image-modality evaluation: only fires when the request carries an
+	// image attachment. The classifier's internal rulesByModality cache
+	// makes the no-image-rules case a free no-op (returns an empty result
+	// without computing the FFI embedding), so this call is safe even when
+	// no image rules are configured.
+	var imageResult *EmbeddingClassificationResult
+	var imageErr error
+	if strings.TrimSpace(imageURL) != "" {
+		imageResult, imageErr = c.keywordEmbeddingClassifier.ClassifyDetailedMultimodal(config.QueryModalityImage, imageURL)
+	}
+
 	elapsed := time.Since(start)
 
-	// Record metrics
 	results.Metrics.Embedding.ExecutionTimeMs = float64(elapsed.Microseconds()) / 1000.0
+	logging.Debugf("[Signal Computation] Embedding signal evaluation completed in %v (text rules + image-rule pass)", elapsed)
 
-	logging.Debugf("[Signal Computation] Embedding signal evaluation completed in %v", elapsed)
-	if err != nil {
-		logging.Errorf("embedding rule evaluation failed: %v", err)
-		return
+	// Text and image classifications are independent: a failure in one does
+	// not skip the other. Pre-PR-2 this function returned early on text
+	// error because there was no second classification to attempt. Now there
+	// is, and an early return would silently drop a valid image-rule match
+	// whenever text classification hit a transient failure.
+	if textErr != nil {
+		logging.Errorf("text-modality embedding rule evaluation failed: %v", textErr)
 	}
-	if detailedResult == nil {
-		return
+	if imageErr != nil {
+		logging.Errorf("image-modality embedding rule evaluation failed: %v", imageErr)
 	}
-
-	var bestConfidence float64
-	for _, score := range detailedResult.Scores {
-		if score.Score > bestConfidence {
-			bestConfidence = score.Score
-		}
-	}
-	results.Metrics.Embedding.Confidence = bestConfidence
 
 	mu.Lock()
-	for _, score := range detailedResult.Scores {
-		results.SignalValues["embedding:"+score.Name] = score.Score
-		results.SignalValues["embedding:"+score.Name+":best"] = score.Best
-		results.SignalValues["embedding:"+score.Name+":support"] = score.Support
-		results.SignalValues["embedding:"+score.Name+":prototype_count"] = float64(score.PrototypeCount)
-	}
-	for _, mr := range detailedResult.Matches {
-		metrics.RecordSignalExtraction(config.SignalTypeEmbedding, mr.RuleName, elapsed.Seconds())
-		metrics.RecordSignalMatch(config.SignalTypeEmbedding, mr.RuleName)
-		results.MatchedEmbeddingRules = append(results.MatchedEmbeddingRules, mr.RuleName)
-		results.SignalConfidences["embedding:"+mr.RuleName] = mr.Score
+	defer mu.Unlock()
 
-		logging.Debugf("[Signal Computation] Embedding match: rule=%q, score=%.4f, method=%s",
-			mr.RuleName, mr.Score, mr.Method)
+	// Track the best confidence across both modalities for the metric.
+	var bestConfidence float64
+	if textResult != nil {
+		bestConfidence = recordEmbeddingResult(results, textResult, elapsed, bestConfidence)
 	}
-	mu.Unlock()
+	if imageResult != nil {
+		bestConfidence = recordEmbeddingResult(results, imageResult, elapsed, bestConfidence)
+	}
+	results.Metrics.Embedding.Confidence = bestConfidence
 }
 
 func (c *Classifier) evaluateDomainSignal(results *SignalResults, mu *sync.Mutex, text string) {

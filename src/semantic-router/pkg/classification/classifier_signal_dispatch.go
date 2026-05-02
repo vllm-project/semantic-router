@@ -32,7 +32,9 @@ func (c *Classifier) buildSignalDispatchers(
 		},
 		{
 			config.SignalTypeEmbedding, "Embedding",
-			func() { c.evaluateEmbeddingSignal(results, mu, textForSignal(config.SignalTypeEmbedding)) },
+			func() {
+				c.evaluateEmbeddingSignal(results, mu, textForSignal(config.SignalTypeEmbedding), imgArg)
+			},
 		},
 		{
 			config.SignalTypeDomain, "Domain",
