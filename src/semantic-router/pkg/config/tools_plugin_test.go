@@ -97,8 +97,8 @@ func registerValidationAcceptSpecs() {
 func registerValidationRejectSpecs() {
 	It("an unknown strategy name", func() {
 		cfg := &ToolsPluginConfig{
-			Enabled: true,
-			Mode:    ToolsPluginModePassthrough,
+			Enabled:          true,
+			Mode:             ToolsPluginModePassthrough,
 			DynamicRetrieval: &DynamicRetrievalConfig{Enabled: true, Strategy: "not_a_real_strategy"},
 		}
 		err := cfg.Validate()
