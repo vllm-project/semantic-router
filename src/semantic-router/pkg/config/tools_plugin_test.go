@@ -7,32 +7,31 @@ import (
 )
 
 var _ = Describe("ToolsPluginConfig", func() {
-	Describe("Validate", registerToolsValidationSpecs)
+	Describe("Validate", func() {
+		Context("accepts", registerValidationAcceptSpecs)
+		Context("rejects", registerValidationRejectSpecs)
+	})
 	Describe("DynamicRetrieval helpers", registerToolsDynamicRetrievalAccessorSpecs)
 	Describe("YAML round-trip", registerToolsDynamicRetrievalYAMLSpecs)
 })
 
-func registerToolsValidationSpecs() {
-	It("accepts an empty disabled config", func() {
+func registerValidationAcceptSpecs() {
+	It("an empty disabled config", func() {
 		cfg := &ToolsPluginConfig{}
 		Expect(cfg.Validate()).To(Succeed())
 	})
 
-	It("accepts a passthrough config without dynamic_retrieval", func() {
-		cfg := &ToolsPluginConfig{
-			Enabled: true,
-			Mode:    ToolsPluginModePassthrough,
-		}
+	It("a passthrough config without dynamic_retrieval", func() {
+		cfg := &ToolsPluginConfig{Enabled: true, Mode: ToolsPluginModePassthrough}
 		Expect(cfg.Validate()).To(Succeed())
 	})
 
-	It("accepts a config with dynamic_retrieval disabled", func() {
+	It("a config with dynamic_retrieval disabled (other fields ignored)", func() {
 		cfg := &ToolsPluginConfig{
 			Enabled: true,
 			Mode:    ToolsPluginModePassthrough,
 			DynamicRetrieval: &DynamicRetrievalConfig{
-				Enabled: false,
-				// Other fields intentionally invalid; should be ignored when disabled.
+				Enabled:              false,
 				Strategy:             "garbage",
 				MinHistoryConfidence: -5.0,
 			},
@@ -40,7 +39,7 @@ func registerToolsValidationSpecs() {
 		Expect(cfg.Validate()).To(Succeed())
 	})
 
-	It("accepts a semantic_only dynamic_retrieval config", func() {
+	It("a semantic_only dynamic_retrieval config", func() {
 		cfg := &ToolsPluginConfig{
 			Enabled: true,
 			Mode:    ToolsPluginModePassthrough,
@@ -52,7 +51,7 @@ func registerToolsValidationSpecs() {
 		Expect(cfg.Validate()).To(Succeed())
 	})
 
-	It("accepts a hybrid_history config with valid weights", func() {
+	It("a hybrid_history config with valid weights", func() {
 		cfg := &ToolsPluginConfig{
 			Enabled: true,
 			Mode:    ToolsPluginModePassthrough,
@@ -61,47 +60,13 @@ func registerToolsValidationSpecs() {
 				Strategy:             DynamicRetrievalStrategyHybridHistory,
 				HistoryWindow:        10,
 				MinHistoryConfidence: 0.5,
-				Weights: &DynamicRetrievalWeights{
-					Semantic:          1.0,
-					History:           0.7,
-					DecisionPrior:     0.2,
-					RepetitionPenalty: 0.1,
-				},
+				Weights:              &DynamicRetrievalWeights{Semantic: 1.0, History: 0.7, DecisionPrior: 0.2, RepetitionPenalty: 0.1},
 			},
 		}
 		Expect(cfg.Validate()).To(Succeed())
 	})
 
-	It("rejects an unknown strategy name", func() {
-		cfg := &ToolsPluginConfig{
-			Enabled: true,
-			Mode:    ToolsPluginModePassthrough,
-			DynamicRetrieval: &DynamicRetrievalConfig{
-				Enabled:  true,
-				Strategy: "not_a_real_strategy",
-			},
-		}
-		err := cfg.Validate()
-		Expect(err).To(HaveOccurred())
-		Expect(err.Error()).To(ContainSubstring("dynamic_retrieval.strategy must be one of"))
-	})
-
-	It("rejects history_window < 1 when strategy is hybrid_history", func() {
-		cfg := &ToolsPluginConfig{
-			Enabled: true,
-			Mode:    ToolsPluginModePassthrough,
-			DynamicRetrieval: &DynamicRetrievalConfig{
-				Enabled:       true,
-				Strategy:      DynamicRetrievalStrategyHybridHistory,
-				HistoryWindow: 0,
-			},
-		}
-		err := cfg.Validate()
-		Expect(err).To(HaveOccurred())
-		Expect(err.Error()).To(ContainSubstring("history_window must be >= 1"))
-	})
-
-	It("permits history_window=0 when strategy is semantic_only", func() {
+	It("history_window=0 when strategy is semantic_only", func() {
 		cfg := &ToolsPluginConfig{
 			Enabled: true,
 			Mode:    ToolsPluginModePassthrough,
@@ -114,37 +79,7 @@ func registerToolsValidationSpecs() {
 		Expect(cfg.Validate()).To(Succeed())
 	})
 
-	It("rejects min_history_confidence below 0", func() {
-		cfg := &ToolsPluginConfig{
-			Enabled: true,
-			Mode:    ToolsPluginModePassthrough,
-			DynamicRetrieval: &DynamicRetrievalConfig{
-				Enabled:              true,
-				Strategy:             DynamicRetrievalStrategySemanticOnly,
-				MinHistoryConfidence: -0.1,
-			},
-		}
-		err := cfg.Validate()
-		Expect(err).To(HaveOccurred())
-		Expect(err.Error()).To(ContainSubstring("min_history_confidence must be between 0.0 and 1.0"))
-	})
-
-	It("rejects min_history_confidence above 1", func() {
-		cfg := &ToolsPluginConfig{
-			Enabled: true,
-			Mode:    ToolsPluginModePassthrough,
-			DynamicRetrieval: &DynamicRetrievalConfig{
-				Enabled:              true,
-				Strategy:             DynamicRetrievalStrategySemanticOnly,
-				MinHistoryConfidence: 1.5,
-			},
-		}
-		err := cfg.Validate()
-		Expect(err).To(HaveOccurred())
-		Expect(err.Error()).To(ContainSubstring("min_history_confidence must be between 0.0 and 1.0"))
-	})
-
-	It("rejects a negative weight", func() {
+	It("zero weights (disabling individual signals)", func() {
 		cfg := &ToolsPluginConfig{
 			Enabled: true,
 			Mode:    ToolsPluginModePassthrough,
@@ -152,33 +87,67 @@ func registerToolsValidationSpecs() {
 				Enabled:       true,
 				Strategy:      DynamicRetrievalStrategyHybridHistory,
 				HistoryWindow: 5,
-				Weights: &DynamicRetrievalWeights{
-					Semantic: -0.5,
+				Weights:       &DynamicRetrievalWeights{Semantic: 1.0},
+			},
+		}
+		Expect(cfg.Validate()).To(Succeed())
+	})
+}
+
+func registerValidationRejectSpecs() {
+	It("an unknown strategy name", func() {
+		cfg := &ToolsPluginConfig{
+			Enabled: true,
+			Mode:    ToolsPluginModePassthrough,
+			DynamicRetrieval: &DynamicRetrievalConfig{Enabled: true, Strategy: "not_a_real_strategy"},
+		}
+		err := cfg.Validate()
+		Expect(err).To(HaveOccurred())
+		Expect(err.Error()).To(ContainSubstring("dynamic_retrieval.strategy must be one of"))
+	})
+
+	It("history_window < 1 when strategy is hybrid_history", func() {
+		cfg := &ToolsPluginConfig{
+			Enabled: true,
+			Mode:    ToolsPluginModePassthrough,
+			DynamicRetrieval: &DynamicRetrievalConfig{
+				Enabled: true, Strategy: DynamicRetrievalStrategyHybridHistory, HistoryWindow: 0,
+			},
+		}
+		err := cfg.Validate()
+		Expect(err).To(HaveOccurred())
+		Expect(err.Error()).To(ContainSubstring("history_window must be >= 1"))
+	})
+
+	It("min_history_confidence outside [0,1]", func() {
+		for _, v := range []float64{-0.1, 1.5} {
+			cfg := &ToolsPluginConfig{
+				Enabled: true,
+				Mode:    ToolsPluginModePassthrough,
+				DynamicRetrieval: &DynamicRetrievalConfig{
+					Enabled: true, Strategy: DynamicRetrievalStrategySemanticOnly, MinHistoryConfidence: v,
 				},
+			}
+			err := cfg.Validate()
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("min_history_confidence must be between 0.0 and 1.0"))
+		}
+	})
+
+	It("a negative weight", func() {
+		cfg := &ToolsPluginConfig{
+			Enabled: true,
+			Mode:    ToolsPluginModePassthrough,
+			DynamicRetrieval: &DynamicRetrievalConfig{
+				Enabled:       true,
+				Strategy:      DynamicRetrievalStrategyHybridHistory,
+				HistoryWindow: 5,
+				Weights:       &DynamicRetrievalWeights{Semantic: -0.5},
 			},
 		}
 		err := cfg.Validate()
 		Expect(err).To(HaveOccurred())
 		Expect(err.Error()).To(ContainSubstring("weights.semantic must be non-negative"))
-	})
-
-	It("accepts zero weights as a way to disable individual signals", func() {
-		cfg := &ToolsPluginConfig{
-			Enabled: true,
-			Mode:    ToolsPluginModePassthrough,
-			DynamicRetrieval: &DynamicRetrievalConfig{
-				Enabled:       true,
-				Strategy:      DynamicRetrievalStrategyHybridHistory,
-				HistoryWindow: 5,
-				Weights: &DynamicRetrievalWeights{
-					Semantic:          1.0,
-					History:           0.0,
-					DecisionPrior:     0.0,
-					RepetitionPenalty: 0.0,
-				},
-			},
-		}
-		Expect(cfg.Validate()).To(Succeed())
 	})
 }
 
