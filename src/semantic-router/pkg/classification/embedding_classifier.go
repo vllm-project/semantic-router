@@ -520,11 +520,11 @@ func (c *EmbeddingClassifier) findAllMatchedRules(scoredRules []EmbeddingRuleSco
 // scoreRulesSlice scores an explicit subset of rules against a query
 // embedding. Used by both the text and multimodal classification paths
 // after each filters c.rules down to the rules eligible for its modality.
+//
+// Precondition: callers must have already invoked ensureCandidateEmbeddings.
+// The two public entry points (ClassifyDetailed, ClassifyDetailedMultimodal)
+// own that contract, so this internal helper does not re-check on every call.
 func (c *EmbeddingClassifier) scoreRulesSlice(queryEmbedding []float32, rules []config.EmbeddingRule) ([]EmbeddingRuleScore, error) {
-	if err := c.ensureCandidateEmbeddings(); err != nil {
-		return nil, err
-	}
-
 	scoredRules := make([]EmbeddingRuleScore, 0, len(rules))
 	for _, rule := range rules {
 		bank, ok := c.rulePrototypeBanks[rule.Name]

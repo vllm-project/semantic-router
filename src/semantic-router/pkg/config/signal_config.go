@@ -83,7 +83,7 @@ const (
 // "image": query embedded from an image attachment (base64, data-URI, or path).
 // "audio": query embedded from an audio attachment (base64, data-URI, or path).
 //
-// "image" and "audio" require model_type=multimodal in embedding_models.
+// "image" and "audio" require global.model_catalog.embeddings.semantic.embedding_config.model_type=multimodal.
 type QueryModality string
 
 const (

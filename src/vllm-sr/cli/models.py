@@ -32,7 +32,7 @@ class EmbeddingSignal(BaseModel):
     The ``query_modality`` field declares which modality of incoming request
     payload the embedding rule's query is computed from. It defaults to
     ``"text"`` when omitted, preserving existing behavior. ``"image"`` and
-    ``"audio"`` require ``embedding_models.embedding_config.model_type=multimodal``
+    ``"audio"`` require ``global.model_catalog.embeddings.semantic.embedding_config.model_type=multimodal``
     in the router config so the query and candidate embeddings land in the same
     shared space.
     """

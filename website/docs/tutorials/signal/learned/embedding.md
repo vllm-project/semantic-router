@@ -92,15 +92,18 @@ Accepted values:
 - `"image"`: query embedded from an image attachment (base64, data-URI, or local file path) on the incoming request.
 - `"audio"`: query embedded from an audio attachment. Schema-accepted but rejected at config-load until the candle-binding `MultiModalEncodeAudioFromBase64` FFI is exposed; remove the rule or use `text`/`image` until that lands.
 
-`"image"` and `"audio"` require `embedding_models.embedding_config.model_type: multimodal` so the candidates and queries are embedded into the same shared space. The router fails configuration validation at load time if an image- or audio-modality rule is paired with a text-only embedding model.
+`"image"` and `"audio"` require `global.model_catalog.embeddings.semantic.embedding_config.model_type: multimodal` so the candidates and queries are embedded into the same shared space. The router fails configuration validation at load time if an image- or audio-modality rule is paired with a text-only embedding model.
 
 ### Worked example: route sensitive imagery on-prem
 
 ```yaml
-embedding_models:
-  multimodal_model_path: models/multi-modal-embed-small
-  embedding_config:
-    model_type: multimodal
+global:
+  model_catalog:
+    embeddings:
+      semantic:
+        multimodal_model_path: models/multi-modal-embed-small
+        embedding_config:
+          model_type: multimodal
 
 routing:
   signals:
@@ -115,11 +118,14 @@ routing:
           - installation guide
           - troubleshooting steps
 
-      # New image-modality rule - fires when the request carries an image
-      # attachment whose visual signature matches one of the anchors. The
-      # router reads the attachment off the OpenAI-shaped chat completion
-      # content array, embeds it via the multimodal model, and cosine-
-      # matches it against the anchors below.
+      # New image-modality rule - declares that this rule's query is computed
+      # from an image attachment. The classifier API accepts image payloads
+      # via ClassifyDetailedMultimodal and cosine-matches them against the
+      # text anchors below in the shared multimodal embedding space. The
+      # request-path extractor that pulls images out of OpenAI-shaped chat
+      # completion content arrays and feeds them into this rule lands in a
+      # follow-up PR; on this PR alone the API surface is in place but the
+      # running router does not yet read attachments off chat completions.
       - name: medical_imagery_phi
         query_modality: image
         threshold: 0.55

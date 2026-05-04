@@ -23,7 +23,7 @@ func validateEmbeddingContracts(cfg *RouterConfig) error {
 //
 // Rules:
 //   - unset or "text": always allowed.
-//   - "image": requires embedding_models.embedding_config.model_type=multimodal.
+//   - "image": requires global.model_catalog.embeddings.semantic.embedding_config.model_type=multimodal.
 //     Rejected otherwise so the candidates and queries cannot end up embedded
 //     in mismatched spaces.
 //   - "audio": rejected at config-load with a clear "planned" message. The
@@ -45,7 +45,7 @@ func validateEmbeddingRuleModalities(rules []EmbeddingRule, modelType string) er
 		case QueryModalityImage:
 			if normalizedModelType != "multimodal" {
 				problems = append(problems, fmt.Sprintf(
-					"embedding rule %q declares query_modality=image, which requires embedding_models.embedding_config.model_type=multimodal. Remove the rule, set query_modality to text, or change model_type to multimodal (current model_type=%q)",
+					"embedding rule %q declares query_modality=image, which requires global.model_catalog.embeddings.semantic.embedding_config.model_type=multimodal. Remove the rule, set query_modality to text, or change model_type to multimodal (current model_type=%q)",
 					rule.Name, modelType))
 			}
 		case QueryModalityAudio:

@@ -113,16 +113,13 @@ routing:
       - name: account_management
         threshold: 0.72
         candidates: ["billing information", "subscription management"]
-      # Optional: declare which modality the embedding query is computed
-      # from. Defaults to "text"; setting "image" or "audio" requires
-      # embedding_models.embedding_config.model_type=multimodal so the
-      # query and candidate embeddings live in the same shared space. See
-      # the embedding signal tutorial for a worked image-modality example.
-      - name: medical_imagery_phi
-        query_modality: image
-        threshold: 0.55
-        aggregation_method: max
-        candidates: ["chest X-ray with patient identifier", "electronic health record screenshot showing patient demographics"]
+      # Embedding rules also accept an optional `query_modality` field
+      # (default `"text"`). Image- and audio-modality rules require a
+      # multimodal embedding model under
+      # `global.model_catalog.embeddings.semantic.embedding_config.model_type`,
+      # which is omitted from this minimal canonical example. See
+      # `website/docs/tutorials/signal/learned/embedding.md` for a worked
+      # image-modality example that includes the model_type setting.
 
   projections:
     partitions:
