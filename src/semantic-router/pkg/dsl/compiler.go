@@ -597,6 +597,12 @@ func (c *Compiler) compileRoutes() {
 			}
 		}
 
+		// Compile EMIT directives. Slice ordering is preserved so decompilation
+		// is stable.
+		for _, e := range r.Emits {
+			decision.Emits = append(decision.Emits, compileEmitDecl(e))
+		}
+
 		c.config.Decisions = append(c.config.Decisions, decision)
 	}
 }
@@ -1429,4 +1435,38 @@ func valueToInterface(v Value) interface{} {
 	default:
 		return nil
 	}
+}
+
+// compileEmitDecl lowers a resolved EmitDecl into the config.EmitDirective
+// surface consumed by the runtime + canonical YAML round-trip.
+func compileEmitDecl(e *EmitDecl) config.EmitDirective {
+	if e == nil {
+		return config.EmitDirective{}
+	}
+	out := config.EmitDirective{Kind: e.Kind}
+	if e.Retention != nil {
+		out.Retention = &config.RetentionDirective{
+			Drop:                  clonePtrBool(e.Retention.Drop),
+			TTLTurns:              clonePtrInt(e.Retention.TTLTurns),
+			KeepCurrentModel:      clonePtrBool(e.Retention.KeepCurrentModel),
+			PreferPrefixRetention: clonePtrBool(e.Retention.PreferPrefixRetention),
+		}
+	}
+	return out
+}
+
+func clonePtrBool(p *bool) *bool {
+	if p == nil {
+		return nil
+	}
+	v := *p
+	return &v
+}
+
+func clonePtrInt(p *int) *int {
+	if p == nil {
+		return nil
+	}
+	v := *p
+	return &v
 }

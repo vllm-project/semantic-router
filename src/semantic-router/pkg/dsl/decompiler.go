@@ -478,6 +478,11 @@ func (d *decompiler) decompileDecisions() {
 			}
 		}
 
+		// EMITs
+		for _, e := range dec.Emits {
+			d.decompileEmit(e)
+		}
+
 		d.write("}\n\n")
 	}
 }
@@ -1485,6 +1490,10 @@ func (d *decompiler) decisionToRoute(dec *config.Decision) *RouteDecl {
 		route.CandidateIterations = append(route.CandidateIterations, candidateIterationConfigToDecl(iter))
 	}
 
+	for _, e := range dec.Emits {
+		route.Emits = append(route.Emits, emitDirectiveToDecl(e))
+	}
+
 	return route
 }
 
@@ -2151,4 +2160,72 @@ func Format(input string) (string, error) {
 		return formatted, nil
 	}
 	return appendFormattedTestBlocks(formatted, prog.TestBlocks), nil
+}
+
+// decompileEmit writes an EMIT block for a single directive. Fields are
+// emitted in a fixed order so round-trip output is stable.
+func (d *decompiler) decompileEmit(e config.EmitDirective) {
+	if e.Kind == "" {
+		return
+	}
+	switch e.Kind {
+	case "retention":
+		if e.Retention == nil {
+			d.write("  EMIT retention {}\n")
+			return
+		}
+		r := e.Retention
+		lines := make([]string, 0, 4)
+		if r.Drop != nil {
+			lines = append(lines, fmt.Sprintf("    drop: %t", *r.Drop))
+		}
+		if r.TTLTurns != nil {
+			lines = append(lines, fmt.Sprintf("    ttl_turns: %d", *r.TTLTurns))
+		}
+		if r.KeepCurrentModel != nil {
+			lines = append(lines, fmt.Sprintf("    keep_current_model: %t", *r.KeepCurrentModel))
+		}
+		if r.PreferPrefixRetention != nil {
+			lines = append(lines, fmt.Sprintf("    prefer_prefix_retention: %t", *r.PreferPrefixRetention))
+		}
+		if len(lines) == 0 {
+			d.write("  EMIT retention {}\n")
+			return
+		}
+		d.write("  EMIT retention {\n%s\n  }\n", strings.Join(lines, "\n"))
+	default:
+		// Unknown kind: preserve as an empty block so validator surfaces the error.
+		d.write("  EMIT %s {}\n", sanitizeName(e.Kind))
+	}
+}
+
+// emitDirectiveToDecl converts a config.EmitDirective back to the resolved
+// DSL AST form used by the AST-level decompile path.
+func emitDirectiveToDecl(e config.EmitDirective) *EmitDecl {
+	decl := &EmitDecl{Kind: e.Kind}
+	if e.Kind == "retention" && e.Retention != nil {
+		decl.Retention = &RetentionDirective{
+			Drop:                  clonePtrBoolDSL(e.Retention.Drop),
+			TTLTurns:              clonePtrIntDSL(e.Retention.TTLTurns),
+			KeepCurrentModel:      clonePtrBoolDSL(e.Retention.KeepCurrentModel),
+			PreferPrefixRetention: clonePtrBoolDSL(e.Retention.PreferPrefixRetention),
+		}
+	}
+	return decl
+}
+
+func clonePtrBoolDSL(p *bool) *bool {
+	if p == nil {
+		return nil
+	}
+	v := *p
+	return &v
+}
+
+func clonePtrIntDSL(p *int) *int {
+	if p == nil {
+		return nil
+	}
+	v := *p
+	return &v
 }
