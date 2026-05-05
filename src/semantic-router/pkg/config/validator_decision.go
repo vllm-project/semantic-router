@@ -11,6 +11,9 @@ func validateDecisionContracts(cfg *RouterConfig) error {
 	if err := validateDecisionModelContracts(cfg); err != nil {
 		return err
 	}
+	if err := validateDecisionEmitContracts(cfg); err != nil {
+		return err
+	}
 	return validateDecisionPluginContracts(cfg)
 }
 

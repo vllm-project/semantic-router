@@ -69,6 +69,11 @@ func (r *OpenAIRouter) cacheStreamingResponse(ctx *RequestContext) error {
 		return nil
 	}
 
+	decisionName := ctx.VSRSelectedDecisionName
+	if !r.semanticCacheEnabledForScope(decisionName) {
+		return nil
+	}
+
 	// Retention drop gate runs before any reconstruction work so that we never
 	// even build the cache entry for a decision that asked us to skip the
 	// write. Same precedence rule as the non-streaming path (§2.8).

@@ -409,6 +409,11 @@ type RouteDecl struct {
 type EmitDecl struct {
 	Kind      string
 	Retention *RetentionDirective
+	// RawFields preserves the parsed EMIT payload for validation. The typed
+	// Retention field intentionally drops unknown or wrong-typed entries; the
+	// validator/compiler still need the raw entries so authoring mistakes are
+	// reported instead of being silently treated as an empty directive.
+	RawFields []*FieldEntry
 	Pos       Position
 }
 

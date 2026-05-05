@@ -20,8 +20,8 @@ type Decision struct {
 // EmitDirective is a tagged-union wrapper for declarative directives emitted
 // by a decision branch. The initial supported Kind is "retention".
 type EmitDirective struct {
-	Kind      string               `yaml:"kind" json:"kind"`
-	Retention *RetentionDirective  `yaml:"retention,omitempty" json:"retention,omitempty"`
+	Kind      string              `yaml:"kind" json:"kind"`
+	Retention *RetentionDirective `yaml:"retention,omitempty" json:"retention,omitempty"`
 }
 
 // RetentionDirective expresses keep / drop / prefer-retain semantics over the

@@ -111,9 +111,9 @@ type RouteDeclJSON struct {
 
 // EmitDeclJSON is the JSON form of an EMIT directive on a route.
 type EmitDeclJSON struct {
-	Kind      string                    `json:"kind"`
-	Retention *RetentionDirectiveJSON   `json:"retention,omitempty"`
-	Pos       Position                  `json:"pos"`
+	Kind      string                  `json:"kind"`
+	Retention *RetentionDirectiveJSON `json:"retention,omitempty"`
+	Pos       Position                `json:"pos"`
 }
 
 // RetentionDirectiveJSON is the JSON form of RetentionDirective. All fields

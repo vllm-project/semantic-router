@@ -7,7 +7,6 @@ import (
 )
 
 func retBool(b bool) *bool { return &b }
-func retInt(i int) *int    { return &i }
 
 func TestShouldSkipCacheWrite(t *testing.T) {
 	cases := []struct {
@@ -101,4 +100,124 @@ func TestObserveRetentionDirectiveNoOp(t *testing.T) {
 	// Must not panic on nil ctx / nil retention.
 	observeRetentionDirective(nil)
 	observeRetentionDirective(&RequestContext{})
+}
+
+func TestUpdateResponseCacheSkipsRetentionDrop(t *testing.T) {
+	mockCache := &mockStreamingCache{}
+	router := &OpenAIRouter{
+		Cache: mockCache,
+		Config: &config.RouterConfig{
+			SemanticCache: config.SemanticCache{Enabled: true},
+			IntelligentRouting: config.IntelligentRouting{
+				Decisions: []config.Decision{retentionCacheDecision("cache-decision", true)},
+			},
+		},
+	}
+	ctx := &RequestContext{
+		RequestID:               "req-retention-drop",
+		VSRSelectedDecisionName: "cache-decision",
+		EmittedRetention:        &config.RetentionDirective{Drop: retBool(true)},
+	}
+
+	router.updateResponseCache(ctx, []byte(`{"choices":[]}`))
+	if mockCache.updateCalled {
+		t.Fatalf("retention.drop must skip non-streaming cache UpdateWithResponse")
+	}
+}
+
+func TestUpdateResponseCacheWritesWhenRetentionDropFalse(t *testing.T) {
+	mockCache := &mockStreamingCache{}
+	router := &OpenAIRouter{
+		Cache: mockCache,
+		Config: &config.RouterConfig{
+			SemanticCache: config.SemanticCache{Enabled: true},
+			IntelligentRouting: config.IntelligentRouting{
+				Decisions: []config.Decision{retentionCacheDecision("cache-decision", true)},
+			},
+		},
+	}
+	ctx := &RequestContext{
+		RequestID:               "req-retention-keep",
+		VSRSelectedDecisionName: "cache-decision",
+		EmittedRetention:        &config.RetentionDirective{Drop: retBool(false)},
+	}
+
+	router.updateResponseCache(ctx, []byte(`{"choices":[]}`))
+	if !mockCache.updateCalled {
+		t.Fatalf("drop=false must preserve non-streaming cache write")
+	}
+}
+
+func TestCacheStreamingResponseSkipsRetentionDrop(t *testing.T) {
+	mockCache := &mockStreamingCache{}
+	router := &OpenAIRouter{
+		Cache: mockCache,
+		Config: &config.RouterConfig{
+			SemanticCache: config.SemanticCache{Enabled: true},
+			IntelligentRouting: config.IntelligentRouting{
+				Decisions: []config.Decision{retentionCacheDecision("cache-decision", true)},
+			},
+		},
+	}
+	ctx := retentionStreamingContext("cache-decision")
+	ctx.EmittedRetention = &config.RetentionDirective{Drop: retBool(true)}
+
+	if err := router.cacheStreamingResponse(ctx); err != nil {
+		t.Fatalf("cacheStreamingResponse() error = %v", err)
+	}
+	if mockCache.addEntryCalled || mockCache.updateCalled {
+		t.Fatalf("retention.drop must skip streaming cache writes, addEntry=%v update=%v", mockCache.addEntryCalled, mockCache.updateCalled)
+	}
+}
+
+func TestCacheStreamingResponseChecksScopeBeforeRetentionDrop(t *testing.T) {
+	mockCache := &mockStreamingCache{}
+	router := &OpenAIRouter{
+		Cache: mockCache,
+		Config: &config.RouterConfig{
+			SemanticCache: config.SemanticCache{Enabled: true},
+			IntelligentRouting: config.IntelligentRouting{
+				Decisions: []config.Decision{retentionCacheDecision("no-cache-decision", false)},
+			},
+		},
+	}
+	ctx := retentionStreamingContext("no-cache-decision")
+	ctx.EmittedRetention = &config.RetentionDirective{Drop: retBool(true)}
+
+	if err := router.cacheStreamingResponse(ctx); err != nil {
+		t.Fatalf("cacheStreamingResponse() error = %v", err)
+	}
+	if mockCache.addEntryCalled || mockCache.updateCalled {
+		t.Fatalf("disabled semantic-cache scope must skip streaming cache writes before retention, addEntry=%v update=%v", mockCache.addEntryCalled, mockCache.updateCalled)
+	}
+}
+
+func retentionCacheDecision(name string, cacheEnabled bool) config.Decision {
+	decision := config.Decision{
+		Name:      name,
+		ModelRefs: []config.ModelRef{{Model: "test-model"}},
+	}
+	if cacheEnabled {
+		decision.Plugins = []config.DecisionPlugin{{
+			Type:          "semantic-cache",
+			Configuration: config.MustStructuredPayload(map[string]interface{}{"enabled": true}),
+		}}
+	}
+	return decision
+}
+
+func retentionStreamingContext(decisionName string) *RequestContext {
+	return &RequestContext{
+		RequestID:               "req-stream-retention",
+		RequestModel:            "test-model",
+		RequestQuery:            "hello",
+		VSRSelectedDecisionName: decisionName,
+		StreamingComplete:       true,
+		StreamingContent:        "hello",
+		StreamingMetadata: map[string]interface{}{
+			"id":      "chatcmpl-retention",
+			"model":   "test-model",
+			"created": int64(1),
+		},
+	}
 }

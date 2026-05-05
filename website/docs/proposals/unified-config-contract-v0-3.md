@@ -81,6 +81,7 @@ Model semantics and deployment bindings are now separated explicitly:
 - each `providers.models[].backend_refs[]` item carries its own transport and auth fields such as `endpoint`, `base_url`, `protocol`, `auth_header`, `auth_prefix`, `api_key`, and `api_key_env`
 - `routing.decisions[].modelRefs[].lora_name` resolves against the matching `routing.modelCards[].loras` entry, so `lora_name` is now part of the supported routing contract instead of a runtime-only escape hatch
 - `routing.decisions[].candidateIterations` is bounded to `decision.candidates` or explicit model lists and remains declarative metadata for the selection layer, not a second policy interpreter
+- `routing.decisions[].emits[]` is the structured side-effect contract produced by DSL `EMIT` blocks. The current supported kind is `retention`; `drop: true` is consumed by the response-side semantic-cache write gate, while `ttl_turns`, `keep_current_model`, and `prefer_prefix_retention` remain typed/auditable hints until their dedicated runtime consumers land.
 
 ## Global defaults
 
