@@ -2,6 +2,8 @@ package responsestore
 
 import (
 	"context"
+	"os"
+	"path/filepath"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -10,14 +12,15 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/responseapi"
 )
 
-// TestRedisStoreConfig tests configuration validation and defaults
-func TestRedisStoreConfig(t *testing.T) {
-	tests := []struct {
-		name        string
-		config      StoreConfig
-		expectError bool
-		errorMsg    string
-	}{
+type redisStoreConfigTestCase struct {
+	name        string
+	config      StoreConfig
+	expectError bool
+	errorMsg    string
+}
+
+func buildRedisStoreConfigTests() []redisStoreConfigTestCase {
+	return []redisStoreConfigTestCase{
 		{
 			name: "valid standalone config",
 			config: StoreConfig{
@@ -103,6 +106,11 @@ func TestRedisStoreConfig(t *testing.T) {
 			errorMsg:    "invalid DB number",
 		},
 	}
+}
+
+// TestRedisStoreConfig tests configuration validation and defaults
+func TestRedisStoreConfig(t *testing.T) {
+	tests := buildRedisStoreConfigTests()
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -346,12 +354,73 @@ func TestRedisStoreCheckConnection(t *testing.T) {
 
 // TestConfigPathLoading tests external config file loading
 func TestConfigPathLoading(t *testing.T) {
-	// This test would require creating a temp config file
-	// Skipping for now, but in a real implementation:
-	// 1. Create temp YAML file with Redis config
-	// 2. Set ConfigPath to temp file
-	// 3. Verify config is loaded correctly
-	t.Skip("TODO: Implement config file loading test")
+	// Create a temporary directory for config file
+	tempDir := t.TempDir()
+	configPath := filepath.Join(tempDir, "redis-config.yaml")
+
+	// Create a test config YAML file
+	configYAML := `address: redis.example.com:6380
+db: 1
+pool_size: 20
+min_idle_conns: 5
+max_retries: 5
+dial_timeout: 10
+read_timeout: 5
+write_timeout: 5
+key_prefix: "test:"`
+
+	err := os.WriteFile(configPath, []byte(configYAML), 0o600)
+	require.NoError(t, err)
+
+	// Load config from file
+	baseCfg := RedisStoreConfig{
+		ConfigPath: configPath,
+	}
+	loadedCfg, err := loadRedisStoreConfig(baseCfg)
+	require.NoError(t, err)
+
+	// Verify loaded config values
+	assert.Equal(t, "redis.example.com:6380", loadedCfg.Address)
+	assert.Equal(t, 1, loadedCfg.DB)
+	assert.Equal(t, 20, loadedCfg.PoolSize)
+	assert.Equal(t, 5, loadedCfg.MinIdleConns)
+	assert.Equal(t, 5, loadedCfg.MaxRetries)
+	assert.Equal(t, 10, loadedCfg.DialTimeout)
+	assert.Equal(t, 5, loadedCfg.ReadTimeout)
+	assert.Equal(t, 5, loadedCfg.WriteTimeout)
+	assert.Equal(t, "test:", loadedCfg.KeyPrefix)
+}
+
+// TestConfigPathLoadingError tests error handling for invalid config files
+func TestConfigPathLoadingError(t *testing.T) {
+	t.Run("non-existent file", func(t *testing.T) {
+		cfg := RedisStoreConfig{
+			ConfigPath: "/nonexistent/config.yaml",
+		}
+		_, err := loadRedisStoreConfig(cfg)
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "failed to read config file")
+	})
+
+	t.Run("invalid YAML syntax", func(t *testing.T) {
+		tempDir := t.TempDir()
+		configPath := filepath.Join(tempDir, "invalid.yaml")
+
+		invalidYAML := `
+  address: redis.example.com:6380
+  invalid: [unclosed
+  db: 1
+`
+		err := os.WriteFile(configPath, []byte(invalidYAML), 0o600)
+		require.NoError(t, err)
+
+		cfg := RedisStoreConfig{
+			ConfigPath: configPath,
+		}
+		_, err = loadRedisStoreConfig(cfg)
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "failed to parse config file")
+	})
 }
 
 // TestTLSConfig tests TLS configuration validation
