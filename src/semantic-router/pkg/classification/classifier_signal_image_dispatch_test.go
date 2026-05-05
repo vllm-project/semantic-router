@@ -3,6 +3,7 @@ package classification
 import (
 	"errors"
 	"sync"
+	"sync/atomic"
 	"testing"
 
 	candle_binding "github.com/vllm-project/semantic-router/candle-binding"
@@ -54,7 +55,7 @@ func TestEvaluateEmbeddingSignal_TextOnly_PreservesExistingBehavior(t *testing.T
 	results := newSignalResultsForTest()
 	var mu sync.Mutex
 
-	classifier.evaluateEmbeddingSignal(results, &mu, "TensorFlow pipeline", "")
+	classifier.evaluateEmbeddingSignal(results, &mu, "TensorFlow pipeline", "", nil)
 
 	if len(results.MatchedEmbeddingRules) == 0 {
 		t.Fatalf("expected at least one matched rule on text-only path, got 0")
@@ -85,7 +86,7 @@ func TestEvaluateEmbeddingSignal_ImageProvidedActivatesImageRules(t *testing.T) 
 	results := newSignalResultsForTest()
 	var mu sync.Mutex
 
-	classifier.evaluateEmbeddingSignal(results, &mu, "TensorFlow training pipeline", "data:image/png;base64,FAKE_WAFER_BYTES")
+	classifier.evaluateEmbeddingSignal(results, &mu, "TensorFlow training pipeline", "data:image/png;base64,FAKE_WAFER_BYTES", nil)
 
 	// The text rule should match the text query.
 	hasText := false
@@ -138,7 +139,7 @@ func TestEvaluateEmbeddingSignal_TextErrorDoesNotSkipImagePass(t *testing.T) {
 
 	// Despite the text-FFI error, the image classification should still run
 	// and surface the chip-fab image rule.
-	classifier.evaluateEmbeddingSignal(results, &mu, "TensorFlow training pipeline", "data:image/png;base64,FAKE_WAFER_BYTES")
+	classifier.evaluateEmbeddingSignal(results, &mu, "TensorFlow training pipeline", "data:image/png;base64,FAKE_WAFER_BYTES", nil)
 
 	hasImage := false
 	for _, name := range results.MatchedEmbeddingRules {
@@ -149,6 +150,128 @@ func TestEvaluateEmbeddingSignal_TextErrorDoesNotSkipImagePass(t *testing.T) {
 	if !hasImage {
 		t.Errorf("expected image rule to fire even when text classification errored, got: %v",
 			results.MatchedEmbeddingRules)
+	}
+}
+
+// TestEvaluateEmbeddingSignal_ImageOnlyContent_SkipsTextFFI confirms that
+// when a request carries only an image (empty text), the text-FFI is never
+// invoked and no spurious "text-modality embedding rule evaluation failed"
+// log fires. This is the request shape produced by OpenAI chat completion
+// content arrays containing only image_url parts.
+func TestEvaluateEmbeddingSignal_ImageOnlyContent_SkipsTextFFI(t *testing.T) {
+	var textCalls int32
+	originalText := getEmbeddingWithModelType
+	getEmbeddingWithModelType = func(text string, modelType string, targetDim int) (*candle_binding.EmbeddingOutput, error) {
+		atomic.AddInt32(&textCalls, 1)
+		return &candle_binding.EmbeddingOutput{Embedding: makeEmbedding(0.0, 0.0, 0.0)}, nil
+	}
+	t.Cleanup(func() { getEmbeddingWithModelType = originalText })
+
+	stubMultiModalImageLookup(t, map[string][]float32{
+		"data:image/png;base64,FAKE_WAFER_BYTES": makeEmbedding(0.92, 0.0, 0.0),
+	})
+	stubEmbeddingLookup(t, map[string][]float32{
+		"wafer photo":       makeEmbedding(0.95, 0.0, 0.0),
+		"SEM micrograph":    makeEmbedding(0.85, 0.0, 0.0),
+		"office whiteboard": makeEmbedding(0.0, 0.95, 0.0),
+		"conference room":   makeEmbedding(0.0, 0.85, 0.0),
+	})
+
+	classifier := classifierWithEmbeddingOnly(t, mixedModalityRules(), "multimodal")
+	results := newSignalResultsForTest()
+	var mu sync.Mutex
+
+	classifier.evaluateEmbeddingSignal(results, &mu, "", "data:image/png;base64,FAKE_WAFER_BYTES", nil)
+
+	if got := atomic.LoadInt32(&textCalls); got != 0 {
+		t.Errorf("text-FFI must not be invoked when text is empty, got %d calls", got)
+	}
+	hasImage := false
+	for _, name := range results.MatchedEmbeddingRules {
+		if name == "chip_fab_sensitive_imagery" {
+			hasImage = true
+		}
+	}
+	if !hasImage {
+		t.Errorf("image rule should still fire for image-only request, got matches: %v",
+			results.MatchedEmbeddingRules)
+	}
+}
+
+// TestEvaluateEmbeddingSignal_SharedCacheDedupsImageFFI exercises the
+// production deduplication property: when complexity image rules and
+// embedding image rules both score the same image during one request, the
+// image FFI runs exactly once. The two evaluators run in independent
+// dispatcher goroutines; the request-scoped cache passed by the orchestrator
+// is what makes the FFI dedupe.
+//
+// This test does not need an actual ComplexityClassifier - the cache layer
+// is what matters. It calls evaluateEmbeddingSignal twice with the same
+// imgCache (simulating two cached consumers within one request) and verifies
+// the FFI ran once.
+func TestEvaluateEmbeddingSignal_SharedCacheDedupsImageFFI(t *testing.T) {
+	var ffiCalls int32
+	originalImage := getMultiModalImageEmbedding
+	getMultiModalImageEmbedding = func(imageRef string, targetDim int) ([]float32, error) {
+		atomic.AddInt32(&ffiCalls, 1)
+		return makeEmbedding(0.92, 0.0, 0.0), nil
+	}
+	t.Cleanup(func() { getMultiModalImageEmbedding = originalImage })
+
+	stubEmbeddingLookup(t, map[string][]float32{
+		"wafer photo":       makeEmbedding(0.95, 0.0, 0.0),
+		"SEM micrograph":    makeEmbedding(0.85, 0.0, 0.0),
+		"office whiteboard": makeEmbedding(0.0, 0.95, 0.0),
+		"conference room":   makeEmbedding(0.0, 0.85, 0.0),
+	})
+
+	classifier := classifierWithEmbeddingOnly(t, mixedModalityRules(), "multimodal")
+	results := newSignalResultsForTest()
+	var mu sync.Mutex
+	cache := newRequestImageEmbeddingCache()
+
+	classifier.evaluateEmbeddingSignal(results, &mu, "wafer photo query", "data:image/png;base64,FAKE_WAFER_BYTES", cache)
+	classifier.evaluateEmbeddingSignal(results, &mu, "wafer photo query", "data:image/png;base64,FAKE_WAFER_BYTES", cache)
+
+	if got := atomic.LoadInt32(&ffiCalls); got != 1 {
+		t.Errorf("expected image FFI to run once across two cached evaluations, ran %d times", got)
+	}
+}
+
+// TestEvaluateEmbeddingSignal_SharedCacheDedupsAcrossDivergentTargetDims is
+// the test that catches the canonical-config bug. Embedding signal asks for
+// optimizationConfig.TargetDimension; complexity signal hardcodes 0. With a
+// targetDim-keyed cache they would compute independently. With the
+// imageRef-keyed full-dim cache they share. Simulates that divergence by
+// pulling the same image through the cache at two different targetDims.
+func TestEvaluateEmbeddingSignal_SharedCacheDedupsAcrossDivergentTargetDims(t *testing.T) {
+	var ffiCalls int32
+	cache := newRequestImageEmbeddingCache()
+
+	compute := func() ([]float32, error) {
+		atomic.AddInt32(&ffiCalls, 1)
+		return makeEmbedding(0.6, 0.8, 0.0), nil
+	}
+
+	// Embedding-side: requests truncation to 2 (mirrors a non-default TargetDimension).
+	embView, err := cache.resolve("img-A", 2, compute)
+	if err != nil {
+		t.Fatalf("embedding-side resolve failed: %v", err)
+	}
+	// Complexity-side: requests full dim (hardcoded 0).
+	complexityView, err := cache.resolve("img-A", 0, compute)
+	if err != nil {
+		t.Fatalf("complexity-side resolve failed: %v", err)
+	}
+
+	if got := atomic.LoadInt32(&ffiCalls); got != 1 {
+		t.Errorf("FFI must run once across divergent targetDims for the same image, ran %d times", got)
+	}
+	if len(embView) != 2 {
+		t.Errorf("embedding view should be truncated to 2, got len=%d", len(embView))
+	}
+	if len(complexityView) != 768 {
+		t.Errorf("complexity view should be full-dim 768 (makeEmbedding default), got len=%d", len(complexityView))
 	}
 }
 
@@ -176,7 +299,7 @@ func TestEvaluateEmbeddingSignal_ImageURLWithNoImageRules_GracefulNoOp(t *testin
 	// the multimodal image FFI (that's the point of the no-rules early-return
 	// in ClassifyDetailedMultimodal), and should produce the same matches as
 	// the no-image case.
-	classifier.evaluateEmbeddingSignal(results, &mu, "TensorFlow pipeline", "data:image/png;base64,IGNORED_BYTES")
+	classifier.evaluateEmbeddingSignal(results, &mu, "TensorFlow pipeline", "data:image/png;base64,IGNORED_BYTES", nil)
 
 	if len(results.MatchedEmbeddingRules) == 0 {
 		t.Fatalf("expected text rule to still match when image URL is present but no image rules exist, got 0 matches")

@@ -23,6 +23,7 @@ func (c *Classifier) buildSignalDispatchers(
 	nonUserMessages []string,
 	hasPriorAssistantReply bool,
 	imgArg string,
+	imgCache *requestImageEmbeddingCache, // may be nil; both image-consuming evaluators handle nil via cache.resolve's nil-receiver fallthrough
 	convFacts ConversationFacts,
 ) []signalDispatch {
 	return []signalDispatch{
@@ -33,7 +34,7 @@ func (c *Classifier) buildSignalDispatchers(
 		{
 			config.SignalTypeEmbedding, "Embedding",
 			func() {
-				c.evaluateEmbeddingSignal(results, mu, textForSignal(config.SignalTypeEmbedding), imgArg)
+				c.evaluateEmbeddingSignal(results, mu, textForSignal(config.SignalTypeEmbedding), imgArg, imgCache)
 			},
 		},
 		{
@@ -77,7 +78,9 @@ func (c *Classifier) buildSignalDispatchers(
 		},
 		{
 			config.SignalTypeComplexity, "Complexity",
-			func() { c.evaluateComplexitySignal(results, mu, textForSignal(config.SignalTypeComplexity), imgArg) },
+			func() {
+				c.evaluateComplexitySignal(results, mu, textForSignal(config.SignalTypeComplexity), imgArg, imgCache)
+			},
 		},
 		{
 			config.SignalTypeModality, "Modality",

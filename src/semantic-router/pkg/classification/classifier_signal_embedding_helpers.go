@@ -13,10 +13,12 @@ import (
 // fold the text-modality and image-modality result sets into one result struct
 // without duplicating the bookkeeping logic.
 //
-// elapsed is the total embedding-evaluation time across all modality passes
-// in the calling evaluator, not per-modality. Per-rule metrics record this
-// shared elapsed value; treat it as evaluator-level timing, not per-rule
-// per-modality timing.
+// elapsed is the modality-specific time spent producing this detailedResult,
+// not the aggregate evaluator time. The caller measures each modality pass
+// independently so per-rule extraction-latency samples reflect the cost of
+// the rule's own modality - mixing the image FFI cost into a text-rule
+// sample (or vice versa) would skew embedding latency dashboards on
+// image-bearing requests.
 //
 // Caller must hold the mu used to guard results.
 func recordEmbeddingResult(results *SignalResults, detailedResult *EmbeddingClassificationResult, elapsed time.Duration, bestConfidence float64) float64 {

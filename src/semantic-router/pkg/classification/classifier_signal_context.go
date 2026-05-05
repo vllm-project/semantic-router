@@ -98,7 +98,18 @@ func (c *Classifier) EvaluateAllSignalsWithContext(text string, contextText stri
 		imgArg = imageURL[0]
 	}
 
-	dispatchers := c.buildSignalDispatchers(results, &mu, textForSignal, contextText, currentUserText, priorUserMessages, nonUserMessages, hasPriorAssistantReply, imgArg, convFacts)
+	// Allocate a request-scoped image embedding cache only when an image is
+	// actually attached. Two signals - complexity (image rules) and embedding
+	// (image-modality rules) - independently pull image embeddings via FFI;
+	// the cache lets whichever runs first donate its result to the other,
+	// turning two SigLIP forward passes into one. With no image attached,
+	// neither signal touches the cache, so leaving it nil is correct.
+	var imgCache *requestImageEmbeddingCache
+	if imgArg != "" {
+		imgCache = newRequestImageEmbeddingCache()
+	}
+
+	dispatchers := c.buildSignalDispatchers(results, &mu, textForSignal, contextText, currentUserText, priorUserMessages, nonUserMessages, hasPriorAssistantReply, imgArg, imgCache, convFacts)
 	runSignalDispatchers(dispatchers, usedSignals, ready, &wg)
 
 	wg.Wait()
@@ -137,28 +148,48 @@ func (c *Classifier) evaluateKeywordSignal(results *SignalResults, mu *sync.Mute
 	}
 }
 
-func (c *Classifier) evaluateEmbeddingSignal(results *SignalResults, mu *sync.Mutex, text string, imageURL string) {
+func (c *Classifier) evaluateEmbeddingSignal(results *SignalResults, mu *sync.Mutex, text string, imageURL string, imgCache *requestImageEmbeddingCache) {
 	start := time.Now()
 
 	// Text-modality evaluation: scores rules whose query_modality is unset
-	// or "text". Existing behavior; preserved for backward compatibility.
-	textResult, textErr := c.keywordEmbeddingClassifier.ClassifyDetailed(text)
+	// or "text". Skipped when the request has no text (image-only content
+	// arrays) because ClassifyDetailed rejects an empty query and the error
+	// would be misleading - "no text rules to evaluate" is the correct
+	// behavior, not a failure.
+	var (
+		textResult  *EmbeddingClassificationResult
+		textErr     error
+		textElapsed time.Duration
+	)
+	if strings.TrimSpace(text) != "" {
+		textStart := time.Now()
+		textResult, textErr = c.keywordEmbeddingClassifier.ClassifyDetailed(text)
+		textElapsed = time.Since(textStart)
+	}
 
 	// Image-modality evaluation: only fires when the request carries an
 	// image attachment. The classifier's internal rulesByModality cache
 	// makes the no-image-rules case a free no-op (returns an empty result
 	// without computing the FFI embedding), so this call is safe even when
-	// no image rules are configured.
-	var imageResult *EmbeddingClassificationResult
-	var imageErr error
+	// no image rules are configured. The shared imgCache deduplicates the
+	// FFI encode against any sibling signal (e.g. complexity image rules)
+	// resolving the same image during this request.
+	var (
+		imageResult  *EmbeddingClassificationResult
+		imageErr     error
+		imageElapsed time.Duration
+	)
 	if strings.TrimSpace(imageURL) != "" {
-		imageResult, imageErr = c.keywordEmbeddingClassifier.ClassifyDetailedMultimodal(config.QueryModalityImage, imageURL)
+		imageStart := time.Now()
+		imageResult, imageErr = c.keywordEmbeddingClassifier.classifyDetailedMultimodalWithCache(config.QueryModalityImage, imageURL, imgCache)
+		imageElapsed = time.Since(imageStart)
 	}
 
 	elapsed := time.Since(start)
 
 	results.Metrics.Embedding.ExecutionTimeMs = float64(elapsed.Microseconds()) / 1000.0
-	logging.Debugf("[Signal Computation] Embedding signal evaluation completed in %v (text rules + image-rule pass)", elapsed)
+	logging.Debugf("[Signal Computation] Embedding signal evaluation completed in %v (text=%v image=%v)",
+		elapsed, textElapsed, imageElapsed)
 
 	// Text and image classifications are independent: a failure in one does
 	// not skip the other. Pre-PR-2 this function returned early on text
@@ -176,12 +207,15 @@ func (c *Classifier) evaluateEmbeddingSignal(results *SignalResults, mu *sync.Mu
 	defer mu.Unlock()
 
 	// Track the best confidence across both modalities for the metric.
+	// Per-rule extraction-latency observations use modality-specific elapsed
+	// times so an image-bearing request that also matched a text rule does
+	// not double-count the image FFI cost into the text-rule sample.
 	var bestConfidence float64
 	if textResult != nil {
-		bestConfidence = recordEmbeddingResult(results, textResult, elapsed, bestConfidence)
+		bestConfidence = recordEmbeddingResult(results, textResult, textElapsed, bestConfidence)
 	}
 	if imageResult != nil {
-		bestConfidence = recordEmbeddingResult(results, imageResult, elapsed, bestConfidence)
+		bestConfidence = recordEmbeddingResult(results, imageResult, imageElapsed, bestConfidence)
 	}
 	results.Metrics.Embedding.Confidence = bestConfidence
 }
@@ -422,9 +456,9 @@ func (c *Classifier) evaluateContextSignal(results *SignalResults, mu *sync.Mute
 	}
 }
 
-func (c *Classifier) evaluateComplexitySignal(results *SignalResults, mu *sync.Mutex, text string, imageURL string) {
+func (c *Classifier) evaluateComplexitySignal(results *SignalResults, mu *sync.Mutex, text string, imageURL string, imgCache *requestImageEmbeddingCache) {
 	start := time.Now()
-	classifyResults, err := c.complexityClassifier.ClassifyDetailedWithImage(text, imageURL)
+	classifyResults, err := c.complexityClassifier.classifyDetailedWithImageCached(text, imageURL, imgCache)
 	elapsed := time.Since(start)
 	latencySeconds := elapsed.Seconds()
 
