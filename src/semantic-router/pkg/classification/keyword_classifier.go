@@ -264,6 +264,21 @@ func (c *KeywordClassifier) ClassifyWithKeywords(text string) (string, []string,
 	return category, keywords, err
 }
 
+// classifyState holds per-call lazy caches so the BM25 / N-gram classifiers
+// are invoked at most once per ClassifyWithKeywordsAndCount call, regardless
+// of how many BM25 / N-gram rule refs appear in ruleOrder.
+//
+// Without this cache, an outer loop with N BM25 refs invokes the full BM25
+// classify N times — and each call internally iterates all rules until first
+// match — yielding O(N^2) work plus N CString allocations of the full prompt.
+type classifyState struct {
+	regexIdx    int
+	bm25Cached  bool
+	bm25Result  nlp_binding.MatchResult
+	ngramCached bool
+	ngramResult nlp_binding.MatchResult
+}
+
 // ClassifyWithKeywordsAndCount performs keyword-based classification and returns:
 // - category: the matched rule name (or "" if no match)
 // - matchedKeywords: slice of keywords that matched
@@ -274,10 +289,10 @@ func (c *KeywordClassifier) ClassifyWithKeywords(text string) (string, []string,
 // Rules are evaluated in the order they were defined in the config (first-match semantics),
 // regardless of method. Each rule is dispatched to its respective engine.
 func (c *KeywordClassifier) ClassifyWithKeywordsAndCount(text string) (string, []string, int, int, error) {
-	regexIdx := 0
+	state := classifyState{}
 
 	for _, ref := range c.ruleOrder {
-		match, err := c.classifyRule(text, ref, &regexIdx)
+		match, err := c.classifyRule(text, ref, &state)
 		if err != nil {
 			return "", nil, 0, 0, err
 		}
@@ -289,10 +304,14 @@ func (c *KeywordClassifier) ClassifyWithKeywordsAndCount(text string) (string, [
 	return "", nil, 0, 0, nil
 }
 
-func (c *KeywordClassifier) classifyRule(text string, ref ruleRef, regexIdx *int) (ruleMatch, error) {
+func (c *KeywordClassifier) classifyRule(text string, ref ruleRef, state *classifyState) (ruleMatch, error) {
 	switch ref.method {
 	case "bm25":
-		result := c.bm25Classifier.Classify(text)
+		if !state.bm25Cached {
+			state.bm25Result = c.bm25Classifier.Classify(text)
+			state.bm25Cached = true
+		}
+		result := state.bm25Result
 		if !result.Matched || result.RuleName != ref.name {
 			return ruleMatch{}, nil
 		}
@@ -304,7 +323,11 @@ func (c *KeywordClassifier) classifyRule(text string, ref ruleRef, regexIdx *int
 			totalKeywords: result.TotalKeywords,
 		}, nil
 	case "ngram":
-		result := c.ngramClassifier.Classify(text)
+		if !state.ngramCached {
+			state.ngramResult = c.ngramClassifier.Classify(text)
+			state.ngramCached = true
+		}
+		result := state.ngramResult
 		if !result.Matched || result.RuleName != ref.name {
 			return ruleMatch{}, nil
 		}
@@ -316,7 +339,7 @@ func (c *KeywordClassifier) classifyRule(text string, ref ruleRef, regexIdx *int
 			totalKeywords: result.TotalKeywords,
 		}, nil
 	case "regex":
-		return c.classifyRegexRule(text, regexIdx)
+		return c.classifyRegexRule(text, &state.regexIdx)
 	default:
 		return ruleMatch{}, nil
 	}
