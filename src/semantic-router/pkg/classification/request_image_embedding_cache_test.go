@@ -26,7 +26,6 @@ func TestRequestImageEmbeddingCache_DedupsConcurrentResolves(t *testing.T) {
 	errs := make([]error, goroutines)
 
 	for i := 0; i < goroutines; i++ {
-		i := i
 		go func() {
 			defer wg.Done()
 			emb, err := cache.resolve("img-A", 0, func() ([]float32, error) {
@@ -159,7 +158,6 @@ func TestRequestImageEmbeddingCache_PropagatesErrorToAllCallers(t *testing.T) {
 	errs := make([]error, goroutines)
 
 	for i := 0; i < goroutines; i++ {
-		i := i
 		go func() {
 			defer wg.Done()
 			_, err := cache.resolve("img-A", 0, func() ([]float32, error) {
@@ -189,7 +187,6 @@ func TestRequestImageEmbeddingCache_NilReceiverFallsThrough(t *testing.T) {
 		atomic.AddInt32(&computeCount, 1)
 		return []float32{0.5}, nil
 	})
-
 	if err != nil {
 		t.Fatalf("nil cache resolve returned error: %v", err)
 	}

@@ -27,15 +27,6 @@ type cachedPIIResult struct {
 	err    error
 }
 
-// EvaluateAllSignalsWithContext evaluates all signal types with separate text for context counting.
-//
-// text: (possibly compressed) text for signal evaluation
-// contextText: text for context token counting (usually all messages combined)
-// nonUserMessages: conversation history for jailbreak/PII with include_history
-// forceEvaluateAll: if true, evaluates all configured signals regardless of decision usage
-// uncompressedText: original text before prompt compression (empty = no compression happened)
-// skipCompressionSignals: signal types that must use uncompressedText instead of text
-// imageURL: optional image URL for multimodal signals
 // signalReadiness returns a map indicating whether each signal type's infrastructure is ready.
 // Separated from EvaluateAllSignalsWithContext to keep cyclomatic complexity under the linter limit.
 func (c *Classifier) signalReadiness() map[string]bool {
@@ -71,6 +62,15 @@ func textForSignalFunc(text, uncompressedText string, skipCompressionSignals map
 	}
 }
 
+// EvaluateAllSignalsWithContext evaluates all signal types with separate text for context counting.
+//
+// text: (possibly compressed) text for signal evaluation
+// contextText: text for context token counting (usually all messages combined)
+// nonUserMessages: conversation history for jailbreak/PII with include_history
+// forceEvaluateAll: if true, evaluates all configured signals regardless of decision usage
+// uncompressedText: original text before prompt compression (empty = no compression happened)
+// skipCompressionSignals: signal types that must use uncompressedText instead of text
+// imageURL: optional image URL for multimodal signals
 func (c *Classifier) EvaluateAllSignalsWithContext(text string, contextText string, currentUserText string, priorUserMessages []string, nonUserMessages []string, hasPriorAssistantReply bool, forceEvaluateAll bool, uncompressedText string, skipCompressionSignals map[string]bool, convFacts ConversationFacts, sessionCtx *SignalSessionContext, imageURL ...string) *SignalResults {
 	defer c.enterSignalEvaluationLoadGate()()
 	// Determine which signals (type:name) should be evaluated

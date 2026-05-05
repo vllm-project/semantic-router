@@ -396,8 +396,12 @@ func (c *EmbeddingClassifier) classifyDetailedMultimodalWithCache(modality confi
 			config.QueryModalityImage)
 	}
 	if effective != config.QueryModalityImage {
-		return nil, fmt.Errorf("unsupported query modality %q (supported: %q, %q)",
-			modality, config.QueryModalityImage, config.QueryModalityAudio)
+		// Defensive catch-all in case a new modality value is added to
+		// config.QueryModality without a branch above. Audio is intentionally
+		// not advertised here because it was just rejected; the only modality
+		// this method actually services today is image.
+		return nil, fmt.Errorf("unsupported query modality %q (supported: %q)",
+			modality, config.QueryModalityImage)
 	}
 
 	startTime := time.Now()

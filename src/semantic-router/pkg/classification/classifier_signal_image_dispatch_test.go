@@ -198,18 +198,22 @@ func TestEvaluateEmbeddingSignal_ImageOnlyContent_SkipsTextFFI(t *testing.T) {
 	}
 }
 
-// TestEvaluateEmbeddingSignal_SharedCacheDedupsImageFFI exercises the
-// production deduplication property: when complexity image rules and
-// embedding image rules both score the same image during one request, the
-// image FFI runs exactly once. The two evaluators run in independent
-// dispatcher goroutines; the request-scoped cache passed by the orchestrator
-// is what makes the FFI dedupe.
+// TestEvaluateAllSignals_DedupsImageFFIAcrossDispatchers exercises the
+// production deduplication property under the actual concurrency pattern
+// runSignalDispatchers uses. Both evaluateEmbeddingSignal and
+// evaluateComplexitySignal run as parallel goroutines sharing one
+// requestImageEmbeddingCache. With the cache, the SigLIP forward pass FFI
+// must run exactly once across the dispatcher fan-out.
 //
-// This test does not need an actual ComplexityClassifier - the cache layer
-// is what matters. It calls evaluateEmbeddingSignal twice with the same
-// imgCache (simulating two cached consumers within one request) and verifies
-// the FFI ran once.
-func TestEvaluateEmbeddingSignal_SharedCacheDedupsImageFFI(t *testing.T) {
+// Setup notes:
+//   - The complexity classifier preloads its image_candidates at init time,
+//     which calls getMultiModalImageEmbedding once per candidate. The test
+//     resets the FFI counter AFTER classifier construction so only
+//     request-time calls are counted.
+//   - The embedding classifier with image rules does not trigger image FFI
+//     at init (its candidates are text anchor labels embedded via the
+//     multimodal text path), so no reset is needed for that side.
+func TestEvaluateAllSignals_DedupsImageFFIAcrossDispatchers(t *testing.T) {
 	var ffiCalls int32
 	originalImage := getMultiModalImageEmbedding
 	getMultiModalImageEmbedding = func(imageRef string, targetDim int) ([]float32, error) {
@@ -219,22 +223,70 @@ func TestEvaluateEmbeddingSignal_SharedCacheDedupsImageFFI(t *testing.T) {
 	t.Cleanup(func() { getMultiModalImageEmbedding = originalImage })
 
 	stubEmbeddingLookup(t, map[string][]float32{
-		"wafer photo":       makeEmbedding(0.95, 0.0, 0.0),
-		"SEM micrograph":    makeEmbedding(0.85, 0.0, 0.0),
-		"office whiteboard": makeEmbedding(0.0, 0.95, 0.0),
-		"conference room":   makeEmbedding(0.0, 0.85, 0.0),
+		"wafer photo":          makeEmbedding(0.95, 0.0, 0.0),
+		"SEM micrograph":       makeEmbedding(0.85, 0.0, 0.0),
+		"office whiteboard":    makeEmbedding(0.0, 0.95, 0.0),
+		"conference room":      makeEmbedding(0.0, 0.85, 0.0),
+		"trace the root cause": makeEmbedding(0.99, 0.05, 0.0),
+		"quick summary":        makeEmbedding(0.05, 0.99, 0.0),
+		"wafer photo query":    makeEmbedding(0.92, 0.0, 0.0),
 	})
 
-	classifier := classifierWithEmbeddingOnly(t, mixedModalityRules(), "multimodal")
+	originalMMText := getMultiModalTextEmbedding
+	getMultiModalTextEmbedding = func(text string, targetDim int) ([]float32, error) {
+		return makeEmbedding(0.0, 0.0, 0.5), nil
+	}
+	t.Cleanup(func() { getMultiModalTextEmbedding = originalMMText })
+
+	embedClassifier := classifierWithEmbeddingOnly(t, mixedModalityRules(), "multimodal")
+
+	complexityRules := []config.ComplexityRule{{
+		Name:      "needs_reasoning",
+		Threshold: 0.2,
+		Hard: config.ComplexityCandidates{
+			Candidates:      []string{"trace the root cause"},
+			ImageCandidates: []string{"data:image/png;base64,FAKE_HARD_CANDIDATE"},
+		},
+		Easy: config.ComplexityCandidates{
+			Candidates:      []string{"quick summary"},
+			ImageCandidates: []string{"data:image/png;base64,FAKE_EASY_CANDIDATE"},
+		},
+	}}
+	complexityClassifier, err := NewComplexityClassifier(complexityRules, "multimodal", config.PrototypeScoringConfig{
+		ClusterSimilarityThreshold: 0.98,
+		MaxPrototypes:              2,
+	})
+	if err != nil {
+		t.Fatalf("NewComplexityClassifier failed: %v", err)
+	}
+
+	// Reset the counter after init so we only measure request-time FFI calls.
+	atomic.StoreInt32(&ffiCalls, 0)
+
+	classifier := &Classifier{
+		keywordEmbeddingClassifier: embedClassifier.keywordEmbeddingClassifier,
+		complexityClassifier:       complexityClassifier,
+	}
 	results := newSignalResultsForTest()
 	var mu sync.Mutex
 	cache := newRequestImageEmbeddingCache()
 
-	classifier.evaluateEmbeddingSignal(results, &mu, "wafer photo query", "data:image/png;base64,FAKE_WAFER_BYTES", cache)
-	classifier.evaluateEmbeddingSignal(results, &mu, "wafer photo query", "data:image/png;base64,FAKE_WAFER_BYTES", cache)
+	const imageURL = "data:image/png;base64,FAKE_WAFER_REQUEST_BYTES"
+
+	var wg sync.WaitGroup
+	wg.Add(2)
+	go func() {
+		defer wg.Done()
+		classifier.evaluateEmbeddingSignal(results, &mu, "wafer photo query", imageURL, cache)
+	}()
+	go func() {
+		defer wg.Done()
+		classifier.evaluateComplexitySignal(results, &mu, "wafer photo query", imageURL, cache)
+	}()
+	wg.Wait()
 
 	if got := atomic.LoadInt32(&ffiCalls); got != 1 {
-		t.Errorf("expected image FFI to run once across two cached evaluations, ran %d times", got)
+		t.Errorf("expected image FFI to run once across embedding+complexity dispatcher fan-out, ran %d times", got)
 	}
 }
 
