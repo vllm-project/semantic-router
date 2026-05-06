@@ -177,6 +177,7 @@ func convertSignals(signals v1alpha1.Signals) config.CanonicalSignals {
 			SimilarityThreshold:       signal.Threshold,
 			Candidates:                signal.Candidates,
 			AggregationMethodConfiged: config.AggregationMethod(signal.AggregationMethod),
+			QueryModality:             config.QueryModality(signal.QueryModality),
 		})
 	}
 
