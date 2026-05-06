@@ -36,6 +36,23 @@ const (
 	// SelectedModel indicates the model that was selected by the router for processing.
 	// This header is set during the routing decision phase.
 	SelectedModel = "x-selected-model"
+
+	// VSRSkipProcessing is a request-side opt-out signal that instructs the router
+	// to bypass all semantic-router processing (classification, decisions, plugins,
+	// memory/RAG injection, model rewriting, response inspection, cache writes, etc.)
+	// and let the request and the upstream response flow through unchanged.
+	//
+	// Motivation: when the router is installed alongside Envoy AI Gateway via a
+	// listener-level patch policy (so it consistently runs before the AI Gateway
+	// extproc), the filter chain is fixed by the initially matched route and cannot
+	// be selectively detached per route. A header-based passthrough lets upstream
+	// systems (ext_authz, AI Gateway extension server, route-level filters, etc.)
+	// choose, per request, whether the router should run. See
+	// https://github.com/vllm-project/semantic-router/issues/1808.
+	//
+	// Value: "true" (case-insensitive) to skip processing; any other value or
+	// absence keeps the standard pipeline.
+	VSRSkipProcessing = "x-vsr-skip-processing"
 )
 
 // VSR Decision Tracking Headers

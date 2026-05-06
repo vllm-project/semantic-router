@@ -183,6 +183,13 @@ type RequestContext struct {
 	LooperRequest   bool // True if this request is from looper (internal request, skip plugins)
 	LooperIteration int  // The iteration number if this is a looper request
 
+	// SkipProcessing indicates the client (or an upstream filter such as Envoy AI
+	// Gateway) requested a full passthrough via the x-vsr-skip-processing header.
+	// When true the extproc still receives Envoy callbacks but acts as a no-op:
+	// it does not classify, route, mutate, cache, or inspect request/response
+	// bodies, and simply returns CONTINUE for every phase.
+	SkipProcessing bool
+
 	// External API routing context (for Envoy-routed external API requests)
 	// APIFormat indicates the target API format (e.g., "anthropic", "gemini")
 	// Empty string means standard OpenAI-compatible backend (no transformation needed)

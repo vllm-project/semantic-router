@@ -23,6 +23,13 @@ import (
 // from the first few KB, and either passes through or accumulates for the
 // full pipeline on end_of_stream.
 func (r *OpenAIRouter) handleRequestBodyDispatch(v *ext_proc.ProcessingRequest_RequestBody, ctx *RequestContext) (*ext_proc.ProcessingResponse, error) {
+	// Honor x-vsr-skip-processing before allocating a streamed-body handler.
+	// This guarantees no chunk accumulation, model detection, or buffered
+	// pipeline runs for opted-out requests, regardless of streamed_body_mode.
+	if ctx.SkipProcessing {
+		return newContinueRequestBodyResponse(), nil
+	}
+
 	eos := v.RequestBody.GetEndOfStream()
 
 	// If we already have a handler from a previous chunk, continue streaming

@@ -6,6 +6,9 @@ import (
 
 // handleResponseHeaders processes the response headers.
 func (r *OpenAIRouter) handleResponseHeaders(v *ext_proc.ProcessingRequest_ResponseHeaders, ctx *RequestContext) (*ext_proc.ProcessingResponse, error) {
+	if skipResp := r.handleSkipProcessingResponseHeaders(v, ctx); skipResp != nil {
+		return skipResp, nil
+	}
 	if looperResp := r.handleLooperResponseHeaders(v, ctx); looperResp != nil {
 		return looperResp, nil
 	}
