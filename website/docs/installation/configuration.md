@@ -106,6 +106,8 @@ routing:
             pattern: '[?？]'
         predicate:
           gte: 3
+    random:
+      - name: random_digit
     embeddings:
       - name: technical_support
         threshold: 0.75
@@ -180,6 +182,8 @@ global:
 ```
 
 For `routing.signals.structure`, `feature.type: density` now uses built-in multilingual text-unit normalization. The router counts each CJK character as one unit, counts contiguous runs of other letters and digits as one unit, and ignores punctuation, so the same density rule shape behaves consistently across English, Chinese, and mixed-script prompts without a separate `normalize_by` field.
+
+For `routing.signals.random`, each named rule emits a request-time integer from `0` to `9`. Decisions can match the rule by name, and projections can consume the generated digit with `value_source: raw`.
 
 ## Repository config assets
 

@@ -375,6 +375,7 @@ func isProjectionInputTypeSupported(signalType string) bool {
 		SignalTypeUserFeedback,
 		SignalTypeReask,
 		SignalTypePreference,
+		SignalTypeRandom,
 		SignalTypeLanguage,
 		SignalTypeContext,
 		SignalTypeStructure,
@@ -403,6 +404,7 @@ func projectionDeclaredSignals(cfg *RouterConfig) map[string]map[string]struct{}
 		SignalTypeUserFeedback:  collectUserFeedbackRuleNames(cfg.UserFeedbackRules),
 		SignalTypeReask:         collectReaskRuleNames(cfg.ReaskRules),
 		SignalTypePreference:    collectPreferenceRuleNames(cfg.PreferenceRules),
+		SignalTypeRandom:        collectRandomRuleNames(cfg.RandomRules),
 		SignalTypeLanguage:      collectLanguageRuleNames(cfg.LanguageRules),
 		SignalTypeContext:       collectContextRuleNames(cfg.ContextRules),
 		SignalTypeStructure:     collectStructureRuleNames(cfg.StructureRules),
@@ -591,6 +593,14 @@ func collectReaskRuleNames(rules []ReaskRule) map[string]struct{} {
 }
 
 func collectPreferenceRuleNames(rules []PreferenceRule) map[string]struct{} {
+	names := make(map[string]struct{}, len(rules))
+	for _, rule := range rules {
+		names[rule.Name] = struct{}{}
+	}
+	return names
+}
+
+func collectRandomRuleNames(rules []RandomRule) map[string]struct{} {
 	names := make(map[string]struct{}, len(rules))
 	for _, rule := range rules {
 		names[rule.Name] = struct{}{}

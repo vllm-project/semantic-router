@@ -46,6 +46,7 @@ func (c *Classifier) getAllSignalTypes() map[string]bool {
 	collectSignalKeys(allSignals, config.SignalTypeUserFeedback, c.Config.UserFeedbackRules, func(r config.UserFeedbackRule) string { return r.Name })
 	collectSignalKeys(allSignals, config.SignalTypeReask, c.Config.ReaskRules, func(r config.ReaskRule) string { return r.Name })
 	collectSignalKeys(allSignals, config.SignalTypePreference, c.Config.PreferenceRules, func(r config.PreferenceRule) string { return r.Name })
+	collectSignalKeys(allSignals, config.SignalTypeRandom, c.Config.RandomRules, func(r config.RandomRule) string { return r.Name })
 	collectSignalKeys(allSignals, config.SignalTypeLanguage, c.Config.LanguageRules, func(r config.LanguageRule) string { return r.Name })
 	collectSignalKeys(allSignals, config.SignalTypeContext, c.Config.ContextRules, func(r config.ContextRule) string { return r.Name })
 	collectSignalKeys(allSignals, config.SignalTypeStructure, c.Config.StructureRules, func(r config.StructureRule) string { return r.Name })
@@ -84,6 +85,7 @@ type SignalResults struct {
 	MatchedUserFeedbackRules  []string // "satisfied", "need_clarification", "wrong_answer", "want_different"
 	MatchedReaskRules         []string // History-aware repeated-question dissatisfaction signals
 	MatchedPreferenceRules    []string // Route preference names matched via external LLM
+	MatchedRandomRules        []string // Random signal names that emitted a 0-9 integer
 	MatchedLanguageRules      []string // Language codes: "en", "es", "zh", "fr", etc.
 	MatchedContextRules       []string // Matched context rule names (e.g. "low_token_count")
 	TokenCount                int      // Total token count
@@ -128,6 +130,7 @@ type SignalMetricsCollection struct {
 	UserFeedback SignalMetrics `json:"user_feedback"`
 	Reask        SignalMetrics `json:"reask"`
 	Preference   SignalMetrics `json:"preference"`
+	Random       SignalMetrics `json:"random"`
 	Language     SignalMetrics `json:"language"`
 	Context      SignalMetrics `json:"context"`
 	Structure    SignalMetrics `json:"structure"`
@@ -365,10 +368,10 @@ func (c *Classifier) evaluateDecisionInternal(signals *SignalResults, trace bool
 		return nil, nil, fmt.Errorf("no decisions configured")
 	}
 
-	logging.Debugf("Signal evaluation results: keyword=%v, embedding=%v, domain=%v, fact_check=%v, user_feedback=%v, reask=%v, preference=%v, language=%v, context=%v, structure=%v, complexity=%v, modality=%v, authz=%v, jailbreak=%v, pii=%v, kb=%v, session_metric=%v, event_context=%v",
+	logging.Debugf("Signal evaluation results: keyword=%v, embedding=%v, domain=%v, fact_check=%v, user_feedback=%v, reask=%v, preference=%v, random=%v, language=%v, context=%v, structure=%v, complexity=%v, modality=%v, authz=%v, jailbreak=%v, pii=%v, kb=%v, session_metric=%v, event_context=%v",
 		signals.MatchedKeywordRules, signals.MatchedEmbeddingRules, signals.MatchedDomainRules,
 		signals.MatchedFactCheckRules, signals.MatchedUserFeedbackRules, signals.MatchedReaskRules, signals.MatchedPreferenceRules,
-		signals.MatchedLanguageRules, signals.MatchedContextRules, signals.MatchedStructureRules,
+		signals.MatchedRandomRules, signals.MatchedLanguageRules, signals.MatchedContextRules, signals.MatchedStructureRules,
 		signals.MatchedComplexityRules, signals.MatchedModalityRules, signals.MatchedAuthzRules,
 		signals.MatchedJailbreakRules, signals.MatchedPIIRules, signals.MatchedKBRules,
 		signals.MatchedSessionMetricRules, signals.MatchedEventContextRules)
@@ -389,6 +392,7 @@ func (c *Classifier) evaluateDecisionInternal(signals *SignalResults, trace bool
 		UserFeedbackRules:  signals.MatchedUserFeedbackRules,
 		ReaskRules:         signals.MatchedReaskRules,
 		PreferenceRules:    signals.MatchedPreferenceRules,
+		RandomRules:        signals.MatchedRandomRules,
 		LanguageRules:      signals.MatchedLanguageRules,
 		ContextRules:       signals.MatchedContextRules,
 		StructureRules:     signals.MatchedStructureRules,

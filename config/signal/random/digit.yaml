@@ -1,0 +1,4 @@
+routing:
+  signals:
+    random:
+      - name: random_digit

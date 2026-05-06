@@ -64,6 +64,7 @@ func (c *Classifier) buildSignalDispatchers(
 			config.SignalTypePreference, "Preference",
 			func() { c.evaluatePreferenceSignal(results, mu, textForSignal(config.SignalTypePreference)) },
 		},
+		c.randomSignalDispatch(results, mu),
 		{
 			config.SignalTypeLanguage, "Language",
 			func() { c.evaluateLanguageSignal(results, mu, textForSignal(config.SignalTypeLanguage)) },
@@ -108,6 +109,13 @@ func (c *Classifier) buildSignalDispatchers(
 			config.SignalTypeEventContext, "EventContext",
 			func() { c.evaluateEventContextSignal(results, mu, textForSignal(config.SignalTypeEventContext)) },
 		},
+	}
+}
+
+func (c *Classifier) randomSignalDispatch(results *SignalResults, mu *sync.Mutex) signalDispatch {
+	return signalDispatch{
+		config.SignalTypeRandom, "Random",
+		func() { c.evaluateRandomSignal(results, mu) },
 	}
 }
 

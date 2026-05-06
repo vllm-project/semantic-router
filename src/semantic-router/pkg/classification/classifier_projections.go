@@ -19,6 +19,7 @@ var projectionMatchAccessors = map[string]projectionMatchAccessor{
 	config.SignalTypeUserFeedback:  func(results *SignalResults) []string { return results.MatchedUserFeedbackRules },
 	config.SignalTypeReask:         func(results *SignalResults) []string { return results.MatchedReaskRules },
 	config.SignalTypePreference:    func(results *SignalResults) []string { return results.MatchedPreferenceRules },
+	config.SignalTypeRandom:        func(results *SignalResults) []string { return results.MatchedRandomRules },
 	config.SignalTypeLanguage:      func(results *SignalResults) []string { return results.MatchedLanguageRules },
 	config.SignalTypeContext:       func(results *SignalResults) []string { return results.MatchedContextRules },
 	config.SignalTypeStructure:     func(results *SignalResults) []string { return results.MatchedStructureRules },

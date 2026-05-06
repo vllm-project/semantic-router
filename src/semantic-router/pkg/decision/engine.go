@@ -66,6 +66,7 @@ type SignalMatches struct {
 	UserFeedbackRules  []string // "need_clarification", "satisfied", "want_different", "wrong_answer"
 	ReaskRules         []string // History-aware dissatisfaction signals from repeated user turns
 	PreferenceRules    []string // Route preference names matched via external LLM
+	RandomRules        []string // Random signal names that emitted a 0-9 integer
 	LanguageRules      []string // Language codes: "en", "es", "zh", "fr", etc.
 	ContextRules       []string // Context rule names matched (e.g. "low_token_count")
 	StructureRules     []string // Structure rule names matched (e.g. "many_questions")
@@ -215,6 +216,7 @@ func (e *DecisionEngine) matchesSignalType(
 		"user_feedback":  signals.UserFeedbackRules,
 		"reask":          signals.ReaskRules,
 		"preference":     signals.PreferenceRules,
+		"random":         signals.RandomRules,
 		"language":       signals.LanguageRules,
 		"context":        signals.ContextRules,
 		"structure":      signals.StructureRules,

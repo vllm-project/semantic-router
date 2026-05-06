@@ -89,6 +89,7 @@ These signals route from explicit rules, request form, or lightweight detectors 
 | `context`     | `config/signal/context/`   | route by effective token-window needs                                        | [Context](./heuristic/context)     |
 | `keyword`     | `config/signal/keyword/`   | route from lexical or BM25-style matches                                     | [Keyword](./heuristic/keyword)     |
 | `language`    | `config/signal/language/`  | route by detected request language                                           | [Language](./heuristic/language)   |
+| `random`      | `config/signal/random/`    | emit a request-time random digit from 0 to 9                                 | [Random](./heuristic/random)       |
 | `structure`   | `config/signal/structure/` | route from request shape such as question counts or ordered workflow markers | [Structure](./heuristic/structure) |
 
 ### Learned Signals

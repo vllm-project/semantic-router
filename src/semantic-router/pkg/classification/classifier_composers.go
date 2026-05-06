@@ -150,6 +150,7 @@ func composerLeafMatches(signals *SignalResults) map[string][]string {
 		"user_feedback": signals.MatchedUserFeedbackRules,
 		"reask":         signals.MatchedReaskRules,
 		"preference":    signals.MatchedPreferenceRules,
+		"random":        signals.MatchedRandomRules,
 		"language":      signals.MatchedLanguageRules,
 		"context":       signals.MatchedContextRules,
 		"structure":     signals.MatchedStructureRules,

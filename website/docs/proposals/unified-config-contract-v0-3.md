@@ -81,6 +81,7 @@ Model semantics and deployment bindings are now separated explicitly:
 - each `providers.models[].backend_refs[]` item carries its own transport and auth fields such as `endpoint`, `base_url`, `protocol`, `auth_header`, `auth_prefix`, `api_key`, and `api_key_env`
 - `routing.decisions[].modelRefs[].lora_name` resolves against the matching `routing.modelCards[].loras` entry, so `lora_name` is now part of the supported routing contract instead of a runtime-only escape hatch
 - `routing.decisions[].candidateIterations` is bounded to `decision.candidates` or explicit model lists and remains declarative metadata for the selection layer, not a second policy interpreter
+- `routing.signals.random` provides named request-time random digits from `0` to `9`; decisions can match the emitted signal, and projections can consume the raw digit for sampling or experiment buckets
 
 ## Global defaults
 
@@ -154,6 +155,7 @@ The repo now has one public config story:
 - deployment bindings live in `providers.defaults` and `providers.models[]`
 - runtime overrides live in `global.router`, `global.services`, `global.stores`, `global.integrations`, and `global.model_catalog`, with model-backed modules under `global.model_catalog.modules`
 - structure-signal `density` uses one built-in multilingual normalization path instead of exposing per-rule `normalize_by` choices
+- random-signal rules provide a built-in request sampling primitive under `routing.signals.random`
 - `global.router.config_source` is the canonical switch between file-backed config and Kubernetes CRD-backed reconciliation
 - built-in defaults live in the router
 - repo-owned sample assets are organized by `signal/decision/algorithm/plugin` fragments instead of parallel full-config examples

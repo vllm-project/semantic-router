@@ -38,6 +38,7 @@ func (c *Classifier) signalReadiness() map[string]bool {
 		config.SignalTypeUserFeedback: len(c.Config.UserFeedbackRules) > 0 && c.IsFeedbackDetectorEnabled(),
 		config.SignalTypeReask:        c.reaskClassifier != nil,
 		config.SignalTypePreference:   len(c.Config.PreferenceRules) > 0 && c.IsPreferenceClassifierEnabled(),
+		config.SignalTypeRandom:       len(c.Config.RandomRules) > 0,
 		config.SignalTypeLanguage:     len(c.Config.LanguageRules) > 0 && c.IsLanguageEnabled(),
 		config.SignalTypeContext:      c.contextClassifier != nil,
 		config.SignalTypeStructure:    c.structureClassifier != nil,

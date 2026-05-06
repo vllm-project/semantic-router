@@ -75,6 +75,7 @@ func canonicalSignalsFromRouterConfig(cfg *RouterConfig) CanonicalSignals {
 		Conversation:       append([]ConversationRule(nil), cfg.ConversationRules...),
 		SessionMetricRules: append([]SessionMetricRule(nil), cfg.SessionMetricRules...),
 		EventContextRules:  append([]EventContextRule(nil), cfg.EventContextRules...),
+		Random:             append([]RandomRule(nil), cfg.RandomRules...),
 	}
 }
 

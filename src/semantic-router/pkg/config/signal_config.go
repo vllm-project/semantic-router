@@ -26,6 +26,12 @@ type Signals struct {
 	ConversationRules  []ConversationRule  `yaml:"conversation,omitempty"`
 	SessionMetricRules []SessionMetricRule `yaml:"session_metrics,omitempty"`
 	EventContextRules  []EventContextRule  `yaml:"event_context_rules,omitempty"`
+	RandomRules        []RandomRule        `yaml:"random,omitempty"`
+}
+
+// RandomRule emits a request-time random integer in the range [0, 9].
+type RandomRule struct {
+	Name string `yaml:"name"`
 }
 
 // SessionMetricRule is a unified session-context routing metric.
