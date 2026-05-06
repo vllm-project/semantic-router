@@ -68,6 +68,13 @@ profile_rules:
     summary: CRD-driven routing semantics and embedding-signal behavior.
     paths:
       - e2e/profiles/dynamic-config/**
+  multimodal-routing:
+    owner: e2e
+    coverage_role: image-modality-embedding-signal-routing
+    selection_mode: full-ci
+    summary: Image-modality EmbeddingSignal routing via the multi-modal-embed-small model.
+    paths:
+      - e2e/profiles/multimodal-routing/**
   llm-d:
     owner: e2e
     coverage_role: llm-d-inference-gateway-health

@@ -1,0 +1,126 @@
+config:
+  version: v0.3
+  listeners: []
+  providers:
+    defaults:
+      default_model: base-model
+      reasoning_families:
+        deepseek:
+          type: chat_template_kwargs
+          parameter: thinking
+        qwen3:
+          type: chat_template_kwargs
+          parameter: enable_thinking
+        gpt-oss:
+          type: reasoning_effort
+          parameter: reasoning_effort
+        gpt:
+          type: reasoning_effort
+          parameter: reasoning_effort
+      default_reasoning_effort: high
+    models:
+      - name: base-model
+        reasoning_family: qwen3
+        backend_refs:
+          - name: local-vllm
+            endpoint: vllm-llama3-8b-instruct.default.svc.cluster.local:8000
+            weight: 1
+  routing:
+    modelCards:
+      - name: base-model
+    signals: {}
+  global:
+    model_catalog:
+      kbs: []
+      embeddings:
+        semantic:
+          # Multi-modal embedding model that exposes both a text encoder and an
+          # image encoder in a shared 384-dim space. Loaded by candle-binding
+          # from /app/models/mom-embedding-multimodal (auto-downloaded by the
+          # router's modeldownload package on first start). Required for any
+          # IntelligentRoute embedding rule with query_modality=image.
+          multimodal_model_path: models/mom-embedding-multimodal
+          embedding_config:
+            model_type: multimodal
+            target_dimension: 384
+            preload_embeddings: true
+            enable_soft_matching: false
+            top_k: 1
+    router:
+      config_source: kubernetes
+    services:
+      api:
+        batch_classification:
+          max_batch_size: 100
+          concurrency_threshold: 5
+          max_concurrency: 8
+          metrics:
+            enabled: true
+            detailed_goroutine_tracking: true
+            high_resolution_timing: false
+            sample_rate: 1.0
+            duration_buckets:
+              - 0.001
+              - 0.005
+              - 0.01
+              - 0.025
+              - 0.05
+              - 0.1
+              - 0.25
+              - 0.5
+              - 1
+              - 2.5
+              - 5
+              - 10
+              - 30
+            size_buckets:
+              - 1
+              - 2
+              - 5
+              - 10
+              - 20
+              - 50
+              - 100
+              - 200
+    stores:
+      semantic_cache:
+        enabled: true
+        backend_type: memory
+        similarity_threshold: 0.8
+        max_entries: 1000
+        ttl_seconds: 3600
+        eviction_policy: fifo
+        embedding_model: mmbert
+      memory:
+        embedding_model: mmbert
+      vector_store:
+        embedding_model: mmbert
+    integrations:
+      tools:
+        enabled: true
+        top_k: 3
+        similarity_threshold: 0.2
+        tools_db_path: config/tools_db.json
+        fallback_to_empty: true
+resources:
+  limits:
+    memory: 10Gi
+    cpu: '2'
+  requests:
+    memory: 6Gi
+    cpu: '1'
+  observability:
+    tracing:
+      enabled: false
+      provider: opentelemetry
+      exporter:
+        type: otlp
+        endpoint: jaeger:4317
+        insecure: true
+      sampling:
+        type: always_on
+        rate: 1.0
+      resource:
+        service_name: vllm-semantic-router
+        service_version: v0.1.0
+        deployment_environment: development
