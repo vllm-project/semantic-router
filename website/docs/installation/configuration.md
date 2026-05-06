@@ -188,7 +188,11 @@ global:
 DSL `EMIT` blocks. The current supported directive is `kind: retention`;
 `drop: true` skips response-side semantic-cache writes for the matched
 decision, while `ttl_turns`, `keep_current_model`, and
-`prefer_prefix_retention` remain structured hints for later runtime consumers.
+`prefer_prefix_retention` remain structured hints for later runtime consumers
+such as turn-aware cache TTL, current-model affinity, and prefix/KV-cache
+warmth. Conversation, tool, replay, and transition-history signals keep their
+own storage surfaces; retention directives only declare the decision's desired
+post-selection side effects.
 
 For `routing.signals.structure`, `feature.type: density` now uses built-in multilingual text-unit normalization. The router counts each CJK character as one unit, counts contiguous runs of other letters and digits as one unit, and ignores punctuation, so the same density rule shape behaves consistently across English, Chinese, and mixed-script prompts without a separate `normalize_by` field.
 

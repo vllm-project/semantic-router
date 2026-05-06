@@ -67,5 +67,6 @@ Use the case-shape catalog below in the same order as the fragment tree:
 | `or` | `config/decision/or/business-or-law.yaml` | shared route across alternatives | [OR Decisions](./or) |
 | `not` | `config/decision/not/exclude-jailbreak.yaml` | explicit exclusion or safety guard | [NOT Decisions](./not) |
 | `composite` | `config/decision/composite/priority-safe-escalation.yaml` | nested real-world policies | [Composite Decisions](./composite) |
+| `retention` | `routing.decisions[].emits[]` | post-decision cache/session side effects | [Retention Directives](./retention) |
 
 Add [Algorithm](../algorithm/overview) when `modelRefs` contains more than one candidate, and add [Plugin](../plugin/overview) when the route needs post-selection behavior.
