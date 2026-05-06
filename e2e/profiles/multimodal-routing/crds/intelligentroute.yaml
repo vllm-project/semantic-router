@@ -1,0 +1,56 @@
+apiVersion: vllm.ai/v1alpha1
+kind: IntelligentRoute
+metadata:
+  name: ai-gateway-route
+  namespace: default
+spec:
+  signals:
+    # Image-modality embedding rule. Fires when the request carries an image
+    # attachment whose visual signature matches one of the medical-imagery
+    # anchors below. Routes through candle-binding's multimodal image encoder
+    # (requires global.model_catalog.embeddings.semantic.embedding_config.
+    # model_type=multimodal in values.yaml).
+    embeddings:
+      - name: "medical_imagery_phi"
+        queryModality: "image"
+        threshold: 0.55
+        aggregationMethod: "max"
+        candidates:
+          - "chest X-ray with patient identifier strip"
+          - "dermatology lesion close-up photograph"
+          - "electronic health record screenshot showing patient demographics"
+          - "ultrasound scan with patient name overlay"
+
+  decisions:
+    # Image-bearing requests with medical-imagery signature route to the
+    # in-cluster expert and never leave on-prem.
+    - name: "route_medical_imagery_on_prem"
+      priority: 200
+      description: "Route image-bearing requests with medical-imagery signature to the in-cluster path"
+      signals:
+        operator: "OR"
+        conditions:
+          - type: "embedding"
+            name: "medical_imagery_phi"
+      modelRefs:
+        - model: "base-model"
+          loraName: "general-expert"
+          useReasoning: false
+      plugins:
+        - type: "header_mutation"
+          configuration:
+            add:
+              - name: "x-vsr-signal-medical_imagery_phi"
+                value: "true"
+
+    # Default fallback for text-only requests where no image signal fires.
+    - name: "default_text_route"
+      priority: 1
+      description: "Default route for text-only requests where no image-modality signal fires"
+      signals:
+        operator: "OR"
+        conditions: []
+      modelRefs:
+        - model: "base-model"
+          loraName: "general-expert"
+          useReasoning: false
