@@ -1,6 +1,10 @@
 package config
 
-import "fmt"
+import (
+	"fmt"
+
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
+)
 
 const emitDirectiveKindRetention = "retention"
 
@@ -40,5 +44,17 @@ func validateRetentionDirectiveConfig(context string, retention *RetentionDirect
 	if retention.Drop != nil && *retention.Drop && retention.TTLTurns != nil && *retention.TTLTurns > 0 {
 		return fmt.Errorf("%s retention: drop=true conflicts with ttl_turns=%d", context, *retention.TTLTurns)
 	}
+	warnRetentionDirectiveNoOpConfig(context, retention)
 	return nil
+}
+
+func warnRetentionDirectiveNoOpConfig(context string, retention *RetentionDirective) {
+	if retention.Drop == nil && retention.TTLTurns == nil &&
+		retention.KeepCurrentModel == nil && retention.PreferPrefixRetention == nil {
+		logging.Warnf("%s retention: empty block has no effect. Set drop, ttl_turns, keep_current_model, or prefer_prefix_retention", context)
+		return
+	}
+	if retention.TTLTurns != nil && *retention.TTLTurns == 0 && retention.Drop == nil {
+		logging.Warnf("%s retention: ttl_turns=0 without drop is likely a no-op. Add drop: true to evict, or remove ttl_turns", context)
+	}
 }

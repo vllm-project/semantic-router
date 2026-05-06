@@ -59,25 +59,25 @@ func observeRetentionDirective(ctx *RequestContext) {
 	}
 
 	if r.Drop != nil {
-		fields["retention.drop"] = *r.Drop
+		fields["vsr.retention.drop"] = *r.Drop
 		if span.IsRecording() {
 			span.SetAttributes(attribute.Bool("vsr.retention.drop", *r.Drop))
 		}
 	}
 	if r.TTLTurns != nil {
-		fields["retention.ttl_turns"] = *r.TTLTurns
+		fields["vsr.retention.ttl_turns"] = *r.TTLTurns
 		if span.IsRecording() {
 			span.SetAttributes(attribute.Int("vsr.retention.ttl_turns", *r.TTLTurns))
 		}
 	}
 	if r.KeepCurrentModel != nil {
-		fields["retention.keep_current_model"] = *r.KeepCurrentModel
+		fields["vsr.retention.keep_current_model"] = *r.KeepCurrentModel
 		if span.IsRecording() {
 			span.SetAttributes(attribute.Bool("vsr.retention.keep_current_model", *r.KeepCurrentModel))
 		}
 	}
 	if r.PreferPrefixRetention != nil {
-		fields["retention.prefer_prefix_retention"] = *r.PreferPrefixRetention
+		fields["vsr.retention.prefer_prefix_retention"] = *r.PreferPrefixRetention
 		if span.IsRecording() {
 			span.SetAttributes(attribute.Bool("vsr.retention.prefer_prefix_retention", *r.PreferPrefixRetention))
 		}
