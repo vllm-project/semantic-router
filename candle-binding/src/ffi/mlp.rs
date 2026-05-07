@@ -62,11 +62,11 @@ pub extern "C" fn candle_mlp_new_with_device(device_type: c_int) -> *mut MLPHand
         }
         2 => {
             // Try Metal
-            #[cfg(feature = "metal")]
+            #[cfg(target_os = "macos")]
             {
                 Device::new_metal(0).unwrap_or(Device::Cpu)
             }
-            #[cfg(not(feature = "metal"))]
+            #[cfg(not(target_os = "macos"))]
             {
                 Device::Cpu
             }
@@ -97,11 +97,11 @@ pub extern "C" fn candle_mlp_new_with_device_and_dtype(
             }
         }
         2 => {
-            #[cfg(feature = "metal")]
+            #[cfg(target_os = "macos")]
             {
                 Device::new_metal(0).unwrap_or(Device::Cpu)
             }
-            #[cfg(not(feature = "metal"))]
+            #[cfg(not(target_os = "macos"))]
             {
                 Device::Cpu
             }
@@ -209,11 +209,11 @@ pub extern "C" fn candle_mlp_from_json_with_device(
             }
         }
         2 => {
-            #[cfg(feature = "metal")]
+            #[cfg(target_os = "macos")]
             {
                 Device::new_metal(0).unwrap_or(Device::Cpu)
             }
-            #[cfg(not(feature = "metal"))]
+            #[cfg(not(target_os = "macos"))]
             {
                 Device::Cpu
             }
@@ -253,11 +253,11 @@ pub extern "C" fn candle_mlp_from_json_with_device_and_dtype(
             }
         }
         2 => {
-            #[cfg(feature = "metal")]
+            #[cfg(target_os = "macos")]
             {
                 Device::new_metal(0).unwrap_or(Device::Cpu)
             }
-            #[cfg(not(feature = "metal"))]
+            #[cfg(not(target_os = "macos"))]
             {
                 Device::Cpu
             }
