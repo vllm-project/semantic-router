@@ -1159,22 +1159,7 @@ func (c *Compiler) buildDecisionPlugin(pluginType string, fields map[string]Valu
 		setPluginConfig(cfg)
 
 	case "tools":
-		cfg := config.ToolsPluginConfig{}
-		if v, ok := getBoolField(fields, "enabled"); ok {
-			cfg.Enabled = v
-		}
-		if v, ok := getStringField(fields, "mode"); ok {
-			cfg.Mode = v
-		}
-		if v, ok := getBoolField(fields, "semantic_selection"); ok {
-			cfg.SemanticSelection = &v
-		}
-		if values, ok := getStringArrayField(fields, "allow_tools"); ok {
-			cfg.AllowTools = values
-		}
-		if values, ok := getStringArrayField(fields, "block_tools"); ok {
-			cfg.BlockTools = values
-		}
+		cfg := c.compileToolsPlugin(fields)
 		setPluginConfig(cfg)
 
 	default:
@@ -1218,6 +1203,76 @@ func (c *Compiler) compileRAGPlugin(fields map[string]Value) config.RAGPluginCon
 		}
 	}
 	return cfg
+}
+
+func (c *Compiler) compileToolsPlugin(fields map[string]Value) config.ToolsPluginConfig {
+	cfg := config.ToolsPluginConfig{}
+	if v, ok := getBoolField(fields, "enabled"); ok {
+		cfg.Enabled = v
+	}
+	if v, ok := getStringField(fields, "mode"); ok {
+		cfg.Mode = v
+	}
+	if v, ok := getBoolField(fields, "semantic_selection"); ok {
+		cfg.SemanticSelection = &v
+	}
+	if values, ok := getStringArrayField(fields, "allow_tools"); ok {
+		cfg.AllowTools = values
+	}
+	if values, ok := getStringArrayField(fields, "block_tools"); ok {
+		cfg.BlockTools = values
+	}
+	if v, ok := getStringField(fields, "strategy"); ok {
+		cfg.Strategy = v
+	}
+	if raw, ok := fields["dynamic_retrieval"]; ok {
+		if obj, ok := raw.(ObjectValue); ok {
+			cfg.DynamicRetrieval = compileDynamicRetrievalConfig(obj.Fields)
+		}
+	}
+	return cfg
+}
+
+func compileDynamicRetrievalConfig(fields map[string]Value) *config.DynamicRetrievalConfig {
+	cfg := &config.DynamicRetrievalConfig{}
+	if v, ok := getBoolField(fields, "enabled"); ok {
+		cfg.Enabled = v
+	}
+	if v, ok := getStringField(fields, "strategy"); ok {
+		cfg.Strategy = v
+	}
+	if v, ok := getIntField(fields, "history_window"); ok {
+		cfg.HistoryWindow = v
+	}
+	if v, ok := getFloat64Field(fields, "min_history_confidence"); ok {
+		cfg.MinHistoryConfidence = v
+	}
+	if v, ok := getBoolField(fields, "fallback_on_low_confidence"); ok {
+		cfg.FallbackOnLowConfidence = v
+	}
+	if raw, ok := fields["weights"]; ok {
+		if obj, ok := raw.(ObjectValue); ok {
+			cfg.Weights = compileDynamicRetrievalWeights(obj.Fields)
+		}
+	}
+	return cfg
+}
+
+func compileDynamicRetrievalWeights(fields map[string]Value) *config.DynamicRetrievalWeights {
+	weights := &config.DynamicRetrievalWeights{}
+	if v, ok := getFloat64Field(fields, "semantic"); ok {
+		weights.Semantic = v
+	}
+	if v, ok := getFloat64Field(fields, "history"); ok {
+		weights.History = v
+	}
+	if v, ok := getFloat64Field(fields, "decision_prior"); ok {
+		weights.DecisionPrior = v
+	}
+	if v, ok := getFloat64Field(fields, "repetition_penalty"); ok {
+		weights.RepetitionPenalty = v
+	}
+	return weights
 }
 
 // compileComposerObj converts an ObjectValue representing a composer (RuleCombination)
