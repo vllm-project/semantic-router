@@ -9,10 +9,8 @@
 //! - Detecting jailbreaks and unsafe content
 //! - Managing model lifecycle
 
-use crate::ffi::types::ClassificationResult;
 use crate::model_architectures::generative::{Qwen3GuardModel, Qwen3MultiLoRAClassifier};
 use candle_core::Device;
-use serde_json::Value;
 use std::ffi::{CStr, CString};
 use std::os::raw::c_char;
 use std::ptr;

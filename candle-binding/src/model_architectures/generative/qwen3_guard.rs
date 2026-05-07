@@ -808,8 +808,8 @@ fn sample_topp(logits: &Tensor, temperature: f64, top_p: f64) -> UnifiedResult<u
 
     // Sample from distribution
     use rand::Rng;
-    let mut rng = rand::thread_rng();
-    let random_value: f32 = rng.gen();
+    let mut rng = rand::rng();
+    let random_value: f32 = rng.random();
 
     let mut cumulative = 0.0;
     for (idx, prob) in normalized_probs.iter() {
