@@ -87,7 +87,7 @@ DECISION_TREE session_routing {
 }
 ```
 
-## YAML Shape
+## Configuration
 
 The compiled config stores retention directives under the matched decision:
 
