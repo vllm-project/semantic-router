@@ -167,6 +167,57 @@ func TestRetrieverE2E_NilRegistryFallsBackWithSuffix(t *testing.T) {
 }
 
 func TestRetrieverE2E_ConversationTriggeredRouteAppliesToolsStrategy(t *testing.T) {
+	router := makeConversationTriggeredToolsRouter(t)
+	req := newConversationTriggeredToolsRequest()
+	ctx := &RequestContext{
+		Headers:   map[string]string{},
+		RequestID: "conversation-triggered-tools",
+	}
+
+	assertConversationTriggeredDecisionMatch(t, router, req, ctx)
+
+	userContent, nonUserMessages := extractUserAndNonUserContent(req)
+	resp := &ext_proc.ProcessingResponse{}
+	err := router.handleToolSelection(req, userContent, nonUserMessages, &resp, ctx)
+	if err != nil {
+		t.Fatalf("handleToolSelection returned unexpected error: %v", err)
+	}
+
+	if len(req.Tools) != 2 {
+		t.Fatalf("expected 2 tools, got %d", len(req.Tools))
+	}
+	if req.Tools[0].Function.Name != "search" {
+		t.Fatalf("expected first tool to be search, got %q", req.Tools[0].Function.Name)
+	}
+
+	strategyHeader := getHeaderValue(resp, "x-vsr-tools-strategy")
+	if strategyHeader != "custom" {
+		t.Fatalf("expected strategy header custom, got %q", strategyHeader)
+	}
+}
+
+func makeConversationTriggeredToolsRouter(t *testing.T) *OpenAIRouter {
+	t.Helper()
+
+	compiled := mustCompileConversationTriggeredToolsDSL(t)
+
+	reg := tools.NewRegistry()
+	reg.Register("custom", &stubRetriever{
+		strategyID: "custom",
+		results:    []tools.ToolSimilarity{sampleTool("search"), sampleTool("calculate")},
+		confidence: 0.95,
+	})
+
+	router := makeToolsRouter(t, reg)
+	router.Config.ConversationRules = compiled.ConversationRules
+	router.Config.Decisions = compiled.Decisions
+	router.Classifier = &classification.Classifier{Config: router.Config}
+	return router
+}
+
+func mustCompileConversationTriggeredToolsDSL(t *testing.T) *config.RouterConfig {
+	t.Helper()
+
 	compiled, errs := dsl.Compile(`
 SIGNAL conversation multi_turn_tool_flow {
   feature: {
@@ -196,19 +247,10 @@ ROUTE agentic_tools {
 	if len(errs) > 0 {
 		t.Fatalf("Compile errors: %v", errs)
 	}
+	return compiled
+}
 
-	reg := tools.NewRegistry()
-	reg.Register("custom", &stubRetriever{
-		strategyID: "custom",
-		results:    []tools.ToolSimilarity{sampleTool("search"), sampleTool("calculate")},
-		confidence: 0.95,
-	})
-
-	router := makeToolsRouter(t, reg)
-	router.Config.ConversationRules = compiled.ConversationRules
-	router.Config.Decisions = compiled.Decisions
-	router.Classifier = &classification.Classifier{Config: router.Config}
-
+func newConversationTriggeredToolsRequest() *openai.ChatCompletionNewParams {
 	req := &openai.ChatCompletionNewParams{
 		Messages: []openai.ChatCompletionMessageParamUnion{
 			openai.UserMessage("Find the deployment runbook."),
@@ -218,11 +260,16 @@ ROUTE agentic_tools {
 		},
 	}
 	req.ToolChoice.OfAuto.Value = "auto"
+	return req
+}
 
-	ctx := &RequestContext{
-		Headers:   map[string]string{},
-		RequestID: "conversation-triggered-tools",
-	}
+func assertConversationTriggeredDecisionMatch(
+	t *testing.T,
+	router *OpenAIRouter,
+	req *openai.ChatCompletionNewParams,
+	ctx *RequestContext,
+) {
+	t.Helper()
 
 	history := extractSignalConversationHistory(req)
 	signalInput := router.prepareSignalEvaluationInput(history)
@@ -257,25 +304,6 @@ ROUTE agentic_tools {
 	}
 	if !toolsCfg.DynamicRetrievalEnabled() {
 		t.Fatal("expected dynamic retrieval to remain attached to the selected decision")
-	}
-
-	userContent, nonUserMessages := extractUserAndNonUserContent(req)
-	resp := &ext_proc.ProcessingResponse{}
-	err = router.handleToolSelection(req, userContent, nonUserMessages, &resp, ctx)
-	if err != nil {
-		t.Fatalf("handleToolSelection returned unexpected error: %v", err)
-	}
-
-	if len(req.Tools) != 2 {
-		t.Fatalf("expected 2 tools, got %d", len(req.Tools))
-	}
-	if req.Tools[0].Function.Name != "search" {
-		t.Fatalf("expected first tool to be search, got %q", req.Tools[0].Function.Name)
-	}
-
-	strategyHeader := getHeaderValue(resp, "x-vsr-tools-strategy")
-	if strategyHeader != "custom" {
-		t.Fatalf("expected strategy header custom, got %q", strategyHeader)
 	}
 }
 
