@@ -7,7 +7,9 @@ import (
 	ext_proc "github.com/envoyproxy/go-control-plane/envoy/service/ext_proc/v3"
 	"github.com/openai/openai-go"
 
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/classification"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/dsl"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/tools"
 )
 
@@ -161,6 +163,119 @@ func TestRetrieverE2E_NilRegistryFallsBackWithSuffix(t *testing.T) {
 	strategyHeader := getHeaderValue(resp, "x-vsr-tools-strategy")
 	if strategyHeader != "embedding-fallback" {
 		t.Errorf("expected strategy header 'embedding-fallback', got %q", strategyHeader)
+	}
+}
+
+func TestRetrieverE2E_ConversationTriggeredRouteAppliesToolsStrategy(t *testing.T) {
+	compiled, errs := dsl.Compile(`
+SIGNAL conversation multi_turn_tool_flow {
+  feature: {
+    type: "count"
+    source: { type: "assistant_tool_cycle" }
+  }
+  predicate: { gte: 1 }
+}
+
+ROUTE agentic_tools {
+  PRIORITY 180
+  WHEN conversation("multi_turn_tool_flow")
+  MODEL "agent-model"
+  PLUGIN tools {
+    enabled: true
+    mode: "passthrough"
+    semantic_selection: true
+    strategy: "custom"
+    dynamic_retrieval: {
+      enabled: true
+      strategy: "hybrid_history"
+      history_window: 8
+    }
+  }
+}
+`)
+	if len(errs) > 0 {
+		t.Fatalf("Compile errors: %v", errs)
+	}
+
+	reg := tools.NewRegistry()
+	reg.Register("custom", &stubRetriever{
+		strategyID: "custom",
+		results:    []tools.ToolSimilarity{sampleTool("search"), sampleTool("calculate")},
+		confidence: 0.95,
+	})
+
+	router := makeToolsRouter(t, reg)
+	router.Config.ConversationRules = compiled.ConversationRules
+	router.Config.Decisions = compiled.Decisions
+	router.Classifier = &classification.Classifier{Config: router.Config}
+
+	req := &openai.ChatCompletionNewParams{
+		Messages: []openai.ChatCompletionMessageParamUnion{
+			openai.UserMessage("Find the deployment runbook."),
+			assistantToolCallMessage("search_docs"),
+			openai.ToolMessage("deployment runbook content", "call-search-docs"),
+			openai.UserMessage("Summarize the deployment steps."),
+		},
+	}
+	req.ToolChoice.OfAuto.Value = "auto"
+
+	ctx := &RequestContext{
+		Headers:   map[string]string{},
+		RequestID: "conversation-triggered-tools",
+	}
+
+	history := extractSignalConversationHistory(req)
+	signalInput := router.prepareSignalEvaluationInput(history)
+
+	signals, err := router.evaluateSignalsForDecision("auto", signalInput, history.nonUserMessages, ctx)
+	if err != nil {
+		t.Fatalf("evaluateSignalsForDecision returned unexpected error: %v", err)
+	}
+	if len(signals.MatchedConversationRules) != 1 || signals.MatchedConversationRules[0] != "multi_turn_tool_flow" {
+		t.Fatalf("matched conversation rules = %v, want [multi_turn_tool_flow]", signals.MatchedConversationRules)
+	}
+
+	result, fallbackModel := router.runDecisionEngine("auto", ctx, signals)
+	if fallbackModel != "" {
+		t.Fatalf("expected no fallback model, got %q", fallbackModel)
+	}
+	if result == nil || result.Decision == nil {
+		t.Fatal("expected a matched decision")
+	}
+	if result.Decision.Name != "agentic_tools" {
+		t.Fatalf("matched decision = %q, want agentic_tools", result.Decision.Name)
+	}
+
+	router.applyDecisionResultToContext(result, ctx)
+
+	toolsCfg := ctx.VSRSelectedDecision.GetToolsConfig()
+	if toolsCfg == nil {
+		t.Fatal("selected decision missing tools config")
+	}
+	if toolsCfg.EffectiveStrategy() != "custom" {
+		t.Fatalf("tools strategy = %q, want custom", toolsCfg.EffectiveStrategy())
+	}
+	if !toolsCfg.DynamicRetrievalEnabled() {
+		t.Fatal("expected dynamic retrieval to remain attached to the selected decision")
+	}
+
+	userContent, nonUserMessages := extractUserAndNonUserContent(req)
+	resp := &ext_proc.ProcessingResponse{}
+	err = router.handleToolSelection(req, userContent, nonUserMessages, &resp, ctx)
+	if err != nil {
+		t.Fatalf("handleToolSelection returned unexpected error: %v", err)
+	}
+
+	if len(req.Tools) != 2 {
+		t.Fatalf("expected 2 tools, got %d", len(req.Tools))
+	}
+	if req.Tools[0].Function.Name != "search" {
+		t.Fatalf("expected first tool to be search, got %q", req.Tools[0].Function.Name)
+	}
+
+	strategyHeader := getHeaderValue(resp, "x-vsr-tools-strategy")
+	if strategyHeader != "custom" {
+		t.Fatalf("expected strategy header custom, got %q", strategyHeader)
 	}
 }
 
