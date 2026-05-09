@@ -51,7 +51,7 @@ func TestValidateEmbeddingRuleModalities_RejectsAudioWithComingLaterMessage(t *t
 		t.Fatal("expected error for audio rule (FFI not yet wired), got nil")
 	}
 	msg := err.Error()
-	for _, want := range []string{"rig_walkie_talkie_audio", "MultiModalEncodeAudioFromBase64", "planned"} {
+	for _, want := range []string{"rig_walkie_talkie_audio", "audio FFI", "planned"} {
 		if !strings.Contains(msg, want) {
 			t.Errorf("error should contain %q, got: %s", want, msg)
 		}
@@ -128,6 +128,38 @@ func TestValidateEmbeddingContracts_RoutesThroughTopLevelConfig(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), "img_rule") {
 		t.Errorf("error should name the offending rule, got: %s", err.Error())
+	}
+}
+
+// TestValidateEmbeddingContracts_ExportedWrapperMatchesInternal confirms the
+// exported wrapper added for the K8s reconcile path forwards to the same
+// private function the file-config path uses. Branch coverage is owned by
+// the TestValidateEmbeddingRuleModalities_* and
+// TestValidateEmbeddingContracts_* tests above; this single case exists only
+// to fail loudly if the wrapper ever drifts from the private function.
+func TestValidateEmbeddingContracts_ExportedWrapperMatchesInternal(t *testing.T) {
+	cfg := &RouterConfig{
+		IntelligentRouting: IntelligentRouting{
+			Signals: Signals{
+				EmbeddingRules: []EmbeddingRule{
+					{Name: "img_rule", Candidates: []string{"x"}, QueryModality: QueryModalityImage},
+				},
+			},
+		},
+		InlineModels: InlineModels{
+			EmbeddingModels: EmbeddingModels{
+				EmbeddingConfig: HNSWConfig{ModelType: "qwen3"},
+			},
+		},
+	}
+	exportedErr := ValidateEmbeddingContracts(cfg)
+	internalErr := validateEmbeddingContracts(cfg)
+	if (exportedErr == nil) != (internalErr == nil) {
+		t.Fatalf("exported wrapper diverged from internal: exported=%v internal=%v", exportedErr, internalErr)
+	}
+	if exportedErr != nil && exportedErr.Error() != internalErr.Error() {
+		t.Errorf("exported wrapper error text drifted from internal:\n  exported: %s\n  internal: %s",
+			exportedErr.Error(), internalErr.Error())
 	}
 }
 
