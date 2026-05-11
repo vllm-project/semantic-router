@@ -15,39 +15,22 @@ import (
 )
 
 const (
-	namespaceSemanticRouter = "vllm-semantic-router-system"
-	namespaceEnvoyGateway   = "envoy-gateway-system"
-	namespaceAIGateway      = "envoy-ai-gateway-system"
-
-	releaseSemanticRouter = "semantic-router"
-	releaseEnvoyGateway   = "eg"
-	releaseAIGatewayCRD   = "aieg-crd"
-	releaseAIGateway      = "aieg"
-
 	deploymentSemanticRouter = "semantic-router"
 	deploymentEnvoyGateway   = "envoy-gateway"
 	deploymentAIGateway      = "ai-gateway-controller"
 
-	chartPathSemanticRouter = "deploy/helm/semantic-router"
-	chartEnvoyGateway       = "oci://docker.io/envoyproxy/gateway-helm"
-	chartAIGatewayCRD       = "oci://docker.io/envoyproxy/ai-gateway-crds-helm"
-	chartAIGateway          = "oci://docker.io/envoyproxy/ai-gateway-helm"
-	envoyGatewayValuesURL   = "https://raw.githubusercontent.com/envoyproxy/ai-gateway/main/manifests/envoy-gateway-values.yaml"
-
 	imageRepository = "ghcr.io/vllm-project/semantic-router/extproc"
 	imagePullPolicy = "Never"
 
-	timeoutSemanticRouterInstall = "30m"
-	timeoutHelmInstall           = "10m"
-	timeoutServiceRetry          = 10 * time.Minute
-	intervalServiceRetry         = 5 * time.Second
-	timeoutDeploymentWait        = 30 * time.Minute
+	timeoutServiceRetry   = 10 * time.Minute
+	intervalServiceRetry  = 5 * time.Second
+	timeoutDeploymentWait = 30 * time.Minute
 )
 
 var defaultVerifyDeployments = []helpers.DeploymentRef{
-	{Namespace: namespaceSemanticRouter, Name: deploymentSemanticRouter},
-	{Namespace: namespaceEnvoyGateway, Name: deploymentEnvoyGateway},
-	{Namespace: namespaceAIGateway, Name: deploymentAIGateway},
+	{Namespace: helm.SemanticRouterRelease.Namespace, Name: deploymentSemanticRouter},
+	{Namespace: helm.EnvoyGatewayRelease.Namespace, Name: deploymentEnvoyGateway},
+	{Namespace: helm.AIGatewayRelease.Namespace, Name: deploymentAIGateway},
 }
 
 // Config describes a reusable semantic-router + Envoy Gateway + AI Gateway test stack.
@@ -83,7 +66,7 @@ func New(config Config) *Stack {
 func DefaultServiceConfig() framework.ServiceConfig {
 	return framework.ServiceConfig{
 		LabelSelector: "gateway.envoyproxy.io/owning-gateway-namespace=default,gateway.envoyproxy.io/owning-gateway-name=semantic-router",
-		Namespace:     namespaceEnvoyGateway,
+		Namespace:     helm.EnvoyGatewayRelease.Namespace,
 		ServicePort:   "80",
 	}
 }
@@ -131,53 +114,34 @@ func (s *Stack) ApplyPrerequisites(ctx context.Context, opts *framework.SetupOpt
 // DeployCore installs semantic-router, Envoy Gateway, and Envoy AI Gateway.
 func (s *Stack) DeployCore(ctx context.Context, opts *framework.SetupOptions) error {
 	deployer := helm.NewDeployer(opts.KubeConfig, opts.Verbose)
+	envoyGatewayRelease := helm.EnvoyGatewayRelease.Clone()
+	aiGatewayCRDRelease := helm.AIGatewayCRDRelease.Clone()
+	aiGatewayRelease := helm.AIGatewayRelease.Clone()
 
 	s.log(opts.Verbose, "Installing semantic-router")
 	if err := deployer.Install(ctx, s.semanticRouterInstallOptions(opts)); err != nil {
 		return fmt.Errorf("install semantic-router: %w", err)
 	}
-	if err := deployer.WaitForDeployment(ctx, namespaceSemanticRouter, deploymentSemanticRouter, timeoutDeploymentWait); err != nil {
+	if err := deployer.WaitForDeployment(ctx, helm.SemanticRouterRelease.Namespace, deploymentSemanticRouter, timeoutDeploymentWait); err != nil {
 		return fmt.Errorf("wait for semantic-router: %w", err)
 	}
 
 	s.log(opts.Verbose, "Installing Envoy Gateway")
-	if err := deployer.Install(ctx, helm.InstallOptions{
-		ReleaseName: releaseEnvoyGateway,
-		Chart:       chartEnvoyGateway,
-		Namespace:   namespaceEnvoyGateway,
-		Version:     "v1.6.0",
-		ValuesFiles: []string{envoyGatewayValuesURL},
-		Wait:        true,
-		Timeout:     timeoutHelmInstall,
-	}); err != nil {
+	if err := deployer.Install(ctx, envoyGatewayRelease); err != nil {
 		return fmt.Errorf("install Envoy Gateway: %w", err)
 	}
-	if err := deployer.WaitForDeployment(ctx, namespaceEnvoyGateway, deploymentEnvoyGateway, timeoutDeploymentWait); err != nil {
+	if err := deployer.WaitForDeployment(ctx, helm.EnvoyGatewayRelease.Namespace, deploymentEnvoyGateway, timeoutDeploymentWait); err != nil {
 		return fmt.Errorf("wait for Envoy Gateway: %w", err)
 	}
 
 	s.log(opts.Verbose, "Installing Envoy AI Gateway")
-	if err := deployer.Install(ctx, helm.InstallOptions{
-		ReleaseName: releaseAIGatewayCRD,
-		Chart:       chartAIGatewayCRD,
-		Namespace:   namespaceAIGateway,
-		Version:     "v0.4.0",
-		Wait:        true,
-		Timeout:     timeoutHelmInstall,
-	}); err != nil {
+	if err := deployer.Install(ctx, aiGatewayCRDRelease); err != nil {
 		return fmt.Errorf("install Envoy AI Gateway CRDs: %w", err)
 	}
-	if err := deployer.Install(ctx, helm.InstallOptions{
-		ReleaseName: releaseAIGateway,
-		Chart:       chartAIGateway,
-		Namespace:   namespaceAIGateway,
-		Version:     "v0.4.0",
-		Wait:        true,
-		Timeout:     timeoutHelmInstall,
-	}); err != nil {
+	if err := deployer.Install(ctx, aiGatewayRelease); err != nil {
 		return fmt.Errorf("install Envoy AI Gateway: %w", err)
 	}
-	if err := deployer.WaitForDeployment(ctx, namespaceAIGateway, deploymentAIGateway, timeoutDeploymentWait); err != nil {
+	if err := deployer.WaitForDeployment(ctx, helm.AIGatewayRelease.Namespace, deploymentAIGateway, timeoutDeploymentWait); err != nil {
 		return fmt.Errorf("wait for Envoy AI Gateway: %w", err)
 	}
 
@@ -241,23 +205,21 @@ func (s *Stack) CleanupPrerequisites(ctx context.Context, opts *framework.Teardo
 // UninstallCore removes the shared Helm releases with best-effort cleanup semantics.
 func (s *Stack) UninstallCore(ctx context.Context, opts *framework.TeardownOptions) {
 	deployer := helm.NewDeployer(opts.KubeConfig, opts.Verbose)
-	bestEffort := []struct {
-		release   string
-		namespace string
-	}{
-		{release: releaseAIGatewayCRD, namespace: namespaceAIGateway},
-		{release: releaseAIGateway, namespace: namespaceAIGateway},
-		{release: releaseEnvoyGateway, namespace: namespaceEnvoyGateway},
-		{release: releaseSemanticRouter, namespace: namespaceSemanticRouter},
+	bestEffort := []helm.InstallOptions{
+		helm.AIGatewayCRDRelease,
+		helm.AIGatewayRelease,
+		helm.EnvoyGatewayRelease,
+		helm.SemanticRouterRelease,
 	}
 	for _, release := range bestEffort {
-		if err := deployer.Uninstall(ctx, release.release, release.namespace); err != nil {
-			s.log(opts.Verbose, "Warning: failed to uninstall %s/%s: %v", release.namespace, release.release, err)
+		if err := deployer.Uninstall(ctx, release.ReleaseName, release.Namespace); err != nil {
+			s.log(opts.Verbose, "Warning: failed to uninstall %s/%s: %v", release.Namespace, release.ReleaseName, err)
 		}
 	}
 }
 
 func (s *Stack) semanticRouterInstallOptions(opts *framework.SetupOptions) helm.InstallOptions {
+	installOptions := helm.SemanticRouterRelease.Clone()
 	setValues := map[string]string{
 		"image.repository": imageRepository,
 		"image.tag":        opts.ImageTag,
@@ -268,19 +230,13 @@ func (s *Stack) semanticRouterInstallOptions(opts *framework.SetupOptions) helm.
 	}
 
 	valuesFiles := []string{s.config.SemanticRouterValuesFile}
-	if extraValuesFile, ok := opts.ValuesFiles[releaseSemanticRouter]; ok && extraValuesFile != "" {
+	if extraValuesFile, ok := opts.ValuesFiles[helm.SemanticRouterRelease.ReleaseName]; ok && extraValuesFile != "" {
 		valuesFiles = append(valuesFiles, extraValuesFile)
 	}
 
-	return helm.InstallOptions{
-		ReleaseName: releaseSemanticRouter,
-		Chart:       chartPathSemanticRouter,
-		Namespace:   namespaceSemanticRouter,
-		ValuesFiles: valuesFiles,
-		Set:         setValues,
-		Wait:        true,
-		Timeout:     timeoutSemanticRouterInstall,
-	}
+	installOptions.ValuesFiles = valuesFiles
+	installOptions.Set = setValues
+	return installOptions
 }
 
 func (s *Stack) waitForService(

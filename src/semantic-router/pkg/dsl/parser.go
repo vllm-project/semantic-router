@@ -412,6 +412,8 @@ func rawToRoute(r *rawRouteDecl) *RouteDecl {
 			route.Description = unquote(*item.Description)
 		case item.CandidateFor != nil:
 			route.CandidateIterations = append(route.CandidateIterations, rawToCandidateIteration(item.CandidateFor))
+		case item.Emit != nil:
+			route.Emits = append(route.Emits, rawToEmitDecl(item.Emit))
 		}
 	}
 

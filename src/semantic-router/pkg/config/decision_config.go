@@ -11,6 +11,32 @@ type Decision struct {
 	Algorithm           *AlgorithmConfig           `yaml:"algorithm,omitempty"`
 	Plugins             []DecisionPlugin           `yaml:"plugins,omitempty"`
 	CandidateIterations []CandidateIterationConfig `yaml:"candidateIterations,omitempty"`
+	// Emits carries declarative side-effect directives produced by EMIT blocks
+	// inside the matching decision branch. The slice preserves DSL declaration
+	// order so round-trip decompilation stays stable.
+	Emits []EmitDirective `yaml:"emits,omitempty" json:"emits,omitempty"`
+}
+
+// EmitDirective is a tagged-union wrapper for declarative directives emitted
+// by a decision branch. The initial supported Kind is "retention".
+type EmitDirective struct {
+	Kind      string              `yaml:"kind" json:"kind"`
+	Retention *RetentionDirective `yaml:"retention,omitempty" json:"retention,omitempty"`
+}
+
+// RetentionDirective expresses keep / drop / prefer-retain semantics over the
+// response/cache surface. All fields are tri-state pointers so we can
+// distinguish "unset" from an explicit zero value.
+//
+// MVP runtime consumes only Drop. The remaining fields are contract-only and
+// observed via log + trace attributes; their runtime consumers will land in
+// follow-up PRs (#1742 turn telemetry, #1749 model_switch_gate, prefix cache
+// eviction hints).
+type RetentionDirective struct {
+	Drop                  *bool `yaml:"drop,omitempty" json:"drop,omitempty"`
+	TTLTurns              *int  `yaml:"ttl_turns,omitempty" json:"ttl_turns,omitempty"`
+	KeepCurrentModel      *bool `yaml:"keep_current_model,omitempty" json:"keep_current_model,omitempty"`
+	PreferPrefixRetention *bool `yaml:"prefer_prefix_retention,omitempty" json:"prefer_prefix_retention,omitempty"`
 }
 
 // CandidateIterationConfig is the canonical, bounded representation of a DSL

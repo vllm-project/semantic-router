@@ -532,6 +532,8 @@ func (v *Validator) checkRouteConstraints(r *RouteDecl) {
 	for _, iter := range r.CandidateIterations {
 		v.checkCandidateIterationConstraints(r, iter, context)
 	}
+
+	v.checkRouteEmits(r)
 }
 
 func (v *Validator) checkAlgorithmConstraints(algo *AlgoSpec, parentContext string) {
