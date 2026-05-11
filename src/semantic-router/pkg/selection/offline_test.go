@@ -26,6 +26,91 @@ import (
 
 func boolPtr(v bool) *bool { return &v }
 
+func offlineWinRecord(turnIndex int, selectedModel, opponentModel string, timestamp time.Time) OfflineDatasetRecord {
+	return OfflineDatasetRecord{
+		SessionID:       "s1",
+		TurnIndex:       turnIndex,
+		SelectedModel:   selectedModel,
+		CandidateModels: []string{"gpt-4o", "gpt-4o-mini"},
+		SelectionMethod: "rl_driven",
+		Outcome: OfflineOutcome{
+			Won:           boolPtr(true),
+			OpponentModel: opponentModel,
+		},
+		Timestamp: timestamp,
+	}
+}
+
+func gpt4oPolicyVersion(id, parentID, source string, alpha, beta float64) *PolicyVersion {
+	return &PolicyVersion{
+		ID:        id,
+		ParentID:  parentID,
+		CreatedAt: time.Now(),
+		Source:    source,
+		Status:    PolicyStatusCandidate,
+		Weights: PolicyWeights{
+			Global: map[string]*ModelPreference{
+				"gpt-4o": {Model: "gpt-4o", Distribution: BetaDistribution{Alpha: alpha, Beta: beta}},
+			},
+		},
+	}
+}
+
+func emptyPolicyVersion(id, source string) *PolicyVersion {
+	return &PolicyVersion{
+		ID:      id,
+		Source:  source,
+		Status:  PolicyStatusCandidate,
+		Weights: PolicyWeights{Global: map[string]*ModelPreference{}},
+	}
+}
+
+func savePolicyVersion(t *testing.T, store *PolicyVersionStore, version *PolicyVersion) {
+	t.Helper()
+	if err := store.Save(version); err != nil {
+		t.Fatalf("save %s: %v", version.ID, err)
+	}
+}
+
+func activatePolicyVersion(t *testing.T, store *PolicyVersionStore, versionID string) {
+	t.Helper()
+	if err := store.Activate(versionID); err != nil {
+		t.Fatalf("activate %s: %v", versionID, err)
+	}
+}
+
+func shadowPolicyVersion(t *testing.T, store *PolicyVersionStore, versionID string) {
+	t.Helper()
+	if err := store.Shadow(versionID); err != nil {
+		t.Fatalf("shadow %s: %v", versionID, err)
+	}
+}
+
+func requireManifestVersions(t *testing.T, store *PolicyVersionStore, activeVersion, shadowVersion string) {
+	t.Helper()
+	manifest, err := store.LoadManifest()
+	if err != nil {
+		t.Fatalf("load manifest: %v", err)
+	}
+	if manifest.ActiveVersion != activeVersion {
+		t.Errorf("expected active version %s, got %s", activeVersion, manifest.ActiveVersion)
+	}
+	if manifest.ShadowVersion != shadowVersion {
+		t.Errorf("expected shadow version %s, got %s", shadowVersion, manifest.ShadowVersion)
+	}
+}
+
+func requirePolicyStatus(t *testing.T, store *PolicyVersionStore, versionID string, status PolicyStatus) {
+	t.Helper()
+	version, err := store.Load(versionID)
+	if err != nil {
+		t.Fatalf("load %s: %v", versionID, err)
+	}
+	if version.Status != status {
+		t.Errorf("expected %s status %s, got %s", versionID, status, version.Status)
+	}
+}
+
 func TestOfflineUpdater_EmptyDataset(t *testing.T) {
 	updater := NewOfflineUpdater(nil)
 	_, err := updater.Update(context.Background(), nil, nil)
@@ -49,66 +134,11 @@ func TestOfflineUpdater_BasicWinLoss(t *testing.T) {
 		WindowEnd:    now,
 		SessionCount: 1,
 		Records: []OfflineDatasetRecord{
-			{
-				SessionID:       "s1",
-				TurnIndex:       0,
-				SelectedModel:   "gpt-4o",
-				CandidateModels: []string{"gpt-4o", "gpt-4o-mini"},
-				SelectionMethod: "rl_driven",
-				Outcome: OfflineOutcome{
-					Won:           boolPtr(true),
-					OpponentModel: "gpt-4o-mini",
-				},
-				Timestamp: now.Add(-23 * time.Hour),
-			},
-			{
-				SessionID:       "s1",
-				TurnIndex:       1,
-				SelectedModel:   "gpt-4o",
-				CandidateModels: []string{"gpt-4o", "gpt-4o-mini"},
-				SelectionMethod: "rl_driven",
-				Outcome: OfflineOutcome{
-					Won:           boolPtr(true),
-					OpponentModel: "gpt-4o-mini",
-				},
-				Timestamp: now.Add(-22 * time.Hour),
-			},
-			{
-				SessionID:       "s1",
-				TurnIndex:       2,
-				SelectedModel:   "gpt-4o-mini",
-				CandidateModels: []string{"gpt-4o", "gpt-4o-mini"},
-				SelectionMethod: "rl_driven",
-				Outcome: OfflineOutcome{
-					Won:           boolPtr(true),
-					OpponentModel: "gpt-4o",
-				},
-				Timestamp: now.Add(-21 * time.Hour),
-			},
-			{
-				SessionID:       "s1",
-				TurnIndex:       3,
-				SelectedModel:   "gpt-4o-mini",
-				CandidateModels: []string{"gpt-4o", "gpt-4o-mini"},
-				SelectionMethod: "rl_driven",
-				Outcome: OfflineOutcome{
-					Won:           boolPtr(true),
-					OpponentModel: "gpt-4o",
-				},
-				Timestamp: now.Add(-20 * time.Hour),
-			},
-			{
-				SessionID:       "s1",
-				TurnIndex:       4,
-				SelectedModel:   "gpt-4o-mini",
-				CandidateModels: []string{"gpt-4o", "gpt-4o-mini"},
-				SelectionMethod: "rl_driven",
-				Outcome: OfflineOutcome{
-					Won:           boolPtr(true),
-					OpponentModel: "gpt-4o",
-				},
-				Timestamp: now.Add(-19 * time.Hour),
-			},
+			offlineWinRecord(0, "gpt-4o", "gpt-4o-mini", now.Add(-23*time.Hour)),
+			offlineWinRecord(1, "gpt-4o", "gpt-4o-mini", now.Add(-22*time.Hour)),
+			offlineWinRecord(2, "gpt-4o-mini", "gpt-4o", now.Add(-21*time.Hour)),
+			offlineWinRecord(3, "gpt-4o-mini", "gpt-4o", now.Add(-20*time.Hour)),
+			offlineWinRecord(4, "gpt-4o-mini", "gpt-4o", now.Add(-19*time.Hour)),
 		},
 	}
 
@@ -389,21 +419,9 @@ func TestPolicyVersionStore_SaveLoadActivate(t *testing.T) {
 		t.Fatalf("failed to create store: %v", err)
 	}
 
-	v1 := &PolicyVersion{
-		ID:        "v1",
-		CreatedAt: time.Now(),
-		Source:    "manual",
-		Status:    PolicyStatusCandidate,
-		Weights: PolicyWeights{
-			Global: map[string]*ModelPreference{
-				"gpt-4o": {Model: "gpt-4o", Distribution: BetaDistribution{Alpha: 5, Beta: 3}},
-			},
-		},
-	}
+	v1 := gpt4oPolicyVersion("v1", "", "manual", 5, 3)
 
-	if err := store.Save(v1); err != nil {
-		t.Fatalf("save v1: %v", err)
-	}
+	savePolicyVersion(t, store, v1)
 
 	loaded, err := store.Load("v1")
 	if err != nil {
@@ -417,72 +435,21 @@ func TestPolicyVersionStore_SaveLoadActivate(t *testing.T) {
 	}
 
 	// Activate v1
-	if err := store.Activate("v1"); err != nil {
-		t.Fatalf("activate v1: %v", err)
-	}
-
-	manifest, err := store.LoadManifest()
-	if err != nil {
-		t.Fatalf("load manifest: %v", err)
-	}
-	if manifest.ActiveVersion != "v1" {
-		t.Errorf("expected active version v1, got %s", manifest.ActiveVersion)
-	}
+	activatePolicyVersion(t, store, "v1")
+	requireManifestVersions(t, store, "v1", "")
 
 	// Save v2 and shadow it
-	v2 := &PolicyVersion{
-		ID:       "v2",
-		ParentID: "v1",
-		Source:   "offline_batch",
-		Status:   PolicyStatusCandidate,
-		Weights: PolicyWeights{
-			Global: map[string]*ModelPreference{
-				"gpt-4o": {Model: "gpt-4o", Distribution: BetaDistribution{Alpha: 8, Beta: 4}},
-			},
-		},
-	}
-	if err := store.Save(v2); err != nil {
-		t.Fatalf("save v2: %v", err)
-	}
-	if err := store.Shadow("v2"); err != nil {
-		t.Fatalf("shadow v2: %v", err)
-	}
-
-	manifest, err = store.LoadManifest()
-	if err != nil {
-		t.Fatalf("load manifest after shadow: %v", err)
-	}
-	if manifest.ShadowVersion != "v2" {
-		t.Errorf("expected shadow version v2, got %s", manifest.ShadowVersion)
-	}
-	if manifest.ActiveVersion != "v1" {
-		t.Errorf("expected active still v1, got %s", manifest.ActiveVersion)
-	}
+	v2 := gpt4oPolicyVersion("v2", "v1", "offline_batch", 8, 4)
+	savePolicyVersion(t, store, v2)
+	shadowPolicyVersion(t, store, "v2")
+	requireManifestVersions(t, store, "v1", "v2")
 
 	// Promote v2 to active (v1 gets retired)
-	if err := store.Activate("v2"); err != nil {
-		t.Fatalf("activate v2: %v", err)
-	}
-
-	manifest, err = store.LoadManifest()
-	if err != nil {
-		t.Fatalf("load manifest after promote: %v", err)
-	}
-	if manifest.ActiveVersion != "v2" {
-		t.Errorf("expected active version v2, got %s", manifest.ActiveVersion)
-	}
-	if manifest.ShadowVersion != "" {
-		t.Errorf("expected empty shadow after promote, got %s", manifest.ShadowVersion)
-	}
+	activatePolicyVersion(t, store, "v2")
+	requireManifestVersions(t, store, "v2", "")
 
 	// v1 should be retired
-	v1Loaded, err := store.Load("v1")
-	if err != nil {
-		t.Fatalf("load v1 after retire: %v", err)
-	}
-	if v1Loaded.Status != PolicyStatusRetired {
-		t.Errorf("expected v1 retired, got %s", v1Loaded.Status)
-	}
+	requirePolicyStatus(t, store, "v1", PolicyStatusRetired)
 }
 
 func TestPolicyVersionStore_Revert(t *testing.T) {
@@ -497,10 +464,8 @@ func TestPolicyVersionStore_Revert(t *testing.T) {
 		t.Fatalf("failed to create store: %v", err)
 	}
 
-	v1 := &PolicyVersion{ID: "v1", Source: "manual", Status: PolicyStatusCandidate,
-		Weights: PolicyWeights{Global: map[string]*ModelPreference{}}}
-	v2 := &PolicyVersion{ID: "v2", Source: "offline_batch", Status: PolicyStatusCandidate,
-		Weights: PolicyWeights{Global: map[string]*ModelPreference{}}}
+	v1 := emptyPolicyVersion("v1", "manual")
+	v2 := emptyPolicyVersion("v2", "offline_batch")
 
 	_ = store.Save(v1)
 	_ = store.Save(v2)

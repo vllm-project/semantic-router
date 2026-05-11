@@ -186,48 +186,33 @@ func (u *OfflineUpdater) applyOutcome(scope map[string]*betaAccumulator, model s
 	acc.count++
 
 	if outcome.Won != nil {
-		if *outcome.Won {
-			if outcome.Tie {
-				acc.alpha += 0.5 * weight
-				acc.beta += 0.5 * weight
-			} else {
-				acc.alpha += weight
-			}
-		} else {
-			if outcome.Tie {
-				acc.alpha += 0.5 * weight
-				acc.beta += 0.5 * weight
-			} else {
-				acc.beta += weight
-			}
-		}
+		applyWinLoss(acc, *outcome.Won, outcome.Tie, weight)
 	}
 
 	// Apply opponent's inverse outcome.
 	if outcome.OpponentModel != "" && outcome.Won != nil {
 		opp := u.getOrCreate(scope, outcome.OpponentModel)
 		opp.count++
-		if *outcome.Won {
-			if outcome.Tie {
-				opp.alpha += 0.5 * weight
-				opp.beta += 0.5 * weight
-			} else {
-				opp.beta += weight
-			}
-		} else {
-			if outcome.Tie {
-				opp.alpha += 0.5 * weight
-				opp.beta += 0.5 * weight
-			} else {
-				opp.alpha += weight
-			}
-		}
+		applyWinLoss(opp, !*outcome.Won, outcome.Tie, weight)
 	}
 
 	// Implicit outcome from response status.
 	if outcome.ResponseStatus >= 500 {
 		acc.beta += weight * 0.5
 	}
+}
+
+func applyWinLoss(acc *betaAccumulator, won, tie bool, weight float64) {
+	if tie {
+		acc.alpha += 0.5 * weight
+		acc.beta += 0.5 * weight
+		return
+	}
+	if won {
+		acc.alpha += weight
+		return
+	}
+	acc.beta += weight
 }
 
 func (u *OfflineUpdater) finalize(accs map[string]*betaAccumulator, parent map[string]*ModelPreference) map[string]*ModelPreference {
@@ -264,11 +249,9 @@ func (u *OfflineUpdater) finalize(accs map[string]*betaAccumulator, parent map[s
 	}
 
 	// Carry forward parent models that had no new observations.
-	if parent != nil {
-		for model, p := range parent {
-			if _, seen := result[model]; !seen {
-				result[model] = p
-			}
+	for model, p := range parent {
+		if _, seen := result[model]; !seen {
+			result[model] = p
 		}
 	}
 
@@ -288,11 +271,9 @@ func (u *OfflineUpdater) finalizeScoped(scoped map[string]map[string]*betaAccumu
 		result[scope] = u.finalize(accs, parentScope)
 	}
 	// Carry forward parent scopes with no new data.
-	if parent != nil {
-		for scope, prefs := range parent {
-			if _, seen := result[scope]; !seen {
-				result[scope] = prefs
-			}
+	for scope, prefs := range parent {
+		if _, seen := result[scope]; !seen {
+			result[scope] = prefs
 		}
 	}
 	return result

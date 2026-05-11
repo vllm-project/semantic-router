@@ -216,8 +216,8 @@ func (s *PolicyVersionStore) Activate(versionID string) error {
 
 	// Retire the current active version
 	if manifest.ActiveVersion != "" && manifest.ActiveVersion != versionID {
-		prev, err := s.Load(manifest.ActiveVersion)
-		if err == nil {
+		prev, loadErr := s.Load(manifest.ActiveVersion)
+		if loadErr == nil {
 			prev.Status = PolicyStatusRetired
 			if saveErr := s.Save(prev); saveErr != nil {
 				logging.Warnf("[PolicyVersionStore] Failed to retire previous version %s: %v", prev.ID, saveErr)
