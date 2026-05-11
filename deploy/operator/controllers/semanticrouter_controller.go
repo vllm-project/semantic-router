@@ -1034,9 +1034,13 @@ func (r *SemanticRouterReconciler) generateVolumes(sr *vllmv1alpha1.SemanticRout
 
 func (r *SemanticRouterReconciler) generateVolumeMounts(sr *vllmv1alpha1.SemanticRouter) []corev1.VolumeMount {
 	mounts := []corev1.VolumeMount{
+		// Mount only config.yaml into the image's /app/config tree. A directory mount of the
+		// whole ConfigMap at /app/config would hide bundled knowledge_bases/** and other
+		// static assets shipped in the container (see runtime_config_load_failed for KB labels).
 		{
 			Name:      "config-volume",
-			MountPath: "/app/config",
+			MountPath: "/app/config/config.yaml",
+			SubPath:   "config.yaml",
 			ReadOnly:  true,
 		},
 		// Mount config.yaml directly to /app/config.yaml for supervisord scripts

@@ -623,6 +623,20 @@ jobs:
         run: |
           kubectl create namespace semantic-router-test || true
 
+      - name: Create Hugging Face token secret (optional, for embedding model download)
+        env:
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}
+        run: |
+          if [ -n "$HF_TOKEN" ]; then
+            kubectl create secret generic semantic-router-hf-token \
+              --namespace=semantic-router-test \
+              --from-literal=token="$HF_TOKEN" \
+              --dry-run=client -o yaml | kubectl apply -f -
+            echo "HF_TOKEN secret applied; mmBERT and other registry models can be pulled during startup."
+          else
+            echo "::warning::Repository secret HF_TOKEN is not set. Embeddings that need Hugging Face (e.g. mom-embedding-ultra) may be skipped and the router can fail to start. Add a repo Actions secret named HF_TOKEN to fix this in CI."
+          fi
+
       - name: Create test SemanticRouter CR
         run: |
           # Generate base CR configuration
@@ -883,6 +897,13 @@ jobs:
               periodSeconds: 10
               timeoutSeconds: 5
               failureThreshold: 60
+            env:
+              - name: HF_TOKEN
+                valueFrom:
+                  secretKeyRef:
+                    name: semantic-router-hf-token
+                    key: token
+                    optional: true
             config:
               embedding_models:
                 mmbert_model_path: "models/mom-embedding-ultra"
