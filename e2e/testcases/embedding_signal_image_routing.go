@@ -3,6 +3,7 @@ package testcases
 import (
 	"bytes"
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -38,16 +39,17 @@ func init() {
 }
 
 // EmbeddingSignalImageTestCase represents a test case for image-modality
-// embedding signal routing. The optional ImageURL field carries a base64
-// data URI that will be embedded into the chat completion content array as
-// an image_url part; when empty, the request sends only text and verifies
-// the image rule does NOT fire. The SignalName field doubles as the
-// expected embedding rule name that should appear in the
+// embedding signal routing. The optional ImageFile field carries a path to
+// an image file (relative to repo root) that will be read from disk,
+// base64-encoded, and embedded into the chat completion content array as
+// an image_url data URI part; when empty, the request sends only text and
+// verifies the image rule does NOT fire. The SignalName field doubles as
+// the expected embedding rule name that should appear in the
 // x-vsr-matched-embeddings response header when ExpectedMatch is true.
 type EmbeddingSignalImageTestCase struct {
 	Description      string `json:"description"`
 	Query            string `json:"query"`
-	ImageURL         string `json:"image_url,omitempty"`
+	ImageFile        string `json:"image_file,omitempty"`
 	SignalName       string `json:"signal_name"`
 	ExpectedMatch    bool   `json:"expected_match"`
 	ExpectedDecision string `json:"expected_decision"`
@@ -150,23 +152,35 @@ func runEmbeddingSignalImageTests(ctx context.Context, testCases []EmbeddingSign
 }
 
 // buildChatCompletionContent constructs the OpenAI chat completion content
-// for a single user turn. When imageURL is empty, returns a plain string
-// content (the existing pre-multimodal request shape). When imageURL is
-// present, returns a content array with both text and image_url parts so
-// the router's request-path extractor pulls the image out for routing.
-func buildChatCompletionContent(query, imageURL string) interface{} {
-	if imageURL == "" {
-		return query
+// for a single user turn. When imageFile is empty, returns a plain string
+// content (the existing pre-multimodal request shape). When imageFile is
+// present, reads the file from disk relative to the repo root,
+// base64-encodes the bytes, and returns a content array with both text and
+// image_url parts so the router's request-path extractor pulls the image
+// out for routing. The content type is inferred from the file extension
+// (defaults to image/jpeg; .png produces image/png).
+func buildChatCompletionContent(query, imageFile string) (interface{}, error) {
+	if imageFile == "" {
+		return query, nil
 	}
+	data, err := os.ReadFile(imageFile)
+	if err != nil {
+		return nil, fmt.Errorf("read image file %q: %w", imageFile, err)
+	}
+	contentType := "image/jpeg"
+	if strings.HasSuffix(strings.ToLower(imageFile), ".png") {
+		contentType = "image/png"
+	}
+	dataURI := fmt.Sprintf("data:%s;base64,%s", contentType, base64.StdEncoding.EncodeToString(data))
 	return []map[string]interface{}{
 		{"type": "text", "text": query},
 		{
 			"type": "image_url",
 			"image_url": map[string]string{
-				"url": imageURL,
+				"url": dataURI,
 			},
 		},
-	}
+	}, nil
 }
 
 // parseMatchedEmbeddingRules extracts the comma-separated rule list from
@@ -189,11 +203,17 @@ func testSingleEmbeddingSignalImage(ctx context.Context, testCase EmbeddingSigna
 	result := EmbeddingSignalImageResult{
 		Description:      testCase.Description,
 		Query:            testCase.Query,
-		HasImage:         testCase.ImageURL != "",
+		HasImage:         testCase.ImageFile != "",
 		SignalName:       testCase.SignalName,
 		ExpectedMatch:    testCase.ExpectedMatch,
 		ExpectedDecision: testCase.ExpectedDecision,
 		Category:         testCase.Category,
+	}
+
+	content, err := buildChatCompletionContent(testCase.Query, testCase.ImageFile)
+	if err != nil {
+		result.Error = fmt.Sprintf("failed to build request content: %v", err)
+		return result
 	}
 
 	requestBody := map[string]interface{}{
@@ -201,7 +221,7 @@ func testSingleEmbeddingSignalImage(ctx context.Context, testCase EmbeddingSigna
 		"messages": []map[string]interface{}{
 			{
 				"role":    "user",
-				"content": buildChatCompletionContent(testCase.Query, testCase.ImageURL),
+				"content": content,
 			},
 		},
 	}
