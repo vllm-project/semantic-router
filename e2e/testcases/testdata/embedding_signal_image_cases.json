@@ -1,28 +1,83 @@
 [
   {
-    "description": "Image-modality embedding signal: medical imagery routes to on-prem decision (the same base64 PNG is reused in case 3 to verify text content does not change the image-rule outcome)",
-    "query": "Please summarize this clinical study finding in plain language for the patient.",
-    "image_url": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAACAAAAAgCAYAAABzenr0AAAAQUlEQVR42u3MMQEAAAgDoNm/9CL44AAQfDdoZmZmZmZmZmZmZmZmZmZmZmZmZmZmZmZmZmZmZmZmZmZmZmbml1mPZQEACgFqUgAAAABJRU5ErkJggg==",
-    "signal_name": "medical_imagery_phi",
+    "description": "Passport image fires identifier_document_imagery (positive case)",
+    "query": "What is shown in this image?",
+    "image_file": "e2e/testcases/testdata/image-fixtures/passport_sample.jpg",
+    "signal_name": "identifier_document_imagery",
     "expected_match": true,
-    "expected_decision": "route_medical_imagery_on_prem",
-    "category": "Medical Imagery (Image-modality)"
+    "expected_decision": "route_identifier_document_on_prem",
+    "category": "Passport vs identifier-document rule (positive)"
   },
   {
-    "description": "Image-modality embedding signal: medical imagery does NOT match when no image attached",
-    "query": "Please summarize this clinical study finding in plain language for the patient.",
-    "signal_name": "medical_imagery_phi",
+    "description": "Passport image does NOT fire code_or_terminal_imagery (cross-rule discrimination)",
+    "query": "What is shown in this image?",
+    "image_file": "e2e/testcases/testdata/image-fixtures/passport_sample.jpg",
+    "signal_name": "code_or_terminal_imagery",
     "expected_match": false,
-    "expected_decision": "default_text_route",
-    "category": "Medical Imagery (Image-modality)"
+    "expected_decision": "route_identifier_document_on_prem",
+    "category": "Passport vs code-terminal rule (cross-discrimination)"
   },
   {
-    "description": "Image-modality embedding signal: text query with attached image still scores image rules",
-    "query": "What does this scan show?",
-    "image_url": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAACAAAAAgCAYAAABzenr0AAAAQUlEQVR42u3MMQEAAAgDoNm/9CL44AAQfDdoZmZmZmZmZmZmZmZmZmZmZmZmZmZmZmZmZmZmZmZmZmZmZmbml1mPZQEACgFqUgAAAABJRU5ErkJggg==",
-    "signal_name": "medical_imagery_phi",
+    "description": "Passport image does NOT fire ambient_office_imagery (cross-rule discrimination)",
+    "query": "What is shown in this image?",
+    "image_file": "e2e/testcases/testdata/image-fixtures/passport_sample.jpg",
+    "signal_name": "ambient_office_imagery",
+    "expected_match": false,
+    "expected_decision": "route_identifier_document_on_prem",
+    "category": "Passport vs ambient-office rule (cross-discrimination)"
+  },
+  {
+    "description": "Code screenshot fires code_or_terminal_imagery (positive case)",
+    "query": "What is shown in this image?",
+    "image_file": "e2e/testcases/testdata/image-fixtures/code_screenshot.jpg",
+    "signal_name": "code_or_terminal_imagery",
     "expected_match": true,
-    "expected_decision": "route_medical_imagery_on_prem",
-    "category": "Medical Imagery (Image-modality)"
+    "expected_decision": "route_code_or_terminal_on_prem",
+    "category": "Code screenshot vs code-terminal rule (positive)"
+  },
+  {
+    "description": "Code screenshot does NOT fire identifier_document_imagery (cross-rule discrimination)",
+    "query": "What is shown in this image?",
+    "image_file": "e2e/testcases/testdata/image-fixtures/code_screenshot.jpg",
+    "signal_name": "identifier_document_imagery",
+    "expected_match": false,
+    "expected_decision": "route_code_or_terminal_on_prem",
+    "category": "Code screenshot vs identifier-document rule (cross-discrimination)"
+  },
+  {
+    "description": "Code screenshot does NOT fire ambient_office_imagery (cross-rule discrimination)",
+    "query": "What is shown in this image?",
+    "image_file": "e2e/testcases/testdata/image-fixtures/code_screenshot.jpg",
+    "signal_name": "ambient_office_imagery",
+    "expected_match": false,
+    "expected_decision": "route_code_or_terminal_on_prem",
+    "category": "Code screenshot vs ambient-office rule (cross-discrimination)"
+  },
+  {
+    "description": "Conference room image fires ambient_office_imagery (positive case)",
+    "query": "What is shown in this image?",
+    "image_file": "e2e/testcases/testdata/image-fixtures/conference_room.jpg",
+    "signal_name": "ambient_office_imagery",
+    "expected_match": true,
+    "expected_decision": "route_ambient_office_default",
+    "category": "Conference room vs ambient-office rule (positive)"
+  },
+  {
+    "description": "Conference room image does NOT fire identifier_document_imagery (cross-rule discrimination)",
+    "query": "What is shown in this image?",
+    "image_file": "e2e/testcases/testdata/image-fixtures/conference_room.jpg",
+    "signal_name": "identifier_document_imagery",
+    "expected_match": false,
+    "expected_decision": "route_ambient_office_default",
+    "category": "Conference room vs identifier-document rule (cross-discrimination)"
+  },
+  {
+    "description": "Conference room image does NOT fire code_or_terminal_imagery (cross-rule discrimination)",
+    "query": "What is shown in this image?",
+    "image_file": "e2e/testcases/testdata/image-fixtures/conference_room.jpg",
+    "signal_name": "code_or_terminal_imagery",
+    "expected_match": false,
+    "expected_decision": "route_ambient_office_default",
+    "category": "Conference room vs code-terminal rule (cross-discrimination)"
   }
 ]
