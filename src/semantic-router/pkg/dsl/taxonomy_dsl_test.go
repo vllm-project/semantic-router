@@ -287,6 +287,65 @@ ROUTE adaptive_tools {
 	assertDynamicRetrievalConfig(t, toolsCfg.DynamicRetrieval)
 }
 
+func TestCompileConversationTriggeredToolsDynamicRetrieval(t *testing.T) {
+	input := `
+SIGNAL conversation multi_turn_tool_flow {
+  feature: {
+    type: "count"
+    source: { type: "assistant_tool_cycle" }
+  }
+  predicate: { gte: 1 }
+}
+
+ROUTE agentic_tools {
+  PRIORITY 180
+  WHEN conversation("multi_turn_tool_flow")
+  MODEL "agent-model"
+  PLUGIN tools {
+    enabled: true
+    mode: "passthrough"
+    semantic_selection: true
+    strategy: "custom"
+    dynamic_retrieval: {
+      enabled: true
+      strategy: "hybrid_history"
+      history_window: 8
+      weights: { semantic: 1.0, history: 0.7, decision_prior: 0.2, repetition_penalty: 0.1 }
+      min_history_confidence: 0.4
+      fallback_on_low_confidence: true
+    }
+  }
+}
+`
+
+	cfg, errs := Compile(input)
+	if len(errs) > 0 {
+		t.Fatalf("Compile errors: %v", errs)
+	}
+	if len(cfg.ConversationRules) != 1 {
+		t.Fatalf("expected 1 conversation rule, got %d", len(cfg.ConversationRules))
+	}
+	if len(cfg.Decisions) != 1 {
+		t.Fatalf("expected 1 decision, got %d", len(cfg.Decisions))
+	}
+
+	decision := cfg.Decisions[0]
+	if decision.Rules.Operator != "AND" || len(decision.Rules.Conditions) != 1 {
+		t.Fatalf("compiled route rules = %+v", decision.Rules)
+	}
+	cond := decision.Rules.Conditions[0]
+	if cond.Type != config.SignalTypeConversation || cond.Name != "multi_turn_tool_flow" {
+		t.Fatalf("WHEN condition = %+v", cond)
+	}
+
+	toolsCfg := decision.GetToolsConfig()
+	if toolsCfg == nil {
+		t.Fatal("expected tools plugin")
+	}
+	assertToolsPluginStrategy(t, toolsCfg)
+	assertDynamicRetrievalConfig(t, toolsCfg.DynamicRetrieval)
+}
+
 func assertToolsPluginStrategy(t *testing.T, cfg *config.ToolsPluginConfig) {
 	t.Helper()
 
