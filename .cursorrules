@@ -1,0 +1,67 @@
+## vLLM Semantic Router
+
+This repository implements an intelligent LLM request router that sits as an Envoy ExtProc filter. It classifies requests using semantic signals and routes them to appropriate model backends.
+
+## Source of Truth
+
+1. `AGENTS.md` — short agent entrypoint
+2. `docs/agent/README.md` — full system of record
+3. `tools/agent/` — executable rule layer (manifests, scripts, skills)
+4. `tools/make/agent.mk` — canonical Make targets
+5. Nearest local `AGENTS.md` for hotspot directories
+
+## Key Commands
+
+- `make vllm-sr-dev` — build local dev image
+- `vllm-sr serve --image-pull-policy never` — run locally
+- `make agent-validate` — validate harness-only changes
+- `make agent-lint CHANGED_FILES="..."` — lint changed files
+- `make agent-ci-gate CHANGED_FILES="..."` — CI gate for changed files
+- `make agent-pr-gate` — full local PR baseline
+- `make test-semantic-router` — Go router tests
+- `make test-binding` — Rust binding tests
+- `make go-lint` / `make go-lint-fix` — Go linting
+- `make e2e-test` — end-to-end tests
+
+## Commit Trajectory and PR Scoping
+
+Structure commits as a reviewable trajectory — each commit is one logical step:
+
+1. Separate concerns into distinct commits (refactor, logic, tests).
+2. Each commit must compile and pass lint — never break the tree mid-sequence.
+3. Commit messages describe the "why", not just the "what".
+4. Sign off all commits: `git commit -s -m "message"` (DCO required).
+
+PR scoping rules:
+- Narrow the blast radius — touch only files necessary for the change.
+- One subsystem per PR when possible; don't mix unrelated cleanups.
+- PR titles use module prefixes: `[Router]`, `[Dashboard]`, `[Operator]`, `[Docs]`, `[CI/Build]`
+- Include a Test Plan section with validation steps and outcomes.
+- Behavior-visible changes need E2E test updates unless pure refactor.
+- Read nearest local `AGENTS.md` before editing hotspot directories.
+
+## Architecture
+
+- Layer model: signal → decision → algorithm → plugin → global
+- One main responsibility per file; extract rather than extend hotspots.
+- Interfaces only at true seams; no premature abstraction.
+
+### Subsystems
+
+- `src/semantic-router/` — Go router (Envoy ExtProc)
+- `src/vllm-sr/` — Python CLI and local dev tools
+- `candle-binding/`, `ml-binding/`, `nlp-binding/` — Rust inference bindings
+- `dashboard/` — Web UI (React frontend, Go backend)
+- `deploy/operator/` — Kubernetes operator and CRDs
+- `e2e/` — End-to-end test framework
+- `tools/` — Automation, agent harness, Make includes
+
+### Hotspot Directories (check local AGENTS.md first)
+
+- `src/semantic-router/pkg/config/`
+- `src/semantic-router/pkg/extproc/`
+- `src/vllm-sr/cli/`
+- `deploy/operator/api/v1alpha1/`
+- `deploy/operator/controllers/`
+- `dashboard/frontend/src/`
+- `dashboard/backend/handlers/`

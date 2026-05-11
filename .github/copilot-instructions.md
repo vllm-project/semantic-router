@@ -74,6 +74,23 @@ Flag missing validation when:
 - harness-only changes do not update the relevant source-of-truth docs or executable rules
 - contributor-interface changes drift away from the canonical harness entrypoints
 
+## Commit Trajectory and PR Scoping
+
+When generating or suggesting changes, structure commits as a reviewable trajectory:
+
+1. Separate concerns into distinct commits (refactor, logic, tests).
+2. Each commit must compile and pass lint — never break the tree mid-sequence.
+3. Commit messages describe the "why", not just the "what".
+4. Sign off all commits with `-s` (DCO required).
+
+PR scoping expectations:
+
+- Narrow the blast radius — touch only files necessary for the change.
+- One subsystem per PR when possible; don't mix unrelated cleanups into a feature PR.
+- PR titles use module-aligned prefixes: `[Router]`, `[Dashboard]`, `[Docs]`, `[CI/Build]`, `[Operator]`, etc.
+- Include a Test Plan section describing validation steps and outcomes.
+- Behavior-visible changes need E2E test updates unless the change is a pure refactor.
+
 ## Review Output Style
 
 Prioritize findings about:
