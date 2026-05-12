@@ -237,15 +237,16 @@ agent-e2e-affected: agent-venv-install ## Run local E2E profiles affected by the
 test-and-build-local: ## Reproduce the CI Test And Build job locally
 	@$(LOG_TARGET)
 	@set -e; \
-	trap '$(MAKE) clean-redis >/dev/null 2>&1 || true; $(MAKE) clean-valkey >/dev/null 2>&1 || true; $(MAKE) stop-milvus >/dev/null 2>&1 || true' EXIT; \
+	trap '$(MAKE) clean-redis >/dev/null 2>&1 || true; $(MAKE) clean-valkey >/dev/null 2>&1 || true; $(MAKE) stop-milvus >/dev/null 2>&1 || true; $(MAKE) stop-qdrant >/dev/null 2>&1 || true' EXIT; \
 	$(MAKE) check-go-mod-tidy; \
 	$(MAKE) rust-ci; \
 	$(MAKE) helm-ci-validate HELM_NAMESPACE=test-namespace; \
 	python3 -m pip install -U "huggingface_hub[cli]" hf_transfer; \
 	$(MAKE) start-milvus; \
+	$(MAKE) start-qdrant; \
 	$(MAKE) start-redis; \
 	$(MAKE) start-valkey; \
-	CI=true CI_MINIMAL_MODELS=true CGO_ENABLED=1 LD_LIBRARY_PATH="$(CURDIR)/candle-binding/target/release" MILVUS_URI=localhost:19530 SKIP_MILVUS_TESTS=false SKIP_REDIS_TESTS=false SKIP_VALKEY_TESTS=false VALKEY_HOST=localhost VALKEY_PORT=6380 HF_TOKEN="$(HF_TOKEN)" HUGGINGFACE_HUB_TOKEN="$(HUGGINGFACE_HUB_TOKEN)" $(MAKE) test
+	CI=true CI_MINIMAL_MODELS=true CGO_ENABLED=1 LD_LIBRARY_PATH="$(CURDIR)/candle-binding/target/release" MILVUS_URI=localhost:19530 SKIP_MILVUS_TESTS=false SKIP_QDRANT_TESTS=false SKIP_REDIS_TESTS=false SKIP_VALKEY_TESTS=false VALKEY_HOST=localhost VALKEY_PORT=6380 HF_TOKEN="$(HF_TOKEN)" HUGGINGFACE_HUB_TOKEN="$(HUGGINGFACE_HUB_TOKEN)" $(MAKE) test
 
 agent-pr-gate: ## Reproduce the baseline PR requirements locally
 	@$(LOG_TARGET)

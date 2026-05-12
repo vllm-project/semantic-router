@@ -57,8 +57,19 @@ type VectorStoreRAGConfig struct {
 	FileIDs       []string `json:"file_ids,omitempty" yaml:"file_ids,omitempty"`
 }
 
+// QdrantRAGConfig represents configuration for Qdrant-based RAG retrieval.
+type QdrantRAGConfig struct {
+	Collection           string `json:"collection" yaml:"collection"`
+	ReuseCacheConnection bool   `json:"reuse_cache_connection,omitempty" yaml:"reuse_cache_connection,omitempty"`
+	ContentField         string `json:"content_field,omitempty" yaml:"content_field,omitempty"`
+}
+
 func (c *RAGPluginConfig) MilvusBackendConfig() (*MilvusRAGConfig, error) {
 	return decodeRAGBackendConfig[MilvusRAGConfig](c, "milvus")
+}
+
+func (c *RAGPluginConfig) QdrantBackendConfig() (*QdrantRAGConfig, error) {
+	return decodeRAGBackendConfig[QdrantRAGConfig](c, "qdrant")
 }
 
 func (c *RAGPluginConfig) ExternalAPIBackendConfig() (*ExternalAPIRAGConfig, error) {

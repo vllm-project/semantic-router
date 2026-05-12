@@ -318,9 +318,9 @@ type SemanticCacheConfig struct {
 	Enabled bool `json:"enabled,omitempty"`
 
 	// BackendType specifies the cache backend to use
-	// Options: "memory" (default), "redis", "valkey", "milvus", "hybrid"
+	// Options: "memory" (default), "redis", "valkey", "milvus", "qdrant", "hybrid"
 	// +kubebuilder:default="memory"
-	// +kubebuilder:validation:Enum=memory;redis;valkey;milvus;hybrid
+	// +kubebuilder:validation:Enum=memory;redis;valkey;milvus;qdrant;hybrid
 	// +optional
 	BackendType string `json:"backend_type,omitempty"`
 
@@ -357,6 +357,10 @@ type SemanticCacheConfig struct {
 	// Milvus configuration (required when backend_type is "milvus")
 	// +optional
 	Milvus *MilvusCacheConfig `json:"milvus,omitempty"`
+
+	// Qdrant configuration (required when backend_type is "qdrant")
+	// +optional
+	Qdrant *QdrantCacheConfig `json:"qdrant,omitempty"`
 
 	// EmbeddingModel specifies which embedding model to use for semantic similarity
 	// Options: "mmbert" (default), "bert", "qwen3", "gemma"
@@ -742,6 +746,40 @@ type MilvusCacheConfig struct {
 	// Development settings for Milvus cache
 	// +optional
 	Development MilvusCacheDevelopment `json:"development,omitempty"`
+}
+
+// QdrantCacheConfig defines Qdrant cache backend configuration.
+// Configure these settings when using Qdrant as the semantic cache backend.
+type QdrantCacheConfig struct {
+	// Host is the Qdrant server hostname or IP address
+	// +optional
+	Host string `json:"host,omitempty"`
+
+	// Port is the Qdrant gRPC port
+	// +kubebuilder:default=6334
+	// +kubebuilder:validation:Minimum=1
+	// +kubebuilder:validation:Maximum=65535
+	// +optional
+	Port int `json:"port,omitempty"`
+
+	// APIKey for Qdrant authentication
+	// +optional
+	APIKey string `json:"api_key,omitempty"`
+
+	// UseTLS enables TLS for the Qdrant connection
+	// +kubebuilder:default=false
+	// +optional
+	UseTLS bool `json:"use_tls,omitempty"`
+
+	// CollectionName is the Qdrant collection to use for semantic cache
+	// +kubebuilder:default="semantic_cache"
+	// +optional
+	CollectionName string `json:"collection_name,omitempty"`
+
+	// ConnectTimeout is the timeout in seconds for Qdrant connection
+	// +kubebuilder:default=10
+	// +optional
+	ConnectTimeout int `json:"connect_timeout,omitempty"`
 }
 
 // MilvusCacheConnection defines Milvus connection parameters.

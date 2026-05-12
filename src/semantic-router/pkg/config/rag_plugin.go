@@ -7,7 +7,7 @@ type RAGPluginConfig struct {
 	// Enable RAG retrieval for this decision
 	Enabled bool `json:"enabled" yaml:"enabled"`
 
-	// Retrieval backend type: "milvus", "external_api", "mcp", "openai", "hybrid"
+	// Retrieval backend type: "milvus", "qdrant", "external_api", "mcp", "openai", "hybrid"
 	// - "openai": Use OpenAI's file_search tool with vector stores (Responses API workflow)
 	Backend string `json:"backend" yaml:"backend"`
 
@@ -30,6 +30,7 @@ type RAGPluginConfig struct {
 	// Backend-specific configuration
 	// Structure depends on Backend type:
 	// - "milvus": MilvusRAGConfig
+	// - "qdrant": QdrantRAGConfig
 	// - "external_api": ExternalAPIRAGConfig
 	// - "mcp": MCPRAGConfig
 	// - "openai": OpenAIRAGConfig

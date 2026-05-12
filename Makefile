@@ -14,6 +14,7 @@ _run:
 		-f tools/make/dashboard.mk \
 		-f tools/make/linter.mk \
 		-f tools/make/milvus.mk \
+		-f tools/make/qdrant.mk \
 		-f tools/make/redis.mk \
 		-f tools/make/valkey.mk \
 		-f tools/make/llama-stack.mk \

@@ -3,6 +3,7 @@ package cache
 import (
 	"fmt"
 
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 )
 
@@ -81,6 +82,17 @@ func NewCacheBackend(config CacheConfig) (CacheBackend, error) {
 			config.Milvus, config.TTLSeconds, config.SimilarityThreshold, config.EmbeddingModel)
 		return NewHybridCache(hybridCacheOptionsFromConfig(config))
 
+	case QdrantCacheType:
+		logging.Debugf("Creating Qdrant cache backend - Config: %v, TTL: %ds, Threshold: %.3f, EmbeddingModel: %s",
+			config.Qdrant, config.TTLSeconds, config.SimilarityThreshold, config.EmbeddingModel)
+		return NewQdrantCache(QdrantCacheOptions{
+			Enabled:             config.Enabled,
+			SimilarityThreshold: config.SimilarityThreshold,
+			TTLSeconds:          config.TTLSeconds,
+			Config:              config.Qdrant,
+			EmbeddingModel:      config.EmbeddingModel,
+		})
+
 	default:
 		logging.Debugf("Unsupported cache backend type: %s", config.BackendType)
 		return nil, fmt.Errorf("unsupported cache backend type: %s", config.BackendType)
@@ -103,32 +115,21 @@ func hybridCacheOptionsFromConfig(config CacheConfig) HybridCacheOptions {
 // ValidateCacheConfig validates cache configuration parameters
 func ValidateCacheConfig(config CacheConfig) error {
 	if !config.Enabled {
-		return nil // Skip validation for disabled cache
+		return nil
 	}
-
-	// Check similarity threshold range
 	if config.SimilarityThreshold < 0.0 || config.SimilarityThreshold > 1.0 {
 		return fmt.Errorf("similarity_threshold must be between 0.0 and 1.0, got: %f", config.SimilarityThreshold)
 	}
-
-	// Check TTL value
 	if config.TTLSeconds < 0 {
 		return fmt.Errorf("ttl_seconds cannot be negative, got: %d", config.TTLSeconds)
 	}
+	return validateCacheBackend(config)
+}
 
-	// Check backend-specific requirements
+func validateCacheBackend(config CacheConfig) error {
 	switch config.BackendType {
 	case InMemoryCacheType, "":
-		if config.MaxEntries < 0 {
-			return fmt.Errorf("max_entries cannot be negative for in-memory cache, got: %d", config.MaxEntries)
-		}
-		// Validate eviction policy
-		switch config.EvictionPolicy {
-		case "", FIFOEvictionPolicyType, LRUEvictionPolicyType, LFUEvictionPolicyType:
-			// "" is allowed, treated as FIFO by default
-		default:
-			return fmt.Errorf("unsupported eviction_policy: %s", config.EvictionPolicy)
-		}
+		return validateInMemoryCacheConfig(config)
 	case MilvusCacheType:
 		if config.Milvus == nil {
 			return fmt.Errorf("milvus configuration is required for Milvus cache backend")
@@ -146,8 +147,31 @@ func ValidateCacheConfig(config CacheConfig) error {
 		if config.Valkey == nil {
 			return fmt.Errorf("valkey configuration is required for Valkey cache backend")
 		}
+	case QdrantCacheType:
+		return validateQdrantCacheConfig(config.Qdrant)
 	}
+	return nil
+}
 
+func validateInMemoryCacheConfig(config CacheConfig) error {
+	if config.MaxEntries < 0 {
+		return fmt.Errorf("max_entries cannot be negative for in-memory cache, got: %d", config.MaxEntries)
+	}
+	switch config.EvictionPolicy {
+	case "", FIFOEvictionPolicyType, LRUEvictionPolicyType, LFUEvictionPolicyType:
+	default:
+		return fmt.Errorf("unsupported eviction_policy: %s", config.EvictionPolicy)
+	}
+	return nil
+}
+
+func validateQdrantCacheConfig(cfg *config.QdrantConfig) error {
+	if cfg == nil {
+		return fmt.Errorf("qdrant configuration is required for Qdrant cache backend")
+	}
+	if cfg.Host == "" {
+		return fmt.Errorf("qdrant.host is required for Qdrant cache backend")
+	}
 	return nil
 }
 

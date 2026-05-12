@@ -337,7 +337,7 @@ func cloneStringPtr(value *string) *string {
 
 // Config holds common configuration options for all storage backends.
 type Config struct {
-	Backend           string // "memory", "redis", "postgres", "milvus"
+	Backend           string // "memory", "redis", "postgres", "milvus", "qdrant"
 	TTLSeconds        int    // Time-to-live for records (0 = no expiration)
 	AsyncWrites       bool   // Enable asynchronous writes
 	MaxBodyBytes      int    // Maximum bytes to store for request/response bodies
@@ -347,6 +347,7 @@ type Config struct {
 	Redis    *RedisConfig
 	Postgres *PostgresConfig
 	Milvus   *MilvusConfig
+	Qdrant   *QdrantConfig
 }
 
 // RedisConfig holds Redis-specific configuration.
@@ -374,4 +375,13 @@ type MilvusConfig struct {
 	// Milvus specific settings
 	ConsistencyLevel string `json:"consistency_level,omitempty" yaml:"consistency_level,omitempty"` // Strong, Session, Bounded, Eventually
 	ShardNum         int    `json:"shard_num,omitempty" yaml:"shard_num,omitempty"`
+}
+
+// QdrantConfig holds Qdrant-specific configuration for the replay store.
+type QdrantConfig struct {
+	Host           string `json:"host" yaml:"host"`
+	Port           int    `json:"port,omitempty" yaml:"port,omitempty"`
+	APIKey         string `json:"api_key,omitempty" yaml:"api_key,omitempty"`
+	UseTLS         bool   `json:"use_tls,omitempty" yaml:"use_tls,omitempty"`
+	CollectionName string `json:"collection_name,omitempty" yaml:"collection_name,omitempty"`
 }

@@ -1460,12 +1460,13 @@ spec:
                         default: memory
                         description: |-
                           BackendType specifies the cache backend to use
-                          Options: "memory" (default), "redis", "valkey", "milvus", "hybrid"
+                          Options: "memory" (default), "redis", "valkey", "milvus", "qdrant", "hybrid"
                         enum:
                         - memory
                         - redis
                         - valkey
                         - milvus
+                        - qdrant
                         - hybrid
                         type: string
                       embedding_model:
@@ -1800,6 +1801,38 @@ spec:
                                 minimum: 1
                                 type: integer
                             type: object
+                        type: object
+                      qdrant:
+                        description: Qdrant configuration (required when backend_type
+                          is "qdrant")
+                        properties:
+                          api_key:
+                            description: APIKey for Qdrant authentication
+                            type: string
+                          collection_name:
+                            default: semantic_cache
+                            description: CollectionName is the Qdrant collection to
+                              use for semantic cache
+                            type: string
+                          connect_timeout:
+                            default: 10
+                            description: ConnectTimeout is the timeout in seconds
+                              for Qdrant connection
+                            type: integer
+                          host:
+                            description: Host is the Qdrant server hostname or IP
+                              address
+                            type: string
+                          port:
+                            default: 6334
+                            description: Port is the Qdrant gRPC port
+                            maximum: 65535
+                            minimum: 1
+                            type: integer
+                          use_tls:
+                            default: false
+                            description: UseTLS enables TLS for the Qdrant connection
+                            type: boolean
                         type: object
                       redis:
                         description: Redis configuration (required when backend_type

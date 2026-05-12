@@ -1474,6 +1474,12 @@ global:
         collection_name: router_replay
         consistency_level: Bounded
         shard_num: 2
+      qdrant:
+        host: qdrant
+        port: 6334
+        api_key: ""
+        use_tls: false
+        collection_name: router_replay
 
   stores:
     semantic_cache:
@@ -1606,6 +1612,13 @@ global:
           level: info
           enable_query_log: true
           enable_metrics: true
+      qdrant:
+        host: qdrant
+        port: 6334
+        api_key: ""
+        use_tls: false
+        connect_timeout: 10
+        collection_name: semantic_cache
     memory:
       enabled: true
       backend: milvus
@@ -1632,6 +1645,14 @@ global:
         collection: agentic_memory
         dimension: 384
         num_partitions: 32
+      qdrant:
+        host: qdrant
+        port: 6334
+        api_key: ""
+        use_tls: false
+        connect_timeout: 10
+        collection: agentic_memory
+        dimension: 384
       redis_cache:
         enabled: false
         address: "localhost:6379"
@@ -1742,6 +1763,13 @@ global:
         metric_type: COSINE
         index_m: 16
         index_ef_construction: 200
+      qdrant:
+        host: qdrant
+        port: 6334
+        api_key: ""
+        use_tls: false
+        connect_timeout: 10
+        collection_prefix: "vsr_vs_"
       metadata_store: memory
       metadata_postgres:
         host: postgres

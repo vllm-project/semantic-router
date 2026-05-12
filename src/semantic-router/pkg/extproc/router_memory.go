@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/qdrant/go-client/qdrant"
 	glide "github.com/valkey-io/valkey-glide/go/v2"
 	glideconfig "github.com/valkey-io/valkey-glide/go/v2/config"
 
@@ -75,8 +76,10 @@ func createMemoryStore(cfg *config.RouterConfig) (memory.Store, error) {
 		store, err = createValkeyMemoryStore(cfg)
 	case "milvus":
 		store, err = createMilvusMemoryStore(cfg)
+	case "qdrant":
+		store, err = createQdrantMemoryStore(cfg)
 	default:
-		return nil, fmt.Errorf("unsupported memory backend: %q (supported: milvus, valkey)", backend)
+		return nil, fmt.Errorf("unsupported memory backend: %q (supported: milvus, valkey, qdrant)", backend)
 	}
 
 	if err != nil {
@@ -290,6 +293,71 @@ func buildValkeyTLSConfig(vc *config.MemoryValkeyConfig) (*glideconfig.TlsConfig
 		logging.Warnf("Memory: Valkey TLS certificate verification is DISABLED — do not use in production")
 	}
 	return tlsConfig, nil
+}
+
+// createQdrantMemoryStore creates a QdrantStore backend.
+func createQdrantMemoryStore(cfg *config.RouterConfig) (memory.Store, error) {
+	qc := cfg.Memory.Qdrant
+	if qc == nil {
+		return nil, fmt.Errorf("memory.qdrant configuration is required when backend is 'qdrant'")
+	}
+
+	host := qc.Host
+	if host == "" {
+		host = "localhost"
+	}
+	port := qc.Port
+	if port <= 0 {
+		port = 6334
+	}
+	timeout := qc.ConnectTimeout
+	if timeout <= 0 {
+		timeout = 10
+	}
+
+	embeddingModel := memory.EmbeddingModelType(detectMemoryEmbeddingModel(cfg))
+
+	embeddingConfig := &memory.EmbeddingConfig{
+		Model:     embeddingModel,
+		Dimension: qc.Dimension,
+	}
+
+	logging.Infof("Memory: connecting to Qdrant at %s:%d, collection=%s, embedding=%s",
+		host, port, qc.Collection, embeddingModel)
+
+	client, err := qdrant.NewClient(&qdrant.Config{
+		Host:   host,
+		Port:   port,
+		APIKey: qc.APIKey,
+		UseTLS: qc.UseTLS,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("failed to create qdrant client: %w", err)
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), time.Duration(timeout)*time.Second)
+	defer cancel()
+	if _, connErr := client.ListCollections(ctx); connErr != nil {
+		_ = client.Close()
+		return nil, fmt.Errorf("qdrant connection check failed: %w", connErr)
+	}
+
+	store, err := memory.NewQdrantStore(memory.QdrantStoreOptions{
+		Client:          client,
+		Config:          cfg.Memory,
+		QdrantConfig:    qc,
+		Enabled:         true,
+		EmbeddingConfig: embeddingConfig,
+	})
+	if err != nil {
+		_ = client.Close()
+		return nil, fmt.Errorf("failed to create qdrant memory store: %w", err)
+	}
+
+	logging.Infof("Memory store initialized: backend=qdrant, address=%s:%d, collection=%s, embedding=%s",
+		host, port, qc.Collection, embeddingModel)
+
+	return store, nil
 }
 
 func detectMemoryEmbeddingModel(cfg *config.RouterConfig) string {

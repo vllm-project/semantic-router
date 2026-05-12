@@ -193,6 +193,8 @@ func (r *OpenAIRouter) retrieveContextFromBackend(
 	switch ragConfig.Backend {
 	case "milvus":
 		retrievedContext, err = r.retrieveFromMilvus(traceCtx, ctx, ragConfig)
+	case "qdrant":
+		retrievedContext, err = r.retrieveFromQdrant(traceCtx, ctx, ragConfig)
 	case "external_api":
 		retrievedContext, err = r.retrieveFromExternalAPI(traceCtx, ctx, ragConfig)
 	case "mcp":

@@ -41,7 +41,7 @@ global:
 
 ### Memory
 
-The memory store supports two backends: `milvus` (default) and `valkey`.
+The memory store supports three backends: `milvus` (default), `valkey`, and `qdrant`.
 
 **Milvus backend** (default):
 
@@ -73,9 +73,29 @@ global:
         metric_type: COSINE
 ```
 
+**Qdrant backend**:
+
+```yaml
+global:
+  stores:
+    memory:
+      enabled: true
+      backend: qdrant
+      qdrant:
+        host: qdrant
+        port: 6334
+        api_key: ""
+        collection: agentic_memory
+        dimension: 384
+      embedding_model: bert
+      default_retrieval_limit: 5
+      default_similarity_threshold: 0.70
+```
+
 For full deployment instructions, see:
 
 - [Valkey Agentic Memory](../../installation/valkey-memory.md) — Docker, Kubernetes, config reference, tuning, and troubleshooting
+- [Qdrant](../../installation/qdrant.md) — Docker, Kubernetes, config reference, tuning, and troubleshooting
 - `deploy/examples/runtime/memory/` for backend-specific configuration references
 
 ### Vector Store
@@ -87,7 +107,7 @@ global:
       provider: milvus
 ```
 
-Supported backends: `memory`, `milvus`, `llama_stack`, `valkey`.
+Supported backends: `memory`, `milvus`, `llama_stack`, `valkey`, `qdrant`.
 
 ### Tools
 

@@ -68,6 +68,10 @@ type VectorStoreConfig struct {
 	// module for vector storage via the valkey-glide Go client.
 	Valkey *ValkeyVectorStoreConfig `json:"valkey,omitempty" yaml:"valkey,omitempty"`
 
+	// Qdrant holds Qdrant vector store backend configuration.
+	// When backend_type is "qdrant", vSR uses Qdrant via its gRPC client.
+	Qdrant *QdrantVectorStoreConfig `json:"qdrant,omitempty" yaml:"qdrant,omitempty"`
+
 	// MetadataStore selects the backend for persisting vector store and file
 	// metadata across restarts: "memory" (default, ephemeral) or "postgres".
 	MetadataStore string `json:"metadata_store,omitempty" yaml:"metadata_store,omitempty"`
@@ -152,6 +156,27 @@ type ValkeyVectorStoreConfig struct {
 	IndexEfConstruction int `json:"index_ef_construction" yaml:"index_ef_construction"`
 }
 
+// QdrantVectorStoreConfig holds configuration for the Qdrant vector store backend.
+type QdrantVectorStoreConfig struct {
+	// Host is the Qdrant server hostname (default "localhost").
+	Host string `json:"host" yaml:"host"`
+
+	// Port is the Qdrant gRPC port (default 6334).
+	Port int `json:"port,omitempty" yaml:"port,omitempty"`
+
+	// APIKey is an optional API key for Qdrant Cloud or secured deployments.
+	APIKey string `json:"api_key,omitempty" yaml:"api_key,omitempty"`
+
+	// UseTLS enables TLS for the gRPC connection.
+	UseTLS bool `json:"use_tls,omitempty" yaml:"use_tls,omitempty"`
+
+	// ConnectTimeout in seconds (default 10).
+	ConnectTimeout int `json:"connect_timeout,omitempty" yaml:"connect_timeout,omitempty"`
+
+	// CollectionPrefix is prepended to vector store IDs to form collection names (default "vsr_vs_").
+	CollectionPrefix string `json:"collection_prefix,omitempty" yaml:"collection_prefix,omitempty"`
+}
+
 // Validate checks the vector store configuration for errors.
 func (c *VectorStoreConfig) Validate() error {
 	if !c.Enabled {
@@ -168,13 +193,13 @@ func (c *VectorStoreConfig) Validate() error {
 
 func validateVectorStoreBackendType(backendType string) error {
 	switch backendType {
-	case "memory", "milvus", "llama_stack", "valkey":
+	case "memory", "milvus", "llama_stack", "valkey", "qdrant":
 		return nil
 	case "":
 		return fmt.Errorf("vector_store.backend_type is required when enabled")
 	default:
 		return fmt.Errorf(
-			"vector_store.backend_type must be 'memory', 'milvus', 'llama_stack', or 'valkey', got '%s'",
+			"vector_store.backend_type must be 'memory', 'milvus', 'llama_stack', 'valkey', or 'qdrant', got '%s'",
 			backendType,
 		)
 	}
@@ -188,9 +213,21 @@ func validateVectorStoreBackendConfig(c *VectorStoreConfig) error {
 		return validateValkeyVectorStoreConfig(c)
 	case "llama_stack":
 		return validateLlamaStackVectorStoreConfig(c)
+	case "qdrant":
+		return validateQdrantVectorStoreConfig(c)
 	default:
 		return nil
 	}
+}
+
+func validateQdrantVectorStoreConfig(c *VectorStoreConfig) error {
+	if c.Qdrant == nil {
+		return fmt.Errorf("vector_store.qdrant configuration is required when backend_type is 'qdrant'")
+	}
+	if c.Qdrant.Host == "" {
+		return fmt.Errorf("vector_store.qdrant.host is required")
+	}
+	return nil
 }
 
 func validateMilvusVectorStoreConfig(c *VectorStoreConfig) error {

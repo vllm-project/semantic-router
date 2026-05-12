@@ -82,6 +82,30 @@ global:
 
 ---
 
+### Qdrant configuration is required
+
+**Log Pattern:**
+
+```
+qdrant configuration is required for Qdrant cache backend
+```
+
+**Fix:** Inline the `semantic_cache.qdrant` settings when using the Qdrant backend:
+
+```yaml
+global:
+  stores:
+    semantic_cache:
+      enabled: true
+      backend_type: qdrant
+      qdrant:
+        host: qdrant
+        port: 6334
+        collection_name: semantic_cache
+```
+
+---
+
 ### Index does not exist and auto-creation is disabled
 
 **Log Pattern:**

@@ -1,0 +1,24 @@
+# Qdrant Vector Search Engine Configuration for Semantic Cache
+# This configuration file contains settings for using Qdrant as the semantic cache backend.
+# To use this configuration:
+# 1. Set backend_type: "qdrant" in your main config.yaml
+# 2. Inline the Qdrant settings from this file into global.stores.semantic_cache.qdrant
+# 3. Ensure a Qdrant server is running and accessible
+
+# Qdrant server host (change for production deployment)
+host: "localhost"  # For production: use your Qdrant cluster endpoint
+
+# Qdrant gRPC port
+port: 6334
+
+# API key for Qdrant authentication (leave empty if no auth required)
+api_key: ""
+
+# TLS configuration (recommended for production)
+use_tls: false  # Set to true for secure connections
+
+# Collection name to use for semantic cache entries
+collection_name: "semantic_cache"
+
+# Timeout for Qdrant connection in seconds
+connect_timeout: 10

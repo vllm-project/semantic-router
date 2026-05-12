@@ -69,13 +69,14 @@ run-router-onnx: build-router-onnx
 		./bin/router-onnx -config=$${ONNX_CONFIG_FILE:-e2e/config/onnx-binding/config.onnx-binding-test.yaml} --enable-system-prompt-api=true
 
 # Unit test semantic-router
-# By default, Milvus, Redis, Valkey, and Llama Stack tests are skipped. To enable them, set the relevant env var to false.
-# Example: make test-semantic-router SKIP_MILVUS_TESTS=false SKIP_VALKEY_TESTS=false
-test-semantic-router: ## Run unit tests for semantic-router (set SKIP_MILVUS_TESTS=false to enable Milvus tests)
+# By default, Milvus, Qdrant, Redis, Valkey, and Llama Stack tests are skipped. To enable them, set the relevant env var to false.
+# Example: make test-semantic-router SKIP_MILVUS_TESTS=false SKIP_QDRANT_TESTS=false SKIP_VALKEY_TESTS=false
+test-semantic-router: ## Run unit tests for semantic-router (set SKIP_MILVUS_TESTS=false / SKIP_QDRANT_TESTS=false to enable)
 test-semantic-router: build-router
 	@$(LOG_TARGET)
 	@export LD_LIBRARY_PATH=${PWD}/candle-binding/target/release:${PWD}/ml-binding/target/release:${PWD}/nlp-binding/target/release && \
 	export SKIP_MILVUS_TESTS=$${SKIP_MILVUS_TESTS:-true} && \
+	export SKIP_QDRANT_TESTS=$${SKIP_QDRANT_TESTS:-true} && \
 	export SKIP_REDIS_TESTS=$${SKIP_REDIS_TESTS:-true} && \
 	export SKIP_VALKEY_TESTS=$${SKIP_VALKEY_TESTS:-true} && \
 	export SKIP_LLAMA_STACK_TESTS=$${SKIP_LLAMA_STACK_TESTS:-true} && \

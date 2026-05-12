@@ -379,6 +379,41 @@ func TestValidateSemanticCacheConfig(t *testing.T) {
 			expectError: false,
 		},
 		{
+			name: "qdrant without config fails",
+			cache: &vllmv1alpha1.SemanticCacheConfig{
+				Enabled:     true,
+				BackendType: "qdrant",
+				Qdrant:      nil,
+			},
+			expectError: true,
+			errorMsg:    "qdrant configuration required",
+		},
+		{
+			name: "qdrant without host fails",
+			cache: &vllmv1alpha1.SemanticCacheConfig{
+				Enabled:     true,
+				BackendType: "qdrant",
+				Qdrant: &vllmv1alpha1.QdrantCacheConfig{
+					Host: "",
+					Port: 6334,
+				},
+			},
+			expectError: true,
+			errorMsg:    "qdrant.host is required",
+		},
+		{
+			name: "qdrant with valid config succeeds",
+			cache: &vllmv1alpha1.SemanticCacheConfig{
+				Enabled:     true,
+				BackendType: "qdrant",
+				Qdrant: &vllmv1alpha1.QdrantCacheConfig{
+					Host: "qdrant.cache-backends.svc.cluster.local",
+					Port: 6334,
+				},
+			},
+			expectError: false,
+		},
+		{
 			name: "unsupported backend type fails",
 			cache: &vllmv1alpha1.SemanticCacheConfig{
 				Enabled:     true,

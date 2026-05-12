@@ -202,7 +202,18 @@ type SemanticCache struct {
 	Redis               *RedisConfig  `yaml:"redis,omitempty"`
 	Valkey              *ValkeyConfig `yaml:"valkey,omitempty"`
 	Milvus              *MilvusConfig `yaml:"milvus,omitempty"`
+	Qdrant              *QdrantConfig `yaml:"qdrant,omitempty"`
 	EmbeddingModel      string        `yaml:"embedding_model,omitempty"`
+}
+
+// QdrantConfig defines the complete configuration structure for Qdrant cache backend.
+type QdrantConfig struct {
+	Host           string `yaml:"host"`
+	Port           int    `yaml:"port,omitempty"`
+	APIKey         string `yaml:"api_key,omitempty"`
+	UseTLS         bool   `yaml:"use_tls,omitempty"`
+	ConnectTimeout int    `yaml:"connect_timeout,omitempty"`
+	CollectionName string `yaml:"collection_name,omitempty"`
 }
 
 type MemoryConfig struct {
@@ -213,6 +224,7 @@ type MemoryConfig struct {
 	DisabledModels             []string                   `yaml:"disabled_models,omitempty"`
 	Milvus                     MemoryMilvusConfig         `yaml:"milvus,omitempty"`
 	Valkey                     *MemoryValkeyConfig        `yaml:"valkey,omitempty"`
+	Qdrant                     *MemoryQdrantConfig        `yaml:"qdrant,omitempty"`
 	RedisCache                 *MemoryRedisCacheConfig    `yaml:"redis_cache,omitempty"`
 	EmbeddingModel             string                     `yaml:"embedding_model,omitempty"`
 	ExtractionBatchSize        int                        `yaml:"extraction_batch_size,omitempty"`
@@ -298,6 +310,17 @@ type MemoryValkeyConfig struct {
 	TLSInsecureSkipVerify bool `yaml:"tls_insecure_skip_verify,omitempty"`
 }
 
+// MemoryQdrantConfig holds configuration for the Qdrant memory store backend.
+type MemoryQdrantConfig struct {
+	Host           string `yaml:"host"`
+	Port           int    `yaml:"port,omitempty"`
+	APIKey         string `yaml:"api_key,omitempty"`
+	UseTLS         bool   `yaml:"use_tls,omitempty"`
+	ConnectTimeout int    `yaml:"connect_timeout,omitempty"`
+	Collection     string `yaml:"collection,omitempty"`
+	Dimension      int    `yaml:"dimension,omitempty"`
+}
+
 // ResponseAPIConfig controls response and conversation history storage.
 // StoreBackend defaults to "redis" for durable storage that survives router
 // restarts. Set to "memory" only for local development — all history is lost
@@ -333,7 +356,7 @@ type ResponseAPIRedisConfig struct {
 // RouterReplayConfig controls routing-decision replay record storage.
 // StoreBackend defaults to "postgres" for durable, SQL-queryable storage
 // that survives router restarts. Supported backends: "postgres", "redis",
-// "milvus", "memory". Use "redis" for lightweight deployments that already
+// "milvus", "qdrant", "memory". Use "redis" for lightweight deployments that already
 // run Redis. Set to "memory" only for local development — all replay
 // records are lost when the router process exits.
 type RouterReplayConfig struct {
@@ -344,6 +367,7 @@ type RouterReplayConfig struct {
 	Redis        *RouterReplayRedisConfig    `json:"redis,omitempty" yaml:"redis,omitempty"`
 	Postgres     *RouterReplayPostgresConfig `json:"postgres,omitempty" yaml:"postgres,omitempty"`
 	Milvus       *RouterReplayMilvusConfig   `json:"milvus,omitempty" yaml:"milvus,omitempty"`
+	Qdrant       *RouterReplayQdrantConfig   `json:"qdrant,omitempty" yaml:"qdrant,omitempty"`
 }
 
 type RouterReplayRedisConfig struct {
@@ -377,4 +401,12 @@ type RouterReplayMilvusConfig struct {
 	CollectionName   string `json:"collection_name,omitempty" yaml:"collection_name,omitempty"`
 	ConsistencyLevel string `json:"consistency_level,omitempty" yaml:"consistency_level,omitempty"`
 	ShardNum         int    `json:"shard_num,omitempty" yaml:"shard_num,omitempty"`
+}
+
+type RouterReplayQdrantConfig struct {
+	Host           string `json:"host" yaml:"host"`
+	Port           int    `json:"port,omitempty" yaml:"port,omitempty"`
+	APIKey         string `json:"api_key,omitempty" yaml:"api_key,omitempty"`
+	UseTLS         bool   `json:"use_tls,omitempty" yaml:"use_tls,omitempty"`
+	CollectionName string `json:"collection_name,omitempty" yaml:"collection_name,omitempty"`
 }

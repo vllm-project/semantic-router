@@ -65,6 +65,12 @@ linters:
           - funlen
           - gocognit
           - nestif
+        path: (^|/)controllers/helpers_test\.go$
+      - linters:
+          - cyclop
+          - funlen
+          - gocognit
+          - nestif
         path: (^|/)src/semantic-router/pkg/apiserver/server_test\.go$
       - linters:
           - cyclop

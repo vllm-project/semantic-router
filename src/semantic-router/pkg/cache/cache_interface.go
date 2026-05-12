@@ -107,6 +107,9 @@ const (
 
 	// HybridCacheType specifies the hybrid HNSW + Milvus backend
 	HybridCacheType CacheBackendType = "hybrid"
+
+	// QdrantCacheType specifies the Qdrant vector search engine backend
+	QdrantCacheType CacheBackendType = "qdrant"
 )
 
 // EvictionPolicyType defines the available eviction policies
@@ -151,6 +154,9 @@ type CacheConfig struct {
 
 	// Milvus specific settings
 	Milvus *config.MilvusConfig `yaml:"milvus,omitempty"`
+
+	// Qdrant specific settings
+	Qdrant *config.QdrantConfig `yaml:"qdrant,omitempty"`
 
 	// UseHNSW enables HNSW index for faster search in memory backend
 	UseHNSW bool `yaml:"use_hnsw,omitempty"`
