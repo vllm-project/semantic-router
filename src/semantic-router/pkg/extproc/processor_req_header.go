@@ -21,7 +21,7 @@ func (r *OpenAIRouter) handleRequestHeaders(v *ext_proc.ProcessingRequest_Reques
 	span := startRequestHeaderSpan(v, ctx)
 	defer span.End()
 
-	method, path := captureRequestHeaders(v, ctx)
+	method, path := captureRequestHeaders(v, ctx, r.skipProcessingEnabled())
 
 	setRequestHeaderSpanAttributes(span, ctx, method, path)
 
@@ -76,6 +76,7 @@ func startRequestHeaderSpan(
 func captureRequestHeaders(
 	v *ext_proc.ProcessingRequest_RequestHeaders,
 	ctx *RequestContext,
+	skipProcessingGateEnabled bool,
 ) (string, string) {
 	requestHeaders := v.RequestHeaders.Headers
 	for _, header := range requestHeaders.Headers {
@@ -92,7 +93,13 @@ func captureRequestHeaders(
 		if lowerKey == headers.VSRLooperRequest && headerValue == "true" {
 			ctx.LooperRequest = true
 		}
-		if lowerKey == headers.VSRSkipProcessing && strings.EqualFold(strings.TrimSpace(headerValue), "true") {
+		// The x-vsr-skip-processing opt-out is gated by the deployment-level
+		// global.router.skip_processing.enabled flag. When disabled (the
+		// default), the header is ignored entirely so an unauthenticated
+		// upstream caller cannot bypass router policy by injecting it.
+		if skipProcessingGateEnabled &&
+			lowerKey == headers.VSRSkipProcessing &&
+			strings.EqualFold(strings.TrimSpace(headerValue), "true") {
 			ctx.SkipProcessing = true
 		}
 	}

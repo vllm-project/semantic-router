@@ -23,12 +23,20 @@ import (
 	http_ext "github.com/envoyproxy/go-control-plane/envoy/extensions/filters/http/ext_proc/v3"
 	ext_proc "github.com/envoyproxy/go-control-plane/envoy/service/ext_proc/v3"
 
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/headers"
 )
 
-// newSkipProcessingRequestHeaders builds a minimal request-headers message
-// that carries the x-vsr-skip-processing opt-out, so each phase test can
-// share the same construction logic.
+func newRouterWithSkipProcessingGate(enabled bool) *OpenAIRouter {
+	return &OpenAIRouter{
+		Config: &config.RouterConfig{
+			RouterOptions: config.RouterOptions{
+				SkipProcessing: config.SkipProcessingConfig{Enabled: enabled},
+			},
+		},
+	}
+}
+
 func newSkipProcessingRequestHeaders(method, path, value string) *ext_proc.ProcessingRequest_RequestHeaders {
 	return &ext_proc.ProcessingRequest_RequestHeaders{
 		RequestHeaders: &ext_proc.HttpHeaders{
@@ -60,7 +68,7 @@ func TestHandleRequestHeadersSkipProcessingOptOut(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			router := &OpenAIRouter{}
+			router := newRouterWithSkipProcessingGate(true)
 			ctx := &RequestContext{Headers: make(map[string]string)}
 
 			request := newSkipProcessingRequestHeaders("POST", "/v1/chat/completions", tt.headerValue)
@@ -82,7 +90,7 @@ func TestHandleRequestHeadersSkipProcessingOptOut(t *testing.T) {
 }
 
 func TestHandleRequestHeadersSkipProcessingHeaderIsCaseInsensitive(t *testing.T) {
-	router := &OpenAIRouter{}
+	router := newRouterWithSkipProcessingGate(true)
 	ctx := &RequestContext{Headers: make(map[string]string)}
 
 	request := &ext_proc.ProcessingRequest_RequestHeaders{
@@ -110,11 +118,9 @@ func TestHandleRequestHeadersSkipProcessingHeaderIsCaseInsensitive(t *testing.T)
 }
 
 func TestHandleRequestHeadersSkipProcessingBypassesValidation(t *testing.T) {
-	router := &OpenAIRouter{}
+	router := newRouterWithSkipProcessingGate(true)
 	ctx := &RequestContext{Headers: make(map[string]string)}
 
-	// Without the opt-out, the unknown /v1 endpoint validator returns an
-	// immediate 404; the opt-out must short-circuit before validation.
 	request := newSkipProcessingRequestHeaders("POST", "/v1/does-not-exist", "true")
 	response, err := router.handleRequestHeaders(request, ctx)
 	if err != nil {
@@ -132,7 +138,7 @@ func TestHandleRequestHeadersSkipProcessingBypassesValidation(t *testing.T) {
 }
 
 func TestHandleRequestHeadersSkipProcessingPreservesStreamingDetection(t *testing.T) {
-	router := &OpenAIRouter{}
+	router := newRouterWithSkipProcessingGate(true)
 	ctx := &RequestContext{Headers: make(map[string]string)}
 
 	request := &ext_proc.ProcessingRequest_RequestHeaders{
@@ -159,6 +165,57 @@ func TestHandleRequestHeadersSkipProcessingPreservesStreamingDetection(t *testin
 	}
 }
 
+func TestHandleRequestHeadersSkipProcessingHeaderIgnoredWhenGateDisabled(t *testing.T) {
+	tests := []struct {
+		name   string
+		router *OpenAIRouter
+	}{
+		{name: "default zero-value router has gate disabled", router: &OpenAIRouter{}},
+		{name: "explicit disabled gate", router: newRouterWithSkipProcessingGate(false)},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			ctx := &RequestContext{Headers: make(map[string]string)}
+			request := newSkipProcessingRequestHeaders("GET", "/v1/models", "true")
+
+			response, err := tt.router.handleRequestHeaders(request, ctx)
+			if err != nil {
+				t.Fatalf("handleRequestHeaders failed: %v", err)
+			}
+			if ctx.SkipProcessing {
+				t.Fatal("expected SkipProcessing to remain false when the deployment gate is off, even with the header set to true")
+			}
+			if got := ctx.Headers[headers.VSRSkipProcessing]; got != "true" {
+				t.Fatalf("expected raw header to still be captured, got %q", got)
+			}
+			if response == nil {
+				t.Fatal("expected a processing response even when the header is ignored")
+			}
+		})
+	}
+}
+
+func TestSkipProcessingEnabledHelper(t *testing.T) {
+	tests := []struct {
+		name   string
+		router *OpenAIRouter
+		want   bool
+	}{
+		{name: "nil router", router: nil, want: false},
+		{name: "router without config", router: &OpenAIRouter{}, want: false},
+		{name: "config with zero-value SkipProcessing", router: &OpenAIRouter{Config: &config.RouterConfig{}}, want: false},
+		{name: "operator enabled the gate", router: newRouterWithSkipProcessingGate(true), want: true},
+		{name: "operator explicitly disabled the gate", router: newRouterWithSkipProcessingGate(false), want: false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := tt.router.skipProcessingEnabled(); got != tt.want {
+				t.Fatalf("skipProcessingEnabled()=%v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
 func TestHandleRequestBodyDispatchSkipProcessingShortCircuits(t *testing.T) {
 	router := &OpenAIRouter{}
 	ctx := &RequestContext{
@@ -166,8 +223,6 @@ func TestHandleRequestBodyDispatchSkipProcessingShortCircuits(t *testing.T) {
 		SkipProcessing: true,
 	}
 
-	// Intentionally pass a body that would otherwise trip request validation
-	// (empty/non-JSON). The opt-out must bypass parsing entirely.
 	request := &ext_proc.ProcessingRequest_RequestBody{
 		RequestBody: &ext_proc.HttpBody{
 			Body:        []byte(""),
@@ -198,8 +253,6 @@ func TestHandleRequestBodyDispatchSkipProcessingShortCircuits(t *testing.T) {
 
 func TestHandleResponseHeadersSkipProcessingBypassesVSRHeaders(t *testing.T) {
 	router := &OpenAIRouter{}
-	// Populate VSR decision metadata that would normally be projected onto the
-	// response as x-vsr-* headers; the opt-out must drop the entire mutation.
 	ctx := &RequestContext{
 		SkipProcessing:          true,
 		VSRSelectedCategory:     "math",
@@ -268,10 +321,7 @@ func TestHandleResponseBodySkipProcessingShortCircuits(t *testing.T) {
 	router := &OpenAIRouter{}
 	ctx := &RequestContext{
 		SkipProcessing: true,
-		// Set RequestModel so the deferred metric decrement does not panic on
-		// nil collectors when the helper is unexpectedly reached. The handler
-		// should short-circuit before the defer registers either way.
-		RequestModel: "passthrough",
+		RequestModel:   "passthrough",
 	}
 	responseBody := &ext_proc.ProcessingRequest_ResponseBody{
 		ResponseBody: &ext_proc.HttpBody{

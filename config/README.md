@@ -30,6 +30,7 @@ Inside canonical `config.yaml`:
 - reusable startup-loaded knowledge bases live under `global.model_catalog.kbs[]`, while `routing.signals.kb[]` binds label/group matches into normal routing signals
 - built-in knowledge base defaults keep `source.path` aligned with the steady-state `knowledge_bases/<dir>/` contract; local/dev runtime seeds missing built-ins from `config/knowledge_bases/<dir>/` into `.vllm-sr/knowledge_bases/<dir>/` once, and router reads the shared runtime KB store from there
 - `global.router.config_source` selects the router's steady-state config source; the exhaustive reference uses `file`, while Kubernetes CRD reconciliation uses `kubernetes`
+- `global.router.skip_processing.enabled` opts the router into honoring the `x-vsr-skip-processing` request header; defaults to `false` so an arbitrary upstream caller cannot bypass router policy by injecting the header. Enable only when an authenticated upstream filter (ext_authz, etc.) is responsible for setting or stripping the header (see [#1808](https://github.com/vllm-project/semantic-router/issues/1808))
 - router-owned model-backed module config lives under `global.model_catalog.modules`
 
 `config/decision/` is organized by boolean rule shape:

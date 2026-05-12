@@ -213,6 +213,12 @@ persistence:
   annotations: {}
   # -- Existing claim name (if provided, will use existing PVC instead of creating new one)
   existingClaim: ""
+# Router runtime feature gates
+router:
+  # -- Honor the x-vsr-skip-processing request header. Default: false.
+  # See https://github.com/vllm-project/semantic-router/issues/1808.
+  skipProcessing:
+    enabled: false
 # Application configuration
 config:
   version: v0.3
