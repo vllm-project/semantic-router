@@ -27,6 +27,7 @@ vllm-sr serve --image-pull-policy never
 ```
 
 For AMD ROCm:
+
 ```bash
 make vllm-sr-dev VLLM_SR_PLATFORM=amd
 vllm-sr serve --image-pull-policy never --platform amd
@@ -61,6 +62,7 @@ make go-lint                 # Go lint
 make go-lint-fix             # Go lint with auto-fix
 make check-go-mod-tidy       # verify Go modules
 pre-commit run --all-files   # all pre-commit hooks
+markdownlint -c tools/linter/markdown/markdownlint.yaml "**/*.md"  # Markdown lint
 ```
 
 ## Commit Trajectory and PR Scoping
@@ -121,6 +123,7 @@ This repo has a full agent harness. For complex tasks:
 4. Validate with the canonical gates before marking work complete.
 
 The executable rule layer lives in:
+
 - `tools/agent/repo-manifest.yaml`
 - `tools/agent/task-matrix.yaml`
 - `tools/agent/skill-registry.yaml`
