@@ -16,6 +16,20 @@ func validateEmbeddingContracts(cfg *RouterConfig) error {
 	return validateEmbeddingRuleModalities(cfg.EmbeddingRules, cfg.EmbeddingModels.EmbeddingConfig.ModelType)
 }
 
+// ValidateEmbeddingContracts is the exported counterpart of the private
+// validateEmbeddingContracts function. It exists so packages outside pkg/config
+// (notably the reconciler in pkg/k8s) can apply the embedding-modality
+// contract directly, since validateConfigStructure short-circuits on
+// ConfigSource == ConfigSourceKubernetes and would otherwise let CRD-loaded
+// configs skip a contract that file-loaded configs are held to.
+//
+// The signature mirrors the private function 1:1 and the call site reads
+// ValidateEmbeddingContracts(cfg) so the contract has a single canonical
+// shape regardless of source.
+func ValidateEmbeddingContracts(cfg *RouterConfig) error {
+	return validateEmbeddingContracts(cfg)
+}
+
 // validateEmbeddingRuleModalities checks every embedding rule's declared
 // query_modality is recognized and compatible with the configured embedding
 // model. Returns a non-nil error listing every misconfigured rule, or nil
@@ -28,9 +42,8 @@ func validateEmbeddingContracts(cfg *RouterConfig) error {
 //     in mismatched spaces.
 //   - "audio": rejected at config-load with a clear "planned" message. The
 //     schema accepts the value so future configs do not need to migrate, but
-//     the candle-binding MultiModalEncodeAudioFromBase64 FFI is not yet
-//     exposed, so any rule declaring audio cannot be served and is loud-failed
-//     early.
+//     the audio FFI is not yet exposed by candle-binding, so any rule
+//     declaring audio cannot be served and is loud-failed early.
 //   - any other value: rejected as an unknown modality so a typo like "imag"
 //     cannot silently drop a rule out of every classification path.
 func validateEmbeddingRuleModalities(rules []EmbeddingRule, modelType string) error {
@@ -50,7 +63,7 @@ func validateEmbeddingRuleModalities(rules []EmbeddingRule, modelType string) er
 			}
 		case QueryModalityAudio:
 			problems = append(problems, fmt.Sprintf(
-				"embedding rule %q declares query_modality=audio, but the audio FFI (MultiModalEncodeAudioFromBase64) is not yet exposed by candle-binding. Audio query support is planned; remove the rule or set query_modality to text/image until the FFI lands",
+				"embedding rule %q declares query_modality=audio, but the audio FFI is not yet exposed by candle-binding. Audio query support is planned; remove the rule or set query_modality to text/image until the FFI lands",
 				rule.Name))
 		default:
 			problems = append(problems, fmt.Sprintf(

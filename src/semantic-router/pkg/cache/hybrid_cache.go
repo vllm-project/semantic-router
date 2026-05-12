@@ -44,9 +44,7 @@ var searchBufferPool = sync.Pool{
 func getSearchBuffers() *searchBuffers {
 	buf := searchBufferPool.Get().(*searchBuffers)
 	// Clear maps and heaps for reuse
-	for k := range buf.visited {
-		delete(buf.visited, k)
-	}
+	clear(buf.visited)
 	buf.candidates.data = buf.candidates.data[:0]
 	buf.results.data = buf.results.data[:0]
 	return buf
@@ -283,8 +281,9 @@ func (h *HybridCache) RebuildFromMilvus(ctx context.Context) error {
 	defer h.mu.Unlock()
 
 	// Clear existing index
-	h.embeddings = make([][]float32, 0, len(embeddings))
-	h.idMap = make(map[int]string)
+	loadLimit := min(len(embeddings), h.maxMemoryEntries)
+	h.embeddings = make([][]float32, 0, loadLimit)
+	h.idMap = make(map[int]string, loadLimit)
 	h.hnswIndex = newHNSWIndex(h.hnswIndex.M, h.hnswIndex.efConstruction)
 
 	// Rebuild HNSW index with progress logging

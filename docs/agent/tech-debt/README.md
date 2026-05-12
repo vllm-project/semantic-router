@@ -78,6 +78,7 @@ Keep the numeric index unique within `docs/agent/tech-debt/`.
 - [TD037 Dev Integration Environment Ownership and Shared-Suite Topology Still Diverge Across CLI, Kind, and CI](td-037-dev-integration-env-ownership-and-shared-suite-topology.md)
 - [TD038 Custom Chat Completions Structs Duplicate Official OpenAI SDK Types](td-038-custom-chat-completions-structs.md)
 - [TD039 Control Planes Still Depend on Router Runtime Internals Instead of Contract-Owned Seams](td-039-control-plane-contract-ownership-collapse.md)
+- [TD040 Kubernetes Reconcile Path Skips File-Config Family Validators](td-040-reconcile-path-skips-family-validators.md)
 
 ## Architecture Review Coverage Map
 

@@ -51,6 +51,159 @@ config:
           - type: fast_response
             configuration:
               message: Your request contains personal information. Please remove any sensitive data and try again.
+      - name: tool_selection_add_weather_decision
+        description: Contract route for tool_selection add mode (weather-aligned retrieval)
+        priority: 500
+        rules:
+          operator: OR
+          conditions:
+            - type: keyword
+              name: tool_selection_add_weather
+        modelRefs:
+          - model: base-model
+            lora_name: general-expert
+            use_reasoning: false
+        plugins:
+          - type: tools
+            configuration:
+              enabled: true
+              mode: passthrough
+              semantic_selection: false
+          - type: tool_selection
+            configuration:
+              enabled: true
+              mode: add
+              top_k: 3
+              similarity_threshold: 0.01
+              strategy: default
+      - name: tool_selection_add_calc_decision
+        description: Contract route for tool_selection add mode (math-aligned retrieval)
+        priority: 500
+        rules:
+          operator: OR
+          conditions:
+            - type: keyword
+              name: tool_selection_add_calc
+        modelRefs:
+          - model: base-model
+            lora_name: general-expert
+            use_reasoning: false
+        plugins:
+          - type: tools
+            configuration:
+              enabled: true
+              mode: passthrough
+              semantic_selection: false
+          - type: tool_selection
+            configuration:
+              enabled: true
+              mode: add
+              top_k: 3
+              similarity_threshold: 0.01
+              strategy: default
+      - name: tool_selection_filter_decision
+        description: Contract route for tool_selection filter mode
+        priority: 500
+        rules:
+          operator: OR
+          conditions:
+            - type: keyword
+              name: tool_selection_filter
+        modelRefs:
+          - model: base-model
+            lora_name: general-expert
+            use_reasoning: false
+        plugins:
+          - type: tools
+            configuration:
+              enabled: true
+              mode: passthrough
+              semantic_selection: false
+          - type: tool_selection
+            configuration:
+              enabled: true
+              mode: filter
+              relevance_threshold: 0.22
+              preserve_count: 2
+      - name: tool_selection_filter_threshold_decision
+        description: Contract route for tool_selection filter mode with strict relevance threshold
+        priority: 500
+        rules:
+          operator: OR
+          conditions:
+            - type: keyword
+              name: tool_selection_filter_threshold
+        modelRefs:
+          - model: base-model
+            lora_name: general-expert
+            use_reasoning: false
+        plugins:
+          - type: tools
+            configuration:
+              enabled: true
+              mode: passthrough
+              semantic_selection: false
+          - type: tool_selection
+            configuration:
+              enabled: true
+              mode: filter
+              relevance_threshold: 0.95
+              preserve_count: 1
+      - name: tool_selection_add_topk_one_decision
+        description: Contract route for tool_selection add mode with alternate top_k
+        priority: 500
+        rules:
+          operator: OR
+          conditions:
+            - type: keyword
+              name: tool_selection_add_topk_one
+        modelRefs:
+          - model: base-model
+            lora_name: general-expert
+            use_reasoning: false
+        plugins:
+          - type: tools
+            configuration:
+              enabled: true
+              mode: passthrough
+              semantic_selection: false
+          - type: tool_selection
+            configuration:
+              enabled: true
+              mode: add
+              top_k: 1
+              similarity_threshold: 0.01
+              strategy: default
+      - name: tool_selection_with_system_prompt_decision
+        description: Contract route for tool_selection stacked with system_prompt plugin
+        priority: 500
+        rules:
+          operator: OR
+          conditions:
+            - type: keyword
+              name: tool_selection_with_system_prompt
+        modelRefs:
+          - model: base-model
+            lora_name: general-expert
+            use_reasoning: false
+        plugins:
+          - type: tools
+            configuration:
+              enabled: true
+              mode: passthrough
+              semantic_selection: false
+          - type: tool_selection
+            configuration:
+              enabled: true
+              mode: add
+              top_k: 2
+              similarity_threshold: 0.01
+              strategy: default
+          - type: system_prompt
+            configuration:
+              enabled: true
+              system_prompt: "Contract route: system_prompt + tool_selection (non-PII path)."
+              mode: append
       - name: business_decision
         description: Business and management related queries
         priority: 10
@@ -376,6 +529,36 @@ config:
             - SSN
             - credit card
           case_sensitive: false
+        - name: tool_selection_add_weather
+          operator: OR
+          keywords:
+            - __TOOL_SELECTION_ADD_WEATHER__
+          case_sensitive: false
+        - name: tool_selection_add_calc
+          operator: OR
+          keywords:
+            - __TOOL_SELECTION_ADD_CALC__
+          case_sensitive: false
+        - name: tool_selection_filter
+          operator: OR
+          keywords:
+            - __TOOL_SELECTION_FILTER__
+          case_sensitive: false
+        - name: tool_selection_filter_threshold
+          operator: OR
+          keywords:
+            - __TOOL_SELECTION_FILTER_THRESHOLD__
+          case_sensitive: false
+        - name: tool_selection_add_topk_one
+          operator: OR
+          keywords:
+            - __TOOL_SELECTION_ADD_TOPK_ONE__
+          case_sensitive: false
+        - name: tool_selection_with_system_prompt
+          operator: OR
+          keywords:
+            - __TOOL_SELECTION_WITH_SYSTEM_PROMPT__
+          case_sensitive: false
       domains:
         - name: business
           description: Business, corporate strategy, management, finance, marketing
@@ -505,6 +688,64 @@ config:
         similarity_threshold: 0.2
         tools_db_path: config/tools_db.json
         fallback_to_empty: true
+toolsDb:
+  - tool:
+      type: function
+      function:
+        name: get_weather
+        description: Get current weather information for a location
+        parameters:
+          type: object
+          properties:
+            location:
+              type: string
+              description: City and region to query
+          required:
+            - location
+    description: Weather forecast and current weather lookup for city-based requests.
+    category: weather
+    tags:
+      - weather
+      - forecast
+      - temperature
+  - tool:
+      type: function
+      function:
+        name: calculate
+        description: Perform mathematical calculations
+        parameters:
+          type: object
+          properties:
+            expression:
+              type: string
+              description: Mathematical expression to evaluate
+          required:
+            - expression
+    description: Math computation helper for arithmetic and equation solving.
+    category: math
+    tags:
+      - math
+      - calculator
+      - arithmetic
+  - tool:
+      type: function
+      function:
+        name: search_web
+        description: Search web resources for recent information
+        parameters:
+          type: object
+          properties:
+            query:
+              type: string
+              description: Search query text
+          required:
+            - query
+    description: Web search utility for current events and external information retrieval.
+    category: search
+    tags:
+      - search
+      - web
+      - internet
 resources:
   limits:
     cpu: "2"

@@ -192,6 +192,7 @@ docs:
   - docs/agent/tech-debt/td-037-dev-integration-env-ownership-and-shared-suite-topology.md
   - docs/agent/tech-debt/td-038-custom-chat-completions-structs.md
   - docs/agent/tech-debt/td-039-control-plane-contract-ownership-collapse.md
+  - docs/agent/tech-debt/td-040-reconcile-path-skips-family-validators.md
   - docs/agent/glossary.md
   - docs/agent/adr/README.md
   - docs/agent/adr/adr-0001-harness-layering.md
@@ -504,6 +505,9 @@ doc_governance:
     - path: docs/agent/tech-debt/td-039-control-plane-contract-ownership-collapse.md
       steward: agent-contract
       freshness: update when the TD039 debt record changes materially
+    - path: docs/agent/tech-debt/td-040-reconcile-path-skips-family-validators.md
+      steward: agent-contract
+      freshness: update when the TD040 debt record changes materially
     - path: docs/agent/glossary.md
       steward: agent-contract
       freshness: update when harness terms or categories change
