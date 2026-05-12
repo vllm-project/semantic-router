@@ -1,0 +1,43 @@
+# Open Code configuration for vLLM Semantic Router
+# See: https://opencode.ai/docs/configuration
+
+name: vllm-semantic-router
+description: Intelligent LLM request router using Envoy ExtProc for semantic classification and model selection.
+
+instructions: |
+  This is the vLLM Semantic Router repository. It routes LLM inference requests
+  to appropriate model backends based on semantic signals (reasoning complexity,
+  PII detection, jailbreak detection, etc.).
+
+  ## Key Entry Points
+  - AGENTS.md — agent harness entrypoint
+  - docs/agent/README.md — full agent documentation
+  - CONTRIBUTING.md — contributor guide
+
+  ## Development
+  - Local dev: `make vllm-sr-dev && vllm-sr serve --image-pull-policy never`
+  - Run tests: `make test-semantic-router` (Go), `make test-binding` (Rust)
+  - Lint: `make go-lint`, `pre-commit run --all-files`
+  - Validate: `make agent-validate`, `make agent-ci-gate CHANGED_FILES="..."`
+  - Full PR gate: `make agent-pr-gate`
+
+  ## Commit Trajectory and PR Scoping
+  - Structure commits as a reviewable trajectory: one logical step per commit.
+  - Separate concerns: refactor in one commit, new logic next, tests after.
+  - Each commit must compile and pass lint — never break the tree mid-sequence.
+  - Sign off commits: `git commit -s` (DCO required).
+  - Narrow the blast radius: touch only files necessary for the change.
+  - One subsystem per PR when possible; don't mix unrelated cleanups.
+  - PR titles use module prefixes: [Router], [Dashboard], [Operator], [Docs], etc.
+  - Include a Test Plan section with validation steps and outcomes.
+  - Behavior-visible changes need E2E test updates unless pure refactor.
+  - Read the nearest local AGENTS.md before editing hotspot directories.
+
+  ## Architecture
+  - Layer model: signal → decision → algorithm → plugin → global
+  - One responsibility per file; legacy hotspots are debt, not precedent.
+  - Go router: src/semantic-router/
+  - Python CLI: src/vllm-sr/
+  - Rust bindings: candle-binding/, ml-binding/, nlp-binding/
+  - Dashboard: dashboard/ (React + Go)
+  - Operator: deploy/operator/

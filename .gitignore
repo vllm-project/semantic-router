@@ -127,25 +127,23 @@ results/
 reports/
 test-results/
 
-# AI tooling regulation docs
-# Ignore Copilot/Claude/Cursor rule docs anywhere in the repo
+# AI tooling — block personal/local agent configs in subdirectories
 **/[Cc]laude*.md
 **/[Cc]ursor*.md
 .github/[Cc]laude*.md
 .github/[Cc]ursor*.md
+**/.cursorrules
+**/.cursorrules.*
 
-# Cursor editor rules files
-.cursorrules
-.cursorrules.*
+# Allow only the root-level agent manifests that are intentionally tracked
+!/CLAUDE.md
+!/.cursorrules
 
 # augment editor rules
 .augment
 
 # Local agent harness artifacts
 .agent-harness/
-
-# Claude Code configuration (should not be committed)
-CLAUDE.md
 
 # Dashboard frontend (React + TypeScript + Vite)
 dashboard/frontend/node_modules/
