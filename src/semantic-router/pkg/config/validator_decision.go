@@ -11,6 +11,9 @@ func validateDecisionContracts(cfg *RouterConfig) error {
 	if err := validateDecisionModelContracts(cfg); err != nil {
 		return err
 	}
+	if err := validateDecisionEmitContracts(cfg); err != nil {
+		return err
+	}
 	return validateDecisionPluginContracts(cfg)
 }
 
@@ -109,6 +112,11 @@ func validateDecisionPluginContracts(cfg *RouterConfig) error {
 	for _, decision := range cfg.Decisions {
 		if toolsCfg := decision.GetToolsConfig(); toolsCfg != nil {
 			if err := toolsCfg.Validate(); err != nil {
+				return fmt.Errorf("decision '%s': %w", decision.Name, err)
+			}
+		}
+		if tsCfg := decision.GetToolSelectionConfig(); tsCfg != nil {
+			if err := tsCfg.Validate(); err != nil {
 				return fmt.Errorf("decision '%s': %w", decision.Name, err)
 			}
 		}

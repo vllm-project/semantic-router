@@ -7,6 +7,7 @@ import (
 	"go.opentelemetry.io/otel/trace"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/projectiontrace"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/ratelimit"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/routerreplay"
 )
@@ -127,6 +128,7 @@ type RequestContext struct {
 	VSRProjectionScores    map[string]float64
 	VSRSignalConfidences   map[string]float64
 	VSRSignalValues        map[string]float64
+	VSRProjectionTrace     *projectiontrace.Trace
 
 	// Endpoint tracking for windowed metrics
 	SelectedEndpoint string // The endpoint address selected for this request
@@ -201,6 +203,12 @@ type RequestContext struct {
 
 	// Rate limit context - stored after Check() for post-response Report()
 	RateLimitCtx *ratelimit.Context
+
+	// EmittedRetention is a deep-clone snapshot of the retention directive
+	// emitted by the matched Decision. The clone owns its own pointer fields
+	// so that any later mutation does not poison the read-only config tree.
+	// nil means the matched decision had no EMIT retention block.
+	EmittedRetention *config.RetentionDirective
 }
 
 // HasPersonalizedContext returns true if the request/response is tainted with user-specific

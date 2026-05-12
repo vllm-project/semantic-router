@@ -63,7 +63,7 @@ The repository now exposes several user-visible stateful product surfaces beyond
 - Deployed config intent stays canonical in YAML or DSL, while dashboard-facing query, audit, and topology needs rely on a persisted derived projection rather than ad hoc reparsing or a second mutable primary source of truth.
 - CLI-mounted local workspace state is treated as one adapter for local development rather than the only implicit persistence contract for production-like features.
 - Background progress and health reporting move toward typed, restart-aware state records or events instead of log scraping, temp-file guesses, or browser-only localStorage.
-- Existing subsystem debts such as TD005, TD021, TD031, and TD032 can converge on one shared control-plane state model instead of drifting independently.
+- Existing subsystem debts such as TD005, TD031, and TD032 can converge on one shared control-plane state model instead of drifting independently (TD021 Milvus lifecycle duplication is retired; see archived entry).
 
 ## Exit Criteria
 

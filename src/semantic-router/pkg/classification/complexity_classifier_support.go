@@ -183,7 +183,7 @@ func (c *ComplexityClassifier) storeCandidateEmbeddingResult(result complexityCa
 	c.easyEmbeddings[result.ruleName][result.candidate] = result.embedding
 }
 
-func (c *ComplexityClassifier) loadQueryEmbeddings(query string, imageURL string) (complexityQueryEmbeddings, error) {
+func (c *ComplexityClassifier) loadQueryEmbeddingsCached(query string, imageURL string, cache *requestImageEmbeddingCache) (complexityQueryEmbeddings, error) {
 	queryOutput, err := getEmbeddingWithModelType(query, c.modelType, 0)
 	if err != nil {
 		return complexityQueryEmbeddings{}, fmt.Errorf("failed to compute query embedding: %w", err)
@@ -196,7 +196,7 @@ func (c *ComplexityClassifier) loadQueryEmbeddings(query string, imageURL string
 
 	embeddings.mmText = c.loadOptionalMultiModalTextEmbedding(query)
 	if imageURL != "" {
-		embeddings.image = c.loadOptionalMultiModalImageEmbedding(imageURL)
+		embeddings.image = c.loadOptionalMultiModalImageEmbeddingCached(imageURL, cache)
 	}
 	return embeddings, nil
 }
@@ -210,8 +210,10 @@ func (c *ComplexityClassifier) loadOptionalMultiModalTextEmbedding(query string)
 	return embedding
 }
 
-func (c *ComplexityClassifier) loadOptionalMultiModalImageEmbedding(imageURL string) []float32 {
-	embedding, err := getMultiModalImageEmbedding(imageURL, 0)
+func (c *ComplexityClassifier) loadOptionalMultiModalImageEmbeddingCached(imageURL string, cache *requestImageEmbeddingCache) []float32 {
+	embedding, err := cache.resolve(imageURL, 0, func() ([]float32, error) {
+		return getMultiModalImageEmbedding(imageURL, 0)
+	})
 	if err != nil {
 		logging.Warnf("[Complexity Signal] Failed to compute request image embedding: %v", err)
 		return nil

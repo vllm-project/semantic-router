@@ -238,6 +238,7 @@ func TestClassifierEvaluateAllSignalsWithContext_ReaskRecordsConfidenceAndStreak
 		"",
 		nil,
 		ConversationFacts{},
+		nil,
 	)
 
 	if len(results.MatchedReaskRules) != 1 || results.MatchedReaskRules[0] != "persistently_dissatisfied" {
@@ -300,6 +301,7 @@ func TestClassifierEvaluateAllSignalsWithContext_ReaskRetainsOnlyPersistentTier(
 		"",
 		nil,
 		ConversationFacts{},
+		nil,
 	)
 
 	if len(results.MatchedReaskRules) != 1 || results.MatchedReaskRules[0] != "persistently_dissatisfied" {
@@ -356,6 +358,7 @@ func TestClassifierEvaluateAllSignalsWithContext_ReaskIgnoresNonUserMessages(t *
 		"",
 		nil,
 		ConversationFacts{},
+		nil,
 	)
 
 	if len(results.MatchedReaskRules) != 0 {

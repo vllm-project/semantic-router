@@ -33,7 +33,7 @@
 - [x] `S003` Audit the `ai-gateway` and shared router testcase set into acceptance contracts versus report-only or benchmark cases, then define explicit thresholds for the acceptance set.
 - [x] `S004` Refactor shared E2E testcase helpers so metric collection, detailed reporting, and pass/fail evaluation are separate concerns.
 - [ ] `S005` Extract classification discovery/bootstrap, per-family adapters, and service assembly seams so `classifier.go` and `services/classification.go` stop growing as multi-role orchestrators.
-- [ ] `S006` Introduce a shared Milvus lifecycle seam and migrate the duplicated runtime stores toward it without collapsing their domain-specific query semantics.
+- [x] `S006` Introduce a shared Milvus lifecycle seam and migrate the duplicated runtime stores toward it without collapsing their domain-specific query semantics.
 - [ ] `S007` Run the required harness validation and close TD019, TD020, and TD021 when the executable code catches up to the desired design.
 
 ## Current Loop

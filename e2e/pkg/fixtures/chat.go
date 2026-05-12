@@ -2,6 +2,7 @@ package fixtures
 
 import (
 	"context"
+	"encoding/json"
 	"net/http"
 	"time"
 )
@@ -12,12 +13,29 @@ type ChatMessage struct {
 	Content string `json:"content"`
 }
 
+// ChatTool is a minimal OpenAI-format tool definition for E2E requests.
+type ChatTool struct {
+	Type     string       `json:"type"`
+	Function ChatToolFunc `json:"function"`
+}
+
+// ChatToolFunc is the function payload for a chat tool.
+type ChatToolFunc struct {
+	Name        string          `json:"name"`
+	Description string          `json:"description,omitempty"`
+	Parameters  json.RawMessage `json:"parameters,omitempty"`
+}
+
 // ChatCompletionsRequest is the typed request for /v1/chat/completions.
 type ChatCompletionsRequest struct {
 	Model    string        `json:"model"`
 	Messages []ChatMessage `json:"messages"`
 	// User is optional; forwarded for per-user routing and session correlation in tests.
 	User string `json:"user,omitempty"`
+	// Tools is optional; used by tool_selection filter-mode E2E contracts.
+	Tools []ChatTool `json:"tools,omitempty"`
+	// ToolChoice is optional; when omitted the gateway uses default auto behavior.
+	ToolChoice json.RawMessage `json:"tool_choice,omitempty"`
 }
 
 // ChatCompletionsClient talks to the routed chat-completions API.

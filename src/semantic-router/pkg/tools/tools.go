@@ -201,6 +201,13 @@ func (db *ToolsDatabase) AddTool(tool openai.ChatCompletionToolParam, descriptio
 	return nil
 }
 
+func (db *ToolsDatabase) similarityFloor(minOverride *float32) float32 {
+	if minOverride != nil {
+		return *minOverride
+	}
+	return db.similarityThreshold
+}
+
 // FindSimilarTools finds the most similar tools based on the query
 func (db *ToolsDatabase) FindSimilarTools(query string, topK int) ([]openai.ChatCompletionToolParam, error) {
 	results, err := db.FindSimilarToolsWithScores(query, topK)
@@ -218,6 +225,12 @@ func (db *ToolsDatabase) FindSimilarTools(query string, topK int) ([]openai.Chat
 
 // FindSimilarToolsWithScores finds the most similar tools based on the query and returns scores.
 func (db *ToolsDatabase) FindSimilarToolsWithScores(query string, topK int) ([]ToolSimilarity, error) {
+	return db.FindSimilarToolsWithScoresMinSimilarity(query, topK, nil)
+}
+
+// FindSimilarToolsWithScoresMinSimilarity is like FindSimilarToolsWithScores but allows overriding
+// the minimum similarity cutoff for this query (embedding dot-product scores).
+func (db *ToolsDatabase) FindSimilarToolsWithScoresMinSimilarity(query string, topK int, minSimilarity *float32) ([]ToolSimilarity, error) {
 	if !db.enabled {
 		return []ToolSimilarity{}, nil
 	}
@@ -241,12 +254,11 @@ func (db *ToolsDatabase) FindSimilarToolsWithScores(query string, topK int) ([]T
 			dotProduct += queryEmbedding[i] * entry.Embedding[i]
 		}
 
-		// Debug logging to see similarity scores
+		floor := db.similarityFloor(minSimilarity)
 		logging.Debugf("Tool '%s' similarity score: %.4f (threshold: %.4f)",
-			entry.Tool.Function.Name, dotProduct, db.similarityThreshold)
+			entry.Tool.Function.Name, dotProduct, floor)
 
-		// Only consider if above threshold
-		if dotProduct >= db.similarityThreshold {
+		if dotProduct >= floor {
 			results = append(results, ToolSimilarity{
 				Entry:      entry,
 				Similarity: dotProduct,

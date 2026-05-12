@@ -5,6 +5,8 @@ import (
 
 	"github.com/vllm-project/semantic-router/e2e/pkg/framework"
 	gatewaystack "github.com/vllm-project/semantic-router/e2e/pkg/stacks/gateway"
+
+	_ "github.com/vllm-project/semantic-router/e2e/testcases"
 )
 
 const (
@@ -58,6 +60,8 @@ func (p *Profile) Teardown(ctx context.Context, opts *framework.TeardownOptions)
 func (p *Profile) GetTestCases() []string {
 	return []string{
 		"router-replay-restart-recovery",
+		"router-replay-session-list-filter",
+		"router-replay-session-turn-progression",
 	}
 }
 

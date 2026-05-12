@@ -114,11 +114,17 @@ func validateDatasetsForConfig(cfg models.EvaluationConfig) (string, int) {
 	return "", 0
 }
 
+// fallbackRouterEvalEndpoint is the placeholder router eval URL the dashboard
+// frontend pre-populates when no in-cluster router address is available. The
+// frontend always sends this value, so the backend treats it as "unset" when a
+// server-side TARGET_ROUTER_API_URL override is configured.
+const fallbackRouterEvalEndpoint = "http://localhost:8080/api/v1/eval"
+
 func (h *EvaluationHandler) applyEvaluationCreateDefaults(cfg *models.EvaluationConfig) {
 	if cfg.MaxSamples <= 0 {
 		cfg.MaxSamples = 50
 	}
-	if cfg.Endpoint == "" {
+	if cfg.Endpoint == "" || h.shouldOverrideEndpoint(cfg) {
 		cfg.Endpoint = h.defaultEvaluationEndpoint(cfg.Level)
 	}
 	if cfg.SamplesPerCat <= 0 {
@@ -129,12 +135,26 @@ func (h *EvaluationHandler) applyEvaluationCreateDefaults(cfg *models.Evaluation
 	}
 }
 
+// shouldOverrideEndpoint returns true when the incoming endpoint matches the
+// frontend placeholder default and a server-side override is configured. This
+// keeps TARGET_ROUTER_API_URL effective in containerized deployments where the
+// dashboard cannot reach localhost:8080.
+func (h *EvaluationHandler) shouldOverrideEndpoint(cfg *models.EvaluationConfig) bool {
+	if cfg.Level != models.LevelRouter {
+		return false
+	}
+	if h.routerAPIURL == "" {
+		return false
+	}
+	return cfg.Endpoint == fallbackRouterEvalEndpoint
+}
+
 func (h *EvaluationHandler) defaultEvaluationEndpoint(level models.EvaluationLevel) string {
 	if level == models.LevelRouter {
 		if h.routerAPIURL != "" {
 			return strings.TrimSuffix(h.routerAPIURL, "/") + "/api/v1/eval"
 		}
-		return "http://localhost:8080/api/v1/eval"
+		return fallbackRouterEvalEndpoint
 	}
 	if h.envoyURL != "" {
 		return h.envoyURL

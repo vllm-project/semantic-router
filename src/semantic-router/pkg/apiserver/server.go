@@ -285,6 +285,9 @@ func (s *ClassificationAPIServer) registerClassificationRoutes(mux *http.ServeMu
 
 	// Evaluation endpoint - evaluates all configured signals regardless of decision usage
 	mux.HandleFunc("POST /api/v1/eval", s.handleEvalClassification)
+
+	// NLI endpoint - Natural Language Inference (premise vs. hypothesis classification)
+	mux.HandleFunc("POST /api/v1/nli", s.handleNLIClassification)
 }
 
 func (s *ClassificationAPIServer) registerEmbeddingRoutes(mux *http.ServeMux) {

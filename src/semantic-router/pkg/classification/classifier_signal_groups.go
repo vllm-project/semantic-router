@@ -7,6 +7,7 @@ import (
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/projectiontrace"
 )
 
 func (c *Classifier) applySignalGroups(results *SignalResults) *SignalResults {
@@ -18,11 +19,13 @@ func (c *Classifier) applySignalGroups(results *SignalResults) *SignalResults {
 		config.SignalTypeDomain,
 		results.MatchedDomainRules,
 		results.SignalConfidences,
+		results,
 	)
 	results.MatchedEmbeddingRules = c.applySignalGroupsForType(
 		config.SignalTypeEmbedding,
 		results.MatchedEmbeddingRules,
 		results.SignalConfidences,
+		results,
 	)
 
 	return results
@@ -44,6 +47,7 @@ func (c *Classifier) applySignalGroupsForType(
 	signalType string,
 	matched []string,
 	confidences map[string]float64,
+	results *SignalResults,
 ) []string {
 	result := matched
 	for _, group := range c.Config.Projections.Partitions {
@@ -51,7 +55,7 @@ func (c *Classifier) applySignalGroupsForType(
 		if len(members) <= 1 {
 			continue
 		}
-		result = applySignalGroupToMatches(signalType, group, members, result, confidences)
+		result = applySignalGroupToMatches(signalType, group, members, result, confidences, results)
 	}
 
 	return result
@@ -89,6 +93,7 @@ func applySignalGroupToMatches(
 	groupMembers []string,
 	matched []string,
 	confidences map[string]float64,
+	results *SignalResults,
 ) []string {
 	memberSet := make(map[string]struct{}, len(groupMembers))
 	for _, member := range groupMembers {
@@ -105,7 +110,7 @@ func applySignalGroupToMatches(
 	}
 
 	if len(contenders) == 0 {
-		return applySignalGroupDefaultFallback(signalType, group, memberSet, matched)
+		return applySignalGroupDefaultFallback(signalType, group, memberSet, matched, results)
 	}
 
 	if len(contenders) == 1 {
@@ -113,6 +118,7 @@ func applySignalGroupToMatches(
 	}
 
 	winner, winnerScore := selectSignalGroupWinner(signalType, group, contenders, confidences)
+	appendPartitionWinnerTrace(results, signalType, group, contenders, confidences, winner, winnerScore)
 
 	filtered := make([]string, 0, len(matched)-len(contenders)+1)
 	for _, name := range matched {
@@ -143,6 +149,7 @@ func applySignalGroupDefaultFallback(
 	group config.ProjectionPartition,
 	memberSet map[string]struct{},
 	matched []string,
+	results *SignalResults,
 ) []string {
 	if group.Default == "" {
 		return matched
@@ -162,7 +169,90 @@ func applySignalGroupDefaultFallback(
 		group.Name,
 		group.Default,
 	)
+	appendPartitionDefaultTrace(results, signalType, group)
 	return append(matched, group.Default)
+}
+
+func appendPartitionTraceEntry(results *SignalResults, entry projectiontrace.PartitionResolution) {
+	if results == nil {
+		return
+	}
+	if results.ProjectionTrace == nil {
+		results.ProjectionTrace = &projectiontrace.Trace{SchemaVersion: projectiontrace.SchemaVersion}
+	}
+	results.ProjectionTrace.Partitions = append(results.ProjectionTrace.Partitions, entry)
+}
+
+func appendPartitionDefaultTrace(results *SignalResults, signalType string, group config.ProjectionPartition) {
+	appendPartitionTraceEntry(results, projectiontrace.PartitionResolution{
+		GroupName:   group.Name,
+		SignalType:  signalType,
+		Semantics:   group.Semantics,
+		Temperature: group.Temperature,
+		Winner:      group.Default,
+		DefaultUsed: true,
+	})
+}
+
+func appendPartitionWinnerTrace(
+	results *SignalResults,
+	signalType string,
+	group config.ProjectionPartition,
+	contenders []string,
+	confidences map[string]float64,
+	winner string,
+	winnerScore float64,
+) {
+	raw := make([]float64, len(contenders))
+	for i, name := range contenders {
+		raw[i] = confidences[signalConfidenceKey(signalType, name)]
+	}
+	entry := projectiontrace.PartitionResolution{
+		GroupName:      group.Name,
+		SignalType:     signalType,
+		Semantics:      group.Semantics,
+		Temperature:    group.Temperature,
+		Winner:         winner,
+		WinnerScore:    winnerScore,
+		RawWinnerScore: rawScoreForName(signalType, winner, contenders, raw),
+	}
+	softmax := strings.EqualFold(group.Semantics, "softmax_exclusive")
+	var norm []float64
+	if softmax {
+		norm = softmaxScores(raw, group.Temperature)
+	}
+	for i, name := range contenders {
+		pc := projectiontrace.PartitionContender{Name: name, RawScore: raw[i]}
+		if softmax && i < len(norm) {
+			ns := norm[i]
+			pc.NormalizedScore = &ns
+		}
+		entry.Contenders = append(entry.Contenders, pc)
+	}
+	if softmax && len(norm) > 0 {
+		entry.Margin = topTwoMargin(norm)
+	} else {
+		entry.Margin = topTwoMargin(raw)
+	}
+	appendPartitionTraceEntry(results, entry)
+}
+
+func rawScoreForName(signalType, winner string, contenders []string, raw []float64) float64 {
+	for i, name := range contenders {
+		if name == winner && i < len(raw) {
+			return raw[i]
+		}
+	}
+	return 0
+}
+
+func topTwoMargin(values []float64) float64 {
+	if len(values) < 2 {
+		return 0
+	}
+	sorted := append([]float64(nil), values...)
+	sort.Slice(sorted, func(i, j int) bool { return sorted[i] > sorted[j] })
+	return sorted[0] - sorted[1]
 }
 
 func selectSignalGroupWinner(

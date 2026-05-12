@@ -153,6 +153,16 @@ extraVolumeMounts: []
 #     mountPath: /mnt/ml-models
 #     readOnly: true
 
+# Knowledge base label manifests (labels.json) for routing.signals.kb / global.model_catalog.kbs
+# ConfigMap keys should mirror subpaths under the mount, e.g. privacy/labels.json, mmlu/labels.json
+knowledgeBases:
+  # -- Mount an existing ConfigMap over /app/config/knowledge_bases (overrides image-bundled seeds when set)
+  enabled: false
+  # -- Name of a ConfigMap in the release namespace containing KB files
+  existingConfigMap: ""
+  # -- Container path; must stay aligned with builtin resolution under /app/config
+  mountPath: /app/config/knowledge_bases
+
 # Startup probe configuration (for slow-starting containers with model loading)
 # This probe runs FIRST and disables liveness/readiness probes until it succeeds
 # Models are now downloaded automatically at startup, which can take 10-20 minutes depending on network speed

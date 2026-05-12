@@ -1,6 +1,7 @@
 package classification
 
 import (
+	"errors"
 	"math"
 	"testing"
 
@@ -392,4 +393,306 @@ func makeEmbedding(values ...float32) []float32 {
 
 func intPtr(value int) *int {
 	return &value
+}
+
+// stubMultiModalImageLookup overrides getMultiModalImageEmbedding for tests.
+// keys map raw image payloads (the same string passed to ClassifyDetailedMultimodal)
+// to the embedding the multimodal model would have produced. Tests must
+// populate every payload they expect the classifier to embed; an unmocked
+// payload fails the test loudly so dimension or stub mismatches surface as
+// real failures instead of silently classifying against a 1-D zero vector.
+func stubMultiModalImageLookup(t *testing.T, mockEmbeddings map[string][]float32) {
+	t.Helper()
+
+	originalFunc := getMultiModalImageEmbedding
+	getMultiModalImageEmbedding = func(imageRef string, targetDim int) ([]float32, error) {
+		if emb, ok := mockEmbeddings[imageRef]; ok {
+			return emb, nil
+		}
+		t.Errorf("stubMultiModalImageLookup called with unmocked payload %q; populate the fixture or stub the embedding explicitly", imageRef)
+		t.FailNow()
+		return nil, nil
+	}
+	t.Cleanup(func() {
+		getMultiModalImageEmbedding = originalFunc
+	})
+}
+
+// chipFabImageRules returns a small, fictional anchor pack matching what
+// the chip-fab vertical demo will ship as its default. Candidates are
+// short text descriptions; the rule's QueryModality is Image so it only
+// fires when the request carries an image attachment.
+func chipFabImageRules() []config.EmbeddingRule {
+	return []config.EmbeddingRule{
+		{
+			Name:                      "chip_fab_sensitive_imagery",
+			Candidates:                []string{"wafer photo", "SEM micrograph"},
+			SimilarityThreshold:       0.70,
+			AggregationMethodConfiged: config.AggregationMethodMax,
+			QueryModality:             config.QueryModalityImage,
+		},
+		{
+			Name:                      "ambient_office_imagery",
+			Candidates:                []string{"office whiteboard", "conference room"},
+			SimilarityThreshold:       0.70,
+			AggregationMethodConfiged: config.AggregationMethodMax,
+			QueryModality:             config.QueryModalityImage,
+		},
+	}
+}
+
+// multimodalHNSWConfig returns the HNSWConfig every multimodal test needs.
+// Image and audio rules are init-rejected unless ModelType is "multimodal",
+// so this helper centralizes that pairing for the test fixtures below.
+func multimodalHNSWConfig(preload bool) config.HNSWConfig {
+	return config.HNSWConfig{
+		ModelType:         "multimodal",
+		PreloadEmbeddings: preload,
+	}
+}
+
+// mixedModalityRules combines text and image rules to verify the classifier
+// only scores rules that match the active query modality.
+func mixedModalityRules() []config.EmbeddingRule {
+	return []config.EmbeddingRule{
+		{
+			Name:                      "text_topic_ai",
+			Candidates:                []string{"machine learning", "neural network"},
+			SimilarityThreshold:       0.70,
+			AggregationMethodConfiged: config.AggregationMethodMax,
+			// QueryModality omitted: defaults to text, exercising the
+			// backward-compatible default path.
+		},
+		{
+			Name:                      "chip_fab_sensitive_imagery",
+			Candidates:                []string{"wafer photo", "SEM micrograph"},
+			SimilarityThreshold:       0.70,
+			AggregationMethodConfiged: config.AggregationMethodMax,
+			QueryModality:             config.QueryModalityImage,
+		},
+	}
+}
+
+func TestEmbeddingClassifier_ClassifyDetailedMultimodalImageHardMatch(t *testing.T) {
+	stubMultiModalImageLookup(t, map[string][]float32{
+		"data:image/png;base64,FAKE_WAFER_BYTES": makeEmbedding(0.9, 0.1, 0.0),
+	})
+	stubEmbeddingLookup(t, map[string][]float32{
+		// Text candidates are embedded the same way as for the text-query path
+		// because preloading goes through getEmbeddingWithModelType regardless
+		// of the rule's query modality. The multimodal model emits text and
+		// image embeddings in the same shared space, so this is a valid stub.
+		"wafer photo":       makeEmbedding(0.95, 0.0, 0.0),
+		"SEM micrograph":    makeEmbedding(0.85, 0.0, 0.0),
+		"office whiteboard": makeEmbedding(0.0, 0.95, 0.0),
+		"conference room":   makeEmbedding(0.0, 0.85, 0.0),
+	})
+
+	classifier := newTestEmbeddingClassifier(t, chipFabImageRules(), multimodalHNSWConfig(true))
+
+	result, err := classifier.ClassifyDetailedMultimodal(
+		config.QueryModalityImage,
+		"data:image/png;base64,FAKE_WAFER_BYTES",
+	)
+	if err != nil {
+		t.Fatalf("ClassifyDetailedMultimodal failed: %v", err)
+	}
+	if len(result.Matches) != 1 {
+		t.Fatalf("expected exactly one match, got %d: %+v", len(result.Matches), result.Matches)
+	}
+	if result.Matches[0].RuleName != "chip_fab_sensitive_imagery" {
+		t.Errorf("expected chip_fab_sensitive_imagery to match, got %s", result.Matches[0].RuleName)
+	}
+	if result.Matches[0].Method != "hard" {
+		t.Errorf("expected hard match, got %+v", result.Matches[0])
+	}
+}
+
+func TestEmbeddingClassifier_ClassifyDetailedFiltersOutImageRules(t *testing.T) {
+	stubEmbeddingLookup(t, map[string][]float32{
+		"machine learning":             makeEmbedding(0.0, 0.0, 0.95),
+		"neural network":               makeEmbedding(0.0, 0.0, 0.85),
+		"wafer photo":                  makeEmbedding(0.95, 0.0, 0.0),
+		"SEM micrograph":               makeEmbedding(0.85, 0.0, 0.0),
+		"TensorFlow training pipeline": makeEmbedding(0.0, 0.0, 0.95),
+	})
+
+	classifier := newTestEmbeddingClassifier(t, mixedModalityRules(), multimodalHNSWConfig(true))
+
+	result, err := classifier.ClassifyDetailed("TensorFlow training pipeline")
+	if err != nil {
+		t.Fatalf("ClassifyDetailed failed: %v", err)
+	}
+	for _, score := range result.Scores {
+		if score.Name == "chip_fab_sensitive_imagery" {
+			t.Errorf("text classification path should NOT score image-modality rules, got %+v", score)
+		}
+	}
+	if len(result.Matches) != 1 || result.Matches[0].RuleName != "text_topic_ai" {
+		t.Fatalf("expected text_topic_ai as sole match, got %+v", result.Matches)
+	}
+}
+
+func TestEmbeddingClassifier_ClassifyDetailedMultimodalFiltersOutTextRules(t *testing.T) {
+	stubMultiModalImageLookup(t, map[string][]float32{
+		"data:image/png;base64,FAKE_WAFER_BYTES": makeEmbedding(0.9, 0.0, 0.0),
+	})
+	stubEmbeddingLookup(t, map[string][]float32{
+		"machine learning": makeEmbedding(0.0, 0.0, 0.95),
+		"neural network":   makeEmbedding(0.0, 0.0, 0.85),
+		"wafer photo":      makeEmbedding(0.95, 0.0, 0.0),
+		"SEM micrograph":   makeEmbedding(0.85, 0.0, 0.0),
+	})
+
+	classifier := newTestEmbeddingClassifier(t, mixedModalityRules(), multimodalHNSWConfig(true))
+
+	result, err := classifier.ClassifyDetailedMultimodal(
+		config.QueryModalityImage,
+		"data:image/png;base64,FAKE_WAFER_BYTES",
+	)
+	if err != nil {
+		t.Fatalf("ClassifyDetailedMultimodal failed: %v", err)
+	}
+	for _, score := range result.Scores {
+		if score.Name == "text_topic_ai" {
+			t.Errorf("image classification path should NOT score text-modality rules, got %+v", score)
+		}
+	}
+	if len(result.Matches) != 1 || result.Matches[0].RuleName != "chip_fab_sensitive_imagery" {
+		t.Fatalf("expected chip_fab_sensitive_imagery as sole match, got %+v", result.Matches)
+	}
+}
+
+func TestEmbeddingClassifier_ClassifyDetailedMultimodalRejectsTextModality(t *testing.T) {
+	classifier := newTestEmbeddingClassifier(t, chipFabImageRules(), multimodalHNSWConfig(false))
+
+	_, err := classifier.ClassifyDetailedMultimodal(config.QueryModalityText, "anything")
+	if err == nil {
+		t.Fatal("expected error for modality=text passed to ClassifyDetailedMultimodal, got nil")
+	}
+	_, err = classifier.ClassifyDetailedMultimodal(config.QueryModality(""), "anything")
+	if err == nil {
+		t.Fatal("expected error for empty modality passed to ClassifyDetailedMultimodal, got nil")
+	}
+}
+
+func TestEmbeddingClassifier_ClassifyDetailedMultimodalRejectsEmptyPayload(t *testing.T) {
+	classifier := newTestEmbeddingClassifier(t, chipFabImageRules(), multimodalHNSWConfig(false))
+
+	_, err := classifier.ClassifyDetailedMultimodal(config.QueryModalityImage, "")
+	if err == nil {
+		t.Fatal("expected error for empty payload, got nil")
+	}
+}
+
+func TestEmbeddingClassifier_ClassifyDetailedMultimodalRejectsAudioUntilWired(t *testing.T) {
+	classifier := newTestEmbeddingClassifier(t, chipFabImageRules(), multimodalHNSWConfig(false))
+
+	_, err := classifier.ClassifyDetailedMultimodal(config.QueryModalityAudio, "data:audio/wav;base64,XYZ")
+	if err == nil {
+		t.Fatal("expected error for audio modality (not yet wired), got nil")
+	}
+}
+
+func TestEmbeddingClassifier_PreloadCoversImageModalityCandidates(t *testing.T) {
+	stubEmbeddingLookup(t, map[string][]float32{
+		"wafer photo":       makeEmbedding(0.95, 0.0, 0.0),
+		"SEM micrograph":    makeEmbedding(0.85, 0.0, 0.0),
+		"office whiteboard": makeEmbedding(0.0, 0.95, 0.0),
+		"conference room":   makeEmbedding(0.0, 0.85, 0.0),
+	})
+
+	classifier, err := NewEmbeddingClassifier(chipFabImageRules(), multimodalHNSWConfig(true))
+	if err != nil {
+		t.Fatalf("NewEmbeddingClassifier failed: %v", err)
+	}
+
+	// All four candidates across both image-modality rules should be preloaded.
+	// Preload is what makes the runtime image-query path cheap; without this
+	// guarantee, multimodal classification would silently re-embed every anchor
+	// per request.
+	got := classifier.GetPreloadStats()
+	if got != 4 {
+		t.Errorf("expected 4 preloaded candidates from image rules, got %d", got)
+	}
+}
+
+func TestEmbeddingClassifier_ClassifyDetailedMultimodalSurfacesEmbeddingErrors(t *testing.T) {
+	wantErr := errors.New("synthetic FFI failure")
+
+	originalFunc := getMultiModalImageEmbedding
+	getMultiModalImageEmbedding = func(imageRef string, targetDim int) ([]float32, error) {
+		return nil, wantErr
+	}
+	t.Cleanup(func() {
+		getMultiModalImageEmbedding = originalFunc
+	})
+
+	classifier, err := NewEmbeddingClassifier(chipFabImageRules(), multimodalHNSWConfig(false))
+	if err != nil {
+		t.Fatalf("NewEmbeddingClassifier failed: %v", err)
+	}
+
+	_, err = classifier.ClassifyDetailedMultimodal(config.QueryModalityImage, "data:image/png;base64,WHATEVER")
+	if err == nil {
+		t.Fatal("expected error to surface from getMultiModalImageEmbedding, got nil")
+	}
+	if !errors.Is(err, wantErr) {
+		t.Errorf("expected wrapped error to satisfy errors.Is for synthetic failure, got: %v", err)
+	}
+}
+
+// textOnlyRulesForGracefulDegradation is a fixture for the no-matching-rules
+// tests: a classifier configured with text-only rules should return an empty
+// result (not an error) when ClassifyDetailedMultimodal is called for image,
+// and a classifier configured with image-only rules should return an empty
+// result (not an error) when ClassifyDetailed is called for text.
+func textOnlyRulesForGracefulDegradation() []config.EmbeddingRule {
+	return []config.EmbeddingRule{
+		{
+			Name:                      "text_only_topic",
+			Candidates:                []string{"machine learning"},
+			SimilarityThreshold:       0.70,
+			AggregationMethodConfiged: config.AggregationMethodMax,
+		},
+	}
+}
+
+func TestEmbeddingClassifier_ClassifyDetailedMultimodalNoMatchingRulesReturnsEmpty(t *testing.T) {
+	classifier := newTestEmbeddingClassifier(t, textOnlyRulesForGracefulDegradation(), multimodalHNSWConfig(false))
+
+	result, err := classifier.ClassifyDetailedMultimodal(
+		config.QueryModalityImage,
+		"data:image/png;base64,WHATEVER",
+	)
+	if err != nil {
+		t.Fatalf("expected no error when classifier has no image rules, got: %v", err)
+	}
+	if result == nil {
+		t.Fatal("expected non-nil result on graceful-degradation path, got nil")
+	}
+	if len(result.Matches) != 0 {
+		t.Errorf("expected zero matches, got %+v", result.Matches)
+	}
+	if len(result.Scores) != 0 {
+		t.Errorf("expected zero scores, got %+v", result.Scores)
+	}
+}
+
+func TestEmbeddingClassifier_ClassifyDetailedNoMatchingTextRulesReturnsEmpty(t *testing.T) {
+	classifier := newTestEmbeddingClassifier(t, chipFabImageRules(), multimodalHNSWConfig(false))
+
+	result, err := classifier.ClassifyDetailed("any text query")
+	if err != nil {
+		t.Fatalf("expected no error when classifier has no text rules, got: %v", err)
+	}
+	if result == nil {
+		t.Fatal("expected non-nil result on graceful-degradation path, got nil")
+	}
+	if len(result.Matches) != 0 {
+		t.Errorf("expected zero matches, got %+v", result.Matches)
+	}
+	if len(result.Scores) != 0 {
+		t.Errorf("expected zero scores, got %+v", result.Scores)
+	}
 }

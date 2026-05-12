@@ -1,11 +1,13 @@
 package extproc
 
 import (
+	"encoding/json"
 	"strings"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/classification"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/projectiontrace"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/promptcompression"
 )
 
@@ -36,7 +38,7 @@ func (r *OpenAIRouter) prepareSignalEvaluationInput(history signalConversationHi
 			ToolMessageCount:       history.toolMessageCount,
 			ToolDefinitionCount:    history.toolDefinitionCount,
 			AssistantToolCallCount: history.assistantToolCallCount,
-			CompletedToolCycles:    history.completedToolCycles,
+			ToolResultCount:        history.toolResultCount,
 		},
 	}
 
@@ -58,8 +60,27 @@ func (r *OpenAIRouter) prepareSignalEvaluationInput(history signalConversationHi
 		return input
 	}
 
+	// Hard safety limit: truncate before any signal processing, independently of
+	// prompt_compression. Keeps embedding and classifier inference bounded even
+	// when compression is disabled, preventing super-linear latency blowup on
+	// giant prompts (see issue #1454).
+	input.evaluationText = r.applyMaxEvaluationChars(input.evaluationText)
+	input.compressedText = input.evaluationText
+
 	input.compressedText, input.skipCompressionSignals = r.compressSignalEvaluationText(input.evaluationText)
 	return input
+}
+
+// applyMaxEvaluationChars truncates evaluationText to the configured hard limit.
+// A limit <= 0 means no truncation. Only the routing-decision text is affected;
+// the actual request body forwarded to the model is never modified.
+func (r *OpenAIRouter) applyMaxEvaluationChars(text string) string {
+	limit := r.Config.PromptCompression.MaxEvaluationChars
+	if limit <= 0 || len(text) <= limit {
+		return text
+	}
+	logging.Infof("[SignalEval] evaluationText truncated by max_evaluation_chars: %d -> %d chars", len(text), limit)
+	return text[:limit]
 }
 
 func (r *OpenAIRouter) compressSignalEvaluationText(evaluationText string) (string, map[string]bool) {
@@ -109,6 +130,7 @@ func (r *OpenAIRouter) applySignalResultsToContext(ctx *RequestContext, signals 
 	ctx.VSRProjectionScores = cloneReplayFloat64Map(signals.ProjectionScores)
 	ctx.VSRSignalConfidences = cloneReplayFloat64Map(signals.SignalConfidences)
 	ctx.VSRSignalValues = cloneReplayFloat64Map(signals.SignalValues)
+	ctx.VSRProjectionTrace = cloneProjectionTraceForReplay(signals.ProjectionTrace)
 
 	if signals.JailbreakDetected {
 		ctx.JailbreakDetected = signals.JailbreakDetected
@@ -122,6 +144,23 @@ func (r *OpenAIRouter) applySignalResultsToContext(ctx *RequestContext, signals 
 
 	r.setFactCheckFromSignals(ctx, signals.MatchedFactCheckRules)
 	r.setModalityFromSignals(ctx, signals.MatchedModalityRules)
+}
+
+func cloneProjectionTraceForReplay(t *projectiontrace.Trace) *projectiontrace.Trace {
+	if t == nil {
+		return nil
+	}
+	b, err := json.Marshal(t)
+	if err != nil {
+		logging.Warnf("failed to clone projection trace for replay during marshal: %v", err)
+		return nil
+	}
+	var out projectiontrace.Trace
+	if err := json.Unmarshal(b, &out); err != nil {
+		logging.Warnf("failed to clone projection trace for replay during unmarshal: %v", err)
+		return nil
+	}
+	return &out
 }
 
 func cloneReplayFloat64Map(values map[string]float64) map[string]float64 {

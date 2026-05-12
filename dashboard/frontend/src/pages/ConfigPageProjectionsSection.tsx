@@ -196,7 +196,7 @@ export default function ConfigPageProjectionsSection({
       type: 'json',
       required: true,
       description:
-        'JSON array of { type, name, weight, value_source?, match?, miss? } objects.',
+        'JSON array of { type, name, weight, value_source?, match?, miss? } objects. Supported value_source: "binary" (default), "confidence", "raw". Use type "projection" with value_source "score" to reference earlier projection scores, or value_source "confidence" to reference mapping output confidences.',
       placeholder:
         '[{"type":"embedding","name":"technical_support","weight":0.18,"value_source":"confidence"}]',
     },
@@ -260,7 +260,7 @@ export default function ConfigPageProjectionsSection({
           semantics: data.semantics,
           members: parseJSONField<string[]>(data.members, 'Members'),
           temperature: data.temperature,
-          default: data.default?.trim() || undefined,
+          default: data.default?.trim() ?? '',
         }
         await withClonedConfig((next) => {
           const projectionConfig = ensureProjectionConfig(next)
@@ -288,7 +288,7 @@ export default function ConfigPageProjectionsSection({
           semantics: data.semantics,
           members: parseJSONField<string[]>(data.members, 'Members'),
           temperature: data.temperature,
-          default: data.default?.trim() || undefined,
+          default: data.default?.trim() ?? '',
         }
         await withClonedConfig((next) => {
           const projectionConfig = ensureProjectionConfig(next)
@@ -579,6 +579,31 @@ export default function ConfigPageProjectionsSection({
       ]}
     >
       <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
+        <p
+          style={{
+            margin: 0,
+            padding: '0.75rem 1rem',
+            borderRadius: 8,
+            background: 'var(--color-surface-elevated, rgba(255, 255, 255, 0.04))',
+            border: '1px solid var(--color-border-subtle, rgba(255, 255, 255, 0.08))',
+            fontSize: '0.875rem',
+            lineHeight: 1.5,
+            color: 'var(--color-text-secondary)',
+          }}
+        >
+          <strong style={{ color: 'var(--color-text)' }}>Debugging projections:</strong> when router replay is on,
+          each Insights record can include a structured{' '}
+          <code style={{ fontSize: '0.8em' }}>projection_trace</code> (partition contenders and winners, score
+          contributions, mapping confidence and boundary distance, per-output threshold steps). See{' '}
+          <a
+            href="https://vllm-semantic-router.com/docs/tutorials/projection/traces"
+            target="_blank"
+            rel="noreferrer"
+          >
+            Projection traces
+          </a>{' '}
+          in the docs.
+        </p>
         <TableHeader
           title="Projection Surfaces"
           count={partitions.length + scores.length + mappings.length}

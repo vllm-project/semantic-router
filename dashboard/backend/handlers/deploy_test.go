@@ -840,7 +840,7 @@ func TestMergeDeployPayload_RoundTripsMaintainedAMDConfig(t *testing.T) {
 	}
 
 	if got, want := canonicalizeYAMLForDiff(mergedCanonical), canonicalizeYAMLForDiff(originalCanonical); got != want {
-		t.Fatalf("import/decompile/compile/merge should preserve maintained AMD config\nwant:\n%s\n\ngot:\n%s", want, got)
+		t.Fatalf("import/decompile/compile/merge should preserve balance recipe config\nwant:\n%s\n\ngot:\n%s", want, got)
 	}
 }
 

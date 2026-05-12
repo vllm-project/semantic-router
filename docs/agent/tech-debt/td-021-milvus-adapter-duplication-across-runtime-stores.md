@@ -2,7 +2,7 @@
 
 ## Status
 
-Open
+Closed (retired 2026-04-29): shared seam lives in [`src/semantic-router/pkg/milvus`](../../../src/semantic-router/pkg/milvus/); runtime stores and `extproc` memory wiring use `ConnectGRPC` / `Connect`, `EnsureCollectionLoaded` (+ hooks), and `Retry`; `router_memory` now calls the same connect path. Domain-specific HNSW/schema and MilvusStore transient retry heuristics remain in their packages by design. A future Response API Milvus backend must build on `pkg/milvus`.
 
 ## Scope
 

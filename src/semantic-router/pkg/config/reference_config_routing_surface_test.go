@@ -3,23 +3,25 @@ package config
 import "reflect"
 
 var referenceSignalKeyByType = map[string]string{
-	SignalTypeAuthz:        "role_bindings",
-	SignalTypeComplexity:   "complexity",
-	SignalTypeContext:      "context",
-	SignalTypeDomain:       "domains",
-	SignalTypeEmbedding:    "embeddings",
-	SignalTypeFactCheck:    "fact_check",
-	SignalTypeJailbreak:    "jailbreak",
-	SignalTypeKeyword:      "keywords",
-	SignalTypeLanguage:     "language",
-	SignalTypeModality:     "modality",
-	SignalTypePII:          "pii",
-	SignalTypePreference:   "preferences",
-	SignalTypeReask:        "reasks",
-	SignalTypeStructure:    "structure",
-	SignalTypeConversation: "conversation",
-	SignalTypeKB:           "kb",
-	SignalTypeUserFeedback: "user_feedbacks",
+	SignalTypeAuthz:         "role_bindings",
+	SignalTypeComplexity:    "complexity",
+	SignalTypeContext:       "context",
+	SignalTypeDomain:        "domains",
+	SignalTypeEmbedding:     "embeddings",
+	SignalTypeFactCheck:     "fact_check",
+	SignalTypeJailbreak:     "jailbreak",
+	SignalTypeKeyword:       "keywords",
+	SignalTypeLanguage:      "language",
+	SignalTypeModality:      "modality",
+	SignalTypePII:           "pii",
+	SignalTypePreference:    "preferences",
+	SignalTypeReask:         "reasks",
+	SignalTypeStructure:     "structure",
+	SignalTypeConversation:  "conversation",
+	SignalTypeKB:            "kb",
+	SignalTypeUserFeedback:  "user_feedbacks",
+	SignalTypeSessionMetric: "session_metrics",
+	SignalTypeEventContext:  "event_context_rules",
 }
 
 func assertSupportedSignalTypesInReferenceConfig(t testingT, root map[string]interface{}) {
@@ -87,6 +89,7 @@ func assertReferenceCorePluginCoverage(t testingT, pluginsByType map[string][]ma
 	assertPluginConfigCoverage(t, pluginsByType["response_jailbreak"], reflect.TypeOf(ResponseJailbreakPluginConfig{}), "response_jailbreak")
 	assertPluginConfigCoverage(t, pluginsByType["router_replay"], reflect.TypeOf(RouterReplayPluginConfig{}), "router_replay")
 	assertPluginConfigCoverage(t, pluginsByType["request_params"], reflect.TypeOf(RequestParamsPluginConfig{}), "request_params")
+	assertPluginConfigCoverage(t, pluginsByType["tool_selection"], reflect.TypeOf(ToolSelectionPluginConfig{}), "tool_selection")
 }
 
 func assertReferenceNestedPluginCoverage(t testingT, pluginsByType map[string][]map[string]interface{}) {

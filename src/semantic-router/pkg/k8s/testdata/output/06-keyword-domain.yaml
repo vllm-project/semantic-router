@@ -153,6 +153,8 @@ global:
     authz: {}
     ratelimit: {}
     router_replay: {}
+    startup_status:
+      store_backend: ""
   stores:
     semantic_cache:
       backend_type: memory

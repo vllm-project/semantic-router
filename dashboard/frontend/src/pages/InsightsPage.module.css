@@ -776,3 +776,95 @@
     display: none;
   }
 }
+
+.projectionTraceWrap {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  font-size: 0.8125rem;
+}
+
+.projectionTraceSectionTitle {
+  font-weight: 600;
+  margin-bottom: 0.35rem;
+  color: var(--color-text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  font-size: 0.7rem;
+}
+
+.projectionTraceTable {
+  width: 100%;
+  border-collapse: collapse;
+  font-family: var(--font-mono);
+  font-size: 0.78rem;
+}
+
+.projectionTraceTable th,
+.projectionTraceTable td {
+  text-align: left;
+  padding: 0.35rem 0.5rem;
+  border-bottom: 1px solid var(--color-border-subtle, rgba(255, 255, 255, 0.08));
+}
+
+.projectionTraceTable th {
+  color: var(--color-text-secondary);
+  font-weight: 500;
+}
+
+.projectionTraceScoreName {
+  font-weight: 600;
+  margin: 0.25rem 0;
+}
+
+.projectionTraceBlock {
+  margin-bottom: 0.85rem;
+}
+
+.projectionTraceBlock:last-child {
+  margin-bottom: 0;
+}
+
+.projectionTraceNestedCell {
+  padding: 0.5rem 0.5rem 0.65rem !important;
+  background: var(--color-surface-elevated, rgba(0, 0, 0, 0.12));
+  border-bottom: 1px solid var(--color-border-subtle, rgba(255, 255, 255, 0.08));
+  vertical-align: top;
+}
+
+.projectionTraceNestedLabel {
+  font-size: 0.65rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--color-text-secondary);
+  margin: 0 0 0.35rem;
+}
+
+.projectionTraceNestedTable {
+  width: 100%;
+  border-collapse: collapse;
+  font-family: var(--font-mono);
+  font-size: 0.74rem;
+}
+
+.projectionTraceNestedTable th,
+.projectionTraceNestedTable td {
+  text-align: left;
+  padding: 0.25rem 0.45rem;
+  border-bottom: 1px solid var(--color-border-subtle, rgba(255, 255, 255, 0.06));
+}
+
+.projectionTraceNestedTable th {
+  color: var(--color-text-secondary);
+  font-weight: 500;
+}
+
+.projectionTraceMatchYes {
+  color: var(--color-success, #3fb950);
+  font-weight: 600;
+}
+
+.projectionTraceMatchNo {
+  color: var(--color-text-secondary);
+}

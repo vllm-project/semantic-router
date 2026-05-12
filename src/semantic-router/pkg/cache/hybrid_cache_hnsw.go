@@ -2,7 +2,7 @@
 
 package cache
 
-import "time"
+import "math/rand/v2"
 
 // searchResult holds a candidate with its similarity score.
 type searchResult struct {
@@ -166,7 +166,7 @@ func (h *HybridCache) selectLevelHybrid() int {
 
 // randFloat returns a random float between 0 and 1.
 func randFloat() float64 {
-	return float64(time.Now().UnixNano()%1000) / 1000.0
+	return rand.Float64()
 }
 
 // searchLayerHybrid searches for nearest neighbors at a specific layer.
@@ -199,7 +199,8 @@ func (h *HybridCache) searchLayerHybridInternal(
 		}
 	}
 
-	return collectHybridSearchResults(buf.results)
+	// return the indexes of the results sorted by similarity (nearest first)
+	return buf.results.sortedIndicesAsc()
 }
 
 // selectNeighborsHybrid selects the best neighbors from candidates (hybrid version).
@@ -316,16 +317,4 @@ func shouldStopHybridSearch(currentDist float32, results *maxHeap) bool {
 
 func hitHybridThreshold(similarity float32, threshold *float32) bool {
 	return threshold != nil && similarity >= *threshold
-}
-
-func collectHybridSearchResults(results *maxHeap) []int {
-	resultIDs := make([]int, 0, results.len())
-	for results.len() > 0 {
-		idx, _ := results.pop()
-		resultIDs = append(resultIDs, idx)
-	}
-	for i, j := 0, len(resultIDs)-1; i < j; i, j = i+1, j-1 {
-		resultIDs[i], resultIDs[j] = resultIDs[j], resultIDs[i]
-	}
-	return resultIDs
 }

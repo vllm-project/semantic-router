@@ -119,6 +119,16 @@ type rawDecisionTreeItem struct {
 	Algorithm    *rawAlgoSpec         `parser:"| 'ALGORITHM' @@"`
 	Plugin       *rawPluginRef        `parser:"| 'PLUGIN' @@"`
 	CandidateFor *rawCandidateForDecl `parser:"| @@"`
+	Emit         *rawEmitDecl         `parser:"| @@"`
+}
+
+// rawEmitDecl: EMIT <kind> { fields... }. Currently only kind="retention" is
+// recognized by the validator, but the grammar accepts any identifier so the
+// validator can emit a friendly error rather than a parse error.
+type rawEmitDecl struct {
+	Pos    lexer.Position
+	Kind   string        `parser:"'EMIT' @Ident"`
+	Fields []*FieldEntry `parser:"'{' @@* '}'"`
 }
 
 // rawModelDecl: MODEL <name> { fields... }
@@ -146,6 +156,7 @@ type rawRouteItem struct {
 	Plugin       *rawPluginRef        `parser:"| 'PLUGIN' @@"`
 	Description  *string              `parser:"| 'DESCRIPTION' @String"`
 	CandidateFor *rawCandidateForDecl `parser:"| @@"`
+	Emit         *rawEmitDecl         `parser:"| @@"`
 }
 
 // rawCandidateForDecl: FOR <var> IN decision.candidates|[models...] { body... }
@@ -388,7 +399,32 @@ type RouteDecl struct {
 	Algorithm           *AlgoSpec
 	Plugins             []*PluginRef
 	CandidateIterations []*CandidateIterationDecl
+	Emits               []*EmitDecl
 	Pos                 Position
+}
+
+// EmitDecl is the resolved AST node for an EMIT block. The Retention pointer
+// is populated when Kind == "retention". Future Kind values (e.g. "log",
+// "metric") will add their own typed payload fields here.
+type EmitDecl struct {
+	Kind      string
+	Retention *RetentionDirective
+	// RawFields preserves the parsed EMIT payload for validation. The typed
+	// Retention field intentionally drops unknown or wrong-typed entries; the
+	// validator/compiler still need the raw entries so authoring mistakes are
+	// reported instead of being silently treated as an empty directive.
+	RawFields []*FieldEntry
+	Pos       Position
+}
+
+// RetentionDirective is the DSL-resolved form of an EMIT retention block.
+// Pointer fields preserve tri-state semantics so we can tell "unset" apart
+// from "explicitly false / 0".
+type RetentionDirective struct {
+	Drop                  *bool
+	TTLTurns              *int
+	KeepCurrentModel      *bool
+	PreferPrefixRetention *bool
 }
 
 // CandidateIterationDecl represents a bounded FOR ... IN block over candidate

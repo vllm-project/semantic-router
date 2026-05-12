@@ -145,6 +145,73 @@ func TestCreateTaskHandler_RouterWithDomainReturns201(t *testing.T) {
 	}
 }
 
+func TestCreateTaskHandler_RouterPlaceholderEndpointReplacedByConfiguredOverride(t *testing.T) {
+	t.Parallel()
+	handler := newTestEvaluationHandler(t)
+	body := map[string]interface{}{
+		"name": "signal-eval-override",
+		"config": map[string]interface{}{
+			"level":      "router",
+			"dimensions": []string{"domain"},
+			// Frontend always sends this hardcoded placeholder; the backend must
+			// substitute the configured TARGET_ROUTER_API_URL when present so the
+			// dashboard can reach the router across pods.
+			"endpoint":    "http://localhost:8080/api/v1/eval",
+			"max_samples": 5,
+		},
+	}
+	bodyBytes, _ := json.Marshal(body)
+	req := httptest.NewRequest(http.MethodPost, "/api/evaluation/tasks", bytes.NewReader(bodyBytes))
+	req.Header.Set("Content-Type", "application/json")
+	rec := httptest.NewRecorder()
+	handler.CreateTaskHandler().ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusCreated {
+		t.Fatalf("status = %d, want %d; body = %s", rec.Code, http.StatusCreated, rec.Body.String())
+	}
+
+	var task models.EvaluationTask
+	if err := json.NewDecoder(rec.Body).Decode(&task); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+	want := "http://router:8080/api/v1/eval"
+	if task.Config.Endpoint != want {
+		t.Errorf("endpoint = %q, want %q (router override should replace placeholder)", task.Config.Endpoint, want)
+	}
+}
+
+func TestCreateTaskHandler_RouterExplicitEndpointPreserved(t *testing.T) {
+	t.Parallel()
+	handler := newTestEvaluationHandler(t)
+	custom := "http://my-router.example.com:9090/api/v1/eval"
+	body := map[string]interface{}{
+		"name": "signal-eval-custom",
+		"config": map[string]interface{}{
+			"level":       "router",
+			"dimensions":  []string{"domain"},
+			"endpoint":    custom,
+			"max_samples": 5,
+		},
+	}
+	bodyBytes, _ := json.Marshal(body)
+	req := httptest.NewRequest(http.MethodPost, "/api/evaluation/tasks", bytes.NewReader(bodyBytes))
+	req.Header.Set("Content-Type", "application/json")
+	rec := httptest.NewRecorder()
+	handler.CreateTaskHandler().ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusCreated {
+		t.Fatalf("status = %d, want %d; body = %s", rec.Code, http.StatusCreated, rec.Body.String())
+	}
+
+	var task models.EvaluationTask
+	if err := json.NewDecoder(rec.Body).Decode(&task); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+	if task.Config.Endpoint != custom {
+		t.Errorf("endpoint = %q, want %q (non-placeholder endpoint must be preserved)", task.Config.Endpoint, custom)
+	}
+}
+
 func TestCreateTaskHandler_NormalizesDefaultDatasetsAndExtraKeys(t *testing.T) {
 	t.Parallel()
 	handler := newTestEvaluationHandler(t)

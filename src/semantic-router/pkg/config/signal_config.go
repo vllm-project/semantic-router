@@ -7,23 +7,50 @@ import (
 )
 
 type Signals struct {
-	KeywordRules      []KeywordRule      `yaml:"keyword_rules,omitempty"`
-	EmbeddingRules    []EmbeddingRule    `yaml:"embedding_rules,omitempty"`
-	Categories        []Category         `yaml:"categories"`
-	FactCheckRules    []FactCheckRule    `yaml:"fact_check_rules,omitempty"`
-	UserFeedbackRules []UserFeedbackRule `yaml:"user_feedback_rules,omitempty"`
-	ReaskRules        []ReaskRule        `yaml:"reask_rules,omitempty"`
-	PreferenceRules   []PreferenceRule   `yaml:"preference_rules,omitempty"`
-	LanguageRules     []LanguageRule     `yaml:"language_rules,omitempty"`
-	ContextRules      []ContextRule      `yaml:"context_rules,omitempty"`
-	StructureRules    []StructureRule    `yaml:"structure_rules,omitempty"`
-	ComplexityRules   []ComplexityRule   `yaml:"complexity_rules,omitempty"`
-	ModalityRules     []ModalityRule     `yaml:"modality_rules,omitempty"`
-	RoleBindings      []RoleBinding      `yaml:"role_bindings,omitempty"`
-	JailbreakRules    []JailbreakRule    `yaml:"jailbreak,omitempty"`
-	PIIRules          []PIIRule          `yaml:"pii,omitempty"`
-	KBRules           []KBSignalRule     `yaml:"kb,omitempty"`
-	ConversationRules []ConversationRule `yaml:"conversation,omitempty"`
+	KeywordRules       []KeywordRule       `yaml:"keyword_rules,omitempty"`
+	EmbeddingRules     []EmbeddingRule     `yaml:"embedding_rules,omitempty"`
+	Categories         []Category          `yaml:"categories"`
+	FactCheckRules     []FactCheckRule     `yaml:"fact_check_rules,omitempty"`
+	UserFeedbackRules  []UserFeedbackRule  `yaml:"user_feedback_rules,omitempty"`
+	ReaskRules         []ReaskRule         `yaml:"reask_rules,omitempty"`
+	PreferenceRules    []PreferenceRule    `yaml:"preference_rules,omitempty"`
+	LanguageRules      []LanguageRule      `yaml:"language_rules,omitempty"`
+	ContextRules       []ContextRule       `yaml:"context_rules,omitempty"`
+	StructureRules     []StructureRule     `yaml:"structure_rules,omitempty"`
+	ComplexityRules    []ComplexityRule    `yaml:"complexity_rules,omitempty"`
+	ModalityRules      []ModalityRule      `yaml:"modality_rules,omitempty"`
+	RoleBindings       []RoleBinding       `yaml:"role_bindings,omitempty"`
+	JailbreakRules     []JailbreakRule     `yaml:"jailbreak,omitempty"`
+	PIIRules           []PIIRule           `yaml:"pii,omitempty"`
+	KBRules            []KBSignalRule      `yaml:"kb,omitempty"`
+	ConversationRules  []ConversationRule  `yaml:"conversation,omitempty"`
+	SessionMetricRules []SessionMetricRule `yaml:"session_metrics,omitempty"`
+	EventContextRules  []EventContextRule  `yaml:"event_context_rules,omitempty"`
+}
+
+// SessionMetricRule is a unified session-context routing metric.
+// Use kind "state" for SESSION_STATE scalars (with optional normalize), or kind "lookup"
+// for table-backed values resolved via LookupResolver at request time.
+type SessionMetricRule struct {
+	Name      string   `yaml:"name"`
+	Kind      string   `yaml:"kind"` // "state" or "lookup"
+	State     string   `yaml:"state,omitempty"`
+	Normalize string   `yaml:"normalize,omitempty"`
+	Min       *float64 `yaml:"min,omitempty"`
+	Max       *float64 `yaml:"max,omitempty"`
+	Table     string   `yaml:"table,omitempty"`
+	Key       []string `yaml:"key,omitempty"`
+}
+
+// EventContextRule matches structured event metadata extracted from request text.
+// It routes event-driven requests (error alerts, audit logs, incident payloads)
+// to specialized model pools based on event type, severity, and temporal urgency.
+type EventContextRule struct {
+	Name        string   `yaml:"name"`
+	EventTypes  []string `yaml:"event_types,omitempty"`  // e.g. ["payment_failed", "auth_error"]
+	Severities  []string `yaml:"severities,omitempty"`   // e.g. ["critical", "high"]
+	ActionCodes []string `yaml:"action_codes,omitempty"` // domain-specific codes, e.g. ["TXN_DECLINE"]
+	Temporal    bool     `yaml:"temporal,omitempty"`     // match time-sensitive markers (urgent, immediate)
 }
 
 type KeywordRule struct {
@@ -47,11 +74,44 @@ const (
 	AggregationMethodAny  AggregationMethod = "any"
 )
 
+// QueryModality declares which modality of incoming request payload the
+// embedding rule's query is computed from. The candidates remain text in
+// every case: the rule cosine-matches a text-anchor set against a query
+// embedding from the declared modality, all in the shared multimodal space.
+//
+// "text"  (default, backward-compatible): query embedded from request text.
+// "image": query embedded from an image attachment (base64, data-URI, or path).
+// "audio": query embedded from an audio attachment (base64, data-URI, or path).
+//
+// "image" and "audio" require global.model_catalog.embeddings.semantic.embedding_config.model_type=multimodal.
+type QueryModality string
+
+const (
+	QueryModalityText  QueryModality = "text"
+	QueryModalityImage QueryModality = "image"
+	QueryModalityAudio QueryModality = "audio"
+)
+
 type EmbeddingRule struct {
 	Name                      string            `yaml:"name"`
 	SimilarityThreshold       float32           `yaml:"threshold"`
 	Candidates                []string          `yaml:"candidates"`
 	AggregationMethodConfiged AggregationMethod `yaml:"aggregation_method"`
+	// QueryModality controls which modality of the incoming request payload
+	// the query embedding is computed from. Defaults to "text" when omitted,
+	// preserving existing behavior.
+	QueryModality QueryModality `yaml:"query_modality,omitempty"`
+}
+
+// EffectiveQueryModality returns the rule's declared query modality, or
+// QueryModalityText when unset. Comparison should always go through this
+// helper so default behavior stays consistent across call sites.
+func (r EmbeddingRule) EffectiveQueryModality() QueryModality {
+	m := QueryModality(strings.ToLower(strings.TrimSpace(string(r.QueryModality))))
+	if m == "" {
+		return QueryModalityText
+	}
+	return m
 }
 
 type FactCheckRule struct {
@@ -115,6 +175,11 @@ type PreferenceRule struct {
 type LanguageRule struct {
 	Name        string `yaml:"name"`
 	Description string `yaml:"description,omitempty"`
+	// Threshold is the minimum lingua-go confidence score required to accept a
+	// language detection result for this rule. When unset (0), the classifier
+	// uses its built-in default of 0.3. Setting a higher value (e.g. 0.6)
+	// reduces false-positive language matches on short or ambiguous text.
+	Threshold float32 `yaml:"threshold,omitempty"`
 }
 
 type TokenCount string

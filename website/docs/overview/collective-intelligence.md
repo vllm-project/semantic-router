@@ -28,7 +28,7 @@ User Query → Single LLM → Response
 ```
 User Query → Signal Extraction → Projection Coordination → Decision Engine → Plugins + Model Dispatch → Response
               ↓                    ↓                         ↓                         ↓
-        14 Signal Families   Partitions / Scores / Mappings  Boolean Policies     Specialized Models
+        16 Signal Families   Partitions / Scores / Mappings  Boolean Policies     Specialized Models
 ```
 
 **Benefits**:

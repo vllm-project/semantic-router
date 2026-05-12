@@ -84,6 +84,7 @@ func (p *PostgresStore) createTable(ctx context.Context) error {
 			signal_confidences JSONB,
 			signal_values JSONB,
 			tool_trace JSONB,
+			projection_trace JSONB,
 			request_body TEXT,
 			response_body TEXT,
 			response_status INTEGER,
@@ -123,6 +124,7 @@ func (p *PostgresStore) createTable(ctx context.Context) error {
 		ALTER TABLE %s ADD COLUMN IF NOT EXISTS signal_confidences JSONB;
 		ALTER TABLE %s ADD COLUMN IF NOT EXISTS signal_values JSONB;
 		ALTER TABLE %s ADD COLUMN IF NOT EXISTS tool_trace JSONB;
+		ALTER TABLE %s ADD COLUMN IF NOT EXISTS projection_trace JSONB;
 		ALTER TABLE %s ADD COLUMN IF NOT EXISTS prompt TEXT;
 		ALTER TABLE %s ADD COLUMN IF NOT EXISTS prompt_truncated BOOLEAN DEFAULT FALSE;
 		ALTER TABLE %s ADD COLUMN IF NOT EXISTS tool_definitions TEXT;
@@ -146,7 +148,7 @@ func (p *PostgresStore) createTable(ctx context.Context) error {
 		CREATE INDEX IF NOT EXISTS idx_%s_selected_model_timestamp ON %s (selected_model, timestamp DESC);
 		CREATE INDEX IF NOT EXISTS idx_%s_session_timestamp ON %s (session_id, timestamp DESC);
 	`, p.tableName,
-		p.tableName, p.tableName, p.tableName, p.tableName, p.tableName, p.tableName, p.tableName,
+		p.tableName, p.tableName, p.tableName, p.tableName, p.tableName, p.tableName, p.tableName, p.tableName,
 		p.tableName, p.tableName, p.tableName, p.tableName, p.tableName, p.tableName, p.tableName, p.tableName,
 		p.tableName, p.tableName, p.tableName, p.tableName, p.tableName, p.tableName, p.tableName, p.tableName,
 		p.tableName, p.tableName, p.tableName, p.tableName,
@@ -184,7 +186,7 @@ func (p *PostgresStore) Add(ctx context.Context, record Record) (string, error) 
 		INSERT INTO %s (
 			id, timestamp, request_id, decision, decision_tier, decision_priority, category,
 			original_model, selected_model, reasoning_mode,
-			signals, projections, projection_scores, signal_confidences, signal_values, tool_trace,
+			signals, projections, projection_scores, signal_confidences, signal_values, tool_trace, projection_trace,
 			request_body, response_body, response_status,
 			from_cache, streaming, request_body_truncated, response_body_truncated,
 			guardrails_enabled, jailbreak_enabled, pii_enabled,

@@ -177,6 +177,7 @@ func convertSignals(signals v1alpha1.Signals) config.CanonicalSignals {
 			SimilarityThreshold:       signal.Threshold,
 			Candidates:                signal.Candidates,
 			AggregationMethodConfiged: config.AggregationMethod(signal.AggregationMethod),
+			QueryModality:             config.QueryModality(signal.QueryModality),
 		})
 	}
 
@@ -361,12 +362,24 @@ var pluginConfigurationValidators = map[string]func([]byte) error{
 	"system_prompt":   validateSystemPromptPluginConfig,
 	"header_mutation": validateHeaderMutationPluginConfig,
 	"router_replay":   validateRouterReplayPluginConfig,
+	"tool_selection":  validateToolSelectionPluginConfigRaw,
 }
 
 func decodePluginConfiguration(rawConfig []byte, target any) error {
 	decoder := json.NewDecoder(bytes.NewReader(rawConfig))
 	decoder.DisallowUnknownFields()
 	return decoder.Decode(target)
+}
+
+func validateToolSelectionPluginConfigRaw(rawConfig []byte) error {
+	var cfg config.ToolSelectionPluginConfig
+	if err := decodePluginConfiguration(rawConfig, &cfg); err != nil {
+		return fmt.Errorf("failed to unmarshal tool_selection config: %w", err)
+	}
+	if err := cfg.Validate(); err != nil {
+		return err
+	}
+	return nil
 }
 
 func validateSemanticCachePluginConfig(rawConfig []byte) error {

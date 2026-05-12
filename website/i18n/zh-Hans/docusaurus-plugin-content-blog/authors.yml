@@ -33,3 +33,15 @@ onezero:
   title: "LLM Inference"
   url: https://github.com/OneZero-Y
   image_url: /img/team/onezero.jpeg
+
+haichen:
+  name: Haichen Zhang
+  title: "Sr. AI Engineer @AMD"
+  url: https://www.linkedin.com/in/haichen-zhang-9010b6382/
+  image_url: /img/team/haichen.jpeg
+
+andyluo:
+  name: Andy Luo
+  title: "Sr. Director @AMD"
+  url: https://www.linkedin.com/in/andyluo77
+  image_url: /img/team/andy.jpeg

@@ -5,12 +5,12 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/milvus-io/milvus-sdk-go/v2/client"
 	glide "github.com/valkey-io/valkey-glide/go/v2"
 	glideconfig "github.com/valkey-io/valkey-glide/go/v2/config"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/memory"
+	milvuslifecycle "github.com/vllm-project/semantic-router/src/semantic-router/pkg/milvus"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 )
 
@@ -136,7 +136,7 @@ func createMilvusMemoryStore(cfg *config.RouterConfig) (memory.Store, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
-	milvusClient, err := client.NewGrpcClient(ctx, milvusAddress)
+	milvusClient, err := milvuslifecycle.ConnectGRPC(ctx, milvusAddress, 0)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create Milvus client: %w", err)
 	}

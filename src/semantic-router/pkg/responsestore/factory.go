@@ -6,7 +6,7 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 )
 
-// NewStore creates a new store based on the configuration.
+// NewStore creates a new store based on the configuration (memory or redis).
 func NewStore(config StoreConfig) (CombinedStore, error) {
 	if !config.Enabled {
 		return NewMemoryStore(StoreConfig{Enabled: false})

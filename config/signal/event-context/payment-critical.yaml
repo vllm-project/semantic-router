@@ -1,0 +1,13 @@
+routing:
+  signals:
+    event_context_rules:
+      - name: critical_payment_event
+        event_types:
+          - payment_failed
+          - transaction_declined
+        severities:
+          - critical
+          - high
+        action_codes:
+          - TXN_DECLINE
+        temporal: true
