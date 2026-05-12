@@ -5,7 +5,7 @@ routing:
   signals:
     embeddings:
       - name: identifier_document_imagery
-        threshold: 0.70
+        threshold: 0.10
         aggregation_method: max
         query_modality: image
         candidates:
@@ -18,7 +18,7 @@ routing:
           - photograph of a tax document or paystub with personal details
           - photograph of a paper form filled in with personal information
       - name: code_or_terminal_imagery
-        threshold: 0.70
+        threshold: 0.10
         aggregation_method: max
         query_modality: image
         candidates:
@@ -31,7 +31,7 @@ routing:
           - screenshot of an API response or HTTP request body
           - screenshot of a database client or SQL query result
       - name: ambient_office_imagery
-        threshold: 0.70
+        threshold: 0.10
         aggregation_method: max
         query_modality: image
         candidates:

@@ -35,14 +35,24 @@ func TestImageRoutingPack_StructuralContract(t *testing.T) {
 		if got, want := rule.QueryModality, QueryModalityImage; got != want {
 			t.Errorf("rule %q: query_modality = %q, want %q", rule.Name, got, want)
 		}
-		if got, want := rule.SimilarityThreshold, float32(0.70); got != want {
-			t.Errorf("rule %q: threshold = %v, want %v", rule.Name, got, want)
+		// Threshold is operator-tunable and is calibrated against the
+		// shipped multimodal embedding model; range-bound it rather
+		// than pinning an exact value so future calibration changes
+		// don't trip an unrelated structural test. The bounds catch
+		// silent regression to the original 0.70 (no rules fire) or
+		// accidental zero (every rule fires).
+		if rule.SimilarityThreshold <= 0 || rule.SimilarityThreshold >= 0.5 {
+			t.Errorf("rule %q: threshold = %v, want (0, 0.5) consistent with the calibrated image-modality range", rule.Name, rule.SimilarityThreshold)
 		}
 		if got, want := rule.AggregationMethodConfiged, AggregationMethodMax; got != want {
 			t.Errorf("rule %q: aggregation_method = %q, want %q", rule.Name, got, want)
 		}
+		// This pack ships 8 candidates per rule. Pinning the floor at
+		// 8 catches silent reduction during future edits. Other shipped
+		// fragment files (e.g., config/signal/embedding/support.yaml)
+		// ship fewer candidates and are not subject to this pin.
 		if got := len(rule.Candidates); got < 8 {
-			t.Errorf("rule %q: candidate count = %d, want at least 8 per the embedding-tutorial authoring guidance", rule.Name, got)
+			t.Errorf("rule %q: candidate count = %d, want at least 8 (this pack's shipped per-rule floor)", rule.Name, got)
 		}
 	}
 	for name, seen := range expectedNames {
