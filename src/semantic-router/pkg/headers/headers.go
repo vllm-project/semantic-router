@@ -36,6 +36,11 @@ const (
 	// SelectedModel indicates the model that was selected by the router for processing.
 	// This header is set during the routing decision phase.
 	SelectedModel = "x-selected-model"
+
+	// VSRSkipProcessing opts the request out of all router processing when
+	// global.router.skip_processing.enabled is true. Value: "true" (case-insensitive).
+	// See https://github.com/vllm-project/semantic-router/issues/1808.
+	VSRSkipProcessing = "x-vsr-skip-processing"
 )
 
 // VSR Decision Tracking Headers

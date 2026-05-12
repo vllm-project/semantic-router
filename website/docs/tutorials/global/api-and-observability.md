@@ -68,6 +68,38 @@ global:
         enabled: true
 ```
 
+### Skip Processing Header
+
+`global.router.skip_processing.enabled` is the deployment-level gate that
+opts the router into honoring the `x-vsr-skip-processing` request header.
+When the gate is on and an upstream filter sets that header to `true`, the
+router becomes a no-op for that single request — every Envoy ext_proc
+callback returns CONTINUE without classifying, routing, mutating, caching,
+or inspecting the request or upstream response. When the gate is off (the
+default) the header is ignored entirely.
+
+```yaml
+global:
+  router:
+    skip_processing:
+      enabled: false        # default; flip to true to honor the header
+```
+
+The Helm chart exposes the same gate as a top-level value
+(`router.skipProcessing.enabled`) so it can be enabled at install time
+without editing the embedded canonical config:
+
+```bash
+helm install vsr ./deploy/helm/semantic-router \
+  --set router.skipProcessing.enabled=true
+```
+
+Enable this gate only when an authenticated upstream filter (Envoy AI
+Gateway, ext_authz, route-level filters, etc.) is responsible for setting
+or stripping the header on trust grounds. Background on the AI Gateway
+interop pattern that motivates this gate lives in
+[issue #1808](https://github.com/vllm-project/semantic-router/issues/1808).
+
 ### Router Replay
 
 ```yaml

@@ -94,6 +94,8 @@ global:
     clear_route_cache: false
     streamed_body:
       enabled: false
+    skip_processing:
+      enabled: false
     model_selection: {}
   services:
     api:

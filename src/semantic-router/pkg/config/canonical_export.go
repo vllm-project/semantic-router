@@ -146,6 +146,7 @@ func CanonicalGlobalFromRouterConfig(cfg *RouterConfig) *CanonicalGlobal {
 				MaxBytes:   cfg.MaxStreamedBodyBytes,
 				TimeoutSec: cfg.StreamedBodyTimeoutSec,
 			},
+			SkipProcessing: cfg.SkipProcessing,
 			ModelSelection: cfg.ModelSelection,
 		},
 		Services: CanonicalServiceGlobal{

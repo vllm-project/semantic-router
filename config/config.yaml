@@ -1262,6 +1262,8 @@ global:
       enabled: true
       max_bytes: 1048576
       timeout_sec: 15
+    skip_processing:
+      enabled: false
     model_selection:
       method: hybrid
       enabled: true
