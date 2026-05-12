@@ -153,6 +153,10 @@ routing:
         - model: in-cluster-vlm
 ```
 
+### Default opt-in pack
+
+The repo ships an opt-in image-modality embedding pack at `config/signal/embedding/image-routing.yaml`. It contains three illustrative rules - `identifier_document_imagery` (for privacy-routing), `code_or_terminal_imagery` (for IP-routing), and `ambient_office_imagery` (the negative-space anchor that the authoring tips below recommend) - that operators can inline into their recipe. The pack uses `0.70` as a default threshold; tune it against your own evaluation corpus before relying on it in production, and replace the `ambient_office_imagery` anchors with content specific to your deployment surface.
+
 ### Authoring tips for image anchors
 
 - Anchors describe **visual signatures**, not text content of the image. "electronic health record screenshot showing patient demographics" works because clinical-record UIs have a recognizable visual signature; an anchor like "the words John Doe SSN 123-45-6789" would not, because the model embeds visual structure, not OCR.

@@ -1,0 +1,45 @@
+# Opt-in image-modality embedding pack. Inline under
+# routing.signals.embeddings to demo image-routing patterns. Requires
+# the multimodal embedding model.
+routing:
+  signals:
+    embeddings:
+      - name: identifier_document_imagery
+        threshold: 0.70
+        aggregation_method: max
+        query_modality: image
+        candidates:
+          - photograph of a passport page
+          - photograph of a driver's license or national ID card
+          - photograph of a credit card or payment card
+          - photograph of an employee or visitor badge
+          - photograph of a healthcare insurance card
+          - photograph of a patient wristband or hospital identifier
+          - photograph of a tax document or paystub with personal details
+          - photograph of a paper form filled in with personal information
+      - name: code_or_terminal_imagery
+        threshold: 0.70
+        aggregation_method: max
+        query_modality: image
+        candidates:
+          - screenshot of source code in an editor
+          - terminal or shell window screenshot
+          - screenshot of a log file or stack trace
+          - git diff or pull-request review screenshot
+          - screenshot of a debugger paused at a breakpoint
+          - command-line build output or test runner output
+          - screenshot of an API response or HTTP request body
+          - screenshot of a database client or SQL query result
+      - name: ambient_office_imagery
+        threshold: 0.70
+        aggregation_method: max
+        query_modality: image
+        candidates:
+          - photograph of a whiteboard with handwritten notes
+          - photograph of a conference room or meeting space
+          - photograph of an office workspace or desk surface
+          - photograph of a building lobby or interior hallway
+          - photograph of an office printer or shared equipment
+          - photograph of a coffee cup or notebook on a desk
+          - photograph of indoor potted plants or office decor
+          - photograph of a wide factory floor or warehouse aisle
