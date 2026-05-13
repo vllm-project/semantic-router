@@ -1,60 +1,21 @@
 """
-MMLU-Pro Category Classification with Qwen3 Generative Fine-tuning + LoRA
-Fine-tunes Qwen3-0.6B as an instruction-following model to GENERATE category labels.
+MMLU-Pro Category Classification with Qwen3 Generative Fine-tuning + LoRA.
 
-**CORRECT APPROACH**: Uses Qwen3 as a generative model (text-to-text)
-   - Qwen3 generates category names as text
-   - Standard causal language modeling (how Qwen3 was pre-trained)
-   - Instruction-tuning format (like ChatGPT/Claude)
-   - Expected accuracy: 70-85% (much better than classification head approach!)
-
-🎯 **How it works**:
-   Input:  "Classify this question: What is corporate law? Category:"
-   Output: "law"
-
-   The model learns to generate the category name as text, which is natural for a
-   causal language model!
+Fine-tunes Qwen3-0.6B as an instruction-following model to GENERATE category labels
+using standard causal language modeling with LoRA adapters.
 
 Usage:
-    # Train with recommended parameters (150 samples per category = ~2100 total)
-    python ft_qwen3_generative_lora.py --mode train --epochs 8 --lora-rank 16 --max-samples-per-category 150
-
-    # Test with specific GPU
-    python ft_qwen3_generative_lora.py --mode train --epochs 8 --gpu-id 2
-
-    # Adjust batch size based on GPU memory (default: 4)
-    python ft_qwen3_generative_lora.py --mode train --batch-size 8 --epochs 5
-
-    # Quick test (10 samples per category = ~140 total)
-    python ft_qwen3_generative_lora.py --mode train --epochs 1 --max-samples-per-category 10
-
-    # Inference
+    python ft_qwen3_generative_lora.py --mode train --epochs 8 --lora-rank 16
     python ft_qwen3_generative_lora.py --mode test --model-path qwen3_generative_classifier
-
-Model:
-    - Qwen/Qwen3-0.6B (752M params, 28 layers, 32k context)
-    - Fine-tuned with LoRA on instruction-following format
-    - Generates category labels as text (natural for decoder models!)
-
-Dataset:
-    - TIGER-Lab/MMLU-Pro: 14 category academic question classification
-    - Formatted as instruction-following pairs
-    - Categories: biology, business, chemistry, computer science, economics,
-                  engineering, health, history, law, math, other, philosophy,
-                  physics, psychology
 """
 
 import json
-import logging
 import os
 import sys
-from pathlib import Path
-from typing import Dict, List, Optional
 
 import torch
 from datasets import Dataset, load_dataset
-from peft import LoraConfig, PeftConfig, PeftModel, TaskType, get_peft_model
-from sklearn.metrics import accuracy_score, f1_score
+from peft import LoraConfig, PeftModel, TaskType, get_peft_model
 from sklearn.model_selection import train_test_split
 from transformers import (
     AutoModelForCausalLM,
@@ -71,9 +32,10 @@ _parent_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if _parent_dir not in sys.path:
     sys.path.insert(0, _parent_dir)
 
-from common_lora_utils import (
+from common_lora_utils import (  # noqa: E402
     clear_gpu_memory,
     log_memory_usage,
+    select_training_split,
     set_gpu_device,
     setup_logging,
 )
@@ -119,20 +81,12 @@ Q: {question}
 A:"""
 
 
-def get_qwen3_target_modules() -> List[str]:
+def get_qwen3_target_modules() -> list[str]:
     """Get LoRA target modules for Qwen3 architecture."""
-    return [
-        "q_proj",  # Query projection
-        "k_proj",  # Key projection
-        "v_proj",  # Value projection
-        "o_proj",  # Output projection
-        "gate_proj",  # MLP gate
-        "up_proj",  # MLP up
-        "down_proj",  # MLP down
-    ]
+    return ["q_proj", "k_proj", "v_proj", "o_proj", "gate_proj", "up_proj", "down_proj"]
 
 
-class MMLU_Dataset:
+class MMLU_Dataset:  # noqa: N801
     """Dataset class for MMLU-Pro category classification."""
 
     def __init__(self, dataset_name="TIGER-Lab/MMLU-Pro"):
@@ -141,26 +95,26 @@ class MMLU_Dataset:
         self.id2label = {}
 
     def load_huggingface_dataset(self, max_samples_per_category=150):
-        """Load the MMLU-Pro dataset from HuggingFace with balanced sampling.
-
-        Args:
-            max_samples_per_category: Maximum number of samples to take from each category.
-                                     Default: 150 per category (14 categories = ~2100 total)
-        """
+        """Load the MMLU-Pro dataset from HuggingFace with balanced sampling."""
         logger.info(f"Loading dataset from HuggingFace: {self.dataset_name}")
 
         try:
             dataset = load_dataset(self.dataset_name)
             logger.info(f"Dataset splits: {dataset.keys()}")
 
-            all_texts = dataset["test"]["question"]
-            all_labels = dataset["test"]["category"]
+            training_split_name, training_split = select_training_split(
+                dataset, self.dataset_name
+            )
+            all_texts = training_split["question"]
+            all_labels = training_split["category"]
 
-            logger.info(f"Total samples in dataset: {len(all_texts)}")
+            logger.info(
+                f"Total samples in {training_split_name} split: {len(all_texts)}"
+            )
 
             # Group samples by category
             category_samples = {}
-            for text, label in zip(all_texts, all_labels):
+            for text, label in zip(all_texts, all_labels, strict=False):
                 if label not in category_samples:
                     category_samples[label] = []
                 category_samples[label].append(text)
@@ -199,15 +153,11 @@ class MMLU_Dataset:
             raise
 
     def prepare_datasets(self, max_samples_per_category=150):
-        """Prepare train/validation/test datasets.
-
-        Args:
-            max_samples_per_category: Maximum samples per category (default: 150)
-        """
+        """Prepare train/validation/test datasets."""
         texts, labels = self.load_huggingface_dataset(max_samples_per_category)
 
         # Create label mapping
-        unique_labels = sorted(list(set(labels)))
+        unique_labels = sorted(set(labels))
         ordered_labels = [cat for cat in REQUIRED_CATEGORIES if cat in unique_labels]
 
         self.label2id = {label: idx for idx, label in enumerate(ordered_labels)}
@@ -228,7 +178,7 @@ class MMLU_Dataset:
             stratify=temp_labels,
         )
 
-        logger.info(f"Dataset sizes:")
+        logger.info("Dataset sizes:")
         logger.info(f"  Train: {len(train_texts)}")
         logger.info(f"  Validation: {len(val_texts)}")
         logger.info(f"  Test: {len(test_texts)}")
@@ -240,22 +190,10 @@ class MMLU_Dataset:
         }
 
 
-def format_instruction(question: str, category: str = None) -> List[Dict[str, str]]:
-    """
-    Format a question-category pair as chat messages for proper instruction fine-tuning.
-
-    Uses Qwen3's ChatML format with special tokens to separate user input from assistant output.
-    This ensures the model only trains on generating the category name (1-2 tokens), not the
-    entire instruction (~200+ tokens), resulting in 100x more efficient training!
-
-    Args:
-        question: The question text
-        category: The category label (None for inference)
-
-    Returns:
-        List of message dicts with 'role' and 'content' keys
-        Format: [{"role": "user", "content": "..."}, {"role": "assistant", "content": "..."}]
-    """
+def format_instruction(
+    question: str, category: str | None = None
+) -> list[dict[str, str]]:
+    """Format a question-category pair as chat messages for instruction fine-tuning."""
     instruction = INSTRUCTION_TEMPLATE.format(question=question)
 
     # User message (the instruction/question)
@@ -270,23 +208,14 @@ def format_instruction(question: str, category: str = None) -> List[Dict[str, st
 
 
 def create_generative_dataset(
-    texts: List[str], labels: List[str], tokenizer, max_length=512
+    texts: list[str], labels: list[str], tokenizer, max_length=512
 ):
-    """
-    Create dataset in chat format for proper instruction fine-tuning.
-
-    Uses tokenizer.apply_chat_template() to format messages with special tokens.
-    This ensures:
-    - User input (instruction) and assistant output (category) are properly separated
-    - Model trains ONLY on the category name (1-2 tokens), not the instruction (200+ tokens)
-    - Training efficiency: Focuses 100% of gradient updates on classification tokens
-    - Inference format matches training format exactly
-    """
+    """Create dataset in chat format for instruction fine-tuning."""
     input_ids_list = []
     labels_list = []
     attention_mask_list = []
 
-    for text, label in zip(texts, labels):
+    for text, label in zip(texts, labels, strict=False):
         # Get messages (user instruction + assistant category)
         messages = format_instruction(text, label)
 
@@ -342,15 +271,8 @@ def create_generative_dataset(
 
 
 def compute_metrics_generative(eval_pred, tokenizer, label2id):
-    """
-    Compute metrics for generative classification during training.
-
-    Since we can't do actual generation during training (too slow),
-    we compute a proxy metric: token-level accuracy at the answer position.
-
-    This checks if the model predicts the correct category token.
-    """
-    import numpy as np
+    """Compute token-level accuracy at the answer position during training."""
+    import numpy as np  # noqa: PLC0415
 
     predictions, labels = eval_pred
 
@@ -362,10 +284,10 @@ def compute_metrics_generative(eval_pred, tokenizer, label2id):
         predictions = np.array(predictions)
 
     # Get predicted tokens (argmax over vocabulary if logits, otherwise use as-is)
-    if len(predictions.shape) == 3:
+    if len(predictions.shape) == 3:  # noqa: PLR2004
         # Logits shape: apply argmax to get token IDs
         pred_tokens = np.argmax(predictions, axis=-1)
-    elif len(predictions.shape) == 2:
+    elif len(predictions.shape) == 2:  # noqa: PLR2004
         # Already token IDs
         pred_tokens = predictions
     else:
@@ -376,7 +298,7 @@ def compute_metrics_generative(eval_pred, tokenizer, label2id):
         return {"token_accuracy": 0.0}
 
     # Only evaluate non-padding positions (labels != -100)
-    mask = labels != -100
+    mask = labels != -100  # noqa: PLR2004
 
     # Token-level accuracy
     correct_tokens = (pred_tokens == labels) & mask
@@ -390,29 +312,112 @@ def compute_metrics_generative(eval_pred, tokenizer, label2id):
     }
 
 
-def main(
-    model_name: str = "Qwen/Qwen3-0.6B",
-    lora_rank: int = 16,
-    lora_alpha: int = 32,
-    lora_dropout: float = 0.05,  # Lower dropout for small model
-    num_epochs: int = 8,  # More epochs for 0.6B
-    batch_size: int = 4,  # Configurable batch size (adjust based on GPU memory)
-    learning_rate: float = 3e-4,  # Higher LR for small model
-    max_samples_per_category: int = 150,  # Samples per category for balanced dataset
-    num_workers: int = 0,  # Number of dataloader workers (0=single process, 2-4 for multiprocessing)
-    output_dir: str = None,
-    gpu_id: Optional[int] = None,
+def _parse_generated_category(generated_text: str) -> str:
+    generated_text = (
+        generated_text.replace("<think>", "").replace("</think>", "").strip()
+    )
+    answer_text = generated_text.split("\n")[0].strip().strip(".,!?;:").lower()
+
+    predicted_category = "unknown"
+    for category in REQUIRED_CATEGORIES:
+        if answer_text.startswith(category.lower()):
+            predicted_category = category.lower()
+            break
+
+    if predicted_category == "unknown" and answer_text:
+        words = answer_text.split()
+        if len(words) >= 2:  # noqa: PLR2004
+            predicted_category = " ".join(words[:2])
+        elif len(words) == 1:
+            predicted_category = words[0]
+        else:
+            predicted_category = answer_text
+
+    return predicted_category
+
+
+def _load_and_configure_model(
+    model_name, lora_rank, lora_alpha, lora_dropout, device_str
 ):
-    """Main training function for generative Qwen3 classification.
+    logger.info(f"Loading Qwen3 model: {model_name}")
+    tokenizer = AutoTokenizer.from_pretrained(model_name, trust_remote_code=True)
 
-    Args:
-        max_samples_per_category: Maximum samples per category (default: 150).
-                                 With 14 categories, this gives ~2100 total samples.
-    """
-    logger.info("Starting Qwen3 Generative Classification Fine-tuning")
-    logger.info("Training Qwen3 to GENERATE category labels (instruction-following)")
+    if tokenizer.pad_token is None:
+        tokenizer.pad_token = tokenizer.eos_token
+        tokenizer.pad_token_id = tokenizer.eos_token_id
 
-    # GPU selection using utility function
+    logger.info("Using F32 dtype for training (more stable than BF16)")
+
+    model = AutoModelForCausalLM.from_pretrained(
+        model_name,
+        torch_dtype=torch.float32,
+        trust_remote_code=True,
+        low_cpu_mem_usage=True,
+    )
+
+    device = torch.device(device_str)
+    model = model.to(device)
+
+    model.config.use_cache = False
+    model.gradient_checkpointing_enable()
+    model.enable_input_require_grads()
+
+    target_modules = get_qwen3_target_modules()
+    peft_config = LoraConfig(
+        task_type=TaskType.CAUSAL_LM,
+        inference_mode=False,
+        r=lora_rank,
+        lora_alpha=lora_alpha,
+        lora_dropout=lora_dropout,
+        target_modules=target_modules,
+        bias="none",
+    )
+
+    model = get_peft_model(model, peft_config)
+    model.print_trainable_parameters()
+
+    model.train()
+    for name, param in model.named_parameters():
+        if param.requires_grad:
+            logger.info(f"Trainable: {name}")
+            break
+
+    return model, tokenizer, device
+
+
+def _create_training_args(
+    output_dir, num_epochs, batch_size, learning_rate, num_workers
+):
+    return TrainingArguments(
+        output_dir=output_dir,
+        num_train_epochs=num_epochs,
+        per_device_train_batch_size=batch_size,
+        per_device_eval_batch_size=1,
+        gradient_accumulation_steps=max(1, 16 // batch_size),
+        learning_rate=learning_rate,
+        weight_decay=0.01,
+        logging_dir=f"{output_dir}/logs",
+        logging_steps=10,
+        eval_strategy="no",
+        save_strategy="no",
+        save_total_limit=1,
+        warmup_ratio=0.1,
+        lr_scheduler_type="cosine",
+        bf16=False,
+        fp16=False,
+        gradient_checkpointing=True,
+        gradient_checkpointing_kwargs={"use_reentrant": False},
+        dataloader_num_workers=num_workers,
+        remove_unused_columns=False,
+        max_grad_norm=1.0,
+        optim="adamw_torch",
+        prediction_loss_only=True,
+        dataloader_pin_memory=False,
+        auto_find_batch_size=False,
+    )
+
+
+def _setup_gpu(gpu_id):
     device_str, selected_gpu = set_gpu_device(
         gpu_id=gpu_id, auto_select=(gpu_id is None)
     )
@@ -426,6 +431,99 @@ def main(
 
     clear_gpu_memory()
     log_memory_usage("Pre-training")
+    return device_str
+
+
+def _save_model_and_mapping(trainer, tokenizer, output_dir, dataset_loader):
+    trainer.save_model(output_dir)
+    tokenizer.save_pretrained(output_dir)
+
+    label_mapping = {
+        "label2id": dataset_loader.label2id,
+        "id2label": dataset_loader.id2label,
+        "instruction_template": INSTRUCTION_TEMPLATE,
+    }
+    with open(os.path.join(output_dir, "label_mapping.json"), "w") as f:
+        json.dump(label_mapping, f, indent=2)
+
+    logger.info(f"Model saved to: {output_dir}")
+
+
+def _evaluate_generative_accuracy(
+    model, tokenizer, val_texts, val_labels, num_test_samples
+):
+    model.eval()
+
+    correct = 0
+    total = 0
+
+    logger.info(f"Testing on {num_test_samples} validation samples...")
+
+    for i in range(num_test_samples):
+        question = val_texts[i]
+        true_category = val_labels[i]
+
+        messages = format_instruction(question, category=None)
+
+        prompt = tokenizer.apply_chat_template(
+            messages, tokenize=False, add_generation_prompt=True, enable_thinking=False
+        )
+
+        inputs = tokenizer(
+            prompt, return_tensors="pt", max_length=512, truncation=True
+        ).to(model.device)
+
+        with torch.no_grad():
+            outputs = model.generate(
+                **inputs,
+                max_new_tokens=10,
+                temperature=0.1,
+                do_sample=False,
+                pad_token_id=tokenizer.pad_token_id,
+                eos_token_id=[
+                    tokenizer.eos_token_id,
+                    tokenizer.convert_tokens_to_ids("<|im_end|>"),
+                ],
+            )
+
+        generated_ids = outputs[0][inputs["input_ids"].shape[1] :]
+        generated_text = tokenizer.decode(generated_ids, skip_special_tokens=True)
+
+        predicted_category = _parse_generated_category(generated_text)
+
+        is_correct = predicted_category == true_category.lower()
+        if is_correct:
+            correct += 1
+        total += 1
+
+        if i < 5 or i >= num_test_samples - 5:  # noqa: PLR2004
+            logger.info(f"\n[{i+1}/{num_test_samples}] Question: {question[:100]}...")
+            logger.info(f"  True: {true_category}")
+            logger.info(f"  Predicted: {predicted_category}")
+            logger.info(f"  {'CORRECT' if is_correct else '✗ WRONG'}")
+
+    accuracy = (correct / total * 100) if total > 0 else 0
+    return correct, total, accuracy
+
+
+def main(
+    model_name: str = "Qwen/Qwen3-0.6B",
+    lora_rank: int = 16,
+    lora_alpha: int = 32,
+    lora_dropout: float = 0.05,  # Lower dropout for small model
+    num_epochs: int = 8,  # More epochs for 0.6B
+    batch_size: int = 4,  # Configurable batch size (adjust based on GPU memory)
+    learning_rate: float = 3e-4,  # Higher LR for small model
+    max_samples_per_category: int = 150,  # Samples per category for balanced dataset
+    num_workers: int = 0,  # Number of dataloader workers (0=single process, 2-4 for multiprocessing)
+    output_dir: str | None = None,
+    gpu_id: int | None = None,
+):
+    """Main training function for generative Qwen3 classification."""
+    logger.info("Starting Qwen3 Generative Classification Fine-tuning")
+    logger.info("Training Qwen3 to GENERATE category labels (instruction-following)")
+
+    device_str = _setup_gpu(gpu_id)
 
     # Load dataset
     dataset_loader = MMLU_Dataset()
@@ -439,66 +537,16 @@ def main(
     logger.info(f"Categories: {len(dataset_loader.label2id)}")
 
     # Load tokenizer and model
-    logger.info(f"Loading Qwen3 model: {model_name}")
-    tokenizer = AutoTokenizer.from_pretrained(model_name, trust_remote_code=True)
-
-    # Set padding token
-    if tokenizer.pad_token is None:
-        tokenizer.pad_token = tokenizer.eos_token
-        tokenizer.pad_token_id = tokenizer.eos_token_id
-
-    # Load model for causal LM with memory optimization
-    # Use F32 for training (more stable), will convert to BF16 for Candle inference later
-    logger.info("Using F32 dtype for training (more stable than BF16)")
-
-    model = AutoModelForCausalLM.from_pretrained(
-        model_name,
-        torch_dtype=torch.float32,
-        trust_remote_code=True,
-        low_cpu_mem_usage=True,
+    model, tokenizer, _device = _load_and_configure_model(
+        model_name, lora_rank, lora_alpha, lora_dropout, device_str
     )
-
-    # Move to GPU using device from set_gpu_device utility
-    # Device is now cuda:0 after CUDA_VISIBLE_DEVICES is set
-    device = torch.device(device_str)
-    model = model.to(device)
-
-    # Prepare model for training
-    model.config.use_cache = False  # Required for training
-
-    # Enable gradient checkpointing for memory efficiency
-    model.gradient_checkpointing_enable()
-    model.enable_input_require_grads()  # Required for gradient checkpointing with LoRA
-
-    # Create LoRA configuration
-    target_modules = get_qwen3_target_modules()
-    peft_config = LoraConfig(
-        task_type=TaskType.CAUSAL_LM,  # Correct task type for generation
-        inference_mode=False,
-        r=lora_rank,
-        lora_alpha=lora_alpha,
-        lora_dropout=lora_dropout,
-        target_modules=target_modules,
-        bias="none",
-    )
-
-    # Apply LoRA
-    model = get_peft_model(model, peft_config)
-    model.print_trainable_parameters()
-
-    # Ensure model is in training mode and enable gradients
-    model.train()
-    for name, param in model.named_parameters():
-        if param.requires_grad:
-            logger.info(f"Trainable: {name}")
-            break  # Just log first one to verify
 
     # Prepare datasets in generative format
     logger.info("Formatting dataset for instruction-following...")
     train_dataset = create_generative_dataset(train_texts, train_labels, tokenizer)
     val_dataset = create_generative_dataset(val_texts, val_labels, tokenizer)
 
-    logger.info(f"Example training input:")
+    logger.info("Example training input:")
     logger.info(tokenizer.decode(train_dataset[0]["input_ids"][:100]))
 
     # Setup output directory
@@ -512,37 +560,8 @@ def main(
         mlm=False,  # Causal LM, not masked LM
     )
 
-    # Training arguments (optimized for memory and stability)
-    # Note: batch_size is configurable via function parameter
-    training_args = TrainingArguments(
-        output_dir=output_dir,
-        num_train_epochs=num_epochs,
-        per_device_train_batch_size=batch_size,  # Configurable via parameter
-        per_device_eval_batch_size=1,  # Reduce eval batch size to save memory
-        gradient_accumulation_steps=max(
-            1, 16 // batch_size
-        ),  # Maintain effective batch size of 16, minimum 1
-        learning_rate=learning_rate,
-        weight_decay=0.01,
-        logging_dir=f"{output_dir}/logs",
-        logging_steps=10,
-        eval_strategy="no",  # Skip eval during training (saves 10+ minutes)
-        save_strategy="no",  # Don't save intermediate checkpoints (saves disk space!)
-        save_total_limit=1,  # Keep only 1 checkpoint
-        warmup_ratio=0.1,
-        lr_scheduler_type="cosine",
-        bf16=False,  # Use F32 for training (more stable)
-        fp16=False,  # Use F32 for training (more stable)
-        gradient_checkpointing=True,  # Enable to save memory (trades compute for memory)
-        gradient_checkpointing_kwargs={"use_reentrant": False},  # Better for BF16
-        dataloader_num_workers=num_workers,  # Configurable workers (0=single process, 2-4=multiprocessing)
-        remove_unused_columns=False,  # Keep all columns
-        max_grad_norm=1.0,  # Gradient clipping for stability
-        optim="adamw_torch",  # Use PyTorch AdamW
-        prediction_loss_only=True,  # Only compute loss, don't collect predictions (saves memory!)
-        # Memory optimizations
-        dataloader_pin_memory=False,  # Disable pin memory to save GPU memory
-        auto_find_batch_size=False,  # Don't auto-adjust batch size
+    training_args = _create_training_args(
+        output_dir, num_epochs, batch_size, learning_rate, num_workers
     )
 
     # Create trainer (no compute_metrics needed since prediction_loss_only=True)
@@ -558,109 +577,18 @@ def main(
     logger.info("Starting training...")
     trainer.train()
 
-    # Save model
-    trainer.save_model(output_dir)
-    tokenizer.save_pretrained(output_dir)
-
-    # Save label mapping
-    label_mapping = {
-        "label2id": dataset_loader.label2id,
-        "id2label": dataset_loader.id2label,
-        "instruction_template": INSTRUCTION_TEMPLATE,
-    }
-    with open(os.path.join(output_dir, "label_mapping.json"), "w") as f:
-        json.dump(label_mapping, f, indent=2)
-
-    logger.info(f"Model saved to: {output_dir}")
+    _save_model_and_mapping(trainer, tokenizer, output_dir, dataset_loader)
 
     # Test generation on MMLU-Pro validation data
     logger.info("\n" + "=" * 50)
     logger.info("Testing generation on MMLU-Pro validation data:")
     logger.info("=" * 50)
 
-    model.eval()
+    num_test_samples = min(200, len(val_texts))
+    correct, total, accuracy = _evaluate_generative_accuracy(
+        model, tokenizer, val_texts, val_labels, num_test_samples
+    )
 
-    # Use validation data for testing
-    num_test_samples = min(200, len(val_texts))  # Test on 200 samples
-    correct = 0
-    total = 0
-
-    logger.info(f"Testing on {num_test_samples} validation samples...")
-
-    for i in range(num_test_samples):
-        question = val_texts[i]
-        true_category = val_labels[i]
-
-        # Format using chat template
-        messages = format_instruction(question, category=None)
-
-        # Apply chat template with generation prompt
-        # This adds <|im_start|>assistant\n to prompt the model to respond
-        # Disable thinking mode for direct classification output
-        prompt = tokenizer.apply_chat_template(
-            messages, tokenize=False, add_generation_prompt=True, enable_thinking=False
-        )
-
-        inputs = tokenizer(
-            prompt, return_tensors="pt", max_length=512, truncation=True
-        ).to(model.device)
-
-        with torch.no_grad():
-            outputs = model.generate(
-                **inputs,
-                max_new_tokens=10,
-                temperature=0.1,
-                do_sample=False,  # Greedy decoding for evaluation
-                pad_token_id=tokenizer.pad_token_id,
-                eos_token_id=[
-                    tokenizer.eos_token_id,
-                    tokenizer.convert_tokens_to_ids("<|im_end|>"),
-                ],
-            )
-
-        # Decode only the generated part (skip the input prompt)
-        generated_ids = outputs[0][inputs["input_ids"].shape[1] :]
-        generated_text = tokenizer.decode(generated_ids, skip_special_tokens=True)
-
-        # Remove thinking tokens that Qwen3 generates
-        generated_text = (
-            generated_text.replace("<think>", "").replace("</think>", "").strip()
-        )
-
-        # With chat template, model generates just the category directly
-        # Clean up answer (take first line, remove punctuation at end)
-        answer_text = generated_text.split("\n")[0].strip().strip(".,!?;:").lower()
-
-        # Match against known categories (handle multi-word categories like "computer science")
-        predicted_category = "unknown"
-        for category in REQUIRED_CATEGORIES:
-            if answer_text.startswith(category.lower()):
-                predicted_category = category.lower()
-                break
-
-        # If no match, take first 2 words (for "computer science" etc)
-        if predicted_category == "unknown" and answer_text:
-            words = answer_text.split()
-            if len(words) >= 2:
-                predicted_category = " ".join(words[:2])
-            elif len(words) == 1:
-                predicted_category = words[0]
-            else:
-                predicted_category = answer_text
-
-        is_correct = predicted_category == true_category.lower()
-        if is_correct:
-            correct += 1
-        total += 1
-
-        # Log first 5 and last 5 examples
-        if i < 5 or i >= num_test_samples - 5:
-            logger.info(f"\n[{i+1}/{num_test_samples}] Question: {question[:100]}...")
-            logger.info(f"  True: {true_category}")
-            logger.info(f"  Predicted: {predicted_category}")
-            logger.info(f"  {'CORRECT' if is_correct else '✗ WRONG'}")
-
-    accuracy = (correct / total * 100) if total > 0 else 0
     logger.info("\n" + "=" * 50)
     logger.info(f"Validation Accuracy: {correct}/{total} = {accuracy:.2f}%")
     logger.info("=" * 50)
@@ -674,8 +602,8 @@ def demo_inference(model_path: str, model_name: str = "Qwen/Qwen3-0.6B"):
 
     try:
         # Load label mapping
-        with open(os.path.join(model_path, "label_mapping.json"), "r") as f:
-            mapping_data = json.load(f)
+        with open(os.path.join(model_path, "label_mapping.json")) as f:
+            json.load(f)
 
         # Load tokenizer
         tokenizer = AutoTokenizer.from_pretrained(model_path, trust_remote_code=True)
@@ -709,8 +637,6 @@ def demo_inference(model_path: str, model_name: str = "Qwen/Qwen3-0.6B"):
         ]
 
         logger.info("Running inference...")
-        correct = 0
-        total = 0
 
         for example in test_examples:
             # Format using chat template
@@ -744,29 +670,7 @@ def demo_inference(model_path: str, model_name: str = "Qwen/Qwen3-0.6B"):
             generated_ids = outputs[0][inputs["input_ids"].shape[1] :]
             generated_text = tokenizer.decode(generated_ids, skip_special_tokens=True)
 
-            # Remove thinking tokens that Qwen3 generates
-            generated_text = (
-                generated_text.replace("<think>", "").replace("</think>", "").strip()
-            )
-
-            # With chat template, model generates just the category directly
-            # Clean up and match against known categories
-            answer_text = generated_text.split("\n")[0].strip().strip(".,!?;:").lower()
-
-            category = "unknown"
-            for cat in REQUIRED_CATEGORIES:
-                if answer_text.startswith(cat.lower()):
-                    category = cat
-                    break
-
-            # If no match, take first 2 words
-            if category == "unknown" and answer_text:
-                words = answer_text.split()
-                category = (
-                    " ".join(words[:2])
-                    if len(words) >= 2
-                    else words[0] if words else "unknown"
-                )
+            category = _parse_generated_category(generated_text)
 
             print(f"\nQuestion: {example}")
             print(f"Generated: {generated_text[:50]}...")
@@ -775,7 +679,7 @@ def demo_inference(model_path: str, model_name: str = "Qwen/Qwen3-0.6B"):
 
     except Exception as e:
         logger.error(f"Error during inference: {e}")
-        import traceback
+        import traceback  # noqa: PLC0415
 
         traceback.print_exc()
 
