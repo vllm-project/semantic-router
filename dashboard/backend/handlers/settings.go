@@ -14,6 +14,7 @@ type SettingsResponse struct {
 	SetupMode       bool   `json:"setupMode"`
 	Platform        string `json:"platform"`
 	EnvoyURL        string `json:"envoyUrl"` // Envoy proxy URL for evaluation endpoint
+	RouterEvalURL   string `json:"routerEvalEndpoint"`
 	FleetSimEnabled bool   `json:"fleetSimEnabled"`
 }
 
@@ -37,6 +38,7 @@ func SettingsHandler(cfg *config.Config) http.HandlerFunc {
 			SetupMode:       cfg.SetupMode,
 			Platform:        cfg.Platform,
 			EnvoyURL:        cfg.EnvoyURL,
+			RouterEvalURL:   defaultRouterEvalEndpoint(cfg.RouterAPIURL),
 			FleetSimEnabled: cfg.FleetSimURL != "",
 		}
 
