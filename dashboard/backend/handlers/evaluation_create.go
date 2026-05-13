@@ -120,6 +120,13 @@ func validateDatasetsForConfig(cfg models.EvaluationConfig) (string, int) {
 // server-side TARGET_ROUTER_API_URL override is configured.
 const fallbackRouterEvalEndpoint = "http://localhost:8080/api/v1/eval"
 
+func defaultRouterEvalEndpoint(routerAPIURL string) string {
+	if routerAPIURL != "" {
+		return strings.TrimSuffix(routerAPIURL, "/") + "/api/v1/eval"
+	}
+	return fallbackRouterEvalEndpoint
+}
+
 func (h *EvaluationHandler) applyEvaluationCreateDefaults(cfg *models.EvaluationConfig) {
 	if cfg.MaxSamples <= 0 {
 		cfg.MaxSamples = 50
@@ -151,10 +158,7 @@ func (h *EvaluationHandler) shouldOverrideEndpoint(cfg *models.EvaluationConfig)
 
 func (h *EvaluationHandler) defaultEvaluationEndpoint(level models.EvaluationLevel) string {
 	if level == models.LevelRouter {
-		if h.routerAPIURL != "" {
-			return strings.TrimSuffix(h.routerAPIURL, "/") + "/api/v1/eval"
-		}
-		return fallbackRouterEvalEndpoint
+		return defaultRouterEvalEndpoint(h.routerAPIURL)
 	}
 	if h.envoyURL != "" {
 		return h.envoyURL

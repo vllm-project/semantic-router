@@ -137,4 +137,73 @@ test.describe('Evaluation page', () => {
     expect(capturedRequest?.config).not.toHaveProperty('datasets.domain');
     expect((capturedRequest?.config as { datasets: Record<string, string[]> }).datasets.accuracy).toEqual([]);
   });
+
+  test('signal-level review uses the configured router evaluation endpoint', async ({ page }) => {
+    await mockAuthenticatedAppShell(page, {
+      user: evalUser,
+      settings: {
+        routerEvalEndpoint: 'http://semantic-router.default.svc.cluster.local:8080/api/v1/eval',
+      },
+    });
+
+    let capturedRequest: Record<string, unknown> | null = null;
+
+    await page.route('**/api/evaluation/tasks', async (route) => {
+      if (route.request().method() === 'GET') {
+        await route.fulfill({ status: 200, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify([]) });
+        return;
+      }
+
+      capturedRequest = route.request().postDataJSON() as Record<string, unknown>;
+      await route.fulfill({
+        status: 201,
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          id: 'task-router-1',
+          name: 'Signal Eval',
+          description: '',
+          status: 'pending',
+          created_at: '2026-05-08T00:00:00Z',
+          progress_percent: 0,
+          config: capturedRequest?.config,
+        }),
+      });
+    });
+
+    await page.route('**/api/evaluation/datasets', async (route) => {
+      await route.fulfill({
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          domain: [{ name: 'mmlu-pro-en', description: 'MMLU-Pro (English)', dimension: 'domain', level: 'router' }],
+          fact_check: [],
+          user_feedback: [],
+          accuracy: [],
+        }),
+      });
+    });
+
+    await page.goto('/evaluation');
+    await page.getByRole('button', { name: /create/i }).click();
+    await page.getByLabel('Task Name *').fill('Signal Eval');
+    await page.getByRole('button', { name: 'Next' }).click();
+    await page.getByRole('button', { name: 'Next' }).click();
+    await page.getByRole('button', { name: 'Next' }).click();
+
+    await expect(
+      page.getByText('http://semantic-router.default.svc.cluster.local:8080/api/v1/eval')
+    ).toBeVisible();
+
+    await page.getByRole('button', { name: /create task/i }).click();
+
+    expect(capturedRequest).not.toBeNull();
+    expect(capturedRequest).toMatchObject({
+      name: 'Signal Eval',
+      config: {
+        level: 'router',
+        dimensions: ['domain'],
+        endpoint: 'http://semantic-router.default.svc.cluster.local:8080/api/v1/eval',
+      },
+    });
+  });
 });

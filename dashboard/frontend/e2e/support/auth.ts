@@ -52,6 +52,7 @@ const defaultSettings = {
   setupMode: false,
   platform: '',
   envoyUrl: '',
+  routerEvalEndpoint: '',
 }
 
 export async function mockAuthenticatedSession(

@@ -26,7 +26,12 @@ func TestSettingsHandlerReflectsEffectiveReadonlyMode(t *testing.T) {
 		}))
 
 		recorder := httptest.NewRecorder()
-		SettingsHandler(&config.Config{ReadonlyMode: false, SetupMode: false, FleetSimURL: "http://fleet-sim:8000"}).ServeHTTP(recorder, req)
+		SettingsHandler(&config.Config{
+			ReadonlyMode: false,
+			SetupMode:    false,
+			RouterAPIURL: "http://router:8080",
+			FleetSimURL:  "http://fleet-sim:8000",
+		}).ServeHTTP(recorder, req)
 
 		if recorder.Code != http.StatusOK {
 			t.Fatalf("status = %d, want %d", recorder.Code, http.StatusOK)
@@ -41,6 +46,9 @@ func TestSettingsHandlerReflectsEffectiveReadonlyMode(t *testing.T) {
 		}
 		if !response.FleetSimEnabled {
 			t.Fatalf("fleetSimEnabled = false, want true")
+		}
+		if response.RouterEvalURL != "http://router:8080/api/v1/eval" {
+			t.Fatalf("routerEvalEndpoint = %q, want %q", response.RouterEvalURL, "http://router:8080/api/v1/eval")
 		}
 	})
 
@@ -69,6 +77,9 @@ func TestSettingsHandlerReflectsEffectiveReadonlyMode(t *testing.T) {
 		}
 		if response.FleetSimEnabled {
 			t.Fatalf("fleetSimEnabled = true, want false when simulator URL is empty")
+		}
+		if response.RouterEvalURL != fallbackRouterEvalEndpoint {
+			t.Fatalf("routerEvalEndpoint = %q, want %q", response.RouterEvalURL, fallbackRouterEvalEndpoint)
 		}
 
 		recorder = httptest.NewRecorder()
