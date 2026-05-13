@@ -269,7 +269,7 @@ export function useTaskMutations() {
 
 // Hook for managing task creation form state
 export function useTaskCreationForm() {
-  const { envoyUrl } = useReadonly();
+  const { envoyUrl, routerEvalEndpoint } = useReadonly();
   const [step, setStep] = useState(1);
   const [level, setLevelState] = useState<EvaluationLevel>('router');
   const [name, setName] = useState('');
@@ -284,8 +284,8 @@ export function useTaskCreationForm() {
 
   // Update endpoint based on level
   useEffect(() => {
-    setEndpoint(getDefaultEndpointForLevel(level, envoyUrl));
-  }, [level, envoyUrl]);
+    setEndpoint(getDefaultEndpointForLevel(level, routerEvalEndpoint, envoyUrl));
+  }, [level, routerEvalEndpoint, envoyUrl]);
 
   const setLevel = useCallback((nextLevel: EvaluationLevel) => {
     setLevelState(nextLevel);
@@ -354,11 +354,11 @@ export function useTaskCreationForm() {
     setDimensions(getDefaultDimensionsForLevel('router'));
     setSelectedDatasets({});
     setMaxSamples(50);
-    setEndpoint(DEFAULT_ROUTER_EVAL_ENDPOINT);
+    setEndpoint(getDefaultEndpointForLevel('router', routerEvalEndpoint, envoyUrl));
     setModel('MoM');
     setConcurrent(1);
     setSamplesPerCat(10);
-  }, []);
+  }, [envoyUrl, routerEvalEndpoint]);
 
   const isStepValid = useCallback(
     (stepNum: number): boolean => {

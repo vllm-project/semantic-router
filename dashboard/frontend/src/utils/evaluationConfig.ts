@@ -37,9 +37,13 @@ export function filterSelectedDatasetsByDimensions(
   );
 }
 
-export function getDefaultEndpointForLevel(level: EvaluationLevel, envoyUrl?: string): string {
+export function getDefaultEndpointForLevel(
+  level: EvaluationLevel,
+  routerEvalEndpoint?: string,
+  envoyUrl?: string
+): string {
   if (level === 'router') {
-    return DEFAULT_ROUTER_EVAL_ENDPOINT;
+    return routerEvalEndpoint || DEFAULT_ROUTER_EVAL_ENDPOINT;
   }
 
   return envoyUrl || DEFAULT_MOM_EVAL_ENDPOINT;
