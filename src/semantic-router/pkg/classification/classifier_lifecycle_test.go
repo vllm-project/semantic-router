@@ -10,7 +10,7 @@ type countingEmbeddingInitializer struct {
 	calls int
 }
 
-func (i *countingEmbeddingInitializer) Init(string, string, string, bool) error {
+func (i *countingEmbeddingInitializer) Init(string, string, string, bool, string, string) error {
 	i.calls++
 	return nil
 }

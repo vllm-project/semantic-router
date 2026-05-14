@@ -573,3 +573,57 @@ check-gpu: ## Check GPU availability in Docker container
 		--group-add video \
 		$(ROCM_IMAGE) \
 		python3 -c "import torch; print(f'PyTorch: {torch.__version__}'); print(f'ROCm: {torch.cuda.is_available()}'); print(f'GPUs: {torch.cuda.device_count()}'); [print(f'  GPU {i}: {torch.cuda.get_device_name(i)} ({torch.cuda.get_device_properties(i).total_memory/1024**3:.0f}GB)') for i in range(torch.cuda.device_count())]"
+
+# Convert models to OpenVINO format for openvino-binding tests
+convert-openvino-test-models: ## Convert models to OpenVINO IR format for openvino-binding tests
+	@echo "Converting models to OpenVINO IR format for tests..."
+	@echo "==============================================================="
+	@echo "This will convert required benchmark/test models to OpenVINO"
+	@echo "==============================================================="
+	@mkdir -p openvino-binding/test_models
+	@mkdir -p openvino-binding/test_models/all-MiniLM-L6-v2
+	@mkdir -p openvino-binding/test_models/category_classifier_modernbert
+	
+	@echo "\n[1/3] Converting all-MiniLM-L6-v2 embedding model..."
+	@if [ ! -f "openvino-binding/test_models/all-MiniLM-L6-v2/openvino_model.xml" ]; then \
+	echo "  -> Exporting with optimum-cli"; \
+	optimum-cli export openvino \
+	--model sentence-transformers/all-MiniLM-L6-v2 \
+	--task feature-extraction \
+	openvino-binding/test_models/all-MiniLM-L6-v2 \
+	--weight-format fp32; \
+	else \
+	echo "  -> Already exists: openvino-binding/test_models/all-MiniLM-L6-v2/openvino_model.xml"; \
+	fi
+	
+	@echo "\n[2/3] Converting category_classifier_modernbert model..."
+	@if [ ! -f "openvino-binding/test_models/category_classifier_modernbert/openvino_model.xml" ]; then \
+	echo "  -> Exporting with optimum-cli"; \
+	optimum-cli export openvino \
+	--model llm-semantic-router/mmbert32k-intent-classifier-merged \
+	--task text-classification \
+	openvino-binding/test_models/category_classifier_modernbert \
+	--weight-format fp32; \
+	else \
+	echo "  -> Already exists: openvino-binding/test_models/category_classifier_modernbert/openvino_model.xml"; \
+	fi
+	
+	@echo "\n[3/3] Converting tokenizers to native OpenVINO format..."
+	@if [ "$$SKIP_TOKENIZER_CONVERSION" = "1" ]; then \
+	echo "  -> SKIP_TOKENIZER_CONVERSION=1 set, skipping tokenizer conversion"; \
+	else \
+	command -v python3 >/dev/null 2>&1 && PYTHON_CMD=python3 || PYTHON_CMD=python; \
+	$$PYTHON_CMD openvino-binding/scripts/convert_test_tokenizers.py || { \
+	echo ""; \
+	echo "Tokenizer conversion failed; models are still usable with fallback tokenization."; \
+	echo "To skip tokenizer conversion explicitly:"; \
+	echo "  export SKIP_TOKENIZER_CONVERSION=1"; \
+	echo "  make convert-openvino-test-models"; \
+	}; \
+	fi
+	
+	@echo "\n==============================================================="
+	@echo "OpenVINO test models are ready"
+	@echo "  - openvino-binding/test_models/all-MiniLM-L6-v2"
+	@echo "  - openvino-binding/test_models/category_classifier_modernbert"
+	@echo "==============================================================="

@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"fmt"
+	"os"
 	"strings"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
@@ -18,6 +19,7 @@ func main() {
 	logo.PrintVLLMLogo()
 	opts := parseRuntimeOptions()
 	initializeRuntimeLogger()
+	applyBackendRuntimeTuningDefaults()
 
 	cfg := loadRuntimeConfigOrFatal(opts.configPath)
 	config.Replace(cfg)
@@ -53,6 +55,43 @@ var (
 	ensureKubernetesConfigModels   = modeldownload.EnsureModelsForConfig
 	replaceKubernetesRuntimeConfig = config.Replace
 )
+
+func applyBackendRuntimeTuningDefaults() {
+	backend := strings.TrimSpace(strings.ToLower(os.Getenv("EMBEDDING_BACKEND_OVERRIDE")))
+	if backend != "candle" {
+		return
+	}
+
+	defaults := map[string]string{
+		"OMP_NUM_THREADS":        "1",
+		"MKL_NUM_THREADS":        "1",
+		"OPENBLAS_NUM_THREADS":   "1",
+		"RAYON_NUM_THREADS":      "1",
+		"TOKENIZERS_PARALLELISM": "false",
+	}
+	applied := make(map[string]string)
+	for key, value := range defaults {
+		if _, exists := os.LookupEnv(key); exists {
+			continue
+		}
+		if err := os.Setenv(key, value); err != nil {
+			logging.ComponentWarnEvent("router", "backend_runtime_tuning_setenv_failed", map[string]interface{}{
+				"backend": backend,
+				"env":     key,
+				"error":   err.Error(),
+			})
+			continue
+		}
+		applied[key] = value
+	}
+	if len(applied) == 0 {
+		return
+	}
+	logging.ComponentEvent("router", "backend_runtime_tuning_applied", map[string]interface{}{
+		"backend": backend,
+		"env":     applied,
+	})
+}
 
 func ensureModelsDownloaded(cfg *config.RouterConfig, startupWriter startupstatus.StatusWriter) error {
 	reporter := func(progress modeldownload.ProgressState) {

@@ -3,6 +3,7 @@ package classification
 import (
 	"fmt"
 	"runtime"
+	"strings"
 	"sync"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
@@ -30,6 +31,12 @@ func (c *EmbeddingClassifier) collectUniqueCandidates() []string {
 }
 
 func (c *EmbeddingClassifier) preloadWorkerCount(candidateCount int) int {
+	if candidateCount <= 1 {
+		return 1
+	}
+	if strings.EqualFold(c.getBackend(), "candle") {
+		return 1
+	}
 	numWorkers := runtime.NumCPU() * 2
 	if numWorkers > candidateCount {
 		return candidateCount
@@ -56,12 +63,12 @@ func (c *EmbeddingClassifier) startCandidateEmbeddingWorkers(
 		go func() {
 			defer wg.Done()
 			for candidate := range candidateChan {
-				output, err := getEmbeddingWithModelType(candidate, modelType, c.optimizationConfig.TargetDimension)
+				embedding, err := c.computeEmbedding(candidate, modelType, "preload")
 				if err != nil {
 					resultChan <- embeddingPreloadResult{candidate: candidate, err: err}
 					continue
 				}
-				resultChan <- embeddingPreloadResult{candidate: candidate, embedding: output.Embedding}
+				resultChan <- embeddingPreloadResult{candidate: candidate, embedding: embedding}
 			}
 		}()
 	}
