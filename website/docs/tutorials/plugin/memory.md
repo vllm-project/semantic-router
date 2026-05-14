@@ -24,12 +24,13 @@ Not every route should pay the complexity or privacy cost of memory. `memory` le
 
 ## Configuration
 
-The memory plugin requires a backing store configured under `global.stores.memory`. The router supports two backends:
+The memory plugin requires a backing store configured under `global.stores.memory`. The router supports three backends:
 
 - **Milvus** (default) — distributed vector database, best for large-scale production
 - **Valkey** — lightweight single-binary option using the Search module, best for dev/test or existing Valkey infra
+- **Qdrant** — single-binary with gRPC, simpler ops than Milvus, good for small-to-large workloads
 
-See the [Stores and Tools](../global/stores-and-tools.md) tutorial for global memory configuration, or the [Valkey Memory deployment guide](../../installation/valkey-memory.md) for Valkey-specific setup.
+See the [Stores and Tools](../global/stores-and-tools.md) tutorial for global memory configuration, the [Valkey Memory deployment guide](../../installation/valkey-memory.md) for Valkey-specific setup, or the [Qdrant deployment guide](../../installation/qdrant.md) for Qdrant-specific setup.
 
 Use this fragment under `routing.decisions[].plugins`:
 

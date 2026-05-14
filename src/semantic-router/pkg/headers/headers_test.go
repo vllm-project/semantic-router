@@ -14,6 +14,7 @@ func TestHeaderConstants(t *testing.T) {
 		{"RequestID", RequestID, "x-request-id"},
 		{"GatewayDestinationEndpoint", GatewayDestinationEndpoint, "x-vsr-destination-endpoint"},
 		{"SelectedModel", SelectedModel, "x-selected-model"},
+		{"VSRSkipProcessing", VSRSkipProcessing, "x-vsr-skip-processing"},
 		// VSR headers
 		{"VSRSelectedCategory", VSRSelectedCategory, "x-vsr-selected-category"},
 		{"VSRSelectedReasoning", VSRSelectedReasoning, "x-vsr-selected-reasoning"},

@@ -5,6 +5,12 @@ import "github.com/vllm-project/semantic-router/src/semantic-router/pkg/observab
 const (
 	defaultRouterReplayMaxRecords   = 10000
 	defaultRouterReplayMaxBodyBytes = 4096
+	// defaultRouterReplayMaxToolTraceSteps caps the per-record tool-trace
+	// step count by default so an agentic session that loops forever can't
+	// drive the router to OOM (see #1835). 100 covers normal multi-tool
+	// flows without losing the user query at the head of the timeline; the
+	// truncation policy is "drop oldest" so the most recent steps stay.
+	defaultRouterReplayMaxToolTraceSteps = 100
 )
 
 func DefaultRouterReplayPluginConfig() RouterReplayPluginConfig {
@@ -14,6 +20,7 @@ func DefaultRouterReplayPluginConfig() RouterReplayPluginConfig {
 		CaptureRequestBody:  true,
 		CaptureResponseBody: true,
 		MaxBodyBytes:        defaultRouterReplayMaxBodyBytes,
+		MaxToolTraceSteps:   defaultRouterReplayMaxToolTraceSteps,
 	}
 }
 

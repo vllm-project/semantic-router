@@ -183,6 +183,12 @@ func (r *OpenAIRouter) applyDecisionResultToContext(result *decision.DecisionRes
 		ctx.RouterReplayPluginConfig = pluginCfg
 	}
 
+	// Snapshot the retention directive emitted by this decision (deep clone)
+	// and observe every declared field via log + trace. Both helpers are
+	// no-ops when the decision did not emit a retention block.
+	applyEmittedRetention(result.Decision, ctx)
+	observeRetentionDirective(ctx)
+
 	categoryName := extractDecisionCategory(result.MatchedRules)
 	ctx.VSRSelectedCategory = categoryName
 	return categoryName
@@ -226,7 +232,7 @@ func (r *OpenAIRouter) selectDecisionRuntimeModel(
 		result.Decision.CandidateIterations,
 		ctx,
 	)
-	selectedModelRef, usedMethod := r.selectModelFromCandidates(selCtx, result.Decision.Algorithm)
+	selectedModelRef, usedMethod := r.selectModelFromCandidates(selCtx, result.Decision.Algorithm, ctx)
 	selectedModel := selectedModelRef.Model
 	selectionFields := map[string]interface{}{
 		"request_id":        ctx.RequestID,

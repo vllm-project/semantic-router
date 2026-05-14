@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"io"
+	"runtime/debug"
 
 	ext_proc "github.com/envoyproxy/go-control-plane/envoy/service/ext_proc/v3"
 	"google.golang.org/grpc/codes"
@@ -22,6 +23,13 @@ import (
 // from the first few KB, and either passes through or accumulates for the
 // full pipeline on end_of_stream.
 func (r *OpenAIRouter) handleRequestBodyDispatch(v *ext_proc.ProcessingRequest_RequestBody, ctx *RequestContext) (*ext_proc.ProcessingResponse, error) {
+	// Honor x-vsr-skip-processing before allocating a streamed-body handler.
+	// This guarantees no chunk accumulation, model detection, or buffered
+	// pipeline runs for opted-out requests, regardless of streamed_body_mode.
+	if ctx.SkipProcessing {
+		return newContinueRequestBodyResponse(), nil
+	}
+
 	eos := v.RequestBody.GetEndOfStream()
 
 	// If we already have a handler from a previous chunk, continue streaming
@@ -46,8 +54,17 @@ func (r *OpenAIRouter) handleRequestBodyDispatch(v *ext_proc.ProcessingRequest_R
 }
 
 // Process implements the ext_proc calls
-func (r *OpenAIRouter) Process(stream ext_proc.ExternalProcessor_ProcessServer) error {
+func (r *OpenAIRouter) Process(stream ext_proc.ExternalProcessor_ProcessServer) (retErr error) {
 	logging.Debugf("Processing at stage [init]")
+
+	// Recover from any panic (including OOM kills surfaced as runtime panics from
+	// CGO inference calls) so a single bad request cannot take down the gRPC server.
+	defer func() {
+		if rec := recover(); rec != nil {
+			logging.Errorf("Process: recovered panic: %v\n%s", rec, debug.Stack())
+			retErr = status.Errorf(codes.Internal, "internal error: %v", rec)
+		}
+	}()
 
 	// Initialize request context
 	ctx := &RequestContext{

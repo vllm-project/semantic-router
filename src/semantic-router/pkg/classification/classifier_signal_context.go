@@ -27,15 +27,6 @@ type cachedPIIResult struct {
 	err    error
 }
 
-// EvaluateAllSignalsWithContext evaluates all signal types with separate text for context counting.
-//
-// text: (possibly compressed) text for signal evaluation
-// contextText: text for context token counting (usually all messages combined)
-// nonUserMessages: conversation history for jailbreak/PII with include_history
-// forceEvaluateAll: if true, evaluates all configured signals regardless of decision usage
-// uncompressedText: original text before prompt compression (empty = no compression happened)
-// skipCompressionSignals: signal types that must use uncompressedText instead of text
-// imageURL: optional image URL for multimodal signals
 // signalReadiness returns a map indicating whether each signal type's infrastructure is ready.
 // Separated from EvaluateAllSignalsWithContext to keep cyclomatic complexity under the linter limit.
 func (c *Classifier) signalReadiness() map[string]bool {
@@ -56,6 +47,7 @@ func (c *Classifier) signalReadiness() map[string]bool {
 		config.SignalTypePII:          len(c.Config.PIIRules) > 0 && c.IsPIIEnabled(),
 		config.SignalTypeKB:           len(c.kbClassifiers) > 0,
 		config.SignalTypeConversation: len(c.Config.ConversationRules) > 0,
+		config.SignalTypeEventContext: c.eventContextClassifier != nil,
 	}
 }
 
@@ -70,6 +62,15 @@ func textForSignalFunc(text, uncompressedText string, skipCompressionSignals map
 	}
 }
 
+// EvaluateAllSignalsWithContext evaluates all signal types with separate text for context counting.
+//
+// text: (possibly compressed) text for signal evaluation
+// contextText: text for context token counting (usually all messages combined)
+// nonUserMessages: conversation history for jailbreak/PII with include_history
+// forceEvaluateAll: if true, evaluates all configured signals regardless of decision usage
+// uncompressedText: original text before prompt compression (empty = no compression happened)
+// skipCompressionSignals: signal types that must use uncompressedText instead of text
+// imageURL: optional image URL for multimodal signals
 func (c *Classifier) EvaluateAllSignalsWithContext(text string, contextText string, currentUserText string, priorUserMessages []string, nonUserMessages []string, hasPriorAssistantReply bool, forceEvaluateAll bool, uncompressedText string, skipCompressionSignals map[string]bool, convFacts ConversationFacts, sessionCtx *SignalSessionContext, imageURL ...string) *SignalResults {
 	defer c.enterSignalEvaluationLoadGate()()
 	// Determine which signals (type:name) should be evaluated
@@ -97,7 +98,18 @@ func (c *Classifier) EvaluateAllSignalsWithContext(text string, contextText stri
 		imgArg = imageURL[0]
 	}
 
-	dispatchers := c.buildSignalDispatchers(results, &mu, textForSignal, contextText, currentUserText, priorUserMessages, nonUserMessages, hasPriorAssistantReply, imgArg, convFacts)
+	// Allocate a request-scoped image embedding cache only when an image is
+	// actually attached. Two signals - complexity (image rules) and embedding
+	// (image-modality rules) - independently pull image embeddings via FFI;
+	// the cache lets whichever runs first donate its result to the other,
+	// turning two SigLIP forward passes into one. With no image attached,
+	// neither signal touches the cache, so leaving it nil is correct.
+	var imgCache *requestImageEmbeddingCache
+	if imgArg != "" {
+		imgCache = newRequestImageEmbeddingCache()
+	}
+
+	dispatchers := c.buildSignalDispatchers(results, &mu, textForSignal, contextText, currentUserText, priorUserMessages, nonUserMessages, hasPriorAssistantReply, imgArg, imgCache, convFacts)
 	runSignalDispatchers(dispatchers, usedSignals, ready, &wg)
 
 	wg.Wait()
@@ -136,48 +148,76 @@ func (c *Classifier) evaluateKeywordSignal(results *SignalResults, mu *sync.Mute
 	}
 }
 
-func (c *Classifier) evaluateEmbeddingSignal(results *SignalResults, mu *sync.Mutex, text string) {
+func (c *Classifier) evaluateEmbeddingSignal(results *SignalResults, mu *sync.Mutex, text string, imageURL string, imgCache *requestImageEmbeddingCache) {
 	start := time.Now()
-	detailedResult, err := c.keywordEmbeddingClassifier.ClassifyDetailed(text)
+
+	// Text-modality evaluation: scores rules whose query_modality is unset
+	// or "text". Skipped when the request has no text (image-only content
+	// arrays) because ClassifyDetailed rejects an empty query and the error
+	// would be misleading - "no text rules to evaluate" is the correct
+	// behavior, not a failure.
+	var (
+		textResult  *EmbeddingClassificationResult
+		textErr     error
+		textElapsed time.Duration
+	)
+	if strings.TrimSpace(text) != "" {
+		textStart := time.Now()
+		textResult, textErr = c.keywordEmbeddingClassifier.ClassifyDetailed(text)
+		textElapsed = time.Since(textStart)
+	}
+
+	// Image-modality evaluation: only fires when the request carries an
+	// image attachment. The classifier's internal rulesByModality cache
+	// makes the no-image-rules case a free no-op (returns an empty result
+	// without computing the FFI embedding), so this call is safe even when
+	// no image rules are configured. The shared imgCache deduplicates the
+	// FFI encode against any sibling signal (e.g. complexity image rules)
+	// resolving the same image during this request.
+	var (
+		imageResult  *EmbeddingClassificationResult
+		imageErr     error
+		imageElapsed time.Duration
+	)
+	if strings.TrimSpace(imageURL) != "" {
+		imageStart := time.Now()
+		imageResult, imageErr = c.keywordEmbeddingClassifier.classifyDetailedMultimodalWithCache(config.QueryModalityImage, imageURL, imgCache)
+		imageElapsed = time.Since(imageStart)
+	}
+
 	elapsed := time.Since(start)
 
-	// Record metrics
 	results.Metrics.Embedding.ExecutionTimeMs = float64(elapsed.Microseconds()) / 1000.0
+	logging.Debugf("[Signal Computation] Embedding signal evaluation completed in %v (text=%v image=%v)",
+		elapsed, textElapsed, imageElapsed)
 
-	logging.Debugf("[Signal Computation] Embedding signal evaluation completed in %v", elapsed)
-	if err != nil {
-		logging.Errorf("embedding rule evaluation failed: %v", err)
-		return
+	// Text and image classifications are independent: a failure in one does
+	// not skip the other. Pre-PR-2 this function returned early on text
+	// error because there was no second classification to attempt. Now there
+	// is, and an early return would silently drop a valid image-rule match
+	// whenever text classification hit a transient failure.
+	if textErr != nil {
+		logging.Errorf("text-modality embedding rule evaluation failed: %v", textErr)
 	}
-	if detailedResult == nil {
-		return
+	if imageErr != nil {
+		logging.Errorf("image-modality embedding rule evaluation failed: %v", imageErr)
 	}
-
-	var bestConfidence float64
-	for _, score := range detailedResult.Scores {
-		if score.Score > bestConfidence {
-			bestConfidence = score.Score
-		}
-	}
-	results.Metrics.Embedding.Confidence = bestConfidence
 
 	mu.Lock()
-	for _, score := range detailedResult.Scores {
-		results.SignalValues["embedding:"+score.Name] = score.Score
-		results.SignalValues["embedding:"+score.Name+":best"] = score.Best
-		results.SignalValues["embedding:"+score.Name+":support"] = score.Support
-		results.SignalValues["embedding:"+score.Name+":prototype_count"] = float64(score.PrototypeCount)
-	}
-	for _, mr := range detailedResult.Matches {
-		metrics.RecordSignalExtraction(config.SignalTypeEmbedding, mr.RuleName, elapsed.Seconds())
-		metrics.RecordSignalMatch(config.SignalTypeEmbedding, mr.RuleName)
-		results.MatchedEmbeddingRules = append(results.MatchedEmbeddingRules, mr.RuleName)
-		results.SignalConfidences["embedding:"+mr.RuleName] = mr.Score
+	defer mu.Unlock()
 
-		logging.Debugf("[Signal Computation] Embedding match: rule=%q, score=%.4f, method=%s",
-			mr.RuleName, mr.Score, mr.Method)
+	// Track the best confidence across both modalities for the metric.
+	// Per-rule extraction-latency observations use modality-specific elapsed
+	// times so an image-bearing request that also matched a text rule does
+	// not double-count the image FFI cost into the text-rule sample.
+	var bestConfidence float64
+	if textResult != nil {
+		bestConfidence = recordEmbeddingResult(results, textResult, textElapsed, bestConfidence)
 	}
-	mu.Unlock()
+	if imageResult != nil {
+		bestConfidence = recordEmbeddingResult(results, imageResult, imageElapsed, bestConfidence)
+	}
+	results.Metrics.Embedding.Confidence = bestConfidence
 }
 
 func (c *Classifier) evaluateDomainSignal(results *SignalResults, mu *sync.Mutex, text string) {
@@ -394,45 +434,7 @@ func (c *Classifier) evaluatePreferenceSignal(results *SignalResults, mu *sync.M
 	logging.Debugf("Preference rule matched: %s", preferenceName)
 }
 
-func (c *Classifier) evaluateLanguageSignal(results *SignalResults, mu *sync.Mutex, text string) {
-	start := time.Now()
-	languageResult, err := c.languageClassifier.Classify(text)
-	elapsed := time.Since(start)
-	latencySeconds := elapsed.Seconds()
-
-	// Use the language code directly as the signal name
-	languageCode := ""
-	if err == nil && languageResult != nil {
-		languageCode = languageResult.LanguageCode
-	}
-
-	// Record signal extraction metrics
-	metrics.RecordSignalExtraction(config.SignalTypeLanguage, languageCode, latencySeconds)
-
-	// Record metrics (use microseconds for better precision)
-	results.Metrics.Language.ExecutionTimeMs = float64(elapsed.Microseconds()) / 1000.0
-	if languageCode != "" && err == nil && languageResult != nil {
-		results.Metrics.Language.Confidence = languageResult.Confidence
-	}
-
-	logging.Debugf("[Signal Computation] Language signal evaluation completed in %v", elapsed)
-	if err != nil {
-		logging.Errorf("language rule evaluation failed: %v", err)
-	} else if languageResult != nil {
-		// Check if this language code is defined in language_rules
-		for _, rule := range c.Config.LanguageRules {
-			if rule.Name == languageCode {
-				// Record signal match
-				metrics.RecordSignalMatch(config.SignalTypeLanguage, rule.Name)
-
-				mu.Lock()
-				results.MatchedLanguageRules = append(results.MatchedLanguageRules, rule.Name)
-				mu.Unlock()
-				break
-			}
-		}
-	}
-}
+// evaluateLanguageSignal is implemented in classifier_signal_language.go
 
 func (c *Classifier) evaluateContextSignal(results *SignalResults, mu *sync.Mutex, contextText string) {
 	start := time.Now()
@@ -454,9 +456,9 @@ func (c *Classifier) evaluateContextSignal(results *SignalResults, mu *sync.Mute
 	}
 }
 
-func (c *Classifier) evaluateComplexitySignal(results *SignalResults, mu *sync.Mutex, text string, imageURL string) {
+func (c *Classifier) evaluateComplexitySignal(results *SignalResults, mu *sync.Mutex, text string, imageURL string, imgCache *requestImageEmbeddingCache) {
 	start := time.Now()
-	classifyResults, err := c.complexityClassifier.ClassifyDetailedWithImage(text, imageURL)
+	classifyResults, err := c.complexityClassifier.classifyDetailedWithImageCached(text, imageURL, imgCache)
 	elapsed := time.Since(start)
 	latencySeconds := elapsed.Seconds()
 

@@ -17,6 +17,7 @@ var BaselineRouterContract = []string{
 	"jailbreak-detection",
 	"decision-priority-selection",
 	"plugin-chain-execution",
+	"tool-selection",
 	"rule-condition-logic",
 	"decision-fallback-behavior",
 	"plugin-config-variations",

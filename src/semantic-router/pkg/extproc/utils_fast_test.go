@@ -652,5 +652,6 @@ func TestExtractContentFast_ConversationFacts(t *testing.T) {
 	assert.Equal(t, 3, r.ToolMessageCount, "three tool messages")
 	assert.Equal(t, 3, r.ToolDefinitionCount, "three tool definitions")
 	assert.Equal(t, 3, r.AssistantToolCallCount, "three tool_calls total (2+1)")
-	assert.Equal(t, 3, r.CompletedToolCycles, "three completed tool cycles")
+	assert.Equal(t, []string{"read_file", "list_dir", "write_file"}, r.AssistantToolNames, "tool call names should preserve conversation order")
+	assert.Equal(t, 3, r.ToolResultCount, "three tool results")
 }

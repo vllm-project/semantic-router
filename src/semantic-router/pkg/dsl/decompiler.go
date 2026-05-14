@@ -478,6 +478,11 @@ func (d *decompiler) decompileDecisions() {
 			}
 		}
 
+		// EMITs
+		for _, e := range dec.Emits {
+			d.decompileEmit(e)
+		}
+
 		d.write("}\n\n")
 	}
 }
@@ -728,6 +733,38 @@ func decompilePluginConfig(p *config.DecisionPlugin) string {
 		if cfg.StripUnknown {
 			fmt.Fprintf(&sb, "    strip_unknown: true\n")
 		}
+	case "tool_selection":
+		cfg, ok := decodePluginConfig[config.ToolSelectionPluginConfig](p)
+		if !ok {
+			break
+		}
+		if cfg.Enabled {
+			fmt.Fprintf(&sb, "    enabled: true\n")
+		}
+		if cfg.Mode != "" {
+			fmt.Fprintf(&sb, "    mode: %q\n", cfg.Mode)
+		}
+		if cfg.ToolsDBPath != "" {
+			fmt.Fprintf(&sb, "    tools_db_path: %q\n", cfg.ToolsDBPath)
+		}
+		if cfg.TopK != 0 {
+			fmt.Fprintf(&sb, "    top_k: %d\n", cfg.TopK)
+		}
+		if cfg.SimilarityThreshold != nil {
+			fmt.Fprintf(&sb, "    similarity_threshold: %v\n", *cfg.SimilarityThreshold)
+		}
+		if cfg.Strategy != "" {
+			fmt.Fprintf(&sb, "    strategy: %q\n", cfg.Strategy)
+		}
+		if cfg.FallbackToEmpty != nil && *cfg.FallbackToEmpty {
+			fmt.Fprintf(&sb, "    fallback_to_empty: true\n")
+		}
+		if cfg.RelevanceThreshold != nil {
+			fmt.Fprintf(&sb, "    relevance_threshold: %v\n", *cfg.RelevanceThreshold)
+		}
+		if cfg.PreserveCount != 0 {
+			fmt.Fprintf(&sb, "    preserve_count: %d\n", cfg.PreserveCount)
+		}
 	case "tools":
 		cfg, ok := decodePluginConfig[config.ToolsPluginConfig](p)
 		if !ok {
@@ -742,11 +779,17 @@ func decompilePluginConfig(p *config.DecisionPlugin) string {
 		if cfg.SemanticSelection != nil {
 			fmt.Fprintf(&sb, "    semantic_selection: %v\n", *cfg.SemanticSelection)
 		}
+		if cfg.Strategy != "" {
+			fmt.Fprintf(&sb, "    strategy: %q\n", cfg.Strategy)
+		}
 		if len(cfg.AllowTools) > 0 {
 			fmt.Fprintf(&sb, "    allow_tools: %s\n", formatStringArray(cfg.AllowTools))
 		}
 		if len(cfg.BlockTools) > 0 {
 			fmt.Fprintf(&sb, "    block_tools: %s\n", formatStringArray(cfg.BlockTools))
+		}
+		if cfg.DynamicRetrieval != nil {
+			fmt.Fprintf(&sb, "    dynamic_retrieval: %s\n", formatPluginConfigValue(dynamicRetrievalConfigMap(cfg.DynamicRetrieval)))
 		}
 	case "rag":
 		cfg, ok := decodePluginConfig[config.RAGPluginConfig](p)
@@ -1453,6 +1496,10 @@ func (d *decompiler) decisionToRoute(dec *config.Decision) *RouteDecl {
 		route.CandidateIterations = append(route.CandidateIterations, candidateIterationConfigToDecl(iter))
 	}
 
+	for _, e := range dec.Emits {
+		route.Emits = append(route.Emits, emitDirectiveToDecl(e))
+	}
+
 	return route
 }
 
@@ -1565,6 +1612,98 @@ func stringsToArray(items []string) ArrayValue {
 		vals[i] = StringValue{V: s}
 	}
 	return ArrayValue{Items: vals}
+}
+
+func dynamicRetrievalConfigMap(cfg *config.DynamicRetrievalConfig) map[string]interface{} {
+	if cfg == nil {
+		return nil
+	}
+	values := map[string]interface{}{}
+	if cfg.Enabled {
+		values["enabled"] = true
+	}
+	if cfg.Strategy != "" {
+		values["strategy"] = cfg.Strategy
+	}
+	if cfg.HistoryWindow != 0 {
+		values["history_window"] = cfg.HistoryWindow
+	}
+	if cfg.Weights != nil {
+		values["weights"] = dynamicRetrievalWeightsMap(cfg.Weights)
+	}
+	if cfg.MinHistoryConfidence != 0 {
+		values["min_history_confidence"] = cfg.MinHistoryConfidence
+	}
+	if cfg.FallbackOnLowConfidence {
+		values["fallback_on_low_confidence"] = true
+	}
+	return values
+}
+
+func dynamicRetrievalWeightsMap(weights *config.DynamicRetrievalWeights) map[string]interface{} {
+	if weights == nil {
+		return nil
+	}
+	values := map[string]interface{}{}
+	if weights.Semantic != 0 {
+		values["semantic"] = weights.Semantic
+	}
+	if weights.History != 0 {
+		values["history"] = weights.History
+	}
+	if weights.DecisionPrior != 0 {
+		values["decision_prior"] = weights.DecisionPrior
+	}
+	if weights.RepetitionPenalty != 0 {
+		values["repetition_penalty"] = weights.RepetitionPenalty
+	}
+	return values
+}
+
+func dynamicRetrievalObjectValue(cfg *config.DynamicRetrievalConfig) ObjectValue {
+	fields := map[string]Value{}
+	if cfg == nil {
+		return ObjectValue{Fields: fields}
+	}
+	if cfg.Enabled {
+		fields["enabled"] = BoolValue{V: true}
+	}
+	if cfg.Strategy != "" {
+		fields["strategy"] = StringValue{V: cfg.Strategy}
+	}
+	if cfg.HistoryWindow != 0 {
+		fields["history_window"] = IntValue{V: cfg.HistoryWindow}
+	}
+	if cfg.Weights != nil {
+		fields["weights"] = dynamicRetrievalWeightsObjectValue(cfg.Weights)
+	}
+	if cfg.MinHistoryConfidence != 0 {
+		fields["min_history_confidence"] = FloatValue{V: cfg.MinHistoryConfidence}
+	}
+	if cfg.FallbackOnLowConfidence {
+		fields["fallback_on_low_confidence"] = BoolValue{V: true}
+	}
+	return ObjectValue{Fields: fields}
+}
+
+func dynamicRetrievalWeightsObjectValue(weights *config.DynamicRetrievalWeights) ObjectValue {
+	fields := map[string]Value{}
+	if weights == nil {
+		return ObjectValue{Fields: fields}
+	}
+	if weights.Semantic != 0 {
+		fields["semantic"] = FloatValue{V: weights.Semantic}
+	}
+	if weights.History != 0 {
+		fields["history"] = FloatValue{V: weights.History}
+	}
+	if weights.DecisionPrior != 0 {
+		fields["decision_prior"] = FloatValue{V: weights.DecisionPrior}
+	}
+	if weights.RepetitionPenalty != 0 {
+		fields["repetition_penalty"] = FloatValue{V: weights.RepetitionPenalty}
+	}
+	return ObjectValue{Fields: fields}
 }
 
 func structureFeatureValue(feature config.StructureFeature) ObjectValue {
@@ -1955,6 +2094,35 @@ func pluginConfigToFields(p *config.DecisionPlugin) map[string]Value {
 		if cfg.StripUnknown {
 			fields["strip_unknown"] = BoolValue{V: true}
 		}
+	case "tool_selection":
+		cfg, ok := decodePluginConfig[config.ToolSelectionPluginConfig](p)
+		if !ok {
+			return fields
+		}
+		if cfg.Enabled {
+			fields["enabled"] = BoolValue{V: true}
+		}
+		if cfg.Mode != "" {
+			fields["mode"] = StringValue{V: cfg.Mode}
+		}
+		if cfg.ToolsDBPath != "" {
+			fields["tools_db_path"] = StringValue{V: cfg.ToolsDBPath}
+		}
+		if cfg.TopK != 0 {
+			fields["top_k"] = IntValue{V: cfg.TopK}
+		}
+		if cfg.SimilarityThreshold != nil {
+			fields["similarity_threshold"] = FloatValue{V: float64(*cfg.SimilarityThreshold)}
+		}
+		if cfg.Strategy != "" {
+			fields["strategy"] = StringValue{V: cfg.Strategy}
+		}
+		if cfg.RelevanceThreshold != nil {
+			fields["relevance_threshold"] = FloatValue{V: float64(*cfg.RelevanceThreshold)}
+		}
+		if cfg.PreserveCount != 0 {
+			fields["preserve_count"] = IntValue{V: cfg.PreserveCount}
+		}
 	case "tools":
 		cfg, ok := decodePluginConfig[config.ToolsPluginConfig](p)
 		if !ok {
@@ -1969,11 +2137,17 @@ func pluginConfigToFields(p *config.DecisionPlugin) map[string]Value {
 		if cfg.SemanticSelection != nil {
 			fields["semantic_selection"] = BoolValue{V: *cfg.SemanticSelection}
 		}
+		if cfg.Strategy != "" {
+			fields["strategy"] = StringValue{V: cfg.Strategy}
+		}
 		if len(cfg.AllowTools) > 0 {
 			fields["allow_tools"] = stringsToArray(cfg.AllowTools)
 		}
 		if len(cfg.BlockTools) > 0 {
 			fields["block_tools"] = stringsToArray(cfg.BlockTools)
+		}
+		if cfg.DynamicRetrieval != nil {
+			fields["dynamic_retrieval"] = dynamicRetrievalObjectValue(cfg.DynamicRetrieval)
 		}
 	case "rag":
 		cfg, ok := decodePluginConfig[config.RAGPluginConfig](p)
@@ -2090,4 +2264,72 @@ func Format(input string) (string, error) {
 		return formatted, nil
 	}
 	return appendFormattedTestBlocks(formatted, prog.TestBlocks), nil
+}
+
+// decompileEmit writes an EMIT block for a single directive. Fields are
+// emitted in a fixed order so round-trip output is stable.
+func (d *decompiler) decompileEmit(e config.EmitDirective) {
+	if e.Kind == "" {
+		return
+	}
+	switch e.Kind {
+	case "retention":
+		if e.Retention == nil {
+			d.write("  EMIT retention {}\n")
+			return
+		}
+		r := e.Retention
+		lines := make([]string, 0, 4)
+		if r.Drop != nil {
+			lines = append(lines, fmt.Sprintf("    drop: %t", *r.Drop))
+		}
+		if r.TTLTurns != nil {
+			lines = append(lines, fmt.Sprintf("    ttl_turns: %d", *r.TTLTurns))
+		}
+		if r.KeepCurrentModel != nil {
+			lines = append(lines, fmt.Sprintf("    keep_current_model: %t", *r.KeepCurrentModel))
+		}
+		if r.PreferPrefixRetention != nil {
+			lines = append(lines, fmt.Sprintf("    prefer_prefix_retention: %t", *r.PreferPrefixRetention))
+		}
+		if len(lines) == 0 {
+			d.write("  EMIT retention {}\n")
+			return
+		}
+		d.write("  EMIT retention {\n%s\n  }\n", strings.Join(lines, "\n"))
+	default:
+		// Unknown kind: preserve as an empty block so validator surfaces the error.
+		d.write("  EMIT %s {}\n", sanitizeName(e.Kind))
+	}
+}
+
+// emitDirectiveToDecl converts a config.EmitDirective back to the resolved
+// DSL AST form used by the AST-level decompile path.
+func emitDirectiveToDecl(e config.EmitDirective) *EmitDecl {
+	decl := &EmitDecl{Kind: e.Kind}
+	if e.Kind == "retention" && e.Retention != nil {
+		decl.Retention = &RetentionDirective{
+			Drop:                  clonePtrBoolDSL(e.Retention.Drop),
+			TTLTurns:              clonePtrIntDSL(e.Retention.TTLTurns),
+			KeepCurrentModel:      clonePtrBoolDSL(e.Retention.KeepCurrentModel),
+			PreferPrefixRetention: clonePtrBoolDSL(e.Retention.PreferPrefixRetention),
+		}
+	}
+	return decl
+}
+
+func clonePtrBoolDSL(p *bool) *bool {
+	if p == nil {
+		return nil
+	}
+	v := *p
+	return &v
+}
+
+func clonePtrIntDSL(p *int) *int {
+	if p == nil {
+		return nil
+	}
+	v := *p
+	return &v
 }

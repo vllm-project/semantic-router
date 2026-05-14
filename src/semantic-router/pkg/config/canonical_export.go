@@ -74,6 +74,7 @@ func canonicalSignalsFromRouterConfig(cfg *RouterConfig) CanonicalSignals {
 		KB:                 append([]KBSignalRule(nil), cfg.KBRules...),
 		Conversation:       append([]ConversationRule(nil), cfg.ConversationRules...),
 		SessionMetricRules: append([]SessionMetricRule(nil), cfg.SessionMetricRules...),
+		EventContextRules:  append([]EventContextRule(nil), cfg.EventContextRules...),
 	}
 }
 
@@ -145,6 +146,7 @@ func CanonicalGlobalFromRouterConfig(cfg *RouterConfig) *CanonicalGlobal {
 				MaxBytes:   cfg.MaxStreamedBodyBytes,
 				TimeoutSec: cfg.StreamedBodyTimeoutSec,
 			},
+			SkipProcessing: cfg.SkipProcessing,
 			ModelSelection: cfg.ModelSelection,
 		},
 		Services: CanonicalServiceGlobal{

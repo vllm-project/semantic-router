@@ -222,6 +222,25 @@ type EmbeddingSignal struct {
 	// +kubebuilder:validation:Enum=mean;max;any
 	// +kubebuilder:default=max
 	AggregationMethod string `json:"aggregationMethod,omitempty" yaml:"aggregationMethod,omitempty"`
+
+	// QueryModality declares which modality of the incoming request payload
+	// the query embedding is computed from. Candidates always remain text;
+	// the rule cosine-matches the text-anchor set against a query embedding
+	// produced from the declared modality, all in the shared multimodal
+	// embedding space.
+	//
+	// "text"  (default, backward-compatible): query embedded from request text.
+	// "image": query embedded from an image attachment (base64 data URI or
+	//          path). Requires the multi-modal embedding model to be loaded
+	//          via global.model_catalog.embeddings.semantic with
+	//          embedding_config.model_type=multimodal.
+	// "audio": query embedded from an audio attachment. Same requirement.
+	//
+	// Omitting this field is equivalent to "text" so existing rules behave
+	// identically.
+	// +optional
+	// +kubebuilder:validation:Enum=text;image;audio
+	QueryModality string `json:"queryModality,omitempty" yaml:"queryModality,omitempty"`
 }
 
 // Decision defines a routing decision based on rule combinations

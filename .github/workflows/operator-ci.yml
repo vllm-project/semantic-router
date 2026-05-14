@@ -294,31 +294,42 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        cache-backend: [memory, redis, milvus, hybrid, mmbert, complexity]
+        cache-backend: [memory, redis, milvus, qdrant, hybrid, mmbert, complexity]
         include:
           - cache-backend: memory
             deploy-redis: false
             deploy-milvus: false
+            deploy-qdrant: false
             router-name: test-router
           - cache-backend: redis
             deploy-redis: true
             deploy-milvus: false
+            deploy-qdrant: false
             router-name: test-router-redis
           - cache-backend: milvus
             deploy-redis: false
             deploy-milvus: true
+            deploy-qdrant: false
             router-name: test-router-milvus
+          - cache-backend: qdrant
+            deploy-redis: false
+            deploy-milvus: false
+            deploy-qdrant: true
+            router-name: test-router-qdrant
           - cache-backend: hybrid
             deploy-redis: false
             deploy-milvus: true
+            deploy-qdrant: false
             router-name: test-router-hybrid
           - cache-backend: mmbert
             deploy-redis: false
             deploy-milvus: false
+            deploy-qdrant: false
             router-name: test-router-mmbert
           - cache-backend: complexity
             deploy-redis: false
             deploy-milvus: false
+            deploy-qdrant: false
             router-name: test-router-complexity
     steps:
       - name: Checkout code
@@ -479,6 +490,64 @@ jobs:
           kubectl wait --for=condition=available --timeout=180s deployment/milvus-standalone -n cache-backends
           echo "Milvus deployed successfully"
           sleep 10
+
+      - name: Deploy Qdrant
+        if: matrix.deploy-qdrant == true
+        run: |
+          echo "Deploying Qdrant..."
+          kubectl create namespace cache-backends || true
+
+          cat <<EOF | kubectl apply -f -
+          apiVersion: apps/v1
+          kind: Deployment
+          metadata:
+            name: qdrant
+            namespace: cache-backends
+          spec:
+            replicas: 1
+            selector:
+              matchLabels:
+                app: qdrant
+            template:
+              metadata:
+                labels:
+                  app: qdrant
+              spec:
+                containers:
+                - name: qdrant
+                  image: qdrant/qdrant:latest
+                  ports:
+                  - containerPort: 6333
+                    name: rest
+                  - containerPort: 6334
+                    name: grpc
+                  resources:
+                    requests:
+                      cpu: 250m
+                      memory: 512Mi
+                    limits:
+                      cpu: 1000m
+                      memory: 1Gi
+          ---
+          apiVersion: v1
+          kind: Service
+          metadata:
+            name: qdrant
+            namespace: cache-backends
+          spec:
+            selector:
+              app: qdrant
+            ports:
+            - port: 6333
+              targetPort: 6333
+              name: rest
+            - port: 6334
+              targetPort: 6334
+              name: grpc
+          EOF
+
+          kubectl wait --for=condition=available --timeout=120s deployment/qdrant -n cache-backends
+          echo "Qdrant deployed successfully"
 
       - name: Create cache credentials secrets
         if: matrix.deploy-redis == true || matrix.deploy-milvus == true
@@ -734,6 +803,22 @@ jobs:
                     auto_create_collection: true
                     verbose_errors: true'
               ;;
+            qdrant)
+              CACHE_CONFIG='
+              semantic_cache:
+                enabled: true
+                backend_type: "qdrant"
+                similarity_threshold: "0.90"
+                ttl_seconds: 7200
+                embedding_model: "mmbert"
+                qdrant:
+                  host: qdrant.cache-backends.svc.cluster.local
+                  port: 6334
+                  api_key: ""
+                  use_tls: false
+                  collection_name: semantic_cache
+                  connect_timeout: 10'
+              ;;
             hybrid)
               CACHE_CONFIG='
               semantic_cache:
@@ -885,7 +970,7 @@ jobs:
               failureThreshold: 60
             config:
               embedding_models:
-                mmbert_model_path: "models/mom-embedding-ultra"
+                mmbert_model_path: "models/mmbert-embed-32k-2d-matryoshka"
                 use_cpu: true
                 embedding_config:
                   model_type: "mmbert"

@@ -132,7 +132,7 @@ func createSharedReplayRecorder(
 
 func usesSharedReplayStorage(backend string) bool {
 	switch backend {
-	case "postgres", "redis", "milvus":
+	case "postgres", "redis", "milvus", "qdrant":
 		return true
 	default:
 		return false
@@ -171,9 +171,11 @@ func createReplayStore(
 		return createReplayPostgresStore(globalCfg)
 	case "milvus":
 		return createReplayMilvusStore(globalCfg)
+	case "qdrant":
+		return createReplayQdrantStore(globalCfg)
 	default:
 		return nil, fmt.Errorf(
-			"unknown store_backend: %s (supported: memory, redis, postgres, milvus)",
+			"unknown store_backend: %s (supported: memory, redis, postgres, milvus, qdrant)",
 			backend,
 		)
 	}
@@ -190,6 +192,8 @@ func createSharedReplayStore(
 		return createReplayPostgresStore(globalCfg)
 	case "milvus":
 		return createReplayMilvusStore(globalCfg)
+	case "qdrant":
+		return createReplayQdrantStore(globalCfg)
 	default:
 		return nil, fmt.Errorf("shared replay storage not supported for backend %s", backend)
 	}
@@ -305,5 +309,36 @@ func buildReplayMilvusConfig(milvusCfg *config.RouterReplayMilvusConfig) *store.
 		CollectionName:   milvusCfg.CollectionName,
 		ConsistencyLevel: milvusCfg.ConsistencyLevel,
 		ShardNum:         milvusCfg.ShardNum,
+	}
+}
+
+func createReplayQdrantStore(globalCfg *config.RouterReplayConfig) (store.Storage, error) {
+	if globalCfg.Qdrant == nil {
+		return nil, fmt.Errorf("qdrant config required when store_backend is 'qdrant'")
+	}
+
+	qdrantConfig := buildReplayQdrantConfig(globalCfg.Qdrant)
+	storage, err := store.NewQdrantStore(qdrantConfig, globalCfg.TTLSeconds, globalCfg.AsyncWrites)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create qdrant store: %w", err)
+	}
+	logging.Debugf(
+		"Router replay using qdrant backend (host=%s, port=%d, collection=%s, ttl=%ds, async=%v)",
+		qdrantConfig.Host,
+		qdrantConfig.Port,
+		qdrantConfig.CollectionName,
+		globalCfg.TTLSeconds,
+		globalCfg.AsyncWrites,
+	)
+	return storage, nil
+}
+
+func buildReplayQdrantConfig(qdrantCfg *config.RouterReplayQdrantConfig) *store.QdrantConfig {
+	return &store.QdrantConfig{
+		Host:           qdrantCfg.Host,
+		Port:           qdrantCfg.Port,
+		APIKey:         qdrantCfg.APIKey,
+		UseTLS:         qdrantCfg.UseTLS,
+		CollectionName: qdrantCfg.CollectionName,
 	}
 }

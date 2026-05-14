@@ -193,7 +193,7 @@ jobs:
           set +e
           if [ "${{ matrix.profile }}" = "kubernetes" ]; then
             # Temporarily skip the stress / pressure coverage until the suite is stable again.
-            KUBERNETES_CI_TESTS="chat-completions-request,apiserver-runtime-config-endpoints,domain-classify,semantic-cache,pii-detection,jailbreak-detection,decision-priority-selection,plugin-chain-execution,rule-condition-logic,decision-fallback-behavior,plugin-config-variations"
+            KUBERNETES_CI_TESTS="chat-completions-request,apiserver-runtime-config-endpoints,domain-classify,semantic-cache,pii-detection,jailbreak-detection,decision-priority-selection,plugin-chain-execution,tool-selection,rule-condition-logic,decision-fallback-behavior,plugin-config-variations"
             make e2e-test E2E_PROFILE=${{ matrix.profile }} E2E_TESTS="${KUBERNETES_CI_TESTS}" E2E_VERBOSE=true E2E_KEEP_CLUSTER=false
             TEST_EXIT_CODE=$?
             set -e

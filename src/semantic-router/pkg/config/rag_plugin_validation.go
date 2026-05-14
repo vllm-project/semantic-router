@@ -29,6 +29,8 @@ func validateRAGBackendConfig(c *RAGPluginConfig) error {
 	switch c.Backend {
 	case "milvus":
 		return validateMilvusRAGBackend(c)
+	case "qdrant":
+		return validateQdrantRAGBackend(c)
 	case "external_api":
 		return validateExternalAPIRAGBackend(c)
 	case "mcp":
@@ -51,6 +53,17 @@ func validateMilvusRAGBackend(c *RAGPluginConfig) error {
 	}
 	if milvusConfig.Collection == "" {
 		return fmt.Errorf("milvus collection name is required")
+	}
+	return nil
+}
+
+func validateQdrantRAGBackend(c *RAGPluginConfig) error {
+	qdrantConfig, err := c.QdrantBackendConfig()
+	if err != nil {
+		return err
+	}
+	if qdrantConfig.Collection == "" {
+		return fmt.Errorf("qdrant collection name is required")
 	}
 	return nil
 }

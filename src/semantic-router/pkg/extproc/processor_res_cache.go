@@ -27,6 +27,18 @@ func (r *OpenAIRouter) updateResponseCache(ctx *RequestContext, responseBody []b
 		return
 	}
 
+	// Retention drop gate: DSL-author-explicit signal takes precedence over
+	// the implicit personalized-context heuristic. Order is locked in
+	// docs/design (issue #1747 §2.8): scope -> retention -> personalized -> TTL -> write.
+	if skip, reason := ShouldSkipCacheWrite(ctx); skip {
+		metrics.RecordCacheWriteSkipped(reason)
+		logRetentionSkip(ctx, reason)
+		if span := trace.SpanFromContext(ctx.TraceContext); span.IsRecording() {
+			span.SetAttributes(attribute.String(tracing.AttrCacheWriteSkippedReason, reason))
+		}
+		return
+	}
+
 	if ok, reason := ctx.HasPersonalizedContext(); ok {
 		metrics.RecordCacheWriteSkipped(reason)
 		logging.Infof("Skipping cache write for request ID %s: response has personalized context (reason=%s)", ctx.RequestID, reason)
@@ -54,6 +66,23 @@ func (r *OpenAIRouter) updateResponseCache(ctx *RequestContext, responseBody []b
 // cacheStreamingResponse reconstructs a ChatCompletion from accumulated chunks and caches it.
 func (r *OpenAIRouter) cacheStreamingResponse(ctx *RequestContext) error {
 	if err := validateStreamingCachePreconditions(ctx); err != nil {
+		return nil
+	}
+
+	decisionName := ctx.VSRSelectedDecisionName
+	if !r.semanticCacheEnabledForScope(decisionName) {
+		return nil
+	}
+
+	// Retention drop gate runs before any reconstruction work so that we never
+	// even build the cache entry for a decision that asked us to skip the
+	// write. Same precedence rule as the non-streaming path (§2.8).
+	if skip, reason := ShouldSkipCacheWrite(ctx); skip {
+		metrics.RecordCacheWriteSkipped(reason)
+		logRetentionSkip(ctx, reason)
+		if span := trace.SpanFromContext(ctx.TraceContext); span.IsRecording() {
+			span.SetAttributes(attribute.String(tracing.AttrCacheWriteSkippedReason, reason))
+		}
 		return nil
 	}
 

@@ -455,7 +455,8 @@ func TestSetupActivateHandler(t *testing.T) {
 	if !ok {
 		t.Fatalf("expected global.model_catalog.embeddings.semantic in activated config, got %#v", embeddings["semantic"])
 	}
-	if semantic["mmbert_model_path"] != "models/mom-embedding-ultra" {
+	// Mirrors pkg/config/canonical_defaults global.model_catalog.embeddings.semantic.mmbert_model_path
+	if semantic["mmbert_model_path"] != "models/mmbert-embed-32k-2d-matryoshka" {
 		t.Fatalf("expected explicit mmbert default path, got %#v", semantic["mmbert_model_path"])
 	}
 

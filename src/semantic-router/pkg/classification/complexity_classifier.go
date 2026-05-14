@@ -158,11 +158,21 @@ func (c *ComplexityClassifier) ClassifyWithImage(query string, imageURL string) 
 }
 
 func (c *ComplexityClassifier) ClassifyDetailedWithImage(query string, imageURL string) ([]ComplexityRuleResult, error) {
+	return c.classifyDetailedWithImageCached(query, imageURL, nil)
+}
+
+// classifyDetailedWithImageCached is the cache-aware variant of
+// ClassifyDetailedWithImage. When cache is non-nil it dedupes the multimodal
+// image FFI call against any sibling signal evaluator that already resolved
+// the same (imageURL, targetDim=0) pair within this request. Text-side
+// embeddings (text and mmText) are not cached because no other signal
+// currently consumes the multimodal text embedding.
+func (c *ComplexityClassifier) classifyDetailedWithImageCached(query string, imageURL string, cache *requestImageEmbeddingCache) ([]ComplexityRuleResult, error) {
 	if len(c.rules) == 0 {
 		return nil, nil
 	}
 
-	queryEmbeddings, err := c.loadQueryEmbeddings(query, imageURL)
+	queryEmbeddings, err := c.loadQueryEmbeddingsCached(query, imageURL, cache)
 	if err != nil {
 		return nil, err
 	}

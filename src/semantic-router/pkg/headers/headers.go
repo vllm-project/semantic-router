@@ -36,6 +36,11 @@ const (
 	// SelectedModel indicates the model that was selected by the router for processing.
 	// This header is set during the routing decision phase.
 	SelectedModel = "x-selected-model"
+
+	// VSRSkipProcessing opts the request out of all router processing when
+	// global.router.skip_processing.enabled is true. Value: "true" (case-insensitive).
+	// See https://github.com/vllm-project/semantic-router/issues/1808.
+	VSRSkipProcessing = "x-vsr-skip-processing"
 )
 
 // VSR Decision Tracking Headers
@@ -80,6 +85,18 @@ const (
 	// RouterReplayID carries the identifier for a captured replay record.
 	// Value: opaque replay token
 	RouterReplayID = "x-vsr-replay-id"
+
+	// VSRToolsStrategy is the name of the retriever strategy that was used
+	// during semantic tool selection for this request.
+	VSRToolsStrategy = "x-vsr-tools-strategy"
+
+	// VSRToolsConfidence is the similarity score (0–1) of the highest-ranked
+	// tool returned by the retriever.  Emitted only when tool selection runs.
+	VSRToolsConfidence = "x-vsr-tools-confidence"
+
+	// VSRToolsLatencyMs is the wall-clock time in milliseconds spent inside
+	// the retriever for this request.
+	VSRToolsLatencyMs = "x-vsr-tools-latency-ms"
 )
 
 // VSR Signal Tracking Headers

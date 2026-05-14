@@ -109,7 +109,7 @@ func emitMetadataStoreWarning(cfg *config.RouterConfig) {
 		return
 	}
 	bt := cfg.VectorStore.BackendType
-	if bt == "milvus" || bt == "valkey" {
+	if bt == "milvus" || bt == "valkey" || bt == "qdrant" {
 		logging.Warnf(
 			"vector_store.metadata_store is 'memory' but backend_type is '%s'; "+
 				"store metadata will be lost on restart — set metadata_store to 'postgres' for durability",
@@ -189,6 +189,18 @@ func buildVectorStoreBackendConfigs(cfg *config.RouterConfig) vectorstore.Backen
 				IndexM:           vCfg.IndexM,
 				IndexEf:          vCfg.IndexEfConstruction,
 				ConnectTimeout:   vCfg.ConnectTimeout,
+			},
+		}
+	case "qdrant":
+		qCfg := cfg.VectorStore.Qdrant
+		return vectorstore.BackendConfigs{
+			Qdrant: vectorstore.QdrantBackendConfig{
+				Host:             qCfg.Host,
+				Port:             qCfg.Port,
+				APIKey:           qCfg.APIKey,
+				UseTLS:           qCfg.UseTLS,
+				CollectionPrefix: qCfg.CollectionPrefix,
+				ConnectTimeout:   qCfg.ConnectTimeout,
 			},
 		}
 	default:

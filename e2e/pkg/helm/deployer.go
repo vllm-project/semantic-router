@@ -294,3 +294,54 @@ type InstallOptions struct {
 	// Timeout is the timeout for waiting
 	Timeout string
 }
+
+// Clone returns a copy that callers can safely mutate without changing shared defaults.
+func (o InstallOptions) Clone() InstallOptions {
+	cloned := o
+	cloned.ValuesFiles = append([]string(nil), o.ValuesFiles...)
+	if o.Set != nil {
+		cloned.Set = make(map[string]string, len(o.Set))
+		for key, value := range o.Set {
+			cloned.Set[key] = value
+		}
+	}
+	return cloned
+}
+
+var (
+	SemanticRouterRelease = InstallOptions{
+		ReleaseName: "semantic-router",
+		Chart:       "deploy/helm/semantic-router",
+		Namespace:   "vllm-semantic-router-system",
+		Wait:        true,
+		Timeout:     "30m",
+	}
+
+	EnvoyGatewayRelease = InstallOptions{
+		ReleaseName: "eg",
+		Chart:       "oci://docker.io/envoyproxy/gateway-helm",
+		Namespace:   "envoy-gateway-system",
+		Version:     "v1.6.0",
+		ValuesFiles: []string{"https://raw.githubusercontent.com/envoyproxy/ai-gateway/main/manifests/envoy-gateway-values.yaml"},
+		Wait:        true,
+		Timeout:     "10m",
+	}
+
+	AIGatewayCRDRelease = InstallOptions{
+		ReleaseName: "aieg-crd",
+		Chart:       "oci://docker.io/envoyproxy/ai-gateway-crds-helm",
+		Namespace:   "envoy-ai-gateway-system",
+		Version:     "v0.4.0",
+		Wait:        true,
+		Timeout:     "10m",
+	}
+
+	AIGatewayRelease = InstallOptions{
+		ReleaseName: "aieg",
+		Chart:       "oci://docker.io/envoyproxy/ai-gateway-helm",
+		Namespace:   "envoy-ai-gateway-system",
+		Version:     "v0.4.0",
+		Wait:        true,
+		Timeout:     "10m",
+	}
+)

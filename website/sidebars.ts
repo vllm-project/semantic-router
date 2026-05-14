@@ -80,6 +80,7 @@ const sidebars: SidebarsConfig = {
                 'tutorials/signal/heuristic/conversation',
                 'tutorials/signal/heuristic/keyword',
                 'tutorials/signal/heuristic/language',
+                'tutorials/signal/heuristic/event-context',
                 'tutorials/signal/heuristic/session-metric',
                 'tutorials/signal/heuristic/structure',
               ],
@@ -123,6 +124,7 @@ const sidebars: SidebarsConfig = {
             'tutorials/decision/or',
             'tutorials/decision/not',
             'tutorials/decision/composite',
+            'tutorials/decision/retention',
           ],
         },
         {
@@ -173,6 +175,7 @@ const sidebars: SidebarsConfig = {
                 'tutorials/plugin/image-gen',
                 'tutorials/plugin/request-params',
                 'tutorials/plugin/system-prompt',
+                'tutorials/plugin/tool-selection',
                 'tutorials/plugin/tools',
               ],
             },

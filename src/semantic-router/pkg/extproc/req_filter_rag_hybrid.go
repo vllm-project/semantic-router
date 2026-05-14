@@ -214,6 +214,8 @@ func (r *OpenAIRouter) retrieveFromBackend(traceCtx context.Context, ctx *Reques
 	switch backendConfig.Backend {
 	case "milvus":
 		return r.retrieveFromMilvus(traceCtx, ctx, backendConfig)
+	case "qdrant":
+		return r.retrieveFromQdrant(traceCtx, ctx, backendConfig)
 	case "external_api":
 		return r.retrieveFromExternalAPI(traceCtx, ctx, backendConfig)
 	case "mcp":

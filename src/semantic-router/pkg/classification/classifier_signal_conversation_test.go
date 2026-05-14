@@ -124,7 +124,7 @@ func TestConversation_ToolLoopDeep(t *testing.T) {
 		Predicate: &config.NumericPredicate{GTE: ptrFloat(2)},
 	}
 
-	facts := ConversationFacts{CompletedToolCycles: 3}
+	facts := ConversationFacts{ToolResultCount: 3}
 	val := resolveConversationValue(rule.Feature, facts)
 	if val != 3.0 {
 		t.Fatalf("expected 3.0, got %v", val)
@@ -133,7 +133,7 @@ func TestConversation_ToolLoopDeep(t *testing.T) {
 		t.Fatal("expected tool_loop_deep to match with 3 cycles")
 	}
 
-	factsShallow := ConversationFacts{CompletedToolCycles: 1}
+	factsShallow := ConversationFacts{ToolResultCount: 1}
 	valShallow := resolveConversationValue(rule.Feature, factsShallow)
 	if conversationPredicateMatches(rule, valShallow) {
 		t.Fatal("expected tool_loop_deep NOT to match with 1 cycle")

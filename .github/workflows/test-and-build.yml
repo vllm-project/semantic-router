@@ -196,6 +196,11 @@ jobs:
           echo "Milvus is ready at localhost:19530"
           docker ps --filter "name=milvus-semantic-cache"
 
+      - name: Start Qdrant service
+        run: |
+          echo "Starting Qdrant..."
+          make start-qdrant
+
       - name: Start Redis service
         run: |
           echo "Starting Redis Stack..."
@@ -215,6 +220,7 @@ jobs:
           LD_LIBRARY_PATH: ${{ github.workspace }}/candle-binding/target/release
           MILVUS_URI: localhost:19530
           SKIP_MILVUS_TESTS: false
+          SKIP_QDRANT_TESTS: false
           SKIP_REDIS_TESTS: false
           SKIP_VALKEY_TESTS: false
           VALKEY_HOST: localhost
@@ -235,6 +241,10 @@ jobs:
         run: |
           echo "Stopping Valkey container and cleaning data..."
           make clean-valkey
+
+      - name: Stop Qdrant service
+        if: always()
+        run: make stop-qdrant
 
       - name: Stop Milvus service
         if: always()

@@ -9,6 +9,7 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/decision"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/metrics"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/projectiontrace"
 )
 
 // getUsedSignals analyzes all decisions and returns which signals (type:name) are actually used
@@ -56,6 +57,7 @@ func (c *Classifier) getAllSignalTypes() map[string]bool {
 	collectSignalKeys(allSignals, config.SignalTypeKB, c.Config.KBRules, func(r config.KBSignalRule) string { return r.Name })
 	collectSignalKeys(allSignals, config.SignalTypeConversation, c.Config.ConversationRules, func(r config.ConversationRule) string { return r.Name })
 	collectSignalKeys(allSignals, config.SignalTypeSessionMetric, c.Config.SessionMetricRules, func(r config.SessionMetricRule) string { return r.Name })
+	collectSignalKeys(allSignals, config.SignalTypeEventContext, c.Config.EventContextRules, func(r config.EventContextRule) string { return r.Name })
 	for _, mapping := range c.Config.Projections.Mappings {
 		for _, output := range mapping.Outputs {
 			allSignals[strings.ToLower(config.SignalTypeProjection+":"+output.Name)] = true
@@ -96,8 +98,10 @@ type SignalResults struct {
 	KBMetricValues            map[string]float64
 	MatchedConversationRules  []string
 	MatchedSessionMetricRules []string
+	MatchedEventContextRules  []string // Matched event_context rule names (event type, severity, temporal, action codes)
 	MatchedProjectionRules    []string // Matched derived routing outputs from routing.projections.mappings
 	ProjectionScores          map[string]float64
+	ProjectionTrace           *projectiontrace.Trace // Explainability payload for projections (replay / dashboard)
 
 	// Jailbreak detection metadata (populated when jailbreak signal is evaluated)
 	JailbreakDetected   bool    // Whether any jailbreak was detected (across all rules)
@@ -134,6 +138,7 @@ type SignalMetricsCollection struct {
 	PII          SignalMetrics `json:"pii"`
 	KB           SignalMetrics `json:"kb"`
 	Conversation SignalMetrics `json:"conversation"`
+	EventContext SignalMetrics `json:"event_context"`
 }
 
 // analyzeRuleCombination recursively traverses a rule tree to collect all referenced signals.
@@ -175,17 +180,42 @@ func (c *Classifier) expandProjectionDependencies(usedSignals map[string]bool) {
 		if !ok {
 			continue
 		}
-		score, ok := scoreByName[scoreName]
-		if !ok {
+		c.expandScoreInputs(scoreName, scoreByName, sourceByOutput, usedSignals, make(map[string]bool))
+	}
+}
+
+func (c *Classifier) expandScoreInputs(
+	scoreName string,
+	scoreByName map[string]config.ProjectionScore,
+	sourceByOutput map[string]string,
+	usedSignals map[string]bool,
+	visited map[string]bool,
+) {
+	if visited[scoreName] {
+		return
+	}
+	visited[scoreName] = true
+
+	score, ok := scoreByName[scoreName]
+	if !ok {
+		return
+	}
+	for _, input := range score.Inputs {
+		if strings.EqualFold(input.Type, config.ProjectionInputKBMetric) {
+			usedSignals[strings.ToLower(config.SignalTypeKB+":"+input.KB)] = true
 			continue
 		}
-		for _, input := range score.Inputs {
-			if strings.EqualFold(input.Type, config.ProjectionInputKBMetric) {
-				usedSignals[strings.ToLower(config.SignalTypeKB+":"+input.KB)] = true
-				continue
+		if strings.EqualFold(input.Type, config.SignalTypeProjection) {
+			dep := input.Name
+			if strings.EqualFold(strings.TrimSpace(input.ValueSource), "confidence") {
+				if src, ok := sourceByOutput[strings.ToLower(dep)]; ok {
+					dep = src
+				}
 			}
-			usedSignals[strings.ToLower(input.Type+":"+input.Name)] = true
+			c.expandScoreInputs(dep, scoreByName, sourceByOutput, usedSignals, visited)
+			continue
 		}
+		usedSignals[strings.ToLower(input.Type+":"+input.Name)] = true
 	}
 }
 
@@ -335,13 +365,13 @@ func (c *Classifier) evaluateDecisionInternal(signals *SignalResults, trace bool
 		return nil, nil, fmt.Errorf("no decisions configured")
 	}
 
-	logging.Debugf("Signal evaluation results: keyword=%v, embedding=%v, domain=%v, fact_check=%v, user_feedback=%v, reask=%v, preference=%v, language=%v, context=%v, structure=%v, complexity=%v, modality=%v, authz=%v, jailbreak=%v, pii=%v, kb=%v, session_metric=%v",
+	logging.Debugf("Signal evaluation results: keyword=%v, embedding=%v, domain=%v, fact_check=%v, user_feedback=%v, reask=%v, preference=%v, language=%v, context=%v, structure=%v, complexity=%v, modality=%v, authz=%v, jailbreak=%v, pii=%v, kb=%v, session_metric=%v, event_context=%v",
 		signals.MatchedKeywordRules, signals.MatchedEmbeddingRules, signals.MatchedDomainRules,
 		signals.MatchedFactCheckRules, signals.MatchedUserFeedbackRules, signals.MatchedReaskRules, signals.MatchedPreferenceRules,
 		signals.MatchedLanguageRules, signals.MatchedContextRules, signals.MatchedStructureRules,
 		signals.MatchedComplexityRules, signals.MatchedModalityRules, signals.MatchedAuthzRules,
 		signals.MatchedJailbreakRules, signals.MatchedPIIRules, signals.MatchedKBRules,
-		signals.MatchedSessionMetricRules)
+		signals.MatchedSessionMetricRules, signals.MatchedEventContextRules)
 
 	engine := decision.NewDecisionEngine(
 		c.Config.KeywordRules,
@@ -371,6 +401,7 @@ func (c *Classifier) evaluateDecisionInternal(signals *SignalResults, trace bool
 		KBRules:            signals.MatchedKBRules,
 		ConversationRules:  signals.MatchedConversationRules,
 		SessionMetricRules: signals.MatchedSessionMetricRules,
+		EventContextRules:  signals.MatchedEventContextRules,
 		ProjectionRules:    signals.MatchedProjectionRules,
 	}
 

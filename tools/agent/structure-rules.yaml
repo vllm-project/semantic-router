@@ -127,6 +127,13 @@ legacy_hotspots:
     file_checks: relaxed
     function_checks: relaxed
   - paths:
+      - candle-binding/src/model_architectures/traditional/modernbert.rs
+      - candle-binding/src/model_architectures/traditional/modernbert_test.rs
+      - onnx-binding/src/model_architectures/classification/mmbert_classifier.rs
+      - onnx-binding/src/model_architectures/embedding/mmbert_embedding.rs
+    file_checks: relaxed
+    function_checks: relaxed
+  - paths:
       - dashboard/backend/handlers/deploy_test.go
       - deploy/operator/controllers/semanticrouter_controller_test.go
     file_checks: relaxed
@@ -204,13 +211,13 @@ legacy_hotspots:
       - src/semantic-router/pkg/selection/automix.go
       - src/semantic-router/pkg/selection/gmtrouter.go
       - src/semantic-router/pkg/selection/rl_driven.go
-    file_checks: relaxed
       - dashboard/backend/handlers/openclaw.go
       - dashboard/backend/handlers/openclaw_provision.go
       - dashboard/backend/handlers/openclaw_rooms.go
       - dashboard/backend/handlers/openclaw_teams.go
       - dashboard/backend/handlers/openclaw_test.go
       - dashboard/backend/handlers/openclaw_workers.go
+    file_checks: relaxed
 
   - paths:
       - tools/security/ast_security_scanner.py

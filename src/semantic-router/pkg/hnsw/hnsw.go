@@ -14,9 +14,11 @@
 package hnsw
 
 import (
+	"cmp"
 	"math"
+	"math/rand/v2"
+	"slices"
 	"sync"
-	"time"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 )
@@ -238,8 +240,7 @@ func (h *Index) Clear() {
 
 // selectLevel randomly selects a level for a new node
 func (h *Index) selectLevel() int {
-	// Use exponential decay probability
-	r := -math.Log(math.Max(1e-9, 1.0-float64(time.Now().UnixNano()%1000000)/1000000.0))
+	r := -math.Log(math.Max(1e-9, 1.0-rand.Float64()))
 	return int(r * h.ml)
 }
 
@@ -334,25 +335,31 @@ func (h *Index) searchLayer(queryEmbedding []float32, entryPoint, ef, layer int)
 				continue
 			}
 			visited[neighborID] = true
-
-			if neighborNode, ok := h.nodes[neighborID]; ok {
-				dist := h.distance(queryEmbedding, neighborNode.Embedding)
-
-				if results.len() < ef {
-					candidates.push(neighborID, dist)
-					results.push(neighborID, dist)
-				} else if dist < results.peekDist() {
-					candidates.push(neighborID, dist)
-					results.push(neighborID, dist)
-					if results.len() > ef {
-						results.pop()
-					}
-				}
-			}
+			h.tryAddNeighbor(queryEmbedding, neighborID, ef, candidates, results)
 		}
 	}
 
 	return results.items()
+}
+
+// tryAddNeighbor evaluates a single neighbor and pushes it into the search
+// heaps when it improves the current top-ef result set.
+func (h *Index) tryAddNeighbor(queryEmbedding []float32, neighborID, ef int, candidates *minHeap, results *maxHeap) {
+	neighborNode, ok := h.nodes[neighborID]
+	if !ok {
+		return
+	}
+	dist := h.distance(queryEmbedding, neighborNode.Embedding)
+
+	if results.len() >= ef && dist >= results.peekDist() {
+		return
+	}
+
+	candidates.push(neighborID, dist)
+	results.push(neighborID, dist)
+	if results.len() > ef {
+		results.pop()
+	}
 }
 
 // selectNeighbors selects the best neighbors by sorting by distance
@@ -365,44 +372,32 @@ func (h *Index) selectNeighbors(candidateIDs []int, m int, queryEmb []float32) [
 		return candidateIDs
 	}
 
-	// Create a temporary slice with distances for sorting
 	type neighborDist struct {
 		id   int
 		dist float32
 	}
 
 	neighbors := make([]neighborDist, 0, len(candidateIDs))
-
-	// Compute distance from query to each candidate
 	for _, id := range candidateIDs {
-		if node, ok := h.nodes[id]; ok {
-			if len(node.Embedding) != len(queryEmb) {
-				continue // Skip dimension mismatch
-			}
-			neighbors = append(neighbors, neighborDist{
-				id:   id,
-				dist: h.distance(queryEmb, node.Embedding),
-			})
+		node, ok := h.nodes[id]
+		if !ok || len(node.Embedding) != len(queryEmb) {
+			continue
 		}
+		neighbors = append(neighbors, neighborDist{
+			id:   id,
+			dist: h.distance(queryEmb, node.Embedding),
+		})
 	}
 
-	// Sort by distance (ascending - smallest distance first)
-	// Use selection sort since m is typically small (16-32)
-	for i := 0; i < m && i < len(neighbors); i++ {
-		minIdx := i
-		for j := i + 1; j < len(neighbors); j++ {
-			if neighbors[j].dist < neighbors[minIdx].dist {
-				minIdx = j
-			}
-		}
-		if minIdx != i {
-			neighbors[i], neighbors[minIdx] = neighbors[minIdx], neighbors[i]
-		}
-	}
+	slices.SortFunc(neighbors, func(a, b neighborDist) int {
+		return cmp.Compare(a.dist, b.dist)
+	})
 
-	// Return the m nearest neighbors
+	if m > len(neighbors) {
+		m = len(neighbors)
+	}
 	result := make([]int, 0, m)
-	for i := 0; i < m && i < len(neighbors); i++ {
+	for i := 0; i < m; i++ {
 		result = append(result, neighbors[i].id)
 	}
 	return result

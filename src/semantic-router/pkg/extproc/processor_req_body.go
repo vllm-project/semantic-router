@@ -30,6 +30,15 @@ func (r *OpenAIRouter) handleRequestBody(v *ext_proc.ProcessingRequest_RequestBo
 	ctx.ProcessingStartTime = time.Now()
 	ctx.OriginalRequestBody = v.RequestBody.GetBody()
 
+	// x-vsr-skip-processing was already detected at the header phase; respect
+	// the opt-out before any classification, decision, or body mutation runs.
+	if ctx.SkipProcessing {
+		logging.ComponentDebugEvent("extproc", "skip_processing_request_body", map[string]interface{}{
+			"request_id": ctx.RequestID,
+		})
+		return newContinueRequestBodyResponse(), nil
+	}
+
 	requestBody, earlyResponse := r.translateResponseAPIRequest(ctx.OriginalRequestBody, ctx)
 	if earlyResponse != nil {
 		return earlyResponse, nil

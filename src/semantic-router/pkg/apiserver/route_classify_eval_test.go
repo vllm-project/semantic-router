@@ -5,6 +5,7 @@ package apiserver
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -49,6 +50,12 @@ func (s *evalCaptureClassificationService) ClassifyFactCheck(req services.FactCh
 func (s *evalCaptureClassificationService) ClassifyUserFeedback(req services.UserFeedbackRequest) (*services.UserFeedbackResponse, error) {
 	return &services.UserFeedbackResponse{}, nil
 }
+
+func (s *evalCaptureClassificationService) ClassifyNLI(_ services.NLIRequest) (*services.NLIResponse, error) {
+	return nil, fmt.Errorf("NLI not available in eval stub")
+}
+
+func (s *evalCaptureClassificationService) IsNLIReady() bool { return false }
 
 func (s *evalCaptureClassificationService) HasUnifiedClassifier() bool      { return true }
 func (s *evalCaptureClassificationService) HasClassifier() bool             { return true }

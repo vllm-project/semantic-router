@@ -1,6 +1,6 @@
 // Package responsestore provides storage interfaces and implementations
-// for the Response API. It supports pluggable backends including memory,
-// Milvus, and Redis for storing responses and conversations.
+// for the Response API. Wired backends are in-memory and Redis. Any future
+// Milvus backend should use pkg/milvus for connection and collection lifecycle.
 package responsestore
 
 import (

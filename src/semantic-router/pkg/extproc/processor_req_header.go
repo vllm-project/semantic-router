@@ -21,9 +21,20 @@ func (r *OpenAIRouter) handleRequestHeaders(v *ext_proc.ProcessingRequest_Reques
 	span := startRequestHeaderSpan(v, ctx)
 	defer span.End()
 
-	method, path := captureRequestHeaders(v, ctx)
+	method, path := captureRequestHeaders(v, ctx, r.skipProcessingEnabled())
 
 	setRequestHeaderSpanAttributes(span, ctx, method, path)
+
+	// Honor x-vsr-skip-processing as early as possible: once captured we bypass
+	// every router-side header check (replay API, validation, response-API
+	// translation) and emit a plain CONTINUE so the request flows through.
+	// Streaming detection still runs because the same flag drives mode selection
+	// for downstream filters and is cheap; the body and response handlers will
+	// also short-circuit in the no-op path.
+	if ctx.SkipProcessing {
+		detectStreamingExpectation(ctx)
+		return newContinueRequestHeadersResponse(), nil
+	}
 
 	if replayResp := r.handleRouterReplayAPI(method, path); replayResp != nil {
 		return replayResp, nil
@@ -65,28 +76,43 @@ func startRequestHeaderSpan(
 func captureRequestHeaders(
 	v *ext_proc.ProcessingRequest_RequestHeaders,
 	ctx *RequestContext,
+	skipProcessingGateEnabled bool,
 ) (string, string) {
 	requestHeaders := v.RequestHeaders.Headers
 	for _, header := range requestHeaders.Headers {
 		headerValue := extractHeaderValue(header)
 		ctx.Headers[header.Key] = headerValue
 
-		if strings.ToLower(header.Key) == headers.RequestID {
+		// HTTP/2 lowercases header names, but we accept either case for both the
+		// internal looper marker and the external skip-processing opt-out so
+		// upstream filters do not have to worry about casing.
+		lowerKey := strings.ToLower(header.Key)
+		if lowerKey == headers.RequestID {
 			ctx.RequestID = headerValue
 		}
-		if header.Key == headers.VSRLooperRequest && headerValue == "true" {
+		if lowerKey == headers.VSRLooperRequest && headerValue == "true" {
 			ctx.LooperRequest = true
+		}
+		// The x-vsr-skip-processing opt-out is gated by the deployment-level
+		// global.router.skip_processing.enabled flag. When disabled (the
+		// default), the header is ignored entirely so an unauthenticated
+		// upstream caller cannot bypass router policy by injecting it.
+		if skipProcessingGateEnabled &&
+			lowerKey == headers.VSRSkipProcessing &&
+			strings.EqualFold(strings.TrimSpace(headerValue), "true") {
+			ctx.SkipProcessing = true
 		}
 	}
 
 	method := ctx.Headers[":method"]
 	path := ctx.Headers[":path"]
 	logging.ComponentDebugEvent("extproc", "request_headers_captured", map[string]interface{}{
-		"request_id":     ctx.RequestID,
-		"method":         method,
-		"path":           path,
-		"header_count":   len(requestHeaders.Headers),
-		"looper_request": ctx.LooperRequest,
+		"request_id":      ctx.RequestID,
+		"method":          method,
+		"path":            path,
+		"header_count":    len(requestHeaders.Headers),
+		"looper_request":  ctx.LooperRequest,
+		"skip_processing": ctx.SkipProcessing,
 	})
 
 	return method, path

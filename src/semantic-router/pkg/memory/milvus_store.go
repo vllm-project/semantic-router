@@ -1415,7 +1415,9 @@ func isTransientError(err error) bool {
 	return false
 }
 
-// retryWithBackoff retries an operation with exponential backoff for transient errors
+// retryWithBackoff retries query/search operations when errors look transient.
+// pkg/milvus.Retry is a simpler bounded backoff without substring classification;
+// replay bootstrap uses that; keep this path while MilvusStore needs error-text heuristics.
 func (m *MilvusStore) retryWithBackoff(ctx context.Context, operation func() error) error {
 	var lastErr error
 

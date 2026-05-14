@@ -2,10 +2,12 @@ package store
 
 import (
 	"context"
+	"encoding/json"
 	"io"
 	"time"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/postgres"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/projectiontrace"
 )
 
 // Signal represents various routing signals captured during a request.
@@ -47,6 +49,14 @@ type ToolTrace struct {
 	Stage     string          `json:"stage,omitempty"`
 	ToolNames []string        `json:"tool_names,omitempty"`
 	Steps     []ToolTraceStep `json:"steps,omitempty"`
+	// StepsTruncated is true when older Steps were dropped to enforce the
+	// MaxToolTraceSteps cap. Long agent sessions can otherwise produce
+	// hundreds of steps per record and OOM the router (see issue #1835).
+	StepsTruncated bool `json:"steps_truncated,omitempty"`
+	// DroppedStepCount records how many steps were dropped from the head of
+	// the timeline when StepsTruncated is true. Zero when no truncation
+	// happened.
+	DroppedStepCount int `json:"dropped_step_count,omitempty"`
 }
 
 // ToolTraceStep represents a single step in a request-local tool-calling flow.
@@ -77,35 +87,36 @@ type ToolTraceStep struct {
 
 // Record represents a routing decision record with metadata and captured payloads.
 type Record struct {
-	ID                    string             `json:"id"`
-	Timestamp             time.Time          `json:"timestamp"`
-	RequestID             string             `json:"request_id,omitempty"`
-	SessionID             string             `json:"session_id,omitempty"`
-	TurnIndex             int                `json:"turn_index"`
-	PreviousResponseID    string             `json:"previous_response_id,omitempty"`
-	ConversationID        string             `json:"conversation_id,omitempty"`
-	Decision              string             `json:"decision,omitempty"`
-	DecisionTier          int                `json:"decision_tier"`
-	DecisionPriority      int                `json:"decision_priority"`
-	Category              string             `json:"category,omitempty"`
-	OriginalModel         string             `json:"original_model,omitempty"`
-	SelectedModel         string             `json:"selected_model,omitempty"`
-	ReasoningMode         string             `json:"reasoning_mode,omitempty"`
-	ConfidenceScore       float64            `json:"confidence_score,omitempty"`
-	SelectionMethod       string             `json:"selection_method,omitempty"`
-	Signals               Signal             `json:"signals"`
-	Projections           []string           `json:"projections,omitempty"`
-	ProjectionScores      map[string]float64 `json:"projection_scores,omitempty"`
-	SignalConfidences     map[string]float64 `json:"signal_confidences,omitempty"`
-	SignalValues          map[string]float64 `json:"signal_values,omitempty"`
-	ToolTrace             *ToolTrace         `json:"tool_trace,omitempty"`
-	RequestBody           string             `json:"request_body,omitempty"`
-	ResponseBody          string             `json:"response_body,omitempty"`
-	ResponseStatus        int                `json:"response_status,omitempty"`
-	FromCache             bool               `json:"from_cache,omitempty"`
-	Streaming             bool               `json:"streaming,omitempty"`
-	RequestBodyTruncated  bool               `json:"request_body_truncated,omitempty"`
-	ResponseBodyTruncated bool               `json:"response_body_truncated,omitempty"`
+	ID                    string                 `json:"id"`
+	Timestamp             time.Time              `json:"timestamp"`
+	RequestID             string                 `json:"request_id,omitempty"`
+	SessionID             string                 `json:"session_id,omitempty"`
+	TurnIndex             int                    `json:"turn_index"`
+	PreviousResponseID    string                 `json:"previous_response_id,omitempty"`
+	ConversationID        string                 `json:"conversation_id,omitempty"`
+	Decision              string                 `json:"decision,omitempty"`
+	DecisionTier          int                    `json:"decision_tier"`
+	DecisionPriority      int                    `json:"decision_priority"`
+	Category              string                 `json:"category,omitempty"`
+	OriginalModel         string                 `json:"original_model,omitempty"`
+	SelectedModel         string                 `json:"selected_model,omitempty"`
+	ReasoningMode         string                 `json:"reasoning_mode,omitempty"`
+	ConfidenceScore       float64                `json:"confidence_score,omitempty"`
+	SelectionMethod       string                 `json:"selection_method,omitempty"`
+	Signals               Signal                 `json:"signals"`
+	Projections           []string               `json:"projections,omitempty"`
+	ProjectionScores      map[string]float64     `json:"projection_scores,omitempty"`
+	ProjectionTrace       *projectiontrace.Trace `json:"projection_trace,omitempty"`
+	SignalConfidences     map[string]float64     `json:"signal_confidences,omitempty"`
+	SignalValues          map[string]float64     `json:"signal_values,omitempty"`
+	ToolTrace             *ToolTrace             `json:"tool_trace,omitempty"`
+	RequestBody           string                 `json:"request_body,omitempty"`
+	ResponseBody          string                 `json:"response_body,omitempty"`
+	ResponseStatus        int                    `json:"response_status,omitempty"`
+	FromCache             bool                   `json:"from_cache,omitempty"`
+	Streaming             bool                   `json:"streaming,omitempty"`
+	RequestBodyTruncated  bool                   `json:"request_body_truncated,omitempty"`
+	ResponseBodyTruncated bool                   `json:"response_body_truncated,omitempty"`
 
 	// Guardrails
 	GuardrailsEnabled bool `json:"guardrails_enabled,omitempty"`
@@ -225,6 +236,21 @@ func cloneFloat64Map(values map[string]float64) map[string]float64 {
 	return cloned
 }
 
+func cloneProjectionTraceRecord(t *projectiontrace.Trace) *projectiontrace.Trace {
+	if t == nil {
+		return nil
+	}
+	b, err := json.Marshal(t)
+	if err != nil {
+		return nil
+	}
+	var out projectiontrace.Trace
+	if err := json.Unmarshal(b, &out); err != nil {
+		return nil
+	}
+	return &out
+}
+
 func cloneToolTraceSteps(steps []ToolTraceStep) []ToolTraceStep {
 	if steps == nil {
 		return nil
@@ -268,6 +294,7 @@ func cloneRecord(record Record) Record {
 	cloned.Signals = cloneSignal(record.Signals)
 	cloned.Projections = cloneStringSlice(record.Projections)
 	cloned.ProjectionScores = cloneFloat64Map(record.ProjectionScores)
+	cloned.ProjectionTrace = cloneProjectionTraceRecord(record.ProjectionTrace)
 	cloned.SignalConfidences = cloneFloat64Map(record.SignalConfidences)
 	cloned.SignalValues = cloneFloat64Map(record.SignalValues)
 	cloned.ToolTrace = cloneToolTrace(record.ToolTrace)
@@ -310,7 +337,7 @@ func cloneStringPtr(value *string) *string {
 
 // Config holds common configuration options for all storage backends.
 type Config struct {
-	Backend           string // "memory", "redis", "postgres", "milvus"
+	Backend           string // "memory", "redis", "postgres", "milvus", "qdrant"
 	TTLSeconds        int    // Time-to-live for records (0 = no expiration)
 	AsyncWrites       bool   // Enable asynchronous writes
 	MaxBodyBytes      int    // Maximum bytes to store for request/response bodies
@@ -320,6 +347,7 @@ type Config struct {
 	Redis    *RedisConfig
 	Postgres *PostgresConfig
 	Milvus   *MilvusConfig
+	Qdrant   *QdrantConfig
 }
 
 // RedisConfig holds Redis-specific configuration.
@@ -347,4 +375,13 @@ type MilvusConfig struct {
 	// Milvus specific settings
 	ConsistencyLevel string `json:"consistency_level,omitempty" yaml:"consistency_level,omitempty"` // Strong, Session, Bounded, Eventually
 	ShardNum         int    `json:"shard_num,omitempty" yaml:"shard_num,omitempty"`
+}
+
+// QdrantConfig holds Qdrant-specific configuration for the replay store.
+type QdrantConfig struct {
+	Host           string `json:"host" yaml:"host"`
+	Port           int    `json:"port,omitempty" yaml:"port,omitempty"`
+	APIKey         string `json:"api_key,omitempty" yaml:"api_key,omitempty"`
+	UseTLS         bool   `json:"use_tls,omitempty" yaml:"use_tls,omitempty"`
+	CollectionName string `json:"collection_name,omitempty" yaml:"collection_name,omitempty"`
 }

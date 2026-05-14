@@ -1,7 +1,16 @@
 {{- $config := deepCopy .Values.config -}}
 {{- $global := (get $config "global") | default (dict) -}}
+{{- $router := (get $global "router") | default (dict) -}}
 {{- $stores := (get $global "stores") | default (dict) -}}
 {{- $services := (get $global "services") | default (dict) -}}
+
+{{- $skipProcessingEnabled := false -}}
+{{- if and .Values.router .Values.router.skipProcessing -}}
+{{-   $skipProcessingEnabled = (.Values.router.skipProcessing.enabled | default false) -}}
+{{- end -}}
+{{- $skipProcessing := dict "enabled" $skipProcessingEnabled -}}
+{{- $_ := set $router "skip_processing" $skipProcessing -}}
+{{- $_ := set $global "router" $router -}}
 {{- $semanticCache := (get $stores "semantic_cache") | default (dict) -}}
 {{- $_ := unset $semanticCache "use_hnsw" -}}
 {{- $_ := unset $semanticCache "hnsw_m" -}}

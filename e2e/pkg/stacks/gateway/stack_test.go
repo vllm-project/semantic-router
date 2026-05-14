@@ -4,6 +4,7 @@ import (
 	"testing"
 
 	"github.com/vllm-project/semantic-router/e2e/pkg/framework"
+	"github.com/vllm-project/semantic-router/e2e/pkg/helm"
 )
 
 func TestSemanticRouterInstallOptionsUsesBaseValuesFileByDefault(t *testing.T) {
@@ -30,7 +31,7 @@ func TestSemanticRouterInstallOptionsAppendsWorkspaceOverlay(t *testing.T) {
 	opts := stack.semanticRouterInstallOptions(&framework.SetupOptions{
 		ImageTag: "test-image",
 		ValuesFiles: map[string]string{
-			releaseSemanticRouter: "workspace-models.yaml",
+			helm.SemanticRouterRelease.ReleaseName: "workspace-models.yaml",
 		},
 	})
 

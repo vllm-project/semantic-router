@@ -597,6 +597,24 @@ func (c *Compiler) compileRoutes() {
 			}
 		}
 
+		// Compile EMIT directives. Slice ordering is preserved so decompilation
+		// is stable.
+		seenEmitKinds := make(map[string]bool, len(r.Emits))
+		for _, e := range r.Emits {
+			if e == nil {
+				continue
+			}
+			if seenEmitKinds[e.Kind] {
+				c.addError(e.Pos, "ROUTE %s EMIT: duplicate EMIT kind %q in the same route. Each kind may appear at most once", r.Name, e.Kind)
+				continue
+			}
+			seenEmitKinds[e.Kind] = true
+			if !c.validateEmitForCompile(r, e) {
+				continue
+			}
+			decision.Emits = append(decision.Emits, compileEmitDecl(e))
+		}
+
 		c.config.Decisions = append(c.config.Decisions, decision)
 	}
 }
@@ -1129,23 +1147,37 @@ func (c *Compiler) buildDecisionPlugin(pluginType string, fields map[string]Valu
 		}
 		setPluginConfig(cfg)
 
-	case "tools":
-		cfg := config.ToolsPluginConfig{}
+	case "tool_selection":
+		dp.Type = "tool_selection"
+		cfg := config.ToolSelectionPluginConfig{}
 		if v, ok := getBoolField(fields, "enabled"); ok {
 			cfg.Enabled = v
 		}
 		if v, ok := getStringField(fields, "mode"); ok {
 			cfg.Mode = v
 		}
-		if v, ok := getBoolField(fields, "semantic_selection"); ok {
-			cfg.SemanticSelection = &v
+		if v, ok := getIntField(fields, "top_k"); ok {
+			cfg.TopK = v
 		}
-		if values, ok := getStringArrayField(fields, "allow_tools"); ok {
-			cfg.AllowTools = values
+		if v, ok := getFloat32Field(fields, "similarity_threshold"); ok {
+			cfg.SimilarityThreshold = &v
 		}
-		if values, ok := getStringArrayField(fields, "block_tools"); ok {
-			cfg.BlockTools = values
+		if v, ok := getStringField(fields, "tools_db_path"); ok {
+			cfg.ToolsDBPath = v
 		}
+		if v, ok := getFloat32Field(fields, "relevance_threshold"); ok {
+			cfg.RelevanceThreshold = &v
+		}
+		if v, ok := getIntField(fields, "preserve_count"); ok {
+			cfg.PreserveCount = v
+		}
+		if v, ok := getStringField(fields, "strategy"); ok {
+			cfg.Strategy = v
+		}
+		setPluginConfig(cfg)
+
+	case "tools":
+		cfg := c.compileToolsPlugin(fields)
 		setPluginConfig(cfg)
 
 	default:
@@ -1189,6 +1221,76 @@ func (c *Compiler) compileRAGPlugin(fields map[string]Value) config.RAGPluginCon
 		}
 	}
 	return cfg
+}
+
+func (c *Compiler) compileToolsPlugin(fields map[string]Value) config.ToolsPluginConfig {
+	cfg := config.ToolsPluginConfig{}
+	if v, ok := getBoolField(fields, "enabled"); ok {
+		cfg.Enabled = v
+	}
+	if v, ok := getStringField(fields, "mode"); ok {
+		cfg.Mode = v
+	}
+	if v, ok := getBoolField(fields, "semantic_selection"); ok {
+		cfg.SemanticSelection = &v
+	}
+	if values, ok := getStringArrayField(fields, "allow_tools"); ok {
+		cfg.AllowTools = values
+	}
+	if values, ok := getStringArrayField(fields, "block_tools"); ok {
+		cfg.BlockTools = values
+	}
+	if v, ok := getStringField(fields, "strategy"); ok {
+		cfg.Strategy = v
+	}
+	if raw, ok := fields["dynamic_retrieval"]; ok {
+		if obj, ok := raw.(ObjectValue); ok {
+			cfg.DynamicRetrieval = compileDynamicRetrievalConfig(obj.Fields)
+		}
+	}
+	return cfg
+}
+
+func compileDynamicRetrievalConfig(fields map[string]Value) *config.DynamicRetrievalConfig {
+	cfg := &config.DynamicRetrievalConfig{}
+	if v, ok := getBoolField(fields, "enabled"); ok {
+		cfg.Enabled = v
+	}
+	if v, ok := getStringField(fields, "strategy"); ok {
+		cfg.Strategy = v
+	}
+	if v, ok := getIntField(fields, "history_window"); ok {
+		cfg.HistoryWindow = v
+	}
+	if v, ok := getFloat64Field(fields, "min_history_confidence"); ok {
+		cfg.MinHistoryConfidence = v
+	}
+	if v, ok := getBoolField(fields, "fallback_on_low_confidence"); ok {
+		cfg.FallbackOnLowConfidence = v
+	}
+	if raw, ok := fields["weights"]; ok {
+		if obj, ok := raw.(ObjectValue); ok {
+			cfg.Weights = compileDynamicRetrievalWeights(obj.Fields)
+		}
+	}
+	return cfg
+}
+
+func compileDynamicRetrievalWeights(fields map[string]Value) *config.DynamicRetrievalWeights {
+	weights := &config.DynamicRetrievalWeights{}
+	if v, ok := getFloat64Field(fields, "semantic"); ok {
+		weights.Semantic = v
+	}
+	if v, ok := getFloat64Field(fields, "history"); ok {
+		weights.History = v
+	}
+	if v, ok := getFloat64Field(fields, "decision_prior"); ok {
+		weights.DecisionPrior = v
+	}
+	if v, ok := getFloat64Field(fields, "repetition_penalty"); ok {
+		weights.RepetitionPenalty = v
+	}
+	return weights
 }
 
 // compileComposerObj converts an ObjectValue representing a composer (RuleCombination)
@@ -1400,4 +1502,69 @@ func valueToInterface(v Value) interface{} {
 	default:
 		return nil
 	}
+}
+
+func (c *Compiler) validateEmitForCompile(r *RouteDecl, e *EmitDecl) bool {
+	if e == nil {
+		return false
+	}
+	context := fmt.Sprintf("ROUTE %s EMIT", r.Name)
+	if !supportedEmitKinds[e.Kind] {
+		c.addError(e.Pos, "%s: unknown EMIT kind %q. Supported kinds: retention", context, e.Kind)
+		return false
+	}
+	if e.Kind != emitKindRetention {
+		return true
+	}
+	ok := true
+	for _, issue := range retentionRawFieldDiagnostics(e, context) {
+		c.addError(issue.pos, "%s", issue.message)
+		ok = false
+	}
+	if e.Retention == nil {
+		return ok
+	}
+	if e.Retention.TTLTurns != nil && *e.Retention.TTLTurns < 0 {
+		c.addError(e.Pos, "%s retention: ttl_turns must be >= 0, got %d", context, *e.Retention.TTLTurns)
+		ok = false
+	}
+	if e.Retention.Drop != nil && *e.Retention.Drop && e.Retention.TTLTurns != nil && *e.Retention.TTLTurns > 0 {
+		c.addError(e.Pos, "%s retention: drop=true conflicts with ttl_turns=%d. Use one or the other", context, *e.Retention.TTLTurns)
+		ok = false
+	}
+	return ok
+}
+
+// compileEmitDecl lowers a resolved EmitDecl into the config.EmitDirective
+// surface consumed by the runtime + canonical YAML round-trip.
+func compileEmitDecl(e *EmitDecl) config.EmitDirective {
+	if e == nil {
+		return config.EmitDirective{}
+	}
+	out := config.EmitDirective{Kind: e.Kind}
+	if e.Retention != nil {
+		out.Retention = &config.RetentionDirective{
+			Drop:                  clonePtrBool(e.Retention.Drop),
+			TTLTurns:              clonePtrInt(e.Retention.TTLTurns),
+			KeepCurrentModel:      clonePtrBool(e.Retention.KeepCurrentModel),
+			PreferPrefixRetention: clonePtrBool(e.Retention.PreferPrefixRetention),
+		}
+	}
+	return out
+}
+
+func clonePtrBool(p *bool) *bool {
+	if p == nil {
+		return nil
+	}
+	v := *p
+	return &v
+}
+
+func clonePtrInt(p *int) *int {
+	if p == nil {
+		return nil
+	}
+	v := *p
+	return &v
 }

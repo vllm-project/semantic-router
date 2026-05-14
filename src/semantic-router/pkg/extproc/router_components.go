@@ -60,6 +60,7 @@ func createSemanticCache(cfg *config.RouterConfig) (cache.CacheBackend, error) {
 		Redis:               semanticCacheCfg.Redis,
 		Valkey:              semanticCacheCfg.Valkey,
 		Milvus:              semanticCacheCfg.Milvus,
+		Qdrant:              semanticCacheCfg.Qdrant,
 		EmbeddingModel:      detectSemanticCacheEmbeddingModel(cfg),
 	}
 

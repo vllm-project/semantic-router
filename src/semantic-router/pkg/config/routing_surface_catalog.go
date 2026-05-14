@@ -14,6 +14,7 @@ const (
 	DecisionPluginImageGen          = "image_gen"
 	DecisionPluginFastResponse      = "fast_response"
 	DecisionPluginRequestParams     = "request_params"
+	DecisionPluginToolSelection     = "tool_selection"
 )
 
 var supportedSignalTypes = []string{
@@ -35,6 +36,7 @@ var supportedSignalTypes = []string{
 	SignalTypeKB,
 	SignalTypeUserFeedback,
 	SignalTypeSessionMetric,
+	SignalTypeEventContext,
 }
 
 var supportedDecisionPluginTypes = []string{
@@ -49,6 +51,7 @@ var supportedDecisionPluginTypes = []string{
 	DecisionPluginRouterReplay,
 	DecisionPluginSemanticCache,
 	DecisionPluginSystemPrompt,
+	DecisionPluginToolSelection,
 	DecisionPluginTools,
 }
 

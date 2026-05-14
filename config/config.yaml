@@ -169,6 +169,21 @@ routing:
           - account settings
           - billing information
           - subscription management
+      # query_modality declares which modality of incoming request payload the
+      # embedding rule's query is computed from. Defaults to "text" when
+      # omitted. Setting it to "image" or "audio" requires
+      # global.model_catalog.embeddings.semantic.embedding_config.model_type=multimodal
+      # so the query and candidate embeddings land in the same shared space;
+      # see website/docs/tutorials/signal/learned/embedding.md for the worked
+      # multimodal example.
+      - name: clinical_query_intent
+        query_modality: text
+        threshold: 0.72
+        aggregation_method: max
+        candidates:
+          - patient symptoms or clinical question
+          - medication interaction or dosage question
+          - test result interpretation request
 
     domains:
       - name: business
@@ -228,6 +243,8 @@ routing:
     language:
       - name: zh
         description: Chinese-language requests.
+        # threshold: minimum lingua-go confidence required (0 = built-in default 0.3)
+        threshold: 0.0
       - name: es
         description: Spanish-language requests.
 
@@ -458,6 +475,18 @@ routing:
           - session_routing.current_model
           - session_routing.candidate_model
 
+    event_context_rules:
+      - name: critical_payment_event
+        event_types:
+          - payment_failed
+          - transaction_declined
+        severities:
+          - critical
+          - high
+        action_codes:
+          - TXN_DECLINE
+        temporal: true
+
   projections:
     partitions:
       - name: support_intents
@@ -584,6 +613,27 @@ routing:
               - search_web
             block_tools:
               - exec_cmd
+        # Disabled sample: add mode only (filter fields belong under mode: filter; see legal_confidence_route).
+        - type: tool_selection
+          configuration:
+            enabled: false
+            mode: add
+            tools_db_path: config/tools_db.json
+            top_k: 5
+            similarity_threshold: 0.30
+            strategy: default
+            fallback_to_empty: false
+            advanced_filtering:
+              enabled: true
+              candidate_pool_size: 30
+              min_combined_score: 0.4
+      emits:
+        - kind: retention
+          retention:
+            drop: false
+            ttl_turns: 4
+            keep_current_model: true
+            prefer_prefix_retention: true
 
     - name: legal_confidence_route
       description: Confidence-routed legal and factual traffic.
@@ -626,6 +676,13 @@ routing:
             hallucination_action: annotate
             unverified_factual_action: warn
             include_hallucination_details: true
+        # Disabled sample: filter mode only (reference config union coverage for ToolSelectionPluginConfig filter fields).
+        - type: tool_selection
+          configuration:
+            enabled: false
+            mode: filter
+            relevance_threshold: 0.25
+            preserve_count: 2
 
     - name: health_ratings_route
       description: Ratings-based route for health requests that need fact verification.
@@ -662,6 +719,10 @@ routing:
             # (prompt, tool_definitions, and each tool-call's arguments/output)
             # without having to shrink max_body_bytes.
             max_tool_trace_bytes: 0
+            # Cap the number of tool-trace steps retained per record. Long
+            # agent sessions (many sequential tool calls) can otherwise grow
+            # the trace unbounded and OOM the router (#1835). 0 = no cap.
+            max_tool_trace_steps: 100
 
     - name: computer-science-remom-route
       description: ReMoM route for complex computer science prompts.
@@ -1201,6 +1262,8 @@ global:
       enabled: true
       max_bytes: 1048576
       timeout_sec: 15
+    skip_processing:
+      enabled: false
     model_selection:
       method: hybrid
       enabled: true
@@ -1240,6 +1303,12 @@ global:
         attack: 0.7
         release: 0.3
         threshold: 0.6
+      model_switch_gate:
+        enabled: false
+        mode: shadow
+        min_switch_advantage: 0.0
+        default_handoff_penalty: 0.0
+        cache_warmth_weight: 0.0
       ml:
         models_path: models/model-selection
         embedding_dim: 384
@@ -1407,6 +1476,12 @@ global:
         collection_name: router_replay
         consistency_level: Bounded
         shard_num: 2
+      qdrant:
+        host: qdrant
+        port: 6334
+        api_key: ""
+        use_tls: false
+        collection_name: router_replay
 
   stores:
     semantic_cache:
@@ -1539,6 +1614,13 @@ global:
           level: info
           enable_query_log: true
           enable_metrics: true
+      qdrant:
+        host: qdrant
+        port: 6334
+        api_key: ""
+        use_tls: false
+        connect_timeout: 10
+        collection_name: semantic_cache
     memory:
       enabled: true
       backend: milvus
@@ -1565,6 +1647,14 @@ global:
         collection: agentic_memory
         dimension: 384
         num_partitions: 32
+      qdrant:
+        host: qdrant
+        port: 6334
+        api_key: ""
+        use_tls: false
+        connect_timeout: 10
+        collection: agentic_memory
+        dimension: 384
       redis_cache:
         enabled: false
         address: "localhost:6379"
@@ -1675,6 +1765,13 @@ global:
         metric_type: COSINE
         index_m: 16
         index_ef_construction: 200
+      qdrant:
+        host: qdrant
+        port: 6334
+        api_key: ""
+        use_tls: false
+        connect_timeout: 10
+        collection_prefix: "vsr_vs_"
       metadata_store: memory
       metadata_postgres:
         host: postgres
@@ -1697,6 +1794,7 @@ global:
       fallback_to_empty: true
       advanced_filtering:
         enabled: true
+        retrieval_strategy: weighted
         candidate_pool_size: 50
         min_lexical_overlap: 1
         min_combined_score: 0.42
@@ -1710,6 +1808,14 @@ global:
         category_confidence_threshold: 0.7
         allow_tools: [docs.search, tickets.lookup]
         block_tools: [admin.delete]
+        hybrid_history:
+          history_horizon: 8
+          min_history_steps: 1
+          history_confidence_threshold: 0
+          weight_semantic: 1
+          weight_history_transition: 1
+          weight_decision_prior: 1
+          repetition_penalty_strength: 0
     looper:
       endpoint: http://localhost:8899/v1/chat/completions
       model_endpoints:
@@ -1870,6 +1976,10 @@ global:
         position_weight: 0.2
         tfidf_weight: 0.3
         position_depth: 0.1
+        # Hard safety limit applied before any signal processing, independent of
+        # the quality-aware compression above. 0 = no limit (default).
+        # Recommended production value: 8192 (~2K tokens).
+        max_evaluation_chars: 0
       prompt_guard:
         enabled: true
         model_ref: prompt_guard

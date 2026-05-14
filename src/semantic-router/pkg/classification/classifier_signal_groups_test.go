@@ -363,3 +363,77 @@ func buildGroupedEmbeddingClassifier(t *testing.T) *Classifier {
 		keywordEmbeddingClassifier: embeddingClassifier,
 	}
 }
+
+func TestApplySignalGroupsRecordsPartitionTraceExclusiveWinner(t *testing.T) {
+	classifier := &Classifier{
+		Config: &config.RouterConfig{
+			IntelligentRouting: config.IntelligentRouting{
+				Signals: config.Signals{
+					Categories: []config.Category{
+						{CategoryMetadata: config.CategoryMetadata{Name: "economics"}},
+						{CategoryMetadata: config.CategoryMetadata{Name: "health"}},
+					},
+				},
+				Projections: config.Projections{
+					Partitions: []config.ProjectionPartition{{
+						Name:      "econ-health",
+						Semantics: "exclusive",
+						Members:   []string{"economics", "health"},
+					}},
+				},
+			},
+		},
+	}
+	results := classifier.applySignalGroups(&SignalResults{
+		MatchedDomainRules: []string{"economics", "health"},
+		SignalConfidences: map[string]float64{
+			"domain:economics": 0.9,
+			"domain:health":    0.4,
+		},
+	})
+	if results.ProjectionTrace == nil || len(results.ProjectionTrace.Partitions) != 1 {
+		t.Fatalf("expected one partition trace, got %+v", results.ProjectionTrace)
+	}
+	p := results.ProjectionTrace.Partitions[0]
+	if p.Winner != "economics" {
+		t.Fatalf("winner = %q", p.Winner)
+	}
+	if p.Margin < 0.49 {
+		t.Fatalf("margin = %v want ~0.5 raw spread", p.Margin)
+	}
+	if len(p.Contenders) != 2 {
+		t.Fatalf("contenders = %+v", p.Contenders)
+	}
+}
+
+func TestApplySignalGroupsRecordsPartitionTraceDefaultSynthetic(t *testing.T) {
+	classifier := &Classifier{
+		Config: &config.RouterConfig{
+			IntelligentRouting: config.IntelligentRouting{
+				Signals: config.Signals{
+					Categories: []config.Category{
+						{CategoryMetadata: config.CategoryMetadata{Name: "economics"}},
+						{CategoryMetadata: config.CategoryMetadata{Name: "health"}},
+						{CategoryMetadata: config.CategoryMetadata{Name: "other"}},
+					},
+				},
+				Projections: config.Projections{
+					Partitions: []config.ProjectionPartition{{
+						Name:      "finance-vs-health",
+						Semantics: "softmax_exclusive",
+						Members:   []string{"economics", "health", "other"},
+						Default:   "other",
+					}},
+				},
+			},
+		},
+	}
+	results := classifier.applySignalGroups(&SignalResults{SignalConfidences: map[string]float64{}})
+	if results.ProjectionTrace == nil || len(results.ProjectionTrace.Partitions) != 1 {
+		t.Fatalf("expected default partition trace, got %+v", results.ProjectionTrace)
+	}
+	p := results.ProjectionTrace.Partitions[0]
+	if !p.DefaultUsed || p.Winner != "other" {
+		t.Fatalf("partition trace = %+v", p)
+	}
+}

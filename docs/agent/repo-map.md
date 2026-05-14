@@ -4,6 +4,8 @@
 
 - `src/semantic-router/`
   - Go router, Envoy extproc server, config loading, Kubernetes controller, routing logic
+- `src/semantic-router/pkg/milvus/`
+  - Shared Milvus dial, collection ensure/load, and retry helpers for memory, cache, vectorstore, replay, and extproc memory wiring (see issue #1601)
 - `src/vllm-sr/`
   - Python CLI, config generation, Docker orchestration, local bootstrap flow
 - `src/fleet-sim/`

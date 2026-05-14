@@ -94,6 +94,8 @@ global:
     clear_route_cache: false
     streamed_body:
       enabled: false
+    skip_processing:
+      enabled: false
     model_selection: {}
   services:
     api:
@@ -153,6 +155,8 @@ global:
     authz: {}
     ratelimit: {}
     router_replay: {}
+    startup_status:
+      store_backend: ""
   stores:
     semantic_cache:
       backend_type: memory

@@ -210,39 +210,65 @@ func validateSemanticCacheConfig(cache *vllmv1alpha1.SemanticCacheConfig) error 
 
 	switch cache.BackendType {
 	case "redis":
-		if cache.Redis == nil {
-			return fmt.Errorf("redis configuration required when backend_type is 'redis'")
-		}
-		if cache.Redis.Connection.Host == "" {
-			return fmt.Errorf("redis.connection.host is required")
-		}
+		return validateRedisCacheBackend(cache.Redis)
 	case "valkey":
-		if cache.Valkey == nil {
-			return fmt.Errorf("valkey configuration required when backend_type is 'valkey'")
-		}
-		if cache.Valkey.Connection.Host == "" {
-			return fmt.Errorf("valkey.connection.host is required")
-		}
+		return validateValkeyCacheBackend(cache.Valkey)
 	case "milvus":
-		if cache.Milvus == nil {
-			return fmt.Errorf("milvus configuration required when backend_type is 'milvus'")
-		}
-		if cache.Milvus.Connection.Host == "" {
-			return fmt.Errorf("milvus.connection.host is required")
-		}
+		return validateMilvusCacheBackend(cache.Milvus, "milvus")
+	case "qdrant":
+		return validateQdrantCacheBackend(cache.Qdrant)
 	case "hybrid":
-		if cache.Milvus == nil {
+		return validateMilvusCacheBackend(cache.Milvus, "hybrid")
+	case "memory", "":
+		return nil
+	default:
+		return fmt.Errorf("unsupported backend_type: %s (must be one of: memory, redis, valkey, milvus, qdrant, hybrid)", cache.BackendType)
+	}
+}
+
+func validateRedisCacheBackend(cfg *vllmv1alpha1.RedisCacheConfig) error {
+	if cfg == nil {
+		return fmt.Errorf("redis configuration required when backend_type is 'redis'")
+	}
+	if cfg.Connection.Host == "" {
+		return fmt.Errorf("redis.connection.host is required")
+	}
+	return nil
+}
+
+func validateValkeyCacheBackend(cfg *vllmv1alpha1.ValkeyCacheConfig) error {
+	if cfg == nil {
+		return fmt.Errorf("valkey configuration required when backend_type is 'valkey'")
+	}
+	if cfg.Connection.Host == "" {
+		return fmt.Errorf("valkey.connection.host is required")
+	}
+	return nil
+}
+
+func validateMilvusCacheBackend(cfg *vllmv1alpha1.MilvusCacheConfig, backend string) error {
+	isHybrid := backend == "hybrid"
+	if cfg == nil {
+		if isHybrid {
 			return fmt.Errorf("milvus configuration required for hybrid backend")
 		}
-		if cache.Milvus.Connection.Host == "" {
+		return fmt.Errorf("milvus configuration required when backend_type is 'milvus'")
+	}
+	if cfg.Connection.Host == "" {
+		if isHybrid {
 			return fmt.Errorf("milvus.connection.host is required for hybrid backend")
 		}
-		// HNSW config is optional but recommended
-	case "memory", "":
-		// No additional validation needed for memory backend
-	default:
-		return fmt.Errorf("unsupported backend_type: %s (must be one of: memory, redis, valkey, milvus, hybrid)", cache.BackendType)
+		return fmt.Errorf("milvus.connection.host is required")
 	}
+	return nil
+}
 
+func validateQdrantCacheBackend(cfg *vllmv1alpha1.QdrantCacheConfig) error {
+	if cfg == nil {
+		return fmt.Errorf("qdrant configuration required when backend_type is 'qdrant'")
+	}
+	if cfg.Host == "" {
+		return fmt.Errorf("qdrant.host is required")
+	}
 	return nil
 }

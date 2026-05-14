@@ -15,6 +15,12 @@ class Listener(BaseModel):
     address: str
     port: int
     timeout: Optional[str] = "300s"
+    api_keys: Optional[List[str]] = Field(
+        default=None,
+        description="Bearer tokens required to call this listener. "
+        "If set, requests without 'Authorization: Bearer <key>' matching one of these "
+        "values are rejected with HTTP 401.",
+    )
 
 
 class KeywordSignal(BaseModel):
@@ -27,12 +33,21 @@ class KeywordSignal(BaseModel):
 
 
 class EmbeddingSignal(BaseModel):
-    """Embedding-based signal configuration."""
+    """Embedding-based signal configuration.
+
+    The ``query_modality`` field declares which modality of incoming request
+    payload the embedding rule's query is computed from. It defaults to
+    ``"text"`` when omitted, preserving existing behavior. ``"image"`` and
+    ``"audio"`` require ``global.model_catalog.embeddings.semantic.embedding_config.model_type=multimodal``
+    in the router config so the query and candidate embeddings land in the same
+    shared space.
+    """
 
     name: str
     threshold: float
     candidates: List[str]
     aggregation_method: str = "max"
+    query_modality: Optional[Literal["text", "image", "audio"]] = None
 
 
 class ProjectionPartition(BaseModel):
@@ -52,6 +67,7 @@ class ProjectionScoreInput(BaseModel):
       - "binary" (default): contributes match/miss fixed values.
       - "confidence": contributes the signal confidence when matched.
       - "raw": contributes the raw numeric value from SignalValues.
+      - "score": contributes the numeric score exposed by a knowledge-base metric.
     """
 
     type: str
@@ -59,7 +75,7 @@ class ProjectionScoreInput(BaseModel):
     kb: Optional[str] = None
     metric: Optional[str] = None
     weight: float
-    value_source: Optional[Literal["binary", "confidence", "raw"]] = None
+    value_source: Optional[Literal["binary", "confidence", "raw", "score"]] = None
     match: Optional[float] = None
     miss: Optional[float] = None
 

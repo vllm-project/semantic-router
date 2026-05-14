@@ -25,6 +25,7 @@ type CanonicalRouterGlobal struct {
 	IncludeConfigModelsInList bool                  `yaml:"include_config_models_in_list"`
 	ClearRouteCache           bool                  `yaml:"clear_route_cache"`
 	StreamedBody              CanonicalStreamedBody `yaml:"streamed_body"`
+	SkipProcessing            SkipProcessingConfig  `yaml:"skip_processing"`
 	ModelSelection            ModelSelectionConfig  `yaml:"model_selection"`
 }
 
@@ -212,6 +213,7 @@ func applyCanonicalGlobal(cfg *RouterConfig, global *CanonicalGlobal) error {
 	cfg.StreamedBodyMode = global.Router.StreamedBody.Enabled
 	cfg.MaxStreamedBodyBytes = global.Router.StreamedBody.MaxBytes
 	cfg.StreamedBodyTimeoutSec = global.Router.StreamedBody.TimeoutSec
+	cfg.SkipProcessing = global.Router.SkipProcessing
 	cfg.ModelSelection = global.Router.ModelSelection
 
 	cfg.API = global.Services.API

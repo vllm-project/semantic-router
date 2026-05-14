@@ -263,6 +263,19 @@ func (r *Reconciler) validateAndUpdate(ctx context.Context, pool *v1alpha1.Intel
 	}
 	newConfig.ConfigSource = config.ConfigSourceKubernetes
 
+	// When staticConfig.ConfigSource is ConfigSourceKubernetes (the
+	// operator-mode default), the canonical bytes inherit that value
+	// and ParseYAMLBytes's call to validateConfigStructure early-returns
+	// before the per-family validators fire. Apply the embedding contract
+	// directly here so the K8s path holds CRDs to the same contract
+	// file-config holds files to. See td-040 for the broader gap this
+	// slice closes.
+	if err := config.ValidateEmbeddingContracts(newConfig); err != nil {
+		r.updatePoolStatus(ctx, pool, metav1.ConditionFalse, "ValidationFailed", err.Error())
+		r.updateRouteStatus(ctx, route, metav1.ConditionFalse, "ValidationFailed", err.Error())
+		return fmt.Errorf("embedding modality validation failed: %w", err)
+	}
+
 	// Call update callback
 	if r.onConfigUpdate != nil {
 		if err := r.onConfigUpdate(newConfig); err != nil {

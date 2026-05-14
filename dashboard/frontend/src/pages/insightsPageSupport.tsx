@@ -10,6 +10,7 @@ import type {
   InsightsRecord,
   Signal,
 } from './insightsPageTypes'
+import { buildProjectionTraceFields } from './insightsPageProjectionTrace'
 import {
   buildToolTraceFields,
   renderToolNamesCell,
@@ -321,6 +322,14 @@ export function buildInsightsRecordSections(
     sections.push({
       title: 'Routing Metadata',
       fields: routingMetadataFields,
+    })
+  }
+
+  const projectionTraceFields = buildProjectionTraceFields(record)
+  if (projectionTraceFields.length > 0) {
+    sections.push({
+      title: 'Projection trace',
+      fields: projectionTraceFields,
     })
   }
 

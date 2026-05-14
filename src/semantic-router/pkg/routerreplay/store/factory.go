@@ -15,45 +15,39 @@ func NewStorage(cfg *Config) (Storage, error) {
 		backend = "memory"
 	}
 
+	return newStorageBackend(backend, cfg)
+}
+
+func newStorageBackend(backend string, cfg *Config) (Storage, error) {
 	switch backend {
 	case "memory":
-		maxRecords := 200
-		if cfg.MaxBodyBytes > 0 {
-			maxRecords = cfg.MaxBodyBytes
-		}
-		return NewMemoryStore(maxRecords, cfg.TTLSeconds), nil
+		return NewMemoryStore(200, cfg.TTLSeconds), nil
 
 	case "redis":
 		if cfg.Redis == nil {
 			return nil, fmt.Errorf("redis config required when backend is 'redis'")
 		}
-		store, err := NewRedisStore(cfg.Redis, cfg.TTLSeconds, cfg.AsyncWrites)
-		if err != nil {
-			return nil, err
-		}
-		return store, nil
+		return NewRedisStore(cfg.Redis, cfg.TTLSeconds, cfg.AsyncWrites)
 
 	case "postgres":
 		if cfg.Postgres == nil {
 			return nil, fmt.Errorf("postgres config required when backend is 'postgres'")
 		}
-		store, err := NewPostgresStore(cfg.Postgres, cfg.TTLSeconds, cfg.AsyncWrites)
-		if err != nil {
-			return nil, err
-		}
-		return store, nil
+		return NewPostgresStore(cfg.Postgres, cfg.TTLSeconds, cfg.AsyncWrites)
 
 	case "milvus":
 		if cfg.Milvus == nil {
 			return nil, fmt.Errorf("milvus config required when backend is 'milvus'")
 		}
-		store, err := NewMilvusStore(cfg.Milvus, cfg.TTLSeconds, cfg.AsyncWrites)
-		if err != nil {
-			return nil, err
+		return NewMilvusStore(cfg.Milvus, cfg.TTLSeconds, cfg.AsyncWrites)
+
+	case "qdrant":
+		if cfg.Qdrant == nil {
+			return nil, fmt.Errorf("qdrant config required when backend is 'qdrant'")
 		}
-		return store, nil
+		return NewQdrantStore(cfg.Qdrant, cfg.TTLSeconds, cfg.AsyncWrites)
 
 	default:
-		return nil, fmt.Errorf("unknown storage backend: %s (supported: memory, redis, postgres, milvus)", backend)
+		return nil, fmt.Errorf("unknown storage backend: %s (supported: memory, redis, postgres, milvus, qdrant)", backend)
 	}
 }

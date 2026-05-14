@@ -38,6 +38,65 @@ export interface ToolTrace {
   steps?: ToolTraceStep[]
 }
 
+/** Router replay projection explainability payload (schema_version "1"). */
+export interface ProjectionTracePartitionContender {
+  name: string
+  raw_score: number
+  normalized_score?: number
+}
+
+export interface ProjectionTracePartition {
+  group_name: string
+  signal_type: string
+  semantics?: string
+  temperature?: number
+  contenders?: ProjectionTracePartitionContender[]
+  winner?: string
+  winner_score?: number
+  raw_winner_score?: number
+  margin?: number
+  default_used?: boolean
+}
+
+export interface ProjectionTraceOutputEval {
+  name: string
+  matched: boolean
+  boundary_distance: number
+}
+
+export interface ProjectionTraceMapping {
+  mapping_name: string
+  source_score: string
+  score_value: number
+  selected_output?: string
+  confidence?: number
+  boundary_distance?: number
+  outputs?: ProjectionTraceOutputEval[]
+}
+
+export interface ProjectionTraceScoreInput {
+  type: string
+  name?: string
+  kb?: string
+  metric?: string
+  weight: number
+  value: number
+  contribution: number
+}
+
+export interface ProjectionTraceScore {
+  name: string
+  total: number
+  inputs?: ProjectionTraceScoreInput[]
+}
+
+export interface ProjectionTrace {
+  schema_version: string
+  partitions?: ProjectionTracePartition[]
+  scores?: ProjectionTraceScore[]
+  mappings?: ProjectionTraceMapping[]
+}
+
 export interface InsightsRecord {
   id: string
   timestamp: string
@@ -54,6 +113,7 @@ export interface InsightsRecord {
   signals: Signal
   projections?: string[]
   projection_scores?: Record<string, number>
+  projection_trace?: ProjectionTrace
   signal_confidences?: Record<string, number>
   signal_values?: Record<string, number>
   tool_trace?: ToolTrace
