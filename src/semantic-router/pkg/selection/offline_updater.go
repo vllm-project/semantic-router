@@ -20,6 +20,7 @@ import (
 	"context"
 	"fmt"
 	"sort"
+	"strings"
 	"time"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
@@ -172,7 +173,7 @@ func (u *OfflineUpdater) getOrCreate(m map[string]*betaAccumulator, model string
 
 func (u *OfflineUpdater) recordWeight(rec OfflineDatasetRecord) float64 {
 	weight := 1.0
-	if rec.Outcome.FeedbackType != "" {
+	if strings.HasPrefix(rec.Outcome.FeedbackType, "implicit") {
 		weight = u.config.ImplicitFeedbackWeight
 		if rec.Outcome.FeedbackConfidence > 0 {
 			weight *= rec.Outcome.FeedbackConfidence

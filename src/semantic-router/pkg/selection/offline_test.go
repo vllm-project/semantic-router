@@ -368,6 +368,45 @@ func TestOfflineUpdater_ImplicitFeedbackWeight(t *testing.T) {
 	}
 }
 
+func TestOfflineUpdater_ExplicitFeedbackFullWeight(t *testing.T) {
+	cfg := DefaultOfflineUpdaterConfig()
+	cfg.ImplicitFeedbackWeight = 0.5
+	cfg.MinRecordsPerModel = 1
+	updater := NewOfflineUpdater(cfg)
+	now := time.Now()
+
+	dataset := &OfflineDataset{
+		Version:      1,
+		CreatedAt:    now,
+		WindowStart:  now.Add(-1 * time.Hour),
+		WindowEnd:    now,
+		SessionCount: 1,
+		Records: []OfflineDatasetRecord{
+			{
+				SessionID:       "s1",
+				SelectedModel:   "gpt-4o",
+				CandidateModels: []string{"gpt-4o"},
+				Outcome: OfflineOutcome{
+					Won:          boolPtr(true),
+					FeedbackType: "explicit",
+				},
+				Timestamp: now,
+			},
+		},
+	}
+
+	version, err := updater.Update(context.Background(), dataset, nil)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	gpt4o := version.Weights.Global["gpt-4o"]
+	// Explicit feedback should get full weight (1.0), so alpha = 1 + 1.0 = 2.0
+	if gpt4o.Distribution.Alpha != 2.0 {
+		t.Errorf("expected alpha=2.0 for explicit feedback, got %.1f", gpt4o.Distribution.Alpha)
+	}
+}
+
 func TestCompareVersions(t *testing.T) {
 	a := &PolicyVersion{
 		ID: "v1",
