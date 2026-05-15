@@ -87,6 +87,7 @@ Keep the numeric index unique within `docs/agent/plans/`.
 - [pl-0023-dashboard-dsl-natural-language-mode-loop.md](pl-0023-dashboard-dsl-natural-language-mode-loop.md)
 - [pl-0024-balance-recipe-simplification-loop.md](pl-0024-balance-recipe-simplification-loop.md)
 - [pl-0025-prototype-aware-embedding-backed-signal-scoring-loop.md](pl-0025-prototype-aware-embedding-backed-signal-scoring-loop.md)
+- [pl-0030-session-aware-model-switch-workstream.md](pl-0030-session-aware-model-switch-workstream.md)
 
 ## Completed Execution Plans
 

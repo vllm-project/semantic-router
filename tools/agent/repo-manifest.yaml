@@ -150,6 +150,7 @@ docs:
   - docs/agent/plans/pl-0027-router-runtime-composition-root-convergence-loop.md
   - docs/agent/plans/pl-0028-knowledge-base-seed-and-steady-state-convergence-loop.md
   - docs/agent/plans/pl-0029-control-plane-contract-boundary-ratchet.md
+  - docs/agent/plans/pl-0030-session-aware-model-switch-workstream.md
   - docs/agent/state-taxonomy-and-inventory.md
   - docs/agent/tech-debt-register.md
   - docs/agent/tech-debt/README.md
@@ -379,6 +380,9 @@ doc_governance:
     - path: docs/agent/plans/pl-0029-control-plane-contract-boundary-ratchet.md
       steward: agent-contract
       freshness: update at the start and end of each control-plane contract boundary ratchet loop and after each completed loop task
+    - path: docs/agent/plans/pl-0030-session-aware-model-switch-workstream.md
+      steward: router-core
+      freshness: update at the start and end of each session-aware offline weight update loop and after each completed loop task
     - path: docs/agent/state-taxonomy-and-inventory.md
       steward: agent-contract
       freshness: update when the runtime or dashboard state inventory, durability taxonomy, or persistence guidance changes materially
