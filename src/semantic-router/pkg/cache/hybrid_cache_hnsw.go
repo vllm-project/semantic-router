@@ -117,9 +117,12 @@ func (h *HybridCache) hybridLayerCandidates(entryPoint, layer int) []int {
 }
 
 func (h *HybridCache) connectHybridNodeLayers(node *HNSWNode, entryIndex int, embedding []float32, level, currNearest int) {
-	for lc := level; lc >= 0; lc-- {
+	for lc := min(level, h.hnswIndex.maxLayer); lc >= 0; lc-- {
 		neighbors := h.searchLayerHybrid(embedding, h.hnswIndex.efConstruction, lc, []int{currNearest})
 		h.linkHybridNeighbors(node, entryIndex, lc, h.selectNeighborsHybrid(neighbors, h.hybridNeighborLimit(lc)))
+		if len(neighbors) > 0 {
+			currNearest = neighbors[0]
+		}
 	}
 }
 
