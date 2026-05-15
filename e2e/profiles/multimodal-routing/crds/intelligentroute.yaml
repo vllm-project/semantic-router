@@ -15,7 +15,7 @@ spec:
     embeddings:
       - name: "identifier_document_imagery"
         queryModality: "image"
-        threshold: 0.70
+        threshold: 0.10
         aggregationMethod: "max"
         candidates:
           - "photograph of a passport page"
@@ -29,7 +29,7 @@ spec:
 
       - name: "code_or_terminal_imagery"
         queryModality: "image"
-        threshold: 0.70
+        threshold: 0.10
         aggregationMethod: "max"
         candidates:
           - "screenshot of source code in an editor"
@@ -43,7 +43,7 @@ spec:
 
       - name: "ambient_office_imagery"
         queryModality: "image"
-        threshold: 0.70
+        threshold: 0.10
         aggregationMethod: "max"
         candidates:
           - "photograph of a whiteboard with handwritten notes"
@@ -90,17 +90,6 @@ spec:
         conditions:
           - type: "embedding"
             name: "ambient_office_imagery"
-      modelRefs:
-        - model: "base-model"
-          loraName: "general-expert"
-          useReasoning: false
-
-    - name: "default_text_route"
-      priority: 1
-      description: "Default route for text-only requests where no image-modality signal fires"
-      signals:
-        operator: "OR"
-        conditions: []
       modelRefs:
         - model: "base-model"
           loraName: "general-expert"
