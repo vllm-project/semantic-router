@@ -269,7 +269,7 @@ func (c *Classifier) applyTopK(
 		return
 	}
 
-	slices.SortFunc(matches, func(a, b bandDistance) int {
+	slices.SortStableFunc(matches, func(a, b bandDistance) int {
 		if a.distance < b.distance {
 			return -1
 		}
