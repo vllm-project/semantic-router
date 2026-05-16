@@ -32,7 +32,7 @@ sidebar_position: 3
 ```
 用户查询 → 信号提取 → 投影协调 → 决策引擎 → 插件 + 模型分发 → 响应
               ↓                    ↓                         ↓                         ↓
-        14 类信号族           分区 / 打分 / 映射           布尔策略               专用模型
+        16 类信号族           分区 / 打分 / 映射           布尔策略               专用模型
 ```
 
 **优势**：
@@ -51,7 +51,7 @@ sidebar_position: 3
 | 信号族分组 | 智能侧面 |
 | ---------- | -------- |
 | **启发式**（`authz`、`context`、`keyword`、`language`、`structure`） | 快速的请求形态、区域与策略门禁 |
-| **学习型**（`complexity`、`domain`、`embedding`、`modality`、`fact-check`、`jailbreak`、`pii`、`preference`、`user-feedback`） | 语义、安全、模态与偏好理解 |
+| **学习型**（ `complexity`、`domain`、`embedding`、`kb`、`modality`、`fact-check`、`jailbreak`、`pii`、`preference`、`reask`、`user-feedback`） | 语义、安全、模态与偏好理解 |
 
 **集体收益**：多信号组合比单一信号理解更丰富。
 

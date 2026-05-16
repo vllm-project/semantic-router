@@ -145,9 +145,10 @@ func TestValkeyCacheIntegration_ErrorScenarios(t *testing.T) {
 			t.Skipf("Failed to initialize BERT model: %v", err)
 		}
 
+		host, port := valkeyIntegrationAddr()
 		valkeyConfig := &config.ValkeyConfig{}
-		valkeyConfig.Connection.Host = "localhost"
-		valkeyConfig.Connection.Port = 6379
+		valkeyConfig.Connection.Host = host
+		valkeyConfig.Connection.Port = port
 
 		valkeyConfig.Index.Name = "nonexistent_idx"
 		valkeyConfig.Index.Prefix = "doc:"

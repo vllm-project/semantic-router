@@ -55,6 +55,7 @@ func (c *Classifier) getAllSignalTypes() map[string]bool {
 	collectSignalKeys(allSignals, config.SignalTypePII, c.Config.PIIRules, func(r config.PIIRule) string { return r.Name })
 	collectSignalKeys(allSignals, config.SignalTypeKB, c.Config.KBRules, func(r config.KBSignalRule) string { return r.Name })
 	collectSignalKeys(allSignals, config.SignalTypeConversation, c.Config.ConversationRules, func(r config.ConversationRule) string { return r.Name })
+	collectSignalKeys(allSignals, config.SignalTypeSessionMetric, c.Config.SessionMetricRules, func(r config.SessionMetricRule) string { return r.Name })
 	for _, mapping := range c.Config.Projections.Mappings {
 		for _, output := range mapping.Outputs {
 			allSignals[strings.ToLower(config.SignalTypeProjection+":"+output.Name)] = true
@@ -73,29 +74,30 @@ type SignalMetrics struct {
 
 // SignalResults contains all evaluated signal results
 type SignalResults struct {
-	MatchedKeywordRules      []string
-	MatchedKeywords          []string // The actual keywords that matched (not rule names)
-	MatchedEmbeddingRules    []string
-	MatchedDomainRules       []string
-	MatchedFactCheckRules    []string // "needs_fact_check" or "no_fact_check_needed"
-	MatchedUserFeedbackRules []string // "satisfied", "need_clarification", "wrong_answer", "want_different"
-	MatchedReaskRules        []string // History-aware repeated-question dissatisfaction signals
-	MatchedPreferenceRules   []string // Route preference names matched via external LLM
-	MatchedLanguageRules     []string // Language codes: "en", "es", "zh", "fr", etc.
-	MatchedContextRules      []string // Matched context rule names (e.g. "low_token_count")
-	TokenCount               int      // Total token count
-	MatchedStructureRules    []string // Matched structure rule names (e.g. "many_questions")
-	MatchedComplexityRules   []string // Matched complexity rules with difficulty level (e.g. "code_complexity:hard")
-	MatchedModalityRules     []string // Matched modality: "AR", "DIFFUSION", or "BOTH"
-	MatchedAuthzRules        []string // Matched authz role names for user-level RBAC routing
-	MatchedJailbreakRules    []string // Matched jailbreak rule names (confidence >= threshold)
-	MatchedPIIRules          []string // Matched PII rule names (denied PII types detected)
-	MatchedKBRules           []string
-	KBClassifierResults      map[string]*KBClassifyResult
-	KBMetricValues           map[string]float64
-	MatchedConversationRules []string
-	MatchedProjectionRules   []string // Matched derived routing outputs from routing.projections.mappings
-	ProjectionScores         map[string]float64
+	MatchedKeywordRules       []string
+	MatchedKeywords           []string // The actual keywords that matched (not rule names)
+	MatchedEmbeddingRules     []string
+	MatchedDomainRules        []string
+	MatchedFactCheckRules     []string // "needs_fact_check" or "no_fact_check_needed"
+	MatchedUserFeedbackRules  []string // "satisfied", "need_clarification", "wrong_answer", "want_different"
+	MatchedReaskRules         []string // History-aware repeated-question dissatisfaction signals
+	MatchedPreferenceRules    []string // Route preference names matched via external LLM
+	MatchedLanguageRules      []string // Language codes: "en", "es", "zh", "fr", etc.
+	MatchedContextRules       []string // Matched context rule names (e.g. "low_token_count")
+	TokenCount                int      // Total token count
+	MatchedStructureRules     []string // Matched structure rule names (e.g. "many_questions")
+	MatchedComplexityRules    []string // Matched complexity rules with difficulty level (e.g. "code_complexity:hard")
+	MatchedModalityRules      []string // Matched modality: "AR", "DIFFUSION", or "BOTH"
+	MatchedAuthzRules         []string // Matched authz role names for user-level RBAC routing
+	MatchedJailbreakRules     []string // Matched jailbreak rule names (confidence >= threshold)
+	MatchedPIIRules           []string // Matched PII rule names (denied PII types detected)
+	MatchedKBRules            []string
+	KBClassifierResults       map[string]*KBClassifyResult
+	KBMetricValues            map[string]float64
+	MatchedConversationRules  []string
+	MatchedSessionMetricRules []string
+	MatchedProjectionRules    []string // Matched derived routing outputs from routing.projections.mappings
+	ProjectionScores          map[string]float64
 
 	// Jailbreak detection metadata (populated when jailbreak signal is evaluated)
 	JailbreakDetected   bool    // Whether any jailbreak was detected (across all rules)
@@ -205,7 +207,7 @@ func isSignalTypeUsed(usedSignals map[string]bool, signalType string) bool {
 // EvaluateAllSignals evaluates all signal types and returns SignalResults
 // This is the new method that includes fact_check signals
 func (c *Classifier) EvaluateAllSignals(text string) *SignalResults {
-	return c.EvaluateAllSignalsWithContext(text, text, text, nil, nil, false, false, "", nil, ConversationFacts{})
+	return c.EvaluateAllSignalsWithContext(text, text, text, nil, nil, false, false, "", nil, ConversationFacts{}, nil)
 }
 
 // EvaluateAllSignalsWithHeaders evaluates all signal types including the authz signal.
@@ -222,72 +224,97 @@ func (c *Classifier) EvaluateAllSignals(text string) *SignalResults {
 // Optional trailing arguments (positional after imageURL):
 //   - uncompressedText (string): original text before prompt compression
 //   - skipCompressionSignals (map[string]bool): signal types that must use uncompressedText
+//   - convFacts (ConversationFacts): optional conversation facts for conversation signals
+//   - sessionCtx (*SignalSessionContext): optional session/lookup runtime snapshots
 func (c *Classifier) EvaluateAllSignalsWithHeaders(text string, contextText string, currentUserText string, priorUserMessages []string, nonUserMessages []string, hasPriorAssistantReply bool, headers map[string]string, forceEvaluateAll bool, imageURL string, extra ...interface{}) (*SignalResults, error) {
-	var uncompressedText string
-	var skipCompressionSignals map[string]bool
-	var convFacts ConversationFacts
-	if len(extra) >= 2 {
-		if s, ok := extra[0].(string); ok {
-			uncompressedText = s
-		}
-		if m, ok := extra[1].(map[string]bool); ok {
-			skipCompressionSignals = m
-		}
+	opts := parseEvaluateSignalsExtra(extra)
+	var img []string
+	if strings.TrimSpace(imageURL) != "" {
+		img = []string{imageURL}
+	}
+	results := c.EvaluateAllSignalsWithContext(text, contextText, currentUserText, priorUserMessages, nonUserMessages, hasPriorAssistantReply, forceEvaluateAll, opts.uncompressedText, opts.skipCompressionSignals, opts.convFacts, opts.sessionCtx, img...)
+	if err := c.appendAuthzFromHeaders(results, headers, forceEvaluateAll); err != nil {
+		return nil, err
+	}
+	return results, nil
+}
+
+// evaluateSignalsExtra mirrors optional trailing args after imageURL for EvaluateAllSignalsWithHeaders.
+type evaluateSignalsExtra struct {
+	uncompressedText       string
+	skipCompressionSignals map[string]bool
+	convFacts              ConversationFacts
+	sessionCtx             *SignalSessionContext
+}
+
+func parseEvaluateSignalsExtra(extra []interface{}) evaluateSignalsExtra {
+	var e evaluateSignalsExtra
+	if len(extra) < 2 {
+		return e
+	}
+	if s, ok := extra[0].(string); ok {
+		e.uncompressedText = s
+	}
+	if m, ok := extra[1].(map[string]bool); ok {
+		e.skipCompressionSignals = m
 	}
 	if len(extra) >= 3 {
 		if cf, ok := extra[2].(ConversationFacts); ok {
-			convFacts = cf
+			e.convFacts = cf
 		}
 	}
-	results := c.EvaluateAllSignalsWithContext(text, contextText, currentUserText, priorUserMessages, nonUserMessages, hasPriorAssistantReply, forceEvaluateAll, uncompressedText, skipCompressionSignals, convFacts, imageURL)
+	if len(extra) >= 4 {
+		if sc, ok := extra[3].(*SignalSessionContext); ok {
+			e.sessionCtx = sc
+		}
+	}
+	return e
+}
 
-	// Evaluate authz signal if role bindings are configured and the signal type is used
+func (c *Classifier) appendAuthzFromHeaders(results *SignalResults, headers map[string]string, forceEvaluateAll bool) error {
 	usedSignals := c.getUsedSignals()
 	if forceEvaluateAll {
 		usedSignals = c.getAllSignalTypes()
 	}
-
-	if isSignalTypeUsed(usedSignals, config.SignalTypeAuthz) && c.authzClassifier != nil {
-		start := time.Now()
-		userID := headers[c.authzUserIDHeader]
-		userGroups := ParseUserGroups(headers[c.authzUserGroupsHeader])
-
-		authzResult, err := c.authzClassifier.Classify(userID, userGroups)
-		authzResult, err = applyAuthzFailOpenOnClassifyError(c.authzFailOpen, userID, authzResult, err)
-		elapsed := time.Since(start)
-		latencySeconds := elapsed.Seconds()
-
-		// Record metrics
-		results.Metrics.Authz.ExecutionTimeMs = float64(elapsed.Microseconds()) / 1000.0
-		results.Metrics.Authz.Confidence = 1.0 // Rule-based, always 1.0
-
-		if err != nil {
-			// Do NOT swallow authz errors — propagate to caller.
-			// A missing user identity header when role_bindings are configured is a hard failure,
-			// not a signal that "didn't fire." Silent bypass is not allowed.
-			logging.Errorf("[Authz Signal] classification failed: %v", err)
-			metrics.RecordSignalExtraction(config.SignalTypeAuthz, "error", latencySeconds)
-			return nil, fmt.Errorf("authz signal evaluation failed: %w", err)
-		}
-
-		for _, ruleName := range authzResult.MatchedRules {
-			metrics.RecordSignalExtraction(config.SignalTypeAuthz, ruleName, latencySeconds)
-			metrics.RecordSignalMatch(config.SignalTypeAuthz, ruleName)
-		}
-		results.MatchedAuthzRules = authzResult.MatchedRules
-
-		logging.Debugf("[Signal Computation] Authz signal evaluation completed in %v", elapsed)
-	} else if !isSignalTypeUsed(usedSignals, config.SignalTypeAuthz) {
+	if !isSignalTypeUsed(usedSignals, config.SignalTypeAuthz) {
 		logging.Debugf("[Signal Computation] Authz signal not used in any decision, skipping evaluation")
+		return nil
+	}
+	if c.authzClassifier == nil {
+		return nil
 	}
 
-	return results, nil
+	start := time.Now()
+	userID := headers[c.authzUserIDHeader]
+	userGroups := ParseUserGroups(headers[c.authzUserGroupsHeader])
+
+	authzResult, err := c.authzClassifier.Classify(userID, userGroups)
+	authzResult, err = applyAuthzFailOpenOnClassifyError(c.authzFailOpen, userID, authzResult, err)
+	elapsed := time.Since(start)
+	latencySeconds := elapsed.Seconds()
+
+	results.Metrics.Authz.ExecutionTimeMs = float64(elapsed.Microseconds()) / 1000.0
+	results.Metrics.Authz.Confidence = 1.0
+
+	if err != nil {
+		logging.Errorf("[Authz Signal] classification failed: %v", err)
+		metrics.RecordSignalExtraction(config.SignalTypeAuthz, "error", latencySeconds)
+		return fmt.Errorf("authz signal evaluation failed: %w", err)
+	}
+
+	for _, ruleName := range authzResult.MatchedRules {
+		metrics.RecordSignalExtraction(config.SignalTypeAuthz, ruleName, latencySeconds)
+		metrics.RecordSignalMatch(config.SignalTypeAuthz, ruleName)
+	}
+	results.MatchedAuthzRules = authzResult.MatchedRules
+	logging.Debugf("[Signal Computation] Authz signal evaluation completed in %v", elapsed)
+	return nil
 }
 
 // EvaluateAllSignalsWithForceOption evaluates signals with option to force evaluate all
 // forceEvaluateAll: if true, evaluates all configured signals regardless of decision usage
 func (c *Classifier) EvaluateAllSignalsWithForceOption(text string, forceEvaluateAll bool) *SignalResults {
-	return c.EvaluateAllSignalsWithContext(text, text, text, nil, nil, false, forceEvaluateAll, "", nil, ConversationFacts{})
+	return c.EvaluateAllSignalsWithContext(text, text, text, nil, nil, false, forceEvaluateAll, "", nil, ConversationFacts{}, nil)
 }
 
 // EvaluateDecisionWithEngine evaluates all decisions using pre-computed signals
@@ -308,12 +335,13 @@ func (c *Classifier) evaluateDecisionInternal(signals *SignalResults, trace bool
 		return nil, nil, fmt.Errorf("no decisions configured")
 	}
 
-	logging.Debugf("Signal evaluation results: keyword=%v, embedding=%v, domain=%v, fact_check=%v, user_feedback=%v, reask=%v, preference=%v, language=%v, context=%v, structure=%v, complexity=%v, modality=%v, authz=%v, jailbreak=%v, pii=%v, kb=%v",
+	logging.Debugf("Signal evaluation results: keyword=%v, embedding=%v, domain=%v, fact_check=%v, user_feedback=%v, reask=%v, preference=%v, language=%v, context=%v, structure=%v, complexity=%v, modality=%v, authz=%v, jailbreak=%v, pii=%v, kb=%v, session_metric=%v",
 		signals.MatchedKeywordRules, signals.MatchedEmbeddingRules, signals.MatchedDomainRules,
 		signals.MatchedFactCheckRules, signals.MatchedUserFeedbackRules, signals.MatchedReaskRules, signals.MatchedPreferenceRules,
 		signals.MatchedLanguageRules, signals.MatchedContextRules, signals.MatchedStructureRules,
 		signals.MatchedComplexityRules, signals.MatchedModalityRules, signals.MatchedAuthzRules,
-		signals.MatchedJailbreakRules, signals.MatchedPIIRules, signals.MatchedKBRules)
+		signals.MatchedJailbreakRules, signals.MatchedPIIRules, signals.MatchedKBRules,
+		signals.MatchedSessionMetricRules)
 
 	engine := decision.NewDecisionEngine(
 		c.Config.KeywordRules,
@@ -324,25 +352,26 @@ func (c *Classifier) evaluateDecisionInternal(signals *SignalResults, trace bool
 	)
 
 	sm := &decision.SignalMatches{
-		KeywordRules:      signals.MatchedKeywordRules,
-		EmbeddingRules:    signals.MatchedEmbeddingRules,
-		DomainRules:       signals.MatchedDomainRules,
-		FactCheckRules:    signals.MatchedFactCheckRules,
-		UserFeedbackRules: signals.MatchedUserFeedbackRules,
-		ReaskRules:        signals.MatchedReaskRules,
-		PreferenceRules:   signals.MatchedPreferenceRules,
-		LanguageRules:     signals.MatchedLanguageRules,
-		ContextRules:      signals.MatchedContextRules,
-		StructureRules:    signals.MatchedStructureRules,
-		ComplexityRules:   signals.MatchedComplexityRules,
-		ModalityRules:     signals.MatchedModalityRules,
-		SignalConfidences: signals.SignalConfidences,
-		AuthzRules:        signals.MatchedAuthzRules,
-		JailbreakRules:    signals.MatchedJailbreakRules,
-		PIIRules:          signals.MatchedPIIRules,
-		KBRules:           signals.MatchedKBRules,
-		ConversationRules: signals.MatchedConversationRules,
-		ProjectionRules:   signals.MatchedProjectionRules,
+		KeywordRules:       signals.MatchedKeywordRules,
+		EmbeddingRules:     signals.MatchedEmbeddingRules,
+		DomainRules:        signals.MatchedDomainRules,
+		FactCheckRules:     signals.MatchedFactCheckRules,
+		UserFeedbackRules:  signals.MatchedUserFeedbackRules,
+		ReaskRules:         signals.MatchedReaskRules,
+		PreferenceRules:    signals.MatchedPreferenceRules,
+		LanguageRules:      signals.MatchedLanguageRules,
+		ContextRules:       signals.MatchedContextRules,
+		StructureRules:     signals.MatchedStructureRules,
+		ComplexityRules:    signals.MatchedComplexityRules,
+		ModalityRules:      signals.MatchedModalityRules,
+		SignalConfidences:  signals.SignalConfidences,
+		AuthzRules:         signals.MatchedAuthzRules,
+		JailbreakRules:     signals.MatchedJailbreakRules,
+		PIIRules:           signals.MatchedPIIRules,
+		KBRules:            signals.MatchedKBRules,
+		ConversationRules:  signals.MatchedConversationRules,
+		SessionMetricRules: signals.MatchedSessionMetricRules,
+		ProjectionRules:    signals.MatchedProjectionRules,
 	}
 
 	var result *decision.DecisionResult

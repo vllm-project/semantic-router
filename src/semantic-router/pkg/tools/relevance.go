@@ -14,6 +14,20 @@ import (
 
 // FilterAndRankTools applies advanced filtering and ranking to tool candidates.
 func FilterAndRankTools(query string, candidates []ToolSimilarity, topK int, advanced *config.AdvancedToolFilteringConfig, selectedCategory string) []openai.ChatCompletionToolParam {
+	return FilterAndRankToolsWithConversation(query, candidates, topK, advanced, selectedCategory, nil, 0)
+}
+
+// FilterAndRankToolsWithConversation is like FilterAndRankTools but supplies assistant tool-call
+// history and decision confidence for hybrid_history retrieval.
+func FilterAndRankToolsWithConversation(
+	query string,
+	candidates []ToolSimilarity,
+	topK int,
+	advanced *config.AdvancedToolFilteringConfig,
+	selectedCategory string,
+	toolHistory []string,
+	decisionConfidence float64,
+) []openai.ChatCompletionToolParam {
 	if len(candidates) == 0 {
 		return []openai.ChatCompletionToolParam{}
 	}
@@ -24,68 +38,95 @@ func FilterAndRankTools(query string, candidates []ToolSimilarity, topK int, adv
 	filtered := applyAllowBlockFilters(candidates, advanced.AllowTools, advanced.BlockTools)
 	filtered = applyCategoryFilter(filtered, advanced.UseCategoryFilter, selectedCategory)
 
+	if config.IsHybridHistoryRetrieval(advanced) {
+		return filterAndRankHybridHistory(query, filtered, topK, advanced, selectedCategory, toolHistory, decisionConfidence)
+	}
+	return filterAndRankWeightedLexical(query, filtered, topK, advanced, selectedCategory)
+}
+
+func filterAndRankWeightedLexical(query string, filtered []ToolSimilarity, topK int, advanced *config.AdvancedToolFilteringConfig, selectedCategory string) []openai.ChatCompletionToolParam {
 	queryTokens := tokenize(query)
 	querySet := tokenSet(queryTokens)
 	queryTokenCount := len(queryTokens)
 
 	weights := resolveWeights(advanced.Weights)
 	weightSum := weights.embed + weights.lexical + weights.tag + weights.name + weights.category
-	minOverlap := 0
-	if advanced.MinLexicalOverlap != nil {
-		minOverlap = *advanced.MinLexicalOverlap
-	}
-
-	minCombined := float32(0)
-	if advanced.MinCombinedScore != nil {
-		minCombined = *advanced.MinCombinedScore
-	}
+	minOverlap, minCombined := minLexicalOverlapAndMinCombined(advanced)
 
 	scored := make([]scoredCandidate, 0, len(filtered))
 	for _, candidate := range filtered {
-		nameTokens := tokenize(candidate.Entry.Tool.Function.Name)
-		descriptionTokens := tokenize(candidate.Entry.Description)
-		categoryTokens := tokenize(candidate.Entry.Category)
-		tagTokens := collectTagTokens(candidate.Entry.Tags)
-
-		lexicalTokens := make([]string, 0, len(nameTokens)+len(descriptionTokens)+len(categoryTokens))
-		lexicalTokens = append(lexicalTokens, nameTokens...)
-		lexicalTokens = append(lexicalTokens, descriptionTokens...)
-		lexicalTokens = append(lexicalTokens, categoryTokens...)
-
-		lexicalOverlap := countOverlap(querySet, lexicalTokens)
-		if minOverlap > 0 && lexicalOverlap < minOverlap {
-			continue
+		if combined, ok := weightedCandidateCombinedScore(
+			candidate, querySet, queryTokenCount, selectedCategory, weights, weightSum, minOverlap, minCombined,
+		); ok {
+			scored = append(scored, scoredCandidate{ToolSimilarity: candidate, CombinedScore: combined})
 		}
-
-		lexicalScore := scoreOverlap(queryTokenCount, lexicalOverlap)
-		tagScore := scoreOverlap(len(tagTokens), countOverlap(querySet, tagTokens))
-		nameScore := nameMatchScore(nameTokens, querySet)
-		categoryScore := categoryMatchScore(selectedCategory, candidate.Entry.Category)
-		similarityScore := clamp01(candidate.Similarity)
-
-		combinedScore := float32(0)
-		if weightSum > 0 {
-			combinedScore = (weights.embed*similarityScore +
-				weights.lexical*lexicalScore +
-				weights.tag*tagScore +
-				weights.name*nameScore +
-				weights.category*categoryScore) / weightSum
-		}
-
-		if combinedScore < minCombined {
-			continue
-		}
-
-		scored = append(scored, scoredCandidate{
-			ToolSimilarity: candidate,
-			CombinedScore:  combinedScore,
-		})
 	}
 
 	if len(scored) == 0 {
 		return []openai.ChatCompletionToolParam{}
 	}
 
+	sortScoredCandidatesByCombinedThenSimilarity(scored)
+
+	return topKToolsFromScored(scored, topK)
+}
+
+func minLexicalOverlapAndMinCombined(advanced *config.AdvancedToolFilteringConfig) (minOverlap int, minCombined float32) {
+	if advanced.MinLexicalOverlap != nil {
+		minOverlap = *advanced.MinLexicalOverlap
+	}
+	if advanced.MinCombinedScore != nil {
+		minCombined = *advanced.MinCombinedScore
+	}
+	return minOverlap, minCombined
+}
+
+func weightedCandidateCombinedScore(
+	candidate ToolSimilarity,
+	querySet map[string]struct{},
+	queryTokenCount int,
+	selectedCategory string,
+	weights resolvedWeights,
+	weightSum float32,
+	minOverlap int,
+	minCombined float32,
+) (float32, bool) {
+	nameTokens := tokenize(candidate.Entry.Tool.Function.Name)
+	descriptionTokens := tokenize(candidate.Entry.Description)
+	categoryTokens := tokenize(candidate.Entry.Category)
+	tagTokens := collectTagTokens(candidate.Entry.Tags)
+
+	lexicalTokens := make([]string, 0, len(nameTokens)+len(descriptionTokens)+len(categoryTokens))
+	lexicalTokens = append(lexicalTokens, nameTokens...)
+	lexicalTokens = append(lexicalTokens, descriptionTokens...)
+	lexicalTokens = append(lexicalTokens, categoryTokens...)
+
+	lexicalOverlap := countOverlap(querySet, lexicalTokens)
+	if minOverlap > 0 && lexicalOverlap < minOverlap {
+		return 0, false
+	}
+
+	lexicalScore := scoreOverlap(queryTokenCount, lexicalOverlap)
+	tagScore := scoreOverlap(len(tagTokens), countOverlap(querySet, tagTokens))
+	nameScore := nameMatchScore(nameTokens, querySet)
+	categoryScore := categoryMatchScore(selectedCategory, candidate.Entry.Category)
+	similarityScore := clamp01(candidate.Similarity)
+
+	var combined float32
+	if weightSum > 0 {
+		combined = (weights.embed*similarityScore +
+			weights.lexical*lexicalScore +
+			weights.tag*tagScore +
+			weights.name*nameScore +
+			weights.category*categoryScore) / weightSum
+	}
+	if combined < minCombined {
+		return 0, false
+	}
+	return combined, true
+}
+
+func sortScoredCandidatesByCombinedThenSimilarity(scored []scoredCandidate) {
 	sort.Slice(scored, func(i, j int) bool {
 		if scored[i].CombinedScore == scored[j].CombinedScore {
 			if scored[i].Similarity == scored[j].Similarity {
@@ -95,18 +136,18 @@ func FilterAndRankTools(query string, candidates []ToolSimilarity, topK int, adv
 		}
 		return scored[i].CombinedScore > scored[j].CombinedScore
 	})
+}
 
+func topKToolsFromScored(scored []scoredCandidate, topK int) []openai.ChatCompletionToolParam {
 	limit := topK
 	if limit <= 0 || limit > len(scored) {
 		limit = len(scored)
 	}
-
-	selected := make([]openai.ChatCompletionToolParam, 0, limit)
+	out := make([]openai.ChatCompletionToolParam, 0, limit)
 	for i := 0; i < limit; i++ {
-		selected = append(selected, scored[i].Entry.Tool)
+		out = append(out, scored[i].Entry.Tool)
 	}
-
-	return selected
+	return out
 }
 
 type scoredCandidate struct {

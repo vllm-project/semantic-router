@@ -17,6 +17,26 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 )
 
+// valkeyIntegrationAddr returns the Valkey host/port for integration tests,
+// honoring VALKEY_HOST / VALKEY_PORT env vars and falling back to localhost:6379.
+// In CI, VALKEY_PORT is set to 6380 because Redis Stack occupies 6379; connecting
+// to 6379 would hit RediSearch (which also registers a module named "search"),
+// not valkey-search.
+func valkeyIntegrationAddr() (string, int) {
+	host := "localhost"
+	port := 6379
+
+	if v := os.Getenv("VALKEY_HOST"); v != "" {
+		host = v
+	}
+	if v := os.Getenv("VALKEY_PORT"); v != "" {
+		if p, err := strconv.Atoi(v); err == nil {
+			port = p
+		}
+	}
+	return host, port
+}
+
 // These tests require:
 //  1. A running Valkey instance with search module.
 //     Default: localhost:6379 (standalone / local-only).
@@ -36,18 +56,7 @@ func setupValkeyCacheIntegration(t *testing.T) *ValkeyCache {
 		t.Skipf("Failed to initialize BERT model: %v", err)
 	}
 
-	// Get Valkey connection details from environment or use defaults
-	valkeyHost := "localhost"
-	valkeyPort := 6379
-
-	if host := os.Getenv("VALKEY_HOST"); host != "" {
-		valkeyHost = host
-	}
-	if portStr := os.Getenv("VALKEY_PORT"); portStr != "" {
-		if port, err := strconv.Atoi(portStr); err == nil {
-			valkeyPort = port
-		}
-	}
+	valkeyHost, valkeyPort := valkeyIntegrationAddr()
 
 	// Create Valkey config
 	valkeyConfig := &config.ValkeyConfig{}
@@ -406,9 +415,10 @@ func TestValkeyCacheIntegration_IsEnabled(t *testing.T) {
 	assert.True(t, cache.IsEnabled(), "Cache should be enabled")
 
 	// Test disabled cache
+	host, port := valkeyIntegrationAddr()
 	valkeyConfig := &config.ValkeyConfig{}
-	valkeyConfig.Connection.Host = "localhost"
-	valkeyConfig.Connection.Port = 6379
+	valkeyConfig.Connection.Host = host
+	valkeyConfig.Connection.Port = port
 
 	disabledCache, err := NewValkeyCache(ValkeyCacheOptions{
 		Enabled: false,
@@ -421,9 +431,10 @@ func TestValkeyCacheIntegration_IsEnabled(t *testing.T) {
 }
 
 func TestValkeyCacheIntegration_DisabledCache(t *testing.T) {
+	host, port := valkeyIntegrationAddr()
 	valkeyConfig := &config.ValkeyConfig{}
-	valkeyConfig.Connection.Host = "localhost"
-	valkeyConfig.Connection.Port = 6379
+	valkeyConfig.Connection.Host = host
+	valkeyConfig.Connection.Port = port
 
 	cache, err := NewValkeyCache(ValkeyCacheOptions{
 		Enabled: false,
@@ -471,9 +482,10 @@ func TestValkeyCacheIntegration_FLATIndexType(t *testing.T) {
 		t.Skipf("Failed to initialize BERT model: %v", err)
 	}
 
+	host, port := valkeyIntegrationAddr()
 	valkeyConfig := &config.ValkeyConfig{}
-	valkeyConfig.Connection.Host = "localhost"
-	valkeyConfig.Connection.Port = 6379
+	valkeyConfig.Connection.Host = host
+	valkeyConfig.Connection.Port = port
 	valkeyConfig.Connection.Database = 0
 
 	valkeyConfig.Index.Name = fmt.Sprintf("test_flat_idx_%d", time.Now().UnixNano())
@@ -603,9 +615,10 @@ func TestValkeyCacheIntegration_L2MetricType(t *testing.T) {
 		t.Skipf("Failed to initialize BERT model: %v", err)
 	}
 
+	host, port := valkeyIntegrationAddr()
 	valkeyConfig := &config.ValkeyConfig{}
-	valkeyConfig.Connection.Host = "localhost"
-	valkeyConfig.Connection.Port = 6379
+	valkeyConfig.Connection.Host = host
+	valkeyConfig.Connection.Port = port
 	valkeyConfig.Connection.Database = 0
 
 	valkeyConfig.Index.Name = fmt.Sprintf("test_l2_idx_%d", time.Now().UnixNano())
@@ -652,9 +665,10 @@ func TestValkeyCacheIntegration_IPMetricType(t *testing.T) {
 		t.Skipf("Failed to initialize BERT model: %v", err)
 	}
 
+	host, port := valkeyIntegrationAddr()
 	valkeyConfig := &config.ValkeyConfig{}
-	valkeyConfig.Connection.Host = "localhost"
-	valkeyConfig.Connection.Port = 6379
+	valkeyConfig.Connection.Host = host
+	valkeyConfig.Connection.Port = port
 	valkeyConfig.Connection.Database = 0
 
 	valkeyConfig.Index.Name = fmt.Sprintf("test_ip_idx_%d", time.Now().UnixNano())

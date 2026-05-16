@@ -289,6 +289,41 @@ func (d *decompiler) decompileSignals() {
 		d.write("}\n\n")
 	}
 
+	for _, m := range d.cfg.SessionMetricRules {
+		d.write("SIGNAL session_metric %s {\n", quoteName(m.Name))
+		kind := strings.ToLower(strings.TrimSpace(m.Kind))
+		if kind == "" {
+			if strings.TrimSpace(m.Table) != "" {
+				kind = "lookup"
+			} else {
+				kind = "state"
+			}
+		}
+		d.write("  kind: %q\n", kind)
+		if kind == "state" {
+			if m.State != "" {
+				d.write("  state: %q\n", m.State)
+			}
+			if m.Normalize != "" {
+				d.write("  normalize: %q\n", m.Normalize)
+			}
+			if m.Min != nil {
+				d.write("  min: %v\n", *m.Min)
+			}
+			if m.Max != nil {
+				d.write("  max: %v\n", *m.Max)
+			}
+		} else {
+			if m.Table != "" {
+				d.write("  table: %q\n", m.Table)
+			}
+			if len(m.Key) > 0 {
+				d.write("  key: %s\n", formatStringArray(m.Key))
+			}
+		}
+		d.write("}\n\n")
+	}
+
 	for _, partition := range d.cfg.Projections.Partitions {
 		d.write("PROJECTION partition %s {\n", quoteName(partition.Name))
 		if partition.Semantics != "" {
@@ -1329,6 +1364,45 @@ func (d *decompiler) kbSignalToDecl(rule *config.KBSignalRule) *SignalDecl {
 		fields["match"] = StringValue{V: rule.Match}
 	}
 	return &SignalDecl{SignalType: "kb", Name: rule.Name, Fields: fields}
+}
+
+func (d *decompiler) sessionMetricRuleToDecl(rule *config.SessionMetricRule) *SignalDecl {
+	fields := make(map[string]Value)
+	kind := strings.ToLower(strings.TrimSpace(rule.Kind))
+	if kind == "" {
+		if strings.TrimSpace(rule.Table) != "" {
+			kind = "lookup"
+		} else {
+			kind = "state"
+		}
+	}
+	fields["kind"] = StringValue{V: kind}
+	if kind == "state" {
+		if rule.State != "" {
+			fields["state"] = StringValue{V: rule.State}
+		}
+		if rule.Normalize != "" {
+			fields["normalize"] = StringValue{V: rule.Normalize}
+		}
+		if rule.Min != nil {
+			fields["min"] = FloatValue{V: *rule.Min}
+		}
+		if rule.Max != nil {
+			fields["max"] = FloatValue{V: *rule.Max}
+		}
+	} else {
+		if rule.Table != "" {
+			fields["table"] = StringValue{V: rule.Table}
+		}
+		items := make([]Value, 0, len(rule.Key))
+		for _, k := range rule.Key {
+			items = append(items, StringValue{V: k})
+		}
+		if len(items) > 0 {
+			fields["key"] = ArrayValue{Items: items}
+		}
+	}
+	return &SignalDecl{SignalType: "session_metric", Name: rule.Name, Fields: fields}
 }
 
 func (d *decompiler) decisionToRoute(dec *config.Decision) *RouteDecl {

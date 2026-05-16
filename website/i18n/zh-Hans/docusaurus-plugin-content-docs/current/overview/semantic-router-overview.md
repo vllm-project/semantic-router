@@ -45,12 +45,12 @@ sidebar_position: 2
 
 ### 1. 信号提取
 
-路由器从每次请求中提取 **14 类维护中的信号族**：
+路由器从每次请求中提取 **16 类维护中的信号族**：
 
 | 信号族分组 | 族 | 示例作用 |
 | ---------- | -- | -------- |
 | **启发式** | `authz`、`context`、`keyword`、`language`、`structure` | 低成本策略、请求形态与区域门禁 |
-| **学习型** | `complexity`、`domain`、`embedding`、`modality`、`fact-check`、`jailbreak`、`pii`、`preference`、`user-feedback` | 语义、安全与响应质量理解 |
+| **学习型** | `complexity`、`domain`、`embedding`、`kb`、`modality`、`fact-check`、`jailbreak`、`pii`、`preference`、`reask`、`user-feedback` | 语义、安全与响应质量理解 |
 
 ### 2. 投影协调
 

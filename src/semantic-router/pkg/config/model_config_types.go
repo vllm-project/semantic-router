@@ -106,6 +106,12 @@ type PromptCompressionConfig struct {
 	PositionWeight float64  `yaml:"position_weight,omitempty"`
 	TFIDFWeight    float64  `yaml:"tfidf_weight,omitempty"`
 	PositionDepth  float64  `yaml:"position_depth,omitempty"`
+	// MaxEvaluationChars is a hard safety limit applied to evaluationText before
+	// any signal processing. Unlike prompt_compression (which is quality-aware and
+	// optional), this truncation always runs when set to a positive value.
+	// Default 0 means no limit. Recommended production value: 8192 (~2K tokens).
+	// Set to -1 to explicitly disable even if a future default is introduced.
+	MaxEvaluationChars int `yaml:"max_evaluation_chars,omitempty"`
 }
 
 func (pc PromptCompressionConfig) SkipSignalsSet() map[string]bool {
@@ -193,15 +199,28 @@ type ToolFilteringWeights struct {
 }
 
 type AdvancedToolFilteringConfig struct {
-	Enabled                     bool                 `yaml:"enabled"`
-	CandidatePoolSize           *int                 `yaml:"candidate_pool_size,omitempty"`
-	MinLexicalOverlap           *int                 `yaml:"min_lexical_overlap,omitempty"`
-	MinCombinedScore            *float32             `yaml:"min_combined_score,omitempty"`
-	Weights                     ToolFilteringWeights `yaml:"weights,omitempty"`
-	UseCategoryFilter           *bool                `yaml:"use_category_filter,omitempty"`
-	CategoryConfidenceThreshold *float32             `yaml:"category_confidence_threshold,omitempty"`
-	AllowTools                  []string             `yaml:"allow_tools,omitempty"`
-	BlockTools                  []string             `yaml:"block_tools,omitempty"`
+	Enabled                     bool                              `yaml:"enabled"`
+	RetrievalStrategy           string                            `yaml:"retrieval_strategy,omitempty"`
+	CandidatePoolSize           *int                              `yaml:"candidate_pool_size,omitempty"`
+	MinLexicalOverlap           *int                              `yaml:"min_lexical_overlap,omitempty"`
+	MinCombinedScore            *float32                          `yaml:"min_combined_score,omitempty"`
+	Weights                     ToolFilteringWeights              `yaml:"weights,omitempty"`
+	UseCategoryFilter           *bool                             `yaml:"use_category_filter,omitempty"`
+	CategoryConfidenceThreshold *float32                          `yaml:"category_confidence_threshold,omitempty"`
+	AllowTools                  []string                          `yaml:"allow_tools,omitempty"`
+	BlockTools                  []string                          `yaml:"block_tools,omitempty"`
+	HybridHistory               *HybridHistoryToolRetrievalConfig `yaml:"hybrid_history,omitempty"`
+}
+
+// HybridHistoryToolRetrievalConfig tunes hybrid_history retrieval (semantic + short history + priors + repetition).
+type HybridHistoryToolRetrievalConfig struct {
+	HistoryHorizon             *int     `yaml:"history_horizon,omitempty"`
+	MinHistorySteps            *int     `yaml:"min_history_steps,omitempty"`
+	HistoryConfidenceThreshold *float32 `yaml:"history_confidence_threshold,omitempty"`
+	WeightSemantic             *float32 `yaml:"weight_semantic,omitempty"`
+	WeightHistoryTransition    *float32 `yaml:"weight_history_transition,omitempty"`
+	WeightDecisionPrior        *float32 `yaml:"weight_decision_prior,omitempty"`
+	RepetitionPenaltyStrength  *float32 `yaml:"repetition_penalty_strength,omitempty"`
 }
 
 type ToolsConfig struct {
