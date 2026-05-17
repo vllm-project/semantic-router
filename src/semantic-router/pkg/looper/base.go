@@ -350,128 +350,17 @@ func (l *BaseLooper) formatStreamingResponse(agg *AggregatedResponse, modelsUsed
 	// but avoids the "fake streaming" behavior where we pre-split text.
 	if len(agg.Responses) > 0 && agg.Responses[0].IsStreaming {
 		body := concatModelSSEStreams(agg.Responses)
-		return &Response{
-			Body:          body,
-			ContentType:   "text/event-stream",
-			Model:         agg.FinalModel,
-			ModelsUsed:    modelsUsed,
-			Iterations:    iterations,
-			AlgorithmType: "simple",
-		}, nil
+		return streamingLooperResponse(body, agg.FinalModel, modelsUsed, iterations, "simple"), nil
 	}
 
 	timestamp := time.Now().Unix()
 	id := fmt.Sprintf("chatcmpl-looper-%d", timestamp)
-
 	toolName, toolArgs, toolCallID, hasToolCall := resolveToolCallForStreaming(agg)
-
-	// Split content into chunks for streaming effect
-	chunks := splitIntoChunks(agg.CombinedContent, 50) // ~50 chars per chunk
-
-	var sseBody []byte
-
-	// First chunk with role
-	firstChunk := map[string]interface{}{
-		"id":      id,
-		"object":  "chat.completion.chunk",
-		"created": timestamp,
-		"model":   agg.FinalModel,
-		"choices": []map[string]interface{}{
-			{
-				"index": 0,
-				"delta": map[string]interface{}{
-					"role": "assistant",
-				},
-				"finish_reason": nil,
-			},
-		},
-	}
-	firstChunkJSON, _ := json.Marshal(firstChunk)
-	sseBody = append(sseBody, []byte(fmt.Sprintf("data: %s\n\n", firstChunkJSON))...)
-
-	if hasToolCall {
-		toolChunk := map[string]interface{}{
-			"id":      id,
-			"object":  "chat.completion.chunk",
-			"created": timestamp,
-			"model":   agg.FinalModel,
-			"choices": []map[string]interface{}{
-				{
-					"index": 0,
-					"delta": map[string]interface{}{
-						"tool_calls": []map[string]interface{}{
-							{
-								"index": 0,
-								"id":    toolCallID,
-								"type":  "function",
-								"function": map[string]interface{}{
-									"name":      toolName,
-									"arguments": toolArgs,
-								},
-							},
-						},
-					},
-					"finish_reason": nil,
-				},
-			},
-		}
-		toolChunkJSON, _ := json.Marshal(toolChunk)
-		sseBody = append(sseBody, []byte(fmt.Sprintf("data: %s\n\n", toolChunkJSON))...)
-	} else {
-		// Content chunks
-		for _, chunk := range chunks {
-			contentChunk := map[string]interface{}{
-				"id":      id,
-				"object":  "chat.completion.chunk",
-				"created": timestamp,
-				"model":   agg.FinalModel,
-				"choices": []map[string]interface{}{
-					{
-						"index": 0,
-						"delta": map[string]interface{}{
-							"content": chunk,
-						},
-						"finish_reason": nil,
-					},
-				},
-			}
-			chunkJSON, _ := json.Marshal(contentChunk)
-			sseBody = append(sseBody, []byte(fmt.Sprintf("data: %s\n\n", chunkJSON))...)
-		}
-	}
-
-	// Final chunk with finish_reason
-	finalReason := "stop"
-	if hasToolCall {
-		finalReason = "tool_calls"
-	}
-	finalChunk := map[string]interface{}{
-		"id":      id,
-		"object":  "chat.completion.chunk",
-		"created": timestamp,
-		"model":   agg.FinalModel,
-		"choices": []map[string]interface{}{
-			{
-				"index":         0,
-				"delta":         map[string]interface{}{},
-				"finish_reason": finalReason,
-			},
-		},
-	}
-	finalChunkJSON, _ := json.Marshal(finalChunk)
-	sseBody = append(sseBody, []byte(fmt.Sprintf("data: %s\n\n", finalChunkJSON))...)
-
-	// [DONE] marker
-	sseBody = append(sseBody, []byte("data: [DONE]\n\n")...)
-
-	return &Response{
-		Body:          sseBody,
-		ContentType:   "text/event-stream",
-		Model:         agg.FinalModel,
-		ModelsUsed:    modelsUsed,
-		Iterations:    iterations,
-		AlgorithmType: "simple",
-	}, nil
+	chunks := splitIntoChunks(agg.CombinedContent, 50)
+	sseBody := buildSimulatedChatCompletionSSE(
+		id, timestamp, agg.FinalModel, chunks, toolName, toolArgs, toolCallID, hasToolCall,
+	)
+	return streamingLooperResponse(sseBody, agg.FinalModel, modelsUsed, iterations, "simple"), nil
 }
 
 func concatModelSSEStreams(responses []*ModelResponse) []byte {
