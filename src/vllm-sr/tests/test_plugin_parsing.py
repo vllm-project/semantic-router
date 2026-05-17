@@ -11,6 +11,7 @@ from cli.models import (
     PluginType,
     RouterReplayPluginConfig,
     RAGPluginConfig,
+    ToolSelectionPluginConfig,
 )
 from cli.config_migration import migrate_config_data
 from cli.parser import parse_user_config
@@ -69,6 +70,7 @@ class TestPluginTypeValidation:
             PluginType.REQUEST_PARAMS.value,
             PluginType.RESPONSE_JAILBREAK.value,
             PluginType.TOOLS.value,
+            PluginType.TOOL_SELECTION.value,
         ]
 
         for plugin_type in valid_types:
@@ -617,6 +619,188 @@ providers:
             assert len(errors) > 0
             error_messages = [str(e) for e in errors]
             assert any("rag" in msg.lower() for msg in error_messages)
+        finally:
+            os.unlink(temp_path)
+
+
+class TestToolSelectionPluginConfig:
+    """Test tool_selection plugin configuration."""
+
+    def test_tool_selection_filter_mode_in_full_config(self):
+        """mode: filter with relevance_threshold + preserve_count parses end-to-end."""
+        config_yaml = """
+version: v0.1
+listeners:
+  - name: "http-8888"
+    address: "0.0.0.0"
+    port: 8888
+signals:
+  keywords:
+    - name: "test_keywords"
+      operator: "OR"
+      keywords: ["test"]
+  domains:
+    - name: "test"
+      description: "Test domain"
+decisions:
+  - name: "test_decision"
+    description: "Tool selection in filter mode"
+    priority: 100
+    rules:
+      operator: "OR"
+      conditions:
+        - type: "keyword"
+          name: "test_keywords"
+    modelRefs:
+      - model: "test_model"
+    plugins:
+      - type: "tool_selection"
+        configuration:
+          enabled: true
+          mode: "filter"
+          relevance_threshold: 0.4
+          preserve_count: 3
+providers:
+  models:
+    - name: "test_model"
+      endpoints:
+        - name: "ep1"
+          weight: 1
+          endpoint: "localhost:8000"
+  default_model: "test_model"
+"""
+
+        temp_path = _write_config(config_yaml)
+
+        try:
+            config = parse_user_config(temp_path)
+            plugin = config.decisions[0].plugins[0]
+            assert plugin.type.value == "tool_selection"
+            assert plugin.configuration["mode"] == "filter"
+            assert plugin.configuration["relevance_threshold"] == 0.4
+            assert plugin.configuration["preserve_count"] == 3
+
+            errors = validate_user_config(config)
+            assert len(errors) == 0, f"Unexpected validation errors: {errors}"
+        finally:
+            os.unlink(temp_path)
+
+    def test_tool_selection_add_mode_in_full_config(self):
+        """mode: add with tools_db_path + top_k parses end-to-end."""
+        config_yaml = """
+version: v0.1
+listeners:
+  - name: "http-8888"
+    address: "0.0.0.0"
+    port: 8888
+signals:
+  keywords:
+    - name: "test_keywords"
+      operator: "OR"
+      keywords: ["test"]
+  domains:
+    - name: "test"
+      description: "Test domain"
+decisions:
+  - name: "test_decision"
+    description: "Tool selection in add mode"
+    priority: 100
+    rules:
+      operator: "OR"
+      conditions:
+        - type: "keyword"
+          name: "test_keywords"
+    modelRefs:
+      - model: "test_model"
+    plugins:
+      - type: "tool_selection"
+        configuration:
+          enabled: true
+          mode: "add"
+          tools_db_path: "config/tools_db.json"
+          top_k: 5
+          similarity_threshold: 0.3
+providers:
+  models:
+    - name: "test_model"
+      endpoints:
+        - name: "ep1"
+          weight: 1
+          endpoint: "localhost:8000"
+  default_model: "test_model"
+"""
+
+        temp_path = _write_config(config_yaml)
+
+        try:
+            config = parse_user_config(temp_path)
+            plugin = config.decisions[0].plugins[0]
+            assert plugin.type.value == "tool_selection"
+            assert plugin.configuration["mode"] == "add"
+            assert plugin.configuration["tools_db_path"] == "config/tools_db.json"
+            assert plugin.configuration["top_k"] == 5
+            assert plugin.configuration["similarity_threshold"] == 0.3
+
+            errors = validate_user_config(config)
+            assert len(errors) == 0, f"Unexpected validation errors: {errors}"
+        finally:
+            os.unlink(temp_path)
+
+    def test_tool_selection_invalid_mode_rejected(self):
+        """mode outside {add, filter} is rejected by the Literal constraint."""
+        with pytest.raises(PydanticValidationError):
+            ToolSelectionPluginConfig(enabled=True, mode="bogus")
+
+    def test_tool_selection_invalid_mode_in_full_config(self):
+        """Invalid mode surfaces as a validator error referencing tool_selection."""
+        config_yaml = """
+version: v0.1
+listeners:
+  - name: "http-8888"
+    address: "0.0.0.0"
+    port: 8888
+signals:
+  keywords:
+    - name: "test_keywords"
+      operator: "OR"
+      keywords: ["test"]
+  domains:
+    - name: "test"
+      description: "Test domain"
+decisions:
+  - name: "test_decision"
+    description: "Tool selection with invalid mode"
+    priority: 100
+    rules:
+      operator: "OR"
+      conditions:
+        - type: "keyword"
+          name: "test_keywords"
+    modelRefs:
+      - model: "test_model"
+    plugins:
+      - type: "tool_selection"
+        configuration:
+          enabled: true
+          mode: "bogus"
+providers:
+  models:
+    - name: "test_model"
+      endpoints:
+        - name: "ep1"
+          weight: 1
+          endpoint: "localhost:8000"
+  default_model: "test_model"
+"""
+
+        temp_path = _write_config(config_yaml)
+
+        try:
+            config = parse_user_config(temp_path)
+            errors = validate_user_config(config)
+            assert len(errors) > 0
+            error_messages = [str(e) for e in errors]
+            assert any("tool_selection" in msg.lower() for msg in error_messages)
         finally:
             os.unlink(temp_path)
 
