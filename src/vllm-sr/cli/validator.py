@@ -15,6 +15,7 @@ from cli.models import (
     RequestParamsPluginConfig,
     ResponseJailbreakPluginConfig,
     ToolsPluginConfig,
+    ToolSelectionPluginConfig,
     SystemPromptPluginConfig,
     HeaderMutationPluginConfig,
     HallucinationPluginConfig,
@@ -409,6 +410,7 @@ def validate_plugin_configurations(config: UserConfig) -> List[ValidationError]:
         PluginType.RAG.value: RAGPluginConfig,
         PluginType.IMAGE_GEN.value: ImageGenPluginConfig,
         PluginType.TOOLS.value: ToolsPluginConfig,
+        PluginType.TOOL_SELECTION.value: ToolSelectionPluginConfig,
     }
 
     for decision in config.decisions:
