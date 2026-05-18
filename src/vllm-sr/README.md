@@ -389,7 +389,7 @@ If a replay page would exceed the ext-proc gRPC message budget, the router retur
 
 **Validation Rules:**
 
-- **Plugin Type**: Must be one of: `semantic-cache`, `memory`, `system_prompt`, `header_mutation`, `hallucination`, `router_replay`, `rag`, `image_gen`, `fast_response`, `request_params`, `response_jailbreak`, `tools`
+- **Plugin Type**: Must be one of: `semantic-cache`, `memory`, `system_prompt`, `header_mutation`, `hallucination`, `router_replay`, `rag`, `image_gen`, `fast_response`, `request_params`, `response_jailbreak`, `tools`, `tool_selection`
 - **enabled**: Must be a boolean (required for most plugins)
 - **similarity_threshold/min_confidence_threshold**: Must be a float between 0.0 and 1.0
 - **max_records/max_body_bytes**: Must be a positive integer
