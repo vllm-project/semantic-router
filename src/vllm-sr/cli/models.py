@@ -487,6 +487,7 @@ class PluginType(str, Enum):
     REQUEST_PARAMS = "request_params"
     RESPONSE_JAILBREAK = "response_jailbreak"
     TOOLS = "tools"
+    TOOL_SELECTION = "tool_selection"
 
 
 class SemanticCachePluginConfig(BaseModel):
@@ -535,6 +536,20 @@ class ToolsPluginConfig(BaseModel):
     semantic_selection: Optional[bool] = None
     allow_tools: Optional[List[str]] = None
     block_tools: Optional[List[str]] = None
+
+
+class ToolSelectionPluginConfig(BaseModel):
+    """Configuration for tool_selection plugin (semantic add/filter on request tools)."""
+
+    enabled: bool
+    mode: Optional[Literal["add", "filter"]] = None
+    tools_db_path: Optional[str] = None
+    top_k: Optional[int] = Field(default=None, ge=0)
+    similarity_threshold: Optional[float] = Field(default=None, ge=0.0, le=1.0)
+    strategy: Optional[str] = None
+    fallback_to_empty: Optional[bool] = None
+    relevance_threshold: Optional[float] = Field(default=None, ge=0.0, le=1.0)
+    preserve_count: Optional[int] = Field(default=None, ge=0)
 
 
 class SystemPromptPluginConfig(BaseModel):

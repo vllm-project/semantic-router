@@ -3944,6 +3944,83 @@ func TestHNSWSearchLayerAndInsertionRegressions(t *testing.T) {
 			t.Fatalf("expected inserted node 4 to connect to D via carried entry point, got %v", inserted.neighbors[0])
 		}
 	})
+
+	t.Run("connectHybridNodeLayers carries the layer entry point into lower-layer neighbor selection", func(t *testing.T) {
+		// Hybrid graph layout mirrors the in-memory insertion regression above:
+		//   layer 1: A <-> B
+		//   layer 0: A <-> C, B <-> D
+		//
+		// New node F is inserted at level 1. The layer 1 search from A should
+		// find B and carry B into the layer 0 search. Without that update, layer 0
+		// restarts from A and links F to C instead of D.
+		embeddings := [][]float32{
+			{0.30}, // A: global entry point
+			{0.95}, // B: better upper-layer entry point for F
+			{0.35}, // C: layer-0 neighbor reachable from A
+			{1.00}, // D: layer-0 neighbor reachable from B
+			{1.00}, // F: new node to connect
+		}
+
+		nodeA := &HNSWNode{
+			entryIndex: 0,
+			neighbors: map[int][]int{
+				1: {1},
+				0: {2},
+			},
+			maxLayer: 1,
+		}
+		nodeB := &HNSWNode{
+			entryIndex: 1,
+			neighbors: map[int][]int{
+				1: {0},
+				0: {3},
+			},
+			maxLayer: 1,
+		}
+		nodeC := &HNSWNode{
+			entryIndex: 2,
+			neighbors: map[int][]int{
+				0: {0},
+			},
+			maxLayer: 0,
+		}
+		nodeD := &HNSWNode{
+			entryIndex: 3,
+			neighbors: map[int][]int{
+				0: {1},
+			},
+			maxLayer: 0,
+		}
+
+		cache := &HybridCache{
+			hnswIndex: &HNSWIndex{
+				nodes: []*HNSWNode{nodeA, nodeB, nodeC, nodeD},
+				nodeIndex: map[int]*HNSWNode{
+					0: nodeA,
+					1: nodeB,
+					2: nodeC,
+					3: nodeD,
+				},
+				entryPoint:     0,
+				maxLayer:       1,
+				efConstruction: 1,
+				M:              1,
+				Mmax:           1,
+				Mmax0:          1,
+				ml:             1,
+			},
+			embeddings: embeddings,
+			idMap:      map[int]string{},
+		}
+
+		nodeF := newHybridNode(4, 1)
+		cache.registerHybridNode(4, nodeF)
+		cache.connectHybridNodeLayers(nodeF, 4, embeddings[4], 1, cache.hnswIndex.entryPoint)
+
+		if !slices.Equal(nodeF.neighbors[0], []int{3}) {
+			t.Fatalf("expected hybrid node 4 to connect to D via carried entry point, got %v", nodeF.neighbors[0])
+		}
+	})
 }
 
 // BenchmarkLargeScale tests HNSW vs Linear at scales where HNSW shows advantages (10K-100K entries)
