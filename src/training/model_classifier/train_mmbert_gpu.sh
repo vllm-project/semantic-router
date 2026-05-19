@@ -114,7 +114,7 @@ for dir in lora_*; do [ -d "$dir" ] && ls -ld "$dir"; done || true
 # Copy models to output
 if compgen -G "lora_*mmbert*" >/dev/null; then
     cp -r lora_*mmbert* "$MODEL_OUTPUT_DIR/"
-    echo -e "${GREEN}Models copied to $MODEL_OUTPUT_DIR/${NC}"
+    echo -e "${GREEN}Models copied to the $MODEL_OUTPUT_DIR/${NC}"
 else
     echo -e "${YELLOW}No lora_*mmbert* directories found to copy.${NC}"
 fi
