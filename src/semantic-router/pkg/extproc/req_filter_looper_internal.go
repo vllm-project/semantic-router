@@ -142,6 +142,7 @@ func (r *OpenAIRouter) buildHeaderMutationsForLooper(
 	modelName string,
 ) ([]*core.HeaderValueOption, []string) {
 	setHeaders := []*core.HeaderValueOption{
+		newHeaderValueOption(headers.SelectedModel, modelName),
 		newHeaderValueOption(headers.VSRSelectedModel, modelName),
 	}
 	removeHeaders := []string{"content-length"}
@@ -217,6 +218,12 @@ func (r *OpenAIRouter) handleLooperInternalRequestWithPlugins(
 
 	if response := r.runLooperInternalPlugins(ctx, decisionName); response != nil {
 		return response, nil
+	}
+
+	if r.Config.GetModelAPIFormat(modelName) == config.APIFormatAnthropic {
+		ctx.ExpectStreamingResponse = false
+		r.startLooperInternalReplay(ctx, modelName, decisionName)
+		return r.handleAnthropicRoutingWithReasoning(openAIRequest, modelName, modelName, decisionName, useReasoning, ctx)
 	}
 
 	modifiedBody, err := r.modifyRequestBodyForLooper(
