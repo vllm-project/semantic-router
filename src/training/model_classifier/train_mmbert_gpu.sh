@@ -1,8 +1,17 @@
 #!/bin/bash
 # GPU Training Script for mmBERT LoRA Adapters using ROCm Docker
 # Optimized hyperparameters for high accuracy
+#
+# Environment overrides:
+#   TRAINING_WORK_DIR  — working directory (default: this script's directory)
+#   MODEL_OUTPUT_DIR   — copy trained adapters here (default: $TRAINING_WORK_DIR/models)
+#   TRAINING_CLEAN=1   — remove prior lora_*mmbert* artifacts before training
 
 set -e
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+TRAINING_WORK_DIR="${TRAINING_WORK_DIR:-$SCRIPT_DIR}"
+MODEL_OUTPUT_DIR="${MODEL_OUTPUT_DIR:-$TRAINING_WORK_DIR/models}"
 
 # Colors
 RED='\033[0;31m'
@@ -32,7 +41,17 @@ echo "  LoRA Rank: $LORA_RANK (higher capacity)"
 echo "  LoRA Alpha: $LORA_ALPHA"
 echo "  Max Samples: $MAX_SAMPLES"
 echo "  Learning Rate: $LEARNING_RATE (lower for stability)"
+echo "  Training work dir: $TRAINING_WORK_DIR"
+echo "  Model output dir: $MODEL_OUTPUT_DIR"
 echo ""
+
+mkdir -p "$TRAINING_WORK_DIR" "$MODEL_OUTPUT_DIR"
+if [ "${TRAINING_CLEAN:-0}" = "1" ]; then
+    echo -e "${YELLOW}Removing prior mmBERT LoRA artifacts in $TRAINING_WORK_DIR ...${NC}"
+    # shellcheck disable=SC2035
+    rm -rf "$TRAINING_WORK_DIR"/lora_*mmbert* 2>/dev/null || true
+fi
+cd "$TRAINING_WORK_DIR"
 
 # Install dependencies
 echo -e "${YELLOW}Installing dependencies...${NC}"
@@ -69,8 +88,6 @@ train_task() {
     echo -e "${GREEN}$task_name completed in ${duration}s${NC}"
 }
 
-cd /workspace/training_lora
-
 # 1. Intent Classification
 train_task "Intent Classifier" "classifier_model_fine_tuning_lora/ft_linear_lora.py"
 
@@ -95,5 +112,9 @@ echo -e "${YELLOW}Trained Models:${NC}"
 for dir in lora_*; do [ -d "$dir" ] && ls -ld "$dir"; done || true
 
 # Copy models to output
-cp -r lora_*mmbert* /workspace/models/ 2>/dev/null || true
-echo -e "${GREEN}Models copied to /workspace/models/${NC}"
+if compgen -G "lora_*mmbert*" >/dev/null; then
+    cp -r lora_*mmbert* "$MODEL_OUTPUT_DIR/"
+    echo -e "${GREEN}Models copied to $MODEL_OUTPUT_DIR/${NC}"
+else
+    echo -e "${YELLOW}No lora_*mmbert* directories found to copy.${NC}"
+fi
