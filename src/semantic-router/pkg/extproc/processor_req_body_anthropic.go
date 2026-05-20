@@ -10,7 +10,6 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/anthropic"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/authz"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
-	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/headers"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 )
 
@@ -43,6 +42,7 @@ func (r *OpenAIRouter) handleAnthropicRouting(
 		return errorResponse, nil
 	}
 	logging.Infof("Transformed request for Anthropic API, body size: %d bytes", len(anthropicBody))
+	r.startRouterReplay(ctx, originalModel, targetModel, decisionName)
 	return r.buildAnthropicRoutingResponse(targetModel, accessKey, anthropicBody, ctx), nil
 }
 
@@ -86,8 +86,36 @@ func (r *OpenAIRouter) buildAnthropicRoutingResponse(
 	anthropicBody []byte,
 	ctx *RequestContext,
 ) *ext_proc.ProcessingResponse {
-	anthropicHeaders := anthropic.BuildRequestHeaders(accessKey, len(anthropicBody))
-	setHeaders := make([]*core.HeaderValueOption, 0, len(anthropicHeaders)+2)
+	endpoint, endpointName, err := r.selectEndpointForModel(ctx, targetModel)
+	if err != nil {
+		logging.Errorf("Anthropic routing endpoint selection failed for model %s: %v", targetModel, err)
+		return r.createErrorResponse(500, fmt.Sprintf("Endpoint selection error: %v", err))
+	}
+	if accessKey == "" && endpointName != "" {
+		if ep, ok := r.Config.GetEndpointByName(endpointName); ok && ep.APIKey != "" {
+			accessKey = ep.APIKey
+		}
+	}
+
+	messagesPath := anthropic.AnthropicMessagesPath
+	profile, profileErr := r.Config.GetProviderProfileForEndpoint(endpointName)
+	if profileErr != nil {
+		logging.Errorf("Anthropic routing profile resolution failed for endpoint %s: %v", endpointName, profileErr)
+		return r.createErrorResponse(500, "Internal routing error. Contact your administrator.")
+	}
+	if profile != nil {
+		if chatPath, pathErr := profile.ResolveChatPath(); pathErr != nil {
+			logging.Errorf("Anthropic routing chat path resolution failed for endpoint %s: %v", endpointName, pathErr)
+			return r.createErrorResponse(500, "Internal routing error. Contact your administrator.")
+		} else if chatPath != "" {
+			messagesPath = chatPath
+			logging.Infof("Anthropic upstream path for model %s: %s", targetModel, messagesPath)
+		}
+	}
+
+	bodyLength := len(anthropicBody)
+	anthropicHeaders := anthropic.BuildRequestHeaders(accessKey, bodyLength, messagesPath)
+	setHeaders := make([]*core.HeaderValueOption, 0, len(anthropicHeaders)+8)
 	for _, header := range anthropicHeaders {
 		setHeaders = append(setHeaders, &core.HeaderValueOption{
 			Header: &core.HeaderValue{
@@ -96,13 +124,9 @@ func (r *OpenAIRouter) buildAnthropicRoutingResponse(
 			},
 		})
 	}
-	setHeaders = append(setHeaders, &core.HeaderValueOption{
-		Header: &core.HeaderValue{
-			Key:      headers.SelectedModel,
-			RawValue: []byte(targetModel),
-		},
-	})
-	setHeaders = append(setHeaders, r.startUpstreamSpanAndInjectHeaders(targetModel, "api.anthropic.com", ctx)...)
+	appendProfileHeaders(&setHeaders, profile)
+	appendRoutingHeaders(&setHeaders, targetModel, endpoint)
+	setHeaders = append(setHeaders, r.startUpstreamSpanAndInjectHeaders(targetModel, endpoint, ctx)...)
 	r.recordRoutingLatency(ctx)
 
 	return &ext_proc.ProcessingResponse{

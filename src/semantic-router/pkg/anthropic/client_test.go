@@ -207,8 +207,13 @@ func TestToOpenAIResponseBody_MaxTokensStopReason(t *testing.T) {
 
 func TestToOpenAIResponseBody_ToolUseStopReason(t *testing.T) {
 	anthropicResp := &anthropic.Message{
-		ID:         "msg_123",
-		Content:    []anthropic.ContentBlockUnion{{Type: "text", Text: "Using tool..."}},
+		ID: "msg_123",
+		Content: []anthropic.ContentBlockUnion{{
+			Type:  "tool_use",
+			ID:    "call_abc",
+			Name:  "get_weather",
+			Input: json.RawMessage(`{"city":"Paris"}`),
+		}},
 		StopReason: anthropic.StopReasonToolUse,
 		Usage:      anthropic.Usage{InputTokens: 10, OutputTokens: 20},
 	}
@@ -224,6 +229,9 @@ func TestToOpenAIResponseBody_ToolUseStopReason(t *testing.T) {
 	require.NoError(t, err)
 
 	assert.Equal(t, "tool_calls", result.Choices[0].FinishReason)
+	require.Len(t, result.Choices[0].Message.ToolCalls, 1)
+	assert.Equal(t, "call_abc", result.Choices[0].Message.ToolCalls[0].ID)
+	assert.Equal(t, "get_weather", result.Choices[0].Message.ToolCalls[0].Function.Name)
 }
 
 func TestToOpenAIResponseBody_MultipleContentBlocks(t *testing.T) {
@@ -251,7 +259,7 @@ func TestToOpenAIResponseBody_MultipleContentBlocks(t *testing.T) {
 }
 
 func TestBuildRequestHeaders(t *testing.T) {
-	headers := BuildRequestHeaders("test-api-key", 1024)
+	headers := BuildRequestHeaders("test-api-key", 1024, "")
 
 	// Check we have all expected headers
 	headerMap := make(map[string]string)
@@ -264,6 +272,23 @@ func TestBuildRequestHeaders(t *testing.T) {
 	assert.Equal(t, "application/json", headerMap["content-type"])
 	assert.Equal(t, AnthropicMessagesPath, headerMap[":path"])
 	assert.Equal(t, "1024", headerMap["content-length"])
+
+	custom := BuildRequestHeaders("key", 10, "/Anthropic/v1/messages")
+	customMap := make(map[string]string)
+	for _, h := range custom {
+		customMap[h.Key] = h.Value
+	}
+	assert.Equal(t, "/Anthropic/v1/messages", customMap[":path"])
+}
+
+func TestBuildRequestHeaders_OmitsEmptyAPIKey(t *testing.T) {
+	headers := BuildRequestHeaders("", 512, "")
+	headerMap := make(map[string]string)
+	for _, h := range headers {
+		headerMap[h.Key] = h.Value
+	}
+	_, hasKey := headerMap["x-api-key"]
+	assert.False(t, hasKey)
 }
 
 func TestHeadersToRemove(t *testing.T) {
@@ -271,6 +296,95 @@ func TestHeadersToRemove(t *testing.T) {
 
 	assert.Contains(t, headers, "authorization")
 	assert.Contains(t, headers, "content-length")
+}
+
+func TestToAnthropicRequestBody_WithTools(t *testing.T) {
+	req := &openai.ChatCompletionNewParams{
+		Model: "claude-sonnet-4-5",
+		Messages: []openai.ChatCompletionMessageParamUnion{
+			{OfUser: &openai.ChatCompletionUserMessageParam{
+				Content: openai.ChatCompletionUserMessageParamContentUnion{
+					OfString: openai.String("What's the weather in Paris?"),
+				},
+			}},
+		},
+		Tools: []openai.ChatCompletionToolParam{{
+			Type: "function",
+			Function: openai.FunctionDefinitionParam{
+				Name:        "get_weather",
+				Description: openai.String("Get weather for a city"),
+				Parameters: openai.FunctionParameters{
+					"type": "object",
+					"properties": map[string]any{
+						"city": map[string]any{"type": "string"},
+					},
+					"required": []any{"city"},
+				},
+			},
+		}},
+		ToolChoice: openai.ChatCompletionToolChoiceOptionUnionParam{
+			OfAuto: openai.String("auto"),
+		},
+	}
+
+	body, err := ToAnthropicRequestBody(req)
+	require.NoError(t, err)
+
+	var parsed anthropic.MessageNewParams
+	require.NoError(t, json.Unmarshal(body, &parsed))
+
+	require.Len(t, parsed.Tools, 1)
+	require.NotNil(t, parsed.Tools[0].OfTool)
+	assert.Equal(t, "get_weather", parsed.Tools[0].OfTool.Name)
+	assert.Equal(t, anthropic.ToolTypeCustom, parsed.Tools[0].OfTool.Type)
+
+	var wire map[string]json.RawMessage
+	require.NoError(t, json.Unmarshal(body, &wire))
+	var tools []map[string]any
+	require.NoError(t, json.Unmarshal(wire["tools"], &tools))
+	require.Len(t, tools, 1)
+	assert.Equal(t, "custom", tools[0]["type"])
+}
+
+func TestToAnthropicRequestBody_WithToolHistory(t *testing.T) {
+	req := &openai.ChatCompletionNewParams{
+		Model: "claude-sonnet-4-5",
+		Messages: []openai.ChatCompletionMessageParamUnion{
+			{OfUser: &openai.ChatCompletionUserMessageParam{
+				Content: openai.ChatCompletionUserMessageParamContentUnion{
+					OfString: openai.String("Weather in Paris?"),
+				},
+			}},
+			{OfAssistant: &openai.ChatCompletionAssistantMessageParam{
+				ToolCalls: []openai.ChatCompletionMessageToolCallParam{{
+					ID:   "call_abc",
+					Type: "function",
+					Function: openai.ChatCompletionMessageToolCallFunctionParam{
+						Name:      "get_weather",
+						Arguments: `{"city":"Paris"}`,
+					},
+				}},
+			}},
+			{OfTool: &openai.ChatCompletionToolMessageParam{
+				ToolCallID: "call_abc",
+				Content: openai.ChatCompletionToolMessageParamContentUnion{
+					OfString: openai.String(`{"temp_c": 18}`),
+				},
+			}},
+		},
+	}
+
+	body, err := ToAnthropicRequestBody(req)
+	require.NoError(t, err)
+
+	var parsed anthropic.MessageNewParams
+	require.NoError(t, json.Unmarshal(body, &parsed))
+	require.Len(t, parsed.Messages, 3)
+
+	assistant := parsed.Messages[1]
+	assert.Equal(t, anthropic.MessageParamRoleAssistant, assistant.Role)
+	require.NotNil(t, assistant.Content[0].OfToolUse)
+	assert.Equal(t, "call_abc", assistant.Content[0].OfToolUse.ID)
 }
 
 func TestExtractSystemContent_StringContent(t *testing.T) {
