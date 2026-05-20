@@ -2,7 +2,7 @@
 translation:
   source_commit: "ab2aa160"
   source_file: "docs/overview/goals.md"
-  outdated: false
+  outdated: true
 sidebar_position: 1
 ---
 
