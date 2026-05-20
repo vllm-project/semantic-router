@@ -38,8 +38,10 @@ func TestParseUnit(t *testing.T) {
 		{"minute", time.Minute},
 		{"hour", time.Hour},
 		{"day", 24 * time.Hour},
+		{"month", 30 * 24 * time.Hour},
 		{"SECOND", time.Second},
 		{"MINUTE", time.Minute},
+		{"MONTH", 30 * 24 * time.Hour},
 		{"unknown", time.Minute}, // default
 	}
 	for _, tc := range tests {
