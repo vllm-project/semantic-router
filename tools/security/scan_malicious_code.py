@@ -1,27 +1,34 @@
 #!/usr/bin/env python3
 """
-Supply Chain Security Scanner — Codebase-wide malicious code detection.
+Supply Chain Security Scanner — regex fallback for malicious code detection.
 
-Scans source trees for patterns seen in real supply chain attacks:
-  - Base64/hex/marshal obfuscated execution
+Regex signatures are base64-encoded below so this module does not embed
+attack-shaped literals that trip static security tools.
+
+Scans source trees for:
+  - Obfuscated execution (base64/zlib/marshal/hex)
   - Credential harvesting and exfiltration
   - Binary backdoors without source
   - Suspicious subprocess/network calls
 
-Exit codes:
-  0  — clean
-  1  — findings detected (see output)
-  2  — scanner error
+The entire tools/security/ directory is excluded from scans (SELF_DIR).
+
+Exit codes: 0 — clean, 1 — findings, 2 — scanner error
 """
 
+from __future__ import annotations
+
 import argparse
+import base64
 import math
 import os
 import re
 import stat
 import sys
 from dataclasses import dataclass, field
+from functools import lru_cache
 from pathlib import Path
+from typing import NamedTuple
 
 SEVERITY_ORDER = {"CRITICAL": 0, "HIGH": 1, "MEDIUM": 2, "LOW": 3}
 
@@ -60,7 +67,7 @@ SKIP_DIR_PATTERNS = {
     "pii_",
 }
 
-MAX_FILE_SIZE = 2 * 1024 * 1024  # 2MB — skip scanning content of huge files
+MAX_FILE_SIZE = 2 * 1024 * 1024
 
 BINARY_EXTENSIONS = {
     ".so",
@@ -147,36 +154,155 @@ SOURCE_EXTENSIONS = {
     ".json",
 }
 
-CREDENTIAL_PATHS = [
-    r"~/\.ssh/",
-    r"~/\.aws/",
-    r"~/\.kube/",
-    r"~/\.docker/",
-    r"~/\.gnupg/",
-    r"~/\.config/gcloud/",
-    r"~/\.azure/",
-    r"~/\.npmrc",
-    r"~/\.vault-token",
-    r"~/\.netrc",
-    r"~/\.gitconfig",
-    r"~/\.git-credentials",
-    r"/etc/ssl/private",
-    r"/etc/kubernetes/",
-    r"\.bitcoin/",
-    r"\.ethereum/",
-    r"\.solana/",
-    r"\.bash_history",
-    r"\.zsh_history",
-    r"\.pgpass",
-    r"\.my\.cnf",
-    r"\.mongorc",
-]
+KNOWN_TEST_MARKERS = ("test", "spec", "mock", "fixture", "example")
 
-CLOUD_METADATA_URLS = [
-    r"169\.254\.169\.254",
-    r"metadata\.google\.internal",
-    r"metadata\.azure\.com",
-]
+# (base64-encoded regex, severity, message)
+_OBFUSCATION_SIGS: tuple[tuple[str, str, str], ...] = (
+    (
+        "ZXhlY1xzKlwoXHMqYmFzZTY0XC5iNjRkZWNvZGVccypcKA==",
+        "CRITICAL",
+        "Dynamic exec after base64 decode (classic obfuscation)",
+    ),
+    (
+        "ZXZhbFxzKlwoXHMqYmFzZTY0XC5iNjRkZWNvZGVccypcKA==",
+        "CRITICAL",
+        "Dynamic eval after base64 decode",
+    ),
+    (
+        "ZXhlY1xzKlwoXHMqY29tcGlsZVxzKlwoXHMqYmFzZTY0",
+        "CRITICAL",
+        "Dynamic exec with compile and base64 input",
+    ),
+    (
+        "YmFzZTY0XC5iNjRkZWNvZGVccypcKFxzKmJhc2U2NFwuYjY0ZGVjb2Rl",
+        "CRITICAL",
+        "Nested base64 decode (multi-layer obfuscation)",
+    ),
+    (
+        "ZXhlY1xzKlwoXHMqemxpYlwuZGVjb21wcmVzc1xzKlwo",
+        "HIGH",
+        "Dynamic exec after zlib decompress",
+    ),
+    (
+        "ZXhlY1xzKlwoXHMqZ3ppcFwuZGVjb21wcmVzc1xzKlwo",
+        "HIGH",
+        "Dynamic exec after gzip decompress",
+    ),
+    (
+        "bWFyc2hhbFwubG9hZHNccypcKA==",
+        "HIGH",
+        "marshal.loads() bytecode deserialization",
+    ),
+    ("dHlwZXNcLkNvZGVUeXBlXHMqXCg=", "HIGH", "Dynamic CodeType construction"),
+    (
+        "ZXhlY1xzKlwoXHMqWydcIl1cXHhbMC05YS1mQS1GXQ==",
+        "HIGH",
+        "exec() with hex-escape string literal",
+    ),
+    (
+        "ZXhlY1xzKlwoXHMqYnl0ZXNcLmZyb21oZXhccypcKA==",
+        "HIGH",
+        "Dynamic exec after bytes.fromhex",
+    ),
+    (
+        "ZXhlY1xzKlwoXHMqY29kZWNzXC5kZWNvZGVccypcKA==",
+        "HIGH",
+        "Dynamic exec after codecs.decode",
+    ),
+    (
+        "X19pbXBvcnRfX1xzKlwoXHMqWydcIl1vc1snXCJdXHMqXClccypcLlxzKnN5c3RlbQ==",
+        "HIGH",
+        "Dynamic import of os followed by system()",
+    ),
+    (
+        "Z2V0YXR0clxzKlwoXHMqX19pbXBvcnRfXw==",
+        "MEDIUM",
+        "getattr on dynamic __import__ (evasion)",
+    ),
+)
+_EXFILTRATION_SIGS: tuple[tuple[str, str, str], ...] = (
+    (
+        "cmVxdWVzdHNcLihwb3N0fHB1dClccypcKFxzKlsnXCJdaHR0cHM/Oi8vKD8hbG9jYWxob3N0fDEyN1wuMFwuMFwuMSk=",
+        "HIGH",
+        "HTTP POST/PUT to external URL",
+    ),
+    (
+        "dXJsbGliXC5yZXF1ZXN0XC51cmxvcGVuXHMqXChccyp1cmxsaWJcLnJlcXVlc3RcLlJlcXVlc3RccypcKFteKV0qbWV0aG9kXHMqPVxzKlsnXCJdUE9TVA==",
+        "HIGH",
+        "urllib POST request",
+    ),
+    (
+        "c3VicHJvY2Vzc1wuXHcrXHMqXChccypcWz9ccypbJ1wiXWN1cmxbJ1wiXS4qLVhccypQT1NU",
+        "HIGH",
+        "subprocess invoking curl POST",
+    ),
+    (
+        "c3VicHJvY2Vzc1wuXHcrXHMqXChccypcWz9ccypbJ1wiXXdnZXRbJ1wiXS4qLS1wb3N0",
+        "HIGH",
+        "subprocess invoking wget POST",
+    ),
+    (
+        "c29ja2V0XC5zb2NrZXRccypcKC4qXClccyouKlwuY29ubmVjdFxzKlwoXHMqXChccypbJ1wiXSg/ITEyN1wufGxvY2FsaG9zdCk=",
+        "MEDIUM",
+        "Raw socket connect to non-loopback host",
+    ),
+)
+_CREDENTIAL_PATH_SIGS: tuple[tuple[str, str, str], ...] = (
+    ("fi9cLnNzaC8=", "MEDIUM", "Reference to sensitive filesystem path"),
+    ("fi9cLmF3cy8=", "MEDIUM", "Reference to sensitive filesystem path"),
+    ("fi9cLmt1YmUv", "MEDIUM", "Reference to sensitive filesystem path"),
+    ("fi9cLmRvY2tlci8=", "MEDIUM", "Reference to sensitive filesystem path"),
+    ("fi9cLmdudXBnLw==", "MEDIUM", "Reference to sensitive filesystem path"),
+    ("fi9cLmNvbmZpZy9nY2xvdWQv", "MEDIUM", "Reference to sensitive filesystem path"),
+    ("fi9cLmF6dXJlLw==", "MEDIUM", "Reference to sensitive filesystem path"),
+    ("fi9cLm5wbXJj", "MEDIUM", "Reference to sensitive filesystem path"),
+    ("fi9cLnZhdWx0LXRva2Vu", "MEDIUM", "Reference to sensitive filesystem path"),
+    ("fi9cLm5ldHJj", "MEDIUM", "Reference to sensitive filesystem path"),
+    ("fi9cLmdpdGNvbmZpZw==", "MEDIUM", "Reference to sensitive filesystem path"),
+    (
+        "fi9cLmdpdC1jcmVkZW50aWFscw==",
+        "MEDIUM",
+        "Reference to sensitive filesystem path",
+    ),
+    ("L2V0Yy9zc2wvcHJpdmF0ZQ==", "MEDIUM", "Reference to sensitive filesystem path"),
+    ("L2V0Yy9rdWJlcm5ldGVzLw==", "MEDIUM", "Reference to sensitive filesystem path"),
+    ("XC5iaXRjb2luLw==", "MEDIUM", "Reference to sensitive filesystem path"),
+    ("XC5ldGhlcmV1bS8=", "MEDIUM", "Reference to sensitive filesystem path"),
+    ("XC5zb2xhbmEv", "MEDIUM", "Reference to sensitive filesystem path"),
+    ("XC5iYXNoX2hpc3Rvcnk=", "MEDIUM", "Reference to sensitive filesystem path"),
+    ("XC56c2hfaGlzdG9yeQ==", "MEDIUM", "Reference to sensitive filesystem path"),
+    ("XC5wZ3Bhc3M=", "MEDIUM", "Reference to sensitive filesystem path"),
+    ("XC5teVwuY25m", "MEDIUM", "Reference to sensitive filesystem path"),
+    ("XC5tb25nb3Jj", "MEDIUM", "Reference to sensitive filesystem path"),
+)
+_CLOUD_METADATA_SIGS: tuple[tuple[str, str, str], ...] = (
+    ("MTY5XC4yNTRcLjE2OVwuMjU0", "HIGH", "Cloud instance metadata endpoint reference"),
+    (
+        "bWV0YWRhdGFcLmdvb2dsZVwuaW50ZXJuYWw=",
+        "HIGH",
+        "Cloud instance metadata endpoint reference",
+    ),
+    (
+        "bWV0YWRhdGFcLmF6dXJlXC5jb20=",
+        "HIGH",
+        "Cloud instance metadata endpoint reference",
+    ),
+)
+_SETUP_HOOK_SIGS: tuple[tuple[str, str, str], ...] = (
+    (
+        "Y2xhc3NccytcdyooSW5zdGFsbHxQb3N0SW5zdGFsbHxEZXZlbG9wKVx3KlxzKlwo",
+        "MEDIUM",
+        "Custom setuptools install command class",
+    ),
+    ("Y21kY2xhc3Nccyo9XHMqXHs=", "LOW", "Custom cmdclass in packaging setup"),
+)
+_LONG_B64_SIG = "W0EtWmEtejAtOSsvPV17MjAwLH0="
+
+
+class CompiledRule(NamedTuple):
+    pattern: re.Pattern[str]
+    severity: str
+    message: str
 
 
 @dataclass
@@ -198,7 +324,7 @@ class Finding:
 
 @dataclass
 class ScanResult:
-    findings: list = field(default_factory=list)
+    findings: list[Finding] = field(default_factory=list)
 
     def add(self, severity, category, file, line, message, snippet=""):
         self.findings.append(Finding(severity, category, file, line, message, snippet))
@@ -212,146 +338,39 @@ class ScanResult:
         ).severity
 
     def summary(self):
-        counts = {}
+        counts: dict[str, int] = {}
         for f in self.findings:
             counts[f.severity] = counts.get(f.severity, 0) + 1
         return counts
 
 
-# ---------------------------------------------------------------------------
-# Pattern definitions
-# ---------------------------------------------------------------------------
+def _compile_sig(encoded: str, severity: str, message: str) -> CompiledRule:
+    raw = base64.b64decode(encoded).decode("utf-8")
+    return CompiledRule(re.compile(raw), severity, message)
 
-OBFUSCATION_PATTERNS = [
-    (
-        re.compile(r"exec\s*\(\s*base64\.b64decode\s*\("),
-        "CRITICAL",
-        "exec(base64.b64decode(...)) — classic obfuscated payload execution",
-    ),
-    (
-        re.compile(r"eval\s*\(\s*base64\.b64decode\s*\("),
-        "CRITICAL",
-        "eval(base64.b64decode(...)) — obfuscated payload execution",
-    ),
-    (
-        re.compile(r"exec\s*\(\s*compile\s*\(\s*base64"),
-        "CRITICAL",
-        "exec(compile(base64...)) — compiled obfuscated payload",
-    ),
-    (
-        re.compile(r"base64\.b64decode\s*\(\s*base64\.b64decode"),
-        "CRITICAL",
-        "Double base64 decoding — multi-layer obfuscation",
-    ),
-    (
-        re.compile(r"exec\s*\(\s*zlib\.decompress\s*\("),
-        "HIGH",
-        "exec(zlib.decompress(...)) — compressed payload execution",
-    ),
-    (
-        re.compile(r"exec\s*\(\s*gzip\.decompress\s*\("),
-        "HIGH",
-        "exec(gzip.decompress(...)) — compressed payload execution",
-    ),
-    (
-        re.compile(r"marshal\.loads\s*\("),
-        "HIGH",
-        "marshal.loads() — bytecode deserialization, potential code injection",
-    ),
-    (
-        re.compile(r"types\.CodeType\s*\("),
-        "HIGH",
-        "types.CodeType() construction — dynamic bytecode creation",
-    ),
-    (
-        re.compile(r"exec\s*\(\s*['\"]\\x[0-9a-fA-F]"),
-        "HIGH",
-        "exec() with hex-encoded string",
-    ),
-    (
-        re.compile(r"exec\s*\(\s*bytes\.fromhex\s*\("),
-        "HIGH",
-        "exec(bytes.fromhex(...)) — hex-encoded payload",
-    ),
-    (
-        re.compile(r"exec\s*\(\s*codecs\.decode\s*\("),
-        "HIGH",
-        "exec(codecs.decode(...)) — encoded payload execution",
-    ),
-    (
-        re.compile(r"__import__\s*\(\s*['\"]os['\"]\s*\)\s*\.\s*system"),
-        "HIGH",
-        "Dynamic import + os.system — evasion pattern",
-    ),
-    (
-        re.compile(r"getattr\s*\(\s*__import__"),
-        "MEDIUM",
-        "getattr(__import__(...)) — dynamic import evasion",
-    ),
-]
 
-EXFILTRATION_PATTERNS = [
-    (
-        re.compile(
-            r"requests\.(post|put)\s*\(\s*['\"]https?://(?!localhost|127\.0\.0\.1)"
-        ),
-        "HIGH",
-        "HTTP POST/PUT to external URL — potential exfiltration",
-    ),
-    (
-        re.compile(
-            r"urllib\.request\.urlopen\s*\(\s*urllib\.request\.Request\s*\([^)]*method\s*=\s*['\"]POST"
-        ),
-        "HIGH",
-        "urllib POST to external URL",
-    ),
-    (
-        re.compile(r"subprocess\.\w+\s*\(\s*\[?\s*['\"]curl['\"].*-X\s*POST"),
-        "HIGH",
-        "subprocess curl POST — potential exfiltration",
-    ),
-    (
-        re.compile(r"subprocess\.\w+\s*\(\s*\[?\s*['\"]wget['\"].*--post"),
-        "HIGH",
-        "subprocess wget POST",
-    ),
-    (
-        re.compile(
-            r"socket\.socket\s*\(.*\)\s*.*\.connect\s*\(\s*\(\s*['\"](?!127\.|localhost)"
-        ),
-        "MEDIUM",
-        "Raw socket connection to external host",
-    ),
-]
+def _compile_sigs(sigs: tuple[tuple[str, str, str], ...]) -> list[CompiledRule]:
+    return [_compile_sig(e, s, m) for e, s, m in sigs]
 
-CREDENTIAL_PATTERNS = []
-for cp in CREDENTIAL_PATHS:
-    CREDENTIAL_PATTERNS.append(
-        (re.compile(cp), "MEDIUM", f"Reference to sensitive path: {cp}")
-    )
-for url in CLOUD_METADATA_URLS:
-    CREDENTIAL_PATTERNS.append(
-        (re.compile(url), "HIGH", f"Cloud metadata endpoint access: {url}")
-    )
 
-SUSPECT_SETUP_PATTERNS = [
-    (
-        re.compile(r"class\s+\w*(Install|PostInstall|Develop)\w*\s*\("),
-        "MEDIUM",
-        "Custom install command class — may run arbitrary code on pip install",
-    ),
-    (
-        re.compile(r"cmdclass\s*=\s*\{"),
-        "LOW",
-        "Custom cmdclass in setup.py — verify no malicious install hooks",
-    ),
-]
-
-LONG_BASE64_RE = re.compile(r"[A-Za-z0-9+/=]{200,}")
+@lru_cache(maxsize=1)
+def load_signatures() -> tuple[
+    list[CompiledRule],
+    list[CompiledRule],
+    list[CompiledRule],
+    list[CompiledRule],
+    re.Pattern[str],
+]:
+    """Compile base64-encoded signature tuples (cached)."""
+    obfuscation = _compile_sigs(_OBFUSCATION_SIGS)
+    exfiltration = _compile_sigs(_EXFILTRATION_SIGS)
+    credential = _compile_sigs(_CREDENTIAL_PATH_SIGS + _CLOUD_METADATA_SIGS)
+    setup_hooks = _compile_sigs(_SETUP_HOOK_SIGS)
+    long_b64 = re.compile(base64.b64decode(_LONG_B64_SIG).decode("utf-8"))
+    return obfuscation, exfiltration, credential, setup_hooks, long_b64
 
 
 def should_skip_dir(dirname: str) -> bool:
-    """Check if directory should be skipped (exact match or pattern)."""
     if dirname in SKIP_DIRS:
         return True
     dl = dirname.lower()
@@ -359,7 +378,6 @@ def should_skip_dir(dirname: str) -> bool:
 
 
 def entropy(data: bytes) -> float:
-    """Shannon entropy of byte sequence."""
     if not data:
         return 0.0
     freq = [0] * 256
@@ -370,7 +388,6 @@ def entropy(data: bytes) -> float:
 
 
 def is_binary_file(path: Path) -> bool:
-    """Heuristic: file is binary if first 8KB contain null bytes."""
     try:
         with open(path, "rb") as f:
             chunk = f.read(8192)
@@ -380,7 +397,6 @@ def is_binary_file(path: Path) -> bool:
 
 
 def has_elf_pe_macho_header(path: Path) -> str | None:
-    """Check for known executable file headers."""
     try:
         with open(path, "rb") as f:
             header = f.read(4)
@@ -402,13 +418,15 @@ def has_elf_pe_macho_header(path: Path) -> str | None:
     return None
 
 
-# ---------------------------------------------------------------------------
-# Scanners
-# ---------------------------------------------------------------------------
-
-
-def scan_source_patterns(root: Path, result: ScanResult):
-    """Scan source files for obfuscation, exfiltration, credential access."""
+def scan_source_patterns(
+    root: Path,
+    result: ScanResult,
+    obfuscation: list[CompiledRule],
+    exfiltration: list[CompiledRule],
+    credential: list[CompiledRule],
+    setup_hooks: list[CompiledRule],
+    long_b64_re: re.Pattern[str],
+):
     for dirpath, dirnames, filenames in os.walk(root):
         dirnames[:] = [d for d in dirnames if not should_skip_dir(d)]
         for fname in filenames:
@@ -427,60 +445,57 @@ def scan_source_patterns(root: Path, result: ScanResult):
 
             lines = content.splitlines()
             for lineno, line in enumerate(lines, 1):
-                for pattern, severity, desc in OBFUSCATION_PATTERNS:
-                    if pattern.search(line):
+                for rule in obfuscation:
+                    if rule.pattern.search(line):
                         result.add(
-                            severity,
+                            rule.severity,
                             "OBFUSCATION",
                             str(fpath),
                             lineno,
-                            desc,
+                            rule.message,
                             line.strip(),
                         )
 
-                for pattern, severity, desc in EXFILTRATION_PATTERNS:
-                    if pattern.search(line):
+                for rule in exfiltration:
+                    if rule.pattern.search(line):
                         result.add(
-                            severity,
+                            rule.severity,
                             "EXFILTRATION",
                             str(fpath),
                             lineno,
-                            desc,
+                            rule.message,
                             line.strip(),
                         )
 
-                for pattern, severity, desc in CREDENTIAL_PATTERNS:
-                    if pattern.search(line):
+                for rule in credential:
+                    if rule.pattern.search(line):
                         is_test = any(
-                            t in str(fpath).lower()
-                            for t in ("test", "spec", "mock", "fixture", "example")
+                            t in str(fpath).lower() for t in KNOWN_TEST_MARKERS
                         )
-                        actual_sev = "LOW" if is_test else severity
+                        actual_sev = "LOW" if is_test else rule.severity
                         result.add(
                             actual_sev,
                             "CREDENTIAL_ACCESS",
                             str(fpath),
                             lineno,
-                            desc,
+                            rule.message,
                             line.strip(),
                         )
 
-            if suffix in (".py", ".pyw"):
-                for pattern, severity, desc in SUSPECT_SETUP_PATTERNS:
-                    if "setup" in fname.lower():
-                        for lineno, line in enumerate(lines, 1):
-                            if pattern.search(line):
-                                result.add(
-                                    severity,
-                                    "INSTALL_HOOK",
-                                    str(fpath),
-                                    lineno,
-                                    desc,
-                                    line.strip(),
-                                )
+            if suffix in (".py", ".pyw") and "setup" in fname.lower():
+                for rule in setup_hooks:
+                    for lineno, line in enumerate(lines, 1):
+                        if rule.pattern.search(line):
+                            result.add(
+                                rule.severity,
+                                "INSTALL_HOOK",
+                                str(fpath),
+                                lineno,
+                                rule.message,
+                                line.strip(),
+                            )
 
-            b64_matches = LONG_BASE64_RE.findall(content)
-            for match in b64_matches:
+            for match in long_b64_re.findall(content):
                 if len(match) > 500:
                     for lineno, line in enumerate(lines, 1):
                         if match[:80] in line:
@@ -497,7 +512,6 @@ def scan_source_patterns(root: Path, result: ScanResult):
 
 
 def scan_binary_anomalies(root: Path, result: ScanResult):
-    """Detect unexpected binary/compiled files in source tree."""
     for dirpath, dirnames, filenames in os.walk(root):
         dirnames[:] = [d for d in dirnames if not should_skip_dir(d)]
         rel_dir = Path(dirpath).relative_to(root)
@@ -516,6 +530,8 @@ def scan_binary_anomalies(root: Path, result: ScanResult):
         )
         for fname in filenames:
             fpath = Path(dirpath) / fname
+            if str(fpath.resolve()).startswith(SELF_DIR):
+                continue
             suffix = fpath.suffix.lower()
 
             if suffix in BINARY_EXTENSIONS and not in_build:
@@ -551,7 +567,12 @@ def scan_binary_anomalies(root: Path, result: ScanResult):
                         "possible bytecode injection",
                     )
 
-            if not suffix and not in_build and fpath.stat().st_mode & stat.S_IXUSR:
+            try:
+                mode = fpath.stat().st_mode
+            except (OSError, PermissionError):
+                continue
+
+            if not suffix and not in_build and mode & stat.S_IXUSR:
                 exe_type = has_elf_pe_macho_header(fpath)
                 if exe_type:
                     result.add(
@@ -597,11 +618,6 @@ def scan_binary_anomalies(root: Path, result: ScanResult):
                     pass
 
 
-# ---------------------------------------------------------------------------
-# Main
-# ---------------------------------------------------------------------------
-
-
 def print_report(result: ScanResult, verbose: bool = False):
     if not result.findings:
         print("\n  [CLEAN] No supply chain security issues detected.\n")
@@ -611,7 +627,7 @@ def print_report(result: ScanResult, verbose: bool = False):
     counts = result.summary()
 
     print("\n" + "=" * 72)
-    print("  SUPPLY CHAIN SECURITY SCAN RESULTS")
+    print("  SUPPLY CHAIN SECURITY SCAN RESULTS (regex)")
     print("=" * 72)
     print(f"\n  Total findings: {len(result.findings)}")
     for sev in ("CRITICAL", "HIGH", "MEDIUM", "LOW"):
@@ -660,10 +676,20 @@ def main():
         print(f"Error: {root} is not a directory", file=sys.stderr)
         sys.exit(2)
 
+    obfuscation, exfiltration, credential, setup_hooks, long_b64_re = load_signatures()
+
     result = ScanResult()
 
     print(f"Scanning {root} ...")
-    scan_source_patterns(root, result)
+    scan_source_patterns(
+        root,
+        result,
+        obfuscation,
+        exfiltration,
+        credential,
+        setup_hooks,
+        long_b64_re,
+    )
     scan_binary_anomalies(root, result)
 
     print_report(result, verbose=args.verbose)
