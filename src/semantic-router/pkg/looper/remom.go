@@ -51,6 +51,99 @@ type ModelCall struct {
 	LoRAName string
 }
 
+// remomParallelResult is one completed parallel model call in a ReMoM round.
+type remomParallelResult struct {
+	resp  *ModelResponse
+	err   error
+	index int
+}
+
+func remomParallelMaxConcurrent(numCalls, maxFromCfg int) int {
+	if maxFromCfg > 0 && maxFromCfg < numCalls {
+		return maxFromCfg
+	}
+	return numCalls
+}
+
+// remomRunOneParallelCall performs a single gated CallModel for ReMoM parallel rounds.
+func (l *ReMoMLooper) remomRunOneParallelCall(
+	ctx context.Context,
+	idx, numCalls int,
+	mc ModelCall,
+	messages *openai.ChatCompletionNewParams,
+	cfg *config.ReMoMAlgorithmConfig,
+	streaming bool,
+	sem chan struct{},
+) remomParallelResult {
+	modelName := mc.Model
+	if mc.LoRAName != "" {
+		modelName = mc.LoRAName
+	}
+
+	logging.Infof("[ReMoM] Goroutine %d/%d started for model %s", idx+1, numCalls, modelName)
+
+	sem <- struct{}{}
+	defer func() { <-sem }()
+
+	msgCopy := cloneRequest(messages)
+	if cfg.Temperature > 0 {
+		msgCopy.Temperature = openai.Float(cfg.Temperature)
+	}
+
+	startTime := time.Now()
+	resp, err := l.client.CallModel(
+		ctx,
+		msgCopy,
+		modelName,
+		streaming,
+		idx+1,
+		nil,
+		"",
+	)
+	elapsed := time.Since(startTime)
+
+	if err != nil {
+		logging.Warnf("[ReMoM] Goroutine %d/%d failed for model %s after %v: %v", idx+1, numCalls, modelName, elapsed, err)
+	} else {
+		logging.Infof("[ReMoM] Goroutine %d/%d completed for model %s in %v", idx+1, numCalls, modelName, elapsed)
+	}
+
+	return remomParallelResult{resp: resp, err: err, index: idx}
+}
+
+func collectRemomParallelResults(
+	ctx context.Context,
+	numCalls int,
+	results <-chan remomParallelResult,
+	cfg *config.ReMoMAlgorithmConfig,
+) ([]*ModelResponse, error) {
+	var responses []*ModelResponse
+	var errs []error
+
+	for range numCalls {
+		select {
+		case res := <-results:
+			if res.err == nil {
+				responses = append(responses, res.resp)
+				continue
+			}
+			errs = append(errs, res.err)
+			if cfg.OnError == "fail" {
+				return nil, fmt.Errorf("model call %d failed: %w", res.index, res.err)
+			}
+		case <-ctx.Done():
+			return nil, ctx.Err()
+		}
+	}
+
+	if len(responses) == 0 {
+		return nil, fmt.Errorf("all %d model calls failed: %v", numCalls, errs)
+	}
+
+	logging.Infof("[ReMoM] Collected %d/%d successful responses", len(responses), numCalls)
+	return responses, nil
+}
+
 // ReferenceResponse represents a response used as reference in synthesis
 type ReferenceResponse struct {
 	Content   string
@@ -113,12 +206,16 @@ Answer:
 
 Now, analyze these reasoning processes and reference responses, then provide your own comprehensive solution with clear reasoning.`
 
+type remomScheduleResult struct {
+	allRoundResponses []RoundResponse
+	modelsUsed        map[string]bool
+	totalIterations   int
+}
+
 // Execute implements the Looper interface for ReMoM
 func (l *ReMoMLooper) Execute(ctx context.Context, req *Request) (*Response, error) {
-	// 1. Set decision name in client for header transmission
 	l.client.SetDecisionName(req.DecisionName)
 
-	// 2. Get config from request
 	var cfg *config.ReMoMAlgorithmConfig
 	if req.Algorithm != nil && req.Algorithm.ReMoM != nil {
 		cfg = req.Algorithm.ReMoM
@@ -126,10 +223,8 @@ func (l *ReMoMLooper) Execute(ctx context.Context, req *Request) (*Response, err
 		cfg = getDefaultReMoMConfig()
 	}
 
-	// 3. Validate
 	// Note: ReMoM internally uses non-streaming calls even if client expects streaming
-	// This is because we need complete responses for synthesis across rounds
-	// The final response will be returned as a complete (non-streaming) response
+	// because we need complete responses for synthesis across rounds.
 	if len(req.ModelRefs) == 0 {
 		return nil, fmt.Errorf("no models configured")
 	}
@@ -137,113 +232,148 @@ func (l *ReMoMLooper) Execute(ctx context.Context, req *Request) (*Response, err
 		return nil, fmt.Errorf("breadth_schedule cannot be empty")
 	}
 
-	// 3. Build schedule (append [1] for final round)
 	schedule := append([]int{}, cfg.BreadthSchedule...)
 	schedule = append(schedule, 1)
-
-	// 4. Extract original content
 	originalContent := extractOriginalContent(req.OriginalRequest)
 
-	// 5. Initialize tracking
+	result, err := l.runReMoMSchedule(ctx, req, cfg, schedule, originalContent)
+	if err != nil {
+		return nil, err
+	}
+
+	finalResponse := result.allRoundResponses[len(result.allRoundResponses)-1].Responses[0]
+	modelsUsedSlice := make([]string, 0, len(result.modelsUsed))
+	for model := range result.modelsUsed {
+		modelsUsedSlice = append(modelsUsedSlice, model)
+	}
+
+	if req.IsStreaming {
+		return l.formatReMoMStreamingResponse(finalResponse, result.allRoundResponses, modelsUsedSlice, result.totalIterations, cfg)
+	}
+	return l.formatReMoMJSONResponse(finalResponse, result.allRoundResponses, modelsUsedSlice, result.totalIterations, cfg)
+}
+
+func (l *ReMoMLooper) runReMoMSchedule(
+	ctx context.Context,
+	req *Request,
+	cfg *config.ReMoMAlgorithmConfig,
+	schedule []int,
+	originalContent string,
+) (*remomScheduleResult, error) {
 	var allRoundResponses []RoundResponse
 	modelsUsed := make(map[string]bool)
 	totalIterations := 0
-
-	// 6. Execute multi-round iteration
 	currentMessages := cloneMessages(req.OriginalRequest)
 
 	for roundIdx, numCalls := range schedule {
 		logging.Infof("[ReMoM] Round %d/%d: %d parallel calls", roundIdx+1, len(schedule), numCalls)
 
-		// Build synthesis prompt if not first round
-		if roundIdx > 0 {
-			// Get previous round responses
-			prevRound := allRoundResponses[roundIdx-1]
-			var prevResponses []*ModelResponse
-			for _, ir := range prevRound.Responses {
-				prevResponses = append(prevResponses, &ModelResponse{
-					Content:          ir.Content,
-					ReasoningContent: ir.Reasoning,
-					Model:            ir.Model,
-				})
-			}
-
-			synthesisPrompt, err := l.buildSynthesisPrompt(cfg, originalContent, prevResponses)
-			if err != nil {
-				return nil, fmt.Errorf("failed to build synthesis prompt for round %d: %w", roundIdx+1, err)
-			}
-
-			// Replace last message with synthesis prompt
-			currentMessages = replaceLastMessage(currentMessages, synthesisPrompt)
-		}
-
-		// Distribute calls to models
-		modelCalls := l.distributeCallsToModels(cfg, numCalls, req.ModelRefs)
-
-		// Execute parallel calls
-		responses, err := l.executeParallelCalls(ctx, cfg, modelCalls, currentMessages)
+		updatedMessages, err := l.prepareReMoMRoundMessages(cfg, originalContent, roundIdx, allRoundResponses, currentMessages)
 		if err != nil {
-			if cfg.OnError == "fail" {
-				return nil, fmt.Errorf("round %d failed: %w", roundIdx+1, err)
-			}
-			logging.Warnf("[ReMoM] Round %d had errors but continuing (on_error=skip)", roundIdx+1)
+			return nil, err
 		}
+		currentMessages = updatedMessages
 
-		if len(responses) == 0 {
-			return nil, fmt.Errorf("round %d: all model calls failed", roundIdx+1)
-		}
-
-		// Sort and shuffle responses
-		responses = l.sortAndShuffle(cfg, responses)
-
-		// Collect intermediate responses for visualization
-		roundResp := RoundResponse{
-			Round:   roundIdx + 1,
-			Breadth: numCalls,
-		}
-
-		maxResponses := len(responses)
-		if cfg.MaxResponsesPerRound > 0 && cfg.MaxResponsesPerRound < maxResponses {
-			maxResponses = cfg.MaxResponsesPerRound
-		}
-
-		for i := 0; i < maxResponses; i++ {
-			resp := responses[i]
-			compacted := l.compactResponse(cfg, resp.Content)
-			roundResp.Responses = append(roundResp.Responses, IntermediateResp{
-				Model:            resp.Model,
-				Content:          resp.Content,
-				Reasoning:        resp.ReasoningContent,
-				CompactedContent: compacted,
-				TokenCount:       estimateTokens(resp.Content),
-			})
+		roundResp, responses, err := l.executeReMoMRound(ctx, req, cfg, roundIdx, numCalls, currentMessages)
+		if err != nil {
+			return nil, err
 		}
 
 		allRoundResponses = append(allRoundResponses, roundResp)
-
-		// Track models used
-		for _, resp := range responses {
-			modelsUsed[resp.Model] = true
-		}
+		trackReMoMModelsUsed(modelsUsed, responses)
 		totalIterations += len(responses)
-
 		logging.Infof("[ReMoM] Round %d completed: %d responses", roundIdx+1, len(responses))
 	}
 
-	// 7. Build final response
-	finalResponse := allRoundResponses[len(allRoundResponses)-1].Responses[0]
+	return &remomScheduleResult{
+		allRoundResponses: allRoundResponses,
+		modelsUsed:        modelsUsed,
+		totalIterations:   totalIterations,
+	}, nil
+}
 
-	// Convert models used to slice
-	var modelsUsedSlice []string
-	for model := range modelsUsed {
-		modelsUsedSlice = append(modelsUsedSlice, model)
+func (l *ReMoMLooper) prepareReMoMRoundMessages(
+	cfg *config.ReMoMAlgorithmConfig,
+	originalContent string,
+	roundIdx int,
+	allRoundResponses []RoundResponse,
+	currentMessages *openai.ChatCompletionNewParams,
+) (*openai.ChatCompletionNewParams, error) {
+	if roundIdx == 0 {
+		return currentMessages, nil
 	}
 
-	// Format response based on streaming preference
-	if req.IsStreaming {
-		return l.formatReMoMStreamingResponse(finalResponse, allRoundResponses, modelsUsedSlice, totalIterations, cfg)
+	prevRound := allRoundResponses[roundIdx-1]
+	prevResponses := intermediateResponsesToModelResponses(prevRound.Responses)
+	synthesisPrompt, err := l.buildSynthesisPrompt(cfg, originalContent, prevResponses)
+	if err != nil {
+		return nil, fmt.Errorf("failed to build synthesis prompt for round %d: %w", roundIdx+1, err)
 	}
-	return l.formatReMoMJSONResponse(finalResponse, allRoundResponses, modelsUsedSlice, totalIterations, cfg)
+	return replaceLastMessage(currentMessages, synthesisPrompt), nil
+}
+
+func intermediateResponsesToModelResponses(responses []IntermediateResp) []*ModelResponse {
+	prevResponses := make([]*ModelResponse, 0, len(responses))
+	for _, ir := range responses {
+		prevResponses = append(prevResponses, &ModelResponse{
+			Content:          ir.Content,
+			ReasoningContent: ir.Reasoning,
+			Model:            ir.Model,
+		})
+	}
+	return prevResponses
+}
+
+func (l *ReMoMLooper) executeReMoMRound(
+	ctx context.Context,
+	req *Request,
+	cfg *config.ReMoMAlgorithmConfig,
+	roundIdx, numCalls int,
+	currentMessages *openai.ChatCompletionNewParams,
+) (RoundResponse, []*ModelResponse, error) {
+	modelCalls := l.distributeCallsToModels(cfg, numCalls, req.ModelRefs)
+	responses, err := l.executeParallelCalls(ctx, cfg, modelCalls, currentMessages, req.IsStreaming)
+	if err != nil {
+		if cfg.OnError == "fail" {
+			return RoundResponse{}, nil, fmt.Errorf("round %d failed: %w", roundIdx+1, err)
+		}
+		logging.Warnf("[ReMoM] Round %d had errors but continuing (on_error=skip)", roundIdx+1)
+	}
+	if len(responses) == 0 {
+		return RoundResponse{}, nil, fmt.Errorf("round %d: all model calls failed", roundIdx+1)
+	}
+
+	responses = l.sortAndShuffle(cfg, responses)
+	return l.buildReMoMRoundResponse(cfg, roundIdx+1, numCalls, responses), responses, nil
+}
+
+func (l *ReMoMLooper) buildReMoMRoundResponse(
+	cfg *config.ReMoMAlgorithmConfig,
+	round, breadth int,
+	responses []*ModelResponse,
+) RoundResponse {
+	roundResp := RoundResponse{Round: round, Breadth: breadth}
+	maxResponses := len(responses)
+	if cfg.MaxResponsesPerRound > 0 && cfg.MaxResponsesPerRound < maxResponses {
+		maxResponses = cfg.MaxResponsesPerRound
+	}
+	for i := 0; i < maxResponses; i++ {
+		resp := responses[i]
+		roundResp.Responses = append(roundResp.Responses, IntermediateResp{
+			Model:            resp.Model,
+			Content:          resp.Content,
+			Reasoning:        resp.ReasoningContent,
+			CompactedContent: l.compactResponse(cfg, resp.Content),
+			TokenCount:       estimateTokens(resp.Content),
+		})
+	}
+	return roundResp
+}
+
+func trackReMoMModelsUsed(modelsUsed map[string]bool, responses []*ModelResponse) {
+	for _, resp := range responses {
+		modelsUsed[resp.Model] = true
+	}
 }
 
 // formatReMoMJSONResponse creates a non-streaming JSON response
@@ -307,98 +437,11 @@ func (l *ReMoMLooper) formatReMoMStreamingResponse(
 ) (*Response, error) {
 	timestamp := time.Now().Unix()
 	id := fmt.Sprintf("chatcmpl-remom-%d", timestamp)
+	sseBody := buildReMoMStreamingSSE(id, timestamp, finalResponse, allRoundResponses, cfg.IncludeIntermediateResponses)
 
-	var sseBody []byte
-
-	// First chunk: send reasoning_mom_responses if enabled
-	if cfg.IncludeIntermediateResponses {
-		firstChunk := map[string]interface{}{
-			"id":      id,
-			"object":  "chat.completion.chunk",
-			"created": timestamp,
-			"model":   finalResponse.Model,
-			"choices": []map[string]interface{}{
-				{
-					"index": 0,
-					"delta": map[string]interface{}{
-						"role": "assistant",
-					},
-					"finish_reason": nil,
-				},
-			},
-			"reasoning_mom_responses": allRoundResponses,
-		}
-		firstChunkJSON, _ := json.Marshal(firstChunk)
-		sseBody = append(sseBody, []byte(fmt.Sprintf("data: %s\n\n", firstChunkJSON))...)
-	} else {
-		// Standard first chunk with role
-		firstChunk := map[string]interface{}{
-			"id":      id,
-			"object":  "chat.completion.chunk",
-			"created": timestamp,
-			"model":   finalResponse.Model,
-			"choices": []map[string]interface{}{
-				{
-					"index": 0,
-					"delta": map[string]interface{}{
-						"role": "assistant",
-					},
-					"finish_reason": nil,
-				},
-			},
-		}
-		firstChunkJSON, _ := json.Marshal(firstChunk)
-		sseBody = append(sseBody, []byte(fmt.Sprintf("data: %s\n\n", firstChunkJSON))...)
-	}
-
-	// Content chunk (send all content at once since we have the complete response)
-	contentChunk := map[string]interface{}{
-		"id":      id,
-		"object":  "chat.completion.chunk",
-		"created": timestamp,
-		"model":   finalResponse.Model,
-		"choices": []map[string]interface{}{
-			{
-				"index": 0,
-				"delta": map[string]interface{}{
-					"content": finalResponse.Content,
-				},
-				"finish_reason": nil,
-			},
-		},
-	}
-	contentChunkJSON, _ := json.Marshal(contentChunk)
-	sseBody = append(sseBody, []byte(fmt.Sprintf("data: %s\n\n", contentChunkJSON))...)
-
-	// Final chunk with finish_reason
-	finalChunk := map[string]interface{}{
-		"id":      id,
-		"object":  "chat.completion.chunk",
-		"created": timestamp,
-		"model":   finalResponse.Model,
-		"choices": []map[string]interface{}{
-			{
-				"index":         0,
-				"delta":         map[string]interface{}{},
-				"finish_reason": "stop",
-			},
-		},
-	}
-	finalChunkJSON, _ := json.Marshal(finalChunk)
-	sseBody = append(sseBody, []byte(fmt.Sprintf("data: %s\n\n", finalChunkJSON))...)
-
-	// Add [DONE] marker
-	sseBody = append(sseBody, []byte("data: [DONE]\n\n")...)
-
-	return &Response{
-		Body:                  sseBody,
-		ContentType:           "text/event-stream",
-		Model:                 finalResponse.Model,
-		ModelsUsed:            modelsUsed,
-		Iterations:            iterations,
-		AlgorithmType:         "remom",
-		IntermediateResponses: allRoundResponses,
-	}, nil
+	resp := streamingLooperResponse(sseBody, finalResponse.Model, modelsUsed, iterations, "remom")
+	resp.IntermediateResponses = allRoundResponses
+	return resp, nil
 }
 
 // distributeCallsToModels distributes K calls among models based on strategy
@@ -480,94 +523,26 @@ func distributeFirstOnly(numCalls int, modelRefs []config.ModelRef) []ModelCall 
 	return calls
 }
 
-// executeParallelCalls executes model calls in parallel with concurrency control
-func (l *ReMoMLooper) executeParallelCalls(ctx context.Context, cfg *config.ReMoMAlgorithmConfig, modelCalls []ModelCall, messages *openai.ChatCompletionNewParams) ([]*ModelResponse, error) {
+// executeParallelCalls executes model calls in parallel with concurrency control.
+func (l *ReMoMLooper) executeParallelCalls(
+	ctx context.Context,
+	cfg *config.ReMoMAlgorithmConfig,
+	modelCalls []ModelCall,
+	messages *openai.ChatCompletionNewParams,
+	streaming bool,
+) ([]*ModelResponse, error) {
 	numCalls := len(modelCalls)
-
-	// Determine max concurrent
-	maxConcurrent := numCalls
-	if cfg.MaxConcurrent > 0 && cfg.MaxConcurrent < numCalls {
-		maxConcurrent = cfg.MaxConcurrent
-	}
-
-	// Semaphore for concurrency control
+	maxConcurrent := remomParallelMaxConcurrent(numCalls, cfg.MaxConcurrent)
 	sem := make(chan struct{}, maxConcurrent)
+	results := make(chan remomParallelResult, numCalls)
 
-	// Result channel
-	type result struct {
-		resp  *ModelResponse
-		err   error
-		index int
-	}
-	results := make(chan result, numCalls)
-
-	// Launch goroutines
 	for i, call := range modelCalls {
 		go func(idx int, mc ModelCall) {
-			modelName := mc.Model
-			if mc.LoRAName != "" {
-				modelName = mc.LoRAName
-			}
-
-			logging.Infof("[ReMoM] Goroutine %d/%d started for model %s", idx+1, numCalls, modelName)
-
-			sem <- struct{}{}
-			defer func() { <-sem }()
-
-			// Clone request and set temperature
-			msgCopy := cloneRequest(messages)
-			if cfg.Temperature > 0 {
-				msgCopy.Temperature = openai.Float(cfg.Temperature)
-			}
-
-			startTime := time.Now()
-			resp, err := l.client.CallModel(
-				ctx,
-				msgCopy,
-				modelName,
-				false, // streaming
-				idx+1, // iteration
-				nil,   // logprobs config
-				"",    // accessKey - not used in ReMoM
-			)
-			elapsed := time.Since(startTime)
-
-			if err != nil {
-				logging.Warnf("[ReMoM] Goroutine %d/%d failed for model %s after %v: %v", idx+1, numCalls, modelName, elapsed, err)
-			} else {
-				logging.Infof("[ReMoM] Goroutine %d/%d completed for model %s in %v", idx+1, numCalls, modelName, elapsed)
-			}
-
-			results <- result{resp: resp, err: err, index: idx}
+			results <- l.remomRunOneParallelCall(ctx, idx, numCalls, mc, messages, cfg, streaming, sem)
 		}(i, call)
 	}
 
-	// Collect results
-	var responses []*ModelResponse
-	var errs []error
-
-	for i := 0; i < numCalls; i++ {
-		select {
-		case res := <-results:
-			if res.err != nil {
-				errs = append(errs, res.err)
-				if cfg.OnError == "fail" {
-					return nil, fmt.Errorf("model call %d failed: %w", res.index, res.err)
-				}
-			} else {
-				responses = append(responses, res.resp)
-			}
-		case <-ctx.Done():
-			return nil, ctx.Err()
-		}
-	}
-
-	if len(responses) == 0 {
-		return nil, fmt.Errorf("all %d model calls failed: %v", numCalls, errs)
-	}
-
-	logging.Infof("[ReMoM] Collected %d/%d successful responses", len(responses), numCalls)
-	return responses, nil
+	return collectRemomParallelResults(ctx, numCalls, results, cfg)
 }
 
 // buildSynthesisPrompt builds the synthesis prompt using template

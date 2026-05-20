@@ -108,9 +108,9 @@ func (l *RatingsLooper) Execute(ctx context.Context, req *Request) (*Response, e
 				"slot":      idx + 1,
 			})
 
-			// Use idx+1 as iteration number for concurrent requests
-			// RatingsLooper doesn't need logprobs (no confidence-based routing)
-			resp, err := l.client.CallModel(ctx, req.OriginalRequest, modelName, false, idx+1, nil, accessKey)
+			// Use idx+1 as iteration number for concurrent requests.
+			// RatingsLooper doesn't need logprobs (no confidence-based routing).
+			resp, err := l.client.CallModel(ctx, req.OriginalRequest, modelName, req.IsStreaming, idx+1, nil, accessKey)
 
 			mu.Lock()
 			defer mu.Unlock()
