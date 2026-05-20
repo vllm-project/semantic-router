@@ -30,7 +30,7 @@ These are upstream model protocols the router can target after routing. They are
 | Backend model API | Upstream path | Status | Notes |
 | --- | --- | --- | --- |
 | OpenAI-compatible Chat Completions | `/chat/completions` | Supported | Default family used for OpenAI-compatible backends |
-| Anthropic Messages API | `/v1/messages` | Supported | Router converts OpenAI-style requests to Anthropic format before forwarding |
+| Anthropic Messages API | `/v1/messages` | Supported | Converts OpenAI-style requests (including tools); upstream host and path from `backend_refs` |
 | vLLM Omni Chat Completions | `/chat/completions` | Supported | Used for omni and image-generation backends such as `vllm_omni` |
 
 Provider families with OpenAI-compatible chat-completions defaults include `openai`, `azure-openai`, `bedrock`, `gemini`, and `vertex-ai`.
@@ -84,6 +84,8 @@ Minimal request:
 - Anthropic support lives in the backend model API layer.
 - Client ingress is still OpenAI-style Chat Completions or Responses API, not `POST /v1/messages`.
 - The router converts the upstream request to Anthropic `POST /v1/messages` and converts the response back to OpenAI-compatible output.
+- Upstream host, path, and optional `extra_headers` come from `backend_refs` and the endpoint provider profile (`base_url`, optional `chat_path`).
+- OpenAI-style `tools`, `tool_calls`, and `tool` messages are converted for Anthropic backends.
 - Streaming is not supported for Anthropic-backed routing.
 
 ### vLLM Omni and Multimodal/Image Generation
