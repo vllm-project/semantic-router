@@ -20,6 +20,7 @@ Standard CI-backed profiles:
 - **aibrix**: AIBrix control-plane and gateway coverage plus a minimal router smoke path
 - **routing-strategies**: Keyword, entropy, and fallback routing behavior
 - **dynamic-config**: Kubernetes CRD-based routing and embedding-signal behavior
+- **multimodal-routing**: Image-modality EmbeddingSignal routing via the multi-modal-embed-small model
 - **llm-d**: LLM-D inference-gateway health plus a minimal router smoke path
 - **istio**: Istio service mesh sidecar, traffic, mTLS, and tracing behavior
 - **production-stack**: HA, load-balancing, failover, and throughput behavior
@@ -47,6 +48,7 @@ Manual-only profiles:
 | `aibrix` | `chat-completions-request` | AIBrix control-plane and gateway health |
 | `routing-strategies` | none | Routing-strategy-specific behavior |
 | `dynamic-config` | `chat-completions-request` | CRD and embedding-signal routing |
+| `multimodal-routing` | `chat-completions-request` | Image-modality embedding-signal routing |
 | `llm-d` | `chat-completions-request` | llm-d inference-gateway health |
 | `istio` | `chat-completions-request` | Sidecar, traffic, mTLS, and tracing |
 | `production-stack` | `chat-completions-request` | HA, failover, load-balancing, throughput |

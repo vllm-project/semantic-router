@@ -1,0 +1,96 @@
+apiVersion: vllm.ai/v1alpha1
+kind: IntelligentRoute
+metadata:
+  name: ai-gateway-route
+  namespace: default
+spec:
+  signals:
+    # Image-modality embedding rules mirroring the opt-in pack shipped in
+    # config/signal/embedding/image-routing.yaml (PR #1896). Each rule's
+    # candidates are short text anchors that get embedded in the shared
+    # multimodal text/image space; the request-path image embedding
+    # cosine-matches against them. Requires
+    # global.model_catalog.embeddings.semantic.embedding_config.model_type=multimodal
+    # in values.yaml.
+    embeddings:
+      - name: "identifier_document_imagery"
+        queryModality: "image"
+        threshold: 0.10
+        aggregationMethod: "max"
+        candidates:
+          - "photograph of a passport page"
+          - "photograph of a driver's license or national ID card"
+          - "photograph of a credit card or payment card"
+          - "photograph of an employee or visitor badge"
+          - "photograph of a healthcare insurance card"
+          - "photograph of a patient wristband or hospital identifier"
+          - "photograph of a tax document or paystub with personal details"
+          - "photograph of a paper form filled in with personal information"
+
+      - name: "code_or_terminal_imagery"
+        queryModality: "image"
+        threshold: 0.10
+        aggregationMethod: "max"
+        candidates:
+          - "screenshot of source code in an editor"
+          - "terminal or shell window screenshot"
+          - "screenshot of a log file or stack trace"
+          - "git diff or pull-request review screenshot"
+          - "screenshot of a debugger paused at a breakpoint"
+          - "command-line build output or test runner output"
+          - "screenshot of an API response or HTTP request body"
+          - "screenshot of a database client or SQL query result"
+
+      - name: "ambient_office_imagery"
+        queryModality: "image"
+        threshold: 0.10
+        aggregationMethod: "max"
+        candidates:
+          - "photograph of a whiteboard with handwritten notes"
+          - "photograph of a conference room or meeting space"
+          - "photograph of an office workspace or desk surface"
+          - "photograph of a building lobby or interior hallway"
+          - "photograph of an office printer or shared equipment"
+          - "photograph of a coffee cup or notebook on a desk"
+          - "photograph of indoor potted plants or office decor"
+          - "photograph of a wide factory floor or warehouse aisle"
+
+  decisions:
+    - name: "route_identifier_document_on_prem"
+      priority: 200
+      description: "Route image-bearing requests with personal-identifier signature to the in-cluster path"
+      signals:
+        operator: "OR"
+        conditions:
+          - type: "embedding"
+            name: "identifier_document_imagery"
+      modelRefs:
+        - model: "base-model"
+          loraName: "general-expert"
+          useReasoning: false
+
+    - name: "route_code_or_terminal_on_prem"
+      priority: 200
+      description: "Route image-bearing requests with code/terminal signature to the in-cluster path"
+      signals:
+        operator: "OR"
+        conditions:
+          - type: "embedding"
+            name: "code_or_terminal_imagery"
+      modelRefs:
+        - model: "base-model"
+          loraName: "general-expert"
+          useReasoning: false
+
+    - name: "route_ambient_office_default"
+      priority: 50
+      description: "Ambient/non-sensitive imagery flows through the normal routing path"
+      signals:
+        operator: "OR"
+        conditions:
+          - type: "embedding"
+            name: "ambient_office_imagery"
+      modelRefs:
+        - model: "base-model"
+          loraName: "general-expert"
+          useReasoning: false
