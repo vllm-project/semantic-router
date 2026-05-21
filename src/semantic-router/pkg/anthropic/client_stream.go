@@ -39,11 +39,6 @@ func TransformSSEChunkToOpenAI(
 		state = NewStreamState()
 	}
 
-	// Some gateways (Vertex AI, APIM) already return OpenAI-compatible SSE.
-	if looksLikeOpenAIStreamChunk(anthropicChunk) {
-		return anthropicChunk, bytes.Contains(anthropicChunk, []byte("[DONE]")), nil
-	}
-
 	var out bytes.Buffer
 	streamDone := false
 	for _, data := range extractSSEDataLines(anthropicChunk) {
@@ -113,12 +108,6 @@ func transformStreamEvent(
 	default:
 		return nil, false, nil
 	}
-}
-
-func looksLikeOpenAIStreamChunk(chunk []byte) bool {
-	return bytes.Contains(chunk, []byte(`"object":"chat.completion.chunk"`)) ||
-		bytes.Contains(chunk, []byte(`"object": "chat.completion.chunk"`)) ||
-		(bytes.Contains(chunk, []byte(`"choices"`)) && bytes.Contains(chunk, []byte(`"delta"`)))
 }
 
 func handleMessageStart(

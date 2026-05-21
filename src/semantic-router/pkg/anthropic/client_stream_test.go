@@ -119,19 +119,6 @@ func buildAnthropicSSE(events ...string) string {
 	return b.String()
 }
 
-func TestTransformSSEChunkToOpenAI_PassthroughOpenAIFormat(t *testing.T) {
-	state := NewStreamState()
-	openAIChunk := []byte(`data: {"id":"chatcmpl-1","object":"chat.completion.chunk","choices":[{"index":0,"delta":{"content":"hi"}}]}
-
-data: [DONE]
-
-`)
-	out, done, err := TransformSSEChunkToOpenAI(openAIChunk, state, "claude-sonnet-4-5")
-	require.NoError(t, err)
-	assert.True(t, done)
-	assert.Equal(t, string(openAIChunk), string(out))
-}
-
 func TestMapAnthropicStopReasonToOpenAI(t *testing.T) {
 	assert.Equal(t, "stop", mapAnthropicStopReasonToOpenAI(anthropic.StopReasonEndTurn))
 	assert.Equal(t, "length", mapAnthropicStopReasonToOpenAI(anthropic.StopReasonMaxTokens))
