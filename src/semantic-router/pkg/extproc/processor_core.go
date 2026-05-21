@@ -10,7 +10,6 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 
-	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/metrics"
 )
@@ -88,9 +87,6 @@ func (r *OpenAIRouter) handleProcessReceiveError(ctx *RequestContext, err error)
 	if ctx.IsStreamingResponse && !ctx.StreamingComplete {
 		ctx.StreamingAborted = true
 		logging.Debugf("Streaming response aborted before completion, will not cache")
-	}
-	if ctx.APIFormat == config.APIFormatAnthropic && ctx.IsStreamingResponse {
-		releaseAnthropicStreamState(ctx)
 	}
 
 	if errors.Is(err, io.EOF) {

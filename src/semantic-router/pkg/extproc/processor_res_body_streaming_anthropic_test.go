@@ -8,6 +8,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/anthropic"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 )
 
@@ -18,9 +19,9 @@ func TestHandleAnthropicStreamingResponseBody_TranslatesSSE(t *testing.T) {
 		},
 	}
 	ctx := &RequestContext{
-		RequestID:           "test-anthropic-stream",
 		APIFormat:           config.APIFormatAnthropic,
 		RequestModel:        "claude-sonnet-4-5",
+		AnthropicStream:     anthropic.NewStreamState(),
 		StreamingMetadata:   make(map[string]interface{}),
 		ProcessingStartTime: time.Now().Add(-10 * time.Millisecond),
 	}

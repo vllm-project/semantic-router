@@ -79,6 +79,9 @@ func TestHandleAnthropicRouting_AllowsStreaming(t *testing.T) {
 	if response == nil {
 		t.Fatal("expected routing response for streaming anthropic request")
 	}
+	if ctx.AnthropicStream == nil {
+		t.Fatal("expected anthropic stream state to be initialized")
+	}
 	body := response.GetRequestBody().GetResponse().GetBodyMutation().GetBody()
 	if !containsJSONField(t, body, "stream", true) {
 		t.Fatalf("expected stream=true in anthropic body, got %s", string(body))
