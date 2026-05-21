@@ -74,9 +74,6 @@ func (r *OpenAIRouter) prepareAnthropicRoutingRequest(
 	ctx.RequestModel = targetModel
 	ctx.VSRSelectedModel = targetModel
 	ctx.APIFormat = config.APIFormatAnthropic
-	if streaming {
-		ctx.AnthropicStream = anthropic.NewStreamState()
-	}
 	if decisionName != "" {
 		ctx.VSRSelectedDecision = r.Config.GetDecisionByName(decisionName)
 	}
