@@ -24,13 +24,6 @@ func (r *OpenAIRouter) handleAnthropicRouting(
 	ctx *RequestContext,
 ) (*ext_proc.ProcessingResponse, error) {
 	logging.Infof("Routing to Anthropic API via Envoy for model: %s (original: %s)", targetModel, originalModel)
-	if ctx.ExpectStreamingResponse {
-		logging.Warnf("Streaming not supported for Anthropic backend, rejecting request for model: %s", targetModel)
-		return r.createErrorResponse(
-			400,
-			"Streaming is not supported for Anthropic models. Please set stream=false in your request.",
-		), nil
-	}
 
 	accessKey, anthropicBody, errorResponse := r.prepareAnthropicRoutingRequest(
 		openAIRequest,
@@ -64,15 +57,26 @@ func (r *OpenAIRouter) prepareAnthropicRoutingRequest(
 	}
 
 	openAIRequest.Model = targetModel
+	streaming := ctx.ExpectStreamingResponse
 	anthropicBody, err := anthropic.ToAnthropicRequestBody(openAIRequest)
 	if err != nil {
 		logging.Errorf("Failed to transform request to Anthropic format: %v", err)
 		return "", nil, r.createErrorResponse(500, fmt.Sprintf("Request transformation error: %v", err))
 	}
+	if streaming {
+		anthropicBody, err = anthropic.WithStreamingRequestBody(anthropicBody)
+		if err != nil {
+			logging.Errorf("Failed to enable Anthropic streaming on request: %v", err)
+			return "", nil, r.createErrorResponse(500, fmt.Sprintf("Request transformation error: %v", err))
+		}
+	}
 
 	ctx.RequestModel = targetModel
 	ctx.VSRSelectedModel = targetModel
 	ctx.APIFormat = config.APIFormatAnthropic
+	if streaming {
+		ctx.AnthropicStream = anthropic.NewStreamState()
+	}
 	if decisionName != "" {
 		ctx.VSRSelectedDecision = r.Config.GetDecisionByName(decisionName)
 	}
@@ -114,7 +118,12 @@ func (r *OpenAIRouter) buildAnthropicRoutingResponse(
 	}
 
 	bodyLength := len(anthropicBody)
-	anthropicHeaders := anthropic.BuildRequestHeaders(accessKey, bodyLength, messagesPath)
+	var anthropicHeaders []anthropic.HeaderKeyValue
+	if ctx.ExpectStreamingResponse {
+		anthropicHeaders = anthropic.BuildStreamingRequestHeaders(accessKey, bodyLength, messagesPath)
+	} else {
+		anthropicHeaders = anthropic.BuildRequestHeaders(accessKey, bodyLength, messagesPath)
+	}
 	setHeaders := make([]*core.HeaderValueOption, 0, len(anthropicHeaders)+8)
 	for _, header := range anthropicHeaders {
 		setHeaders = append(setHeaders, &core.HeaderValueOption{

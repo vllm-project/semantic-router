@@ -6,6 +6,7 @@ import (
 
 	"go.opentelemetry.io/otel/trace"
 
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/anthropic"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/projectiontrace"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/ratelimit"
@@ -56,8 +57,9 @@ type RequestContext struct {
 	ProcessingStartTime time.Time
 
 	// Streaming detection
-	ExpectStreamingResponse bool // set from request Accept header or stream parameter
-	IsStreamingResponse     bool // set from response Content-Type
+	ExpectStreamingResponse bool                   // set from request Accept header or stream parameter
+	IsStreamingResponse     bool                   // set from response Content-Type
+	AnthropicStream         *anthropic.StreamState // Anthropic SSE → OpenAI translation state
 
 	// Semi-streaming body handler (non-nil when Envoy sends STREAMED body chunks)
 	StreamedBody *StreamedBodyHandler

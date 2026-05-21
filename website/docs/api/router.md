@@ -86,7 +86,7 @@ Minimal request:
 - The router converts the upstream request to Anthropic `POST /v1/messages` and converts the response back to OpenAI-compatible output.
 - Upstream host, path, and optional `extra_headers` come from `backend_refs` and the endpoint provider profile (`base_url`, optional `chat_path`).
 - OpenAI-style `tools`, `tool_calls`, and `tool` messages are converted for Anthropic backends.
-- Streaming is not supported for Anthropic-backed routing.
+- Streaming (`stream: true`) is supported; Anthropic SSE is translated to OpenAI `chat.completion.chunk` SSE, including tool-call deltas.
 
 ### vLLM Omni and Multimodal/Image Generation
 

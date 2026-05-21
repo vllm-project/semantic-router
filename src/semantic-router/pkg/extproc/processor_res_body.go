@@ -27,6 +27,10 @@ func (r *OpenAIRouter) handleResponseBody(v *ext_proc.ProcessingRequest_Response
 		return looperResponse, nil
 	}
 
+	if ctx.IsStreamingResponse && ctx.APIFormat == config.APIFormatAnthropic {
+		return r.handleAnthropicStreamingResponseBody(v.ResponseBody.Body, ctx), nil
+	}
+
 	responseBody, anthropicTransformed, err := r.normalizeProviderResponseBody(v.ResponseBody.Body, ctx)
 	if err != nil {
 		return r.createErrorResponse(502, fmt.Sprintf("Response transformation error: %v", err)), nil
