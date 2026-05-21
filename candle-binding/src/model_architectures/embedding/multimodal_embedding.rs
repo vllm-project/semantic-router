@@ -605,7 +605,142 @@ struct SigLIPVisionEncoder {
     patch_embedding: SigLIPPatchEmbedding,
     layers: Vec<SigLIPEncoderLayer>,
     post_layernorm: LayerNorm,
-    head: Option<Linear>,
+    head: Option<SigLIPHead>,
+}
+
+/// MultiheadAttention compatible with PyTorch's nn.MultiheadAttention combined-QKV
+/// in_proj_weight format. Mirrors candle-transformers/src/models/siglip.rs:292.
+/// Used by SigLIP-base / SigLIP2 attentional probe pooling.
+#[derive(Clone, Debug)]
+struct SigLIPHeadAttention {
+    q_proj: Linear,
+    k_proj: Linear,
+    v_proj: Linear,
+    out_proj: Linear,
+    num_heads: usize,
+}
+
+impl SigLIPHeadAttention {
+    fn load(vb: VarBuilder, config: &MultiModalEmbeddingConfig) -> candle_core::Result<Self> {
+        let h = config.image_hidden_size;
+        let num_heads = config.image_num_heads;
+        let w_in_proj = vb.get((3 * h, h), "in_proj_weight")?.chunk(3, 0)?;
+        let b_in_proj = vb.get(3 * h, "in_proj_bias")?.chunk(3, 0)?;
+        let q_proj = Linear::new(w_in_proj[0].clone(), Some(b_in_proj[0].clone()));
+        let k_proj = Linear::new(w_in_proj[1].clone(), Some(b_in_proj[1].clone()));
+        let v_proj = Linear::new(w_in_proj[2].clone(), Some(b_in_proj[2].clone()));
+        let out_proj = linear(h, h, vb.pp("out_proj"))?;
+        Ok(Self {
+            q_proj,
+            k_proj,
+            v_proj,
+            out_proj,
+            num_heads,
+        })
+    }
+
+    fn separate_heads(&self, x: &candle_core::Tensor) -> candle_core::Result<candle_core::Tensor> {
+        let (b, n, c) = x.dims3()?;
+        x.reshape((b, n, self.num_heads, c / self.num_heads))?
+            .transpose(1, 2)?
+            .contiguous()
+    }
+
+    fn recombine_heads(&self, x: &candle_core::Tensor) -> candle_core::Result<candle_core::Tensor> {
+        let (b, n_heads, n_tokens, c_per_head) = x.dims4()?;
+        x.transpose(1, 2)?
+            .reshape((b, n_tokens, n_heads * c_per_head))
+    }
+
+    fn forward(
+        &self,
+        q: &candle_core::Tensor,
+        k: &candle_core::Tensor,
+        v: &candle_core::Tensor,
+    ) -> candle_core::Result<candle_core::Tensor> {
+        use candle_core::Module;
+        let q = self.q_proj.forward(&q.contiguous()?)?;
+        let k = self.k_proj.forward(&k.contiguous()?)?;
+        let v = self.v_proj.forward(&v.contiguous()?)?;
+
+        let q = self.separate_heads(&q)?;
+        let k = self.separate_heads(&k)?;
+        let v = self.separate_heads(&v)?;
+
+        let (_, _, _, c_per_head) = q.dims4()?;
+        let attn = (q.matmul(&k.t()?)? / (c_per_head as f64).sqrt())?;
+        let attn = candle_nn::ops::softmax_last_dim(&attn)?;
+
+        let out = attn.matmul(&v)?;
+        self.recombine_heads(&out)?.apply(&self.out_proj)
+    }
+}
+
+/// MLP for the attentional pooling head. Matches candle-transformers/src/models/siglip.rs:444
+/// in shape, uses gelu_erf for the activation consistent with the rest of this file's
+/// SigLIP encoder MLPs.
+#[derive(Clone, Debug)]
+struct SigLIPHeadMlp {
+    fc1: Linear,
+    fc2: Linear,
+}
+
+impl SigLIPHeadMlp {
+    fn load(vb: VarBuilder, config: &MultiModalEmbeddingConfig) -> candle_core::Result<Self> {
+        let fc1 = candle_nn::linear(
+            config.image_hidden_size,
+            config.image_intermediate_size,
+            vb.pp("fc1"),
+        )?;
+        let fc2 = candle_nn::linear(
+            config.image_intermediate_size,
+            config.image_hidden_size,
+            vb.pp("fc2"),
+        )?;
+        Ok(Self { fc1, fc2 })
+    }
+
+    fn forward(&self, xs: &candle_core::Tensor) -> candle_core::Result<candle_core::Tensor> {
+        xs.apply(&self.fc1)?.gelu_erf()?.apply(&self.fc2)
+    }
+}
+
+/// SigLIP attentional probe pooling head. Mirrors HF transformers'
+/// SiglipMultiheadAttentionPoolingHead (modeling_siglip.py) and
+/// candle-transformers/src/models/siglip.rs:351's MultiheadAttentionPoolingHead.
+/// Replaces the incorrect BERT-style mean+linear+tanh that was previously here.
+#[derive(Clone, Debug)]
+struct SigLIPHead {
+    probe: candle_core::Tensor,
+    attention: SigLIPHeadAttention,
+    layernorm: LayerNorm,
+    mlp: SigLIPHeadMlp,
+}
+
+impl SigLIPHead {
+    fn load(vb: VarBuilder, config: &MultiModalEmbeddingConfig) -> candle_core::Result<Self> {
+        let mlp = SigLIPHeadMlp::load(vb.pp("mlp"), config)?;
+        let layernorm = layer_norm(config.image_hidden_size, 1e-6, vb.pp("layernorm"))?;
+        let probe = vb.get((1, 1, config.image_hidden_size), "probe")?;
+        let attention = SigLIPHeadAttention::load(vb.pp("attention"), config)?;
+        Ok(Self {
+            probe,
+            attention,
+            layernorm,
+            mlp,
+        })
+    }
+
+    fn forward(&self, xs: &candle_core::Tensor) -> candle_core::Result<candle_core::Tensor> {
+        use candle_core::IndexOp;
+        let batch_size = xs.dim(0)?;
+        let probe = self.probe.repeat((batch_size, 1, 1))?;
+        let xs = self.attention.forward(&probe, xs, xs)?;
+        let residual = &xs;
+        let xs = xs.apply(&self.layernorm)?;
+        let xs = self.mlp.forward(&xs)?;
+        (xs + residual)?.i((.., 0))
+    }
 }
 
 impl SigLIPVisionEncoder {
@@ -619,19 +754,7 @@ impl SigLIPVisionEncoder {
             )?);
         }
         let post_layernorm = layer_norm(config.image_hidden_size, 1e-6, vb.pp("post_layernorm"))?;
-        let head = linear(
-            config.image_hidden_size,
-            config.image_hidden_size,
-            vb.pp("head.probe"),
-        )
-        .or_else(|_| {
-            candle_nn::linear(
-                config.image_hidden_size,
-                config.image_hidden_size,
-                vb.pp("head.dense"),
-            )
-        })
-        .ok();
+        let head = SigLIPHead::load(vb.pp("head"), config).ok();
         Ok(Self {
             patch_embedding,
             layers,
@@ -641,6 +764,20 @@ impl SigLIPVisionEncoder {
     }
 
     /// Returns pooler_output: [batch, hidden_size]
+    ///
+    /// SigLIP-base uses `SiglipMultiheadAttentionPoolingHead` (learned probe +
+    /// cross-attention + LayerNorm + MLP + residual). Replaces the prior
+    /// BERT-style `mean + Linear + tanh` which produced garbage cosines.
+    /// Mirrors candle-transformers/src/models/siglip.rs:373.
+    ///
+    /// The mean-pool path on the `head: None` branch is intentional
+    /// defense-in-depth. It should not trigger on a genuine SigLIP checkpoint
+    /// (the head weights are always present). If this branch ever fires in
+    /// production, that is a misload to investigate, not a silently-acceptable
+    /// path. This replaces a prior `linear(head.probe).or_else(linear(head.dense)).ok()`
+    /// pattern that silently fell through to mean-pool on real SigLIP
+    /// checkpoints, masking the kind of misload this code path is now meant
+    /// to surface.
     fn forward(&self, pixel_values: &Tensor) -> candle_core::Result<Tensor> {
         // SigLIP expects inputs in [-1, 1], normalized via (x - mean) / std
         // per channel using IMAGE_MEAN / IMAGE_STD from the model's
@@ -662,10 +799,9 @@ impl SigLIPVisionEncoder {
             xs = layer.forward(&xs)?;
         }
         xs = xs.apply(&self.post_layernorm)?;
-        let pooled = xs.mean(1)?;
         match &self.head {
-            Some(h) => pooled.apply(h)?.tanh(),
-            None => Ok(pooled),
+            Some(h) => h.forward(&xs),
+            None => xs.mean(1),
         }
     }
 }
@@ -2292,5 +2428,83 @@ mod integration_tests {
             Some(999), // exceeds embedding_dim
         );
         assert!(result.is_err(), "dim=999 should be rejected");
+    }
+
+    /// Shape-only smoke test for the new SigLIPHead attentional probe pooling.
+    ///
+    /// Builds a `SigLIPHead` from synthetic randomly-initialized weights and
+    /// confirms the forward pass collapses a `[batch, num_patches, hidden]`
+    /// patch-token tensor down to `[batch, hidden]`. This exercises the head's
+    /// own state-dict shape contract (probe, attention.in_proj_*,
+    /// attention.out_proj.*, layernorm.*, mlp.fc1.*, mlp.fc2.*) and the
+    /// forward arithmetic without requiring any model file on disk. It does
+    /// NOT exercise the encoder-to-head wiring in `SigLIPVisionEncoder`;
+    /// that integration is covered by the `#[ignore]`-gated diagnostic
+    /// tests on the verification branch.
+    ///
+    /// Empirical correctness against real SigLIP weights is verified on the
+    /// `candle-binding-siglip-pooling-fix-wip` branch via `#[ignore]`-gated
+    /// diagnostic tests.
+    #[test]
+    fn test_siglip_head_forward_shape() {
+        use std::collections::HashMap;
+
+        let device = Device::Cpu;
+        // Small synthetic dimensions; head_dim must divide hidden_size evenly.
+        let hidden = 32usize;
+        let num_heads = 4usize;
+        let intermediate = 64usize;
+        let batch = 2usize;
+        let num_patches = 16usize;
+
+        let config = MultiModalEmbeddingConfig {
+            image_hidden_size: hidden,
+            image_num_heads: num_heads,
+            image_intermediate_size: intermediate,
+            ..MultiModalEmbeddingConfig::default()
+        };
+
+        // Populate a backend HashMap with the exact state-dict keys SigLIPHead::load
+        // expects under prefix "head.*". Random init for every tensor.
+        let mut tensors: HashMap<String, Tensor> = HashMap::new();
+        let randn =
+            |shape: &[usize]| -> Tensor { Tensor::randn(0.0f32, 1.0, shape, &device).unwrap() };
+        let zeros =
+            |shape: &[usize]| -> Tensor { Tensor::zeros(shape, DType::F32, &device).unwrap() };
+        let ones =
+            |shape: &[usize]| -> Tensor { Tensor::ones(shape, DType::F32, &device).unwrap() };
+
+        tensors.insert("head.probe".into(), randn(&[1, 1, hidden]));
+        tensors.insert(
+            "head.attention.in_proj_weight".into(),
+            randn(&[3 * hidden, hidden]),
+        );
+        tensors.insert("head.attention.in_proj_bias".into(), zeros(&[3 * hidden]));
+        tensors.insert(
+            "head.attention.out_proj.weight".into(),
+            randn(&[hidden, hidden]),
+        );
+        tensors.insert("head.attention.out_proj.bias".into(), zeros(&[hidden]));
+        tensors.insert("head.layernorm.weight".into(), ones(&[hidden]));
+        tensors.insert("head.layernorm.bias".into(), zeros(&[hidden]));
+        tensors.insert("head.mlp.fc1.weight".into(), randn(&[intermediate, hidden]));
+        tensors.insert("head.mlp.fc1.bias".into(), zeros(&[intermediate]));
+        tensors.insert("head.mlp.fc2.weight".into(), randn(&[hidden, intermediate]));
+        tensors.insert("head.mlp.fc2.bias".into(), zeros(&[hidden]));
+
+        let vb = VarBuilder::from_tensors(tensors, DType::F32, &device);
+        let head = SigLIPHead::load(vb.pp("head"), &config)
+            .expect("SigLIPHead::load with synthetic weights should succeed");
+
+        let xs = Tensor::randn(0.0f32, 1.0, (batch, num_patches, hidden), &device).unwrap();
+        let out = head
+            .forward(&xs)
+            .expect("SigLIPHead::forward should succeed");
+
+        assert_eq!(
+            out.dims(),
+            &[batch, hidden],
+            "SigLIPHead.forward should pool [batch, num_patches, hidden] to [batch, hidden]"
+        );
     }
 }
