@@ -4,7 +4,6 @@ package cache
 
 import (
 	"fmt"
-	"strings"
 	"sync"
 	"time"
 
@@ -128,11 +127,8 @@ func NewInMemoryCache(options InMemoryCacheOptions) *InMemoryCache {
 		efSearch = 50 // Default value
 	}
 
-	// Set default embedding model if not specified, normalize to lowercase
-	embeddingModel := strings.ToLower(strings.TrimSpace(options.EmbeddingModel))
-	if embeddingModel == "" {
-		embeddingModel = "bert" // Default: BERT (fastest, lowest memory)
-	}
+	// Store the canonical model name used by embedding dispatch.
+	embeddingModel := normalizeEmbeddingModel(options.EmbeddingModel)
 
 	logging.ComponentEvent("cache", "inmemory_cache_init_started", map[string]interface{}{
 		"enabled":              options.Enabled,
@@ -190,8 +186,7 @@ func (c *InMemoryCache) CheckConnection() error {
 
 // generateEmbedding generates an embedding using the configured model
 func (c *InMemoryCache) generateEmbedding(text string) ([]float32, error) {
-	// Normalize to lowercase for case-insensitive comparison
-	modelName := strings.ToLower(strings.TrimSpace(c.embeddingModel))
+	modelName := c.embeddingModel
 
 	switch modelName {
 	case "qwen3":
@@ -224,7 +219,7 @@ func (c *InMemoryCache) generateEmbedding(text string) ([]float32, error) {
 			return nil, err
 		}
 		return output.Embedding, nil
-	case "bert", "":
+	case "bert":
 		// Use traditional GetEmbedding for BERT (default)
 		return candle_binding.GetEmbedding(text, 0)
 	default:

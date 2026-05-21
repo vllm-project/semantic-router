@@ -90,11 +90,7 @@ func NewMilvusCache(options MilvusCacheOptions) (*MilvusCache, error) {
 		return nil, fmt.Errorf("failed to create Milvus client: %w", err)
 	}
 
-	// Default to "bert" if no embedding model specified
-	embeddingModel := options.EmbeddingModel
-	if embeddingModel == "" {
-		embeddingModel = "bert"
-	}
+	embeddingModel := normalizeEmbeddingModel(options.EmbeddingModel)
 
 	cache := &MilvusCache{
 		client:              milvusClient,
@@ -253,9 +249,6 @@ func (c *MilvusCache) initializeCollection() error {
 // getEmbedding generates an embedding based on the configured embedding model
 func (c *MilvusCache) getEmbedding(text string) ([]float32, error) {
 	modelName := c.embeddingModel
-	if modelName == "" {
-		modelName = "bert"
-	}
 
 	switch modelName {
 	case "qwen3":
@@ -286,7 +279,7 @@ func (c *MilvusCache) getEmbedding(text string) ([]float32, error) {
 			return nil, err
 		}
 		return output.Embedding, nil
-	case "bert", "":
+	case "bert":
 		// Use traditional GetEmbedding for BERT (default)
 		return candle_binding.GetEmbedding(text, 0)
 	default:
