@@ -13,7 +13,7 @@ import (
 
 func TestHandleAnthropicStreamingResponseBody_TranslatesSSE(t *testing.T) {
 	router := &OpenAIRouter{
-		Config: &config.Config{
+		Config: &config.RouterConfig{
 			SemanticCache: config.SemanticCache{Enabled: false},
 		},
 	}
