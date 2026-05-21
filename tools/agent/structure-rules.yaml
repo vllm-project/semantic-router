@@ -53,8 +53,6 @@ legacy_hotspots:
       - dashboard/frontend/src/pages/ConfigPage.tsx
     file_checks: relaxed
   - paths:
-      - dashboard/backend/handlers/config.go
-      - dashboard/backend/handlers/config_test.go
       - dashboard/backend/handlers/deploy.go
       - deploy/addons/redis/redis-cache.go
       - src/semantic-router/pkg/config/canonical_defaults.go
