@@ -109,7 +109,6 @@ func userScopeNamespace(userID string) string {
 	return fmt.Sprintf("%x", digest[:8])
 }
 
-
 const defaultEmbeddingModel = "bert"
 
 // normalizeEmbeddingModel normalizes the embedding model name by trimming whitespace and converting to lowercase.
