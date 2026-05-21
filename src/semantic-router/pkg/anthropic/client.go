@@ -34,6 +34,10 @@ type HeaderKeyValue struct {
 // messagesPath should include any base_url prefix (e.g. /Anthropic/v1/messages for AMD).
 // When empty, AnthropicMessagesPath (/v1/messages) is used.
 func BuildRequestHeaders(apiKey string, bodyLength int, messagesPath string) []HeaderKeyValue {
+	return buildRequestHeaders(apiKey, bodyLength, messagesPath, false)
+}
+
+func buildRequestHeaders(apiKey string, bodyLength int, messagesPath string, streaming bool) []HeaderKeyValue {
 	if strings.TrimSpace(messagesPath) == "" {
 		messagesPath = AnthropicMessagesPath
 	}
@@ -43,6 +47,9 @@ func BuildRequestHeaders(apiKey string, bodyLength int, messagesPath string) []H
 		{Key: "accept-encoding", Value: "identity"},
 		{Key: ":path", Value: messagesPath},
 		{Key: "content-length", Value: fmt.Sprintf("%d", bodyLength)},
+	}
+	if streaming {
+		headers = append(headers, HeaderKeyValue{Key: "accept", Value: "text/event-stream"})
 	}
 	if strings.TrimSpace(apiKey) != "" {
 		headers = append([]HeaderKeyValue{{Key: "x-api-key", Value: apiKey}}, headers...)
