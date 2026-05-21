@@ -95,10 +95,7 @@ func NewValkeyCache(options ValkeyCacheOptions) (*ValkeyCache, error) {
 		return nil, fmt.Errorf("failed to create Valkey client: %w", err)
 	}
 
-	embeddingModel := options.EmbeddingModel
-	if embeddingModel == "" {
-		embeddingModel = "bert"
-	}
+	embeddingModel := normalizeEmbeddingModel(options.EmbeddingModel)
 
 	cache := &ValkeyCache{
 		client:              valkeyClient,
@@ -186,7 +183,7 @@ func (c *ValkeyCache) initializeIndex() error {
 
 // getEmbedding generates an embedding based on the configured embedding model
 func (c *ValkeyCache) getEmbedding(text string) ([]float32, error) {
-	modelName := strings.ToLower(strings.TrimSpace(c.embeddingModel))
+	modelName := c.embeddingModel
 
 	switch modelName {
 	case "qwen3":
@@ -217,7 +214,7 @@ func (c *ValkeyCache) getEmbedding(text string) ([]float32, error) {
 			return nil, err
 		}
 		return output.Embedding, nil
-	case "bert", "":
+	case "bert":
 		// Use traditional GetEmbedding for BERT (default)
 		return candle_binding.GetEmbedding(text, 0)
 	default:

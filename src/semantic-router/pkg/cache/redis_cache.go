@@ -84,11 +84,7 @@ func NewRedisCache(options RedisCacheOptions) (*RedisCache, error) {
 		Protocol: 2, // Use RESP2 protocol for compatibility
 	})
 
-	// Default to "bert" if no embedding model specified
-	embeddingModel := options.EmbeddingModel
-	if embeddingModel == "" {
-		embeddingModel = "bert"
-	}
+	embeddingModel := normalizeEmbeddingModel(options.EmbeddingModel)
 
 	cache := &RedisCache{
 		client:              redisClient,
@@ -219,7 +215,7 @@ func (c *RedisCache) initializeIndex() error {
 
 // getEmbedding generates an embedding based on the configured embedding model
 func (c *RedisCache) getEmbedding(text string) ([]float32, error) {
-	modelName := strings.ToLower(strings.TrimSpace(c.embeddingModel))
+	modelName := c.embeddingModel
 
 	switch modelName {
 	case "qwen3":
@@ -250,7 +246,7 @@ func (c *RedisCache) getEmbedding(text string) ([]float32, error) {
 			return nil, err
 		}
 		return output.Embedding, nil
-	case "bert", "":
+	case "bert":
 		// Use traditional GetEmbedding for BERT (default)
 		return candle_binding.GetEmbedding(text, 0)
 	default:

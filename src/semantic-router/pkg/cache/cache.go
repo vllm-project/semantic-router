@@ -108,3 +108,16 @@ func userScopeNamespace(userID string) string {
 	digest := sha256.Sum256([]byte(userID))
 	return fmt.Sprintf("%x", digest[:8])
 }
+
+
+const defaultEmbeddingModel = "bert"
+
+// normalizeEmbeddingModel normalizes the embedding model name by trimming whitespace and converting to lowercase.
+// If the resulting model name is empty, it returns "bert" as the default embedding model.
+func normalizeEmbeddingModel(model string) string {
+	normalized := strings.ToLower(strings.TrimSpace(model))
+	if normalized == "" {
+		return defaultEmbeddingModel
+	}
+	return normalized
+}

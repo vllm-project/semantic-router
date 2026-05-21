@@ -56,10 +56,7 @@ func NewQdrantCache(opts QdrantCacheOptions) (*QdrantCache, error) {
 	if collectionName == "" {
 		collectionName = "semantic_cache"
 	}
-	embeddingModel := opts.EmbeddingModel
-	if embeddingModel == "" {
-		embeddingModel = "bert"
-	}
+	embeddingModel := normalizeEmbeddingModel(opts.EmbeddingModel)
 
 	client, err := qdrant.NewClient(&qdrant.Config{
 		Host:   opts.Config.Host,
@@ -146,7 +143,9 @@ func (c *QdrantCache) ensureCollection() error {
 }
 
 func (c *QdrantCache) getEmbedding(text string) ([]float32, error) {
-	switch c.embeddingModel {
+	modelName := c.embeddingModel
+
+	switch modelName {
 	case "qwen3":
 		out, err := candle_binding.GetEmbeddingBatched(text, "qwen3", 0)
 		if err != nil {
@@ -171,8 +170,10 @@ func (c *QdrantCache) getEmbedding(text string) ([]float32, error) {
 			return nil, err
 		}
 		return out.Embedding, nil
-	default: // "bert" or ""
+	case "bert":
 		return candle_binding.GetEmbedding(text, 0)
+	default:
+		return nil, fmt.Errorf("unsupported embedding model: %s (must be 'bert', 'qwen3', 'gemma', 'mmbert', or 'multimodal')", c.embeddingModel)
 	}
 }
 
