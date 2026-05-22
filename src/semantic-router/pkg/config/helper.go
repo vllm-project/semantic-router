@@ -42,6 +42,33 @@ func (rc *RouterConfig) GetModelReasoningFamilyName(modelName string) (string, b
 	return modelParams.ReasoningFamily, exists
 }
 
+func (rc *RouterConfig) ModelNameMatches(candidateName string, modelName string) bool {
+	if candidateName == modelName {
+		return true
+	}
+	if rc == nil || rc.ModelConfig == nil {
+		return false
+	}
+
+	candidateKey, candidateExists := rc.resolveModelConfigKey(candidateName)
+	modelKey, modelExists := rc.resolveModelConfigKey(modelName)
+	return candidateExists && modelExists && candidateKey == modelKey
+}
+
+func (c *RouterConfig) resolveModelConfigKey(modelName string) (string, bool) {
+	if _, ok := c.ModelConfig[modelName]; ok {
+		return modelName, true
+	}
+	for configuredName, params := range c.ModelConfig {
+		for _, extID := range params.ExternalModelIDs {
+			if extID == modelName {
+				return configuredName, true
+			}
+		}
+	}
+	return "", false
+}
+
 // GetEffectiveAutoModelName returns the effective auto model name for automatic model selection
 // Returns the configured AutoModelName if set, otherwise defaults to "MoM"
 // This is the primary model name that triggers automatic routing

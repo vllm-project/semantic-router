@@ -485,6 +485,12 @@ func TestGetReasoningEffort(t *testing.T) {
 									ReasoningEffort: "low",
 								},
 							},
+							{
+								Model: "model-openai",
+								ModelReasoningControl: config.ModelReasoningControl{
+									ReasoningEffort: "high",
+								},
+							},
 						},
 					},
 					{
@@ -494,6 +500,15 @@ func TestGetReasoningEffort(t *testing.T) {
 								Model: "model-c",
 								// No reasoning effort specified
 							},
+						},
+					},
+				},
+			},
+			BackendModels: config.BackendModels{
+				ModelConfig: map[string]config.ModelParams{
+					"model-openai": {
+						ExternalModelIDs: map[string]string{
+							"openai": "gpt-5-mini",
 						},
 					},
 				},
@@ -518,6 +533,12 @@ func TestGetReasoningEffort(t *testing.T) {
 			categoryName:   "math",
 			modelName:      "model-b",
 			expectedEffort: "low",
+		},
+		{
+			name:           "Provider model ID resolves model-specific effort",
+			categoryName:   "math",
+			modelName:      "gpt-5-mini",
+			expectedEffort: "high",
 		},
 		{
 			name:           "Falls back to default",
@@ -671,6 +692,12 @@ func TestBuildReasoningRequestFields(t *testing.T) {
 									ReasoningEffort: "low",
 								},
 							},
+							{
+								Model: "openai-alias",
+								ModelReasoningControl: config.ModelReasoningControl{
+									ReasoningEffort: "high",
+								},
+							},
 						},
 					},
 				},
@@ -682,6 +709,12 @@ func TestBuildReasoningRequestFields(t *testing.T) {
 					},
 					"gpt-oss-model": {
 						ReasoningFamily: "gpt-oss",
+					},
+					"openai-alias": {
+						ReasoningFamily: "gpt-oss",
+						ExternalModelIDs: map[string]string{
+							"openai": "gpt-5-mini",
+						},
 					},
 					"phi4": {
 						// No reasoning family
@@ -698,6 +731,7 @@ func TestBuildReasoningRequestFields(t *testing.T) {
 		categoryName       string
 		expectNil          bool
 		expectEffortReturn string
+		profile            *config.ProviderProfile
 		verifyFunc         func(t *testing.T, fields map[string]interface{})
 	}{
 		{
@@ -732,6 +766,23 @@ func TestBuildReasoningRequestFields(t *testing.T) {
 			},
 		},
 		{
+			name:               "OpenAI provider model ID uses modelRef effort",
+			model:              "gpt-5-mini",
+			useReasoning:       true,
+			categoryName:       "test",
+			expectNil:          false,
+			expectEffortReturn: "high",
+			profile:            &config.ProviderProfile{Type: "openai", BaseURL: "https://api.openai.com/v1"},
+			verifyFunc: func(t *testing.T, fields map[string]interface{}) {
+				require.NotNil(t, fields)
+				reasoningEffort, exists := fields["reasoning_effort"]
+				require.True(t, exists)
+				assert.Equal(t, "high", reasoningEffort)
+				_, hasChatTemplate := fields["chat_template_kwargs"]
+				assert.False(t, hasChatTemplate)
+			},
+		},
+		{
 			name:         "Reasoning disabled",
 			model:        "deepseek-v3",
 			useReasoning: false,
@@ -749,7 +800,12 @@ func TestBuildReasoningRequestFields(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			fields, effort := router.buildReasoningRequestFields(tt.model, tt.useReasoning, tt.categoryName)
+			fields, effort := router.buildReasoningRequestFieldsForProvider(
+				tt.model,
+				tt.useReasoning,
+				tt.categoryName,
+				tt.profile,
+			)
 
 			if tt.expectNil {
 				assert.Nil(t, fields)
