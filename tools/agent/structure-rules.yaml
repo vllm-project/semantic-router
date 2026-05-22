@@ -73,7 +73,6 @@ legacy_hotspots:
       - src/vllm-sr/cli/models.py
     file_checks: relaxed
   - paths:
-      - deploy/operator/controllers/semanticrouter_controller.go
       - src/semantic-router/pkg/config/config_test.go
       - src/semantic-router/pkg/dsl/compiler.go
       - src/semantic-router/pkg/dsl/decompiler.go
