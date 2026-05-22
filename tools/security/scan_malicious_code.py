@@ -23,10 +23,11 @@ import os
 import re
 import stat
 import sys
-import tomllib
 from dataclasses import dataclass, field
 from functools import lru_cache
 from pathlib import Path
+
+import tomllib
 
 SEVERITY_ORDER = {"CRITICAL": 0, "HIGH": 1, "MEDIUM": 2, "LOW": 3}
 
@@ -71,23 +72,88 @@ SKIP_DIR_PATTERNS = {
 MAX_FILE_SIZE = 2 * 1024 * 1024
 
 BINARY_EXTENSIONS = {
-    ".so", ".dll", ".dylib", ".pyd", ".exe", ".bin", ".elf", ".o", ".a", ".lib", ".wasm",
+    ".so",
+    ".dll",
+    ".dylib",
+    ".pyd",
+    ".exe",
+    ".bin",
+    ".elf",
+    ".o",
+    ".a",
+    ".lib",
+    ".wasm",
 }
 
 KNOWN_BINARY_EXTENSIONS = {
-    ".png", ".jpg", ".jpeg", ".gif", ".bmp", ".ico", ".webp", ".svg",
-    ".mp3", ".mp4", ".wav", ".avi", ".mkv", ".webm", ".ogg",
-    ".pdf", ".zip", ".gz", ".tar", ".bz2", ".xz", ".7z", ".rar",
-    ".woff", ".woff2", ".ttf", ".otf", ".eot",
-    ".safetensors", ".gguf", ".pt", ".pth", ".onnx", ".pb",
-    ".parquet", ".arrow", ".feather", ".h5", ".hdf5",
-    ".db", ".sqlite", ".sqlite3",
+    ".png",
+    ".jpg",
+    ".jpeg",
+    ".gif",
+    ".bmp",
+    ".ico",
+    ".webp",
+    ".svg",
+    ".mp3",
+    ".mp4",
+    ".wav",
+    ".avi",
+    ".mkv",
+    ".webm",
+    ".ogg",
+    ".pdf",
+    ".zip",
+    ".gz",
+    ".tar",
+    ".bz2",
+    ".xz",
+    ".7z",
+    ".rar",
+    ".woff",
+    ".woff2",
+    ".ttf",
+    ".otf",
+    ".eot",
+    ".safetensors",
+    ".gguf",
+    ".pt",
+    ".pth",
+    ".onnx",
+    ".pb",
+    ".parquet",
+    ".arrow",
+    ".feather",
+    ".h5",
+    ".hdf5",
+    ".db",
+    ".sqlite",
+    ".sqlite3",
 }
 
 SOURCE_EXTENSIONS = {
-    ".py", ".pyw", ".pyi", ".js", ".ts", ".jsx", ".tsx", ".mjs", ".cjs",
-    ".go", ".rs", ".rb", ".pl", ".sh", ".bash", ".zsh", ".ps1",
-    ".yaml", ".yml", ".toml", ".cfg", ".ini", ".json",
+    ".py",
+    ".pyw",
+    ".pyi",
+    ".js",
+    ".ts",
+    ".jsx",
+    ".tsx",
+    ".mjs",
+    ".cjs",
+    ".go",
+    ".rs",
+    ".rb",
+    ".pl",
+    ".sh",
+    ".bash",
+    ".zsh",
+    ".ps1",
+    ".yaml",
+    ".yml",
+    ".toml",
+    ".cfg",
+    ".ini",
+    ".json",
 }
 
 KNOWN_TEST_MARKERS = ("test", "spec", "mock", "fixture", "example")
@@ -247,16 +313,28 @@ def scan_source_patterns(
                 for pattern, severity, desc in obfuscation:
                     if pattern.search(line):
                         result.add(
-                            severity, "OBFUSCATION", str(fpath), lineno, desc, line.strip()
+                            severity,
+                            "OBFUSCATION",
+                            str(fpath),
+                            lineno,
+                            desc,
+                            line.strip(),
                         )
                 for pattern, severity, desc in exfiltration:
                     if pattern.search(line):
                         result.add(
-                            severity, "EXFILTRATION", str(fpath), lineno, desc, line.strip()
+                            severity,
+                            "EXFILTRATION",
+                            str(fpath),
+                            lineno,
+                            desc,
+                            line.strip(),
                         )
                 for pattern, severity, desc in credential:
                     if pattern.search(line):
-                        is_test = any(t in str(fpath).lower() for t in KNOWN_TEST_MARKERS)
+                        is_test = any(
+                            t in str(fpath).lower() for t in KNOWN_TEST_MARKERS
+                        )
                         result.add(
                             "LOW" if is_test else severity,
                             "CREDENTIAL_ACCESS",
@@ -271,7 +349,12 @@ def scan_source_patterns(
                     for lineno, line in enumerate(lines, 1):
                         if pattern.search(line):
                             result.add(
-                                severity, "INSTALL_HOOK", str(fpath), lineno, desc, line.strip()
+                                severity,
+                                "INSTALL_HOOK",
+                                str(fpath),
+                                lineno,
+                                desc,
+                                line.strip(),
                             )
 
             for match in long_b64_re.findall(content):
@@ -296,7 +379,16 @@ def scan_binary_anomalies(root: Path, result: ScanResult):
         rel_dir = Path(dirpath).relative_to(root)
         in_build = any(
             p in str(rel_dir).lower()
-            for p in ("build", "dist", "target", "release", "debug", "vendor", "third_party", "3rdparty")
+            for p in (
+                "build",
+                "dist",
+                "target",
+                "release",
+                "debug",
+                "vendor",
+                "third_party",
+                "3rdparty",
+            )
         )
         for fname in filenames:
             fpath = Path(dirpath) / fname
@@ -308,12 +400,18 @@ def scan_binary_anomalies(root: Path, result: ScanResult):
                 exe_type = has_elf_pe_macho_header(fpath)
                 if exe_type:
                     result.add(
-                        "HIGH", "BINARY_IN_SOURCE", str(fpath), 0,
+                        "HIGH",
+                        "BINARY_IN_SOURCE",
+                        str(fpath),
+                        0,
                         f"Compiled {exe_type} binary in source tree — verify intentional",
                     )
                 else:
                     result.add(
-                        "MEDIUM", "BINARY_IN_SOURCE", str(fpath), 0,
+                        "MEDIUM",
+                        "BINARY_IN_SOURCE",
+                        str(fpath),
+                        0,
                         f"Binary file ({suffix}) in source tree",
                     )
 
@@ -322,7 +420,10 @@ def scan_binary_anomalies(root: Path, result: ScanResult):
                 parent_py = fpath.parent.parent / fpath.stem
                 if not py_source.exists() and not parent_py.with_suffix(".py").exists():
                     result.add(
-                        "HIGH", "ORPHAN_PYC", str(fpath), 0,
+                        "HIGH",
+                        "ORPHAN_PYC",
+                        str(fpath),
+                        0,
                         "Compiled .pyc without .py source — possible bytecode injection",
                     )
 
@@ -335,13 +436,19 @@ def scan_binary_anomalies(root: Path, result: ScanResult):
                 exe_type = has_elf_pe_macho_header(fpath)
                 if exe_type:
                     result.add(
-                        "MEDIUM", "BINARY_EXECUTABLE", str(fpath), 0,
+                        "MEDIUM",
+                        "BINARY_EXECUTABLE",
+                        str(fpath),
+                        0,
                         f"Executable {exe_type} binary without extension",
                     )
 
             if suffix in (".py", ".js", ".sh", ".ts") and is_binary_file(fpath):
                 result.add(
-                    "HIGH", "BINARY_MASQUERADE", str(fpath), 0,
+                    "HIGH",
+                    "BINARY_MASQUERADE",
+                    str(fpath),
+                    0,
                     f"Source extension ({suffix}) with binary data — possible masquerade",
                 )
 
@@ -358,7 +465,10 @@ def scan_binary_anomalies(root: Path, result: ScanResult):
                             ent = entropy(f.read(min(size, 65536)))
                         if ent > 7.5:
                             result.add(
-                                "MEDIUM", "HIGH_ENTROPY", str(fpath), 0,
+                                "MEDIUM",
+                                "HIGH_ENTROPY",
+                                str(fpath),
+                                0,
                                 f"High entropy binary ({ent:.2f} bits/byte) — "
                                 "possible encrypted/compressed payload",
                             )
