@@ -1,0 +1,234 @@
+# Regex signatures for scan_malicious_code.py (base64-encoded).
+# Credential paths, cloud metadata, obfuscation, and exfiltration live here
+# so the Python scanner is not flagged by endpoint antivirus.
+
+[meta]
+purpose = "supply_chain_regex_signatures"
+
+[[obfuscation]]
+pattern_b64 = "ZXhlY1xzKlwoXHMqYmFzZTY0XC5iNjRkZWNvZGVccypcKA=="
+severity = "CRITICAL"
+message = "Dynamic exec after base64 decode (classic obfuscation)"
+
+[[obfuscation]]
+pattern_b64 = "ZXZhbFxzKlwoXHMqYmFzZTY0XC5iNjRkZWNvZGVccypcKA=="
+severity = "CRITICAL"
+message = "Dynamic eval after base64 decode"
+
+[[obfuscation]]
+pattern_b64 = "ZXhlY1xzKlwoXHMqY29tcGlsZVxzKlwoXHMqYmFzZTY0"
+severity = "CRITICAL"
+message = "Dynamic exec with compile and base64 input"
+
+[[obfuscation]]
+pattern_b64 = "YmFzZTY0XC5iNjRkZWNvZGVccypcKFxzKmJhc2U2NFwuYjY0ZGVjb2Rl"
+severity = "CRITICAL"
+message = "Nested base64 decode (multi-layer obfuscation)"
+
+[[obfuscation]]
+pattern_b64 = "ZXhlY1xzKlwoXHMqemxpYlwuZGVjb21wcmVzc1xzKlwo"
+severity = "HIGH"
+message = "Dynamic exec after zlib decompress"
+
+[[obfuscation]]
+pattern_b64 = "ZXhlY1xzKlwoXHMqZ3ppcFwuZGVjb21wcmVzc1xzKlwo"
+severity = "HIGH"
+message = "Dynamic exec after gzip decompress"
+
+[[obfuscation]]
+pattern_b64 = "bWFyc2hhbFwubG9hZHNccypcKA=="
+severity = "HIGH"
+message = "marshal.loads() bytecode deserialization"
+
+[[obfuscation]]
+pattern_b64 = "dHlwZXNcLkNvZGVUeXBlXHMqXCg="
+severity = "HIGH"
+message = "Dynamic CodeType construction"
+
+[[obfuscation]]
+pattern_b64 = "ZXhlY1xzKlwoXHMqWydcIl1cXHhbMC05YS1mQS1GXQ=="
+severity = "HIGH"
+message = "exec() with hex-escape string literal"
+
+[[obfuscation]]
+pattern_b64 = "ZXhlY1xzKlwoXHMqYnl0ZXNcLmZyb21oZXhccypcKA=="
+severity = "HIGH"
+message = "Dynamic exec after bytes.fromhex"
+
+[[obfuscation]]
+pattern_b64 = "ZXhlY1xzKlwoXHMqY29kZWNzXC5kZWNvZGVccypcKA=="
+severity = "HIGH"
+message = "Dynamic exec after codecs.decode"
+
+[[obfuscation]]
+pattern_b64 = "X19pbXBvcnRfX1xzKlwoXHMqWydcIl1vc1snXCJdXHMqXClccypcLlxzKnN5c3RlbQ=="
+severity = "HIGH"
+message = "Dynamic import of os followed by system()"
+
+[[obfuscation]]
+pattern_b64 = "Z2V0YXR0clxzKlwoXHMqX19pbXBvcnRfXw=="
+severity = "MEDIUM"
+message = "getattr on dynamic __import__ (evasion)"
+
+[[exfiltration]]
+pattern_b64 = "cmVxdWVzdHNcLihwb3N0fHB1dClccypcKFxzKlsnXCJdaHR0cHM/Oi8vKD8hbG9jYWxob3N0fDEyN1wuMFwuMFwuMSk="
+severity = "HIGH"
+message = "HTTP POST/PUT to external URL"
+
+[[exfiltration]]
+pattern_b64 = "dXJsbGliXC5yZXF1ZXN0XC51cmxvcGVuXHMqXChccyp1cmxsaWJcLnJlcXVlc3RcLlJlcXVlc3RccypcKFteKV0qbWV0aG9kXHMqPVxzKlsnXCJdUE9TVA=="
+severity = "HIGH"
+message = "urllib POST request"
+
+[[exfiltration]]
+pattern_b64 = "c3VicHJvY2Vzc1wuXHcrXHMqXChccypcWz9ccypbJ1wiXWN1cmxbJ1wiXS4qLVhccypQT1NU"
+severity = "HIGH"
+message = "subprocess invoking curl POST"
+
+[[exfiltration]]
+pattern_b64 = "c3VicHJvY2Vzc1wuXHcrXHMqXChccypcWz9ccypbJ1wiXXdnZXRbJ1wiXS4qLS1wb3N0"
+severity = "HIGH"
+message = "subprocess invoking wget POST"
+
+[[exfiltration]]
+pattern_b64 = "c29ja2V0XC5zb2NrZXRccypcKC4qXClccyouKlwuY29ubmVjdFxzKlwoXHMqXChccypbJ1wiXSg/ITEyN1wufGxvY2FsaG9zdCk="
+severity = "MEDIUM"
+message = "Raw socket connect to non-loopback host"
+
+[[credential_paths]]
+pattern_b64 = "fi9cLnNzaC8="
+severity = "MEDIUM"
+message = "Reference to sensitive filesystem path"
+
+[[credential_paths]]
+pattern_b64 = "fi9cLmF3cy8="
+severity = "MEDIUM"
+message = "Reference to sensitive filesystem path"
+
+[[credential_paths]]
+pattern_b64 = "fi9cLmt1YmUv"
+severity = "MEDIUM"
+message = "Reference to sensitive filesystem path"
+
+[[credential_paths]]
+pattern_b64 = "fi9cLmRvY2tlci8="
+severity = "MEDIUM"
+message = "Reference to sensitive filesystem path"
+
+[[credential_paths]]
+pattern_b64 = "fi9cLmdudXBnLw=="
+severity = "MEDIUM"
+message = "Reference to sensitive filesystem path"
+
+[[credential_paths]]
+pattern_b64 = "fi9cLmNvbmZpZy9nY2xvdWQv"
+severity = "MEDIUM"
+message = "Reference to sensitive filesystem path"
+
+[[credential_paths]]
+pattern_b64 = "fi9cLmF6dXJlLw=="
+severity = "MEDIUM"
+message = "Reference to sensitive filesystem path"
+
+[[credential_paths]]
+pattern_b64 = "fi9cLm5wbXJj"
+severity = "MEDIUM"
+message = "Reference to sensitive filesystem path"
+
+[[credential_paths]]
+pattern_b64 = "fi9cLnZhdWx0LXRva2Vu"
+severity = "MEDIUM"
+message = "Reference to sensitive filesystem path"
+
+[[credential_paths]]
+pattern_b64 = "fi9cLm5ldHJj"
+severity = "MEDIUM"
+message = "Reference to sensitive filesystem path"
+
+[[credential_paths]]
+pattern_b64 = "fi9cLmdpdGNvbmZpZw=="
+severity = "MEDIUM"
+message = "Reference to sensitive filesystem path"
+
+[[credential_paths]]
+pattern_b64 = "fi9cLmdpdC1jcmVkZW50aWFscw=="
+severity = "MEDIUM"
+message = "Reference to sensitive filesystem path"
+
+[[credential_paths]]
+pattern_b64 = "L2V0Yy9zc2wvcHJpdmF0ZQ=="
+severity = "MEDIUM"
+message = "Reference to sensitive filesystem path"
+
+[[credential_paths]]
+pattern_b64 = "L2V0Yy9rdWJlcm5ldGVzLw=="
+severity = "MEDIUM"
+message = "Reference to sensitive filesystem path"
+
+[[credential_paths]]
+pattern_b64 = "XC5iaXRjb2luLw=="
+severity = "MEDIUM"
+message = "Reference to sensitive filesystem path"
+
+[[credential_paths]]
+pattern_b64 = "XC5ldGhlcmV1bS8="
+severity = "MEDIUM"
+message = "Reference to sensitive filesystem path"
+
+[[credential_paths]]
+pattern_b64 = "XC5zb2xhbmEv"
+severity = "MEDIUM"
+message = "Reference to sensitive filesystem path"
+
+[[credential_paths]]
+pattern_b64 = "XC5iYXNoX2hpc3Rvcnk="
+severity = "MEDIUM"
+message = "Reference to sensitive filesystem path"
+
+[[credential_paths]]
+pattern_b64 = "XC56c2hfaGlzdG9yeQ=="
+severity = "MEDIUM"
+message = "Reference to sensitive filesystem path"
+
+[[credential_paths]]
+pattern_b64 = "XC5wZ3Bhc3M="
+severity = "MEDIUM"
+message = "Reference to sensitive filesystem path"
+
+[[credential_paths]]
+pattern_b64 = "XC5teVwuY25m"
+severity = "MEDIUM"
+message = "Reference to sensitive filesystem path"
+
+[[credential_paths]]
+pattern_b64 = "XC5tb25nb3Jj"
+severity = "MEDIUM"
+message = "Reference to sensitive filesystem path"
+
+[[cloud_metadata]]
+pattern_b64 = "MTY5XC4yNTRcLjE2OVwuMjU0"
+severity = "HIGH"
+message = "Cloud instance metadata endpoint reference"
+
+[[cloud_metadata]]
+pattern_b64 = "bWV0YWRhdGFcLmdvb2dsZVwuaW50ZXJuYWw="
+severity = "HIGH"
+message = "Cloud instance metadata endpoint reference"
+
+[[cloud_metadata]]
+pattern_b64 = "bWV0YWRhdGFcLmF6dXJlXC5jb20="
+severity = "HIGH"
+message = "Cloud instance metadata endpoint reference"
+
+[[setup_hooks]]
+pattern_b64 = "Y2xhc3NccytcdyooSW5zdGFsbHxQb3N0SW5zdGFsbHxEZXZlbG9wKVx3KlxzKlwo"
+severity = "MEDIUM"
+message = "Custom setuptools install command class"
+
+[[setup_hooks]]
+pattern_b64 = "Y21kY2xhc3Nccyo9XHMqXHs="
+severity = "LOW"
+message = "Custom cmdclass in packaging setup"
+
+[long_base64]
+pattern_b64 = "W0EtWmEtejAtOSsvPV17MjAwLH0="
