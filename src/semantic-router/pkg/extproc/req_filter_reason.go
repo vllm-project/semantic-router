@@ -3,6 +3,8 @@ package extproc
 import (
 	"encoding/json"
 	"fmt"
+	"net/url"
+	"strings"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/consts"
@@ -10,8 +12,17 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/metrics"
 )
 
-// setReasoningModeToRequestBody adds chat_template_kwargs to the JSON request body
 func (r *OpenAIRouter) setReasoningModeToRequestBody(requestBody []byte, enabled bool, categoryName string) ([]byte, error) {
+	return r.setReasoningModeToRequestBodyForProvider(requestBody, enabled, categoryName, nil)
+}
+
+// setReasoningModeToRequestBodyForProvider adds provider-compatible reasoning fields to the JSON request body.
+func (r *OpenAIRouter) setReasoningModeToRequestBodyForProvider(
+	requestBody []byte,
+	enabled bool,
+	categoryName string,
+	profile *config.ProviderProfile,
+) ([]byte, error) {
 	// Parse the JSON request body
 	var requestMap map[string]interface{}
 	if err := json.Unmarshal(requestBody, &requestMap); err != nil {
@@ -63,9 +74,13 @@ func (r *OpenAIRouter) setReasoningModeToRequestBody(requestBody []byte, enabled
 				reasoningApplied = true
 			case "reasoning_effort":
 				effort := r.getReasoningEffort(categoryName, model)
-				// Put reasoning_effort inside chat_template_kwargs (vLLM requirement)
-				chatTemplateKwargs[familyConfig.Parameter] = effort
-				requestMap["chat_template_kwargs"] = chatTemplateKwargs
+				if usesTopLevelReasoningEffort(profile) {
+					requestMap[familyConfig.Parameter] = effort
+				} else {
+					// Put reasoning_effort inside chat_template_kwargs (vLLM requirement)
+					chatTemplateKwargs[familyConfig.Parameter] = effort
+					requestMap["chat_template_kwargs"] = chatTemplateKwargs
+				}
 				appliedEffort = effort
 				reasoningApplied = true
 			default:
@@ -81,9 +96,15 @@ func (r *OpenAIRouter) setReasoningModeToRequestBody(requestBody []byte, enabled
 		if familyConfig != nil {
 			switch familyConfig.Type {
 			case "reasoning_effort":
-				// For reasoning_effort models, set effort in chat_template_kwargs
-				chatTemplateKwargs[familyConfig.Parameter] = originalReasoningEffort
-				requestMap["chat_template_kwargs"] = chatTemplateKwargs
+				if usesTopLevelReasoningEffort(profile) {
+					if hasOriginalEffort {
+						requestMap[familyConfig.Parameter] = originalReasoningEffort
+					}
+				} else {
+					// For vLLM reasoning_effort models, set effort in chat_template_kwargs.
+					chatTemplateKwargs[familyConfig.Parameter] = originalReasoningEffort
+					requestMap["chat_template_kwargs"] = chatTemplateKwargs
+				}
 				if s, ok := originalReasoningEffort.(string); ok {
 					appliedEffort = s
 				}
@@ -117,9 +138,9 @@ func (r *OpenAIRouter) setReasoningModeToRequestBody(requestBody []byte, enabled
 
 		if familyConfig != nil {
 			// Use the model's actual reasoning family name from model_config
-			if r.Config != nil && r.Config.ModelConfig != nil {
-				if modelParams, exists := r.Config.ModelConfig[model]; exists && modelParams.ReasoningFamily != "" {
-					modelFamily = modelParams.ReasoningFamily
+			if r.Config != nil {
+				if familyName, exists := r.Config.GetModelReasoningFamilyName(model); exists {
+					modelFamily = familyName
 				}
 			}
 
@@ -144,6 +165,17 @@ func (r *OpenAIRouter) setReasoningModeToRequestBody(requestBody []byte, enabled
 	}
 
 	return modifiedBody, nil
+}
+
+func usesTopLevelReasoningEffort(profile *config.ProviderProfile) bool {
+	if profile == nil || profile.Type != "openai" || profile.BaseURL == "" {
+		return false
+	}
+	u, err := url.Parse(profile.BaseURL)
+	if err != nil {
+		return false
+	}
+	return strings.EqualFold(u.Hostname(), "api.openai.com")
 }
 
 // getReasoningEffort returns the reasoning effort level for a given decision and model
@@ -189,6 +221,15 @@ func (r *OpenAIRouter) getModelReasoningFamily(model string) *config.ReasoningFa
 
 // buildReasoningRequestFields returns the appropriate fields to add to the request based on model config
 func (r *OpenAIRouter) buildReasoningRequestFields(model string, useReasoning bool, categoryName string) (map[string]interface{}, string) {
+	return r.buildReasoningRequestFieldsForProvider(model, useReasoning, categoryName, nil)
+}
+
+func (r *OpenAIRouter) buildReasoningRequestFieldsForProvider(
+	model string,
+	useReasoning bool,
+	categoryName string,
+	profile *config.ProviderProfile,
+) (map[string]interface{}, string) {
 	familyConfig := r.getModelReasoningFamily(model)
 	if familyConfig == nil {
 		// No reasoning family configured for this model - don't apply any reasoning syntax
@@ -210,6 +251,9 @@ func (r *OpenAIRouter) buildReasoningRequestFields(model string, useReasoning bo
 		return map[string]interface{}{"chat_template_kwargs": kwargs}, ""
 	case "reasoning_effort":
 		effort := r.getReasoningEffort(categoryName, model)
+		if usesTopLevelReasoningEffort(profile) {
+			return map[string]interface{}{familyConfig.Parameter: effort}, effort
+		}
 		// Put reasoning_effort inside chat_template_kwargs (vLLM requirement)
 		kwargs := map[string]interface{}{
 			familyConfig.Parameter: effort,

@@ -67,6 +67,7 @@ func (r *OpenAIRouter) modifyRequestBodyForAutoRouting(
 	matchedModel string,
 	decisionName string,
 	useReasoning bool,
+	profile *config.ProviderProfile,
 	ctx *RequestContext,
 ) ([]byte, error) {
 	openAIRequest.Model = matchedModel
@@ -79,7 +80,12 @@ func (r *OpenAIRouter) modifyRequestBodyForAutoRouting(
 	}
 
 	if decisionName != "" {
-		modifiedBody, err = r.setReasoningModeToRequestBody(modifiedBody, useReasoning, decisionName)
+		modifiedBody, err = r.setReasoningModeToRequestBodyForProvider(
+			modifiedBody,
+			useReasoning,
+			decisionName,
+			profile,
+		)
 		if err != nil {
 			logging.Errorf("Error setting reasoning mode %v to request: %v", useReasoning, err)
 			metrics.RecordRequestError(matchedModel, "serialization_error")

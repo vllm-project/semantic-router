@@ -10,27 +10,36 @@ import (
 
 // GetModelReasoningFamily returns the reasoning family configuration for a given model name
 func (rc *RouterConfig) GetModelReasoningFamily(modelName string) *ReasoningFamilyConfig {
-	if rc == nil || rc.ModelConfig == nil || rc.ReasoningFamilies == nil {
+	familyName, ok := rc.GetModelReasoningFamilyName(modelName)
+	if !ok {
 		return nil
 	}
 
-	// Look up the model in model_config
-	modelParams, exists := rc.ModelConfig[modelName]
-	if !exists || modelParams.ReasoningFamily == "" {
-		_, baseParams, fallback := rc.resolveLoRABaseModel(modelName)
-		if !fallback || baseParams.ReasoningFamily == "" {
-			return nil
-		}
-		modelParams = baseParams
-	}
-
-	// Look up the reasoning family configuration
-	familyConfig, exists := rc.ReasoningFamilies[modelParams.ReasoningFamily]
+	familyConfig, exists := rc.ReasoningFamilies[familyName]
 	if !exists {
 		return nil
 	}
 
 	return &familyConfig
+}
+
+func (rc *RouterConfig) GetModelReasoningFamilyName(modelName string) (string, bool) {
+	if rc == nil || rc.ModelConfig == nil || rc.ReasoningFamilies == nil {
+		return "", false
+	}
+
+	// Look up the model in model_config, including provider_model_id/external IDs
+	// because request-body mutation may already have rewritten the model field.
+	modelParams, exists := rc.resolveModelConfig(modelName)
+	if !exists || modelParams.ReasoningFamily == "" {
+		_, baseParams, fallback := rc.resolveLoRABaseModel(modelName)
+		if !fallback || baseParams.ReasoningFamily == "" {
+			return "", false
+		}
+		modelParams = baseParams
+	}
+	_, exists = rc.ReasoningFamilies[modelParams.ReasoningFamily]
+	return modelParams.ReasoningFamily, exists
 }
 
 // GetEffectiveAutoModelName returns the effective auto model name for automatic model selection
