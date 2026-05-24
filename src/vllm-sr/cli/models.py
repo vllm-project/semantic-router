@@ -556,9 +556,7 @@ class HybridHistoryConfig(BaseModel):
 
     history_horizon: Optional[int] = Field(default=None, ge=0)
     min_history_steps: Optional[int] = Field(default=None, ge=0)
-    history_confidence_threshold: Optional[float] = Field(
-        default=None, ge=0.0, le=1.0
-    )
+    history_confidence_threshold: Optional[float] = Field(default=None, ge=0.0, le=1.0)
     weight_semantic: Optional[float] = Field(default=None, ge=0.0)
     weight_history_transition: Optional[float] = Field(default=None, ge=0.0)
     weight_decision_prior: Optional[float] = Field(default=None, ge=0.0)
@@ -581,9 +579,7 @@ class AdvancedToolFilteringConfig(BaseModel):
     min_combined_score: Optional[float] = Field(default=None, ge=0.0, le=1.0)
     weights: Optional[ToolFilteringWeights] = None
     use_category_filter: Optional[bool] = None
-    category_confidence_threshold: Optional[float] = Field(
-        default=None, ge=0.0, le=1.0
-    )
+    category_confidence_threshold: Optional[float] = Field(default=None, ge=0.0, le=1.0)
     allow_tools: Optional[List[str]] = None
     block_tools: Optional[List[str]] = None
     hybrid_history: Optional[HybridHistoryConfig] = None
