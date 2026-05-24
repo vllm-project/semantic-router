@@ -117,7 +117,7 @@ func (r *OpenAIRouter) runSemanticToolSelection(
 	ctx *RequestContext,
 	toolsCfg *config.ToolsPluginConfig,
 ) error {
-	selectedTools, strategyID, confidence, latency, toolErr := r.findToolsForQuery(classificationText, historySummary, ctx, toolsCfg)
+	selectedTools, strategyID, confidence, latency, toolErr := r.findToolsForQuery(openAIRequest, classificationText, historySummary, ctx, toolsCfg)
 
 	emitToolObservability(response, strategyID, confidence, latency)
 	metrics.RecordToolsRetrieval(strategyID, latency.Seconds())
@@ -314,6 +314,7 @@ func (r *OpenAIRouter) executeRetrieval(ctx context.Context, strategyID string, 
 // retrieval, applies advanced filtering, and returns the final tool list together
 // with the strategy name, top-1 confidence score, and retrieval wall-clock time.
 func (r *OpenAIRouter) findToolsForQuery(
+	openAIRequest *openai.ChatCompletionNewParams,
 	query, historySummary string,
 	ctx *RequestContext,
 	toolsCfg *config.ToolsPluginConfig,
@@ -323,10 +324,11 @@ func (r *OpenAIRouter) findToolsForQuery(
 		topK = 3
 	}
 	advanced := mergeAdvancedToolFiltering(r.Config.Tools.AdvancedFiltering, toolsCfg)
-	return r.findToolsForQueryExt(query, historySummary, ctx, toolsCfg, topK, advanced, toolsCfg.EffectiveStrategy(), nil, r.Config.Tools.SimilarityThreshold)
+	return r.findToolsForQueryExt(openAIRequest, query, historySummary, ctx, toolsCfg, topK, advanced, toolsCfg.EffectiveStrategy(), nil, r.Config.Tools.SimilarityThreshold)
 }
 
 func (r *OpenAIRouter) findToolsForQueryExt(
+	openAIRequest *openai.ChatCompletionNewParams,
 	query, historySummary string,
 	ctx *RequestContext,
 	toolsCfg *config.ToolsPluginConfig,
@@ -362,6 +364,24 @@ func (r *OpenAIRouter) findToolsForQueryExt(
 
 	if advanced == nil || !advanced.Enabled {
 		return selectTopKTools(retrieved.Tools, topK), retrieved.StrategyID, retrieved.Confidence, latency, nil
+	}
+
+	if config.IsHybridHistoryRetrieval(advanced) {
+		transition := extractToolTransitionContextFromRequest(openAIRequest, config.ResolveHybridHistoryHorizon(advanced), ctx)
+		decisionConfidence := float64(0)
+		if ctx != nil {
+			decisionConfidence = float64(ctx.VSRSelectedDecisionConfidence)
+		}
+		selected := tools.FilterAndRankToolsWithConversation(
+			query,
+			retrieved.Tools,
+			topK,
+			advanced,
+			resolveCategory(advanced, ctx),
+			transition.RecentToolNames,
+			decisionConfidence,
+		)
+		return selected, retrieved.StrategyID, retrieved.Confidence, latency, nil
 	}
 
 	selected := tools.FilterAndRankTools(query, retrieved.Tools, topK, advanced, resolveCategory(advanced, ctx))
