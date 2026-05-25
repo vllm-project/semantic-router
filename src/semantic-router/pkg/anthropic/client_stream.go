@@ -10,30 +10,50 @@ import (
 	"github.com/anthropics/anthropic-sdk-go"
 	"github.com/openai/openai-go"
 	"github.com/tidwall/sjson"
+
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/ir"
 )
 
 // StreamState tracks Anthropic SSE events while translating to OpenAI SSE.
 type StreamState struct {
-	MessageID           string
-	Created             int64
-	RoleSent            bool
-	BlockIndexToToolIdx map[int64]int
-	NextToolIdx         int
+	MessageID                  string
+	Created                    int64
+	RoleSent                   bool
+	BlockIndexToToolIdx        map[int64]int
+	NextToolIdx                int
+	BlockIndexToThinkingActive map[int64]bool
 }
 
 // NewStreamState returns initialized stream translation state.
 func NewStreamState() *StreamState {
 	return &StreamState{
-		BlockIndexToToolIdx: make(map[int64]int),
+		BlockIndexToToolIdx:        make(map[int64]int),
+		BlockIndexToThinkingActive: make(map[int64]bool),
 	}
+}
+
+// extractedSSELine carries one parsed `data:` payload along with the most
+// recent `event:` header above it. The header lets us route Anthropic
+// `event: error` lines into the error arm of transformStreamEvent — those
+// lines unmarshal as `{"type":"error",...}` which the switch otherwise
+// drops silently.
+type extractedSSELine struct {
+	Data    []byte
+	IsError bool
 }
 
 // TransformSSEChunkToOpenAI converts Anthropic SSE bytes from Envoy into OpenAI SSE.
 // streamDone is true when message_stop is observed.
+//
+// ext is optional; when non-nil, signature_delta events are captured into
+// ext.ThinkingSignatures so the symmetric outbound emitter can replay them
+// on multi-turn requests. Pass nil for the existing OpenAI-client cell
+// where signatures have no downstream consumer.
 func TransformSSEChunkToOpenAI(
 	anthropicChunk []byte,
 	state *StreamState,
 	model string,
+	ext *ir.IRExtensions,
 ) ([]byte, bool, error) {
 	if state == nil {
 		state = NewStreamState()
@@ -41,12 +61,23 @@ func TransformSSEChunkToOpenAI(
 
 	var out bytes.Buffer
 	streamDone := false
-	for _, data := range extractSSEDataLines(anthropicChunk) {
-		var event anthropic.MessageStreamEventUnion
-		if err := json.Unmarshal(data, &event); err != nil {
+	for _, line := range extractSSEDataLines(anthropicChunk) {
+		if line.IsError {
+			chunks, err := handleErrorEvent(line.Data, state, model)
+			if err != nil {
+				return nil, false, err
+			}
+			for _, chunk := range chunks {
+				out.Write(formatOpenAISSELine(chunk))
+			}
 			continue
 		}
-		chunks, done, err := transformStreamEvent(event, state, model)
+
+		var event anthropic.MessageStreamEventUnion
+		if err := json.Unmarshal(line.Data, &event); err != nil {
+			continue
+		}
+		chunks, done, err := transformStreamEvent(event, state, model, ext)
 		if err != nil {
 			return nil, false, err
 		}
@@ -65,11 +96,24 @@ func TransformSSEChunkToOpenAI(
 	return out.Bytes(), streamDone, nil
 }
 
-func extractSSEDataLines(chunk []byte) [][]byte {
-	var lines [][]byte
-	for _, line := range bytes.Split(chunk, []byte("\n")) {
-		line = bytes.TrimSpace(line)
+// extractSSEDataLines walks the Anthropic SSE framing in chunk and yields
+// each `data:` payload along with whether the preceding `event:` header
+// flagged it as an error event. Lines that begin with `{` (some
+// transports omit the `data:` prefix) are surfaced as ordinary payloads.
+func extractSSEDataLines(chunk []byte) []extractedSSELine {
+	var lines []extractedSSELine
+	currentEvent := ""
+	for _, raw := range bytes.Split(chunk, []byte("\n")) {
+		line := bytes.TrimSpace(raw)
 		if len(line) == 0 {
+			// Blank line terminates the current SSE event; reset the
+			// per-event header tracker so the next data: line is not
+			// mis-classified as belonging to a stale event header.
+			currentEvent = ""
+			continue
+		}
+		if bytes.HasPrefix(line, []byte("event:")) {
+			currentEvent = string(bytes.TrimSpace(bytes.TrimPrefix(line, []byte("event:"))))
 			continue
 		}
 		if bytes.HasPrefix(line, []byte("data:")) {
@@ -77,11 +121,17 @@ func extractSSEDataLines(chunk []byte) [][]byte {
 			if len(payload) == 0 || bytes.Equal(payload, []byte("[DONE]")) {
 				continue
 			}
-			lines = append(lines, payload)
+			lines = append(lines, extractedSSELine{
+				Data:    payload,
+				IsError: currentEvent == "error",
+			})
 			continue
 		}
 		if line[0] == '{' {
-			lines = append(lines, line)
+			lines = append(lines, extractedSSELine{
+				Data:    line,
+				IsError: currentEvent == "error",
+			})
 		}
 	}
 	return lines
@@ -91,6 +141,7 @@ func transformStreamEvent(
 	event anthropic.MessageStreamEventUnion,
 	state *StreamState,
 	model string,
+	ext *ir.IRExtensions,
 ) ([][]byte, bool, error) {
 	switch event.Type {
 	case "message_start":
@@ -98,13 +149,19 @@ func transformStreamEvent(
 	case "content_block_start":
 		return handleContentBlockStart(event, state, model)
 	case "content_block_delta":
-		return handleContentBlockDelta(event, state, model)
+		return handleContentBlockDelta(event, state, model, ext)
 	case "message_delta":
 		return handleMessageDelta(event, state, model)
 	case "message_stop":
 		return nil, true, nil
 	case "content_block_stop", "ping", "vertex_event":
 		return nil, false, nil
+	case "error":
+		// Some transports surface error events as ordinary
+		// MessageStreamEventUnion entries (no `event: error` header).
+		// Route them through the same error pipeline.
+		chunks, err := handleErrorEvent([]byte(event.RawJSON()), state, model)
+		return chunks, false, err
 	default:
 		return nil, false, nil
 	}
@@ -155,6 +212,15 @@ func handleContentBlockStart(
 		state.BlockIndexToToolIdx[start.Index] = toolIdx
 		chunk, err := buildOpenAIStreamToolChunk(state, model, toolIdx, block.ID, block.Name, "")
 		return [][]byte{chunk}, false, err
+	case "thinking":
+		// Mark the block index as a thinking block so subsequent
+		// thinking_delta and signature_delta events can be routed back to
+		// it. Emit a bootstrap chunk carrying an empty reasoning_content
+		// string so downstream consumers see the field appear (mirroring
+		// the text case's bootstrap content).
+		state.BlockIndexToThinkingActive[start.Index] = true
+		chunk, err := buildOpenAIReasoningChunk(state, model, "")
+		return [][]byte{chunk}, false, err
 	default:
 		return nil, false, nil
 	}
@@ -164,6 +230,7 @@ func handleContentBlockDelta(
 	event anthropic.MessageStreamEventUnion,
 	state *StreamState,
 	model string,
+	ext *ir.IRExtensions,
 ) ([][]byte, bool, error) {
 	deltaEvent := event.AsContentBlockDelta()
 	delta := deltaEvent.Delta
@@ -186,9 +253,63 @@ func handleContentBlockDelta(
 		jsonDelta := delta.AsInputJSONDelta()
 		chunk, err := buildOpenAIStreamToolChunk(state, model, toolIdx, "", "", jsonDelta.PartialJSON)
 		return [][]byte{chunk}, false, err
+	case "thinking_delta":
+		return handleThinkingDelta(deltaEvent, state, model)
+	case "signature_delta":
+		return handleSignatureDelta(deltaEvent, state, ext)
 	default:
 		return nil, false, nil
 	}
+}
+
+// handleThinkingDelta translates an Anthropic thinking_delta into an OpenAI
+// chunk carrying delta.reasoning_content. Returns nil for deltas that arrive
+// without a matching content_block_start (orphan deltas cannot be routed).
+func handleThinkingDelta(
+	deltaEvent anthropic.ContentBlockDeltaEvent,
+	state *StreamState,
+	model string,
+) ([][]byte, bool, error) {
+	if !state.BlockIndexToThinkingActive[deltaEvent.Index] {
+		return nil, false, nil
+	}
+	thinkingDelta := deltaEvent.Delta.AsThinkingDelta()
+	if thinkingDelta.Thinking == "" {
+		return nil, false, nil
+	}
+	chunk, err := buildOpenAIReasoningChunk(state, model, thinkingDelta.Thinking)
+	return [][]byte{chunk}, false, err
+}
+
+// handleSignatureDelta captures the per-block signature into IRExtensions
+// so the symmetric outbound emitter can replay it on multi-turn requests.
+// Signatures have no representation on the OpenAI envelope; with nil ext
+// (the existing OpenAI-client cell), the signature is dropped — no consumer.
+func handleSignatureDelta(
+	deltaEvent anthropic.ContentBlockDeltaEvent,
+	state *StreamState,
+	ext *ir.IRExtensions,
+) ([][]byte, bool, error) {
+	if ext == nil {
+		return nil, false, nil
+	}
+	if !state.BlockIndexToThinkingActive[deltaEvent.Index] {
+		return nil, false, nil
+	}
+	sigDelta := deltaEvent.Delta.AsSignatureDelta()
+	if sigDelta.Signature == "" {
+		return nil, false, nil
+	}
+	ext.SetThinkingSignature(thinkingBlockKey(deltaEvent.Index), sigDelta.Signature)
+	return nil, false, nil
+}
+
+// thinkingBlockKey is the stable IRExtensions.ThinkingSignatures key for
+// a thinking block at Anthropic content_block index. Mirrors the
+// non-streaming inverse helper in client.go so a request that becomes
+// streaming mid-way does not double-store signatures.
+func thinkingBlockKey(blockIdx int64) string {
+	return fmt.Sprintf("content[%d]", blockIdx)
 }
 
 func handleMessageDelta(
@@ -209,6 +330,46 @@ func handleMessageDelta(
 	return [][]byte{chunk}, false, nil
 }
 
+// handleErrorEvent maps an Anthropic `event: error` data payload onto an
+// OpenAI terminal chunk. Per the plan's Q4 resolution: emit
+// finish_reason="error" plus a synthetic content delta carrying the error
+// message, so clients that ignore the non-standard finish_reason still
+// see the human-readable failure in the assistant text stream.
+func handleErrorEvent(data []byte, state *StreamState, model string) ([][]byte, error) {
+	var envelope anthropicErrorEnvelope
+	if err := json.Unmarshal(data, &envelope); err != nil {
+		// Malformed error payload; surface a generic message so the
+		// client at least sees that the stream aborted abnormally.
+		envelope = anthropicErrorEnvelope{
+			Type: "error",
+			Error: anthropicErrorDetail{
+				Type:    anthropicErrorTypeAPI,
+				Message: "unparsable Anthropic error event",
+			},
+		}
+	}
+	message := envelope.Error.Message
+	if message == "" {
+		message = "Anthropic upstream error"
+	}
+
+	contentChunk, err := buildOpenAIStreamChunk(state, model, openai.ChatCompletionChunkChoiceDelta{
+		Content: fmt.Sprintf("[error: %s] %s", envelope.Error.Type, message),
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	finishChunk, err := buildOpenAIStreamFinishChunk(state, model, "error", anthropic.MessageDeltaUsage{})
+	if err != nil {
+		return nil, err
+	}
+	if finishChunk == nil {
+		return [][]byte{contentChunk}, nil
+	}
+	return [][]byte{contentChunk, finishChunk}, nil
+}
+
 func buildOpenAIStreamChunk(
 	state *StreamState,
 	model string,
@@ -225,6 +386,23 @@ func buildOpenAIStreamChunk(
 		}},
 	}
 	return json.Marshal(chunk)
+}
+
+// buildOpenAIReasoningChunk emits an OpenAI chunk carrying
+// `reasoning_content` on the delta. The OpenAI Go SDK's delta struct has
+// no first-class reasoning_content field, so the value is injected via
+// sjson after marshal — keeping interop with vsr's existing convention
+// (the non-streaming path reads reasoning_content the same way).
+func buildOpenAIReasoningChunk(state *StreamState, model string, reasoning string) ([]byte, error) {
+	base, err := buildOpenAIStreamChunk(state, model, openai.ChatCompletionChunkChoiceDelta{})
+	if err != nil {
+		return nil, err
+	}
+	withReasoning, err := sjson.SetBytes(base, "choices.0.delta.reasoning_content", reasoning)
+	if err != nil {
+		return nil, fmt.Errorf("inject reasoning_content: %w", err)
+	}
+	return withReasoning, nil
 }
 
 func buildOpenAIStreamToolChunk(

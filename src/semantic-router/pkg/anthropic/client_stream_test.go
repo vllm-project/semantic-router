@@ -9,6 +9,8 @@ import (
 	"github.com/openai/openai-go"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/ir"
 )
 
 func TestWithStreamingRequestBody_SetsStreamFlag(t *testing.T) {
@@ -51,7 +53,7 @@ func TestTransformSSEChunkToOpenAI_TextStream(t *testing.T) {
 	}
 	chunk := buildAnthropicSSE(events...)
 
-	out, done, err := TransformSSEChunkToOpenAI([]byte(chunk), state, "claude-sonnet-4-5")
+	out, done, err := TransformSSEChunkToOpenAI([]byte(chunk), state, "claude-sonnet-4-5", nil)
 	require.NoError(t, err)
 	assert.True(t, done)
 	assert.Contains(t, string(out), "data: ")
@@ -75,7 +77,7 @@ func TestTransformSSEChunkToOpenAI_ToolUseStream(t *testing.T) {
 	}
 	chunk := buildAnthropicSSE(events...)
 
-	out, done, err := TransformSSEChunkToOpenAI([]byte(chunk), state, "claude-sonnet-4-5")
+	out, done, err := TransformSSEChunkToOpenAI([]byte(chunk), state, "claude-sonnet-4-5", nil)
 	require.NoError(t, err)
 	assert.True(t, done)
 	body := string(out)
@@ -92,15 +94,121 @@ func TestTransformSSEChunkToOpenAI_AccumulatesToolArguments(t *testing.T) {
 		`{"type":"message_start","message":{"id":"msg_tool","type":"message","role":"assistant","content":[],"model":"claude-sonnet-4-5","stop_reason":null,"stop_sequence":null,"usage":{"input_tokens":1,"output_tokens":0}}}`,
 		`{"type":"content_block_start","index":0,"content_block":{"type":"tool_use","id":"toolu_01","name":"get_weather","input":{}}}`,
 	)
-	_, _, err := TransformSSEChunkToOpenAI([]byte(start), state, "claude-sonnet-4-5")
+	_, _, err := TransformSSEChunkToOpenAI([]byte(start), state, "claude-sonnet-4-5", nil)
 	require.NoError(t, err)
 
 	delta := buildAnthropicSSE(
 		`{"type":"content_block_delta","index":0,"delta":{"type":"input_json_delta","partial_json":"{\"city\":\"Paris\"}"}}`,
 	)
-	out, _, err := TransformSSEChunkToOpenAI([]byte(delta), state, "claude-sonnet-4-5")
+	out, _, err := TransformSSEChunkToOpenAI([]byte(delta), state, "claude-sonnet-4-5", nil)
 	require.NoError(t, err)
 	assert.Contains(t, string(out), "Paris")
+}
+
+// TestTransformSSEChunkToOpenAI_ThinkingBlockStart asserts that an
+// Anthropic content_block_start with type "thinking" surfaces a
+// reasoning_content bootstrap on the OpenAI envelope instead of being
+// silently dropped (pre-fix behavior).
+func TestTransformSSEChunkToOpenAI_ThinkingBlockStart(t *testing.T) {
+	state := NewStreamState()
+	events := buildAnthropicSSE(
+		`{"type":"content_block_start","index":0,"content_block":{"type":"thinking","thinking":""}}`,
+	)
+	out, _, err := TransformSSEChunkToOpenAI([]byte(events), state, "claude-sonnet-4-5", nil)
+	require.NoError(t, err)
+	assert.Contains(t, string(out), `"reasoning_content"`)
+	assert.True(t, state.BlockIndexToThinkingActive[0], "block index should be tracked as thinking")
+}
+
+// TestTransformSSEChunkToOpenAI_ThinkingDelta asserts that thinking_delta
+// events emit reasoning_content with the delta text.
+func TestTransformSSEChunkToOpenAI_ThinkingDelta(t *testing.T) {
+	state := NewStreamState()
+	events := buildAnthropicSSE(
+		`{"type":"content_block_start","index":0,"content_block":{"type":"thinking","thinking":""}}`,
+		`{"type":"content_block_delta","index":0,"delta":{"type":"thinking_delta","thinking":"Let me think about this..."}}`,
+	)
+	out, _, err := TransformSSEChunkToOpenAI([]byte(events), state, "claude-sonnet-4-5", nil)
+	require.NoError(t, err)
+	body := string(out)
+	assert.Contains(t, body, `"reasoning_content":"Let me think about this..."`)
+}
+
+// TestTransformSSEChunkToOpenAI_ThinkingDelta_WithoutBlockStart_Drops
+// asserts that thinking_delta events arriving without a preceding
+// content_block_start are dropped (cannot be routed to a block).
+func TestTransformSSEChunkToOpenAI_ThinkingDelta_WithoutBlockStart_Drops(t *testing.T) {
+	state := NewStreamState()
+	events := buildAnthropicSSE(
+		`{"type":"content_block_delta","index":7,"delta":{"type":"thinking_delta","thinking":"orphan"}}`,
+	)
+	out, _, err := TransformSSEChunkToOpenAI([]byte(events), state, "claude-sonnet-4-5", nil)
+	require.NoError(t, err)
+	assert.NotContains(t, string(out), "orphan")
+}
+
+// TestTransformSSEChunkToOpenAI_SignatureDelta asserts that signature_delta
+// events capture the signature into IRExtensions.ThinkingSignatures.
+func TestTransformSSEChunkToOpenAI_SignatureDelta(t *testing.T) {
+	state := NewStreamState()
+	ext := &ir.IRExtensions{}
+	events := buildAnthropicSSE(
+		`{"type":"content_block_start","index":0,"content_block":{"type":"thinking","thinking":""}}`,
+		`{"type":"content_block_delta","index":0,"delta":{"type":"signature_delta","signature":"sig_abc123"}}`,
+	)
+	_, _, err := TransformSSEChunkToOpenAI([]byte(events), state, "claude-sonnet-4-5", ext)
+	require.NoError(t, err)
+	assert.Equal(t, "sig_abc123", ext.ThinkingSignatures["content[0]"])
+}
+
+// TestTransformSSEChunkToOpenAI_SignatureDelta_NilExt_NoPanic asserts
+// that the existing OpenAI-client cell (which passes nil ext) is
+// unaffected by signature_delta events.
+func TestTransformSSEChunkToOpenAI_SignatureDelta_NilExt_NoPanic(t *testing.T) {
+	state := NewStreamState()
+	events := buildAnthropicSSE(
+		`{"type":"content_block_start","index":0,"content_block":{"type":"thinking","thinking":""}}`,
+		`{"type":"content_block_delta","index":0,"delta":{"type":"signature_delta","signature":"sig_xyz"}}`,
+	)
+	out, _, err := TransformSSEChunkToOpenAI([]byte(events), state, "claude-sonnet-4-5", nil)
+	require.NoError(t, err)
+	assert.NotContains(t, string(out), "sig_xyz", "signature should not leak onto OpenAI stream")
+}
+
+// TestTransformSSEChunkToOpenAI_ErrorEvent asserts that an
+// `event: error` SSE line surfaces as an OpenAI chunk carrying both the
+// error message in delta.content and finish_reason="error" — instead of
+// being silently dropped (pre-fix behavior).
+func TestTransformSSEChunkToOpenAI_ErrorEvent(t *testing.T) {
+	state := NewStreamState()
+	raw := "event: error\ndata: {\"type\":\"error\",\"error\":{\"type\":\"overloaded_error\",\"message\":\"upstream is overloaded\"}}\n\n"
+	out, _, err := TransformSSEChunkToOpenAI([]byte(raw), state, "claude-sonnet-4-5", nil)
+	require.NoError(t, err)
+	body := string(out)
+	assert.Contains(t, body, "overloaded_error")
+	assert.Contains(t, body, "upstream is overloaded")
+	assert.Contains(t, body, `"finish_reason":"error"`)
+}
+
+// TestTransformSSEChunkToOpenAI_ErrorEvent_NoHeader asserts that an error
+// payload sent without an `event: error` header (some transports) is
+// still surfaced via the MessageStreamEventUnion error type arm.
+func TestTransformSSEChunkToOpenAI_ErrorEvent_NoHeader(t *testing.T) {
+	state := NewStreamState()
+	raw := "data: {\"type\":\"error\",\"error\":{\"type\":\"rate_limit_error\",\"message\":\"slow down\"}}\n\n"
+	out, _, err := TransformSSEChunkToOpenAI([]byte(raw), state, "claude-sonnet-4-5", nil)
+	require.NoError(t, err)
+	body := string(out)
+	assert.Contains(t, body, "rate_limit_error")
+	assert.Contains(t, body, "slow down")
+}
+
+func TestExtractSSEDataLines_TracksEventHeader(t *testing.T) {
+	raw := "event: error\ndata: {\"type\":\"error\"}\n\nevent: message_start\ndata: {\"type\":\"message_start\"}\n\n"
+	lines := extractSSEDataLines([]byte(raw))
+	require.Len(t, lines, 2)
+	assert.True(t, lines[0].IsError, "first line should be tagged as error")
+	assert.False(t, lines[1].IsError, "second line should not be tagged after blank-line reset")
 }
 
 func buildAnthropicSSE(events ...string) string {
