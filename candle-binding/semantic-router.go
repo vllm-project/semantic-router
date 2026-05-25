@@ -6,15 +6,10 @@
 package candle_binding
 
 import (
-	"bytes"
 	"encoding/base64"
 	"fmt"
-	"image"
-	_ "image/jpeg"
-	_ "image/png"
 	"io"
 	"log"
-	"math"
 	"net/http"
 	"regexp"
 	"runtime"
@@ -262,6 +257,7 @@ typedef struct {
 
 extern int multimodal_encode_text(const char* text, int target_dim, MultiModalEmbeddingResult* result);
 extern int multimodal_encode_image(const float* pixel_data, int height, int width, int target_dim, MultiModalEmbeddingResult* result);
+extern int multimodal_encode_image_from_bytes(const unsigned char* bytes_ptr, size_t bytes_len, int target_dim, MultiModalEmbeddingResult* result);
 extern int multimodal_encode_audio(const float* mel_data, int n_mels, int time_frames, int target_dim, MultiModalEmbeddingResult* result);
 extern void free_multimodal_embedding(float* data, int length);
 extern void free_tokenization_result(TokenizationResult result);
@@ -1142,8 +1138,10 @@ func MultiModalEncodeAudio(melData []float32, nMels, timeFrames, targetDim int) 
 	}, nil
 }
 
-// MultiModalEncodeImageFromBytes decodes JPEG/PNG image bytes, resizes to 512x512,
-// and encodes into an embedding using the multi-modal model.
+// MultiModalEncodeImageFromBytes decodes JPEG/PNG image bytes, resizes to 512x512
+// using PIL-equivalent bicubic+antialias filtering, and encodes into an embedding
+// using the multi-modal model. All preprocessing happens in the Rust FFI for
+// numerical parity with the SiglipProcessor reference.
 //
 // Parameters:
 //   - imageBytes: Raw JPEG or PNG image data
@@ -1157,12 +1155,29 @@ func MultiModalEncodeImageFromBytes(imageBytes []byte, targetDim int) (*MultiMod
 		return nil, fmt.Errorf("imageBytes cannot be empty")
 	}
 
-	pixelData, err := decodeAndResizeImage(imageBytes, 512, 512)
-	if err != nil {
-		return nil, fmt.Errorf("image decode/resize failed: %w", err)
+	var result C.MultiModalEmbeddingResult
+	status := C.multimodal_encode_image_from_bytes(
+		(*C.uchar)(unsafe.Pointer(&imageBytes[0])),
+		C.size_t(len(imageBytes)),
+		C.int(targetDim),
+		&result,
+	)
+	if status != 0 || result.error {
+		return nil, fmt.Errorf("multi-modal image encoding from bytes failed")
+	}
+	defer C.free_multimodal_embedding(result.data, result.length)
+
+	embedding := make([]float32, result.length)
+	src := (*[1 << 30]C.float)(unsafe.Pointer(result.data))[:result.length:result.length]
+	for i, v := range src {
+		embedding[i] = float32(v)
 	}
 
-	return MultiModalEncodeImage(pixelData, 512, 512, targetDim)
+	return &MultiModalEmbeddingOutput{
+		Embedding:        embedding,
+		Modality:         "image",
+		ProcessingTimeMs: float32(result.processing_time_ms),
+	}, nil
 }
 
 // MultiModalEncodeImageFromBase64 decodes a base64-encoded image and encodes it
@@ -1240,65 +1255,6 @@ func MultiModalEncodeImageFromURL(url string, targetDim int) (*MultiModalEmbeddi
 	}
 
 	return MultiModalEncodeImageFromBytes(imageBytes, targetDim)
-}
-
-// decodeAndResizeImage decodes a JPEG/PNG image, resizes it to targetW x targetH
-// using bilinear interpolation, and returns CHW float32 pixel data in [0, 1].
-func decodeAndResizeImage(data []byte, targetW, targetH int) ([]float32, error) {
-	img, _, err := image.Decode(bytes.NewReader(data))
-	if err != nil {
-		return nil, fmt.Errorf("image decode: %w", err)
-	}
-
-	bounds := img.Bounds()
-	srcW := bounds.Dx()
-	srcH := bounds.Dy()
-
-	pixels := make([]float32, 3*targetH*targetW)
-	xRatio := float64(srcW) / float64(targetW)
-	yRatio := float64(srcH) / float64(targetH)
-
-	for y := 0; y < targetH; y++ {
-		srcY := float64(y)*yRatio + float64(bounds.Min.Y)
-		y0 := int(math.Floor(srcY))
-		y1 := y0 + 1
-		fy := srcY - float64(y0)
-		if y1 >= bounds.Max.Y {
-			y1 = bounds.Max.Y - 1
-		}
-
-		for x := 0; x < targetW; x++ {
-			srcX := float64(x)*xRatio + float64(bounds.Min.X)
-			x0 := int(math.Floor(srcX))
-			x1 := x0 + 1
-			fx := srcX - float64(x0)
-			if x1 >= bounds.Max.X {
-				x1 = bounds.Max.X - 1
-			}
-
-			r00, g00, b00, _ := img.At(x0, y0).RGBA()
-			r10, g10, b10, _ := img.At(x1, y0).RGBA()
-			r01, g01, b01, _ := img.At(x0, y1).RGBA()
-			r11, g11, b11, _ := img.At(x1, y1).RGBA()
-
-			bilerp := func(v00, v10, v01, v11 uint32) float32 {
-				f00 := float64(v00) / 65535.0
-				f10 := float64(v10) / 65535.0
-				f01 := float64(v01) / 65535.0
-				f11 := float64(v11) / 65535.0
-				top := f00*(1-fx) + f10*fx
-				bot := f01*(1-fx) + f11*fx
-				return float32(top*(1-fy) + bot*fy)
-			}
-
-			idx := y*targetW + x
-			pixels[idx] = bilerp(r00, r10, r01, r11)
-			pixels[targetH*targetW+idx] = bilerp(g00, g10, g01, g11)
-			pixels[2*targetH*targetW+idx] = bilerp(b00, b10, b01, b11)
-		}
-	}
-
-	return pixels, nil
 }
 
 // InitEmbeddingModelsWithMmBert initializes all embedding models including mmBERT.

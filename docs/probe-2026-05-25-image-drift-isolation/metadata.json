@@ -1,0 +1,34 @@
+{
+  "probe_date": "2026-05-25",
+  "passport_path": "docs/probe-2026-05-20-calibration/fixtures/inrule_identifier_passport.jpg",
+  "passport_sha256": "5bb61a379507748ddc5aeb8d4f7b278b077601133e0e769bb730b46662066a66",
+  "image_size_original": [
+    886,
+    606
+  ],
+  "image_size_resized": [
+    512,
+    512
+  ],
+  "torch_version": "2.11.0",
+  "siglip_repo": "google/siglip-base-patch16-512",
+  "mmes_repo": "llm-semantic-router/multi-modal-embed-small",
+  "device": "cpu",
+  "dtype": "torch.float32",
+  "pixels_dtype": "float32",
+  "pixels_layout": "CHW",
+  "pixels_range": "[0, 1]",
+  "pixels_shape": [
+    3,
+    512,
+    512
+  ],
+  "embedding_norm": 0.9999999403953552,
+  "embedding_first5": [
+    -0.012671977281570435,
+    0.11701544374227524,
+    -0.03267939016222954,
+    0.018062707036733627,
+    0.06720413267612457
+  ]
+}

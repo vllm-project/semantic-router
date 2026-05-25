@@ -2407,6 +2407,138 @@ pub extern "C" fn multimodal_encode_text(
 ///
 /// # Returns
 /// 0 on success, -1 on error
+/// Encode image bytes (decode + PIL-equivalent bicubic+antialias resize + forward).
+///
+/// Preferred entry point for image embedding from raw JPEG/PNG bytes. All
+/// preprocessing happens in Rust using the `image` crate's `FilterType::CatmullRom`
+/// (PIL `BICUBIC`-equivalent: B=0, C=0.5) via `imageops::resize`, which integrates
+/// the kernel over the source area on downscale - the antialias pre-filter
+/// behavior that PIL/SiglipProcessor uses with `antialias=True`.
+///
+/// Closes the ~1% cosine drift versus PyTorch reference that came from the
+/// previous Go-side 4-tap bilinear path with no antialias (probe-2026-05-25).
+///
+/// # Parameters
+/// - `bytes_ptr`: Pointer to raw JPEG/PNG bytes
+/// - `bytes_len`: Number of bytes
+/// - `target_dim`: Target dimension (0 for default 384)
+/// - `result`: Output pointer for embedding result
+///
+/// # Returns
+/// 0 on success, -1 on error
+#[no_mangle]
+pub extern "C" fn multimodal_encode_image_from_bytes(
+    bytes_ptr: *const u8,
+    bytes_len: usize,
+    target_dim: i32,
+    result: *mut crate::ffi::types::MultiModalEmbeddingResult,
+) -> i32 {
+    use crate::ffi::types::MultiModalEmbeddingResult;
+    use image::imageops::FilterType;
+
+    if bytes_ptr.is_null() || result.is_null() || bytes_len == 0 {
+        eprintln!("Error: null/empty input to multimodal_encode_image_from_bytes");
+        return -1;
+    }
+
+    let (model, _tokenizer) = match get_multimodal_refs() {
+        Some(refs) => refs,
+        None => {
+            eprintln!("Error: Multi-modal model not loaded");
+            unsafe {
+                (*result) = MultiModalEmbeddingResult::default();
+            }
+            return -1;
+        }
+    };
+
+    let start_time = std::time::Instant::now();
+    let bytes = unsafe { std::slice::from_raw_parts(bytes_ptr, bytes_len) };
+
+    let img = match image::load_from_memory(bytes) {
+        Ok(i) => i.to_rgb8(),
+        Err(e) => {
+            eprintln!("Error: image decode failed: {:?}", e);
+            unsafe {
+                (*result) = MultiModalEmbeddingResult::default();
+            }
+            return -1;
+        }
+    };
+
+    const TARGET_W: u32 = 512;
+    const TARGET_H: u32 = 512;
+    let resized = image::imageops::resize(&img, TARGET_W, TARGET_H, FilterType::CatmullRom);
+
+    let h = TARGET_H as usize;
+    let w = TARGET_W as usize;
+    let mut pixels = vec![0f32; 3 * h * w];
+    let raw = resized.as_raw();
+    let inv = 1.0f32 / 255.0;
+    for i in 0..(h * w) {
+        let base = i * 3;
+        pixels[i] = raw[base] as f32 * inv;
+        pixels[h * w + i] = raw[base + 1] as f32 * inv;
+        pixels[2 * h * w + i] = raw[base + 2] as f32 * inv;
+    }
+
+    let device = model.device();
+    let pixel_tensor = match candle_core::Tensor::from_slice(&pixels, (1, 3, h, w), device) {
+        Ok(t) => t,
+        Err(e) => {
+            eprintln!("Error: pixel tensor creation failed: {:?}", e);
+            unsafe {
+                (*result) = MultiModalEmbeddingResult::default();
+            }
+            return -1;
+        }
+    };
+
+    let target_dimension = if target_dim > 0 {
+        Some(target_dim as usize)
+    } else {
+        None
+    };
+
+    let embedding = match model.encode_image_with_dim(&pixel_tensor, target_dimension) {
+        Ok(emb) => emb,
+        Err(e) => {
+            eprintln!("Error: image encoding failed: {:?}", e);
+            unsafe {
+                (*result) = MultiModalEmbeddingResult::default();
+            }
+            return -1;
+        }
+    };
+
+    let embedding_vec = match embedding.squeeze(0).and_then(|t| t.to_vec1::<f32>()) {
+        Ok(v) => v,
+        Err(e) => {
+            eprintln!("Error: embedding conversion failed: {:?}", e);
+            unsafe {
+                (*result) = MultiModalEmbeddingResult::default();
+            }
+            return -1;
+        }
+    };
+
+    let length = embedding_vec.len() as i32;
+    let data = Box::into_raw(embedding_vec.into_boxed_slice()) as *mut f32;
+    let processing_time_ms = start_time.elapsed().as_secs_f32() * 1000.0;
+
+    unsafe {
+        (*result) = MultiModalEmbeddingResult {
+            data,
+            length,
+            error: false,
+            modality: 1, // image
+            processing_time_ms,
+        };
+    }
+
+    0
+}
+
 #[no_mangle]
 pub extern "C" fn multimodal_encode_image(
     pixel_data: *const f32,
