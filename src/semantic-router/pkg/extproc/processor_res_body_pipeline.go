@@ -56,7 +56,14 @@ func (r *OpenAIRouter) translateResponseBodyForClient(
 	ctx *RequestContext,
 	responseBody []byte,
 ) ([]byte, bool) {
-	if ctx != nil && ctx.ClientProtocol == config.ClientProtocolAnthropic {
+	// Defensive: a nil ctx cannot match either dispatcher branch and the
+	// downstream isResponseAPIRequest dereference would panic. Treat as
+	// plain OpenAI pass-through.
+	if ctx == nil {
+		return responseBody, false
+	}
+
+	if ctx.ClientProtocol == config.ClientProtocolAnthropic {
 		translated, err := anthropic.EmitAnthropicResponse(responseBody, ctx.IRExtensions, ctx.RequestModel)
 		if err != nil {
 			logging.Errorf("Anthropic outbound emit failed: %v", err)
