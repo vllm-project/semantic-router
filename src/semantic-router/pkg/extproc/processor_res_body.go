@@ -27,7 +27,23 @@ func (r *OpenAIRouter) handleResponseBody(v *ext_proc.ProcessingRequest_Response
 		return looperResponse, nil
 	}
 
-	if ctx.IsStreamingResponse && ctx.APIFormat == config.APIFormatAnthropic {
+	// Anthropic clients on the streaming path always go through the
+	// outbound emitter so the client sees Anthropic-shape SSE,
+	// regardless of upstream APIFormat. The dispatcher branch order
+	// matters: this check precedes the older
+	// handleAnthropicStreamingResponseBody branch because the
+	// double-Anthropic cell (Anthropic client + Anthropic backend)
+	// would otherwise match the legacy branch and the client would
+	// receive OpenAI SSE.
+	if ctx.IsStreamingResponse && ctx.ClientProtocol == config.ClientProtocolAnthropic {
+		return r.handleAnthropicClientStreamingResponseBody(v.ResponseBody.Body, ctx), nil
+	}
+
+	// Legacy branch: OpenAI client hitting an Anthropic backend. The
+	// extra ClientProtocol guard prevents the new Anthropic-client
+	// branch from being shadowed by this one.
+	if ctx.IsStreamingResponse && ctx.APIFormat == config.APIFormatAnthropic &&
+		ctx.ClientProtocol != config.ClientProtocolAnthropic {
 		return r.handleAnthropicStreamingResponseBody(v.ResponseBody.Body, ctx), nil
 	}
 
