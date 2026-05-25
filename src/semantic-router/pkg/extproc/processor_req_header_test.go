@@ -247,6 +247,43 @@ func assertImmediateErrorResponse(
 	}
 }
 
+func TestValidateRequestHeaders_V1Messages(t *testing.T) {
+	router := &OpenAIRouter{}
+
+	tests := []struct {
+		name       string
+		method     string
+		path       string
+		wantStatus typev3.StatusCode // 0 means request should pass validation
+	}{
+		{name: "POST /v1/messages allowed", method: "POST", path: "/v1/messages"},
+		{name: "POST /v1/messages with query allowed", method: "POST", path: "/v1/messages?stream=true"},
+		{name: "GET /v1/messages returns 405", method: "GET", path: "/v1/messages", wantStatus: typev3.StatusCode_MethodNotAllowed},
+		{name: "PUT /v1/messages returns 405", method: "PUT", path: "/v1/messages", wantStatus: typev3.StatusCode_MethodNotAllowed},
+		{name: "DELETE /v1/messages returns 405", method: "DELETE", path: "/v1/messages", wantStatus: typev3.StatusCode_MethodNotAllowed},
+		{name: "/v1/messages/anything still 404", method: "POST", path: "/v1/messages/count_tokens", wantStatus: typev3.StatusCode_NotFound},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			response := router.validateRequestHeaders(tt.method, tt.path)
+			if tt.wantStatus == 0 {
+				if response != nil {
+					t.Fatalf("expected nil response for %s %s, got %+v", tt.method, tt.path, response)
+				}
+				return
+			}
+			if response == nil {
+				t.Fatalf("expected immediate response for %s %s, got nil", tt.method, tt.path)
+			}
+			immediate := response.GetImmediateResponse()
+			if immediate == nil || immediate.Status == nil || immediate.Status.Code != tt.wantStatus {
+				t.Fatalf("expected status %v for %s %s, got %v", tt.wantStatus, tt.method, tt.path, immediate.Status)
+			}
+		})
+	}
+}
+
 func TestDetectClientProtocol(t *testing.T) {
 	tests := []struct {
 		name      string
