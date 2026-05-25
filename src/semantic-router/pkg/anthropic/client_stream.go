@@ -14,21 +14,51 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/ir"
 )
 
-// StreamState tracks Anthropic SSE events while translating to OpenAI SSE.
+// StreamState tracks per-request streaming translation state. The struct
+// is shared by both directions:
+//
+//   - Inbound (Anthropic SSE → OpenAI SSE), driven by TransformSSEChunkToOpenAI:
+//     uses MessageID, Created, RoleSent, BlockIndexToToolIdx, NextToolIdx,
+//     BlockIndexToThinkingActive.
+//
+//   - Outbound (OpenAI SSE → Anthropic SSE), driven by the PR5 emitter:
+//     uses MessageStartSent, MessageStopSent, NextBlockIndex, the Open*
+//     pointers tracking which block index is currently open, the
+//     ToolIdxToBlockIndex / ToolUseEmittedStart maps mirroring the inbound
+//     pair in the reverse direction, LastChunkAt for the ping keepalive
+//     ticker, and InitialUsage for the message_start usage placeholder.
+//
+// One ClientProtocol per request means only one direction is active at a
+// time, so the two sub-sets never collide on the same instance.
 type StreamState struct {
+	// Inbound direction (Anthropic → OpenAI).
 	MessageID                  string
 	Created                    int64
 	RoleSent                   bool
 	BlockIndexToToolIdx        map[int64]int
 	NextToolIdx                int
 	BlockIndexToThinkingActive map[int64]bool
+
+	// Outbound direction (OpenAI → Anthropic).
+	MessageStartSent     bool
+	MessageStopSent      bool
+	NextBlockIndex       int64
+	OpenTextBlockIndex   *int64
+	OpenThinkingBlockIdx *int64
+	ToolIdxToBlockIndex  map[int]int64
+	ToolUseEmittedStart  map[int]bool
+	LastChunkAt          time.Time
+	InitialUsage         anthropic.Usage
 }
 
-// NewStreamState returns initialized stream translation state.
+// NewStreamState returns initialized stream translation state with maps
+// allocated for both directions.
 func NewStreamState() *StreamState {
 	return &StreamState{
 		BlockIndexToToolIdx:        make(map[int64]int),
 		BlockIndexToThinkingActive: make(map[int64]bool),
+		ToolIdxToBlockIndex:        make(map[int]int64),
+		ToolUseEmittedStart:        make(map[int]bool),
 	}
 }
 

@@ -13,6 +13,31 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/ir"
 )
 
+// TestNewStreamState_InitializesOutboundFields asserts that
+// NewStreamState allocates the outbound-direction maps and leaves the
+// outbound bookkeeping flags at zero values so the symmetric emitter can
+// rely on them being non-nil and false on the first chunk.
+func TestNewStreamState_InitializesOutboundFields(t *testing.T) {
+	state := NewStreamState()
+
+	// Inbound maps remain allocated as before.
+	require.NotNil(t, state.BlockIndexToToolIdx)
+	require.NotNil(t, state.BlockIndexToThinkingActive)
+
+	// Outbound maps are allocated so the emitter can write without a
+	// nil-map panic on first use.
+	require.NotNil(t, state.ToolIdxToBlockIndex)
+	require.NotNil(t, state.ToolUseEmittedStart)
+
+	// Outbound bookkeeping starts unset.
+	assert.False(t, state.MessageStartSent)
+	assert.False(t, state.MessageStopSent)
+	assert.Equal(t, int64(0), state.NextBlockIndex)
+	assert.Nil(t, state.OpenTextBlockIndex)
+	assert.Nil(t, state.OpenThinkingBlockIdx)
+	assert.True(t, state.LastChunkAt.IsZero())
+}
+
 func TestWithStreamingRequestBody_SetsStreamFlag(t *testing.T) {
 	req := &openai.ChatCompletionNewParams{
 		Model:    "claude-sonnet-4-5",
