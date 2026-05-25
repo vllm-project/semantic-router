@@ -213,6 +213,24 @@ func TestAddLossinessWarnings_SanitizesSeparatorsInFieldPaths(t *testing.T) {
 	)
 }
 
+func TestAddLossinessWarnings_SanitizesCRLFInFieldPaths(t *testing.T) {
+	ctx := &RequestContext{ClientProtocol: config.ClientProtocolAnthropic}
+	builder := newResponseHeaderMutationBuilder()
+
+	builder.addLossinessWarnings(ctx, []ir.Warning{{
+		Field:    "field\r\nx-injected: pwned",
+		Reason:   "rea\nson",
+		Severity: ir.WarningSeverityLossy,
+	}})
+
+	headerMap := mutationToMap(builder.setHeaders)
+	got := headerMap[headers.VSRLossinessWarnings]
+	assert.NotContains(t, got, "\r")
+	assert.NotContains(t, got, "\n")
+	assert.Contains(t, got, "%0D%0A")
+	assert.Contains(t, got, "rea%0Ason")
+}
+
 func TestBuildResponseHeaderMutation_EmitsWarningsAlongsideStandardHeaders(t *testing.T) {
 	ctx := &RequestContext{
 		ClientProtocol: config.ClientProtocolAnthropic,

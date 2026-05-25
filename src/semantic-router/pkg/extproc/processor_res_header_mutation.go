@@ -151,10 +151,11 @@ func formatLossinessEntry(w ir.Warning) string {
 
 // sanitizeWarningField percent-encodes the format separators ',' and
 // ';' so a pathological JSON-path field name cannot break the
-// single-line encoding. PR2's parser never produces such paths; this is
-// belt-and-suspenders.
+// single-line encoding, and strips CR/LF so a hostile value cannot
+// inject a new header line. PR2's parser never produces such paths;
+// this is belt-and-suspenders.
 func sanitizeWarningField(field string) string {
-	if !strings.ContainsAny(field, ",;") {
+	if !strings.ContainsAny(field, ",;\r\n") {
 		return field
 	}
 	var sb strings.Builder
@@ -165,6 +166,10 @@ func sanitizeWarningField(field string) string {
 			sb.WriteString("%2C")
 		case ';':
 			sb.WriteString("%3B")
+		case '\r':
+			sb.WriteString("%0D")
+		case '\n':
+			sb.WriteString("%0A")
 		default:
 			sb.WriteRune(r)
 		}
