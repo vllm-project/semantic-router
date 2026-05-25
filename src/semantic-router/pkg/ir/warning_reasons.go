@@ -61,4 +61,16 @@ const (
 	// header size limit. The associated field carries the count of
 	// dropped entries.
 	ReasonWarningsTruncated WarningReason = "warnings_truncated"
+
+	// ReasonCacheUnavailableOnOpenAIBackend indicates an Anthropic client
+	// received a response from an OpenAI backend that has no cache
+	// support, so usage.cache_* fields are zero by definition. Info-level
+	// so it does not surface as a lossy warning in the response header.
+	ReasonCacheUnavailableOnOpenAIBackend WarningReason = "cache_unavailable_on_openai_backend"
+
+	// ReasonAnthropicStopReasonCoerced indicates an OpenAI finish_reason
+	// could not be mapped to a known Anthropic stop_reason and was
+	// coerced to "end_turn". Surfaced for diagnostics so clients can
+	// detect unexpected upstream behavior.
+	ReasonAnthropicStopReasonCoerced WarningReason = "anthropic_stop_reason_coerced"
 )
