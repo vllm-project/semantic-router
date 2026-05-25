@@ -8,6 +8,8 @@ import (
 	"github.com/openai/openai-go"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/ir"
 )
 
 func TestToAnthropicRequestBody_BasicConversion(t *testing.T) {
@@ -409,6 +411,170 @@ func TestExtractUserContent_StringContent(t *testing.T) {
 	result := extractUserContent(msg)
 
 	assert.Equal(t, "Hello there!", result)
+}
+
+func TestOpenAIFinishReasonFromAnthropic(t *testing.T) {
+	cases := []struct {
+		name          string
+		stopReason    anthropic.StopReason
+		toolCallCount int
+		want          string
+	}{
+		{name: "end_turn maps to stop", stopReason: anthropic.StopReasonEndTurn, want: "stop"},
+		{name: "max_tokens maps to length", stopReason: anthropic.StopReasonMaxTokens, want: "length"},
+		{name: "tool_use maps to tool_calls", stopReason: anthropic.StopReasonToolUse, want: "tool_calls"},
+		{name: "stop with tool calls upgrades to tool_calls", stopReason: anthropic.StopReasonEndTurn, toolCallCount: 1, want: "tool_calls"},
+		{name: "pause_turn collapses to stop", stopReason: anthropic.StopReasonPauseTurn, want: "stop"},
+		{name: "refusal collapses to stop", stopReason: anthropic.StopReasonRefusal, want: "stop"},
+		{name: "stop_sequence collapses to stop", stopReason: anthropic.StopReasonStopSequence, want: "stop"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			got := openAIFinishReasonFromAnthropic(tc.stopReason, tc.toolCallCount)
+			assert.Equal(t, tc.want, got)
+		})
+	}
+}
+
+func TestCaptureAnthropicStopReasonIntoExt_PauseTurn(t *testing.T) {
+	ext := &ir.IRExtensions{}
+	captureAnthropicStopReasonIntoExt(anthropic.StopReasonPauseTurn, "", ext)
+	assert.Equal(t, "pause_turn", ext.AnthropicStopReason)
+	assert.Empty(t, ext.AnthropicStopSequence)
+}
+
+func TestCaptureAnthropicStopReasonIntoExt_Refusal(t *testing.T) {
+	ext := &ir.IRExtensions{}
+	captureAnthropicStopReasonIntoExt(anthropic.StopReasonRefusal, "", ext)
+	assert.Equal(t, "refusal", ext.AnthropicStopReason)
+}
+
+func TestCaptureAnthropicStopReasonIntoExt_StopSequence(t *testing.T) {
+	ext := &ir.IRExtensions{}
+	captureAnthropicStopReasonIntoExt(anthropic.StopReasonStopSequence, "###END###", ext)
+	assert.Equal(t, "stop_sequence", ext.AnthropicStopReason,
+		"stop_sequence must be captured so the outbound emitter can restore it; "+
+			"OpenAI finish_reason collapses it to \"stop\"")
+	assert.Equal(t, "###END###", ext.AnthropicStopSequence)
+}
+
+func TestCaptureAnthropicStopReasonIntoExt_StopSequenceWithoutSequenceString(t *testing.T) {
+	// Defensive: even if the upstream omits the matched sequence string,
+	// the stop_reason itself must still round-trip so the emitter
+	// reports stop_sequence rather than end_turn.
+	ext := &ir.IRExtensions{}
+	captureAnthropicStopReasonIntoExt(anthropic.StopReasonStopSequence, "", ext)
+	assert.Equal(t, "stop_sequence", ext.AnthropicStopReason)
+	assert.Empty(t, ext.AnthropicStopSequence)
+}
+
+func TestCaptureAnthropicStopReasonIntoExt_EndTurnLeavesExtClean(t *testing.T) {
+	ext := &ir.IRExtensions{}
+	captureAnthropicStopReasonIntoExt(anthropic.StopReasonEndTurn, "", ext)
+	assert.Empty(t, ext.AnthropicStopReason)
+	assert.Empty(t, ext.AnthropicStopSequence)
+}
+
+func TestCaptureAnthropicStopReasonIntoExt_NilSafe(t *testing.T) {
+	captureAnthropicStopReasonIntoExt(anthropic.StopReasonRefusal, "", nil)
+}
+
+func TestExtractThinkingBlocks_PopulatesSignatures(t *testing.T) {
+	blocks := []anthropic.ContentBlockUnion{
+		{Type: "thinking", Thinking: "let me reason...", Signature: "sig-1"},
+		{Type: "text", Text: "the answer is 42"},
+		{Type: "thinking", Thinking: "and another...", Signature: "sig-2"},
+	}
+	ext := &ir.IRExtensions{}
+	extractThinkingBlocks(blocks, ext)
+
+	assert.Equal(t, "sig-1", ext.ThinkingSignatures["content[0]"])
+	assert.Equal(t, "sig-2", ext.ThinkingSignatures["content[1]"])
+}
+
+func TestExtractThinkingBlocks_SkipsEmptySignatures(t *testing.T) {
+	blocks := []anthropic.ContentBlockUnion{
+		{Type: "thinking", Thinking: "no signature here"},
+	}
+	ext := &ir.IRExtensions{}
+	extractThinkingBlocks(blocks, ext)
+	assert.Empty(t, ext.ThinkingSignatures)
+}
+
+func TestExtractThinkingBlocks_NilSafe(t *testing.T) {
+	blocks := []anthropic.ContentBlockUnion{{Type: "thinking", Signature: "sig"}}
+	extractThinkingBlocks(blocks, nil)
+}
+
+func TestExtractAnthropicUsageIntoExt_PopulatesAllFields(t *testing.T) {
+	u := anthropic.Usage{
+		InputTokens:              100,
+		OutputTokens:             50,
+		CacheReadInputTokens:     120,
+		CacheCreationInputTokens: 80,
+		CacheCreation: anthropic.CacheCreation{
+			Ephemeral5mInputTokens: 30,
+			Ephemeral1hInputTokens: 50,
+		},
+		ServerToolUse: anthropic.ServerToolUsage{
+			WebSearchRequests: 2,
+		},
+	}
+	ext := &ir.IRExtensions{}
+	extractAnthropicUsageIntoExt(u, ext)
+
+	assert.Equal(t, int64(120), ext.CacheReadInputTokens)
+	assert.Equal(t, int64(80), ext.CacheCreationInputTokens)
+	assert.Equal(t, int64(30), ext.Ephemeral5mInputTokens)
+	assert.Equal(t, int64(50), ext.Ephemeral1hInputTokens)
+	assert.Equal(t, int64(2), ext.ServerToolUseCounts["web_search"])
+}
+
+func TestExtractAnthropicUsageIntoExt_OmitsServerToolWhenZero(t *testing.T) {
+	u := anthropic.Usage{
+		InputTokens:  10,
+		OutputTokens: 5,
+	}
+	ext := &ir.IRExtensions{}
+	extractAnthropicUsageIntoExt(u, ext)
+	assert.Empty(t, ext.ServerToolUseCounts, "no server tool keys for zero counts")
+}
+
+func TestExtractAnthropicUsageIntoExt_NilSafe(t *testing.T) {
+	extractAnthropicUsageIntoExt(anthropic.Usage{InputTokens: 1}, nil)
+}
+
+// ToOpenAIResponseBody must remain byte-identical for the legacy
+// OpenAI-client / Anthropic-backend cell after the refactor. The new
+// helpers accept an ext but the legacy entrypoint passes nil.
+func TestToOpenAIResponseBody_NoSideEffectsOnNilExt(t *testing.T) {
+	anthropicResp := &anthropic.Message{
+		ID: "msg_refactor",
+		Content: []anthropic.ContentBlockUnion{
+			{Type: "thinking", Thinking: "reasoning...", Signature: "sig-xyz"},
+			{Type: "text", Text: "answer"},
+		},
+		StopReason: anthropic.StopReasonRefusal,
+		Usage: anthropic.Usage{
+			InputTokens:              10,
+			OutputTokens:             5,
+			CacheReadInputTokens:     7,
+			CacheCreationInputTokens: 3,
+		},
+	}
+	body, err := json.Marshal(anthropicResp)
+	require.NoError(t, err)
+
+	out, err := ToOpenAIResponseBody(body, "claude-sonnet-4-5")
+	require.NoError(t, err)
+
+	var oa openai.ChatCompletion
+	require.NoError(t, json.Unmarshal(out, &oa))
+	assert.Equal(t, "msg_refactor", oa.ID)
+	// Refusal collapses to "stop" in the OpenAI envelope; no side
+	// channel exists for the legacy entrypoint to expose it.
+	assert.Equal(t, "stop", oa.Choices[0].FinishReason)
+	assert.Equal(t, "answer", oa.Choices[0].Message.Content)
 }
 
 func TestExtractAssistantContent_StringContent(t *testing.T) {
