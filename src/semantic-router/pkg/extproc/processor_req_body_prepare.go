@@ -8,6 +8,7 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/metrics"
 )
@@ -45,7 +46,7 @@ func (r *OpenAIRouter) extractFastRequestState(
 	requestBody []byte,
 	ctx *RequestContext,
 ) (*FastExtractResult, error) {
-	fast, err := extractContentFast(requestBody)
+	fast, err := extractRequestSignalsForProtocol(ctx.ClientProtocol, requestBody)
 	if err != nil {
 		logging.Errorf("Error extracting request fields: %v", err)
 		metrics.RecordRequestError(ctx.RequestModel, "parse_error")
@@ -59,6 +60,20 @@ func (r *OpenAIRouter) extractFastRequestState(
 		ctx.ExpectStreamingResponse = true
 	}
 	return fast, nil
+}
+
+// extractRequestSignalsForProtocol dispatches the gjson-based fast-extract
+// walker by inbound wire format. OpenAI is the default (empty protocol);
+// Anthropic /v1/messages uses the variant that understands the Anthropic
+// content-block shape. Downstream signal consumers see the same
+// FastExtractResult contract regardless of source protocol.
+func extractRequestSignalsForProtocol(clientProtocol string, body []byte) (*FastExtractResult, error) {
+	switch clientProtocol {
+	case config.ClientProtocolAnthropic:
+		return extractContentFastAnthropic(body)
+	default:
+		return extractContentFast(body)
+	}
 }
 
 func (r *OpenAIRouter) runRequestPreRoutingStages(
