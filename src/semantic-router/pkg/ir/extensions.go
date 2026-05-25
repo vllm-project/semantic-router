@@ -75,6 +75,23 @@ type IRExtensions struct {
 	// records; it does not act on the value.
 	AnthropicBeta string
 
+	// InboundAnthropicVersion captures the inbound anthropic-version
+	// header value on Anthropic-shape ingress so the body-phase routing
+	// step can layer it under the provider-profile pin when the profile
+	// did not supply one.
+	InboundAnthropicVersion string
+
+	// InboundAnthropicBeta captures the inbound anthropic-beta header
+	// value on Anthropic-shape ingress for header pass-through. Duplicates
+	// AnthropicBeta from the body parser path on purpose: the header is
+	// captured at the request-header phase before the body has been seen.
+	InboundAnthropicBeta string
+
+	// InboundDangerousDirectBrowserAccess captures the
+	// anthropic-dangerous-direct-browser-access header value on Anthropic
+	// ingress for pass-through to compatible backends.
+	InboundDangerousDirectBrowserAccess string
+
 	// Warnings accumulates parse- and emit-time observations. Surfaced via
 	// response headers, structured logging, and metrics.
 	Warnings []Warning

@@ -272,6 +272,7 @@ func (r *OpenAIRouter) buildRouteHeaderState(
 	}
 	state.removeHeaders = append(state.removeHeaders, r.CredentialResolver.HeadersToStrip()...)
 	appendProfileHeaders(&state.setHeaders, profile)
+	appendCapturedPassThroughHeaders(&state.setHeaders, profile, ctx)
 	appendRoutingHeaders(&state.setHeaders, model)
 
 	return state, nil
@@ -336,6 +337,39 @@ func appendProfileHeaders(setHeaders *[]*core.HeaderValueOption, profile *config
 		return
 	}
 	for key, value := range profile.ExtraHeaders {
+		*setHeaders = append(*setHeaders, &core.HeaderValueOption{
+			Header: &core.HeaderValue{Key: key, RawValue: []byte(value)},
+		})
+	}
+}
+
+// appendCapturedPassThroughHeaders layers inbound Anthropic
+// pass-through headers (captured at the request-header phase into
+// IRExtensions) under the provider-profile pin. ExtraHeaders wins on
+// any collision so deployments can pin a known-tested anthropic-version
+// without the client forcing a different one.
+func appendCapturedPassThroughHeaders(
+	setHeaders *[]*core.HeaderValueOption,
+	profile *config.ProviderProfile,
+	ctx *RequestContext,
+) {
+	if ctx == nil || ctx.IRExtensions == nil {
+		return
+	}
+	captured := map[string]string{
+		"anthropic-version":                         ctx.IRExtensions.InboundAnthropicVersion,
+		"anthropic-beta":                            ctx.IRExtensions.InboundAnthropicBeta,
+		"anthropic-dangerous-direct-browser-access": ctx.IRExtensions.InboundDangerousDirectBrowserAccess,
+	}
+	for key, value := range captured {
+		if value == "" {
+			continue
+		}
+		if profile != nil {
+			if _, pinned := profile.ExtraHeaders[key]; pinned {
+				continue
+			}
+		}
 		*setHeaders = append(*setHeaders, &core.HeaderValueOption{
 			Header: &core.HeaderValue{Key: key, RawValue: []byte(value)},
 		})
