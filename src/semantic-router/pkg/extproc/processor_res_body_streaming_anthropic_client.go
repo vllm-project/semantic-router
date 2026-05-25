@@ -2,6 +2,7 @@ package extproc
 
 import (
 	"strings"
+	"time"
 
 	ext_proc "github.com/envoyproxy/go-control-plane/envoy/service/ext_proc/v3"
 
@@ -9,6 +10,13 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 )
+
+// anthropicPingCadence is how long the emitter waits between
+// surfacing keepalive pings. Matches the observed upstream cadence
+// (~15s) and the Claude Code SDK's idle tolerance.
+//
+// Hardcoded in v1; can be made configurable in a follow-up if operators ask.
+const anthropicPingCadence = 15 * time.Second
 
 // handleAnthropicClientStreamingResponseBody dispatches streaming
 // responses for clients that called the /v1/messages endpoint
@@ -43,6 +51,14 @@ func (r *OpenAIRouter) handleAnthropicClientStreamingResponseBody(
 		ctx.AnthropicStream = anthropic.NewStreamState()
 	}
 
+	// Inject a keepalive ping if the gap since the last chunk crossed
+	// the cadence threshold. Anthropic clients (including the SDK
+	// MessageStream accumulator) treat pings as no-ops; the value is
+	// keeping middleboxes from severing the long-lived connection
+	// during sparse-token windows. The ping is prepended below so it
+	// reaches the client before this chunk's content events.
+	pingBytes := maybeEmitPing(ctx.AnthropicStream)
+
 	openAIBytes, err := r.translateUpstreamToOpenAI(responseBody, ctx)
 	if err != nil {
 		logging.Errorf("Failed to translate upstream streaming chunk to OpenAI: %v", err)
@@ -67,6 +83,15 @@ func (r *OpenAIRouter) handleAnthropicClientStreamingResponseBody(
 		r.finalizeStreamingResponse(ctx)
 	}
 
+	// Stamp the chunk-arrival time so the next pass can compute the
+	// silence gap for ping injection. Done after the emitter so a
+	// chunk that produced no bytes still extends the keepalive window
+	// (otherwise zero-emit chunks would fire a ping on every call).
+	ctx.AnthropicStream.LastChunkAt = time.Now()
+
+	combined := make([]byte, 0, len(pingBytes)+len(anthropicBytes))
+	combined = append(combined, pingBytes...)
+	combined = append(combined, anthropicBytes...)
 	// Always replace the body, even when our emitter produced zero
 	// bytes for this chunk. A nil BodyMutation makes Envoy forward the
 	// raw upstream chunk unmodified, which would leak Anthropic-shape
@@ -76,8 +101,23 @@ func (r *OpenAIRouter) handleAnthropicClientStreamingResponseBody(
 	// have entered this handler we own the wire, so an empty mutation
 	// is the correct way to swallow upstream noise.
 	return buildResponseBodyContinueResponse(&ext_proc.BodyMutation{
-		Mutation: &ext_proc.BodyMutation_Body{Body: anthropicBytes},
+		Mutation: &ext_proc.BodyMutation_Body{Body: combined},
 	}, nil)
+}
+
+// maybeEmitPing returns ping event bytes when the gap since the last
+// chunk arrival crossed anthropicPingCadence. Returns nil otherwise.
+// A zero LastChunkAt (first chunk after stream init) suppresses the
+// ping — the spec only asks for pings during sparse-token windows, not
+// for synthetic pings before any content has flowed.
+func maybeEmitPing(state *anthropic.StreamState) []byte {
+	if state == nil || state.LastChunkAt.IsZero() {
+		return nil
+	}
+	if time.Since(state.LastChunkAt) < anthropicPingCadence {
+		return nil
+	}
+	return anthropic.EmitAnthropicPingEvent()
 }
 
 // translateUpstreamToOpenAI normalizes the upstream SSE bytes into the
