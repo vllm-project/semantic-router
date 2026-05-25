@@ -20,7 +20,7 @@ import (
 	"context"
 	"fmt"
 	"math"
-	"math/rand"
+	"math/rand/v2"
 	"sort"
 	"strings"
 	"sync"
@@ -192,7 +192,8 @@ type BetaDistribution struct {
 
 // Sample draws a sample from the Beta distribution
 // Uses the gamma distribution method: X ~ Beta(a,b) = Gamma(a,1) / (Gamma(a,1) + Gamma(b,1))
-func (b *BetaDistribution) Sample(rng *rand.Rand) float64 {
+// Backed by math/rand/v2 package-level functions, which are concurrency-safe.
+func (b *BetaDistribution) Sample() float64 {
 	// Handle edge cases
 	if b.Alpha <= 0 {
 		b.Alpha = 1.0
@@ -201,8 +202,8 @@ func (b *BetaDistribution) Sample(rng *rand.Rand) float64 {
 		b.Beta = 1.0
 	}
 
-	x := gammaVariate(rng, b.Alpha)
-	y := gammaVariate(rng, b.Beta)
+	x := gammaVariate(b.Alpha)
+	y := gammaVariate(b.Beta)
 
 	if x+y == 0 {
 		return 0.5
@@ -228,11 +229,12 @@ func (b *BetaDistribution) Variance() float64 {
 }
 
 // gammaVariate generates a random variate from Gamma(alpha, 1) distribution
-// Uses Marsaglia and Tsang's method for alpha >= 1
-func gammaVariate(rng *rand.Rand, alpha float64) float64 {
+// Uses Marsaglia and Tsang's method for alpha >= 1.
+// Backed by math/rand/v2 package-level functions, which are concurrency-safe.
+func gammaVariate(alpha float64) float64 {
 	if alpha < 1 {
 		// For alpha < 1, use the transformation: Gamma(alpha) = Gamma(alpha+1) * U^(1/alpha)
-		return gammaVariate(rng, alpha+1) * math.Pow(rng.Float64(), 1/alpha)
+		return gammaVariate(alpha+1) * math.Pow(rand.Float64(), 1/alpha)
 	}
 
 	d := alpha - 1.0/3.0
@@ -241,7 +243,7 @@ func gammaVariate(rng *rand.Rand, alpha float64) float64 {
 	for {
 		var x, v float64
 		for {
-			x = rng.NormFloat64()
+			x = rand.NormFloat64()
 			v = 1.0 + c*x
 			if v > 0 {
 				break
@@ -249,7 +251,7 @@ func gammaVariate(rng *rand.Rand, alpha float64) float64 {
 		}
 
 		v = v * v * v
-		u := rng.Float64()
+		u := rand.Float64()
 
 		if u < 1.0-0.0331*(x*x)*(x*x) {
 			return d * v
@@ -292,8 +294,8 @@ type ModelPreference struct {
 type RLDrivenSelector struct {
 	config *RLDrivenConfig
 
-	// rng is the random number generator (thread-safe via mutex)
-	rng *rand.Rand
+	// Random numbers are drawn from math/rand/v2 package-level functions, which
+	// are concurrency-safe. There is no per-selector PRNG state to guard.
 
 	// Global preferences (shared across all users)
 	globalPreferences map[string]*ModelPreference
@@ -343,7 +345,6 @@ func NewRLDrivenSelector(cfg *RLDrivenConfig) *RLDrivenSelector {
 
 	selector := &RLDrivenSelector{
 		config:              cfg,
-		rng:                 rand.New(rand.NewSource(time.Now().UnixNano())),
 		globalPreferences:   make(map[string]*ModelPreference),
 		userPreferences:     make(map[string]map[string]*ModelPreference),
 		categoryPreferences: make(map[string]map[string]*ModelPreference),
@@ -531,7 +532,7 @@ func (r *RLDrivenSelector) Select(ctx context.Context, selCtx *SelectionContext)
 		sampledValues = make(map[string]float64)
 
 		for _, pref := range preferences {
-			sample := pref.Distribution.Sample(r.rng)
+			sample := pref.Distribution.Sample()
 
 			// Apply cost adjustment if enabled
 			if r.config.CostAwareness && r.config.CostWeight > 0 {
@@ -564,7 +565,7 @@ func (r *RLDrivenSelector) Select(ctx context.Context, selCtx *SelectionContext)
 		// Epsilon-greedy exploration
 		explorationRate := r.getCurrentExplorationRate(selectionNum)
 
-		if r.rng.Float64() < explorationRate {
+		if rand.Float64() < explorationRate {
 			// Explore: select random model (prefer cheaper if cost-aware)
 			selectedModel = r.selectRandomModel(selCtx.CandidateModels)
 			selectedScore = 0.5
@@ -737,7 +738,7 @@ func (r *RLDrivenSelector) SelectMultiRound(ctx context.Context, selCtx *Selecti
 
 	for _, pref := range preferences {
 		// Sample from distribution for exploration
-		sample := pref.Distribution.Sample(r.rng)
+		sample := pref.Distribution.Sample()
 
 		// Apply cost awareness
 		if r.config.CostAwareness && r.config.CostWeight > 0 {
@@ -1157,7 +1158,7 @@ func (r *RLDrivenSelector) applyCostBonus(model string, score float64) float64 {
 func (r *RLDrivenSelector) selectRandomModel(candidates []config.ModelRef) *config.ModelRef {
 	if !r.config.CostAwareness || len(r.modelCosts) == 0 {
 		// Uniform random
-		idx := r.rng.Intn(len(candidates))
+		idx := rand.IntN(len(candidates))
 		return &candidates[idx]
 	}
 
@@ -1177,15 +1178,15 @@ func (r *RLDrivenSelector) selectRandomModel(candidates []config.ModelRef) *conf
 	// Weight towards cheaper models (first third has 50% chance)
 	idx := 0
 	if len(sorted) > 2 {
-		if r.rng.Float64() < 0.5 {
+		if rand.Float64() < 0.5 {
 			// Pick from cheaper third
-			idx = r.rng.Intn(len(sorted) / 3)
+			idx = rand.IntN(len(sorted) / 3)
 		} else {
 			// Pick uniformly from rest
-			idx = r.rng.Intn(len(sorted))
+			idx = rand.IntN(len(sorted))
 		}
 	} else {
-		idx = r.rng.Intn(len(sorted))
+		idx = rand.IntN(len(sorted))
 	}
 
 	return &sorted[idx]
