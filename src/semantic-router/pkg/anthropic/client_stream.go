@@ -181,7 +181,7 @@ func transformStreamEvent(
 	case "content_block_delta":
 		return handleContentBlockDelta(event, state, model, ext)
 	case "message_delta":
-		return handleMessageDelta(event, state, model)
+		return handleMessageDelta(event, state, model, ext)
 	case "message_stop":
 		return nil, true, nil
 	case "content_block_stop", "ping", "vertex_event":
@@ -209,6 +209,11 @@ func handleMessageStart(
 	if state.Created == 0 {
 		state.Created = time.Now().Unix()
 	}
+	// Capture the upstream's initial usage so the symmetric outbound
+	// emitter (sse_out.go) can echo it onto its synthesized
+	// message_start event, preserving the per-request input token
+	// count clients use to seed their usage accumulators.
+	state.InitialUsage = start.Message.Usage
 	if state.RoleSent {
 		return nil, false, nil
 	}
@@ -346,9 +351,22 @@ func handleMessageDelta(
 	event anthropic.MessageStreamEventUnion,
 	state *StreamState,
 	model string,
+	ext *ir.IRExtensions,
 ) ([][]byte, bool, error) {
 	deltaEvent := event.AsMessageDelta()
 	finishReason := mapAnthropicStopReasonToOpenAI(deltaEvent.Delta.StopReason)
+
+	// Capture Anthropic-only stop reasons ("pause_turn", "refusal")
+	// onto the IR sidecar so the symmetric outbound emitter can
+	// surface them verbatim on the client's message_delta. OpenAI's
+	// finish_reason alphabet has no equivalent, so without this
+	// round-trip the value would be lossily mapped to end_turn.
+	if ext != nil && isAnthropicOnlyStopReason(deltaEvent.Delta.StopReason) {
+		ext.AnthropicStopReason = string(deltaEvent.Delta.StopReason)
+		if deltaEvent.Delta.StopSequence != "" {
+			ext.AnthropicStopSequence = deltaEvent.Delta.StopSequence
+		}
+	}
 
 	chunk, err := buildOpenAIStreamFinishChunk(state, model, finishReason, deltaEvent.Usage)
 	if err != nil {
@@ -358,6 +376,20 @@ func handleMessageDelta(
 		return nil, false, nil
 	}
 	return [][]byte{chunk}, false, nil
+}
+
+// isAnthropicOnlyStopReason returns true for stop_reason values that
+// have no equivalent in the OpenAI finish_reason alphabet and must
+// round-trip via IRExtensions to survive the OpenAI normalization
+// step. "end_turn", "max_tokens", "tool_use", "stop_sequence", and
+// "refusal" all map onto OpenAI tokens; "pause_turn" does not.
+func isAnthropicOnlyStopReason(reason anthropic.StopReason) bool {
+	switch reason {
+	case anthropic.StopReasonPauseTurn:
+		return true
+	default:
+		return false
+	}
 }
 
 // handleErrorEvent maps an Anthropic `event: error` data payload onto an

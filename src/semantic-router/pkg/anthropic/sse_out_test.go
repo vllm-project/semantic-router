@@ -218,6 +218,64 @@ func TestEmitAnthropicPingEvent(t *testing.T) {
 	assert.True(t, strings.HasSuffix(out, "\n\n"), "SSE event must terminate with blank line")
 }
 
+// TestEmitAnthropicSSEChunk_CacheUsageRoundTrip asserts that cache
+// counters captured on IRExtensions (typically populated by the
+// inbound translator for the Anthropic→Anthropic cell) land on the
+// terminal message_delta.usage so an Anthropic client sees the same
+// cache_read / cache_creation breakdown the upstream produced.
+func TestEmitAnthropicSSEChunk_CacheUsageRoundTrip(t *testing.T) {
+	state := NewStreamState()
+	ext := &ir.IRExtensions{
+		CacheReadInputTokens:     120,
+		CacheCreationInputTokens: 80,
+	}
+	input := buildOpenAISSE(
+		`{"id":"c","object":"chat.completion.chunk","model":"m","choices":[{"index":0,"delta":{"role":"assistant","content":"x"},"finish_reason":"stop"}],"usage":{"prompt_tokens":1,"completion_tokens":1,"total_tokens":2}}`,
+	)
+	out, _, err := EmitAnthropicSSEChunk(input, state, ext, "claude-sonnet-4-5")
+	require.NoError(t, err)
+	body := string(out)
+	assert.Contains(t, body, `"cache_read_input_tokens":120`)
+	assert.Contains(t, body, `"cache_creation_input_tokens":80`)
+}
+
+// TestEmitAnthropicSSEChunk_AnthropicOnlyStopReasonOverride asserts
+// that an Anthropic-only stop_reason captured on ext overrides the
+// OpenAI-derived mapping on the outbound message_delta.
+func TestEmitAnthropicSSEChunk_AnthropicOnlyStopReasonOverride(t *testing.T) {
+	state := NewStreamState()
+	ext := &ir.IRExtensions{
+		AnthropicStopReason: "pause_turn",
+	}
+	input := buildOpenAISSE(
+		`{"id":"c","object":"chat.completion.chunk","model":"m","choices":[{"index":0,"delta":{"role":"assistant","content":"x"},"finish_reason":"stop"}],"usage":{"prompt_tokens":1,"completion_tokens":1,"total_tokens":2}}`,
+	)
+	out, _, err := EmitAnthropicSSEChunk(input, state, ext, "claude-sonnet-4-5")
+	require.NoError(t, err)
+	assert.Contains(t, string(out), `"stop_reason":"pause_turn"`)
+}
+
+// TestEmitAnthropicSSEChunk_InitialUsageEcho asserts that an initial
+// usage captured on the inbound side reaches the outbound
+// message_start payload, preserving the input_tokens count clients use
+// to seed their usage accumulators.
+func TestEmitAnthropicSSEChunk_InitialUsageEcho(t *testing.T) {
+	state := NewStreamState()
+	state.InitialUsage.InputTokens = 99
+	input := buildOpenAISSE(
+		`{"id":"c","object":"chat.completion.chunk","model":"m","choices":[{"index":0,"delta":{"role":"assistant","content":"x"},"finish_reason":"stop"}],"usage":{"prompt_tokens":99,"completion_tokens":1,"total_tokens":100}}`,
+	)
+	out, _, err := EmitAnthropicSSEChunk(input, state, nil, "claude-sonnet-4-5")
+	require.NoError(t, err)
+	body := string(out)
+	// message_start.usage carries InitialUsage.InputTokens.
+	startIdx := strings.Index(body, "event: message_start")
+	deltaIdx := strings.Index(body, "event: message_delta")
+	require.Greater(t, deltaIdx, startIdx)
+	messageStartBlock := body[startIdx:deltaIdx]
+	assert.Contains(t, messageStartBlock, `"input_tokens":99`)
+}
+
 // TestFormatAnthropicSSEEvent asserts the SSE framing helper produces
 // the wire shape Anthropic clients expect — event header, data line,
 // terminating blank line.

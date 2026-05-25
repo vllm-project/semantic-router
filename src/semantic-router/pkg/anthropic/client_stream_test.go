@@ -228,6 +228,51 @@ func TestTransformSSEChunkToOpenAI_ErrorEvent_NoHeader(t *testing.T) {
 	assert.Contains(t, body, "slow down")
 }
 
+// TestTransformSSEChunkToOpenAI_CapturesInitialUsage asserts that
+// the inbound translator captures the message_start.usage block onto
+// state.InitialUsage so the outbound emitter can echo it on its
+// synthesized message_start event during round-trips.
+func TestTransformSSEChunkToOpenAI_CapturesInitialUsage(t *testing.T) {
+	state := NewStreamState()
+	events := buildAnthropicSSE(
+		`{"type":"message_start","message":{"id":"msg_1","type":"message","role":"assistant","content":[],"model":"claude-sonnet-4-5","stop_reason":null,"stop_sequence":null,"usage":{"input_tokens":42,"output_tokens":1,"cache_read_input_tokens":10,"cache_creation_input_tokens":5}}}`,
+	)
+	_, _, err := TransformSSEChunkToOpenAI([]byte(events), state, "claude-sonnet-4-5", nil)
+	require.NoError(t, err)
+	assert.Equal(t, int64(42), state.InitialUsage.InputTokens)
+	assert.Equal(t, int64(10), state.InitialUsage.CacheReadInputTokens)
+	assert.Equal(t, int64(5), state.InitialUsage.CacheCreationInputTokens)
+}
+
+// TestTransformSSEChunkToOpenAI_AnthropicOnlyStopReason asserts that
+// pause_turn round-trips through IRExtensions because the OpenAI
+// finish_reason alphabet has no equivalent.
+func TestTransformSSEChunkToOpenAI_AnthropicOnlyStopReason(t *testing.T) {
+	state := NewStreamState()
+	ext := &ir.IRExtensions{}
+	events := buildAnthropicSSE(
+		`{"type":"message_delta","delta":{"stop_reason":"pause_turn","stop_sequence":null},"usage":{"output_tokens":50}}`,
+	)
+	_, _, err := TransformSSEChunkToOpenAI([]byte(events), state, "claude-sonnet-4-5", ext)
+	require.NoError(t, err)
+	assert.Equal(t, "pause_turn", ext.AnthropicStopReason)
+}
+
+// TestTransformSSEChunkToOpenAI_StandardStopReasonNotCaptured asserts
+// that mappable stop reasons (end_turn, tool_use, etc.) are NOT
+// stashed onto ext — only the Anthropic-only ones need the round-trip
+// because the mappable ones survive OpenAI normalization.
+func TestTransformSSEChunkToOpenAI_StandardStopReasonNotCaptured(t *testing.T) {
+	state := NewStreamState()
+	ext := &ir.IRExtensions{}
+	events := buildAnthropicSSE(
+		`{"type":"message_delta","delta":{"stop_reason":"end_turn","stop_sequence":null},"usage":{"output_tokens":50}}`,
+	)
+	_, _, err := TransformSSEChunkToOpenAI([]byte(events), state, "claude-sonnet-4-5", ext)
+	require.NoError(t, err)
+	assert.Empty(t, ext.AnthropicStopReason, "mappable stop_reason should round-trip via standard mapping")
+}
+
 func TestExtractSSEDataLines_TracksEventHeader(t *testing.T) {
 	raw := "event: error\ndata: {\"type\":\"error\"}\n\nevent: message_start\ndata: {\"type\":\"message_start\"}\n\n"
 	lines := extractSSEDataLines([]byte(raw))
