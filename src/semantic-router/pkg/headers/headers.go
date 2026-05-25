@@ -193,6 +193,29 @@ const (
 	VSRFastResponse = "x-vsr-fast-response"
 )
 
+// VSR Protocol Markers and Translation Warnings
+// These headers are emitted on every non-cache-hit response (including 4xx
+// and 5xx) so clients can always tell which translation cell handled the
+// call and what was lost during translation.
+const (
+	// VSRInboundProtocol describes the wire format of the inbound request
+	// as seen by the router (e.g. "openai", "anthropic"). Defaults to
+	// "openai" when no other protocol was detected.
+	VSRInboundProtocol = "x-vsr-inbound-protocol"
+
+	// VSROutboundProtocol describes the wire format of the outbound
+	// request sent to the upstream backend. Defaults to "openai" when no
+	// explicit APIFormat was resolved.
+	VSROutboundProtocol = "x-vsr-outbound-protocol"
+
+	// VSRLossinessWarnings carries a structured, semicolon-separated
+	// list of translation observations emitted by the inbound parser
+	// during a lossy translation. Each entry is "severity;reason;field";
+	// entries are comma-separated. Absent when no warnings were
+	// produced.
+	VSRLossinessWarnings = "x-vsr-lossiness-warnings"
+)
+
 // Legacy Security Headers (kept for backward compatibility with replay recorder)
 // New signal-driven architecture uses x-vsr-matched-jailbreak and x-vsr-matched-pii instead.
 const (
