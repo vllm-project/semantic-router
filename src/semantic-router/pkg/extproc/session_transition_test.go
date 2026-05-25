@@ -9,6 +9,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/headers"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/ir"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/responseapi"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/sessiontelemetry"
 )
@@ -252,6 +253,119 @@ func TestEstimateTokenLength(t *testing.T) {
 	assert.Equal(t, 0, estimateTokenLength(""))
 	assert.Equal(t, 1, estimateTokenLength("abcd"))
 	assert.Equal(t, 3, estimateTokenLength("abcdefghijkl"))
+}
+
+func TestPopulateSessionTransitionFields_ClaudeCodeSessionID_UsedWhenXSessionIDAbsent(t *testing.T) {
+	ctx := &RequestContext{
+		Headers: map[string]string{
+			headers.XClaudeCodeSessionID: "cc-uuid-1",
+		},
+		ChatCompletionMessages: []ChatCompletionMessage{
+			{Role: "user", Content: "Hello"},
+		},
+	}
+
+	populateSessionTransitionFields(ctx)
+
+	assert.Equal(t, "cc-uuid-1", ctx.SessionID)
+}
+
+func TestPopulateSessionTransitionFields_XSessionIDOutranksClaudeCodeSessionID(t *testing.T) {
+	ctx := &RequestContext{
+		Headers: map[string]string{
+			headers.XSessionID:           "pinned",
+			headers.XClaudeCodeSessionID: "cc-uuid-2",
+		},
+		ChatCompletionMessages: []ChatCompletionMessage{
+			{Role: "user", Content: "Hello"},
+		},
+	}
+
+	populateSessionTransitionFields(ctx)
+
+	assert.Equal(t, "pinned", ctx.SessionID)
+}
+
+func TestPopulateSessionTransitionFields_ClaudeCodeSessionIDOutranksMetadataUserID(t *testing.T) {
+	ctx := &RequestContext{
+		Headers: map[string]string{
+			headers.XClaudeCodeSessionID: "cc-uuid-3",
+		},
+		IRExtensions: &ir.IRExtensions{
+			MetadataUserID: "user-zzz",
+		},
+		ChatCompletionMessages: []ChatCompletionMessage{
+			{Role: "user", Content: "Hello"},
+		},
+	}
+
+	populateSessionTransitionFields(ctx)
+
+	assert.Equal(t, "cc-uuid-3", ctx.SessionID)
+}
+
+func TestPopulateSessionTransitionFields_MetadataUserIDSeedsSessionWhenNoTransportHeader(t *testing.T) {
+	ctx := &RequestContext{
+		IRExtensions: &ir.IRExtensions{
+			MetadataUserID: "user-abc",
+		},
+		ChatCompletionMessages: []ChatCompletionMessage{
+			{Role: "user", Content: "Hello"},
+		},
+	}
+
+	populateSessionTransitionFields(ctx)
+
+	assert.Equal(t, "ant-md-user-abc", ctx.SessionID)
+}
+
+func TestPopulateSessionTransitionFields_ResponseAPIConversationOutranksAnthropicSignals(t *testing.T) {
+	ctx := &RequestContext{
+		ResponseAPICtx: &ResponseAPIContext{
+			IsResponseAPIRequest: true,
+			ConversationID:       "conv-1",
+		},
+		Headers: map[string]string{
+			headers.XClaudeCodeSessionID: "cc-uuid-4",
+		},
+		IRExtensions: &ir.IRExtensions{
+			MetadataUserID: "user-xyz",
+		},
+	}
+
+	populateSessionTransitionFields(ctx)
+
+	assert.Equal(t, "conv-1", ctx.SessionID)
+}
+
+func TestPopulateSessionTransitionFields_ClaudeCodeSessionID_StableAcrossRequests(t *testing.T) {
+	uuid := "cc-uuid-stable"
+	ctxA := &RequestContext{
+		Headers: map[string]string{
+			headers.XClaudeCodeSessionID: uuid,
+		},
+		ChatCompletionMessages: []ChatCompletionMessage{
+			{Role: "user", Content: "first"},
+		},
+	}
+	ctxB := &RequestContext{
+		Headers: map[string]string{
+			headers.XClaudeCodeSessionID: uuid,
+		},
+		ChatCompletionMessages: []ChatCompletionMessage{
+			{Role: "user", Content: "second"},
+		},
+	}
+
+	populateSessionTransitionFields(ctxA)
+	populateSessionTransitionFields(ctxB)
+
+	assert.Equal(t, ctxA.SessionID, ctxB.SessionID)
+}
+
+func TestDeriveSessionIDFromAnthropicSignals_NilSafe(t *testing.T) {
+	assert.Empty(t, deriveSessionIDFromAnthropicSignals(nil))
+	assert.Empty(t, deriveSessionIDFromAnthropicSignals(&RequestContext{}))
 }
 
 func TestEstimateStoredResponseTokens_FallsBackToOutputItems(t *testing.T) {

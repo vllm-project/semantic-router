@@ -39,6 +39,12 @@ func populateSessionTransitionFields(ctx *RequestContext) {
 		ctx.SessionID = sid
 	}
 
+	if ctx.SessionID == "" {
+		if sid := deriveSessionIDFromAnthropicSignals(ctx); sid != "" {
+			ctx.SessionID = sid
+		}
+	}
+
 	if len(ctx.ChatCompletionMessages) == 0 {
 		if ctx.SessionID == "" {
 			ctx.SessionID = deriveSessionIDFromRequestID(ctx)
@@ -95,6 +101,36 @@ func populateLastSessionObservation(ctx *RequestContext) {
 	}
 	ctx.SessionIdleSeconds = idleFor.Seconds()
 	ctx.SessionIdleKnown = true
+}
+
+// deriveSessionIDFromAnthropicSignals returns a session-ID candidate
+// from Anthropic-shape transport and body signals. Two sources, evaluated
+// in order:
+//
+//  1. x-claude-code-session-id — per-conversation UUID emitted by the
+//     Claude Code CLI on every /v1/messages request in a thread. Returned
+//     verbatim so plugins can map sessions back to the client-declared
+//     conversation; operators wanting privacy should run a hashing plugin
+//     in front.
+//  2. metadata.user_id — populated by the PR2 Anthropic inbound parser
+//     into IRExtensions.MetadataUserID. Returned with an "ant-md-" prefix
+//     so the namespace is distinguishable from other derivation sources.
+//
+// Returns empty string when neither signal is present, leaving the caller
+// to fall through to the chat-message fingerprint fallbacks.
+func deriveSessionIDFromAnthropicSignals(ctx *RequestContext) string {
+	if ctx == nil {
+		return ""
+	}
+	if sid := strings.TrimSpace(headerValueCI(ctx, headers.XClaudeCodeSessionID)); sid != "" {
+		return sid
+	}
+	if ctx.IRExtensions != nil {
+		if uid := strings.TrimSpace(ctx.IRExtensions.MetadataUserID); uid != "" {
+			return "ant-md-" + uid
+		}
+	}
+	return ""
 }
 
 // populateChatCompletionSessionIDIfNeeded sets ctx.SessionID when not already
