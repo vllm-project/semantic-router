@@ -5,6 +5,8 @@ import (
 
 	ext_proc "github.com/envoyproxy/go-control-plane/envoy/service/ext_proc/v3"
 
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/anthropic"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 )
 
@@ -19,10 +21,10 @@ func (r *OpenAIRouter) handleNonStreamingResponseBody(
 	r.calibrateTokenEstimator(ctx, usage.promptTokens)
 	r.updateResponseCache(ctx, responseBody)
 
-	finalBody := r.translateResponseBodyForClient(ctx, responseBody)
+	finalBody, clientTransformed := r.translateResponseBodyForClient(ctx, responseBody)
 	bodyMutation, headerMutation := buildInitialResponseMutations(
 		finalBody,
-		initialBodyTransformed || isResponseAPIRequest(ctx),
+		initialBodyTransformed || clientTransformed,
 	)
 
 	if jailbreakResponse := r.performResponseJailbreakDetection(ctx, responseBody); jailbreakResponse != nil {
@@ -41,12 +43,30 @@ func (r *OpenAIRouter) handleNonStreamingResponseBody(
 	return response
 }
 
+// translateResponseBodyForClient dispatches body rewriting based on the
+// inbound client protocol. Returns the rewritten body and a flag
+// indicating whether a rewrite happened, so callers know whether to
+// emit a body mutation downstream.
+//
+// Branch order matters: ClientProtocol "anthropic" and Response API are
+// mutually exclusive (different inbound paths — /v1/messages vs
+// /v1/responses), but pinning the Anthropic branch first keeps the
+// dispatcher reading top-down by likelihood.
 func (r *OpenAIRouter) translateResponseBodyForClient(
 	ctx *RequestContext,
 	responseBody []byte,
-) []byte {
+) ([]byte, bool) {
+	if ctx != nil && ctx.ClientProtocol == config.ClientProtocolAnthropic {
+		translated, err := anthropic.EmitAnthropicResponse(responseBody, ctx.IRExtensions, ctx.RequestModel)
+		if err != nil {
+			logging.Errorf("Anthropic outbound emit failed: %v", err)
+			return anthropic.EmitAnthropicError("api_error", err.Error()), true
+		}
+		return translated, true
+	}
+
 	if !isResponseAPIRequest(ctx) || r.ResponseAPIFilter == nil {
-		return responseBody
+		return responseBody, false
 	}
 
 	translatedBody, err := r.ResponseAPIFilter.TranslateResponse(
@@ -56,11 +76,11 @@ func (r *OpenAIRouter) translateResponseBodyForClient(
 	)
 	if err != nil {
 		logging.Errorf("Response API translation error: %v", err)
-		return responseBody
+		return responseBody, false
 	}
 
 	logging.Infof("Response API: Translated response to Response API format")
-	return translatedBody
+	return translatedBody, true
 }
 
 func buildInitialResponseMutations(
