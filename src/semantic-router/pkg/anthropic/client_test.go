@@ -577,6 +577,75 @@ func TestToOpenAIResponseBody_NoSideEffectsOnNilExt(t *testing.T) {
 	assert.Equal(t, "answer", oa.Choices[0].Message.Content)
 }
 
+func TestToOpenAIResponseBodyWithExt_PopulatesIRExtensions(t *testing.T) {
+	anthropicResp := &anthropic.Message{
+		ID: "msg_ext",
+		Content: []anthropic.ContentBlockUnion{
+			{Type: "thinking", Thinking: "reasoning", Signature: "sig-1"},
+			{Type: "text", Text: "answer"},
+		},
+		StopReason: anthropic.StopReasonPauseTurn,
+		Usage: anthropic.Usage{
+			InputTokens:              100,
+			OutputTokens:             50,
+			CacheReadInputTokens:     200,
+			CacheCreationInputTokens: 75,
+			CacheCreation: anthropic.CacheCreation{
+				Ephemeral5mInputTokens: 25,
+				Ephemeral1hInputTokens: 50,
+			},
+			ServerToolUse: anthropic.ServerToolUsage{WebSearchRequests: 4},
+		},
+	}
+	body, err := json.Marshal(anthropicResp)
+	require.NoError(t, err)
+
+	ext := &ir.IRExtensions{SourceProtocol: SourceProtocolAnthropic}
+	out, err := ToOpenAIResponseBodyWithExt(body, "claude-opus-4-7", ext)
+	require.NoError(t, err)
+
+	// Returned envelope is OpenAI-shape (parser does not change with ext).
+	var oa openai.ChatCompletion
+	require.NoError(t, json.Unmarshal(out, &oa))
+	assert.Equal(t, "msg_ext", oa.ID)
+
+	// Ext is populated with the values the OpenAI envelope cannot carry.
+	assert.Equal(t, "pause_turn", ext.AnthropicStopReason)
+	assert.Equal(t, int64(200), ext.CacheReadInputTokens)
+	assert.Equal(t, int64(75), ext.CacheCreationInputTokens)
+	assert.Equal(t, int64(25), ext.Ephemeral5mInputTokens)
+	assert.Equal(t, int64(50), ext.Ephemeral1hInputTokens)
+	assert.Equal(t, int64(4), ext.ServerToolUseCounts["web_search"])
+	assert.Equal(t, "sig-1", ext.ThinkingSignatures["content[0]"])
+}
+
+func TestToOpenAIResponseBodyWithExt_NilExtMatchesLegacyEntrypoint(t *testing.T) {
+	anthropicResp := &anthropic.Message{
+		ID: "msg_nil_ext",
+		Content: []anthropic.ContentBlockUnion{
+			{Type: "text", Text: "x"},
+		},
+		StopReason: anthropic.StopReasonEndTurn,
+		Usage:      anthropic.Usage{InputTokens: 1, OutputTokens: 1},
+	}
+	body, err := json.Marshal(anthropicResp)
+	require.NoError(t, err)
+
+	legacyOut, err := ToOpenAIResponseBody(body, "m")
+	require.NoError(t, err)
+
+	withExtOut, err := ToOpenAIResponseBodyWithExt(body, "m", nil)
+	require.NoError(t, err)
+
+	// Identical apart from the "created" Unix timestamp.
+	var legacy, withExt openai.ChatCompletion
+	require.NoError(t, json.Unmarshal(legacyOut, &legacy))
+	require.NoError(t, json.Unmarshal(withExtOut, &withExt))
+	legacy.Created = 0
+	withExt.Created = 0
+	assert.Equal(t, legacy, withExt)
+}
+
 func TestExtractAssistantContent_StringContent(t *testing.T) {
 	msg := &openai.ChatCompletionAssistantMessageParam{
 		Content: openai.ChatCompletionAssistantMessageParamContentUnion{

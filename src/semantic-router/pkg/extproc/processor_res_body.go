@@ -64,7 +64,13 @@ func (r *OpenAIRouter) normalizeProviderResponseBody(
 		return responseBody, false, nil
 	}
 
-	transformedBody, err := anthropic.ToOpenAIResponseBody(responseBody, ctx.RequestModel)
+	// Pass IRExtensions through so the Anthropic-only stop reason, cache
+	// usage counters, server-tool counts, and thinking-block signatures
+	// land on the per-request sidecar. The Anthropic outbound emitter
+	// (translateResponseBodyForClient → EmitAnthropicResponse) replays
+	// them on the response body so an Anthropic client sees the same
+	// fields the upstream actually produced.
+	transformedBody, err := anthropic.ToOpenAIResponseBodyWithExt(responseBody, ctx.RequestModel, ctx.IRExtensions)
 	if err != nil {
 		logging.Errorf("Failed to transform Anthropic response to OpenAI format: %v", err)
 		return nil, false, err

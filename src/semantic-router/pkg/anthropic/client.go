@@ -141,6 +141,16 @@ func ToOpenAIResponseBody(anthropicResponse []byte, model string) ([]byte, error
 	return toOpenAIResponseBody(anthropicResponse, model, nil)
 }
 
+// ToOpenAIResponseBodyWithExt is the IRExtensions-aware form of
+// ToOpenAIResponseBody. When ext is non-nil the parser stashes the
+// Anthropic-only stop_reason, cache usage counters, server-tool counts,
+// and thinking-block signatures onto it so the symmetric outbound
+// emitter (EmitAnthropicResponse) can replay them on the response body.
+// Pass nil ext for byte-identical behavior with the original entrypoint.
+func ToOpenAIResponseBodyWithExt(anthropicResponse []byte, model string, ext *ir.IRExtensions) ([]byte, error) {
+	return toOpenAIResponseBody(anthropicResponse, model, ext)
+}
+
 // toOpenAIResponseBody is the internal form that exposes the
 // IRExtensions side channel. It is called by ToOpenAIResponseBody with a
 // nil ext to preserve the existing inverse cell byte-for-byte; the
