@@ -134,10 +134,13 @@ func extractResponseIDFromInputItemsPath(path string) string {
 	return ""
 }
 
-// /v1/messages → Anthropic; everything else defaults to OpenAI (empty string).
+// detectClientProtocol classifies the inbound wire format from the request path.
+// Paths under /v1/messages (the Anthropic Messages API surface, including
+// /v1/messages/count_tokens) are tagged as Anthropic; everything else falls
+// through to the OpenAI-compatible default represented by the zero value.
 func detectClientProtocol(path string, ctx *RequestContext) {
 	if strings.HasPrefix(path, "/v1/messages") {
 		ctx.ClientProtocol = config.ClientProtocolAnthropic
-		logging.Infof("Detected Anthropic client protocol from path: %s", path)
+		logging.Debugf("Detected Anthropic client protocol from path: %s", path)
 	}
 }

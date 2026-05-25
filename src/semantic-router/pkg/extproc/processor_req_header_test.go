@@ -255,6 +255,7 @@ func TestDetectClientProtocol(t *testing.T) {
 	}{
 		{name: "anthropic messages path", path: "/v1/messages", wantProto: config.ClientProtocolAnthropic},
 		{name: "anthropic messages with query", path: "/v1/messages?stream=true", wantProto: config.ClientProtocolAnthropic},
+		{name: "anthropic count tokens subpath", path: "/v1/messages/count_tokens", wantProto: config.ClientProtocolAnthropic},
 		{name: "openai chat completions", path: "/v1/chat/completions", wantProto: ""},
 		{name: "openai responses", path: "/v1/responses", wantProto: ""},
 		{name: "openai models", path: "/v1/models", wantProto: ""},
