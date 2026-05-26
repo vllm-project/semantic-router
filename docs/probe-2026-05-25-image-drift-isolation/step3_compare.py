@@ -176,7 +176,9 @@ def main():
 
     out_path = PROBE_DIR / "report.json"
     with open(out_path, "w") as f:
-        json.dump(_build_report(norms, cos_results, md_results, mn_results), f, indent=2)
+        json.dump(
+            _build_report(norms, cos_results, md_results, mn_results), f, indent=2
+        )
     print(f"Wrote {out_path}")
 
 
