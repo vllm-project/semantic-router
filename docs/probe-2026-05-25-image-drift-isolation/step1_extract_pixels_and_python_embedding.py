@@ -30,10 +30,10 @@ from pathlib import Path
 
 import numpy as np
 import torch
-import torch.nn as nn
-import torch.nn.functional as F
 from huggingface_hub import hf_hub_download
 from PIL import Image
+from torch import nn
+from torch.nn import functional
 from transformers import (
     AutoModel,
     AutoTokenizer,
@@ -87,7 +87,7 @@ class MultiModalEmbedder(nn.Module):
         outputs = self.image_encoder(**inputs)
         embeddings = outputs.pooler_output
         embeddings = self.image_proj(embeddings)
-        return F.normalize(embeddings, p=2, dim=-1)
+        return functional.normalize(embeddings, p=2, dim=-1)
 
 
 def load_weights(model):
@@ -199,7 +199,7 @@ def main():
     log.info(f"Wrote {meta_path}")
 
     print()
-    print(f"Step 1 done. Now run step 2 (Go test) then step 3 (compare).")
+    print("Step 1 done. Now run step 2 (Go test) then step 3 (compare).")
 
 
 if __name__ == "__main__":

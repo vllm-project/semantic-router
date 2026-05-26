@@ -20,6 +20,13 @@ import numpy as np
 PROBE_DIR = Path(__file__).parent.resolve()
 
 
+# Verdict-band thresholds, named so the verdict heuristic reads structurally.
+COSINE_FP32_NOISE_FLOOR = 0.9995  # Model-forward parity (Python vs Candle-PIL); cos at or above this = essentially identical
+COSINE_PARITY_FLOOR = 0.999  # Pipeline-level "no meaningful drift" floor
+COSINE_DRIFT_FLOOR = 0.995  # Below this on model-forward = real numerical bug
+DRIFT_DELTA = 0.003  # Minimum cos(model-forward) - cos(full-pipeline) gap to call preprocessing dominant
+
+
 def cos(a, b):
     return float(a @ b / (np.linalg.norm(a) * np.linalg.norm(b)))
 
@@ -32,49 +39,13 @@ def meandiff(a, b):
     return float(np.mean(np.abs(a - b)))
 
 
-def main():
-    p_python = PROBE_DIR / "embedding_python.npy"
-    p_pilpipe = PROBE_DIR / "embedding_candle_pilpipe.bin"
-    p_gopipe = PROBE_DIR / "embedding_candle_gopipe.bin"
-
-    missing = [p for p in (p_python, p_pilpipe, p_gopipe) if not p.exists()]
-    if missing:
-        print("ERROR: missing artifacts. Run step1 + step2 first.", file=sys.stderr)
-        for m in missing:
-            print(f"  missing: {m}", file=sys.stderr)
+def _check_shape(name, arr):
+    if arr.shape != (384,):
+        print(f"ERROR: {name} shape {arr.shape} != (384,)", file=sys.stderr)
         sys.exit(1)
 
-    e_python = np.load(p_python).astype(np.float32)
-    e_pilpipe = np.fromfile(p_pilpipe, dtype=np.float32)
-    e_gopipe = np.fromfile(p_gopipe, dtype=np.float32)
 
-    for name, arr in [
-        ("Python (PIL preproc + torch forward)", e_python),
-        ("Candle PIL-pipe (PIL preproc + Rust forward)", e_pilpipe),
-        ("Candle Go-pipe  (Go bilinear + Rust forward)", e_gopipe),
-    ]:
-        if arr.shape != (384,):
-            print(f"ERROR: {name} shape {arr.shape} != (384,)", file=sys.stderr)
-            sys.exit(1)
-
-    norms = {
-        "python": float(np.linalg.norm(e_python)),
-        "pilpipe": float(np.linalg.norm(e_pilpipe)),
-        "gopipe": float(np.linalg.norm(e_gopipe)),
-    }
-
-    cos_python_pil = cos(e_python, e_pilpipe)
-    cos_python_go = cos(e_python, e_gopipe)
-    cos_pil_go = cos(e_pilpipe, e_gopipe)
-
-    md_python_pil = maxdiff(e_python, e_pilpipe)
-    md_python_go = maxdiff(e_python, e_gopipe)
-    md_pil_go = maxdiff(e_pilpipe, e_gopipe)
-
-    mn_python_pil = meandiff(e_python, e_pilpipe)
-    mn_python_go = meandiff(e_python, e_gopipe)
-    mn_pil_go = meandiff(e_pilpipe, e_gopipe)
-
+def _print_header_and_norms(norms):
     print()
     print("=" * 78)
     print("Image-drift isolation report - 2026-05-25 - inrule_identifier_passport.jpg")
@@ -83,6 +54,12 @@ def main():
     print("L2 norms (all three should be ~1.0 if L2-normalize is applied at end):")
     for k, v in norms.items():
         print(f"  {k:8s}: {v:.6f}")
+
+
+def _print_pairwise(cos_results, md_results, mn_results):
+    cos_python_pil, cos_python_go, cos_pil_go = cos_results
+    md_python_pil, md_python_go, md_pil_go = md_results
+    mn_python_pil, mn_python_go, mn_pil_go = mn_results
     print()
     print("Pairwise comparisons:")
     print()
@@ -97,9 +74,13 @@ def main():
     )
     print()
 
-    # Verdict heuristic
+
+def _print_verdict(cos_python_pil, cos_pil_go):
     print("Verdict:")
-    if cos_python_pil > 0.9995 and cos_pil_go < cos_python_pil - 0.003:
+    if (
+        cos_python_pil > COSINE_FP32_NOISE_FLOOR
+        and cos_pil_go < cos_python_pil - DRIFT_DELTA
+    ):
         print("  >>> PREPROCESSING IS THE DOMINANT DRIFT SOURCE.")
         print("      Model forward (Python vs Candle-PIL) cosine is essentially 1.0,")
         print("      so the Rust port of the mmes vision forward is clean.")
@@ -109,18 +90,23 @@ def main():
         print(
             "      Fix path: replace decodeAndResizeImage with a PIL-equivalent resize."
         )
-    elif cos_python_pil < 0.995 and cos_pil_go > 0.999:
+    elif cos_python_pil < COSINE_DRIFT_FLOOR and cos_pil_go > COSINE_PARITY_FLOOR:
         print("  >>> MODEL-FORWARD IS THE DOMINANT DRIFT SOURCE.")
         print("      Preprocessing is fine; the Rust port of mmes has a numerical bug.")
         print("      Next step: per-stage activation comparison to localize.")
-    elif cos_python_pil > 0.999 and cos_pil_go > 0.999:
+    elif cos_python_pil > COSINE_PARITY_FLOOR and cos_pil_go > COSINE_PARITY_FLOOR:
         print("  >>> NEGLIGIBLE DRIFT (under measurement noise). Recheck setup.")
     else:
         print("  >>> MIXED. Both preprocessing AND model forward contribute.")
         print("      Run per-stage comparison next.")
     print()
 
-    report = {
+
+def _build_report(norms, cos_results, md_results, mn_results):
+    cos_python_pil, cos_python_go, cos_pil_go = cos_results
+    md_python_pil, md_python_go, md_pil_go = md_results
+    mn_python_pil, mn_python_go, mn_pil_go = mn_results
+    return {
         "probe_date": "2026-05-25",
         "image": "inrule_identifier_passport.jpg",
         "norms": norms,
@@ -140,9 +126,57 @@ def main():
             "candle_pil_vs_candle_go": mn_pil_go,
         },
     }
+
+
+def main():
+    p_python = PROBE_DIR / "embedding_python.npy"
+    p_pilpipe = PROBE_DIR / "embedding_candle_pilpipe.bin"
+    p_gopipe = PROBE_DIR / "embedding_candle_gopipe.bin"
+
+    missing = [p for p in (p_python, p_pilpipe, p_gopipe) if not p.exists()]
+    if missing:
+        print("ERROR: missing artifacts. Run step1 + step2 first.", file=sys.stderr)
+        for m in missing:
+            print(f"  missing: {m}", file=sys.stderr)
+        sys.exit(1)
+
+    e_python = np.load(p_python).astype(np.float32)
+    e_pilpipe = np.fromfile(p_pilpipe, dtype=np.float32)
+    e_gopipe = np.fromfile(p_gopipe, dtype=np.float32)
+
+    _check_shape("Python (PIL preproc + torch forward)", e_python)
+    _check_shape("Candle PIL-pipe (PIL preproc + Rust forward)", e_pilpipe)
+    _check_shape("Candle Go-pipe  (Go bilinear + Rust forward)", e_gopipe)
+
+    norms = {
+        "python": float(np.linalg.norm(e_python)),
+        "pilpipe": float(np.linalg.norm(e_pilpipe)),
+        "gopipe": float(np.linalg.norm(e_gopipe)),
+    }
+
+    cos_results = (
+        cos(e_python, e_pilpipe),
+        cos(e_python, e_gopipe),
+        cos(e_pilpipe, e_gopipe),
+    )
+    md_results = (
+        maxdiff(e_python, e_pilpipe),
+        maxdiff(e_python, e_gopipe),
+        maxdiff(e_pilpipe, e_gopipe),
+    )
+    mn_results = (
+        meandiff(e_python, e_pilpipe),
+        meandiff(e_python, e_gopipe),
+        meandiff(e_pilpipe, e_gopipe),
+    )
+
+    _print_header_and_norms(norms)
+    _print_pairwise(cos_results, md_results, mn_results)
+    _print_verdict(cos_results[0], cos_results[2])
+
     out_path = PROBE_DIR / "report.json"
     with open(out_path, "w") as f:
-        json.dump(report, f, indent=2)
+        json.dump(_build_report(norms, cos_results, md_results, mn_results), f, indent=2)
     print(f"Wrote {out_path}")
 
 

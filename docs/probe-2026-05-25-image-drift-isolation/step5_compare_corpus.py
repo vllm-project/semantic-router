@@ -22,11 +22,16 @@ import numpy as np
 PROBE_DIR = Path(__file__).parent.resolve()
 
 
+# Verdict-band thresholds; mirror step3 so both reports speak the same language.
+COSINE_PARITY_FLOOR = 0.999  # All-images parity vs PyTorch reference
+COSINE_OK_FLOOR = 0.995  # Pipeline OK but some images have residual drift
+
+
 def cos(a, b):
     return float(a @ b / (np.linalg.norm(a) * np.linalg.norm(b)))
 
 
-def main():
+def _load_inputs():
     py_npy = PROBE_DIR / "python_corpus_embeddings.npy"
     py_idx = PROBE_DIR / "python_corpus_index.json"
     cd_bin = PROBE_DIR / "candle_corpus_gopipe.bin"
@@ -58,22 +63,19 @@ def main():
             "ERROR: image order mismatch between python and candle indices",
             file=sys.stderr,
         )
-        for i, (p, c) in enumerate(zip(py_idx_data["images"], cd_idx_data["images"])):
+        for i, (p, c) in enumerate(
+            zip(py_idx_data["images"], cd_idx_data["images"], strict=False)
+        ):
             mark = " " if p == c else "*"
             print(f"  {mark} [{i}] python={p:50s} candle={c}", file=sys.stderr)
         sys.exit(1)
 
-    names = py_idx_data["images"]
-    n = len(names)
+    return py_emb, cd_emb, py_idx_data["images"]
 
-    print()
-    print("=" * 90)
-    print(f"Corpus drift report - 2026-05-25 - {n} images x 384-d embeddings")
-    print("=" * 90)
-    print()
+
+def _compute_rows(py_emb, cd_emb, names):
     print(f"{'image':50s} {'cos':>10s} {'max_abs':>10s} {'mean_abs':>10s}")
     print("-" * 90)
-
     rows = []
     for i, name in enumerate(names):
         c = cos(py_emb[i], cd_emb[i])
@@ -81,12 +83,14 @@ def main():
         mn = float(np.mean(np.abs(py_emb[i] - cd_emb[i])))
         rows.append({"image": name, "cos": c, "max_abs": mx, "mean_abs": mn})
         print(f"{name:50s} {c:10.6f} {mx:10.6f} {mn:10.6f}")
+    return rows
 
+
+def _summarize(rows, n):
     cosines = [r["cos"] for r in rows]
     max_abs = [r["max_abs"] for r in rows]
     mean_abs = [r["mean_abs"] for r in rows]
-
-    summary = {
+    return {
         "image_count": n,
         "cosine": {
             "min": float(min(cosines)),
@@ -108,6 +112,8 @@ def main():
         },
     }
 
+
+def _print_summary_and_verdict(summary):
     print()
     print("Corpus summary:")
     print(
@@ -121,17 +127,32 @@ def main():
     )
     print()
 
-    # Verdict heuristic - same band as single-image step3
-    if summary["cosine"]["min"] >= 0.999:
+    min_cos = summary["cosine"]["min"]
+    if min_cos >= COSINE_PARITY_FLOOR:
         print(
             ">>> CORPUS-WIDE PARITY ACHIEVED. All 20 images at cos >= 0.999 vs Python reference."
         )
-    elif summary["cosine"]["min"] >= 0.995:
+    elif min_cos >= COSINE_OK_FLOOR:
         print(
             ">>> CORPUS GOOD. All 20 images cos >= 0.995. Some images have residual drift; outliers worth inspecting."
         )
     else:
         print(">>> CORPUS HAS OUTLIERS. Investigate images below cos 0.995.")
+
+
+def main():
+    py_emb, cd_emb, names = _load_inputs()
+    n = len(names)
+
+    print()
+    print("=" * 90)
+    print(f"Corpus drift report - 2026-05-25 - {n} images x 384-d embeddings")
+    print("=" * 90)
+    print()
+
+    rows = _compute_rows(py_emb, cd_emb, names)
+    summary = _summarize(rows, n)
+    _print_summary_and_verdict(summary)
 
     report = {
         "probe_date": "2026-05-25",
