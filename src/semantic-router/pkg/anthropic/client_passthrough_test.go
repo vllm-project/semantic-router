@@ -288,6 +288,148 @@ func TestReplay_CacheControlDroppedWhenBlockMissing(t *testing.T) {
 	assert.False(t, gjson.GetBytes(body, "messages.0.content.0.cache_control").Exists())
 }
 
+func TestReplay_ImageBlocksReachedOutboundUserMessage_Base64(t *testing.T) {
+	req := &openai.ChatCompletionNewParams{
+		Model:    "claude-sonnet-4-5",
+		Messages: []openai.ChatCompletionMessageParamUnion{userStringMessage("what is this")},
+	}
+	pt := &AnthropicPassthrough{
+		UserMessageImageBlocks: map[int][]ImageBlock{
+			0: {{Source: ImageSource{Type: "base64", MediaType: "image/png", Data: "AAAA"}}},
+		},
+	}
+
+	body, err := ToAnthropicRequestBodyWithPassthrough(req, pt)
+	require.NoError(t, err)
+
+	content := gjson.GetBytes(body, "messages.0.content").Array()
+	require.Len(t, content, 2)
+	assert.Equal(t, "text", content[0].Get("type").String())
+	assert.Equal(t, "image", content[1].Get("type").String())
+	assert.Equal(t, "base64", content[1].Get("source.type").String())
+	assert.Equal(t, "image/png", content[1].Get("source.media_type").String())
+	assert.Equal(t, "AAAA", content[1].Get("source.data").String())
+}
+
+func TestReplay_ImageBlocksReachedOutboundUserMessage_URL(t *testing.T) {
+	req := &openai.ChatCompletionNewParams{
+		Model:    "claude-sonnet-4-5",
+		Messages: []openai.ChatCompletionMessageParamUnion{userStringMessage("describe this")},
+	}
+	pt := &AnthropicPassthrough{
+		UserMessageImageBlocks: map[int][]ImageBlock{
+			0: {{Source: ImageSource{Type: "url", URL: "https://example.com/cat.png"}}},
+		},
+	}
+
+	body, err := ToAnthropicRequestBodyWithPassthrough(req, pt)
+	require.NoError(t, err)
+	content := gjson.GetBytes(body, "messages.0.content").Array()
+	require.Len(t, content, 2)
+	assert.Equal(t, "url", content[1].Get("source.type").String())
+	assert.Equal(t, "https://example.com/cat.png", content[1].Get("source.url").String())
+}
+
+func TestReplay_ImageBlocksMapToUserMessageIndexOnly(t *testing.T) {
+	// Assistant messages are skipped when counting user-message indices.
+	req := &openai.ChatCompletionNewParams{
+		Model: "claude-sonnet-4-5",
+		Messages: []openai.ChatCompletionMessageParamUnion{
+			userStringMessage("first"),
+			assistantStringMessage("ack"),
+			userStringMessage("second"),
+		},
+	}
+	pt := &AnthropicPassthrough{
+		UserMessageImageBlocks: map[int][]ImageBlock{
+			1: {{Source: ImageSource{Type: "url", URL: "https://example.com/b.png"}}},
+		},
+	}
+	body, err := ToAnthropicRequestBodyWithPassthrough(req, pt)
+	require.NoError(t, err)
+	// Image should land on messages[2] (user index 1), not messages[1] (assistant).
+	assert.Len(t, gjson.GetBytes(body, "messages.0.content").Array(), 1)
+	assert.Len(t, gjson.GetBytes(body, "messages.1.content").Array(), 1)
+	assert.Len(t, gjson.GetBytes(body, "messages.2.content").Array(), 2)
+	assert.Equal(t, "image", gjson.GetBytes(body, "messages.2.content.1.type").String())
+}
+
+func TestReplay_ImageBlocksDroppedWhenIndexOutOfRange(t *testing.T) {
+	req := &openai.ChatCompletionNewParams{
+		Model:    "claude-sonnet-4-5",
+		Messages: []openai.ChatCompletionMessageParamUnion{userStringMessage("hi")},
+	}
+	pt := &AnthropicPassthrough{
+		UserMessageImageBlocks: map[int][]ImageBlock{
+			5: {{Source: ImageSource{Type: "url", URL: "https://example.com/a.png"}}},
+		},
+	}
+	body, err := ToAnthropicRequestBodyWithPassthrough(req, pt)
+	require.NoError(t, err)
+	assert.Len(t, gjson.GetBytes(body, "messages.0.content").Array(), 1)
+}
+
+// OpenAI-shape image_url inbound -> Anthropic image block.
+// Closes the OpenAI-client/Anthropic-backend cell for image content. No
+// passthrough required for this path: the OpenAI message itself carries the
+// image part.
+func TestOpenAIShape_ImageURLDataURIBecomesAnthropicImageBlock(t *testing.T) {
+	req := &openai.ChatCompletionNewParams{
+		Model: "claude-sonnet-4-5",
+		Messages: []openai.ChatCompletionMessageParamUnion{
+			{OfUser: &openai.ChatCompletionUserMessageParam{
+				Content: openai.ChatCompletionUserMessageParamContentUnion{
+					OfArrayOfContentParts: []openai.ChatCompletionContentPartUnionParam{
+						{OfText: &openai.ChatCompletionContentPartTextParam{Text: "what is this"}},
+						{OfImageURL: &openai.ChatCompletionContentPartImageParam{
+							ImageURL: openai.ChatCompletionContentPartImageImageURLParam{
+								URL: "data:image/png;base64,AAAA",
+							},
+						}},
+					},
+				},
+			}},
+		},
+	}
+
+	body, err := ToAnthropicRequestBody(req)
+	require.NoError(t, err)
+	content := gjson.GetBytes(body, "messages.0.content").Array()
+	require.Len(t, content, 2)
+	assert.Equal(t, "text", content[0].Get("type").String())
+	assert.Equal(t, "what is this", content[0].Get("text").String())
+	assert.Equal(t, "image", content[1].Get("type").String())
+	assert.Equal(t, "base64", content[1].Get("source.type").String())
+	assert.Equal(t, "image/png", content[1].Get("source.media_type").String())
+	assert.Equal(t, "AAAA", content[1].Get("source.data").String())
+}
+
+func TestOpenAIShape_ImageURLPlainURLBecomesAnthropicURLImage(t *testing.T) {
+	req := &openai.ChatCompletionNewParams{
+		Model: "claude-sonnet-4-5",
+		Messages: []openai.ChatCompletionMessageParamUnion{
+			{OfUser: &openai.ChatCompletionUserMessageParam{
+				Content: openai.ChatCompletionUserMessageParamContentUnion{
+					OfArrayOfContentParts: []openai.ChatCompletionContentPartUnionParam{
+						{OfImageURL: &openai.ChatCompletionContentPartImageParam{
+							ImageURL: openai.ChatCompletionContentPartImageImageURLParam{
+								URL: "https://example.com/cat.png",
+							},
+						}},
+					},
+				},
+			}},
+		},
+	}
+	body, err := ToAnthropicRequestBody(req)
+	require.NoError(t, err)
+	content := gjson.GetBytes(body, "messages.0.content").Array()
+	require.Len(t, content, 1)
+	assert.Equal(t, "image", content[0].Get("type").String())
+	assert.Equal(t, "url", content[0].Get("source.type").String())
+	assert.Equal(t, "https://example.com/cat.png", content[0].Get("source.url").String())
+}
+
 func TestReplay_ToolCacheControl(t *testing.T) {
 	req := &openai.ChatCompletionNewParams{
 		Model:    "claude-sonnet-4-5",

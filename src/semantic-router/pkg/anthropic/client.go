@@ -96,6 +96,7 @@ func ToAnthropicRequestBodyWithPassthrough(openAIRequest *openai.ChatCompletionN
 	}
 	applyToolsCacheControl(&params, pt)
 	applyMessagesCacheControl(params.Messages, pt)
+	applyUserMessageImageBlocks(params.Messages, pt)
 	applySampling(&params, openAIRequest, pt)
 	applyMetadata(&params, openAIRequest, pt)
 
@@ -293,7 +294,10 @@ func extractSystemContent(msg *openai.ChatCompletionSystemMessageParam) string {
 	return strings.Join(parts, " ")
 }
 
-// extractUserContent extracts text from a user message
+// extractUserContent extracts text from a user message. Kept for
+// backwards-compatibility with callers that only need the flattened text
+// representation; userMessageBlocks is the structured form used by the
+// outbound writer (which also preserves image blocks).
 func extractUserContent(msg *openai.ChatCompletionUserMessageParam) string {
 	if msg.Content.OfString.Value != "" {
 		return msg.Content.OfString.Value
@@ -305,6 +309,131 @@ func extractUserContent(msg *openai.ChatCompletionUserMessageParam) string {
 		}
 	}
 	return strings.Join(parts, " ")
+}
+
+// userMessageBlocks converts an OpenAI user message into a slice of Anthropic
+// content blocks, preserving image_url parts as Anthropic image blocks. This
+// fixes the long-standing drop where image content (OpenAI-shape OfImageURL)
+// was flattened to an empty string by extractUserContent, causing the model to
+// report "I don't see any image attached" on the upstream side.
+func userMessageBlocks(msg *openai.ChatCompletionUserMessageParam) []anthropic.ContentBlockParamUnion {
+	if msg.Content.OfString.Value != "" {
+		return []anthropic.ContentBlockParamUnion{anthropic.NewTextBlock(msg.Content.OfString.Value)}
+	}
+	var blocks []anthropic.ContentBlockParamUnion
+	var textParts []string
+	flushText := func() {
+		if len(textParts) > 0 {
+			blocks = append(blocks, anthropic.NewTextBlock(strings.Join(textParts, " ")))
+			textParts = nil
+		}
+	}
+	for _, part := range msg.Content.OfArrayOfContentParts {
+		switch {
+		case part.OfText != nil:
+			textParts = append(textParts, part.OfText.Text)
+		case part.OfImageURL != nil:
+			flushText()
+			if block, ok := openAIImageURLToAnthropicBlock(part.OfImageURL.ImageURL.URL); ok {
+				blocks = append(blocks, block)
+			}
+		}
+	}
+	flushText()
+	return blocks
+}
+
+// openAIImageURLToAnthropicBlock parses an OpenAI image_url value into an
+// Anthropic image block. Both data-URI (data:image/<type>;base64,<data>) and
+// plain URL forms are supported; unrecognised shapes are skipped.
+func openAIImageURLToAnthropicBlock(url string) (anthropic.ContentBlockParamUnion, bool) {
+	const dataURIPrefix = "data:"
+	if strings.HasPrefix(url, dataURIPrefix) {
+		mediaType, data, ok := parseDataURI(url)
+		if !ok {
+			return anthropic.ContentBlockParamUnion{}, false
+		}
+		return anthropic.NewImageBlock(anthropic.Base64ImageSourceParam{
+			Data:      data,
+			MediaType: anthropic.Base64ImageSourceMediaType(mediaType),
+		}), true
+	}
+	if url == "" {
+		return anthropic.ContentBlockParamUnion{}, false
+	}
+	return anthropic.NewImageBlock(anthropic.URLImageSourceParam{URL: url}), true
+}
+
+// parseDataURI extracts the media type and base64-encoded payload from a data
+// URI of the form `data:<media-type>;base64,<data>`. Returns ok=false for any
+// other shape.
+func parseDataURI(uri string) (mediaType, data string, ok bool) {
+	const prefix = "data:"
+	if !strings.HasPrefix(uri, prefix) {
+		return "", "", false
+	}
+	rest := uri[len(prefix):]
+	comma := strings.IndexByte(rest, ',')
+	if comma < 0 {
+		return "", "", false
+	}
+	header := rest[:comma]
+	payload := rest[comma+1:]
+	if !strings.Contains(header, ";base64") {
+		return "", "", false
+	}
+	mediaType = strings.TrimSuffix(header, ";base64")
+	if mediaType == "" {
+		return "", "", false
+	}
+	return mediaType, payload, true
+}
+
+// applyUserMessageImageBlocks appends image blocks captured in the passthrough
+// to the matching user message. Indexing is user-message-only (index 0 = first
+// user message in messages[]). When the index is out of range, images are
+// silently dropped to match the surrounding lossy-translation discipline.
+func applyUserMessageImageBlocks(messages []anthropic.MessageParam, pt *AnthropicPassthrough) {
+	if pt == nil || len(pt.UserMessageImageBlocks) == 0 {
+		return
+	}
+	userIdx := -1
+	for i := range messages {
+		if messages[i].Role != anthropic.MessageParamRoleUser {
+			continue
+		}
+		userIdx++
+		images, ok := pt.UserMessageImageBlocks[userIdx]
+		if !ok {
+			continue
+		}
+		for _, img := range images {
+			block, ok := buildImageBlockFromSource(img.Source)
+			if !ok {
+				continue
+			}
+			messages[i].Content = append(messages[i].Content, block)
+		}
+	}
+}
+
+func buildImageBlockFromSource(src ImageSource) (anthropic.ContentBlockParamUnion, bool) {
+	switch src.Type {
+	case "base64":
+		if src.Data == "" || src.MediaType == "" {
+			return anthropic.ContentBlockParamUnion{}, false
+		}
+		return anthropic.NewImageBlock(anthropic.Base64ImageSourceParam{
+			Data:      src.Data,
+			MediaType: anthropic.Base64ImageSourceMediaType(src.MediaType),
+		}), true
+	case "url":
+		if src.URL == "" {
+			return anthropic.ContentBlockParamUnion{}, false
+		}
+		return anthropic.NewImageBlock(anthropic.URLImageSourceParam{URL: src.URL}), true
+	}
+	return anthropic.ContentBlockParamUnion{}, false
 }
 
 // extractAssistantContent extracts text from an assistant message
@@ -332,9 +461,10 @@ func buildAnthropicMessages(
 		case msg.OfSystem != nil:
 			systemPrompt = extractSystemContent(msg.OfSystem)
 		case msg.OfUser != nil:
-			anthropicMessages = append(anthropicMessages, anthropic.NewUserMessage(
-				anthropic.NewTextBlock(extractUserContent(msg.OfUser)),
-			))
+			blocks := userMessageBlocks(msg.OfUser)
+			if len(blocks) > 0 {
+				anthropicMessages = append(anthropicMessages, anthropic.NewUserMessage(blocks...))
+			}
 		case msg.OfAssistant != nil:
 			blocks, err := assistantContentBlocks(msg.OfAssistant)
 			if err != nil {
