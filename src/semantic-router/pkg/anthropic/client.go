@@ -32,17 +32,37 @@ type HeaderKeyValue struct {
 
 // BuildRequestHeaders returns the headers needed for an Anthropic API request.
 // messagesPath should include any base_url prefix (e.g. /Anthropic/v1/messages for AMD).
-// When empty, AnthropicMessagesPath (/v1/messages) is used.
+// When empty, AnthropicMessagesPath (/v1/messages) is used. Equivalent to
+// BuildRequestHeadersWithPassthrough with a nil passthrough.
 func BuildRequestHeaders(apiKey string, bodyLength int, messagesPath string) []HeaderKeyValue {
-	return buildRequestHeaders(apiKey, bodyLength, messagesPath, false)
+	return buildRequestHeaders(apiKey, bodyLength, messagesPath, false, nil)
 }
 
-func buildRequestHeaders(apiKey string, bodyLength int, messagesPath string, streaming bool) []HeaderKeyValue {
+// BuildRequestHeadersWithPassthrough is the passthrough-aware form of
+// BuildRequestHeaders. When pt.AnthropicVersion is non-empty it overrides the
+// package default; when pt.AnthropicBeta is non-empty an anthropic-beta header
+// is appended. Passing a nil passthrough is byte-identical to
+// BuildRequestHeaders.
+//
+// Header precedence (lowest to highest) is documented for callers that
+// combine this output with profile-supplied headers: package default <
+// passthrough < profile pin. Callers that append profile headers AFTER this
+// function's output (the convention in pkg/extproc) get this precedence for
+// free: a later HeaderValueOption with the same key wins on the Envoy side.
+func BuildRequestHeadersWithPassthrough(apiKey string, bodyLength int, messagesPath string, pt *AnthropicPassthrough) []HeaderKeyValue {
+	return buildRequestHeaders(apiKey, bodyLength, messagesPath, false, pt)
+}
+
+func buildRequestHeaders(apiKey string, bodyLength int, messagesPath string, streaming bool, pt *AnthropicPassthrough) []HeaderKeyValue {
 	if strings.TrimSpace(messagesPath) == "" {
 		messagesPath = AnthropicMessagesPath
 	}
+	version := AnthropicAPIVersion
+	if pt != nil && pt.AnthropicVersion != "" {
+		version = pt.AnthropicVersion
+	}
 	headers := []HeaderKeyValue{
-		{Key: "anthropic-version", Value: AnthropicAPIVersion},
+		{Key: "anthropic-version", Value: version},
 		{Key: "content-type", Value: "application/json"},
 		{Key: "accept-encoding", Value: "identity"},
 		{Key: ":path", Value: messagesPath},
@@ -50,6 +70,9 @@ func buildRequestHeaders(apiKey string, bodyLength int, messagesPath string, str
 	}
 	if streaming {
 		headers = append(headers, HeaderKeyValue{Key: "accept", Value: "text/event-stream"})
+	}
+	if pt != nil && pt.AnthropicBeta != "" {
+		headers = append(headers, HeaderKeyValue{Key: "anthropic-beta", Value: pt.AnthropicBeta})
 	}
 	if strings.TrimSpace(apiKey) != "" {
 		headers = append([]HeaderKeyValue{{Key: "x-api-key", Value: apiKey}}, headers...)

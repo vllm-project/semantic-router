@@ -430,6 +430,58 @@ func TestOpenAIShape_ImageURLPlainURLBecomesAnthropicURLImage(t *testing.T) {
 	assert.Equal(t, "https://example.com/cat.png", content[0].Get("source.url").String())
 }
 
+func TestBuildRequestHeadersWithPassthrough_NilByteIdenticalToLegacy(t *testing.T) {
+	legacy := BuildRequestHeaders("k", 100, "")
+	pt := BuildRequestHeadersWithPassthrough("k", 100, "", nil)
+	assert.Equal(t, legacy, pt)
+}
+
+func TestBuildRequestHeadersWithPassthrough_VersionOverridesDefault(t *testing.T) {
+	headers := BuildRequestHeadersWithPassthrough("k", 1, "", &AnthropicPassthrough{
+		AnthropicVersion: "2024-10-22",
+	})
+	got := headerMap(headers)
+	assert.Equal(t, "2024-10-22", got["anthropic-version"])
+}
+
+func TestBuildRequestHeadersWithPassthrough_VersionFallsBackToDefault(t *testing.T) {
+	headers := BuildRequestHeadersWithPassthrough("k", 1, "", &AnthropicPassthrough{})
+	got := headerMap(headers)
+	assert.Equal(t, AnthropicAPIVersion, got["anthropic-version"])
+}
+
+func TestBuildRequestHeadersWithPassthrough_BetaForwarded(t *testing.T) {
+	headers := BuildRequestHeadersWithPassthrough("k", 1, "", &AnthropicPassthrough{
+		AnthropicBeta: "prompt-caching-2024-07-31",
+	})
+	got := headerMap(headers)
+	assert.Equal(t, "prompt-caching-2024-07-31", got["anthropic-beta"])
+}
+
+func TestBuildRequestHeadersWithPassthrough_BetaOmittedWhenEmpty(t *testing.T) {
+	headers := BuildRequestHeadersWithPassthrough("k", 1, "", &AnthropicPassthrough{})
+	got := headerMap(headers)
+	_, ok := got["anthropic-beta"]
+	assert.False(t, ok)
+}
+
+func TestBuildStreamingRequestHeadersWithPassthrough_PreservesAcceptAndBeta(t *testing.T) {
+	headers := BuildStreamingRequestHeadersWithPassthrough("k", 1, "", &AnthropicPassthrough{
+		AnthropicBeta: "messages-2023-12-15",
+	})
+	got := headerMap(headers)
+	assert.Equal(t, "text/event-stream", got["accept"])
+	assert.Equal(t, "messages-2023-12-15", got["anthropic-beta"])
+}
+
+func headerMap(headers []HeaderKeyValue) map[string]string {
+	out := make(map[string]string, len(headers))
+	for _, h := range headers {
+		out[h.Key] = h.Value
+	}
+	return out
+}
+
 func TestReplay_ToolCacheControl(t *testing.T) {
 	req := &openai.ChatCompletionNewParams{
 		Model:    "claude-sonnet-4-5",
