@@ -64,52 +64,84 @@ func HeadersToRemove() []string {
 
 // ToAnthropicRequestBody transforms an OpenAI-format request to Anthropic API format (JSON).
 // This is used for Envoy-routed requests where the router transforms the body
-// before forwarding to Anthropic via Envoy.
+// before forwarding to Anthropic via Envoy. Equivalent to calling
+// ToAnthropicRequestBodyWithPassthrough with a nil passthrough.
 func ToAnthropicRequestBody(openAIRequest *openai.ChatCompletionNewParams) ([]byte, error) {
+	return ToAnthropicRequestBodyWithPassthrough(openAIRequest, nil)
+}
+
+// ToAnthropicRequestBodyWithPassthrough transforms an OpenAI-format request to
+// Anthropic API format and replays Anthropic-only fields carried in pt.
+//
+// Passing a nil passthrough is byte-identical to ToAnthropicRequestBody —
+// existing callers and behaviour are preserved. When pt is non-nil, fields
+// without an OpenAI representation (cache_control markers, top_k,
+// metadata.user_id, multi-block system prompts, image blocks, tool_result
+// error/array content) are emitted on the outbound body.
+func ToAnthropicRequestBodyWithPassthrough(openAIRequest *openai.ChatCompletionNewParams, pt *AnthropicPassthrough) ([]byte, error) {
 	systemPrompt, messages, err := buildAnthropicMessages(openAIRequest.Messages)
 	if err != nil {
 		return nil, err
 	}
 
-	// Determine max tokens (required for Anthropic)
-	maxTokens := DefaultMaxTokens
-	if openAIRequest.MaxCompletionTokens.Value > 0 {
-		maxTokens = openAIRequest.MaxCompletionTokens.Value
-	} else if openAIRequest.MaxTokens.Value > 0 {
-		maxTokens = openAIRequest.MaxTokens.Value
-	}
-
 	params := anthropic.MessageNewParams{
 		Model:     anthropic.Model(openAIRequest.Model),
 		Messages:  messages,
-		MaxTokens: maxTokens,
-	}
-
-	// Set system prompt if present
-	if systemPrompt != "" {
-		params.System = []anthropic.TextBlockParam{
-			{Text: systemPrompt},
-		}
+		MaxTokens: resolveMaxTokens(openAIRequest),
+		System:    buildSystem(systemPrompt, pt),
 	}
 
 	if err := applyOpenAIToolsToAnthropicParams(&params, openAIRequest); err != nil {
 		return nil, err
 	}
-
-	// Set optional parameters
-	if openAIRequest.Temperature.Valid() {
-		params.Temperature = anthropic.Float(openAIRequest.Temperature.Value)
-	}
-	if openAIRequest.TopP.Valid() {
-		params.TopP = anthropic.Float(openAIRequest.TopP.Value)
-	}
-	if len(openAIRequest.Stop.OfStringArray) > 0 {
-		params.StopSequences = openAIRequest.Stop.OfStringArray
-	} else if openAIRequest.Stop.OfString.Value != "" {
-		params.StopSequences = []string{openAIRequest.Stop.OfString.Value}
-	}
+	applySampling(&params, openAIRequest, pt)
+	applyMetadata(&params, openAIRequest, pt)
 
 	return json.Marshal(params)
+}
+
+// resolveMaxTokens picks max_tokens with Anthropic's required default.
+func resolveMaxTokens(req *openai.ChatCompletionNewParams) int64 {
+	switch {
+	case req.MaxCompletionTokens.Value > 0:
+		return req.MaxCompletionTokens.Value
+	case req.MaxTokens.Value > 0:
+		return req.MaxTokens.Value
+	default:
+		return DefaultMaxTokens
+	}
+}
+
+// buildSystem returns the Anthropic system array. When no passthrough is
+// supplied (or its SystemBlocks slice is empty), it falls back to the
+// string-form system derived from the OpenAI messages, preserving today's
+// behaviour byte-for-byte.
+func buildSystem(systemPrompt string, _ *AnthropicPassthrough) []anthropic.TextBlockParam {
+	if systemPrompt == "" {
+		return nil
+	}
+	return []anthropic.TextBlockParam{{Text: systemPrompt}}
+}
+
+// applySampling sets temperature, top_p, and stop_sequences from the OpenAI
+// request. Reserved for future top_k replay from passthrough.
+func applySampling(params *anthropic.MessageNewParams, req *openai.ChatCompletionNewParams, _ *AnthropicPassthrough) {
+	if req.Temperature.Valid() {
+		params.Temperature = anthropic.Float(req.Temperature.Value)
+	}
+	if req.TopP.Valid() {
+		params.TopP = anthropic.Float(req.TopP.Value)
+	}
+	if len(req.Stop.OfStringArray) > 0 {
+		params.StopSequences = req.Stop.OfStringArray
+	} else if req.Stop.OfString.Value != "" {
+		params.StopSequences = []string{req.Stop.OfString.Value}
+	}
+}
+
+// applyMetadata is the metadata.user_id replay hook. Reserved for future use:
+// today's behaviour does not emit metadata, so this is a no-op when pt is nil.
+func applyMetadata(_ *anthropic.MessageNewParams, _ *openai.ChatCompletionNewParams, _ *AnthropicPassthrough) {
 }
 
 // ToOpenAIResponseBody transforms an Anthropic API response to OpenAI format.
