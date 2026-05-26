@@ -94,6 +94,8 @@ func ToAnthropicRequestBodyWithPassthrough(openAIRequest *openai.ChatCompletionN
 	if err := applyOpenAIToolsToAnthropicParams(&params, openAIRequest); err != nil {
 		return nil, err
 	}
+	applyToolsCacheControl(&params, pt)
+	applyMessagesCacheControl(params.Messages, pt)
 	applySampling(&params, openAIRequest, pt)
 	applyMetadata(&params, openAIRequest, pt)
 
@@ -112,11 +114,22 @@ func resolveMaxTokens(req *openai.ChatCompletionNewParams) int64 {
 	}
 }
 
-// buildSystem returns the Anthropic system array. When no passthrough is
-// supplied (or its SystemBlocks slice is empty), it falls back to the
-// string-form system derived from the OpenAI messages, preserving today's
-// behaviour byte-for-byte.
-func buildSystem(systemPrompt string, _ *AnthropicPassthrough) []anthropic.TextBlockParam {
+// buildSystem returns the Anthropic system array. When pt carries
+// SystemBlocks (array-form system from inbound), each block is emitted with
+// its cache_control marker; otherwise it falls back to the string-form system
+// derived from the OpenAI messages, preserving today's behaviour byte-for-byte.
+func buildSystem(systemPrompt string, pt *AnthropicPassthrough) []anthropic.TextBlockParam {
+	if pt != nil && len(pt.SystemBlocks) > 0 {
+		out := make([]anthropic.TextBlockParam, 0, len(pt.SystemBlocks))
+		for _, sb := range pt.SystemBlocks {
+			block := anthropic.TextBlockParam{Text: sb.Text}
+			if sb.CacheControl != nil {
+				block.CacheControl = toSDKCacheControl(*sb.CacheControl)
+			}
+			out = append(out, block)
+		}
+		return out
+	}
 	if systemPrompt == "" {
 		return nil
 	}
@@ -124,8 +137,8 @@ func buildSystem(systemPrompt string, _ *AnthropicPassthrough) []anthropic.TextB
 }
 
 // applySampling sets temperature, top_p, and stop_sequences from the OpenAI
-// request. Reserved for future top_k replay from passthrough.
-func applySampling(params *anthropic.MessageNewParams, req *openai.ChatCompletionNewParams, _ *AnthropicPassthrough) {
+// request, plus top_k from the passthrough when present.
+func applySampling(params *anthropic.MessageNewParams, req *openai.ChatCompletionNewParams, pt *AnthropicPassthrough) {
 	if req.Temperature.Valid() {
 		params.Temperature = anthropic.Float(req.Temperature.Value)
 	}
@@ -137,11 +150,82 @@ func applySampling(params *anthropic.MessageNewParams, req *openai.ChatCompletio
 	} else if req.Stop.OfString.Value != "" {
 		params.StopSequences = []string{req.Stop.OfString.Value}
 	}
+	if pt != nil && pt.TopK != nil {
+		params.TopK = anthropic.Int(*pt.TopK)
+	}
 }
 
-// applyMetadata is the metadata.user_id replay hook. Reserved for future use:
-// today's behaviour does not emit metadata, so this is a no-op when pt is nil.
-func applyMetadata(_ *anthropic.MessageNewParams, _ *openai.ChatCompletionNewParams, _ *AnthropicPassthrough) {
+// applyMetadata emits metadata.user_id from the passthrough when set, falling
+// back to the OpenAI request's `user` field as the conventional mapping.
+func applyMetadata(params *anthropic.MessageNewParams, req *openai.ChatCompletionNewParams, pt *AnthropicPassthrough) {
+	userID := ""
+	if pt != nil && pt.MetadataUserID != "" {
+		userID = pt.MetadataUserID
+	} else if req != nil && req.User.Valid() && req.User.Value != "" {
+		userID = req.User.Value
+	}
+	if userID == "" {
+		return
+	}
+	params.Metadata = anthropic.MetadataParam{UserID: anthropic.String(userID)}
+}
+
+// applyToolsCacheControl attaches cache_control markers to tool definitions
+// based on the `tools[i]` keys in the passthrough.
+func applyToolsCacheControl(params *anthropic.MessageNewParams, pt *AnthropicPassthrough) {
+	if pt == nil || len(pt.CacheControl) == 0 {
+		return
+	}
+	for i := range params.Tools {
+		spec, ok := pt.CacheControl[fmt.Sprintf("tools[%d]", i)]
+		if !ok {
+			continue
+		}
+		if params.Tools[i].OfTool != nil {
+			params.Tools[i].OfTool.CacheControl = toSDKCacheControl(spec)
+		}
+	}
+}
+
+// applyMessagesCacheControl attaches per-content-block cache_control markers
+// to the outbound user/assistant messages. Markers whose `messages[i].content[j]`
+// key no longer matches a block on the outbound side are silently dropped to
+// match the surrounding lossy-translation discipline.
+func applyMessagesCacheControl(messages []anthropic.MessageParam, pt *AnthropicPassthrough) {
+	if pt == nil || len(pt.CacheControl) == 0 {
+		return
+	}
+	for i := range messages {
+		for j := range messages[i].Content {
+			spec, ok := pt.CacheControl[fmt.Sprintf("messages[%d].content[%d]", i, j)]
+			if !ok {
+				continue
+			}
+			sdkCC := toSDKCacheControl(spec)
+			block := &messages[i].Content[j]
+			switch {
+			case block.OfText != nil:
+				block.OfText.CacheControl = sdkCC
+			case block.OfImage != nil:
+				block.OfImage.CacheControl = sdkCC
+			case block.OfToolUse != nil:
+				block.OfToolUse.CacheControl = sdkCC
+			case block.OfToolResult != nil:
+				block.OfToolResult.CacheControl = sdkCC
+			}
+		}
+	}
+}
+
+// toSDKCacheControl converts the package-local CacheControlSpec into the SDK's
+// CacheControlEphemeralParam. Type defaults to "ephemeral" (the only value the
+// SDK supports today); TTL is forwarded when set.
+func toSDKCacheControl(spec CacheControlSpec) anthropic.CacheControlEphemeralParam {
+	cc := anthropic.NewCacheControlEphemeralParam()
+	if spec.TTL != "" {
+		cc.TTL = anthropic.CacheControlEphemeralTTL(spec.TTL)
+	}
+	return cc
 }
 
 // ToOpenAIResponseBody transforms an Anthropic API response to OpenAI format.
