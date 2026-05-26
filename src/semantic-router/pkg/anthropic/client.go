@@ -120,6 +120,7 @@ func ToAnthropicRequestBodyWithPassthrough(openAIRequest *openai.ChatCompletionN
 	applyToolsCacheControl(&params, pt)
 	applyMessagesCacheControl(params.Messages, pt)
 	applyUserMessageImageBlocks(params.Messages, pt)
+	applyToolResultPassthrough(params.Messages, pt)
 	applySampling(&params, openAIRequest, pt)
 	applyMetadata(&params, openAIRequest, pt)
 
@@ -438,6 +439,83 @@ func applyUserMessageImageBlocks(messages []anthropic.MessageParam, pt *Anthropi
 			messages[i].Content = append(messages[i].Content, block)
 		}
 	}
+}
+
+// applyToolResultPassthrough overwrites tool_result blocks with the passthrough
+// payload: is_error: true is restored from pt.ToolResultErrors, and array
+// content (text + image blocks) is restored from pt.ToolResultArrayContent.
+// Matches by tool_use_id; missing keys leave the block as today's
+// translation produced it.
+func applyToolResultPassthrough(messages []anthropic.MessageParam, pt *AnthropicPassthrough) {
+	if pt == nil || (len(pt.ToolResultErrors) == 0 && len(pt.ToolResultArrayContent) == 0) {
+		return
+	}
+	for i := range messages {
+		for j := range messages[i].Content {
+			tr := messages[i].Content[j].OfToolResult
+			if tr == nil || tr.ToolUseID == "" {
+				continue
+			}
+			if isErr, ok := pt.ToolResultErrors[tr.ToolUseID]; ok && isErr {
+				tr.IsError = anthropic.Bool(true)
+			}
+			if blocks, ok := pt.ToolResultArrayContent[tr.ToolUseID]; ok && len(blocks) > 0 {
+				tr.Content = toSDKToolResultContent(blocks)
+			}
+		}
+	}
+}
+
+func toSDKToolResultContent(blocks []ToolResultContentBlock) []anthropic.ToolResultBlockParamContentUnion {
+	out := make([]anthropic.ToolResultBlockParamContentUnion, 0, len(blocks))
+	for _, b := range blocks {
+		switch b.Type {
+		case "text":
+			out = append(out, anthropic.ToolResultBlockParamContentUnion{
+				OfText: &anthropic.TextBlockParam{Text: b.Text},
+			})
+		case "image":
+			if b.Source == nil {
+				continue
+			}
+			img, ok := buildImageParamFromSource(*b.Source)
+			if !ok {
+				continue
+			}
+			out = append(out, anthropic.ToolResultBlockParamContentUnion{OfImage: img})
+		}
+	}
+	return out
+}
+
+// buildImageParamFromSource is the variant of buildImageBlockFromSource that
+// returns the raw *ImageBlockParam needed by ToolResultBlockParamContentUnion
+// (which embeds ImageBlockParam directly rather than via NewImageBlock).
+func buildImageParamFromSource(src ImageSource) (*anthropic.ImageBlockParam, bool) {
+	switch src.Type {
+	case "base64":
+		if src.Data == "" || src.MediaType == "" {
+			return nil, false
+		}
+		return &anthropic.ImageBlockParam{
+			Source: anthropic.ImageBlockParamSourceUnion{
+				OfBase64: &anthropic.Base64ImageSourceParam{
+					Data:      src.Data,
+					MediaType: anthropic.Base64ImageSourceMediaType(src.MediaType),
+				},
+			},
+		}, true
+	case "url":
+		if src.URL == "" {
+			return nil, false
+		}
+		return &anthropic.ImageBlockParam{
+			Source: anthropic.ImageBlockParamSourceUnion{
+				OfURL: &anthropic.URLImageSourceParam{URL: src.URL},
+			},
+		}, true
+	}
+	return nil, false
 }
 
 func buildImageBlockFromSource(src ImageSource) (anthropic.ContentBlockParamUnion, bool) {

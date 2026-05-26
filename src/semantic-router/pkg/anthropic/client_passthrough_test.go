@@ -474,6 +474,100 @@ func TestBuildStreamingRequestHeadersWithPassthrough_PreservesAcceptAndBeta(t *t
 	assert.Equal(t, "messages-2023-12-15", got["anthropic-beta"])
 }
 
+// withToolResultRequest builds a request whose third message is an OpenAI
+// tool message that the writer translates into an Anthropic tool_result block.
+func withToolResultRequest() *openai.ChatCompletionNewParams {
+	return &openai.ChatCompletionNewParams{
+		Model: "claude-sonnet-4-5",
+		Messages: []openai.ChatCompletionMessageParamUnion{
+			userStringMessage("weather?"),
+			{OfAssistant: &openai.ChatCompletionAssistantMessageParam{
+				ToolCalls: []openai.ChatCompletionMessageToolCallParam{{
+					ID:   "call_abc",
+					Type: "function",
+					Function: openai.ChatCompletionMessageToolCallFunctionParam{
+						Name:      "get_weather",
+						Arguments: `{"city":"Paris"}`,
+					},
+				}},
+			}},
+			{OfTool: &openai.ChatCompletionToolMessageParam{
+				ToolCallID: "call_abc",
+				Content: openai.ChatCompletionToolMessageParamContentUnion{
+					OfString: openai.String("backend error"),
+				},
+			}},
+		},
+	}
+}
+
+func TestReplay_ToolResultErrorPreserved(t *testing.T) {
+	req := withToolResultRequest()
+	pt := &AnthropicPassthrough{
+		ToolResultErrors: map[string]bool{"call_abc": true},
+	}
+
+	body, err := ToAnthropicRequestBodyWithPassthrough(req, pt)
+	require.NoError(t, err)
+
+	// The tool_result lives on messages[2] (the user-wrapped tool message).
+	isErr := gjson.GetBytes(body, "messages.2.content.0.is_error")
+	require.True(t, isErr.Exists())
+	assert.True(t, isErr.Bool())
+}
+
+func TestReplay_ToolResultErrorDefaultsToFalse(t *testing.T) {
+	// Today's translation always emits is_error (SDK NewToolResultBlock sets
+	// it via param.Bool). With no passthrough flag set, the value remains the
+	// default false; the passthrough only flips it to true when present.
+	req := withToolResultRequest()
+	body, err := ToAnthropicRequestBodyWithPassthrough(req, &AnthropicPassthrough{})
+	require.NoError(t, err)
+	isErr := gjson.GetBytes(body, "messages.2.content.0.is_error")
+	require.True(t, isErr.Exists())
+	assert.False(t, isErr.Bool())
+}
+
+func TestReplay_ToolResultArrayContent_TextAndImageMix(t *testing.T) {
+	req := withToolResultRequest()
+	pt := &AnthropicPassthrough{
+		ToolResultArrayContent: map[string][]ToolResultContentBlock{
+			"call_abc": {
+				{Type: "text", Text: "see image"},
+				{Type: "image", Source: &ImageSource{
+					Type: "base64", MediaType: "image/jpeg", Data: "BBBB",
+				}},
+			},
+		},
+	}
+
+	body, err := ToAnthropicRequestBodyWithPassthrough(req, pt)
+	require.NoError(t, err)
+
+	content := gjson.GetBytes(body, "messages.2.content.0.content").Array()
+	require.Len(t, content, 2)
+	assert.Equal(t, "text", content[0].Get("type").String())
+	assert.Equal(t, "see image", content[0].Get("text").String())
+	assert.Equal(t, "image", content[1].Get("type").String())
+	assert.Equal(t, "base64", content[1].Get("source.type").String())
+	assert.Equal(t, "image/jpeg", content[1].Get("source.media_type").String())
+	assert.Equal(t, "BBBB", content[1].Get("source.data").String())
+}
+
+func TestReplay_ToolResultUnknownIDLeavesBlockUntouched(t *testing.T) {
+	// An ID in the passthrough that doesn't match an outbound tool_result
+	// must not affect the existing block's is_error value (defaults to false).
+	req := withToolResultRequest()
+	pt := &AnthropicPassthrough{
+		ToolResultErrors: map[string]bool{"call_other": true},
+	}
+	body, err := ToAnthropicRequestBodyWithPassthrough(req, pt)
+	require.NoError(t, err)
+	isErr := gjson.GetBytes(body, "messages.2.content.0.is_error")
+	require.True(t, isErr.Exists())
+	assert.False(t, isErr.Bool())
+}
+
 func headerMap(headers []HeaderKeyValue) map[string]string {
 	out := make(map[string]string, len(headers))
 	for _, h := range headers {
