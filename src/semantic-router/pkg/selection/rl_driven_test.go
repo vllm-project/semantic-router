@@ -19,7 +19,7 @@ package selection
 import (
 	"context"
 	"math"
-	"math/rand"
+	"sync"
 	"testing"
 	"time"
 
@@ -67,13 +67,12 @@ func TestBetaDistribution_Sample(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			dist := &BetaDistribution{Alpha: tt.alpha, Beta: tt.beta}
-			rng := rand.New(rand.NewSource(42))
 
 			// Sample many times and compute average
 			numSamples := 10000
 			sum := 0.0
 			for i := 0; i < numSamples; i++ {
-				sum += dist.Sample(rng)
+				sum += dist.Sample()
 			}
 			avg := sum / float64(numSamples)
 
@@ -653,4 +652,100 @@ func TestRLDrivenSelector_InitializeFromConfig(t *testing.T) {
 			t.Error("Model-a should have higher alpha due to higher score")
 		}
 	}
+}
+
+func TestRLDrivenSelector_ConcurrentSelect(t *testing.T) {
+	candidates := []config.ModelRef{
+		{Model: "model-a"},
+		{Model: "model-b"},
+		{Model: "model-c"},
+		{Model: "model-d"},
+	}
+
+	cases := []struct {
+		name string
+		cfg  *RLDrivenConfig
+	}{
+		{
+			name: "thompson sampling path",
+			cfg: &RLDrivenConfig{
+				UseThompsonSampling:   true,
+				EnablePersonalization: false,
+				CostAwareness:         false,
+			},
+		},
+		{
+			name: "epsilon-greedy exploration path",
+			cfg: &RLDrivenConfig{
+				UseThompsonSampling:   false,
+				EnablePersonalization: false,
+				ExplorationRate:       1.0, // force exploration branch (rand.Float64)
+				MinExploration:        1.0,
+				CostAwareness:         false,
+			},
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			hammerSelect(t, NewRLDrivenSelector(tc.cfg), candidates)
+		})
+	}
+}
+
+func hammerSelect(t *testing.T, selector *RLDrivenSelector, candidates []config.ModelRef) {
+	t.Helper()
+
+	const (
+		goroutines = 32
+		iterations = 50
+	)
+	selCtx := &SelectionContext{
+		DecisionName:    "concurrent-test",
+		CandidateModels: candidates,
+	}
+
+	var wg sync.WaitGroup
+	wg.Add(goroutines)
+	for g := 0; g < goroutines; g++ {
+		go func() {
+			defer wg.Done()
+			for i := 0; i < iterations; i++ {
+				res, err := selector.Select(context.Background(), selCtx)
+				if err != nil {
+					t.Errorf("Select() error = %v", err)
+					return
+				}
+				if res.SelectedModel == "" {
+					t.Errorf("Select() returned empty model")
+					return
+				}
+			}
+		}()
+	}
+	wg.Wait()
+}
+
+func TestBetaDistribution_ConcurrentSample(t *testing.T) {
+	dist := &BetaDistribution{Alpha: 3.0, Beta: 5.0}
+
+	const (
+		goroutines = 32
+		samples    = 200
+	)
+	var wg sync.WaitGroup
+	wg.Add(goroutines)
+	for g := 0; g < goroutines; g++ {
+		go func() {
+			defer wg.Done()
+			for i := 0; i < samples; i++ {
+				v := dist.Sample()
+				if v < 0 || v > 1 {
+					t.Errorf("Sample() out of [0,1]: %v", v)
+					return
+				}
+			}
+		}()
+	}
+	wg.Wait()
 }
