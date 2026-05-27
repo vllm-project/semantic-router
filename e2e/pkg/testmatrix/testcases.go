@@ -10,6 +10,7 @@ var BaselineRouterContract = []string{
 	"chat-completions-request",
 	"anthropic-messages-request",
 	"anthropic-messages-protocol-headers",
+	"anthropic-messages-response-shape",
 	"apiserver-runtime-config-endpoints",
 	"apiserver-classification-endpoints",
 	"chat-completions-stress-request",
