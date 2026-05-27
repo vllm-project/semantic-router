@@ -116,6 +116,7 @@ jobs:
               - 'Cargo.lock'
               - 'pyproject.toml'
               - 'e2e/testing/llm-katan/**'
+              - 'e2e/testing/anthropic-shim/**'
             dashboard:
               - 'dashboard/**'
             website:
