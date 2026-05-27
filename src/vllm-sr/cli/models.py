@@ -530,6 +530,61 @@ class ToolsPluginConfig(BaseModel):
     block_tools: Optional[List[str]] = None
 
 
+class ToolFilteringWeights(BaseModel):
+    """Weights for tool_selection advanced_filtering combined score.
+
+    Mirrors the Go-side `config.ToolFilteringWeights`. All weights are optional
+    pointers on the Go side; non-negative is the only structural constraint.
+    Cross-field rules (e.g. weights-all-zero) are enforced by the Go validator.
+    """
+
+    embed: Optional[float] = Field(default=None, ge=0.0)
+    lexical: Optional[float] = Field(default=None, ge=0.0)
+    tag: Optional[float] = Field(default=None, ge=0.0)
+    name: Optional[float] = Field(default=None, ge=0.0)
+    category: Optional[float] = Field(default=None, ge=0.0)
+
+
+class HybridHistoryConfig(BaseModel):
+    """Sub-config for `retrieval_strategy: hybrid_history`.
+
+    Mirrors the Go-side `config.HybridHistoryToolRetrievalConfig`. Cross-field
+    semantic rules (e.g. min_history_steps > history_horizon) are enforced by
+    the Go validator; this layer only mirrors the schema surface so Pydantic
+    stops dropping the subtree.
+    """
+
+    history_horizon: Optional[int] = Field(default=None, ge=0)
+    min_history_steps: Optional[int] = Field(default=None, ge=0)
+    history_confidence_threshold: Optional[float] = Field(default=None, ge=0.0, le=1.0)
+    weight_semantic: Optional[float] = Field(default=None, ge=0.0)
+    weight_history_transition: Optional[float] = Field(default=None, ge=0.0)
+    weight_decision_prior: Optional[float] = Field(default=None, ge=0.0)
+    repetition_penalty_strength: Optional[float] = Field(default=None, ge=0.0)
+
+
+class AdvancedToolFilteringConfig(BaseModel):
+    """Advanced filtering layer applied on top of semantic retrieval.
+
+    Mirrors the Go-side `config.AdvancedToolFilteringConfig`. The Go side
+    treats `retrieval_strategy: hybrid_history` as opt-in; without this model
+    the nested subtree was silently dropped by Pydantic and the Go router
+    received an effectively empty advanced_filtering block.
+    """
+
+    enabled: Optional[bool] = None
+    retrieval_strategy: Optional[Literal["weighted", "hybrid_history"]] = None
+    candidate_pool_size: Optional[int] = Field(default=None, ge=0)
+    min_lexical_overlap: Optional[int] = Field(default=None, ge=0)
+    min_combined_score: Optional[float] = Field(default=None, ge=0.0, le=1.0)
+    weights: Optional[ToolFilteringWeights] = None
+    use_category_filter: Optional[bool] = None
+    category_confidence_threshold: Optional[float] = Field(default=None, ge=0.0, le=1.0)
+    allow_tools: Optional[List[str]] = None
+    block_tools: Optional[List[str]] = None
+    hybrid_history: Optional[HybridHistoryConfig] = None
+
+
 class ToolSelectionPluginConfig(BaseModel):
     """Configuration for tool_selection plugin (semantic add/filter on request tools)."""
 
@@ -542,6 +597,7 @@ class ToolSelectionPluginConfig(BaseModel):
     fallback_to_empty: Optional[bool] = None
     relevance_threshold: Optional[float] = Field(default=None, ge=0.0, le=1.0)
     preserve_count: Optional[int] = Field(default=None, ge=0)
+    advanced_filtering: Optional[AdvancedToolFilteringConfig] = None
 
 
 class SystemPromptPluginConfig(BaseModel):
