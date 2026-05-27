@@ -255,11 +255,15 @@ func createReplayPostgresStore(globalCfg *config.RouterReplayConfig) (store.Stor
 	if err != nil {
 		return nil, fmt.Errorf("failed to create postgres store: %w", err)
 	}
+	tableName := pgConfig.TableName
+	if tableName == "" {
+		tableName = store.DefaultPostgresTableName
+	}
 	logging.Debugf(
 		"Router replay using postgres backend (host=%s, db=%s, table=%s, ttl=%ds, async=%v)",
 		pgConfig.Host,
 		pgConfig.Database,
-		pgConfig.TableName,
+		tableName,
 		globalCfg.TTLSeconds,
 		globalCfg.AsyncWrites,
 	)
