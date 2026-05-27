@@ -38,7 +38,7 @@
     "@lobehub/icons": "^5.4.0",
     "@mdx-js/react": "^3.1.0",
     "@stylistic/eslint-plugin": "2.13.0",
-    "eslint": "9.18.0",
+    "eslint": "9.39.4",
     "eslint-plugin-react": "^7.37.4",
     "motion": "^12.34.0",
     "ogl": "^1.0.11",
