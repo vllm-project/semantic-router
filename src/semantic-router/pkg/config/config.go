@@ -50,6 +50,13 @@ const (
 	APIFormatAnthropic = "anthropic"
 )
 
+// ClientProtocol* identifies the inbound wire format; distinct from APIFormat (upstream backend).
+// The zero value (empty string) is treated as OpenAI-compatible; additional constants will be
+// introduced as follow-up changes add explicit consumers.
+const (
+	ClientProtocolAnthropic = "anthropic"
+)
+
 // RouterConfig represents the main configuration for the LLM Router.
 type RouterConfig struct {
 	ConfigSource ConfigSource      `yaml:"config_source,omitempty"`

@@ -24,6 +24,7 @@ func (r *OpenAIRouter) handleRequestHeaders(v *ext_proc.ProcessingRequest_Reques
 	method, path := captureRequestHeaders(v, ctx, r.skipProcessingEnabled())
 
 	setRequestHeaderSpanAttributes(span, ctx, method, path)
+	detectClientProtocol(path, ctx)
 
 	// Honor x-vsr-skip-processing as early as possible: once captured we bypass
 	// every router-side header check (replay API, validation, response-API
