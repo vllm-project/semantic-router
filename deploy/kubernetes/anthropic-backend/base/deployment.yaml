@@ -1,0 +1,174 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: anthropic-backend
+spec:
+  selector:
+    matchLabels:
+      app: anthropic-backend
+      app.kubernetes.io/name: anthropic-backend
+  replicas: 1
+  template:
+    metadata:
+      labels:
+        app: anthropic-backend
+        app.kubernetes.io/name: anthropic-backend
+    spec:
+      securityContext:
+        fsGroup: 1000
+        runAsUser: 1000
+        runAsNonRoot: true
+
+      initContainers:
+        - name: model-downloader
+          image: python:3.11-slim
+          imagePullPolicy: IfNotPresent
+          securityContext:
+            runAsUser: 0  # root needed to install hf CLI into image-local site-packages
+            runAsNonRoot: false
+            allowPrivilegeEscalation: false
+          command: ["/bin/bash", "-c"]
+          args:
+            - |
+              set -e
+
+              MODEL_REPO="${MODEL_REPO:-bartowski/Qwen2.5-0.5B-Instruct-GGUF}"
+              MODEL_FILE="${MODEL_FILE:-Qwen2.5-0.5B-Instruct-Q4_K_M.gguf}"
+              TARGET="/cache/models/${MODEL_FILE}"
+
+              mkdir -p /cache/models
+              if [ -f "$TARGET" ]; then
+                echo "Model $MODEL_FILE already cached. Skipping download."
+                exit 0
+              fi
+
+              echo "Downloading ${MODEL_REPO}/${MODEL_FILE}..."
+              pip install --no-cache-dir "huggingface_hub[cli]"
+              hf download "$MODEL_REPO" "$MODEL_FILE" --local-dir /cache/models
+          env:
+            - name: MODEL_REPO
+              value: "bartowski/Qwen2.5-0.5B-Instruct-GGUF"
+            - name: MODEL_FILE
+              value: "Qwen2.5-0.5B-Instruct-Q4_K_M.gguf"
+          volumeMounts:
+            - name: models-volume
+              mountPath: /cache/models
+          resources:
+            requests:
+              memory: "256Mi"
+              cpu: "200m"
+            limits:
+              memory: "512Mi"
+              cpu: "500m"
+
+      containers:
+        - name: llama-server
+          image: ghcr.io/ggml-org/llama.cpp:server
+          imagePullPolicy: IfNotPresent
+          args:
+            - "--model"
+            - "/cache/models/Qwen2.5-0.5B-Instruct-Q4_K_M.gguf"
+            - "--jinja"
+            - "--host"
+            - "0.0.0.0"
+            - "--port"
+            - "8080"
+            - "-c"
+            - "4096"
+          ports:
+            - name: llama
+              containerPort: 8080
+              protocol: TCP
+          volumeMounts:
+            - name: models-volume
+              mountPath: /cache/models
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: llama
+            initialDelaySeconds: 30
+            periodSeconds: 20
+            timeoutSeconds: 5
+            failureThreshold: 3
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: llama
+            initialDelaySeconds: 10
+            periodSeconds: 10
+            timeoutSeconds: 3
+            failureThreshold: 3
+          startupProbe:
+            httpGet:
+              path: /health
+              port: llama
+            initialDelaySeconds: 15
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 18  # 3 min total
+          resources:
+            requests:
+              memory: "1Gi"
+              cpu: "500m"
+            limits:
+              memory: "2Gi"
+              cpu: "1500m"
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: false
+            runAsNonRoot: true
+            capabilities:
+              drop:
+                - ALL
+
+        - name: anthropic-shim
+          image: anthropic-shim:latest
+          imagePullPolicy: IfNotPresent
+          ports:
+            - name: shim
+              containerPort: 9080
+              protocol: TCP
+          env:
+            - name: ANTHROPIC_SHIM_UPSTREAM_URL
+              value: "http://127.0.0.1:8080"
+            - name: ANTHROPIC_SHIM_HOST
+              value: "0.0.0.0"
+            - name: ANTHROPIC_SHIM_PORT
+              value: "9080"
+            - name: ANTHROPIC_SHIM_SESSION_HEADER
+              value: "x-vsr-test-session-id"
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: shim
+            initialDelaySeconds: 10
+            periodSeconds: 20
+            timeoutSeconds: 5
+            failureThreshold: 3
+          readinessProbe:
+            httpGet:
+              path: /healthz
+              port: shim
+            initialDelaySeconds: 5
+            periodSeconds: 10
+            timeoutSeconds: 3
+            failureThreshold: 3
+          resources:
+            requests:
+              memory: "128Mi"
+              cpu: "100m"
+            limits:
+              memory: "512Mi"
+              cpu: "500m"
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: false
+            runAsNonRoot: true
+            capabilities:
+              drop:
+                - ALL
+
+      volumes:
+        - name: models-volume
+          persistentVolumeClaim:
+            claimName: anthropic-backend-models
