@@ -8,6 +8,7 @@ import (
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/anthropic"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/ir"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/projectiontrace"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/ratelimit"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/routerreplay"
@@ -200,6 +201,12 @@ type RequestContext struct {
 	// ClientProtocol identifies the inbound wire format (e.g., "anthropic" for /v1/messages).
 	// Empty string means OpenAI-compatible (the default).
 	ClientProtocol string
+
+	// IRExtensions carries protocol-specific fields that have no home in
+	// the OpenAI-shape IR (*openai.ChatCompletionNewParams). Inbound
+	// parsers populate it for non-OpenAI clients; outbound emitters and
+	// plugins read from it. Nil for plain OpenAI requests.
+	IRExtensions *ir.IRExtensions
 
 	// RAG (Retrieval-Augmented Generation) tracking
 	RAGRetrievedContext string  // Retrieved context from RAG plugin

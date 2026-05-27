@@ -12,6 +12,8 @@ func (r *OpenAIRouter) validateRequestHeaders(method string, path string) *ext_p
 	switch normalizedPath {
 	case "/v1/chat/completions":
 		return validateAllowedMethod(r, method, "POST")
+	case "/v1/messages":
+		return validateAllowedMethod(r, method, "POST")
 	case "/v1/models":
 		return validateAllowedMethod(r, method, "GET")
 	case "/v1/responses":

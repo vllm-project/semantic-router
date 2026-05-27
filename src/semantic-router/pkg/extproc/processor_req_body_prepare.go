@@ -8,6 +8,8 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/anthropic"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/metrics"
 )
@@ -45,7 +47,7 @@ func (r *OpenAIRouter) extractFastRequestState(
 	requestBody []byte,
 	ctx *RequestContext,
 ) (*FastExtractResult, error) {
-	fast, err := extractContentFast(requestBody)
+	fast, err := extractRequestSignalsForProtocol(ctx.ClientProtocol, requestBody)
 	if err != nil {
 		logging.Errorf("Error extracting request fields: %v", err)
 		metrics.RecordRequestError(ctx.RequestModel, "parse_error")
@@ -59,6 +61,38 @@ func (r *OpenAIRouter) extractFastRequestState(
 		ctx.ExpectStreamingResponse = true
 	}
 	return fast, nil
+}
+
+// extractRequestSignalsForProtocol dispatches the gjson-based fast-extract
+// walker by inbound wire format. OpenAI is the default (empty protocol);
+// Anthropic /v1/messages uses the variant that understands the Anthropic
+// content-block shape. Downstream signal consumers see the same
+// FastExtractResult contract regardless of source protocol.
+func extractRequestSignalsForProtocol(clientProtocol string, body []byte) (*FastExtractResult, error) {
+	switch clientProtocol {
+	case config.ClientProtocolAnthropic:
+		return extractContentFastAnthropic(body)
+	default:
+		return extractContentFast(body)
+	}
+}
+
+// parseRequestForProtocol dispatches body parsing by inbound wire format.
+// OpenAI is the default; Anthropic /v1/messages routes through the
+// dedicated inbound parser, whose IRExtensions output is stashed on the
+// request context for downstream emitters and plugins.
+func parseRequestForProtocol(ctx *RequestContext, requestBody []byte) (*openai.ChatCompletionNewParams, error) {
+	if ctx.ClientProtocol != config.ClientProtocolAnthropic {
+		return parseOpenAIRequest(requestBody)
+	}
+	openAIRequest, ext, err := anthropic.ParseAnthropicRequest(requestBody)
+	if err != nil {
+		return nil, err
+	}
+	if ext != nil {
+		ctx.IRExtensions = ext
+	}
+	return openAIRequest, nil
 }
 
 func (r *OpenAIRouter) runRequestPreRoutingStages(
@@ -143,9 +177,9 @@ func (r *OpenAIRouter) prepareRequestForModelRouting(
 ) (*openai.ChatCompletionNewParams, *ext_proc.ProcessingResponse, error) {
 	r.maybeForceImageGenerationModality(userContent, ctx)
 
-	openAIRequest, err := parseOpenAIRequest(requestBody)
+	openAIRequest, err := parseRequestForProtocol(ctx, requestBody)
 	if err != nil {
-		logging.Errorf("Error parsing OpenAI request for routing: %v", err)
+		logging.Errorf("Error parsing request for routing: %v", err)
 		metrics.RecordRequestError(ctx.RequestModel, "parse_error")
 		return nil, nil, status.Errorf(codes.InvalidArgument, "invalid request body: %v", err)
 	}
@@ -224,7 +258,7 @@ func (r *OpenAIRouter) reparseRequestWithMemory(
 		return openAIRequest
 	}
 
-	updatedReq, err := parseOpenAIRequest(requestBody)
+	updatedReq, err := parseRequestForProtocol(ctx, requestBody)
 	if err != nil {
 		logging.ComponentErrorEvent("extproc", "memory_request_reparse_failed", map[string]interface{}{
 			"request_id": ctx.RequestID,

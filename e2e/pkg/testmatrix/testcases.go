@@ -8,6 +8,7 @@ var RouterSmoke = []string{
 // BaselineRouterContract is the canonical full router contract owned by the kubernetes baseline profile.
 var BaselineRouterContract = []string{
 	"chat-completions-request",
+	"anthropic-messages-request",
 	"apiserver-runtime-config-endpoints",
 	"apiserver-classification-endpoints",
 	"chat-completions-stress-request",
