@@ -7,7 +7,7 @@ Uses PEFT (Parameter-Efficient Fine-Tuning) with LoRA adapters for efficient sec
    Original: src/training/prompt_guard_fine_tuning/jailbreak_bert_finetuning.py
 
 🔧  Enhanced based on LLM Guard and Guardrails best practices
-   - Fixed gradient explosion: learning_rate 1e-4→3e-5, added gradient clipping (max_grad_norm=1.0)
+   - Fixed gradient explosion: learning_rate 1e-4→3e-5 and stabilized the LoRA trainer settings
    - Improved training stability: cosine scheduling, warmup_ratio=0.06
    - Enhanced jailbreak detection: Added 25+ diverse attack patterns for better coverage
    - Addresses 26% false negative rate: Role-playing, hypothetical, educational disclaimer attacks
@@ -681,9 +681,8 @@ def main(
         per_device_train_batch_size=batch_size,
         per_device_eval_batch_size=batch_size,
         learning_rate=learning_rate,
-        # Gradient clipping disabled for LoRA - official PEFT example doesn't use it
-        # Clipping may interfere with LoRA gradient flow (especially with modules_to_save)
-        max_grad_norm=None,  # Fixed: was 1.0, removed per PEFT best practices
+        # Disable clipping for LoRA while still satisfying Trainer's numeric check.
+        max_grad_norm=0.0,
         lr_scheduler_type="cosine",  # More stable learning rate schedule for LoRA
         warmup_ratio=0.06,  # PEFT recommended warmup ratio
         weight_decay=0.01,  # Re-enabled for regularization
