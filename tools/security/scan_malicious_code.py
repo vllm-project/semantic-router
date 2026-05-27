@@ -8,22 +8,31 @@ Scans source trees for patterns seen in real supply chain attacks:
   - Binary backdoors without source
   - Suspicious subprocess/network calls
 
-Exit codes:
-  0  — clean
-  1  — findings detected (see output)
-  2  — scanner error
+All regex signatures are in scan_sensitive_paths.toml (base64-encoded).
+The entire tools/security/ directory is excluded from scans (SELF_DIR).
+
+Exit codes: 0 — clean, 1 — findings, 2 — scanner error
 """
 
+from __future__ import annotations
+
 import argparse
+import base64
 import math
 import os
 import re
 import stat
 import sys
 from dataclasses import dataclass, field
+from functools import lru_cache
 from pathlib import Path
 
+import tomllib
+
 SEVERITY_ORDER = {"CRITICAL": 0, "HIGH": 1, "MEDIUM": 2, "LOW": 3}
+
+SECURITY_DIR = Path(__file__).resolve().parent
+SIGNATURES_CONFIG = SECURITY_DIR / "scan_sensitive_paths.toml"
 
 SKIP_DIRS = {
     ".git",
@@ -44,7 +53,7 @@ SKIP_DIRS = {
     "supply-chain-security-scan",
 }
 
-SELF_DIR = str(Path(__file__).resolve().parent) + os.sep
+SELF_DIR = str(SECURITY_DIR) + os.sep
 
 SKIP_DIR_PATTERNS = {
     "model",
@@ -60,7 +69,7 @@ SKIP_DIR_PATTERNS = {
     "pii_",
 }
 
-MAX_FILE_SIZE = 2 * 1024 * 1024  # 2MB — skip scanning content of huge files
+MAX_FILE_SIZE = 2 * 1024 * 1024
 
 BINARY_EXTENSIONS = {
     ".so",
@@ -147,36 +156,7 @@ SOURCE_EXTENSIONS = {
     ".json",
 }
 
-CREDENTIAL_PATHS = [
-    r"~/\.ssh/",
-    r"~/\.aws/",
-    r"~/\.kube/",
-    r"~/\.docker/",
-    r"~/\.gnupg/",
-    r"~/\.config/gcloud/",
-    r"~/\.azure/",
-    r"~/\.npmrc",
-    r"~/\.vault-token",
-    r"~/\.netrc",
-    r"~/\.gitconfig",
-    r"~/\.git-credentials",
-    r"/etc/ssl/private",
-    r"/etc/kubernetes/",
-    r"\.bitcoin/",
-    r"\.ethereum/",
-    r"\.solana/",
-    r"\.bash_history",
-    r"\.zsh_history",
-    r"\.pgpass",
-    r"\.my\.cnf",
-    r"\.mongorc",
-]
-
-CLOUD_METADATA_URLS = [
-    r"169\.254\.169\.254",
-    r"metadata\.google\.internal",
-    r"metadata\.azure\.com",
-]
+KNOWN_TEST_MARKERS = ("test", "spec", "mock", "fixture", "example")
 
 
 @dataclass
@@ -218,140 +198,45 @@ class ScanResult:
         return counts
 
 
-# ---------------------------------------------------------------------------
-# Pattern definitions
-# ---------------------------------------------------------------------------
-
-OBFUSCATION_PATTERNS = [
-    (
-        re.compile(r"exec\s*\(\s*base64\.b64decode\s*\("),
-        "CRITICAL",
-        "exec(base64.b64decode(...)) — classic obfuscated payload execution",
-    ),
-    (
-        re.compile(r"eval\s*\(\s*base64\.b64decode\s*\("),
-        "CRITICAL",
-        "eval(base64.b64decode(...)) — obfuscated payload execution",
-    ),
-    (
-        re.compile(r"exec\s*\(\s*compile\s*\(\s*base64"),
-        "CRITICAL",
-        "exec(compile(base64...)) — compiled obfuscated payload",
-    ),
-    (
-        re.compile(r"base64\.b64decode\s*\(\s*base64\.b64decode"),
-        "CRITICAL",
-        "Double base64 decoding — multi-layer obfuscation",
-    ),
-    (
-        re.compile(r"exec\s*\(\s*zlib\.decompress\s*\("),
-        "HIGH",
-        "exec(zlib.decompress(...)) — compressed payload execution",
-    ),
-    (
-        re.compile(r"exec\s*\(\s*gzip\.decompress\s*\("),
-        "HIGH",
-        "exec(gzip.decompress(...)) — compressed payload execution",
-    ),
-    (
-        re.compile(r"marshal\.loads\s*\("),
-        "HIGH",
-        "marshal.loads() — bytecode deserialization, potential code injection",
-    ),
-    (
-        re.compile(r"types\.CodeType\s*\("),
-        "HIGH",
-        "types.CodeType() construction — dynamic bytecode creation",
-    ),
-    (
-        re.compile(r"exec\s*\(\s*['\"]\\x[0-9a-fA-F]"),
-        "HIGH",
-        "exec() with hex-encoded string",
-    ),
-    (
-        re.compile(r"exec\s*\(\s*bytes\.fromhex\s*\("),
-        "HIGH",
-        "exec(bytes.fromhex(...)) — hex-encoded payload",
-    ),
-    (
-        re.compile(r"exec\s*\(\s*codecs\.decode\s*\("),
-        "HIGH",
-        "exec(codecs.decode(...)) — encoded payload execution",
-    ),
-    (
-        re.compile(r"__import__\s*\(\s*['\"]os['\"]\s*\)\s*\.\s*system"),
-        "HIGH",
-        "Dynamic import + os.system — evasion pattern",
-    ),
-    (
-        re.compile(r"getattr\s*\(\s*__import__"),
-        "MEDIUM",
-        "getattr(__import__(...)) — dynamic import evasion",
-    ),
-]
-
-EXFILTRATION_PATTERNS = [
-    (
-        re.compile(
-            r"requests\.(post|put)\s*\(\s*['\"]https?://(?!localhost|127\.0\.0\.1)"
-        ),
-        "HIGH",
-        "HTTP POST/PUT to external URL — potential exfiltration",
-    ),
-    (
-        re.compile(
-            r"urllib\.request\.urlopen\s*\(\s*urllib\.request\.Request\s*\([^)]*method\s*=\s*['\"]POST"
-        ),
-        "HIGH",
-        "urllib POST to external URL",
-    ),
-    (
-        re.compile(r"subprocess\.\w+\s*\(\s*\[?\s*['\"]curl['\"].*-X\s*POST"),
-        "HIGH",
-        "subprocess curl POST — potential exfiltration",
-    ),
-    (
-        re.compile(r"subprocess\.\w+\s*\(\s*\[?\s*['\"]wget['\"].*--post"),
-        "HIGH",
-        "subprocess wget POST",
-    ),
-    (
-        re.compile(
-            r"socket\.socket\s*\(.*\)\s*.*\.connect\s*\(\s*\(\s*['\"](?!127\.|localhost)"
-        ),
-        "MEDIUM",
-        "Raw socket connection to external host",
-    ),
-]
-
-CREDENTIAL_PATTERNS = []
-for cp in CREDENTIAL_PATHS:
-    CREDENTIAL_PATTERNS.append(
-        (re.compile(cp), "MEDIUM", f"Reference to sensitive path: {cp}")
-    )
-for url in CLOUD_METADATA_URLS:
-    CREDENTIAL_PATTERNS.append(
-        (re.compile(url), "HIGH", f"Cloud metadata endpoint access: {url}")
+def _compile_entry(entry: dict) -> tuple[re.Pattern[str], str, str]:
+    raw = base64.b64decode(entry["pattern_b64"]).decode("utf-8")
+    return (
+        re.compile(raw),
+        entry.get("severity", "MEDIUM"),
+        entry.get("message", "Suspicious pattern"),
     )
 
-SUSPECT_SETUP_PATTERNS = [
-    (
-        re.compile(r"class\s+\w*(Install|PostInstall|Develop)\w*\s*\("),
-        "MEDIUM",
-        "Custom install command class — may run arbitrary code on pip install",
-    ),
-    (
-        re.compile(r"cmdclass\s*=\s*\{"),
-        "LOW",
-        "Custom cmdclass in setup.py — verify no malicious install hooks",
-    ),
-]
 
-LONG_BASE64_RE = re.compile(r"[A-Za-z0-9+/=]{200,}")
+def _compile_section(data: dict, name: str) -> list[tuple[re.Pattern[str], str, str]]:
+    return [_compile_entry(e) for e in data.get(name, []) if e.get("pattern_b64")]
+
+
+@lru_cache(maxsize=1)
+def load_signatures() -> tuple[
+    list[tuple[re.Pattern[str], str, str]],
+    list[tuple[re.Pattern[str], str, str]],
+    list[tuple[re.Pattern[str], str, str]],
+    list[tuple[re.Pattern[str], str, str]],
+    re.Pattern[str],
+]:
+    try:
+        data = tomllib.loads(SIGNATURES_CONFIG.read_text(encoding="utf-8"))
+    except (OSError, tomllib.TOMLDecodeError) as exc:
+        print(f"Error: cannot load {SIGNATURES_CONFIG}: {exc}", file=sys.stderr)
+        sys.exit(2)
+
+    obfuscation = _compile_section(data, "obfuscation")
+    exfiltration = _compile_section(data, "exfiltration")
+    credential = _compile_section(data, "credential_paths") + _compile_section(
+        data, "cloud_metadata"
+    )
+    setup_hooks = _compile_section(data, "setup_hooks")
+    long_b64_raw = base64.b64decode(data["long_base64"]["pattern_b64"]).decode("utf-8")
+    long_b64 = re.compile(long_b64_raw)
+    return obfuscation, exfiltration, credential, setup_hooks, long_b64
 
 
 def should_skip_dir(dirname: str) -> bool:
-    """Check if directory should be skipped (exact match or pattern)."""
     if dirname in SKIP_DIRS:
         return True
     dl = dirname.lower()
@@ -359,7 +244,6 @@ def should_skip_dir(dirname: str) -> bool:
 
 
 def entropy(data: bytes) -> float:
-    """Shannon entropy of byte sequence."""
     if not data:
         return 0.0
     freq = [0] * 256
@@ -370,17 +254,14 @@ def entropy(data: bytes) -> float:
 
 
 def is_binary_file(path: Path) -> bool:
-    """Heuristic: file is binary if first 8KB contain null bytes."""
     try:
         with open(path, "rb") as f:
-            chunk = f.read(8192)
-        return b"\x00" in chunk
+            return b"\x00" in f.read(8192)
     except (OSError, PermissionError):
         return False
 
 
 def has_elf_pe_macho_header(path: Path) -> str | None:
-    """Check for known executable file headers."""
     try:
         with open(path, "rb") as f:
             header = f.read(4)
@@ -402,13 +283,15 @@ def has_elf_pe_macho_header(path: Path) -> str | None:
     return None
 
 
-# ---------------------------------------------------------------------------
-# Scanners
-# ---------------------------------------------------------------------------
-
-
-def scan_source_patterns(root: Path, result: ScanResult):
-    """Scan source files for obfuscation, exfiltration, credential access."""
+def scan_source_patterns(
+    root: Path,
+    result: ScanResult,
+    obfuscation: list,
+    exfiltration: list,
+    credential: list,
+    setup_hooks: list,
+    long_b64_re: re.Pattern[str],
+):
     for dirpath, dirnames, filenames in os.walk(root):
         dirnames[:] = [d for d in dirnames if not should_skip_dir(d)]
         for fname in filenames:
@@ -427,7 +310,7 @@ def scan_source_patterns(root: Path, result: ScanResult):
 
             lines = content.splitlines()
             for lineno, line in enumerate(lines, 1):
-                for pattern, severity, desc in OBFUSCATION_PATTERNS:
+                for pattern, severity, desc in obfuscation:
                     if pattern.search(line):
                         result.add(
                             severity,
@@ -437,8 +320,7 @@ def scan_source_patterns(root: Path, result: ScanResult):
                             desc,
                             line.strip(),
                         )
-
-                for pattern, severity, desc in EXFILTRATION_PATTERNS:
+                for pattern, severity, desc in exfiltration:
                     if pattern.search(line):
                         result.add(
                             severity,
@@ -448,16 +330,13 @@ def scan_source_patterns(root: Path, result: ScanResult):
                             desc,
                             line.strip(),
                         )
-
-                for pattern, severity, desc in CREDENTIAL_PATTERNS:
+                for pattern, severity, desc in credential:
                     if pattern.search(line):
                         is_test = any(
-                            t in str(fpath).lower()
-                            for t in ("test", "spec", "mock", "fixture", "example")
+                            t in str(fpath).lower() for t in KNOWN_TEST_MARKERS
                         )
-                        actual_sev = "LOW" if is_test else severity
                         result.add(
-                            actual_sev,
+                            "LOW" if is_test else severity,
                             "CREDENTIAL_ACCESS",
                             str(fpath),
                             lineno,
@@ -465,22 +344,20 @@ def scan_source_patterns(root: Path, result: ScanResult):
                             line.strip(),
                         )
 
-            if suffix in (".py", ".pyw"):
-                for pattern, severity, desc in SUSPECT_SETUP_PATTERNS:
-                    if "setup" in fname.lower():
-                        for lineno, line in enumerate(lines, 1):
-                            if pattern.search(line):
-                                result.add(
-                                    severity,
-                                    "INSTALL_HOOK",
-                                    str(fpath),
-                                    lineno,
-                                    desc,
-                                    line.strip(),
-                                )
+            if suffix in (".py", ".pyw") and "setup" in fname.lower():
+                for pattern, severity, desc in setup_hooks:
+                    for lineno, line in enumerate(lines, 1):
+                        if pattern.search(line):
+                            result.add(
+                                severity,
+                                "INSTALL_HOOK",
+                                str(fpath),
+                                lineno,
+                                desc,
+                                line.strip(),
+                            )
 
-            b64_matches = LONG_BASE64_RE.findall(content)
-            for match in b64_matches:
+            for match in long_b64_re.findall(content):
                 if len(match) > 500:
                     for lineno, line in enumerate(lines, 1):
                         if match[:80] in line:
@@ -497,7 +374,6 @@ def scan_source_patterns(root: Path, result: ScanResult):
 
 
 def scan_binary_anomalies(root: Path, result: ScanResult):
-    """Detect unexpected binary/compiled files in source tree."""
     for dirpath, dirnames, filenames in os.walk(root):
         dirnames[:] = [d for d in dirnames if not should_skip_dir(d)]
         rel_dir = Path(dirpath).relative_to(root)
@@ -516,6 +392,8 @@ def scan_binary_anomalies(root: Path, result: ScanResult):
         )
         for fname in filenames:
             fpath = Path(dirpath) / fname
+            if str(fpath.resolve()).startswith(SELF_DIR):
+                continue
             suffix = fpath.suffix.lower()
 
             if suffix in BINARY_EXTENSIONS and not in_build:
@@ -526,8 +404,7 @@ def scan_binary_anomalies(root: Path, result: ScanResult):
                         "BINARY_IN_SOURCE",
                         str(fpath),
                         0,
-                        f"Compiled {exe_type} binary in source tree — "
-                        "verify this is intentional",
+                        f"Compiled {exe_type} binary in source tree — verify intentional",
                     )
                 else:
                     result.add(
@@ -547,11 +424,15 @@ def scan_binary_anomalies(root: Path, result: ScanResult):
                         "ORPHAN_PYC",
                         str(fpath),
                         0,
-                        "Compiled .pyc without corresponding .py source — "
-                        "possible bytecode injection",
+                        "Compiled .pyc without .py source — possible bytecode injection",
                     )
 
-            if not suffix and not in_build and fpath.stat().st_mode & stat.S_IXUSR:
+            try:
+                mode = fpath.stat().st_mode
+            except (OSError, PermissionError):
+                continue
+
+            if not suffix and not in_build and mode & stat.S_IXUSR:
                 exe_type = has_elf_pe_macho_header(fpath)
                 if exe_type:
                     result.add(
@@ -568,8 +449,7 @@ def scan_binary_anomalies(root: Path, result: ScanResult):
                     "BINARY_MASQUERADE",
                     str(fpath),
                     0,
-                    f"File has source extension ({suffix}) but contains "
-                    "binary data — possible masquerade",
+                    f"Source extension ({suffix}) with binary data — possible masquerade",
                 )
 
             if (
@@ -582,8 +462,7 @@ def scan_binary_anomalies(root: Path, result: ScanResult):
                     size = fpath.stat().st_size
                     if size > 1024:
                         with open(fpath, "rb") as f:
-                            data = f.read(min(size, 65536))
-                        ent = entropy(data)
+                            ent = entropy(f.read(min(size, 65536)))
                         if ent > 7.5:
                             result.add(
                                 "MEDIUM",
@@ -597,11 +476,6 @@ def scan_binary_anomalies(root: Path, result: ScanResult):
                     pass
 
 
-# ---------------------------------------------------------------------------
-# Main
-# ---------------------------------------------------------------------------
-
-
 def print_report(result: ScanResult, verbose: bool = False):
     if not result.findings:
         print("\n  [CLEAN] No supply chain security issues detected.\n")
@@ -609,7 +483,6 @@ def print_report(result: ScanResult, verbose: bool = False):
 
     result.findings.sort(key=lambda f: SEVERITY_ORDER.get(f.severity, 99))
     counts = result.summary()
-
     print("\n" + "=" * 72)
     print("  SUPPLY CHAIN SECURITY SCAN RESULTS")
     print("=" * 72)
@@ -618,7 +491,6 @@ def print_report(result: ScanResult, verbose: bool = False):
         if sev in counts:
             print(f"    {sev}: {counts[sev]}")
     print()
-
     prev_sev = None
     for f in result.findings:
         if not verbose and f.severity == "LOW":
@@ -628,7 +500,6 @@ def print_report(result: ScanResult, verbose: bool = False):
             prev_sev = f.severity
         print(f)
         print()
-
     if "CRITICAL" in counts:
         print("  *** CRITICAL findings require IMMEDIATE investigation ***")
     print("=" * 72 + "\n")
@@ -638,34 +509,26 @@ def main():
     parser = argparse.ArgumentParser(
         description="Scan codebase for supply chain attacks and malicious code"
     )
-    parser.add_argument(
-        "path",
-        nargs="?",
-        default=".",
-        help="Root directory to scan (default: current dir)",
-    )
-    parser.add_argument(
-        "--verbose", "-v", action="store_true", help="Show LOW severity findings too"
-    )
+    parser.add_argument("path", nargs="?", default=".", help="Root directory to scan")
+    parser.add_argument("--verbose", "-v", action="store_true")
     parser.add_argument(
         "--fail-on",
         choices=["CRITICAL", "HIGH", "MEDIUM", "LOW"],
         default="HIGH",
-        help="Exit non-zero if findings at this severity or above (default: HIGH)",
     )
     args = parser.parse_args()
-
     root = Path(args.path).resolve()
     if not root.is_dir():
         print(f"Error: {root} is not a directory", file=sys.stderr)
         sys.exit(2)
 
+    obfuscation, exfiltration, credential, setup_hooks, long_b64_re = load_signatures()
     result = ScanResult()
-
     print(f"Scanning {root} ...")
-    scan_source_patterns(root, result)
+    scan_source_patterns(
+        root, result, obfuscation, exfiltration, credential, setup_hooks, long_b64_re
+    )
     scan_binary_anomalies(root, result)
-
     print_report(result, verbose=args.verbose)
 
     fail_threshold = SEVERITY_ORDER.get(args.fail_on, 1)

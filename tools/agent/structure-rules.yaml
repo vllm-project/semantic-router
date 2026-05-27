@@ -213,6 +213,7 @@ legacy_hotspots:
   - paths:
       - tools/security/ast_security_scanner.py
       - tools/security/scan_malicious_code.py
+      - tools/security/scan_sensitive_paths.toml
     file_checks: relaxed
     function_checks: relaxed
   - paths:
