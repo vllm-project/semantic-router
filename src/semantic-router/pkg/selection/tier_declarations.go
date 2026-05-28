@@ -49,6 +49,16 @@ func (l *LatencyAwareSelector) ExternalDependencies() []Dependency {
 }
 
 // Tier returns the production readiness tier
+func (m *MultiFactorSelector) Tier() AlgorithmTier {
+	return TierSupported
+}
+
+// ExternalDependencies returns external dependencies (none for multi_factor)
+func (m *MultiFactorSelector) ExternalDependencies() []Dependency {
+	return []Dependency{}
+}
+
+// Tier returns the production readiness tier
 func (h *HybridSelector) Tier() AlgorithmTier {
 	return TierSupported
 }

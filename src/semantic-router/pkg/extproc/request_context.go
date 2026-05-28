@@ -77,6 +77,12 @@ type RequestContext struct {
 	TTFTRecorded bool
 	TTFTSeconds  float64
 
+	// InflightToken is the handle returned by inflight.Begin when this request
+	// was admitted to the in-flight tracker after model selection. Zero means
+	// the request was never admitted (rejected pre-selection, cache hit, etc.)
+	// and inflight.End on it is a no-op.
+	InflightToken uint64
+
 	// Session-aware transition metadata
 	SessionID           string  // Derived from ConversationID (Response API) or message hash (Chat Completions)
 	TurnIndex           int     // Number of prior turns in this session (0 = first turn)

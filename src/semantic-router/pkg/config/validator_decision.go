@@ -211,6 +211,7 @@ func validateDecisionAlgorithmConfig(decisionName string, algorithm *AlgorithmCo
 	addBlock("rl_driven", algorithm.RLDriven != nil)
 	addBlock("gmtrouter", algorithm.GMTRouter != nil)
 	addBlock("latency_aware", algorithm.LatencyAware != nil)
+	addBlock("multi_factor", algorithm.MultiFactor != nil)
 
 	if len(configuredBlocks) > 1 {
 		return fmt.Errorf(
@@ -232,6 +233,7 @@ func validateDecisionAlgorithmConfig(decisionName string, algorithm *AlgorithmCo
 		"rl_driven":     "rl_driven",
 		"gmtrouter":     "gmtrouter",
 		"latency_aware": "latency_aware",
+		"multi_factor":  "multi_factor",
 	}
 
 	expectedBlock, hasExpectedBlock := expectedBlockByType[normalizedType]

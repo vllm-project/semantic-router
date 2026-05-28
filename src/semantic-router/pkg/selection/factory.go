@@ -55,6 +55,10 @@ type ModelSelectionConfig struct {
 	// GMTRouter configuration (used when method is "gmtrouter")
 	// Implements heterogeneous graph learning for personalized routing
 	GMTRouter *GMTRouterConfig `yaml:"gmtrouter,omitempty"`
+
+	// MultiFactor configuration (used when method is "multi_factor")
+	// Implements weighted quality/latency/cost/load composition. Issue #37.
+	MultiFactor *MultiFactorConfig `yaml:"multi_factor,omitempty"`
 }
 
 // DefaultModelSelectionConfig returns the default configuration
@@ -174,6 +178,13 @@ func (f *Factory) Create() Selector {
 
 	case MethodLatencyAware:
 		selector = NewLatencyAwareSelector(nil)
+
+	case MethodMultiFactor:
+		multiFactorSelector := NewMultiFactorSelector(f.cfg.MultiFactor)
+		if f.modelConfig != nil {
+			multiFactorSelector.InitializeFromConfig(f.modelConfig)
+		}
+		selector = multiFactorSelector
 
 	default:
 		// Default to static selector
@@ -321,6 +332,13 @@ func (f *Factory) CreateAll() *Registry {
 	// Create LatencyAware selector
 	latencyAwareSelector := NewLatencyAwareSelector(nil)
 	registry.Register(MethodLatencyAware, latencyAwareSelector)
+
+	// Create MultiFactor selector
+	multiFactorSelector := NewMultiFactorSelector(f.cfg.MultiFactor)
+	if f.modelConfig != nil {
+		multiFactorSelector.InitializeFromConfig(f.modelConfig)
+	}
+	registry.Register(MethodMultiFactor, multiFactorSelector)
 
 	LogRegisteredAlgorithms(registry)
 	logging.ComponentEvent("selection", "selection_factory_initialized", map[string]interface{}{

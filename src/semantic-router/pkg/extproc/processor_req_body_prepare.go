@@ -10,6 +10,7 @@ import (
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/anthropic"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/inflight"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/metrics"
 )
@@ -112,15 +113,22 @@ func (r *OpenAIRouter) runRequestPreRoutingStages(
 	}
 
 	metrics.RecordModelRequest(selectedModel)
+	ctx.InflightToken = inflight.Begin(selectedModel)
 	if resp := r.handleFastResponse(ctx, decisionName); resp != nil {
+		inflight.End(selectedModel, ctx.InflightToken)
+		ctx.InflightToken = 0
 		r.startRouterReplay(ctx, originalModel, selectedModel, decisionName)
 		r.updateRouterReplayStatus(ctx, 200, false)
 		return requestDecisionState{}, resp
 	}
 	if resp := r.applyRateLimitAndCacheChecks(ctx, selectedModel, decisionName); resp != nil {
+		inflight.End(selectedModel, ctx.InflightToken)
+		ctx.InflightToken = 0
 		return requestDecisionState{}, resp
 	}
 	if ragErr := r.executeRAGPlugin(ctx, decisionName); ragErr != nil {
+		inflight.End(selectedModel, ctx.InflightToken)
+		ctx.InflightToken = 0
 		return requestDecisionState{}, r.createErrorResponse(503, fmt.Sprintf("RAG retrieval failed: %v", ragErr))
 	}
 
