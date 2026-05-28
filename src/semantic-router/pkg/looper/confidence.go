@@ -25,11 +25,14 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"sync"
+	"time"
 
 	"github.com/openai/openai-go"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/selection"
 )
 
 // SelfVerificationPrompt is the prompt template for AutoMix self-verification
@@ -294,13 +297,27 @@ func getCostQualityTradeoff(cfg *config.ConfidenceAlgorithmConfig) float64 {
 	return cfg.CostQualityTradeoff
 }
 
+// MethodAutoMixEntailment is the confidence method name for paper-faithful
+// AutoMix self-verification (arXiv:2310.12963 §3.2). Unlike "self_verify",
+// which prompts the generation model to grade its own answer, this method
+// delegates verification to a separate entailment verifier reached over HTTP
+// via selection.AutoMixVerifierClient (reference server:
+// src/training/model_selection/rl_model_selection/automix_verifier.py).
+const MethodAutoMixEntailment = "automix_entailment"
+
 // ConfidenceEvaluator evaluates model response confidence based on configured method
 type ConfidenceEvaluator struct {
-	Method        string  // "avg_logprob", "margin", "hybrid", or "self_verify" (AutoMix)
+	Method        string  // "avg_logprob", "margin", "hybrid", "self_verify", or "automix_entailment"
 	Threshold     float64 // Threshold for the chosen method
 	LogprobWeight float64 // Weight for logprob in hybrid mode
 	MarginWeight  float64 // Weight for margin in hybrid mode
 	TokenFilter   string  // "all", "tool_call_args" — selects which tokens feed confidence
+
+	// VerifierServerURL and VerifierTimeoutSeconds carry the AutoMix
+	// entailment verifier configuration when Method == "automix_entailment".
+	// Empty/zero values when the method is anything else.
+	VerifierServerURL      string
+	VerifierTimeoutSeconds int
 }
 
 // NewConfidenceEvaluator creates a confidence evaluator from algorithm config
@@ -335,6 +352,8 @@ func NewConfidenceEvaluator(cfg *config.ConfidenceAlgorithmConfig) *ConfidenceEv
 			eval.Threshold = 0.5 // Normalized score
 		case "self_verify":
 			eval.Threshold = 0.7 // AutoMix paper default
+		case MethodAutoMixEntailment:
+			eval.Threshold = 0.7 // AutoMix paper default (k-sample entailment)
 		}
 	}
 
@@ -351,6 +370,9 @@ func NewConfidenceEvaluator(cfg *config.ConfidenceAlgorithmConfig) *ConfidenceEv
 	if cfg.TokenFilter != "" {
 		eval.TokenFilter = cfg.TokenFilter
 	}
+
+	eval.VerifierServerURL = cfg.VerifierServerURL
+	eval.VerifierTimeoutSeconds = cfg.VerifierTimeoutSeconds
 
 	return eval
 }
@@ -425,16 +447,24 @@ func (e *ConfidenceEvaluator) Evaluate(resp *ModelResponse) (float64, bool) {
 
 // NeedsLogprobs returns whether this evaluator needs logprobs enabled
 func (e *ConfidenceEvaluator) NeedsLogprobs() bool {
-	// self_verify uses model self-assessment, not logprobs
-	if e.Method == "self_verify" {
+	// self_verify and automix_entailment use external verification signals
+	// rather than logprobs from the generation call.
+	switch e.Method {
+	case "self_verify", MethodAutoMixEntailment:
 		return false
 	}
-	return true // All other methods need logprobs
+	return true
 }
 
 // IsSelfVerify returns true if using AutoMix self-verification method
 func (e *ConfidenceEvaluator) IsSelfVerify() bool {
 	return e.Method == "self_verify"
+}
+
+// IsAutoMixEntailment returns true when the evaluator delegates verification
+// to an external AutoMix entailment server (arXiv:2310.12963 §3.2).
+func (e *ConfidenceEvaluator) IsAutoMixEntailment() bool {
+	return e.Method == MethodAutoMixEntailment
 }
 
 // NeedsTopLogprobs returns the number of top_logprobs needed (0 if not needed)
@@ -607,7 +637,32 @@ func (l *ConfidenceLooper) Execute(ctx context.Context, req *Request) (*Response
 		var meetsThreshold bool
 
 		// Evaluate confidence using configured method
-		if evaluator.IsSelfVerify() {
+		switch {
+		case evaluator.IsAutoMixEntailment():
+			// AutoMix entailment cascade (arXiv:2310.12963 §3.2): delegate
+			// verification to an external few-shot entailment server.
+			var verifyErr error
+			confidence, meetsThreshold, verifyErr = l.performAutoMixEntailment(ctx, req, evaluator, modelName, resp.Content)
+			if verifyErr != nil {
+				logging.ComponentWarnEvent("looper", "automix_entailment_failed", map[string]interface{}{
+					"looper":    "confidence",
+					"decision":  req.DecisionName,
+					"model_ref": modelName,
+					"error":     verifyErr.Error(),
+				})
+				if onError == "fail" {
+					return nil, fmt.Errorf("automix_entailment verification for %s failed: %w", modelName, verifyErr)
+				}
+			}
+			logging.ComponentDebugEvent("looper", "automix_entailment_completed", map[string]interface{}{
+				"looper":     "confidence",
+				"decision":   req.DecisionName,
+				"model_ref":  modelName,
+				"confidence": confidence,
+				"threshold":  evaluator.Threshold,
+				"accepted":   meetsThreshold,
+			})
+		case evaluator.IsSelfVerify():
 			// AutoMix self-verification: ask the model to evaluate its own answer
 			confidence, meetsThreshold = l.performSelfVerification(ctx, req, modelName, resp.Content, accessKey, evaluator.Threshold)
 			logging.ComponentDebugEvent("looper", "self_verification_completed", map[string]interface{}{
@@ -618,7 +673,7 @@ func (l *ConfidenceLooper) Execute(ctx context.Context, req *Request) (*Response
 				"threshold":  evaluator.Threshold,
 				"accepted":   meetsThreshold,
 			})
-		} else {
+		default:
 			confidence, meetsThreshold = evaluator.Evaluate(resp)
 			if evaluator.TokenFilter != "" && evaluator.TokenFilter != "all" && resp.FilteredAverageLogprob != 0 {
 				logging.ComponentDebugEvent("looper", "confidence_evaluated", map[string]interface{}{
@@ -830,6 +885,71 @@ func (l *ConfidenceLooper) buildSelfVerificationRequest(verificationPrompt strin
 	}
 
 	return &params
+}
+
+// automixVerifierCache memoises one selection.AutoMixVerifierClient per
+// (server_url, timeout_seconds) pair so repeated requests share a single
+// http.Client (and its underlying connection pool) instead of reconstructing
+// one per evaluation.
+var automixVerifierCache sync.Map
+
+type automixVerifierCacheKey struct {
+	url            string
+	timeoutSeconds int
+}
+
+func getAutoMixVerifierClient(serverURL string, timeoutSeconds int) *selection.AutoMixVerifierClient {
+	key := automixVerifierCacheKey{url: serverURL, timeoutSeconds: timeoutSeconds}
+	if existing, ok := automixVerifierCache.Load(key); ok {
+		return existing.(*selection.AutoMixVerifierClient)
+	}
+	client := selection.NewAutoMixVerifierClient(serverURL)
+	if timeoutSeconds > 0 {
+		client.SetTimeout(time.Duration(timeoutSeconds) * time.Second)
+	}
+	actual, _ := automixVerifierCache.LoadOrStore(key, client)
+	return actual.(*selection.AutoMixVerifierClient)
+}
+
+// performAutoMixEntailment runs the AutoMix paper-faithful self-verification
+// step (arXiv:2310.12963 §3.2) for one candidate model: it sends the original
+// question and the candidate's answer to an external entailment verifier and
+// returns (confidence, accepted, err). A non-nil err signals an unrecoverable
+// verifier failure; the caller decides how to react via the looper's on_error
+// policy. Missing or malformed configuration is reported as a hard error so it
+// fails loudly at the first request rather than silently degrading.
+func (l *ConfidenceLooper) performAutoMixEntailment(
+	ctx context.Context,
+	req *Request,
+	evaluator *ConfidenceEvaluator,
+	modelName string,
+	responseContent string,
+) (float64, bool, error) {
+	if evaluator.VerifierServerURL == "" {
+		return 0, false, fmt.Errorf("confidence_method=%s requires verifier_server_url", MethodAutoMixEntailment)
+	}
+
+	question := l.extractQuestionFromRequest(req.OriginalRequest)
+	if question == "" {
+		return 0, false, fmt.Errorf("could not extract user question from request")
+	}
+
+	client := getAutoMixVerifierClient(evaluator.VerifierServerURL, evaluator.VerifierTimeoutSeconds)
+
+	logging.ComponentDebugEvent("looper", "automix_entailment_started", map[string]interface{}{
+		"looper":     "confidence",
+		"decision":   req.DecisionName,
+		"model_ref":  modelName,
+		"server_url": evaluator.VerifierServerURL,
+	})
+
+	verifyResp, err := client.Verify(ctx, question, responseContent, "", evaluator.Threshold)
+	if err != nil {
+		return 0, false, fmt.Errorf("verifier call failed: %w", err)
+	}
+
+	accepted := verifyResp.Confidence >= evaluator.Threshold
+	return verifyResp.Confidence, accepted, nil
 }
 
 // formatConfidenceJSONResponse creates response with confidence algorithm type
