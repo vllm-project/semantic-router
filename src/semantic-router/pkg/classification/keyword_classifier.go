@@ -243,6 +243,9 @@ func regexPatterns(keyword string, useExplicitRegex bool) (string, string) {
 // For regex: confidence = 0.5 + (matchCount / totalKeywords * 0.5)
 // For BM25/N-gram: confidence derived from match scores
 func (c *KeywordClassifier) Classify(text string) (string, float64, error) {
+	if c == nil {
+		return "", 0.0, nil
+	}
 	category, _, matchCount, totalKeywords, err := c.ClassifyWithKeywordsAndCount(text)
 	if err != nil || category == "" {
 		return category, 0.0, err
@@ -289,6 +292,9 @@ type classifyState struct {
 // Rules are evaluated in the order they were defined in the config (first-match semantics),
 // regardless of method. Each rule is dispatched to its respective engine.
 func (c *KeywordClassifier) ClassifyWithKeywordsAndCount(text string) (string, []string, int, int, error) {
+	if c == nil {
+		return "", nil, 0, 0, nil
+	}
 	state := classifyState{}
 
 	for _, ref := range c.ruleOrder {

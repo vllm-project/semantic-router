@@ -9,6 +9,7 @@ _run:
 		-f tools/make/envoy.mk \
 		-f tools/make/golang.mk \
 		-f tools/make/rust.mk \
+                -f tools/make/openvino.mk \
 		-f tools/make/build-run-test.mk \
 		-f tools/make/docs.mk \
 		-f tools/make/dashboard.mk \

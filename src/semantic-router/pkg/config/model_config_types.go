@@ -48,6 +48,7 @@ func (e EmbeddingModels) MinSimilarityThreshold() float32 {
 
 // HNSWConfig contains settings for optimizing embedding-backed classification.
 type HNSWConfig struct {
+	Backend            string                 `yaml:"backend,omitempty"`
 	ModelType          string                 `yaml:"model_type,omitempty"`
 	PreloadEmbeddings  bool                   `yaml:"preload_embeddings"`
 	TargetDimension    int                    `yaml:"target_dimension,omitempty"`
@@ -60,6 +61,9 @@ type HNSWConfig struct {
 
 func (c HNSWConfig) WithDefaults() HNSWConfig {
 	result := c
+	if result.Backend == "" {
+		result.Backend = "candle"
+	}
 	if result.ModelType == "" {
 		result.ModelType = "qwen3"
 	}

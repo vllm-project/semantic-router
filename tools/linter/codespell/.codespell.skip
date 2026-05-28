@@ -27,3 +27,6 @@ e2e/testcases/testdata/*
 data/cache_embeddings/*
 models/*
 paper/*
+candle-binding/target-mkl/*
+candle-binding/target-cpu/*
+*.patch

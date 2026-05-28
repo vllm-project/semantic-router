@@ -6,6 +6,7 @@ replace (
 	github.com/vllm-project/semantic-router/candle-binding => ../../onnx-binding
 	github.com/vllm-project/semantic-router/ml-binding => ../../ml-binding
 	github.com/vllm-project/semantic-router/nlp-binding => ../../nlp-binding
+	github.com/vllm-project/semantic-router/openvino-binding => ../../openvino-binding
 	github.com/vllm-project/semantic-router/src/semantic-router/pkg/cache => ./pkg/cache
 	github.com/vllm-project/semantic-router/src/semantic-router/pkg/config => ./pkg/config
 	github.com/vllm-project/semantic-router/src/semantic-router/pkg/extproc => ./pkg/extproc
@@ -38,8 +39,9 @@ require (
 	github.com/vllm-project/semantic-router/candle-binding v0.0.0-00010101000000-000000000000
 	github.com/vllm-project/semantic-router/ml-binding v0.0.0-00010101000000-000000000000
 	github.com/vllm-project/semantic-router/nlp-binding v0.0.0-00010101000000-000000000000
+	github.com/vllm-project/semantic-router/openvino-binding v0.0.0-00010101000000-000000000000
 	go.opentelemetry.io/otel v1.40.0
-	go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracegrpc v1.38.0
+	go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracegrpc v1.34.0
 	go.opentelemetry.io/otel/exporters/stdout/stdouttrace v1.38.0
 	go.opentelemetry.io/otel/sdk v1.38.0
 	go.opentelemetry.io/otel/trace v1.40.0
@@ -61,7 +63,7 @@ require (
 	github.com/bahlo/generic-list-go v0.2.0 // indirect
 	github.com/beorn7/perks v1.0.1 // indirect
 	github.com/buger/jsonparser v1.1.1 // indirect
-	github.com/cenkalti/backoff/v5 v5.0.3 // indirect
+	github.com/cenkalti/backoff/v4 v4.3.0 // indirect
 	github.com/cespare/xxhash/v2 v2.3.0 // indirect
 	github.com/cncf/xds/go v0.0.0-20251022180443-0feb69152e9f // indirect
 	github.com/cockroachdb/errors v1.9.1 // indirect

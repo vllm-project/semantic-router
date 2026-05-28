@@ -209,3 +209,7 @@ prometheus-data/
 
 # Local dev makefile (not committed)
 Makefile.local
+
+# Candle binding build outputs (use target/ for default Cargo builds)
+candle-binding/target-mkl/
+candle-binding/target-cpu/

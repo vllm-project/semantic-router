@@ -39,11 +39,14 @@ type KBClassifyResult struct {
 
 // KnowledgeBaseClassifier performs exemplar-based KB classification.
 type KnowledgeBaseClassifier struct {
-	rule       config.KnowledgeBaseConfig
-	definition config.KnowledgeBaseDefinition
-	labels     map[string]*kbLabelData
-	modelType  string
-	baseDir    string
+	rule        config.KnowledgeBaseConfig
+	definition  config.KnowledgeBaseDefinition
+	labels      map[string]*kbLabelData
+	modelType   string
+	baseDir     string
+	preloadOnce sync.Once
+	preloadErr  error
+	preloaded   bool
 }
 
 func NewKnowledgeBaseClassifier(rule config.KnowledgeBaseConfig, modelType string, baseDir string) (*KnowledgeBaseClassifier, error) {
@@ -58,10 +61,37 @@ func NewKnowledgeBaseClassifier(rule config.KnowledgeBaseConfig, modelType strin
 	if err := c.loadDefinition(); err != nil {
 		return nil, fmt.Errorf("failed to load KB manifest from %s: %w", rule.Source.Path, err)
 	}
-	if err := c.preloadEmbeddings(); err != nil {
+	if c.shouldDeferPreload() {
+		logging.ComponentEvent("classifier", "knowledge_base_preload_deferred", map[string]interface{}{
+			"knowledge_base": c.rule.Name,
+			"labels":         len(c.labels),
+			"backend":        c.currentBackend(),
+		})
+	} else if err := c.preloadEmbeddings(); err != nil {
 		return nil, fmt.Errorf("failed to preload KB embeddings: %w", err)
 	}
 	return c, nil
+}
+
+func (c *KnowledgeBaseClassifier) currentBackend() string {
+	return embeddingBackendOverride()
+}
+
+func (c *KnowledgeBaseClassifier) shouldDeferPreload() bool {
+	return c.currentBackend() == "candle"
+}
+
+func (c *KnowledgeBaseClassifier) ensureEmbeddingsPreloaded() error {
+	if c.preloaded {
+		return nil
+	}
+	c.preloadOnce.Do(func() {
+		c.preloadErr = c.preloadEmbeddings()
+		if c.preloadErr == nil {
+			c.preloaded = true
+		}
+	})
+	return c.preloadErr
 }
 
 func (c *KnowledgeBaseClassifier) loadDefinition() error {
@@ -114,8 +144,29 @@ func (c *KnowledgeBaseClassifier) collectExemplarRefs() []exemplarRef {
 	return refs
 }
 
+func (c *KnowledgeBaseClassifier) embedOneExemplar(backend, modelType string, targetDim int, ref exemplarRef) embeddingResult {
+	if backend == "openvino" {
+		embedding, err := getOpenVINOEmbedding(modelType, ref.text, targetDim)
+		if err != nil {
+			return embeddingResult{ref: ref, err: err}
+		}
+		return embeddingResult{ref: ref, embedding: embedding}
+	}
+	output, err := getEmbeddingWithModelType(ref.text, modelType, targetDim)
+	if err != nil {
+		return embeddingResult{ref: ref, err: err}
+	}
+	return embeddingResult{ref: ref, embedding: output.Embedding}
+}
+
 func (c *KnowledgeBaseClassifier) embedExemplarsParallel(refs []exemplarRef) <-chan embeddingResult {
-	numWorkers := runtime.NumCPU() * 2
+	numWorkers := runtime.NumCPU()
+	backend := embeddingBackendOverride()
+	if backend == "candle" {
+		numWorkers = 1
+	} else if numWorkers > 8 {
+		numWorkers = 8
+	}
 	if numWorkers > len(refs) {
 		numWorkers = len(refs)
 	}
@@ -139,12 +190,7 @@ func (c *KnowledgeBaseClassifier) embedExemplarsParallel(refs []exemplarRef) <-c
 		go func() {
 			defer wg.Done()
 			for ref := range refChan {
-				output, err := getEmbeddingWithModelType(ref.text, modelType, targetDim)
-				if err != nil {
-					resultChan <- embeddingResult{ref: ref, err: err}
-					continue
-				}
-				resultChan <- embeddingResult{ref: ref, embedding: output.Embedding}
+				resultChan <- c.embedOneExemplar(backend, modelType, targetDim, ref)
 			}
 		}()
 	}
@@ -159,6 +205,11 @@ func (c *KnowledgeBaseClassifier) embedExemplarsParallel(refs []exemplarRef) <-c
 
 func (c *KnowledgeBaseClassifier) preloadEmbeddings() error {
 	startTime := time.Now()
+	logging.ComponentEvent("classifier", "knowledge_base_embeddings_preload_started", map[string]interface{}{
+		"knowledge_base": c.rule.Name,
+		"labels":         len(c.labels),
+		"backend":        c.currentBackend(),
+	})
 	refs := c.collectExemplarRefs()
 	resultChan := c.embedExemplarsParallel(refs)
 
@@ -172,13 +223,14 @@ func (c *KnowledgeBaseClassifier) preloadEmbeddings() error {
 		c.labels[res.ref.label].Embeddings[res.ref.index] = res.embedding
 	}
 
-	logging.ComponentDebugEvent("classifier", "knowledge_base_embeddings_preloaded", map[string]interface{}{
+	logging.ComponentEvent("classifier", "knowledge_base_embeddings_preloaded", map[string]interface{}{
 		"knowledge_base": c.rule.Name,
 		"exemplars":      len(refs) - failCount,
 		"labels":         len(c.labels),
 		"latency_ms":     time.Since(startTime).Milliseconds(),
 	})
 	c.rebuildLabelPrototypeBanks()
+	c.preloaded = true
 	return nil
 }
 
@@ -287,6 +339,9 @@ func (c *KnowledgeBaseClassifier) Classify(text string) (*KBClassifyResult, erro
 	}
 
 	startTime := time.Now()
+	if err := c.ensureEmbeddingsPreloaded(); err != nil {
+		return nil, fmt.Errorf("failed to ensure KB embeddings are loaded: %w", err)
+	}
 	queryOutput, err := getEmbeddingWithModelType(text, c.modelType, 0)
 	if err != nil {
 		return nil, fmt.Errorf("failed to compute query embedding: %w", err)

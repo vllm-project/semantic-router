@@ -2,6 +2,7 @@ package classification
 
 import (
 	"fmt"
+	"time"
 
 	candle_binding "github.com/vllm-project/semantic-router/candle-binding"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
@@ -52,6 +53,29 @@ type MmBERT32KCategoryInitializerImpl struct {
 }
 
 func (c *MmBERT32KCategoryInitializerImpl) Init(modelID string, useCPU bool, numClasses ...int) error {
+	backend := embeddingBackendOverride()
+
+	// When OpenVINO backend is explicitly selected, prefer OpenVINO-only initialization
+	// to avoid loading the 1.2GB safetensors model via Candle (which causes thread explosion on many-core systems)
+	if backend == "openvino" {
+		nc := 0
+		if len(numClasses) > 0 {
+			nc = numClasses[0]
+		}
+		if ovErr := initOpenVINOClassifier(modelID, nc, useCPU); ovErr == nil {
+			c.usedMmBERT32K = true
+			logging.ComponentEvent("classifier", "category_classifier_initialized", map[string]interface{}{
+				"backend":   "openvino",
+				"model_ref": modelID,
+				"classes":   nc,
+			})
+			return nil
+		} else {
+			logging.Warnf("OpenVINO classifier init failed, falling back to candle: %v", ovErr)
+		}
+	}
+
+	// Initialize candle backend
 	err := candle_binding.InitMmBert32KIntentClassifier(modelID, useCPU)
 	if err != nil {
 		return fmt.Errorf("failed to initialize mmBERT-32K intent classifier: %w", err)
@@ -103,15 +127,46 @@ func createCategoryInference() CategoryInference {
 }
 
 // MmBERT32KCategoryInferenceImpl uses mmBERT-32K for intent classification
+// Supports both candle and openvino backends via EMBEDDING_BACKEND_OVERRIDE env var
 type MmBERT32KCategoryInferenceImpl struct{}
 
+func (c *MmBERT32KCategoryInferenceImpl) getBackend() string {
+	if backend := embeddingBackendOverride(); backend != "" {
+		return backend
+	}
+	return "candle"
+}
+
 func (c *MmBERT32KCategoryInferenceImpl) Classify(text string) (candle_binding.ClassResult, error) {
-	return candle_binding.ClassifyMmBert32KIntent(text)
+	backend := c.getBackend()
+	start := time.Now()
+	var result candle_binding.ClassResult
+	var err error
+
+	switch backend {
+	case "openvino":
+		ovResult, ovErr := classifyOpenVINO(text)
+		if ovErr != nil {
+			err = ovErr
+		} else {
+			result = candle_binding.ClassResult{
+				Class:      ovResult.Class,
+				Confidence: ovResult.Confidence,
+			}
+		}
+	default:
+		result, err = candle_binding.ClassifyMmBert32KIntent(text)
+	}
+
+	elapsed := time.Since(start)
+	logging.Infof("[Perf] classifier inference (phase=request, backend=%s): %.3fms",
+		backend, float64(elapsed.Microseconds())/1000.0)
+
+	return result, err
 }
 
 func (c *MmBERT32KCategoryInferenceImpl) ClassifyWithProbabilities(text string) (candle_binding.ClassResultWithProbs, error) {
-	// mmBERT-32K doesn't have WithProbabilities yet, use basic classification
-	result, err := candle_binding.ClassifyMmBert32KIntent(text)
+	result, err := c.Classify(text)
 	if err != nil {
 		return candle_binding.ClassResultWithProbs{}, err
 	}

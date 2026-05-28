@@ -62,35 +62,52 @@ var initMultiModalModel = candle_binding.InitMultiModalEmbeddingModel
 
 // EmbeddingClassifierInitializer initializes KeywordEmbeddingClassifier for embedding based classification
 type EmbeddingClassifierInitializer interface {
-	Init(qwen3ModelPath string, gemmaModelPath string, mmBertModelPath string, useCPU bool) error
+	Init(qwen3ModelPath string, gemmaModelPath string, mmBertModelPath string, useCPU bool, backend string, modelType string) error
 }
 
 type ExternalModelBasedEmbeddingInitializer struct{}
 
-func (c *ExternalModelBasedEmbeddingInitializer) Init(qwen3ModelPath string, gemmaModelPath string, mmBertModelPath string, useCPU bool) error {
+func (c *ExternalModelBasedEmbeddingInitializer) Init(qwen3ModelPath string, gemmaModelPath string, mmBertModelPath string, useCPU bool, backend string, modelType string) error {
 	// Resolve model paths using registry (supports aliases like "qwen3", "gemma", "mmbert")
 	qwen3ModelPath = config.ResolveModelPath(qwen3ModelPath)
 	gemmaModelPath = config.ResolveModelPath(gemmaModelPath)
 	mmBertModelPath = config.ResolveModelPath(mmBertModelPath)
 
-	err := candle_binding.InitEmbeddingModels(qwen3ModelPath, gemmaModelPath, mmBertModelPath, useCPU)
-	if err != nil {
-		return err
+	backend = strings.ToLower(strings.TrimSpace(backend))
+	if backend == "" {
+		backend = "candle"
 	}
 
-	backend := "embedding_models"
-	if mmBertModelPath != "" {
-		backend = "mmbert_2d_matryoshka"
+	switch backend {
+	case "openvino":
+		if err := initOpenVINOModel(modelType, mmBertModelPath, qwen3ModelPath, useCPU); err != nil {
+			return err
+		}
+		logging.ComponentEvent("classifier", "keyword_embedding_backend_initialized", map[string]interface{}{
+			"backend":          "openvino",
+			"model_type":       modelType,
+			"mmbert_model_ref": mmBertModelPath,
+			"qwen3_model_ref":  qwen3ModelPath,
+			"use_cpu":          useCPU,
+		})
+		return nil
+	case "candle":
+		err := candle_binding.InitEmbeddingModels(qwen3ModelPath, gemmaModelPath, mmBertModelPath, useCPU)
+		if err != nil {
+			return err
+		}
+		logging.ComponentEvent("classifier", "keyword_embedding_backend_initialized", map[string]interface{}{
+			"backend":           "candle",
+			"qwen3_model_ref":   qwen3ModelPath,
+			"gemma_model_ref":   gemmaModelPath,
+			"mmbert_model_ref":  mmBertModelPath,
+			"use_cpu":           useCPU,
+			"mmbert_2d_enabled": mmBertModelPath != "",
+		})
+		return nil
+	default:
+		return fmt.Errorf("unsupported embedding backend %q", backend)
 	}
-	logging.ComponentEvent("classifier", "keyword_embedding_backend_initialized", map[string]interface{}{
-		"backend":           backend,
-		"qwen3_model_ref":   qwen3ModelPath,
-		"gemma_model_ref":   gemmaModelPath,
-		"mmbert_model_ref":  mmBertModelPath,
-		"use_cpu":           useCPU,
-		"mmbert_2d_enabled": mmBertModelPath != "",
-	})
-	return nil
 }
 
 // createEmbeddingInitializer creates the appropriate keyword embedding initializer based on configuration
@@ -119,6 +136,7 @@ type EmbeddingClassifier struct {
 	optimizationConfig config.HNSWConfig
 	preloadEnabled     bool
 	modelType          string // Model type to use for embeddings ("qwen3" or "gemma")
+	backend            string
 }
 
 // NewEmbeddingClassifier creates a new EmbeddingClassifier.
@@ -136,10 +154,12 @@ func NewEmbeddingClassifier(cfgRules []config.EmbeddingRule, optConfig config.HN
 		optimizationConfig:  optConfig,
 		preloadEnabled:      optConfig.PreloadEmbeddings,
 		modelType:           optConfig.ModelType, // Use configured model type
+		backend:             strings.ToLower(strings.TrimSpace(optConfig.Backend)),
 	}
 
 	logging.ComponentEvent("classifier", "embedding_classifier_initialized", map[string]interface{}{
 		"model_type":          c.modelType,
+		"backend":             c.backend,
 		"rules":               len(cfgRules),
 		"preload_embeddings":  optConfig.PreloadEmbeddings,
 		"target_dimension":    optConfig.TargetDimension,
@@ -221,6 +241,51 @@ func (c *EmbeddingClassifier) getModelType() string {
 	return c.modelType
 }
 
+func (c *EmbeddingClassifier) getBackend() string {
+	if backend := embeddingBackendOverride(); backend != "" {
+		logging.Infof("Embedding backend override from env: %s", backend)
+		return backend
+	}
+	if c.backend == "" {
+		return "candle"
+	}
+	return c.backend
+}
+
+func (c *EmbeddingClassifier) computeEmbedding(text string, modelType string, phases ...string) ([]float32, error) {
+	backend := c.getBackend()
+	start := time.Now()
+	var embedding []float32
+	var err error
+
+	switch backend {
+	case "openvino":
+		embedding, err = getOpenVINOEmbedding(modelType, text, c.optimizationConfig.TargetDimension)
+	case "candle":
+		var output *candle_binding.EmbeddingOutput
+		output, err = getEmbeddingWithModelType(text, modelType, c.optimizationConfig.TargetDimension)
+		if err == nil {
+			embedding = output.Embedding
+		}
+	default:
+		return nil, fmt.Errorf("unsupported embedding backend %q", backend)
+	}
+
+	elapsed := time.Since(start)
+	dim := 0
+	if embedding != nil {
+		dim = len(embedding)
+	}
+	phase := "request"
+	if len(phases) > 0 {
+		phase = phases[0]
+	}
+	logging.Infof("[Perf] embedding inference (phase=%s, backend=%s, model=%s, dim=%d): %.3fms",
+		phase, backend, modelType, dim, float64(elapsed.Microseconds())/1000.0)
+
+	return embedding, err
+}
+
 // IsKeywordEmbeddingClassifierEnabled checks if Keyword embedding classification rules are properly configured
 func (c *Classifier) IsKeywordEmbeddingClassifierEnabled() bool {
 	return len(c.Config.EmbeddingRules) > 0
@@ -256,6 +321,8 @@ func (c *Classifier) initializeKeywordEmbeddingClassifier() error {
 		c.Config.GemmaModelPath,
 		c.Config.MmBertModelPath,
 		c.Config.UseCPU,
+		c.Config.EmbeddingConfig.Backend,
+		c.Config.EmbeddingConfig.ModelType,
 	)
 }
 
@@ -321,11 +388,10 @@ func (c *EmbeddingClassifier) ClassifyDetailed(text string) (*EmbeddingClassific
 
 	// Step 2: Compute query embedding once
 	modelType := c.getModelType()
-	queryOutput, err := getEmbeddingWithModelType(text, modelType, c.optimizationConfig.TargetDimension)
+	queryEmbedding, err := c.computeEmbedding(text, modelType)
 	if err != nil {
 		return nil, fmt.Errorf("failed to compute query embedding: %w", err)
 	}
-	queryEmbedding := queryOutput.Embedding
 
 	logging.Infof("Computed query embedding (model: %s, dimension: %d)", modelType, len(queryEmbedding))
 
