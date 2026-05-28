@@ -72,6 +72,7 @@ jobs:
       - name: Convert test models
         run: |
           export LD_LIBRARY_PATH=${{ github.workspace }}/openvino-binding/build:$LD_LIBRARY_PATH
+          export TORCHDYNAMO_DISABLE=1
           cd openvino-binding
           mkdir -p test_models
           # Convert embedding model to OpenVINO IR
