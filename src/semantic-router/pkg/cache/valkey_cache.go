@@ -72,7 +72,8 @@ func NewValkeyCache(options ValkeyCacheOptions) (*ValkeyCache, error) {
 		WithAddress(&config.NodeAddress{
 			Host: resolvedHost,
 			Port: valkeyConfig.Connection.Port,
-		})
+		}).
+		WithClientName("vllm_cache_client")
 
 	if valkeyConfig.Connection.Password != "" {
 		clientConfig = clientConfig.WithCredentials(
