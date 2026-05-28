@@ -73,6 +73,13 @@ jobs:
         run: |
           mkdir -p logs
 
+          # The test script's cleanup trap dumps container logs into ./logs/*.predump.log
+          # BEFORE removing the containers. Prefer those if present.
+          if ls logs/*.predump.log >/dev/null 2>&1; then
+            echo "Found pre-dumped container logs from test script cleanup trap:"
+            ls -la logs/*.predump.log
+          fi
+
           # Runtime logs (split topology first, legacy single-container fallback second)
           docker logs vllm-sr-router-container 2>&1 > logs/router.log || \
             docker exec vllm-sr-container cat /var/log/supervisor/router.log 2>&1 > logs/router.log || true

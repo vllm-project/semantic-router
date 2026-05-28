@@ -64,6 +64,13 @@ cleanup() {
         wait "${VLLM_SR_PID}" 2>/dev/null || true
     fi
 
+    # Dump container logs BEFORE stopping/removing them so CI can collect them.
+    local log_dump_dir="${REPO_ROOT}/logs"
+    mkdir -p "${log_dump_dir}" 2>/dev/null || true
+    for c in vllm-sr-router-container vllm-sr-envoy-container vllm-sr-dashboard-container vllm-sr-container llm-katan milvus-semantic-cache; do
+        "${CONTAINER_RUNTIME}" logs "$c" > "${log_dump_dir}/${c}.predump.log" 2>&1 || true
+    done
+
     vllm-sr stop >/dev/null 2>&1 || true
     "${CONTAINER_RUNTIME}" stop llm-katan >/dev/null 2>&1 || true
     "${CONTAINER_RUNTIME}" rm llm-katan >/dev/null 2>&1 || true
