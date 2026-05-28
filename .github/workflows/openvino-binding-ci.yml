@@ -50,6 +50,7 @@ jobs:
             openvino==2025.1.0 \
             openvino-tokenizers==2025.1.0 \
             optimum[openvino] \
+            Pillow \
             huggingface_hub[cli]
 
       - name: Build OpenVINO C++ library
@@ -77,14 +78,14 @@ jobs:
           optimum-cli export openvino \
             --model sentence-transformers/all-MiniLM-L6-v2 \
             --task feature-extraction \
-            test_models/all-MiniLM-L6-v2 || echo "Embedding model conversion skipped"
+            test_models/all-MiniLM-L6-v2
           # Convert classifier model to OpenVINO IR
           optimum-cli export openvino \
             --model LLM-Semantic-Router/category_classifier_modernbert-base_model \
             --task text-classification \
-            test_models/category_classifier_modernbert || echo "Classifier model conversion skipped"
+            test_models/category_classifier_modernbert
           # Convert tokenizers
-          python3 scripts/convert_test_tokenizers.py || echo "Tokenizer conversion skipped"
+          python3 scripts/convert_test_tokenizers.py
 
       - name: Run Go tests
         run: |
