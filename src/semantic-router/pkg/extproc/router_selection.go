@@ -2,6 +2,8 @@ package extproc
 
 import (
 	"context"
+	"os"
+	"strings"
 	"time"
 
 	candle_binding "github.com/vllm-project/semantic-router/candle-binding"
@@ -23,13 +25,7 @@ func createModelSelectorRegistry(cfg *config.RouterConfig, replayReader store.Re
 	if len(cfg.Categories) > 0 {
 		selectionFactory = selectionFactory.WithCategories(cfg.Categories)
 	}
-	selectionFactory = selectionFactory.WithEmbeddingFunc(func(text string) ([]float32, error) {
-		output, err := candle_binding.GetEmbeddingBatched(text, "qwen3", 1024)
-		if err != nil {
-			return nil, err
-		}
-		return output.Embedding, nil
-	})
+	selectionFactory = selectionFactory.WithEmbeddingFunc(resolveSelectionEmbeddingFunc(cfg))
 
 	lt, cancel := buildLookupTable(cfg, replayReader)
 	if lt != nil {
@@ -50,6 +46,34 @@ func createModelSelectorRegistry(cfg *config.RouterConfig, replayReader store.Re
 		"mode": "per_decision_algorithm_config",
 	})
 	return registry, lt, cancel
+}
+
+func resolveSelectionEmbeddingFunc(cfg *config.RouterConfig) func(string) ([]float32, error) {
+	backend := strings.TrimSpace(strings.ToLower(os.Getenv("EMBEDDING_BACKEND_OVERRIDE")))
+	if backend == "" {
+		backend = strings.TrimSpace(strings.ToLower(cfg.EmbeddingConfig.Backend))
+	}
+	if backend == "" {
+		backend = "candle"
+	}
+
+	modelType := strings.TrimSpace(strings.ToLower(cfg.EmbeddingConfig.ModelType))
+	if modelType == "" {
+		modelType = "qwen3"
+	}
+
+	switch backend {
+	case "openvino":
+		return openvinoEmbeddingFunc(modelType)
+	default:
+		return func(text string) ([]float32, error) {
+			output, err := candle_binding.GetEmbeddingBatched(text, modelType, 1024)
+			if err != nil {
+				return nil, err
+			}
+			return output.Embedding, nil
+		}
+	}
 }
 
 func collectConfiguredAlgorithmMethods(cfg *config.RouterConfig) []selection.SelectionMethod {

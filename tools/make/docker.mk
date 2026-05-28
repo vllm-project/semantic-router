@@ -40,6 +40,14 @@ docker-build-extproc-rocm:
 	@echo "Building extproc-rocm Docker image (x86_64 only, ROCm 7.0)..."
 	@$(CONTAINER_RUNTIME) build -f tools/docker/Dockerfile.extproc-rocm -t $(DOCKER_REGISTRY)/extproc-rocm:$(DOCKER_TAG) .
 
+
+# Build openvino-binding Docker image (OpenVINO inference backend, x86_64 only)
+docker-build-openvino-binding: ## Build openvino-binding Docker image
+docker-build-openvino-binding:
+	@$(LOG_TARGET)
+	@echo "Building openvino-binding Docker image (x86_64 only)..."
+	@$(CONTAINER_RUNTIME) build -f openvino-binding/Dockerfile -t $(DOCKER_REGISTRY)/openvino-binding:$(DOCKER_TAG) .
+
 # Build llm-katan Docker image
 docker-build-llm-katan: ## Build llm-katan Docker image
 docker-build-llm-katan:

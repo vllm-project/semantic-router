@@ -13,11 +13,14 @@ case "$AI_BINDING" in
   onnx)
     BINARY=/app/router-onnx
     ;;
+  openvino)
+    BINARY=/app/router-openvino
+    ;;
   candle|"")
     BINARY=/app/router-candle
     ;;
   *)
-    echo "[entrypoint] Unknown AI_BINDING='$AI_BINDING'. Valid values: candle (default), onnx" >&2
+    echo "[entrypoint] Unknown AI_BINDING='$AI_BINDING'. Valid values: candle (default), onnx, openvino" >&2
     exit 1
     ;;
 esac

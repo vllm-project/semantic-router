@@ -154,6 +154,7 @@ COPY candle-binding/go.mod candle-binding/semantic-router.go candle-binding/
 COPY onnx-binding/go.mod onnx-binding/semantic-router.go onnx-binding/
 COPY ml-binding/go.mod ml-binding/ml_binding.go ml-binding/
 COPY nlp-binding/go.mod nlp-binding/nlp_binding.go nlp-binding/nlp_binding_mock.go nlp-binding/
+COPY openvino-binding/go.mod openvino-binding/semantic-router.go openvino-binding/
 
 RUN cd src/semantic-router && go mod download
 

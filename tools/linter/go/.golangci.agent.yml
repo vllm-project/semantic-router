@@ -42,6 +42,13 @@ linters:
           - gocognit
           - nestif
           - interfacebloat
+        path: (^|/)openvino-binding/(semantic-router_test\.go|examples/.*/.*\.go)$
+      - linters:
+          - cyclop
+          - funlen
+          - gocognit
+          - nestif
+          - interfacebloat
         path: (^|/)src/semantic-router/pkg/extproc/(processor_core\.go|processor_core_panic_test\.go|processor_res_memory\.go|router_selection\.go)$
       - linters:
           - cyclop

@@ -64,6 +64,13 @@ cleanup() {
         wait "${VLLM_SR_PID}" 2>/dev/null || true
     fi
 
+    # Dump container logs BEFORE stopping/removing them so CI can collect them.
+    local log_dump_dir="${REPO_ROOT}/logs"
+    mkdir -p "${log_dump_dir}" 2>/dev/null || true
+    for c in vllm-sr-router-container vllm-sr-envoy-container vllm-sr-dashboard-container vllm-sr-container llm-katan milvus-semantic-cache; do
+        "${CONTAINER_RUNTIME}" logs "$c" > "${log_dump_dir}/${c}.predump.log" 2>&1 || true
+    done
+
     vllm-sr stop >/dev/null 2>&1 || true
     "${CONTAINER_RUNTIME}" stop llm-katan >/dev/null 2>&1 || true
     "${CONTAINER_RUNTIME}" rm llm-katan >/dev/null 2>&1 || true
@@ -91,6 +98,8 @@ mkdir -p "${TEST_DIR}/models"
 HF_HUB_ENABLE_HF_TRANSFER=1 \
 python3 -c "from huggingface_hub import snapshot_download; snapshot_download('sentence-transformers/all-MiniLM-L12-v2', local_dir='${TEST_DIR}/models/mom-embedding-light', local_dir_use_symlinks=False)"
 
+HF_HUB_ENABLE_HF_TRANSFER=1 \
+python3 -c "from huggingface_hub import snapshot_download; snapshot_download('llm-semantic-router/mmbert-embed-32k-2d-matryoshka', local_dir='${TEST_DIR}/models/mmbert-embed-32k-2d-matryoshka', local_dir_use_symlinks=False)" || echo "Warning: mmbert-embed-32k-2d-matryoshka download failed (may be gated); router will skip it"
 make -C "${REPO_ROOT}" start-milvus
 
 # Double-check Milvus readiness with pymilvus probe (gRPC-level, not just HTTP)

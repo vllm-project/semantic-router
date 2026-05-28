@@ -56,12 +56,14 @@ func (b *classifierOptionBuilder) buildParallelOptions(steps []func() (option, e
 	group.SetLimit(classifierBuildParallelism(len(steps)))
 
 	for i, step := range steps {
+		stepIndex := i
+		stepFn := step
 		group.Go(func() error {
-			opt, err := step()
+			opt, err := stepFn()
 			if err != nil {
 				return err
 			}
-			results[i] = opt
+			results[stepIndex] = opt
 			return nil
 		})
 	}
@@ -81,6 +83,10 @@ func (b *classifierOptionBuilder) buildParallelOptions(steps []func() (option, e
 
 func classifierBuildParallelism(stepCount int) int {
 	if stepCount <= 1 {
+		return 1
+	}
+	backend := embeddingBackendOverride()
+	if backend == "candle" {
 		return 1
 	}
 	parallelism := runtime.NumCPU()
@@ -115,6 +121,21 @@ func (b *classifierOptionBuilder) buildEmbeddingClassifierOption() (option, erro
 	if strings.EqualFold(strings.TrimSpace(optConfig.ModelType), "multimodal") {
 		if err := b.initMultiModalIfNeeded("embedding_rules with model_type=multimodal"); err != nil {
 			return nil, err
+		}
+	}
+	// Eagerly initialize the OpenVINO embedding model so that
+	// NewEmbeddingClassifier's preload step can use it.
+	// Skip if EMBEDDING_BACKEND_OVERRIDE forces a different backend at runtime.
+	backendOverride := embeddingBackendOverride()
+	if backendOverride == "" {
+		backendOverride = strings.ToLower(strings.TrimSpace(optConfig.Backend))
+	}
+	if backendOverride == "openvino" {
+		modelType := strings.ToLower(strings.TrimSpace(optConfig.ModelType))
+		if err := initOpenVINOModel(modelType, b.cfg.MmBertModelPath, b.cfg.Qwen3ModelPath, b.cfg.UseCPU); err != nil {
+			logging.ComponentWarnEvent("classifier", "openvino_eager_init_failed", map[string]interface{}{
+				"error": err.Error(),
+			})
 		}
 	}
 	keywordEmbeddingClassifier, err := NewEmbeddingClassifier(b.cfg.EmbeddingRules, optConfig)

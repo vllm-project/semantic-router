@@ -1868,6 +1868,7 @@ global:
         bert_model_path: models/mom-embedding-light
         use_cpu: true
         embedding_config:
+          backend: candle
           model_type: mmbert
           preload_embeddings: true
           target_dimension: 768
