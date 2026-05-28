@@ -87,6 +87,7 @@ func (r *OpenAIRouter) runToolSelectionPluginAdd(
 	}
 
 	selectedTools, strategyOut, confidence, latency, toolErr := r.findToolsForQueryExt(
+		openAIRequest,
 		classificationText,
 		historySummary,
 		ctx,

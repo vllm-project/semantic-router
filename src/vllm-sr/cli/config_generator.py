@@ -14,6 +14,20 @@ from cli.utils import get_logger
 log = get_logger(__name__)
 
 
+def _uses_shared_anthropic_cluster(model) -> bool:
+    """Use api.anthropic.com only when no custom upstream host is configured."""
+    if not model.backend_refs:
+        return True
+    for backend in model.backend_refs:
+        upstream = (backend.endpoint or backend.base_url or "").lower()
+        if not upstream:
+            continue
+        if "api.anthropic.com" in upstream:
+            continue
+        return False
+    return True
+
+
 def _is_ip_address(host: str) -> bool:
     """
     Check if a host string is an IP address (IPv4 or IPv6).
@@ -99,12 +113,16 @@ def generate_envoy_config_from_user_config(
     for model in user_config.providers.models:
         # Handle external API models (e.g., Anthropic) - they use shared clusters
         if model.api_format and model.api_format in EXTERNAL_API_MODEL_FORMATS:
-            if model.api_format == "anthropic":
+            if model.api_format == "anthropic" and _uses_shared_anthropic_cluster(
+                model
+            ):
                 anthropic_models.append({"name": model.name})
                 log.info(
                     f"  Anthropic model: {model.name} (will use shared anthropic_api_cluster)"
                 )
-            continue
+                continue
+            if model.api_format == "anthropic":
+                log.info(f"  Anthropic model: {model.name} (dedicated cluster)")
 
         endpoints = []
         has_https = False

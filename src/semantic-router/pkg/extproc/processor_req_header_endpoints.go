@@ -5,6 +5,7 @@ import (
 
 	ext_proc "github.com/envoyproxy/go-control-plane/envoy/service/ext_proc/v3"
 
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 )
 
@@ -131,4 +132,15 @@ func extractResponseIDFromInputItemsPath(path string) string {
 		return responseID
 	}
 	return ""
+}
+
+// detectClientProtocol classifies the inbound wire format from the request path.
+// Paths under /v1/messages (the Anthropic Messages API surface, including
+// /v1/messages/count_tokens) are tagged as Anthropic; everything else falls
+// through to the OpenAI-compatible default represented by the zero value.
+func detectClientProtocol(path string, ctx *RequestContext) {
+	if strings.HasPrefix(path, "/v1/messages") {
+		ctx.ClientProtocol = config.ClientProtocolAnthropic
+		logging.Debugf("Detected Anthropic client protocol from path: %s", path)
+	}
 }

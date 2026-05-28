@@ -1042,6 +1042,35 @@ routing:
                 top_k: ${top_k}
               timeout_seconds: 20
 
+    # multi_factor example: composes quality/latency/cost/load into one
+    # weighted score with optional SLO ceilings. Issue #37.
+    - name: multi_factor_route
+      description: Compose quality, latency, cost, and load signals into a single weighted score.
+      priority: 124
+      rules:
+        operator: AND
+        conditions:
+          - type: domain
+            name: other
+      modelRefs:
+        - model: qwen3-8b
+        - model: qwen3-32b
+      algorithm:
+        type: multi_factor
+        multi_factor:
+          weights:
+            quality: 0.4
+            latency: 0.2
+            cost: 0.2
+            load: 0.2
+          slo:
+            max_tpot_ms: 200
+            max_ttft_ms: 800
+            max_cost_per_1m: 5.0
+            max_inflight: 50
+          latency_percentile: 95
+          on_no_candidates: cheapest
+
     - name: fallback_knn_route
       description: KNN fallback route for general traffic with OpenAI vector-store RAG.
       priority: 120

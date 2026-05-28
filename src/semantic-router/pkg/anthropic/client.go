@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/anthropics/anthropic-sdk-go"
+	"github.com/anthropics/anthropic-sdk-go/packages/param"
 	"github.com/openai/openai-go"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
@@ -30,16 +31,30 @@ type HeaderKeyValue struct {
 }
 
 // BuildRequestHeaders returns the headers needed for an Anthropic API request.
-// Returns headers as simple key-value pairs to avoid coupling to Envoy types.
-func BuildRequestHeaders(apiKey string, bodyLength int) []HeaderKeyValue {
-	return []HeaderKeyValue{
-		{Key: "x-api-key", Value: apiKey},
+// messagesPath should include any base_url prefix (e.g. /Anthropic/v1/messages for AMD).
+// When empty, AnthropicMessagesPath (/v1/messages) is used.
+func BuildRequestHeaders(apiKey string, bodyLength int, messagesPath string) []HeaderKeyValue {
+	return buildRequestHeaders(apiKey, bodyLength, messagesPath, false)
+}
+
+func buildRequestHeaders(apiKey string, bodyLength int, messagesPath string, streaming bool) []HeaderKeyValue {
+	if strings.TrimSpace(messagesPath) == "" {
+		messagesPath = AnthropicMessagesPath
+	}
+	headers := []HeaderKeyValue{
 		{Key: "anthropic-version", Value: AnthropicAPIVersion},
 		{Key: "content-type", Value: "application/json"},
 		{Key: "accept-encoding", Value: "identity"},
-		{Key: ":path", Value: AnthropicMessagesPath},
+		{Key: ":path", Value: messagesPath},
 		{Key: "content-length", Value: fmt.Sprintf("%d", bodyLength)},
 	}
+	if streaming {
+		headers = append(headers, HeaderKeyValue{Key: "accept", Value: "text/event-stream"})
+	}
+	if strings.TrimSpace(apiKey) != "" {
+		headers = append([]HeaderKeyValue{{Key: "x-api-key", Value: apiKey}}, headers...)
+	}
+	return headers
 }
 
 // HeadersToRemove returns headers that should be removed when routing to Anthropic.
@@ -51,21 +66,9 @@ func HeadersToRemove() []string {
 // This is used for Envoy-routed requests where the router transforms the body
 // before forwarding to Anthropic via Envoy.
 func ToAnthropicRequestBody(openAIRequest *openai.ChatCompletionNewParams) ([]byte, error) {
-	var messages []anthropic.MessageParam
-	var systemPrompt string
-
-	// Process messages - extract system prompt separately (Anthropic requirement)
-	for _, msg := range openAIRequest.Messages {
-		switch {
-		case msg.OfSystem != nil:
-			systemPrompt = extractSystemContent(msg.OfSystem)
-		case msg.OfUser != nil:
-			content := extractUserContent(msg.OfUser)
-			messages = append(messages, anthropic.NewUserMessage(anthropic.NewTextBlock(content)))
-		case msg.OfAssistant != nil:
-			content := extractAssistantContent(msg.OfAssistant)
-			messages = append(messages, anthropic.NewAssistantMessage(anthropic.NewTextBlock(content)))
-		}
+	systemPrompt, messages, err := buildAnthropicMessages(openAIRequest.Messages)
+	if err != nil {
+		return nil, err
 	}
 
 	// Determine max tokens (required for Anthropic)
@@ -87,6 +90,10 @@ func ToAnthropicRequestBody(openAIRequest *openai.ChatCompletionNewParams) ([]by
 		params.System = []anthropic.TextBlockParam{
 			{Text: systemPrompt},
 		}
+	}
+
+	if err := applyOpenAIToolsToAnthropicParams(&params, openAIRequest); err != nil {
+		return nil, err
 	}
 
 	// Set optional parameters
@@ -118,13 +125,7 @@ func ToOpenAIResponseBody(anthropicResponse []byte, model string) ([]byte, error
 
 	logging.Debugf("Parsed Anthropic response - ID: %s, Content blocks: %d, StopReason: %s", resp.ID, len(resp.Content), resp.StopReason)
 
-	// Extract text content
-	var content string
-	for _, block := range resp.Content {
-		if block.Type == "text" {
-			content += block.Text
-		}
-	}
+	toolCalls, content := openAIToolCallsFromAnthropicContent(resp.Content)
 
 	// Map stop reason
 	finishReason := "stop"
@@ -132,6 +133,9 @@ func ToOpenAIResponseBody(anthropicResponse []byte, model string) ([]byte, error
 	case anthropic.StopReasonMaxTokens:
 		finishReason = "length"
 	case anthropic.StopReasonToolUse:
+		finishReason = "tool_calls"
+	}
+	if len(toolCalls) > 0 && finishReason == "stop" {
 		finishReason = "tool_calls"
 	}
 
@@ -143,8 +147,9 @@ func ToOpenAIResponseBody(anthropicResponse []byte, model string) ([]byte, error
 		Choices: []openai.ChatCompletionChoice{{
 			Index: 0,
 			Message: openai.ChatCompletionMessage{
-				Role:    "assistant",
-				Content: content,
+				Role:      "assistant",
+				Content:   content,
+				ToolCalls: toolCalls,
 			},
 			FinishReason: finishReason,
 		}},
@@ -198,4 +203,242 @@ func extractAssistantContent(msg *openai.ChatCompletionAssistantMessageParam) st
 		}
 	}
 	return strings.Join(parts, " ")
+}
+
+func buildAnthropicMessages(
+	messages []openai.ChatCompletionMessageParamUnion,
+) (string, []anthropic.MessageParam, error) {
+	var systemPrompt string
+	var anthropicMessages []anthropic.MessageParam
+
+	for _, msg := range messages {
+		switch {
+		case msg.OfSystem != nil:
+			systemPrompt = extractSystemContent(msg.OfSystem)
+		case msg.OfUser != nil:
+			anthropicMessages = append(anthropicMessages, anthropic.NewUserMessage(
+				anthropic.NewTextBlock(extractUserContent(msg.OfUser)),
+			))
+		case msg.OfAssistant != nil:
+			blocks, err := assistantContentBlocks(msg.OfAssistant)
+			if err != nil {
+				return "", nil, err
+			}
+			if len(blocks) > 0 {
+				anthropicMessages = append(anthropicMessages, anthropic.NewAssistantMessage(blocks...))
+			}
+		case msg.OfTool != nil:
+			toolUseID := strings.TrimSpace(msg.OfTool.ToolCallID)
+			if toolUseID == "" {
+				return "", nil, fmt.Errorf("tool message missing tool_call_id")
+			}
+			content := extractToolMessageContent(msg.OfTool)
+			anthropicMessages = append(anthropicMessages, anthropic.NewUserMessage(
+				anthropic.NewToolResultBlock(toolUseID, content, false),
+			))
+		default:
+			logging.Debugf("Skipping unsupported OpenAI message role in Anthropic conversion")
+		}
+	}
+
+	return systemPrompt, anthropicMessages, nil
+}
+
+func extractToolMessageContent(msg *openai.ChatCompletionToolMessageParam) string {
+	if msg.Content.OfString.Value != "" {
+		return msg.Content.OfString.Value
+	}
+	var parts []string
+	for _, part := range msg.Content.OfArrayOfContentParts {
+		if part.Text != "" {
+			parts = append(parts, part.Text)
+		}
+	}
+	return strings.Join(parts, " ")
+}
+
+func assistantContentBlocks(
+	msg *openai.ChatCompletionAssistantMessageParam,
+) ([]anthropic.ContentBlockParamUnion, error) {
+	var blocks []anthropic.ContentBlockParamUnion
+
+	content := extractAssistantContent(msg)
+	if content != "" {
+		blocks = append(blocks, anthropic.NewTextBlock(content))
+	}
+
+	for _, toolCall := range msg.ToolCalls {
+		toolUseID := strings.TrimSpace(toolCall.ID)
+		if toolUseID == "" {
+			return nil, fmt.Errorf("assistant tool_call missing id")
+		}
+		name := strings.TrimSpace(toolCall.Function.Name)
+		if name == "" {
+			return nil, fmt.Errorf("assistant tool_call %s missing function name", toolUseID)
+		}
+		input, err := parseToolCallArguments(toolCall.Function.Arguments)
+		if err != nil {
+			return nil, fmt.Errorf("assistant tool_call %s: %w", toolUseID, err)
+		}
+		blocks = append(blocks, anthropic.NewToolUseBlock(toolUseID, input, name))
+	}
+
+	return blocks, nil
+}
+
+func parseToolCallArguments(arguments string) (any, error) {
+	trimmed := strings.TrimSpace(arguments)
+	if trimmed == "" {
+		return map[string]any{}, nil
+	}
+	var parsed any
+	if err := json.Unmarshal([]byte(trimmed), &parsed); err != nil {
+		return nil, fmt.Errorf("invalid tool arguments JSON: %w", err)
+	}
+	return parsed, nil
+}
+
+func applyOpenAIToolsToAnthropicParams(
+	params *anthropic.MessageNewParams,
+	openAIRequest *openai.ChatCompletionNewParams,
+) error {
+	if openAIRequest == nil {
+		return nil
+	}
+
+	if len(openAIRequest.Tools) > 0 {
+		tools, err := openAIToolsToAnthropic(openAIRequest.Tools)
+		if err != nil {
+			return err
+		}
+		params.Tools = tools
+	}
+
+	toolChoice, hasChoice := openAIToolChoiceToAnthropic(openAIRequest.ToolChoice)
+	if hasChoice {
+		params.ToolChoice = toolChoice
+	}
+	return nil
+}
+
+func openAIToolsToAnthropic(tools []openai.ChatCompletionToolParam) ([]anthropic.ToolUnionParam, error) {
+	result := make([]anthropic.ToolUnionParam, 0, len(tools))
+	for index, tool := range tools {
+		if tool.Type != "" && tool.Type != "function" {
+			logging.Debugf("Skipping non-function OpenAI tool type %q at index %d", tool.Type, index)
+			continue
+		}
+		name := strings.TrimSpace(tool.Function.Name)
+		if name == "" {
+			return nil, fmt.Errorf("tools[%d]: function name is required", index)
+		}
+
+		inputSchema, err := functionParametersToAnthropicSchema(tool.Function.Parameters)
+		if err != nil {
+			return nil, fmt.Errorf("tools[%d] (%s): %w", index, name, err)
+		}
+
+		toolParam := anthropic.ToolParam{
+			Name:        name,
+			InputSchema: inputSchema,
+			Type:        anthropic.ToolTypeCustom,
+		}
+		if desc := strings.TrimSpace(tool.Function.Description.Value); desc != "" {
+			toolParam.Description = anthropic.String(desc)
+		}
+		result = append(result, anthropic.ToolUnionParam{OfTool: &toolParam})
+	}
+	return result, nil
+}
+
+func functionParametersToAnthropicSchema(
+	parameters openai.FunctionParameters,
+) (anthropic.ToolInputSchemaParam, error) {
+	schema := anthropic.ToolInputSchemaParam{
+		Type: "object",
+	}
+	if parameters == nil {
+		return schema, nil
+	}
+
+	raw, err := json.Marshal(parameters)
+	if err != nil {
+		return schema, fmt.Errorf("marshal function parameters: %w", err)
+	}
+	if err := json.Unmarshal(raw, &schema); err != nil {
+		return schema, fmt.Errorf("parse function parameters: %w", err)
+	}
+	if schema.Type == "" {
+		schema.Type = "object"
+	}
+	return schema, nil
+}
+
+func openAIToolChoiceToAnthropic(
+	choice openai.ChatCompletionToolChoiceOptionUnionParam,
+) (anthropic.ToolChoiceUnionParam, bool) {
+	if !param.IsOmitted(choice.OfAuto) {
+		value := strings.TrimSpace(choice.OfAuto.Value)
+		switch value {
+		case "", "auto":
+			return anthropic.ToolChoiceUnionParam{
+				OfAuto: &anthropic.ToolChoiceAutoParam{},
+			}, true
+		case "none":
+			none := anthropic.NewToolChoiceNoneParam()
+			return anthropic.ToolChoiceUnionParam{OfNone: &none}, true
+		case "required", "any":
+			return anthropic.ToolChoiceUnionParam{
+				OfAny: &anthropic.ToolChoiceAnyParam{},
+			}, true
+		default:
+			logging.Debugf("Unknown OpenAI tool_choice auto value %q, defaulting to auto", value)
+			return anthropic.ToolChoiceUnionParam{
+				OfAuto: &anthropic.ToolChoiceAutoParam{},
+			}, true
+		}
+	}
+
+	if choice.OfChatCompletionNamedToolChoice != nil {
+		name := strings.TrimSpace(choice.OfChatCompletionNamedToolChoice.Function.Name)
+		if name == "" {
+			return anthropic.ToolChoiceUnionParam{}, false
+		}
+		return anthropic.ToolChoiceParamOfTool(name), true
+	}
+
+	return anthropic.ToolChoiceUnionParam{}, false
+}
+
+func openAIToolCallsFromAnthropicContent(
+	blocks []anthropic.ContentBlockUnion,
+) ([]openai.ChatCompletionMessageToolCall, string) {
+	var contentParts []string
+	var toolCalls []openai.ChatCompletionMessageToolCall
+
+	for _, block := range blocks {
+		switch block.Type {
+		case "text":
+			if block.Text != "" {
+				contentParts = append(contentParts, block.Text)
+			}
+		case "tool_use":
+			arguments := string(block.Input)
+			if len(block.Input) == 0 {
+				arguments = "{}"
+			}
+			toolCalls = append(toolCalls, openai.ChatCompletionMessageToolCall{
+				ID:   block.ID,
+				Type: "function",
+				Function: openai.ChatCompletionMessageToolCallFunction{
+					Name:      block.Name,
+					Arguments: arguments,
+				},
+			})
+		default:
+			logging.Debugf("Skipping unsupported Anthropic content block type %q in OpenAI response conversion", block.Type)
+		}
+	}
+
+	return toolCalls, strings.Join(contentParts, "")
 }

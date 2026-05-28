@@ -15,6 +15,7 @@ from cli.models import (
     RequestParamsPluginConfig,
     ResponseJailbreakPluginConfig,
     ToolsPluginConfig,
+    ToolSelectionPluginConfig,
     SystemPromptPluginConfig,
     HeaderMutationPluginConfig,
     HallucinationPluginConfig,
@@ -26,21 +27,13 @@ from cli.models import (
 from pydantic import ValidationError as PydanticValidationError
 from cli.utils import get_logger
 from cli.consts import EXTERNAL_API_MODEL_FORMATS
+from cli.validation_error import ValidationError
+from cli.validator_projection_embedding import (
+    validate_embedding_modality_compatibility,
+    validate_projection_score_dependencies,
+)
 
 log = get_logger(__name__)
-
-
-class ValidationError:
-    """Validation error."""
-
-    def __init__(self, message: str, field: str = None):
-        self.message = message
-        self.field = field
-
-    def __str__(self):
-        if self.field:
-            return f"[{self.field}] {self.message}"
-        return self.message
 
 
 def _is_latency_condition(condition_type: str) -> bool:
@@ -383,6 +376,44 @@ def validate_model_references(config: UserConfig) -> List[ValidationError]:
     return errors
 
 
+def _collect_pydantic_error_messages(exc: PydanticValidationError) -> List[str]:
+    messages: List[str] = []
+    for error in exc.errors():
+        field = " -> ".join(str(x) for x in error["loc"])
+        messages.append(f"{field}: {error['msg']}")
+    return messages
+
+
+def _validate_single_plugin_configuration(
+    decision_name: str,
+    idx: int,
+    plugin_type: str,
+    plugin_config: dict,
+    config_model: type | None,
+) -> List[ValidationError]:
+    if config_model is None:
+        return []
+    field = f"decisions.{decision_name}.plugins[{idx}]"
+    try:
+        config_model(**plugin_config)
+        return []
+    except PydanticValidationError as exc:
+        joined = ", ".join(_collect_pydantic_error_messages(exc))
+        return [
+            ValidationError(
+                f"Decision '{decision_name}' plugin #{idx + 1} ({plugin_type}) has invalid configuration: {joined}",
+                field=field,
+            )
+        ]
+    except Exception as exc:
+        return [
+            ValidationError(
+                f"Decision '{decision_name}' plugin #{idx + 1} ({plugin_type}) configuration validation failed: {exc}",
+                field=field,
+            )
+        ]
+
+
 def validate_plugin_configurations(config: UserConfig) -> List[ValidationError]:
     """
     Validate plugin configurations match their plugin types.
@@ -409,6 +440,7 @@ def validate_plugin_configurations(config: UserConfig) -> List[ValidationError]:
         PluginType.RAG.value: RAGPluginConfig,
         PluginType.IMAGE_GEN.value: ImageGenPluginConfig,
         PluginType.TOOLS.value: ToolsPluginConfig,
+        PluginType.TOOL_SELECTION.value: ToolSelectionPluginConfig,
     }
 
     for decision in config.decisions:
@@ -416,39 +448,67 @@ def validate_plugin_configurations(config: UserConfig) -> List[ValidationError]:
             continue
 
         for idx, plugin in enumerate(decision.plugins):
-            # plugin.type is now a PluginType enum, get its string value
             plugin_type = (
                 plugin.type.value if hasattr(plugin.type, "value") else str(plugin.type)
             )
-            plugin_config = plugin.configuration
-
-            # Get the appropriate config model for this plugin type
             config_model = config_models.get(plugin_type)
-            if config_model:
-                try:
-                    # Validate configuration against the plugin-specific model
-                    config_model(**plugin_config)
-                except PydanticValidationError as e:
-                    error_messages = []
-                    for error in e.errors():
-                        field = " -> ".join(str(x) for x in error["loc"])
-                        msg = error["msg"]
-                        error_messages.append(f"{field}: {msg}")
-                    errors.append(
-                        ValidationError(
-                            f"Decision '{decision.name}' plugin #{idx + 1} ({plugin_type}) has invalid configuration: {', '.join(error_messages)}",
-                            field=f"decisions.{decision.name}.plugins[{idx}]",
-                        )
-                    )
-                except Exception as e:
-                    errors.append(
-                        ValidationError(
-                            f"Decision '{decision.name}' plugin #{idx + 1} ({plugin_type}) configuration validation failed: {e}",
-                            field=f"decisions.{decision.name}.plugins[{idx}]",
-                        )
-                    )
+            errors.extend(
+                _validate_single_plugin_configuration(
+                    decision.name,
+                    idx,
+                    plugin_type,
+                    plugin.configuration,
+                    config_model,
+                )
+            )
 
     return errors
+
+
+def _router_dc_missing_description_errors(
+    decision, algo, config: UserConfig
+) -> List[ValidationError]:
+    if (
+        algo.type != "router_dc"
+        or not algo.router_dc
+        or not algo.router_dc.require_descriptions
+    ):
+        return []
+    errs: List[ValidationError] = []
+    routing_cards = {card.name: card for card in config.routing.model_cards}
+    for model_ref in decision.modelRefs:
+        model_card = routing_cards.get(model_ref.model)
+        if model_card is None or model_card.description:
+            continue
+        errs.append(
+            ValidationError(
+                f"Decision '{decision.name}' uses router_dc with require_descriptions=true, "
+                f"but model '{model_ref.model}' has no description",
+                field=f"routing.modelCards.{model_ref.model}.description",
+            )
+        )
+    return errs
+
+
+def _maybe_hybrid_weight_error(
+    decision_name: str, algo_type: str, algo
+) -> ValidationError | None:
+    if algo_type != "hybrid" or not algo.hybrid:
+        return None
+    h = algo.hybrid
+    total = (
+        (0.3 if h.elo_weight is None else h.elo_weight)
+        + (0.3 if h.router_dc_weight is None else h.router_dc_weight)
+        + (0.2 if h.automix_weight is None else h.automix_weight)
+        + (0.2 if h.cost_weight is None else h.cost_weight)
+    )
+    if abs(total - 1.0) <= 0.01:
+        return None
+    return ValidationError(
+        f"Decision '{decision_name}' hybrid weights sum to {total:.2f}, "
+        "should sum to 1.0",
+        field=f"decisions.{decision_name}.algorithm.hybrid",
+    )
 
 
 def validate_algorithm_configurations(config: UserConfig) -> List[ValidationError]:
@@ -500,218 +560,12 @@ def validate_algorithm_configurations(config: UserConfig) -> List[ValidationErro
             )
             continue
 
-        # Validate selection algorithm has corresponding config
-        if algo_type == "elo" and algo.elo is None:
-            # elo config is optional (uses defaults)
-            pass
-        if algo_type == "router_dc":
-            # Warn if require_descriptions is true but models lack descriptions
-            if algo.router_dc and algo.router_dc.require_descriptions:
-                routing_cards = {card.name: card for card in config.routing.model_cards}
-                for model_ref in decision.modelRefs:
-                    model_card = routing_cards.get(model_ref.model)
-                    if model_card is not None and not model_card.description:
-                        errors.append(
-                            ValidationError(
-                                f"Decision '{decision.name}' uses router_dc with require_descriptions=true, "
-                                f"but model '{model_ref.model}' has no description",
-                                field=f"routing.modelCards.{model_ref.model}.description",
-                            )
-                        )
+        # elo config is optional (uses defaults)
+        errors.extend(_router_dc_missing_description_errors(decision, algo, config))
 
-        # Validate hybrid weights sum to ~1.0 (with tolerance)
-        # Note: Use `is None` check instead of `or` to handle 0.0 weights correctly
-        if algo_type == "hybrid" and algo.hybrid:
-            h = algo.hybrid
-            total = (
-                (0.3 if h.elo_weight is None else h.elo_weight)
-                + (0.3 if h.router_dc_weight is None else h.router_dc_weight)
-                + (0.2 if h.automix_weight is None else h.automix_weight)
-                + (0.2 if h.cost_weight is None else h.cost_weight)
-            )
-            if abs(total - 1.0) > 0.01:
-                errors.append(
-                    ValidationError(
-                        f"Decision '{decision.name}' hybrid weights sum to {total:.2f}, "
-                        "should sum to 1.0",
-                        field=f"decisions.{decision.name}.algorithm.hybrid",
-                    )
-                )
-
-    return errors
-
-
-def validate_projection_score_dependencies(
-    config: UserConfig,
-) -> List[ValidationError]:
-    """Validate that projection scores have no dependency cycles."""
-    errors: List[ValidationError] = []
-    projections = getattr(getattr(config, "routing", None), "projections", None)
-    if not projections:
-        return errors
-
-    scores = getattr(projections, "scores", None) or []
-    score_names = {s.name for s in scores if s.name}
-
-    output_to_source: dict[str, str] = {}
-    for mapping in getattr(projections, "mappings", None) or []:
-        source_score = getattr(mapping, "source", None)
-        if not source_score:
-            continue
-        for output in getattr(mapping, "outputs", None) or []:
-            output_name = getattr(output, "name", None)
-            if output_name:
-                output_to_source[output_name] = source_score
-
-    adj: dict[str, list[str]] = {}
-    for score in scores:
-        deps: list[str] = []
-        for inp in getattr(score, "inputs", None) or []:
-            if (getattr(inp, "type", "") or "").lower() != "projection":
-                continue
-            dep_name = getattr(inp, "name", None)
-            if not dep_name:
-                continue
-            vs = (getattr(inp, "value_source", "") or "").strip().lower()
-            if vs == "confidence":
-                src = output_to_source.get(dep_name)
-                if not src:
-                    errors.append(
-                        ValidationError(
-                            field=f"routing.projections.scores[{score.name}]",
-                            message=f'projection input references undefined mapping output "{dep_name}"',
-                        )
-                    )
-                    continue
-                deps.append(src)
-            else:
-                if dep_name not in score_names:
-                    errors.append(
-                        ValidationError(
-                            field=f"routing.projections.scores[{score.name}]",
-                            message=f'projection input references undefined score "{dep_name}"',
-                        )
-                    )
-                    continue
-                deps.append(dep_name)
-        adj[score.name] = deps
-
-    unvisited, visiting, visited = 0, 1, 2
-    state: dict[str, int] = {s.name: unvisited for s in scores}
-    path: list[str] = []
-
-    def visit(name: str) -> None:
-        if state.get(name) == visited:
-            return
-        if state.get(name) == visiting:
-            cycle = [*list(path), name]
-            start = cycle.index(name)
-            cycle_str = " -> ".join(cycle[start:])
-            errors.append(
-                ValidationError(
-                    field="routing.projections.scores",
-                    message=f"dependency cycle detected: {cycle_str}",
-                )
-            )
-            return
-        state[name] = visiting
-        path.append(name)
-        for dep in adj.get(name, []):
-            visit(dep)
-        path.pop()
-        state[name] = visited
-
-    for score in scores:
-        if state.get(score.name) == unvisited:
-            visit(score.name)
-
-    return errors
-
-
-def validate_embedding_modality_compatibility(
-    config: UserConfig,
-) -> List[ValidationError]:
-    """
-    Validate that image/audio query_modality embedding rules are paired with a
-    multimodal embedding model. Mirrors the Go-side ``validateEmbeddingContracts``
-    so the CLI catches the same misconfiguration the router would reject at load.
-
-    Rules:
-      - ``text`` (or unset): always allowed.
-      - ``image``: requires
-        ``global.model_catalog.embeddings.semantic.embedding_config.model_type=multimodal``.
-      - ``audio``: rejected with a "planned" message — the audio FFI is not
-        yet exposed by candle-binding.
-      - any other value: rejected as unknown (defense-in-depth; Pydantic's
-        ``Literal`` type enforces the same constraint at parse time).
-
-    Args:
-        config: User configuration
-
-    Returns:
-        list: List of validation errors
-    """
-    errors: List[ValidationError] = []
-    embeddings = config.signals.embeddings or []
-    if not embeddings:
-        return errors
-
-    # Resolve embedding model_type from the canonical v0.3 path
-    # (global.model_catalog.embeddings.semantic.embedding_config.model_type).
-    # Falls back to "" if the path is absent; the Go side defaults to "qwen3"
-    # for an empty value, which keeps image/audio rules from being accepted
-    # without an explicit multimodal opt-in.
-    model_type = ""
-    if isinstance(config.global_, dict):
-        try:
-            model_type = (
-                config.global_.get("model_catalog", {})
-                .get("embeddings", {})
-                .get("semantic", {})
-                .get("embedding_config", {})
-                .get("model_type", "")
-            ) or ""
-        except (AttributeError, TypeError):
-            model_type = ""
-
-    normalized = model_type.strip().lower() if isinstance(model_type, str) else ""
-
-    for rule in embeddings:
-        raw = (rule.query_modality or "").strip().lower() if rule.query_modality else ""
-        if raw in ("", "text"):
-            continue
-        if raw == "image":
-            if normalized != "multimodal":
-                errors.append(
-                    ValidationError(
-                        f"Embedding rule '{rule.name}' declares query_modality=image, "
-                        f"which requires global.model_catalog.embeddings.semantic."
-                        f"embedding_config.model_type=multimodal (current: "
-                        f"'{model_type}'). Remove the rule, set query_modality to "
-                        f"text, or change the embedding model_type to multimodal.",
-                        field=f"signals.embeddings.{rule.name}",
-                    )
-                )
-        elif raw == "audio":
-            errors.append(
-                ValidationError(
-                    f"Embedding rule '{rule.name}' declares query_modality=audio, "
-                    f"but the audio FFI (MultiModalEncodeAudioFromBase64) is not "
-                    f"yet exposed by candle-binding. Audio query support is "
-                    f"planned; remove the rule or set query_modality to "
-                    f"text/image until the FFI lands.",
-                    field=f"signals.embeddings.{rule.name}",
-                )
-            )
-        else:
-            errors.append(
-                ValidationError(
-                    f"Embedding rule '{rule.name}' declares unknown "
-                    f"query_modality='{rule.query_modality}' "
-                    f"(allowed values: text, image, audio).",
-                    field=f"signals.embeddings.{rule.name}",
-                )
-            )
+        hybrid_err = _maybe_hybrid_weight_error(decision.name, algo_type, algo)
+        if hybrid_err is not None:
+            errors.append(hybrid_err)
 
     return errors
 

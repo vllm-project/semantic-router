@@ -8,7 +8,6 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/decision"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
-	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/metrics"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/tracing"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/selection"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/utils/entropy"
@@ -101,13 +100,12 @@ func (r *OpenAIRouter) runDecisionEngine(
 	ctx *RequestContext,
 	signals *classification.SignalResults,
 ) (*decision.DecisionResult, string) {
-	decisionStart := time.Now()
+	// llm_decision_evaluation_latency_seconds and llm_decision_match_total are
+	// emitted by decision.DecisionEngine.EvaluateDecisionsWithSignals; do not
+	// emit them here or both metrics will be double-counted.
 	decisionCtx, decisionSpan := tracing.StartDecisionSpan(ctx.TraceContext, "decision_evaluation")
 
 	result, err := r.Classifier.EvaluateDecisionWithEngine(signals)
-	decisionLatency := time.Since(decisionStart).Seconds()
-	metrics.RecordDecisionEvaluation(decisionLatency)
-
 	if err != nil {
 		logging.ComponentErrorEvent("extproc", "decision_evaluation_failed", map[string]interface{}{
 			"request_id": ctx.RequestID,
@@ -124,7 +122,6 @@ func (r *OpenAIRouter) runDecisionEngine(
 		return nil, r.defaultDecisionFallbackModel(originalModel)
 	}
 
-	metrics.RecordDecisionMatch(result.Decision.Name, result.Confidence)
 	tracing.EndDecisionSpan(decisionSpan, result.Confidence, result.MatchedRules, r.Config.Strategy)
 	ctx.TraceContext = decisionCtx
 	return result, ""

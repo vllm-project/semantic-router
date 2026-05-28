@@ -383,3 +383,12 @@ func (r *Runner) RunBenchmark(ctx context.Context, modelsYAMLPath, queryJSONLPat
 	}
 	return r.runBenchmarkSubprocess(ctx, modelsYAMLPath, queryJSONLPath, req)
 }
+
+// RunTrain runs Layer 2. If ML service URL is configured, it delegates to the
+// Python HTTP sidecar. Otherwise, it spawns train.py as a subprocess.
+func (r *Runner) RunTrain(ctx context.Context, benchmarkDataPath string, req TrainRequest) (string, error) {
+	if r.mlServiceURL != "" {
+		return r.runTrainHTTP(ctx, benchmarkDataPath, req)
+	}
+	return r.runTrainSubprocess(ctx, benchmarkDataPath, req)
+}

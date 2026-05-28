@@ -88,6 +88,10 @@ const (
 	// MethodLatencyAware uses TPOT/TTFT percentile data for latency-aware model selection
 	// Selects the fastest model from candidates based on configured latency percentiles
 	MethodLatencyAware SelectionMethod = "latency_aware"
+
+	// MethodMultiFactor combines quality/latency/cost/load signals via a
+	// weighted score with optional SLO ceilings. Issue #37.
+	MethodMultiFactor SelectionMethod = "multi_factor"
 )
 
 // AlgorithmTier classifies algorithms by production readiness

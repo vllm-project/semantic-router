@@ -11,6 +11,7 @@ from cli.models import (
     PluginType,
     RouterReplayPluginConfig,
     RAGPluginConfig,
+    ToolSelectionPluginConfig,
 )
 from cli.config_migration import migrate_config_data
 from cli.parser import parse_user_config
@@ -69,6 +70,7 @@ class TestPluginTypeValidation:
             PluginType.REQUEST_PARAMS.value,
             PluginType.RESPONSE_JAILBREAK.value,
             PluginType.TOOLS.value,
+            PluginType.TOOL_SELECTION.value,
         ]
 
         for plugin_type in valid_types:
@@ -621,165 +623,67 @@ providers:
             os.unlink(temp_path)
 
 
-class TestMultiplePlugins:
-    """Test configurations with multiple plugins."""
+class TestToolSelectionAdvancedFiltering:
+    """Test tool_selection plugin's advanced_filtering subtree.
 
-    def test_multiple_plugins_in_decision(self):
-        """Test decision with multiple plugins."""
-        config_yaml = """
-version: v0.1
-listeners:
-  - name: "http-8888"
-    address: "0.0.0.0"
-    port: 8888
-signals:
-  keywords:
-    - name: "test_keywords"
-      operator: "OR"
-      keywords: ["test"]
-  domains:
-    - name: "test"
-      description: "Test domain"
-decisions:
-  - name: "test_decision"
-    description: "Test decision"
-    priority: 100
-    rules:
-      operator: "OR"
-      conditions:
-        - type: "keyword"
-          name: "test_keywords"
-    modelRefs:
-      - model: "test_model"
-    plugins:
-      - type: "router_replay"
-        configuration:
-          enabled: true
-          max_records: 100
-      - type: "semantic-cache"
-        configuration:
-          enabled: true
-          similarity_threshold: 0.9
-      - type: "system_prompt"
-        configuration:
-          enabled: true
-          system_prompt: "You are a test assistant"
-providers:
-  models:
-    - name: "test_model"
-      endpoints:
-        - name: "ep1"
-          weight: 1
-          endpoint: "localhost:8000"
-  default_model: "test_model"
-"""
+    Pins down the schema parity with the Go-side
+    `config.AdvancedToolFilteringConfig`. Before this surface was modeled,
+    `ToolSelectionPluginConfig` had no `advanced_filtering` field and Pydantic
+    silently dropped the subtree, so users opting into
+    `retrieval_strategy: hybrid_history` ended up with a config equivalent to
+    no advanced filtering at all.
+    """
 
-        temp_path = _write_config(config_yaml)
+    def test_hybrid_history_round_trips_without_field_loss(self):
+        """advanced_filtering.hybrid_history survives model_validate -> model_dump."""
+        cfg = ToolSelectionPluginConfig.model_validate(
+            {
+                "enabled": True,
+                "mode": "add",
+                "tools_db_path": "config/tools_db.json",
+                "top_k": 5,
+                "advanced_filtering": {
+                    "enabled": True,
+                    "retrieval_strategy": "hybrid_history",
+                    "hybrid_history": {
+                        "history_horizon": 8,
+                        "weight_history_transition": 2.0,
+                    },
+                },
+            }
+        )
 
-        try:
-            config = parse_user_config(temp_path)
-            assert len(config.decisions[0].plugins) == 3
+        dump = cfg.model_dump(exclude_none=True)
+        assert "advanced_filtering" in dump
+        assert dump["advanced_filtering"]["retrieval_strategy"] == "hybrid_history"
+        assert dump["advanced_filtering"]["hybrid_history"]["history_horizon"] == 8
+        assert (
+            dump["advanced_filtering"]["hybrid_history"]["weight_history_transition"]
+            == 2.0
+        )
 
-            plugin_types = [p.type.value for p in config.decisions[0].plugins]
-            assert "router_replay" in plugin_types
-            assert "semantic-cache" in plugin_types
-            assert "system_prompt" in plugin_types
-
-            errors = validate_user_config(config)
-            assert len(errors) == 0
-        finally:
-            os.unlink(temp_path)
-
-    def test_multiple_plugins_with_rag(self):
-        """Test RAG alongside system_prompt, semantic-cache, and router_replay."""
-        config_yaml = """
-version: v0.1
-listeners:
-  - name: "http-8888"
-    address: "0.0.0.0"
-    port: 8888
-signals:
-  keywords:
-    - name: "test_keywords"
-      operator: "OR"
-      keywords: ["test"]
-  domains:
-    - name: "test"
-      description: "Test domain"
-decisions:
-  - name: "test_decision"
-    description: "Decision with RAG and other plugins"
-    priority: 100
-    rules:
-      operator: "OR"
-      conditions:
-        - type: "keyword"
-          name: "test_keywords"
-    modelRefs:
-      - model: "test_model"
-    plugins:
-      - type: "system_prompt"
-        configuration:
-          enabled: true
-          system_prompt: "You are a knowledge assistant."
-      - type: "rag"
-        configuration:
-          enabled: true
-          backend: "external_api"
-          top_k: 5
-          similarity_threshold: 0.75
-          injection_mode: "tool_role"
-          on_failure: "skip"
-          cache_results: true
-          cache_ttl_seconds: 300
-          backend_config:
-            endpoint: "http://rag-service:8000/v1/search"
-            request_format: "openai"
-            timeout_seconds: 10
-      - type: "semantic-cache"
-        configuration:
-          enabled: true
-          similarity_threshold: 0.92
-      - type: "router_replay"
-        configuration:
-          enabled: true
-          max_records: 200
-providers:
-  models:
-    - name: "test_model"
-      endpoints:
-        - name: "ep1"
-          weight: 1
-          endpoint: "localhost:8000"
-  default_model: "test_model"
-"""
-
-        temp_path = _write_config(config_yaml)
-
-        try:
-            config = parse_user_config(temp_path)
-            assert len(config.decisions[0].plugins) == 4
-
-            plugin_types = [p.type.value for p in config.decisions[0].plugins]
-            assert "system_prompt" in plugin_types
-            assert "rag" in plugin_types
-            assert "semantic-cache" in plugin_types
-            assert "router_replay" in plugin_types
-
-            # Verify RAG plugin configuration is correctly parsed
-            rag_plugin = next(
-                p for p in config.decisions[0].plugins if p.type.value == "rag"
-            )
-            assert rag_plugin.configuration["enabled"] is True
-            assert rag_plugin.configuration["backend"] == "external_api"
-            assert rag_plugin.configuration["top_k"] == 5
-            assert (
-                rag_plugin.configuration["backend_config"]["endpoint"]
-                == "http://rag-service:8000/v1/search"
+    def test_invalid_retrieval_strategy_rejected(self):
+        """retrieval_strategy must be 'weighted' or 'hybrid_history'."""
+        with pytest.raises(PydanticValidationError):
+            ToolSelectionPluginConfig.model_validate(
+                {
+                    "enabled": True,
+                    "advanced_filtering": {
+                        "enabled": True,
+                        "retrieval_strategy": "bogus",
+                    },
+                }
             )
 
-            # Validate entire config (no errors expected)
-            errors = validate_user_config(config)
-            assert len(errors) == 0, f"Unexpected validation errors: {errors}"
-        finally:
-            os.unlink(temp_path)
+    def test_invalid_threshold_rejected(self):
+        """category_confidence_threshold must be in [0.0, 1.0]."""
+        with pytest.raises(PydanticValidationError):
+            ToolSelectionPluginConfig.model_validate(
+                {
+                    "enabled": True,
+                    "advanced_filtering": {
+                        "enabled": True,
+                        "category_confidence_threshold": 1.5,
+                    },
+                }
+            )

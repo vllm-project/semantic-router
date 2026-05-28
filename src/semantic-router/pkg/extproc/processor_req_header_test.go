@@ -7,6 +7,8 @@ import (
 	core "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
 	ext_proc "github.com/envoyproxy/go-control-plane/envoy/service/ext_proc/v3"
 	typev3 "github.com/envoyproxy/go-control-plane/envoy/type/v3"
+
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 )
 
 type requestHeaderTestCase struct {
@@ -242,5 +244,95 @@ func assertImmediateErrorResponse(
 	}
 	if decoded.Error.Message != wantMessage {
 		t.Fatalf("expected error message %q, got %q", wantMessage, decoded.Error.Message)
+	}
+}
+
+func TestValidateRequestHeaders_V1Messages(t *testing.T) {
+	router := &OpenAIRouter{}
+
+	tests := []struct {
+		name       string
+		method     string
+		path       string
+		wantStatus typev3.StatusCode // 0 means request should pass validation
+	}{
+		{name: "POST /v1/messages allowed", method: "POST", path: "/v1/messages"},
+		{name: "POST /v1/messages with query allowed", method: "POST", path: "/v1/messages?stream=true"},
+		{name: "GET /v1/messages returns 405", method: "GET", path: "/v1/messages", wantStatus: typev3.StatusCode_MethodNotAllowed},
+		{name: "PUT /v1/messages returns 405", method: "PUT", path: "/v1/messages", wantStatus: typev3.StatusCode_MethodNotAllowed},
+		{name: "DELETE /v1/messages returns 405", method: "DELETE", path: "/v1/messages", wantStatus: typev3.StatusCode_MethodNotAllowed},
+		{name: "/v1/messages/anything still 404", method: "POST", path: "/v1/messages/count_tokens", wantStatus: typev3.StatusCode_NotFound},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			response := router.validateRequestHeaders(tt.method, tt.path)
+			if tt.wantStatus == 0 {
+				if response != nil {
+					t.Fatalf("expected nil response for %s %s, got %+v", tt.method, tt.path, response)
+				}
+				return
+			}
+			if response == nil {
+				t.Fatalf("expected immediate response for %s %s, got nil", tt.method, tt.path)
+			}
+			immediate := response.GetImmediateResponse()
+			if immediate == nil || immediate.Status == nil || immediate.Status.Code != tt.wantStatus {
+				t.Fatalf("expected status %v for %s %s, got %v", tt.wantStatus, tt.method, tt.path, immediate.Status)
+			}
+		})
+	}
+}
+
+func TestDetectClientProtocol(t *testing.T) {
+	tests := []struct {
+		name      string
+		path      string
+		wantProto string
+	}{
+		{name: "anthropic messages path", path: "/v1/messages", wantProto: config.ClientProtocolAnthropic},
+		{name: "anthropic messages with query", path: "/v1/messages?stream=true", wantProto: config.ClientProtocolAnthropic},
+		{name: "anthropic count tokens subpath", path: "/v1/messages/count_tokens", wantProto: config.ClientProtocolAnthropic},
+		{name: "openai chat completions", path: "/v1/chat/completions", wantProto: ""},
+		{name: "openai responses", path: "/v1/responses", wantProto: ""},
+		{name: "openai models", path: "/v1/models", wantProto: ""},
+		{name: "root path", path: "/", wantProto: ""},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			ctx := &RequestContext{Headers: make(map[string]string)}
+			detectClientProtocol(tt.path, ctx)
+			if ctx.ClientProtocol != tt.wantProto {
+				t.Fatalf("detectClientProtocol(%q): got ClientProtocol=%q, want %q", tt.path, ctx.ClientProtocol, tt.wantProto)
+			}
+		})
+	}
+}
+
+func TestHandleRequestHeadersSetsClientProtocol(t *testing.T) {
+	router := &OpenAIRouter{}
+
+	tests := []struct {
+		name      string
+		path      string
+		wantProto string
+	}{
+		{name: "anthropic messages sets protocol", path: "/v1/messages", wantProto: config.ClientProtocolAnthropic},
+		{name: "openai chat keeps default", path: "/v1/chat/completions", wantProto: ""},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			requestHeaders := newRequestHeaders("POST", tt.path)
+			ctx := &RequestContext{Headers: make(map[string]string)}
+			_, err := router.handleRequestHeaders(requestHeaders, ctx)
+			if err != nil {
+				t.Fatalf("handleRequestHeaders failed: %v", err)
+			}
+			if ctx.ClientProtocol != tt.wantProto {
+				t.Fatalf("got ClientProtocol=%q, want %q", ctx.ClientProtocol, tt.wantProto)
+			}
+		})
 	}
 }

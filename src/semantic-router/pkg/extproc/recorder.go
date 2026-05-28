@@ -321,6 +321,11 @@ func persistReplayRecord(
 ) bool {
 	replayID, err := recorder.AddRecord(record)
 	if err != nil {
+		logging.ComponentErrorEvent("extproc", "router_replay_persist_failed", map[string]interface{}{
+			"request_id": ctx.RequestID,
+			"decision":   record.Decision,
+			"error":      err.Error(),
+		})
 		return false
 	}
 	ctx.RouterReplayID = replayID

@@ -1,6 +1,7 @@
 import sys
 from pathlib import Path
 
+import pytest
 import yaml
 
 CLI_ROOT = Path(__file__).resolve().parents[1]
@@ -215,6 +216,58 @@ routing:
     assert route_action["host_rewrite_literal"] == "api.example.com"
     assert route_action["regex_rewrite"]["pattern"]["regex"] == "^/v1(.*)$"
     assert route_action["regex_rewrite"]["substitution"] == "/compatible-mode/v1\\1"
+
+
+def test_generate_envoy_config_custom_anthropic_upstream_rewrites_host(
+    tmp_path, monkeypatch
+):
+    rendered = _render_envoy_config(
+        tmp_path,
+        monkeypatch,
+        """
+version: v0.3
+listeners:
+  - name: "http-8899"
+    address: "0.0.0.0"
+    port: 8899
+providers:
+  defaults:
+    default_model: "claude-sonnet-4.6"
+  models:
+    - name: "claude-sonnet-4.6"
+      api_format: "anthropic"
+      backend_refs:
+        - name: "anthropic-primary"
+          endpoint: "domain.com:443"
+          protocol: "https"
+          weight: 100
+          base_url: "https://domain.com/Anthropic"
+          type: "anthropic"
+          provider: "anthropic"
+routing:
+  modelCards:
+    - name: "claude-sonnet-4.6"
+  decisions:
+    - name: "default-route"
+      description: "default route"
+      priority: 100
+      rules:
+        operator: "AND"
+        conditions: []
+      modelRefs:
+        - model: "claude-sonnet-4.6"
+          use_reasoning: false
+""",
+        extproc_host="vllm-sr-router-container",
+        router_api_host="vllm-sr-router-container",
+    )
+
+    route = _model_route(rendered, "claude-sonnet-4.6")
+    assert route["route"]["cluster"] == "claude_sonnet_4.6_cluster"
+    assert route["route"]["host_rewrite_literal"] == "domain.com"
+
+    with pytest.raises(AssertionError):
+        _cluster_by_name(rendered, "anthropic_api_cluster")
 
 
 def test_generate_envoy_config_uses_logical_dns_for_api_only_router_fallback(

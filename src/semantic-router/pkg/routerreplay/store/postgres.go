@@ -13,6 +13,31 @@ import (
 
 const DefaultPostgresTableName = "router_replay_records"
 
+// postgresInsertQueryTemplate is the parameterized INSERT statement used by
+// PostgresStore.Add. The single %s slot receives the validated table name.
+//
+// The column list, the $N placeholders, and the slice returned by
+// postgresInsertRecord.args() must stay in sync — a mismatch silently breaks
+// every replay write (postgres returns "more target columns than expressions"
+// or vice versa, which is then swallowed by the Recorder). The invariant is
+// guarded by TestPostgresInsertQueryColumnArgsAlignment.
+const postgresInsertQueryTemplate = `
+		INSERT INTO %s (
+			id, timestamp, request_id, decision, decision_tier, decision_priority, category,
+			original_model, selected_model, reasoning_mode,
+			signals, projections, projection_scores, signal_confidences, signal_values, tool_trace, projection_trace,
+			request_body, response_body, response_status,
+			from_cache, streaming, request_body_truncated, response_body_truncated,
+			guardrails_enabled, jailbreak_enabled, pii_enabled,
+			prompt, prompt_truncated, tool_definitions, tool_definitions_truncated,
+			rag_enabled, rag_backend, rag_context_length, rag_similarity_score,
+			hallucination_enabled, hallucination_detected, hallucination_confidence, hallucination_spans,
+			prompt_tokens, completion_tokens, total_tokens,
+			actual_cost, baseline_cost, cost_savings, currency, baseline_model,
+			session_id, turn_index, previous_response_id, conversation_id
+		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27, $28, $29, $30, $31, $32, $33, $34, $35, $36, $37, $38, $39, $40, $41, $42, $43, $44, $45, $46, $47, $48, $49, $50, $51)
+	`
+
 // PostgresStore implements Storage using PostgreSQL as the backend.
 type PostgresStore struct {
 	db          *sql.DB
@@ -182,22 +207,7 @@ func (p *PostgresStore) Add(ctx context.Context, record Record) (string, error) 
 	}
 
 	//nolint:gosec // tableName is validated during store creation
-	query := fmt.Sprintf(`
-		INSERT INTO %s (
-			id, timestamp, request_id, decision, decision_tier, decision_priority, category,
-			original_model, selected_model, reasoning_mode,
-			signals, projections, projection_scores, signal_confidences, signal_values, tool_trace, projection_trace,
-			request_body, response_body, response_status,
-			from_cache, streaming, request_body_truncated, response_body_truncated,
-			guardrails_enabled, jailbreak_enabled, pii_enabled,
-			prompt, prompt_truncated, tool_definitions, tool_definitions_truncated,
-			rag_enabled, rag_backend, rag_context_length, rag_similarity_score,
-			hallucination_enabled, hallucination_detected, hallucination_confidence, hallucination_spans,
-			prompt_tokens, completion_tokens, total_tokens,
-			actual_cost, baseline_cost, cost_savings, currency, baseline_model,
-			session_id, turn_index, previous_response_id, conversation_id
-		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27, $28, $29, $30, $31, $32, $33, $34, $35, $36, $37, $38, $39, $40, $41, $42, $43, $44, $45, $46, $47, $48, $49, $50)
-	`, p.tableName)
+	query := fmt.Sprintf(postgresInsertQueryTemplate, p.tableName)
 
 	fn := func() error {
 		_, err := p.db.ExecContext(ctx, query, insertRecord.args()...)

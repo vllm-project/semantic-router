@@ -53,8 +53,6 @@ legacy_hotspots:
       - dashboard/frontend/src/pages/ConfigPage.tsx
     file_checks: relaxed
   - paths:
-      - dashboard/backend/handlers/config.go
-      - dashboard/backend/handlers/config_test.go
       - dashboard/backend/handlers/deploy.go
       - deploy/addons/redis/redis-cache.go
       - src/semantic-router/pkg/config/canonical_defaults.go
@@ -65,7 +63,6 @@ legacy_hotspots:
       - src/vllm-sr/cli/config_generator.py
       - src/vllm-sr/cli/config_migration.py
       - src/vllm-sr/cli/parser.py
-      - src/vllm-sr/cli/validator.py
     function_checks: relaxed
   - paths:
       - src/training/model_classifier/verify_text_classification_datasets.py
@@ -113,11 +110,6 @@ legacy_hotspots:
       - src/semantic-router/pkg/extproc/res_filter_jailbreak_test.go
       - src/semantic-router/pkg/extproc/server.go
       - src/semantic-router/pkg/imagegen/backend_vllm_omni.go
-    function_checks: relaxed
-  - paths:
-      - src/semantic-router/pkg/cache/inmemory_cache.go
-      - src/semantic-router/pkg/cache/milvus_cache.go
-    file_checks: relaxed
     function_checks: relaxed
   - paths:
       - src/semantic-router/pkg/cache/cache_interface.go
@@ -181,7 +173,6 @@ legacy_hotspots:
       - dashboard/frontend/src/components/ExpressionBuilder.tsx
   - paths:
       - src/semantic-router/pkg/classification/classifier.go
-      - src/semantic-router/pkg/services/classification.go
     file_checks: relaxed
     function_checks: relaxed
   - paths:
@@ -222,6 +213,7 @@ legacy_hotspots:
   - paths:
       - tools/security/ast_security_scanner.py
       - tools/security/scan_malicious_code.py
+      - tools/security/scan_sensitive_paths.toml
     file_checks: relaxed
     function_checks: relaxed
   - paths:

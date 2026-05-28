@@ -1,0 +1,24 @@
+apiVersion: vllm.ai/v1alpha1
+kind: IntelligentPool
+metadata:
+  name: ai-gateway-pool
+  namespace: default
+spec:
+  defaultModel: "general-expert"
+  models:
+    - name: "base-model"
+      reasoningFamily: "qwen3"
+      loras:
+        - name: "science-expert"
+          description: "Specialized for science domains: biology, chemistry, physics, health, engineering"
+        - name: "social-expert"
+          description: "Optimized for social sciences: business, economics"
+        - name: "math-expert"
+          description: "Fine-tuned for mathematics and quantitative reasoning"
+        - name: "law-expert"
+          description: "Specialized for legal questions and law-related topics"
+        - name: "humanities-expert"
+          description: "Optimized for humanities: psychology, history, philosophy"
+        - name: "general-expert"
+          description: "General-purpose adapter for diverse topics"
+

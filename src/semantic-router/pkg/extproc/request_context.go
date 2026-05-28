@@ -6,7 +6,9 @@ import (
 
 	"go.opentelemetry.io/otel/trace"
 
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/anthropic"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/ir"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/projectiontrace"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/ratelimit"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/routerreplay"
@@ -56,8 +58,9 @@ type RequestContext struct {
 	ProcessingStartTime time.Time
 
 	// Streaming detection
-	ExpectStreamingResponse bool // set from request Accept header or stream parameter
-	IsStreamingResponse     bool // set from response Content-Type
+	ExpectStreamingResponse bool                   // set from request Accept header or stream parameter
+	IsStreamingResponse     bool                   // set from response Content-Type
+	AnthropicStream         *anthropic.StreamState // Anthropic SSE → OpenAI translation state
 
 	// Semi-streaming body handler (non-nil when Envoy sends STREAMED body chunks)
 	StreamedBody *StreamedBodyHandler
@@ -73,6 +76,12 @@ type RequestContext struct {
 	// TTFT tracking
 	TTFTRecorded bool
 	TTFTSeconds  float64
+
+	// InflightToken is the handle returned by inflight.Begin when this request
+	// was admitted to the in-flight tracker after model selection. Zero means
+	// the request was never admitted (rejected pre-selection, cache hit, etc.)
+	// and inflight.End on it is a no-op.
+	InflightToken uint64
 
 	// Session-aware transition metadata
 	SessionID           string  // Derived from ConversationID (Response API) or message hash (Chat Completions)
@@ -194,6 +203,16 @@ type RequestContext struct {
 	// APIFormat indicates the target API format (e.g., "anthropic", "gemini")
 	// Empty string means standard OpenAI-compatible backend (no transformation needed)
 	APIFormat string
+
+	// ClientProtocol identifies the inbound wire format (e.g., "anthropic" for /v1/messages).
+	// Empty string means OpenAI-compatible (the default).
+	ClientProtocol string
+
+	// IRExtensions carries protocol-specific fields that have no home in
+	// the OpenAI-shape IR (*openai.ChatCompletionNewParams). Inbound
+	// parsers populate it for non-OpenAI clients; outbound emitters and
+	// plugins read from it. Nil for plain OpenAI requests.
+	IRExtensions *ir.IRExtensions
 
 	// RAG (Retrieval-Augmented Generation) tracking
 	RAGRetrievedContext string  // Retrieved context from RAG plugin

@@ -3,7 +3,7 @@
 from enum import Enum
 from typing import Any, Dict, List, Literal, Optional
 
-from pydantic import BaseModel, Field, model_validator
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from .algorithms import AlgorithmConfig, ModelRef
 
@@ -173,80 +173,73 @@ class ContextRule(BaseModel):
 class StructureSource(BaseModel):
     """Source selector for structure-based signals."""
 
+    model_config = ConfigDict(extra="forbid")
+
     type: str
     pattern: Optional[str] = None
     keywords: Optional[List[str]] = None
     case_sensitive: bool = False
     sequences: Optional[List[List[str]]] = None
 
-    class Config:
-        extra = "forbid"
-
 
 class StructureFeature(BaseModel):
     """Typed request-shape feature extractor."""
 
+    model_config = ConfigDict(extra="forbid")
+
     type: str
     source: StructureSource
-
-    class Config:
-        extra = "forbid"
 
 
 class NumericPredicate(BaseModel):
     """Numeric threshold predicate for structure signals."""
+
+    model_config = ConfigDict(extra="forbid")
 
     gt: Optional[float] = None
     gte: Optional[float] = None
     lt: Optional[float] = None
     lte: Optional[float] = None
 
-    class Config:
-        extra = "forbid"
-
 
 class StructureRule(BaseModel):
     """Request-shape routing signal configuration."""
+
+    model_config = ConfigDict(extra="forbid")
 
     name: str
     description: Optional[str] = None
     feature: StructureFeature
     predicate: Optional[NumericPredicate] = None
 
-    class Config:
-        extra = "forbid"
-
 
 class ConversationSource(BaseModel):
     """Source selector for conversation-shape signals."""
 
+    model_config = ConfigDict(extra="forbid")
+
     type: str
     role: Optional[str] = None
-
-    class Config:
-        extra = "forbid"
 
 
 class ConversationFeature(BaseModel):
     """Typed conversation-shape feature extractor."""
 
+    model_config = ConfigDict(extra="forbid")
+
     type: str
     source: ConversationSource
-
-    class Config:
-        extra = "forbid"
 
 
 class ConversationRule(BaseModel):
     """Conversation-shape routing signal configuration."""
 
+    model_config = ConfigDict(extra="forbid")
+
     name: str
     description: Optional[str] = None
     feature: ConversationFeature
     predicate: Optional[NumericPredicate] = None
-
-    class Config:
-        extra = "forbid"
 
 
 class ComplexityCandidates(BaseModel):
@@ -270,6 +263,8 @@ class PrototypeScoringConfig(BaseModel):
 class EmbeddingClassifierConfig(BaseModel):
     """Embedding classifier tuning, including prototype-aware label scoring controls."""
 
+    model_config = ConfigDict(extra="allow")
+
     model_type: Optional[str] = None
     preload_embeddings: Optional[bool] = None
     target_dimension: Optional[int] = None
@@ -278,9 +273,6 @@ class EmbeddingClassifierConfig(BaseModel):
     top_k: Optional[int] = None
     min_score_threshold: Optional[float] = None
     prototype_scoring: Optional[PrototypeScoringConfig] = None
-
-    class Config:
-        extra = "allow"
 
 
 class ComplexityRule(BaseModel):
@@ -487,6 +479,7 @@ class PluginType(str, Enum):
     REQUEST_PARAMS = "request_params"
     RESPONSE_JAILBREAK = "response_jailbreak"
     TOOLS = "tools"
+    TOOL_SELECTION = "tool_selection"
 
 
 class SemanticCachePluginConfig(BaseModel):
@@ -535,6 +528,76 @@ class ToolsPluginConfig(BaseModel):
     semantic_selection: Optional[bool] = None
     allow_tools: Optional[List[str]] = None
     block_tools: Optional[List[str]] = None
+
+
+class ToolFilteringWeights(BaseModel):
+    """Weights for tool_selection advanced_filtering combined score.
+
+    Mirrors the Go-side `config.ToolFilteringWeights`. All weights are optional
+    pointers on the Go side; non-negative is the only structural constraint.
+    Cross-field rules (e.g. weights-all-zero) are enforced by the Go validator.
+    """
+
+    embed: Optional[float] = Field(default=None, ge=0.0)
+    lexical: Optional[float] = Field(default=None, ge=0.0)
+    tag: Optional[float] = Field(default=None, ge=0.0)
+    name: Optional[float] = Field(default=None, ge=0.0)
+    category: Optional[float] = Field(default=None, ge=0.0)
+
+
+class HybridHistoryConfig(BaseModel):
+    """Sub-config for `retrieval_strategy: hybrid_history`.
+
+    Mirrors the Go-side `config.HybridHistoryToolRetrievalConfig`. Cross-field
+    semantic rules (e.g. min_history_steps > history_horizon) are enforced by
+    the Go validator; this layer only mirrors the schema surface so Pydantic
+    stops dropping the subtree.
+    """
+
+    history_horizon: Optional[int] = Field(default=None, ge=0)
+    min_history_steps: Optional[int] = Field(default=None, ge=0)
+    history_confidence_threshold: Optional[float] = Field(default=None, ge=0.0, le=1.0)
+    weight_semantic: Optional[float] = Field(default=None, ge=0.0)
+    weight_history_transition: Optional[float] = Field(default=None, ge=0.0)
+    weight_decision_prior: Optional[float] = Field(default=None, ge=0.0)
+    repetition_penalty_strength: Optional[float] = Field(default=None, ge=0.0)
+
+
+class AdvancedToolFilteringConfig(BaseModel):
+    """Advanced filtering layer applied on top of semantic retrieval.
+
+    Mirrors the Go-side `config.AdvancedToolFilteringConfig`. The Go side
+    treats `retrieval_strategy: hybrid_history` as opt-in; without this model
+    the nested subtree was silently dropped by Pydantic and the Go router
+    received an effectively empty advanced_filtering block.
+    """
+
+    enabled: Optional[bool] = None
+    retrieval_strategy: Optional[Literal["weighted", "hybrid_history"]] = None
+    candidate_pool_size: Optional[int] = Field(default=None, ge=0)
+    min_lexical_overlap: Optional[int] = Field(default=None, ge=0)
+    min_combined_score: Optional[float] = Field(default=None, ge=0.0, le=1.0)
+    weights: Optional[ToolFilteringWeights] = None
+    use_category_filter: Optional[bool] = None
+    category_confidence_threshold: Optional[float] = Field(default=None, ge=0.0, le=1.0)
+    allow_tools: Optional[List[str]] = None
+    block_tools: Optional[List[str]] = None
+    hybrid_history: Optional[HybridHistoryConfig] = None
+
+
+class ToolSelectionPluginConfig(BaseModel):
+    """Configuration for tool_selection plugin (semantic add/filter on request tools)."""
+
+    enabled: bool
+    mode: Optional[Literal["add", "filter"]] = None
+    tools_db_path: Optional[str] = None
+    top_k: Optional[int] = Field(default=None, ge=0)
+    similarity_threshold: Optional[float] = Field(default=None, ge=0.0, le=1.0)
+    strategy: Optional[str] = None
+    fallback_to_empty: Optional[bool] = None
+    relevance_threshold: Optional[float] = Field(default=None, ge=0.0, le=1.0)
+    preserve_count: Optional[int] = Field(default=None, ge=0)
+    advanced_filtering: Optional[AdvancedToolFilteringConfig] = None
 
 
 class SystemPromptPluginConfig(BaseModel):
@@ -746,6 +809,8 @@ class ImageGenPluginConfig(BaseModel):
 class Decision(BaseModel):
     """Routing decision configuration."""
 
+    model_config = ConfigDict(populate_by_name=True)
+
     name: str
     description: str
     priority: int
@@ -753,9 +818,6 @@ class Decision(BaseModel):
     modelRefs: List[ModelRef] = Field(alias="modelRefs")
     algorithm: Optional[AlgorithmConfig] = None  # Multi-model orchestration algorithm
     plugins: Optional[List[PluginConfig]] = []
-
-    class Config:
-        populate_by_name = True
 
 
 class ModelPricing(BaseModel):
@@ -866,17 +928,19 @@ class Providers(BaseModel):
 class Routing(BaseModel):
     """Canonical routing block."""
 
+    model_config = ConfigDict(populate_by_name=True)
+
     model_cards: List[RoutingModel] = Field(default_factory=list, alias="modelCards")
     signals: Signals = Field(default_factory=Signals)
     projections: Projections = Field(default_factory=Projections)
     decisions: List[Decision] = Field(default_factory=list)
 
-    class Config:
-        populate_by_name = True
-
 
 class EmbeddingModelsConfig(BaseModel):
     """Embedding models configuration for memory and semantic features."""
+
+    # Preserve advanced nested fields when users pass through custom config blocks.
+    model_config = ConfigDict(extra="allow")
 
     qwen3_model_path: Optional[str] = Field(
         None, description="Path to Qwen3-Embedding model"
@@ -901,13 +965,11 @@ class EmbeddingModelsConfig(BaseModel):
     )
     use_cpu: bool = Field(True, description="Use CPU for inference")
 
-    class Config:
-        # Preserve advanced nested fields when users pass through custom config blocks.
-        extra = "allow"
-
 
 class UserConfig(BaseModel):
     """Canonical v0.3 user configuration."""
+
+    model_config = ConfigDict(populate_by_name=True, extra="forbid")
 
     version: str
     listeners: List[Listener] = Field(default_factory=list)
@@ -923,10 +985,6 @@ class UserConfig(BaseModel):
     @property
     def decisions(self) -> List[Decision]:
         return self.routing.decisions
-
-    class Config:
-        populate_by_name = True
-        extra = "forbid"
 
 
 # Resolve forward references for recursive condition trees.

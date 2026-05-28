@@ -39,7 +39,7 @@ Router 是通常通过 Envoy 暴露的数据面 HTTP 接口。
 | 后端模型 API | 上游路径 | 状态 | 说明 |
 | --- | --- | --- | --- |
 | OpenAI 兼容 Chat Completions | `/chat/completions` | 支持 | OpenAI 兼容后端的默认族 |
-| Anthropic Messages API | `/v1/messages` | 支持 | 转发前将 OpenAI 风格请求转换为 Anthropic 格式 |
+| Anthropic Messages API | `/v1/messages` | 支持 | 将 OpenAI 风格请求（含 tools）转换为 Anthropic 格式；上游主机与路径来自 `backend_refs` |
 | vLLM Omni Chat Completions | `/chat/completions` | 支持 | 用于 omni 与图像生成等后端，例如 `vllm_omni` |
 
 默认使用 OpenAI 兼容 chat-completions 的 provider 族包括 `openai`、`azure-openai`、`bedrock`、`gemini`、`vertex-ai`。
@@ -93,6 +93,8 @@ Router 是通常通过 Envoy 暴露的数据面 HTTP 接口。
 - Anthropic 支持位于后端模型 API 层。
 - 客户端入口仍是 OpenAI 风格的 Chat Completions 或 Responses API，而不是 `POST /v1/messages`。
 - Router 将上游请求转为 Anthropic `POST /v1/messages`，再将响应转回 OpenAI 兼容输出。
+- 上游主机、路径及可选 `extra_headers` 来自 `backend_refs` 与端点 provider profile（`base_url`、可选 `chat_path`）。
+- OpenAI 风格的 `tools`、`tool_calls` 与 `tool` 消息会转换为 Anthropic 后端格式。
 - 基于 Anthropic 的路由不支持流式。
 
 ### vLLM Omni 与多模态/图像生成
