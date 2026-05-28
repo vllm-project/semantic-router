@@ -99,6 +99,7 @@ max-nested-blocks = 4
 "tools/agent/scripts/tuning/scenarios/*.py" = ["PLR2004"]
 "tools/agent/scripts/tuning/tests/*.py" = ["PLC0415", "PLR2004"]
 "src/vllm-sr/tests/*.py" = ["PLR2004"]
+"e2e/testing/anthropic-shim/tests/*.py" = ["PLR2004"]
 "src/vllm-sr/tests/test_config_template.py" = ["E402", "UP015"]
 "src/vllm-sr/tests/test_latency_validation.py" = ["I001"]
 "src/vllm-sr/tests/test_plugin_parsing.py" = ["I001", "RUF043"]

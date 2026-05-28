@@ -28,6 +28,7 @@ on:
       - "onnx-binding/**"
       - "src/**"
       - "e2e/testing/llm-katan/**"
+      - "e2e/testing/anthropic-shim/**"
       - "dashboard/**"
       - "src/vllm-sr/**"
   pull_request:
@@ -38,6 +39,7 @@ on:
       - "onnx-binding/**"
       - "src/**"
       - "e2e/testing/llm-katan/**"
+      - "e2e/testing/anthropic-shim/**"
       - "dashboard/**"
       - "src/vllm-sr/**"
 
@@ -61,7 +63,7 @@ jobs:
       packages: write
     strategy:
       matrix:
-        image: [dashboard, extproc, extproc-rocm, llm-katan, vllm-sr, vllm-sr-rocm, vllm-sr-sim]
+        image: [anthropic-shim, dashboard, extproc, extproc-rocm, llm-katan, vllm-sr, vllm-sr-rocm, vllm-sr-sim]
       fail-fast: false
 
     steps:
@@ -107,6 +109,9 @@ jobs:
           elif [ "${{ matrix.image }}" = "llm-katan" ]; then
             echo "context=./e2e/testing/llm-katan" >> $GITHUB_OUTPUT
             echo "dockerfile=./e2e/testing/llm-katan/Dockerfile" >> $GITHUB_OUTPUT
+          elif [ "${{ matrix.image }}" = "anthropic-shim" ]; then
+            echo "context=./e2e/testing/anthropic-shim" >> $GITHUB_OUTPUT
+            echo "dockerfile=./e2e/testing/anthropic-shim/Dockerfile" >> $GITHUB_OUTPUT
           elif [ "${{ matrix.image }}" = "dashboard" ]; then
             echo "context=." >> $GITHUB_OUTPUT
             echo "dockerfile=./dashboard/backend/Dockerfile" >> $GITHUB_OUTPUT
@@ -188,7 +193,7 @@ jobs:
       packages: write
     strategy:
       matrix:
-        image: [dashboard, extproc, llm-katan, vllm-sr, vllm-sr-sim]
+        image: [anthropic-shim, dashboard, extproc, llm-katan, vllm-sr, vllm-sr-sim]
         platform: [linux/amd64, linux/arm64]
       fail-fast: false
 
@@ -248,6 +253,9 @@ jobs:
           elif [ "${{ matrix.image }}" = "llm-katan" ]; then
             echo "context=./e2e/testing/llm-katan" >> $GITHUB_OUTPUT
             echo "dockerfile=./e2e/testing/llm-katan/Dockerfile" >> $GITHUB_OUTPUT
+          elif [ "${{ matrix.image }}" = "anthropic-shim" ]; then
+            echo "context=./e2e/testing/anthropic-shim" >> $GITHUB_OUTPUT
+            echo "dockerfile=./e2e/testing/anthropic-shim/Dockerfile" >> $GITHUB_OUTPUT
           elif [ "${{ matrix.image }}" = "dashboard" ]; then
             echo "context=." >> $GITHUB_OUTPUT
             echo "dockerfile=./dashboard/backend/Dockerfile" >> $GITHUB_OUTPUT
@@ -557,7 +565,7 @@ jobs:
       packages: write
     strategy:
       matrix:
-        image: [dashboard, extproc, llm-katan, vllm-sr, vllm-sr-sim]
+        image: [anthropic-shim, dashboard, extproc, llm-katan, vllm-sr, vllm-sr-sim]
       fail-fast: false
 
     steps:

@@ -1,0 +1,52 @@
+[build-system]
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "anthropic-shim"
+version = "0.1.0"
+description = "Anthropic Messages API shim in front of llama.cpp's llama-server for vLLM Semantic Router e2e tests"
+readme = "README.md"
+license = {text = "Apache-2.0"}
+requires-python = ">=3.10"
+keywords = ["llm", "anthropic", "llama.cpp", "testing", "semantic-router"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: Apache Software License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Software Development :: Testing",
+]
+
+dependencies = [
+    "fastapi>=0.110.0",
+    "uvicorn[standard]>=0.27.0",
+    "httpx>=0.27.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.0.0",
+    "pytest-asyncio>=0.23.0",
+    "asgi-lifespan>=2.0",
+]
+
+[project.urls]
+Homepage = "https://github.com/vllm-project/semantic-router"
+Documentation = "https://github.com/vllm-project/semantic-router/tree/main/e2e/testing/anthropic-shim"
+Repository = "https://github.com/vllm-project/semantic-router.git"
+Issues = "https://github.com/vllm-project/semantic-router/issues"
+
+[project.scripts]
+anthropic-shim = "anthropic_shim.__main__:main"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["anthropic_shim*"]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]

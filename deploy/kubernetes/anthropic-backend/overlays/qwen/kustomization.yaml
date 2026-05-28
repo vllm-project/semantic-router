@@ -1,0 +1,45 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+metadata:
+  name: anthropic-backend-qwen
+
+resources:
+  - ../../base
+
+components:
+  - ../../components/common
+
+nameSuffix: -qwen
+
+patches:
+  - target:
+      kind: Deployment
+      name: anthropic-backend
+    patch: |-
+      - op: add
+        path: /spec/selector/matchLabels/app
+        value: "anthropic-backend-qwen"
+      - op: add
+        path: /spec/template/metadata/labels/app
+        value: "anthropic-backend-qwen"
+      - op: add
+        path: /spec/template/metadata/labels/model-alias
+        value: "qwen2.5-0.5b-instruct"
+  - target:
+      kind: Service
+      name: anthropic-backend
+    patch: |-
+      - op: add
+        path: /spec/selector/app
+        value: "anthropic-backend-qwen"
+      - op: add
+        path: /metadata/labels/model-alias
+        value: "qwen2.5-0.5b-instruct"
+  - target:
+      kind: Deployment
+      name: anthropic-backend
+    patch: |-
+      - op: replace
+        path: /spec/template/spec/volumes/0/persistentVolumeClaim/claimName
+        value: anthropic-backend-models-qwen
