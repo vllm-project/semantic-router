@@ -71,6 +71,7 @@ var decisionAlgorithmCatalog = []AlgorithmCatalogEntry{
 	{Type: "knn", Tier: "experimental"},
 	{Type: "latency_aware", Tier: "supported"},
 	{Type: "mlp", Tier: "experimental"},
+	{Type: "multi_factor", Tier: "supported"},
 	{Type: "ratings", Tier: "supported"},
 	{Type: "remom", Tier: "supported"},
 	{Type: "rl_driven", Tier: "experimental"},

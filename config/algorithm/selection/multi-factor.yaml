@@ -1,0 +1,15 @@
+algorithm:
+  type: multi_factor
+  multi_factor:
+    weights:
+      quality: 0.4
+      latency: 0.2
+      cost: 0.2
+      load: 0.2
+    slo:
+      max_tpot_ms: 200
+      max_ttft_ms: 800
+      max_cost_per_1m: 5.0
+      max_inflight: 50
+    latency_percentile: 95
+    on_no_candidates: cheapest

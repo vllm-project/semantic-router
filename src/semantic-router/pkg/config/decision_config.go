@@ -69,6 +69,7 @@ type AlgorithmConfig struct {
 	RLDriven     *RLDrivenSelectionConfig     `yaml:"rl_driven,omitempty"`
 	GMTRouter    *GMTRouterSelectionConfig    `yaml:"gmtrouter,omitempty"`
 	LatencyAware *LatencyAwareAlgorithmConfig `yaml:"latency_aware,omitempty"`
+	MultiFactor  *MultiFactorSelectionConfig  `yaml:"multi_factor,omitempty"`
 	OnError      string                       `yaml:"on_error,omitempty"`
 }
 

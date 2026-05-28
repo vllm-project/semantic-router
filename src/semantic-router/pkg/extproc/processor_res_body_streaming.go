@@ -7,6 +7,7 @@ import (
 
 	ext_proc "github.com/envoyproxy/go-control-plane/envoy/service/ext_proc/v3"
 
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/inflight"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/latency"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/metrics"
@@ -79,6 +80,9 @@ func (r *OpenAIRouter) finalizeStreamingResponse(ctx *RequestContext) {
 			"completion_latency_ms": time.Since(ctx.StartTime).Milliseconds(),
 		})
 	}
+
+	inflight.End(ctx.RequestModel, ctx.InflightToken)
+	ctx.InflightToken = 0
 
 	usage := extractStreamingUsage(ctx)
 	r.reportStreamingUsageMetrics(ctx, usage)

@@ -186,6 +186,41 @@ type HybridSelectionConfig struct {
 	NormalizeScores     bool    `yaml:"normalize_scores,omitempty"`
 }
 
+// MultiFactorSelectionConfig configures the multi_factor selector, which
+// composes raw quality/latency/cost/load signals into a weighted score per
+// candidate model. See issue #37.
+type MultiFactorSelectionConfig struct {
+	Weights *MultiFactorWeightsConfig `yaml:"weights,omitempty"`
+	SLO     *MultiFactorSLOConfig     `yaml:"slo,omitempty"`
+
+	// LatencyPercentile selects which percentile (e.g. 95) is read from
+	// pkg/latency when computing the latency signal. Defaults to 95.
+	LatencyPercentile int `yaml:"latency_percentile,omitempty"`
+
+	// OnNoCandidates controls behavior when SLO filtering removes every
+	// candidate. Valid values: "cheapest" (default), "first", "fail".
+	OnNoCandidates string `yaml:"on_no_candidates,omitempty"`
+}
+
+// MultiFactorWeightsConfig holds per-signal weights for the multi_factor
+// scoring formula score = w_q*quality + w_l*latency + w_c*cost + w_L*load.
+// Weights are normalized to sum to 1 if they do not. All four default to 0.25.
+type MultiFactorWeightsConfig struct {
+	Quality float64 `yaml:"quality,omitempty"`
+	Latency float64 `yaml:"latency,omitempty"`
+	Cost    float64 `yaml:"cost,omitempty"`
+	Load    float64 `yaml:"load,omitempty"`
+}
+
+// MultiFactorSLOConfig sets hard ceilings that prune candidates before
+// scoring. A zero value means "no ceiling" for that dimension.
+type MultiFactorSLOConfig struct {
+	MaxTPOTMs    float64 `yaml:"max_tpot_ms,omitempty"`
+	MaxTTFTMs    float64 `yaml:"max_ttft_ms,omitempty"`
+	MaxCostPer1M float64 `yaml:"max_cost_per_1m,omitempty"`
+	MaxInflight  int     `yaml:"max_inflight,omitempty"`
+}
+
 // RLDrivenSelectionConfig configures Router-R1 style reinforcement-learning-based routing.
 type RLDrivenSelectionConfig struct {
 	ExplorationRate       float64 `yaml:"exploration_rate,omitempty"`

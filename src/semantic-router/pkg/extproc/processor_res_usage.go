@@ -6,6 +6,7 @@ import (
 	"github.com/openai/openai-go"
 	"github.com/tidwall/gjson"
 
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/inflight"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/latency"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/metrics"
@@ -74,6 +75,8 @@ func (r *OpenAIRouter) reportNonStreamingUsage(
 		float64(usage.completionTokens),
 	)
 	metrics.RecordModelCompletionLatency(ctx.RequestModel, completionLatency.Seconds())
+	inflight.End(ctx.RequestModel, ctx.InflightToken)
+	ctx.InflightToken = 0
 
 	if usage.completionTokens > 0 {
 		timePerToken := completionLatency.Seconds() / float64(usage.completionTokens)
