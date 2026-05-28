@@ -91,6 +91,8 @@ mkdir -p "${TEST_DIR}/models"
 HF_HUB_ENABLE_HF_TRANSFER=1 \
 python3 -c "from huggingface_hub import snapshot_download; snapshot_download('sentence-transformers/all-MiniLM-L12-v2', local_dir='${TEST_DIR}/models/mom-embedding-light', local_dir_use_symlinks=False)"
 
+HF_HUB_ENABLE_HF_TRANSFER=1 \
+python3 -c "from huggingface_hub import snapshot_download; snapshot_download('llm-semantic-router/mmbert-embed-32k-2d-matryoshka', local_dir='${TEST_DIR}/models/mmbert-embed-32k-2d-matryoshka', local_dir_use_symlinks=False)" || echo "Warning: mmbert-embed-32k-2d-matryoshka download failed (may be gated); router will skip it"
 make -C "${REPO_ROOT}" start-milvus
 
 # Double-check Milvus readiness with pymilvus probe (gRPC-level, not just HTTP)

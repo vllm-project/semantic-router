@@ -41,6 +41,27 @@ func EnsureModelsForConfigWithProgress(
 
 	logModelRegistry(cfg.MoMRegistry)
 
+	// Only require huggingface-cli when there are actually missing models to
+	// download. If all configured models are already present locally (e.g.
+	// pre-mounted into the container), skip the CLI check so the router can
+	// start in environments without huggingface-cli installed.
+	missing, missingErr := GetMissingModels(specs)
+	if missingErr != nil {
+		return fmt.Errorf("failed to check models: %w", missingErr)
+	}
+	if len(missing) == 0 {
+		logging.ComponentEvent("router", "required_models_already_present", map[string]interface{}{
+			"total_models": len(specs),
+		})
+		reportProgress(reporter, ProgressState{
+			Phase:       "completed",
+			ReadyModels: len(specs),
+			TotalModels: len(specs),
+			Message:     "All required router models are already present locally.",
+		})
+		return nil
+	}
+
 	if err := CheckHuggingFaceCLI(); err != nil {
 		return fmt.Errorf("huggingface-cli check failed: %w", err)
 	}
