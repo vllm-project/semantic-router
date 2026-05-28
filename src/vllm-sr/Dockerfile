@@ -269,9 +269,19 @@ RUN set -eux; \
 
 RUN python3 -m venv "${VIRTUAL_ENV}" && \
     "${VIRTUAL_ENV}/bin/pip" install --no-cache-dir --upgrade pip && \
-    "${VIRTUAL_ENV}/bin/pip" install --no-cache-dir 'huggingface_hub[cli]==1.5.0' && \
-    ln -sf "${VIRTUAL_ENV}/bin/hf" /usr/local/bin/hf || true && \
-    ln -sf "${VIRTUAL_ENV}/bin/huggingface-cli" /usr/local/bin/huggingface-cli || true
+    # huggingface_hub 1.5.0 [cli] extra is missing the click dependency,
+    # which makes `hf env` crash with ModuleNotFoundError. Install click
+    # explicitly. Also: v1.x dropped the legacy `huggingface-cli` entrypoint,
+    # only `hf` is shipped.
+    "${VIRTUAL_ENV}/bin/pip" install --no-cache-dir 'huggingface_hub[cli]==1.5.0' click && \
+    ln -sf "${VIRTUAL_ENV}/bin/hf" /usr/local/bin/hf && \
+    # Provide a `huggingface-cli` shim that forwards to `hf` for legacy callers.
+    printf '#!/bin/sh\nexec "%s/bin/hf" "$@"\n' "${VIRTUAL_ENV}" > /usr/local/bin/huggingface-cli && \
+    chmod +x /usr/local/bin/huggingface-cli && \
+    # Sanity-check at build time so a broken install fails the image build
+    # instead of silently breaking the router at runtime.
+    "${VIRTUAL_ENV}/bin/hf" env | head -3 && \
+    huggingface-cli env | head -3
 
 COPY --from=go-builder /build/router /usr/local/bin/router
 COPY --from=rust-builder /build/out/libcandle_semantic_router.so /usr/local/lib/
