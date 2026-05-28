@@ -246,7 +246,8 @@ func buildValkeyClientConfig(vc *config.MemoryValkeyConfig, host string, port in
 		WithAddress(&glideconfig.NodeAddress{
 			Host: host,
 			Port: port,
-		})
+		}).
+		WithClientName("vllm_agentic_memory_client")
 
 	if vc.Password != "" {
 		clientConfig = clientConfig.WithCredentials(
