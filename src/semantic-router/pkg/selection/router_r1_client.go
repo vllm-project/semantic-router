@@ -137,6 +137,16 @@ func NewAutoMixVerifierClient(serverURL string) *AutoMixVerifierClient {
 	}
 }
 
+// SetTimeout overrides the verifier HTTP client timeout. Useful for callers
+// that load timeout values from configuration after client construction.
+// Non-positive durations are ignored.
+func (c *AutoMixVerifierClient) SetTimeout(timeout time.Duration) {
+	if timeout <= 0 {
+		return
+	}
+	c.httpClient.Timeout = timeout
+}
+
 // Verify sends a question/answer pair for verification
 func (c *AutoMixVerifierClient) Verify(ctx context.Context, question, answer, optionalContext string, threshold float64) (*AutoMixVerifyResponse, error) {
 	reqBody := map[string]interface{}{

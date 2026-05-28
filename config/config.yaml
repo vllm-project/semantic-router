@@ -668,6 +668,8 @@ routing:
           escalation_order: small_to_large
           cost_quality_tradeoff: 0.45
           token_filter: alpha_numeric
+          verifier_server_url: ""
+          verifier_timeout_seconds: 0
       plugins:
         - type: hallucination
           configuration:

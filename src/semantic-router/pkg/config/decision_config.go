@@ -80,6 +80,19 @@ type ConfidenceAlgorithmConfig struct {
 	EscalationOrder     string               `yaml:"escalation_order,omitempty"`
 	CostQualityTradeoff float64              `yaml:"cost_quality_tradeoff,omitempty"`
 	TokenFilter         string               `yaml:"token_filter,omitempty"`
+
+	// VerifierServerURL points to the AutoMix self-verification server when
+	// confidence_method=automix_entailment. The server implements few-shot
+	// entailment verification per arXiv:2310.12963 §3.2 and is reached over
+	// HTTP via selection.AutoMixVerifierClient. A reference implementation
+	// lives at src/training/model_selection/rl_model_selection/automix_verifier.py.
+	// Required only when confidence_method=automix_entailment; ignored otherwise.
+	VerifierServerURL string `yaml:"verifier_server_url,omitempty"`
+
+	// VerifierTimeoutSeconds bounds each verifier HTTP call. Defaults to 60
+	// when zero, matching selection.NewAutoMixVerifierClient. Only consulted
+	// when confidence_method=automix_entailment.
+	VerifierTimeoutSeconds int `yaml:"verifier_timeout_seconds,omitempty"`
 }
 
 type HybridWeightsConfig struct {
