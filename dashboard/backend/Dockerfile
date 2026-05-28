@@ -9,10 +9,11 @@ COPY src/semantic-router/ ./
 
 # Local replace directives point at sibling bindings that are not needed for the
 # WASM build. Stub them under /app so `../../*-binding` resolves correctly.
-RUN mkdir -p /app/candle-binding /app/ml-binding /app/nlp-binding && \
+RUN mkdir -p /app/candle-binding /app/ml-binding /app/nlp-binding /app/openvino-binding && \
     echo 'module github.com/vllm-project/semantic-router/candle-binding' > /app/candle-binding/go.mod && \
     echo 'module github.com/vllm-project/semantic-router/ml-binding' > /app/ml-binding/go.mod && \
-    echo 'module github.com/vllm-project/semantic-router/nlp-binding' > /app/nlp-binding/go.mod
+    echo 'module github.com/vllm-project/semantic-router/nlp-binding' > /app/nlp-binding/go.mod && \
+    echo 'module github.com/vllm-project/semantic-router/openvino-binding' > /app/openvino-binding/go.mod
 RUN go mod download
 RUN CGO_ENABLED=0 GOOS=js GOARCH=wasm go build \
       -buildvcs=false \

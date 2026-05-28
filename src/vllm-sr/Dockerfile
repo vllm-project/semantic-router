@@ -221,6 +221,10 @@ COPY --from=ml-builder /build/out/ /build/../ml-binding/target/release/
 COPY nlp-binding/go.mod nlp-binding/nlp_binding.go nlp-binding/nlp_binding_mock.go /build/../nlp-binding/
 COPY --from=nlp-builder /build/out/ /build/../nlp-binding/target/release/
 
+# Copy openvino-binding Go files (needed for go.mod replace directive)
+# openvino-binding is not built in this image, just stub the module
+COPY openvino-binding/go.mod openvino-binding/semantic-router.go /build/../openvino-binding/
+
 # Copy Go source (go.mod has local replace directives, so go mod download
 # requires candle-binding and ml-binding to be present first)
 COPY src/semantic-router/ .

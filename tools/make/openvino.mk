@@ -19,7 +19,9 @@ test-openvino-binding: build-openvino-binding convert-openvino-test-models ## Ru
 	@$(LOG_TARGET)
 	@echo "Running OpenVINO binding Go unit tests..."
 	@echo "================================================================"
-	@export LD_LIBRARY_PATH=$${PWD}/openvino-binding/build:$$LD_LIBRARY_PATH && \
+	@OV_LIB_DIR=$$(python3 -c "import openvino; print(openvino.__path__[0])" 2>/dev/null)/libs; \
+		OV_TOK_DIR=$$(python3 -c "import openvino_tokenizers; print(openvino_tokenizers.__path__[0])" 2>/dev/null)/lib; \
+		export LD_LIBRARY_PATH=$${PWD}/openvino-binding/build:$${OV_LIB_DIR}:$${OV_TOK_DIR}:$$LD_LIBRARY_PATH && \
 		cd openvino-binding && CGO_ENABLED=1 go test -v -timeout 10m
 	@echo "================================================================"
 	@echo "✅ OpenVINO binding tests passed"
@@ -40,7 +42,9 @@ test-openvino-specific: build-openvino-binding convert-openvino-test-models ## R
 		exit 1; \
 	fi
 	@echo "Running OpenVINO test: $(TEST_NAME)"
-	@export LD_LIBRARY_PATH=$${PWD}/openvino-binding/build:$$LD_LIBRARY_PATH && \
+	@OV_LIB_DIR=$$(python3 -c "import openvino; print(openvino.__path__[0])" 2>/dev/null)/libs; \
+		OV_TOK_DIR=$$(python3 -c "import openvino_tokenizers; print(openvino_tokenizers.__path__[0])" 2>/dev/null)/lib; \
+		export LD_LIBRARY_PATH=$${PWD}/openvino-binding/build:$${OV_LIB_DIR}:$${OV_TOK_DIR}:$$LD_LIBRARY_PATH && \
 		cd openvino-binding && CGO_ENABLED=1 go test -v -timeout 10m -run "^$(TEST_NAME)$$"
 
 # Verify OpenVINO binding with real model inference
@@ -48,7 +52,9 @@ verify-openvino-binding: build-openvino-binding convert-openvino-test-models ## 
 	@$(LOG_TARGET)
 	@echo "Verifying OpenVINO binding with real model inference..."
 	@echo "================================================================"
-	@export LD_LIBRARY_PATH=$${PWD}/openvino-binding/build:$$LD_LIBRARY_PATH && \
+	@OV_LIB_DIR=$$(python3 -c "import openvino; print(openvino.__path__[0])" 2>/dev/null)/libs; \
+		OV_TOK_DIR=$$(python3 -c "import openvino_tokenizers; print(openvino_tokenizers.__path__[0])" 2>/dev/null)/lib; \
+		export LD_LIBRARY_PATH=$${PWD}/openvino-binding/build:$${OV_LIB_DIR}:$${OV_TOK_DIR}:$$LD_LIBRARY_PATH && \
 		cd openvino-binding && go run verify_tests_are_real.go
 	@echo "================================================================"
 	@echo "✅ OpenVINO binding verification passed"

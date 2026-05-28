@@ -102,6 +102,7 @@ jobs:
             core:
               - 'src/**'
               - 'candle-binding/**'
+              - 'openvino-binding/**'
               - 'bench/**'
               - 'config/**'
               - 'scripts/**'
