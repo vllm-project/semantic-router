@@ -221,9 +221,10 @@ COPY --from=ml-builder /build/out/ /build/../ml-binding/target/release/
 COPY nlp-binding/go.mod nlp-binding/nlp_binding.go nlp-binding/nlp_binding_mock.go /build/../nlp-binding/
 COPY --from=nlp-builder /build/out/ /build/../nlp-binding/target/release/
 
-# Copy openvino-binding Go files (needed for go.mod replace directive)
-# openvino-binding is not built in this image, just stub the module
-COPY openvino-binding/go.mod openvino-binding/semantic-router.go /build/../openvino-binding/
+# Create openvino-binding stub (needed for go.mod replace directive)
+RUN mkdir -p /build/../openvino-binding && \
+    printf 'module github.com/vllm-project/semantic-router/openvino-binding\n\ngo 1.24.1\n' > /build/../openvino-binding/go.mod && \
+    printf 'package openvino_binding\n' > /build/../openvino-binding/stub.go
 
 # Copy Go source (go.mod has local replace directives, so go mod download
 # requires candle-binding and ml-binding to be present first)
@@ -268,7 +269,9 @@ RUN set -eux; \
 
 RUN python3 -m venv "${VIRTUAL_ENV}" && \
     "${VIRTUAL_ENV}/bin/pip" install --no-cache-dir --upgrade pip && \
-    "${VIRTUAL_ENV}/bin/pip" install --no-cache-dir 'huggingface_hub[cli]==1.5.0'
+    "${VIRTUAL_ENV}/bin/pip" install --no-cache-dir 'huggingface_hub[cli]==1.5.0' && \
+    ln -sf "${VIRTUAL_ENV}/bin/hf" /usr/local/bin/hf || true && \
+    ln -sf "${VIRTUAL_ENV}/bin/huggingface-cli" /usr/local/bin/huggingface-cli || true
 
 COPY --from=go-builder /build/router /usr/local/bin/router
 COPY --from=rust-builder /build/out/libcandle_semantic_router.so /usr/local/lib/
