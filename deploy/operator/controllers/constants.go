@@ -19,6 +19,10 @@ package controllers
 const (
 	// SemanticRouterFinalizer is the finalizer for SemanticRouter resources
 	SemanticRouterFinalizer = "semanticrouter.vllm.ai/finalizer"
+
+	typeAvailableSemanticRouter   = "Available"
+	typeProgressingSemanticRouter = "Progressing"
+	typeDegradedSemanticRouter    = "Degraded"
 )
 
 // Default values for SemanticRouter resources
