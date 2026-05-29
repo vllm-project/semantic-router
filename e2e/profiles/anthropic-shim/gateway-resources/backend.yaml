@@ -1,0 +1,258 @@
+# Anthropic-Shim Backend Resources
+#
+# Deploys the Qwen-flavoured anthropic-shim backend (llama.cpp + Python shim)
+# and exposes it to Envoy AI Gateway so the router can forward Anthropic-
+# protocol requests to it.
+#
+# The backend runs in the anthropic-backend-system namespace (created by
+# deploy/kubernetes/anthropic-backend/base/namespace.yaml). The shim Service
+# exposes port 9080; port 8080 (llama-server) is cluster-internal only.
+
+# ── Namespace ────────────────────────────────────────────────────────────────
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: anthropic-backend-system
+---
+# ── PersistentVolumeClaim (model cache) ──────────────────────────────────────
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: anthropic-backend-models-qwen
+  namespace: anthropic-backend-system
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 5Gi
+---
+# ── Deployment (llama-server + anthropic-shim sidecar) ───────────────────────
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: anthropic-backend-qwen
+  namespace: anthropic-backend-system
+  labels:
+    app: anthropic-backend-qwen
+    app.kubernetes.io/name: anthropic-backend
+    app.kubernetes.io/part-of: semantic-router-workspaces
+    model-alias: qwen2.5-0.5b-instruct
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: anthropic-backend-qwen
+      app.kubernetes.io/name: anthropic-backend
+  template:
+    metadata:
+      labels:
+        app: anthropic-backend-qwen
+        app.kubernetes.io/name: anthropic-backend
+        app.kubernetes.io/part-of: semantic-router-workspaces
+        model-alias: qwen2.5-0.5b-instruct
+    spec:
+      securityContext:
+        fsGroup: 1000
+        runAsUser: 1000
+        runAsNonRoot: true
+
+      initContainers:
+        - name: model-downloader
+          image: python:3.11-slim
+          imagePullPolicy: IfNotPresent
+          # Root required for pip install into a fresh image and for writing to
+          # the PVC; main containers run confined under fsGroup 1000.
+          securityContext:
+            runAsUser: 0
+            runAsNonRoot: false
+            allowPrivilegeEscalation: false
+          command: ["/bin/bash", "-c"]
+          args:
+            - |
+              set -e
+              MODEL_FILE="Qwen2.5-0.5B-Instruct-Q4_K_M.gguf"
+              TARGET="/cache/models/${MODEL_FILE}"
+              mkdir -p /cache/models
+              if [ -f "$TARGET" ]; then
+                echo "Model already cached."
+                exit 0
+              fi
+              pip install --no-cache-dir "huggingface_hub[cli]"
+              hf download "bartowski/Qwen2.5-0.5B-Instruct-GGUF" "$MODEL_FILE" --local-dir /cache/models
+          env:
+            - name: MODEL_REPO
+              value: "bartowski/Qwen2.5-0.5B-Instruct-GGUF"
+            - name: MODEL_FILE
+              value: "Qwen2.5-0.5B-Instruct-Q4_K_M.gguf"
+          volumeMounts:
+            - name: models-volume
+              mountPath: /cache/models
+          resources:
+            requests:
+              memory: "256Mi"
+              cpu: "200m"
+            limits:
+              memory: "512Mi"
+              cpu: "500m"
+
+      containers:
+        - name: llama-server
+          image: ghcr.io/ggml-org/llama.cpp:server
+          imagePullPolicy: IfNotPresent
+          args:
+            - "--model"
+            - "/cache/models/Qwen2.5-0.5B-Instruct-Q4_K_M.gguf"
+            - "--jinja"
+            - "--host"
+            - "0.0.0.0"
+            - "--port"
+            - "8080"
+            - "-c"
+            - "4096"
+          ports:
+            - name: llama
+              containerPort: 8080
+              protocol: TCP
+          volumeMounts:
+            - name: models-volume
+              mountPath: /cache/models
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: llama
+            initialDelaySeconds: 30
+            periodSeconds: 20
+            timeoutSeconds: 5
+            failureThreshold: 3
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: llama
+            initialDelaySeconds: 10
+            periodSeconds: 10
+            timeoutSeconds: 3
+            failureThreshold: 3
+          startupProbe:
+            httpGet:
+              path: /health
+              port: llama
+            initialDelaySeconds: 15
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 18
+          resources:
+            requests:
+              memory: "1Gi"
+              cpu: "500m"
+            limits:
+              memory: "2Gi"
+              cpu: "1500m"
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: false
+            runAsNonRoot: true
+            capabilities:
+              drop:
+                - ALL
+
+        - name: anthropic-shim
+          image: ghcr.io/vllm-project/semantic-router/anthropic-shim:e2e-test
+          imagePullPolicy: IfNotPresent
+          ports:
+            - name: shim
+              containerPort: 9080
+              protocol: TCP
+          env:
+            - name: ANTHROPIC_SHIM_UPSTREAM_URL
+              value: "http://127.0.0.1:8080"
+            - name: ANTHROPIC_SHIM_HOST
+              value: "0.0.0.0"
+            - name: ANTHROPIC_SHIM_PORT
+              value: "9080"
+            - name: ANTHROPIC_SHIM_SESSION_HEADER
+              value: "x-vsr-test-session-id"
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: shim
+            initialDelaySeconds: 10
+            periodSeconds: 20
+            timeoutSeconds: 5
+            failureThreshold: 3
+          readinessProbe:
+            httpGet:
+              path: /healthz
+              port: shim
+            initialDelaySeconds: 5
+            periodSeconds: 10
+            timeoutSeconds: 3
+            failureThreshold: 3
+          resources:
+            requests:
+              memory: "128Mi"
+              cpu: "100m"
+            limits:
+              memory: "512Mi"
+              cpu: "500m"
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: false
+            runAsNonRoot: true
+            capabilities:
+              drop:
+                - ALL
+
+      volumes:
+        - name: models-volume
+          persistentVolumeClaim:
+            claimName: anthropic-backend-models-qwen
+---
+# ── Service (shim port only) ──────────────────────────────────────────────────
+apiVersion: v1
+kind: Service
+metadata:
+  name: anthropic-backend-qwen
+  namespace: anthropic-backend-system
+  labels:
+    app: anthropic-backend-qwen
+    app.kubernetes.io/name: anthropic-backend
+    app.kubernetes.io/part-of: semantic-router-workspaces
+    model-alias: qwen2.5-0.5b-instruct
+spec:
+  type: ClusterIP
+  selector:
+    app: anthropic-backend-qwen
+    app.kubernetes.io/name: anthropic-backend
+  ports:
+    - name: http
+      port: 9080
+      targetPort: shim
+      protocol: TCP
+---
+# ── Envoy AI Gateway Backend + AIServiceBackend ───────────────────────────────
+# The router uses the Anthropic schema so the AI Gateway knows to translate
+# outbound requests to Anthropic Messages shape before forwarding.
+apiVersion: aigateway.envoyproxy.io/v1alpha1
+kind: AIServiceBackend
+metadata:
+  name: anthropic-backend-qwen
+  namespace: default
+spec:
+  schema:
+    name: Anthropic
+  backendRef:
+    name: anthropic-backend-qwen
+    kind: Backend
+    group: gateway.envoyproxy.io
+---
+apiVersion: gateway.envoyproxy.io/v1alpha1
+kind: Backend
+metadata:
+  name: anthropic-backend-qwen
+  namespace: default
+spec:
+  endpoints:
+    - fqdn:
+        hostname: anthropic-backend-qwen.anthropic-backend-system.svc.cluster.local
+        port: 9080

@@ -48,6 +48,16 @@ var DashboardContract = []string{
 	"security-policy-apply",
 }
 
+// AnthropicShimContract is the test suite that exercises the Anthropic-
+// shaped backend (llama.cpp + anthropic-shim). These tests require the
+// anthropic-shim profile and will not run correctly against the baseline
+// OpenAI-shaped backends because they assert on Anthropic-specific
+// behaviour such as cache-token synthesis and stop-reason mapping.
+var AnthropicShimContract = []string{
+	"anthropic-messages-cache-cycle",
+	"anthropic-messages-stop-sequence",
+}
+
 // Combine preserves order while removing duplicate testcase names.
 func Combine(groups ...[]string) []string {
 	size := 0

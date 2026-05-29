@@ -1,0 +1,87 @@
+replicaCount: 1
+image:
+  repository: ghcr.io/vllm-project/semantic-router/extproc
+  pullPolicy: Never
+  tag: e2e-test
+service:
+  type: ClusterIP
+  port: 8080
+config:
+  version: v0.3
+  listeners: []
+  providers:
+    defaults:
+      default_model: MoM
+    models:
+      - name: MoM
+        backend_refs:
+          - name: anthropic-backend-qwen
+            # The shim's Service exposes port 9080 (the Python FastAPI layer).
+            # Requests from the router arrive as Anthropic Messages bodies;
+            # the shim forwards them to llama-server after translation.
+            endpoint: anthropic-backend-qwen.anthropic-backend-system.svc.cluster.local:9080
+            weight: 1
+            type: anthropic
+  routing:
+    decisions:
+      - name: route_to_anthropic_shim
+        description: Route all requests to the anthropic-shim backend
+        priority: 50
+        rules:
+          operator: OR
+          conditions:
+            - type: keyword
+              name: all_requests
+        modelRefs:
+          - model: MoM
+            use_reasoning: false
+    signals:
+      keywords:
+        - name: all_requests
+          operator: OR
+          keywords:
+            # Catch-all routing; the AIGatewayRoute also has a bare fallback
+            # rule in gwapi-resources.yaml. Both are intentional — the router
+            # needs a signal match to route, and the gateway provides a
+            # safety-net in case the router produces no match.
+            - ""
+    modelCards:
+      - name: MoM
+        param_size: 0.5b
+        description: Qwen2.5-0.5B-Instruct via llama.cpp + anthropic-shim
+        capabilities:
+          - chat
+        quality_score: 0.5
+  global:
+    model_catalog:
+      kbs: []
+    router:
+      clear_route_cache: true
+      strategy: priority
+    services:
+      observability:
+        metrics:
+          enabled: true
+        tracing:
+          enabled: false
+      api:
+        batch_classification:
+          max_batch_size: 100
+          concurrency_threshold: 5
+          max_concurrency: 8
+    stores:
+      semantic_cache:
+        enabled: false
+        embedding_model: mmbert
+      memory:
+        embedding_model: mmbert
+      vector_store:
+        embedding_model: mmbert
+    integrations: {}
+resources:
+  limits:
+    cpu: 2000m
+    memory: 8Gi
+  requests:
+    cpu: 500m
+    memory: 2Gi

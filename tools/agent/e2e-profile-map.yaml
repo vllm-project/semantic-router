@@ -148,6 +148,16 @@ profile_rules:
       - e2e/profiles/streaming/**
       - deploy/kubernetes/streaming/**
       - src/semantic-router/pkg/extproc/processor_req_body_streamed*.go
+  anthropic-shim:
+    owner: e2e
+    coverage_role: anthropic-shape-backend-translation-contracts
+    selection_mode: full-ci
+    summary: Anthropic-shape backend (llama.cpp + shim) for verifying outbound translation cells — cache-cycle synthesis, stop-reason mapping, and request-side field preservation.
+    paths:
+      - e2e/profiles/anthropic-shim/**
+      - e2e/testing/anthropic-shim/**
+      - deploy/kubernetes/anthropic-backend/**
+      - src/semantic-router/pkg/anthropic/outbound*.go
 
 manual_profile_rules:
   response-api:
