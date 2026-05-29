@@ -62,18 +62,3 @@ const (
 	// dropped entries.
 	ReasonWarningsTruncated WarningReason = "warnings_truncated"
 )
-
-// String returns the lowercase token representation of the severity used
-// in the response header and metric label.
-func (s WarningSeverity) String() string {
-	switch s {
-	case WarningSeverityInfo:
-		return "info"
-	case WarningSeverityLossy:
-		return "lossy"
-	case WarningSeverityError:
-		return "error"
-	default:
-		return "unknown"
-	}
-}

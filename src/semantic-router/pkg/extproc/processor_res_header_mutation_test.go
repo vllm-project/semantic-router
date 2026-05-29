@@ -111,7 +111,7 @@ func TestBuildResponseHeaderMutation_CacheHitSkipsNewHeaders(t *testing.T) {
 		ClientProtocol: config.ClientProtocolAnthropic,
 		VSRCacheHit:    true,
 		IRExtensions: &ir.IRExtensions{
-			Warnings: []ir.Warning{{Field: "top_k", Reason: "dropped", Severity: ir.WarningSeverityLossy}},
+			Warnings: []ir.Warning{{Field: "top_k", Reason: ir.ReasonDropped, Severity: ir.WarningSeverityLossy}},
 		},
 	}
 
@@ -140,7 +140,7 @@ func TestAddLossinessWarnings_SingleEntry(t *testing.T) {
 
 	builder.addLossinessWarnings(ctx, []ir.Warning{{
 		Field:    "top_k",
-		Reason:   string(ir.ReasonTopKDropOnOpenAIBackend),
+		Reason:   ir.ReasonTopKDropOnOpenAIBackend,
 		Severity: ir.WarningSeverityLossy,
 	}})
 
@@ -156,9 +156,9 @@ func TestAddLossinessWarnings_MultipleEntriesCommaSeparated(t *testing.T) {
 	builder := newResponseHeaderMutationBuilder()
 
 	builder.addLossinessWarnings(ctx, []ir.Warning{
-		{Field: "messages[0].content[2]", Reason: string(ir.ReasonUnsupportedBlockType), Severity: ir.WarningSeverityLossy},
-		{Field: "top_k", Reason: string(ir.ReasonDropped), Severity: ir.WarningSeverityLossy},
-		{Field: "tool_choice.disable_parallel_tool_use", Reason: string(ir.ReasonCoercedString), Severity: ir.WarningSeverityInfo},
+		{Field: "messages[0].content[2]", Reason: ir.ReasonUnsupportedBlockType, Severity: ir.WarningSeverityLossy},
+		{Field: "top_k", Reason: ir.ReasonDropped, Severity: ir.WarningSeverityLossy},
+		{Field: "tool_choice.disable_parallel_tool_use", Reason: ir.ReasonCoercedString, Severity: ir.WarningSeverityInfo},
 	})
 
 	headerMap := mutationToMap(builder.setHeaders)
@@ -179,7 +179,7 @@ func TestAddLossinessWarnings_TruncationAppendsTrailer(t *testing.T) {
 	for i := range warnings {
 		warnings[i] = ir.Warning{
 			Field:    "messages[0].content[" + strings.Repeat("x", 16) + "]",
-			Reason:   string(ir.ReasonUnsupportedBlockType),
+			Reason:   ir.ReasonUnsupportedBlockType,
 			Severity: ir.WarningSeverityLossy,
 		}
 	}
@@ -202,7 +202,7 @@ func TestAddLossinessWarnings_SanitizesSeparatorsInFieldPaths(t *testing.T) {
 
 	builder.addLossinessWarnings(ctx, []ir.Warning{{
 		Field:    "weird;field,name",
-		Reason:   "dropped;extra,bits",
+		Reason:   ir.WarningReason("dropped;extra,bits"),
 		Severity: ir.WarningSeverityLossy,
 	}})
 
@@ -219,7 +219,7 @@ func TestAddLossinessWarnings_SanitizesCRLFInFieldPaths(t *testing.T) {
 
 	builder.addLossinessWarnings(ctx, []ir.Warning{{
 		Field:    "field\r\nx-injected: pwned",
-		Reason:   "rea\nson",
+		Reason:   ir.WarningReason("rea\nson"),
 		Severity: ir.WarningSeverityLossy,
 	}})
 
@@ -238,7 +238,7 @@ func TestBuildResponseHeaderMutation_EmitsWarningsAlongsideStandardHeaders(t *te
 		IRExtensions: &ir.IRExtensions{
 			Warnings: []ir.Warning{{
 				Field:    "top_k",
-				Reason:   string(ir.ReasonTopKDropOnOpenAIBackend),
+				Reason:   ir.ReasonTopKDropOnOpenAIBackend,
 				Severity: ir.WarningSeverityLossy,
 			}},
 		},

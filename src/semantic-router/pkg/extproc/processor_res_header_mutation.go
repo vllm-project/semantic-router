@@ -144,7 +144,7 @@ func (builder *responseHeaderMutationBuilder) addLossinessWarnings(
 func formatLossinessEntry(w ir.Warning) string {
 	return fmt.Sprintf("%s;%s;%s",
 		w.Severity,
-		sanitizeWarningField(w.Reason),
+		sanitizeWarningField(string(w.Reason)),
 		sanitizeWarningField(w.Field),
 	)
 }
@@ -178,7 +178,7 @@ func sanitizeWarningField(field string) string {
 }
 
 func recordWarning(ctx *RequestContext, inbound, outbound string, w ir.Warning) {
-	metrics.RecordTranslationWarning(inbound, outbound, w.Severity.String(), w.Reason)
+	metrics.RecordTranslationWarning(inbound, outbound, w.Severity.String(), string(w.Reason))
 	logging.ComponentDebugEvent("extproc", "translation_lossy", map[string]interface{}{
 		"request_id":        ctx.RequestID,
 		"inbound_protocol":  inbound,
