@@ -31,4 +31,4 @@ all current maintainers.
 ## Community Channels
 
 - **Slack:** `#semantic-router` in vLLM Slack
-- **Meetings:** Bi-weekly, listed in the [README](./README.md#community-meetings-)
+- **Meetings:** First and third Tuesday of each month, listed in the [README](./README.md#community-meetings-)
