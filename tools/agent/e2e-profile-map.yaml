@@ -91,6 +91,14 @@ profile_rules:
     paths:
       - e2e/profiles/istio/**
       - deploy/kubernetes/istio/**
+  agentgateway:
+    owner: e2e
+    coverage_role: agentgateway-integration
+    selection_mode: full-ci
+    summary: Integration coverage with Agentgateway's gateway controller, including backend routing and extproc policy enforcement.
+    paths:
+      - e2e/profiles/agentgateway/**
+      - deploy/kubernetes/agentgateway/**
   production-stack:
     owner: e2e
     coverage_role: production-ha-load-observability
