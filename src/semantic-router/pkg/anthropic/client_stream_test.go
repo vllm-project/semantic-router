@@ -272,6 +272,40 @@ func TestTransformSSEChunkToOpenAI_StandardStopReasonNotCaptured(t *testing.T) {
 	assert.Empty(t, ext.AnthropicStopReason, "mappable stop_reason should round-trip via standard mapping")
 }
 
+// TestTransformSSEChunkToOpenAI_RefusalCaptured asserts that a streaming
+// Anthropic response with stop_reason "refusal" is captured onto ext so
+// the outbound emitter can surface it verbatim. Before this fix only
+// pause_turn was captured; refusal fell through to the default arm
+// (mapped to "stop") and was lost on round-trips.
+func TestTransformSSEChunkToOpenAI_RefusalCaptured(t *testing.T) {
+	state := NewStreamState()
+	ext := &ir.IRExtensions{}
+	events := buildAnthropicSSE(
+		`{"type":"message_delta","delta":{"stop_reason":"refusal","stop_sequence":null},"usage":{"output_tokens":12}}`,
+	)
+	_, _, err := TransformSSEChunkToOpenAI([]byte(events), state, "claude-sonnet-4-5", ext)
+	require.NoError(t, err)
+	assert.Equal(t, "refusal", ext.AnthropicStopReason, "refusal must be captured into ext")
+	assert.Empty(t, ext.AnthropicStopSequence, "stop_sequence string must be empty for refusal")
+}
+
+// TestTransformSSEChunkToOpenAI_StopSequenceCaptured asserts that a
+// streaming response with stop_reason "stop_sequence" captures both the
+// reason and the stop_sequence string onto ext. The non-streaming sibling
+// (captureAnthropicStopReasonIntoExt) captures the string; streaming must
+// now match.
+func TestTransformSSEChunkToOpenAI_StopSequenceCaptured(t *testing.T) {
+	state := NewStreamState()
+	ext := &ir.IRExtensions{}
+	events := buildAnthropicSSE(
+		`{"type":"message_delta","delta":{"stop_reason":"stop_sequence","stop_sequence":"DONE"},"usage":{"output_tokens":8}}`,
+	)
+	_, _, err := TransformSSEChunkToOpenAI([]byte(events), state, "claude-sonnet-4-5", ext)
+	require.NoError(t, err)
+	assert.Equal(t, "stop_sequence", ext.AnthropicStopReason, "stop_sequence reason must be captured")
+	assert.Equal(t, "DONE", ext.AnthropicStopSequence, "stop_sequence string must be captured")
+}
+
 func TestExtractSSEDataLines_TracksEventHeader(t *testing.T) {
 	raw := "event: error\ndata: {\"type\":\"error\"}\n\nevent: message_start\ndata: {\"type\":\"message_start\"}\n\n"
 	lines := extractSSEDataLines([]byte(raw))

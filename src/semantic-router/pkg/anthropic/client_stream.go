@@ -378,12 +378,16 @@ func handleMessageDelta(
 
 // isAnthropicOnlyStopReason returns true for stop_reason values that
 // have no equivalent in the OpenAI finish_reason alphabet and must
-// round-trip via IRExtensions to survive the OpenAI normalization
-// step. "end_turn", "max_tokens", "tool_use", "stop_sequence", and
-// "refusal" all map onto OpenAI tokens; "pause_turn" does not.
+// round-trip via IRExtensions to survive the OpenAI normalization step.
+//
+// The full set: pause_turn, refusal, and stop_sequence all map onto
+// "stop" in mapAnthropicStopReasonToOpenAI (refusal via the default arm,
+// stop_sequence explicitly). The outbound emitter restores the original
+// value from IRExtensions so an Anthropic client in a double-Anthropic
+// cell sees the correct stop_reason.
 func isAnthropicOnlyStopReason(reason anthropic.StopReason) bool {
 	switch reason {
-	case anthropic.StopReasonPauseTurn:
+	case anthropic.StopReasonPauseTurn, anthropic.StopReasonRefusal, anthropic.StopReasonStopSequence:
 		return true
 	default:
 		return false
