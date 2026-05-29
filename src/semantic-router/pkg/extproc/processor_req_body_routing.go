@@ -348,6 +348,12 @@ func appendProfileHeaders(setHeaders *[]*core.HeaderValueOption, profile *config
 // IRExtensions) under the provider-profile pin. ExtraHeaders wins on
 // any collision so deployments can pin a known-tested anthropic-version
 // without the client forcing a different one.
+//
+// Sibling mechanism: requests routed to an Anthropic-native upstream
+// take a different path that forwards the same headers via
+// anthropic.BuildRequestHeadersWithPassthrough (pkg/anthropic), using
+// the AnthropicPassthrough carrier on RequestContext. The two paths
+// fire on disjoint routing branches.
 func appendCapturedPassThroughHeaders(
 	setHeaders *[]*core.HeaderValueOption,
 	profile *config.ProviderProfile,
