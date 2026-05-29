@@ -64,6 +64,12 @@ func recordSessionTurn(ctx *RequestContext, usage responseUsageMetrics, pricing 
 			}
 		}
 		p.Chat = &sessiontelemetry.ChatInput{UserID: userID, Messages: msgs}
+		// Remember the model used for this Chat Completions session so the next
+		// turn's request phase can populate ctx.PreviousModel via GetLastModel.
+		// Keyed on ctx.SessionID (set during request prep), the same key the read
+		// side uses. Response API derives previous model from the conversation
+		// chain instead, so it is intentionally not recorded here.
+		sessiontelemetry.RecordLastModel(ctx.SessionID, ctx.RequestModel)
 	}
 	sessiontelemetry.RecordTurn(p)
 }

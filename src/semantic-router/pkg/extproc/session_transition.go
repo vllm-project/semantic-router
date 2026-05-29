@@ -48,7 +48,12 @@ func populateSessionTransitionFields(ctx *RequestContext) {
 
 	ctx.TurnIndex = sessiontelemetry.ChatTurnNumber(sessionTransitionChatMessages(ctx.ChatCompletionMessages)) - 1
 	ctx.HistoryTokenCount = historyTokensFromChatMessages(ctx.ChatCompletionMessages)
-	// TODO: populate PreviousModel for Chat Completions once per-turn model history is available.
+	// Populate PreviousModel for Chat Completions from the in-memory last-model
+	// store, recorded at response time of the previous turn in this session.
+	// (Response API derives PreviousModel from the conversation chain above.)
+	if model, ok := sessiontelemetry.GetLastModel(ctx.SessionID); ok {
+		ctx.PreviousModel = model
+	}
 }
 
 // populateChatCompletionSessionIDIfNeeded sets ctx.SessionID when not already
