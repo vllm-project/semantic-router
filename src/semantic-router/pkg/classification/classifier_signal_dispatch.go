@@ -89,12 +89,14 @@ func (c *Classifier) buildSignalDispatchers(
 		{
 			config.SignalTypeJailbreak, "Jailbreak",
 			func() {
-				c.evaluateJailbreakSignal(results, mu, textForSignal(config.SignalTypeJailbreak), nonUserMessages)
+				c.evaluateJailbreakSignal(results, mu, textForSignal(config.SignalTypeJailbreak), historyForHistoryAwareSignals(priorUserMessages, nonUserMessages))
 			},
 		},
 		{
 			config.SignalTypePII, "PII",
-			func() { c.evaluatePIISignal(results, mu, textForSignal(config.SignalTypePII), nonUserMessages) },
+			func() {
+				c.evaluatePIISignal(results, mu, textForSignal(config.SignalTypePII), historyForHistoryAwareSignals(priorUserMessages, nonUserMessages))
+			},
 		},
 		{
 			config.SignalTypeKB, "KB",
