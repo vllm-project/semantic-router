@@ -17,6 +17,25 @@ Everything else (image blocks, `top_k`, `metadata.user_id`,
 `tool_result.is_error`, headers like `anthropic-version` and
 `anthropic-beta`, streaming SSE) is forwarded verbatim.
 
+## Debug endpoint
+
+`GET /debug/last-request` returns the most recent translated Anthropic
+Messages body that the shim forwarded to llama-server for a given
+session, plus the original inbound headers. This allows e2e tests to
+assert on request-side preservation (header forwarding, field
+translation) without log-scraping.
+
+The session is identified by the `x-vsr-test-session-id` request
+header or the same-named query parameter. Returns 404 when no request
+has been seen for that session yet.
+
+```bash
+curl -s 'http://127.0.0.1:9080/debug/last-request' \
+  -H 'x-vsr-test-session-id: my-session' | jq .
+```
+
+The in-memory store is bounded to 32 sessions with LRU eviction.
+
 ## Layout
 
 ```

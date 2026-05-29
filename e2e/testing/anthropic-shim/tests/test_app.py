@@ -15,7 +15,7 @@ from typing import Any
 
 import httpx
 import pytest
-from anthropic_shim.app import create_app
+from anthropic_shim.app import _MAX_REQUEST_STORE_SESSIONS, create_app
 
 
 class _UpstreamRecorder:
@@ -195,3 +195,174 @@ async def test_invalid_json_returns_400(
         headers={"content-type": "application/json"},
     )
     assert response.status_code == 400
+
+
+# ── /debug/last-request tests ─────────────────────────────────────────────────
+
+
+@pytest.mark.asyncio
+async def test_debug_last_request_returns_404_before_any_request(
+    client_with_upstream: tuple[httpx.AsyncClient, _UpstreamRecorder],
+) -> None:
+    client, _ = client_with_upstream
+    response = await client.get(
+        "/debug/last-request",
+        headers={"x-vsr-test-session-id": "session-new"},
+    )
+    assert response.status_code == 404
+
+
+@pytest.mark.asyncio
+async def test_debug_last_request_returns_translated_body_after_messages_post(
+    client_with_upstream: tuple[httpx.AsyncClient, _UpstreamRecorder],
+) -> None:
+    client, _ = client_with_upstream
+    payload = {
+        "model": "qwen-test",
+        "system": [
+            {"type": "text", "text": "You are helpful."},
+            {"type": "text", "text": "Be concise."},
+        ],
+        "messages": [{"role": "user", "content": "hello"}],
+        "max_tokens": 16,
+    }
+    session = "debug-session-1"
+    await client.post(
+        "/v1/messages", json=payload, headers={"x-vsr-test-session-id": session}
+    )
+
+    response = await client.get(
+        "/debug/last-request",
+        headers={"x-vsr-test-session-id": session},
+    )
+    assert response.status_code == 200
+    data = response.json()
+    # The shim joins the system array before forwarding.
+    assert data["body"]["system"] == "You are helpful.\nBe concise."
+    assert data["session_id"] == session
+    assert "headers" in data
+
+
+@pytest.mark.asyncio
+async def test_debug_last_request_session_via_query_param(
+    client_with_upstream: tuple[httpx.AsyncClient, _UpstreamRecorder],
+) -> None:
+    client, _ = client_with_upstream
+    payload = {
+        "model": "qwen-test",
+        "messages": [{"role": "user", "content": "ping"}],
+        "max_tokens": 8,
+    }
+    session = "debug-qp-session"
+    await client.post(
+        "/v1/messages", json=payload, headers={"x-vsr-test-session-id": session}
+    )
+
+    # Retrieve via query param instead of header.
+    response = await client.get(
+        f"/debug/last-request?x-vsr-test-session-id={session}",
+    )
+    assert response.status_code == 200
+    assert response.json()["session_id"] == session
+
+
+@pytest.mark.asyncio
+async def test_debug_last_request_reflects_most_recent_request(
+    client_with_upstream: tuple[httpx.AsyncClient, _UpstreamRecorder],
+) -> None:
+    client, _ = client_with_upstream
+    session = "debug-overwrite-session"
+    for content in ("first", "second"):
+        await client.post(
+            "/v1/messages",
+            json={
+                "model": "qwen-test",
+                "messages": [{"role": "user", "content": content}],
+                "max_tokens": 8,
+            },
+            headers={"x-vsr-test-session-id": session},
+        )
+
+    response = await client.get(
+        "/debug/last-request",
+        headers={"x-vsr-test-session-id": session},
+    )
+    assert response.status_code == 200
+    # Only the most recent request is retained.
+    assert response.json()["body"]["messages"][0]["content"] == "second"
+
+
+@pytest.mark.asyncio
+async def test_debug_last_request_session_isolation(
+    client_with_upstream: tuple[httpx.AsyncClient, _UpstreamRecorder],
+) -> None:
+    client, _ = client_with_upstream
+    payload_a = {
+        "model": "qwen-test",
+        "messages": [{"role": "user", "content": "alpha"}],
+        "max_tokens": 8,
+    }
+    payload_b = {
+        "model": "qwen-test",
+        "messages": [{"role": "user", "content": "beta"}],
+        "max_tokens": 8,
+    }
+    await client.post(
+        "/v1/messages", json=payload_a, headers={"x-vsr-test-session-id": "alpha"}
+    )
+    await client.post(
+        "/v1/messages", json=payload_b, headers={"x-vsr-test-session-id": "beta"}
+    )
+
+    resp_a = await client.get(
+        "/debug/last-request", headers={"x-vsr-test-session-id": "alpha"}
+    )
+    resp_b = await client.get(
+        "/debug/last-request", headers={"x-vsr-test-session-id": "beta"}
+    )
+    assert resp_a.json()["body"]["messages"][0]["content"] == "alpha"
+    assert resp_b.json()["body"]["messages"][0]["content"] == "beta"
+
+
+@pytest.mark.asyncio
+async def test_request_store_lru_evicts_oldest_session(
+    client_with_upstream: tuple[httpx.AsyncClient, _UpstreamRecorder],
+) -> None:
+    """Filling _MAX_REQUEST_STORE_SESSIONS+1 sessions evicts the oldest."""
+    client, _ = client_with_upstream
+    # Session IDs in insertion order; the first one must be evicted.
+    session_ids = [
+        f"lru-session-{i:03d}" for i in range(_MAX_REQUEST_STORE_SESSIONS + 1)
+    ]
+
+    for sid in session_ids:
+        await client.post(
+            "/v1/messages",
+            json={
+                "model": "qwen-test",
+                "messages": [{"role": "user", "content": sid}],
+                "max_tokens": 8,
+            },
+            headers={"x-vsr-test-session-id": sid},
+        )
+
+    # The oldest session must have been evicted.
+    evicted = session_ids[0]
+    resp_evicted = await client.get(
+        "/debug/last-request",
+        headers={"x-vsr-test-session-id": evicted},
+    )
+    assert (
+        resp_evicted.status_code == 404
+    ), f"expected evicted session {evicted!r} to return 404, got {resp_evicted.status_code}"
+
+    # The most recent _MAX_REQUEST_STORE_SESSIONS sessions must still be present.
+    for sid in session_ids[1:]:
+        resp = await client.get(
+            "/debug/last-request",
+            headers={"x-vsr-test-session-id": sid},
+        )
+        assert (
+            resp.status_code == 200
+        ), f"expected session {sid!r} to be present, got {resp.status_code}"
+        assert resp.json()["body"]["messages"][0]["content"] == sid
