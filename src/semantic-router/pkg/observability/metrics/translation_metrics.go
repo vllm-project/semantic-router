@@ -11,7 +11,7 @@ import (
 // protocol-pair regressions and to size lossiness across the fleet.
 var TranslationLossyTotal = promauto.NewCounterVec(
 	prometheus.CounterOpts{
-		Name: "vsr_translation_lossy_total",
+		Name: "llm_translation_lossy_total",
 		Help: "Total translation warnings emitted by the inbound parser, partitioned by protocol pair, severity, and reason.",
 	},
 	[]string{"from", "to", "severity", "reason"},
