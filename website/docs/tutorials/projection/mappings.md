@@ -36,7 +36,10 @@ This is also the point where a projection becomes decision-visible. In the curre
 
 ## How Mappings Behave at Runtime
 
-The current implementation supports `method: threshold_bands` only.
+The implementation supports two mapping methods:
+
+- `threshold_bands` (default, also used when `method` is unset) — emits the **first** matching output band.
+- `multi_emit` — emits **every** matching output band, so one mapping can set several orthogonal policy tags from the same score. Requires at least two outputs.
 
 Each output declares one or more bounds using:
 
@@ -47,10 +50,11 @@ Each output declares one or more bounds using:
 
 Important runtime details:
 
-- outputs are checked in order
-- the first matching output wins
+- outputs are checked in declared order
+- with `threshold_bands`, the first matching output wins
+- with `multi_emit`, every matching output is emitted (in declared order)
 - if no output matches, the mapping emits nothing
-- optional `calibration` computes a confidence for the matched projection output
+- optional `calibration` computes a confidence for each emitted projection output
 
 The supported calibration method today is `sigmoid_distance`, which derives confidence from how far the score sits from the nearest threshold boundary.
 
@@ -118,7 +122,7 @@ ROUTE reasoning_deep {
 |-------|---------|
 | `name` | mapping identifier |
 | `source` | score name to read from |
-| `method` | currently `threshold_bands` |
+| `method` | `threshold_bands` (default) or `multi_emit` |
 | `calibration` | optional confidence model for the matched output |
 | `outputs[].name` | decision-visible projection name |
 | `outputs[].lt/lte/gt/gte` | threshold bounds for that output |
@@ -130,7 +134,7 @@ ROUTE reasoning_deep {
 
 ## Configuration
 
-Mappings are configured under `routing.projections.mappings`. Each mapping requires a `name`, a `source` score, a `method` (currently `threshold_bands`), and a list of `outputs` with threshold bounds. See the [Canonical YAML](#canonical-yaml) and [Config Fields](#config-fields) sections above for full field reference.
+Mappings are configured under `routing.projections.mappings`. Each mapping requires a `name`, a `source` score, a `method` (`threshold_bands` by default, or `multi_emit`), and a list of `outputs` with threshold bounds. See the [Canonical YAML](#canonical-yaml) and [Config Fields](#config-fields) sections above for full field reference.
 
 ## When to Use
 
@@ -153,7 +157,7 @@ Do not use mappings when:
 - Keep output names policy-oriented so decisions read like routing intent, not threshold math.
 - Keep threshold bands monotonic, ordered, and easy to audit.
 - Let decisions consume named outputs with `type: projection` rather than repeating numeric thresholds in multiple places.
-- Avoid overlapping bands unless you intentionally want order-dependent behavior; the runtime returns the first matching output.
+- With `threshold_bands`, avoid overlapping bands unless you intentionally want order-dependent behavior; the runtime returns the first matching output. Use `multi_emit` when overlapping bands should all fire (e.g. orthogonal policy tags).
 
 ## Next Steps
 
