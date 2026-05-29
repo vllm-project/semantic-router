@@ -77,7 +77,7 @@ For questions, feedback, or to contribute, please join the `#semantic-router` ch
 
 ### Community Meetings
 
-We host bi-weekly community meetings to sync with contributors across different time zones:
+We host community meetings on the first and third Tuesday of each month to sync with contributors across different time zones:
 
 - **First Tuesday of the month**: 9:00-10:00 AM EST (accommodates US EST, EU, and Asia Pacific contributors)
   - [Zoom Link](https://us05web.zoom.us/j/84122485631?pwd=BB88v03mMNLVHn60YzVk4PihuqBV9d.1)
