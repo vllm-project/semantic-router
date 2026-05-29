@@ -59,6 +59,11 @@ func testAnthropicMessagesProtocolHeaders(ctx context.Context, client *kubernete
 		return fmt.Errorf("expected status 200, got %d", resp.StatusCode)
 	}
 
+	// Header names are duplicated as string literals here because the
+	// e2e module (e2e/go.mod) is intentionally decoupled from the
+	// router module (src/semantic-router/go.mod) and does not import
+	// pkg/headers. If a header name changes upstream, this test must
+	// be updated explicitly.
 	inbound := resp.Header.Get("x-vsr-inbound-protocol")
 	outbound := resp.Header.Get("x-vsr-outbound-protocol")
 	lossiness := resp.Header.Get("x-vsr-lossiness-warnings")
@@ -75,10 +80,11 @@ func testAnthropicMessagesProtocolHeaders(ctx context.Context, client *kubernete
 	if inbound != "anthropic" {
 		return fmt.Errorf("expected x-vsr-inbound-protocol=anthropic, got %q", inbound)
 	}
-	// Outbound protocol depends on the backend the router selected. In the
-	// kubernetes e2e profile the backend is OpenAI-shaped (llm-katan), so
-	// outbound must be openai. If a future profile points the backend at
-	// an Anthropic-native endpoint this assertion would tighten there.
+	// Outbound protocol depends on the backend the router selected. In
+	// the kubernetes e2e profile the backend is OpenAI-shaped, so
+	// outbound must be openai. If a future profile points the backend
+	// at an Anthropic-native endpoint this assertion would tighten
+	// there.
 	if outbound != "openai" {
 		return fmt.Errorf("expected x-vsr-outbound-protocol=openai for kubernetes profile, got %q", outbound)
 	}

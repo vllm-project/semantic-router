@@ -14,7 +14,7 @@ top-to-bottom; the first non-empty value wins.
 |---|-----------------------------------------|--------------------------------------------------------------------------------------------------|
 | 1 | `ResponseAPICtx.ConversationID`         | Response API only. Stamped by the Response API extractor.                                        |
 | 2 | `x-session-id` header                   | Explicit operator/SDK pin. Highest-priority client-supplied source.                              |
-| 3 | `x-claude-code-session-id` header       | Per-conversation UUID emitted by the Claude Code CLI on `/v1/messages` requests.                 |
+| 3 | `x-claude-code-session-id` header       | Opaque per-conversation token emitted by the Claude Code CLI on `/v1/messages` requests. The router passes it through verbatim and does not validate format. |
 | 4 | `metadata.user_id` (Anthropic body)     | Mirrored by the Anthropic inbound parser into `IRExtensions.MetadataUserID`. Prefixed `ant-md-`. |
 | 5 | `deriveSessionIDFromMessages`           | Fingerprint over the message thread plus the resolved authz user.                                |
 | 6 | `deriveSessionIDFromMessagesStructure`  | Fingerprint over message structure when no user identity is available.                           |

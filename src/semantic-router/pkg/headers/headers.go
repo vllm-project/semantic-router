@@ -208,11 +208,10 @@ const (
 	// explicit APIFormat was resolved.
 	VSROutboundProtocol = "x-vsr-outbound-protocol"
 
-	// VSRLossinessWarnings carries a structured, semicolon-separated
-	// list of translation observations emitted by the inbound parser
-	// during a lossy translation. Each entry is "severity;reason;field";
-	// entries are comma-separated. Absent when no warnings were
-	// produced.
+	// VSRLossinessWarnings carries a structured, comma-separated list
+	// of translation observations emitted by the inbound parser during
+	// a lossy translation. Each entry is "severity;reason;field".
+	// Absent when no warnings were produced.
 	VSRLossinessWarnings = "x-vsr-lossiness-warnings"
 )
 
