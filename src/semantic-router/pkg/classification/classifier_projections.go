@@ -60,12 +60,7 @@ func (c *Classifier) applyProjections(results *SignalResults) *SignalResults {
 
 		for _, mapping := range mappingBySource[score.Name] {
 			scoreValue := results.ProjectionScores[mapping.Source]
-			output, matched := matchProjectionOutput(mapping, scoreValue)
-			if !matched {
-				continue
-			}
-			results.MatchedProjectionRules = append(results.MatchedProjectionRules, output.Name)
-			results.SignalConfidences[signalConfidenceKey(config.SignalTypeProjection, output.Name)] = projectionOutputConfidence(mapping, output, scoreValue)
+			applyProjectionMapping(mapping, scoreValue, results)
 		}
 	}
 
@@ -237,6 +232,39 @@ func projectionMatchSet(results *SignalResults, signalType string) []string {
 		return nil
 	}
 	return accessor(results)
+}
+
+// applyProjectionMapping records the matched output band(s) for a mapping
+// according to its method. threshold_bands (and the empty default) emit only the
+// first matching band; multi_emit emits every matching band so orthogonal policy
+// tags can propagate simultaneously.
+func applyProjectionMapping(
+	mapping config.ProjectionMapping,
+	scoreValue float64,
+	results *SignalResults,
+) {
+	switch mapping.Method {
+	case config.ProjectionMappingMethodMultiEmit:
+		for _, output := range mapping.Outputs {
+			if projectionOutputMatches(output, scoreValue) {
+				recordProjectionMatch(mapping, output, scoreValue, results)
+			}
+		}
+	default: // "" and threshold_bands preserve first-hit behavior
+		if output, matched := matchProjectionOutput(mapping, scoreValue); matched {
+			recordProjectionMatch(mapping, output, scoreValue, results)
+		}
+	}
+}
+
+func recordProjectionMatch(
+	mapping config.ProjectionMapping,
+	output config.ProjectionMappingOutput,
+	scoreValue float64,
+	results *SignalResults,
+) {
+	results.MatchedProjectionRules = append(results.MatchedProjectionRules, output.Name)
+	results.SignalConfidences[signalConfidenceKey(config.SignalTypeProjection, output.Name)] = projectionOutputConfidence(mapping, output, scoreValue)
 }
 
 func matchProjectionOutput(
