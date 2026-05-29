@@ -529,3 +529,83 @@ func TestValidateProjectionScoreDependencyOrder_ConfidenceResolvesToSourceScore(
 }
 
 func float64Ptr(v float64) *float64 { return &v }
+
+func twoBandOutputs() []ProjectionMappingOutput {
+	return []ProjectionMappingOutput{
+		{Name: "low", LT: float64Ptr(0.5)},
+		{Name: "high", GTE: float64Ptr(0.5)},
+	}
+}
+
+func TestValidateProjectionMappingAcceptsSupportedMethods(t *testing.T) {
+	scoreNames := map[string]struct{}{"s": {}}
+	for _, method := range []string{"", ProjectionMappingMethodThresholdBands, ProjectionMappingMethodMultiEmit} {
+		t.Run(fmt.Sprintf("method=%q", method), func(t *testing.T) {
+			mapping := ProjectionMapping{
+				Name:    "m",
+				Source:  "s",
+				Method:  method,
+				Outputs: twoBandOutputs(),
+			}
+			if err := validateProjectionMapping(mapping, scoreNames, map[string]struct{}{}); err != nil {
+				t.Fatalf("expected method %q to be accepted, got: %v", method, err)
+			}
+		})
+	}
+}
+
+func TestValidateProjectionMappingRejectsUnknownMethod(t *testing.T) {
+	scoreNames := map[string]struct{}{"s": {}}
+	mapping := ProjectionMapping{
+		Name:    "m",
+		Source:  "s",
+		Method:  "bogus_method",
+		Outputs: twoBandOutputs(),
+	}
+	err := validateProjectionMapping(mapping, scoreNames, map[string]struct{}{})
+	if err == nil {
+		t.Fatal("expected error for unsupported mapping method")
+	}
+	if !strings.Contains(err.Error(), "unsupported method") {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	for _, want := range []string{ProjectionMappingMethodThresholdBands, ProjectionMappingMethodMultiEmit} {
+		if !strings.Contains(err.Error(), want) {
+			t.Fatalf("error should list %q as supported: %v", want, err)
+		}
+	}
+}
+
+func TestValidateProjectionMappingMultiEmitRequiresAtLeastTwoOutputs(t *testing.T) {
+	scoreNames := map[string]struct{}{"s": {}}
+	mapping := ProjectionMapping{
+		Name:   "m",
+		Source: "s",
+		Method: ProjectionMappingMethodMultiEmit,
+		Outputs: []ProjectionMappingOutput{
+			{Name: "only", GTE: float64Ptr(0.5)},
+		},
+	}
+	err := validateProjectionMapping(mapping, scoreNames, map[string]struct{}{})
+	if err == nil {
+		t.Fatal("expected error for multi_emit with a single output")
+	}
+	if !strings.Contains(err.Error(), ProjectionMappingMethodMultiEmit) {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
+func TestValidateProjectionMappingThresholdBandsAllowsSingleOutput(t *testing.T) {
+	scoreNames := map[string]struct{}{"s": {}}
+	mapping := ProjectionMapping{
+		Name:   "m",
+		Source: "s",
+		Method: ProjectionMappingMethodThresholdBands,
+		Outputs: []ProjectionMappingOutput{
+			{Name: "only", GTE: float64Ptr(0.5)},
+		},
+	}
+	if err := validateProjectionMapping(mapping, scoreNames, map[string]struct{}{}); err != nil {
+		t.Fatalf("threshold_bands with a single output should be valid, got: %v", err)
+	}
+}

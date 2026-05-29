@@ -474,11 +474,27 @@ func validateProjectionMapping(
 	if _, exists := scoreNames[mapping.Source]; !exists {
 		return fmt.Errorf("routing.projections.mappings[%q]: source %q is not a declared projection score", mapping.Name, mapping.Source)
 	}
-	if mapping.Method != "threshold_bands" {
-		return fmt.Errorf("routing.projections.mappings[%q]: unsupported method %q (supported: threshold_bands)", mapping.Name, mapping.Method)
+	switch mapping.Method {
+	case "", ProjectionMappingMethodThresholdBands, ProjectionMappingMethodMultiEmit:
+		// supported (empty defaults to threshold_bands)
+	default:
+		return fmt.Errorf(
+			"routing.projections.mappings[%q]: unsupported method %q (supported: %s, %s)",
+			mapping.Name,
+			mapping.Method,
+			ProjectionMappingMethodThresholdBands,
+			ProjectionMappingMethodMultiEmit,
+		)
 	}
 	if len(mapping.Outputs) == 0 {
 		return fmt.Errorf("routing.projections.mappings[%q]: outputs cannot be empty", mapping.Name)
+	}
+	if mapping.Method == ProjectionMappingMethodMultiEmit && len(mapping.Outputs) < 2 {
+		return fmt.Errorf(
+			"routing.projections.mappings[%q]: method %q requires at least 2 outputs (a single-output multi_emit is equivalent to threshold_bands)",
+			mapping.Name,
+			ProjectionMappingMethodMultiEmit,
+		)
 	}
 	if err := validateProjectionCalibration(mapping); err != nil {
 		return err

@@ -37,6 +37,17 @@ type ProjectionScoreInput struct {
 	Miss        float64 `yaml:"miss,omitempty"`
 }
 
+// Projection mapping methods control how matching output bands are selected
+// when a score is projected into named outputs.
+const (
+	// ProjectionMappingMethodThresholdBands emits the first matching output band
+	// (first-hit). It is the default behavior when method is unset.
+	ProjectionMappingMethodThresholdBands = "threshold_bands"
+	// ProjectionMappingMethodMultiEmit emits every matching output band, so
+	// orthogonal policy tags can propagate simultaneously from one mapping.
+	ProjectionMappingMethodMultiEmit = "multi_emit"
+)
+
 // ProjectionMapping projects a score into named routing outputs.
 type ProjectionMapping struct {
 	Name        string                        `yaml:"name"`
