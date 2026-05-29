@@ -396,14 +396,18 @@ func TestEmitAnthropicSSEChunk_DeterministicToolClose(t *testing.T) {
 		// Both blocks must have a stop event.
 		assert.Equal(t, 2, strings.Count(body, "event: content_block_stop"), "both tool blocks must be closed")
 
-		// Block index 1 (alpha) must have its stop before block index 2 (beta).
-		// The emitter assigns block indices starting from 0 for the first
-		// tool and 1 for the second, so "index":1 stop precedes "index":2 stop.
-		firstStop := strings.Index(body, `"index":1`)
-		secondStop := strings.Index(body, `"index":2`)
-		// Both stops must appear; first tool's stop must come first.
-		require.Greater(t, firstStop, 0, "first tool block stop index must be present")
-		require.Greater(t, secondStop, 0, "second tool block stop index must be present")
-		assert.Less(t, firstStop, secondStop, "tool block stops must appear in block-index order")
+		// The emitter assigns block indices sequentially starting from 0:
+		// tool 0 → block 0, tool 1 → block 1. Within the content_block_stop
+		// events, the stop for index 0 must appear before the stop for index 1.
+		// Scope the search to the stop-events section because message_start also
+		// carries "index":0 earlier in the stream.
+		stopStart := strings.Index(body, "event: content_block_stop")
+		require.GreaterOrEqual(t, stopStart, 0, "content_block_stop events must be present")
+		stopSection := body[stopStart:]
+		firstStopInSection := strings.Index(stopSection, `"index":0`)
+		secondStopInSection := strings.Index(stopSection, `"index":1`)
+		require.GreaterOrEqual(t, firstStopInSection, 0, "first tool block stop (index 0) must be present")
+		require.Positive(t, secondStopInSection, "second tool block stop (index 1) must be present")
+		assert.Less(t, firstStopInSection, secondStopInSection, "tool block stops must appear in block-index ascending order")
 	}
 }
