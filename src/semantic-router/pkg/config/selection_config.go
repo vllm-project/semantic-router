@@ -90,11 +90,13 @@ type MomentumSelectionConfig struct {
 // ModelSwitchGateConfig configures auditable session-aware model switching.
 //
 // Note: enforce mode requires per-turn model history (the previous model the
-// session used). Today only Response API requests carry that signal via the
-// conversation chain. Chat Completions traffic is observed in shadow regardless
-// of mode until per-turn history persistence ships; when enforce is configured
-// but the signal is missing the router emits a model_switch_gate_enforce_unavailable
-// log event so operators can spot misconfiguration without an incident.
+// session used). Response API requests carry that signal via the conversation
+// chain; Chat Completions carry it from the first follow-up turn via an
+// in-memory, session-keyed last-model store (per-replica, lost on restart).
+// When enforce is configured but the signal is still missing — the first turn of
+// a session, an unresolvable session, or after a restart — the router emits a
+// model_switch_gate_enforce_unavailable log event so operators can spot
+// misconfiguration without an incident.
 type ModelSwitchGateConfig struct {
 	// Enabled activates stay-vs-switch evaluation after the configured selector runs.
 	Enabled bool `yaml:"enabled,omitempty"`
@@ -102,7 +104,8 @@ type ModelSwitchGateConfig struct {
 	// Mode controls whether the gate only audits decisions ("shadow") or applies
 	// them to keep the current model ("enforce"). Empty defaults to shadow.
 	// Enforce only takes effect when previous-model history is available
-	// (currently Response API only).
+	// (Response API via the conversation chain; Chat Completions from the first
+	// follow-up turn via the in-memory last-model store).
 	Mode string `yaml:"mode,omitempty"`
 
 	// MinSwitchAdvantage is the minimum net advantage required to allow switching.

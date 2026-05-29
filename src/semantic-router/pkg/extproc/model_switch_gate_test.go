@@ -46,16 +46,16 @@ func TestApplyModelSwitchGateShadowDoesNotOverride(t *testing.T) {
 }
 
 func TestApplyModelSwitchGateChatCompletionsAuditOnly(t *testing.T) {
-	// Chat Completions traffic has no per-turn model history yet; gate must
+	// A first-turn / unresolvable request still has no prior model; the gate must
 	// fall back to audit-only and never override the selector even in enforce.
 	router := routerWithModelSwitchGate(selection.ModelSwitchGateModeEnforce)
 	selCtx, result := modelSwitchGateSelectionInput()
-	selCtx.SessionID = "" // simulate Chat Completions: no session derived yet
+	selCtx.SessionID = "" // simulate a request with no session derived yet
 	selected := &selCtx.CandidateModels[1]
 
 	got, applied := router.applyModelSwitchGate(selCtx, result, selected, &RequestContext{
 		RequestID:     "req-cc",
-		PreviousModel: "", // unavailable for Chat Completions today
+		PreviousModel: "", // no prior model yet (first turn / unresolved session)
 	})
 	if applied {
 		t.Fatalf("enforce must not override when previous_model is missing")
