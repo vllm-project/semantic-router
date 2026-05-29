@@ -132,6 +132,9 @@ func (r *OpenAIRouter) translateUpstreamToOpenAI(
 	if ctx.APIFormat != config.APIFormatAnthropic {
 		return responseBody, nil
 	}
+	// streamDone is intentionally discarded here; finalization is driven by
+	// the outbound emitter's own streamDone return in
+	// handleAnthropicClientStreamingResponseBody, not by the inbound translator.
 	translated, _, err := anthropic.TransformSSEChunkToOpenAI(
 		responseBody, ctx.AnthropicStream, ctx.RequestModel, ctx.IRExtensions,
 	)

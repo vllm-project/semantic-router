@@ -84,7 +84,7 @@ func testAnthropicMessagesStreaming(ctx context.Context, client *kubernetes.Clie
 			resp.StatusCode, truncateString(string(body), 200))
 	}
 
-	events, err := consumeAnthropicSSE(resp)
+	events, parseErrors, err := consumeAnthropicSSE(resp)
 	if err != nil {
 		return fmt.Errorf("failed to consume SSE stream: %w", err)
 	}
@@ -96,6 +96,9 @@ func testAnthropicMessagesStreaming(ctx context.Context, client *kubernetes.Clie
 		}
 		for name, c := range counts {
 			details["event_"+name] = c
+		}
+		if len(parseErrors) > 0 {
+			details["parse_errors"] = parseErrors
 		}
 		opts.SetDetails(details)
 	}
@@ -143,6 +146,7 @@ func sendAnthropicMessagesStreamingRequest(
 	req.Header.Set("Accept", "text/event-stream")
 	req.Header.Set("anthropic-version", "2023-06-01")
 
+	// Streaming responses can take longer than the 30 s non-streaming default.
 	httpClient := &http.Client{Timeout: 60 * time.Second}
 	return httpClient.Do(req)
 }
@@ -156,8 +160,14 @@ func sendAnthropicMessagesStreamingRequest(
 // separated by a blank line. The emitter may also send ping events
 // (just an event line plus an empty-data line); those are recorded so
 // keepalive can be observed but are not asserted on.
-func consumeAnthropicSSE(resp *http.Response) ([]anthropicStreamingEvent, error) {
+//
+// parseErrors accumulates any json.Unmarshal failures on data: lines so
+// callers can surface them via opts.SetDetails for CI diagnostics. A
+// non-nil parse error does not abort consumption — the event is still
+// recorded with a nil Data map so sequence assertions can continue.
+func consumeAnthropicSSE(resp *http.Response) ([]anthropicStreamingEvent, []string, error) {
 	var events []anthropicStreamingEvent
+	var parseErrors []string
 	scanner := bufio.NewScanner(resp.Body)
 	// SSE frames can be larger than the default 64 KiB scanner buffer
 	// for long content_block_delta lines.
@@ -173,7 +183,11 @@ func consumeAnthropicSSE(resp *http.Response) ([]anthropicStreamingEvent, error)
 			data := strings.TrimSpace(strings.TrimPrefix(line, "data:"))
 			pending.Data = nil
 			if data != "" {
-				_ = json.Unmarshal([]byte(data), &pending.Data)
+				if err := json.Unmarshal([]byte(data), &pending.Data); err != nil {
+					// Record the error so CI logs show the malformed payload
+					// rather than a cryptic downstream assertion failure.
+					parseErrors = append(parseErrors, fmt.Sprintf("event %q: %v", pending.Name, err))
+				}
 			}
 		case line == "":
 			if pending.Name != "" {
@@ -186,9 +200,9 @@ func consumeAnthropicSSE(resp *http.Response) ([]anthropicStreamingEvent, error)
 		events = append(events, pending)
 	}
 	if err := scanner.Err(); err != nil {
-		return events, fmt.Errorf("scanner: %w", err)
+		return events, parseErrors, fmt.Errorf("scanner: %w", err)
 	}
-	return events, nil
+	return events, parseErrors, nil
 }
 
 // countAnthropicEvents tallies how many times each event name appeared.
