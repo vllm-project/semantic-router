@@ -47,6 +47,7 @@ package anthropic
 import (
 	"bytes"
 	"encoding/json"
+	"sort"
 
 	"github.com/openai/openai-go"
 
@@ -85,8 +86,14 @@ func EmitAnthropicSSEChunk(
 		// envelope inherits the upstream error flag from
 		// extractSSEDataLines. Emit a spec-compliant Anthropic error
 		// event followed by a terminal message_stop so the client
-		// observes a clean stream end.
+		// observes a clean stream end. Guard on MessageStopSent so a
+		// second error chunk (or an error chunk after a normal terminal)
+		// does not produce a duplicate message_stop.
 		if line.IsError {
+			if state.MessageStopSent {
+				streamDone = true
+				continue
+			}
 			out.Write(emitAnthropicError("api_error", string(line.Data)))
 			out.Write(emitMessageStop())
 			state.MessageStopSent = true
@@ -121,6 +128,15 @@ func emitChunkEvents(
 	ext *ir.IRExtensions,
 	model string,
 ) ([]byte, bool, error) {
+	// message_stop must fire exactly once. If a backend legally splits
+	// finish_reason and usage across two chunks, the second chunk also
+	// satisfies isTerminalChunk and would call emitTerminalEvents again.
+	// Return early so the caller sees (nil, true, nil) rather than a
+	// second message_stop on the wire.
+	if state.MessageStopSent {
+		return nil, true, nil
+	}
+
 	var out bytes.Buffer
 
 	if !state.MessageStartSent {
@@ -298,7 +314,6 @@ func emitToolCallDelta(state *StreamState, tc openai.ChatCompletionChunkChoiceDe
 		state.NextBlockIndex++
 		state.ToolIdxToBlockIndex[toolIdx] = blockIdx
 		buf.Write(emitContentBlockStartToolUse(blockIdx, tc.ID, tc.Function.Name))
-		state.ToolUseEmittedStart[toolIdx] = true
 	}
 	if tc.Function.Arguments != "" {
 		buf.Write(emitContentBlockDeltaInputJSON(blockIdx, tc.Function.Arguments))
@@ -309,6 +324,11 @@ func emitToolCallDelta(state *StreamState, tc openai.ChatCompletionChunkChoiceDe
 // closeAllOpenBlocks emits content_block_stop for every block currently
 // tracked as open and clears the bookkeeping. Called once at stream
 // termination before message_delta / message_stop.
+//
+// Tool blocks are closed in ascending block-index order to produce a
+// deterministic event sequence for streams with multiple concurrent
+// tool calls. Go map iteration order is non-deterministic; sorting by
+// block index (not tool index) matches Anthropic's content[] position.
 func closeAllOpenBlocks(state *StreamState) []byte {
 	var buf bytes.Buffer
 	if state.OpenTextBlockIndex != nil {
@@ -319,10 +339,18 @@ func closeAllOpenBlocks(state *StreamState) []byte {
 		buf.Write(emitContentBlockStop(*state.OpenThinkingBlockIdx))
 		state.OpenThinkingBlockIdx = nil
 	}
-	for toolIdx, blockIdx := range state.ToolIdxToBlockIndex {
-		buf.Write(emitContentBlockStop(blockIdx))
+	// Sort tool indices by their assigned block index so the wire order
+	// is stable regardless of Go's map iteration randomness.
+	toolIdxs := make([]int, 0, len(state.ToolIdxToBlockIndex))
+	for toolIdx := range state.ToolIdxToBlockIndex {
+		toolIdxs = append(toolIdxs, toolIdx)
+	}
+	sort.Slice(toolIdxs, func(i, j int) bool {
+		return state.ToolIdxToBlockIndex[toolIdxs[i]] < state.ToolIdxToBlockIndex[toolIdxs[j]]
+	})
+	for _, toolIdx := range toolIdxs {
+		buf.Write(emitContentBlockStop(state.ToolIdxToBlockIndex[toolIdx]))
 		delete(state.ToolIdxToBlockIndex, toolIdx)
-		delete(state.ToolUseEmittedStart, toolIdx)
 	}
 	return buf.Bytes()
 }
@@ -338,7 +366,6 @@ func closeNonTextBlocks(state *StreamState) []byte {
 	for toolIdx, blockIdx := range state.ToolIdxToBlockIndex {
 		buf.Write(emitContentBlockStop(blockIdx))
 		delete(state.ToolIdxToBlockIndex, toolIdx)
-		delete(state.ToolUseEmittedStart, toolIdx)
 	}
 	return buf.Bytes()
 }
@@ -354,7 +381,6 @@ func closeNonThinkingBlocks(state *StreamState) []byte {
 	for toolIdx, blockIdx := range state.ToolIdxToBlockIndex {
 		buf.Write(emitContentBlockStop(blockIdx))
 		delete(state.ToolIdxToBlockIndex, toolIdx)
-		delete(state.ToolUseEmittedStart, toolIdx)
 	}
 	return buf.Bytes()
 }

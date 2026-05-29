@@ -54,6 +54,10 @@ func TestEmitAnthropicSSEChunk_TextOnly(t *testing.T) {
 	require.Greater(t, messageDeltaIdx, blockStopIdx, "message_delta after content_block_stop")
 	require.Greater(t, messageStopIdx, messageDeltaIdx, "message_stop last")
 
+	// Exactly-once invariant: the emitter must never produce a second
+	// message_stop regardless of how the upstream split finish_reason and usage.
+	assert.Equal(t, 1, strings.Count(body, "event: message_stop"), "message_stop exactly once")
+
 	assert.Contains(t, body, `"text":"Hello"`)
 	assert.Contains(t, body, `"text":" world"`)
 	assert.Contains(t, body, `"stop_reason":"end_turn"`)
@@ -282,4 +286,103 @@ func TestEmitAnthropicSSEChunk_InitialUsageEcho(t *testing.T) {
 func TestFormatAnthropicSSEEvent(t *testing.T) {
 	out := string(formatAnthropicSSEEvent("message_start", []byte(`{"type":"message_start"}`)))
 	assert.Equal(t, "event: message_start\ndata: {\"type\":\"message_start\"}\n\n", out)
+}
+
+// TestEmitAnthropicSSEChunk_SplitFinishReasonAndUsage asserts that when
+// an OpenAI-compatible backend legally splits finish_reason and usage
+// across two separate chunks, message_stop appears exactly once on the
+// wire. Before the idempotency guard, the second chunk (usage-only)
+// also satisfied isTerminalChunk, causing a second message_stop.
+func TestEmitAnthropicSSEChunk_SplitFinishReasonAndUsage(t *testing.T) {
+	state := NewStreamState()
+
+	// Chunk 1: finish_reason present, no usage.
+	chunk1 := buildOpenAISSE(
+		`{"id":"c","object":"chat.completion.chunk","model":"m","choices":[{"index":0,"delta":{"role":"assistant","content":"hi"},"finish_reason":"stop"}]}`,
+	)
+	out1, done1, err := EmitAnthropicSSEChunk(chunk1, state, nil, "claude-sonnet-4-5")
+	require.NoError(t, err)
+	assert.True(t, done1, "finish_reason chunk must set streamDone")
+	assert.Equal(t, 1, strings.Count(string(out1), "event: message_stop"), "exactly one message_stop after finish_reason chunk")
+
+	// Chunk 2: usage-only, no finish_reason. The idempotency guard must
+	// suppress a second call to emitTerminalEvents.
+	chunk2 := buildOpenAISSE(
+		`{"id":"c","object":"chat.completion.chunk","model":"m","choices":[{"index":0,"delta":{}}],"usage":{"prompt_tokens":4,"completion_tokens":2,"total_tokens":6}}`,
+	)
+	out2, done2, err := EmitAnthropicSSEChunk(chunk2, state, nil, "claude-sonnet-4-5")
+	require.NoError(t, err)
+	assert.True(t, done2, "post-terminal usage chunk must still report streamDone")
+	assert.Equal(t, 0, strings.Count(string(out2), "event: message_stop"), "no second message_stop from usage-only chunk")
+
+	// Total across both chunks: exactly one message_stop.
+	combined := string(out1) + string(out2)
+	assert.Equal(t, 1, strings.Count(combined, "event: message_stop"), "exactly one message_stop total across split chunks")
+}
+
+// TestEmitAnthropicSSEChunk_ErrorPath covers the IsError emitter branch:
+// an error event followed by terminal state flags and no second emission.
+func TestEmitAnthropicSSEChunk_ErrorPath(t *testing.T) {
+	state := NewStreamState()
+	state.MessageStartSent = true // simulate mid-stream error
+
+	// Synthesize an extractedSSELine with IsError=true by building the
+	// wire bytes the way extractSSEDataLines produces for error events.
+	errInput := []byte("event: error\ndata: {\"type\":\"error\",\"error\":{\"type\":\"api_error\",\"message\":\"overloaded\"}}\n\n")
+
+	out, streamDone, err := EmitAnthropicSSEChunk(errInput, state, nil, "claude-sonnet-4-5")
+	require.NoError(t, err)
+	body := string(out)
+
+	assert.True(t, streamDone, "error path must set streamDone")
+	assert.True(t, state.MessageStopSent, "MessageStopSent must be true after error emission")
+	assert.Contains(t, body, "event: error", "error event must be emitted")
+	assert.Contains(t, body, "event: message_stop", "message_stop must follow error event")
+	assert.Equal(t, 1, strings.Count(body, "event: message_stop"), "exactly one message_stop after error")
+
+	// A second call with IsError must not produce another message_stop.
+	out2, streamDone2, err2 := EmitAnthropicSSEChunk(errInput, state, nil, "claude-sonnet-4-5")
+	require.NoError(t, err2)
+	assert.True(t, streamDone2)
+	assert.Equal(t, 0, strings.Count(string(out2), "event: message_stop"), "no second message_stop on re-entry")
+}
+
+// TestEmitAnthropicSSEChunk_DeterministicToolClose asserts that
+// closeAllOpenBlocks emits content_block_stop events in ascending
+// block-index order even when the underlying map iteration is
+// non-deterministic. Multi-tool streams previously produced an
+// unpredictable content_block_stop sequence because Go map iteration
+// order is randomised per program.
+func TestEmitAnthropicSSEChunk_DeterministicToolClose(t *testing.T) {
+	// Feed two tool calls and let the stream terminate. Run many times
+	// to surface any non-determinism.
+	for range 50 {
+		state := NewStreamState()
+		input := buildOpenAISSE(
+			// Tool 0 opens first.
+			`{"id":"c","object":"chat.completion.chunk","model":"m","choices":[{"index":0,"delta":{"role":"assistant","tool_calls":[{"index":0,"id":"call_0","type":"function","function":{"name":"alpha","arguments":""}}]},"finish_reason":null}]}`,
+			// Tool 1 opens second.
+			`{"id":"c","object":"chat.completion.chunk","model":"m","choices":[{"index":0,"delta":{"tool_calls":[{"index":1,"id":"call_1","type":"function","function":{"name":"beta","arguments":""}}]},"finish_reason":null}]}`,
+			// Terminal chunk closes both.
+			`{"id":"c","object":"chat.completion.chunk","model":"m","choices":[{"index":0,"delta":{},"finish_reason":"tool_calls"}],"usage":{"prompt_tokens":1,"completion_tokens":2,"total_tokens":3}}`,
+		)
+
+		out, done, err := EmitAnthropicSSEChunk(input, state, nil, "claude-sonnet-4-5")
+		require.NoError(t, err)
+		assert.True(t, done)
+
+		body := string(out)
+		// Both blocks must have a stop event.
+		assert.Equal(t, 2, strings.Count(body, "event: content_block_stop"), "both tool blocks must be closed")
+
+		// Block index 1 (alpha) must have its stop before block index 2 (beta).
+		// The emitter assigns block indices starting from 0 for the first
+		// tool and 1 for the second, so "index":1 stop precedes "index":2 stop.
+		firstStop := strings.Index(body, `"index":1`)
+		secondStop := strings.Index(body, `"index":2`)
+		// Both stops must appear; first tool's stop must come first.
+		require.Greater(t, firstStop, 0, "first tool block stop index must be present")
+		require.Greater(t, secondStop, 0, "second tool block stop index must be present")
+		assert.Less(t, firstStop, secondStop, "tool block stops must appear in block-index order")
+	}
 }

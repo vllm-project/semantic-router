@@ -23,10 +23,10 @@ import (
 //
 //   - Outbound (OpenAI SSE → Anthropic SSE), driven by the PR5 emitter:
 //     uses MessageStartSent, MessageStopSent, NextBlockIndex, the Open*
-//     pointers tracking which block index is currently open, the
-//     ToolIdxToBlockIndex / ToolUseEmittedStart maps mirroring the inbound
-//     pair in the reverse direction, LastChunkAt for the ping keepalive
-//     ticker, and InitialUsage for the message_start usage placeholder.
+//     pointers tracking which block index is currently open,
+//     ToolIdxToBlockIndex (the reverse of the inbound pair),
+//     LastChunkAt for the ping keepalive ticker, and InitialUsage for the
+//     message_start usage placeholder.
 //
 // One ClientProtocol per request means only one direction is active at a
 // time, so the two sub-sets never collide on the same instance.
@@ -46,7 +46,6 @@ type StreamState struct {
 	OpenTextBlockIndex   *int64
 	OpenThinkingBlockIdx *int64
 	ToolIdxToBlockIndex  map[int]int64
-	ToolUseEmittedStart  map[int]bool
 	LastChunkAt          time.Time
 	InitialUsage         anthropic.Usage
 }
@@ -58,7 +57,6 @@ func NewStreamState() *StreamState {
 		BlockIndexToToolIdx:        make(map[int64]int),
 		BlockIndexToThinkingActive: make(map[int64]bool),
 		ToolIdxToBlockIndex:        make(map[int]int64),
-		ToolUseEmittedStart:        make(map[int]bool),
 	}
 }
 

@@ -27,7 +27,6 @@ func TestNewStreamState_InitializesOutboundFields(t *testing.T) {
 	// Outbound maps are allocated so the emitter can write without a
 	// nil-map panic on first use.
 	require.NotNil(t, state.ToolIdxToBlockIndex)
-	require.NotNil(t, state.ToolUseEmittedStart)
 
 	// Outbound bookkeeping starts unset.
 	assert.False(t, state.MessageStartSent)
