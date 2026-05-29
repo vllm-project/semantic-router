@@ -41,6 +41,7 @@ package anthropic
 import (
 	"encoding/json"
 	"fmt"
+	"sort"
 
 	"github.com/anthropics/anthropic-sdk-go"
 	"github.com/openai/openai-go"
@@ -272,18 +273,8 @@ func orderedThinkingBlockIDs(ext *ir.IRExtensions) []string {
 	}
 	// Lexicographic sort matches the "content[0]", "content[1]"
 	// emission order used by the inverse extractor in client.go.
-	sortStrings(ids)
+	sort.Strings(ids)
 	return ids
-}
-
-// sortStrings is a small wrapper to keep the stdlib sort import out
-// of the public surface and make the call site self-documenting.
-func sortStrings(s []string) {
-	for i := 1; i < len(s); i++ {
-		for j := i; j > 0 && s[j-1] > s[j]; j-- {
-			s[j-1], s[j] = s[j], s[j-1]
-		}
-	}
 }
 
 // buildAnthropicUsage maps OpenAI completion usage onto the Anthropic
@@ -292,8 +283,9 @@ func sortStrings(s []string) {
 // upstream was an OpenAI backend (no cache, no server tools), ext's
 // counters are all zero and the cache_creation / server_tool_use
 // sub-objects are omitted from the wire output. A
-// ReasonCacheUnavailableOnOpenAIBackend info warning is appended in
-// that case so observability captures the structural difference.
+// ReasonCacheFieldsAbsent info warning is appended when an Anthropic-
+// source response has all-zero cache counters, so observability can
+// distinguish a legitimately uncached response from a translation gap.
 func buildAnthropicUsage(usage openai.CompletionUsage, ext *ir.IRExtensions) anthropicUsageResponse {
 	out := anthropicUsageResponse{
 		InputTokens:  usage.PromptTokens,
@@ -324,9 +316,9 @@ func buildAnthropicUsage(usage openai.CompletionUsage, ext *ir.IRExtensions) ant
 		ext.Ephemeral1hInputTokens == 0 {
 		ext.AppendWarning(ir.Warning{
 			Field:    "usage.cache",
-			Reason:   ir.ReasonCacheUnavailableOnOpenAIBackend,
+			Reason:   ir.ReasonCacheFieldsAbsent,
 			Severity: ir.WarningSeverityInfo,
-			Detail:   "Anthropic client received cache-free response (typically OpenAI backend)",
+			Detail:   "Anthropic client received response with no cache fields populated",
 		})
 	}
 

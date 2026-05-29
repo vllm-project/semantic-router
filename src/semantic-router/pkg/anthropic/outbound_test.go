@@ -321,12 +321,12 @@ func TestEmitAnthropicResponse_OpenAIBackendOmitsCacheObjectAndWarns(t *testing.
 	require.NotEmpty(t, ext.Warnings)
 	var sawCacheWarning bool
 	for _, w := range ext.Warnings {
-		if w.Reason == ir.ReasonCacheUnavailableOnOpenAIBackend {
+		if w.Reason == ir.ReasonCacheFieldsAbsent {
 			sawCacheWarning = true
 			assert.Equal(t, ir.WarningSeverityInfo, w.Severity)
 		}
 	}
-	assert.True(t, sawCacheWarning, "expected cache_unavailable warning")
+	assert.True(t, sawCacheWarning, "expected cache_fields_absent warning")
 }
 
 func TestEmitAnthropicResponse_EmptyContentReturnsEmptyArray(t *testing.T) {
@@ -496,14 +496,23 @@ func TestRoundTrip_AnthropicResponse_StopReasonAndUsage(t *testing.T) {
 	assert.Equal(t, original.Usage.CacheCreation.Ephemeral1hInputTokens, restored.Usage.CacheCreation.Ephemeral1hInputTokens)
 }
 
-func TestSortStrings_StableOrder(t *testing.T) {
-	// Internal helper sanity check — content[10] must sort after
-	// content[2] under lexicographic order; that's acceptable because
-	// the inverse extractor uses sequential indices without padding
-	// and signatures in practice never exceed a single-digit count.
-	in := []string{"content[2]", "content[1]", "content[0]"}
-	sortStrings(in)
-	assert.Equal(t, []string{"content[0]", "content[1]", "content[2]"}, in)
+func TestOrderedThinkingBlockIDs_LexicographicOrder(t *testing.T) {
+	// Verify orderedThinkingBlockIDs returns IDs in deterministic
+	// lexicographic order. Multi-digit indices sort by byte value, not
+	// by parsed integer, so "content[10]" precedes "content[1]" because
+	// '0' (0x30) < ']' (0x5D) at the first differing byte. The SSE
+	// emitter consumes this for replay ordering and requires only
+	// determinism, not numeric ordering.
+	ext := &ir.IRExtensions{
+		ThinkingSignatures: map[string]string{
+			"content[2]":  "sig2",
+			"content[10]": "sig10",
+			"content[1]":  "sig1",
+			"content[0]":  "sig0",
+		},
+	}
+	got := orderedThinkingBlockIDs(ext)
+	assert.Equal(t, []string{"content[0]", "content[10]", "content[1]", "content[2]"}, got)
 }
 
 func TestEmitAnthropicResponse_PreservesIDAndModel(t *testing.T) {

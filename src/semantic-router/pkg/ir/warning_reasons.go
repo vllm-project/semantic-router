@@ -62,11 +62,12 @@ const (
 	// dropped entries.
 	ReasonWarningsTruncated WarningReason = "warnings_truncated"
 
-	// ReasonCacheUnavailableOnOpenAIBackend indicates an Anthropic client
-	// received a response from an OpenAI backend that has no cache
-	// support, so usage.cache_* fields are zero by definition. Info-level
-	// so it does not surface as a lossy warning in the response header.
-	ReasonCacheUnavailableOnOpenAIBackend WarningReason = "cache_unavailable_on_openai_backend"
+	// ReasonCacheFieldsAbsent indicates an Anthropic-source response had all
+	// cache usage counters at zero. This covers both the case where the user
+	// did not annotate any prompt segment with cache_control (no cache was
+	// requested) and the case where an OpenAI backend was used (no cache
+	// support). Info-level so it does not surface as a lossy warning.
+	ReasonCacheFieldsAbsent WarningReason = "cache_fields_absent"
 
 	// ReasonAnthropicStopReasonCoerced indicates an OpenAI finish_reason
 	// could not be mapped to a known Anthropic stop_reason and was
