@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"regexp"
 	"sort"
 	"strings"
 	"sync"
@@ -25,6 +26,14 @@ var deployMu sync.Mutex
 
 // maxBackups is the maximum number of config backups to keep
 const maxBackups = 10
+
+// configVersionPattern matches the backup version identifier produced by
+// recordRouterConfigArtifacts, i.e. time.Now().Format("20060102-150405")
+// (YYYYMMDD-HHMMSS). The rollback endpoint accepts a caller-supplied version
+// and uses it to build a filesystem path, so the value is restricted to this
+// exact shape to prevent path traversal (e.g. "../../../etc/passwd") out of the
+// backup directory.
+var configVersionPattern = regexp.MustCompile(`^[0-9]{8}-[0-9]{6}$`)
 
 // RouterConfigUpdateRequest is the JSON body for a router config update request.
 type RouterConfigUpdateRequest struct {
@@ -73,6 +82,15 @@ func (s *ClassificationAPIServer) handleConfigRollback(w http.ResponseWriter, r 
 	}
 	if req.Version == "" {
 		s.writeErrorResponse(w, http.StatusBadRequest, "INVALID_INPUT", "version is required")
+		return
+	}
+	// Reject anything that is not a canonical backup version. req.Version is
+	// interpolated into a filesystem path below, so an unvalidated value such as
+	// "../../../etc/passwd" would escape the backup directory (filepath.Join
+	// resolves the "..") and read/restore an arbitrary file as the live config.
+	if !configVersionPattern.MatchString(req.Version) {
+		s.writeErrorResponse(w, http.StatusBadRequest, "INVALID_INPUT",
+			"version must match the backup timestamp format YYYYMMDD-HHMMSS")
 		return
 	}
 
