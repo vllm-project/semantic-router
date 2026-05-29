@@ -58,7 +58,24 @@ func (r *OpenAIRouter) prepareAnthropicRoutingRequest(
 
 	openAIRequest.Model = targetModel
 	streaming := ctx.ExpectStreamingResponse
-	anthropicBody, err := anthropic.ToAnthropicRequestBody(openAIRequest)
+
+	// Capture Anthropic-only fields from the raw inbound body (cache_control,
+	// top_k, metadata.user_id, multi-block system, image blocks, tool_result
+	// is_error/array content) and from the incoming headers (anthropic-version,
+	// anthropic-beta). For OpenAI-shape inbound the carrier ends up empty and
+	// the rebuild is byte-identical to today. The carrier is also stashed on
+	// the request context so the header builder can consume the same values
+	// without re-parsing.
+	passthrough, ptErr := anthropic.BuildPassthroughFromAnthropicBody(ctx.OriginalRequestBody)
+	if ptErr != nil {
+		logging.Debugf("Anthropic passthrough capture skipped: %v", ptErr)
+	}
+	if passthrough != nil {
+		passthrough.SetHeadersFromIncoming(ctx.Headers)
+	}
+	ctx.AnthropicPassthrough = passthrough
+
+	anthropicBody, err := anthropic.ToAnthropicRequestBodyWithPassthrough(openAIRequest, passthrough)
 	if err != nil {
 		logging.Errorf("Failed to transform request to Anthropic format: %v", err)
 		return "", nil, r.createErrorResponse(500, fmt.Sprintf("Request transformation error: %v", err))
@@ -120,9 +137,9 @@ func (r *OpenAIRouter) buildAnthropicRoutingResponse(
 	bodyLength := len(anthropicBody)
 	var anthropicHeaders []anthropic.HeaderKeyValue
 	if ctx.ExpectStreamingResponse {
-		anthropicHeaders = anthropic.BuildStreamingRequestHeaders(accessKey, bodyLength, messagesPath)
+		anthropicHeaders = anthropic.BuildStreamingRequestHeadersWithPassthrough(accessKey, bodyLength, messagesPath, ctx.AnthropicPassthrough)
 	} else {
-		anthropicHeaders = anthropic.BuildRequestHeaders(accessKey, bodyLength, messagesPath)
+		anthropicHeaders = anthropic.BuildRequestHeadersWithPassthrough(accessKey, bodyLength, messagesPath, ctx.AnthropicPassthrough)
 	}
 	setHeaders := make([]*core.HeaderValueOption, 0, len(anthropicHeaders)+8)
 	for _, header := range anthropicHeaders {

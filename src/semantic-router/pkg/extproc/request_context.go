@@ -62,6 +62,11 @@ type RequestContext struct {
 	IsStreamingResponse     bool                   // set from response Content-Type
 	AnthropicStream         *anthropic.StreamState // Anthropic SSE → OpenAI translation state
 
+	// AnthropicPassthrough carries Anthropic-only request fields captured from
+	// the raw inbound body and incoming headers, so the request-body writer
+	// and header builder can replay them on the outbound side.
+	AnthropicPassthrough *anthropic.AnthropicPassthrough
+
 	// Semi-streaming body handler (non-nil when Envoy sends STREAMED body chunks)
 	StreamedBody *StreamedBodyHandler
 

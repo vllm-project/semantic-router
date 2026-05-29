@@ -23,6 +23,7 @@ var BaselineRouterContract = []string{
 	"decision-fallback-behavior",
 	"plugin-config-variations",
 	"chat-completions-progressive-stress",
+	"anthropic-passthrough-openai-regression",
 	// Session observability
 	"session-telemetry-metrics",
 	"session-pricing-chat-completions",

@@ -332,8 +332,16 @@ func WithStreamingRequestBody(body []byte) ([]byte, error) {
 }
 
 // BuildStreamingRequestHeaders returns headers for a streaming Anthropic request.
+// Equivalent to BuildStreamingRequestHeadersWithPassthrough with a nil passthrough.
 func BuildStreamingRequestHeaders(apiKey string, bodyLength int, messagesPath string) []HeaderKeyValue {
-	return buildRequestHeaders(apiKey, bodyLength, messagesPath, true)
+	return buildRequestHeaders(apiKey, bodyLength, messagesPath, true, nil)
+}
+
+// BuildStreamingRequestHeadersWithPassthrough is the passthrough-aware form of
+// BuildStreamingRequestHeaders. See BuildRequestHeadersWithPassthrough for the
+// header precedence contract.
+func BuildStreamingRequestHeadersWithPassthrough(apiKey string, bodyLength int, messagesPath string, pt *AnthropicPassthrough) []HeaderKeyValue {
+	return buildRequestHeaders(apiKey, bodyLength, messagesPath, true, pt)
 }
 
 // withStreamFlag adds stream=true to an Anthropic request JSON body.
