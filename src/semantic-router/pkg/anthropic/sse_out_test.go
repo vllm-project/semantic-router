@@ -259,6 +259,27 @@ func TestEmitAnthropicSSEChunk_AnthropicOnlyStopReasonOverride(t *testing.T) {
 	assert.Contains(t, string(out), `"stop_reason":"pause_turn"`)
 }
 
+// TestEmitAnthropicSSEChunk_StopSequenceVariant asserts that when
+// ext.AnthropicStopReason is "stop_sequence" the outbound message_delta
+// carries both stop_reason:"stop_sequence" and a non-nil stop_sequence
+// field with the sequence string. This exercises mapOpenAIFinishReasonToAnthropic's
+// stop_sequence branch end-to-end.
+func TestEmitAnthropicSSEChunk_StopSequenceVariant(t *testing.T) {
+	state := NewStreamState()
+	ext := &ir.IRExtensions{
+		AnthropicStopReason:   "stop_sequence",
+		AnthropicStopSequence: "DONE",
+	}
+	input := buildOpenAISSE(
+		`{"id":"c","object":"chat.completion.chunk","model":"m","choices":[{"index":0,"delta":{"role":"assistant","content":"x"},"finish_reason":"stop"}],"usage":{"prompt_tokens":1,"completion_tokens":1,"total_tokens":2}}`,
+	)
+	out, _, err := EmitAnthropicSSEChunk(input, state, ext, "claude-sonnet-4-5")
+	require.NoError(t, err)
+	body := string(out)
+	assert.Contains(t, body, `"stop_reason":"stop_sequence"`)
+	assert.Contains(t, body, `"stop_sequence":"DONE"`)
+}
+
 // TestEmitAnthropicSSEChunk_InitialUsageEcho asserts that an initial
 // usage captured on the inbound side reaches the outbound
 // message_start payload, preserving the input_tokens count clients use
