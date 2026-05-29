@@ -362,22 +362,18 @@ func appendCapturedPassThroughHeaders(
 	if ctx == nil || ctx.IRExtensions == nil {
 		return
 	}
-	captured := map[string]string{
-		"anthropic-version":                         ctx.IRExtensions.InboundAnthropicVersion,
-		"anthropic-beta":                            ctx.IRExtensions.InboundAnthropicBeta,
-		"anthropic-dangerous-direct-browser-access": ctx.IRExtensions.InboundDangerousDirectBrowserAccess,
-	}
-	for key, value := range captured {
+	for _, h := range anthropicPassThroughHeaders {
+		value := h.read(ctx.IRExtensions)
 		if value == "" {
 			continue
 		}
 		if profile != nil {
-			if _, pinned := profile.ExtraHeaders[key]; pinned {
+			if _, pinned := profile.ExtraHeaders[h.name]; pinned {
 				continue
 			}
 		}
 		*setHeaders = append(*setHeaders, &core.HeaderValueOption{
-			Header: &core.HeaderValue{Key: key, RawValue: []byte(value)},
+			Header: &core.HeaderValue{Key: h.name, RawValue: []byte(value)},
 		})
 	}
 }

@@ -202,24 +202,31 @@ var hopByHopDropList = []string{
 // anthropicPassThroughHeader names a header captured from an Anthropic
 // inbound request so the body-phase routing step can layer the value
 // under the provider-profile pin. Stored on IRExtensions; downstream
-// reads decide whether to forward.
+// reads decide whether to forward. `anthropicPassThroughHeaders` is
+// the canonical list: both capture (request-header phase) and forward
+// (request-body routing phase via appendCapturedPassThroughHeaders)
+// iterate it, so adding a new header only requires one entry here.
 type anthropicPassThroughHeader struct {
 	name   string
 	assign func(ext *ir.IRExtensions, value string)
+	read   func(ext *ir.IRExtensions) string
 }
 
 var anthropicPassThroughHeaders = []anthropicPassThroughHeader{
 	{
 		name:   "anthropic-version",
 		assign: func(ext *ir.IRExtensions, v string) { ext.InboundAnthropicVersion = v },
+		read:   func(ext *ir.IRExtensions) string { return ext.InboundAnthropicVersion },
 	},
 	{
 		name:   "anthropic-beta",
 		assign: func(ext *ir.IRExtensions, v string) { ext.InboundAnthropicBeta = v },
+		read:   func(ext *ir.IRExtensions) string { return ext.InboundAnthropicBeta },
 	},
 	{
 		name:   "anthropic-dangerous-direct-browser-access",
 		assign: func(ext *ir.IRExtensions, v string) { ext.InboundDangerousDirectBrowserAccess = v },
+		read:   func(ext *ir.IRExtensions) string { return ext.InboundDangerousDirectBrowserAccess },
 	},
 }
 
