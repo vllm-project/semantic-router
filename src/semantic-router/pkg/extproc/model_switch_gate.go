@@ -105,7 +105,8 @@ func estimateGateCacheWarmth(model string, now time.Time) (float64, bool) {
 
 // emitEnforceUnavailableLog warns once per request when enforce mode is
 // configured but the gate fell back to audit-only because previous_model was
-// missing — typically Chat Completions traffic without per-turn model history.
+// missing — e.g. the first turn of a session, an unresolvable session, or a
+// session whose recorded model expired/was lost on restart.
 func emitEnforceUnavailableLog(decision selection.ModelSwitchGateDecision, requestID, decisionName string) {
 	if decision.Mode != selection.ModelSwitchGateModeEnforce {
 		return
@@ -120,7 +121,7 @@ func emitEnforceUnavailableLog(decision selection.ModelSwitchGateDecision, reque
 		"request_id":      requestID,
 		"decision":        decisionName,
 		"missing_signals": decision.MissingSignals,
-		"hint":            "enforce mode currently requires per-turn model history; only Response API requests carry it. Chat Completions are observed in shadow until persistence ships.",
+		"hint":            "enforce mode requires a known previous model for the session; it is unavailable on the first turn, for unresolvable sessions, or after a restart (the Chat Completions last-model store is in-memory).",
 	})
 }
 

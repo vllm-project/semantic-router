@@ -131,12 +131,14 @@ This ensures:
 - 2026-05-10: Chose Beta distribution accumulation (same as online `UpdateFeedback`) for offline replay rather than introducing a separate reward model. Keeps the weight format identical across online and offline paths, simplifying version promotion.
 - 2026-05-10: Added `MinRecordsPerModel` threshold so models with sparse offline evidence keep their parent-version priors unchanged, preventing noisy updates from small samples.
 - 2026-05-10: Policy versions are file-backed JSON rather than database-backed to keep the offline path zero-dependency and operator-friendly for inspection.
+- 2026-05-29: Unblocked enforce-mode for Chat Completions by recording the per-turn model in an in-memory, session-keyed last-model store (`pkg/sessiontelemetry/last_model.go`) at response time (`recordSessionTurn`) and reading it back as `ctx.PreviousModel` during request prep (`populateSessionTransitionFields`). Previously only Response API carried previous-model history via the conversation chain, so the ModelSwitchGate fell back to audit-only for all Chat Completions traffic regardless of mode (#1753). Keyed on the same `ctx.SessionID` the read side uses; mirrors the existing telemetry/transition store idioms (1h TTL + size cap).
 
 ## Follow-up Debt / ADR Links
 
 - `OfflineDatasetBuilder` implementation depends on RouterReplay store query capabilities (session-range queries). May need a store extension for windowed reads.
 - Shadow evaluator integration into the ExtProc hot path must respect latency budgets. Consider async recording or bounded channel.
 - No ADR required yet — this is additive infrastructure that does not change the runtime decision contract.
+- The Chat Completions last-model store (`pkg/sessiontelemetry/last_model.go`) is in-memory and per-replica (lost on restart, not shared across horizontally-scaled routers), matching the existing telemetry/transition stores. Durable/shared previous-model persistence is follow-up debt for enforce-mode continuity across replicas and restarts; until then enforce continuity is best-effort and the gate emits `model_switch_gate_enforce_unavailable` when the signal is absent.
 
 ## Validation
 
