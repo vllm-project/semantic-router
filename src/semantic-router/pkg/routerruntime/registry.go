@@ -5,6 +5,7 @@ import (
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/memory"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/selection"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/services"
 )
 
@@ -16,6 +17,7 @@ type Registry struct {
 	classificationService *services.ClassificationService
 	memoryStore           memory.Store
 	vectorStore           *VectorStoreRuntime
+	modelSelector         *selection.Registry
 }
 
 func NewRegistry(cfg *config.RouterConfig) *Registry {
@@ -91,6 +93,24 @@ func (r *Registry) SetVectorStoreRuntime(runtime *VectorStoreRuntime) {
 	}
 	r.mu.Lock()
 	r.vectorStore = runtime
+	r.mu.Unlock()
+}
+
+func (r *Registry) ModelSelector() *selection.Registry {
+	if r == nil {
+		return nil
+	}
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	return r.modelSelector
+}
+
+func (r *Registry) SetModelSelector(registry *selection.Registry) {
+	if r == nil {
+		return
+	}
+	r.mu.Lock()
+	r.modelSelector = registry
 	r.mu.Unlock()
 }
 

@@ -100,8 +100,8 @@ func (s *StaticSelector) SetCategoryScore(category, model string, score float64)
 
 // Select chooses the best model based on static configuration scores
 func (s *StaticSelector) Select(ctx context.Context, selCtx *SelectionContext) (*SelectionResult, error) {
-	if len(selCtx.CandidateModels) == 0 {
-		return nil, fmt.Errorf("no candidate models provided")
+	if err := ValidateSelectionContext(selCtx); err != nil {
+		return nil, err
 	}
 
 	allScores := make(map[string]float64)

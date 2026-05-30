@@ -1,3 +1,27 @@
+{{- $routerMultiReplica := false -}}
+{{- if .Values.autoscaling.enabled -}}
+{{- $routerMultiReplica = gt (int .Values.autoscaling.maxReplicas) 1 -}}
+{{- else -}}
+{{- $routerMultiReplica = gt (int .Values.replicaCount) 1 -}}
+{{- end -}}
+{{- $localSelectorStateDecisions := list -}}
+{{- $config := (get .Values "config") | default (dict) -}}
+{{- $routing := (get $config "routing") | default (dict) -}}
+{{- range $decision := ((get $routing "decisions") | default (list)) -}}
+{{- $algorithm := (get $decision "algorithm") | default (dict) -}}
+{{- $algorithmType := (get $algorithm "type") | default "" -}}
+{{- if or (eq $algorithmType "elo") (eq $algorithmType "rl_driven") (eq $algorithmType "gmtrouter") -}}
+{{- $localSelectorStateDecisions = append $localSelectorStateDecisions ((get $decision "name") | default "<unnamed>") -}}
+{{- end -}}
+{{- end -}}
+{{- $safetyGuards := (get .Values "safetyGuards") | default (dict) -}}
+{{- $rejectMultiReplicaLocalSelectorState := true -}}
+{{- if hasKey $safetyGuards "rejectMultiReplicaLocalSelectorState" -}}
+{{- $rejectMultiReplicaLocalSelectorState = get $safetyGuards "rejectMultiReplicaLocalSelectorState" -}}
+{{- end -}}
+{{- if and $rejectMultiReplicaLocalSelectorState $routerMultiReplica (gt (len $localSelectorStateDecisions) 0) -}}
+{{- fail (printf "multi-replica router deployments cannot use local learning selector state for decisions [%s]; configure a shared selector-state store or set safetyGuards.rejectMultiReplicaLocalSelectorState=false after accepting replica-local learning divergence" (join ", " $localSelectorStateDecisions)) -}}
+{{- end }}
 apiVersion: apps/v1
 kind: Deployment
 metadata:

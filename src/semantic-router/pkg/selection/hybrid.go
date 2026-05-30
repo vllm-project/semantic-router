@@ -18,6 +18,7 @@ package selection
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"math"
 	"strings"
@@ -167,8 +168,8 @@ func (h *HybridSelector) resolveQualityGap(taskFamily, currentModel, candidateMo
 
 // Select chooses the best model by combining multiple selection methods
 func (h *HybridSelector) Select(ctx context.Context, selCtx *SelectionContext) (*SelectionResult, error) {
-	if len(selCtx.CandidateModels) == 0 {
-		return nil, fmt.Errorf("no candidate models provided")
+	if err := ValidateSelectionContext(selCtx); err != nil {
+		return nil, err
 	}
 
 	// Collect scores from each component
@@ -312,32 +313,57 @@ func (h *HybridSelector) recordComponentAgreement(componentResults []*SelectionR
 
 // UpdateFeedback propagates feedback to all component selectors
 func (h *HybridSelector) UpdateFeedback(ctx context.Context, feedback *Feedback) error {
+	if err := h.normalizeFeedbackForComponents(feedback); err != nil {
+		return err
+	}
+
 	var errs []error
+	updatedComponents := 0
 
 	if h.eloSelector != nil {
 		if err := h.eloSelector.UpdateFeedback(ctx, feedback); err != nil {
 			errs = append(errs, fmt.Errorf("elo: %w", err))
+		} else {
+			updatedComponents++
 		}
 	}
 
 	if h.routerDCSelector != nil {
 		if err := h.routerDCSelector.UpdateFeedback(ctx, feedback); err != nil {
 			errs = append(errs, fmt.Errorf("router_dc: %w", err))
+		} else {
+			updatedComponents++
 		}
 	}
 
 	if h.autoMixSelector != nil {
 		if err := h.autoMixSelector.UpdateFeedback(ctx, feedback); err != nil {
 			errs = append(errs, fmt.Errorf("automix: %w", err))
+		} else {
+			updatedComponents++
 		}
 	}
 
 	if len(errs) > 0 {
-		return fmt.Errorf("feedback update errors: %v", errs)
+		return fmt.Errorf("feedback update errors: %w", errors.Join(errs...))
 	}
 
-	logging.Debugf("[HybridSelector] Propagated feedback to %d components", 3)
+	logging.Debugf("[HybridSelector] Propagated feedback to %d components", updatedComponents)
 	return nil
+}
+
+func (h *HybridSelector) normalizeFeedbackForComponents(feedback *Feedback) error {
+	if err := NormalizeFeedback(feedback); err != nil {
+		return err
+	}
+	if h.requiresWinnerFeedback() && feedback.WinnerModel == "" {
+		return ErrFeedbackWinnerRequired
+	}
+	return nil
+}
+
+func (h *HybridSelector) requiresWinnerFeedback() bool {
+	return h.routerDCSelector != nil || h.autoMixSelector != nil
 }
 
 // combineScores combines scores from all components with weights

@@ -84,7 +84,7 @@ func TestScheduleResponseMemoryStore_SkippedWhenJailbreakDetected(t *testing.T) 
 	router.scheduleResponseMemoryStore(reqCtx, chatCompletionBody("test"))
 }
 
-func TestScheduleResponseMemoryStore_FallsBackToGlobalAutoStore(t *testing.T) {
+func TestScheduleResponseMemoryStore_FallsBackToRouterAutoStore(t *testing.T) {
 	router := &OpenAIRouter{
 		Config: &config.RouterConfig{
 			Memory: config.MemoryConfig{AutoStore: true},
@@ -94,10 +94,10 @@ func TestScheduleResponseMemoryStore_FallsBackToGlobalAutoStore(t *testing.T) {
 	}
 
 	// No per-decision plugin → extractAutoStore returns false
-	// Global AutoStore=true → fallback kicks in → function does NOT return early
+	// Router AutoStore=true -> fallback kicks in -> function does NOT return early
 	// The goroutine runs but extractMemoryInfo fails gracefully (no ResponseAPICtx)
 	reqCtx := &RequestContext{
-		RequestID: "req-global-fallback",
+		RequestID: "req-router-fallback",
 	}
 
 	router.scheduleResponseMemoryStore(reqCtx, chatCompletionBody("test"))
@@ -111,7 +111,7 @@ func TestScheduleResponseMemoryStore_SkippedWhenBothAutoStoresDisabled(t *testin
 		MemoryExtractor: memory.NewMemoryChunkStore(&noopMemoryStore{}),
 	}
 
-	// extractAutoStore returns false + global AutoStore=false → autoStoreEnabled stays false → skip
+	// extractAutoStore returns false + router AutoStore=false -> autoStoreEnabled stays false -> skip
 	reqCtx := &RequestContext{
 		RequestID: "req-both-disabled",
 	}

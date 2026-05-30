@@ -63,19 +63,45 @@ func TestRecoverInterruptedMLJobs(t *testing.T) {
 	}
 	defer s.Close()
 
-	j := MLJobRecord{
+	running := MLJobRecord{
 		ID: "ml-train-9", Type: "train", Status: "running",
-		CreatedAt: time.Now().UTC(),
+		CreatedAt: time.Now().UTC(), Progress: 37, CurrentStep: "training",
 	}
-	if err := s.PutMLJob(j); err != nil {
+	pending := MLJobRecord{
+		ID: "ml-config-2", Type: "config", Status: "pending",
+		CreatedAt: time.Now().UTC(), Progress: 0,
+	}
+	completed := MLJobRecord{
+		ID: "ml-benchmark-1", Type: "benchmark", Status: "completed",
+		CreatedAt: time.Now().UTC(), CompletedAt: time.Now().UTC(), Progress: 100,
+	}
+	for _, job := range []MLJobRecord{running, pending, completed} {
+		if putErr := s.PutMLJob(job); putErr != nil {
+			t.Fatal(putErr)
+		}
+	}
+	if recoverErr := s.RecoverInterruptedMLJobs("restart"); recoverErr != nil {
+		t.Fatal(recoverErr)
+	}
+	gotRunning, _ := s.GetMLJob(running.ID)
+	if gotRunning == nil || gotRunning.Status != "failed" || gotRunning.Error != "restart" || gotRunning.CurrentStep != mlPipelineRecoveredStep {
+		t.Fatalf("running got %+v", gotRunning)
+	}
+	gotPending, _ := s.GetMLJob(pending.ID)
+	if gotPending == nil || gotPending.Status != "failed" || gotPending.Error != "restart" || gotPending.CurrentStep != mlPipelineRecoveredStep {
+		t.Fatalf("pending got %+v", gotPending)
+	}
+	gotCompleted, _ := s.GetMLJob(completed.ID)
+	if gotCompleted == nil || gotCompleted.Status != "completed" || gotCompleted.Error != "" {
+		t.Fatalf("completed got %+v", gotCompleted)
+	}
+
+	events, err := s.ListMLProgressEvents(running.ID, 10)
+	if err != nil {
 		t.Fatal(err)
 	}
-	if err := s.RecoverInterruptedMLJobs("restart"); err != nil {
-		t.Fatal(err)
-	}
-	got, _ := s.GetMLJob(j.ID)
-	if got == nil || got.Status != "failed" || got.Error != "restart" {
-		t.Fatalf("got %+v", got)
+	if len(events) != 1 || events[0].Step != mlPipelineRecoveredStep || events[0].Percent != running.Progress || events[0].Message != "restart" {
+		t.Fatalf("running events %+v", events)
 	}
 }
 

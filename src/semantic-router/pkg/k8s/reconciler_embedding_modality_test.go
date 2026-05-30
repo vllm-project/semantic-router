@@ -18,12 +18,13 @@ import (
 
 // TestReconcileEmbeddingModalityValidation drives a real Reconciler instance
 // through validateAndUpdate using controller-runtime's fake client, verifying
-// that the embedding-modality contract is enforced on the K8s reconcile path
-// (the gap rootfs identified in PR #1880's review).
+// that the shared K8s config validator dispatch enforces the embedding-modality
+// contract on the reconcile path (the gap rootfs identified in PR #1880's
+// review).
 //
-// This test must not pass if the validation block in
-// reconciler.go::validateAndUpdate is removed; that property is what makes
-// it the load-bearing artifact for the contract this PR adds.
+// This test must not pass if the ValidateKubernetesConfigContracts block in
+// reconciler.go::validateAndUpdate is removed; that property is what keeps this
+// as a load-bearing artifact for the reconcile-path validation contract.
 //
 // TODO: once an embedding-modality e2e profile lands (#1881), consider
 // migrating to the fixture-driven pattern used by
@@ -87,6 +88,34 @@ func TestReconcileEmbeddingModalityValidation(t *testing.T) {
 			runReconcileEmbeddingModalityCase(t, tc)
 		})
 	}
+}
+
+func TestReconcileKubernetesConfigValidationDispatch(t *testing.T) {
+	const namespace = "default"
+	pool := buildEmbeddingModalityPool(namespace)
+	route := buildEmbeddingModalityRoute(namespace, "text_rule_under_test", "text")
+	staticConfig := buildEmbeddingModalityStaticConfig("qwen3")
+	negativeCandidatePoolSize := -1
+	staticConfig.Tools.AdvancedFiltering = &config.AdvancedToolFilteringConfig{
+		Enabled:           true,
+		CandidatePoolSize: &negativeCandidatePoolSize,
+	}
+
+	reconciler := buildEmbeddingModalityReconciler(t, namespace, staticConfig, pool, route)
+	gotErr := reconciler.validateAndUpdate(context.Background(), pool, route)
+	if gotErr == nil {
+		t.Fatal("validateAndUpdate: expected shared K8s config validation error, got nil")
+	}
+	for _, want := range []string{
+		"kubernetes config validation failed:",
+		"tools.advanced_filtering.candidate_pool_size must be >= 0",
+	} {
+		if !strings.Contains(gotErr.Error(), want) {
+			t.Errorf("error should contain %q, got: %s", want, gotErr.Error())
+		}
+	}
+
+	assertKubernetesValidationFailureStatus(t, reconciler, namespace)
 }
 
 // reconcileEmbeddingModalityCase is one row in the embedding-modality
@@ -232,7 +261,7 @@ func buildEmbeddingModalityReconciler(
 
 // assertEmbeddingModalityResult applies the case's expectations to the
 // validateAndUpdate return value. The accepted cases must return nil; the
-// rejected cases must return a wrapped embedding-validation error whose
+// rejected cases must return a wrapped K8s-config-validation error whose
 // message contains every named substring.
 func assertEmbeddingModalityResult(t *testing.T, tc reconcileEmbeddingModalityCase, gotErr error) {
 	t.Helper()
@@ -249,7 +278,7 @@ func assertEmbeddingModalityResult(t *testing.T, tc reconcileEmbeddingModalityCa
 		t.Fatalf("validateAndUpdate: expected error, got nil")
 	}
 
-	const wantPrefix = "embedding modality validation failed:"
+	const wantPrefix = "kubernetes config validation failed:"
 	if !strings.HasPrefix(gotErr.Error(), wantPrefix) {
 		t.Errorf("error should start with %q so callers can pattern-match the failure class, got: %s",
 			wantPrefix, gotErr.Error())
@@ -329,4 +358,27 @@ func assertReadyCondition(
 		return
 	}
 	t.Errorf("%s has no Ready condition; want status=%s reason=%q", subject, wantStatus, wantReason)
+}
+
+func assertKubernetesValidationFailureStatus(t *testing.T, reconciler *Reconciler, namespace string) {
+	t.Helper()
+
+	ctx := context.Background()
+	var refetchedPool v1alpha1.IntelligentPool
+	if err := reconciler.client.Get(ctx, client.ObjectKey{
+		Namespace: namespace,
+		Name:      "embedding-modality-pool",
+	}, &refetchedPool); err != nil {
+		t.Fatalf("Get pool after reconcile: %v", err)
+	}
+	assertReadyCondition(t, "pool", refetchedPool.Status.Conditions, metav1.ConditionFalse, "ValidationFailed")
+
+	var refetchedRoute v1alpha1.IntelligentRoute
+	if err := reconciler.client.Get(ctx, types.NamespacedName{
+		Namespace: namespace,
+		Name:      "embedding-modality-route",
+	}, &refetchedRoute); err != nil {
+		t.Fatalf("Get route after reconcile: %v", err)
+	}
+	assertReadyCondition(t, "route", refetchedRoute.Status.Conditions, metav1.ConditionFalse, "ValidationFailed")
 }

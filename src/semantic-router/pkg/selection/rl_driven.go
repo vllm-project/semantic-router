@@ -18,6 +18,7 @@ package selection
 
 import (
 	"context"
+	"encoding/base64"
 	"fmt"
 	"math"
 	"math/rand/v2"
@@ -28,6 +29,11 @@ import (
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
+)
+
+const (
+	rlUserStoragePrefix    = "_rl_user:"
+	rlSessionStoragePrefix = "_rl_session:"
 )
 
 // RLDrivenConfig configures the RL-driven model selector
@@ -492,8 +498,8 @@ func (r *RLDrivenSelector) InitializeFromConfig(modelConfig map[string]config.Mo
 // to analyze the query and make an intelligent routing decision (Router-R1 approach).
 // If LLM routing fails or is disabled, falls back to Thompson Sampling.
 func (r *RLDrivenSelector) Select(ctx context.Context, selCtx *SelectionContext) (*SelectionResult, error) {
-	if len(selCtx.CandidateModels) == 0 {
-		return nil, fmt.Errorf("no candidate models provided")
+	if err := ValidateSelectionContext(selCtx); err != nil {
+		return nil, err
 	}
 
 	// Try Router-R1 LLM routing first if enabled
@@ -713,8 +719,8 @@ func (r *RLDrivenSelector) SelectMultiRound(ctx context.Context, selCtx *Selecti
 		return nil, fmt.Errorf("multi-round aggregation not enabled")
 	}
 
-	if len(selCtx.CandidateModels) == 0 {
-		return nil, fmt.Errorf("no candidate models provided")
+	if err := ValidateSelectionContext(selCtx); err != nil {
+		return nil, err
 	}
 
 	maxRounds := r.config.MaxAggregationRounds
@@ -798,8 +804,8 @@ func (r *RLDrivenSelector) AggregateResponses(responses map[string]string, score
 
 // UpdateFeedback updates the RL model based on user feedback
 func (r *RLDrivenSelector) UpdateFeedback(ctx context.Context, feedback *Feedback) error {
-	if feedback.WinnerModel == "" && feedback.LoserModel == "" {
-		return fmt.Errorf("either winner_model or loser_model is required")
+	if err := NormalizeFeedback(feedback); err != nil {
+		return err
 	}
 
 	// Determine feedback weight based on type
@@ -847,12 +853,7 @@ func (r *RLDrivenSelector) UpdateFeedback(ctx context.Context, feedback *Feedbac
 	logging.Infof("[RLDrivenSelector] Feedback updated: winner=%s, loser=%s, user=%s, weight=%.2f",
 		feedback.WinnerModel, feedback.LoserModel, feedback.UserID, weight)
 
-	// Mark storage as dirty
-	if r.storage != nil {
-		if fileStorage, ok := r.storage.(*FileEloStorage); ok {
-			fileStorage.MarkDirty()
-		}
-	}
+	r.persistState()
 
 	// Record feedback metrics
 	RecordRLFeedback(feedback.WinnerModel, feedback.LoserModel, feedback.DecisionName, feedback.UserID)
@@ -1290,32 +1291,33 @@ func (r *RLDrivenSelector) loadFromStorage() error {
 	defer r.globalMu.Unlock()
 	defer r.categoryMu.Unlock()
 
+	r.userMu.Lock()
+	r.sessionMu.Lock()
+	defer r.userMu.Unlock()
+	defer r.sessionMu.Unlock()
+
 	for category, ratings := range allRatings {
+		if userID, ok := decodeRLStateStorageKey(category, rlUserStoragePrefix); ok {
+			if r.userPreferences[userID] == nil {
+				r.userPreferences[userID] = make(map[string]*ModelPreference)
+			}
+			for model, rating := range ratings {
+				r.userPreferences[userID][model] = r.ratingToPreference(model, rating)
+			}
+			continue
+		}
+		if sessionID, ok := decodeRLStateStorageKey(category, rlSessionStoragePrefix); ok {
+			if r.sessionContext[sessionID] == nil {
+				r.sessionContext[sessionID] = make(map[string]*SessionModelStats)
+			}
+			for model, rating := range ratings {
+				r.sessionContext[sessionID][model] = ratingToSessionStats(model, rating)
+			}
+			continue
+		}
+
 		for model, rating := range ratings {
-			// Convert Elo rating to Beta distribution
-			// Higher Elo = higher alpha
-			winRate := (rating.Rating - 1000) / 1000 // Normalize to ~0-1
-			if winRate < 0.1 {
-				winRate = 0.1
-			}
-			if winRate > 0.9 {
-				winRate = 0.9
-			}
-
-			totalComparisons := float64(rating.Comparisons)
-			if totalComparisons < 2 {
-				totalComparisons = 2
-			}
-
-			pref := &ModelPreference{
-				Model: model,
-				Distribution: BetaDistribution{
-					Alpha: 1 + winRate*totalComparisons,
-					Beta:  1 + (1-winRate)*totalComparisons,
-				},
-				TotalInteractions: rating.Comparisons,
-				LastUpdated:       time.Now(),
-			}
+			pref := r.ratingToPreference(model, rating)
 
 			if category == "_global" {
 				r.globalPreferences[model] = pref
@@ -1332,6 +1334,19 @@ func (r *RLDrivenSelector) loadFromStorage() error {
 		"categories_loaded": len(allRatings),
 	})
 	return nil
+}
+
+func (r *RLDrivenSelector) persistState() {
+	if r.storage == nil {
+		return
+	}
+	if fileStorage, ok := r.storage.(*FileEloStorage); ok {
+		fileStorage.MarkDirty()
+		return
+	}
+	if err := r.storage.SaveAllRatings(r.getAllPreferencesForStorage()); err != nil {
+		logging.Warnf("[RLDrivenSelector] Failed to save state to storage: %v", err)
+	}
 }
 
 func (r *RLDrivenSelector) getAllPreferencesForStorage() map[string]map[string]*ModelRating {
@@ -1355,7 +1370,73 @@ func (r *RLDrivenSelector) getAllPreferencesForStorage() map[string]map[string]*
 	}
 	r.categoryMu.RUnlock()
 
+	r.userMu.RLock()
+	for userID, prefs := range r.userPreferences {
+		if len(prefs) == 0 {
+			continue
+		}
+		key := encodeRLStateStorageKey(rlUserStoragePrefix, userID)
+		result[key] = make(map[string]*ModelRating, len(prefs))
+		for model, pref := range prefs {
+			result[key][model] = r.preferenceToRating(pref)
+		}
+	}
+	r.userMu.RUnlock()
+
+	r.sessionMu.RLock()
+	for sessionID, statsByModel := range r.sessionContext {
+		if len(statsByModel) == 0 {
+			continue
+		}
+		key := encodeRLStateStorageKey(rlSessionStoragePrefix, sessionID)
+		result[key] = make(map[string]*ModelRating, len(statsByModel))
+		for model, stats := range statsByModel {
+			result[key][model] = sessionStatsToRating(model, stats)
+		}
+	}
+	r.sessionMu.RUnlock()
+
 	return result
+}
+
+func (r *RLDrivenSelector) ratingToPreference(model string, rating *ModelRating) *ModelPreference {
+	if rating == nil {
+		return &ModelPreference{
+			Model: model,
+			Distribution: BetaDistribution{
+				Alpha: 1.0,
+				Beta:  1.0,
+			},
+			LastUpdated: time.Now(),
+		}
+	}
+
+	// Convert Elo rating to Beta distribution. Higher Elo means higher alpha.
+	winRate := (rating.Rating - 1000) / 1000
+	if winRate < 0.1 {
+		winRate = 0.1
+	}
+	if winRate > 0.9 {
+		winRate = 0.9
+	}
+
+	totalComparisons := float64(rating.Comparisons)
+	if totalComparisons < 2 {
+		totalComparisons = 2
+	}
+
+	if model == "" {
+		model = rating.Model
+	}
+	return &ModelPreference{
+		Model: model,
+		Distribution: BetaDistribution{
+			Alpha: 1 + winRate*totalComparisons,
+			Beta:  1 + (1-winRate)*totalComparisons,
+		},
+		TotalInteractions: rating.Comparisons,
+		LastUpdated:       time.Now(),
+	}
 }
 
 func (r *RLDrivenSelector) preferenceToRating(pref *ModelPreference) *ModelRating {
@@ -1380,6 +1461,89 @@ func (r *RLDrivenSelector) preferenceToRating(pref *ModelPreference) *ModelRatin
 		Wins:        wins,
 		Losses:      losses,
 	}
+}
+
+func sessionStatsToRating(model string, stats *SessionModelStats) *ModelRating {
+	if stats == nil {
+		return &ModelRating{Model: model, Rating: 1000}
+	}
+	if model == "" {
+		model = stats.Model
+	}
+	selections := stats.Selections
+	successes := stats.Successes
+	if selections < 0 {
+		selections = 0
+	}
+	if successes < 0 {
+		successes = 0
+	}
+	if successes > selections {
+		successes = selections
+	}
+	losses := selections - successes
+
+	rating := 1500.0
+	if selections > 0 {
+		rating = 1000 + 1000*float64(successes)/float64(selections)
+	}
+
+	return &ModelRating{
+		Model:       model,
+		Rating:      rating,
+		Comparisons: selections,
+		Wins:        successes,
+		Losses:      losses,
+	}
+}
+
+func ratingToSessionStats(model string, rating *ModelRating) *SessionModelStats {
+	if rating == nil {
+		return &SessionModelStats{Model: model, LastUpdated: time.Now()}
+	}
+	if model == "" {
+		model = rating.Model
+	}
+	selections := rating.Comparisons
+	if selections == 0 {
+		selections = rating.Wins + rating.Losses + rating.Ties
+	}
+	successes := rating.Wins
+	if selections < 0 {
+		selections = 0
+	}
+	if successes < 0 {
+		successes = 0
+	}
+	if successes > selections {
+		successes = selections
+	}
+	return &SessionModelStats{
+		Model:       model,
+		Selections:  selections,
+		Successes:   successes,
+		LastUpdated: time.Now(),
+	}
+}
+
+func encodeRLStateStorageKey(prefix, id string) string {
+	return prefix + base64.RawURLEncoding.EncodeToString([]byte(id))
+}
+
+func decodeRLStateStorageKey(key, prefix string) (string, bool) {
+	if !strings.HasPrefix(key, prefix) {
+		return "", false
+	}
+	encoded := strings.TrimPrefix(key, prefix)
+	decoded, err := base64.RawURLEncoding.DecodeString(encoded)
+	if err != nil {
+		logging.ComponentWarnEvent("selection", "rl_driven_storage_key_decode_failed", map[string]interface{}{
+			"key":   key,
+			"error": err.Error(),
+		})
+		return "", false
+	}
+	return string(decoded), true
 }
 
 // Close stops storage operations

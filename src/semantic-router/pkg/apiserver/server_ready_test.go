@@ -57,3 +57,33 @@ func TestHandleReadyReturns200WhenStartupReady(t *testing.T) {
 		t.Fatalf("expected 200 when startup ready, got %d", rr.Code)
 	}
 }
+
+func TestHandleReadyUsesSharedStartupStateResolver(t *testing.T) {
+	tmpDir := t.TempDir()
+	apiServer := &ClassificationAPIServer{
+		classificationSvc: services.NewPlaceholderClassificationService(),
+		config: &config.RouterConfig{
+			StartupStatus: config.StartupStatusConfig{
+				StoreBackend: "redis",
+				Redis:        &config.StartupStatusRedisConfig{Address: "127.0.0.1:0"},
+			},
+		},
+		configPath: filepath.Join(tmpDir, "router-config.yaml"),
+		startupStateLoader: func() *startupstatus.State {
+			return &startupstatus.State{
+				Phase:   "ready",
+				Ready:   true,
+				Message: "Router startup complete from shared status",
+			}
+		},
+	}
+
+	req := httptest.NewRequest(http.MethodGet, "/ready", nil)
+	rr := httptest.NewRecorder()
+
+	apiServer.handleReady(rr, req)
+
+	if rr.Code != http.StatusOK {
+		t.Fatalf("expected 200 from shared startup resolver, got %d", rr.Code)
+	}
+}

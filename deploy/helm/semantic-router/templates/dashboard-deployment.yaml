@@ -1,3 +1,6 @@
+{{- if and .Values.dashboard.enabled (gt (int .Values.dashboard.replicaCount) 1) }}
+{{- fail "dashboard.replicaCount > 1 is not supported with the current SQLite auth/session store; use one dashboard replica until a shared auth/session store is configured" }}
+{{- end }}
 {{- if .Values.dashboard.enabled }}
 apiVersion: apps/v1
 kind: Deployment
@@ -8,7 +11,7 @@ metadata:
     {{- include "semantic-router.labels" . | nindent 4 }}
     app.kubernetes.io/component: dashboard
 spec:
-  replicas: 1
+  replicas: {{ .Values.dashboard.replicaCount }}
   selector:
     matchLabels:
       {{- include "semantic-router.selectorLabels" . | nindent 6 }}
@@ -38,6 +41,12 @@ spec:
         - name: DASHBOARD_READONLY
           value: "true"
         {{- end }}
+        {{- if .Values.dashboard.persistence.enabled }}
+        - name: DASHBOARD_AUTH_DB_PATH
+          value: "{{ .Values.dashboard.persistence.mountPath }}/auth.db"
+        - name: DASHBOARD_WORKFLOW_DB_PATH
+          value: "{{ .Values.dashboard.persistence.mountPath }}/workflow.sqlite"
+        {{- end }}
         {{- if .Values.dependencies.observability.prometheus.enabled }}
         - name: TARGET_PROMETHEUS_URL
           value: "http://{{ .Release.Name }}-prometheus-server:80"
@@ -59,6 +68,10 @@ spec:
           mountPath: /app/config/tools_db.json
           subPath: tools_db.json
           readOnly: true
+        {{- if .Values.dashboard.persistence.enabled }}
+        - name: dashboard-data
+          mountPath: {{ .Values.dashboard.persistence.mountPath }}
+        {{- end }}
         livenessProbe:
           httpGet:
             path: /healthz
@@ -77,4 +90,9 @@ spec:
       - name: config-volume
         configMap:
           name: {{ include "semantic-router.fullname" . }}-config
+      {{- if .Values.dashboard.persistence.enabled }}
+      - name: dashboard-data
+        persistentVolumeClaim:
+          claimName: {{ include "semantic-router.dashboardPvcName" . }}
+      {{- end }}
 {{- end }}

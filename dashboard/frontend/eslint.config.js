@@ -32,5 +32,24 @@ export default tseslint.config(
       "@typescript-eslint/ban-ts-comment": "warn",
       "no-useless-escape": "warn",
     },
+  },
+  {
+    files: [
+      "src/components/ExpressionBuilderNodes.tsx",
+      "src/pages/*Support.tsx",
+      "src/pages/builderPage*.tsx",
+    ],
+    rules: {
+      "react-refresh/only-export-components": "off",
+    },
+  },
+  {
+    files: ["src/contexts/AuthContext.tsx"],
+    rules: {
+      "react-refresh/only-export-components": [
+        "warn",
+        { allowConstantExport: true, allowExportNames: ["useAuth"] },
+      ],
+    },
   }
 );

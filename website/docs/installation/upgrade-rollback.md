@@ -122,6 +122,19 @@ For Kubernetes manifests, pin to the digest, not the tag:
 image: ghcr.io/vllm-project/semantic-router/extproc@sha256:<digest>
 ```
 
+Published versioned images for a full release:
+
+| Image | Typical owner |
+|-------|---------------|
+| `ghcr.io/vllm-project/semantic-router/extproc:v0.3.0` | Router ExtProc runtime |
+| `ghcr.io/vllm-project/semantic-router/extproc-rocm:v0.3.0` | ROCm router ExtProc runtime |
+| `ghcr.io/vllm-project/semantic-router/vllm-sr:v0.3.0` | Local/runtime CLI image |
+| `ghcr.io/vllm-project/semantic-router/vllm-sr-rocm:v0.3.0` | ROCm local/runtime CLI image |
+| `ghcr.io/vllm-project/semantic-router/dashboard:v0.3.0` | Dashboard backend/frontend image |
+| `ghcr.io/vllm-project/semantic-router/llm-katan:v0.3.0` | Fleet simulation service image |
+| `ghcr.io/vllm-project/semantic-router/operator:v0.3.0` | Kubernetes operator image |
+| `ghcr.io/vllm-project/semantic-router/operator-bundle:v0.3.0` | Operator bundle image |
+
 ### 2c. Python CLI upgrade
 
 ```bash
@@ -134,6 +147,20 @@ To upgrade to the latest stable release:
 ```bash
 pip install --upgrade vllm-sr
 ```
+
+### 2d. Fleet simulator Python package upgrade
+
+`vllm-sr-sim` is a separate PyPI package with its own release cadence. Pin it
+explicitly when you depend on the simulator CLI or dashboard sidecar package
+data:
+
+```bash
+pip install --upgrade vllm-sr-sim==0.1.0
+```
+
+Fleet simulator package releases use the independent `vllm-sr-sim-v<version>`
+tag stream and the `pypi-publish-vllm-sr-sim.yml` workflow; they are not
+published by the main `v<version>` router release tag.
 
 ---
 
@@ -275,6 +302,10 @@ A nightly build is promoted to a release by:
 2. Bumping version fields in `src/vllm-sr/pyproject.toml` and `candle-binding/Cargo.toml` to the target version.
 3. Pushing a `v<version>` tag — this triggers `docker-release.yml`, `helm-publish.yml`, `pypi-publish.yml`, `publish-crate.yml`, and `release.yml` simultaneously.
 4. The `release.yml` workflow validates all surfaces are consistent before the GitHub Release is created.
+
+Fleet simulator package releases are promoted separately by bumping
+`src/fleet-sim/pyproject.toml` and pushing a `vllm-sr-sim-v<version>` tag,
+which triggers `pypi-publish-vllm-sr-sim.yml`.
 
 There is no automated gating from nightly → release; that decision is made by
 the release owner.

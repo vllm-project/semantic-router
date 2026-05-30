@@ -460,10 +460,10 @@ func (v *Validator) checkSignalConstraints(s *SignalDecl) {
 }
 
 func (v *Validator) checkStructureSignalConstraints(s *SignalDecl) {
-	payload := fieldsToMap(s.Fields)
-	payload["name"] = s.Name
+	payload := dslFieldObjectFromValues(s.Fields)
+	payload.setString("name", s.Name)
 
-	raw, err := yaml.Marshal(payload)
+	raw, err := payload.marshalYAML()
 	if err != nil {
 		v.addDiag(DiagConstraint, s.Pos,
 			fmt.Sprintf("failed to encode structure signal %q: %v", s.Name, err),
@@ -487,10 +487,10 @@ func (v *Validator) checkStructureSignalConstraints(s *SignalDecl) {
 }
 
 func (v *Validator) checkConversationSignalConstraints(s *SignalDecl) {
-	payload := fieldsToMap(s.Fields)
-	payload["name"] = s.Name
+	payload := dslFieldObjectFromValues(s.Fields)
+	payload.setString("name", s.Name)
 
-	raw, err := yaml.Marshal(payload)
+	raw, err := payload.marshalYAML()
 	if err != nil {
 		v.addDiag(DiagConstraint, s.Pos,
 			fmt.Sprintf("failed to encode conversation signal %q: %v", s.Name, err),

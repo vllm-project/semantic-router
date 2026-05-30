@@ -138,9 +138,8 @@ func registerGrafanaRoutes(mux *http.ServeMux, cfg *config.Config) *httputil.Rev
 
 	registerStaticProxyRoute(mux, "/public/", grafanaStaticProxy, "Grafana static proxy not configured")
 	registerStaticProxyRoute(mux, "/avatar/", grafanaStaticProxy, "Grafana static proxy not configured")
-	registerStaticProxyRoute(mux, "/login", grafanaStaticProxy, "Grafana proxy not configured")
 	log.Printf("Grafana proxy configured: %s", cfg.GrafanaURL)
-	log.Printf("Grafana static assets proxied: /public/, /avatar/, /login")
+	log.Printf("Grafana static assets proxied: /public/, /avatar/")
 	return grafanaStaticProxy
 }
 

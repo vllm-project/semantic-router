@@ -2,7 +2,6 @@ package classification
 
 import (
 	"fmt"
-	"time"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
@@ -91,44 +90,6 @@ func NewComplexityClassifier(
 	return c, nil
 }
 
-// preloadCandidateEmbeddings computes embeddings for all hard/easy candidates (text + image).
-// Uses concurrent processing for better performance.
-func (c *ComplexityClassifier) preloadCandidateEmbeddings() error {
-	startTime := time.Now()
-	logging.ComponentDebugEvent("classifier", "complexity_candidates_preload_started", map[string]interface{}{
-		"model_type":       c.modelType,
-		"image_candidates": c.hasImageCandidates,
-	})
-	tasks := c.buildCandidateTasks()
-	if len(tasks) == 0 {
-		logging.ComponentDebugEvent("classifier", "complexity_candidates_preload_skipped", map[string]interface{}{
-			"reason": "no_candidates",
-		})
-		return nil
-	}
-
-	numWorkers := complexityWorkerCount(len(tasks))
-	successCount, firstError := c.collectCandidateEmbeddingResults(c.startCandidateEmbeddingWorkers(tasks, numWorkers))
-
-	elapsed := time.Since(startTime)
-	logging.ComponentEvent("classifier", "complexity_candidates_preloaded", map[string]interface{}{
-		"candidates":       successCount,
-		"total_candidates": len(tasks),
-		"model_type":       c.modelType,
-		"image_candidates": c.hasImageCandidates,
-		"workers":          numWorkers,
-		"elapsed_ms":       elapsed.Milliseconds(),
-	})
-
-	if firstError != nil {
-		return firstError
-	}
-
-	c.rebuildPrototypeBanks()
-
-	return nil
-}
-
 // Classify evaluates the query against ALL complexity rules independently (text-only).
 // For CUA requests with screenshots, use ClassifyWithImage instead.
 func (c *ComplexityClassifier) Classify(query string) ([]string, error) {
@@ -184,39 +145,4 @@ func (c *ComplexityClassifier) classifyDetailedWithImageCached(query string, ima
 		results = append(results, result)
 	}
 	return results, nil
-}
-
-func (c *ComplexityClassifier) rebuildPrototypeBanks() {
-	for _, rule := range c.rules {
-		hardExamples := make([]prototypeExample, 0, len(c.hardEmbeddings[rule.Name]))
-		for candidate, embedding := range c.hardEmbeddings[rule.Name] {
-			hardExamples = append(hardExamples, prototypeExample{Key: rule.Name + ":hard:" + candidate, Text: candidate, Embedding: embedding})
-		}
-		easyExamples := make([]prototypeExample, 0, len(c.easyEmbeddings[rule.Name]))
-		for candidate, embedding := range c.easyEmbeddings[rule.Name] {
-			easyExamples = append(easyExamples, prototypeExample{Key: rule.Name + ":easy:" + candidate, Text: candidate, Embedding: embedding})
-		}
-		imageHardExamples := make([]prototypeExample, 0, len(c.imageHardEmbeddings[rule.Name]))
-		for candidate, embedding := range c.imageHardEmbeddings[rule.Name] {
-			imageHardExamples = append(imageHardExamples, prototypeExample{Key: rule.Name + ":image-hard:" + candidate, Text: candidate, Embedding: embedding})
-		}
-		imageEasyExamples := make([]prototypeExample, 0, len(c.imageEasyEmbeddings[rule.Name]))
-		for candidate, embedding := range c.imageEasyEmbeddings[rule.Name] {
-			imageEasyExamples = append(imageEasyExamples, prototypeExample{Key: rule.Name + ":image-easy:" + candidate, Text: candidate, Embedding: embedding})
-		}
-		hardBank := newPrototypeBank(hardExamples, c.prototypeCfg)
-		easyBank := newPrototypeBank(easyExamples, c.prototypeCfg)
-		imageHardBank := newPrototypeBank(imageHardExamples, c.prototypeCfg)
-		imageEasyBank := newPrototypeBank(imageEasyExamples, c.prototypeCfg)
-		c.hardPrototypeBanks[rule.Name] = hardBank
-		c.easyPrototypeBanks[rule.Name] = easyBank
-		c.imageHardPrototypeBanks[rule.Name] = imageHardBank
-		c.imageEasyPrototypeBanks[rule.Name] = imageEasyBank
-		logPrototypeBankSummary("Complexity hard", rule.Name, hardBank)
-		logPrototypeBankSummary("Complexity easy", rule.Name, easyBank)
-		if len(imageHardExamples) > 0 || len(imageEasyExamples) > 0 {
-			logPrototypeBankSummary("Complexity image-hard", rule.Name, imageHardBank)
-			logPrototypeBankSummary("Complexity image-easy", rule.Name, imageEasyBank)
-		}
-	}
 }

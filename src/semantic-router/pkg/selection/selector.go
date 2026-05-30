@@ -309,6 +309,10 @@ var GlobalRegistry = NewRegistry()
 
 // Select uses the specified method to select a model
 func Select(ctx context.Context, method SelectionMethod, selCtx *SelectionContext) (*SelectionResult, error) {
+	if err := ValidateSelectionContext(selCtx); err != nil {
+		return nil, err
+	}
+
 	selector, ok := GlobalRegistry.Get(method)
 	if !ok {
 		// Fall back to static selection
@@ -328,6 +332,9 @@ func Select(ctx context.Context, method SelectionMethod, selCtx *SelectionContex
 	}
 	result, err := selector.Select(ctx, selCtx)
 	if err != nil {
+		return nil, err
+	}
+	if err := ValidateSelectionResult(selCtx, result); err != nil {
 		return nil, err
 	}
 	result.Tier = selector.Tier()

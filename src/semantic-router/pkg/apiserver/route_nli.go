@@ -48,7 +48,7 @@ func (s *ClassificationAPIServer) handleNLIClassification(w http.ResponseWriter,
 
 	var req services.NLIRequest
 	if err := s.parseJSONRequest(r, &req); err != nil {
-		s.writeErrorResponse(w, http.StatusBadRequest, "INVALID_INPUT", err.Error())
+		s.writeJSONRequestError(w, err)
 		return
 	}
 

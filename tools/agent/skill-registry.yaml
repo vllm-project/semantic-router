@@ -177,6 +177,7 @@ surfaces:
   deployment_profile_stack:
     description: Kubernetes deployment profiles, stack manifests, and profile-owned platform resources outside operator CRDs.
     paths:
+      - deploy/helm/**
       - deploy/kubernetes/ai-gateway/**
       - deploy/kubernetes/aibrix/**
       - deploy/kubernetes/dynamo/**
@@ -193,6 +194,7 @@ surfaces:
   k8s_platform:
     description: Kubernetes-facing operator, CRD, deployment-profile, and DSL translation surfaces for semantic-router platform integration.
     paths:
+      - deploy/helm/**
       - deploy/operator/**
       - deploy/kubernetes/**
       - src/semantic-router/pkg/apis/**

@@ -98,3 +98,42 @@ func TestResolveEvaluationProjectRootRecognizesRuntimeAppLayout(t *testing.T) {
 		t.Fatalf("resolveEvaluationProjectRoot() = %q, want %q", got, appRoot)
 	}
 }
+
+func TestResolveToolsDBPathUsesRouterContractPath(t *testing.T) {
+	configDir := t.TempDir()
+	configPath := filepath.Join(configDir, "config.yaml")
+	if err := os.WriteFile(configPath, []byte(`
+version: "0.3"
+global:
+  integrations:
+    tools:
+      tools_db_path: "/tmp/custom-tools.json"
+`), 0o644); err != nil {
+		t.Fatalf("WriteFile(config): %v", err)
+	}
+
+	got := resolveToolsDBPath(&config.Config{
+		AbsConfigPath: configPath,
+		ConfigDir:     configDir,
+	})
+	if got != "/tmp/custom-tools.json" {
+		t.Fatalf("resolveToolsDBPath() = %q, want %q", got, "/tmp/custom-tools.json")
+	}
+}
+
+func TestResolveToolsDBPathFallsBackWhenRouterContractCannotParse(t *testing.T) {
+	configDir := t.TempDir()
+	configPath := filepath.Join(configDir, "config.yaml")
+	if err := os.WriteFile(configPath, []byte("routing: ["), 0o644); err != nil {
+		t.Fatalf("WriteFile(config): %v", err)
+	}
+
+	got := resolveToolsDBPath(&config.Config{
+		AbsConfigPath: configPath,
+		ConfigDir:     configDir,
+	})
+	want := filepath.Join(configDir, "config", "tools_db.json")
+	if got != want {
+		t.Fatalf("resolveToolsDBPath() = %q, want %q", got, want)
+	}
+}

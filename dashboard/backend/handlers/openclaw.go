@@ -14,8 +14,7 @@ import (
 	"sync"
 	"time"
 
-	"gopkg.in/yaml.v3"
-
+	"github.com/vllm-project/semantic-router/dashboard/backend/routercontract"
 	"github.com/vllm-project/semantic-router/dashboard/backend/workflowstore"
 )
 
@@ -331,102 +330,13 @@ func (h *OpenClawHandler) discoverOpenClawModelBaseURLFromRouterConfig() string 
 		return ""
 	}
 
-	data, err := os.ReadFile(configPath)
-	if err != nil {
+	endpoint, ok, err := routercontract.ReadFirstListenerEndpoint(configPath)
+	if err != nil || !ok {
 		return ""
 	}
 
-	var config map[string]any
-	if err := yaml.Unmarshal(data, &config); err != nil {
-		return ""
-	}
-
-	for _, listener := range extractOpenClawRouterListeners(config) {
-		port, ok := openClawToPort(listener["port"])
-		if !ok {
-			continue
-		}
-		host := formatOpenClawURLHost(normalizeOpenClawListenerHost(asString(listener["address"])))
-		return fmt.Sprintf("http://%s:%d/v1", host, port)
-	}
-
-	return ""
-}
-
-func extractOpenClawRouterListeners(config map[string]any) []map[string]any {
-	listeners := make([]map[string]any, 0)
-
-	appendListeners := func(value any) {
-		entries, ok := value.([]any)
-		if !ok {
-			return
-		}
-		for _, entry := range entries {
-			if listener, ok := asStringMap(entry); ok {
-				listeners = append(listeners, listener)
-			}
-		}
-	}
-
-	appendListeners(config["listeners"])
-
-	if apiServer, ok := asStringMap(config["api_server"]); ok {
-		appendListeners(apiServer["listeners"])
-	}
-
-	return listeners
-}
-
-func asStringMap(value any) (map[string]any, bool) {
-	switch typed := value.(type) {
-	case map[string]any:
-		return typed, true
-	case map[any]any:
-		normalized := make(map[string]any, len(typed))
-		for key, nested := range typed {
-			textKey, ok := key.(string)
-			if !ok {
-				continue
-			}
-			normalized[textKey] = nested
-		}
-		return normalized, true
-	default:
-		return nil, false
-	}
-}
-
-func asString(value any) string {
-	text, ok := value.(string)
-	if !ok {
-		return ""
-	}
-	return strings.TrimSpace(text)
-}
-
-func openClawToPort(value any) (int, bool) {
-	switch typed := value.(type) {
-	case int:
-		if typed >= 1 && typed <= 65535 {
-			return typed, true
-		}
-	case int64:
-		port := int(typed)
-		if port >= 1 && port <= 65535 {
-			return port, true
-		}
-	case float64:
-		port := int(typed)
-		if port >= 1 && port <= 65535 && float64(port) == typed {
-			return port, true
-		}
-	case string:
-		port, err := strconv.Atoi(strings.TrimSpace(typed))
-		if err == nil && port >= 1 && port <= 65535 {
-			return port, true
-		}
-	}
-	return 0, false
+	host := formatOpenClawURLHost(normalizeOpenClawListenerHost(endpoint.Address))
+	return fmt.Sprintf("http://%s:%d/v1", host, endpoint.Port)
 }
 
 func normalizeOpenClawListenerHost(host string) string {

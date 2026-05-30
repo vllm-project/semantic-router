@@ -18,10 +18,8 @@ package selection
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"math"
-	"os"
 	"sort"
 	"sync"
 	"time"
@@ -240,8 +238,8 @@ func (g *GMTRouterSelector) InitializeFromConfig(modelConfig map[string]config.M
 
 // Select chooses the best model using graph-based preference learning
 func (g *GMTRouterSelector) Select(ctx context.Context, selCtx *SelectionContext) (*SelectionResult, error) {
-	if len(selCtx.CandidateModels) == 0 {
-		return nil, fmt.Errorf("no candidate models provided")
+	if err := ValidateSelectionContext(selCtx); err != nil {
+		return nil, err
 	}
 
 	userID := selCtx.UserID
@@ -315,8 +313,8 @@ func (g *GMTRouterSelector) Select(ctx context.Context, selCtx *SelectionContext
 
 // UpdateFeedback updates the interaction graph with new feedback
 func (g *GMTRouterSelector) UpdateFeedback(ctx context.Context, feedback *Feedback) error {
-	if feedback.WinnerModel == "" {
-		return fmt.Errorf("winner model is required")
+	if err := normalizeWinnerFeedback(feedback); err != nil {
+		return err
 	}
 
 	userID := feedback.UserID
@@ -806,15 +804,10 @@ func (g *GMTRouterSelector) saveState() {
 	}
 
 	g.userMu.RLock()
-	defer g.userMu.RUnlock()
+	states := cloneUserPreferenceStates(g.userStates)
+	g.userMu.RUnlock()
 
-	data, err := json.Marshal(g.userStates)
-	if err != nil {
-		logging.Warnf("[GMTRouter] Failed to marshal state: %v", err)
-		return
-	}
-
-	if err := os.WriteFile(g.config.StoragePath, data, 0o644); err != nil {
+	if err := saveGMTRouterState(g.config.StoragePath, states); err != nil {
 		logging.Warnf("[GMTRouter] Failed to save state: %v", err)
 	}
 }
@@ -825,31 +818,27 @@ func (g *GMTRouterSelector) loadState() {
 		return
 	}
 
-	data, err := os.ReadFile(g.config.StoragePath)
+	states, loaded, err := loadGMTRouterState(g.config.StoragePath)
 	if err != nil {
-		if !os.IsNotExist(err) {
-			logging.ComponentWarnEvent("selection", "gmt_router_state_load_failed", map[string]interface{}{
-				"storage_path": g.config.StoragePath,
-				"error":        err.Error(),
-			})
-		}
+		logging.ComponentWarnEvent("selection", "gmt_router_state_load_failed", map[string]interface{}{
+			"storage_path": g.config.StoragePath,
+			"error":        err.Error(),
+		})
+		return
+	}
+	if !loaded {
 		return
 	}
 
 	g.userMu.Lock()
-	defer g.userMu.Unlock()
+	g.userStates = states
+	userCount := len(g.userStates)
+	g.userMu.Unlock()
 
-	if err := json.Unmarshal(data, &g.userStates); err != nil {
-		logging.ComponentWarnEvent("selection", "gmt_router_state_unmarshal_failed", map[string]interface{}{
-			"storage_path": g.config.StoragePath,
-			"error":        err.Error(),
-		})
-	} else {
-		logging.ComponentEvent("selection", "gmt_router_state_loaded", map[string]interface{}{
-			"storage_path": g.config.StoragePath,
-			"user_count":   len(g.userStates),
-		})
-	}
+	logging.ComponentEvent("selection", "gmt_router_state_loaded", map[string]interface{}{
+		"storage_path": g.config.StoragePath,
+		"user_count":   userCount,
+	})
 }
 
 // Close saves state and cleans up resources

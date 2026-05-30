@@ -5488,6 +5488,61 @@ DECISION_TREE routing_policy {
 	}
 }
 
+func TestDecisionTreeDecompileContractUsesFlatRoutes(t *testing.T) {
+	input := `
+SIGNAL jailbreak detector { method: "embedding" threshold: 0.8 }
+SIGNAL domain math { mmlu_categories: ["math"] }
+
+DECISION_TREE routing_policy {
+  IF jailbreak("detector") {
+    NAME "jailbreak_block"
+    TIER 1
+    MODEL "fast-reject"
+  }
+  ELSE IF domain("math") {
+    NAME "math_route"
+    TIER 2
+    MODEL "qwen-math"
+  }
+  ELSE {
+    NAME "default_route"
+    TIER 2
+    MODEL "qwen-default"
+  }
+}
+`
+	cfg, errs := Compile(input)
+	if len(errs) > 0 {
+		t.Fatalf("compile errors: %v", errs)
+	}
+
+	dslText, err := DecompileRouting(cfg)
+	if err != nil {
+		t.Fatalf("DecompileRouting error: %v", err)
+	}
+	if strings.Contains(dslText, "DECISION_TREE") {
+		t.Fatalf("routing decompile should expose flat ROUTE blocks, got:\n%s", dslText)
+	}
+	for _, routeName := range []string{"jailbreak_block", "math_route", "default_route"} {
+		if !strings.Contains(dslText, "ROUTE "+routeName) {
+			t.Fatalf("routing decompile missing flattened route %q:\n%s", routeName, dslText)
+		}
+	}
+
+	roundTripped, errs := Compile(dslText)
+	if len(errs) > 0 {
+		t.Fatalf("round-trip compile errors: %v\n--- source ---\n%s", errs, dslText)
+	}
+	if got, want := len(roundTripped.Decisions), len(cfg.Decisions); got != want {
+		t.Fatalf("round-trip decisions = %d, want %d", got, want)
+	}
+	for i := range cfg.Decisions {
+		if got, want := roundTripped.Decisions[i].Name, cfg.Decisions[i].Name; got != want {
+			t.Fatalf("round-trip decision[%d].Name = %q, want %q", i, got, want)
+		}
+	}
+}
+
 // ---------- Decompiler Round-trip for new constructs ----------
 
 func TestDecompileProjectionPartitionRoundTrip(t *testing.T) {

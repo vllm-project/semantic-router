@@ -1,6 +1,7 @@
 package services
 
 import (
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/classification"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 )
@@ -13,7 +14,7 @@ func (s *ClassificationService) RefreshRuntimeConfig(newConfig *config.RouterCon
 
 	s.config = newConfig
 	if s.classifier != nil {
-		rebuiltClassifier, err := createLegacyClassifier(newConfig)
+		rebuiltClassifier, err := classification.NewLegacyClassifierFromConfig(newConfig)
 		if err != nil {
 			logging.Warnf("Failed to rebuild classifier during config update, falling back to in-place config swap: %v", err)
 			s.classifier.Config = newConfig
@@ -21,6 +22,4 @@ func (s *ClassificationService) RefreshRuntimeConfig(newConfig *config.RouterCon
 			s.classifier = rebuiltClassifier
 		}
 	}
-
-	config.Replace(newConfig)
 }

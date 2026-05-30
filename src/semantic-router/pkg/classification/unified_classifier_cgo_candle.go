@@ -9,3 +9,14 @@ package classification
 #cgo LDFLAGS: -L../../../../../candle-binding/target/release -lcandle_semantic_router
 */
 import "C"
+
+var nativeBackendCapabilities = NativeBackendCapabilities{
+	Name:                       "candle",
+	UnifiedBatchClassification: true,
+	LoRABatchClassification:    true,
+	BatchedEmbedding:           true,
+	MultimodalEmbedding:        true,
+	ModalityRouting:            true,
+	MLPSelector:                true,
+	ExplicitReset:              false,
+}

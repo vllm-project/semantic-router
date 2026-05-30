@@ -48,6 +48,7 @@ type IngestionPipeline struct {
 	embedder     Embedder
 	jobQueue     chan IngestionJob
 	workers      int
+	lifecycleMu  sync.Mutex
 	mu           sync.RWMutex
 	fileStatuses map[string]*VectorStoreFile // vsf_id -> status
 	wg           sync.WaitGroup
@@ -86,31 +87,41 @@ func NewIngestionPipeline(backend VectorStoreBackend, fileStore *FileStore, mana
 
 // Start launches the worker goroutines.
 func (p *IngestionPipeline) Start() {
+	p.lifecycleMu.Lock()
+	defer p.lifecycleMu.Unlock()
+
 	p.mu.Lock()
 	if p.running {
 		p.mu.Unlock()
 		return
 	}
+	p.stopCh = make(chan struct{})
+	stopCh := p.stopCh
 	p.running = true
 	p.mu.Unlock()
 
 	for i := 0; i < p.workers; i++ {
 		p.wg.Add(1)
-		go p.worker()
+		go p.worker(stopCh)
 	}
 }
 
 // Stop gracefully shuts down the pipeline.
 func (p *IngestionPipeline) Stop() {
+	p.lifecycleMu.Lock()
+	defer p.lifecycleMu.Unlock()
+
 	p.mu.Lock()
 	if !p.running {
 		p.mu.Unlock()
 		return
 	}
+	stopCh := p.stopCh
 	p.running = false
 	p.mu.Unlock()
 
-	close(p.stopCh)
+	p.failQueuedJobs("pipeline_stopped", "ingestion pipeline stopped before processing job")
+	close(stopCh)
 	p.wg.Wait()
 }
 
@@ -128,6 +139,13 @@ func (p *IngestionPipeline) AttachFile(vectorStoreID, fileID string, strategy *C
 		return nil, fmt.Errorf("vector store not found: %w", err)
 	}
 
+	p.lifecycleMu.Lock()
+	defer p.lifecycleMu.Unlock()
+
+	if !p.isRunningLocked() {
+		return nil, fmt.Errorf("ingestion pipeline is not running")
+	}
+
 	vsfID := GenerateVectorStoreFileID()
 	vsf := &VectorStoreFile{
 		ID:               vsfID,
@@ -140,7 +158,7 @@ func (p *IngestionPipeline) AttachFile(vectorStoreID, fileID string, strategy *C
 	}
 
 	p.mu.Lock()
-	p.fileStatuses[vsfID] = vsf
+	p.fileStatuses[vsfID] = cloneVectorStoreFile(vsf)
 	p.mu.Unlock()
 
 	// Update file counts.
@@ -158,11 +176,11 @@ func (p *IngestionPipeline) AttachFile(vectorStoreID, fileID string, strategy *C
 
 	// Snapshot before enqueuing so the caller always sees "in_progress",
 	// even if the worker completes the job before we return.
-	snapshot := *vsf
+	snapshot := cloneVectorStoreFile(vsf)
 
 	select {
 	case p.jobQueue <- job:
-		return &snapshot, nil
+		return snapshot, nil
 	default:
 		// Queue is full.
 		p.setFileStatus(vsfID, "failed", &FileError{
@@ -173,8 +191,19 @@ func (p *IngestionPipeline) AttachFile(vectorStoreID, fileID string, strategy *C
 			fc.InProgress--
 			fc.Failed++
 		})
-		return vsf, nil
+		status, err := p.GetFileStatus(vsfID)
+		if err != nil {
+			return cloneVectorStoreFile(vsf), nil
+		}
+		return status, nil
 	}
+}
+
+func (p *IngestionPipeline) isRunningLocked() bool {
+	p.mu.RLock()
+	defer p.mu.RUnlock()
+
+	return p.running
 }
 
 // GetFileStatus returns the current status of a vector store file.
@@ -186,7 +215,7 @@ func (p *IngestionPipeline) GetFileStatus(vsfID string) (*VectorStoreFile, error
 	if !ok {
 		return nil, fmt.Errorf("vector store file not found: %s", vsfID)
 	}
-	return vsf, nil
+	return cloneVectorStoreFile(vsf), nil
 }
 
 // ListFileStatuses returns all vector store files for a given vector store.
@@ -197,7 +226,7 @@ func (p *IngestionPipeline) ListFileStatuses(vectorStoreID string) []*VectorStor
 	var result []*VectorStoreFile
 	for _, vsf := range p.fileStatuses {
 		if vsf.VectorStoreID == vectorStoreID {
-			result = append(result, vsf)
+			result = append(result, cloneVectorStoreFile(vsf))
 		}
 	}
 	return result
@@ -216,6 +245,7 @@ func (p *IngestionPipeline) DetachFile(ctx context.Context, vectorStoreID, vsfID
 		return fmt.Errorf("vector store file %s does not belong to store %s", vsfID, vectorStoreID)
 	}
 	fileID := vsf.FileID
+	status := vsf.Status
 	delete(p.fileStatuses, vsfID)
 	p.mu.Unlock()
 
@@ -224,7 +254,7 @@ func (p *IngestionPipeline) DetachFile(ctx context.Context, vectorStoreID, vsfID
 	}
 
 	_ = p.manager.UpdateFileCounts(context.Background(), vectorStoreID, func(fc *FileCounts) {
-		switch vsf.Status {
+		switch status {
 		case "completed":
 			fc.Completed--
 		case "in_progress":
@@ -239,12 +269,12 @@ func (p *IngestionPipeline) DetachFile(ctx context.Context, vectorStoreID, vsfID
 }
 
 // worker is the background goroutine that processes ingestion jobs.
-func (p *IngestionPipeline) worker() {
+func (p *IngestionPipeline) worker(stopCh <-chan struct{}) {
 	defer p.wg.Done()
 
 	for {
 		select {
-		case <-p.stopCh:
+		case <-stopCh:
 			return
 		case job, ok := <-p.jobQueue:
 			if !ok {
@@ -334,6 +364,17 @@ func (p *IngestionPipeline) failJob(job IngestionJob, code, message string) {
 	})
 }
 
+func (p *IngestionPipeline) failQueuedJobs(code, message string) {
+	for {
+		select {
+		case job := <-p.jobQueue:
+			p.failJob(job, code, message)
+		default:
+			return
+		}
+	}
+}
+
 // setFileStatus updates the status and error of a vector store file.
 func (p *IngestionPipeline) setFileStatus(vsfID, status string, lastError *FileError) {
 	p.mu.Lock()
@@ -341,6 +382,6 @@ func (p *IngestionPipeline) setFileStatus(vsfID, status string, lastError *FileE
 
 	if vsf, ok := p.fileStatuses[vsfID]; ok {
 		vsf.Status = status
-		vsf.LastError = lastError
+		vsf.LastError = cloneFileError(lastError)
 	}
 }

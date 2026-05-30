@@ -23,7 +23,7 @@ func StaticFileServer(staticDir string) http.Handler {
 		if strings.HasPrefix(p, "/api/") || strings.HasPrefix(p, "/embedded/") ||
 			strings.HasPrefix(p, "/metrics/") || strings.HasPrefix(p, "/public/") ||
 			strings.HasPrefix(p, "/avatar/") || strings.HasPrefix(p, "/static/") ||
-			p == "/login" || p == "/logout" ||
+			p == "/logout" ||
 			strings.HasPrefix(p, "/r/") {
 			// These paths should have been handled by other handlers
 			// If we reach here, it means the proxy failed or route not found

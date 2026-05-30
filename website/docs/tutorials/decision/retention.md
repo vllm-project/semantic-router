@@ -58,6 +58,14 @@ That inventory is why the directive is named `retention` instead of
 `semantic_cache`: semantic-cache write skipping is only the first runtime
 consumer of a broader session-retention contract.
 
+## DSL Round-Trip Scope
+
+The example below uses `DECISION_TREE` for readability, but that syntax is an
+authoring convenience. Compiled config stores flat `routing.decisions`, and
+config-backed export/decompile paths emit flat `ROUTE` blocks rather than
+reconstructing the original tree. Retention fields still round-trip through
+DSL/config; the tree shape itself does not.
+
 ## DSL Example
 
 ```dsl

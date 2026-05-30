@@ -10,11 +10,12 @@ Open
 
 ## Summary
 
-The fleet-sim optimizer surface still concentrates too many responsibilities into one seam. `fleet_sim/optimizer/base.py` owns analytical sizing, DES calibration, Pareto search helpers, grid-flex analysis, tokens-per-watt analysis, reporting helpers, and several public dataclasses/constants in the same module. At the same time, `fleet_sim/optimizer/__init__.py` and `fleet_sim/__init__.py` both re-export a broad optimizer surface, so adding or changing one optimization feature tends to require edits in internal modeling code and in multiple public export layers. TD016 and TD017 track fleet-sim style and structure migration, but they do not define the narrower architecture target for the optimizer and public API boundary itself.
+The fleet-sim optimizer surface still concentrates too many responsibilities into too few seams. `fleet_sim/optimizer/base.py` now delegates threshold Pareto analysis to `optimizer/threshold.py`, but it still owns analytical sizing, DES calibration and verification, simulation reporting, compatibility exports, and several public dataclasses/constants in the same module. `fleet_sim/optimizer/__init__.py` is now the primary threshold Pareto export owner, but root-package curation and other optimizer feature boundaries still need tightening. TD016 and TD017 track fleet-sim style and structure migration, but they do not define the narrower architecture target for the optimizer and public API boundary itself.
 
 ## Evidence
 
 - [src/fleet-sim/fleet_sim/optimizer/base.py](../../../src/fleet-sim/fleet_sim/optimizer/base.py)
+- [src/fleet-sim/fleet_sim/optimizer/threshold.py](../../../src/fleet-sim/fleet_sim/optimizer/threshold.py)
 - [src/fleet-sim/fleet_sim/optimizer/__init__.py](../../../src/fleet-sim/fleet_sim/optimizer/__init__.py)
 - [src/fleet-sim/fleet_sim/__init__.py](../../../src/fleet-sim/fleet_sim/__init__.py)
 - [src/fleet-sim/AGENTS.md](../../../src/fleet-sim/AGENTS.md)
@@ -36,8 +37,14 @@ The fleet-sim optimizer surface still concentrates too many responsibilities int
 - `fleet_sim/optimizer/__init__.py` becomes the primary optimizer export seam, and the root `fleet_sim/__init__.py` curates a deliberate subset instead of mirroring every optimizer detail.
 - Optimizer-facing tests validate behavior through those narrower seams rather than depending on one all-purpose module.
 
+## Progress
+
+- 2026-05-24: `ThresholdResult`, `threshold_pareto`, Pareto marking, and `print_threshold_pareto` moved from `optimizer/base.py` to `optimizer/threshold.py`.
+- 2026-05-24: `optimizer/__init__.py` exports the threshold Pareto API from the new module, while `optimizer/base.py` keeps compatibility exports for existing direct imports.
+- 2026-05-24 validation: `make vllm-sr-sim-test` passed with 304 tests.
+
 ## Exit Criteria
 
 - New optimizer features no longer require editing `base.py` unless they truly belong to the same analytical kernel.
 - Public export changes can be made in one clear owner layer instead of synchronizing parallel symbol lists in both optimizer and root package exports.
-- Local AGENT rules explicitly name the optimizer hotspot and the extraction-first path for future changes.
+- Local AGENT rules explicitly name the optimizer hotspot and the extraction-first path for future changes. This is satisfied by `src/fleet-sim/fleet_sim/optimizer/AGENTS.md`; the remaining work is implementation extraction.

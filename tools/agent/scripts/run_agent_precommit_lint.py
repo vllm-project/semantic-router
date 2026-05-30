@@ -9,7 +9,7 @@ import sys
 import tempfile
 from pathlib import Path
 
-from agent_resolution import git_changed_files, split_changed_files
+from agent_changed_files import git_changed_files, split_changed_files
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
 SKIP_ENV = "AGENT_SKIP_PRECOMMIT_CHANGED_LINT"

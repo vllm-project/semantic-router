@@ -172,9 +172,9 @@ func (d *decompiler) decompileSignals() {
 		if structure.Description != "" {
 			d.write("  description: %q\n", structure.Description)
 		}
-		d.write("  feature: %s\n", formatPluginConfigValue(structureFeatureToMap(structure.Feature)))
+		d.write("  feature: %s\n", formatDSLValue(structureFeatureValue(structure.Feature)))
 		if structure.Predicate != nil {
-			d.write("  predicate: %s\n", formatPluginConfigValue(structurePredicateToMap(structure.Predicate)))
+			d.write("  predicate: %s\n", formatDSLValue(structurePredicateValue(structure.Predicate)))
 		}
 		d.write("}\n\n")
 	}
@@ -184,9 +184,9 @@ func (d *decompiler) decompileSignals() {
 		if conv.Description != "" {
 			d.write("  description: %q\n", conv.Description)
 		}
-		d.write("  feature: %s\n", formatPluginConfigValue(conversationFeatureToMap(conv.Feature)))
+		d.write("  feature: %s\n", formatDSLValue(conversationFeatureValue(conv.Feature)))
 		if conv.Predicate != nil {
-			d.write("  predicate: %s\n", formatPluginConfigValue(structurePredicateToMap(conv.Predicate)))
+			d.write("  predicate: %s\n", formatDSLValue(structurePredicateValue(conv.Predicate)))
 		}
 		d.write("}\n\n")
 	}
@@ -789,7 +789,7 @@ func decompilePluginConfig(p *config.DecisionPlugin) string {
 			fmt.Fprintf(&sb, "    block_tools: %s\n", formatStringArray(cfg.BlockTools))
 		}
 		if cfg.DynamicRetrieval != nil {
-			fmt.Fprintf(&sb, "    dynamic_retrieval: %s\n", formatPluginConfigValue(dynamicRetrievalConfigMap(cfg.DynamicRetrieval)))
+			fmt.Fprintf(&sb, "    dynamic_retrieval: %s\n", formatDSLValue(dynamicRetrievalObjectValue(cfg.DynamicRetrieval)))
 		}
 	case "rag":
 		cfg, ok := decodePluginConfig[config.RAGPluginConfig](p)
@@ -1021,6 +1021,50 @@ func formatPluginConfigMap(values map[string]interface{}) string {
 	parts := make([]string, 0, len(keys))
 	for _, key := range keys {
 		parts = append(parts, fmt.Sprintf("%s: %s", key, formatPluginConfigValue(values[key])))
+	}
+	return "{ " + strings.Join(parts, ", ") + " }"
+}
+
+func formatDSLValue(value Value) string {
+	switch typed := value.(type) {
+	case StringValue:
+		return fmt.Sprintf("%q", typed.V)
+	case BoolValue:
+		return strconv.FormatBool(typed.V)
+	case IntValue:
+		return fmt.Sprintf("%d", typed.V)
+	case FloatValue:
+		return fmt.Sprintf("%g", typed.V)
+	case ArrayValue:
+		return formatDSLArray(typed.Items)
+	case ObjectValue:
+		return formatDSLObject(typed.Fields)
+	default:
+		return "null"
+	}
+}
+
+func formatDSLArray(items []Value) string {
+	parts := make([]string, 0, len(items))
+	for _, item := range items {
+		parts = append(parts, formatDSLValue(item))
+	}
+	return "[" + strings.Join(parts, ", ") + "]"
+}
+
+func formatDSLObject(fields map[string]Value) string {
+	if len(fields) == 0 {
+		return "{}"
+	}
+	keys := make([]string, 0, len(fields))
+	for key := range fields {
+		keys = append(keys, key)
+	}
+	sort.Strings(keys)
+
+	parts := make([]string, 0, len(keys))
+	for _, key := range keys {
+		parts = append(parts, fmt.Sprintf("%s: %s", key, formatDSLValue(fields[key])))
 	}
 	return "{ " + strings.Join(parts, ", ") + " }"
 }
@@ -1614,52 +1658,6 @@ func stringsToArray(items []string) ArrayValue {
 	return ArrayValue{Items: vals}
 }
 
-func dynamicRetrievalConfigMap(cfg *config.DynamicRetrievalConfig) map[string]interface{} {
-	if cfg == nil {
-		return nil
-	}
-	values := map[string]interface{}{}
-	if cfg.Enabled {
-		values["enabled"] = true
-	}
-	if cfg.Strategy != "" {
-		values["strategy"] = cfg.Strategy
-	}
-	if cfg.HistoryWindow != 0 {
-		values["history_window"] = cfg.HistoryWindow
-	}
-	if cfg.Weights != nil {
-		values["weights"] = dynamicRetrievalWeightsMap(cfg.Weights)
-	}
-	if cfg.MinHistoryConfidence != 0 {
-		values["min_history_confidence"] = cfg.MinHistoryConfidence
-	}
-	if cfg.FallbackOnLowConfidence {
-		values["fallback_on_low_confidence"] = true
-	}
-	return values
-}
-
-func dynamicRetrievalWeightsMap(weights *config.DynamicRetrievalWeights) map[string]interface{} {
-	if weights == nil {
-		return nil
-	}
-	values := map[string]interface{}{}
-	if weights.Semantic != 0 {
-		values["semantic"] = weights.Semantic
-	}
-	if weights.History != 0 {
-		values["history"] = weights.History
-	}
-	if weights.DecisionPrior != 0 {
-		values["decision_prior"] = weights.DecisionPrior
-	}
-	if weights.RepetitionPenalty != 0 {
-		values["repetition_penalty"] = weights.RepetitionPenalty
-	}
-	return values
-}
-
 func dynamicRetrievalObjectValue(cfg *config.DynamicRetrievalConfig) ObjectValue {
 	fields := map[string]Value{}
 	if cfg == nil {
@@ -1754,33 +1752,6 @@ func structurePredicateValue(predicate *config.NumericPredicate) ObjectValue {
 	return ObjectValue{Fields: fields}
 }
 
-func structureFeatureToMap(feature config.StructureFeature) map[string]interface{} {
-	values := map[string]interface{}{
-		"type":   feature.Type,
-		"source": structureSourceToMap(feature.Source),
-	}
-	return values
-}
-
-func structureSourceToMap(source config.StructureSource) map[string]interface{} {
-	values := map[string]interface{}{
-		"type": source.Type,
-	}
-	if source.Pattern != "" {
-		values["pattern"] = source.Pattern
-	}
-	if len(source.Keywords) > 0 {
-		values["keywords"] = source.Keywords
-	}
-	if source.CaseSensitive {
-		values["case_sensitive"] = true
-	}
-	if len(source.Sequences) > 0 {
-		values["sequences"] = source.Sequences
-	}
-	return values
-}
-
 func conversationFeatureValue(feature config.ConversationFeature) ObjectValue {
 	fields := map[string]Value{
 		"type":   StringValue{V: feature.Type},
@@ -1797,43 +1768,6 @@ func conversationSourceValue(source config.ConversationSource) ObjectValue {
 		fields["role"] = StringValue{V: source.Role}
 	}
 	return ObjectValue{Fields: fields}
-}
-
-func conversationFeatureToMap(feature config.ConversationFeature) map[string]interface{} {
-	return map[string]interface{}{
-		"type":   feature.Type,
-		"source": conversationSourceToMap(feature.Source),
-	}
-}
-
-func conversationSourceToMap(source config.ConversationSource) map[string]interface{} {
-	values := map[string]interface{}{
-		"type": source.Type,
-	}
-	if source.Role != "" {
-		values["role"] = source.Role
-	}
-	return values
-}
-
-func structurePredicateToMap(predicate *config.NumericPredicate) map[string]interface{} {
-	values := make(map[string]interface{})
-	if predicate == nil {
-		return values
-	}
-	if predicate.GT != nil {
-		values["gt"] = *predicate.GT
-	}
-	if predicate.GTE != nil {
-		values["gte"] = *predicate.GTE
-	}
-	if predicate.LT != nil {
-		values["lt"] = *predicate.LT
-	}
-	if predicate.LTE != nil {
-		values["lte"] = *predicate.LTE
-	}
-	return values
 }
 
 func formatProjectionScoreInputs(inputs []config.ProjectionScoreInput) string {

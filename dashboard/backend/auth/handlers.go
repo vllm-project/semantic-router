@@ -41,6 +41,8 @@ func AuthRoutes(svc *Service) *http.ServeMux {
 	mux.HandleFunc("/api/auth/bootstrap/register", bootstrapRegisterHandler(svc))
 	mux.HandleFunc("/api/auth/login", loginHandler(svc))
 	mux.HandleFunc("/api/auth/login/", loginHandler(svc))
+	mux.HandleFunc("/api/auth/logout", logoutHandler(svc))
+	mux.HandleFunc("/api/auth/logout/", logoutHandler(svc))
 	mux.HandleFunc("/api/auth/me", meHandler(svc))
 	mux.HandleFunc("/api/auth/me/", meHandler(svc))
 

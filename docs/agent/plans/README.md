@@ -88,6 +88,8 @@ Keep the numeric index unique within `docs/agent/plans/`.
 - [pl-0024-balance-recipe-simplification-loop.md](pl-0024-balance-recipe-simplification-loop.md)
 - [pl-0025-prototype-aware-embedding-backed-signal-scoring-loop.md](pl-0025-prototype-aware-embedding-backed-signal-scoring-loop.md)
 - [pl-0030-session-aware-model-switch-workstream.md](pl-0030-session-aware-model-switch-workstream.md)
+- [pl-0031-router-api-vectorstore-harness-ratchet.md](pl-0031-router-api-vectorstore-harness-ratchet.md)
+- [pl-0032-architecture-scorecard-ratchet.md](pl-0032-architecture-scorecard-ratchet.md)
 
 ## Completed Execution Plans
 

@@ -7,7 +7,7 @@ import (
 	. "github.com/onsi/gomega"
 )
 
-var _ = Describe("MemoryMetadataRegistry", func() {
+var _ = Describe("MemoryMetadataRegistry stores", func() {
 	var (
 		reg *MemoryMetadataRegistry
 		ctx context.Context
@@ -58,6 +58,38 @@ var _ = Describe("MemoryMetadataRegistry", func() {
 			_, err := reg.GetStore(ctx, "vs_missing")
 			Expect(err).To(HaveOccurred())
 		})
+
+		It("returns defensive store copies", func() {
+			vs := &VectorStore{
+				ID:       "vs_copy",
+				Name:     "original",
+				Metadata: map[string]interface{}{"env": "test"},
+			}
+			Expect(reg.SaveStore(ctx, vs)).To(Succeed())
+
+			vs.Name = "mutated-before-read"
+			got, err := reg.GetStore(ctx, "vs_copy")
+			Expect(err).NotTo(HaveOccurred())
+			got.Name = "mutated-after-read"
+			got.Metadata["env"] = "mutated"
+
+			reloaded, err := reg.GetStore(ctx, "vs_copy")
+			Expect(err).NotTo(HaveOccurred())
+			Expect(reloaded.Name).To(Equal("original"))
+			Expect(reloaded.Metadata["env"]).To(Equal("test"))
+		})
+	})
+})
+
+var _ = Describe("MemoryMetadataRegistry files", func() {
+	var (
+		reg *MemoryMetadataRegistry
+		ctx context.Context
+	)
+
+	BeforeEach(func() {
+		reg = NewMemoryMetadataRegistry()
+		ctx = context.Background()
 	})
 
 	Context("File CRUD", func() {
@@ -91,6 +123,20 @@ var _ = Describe("MemoryMetadataRegistry", func() {
 		It("returns error for missing file", func() {
 			_, err := reg.GetFile(ctx, "f_missing")
 			Expect(err).To(HaveOccurred())
+		})
+
+		It("returns defensive file record copies", func() {
+			fr := &FileRecord{ID: "file_copy", Filename: "original.txt"}
+			Expect(reg.SaveFile(ctx, fr)).To(Succeed())
+
+			fr.Filename = "mutated-before-read.txt"
+			got, err := reg.GetFile(ctx, "file_copy")
+			Expect(err).NotTo(HaveOccurred())
+			got.Filename = "mutated-after-read.txt"
+
+			reloaded, err := reg.GetFile(ctx, "file_copy")
+			Expect(err).NotTo(HaveOccurred())
+			Expect(reloaded.Filename).To(Equal("original.txt"))
 		})
 	})
 })

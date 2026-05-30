@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"testing"
 
+	"github.com/openai/openai-go"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -162,6 +163,63 @@ func TestResolveModalityModelsFromDecision_ModelWithNoModality(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, "model-ar", ar)
 	assert.Empty(t, diffusion)
+}
+
+func TestHandleModalityFromDecisionUsesRouterConfigBeforeGlobal(t *testing.T) {
+	restoreGlobalConfig := replaceExtProcGlobalConfigForTest(&config.RouterConfig{
+		InlineModels: config.InlineModels{
+			ModalityDetector: config.ModalityDetectorConfig{Enabled: false},
+		},
+	})
+	defer restoreGlobalConfig()
+
+	router := &OpenAIRouter{
+		Config: &config.RouterConfig{
+			InlineModels: config.InlineModels{
+				ModalityDetector: config.ModalityDetectorConfig{Enabled: true},
+			},
+		},
+	}
+	ctx := &RequestContext{
+		ModalityClassification: &ModalityClassificationResult{
+			Modality: ModalityDiffusion,
+			Method:   "unit-test",
+		},
+	}
+
+	resp, err := router.handleModalityFromDecision(ctx, &openai.ChatCompletionNewParams{})
+
+	require.Error(t, err)
+	assert.Nil(t, resp)
+	assert.Contains(t, err.Error(), "no decision selected")
+}
+
+func TestHandleModalityFromDecisionDoesNotUseGlobalWhenRouterConfigDisablesDetector(t *testing.T) {
+	restoreGlobalConfig := replaceExtProcGlobalConfigForTest(&config.RouterConfig{
+		InlineModels: config.InlineModels{
+			ModalityDetector: config.ModalityDetectorConfig{Enabled: true},
+		},
+	})
+	defer restoreGlobalConfig()
+
+	router := &OpenAIRouter{
+		Config: &config.RouterConfig{
+			InlineModels: config.InlineModels{
+				ModalityDetector: config.ModalityDetectorConfig{Enabled: false},
+			},
+		},
+	}
+	ctx := &RequestContext{
+		ModalityClassification: &ModalityClassificationResult{
+			Modality: ModalityDiffusion,
+			Method:   "unit-test",
+		},
+	}
+
+	resp, err := router.handleModalityFromDecision(ctx, &openai.ChatCompletionNewParams{})
+
+	require.NoError(t, err)
+	assert.Nil(t, resp)
 }
 
 // =============================================================================

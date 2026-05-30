@@ -26,7 +26,7 @@ type CombinedClassificationResponse struct {
 func (s *ClassificationAPIServer) handleCombinedClassification(w http.ResponseWriter, r *http.Request) {
 	var req CombinedClassificationRequest
 	if err := s.parseJSONRequest(r, &req); err != nil {
-		s.writeErrorResponse(w, http.StatusBadRequest, "INVALID_INPUT", err.Error())
+		s.writeJSONRequestError(w, err)
 		return
 	}
 	if req.Text == "" {

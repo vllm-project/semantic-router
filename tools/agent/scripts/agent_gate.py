@@ -12,14 +12,13 @@ from agent_artifacts import (
     write_default_report_artifacts,
     write_explicit_report_artifact,
 )
+from agent_changed_files import get_changed_files
+from agent_context_resolution import resolve_context, unique_preserve_order
 from agent_resolution import (
     build_report,
-    get_changed_files,
-    resolve_context,
     resolve_environment,
     resolve_skill,
     run_local_e2e,
-    unique_preserve_order,
 )
 from agent_scorecard import build_harness_scorecard
 from agent_support import (

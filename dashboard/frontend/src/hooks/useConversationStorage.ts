@@ -2,12 +2,14 @@
 // or restart-safe. Supported multi-operator chat history lives in OpenClaw room APIs.
 import { useCallback, useEffect, useState } from 'react'
 
-export interface StoredConversation<T> {
-    id: string
-    createdAt: number
-    updatedAt: number
-    payload: T
-}
+import {
+    DEFAULT_MAX_CONVERSATIONS,
+    normalizeStoredConversations,
+    pruneStoredConversations,
+    type StoredConversation,
+} from './conversationStorage'
+
+export type { StoredConversation } from './conversationStorage'
 
 interface UseConversationStorageOptions {
     storageKey?: string
@@ -15,7 +17,6 @@ interface UseConversationStorageOptions {
 }
 
 const DEFAULT_STORAGE_KEY = 'sr:chat:conversations'
-const DEFAULT_MAX_CONVERSATIONS = 20
 
 export const useConversationStorage = <T,>({
     storageKey = DEFAULT_STORAGE_KEY,
@@ -30,23 +31,36 @@ export const useConversationStorage = <T,>({
             const raw = window.localStorage.getItem(storageKey)
             if (!raw) return
 
-            const parsed = JSON.parse(raw)
-            if (Array.isArray(parsed)) {
-                setConversations(parsed)
+            const restored = normalizeStoredConversations<T>(JSON.parse(raw), {
+                maxConversations,
+            })
+
+            if (restored.length === 0) {
+                window.localStorage.removeItem(storageKey)
+            } else {
+                window.localStorage.setItem(storageKey, JSON.stringify(restored))
             }
+
+            setConversations(restored)
         } catch (err) {
             console.error('Failed to load conversations from localStorage', err)
         }
-    }, [storageKey])
+    }, [maxConversations, storageKey])
 
     const updateAndPersist = useCallback(
         (updater: (prev: StoredConversation<T>[]) => StoredConversation<T>[]) => {
             setConversations(prev => {
-                const next = updater(prev)
+                const next = pruneStoredConversations(updater(prev), {
+                    maxConversations,
+                })
 
                 if (typeof window !== 'undefined') {
                     try {
-                        window.localStorage.setItem(storageKey, JSON.stringify(next))
+                        if (next.length === 0) {
+                            window.localStorage.removeItem(storageKey)
+                        } else {
+                            window.localStorage.setItem(storageKey, JSON.stringify(next))
+                        }
                     } catch (err) {
                         console.error('Failed to save conversations to localStorage', err)
                     }
@@ -55,7 +69,7 @@ export const useConversationStorage = <T,>({
                 return next
             })
         },
-        [storageKey]
+        [maxConversations, storageKey]
     )
 
     const saveConversation = useCallback(
@@ -74,14 +88,10 @@ export const useConversationStorage = <T,>({
                     next = [{ id, payload, createdAt: now, updatedAt: now }, ...prev]
                 }
 
-                if (next.length > maxConversations) {
-                    next = next.slice(0, maxConversations)
-                }
-
                 return next
             })
         },
-        [maxConversations, updateAndPersist]
+        [updateAndPersist]
     )
 
     const deleteConversation = useCallback(

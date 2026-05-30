@@ -10,6 +10,7 @@ deploy/helm/
 ├── validate-chart.sh              # Chart validation script
 └── semantic-router/               # Helm chart
     ├── Chart.yaml                 # Chart metadata
+    ├── values.schema.json         # Helm values type contract
     ├── values.yaml                # Default configuration values
     ├── values-dev.yaml            # Development environment values
     ├── values-prod.yaml           # Production environment values
@@ -21,6 +22,7 @@ deploy/helm/
         ├── serviceaccount.yaml   # Service account
         ├── configmap.yaml        # Configuration
         ├── pvc.yaml              # Persistent volume claim
+        ├── dashboard-pvc.yaml    # Dashboard local-state persistent volume claim
         ├── deployment.yaml       # Main deployment
         ├── dashboard-deployment.yaml  # Dashboard deployment (optional)
         ├── dashboard-service.yaml     # Dashboard service (optional)
@@ -37,6 +39,16 @@ deploy/helm/
 - Kubernetes 1.19+
 - Helm 3.2.0+
 - kubectl configured to access your cluster
+
+### Chart Contract Guards
+
+The chart includes a narrow `values.schema.json` for public router and
+dashboard deployment controls. Helm now rejects invalid types for replica
+counts, autoscaling controls, dashboard persistence controls, and safety
+guards before template rendering. Template guards still own cross-field
+constraints, including invalid HPA replica bounds, unsupported multi-replica
+dashboard local state, and multi-replica router deployments that use local
+learning selector state.
 
 ### Install via vllm-sr CLI (recommended)
 
@@ -180,7 +192,13 @@ helm install semantic-router ./deploy/helm/semantic-router \
 
 **Features:**
 
-- Multiple replicas (2 minimum, auto-scaling to 10)
+- Router replicas scale from 2 minimum to 10 through HPA
+- Helm rejects multi-replica router renders when the active config uses
+  local-state learning selectors such as `elo`, `rl_driven`, or `gmtrouter`,
+  unless that safety guard is explicitly disabled after externalizing state
+- Dashboard stays at one replica in the production values profile; it can mount
+  dashboard-local SQLite state on a PVC, but the current auth/session store is
+  not a shared HA store
 - High resource allocation (8Gi RAM, 4 CPU)
 - Auto-scaling enabled (70% CPU target)
 - Security hardening (runAsNonRoot, no privilege escalation)
@@ -263,6 +281,7 @@ make helm-list                 # List all releases
 ```bash
 make helm-lint                 # Lint the chart
 make helm-template             # Template the chart
+make helm-safety-validate      # Validate schema and local-state safety guards
 make helm-dev                  # Deploy with dev config
 make helm-prod                 # Deploy with prod config
 make helm-package              # Package the chart
@@ -310,6 +329,7 @@ Before deploying, validate the Helm chart:
 # Or manually:
 make helm-lint
 make helm-template
+make helm-safety-validate HELM_REPO_UPDATE=false
 ```
 
 ## Upgrading

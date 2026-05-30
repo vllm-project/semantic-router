@@ -155,6 +155,62 @@ func TestPreferenceClassifier_DefaultsToContrastiveWhenConfigOmitted(t *testing.
 	}
 }
 
+func TestPreferenceClassifier_ParsePreferenceOutput(t *testing.T) {
+	classifier := &PreferenceClassifier{}
+
+	tests := []struct {
+		name       string
+		output     string
+		want       string
+		wantErrSub string
+	}{
+		{
+			name:   "plain JSON",
+			output: `{"route":"code_generation"}`,
+			want:   "code_generation",
+		},
+		{
+			name:   "prose wrapped JSON",
+			output: `The best route is {"route":"bug_fixing"}.`,
+			want:   "bug_fixing",
+		},
+		{
+			name:   "single quoted JSON",
+			output: `{'route':'other'}`,
+			want:   "other",
+		},
+		{
+			name:       "missing JSON",
+			output:     "route: code_generation",
+			wantErrSub: "no valid JSON",
+		},
+		{
+			name:       "empty route",
+			output:     `{"route":""}`,
+			wantErrSub: "preference field is empty",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result, err := classifier.parsePreferenceOutput(tt.output)
+			if tt.wantErrSub != "" {
+				if err == nil || !strings.Contains(err.Error(), tt.wantErrSub) {
+					t.Fatalf("expected error containing %q, got result=%+v err=%v", tt.wantErrSub, result, err)
+				}
+				return
+			}
+
+			if err != nil {
+				t.Fatalf("unexpected parse error: %v", err)
+			}
+			if result.Preference != tt.want {
+				t.Fatalf("expected preference %q, got %+v", tt.want, result)
+			}
+		})
+	}
+}
+
 func TestContrastivePreferenceClassifier_BelowThresholdReturnsNoMatchError(t *testing.T) {
 	reset := SetEmbeddingFuncForTests(func(text string, modelType string, targetDim int) (*candle_binding.EmbeddingOutput, error) {
 		switch text {

@@ -47,6 +47,11 @@ interface ProjectionMappingFormState {
   outputs: ProjectionMappingOutput[]
 }
 
+const EMPTY_PROJECTIONS: ConfigProjections = { partitions: [], scores: [], mappings: [] }
+const EMPTY_PARTITIONS: ProjectionPartition[] = []
+const EMPTY_SCORES: ProjectionScore[] = []
+const EMPTY_MAPPINGS: ProjectionMapping[] = []
+
 const toPrettyJSON = (value: unknown) => (
   <pre
     style={{
@@ -98,12 +103,12 @@ export default function ConfigPageProjectionsSection({
 }: ConfigPageProjectionsSectionProps) {
   const [search, setSearch] = useState('')
   const projections = useMemo<ConfigProjections>(
-    () => config?.projections || { partitions: [], scores: [], mappings: [] },
+    () => config?.projections || EMPTY_PROJECTIONS,
     [config?.projections]
   )
-  const partitions = projections.partitions || []
-  const scores = projections.scores || []
-  const mappings = projections.mappings || []
+  const partitions = projections.partitions || EMPTY_PARTITIONS
+  const scores = projections.scores || EMPTY_SCORES
+  const mappings = projections.mappings || EMPTY_MAPPINGS
   const scoreOptions = scores.map((score) => score.name)
 
   const filteredPartitions = useMemo(

@@ -20,6 +20,7 @@ type ColorBendsProps = {
 }
 
 const MAX_COLORS = 8 as const
+const INITIAL_TRANSPARENT = true
 
 const frag = `
 #define MAX_COLORS ${MAX_COLORS}
@@ -173,18 +174,18 @@ export default function ColorBends({
       uniforms: {
         uCanvas: { value: new THREE.Vector2(1, 1) },
         uTime: { value: 0 },
-        uSpeed: { value: speed },
+        uSpeed: { value: 0 },
         uRot: { value: new THREE.Vector2(1, 0) },
         uColorCount: { value: 0 },
         uColors: { value: uColorsArray },
-        uTransparent: { value: transparent ? 1 : 0 },
-        uScale: { value: scale },
-        uFrequency: { value: frequency },
-        uWarpStrength: { value: warpStrength },
+        uTransparent: { value: INITIAL_TRANSPARENT ? 1 : 0 },
+        uScale: { value: 1 },
+        uFrequency: { value: 1 },
+        uWarpStrength: { value: 1 },
         uPointer: { value: new THREE.Vector2(0, 0) },
-        uMouseInfluence: { value: mouseInfluence },
-        uParallax: { value: parallax },
-        uNoise: { value: noise },
+        uMouseInfluence: { value: 1 },
+        uParallax: { value: 0 },
+        uNoise: { value: 0 },
       },
       premultipliedAlpha: true,
       transparent: true,
@@ -204,7 +205,7 @@ export default function ColorBends({
     rendererRef.current = renderer
     renderer.outputColorSpace = THREE.SRGBColorSpace
     renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2))
-    renderer.setClearColor(0x000000, transparent ? 0 : 1)
+    renderer.setClearColor(0x000000, INITIAL_TRANSPARENT ? 0 : 1)
     renderer.domElement.style.width = '100%'
     renderer.domElement.style.height = '100%'
     renderer.domElement.style.display = 'block'

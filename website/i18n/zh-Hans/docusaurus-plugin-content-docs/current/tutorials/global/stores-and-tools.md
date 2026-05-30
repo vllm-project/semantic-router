@@ -61,8 +61,17 @@ global:
 global:
   stores:
     vector_store:
-      provider: milvus
+      enabled: true
+      backend_type: milvus
+      metadata_store: postgres
 ```
+
+支持的后端包括 `memory`、`milvus`、`llama_stack`、`valkey`、`qdrant`。
+
+`metadata_store` 控制向量库和上传文件的元数据注册表。需要重启安全的
+本地或类生产环境时使用 `postgres`；设置 `metadata_store: postgres` 后，
+CLI 本地运行时会拉起 Postgres 并补齐 `metadata_postgres` 连接默认值。
+`memory` 只适合临时本地实验，路由器重启后会丢失库和文件元数据。
 
 ### 工具
 

@@ -215,6 +215,57 @@ func TestFactory_RLDriven(t *testing.T) {
 	t.Log("Factory correctly creates RLDrivenLooper for 'rl_driven' type")
 }
 
+func TestFactoryWithSelectionRegistryUsesRuntimeRLDrivenSelector(t *testing.T) {
+	cfg := &config.LooperConfig{
+		Endpoint: "http://localhost:8000",
+	}
+	originalRegistry := selection.GlobalRegistry
+	defer func() {
+		selection.GlobalRegistry = originalRegistry
+	}()
+
+	globalSelector := selection.NewRLDrivenSelector(selection.DefaultRLDrivenConfig())
+	globalRegistry := selection.NewRegistry()
+	globalRegistry.Register(selection.MethodRLDriven, globalSelector)
+	selection.GlobalRegistry = globalRegistry
+
+	runtimeSelector := selection.NewRLDrivenSelector(selection.DefaultRLDrivenConfig())
+	runtimeRegistry := selection.NewRegistry()
+	runtimeRegistry.Register(selection.MethodRLDriven, runtimeSelector)
+
+	got := FactoryWithSelectionRegistry(cfg, "rl_driven", runtimeRegistry)
+	rlLooper, ok := got.(*RLDrivenLooper)
+	if !ok {
+		t.Fatalf("FactoryWithSelectionRegistry returned %T, want *RLDrivenLooper", got)
+	}
+	if rlLooper.selector != runtimeSelector {
+		t.Fatalf("RL-driven looper selector = %p, want runtime registry selector %p", rlLooper.selector, runtimeSelector)
+	}
+	if rlLooper.selector == globalSelector {
+		t.Fatal("RL-driven looper used process-wide global selector instead of runtime registry selector")
+	}
+}
+
+func TestNewRLDrivenLooperPreservesGlobalRegistryCompatibility(t *testing.T) {
+	cfg := &config.LooperConfig{
+		Endpoint: "http://localhost:8000",
+	}
+	originalRegistry := selection.GlobalRegistry
+	defer func() {
+		selection.GlobalRegistry = originalRegistry
+	}()
+
+	globalSelector := selection.NewRLDrivenSelector(selection.DefaultRLDrivenConfig())
+	globalRegistry := selection.NewRegistry()
+	globalRegistry.Register(selection.MethodRLDriven, globalSelector)
+	selection.GlobalRegistry = globalRegistry
+
+	got := NewRLDrivenLooper(cfg)
+	if got.selector != globalSelector {
+		t.Fatalf("NewRLDrivenLooper selector = %p, want global compatibility selector %p", got.selector, globalSelector)
+	}
+}
+
 func TestRLDrivenLooper_SelectorIntegration(t *testing.T) {
 	cfg := &config.LooperConfig{
 		Endpoint: "http://localhost:8000",

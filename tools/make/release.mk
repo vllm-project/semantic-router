@@ -1,6 +1,9 @@
 ##@ Release
 
-.PHONY: release
+.PHONY: release release-check
+
+release-check: ## Validate the local release version contract; set RELEASE_VERSION to check a tag version
+	@python3 tools/release/check_version_contract.py $(if $(RELEASE_VERSION),--version "$(RELEASE_VERSION)")
 
 release: ## Prepare the local vllm-sr release commit, stable tag, and next dev bump
 	@test -n "$(RELEASE_VERSION)" || { \

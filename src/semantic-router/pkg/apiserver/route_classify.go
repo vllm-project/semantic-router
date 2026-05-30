@@ -3,10 +3,8 @@
 package apiserver
 
 import (
-	"bytes"
 	"encoding/json"
 	"fmt"
-	"io"
 	"net/http"
 	"time"
 
@@ -18,7 +16,7 @@ import (
 func (s *ClassificationAPIServer) handleIntentClassification(w http.ResponseWriter, r *http.Request) {
 	var req services.IntentRequest
 	if err := s.parseJSONRequest(r, &req); err != nil {
-		s.writeErrorResponse(w, http.StatusBadRequest, "INVALID_INPUT", err.Error())
+		s.writeJSONRequestError(w, err)
 		return
 	}
 
@@ -38,7 +36,7 @@ func (s *ClassificationAPIServer) handleIntentClassification(w http.ResponseWrit
 func (s *ClassificationAPIServer) handleEvalClassification(w http.ResponseWriter, r *http.Request) {
 	var req services.IntentRequest
 	if err := s.parseJSONRequest(r, &req); err != nil {
-		s.writeErrorResponse(w, http.StatusBadRequest, "INVALID_INPUT", err.Error())
+		s.writeJSONRequestError(w, err)
 		return
 	}
 
@@ -63,7 +61,7 @@ func (s *ClassificationAPIServer) handleEvalClassification(w http.ResponseWriter
 func (s *ClassificationAPIServer) handlePIIDetection(w http.ResponseWriter, r *http.Request) {
 	var req services.PIIRequest
 	if err := s.parseJSONRequest(r, &req); err != nil {
-		s.writeErrorResponse(w, http.StatusBadRequest, "INVALID_INPUT", err.Error())
+		s.writeJSONRequestError(w, err)
 		return
 	}
 
@@ -80,7 +78,7 @@ func (s *ClassificationAPIServer) handlePIIDetection(w http.ResponseWriter, r *h
 func (s *ClassificationAPIServer) handleSecurityDetection(w http.ResponseWriter, r *http.Request) {
 	var req services.SecurityRequest
 	if err := s.parseJSONRequest(r, &req); err != nil {
-		s.writeErrorResponse(w, http.StatusBadRequest, "INVALID_INPUT", err.Error())
+		s.writeJSONRequestError(w, err)
 		return
 	}
 
@@ -94,70 +92,19 @@ func (s *ClassificationAPIServer) handleSecurityDetection(w http.ResponseWriter,
 }
 
 func (s *ClassificationAPIServer) handleBatchClassification(w http.ResponseWriter, r *http.Request) {
-	// Record batch classification request
 	metrics.RecordBatchClassificationRequest("unified")
-
-	// Start timing for duration metrics
 	start := time.Now()
 
-	// First, read the raw body to check if texts field exists
-	body, err := io.ReadAll(r.Body)
-	if err != nil {
-		metrics.RecordBatchClassificationError("unified", "read_body_failed")
-		s.writeErrorResponse(w, http.StatusBadRequest, "INVALID_INPUT", "Failed to read request body")
-		return
-	}
-	r.Body = io.NopCloser(bytes.NewReader(body))
-
-	// Check if texts field exists in JSON
-	var rawReq map[string]interface{}
-	if unmarshalErr := json.Unmarshal(body, &rawReq); unmarshalErr != nil {
-		metrics.RecordBatchClassificationError("unified", "invalid_json")
-		s.writeErrorResponse(w, http.StatusBadRequest, "INVALID_INPUT", "Invalid JSON format")
+	req, ok := s.parseBatchClassificationRequest(w, r)
+	if !ok {
 		return
 	}
 
-	// Check if texts field is present
-	if _, exists := rawReq["texts"]; !exists {
-		metrics.RecordBatchClassificationError("unified", "missing_texts_field")
-		s.writeErrorResponse(w, http.StatusBadRequest, "INVALID_INPUT", "texts field is required")
-		return
-	}
-
-	var req BatchClassificationRequest
-	if parseErr := s.parseJSONRequest(r, &req); parseErr != nil {
-		metrics.RecordBatchClassificationError("unified", "parse_request_failed")
-		s.writeErrorResponse(w, http.StatusBadRequest, "INVALID_INPUT", parseErr.Error())
-		return
-	}
-
-	// Input validation - now we know texts field exists, check if it's empty
-	if len(req.Texts) == 0 {
-		// Record validation error in metrics
-		metrics.RecordBatchClassificationError("unified", "empty_texts")
-		s.writeErrorResponse(w, http.StatusBadRequest, "INVALID_INPUT", "texts array cannot be empty")
-		return
-	}
-
-	// Validate task_type if provided
-	if validateErr := validateTaskType(req.TaskType); validateErr != nil {
-		metrics.RecordBatchClassificationError("unified", "invalid_task_type")
-		s.writeErrorResponse(w, http.StatusBadRequest, "INVALID_TASK_TYPE", validateErr.Error())
-		return
-	}
-
-	// Record the number of texts being processed
 	metrics.RecordBatchClassificationTexts("unified", len(req.Texts))
-
-	// Batch classification requires unified classifier
-	if !s.classificationSvc.HasUnifiedClassifier() {
-		metrics.RecordBatchClassificationError("unified", "classifier_unavailable")
-		s.writeErrorResponse(w, http.StatusServiceUnavailable, "UNIFIED_CLASSIFIER_UNAVAILABLE",
-			"Batch classification requires unified classifier. Please ensure models are available in ./models/ directory.")
+	if !s.ensureUnifiedClassifierAvailable(w) {
 		return
 	}
 
-	// Use unified classifier for true batch processing with options support
 	unifiedResults, err := s.classificationSvc.ClassifyBatchUnifiedWithOptions(req.Texts, req.Options)
 	if err != nil {
 		metrics.RecordBatchClassificationError("unified", "classification_failed")
@@ -165,22 +112,74 @@ func (s *ClassificationAPIServer) handleBatchClassification(w http.ResponseWrite
 		return
 	}
 
-	// Convert unified results to legacy format based on requested task type
-	results := s.extractRequestedResults(unifiedResults, req.TaskType, req.Options)
-	statistics := s.calculateUnifiedStatistics(unifiedResults)
-
-	// Record successful processing duration
 	duration := time.Since(start).Seconds()
 	metrics.RecordBatchClassificationDuration("unified", len(req.Texts), duration)
 
-	response := BatchClassificationResponse{
-		Results:          results,
-		TotalCount:       len(req.Texts),
-		ProcessingTimeMs: unifiedResults.ProcessingTimeMs,
-		Statistics:       statistics,
+	response := s.buildBatchClassificationResponse(unifiedResults, req)
+	s.writeJSONResponse(w, http.StatusOK, response)
+}
+
+func (s *ClassificationAPIServer) parseBatchClassificationRequest(w http.ResponseWriter, r *http.Request) (BatchClassificationRequest, bool) {
+	body, err := readJSONRequestBody(r, defaultJSONRequestBodyLimit)
+	if err != nil {
+		metrics.RecordBatchClassificationError("unified", "read_body_failed")
+		s.writeJSONRequestError(w, err)
+		return BatchClassificationRequest{}, false
 	}
 
-	s.writeJSONResponse(w, http.StatusOK, response)
+	var rawReq map[string]json.RawMessage
+	if unmarshalErr := decodeJSONBody(body, &rawReq); unmarshalErr != nil {
+		metrics.RecordBatchClassificationError("unified", "invalid_json")
+		s.writeErrorResponse(w, http.StatusBadRequest, "INVALID_INPUT", "Invalid JSON format")
+		return BatchClassificationRequest{}, false
+	}
+
+	if _, exists := rawReq["texts"]; !exists {
+		metrics.RecordBatchClassificationError("unified", "missing_texts_field")
+		s.writeErrorResponse(w, http.StatusBadRequest, "INVALID_INPUT", "texts field is required")
+		return BatchClassificationRequest{}, false
+	}
+
+	var req BatchClassificationRequest
+	if parseErr := decodeJSONBody(body, &req); parseErr != nil {
+		metrics.RecordBatchClassificationError("unified", "parse_request_failed")
+		s.writeErrorResponse(w, http.StatusBadRequest, "INVALID_INPUT", parseErr.Error())
+		return BatchClassificationRequest{}, false
+	}
+
+	if len(req.Texts) == 0 {
+		metrics.RecordBatchClassificationError("unified", "empty_texts")
+		s.writeErrorResponse(w, http.StatusBadRequest, "INVALID_INPUT", "texts array cannot be empty")
+		return BatchClassificationRequest{}, false
+	}
+
+	if validateErr := validateTaskType(req.TaskType); validateErr != nil {
+		metrics.RecordBatchClassificationError("unified", "invalid_task_type")
+		s.writeErrorResponse(w, http.StatusBadRequest, "INVALID_TASK_TYPE", validateErr.Error())
+		return BatchClassificationRequest{}, false
+	}
+
+	return req, true
+}
+
+func (s *ClassificationAPIServer) ensureUnifiedClassifierAvailable(w http.ResponseWriter) bool {
+	if !s.classificationSvc.HasUnifiedClassifier() {
+		metrics.RecordBatchClassificationError("unified", "classifier_unavailable")
+		s.writeErrorResponse(w, http.StatusServiceUnavailable, "UNIFIED_CLASSIFIER_UNAVAILABLE",
+			"Batch classification requires unified classifier. Please ensure models are available in ./models/ directory.")
+		return false
+	}
+
+	return true
+}
+
+func (s *ClassificationAPIServer) buildBatchClassificationResponse(unifiedResults *services.UnifiedBatchResponse, req BatchClassificationRequest) BatchClassificationResponse {
+	return BatchClassificationResponse{
+		Results:          s.extractRequestedResults(unifiedResults, req.TaskType, req.Options),
+		TotalCount:       len(req.Texts),
+		ProcessingTimeMs: unifiedResults.ProcessingTimeMs,
+		Statistics:       s.calculateUnifiedStatistics(unifiedResults),
+	}
 }
 
 // calculateUnifiedStatistics calculates statistics from unified batch results
@@ -217,74 +216,91 @@ func (s *ClassificationAPIServer) calculateUnifiedStatistics(unifiedResults *ser
 
 // extractRequestedResults converts unified results to batch format based on task type
 func (s *ClassificationAPIServer) extractRequestedResults(unifiedResults *services.UnifiedBatchResponse, taskType string, options *ClassificationOptions) []BatchClassificationResult {
-	// Determine the correct batch size based on task type
-	var batchSize int
 	switch taskType {
 	case "pii":
-		batchSize = len(unifiedResults.PIIResults)
+		return piiBatchResults(unifiedResults)
 	case "security":
-		batchSize = len(unifiedResults.SecurityResults)
+		return securityBatchResults(unifiedResults)
 	default:
-		batchSize = len(unifiedResults.IntentResults)
+		return intentBatchResults(unifiedResults, options)
 	}
+}
 
-	results := make([]BatchClassificationResult, batchSize)
+func piiBatchResults(unifiedResults *services.UnifiedBatchResponse) []BatchClassificationResult {
+	results := make([]BatchClassificationResult, len(unifiedResults.PIIResults))
+	processingTimeMs := perResultProcessingTime(unifiedResults.ProcessingTimeMs, len(results))
 
-	switch taskType {
-	case "pii":
-		// Convert PII results to batch format
-		for i, piiResult := range unifiedResults.PIIResults {
-			category := "no_pii"
-			if piiResult.HasPII {
-				if len(piiResult.PIITypes) > 0 {
-					category = piiResult.PIITypes[0] // Use first PII type
-				} else {
-					category = "pii_detected"
-				}
-			}
-			results[i] = BatchClassificationResult{
-				Category:         category,
-				Confidence:       float64(piiResult.Confidence),
-				ProcessingTimeMs: unifiedResults.ProcessingTimeMs / int64(len(unifiedResults.PIIResults)),
-			}
-		}
-	case "security":
-		// Convert security results to batch format
-		for i, securityResult := range unifiedResults.SecurityResults {
-			category := "safe"
-			if securityResult.IsJailbreak {
-				category = securityResult.ThreatType
-			}
-			results[i] = BatchClassificationResult{
-				Category:         category,
-				Confidence:       float64(securityResult.Confidence),
-				ProcessingTimeMs: unifiedResults.ProcessingTimeMs / int64(len(unifiedResults.SecurityResults)),
-			}
-		}
-	case "intent":
-		fallthrough
-	default:
-		// Convert intent results to batch format with probabilities support (default)
-		for i, intentResult := range unifiedResults.IntentResults {
-			result := BatchClassificationResult{
-				Category:         intentResult.Category,
-				Confidence:       float64(intentResult.Confidence),
-				ProcessingTimeMs: unifiedResults.ProcessingTimeMs / int64(len(unifiedResults.IntentResults)),
-			}
-
-			// Add probabilities if requested and available
-			if options != nil && options.ReturnProbabilities && len(intentResult.Probabilities) > 0 {
-				result.Probabilities = make(map[string]float64)
-				// Convert probabilities array to map (assuming they match category order)
-				// For now, just include the main category probability
-				result.Probabilities[intentResult.Category] = float64(intentResult.Confidence)
-			}
-
-			results[i] = result
+	for i, piiResult := range unifiedResults.PIIResults {
+		results[i] = BatchClassificationResult{
+			Category:         piiBatchCategory(piiResult.HasPII, piiResult.PIITypes),
+			Confidence:       float64(piiResult.Confidence),
+			ProcessingTimeMs: processingTimeMs,
 		}
 	}
 
 	return results
+}
+
+func securityBatchResults(unifiedResults *services.UnifiedBatchResponse) []BatchClassificationResult {
+	results := make([]BatchClassificationResult, len(unifiedResults.SecurityResults))
+	processingTimeMs := perResultProcessingTime(unifiedResults.ProcessingTimeMs, len(results))
+
+	for i, securityResult := range unifiedResults.SecurityResults {
+		results[i] = BatchClassificationResult{
+			Category:         securityBatchCategory(securityResult.IsJailbreak, securityResult.ThreatType),
+			Confidence:       float64(securityResult.Confidence),
+			ProcessingTimeMs: processingTimeMs,
+		}
+	}
+
+	return results
+}
+
+func intentBatchResults(unifiedResults *services.UnifiedBatchResponse, options *ClassificationOptions) []BatchClassificationResult {
+	results := make([]BatchClassificationResult, len(unifiedResults.IntentResults))
+	processingTimeMs := perResultProcessingTime(unifiedResults.ProcessingTimeMs, len(results))
+
+	for i, intentResult := range unifiedResults.IntentResults {
+		result := BatchClassificationResult{
+			Category:         intentResult.Category,
+			Confidence:       float64(intentResult.Confidence),
+			ProcessingTimeMs: processingTimeMs,
+		}
+
+		if options != nil && options.ReturnProbabilities && len(intentResult.Probabilities) > 0 {
+			result.Probabilities = map[string]float64{
+				intentResult.Category: float64(intentResult.Confidence),
+			}
+		}
+
+		results[i] = result
+	}
+
+	return results
+}
+
+func piiBatchCategory(hasPII bool, piiTypes []string) string {
+	if !hasPII {
+		return "no_pii"
+	}
+	if len(piiTypes) > 0 {
+		return piiTypes[0]
+	}
+	return "pii_detected"
+}
+
+func securityBatchCategory(isJailbreak bool, threatType string) string {
+	if isJailbreak {
+		return threatType
+	}
+	return "safe"
+}
+
+func perResultProcessingTime(totalProcessingTimeMs int64, resultCount int) int64 {
+	if resultCount == 0 {
+		return 0
+	}
+	return totalProcessingTimeMs / int64(resultCount)
 }
 
 // validateTaskType validates the task_type parameter for batch classification
@@ -309,7 +325,7 @@ func validateTaskType(taskType string) error {
 func (s *ClassificationAPIServer) handleFactCheckClassification(w http.ResponseWriter, r *http.Request) {
 	var req services.FactCheckRequest
 	if err := s.parseJSONRequest(r, &req); err != nil {
-		s.writeErrorResponse(w, http.StatusBadRequest, "INVALID_INPUT", err.Error())
+		s.writeJSONRequestError(w, err)
 		return
 	}
 
@@ -326,7 +342,7 @@ func (s *ClassificationAPIServer) handleFactCheckClassification(w http.ResponseW
 func (s *ClassificationAPIServer) handleUserFeedbackClassification(w http.ResponseWriter, r *http.Request) {
 	var req services.UserFeedbackRequest
 	if err := s.parseJSONRequest(r, &req); err != nil {
-		s.writeErrorResponse(w, http.StatusBadRequest, "INVALID_INPUT", err.Error())
+		s.writeJSONRequestError(w, err)
 		return
 	}
 

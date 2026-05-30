@@ -28,8 +28,8 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/vectorstore"
 )
 
-// retrieveFromVectorStore retrieves context from a local vector store.
-// It uses the global embedder and vector store manager set via apiserver.
+// retrieveFromVectorStore retrieves context from a local vector store using
+// the router-owned vector-store runtime published through RuntimeRegistry.
 func (r *OpenAIRouter) retrieveFromVectorStore(traceCtx context.Context, ctx *RequestContext, ragConfig *config.RAGPluginConfig) (string, error) {
 	params, err := resolveVectorStoreRetrievalParams(ctx, ragConfig)
 	if err != nil {

@@ -73,12 +73,33 @@ var _ = Describe("ValkeyBackend helpers", func() {
 	})
 
 	Context("toInt64", func() {
-		It("int64", func() { Expect(toInt64(int64(42))).To(Equal(int64(42))) })
-		It("float64", func() { Expect(toInt64(float64(42.9))).To(Equal(int64(42))) })
-		It("string", func() { Expect(toInt64("123")).To(Equal(int64(123))) })
-		It("nil", func() { Expect(toInt64(nil)).To(Equal(int64(0))) })
-		It("unsupported", func() { Expect(toInt64(true)).To(Equal(int64(0))) })
-		It("invalid string", func() { Expect(toInt64("abc")).To(Equal(int64(0))) })
+		It("int64", func() {
+			value, ok := toInt64(int64(42))
+			Expect(ok).To(BeTrue())
+			Expect(value).To(Equal(int64(42)))
+		})
+		It("float64", func() {
+			value, ok := toInt64(float64(42.9))
+			Expect(ok).To(BeTrue())
+			Expect(value).To(Equal(int64(42)))
+		})
+		It("string", func() {
+			value, ok := toInt64("123")
+			Expect(ok).To(BeTrue())
+			Expect(value).To(Equal(int64(123)))
+		})
+		It("nil", func() {
+			_, ok := toInt64(nil)
+			Expect(ok).To(BeFalse())
+		})
+		It("unsupported", func() {
+			_, ok := toInt64(true)
+			Expect(ok).To(BeFalse())
+		})
+		It("invalid string", func() {
+			_, ok := toInt64("abc")
+			Expect(ok).To(BeFalse())
+		})
 	})
 
 	Context("extractKeysFromSearchResult", func() {
@@ -213,6 +234,12 @@ var _ = Describe("ValkeyBackend parseSearchResults", func() {
 		Expect(err).NotTo(HaveOccurred())
 		Expect(r).To(BeEmpty())
 	})
+})
+
+var _ = Describe("ValkeyBackend parseSearchResults malformed fields", func() {
+	var vb *ValkeyBackend
+	BeforeEach(func() { vb = &ValkeyBackend{metricType: "COSINE"} })
+
 	It("skip non-map fields", func() {
 		r, err := vb.parseSearchResults([]interface{}{int64(1), "not-a-map"}, 0)
 		Expect(err).NotTo(HaveOccurred())
@@ -222,10 +249,49 @@ var _ = Describe("ValkeyBackend parseSearchResults", func() {
 		result := []interface{}{int64(1), map[string]interface{}{
 			"key:1": map[string]interface{}{"file_id": "f1", "content": "hello"},
 		}}
-		r, err := vb.parseSearchResults(result, 0.1)
+		r, err := vb.parseSearchResults(result, 0)
 		Expect(err).NotTo(HaveOccurred())
 		Expect(r).To(BeEmpty())
 	})
+	It("invalid vector_distance", func() {
+		result := []interface{}{int64(1), map[string]interface{}{
+			"key:1": map[string]interface{}{
+				"file_id": "f1", "filename": "a.txt", "content": "hello",
+				"chunk_index": "0", "vector_distance": "not-a-number",
+			},
+		}}
+		r, err := vb.parseSearchResults(result, 0)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(r).To(BeEmpty())
+	})
+	It("invalid chunk_index", func() {
+		result := []interface{}{int64(1), map[string]interface{}{
+			"key:1": map[string]interface{}{
+				"file_id": "f1", "filename": "a.txt", "content": "hello",
+				"chunk_index": "bad", "vector_distance": "0.1",
+			},
+		}}
+		r, err := vb.parseSearchResults(result, 0)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(r).To(BeEmpty())
+	})
+	It("missing required document fields", func() {
+		result := []interface{}{int64(1), map[string]interface{}{
+			"key:1": map[string]interface{}{
+				"file_id": "f1", "content": "hello",
+				"chunk_index": "0", "vector_distance": "0.1",
+			},
+		}}
+		r, err := vb.parseSearchResults(result, 0)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(r).To(BeEmpty())
+	})
+})
+
+var _ = Describe("ValkeyBackend parseSearchResults ordering", func() {
+	var vb *ValkeyBackend
+	BeforeEach(func() { vb = &ValkeyBackend{metricType: "COSINE"} })
+
 	It("multiple results sorted descending by score", func() {
 		result := []interface{}{int64(2), map[string]interface{}{
 			"key:1": map[string]interface{}{"file_id": "f1", "filename": "a.txt", "content": "hello", "vector_distance": "0.1", "chunk_index": "0"},

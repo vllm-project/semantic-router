@@ -2,11 +2,18 @@ import { useCallback, useEffect, useState } from 'react'
 
 import type { PlaygroundTask } from '../components/ChatComponentTypes'
 import { PLAYGROUND_QUEUE_STORAGE_KEY } from '../components/ChatComponentTypes'
-
-type PlaygroundTaskQueues = Record<string, PlaygroundTask[]>
+import {
+  DEFAULT_MAX_QUEUE_CONVERSATIONS,
+  DEFAULT_MAX_TASKS_PER_CONVERSATION,
+  normalizePlaygroundQueues,
+  prunePlaygroundQueues,
+  type PlaygroundTaskQueues,
+} from './playgroundQueueStorage'
 
 interface UsePlaygroundQueueOptions {
   storageKey?: string
+  maxConversations?: number
+  maxTasksPerConversation?: number
 }
 
 const removeConversationQueue = (
@@ -24,6 +31,8 @@ const removeConversationQueue = (
 
 export const usePlaygroundQueue = ({
   storageKey = PLAYGROUND_QUEUE_STORAGE_KEY,
+  maxConversations = DEFAULT_MAX_QUEUE_CONVERSATIONS,
+  maxTasksPerConversation = DEFAULT_MAX_TASKS_PER_CONVERSATION,
 }: UsePlaygroundQueueOptions = {}) => {
   const [queues, setQueues] = useState<PlaygroundTaskQueues>({})
 
@@ -34,28 +43,30 @@ export const usePlaygroundQueue = ({
       const raw = window.localStorage.getItem(storageKey)
       if (!raw) return
 
-      const parsed = JSON.parse(raw)
-      if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
-        return
-      }
+      const restored = normalizePlaygroundQueues(JSON.parse(raw), {
+        maxConversations,
+        maxTasksPerConversation,
+      })
 
-      const restored = Object.entries(parsed).reduce<PlaygroundTaskQueues>((acc, [conversationId, tasks]) => {
-        if (Array.isArray(tasks)) {
-          acc[conversationId] = tasks as PlaygroundTask[]
-        }
-        return acc
-      }, {})
+      if (Object.keys(restored).length === 0) {
+        window.localStorage.removeItem(storageKey)
+      } else {
+        window.localStorage.setItem(storageKey, JSON.stringify(restored))
+      }
 
       setQueues(restored)
     } catch (err) {
       console.error('Failed to load playground queue from localStorage', err)
     }
-  }, [storageKey])
+  }, [maxConversations, maxTasksPerConversation, storageKey])
 
   const updateAndPersist = useCallback(
     (updater: (prev: PlaygroundTaskQueues) => PlaygroundTaskQueues) => {
       setQueues(prev => {
-        const next = updater(prev)
+        const next = prunePlaygroundQueues(updater(prev), {
+          maxConversations,
+          maxTasksPerConversation,
+        })
 
         if (typeof window !== 'undefined') {
           try {
@@ -72,7 +83,7 @@ export const usePlaygroundQueue = ({
         return next
       })
     },
-    [storageKey]
+    [maxConversations, maxTasksPerConversation, storageKey]
   )
 
   const getQueue = useCallback(

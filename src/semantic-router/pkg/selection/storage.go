@@ -66,11 +66,15 @@ type StoredRatings struct {
 
 // FileEloStorage implements EloStorage using a JSON file
 type FileEloStorage struct {
-	path     string
-	mu       sync.RWMutex
-	dirty    atomic.Bool
-	stopChan chan struct{}
-	doneChan chan struct{}
+	path            string
+	mu              sync.RWMutex
+	dirty           atomic.Bool
+	lifecycleMu     sync.Mutex
+	autoSaveStarted bool
+	closed          bool
+	closeOnce       sync.Once
+	stopChan        chan struct{}
+	doneChan        chan struct{}
 }
 
 // NewFileEloStorage creates a new file-based storage backend
@@ -194,8 +198,21 @@ func (f *FileEloStorage) SaveAllRatings(ratings map[string]map[string]*ModelRati
 
 // Close stops background operations and releases resources
 func (f *FileEloStorage) Close() error {
-	close(f.stopChan)
-	<-f.doneChan
+	f.closeOnce.Do(func() {
+		f.lifecycleMu.Lock()
+		f.closed = true
+		autoSaveStarted := f.autoSaveStarted
+		if autoSaveStarted {
+			close(f.stopChan)
+		} else {
+			close(f.doneChan)
+		}
+		f.lifecycleMu.Unlock()
+
+		if autoSaveStarted {
+			<-f.doneChan
+		}
+	})
 	logging.Infof("[EloStorage] Closed file storage: %s", f.path)
 	return nil
 }
@@ -307,6 +324,14 @@ func (f *FileEloStorage) saveToFile(stored *StoredRatings) error {
 
 // StartAutoSave starts a background goroutine that periodically saves dirty ratings
 func (f *FileEloStorage) StartAutoSave(interval time.Duration, getAll func() map[string]map[string]*ModelRating) {
+	f.lifecycleMu.Lock()
+	if f.closed || f.autoSaveStarted {
+		f.lifecycleMu.Unlock()
+		return
+	}
+	f.autoSaveStarted = true
+	f.lifecycleMu.Unlock()
+
 	go func() {
 		defer close(f.doneChan)
 

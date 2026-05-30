@@ -12,6 +12,7 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/ratelimit"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/routerreplay"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/routerreplay/store"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/routerruntime"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/selection"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/selection/lookuptable"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/services"
@@ -61,6 +62,46 @@ func NewOpenAIRouter(configPath string) (*OpenAIRouter, error) {
 	return router, nil
 }
 
+func newOpenAIRouterForServer(
+	configPath string,
+	runtimeRegistry *routerruntime.Registry,
+) (*OpenAIRouter, error) {
+	cfg, publishGlobal, err := resolveInitialRouterConfig(configPath, runtimeRegistry)
+	if err != nil {
+		return nil, err
+	}
+
+	router, err := buildOpenAIRouterFromConfig(cfg)
+	if err != nil {
+		return nil, err
+	}
+
+	if publishGlobal {
+		config.Replace(cfg)
+	}
+	logLoadedRouterConfig(configPath, cfg)
+	return router, nil
+}
+
+func resolveInitialRouterConfig(
+	configPath string,
+	runtimeRegistry *routerruntime.Registry,
+) (*config.RouterConfig, bool, error) {
+	if runtimeRegistry != nil {
+		if cfg := runtimeRegistry.CurrentConfig(); cfg != nil {
+			logging.ComponentEvent("extproc", "router_config_using_runtime_registry", map[string]interface{}{
+				"config_source": cfg.ConfigSource,
+			})
+			return cfg, false, nil
+		}
+		cfg, err := parseRouterConfigFile(configPath)
+		return cfg, false, err
+	}
+
+	cfg, err := loadRouterConfig(configPath)
+	return cfg, true, err
+}
+
 func loadRouterConfig(configPath string) (*config.RouterConfig, error) {
 	globalCfg := config.Get()
 	if globalCfg != nil && globalCfg.ConfigSource == config.ConfigSourceKubernetes {
@@ -70,6 +111,10 @@ func loadRouterConfig(configPath string) (*config.RouterConfig, error) {
 		return globalCfg, nil
 	}
 
+	return parseRouterConfigFile(configPath)
+}
+
+func parseRouterConfigFile(configPath string) (*config.RouterConfig, error) {
 	cfg, err := config.Parse(configPath)
 	if err != nil {
 		return nil, fmt.Errorf("failed to load config: %w", err)

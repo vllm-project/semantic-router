@@ -6,6 +6,8 @@
 //! Training is done in Python (src/training/model_selection/ml_model_selection/).
 //! Models are loaded from JSON files trained by the Python scripts.
 
+#![allow(clippy::not_unsafe_ptr_arg_deref)]
+
 use crate::classifiers::mlp_selector::{MLPDType, MLPSelector};
 use candle_core::Device;
 use libc::{c_char, c_double, c_int, size_t};
@@ -30,6 +32,26 @@ fn string_to_c_str(s: String) -> *mut c_char {
         .unwrap_or(ptr::null_mut())
 }
 
+fn device_from_type(device_type: c_int) -> Device {
+    match device_type {
+        1 => {
+            // Try CUDA
+            #[cfg(feature = "cuda")]
+            {
+                Device::new_cuda(0).unwrap_or(Device::Cpu)
+            }
+            #[cfg(not(feature = "cuda"))]
+            {
+                Device::Cpu
+            }
+        }
+        // Metal is not a supported cargo feature for this crate yet, so retain
+        // the existing CPU fallback without advertising a broken feature flag.
+        2 => Device::Cpu,
+        _ => Device::Cpu,
+    }
+}
+
 // =============================================================================
 // MLP FFI (Inference Only - GPU Accelerated via Candle)
 // Reference: FusionFactory (arXiv:2507.10540)
@@ -48,32 +70,7 @@ pub extern "C" fn candle_mlp_new() -> *mut MLPHandle {
 /// device_type: 0 = CPU, 1 = CUDA (GPU), 2 = Metal (Apple Silicon)
 #[no_mangle]
 pub extern "C" fn candle_mlp_new_with_device(device_type: c_int) -> *mut MLPHandle {
-    let device = match device_type {
-        1 => {
-            // Try CUDA
-            #[cfg(feature = "cuda")]
-            {
-                Device::new_cuda(0).unwrap_or(Device::Cpu)
-            }
-            #[cfg(not(feature = "cuda"))]
-            {
-                Device::Cpu
-            }
-        }
-        2 => {
-            // Try Metal
-            #[cfg(feature = "metal")]
-            {
-                Device::new_metal(0).unwrap_or(Device::Cpu)
-            }
-            #[cfg(not(feature = "metal"))]
-            {
-                Device::Cpu
-            }
-        }
-        _ => Device::Cpu,
-    };
-
+    let device = device_from_type(device_type);
     Box::into_raw(Box::new(MLPHandle(MLPSelector::with_device(device))))
 }
 
@@ -85,30 +82,7 @@ pub extern "C" fn candle_mlp_new_with_device_and_dtype(
     device_type: c_int,
     dtype: c_int,
 ) -> *mut MLPHandle {
-    let device = match device_type {
-        1 => {
-            #[cfg(feature = "cuda")]
-            {
-                Device::new_cuda(0).unwrap_or(Device::Cpu)
-            }
-            #[cfg(not(feature = "cuda"))]
-            {
-                Device::Cpu
-            }
-        }
-        2 => {
-            #[cfg(feature = "metal")]
-            {
-                Device::new_metal(0).unwrap_or(Device::Cpu)
-            }
-            #[cfg(not(feature = "metal"))]
-            {
-                Device::Cpu
-            }
-        }
-        _ => Device::Cpu,
-    };
-
+    let device = device_from_type(device_type);
     let mlp_dtype = match dtype {
         1 => MLPDType::F16,
         2 => MLPDType::BF16,
@@ -197,30 +171,7 @@ pub extern "C" fn candle_mlp_from_json_with_device(
         None => return ptr::null_mut(),
     };
 
-    let device = match device_type {
-        1 => {
-            #[cfg(feature = "cuda")]
-            {
-                Device::new_cuda(0).unwrap_or(Device::Cpu)
-            }
-            #[cfg(not(feature = "cuda"))]
-            {
-                Device::Cpu
-            }
-        }
-        2 => {
-            #[cfg(feature = "metal")]
-            {
-                Device::new_metal(0).unwrap_or(Device::Cpu)
-            }
-            #[cfg(not(feature = "metal"))]
-            {
-                Device::Cpu
-            }
-        }
-        _ => Device::Cpu,
-    };
-
+    let device = device_from_type(device_type);
     match MLPSelector::from_json_with_device(&json_str, device) {
         Ok(selector) => Box::into_raw(Box::new(MLPHandle(selector))),
         Err(_) => ptr::null_mut(),
@@ -241,30 +192,7 @@ pub extern "C" fn candle_mlp_from_json_with_device_and_dtype(
         None => return ptr::null_mut(),
     };
 
-    let device = match device_type {
-        1 => {
-            #[cfg(feature = "cuda")]
-            {
-                Device::new_cuda(0).unwrap_or(Device::Cpu)
-            }
-            #[cfg(not(feature = "cuda"))]
-            {
-                Device::Cpu
-            }
-        }
-        2 => {
-            #[cfg(feature = "metal")]
-            {
-                Device::new_metal(0).unwrap_or(Device::Cpu)
-            }
-            #[cfg(not(feature = "metal"))]
-            {
-                Device::Cpu
-            }
-        }
-        _ => Device::Cpu,
-    };
-
+    let device = device_from_type(device_type);
     let mlp_dtype = match dtype {
         1 => MLPDType::F16,
         2 => MLPDType::BF16,

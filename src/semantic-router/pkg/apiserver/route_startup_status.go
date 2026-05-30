@@ -36,6 +36,10 @@ func (s *ClassificationAPIServer) handleStartupStatus(w http.ResponseWriter, _ *
 }
 
 func (s *ClassificationAPIServer) loadStartupState() *startupstatus.State {
+	if s.startupStateLoader != nil {
+		return s.startupStateLoader()
+	}
+
 	cfg := s.config
 	if cfg != nil && cfg.StartupStatus.StoreBackend == "redis" && cfg.StartupStatus.Redis != nil {
 		client := redis.NewClient(&redis.Options{

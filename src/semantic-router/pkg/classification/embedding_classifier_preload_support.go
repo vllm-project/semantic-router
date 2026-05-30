@@ -5,6 +5,7 @@ import (
 	"runtime"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 )
@@ -13,6 +14,48 @@ type embeddingPreloadResult struct {
 	candidate string
 	embedding []float32
 	err       error
+}
+
+// preloadCandidateEmbeddings computes embeddings for all unique candidates across all rules.
+// Uses concurrent processing for better performance.
+func (c *EmbeddingClassifier) preloadCandidateEmbeddings() error {
+	startTime := time.Now()
+	candidates := c.collectUniqueCandidates()
+	if len(candidates) == 0 {
+		logging.ComponentDebugEvent("classifier", "embedding_candidates_preload_skipped", map[string]interface{}{
+			"reason": "no_candidates",
+		})
+		return nil
+	}
+
+	modelType := c.getModelType()
+	logging.ComponentDebugEvent("classifier", "embedding_candidates_preload_started", map[string]interface{}{
+		"candidates":       len(candidates),
+		"model_type":       modelType,
+		"target_dimension": c.optimizationConfig.TargetDimension,
+	})
+
+	numWorkers := c.preloadWorkerCount(len(candidates))
+	successCount, firstError := c.collectCandidateEmbeddingResults(
+		c.startCandidateEmbeddingWorkers(candidates, modelType, numWorkers),
+	)
+
+	elapsed := time.Since(startTime)
+	logging.ComponentEvent("classifier", "embedding_candidates_preloaded", map[string]interface{}{
+		"candidates":       successCount,
+		"total_candidates": len(candidates),
+		"model_type":       modelType,
+		"target_dimension": c.optimizationConfig.TargetDimension,
+		"workers":          numWorkers,
+		"elapsed_ms":       elapsed.Milliseconds(),
+	})
+
+	if firstError != nil {
+		return firstError
+	}
+
+	c.rebuildRulePrototypeBanks()
+	return nil
 }
 
 func (c *EmbeddingClassifier) collectUniqueCandidates() []string {

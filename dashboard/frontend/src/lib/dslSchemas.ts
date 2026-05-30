@@ -326,18 +326,38 @@ export function getAlgorithmFieldSchema(algoType: string): FieldSchema[] {
     case 'rl_driven':
       return [
         { key: 'exploration_rate', label: 'Exploration Rate', type: 'number', placeholder: '0.3', description: '0-1' },
+        { key: 'exploration_decay', label: 'Exploration Decay', type: 'number', placeholder: '0.99', description: '0-1' },
+        { key: 'min_exploration', label: 'Min Exploration', type: 'number', placeholder: '0.05', description: '0-1' },
         { key: 'use_thompson_sampling', label: 'Thompson Sampling', type: 'boolean' },
         { key: 'enable_personalization', label: 'Personalization', type: 'boolean' },
-        { key: 'personalization_blend', label: 'Personalization Blend', type: 'number', placeholder: '0.3', description: 'Global vs user-specific (0-1)' },
+        { key: 'personalization_blend', label: 'Personalization Blend', type: 'number', placeholder: '0.7', description: 'Global vs user-specific (0-1)' },
+        { key: 'session_context_weight', label: 'Session Context Weight', type: 'number', placeholder: '0.3' },
+        { key: 'implicit_feedback_weight', label: 'Implicit Feedback Weight', type: 'number', placeholder: '0.5' },
         { key: 'cost_awareness', label: 'Cost Awareness', type: 'boolean' },
+        { key: 'cost_weight', label: 'Cost Weight', type: 'number', placeholder: '0.2' },
+        { key: 'storage_path', label: 'Storage Path', type: 'string', placeholder: 'state/rl-driven.json' },
+        { key: 'auto_save_interval', label: 'Auto-Save Interval', type: 'string', placeholder: '30s' },
+        { key: 'use_router_r1_rewards', label: 'Router-R1 Rewards', type: 'boolean' },
+        { key: 'cost_reward_alpha', label: 'Cost Reward Alpha', type: 'number', placeholder: '0.3' },
+        { key: 'format_reward_penalty', label: 'Format Penalty', type: 'number', placeholder: '-1.0' },
+        { key: 'enable_llm_routing', label: 'LLM Routing', type: 'boolean' },
+        { key: 'router_r1_server_url', label: 'Router-R1 Server URL', type: 'string', placeholder: 'http://router-r1:8080' },
+        { key: 'llm_routing_fallback', label: 'LLM Routing Fallback', type: 'string', placeholder: 'thompson' },
+        { key: 'enable_multi_round_aggregation', label: 'Multi-Round Aggregation', type: 'boolean' },
+        { key: 'max_aggregation_rounds', label: 'Max Aggregation Rounds', type: 'number', placeholder: '3' },
       ]
     case 'gmtrouter':
       return [
         { key: 'enable_personalization', label: 'Personalization', type: 'boolean' },
         { key: 'history_sample_size', label: 'History Sample Size', type: 'number', placeholder: '5' },
+        { key: 'embedding_dimension', label: 'Embedding Dimension', type: 'number', placeholder: '768' },
+        { key: 'num_gnn_layers', label: 'GNN Layers', type: 'number', placeholder: '2' },
+        { key: 'attention_heads', label: 'Attention Heads', type: 'number', placeholder: '8' },
         { key: 'min_interactions_for_personalization', label: 'Min Interactions', type: 'number' },
         { key: 'max_interactions_per_user', label: 'Max Interactions/User', type: 'number', placeholder: '100' },
+        { key: 'feedback_types', label: 'Feedback Types', type: 'string[]', placeholder: 'rating, ranking' },
         { key: 'model_path', label: 'Model Path', type: 'string', placeholder: '/models/gmt' },
+        { key: 'storage_path', label: 'Storage Path', type: 'string', placeholder: 'state/gmtrouter.db' },
       ]
     case 'latency_aware':
       return [

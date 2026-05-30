@@ -11,7 +11,8 @@ HELM_CHART_PATH ?= deploy/helm/semantic-router
 HELM_VALUES_FILE ?=
 HELM_SET_VALUES ?=
 HELM_TIMEOUT ?= 10m
-HELM_TEMPLATE_OUTPUT ?= dist/helm/default-template.yaml
+HELM_TEMPLATE_OUTPUT ?= /tmp/semantic-router-helm/default-template.yaml
+HELM_REPO_UPDATE ?= true
 
 # ── Remote OCI chart registry ────────────────────────────────────────────────
 # Used by helm-install-version, helm-upgrade-version, and related targets.
@@ -37,7 +38,7 @@ YELLOW ?= \033[1;33m
 RED ?= \033[0;31m
 NC ?= \033[0m
 
-.PHONY: helm-lint helm-template helm-ci-setup helm-ci-validate helm-install helm-upgrade helm-install-or-upgrade \
+.PHONY: helm-lint helm-template helm-ci-setup helm-ci-validate helm-safety-validate helm-install helm-upgrade helm-install-or-upgrade \
 	helm-uninstall helm-status helm-list helm-history helm-rollback helm-test \
 	helm-package helm-dev helm-prod helm-values helm-manifest \
 	helm-port-forward-api helm-port-forward-grpc helm-port-forward-metrics \
@@ -120,13 +121,18 @@ helm-template:
 helm-ci-setup: ## Prepare Helm repositories and chart dependencies for CI-style validation
 helm-ci-setup:
 	@$(LOG_TARGET)
-	@helm repo add bitnami https://charts.bitnami.com/bitnami --force-update
-	@helm repo add milvus https://milvus-io.github.io/milvus-helm/ --force-update
-	@helm repo add jaegertracing https://jaegertracing.github.io/helm-charts --force-update
-	@helm repo add prometheus-community https://prometheus-community.github.io/helm-charts --force-update
-	@helm repo add grafana https://grafana.github.io/helm-charts --force-update
-	@helm repo update
-	@helm dependency build $(HELM_CHART_PATH)
+	@if [ "$(HELM_REPO_UPDATE)" = "true" ]; then \
+		helm repo add bitnami https://charts.bitnami.com/bitnami --force-update; \
+		helm repo add milvus https://milvus-io.github.io/milvus-helm/ --force-update; \
+		helm repo add jaegertracing https://jaegertracing.github.io/helm-charts --force-update; \
+		helm repo add prometheus-community https://prometheus-community.github.io/helm-charts --force-update; \
+		helm repo add grafana https://grafana.github.io/helm-charts --force-update; \
+		helm repo update; \
+		helm dependency build $(HELM_CHART_PATH); \
+	else \
+		echo "$(YELLOW)[WARN]$(NC) Skipping helm repo add/update; using Chart.lock dependency versions"; \
+		helm dependency build $(HELM_CHART_PATH) --skip-refresh; \
+	fi
 
 helm-ci-validate: ## Run the CI Helm lint and template validation flow
 helm-ci-validate: helm-ci-setup
@@ -149,6 +155,82 @@ helm-ci-validate: helm-ci-setup
 		fi; \
 	done
 	@echo "$(GREEN)[SUCCESS]$(NC) Helm CI validation completed successfully"
+
+helm-safety-validate: ## Validate Helm schema and local-state safety guards
+helm-safety-validate: helm-ci-setup
+	@$(LOG_TARGET)
+	@set -e; \
+	tmp_dir="$$(mktemp -d)"; \
+	trap 'rm -rf "$$tmp_dir"' EXIT; \
+	echo "Validating production Helm render..."; \
+	helm template $(HELM_RELEASE_NAME) $(HELM_CHART_PATH) \
+		-f "$(HELM_CHART_PATH)/values-prod.yaml" \
+		--namespace $(HELM_NAMESPACE) > "$$tmp_dir/prod.yaml"; \
+	grep -q "kind: HorizontalPodAutoscaler" "$$tmp_dir/prod.yaml"; \
+	echo "Validating schema rejection for invalid selector guard type..."; \
+	if helm template $(HELM_RELEASE_NAME) $(HELM_CHART_PATH) \
+		--set safetyGuards.rejectMultiReplicaLocalSelectorState=maybe \
+		--namespace $(HELM_NAMESPACE) > "$$tmp_dir/invalid-guard.out" 2>&1; then \
+		echo "Expected invalid selector guard type to fail schema validation"; \
+		cat "$$tmp_dir/invalid-guard.out"; \
+		exit 1; \
+	fi; \
+	grep -q "safetyGuards.rejectMultiReplicaLocalSelectorState: Invalid type" "$$tmp_dir/invalid-guard.out"; \
+	echo "Validating schema rejection for invalid replicaCount type..."; \
+	if helm template $(HELM_RELEASE_NAME) $(HELM_CHART_PATH) \
+		--set replicaCount=oops \
+		--namespace $(HELM_NAMESPACE) > "$$tmp_dir/invalid-replica.out" 2>&1; then \
+		echo "Expected invalid replicaCount type to fail schema validation"; \
+		cat "$$tmp_dir/invalid-replica.out"; \
+		exit 1; \
+	fi; \
+	grep -q "replicaCount: Invalid type" "$$tmp_dir/invalid-replica.out"; \
+	echo "Validating RL-driven selector local-state multi-replica rejection..."; \
+	if helm template $(HELM_RELEASE_NAME) $(HELM_CHART_PATH) \
+		--set autoscaling.enabled=false \
+		--set replicaCount=2 \
+		--set 'config.routing.decisions[0].name=adaptive' \
+		--set 'config.routing.decisions[0].algorithm.type=rl_driven' \
+		--namespace $(HELM_NAMESPACE) > "$$tmp_dir/rl-driven.out" 2>&1; then \
+		echo "Expected RL-driven local selector state to reject multi-replica render"; \
+		cat "$$tmp_dir/rl-driven.out"; \
+		exit 1; \
+	fi; \
+	grep -q "multi-replica router deployments cannot use local learning selector state" "$$tmp_dir/rl-driven.out"; \
+	echo "Validating explicit selector local-state opt-out escape hatch..."; \
+	helm template $(HELM_RELEASE_NAME) $(HELM_CHART_PATH) \
+		--set autoscaling.enabled=false \
+		--set replicaCount=2 \
+		--set safetyGuards.rejectMultiReplicaLocalSelectorState=false \
+		--set 'config.routing.decisions[0].name=adaptive' \
+		--set 'config.routing.decisions[0].algorithm.type=rl_driven' \
+		--namespace $(HELM_NAMESPACE) > "$$tmp_dir/unsafe-rl-driven.yaml"; \
+	grep -q "type: rl_driven" "$$tmp_dir/unsafe-rl-driven.yaml"; \
+	grep -q "replicas: 2" "$$tmp_dir/unsafe-rl-driven.yaml"; \
+	echo "Validating HPA replica bound rejection..."; \
+	if helm template $(HELM_RELEASE_NAME) $(HELM_CHART_PATH) \
+		--set autoscaling.enabled=true \
+		--set autoscaling.minReplicas=3 \
+		--set autoscaling.maxReplicas=2 \
+		--namespace $(HELM_NAMESPACE) > "$$tmp_dir/hpa-bounds.out" 2>&1; then \
+		echo "Expected HPA minReplicas > maxReplicas to fail template validation"; \
+		cat "$$tmp_dir/hpa-bounds.out"; \
+		exit 1; \
+	fi; \
+	grep -q "autoscaling.minReplicas (3) cannot be greater than autoscaling.maxReplicas (2)" "$$tmp_dir/hpa-bounds.out"; \
+	echo "Validating GMTRouter selector local-state HPA rejection..."; \
+	if helm template $(HELM_RELEASE_NAME) $(HELM_CHART_PATH) \
+		--set autoscaling.enabled=true \
+		--set autoscaling.maxReplicas=2 \
+		--set 'config.routing.decisions[0].name=adaptive' \
+		--set 'config.routing.decisions[0].algorithm.type=gmtrouter' \
+		--namespace $(HELM_NAMESPACE) > "$$tmp_dir/gmtrouter.out" 2>&1; then \
+		echo "Expected GMTRouter local selector state to reject HPA multi-replica render"; \
+		cat "$$tmp_dir/gmtrouter.out"; \
+		exit 1; \
+	fi; \
+	grep -q "multi-replica router deployments cannot use local learning selector state" "$$tmp_dir/gmtrouter.out"
+	@echo "$(GREEN)[SUCCESS]$(NC) Helm safety validation completed successfully"
 
 helm-install: ## Install the Helm chart
 helm-install: _check-k8s

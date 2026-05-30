@@ -11,8 +11,8 @@ import (
 	"github.com/vllm-project/semantic-router/dashboard/backend/handlers"
 	"github.com/vllm-project/semantic-router/dashboard/backend/middleware"
 	"github.com/vllm-project/semantic-router/dashboard/backend/mlpipeline"
+	"github.com/vllm-project/semantic-router/dashboard/backend/routercontract"
 	"github.com/vllm-project/semantic-router/dashboard/backend/workflowstore"
-	routerconfig "github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 )
 
 func registerCoreRoutes(mux *http.ServeMux, cfg *config.Config) {
@@ -104,13 +104,13 @@ func registerToolRoutes(mux *http.ServeMux, cfg *config.Config) {
 
 func resolveToolsDBPath(cfg *config.Config) string {
 	toolsDBPath := filepath.Join(cfg.ConfigDir, "config", "tools_db.json")
-	parsedCfg, err := routerconfig.Parse(cfg.AbsConfigPath)
+	toolSelection, err := routercontract.ReadToolSelection(cfg.AbsConfigPath)
 	if err != nil {
 		log.Printf("Warning: failed to parse config for tools_db_path, use the default path %s: %v", toolsDBPath, err)
 		return toolsDBPath
 	}
-	if parsedCfg.ToolSelection.Tools.ToolsDBPath != "" {
-		return parsedCfg.ToolSelection.Tools.ToolsDBPath
+	if toolSelection.ToolsDBPath != "" {
+		return toolSelection.ToolsDBPath
 	}
 	return toolsDBPath
 }

@@ -1,26 +1,29 @@
-import React from 'react'
+import React, { Suspense, lazy } from 'react'
 import { useNavigate } from 'react-router-dom'
-import ColorBends from '../components/ColorBends'
 import styles from './LandingPage.module.css'
+
+const ColorBends = lazy(() => import('../components/ColorBends'))
 
 const LandingPage: React.FC = () => {
   const navigate = useNavigate()
   return (
     <div className={styles.container}>
       <div className={styles.backgroundEffect}>
-        <ColorBends
-          colors={['#76b900', '#00b4d8', '#ffffff']}
-          rotation={20}
-          speed={0.2}
-          scale={1}
-          frequency={1}
-          warpStrength={1}
-          mouseInfluence={1}
-          parallax={0.5}
-          noise={0.08}
-          transparent
-          autoRotate={0.8}
-        />
+        <Suspense fallback={null}>
+          <ColorBends
+            colors={['#76b900', '#00b4d8', '#ffffff']}
+            rotation={20}
+            speed={0.2}
+            scale={1}
+            frequency={1}
+            warpStrength={1}
+            mouseInfluence={1}
+            parallax={0.5}
+            noise={0.08}
+            transparent
+            autoRotate={0.8}
+          />
+        </Suspense>
       </div>
 
       {/* Main Content - Centered */}

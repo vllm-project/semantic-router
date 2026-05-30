@@ -17,11 +17,9 @@ limitations under the License.
 package vectorstore
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
-	"io"
 	"net/http"
 	"strings"
 	"sync"
@@ -296,104 +294,6 @@ func (l *LlamaStackBackend) DeleteByFileID(ctx context.Context, vectorStoreID st
 	return nil
 }
 
-// Search performs a text-based similarity search in a Llama Stack vector store.
-// Maps to: POST /v1/vector_stores/{vector_store_id}/search
-//
-// Llama Stack searches by text query, not by embedding vector. The query text
-// must be passed via filter["_query_text"]; the queryEmbedding param is ignored.
-//
-// When searchType is "hybrid", the request includes ranking_options that tell
-// Llama Stack to combine vector similarity and BM25 keyword search using
-// Reciprocal Rank Fusion. This requires the Milvus vector_io provider.
-func (l *LlamaStackBackend) Search(
-	ctx context.Context, vectorStoreID string, queryEmbedding []float32,
-	topK int, threshold float32, filter map[string]interface{},
-) ([]SearchResult, error) {
-	queryText, ok := filter["_query_text"].(string)
-	if !ok || queryText == "" {
-		return nil, fmt.Errorf(
-			"llama_stack backend requires '_query_text' in the filter map for search; " +
-				"Llama Stack searches by text query, not by embedding vector")
-	}
-
-	storeID, err := l.resolveStoreID(ctx, vectorStoreID)
-	if err != nil {
-		return nil, fmt.Errorf("failed to resolve vector store %s for search: %w", vectorStoreID, err)
-	}
-
-	body := map[string]interface{}{
-		"query":           queryText,
-		"max_num_results": topK,
-	}
-
-	if l.searchType == "hybrid" {
-		body["ranking_options"] = map[string]interface{}{
-			"ranker": "rrf",
-		}
-	}
-
-	if fid, ok := filter["file_id"].(string); ok && fid != "" {
-		body["filters"] = map[string]interface{}{
-			"type":  "eq",
-			"key":   "file_id",
-			"value": fid,
-		}
-	}
-
-	path := fmt.Sprintf("/v1/vector_stores/%s/search", storeID)
-	resp, err := l.doRequest(ctx, http.MethodPost, path, body)
-	if err != nil {
-		return nil, fmt.Errorf("failed to search vector store %s in Llama Stack: %w", vectorStoreID, err)
-	}
-
-	var searchResp struct {
-		Data []struct {
-			Content  []map[string]interface{} `json:"content"`
-			FileID   string                   `json:"file_id"`
-			Filename string                   `json:"filename"`
-			Score    float64                  `json:"score"`
-		} `json:"data"`
-	}
-	if jsonErr := json.Unmarshal(resp, &searchResp); jsonErr != nil {
-		return nil, fmt.Errorf("failed to parse Llama Stack search response: %w", jsonErr)
-	}
-
-	// RRF scores (hybrid search) live on a fundamentally different scale than
-	// cosine similarity (vector search):
-	//   vector  → cosine similarity  → 0.0 – 1.0  (threshold ~0.7 is reasonable)
-	//   hybrid  → RRF = Σ 1/(k+rank) → 0.001 – 0.05 (threshold 0.7 would drop everything)
-	// When hybrid search is active the results are already ranked by the RRF
-	// combiner, so we skip score-based filtering and rely on topK to limit volume.
-	applyThreshold := l.searchType != "hybrid"
-
-	var results []SearchResult
-	for _, hit := range searchResp.Data {
-		if applyThreshold && float32(hit.Score) < threshold {
-			continue
-		}
-
-		// Llama Stack returns content as [{type: "text", text: "..."}].
-		content := ""
-		for _, c := range hit.Content {
-			if c["type"] == "text" {
-				if text, ok := c["text"].(string); ok {
-					content = text
-					break
-				}
-			}
-		}
-
-		results = append(results, SearchResult{
-			FileID:   hit.FileID,
-			Filename: hit.Filename,
-			Content:  content,
-			Score:    hit.Score,
-		})
-	}
-
-	return results, nil
-}
-
 // Close releases HTTP client resources.
 func (l *LlamaStackBackend) Close() error {
 	l.httpClient.CloseIdleConnections()
@@ -447,51 +347,4 @@ func (l *LlamaStackBackend) resolveStoreID(ctx context.Context, name string) (st
 	l.mu.Unlock()
 
 	return bestID, nil
-}
-
-// doRequest is the shared HTTP helper for all Llama Stack API calls.
-func (l *LlamaStackBackend) doRequest(
-	ctx context.Context, method, path string, body interface{},
-) ([]byte, error) {
-	var reqBody io.Reader
-	if body != nil {
-		jsonBytes, err := json.Marshal(body)
-		if err != nil {
-			return nil, fmt.Errorf("failed to marshal request body: %w", err)
-		}
-		reqBody = bytes.NewReader(jsonBytes)
-	}
-
-	url := l.endpoint + path
-	req, err := http.NewRequestWithContext(ctx, method, url, reqBody)
-	if err != nil {
-		return nil, fmt.Errorf("failed to create HTTP request: %w", err)
-	}
-
-	req.Header.Set("Content-Type", "application/json")
-	if l.authToken != "" {
-		req.Header.Set("Authorization", "Bearer "+l.authToken)
-	}
-
-	resp, err := l.httpClient.Do(req)
-	if err != nil {
-		return nil, fmt.Errorf("HTTP request to Llama Stack failed (%s %s): %w", method, path, err)
-	}
-	defer resp.Body.Close()
-
-	respBody, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return nil, fmt.Errorf("failed to read Llama Stack response body: %w", err)
-	}
-
-	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		errMsg := string(respBody)
-		if len(errMsg) > 500 {
-			errMsg = errMsg[:500] + "..."
-		}
-		return nil, fmt.Errorf("llama stack API error: %s %s returned status %d: %s",
-			method, path, resp.StatusCode, errMsg)
-	}
-
-	return respBody, nil
 }

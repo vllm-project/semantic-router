@@ -38,150 +38,6 @@ from ..gpu_profiles.profiles import A100_80GB, GpuProfile
 from ..workload.synthetic import CdfWorkload
 from . import analytical
 
-# ── ThresholdResult (Pareto sweep over B_short candidates) ────────────────────
-
-
-@dataclass
-class ThresholdResult:
-    """One point on the threshold–cost–latency Pareto frontier."""
-
-    b_short: int  # candidate short/long split (tokens)
-    alpha: float  # fraction of requests routed to short pool
-    n_s: int  # short-pool GPUs
-    n_l: int  # long-pool GPUs
-    total_gpus: int
-    cost_kusd_yr: float
-    savings_vs_homo_pct: (
-        float  # positive = cheaper than homo; negative = more expensive
-    )
-    p99_short_ms: float
-    p99_long_ms: float
-    worst_p99_ms: float  # max(p99_short, p99_long) — single latency objective
-    slo_met: bool
-    pareto: bool = False  # True if no other threshold dominates on (cost, worst_p99)
-
-
-def threshold_pareto(
-    cdf: list,
-    lam: float,
-    gpu_short: GpuProfile,
-    gpu_long: GpuProfile,
-    t_slo_ms: float = 500.0,
-    long_max_ctx: int = 8192,
-    gamma: float = 1.0,
-) -> list[ThresholdResult]:
-    """Sweep all CDF breakpoints as candidate B_short thresholds.
-
-    For each candidate, sizes the fleet analytically at gamma=1 (pure length
-    routing) and records cost and P99 TTFT for both pools.  Marks each result
-    as Pareto-optimal: a threshold is dominated if another threshold achieves
-    strictly lower cost AND strictly lower worst-case P99.
-
-    Parameters
-    ----------
-    cdf          : workload CDF as list of (token_threshold, cumulative_frac)
-    lam          : total arrival rate (req/s)
-    gpu_short    : GPU type for short pool
-    gpu_long     : GPU type for long pool
-    t_slo_ms     : P99 TTFT SLO (ms)
-    long_max_ctx : max context length the long pool is configured for
-    gamma        : C&R compression factor (1.0 = no compression)
-    """
-    # Candidate thresholds: all CDF breakpoints except the last (which is the max)
-    cdf_toks = [t for t, _ in cdf]
-    # Exclude breakpoints where virtually all traffic is already in the short pool
-    # (alpha > 0.999) or where the short pool would receive < 1% of traffic.
-    candidates = [
-        t for t in cdf_toks[:-1] if 0.01 <= analytical.cdf_eval(cdf, t) <= 0.999
-    ]
-
-    # Homo baseline: B_short = long_max_ctx (single pool, no split)
-    homo_opt = FleetOptimizer(
-        gpu_short=gpu_short,
-        gpu_long=gpu_long,
-        B_short=long_max_ctx,
-        t_slo_ms=t_slo_ms,
-        long_max_ctx=long_max_ctx,
-    )
-    homo_sweep = homo_opt.sweep_analytical(cdf, lam, gammas=[gamma], verbose=False)
-    homo_cost = homo_sweep[0].cost_per_hr * 8760 / 1000 if homo_sweep else 1e9
-
-    results: list[ThresholdResult] = []
-    for b in candidates:
-        opt = FleetOptimizer(
-            gpu_short=gpu_short,
-            gpu_long=gpu_long,
-            B_short=b,
-            t_slo_ms=t_slo_ms,
-            long_max_ctx=long_max_ctx,
-        )
-        sweep = opt.sweep_analytical(cdf, lam, gammas=[gamma], verbose=False)
-        if not sweep:
-            continue
-        sr = sweep[0]
-        alpha = analytical.cdf_eval(cdf, b)
-        cost = sr.cost_per_hr * 8760 / 1000
-        saving = (homo_cost - cost) / homo_cost * 100 if homo_cost > 0 else 0.0
-        worst = max(sr.p99_ttft_short_ms, sr.p99_ttft_long_ms)
-        results.append(
-            ThresholdResult(
-                b_short=b,
-                alpha=alpha,
-                n_s=sr.n_s,
-                n_l=sr.n_l,
-                total_gpus=sr.total_gpus,
-                cost_kusd_yr=cost,
-                savings_vs_homo_pct=saving,
-                p99_short_ms=sr.p99_ttft_short_ms,
-                p99_long_ms=sr.p99_ttft_long_ms,
-                worst_p99_ms=worst,
-                slo_met=sr.slo_met,
-            )
-        )
-
-    # Mark Pareto-optimal points: lower cost AND lower worst_p99
-    for r in results:
-        dominated = any(
-            other.cost_kusd_yr < r.cost_kusd_yr and other.worst_p99_ms < r.worst_p99_ms
-            for other in results
-            if other is not r
-        )
-        r.pareto = not dominated
-
-    results.sort(key=lambda r: r.b_short)
-    return results
-
-
-def print_threshold_pareto(
-    results: list[ThresholdResult], t_slo_ms: float, homo_cost_kusd: float
-) -> None:
-    """Print a formatted Pareto frontier table."""
-    print(
-        f"\n  {'B_short':>8}  {'α-short':>8}  {'n_s':>4} {'n_l':>4}"
-        f"  {'GPUs':>5}  {'$/yr':>8}  {'saving':>7}"
-        f"  {'P99-s':>7}  {'P99-l':>7}  {'SLO':>4}  {'Pareto':>6}"
-    )
-    print(f"  {'-'*87}")
-    for r in results:
-        ok = "✓" if r.slo_met else "✗"
-        star = "★" if r.pareto else " "
-        print(
-            f"  {r.b_short:>8,}  {r.alpha:>7.1%}  {r.n_s:>4} {r.n_l:>4}"
-            f"  {r.total_gpus:>5}  ${r.cost_kusd_yr:>6.0f}K"
-            f"  {r.savings_vs_homo_pct:>+6.1f}%"
-            f"  {r.p99_short_ms:>6.0f}ms  {r.p99_long_ms:>6.0f}ms"
-            f"  {ok:>4}  {star:>6}"
-        )
-    pareto_slo = [r for r in results if r.pareto and r.slo_met]
-    if pareto_slo:
-        best = min(pareto_slo, key=lambda r: r.cost_kusd_yr)
-        print(
-            f"\n  Recommended B_short = {best.b_short:,} tokens"
-            f"  (α={best.alpha:.1%} short, saving={best.savings_vs_homo_pct:+.1f}%,"
-            f"  P99-short={best.p99_short_ms:.0f}ms, P99-long={best.p99_long_ms:.0f}ms)"
-        )
-
-
 # ── SweepResult ───────────────────────────────────────────────────────────────
 
 
@@ -755,3 +611,11 @@ class OptimizationReport:
                     f" {sav:>+7.1f}% {sr.p99_ttft_short_ms:>7.1f}ms"
                     f" {sr.p99_ttft_long_ms:>7.1f}ms {ok}"
                 )
+
+
+# Compatibility exports for callers that imported threshold helpers from base.
+from .threshold import (
+    ThresholdResult,
+    print_threshold_pareto,
+    threshold_pareto,
+)

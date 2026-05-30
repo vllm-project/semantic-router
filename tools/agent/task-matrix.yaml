@@ -98,6 +98,18 @@ rules:
     feature_tests:
       - make memory-test-integration
     requires_local_smoke: false
+  - name: helm-chart
+    doc_only: false
+    loop_mode: completion
+    execution_plan_policy: long_horizon
+    paths:
+      - deploy/helm/**
+    fast_tests:
+      - make helm-lint
+    feature_tests:
+      - make helm-ci-validate HELM_REPO_UPDATE=false
+      - make helm-safety-validate HELM_REPO_UPDATE=false
+    requires_local_smoke: false
   - name: router-core
     doc_only: false
     loop_mode: completion

@@ -4,6 +4,8 @@ const COOKIE_PATH = 'Path=/'
 const COOKIE_SAME_SITE = 'SameSite=Lax'
 const AUTH_QUERY_PARAM = 'authToken'
 const UNAUTHORIZED_EVENT = 'vsr-auth-unauthorized'
+const MAX_AUTH_TOKEN_LENGTH = 8192
+const UNSAFE_AUTH_TOKEN_CHARS = /[\s;]/
 
 type WrappedFetch = typeof window.fetch & {
   __vsrAuthWrapped?: boolean
@@ -112,22 +114,66 @@ function patchProtectedResourceUrl(value: string): string {
   }
 }
 
+export function normalizeAuthToken(token: string | null | undefined): string | null {
+  if (typeof token !== 'string') {
+    return null
+  }
+
+  const next = token.trim()
+  if (
+    !next ||
+    next.length > MAX_AUTH_TOKEN_LENGTH ||
+    UNSAFE_AUTH_TOKEN_CHARS.test(next) ||
+    hasControlCharacter(next)
+  ) {
+    return null
+  }
+
+  return next
+}
+
+function hasControlCharacter(value: string): boolean {
+  for (let index = 0; index < value.length; index += 1) {
+    const code = value.charCodeAt(index)
+    if (code < 32 || code === 127) {
+      return true
+    }
+  }
+  return false
+}
+
 export function getStoredAuthToken(): string | null {
   if (typeof window === 'undefined') {
     return null
   }
 
-  return window.localStorage.getItem(STORAGE_KEY)
+  const raw = window.localStorage.getItem(STORAGE_KEY)
+  const token = normalizeAuthToken(raw)
+  if (raw !== null && token !== raw) {
+    if (token) {
+      window.localStorage.setItem(STORAGE_KEY, token)
+    } else {
+      window.localStorage.removeItem(STORAGE_KEY)
+      clearSessionCookie()
+    }
+  }
+  return token
 }
 
-export function storeAuthToken(token: string): void {
+export function storeAuthToken(token: string): string | null {
   if (typeof window === 'undefined') {
-    return
+    return null
   }
 
-  window.localStorage.setItem(STORAGE_KEY, token)
-  const secure = window.location.protocol === 'https:' ? '; Secure' : ''
-  document.cookie = `${COOKIE_NAME}=${token}; ${COOKIE_PATH}; ${COOKIE_SAME_SITE}${secure}`
+  const next = normalizeAuthToken(token)
+  if (!next) {
+    clearStoredAuthToken()
+    return null
+  }
+
+  window.localStorage.setItem(STORAGE_KEY, next)
+  document.cookie = buildSessionCookie(next)
+  return next
 }
 
 export function clearStoredAuthToken(): void {
@@ -136,6 +182,15 @@ export function clearStoredAuthToken(): void {
   }
 
   window.localStorage.removeItem(STORAGE_KEY)
+  clearSessionCookie()
+}
+
+function buildSessionCookie(token: string): string {
+  const secure = window.location.protocol === 'https:' ? '; Secure' : ''
+  return `${COOKIE_NAME}=${token}; ${COOKIE_PATH}; ${COOKIE_SAME_SITE}${secure}`
+}
+
+function clearSessionCookie(): void {
   const secure = window.location.protocol === 'https:' ? '; Secure' : ''
   document.cookie = `${COOKIE_NAME}=; ${COOKIE_PATH}; ${COOKIE_SAME_SITE}; Max-Age=0${secure}`
 }
@@ -174,14 +229,15 @@ export function installAuthenticatedFetch(): void {
   const originalFetch = window.fetch.bind(window)
   const wrappedFetch: WrappedFetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
     const url = getRequestUrl(input)
-    const shouldAttachAuth = Boolean(getStoredAuthToken()) && isProtectedPath(url)
+    const token = getStoredAuthToken()
+    const shouldAttachAuth = Boolean(token) && isProtectedPath(url)
     const headers = input instanceof Request ? new Headers(input.headers) : new Headers()
     new Headers(init?.headers).forEach((value, key) => {
       headers.set(key, value)
     })
 
-    if (shouldAttachAuth && !headers.has('Authorization')) {
-      headers.set('Authorization', `Bearer ${getStoredAuthToken()}`)
+    if (shouldAttachAuth && token && !headers.has('Authorization')) {
+      headers.set('Authorization', `Bearer ${token}`)
     }
 
     const response = await originalFetch(input, { ...init, headers })

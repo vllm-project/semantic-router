@@ -1,4 +1,4 @@
-package services
+package classification
 
 import (
 	"path/filepath"
@@ -9,15 +9,22 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 )
 
-func TestCreateLegacyClassifierSkipsUnusedCoreSignalMappings(t *testing.T) {
+func TestNewLegacyClassifierFromConfigRejectsNilConfig(t *testing.T) {
+	classifier, err := NewLegacyClassifierFromConfig(nil)
+	require.Nil(t, classifier)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "config is nil")
+}
+
+func TestNewLegacyClassifierFromConfigSkipsUnusedCoreSignalMappings(t *testing.T) {
 	cfg := newLegacyClassifierMappingGateConfig(t)
 
-	classifier, err := createLegacyClassifier(cfg)
+	classifier, err := NewLegacyClassifierFromConfig(cfg)
 	require.NoError(t, err)
 	require.NotNil(t, classifier)
 }
 
-func TestCreateLegacyClassifierRequiresUsedCoreSignalMappings(t *testing.T) {
+func TestNewLegacyClassifierFromConfigRequiresUsedCoreSignalMappings(t *testing.T) {
 	tests := []struct {
 		name        string
 		rule        config.RuleNode
@@ -50,7 +57,7 @@ func TestCreateLegacyClassifierRequiresUsedCoreSignalMappings(t *testing.T) {
 				}},
 			}}
 
-			classifier, err := createLegacyClassifier(cfg)
+			classifier, err := NewLegacyClassifierFromConfig(cfg)
 			require.Nil(t, classifier)
 			require.Error(t, err)
 			require.Contains(t, err.Error(), tt.wantErrPart)

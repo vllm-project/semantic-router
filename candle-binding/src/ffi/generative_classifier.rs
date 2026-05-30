@@ -9,10 +9,10 @@
 //! - Detecting jailbreaks and unsafe content
 //! - Managing model lifecycle
 
-use crate::ffi::types::ClassificationResult;
-use crate::model_architectures::generative::{Qwen3GuardModel, Qwen3MultiLoRAClassifier};
+use crate::model_architectures::generative::{
+    MultiAdapterClassificationResult, Qwen3MultiLoRAClassifier,
+};
 use candle_core::Device;
-use serde_json::Value;
 use std::ffi::{CStr, CString};
 use std::os::raw::c_char;
 use std::ptr;
@@ -20,9 +20,6 @@ use std::sync::{Mutex, OnceLock};
 
 /// Global multi-adapter classifier instance (for LoRA-based classification)
 static GLOBAL_QWEN3_MULTI_CLASSIFIER: OnceLock<Mutex<Qwen3MultiLoRAClassifier>> = OnceLock::new();
-
-/// Global Qwen3Guard instance (for safety/jailbreak detection)
-static GLOBAL_QWEN3_GUARD: OnceLock<Mutex<Qwen3GuardModel>> = OnceLock::new();
 
 /// Generative classification result returned to Go
 #[repr(C)]
@@ -70,10 +67,12 @@ impl Default for GenerativeClassificationResult {
 /// Free classification result
 ///
 /// # Safety
-/// - Must only be called once per result
-/// - Result must have been allocated by classify_with_qwen3_adapter
+/// - `result` must be a valid pointer to a `GenerativeClassificationResult` initialized by
+///   this FFI module.
+/// - Must only be called once per result; the owned string and probability pointers inside the
+///   result must not be freed elsewhere.
 #[no_mangle]
-pub extern "C" fn free_generative_classification_result(
+pub unsafe extern "C" fn free_generative_classification_result(
     result: *mut GenerativeClassificationResult,
 ) {
     if result.is_null() {
@@ -102,10 +101,11 @@ pub extern "C" fn free_generative_classification_result(
 /// Free categories array
 ///
 /// # Safety
-/// - Must only be called once per array
-/// - Array must have been allocated by get_qwen3_loaded_adapters
+/// - `categories` must be the pointer returned by `get_qwen3_loaded_adapters`.
+/// - `num_categories` must match the element count returned with that pointer.
+/// - Must only be called once per array; the element strings must not be freed elsewhere.
 #[no_mangle]
-pub extern "C" fn free_categories(categories: *mut *mut c_char, num_categories: i32) {
+pub unsafe extern "C" fn free_categories(categories: *mut *mut c_char, num_categories: i32) {
     if categories.is_null() || num_categories <= 0 {
         return;
     }
@@ -129,6 +129,72 @@ fn create_error_message(msg: &str) -> *mut c_char {
     }
 }
 
+fn cstr_to_string(ptr: *const c_char, arg_name: &str) -> Result<String, String> {
+    unsafe {
+        CStr::from_ptr(ptr)
+            .to_str()
+            .map(str::to_owned)
+            .map_err(|e| format!("invalid UTF-8 in {}: {}", arg_name, e))
+    }
+}
+
+fn write_generative_error(result: *mut GenerativeClassificationResult, msg: &str) -> i32 {
+    unsafe {
+        (*result) = GenerativeClassificationResult::default();
+        (*result).error_message = create_error_message(msg);
+    }
+    -1
+}
+
+fn write_generative_success(
+    result: *mut GenerativeClassificationResult,
+    multi_result: MultiAdapterClassificationResult,
+) -> Result<(), String> {
+    let category_name_c = CString::new(multi_result.category.as_str())
+        .map_err(|e| format!("Failed to create C string: {}", e))?
+        .into_raw();
+    let class_id = multi_result
+        .all_categories
+        .iter()
+        .position(|cat| cat == &multi_result.category)
+        .unwrap_or(0) as i32;
+    let mut probabilities = multi_result.probabilities;
+    let probs_ptr = probabilities.as_mut_ptr();
+    let num_categories = probabilities.len();
+    std::mem::forget(probabilities);
+
+    unsafe {
+        (*result) = GenerativeClassificationResult {
+            class_id,
+            confidence: multi_result.confidence,
+            category_name: category_name_c,
+            probabilities: probs_ptr,
+            num_categories: num_categories as i32,
+            error: false,
+            error_message: ptr::null_mut(),
+        };
+    }
+
+    Ok(())
+}
+
+fn collect_category_strings(
+    categories: *const *const c_char,
+    num_categories: i32,
+) -> Result<Vec<String>, String> {
+    let mut result = Vec::new();
+    unsafe {
+        for i in 0..num_categories {
+            let cat_ptr = *categories.offset(i as isize);
+            if cat_ptr.is_null() {
+                return Err("Null category in array".to_string());
+            }
+            result.push(cstr_to_string(cat_ptr, &format!("category {}", i))?);
+        }
+    }
+    Ok(result)
+}
+
 /// Initialize Qwen3 Multi-LoRA classifier with base model
 ///
 /// # Arguments
@@ -139,9 +205,9 @@ fn create_error_message(msg: &str) -> *mut c_char {
 /// - -1 on error
 ///
 /// # Safety
-/// - `base_model_path` must be a valid null-terminated C string
+/// - `base_model_path` must be a valid null-terminated C string.
 #[no_mangle]
-pub extern "C" fn init_qwen3_multi_lora_classifier(base_model_path: *const c_char) -> i32 {
+pub unsafe extern "C" fn init_qwen3_multi_lora_classifier(base_model_path: *const c_char) -> i32 {
     if base_model_path.is_null() {
         eprintln!("Error: base_model_path is null");
         return -1;
@@ -201,9 +267,9 @@ pub extern "C" fn init_qwen3_multi_lora_classifier(base_model_path: *const c_cha
 /// - -1 on error
 ///
 /// # Safety
-/// - Both arguments must be valid null-terminated C strings
+/// - `adapter_name` and `adapter_path` must be valid null-terminated C strings.
 #[no_mangle]
-pub extern "C" fn load_qwen3_lora_adapter(
+pub unsafe extern "C" fn load_qwen3_lora_adapter(
     adapter_name: *const c_char,
     adapter_path: *const c_char,
 ) -> i32 {
@@ -278,10 +344,11 @@ pub extern "C" fn load_qwen3_lora_adapter(
 /// - -1 on error
 ///
 /// # Safety
-/// - All arguments must be valid pointers
-/// - Caller must free: result.category_name, result.probabilities, result.error_message
+/// - `text` and `adapter_name` must be valid null-terminated C strings.
+/// - `result` must be a valid writable pointer for one `GenerativeClassificationResult`.
+/// - Caller must later release owned fields with `free_generative_classification_result`.
 #[no_mangle]
-pub extern "C" fn classify_with_qwen3_adapter(
+pub unsafe extern "C" fn classify_with_qwen3_adapter(
     text: *const c_char,
     adapter_name: *const c_char,
     result: *mut GenerativeClassificationResult,
@@ -291,113 +358,51 @@ pub extern "C" fn classify_with_qwen3_adapter(
         return -1;
     }
 
-    let text_str = unsafe {
-        match CStr::from_ptr(text).to_str() {
-            Ok(s) => s,
-            Err(e) => {
-                eprintln!("Error: invalid UTF-8 in text: {}", e);
-                (*result) = GenerativeClassificationResult::default();
-                (*result).error_message = create_error_message(&format!("Invalid UTF-8: {}", e));
-                return -1;
-            }
+    let text_str = match cstr_to_string(text, "text") {
+        Ok(s) => s,
+        Err(e) => {
+            eprintln!("Error: {}", e);
+            return write_generative_error(result, &e);
+        }
+    };
+    let adapter_name_str = match cstr_to_string(adapter_name, "adapter_name") {
+        Ok(s) => s,
+        Err(e) => {
+            eprintln!("Error: {}", e);
+            return write_generative_error(result, &e);
         }
     };
 
-    let adapter_name_str = unsafe {
-        match CStr::from_ptr(adapter_name).to_str() {
-            Ok(s) => s,
-            Err(e) => {
-                eprintln!("Error: invalid UTF-8 in adapter_name: {}", e);
-                (*result) = GenerativeClassificationResult::default();
-                (*result).error_message = create_error_message(&format!("Invalid UTF-8: {}", e));
-                return -1;
-            }
-        }
-    };
-
-    // Get classifier
     let classifier_mutex = match GLOBAL_QWEN3_MULTI_CLASSIFIER.get() {
         Some(c) => c,
         None => {
             eprintln!("Error: Qwen3 Multi-LoRA classifier not initialized");
-            unsafe {
-                (*result) = GenerativeClassificationResult::default();
-                (*result).error_message = create_error_message("Classifier not initialized");
-            }
-            return -1;
+            return write_generative_error(result, "Classifier not initialized");
         }
     };
 
-    // Classify with adapter
     match classifier_mutex.lock() {
         Ok(mut classifier) => {
-            match classifier.classify_with_adapter(text_str, adapter_name_str) {
-                Ok(multi_result) => {
-                    // Convert MultiAdapterClassificationResult to GenerativeClassificationResult
-                    let category_name_c = match CString::new(multi_result.category.as_str()) {
-                        Ok(s) => s.into_raw(),
-                        Err(e) => {
-                            eprintln!("Error: failed to create category name C string: {}", e);
-                            unsafe {
-                                (*result) = GenerativeClassificationResult::default();
-                                (*result).error_message = create_error_message(&format!(
-                                    "Failed to create C string: {}",
-                                    e
-                                ));
-                            }
-                            return -1;
-                        }
-                    };
-
-                    // Find class_id from category name in all_categories
-                    let class_id = multi_result
-                        .all_categories
-                        .iter()
-                        .position(|cat| cat == &multi_result.category)
-                        .unwrap_or(0) as i32;
-
-                    // Allocate probabilities array
-                    let mut probabilities = multi_result.probabilities;
-                    let probs_ptr = probabilities.as_mut_ptr();
-                    let num_categories = probabilities.len();
-                    std::mem::forget(probabilities); // Prevent Rust from deallocating
-
-                    unsafe {
-                        (*result) = GenerativeClassificationResult {
-                            class_id,
-                            confidence: multi_result.confidence,
-                            category_name: category_name_c,
-                            probabilities: probs_ptr,
-                            num_categories: num_categories as i32,
-                            error: false,
-                            error_message: ptr::null_mut(),
-                        };
+            match classifier.classify_with_adapter(&text_str, &adapter_name_str) {
+                Ok(multi_result) => match write_generative_success(result, multi_result) {
+                    Ok(()) => 0,
+                    Err(e) => {
+                        eprintln!("Error: {}", e);
+                        write_generative_error(result, &e)
                     }
-
-                    0
-                }
+                },
                 Err(e) => {
                     eprintln!(
                         "Error: classification with adapter '{}' failed: {}",
                         adapter_name_str, e
                     );
-                    unsafe {
-                        (*result) = GenerativeClassificationResult::default();
-                        (*result).error_message =
-                            create_error_message(&format!("Classification failed: {}", e));
-                    }
-                    -1
+                    write_generative_error(result, &format!("Classification failed: {}", e))
                 }
             }
         }
         Err(e) => {
             eprintln!("Error: failed to acquire lock: {}", e);
-            unsafe {
-                (*result) = GenerativeClassificationResult::default();
-                (*result).error_message =
-                    create_error_message(&format!("Failed to acquire lock: {}", e));
-            }
-            -1
+            write_generative_error(result, &format!("Failed to acquire lock: {}", e))
         }
     }
 }
@@ -413,9 +418,10 @@ pub extern "C" fn classify_with_qwen3_adapter(
 /// - -1 on error
 ///
 /// # Safety
-/// - Caller must free each string in the adapters array and the array itself
+/// - `adapters_out` and `num_adapters` must be valid writable output pointers.
+/// - Caller must release the returned array with `free_categories`.
 #[no_mangle]
-pub extern "C" fn get_qwen3_loaded_adapters(
+pub unsafe extern "C" fn get_qwen3_loaded_adapters(
     adapters_out: *mut *mut *mut c_char,
     num_adapters: *mut i32,
 ) -> i32 {
@@ -484,10 +490,12 @@ pub extern "C" fn get_qwen3_loaded_adapters(
 /// - -1 on error
 ///
 /// # Safety
-/// - All arguments must be valid pointers
-/// - Caller must free: result.category_name, result.probabilities, result.error_message
+/// - `text` must be a valid null-terminated C string.
+/// - `categories` must point to `num_categories` valid null-terminated C string pointers.
+/// - `result` must be a valid writable pointer for one `GenerativeClassificationResult`.
+/// - Caller must later release owned fields with `free_generative_classification_result`.
 #[no_mangle]
-pub extern "C" fn classify_zero_shot_qwen3(
+pub unsafe extern "C" fn classify_zero_shot_qwen3(
     text: *const c_char,
     categories: *const *const c_char,
     num_categories: i32,
@@ -500,356 +508,47 @@ pub extern "C" fn classify_zero_shot_qwen3(
         return -1;
     }
 
-    let text_str = unsafe {
-        match CStr::from_ptr(text).to_str() {
-            Ok(s) => s,
-            Err(e) => {
-                eprintln!("Error: invalid UTF-8 in text: {}", e);
-                (*result) = GenerativeClassificationResult::default();
-                (*result).error_message = create_error_message(&format!("Invalid UTF-8: {}", e));
-                return -1;
-            }
+    let text_str = match cstr_to_string(text, "text") {
+        Ok(s) => s,
+        Err(e) => {
+            eprintln!("Error: {}", e);
+            return write_generative_error(result, &e);
+        }
+    };
+    let cats = match collect_category_strings(categories, num_categories) {
+        Ok(cats) => cats,
+        Err(e) => {
+            eprintln!("Error: {}", e);
+            return write_generative_error(result, &e);
         }
     };
 
-    // Convert C string array to Rust Vec<String>
-    let mut cats = Vec::new();
-    unsafe {
-        for i in 0..num_categories {
-            let cat_ptr = *categories.offset(i as isize);
-            if cat_ptr.is_null() {
-                eprintln!("Error: null category at index {}", i);
-                (*result) = GenerativeClassificationResult::default();
-                (*result).error_message = create_error_message("Null category in array");
-                return -1;
-            }
-            match CStr::from_ptr(cat_ptr).to_str() {
-                Ok(s) => cats.push(s.to_string()),
-                Err(e) => {
-                    eprintln!("Error: invalid UTF-8 in category {}: {}", i, e);
-                    (*result) = GenerativeClassificationResult::default();
-                    (*result).error_message =
-                        create_error_message(&format!("Invalid UTF-8 in category {}", i));
-                    return -1;
-                }
-            }
-        }
-    }
-
-    // Get classifier
     let classifier_mutex = match GLOBAL_QWEN3_MULTI_CLASSIFIER.get() {
         Some(c) => c,
         None => {
             eprintln!("Error: Qwen3 Multi-LoRA classifier not initialized");
-            unsafe {
-                (*result) = GenerativeClassificationResult::default();
-                (*result).error_message = create_error_message("Classifier not initialized");
-            }
-            return -1;
+            return write_generative_error(result, "Classifier not initialized");
         }
     };
 
-    // Classify zero-shot
     match classifier_mutex.lock() {
-        Ok(mut classifier) => {
-            match classifier.classify_zero_shot(text_str, cats.clone()) {
-                Ok(multi_result) => {
-                    // Convert MultiAdapterClassificationResult to GenerativeClassificationResult
-                    let category_name_c = match CString::new(multi_result.category.as_str()) {
-                        Ok(s) => s.into_raw(),
-                        Err(e) => {
-                            eprintln!("Error: failed to create category name C string: {}", e);
-                            unsafe {
-                                (*result) = GenerativeClassificationResult::default();
-                                (*result).error_message = create_error_message(&format!(
-                                    "Failed to create C string: {}",
-                                    e
-                                ));
-                            }
-                            return -1;
-                        }
-                    };
-
-                    // Find class_id from category name in all_categories
-                    let class_id = multi_result
-                        .all_categories
-                        .iter()
-                        .position(|cat| cat == &multi_result.category)
-                        .unwrap_or(0) as i32;
-
-                    // Allocate probabilities array
-                    let mut probabilities = multi_result.probabilities;
-                    let probs_ptr = probabilities.as_mut_ptr();
-                    let num_cats = probabilities.len();
-                    std::mem::forget(probabilities); // Prevent Rust from deallocating
-
-                    unsafe {
-                        (*result) = GenerativeClassificationResult {
-                            class_id,
-                            confidence: multi_result.confidence,
-                            category_name: category_name_c,
-                            probabilities: probs_ptr,
-                            num_categories: num_cats as i32,
-                            error: false,
-                            error_message: ptr::null_mut(),
-                        };
-                    }
-
-                    0
-                }
+        Ok(mut classifier) => match classifier.classify_zero_shot(&text_str, cats) {
+            Ok(multi_result) => match write_generative_success(result, multi_result) {
+                Ok(()) => 0,
                 Err(e) => {
-                    eprintln!("Error: zero-shot classification failed: {}", e);
-                    unsafe {
-                        (*result) = GenerativeClassificationResult::default();
-                        (*result).error_message =
-                            create_error_message(&format!("Classification failed: {}", e));
-                    }
-                    -1
+                    eprintln!("Error: {}", e);
+                    write_generative_error(result, &e)
                 }
-            }
-        }
-        Err(e) => {
-            eprintln!("Error: failed to acquire lock: {}", e);
-            unsafe {
-                (*result) = GenerativeClassificationResult::default();
-                (*result).error_message =
-                    create_error_message(&format!("Failed to acquire lock: {}", e));
-            }
-            -1
-        }
-    }
-}
-
-// ================================================================================================
-// QWEN3 GUARD FFI (Safety/Jailbreak Detection)
-// ================================================================================================
-
-/// Guard generation result returned to Go (raw text only)
-#[repr(C)]
-pub struct GuardResult {
-    /// Raw generated output (null-terminated C string)
-    pub raw_output: *mut c_char,
-
-    /// Error flag
-    pub error: bool,
-
-    /// Error message (null-terminated C string, only set if error=true)
-    pub error_message: *mut c_char,
-}
-
-impl Default for GuardResult {
-    fn default() -> Self {
-        Self {
-            raw_output: ptr::null_mut(),
-            error: true,
-            error_message: ptr::null_mut(),
-        }
-    }
-}
-
-/// Free guard result
-///
-/// # Safety
-/// - Must only be called once per result
-/// - Result must have been allocated by classify_with_qwen3_guard
-#[no_mangle]
-pub extern "C" fn free_guard_result(result: *mut GuardResult) {
-    if result.is_null() {
-        return;
-    }
-
-    unsafe {
-        // Free raw output
-        if !(*result).raw_output.is_null() {
-            let _ = CString::from_raw((*result).raw_output);
-        }
-
-        // Free error message
-        if !(*result).error_message.is_null() {
-            let _ = CString::from_raw((*result).error_message);
-        }
-    }
-}
-
-/// Initialize Qwen3Guard model
-///
-/// # Arguments
-/// - `model_path`: Path to Qwen3Guard model directory
-///
-/// # Returns
-/// - 0 on success
-/// - -1 on error
-///
-/// # Safety
-/// - `model_path` must be a valid null-terminated C string
-#[no_mangle]
-pub extern "C" fn init_qwen3_guard(model_path: *const c_char) -> i32 {
-    if model_path.is_null() {
-        eprintln!("Error: model_path is null");
-        return -1;
-    }
-
-    let model_path_str = unsafe {
-        match CStr::from_ptr(model_path).to_str() {
-            Ok(s) => s,
+            },
             Err(e) => {
-                eprintln!("Error: invalid UTF-8 in model_path: {}", e);
-                return -1;
-            }
-        }
-    };
-
-    // Determine device
-    let device = Device::cuda_if_available(0).unwrap_or(Device::Cpu);
-
-    // Check if already initialized
-    if GLOBAL_QWEN3_GUARD.get().is_some() {
-        println!("Qwen3Guard already initialized, reusing existing instance");
-        return 0;
-    }
-
-    // Load guard model
-    match Qwen3GuardModel::new(model_path_str, &device, None) {
-        Ok(guard) => match GLOBAL_QWEN3_GUARD.set(Mutex::new(guard)) {
-            Ok(_) => {
-                println!("Qwen3Guard initialized: {}", model_path_str);
-                0
-            }
-            Err(_) => {
-                println!("Qwen3Guard already initialized (race condition), reusing");
-                0
-            }
-        },
-        Err(e) => {
-            eprintln!("Error: failed to load Qwen3Guard: {}", e);
-            -1
-        }
-    }
-}
-
-/// Classify text with Qwen3Guard
-///
-/// # Arguments
-/// - `text`: Input text to classify (null-terminated C string)
-/// - `mode`: Classification mode ("input" for user prompts, "output" for model responses)
-/// - `result`: Pointer to GuardResult struct (allocated by caller)
-///
-/// # Returns
-/// - 0 on success
-/// - -1 on error
-///
-/// # Safety
-/// - All arguments must be valid pointers
-/// - Caller must free: result.raw_output, result.error_message
-#[no_mangle]
-pub extern "C" fn classify_with_qwen3_guard(
-    text: *const c_char,
-    mode: *const c_char,
-    result: *mut GuardResult,
-) -> i32 {
-    if text.is_null() || mode.is_null() || result.is_null() {
-        eprintln!("Error: null pointer passed to classify_with_qwen3_guard");
-        return -1;
-    }
-
-    let text_str = unsafe {
-        match CStr::from_ptr(text).to_str() {
-            Ok(s) => s,
-            Err(e) => {
-                eprintln!("Error: invalid UTF-8 in text: {}", e);
-                (*result) = GuardResult::default();
-                (*result).error_message = create_error_message(&format!("Invalid UTF-8: {}", e));
-                return -1;
-            }
-        }
-    };
-
-    let mode_str = unsafe {
-        match CStr::from_ptr(mode).to_str() {
-            Ok(s) => s,
-            Err(e) => {
-                eprintln!("Error: invalid UTF-8 in mode: {}", e);
-                (*result) = GuardResult::default();
-                (*result).error_message = create_error_message(&format!("Invalid UTF-8: {}", e));
-                return -1;
-            }
-        }
-    };
-
-    // Get guard model
-    let guard_mutex = match GLOBAL_QWEN3_GUARD.get() {
-        Some(g) => g,
-        None => {
-            eprintln!("Error: Qwen3Guard not initialized");
-            unsafe {
-                (*result) = GuardResult::default();
-                (*result).error_message = create_error_message("Guard not initialized");
-            }
-            return -1;
-        }
-    };
-
-    // Generate with guard
-    match guard_mutex.lock() {
-        Ok(mut guard) => match guard.generate_guard(text_str, mode_str) {
-            Ok(guard_result) => {
-                // Convert GuardGenerationResult to GuardResult
-                let raw_output_c = match CString::new(guard_result.raw_output.as_str()) {
-                    Ok(s) => s.into_raw(),
-                    Err(e) => {
-                        eprintln!("Error: failed to create raw_output C string: {}", e);
-                        unsafe {
-                            (*result) = GuardResult::default();
-                            (*result).error_message =
-                                create_error_message(&format!("Failed to create C string: {}", e));
-                        }
-                        return -1;
-                    }
-                };
-
-                unsafe {
-                    (*result) = GuardResult {
-                        raw_output: raw_output_c,
-                        error: false,
-                        error_message: ptr::null_mut(),
-                    };
-                }
-
-                0
-            }
-            Err(e) => {
-                eprintln!("Error: guard classification failed: {}", e);
-                unsafe {
-                    (*result) = GuardResult::default();
-                    (*result).error_message =
-                        create_error_message(&format!("Classification failed: {}", e));
-                }
-                -1
+                eprintln!("Error: zero-shot classification failed: {}", e);
+                write_generative_error(result, &format!("Classification failed: {}", e))
             }
         },
         Err(e) => {
             eprintln!("Error: failed to acquire lock: {}", e);
-            unsafe {
-                (*result) = GuardResult::default();
-                (*result).error_message =
-                    create_error_message(&format!("Failed to acquire lock: {}", e));
-            }
-            -1
+            write_generative_error(result, &format!("Failed to acquire lock: {}", e))
         }
-    }
-}
-
-/// Check if Qwen3Guard is initialized
-///
-/// # Returns
-/// - 1 if initialized
-/// - 0 if not initialized
-#[no_mangle]
-pub extern "C" fn is_qwen3_guard_initialized() -> i32 {
-    if GLOBAL_QWEN3_GUARD.get().is_some() {
-        1
-    } else {
-        0
     }
 }
 

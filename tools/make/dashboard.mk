@@ -89,6 +89,11 @@ dashboard-type-check: ## Run TypeScript type checking for dashboard frontend
 	cd $(DASHBOARD_WIZMAP_DIR) && npm install 2>/dev/null && npm run build >/dev/null
 	@echo "dashboard/frontend type-check passed"
 
+dashboard-test-frontend: ## Run dashboard frontend unit tests
+	@$(LOG_TARGET)
+	cd $(DASHBOARD_FRONTEND_DIR) && npm install 2>/dev/null && npm run test:unit
+	@echo "dashboard/frontend unit tests passed"
+
 dashboard-go-mod-tidy: ## Check go mod tidy for dashboard backend
 	@$(LOG_TARGET)
 	@echo "Checking dashboard/backend..."
@@ -104,7 +109,7 @@ dashboard-test-backend: ## Run dashboard backend Go tests (run from repo root: m
 	@$(LOG_TARGET)
 	cd $(DASHBOARD_BACKEND_DIR) && go test ./...
 
-dashboard-check: dashboard-lint dashboard-type-check dashboard-go-mod-tidy ## Run all dashboard checks (lint, type-check, go mod tidy)
+dashboard-check: dashboard-lint dashboard-type-check dashboard-test-frontend dashboard-go-mod-tidy ## Run all dashboard checks (lint, type-check, frontend tests, go mod tidy)
 	@$(LOG_TARGET)
 	@echo "All dashboard checks passed"
 
@@ -123,6 +128,6 @@ dashboard-clean: ## Clean dashboard build artifacts (frontend dist + backend bin
 
 .PHONY: dashboard-install dashboard-dev-frontend dashboard-dev-backend \
 	dashboard-build dashboard-build-wasm dashboard-build-frontend dashboard-build-backend \
-	dashboard-test-backend \
+	dashboard-test-backend dashboard-test-frontend \
 	dashboard-lint dashboard-lint-fix dashboard-type-check dashboard-go-mod-tidy \
 	dashboard-check dashboard-clean

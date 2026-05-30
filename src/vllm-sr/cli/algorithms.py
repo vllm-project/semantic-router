@@ -242,6 +242,34 @@ class HybridSelectionConfig(BaseModel):
 # =============================================================================
 
 
+class RLDrivenSelectionConfig(BaseModel):
+    """Configuration for the canonical rl_driven selection algorithm.
+
+    Matches decision.algorithm.rl_driven in the router config contract.
+    """
+
+    exploration_rate: float | None = Field(default=0.3, ge=0, le=1)
+    exploration_decay: float | None = Field(default=0.99, ge=0, le=1)
+    min_exploration: float | None = Field(default=0.05, ge=0, le=1)
+    use_thompson_sampling: bool | None = True
+    enable_personalization: bool | None = True
+    personalization_blend: float | None = Field(default=0.7, ge=0, le=1)
+    session_context_weight: float | None = Field(default=0.3, ge=0, le=1)
+    implicit_feedback_weight: float | None = Field(default=0.5, ge=0, le=1)
+    cost_awareness: bool | None = True
+    cost_weight: float | None = Field(default=0.2, ge=0)
+    storage_path: str | None = None
+    auto_save_interval: str | None = "30s"
+    use_router_r1_rewards: bool | None = True
+    cost_reward_alpha: float | None = Field(default=0.3, ge=0, le=1)
+    format_reward_penalty: float | None = -1.0
+    enable_llm_routing: bool | None = False
+    router_r1_server_url: str | None = None
+    llm_routing_fallback: str | None = "thompson"
+    enable_multi_round_aggregation: bool | None = False
+    max_aggregation_rounds: int | None = Field(default=None, ge=1)
+
+
 class ThompsonSamplingConfig(BaseModel):
     """Configuration for Thompson Sampling model selection.
 
@@ -270,6 +298,21 @@ class GMTRouterConfig(BaseModel):
     Uses heterogeneous GNN for personalized routing decisions.
     """
 
+    # Canonical router config fields.
+    enable_personalization: bool | None = True
+    history_sample_size: int | None = Field(default=5, gt=0)
+    embedding_dimension: int | None = Field(default=768, gt=0)
+    num_gnn_layers: int | None = Field(default=2, ge=1, le=5)
+    attention_heads: int | None = Field(default=8, ge=1)
+    min_interactions_for_personalization: int | None = Field(default=3, ge=0)
+    max_interactions_per_user: int | None = Field(default=100, gt=0)
+    feedback_types: list[str] | None = Field(
+        default_factory=lambda: ["rating", "ranking"]
+    )
+    model_path: str | None = None
+    storage_path: str | None = None
+
+    # Legacy CLI aliases retained for compatibility with older local scripts.
     # Number of GNN layers (default: 2)
     num_layers: int | None = Field(default=2, ge=1, le=5)
 
@@ -281,9 +324,6 @@ class GMTRouterConfig(BaseModel):
 
     # Enable user preference learning
     learn_preferences: bool | None = True
-
-    # Path to pre-trained model weights (optional)
-    model_path: str | None = None
 
 
 class RouterR1Config(BaseModel):
@@ -328,6 +368,7 @@ class AlgorithmConfig(BaseModel):
        - "hybrid": Combine multiple selection methods
 
     3. RL-driven selection algorithms (from issue #994):
+       - "rl_driven": Canonical online learning and Router-R1 style selector
        - "thompson": Thompson Sampling with exploration/exploitation
        - "gmtrouter": Graph neural network for personalized routing
        - "router_r1": LLM-as-router with think/route actions
@@ -335,7 +376,7 @@ class AlgorithmConfig(BaseModel):
 
     # Algorithm type: looper ("confidence", "concurrent", "remom", "latency_aware") or
     # selection ("static", "elo", "router_dc", "automix", "hybrid",
-    #            "thompson", "gmtrouter", "router_r1")
+    #            "rl_driven", "thompson", "gmtrouter", "router_r1")
     type: str
 
     # Looper algorithm configurations
@@ -351,6 +392,7 @@ class AlgorithmConfig(BaseModel):
     hybrid: HybridSelectionConfig | None = None
 
     # RL-driven selection algorithms (from PR #1196, issue #994)
+    rl_driven: RLDrivenSelectionConfig | None = None
     thompson: ThompsonSamplingConfig | None = None
     gmtrouter: GMTRouterConfig | None = None
     router_r1: RouterR1Config | None = None

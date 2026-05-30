@@ -145,7 +145,7 @@ algorithm:
     auto_save_interval: 30s
 
     # Router-R1 reward
-    use_router_r1_rewards: false       # Enable Router-R1 reward computation
+    use_router_r1_rewards: true        # Enable Router-R1 reward computation
     cost_reward_alpha: 0.3             # Performance-cost tradeoff in reward
     format_reward_penalty: -1.0        # Penalty for incorrect format
 
@@ -156,6 +156,7 @@ algorithm:
 
     # Multi-round
     enable_multi_round_aggregation: false
+    max_aggregation_rounds: 3
 ```
 
 ### Parameters
@@ -172,10 +173,23 @@ algorithm:
 | `implicit_feedback_weight` | float | `0.5` | Implicit feedback weight (0–1) |
 | `cost_awareness` | bool | `true` | Prefer cheaper models for exploration |
 | `cost_weight` | float | `0.2` | Cost influence weight |
-| `use_router_r1_rewards` | bool | `false` | Enable Router-R1 reward structure |
+| `use_router_r1_rewards` | bool | `true` | Enable Router-R1 reward structure |
 | `cost_reward_alpha` | float | `0.3` | Performance-cost tradeoff (0=outcome, 1=cost) |
+| `format_reward_penalty` | float | `-1.0` | Penalty applied when response format is incorrect |
 | `enable_llm_routing` | bool | `false` | Enable LLM-as-router mode |
 | `router_r1_server_url` | string | — | URL of Router-R1 LLM server |
 | `llm_routing_fallback` | string | `thompson` | Fallback when LLM routing fails |
 | `storage_path` | string | — | Persist RL state to file |
 | `auto_save_interval` | string | `30s` | Auto-save interval |
+| `enable_multi_round_aggregation` | bool | `false` | Query and aggregate multiple models |
+| `max_aggregation_rounds` | int | — | Maximum models to query in multi-round mode |
+
+:::warning Multi-replica state
+
+RL-driven preferences and session context are local learning state when they are
+kept in memory or written to a local `storage_path`. In Helm deployments,
+multi-replica router renders are rejected by default when an active decision
+uses `algorithm.type: rl_driven`; keep one router replica or externalize
+selector state before disabling that safety guard.
+
+:::

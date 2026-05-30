@@ -219,11 +219,13 @@ Recommended upstream settings for embedding:
 ## Security & access control
 
 - Dashboard auth uses JWTs from `Authorization: Bearer <token>` for protected `/api/*` and `/embedded/*` requests.
-- Protected embedded entry URLs may also carry `authToken=<token>`, and the frontend mirrors the active token into a same-origin `vsr_session` cookie so Grafana/Jaeger iframe redirects and in-frame `/api/*` calls stay authenticated.
+- Protected embedded entry URLs may also carry `authToken=<token>`. Login and bootstrap responses set an HttpOnly `vsr_session` cookie, and logout revokes newly issued server-side session ids before clearing that cookie.
 - Frame embedding: backend strips/overrides `X-Frame-Options` and `Content-Security-Policy` headers from upstreams to permit `frame-ancestors 'self'` only.
 - **Security Policy page** (`/security`, accessible via Manager dropdown): allows admins to define role-to-model RBAC mappings and per-role rate-limit tiers. On save, the dashboard translates these into canonical router config (`routing.signals.role_bindings`, `routing.decisions`, and `global.services.ratelimit`), merges them into the running `config.yaml`, and triggers a hot-reload so the router enforces the new policy immediately. Requires the `security.manage` permission for writes; `config.read` is sufficient for viewing. See [docs/security-hardening.md](../docs/security-hardening.md) for full details.
 - **Dashboard RBAC permissions**: `feedback.submit`, `replay.read`, and `security.manage` extend the built-in role/permission matrix. Only admin-role users receive `security.manage` by default.
-- Future: OIDC login on dashboard, stronger session-cookie handling, and signed proxy sessions to embedded services.
+- Auth users, roles, permissions, audit logs, workflow state, and session ids use SQLite under `./data` by default. In containers or Kubernetes, mount `/app/data` or set `DASHBOARD_AUTH_DB_PATH` and `DASHBOARD_WORKFLOW_DB_PATH` to persistent paths if you need state to survive restarts.
+- The current SQLite auth/session store is single-replica local state. Run one dashboard replica unless you add a shared production auth/session store.
+- Future: OIDC login on dashboard and signed proxy sessions to embedded services.
 
 Write access warning for config updates:
 
@@ -366,6 +368,7 @@ kubectl -n vllm-semantic-router-system port-forward svc/semantic-router-dashboar
 Notes:
 
 - Configure environment variables to match your in-cluster service DNS names and namespace.
+- For Helm deployments, `dashboard.persistence.enabled=true` mounts `/app/data` and wires the auth/session and workflow SQLite paths into that persistent volume. The production values profile enables this, but still keeps the dashboard at one replica because the current auth/session store is not a shared HA store.
 - Mount your actual `config.yaml` via ConfigMap/Secret or a writable volume if you need runtime changes.
 - To expose externally, add an Ingress or Service of type LoadBalancer according to your cluster.
 
