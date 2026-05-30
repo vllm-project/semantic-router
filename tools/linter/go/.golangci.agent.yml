@@ -114,7 +114,7 @@ linters:
           - funlen
           - gocognit
           - nestif
-        path: (^|/)src/semantic-router/pkg/dsl/(decompiler|parser)\.go$
+        path: (^|/)src/semantic-router/pkg/dsl/parser\.go$
       - linters:
           - cyclop
           - funlen
@@ -188,12 +188,6 @@ linters:
           - gocognit
           - nestif
         path: (^|/)src/semantic-router/pkg/looper/(base|client|confidence|ratings|rl_driven)\.go$
-      - linters:
-          - cyclop
-          - funlen
-          - gocognit
-          - nestif
-        path: (^|/)src/semantic-router/pkg/memory/milvus_store\.go$
       - linters:
           - errcheck
           - nestif
