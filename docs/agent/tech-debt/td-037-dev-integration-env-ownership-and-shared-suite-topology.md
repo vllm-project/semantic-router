@@ -4,6 +4,14 @@
 
 Open
 
+## Owner Plan
+
+PL0033 v0.3 Themis Release Closure
+
+## Release Relevance
+
+v0.3 Themis
+
 ## Scope
 
 `src/vllm-sr/cli/**`, `e2e/pkg/framework/**`, `e2e/pkg/fixtures/**`, `e2e/pkg/testmatrix/testcases.go`, `e2e/profiles/**`, `e2e/testing/vllm-sr-cli/**`, `.github/workflows/integration-test-*.yml`, `.github/workflows/test-and-build.yml`, `tools/agent/e2e-profile-map.yaml`, `tools/agent/repo-manifest.yaml`, and `tools/make/{docker,e2e}.mk`

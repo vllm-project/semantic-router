@@ -4,6 +4,14 @@
 
 Open
 
+## Owner Plan
+
+PL0033 v0.3 Themis Release Closure
+
+## Release Relevance
+
+v0.3 Themis
+
 ## Scope
 
 `src/training/**`, dashboard backend training or evaluation runners, and runtime selection or evaluation seams that consume training-generated artifacts

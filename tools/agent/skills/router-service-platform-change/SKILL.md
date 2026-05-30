@@ -13,7 +13,7 @@ description: Modifies router-side API, authz, memory, provider, storage, or runt
 
 ## Workflow
 
-1. Read change surfaces, module boundaries, and the Go router playbook for the affected service layer
+1. Read change surfaces and module boundaries for the affected service layer
 2. Modify the router-side service or API seam and identify whether profile-owned behavior changed
 3. Run `make agent-report ENV=cpu CHANGED_FILES="..."` to verify surface alignment
 4. Run `make agent-ci-gate CHANGED_FILES="..."` to validate the affected constraints
@@ -28,7 +28,7 @@ description: Modifies router-side API, authz, memory, provider, storage, or runt
 
 - [docs/agent/change-surfaces.md](../../../../docs/agent/change-surfaces.md)
 - [docs/agent/module-boundaries.md](../../../../docs/agent/module-boundaries.md)
-- [docs/agent/playbooks/go-router.md](../../../../docs/agent/playbooks/go-router.md)
+- [docs/agent/testing-strategy.md](../../../../docs/agent/testing-strategy.md)
 
 ## Standard Commands
 

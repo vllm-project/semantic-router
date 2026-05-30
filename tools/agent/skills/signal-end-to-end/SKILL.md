@@ -15,7 +15,7 @@ description: Implements end-to-end signal changes spanning router config, signal
 
 ## Workflow
 
-1. Read change surfaces, module boundaries, and playbooks for signal context
+1. Read change surfaces and module boundaries for signal context
 2. Modify signal config, extraction, CLI schema, and dashboard surfaces as needed
 3. Run `make agent-report ENV=cpu CHANGED_FILES="..."` to identify all impacted surfaces
 4. Run `make agent-ci-gate CHANGED_FILES="..."` to validate signal contract alignment
@@ -33,7 +33,7 @@ description: Implements end-to-end signal changes spanning router config, signal
 
 - [docs/agent/change-surfaces.md](../../../../docs/agent/change-surfaces.md)
 - [docs/agent/module-boundaries.md](../../../../docs/agent/module-boundaries.md)
-- [docs/agent/playbooks/go-router.md](../../../../docs/agent/playbooks/go-router.md)
+- [docs/agent/testing-strategy.md](../../../../docs/agent/testing-strategy.md)
 
 ## Standard Commands
 

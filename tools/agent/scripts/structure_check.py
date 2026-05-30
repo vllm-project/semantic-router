@@ -145,8 +145,8 @@ def matches_any(path: str, patterns: list[str]) -> bool:
     return any(fnmatch.fnmatch(path, pattern) for pattern in patterns)
 
 
-def get_legacy_hotspot_rule(path: str, rules: dict) -> dict | None:
-    for rule in rules.get("legacy_hotspots", []):
+def get_structure_exception_rule(path: str, rules: dict) -> dict | None:
+    for rule in rules.get("structure_exceptions", []):
         patterns = rule.get("paths", [])
         if matches_any(path, patterns):
             return rule
@@ -195,16 +195,16 @@ def evaluate_file_line_count(
     path: str, line_count: int, rules: dict, base_ref: str | None
 ) -> list[Finding]:
     findings: list[Finding] = []
-    legacy_hotspot = get_legacy_hotspot_rule(path, rules)
+    structure_exception = get_structure_exception_rule(path, rules)
     baseline_line_count = (
-        load_baseline_line_count(path, base_ref) if legacy_hotspot else None
+        load_baseline_line_count(path, base_ref) if structure_exception else None
     )
     warn_limit = rules["limits"]["file_lines"]["warn"]
     error_limit = rules["limits"]["file_lines"]["error"]
 
     if line_count > error_limit:
         if (
-            legacy_hotspot
+            structure_exception
             and baseline_line_count is not None
             and line_count <= baseline_line_count
         ):
@@ -212,11 +212,11 @@ def evaluate_file_line_count(
                 Finding(
                     "WARN",
                     path,
-                    f"legacy hotspot still has {line_count} lines (limit {error_limit}) "
+                    f"structure exception still has {line_count} lines (limit {error_limit}) "
                     f"but did not grow from baseline {baseline_line_count}",
                 )
             )
-        elif relax_file_checks(legacy_hotspot):
+        elif relax_file_checks(structure_exception):
             baseline_suffix = (
                 f" (baseline {baseline_line_count})"
                 if baseline_line_count is not None
@@ -226,7 +226,7 @@ def evaluate_file_line_count(
                 Finding(
                     "WARN",
                     path,
-                    f"legacy hotspot has {line_count} lines (limit {error_limit}); "
+                    f"structure exception has {line_count} lines (limit {error_limit}); "
                     f"file-level ratchet is relaxed for this file{baseline_suffix}",
                 )
             )
@@ -356,21 +356,27 @@ def ratchet_or_error(
         return Finding(
             "WARN",
             path,
-            f"legacy hotspot {message} but did not exceed baseline {baseline_value_getter(baseline)}",
+            f"structure exception {message} but did not exceed baseline {baseline_value_getter(baseline)}",
         )
     return Finding("ERROR", path, message)
 
 
-def relax_function_checks(legacy_hotspot: dict | None) -> bool:
-    return bool(legacy_hotspot and legacy_hotspot.get("function_checks") == "relaxed")
+def relax_function_checks(structure_exception: dict | None) -> bool:
+    return bool(
+        structure_exception and structure_exception.get("function_checks") == "relaxed"
+    )
 
 
-def relax_file_checks(legacy_hotspot: dict | None) -> bool:
-    return bool(legacy_hotspot and legacy_hotspot.get("file_checks") == "relaxed")
+def relax_file_checks(structure_exception: dict | None) -> bool:
+    return bool(
+        structure_exception and structure_exception.get("file_checks") == "relaxed"
+    )
 
 
-def relax_interface_checks(legacy_hotspot: dict | None) -> bool:
-    return bool(legacy_hotspot and legacy_hotspot.get("interface_checks") == "relaxed")
+def relax_interface_checks(structure_exception: dict | None) -> bool:
+    return bool(
+        structure_exception and structure_exception.get("interface_checks") == "relaxed"
+    )
 
 
 def function_metric_finding(
@@ -380,13 +386,13 @@ def function_metric_finding(
     current_value: int,
     baseline_metrics: dict[str, FunctionMetrics],
     baseline_value_getter,
-    legacy_hotspot: dict | None,
+    structure_exception: dict | None,
 ) -> Finding:
-    if relax_function_checks(legacy_hotspot):
+    if relax_function_checks(structure_exception):
         return Finding(
             "WARN",
             path,
-            f"legacy hotspot {message}; per-function ratchet is relaxed for this file",
+            f"structure exception {message}; per-function ratchet is relaxed for this file",
         )
     return ratchet_or_error(
         path,
@@ -408,10 +414,10 @@ def evaluate_ast_rules(
 ) -> list[Finding]:
     findings: list[Finding] = []
     tree = parser.parse(source_bytes)
-    legacy_hotspot = get_legacy_hotspot_rule(path, rules)
+    structure_exception = get_structure_exception_rule(path, rules)
     baseline_metrics = (
         load_baseline_function_metrics(path, language_name, parser, base_ref)
-        if legacy_hotspot
+        if structure_exception
         else {}
     )
     occurrence_counts: dict[str, int] = defaultdict(int)
@@ -435,7 +441,7 @@ def evaluate_ast_rules(
                         function_lines,
                         baseline_metrics,
                         lambda metrics: metrics.lines,
-                        legacy_hotspot,
+                        structure_exception,
                     )
                 )
             nesting = max_nesting_depth(node, language_name)
@@ -452,7 +458,7 @@ def evaluate_ast_rules(
                         nesting,
                         baseline_metrics,
                         lambda metrics: metrics.nesting,
-                        legacy_hotspot,
+                        structure_exception,
                     )
                 )
 
@@ -463,12 +469,12 @@ def evaluate_ast_rules(
                     f"interface/trait starting at line {node.start_point.row + 1} has {method_count} methods "
                     f"(limit {rules['limits']['interface_methods']['error']})"
                 )
-                if relax_interface_checks(legacy_hotspot):
+                if relax_interface_checks(structure_exception):
                     findings.append(
                         Finding(
                             "WARN",
                             path,
-                            f"legacy hotspot {message}; interface-size ratchet is relaxed for this file",
+                            f"structure exception {message}; interface-size ratchet is relaxed for this file",
                         )
                     )
                 else:

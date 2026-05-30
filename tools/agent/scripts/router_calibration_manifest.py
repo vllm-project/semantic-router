@@ -31,12 +31,7 @@ def load_probe_manifest(path: Path) -> tuple[dict[str, Any], list[Probe]]:
     if isinstance(raw_decisions, list) and raw_decisions:
         return manifest, _load_grouped_probes(raw_decisions)
 
-    raw_probes = manifest.get("probes")
-    if not isinstance(raw_probes, list) or not raw_probes:
-        raise ValueError(
-            f"{path} must contain a non-empty 'decisions' or legacy 'probes' list"
-        )
-    return manifest, _load_legacy_probes(raw_probes)
+    raise ValueError(f"{path} must contain a non-empty 'decisions' list")
 
 
 def _load_grouped_probes(raw_decisions: list[Any]) -> list[Probe]:
@@ -86,35 +81,6 @@ def _load_grouped_probes(raw_decisions: list[Any]) -> list[Probe]:
                     tags=_normalize_tags(variant.get("tags")),
                 )
             )
-    return probes
-
-
-def _load_legacy_probes(raw_probes: list[Any]) -> list[Probe]:
-    probes: list[Probe] = []
-    for index, item in enumerate(raw_probes):
-        if not isinstance(item, dict):
-            raise ValueError(f"probe[{index}] must be a mapping")
-        probe_id = str(item.get("id") or item.get("expected_decision") or "").strip()
-        expected = str(item.get("expected_decision") or "").strip()
-        query = str(item.get("query") or "").strip()
-        messages = _normalize_messages(item.get("messages"))
-        if not probe_id or not expected or (not query and not messages):
-            raise ValueError(
-                f"probe[{index}] must include non-empty id, expected_decision, and either query or messages"
-            )
-        probes.append(
-            Probe(
-                decision_id=expected,
-                variant_id=probe_id,
-                probe_id=probe_id,
-                expected_decision=expected,
-                query=query or None,
-                messages=messages,
-                expected_alias=str(item.get("expected_alias") or "").strip() or None,
-                notes=str(item.get("notes") or "").strip() or None,
-                tags=_normalize_tags(item.get("tags")),
-            )
-        )
     return probes
 
 

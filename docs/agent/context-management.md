@@ -15,21 +15,20 @@ This document defines how the harness exposes the minimum useful context for a t
   - `docs/agent/README.md`
 - `L1` task contract
   - resolved primary skill
-  - fragment skills
   - loop mode and execution-plan guidance for the active task
-  - the `## Must Read` links referenced by those skills
+  - the `## Must Read` links referenced by the primary skill
 - `L2` surface context
   - only docs and executable sources for the impacted surfaces
 - `L3` hotspot supplements
   - nearest local `AGENTS.md` files for changed hotspot trees
 - `L4` durable loop context
-  - execution plans, ADRs, and tech debt only when the task needs resumable or unresolved context
+  - execution plans and tech debt only when the task needs resumable or unresolved context
 
 ## Context Pack Flow
 
 1. Resolve changed files through `make agent-report ENV=cpu|amd CHANGED_FILES="..."` so the harness can emit the active skill, loop mode, execution-plan guidance, and validation commands.
-2. Select the primary skill and fragment skills from `tools/agent/skill-registry.yaml`.
-3. Pull the skill `## Must Read` references from the active `SKILL.md` files.
+2. Select the primary skill from `tools/agent/skill-registry.yaml`.
+3. Pull the skill `## Must Read` references from the active `SKILL.md` file.
 4. Add surface-specific references from `tools/agent/context-map.yaml`.
 5. Add nearest local `AGENTS.md` files for hotspot paths when applicable.
 6. Add resume references such as plans or debt as low-priority follow-up context, then promote them into the active loop when the task becomes long-horizon, multi-loop, or unresolved.
@@ -58,7 +57,7 @@ These files are gitignored local artifacts derived from the canonical harness. T
 - The default `agent-report` summary stays compact.
 - The printed summary should prioritize:
   - `Start here`
-  - the primary skill plus active fragments only
+  - the primary skill only
   - the smallest useful `Must Read` set
 - Full `read_if_applicable` and resume references remain available through `--context-detail full` or `--format json`.
 - Execution-plan resume references belong in the default pack only when the resolved task still needs long-horizon loop state.
@@ -70,4 +69,4 @@ These files are gitignored local artifacts derived from the canonical harness. T
 - Keep the context pack task-first and minimal; if a reference is almost always skipped, remove it or lower it to resume-only context.
 - When a new surface, skill, or local rule is added, update the context map in the same change.
 - If the context pack and the canonical docs disagree, fix the canonical doc and the executable map together.
-- Keep `.agent-harness/` outputs gitignored and derived; if loop state needs to be shared or versioned, promote it into an execution plan, ADR, or debt entry instead.
+- Keep `.agent-harness/` outputs gitignored and derived; if loop state needs to be shared or versioned, promote it into an execution plan or debt entry instead.

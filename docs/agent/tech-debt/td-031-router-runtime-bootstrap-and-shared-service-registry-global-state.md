@@ -4,120 +4,86 @@
 
 Open
 
+## Owner Plan
+
+PL0033 v0.3 Themis Release Closure
+
+## Release Relevance
+
+v0.3 Themis
+
 ## Scope
 
-`src/semantic-router/cmd/{main.go,runtime_bootstrap.go}`, `src/semantic-router/pkg/config/loader.go`, `src/semantic-router/pkg/routerruntime/**`, `src/semantic-router/pkg/apiserver/**`, `src/semantic-router/pkg/services/classification.go`, and adjacent runtime bootstrap or reload seams
+`src/semantic-router/cmd/{main.go,runtime_bootstrap.go}`,
+`src/semantic-router/pkg/routerruntime/**`,
+`src/semantic-router/pkg/apiserver/**`,
+`src/semantic-router/pkg/extproc/**`,
+`src/semantic-router/pkg/services/classification.go`, and adjacent runtime
+bootstrap or reload seams.
 
 ## Summary
 
-The common runtime path no longer suffers from the stale API-server config snapshot tracked by TD011, the single-consumer config-update channel, or implicit publication of classification, memory, vector-store, file-store, embedder, ingestion-pipeline, and model-selection dependencies through constructor side effects or `cmd`-owned package globals. Those steady-state dependencies now flow through `pkg/routerruntime` for the main startup and reload path. `InitWithRuntime` also no longer adopts process-wide config, classification service, or memory state when a runtime registry is present; the `config.Get()`, global classification-service, and global memory-store fallbacks are limited to the legacy nil-registry entrypoint. API vector-store/file-store helpers and model-selection APIs now follow the same rule: a server with a runtime registry only uses dependencies published through that registry, while process-wide globals remain a legacy nil-registry compatibility path. Managed knowledge-base config mutations now follow that rule too: server-local state and the runtime registry are updated when present, while `config.Replace()` remains reserved for legacy nil-registry callers. ExtProc vectorstore RAG now has the same runtime-owned boundary locked by tests: request-time manager/embedder lookup returns only the router runtime registry dependencies and does not consult API-server globals. Registry-backed classification refresh no longer rewrites process-wide config through `config.Replace()`; legacy nil-registry config updates still publish that compatibility global explicitly. ExtProc RL-driven looper execution now receives the router's runtime selector registry instead of reading `selection.GlobalRegistry`; the global selector registry remains only a direct-constructor compatibility path. ExtProc server construction now resolves its initial router config from the runtime registry before entering the legacy file/global constructor path; when a registry exists but has not published config yet, construction parses the explicit config file without falling through to a conflicting process-wide Kubernetes config. ExtProc gRPC startup plus config-source watcher selection read from the active router/runtime config before the process-wide fallback, and a present-but-empty runtime registry no longer falls through to `config.Get()` for those server config decisions. Registry-backed file reload now publishes the swapped router state through `routerruntime.Registry` without calling `config.Replace`; legacy nil-registry reload remains the compatibility path that updates the process-wide config. Request-time ExtProc modality and system-prompt plugin paths now resolve router-owned config before any legacy process-wide fallback, and system-prompt injection no longer dereferences a missing decision. The same runtime-registry boundary now applies inside `OpenAIRouter.routerConfig()` and `decisionByName()`: a present registry supplies request-time config when available and suppresses `config.Get()` before publication. The residual gap is narrower: `config.Replace`/`config.Get` still act as a process-wide compatibility contract for non-registry code, legacy global service accessors still exist for non-registry callers, `selection.GlobalRegistry` remains the selector package default for legacy helpers, and startup remains the place where tracing, metrics, controller startup, and compatibility publication are coordinated. The remaining debt is therefore about fully retiring the compatibility globals and broad bootstrap ownership, not about the common runtime path lacking an explicit registry anymore.
+The main runtime path is now substantially better than the older package-global
+shape: config, classification, memory, vector-store, file-store, embedder,
+ingestion-pipeline, and model-selection dependencies can flow through
+`pkg/routerruntime` for startup, API, ExtProc, and reload paths.
+
+The debt that remains is narrower but still release-relevant. Several
+non-registry entrypoints and fallback helpers still expose process-wide config,
+classification, memory, and selector state. `runtime_bootstrap.go` also remains
+the broad place where tracing, metrics, controller startup, service publication,
+and reload coordination meet.
 
 ## Evidence
 
 - [src/semantic-router/cmd/main.go](../../../src/semantic-router/cmd/main.go)
 - [src/semantic-router/cmd/runtime_bootstrap.go](../../../src/semantic-router/cmd/runtime_bootstrap.go)
 - [src/semantic-router/pkg/config/loader.go](../../../src/semantic-router/pkg/config/loader.go)
-- [src/semantic-router/pkg/config/loader_subscription_test.go](../../../src/semantic-router/pkg/config/loader_subscription_test.go)
 - [src/semantic-router/pkg/routerruntime/registry.go](../../../src/semantic-router/pkg/routerruntime/registry.go)
 - [src/semantic-router/pkg/routerruntime/vectorstore_runtime.go](../../../src/semantic-router/pkg/routerruntime/vectorstore_runtime.go)
 - [src/semantic-router/pkg/extproc/router_build.go](../../../src/semantic-router/pkg/extproc/router_build.go)
-- [src/semantic-router/pkg/extproc/router_build_runtime_config_test.go](../../../src/semantic-router/pkg/extproc/router_build_runtime_config_test.go)
+- [src/semantic-router/pkg/extproc/router_runtime_services.go](../../../src/semantic-router/pkg/extproc/router_runtime_services.go)
 - [src/semantic-router/pkg/extproc/server.go](../../../src/semantic-router/pkg/extproc/server.go)
 - [src/semantic-router/pkg/extproc/server_config_watch.go](../../../src/semantic-router/pkg/extproc/server_config_watch.go)
-- [src/semantic-router/pkg/extproc/server_reload_test.go](../../../src/semantic-router/pkg/extproc/server_reload_test.go)
-- [src/semantic-router/pkg/extproc/router_config.go](../../../src/semantic-router/pkg/extproc/router_config.go)
-- [src/semantic-router/pkg/extproc/router_runtime_services.go](../../../src/semantic-router/pkg/extproc/router_runtime_services.go)
-- [src/semantic-router/pkg/extproc/router_runtime_services_test.go](../../../src/semantic-router/pkg/extproc/router_runtime_services_test.go)
-- [src/semantic-router/pkg/extproc/req_filter_rag_vectorstore.go](../../../src/semantic-router/pkg/extproc/req_filter_rag_vectorstore.go)
-- [src/semantic-router/pkg/extproc/req_filter_modality.go](../../../src/semantic-router/pkg/extproc/req_filter_modality.go)
-- [src/semantic-router/pkg/extproc/req_filter_modality_test.go](../../../src/semantic-router/pkg/extproc/req_filter_modality_test.go)
-- [src/semantic-router/pkg/extproc/req_filter_sys_prompt.go](../../../src/semantic-router/pkg/extproc/req_filter_sys_prompt.go)
-- [src/semantic-router/pkg/extproc/req_filter_sys_prompt_test.go](../../../src/semantic-router/pkg/extproc/req_filter_sys_prompt_test.go)
 - [src/semantic-router/pkg/apiserver/server.go](../../../src/semantic-router/pkg/apiserver/server.go)
 - [src/semantic-router/pkg/apiserver/runtime_config.go](../../../src/semantic-router/pkg/apiserver/runtime_config.go)
-- [src/semantic-router/pkg/apiserver/server_memory_test.go](../../../src/semantic-router/pkg/apiserver/server_memory_test.go)
-- [src/semantic-router/pkg/apiserver/route_taxonomy_runtime_config_test.go](../../../src/semantic-router/pkg/apiserver/route_taxonomy_runtime_config_test.go)
 - [src/semantic-router/pkg/apiserver/route_vectorstore.go](../../../src/semantic-router/pkg/apiserver/route_vectorstore.go)
 - [src/semantic-router/pkg/apiserver/route_files.go](../../../src/semantic-router/pkg/apiserver/route_files.go)
 - [src/semantic-router/pkg/apiserver/route_feedback.go](../../../src/semantic-router/pkg/apiserver/route_feedback.go)
-- [src/semantic-router/pkg/extproc/req_filter_looper.go](../../../src/semantic-router/pkg/extproc/req_filter_looper.go)
-- [src/semantic-router/pkg/looper/looper.go](../../../src/semantic-router/pkg/looper/looper.go)
-- [src/semantic-router/pkg/looper/rl_driven.go](../../../src/semantic-router/pkg/looper/rl_driven.go)
-- [src/semantic-router/pkg/looper/rl_driven_test.go](../../../src/semantic-router/pkg/looper/rl_driven_test.go)
 - [src/semantic-router/pkg/selection/selector.go](../../../src/semantic-router/pkg/selection/selector.go)
 - [src/semantic-router/pkg/services/classification.go](../../../src/semantic-router/pkg/services/classification.go)
 - [src/semantic-router/pkg/memory/store.go](../../../src/semantic-router/pkg/memory/store.go)
-- [docs/agent/tech-debt/td-011-apiserver-runtime-state-split.md](td-011-apiserver-runtime-state-split.md)
-
-## Progress
-
-- 2026-05-24: Current-source recheck found the original entry too broad for the common runtime path. `routerruntime.Registry` already owns config, classification, memory, vector-store, and file-store dependencies for steady-state API behavior.
-- 2026-05-25: Current-source recheck found the older single-consumer config-update wording stale. `config.SubscribeConfigUpdates` now keeps one buffered channel per subscriber, `config.Replace` snapshots and notifies all current subscribers, `WatchConfigUpdates` is only a compatibility wrapper, and `TestSubscribeConfigUpdatesFanout` covers two independent subscribers receiving the same replacement config.
-- 2026-05-25 validation for config-update fanout recheck: `go test ./pkg/config -run TestSubscribeConfigUpdatesFanout -count=1`.
-- 2026-05-24: The remaining model-selection API slice was narrowed. `routerruntime.Registry` now carries a model-selection registry, `extproc` publishes `OpenAIRouter.ModelSelector` into it on startup and reload, and feedback, ratings, and RL-state APIs prefer the active runtime registry before falling back to `selection.GlobalRegistry`.
-- 2026-05-24: The memory-store startup fallback was narrowed. `apiserver.InitWithRuntime` now resolves startup memory state only from `runtimeRegistry.MemoryStore()` when a registry is provided, while preserving the process-wide `memory.GetGlobalMemoryStore()` fallback for legacy nil-registry callers.
-- 2026-05-24 validation: `go test ./pkg/routerruntime`; `go test ./pkg/apiserver -run 'TestHandleFeedback|TestHandleGetRatings|TestRuntimeRegistryResolvesSharedDependencies'`; `go test ./pkg/extproc -run TestReloadRouterFromConfigPublishesRuntimeRegistryAfterSwap`; `make agent-ci-gate CHANGED_FILES="..."`.
-- 2026-05-24 validation for memory-store startup fallback: `go test ./pkg/apiserver -run 'TestResolveMemoryStoreUsesRuntimeRegistryOnly|TestResolveMemoryStorePreservesLegacyGlobalFallback|TestRuntimeRegistryResolvesSharedDependencies'`; `go test ./pkg/routerruntime`.
-- 2026-05-24 changed-set validation for memory-store startup fallback: `make agent-ci-gate CHANGED_FILES="src/semantic-router/pkg/apiserver/server.go,src/semantic-router/pkg/apiserver/server_memory_test.go,docs/agent/architecture-scorecard.md,docs/agent/plans/pl-0032-architecture-scorecard-ratchet.md,docs/agent/tech-debt/td-031-router-runtime-bootstrap-and-shared-service-registry-global-state.md,docs/agent/tech-debt/td-034-runtime-and-dashboard-state-durability-and-telemetry-contract.md,docs/agent/state-taxonomy-and-inventory.md"`; `make agent-scorecard`; `git diff --check`. Local dev/smoke remains blocked because Docker cannot connect to `/Users/bitliu/.docker/run/docker.sock`.
-- 2026-05-25: The API vector/file/selector runtime-boundary slice removed another stale-global path. When `ClassificationAPIServer` has a `routerruntime.Registry`, vector-store manager, embedder, ingestion pipeline, file store, and selection registry helpers now return only registry-published dependencies and no longer fall back to legacy process-wide globals before publication. Legacy fallback remains available for nil-registry callers.
-- 2026-05-25 validation for API runtime-boundary slice: `go test ./pkg/apiserver -run 'TestLegacyRuntimeGlobalsResolveThroughSynchronizedAccessors|TestRuntimeRegistrySuppressesLegacyVectorGlobalsUntilPublished|TestRuntimeRegistrySuppressesLegacySelectionGlobalUntilPublished|TestHandleFeedbackUsesRuntimeSelectionRegistry|TestHandleGetRatingsUsesRuntimeSelectionRegistry|TestResolveMemoryStoreUsesRuntimeRegistryOnly'`; `go test ./pkg/routerruntime`.
-- 2026-05-25 changed-set validation for API runtime-boundary slice: `go test ./pkg/apiserver`; `make agent-ci-gate CHANGED_FILES="src/semantic-router/pkg/apiserver/runtime_dependencies.go,src/semantic-router/pkg/apiserver/runtime_globals_test.go,docs/agent/architecture-scorecard.md,docs/agent/tech-debt/td-031-router-runtime-bootstrap-and-shared-service-registry-global-state.md,docs/agent/tech-debt/td-034-runtime-and-dashboard-state-durability-and-telemetry-contract.md,docs/agent/state-taxonomy-and-inventory.md,docs/agent/plans/pl-0032-architecture-scorecard-ratchet.md"`; `make agent-scorecard`; `git diff --check`. Local smoke remains blocked because Docker cannot connect to `/Users/bitliu/.docker/run/docker.sock`.
-- 2026-05-25: The API startup config resolver now follows the same registry-owned rule. `resolveAPIServerConfig` returns only `runtimeRegistry.CurrentConfig()` when a registry is provided and no longer falls back to `config.Get()` before runtime config publication. Legacy nil-registry callers still use `config.Get()`.
-- 2026-05-25 validation for API config resolver slice: `go test ./pkg/apiserver -run 'TestResolveAPIServerConfigUsesRuntimeRegistryOnly|TestResolveAPIServerConfigPreservesLegacyGlobalFallback|TestResolveMemoryStoreUsesRuntimeRegistryOnly|TestResolveMemoryStorePreservesLegacyGlobalFallback'`.
-- 2026-05-25 changed-set validation for API config resolver slice: `go test ./pkg/apiserver`; `go test ./pkg/routerruntime`; `make agent-ci-gate CHANGED_FILES="src/semantic-router/pkg/apiserver/server.go,src/semantic-router/pkg/apiserver/server_memory_test.go,docs/agent/architecture-scorecard.md,docs/agent/tech-debt/td-031-router-runtime-bootstrap-and-shared-service-registry-global-state.md,docs/agent/tech-debt/td-034-runtime-and-dashboard-state-durability-and-telemetry-contract.md,docs/agent/state-taxonomy-and-inventory.md,docs/agent/plans/pl-0032-architecture-scorecard-ratchet.md"`. Local smoke remains blocked because Docker cannot connect to `/Users/bitliu/.docker/run/docker.sock`.
-- 2026-05-25: The classification refresh global-config slice removed another registry-backed config leak. `ClassificationService.RefreshRuntimeConfig` now refreshes only the service-local config/classifier. `buildConfigUpdater(nil, ...)` explicitly preserves legacy global `config.Replace()` publication for nil-registry API servers, while registry-backed update paths refresh `routerruntime.Registry` and the service without rewriting `config.Get()`.
-- 2026-05-25 validation for classification refresh global-config slice: `go test ./pkg/services -run 'TestClassificationServiceRefreshRuntimeConfig'`; `go test ./pkg/apiserver -run 'TestBuildConfigUpdater|TestResolveAPIServerConfig|TestResolveMemoryStore'`.
-- 2026-05-25 changed-set validation for classification refresh global-config slice: `go test ./pkg/services ./pkg/apiserver ./pkg/routerruntime`; `make agent-ci-gate CHANGED_FILES="src/semantic-router/pkg/services/classification_runtime_config.go,src/semantic-router/pkg/services/classification_update_test.go,src/semantic-router/pkg/apiserver/server.go,src/semantic-router/pkg/apiserver/server_memory_test.go,docs/agent/architecture-scorecard.md,docs/agent/tech-debt/td-031-router-runtime-bootstrap-and-shared-service-registry-global-state.md,docs/agent/tech-debt/td-034-runtime-and-dashboard-state-durability-and-telemetry-contract.md,docs/agent/state-taxonomy-and-inventory.md,docs/agent/plans/pl-0032-architecture-scorecard-ratchet.md"`. Local smoke remains blocked because Docker cannot connect to `/Users/bitliu/.docker/run/docker.sock`.
-- 2026-05-25: The RL-driven looper selector slice removed another process-wide selector read from the runtime path. ExtProc now creates loopers through `looper.FactoryWithSelectionRegistry(..., r.ModelSelector)`, while direct `looper.Factory` and `NewRLDrivenLooper` calls keep the legacy global-registry compatibility behavior.
-- 2026-05-25 validation for RL-driven looper selector slice: `go test ./pkg/looper -run 'TestFactory_RLDriven|TestFactoryWithSelectionRegistryUsesRuntimeRLDrivenSelector|TestNewRLDrivenLooperPreservesGlobalRegistryCompatibility|TestRLDrivenLooper_SelectorIntegration'`; `go test ./pkg/extproc -run 'TestShouldUseLooper|TestCreateLooperResponseIncludesTrackedHeaders'`.
-- 2026-05-25 changed-set validation for RL-driven looper selector slice: `go test ./pkg/looper`; `make agent-ci-gate CHANGED_FILES="src/semantic-router/pkg/looper/looper.go,src/semantic-router/pkg/looper/rl_driven.go,src/semantic-router/pkg/looper/rl_driven_test.go,src/semantic-router/pkg/extproc/req_filter_looper.go,docs/agent/architecture-scorecard.md,docs/agent/tech-debt/td-031-router-runtime-bootstrap-and-shared-service-registry-global-state.md,docs/agent/tech-debt/td-034-runtime-and-dashboard-state-durability-and-telemetry-contract.md,docs/agent/state-taxonomy-and-inventory.md,docs/agent/plans/pl-0032-architecture-scorecard-ratchet.md"`.
-- 2026-05-25: The ExtProc startup config precedence slice removed another main-path `config.Get()` read. `Server.Start()` now uses the active router config, then the runtime registry config, before falling back to the compatibility global for gRPC max-message-size configuration.
-- 2026-05-25 validation for ExtProc startup config precedence slice: `go test ./pkg/extproc -run 'TestConfiguredGRPCMaxMessageSize'`.
-- 2026-05-25 changed-set validation for ExtProc startup config precedence slice: `make agent-ci-gate CHANGED_FILES="src/semantic-router/pkg/extproc/server.go,src/semantic-router/pkg/extproc/server_reload_test.go,docs/agent/architecture-scorecard.md,docs/agent/tech-debt/td-031-router-runtime-bootstrap-and-shared-service-registry-global-state.md,docs/agent/tech-debt/td-034-runtime-and-dashboard-state-durability-and-telemetry-contract.md,docs/agent/state-taxonomy-and-inventory.md,docs/agent/plans/pl-0032-architecture-scorecard-ratchet.md"`, including `make agent-validate` and `make test-semantic-router`.
-- 2026-05-25: The ExtProc request-time plugin config precedence slice removed two more live process-wide config reads. Modality routing and system-prompt injection now resolve from the router instance first, then classifier-local config where applicable, and only keep `config.Get()` for legacy nil-router-config compatibility callers.
-- 2026-05-25 validation for ExtProc request-time plugin config precedence slice: `go test ./pkg/extproc -run 'TestHandleModalityFromDecision|TestAddSystemPrompt'`.
-- 2026-05-25: The ExtProc config-source watcher slice removed another startup-time `config.Get()` decision. `watchConfigAndReload` now chooses file watching versus Kubernetes updates from active router config, then runtime registry config, before the legacy global fallback.
-- 2026-05-25 validation for ExtProc config-source watcher slice: `go test ./pkg/extproc -run 'TestConfiguredGRPCMaxMessageSize|TestUsesKubernetesConfigSource'`.
-- 2026-05-25 changed-set validation for ExtProc request-time plugin and config-source watcher slices: `make agent-ci-gate CHANGED_FILES="src/semantic-router/pkg/extproc/router_config.go,src/semantic-router/pkg/extproc/server.go,src/semantic-router/pkg/extproc/server_reload_test.go,src/semantic-router/pkg/extproc/req_filter_modality.go,src/semantic-router/pkg/extproc/req_filter_modality_test.go,src/semantic-router/pkg/extproc/req_filter_sys_prompt.go,src/semantic-router/pkg/extproc/req_filter_sys_prompt_test.go,docs/agent/architecture-scorecard.md,docs/agent/tech-debt/td-031-router-runtime-bootstrap-and-shared-service-registry-global-state.md,docs/agent/tech-debt/td-034-runtime-and-dashboard-state-durability-and-telemetry-contract.md,docs/agent/state-taxonomy-and-inventory.md,docs/agent/plans/pl-0032-architecture-scorecard-ratchet.md"`, including `make agent-validate` and `make test-semantic-router`.
-- 2026-05-25: The ExtProc initial router config slice removed a constructor-time compatibility-global leak. `NewServer` now builds routers through a runtime-registry-first config resolver, and only legacy nil-registry callers publish the process-wide config through the old path.
-- 2026-05-25 validation for ExtProc initial router config slice: `go test ./pkg/extproc -run 'TestResolveInitialRouterConfig|TestConfiguredGRPCMaxMessageSize|TestUsesKubernetesConfigSource'`.
-- 2026-05-25 changed-set validation for ExtProc initial router config slice: `make agent-ci-gate CHANGED_FILES="src/semantic-router/pkg/extproc/router_build.go,src/semantic-router/pkg/extproc/router_config.go,src/semantic-router/pkg/extproc/server.go,src/semantic-router/pkg/extproc/server_reload_test.go,src/semantic-router/pkg/extproc/req_filter_modality.go,src/semantic-router/pkg/extproc/req_filter_modality_test.go,src/semantic-router/pkg/extproc/req_filter_sys_prompt.go,src/semantic-router/pkg/extproc/req_filter_sys_prompt_test.go,docs/agent/architecture-scorecard.md,docs/agent/tech-debt/td-031-router-runtime-bootstrap-and-shared-service-registry-global-state.md,docs/agent/tech-debt/td-034-runtime-and-dashboard-state-durability-and-telemetry-contract.md,docs/agent/state-taxonomy-and-inventory.md,docs/agent/plans/pl-0032-architecture-scorecard-ratchet.md"`, including `make agent-validate` and `make test-semantic-router`.
-- 2026-05-25: The ExtProc initial router config slice was tightened again for an empty-registry edge. When a runtime registry exists but has not yet published config, `resolveInitialRouterConfig` now parses the explicit config file and does not fall through to the legacy Kubernetes global fallback. Focused coverage is included in the same `TestResolveInitialRouterConfig` run.
-- 2026-05-25: The ExtProc server config resolver was tightened for the same empty-registry edge. Once `Server.runtime` is present, `resolveServerConfig` returns only runtime-owned config and no longer falls through to `config.Get()` before publication. gRPC max-message-size startup uses the explicit default in that state, and Kubernetes watcher selection remains false instead of adopting a conflicting process-wide config.
-- 2026-05-25 validation for ExtProc empty-registry server config resolver slice: `go test ./pkg/extproc -run 'TestConfiguredGRPCMaxMessageSize|TestUsesKubernetesConfigSource|TestResolveInitialRouterConfig' -count=1`.
-- 2026-05-25: The ExtProc reload publication slice removed another registry-backed `config.Replace` path. File reloads on servers with a runtime registry now publish only through the swapped router service and `routerruntime.Registry`; `replaceReloadConfig` remains for legacy nil-registry reloads.
-- 2026-05-25 validation for ExtProc reload publication slice: `go test ./pkg/extproc -run 'TestReloadRouterFromFile|TestReloadRouterFromConfig|TestResolveInitialRouterConfig|TestConfiguredGRPCMaxMessageSize|TestUsesKubernetesConfigSource' -count=1`.
-- 2026-05-25: The ExtProc request-time helper slice removed another empty-registry fallback. `OpenAIRouter.routerConfig()` and `decisionByName()` now use router-local config first, runtime-registry config next, and no longer read `config.Get()` when a runtime registry is present but not yet populated.
-- 2026-05-25 validation for ExtProc request-time helper slice: `go test ./pkg/extproc -run 'TestRouterConfig|TestConfiguredGRPCMaxMessageSize|TestUsesKubernetesConfigSource|TestResolveInitialRouterConfig|TestReloadRouterFromConfig' -count=1`.
-- 2026-05-25: The ExtProc watcher ownership split moved file watcher setup, debounce scheduling, reload file-stat logging, and Kubernetes config-update handling from the core server file into `server_config_watch.go`. This keeps runtime config-source selection behavior unchanged while reducing `server.go` from 542 to 347 lines.
-- 2026-05-25 validation for ExtProc watcher ownership split: `go test ./pkg/extproc -run 'TestShouldReloadForConfigEvent|TestRouterConfig|TestConfiguredGRPCMaxMessageSize|TestUsesKubernetesConfigSource|TestResolveInitialRouterConfig|TestReloadRouterFromFile|TestReloadRouterFromConfig' -count=1`.
-- 2026-05-25 changed-set validation for ExtProc watcher ownership split: `make agent-ci-gate CHANGED_FILES="src/semantic-router/pkg/extproc/router_config.go,src/semantic-router/pkg/extproc/router_config_test.go,src/semantic-router/pkg/extproc/server.go,src/semantic-router/pkg/extproc/server_config_watch.go,src/semantic-router/pkg/extproc/server_reload_test.go,docs/agent/architecture-scorecard.md,docs/agent/plans/pl-0032-architecture-scorecard-ratchet.md,docs/agent/tech-debt/td-006-structural-rule-target-vs-legacy-hotspots.md,docs/agent/tech-debt/td-031-router-runtime-bootstrap-and-shared-service-registry-global-state.md,docs/agent/tech-debt/td-034-runtime-and-dashboard-state-durability-and-telemetry-contract.md,docs/agent/state-taxonomy-and-inventory.md"`, including `make agent-validate` and `make test-semantic-router`.
-- 2026-05-25: The ExtProc runtime/reload regression suite was split by ownership. `server_config_runtime_test.go` covers runtime config precedence, `server_reload_runtime_test.go` covers runtime publication and reload failure behavior, and `server_reload_test.go` dropped from 683 to 283 lines while preserving the same runtime-boundary assertions.
-- 2026-05-25 changed-set validation for ExtProc runtime/reload test ownership split: `make agent-ci-gate CHANGED_FILES="src/semantic-router/pkg/extproc/router_config.go,src/semantic-router/pkg/extproc/router_config_test.go,src/semantic-router/pkg/extproc/server.go,src/semantic-router/pkg/extproc/server_config_watch.go,src/semantic-router/pkg/extproc/server_config_runtime_test.go,src/semantic-router/pkg/extproc/server_reload_test.go,src/semantic-router/pkg/extproc/server_reload_runtime_test.go,docs/agent/architecture-scorecard.md,docs/agent/plans/pl-0032-architecture-scorecard-ratchet.md,docs/agent/tech-debt/td-006-structural-rule-target-vs-legacy-hotspots.md,docs/agent/tech-debt/td-031-router-runtime-bootstrap-and-shared-service-registry-global-state.md,docs/agent/tech-debt/td-034-runtime-and-dashboard-state-durability-and-telemetry-contract.md,docs/agent/state-taxonomy-and-inventory.md"`, including `make agent-validate`, changed-file lint, Go structural lint, structure checks, and `make test-semantic-router`.
-- 2026-05-25: The ExtProc vectorstore RAG dependency slice turned a previously stale "global embedder/vector manager" comment into a tested runtime boundary. `OpenAIRouter.currentVectorStoreManager` and `currentVectorStoreEmbedder` are now covered for nil router, nil registry, pre-publication, and registry-published states, and request-time RAG wording names the router-owned runtime registry.
-- 2026-05-25 validation for ExtProc vectorstore RAG dependency slice: `go test ./pkg/extproc -run 'TestRouterVectorStoreRuntime|TestScheduleResponseMemoryStore|TestResolveVectorStoreRetrievalParams|TestVectorStoreRAG'`.
-- 2026-05-25: The API managed knowledge-base config mutation slice removed another registry-path `config.Replace()` leak. `persistConfigAndSync` now publishes through `ClassificationAPIServer.publishConfigMutation`, which updates server-local state, prefers `liveRuntimeConfig`, updates a present runtime registry without touching `config.Get()`, and preserves process-wide publication only for legacy nil-registry callers.
-- 2026-05-25 validation for API managed knowledge-base config mutation slice: `go test ./pkg/apiserver -run 'TestHandleKnowledgeBaseMutationWithRuntimeRegistryDoesNotReplaceGlobalConfig|TestHandleKnowledgeBaseLifecycle|TestBuildConfigUpdater|TestResolveAPIServerConfig' -count=1`.
-- 2026-05-25: The API classification-service startup slice removed another registry-path global read. `resolveClassificationService` and the live service resolver now return only `runtimeRegistry.ClassificationService()` when a registry is present, while the retrying `services.GetGlobalClassificationService()` fallback is preserved only for legacy nil-registry callers.
-- 2026-05-25 validation for API classification-service startup slice: `go test ./pkg/apiserver -run 'TestResolveClassificationService|TestResolveAPIServerConfig|TestResolveMemoryStore|TestBuildConfigUpdater' -count=1`.
 
 ## Why It Matters
 
-- The common startup and reload path is now explicit enough for config, classification, memory, vector-store, file-store, config-fanout, and API-facing model-selection ownership, but the remaining compatibility globals still make it harder to reason about which non-registry code paths are fully legacy versus runtime-owned.
-- Process-wide compatibility accessors still make multi-stack tests and partial-service recovery harder than they need to be because callers can still bypass the registry and touch package-global state directly.
-- `config.Replace`/`config.Get` still form a broad shared contract across startup, reload, and request-time code, so the repo still lacks a complete composition root for all runtime-owned state.
-- As the repo adds more deployment modes, background services, and observability hooks, this hidden registry becomes a concurrency and maintenance bottleneck rather than a simple bootstrap shortcut.
+- Runtime-owned paths are easier to test and recover when dependencies are
+  passed through explicit registries or constructors.
+- Process-wide fallback accessors make multi-stack tests and partial-service
+  recovery harder because callers can bypass the active runtime graph.
+- Startup, reload, and service publication still share too much coordination
+  logic in a small set of bootstrap files.
 
 ## Desired End State
 
-- Runtime startup is expressed as an explicit composition root with typed component ownership and lifecycle hooks instead of package-global setters.
-- API server, vector-store/file-store APIs, feedback/ratings/RL-state APIs, classification service, and memory service receive their steady-state dependencies through constructors or a narrow runtime registry object rather than through process-wide globals.
-- Config updates keep their explicit `SubscribeConfigUpdates` fanout and releaseable subscriptions while runtime-owned paths stop depending on process-wide `config.Replace` publication for steady-state behavior.
-- Startup, shutdown, and reload each have narrow responsibilities and can be tested independently for partial dependency availability.
+- Runtime startup is expressed as an explicit composition root with typed
+  component ownership and lifecycle hooks.
+- API server, ExtProc, vector-store/file-store APIs, feedback/ratings/RL-state
+  APIs, classification service, and memory service receive steady-state
+  dependencies through constructors or a narrow runtime registry.
+- Config update fanout remains explicit while runtime-owned paths stop relying
+  on process-wide config publication for steady-state behavior.
+- Startup, shutdown, and reload each have narrow responsibilities and focused
+  tests for partial dependency availability.
 
 ## Exit Criteria
 
-- `runtime_bootstrap.go` delegates service construction and lifecycle to narrower helpers or runtime components instead of remaining the default owner for cross-subsystem startup.
-- `apiserver` no longer depends on package-global store/embedder/pipeline/model-selector setters for its steady-state runtime behavior.
-- Runtime-owned reload and service-update paths no longer require process-wide `config.Replace` publication, while the existing `SubscribeConfigUpdates` fanout remains covered as the compatibility update observer seam.
-- Targeted tests can exercise bootstrap ordering, degraded startup, and runtime reload behavior without mutating process-wide globals across unrelated packages.
+- `runtime_bootstrap.go` delegates service construction and lifecycle to
+  narrower helpers or runtime components.
+- `apiserver` and `extproc` do not depend on package-global store, embedder,
+  pipeline, model-selector, config, or classification-service setters for
+  steady-state runtime behavior.
+- Runtime-owned reload and service-update paths publish through the runtime
+  graph instead of process-wide state.
+- Targeted tests exercise bootstrap ordering, degraded startup, and runtime
+  reload behavior without mutating process-wide globals across unrelated
+  packages.

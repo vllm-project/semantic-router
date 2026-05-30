@@ -44,7 +44,7 @@ ignore_globs:
   - '**/zz_generated*'
   - '**/node_modules/**'
 
-legacy_hotspots:
+structure_exceptions:
   - paths:
       - src/semantic-router/pkg/config/config.go
       - src/semantic-router/pkg/config/rag_plugin.go

@@ -106,7 +106,6 @@ class EnvironmentResolution:
     build_target: str
     serve_command: str
     smoke_config: str | None
-    local_dev_fragment: str | None
     local_env: bool
 
     def to_json(self) -> str:
@@ -119,7 +118,6 @@ class EnvironmentResolution:
             "AGENT_BUILD_TARGET": self.build_target,
             "AGENT_SERVE_COMMAND": self.serve_command,
             "AGENT_SMOKE_CONFIG": self.smoke_config or "",
-            "AGENT_LOCAL_DEV_FRAGMENT": self.local_dev_fragment or "",
             "AGENT_LOCAL_ENV": str(self.local_env).lower(),
         }
         return "\n".join(f"{key}={shlex.quote(value)}" for key, value in values.items())
@@ -135,8 +133,6 @@ class EnvironmentResolution:
         ]
         if self.smoke_config:
             lines.append(f"  Smoke config: {self.smoke_config}")
-        if self.local_dev_fragment:
-            lines.append(f"  Local dev fragment: {self.local_dev_fragment}")
         return "\n".join(lines)
 
 
@@ -144,8 +140,6 @@ class EnvironmentResolution:
 class SkillResolution:
     primary_skill: str
     primary_skill_path: str
-    fragment_skills: list[str]
-    fragment_skill_paths: list[str]
     impacted_surfaces: list[str]
     required_surfaces: list[str]
     conditional_surfaces_hit: list[str]
@@ -160,7 +154,6 @@ class SkillResolution:
         values = {
             "AGENT_PRIMARY_SKILL": self.primary_skill,
             "AGENT_PRIMARY_SKILL_PATH": self.primary_skill_path,
-            "AGENT_FRAGMENT_SKILLS": ",".join(self.fragment_skills),
             "AGENT_IMPACTED_SURFACES": ",".join(self.impacted_surfaces),
             "AGENT_REQUIRED_SURFACES": ",".join(self.required_surfaces),
             "AGENT_CONDITIONAL_SURFACES_HIT": ",".join(self.conditional_surfaces_hit),
@@ -172,7 +165,6 @@ class SkillResolution:
         lines = [
             "Agent Skill",
             f"  Primary skill: {self.primary_skill}",
-            f"  Active fragments: {', '.join(self.fragment_skills) or 'none'}",
             f"  Impacted surfaces: {', '.join(self.impacted_surfaces) or 'none'}",
             f"  Required surfaces: {', '.join(self.required_surfaces) or 'none'}",
             "  Conditional surfaces hit: "
@@ -288,9 +280,8 @@ class HarnessScorecard:
     subsystem_count: int
     surface_count: int
     primary_skill_count: int
-    fragment_skill_count: int
     support_skill_count: int
-    legacy_reference_skill_count: int
+    current_execution_plans: list[str] = field(default_factory=list)
     open_execution_plan_tasks: list[str] = field(default_factory=list)
     validation_errors: list[str] = field(default_factory=list)
 
@@ -309,11 +300,14 @@ class HarnessScorecard:
             f"  Subsystems: {self.subsystem_count}",
             f"  Surfaces: {self.surface_count}",
             f"  Primary skills: {self.primary_skill_count}",
-            f"  Fragment skills: {self.fragment_skill_count}",
             f"  Support skills: {self.support_skill_count}",
-            f"  Legacy reference skills: {self.legacy_reference_skill_count}",
+            f"  Current execution plans: {len(self.current_execution_plans)}",
             f"  Open execution plan tasks: {len(self.open_execution_plan_tasks)}",
         ]
+        if self.current_execution_plans:
+            lines.extend(
+                f"  - current plan: {plan}" for plan in self.current_execution_plans
+            )
         if self.open_technical_debt_items:
             lines.extend(f"  - {item}" for item in self.open_technical_debt_items)
         if self.open_execution_plan_tasks:

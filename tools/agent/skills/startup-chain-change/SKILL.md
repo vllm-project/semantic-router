@@ -14,7 +14,7 @@ description: Modifies the local startup chain including image build, container s
 
 ## Workflow
 
-1. Read environment docs and CLI Docker playbook for startup chain context
+1. Read environment docs for startup chain context
 2. Modify serve, bootstrap, image selection, or smoke config
 3. Run `make agent-report ENV=cpu|amd CHANGED_FILES="..."` to identify impacted surfaces
 4. Run `make agent-feature-gate ENV=cpu|amd CHANGED_FILES="..."` to validate startup behavior
@@ -29,7 +29,7 @@ description: Modifies the local startup chain including image build, container s
 
 - [docs/agent/environments.md](../../../../docs/agent/environments.md)
 - [docs/agent/amd-local.md](../../../../docs/agent/amd-local.md)
-- [docs/agent/playbooks/vllm-sr-cli-docker.md](../../../../docs/agent/playbooks/vllm-sr-cli-docker.md)
+- [docs/agent/testing-strategy.md](../../../../docs/agent/testing-strategy.md)
 
 ## Standard Commands
 

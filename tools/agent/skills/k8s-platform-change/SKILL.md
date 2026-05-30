@@ -14,7 +14,7 @@ description: Modifies Kubernetes-facing operator, CRD, deployment-profile, or DS
 
 ## Workflow
 
-1. Read change surfaces, module boundaries, and the E2E selection playbook for the affected Kubernetes-facing surface
+1. Read change surfaces, module boundaries, and testing strategy for the affected Kubernetes-facing surface
 2. Modify the operator, deployment profile, or DSL translation behavior
 3. Run `make agent-report ENV=cpu CHANGED_FILES="..."` to identify impacted surfaces and affected profile coverage
 4. Run `make agent-ci-gate CHANGED_FILES="..."` to validate the affected constraints
@@ -30,7 +30,7 @@ description: Modifies Kubernetes-facing operator, CRD, deployment-profile, or DS
 
 - [docs/agent/change-surfaces.md](../../../../docs/agent/change-surfaces.md)
 - [docs/agent/module-boundaries.md](../../../../docs/agent/module-boundaries.md)
-- [docs/agent/playbooks/e2e-selection.md](../../../../docs/agent/playbooks/e2e-selection.md)
+- [docs/agent/testing-strategy.md](../../../../docs/agent/testing-strategy.md)
 
 ## Standard Commands
 

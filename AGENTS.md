@@ -1,6 +1,6 @@
 # vLLM Semantic Router Agent Entry
 
-This file is the short entrypoint for coding agents. The detailed human-readable system of record lives in [docs/agent/README.md](docs/agent/README.md). The executable rule layer lives in [tools/agent/repo-manifest.yaml](tools/agent/repo-manifest.yaml), [tools/agent/task-matrix.yaml](tools/agent/task-matrix.yaml), [tools/agent/skill-registry.yaml](tools/agent/skill-registry.yaml), [tools/agent/structure-rules.yaml](tools/agent/structure-rules.yaml), and [tools/make/agent.mk](tools/make/agent.mk).
+This file is the short entrypoint for coding agents. The detailed human-readable system of record lives in [docs/agent/README.md](docs/agent/README.md). The executable rule layer lives in [tools/agent/repo-manifest.yaml](tools/agent/repo-manifest.yaml), [tools/agent/task-matrix.yaml](tools/agent/task-matrix.yaml), [tools/agent/skill-registry.yaml](tools/agent/skill-registry.yaml), [tools/agent/structure-rules.yaml](tools/agent/structure-rules.yaml), [tools/agent/maintainer-policy.yaml](tools/agent/maintainer-policy.yaml), and [tools/make/agent.mk](tools/make/agent.mk).
 
 ## Read First
 
@@ -27,14 +27,15 @@ If you need real AMD model deployment details instead of the minimal smoke path,
 ## Non-Negotiable Rules
 
 - Use the local image flow for local-dev behavior. Do not invent another serve path.
-- Start from a project-level primary skill. Fragment skills are support material, not the default entrypoint.
+- Start from one project-level primary skill. Cross-cutting guidance belongs in change surfaces, canonical docs, or maintainer support skills.
 - Run the smallest relevant gate first: `make agent-validate`, `make agent-lint`, `make agent-ci-gate`, then `make agent-feature-gate`.
 - Use `make agent-pr-gate` when you need a repo-native local reproduction of the baseline PR requirements.
 - Drive the active task to its reported completion boundary: fix failures and rerun the applicable gates until the current change or subtask is done, and do not hand off on the first failing run.
 - Treat docs-only and website-only edits as lightweight unless the task matrix says otherwise.
 - Contributor workflow, issue or PR intake rules, and maintainer label taxonomy live in `CONTRIBUTING.md`, `.github/PULL_REQUEST_TEMPLATE.md`, `.github/ISSUE_TEMPLATE/**`, and `.prowlabels.yaml`; commits intended for PRs must use `git commit -s`.
+- Maintainer release, issue, PR, stale-work, and daily-board workflows live in [docs/agent/maintainer-ops.md](docs/agent/maintainer-ops.md) and write local state only under `.agent-harness/maintainer/` unless an explicit reviewed apply step mutates GitHub.
 - Behavior-visible routing, startup, config, Docker, CLI, or API changes need E2E updates unless the change is a pure refactor.
-- If the work needs multiple resumable loops across sessions or contributors, use the indexed execution plans under [docs/agent/plans/README.md](docs/agent/plans/README.md) instead of ad hoc task notes.
+- If the work needs multiple resumable loops across sessions or contributors, use the indexed current execution plans under [docs/agent/plans/README.md](docs/agent/plans/README.md) instead of ad hoc task notes. Historical plans are not kept in the current tree.
 - If the desired architecture and the current implementation still diverge after your change, add or update the durable debt entry indexed from [docs/agent/tech-debt/README.md](docs/agent/tech-debt/README.md) instead of leaving the gap only in chat or PR text.
 - Keep modules narrow: one main responsibility per file, small orchestrators plus helpers, interfaces only at seams.
 - Legacy hotspots are debt, not precedent. Touched hotspot files must not grow in responsibility; prefer extraction-first edits.
@@ -61,5 +62,6 @@ If you need real AMD model deployment details instead of the minimal smoke path,
 - Architecture and boundaries: [docs/agent/architecture-guardrails.md](docs/agent/architecture-guardrails.md), nearest local `AGENTS.md`
 - Testing and done criteria: [docs/agent/feature-complete-checklist.md](docs/agent/feature-complete-checklist.md)
 - Executable contract: [tools/agent/repo-manifest.yaml](tools/agent/repo-manifest.yaml), [tools/agent/task-matrix.yaml](tools/agent/task-matrix.yaml), [tools/agent/skill-registry.yaml](tools/agent/skill-registry.yaml), [tools/agent/e2e-profile-map.yaml](tools/agent/e2e-profile-map.yaml), [tools/agent/structure-rules.yaml](tools/agent/structure-rules.yaml)
+- Maintainer ops: [docs/agent/maintainer-ops.md](docs/agent/maintainer-ops.md), [tools/agent/maintainer-policy.yaml](tools/agent/maintainer-policy.yaml)
 
 Temporary working notes can exist when needed, but they are not part of the canonical harness unless promoted into the docs or executable rule layer above.
