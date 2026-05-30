@@ -41,6 +41,8 @@ Out of scope:
 
 - Non-release hotspot and fleet-sim debt owned by
   [PL0032](pl-0032-architecture-scorecard-ratchet.md).
+- Daily maintainer sync, report generation, and seed issue creation; these
+  belong to [Maintainer Ops](../maintainer-ops.md).
 - Plan archaeology.
 - Daily issue and PR status snapshots, which are generated under
   `.agent-harness/maintainer/`.
@@ -57,11 +59,6 @@ Out of scope:
 
 ## Task List
 
-- [x] `THEMIS001` Establish the single v0.3 release plan.
-- [ ] `THEMIS002` Sync GitHub milestone state into
-  `.agent-harness/maintainer/` and classify issues by release track.
-- [ ] `THEMIS003` Create or update release-track seed issues for missing
-  Themis work, using dry-run review before applying GitHub mutations.
 - [ ] `THEMIS004` Close API/config/deployment contract gaps covering TD015,
   TD028, and TD039.
 - [ ] `THEMIS005` Close runtime state and control-plane durability gaps
@@ -76,13 +73,15 @@ Out of scope:
 
 ## Next Action
 
-- Run maintainer sync, classify open issues and PRs against the Themis tracks,
-  and generate `.agent-harness/maintainer/today.md`.
+- Choose the remaining v0.3 release tracks that are worth doing, then narrow
+  each kept track into GitHub issue ownership and exit criteria.
 
 ## Operating Rules
 
 - One release means one release plan. Feature work that belongs to v0.3 is
   tracked here, even when implementation happens through GitHub issues.
+- Maintainer operations do not belong in this task list unless they become
+  release-blocking product work.
 - Technical debt enters the release only when it blocks a release track or is
   explicitly accepted as a release risk.
 - Daily GitHub state is generated under `.agent-harness/maintainer/`, not stored

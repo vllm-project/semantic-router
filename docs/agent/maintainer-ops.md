@@ -55,6 +55,14 @@ include private infrastructure paths, private hosts, local workspace paths, or
 AI/tool attribution. Newly created issues receive `help wanted` by default
 unless the maintainer explicitly disables it.
 
+Maintainer ops owns two release-management actions that should not appear as
+active release-plan tasks:
+
+- Sync GitHub milestone, issue, PR, label, review, and CI state into the local
+  board and classify the result by release track.
+- Propose missing release seed issues from the active release plan, review the
+  dry-run payload, and apply only after explicit maintainer approval.
+
 ## Commands
 
 ```bash
