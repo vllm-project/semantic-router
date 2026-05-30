@@ -12,16 +12,17 @@ import (
 // ConversationFacts holds request-shape facts extracted from the incoming
 // request for use by the conversation signal evaluator.
 type ConversationFacts struct {
-	HasDeveloperMessage    bool
-	UserMessageCount       int
-	AssistantMessageCount  int
-	SystemMessageCount     int
-	ToolMessageCount       int
-	ToolDefinitionCount    int
-	AssistantToolCallCount int
-	ToolResultCount        int
-	LastMessageRole        string
-	LastMessageToolResult  bool
+	HasDeveloperMessage     bool
+	UserMessageCount        int
+	AssistantMessageCount   int
+	SystemMessageCount      int
+	ToolMessageCount        int
+	ToolDefinitionCount     int
+	AssistantToolCallCount  int
+	ToolResultCount         int
+	LastMessageRole         string
+	LastMessageToolResult   bool
+	LastUserAfterToolResult bool
 }
 
 func (c *Classifier) evaluateConversationSignal(results *SignalResults, mu *sync.Mutex, facts ConversationFacts) {

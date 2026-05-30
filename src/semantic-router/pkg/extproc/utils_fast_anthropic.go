@@ -84,10 +84,12 @@ func extractAnthropicSystemText(system gjson.Result) string {
 }
 
 func consumeFastExtractAnthropicMessage(msg gjson.Result, result *FastExtractResult) {
+	previousWasToolResult := result.LastMessageToolResult
 	role := msg.Get("role").String()
 	content := msg.Get("content")
 	result.LastMessageRole = role
 	result.LastMessageToolResult = false
+	result.LastUserAfterToolResult = false
 
 	text := extractAnthropicTextFromContent(content)
 	hasToolResult, hasToolUse := scanAnthropicBlockTypes(content)
@@ -95,6 +97,7 @@ func consumeFastExtractAnthropicMessage(msg gjson.Result, result *FastExtractRes
 	switch role {
 	case "user":
 		result.UserMessageCount++
+		result.LastUserAfterToolResult = previousWasToolResult && !hasToolResult
 		recordAnthropicUserMessage(result, text, content)
 		if hasToolResult {
 			// Anthropic carries tool_result blocks inline on user turns;

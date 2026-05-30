@@ -13,17 +13,18 @@ type signalConversationHistory struct {
 	hasAssistantReply  bool
 
 	// Conversation-shape facts for the conversation signal family.
-	hasDeveloperMessage    bool
-	userMessageCount       int
-	assistantMessageCount  int
-	systemMessageCount     int
-	toolMessageCount       int
-	toolDefinitionCount    int
-	assistantToolCallCount int
-	toolResultCount        int
-	assistantToolNames     []string
-	lastMessageRole        string
-	lastMessageToolResult  bool
+	hasDeveloperMessage     bool
+	userMessageCount        int
+	assistantMessageCount   int
+	systemMessageCount      int
+	toolMessageCount        int
+	toolDefinitionCount     int
+	assistantToolCallCount  int
+	toolResultCount         int
+	assistantToolNames      []string
+	lastMessageRole         string
+	lastMessageToolResult   bool
+	lastUserAfterToolResult bool
 }
 
 func signalConversationHistoryFromFastExtract(result *FastExtractResult) signalConversationHistory {
@@ -31,21 +32,22 @@ func signalConversationHistoryFromFastExtract(result *FastExtractResult) signalC
 		return signalConversationHistory{}
 	}
 	return signalConversationHistory{
-		currentUserMessage:     result.UserContent,
-		priorUserMessages:      append([]string(nil), result.PriorUserMessages...),
-		nonUserMessages:        append([]string(nil), result.NonUserMessages...),
-		hasAssistantReply:      result.HasAssistantReply,
-		hasDeveloperMessage:    result.HasDeveloperMessage,
-		userMessageCount:       result.UserMessageCount,
-		assistantMessageCount:  result.AssistantMessageCount,
-		systemMessageCount:     result.SystemMessageCount,
-		toolMessageCount:       result.ToolMessageCount,
-		toolDefinitionCount:    result.ToolDefinitionCount,
-		assistantToolCallCount: result.AssistantToolCallCount,
-		toolResultCount:        result.ToolResultCount,
-		assistantToolNames:     append([]string(nil), result.AssistantToolNames...),
-		lastMessageRole:        result.LastMessageRole,
-		lastMessageToolResult:  result.LastMessageToolResult,
+		currentUserMessage:      result.UserContent,
+		priorUserMessages:       append([]string(nil), result.PriorUserMessages...),
+		nonUserMessages:         append([]string(nil), result.NonUserMessages...),
+		hasAssistantReply:       result.HasAssistantReply,
+		hasDeveloperMessage:     result.HasDeveloperMessage,
+		userMessageCount:        result.UserMessageCount,
+		assistantMessageCount:   result.AssistantMessageCount,
+		systemMessageCount:      result.SystemMessageCount,
+		toolMessageCount:        result.ToolMessageCount,
+		toolDefinitionCount:     result.ToolDefinitionCount,
+		assistantToolCallCount:  result.AssistantToolCallCount,
+		toolResultCount:         result.ToolResultCount,
+		assistantToolNames:      append([]string(nil), result.AssistantToolNames...),
+		lastMessageRole:         result.LastMessageRole,
+		lastMessageToolResult:   result.LastMessageToolResult,
+		lastUserAfterToolResult: result.LastUserAfterToolResult,
 	}
 }
 
@@ -70,47 +72,66 @@ func extractSignalConversationHistory(req *openai.ChatCompletionNewParams) signa
 	var history signalConversationHistory
 
 	for _, msg := range req.Messages {
-		role, textContent := extractMessageRoleAndContent(msg)
-		history.lastMessageRole = role
-		history.lastMessageToolResult = false
-
-		switch role {
-		case "user":
-			history.userMessageCount++
-			if textContent == "" {
-				continue
-			}
-			if history.currentUserMessage != "" {
-				history.priorUserMessages = append(history.priorUserMessages, history.currentUserMessage)
-			}
-			history.currentUserMessage = textContent
-		case "system":
-			history.systemMessageCount++
-			if textContent != "" {
-				history.nonUserMessages = append(history.nonUserMessages, textContent)
-			}
-		case "assistant":
-			history.assistantMessageCount++
-			if textContent != "" {
-				history.nonUserMessages = append(history.nonUserMessages, textContent)
-			}
-			history.hasAssistantReply = true
-			history.assistantToolCallCount += len(msg.OfAssistant.ToolCalls)
-			history.assistantToolNames = append(history.assistantToolNames, toolNamesFromAssistantMessage(msg)...)
-		case "developer":
-			history.hasDeveloperMessage = true
-			if textContent != "" {
-				history.nonUserMessages = append(history.nonUserMessages, textContent)
-			}
-		case "tool":
-			history.toolMessageCount++
-			history.toolResultCount++
-			history.lastMessageToolResult = true
-		}
+		consumeSignalConversationMessage(msg, &history)
 	}
 
 	history.toolDefinitionCount = countSDKToolDefinitions(req)
 	return history
+}
+
+func consumeSignalConversationMessage(msg openai.ChatCompletionMessageParamUnion, history *signalConversationHistory) {
+	previousWasToolResult := history.lastMessageToolResult || history.lastMessageRole == "tool"
+	role, textContent := extractMessageRoleAndContent(msg)
+	history.lastMessageRole = role
+	history.lastMessageToolResult = false
+	history.lastUserAfterToolResult = false
+
+	switch role {
+	case "user":
+		consumeSignalConversationUserMessage(textContent, previousWasToolResult, history)
+	case "system":
+		history.systemMessageCount++
+		recordSignalConversationNonUserMessage(textContent, history)
+	case "assistant":
+		consumeSignalConversationAssistantMessage(msg, textContent, history)
+	case "developer":
+		history.hasDeveloperMessage = true
+		recordSignalConversationNonUserMessage(textContent, history)
+	case "tool":
+		history.toolMessageCount++
+		history.toolResultCount++
+		history.lastMessageToolResult = true
+	}
+}
+
+func consumeSignalConversationUserMessage(textContent string, previousWasToolResult bool, history *signalConversationHistory) {
+	history.userMessageCount++
+	history.lastUserAfterToolResult = previousWasToolResult
+	if textContent == "" {
+		return
+	}
+	if history.currentUserMessage != "" {
+		history.priorUserMessages = append(history.priorUserMessages, history.currentUserMessage)
+	}
+	history.currentUserMessage = textContent
+}
+
+func consumeSignalConversationAssistantMessage(
+	msg openai.ChatCompletionMessageParamUnion,
+	textContent string,
+	history *signalConversationHistory,
+) {
+	history.assistantMessageCount++
+	recordSignalConversationNonUserMessage(textContent, history)
+	history.hasAssistantReply = true
+	history.assistantToolCallCount += len(msg.OfAssistant.ToolCalls)
+	history.assistantToolNames = append(history.assistantToolNames, toolNamesFromAssistantMessage(msg)...)
+}
+
+func recordSignalConversationNonUserMessage(textContent string, history *signalConversationHistory) {
+	if textContent != "" {
+		history.nonUserMessages = append(history.nonUserMessages, textContent)
+	}
 }
 
 func toolNamesFromAssistantMessage(msg openai.ChatCompletionMessageParamUnion) []string {

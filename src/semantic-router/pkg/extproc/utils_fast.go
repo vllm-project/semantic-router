@@ -21,17 +21,18 @@ type FastExtractResult struct {
 	FirstImageURL     string
 
 	// Conversation-shape fields for the conversation signal family.
-	HasDeveloperMessage    bool
-	UserMessageCount       int
-	AssistantMessageCount  int
-	SystemMessageCount     int
-	ToolMessageCount       int
-	ToolDefinitionCount    int
-	AssistantToolCallCount int
-	ToolResultCount        int
-	AssistantToolNames     []string
-	LastMessageRole        string
-	LastMessageToolResult  bool
+	HasDeveloperMessage     bool
+	UserMessageCount        int
+	AssistantMessageCount   int
+	SystemMessageCount      int
+	ToolMessageCount        int
+	ToolDefinitionCount     int
+	AssistantToolCallCount  int
+	ToolResultCount         int
+	AssistantToolNames      []string
+	LastMessageRole         string
+	LastMessageToolResult   bool
+	LastUserAfterToolResult bool
 }
 
 // extractContentFast extracts model, stream, message content, and the first
@@ -95,15 +96,18 @@ func populateFastExtractMessages(messages gjson.Result, result *FastExtractResul
 }
 
 func consumeFastExtractMessage(msg gjson.Result, result *FastExtractResult) {
+	previousWasToolResult := result.LastMessageToolResult || result.LastMessageRole == "tool"
 	role := msg.Get("role").String()
 	content := msg.Get("content")
 	text := extractTextFromContent(content)
 	result.LastMessageRole = role
 	result.LastMessageToolResult = false
+	result.LastUserAfterToolResult = false
 
 	switch role {
 	case "user":
 		result.UserMessageCount++
+		result.LastUserAfterToolResult = previousWasToolResult
 		recordFastExtractUserMessage(result, text, content)
 	case "system":
 		result.SystemMessageCount++

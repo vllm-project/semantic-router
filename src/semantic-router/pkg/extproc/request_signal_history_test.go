@@ -77,6 +77,23 @@ func TestExtractToolTransitionContextFromRequest_ChatCompletionsToolHistory(t *t
 	assert.Equal(t, "coding", transition.SelectedCategory)
 }
 
+func TestExtractSignalConversationHistoryMarksUserAfterToolResult(t *testing.T) {
+	req := &openai.ChatCompletionNewParams{
+		Messages: []openai.ChatCompletionMessageParamUnion{
+			openai.UserMessage("Read the log."),
+			assistantToolCallMessage("read_log"),
+			openai.ToolMessage("TypeError: int + str", "call-read-log"),
+			openai.UserMessage("Now give the fix."),
+		},
+	}
+
+	history := extractSignalConversationHistory(req)
+
+	assert.Equal(t, "user", history.lastMessageRole)
+	assert.False(t, history.lastMessageToolResult)
+	assert.True(t, history.lastUserAfterToolResult)
+}
+
 func TestToolTransitionContextFromConversationHistoryPreservesAllToolsWhenWindowUnset(t *testing.T) {
 	history := signalConversationHistory{
 		userMessageCount:   2,
