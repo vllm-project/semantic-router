@@ -42,7 +42,17 @@ class WorkloadScenario:
     history_min: int
     history_max: int
     idle_mode: str
+    remaining_turn_prior: float
     token_growth: float = 1.0
+
+
+@dataclass(frozen=True)
+class AgenticDecision:
+    model: ModelProfile
+    reason: str
+    continuation_mass: float
+    prior_mass: float
+    remaining_turns_estimate: float
 
 
 MODELS = (
@@ -57,6 +67,7 @@ DEFAULT_ABLATION_POLICIES = (
     "sticky-session",
     "acr-no-tool-lock",
     "acr-no-idle-boundary",
+    "acr-no-remaining-prior",
     "acr-no-frontier-cost",
     "acr-full",
 )
@@ -73,6 +84,7 @@ SCENARIOS = {
         history_min=512,
         history_max=2048,
         idle_mode="single",
+        remaining_turn_prior=6.0,
     ),
     "tool-heavy": WorkloadScenario(
         name="tool-heavy",
@@ -86,6 +98,7 @@ SCENARIOS = {
         history_min=1024,
         history_max=3072,
         idle_mode="single",
+        remaining_turn_prior=9.0,
         token_growth=1.12,
     ),
     "frontier-heavy": WorkloadScenario(
@@ -100,6 +113,7 @@ SCENARIOS = {
         history_min=1536,
         history_max=4096,
         idle_mode="rare",
+        remaining_turn_prior=10.0,
         token_growth=1.20,
     ),
     "idle-heavy": WorkloadScenario(
@@ -114,6 +128,7 @@ SCENARIOS = {
         history_min=512,
         history_max=2048,
         idle_mode="frequent",
+        remaining_turn_prior=4.0,
     ),
 }
 
@@ -184,7 +199,7 @@ def simulate_workload(
             base_choice = choose_base_model(demand)
 
             baseline_next = base_choice
-            agentic_next, reason = choose_agentic_model(
+            agentic_decision = choose_agentic_model(
                 base_choice=base_choice,
                 current=agentic_model,
                 phase=phase,
@@ -192,8 +207,10 @@ def simulate_workload(
                 switch_count=switch_count,
                 history_tokens=history_tokens,
                 idle_expired=idle_expired,
+                remaining_turn_prior=scenario.remaining_turn_prior,
                 policy=agentic_policy,
             )
+            agentic_next = agentic_decision.model
 
             baseline_switch = baseline_next.name != baseline_model.name
             agentic_switch = agentic_next.name != agentic_model.name
@@ -222,6 +239,12 @@ def simulate_workload(
                     "idle_expired": idle_expired,
                     "demand": round(demand, 4),
                     "history_tokens": history_tokens,
+                    "remaining_turn_prior": round(scenario.remaining_turn_prior, 4),
+                    "remaining_turns_estimate": round(
+                        agentic_decision.remaining_turns_estimate, 4
+                    ),
+                    "continuation_mass": round(agentic_decision.continuation_mass, 4),
+                    "prior_mass": round(agentic_decision.prior_mass, 4),
                     "baseline_model": baseline_next.name,
                     "agentic_model": agentic_next.name,
                     "baseline_switch": baseline_switch,
@@ -235,7 +258,7 @@ def simulate_workload(
                     "agentic_quality": agentic_next.quality,
                     "baseline_cost": round(baseline_cost, 8),
                     "agentic_cost": round(agentic_cost, 8),
-                    "policy_reason": reason,
+                    "policy_reason": agentic_decision.reason,
                 }
             )
 
@@ -306,21 +329,57 @@ def choose_agentic_model(
     switch_count: int,
     history_tokens: int,
     idle_expired: bool,
+    remaining_turn_prior: float,
     policy: str = "acr-full",
-) -> tuple[ModelProfile, str]:
+) -> AgenticDecision:
+    continuation_mass, prior_mass, remaining_turns_estimate = continuation_evidence(
+        history_tokens=history_tokens,
+        turn=turn,
+        remaining_turn_prior=remaining_turn_prior,
+        use_remaining_prior=policy != "acr-no-remaining-prior",
+    )
     if policy == "sticky-session" and turn > 0:
-        return current, "sticky_session"
+        return AgenticDecision(
+            current,
+            "sticky_session",
+            continuation_mass,
+            prior_mass,
+            remaining_turns_estimate,
+        )
     if turn == 0:
-        return base_choice, "cold_select"
+        return AgenticDecision(
+            base_choice,
+            "cold_select",
+            continuation_mass,
+            prior_mass,
+            remaining_turns_estimate,
+        )
     if phase == "tool_loop" and policy != "acr-no-tool-lock":
-        return current, "tool_loop_hard_lock"
+        return AgenticDecision(
+            current,
+            "tool_loop_hard_lock",
+            continuation_mass,
+            prior_mass,
+            remaining_turns_estimate,
+        )
     if idle_expired and policy != "acr-no-idle-boundary":
-        return base_choice, "idle_select"
+        return AgenticDecision(
+            base_choice,
+            "idle_select",
+            continuation_mass,
+            prior_mass,
+            remaining_turns_estimate,
+        )
     if base_choice.name == current.name:
-        return current, "base_selects_current"
+        return AgenticDecision(
+            current,
+            "base_selects_current",
+            continuation_mass,
+            prior_mass,
+            remaining_turns_estimate,
+        )
 
     quality_gain = base_choice.quality - current.quality
-    continuation_mass = min(1.0, history_tokens / 16000)
     frontier_multiplier = (
         1.0
         if policy == "acr-no-frontier-cost"
@@ -332,8 +391,35 @@ def choose_agentic_model(
         + 0.04 * min(switch_count / 8, 1)
     )
     if quality_gain > switch_cost:
-        return base_choice, "quality_gain_clears_switch_cost"
-    return current, "continuity_cost_blocks_switch"
+        return AgenticDecision(
+            base_choice,
+            "quality_gain_clears_switch_cost",
+            continuation_mass,
+            prior_mass,
+            remaining_turns_estimate,
+        )
+    return AgenticDecision(
+        current,
+        "continuity_cost_blocks_switch",
+        continuation_mass,
+        prior_mass,
+        remaining_turns_estimate,
+    )
+
+
+def continuation_evidence(
+    *,
+    history_tokens: int,
+    turn: int,
+    remaining_turn_prior: float,
+    use_remaining_prior: bool,
+) -> tuple[float, float, float]:
+    history_mass = min(1.0, max(0.0, history_tokens / 16000))
+    if not use_remaining_prior:
+        return history_mass, 0.0, 0.0
+    remaining_turns_estimate = max(0.0, remaining_turn_prior - turn)
+    prior_mass = min(1.0, remaining_turns_estimate / 8.0)
+    return max(history_mass, prior_mass), prior_mass, remaining_turns_estimate
 
 
 def cost_pressure(model: ModelProfile) -> float:
@@ -382,6 +468,10 @@ def rows_from_replay(path: Path) -> list[dict[str, Any]]:
                 "idle_expired": policy.get("idle_expired", False),
                 "demand": "",
                 "history_tokens": "",
+                "remaining_turn_prior": policy.get("remaining_turn_prior", ""),
+                "remaining_turns_estimate": policy.get("remaining_turns_estimate", ""),
+                "continuation_mass": policy.get("continuation_mass", ""),
+                "prior_mass": "",
                 "baseline_model": policy.get("fallback_selected_model", ""),
                 "agentic_model": rec.get("selected_model", ""),
                 "baseline_switch": "",
@@ -442,6 +532,16 @@ def summarize(rows: list[dict[str, Any]]) -> dict[str, Any]:
     )
     idle_turns = [row for row in rows if bool(row.get("idle_expired"))]
     agentic_idle_switches = sum(bool(row.get("agentic_switch")) for row in idle_turns)
+    continuation_values = [
+        float(row["continuation_mass"])
+        for row in rows
+        if row.get("continuation_mass", "") != ""
+    ]
+    remaining_estimates = [
+        float(row["remaining_turns_estimate"])
+        for row in rows
+        if row.get("remaining_turns_estimate", "") != ""
+    ]
     return {
         "sessions": len(sessions),
         "turns": len(rows),
@@ -470,6 +570,12 @@ def summarize(rows: list[dict[str, Any]]) -> dict[str, Any]:
         "agentic_idle_switches": agentic_idle_switches,
         "mean_cached_prompt_ratio": (
             round(mean(cached_values), 4) if cached_values else None
+        ),
+        "mean_continuation_mass": (
+            round(mean(continuation_values), 4) if continuation_values else None
+        ),
+        "mean_remaining_turns_estimate": (
+            round(mean(remaining_estimates), 4) if remaining_estimates else None
         ),
         "baseline_mean_quality": (
             round(mean(baseline_quality), 4) if baseline_quality else None
@@ -570,6 +676,8 @@ def summarize_baseline_policy(rows: list[dict[str, Any]]) -> dict[str, Any]:
         "frontier_turns": summary["baseline_frontier_turns"],
         "idle_switches": "",
         "mean_cached_prompt_ratio": "",
+        "mean_continuation_mass": "",
+        "mean_remaining_turns_estimate": "",
         "mean_quality": summary["baseline_mean_quality"],
         "quality_delta": 0.0,
     }
@@ -588,6 +696,8 @@ def summarize_agentic_policy(policy: str, rows: list[dict[str, Any]]) -> dict[st
         "frontier_turns": summary["agentic_frontier_turns"],
         "idle_switches": summary["agentic_idle_switches"],
         "mean_cached_prompt_ratio": summary["mean_cached_prompt_ratio"],
+        "mean_continuation_mass": summary["mean_continuation_mass"],
+        "mean_remaining_turns_estimate": summary["mean_remaining_turns_estimate"],
         "mean_quality": summary["agentic_mean_quality"],
         "quality_delta": summary["quality_delta"],
     }
@@ -639,6 +749,7 @@ def write_ablation_outputs(
     (out_dir / "summary.json").write_text(
         json.dumps(summary, indent=2, sort_keys=True) + "\n"
     )
+    (out_dir / "summary.svg").write_text(render_ablation_svg(summary))
     return summary
 
 
@@ -683,7 +794,7 @@ def render_svg(summary: dict[str, Any]) -> str:
     return "\n".join(
         [
             '<svg xmlns="http://www.w3.org/2000/svg" width="680" height="240" viewBox="0 0 680 240">',
-            '<rect width="680" height="240" fill="#f8fafc"/>',
+            '<rect width="680" height="240" fill="#ffffff"/>',
             '<text x="24" y="28" font-size="18" font-weight="700" fill="#111827">Agentic Continuity Routing</text>',
             *bars,
             f'<text x="24" y="224" font-size="12" fill="#4b5563">Cost delta: {summary.get("cost_delta")} | Mean cached ratio: {summary.get("mean_cached_prompt_ratio")}</text>',
@@ -721,8 +832,8 @@ def render_matrix_svg(summary: dict[str, Any]) -> str:
     return "\n".join(
         [
             f'<svg xmlns="http://www.w3.org/2000/svg" width="980" height="{height}" viewBox="0 0 980 {height}">',
-            '<rect width="980" height="100%" fill="#f8fafc"/>',
-            '<text x="28" y="32" font-size="20" font-weight="700" fill="#0f172a">Session-aware agentic routing matrix</text>',
+            '<rect width="980" height="100%" fill="#ffffff"/>',
+            '<text x="28" y="32" font-size="20" font-weight="700" fill="#0f172a">Session-aware Agentic Routing Matrix</text>',
             '<text x="160" y="54" font-size="12" fill="#64748b">model switches</text>',
             '<text x="560" y="54" font-size="12" fill="#64748b">estimated cost</text>',
             *rows,
@@ -730,6 +841,41 @@ def render_matrix_svg(summary: dict[str, Any]) -> str:
             f'<text x="46" y="{height - 18}" font-size="11" fill="#64748b">baseline selector</text>',
             f'<rect x="160" y="{height - 28}" width="12" height="12" fill="#16a34a"/>',
             f'<text x="178" y="{height - 18}" font-size="11" fill="#64748b">session-aware policy</text>',
+            "</svg>",
+        ]
+    )
+
+
+def render_ablation_svg(summary: dict[str, Any]) -> str:
+    policies = summary.get("by_policy", [])
+    max_switch = max([row["switches"] for row in policies] + [1])
+    costs = [float(row["estimated_cost"] or 0) for row in policies]
+    max_cost = max([*costs, 1.0])
+    rows = []
+    for idx, row in enumerate(policies):
+        y = 72 + idx * 52
+        switch_w = int(250 * row["switches"] / max_switch)
+        cost_w = int(250 * float(row["estimated_cost"] or 0) / max_cost)
+        color = "#2563eb" if row["policy"] == "acr-full" else "#94a3b8"
+        rows.extend(
+            [
+                f'<text x="28" y="{y + 14}" font-size="13" font-weight="700" fill="#0f172a">{row["policy"]}</text>',
+                f'<rect x="230" y="{y}" width="{switch_w}" height="14" fill="{color}"/>',
+                f'<text x="490" y="{y + 12}" font-size="11" fill="#475569">{row["switches"]} switches</text>',
+                f'<rect x="610" y="{y}" width="{cost_w}" height="14" fill="{color}"/>',
+                f'<text x="870" y="{y + 12}" font-size="11" fill="#475569">${float(row["estimated_cost"] or 0):.4f}</text>',
+                f'<text x="230" y="{y + 34}" font-size="11" fill="#64748b">tool-loop violations {row["tool_loop_switch_violations"]}; cached {row["mean_cached_prompt_ratio"]}; continuation {row["mean_continuation_mass"]}</text>',
+            ]
+        )
+    height = 112 + len(policies) * 52
+    return "\n".join(
+        [
+            f'<svg xmlns="http://www.w3.org/2000/svg" width="980" height="{height}" viewBox="0 0 980 {height}">',
+            '<rect width="980" height="100%" fill="#ffffff"/>',
+            '<text x="28" y="32" font-size="20" font-weight="700" fill="#0f172a">Agentic Routing Ablation</text>',
+            '<text x="230" y="56" font-size="12" fill="#64748b">model switches</text>',
+            '<text x="610" y="56" font-size="12" fill="#64748b">estimated cost</text>',
+            *rows,
             "</svg>",
         ]
     )
