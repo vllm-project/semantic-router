@@ -111,6 +111,7 @@ jobs:
             ```bash
             docker pull ghcr.io/${{ steps.owner.outputs.lower }}/semantic-router/extproc:${{ needs.validate.outputs.tag }}
             docker pull ghcr.io/${{ steps.owner.outputs.lower }}/semantic-router/vllm-sr:${{ needs.validate.outputs.tag }}
+            docker pull ghcr.io/${{ steps.owner.outputs.lower }}/semantic-router/anthropic-shim:${{ needs.validate.outputs.tag }}
             docker pull ghcr.io/${{ steps.owner.outputs.lower }}/semantic-router/dashboard:${{ needs.validate.outputs.tag }}
             docker pull ghcr.io/${{ steps.owner.outputs.lower }}/semantic-router/operator:${{ needs.validate.outputs.tag }}
             docker pull ghcr.io/${{ steps.owner.outputs.lower }}/semantic-router/operator-bundle:${{ needs.validate.outputs.tag }}
@@ -120,6 +121,7 @@ jobs:
             |-------|-------------|
             | `extproc` | `${{ needs.validate.outputs.tag }}` · `latest` |
             | `vllm-sr` | `${{ needs.validate.outputs.tag }}` · `latest` |
+            | `anthropic-shim` | `${{ needs.validate.outputs.tag }}` · `latest` |
             | `extproc-rocm` | `${{ needs.validate.outputs.tag }}` · `latest` |
             | `vllm-sr-rocm` | `${{ needs.validate.outputs.tag }}` · `latest` |
             | `llm-katan` | `${{ needs.validate.outputs.tag }}` · `latest` |
