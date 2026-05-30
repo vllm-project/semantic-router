@@ -3912,21 +3912,21 @@ resources:
   requests:
     memory: 6Gi
     cpu: '1'
-  observability:
-    tracing:
-      enabled: false
-      provider: opentelemetry
-      exporter:
-        type: otlp
-        endpoint: jaeger:4317
-        insecure: true
-      sampling:
-        type: always_on
-        rate: 1.0
-      resource:
-        service_name: vllm-semantic-router
-        service_version: v0.1.0
-        deployment_environment: development
+observability:
+  tracing:
+    enabled: false
+    provider: opentelemetry
+    exporter:
+      type: otlp
+      endpoint: jaeger:4317
+      insecure: true
+    sampling:
+      type: always_on
+      rate: 1.0
+    resource:
+      service_name: vllm-semantic-router
+      service_version: v0.1.0
+      deployment_environment: development
 ---
 # Profile revision 2025-11-21: math -> phi4-mini; cs/default -> llama3-8b; removed global HTTPRoute catch-all.
 config:
@@ -9330,21 +9330,21 @@ resources:
   requests:
     memory: 6Gi
     cpu: '1'
-  observability:
-    tracing:
-      enabled: false
-      provider: opentelemetry
-      exporter:
-        type: otlp
-        endpoint: jaeger:4317
-        insecure: true
-      sampling:
-        type: always_on
-        rate: 1.0
-      resource:
-        service_name: vllm-semantic-router
-        service_version: v0.1.0
-        deployment_environment: development
+observability:
+  tracing:
+    enabled: false
+    provider: opentelemetry
+    exporter:
+      type: otlp
+      endpoint: jaeger:4317
+      insecure: true
+    sampling:
+      type: always_on
+      rate: 1.0
+    resource:
+      service_name: vllm-semantic-router
+      service_version: v0.1.0
+      deployment_environment: development
 ---
 # Profile revision 2025-11-21: math -> phi4-mini; cs/default -> llama3-8b; removed global HTTPRoute catch-all.
 config:
