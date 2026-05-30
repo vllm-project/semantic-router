@@ -21,10 +21,13 @@ var selectionMethodByAlgorithmType = map[string]selection.SelectionMethod{
 	"rl_driven":     selection.MethodRLDriven,
 	"gmtrouter":     selection.MethodGMTRouter,
 	"latency_aware": selection.MethodLatencyAware,
+	"session_aware": selection.MethodSessionAware,
 	"static":        selection.MethodStatic,
 	"knn":           selection.MethodKNN,
 	"kmeans":        selection.MethodKMeans,
 	"svm":           selection.MethodSVM,
+	"multi_factor":  selection.MethodMultiFactor,
+	"mlp":           selection.MethodMLP,
 }
 
 func (r *OpenAIRouter) evaluateSignalsForDecision(

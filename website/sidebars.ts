@@ -149,6 +149,7 @@ const sidebars: SidebarsConfig = {
                 'tutorials/algorithm/selection/multi-factor',
                 'tutorials/algorithm/selection/rl-driven',
                 'tutorials/algorithm/selection/router-dc',
+                'tutorials/algorithm/selection/session-aware',
                 'tutorials/algorithm/selection/static',
                 'tutorials/algorithm/selection/svm',
               ],

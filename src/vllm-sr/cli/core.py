@@ -3,7 +3,7 @@
 import os
 import subprocess
 
-from cli.consts import DEFAULT_API_PORT, DEFAULT_ENVOY_PORT
+from cli.consts import DEFAULT_API_PORT, DEFAULT_ENVOY_PORT, IMAGE_PULL_POLICY_NEVER
 from cli.docker_cli import (
     docker_container_status,
     docker_exec,
@@ -15,6 +15,7 @@ from cli.docker_cli import (
     docker_stop_container,
     load_openclaw_registry,
 )
+from cli.docker_images import get_runtime_images
 from cli.logo import print_vllm_logo
 from cli.runtime_lifecycle import (
     connect_runtime_container,
@@ -58,6 +59,63 @@ def _resolve_state_root_dir(
     return os.path.dirname(os.path.abspath(source_config_file))
 
 
+def _load_runtime_config(runtime_config_file):
+    user_config = load_config(runtime_config_file) or {}
+    listeners = user_config.get("listeners", [])
+    if not listeners:
+        log.error("No listeners configured in config.yaml")
+        raise SystemExit(1)
+    return user_config, listeners
+
+
+def _prepare_runtime_network(
+    source_config_file,
+    env_vars,
+    stack_layout,
+    image,
+    router_image,
+    envoy_image,
+    dashboard_image,
+    pull_policy,
+    dashboard_disabled,
+):
+    shared_network_name = stack_layout.network_name
+    state_root_dir = _resolve_state_root_dir(source_config_file, env_vars)
+    ensure_shared_network(shared_network_name)
+    ensure_runtime_images_for_pull_policy(
+        image,
+        router_image,
+        envoy_image,
+        dashboard_image,
+        pull_policy,
+        env_vars,
+        dashboard_disabled=dashboard_disabled,
+    )
+    return shared_network_name, state_root_dir
+
+
+def ensure_runtime_images_for_pull_policy(
+    image,
+    router_image,
+    envoy_image,
+    dashboard_image,
+    pull_policy,
+    env_vars,
+    dashboard_disabled=False,
+):
+    if pull_policy != IMAGE_PULL_POLICY_NEVER:
+        return
+    get_runtime_images(
+        image=image,
+        router_image=router_image,
+        envoy_image=envoy_image,
+        dashboard_image=None if dashboard_disabled else dashboard_image,
+        pull_policy=pull_policy,
+        platform=env_vars.get("VLLM_SR_PLATFORM"),
+        include_dashboard=not dashboard_disabled,
+    )
+
+
 def start_vllm_sr(
     config_file,
     env_vars=None,
@@ -72,28 +130,32 @@ def start_vllm_sr(
     runtime_config_file=None,
 ):
     """Start vLLM Semantic Router."""
-    if env_vars is None:
-        env_vars = {}
+    env_vars = env_vars if env_vars is not None else {}
     stack_layout = resolve_runtime_stack()
     runtime_topology = resolve_runtime_topology(topology)
 
     print_vllm_logo()
     source_config_file = source_config_file or config_file
     runtime_config_file = runtime_config_file or config_file
-    user_config = load_config(runtime_config_file) or {}
-    listeners = user_config.get("listeners", [])
-    if not listeners:
-        log.error("No listeners configured in config.yaml")
-        raise SystemExit(1)
+    user_config, listeners = _load_runtime_config(runtime_config_file)
 
     log_startup_banner(source_config_file, listeners, stack_layout)
     log.info(f"Runtime topology: {runtime_topology}")
     for container_name in stack_layout.runtime_container_names:
         ensure_clean_runtime_container(container_name)
 
-    shared_network_name = stack_layout.network_name
-    state_root_dir = _resolve_state_root_dir(source_config_file, env_vars)
-    ensure_shared_network(shared_network_name)
+    dashboard_disabled = env_vars.get("DISABLE_DASHBOARD") == "true"
+    shared_network_name, state_root_dir = _prepare_runtime_network(
+        source_config_file,
+        env_vars,
+        stack_layout,
+        image,
+        router_image,
+        envoy_image,
+        dashboard_image,
+        pull_policy,
+        dashboard_disabled,
+    )
 
     started_backends = provision_storage_backends(
         user_config, shared_network_name, stack_layout
@@ -116,24 +178,23 @@ def start_vllm_sr(
     if fleet_sim_enabled:
         env_vars.setdefault("TARGET_FLEET_SIM_URL", stack_layout.fleet_sim_service_url)
 
-    dashboard_disabled = env_vars.get("DISABLE_DASHBOARD") == "true"
     setup_mode = str(env_vars.get("VLLM_SR_SETUP_MODE", "")).lower() == "true"
-    return_code, _stdout, stderr = docker_start_vllm_sr(
-        config_file=source_config_file,
-        env_vars=env_vars,
-        listeners=listeners,
-        image=image,
-        router_image=router_image,
-        envoy_image=envoy_image,
-        dashboard_image=dashboard_image,
-        topology=runtime_topology,
-        pull_policy=pull_policy,
-        network_name=runtime_network_name,
-        openclaw_network_name=shared_network_name,
-        minimal=dashboard_disabled,
-        stack_layout=stack_layout,
-        state_root_dir=state_root_dir,
-        runtime_config_file=runtime_config_file,
+    return_code, _stdout, stderr = _start_runtime_containers(
+        source_config_file,
+        runtime_config_file,
+        listeners,
+        runtime_topology,
+        runtime_network_name,
+        shared_network_name,
+        stack_layout,
+        state_root_dir,
+        dashboard_disabled,
+        env_vars,
+        image,
+        router_image,
+        envoy_image,
+        dashboard_image,
+        pull_policy,
     )
     if return_code != 0:
         log.error(f"Failed to start container: {stderr}")
@@ -153,6 +214,42 @@ def start_vllm_sr(
         enable_observability,
         fleet_sim_enabled,
         started_backends=started_backends,
+    )
+
+
+def _start_runtime_containers(
+    source_config_file,
+    runtime_config_file,
+    listeners,
+    runtime_topology,
+    runtime_network_name,
+    shared_network_name,
+    stack_layout,
+    state_root_dir,
+    dashboard_disabled,
+    env_vars,
+    image,
+    router_image,
+    envoy_image,
+    dashboard_image,
+    pull_policy,
+):
+    return docker_start_vllm_sr(
+        config_file=source_config_file,
+        env_vars=env_vars,
+        listeners=listeners,
+        image=image,
+        router_image=router_image,
+        envoy_image=envoy_image,
+        dashboard_image=dashboard_image,
+        topology=runtime_topology,
+        pull_policy=pull_policy,
+        network_name=runtime_network_name,
+        openclaw_network_name=shared_network_name,
+        minimal=dashboard_disabled,
+        stack_layout=stack_layout,
+        state_root_dir=state_root_dir,
+        runtime_config_file=runtime_config_file,
     )
 
 

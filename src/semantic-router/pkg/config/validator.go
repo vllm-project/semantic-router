@@ -207,6 +207,9 @@ func validateModelSelectionConfig(cfg *RouterConfig) error {
 	if err := validateModelSwitchGate(cfg.ModelSelection.ModelSwitchGate); err != nil {
 		return err
 	}
+	if err := validateSessionAwareSelectionConfig(cfg.ModelSelection.SessionAware); err != nil {
+		return err
+	}
 	warnModelSwitchGateEnforceWithoutCostSignals(cfg.ModelSelection)
 	return nil
 }

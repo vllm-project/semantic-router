@@ -1,0 +1,344 @@
+package selection
+
+import (
+	"context"
+	"fmt"
+	"math"
+	"strings"
+
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/selection/lookuptable"
+)
+
+// SessionAwareConfig configures agentic session-aware model selection.
+type SessionAwareConfig struct {
+	FallbackMethod         SelectionMethod
+	IdleTimeoutSeconds     int
+	MinTurnsBeforeSwitch   int
+	SwitchMargin           float64
+	StayBias               float64
+	ToolLoopHardLock       bool
+	ToolLoopStayBias       float64
+	PrefixCacheWeight      float64
+	HandoffPenaltyWeight   float64
+	DefaultHandoffPenalty  float64
+	QualityGapMultiplier   float64
+	MaxCacheCostMultiplier float64
+	SwitchHistoryWeight    float64
+}
+
+// DefaultSessionAwareConfig returns the production-oriented default policy.
+func DefaultSessionAwareConfig() *SessionAwareConfig {
+	return &SessionAwareConfig{
+		FallbackMethod:         MethodHybrid,
+		IdleTimeoutSeconds:     300,
+		MinTurnsBeforeSwitch:   1,
+		SwitchMargin:           0.05,
+		StayBias:               0.10,
+		ToolLoopHardLock:       true,
+		ToolLoopStayBias:       0.35,
+		PrefixCacheWeight:      0.20,
+		HandoffPenaltyWeight:   1.0,
+		DefaultHandoffPenalty:  0.05,
+		QualityGapMultiplier:   1.0,
+		MaxCacheCostMultiplier: 2.5,
+		SwitchHistoryWeight:    0.04,
+	}
+}
+
+// SessionAwareSelector wraps a base selector with explicit session policy.
+type SessionAwareSelector struct {
+	config      *SessionAwareConfig
+	fallback    Selector
+	modelParams map[string]config.ModelParams
+	lookupTable lookuptable.LookupTable
+}
+
+func NewSessionAwareSelector(cfg *SessionAwareConfig) *SessionAwareSelector {
+	if cfg == nil {
+		cfg = DefaultSessionAwareConfig()
+	} else {
+		cfg = normalizeSessionAwareConfig(*cfg)
+	}
+	return &SessionAwareSelector{
+		config:      cfg,
+		modelParams: make(map[string]config.ModelParams),
+	}
+}
+
+func normalizeSessionAwareConfig(cfg SessionAwareConfig) *SessionAwareConfig {
+	defaults := DefaultSessionAwareConfig()
+	cfg.FallbackMethod = defaultSessionAwareFallback(cfg.FallbackMethod, defaults.FallbackMethod)
+	cfg.IdleTimeoutSeconds = defaultNonNegativeInt(cfg.IdleTimeoutSeconds, defaults.IdleTimeoutSeconds)
+	cfg.MinTurnsBeforeSwitch = defaultNonNegativeInt(cfg.MinTurnsBeforeSwitch, defaults.MinTurnsBeforeSwitch)
+	cfg.SwitchMargin = defaultNonNegativeFloat(cfg.SwitchMargin, defaults.SwitchMargin)
+	cfg.StayBias = defaultNonNegativeFloat(cfg.StayBias, defaults.StayBias)
+	cfg.ToolLoopStayBias = defaultNonNegativeFloat(cfg.ToolLoopStayBias, defaults.ToolLoopStayBias)
+	cfg.PrefixCacheWeight = defaultNonNegativeFloat(cfg.PrefixCacheWeight, defaults.PrefixCacheWeight)
+	cfg.HandoffPenaltyWeight = defaultNonNegativeFloat(cfg.HandoffPenaltyWeight, defaults.HandoffPenaltyWeight)
+	cfg.DefaultHandoffPenalty = defaultNonNegativeFloat(cfg.DefaultHandoffPenalty, defaults.DefaultHandoffPenalty)
+	cfg.QualityGapMultiplier = defaultPositiveFloat(cfg.QualityGapMultiplier, defaults.QualityGapMultiplier)
+	cfg.MaxCacheCostMultiplier = defaultPositiveFloat(cfg.MaxCacheCostMultiplier, defaults.MaxCacheCostMultiplier)
+	cfg.SwitchHistoryWeight = defaultNonNegativeFloat(cfg.SwitchHistoryWeight, defaults.SwitchHistoryWeight)
+	return &cfg
+}
+
+func defaultSessionAwareFallback(method, fallback SelectionMethod) SelectionMethod {
+	if method == "" || method == MethodSessionAware {
+		return fallback
+	}
+	return method
+}
+
+func defaultNonNegativeInt(value, fallback int) int {
+	if value < 0 {
+		return fallback
+	}
+	return value
+}
+
+func defaultNonNegativeFloat(value, fallback float64) float64 {
+	if value < 0 {
+		return fallback
+	}
+	return value
+}
+
+func defaultPositiveFloat(value, fallback float64) float64 {
+	if value <= 0 {
+		return fallback
+	}
+	return value
+}
+
+func (s *SessionAwareSelector) Method() SelectionMethod {
+	return MethodSessionAware
+}
+
+func (s *SessionAwareSelector) SetFallbackSelector(selector Selector) {
+	s.fallback = selector
+}
+
+func (s *SessionAwareSelector) SetLookupTable(lt lookuptable.LookupTable) {
+	s.lookupTable = lt
+}
+
+func (s *SessionAwareSelector) InitializeFromConfig(modelConfig map[string]config.ModelParams) {
+	s.modelParams = make(map[string]config.ModelParams, len(modelConfig))
+	for k, v := range modelConfig {
+		s.modelParams[k] = v
+	}
+}
+
+func (s *SessionAwareSelector) Select(ctx context.Context, selCtx *SelectionContext) (*SelectionResult, error) {
+	if err := ValidateSelectionContext(selCtx); err != nil {
+		return nil, err
+	}
+
+	base, err := s.selectFallback(ctx, selCtx)
+	if err != nil {
+		return nil, err
+	}
+	session := selCtx.AgenticSession
+	if session == nil {
+		trace := s.newPolicyTrace(selCtx, base, nil, "", false)
+		trace.MissingSignals = append(trace.MissingSignals, "session_context")
+		return s.wrapFallback(base, "missing_session_context", trace), nil
+	}
+
+	current := strings.TrimSpace(session.PreviousModel)
+	trace := s.newPolicyTrace(selCtx, base, session, current, false)
+	if current == "" {
+		trace.MissingSignals = append(trace.MissingSignals, "previous_model")
+		return s.wrapFallback(base, "missing_previous_model", trace), nil
+	}
+	if !candidateSetContains(selCtx.CandidateModels, current) {
+		trace.MissingSignals = append(trace.MissingSignals, "previous_model_not_in_candidates")
+		return s.wrapFallback(base, "previous_model_not_in_candidates", trace), nil
+	}
+
+	timeout := secondsDuration(s.config.IdleTimeoutSeconds)
+	idleExpired := session.idleExpired(timeout)
+	trace.IdleExpired = idleExpired
+	if session.ActiveToolLoop && s.config.ToolLoopHardLock {
+		return s.forceCurrent(selCtx, base, current, "hard_lock=tool_loop", trace), nil
+	}
+	if effectiveSessionTurns(session) < s.config.MinTurnsBeforeSwitch && !idleExpired {
+		return s.forceCurrent(selCtx, base, current, "hard_lock=min_turns", trace), nil
+	}
+
+	adjusted, candidateTraces := s.adjustScores(selCtx, base, session, current, idleExpired)
+	bestRef, bestScore := bestCandidateByScore(selCtx.CandidateModels, adjusted)
+	if bestRef == nil {
+		trace.MissingSignals = append(trace.MissingSignals, "adjusted_scores")
+		return s.wrapFallback(base, "missing_adjusted_scores", trace), nil
+	}
+
+	confidence := adjustedConfidence(bestRef.Model, adjusted)
+	reason := fmt.Sprintf(
+		"session_aware: fallback=%s current=%s selected=%s idle_expired=%t active_tool_loop=%t",
+		base.Method, current, bestRef.Model, idleExpired, session.ActiveToolLoop,
+	)
+	trace.SelectedModel = bestRef.Model
+	trace.FinalScores = cloneScores(adjusted)
+	trace.CandidateTraces = candidateTraces
+	trace.DecisionReason = "switch_allowed"
+	if bestRef.Model == current {
+		trace.DecisionReason = "stay_has_best_adjusted_score"
+	}
+	logging.Infof("[SessionAwareSelector] %s score=%.4f confidence=%.2f", reason, bestScore, confidence)
+	return &SelectionResult{
+		SelectedModel: bestRef.Model,
+		LoRAName:      bestRef.LoRAName,
+		Score:         bestScore,
+		Confidence:    confidence,
+		Method:        MethodSessionAware,
+		Tier:          TierSupported,
+		Reasoning:     reason,
+		AllScores:     adjusted,
+		SessionPolicy: trace,
+	}, nil
+}
+
+func effectiveSessionTurns(session *AgenticSessionContext) int {
+	if session == nil {
+		return 0
+	}
+	if session.MemoryTurnCount > session.TurnIndex {
+		return session.MemoryTurnCount
+	}
+	return session.TurnIndex
+}
+
+func (s *SessionAwareSelector) selectFallback(ctx context.Context, selCtx *SelectionContext) (*SelectionResult, error) {
+	if s.fallback != nil && s.fallback.Method() != MethodSessionAware {
+		result, err := s.fallback.Select(ctx, selCtx)
+		if err == nil && result != nil {
+			ensureScoresForCandidates(result, selCtx.CandidateModels)
+			return result, nil
+		}
+		logging.Warnf("[SessionAwareSelector] fallback selector %s failed: %v", s.fallback.Method(), err)
+	}
+	result := staticFallbackResult(selCtx)
+	return result, nil
+}
+
+func (s *SessionAwareSelector) wrapFallback(base *SelectionResult, reason string, trace *SessionPolicyTrace) *SelectionResult {
+	wrapped := *base
+	wrapped.Method = MethodSessionAware
+	wrapped.Tier = TierSupported
+	wrapped.Reasoning = fmt.Sprintf("session_aware: %s; fallback=%s selected=%s", reason, base.Method, base.SelectedModel)
+	if trace != nil {
+		trace.SelectedModel = base.SelectedModel
+		trace.DecisionReason = reason
+		trace.FinalScores = cloneScores(base.AllScores)
+		wrapped.SessionPolicy = trace
+	}
+	return &wrapped
+}
+
+func (s *SessionAwareSelector) forceCurrent(selCtx *SelectionContext, base *SelectionResult, current, reason string, trace *SessionPolicyTrace) *SelectionResult {
+	allScores := cloneScores(base.AllScores)
+	if allScores == nil {
+		allScores = make(map[string]float64, len(selCtx.CandidateModels))
+	}
+	currentScore := allScores[current]
+	allScores[current] = math.Max(currentScore, maxScore(allScores)+s.config.ToolLoopStayBias+s.config.StayBias)
+	ref := modelRefForName(selCtx.CandidateModels, current)
+	loRA := ""
+	if ref != nil {
+		loRA = ref.LoRAName
+	}
+	if trace != nil {
+		trace.HardLocked = true
+		trace.HardLockReason = reason
+		trace.DecisionReason = reason
+		trace.SelectedModel = current
+		trace.FinalScores = cloneScores(allScores)
+		baseScore := 0.0
+		if base != nil && base.AllScores != nil {
+			baseScore = base.AllScores[current]
+		}
+		trace.CandidateTraces = map[string]SessionCandidateTrace{
+			current: {
+				Current:    true,
+				BaseScore:  baseScore,
+				FinalScore: allScores[current],
+			},
+		}
+	}
+	result := &SelectionResult{
+		SelectedModel: current,
+		LoRAName:      loRA,
+		Score:         allScores[current],
+		Confidence:    1.0,
+		Method:        MethodSessionAware,
+		Tier:          TierSupported,
+		Reasoning:     fmt.Sprintf("session_aware: %s current=%s fallback=%s", reason, current, base.Method),
+		AllScores:     allScores,
+		SessionPolicy: trace,
+	}
+	return result
+}
+
+func (s *SessionAwareSelector) newPolicyTrace(
+	selCtx *SelectionContext,
+	base *SelectionResult,
+	session *AgenticSessionContext,
+	current string,
+	idleExpired bool,
+) *SessionPolicyTrace {
+	trace := &SessionPolicyTrace{
+		Algorithm:    "agentic_continuity_routing",
+		CurrentModel: current,
+		SwitchMargin: s.config.SwitchMargin,
+		StayBias:     s.config.StayBias,
+		IdleExpired:  idleExpired,
+	}
+	if base != nil {
+		trace.FallbackMethod = string(base.Method)
+		trace.FallbackSelectedModel = base.SelectedModel
+		trace.BaseScores = cloneScores(base.AllScores)
+	}
+	if session == nil {
+		return trace
+	}
+	trace.SessionID = session.ID
+	trace.UserID = session.UserID
+	trace.Phase = session.Phase
+	trace.TurnIndex = session.TurnIndex
+	trace.MemoryTurnCount = session.MemoryTurnCount
+	trace.SwitchCount = session.MemorySwitchCount
+	trace.ActiveToolLoop = session.ActiveToolLoop
+	trace.IdleKnown = session.IdleKnown
+	trace.IdleForSeconds = session.IdleFor.Seconds()
+	trace.ContinuationMass = sessionContinuationMass(session)
+	trace.CacheWarmth = sessionCacheWarmth(session, idleExpired)
+	trace.CacheWarmthOK = session.CacheWarmthOK
+	if session.MemoryPresent && trace.MemoryTurnCount == 0 {
+		trace.MemoryTurnCount = session.TurnIndex + 1
+	}
+	if selCtx != nil && trace.SessionID == "" {
+		trace.SessionID = selCtx.SessionID
+	}
+	return trace
+}
+
+func (s *SessionAwareSelector) UpdateFeedback(ctx context.Context, feedback *Feedback) error {
+	if s.fallback == nil {
+		return nil
+	}
+	return s.fallback.UpdateFeedback(ctx, feedback)
+}
+
+func (s *SessionAwareSelector) Tier() AlgorithmTier {
+	return TierSupported
+}
+
+func (s *SessionAwareSelector) ExternalDependencies() []Dependency {
+	if s.fallback == nil {
+		return nil
+	}
+	return s.fallback.ExternalDependencies()
+}

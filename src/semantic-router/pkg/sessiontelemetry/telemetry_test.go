@@ -369,7 +369,7 @@ func TestComputeCost(t *testing.T) {
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			got := computeCost(tc.prompt, tc.compl, tc.pricing)
+			got := computeCost(tc.prompt, 0, tc.compl, tc.pricing)
 			assert.InDelta(t, tc.wantCost, got, 1e-9)
 		})
 	}

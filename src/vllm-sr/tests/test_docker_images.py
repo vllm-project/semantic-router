@@ -318,6 +318,36 @@ def test_get_runtime_images_prefers_explicit_service_image_over_explicit_base_im
     ]
 
 
+def test_get_runtime_images_can_skip_dashboard_for_minimal_runtime(monkeypatch):
+    ensured = []
+    monkeypatch.setattr(
+        docker_images,
+        "_resolve_selected_image",
+        lambda image, normalized_platform: image,
+    )
+    monkeypatch.setattr(
+        docker_images,
+        "_ensure_image_available",
+        lambda image, pull_policy: ensured.append((image, pull_policy)),
+    )
+
+    images = docker_images.get_runtime_images(
+        image="base:explicit",
+        dashboard_image="dashboard:missing",
+        pull_policy="never",
+        include_dashboard=False,
+    )
+
+    assert images == {
+        "router": "base:explicit",
+        "envoy": VLLM_SR_ENVOY_DOCKER_IMAGE_DEFAULT,
+    }
+    assert ensured == [
+        ("base:explicit", "never"),
+        (VLLM_SR_ENVOY_DOCKER_IMAGE_DEFAULT, "never"),
+    ]
+
+
 def test_get_runtime_images_upgrades_router_override_to_rocm_on_amd(monkeypatch):
     ensured = []
     monkeypatch.setattr(

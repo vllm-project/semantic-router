@@ -135,6 +135,44 @@ def test_docker_start_vllm_sr_uses_role_specific_runtime_images(tmp_path, monkey
     assert "/etc/envoy/envoy.yaml" in " ".join(envoy_cmd)
 
 
+def test_docker_start_vllm_sr_skips_dashboard_image_resolution_in_minimal_mode(
+    tmp_path, monkeypatch
+):
+    config_path = tmp_path / "config.yaml"
+    config_path.write_text(
+        "version: v0.1\nlisteners:\n  - name: http-8899\n    address: 0.0.0.0\n    port: 8899\n"
+    )
+    captured_kwargs = {}
+
+    def fake_get_runtime_images(**kwargs):
+        captured_kwargs.update(kwargs)
+        return {
+            "router": "router-image:latest",
+            "envoy": "envoy-image:latest",
+        }
+
+    monkeypatch.setattr(docker_start, "get_container_runtime", lambda: "docker")
+    monkeypatch.setattr(docker_start, "get_runtime_images", fake_get_runtime_images)
+    captured = _capture_run_commands(monkeypatch)
+    _stub_valid_docker_cli(monkeypatch, tmp_path)
+
+    rc, _, _ = docker_cli.docker_start_vllm_sr(
+        str(config_path),
+        {},
+        [{"name": "http-8899", "address": "0.0.0.0", "port": 8899}],
+        network_name="vllm-sr-network",
+        openclaw_network_name="vllm-sr-network",
+        minimal=True,
+    )
+
+    assert rc == 0
+    assert captured_kwargs["include_dashboard"] is False
+    _find_container_run_cmd(captured, "vllm-sr-router-container")
+    _find_container_run_cmd(captured, "vllm-sr-envoy-container")
+    with pytest.raises(AssertionError):
+        _find_container_run_cmd(captured, "vllm-sr-dashboard-container")
+
+
 def test_docker_start_vllm_sr_creates_router_and_envoy_standby_in_setup_mode(
     tmp_path, monkeypatch
 ):

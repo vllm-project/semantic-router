@@ -11,14 +11,14 @@ import (
 const postgresRecordSelectColumns = `
 	id, timestamp, request_id, decision, decision_tier, decision_priority, category,
 	original_model, selected_model, reasoning_mode,
-	signals, projections, projection_scores, signal_confidences, signal_values, tool_trace, projection_trace,
+	signals, projections, projection_scores, signal_confidences, signal_values, tool_trace, projection_trace, session_policy,
 	request_body, response_body, response_status,
 	from_cache, streaming, request_body_truncated, response_body_truncated,
 	guardrails_enabled, jailbreak_enabled, pii_enabled,
 	prompt, prompt_truncated, tool_definitions, tool_definitions_truncated,
 	rag_enabled, rag_backend, rag_context_length, rag_similarity_score,
 	hallucination_enabled, hallucination_detected, hallucination_confidence, hallucination_spans,
-	prompt_tokens, completion_tokens, total_tokens,
+	prompt_tokens, cached_prompt_tokens, completion_tokens, total_tokens,
 	actual_cost, baseline_cost, cost_savings, currency, baseline_model,
 	session_id, turn_index, previous_response_id, conversation_id
 `
@@ -36,6 +36,7 @@ type postgresInsertRecord struct {
 	signalValuesJSON       []byte
 	toolTraceJSON          []byte
 	projectionTraceJSON    []byte
+	sessionPolicyJSON      []byte
 	hallucinationSpansJSON []byte
 }
 
@@ -48,8 +49,10 @@ type postgresRecordRow struct {
 	signalValuesJSON       []byte
 	toolTraceJSON          []byte
 	projectionTraceJSON    []byte
+	sessionPolicyJSON      []byte
 	hallucinationSpansJSON []byte
 	promptTokens           sql.NullInt64
+	cachedPromptTokens     sql.NullInt64
 	completionTokens       sql.NullInt64
 	totalTokens            sql.NullInt64
 	actualCost             sql.NullFloat64
@@ -97,6 +100,10 @@ func newPostgresInsertRecord(record Record) (postgresInsertRecord, error) {
 	if err != nil {
 		return postgresInsertRecord{}, fmt.Errorf("failed to marshal projection trace: %w", err)
 	}
+	sessionPolicyJSON, err := marshalReplayOptionalJSON(prepared.SessionPolicy)
+	if err != nil {
+		return postgresInsertRecord{}, fmt.Errorf("failed to marshal session policy: %w", err)
+	}
 	hallucinationSpansJSON, err := json.Marshal(prepared.HallucinationSpans)
 	if err != nil {
 		return postgresInsertRecord{}, fmt.Errorf("failed to marshal hallucination spans: %w", err)
@@ -111,6 +118,7 @@ func newPostgresInsertRecord(record Record) (postgresInsertRecord, error) {
 		signalValuesJSON:       signalValuesJSON,
 		toolTraceJSON:          toolTraceJSON,
 		projectionTraceJSON:    projectionTraceJSON,
+		sessionPolicyJSON:      sessionPolicyJSON,
 		hallucinationSpansJSON: hallucinationSpansJSON,
 	}, nil
 }
@@ -148,6 +156,7 @@ func (record postgresInsertRecord) args() []interface{} {
 		record.signalValuesJSON,
 		record.toolTraceJSON,
 		record.projectionTraceJSON,
+		record.sessionPolicyJSON,
 		record.record.RequestBody,
 		record.record.ResponseBody,
 		record.record.ResponseStatus,
@@ -171,6 +180,7 @@ func (record postgresInsertRecord) args() []interface{} {
 		record.record.HallucinationConfidence,
 		record.hallucinationSpansJSON,
 		nullableIntArg(record.record.PromptTokens),
+		nullableIntArg(record.record.CachedPromptTokens),
 		nullableIntArg(record.record.CompletionTokens),
 		nullableIntArg(record.record.TotalTokens),
 		nullableFloat64Arg(record.record.ActualCost),
@@ -231,6 +241,7 @@ func (row *postgresRecordRow) scanDestinations() []interface{} {
 		&row.signalValuesJSON,
 		&row.toolTraceJSON,
 		&row.projectionTraceJSON,
+		&row.sessionPolicyJSON,
 		&row.record.RequestBody,
 		&row.record.ResponseBody,
 		&row.record.ResponseStatus,
@@ -254,6 +265,7 @@ func (row *postgresRecordRow) scanDestinations() []interface{} {
 		&row.record.HallucinationConfidence,
 		&row.hallucinationSpansJSON,
 		&row.promptTokens,
+		&row.cachedPromptTokens,
 		&row.completionTokens,
 		&row.totalTokens,
 		&row.actualCost,
@@ -278,6 +290,7 @@ func (row *postgresRecordRow) decode() (Record, error) {
 	assignUsageCostFields(
 		&row.record,
 		row.promptTokens,
+		row.cachedPromptTokens,
 		row.completionTokens,
 		row.totalTokens,
 		row.actualCost,
@@ -311,6 +324,9 @@ func (row *postgresRecordRow) unmarshalDecodedJSON() error {
 	}
 	if err := unmarshalReplayOptionalJSON(row.projectionTraceJSON, &row.record.ProjectionTrace); err != nil {
 		return fmt.Errorf("failed to unmarshal projection trace: %w", err)
+	}
+	if err := unmarshalReplayOptionalJSON(row.sessionPolicyJSON, &row.record.SessionPolicy); err != nil {
+		return fmt.Errorf("failed to unmarshal session policy: %w", err)
 	}
 	return nil
 }

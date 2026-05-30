@@ -86,6 +86,8 @@ func extractAnthropicSystemText(system gjson.Result) string {
 func consumeFastExtractAnthropicMessage(msg gjson.Result, result *FastExtractResult) {
 	role := msg.Get("role").String()
 	content := msg.Get("content")
+	result.LastMessageRole = role
+	result.LastMessageToolResult = false
 
 	text := extractAnthropicTextFromContent(content)
 	hasToolResult, hasToolUse := scanAnthropicBlockTypes(content)
@@ -101,6 +103,7 @@ func consumeFastExtractAnthropicMessage(msg gjson.Result, result *FastExtractRes
 			// signal parity.
 			result.ToolMessageCount++
 			result.ToolResultCount++
+			result.LastMessageToolResult = true
 		}
 	case "assistant":
 		result.AssistantMessageCount++

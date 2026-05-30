@@ -92,6 +92,11 @@ const (
 	// MethodMultiFactor combines quality/latency/cost/load signals via a
 	// weighted score with optional SLO ceilings. Issue #37.
 	MethodMultiFactor SelectionMethod = "multi_factor"
+
+	// MethodSessionAware wraps a base selector with agentic session policy:
+	// it keeps tool loops and hot multi-turn continuations on the current model
+	// unless the switch benefit clears the explicit handoff and prefix-cache cost.
+	MethodSessionAware SelectionMethod = "session_aware"
 )
 
 // AlgorithmTier classifies algorithms by production readiness
@@ -180,6 +185,11 @@ type SelectionContext struct {
 	// Used to track within-session model performance
 	SessionID string
 
+	// AgenticSession carries request-time session facts used by
+	// session_aware selection. The legacy flat SessionID remains for selectors
+	// that only need a correlation key.
+	AgenticSession *AgenticSessionContext
+
 	// LatencyAwareTPOTPercentile is the configured TPOT percentile (1-100) for latency_aware selection
 	LatencyAwareTPOTPercentile int
 
@@ -215,6 +225,10 @@ type SelectionResult struct {
 
 	// AllScores maps each candidate model to its computed score
 	AllScores map[string]float64
+
+	// SessionPolicy records the session-aware stay/switch policy trace when
+	// Method is session_aware.
+	SessionPolicy *SessionPolicyTrace
 }
 
 // Selector is the interface for model selection algorithms

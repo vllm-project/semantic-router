@@ -3,10 +3,12 @@ package extproc
 import (
 	"context"
 	"strings"
+	"time"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/selection"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/sessiontelemetry"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/utils/entropy"
 )
 
@@ -36,6 +38,7 @@ func (r *OpenAIRouter) performDecisionEvaluation(originalModel string, history s
 	}
 
 	signalInput := r.prepareSignalEvaluationInput(history)
+	ctx.VSRConversationFacts = signalInput.conversationFacts
 	if signalInput.evaluationText == "" {
 		return "", 0.0, entropy.ReasoningDecision{}, "", nil
 	}
@@ -72,11 +75,13 @@ func (r *OpenAIRouter) selectModelFromCandidates(selCtx *selection.SelectionCont
 	}
 	if err := selection.ValidateSelectionContext(selCtx); err != nil {
 		logging.Warnf("[ModelSelection] Invalid selection context: %v, using first valid model", err)
+		recordAgenticSessionDecision(selCtx, nil, fallbackModelRef, ctx)
 		return fallbackModelRef, ""
 	}
 
 	// If only one model, no need for selection algorithm
 	if len(selCtx.CandidateModels) == 1 {
+		recordAgenticSessionDecision(selCtx, nil, fallbackModelRef, ctx)
 		return fallbackModelRef, "single"
 	}
 
@@ -84,14 +89,12 @@ func (r *OpenAIRouter) selectModelFromCandidates(selCtx *selection.SelectionCont
 	method := r.getSelectionMethod(algorithm)
 
 	// Get selector from registry
-	var selector selection.Selector
-	if r.ModelSelector != nil {
-		selector, _ = r.ModelSelector.Get(method)
-	}
+	selector := r.selectorForDecisionMethod(method, algorithm)
 
 	// Fallback to first model if no selector available
 	if selector == nil {
 		logging.Warnf("[ModelSelection] No selector available for method %s, using first model", method)
+		recordAgenticSessionDecision(selCtx, nil, fallbackModelRef, ctx)
 		return fallbackModelRef, string(method)
 	}
 
@@ -99,34 +102,97 @@ func (r *OpenAIRouter) selectModelFromCandidates(selCtx *selection.SelectionCont
 	result, err := selector.Select(context.Background(), selCtx)
 	if err != nil {
 		logging.Warnf("[ModelSelection] Selection failed: %v, using first model", err)
+		recordAgenticSessionDecision(selCtx, nil, fallbackModelRef, ctx)
 		return fallbackModelRef, string(method)
 	}
 	if err := selection.ValidateSelectionResult(selCtx, result); err != nil {
 		logging.Warnf("[ModelSelection] Invalid selection result: %v, using first model", err)
+		recordAgenticSessionDecision(selCtx, result, fallbackModelRef, ctx)
 		return fallbackModelRef, string(method)
 	}
 
-	// Find the selected model in the candidates
+	selectedModelRef := selectedModelRefFromResult(selCtx, result)
+	if selectedModelRef == nil {
+		logging.Warnf("[ModelSelection] Selected model %s not found in candidates, using first model", result.SelectedModel)
+		recordAgenticSessionDecision(selCtx, result, fallbackModelRef, ctx)
+		return fallbackModelRef, string(method)
+	}
+	if result.SessionPolicy != nil && ctx != nil {
+		ctx.VSRSessionPolicy = result.SessionPolicy.ToMap()
+	}
+	selectedModelRef, gateApplied := r.applyPostSelectionGate(selCtx, result, selectedModelRef, ctx, method)
+	logSelectionResult(method, result, selectedModelRef, gateApplied)
+	selection.RecordSelection(string(method), selCtx.DecisionName, selectedModelRef.Model, result.Tier, result.Score)
+	recordAgenticSessionDecision(selCtx, result, selectedModelRef, ctx)
+	return selectedModelRef, string(method)
+}
+
+func (r *OpenAIRouter) selectorForDecisionMethod(method selection.SelectionMethod, algorithm *config.AlgorithmConfig) selection.Selector {
+	if method == selection.MethodSessionAware && algorithm != nil && algorithm.SessionAware != nil {
+		return r.newDecisionSessionAwareSelector(algorithm.SessionAware)
+	}
+	if r.ModelSelector == nil {
+		return nil
+	}
+	selector, _ := r.ModelSelector.Get(method)
+	return selector
+}
+
+func (r *OpenAIRouter) newDecisionSessionAwareSelector(decisionCfg *config.SessionAwareSelectionConfig) selection.Selector {
+	cfg := selection.DefaultSessionAwareConfig()
+	if r != nil && r.Config != nil {
+		cfg = buildSessionAwareSelectionConfig(r.Config, decisionCfg)
+	} else if decisionCfg != nil {
+		applySessionAwareSelectionConfig(cfg, *decisionCfg)
+	}
+	selector := selection.NewSessionAwareSelector(cfg)
+	if r == nil {
+		return selector
+	}
+	if r.Config != nil && r.Config.ModelConfig != nil {
+		selector.InitializeFromConfig(r.Config.ModelConfig)
+	}
+	if r.LookupTable != nil {
+		selector.SetLookupTable(r.LookupTable)
+	}
+	if r.ModelSelector != nil && cfg.FallbackMethod != "" && cfg.FallbackMethod != selection.MethodSessionAware {
+		fallback, _ := r.ModelSelector.Get(cfg.FallbackMethod)
+		selector.SetFallbackSelector(fallback)
+	}
+	return selector
+}
+
+func (r *OpenAIRouter) applyPostSelectionGate(
+	selCtx *selection.SelectionContext,
+	result *selection.SelectionResult,
+	selectedModelRef *config.ModelRef,
+	ctx *RequestContext,
+	method selection.SelectionMethod,
+) (*config.ModelRef, bool) {
+	if method == selection.MethodSessionAware || result.Method == selection.MethodSessionAware {
+		return selectedModelRef, false
+	}
+	return r.applyModelSwitchGate(selCtx, result, selectedModelRef, ctx)
+}
+
+func selectedModelRefFromResult(selCtx *selection.SelectionContext, result *selection.SelectionResult) *config.ModelRef {
 	for i := range selCtx.CandidateModels {
 		if selCtx.CandidateModels[i].Model == result.SelectedModel ||
 			selCtx.CandidateModels[i].LoRAName == result.SelectedModel {
-			selectedModelRef := &selCtx.CandidateModels[i]
-			selectedModelRef, gateApplied := r.applyModelSwitchGate(selCtx, result, selectedModelRef, ctx)
-			if gateApplied {
-				logging.Infof("[ModelSelection] Gate enforced stay on %s (method=%s, score=%.4f, confidence=%.2f): %s",
-					selectedModelRef.Model, method, result.Score, result.Confidence, result.Reasoning)
-			} else {
-				logging.Infof("[ModelSelection] Selected %s (method=%s, score=%.4f, confidence=%.2f): %s",
-					selectedModelRef.Model, method, result.Score, result.Confidence, result.Reasoning)
-			}
-			selection.RecordSelection(string(method), selCtx.DecisionName, selectedModelRef.Model, result.Tier, result.Score)
-			return selectedModelRef, string(method)
+			return &selCtx.CandidateModels[i]
 		}
 	}
+	return nil
+}
 
-	// Fallback if selected model not found in candidates (shouldn't happen)
-	logging.Warnf("[ModelSelection] Selected model %s not found in candidates, using first model", result.SelectedModel)
-	return fallbackModelRef, string(method)
+func logSelectionResult(method selection.SelectionMethod, result *selection.SelectionResult, selected *config.ModelRef, gateApplied bool) {
+	if gateApplied {
+		logging.Infof("[ModelSelection] Gate enforced stay on %s (method=%s, score=%.4f, confidence=%.2f): %s",
+			selected.Model, method, result.Score, result.Confidence, result.Reasoning)
+		return
+	}
+	logging.Infof("[ModelSelection] Selected %s (method=%s, score=%.4f, confidence=%.2f): %s",
+		selected.Model, method, result.Score, result.Confidence, result.Reasoning)
 }
 
 func firstValidCandidateModelRef(selCtx *selection.SelectionContext) *config.ModelRef {
@@ -171,9 +237,106 @@ func (r *OpenAIRouter) buildSelectionContext(
 		LatencyAwareTTFTPercentile: latencyAwareTTFTPercentile,
 		UserID:                     userID,
 		SessionID:                  sessionID,
+		AgenticSession:             r.buildAgenticSessionContext(reqCtx, modelRefs, sessionID, userID),
 		ConversationHistory:        conversationHistory,
 		CacheAffinityCtx:           r.buildCacheAffinityContext(reqCtx, modelRefs),
 	}
+}
+
+func (r *OpenAIRouter) buildAgenticSessionContext(
+	reqCtx *RequestContext,
+	modelRefs []config.ModelRef,
+	sessionID string,
+	userID string,
+) *selection.AgenticSessionContext {
+	if reqCtx == nil {
+		return nil
+	}
+	now := time.Now()
+	snapshot, hasMemory := sessiontelemetry.GetRouterSessionSnapshot(sessionID, now)
+	previousModel := reqCtx.PreviousModel
+	if previousModel == "" && hasMemory {
+		previousModel = snapshot.CurrentModel
+	}
+	idleFor := time.Duration(reqCtx.SessionIdleSeconds * float64(time.Second))
+	idleKnown := reqCtx.SessionIdleKnown
+	if hasMemory {
+		idleFor = snapshot.IdleFor
+		idleKnown = true
+	}
+	cacheWarmth, cacheWarmthOK := r.agenticCacheWarmth(reqCtx, previousModel, snapshot, hasMemory, now)
+	facts := reqCtx.VSRConversationFacts
+	activeToolLoop := facts.LastMessageToolResult ||
+		facts.LastMessageRole == "tool" ||
+		facts.AssistantToolCallCount > facts.ToolResultCount
+	phase := selection.AgenticPhaseUserTurn
+	if activeToolLoop {
+		phase = selection.AgenticPhaseToolLoop
+	}
+	return &selection.AgenticSessionContext{
+		ID:                  sessionID,
+		UserID:              userID,
+		TurnIndex:           reqCtx.TurnIndex,
+		PreviousModel:       previousModel,
+		PreviousResponseID:  reqCtx.PreviousResponseID,
+		MemoryPresent:       hasMemory,
+		MemoryTurnCount:     snapshot.TurnCount,
+		MemorySwitchCount:   snapshot.SwitchCount,
+		MemoryModelTurnCnts: snapshot.ModelTurns,
+		MemoryPromptTokens:  snapshot.CumulativePromptTokens,
+		MemoryCachedTokens:  snapshot.CumulativeCachedTokens,
+		MemoryOutputTokens:  snapshot.CumulativeCompletionTokens,
+		MemoryCost:          snapshot.CumulativeCost,
+		LastDecisionReason:  snapshot.LastDecisionReason,
+		HistoryTokens:       reqCtx.HistoryTokenCount,
+		ContextTokens:       reqCtx.VSRContextTokenCount,
+		IdleFor:             idleFor,
+		IdleKnown:           idleKnown,
+		CacheWarmth:         cacheWarmth,
+		CacheWarmthOK:       cacheWarmthOK,
+		Phase:               phase,
+		ActiveToolLoop:      activeToolLoop,
+		ToolCallCount:       facts.AssistantToolCallCount,
+		ToolResultCount:     facts.ToolResultCount,
+		ToolDefinitionCnt:   facts.ToolDefinitionCount,
+		ModelContextWindows: r.modelContextWindows(modelRefs),
+	}
+}
+
+func (r *OpenAIRouter) agenticCacheWarmth(
+	reqCtx *RequestContext,
+	previousModel string,
+	snapshot sessiontelemetry.RouterSessionSnapshot,
+	hasMemory bool,
+	now time.Time,
+) (float64, bool) {
+	cacheWarmth := reqCtx.CacheWarmthEstimate
+	cacheWarmthOK := cacheWarmth > 0
+	if ambient, ok := estimateGateCacheWarmth(previousModel, now); ok {
+		cacheWarmth = ambient
+		cacheWarmthOK = true
+	}
+	if hasMemory && snapshot.CumulativePromptTokens > 0 {
+		cachedRatio := float64(snapshot.CumulativeCachedTokens) / float64(snapshot.CumulativePromptTokens)
+		if cachedRatio > cacheWarmth {
+			cacheWarmth = cachedRatio
+			cacheWarmthOK = true
+		}
+	}
+	return cacheWarmth, cacheWarmthOK
+}
+
+func (r *OpenAIRouter) modelContextWindows(modelRefs []config.ModelRef) map[string]int {
+	if r == nil || r.Config == nil || r.Config.ModelConfig == nil {
+		return nil
+	}
+	windows := make(map[string]int, len(modelRefs))
+	for _, ref := range modelRefs {
+		if params, ok := r.Config.ModelConfig[ref.Model]; ok {
+			windows[ref.Model] = params.ContextWindowSize
+		}
+	}
+	return windows
 }
 
 // buildCacheAffinityContext extracts the pre-dispatch continuation signals used
@@ -186,22 +349,13 @@ func (r *OpenAIRouter) buildCacheAffinityContext(reqCtx *RequestContext, modelRe
 
 	// Missing model window metadata is valid; the estimator treats it as a
 	// neutral fit score rather than as an error.
-	var windows map[string]int
-	if r.Config != nil && r.Config.ModelConfig != nil {
-		windows = make(map[string]int, len(modelRefs))
-		for _, ref := range modelRefs {
-			if params, ok := r.Config.ModelConfig[ref.Model]; ok {
-				windows[ref.Model] = params.ContextWindowSize
-			}
-		}
-	}
 	return &selection.CacheAffinityContext{
 		TurnIndex:           reqCtx.TurnIndex,
 		PreviousModel:       reqCtx.PreviousModel,
 		PreviousResponseID:  reqCtx.PreviousResponseID,
 		HistoryTokens:       reqCtx.HistoryTokenCount,
 		ContextTokens:       reqCtx.VSRContextTokenCount,
-		ModelContextWindows: windows,
+		ModelContextWindows: r.modelContextWindows(modelRefs),
 	}
 }
 
@@ -331,7 +485,7 @@ func (r *OpenAIRouter) extractSessionContext(ctx *RequestContext) (sessionID, us
 	if len(ctx.ChatCompletionMessages) > 0 {
 		return r.extractChatCompletionSessionContext(ctx, userID)
 	}
-	return "", userID, nil
+	return ctx.SessionID, userID, nil
 }
 
 func (r *OpenAIRouter) extractResponseAPISessionContext(ctx *RequestContext, userID string) (sessionID, userIDOut string, conversationHistory []string) {
@@ -354,7 +508,10 @@ func (r *OpenAIRouter) extractResponseAPISessionContext(ctx *RequestContext, use
 }
 
 func (r *OpenAIRouter) extractChatCompletionSessionContext(ctx *RequestContext, userID string) (sessionID, userIDOut string, conversationHistory []string) {
-	sessionID = deriveSessionIDFromMessages(ctx.ChatCompletionMessages, userID)
+	sessionID = ctx.SessionID
+	if sessionID == "" {
+		sessionID = deriveSessionIDFromMessages(ctx.ChatCompletionMessages, userID)
+	}
 	for i, msg := range ctx.ChatCompletionMessages {
 		if msg.Content != "" && i < len(ctx.ChatCompletionMessages)-1 {
 			conversationHistory = append(conversationHistory, msg.Content)

@@ -25,17 +25,17 @@ const postgresInsertQueryTemplate = `
 		INSERT INTO %s (
 			id, timestamp, request_id, decision, decision_tier, decision_priority, category,
 			original_model, selected_model, reasoning_mode,
-			signals, projections, projection_scores, signal_confidences, signal_values, tool_trace, projection_trace,
+			signals, projections, projection_scores, signal_confidences, signal_values, tool_trace, projection_trace, session_policy,
 			request_body, response_body, response_status,
 			from_cache, streaming, request_body_truncated, response_body_truncated,
 			guardrails_enabled, jailbreak_enabled, pii_enabled,
 			prompt, prompt_truncated, tool_definitions, tool_definitions_truncated,
 			rag_enabled, rag_backend, rag_context_length, rag_similarity_score,
 			hallucination_enabled, hallucination_detected, hallucination_confidence, hallucination_spans,
-			prompt_tokens, completion_tokens, total_tokens,
+			prompt_tokens, cached_prompt_tokens, completion_tokens, total_tokens,
 			actual_cost, baseline_cost, cost_savings, currency, baseline_model,
 			session_id, turn_index, previous_response_id, conversation_id
-		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27, $28, $29, $30, $31, $32, $33, $34, $35, $36, $37, $38, $39, $40, $41, $42, $43, $44, $45, $46, $47, $48, $49, $50, $51)
+		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27, $28, $29, $30, $31, $32, $33, $34, $35, $36, $37, $38, $39, $40, $41, $42, $43, $44, $45, $46, $47, $48, $49, $50, $51, $52, $53)
 	`
 
 // PostgresStore implements Storage using PostgreSQL as the backend.
@@ -110,6 +110,7 @@ func (p *PostgresStore) createTable(ctx context.Context) error {
 			signal_values JSONB,
 			tool_trace JSONB,
 			projection_trace JSONB,
+			session_policy JSONB,
 			request_body TEXT,
 			response_body TEXT,
 			response_status INTEGER,
@@ -133,6 +134,7 @@ func (p *PostgresStore) createTable(ctx context.Context) error {
 			hallucination_confidence REAL DEFAULT 0,
 			hallucination_spans JSONB,
 			prompt_tokens INTEGER,
+			cached_prompt_tokens INTEGER,
 			completion_tokens INTEGER,
 			total_tokens INTEGER,
 			actual_cost DOUBLE PRECISION,
@@ -150,11 +152,13 @@ func (p *PostgresStore) createTable(ctx context.Context) error {
 		ALTER TABLE %s ADD COLUMN IF NOT EXISTS signal_values JSONB;
 		ALTER TABLE %s ADD COLUMN IF NOT EXISTS tool_trace JSONB;
 		ALTER TABLE %s ADD COLUMN IF NOT EXISTS projection_trace JSONB;
+		ALTER TABLE %s ADD COLUMN IF NOT EXISTS session_policy JSONB;
 		ALTER TABLE %s ADD COLUMN IF NOT EXISTS prompt TEXT;
 		ALTER TABLE %s ADD COLUMN IF NOT EXISTS prompt_truncated BOOLEAN DEFAULT FALSE;
 		ALTER TABLE %s ADD COLUMN IF NOT EXISTS tool_definitions TEXT;
 		ALTER TABLE %s ADD COLUMN IF NOT EXISTS tool_definitions_truncated BOOLEAN DEFAULT FALSE;
 		ALTER TABLE %s ADD COLUMN IF NOT EXISTS prompt_tokens INTEGER;
+		ALTER TABLE %s ADD COLUMN IF NOT EXISTS cached_prompt_tokens INTEGER;
 		ALTER TABLE %s ADD COLUMN IF NOT EXISTS completion_tokens INTEGER;
 		ALTER TABLE %s ADD COLUMN IF NOT EXISTS total_tokens INTEGER;
 		ALTER TABLE %s ADD COLUMN IF NOT EXISTS actual_cost DOUBLE PRECISION;
@@ -177,6 +181,7 @@ func (p *PostgresStore) createTable(ctx context.Context) error {
 		p.tableName, p.tableName, p.tableName, p.tableName, p.tableName, p.tableName, p.tableName, p.tableName,
 		p.tableName, p.tableName, p.tableName, p.tableName, p.tableName, p.tableName, p.tableName, p.tableName,
 		p.tableName, p.tableName, p.tableName, p.tableName,
+		p.tableName, p.tableName,
 		p.tableName, p.tableName, p.tableName, p.tableName,
 		p.tableName, p.tableName, p.tableName, p.tableName)
 
@@ -416,13 +421,14 @@ func (p *PostgresStore) UpdateUsageCost(ctx context.Context, id string, usage Us
 	query := fmt.Sprintf(`
 		UPDATE %s
 		SET prompt_tokens = $2,
-		    completion_tokens = $3,
-		    total_tokens = $4,
-		    actual_cost = $5,
-		    baseline_cost = $6,
-		    cost_savings = $7,
-		    currency = $8,
-		    baseline_model = $9
+		    cached_prompt_tokens = $3,
+		    completion_tokens = $4,
+		    total_tokens = $5,
+		    actual_cost = $6,
+		    baseline_cost = $7,
+		    cost_savings = $8,
+		    currency = $9,
+		    baseline_model = $10
 		WHERE id = $1
 	`, p.tableName)
 
@@ -432,6 +438,7 @@ func (p *PostgresStore) UpdateUsageCost(ctx context.Context, id string, usage Us
 			query,
 			id,
 			nullableIntArg(usage.PromptTokens),
+			nullableIntArg(usage.CachedPromptTokens),
 			nullableIntArg(usage.CompletionTokens),
 			nullableIntArg(usage.TotalTokens),
 			nullableFloat64Arg(usage.ActualCost),

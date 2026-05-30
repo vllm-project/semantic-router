@@ -10,6 +10,7 @@ import (
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/headers"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/responseapi"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/sessiontelemetry"
 )
 
 func TestPopulateSessionTransitionFields_ResponseAPI(t *testing.T) {
@@ -176,6 +177,27 @@ func TestPopulateSessionTransitionFields_XSessionIDHeaderOverridesDerivation(t *
 
 	assert.Equal(t, "client-defined-session", ctx.SessionID)
 	assert.Equal(t, 0, ctx.TurnIndex)
+}
+
+func TestPopulatePinnedSessionFromHeadersReadsRouterMemoryBeforeParsing(t *testing.T) {
+	sessiontelemetry.ResetRouterSessionMemoryForTesting()
+	t.Cleanup(sessiontelemetry.ResetRouterSessionMemoryForTesting)
+	sessiontelemetry.RecordSessionDecision(sessiontelemetry.SessionDecisionParams{
+		SessionID:     "client-defined-session",
+		SelectedModel: "cheap-agent",
+	})
+
+	ctx := &RequestContext{
+		Headers: map[string]string{
+			headers.XSessionID: "client-defined-session",
+		},
+	}
+
+	populatePinnedSessionFromHeaders(ctx)
+
+	assert.Equal(t, "client-defined-session", ctx.SessionID)
+	assert.Equal(t, "cheap-agent", ctx.PreviousModel)
+	assert.True(t, ctx.SessionIdleKnown)
 }
 
 func TestPopulateSessionTransitionFields_ChatCompletionsNoUserUsesStructureHash(t *testing.T) {

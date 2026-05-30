@@ -37,6 +37,7 @@ func emptyStringSQL(s string) interface{} {
 func assignUsageCostFields(
 	record *Record,
 	promptTokens sql.NullInt64,
+	cachedPromptTokens sql.NullInt64,
 	completionTokens sql.NullInt64,
 	totalTokens sql.NullInt64,
 	actualCost sql.NullFloat64,
@@ -48,6 +49,10 @@ func assignUsageCostFields(
 	if promptTokens.Valid {
 		value := int(promptTokens.Int64)
 		record.PromptTokens = &value
+	}
+	if cachedPromptTokens.Valid {
+		value := int(cachedPromptTokens.Int64)
+		record.CachedPromptTokens = &value
 	}
 	if completionTokens.Valid {
 		value := int(completionTokens.Int64)

@@ -37,6 +37,43 @@ func validateModelSwitchGate(cfg ModelSwitchGateConfig) error {
 	return nil
 }
 
+func validateSessionAwareSelectionConfig(cfg SessionAwareSelectionConfig) error {
+	if cfg.IdleTimeoutSeconds < 0 {
+		return fmt.Errorf("session_aware.idle_timeout_seconds must be >= 0, got %d", cfg.IdleTimeoutSeconds)
+	}
+	if cfg.MinTurnsBeforeSwitch < 0 {
+		return fmt.Errorf("session_aware.min_turns_before_switch must be >= 0, got %d", cfg.MinTurnsBeforeSwitch)
+	}
+	if cfg.SwitchMargin < 0 {
+		return fmt.Errorf("session_aware.switch_margin must be >= 0, got %v", cfg.SwitchMargin)
+	}
+	if cfg.StayBias < 0 {
+		return fmt.Errorf("session_aware.stay_bias must be >= 0, got %v", cfg.StayBias)
+	}
+	if cfg.ToolLoopStayBias < 0 {
+		return fmt.Errorf("session_aware.tool_loop_stay_bias must be >= 0, got %v", cfg.ToolLoopStayBias)
+	}
+	if cfg.PrefixCacheWeight < 0 {
+		return fmt.Errorf("session_aware.prefix_cache_weight must be >= 0, got %v", cfg.PrefixCacheWeight)
+	}
+	if cfg.HandoffPenaltyWeight < 0 {
+		return fmt.Errorf("session_aware.handoff_penalty_weight must be >= 0, got %v", cfg.HandoffPenaltyWeight)
+	}
+	if cfg.DefaultHandoffPenalty < 0 {
+		return fmt.Errorf("session_aware.default_handoff_penalty must be >= 0, got %v", cfg.DefaultHandoffPenalty)
+	}
+	if cfg.QualityGapMultiplier < 0 {
+		return fmt.Errorf("session_aware.quality_gap_multiplier must be >= 0, got %v", cfg.QualityGapMultiplier)
+	}
+	if cfg.MaxCacheCostMultiplier < 0 {
+		return fmt.Errorf("session_aware.max_cache_cost_multiplier must be >= 0, got %v", cfg.MaxCacheCostMultiplier)
+	}
+	if cfg.SwitchHistoryWeight < 0 {
+		return fmt.Errorf("session_aware.switch_history_weight must be >= 0, got %v", cfg.SwitchHistoryWeight)
+	}
+	return nil
+}
+
 // warnModelSwitchGateEnforceWithoutCostSignals emits a startup warning when
 // enforce is configured but neither lookup_tables nor a default handoff penalty
 // is in place. In that situation the gate's stay cost has no real evidence and

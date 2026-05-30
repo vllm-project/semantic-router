@@ -352,6 +352,9 @@ func appendUsageCostLogFields(fields map[string]interface{}, r RoutingRecord) {
 	if r.PromptTokens != nil {
 		fields["prompt_tokens"] = *r.PromptTokens
 	}
+	if r.CachedPromptTokens != nil {
+		fields["cached_prompt_tokens"] = *r.CachedPromptTokens
+	}
 	if r.CompletionTokens != nil {
 		fields["completion_tokens"] = *r.CompletionTokens
 	}
@@ -388,6 +391,7 @@ func LogFields(r RoutingRecord, event string) map[string]interface{} {
 		"reasoning_mode":    r.ReasoningMode,
 		"confidence_score":  r.ConfidenceScore,
 		"selection_method":  r.SelectionMethod,
+		"session_policy":    r.SessionPolicy,
 		"request_id":        r.RequestID,
 		"timestamp":         r.Timestamp,
 		"turn_index":        r.TurnIndex,

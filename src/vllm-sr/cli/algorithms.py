@@ -233,6 +233,24 @@ class HybridSelectionConfig(BaseModel):
     normalize_scores: bool | None = True
 
 
+class SessionAwareSelectionConfig(BaseModel):
+    """Configuration for session-aware agentic model selection."""
+
+    fallback_method: str | None = "hybrid"
+    idle_timeout_seconds: int | None = Field(default=300, ge=0)
+    min_turns_before_switch: int | None = Field(default=1, ge=0)
+    switch_margin: float | None = Field(default=0.05, ge=0)
+    stay_bias: float | None = Field(default=0.10, ge=0)
+    tool_loop_hard_lock: bool | None = True
+    tool_loop_stay_bias: float | None = Field(default=0.35, ge=0)
+    prefix_cache_weight: float | None = Field(default=0.20, ge=0)
+    handoff_penalty_weight: float | None = Field(default=1.0, ge=0)
+    default_handoff_penalty: float | None = Field(default=0.05, ge=0)
+    quality_gap_multiplier: float | None = Field(default=1.0, ge=0)
+    max_cache_cost_multiplier: float | None = Field(default=2.5, ge=0)
+    switch_history_weight: float | None = Field(default=0.04, ge=0)
+
+
 # =============================================================================
 # RL-Driven Model Selection Algorithm Configs (from PR #1196 / Issue #994)
 # Reference papers:
@@ -366,6 +384,7 @@ class AlgorithmConfig(BaseModel):
        - "router_dc": Use embedding similarity for query-model matching
        - "automix": Use POMDP-based cost-quality optimization
        - "hybrid": Combine multiple selection methods
+       - "session_aware": Agentic long-horizon routing with router-owned session memory
 
     3. RL-driven selection algorithms (from issue #994):
        - "rl_driven": Canonical online learning and Router-R1 style selector
@@ -390,6 +409,7 @@ class AlgorithmConfig(BaseModel):
     router_dc: RouterDCSelectionConfig | None = None
     automix: AutoMixSelectionConfig | None = None
     hybrid: HybridSelectionConfig | None = None
+    session_aware: SessionAwareSelectionConfig | None = None
 
     # RL-driven selection algorithms (from PR #1196, issue #994)
     rl_driven: RLDrivenSelectionConfig | None = None

@@ -71,6 +71,7 @@ func TestSelectorsRejectInvalidSelectionContextWithoutPanic(t *testing.T) {
 		{name: "rl_driven", selector: NewRLDrivenSelector(nil)},
 		{name: "latency_aware", selector: NewLatencyAwareSelector(nil)},
 		{name: "ml_adapter", selector: NewMLSelectorAdapter(nil, MethodKNN)},
+		{name: "session_aware", selector: NewSessionAwareSelector(nil)},
 	}
 
 	for _, tc := range selectors {

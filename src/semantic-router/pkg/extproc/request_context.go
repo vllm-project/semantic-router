@@ -7,6 +7,7 @@ import (
 	"go.opentelemetry.io/otel/trace"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/anthropic"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/classification"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/ir"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/projectiontrace"
@@ -93,6 +94,8 @@ type RequestContext struct {
 	TurnIndex           int     // Number of prior turns in this session (0 = first turn)
 	PreviousModel       string  // Model used in the immediately preceding turn; empty on first turn
 	CacheWarmthEstimate float64 // [0,1] from EstimateCacheProbability; 0.5 = unknown
+	SessionIdleSeconds  float64 // Seconds since the last locally observed turn for this session
+	SessionIdleKnown    bool    // True when SessionIdleSeconds came from local session observation
 
 	// HistoryTokenCount is the estimated token count of conversation history,
 	// excluding the current turn. Source priority: provider usage accumulation
@@ -105,16 +108,17 @@ type RequestContext struct {
 	PreviousResponseID string
 
 	// VSR decision tracking
-	VSRSelectedCategory           string           // The category from domain classification (MMLU category)
-	VSRSelectedDecisionName       string           // The decision name from DecisionEngine evaluation
-	VSRSelectedDecisionConfidence float64          // Confidence score from DecisionEngine evaluation
-	VSRReasoningMode              string           // "on" or "off" - whether reasoning mode was determined to be used
-	VSRSelectedModel              string           // The model selected by VSR
-	VSRSelectionMethod            string           // Model selection algorithm used (e.g., "elo", "static", "router_dc")
-	VSRCacheHit                   bool             // Whether this request hit the cache
-	VSRCacheSimilarity            float32          // Similarity score from last cache lookup (0 = no lookup performed)
-	VSRInjectedSystemPrompt       bool             // Whether a system prompt was injected into the request
-	VSRSelectedDecision           *config.Decision // The decision object selected by DecisionEngine (for plugins)
+	VSRSelectedCategory           string                 // The category from domain classification (MMLU category)
+	VSRSelectedDecisionName       string                 // The decision name from DecisionEngine evaluation
+	VSRSelectedDecisionConfidence float64                // Confidence score from DecisionEngine evaluation
+	VSRReasoningMode              string                 // "on" or "off" - whether reasoning mode was determined to be used
+	VSRSelectedModel              string                 // The model selected by VSR
+	VSRSelectionMethod            string                 // Model selection algorithm used (e.g., "elo", "static", "router_dc")
+	VSRSessionPolicy              map[string]interface{} // Session-aware routing policy trace for replay/experiments
+	VSRCacheHit                   bool                   // Whether this request hit the cache
+	VSRCacheSimilarity            float32                // Similarity score from last cache lookup (0 = no lookup performed)
+	VSRInjectedSystemPrompt       bool                   // Whether a system prompt was injected into the request
+	VSRSelectedDecision           *config.Decision       // The decision object selected by DecisionEngine (for plugins)
 
 	// Modality routing classification result (AR/DIFFUSION/BOTH)
 	ModalityClassification *ModalityClassificationResult // Set by classifyModality()
@@ -138,6 +142,7 @@ type RequestContext struct {
 	VSRMatchedPII          []string // Matched PII rule names (denied PII types detected)
 	VSRMatchedKB           []string // Matched knowledge-base signal names
 	VSRMatchedConversation []string // Matched conversation-shape signal names
+	VSRConversationFacts   classification.ConversationFacts
 	VSRMatchedProjection   []string // Matched projection mapping outputs
 	VSRProjectionScores    map[string]float64
 	VSRSignalConfidences   map[string]float64

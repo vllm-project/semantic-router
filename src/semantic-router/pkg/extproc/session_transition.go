@@ -2,6 +2,7 @@ package extproc
 
 import (
 	"strings"
+	"time"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/headers"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
@@ -30,6 +31,7 @@ func populateSessionTransitionFields(ctx *RequestContext) {
 			}
 		}
 		ctx.HistoryTokenCount = historyTokensFromStoredResponses(history)
+		populateLastSessionObservation(ctx)
 		return
 	}
 
@@ -54,6 +56,45 @@ func populateSessionTransitionFields(ctx *RequestContext) {
 	if model, ok := sessiontelemetry.GetLastModel(ctx.SessionID); ok {
 		ctx.PreviousModel = model
 	}
+	populateLastSessionObservation(ctx)
+}
+
+// populatePinnedSessionFromHeaders makes client-supplied Chat Completions
+// session IDs available before full request parsing. Decision evaluation runs
+// on the fast-extract path, so session-aware selection cannot wait for
+// populateSessionTransitionFields.
+func populatePinnedSessionFromHeaders(ctx *RequestContext) {
+	if ctx == nil {
+		return
+	}
+	if sid := strings.TrimSpace(headerValueCI(ctx, headers.XSessionID)); sid != "" {
+		ctx.SessionID = sid
+	}
+	if ctx.SessionID == "" {
+		return
+	}
+	populateLastSessionObservation(ctx)
+}
+
+func populateLastSessionObservation(ctx *RequestContext) {
+	now := time.Now()
+	if snapshot, ok := sessiontelemetry.GetRouterSessionSnapshot(ctx.SessionID, now); ok {
+		if ctx.PreviousModel == "" {
+			ctx.PreviousModel = snapshot.CurrentModel
+		}
+		ctx.SessionIdleSeconds = snapshot.IdleFor.Seconds()
+		ctx.SessionIdleKnown = true
+		return
+	}
+	model, idleFor, ok := sessiontelemetry.GetLastModelInfo(ctx.SessionID, now)
+	if !ok {
+		return
+	}
+	if ctx.PreviousModel == "" {
+		ctx.PreviousModel = model
+	}
+	ctx.SessionIdleSeconds = idleFor.Seconds()
+	ctx.SessionIdleKnown = true
 }
 
 // populateChatCompletionSessionIDIfNeeded sets ctx.SessionID when not already

@@ -443,6 +443,14 @@ routing:
             type: tool_definition
         predicate:
           gte: 1
+      - name: active_tool_use
+        description: Tool-result continuation inside an agent loop.
+        feature:
+          type: count
+          source:
+            type: assistant_tool_cycle
+        predicate:
+          gte: 1
       - name: has_developer_msg
         description: Request contains a developer message.
         feature:
@@ -1091,6 +1099,34 @@ routing:
           latency_percentile: 95
           on_no_candidates: cheapest
 
+    - name: agentic_session_route
+      description: Session-aware policy for agentic multi-turn traffic.
+      priority: 123
+      rules:
+        operator: AND
+        conditions:
+          - type: conversation
+            name: active_tool_use
+      modelRefs:
+        - model: qwen3-8b
+        - model: qwen3-32b
+      algorithm:
+        type: session_aware
+        session_aware:
+          fallback_method: hybrid
+          idle_timeout_seconds: 300
+          min_turns_before_switch: 1
+          switch_margin: 0.05
+          stay_bias: 0.10
+          tool_loop_hard_lock: true
+          tool_loop_stay_bias: 0.35
+          prefix_cache_weight: 0.20
+          handoff_penalty_weight: 1.0
+          default_handoff_penalty: 0.05
+          quality_gap_multiplier: 1.0
+          max_cache_cost_multiplier: 2.5
+          switch_history_weight: 0.04
+
     - name: fallback_knn_route
       description: KNN fallback route for general traffic with OpenAI vector-store RAG.
       priority: 120
@@ -1347,6 +1383,20 @@ global:
         cost_weight: 0.1
         quality_gap_threshold: 0.08
         normalize_scores: true
+      session_aware:
+        fallback_method: hybrid
+        idle_timeout_seconds: 300
+        min_turns_before_switch: 1
+        switch_margin: 0.05
+        stay_bias: 0.10
+        tool_loop_hard_lock: true
+        tool_loop_stay_bias: 0.35
+        prefix_cache_weight: 0.20
+        handoff_penalty_weight: 1.0
+        default_handoff_penalty: 0.05
+        quality_gap_multiplier: 1.0
+        max_cache_cost_multiplier: 2.5
+        switch_history_weight: 0.04
       momentum:
         enabled: false
         attack: 0.7

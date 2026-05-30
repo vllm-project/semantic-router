@@ -128,3 +128,26 @@ def test_show_status_reports_not_running_when_docker_daemon_unreachable(monkeypa
     assert "Status: Not running" in messages
     assert any("Docker daemon is not reachable" in message for message in messages)
     assert "Start with: vllm-sr serve" in messages
+
+
+def test_never_pull_preflight_skips_dashboard_when_disabled(monkeypatch):
+    captured = {}
+
+    def fake_get_runtime_images(**kwargs):
+        captured.update(kwargs)
+        return {"router": "router:test", "envoy": "envoy:test"}
+
+    monkeypatch.setattr(core, "get_runtime_images", fake_get_runtime_images)
+
+    core.ensure_runtime_images_for_pull_policy(
+        image="router:test",
+        router_image=None,
+        envoy_image=None,
+        dashboard_image="dashboard:missing",
+        pull_policy="never",
+        env_vars={"VLLM_SR_PLATFORM": "amd"},
+        dashboard_disabled=True,
+    )
+
+    assert captured["dashboard_image"] is None
+    assert captured["include_dashboard"] is False

@@ -20,6 +20,8 @@ type ConversationFacts struct {
 	ToolDefinitionCount    int
 	AssistantToolCallCount int
 	ToolResultCount        int
+	LastMessageRole        string
+	LastMessageToolResult  bool
 }
 
 func (c *Classifier) evaluateConversationSignal(results *SignalResults, mu *sync.Mutex, facts ConversationFacts) {

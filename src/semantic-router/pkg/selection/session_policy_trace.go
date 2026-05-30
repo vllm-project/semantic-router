@@ -1,0 +1,117 @@
+package selection
+
+// SessionPolicyTrace is the auditable output of the session-aware policy.
+// It records the facts and costs used to decide whether an agentic session may
+// switch models, so replay and experiments can reconstruct every stay/switch.
+type SessionPolicyTrace struct {
+	Algorithm      string
+	FallbackMethod string
+
+	SessionID string
+	UserID    string
+	Phase     AgenticPhase
+
+	CurrentModel          string
+	FallbackSelectedModel string
+	SelectedModel         string
+
+	TurnIndex       int
+	MemoryTurnCount int
+	SwitchCount     int
+
+	ActiveToolLoop bool
+	IdleKnown      bool
+	IdleForSeconds float64
+	IdleExpired    bool
+
+	HardLocked     bool
+	HardLockReason string
+	DecisionReason string
+	MissingSignals []string
+
+	ContinuationMass float64
+	CacheWarmth      float64
+	CacheWarmthOK    bool
+	SwitchMargin     float64
+	StayBias         float64
+
+	BaseScores      map[string]float64
+	FinalScores     map[string]float64
+	CandidateTraces map[string]SessionCandidateTrace
+}
+
+// SessionCandidateTrace captures the per-model decomposition used by
+// SessionPolicyTrace.
+type SessionCandidateTrace struct {
+	Current bool
+
+	BaseScore  float64
+	FinalScore float64
+
+	SelectorDelta          float64
+	QualityGap             float64
+	HandoffPenalty         float64
+	PrefixCacheBenefit     float64
+	PrefixCachePenalty     float64
+	ToolLoopPenalty        float64
+	SwitchHistoryPenalty   float64
+	FrontierCostMultiplier float64
+	NetSwitchAdvantage     float64
+}
+
+// ToMap converts the trace into a JSON-friendly representation for packages
+// that should not import selection types into their storage schema.
+func (t *SessionPolicyTrace) ToMap() map[string]interface{} {
+	if t == nil {
+		return nil
+	}
+	out := map[string]interface{}{
+		"algorithm":               t.Algorithm,
+		"fallback_method":         t.FallbackMethod,
+		"session_id":              t.SessionID,
+		"user_id":                 t.UserID,
+		"phase":                   string(t.Phase),
+		"current_model":           t.CurrentModel,
+		"fallback_selected_model": t.FallbackSelectedModel,
+		"selected_model":          t.SelectedModel,
+		"turn_index":              t.TurnIndex,
+		"memory_turn_count":       t.MemoryTurnCount,
+		"switch_count":            t.SwitchCount,
+		"active_tool_loop":        t.ActiveToolLoop,
+		"idle_known":              t.IdleKnown,
+		"idle_for_seconds":        t.IdleForSeconds,
+		"idle_expired":            t.IdleExpired,
+		"hard_locked":             t.HardLocked,
+		"hard_lock_reason":        t.HardLockReason,
+		"decision_reason":         t.DecisionReason,
+		"missing_signals":         append([]string(nil), t.MissingSignals...),
+		"continuation_mass":       t.ContinuationMass,
+		"cache_warmth":            t.CacheWarmth,
+		"cache_warmth_ok":         t.CacheWarmthOK,
+		"switch_margin":           t.SwitchMargin,
+		"stay_bias":               t.StayBias,
+		"base_scores":             cloneScores(t.BaseScores),
+		"final_scores":            cloneScores(t.FinalScores),
+	}
+	if len(t.CandidateTraces) > 0 {
+		candidates := make(map[string]interface{}, len(t.CandidateTraces))
+		for model, trace := range t.CandidateTraces {
+			candidates[model] = map[string]interface{}{
+				"current":                  trace.Current,
+				"base_score":               trace.BaseScore,
+				"final_score":              trace.FinalScore,
+				"selector_delta":           trace.SelectorDelta,
+				"quality_gap":              trace.QualityGap,
+				"handoff_penalty":          trace.HandoffPenalty,
+				"prefix_cache_benefit":     trace.PrefixCacheBenefit,
+				"prefix_cache_penalty":     trace.PrefixCachePenalty,
+				"tool_loop_penalty":        trace.ToolLoopPenalty,
+				"switch_history_penalty":   trace.SwitchHistoryPenalty,
+				"frontier_cost_multiplier": trace.FrontierCostMultiplier,
+				"net_switch_advantage":     trace.NetSwitchAdvantage,
+			}
+		}
+		out["candidate_traces"] = candidates
+	}
+	return out
+}

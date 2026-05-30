@@ -23,6 +23,7 @@ var algorithmTutorialBuckets = map[string]string{
 	"remom":         "looper",
 	"rl-driven":     "selection",
 	"router-dc":     "selection",
+	"session-aware": "selection",
 	"static":        "selection",
 	"svm":           "selection",
 }

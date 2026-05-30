@@ -35,13 +35,15 @@ func recordSessionTurn(ctx *RequestContext, usage responseUsageMetrics, pricing 
 	if ctx.VSRSelectedCategory != "" {
 		domain = ctx.VSRSelectedCategory
 	}
+	sessiontelemetry.RecordLastModel(ctx.SessionID, ctx.RequestModel)
 	p := sessiontelemetry.TurnParams{
-		RequestID:        ctx.RequestID,
-		Model:            ctx.RequestModel,
-		Domain:           domain,
-		PromptTokens:     usage.promptTokens,
-		CompletionTokens: usage.completionTokens,
-		Pricing:          pricing,
+		RequestID:          ctx.RequestID,
+		Model:              ctx.RequestModel,
+		Domain:             domain,
+		PromptTokens:       usage.promptTokens,
+		CachedPromptTokens: usage.cachedPromptTokens,
+		CompletionTokens:   usage.completionTokens,
+		Pricing:            pricing,
 	}
 	if ctx.ResponseAPICtx != nil && ctx.ResponseAPICtx.IsResponseAPIRequest {
 		if ctx.ResponseAPICtx.ConversationID == "" {
@@ -64,12 +66,6 @@ func recordSessionTurn(ctx *RequestContext, usage responseUsageMetrics, pricing 
 			}
 		}
 		p.Chat = &sessiontelemetry.ChatInput{UserID: userID, Messages: msgs}
-		// Remember the model used for this Chat Completions session so the next
-		// turn's request phase can populate ctx.PreviousModel via GetLastModel.
-		// Keyed on ctx.SessionID (set during request prep), the same key the read
-		// side uses. Response API derives previous model from the conversation
-		// chain instead, so it is intentionally not recorded here.
-		sessiontelemetry.RecordLastModel(ctx.SessionID, ctx.RequestModel)
 	}
 	sessiontelemetry.RecordTurn(p)
 }
