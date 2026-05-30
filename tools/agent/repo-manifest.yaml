@@ -135,19 +135,10 @@ docs:
 - docs/agent/plans/pl-0032-architecture-scorecard-ratchet.md
 - docs/agent/plans/pl-0033-v0-3-themis-release-closure.md
 - docs/agent/tech-debt/td-006-structural-rule-exceptions.md
-- docs/agent/tech-debt/td-015-weakly-typed-config-and-dsl-contracts.md
 - docs/agent/tech-debt/td-016-fleet-sim-shared-ruff-contract-gap.md
 - docs/agent/tech-debt/td-017-fleet-sim-structure-gate-migration-gap.md
 - docs/agent/tech-debt/td-020-classification-subsystem-boundary-collapse.md
 - docs/agent/tech-debt/td-027-fleet-sim-optimizer-and-public-surface-boundary-collapse.md
-- docs/agent/tech-debt/td-028-operator-config-contract-boundary-collapse.md
-- docs/agent/tech-debt/td-030-dashboard-frontend-config-and-interaction-slice-collapse.md
-- docs/agent/tech-debt/td-031-router-runtime-bootstrap-and-shared-service-registry-global-state.md
-- docs/agent/tech-debt/td-032-training-evaluation-artifact-contract-drift.md
-- docs/agent/tech-debt/td-033-native-binding-runtime-parity-and-lifecycle-gap.md
-- docs/agent/tech-debt/td-034-runtime-and-dashboard-state-durability-and-telemetry-contract.md
-- docs/agent/tech-debt/td-037-dev-integration-env-ownership-and-shared-suite-topology.md
-- docs/agent/tech-debt/td-039-control-plane-contract-ownership-collapse.md
 local_agent_rules:
 - path: src/vllm-sr/cli/AGENTS.md
   scope: src/vllm-sr/cli/**
@@ -273,9 +264,6 @@ doc_governance:
   - path: docs/agent/tech-debt/td-006-structural-rule-exceptions.md
     steward: agent-contract
     freshness: update when the TD006 debt record changes materially
-  - path: docs/agent/tech-debt/td-015-weakly-typed-config-and-dsl-contracts.md
-    steward: agent-contract
-    freshness: update when the TD015 debt record changes materially
   - path: docs/agent/tech-debt/td-016-fleet-sim-shared-ruff-contract-gap.md
     steward: fleet-sim
     freshness: update when the TD016 debt record changes materially
@@ -288,30 +276,6 @@ doc_governance:
   - path: docs/agent/tech-debt/td-027-fleet-sim-optimizer-and-public-surface-boundary-collapse.md
     steward: fleet-sim
     freshness: update when the TD027 debt record changes materially
-  - path: docs/agent/tech-debt/td-028-operator-config-contract-boundary-collapse.md
-    steward: operator-stack
-    freshness: update when the TD028 debt record changes materially
-  - path: docs/agent/tech-debt/td-030-dashboard-frontend-config-and-interaction-slice-collapse.md
-    steward: dashboard
-    freshness: update when the TD030 debt record changes materially
-  - path: docs/agent/tech-debt/td-031-router-runtime-bootstrap-and-shared-service-registry-global-state.md
-    steward: router-core
-    freshness: update when the TD031 debt record changes materially
-  - path: docs/agent/tech-debt/td-032-training-evaluation-artifact-contract-drift.md
-    steward: training-stack
-    freshness: update when the TD032 debt record changes materially
-  - path: docs/agent/tech-debt/td-033-native-binding-runtime-parity-and-lifecycle-gap.md
-    steward: rust-bindings
-    freshness: update when the TD033 debt record changes materially
-  - path: docs/agent/tech-debt/td-034-runtime-and-dashboard-state-durability-and-telemetry-contract.md
-    steward: agent-contract
-    freshness: update when the TD034 debt record changes materially
-  - path: docs/agent/tech-debt/td-037-dev-integration-env-ownership-and-shared-suite-topology.md
-    steward: agent-contract
-    freshness: update when the TD037 debt record changes materially
-  - path: docs/agent/tech-debt/td-039-control-plane-contract-ownership-collapse.md
-    steward: agent-contract
-    freshness: update when the TD039 debt record changes materially
 skills:
 - tools/agent/skills/config-platform-change/SKILL.md
 - tools/agent/skills/cross-stack-bugfix/SKILL.md

@@ -2,39 +2,44 @@
 
 ## Goal
 
-- Track all current v0.3 Themis release work in one maintainer-owned plan.
-- Convert the Themis roadmap into release tracks, issue groups, and closure
-  criteria.
-- Keep unrelated architecture debt out of the release unless it blocks a
-  Themis track.
+- Track only the work that can actually block a v0.3 release.
+- Keep the release plan grounded in current source, release gates, reproducible
+  bugs, and maintainer-approved product direction.
+- Remove roadmap wishes that do not map to a concrete release blocker.
 
-Themis is the stability-at-scale release. The local roadmap source is
-`website/blog/2026-03-12-v0-3-themis-roadmap.md`.
+The latest published release is v0.2.0. The current source already carries
+v0.3.0 package and crate versions, so this plan is about making v0.3.0
+publishable rather than preserving every old roadmap item.
 
 ## Scope
 
-Release tracks:
+Release work:
 
-- API, config, deployment, and control-plane contracts.
-- Stable versions, upgrades, and production operations.
-- Runtime state, durability, recovery, and telemetry.
-- Performance and native backend parity on real hardware.
-- Research that feeds product: session affinity and model-selection quality.
-- Product hardening across dashboard, eval, RAG/memory, protocol surfaces, and
-  ClawOS-related control surfaces that are already part of v0.3.
-- Observability and E2E only where they validate the release tracks above.
+- v0.3.0 release contract and artifact documentation.
+- Current install, docs-site, Helm, and supported `vllm-sr serve` blockers.
+- Agentic routing through the session-aware model-switching workstream.
+- Triage of current crash or user-visible regressions that could make v0.3
+  unsafe to publish.
+- Final release validation and release notes.
 
-Owned TD entries:
+Current issue anchors:
 
-- [TD015](../tech-debt/td-015-weakly-typed-config-and-dsl-contracts.md)
-- [TD028](../tech-debt/td-028-operator-config-contract-boundary-collapse.md)
-- [TD030](../tech-debt/td-030-dashboard-frontend-config-and-interaction-slice-collapse.md)
-- [TD031](../tech-debt/td-031-router-runtime-bootstrap-and-shared-service-registry-global-state.md)
-- [TD032](../tech-debt/td-032-training-evaluation-artifact-contract-drift.md)
-- [TD033](../tech-debt/td-033-native-binding-runtime-parity-and-lifecycle-gap.md)
-- [TD034](../tech-debt/td-034-runtime-and-dashboard-state-durability-and-telemetry-contract.md)
-- [TD037](../tech-debt/td-037-dev-integration-env-ownership-and-shared-suite-topology.md)
-- [TD039](../tech-debt/td-039-control-plane-contract-ownership-collapse.md)
+- [#1956](https://github.com/vllm-project/semantic-router/issues/1956) docs
+  site paused.
+- [#1962](https://github.com/vllm-project/semantic-router/issues/1962)
+  `vllm-sr serve` model factory or embedding initialization failure.
+- [#1957](https://github.com/vllm-project/semantic-router/issues/1957) large
+  input crash or hang.
+- [#1910](https://github.com/vllm-project/semantic-router/issues/1910) Helm
+  chart renders invalid deployment resources.
+- [#1908](https://github.com/vllm-project/semantic-router/issues/1908)
+  operator cannot validate multiple `IntelligentRoute` resources independently.
+- [#1897](https://github.com/vllm-project/semantic-router/issues/1897)
+  OpenRouter usage parsing breaks dashboard insights.
+- [#1753](https://github.com/vllm-project/semantic-router/issues/1753)
+  session-aware model switching.
+- [#1751](https://github.com/vllm-project/semantic-router/issues/1751)
+  multi-turn follow-up routing context.
 
 Out of scope:
 
@@ -42,6 +47,10 @@ Out of scope:
   [PL0032](pl-0032-architecture-scorecard-ratchet.md).
 - Security and RBAC hardening. Security bugs can still be triaged as normal
   bugfixes, but new security/RBAC closure is not a v0.3 release track.
+- Broad API/config/control-plane contract redesign, dashboard hardening,
+  training/eval artifact redesign, runtime-state redesign, and native backend
+  parity work unless a current reproducible release blocker proves they are
+  needed.
 - Daily maintainer sync, report generation, and seed issue creation; these
   belong to [Maintainer Ops](../maintainer-ops.md).
 - Plan archaeology.
@@ -50,105 +59,113 @@ Out of scope:
 
 ## Exit Criteria
 
-- GitHub milestone issues map to these release tracks.
-- Every release-bound issue has a track, priority, owner, and validation
-  expectation.
-- Every release-owned TD is retired, narrowed, or explicitly accepted as a
-  known release risk.
-- Release notes can be assembled from the plan, milestone state, and merged PRs.
-- `make agent-scorecard` reports only current release and debt tasks.
+- `make release-check RELEASE_VERSION=0.3.0` passes.
+- Supported install, docs-site, Helm, and `vllm-sr serve` smoke paths have no
+  open release-blocking regressions.
+- Session-aware routing is either shipped in a scoped v0.3 slice or explicitly
+  deferred with stale attempts closed or superseded.
+- Current crash and user-visible regression reports are fixed, rejected as not
+  reproducible, moved out of scope, or accepted as release risks.
+- Release notes describe the shipped v0.3.0 artifacts and accepted risks.
 
 ## Task List
 
-- [ ] `THEMIS004` Freeze the public config and control-plane contract for v0.3.
+- [ ] `V030001` Land the harness refresh that defines this release plan.
+- [ ] `V030002` Make the v0.3.0 release contract pass.
+- [ ] `V030003` Clear supported install and deployment blockers.
+- [ ] `V030004` Decide and land the agentic session-aware routing slice.
+- [ ] `V030005` Triage current crash and user-visible regressions.
+- [ ] `V030006` Produce the final release readiness result.
 
-  Do:
+## Task Details
 
-  - decide which config, DSL, API, operator, CLI, and dashboard projection
-    shapes are supported in v0.3
-  - remove or reject unsupported shapes with clear validation errors
-  - align samples, docs, generated config, CRD/webhook behavior, and dashboard
-    deploy paths to the same contract
+### V030001: Land Harness Refresh
 
-  Done when: TD015, TD028, and TD039 are retired, narrowed, or accepted as
-  explicit release risks.
+Do:
 
-- [ ] `THEMIS005` Make release-critical state restart-safe.
+- merge or supersede
+  [#1972](https://github.com/vllm-project/semantic-router/pull/1972)
+- ensure the repo-native maintainer ops and current plan model are on `main`
 
-  Do:
+Done when: this plan and maintainer ops run from the default branch.
 
-  - list the runtime and dashboard state that must survive restart for v0.3
-  - choose the durable owner for each kept state surface, or mark it explicitly
-    ephemeral
-  - verify deployed config, dashboard control-plane config, runtime reload, and
-    local dev integration behavior after restart
+### V030002: Release Contract
 
-  Done when: TD031, TD034, and TD037 are retired, narrowed, or accepted as
-  explicit release risks.
+Do:
 
-- [ ] `THEMIS006` Ship only the dashboard and eval hardening needed by v0.3.
+- run `make release-check RELEASE_VERSION=0.3.0`
+- fix the current release-contract failure for the `anthropic-shim` image in
+  release notes and upgrade or rollback docs
+- rerun the release check after the documentation and workflow references are
+  aligned
 
-  Do:
+Done when: the release contract check passes for `0.3.0`.
 
-  - narrow the dashboard config/editor flows needed for release
-  - make training or evaluation artifacts that feed product flows use one
-    documented contract
-  - add focused dashboard or eval validation for the kept workflows
-  - defer exploratory dashboard, eval, and product ideas that do not block v0.3
+### V030003: Install And Deployment Blockers
 
-  Done when: TD030 and TD032 are retired, narrowed, or accepted as explicit
-  release risks.
+Do:
 
-- [ ] `THEMIS007` Publish and smoke the native backend support matrix.
+- resolve the docs-site availability issue in #1956 or accept it as an
+  external release risk
+- fix the Helm values rendering bug in #1910
+- reproduce #1962 on a supported Linux path and fix it, or close it as
+  unreproducible or environment-specific
+- decide whether Windows `vllm-sr serve` in #1949 is supported in v0.3; fix it
+  only if it is supported, otherwise document the support boundary
 
-  Do:
+Done when: supported install and deployment smoke paths are not blocked by
+those reports.
 
-  - state which Candle and ONNX backend features are supported in v0.3
-  - make unsupported native paths fail early with actionable errors
-  - verify native package, image, startup, reset, and upgrade or rollback claims
-    against the support matrix
+### V030004: Session-Aware Agentic Routing
 
-  Done when: TD033 is retired, narrowed, or accepted as an explicit release
-  risk.
+Do:
 
-- [ ] `THEMIS008` Decide the v0.3 session-aware model-switching scope.
+- choose the v0.3 scope for #1753 and #1751
+- ship the smallest useful multi-turn routing behavior, or defer the feature
+  explicitly
+- close, rebase, or supersede stale session-routing PRs so the PR queue reflects
+  the decision
 
-  Do:
+Done when: session-aware routing is either in v0.3 with tests or explicitly out
+of v0.3.
 
-  - choose one release answer: ship a small session-aware routing slice, defer
-    it, or close stale attempts and re-open a smaller issue
-  - do not treat old stale PRs as the source of truth unless they are rebased
-    and reduced to the chosen scope
-  - document the release decision and any accepted user-visible limitation
+### V030005: Crash And Regression Triage
 
-  Done when: the milestone and PR queue reflect the chosen session-routing
-  decision.
+Do:
 
-- [ ] `THEMIS009` Produce the final release readiness result.
+- reproduce or reject #1957 before release
+- decide whether #1908 blocks the supported v0.3 operator story
+- decide whether #1897 blocks the supported v0.3 dashboard insights story
+- move non-blocking items out of the release milestone instead of keeping them
+  as vague release work
 
-  Do:
+Done when: each item is fixed, scoped out, or recorded as an accepted risk.
 
-  - run the release validation gates for the kept tracks
-  - update scorecard evidence and maintainer release readiness output
-  - assemble release notes from merged PRs, closed issues, and accepted risks
+### V030006: Final Release Readiness
 
-  Done when: every kept v0.3 task is closed, narrowed, or explicitly accepted
-  as a release risk.
+Do:
+
+- run `make release-check RELEASE_VERSION=0.3.0`
+- run the repo validation gates required for the final release candidate
+- update scorecard evidence and maintainer release readiness output
+- assemble release notes from merged PRs, closed issues, and accepted risks
+
+Done when: v0.3.0 can be tagged and published without unresolved release
+blockers.
 
 ## Next Action
 
-- Decide which of `THEMIS004` through `THEMIS008` are kept for v0.3, which are
-  cut, and which are accepted as release risks. Start with `THEMIS004`, because
-  the contract baseline affects the other tracks.
+- Start with `V030002`, because the release contract check already fails on the
+  current source and has a concrete fix.
 
 ## Operating Rules
 
-- One release means one release plan. Feature work that belongs to v0.3 is
-  tracked here, even when implementation happens through GitHub issues.
-- Maintainer operations do not belong in this task list unless they become
-  release-blocking product work.
-- Technical debt enters the release only when it blocks a release track or is
-  explicitly accepted as a release risk.
+- One release means one release plan, but the plan is not a roadmap archive.
+- Do not keep a task because a previous roadmap mentioned it.
+- A task belongs here only when it blocks publishing v0.3.0 or when the
+  maintainer explicitly chooses it as the release direction.
+- Technical debt enters the release only when current source or a reproducible
+  issue proves it blocks the release.
 - Daily GitHub state is generated under `.agent-harness/maintainer/`, not stored
   as canonical repo documentation.
 

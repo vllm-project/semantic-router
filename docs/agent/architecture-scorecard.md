@@ -6,24 +6,20 @@ This scorecard is a maintainer dashboard, not a historical log.
 
 | Area | Score | Owner |
 |---|---:|---|
-| Release contract coherence | 72 | PL0033 |
-| Runtime state and lifecycle | 74 | PL0033 |
-| Control-plane boundaries | 70 | PL0033 |
-| Product hardening and dashboard seams | 68 | PL0033 |
-| Native/runtime parity | 66 | PL0033 |
+| Release readiness | 70 | PL0033 |
+| Session-aware agentic routing | 65 | PL0033 |
 | Non-release architecture debt | 70 | PL0032 |
 
 Overall posture: `70/100`.
 
 ## Current Release Risks
 
-- The v0.3 release scope is broad and must be governed through one milestone
-  plan instead of scattered historical workstreams.
-- Runtime/control-plane boundaries still carry release risk through TD031,
-  TD034, TD037, and TD039.
-- Dashboard and eval hardening still need tighter release issue ownership
-  through TD030 and TD032.
-- Native/runtime parity is still release-relevant through TD033.
+- The v0.3.0 release contract currently fails because a published Docker image
+  is not represented in release notes and upgrade or rollback docs.
+- Supported install, docs-site, Helm, and `vllm-sr serve` smoke paths still need
+  release-blocker triage against current open bug reports.
+- Session-aware agentic routing is the only explicitly retained feature
+  direction for v0.3 and still needs a scoped ship-or-defer decision.
 
 ## Current Debt Risks
 
