@@ -12,6 +12,7 @@ import {
   type ParsedToolCallChunk,
 } from './chatResponseParsing'
 import { buildChatMessages, buildChatRequestBody, collectResponseHeaders } from './chatRequestSupport'
+import { toPlaygroundAttachmentSummaries } from './playgroundFileAttachments'
 import { createFrameSyncController } from './chatStreamingFrameSync'
 import { runToolLoop } from './chatTaskToolLoop'
 import type { Choice, Message, PlaygroundTask, ReMoMRoundResponse } from './ChatComponentTypes'
@@ -69,7 +70,8 @@ export const runPlaygroundTask = async ({
   updateConversationMessages,
 }: RunPlaygroundTaskOptions): Promise<void> => {
   const trimmedInput = task.prompt.trim()
-  if (!trimmedInput) return
+  const taskAttachments = task.attachments ?? []
+  if (!trimmedInput && taskAttachments.length === 0) return
 
   setConversationError(task.conversationId, null)
 
@@ -81,6 +83,10 @@ export const runPlaygroundTask = async ({
     id: generateId(),
     role: 'user',
     content: trimmedInput,
+    attachments: taskAttachments.length > 0
+      ? toPlaygroundAttachmentSummaries(taskAttachments)
+      : undefined,
+    playgroundAttachments: taskAttachments.length > 0 ? taskAttachments : undefined,
     timestamp: new Date(),
   }
   const assistantMessage: Message = {
@@ -103,7 +109,8 @@ export const runPlaygroundTask = async ({
     const chatMessages = buildChatMessages(
       getConversationMessagesSnapshot(task.conversationId),
       trimmedInput,
-      task.requestOptions.enableClawMode && !clawManagementDisabled
+      task.requestOptions.enableClawMode && !clawManagementDisabled,
+      taskAttachments
     )
     const requestBody = buildChatRequestBody(task.requestOptions.model, chatMessages, activeTools)
     const response = await fetch(endpoint, {

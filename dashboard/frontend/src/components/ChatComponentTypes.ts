@@ -1,4 +1,7 @@
 import type { ToolCall, ToolResult, WebSearchResult } from '../tools'
+import type { PlaygroundAttachment, PlaygroundAttachmentSummary } from './playgroundFileAttachments'
+
+export type { PlaygroundAttachment, PlaygroundAttachmentSummary }
 
 export const GREETING_LINES = [
   'Hi there, I am MoM :-)',
@@ -55,6 +58,8 @@ export interface Message {
   id: string
   role: 'user' | 'assistant' | 'system'
   content: string
+  attachments?: PlaygroundAttachmentSummary[]
+  playgroundAttachments?: PlaygroundAttachment[]
   timestamp: Date
   isStreaming?: boolean
   headers?: Record<string, string>
@@ -81,6 +86,7 @@ export interface PlaygroundTask {
   id: string
   conversationId: string
   prompt: string
+  attachments?: PlaygroundAttachment[]
   createdAt: number
   requestOptions: PlaygroundTaskRequestOptions
 }

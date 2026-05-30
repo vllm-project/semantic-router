@@ -10,6 +10,7 @@ import { MessageActionBar, TypingGreeting } from './ChatComponentControls'
 import { ContentWithCitations } from './ChatComponentCitations'
 import { ToolCard } from './ChatComponentToolCards'
 import { GREETING_LINES, type Message } from './ChatComponentTypes'
+import { formatPlaygroundFileSize } from './playgroundFileAttachments'
 import { getTranslateAttr } from '../hooks/useNoTranslate'
 
 interface ChatComponentMessagesProps {
@@ -174,8 +175,26 @@ interface MessageCardProps {
 }
 
 function UserOrSystemMessage({ message }: Pick<MessageCardProps, 'message'>) {
+  const attachmentItems = message.attachments ?? []
+
   return (
     <div className={styles.messageText}>
+      {attachmentItems.length > 0 ? (
+        <div className={styles.messageAttachmentList}>
+          {attachmentItems.map(attachment => (
+            <span
+              key={`${attachment.fileName}-${attachment.sizeBytes}`}
+              className={styles.messageAttachmentChip}
+              title={attachment.fileName}
+            >
+              {attachment.fileName}
+              <span className={styles.messageAttachmentChipSize}>
+                {formatPlaygroundFileSize(attachment.sizeBytes)}
+              </span>
+            </span>
+          ))}
+        </div>
+      ) : null}
       {message.content || message.isStreaming ? <span>{message.content}</span> : null}
       {message.isStreaming ? <span className={styles.cursor}>▊</span> : null}
     </div>
@@ -192,7 +211,7 @@ const MessageCard = memo(function MessageCard({
     message.role === 'assistant' && Boolean(message.choices && message.choices.length > 1)
   const showCopyAction =
     (message.role === 'assistant' || message.role === 'user') &&
-    Boolean(message.content) &&
+    (Boolean(message.content) || (message.attachments?.length ?? 0) > 0) &&
     !message.isStreaming
 
   return (

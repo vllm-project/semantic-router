@@ -1,4 +1,5 @@
 import { CLAW_MODE_SYSTEM_PROMPT, type Message } from './ChatComponentTypes'
+import { buildPromptWithAttachments, type PlaygroundAttachment } from './playgroundFileAttachments'
 
 export interface OutboundChatMessage {
   role: string
@@ -53,13 +54,20 @@ const RESPONSE_HEADER_KEYS = [
 export const buildChatMessages = (
   messages: Message[],
   nextUserMessage: string,
-  enableClawMode: boolean
+  enableClawMode: boolean,
+  nextUserAttachments: PlaygroundAttachment[] = []
 ): OutboundChatMessage[] => {
   const chatMessages: OutboundChatMessage[] = []
 
   for (const message of messages) {
     if (message.role === 'user') {
-      chatMessages.push({ role: 'user', content: message.content })
+      chatMessages.push({
+        role: 'user',
+        content: buildPromptWithAttachments(
+          message.content,
+          message.playgroundAttachments ?? []
+        ),
+      })
       continue
     }
 
@@ -72,7 +80,10 @@ export const buildChatMessages = (
     chatMessages.unshift({ role: 'system', content: CLAW_MODE_SYSTEM_PROMPT })
   }
 
-  chatMessages.push({ role: 'user', content: nextUserMessage })
+  chatMessages.push({
+    role: 'user',
+    content: buildPromptWithAttachments(nextUserMessage, nextUserAttachments),
+  })
   return chatMessages
 }
 

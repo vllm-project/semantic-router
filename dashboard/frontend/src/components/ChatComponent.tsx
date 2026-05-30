@@ -25,6 +25,10 @@ import { isOpenClawMCPToolName, useMCPToolSync } from '../tools/mcp'
 import { ensureOpenClawServerConnected } from '../tools/mcp/api'
 import { useConversationStorage, usePlaygroundQueue } from '../hooks'
 import { useReadonly } from '../contexts/ReadonlyContext'
+import {
+  readPlaygroundAttachmentFile,
+  type PlaygroundAttachment,
+} from './playgroundFileAttachments'
 
 interface ChatComponentProps {
   endpoint?: string
@@ -45,6 +49,7 @@ const ChatComponent = ({
   const [conversationMessages, setConversationMessages] = useState<Record<string, Message[]>>({})
   const [conversationId, setConversationId] = useState<string>(() => generateConversationId())
   const [inputValue, setInputValue] = useState('')
+  const [pendingAttachments, setPendingAttachments] = useState<PlaygroundAttachment[]>([])
   const [activeTasks, setActiveTasks] = useState<Record<string, PlaygroundTask>>({})
   const model = 'MoM' // Fixed to MoM
   const [conversationErrors, setConversationErrors] = useState<Record<string, string>>({})
@@ -529,12 +534,14 @@ const ChatComponent = ({
 
   const handleSend = useCallback(() => {
     const trimmedInput = inputValue.trim()
-    if (!trimmedInput) return
+    if (!trimmedInput && pendingAttachments.length === 0) return
 
+    const attachmentsForTask = pendingAttachments.map(attachment => ({ ...attachment }))
     const nextTask: PlaygroundTask = {
       id: generatePlaygroundTaskId(),
       conversationId,
       prompt: trimmedInput,
+      attachments: attachmentsForTask.length > 0 ? attachmentsForTask : undefined,
       createdAt: Date.now(),
       requestOptions: buildTaskRequestOptions(),
     }
@@ -546,6 +553,7 @@ const ChatComponent = ({
 
     setConversationError(conversationId, null)
     setInputValue('')
+    setPendingAttachments([])
 
     if (!activeTasksRef.current[conversationId]) {
       startTask(nextTask)
@@ -559,10 +567,35 @@ const ChatComponent = ({
     enqueueTask,
     getConversationMessagesSnapshot,
     inputValue,
+    pendingAttachments,
     saveConversation,
     setConversationError,
     startTask,
   ])
+
+  const handleAttachFiles = useCallback(async (files: FileList | File[]) => {
+    const nextFiles = Array.from(files)
+    if (nextFiles.length === 0) {
+      return
+    }
+
+    setConversationError(conversationId, null)
+
+    for (const file of nextFiles) {
+      try {
+        const attachment = await readPlaygroundAttachmentFile(file)
+        setPendingAttachments(prev => [...prev, attachment])
+      } catch (error) {
+        const message = error instanceof Error ? error.message : `Could not attach "${file.name}".`
+        setConversationError(conversationId, message)
+        break
+      }
+    }
+  }, [conversationId, setConversationError])
+
+  const handleRemoveAttachment = useCallback((attachmentId: string) => {
+    setPendingAttachments(prev => prev.filter(attachment => attachment.id !== attachmentId))
+  }, [])
 
   useEffect(() => {
     Object.entries(queues).forEach(([targetConversationId, queue]) => {
@@ -597,6 +630,7 @@ const ChatComponent = ({
 
     removeQueuedTask(conversationId, taskId)
     setInputValue(taskToEdit.prompt)
+    setPendingAttachments((taskToEdit.attachments ?? []).map(attachment => ({ ...attachment })))
 
     if (typeof window !== 'undefined') {
       window.requestAnimationFrame(() => {
@@ -624,6 +658,7 @@ const ChatComponent = ({
 
   const handleNewConversation = useCallback(() => {
     setInputValue('')
+    setPendingAttachments([])
     setExpandedToolCards(new Set())
     setConversationId(generateConversationId())
   }, [])
@@ -770,6 +805,8 @@ const ChatComponent = ({
                   onReorderTasks={handleReorderQueuedTasks}
                 />
                 <ChatComponentInputBar
+                  attachments={pendingAttachments}
+                  attachFilesDisabled={readonlyLoading || isReadonly}
                   enableClawMode={enableClawMode}
                   enableWebSearch={enableWebSearch}
                   inputRef={inputRef}
@@ -778,8 +815,10 @@ const ChatComponent = ({
                   isTogglingClawMode={isTogglingClawMode}
                   modeToggleDisabled={modeToggleDisabled}
                   voiceInputDisabled={isCurrentConversationRunning || readonlyLoading || isReadonly}
+                  onAttachFiles={handleAttachFiles}
                   onChangeInput={setInputValue}
                   onKeyDown={handleKeyDown}
+                  onRemoveAttachment={handleRemoveAttachment}
                   onSend={handleSend}
                   onStop={handleStop}
                   onToggleClawMode={handleToggleClawMode}
