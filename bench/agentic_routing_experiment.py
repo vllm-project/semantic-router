@@ -53,6 +53,13 @@ MODELS = (
 FRONTIER_DEMAND_THRESHOLD = 0.78
 MID_DEMAND_THRESHOLD = 0.55
 DEFAULT_SCENARIOS = ("balanced", "tool-heavy", "frontier-heavy", "idle-heavy")
+DEFAULT_ABLATION_POLICIES = (
+    "sticky-session",
+    "acr-no-tool-lock",
+    "acr-no-idle-boundary",
+    "acr-no-frontier-cost",
+    "acr-full",
+)
 SCENARIOS = {
     "balanced": WorkloadScenario(
         name="balanced",
@@ -130,6 +137,17 @@ def parse_args() -> argparse.Namespace:
         help="Run the maintained scenario matrix instead of one workload.",
     )
     parser.add_argument(
+        "--ablation",
+        action="store_true",
+        help="Run policy ablations across the maintained scenario matrix.",
+    )
+    parser.add_argument(
+        "--agentic-policy",
+        choices=DEFAULT_ABLATION_POLICIES,
+        default="acr-full",
+        help="Session policy variant used for a single synthetic workload.",
+    )
+    parser.add_argument(
         "--seeds",
         default="20260530,20260531,20260532,20260533,20260534",
         help="Comma-separated seeds for --matrix.",
@@ -147,6 +165,7 @@ def simulate_workload(
     turn_count: int,
     seed: int,
     scenario: WorkloadScenario = SCENARIOS["balanced"],
+    agentic_policy: str = "acr-full",
 ) -> list[dict[str, Any]]:
     rng = random.Random(seed)
     rows: list[dict[str, Any]] = []
@@ -173,6 +192,7 @@ def simulate_workload(
                 switch_count=switch_count,
                 history_tokens=history_tokens,
                 idle_expired=idle_expired,
+                policy=agentic_policy,
             )
 
             baseline_switch = baseline_next.name != baseline_model.name
@@ -286,20 +306,25 @@ def choose_agentic_model(
     switch_count: int,
     history_tokens: int,
     idle_expired: bool,
+    policy: str = "acr-full",
 ) -> tuple[ModelProfile, str]:
+    if policy == "sticky-session" and turn > 0:
+        return current, "sticky_session"
     if turn == 0:
         return base_choice, "cold_select"
-    if phase == "tool_loop":
+    if phase == "tool_loop" and policy != "acr-no-tool-lock":
         return current, "tool_loop_hard_lock"
-    if idle_expired:
+    if idle_expired and policy != "acr-no-idle-boundary":
         return base_choice, "idle_select"
     if base_choice.name == current.name:
         return current, "base_selects_current"
 
     quality_gain = base_choice.quality - current.quality
     continuation_mass = min(1.0, history_tokens / 16000)
-    frontier_multiplier = 1.0 + 1.6 * max(
-        cost_pressure(base_choice), cost_pressure(current)
+    frontier_multiplier = (
+        1.0
+        if policy == "acr-no-frontier-cost"
+        else 1.0 + 1.6 * max(cost_pressure(base_choice), cost_pressure(current))
     )
     switch_cost = (
         0.05
@@ -532,6 +557,91 @@ def write_matrix_outputs(
     return summary
 
 
+def summarize_baseline_policy(rows: list[dict[str, Any]]) -> dict[str, Any]:
+    summary = summarize(rows)
+    return {
+        "policy": "single-turn",
+        "turns": summary["turns"],
+        "switches": summary["baseline_switches"],
+        "switch_reduction_pct": 0.0,
+        "tool_loop_switch_violations": summary["baseline_tool_loop_switch_violations"],
+        "estimated_cost": summary["baseline_cost"],
+        "cost_reduction_pct": 0.0,
+        "frontier_turns": summary["baseline_frontier_turns"],
+        "idle_switches": "",
+        "mean_cached_prompt_ratio": "",
+        "mean_quality": summary["baseline_mean_quality"],
+        "quality_delta": 0.0,
+    }
+
+
+def summarize_agentic_policy(policy: str, rows: list[dict[str, Any]]) -> dict[str, Any]:
+    summary = summarize(rows)
+    return {
+        "policy": policy,
+        "turns": summary["turns"],
+        "switches": summary["agentic_switches"],
+        "switch_reduction_pct": summary["switch_reduction_pct"],
+        "tool_loop_switch_violations": summary["agentic_tool_loop_switch_violations"],
+        "estimated_cost": summary["agentic_cost"],
+        "cost_reduction_pct": summary["cost_reduction_pct"],
+        "frontier_turns": summary["agentic_frontier_turns"],
+        "idle_switches": summary["agentic_idle_switches"],
+        "mean_cached_prompt_ratio": summary["mean_cached_prompt_ratio"],
+        "mean_quality": summary["agentic_mean_quality"],
+        "quality_delta": summary["quality_delta"],
+    }
+
+
+def write_ablation_outputs(
+    scenarios: tuple[str, ...],
+    seeds: list[int],
+    sessions: int,
+    turns: int,
+    out_dir: Path,
+) -> dict[str, Any]:
+    summary_rows: list[dict[str, Any]] = []
+    policy_rows: dict[str, list[dict[str, Any]]] = {}
+    baseline_rows: list[dict[str, Any]] = []
+
+    for policy in DEFAULT_ABLATION_POLICIES:
+        rows_for_policy: list[dict[str, Any]] = []
+        for scenario_name in scenarios:
+            scenario = SCENARIOS[scenario_name]
+            for seed in seeds:
+                rows = simulate_workload(
+                    sessions,
+                    turns,
+                    seed,
+                    scenario,
+                    agentic_policy=policy,
+                )
+                rows_for_policy.extend(rows)
+                if policy == "acr-full":
+                    baseline_rows.extend(rows)
+        policy_rows[policy] = rows_for_policy
+
+    summary_rows.append(summarize_baseline_policy(baseline_rows))
+    for policy in DEFAULT_ABLATION_POLICIES:
+        summary_rows.append(summarize_agentic_policy(policy, policy_rows[policy]))
+
+    summary = {
+        "matrix": {
+            "scenarios": list(scenarios),
+            "seeds": seeds,
+            "sessions_per_seed": sessions,
+            "turns_per_session": turns,
+        },
+        "by_policy": summary_rows,
+    }
+    out_dir.mkdir(parents=True, exist_ok=True)
+    write_csv(summary_rows, out_dir / "ablation_summary.csv")
+    (out_dir / "summary.json").write_text(
+        json.dumps(summary, indent=2, sort_keys=True) + "\n"
+    )
+    return summary
+
+
 def write_csv(rows: list[dict[str, Any]], path: Path) -> None:
     if not rows:
         return
@@ -628,7 +738,15 @@ def render_matrix_svg(summary: dict[str, Any]) -> str:
 def main() -> None:
     args = parse_args()
     out_dir = args.output_dir or default_output_dir()
-    if args.matrix:
+    if args.ablation:
+        summary = write_ablation_outputs(
+            DEFAULT_SCENARIOS,
+            parse_seeds(args.seeds),
+            args.sessions,
+            args.turns,
+            out_dir,
+        )
+    elif args.matrix:
         summary = write_matrix_outputs(
             DEFAULT_SCENARIOS,
             parse_seeds(args.seeds),
@@ -641,7 +759,11 @@ def main() -> None:
             rows_from_replay(args.from_replay)
             if args.from_replay
             else simulate_workload(
-                args.sessions, args.turns, args.seed, SCENARIOS[args.scenario]
+                args.sessions,
+                args.turns,
+                args.seed,
+                SCENARIOS[args.scenario],
+                agentic_policy=args.agentic_policy,
             )
         )
         summary = write_outputs(rows, out_dir)
