@@ -1270,6 +1270,24 @@ default_model: "my-alias"
 				Expect(resolved).To(Equal("Qwen/Qwen2.5-14B-Instruct"))
 			})
 
+			It("should match aliases to provider model IDs", func() {
+				cfg := &RouterConfig{
+					BackendModels: BackendModels{
+						ModelConfig: map[string]ModelParams{
+							"my-alias": {
+								ExternalModelIDs: map[string]string{
+									"openai": "gpt-5-mini",
+								},
+							},
+						},
+					},
+				}
+
+				Expect(cfg.ModelNameMatches("my-alias", "gpt-5-mini")).To(BeTrue())
+				Expect(cfg.ModelNameMatches("gpt-5-mini", "my-alias")).To(BeTrue())
+				Expect(cfg.ModelNameMatches("other", "gpt-5-mini")).To(BeFalse())
+			})
+
 			It("should default to vllm type when endpoint has no type set", func() {
 				configContent := `
 vllm_endpoints:

@@ -179,7 +179,19 @@ func (r *OpenAIRouter) handleAutoModelRouting(openAIRequest *openai.ChatCompleti
 	upstreamModel := r.resolveModelNameForEndpoint(matchedModel, selectedEndpointName)
 
 	// Modify request body with resolved model name, reasoning mode, and system prompt
-	modifiedBody, err := r.modifyRequestBodyForAutoRouting(openAIRequest, upstreamModel, decisionName, reasoningDecision.UseReasoning, ctx)
+	profile, profileErr := r.Config.GetProviderProfileForEndpoint(selectedEndpointName)
+	if profileErr != nil {
+		return nil, fmt.Errorf("auto routing provider profile: %w", profileErr)
+	}
+
+	modifiedBody, err := r.modifyRequestBodyForAutoRouting(
+		openAIRequest,
+		upstreamModel,
+		decisionName,
+		reasoningDecision.UseReasoning,
+		profile,
+		ctx,
+	)
 	if err != nil {
 		return nil, err
 	}
