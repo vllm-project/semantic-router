@@ -39,6 +39,7 @@ const sidebars: SidebarsConfig = {
           label: 'Install with Gateways',
           items: [
             'installation/k8s/ai-gateway',
+            'installation/k8s/agentgateway',
             'installation/k8s/istio',
             'installation/k8s/gateway-api-inference-extension',
           ],

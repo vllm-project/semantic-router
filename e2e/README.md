@@ -23,6 +23,7 @@ Standard CI-backed profiles:
 - **multimodal-routing**: Image-modality EmbeddingSignal routing via the multi-modal-embed-small model
 - **llm-d**: LLM-D inference-gateway health plus a minimal router smoke path
 - **istio**: Istio service mesh sidecar, traffic, mTLS, and tracing behavior
+- **agentgateway**: Agentgateway gateway controller routing and extproc policy enforcement behavior
 - **production-stack**: HA, load-balancing, failover, and throughput behavior
 - **response-api**: Responses API coverage across memory, Redis, and Redis Cluster backends under one CI check
 - **ml-model-selection**: ML-based model-selection behavior
@@ -51,6 +52,7 @@ Manual-only profiles:
 | `multimodal-routing` | `chat-completions-request` | Image-modality embedding-signal routing |
 | `llm-d` | `chat-completions-request` | llm-d inference-gateway health |
 | `istio` | `chat-completions-request` | Sidecar, traffic, mTLS, and tracing |
+| `agentgateway` | `chat-completions-request` | Agentgateway gateway controller and extproc behavior |
 | `production-stack` | `chat-completions-request` | HA, failover, load-balancing, throughput |
 | `response-api` | none | Responses API behavior across memory, Redis, and Redis Cluster backends |
 | `ml-model-selection` | `chat-completions-request`, `domain-classify` | ML selector behavior |

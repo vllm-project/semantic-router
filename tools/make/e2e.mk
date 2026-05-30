@@ -127,7 +127,8 @@ e2e-help: ## Show help for E2E testing
 	@echo ""
 	@echo "Available Profiles:"
 	@echo "  kubernetes       - Test Semantic Router with the default Kubernetes baseline"
-	@echo "  aibrix           - Test Semantic Router with vLLM AIBrix"
+	@echo "  agentgateway			 - Test Semantic Router with Agentgateway gateway controller"
+	@echo "  aibrix           - Test Semantic Router with vLLM AIBrix"F
 	@echo "  dynamo           - Test Semantic Router with Nvidia Dynamo (requires 3+ GPUs)"
 	@echo "  istio            - Test Semantic Router with Istio service mesh"
 	@echo "  llm-d            - Test Semantic Router with LLM-D"
