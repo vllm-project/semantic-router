@@ -13,7 +13,35 @@ func validateEmbeddingContracts(cfg *RouterConfig) error {
 	if cfg == nil {
 		return nil
 	}
+	if err := validateMmBertModelPath(cfg.EmbeddingModels.MmBertModelPath); err != nil {
+		return err
+	}
 	return validateEmbeddingRuleModalities(cfg.EmbeddingRules, cfg.EmbeddingModels.EmbeddingConfig.ModelType)
+}
+
+// validateMmBertModelPath rejects classic BERT models in the mmbert_model_path
+// slot. Classic BERT (e.g. all-MiniLM-L12-v2) uses a different tensor layout
+// than ModernBERT/mmBERT and will crash the Rust loader with a cryptic tensor
+// name mismatch. Catching it here gives the user a clear message at config-load
+// time instead of a crash at model-init time.
+func validateMmBertModelPath(modelPath string) error {
+	if modelPath == "" {
+		return nil
+	}
+	model := GetModelByPath(modelPath)
+	if model == nil {
+		return nil
+	}
+	if model.Purpose == PurposeSemanticSimilarity {
+		return fmt.Errorf(
+			"mmbert_model_path is set to %q, which is a classic BERT model (%s, %s). "+
+				"Classic BERT models are not compatible with the mmBERT loader. "+
+				"Use 'bert_model_path' for this model instead, or set mmbert_model_path "+
+				"to a ModernBERT-based model such as 'models/mmbert-embed-32k-2d-matryoshka'",
+			modelPath, model.RepoID, model.ParameterSize,
+		)
+	}
+	return nil
 }
 
 // ValidateEmbeddingContracts is the exported counterpart of the private
