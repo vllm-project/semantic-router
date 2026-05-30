@@ -256,8 +256,8 @@ func (a *AutoMixSelector) InitializeFromConfig(modelConfig map[string]config.Mod
 
 // Select chooses the best model using POMDP-based cost-quality optimization
 func (a *AutoMixSelector) Select(ctx context.Context, selCtx *SelectionContext) (*SelectionResult, error) {
-	if len(selCtx.CandidateModels) == 0 {
-		return nil, fmt.Errorf("no candidate models provided")
+	if err := ValidateSelectionContext(selCtx); err != nil {
+		return nil, err
 	}
 
 	// Sort candidates by cost (cheaper first for cascaded routing)
@@ -328,8 +328,8 @@ func (a *AutoMixSelector) Select(ctx context.Context, selCtx *SelectionContext) 
 
 // UpdateFeedback updates POMDP model based on verification outcomes
 func (a *AutoMixSelector) UpdateFeedback(ctx context.Context, feedback *Feedback) error {
-	if feedback.WinnerModel == "" {
-		return fmt.Errorf("winner model is required")
+	if err := normalizeWinnerFeedback(feedback); err != nil {
+		return err
 	}
 
 	a.capMu.Lock()
@@ -722,8 +722,8 @@ type SelectWithCascadeState struct {
 // InitializeCascade prepares the cascade state for a new request
 // Returns the first (smallest) model to try
 func (a *AutoMixSelector) InitializeCascade(ctx context.Context, selCtx *SelectionContext) (*SelectWithCascadeState, *SelectionResult, error) {
-	if len(selCtx.CandidateModels) == 0 {
-		return nil, nil, fmt.Errorf("no candidate models provided")
+	if err := ValidateSelectionContext(selCtx); err != nil {
+		return nil, nil, err
 	}
 
 	// Get escalation chain (smallest to largest)

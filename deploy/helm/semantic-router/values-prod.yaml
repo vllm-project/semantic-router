@@ -19,6 +19,10 @@ persistence:
 
 dashboard:
   enabled: true
+  replicaCount: 1
+  persistence:
+    enabled: true
+    size: 5Gi
 
 autoscaling:
   enabled: true

@@ -9,13 +9,10 @@ import (
 	"os"
 	"os/signal"
 	"path/filepath"
-	"strings"
 	"sync/atomic"
 	"syscall"
-	"time"
 
 	ext_proc "github.com/envoyproxy/go-control-plane/envoy/service/ext_proc/v3"
-	"github.com/fsnotify/fsnotify"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
 
@@ -74,7 +71,7 @@ func NewServer(
 	certPath string,
 	runtimeRegistry *routerruntime.Registry,
 ) (*Server, error) {
-	router, err := NewOpenAIRouter(configPath)
+	router, err := newOpenAIRouterForServer(configPath, runtimeRegistry)
 	if err != nil {
 		return nil, err
 	}
@@ -139,7 +136,7 @@ func (s *Server) Start() error {
 		serverOpts = append(serverOpts, grpc.Creds(creds))
 	}
 
-	maxMsgSize := config.Get().Looper.GetGRPCMaxMsgSize()
+	maxMsgSize := s.configuredGRPCMaxMessageSize()
 	serverOpts = append(serverOpts,
 		grpc.MaxRecvMsgSize(maxMsgSize),
 		grpc.MaxSendMsgSize(maxMsgSize),
@@ -199,31 +196,6 @@ func (s *Server) Stop() {
 			"port": s.port,
 		})
 	}
-}
-
-func shouldReloadForConfigEvent(cfgFile, cfgDir, eventPath string) bool {
-	if eventPath == "" {
-		return false
-	}
-
-	cleanEventPath := filepath.Clean(eventPath)
-	if cleanEventPath == filepath.Clean(cfgFile) {
-		return true
-	}
-
-	if filepath.Dir(cleanEventPath) != filepath.Clean(cfgDir) {
-		return false
-	}
-
-	base := filepath.Base(cleanEventPath)
-	if base == filepath.Base(cfgFile) {
-		return true
-	}
-	if strings.HasPrefix(base, ".vllm-sr-write-check-") {
-		return false
-	}
-
-	return strings.HasPrefix(base, "..data")
 }
 
 // RouterService is a delegating gRPC service that forwards to the current router implementation.
@@ -289,7 +261,7 @@ func (s *Server) reloadRouterFromConfig(
 	// Kubernetes updates are already published through config.Replace in the
 	// controller callback. Replacing again here would re-enqueue the same config
 	// update and can cause duplicate reload notifications.
-	if source != "kubernetes" {
+	if source != "kubernetes" && s.runtime == nil {
 		replaceReloadConfig(candidateCfg)
 	}
 	logLoadedRouterConfig(configPath, candidateCfg)
@@ -300,6 +272,31 @@ func (s *Server) reloadRouterFromConfig(
 	}
 	publishRouterState(candidateCfg, newRouter, s.runtime)
 	return nil
+}
+
+func (s *Server) configuredGRPCMaxMessageSize() int {
+	cfg := resolveServerConfig(s)
+	if cfg == nil {
+		return (&config.LooperConfig{}).GetGRPCMaxMsgSize()
+	}
+	return cfg.Looper.GetGRPCMaxMsgSize()
+}
+
+func resolveServerConfig(s *Server) *config.RouterConfig {
+	if s != nil && s.service != nil {
+		if router := s.service.GetRouter(); router != nil && router.Config != nil {
+			return router.Config
+		}
+	}
+	if s != nil && s.runtime != nil {
+		return s.runtime.CurrentConfig()
+	}
+	return config.Get()
+}
+
+func (s *Server) usesKubernetesConfigSource() bool {
+	cfg := resolveServerConfig(s)
+	return cfg != nil && cfg.ConfigSource == config.ConfigSourceKubernetes
 }
 
 func logReloadRuntimeLifecycleEvent(event modelruntime.Event) {
@@ -325,173 +322,6 @@ func logReloadRuntimeLifecycleEvent(event modelruntime.Event) {
 	logging.ComponentErrorEvent("extproc", "runtime_lifecycle_task_failed", payload)
 }
 
-// watchConfigAndReload watches the config file and reloads router on changes.
-func (s *Server) watchConfigAndReload(ctx context.Context) {
-	// Check if we're using Kubernetes config source
-	cfg := config.Get()
-	if cfg != nil && cfg.ConfigSource == config.ConfigSourceKubernetes {
-		logging.ComponentEvent("extproc", "config_update_watch_started", map[string]interface{}{
-			"source": "kubernetes",
-		})
-		// Watch for config updates from the Kubernetes controller
-		s.watchKubernetesConfigUpdates(ctx)
-		return
-	}
-
-	watcher, err := fsnotify.NewWatcher()
-	if err != nil {
-		logging.ComponentErrorEvent("extproc", "config_watcher_error", map[string]interface{}{
-			"stage": "create_watcher",
-			"error": err.Error(),
-		})
-		return
-	}
-	defer func() {
-		_ = watcher.Close()
-	}()
-
-	cfgFile := s.configPath
-	cfgDir := filepath.Dir(cfgFile)
-
-	// Watch both the file and its directory to handle symlink swaps (Kubernetes ConfigMap)
-	if err := watcher.Add(cfgDir); err != nil {
-		logging.ComponentErrorEvent("extproc", "config_watcher_error", map[string]interface{}{
-			"stage": "watch_dir",
-			"dir":   cfgDir,
-			"error": err.Error(),
-		})
-		return
-	}
-	_ = watcher.Add(cfgFile) // best-effort; may fail if file replaced by symlink later
-
-	// Debounce events
-	var (
-		pending bool
-		last    time.Time
-	)
-
-	reload := func() {
-		logging.ComponentDebugEvent("extproc", "config_reload_triggered", map[string]interface{}{
-			"file": cfgFile,
-		})
-
-		if info, err := os.Stat(cfgFile); err == nil {
-			logging.ComponentDebugEvent("extproc", "config_file_stat", map[string]interface{}{
-				"file":       cfgFile,
-				"size_bytes": info.Size(),
-				"mod_time":   info.ModTime().Format("2006-01-02 15:04:05"),
-			})
-		} else {
-			logging.ComponentDebugEvent("extproc", "config_file_stat_failed", map[string]interface{}{
-				"file":  cfgFile,
-				"error": err.Error(),
-			})
-		}
-
-		err := s.reloadRouterFromFile(cfgFile)
-		if err != nil {
-			event := map[string]interface{}{
-				"file":  cfgFile,
-				"error": err.Error(),
-			}
-			if strings.Contains(err.Error(), "model download preflight failed") {
-				event["stage"] = "model_download"
-			}
-			logging.ComponentErrorEvent("extproc", "config_reload_failed", event)
-			return
-		}
-
-		newRouter := s.service.GetRouter()
-		event := map[string]interface{}{
-			"file": cfgFile,
-		}
-		if newRouter != nil && newRouter.Config != nil {
-			event["decision_count"] = len(newRouter.Config.Decisions)
-		}
-		logging.ComponentEvent("extproc", "config_reloaded", event)
-	}
-
-	for {
-		select {
-		case <-ctx.Done():
-			return
-		case ev, ok := <-watcher.Events:
-			if !ok {
-				return
-			}
-			logging.ComponentDebugEvent("extproc", "config_watcher_event", map[string]interface{}{
-				"name": ev.Name,
-				"op":   ev.Op.String(),
-			})
-			if ev.Op&(fsnotify.Write|fsnotify.Create|fsnotify.Rename|fsnotify.Remove|fsnotify.Chmod) != 0 {
-				if shouldReloadForConfigEvent(cfgFile, cfgDir, ev.Name) {
-					if !pending || time.Since(last) > 250*time.Millisecond {
-						pending = true
-						last = time.Now()
-						logging.ComponentEvent("extproc", "config_reload_scheduled", map[string]interface{}{
-							"file":     ev.Name,
-							"event":    ev.Op.String(),
-							"delay_ms": 300,
-						})
-						// Slight delay to let file settle. Wrap with
-						// goSafely so a panic inside reload() is logged
-						// via the structured `extproc:goroutine_panic`
-						// event instead of crashing the process (#1843).
-						goSafely("config_reload_debouncer", func() {
-							time.Sleep(300 * time.Millisecond)
-							reload()
-						})
-					} else {
-						logging.ComponentDebugEvent("extproc", "config_reload_debounced", map[string]interface{}{
-							"file": ev.Name,
-						})
-					}
-				}
-			}
-		case err, ok := <-watcher.Errors:
-			if !ok {
-				return
-			}
-			logging.ComponentErrorEvent("extproc", "config_watcher_error", map[string]interface{}{
-				"stage": "watch_loop",
-				"error": err.Error(),
-			})
-		}
-	}
-}
-
-// watchKubernetesConfigUpdates watches for config updates from the Kubernetes controller
-func (s *Server) watchKubernetesConfigUpdates(ctx context.Context) {
-	subscription := config.SubscribeConfigUpdates(1)
-	defer subscription.Close()
-	updateCh := subscription.Updates()
-
-	for {
-		select {
-		case <-ctx.Done():
-			return
-		case newCfg := <-updateCh:
-			if newCfg == nil {
-				continue
-			}
-
-			err := s.reloadRouterFromConfig("kubernetes", s.configPath, newCfg)
-			if err != nil {
-				logging.ComponentErrorEvent("extproc", "config_reload_failed", map[string]interface{}{
-					"source": "kubernetes",
-					"error":  err.Error(),
-				})
-				continue
-			}
-
-			logging.ComponentEvent("extproc", "config_reloaded", map[string]interface{}{
-				"source":         "kubernetes",
-				"decision_count": len(newCfg.Decisions),
-			})
-		}
-	}
-}
-
 func attachRuntimeRegistry(router *OpenAIRouter, runtimeRegistry *routerruntime.Registry) {
 	if router == nil {
 		return
@@ -509,6 +339,7 @@ func publishRouterState(
 	}
 	if runtimeRegistry != nil {
 		runtimeRegistry.PublishRouterRuntime(cfg, router.ClassificationService, router.MemoryStore)
+		runtimeRegistry.SetModelSelector(router.ModelSelector)
 		return
 	}
 	services.SetGlobalClassificationService(router.ClassificationService)

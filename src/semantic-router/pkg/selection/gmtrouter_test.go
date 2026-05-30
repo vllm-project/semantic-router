@@ -278,6 +278,64 @@ func TestGMTRouterSelector_Persistence(t *testing.T) {
 	}
 }
 
+func TestGMTRouterStateStorageCreatesDirectoryAndNormalizes(t *testing.T) {
+	storagePath := filepath.Join(t.TempDir(), "nested", "gmtrouter_state.json")
+	states := map[string]*UserPreferenceState{
+		"persist-user": {
+			Interactions: []InteractionRecord{
+				{UserID: "persist-user", LLMModel: "model-1", Rating: 1},
+			},
+		},
+	}
+
+	if err := saveGMTRouterState(storagePath, states); err != nil {
+		t.Fatalf("saveGMTRouterState() error = %v", err)
+	}
+	if _, err := os.Stat(storagePath); err != nil {
+		t.Fatalf("expected state file to exist: %v", err)
+	}
+
+	loaded, ok, err := loadGMTRouterState(storagePath)
+	if err != nil {
+		t.Fatalf("loadGMTRouterState() error = %v", err)
+	}
+	if !ok {
+		t.Fatalf("loadGMTRouterState() did not report loaded state")
+	}
+
+	state := loaded["persist-user"]
+	if state == nil {
+		t.Fatalf("missing persisted user state")
+	}
+	if state.UserID != "persist-user" {
+		t.Fatalf("user id = %q, want persist-user", state.UserID)
+	}
+	if state.ModelPreferences == nil {
+		t.Fatalf("model preferences should be initialized")
+	}
+	if state.TotalInteractions != 1 {
+		t.Fatalf("total interactions = %d, want 1", state.TotalInteractions)
+	}
+}
+
+func TestGMTRouterStateStorageBacksUpCorruptedFile(t *testing.T) {
+	storagePath := filepath.Join(t.TempDir(), "gmtrouter_state.json")
+	if err := os.WriteFile(storagePath, []byte("not-json"), 0o644); err != nil {
+		t.Fatalf("write corrupted state: %v", err)
+	}
+
+	_, loaded, err := loadGMTRouterState(storagePath)
+	if err == nil {
+		t.Fatalf("expected corrupted state load error")
+	}
+	if loaded {
+		t.Fatalf("corrupted state should not be marked loaded")
+	}
+	if _, statErr := os.Stat(storagePath + ".corrupted"); statErr != nil {
+		t.Fatalf("expected corrupted backup to exist: %v", statErr)
+	}
+}
+
 func TestGMTRouterSelector_AnonymousUser(t *testing.T) {
 	selector := NewGMTRouterSelector(nil)
 

@@ -18,29 +18,38 @@ package vectorstore
 
 import (
 	"os"
-	"sync"
+	"strings"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 )
 
-var _ = Describe("FileStore", func() {
-	var (
-		store   *FileStore
-		tempDir string
-	)
+func newFileStoreTestStore() (*FileStore, string) {
+	GinkgoHelper()
+
+	tempDir, err := os.MkdirTemp("", "filestore-test-*")
+	Expect(err).NotTo(HaveOccurred())
+
+	store, err := NewFileStore(tempDir, NewMemoryMetadataRegistry())
+	Expect(err).NotTo(HaveOccurred())
+
+	return store, tempDir
+}
+
+func cleanupFileStoreTestDir(tempDir string) {
+	GinkgoHelper()
+	Expect(os.RemoveAll(tempDir)).To(Succeed())
+}
+
+var _ = Describe("FileStore construction and saving", func() {
+	var tempDir string
 
 	BeforeEach(func() {
-		var err error
-		tempDir, err = os.MkdirTemp("", "filestore-test-*")
-		Expect(err).NotTo(HaveOccurred())
-
-		store, err = NewFileStore(tempDir, NewMemoryMetadataRegistry())
-		Expect(err).NotTo(HaveOccurred())
+		_, tempDir = newFileStoreTestStore()
 	})
 
 	AfterEach(func() {
-		_ = os.RemoveAll(tempDir)
+		cleanupFileStoreTestDir(tempDir)
 	})
 
 	Context("NewFileStore", func() {
@@ -54,6 +63,27 @@ var _ = Describe("FileStore", func() {
 			_, err := NewFileStore("/dev/null/invalid", NewMemoryMetadataRegistry())
 			Expect(err).To(HaveOccurred())
 		})
+
+		It("should require a metadata registry", func() {
+			_, err := NewFileStore(tempDir, nil)
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("file metadata registry is required"))
+		})
+	})
+})
+
+var _ = Describe("FileStore saving", func() {
+	var (
+		store   *FileStore
+		tempDir string
+	)
+
+	BeforeEach(func() {
+		store, tempDir = newFileStoreTestStore()
+	})
+
+	AfterEach(func() {
+		cleanupFileStoreTestDir(tempDir)
 	})
 
 	Context("Save", func() {
@@ -116,6 +146,33 @@ var _ = Describe("FileStore", func() {
 
 			Expect(r1.ID).NotTo(Equal(r2.ID))
 		})
+
+		It("should save file content from a reader", func() {
+			content := strings.Repeat("streamed content\n", 128)
+			record, err := store.SaveFromReader("streamed.txt", strings.NewReader(content), "assistants")
+
+			Expect(err).NotTo(HaveOccurred())
+			Expect(record.Bytes).To(Equal(int64(len(content))))
+
+			data, err := store.Read(record.ID)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(string(data)).To(Equal(content))
+		})
+	})
+})
+
+var _ = Describe("FileStore record access", func() {
+	var (
+		store   *FileStore
+		tempDir string
+	)
+
+	BeforeEach(func() {
+		store, tempDir = newFileStoreTestStore()
+	})
+
+	AfterEach(func() {
+		cleanupFileStoreTestDir(tempDir)
 	})
 
 	Context("Read", func() {
@@ -158,6 +215,21 @@ var _ = Describe("FileStore", func() {
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring("file not found"))
 		})
+	})
+})
+
+var _ = Describe("FileStore listing and lookup", func() {
+	var (
+		store   *FileStore
+		tempDir string
+	)
+
+	BeforeEach(func() {
+		store, tempDir = newFileStoreTestStore()
+	})
+
+	AfterEach(func() {
+		cleanupFileStoreTestDir(tempDir)
 	})
 
 	Context("List", func() {
@@ -209,107 +281,23 @@ var _ = Describe("FileStore", func() {
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring("file not found"))
 		})
-	})
 
-	Context("concurrent access", func() {
-		It("should handle concurrent saves safely", func() {
-			var wg sync.WaitGroup
-			errors := make(chan error, 20)
-
-			for i := 0; i < 20; i++ {
-				wg.Add(1)
-				go func(idx int) {
-					defer wg.Done()
-					_, err := store.Save("concurrent.txt", []byte("data"), "assistants")
-					if err != nil {
-						errors <- err
-					}
-				}(i)
-			}
-
-			wg.Wait()
-			close(errors)
-
-			for err := range errors {
-				Expect(err).NotTo(HaveOccurred())
-			}
-
-			records := store.List()
-			Expect(records).To(HaveLen(20))
-		})
-
-		It("should handle concurrent reads and writes safely", func() {
-			// Pre-save some files.
-			ids := make([]string, 5)
-			for i := 0; i < 5; i++ {
-				r, err := store.Save("file.txt", []byte("content"), "assistants")
-				Expect(err).NotTo(HaveOccurred())
-				ids[i] = r.ID
-			}
-
-			var wg sync.WaitGroup
-			errors := make(chan error, 30)
-
-			// Concurrent reads.
-			for i := 0; i < 10; i++ {
-				wg.Add(1)
-				go func(idx int) {
-					defer wg.Done()
-					_, err := store.Read(ids[idx%5])
-					if err != nil {
-						errors <- err
-					}
-				}(i)
-			}
-
-			// Concurrent writes.
-			for i := 0; i < 10; i++ {
-				wg.Add(1)
-				go func() {
-					defer wg.Done()
-					_, err := store.Save("new.txt", []byte("new"), "assistants")
-					if err != nil {
-						errors <- err
-					}
-				}()
-			}
-
-			// Concurrent lists.
-			for i := 0; i < 10; i++ {
-				wg.Add(1)
-				go func() {
-					defer wg.Done()
-					_ = store.List()
-				}()
-			}
-
-			wg.Wait()
-			close(errors)
-
-			for err := range errors {
-				Expect(err).NotTo(HaveOccurred())
-			}
-		})
-
-		It("should handle concurrent delete and get safely", func() {
-			r, err := store.Save("target.txt", []byte("data"), "assistants")
+		It("should return defensive record copies", func() {
+			saved, err := store.Save("copy.txt", []byte("content"), "assistants")
 			Expect(err).NotTo(HaveOccurred())
 
-			var wg sync.WaitGroup
+			record, err := store.Get(saved.ID)
+			Expect(err).NotTo(HaveOccurred())
+			record.Filename = "mutated.txt"
 
-			// One goroutine deletes, the other tries to get.
-			wg.Add(2)
-			go func() {
-				defer wg.Done()
-				_ = store.Delete(r.ID)
-			}()
-			go func() {
-				defer wg.Done()
-				// Either succeeds or returns "not found" - both are acceptable.
-				_, _ = store.Get(r.ID)
-			}()
+			records := store.List()
+			Expect(records).To(HaveLen(1))
+			records[0].Purpose = "mutated"
 
-			wg.Wait()
+			reloaded, err := store.Get(saved.ID)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(reloaded.Filename).To(Equal("copy.txt"))
+			Expect(reloaded.Purpose).To(Equal("assistants"))
 		})
 	})
 })

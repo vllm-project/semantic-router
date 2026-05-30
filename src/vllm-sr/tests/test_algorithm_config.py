@@ -12,6 +12,7 @@ from cli.algorithms import (
     GMTRouterConfig,
     HybridSelectionConfig,
     ReMoMAlgorithmConfig,
+    RLDrivenSelectionConfig,
     RouterDCSelectionConfig,
     RouterR1Config,
     ThompsonSamplingConfig,
@@ -39,6 +40,7 @@ class TestAlgorithmConfigTypes:
             "automix",
             "hybrid",
             "latency_aware",
+            "rl_driven",
             "thompson",
             "gmtrouter",
             "router_r1",
@@ -193,6 +195,14 @@ class TestGMTRouterConfig:
     def test_default_values(self):
         """Test GMTRouter config default values."""
         config = GMTRouterConfig()
+        assert config.enable_personalization is True
+        assert config.history_sample_size == 5
+        assert config.embedding_dimension == 768
+        assert config.num_gnn_layers == 2
+        assert config.attention_heads == 8
+        assert config.min_interactions_for_personalization == 3
+        assert config.max_interactions_per_user == 100
+        assert config.feedback_types == ["rating", "ranking"]
         assert config.num_layers == 2
         assert config.hidden_dim == 64
         assert config.num_heads == 4
@@ -208,8 +218,55 @@ class TestGMTRouterConfig:
 
     def test_model_path(self):
         """Test GMTRouter config with model path."""
-        config = GMTRouterConfig(model_path="/models/gmtrouter.pt")
+        config = GMTRouterConfig(
+            model_path="/models/gmtrouter.pt",
+            storage_path="/var/lib/vsr/gmt_graph.json",
+            feedback_types=["rating", "ranking", "response"],
+        )
         assert config.model_path == "/models/gmtrouter.pt"
+        assert config.storage_path == "/var/lib/vsr/gmt_graph.json"
+        assert config.feedback_types == ["rating", "ranking", "response"]
+
+
+class TestRLDrivenSelectionConfig:
+    """Test canonical rl_driven selection configuration."""
+
+    def test_default_values(self):
+        """Test RL-driven config default values."""
+        config = RLDrivenSelectionConfig()
+        assert config.exploration_rate == 0.3
+        assert config.exploration_decay == 0.99
+        assert config.min_exploration == 0.05
+        assert config.use_thompson_sampling is True
+        assert config.enable_personalization is True
+        assert config.personalization_blend == 0.7
+        assert config.session_context_weight == 0.3
+        assert config.implicit_feedback_weight == 0.5
+        assert config.cost_awareness is True
+        assert config.cost_weight == 0.2
+        assert config.auto_save_interval == "30s"
+        assert config.use_router_r1_rewards is True
+        assert config.cost_reward_alpha == 0.3
+        assert config.format_reward_penalty == -1.0
+
+    def test_storage_and_router_r1_fields(self):
+        """Test persistence and Router-R1 fields."""
+        config = RLDrivenSelectionConfig(
+            storage_path="/var/lib/vsr/rl_state.json",
+            auto_save_interval="45s",
+            enable_llm_routing=True,
+            router_r1_server_url="http://router-r1:8080",
+            llm_routing_fallback="error",
+            enable_multi_round_aggregation=True,
+            max_aggregation_rounds=4,
+        )
+        assert config.storage_path == "/var/lib/vsr/rl_state.json"
+        assert config.auto_save_interval == "45s"
+        assert config.enable_llm_routing is True
+        assert config.router_r1_server_url == "http://router-r1:8080"
+        assert config.llm_routing_fallback == "error"
+        assert config.enable_multi_round_aggregation is True
+        assert config.max_aggregation_rounds == 4
 
 
 class TestRouterR1Config:
@@ -276,7 +333,16 @@ class TestAlgorithmConfigIntegration:
         assert config.elo.min_comparisons == 10
 
     def test_rl_driven_algorithm_config(self):
-        """Test AlgorithmConfig with Thompson Sampling (RL-driven)."""
+        """Test AlgorithmConfig with canonical RL-driven config."""
+        config = AlgorithmConfig(
+            type="rl_driven",
+            rl_driven=RLDrivenSelectionConfig(storage_path="/tmp/rl.json"),
+        )
+        assert config.type == "rl_driven"
+        assert config.rl_driven.storage_path == "/tmp/rl.json"
+
+    def test_thompson_algorithm_config(self):
+        """Test AlgorithmConfig with legacy Thompson Sampling config."""
         config = AlgorithmConfig(
             type="thompson",
             thompson=ThompsonSamplingConfig(per_user=True, min_samples=20),

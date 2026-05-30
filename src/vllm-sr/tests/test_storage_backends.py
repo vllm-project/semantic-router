@@ -80,6 +80,54 @@ def test_detect_required_backends_excludes_milvus_when_cache_disabled():
     assert "milvus" not in required
 
 
+def test_detect_required_backends_includes_postgres_for_vector_store_metadata():
+    config = {
+        "version": "v0.3",
+        "listeners": [{"name": "http-8899", "address": "0.0.0.0", "port": 8899}],
+        "global": {
+            "stores": {
+                "semantic_cache": {
+                    "enabled": False,
+                },
+                "vector_store": {
+                    "enabled": True,
+                    "metadata_store": "postgres",
+                },
+            }
+        },
+    }
+
+    assert detect_required_backends(config) == {"redis", "postgres"}
+
+
+def test_detect_required_backends_ignores_disabled_vector_store_metadata():
+    config = {
+        "version": "v0.3",
+        "listeners": [{"name": "http-8899", "address": "0.0.0.0", "port": 8899}],
+        "global": {
+            "services": {
+                "router_replay": {
+                    "enabled": False,
+                },
+                "response_api": {
+                    "enabled": False,
+                },
+            },
+            "stores": {
+                "semantic_cache": {
+                    "enabled": False,
+                },
+                "vector_store": {
+                    "enabled": False,
+                    "metadata_store": "postgres",
+                },
+            },
+        },
+    }
+
+    assert detect_required_backends(config) == set()
+
+
 def test_inject_local_service_runtime_defaults_populates_canonical_connections():
     config = {
         "version": "v0.3",
@@ -164,6 +212,63 @@ def test_inject_local_store_runtime_defaults_populates_milvus_connection():
     assert search["topk"] == 10
     dev = milvus["development"]
     assert dev["auto_create_collection"] is True
+
+
+def test_inject_local_store_runtime_defaults_populates_vector_store_metadata_postgres():
+    config = {
+        "version": "v0.3",
+        "global": {
+            "stores": {
+                "semantic_cache": {
+                    "enabled": False,
+                },
+                "vector_store": {
+                    "enabled": True,
+                    "metadata_store": "postgres",
+                },
+            }
+        },
+    }
+
+    changed = inject_local_store_runtime_defaults(config, resolve_runtime_stack())
+
+    assert changed is True
+    metadata = config["global"]["stores"]["vector_store"]["metadata_postgres"]
+    assert metadata["host"] == "vllm-sr-postgres"
+    assert metadata["port"] == 5432
+    assert metadata["database"] == "vsr"
+    assert metadata["user"] == "router"
+    assert metadata["password"] == "router-secret"
+    assert metadata["ssl_mode"] == "disable"
+
+
+def test_inject_local_store_runtime_defaults_backfills_vector_store_metadata_postgres():
+    config = {
+        "version": "v0.3",
+        "global": {
+            "stores": {
+                "semantic_cache": {
+                    "enabled": False,
+                },
+                "vector_store": {
+                    "enabled": True,
+                    "metadata_store": "postgres",
+                    "metadata_postgres": {
+                        "host": "",
+                        "database": "custom",
+                    },
+                },
+            }
+        },
+    }
+
+    changed = inject_local_store_runtime_defaults(config, resolve_runtime_stack())
+
+    assert changed is True
+    metadata = config["global"]["stores"]["vector_store"]["metadata_postgres"]
+    assert metadata["host"] == "vllm-sr-postgres"
+    assert metadata["database"] == "custom"
+    assert metadata["user"] == "router"
 
 
 def test_inject_local_store_runtime_defaults_preserves_user_milvus_config():

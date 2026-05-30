@@ -44,15 +44,18 @@ type RLDrivenLooper struct {
 
 // NewRLDrivenLooper creates a new RLDrivenLooper instance
 func NewRLDrivenLooper(cfg *config.LooperConfig) *RLDrivenLooper {
-	// Get the RL-driven selector from the global registry
-	var rlSelector *selection.RLDrivenSelector
-	if s, ok := selection.GlobalRegistry.Get(selection.MethodRLDriven); ok {
-		if typed, ok := s.(*selection.RLDrivenSelector); ok {
-			rlSelector = typed
-		}
-	}
+	return NewRLDrivenLooperWithSelectionRegistry(cfg, selection.GlobalRegistry)
+}
 
-	// If not registered, create a new one with default config
+// NewRLDrivenLooperWithSelectionRegistry creates a new RLDrivenLooper instance
+// bound to the provided runtime selector registry.
+func NewRLDrivenLooperWithSelectionRegistry(
+	cfg *config.LooperConfig,
+	selectorRegistry *selection.Registry,
+) *RLDrivenLooper {
+	rlSelector := resolveRLDrivenSelector(selectorRegistry)
+
+	// If not registered, create a new one with default config.
 	if rlSelector == nil {
 		rlCfg := selection.DefaultRLDrivenConfig()
 		rlCfg.EnableMultiRoundAggregation = true
@@ -68,6 +71,18 @@ func NewRLDrivenLooper(cfg *config.LooperConfig) *RLDrivenLooper {
 		cfg:      cfg,
 		selector: rlSelector,
 	}
+}
+
+func resolveRLDrivenSelector(selectorRegistry *selection.Registry) *selection.RLDrivenSelector {
+	if selectorRegistry == nil {
+		return nil
+	}
+	if s, ok := selectorRegistry.Get(selection.MethodRLDriven); ok {
+		if typed, ok := s.(*selection.RLDrivenSelector); ok {
+			return typed
+		}
+	}
+	return nil
 }
 
 // SetEndpointOverrides sets per-model endpoint URL overrides on the underlying client.

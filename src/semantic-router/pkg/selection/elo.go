@@ -302,8 +302,8 @@ func (e *EloSelector) InitializeFromConfig(modelConfig map[string]config.ModelPa
 
 // Select chooses the best model based on Elo ratings
 func (e *EloSelector) Select(ctx context.Context, selCtx *SelectionContext) (*SelectionResult, error) {
-	if len(selCtx.CandidateModels) == 0 {
-		return nil, fmt.Errorf("no candidate models provided")
+	if err := ValidateSelectionContext(selCtx); err != nil {
+		return nil, err
 	}
 
 	allScores := make(map[string]float64)
@@ -408,8 +408,8 @@ func (e *EloSelector) Select(ctx context.Context, selCtx *SelectionContext) (*Se
 // 2. Positive self-feedback: Only WinnerModel set - small rating boost
 // 3. Negative self-feedback: Only LoserModel set - small rating penalty
 func (e *EloSelector) UpdateFeedback(ctx context.Context, feedback *Feedback) error {
-	if feedback.WinnerModel == "" && feedback.LoserModel == "" {
-		return fmt.Errorf("either winner_model or loser_model is required")
+	if err := NormalizeFeedback(feedback); err != nil {
+		return err
 	}
 
 	e.updateGlobalRatings(feedback)

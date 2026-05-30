@@ -27,6 +27,19 @@ A Helm chart for deploying Semantic Router - an intelligent routing system for L
 | https://milvus-io.github.io/milvus-helm/ | semantic-cache-milvus(milvus) | >=0.0.0 |
 | https://prometheus-community.github.io/helm-charts | prometheus | >=0.0.0 |
 
+## Values Schema
+
+The chart ships a narrow `values.schema.json` for public router and dashboard
+deployment controls. Helm validates key replica, autoscaling, persistence, and
+safety-guard value types before template rendering. Cross-field production
+safety rules remain in templates so the chart can emit targeted errors for
+invalid HPA replica bounds and unsupported multi-replica local-state
+deployments.
+
+Run `make helm-safety-validate HELM_REPO_UPDATE=false` from the repository root
+to validate the schema plus the multi-replica local-state safety guards against
+the locked chart dependencies.
+
 ## Values
 
 | Key | Type | Default | Description |
@@ -112,6 +125,24 @@ A Helm chart for deploying Semantic Router - an intelligent routing system for L
 | config.global.stores.semantic_cache.max_entries | int | `1000` |  |
 | config.global.stores.semantic_cache.similarity_threshold | float | `0.8` |  |
 | config.global.stores.semantic_cache.ttl_seconds | int | `3600` |  |
+| dashboard.enabled | bool | `false` | Enable the vLLM-SR dashboard |
+| dashboard.image.pullPolicy | string | `"IfNotPresent"` | Dashboard image pull policy |
+| dashboard.image.repository | string | `"ghcr.io/vllm-project/semantic-router/dashboard"` | Dashboard image repository |
+| dashboard.image.tag | string | `"latest"` | Dashboard image tag |
+| dashboard.persistence.accessMode | string | `"ReadWriteOnce"` | Access mode for the dashboard-local state PVC |
+| dashboard.persistence.annotations | object | `{}` | Annotations for the dashboard-local state PVC |
+| dashboard.persistence.enabled | bool | `false` | Persist dashboard-local SQLite state for auth/session/workflow data. This is restart-safe for one dashboard replica, not a shared HA session store. |
+| dashboard.persistence.existingClaim | string | `""` | Existing PVC to mount for dashboard-local state |
+| dashboard.persistence.mountPath | string | `"/app/data"` | Container mount path for dashboard-local state |
+| dashboard.persistence.size | string | `"1Gi"` | Requested dashboard-local state size |
+| dashboard.persistence.storageClassName | string | `""` | Storage class name. Leave empty for the cluster default; use "-" to render storageClassName: "". |
+| dashboard.readonly | bool | `false` | Run dashboard in read-only mode |
+| dashboard.replicaCount | int | `1` | Dashboard replica count. Must stay 1 until the dashboard auth/session store supports a shared multi-replica backend. |
+| dashboard.resources.limits | object | `{"cpu":"500m","memory":"512Mi"}` |  |
+| dashboard.resources.requests | object | `{"cpu":"100m","memory":"128Mi"}` |  |
+| dashboard.service.port | int | `8700` | Dashboard service port |
+| dashboard.service.targetPort | int | `8700` | Dashboard target port |
+| dashboard.service.type | string | `"ClusterIP"` | Dashboard service type |
 | config.listeners[0].address | string | `"0.0.0.0"` |  |
 | config.listeners[0].name | string | `"grpc-50051"` |  |
 | config.listeners[0].port | int | `50051` |  |
@@ -245,7 +276,7 @@ A Helm chart for deploying Semantic Router - an intelligent routing system for L
 | persistence.enabled | bool | `true` | Enable persistent volume |
 | persistence.existingClaim | string | `""` | Existing claim name (if provided, will use existing PVC instead of creating new one) |
 | persistence.size | string | `"10Gi"` | Storage size |
-| persistence.storageClassName | string | `"standard"` | Storage class name (use "-" for default storage class) |
+| persistence.storageClassName | string | `"standard"` | Storage class name. Leave empty for the cluster default; use "-" to render storageClassName: "". |
 | podAnnotations | object | `{}` |  |
 | podSecurityContext | object | `{}` |  |
 | prometheus.server.image.tag | string | `"v2.53.0"` |  |
@@ -260,6 +291,7 @@ A Helm chart for deploying Semantic Router - an intelligent routing system for L
 | resources.requests | object | `{"cpu":"1","memory":"3Gi"}` | Resource requests |
 | response-api-redis.architecture | string | `"standalone"` |  |
 | response-api-redis.auth.enabled | bool | `false` |  |
+| safetyGuards.rejectMultiReplicaLocalSelectorState | bool | `true` | Reject multi-replica router deployments when config uses local learning selector state (elo, rl_driven, or gmtrouter). Disable only when selector learning state is intentionally externalized or the algorithm is used in a read-only/non-learning mode. |
 | securityContext.allowPrivilegeEscalation | bool | `false` | Allow privilege escalation |
 | securityContext.runAsNonRoot | bool | `false` | Run as non-root user |
 | semantic-cache-milvus.cluster.enabled | bool | `false` |  |

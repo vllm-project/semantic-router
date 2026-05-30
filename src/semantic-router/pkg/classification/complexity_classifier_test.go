@@ -54,3 +54,58 @@ func TestComplexityClassifier_ClassifyDetailedWithImageUsesPrototypeBanks(t *tes
 		t.Fatalf("expected confidence > 0.2, got %+v", results[0])
 	}
 }
+
+func TestComplexityClassifier_ClassifyDetailedWithImageWithoutCache(t *testing.T) {
+	stubEmbeddingLookup(t, map[string][]float32{
+		"hard text":     makeEmbedding(0.5, 0.5),
+		"easy text":     makeEmbedding(0.5, 0.5),
+		"visual query":  makeEmbedding(0.5, 0.5),
+		"fallback text": makeEmbedding(0.5, 0.5),
+	})
+	stubMultiModalImageLookup(t, map[string][]float32{
+		"hard-image":    makeEmbedding(1.0, 0.0),
+		"easy-image":    makeEmbedding(0.0, 1.0),
+		"request-image": makeEmbedding(1.0, 0.0),
+	})
+
+	originalMMText := getMultiModalTextEmbedding
+	getMultiModalTextEmbedding = func(text string, targetDim int) ([]float32, error) {
+		return makeEmbedding(0.5, 0.5), nil
+	}
+	t.Cleanup(func() { getMultiModalTextEmbedding = originalMMText })
+
+	classifier, err := NewComplexityClassifier([]config.ComplexityRule{
+		{
+			Name:      "visual_reasoning",
+			Threshold: 0.2,
+			Hard: config.ComplexityCandidates{
+				Candidates:      []string{"hard text"},
+				ImageCandidates: []string{"hard-image"},
+			},
+			Easy: config.ComplexityCandidates{
+				Candidates:      []string{"easy text"},
+				ImageCandidates: []string{"easy-image"},
+			},
+		},
+	}, "qwen3", config.PrototypeScoringConfig{
+		ClusterSimilarityThreshold: 0.98,
+		MaxPrototypes:              2,
+	})
+	if err != nil {
+		t.Fatalf("failed to create complexity classifier: %v", err)
+	}
+
+	results, err := classifier.ClassifyDetailedWithImage("visual query", "request-image")
+	if err != nil {
+		t.Fatalf("ClassifyDetailedWithImage failed without cache: %v", err)
+	}
+	if len(results) != 1 {
+		t.Fatalf("expected one complexity result, got %+v", results)
+	}
+	if results[0].Difficulty != "hard" {
+		t.Fatalf("expected image-backed hard difficulty, got %+v", results[0])
+	}
+	if results[0].SignalSource != "image" {
+		t.Fatalf("expected image signal source, got %+v", results[0])
+	}
+}

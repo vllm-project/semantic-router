@@ -143,3 +143,12 @@ algorithm:
 | `cost_scaling_factor` | float | `0.0` | Cost penalty per $1M tokens (0 = ignore) |
 | `storage_path` | string | — | File path to persist Elo ratings |
 | `auto_save_interval` | string | `1m` | Auto-save interval (e.g. `5m`, `30s`) |
+
+:::warning Multi-replica state
+
+Elo ratings are local learning state when they are kept in memory or written to
+a local `storage_path`. In Helm deployments, multi-replica router renders are
+rejected by default when an active decision uses `algorithm.type: elo`; keep one
+router replica or externalize selector state before disabling that safety guard.
+
+:::

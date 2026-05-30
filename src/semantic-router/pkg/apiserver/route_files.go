@@ -19,8 +19,8 @@ limitations under the License.
 package apiserver
 
 import (
+	"errors"
 	"fmt"
-	"io"
 	"net/http"
 	"path/filepath"
 	"strings"
@@ -29,7 +29,10 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/vectorstore"
 )
 
-const maxUploadSize = 50 * 1024 * 1024 // 50MB
+const (
+	maxUploadSize        = 50 * 1024 * 1024 // 50MB
+	multipartMemoryLimit = 8 * 1024 * 1024
+)
 
 // allowedExtensions defines the file types that can be uploaded.
 var allowedExtensions = map[string]bool{
@@ -41,22 +44,9 @@ var allowedExtensions = map[string]bool{
 	".htm":  true,
 }
 
-// globalFileStore is the global file store instance.
-// It is set during initialization via SetFileStore.
-var globalFileStore *vectorstore.FileStore
-
 // SetFileStore sets the global file store for the API server.
 func SetFileStore(fs *vectorstore.FileStore) {
-	globalFileStore = fs
-}
-
-// registerFileRoutes registers file management routes.
-func registerFileRoutes(mux *http.ServeMux, s *ClassificationAPIServer) {
-	mux.HandleFunc("POST /v1/files", s.handleUploadFile)
-	mux.HandleFunc("GET /v1/files", s.handleListFiles)
-	mux.HandleFunc("GET /v1/files/{id}", s.handleGetFile)
-	mux.HandleFunc("DELETE /v1/files/{id}", s.handleDeleteFile)
-	mux.HandleFunc("GET /v1/files/{id}/content", s.handleGetFileContent)
+	globalRuntimeDeps.setFileStore(fs)
 }
 
 func (s *ClassificationAPIServer) handleUploadFile(w http.ResponseWriter, r *http.Request) {
@@ -69,10 +59,24 @@ func (s *ClassificationAPIServer) handleUploadFile(w http.ResponseWriter, r *htt
 	// Limit upload size.
 	r.Body = http.MaxBytesReader(w, r.Body, maxUploadSize)
 
-	if err := r.ParseMultipartForm(maxUploadSize); err != nil {
+	if err := r.ParseMultipartForm(multipartMemoryLimit); err != nil {
+		var maxBytesErr *http.MaxBytesError
+		if errors.As(err, &maxBytesErr) {
+			s.writeErrorResponse(w, http.StatusRequestEntityTooLarge, "REQUEST_BODY_TOO_LARGE", errRequestBodyTooLarge.Error())
+			return
+		}
 		s.writeErrorResponse(w, http.StatusBadRequest, "INVALID_INPUT",
 			fmt.Sprintf("failed to parse multipart form (max size: %dMB): %s", maxUploadSize/(1024*1024), err.Error()))
 		return
+	}
+	if r.MultipartForm != nil {
+		defer func() {
+			if err := r.MultipartForm.RemoveAll(); err != nil {
+				logging.ComponentWarnEvent("apiserver", "file_upload_cleanup_failed", map[string]interface{}{
+					"error": err.Error(),
+				})
+			}
+		}()
 	}
 
 	file, header, err := r.FormFile("file")
@@ -102,13 +106,7 @@ func (s *ClassificationAPIServer) handleUploadFile(w http.ResponseWriter, r *htt
 		return
 	}
 
-	content, err := io.ReadAll(file)
-	if err != nil {
-		s.writeErrorResponse(w, http.StatusInternalServerError, "READ_ERROR", "failed to read file content")
-		return
-	}
-
-	record, err := fileStore.Save(header.Filename, content, purpose)
+	record, err := fileStore.SaveFromReader(header.Filename, file, purpose)
 	if err != nil {
 		s.writeErrorResponse(w, http.StatusInternalServerError, "SAVE_ERROR", "failed to save file")
 		return

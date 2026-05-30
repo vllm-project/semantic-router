@@ -18,6 +18,7 @@ package selection
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"math"
 	"strings"
@@ -63,13 +64,18 @@ type latencyCandidateScore struct {
 	ttft     float64
 }
 
+var ErrLatencyAwarePercentileInvalid = errors.New("latency-aware percentile must be between 1 and 100")
+
 // Select chooses the best model based on configured TPOT/TTFT percentiles.
 // If percentile data is missing for all candidates, falls back to the first candidate.
 func (s *LatencyAwareSelector) Select(ctx context.Context, selCtx *SelectionContext) (*SelectionResult, error) {
 	_ = ctx
 
-	if len(selCtx.CandidateModels) == 0 {
-		return nil, fmt.Errorf("no candidate models provided")
+	if err := ValidateSelectionContext(selCtx); err != nil {
+		return nil, err
+	}
+	if err := validateLatencyAwarePercentiles(selCtx); err != nil {
+		return nil, err
 	}
 
 	hasTPOT := selCtx.LatencyAwareTPOTPercentile > 0
@@ -79,122 +85,182 @@ func (s *LatencyAwareSelector) Select(ctx context.Context, selCtx *SelectionCont
 		return s.fallbackToFirst(selCtx, "Latency-aware percentile config missing, using first candidate"), nil
 	}
 
+	candidates, minTPOT, minTTFT := collectLatencyCandidates(selCtx, hasTPOT, hasTTFT)
+	if len(candidates) == 0 {
+		logging.Warnf("[LatencyAwareSelector] No latency percentile data for candidates=%v, using first candidate", getModelNames(selCtx.CandidateModels))
+		return s.fallbackToFirst(selCtx, "No latency stats available, using first candidate"), nil
+	}
+
+	scored := scoreLatencyCandidates(candidates, latencyScoreOptions{
+		hasTPOT: hasTPOT,
+		hasTTFT: hasTTFT,
+		minTPOT: minTPOT,
+		minTTFT: minTTFT,
+	})
+	if !scored.ok {
+		logging.Warnf("[LatencyAwareSelector] Failed to score candidates=%v, using first candidate", getModelNames(selCtx.CandidateModels))
+		return s.fallbackToFirst(selCtx, "Latency-aware scoring failed, using first candidate"), nil
+	}
+
+	confidence := latencyConfidence(scored.bestScore, scored.secondBestScore)
+	reasoning := latencyReasoning(hasTPOT, hasTTFT, selCtx.LatencyAwareTPOTPercentile, selCtx.LatencyAwareTTFTPercentile)
+	logging.Infof("[LatencyAwareSelector] Candidates=%v -> selected=%s (score=%.4f, confidence=%.2f)",
+		getModelNames(selCtx.CandidateModels), scored.best.modelRef.Model, scored.bestScore, confidence)
+
+	return &SelectionResult{
+		SelectedModel: scored.best.modelRef.Model,
+		LoRAName:      scored.best.modelRef.LoRAName,
+		Score:         scored.bestScore,
+		Confidence:    confidence,
+		Method:        MethodLatencyAware,
+		Reasoning:     reasoning,
+		AllScores:     scored.allScores,
+	}, nil
+}
+
+func validateLatencyAwarePercentiles(selCtx *SelectionContext) error {
+	for _, percentile := range []struct {
+		name  string
+		value int
+	}{
+		{name: "tpot_percentile", value: selCtx.LatencyAwareTPOTPercentile},
+		{name: "ttft_percentile", value: selCtx.LatencyAwareTTFTPercentile},
+	} {
+		if percentile.value < 0 || percentile.value > 100 {
+			return fmt.Errorf("%w: %s=%d", ErrLatencyAwarePercentileInvalid, percentile.name, percentile.value)
+		}
+	}
+	return nil
+}
+
+func collectLatencyCandidates(selCtx *SelectionContext, hasTPOT, hasTTFT bool) ([]latencyCandidateScore, float64, float64) {
 	candidates := make([]latencyCandidateScore, 0, len(selCtx.CandidateModels))
 	minTPOT := math.MaxFloat64
 	minTTFT := math.MaxFloat64
 
 	for i := range selCtx.CandidateModels {
-		ref := &selCtx.CandidateModels[i]
-		model := strings.TrimSpace(ref.Model)
-		if model == "" {
+		candidate, ok := latencyCandidateFromRef(&selCtx.CandidateModels[i], selCtx, hasTPOT, hasTTFT)
+		if !ok {
 			continue
 		}
-
-		candidate := latencyCandidateScore{
-			modelRef: ref,
-		}
-
-		if hasTPOT {
-			tpotValue, ok := latency.GetTPOTPercentile(model, selCtx.LatencyAwareTPOTPercentile)
-			if !ok {
-				continue
-			}
-			candidate.tpot = tpotValue
-		}
-
-		if hasTTFT {
-			ttftValue, ok := latency.GetTTFTPercentile(model, selCtx.LatencyAwareTTFTPercentile)
-			if !ok {
-				continue
-			}
-			candidate.ttft = ttftValue
-		}
-
 		if hasTPOT && candidate.tpot < minTPOT {
 			minTPOT = candidate.tpot
 		}
 		if hasTTFT && candidate.ttft < minTTFT {
 			minTTFT = candidate.ttft
 		}
-
 		candidates = append(candidates, candidate)
 	}
 
-	if len(candidates) == 0 {
-		logging.Warnf("[LatencyAwareSelector] No latency percentile data for candidates=%v, using first candidate", getModelNames(selCtx.CandidateModels))
-		return s.fallbackToFirst(selCtx, "No latency stats available, using first candidate"), nil
+	return candidates, minTPOT, minTTFT
+}
+
+func latencyCandidateFromRef(ref *config.ModelRef, selCtx *SelectionContext, hasTPOT, hasTTFT bool) (latencyCandidateScore, bool) {
+	model := strings.TrimSpace(ref.Model)
+	if model == "" {
+		return latencyCandidateScore{}, false
 	}
 
-	allScores := make(map[string]float64, len(candidates))
-	best := candidates[0]
-	bestScore := math.MaxFloat64
-	secondBestScore := math.MaxFloat64
+	candidate := latencyCandidateScore{modelRef: ref}
+	if hasTPOT {
+		tpotValue, ok := latency.GetTPOTPercentile(model, selCtx.LatencyAwareTPOTPercentile)
+		if !ok {
+			return latencyCandidateScore{}, false
+		}
+		candidate.tpot = tpotValue
+	}
+
+	if hasTTFT {
+		ttftValue, ok := latency.GetTTFTPercentile(model, selCtx.LatencyAwareTTFTPercentile)
+		if !ok {
+			return latencyCandidateScore{}, false
+		}
+		candidate.ttft = ttftValue
+	}
+
+	return candidate, true
+}
+
+type latencyScoreOptions struct {
+	hasTPOT bool
+	hasTTFT bool
+	minTPOT float64
+	minTTFT float64
+}
+
+type latencyScoreResult struct {
+	allScores       map[string]float64
+	best            latencyCandidateScore
+	bestScore       float64
+	secondBestScore float64
+	ok              bool
+}
+
+func scoreLatencyCandidates(candidates []latencyCandidateScore, opts latencyScoreOptions) latencyScoreResult {
+	result := latencyScoreResult{
+		allScores:       make(map[string]float64, len(candidates)),
+		best:            candidates[0],
+		bestScore:       math.MaxFloat64,
+		secondBestScore: math.MaxFloat64,
+	}
 
 	for _, candidate := range candidates {
-		score := 0.0
-		parts := 0
-
-		if hasTPOT {
-			denominator := minTPOT
-			if denominator <= 0 {
-				denominator = 1.0
-			}
-			score += candidate.tpot / denominator
-			parts++
-		}
-
-		if hasTTFT {
-			denominator := minTTFT
-			if denominator <= 0 {
-				denominator = 1.0
-			}
-			score += candidate.ttft / denominator
-			parts++
-		}
-
-		if parts == 0 {
+		score, ok := normalizedLatencyScore(candidate, opts)
+		if !ok {
 			continue
 		}
-
-		score /= float64(parts)
-		allScores[candidate.modelRef.Model] = score
-
-		if score < bestScore {
-			secondBestScore = bestScore
-			bestScore = score
-			best = candidate
-		} else if score < secondBestScore {
-			secondBestScore = score
-		}
+		result.allScores[candidate.modelRef.Model] = score
+		result.record(candidate, score)
 	}
+	result.ok = result.bestScore != math.MaxFloat64
+	return result
+}
 
-	if bestScore == math.MaxFloat64 {
-		logging.Warnf("[LatencyAwareSelector] Failed to score candidates=%v, using first candidate", getModelNames(selCtx.CandidateModels))
-		return s.fallbackToFirst(selCtx, "Latency-aware scoring failed, using first candidate"), nil
+func (r *latencyScoreResult) record(candidate latencyCandidateScore, score float64) {
+	if score < r.bestScore {
+		r.secondBestScore = r.bestScore
+		r.bestScore = score
+		r.best = candidate
+		return
 	}
-
-	confidence := 1.0
-	if secondBestScore < math.MaxFloat64 && secondBestScore > 0 {
-		gap := secondBestScore - bestScore
-		if gap < 0 {
-			gap = 0
-		}
-		confidence = gap / secondBestScore
+	if score < r.secondBestScore {
+		r.secondBestScore = score
 	}
+}
 
-	reasoning := latencyReasoning(hasTPOT, hasTTFT, selCtx.LatencyAwareTPOTPercentile, selCtx.LatencyAwareTTFTPercentile)
-	logging.Infof("[LatencyAwareSelector] Candidates=%v -> selected=%s (score=%.4f, confidence=%.2f)",
-		getModelNames(selCtx.CandidateModels), best.modelRef.Model, bestScore, confidence)
+func normalizedLatencyScore(candidate latencyCandidateScore, opts latencyScoreOptions) (float64, bool) {
+	score := 0.0
+	parts := 0
+	if opts.hasTPOT {
+		score += candidate.tpot / positiveDenominator(opts.minTPOT)
+		parts++
+	}
+	if opts.hasTTFT {
+		score += candidate.ttft / positiveDenominator(opts.minTTFT)
+		parts++
+	}
+	if parts == 0 {
+		return 0, false
+	}
+	return score / float64(parts), true
+}
 
-	return &SelectionResult{
-		SelectedModel: best.modelRef.Model,
-		LoRAName:      best.modelRef.LoRAName,
-		Score:         bestScore,
-		Confidence:    confidence,
-		Method:        MethodLatencyAware,
-		Reasoning:     reasoning,
-		AllScores:     allScores,
-	}, nil
+func positiveDenominator(value float64) float64 {
+	if value <= 0 {
+		return 1.0
+	}
+	return value
+}
+
+func latencyConfidence(bestScore, secondBestScore float64) float64 {
+	if secondBestScore == math.MaxFloat64 || secondBestScore <= 0 {
+		return 1.0
+	}
+	gap := secondBestScore - bestScore
+	if gap < 0 {
+		gap = 0
+	}
+	return gap / secondBestScore
 }
 
 func latencyReasoning(hasTPOT, hasTTFT bool, tpotPercentile, ttftPercentile int) string {

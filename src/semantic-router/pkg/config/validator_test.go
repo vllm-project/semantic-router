@@ -105,6 +105,34 @@ func registerValidateConfigStructureCoreSpecs() {
 		Expect(validateConfigStructure(cfg)).To(Succeed())
 	})
 
+	It("validates shared family contracts after k8s CRD conversion", func() {
+		cfg := &RouterConfig{
+			ConfigSource: ConfigSourceKubernetes,
+			IntelligentRouting: IntelligentRouting{
+				Decisions: []Decision{{
+					Name: "bad",
+					ModelRefs: []ModelRef{{
+						Model:                 "",
+						ModelReasoningControl: ModelReasoningControl{UseReasoning: boolPtr(false)},
+					}},
+				}},
+			},
+		}
+
+		err := ValidateKubernetesConfigContracts(cfg)
+		Expect(err).To(HaveOccurred())
+		Expect(err.Error()).To(ContainSubstring("model name cannot be empty"))
+	})
+
+	It("keeps the shared dispatch table wired for file and k8s validation", func() {
+		Expect(sharedConfigContractValidators).NotTo(BeEmpty())
+		for _, validator := range sharedConfigContractValidators {
+			Expect(validator.name).NotTo(BeEmpty())
+			Expect(validator.scopes&configValidationScopeFile).NotTo(BeZero(), "validator %s must run for file config", validator.name)
+			Expect(validator.scopes&configValidationScopeKubernetes).NotTo(BeZero(), "validator %s must run after k8s CRD conversion", validator.name)
+		}
+	})
+
 	It("accepts empty config", func() {
 		Expect(validateConfigStructure(&RouterConfig{})).To(Succeed())
 	})

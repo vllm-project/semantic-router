@@ -11,17 +11,20 @@ from cli.bootstrap import (
     ensure_bootstrap_workspace,
 )
 from cli.commands.common import exit_with_logged_error
-from cli.commands.runtime_support import (
+from cli.commands.runtime_config_mutation import (
     ALGORITHM_TYPES,
+)
+from cli.commands.runtime_config_mutation import (
+    inject_algorithm_into_config as _inject_algorithm_into_config,
+)
+from cli.commands.runtime_help import SERVE_HELP
+from cli.commands.runtime_support import (
     append_passthrough_env_vars,
     apply_runtime_mode_env_vars,
     configure_runtime_override_env_vars,
     log_bootstrap_result,
     resolve_effective_config_path,
     validate_setup_mode_flags,
-)
-from cli.commands.runtime_support import (
-    inject_algorithm_into_config as _inject_algorithm_into_config,
 )
 from cli.consts import (
     DEFAULT_IMAGE_PULL_POLICY,
@@ -34,7 +37,12 @@ from cli.deployment_backend import DEFAULT_TARGET, VALID_TARGETS, resolve_target
 from cli.utils import get_logger
 
 log = get_logger(__name__)
-inject_algorithm_into_config = _inject_algorithm_into_config
+
+
+def inject_algorithm_into_config(config_path: Path, algorithm: str) -> Path:
+    """Compatibility wrapper for callers importing from cli.commands.runtime."""
+    return _inject_algorithm_into_config(config_path, algorithm)
+
 
 TARGET_HELP = (
     f"Deployment target: {', '.join(VALID_TARGETS)} (default: {DEFAULT_TARGET})"
@@ -121,7 +129,7 @@ def _execute_serve(
     )
 
 
-@click.command()
+@click.command(help=SERVE_HELP)
 @click.option(
     "--config",
     default="config.yaml",
@@ -194,7 +202,8 @@ def _execute_serve(
     default=None,
     help="Model selection algorithm: static (default), elo (rating-based), "
     "router_dc (embedding similarity), automix (cost-quality optimization), "
-    "hybrid (combined methods). Overrides config file setting.",
+    "hybrid (combined methods), rl_driven (online learning). "
+    "Overrides config file setting.",
 )
 @click.option("--target", default=None, help=TARGET_HELP)
 @click.option(
@@ -230,64 +239,6 @@ def serve(
     profile: str | None,
     chart_dir: str | None,
 ) -> None:
-    """
-    Start vLLM Semantic Router.
-
-    Ports are configured in config.yaml under 'listeners' section.
-
-    DEPLOYMENT TARGETS:
-
-    \b
-    docker  - Local Docker deployment (default)
-    k8s     - Kubernetes deployment via Helm
-
-    MODEL SELECTION ALGORITHMS:
-
-    \b
-    static     - Use first configured model (default, no learning)
-    elo        - Rating-based selection using user feedback
-    router_dc  - Query-model matching via embedding similarity
-    automix    - Cost-quality optimization using POMDP
-    hybrid     - Combine multiple methods with configurable weights
-    thompson   - Thompson Sampling with exploration/exploitation (RL-driven)
-    gmtrouter  - Graph neural network for personalized routing (RL-driven)
-    router_r1  - LLM-as-router with think/route actions (RL-driven)
-
-    Examples:
-        # Basic usage (uses config.yaml, Docker target)
-        vllm-sr serve
-
-        # Deploy to Kubernetes
-        vllm-sr serve --target k8s --namespace my-ns --profile dev
-
-        # Custom config file
-        vllm-sr serve --config my-config.yaml
-
-        # Use Elo rating selection (learns from feedback)
-        vllm-sr serve --algorithm elo
-
-        # Use cost-optimized selection
-        vllm-sr serve --algorithm automix
-
-        # Custom image
-        vllm-sr serve --image ghcr.io/vllm-project/semantic-router/vllm-sr:latest
-
-        # Pull policy
-        vllm-sr serve --image-pull-policy always
-
-        # Read-only dashboard (for public beta)
-        vllm-sr serve --readonly
-
-        # Minimal mode (no dashboard, no observability)
-        vllm-sr serve --minimal
-
-        # Start router with debug logs
-        vllm-sr serve --log-level debug
-
-        # Platform branding (for AMD deployments)
-        vllm-sr serve --platform amd
-
-    """
     _execute_serve(
         config,
         image,

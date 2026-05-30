@@ -12,6 +12,31 @@ Open
 
 The repository's top-level product split is coherent, but the cross-stack dependency direction is still too porous. Dashboard backend, operator, and CLI surfaces continue to co-own router-runtime contract knowledge instead of consuming a narrow contract or public-service seam. Dashboard backend imports router config and authoring internals directly. The operator's controller-side canonical translation depends directly on router canonical config types. The CLI still carries a large share of canonical config knowledge while its local hotspot rules had drifted behind the real runtime orchestration files. At the same time, router runtime bootstrap and API-server startup still publish shared dependencies through process-wide globals.
 
+Current-source recheck on 2026-05-24 found this debt still valid, but not all
+original evidence has the same weight. Two Dashboard backend slices were narrowed:
+`/api/tools-db` path resolution now goes through
+`dashboard/backend/routercontract.ReadToolSelection` instead of importing router
+config directly from `dashboard/backend/router/core_routes.go`, and OpenClaw
+model-gateway discovery now goes through
+`dashboard/backend/routercontract.ReadFirstListenerEndpoint` instead of parsing
+router listener YAML inside `dashboard/backend/handlers/openclaw.go`. A
+2026-05-25 Dashboard security-policy slice also narrowed a live apply-time
+validation gap: `applySecurityFragment` now validates merged generated config
+through `dashboard/backend/handlers/security_policy_config_validation.go` before
+the config is written or applied to runtime, with
+`dashboard/backend/handlers/security_policy_apply.go` owning the write/hot-reload
+application path so the transport handler no longer grows past the structure
+warn threshold. The debt remains open because
+Dashboard config/deploy/setup handlers, Operator canonical
+translation, CLI runtime/config ownership, and router bootstrap globals still
+carry the broader cross-stack ownership problem.
+
+Validation for the OpenClaw listener adapter slice passed with
+`go test ./handlers ./routercontract -run 'TestResolveOpenClawModelBaseURL|TestDefaultOpenClawModelBaseURL|TestReadFirstListenerEndpoint|TestOpenClawModelGatewayContainerName'`
+from `dashboard/backend`, followed by changed-set `make agent-ci-gate
+CHANGED_FILES="..."`. Feature integration and local smoke remain blocked by the
+desktop Docker socket, not by this code path.
+
 This is broader than the existing subsystem debts:
 
 - TD022 focused on CLI-internal config ownership collapse
@@ -26,6 +51,12 @@ Those entries remain valid, but they do not by themselves define the cross-stack
 - [src/semantic-router/pkg/config/loader.go](../../../src/semantic-router/pkg/config/loader.go)
 - [src/semantic-router/pkg/apiserver/server.go](../../../src/semantic-router/pkg/apiserver/server.go)
 - [dashboard/backend/router/core_routes.go](../../../dashboard/backend/router/core_routes.go)
+- [dashboard/backend/handlers/openclaw.go](../../../dashboard/backend/handlers/openclaw.go)
+- [dashboard/backend/handlers/security_policy.go](../../../dashboard/backend/handlers/security_policy.go)
+- [dashboard/backend/handlers/security_policy_apply.go](../../../dashboard/backend/handlers/security_policy_apply.go)
+- [dashboard/backend/handlers/security_policy_config_validation.go](../../../dashboard/backend/handlers/security_policy_config_validation.go)
+- [dashboard/backend/routercontract/tools.go](../../../dashboard/backend/routercontract/tools.go)
+- [dashboard/backend/routercontract/listeners.go](../../../dashboard/backend/routercontract/listeners.go)
 - [dashboard/backend/handlers/config.go](../../../dashboard/backend/handlers/config.go)
 - [dashboard/backend/handlers/canonical_transport.go](../../../dashboard/backend/handlers/canonical_transport.go)
 - [deploy/operator/controllers/canonical_config_builder.go](../../../deploy/operator/controllers/canonical_config_builder.go)

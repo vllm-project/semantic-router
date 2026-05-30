@@ -58,7 +58,7 @@ func (m *Manager) LoadFromRegistry(ctx context.Context) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	for _, vs := range stores {
-		m.stores[vs.ID] = vs
+		m.stores[vs.ID] = cloneVectorStore(vs)
 	}
 	return nil
 }
@@ -100,19 +100,19 @@ func (m *Manager) CreateStore(ctx context.Context, req CreateStoreRequest) (*Vec
 		CreatedAt:    time.Now().Unix(),
 		Status:       "active",
 		FileCounts:   FileCounts{},
-		ExpiresAfter: req.ExpiresAfter,
-		Metadata:     req.Metadata,
+		ExpiresAfter: cloneExpirationPolicy(req.ExpiresAfter),
+		Metadata:     cloneMetadata(req.Metadata),
 		BackendType:  m.defaultBackendType,
 	}
 
 	m.mu.Lock()
-	m.stores[id] = vs
+	m.stores[id] = cloneVectorStore(vs)
 	m.mu.Unlock()
 
-	if err := m.registry.SaveStore(ctx, vs); err != nil {
-		return vs, fmt.Errorf("persist vector store metadata: %w", err)
+	if err := m.registry.SaveStore(ctx, cloneVectorStore(vs)); err != nil {
+		return cloneVectorStore(vs), fmt.Errorf("persist vector store metadata: %w", err)
 	}
-	return vs, nil
+	return cloneVectorStore(vs), nil
 }
 
 // GetStore returns a vector store by ID.
@@ -124,36 +124,49 @@ func (m *Manager) GetStore(id string) (*VectorStore, error) {
 	if !ok {
 		return nil, fmt.Errorf("vector store not found: %s", id)
 	}
-	return vs, nil
+	return cloneVectorStore(vs), nil
 }
 
 // ListStores returns vector stores with pagination.
 func (m *Manager) ListStores(params ListStoresParams) []*VectorStore {
-	m.mu.RLock()
-	defer m.mu.RUnlock()
+	params = normalizeListStoresParams(params)
 
+	m.mu.RLock()
+	all := make([]*VectorStore, 0, len(m.stores))
+	for _, vs := range m.stores {
+		all = append(all, cloneVectorStore(vs))
+	}
+	m.mu.RUnlock()
+
+	sortVectorStores(all, params.Order)
+	return pageVectorStores(all, params)
+}
+
+func normalizeListStoresParams(params ListStoresParams) ListStoresParams {
 	if params.Limit <= 0 {
 		params.Limit = 20
 	}
 	if params.Limit > 100 {
 		params.Limit = 100
 	}
-
-	// Collect all stores into a slice.
-	all := make([]*VectorStore, 0, len(m.stores))
-	for _, vs := range m.stores {
-		all = append(all, vs)
+	if params.Order != "asc" {
+		params.Order = "desc"
 	}
+	return params
+}
 
-	// Sort by created_at.
-	if params.Order == "asc" {
-		sort.Slice(all, func(i, j int) bool { return all[i].CreatedAt < all[j].CreatedAt })
+func sortVectorStores(stores []*VectorStore, order string) {
+	if order == "asc" {
+		sort.Slice(stores, func(i, j int) bool { return stores[i].CreatedAt < stores[j].CreatedAt })
 	} else {
-		sort.Slice(all, func(i, j int) bool { return all[i].CreatedAt > all[j].CreatedAt })
+		sort.Slice(stores, func(i, j int) bool { return stores[i].CreatedAt > stores[j].CreatedAt })
 	}
+}
 
-	// Apply cursor-based pagination.
+func pageVectorStores(all []*VectorStore, params ListStoresParams) []*VectorStore {
 	startIdx := 0
+	endIdx := len(all)
+
 	if params.After != "" {
 		for i, vs := range all {
 			if vs.ID == params.After {
@@ -162,14 +175,22 @@ func (m *Manager) ListStores(params ListStoresParams) []*VectorStore {
 			}
 		}
 	}
+	if params.Before != "" {
+		for i, vs := range all {
+			if vs.ID == params.Before {
+				endIdx = i
+				break
+			}
+		}
+	}
 
-	if startIdx >= len(all) {
+	if startIdx >= endIdx {
 		return nil
 	}
 
 	end := startIdx + params.Limit
-	if end > len(all) {
-		end = len(all)
+	if end > endIdx {
+		end = endIdx
 	}
 
 	return all[startIdx:end]
@@ -188,18 +209,18 @@ func (m *Manager) UpdateStore(ctx context.Context, id string, req UpdateStoreReq
 		vs.Name = *req.Name
 	}
 	if req.ExpiresAfter != nil {
-		vs.ExpiresAfter = req.ExpiresAfter
+		vs.ExpiresAfter = cloneExpirationPolicy(req.ExpiresAfter)
 	}
 	if req.Metadata != nil {
-		vs.Metadata = req.Metadata
+		vs.Metadata = cloneMetadata(req.Metadata)
 	}
-	snapshot := *vs
+	snapshot := cloneVectorStore(vs)
 	m.mu.Unlock()
 
-	if err := m.registry.SaveStore(ctx, &snapshot); err != nil {
-		return vs, fmt.Errorf("persist vector store metadata: %w", err)
+	if err := m.registry.SaveStore(ctx, cloneVectorStore(snapshot)); err != nil {
+		return cloneVectorStore(snapshot), fmt.Errorf("persist vector store metadata: %w", err)
 	}
-	return vs, nil
+	return cloneVectorStore(snapshot), nil
 }
 
 // DeleteStore deletes a vector store and its backing collection.
@@ -236,10 +257,10 @@ func (m *Manager) UpdateFileCounts(ctx context.Context, id string, fn func(*File
 		return fmt.Errorf("vector store not found: %s", id)
 	}
 	fn(&vs.FileCounts)
-	snapshot := *vs
+	snapshot := cloneVectorStore(vs)
 	m.mu.Unlock()
 
-	if err := m.registry.SaveStore(ctx, &snapshot); err != nil {
+	if err := m.registry.SaveStore(ctx, cloneVectorStore(snapshot)); err != nil {
 		return fmt.Errorf("persist vector store metadata: %w", err)
 	}
 	return nil

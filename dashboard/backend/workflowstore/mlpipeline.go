@@ -30,6 +30,8 @@ type MLProgressEvent struct {
 	RecordedAt time.Time `json:"recorded_at"`
 }
 
+const mlPipelineRecoveredStep = "recovered_after_restart"
+
 // PutMLJob inserts or replaces a job row.
 func (s *Store) PutMLJob(j MLJobRecord) error {
 	s.mu.Lock()
@@ -139,16 +141,69 @@ LIMIT ?`, jobID, limit)
 	return out, rows.Err()
 }
 
-// RecoverInterruptedMLJobs marks running jobs as failed after process restart.
+// RecoverInterruptedMLJobs marks non-terminal jobs as failed after process
+// restart and records a durable recovery event for UI catch-up.
 func (s *Store) RecoverInterruptedMLJobs(message string) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	now := time.Now().UTC().Format(time.RFC3339Nano)
-	_, err := s.db.Exec(`
+
+	tx, err := s.db.Begin()
+	if err != nil {
+		return err
+	}
+	defer func() {
+		_ = tx.Rollback()
+	}()
+
+	rows, err := tx.Query(`
+SELECT id, progress
+FROM ml_pipeline_jobs
+WHERE status IN ('pending', 'running')`)
+	if err != nil {
+		return err
+	}
+
+	type interruptedJob struct {
+		id       string
+		progress int
+	}
+	interrupted := []interruptedJob{}
+	for rows.Next() {
+		var job interruptedJob
+		if scanErr := rows.Scan(&job.id, &job.progress); scanErr != nil {
+			_ = rows.Close()
+			return scanErr
+		}
+		interrupted = append(interrupted, job)
+	}
+	if closeErr := rows.Close(); closeErr != nil {
+		return closeErr
+	}
+	if rowsErr := rows.Err(); rowsErr != nil {
+		return rowsErr
+	}
+	if len(interrupted) == 0 {
+		return tx.Commit()
+	}
+
+	_, err = tx.Exec(`
 UPDATE ml_pipeline_jobs
-SET status = 'failed', completed_at = ?, error = ?
-WHERE status = 'running'`, now, message)
-	return err
+SET status = 'failed', completed_at = ?, error = ?, current_step = ?
+WHERE status IN ('pending', 'running')`, now, message, mlPipelineRecoveredStep)
+	if err != nil {
+		return err
+	}
+
+	for _, job := range interrupted {
+		if _, err := tx.Exec(
+			`INSERT INTO ml_pipeline_progress_events (job_id, step, percent, message, recorded_at) VALUES (?, ?, ?, ?, ?)`,
+			job.id, mlPipelineRecoveredStep, job.progress, message, now); err != nil {
+			return err
+		}
+	}
+
+	return tx.Commit()
 }
 
 // MLWorkflowStats returns counts for health endpoints.

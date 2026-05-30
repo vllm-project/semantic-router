@@ -25,6 +25,7 @@ import (
 	"github.com/openai/openai-go"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/selection"
 )
 
 // Request contains the input for looper execution
@@ -90,6 +91,16 @@ type Looper interface {
 
 // Factory creates a Looper instance based on the algorithm type
 func Factory(cfg *config.LooperConfig, algorithmType string) Looper {
+	return FactoryWithSelectionRegistry(cfg, algorithmType, nil)
+}
+
+// FactoryWithSelectionRegistry creates a Looper using runtime-owned model
+// selectors when an algorithm needs selector state.
+func FactoryWithSelectionRegistry(
+	cfg *config.LooperConfig,
+	algorithmType string,
+	selectorRegistry *selection.Registry,
+) Looper {
 	switch algorithmType {
 	case "confidence":
 		return NewConfidenceLooper(cfg)
@@ -98,7 +109,7 @@ func Factory(cfg *config.LooperConfig, algorithmType string) Looper {
 	case "remom":
 		return NewReMoMLooper(cfg)
 	case "rl_driven":
-		return NewRLDrivenLooper(cfg)
+		return NewRLDrivenLooperWithSelectionRegistry(cfg, selectorRegistry)
 	default:
 		// Default to simple looper that just calls models sequentially
 		return NewBaseLooper(cfg)

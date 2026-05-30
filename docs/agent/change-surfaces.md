@@ -113,14 +113,14 @@ This document defines the project-level surfaces used by skills, reports, and va
 ## `deployment_profile_stack`
 
 - Kubernetes deployment profiles, stack manifests, and profile-owned platform resources outside operator CRDs.
-- Typical paths: `deploy/kubernetes/response-api/**`, `deploy/kubernetes/ai-gateway/**`, `deploy/kubernetes/observability/**`, `deploy/kubernetes/streaming/**`
-- Task rules: `e2e-framework`
+- Typical paths: `deploy/helm/**`, `deploy/kubernetes/response-api/**`, `deploy/kubernetes/ai-gateway/**`, `deploy/kubernetes/observability/**`, `deploy/kubernetes/streaming/**`
+- Task rules: `helm-chart`, `e2e-framework`
 
 ## `k8s_platform`
 
 - Kubernetes-facing operator, CRD, deployment-profile, and DSL translation surfaces for semantic-router platform integration.
-- Typical paths: `deploy/operator/**`, `deploy/kubernetes/**`, `src/semantic-router/pkg/apis/**`, `src/semantic-router/pkg/dsl/**`, `src/semantic-router/pkg/k8s/**`
-- Task rules: `operator-stack`, `e2e-framework`
+- Typical paths: `deploy/helm/**`, `deploy/operator/**`, `deploy/kubernetes/**`, `src/semantic-router/pkg/apis/**`, `src/semantic-router/pkg/dsl/**`, `src/semantic-router/pkg/k8s/**`
+- Task rules: `helm-chart`, `operator-stack`, `e2e-framework`
 
 ## `fleet_sim_runtime`
 

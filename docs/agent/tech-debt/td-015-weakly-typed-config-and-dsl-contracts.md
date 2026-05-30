@@ -7,6 +7,7 @@ Open
 ## Scope
 
 - `src/semantic-router/pkg/dsl/compiler.go`
+- `src/semantic-router/pkg/dsl/field_payload.go`
 - `src/semantic-router/pkg/dsl/decompiler.go`
 - `src/semantic-router/pkg/dsl/emitter_yaml.go`
 - `dashboard/frontend/src/types/config.ts`
@@ -50,18 +51,32 @@ The branch has already removed the worst contract-level weak typing from the rou
 
 The dashboard visual builder and global-editor mutation layer now also uses named recursive field types (`DSLFieldObject` / `DSLFieldValue`) instead of passing `Record<string, unknown>` through the store, page orchestration, and shared editors.
 
+The ASR005 contract/API ratchet also removed the compiler and validator
+`fieldsToMap` / `valueToInterface` helpers. Structure and conversation signal
+validation plus RAG `backend_config` payload construction now pass through the
+named `dslFieldObject` / `dslFieldValue` conversion seam in `field_payload.go`
+before crossing into YAML or `StructuredPayload`.
+
+The same ratchet also narrowed one decompiler slice. Structure and conversation
+feature objects, structure predicates, and tools `dynamic_retrieval` now format
+through AST `Value` / `ObjectValue` helpers in `decompiler.go` instead of
+detouring through ad hoc `map[string]interface{}` helpers. Raw map normalization
+is still intentionally retained for unknown plugin payload compatibility.
+
 The remaining gaps are narrower and now cluster around three places:
 
-- the Go DSL YAML compile/decompile/emit helpers still fall back to raw `map[string]interface{}` / `interface{}` while formatting arbitrary field bags
+- the Go DSL emit/export helpers still fall back to raw `map[string]interface{}` / `interface{}` while formatting infra, CRD, and YAML documents
 - dashboard config type adapters still carry a hybrid canonical-versus-legacy view model and format-detection seam for editor and fallback rendering
 - dashboard setup/canonicalization utilities still manipulate open-ended config fragments as mutable record bags instead of named helper payloads
 
 ## Evidence
 
+- [field_payload.go](../../../src/semantic-router/pkg/dsl/field_payload.go)
+  - compiler and validator field lowering now use named DSL payload helpers before YAML or `StructuredPayload` encoding
 - [compiler.go](../../../src/semantic-router/pkg/dsl/compiler.go)
-  - compiler field lowering still emits `map[string]interface{}` / `interface{}` through `fieldsToMap` and `valueToInterface`
+  - structure, conversation, and RAG backend payload construction no longer own raw field-bag conversion directly
 - [decompiler.go](../../../src/semantic-router/pkg/dsl/decompiler.go)
-  - plugin config normalization still formats through `map[string]interface{}`
+  - typed structure/conversation/tools dynamic-retrieval decompile paths now use AST `Value` helpers; unknown plugin payload compatibility still normalizes through `map[string]interface{}`
 - [emitter_yaml.go](../../../src/semantic-router/pkg/dsl/emitter_yaml.go)
   - canonical/CRD emit paths still assemble YAML through raw infra maps
 - [config.ts](../../../dashboard/frontend/src/types/config.ts)
@@ -104,7 +119,7 @@ The remaining gaps are narrower and now cluster around three places:
 
 ## Why It Matters
 
-- raw DSL field-bag helpers still hide contract changes from the compiler, so import/export regressions surface late
+- raw DSL field-bag helpers still hide contract changes from decompile/export surfaces, so import/export regressions surface late
 - dashboard type adapters still preserve more than one effective steady-state config shape in the editor layer, which keeps compatibility logic close to the normal editing surface
 - dashboard setup/canonicalization record bags still bypass the same named config seams used by the steady-state editor
 - these weakly typed seams undermine the v0.3 canonical-config cleanup by leaving YAML/setup helpers dynamically shaped even after the main editor surface was typed
@@ -113,12 +128,12 @@ The remaining gaps are narrower and now cluster around three places:
 
 - dashboard setup/canonicalization helpers use named helper payloads instead of mutable record bags
 - dashboard config typing presents one canonical steady-state editor model, with legacy compatibility isolated behind import or canonicalization seams
-- Go DSL compile/decompile/emit helpers use named value abstractions or `yaml.Node` transforms instead of raw maps
+- remaining Go DSL decompile/emit helpers use named value abstractions or `yaml.Node` transforms instead of raw maps
 - branch-level config/dashboard/DSL changes can be validated without reopening raw field-bag questions in setup/import/export helpers
 
 ## Exit Criteria
 
 - dashboard setup/import/defaults helpers no longer require mutable `Record<string, unknown>` bags for config shaping
 - dashboard config typing no longer keeps long-lived hybrid `UnifiedConfig` or legacy-only fallback semantics on the same primary editor seam
-- DSL compiler/decompile/export hotspots no longer require raw `map[string]interface{}` / `interface{}` field bags
+- DSL decompile/export hotspots no longer require raw `map[string]interface{}` / `interface{}` field bags
 - active config/dashboard/DSL branch diffs can pass harness lint without new weak-typing exemptions for these surfaces

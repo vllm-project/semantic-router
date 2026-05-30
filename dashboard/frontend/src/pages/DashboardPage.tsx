@@ -13,14 +13,13 @@ import {
 import { DashboardMiniFlowDiagram } from './DashboardMiniFlowDiagram'
 import type { RouterConfig } from './dashboardPageTypes'
 import {
-  SIGNAL_COLORS,
   categorizeDecisions,
   countDecisions,
   countModels,
   countPlugins,
   countSignals,
-  getDecisionCategory,
 } from './dashboardPageStats'
+import { buildDecisionPreviewRows, buildSignalBreakdownRows } from './dashboardPageOverview'
 import styles from './DashboardPage.module.css'
 
 const DashboardPage: React.FC = () => {
@@ -105,6 +104,18 @@ const DashboardPage: React.FC = () => {
   const categorizedDecisions = useMemo(
     () => (config ? categorizeDecisions(config) : { guardrails: [], routing: [], fallbacks: [] }),
     [config],
+  )
+  const signalBreakdownRows = useMemo(
+    () => buildSignalBreakdownRows(signalStats.byType),
+    [signalStats.byType],
+  )
+  const decisionPreviewRows = useMemo(
+    () => buildDecisionPreviewRows([
+      ...categorizedDecisions.guardrails,
+      ...categorizedDecisions.routing,
+      ...categorizedDecisions.fallbacks,
+    ]),
+    [categorizedDecisions],
   )
 
   if (loading && !config && !status) {
@@ -393,23 +404,18 @@ const DashboardPage: React.FC = () => {
               <span className={styles.cardSubtitle}>{signalStats.total} total</span>
             </div>
             <div className={styles.signalBreakdown}>
-              {Object.entries(signalStats.byType).sort((a, b) => b[1] - a[1]).map(([type, count]) => {
-                const maxCount = Math.max(...Object.values(signalStats.byType))
-                const pct = Math.round((count / maxCount) * 100)
-                const color = SIGNAL_COLORS[type] || '#999'
-                return (
-                  <div key={type} className={styles.breakdownRow} title={`${type}: ${count} signal(s)`}>
-                    <span className={styles.breakdownLabel}>
-                      <span className={styles.breakdownDot} style={{ background: color }} />
-                      {type}
-                    </span>
-                    <div className={styles.breakdownBar}>
-                      <div className={styles.breakdownFill} style={{ width: `${pct}%`, background: color }} />
-                    </div>
-                    <span className={styles.breakdownCount}>{count}</span>
+              {signalBreakdownRows.map((row) => (
+                <div key={row.type} className={styles.breakdownRow} title={`${row.type}: ${row.count} signal(s)`}>
+                  <span className={styles.breakdownLabel}>
+                    <span className={styles.breakdownDot} style={{ background: row.color }} />
+                    {row.type}
+                  </span>
+                  <div className={styles.breakdownBar}>
+                    <div className={styles.breakdownFill} style={{ width: `${row.percent}%`, background: row.color }} />
                   </div>
-                )
-              })}
+                  <span className={styles.breakdownCount}>{row.count}</span>
+                </div>
+              ))}
             </div>
           </div>
         )}
@@ -429,32 +435,23 @@ const DashboardPage: React.FC = () => {
                 <span>Type</span>
                 <span>Models</span>
               </div>
-              {[...categorizedDecisions.guardrails, ...categorizedDecisions.routing, ...categorizedDecisions.fallbacks]
-                .slice(0, 10)
-                .map((d, i) => {
-                  const modelNames = Array.isArray(d.modelRefs)
-                    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                    ? d.modelRefs.map((m: any) => m?.model || '').filter(Boolean).join(', ')
-                    : '—'
-                  const cat = getDecisionCategory(d.priority)
-                  return (
-                    <div key={i} className={styles.decisionTableRow}>
-                      <span className={styles.decisionName} title={d.description || d.name || ''}>
-                        {d.name || `Decision ${i + 1}`}
-                      </span>
-                      <span className={styles.decisionPriority}>{d.priority ?? '—'}</span>
-                      <span className={`${styles.decisionBadge} ${
-                        cat === 'guardrail' ? styles.badgeGuardrail :
-                        cat === 'fallback' ? styles.badgeFallback :
-                        styles.badgeRouting
-                      }`}
-                      >
-                        {cat === 'guardrail' ? 'Guard' : cat === 'fallback' ? 'Default' : 'Route'}
-                      </span>
-                      <span className={styles.decisionModels} title={modelNames}>{modelNames}</span>
-                    </div>
-                  )
-                })}
+              {decisionPreviewRows.map((row) => (
+                <div key={row.key} className={styles.decisionTableRow}>
+                  <span className={styles.decisionName} title={row.title}>
+                    {row.name}
+                  </span>
+                  <span className={styles.decisionPriority}>{row.priorityLabel}</span>
+                  <span className={`${styles.decisionBadge} ${
+                    row.category === 'guardrail' ? styles.badgeGuardrail :
+                    row.category === 'fallback' ? styles.badgeFallback :
+                    styles.badgeRouting
+                  }`}
+                  >
+                    {row.typeLabel}
+                  </span>
+                  <span className={styles.decisionModels} title={row.modelNames}>{row.modelNames}</span>
+                </div>
+              ))}
               {currentDecisions.length > 10 && (
                 <button type="button" className={styles.decisionTableMore} onClick={() => navigate('/config/decisions')}>
                   +{currentDecisions.length - 10} more decisions &rsaquo;

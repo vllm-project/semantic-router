@@ -129,6 +129,16 @@ algorithm:
 | `model_path` | string | — | Path to pre-trained GMTRouter model weights |
 | `storage_path` | string | — | Path to persist interaction graph |
 
+:::warning Multi-replica state
+
+GMTRouter's interaction graph is local learning state when it is kept in memory
+or written to a local `storage_path`. In Helm deployments, multi-replica router
+renders are rejected by default when an active decision uses
+`algorithm.type: gmtrouter`; keep one router replica or externalize selector
+state before disabling that safety guard.
+
+:::
+
 ## Feedback
 
 GMTRouter's `UpdateFeedback()` builds the interaction graph incrementally:

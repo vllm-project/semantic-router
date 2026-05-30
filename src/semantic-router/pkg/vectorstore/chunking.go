@@ -33,26 +33,38 @@ func ChunkText(text string, strategy *ChunkingStrategy) []TextChunk {
 		return nil
 	}
 
-	if strategy == nil || strategy.Type == "" || strategy.Type == "auto" {
-		return chunkAuto(text)
-	}
-
-	if strategy.Type == "static" {
-		maxSize := DefaultMaxChunkSize
-		overlap := DefaultChunkOverlap
-		if strategy.Static != nil {
-			if strategy.Static.MaxChunkSizeTokens > 0 {
-				maxSize = strategy.Static.MaxChunkSizeTokens
-			}
-			if strategy.Static.ChunkOverlapTokens > 0 {
-				overlap = strategy.Static.ChunkOverlapTokens
-			}
-		}
+	if chunkingStrategyType(strategy) == "static" {
+		maxSize, overlap := staticChunkConfig(strategy)
 		return chunkStatic(text, maxSize, overlap)
 	}
 
-	// Unknown strategy: fall back to auto.
 	return chunkAuto(text)
+}
+
+func chunkingStrategyType(strategy *ChunkingStrategy) string {
+	if strategy == nil || strategy.Type == "" || strategy.Type == "auto" {
+		return "auto"
+	}
+	if strategy.Type == "static" {
+		return "static"
+	}
+	return "auto"
+}
+
+func staticChunkConfig(strategy *ChunkingStrategy) (int, int) {
+	maxSize := DefaultMaxChunkSize
+	overlap := DefaultChunkOverlap
+
+	if strategy.Static == nil {
+		return maxSize, overlap
+	}
+	if strategy.Static.MaxChunkSizeTokens > 0 {
+		maxSize = strategy.Static.MaxChunkSizeTokens
+	}
+	if strategy.Static.ChunkOverlapTokens > 0 {
+		overlap = strategy.Static.ChunkOverlapTokens
+	}
+	return maxSize, overlap
 }
 
 // chunkAuto splits text by paragraphs (double newlines). Consecutive blank
@@ -77,14 +89,21 @@ func chunkAuto(text string) []TextChunk {
 			if part == "" {
 				continue
 			}
-			chunks = append(chunks, TextChunk{
-				Content:    part,
-				ChunkIndex: idx,
-			})
-			idx++
+			chunks = appendAutoChunks(chunks, part, &idx)
 		}
 	}
 
+	return chunks
+}
+
+func appendAutoChunks(chunks []TextChunk, text string, idx *int) []TextChunk {
+	for _, chunk := range chunkStatic(text, DefaultMaxChunkSize, DefaultChunkOverlap) {
+		chunks = append(chunks, TextChunk{
+			Content:    chunk.Content,
+			ChunkIndex: *idx,
+		})
+		(*idx)++
+	}
 	return chunks
 }
 

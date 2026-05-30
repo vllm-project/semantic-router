@@ -5,6 +5,7 @@ package apiserver
 import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/memory"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/routerruntime"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/selection"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/vectorstore"
 )
 
@@ -31,12 +32,18 @@ func (s *ClassificationAPIServer) currentVectorStoreManager() *vectorstore.Manag
 	if runtime := s.currentVectorStoreRuntime(); runtime != nil {
 		return runtime.Manager
 	}
+	if s != nil && s.runtimeRegistry != nil {
+		return nil
+	}
 	return GetVectorStoreManager()
 }
 
 func (s *ClassificationAPIServer) currentVectorStoreEmbedder() vectorstore.Embedder {
 	if runtime := s.currentVectorStoreRuntime(); runtime != nil {
 		return runtime.Embedder
+	}
+	if s != nil && s.runtimeRegistry != nil {
+		return nil
 	}
 	return GetEmbedder()
 }
@@ -45,12 +52,28 @@ func (s *ClassificationAPIServer) currentVectorStorePipeline() *vectorstore.Inge
 	if runtime := s.currentVectorStoreRuntime(); runtime != nil {
 		return runtime.Pipeline
 	}
-	return globalPipeline
+	if s != nil && s.runtimeRegistry != nil {
+		return nil
+	}
+	return globalRuntimeDeps.getIngestionPipeline()
 }
 
 func (s *ClassificationAPIServer) currentFileStore() *vectorstore.FileStore {
 	if runtime := s.currentVectorStoreRuntime(); runtime != nil {
 		return runtime.FileStore
 	}
-	return globalFileStore
+	if s != nil && s.runtimeRegistry != nil {
+		return nil
+	}
+	return globalRuntimeDeps.getFileStore()
+}
+
+func (s *ClassificationAPIServer) currentSelectionRegistry() *selection.Registry {
+	if s != nil && s.runtimeRegistry != nil {
+		if registry := s.runtimeRegistry.ModelSelector(); registry != nil {
+			return registry
+		}
+		return nil
+	}
+	return selection.GlobalRegistry
 }

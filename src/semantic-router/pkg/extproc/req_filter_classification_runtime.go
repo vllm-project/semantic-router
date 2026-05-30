@@ -230,6 +230,13 @@ func (r *OpenAIRouter) selectDecisionRuntimeModel(
 		ctx,
 	)
 	selectedModelRef, usedMethod := r.selectModelFromCandidates(selCtx, result.Decision.Algorithm, ctx)
+	if selectedModelRef == nil {
+		selectedModel := r.Config.DefaultModel
+		ctx.VSRSelectedModel = selectedModel
+		ctx.VSRSelectionMethod = "default"
+		logging.Warnf("[ModelSelection] No valid decision modelRefs for decision %s, using default model %s", decisionName, selectedModel)
+		return selectedModel, entropy.ReasoningDecision{}
+	}
 	selectedModel := selectedModelRef.Model
 	selectionFields := map[string]interface{}{
 		"request_id":        ctx.RequestID,

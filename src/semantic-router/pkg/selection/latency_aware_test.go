@@ -18,157 +18,148 @@ package selection
 
 import (
 	"context"
+	"errors"
 	"testing"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/latency"
 )
 
-func TestLatencyAwareSelector_Select(t *testing.T) {
-	ctx := context.Background()
+func resetLatencyAwareStats() {
+	latency.ResetTPOT()
+	latency.ResetTTFT()
+}
 
-	t.Run("select fastest model with TPOT percentile only", func(t *testing.T) {
-		latency.ResetTPOT()
-		latency.ResetTTFT()
+func TestLatencyAwareSelectorSelectsFastestTPOT(t *testing.T) {
+	resetLatencyAwareStats()
 
-		selector := NewLatencyAwareSelector(nil)
-		latency.UpdateTPOT("model-a", 0.06)
-		latency.UpdateTPOT("model-a", 0.06)
-		latency.UpdateTPOT("model-a", 0.06)
+	selector := NewLatencyAwareSelector(nil)
+	latency.UpdateTPOT("model-a", 0.06)
+	latency.UpdateTPOT("model-a", 0.06)
+	latency.UpdateTPOT("model-a", 0.06)
+	latency.UpdateTPOT("model-b", 0.03)
+	latency.UpdateTPOT("model-b", 0.03)
+	latency.UpdateTPOT("model-b", 0.03)
 
-		latency.UpdateTPOT("model-b", 0.03)
-		latency.UpdateTPOT("model-b", 0.03)
-		latency.UpdateTPOT("model-b", 0.03)
-
-		result, err := selector.Select(ctx, &SelectionContext{
-			CandidateModels:            createCandidateModels("model-a", "model-b"),
-			LatencyAwareTPOTPercentile: 50,
-		})
-		if err != nil {
-			t.Fatalf("unexpected error: %v", err)
-		}
-
-		if result.Method != MethodLatencyAware {
-			t.Errorf("expected method %s, got %s", MethodLatencyAware, result.Method)
-		}
-		if result.SelectedModel != "model-b" {
-			t.Errorf("expected model-b, got %s", result.SelectedModel)
-		}
+	result, err := selector.Select(context.Background(), &SelectionContext{
+		CandidateModels:            createCandidateModels("model-a", "model-b"),
+		LatencyAwareTPOTPercentile: 50,
 	})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if result.Method != MethodLatencyAware {
+		t.Errorf("expected method %s, got %s", MethodLatencyAware, result.Method)
+	}
+	if result.SelectedModel != "model-b" {
+		t.Errorf("expected model-b, got %s", result.SelectedModel)
+	}
+}
 
-	t.Run("select fastest model with TTFT percentile only", func(t *testing.T) {
-		latency.ResetTPOT()
-		latency.ResetTTFT()
+func TestLatencyAwareSelectorSelectsFastestTTFT(t *testing.T) {
+	resetLatencyAwareStats()
 
-		selector := NewLatencyAwareSelector(nil)
-		latency.UpdateTTFT("model-a", 0.30)
-		latency.UpdateTTFT("model-a", 0.30)
-		latency.UpdateTTFT("model-a", 0.30)
+	selector := NewLatencyAwareSelector(nil)
+	latency.UpdateTTFT("model-a", 0.30)
+	latency.UpdateTTFT("model-a", 0.30)
+	latency.UpdateTTFT("model-a", 0.30)
+	latency.UpdateTTFT("model-b", 0.12)
+	latency.UpdateTTFT("model-b", 0.12)
+	latency.UpdateTTFT("model-b", 0.12)
 
-		latency.UpdateTTFT("model-b", 0.12)
-		latency.UpdateTTFT("model-b", 0.12)
-		latency.UpdateTTFT("model-b", 0.12)
-
-		result, err := selector.Select(ctx, &SelectionContext{
-			CandidateModels:            createCandidateModels("model-a", "model-b"),
-			LatencyAwareTTFTPercentile: 50,
-		})
-		if err != nil {
-			t.Fatalf("unexpected error: %v", err)
-		}
-
-		if result.SelectedModel != "model-b" {
-			t.Errorf("expected model-b, got %s", result.SelectedModel)
-		}
+	result, err := selector.Select(context.Background(), &SelectionContext{
+		CandidateModels:            createCandidateModels("model-a", "model-b"),
+		LatencyAwareTTFTPercentile: 50,
 	})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if result.SelectedModel != "model-b" {
+		t.Errorf("expected model-b, got %s", result.SelectedModel)
+	}
+}
 
-	t.Run("select best combined model with TPOT and TTFT percentiles", func(t *testing.T) {
-		latency.ResetTPOT()
-		latency.ResetTTFT()
+func TestLatencyAwareSelectorSelectsBestCombinedLatency(t *testing.T) {
+	resetLatencyAwareStats()
+	seedCombinedLatencyStats()
 
-		selector := NewLatencyAwareSelector(nil)
+	result, err := NewLatencyAwareSelector(nil).Select(context.Background(), &SelectionContext{
+		CandidateModels:            createCandidateModels("model-a", "model-b", "model-c"),
+		LatencyAwareTPOTPercentile: 50,
+		LatencyAwareTTFTPercentile: 50,
+	})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if result.SelectedModel != "model-b" {
+		t.Errorf("expected model-b, got %s", result.SelectedModel)
+	}
+}
 
-		latency.UpdateTPOT("model-a", 0.02)
-		latency.UpdateTPOT("model-a", 0.02)
+func seedCombinedLatencyStats() {
+	for i := 0; i < 3; i++ {
 		latency.UpdateTPOT("model-a", 0.02)
 		latency.UpdateTTFT("model-a", 0.60)
-		latency.UpdateTTFT("model-a", 0.60)
-		latency.UpdateTTFT("model-a", 0.60)
-
-		latency.UpdateTPOT("model-b", 0.05)
-		latency.UpdateTPOT("model-b", 0.05)
 		latency.UpdateTPOT("model-b", 0.05)
 		latency.UpdateTTFT("model-b", 0.20)
-		latency.UpdateTTFT("model-b", 0.20)
-		latency.UpdateTTFT("model-b", 0.20)
-
-		latency.UpdateTPOT("model-c", 0.08)
-		latency.UpdateTPOT("model-c", 0.08)
 		latency.UpdateTPOT("model-c", 0.08)
 		latency.UpdateTTFT("model-c", 0.10)
-		latency.UpdateTTFT("model-c", 0.10)
-		latency.UpdateTTFT("model-c", 0.10)
+	}
+}
 
-		result, err := selector.Select(ctx, &SelectionContext{
-			CandidateModels:            createCandidateModels("model-a", "model-b", "model-c"),
-			LatencyAwareTPOTPercentile: 50,
-			LatencyAwareTTFTPercentile: 50,
+func TestLatencyAwareSelectorFallbacks(t *testing.T) {
+	for _, tc := range []struct {
+		name   string
+		selCtx *SelectionContext
+	}{
+		{
+			name: "no stats available",
+			selCtx: &SelectionContext{
+				CandidateModels:            createCandidateModels("model-a", "model-b"),
+				LatencyAwareTPOTPercentile: 50,
+				LatencyAwareTTFTPercentile: 50,
+			},
+		},
+		{
+			name: "missing latency aware config",
+			selCtx: &SelectionContext{
+				CandidateModels: createCandidateModels("model-a", "model-b"),
+			},
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			resetLatencyAwareStats()
+			result, err := NewLatencyAwareSelector(nil).Select(context.Background(), tc.selCtx)
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+			if result.SelectedModel != "model-a" {
+				t.Errorf("expected fallback model-a, got %s", result.SelectedModel)
+			}
 		})
-		if err != nil {
-			t.Fatalf("unexpected error: %v", err)
-		}
+	}
+}
 
-		if result.SelectedModel != "model-b" {
-			t.Errorf("expected model-b, got %s", result.SelectedModel)
-		}
-	})
-
-	t.Run("fallback to first candidate when no stats available", func(t *testing.T) {
-		latency.ResetTPOT()
-		latency.ResetTTFT()
-
-		selector := NewLatencyAwareSelector(nil)
-		result, err := selector.Select(ctx, &SelectionContext{
-			CandidateModels:            createCandidateModels("model-a", "model-b"),
-			LatencyAwareTPOTPercentile: 50,
-			LatencyAwareTTFTPercentile: 50,
-		})
-		if err != nil {
-			t.Fatalf("unexpected error: %v", err)
-		}
-
-		if result.SelectedModel != "model-a" {
-			t.Errorf("expected fallback model-a, got %s", result.SelectedModel)
-		}
-	})
-
-	t.Run("fallback to first candidate when latency_aware config is missing", func(t *testing.T) {
-		latency.ResetTPOT()
-		latency.ResetTTFT()
-
-		selector := NewLatencyAwareSelector(nil)
-		result, err := selector.Select(ctx, &SelectionContext{
-			CandidateModels: createCandidateModels("model-a", "model-b"),
-		})
-		if err != nil {
-			t.Fatalf("unexpected error: %v", err)
-		}
-
-		if result.SelectedModel != "model-a" {
-			t.Errorf("expected fallback model-a, got %s", result.SelectedModel)
-		}
-	})
-
-	t.Run("return error when no candidates", func(t *testing.T) {
-		latency.ResetTPOT()
-		latency.ResetTTFT()
-
-		selector := NewLatencyAwareSelector(nil)
-		_, err := selector.Select(ctx, &SelectionContext{
-			CandidateModels:            nil,
+func TestLatencyAwareSelectorRejectsInvalidInput(t *testing.T) {
+	t.Run("no candidates", func(t *testing.T) {
+		resetLatencyAwareStats()
+		_, err := NewLatencyAwareSelector(nil).Select(context.Background(), &SelectionContext{
 			LatencyAwareTPOTPercentile: 50,
 		})
 		if err == nil {
 			t.Fatal("expected error but got nil")
+		}
+	})
+
+	t.Run("invalid percentiles", func(t *testing.T) {
+		resetLatencyAwareStats()
+		for _, selCtx := range []*SelectionContext{
+			{CandidateModels: createCandidateModels("model-a"), LatencyAwareTPOTPercentile: 101},
+			{CandidateModels: createCandidateModels("model-a"), LatencyAwareTTFTPercentile: -1},
+		} {
+			_, err := NewLatencyAwareSelector(nil).Select(context.Background(), selCtx)
+			if !errors.Is(err, ErrLatencyAwarePercentileInvalid) {
+				t.Fatalf("expected %v, got %v", ErrLatencyAwarePercentileInvalid, err)
+			}
 		}
 	})
 }

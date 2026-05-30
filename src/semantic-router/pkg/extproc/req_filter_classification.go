@@ -2,6 +2,7 @@ package extproc
 
 import (
 	"context"
+	"strings"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
@@ -65,13 +66,18 @@ func (r *OpenAIRouter) performDecisionEvaluation(originalModel string, history s
 // inputs such as query text, candidate models, and cache-affinity signals.
 // Returns the selected model and the method name used for logging.
 func (r *OpenAIRouter) selectModelFromCandidates(selCtx *selection.SelectionContext, algorithm *config.AlgorithmConfig, ctx *RequestContext) (*config.ModelRef, string) {
-	if selCtx == nil || len(selCtx.CandidateModels) == 0 {
+	fallbackModelRef := firstValidCandidateModelRef(selCtx)
+	if fallbackModelRef == nil {
 		return nil, ""
+	}
+	if err := selection.ValidateSelectionContext(selCtx); err != nil {
+		logging.Warnf("[ModelSelection] Invalid selection context: %v, using first valid model", err)
+		return fallbackModelRef, ""
 	}
 
 	// If only one model, no need for selection algorithm
 	if len(selCtx.CandidateModels) == 1 {
-		return &selCtx.CandidateModels[0], "single"
+		return fallbackModelRef, "single"
 	}
 
 	// Determine selection method: per-decision algorithm takes precedence over global config
@@ -86,14 +92,18 @@ func (r *OpenAIRouter) selectModelFromCandidates(selCtx *selection.SelectionCont
 	// Fallback to first model if no selector available
 	if selector == nil {
 		logging.Warnf("[ModelSelection] No selector available for method %s, using first model", method)
-		return &selCtx.CandidateModels[0], string(method)
+		return fallbackModelRef, string(method)
 	}
 
 	// Perform selection
 	result, err := selector.Select(context.Background(), selCtx)
 	if err != nil {
 		logging.Warnf("[ModelSelection] Selection failed: %v, using first model", err)
-		return &selCtx.CandidateModels[0], string(method)
+		return fallbackModelRef, string(method)
+	}
+	if err := selection.ValidateSelectionResult(selCtx, result); err != nil {
+		logging.Warnf("[ModelSelection] Invalid selection result: %v, using first model", err)
+		return fallbackModelRef, string(method)
 	}
 
 	// Find the selected model in the candidates
@@ -116,7 +126,19 @@ func (r *OpenAIRouter) selectModelFromCandidates(selCtx *selection.SelectionCont
 
 	// Fallback if selected model not found in candidates (shouldn't happen)
 	logging.Warnf("[ModelSelection] Selected model %s not found in candidates, using first model", result.SelectedModel)
-	return &selCtx.CandidateModels[0], string(method)
+	return fallbackModelRef, string(method)
+}
+
+func firstValidCandidateModelRef(selCtx *selection.SelectionContext) *config.ModelRef {
+	if selCtx == nil {
+		return nil
+	}
+	for i := range selCtx.CandidateModels {
+		if strings.TrimSpace(selCtx.CandidateModels[i].Model) != "" {
+			return &selCtx.CandidateModels[i]
+		}
+	}
+	return nil
 }
 
 // buildSelectionContext assembles the runtime inputs shared by selection

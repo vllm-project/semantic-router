@@ -7,6 +7,19 @@ import (
 	"strings"
 )
 
+type configValidationScope uint8
+
+const (
+	configValidationScopeFile configValidationScope = 1 << iota
+	configValidationScopeKubernetes
+)
+
+type configContractValidator struct {
+	name     string
+	validate func(*RouterConfig) error
+	scopes   configValidationScope
+}
+
 var (
 	// Pre-compiled regular expressions for better performance
 	protocolRegex = regexp.MustCompile(`^https?://`)
@@ -15,6 +28,69 @@ var (
 	ipv4PortRegex = regexp.MustCompile(`^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}:\d+$`)
 	// Pattern to match IPv6 address followed by port number [::1]:8080
 	ipv6PortRegex = regexp.MustCompile(`^\[.*\]:\d+$`)
+
+	sharedConfigContractValidators = []configContractValidator{
+		{
+			name:     "legacy_latency_routing",
+			validate: validateLegacyLatencyRoutingConfig,
+			scopes:   configValidationScopeFile | configValidationScopeKubernetes,
+		},
+		{
+			name:     "domain",
+			validate: validateDomainContracts,
+			scopes:   configValidationScopeFile | configValidationScopeKubernetes,
+		},
+		{
+			name:     "structure",
+			validate: validateStructureContracts,
+			scopes:   configValidationScopeFile | configValidationScopeKubernetes,
+		},
+		{
+			name:     "reask",
+			validate: validateReaskContracts,
+			scopes:   configValidationScopeFile | configValidationScopeKubernetes,
+		},
+		{
+			name:     "projection",
+			validate: validateProjectionContracts,
+			scopes:   configValidationScopeFile | configValidationScopeKubernetes,
+		},
+		{
+			name:     "knowledge_base",
+			validate: validateKnowledgeBaseContracts,
+			scopes:   configValidationScopeFile | configValidationScopeKubernetes,
+		},
+		{
+			name:     "conversation",
+			validate: validateConversationContracts,
+			scopes:   configValidationScopeFile | configValidationScopeKubernetes,
+		},
+		{
+			name:     "decision",
+			validate: validateDecisionContracts,
+			scopes:   configValidationScopeFile | configValidationScopeKubernetes,
+		},
+		{
+			name:     "embedding",
+			validate: validateEmbeddingContracts,
+			scopes:   configValidationScopeFile | configValidationScopeKubernetes,
+		},
+		{
+			name:     "modality",
+			validate: validateModalityContracts,
+			scopes:   configValidationScopeFile | configValidationScopeKubernetes,
+		},
+		{
+			name:     "model_selection",
+			validate: validateModelSelectionConfig,
+			scopes:   configValidationScopeFile | configValidationScopeKubernetes,
+		},
+		{
+			name:     "advanced_tool_filtering",
+			validate: validateAdvancedToolFilteringConfig,
+			scopes:   configValidationScopeFile | configValidationScopeKubernetes,
+		},
+	}
 )
 
 // validateIPAddress validates IP address format
@@ -93,27 +169,33 @@ func validateConfigStructure(cfg *RouterConfig) error {
 	if cfg.ConfigSource == ConfigSourceKubernetes {
 		return nil
 	}
-	if hasLegacyLatencyRoutingConfig(cfg) {
-		return fmt.Errorf("legacy latency config is no longer supported; use decision.algorithm.type=latency_aware and remove signals.latency_rules / conditions.type=latency")
-	}
+	return validateConfigContracts(cfg, configValidationScopeFile)
+}
 
-	validators := []func(*RouterConfig) error{
-		validateDomainContracts,
-		validateStructureContracts,
-		validateReaskContracts,
-		validateProjectionContracts,
-		validateKnowledgeBaseContracts,
-		validateConversationContracts,
-		validateDecisionContracts,
-		validateEmbeddingContracts,
-		validateModalityContracts,
-		validateModelSelectionConfig,
-		validateAdvancedToolFilteringConfig,
-	}
-	for _, validate := range validators {
-		if err := validate(cfg); err != nil {
+// ValidateKubernetesConfigContracts runs the validators that apply after CRDs
+// have been converted into the canonical runtime config. The initial
+// Kubernetes static-config parse stays tolerant because routing state is still
+// absent there; the reconciler calls this function once the pool and route have
+// been merged.
+func ValidateKubernetesConfigContracts(cfg *RouterConfig) error {
+	return validateConfigContracts(cfg, configValidationScopeKubernetes)
+}
+
+func validateConfigContracts(cfg *RouterConfig, scope configValidationScope) error {
+	for _, validator := range sharedConfigContractValidators {
+		if validator.scopes&scope == 0 {
+			continue
+		}
+		if err := validator.validate(cfg); err != nil {
 			return err
 		}
+	}
+	return nil
+}
+
+func validateLegacyLatencyRoutingConfig(cfg *RouterConfig) error {
+	if hasLegacyLatencyRoutingConfig(cfg) {
+		return fmt.Errorf("legacy latency config is no longer supported; use decision.algorithm.type=latency_aware and remove signals.latency_rules / conditions.type=latency")
 	}
 	return nil
 }

@@ -1,0 +1,27 @@
+{{- if and .Values.dashboard.enabled .Values.dashboard.persistence.enabled (not .Values.dashboard.persistence.existingClaim) }}
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: {{ include "semantic-router.dashboardPvcName" . }}
+  namespace: {{ include "semantic-router.namespace" . }}
+  labels:
+    {{- include "semantic-router.labels" . | nindent 4 }}
+    app.kubernetes.io/component: dashboard
+  {{- with .Values.dashboard.persistence.annotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+spec:
+  accessModes:
+    - {{ .Values.dashboard.persistence.accessMode }}
+  {{- if .Values.dashboard.persistence.storageClassName }}
+  {{- if (eq "-" .Values.dashboard.persistence.storageClassName) }}
+  storageClassName: ""
+  {{- else }}
+  storageClassName: {{ .Values.dashboard.persistence.storageClassName }}
+  {{- end }}
+  {{- end }}
+  resources:
+    requests:
+      storage: {{ .Values.dashboard.persistence.size }}
+{{- end }}

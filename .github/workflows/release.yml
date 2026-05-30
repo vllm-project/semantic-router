@@ -41,7 +41,7 @@ jobs:
     outputs:
       version: ${{ steps.extract.outputs.version }}
       tag: ${{ steps.extract.outputs.tag }}
-      sim_version: ${{ steps.check_sim.outputs.sim_version }}
+      sim_version: ${{ steps.check_versions.outputs.sim_version }}
 
     steps:
       - uses: actions/checkout@v4
@@ -61,76 +61,17 @@ jobs:
           echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
           echo "Validating release: ${TAG} (version: ${VERSION})"
 
-      # ── vllm-sr Python package ────────────────────────────────────────────────
-      - name: Validate vllm-sr pyproject.toml
-        id: check_pyproject
+      # ── Cross-surface release contract ───────────────────────────────────────
+      # The script is also used by `make release-check` and `make release`, so
+      # tag validation, local release prep, Helm packaging semantics, and release
+      # notes stay on the same parser instead of drifting across workflow-local
+      # grep/sed snippets.
+      - name: Validate release version contract
+        id: check_versions
         run: |
-          VERSION="${{ steps.extract.outputs.version }}"
-          PKG_VERSION=$(grep '^version = ' src/vllm-sr/pyproject.toml \
-            | head -1 | sed 's/version = "\(.*\)"/\1/')
-          echo "  vllm-sr version in pyproject.toml: ${PKG_VERSION}"
-          if [ "${PKG_VERSION}" != "${VERSION}" ]; then
-            echo "::error file=src/vllm-sr/pyproject.toml,title=Version mismatch::\
-          src/vllm-sr/pyproject.toml has '${PKG_VERSION}' but the tag is '${VERSION}'. \
-          Update the file and re-tag."
-            echo "ok=false" >> "$GITHUB_OUTPUT"
-          else
-            echo "ok=true" >> "$GITHUB_OUTPUT"
-          fi
-
-      # ── candle-binding Rust crate ─────────────────────────────────────────────
-      # Parse Cargo.toml with Python to avoid installing a full Rust toolchain
-      # just for a version check.
-      - name: Validate candle-binding Cargo.toml
-        id: check_cargo
-        run: |
-          VERSION="${{ steps.extract.outputs.version }}"
-          CARGO_VERSION=$(python3 - <<'EOF'
-          import re, sys
-          content = open("candle-binding/Cargo.toml").read()
-          # Isolate the [package] section (ends at the next bare [section] header)
-          pkg_section = re.split(r"^\[(?!package)", content, maxsplit=1, flags=re.MULTILINE)[0]
-          m = re.search(r'^version\s*=\s*"([^"]+)"', pkg_section, re.MULTILINE)
-          print(m.group(1) if m else "")
-          EOF
-          )
-          echo "  candle-binding version in Cargo.toml: ${CARGO_VERSION}"
-          if [ "${CARGO_VERSION}" != "${VERSION}" ]; then
-            echo "::error file=candle-binding/Cargo.toml,title=Version mismatch::\
-          candle-binding/Cargo.toml has '${CARGO_VERSION}' but the tag is '${VERSION}'. \
-          Update the file and re-tag."
-            echo "ok=false" >> "$GITHUB_OUTPUT"
-          else
-            echo "ok=true" >> "$GITHUB_OUTPUT"
-          fi
-
-      # ── vllm-sr-sim (informational — uses its own tag scheme) ─────────────────
-      - name: Read vllm-sr-sim version
-        id: check_sim
-        run: |
-          SIM_VERSION=$(grep '^version = ' src/fleet-sim/pyproject.toml \
-            | head -1 | sed 's/version = "\(.*\)"/\1/')
-          echo "  vllm-sr-sim version: ${SIM_VERSION} (ships on its own vllm-sr-sim-v* tag)"
-          echo "sim_version=${SIM_VERSION}" >> "$GITHUB_OUTPUT"
-
-      # ── Fail if anything is mismatched ────────────────────────────────────────
-      - name: Assert no mismatches
-        run: |
-          FAILED=false
-          [ "${{ steps.check_pyproject.outputs.ok }}" = "false" ] && FAILED=true
-          [ "${{ steps.check_cargo.outputs.ok }}"    = "false" ] && FAILED=true
-          if [ "${FAILED}" = "true" ]; then
-            echo ""
-            echo "One or more versioned files do not match tag ${{ steps.extract.outputs.tag }}."
-            echo "Fix the mismatches listed above, then delete and re-push the tag:"
-            echo "  git tag -d ${{ steps.extract.outputs.tag }}"
-            echo "  git push origin :${{ steps.extract.outputs.tag }}"
-            echo "  # (bump files, commit)"
-            echo "  git tag ${{ steps.extract.outputs.tag }}"
-            echo "  git push origin ${{ steps.extract.outputs.tag }}"
-            exit 1
-          fi
-          echo "All surfaces consistent with ${{ steps.extract.outputs.tag }}."
+          python3 tools/release/check_version_contract.py \
+            --version "${{ steps.extract.outputs.version }}" \
+            --github-output "$GITHUB_OUTPUT"
 
   # ─────────────────────────────────────────────────────────────────────────────
   # release-notes: create or update the GitHub Release with a cross-surface
@@ -171,6 +112,8 @@ jobs:
             docker pull ghcr.io/${{ steps.owner.outputs.lower }}/semantic-router/extproc:${{ needs.validate.outputs.tag }}
             docker pull ghcr.io/${{ steps.owner.outputs.lower }}/semantic-router/vllm-sr:${{ needs.validate.outputs.tag }}
             docker pull ghcr.io/${{ steps.owner.outputs.lower }}/semantic-router/dashboard:${{ needs.validate.outputs.tag }}
+            docker pull ghcr.io/${{ steps.owner.outputs.lower }}/semantic-router/operator:${{ needs.validate.outputs.tag }}
+            docker pull ghcr.io/${{ steps.owner.outputs.lower }}/semantic-router/operator-bundle:${{ needs.validate.outputs.tag }}
             ```
 
             | Image | Tags pushed |
@@ -181,6 +124,8 @@ jobs:
             | `vllm-sr-rocm` | `${{ needs.validate.outputs.tag }}` · `latest` |
             | `llm-katan` | `${{ needs.validate.outputs.tag }}` · `latest` |
             | `dashboard` | `${{ needs.validate.outputs.tag }}` · `latest` |
+            | `operator` | `${{ needs.validate.outputs.tag }}` · `latest` |
+            | `operator-bundle` | `${{ needs.validate.outputs.tag }}` · `latest` |
 
             ### Helm Chart
 

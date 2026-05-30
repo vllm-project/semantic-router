@@ -83,6 +83,17 @@ Get the PVC name
 {{- end }}
 
 {{/*
+Get the dashboard local-state PVC name
+*/}}
+{{- define "semantic-router.dashboardPvcName" -}}
+{{- if .Values.dashboard.persistence.existingClaim }}
+{{- .Values.dashboard.persistence.existingClaim }}
+{{- else }}
+{{- printf "%s-dashboard-data" (include "semantic-router.fullname" .) }}
+{{- end }}
+{{- end }}
+
+{{/*
 Resolve semantic cache Redis host for dependency-based deployments.
 */}}
 {{- define "semantic-router.semanticCache.redisHost" -}}

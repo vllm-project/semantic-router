@@ -17,15 +17,10 @@ func validateEmbeddingContracts(cfg *RouterConfig) error {
 }
 
 // ValidateEmbeddingContracts is the exported counterpart of the private
-// validateEmbeddingContracts function. It exists so packages outside pkg/config
-// (notably the reconciler in pkg/k8s) can apply the embedding-modality
-// contract directly, since validateConfigStructure short-circuits on
-// ConfigSource == ConfigSourceKubernetes and would otherwise let CRD-loaded
-// configs skip a contract that file-loaded configs are held to.
-//
-// The signature mirrors the private function 1:1 and the call site reads
-// ValidateEmbeddingContracts(cfg) so the contract has a single canonical
-// shape regardless of source.
+// validateEmbeddingContracts function. It remains available for narrow callers
+// that need only the embedding-modality slice; Kubernetes reconciliation should
+// prefer ValidateKubernetesConfigContracts so every shared family validator runs
+// through one dispatch surface.
 func ValidateEmbeddingContracts(cfg *RouterConfig) error {
 	return validateEmbeddingContracts(cfg)
 }

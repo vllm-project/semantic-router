@@ -6,6 +6,7 @@
 pub mod classify; //  classification functions
 pub mod embedding; //  embedding functions
 pub mod generative_classifier; // Qwen3 LoRA generative classifier
+pub mod generative_guard; // Qwen3Guard safety classifier
 pub mod init; //  initialization functions
 pub mod memory; //  memory management functions
 pub mod mlp; // MLP selector for model selection (GPU-accelerated)
@@ -21,6 +22,7 @@ pub mod state_manager; // Global state management system
 pub use classify::*;
 pub use embedding::*; // Intelligent embedding functions
 pub use generative_classifier::*; // Qwen3 LoRA generative classifier functions
+pub use generative_guard::*; // Qwen3Guard safety classifier functions
 pub use init::*;
 pub use memory::*;
 pub use mlp::*; // MLP selector FFI functions

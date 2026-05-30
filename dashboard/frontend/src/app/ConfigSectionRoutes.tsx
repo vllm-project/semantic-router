@@ -1,10 +1,18 @@
-import React, { useEffect } from 'react'
+import React, { Suspense, lazy, useEffect } from 'react'
 import { Navigate, useParams } from 'react-router-dom'
 import type { KnowledgeBaseView } from '../pages/TaxonomyPage'
-import ConfigPage from '../pages/ConfigPage'
-import TaxonomyPage from '../pages/TaxonomyPage'
 import AppShellLayout from './AppShellLayout'
 import type { ConfigSection } from '../components/ConfigNav'
+import RouteLoadingFallback from './RouteLoadingFallback'
+
+const ConfigPage = lazy(() => import('../pages/ConfigPage'))
+const TaxonomyPage = lazy(() => import('../pages/TaxonomyPage'))
+
+const renderPage = (element: React.ReactElement) => (
+  <Suspense fallback={<RouteLoadingFallback />}>
+    {element}
+  </Suspense>
+)
 
 export const ConfigSectionRoute: React.FC<{
   configSection: ConfigSection
@@ -51,7 +59,7 @@ export const ConfigSectionRoute: React.FC<{
 
   return (
     <AppShellLayout configSection={configSection} setConfigSection={setConfigSection}>
-      <ConfigPage activeSection={configSection} />
+      {renderPage(<ConfigPage activeSection={configSection} />)}
     </AppShellLayout>
   )
 }
@@ -72,7 +80,7 @@ export const KnowledgeBaseRoute: React.FC<{
 
   return (
     <AppShellLayout configSection={configSection} setConfigSection={setConfigSection}>
-      <TaxonomyPage activeView={activeView} />
+      {renderPage(<TaxonomyPage activeView={activeView} />)}
     </AppShellLayout>
   )
 }

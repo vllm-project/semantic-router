@@ -129,7 +129,10 @@ rust: ## Ensure Rust is installed and build the Rust library with CUDA support (
 	echo "Building ml-binding Rust library..." && \
 	cd ../ml-binding && cargo build --release && \
 	echo "Building nlp-binding Rust library..." && \
-	cd ../nlp-binding && cargo build --release'
+	cd ../nlp-binding && \
+	rm -f target/release/libnlp_binding.dylib target/release/deps/libnlp_binding.dylib \
+		target/release/libnlp_binding.so target/release/deps/libnlp_binding.so && \
+	cargo build --release'
 
 # Build the Rust library without CUDA (for CI/CD environments)
 rust-ci: ## Build the Rust library without CUDA support (for GitHub Actions/CI)
@@ -150,7 +153,10 @@ rust-ci: ## Build the Rust library without CUDA support (for GitHub Actions/CI)
 	echo "Building ml-binding Rust library..." && \
 	cd ../ml-binding && cargo build --release && \
 	echo "Building nlp-binding Rust library..." && \
-	cd ../nlp-binding && cargo build --release'
+	cd ../nlp-binding && \
+	rm -f target/release/libnlp_binding.dylib target/release/deps/libnlp_binding.dylib \
+		target/release/libnlp_binding.so target/release/deps/libnlp_binding.so && \
+	cargo build --release'
 
 rust-flash-attn: ## Build Rust library with Flash Attention 2 (requires CUDA environment)
 	@$(LOG_TARGET)
@@ -165,4 +171,5 @@ rust-flash-attn: ## Build Rust library with Flash Attention 2 (requires CUDA env
 	@echo "Building ml-binding Rust library..."
 	@cd ml-binding && cargo build --release
 	@echo "Building nlp-binding Rust library..."
-	@cd nlp-binding && cargo build --release
+	@cd nlp-binding && rm -f target/release/libnlp_binding.dylib target/release/deps/libnlp_binding.dylib \
+		target/release/libnlp_binding.so target/release/deps/libnlp_binding.so && cargo build --release

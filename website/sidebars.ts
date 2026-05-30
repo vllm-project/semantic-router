@@ -33,6 +33,7 @@ const sidebars: SidebarsConfig = {
         'installation/installation',
         'installation/k8s/operator',
         'installation/configuration',
+        'installation/native-backends',
         'installation/upgrade-rollback',
         {
           type: 'category',

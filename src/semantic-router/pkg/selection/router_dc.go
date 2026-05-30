@@ -246,8 +246,8 @@ func (r *RouterDCSelector) ValidateConfig(modelConfig map[string]config.ModelPar
 
 // Select chooses the best model using dual-contrastive matching
 func (r *RouterDCSelector) Select(ctx context.Context, selCtx *SelectionContext) (*SelectionResult, error) {
-	if len(selCtx.CandidateModels) == 0 {
-		return nil, fmt.Errorf("no candidate models provided")
+	if err := ValidateSelectionContext(selCtx); err != nil {
+		return nil, err
 	}
 
 	// Get or compute query embedding
@@ -331,8 +331,8 @@ func (r *RouterDCSelector) Select(ctx context.Context, selCtx *SelectionContext)
 
 // UpdateFeedback updates model-query affinity based on feedback
 func (r *RouterDCSelector) UpdateFeedback(ctx context.Context, feedback *Feedback) error {
-	if feedback.WinnerModel == "" {
-		return fmt.Errorf("winner model is required")
+	if err := normalizeWinnerFeedback(feedback); err != nil {
+		return err
 	}
 
 	// Create a simple hash for the query to track affinity

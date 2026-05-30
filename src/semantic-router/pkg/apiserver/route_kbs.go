@@ -56,7 +56,7 @@ func (s *ClassificationAPIServer) handleCreateKnowledgeBase(w http.ResponseWrite
 
 	var payload knowledgeBaseUpsertRequest
 	if err := s.parseJSONRequest(r, &payload); err != nil {
-		s.writeErrorResponse(w, http.StatusBadRequest, "INVALID_INPUT", err.Error())
+		s.writeJSONRequestError(w, err)
 		return
 	}
 	payload, err := normalizeKnowledgeBaseRequest(payload)
@@ -105,7 +105,7 @@ func (s *ClassificationAPIServer) handleUpdateKnowledgeBase(w http.ResponseWrite
 
 	var payload knowledgeBaseUpsertRequest
 	if err := s.parseJSONRequest(r, &payload); err != nil {
-		s.writeErrorResponse(w, http.StatusBadRequest, "INVALID_INPUT", err.Error())
+		s.writeJSONRequestError(w, err)
 		return
 	}
 	payload.Name = name

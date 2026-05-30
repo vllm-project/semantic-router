@@ -17,8 +17,10 @@ limitations under the License.
 package vectorstore
 
 import (
+	"bytes"
 	"context"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"strings"
@@ -38,6 +40,10 @@ type FileStore struct {
 // NewFileStore creates a new FileStore rooted at the given base directory.
 // The directory is created if it does not exist.
 func NewFileStore(baseDir string, registry FileRegistry) (*FileStore, error) {
+	if registry == nil {
+		return nil, fmt.Errorf("file metadata registry is required")
+	}
+
 	filesDir := filepath.Join(baseDir, "files")
 	if err := os.MkdirAll(filesDir, 0o755); err != nil {
 		return nil, fmt.Errorf("failed to create file storage directory: %w", err)
@@ -61,7 +67,7 @@ func (fs *FileStore) LoadFromRegistry(ctx context.Context) error {
 	fs.mu.Lock()
 	defer fs.mu.Unlock()
 	for _, fr := range records {
-		fs.files[fr.ID] = fr
+		fs.files[fr.ID] = cloneFileRecord(fr)
 	}
 	return nil
 }
@@ -69,6 +75,16 @@ func (fs *FileStore) LoadFromRegistry(ctx context.Context) error {
 // Save stores file content on disk and records its metadata.
 // It generates a unique file ID and returns the created FileRecord.
 func (fs *FileStore) Save(filename string, content []byte, purpose string) (*FileRecord, error) {
+	return fs.SaveFromReader(filename, bytes.NewReader(content), purpose)
+}
+
+// SaveFromReader streams file content to disk and records its metadata.
+// It generates a unique file ID and returns the created FileRecord.
+func (fs *FileStore) SaveFromReader(filename string, content io.Reader, purpose string) (*FileRecord, error) {
+	if content == nil {
+		return nil, fmt.Errorf("file content reader is required")
+	}
+
 	// Sanitize filename to prevent path traversal (e.g. "../../etc/passwd").
 	filename = filepath.Base(filename)
 	if filename == "." || filename == "/" {
@@ -97,14 +113,27 @@ func (fs *FileStore) Save(filename string, content []byte, purpose string) (*Fil
 		return nil, fmt.Errorf("invalid filename")
 	}
 
-	if err := os.WriteFile(filePath, content, 0o644); err != nil {
-		return nil, fmt.Errorf("failed to write file: %w", err)
+	file, err := os.OpenFile(filePath, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o644)
+	if err != nil {
+		_ = os.RemoveAll(fileDir)
+		return nil, fmt.Errorf("failed to create file: %w", err)
+	}
+
+	written, copyErr := io.Copy(file, content)
+	closeErr := file.Close()
+	if copyErr != nil {
+		_ = os.RemoveAll(fileDir)
+		return nil, fmt.Errorf("failed to write file: %w", copyErr)
+	}
+	if closeErr != nil {
+		_ = os.RemoveAll(fileDir)
+		return nil, fmt.Errorf("failed to close file: %w", closeErr)
 	}
 
 	record := &FileRecord{
 		ID:        fileID,
 		Object:    "file",
-		Bytes:     int64(len(content)),
+		Bytes:     written,
 		CreatedAt: time.Now().Unix(),
 		Filename:  filename,
 		Purpose:   purpose,
@@ -112,13 +141,13 @@ func (fs *FileStore) Save(filename string, content []byte, purpose string) (*Fil
 	}
 
 	fs.mu.Lock()
-	fs.files[fileID] = record
+	fs.files[fileID] = cloneFileRecord(record)
 	fs.mu.Unlock()
 
 	if err := fs.registry.SaveFile(context.Background(), record); err != nil {
-		return record, fmt.Errorf("persist file metadata: %w", err)
+		return cloneFileRecord(record), fmt.Errorf("persist file metadata: %w", err)
 	}
-	return record, nil
+	return cloneFileRecord(record), nil
 }
 
 // Read returns the content of a file by its ID.
@@ -169,7 +198,7 @@ func (fs *FileStore) List() []*FileRecord {
 
 	records := make([]*FileRecord, 0, len(fs.files))
 	for _, r := range fs.files {
-		records = append(records, r)
+		records = append(records, cloneFileRecord(r))
 	}
 	return records
 }
@@ -183,5 +212,5 @@ func (fs *FileStore) Get(fileID string) (*FileRecord, error) {
 	if !ok {
 		return nil, fmt.Errorf("file not found: %s", fileID)
 	}
-	return record, nil
+	return cloneFileRecord(record), nil
 }

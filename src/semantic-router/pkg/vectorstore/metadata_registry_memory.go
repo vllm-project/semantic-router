@@ -42,7 +42,7 @@ func NewMemoryMetadataRegistry() *MemoryMetadataRegistry {
 func (r *MemoryMetadataRegistry) SaveStore(_ context.Context, vs *VectorStore) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	r.stores[vs.ID] = vs
+	r.stores[vs.ID] = cloneVectorStore(vs)
 	return nil
 }
 
@@ -53,7 +53,7 @@ func (r *MemoryMetadataRegistry) GetStore(_ context.Context, id string) (*Vector
 	if !ok {
 		return nil, fmt.Errorf("vector store not found: %s", id)
 	}
-	return vs, nil
+	return cloneVectorStore(vs), nil
 }
 
 func (r *MemoryMetadataRegistry) ListStores(_ context.Context) ([]*VectorStore, error) {
@@ -61,7 +61,7 @@ func (r *MemoryMetadataRegistry) ListStores(_ context.Context) ([]*VectorStore, 
 	defer r.mu.RUnlock()
 	out := make([]*VectorStore, 0, len(r.stores))
 	for _, vs := range r.stores {
-		out = append(out, vs)
+		out = append(out, cloneVectorStore(vs))
 	}
 	return out, nil
 }
@@ -76,7 +76,7 @@ func (r *MemoryMetadataRegistry) DeleteStore(_ context.Context, id string) error
 func (r *MemoryMetadataRegistry) SaveFile(_ context.Context, fr *FileRecord) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	r.files[fr.ID] = fr
+	r.files[fr.ID] = cloneFileRecord(fr)
 	return nil
 }
 
@@ -87,7 +87,7 @@ func (r *MemoryMetadataRegistry) GetFile(_ context.Context, id string) (*FileRec
 	if !ok {
 		return nil, fmt.Errorf("file not found: %s", id)
 	}
-	return fr, nil
+	return cloneFileRecord(fr), nil
 }
 
 func (r *MemoryMetadataRegistry) ListFiles(_ context.Context) ([]*FileRecord, error) {
@@ -95,7 +95,7 @@ func (r *MemoryMetadataRegistry) ListFiles(_ context.Context) ([]*FileRecord, er
 	defer r.mu.RUnlock()
 	out := make([]*FileRecord, 0, len(r.files))
 	for _, fr := range r.files {
-		out = append(out, fr)
+		out = append(out, cloneFileRecord(fr))
 	}
 	return out, nil
 }

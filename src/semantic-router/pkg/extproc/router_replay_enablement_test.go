@@ -65,6 +65,64 @@ func TestApplyDecisionResultToContextUsesEffectiveRouterReplayConfig(t *testing.
 	}
 }
 
+func TestResolveReplayStoreBackend(t *testing.T) {
+	tests := []struct {
+		name string
+		cfg  config.RouterReplayConfig
+		want string
+	}{
+		{
+			name: "explicit backend wins",
+			cfg: config.RouterReplayConfig{
+				StoreBackend: " redis ",
+				Postgres:     &config.RouterReplayPostgresConfig{},
+			},
+			want: "redis",
+		},
+		{
+			name: "postgres config implies postgres",
+			cfg: config.RouterReplayConfig{
+				Postgres: &config.RouterReplayPostgresConfig{},
+			},
+			want: "postgres",
+		},
+		{
+			name: "redis config implies redis",
+			cfg: config.RouterReplayConfig{
+				Redis: &config.RouterReplayRedisConfig{},
+			},
+			want: "redis",
+		},
+		{
+			name: "milvus config implies milvus",
+			cfg: config.RouterReplayConfig{
+				Milvus: &config.RouterReplayMilvusConfig{},
+			},
+			want: "milvus",
+		},
+		{
+			name: "qdrant config implies qdrant",
+			cfg: config.RouterReplayConfig{
+				Qdrant: &config.RouterReplayQdrantConfig{},
+			},
+			want: "qdrant",
+		},
+		{
+			name: "empty config remains memory compatibility fallback",
+			cfg:  config.RouterReplayConfig{},
+			want: "memory",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := resolveReplayStoreBackend(tt.cfg); got != tt.want {
+				t.Fatalf("expected backend %q, got %q", tt.want, got)
+			}
+		})
+	}
+}
+
 func TestBuildReplayPostgresConfigUsesUnifiedTableName(t *testing.T) {
 	pgConfig := buildReplayPostgresConfig(&config.RouterReplayPostgresConfig{
 		Host:      "localhost",

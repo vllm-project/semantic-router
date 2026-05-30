@@ -226,25 +226,40 @@ type MultiFactorSLOConfig struct {
 
 // RLDrivenSelectionConfig configures Router-R1 style reinforcement-learning-based routing.
 type RLDrivenSelectionConfig struct {
-	ExplorationRate       float64 `yaml:"exploration_rate,omitempty"`
-	UseThompsonSampling   bool    `yaml:"use_thompson_sampling,omitempty"`
-	EnablePersonalization bool    `yaml:"enable_personalization,omitempty"`
-	PersonalizationBlend  float64 `yaml:"personalization_blend,omitempty"`
-	CostAwareness         bool    `yaml:"cost_awareness,omitempty"`
-	CostWeight            float64 `yaml:"cost_weight,omitempty"`
-	UseRouterR1Rewards    bool    `yaml:"use_router_r1_rewards,omitempty"`
-	EnableLLMRouting      bool    `yaml:"enable_llm_routing,omitempty"`
-	RouterR1ServerURL     string  `yaml:"router_r1_server_url,omitempty"`
+	ExplorationRate             float64 `yaml:"exploration_rate,omitempty"`
+	ExplorationDecay            float64 `yaml:"exploration_decay,omitempty"`
+	MinExploration              float64 `yaml:"min_exploration,omitempty"`
+	UseThompsonSampling         bool    `yaml:"use_thompson_sampling,omitempty"`
+	EnablePersonalization       bool    `yaml:"enable_personalization,omitempty"`
+	PersonalizationBlend        float64 `yaml:"personalization_blend,omitempty"`
+	SessionContextWeight        float64 `yaml:"session_context_weight,omitempty"`
+	ImplicitFeedbackWeight      float64 `yaml:"implicit_feedback_weight,omitempty"`
+	CostAwareness               bool    `yaml:"cost_awareness,omitempty"`
+	CostWeight                  float64 `yaml:"cost_weight,omitempty"`
+	StoragePath                 string  `yaml:"storage_path,omitempty"`
+	AutoSaveInterval            string  `yaml:"auto_save_interval,omitempty"`
+	UseRouterR1Rewards          bool    `yaml:"use_router_r1_rewards,omitempty"`
+	CostRewardAlpha             float64 `yaml:"cost_reward_alpha,omitempty"`
+	FormatRewardPenalty         float64 `yaml:"format_reward_penalty,omitempty"`
+	EnableLLMRouting            bool    `yaml:"enable_llm_routing,omitempty"`
+	RouterR1ServerURL           string  `yaml:"router_r1_server_url,omitempty"`
+	LLMRoutingFallback          string  `yaml:"llm_routing_fallback,omitempty"`
+	EnableMultiRoundAggregation bool    `yaml:"enable_multi_round_aggregation,omitempty"`
+	MaxAggregationRounds        int     `yaml:"max_aggregation_rounds,omitempty"`
 }
 
 // GMTRouterSelectionConfig configures graph-based personalized routing.
 type GMTRouterSelectionConfig struct {
-	EnablePersonalization             bool   `yaml:"enable_personalization,omitempty"`
-	HistorySampleSize                 int    `yaml:"history_sample_size,omitempty"`
-	MinInteractionsForPersonalization int    `yaml:"min_interactions_for_personalization,omitempty"`
-	MaxInteractionsPerUser            int    `yaml:"max_interactions_per_user,omitempty"`
-	ModelPath                         string `yaml:"model_path,omitempty"`
-	StoragePath                       string `yaml:"storage_path,omitempty"`
+	EnablePersonalization             bool     `yaml:"enable_personalization,omitempty"`
+	HistorySampleSize                 int      `yaml:"history_sample_size,omitempty"`
+	EmbeddingDimension                int      `yaml:"embedding_dimension,omitempty"`
+	NumGNNLayers                      int      `yaml:"num_gnn_layers,omitempty"`
+	AttentionHeads                    int      `yaml:"attention_heads,omitempty"`
+	MinInteractionsForPersonalization int      `yaml:"min_interactions_for_personalization,omitempty"`
+	MaxInteractionsPerUser            int      `yaml:"max_interactions_per_user,omitempty"`
+	FeedbackTypes                     []string `yaml:"feedback_types,omitempty"`
+	ModelPath                         string   `yaml:"model_path,omitempty"`
+	StoragePath                       string   `yaml:"storage_path,omitempty"`
 }
 
 // LatencyAwareAlgorithmConfig configures TPOT/TTFT percentile routing policies.

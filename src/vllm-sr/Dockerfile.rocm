@@ -313,7 +313,8 @@ RUN python3 -m venv "${VIRTUAL_ENV}" && \
     "${VIRTUAL_ENV}/bin/pip" install --no-cache-dir --upgrade pip && \
     "${VIRTUAL_ENV}/bin/pip" install --no-cache-dir \
       https://repo.radeon.com/rocm/manylinux/rocm-rel-7.0/onnxruntime_rocm-1.22.1-cp310-cp310-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl \
-      'huggingface_hub[cli]==1.5.0' && \
+      'huggingface_hub[cli]==1.5.0' \
+      'click>=8.1.7' && \
     ORT_DIR="$("${VIRTUAL_ENV}/bin/python" -c 'import pathlib, onnxruntime; print(pathlib.Path(onnxruntime.__file__).resolve().parent / "capi")')" && \
     mkdir -p /opt/onnxruntime && \
     ln -sfn "$ORT_DIR" /opt/onnxruntime/capi && \

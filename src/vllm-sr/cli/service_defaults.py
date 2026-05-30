@@ -297,17 +297,38 @@ def inject_local_store_runtime_defaults(
     config: dict[str, object], stack_layout: RuntimeStackLayout
 ) -> bool:
     """Inject local Docker connection defaults for canonical store backends."""
-    if (
-        is_setup_mode_config(config)
-        or _effective_store_backend(config, "semantic_cache", "backend_type")
-        != "milvus"
-    ):
+    if is_setup_mode_config(config):
+        return False
+
+    wants_milvus_cache = (
+        _effective_store_backend(config, "semantic_cache", "backend_type") == "milvus"
+    )
+    wants_vector_metadata_postgres = (
+        _vector_store_metadata_backend(config) == "postgres"
+    )
+    if not wants_milvus_cache and not wants_vector_metadata_postgres:
         return False
 
     stores = _ensure_stores_mapping(config)
     if stores is None:
         return False
 
+    changed = False
+    if wants_milvus_cache:
+        changed = (
+            _inject_semantic_cache_milvus_defaults(stores, stack_layout) or changed
+        )
+    if wants_vector_metadata_postgres:
+        changed = (
+            _inject_vector_store_metadata_postgres_defaults(stores, stack_layout)
+            or changed
+        )
+    return changed
+
+
+def _inject_semantic_cache_milvus_defaults(
+    stores: dict[str, object], stack_layout: RuntimeStackLayout
+) -> bool:
     cache_config = stores.get("semantic_cache")
     if cache_config is None:
         cache_mapping: dict[str, object] = {}
@@ -378,6 +399,32 @@ def inject_local_store_runtime_defaults(
     return c1 or c2 or c3 or c4
 
 
+def _inject_vector_store_metadata_postgres_defaults(
+    stores: dict[str, object], stack_layout: RuntimeStackLayout
+) -> bool:
+    vs_config = stores.get("vector_store")
+    if not isinstance(vs_config, dict):
+        log.warning(
+            "Skipping local store default injection for global.stores.vector_store "
+            "because it is not a mapping"
+        )
+        return False
+
+    postgres_defaults = _local_postgres_defaults(stack_layout)
+    metadata_config = vs_config.get("metadata_postgres")
+    if metadata_config is None:
+        vs_config["metadata_postgres"] = dict(postgres_defaults)
+        return True
+    if not isinstance(metadata_config, dict):
+        log.warning(
+            "Skipping local store default injection for "
+            "global.stores.vector_store.metadata_postgres because it is not a mapping"
+        )
+        return False
+
+    return _apply_missing_or_blank_defaults(metadata_config, postgres_defaults)
+
+
 def _inject_sub_block(
     parent: dict[str, object],
     key: str,
@@ -437,6 +484,8 @@ def _vector_store_metadata_backend(config: Mapping[str, Any]) -> str | None:
     vs_config = stores.get("vector_store")
     if not isinstance(vs_config, Mapping):
         return None
+    if vs_config.get("enabled") is False:
+        return None
     raw = vs_config.get("metadata_store")
     if raw is None:
         return None
@@ -481,13 +530,17 @@ def _local_backend_defaults(
         }
 
     if service_key == "router_replay" and backend == "postgres":
-        return {
-            "host": stack_layout.postgres_container_name,
-            "port": 5432,
-            "database": "vsr",
-            "user": "router",
-            "password": "router-secret",
-            "ssl_mode": "disable",
-        }
+        return _local_postgres_defaults(stack_layout)
 
     return {}
+
+
+def _local_postgres_defaults(stack_layout: RuntimeStackLayout) -> dict[str, object]:
+    return {
+        "host": stack_layout.postgres_container_name,
+        "port": 5432,
+        "database": "vsr",
+        "user": "router",
+        "password": "router-secret",
+        "ssl_mode": "disable",
+    }

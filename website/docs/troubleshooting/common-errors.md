@@ -124,24 +124,32 @@ index:
 
 ---
 
-### Redis store not yet implemented
+### Redis Response API store cannot connect
 
 **Log Pattern:**
 
 ```
-redis store not yet implemented
+failed to connect to Redis: redis ping failed
 ```
 
-**Note:** Redis response store is not yet available. Use `memory` or `milvus` instead:
+**Fix:** Redis is the default durable Response API store. Make sure the router
+can reach the Redis address configured under `global.services.response_api`:
 
 ```yaml
 global:
-  stores:
-    semantic_cache:
-      backend_type: "memory" # or "milvus"
+  services:
+    response_api:
+      enabled: true
+      store_backend: redis
+      redis:
+        address: redis:6379
+        db: 0
 ```
 
-> See code: [pkg/cache](https://github.com/vllm-project/semantic-router/tree/main/src/semantic-router/pkg/cache) AND [pkg/responsestore](https://github.com/vllm-project/semantic-router/tree/main/src/semantic-router/pkg/responsestore).
+Use `store_backend: memory` only for local development. Memory-backed
+responses and conversation chains are lost when the router process restarts.
+
+> See code: [pkg/responsestore](https://github.com/vllm-project/semantic-router/tree/main/src/semantic-router/pkg/responsestore).
 
 ---
 

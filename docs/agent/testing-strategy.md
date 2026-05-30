@@ -30,6 +30,10 @@ This document defines the harness-side validation ladder for repository changes.
 - `make agent-e2e-affected CHANGED_FILES="..."`
   - explicit manual local E2E path for affected profiles when debugging or additional local confidence is needed
 
+`CHANGED_FILES` accepts comma-separated, whitespace-separated, or newline-separated
+paths. For long changed-file lists or paths that need exact shell preservation, write
+the paths one per line and pass `AGENT_CHANGED_FILES_PATH=<file>` instead.
+
 ## Selection Rules
 
 - Harness-only prose or manifest changes start with `make agent-validate`.

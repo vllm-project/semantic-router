@@ -93,7 +93,7 @@ func (s *ClassificationAPIServer) parseRouterConfigUpdateRequest(
 ) (RouterConfigUpdateRequest, map[string]any, bool) {
 	var req RouterConfigUpdateRequest
 	if err := s.parseJSONRequest(r, &req); err != nil {
-		s.writeErrorResponse(w, http.StatusBadRequest, "INVALID_INPUT", err.Error())
+		s.writeJSONRequestError(w, err)
 		return RouterConfigUpdateRequest{}, nil, false
 	}
 	if strings.TrimSpace(req.YAML) == "" {

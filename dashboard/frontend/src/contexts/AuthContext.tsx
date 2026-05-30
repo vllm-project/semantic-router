@@ -1,20 +1,18 @@
-import React, { createContext, ReactNode, useContext, useEffect, useState } from 'react'
+import React, { createContext, ReactNode, useCallback, useContext, useEffect, useState } from 'react'
 import {
   clearStoredAuthToken,
   getStoredAuthToken,
   installAuthenticatedFetch,
+  normalizeAuthToken,
   notifyUnauthorized,
   storeAuthToken,
   UNAUTHORIZED_EVENT,
 } from '../utils/authFetch'
-
-interface AuthUser {
-  id: string
-  email: string
-  name: string
-  role?: string
-  permissions?: string[]
-}
+import {
+  fetchCurrentAuthUser,
+  hasAuthenticatedSession,
+  type AuthUser,
+} from './authSession'
 
 interface AuthContextValue {
   token: string | null
@@ -48,36 +46,48 @@ installAuthenticatedFetch()
 export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
   const [token, setToken] = useState<string | null>(() => getStoredAuthToken())
   const [user, setUser] = useState<AuthUser | null>(null)
-  const [isLoading, setIsLoading] = useState(() => Boolean(getStoredAuthToken()))
+  const [isLoading, setIsLoading] = useState(true)
 
-  const clearSession = () => {
+  const clearSession = useCallback(() => {
     setToken(null)
     setUser(null)
     clearStoredAuthToken()
-  }
+  }, [])
 
-  const setSession = (nextToken: string, nextUser?: AuthUser | null) => {
-    storeAuthToken(nextToken)
-    setToken(nextToken)
-    setUser(nextUser ?? null)
-  }
+  const setSession = useCallback((nextToken: string, nextUser?: AuthUser | null) => {
+    const storedToken = storeAuthToken(nextToken)
+    setToken(storedToken)
+    setUser(storedToken ? (nextUser ?? null) : null)
+  }, [])
+
+  const refreshSession = useCallback(async () => {
+    setIsLoading(true)
+    try {
+      const result = await fetchCurrentAuthUser()
+      if (result.clearLocalToken) {
+        clearSession()
+        return
+      }
+      setUser(result.user)
+    } catch {
+      notifyUnauthorized()
+    } finally {
+      setIsLoading(false)
+    }
+  }, [clearSession])
 
   useEffect(() => {
     if (token) {
-      storeAuthToken(token)
+      const storedToken = storeAuthToken(token)
+      if (storedToken !== token) {
+        setToken(storedToken)
+      }
     }
   }, [token])
 
   useEffect(() => {
-    if (!token) {
-      setUser(null)
-      setIsLoading(false)
-      return
-    }
-
     void refreshSession()
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [token])
+  }, [refreshSession])
 
   useEffect(() => {
     const handleUnauthorized = () => {
@@ -87,32 +97,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
     window.addEventListener(UNAUTHORIZED_EVENT, handleUnauthorized)
     return () => window.removeEventListener(UNAUTHORIZED_EVENT, handleUnauthorized)
-  }, [])
-
-  const refreshSession = async () => {
-    if (!token) {
-      setUser(null)
-      setIsLoading(false)
-      return
-    }
-
-    setIsLoading(true)
-    try {
-      const response = await fetch('/api/auth/me')
-      if (!response.ok) {
-        if (response.status === 401) {
-          clearSession()
-        }
-        return
-      }
-      const payload = (await response.json()) as { user?: AuthUser }
-      setUser(payload?.user ?? null)
-    } catch {
-      notifyUnauthorized()
-    } finally {
-      setIsLoading(false)
-    }
-  }
+  }, [clearSession])
 
   const login = async (email: string, password: string) => {
     setIsLoading(true)
@@ -128,13 +113,20 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       }
 
       const payload = (await response.json()) as { token: string; user?: AuthUser }
-      setSession(payload.token, payload.user ?? null)
+      const nextToken = normalizeAuthToken(payload.token)
+      if (!nextToken) {
+        throw new Error('Login response did not include a valid session token')
+      }
+      setSession(nextToken, payload.user ?? null)
     } finally {
       setIsLoading(false)
     }
   }
 
   const logout = () => {
+    void fetch('/api/auth/logout', { method: 'POST', keepalive: true }).catch(() => {
+      // Local logout should still complete if the server session clear cannot be reached.
+    })
     clearSession()
   }
 
@@ -144,7 +136,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         token,
         user,
         isLoading,
-        isAuthenticated: Boolean(token),
+        isAuthenticated: hasAuthenticatedSession(token, user),
         login,
         setSession,
         logout,

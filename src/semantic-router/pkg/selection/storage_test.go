@@ -20,6 +20,7 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
 )
 
 func TestFileEloStorage_SaveAndLoad(t *testing.T) {
@@ -117,6 +118,32 @@ func TestFileEloStorage_LoadNonExistent(t *testing.T) {
 
 	if len(ratings) != 0 {
 		t.Errorf("Expected empty ratings, got %d", len(ratings))
+	}
+}
+
+func TestFileEloStorage_CloseWithoutAutoSaveDoesNotBlock(t *testing.T) {
+	storagePath := filepath.Join(t.TempDir(), "ratings.json")
+	storage, err := NewFileEloStorage(storagePath)
+	if err != nil {
+		t.Fatalf("Failed to create storage: %v", err)
+	}
+
+	done := make(chan error, 1)
+	go func() {
+		done <- storage.Close()
+	}()
+
+	select {
+	case err := <-done:
+		if err != nil {
+			t.Fatalf("Close() error = %v", err)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("Close() blocked without auto-save goroutine")
+	}
+
+	if err := storage.Close(); err != nil {
+		t.Fatalf("second Close() error = %v", err)
 	}
 }
 

@@ -104,10 +104,18 @@ For full deployment instructions, see:
 global:
   stores:
     vector_store:
-      provider: milvus
+      enabled: true
+      backend_type: milvus
+      metadata_store: postgres
 ```
 
 Supported backends: `memory`, `milvus`, `llama_stack`, `valkey`, `qdrant`.
+
+`metadata_store` controls the registry for vector-store and uploaded-file
+metadata. Use `postgres` for restart-safe local or production-like stacks; the
+CLI local runtime will provision Postgres and fill `metadata_postgres` connection
+defaults when `metadata_store: postgres` is set. Use `memory` only for ephemeral
+local experiments because store and file metadata is lost on router restart.
 
 ### Tools
 

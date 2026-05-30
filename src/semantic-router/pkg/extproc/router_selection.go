@@ -98,21 +98,27 @@ func buildModelSelectionConfig(cfg *config.RouterConfig) *selection.ModelSelecti
 		Method: "static",
 	}
 
-	eloFromDecision, routerDCFromDecision := findDecisionScopedSelectionConfigs(cfg)
-	modelSelectionCfg.Elo = buildEloSelectionConfig(cfg, eloFromDecision)
-	modelSelectionCfg.RouterDC = buildRouterDCSelectionConfig(cfg, routerDCFromDecision)
+	decisionCfgs := findDecisionScopedSelectionConfigs(cfg)
+	modelSelectionCfg.Elo = buildEloSelectionConfig(cfg, decisionCfgs.elo)
+	modelSelectionCfg.RouterDC = buildRouterDCSelectionConfig(cfg, decisionCfgs.routerDC)
 	modelSelectionCfg.AutoMix = buildAutoMixSelectionConfig(cfg)
 	modelSelectionCfg.Hybrid = buildHybridSelectionConfig(cfg)
 	modelSelectionCfg.ML = buildMLSelectionConfig(cfg)
+	modelSelectionCfg.RLDriven = buildRLDrivenSelectionConfig(decisionCfgs.rlDriven)
+	modelSelectionCfg.GMTRouter = buildGMTRouterSelectionConfig(decisionCfgs.gmtRouter)
 	return modelSelectionCfg
 }
 
-func findDecisionScopedSelectionConfigs(
-	cfg *config.RouterConfig,
-) (*config.EloSelectionConfig, *config.RouterDCSelectionConfig) {
+type decisionScopedSelectionConfigs struct {
+	elo       *config.EloSelectionConfig
+	routerDC  *config.RouterDCSelectionConfig
+	rlDriven  *config.RLDrivenSelectionConfig
+	gmtRouter *config.GMTRouterSelectionConfig
+}
+
+func findDecisionScopedSelectionConfigs(cfg *config.RouterConfig) decisionScopedSelectionConfigs {
 	intelligentRouting := cfg.IntelligentRouting
-	var eloFromDecision *config.EloSelectionConfig
-	var routerDCFromDecision *config.RouterDCSelectionConfig
+	var result decisionScopedSelectionConfigs
 
 	for _, decision := range intelligentRouting.Decisions {
 		if decision.Algorithm == nil {
@@ -120,17 +126,27 @@ func findDecisionScopedSelectionConfigs(
 		}
 		if decision.Algorithm.Type == "elo" &&
 			decision.Algorithm.Elo != nil &&
-			eloFromDecision == nil {
-			eloFromDecision = decision.Algorithm.Elo
+			result.elo == nil {
+			result.elo = decision.Algorithm.Elo
 		}
 		if decision.Algorithm.Type == "router_dc" &&
 			decision.Algorithm.RouterDC != nil &&
-			routerDCFromDecision == nil {
-			routerDCFromDecision = decision.Algorithm.RouterDC
+			result.routerDC == nil {
+			result.routerDC = decision.Algorithm.RouterDC
+		}
+		if decision.Algorithm.Type == "rl_driven" &&
+			decision.Algorithm.RLDriven != nil &&
+			result.rlDriven == nil {
+			result.rlDriven = decision.Algorithm.RLDriven
+		}
+		if decision.Algorithm.Type == "gmtrouter" &&
+			decision.Algorithm.GMTRouter != nil &&
+			result.gmtRouter == nil {
+			result.gmtRouter = decision.Algorithm.GMTRouter
 		}
 	}
 
-	return eloFromDecision, routerDCFromDecision
+	return result
 }
 
 func buildEloSelectionConfig(
@@ -265,6 +281,114 @@ func buildMLSelectionConfig(cfg *config.RouterConfig) *selection.MLSelectorConfi
 			PretrainedPath: mlCfg.MLP.PretrainedPath,
 		},
 	}
+}
+
+func buildRLDrivenSelectionConfig(decisionCfg *config.RLDrivenSelectionConfig) *selection.RLDrivenConfig {
+	result := selection.DefaultRLDrivenConfig()
+	if decisionCfg == nil {
+		return result
+	}
+
+	if decisionCfg.ExplorationRate != 0 {
+		result.ExplorationRate = decisionCfg.ExplorationRate
+	}
+	if decisionCfg.ExplorationDecay != 0 {
+		result.ExplorationDecay = decisionCfg.ExplorationDecay
+	}
+	if decisionCfg.MinExploration != 0 {
+		result.MinExploration = decisionCfg.MinExploration
+	}
+	if decisionCfg.UseThompsonSampling {
+		result.UseThompsonSampling = true
+	}
+	if decisionCfg.EnablePersonalization {
+		result.EnablePersonalization = true
+	}
+	if decisionCfg.PersonalizationBlend != 0 {
+		result.PersonalizationBlend = decisionCfg.PersonalizationBlend
+	}
+	if decisionCfg.SessionContextWeight != 0 {
+		result.SessionContextWeight = decisionCfg.SessionContextWeight
+	}
+	if decisionCfg.ImplicitFeedbackWeight != 0 {
+		result.ImplicitFeedbackWeight = decisionCfg.ImplicitFeedbackWeight
+	}
+	if decisionCfg.CostAwareness {
+		result.CostAwareness = true
+	}
+	if decisionCfg.CostWeight != 0 {
+		result.CostWeight = decisionCfg.CostWeight
+	}
+	if decisionCfg.StoragePath != "" {
+		result.StoragePath = decisionCfg.StoragePath
+	}
+	if decisionCfg.AutoSaveInterval != "" {
+		result.AutoSaveInterval = decisionCfg.AutoSaveInterval
+	}
+	if decisionCfg.UseRouterR1Rewards {
+		result.UseRouterR1Rewards = true
+	}
+	if decisionCfg.CostRewardAlpha != 0 {
+		result.CostRewardAlpha = decisionCfg.CostRewardAlpha
+	}
+	if decisionCfg.FormatRewardPenalty != 0 {
+		result.FormatRewardPenalty = decisionCfg.FormatRewardPenalty
+	}
+	if decisionCfg.EnableLLMRouting {
+		result.EnableLLMRouting = true
+	}
+	if decisionCfg.RouterR1ServerURL != "" {
+		result.RouterR1ServerURL = decisionCfg.RouterR1ServerURL
+	}
+	if decisionCfg.LLMRoutingFallback != "" {
+		result.LLMRoutingFallback = decisionCfg.LLMRoutingFallback
+	}
+	if decisionCfg.EnableMultiRoundAggregation {
+		result.EnableMultiRoundAggregation = true
+	}
+	if decisionCfg.MaxAggregationRounds != 0 {
+		result.MaxAggregationRounds = decisionCfg.MaxAggregationRounds
+	}
+	return result
+}
+
+func buildGMTRouterSelectionConfig(decisionCfg *config.GMTRouterSelectionConfig) *selection.GMTRouterConfig {
+	result := selection.DefaultGMTRouterConfig()
+	if decisionCfg == nil {
+		return result
+	}
+
+	if decisionCfg.EnablePersonalization {
+		result.EnablePersonalization = true
+	}
+	if decisionCfg.HistorySampleSize != 0 {
+		result.HistorySampleSize = decisionCfg.HistorySampleSize
+	}
+	if decisionCfg.EmbeddingDimension != 0 {
+		result.EmbeddingDimension = decisionCfg.EmbeddingDimension
+	}
+	if decisionCfg.NumGNNLayers != 0 {
+		result.NumGNNLayers = decisionCfg.NumGNNLayers
+	}
+	if decisionCfg.AttentionHeads != 0 {
+		result.AttentionHeads = decisionCfg.AttentionHeads
+	}
+	if decisionCfg.MinInteractionsForPersonalization != 0 {
+		result.MinInteractionsForPersonalization = decisionCfg.MinInteractionsForPersonalization
+	}
+	if decisionCfg.MaxInteractionsPerUser != 0 {
+		result.MaxInteractionsPerUser = decisionCfg.MaxInteractionsPerUser
+	}
+	if len(decisionCfg.FeedbackTypes) > 0 {
+		result.FeedbackTypes = append([]string(nil), decisionCfg.FeedbackTypes...)
+	}
+	if decisionCfg.ModelPath != "" {
+		result.ModelPath = decisionCfg.ModelPath
+	}
+	if decisionCfg.StoragePath != "" {
+		result.StoragePath = decisionCfg.StoragePath
+	}
+	return result
 }
 
 // buildLookupTable constructs a LookupTable from the router config.

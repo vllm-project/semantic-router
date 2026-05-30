@@ -10,6 +10,7 @@ import (
 	"os"
 	"path/filepath"
 	"slices"
+	"strings"
 	"testing"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
@@ -283,6 +284,64 @@ func TestHandleKnowledgeBaseAllowsBuiltinMutationAndDeletion(t *testing.T) {
 		t.Fatalf("config.Parse after delete: %v", err)
 	}
 	assertKnowledgeBaseConfigNames(t, reloaded.KnowledgeBases, []string{"mmlu_kb"})
+}
+
+func TestHandleKnowledgeBaseRejectsInvalidInputBeforePersisting(t *testing.T) {
+	tests := []struct {
+		name       string
+		mutate     func(*knowledgeBaseUpsertRequest)
+		wantDetail string
+	}{
+		{
+			name: "top level threshold",
+			mutate: func(payload *knowledgeBaseUpsertRequest) {
+				payload.Threshold = 1.1
+			},
+			wantDetail: "threshold must be between 0 and 1",
+		},
+		{
+			name: "label threshold",
+			mutate: func(payload *knowledgeBaseUpsertRequest) {
+				payload.LabelThresholds = map[string]float32{"papers": -0.1}
+			},
+			wantDetail: "must be between 0 and 1",
+		},
+		{
+			name: "empty group",
+			mutate: func(payload *knowledgeBaseUpsertRequest) {
+				payload.Groups["public"] = nil
+			},
+			wantDetail: "must include at least one label",
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			apiServer, tempDir, _ := newTestKnowledgeBaseAPIServer(t)
+			withStubbedRuntimeConfigSync(t)
+
+			payload := testKnowledgeBasePayload()
+			tc.mutate(&payload)
+			body := mustMarshalKnowledgeBasePayload(t, payload)
+
+			req := httptest.NewRequest(http.MethodPost, "/config/kbs", bytes.NewReader(body))
+			rr := httptest.NewRecorder()
+			apiServer.handleCreateKnowledgeBase(rr, req)
+
+			if rr.Code != http.StatusBadRequest {
+				t.Fatalf("expected 400 Bad Request, got %d: %s", rr.Code, rr.Body.String())
+			}
+			if code := parseErrorResponse(t, rr.Body.Bytes()); code != "INVALID_INPUT" {
+				t.Fatalf("expected INVALID_INPUT, got %s: %s", code, rr.Body.String())
+			}
+			if !strings.Contains(rr.Body.String(), tc.wantDetail) {
+				t.Fatalf("expected error detail %q, got %s", tc.wantDetail, rr.Body.String())
+			}
+			if _, err := os.Stat(filepath.Join(tempDir, ".vllm-sr", "knowledge_bases", "research_kb")); !os.IsNotExist(err) {
+				t.Fatalf("invalid payload should not persist managed assets, stat err=%v", err)
+			}
+		})
+	}
 }
 
 func defaultKnowledgeBaseNames() []string {

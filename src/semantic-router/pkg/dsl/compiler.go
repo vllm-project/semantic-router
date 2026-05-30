@@ -359,10 +359,10 @@ func (c *Compiler) compileContextSignal(s *SignalDecl) {
 }
 
 func (c *Compiler) compileStructureSignal(s *SignalDecl) {
-	payload := fieldsToMap(s.Fields)
-	payload["name"] = s.Name
+	payload := dslFieldObjectFromValues(s.Fields)
+	payload.setString("name", s.Name)
 
-	raw, err := yaml.Marshal(payload)
+	raw, err := payload.marshalYAML()
 	if err != nil {
 		c.addError(s.Pos, "failed to encode structure signal %q: %v", s.Name, err)
 		return
@@ -461,10 +461,10 @@ func (c *Compiler) compilePIISignal(s *SignalDecl) {
 }
 
 func (c *Compiler) compileConversationSignal(s *SignalDecl) {
-	payload := fieldsToMap(s.Fields)
-	payload["name"] = s.Name
+	payload := dslFieldObjectFromValues(s.Fields)
+	payload.setString("name", s.Name)
 
-	raw, err := yaml.Marshal(payload)
+	raw, err := payload.marshalYAML()
 	if err != nil {
 		c.addError(s.Pos, "failed to encode conversation signal %q: %v", s.Name, err)
 		return
@@ -1212,7 +1212,7 @@ func (c *Compiler) compileRAGPlugin(fields map[string]Value) config.RAGPluginCon
 	// backend_config is a nested object
 	if obj, ok := fields["backend_config"]; ok {
 		if ov, ok := obj.(ObjectValue); ok {
-			payload, err := config.NewStructuredPayload(fieldsToMap(ov.Fields))
+			payload, err := dslFieldObjectFromValues(ov.Fields).structuredPayload()
 			if err != nil {
 				c.addError(Position{}, "failed to encode rag backend_config: %v", err)
 			} else {
@@ -1471,37 +1471,6 @@ func getIntArrayField(fields map[string]Value, key string) ([]int, bool) {
 		}
 	}
 	return nil, false
-}
-
-func fieldsToMap(fields map[string]Value) map[string]interface{} {
-	result := make(map[string]interface{})
-	for k, v := range fields {
-		result[k] = valueToInterface(v)
-	}
-	return result
-}
-
-func valueToInterface(v Value) interface{} {
-	switch val := v.(type) {
-	case StringValue:
-		return val.V
-	case IntValue:
-		return val.V
-	case FloatValue:
-		return val.V
-	case BoolValue:
-		return val.V
-	case ArrayValue:
-		var arr []interface{}
-		for _, item := range val.Items {
-			arr = append(arr, valueToInterface(item))
-		}
-		return arr
-	case ObjectValue:
-		return fieldsToMap(val.Fields)
-	default:
-		return nil
-	}
 }
 
 func (c *Compiler) validateEmitForCompile(r *RouteDecl, e *EmitDecl) bool {

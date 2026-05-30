@@ -87,11 +87,11 @@ Use this map when turning scale-out architecture findings into debt work. Reuse 
 - Router core
   - runtime bootstrap and shared runtime state: [TD031](td-031-router-runtime-bootstrap-and-shared-service-registry-global-state.md)
   - classification subsystem boundary collapse: [TD020](td-020-classification-subsystem-boundary-collapse.md)
-  - extproc request and response phase collapse: [TD023](td-023-extproc-request-pipeline-phase-collapse.md), [TD029](td-029-extproc-response-pipeline-phase-collapse.md)
   - restart-sensitive runtime state and control-plane telemetry semantics: [TD034](td-034-runtime-and-dashboard-state-durability-and-telemetry-contract.md)
   - remaining hotspot-ratchet debt across router and binding hotspots: [TD006](td-006-structural-rule-target-vs-legacy-hotspots.md)
   - remaining custom Chat Completions struct consolidation: [TD038](td-038-custom-chat-completions-structs.md)
   - resolved shared Milvus lifecycle duplication across runtime stores: [TD021](td-021-milvus-adapter-duplication-across-runtime-stores.md)
+  - resolved extproc request and response phase collapse: [TD023](td-023-extproc-request-pipeline-phase-collapse.md), [TD029](td-029-extproc-response-pipeline-phase-collapse.md)
 - Dashboard frontend and backend
   - frontend route shell, editor control plane, and large UI containers: [TD030](td-030-dashboard-frontend-config-and-interaction-slice-collapse.md)
   - dashboard backend training, evaluation, and model-research contract seams: [TD032](td-032-training-evaluation-artifact-contract-drift.md)
@@ -117,7 +117,7 @@ Use this map when turning scale-out architecture findings into debt work. Reuse 
   - weakly typed or hybrid adapter seams in dashboard and DSL helpers: [TD015](td-015-weakly-typed-config-and-dsl-contracts.md)
   - operator-side contract ownership and canonical translation boundaries: [TD028](td-028-operator-config-contract-boundary-collapse.md)
   - resolved projection-partition fallback and centroid-validation contract work: [TD035](td-035-signal-group-default-coverage-contract-gap.md)
-  - `DECISION_TREE` authoring still lowers away before runtime config and decompile, so tree-authored DSL cannot yet round-trip through canonical router config: [TD036](td-036-decision-tree-authoring-roundtrip-gap.md)
+  - resolved `DECISION_TREE` authoring-sugar contract: runtime config and decompile intentionally use flat decisions instead of preserving tree metadata: [TD036](td-036-decision-tree-authoring-roundtrip-gap.md)
   - state taxonomy, durability ownership, and restart-aware telemetry across router/dashboard/CLI: [TD034](td-034-runtime-and-dashboard-state-durability-and-telemetry-contract.md)
   - resolved predecessor work for repo-wide canonical contract consolidation: [TD001](td-001-config-surface-fragmentation.md), [TD026](td-026-go-config-contract-boundary-collapse.md)
 

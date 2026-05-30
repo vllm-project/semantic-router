@@ -46,6 +46,35 @@ func TestUnifiedClassifier_Initialize(t *testing.T) {
 			t.Error("Expected error when models don't exist")
 		}
 	})
+
+	t.Run("Rejects_empty_labels_before_native_call", func(t *testing.T) {
+		original := nativeBackendCapabilities
+		defer func() { nativeBackendCapabilities = original }()
+		nativeBackendCapabilities = NativeBackendCapabilities{
+			Name:                       "test",
+			UnifiedBatchClassification: true,
+		}
+
+		classifier := &UnifiedClassifier{}
+
+		err := classifier.Initialize(
+			"./test_models/modernbert",
+			"./test_models/intent_head",
+			"./test_models/pii_head",
+			"./test_models/security_head",
+			nil,
+			testUnifiedPIILabels,
+			testUnifiedSecurityLabels,
+			true,
+		)
+
+		if err == nil {
+			t.Fatal("Expected error for empty intent labels")
+		}
+		if err.Error() != "intent labels are required for unified classifier initialization" {
+			t.Errorf("Expected intent label validation error, got: %v", err)
+		}
+	})
 }
 
 func TestUnifiedClassifier_ClassifyBatch(t *testing.T) {

@@ -126,7 +126,7 @@ func buildStartupWriter(cfg *config.RouterConfig, configPath string) startupstat
 
 	logging.ComponentWarnEvent("router", "startup_status_file_backend", map[string]interface{}{
 		"backend": "file",
-		"message": "Startup status using local file backend. Status is not shared across replicas or visible to the dashboard in containerized deployments. Set startup_status.backend: redis for production use.",
+		"message": "Startup status using local file backend. Status is not shared across replicas or visible to the dashboard in containerized deployments. Set startup_status.store_backend: redis for production use.",
 	})
 	return startupstatus.NewFileWriter(configPath)
 }

@@ -2,6 +2,7 @@ package extproc
 
 import (
 	"fmt"
+	"strings"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
@@ -10,7 +11,7 @@ import (
 )
 
 func createReplayRuntime(cfg *config.RouterConfig) (map[string]*routerreplay.Recorder, *routerreplay.Recorder, bool) {
-	backend := resolveReplayStoreBackend(cfg.RouterReplay.StoreBackend)
+	backend := resolveReplayStoreBackend(cfg.RouterReplay)
 	if usesSharedReplayStorage(backend) {
 		recorders, replayRecorder := initializeSharedReplayRecorders(cfg, backend)
 		return recorders, replayRecorder, replayRecorder != nil
@@ -29,7 +30,7 @@ func createReplayRuntime(cfg *config.RouterConfig) (map[string]*routerreplay.Rec
 
 // initializeReplayRecorders creates replay recorders for decisions with router_replay plugin configured.
 func initializeReplayRecorders(cfg *config.RouterConfig) map[string]*routerreplay.Recorder {
-	backend := resolveReplayStoreBackend(cfg.RouterReplay.StoreBackend)
+	backend := resolveReplayStoreBackend(cfg.RouterReplay)
 	if usesSharedReplayStorage(backend) {
 		recorders, _ := initializeSharedReplayRecorders(cfg, backend)
 		return recorders
@@ -139,11 +140,23 @@ func usesSharedReplayStorage(backend string) bool {
 	}
 }
 
-func resolveReplayStoreBackend(backend string) string {
-	if backend == "" {
-		return "memory"
+func resolveReplayStoreBackend(cfg config.RouterReplayConfig) string {
+	if backend := strings.ToLower(strings.TrimSpace(cfg.StoreBackend)); backend != "" {
+		return backend
 	}
-	return backend
+	if cfg.Postgres != nil {
+		return "postgres"
+	}
+	if cfg.Redis != nil {
+		return "redis"
+	}
+	if cfg.Milvus != nil {
+		return "milvus"
+	}
+	if cfg.Qdrant != nil {
+		return "qdrant"
+	}
+	return "memory"
 }
 
 func resolveReplayMaxBodyBytes(maxBodyBytes int) int {

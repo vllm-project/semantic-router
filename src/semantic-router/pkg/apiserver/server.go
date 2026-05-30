@@ -5,7 +5,6 @@ package apiserver
 import (
 	"encoding/json"
 	"fmt"
-	"io"
 	"net/http"
 	"time"
 
@@ -16,7 +15,6 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/routerruntime"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/selection"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/services"
-	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/startupstatus"
 )
 
 // Init starts the API server.
@@ -74,9 +72,7 @@ func InitWithRuntime(configPath string, port int, runtimeRegistry *routerruntime
 		classificationSvc,
 		func() classificationService {
 			if runtimeRegistry != nil {
-				if svc := runtimeRegistry.ClassificationService(); svc != nil {
-					return svc
-				}
+				return runtimeRegistry.ClassificationService()
 			}
 			return services.GetGlobalClassificationService()
 		},
@@ -111,9 +107,7 @@ func InitWithRuntime(configPath string, port int, runtimeRegistry *routerruntime
 
 func resolveAPIServerConfig(runtimeRegistry *routerruntime.Registry) *config.RouterConfig {
 	if runtimeRegistry != nil {
-		if cfg := runtimeRegistry.CurrentConfig(); cfg != nil {
-			return cfg
-		}
+		return runtimeRegistry.CurrentConfig()
 	}
 	return config.Get()
 }
@@ -123,9 +117,7 @@ func resolveClassificationService(
 	runtimeRegistry *routerruntime.Registry,
 ) *services.ClassificationService {
 	if runtimeRegistry != nil {
-		if svc := runtimeRegistry.ClassificationService(); svc != nil {
-			return svc
-		}
+		return runtimeRegistry.ClassificationService()
 	}
 	return initClassify(5, 500*time.Millisecond)
 }
@@ -159,9 +151,7 @@ func ensureClassificationService(
 
 func resolveMemoryStore(cfg *config.RouterConfig, runtimeRegistry *routerruntime.Registry) memory.Store {
 	if runtimeRegistry != nil {
-		if store := runtimeRegistry.MemoryStore(); store != nil {
-			return store
-		}
+		return runtimeRegistry.MemoryStore()
 	}
 	return initMemoryStore(5, 500*time.Millisecond)
 }
@@ -178,7 +168,12 @@ func buildConfigUpdater(
 	liveClassificationSvc classificationService,
 ) func(*config.RouterConfig) {
 	if runtimeRegistry == nil {
-		return liveClassificationSvc.RefreshRuntimeConfig
+		return func(newCfg *config.RouterConfig) {
+			if liveClassificationSvc != nil {
+				liveClassificationSvc.RefreshRuntimeConfig(newCfg)
+			}
+			config.Replace(newCfg)
+		}
 	}
 	return runtimeRegistry.RefreshRuntimeConfig
 }
@@ -248,96 +243,10 @@ func shouldInitMemoryStore(cfg *config.RouterConfig) bool {
 // setupRoutes configures all API routes
 func (s *ClassificationAPIServer) setupRoutes() *http.ServeMux {
 	mux := http.NewServeMux()
-	s.registerCoreRoutes(mux)
-	s.registerClassificationRoutes(mux)
-	s.registerEmbeddingRoutes(mux)
-	s.registerInfoRoutes(mux)
-	s.registerConfigRoutes(mux)
-	s.registerMemoryRoutes(mux)
-	registerVectorStoreRoutes(mux, s)
-	registerFileRoutes(mux, s)
+	for _, route := range apiRoutes() {
+		mux.HandleFunc(route.pattern(), route.bind(s))
+	}
 	return mux
-}
-
-func (s *ClassificationAPIServer) registerCoreRoutes(mux *http.ServeMux) {
-	// Health check endpoint
-	mux.HandleFunc("GET /health", s.handleHealth)
-	mux.HandleFunc("GET /ready", s.handleReady)
-	mux.HandleFunc("GET /startup-status", s.handleStartupStatus)
-
-	// API discovery endpoint
-	mux.HandleFunc("GET /api/v1", s.handleAPIOverview)
-
-	// OpenAPI and documentation endpoints
-	mux.HandleFunc("GET /openapi.json", s.handleOpenAPISpec)
-	mux.HandleFunc("GET /docs", s.handleSwaggerUI)
-}
-
-func (s *ClassificationAPIServer) registerClassificationRoutes(mux *http.ServeMux) {
-	// Classification endpoints
-	mux.HandleFunc("POST /api/v1/classify/intent", s.handleIntentClassification)
-	mux.HandleFunc("POST /api/v1/classify/pii", s.handlePIIDetection)
-	mux.HandleFunc("POST /api/v1/classify/security", s.handleSecurityDetection)
-	mux.HandleFunc("POST /api/v1/classify/fact-check", s.handleFactCheckClassification)
-	mux.HandleFunc("POST /api/v1/classify/user-feedback", s.handleUserFeedbackClassification)
-	mux.HandleFunc("POST /api/v1/classify/combined", s.handleCombinedClassification)
-	mux.HandleFunc("POST /api/v1/classify/batch", s.handleBatchClassification)
-
-	// Evaluation endpoint - evaluates all configured signals regardless of decision usage
-	mux.HandleFunc("POST /api/v1/eval", s.handleEvalClassification)
-
-	// NLI endpoint - Natural Language Inference (premise vs. hypothesis classification)
-	mux.HandleFunc("POST /api/v1/nli", s.handleNLIClassification)
-}
-
-func (s *ClassificationAPIServer) registerEmbeddingRoutes(mux *http.ServeMux) {
-	// Embedding endpoints
-	mux.HandleFunc("POST /api/v1/embeddings", s.handleEmbeddings)
-	mux.HandleFunc("POST /api/v1/similarity", s.handleSimilarity)
-	mux.HandleFunc("POST /api/v1/similarity/batch", s.handleBatchSimilarity)
-}
-
-func (s *ClassificationAPIServer) registerInfoRoutes(mux *http.ServeMux) {
-	// Information endpoints
-	mux.HandleFunc("GET /info/models", s.handleModelsInfo) // All models (classification + embedding)
-	mux.HandleFunc("GET /info/classifier", s.handleClassifierInfo)
-	mux.HandleFunc("GET /api/v1/embeddings/models", s.handleEmbeddingModelsInfo) // Only embedding models
-
-	// OpenAI-compatible endpoints
-	mux.HandleFunc("GET /v1/models", s.handleOpenAIModels)
-
-	// Metrics endpoints
-	mux.HandleFunc("GET /metrics/classification", s.handleClassificationMetrics)
-
-	// Model selection feedback endpoints
-	mux.HandleFunc("POST /api/v1/feedback", s.handleFeedback)
-	mux.HandleFunc("GET /api/v1/ratings", s.handleGetRatings)
-	mux.HandleFunc("GET /api/v1/rl-state", s.handleRLState)
-}
-
-func (s *ClassificationAPIServer) registerConfigRoutes(mux *http.ServeMux) {
-	// Configuration endpoints
-	mux.HandleFunc("GET /config/kbs", s.handleListKnowledgeBases)
-	mux.HandleFunc("POST /config/kbs", s.handleCreateKnowledgeBase)
-	mux.HandleFunc("GET /config/kbs/{name}", s.handleGetKnowledgeBase)
-	mux.HandleFunc("GET /config/kbs/{name}/map/metadata", s.handleGetKnowledgeBaseMapMetadata)
-	mux.HandleFunc("GET /config/kbs/{name}/map/data.ndjson", s.handleGetKnowledgeBaseMapData)
-	mux.HandleFunc("PUT /config/kbs/{name}", s.handleUpdateKnowledgeBase)
-	mux.HandleFunc("DELETE /config/kbs/{name}", s.handleDeleteKnowledgeBase)
-	mux.HandleFunc("GET /config/router", s.handleConfigGet)
-	mux.HandleFunc("PATCH /config/router", s.handleConfigPatch)
-	mux.HandleFunc("PUT /config/router", s.handleConfigPut)
-	mux.HandleFunc("POST /config/router/rollback", s.handleConfigRollback)
-	mux.HandleFunc("GET /config/router/versions", s.handleConfigVersions)
-	mux.HandleFunc("GET /config/hash", s.handleConfigHash)
-}
-
-func (s *ClassificationAPIServer) registerMemoryRoutes(mux *http.ServeMux) {
-	// Memory management endpoints
-	mux.HandleFunc("GET /v1/memory/{id}", s.handleGetMemory)
-	mux.HandleFunc("GET /v1/memory", s.handleListMemories)
-	mux.HandleFunc("DELETE /v1/memory/{id}", s.handleDeleteMemory)
-	mux.HandleFunc("DELETE /v1/memory", s.handleDeleteMemoriesByScope)
 }
 
 // handleHealth handles health check requests
@@ -351,8 +260,8 @@ func (s *ClassificationAPIServer) handleHealth(w http.ResponseWriter, _ *http.Re
 func (s *ClassificationAPIServer) handleReady(w http.ResponseWriter, _ *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 
-	state, err := startupstatus.Load(startupstatus.StatusPathFromConfigPath(s.configPath))
-	if err != nil {
+	state := s.loadStartupState()
+	if state == nil {
 		w.WriteHeader(http.StatusServiceUnavailable)
 		_, _ = w.Write([]byte(`{"status":"starting","service":"classification-api","ready":false}`))
 		return
@@ -384,23 +293,6 @@ func (s *ClassificationAPIServer) handleReady(w http.ResponseWriter, _ *http.Req
 		"ready_models":      state.ReadyModels,
 		"total_models":      state.TotalModels,
 	})
-}
-
-// Helper methods for JSON handling
-func (s *ClassificationAPIServer) parseJSONRequest(r *http.Request, v interface{}) error {
-	defer func() {
-		_ = r.Body.Close()
-	}()
-	body, err := io.ReadAll(r.Body)
-	if err != nil {
-		return fmt.Errorf("failed to read request body: %w", err)
-	}
-
-	if err := json.Unmarshal(body, v); err != nil {
-		return fmt.Errorf("failed to parse JSON: %w", err)
-	}
-
-	return nil
 }
 
 func (s *ClassificationAPIServer) writeJSONResponse(w http.ResponseWriter, statusCode int, data interface{}) {
@@ -459,15 +351,21 @@ func (s *ClassificationAPIServer) handleRLState(w http.ResponseWriter, r *http.R
 		"timestamp": time.Now().UTC().Format(time.RFC3339),
 	}
 
+	registry := s.currentSelectionRegistry()
+	if registry == nil {
+		s.writeJSONResponse(w, http.StatusOK, state)
+		return
+	}
+
 	// Get RLDriven selector state
-	if rlSelector, ok := selection.GlobalRegistry.Get(selection.MethodRLDriven); ok {
+	if rlSelector, ok := registry.Get(selection.MethodRLDriven); ok {
 		if rlDriven, ok := rlSelector.(*selection.RLDrivenSelector); ok {
 			state["rl_driven"] = rlDriven.GetDebugState(userID)
 		}
 	}
 
 	// Get GMTRouter selector state
-	if gmtSelector, ok := selection.GlobalRegistry.Get(selection.MethodGMTRouter); ok {
+	if gmtSelector, ok := registry.Get(selection.MethodGMTRouter); ok {
 		if gmtRouter, ok := gmtSelector.(*selection.GMTRouterSelector); ok {
 			state["gmtrouter"] = gmtRouter.GetDebugState(userID)
 		}

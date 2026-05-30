@@ -49,6 +49,9 @@ func (a *MLSelectorAdapter) SetEmbeddingFunc(fn func(string) ([]float32, error))
 // Select implements selection.Selector interface.
 // Converts selection.SelectionContext to modelselection.SelectionContext and calls the ML selector.
 func (a *MLSelectorAdapter) Select(ctx context.Context, selCtx *SelectionContext) (*SelectionResult, error) {
+	if err := ValidateSelectionContext(selCtx); err != nil {
+		return nil, err
+	}
 	if a.mlSelector == nil {
 		return nil, fmt.Errorf("ML selector not initialized")
 	}

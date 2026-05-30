@@ -2,40 +2,69 @@
 
 ## Status
 
-Open
+Resolved
 
 ## Scope
 
-`spec/dsl.md`, `deploy/recipes/{balance.dsl,balance.yaml}`, `src/semantic-router/pkg/dsl/{decision_tree.go,decompiler.go}`, and any API or tooling surface that claims round-trip fidelity between DSL authoring and canonical router config
+`deploy/recipes/{balance.dsl,balance.yaml}`,
+`src/semantic-router/pkg/dsl/{decision_tree.go,decompiler.go,routing_contract.go}`,
+the retention DSL tutorial, and any API or tooling surface that describes
+round-trip fidelity between DSL authoring and canonical router config.
 
 ## Summary
 
-The repository now supports `DECISION_TREE` / `IF ELSE` authoring by lowering tree branches into flat `config.Decision` entries at parse time. That keeps runtime routing, the config API, and canonical router config on one existing model, but it also means the original tree structure is discarded before decompile and API consumers ever see it. `DecompileRouting()` still reconstructs plain `ROUTE` blocks from `config.Decision`, so a DSL file authored as a decision tree cannot be losslessly recovered from runtime config or from the core config endpoints. The maintained `balance` recipe pair is therefore the current explicit paired-source model for showcasing richer DSL authoring without claiming runtime-config tree round-trip.
+Current-source recheck confirmed that the repository has intentionally narrowed
+`DECISION_TREE` to DSL authoring sugar. The parser lowers tree branches into
+flat `config.Decision` entries, runtime config remains the canonical flat
+decision model, and `DecompileRouting()` emits flat `ROUTE` blocks. That is the
+supported contract rather than a partial implementation of lossless tree
+round-trip.
+
+The remaining gap was stale governance and public-facing clarity: the debt entry
+still pointed at a removed `spec/dsl.md` file and the maintained recipe and
+tutorial docs did not explicitly state that only retention/config fields
+round-trip, not the tree shape itself. This is now resolved by codifying the
+flat-route decompile contract in tests and documenting the paired DSL/YAML
+model for tree-authored recipes.
 
 ## Evidence
 
-- [spec/dsl.md](../../../spec/dsl.md)
 - [deploy/recipes/balance.dsl](../../../deploy/recipes/balance.dsl)
 - [deploy/recipes/balance.yaml](../../../deploy/recipes/balance.yaml)
+- [deploy/recipes/README.md](../../../deploy/recipes/README.md)
 - [src/semantic-router/pkg/dsl/decision_tree.go](../../../src/semantic-router/pkg/dsl/decision_tree.go)
 - [src/semantic-router/pkg/dsl/decompiler.go](../../../src/semantic-router/pkg/dsl/decompiler.go)
-- [src/semantic-router/pkg/apiserver/route_classification_config.go](../../../src/semantic-router/pkg/apiserver/route_classification_config.go)
+- [src/semantic-router/pkg/dsl/routing_contract.go](../../../src/semantic-router/pkg/dsl/routing_contract.go)
+- [src/semantic-router/pkg/dsl/dsl_test.go](../../../src/semantic-router/pkg/dsl/dsl_test.go)
+- [website/docs/tutorials/decision/retention.md](../../../website/docs/tutorials/decision/retention.md)
+- [docs/agent/plans/pl-0012-dsl-conflict-free-routing-workstream.md](../plans/pl-0012-dsl-conflict-free-routing-workstream.md)
 
 ## Why It Matters
 
-- Authors can now express conflict-free routing with `IF`, `ELSE IF`, and `ELSE`, but downstream tooling still only sees flattened routes and cannot recover the original partitioning intent.
-- The core config API exposes canonical router config, not DSL source. Without preserved tree metadata, API-backed editors or future migration tools will silently degrade tree authoring into route lists.
-- Maintained examples currently need both a DSL source file and a compiled YAML artifact because neither runtime config nor decompile can serve as the sole source of truth for tree-authored configs.
-- The repo has already narrowed its public contract to `DECISION_TREE` as authoring sugar only, so debt remains open until every doc/example/API claim matches that narrower posture.
+- Authors can express conflict-free routing with `IF`, `ELSE IF`, and `ELSE`,
+  while downstream tooling correctly sees the flat canonical decision model.
+- Config APIs, Kubernetes translation, and decompile/export paths no longer need
+  to imply that tree metadata is preserved when it is not.
+- Maintained examples can keep paired DSL/YAML assets without suggesting that
+  runtime config is a lossless source for tree-authored DSL.
 
 ## Desired End State
 
-- The repository has one explicit contract for `DECISION_TREE` round-trip behavior across authoring, config APIs, and decompile.
-- Either canonical router config preserves enough decision-tree metadata to reconstruct `DECISION_TREE` authoring, or the repo narrows the supported round-trip claim and makes the paired-source model explicit across APIs, examples, and tooling.
-- Tests enforce the chosen contract so tree-authored configs do not silently degrade across future compiler or API changes.
+Resolved by the narrowed contract:
+
+- `DECISION_TREE` remains authoring sugar only.
+- Canonical router config preserves flat `routing.decisions`, not tree
+  authoring metadata.
+- `DecompileRouting()` emits flat `ROUTE` blocks for tree-authored input.
+- Maintained recipe docs and retention tutorial docs state that tree shape is
+  not preserved by config-backed round-trip paths.
+- Tests enforce this contract.
 
 ## Exit Criteria
 
-- Canonical router config and the related API/tooling surfaces either preserve or explicitly disclaim decision-tree authoring metadata in one contributor-visible contract.
-- `DecompileRouting()` or an equivalent supported export path can reproduce `DECISION_TREE` syntax when the repo claims tree round-trip support.
-- Maintained examples, tests, and docs no longer rely on an implicit assumption that tree-authored DSL can be losslessly recovered from runtime config when it cannot.
+- Contributor-visible contract explicitly disclaims decision-tree metadata
+  preservation in runtime config and decompile paths.
+- DSL tests verify tree-authored input decompiles to flat `ROUTE` blocks and
+  recompiles without changing the decision set.
+- Maintained recipe and tutorial docs describe the paired-source model and do
+  not imply lossless tree-shape round-trip.

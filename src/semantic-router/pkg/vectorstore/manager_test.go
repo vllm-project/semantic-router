@@ -23,17 +23,22 @@ import (
 	. "github.com/onsi/gomega"
 )
 
-var _ = Describe("Manager", func() {
+func newManagerTestFixture() (*Manager, context.Context) {
+	GinkgoHelper()
+
+	backend := NewMemoryBackend(MemoryBackendConfig{})
+	registry := NewMemoryMetadataRegistry()
+	return NewManager(backend, registry, 768, BackendTypeMemory), context.Background()
+}
+
+var _ = Describe("Manager store creation and retrieval", func() {
 	var (
 		mgr *Manager
 		ctx context.Context
 	)
 
 	BeforeEach(func() {
-		backend := NewMemoryBackend(MemoryBackendConfig{})
-		registry := NewMemoryMetadataRegistry()
-		mgr = NewManager(backend, registry, 768, BackendTypeMemory)
-		ctx = context.Background()
+		mgr, ctx = newManagerTestFixture()
 	})
 
 	Context("CreateStore", func() {
@@ -96,16 +101,50 @@ var _ = Describe("Manager", func() {
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring("not found"))
 		})
+
+		It("should return defensive store copies", func() {
+			created, err := mgr.CreateStore(ctx, CreateStoreRequest{
+				Name:     "copy-test",
+				Metadata: map[string]interface{}{"env": "test"},
+			})
+			Expect(err).NotTo(HaveOccurred())
+
+			got, err := mgr.GetStore(created.ID)
+			Expect(err).NotTo(HaveOccurred())
+			got.Name = "mutated"
+			got.Metadata["env"] = "mutated"
+
+			reloaded, err := mgr.GetStore(created.ID)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(reloaded.Name).To(Equal("copy-test"))
+			Expect(reloaded.Metadata["env"]).To(Equal("test"))
+		})
+	})
+})
+
+var _ = Describe("Manager store listing", func() {
+	var (
+		mgr *Manager
+		ctx context.Context
+	)
+
+	BeforeEach(func() {
+		mgr, ctx = newManagerTestFixture()
 	})
 
 	Context("ListStores", func() {
+		var created []*VectorStore
+
 		BeforeEach(func() {
+			created = nil
 			for i := 0; i < 5; i++ {
-				_, err := mgr.CreateStore(ctx, CreateStoreRequest{
+				vs, err := mgr.CreateStore(ctx, CreateStoreRequest{
 					Name: "list-test",
 				})
 				Expect(err).NotTo(HaveOccurred())
+				created = append(created, vs)
 			}
+			setStoreCreatedAt(mgr, created)
 		})
 
 		It("should return all stores", func() {
@@ -123,11 +162,55 @@ var _ = Describe("Manager", func() {
 			Expect(stores).To(HaveLen(5)) // only 5 exist
 		})
 
+		It("should respect after cursor in sorted order", func() {
+			stores := mgr.ListStores(ListStoresParams{After: created[2].ID})
+			Expect(storeIDs(stores)).To(Equal([]string{created[1].ID, created[0].ID}))
+		})
+
+		It("should respect before cursor in sorted order", func() {
+			stores := mgr.ListStores(ListStoresParams{Before: created[2].ID})
+			Expect(storeIDs(stores)).To(Equal([]string{created[4].ID, created[3].ID}))
+		})
+
+		It("should respect asc order", func() {
+			stores := mgr.ListStores(ListStoresParams{Order: "asc", Limit: 3})
+			Expect(storeIDs(stores)).To(Equal([]string{created[0].ID, created[1].ID, created[2].ID}))
+		})
+
 		It("should handle empty result", func() {
 			emptyMgr := NewManager(NewMemoryBackend(MemoryBackendConfig{}), NewMemoryMetadataRegistry(), 768, BackendTypeMemory)
 			stores := emptyMgr.ListStores(ListStoresParams{})
 			Expect(stores).To(BeEmpty())
 		})
+	})
+})
+
+func setStoreCreatedAt(mgr *Manager, stores []*VectorStore) {
+	GinkgoHelper()
+
+	mgr.mu.Lock()
+	defer mgr.mu.Unlock()
+	for i, store := range stores {
+		mgr.stores[store.ID].CreatedAt = int64(i + 1)
+	}
+}
+
+func storeIDs(stores []*VectorStore) []string {
+	ids := make([]string, 0, len(stores))
+	for _, store := range stores {
+		ids = append(ids, store.ID)
+	}
+	return ids
+}
+
+var _ = Describe("Manager store mutation", func() {
+	var (
+		mgr *Manager
+		ctx context.Context
+	)
+
+	BeforeEach(func() {
+		mgr, ctx = newManagerTestFixture()
 	})
 
 	Context("UpdateStore", func() {

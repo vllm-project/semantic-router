@@ -35,7 +35,6 @@ export default defineConfig({
       output: {
         manualChunks: {
           'react-vendor': ['react', 'react-dom', 'react-router-dom'],
-          'monaco-vendor': ['monaco-editor'],
         },
       },
     },
