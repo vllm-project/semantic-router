@@ -1126,6 +1126,10 @@ routing:
           quality_gap_multiplier: 1.0
           max_cache_cost_multiplier: 2.5
           switch_history_weight: 0.04
+          context_portability_weight: 0.25
+          min_switch_context_portability: 0.20
+          provider_state_penalty: 0.35
+          provider_state_hard_lock: true
 
     - name: fallback_knn_route
       description: KNN fallback route for general traffic with OpenAI vector-store RAG.
@@ -1397,6 +1401,10 @@ global:
         quality_gap_multiplier: 1.0
         max_cache_cost_multiplier: 2.5
         switch_history_weight: 0.04
+        context_portability_weight: 0.25
+        min_switch_context_portability: 0.20
+        provider_state_penalty: 0.35
+        provider_state_hard_lock: true
       momentum:
         enabled: false
         attack: 0.7

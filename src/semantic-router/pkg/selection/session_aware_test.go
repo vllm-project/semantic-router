@@ -159,6 +159,112 @@ func TestSessionAwareSelectorIdleSessionClearsContinuityPenalty(t *testing.T) {
 	}
 }
 
+func TestSessionAwareSelectorProviderStateOnlyHardLocksAcrossIdleBoundary(t *testing.T) {
+	selector := NewSessionAwareSelector(&SessionAwareConfig{
+		FallbackMethod:              MethodStatic,
+		IdleTimeoutSeconds:          60,
+		SwitchMargin:                0,
+		StayBias:                    0,
+		ToolLoopHardLock:            true,
+		PrefixCacheWeight:           0,
+		HandoffPenaltyWeight:        0,
+		DefaultHandoffPenalty:       0,
+		QualityGapMultiplier:        1,
+		MaxCacheCostMultiplier:      1,
+		ProviderStateHardLock:       true,
+		ContextPortabilityWeight:    0.25,
+		MinSwitchContextPortability: 0.20,
+		ProviderStatePenalty:        0.35,
+	})
+	selector.SetFallbackSelector(stubSessionFallback{
+		result: &SelectionResult{
+			SelectedModel: "frontier",
+			Score:         1.0,
+			Method:        MethodHybrid,
+			AllScores: map[string]float64{
+				"current":  0.20,
+				"frontier": 1.0,
+			},
+		},
+	})
+
+	result, err := selector.Select(context.Background(), &SelectionContext{
+		CandidateModels: []config.ModelRef{{Model: "current"}, {Model: "frontier"}},
+		AgenticSession: &AgenticSessionContext{
+			ID:                   "sess-provider-state",
+			TurnIndex:            5,
+			PreviousModel:        "current",
+			PreviousResponseID:   "resp-previous",
+			ContextPortability:   0,
+			ContextPortabilityOK: true,
+			ProviderStateOnly:    true,
+			IdleFor:              2 * time.Minute,
+			IdleKnown:            true,
+		},
+	})
+	if err != nil {
+		t.Fatalf("Select returned error: %v", err)
+	}
+	if result.SelectedModel != "current" {
+		t.Fatalf("expected provider-only context to hard-lock current model, got %q", result.SelectedModel)
+	}
+	if result.SessionPolicy == nil || result.SessionPolicy.HardLockReason != "hard_lock=context_not_portable" {
+		t.Fatalf("expected context portability hard lock, got %#v", result.SessionPolicy)
+	}
+	if !result.SessionPolicy.ProviderStateOnly || result.SessionPolicy.ContextPortability != 0 {
+		t.Fatalf("expected provider-state trace with zero portability, got %#v", result.SessionPolicy)
+	}
+}
+
+func TestSessionAwareSelectorLowContextPortabilityPenalizesNonIdleSwitch(t *testing.T) {
+	selector := NewSessionAwareSelector(&SessionAwareConfig{
+		FallbackMethod:              MethodStatic,
+		SwitchMargin:                0,
+		StayBias:                    0,
+		PrefixCacheWeight:           0,
+		HandoffPenaltyWeight:        0,
+		DefaultHandoffPenalty:       0,
+		QualityGapMultiplier:        1,
+		MaxCacheCostMultiplier:      1,
+		ContextPortabilityWeight:    0.40,
+		MinSwitchContextPortability: 0.50,
+	})
+	selector.SetFallbackSelector(stubSessionFallback{
+		result: &SelectionResult{
+			SelectedModel: "frontier",
+			Score:         0.62,
+			Method:        MethodHybrid,
+			AllScores: map[string]float64{
+				"current":  0.60,
+				"frontier": 0.62,
+			},
+		},
+	})
+
+	result, err := selector.Select(context.Background(), &SelectionContext{
+		CandidateModels: []config.ModelRef{{Model: "current"}, {Model: "frontier"}},
+		AgenticSession: &AgenticSessionContext{
+			ID:                   "sess-low-portable",
+			TurnIndex:            4,
+			PreviousModel:        "current",
+			HistoryTokens:        100,
+			ContextTokens:        1000,
+			ContextPortability:   0.10,
+			ContextPortabilityOK: true,
+		},
+	})
+	if err != nil {
+		t.Fatalf("Select returned error: %v", err)
+	}
+	if result.SelectedModel != "current" {
+		t.Fatalf("expected low context portability to keep current model, got %q", result.SelectedModel)
+	}
+	trace := result.SessionPolicy.CandidateTraces["frontier"]
+	if trace.ContextPortabilityPenalty <= 0 {
+		t.Fatalf("expected positive context portability penalty, got %#v", trace)
+	}
+}
+
 func TestSessionAwareSelectorUsesRouterMemoryTurnCountBeforeFullParsing(t *testing.T) {
 	selector := NewSessionAwareSelector(&SessionAwareConfig{
 		FallbackMethod:         MethodStatic,

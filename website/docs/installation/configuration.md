@@ -41,7 +41,7 @@ The detailed background is in [Unified Config Contract v0.3](../proposals/unifie
 - `global` owns router-wide runtime overrides.
   - `global.router` groups router-engine control knobs such as config-source selection, route-cache, and model-selection defaults
   - `global.router.config_source` selects whether runtime config comes from the canonical YAML file (`file`) or from in-process Kubernetes CRD reconciliation (`kubernetes`)
-  - `decision.algorithm.type=session_aware` enables agentic stay-vs-switch routing with router-owned session memory, tool-loop hard locks, idle-time re-selection, prefix-cache cost, and replayed policy traces.
+  - `decision.algorithm.type=session_aware` enables agentic stay-vs-switch routing with router-owned session memory, tool-loop and provider-state hard locks, idle-time re-selection, context-portability penalties, prefix-cache cost, and replayed policy traces.
   - `global.services` groups shared APIs and control-plane services such as `response_api`, `router_replay`, `observability`, `authz`, and `ratelimit`
   - `global.services.router_replay.enabled` acts as the default replay switch for every decision; route-local `router_replay.enabled: false` is the explicit opt-out
   - `global.stores` groups shared storage-backed services such as `semantic_cache`, `memory`, and `vector_store`

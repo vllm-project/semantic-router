@@ -227,4 +227,46 @@ func TestBuildSelectionContextUsesPinnedSessionIDAndToolLoopFacts(t *testing.T) 
 	if got := selCtx.AgenticSession.ModelContextWindows["model-a"]; got != 8192 {
 		t.Fatalf("expected model context window 8192, got %d", got)
 	}
+	if got := selCtx.AgenticSession.PortableHistoryTokens; got != 1024 {
+		t.Fatalf("expected portable history tokens 1024, got %d", got)
+	}
+	if !selCtx.AgenticSession.ContextPortabilityOK || selCtx.AgenticSession.ContextPortability != 0.5 {
+		t.Fatalf("expected context portability 0.5, got %#v", selCtx.AgenticSession)
+	}
+	if selCtx.AgenticSession.ProviderStateOnly {
+		t.Fatalf("did not expect provider-state-only context: %#v", selCtx.AgenticSession)
+	}
+}
+
+func TestBuildSelectionContextMarksProviderStateOnlyContext(t *testing.T) {
+	router := &OpenAIRouter{}
+	reqCtx := &RequestContext{
+		SessionID:            "responses-session",
+		PreviousModel:        "model-a",
+		PreviousResponseID:   "resp-prev",
+		VSRContextTokenCount: 256,
+	}
+
+	selCtx := router.buildSelectionContext(
+		[]config.ModelRef{{Model: "model-a"}, {Model: "model-b"}},
+		"agentic",
+		"query",
+		nil,
+		"",
+		nil,
+		reqCtx,
+	)
+
+	if selCtx.AgenticSession == nil {
+		t.Fatalf("expected agentic session context")
+	}
+	if !selCtx.AgenticSession.ContextPortabilityOK {
+		t.Fatalf("expected context portability to be known: %#v", selCtx.AgenticSession)
+	}
+	if !selCtx.AgenticSession.ProviderStateOnly {
+		t.Fatalf("expected provider-state-only context: %#v", selCtx.AgenticSession)
+	}
+	if selCtx.AgenticSession.ContextPortability != 0 {
+		t.Fatalf("expected zero context portability, got %.4f", selCtx.AgenticSession.ContextPortability)
+	}
 }

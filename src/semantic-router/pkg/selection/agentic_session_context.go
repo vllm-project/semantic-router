@@ -34,6 +34,11 @@ type AgenticSessionContext struct {
 	HistoryTokens int
 	ContextTokens int
 
+	PortableHistoryTokens int
+	ContextPortability    float64
+	ContextPortabilityOK  bool
+	ProviderStateOnly     bool
+
 	IdleFor   time.Duration
 	IdleKnown bool
 

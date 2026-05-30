@@ -2,9 +2,9 @@
 
 ## Overview
 
-`session_aware` selects one model from a decision's `modelRefs` while respecting agentic multi-turn context. It wraps a base selector such as `hybrid`, then applies a router-owned stay-vs-switch policy for sessions, tool loops, idle timeout, handoff cost, switch history, and prefix-cache cost.
+`session_aware` selects one model from a decision's `modelRefs` while respecting agentic multi-turn context. It wraps a base selector such as `hybrid`, then applies a router-owned stay-vs-switch policy for sessions, tool loops, idle timeout, portable context, handoff cost, switch history, and prefix-cache cost.
 
-Use it when clients send a stable `x-session-id` header or use Response API conversation IDs and you want long-running agent sessions to avoid unnecessary model churn. Provider conversation history is treated as cache; the router keeps its own session memory so model selection can reason about the conversation even when the next turn might move to another backend.
+Use it when clients send a stable `x-session-id` header or use Response API conversation IDs and you want long-running agent sessions to avoid unnecessary model churn. Provider-side continuation state is treated as non-portable; the router only allows model switches when enough portable history is present in the request or router-owned reconstruction path.
 
 It aligns to `config/algorithm/selection/session-aware.yaml`.
 
@@ -12,13 +12,14 @@ It aligns to `config/algorithm/selection/session-aware.yaml`.
 
 - Preserves KV/prefix-cache locality across long-horizon agent sessions.
 - Hard-locks active tool loops to avoid mid-loop model changes.
+- Avoids switching away from provider-side continuations that do not include portable history.
 - Lets idle sessions reselect after the cache is likely cold.
 - Scales switch cost up for expensive/frontier model checkouts.
 - Records `session_policy` in router replay for audit, experiments, and paper/blog analysis.
 
 ## What Problem Does It Solve?
 
-Single-turn routers often pick the best model for the latest message only. In long-running agent loops that can churn models between tool calls, waste prefix-cache locality, and make frontier model checkouts unnecessarily expensive. `session_aware` makes the router aware of session continuity before it decides whether a switch is worth the cost.
+Single-turn routers often pick the best model for the latest message only. In long-running agent loops that can churn models between tool calls, lose provider-side continuation state, waste prefix-cache locality, and make frontier model checkouts unnecessarily expensive. `session_aware` makes the router aware of session continuity before it decides whether a switch is worth the cost.
 
 ## When to Use
 
@@ -49,14 +50,19 @@ routing:
           tool_loop_hard_lock: true
           prefix_cache_weight: 0.20
           switch_history_weight: 0.04
+          context_portability_weight: 0.25
+          min_switch_context_portability: 0.20
+          provider_state_penalty: 0.35
+          provider_state_hard_lock: true
 ```
 
 ## Policy
 
 - Tool loops stay on the previous model while tool calls/results are still active.
-- Non-idle sessions pay a prefix-cache and handoff penalty before switching.
+- Requests that only carry provider-side continuation state, such as `previous_response_id` without portable history, stay on the previous model.
+- Non-idle sessions pay prefix-cache, handoff, and context-portability penalties before switching.
 - Idle sessions can reselect after `idle_timeout_seconds`.
 - Expensive/frontier models increase the prefix-cache penalty, so checkout churn is stricter for higher-cost candidates.
 - Recent switch history increases the cost of another switch, preventing long-horizon agents from bouncing between models.
-- Router replay stores `session_policy`, including base scores, adjusted scores, hard-lock reasons, cache warmth, handoff penalties, and net switch advantage.
+- Router replay stores `session_policy`, including base scores, adjusted scores, hard-lock reasons, cache warmth, context portability, handoff penalties, and net switch advantage.
 - Provider-reported cached prompt tokens are recorded as telemetry and costed with `cached_input_per_1m`; client-facing usage is not rewritten.

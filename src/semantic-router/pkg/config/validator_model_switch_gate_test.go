@@ -60,3 +60,28 @@ var _ = Describe("validateModelSwitchGate", func() {
 		Expect(validateModelSwitchGate(cfg)).To(Succeed())
 	})
 })
+
+var _ = Describe("validateSessionAwareSelectionConfig", func() {
+	It("accepts context portability defaults and explicit policy knobs", func() {
+		cfg := SessionAwareSelectionConfig{
+			ContextPortabilityWeight:    0.25,
+			MinSwitchContextPortability: 0.20,
+			ProviderStatePenalty:        0.35,
+		}
+		Expect(validateSessionAwareSelectionConfig(cfg)).To(Succeed())
+	})
+
+	It("rejects invalid context portability bounds", func() {
+		cfg := SessionAwareSelectionConfig{MinSwitchContextPortability: 1.1}
+		err := validateSessionAwareSelectionConfig(cfg)
+		Expect(err).To(HaveOccurred())
+		Expect(err.Error()).To(ContainSubstring("min_switch_context_portability"))
+	})
+
+	It("rejects negative context portability penalties", func() {
+		cfg := SessionAwareSelectionConfig{ProviderStatePenalty: -0.1}
+		err := validateSessionAwareSelectionConfig(cfg)
+		Expect(err).To(HaveOccurred())
+		Expect(err.Error()).To(ContainSubstring("provider_state_penalty"))
+	})
+})

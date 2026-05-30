@@ -13,37 +13,45 @@ import (
 
 // SessionAwareConfig configures agentic session-aware model selection.
 type SessionAwareConfig struct {
-	FallbackMethod         SelectionMethod
-	IdleTimeoutSeconds     int
-	MinTurnsBeforeSwitch   int
-	SwitchMargin           float64
-	StayBias               float64
-	ToolLoopHardLock       bool
-	ToolLoopStayBias       float64
-	PrefixCacheWeight      float64
-	HandoffPenaltyWeight   float64
-	DefaultHandoffPenalty  float64
-	QualityGapMultiplier   float64
-	MaxCacheCostMultiplier float64
-	SwitchHistoryWeight    float64
+	FallbackMethod              SelectionMethod
+	IdleTimeoutSeconds          int
+	MinTurnsBeforeSwitch        int
+	SwitchMargin                float64
+	StayBias                    float64
+	ToolLoopHardLock            bool
+	ToolLoopStayBias            float64
+	PrefixCacheWeight           float64
+	HandoffPenaltyWeight        float64
+	DefaultHandoffPenalty       float64
+	QualityGapMultiplier        float64
+	MaxCacheCostMultiplier      float64
+	SwitchHistoryWeight         float64
+	ContextPortabilityWeight    float64
+	MinSwitchContextPortability float64
+	ProviderStatePenalty        float64
+	ProviderStateHardLock       bool
 }
 
 // DefaultSessionAwareConfig returns the production-oriented default policy.
 func DefaultSessionAwareConfig() *SessionAwareConfig {
 	return &SessionAwareConfig{
-		FallbackMethod:         MethodHybrid,
-		IdleTimeoutSeconds:     300,
-		MinTurnsBeforeSwitch:   1,
-		SwitchMargin:           0.05,
-		StayBias:               0.10,
-		ToolLoopHardLock:       true,
-		ToolLoopStayBias:       0.35,
-		PrefixCacheWeight:      0.20,
-		HandoffPenaltyWeight:   1.0,
-		DefaultHandoffPenalty:  0.05,
-		QualityGapMultiplier:   1.0,
-		MaxCacheCostMultiplier: 2.5,
-		SwitchHistoryWeight:    0.04,
+		FallbackMethod:              MethodHybrid,
+		IdleTimeoutSeconds:          300,
+		MinTurnsBeforeSwitch:        1,
+		SwitchMargin:                0.05,
+		StayBias:                    0.10,
+		ToolLoopHardLock:            true,
+		ToolLoopStayBias:            0.35,
+		PrefixCacheWeight:           0.20,
+		HandoffPenaltyWeight:        1.0,
+		DefaultHandoffPenalty:       0.05,
+		QualityGapMultiplier:        1.0,
+		MaxCacheCostMultiplier:      2.5,
+		SwitchHistoryWeight:         0.04,
+		ContextPortabilityWeight:    0.25,
+		MinSwitchContextPortability: 0.20,
+		ProviderStatePenalty:        0.35,
+		ProviderStateHardLock:       true,
 	}
 }
 
@@ -81,6 +89,9 @@ func normalizeSessionAwareConfig(cfg SessionAwareConfig) *SessionAwareConfig {
 	cfg.QualityGapMultiplier = defaultPositiveFloat(cfg.QualityGapMultiplier, defaults.QualityGapMultiplier)
 	cfg.MaxCacheCostMultiplier = defaultPositiveFloat(cfg.MaxCacheCostMultiplier, defaults.MaxCacheCostMultiplier)
 	cfg.SwitchHistoryWeight = defaultNonNegativeFloat(cfg.SwitchHistoryWeight, defaults.SwitchHistoryWeight)
+	cfg.ContextPortabilityWeight = defaultNonNegativeFloat(cfg.ContextPortabilityWeight, defaults.ContextPortabilityWeight)
+	cfg.MinSwitchContextPortability = defaultNonNegativeFloat(cfg.MinSwitchContextPortability, defaults.MinSwitchContextPortability)
+	cfg.ProviderStatePenalty = defaultNonNegativeFloat(cfg.ProviderStatePenalty, defaults.ProviderStatePenalty)
 	return &cfg
 }
 
@@ -161,11 +172,9 @@ func (s *SessionAwareSelector) Select(ctx context.Context, selCtx *SelectionCont
 	timeout := secondsDuration(s.config.IdleTimeoutSeconds)
 	idleExpired := session.idleExpired(timeout)
 	trace.IdleExpired = idleExpired
-	if session.ActiveToolLoop && s.config.ToolLoopHardLock {
-		return s.forceCurrent(selCtx, base, current, "hard_lock=tool_loop", trace), nil
-	}
-	if effectiveSessionTurns(session) < s.config.MinTurnsBeforeSwitch && !idleExpired {
-		return s.forceCurrent(selCtx, base, current, "hard_lock=min_turns", trace), nil
+	trace.CacheWarmth = sessionCacheWarmth(session, idleExpired)
+	if reason := s.sessionHardLockReason(session, idleExpired); reason != "" {
+		return s.forceCurrent(selCtx, base, current, reason, trace), nil
 	}
 
 	adjusted, candidateTraces := s.adjustScores(selCtx, base, session, current, idleExpired)
@@ -209,6 +218,19 @@ func effectiveSessionTurns(session *AgenticSessionContext) int {
 		return session.MemoryTurnCount
 	}
 	return session.TurnIndex
+}
+
+func (s *SessionAwareSelector) sessionHardLockReason(session *AgenticSessionContext, idleExpired bool) string {
+	if session.ActiveToolLoop && s.config.ToolLoopHardLock {
+		return "hard_lock=tool_loop"
+	}
+	if s.providerStateHardLock(session) {
+		return "hard_lock=context_not_portable"
+	}
+	if effectiveSessionTurns(session) < s.config.MinTurnsBeforeSwitch && !idleExpired {
+		return "hard_lock=min_turns"
+	}
+	return ""
 }
 
 func (s *SessionAwareSelector) selectFallback(ctx context.Context, selCtx *SelectionContext) (*SelectionResult, error) {
@@ -316,6 +338,13 @@ func (s *SessionAwareSelector) newPolicyTrace(
 	trace.ContinuationMass = sessionContinuationMass(session)
 	trace.CacheWarmth = sessionCacheWarmth(session, idleExpired)
 	trace.CacheWarmthOK = session.CacheWarmthOK
+	trace.PortableHistoryTokens = session.PortableHistoryTokens
+	trace.ContextPortability = sessionContextPortability(session)
+	trace.ContextPortabilityOK = session.ContextPortabilityOK
+	trace.ProviderStateOnly = session.ProviderStateOnly
+	if session.ProviderStateOnly {
+		trace.MissingSignals = append(trace.MissingSignals, "portable_context_history")
+	}
 	if session.MemoryPresent && trace.MemoryTurnCount == 0 {
 		trace.MemoryTurnCount = session.TurnIndex + 1
 	}

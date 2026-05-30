@@ -265,6 +265,10 @@ func (r *OpenAIRouter) buildAgenticSessionContext(
 		idleKnown = true
 	}
 	cacheWarmth, cacheWarmthOK := r.agenticCacheWarmth(reqCtx, previousModel, snapshot, hasMemory, now)
+	portableHistoryTokens, contextPortability, contextPortabilityOK, providerStateOnly := deriveAgenticContextPortability(
+		reqCtx,
+		hasMemory,
+	)
 	facts := reqCtx.VSRConversationFacts
 	activeToolLoop := facts.LastMessageToolResult ||
 		facts.LastMessageRole == "tool" ||
@@ -274,32 +278,36 @@ func (r *OpenAIRouter) buildAgenticSessionContext(
 		phase = selection.AgenticPhaseToolLoop
 	}
 	return &selection.AgenticSessionContext{
-		ID:                  sessionID,
-		UserID:              userID,
-		TurnIndex:           reqCtx.TurnIndex,
-		PreviousModel:       previousModel,
-		PreviousResponseID:  reqCtx.PreviousResponseID,
-		MemoryPresent:       hasMemory,
-		MemoryTurnCount:     snapshot.TurnCount,
-		MemorySwitchCount:   snapshot.SwitchCount,
-		MemoryModelTurnCnts: snapshot.ModelTurns,
-		MemoryPromptTokens:  snapshot.CumulativePromptTokens,
-		MemoryCachedTokens:  snapshot.CumulativeCachedTokens,
-		MemoryOutputTokens:  snapshot.CumulativeCompletionTokens,
-		MemoryCost:          snapshot.CumulativeCost,
-		LastDecisionReason:  snapshot.LastDecisionReason,
-		HistoryTokens:       reqCtx.HistoryTokenCount,
-		ContextTokens:       reqCtx.VSRContextTokenCount,
-		IdleFor:             idleFor,
-		IdleKnown:           idleKnown,
-		CacheWarmth:         cacheWarmth,
-		CacheWarmthOK:       cacheWarmthOK,
-		Phase:               phase,
-		ActiveToolLoop:      activeToolLoop,
-		ToolCallCount:       facts.AssistantToolCallCount,
-		ToolResultCount:     facts.ToolResultCount,
-		ToolDefinitionCnt:   facts.ToolDefinitionCount,
-		ModelContextWindows: r.modelContextWindows(modelRefs),
+		ID:                    sessionID,
+		UserID:                userID,
+		TurnIndex:             reqCtx.TurnIndex,
+		PreviousModel:         previousModel,
+		PreviousResponseID:    reqCtx.PreviousResponseID,
+		MemoryPresent:         hasMemory,
+		MemoryTurnCount:       snapshot.TurnCount,
+		MemorySwitchCount:     snapshot.SwitchCount,
+		MemoryModelTurnCnts:   snapshot.ModelTurns,
+		MemoryPromptTokens:    snapshot.CumulativePromptTokens,
+		MemoryCachedTokens:    snapshot.CumulativeCachedTokens,
+		MemoryOutputTokens:    snapshot.CumulativeCompletionTokens,
+		MemoryCost:            snapshot.CumulativeCost,
+		LastDecisionReason:    snapshot.LastDecisionReason,
+		HistoryTokens:         reqCtx.HistoryTokenCount,
+		ContextTokens:         reqCtx.VSRContextTokenCount,
+		PortableHistoryTokens: portableHistoryTokens,
+		ContextPortability:    contextPortability,
+		ContextPortabilityOK:  contextPortabilityOK,
+		ProviderStateOnly:     providerStateOnly,
+		IdleFor:               idleFor,
+		IdleKnown:             idleKnown,
+		CacheWarmth:           cacheWarmth,
+		CacheWarmthOK:         cacheWarmthOK,
+		Phase:                 phase,
+		ActiveToolLoop:        activeToolLoop,
+		ToolCallCount:         facts.AssistantToolCallCount,
+		ToolResultCount:       facts.ToolResultCount,
+		ToolDefinitionCnt:     facts.ToolDefinitionCount,
+		ModelContextWindows:   r.modelContextWindows(modelRefs),
 	}
 }
 

@@ -300,6 +300,18 @@ func applySessionAwareSelectionConfig(result *selection.SessionAwareConfig, cfg 
 	if cfg.SwitchHistoryWeight != 0 {
 		result.SwitchHistoryWeight = cfg.SwitchHistoryWeight
 	}
+	if cfg.ContextPortabilityWeight != 0 {
+		result.ContextPortabilityWeight = cfg.ContextPortabilityWeight
+	}
+	if cfg.MinSwitchContextPortability != 0 {
+		result.MinSwitchContextPortability = cfg.MinSwitchContextPortability
+	}
+	if cfg.ProviderStatePenalty != 0 {
+		result.ProviderStatePenalty = cfg.ProviderStatePenalty
+	}
+	if cfg.ProviderStateHardLock != nil {
+		result.ProviderStateHardLock = *cfg.ProviderStateHardLock
+	}
 }
 
 func buildMLSelectionConfig(cfg *config.RouterConfig) *selection.MLSelectorConfig {
