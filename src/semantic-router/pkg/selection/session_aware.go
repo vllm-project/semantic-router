@@ -313,7 +313,11 @@ func (s *SessionAwareSelector) newPolicyTrace(
 	trace.ActiveToolLoop = session.ActiveToolLoop
 	trace.IdleKnown = session.IdleKnown
 	trace.IdleForSeconds = session.IdleFor.Seconds()
-	trace.ContinuationMass = sessionContinuationMass(session)
+	continuation := s.continuationEvidence(selCtx, session)
+	trace.ContinuationMass = continuation.Mass
+	trace.RemainingTurnPrior = continuation.RemainingTurnPrior
+	trace.RemainingTurnPriorOK = continuation.RemainingTurnPriorOK
+	trace.RemainingTurnsEstimate = continuation.RemainingTurnsEstimate
 	trace.CacheWarmth = sessionCacheWarmth(session, idleExpired)
 	trace.CacheWarmthOK = session.CacheWarmthOK
 	if session.MemoryPresent && trace.MemoryTurnCount == 0 {

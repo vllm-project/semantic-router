@@ -13,6 +13,7 @@ It aligns to `config/algorithm/selection/session-aware.yaml`.
 - Preserves KV/prefix-cache locality across long-horizon agent sessions.
 - Hard-locks active tool loops to avoid mid-loop model changes.
 - Lets idle sessions reselect after the cache is likely cold.
+- Uses replay-derived remaining-turn priors to be stricter for task families that usually continue for many turns.
 - Scales switch cost up for expensive/frontier model checkouts.
 - Records `session_policy` in router replay for audit, experiments, and paper/blog analysis.
 
@@ -58,5 +59,6 @@ routing:
 - Idle sessions can reselect after `idle_timeout_seconds`.
 - Expensive/frontier models increase the prefix-cache penalty, so checkout churn is stricter for higher-cost candidates.
 - Recent switch history increases the cost of another switch, preventing long-horizon agents from bouncing between models.
+- If lookup tables contain `remaining_turn_prior` for the matched category or decision, that prior lifts continuation mass for early turns and decays as the session advances.
 - Router replay stores `session_policy`, including base scores, adjusted scores, hard-lock reasons, cache warmth, handoff penalties, and net switch advantage.
 - Provider-reported cached prompt tokens are recorded as telemetry and costed with `cached_input_per_1m`; client-facing usage is not rewritten.

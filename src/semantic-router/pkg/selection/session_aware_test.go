@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/selection/lookuptable"
 )
 
 func TestSessionAwareSelectorToolLoopHardLocksCurrentModel(t *testing.T) {
@@ -277,10 +278,73 @@ func TestSessionAwarePrefixPenaltyScalesWithModelCost(t *testing.T) {
 		CacheWarmthOK: true,
 	}
 
-	cheapPenalty := selector.prefixCachePenalty(session, "cheap", "cheap-2", false)
-	frontierPenalty := selector.prefixCachePenalty(session, "frontier", "cheap", false)
+	continuationMass := sessionContinuationMass(session)
+	cheapPenalty := selector.prefixCachePenalty(session, "cheap", "cheap-2", false, continuationMass)
+	frontierPenalty := selector.prefixCachePenalty(session, "frontier", "cheap", false, continuationMass)
 	if frontierPenalty <= cheapPenalty {
 		t.Fatalf("expected frontier switch penalty %.4f > cheap penalty %.4f", frontierPenalty, cheapPenalty)
+	}
+}
+
+func TestSessionAwareRemainingTurnPriorRaisesContinuationMass(t *testing.T) {
+	selector := NewSessionAwareSelector(&SessionAwareConfig{
+		FallbackMethod:         MethodStatic,
+		MinTurnsBeforeSwitch:   0,
+		SwitchMargin:           0,
+		StayBias:               0,
+		PrefixCacheWeight:      0.2,
+		HandoffPenaltyWeight:   0,
+		DefaultHandoffPenalty:  0,
+		QualityGapMultiplier:   1,
+		MaxCacheCostMultiplier: 1,
+	})
+	selector.SetFallbackSelector(stubSessionFallback{
+		result: &SelectionResult{
+			SelectedModel: "frontier",
+			Score:         0.55,
+			Method:        MethodHybrid,
+			AllScores: map[string]float64{
+				"current":  0.50,
+				"frontier": 0.55,
+			},
+		},
+	})
+	table := lookuptable.NewMemoryStorage()
+	if err := table.Set(lookuptable.RemainingTurnPriorKey("coding"), lookuptable.Entry{Value: 6}); err != nil {
+		t.Fatalf("set remaining turn prior: %v", err)
+	}
+	selector.SetLookupTable(table)
+
+	result, err := selector.Select(context.Background(), &SelectionContext{
+		CategoryName:    "coding",
+		CandidateModels: []config.ModelRef{{Model: "current"}, {Model: "frontier"}},
+		AgenticSession: &AgenticSessionContext{
+			ID:            "sess-prior",
+			TurnIndex:     0,
+			PreviousModel: "current",
+			HistoryTokens: 0,
+			ContextTokens: 8192,
+			CacheWarmth:   1,
+			CacheWarmthOK: true,
+		},
+	})
+	if err != nil {
+		t.Fatalf("Select returned error: %v", err)
+	}
+	if result.SelectedModel != "current" {
+		t.Fatalf("expected long remaining-turn prior to preserve current model, got %q", result.SelectedModel)
+	}
+	if result.SessionPolicy == nil {
+		t.Fatal("expected session policy trace")
+	}
+	if !result.SessionPolicy.RemainingTurnPriorOK || result.SessionPolicy.RemainingTurnPrior != 6 {
+		t.Fatalf("expected remaining-turn prior in trace, got %#v", result.SessionPolicy)
+	}
+	if result.SessionPolicy.RemainingTurnsEstimate != 6 {
+		t.Fatalf("expected first-turn remaining estimate 6, got %.4f", result.SessionPolicy.RemainingTurnsEstimate)
+	}
+	if result.SessionPolicy.ContinuationMass < 0.74 {
+		t.Fatalf("expected prior to lift continuation mass, got %.4f", result.SessionPolicy.ContinuationMass)
 	}
 }
 

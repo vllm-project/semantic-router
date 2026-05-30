@@ -9,6 +9,7 @@ func (s *SessionAwareSelector) adjustScores(
 	current string,
 	idleExpired bool,
 ) (map[string]float64, map[string]SessionCandidateTrace) {
+	continuation := s.continuationEvidence(selCtx, session)
 	baseScores := cloneScores(base.AllScores)
 	ensureScoresForCandidates(&SelectionResult{AllScores: baseScores, SelectedModel: base.SelectedModel, Score: base.Score}, selCtx.CandidateModels)
 	currentBaseScore := baseScores[current]
@@ -17,6 +18,7 @@ func (s *SessionAwareSelector) adjustScores(
 		session,
 		current,
 		idleExpired,
+		continuation.Mass,
 		SessionCandidateTrace{
 			Current:    true,
 			BaseScore:  currentBaseScore,
@@ -40,7 +42,7 @@ func (s *SessionAwareSelector) adjustScores(
 			continue
 		}
 
-		score, trace = s.scoreSwitchCandidate(selCtx, session, current, model, score, currentBaseScore, currentAdjustedScore, idleExpired, trace)
+		score, trace = s.scoreSwitchCandidate(selCtx, session, current, model, score, currentBaseScore, currentAdjustedScore, idleExpired, continuation.Mass, trace)
 		adjusted[model] = score
 		traces[model] = trace
 	}
@@ -52,12 +54,13 @@ func (s *SessionAwareSelector) scoreCurrentCandidate(
 	session *AgenticSessionContext,
 	current string,
 	idleExpired bool,
+	continuationMass float64,
 	trace SessionCandidateTrace,
 ) (float64, SessionCandidateTrace) {
 	prefixBenefit := 0.0
 	if !idleExpired {
 		score += s.config.StayBias
-		prefixBenefit = s.prefixCacheBenefit(session, current)
+		prefixBenefit = s.prefixCacheBenefit(session, current, continuationMass)
 		score += prefixBenefit
 	}
 	if session.ActiveToolLoop {
@@ -77,11 +80,12 @@ func (s *SessionAwareSelector) scoreSwitchCandidate(
 	currentBaseScore float64,
 	currentAdjustedScore float64,
 	idleExpired bool,
+	continuationMass float64,
 	trace SessionCandidateTrace,
 ) (float64, SessionCandidateTrace) {
 	qualityGap := s.lookupQualityGap(selCtx, current, model)
 	handoffPenalty := s.lookupHandoffPenalty(current, model)
-	prefixPenalty := s.prefixCachePenalty(session, current, model, idleExpired)
+	prefixPenalty := s.prefixCachePenalty(session, current, model, idleExpired, continuationMass)
 	frontierMultiplier := s.cacheCostMultiplier(current, model)
 	toolPenalty := 0.0
 	if session.ActiveToolLoop {
@@ -118,8 +122,12 @@ func (s *SessionAwareSelector) scoreSwitchCandidate(
 	return score, trace
 }
 
-func (s *SessionAwareSelector) prefixCacheBenefit(session *AgenticSessionContext, current string) float64 {
-	return s.config.PrefixCacheWeight * sessionContinuationMass(session) * sessionCacheWarmth(session, false) * s.cacheCostMultiplier(current, current)
+func (s *SessionAwareSelector) prefixCacheBenefit(
+	session *AgenticSessionContext,
+	current string,
+	continuationMass float64,
+) float64 {
+	return s.config.PrefixCacheWeight * continuationMass * sessionCacheWarmth(session, false) * s.cacheCostMultiplier(current, current)
 }
 
 func (s *SessionAwareSelector) prefixCachePenalty(
@@ -127,12 +135,13 @@ func (s *SessionAwareSelector) prefixCachePenalty(
 	current string,
 	candidate string,
 	idleExpired bool,
+	continuationMass float64,
 ) float64 {
 	if session == nil || current == "" || candidate == "" || current == candidate {
 		return 0
 	}
 	return s.config.PrefixCacheWeight *
-		sessionContinuationMass(session) *
+		continuationMass *
 		sessionCacheWarmth(session, idleExpired) *
 		s.cacheCostMultiplier(current, candidate)
 }
@@ -186,6 +195,50 @@ func (s *SessionAwareSelector) lookupQualityGap(selCtx *SelectionContext, curren
 		}
 	}
 	return 0
+}
+
+type continuationEvidence struct {
+	Mass                   float64
+	RemainingTurnPrior     float64
+	RemainingTurnPriorOK   bool
+	RemainingTurnsEstimate float64
+}
+
+func (s *SessionAwareSelector) continuationEvidence(selCtx *SelectionContext, session *AgenticSessionContext) continuationEvidence {
+	base := sessionContinuationMass(session)
+	prior, ok := s.lookupRemainingTurnPrior(selCtx)
+	if !ok {
+		return continuationEvidence{Mass: base}
+	}
+	remaining := prior - float64(effectiveSessionTurns(session))
+	if remaining < 0 {
+		remaining = 0
+	}
+	priorMass := clampF(remaining/8.0, 0, 1)
+	return continuationEvidence{
+		Mass:                   math.Max(base, priorMass),
+		RemainingTurnPrior:     prior,
+		RemainingTurnPriorOK:   true,
+		RemainingTurnsEstimate: remaining,
+	}
+}
+
+func (s *SessionAwareSelector) lookupRemainingTurnPrior(selCtx *SelectionContext) (float64, bool) {
+	if s.lookupTable == nil || selCtx == nil {
+		return 0, false
+	}
+	for _, family := range []string{selCtx.CategoryName, selCtx.DecisionName} {
+		if family == "" {
+			continue
+		}
+		if prior, ok := s.lookupTable.RemainingTurnPrior(family); ok {
+			if prior < 0 {
+				prior = 0
+			}
+			return prior, true
+		}
+	}
+	return 0, false
 }
 
 func (s *SessionAwareSelector) lookupHandoffPenalty(current, candidate string) float64 {
