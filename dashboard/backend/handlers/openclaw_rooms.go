@@ -10,7 +10,6 @@ import (
 	"sort"
 	"strconv"
 	"strings"
-	"sync"
 	"time"
 )
 
@@ -296,33 +295,6 @@ func cloneRoomEventWithMessage(event clawRoomStreamEvent) clawRoomStreamEvent {
 	return event
 }
 
-func (h *OpenClawHandler) roomClientMap(roomID string) *sync.Map {
-	if existing, ok := h.roomSSEClients.Load(roomID); ok {
-		return existing.(*sync.Map)
-	}
-	clients := &sync.Map{}
-	actual, _ := h.roomSSEClients.LoadOrStore(roomID, clients)
-	return actual.(*sync.Map)
-}
-
-func (h *OpenClawHandler) publishRoomEvent(roomID string, event clawRoomStreamEvent) {
-	event.RoomID = roomID
-	h.roomSSELastEvent.Store(roomID, cloneRoomEventWithMessage(event))
-
-	clients := h.roomClientMap(roomID)
-	clients.Range(func(_, value any) bool {
-		ch, ok := value.(chan clawRoomStreamEvent)
-		if !ok {
-			return true
-		}
-		select {
-		case ch <- cloneRoomEventWithMessage(event):
-		default:
-		}
-		return true
-	})
-}
-
 func writeSSE(w http.ResponseWriter, flusher http.Flusher, eventName string, payload any) {
 	data, err := json.Marshal(payload)
 	if err != nil {
@@ -345,14 +317,7 @@ func (h *OpenClawHandler) appendRoomMessage(roomID string, message ClawRoomMessa
 		return err
 	}
 
-	// Broadcast to WebSocket clients (also handles SSE backward compatibility)
-	h.publishRoomWSEvent(roomID, WSOutboundMessage{
-		Type:    WSTypeNewMessage,
-		Message: &message,
-	})
-
-	// Keep SSE event for backward compatibility
-	h.publishRoomEvent(roomID, clawRoomStreamEvent{Type: "message", Message: &message})
+	h.publishRoomCollaborationEvent(roomID, newMessageCollaborationEvent(message))
 	return nil
 }
 
@@ -751,7 +716,7 @@ func (h *OpenClawHandler) handleRoomStream(w http.ResponseWriter, r *http.Reques
 
 	clientID := generateRoomEntityID("room-client")
 	clientChan := make(chan clawRoomStreamEvent, 16)
-	clients := h.roomClientMap(roomID)
+	clients := h.roomSSEClientMap(roomID)
 	clients.Store(clientID, clientChan)
 	defer func() {
 		clients.Delete(clientID)

@@ -38,14 +38,17 @@ type WSInboundMessage struct {
 
 // WSOutboundMessage represents a message from server to client
 type WSOutboundMessage struct {
-	Type      string           `json:"type"`
-	RoomID    string           `json:"roomId,omitempty"`
-	Message   *ClawRoomMessage `json:"message,omitempty"`
-	MessageID string           `json:"messageId,omitempty"`
-	Chunk     string           `json:"chunk,omitempty"`
-	Status    string           `json:"status,omitempty"`
-	Error     string           `json:"error,omitempty"`
-	Timestamp string           `json:"timestamp,omitempty"`
+	Type            string           `json:"type"`
+	RoomID          string           `json:"roomId,omitempty"`
+	Message         *ClawRoomMessage `json:"message,omitempty"`
+	MessageID       string           `json:"messageId,omitempty"`
+	Chunk           string           `json:"chunk,omitempty"`
+	Status          string           `json:"status,omitempty"`
+	Error           string           `json:"error,omitempty"`
+	ParticipantType string           `json:"participantType,omitempty"`
+	ParticipantID   string           `json:"participantId,omitempty"`
+	SessionUser     string           `json:"sessionUser,omitempty"`
+	Timestamp       string           `json:"timestamp,omitempty"`
 }
 
 // WSClient represents a WebSocket client connection
@@ -67,59 +70,36 @@ var wsUpgrader = websocket.Upgrader{
 	},
 }
 
-// roomWSClients stores WebSocket clients per room
-// Key: roomID, Value: *sync.Map (clientID -> *WSClient)
-func (h *OpenClawHandler) roomWSClientMap(roomID string) *sync.Map {
-	if existing, ok := h.roomSSEClients.Load(roomID); ok {
-		return existing.(*sync.Map)
+func wsOutboundFromLastRoomEvent(roomID string, event clawRoomStreamEvent) (WSOutboundMessage, bool) {
+	if event.Message == nil {
+		return WSOutboundMessage{}, false
 	}
-	clients := &sync.Map{}
-	actual, _ := h.roomSSEClients.LoadOrStore(roomID, clients)
-	return actual.(*sync.Map)
+	copyMsg := *event.Message
+	return WSOutboundMessage{
+		Type:    WSTypeNewMessage,
+		RoomID:  roomID,
+		Message: &copyMsg,
+	}, true
 }
 
-// publishRoomWSEvent broadcasts an event to all WebSocket clients in a room
-func (h *OpenClawHandler) publishRoomWSEvent(roomID string, event WSOutboundMessage) {
-	event.RoomID = roomID
-	event.Timestamp = time.Now().UTC().Format(time.RFC3339)
-
-	clients := h.roomWSClientMap(roomID)
-	clients.Range(func(_, value any) bool {
-		client, ok := value.(*WSClient)
-		if !ok {
-			// Backward compatibility: might be SSE channel
-			if ch, ok := value.(chan clawRoomStreamEvent); ok {
-				// Convert to SSE event
-				sseEvent := clawRoomStreamEvent{
-					Type:   event.Type,
-					RoomID: roomID,
-				}
-				if event.Message != nil {
-					sseEvent.Message = event.Message
-				}
-				select {
-				case ch <- sseEvent:
-				default:
-				}
-			}
-			return true
-		}
-
-		client.closeMu.Lock()
-		if client.closed {
-			client.closeMu.Unlock()
-			return true
-		}
-		client.closeMu.Unlock()
-
-		select {
-		case client.send <- event:
-		default:
-			// Client buffer full, skip
-			log.Printf("openclaw: WS client %s buffer full, skipping event", client.clientID)
-		}
-		return true
-	})
+func (h *OpenClawHandler) replayLastRoomEventToClient(client *WSClient, roomID string) {
+	lastAny, ok := h.roomSSELastEvent.Load(roomID)
+	if !ok {
+		return
+	}
+	lastEvent, ok := lastAny.(clawRoomStreamEvent)
+	if !ok {
+		return
+	}
+	replay, ok := wsOutboundFromLastRoomEvent(roomID, lastEvent)
+	if !ok {
+		return
+	}
+	select {
+	case client.send <- replay:
+	default:
+		log.Printf("openclaw: WS client %s buffer full, skipping room replay", client.clientID)
+	}
 }
 
 // handleRoomWebSocket handles WebSocket connections for a room
@@ -147,7 +127,7 @@ func (h *OpenClawHandler) handleRoomWebSocket(w http.ResponseWriter, r *http.Req
 	clientID := generateRoomEntityID("ws-client")
 	client := &WSClient{
 		conn:     conn,
-		send:     make(chan WSOutboundMessage, 32),
+		send:     make(chan WSOutboundMessage, 128),
 		roomID:   roomID,
 		clientID: clientID,
 		handler:  h,
@@ -164,6 +144,7 @@ func (h *OpenClawHandler) handleRoomWebSocket(w http.ResponseWriter, r *http.Req
 		Type:   WSTypeConnected,
 		RoomID: roomID,
 	}
+	h.replayLastRoomEventToClient(client, roomID)
 
 	// Start read/write goroutines
 	go client.writePump()
@@ -336,19 +317,7 @@ func (h *OpenClawHandler) appendRoomMessageWS(roomID string, message ClawRoomMes
 	}
 	h.mu.Unlock()
 
-	// Broadcast via WebSocket
-	h.publishRoomWSEvent(roomID, WSOutboundMessage{
-		Type:    WSTypeNewMessage,
-		Message: &message,
-	})
-
-	// Also publish to SSE for backward compatibility
-	h.roomSSELastEvent.Store(roomID, clawRoomStreamEvent{
-		Type:    "message",
-		RoomID:  roomID,
-		Message: &message,
-	})
-
+	h.publishRoomCollaborationEvent(roomID, newMessageCollaborationEvent(message))
 	return nil
 }
 
