@@ -12,10 +12,6 @@ The stable shared contract represented by `AGENTS.md`, `docs/agent/*`, `tools/ag
 
 The project-level change archetype selected first for a task. Primary skills decide the default surfaces and validation posture.
 
-## Fragment Skill
-
-A narrower skill that supports a primary skill with subsystem-specific implementation guidance.
-
 ## Support Skill
 
 A skill that does not drive task selection but provides close-out or cross-cutting guidance.
@@ -24,13 +20,9 @@ A skill that does not drive task selection but provides close-out or cross-cutti
 
 A stable project-level contract area such as `signal_runtime`, `python_cli_runtime`, or `harness_exec`. Surfaces connect changed paths, skills, and validation expectations.
 
-## ADR
-
-An architecture decision record: a durable, versioned record of a long-lived harness decision, its context, and its consequences.
-
 ## Execution Plan
 
-A canonical, loop-scoped file for long-horizon execution work. Execution plans guide active multi-step work; they are not the same thing as long-lived architectural decisions.
+A canonical, loop-scoped file for long-horizon execution work. Execution plans guide active multi-step work.
 
 ## Technical Debt Register
 

@@ -494,7 +494,8 @@ class TestScoreComputation:
 
 class TestConfigMutation:
     def test_apply_threshold_fix(self, dsl_config):
-        from tuning.engine import Fix, apply_fix_to_config
+        from tuning.engine import Fix
+        from tuning.engine_selection import apply_fix_to_config
 
         fix = Fix(
             fix_type="threshold",
@@ -512,7 +513,8 @@ class TestConfigMutation:
         assert lt_out["lt"] == 0.19  # partition consistency
 
     def test_apply_structural_fix(self):
-        from tuning.engine import StructuralFix, apply_structural_fix
+        from tuning.engine import StructuralFix
+        from tuning.engine_selection import apply_structural_fix
 
         cfg = {
             "routing": {
@@ -547,7 +549,8 @@ class TestConfigMutation:
     def test_apply_fix_preserves_original(self, dsl_config):
         import copy
 
-        from tuning.engine import Fix, apply_fix_to_config
+        from tuning.engine import Fix
+        from tuning.engine_selection import apply_fix_to_config
 
         original = copy.deepcopy(SAMPLE_DSL_CONFIG)
         fix = Fix(

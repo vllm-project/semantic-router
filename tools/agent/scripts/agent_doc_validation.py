@@ -5,10 +5,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from agent_governance_doc_support import (
-    validate_adr_inventory_and_template,
-    validate_plan_inventory_and_template,
-)
+from agent_governance_doc_support import validate_plan_inventory_and_template
 from agent_support import (
     ABSOLUTE_MARKDOWN_LINK_PATTERN,
     AGENT_GOVERNANCE_DOC,
@@ -22,11 +19,11 @@ MAX_AGENTS_ENTRY_LINES = 90
 TEMPORARY_WORKING_NOTES = {"TASKS.md", "CI_LOOP.md"}
 REQUIRED_DOC_SECTIONS = {
     "docs/agent/README.md": [
-        "## Start Here",
-        "## Governance and Structure",
-        "## Task-Specific Guidance",
+        "## Maintainer",
+        "## Contributor",
+        "## Coding Agent",
+        "## Governance",
         "## Executable Contract",
-        "## Contributor Interface",
     ],
     "docs/agent/context-management.md": [
         "## Why This Exists",
@@ -54,14 +51,17 @@ REQUIRED_DOC_SECTIONS = {
         "## What Does Not Belong in a Debt Entry",
         "## Debt Entry Versus Other Governance Files",
         "## Debt Entry Template",
-        "## Current Debt Entries",
+        "## Open Debt By Owner Plan",
     ],
     "docs/agent/plans/README.md": [
+        "## Maintainer Model",
         "## When to Use an Execution Plan",
         "## What Belongs in an Execution Plan",
         "## What Does Not Belong in an Execution Plan",
         "## Execution Plan Versus Other Governance Files",
         "## Execution Plan Template",
+        "## Current Release Plans",
+        "## Current Debt Plans",
         "## Current Execution Plans",
     ],
     "docs/agent/local-rules.md": [
@@ -69,18 +69,18 @@ REQUIRED_DOC_SECTIONS = {
         "## Policy",
     ],
     "docs/agent/skill-catalog.md": [
+        "## Audience Model",
         "## Primary Skills",
-        "## Fragment Skills",
         "## Support Skills",
         "## Source of Truth",
     ],
-    "docs/agent/adr/README.md": [
-        "## When to Create or Update an ADR",
-        "## What Belongs in an ADR",
-        "## What Does Not Belong in an ADR",
-        "## ADR Versus Other Governance Files",
-        "## ADR Template",
-        "## Current ADRs",
+    "docs/agent/maintainer-ops.md": [
+        "## Why This Exists",
+        "## Local Board",
+        "## Issue Groups",
+        "## PR Groups",
+        "## Release Issue Creation",
+        "## Apply Policy",
     ],
 }
 LOCAL_AGENT_REQUIRED_SECTIONS = [
@@ -132,7 +132,6 @@ def validate_agent_harness_layers(
     )
     validate_doc_governance(repo_manifest, errors)
     validate_required_doc_sections(errors)
-    validate_adr_inventory_and_template(repo_manifest, errors)
     validate_plan_inventory_and_template(repo_manifest, errors)
     validate_tech_debt_inventory_and_template(repo_manifest, errors)
 
@@ -233,11 +232,6 @@ def validate_doc_index_coverage(repo_manifest: dict, errors: list[str]) -> None:
     readme_text = AGENT_INDEX_DOC.read_text(encoding="utf-8")
     for doc_path in repo_manifest.get("docs", []):
         if not doc_path.startswith("docs/agent/") or doc_path == "docs/agent/README.md":
-            continue
-        if (
-            doc_path.startswith("docs/agent/adr/")
-            and doc_path != "docs/agent/adr/README.md"
-        ):
             continue
         if (
             doc_path.startswith("docs/agent/plans/")

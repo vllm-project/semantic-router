@@ -14,8 +14,8 @@ This document is the landing page for durable gaps between the repository's desi
 
 - [tech-debt/README.md](tech-debt/README.md)
   - inventory, template, and entrypoint for editing tracked debt
-- `docs/agent/tech-debt/*.md`
-  - the only source of truth for per-item debt status, scope, summary, evidence, and exit criteria
+- `docs/agent/tech-debt/td-*.md`
+  - current open debt entries only
 
 ## Policy
 
@@ -23,12 +23,13 @@ This document is the landing page for durable gaps between the repository's desi
 - Use stable IDs (`TD001`, `TD002`, ...) so PRs and follow-up work can point to the same debt item.
 - Do not duplicate per-item status, scope, or summary in this landing page.
 - Do not use this file for one-off branch tasks or temporary debugging notes.
+- Every open TD must name an owner plan and release relevance.
 
 ## How to Retire Debt
 
 - Close an item only when the underlying architectural gap is materially reduced, not just renamed.
 - When a debt item is retired:
   - update the relevant canonical docs and executable rules first
-  - update the matching debt entry file and the inventory in `docs/agent/tech-debt/README.md`
-  - mark the entry as closed or remove it from the inventory when appropriate
-  - reference the retiring PR or change in the entry if useful
+  - remove the entry from `docs/agent/tech-debt/README.md`
+  - remove the retired file from the current tree
+  - rely on git history for the closed record

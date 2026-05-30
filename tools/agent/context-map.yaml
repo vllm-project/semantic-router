@@ -1,177 +1,173 @@
 version: 1
-
 defaults:
   start_here:
-    - path: AGENTS.md
-      reason: Short harness entrypoint and canonical command index.
-    - path: docs/agent/README.md
-      reason: Canonical docs index and task-first navigation entry.
-    - path: docs/agent/context-management.md
-      reason: Progressive disclosure model and context-pack policy for this repository.
+  - path: AGENTS.md
+    reason: Short harness entrypoint and canonical command index.
+  - path: docs/agent/README.md
+    reason: Canonical docs index and task-first navigation entry.
+  - path: docs/agent/context-management.md
+    reason: Progressive disclosure model and context-pack policy for this repository.
   resume_refs:
-    - path: docs/agent/plans/README.md
-      reason: Use when the work needs a resumable execution loop across sessions or contributors.
-
+  - path: docs/agent/plans/README.md
+    reason: Use when the work needs a resumable execution loop across sessions or contributors.
 rules:
   repo-docs:
-    - path: docs/agent/testing-strategy.md
-      reason: Validation ladder for docs, examples, and contributor-facing text changes.
+  - path: docs/agent/testing-strategy.md
+    reason: Validation ladder, E2E profile selection, and acceptance policy.
   agent_text:
-    - path: docs/agent/governance.md
-      reason: Harness doc layering and source-of-truth policy for shared contract changes.
+  - path: docs/agent/governance.md
+    reason: Harness doc layering and source-of-truth policy for shared contract changes.
   agent_exec:
-    - path: docs/agent/testing-strategy.md
-      reason: Validation ladder for executable harness changes.
-
+  - path: docs/agent/testing-strategy.md
+    reason: Validation ladder, E2E profile selection, and acceptance policy.
 surfaces:
   router_config_contract:
-    - path: docs/agent/playbooks/go-router.md
-      reason: Router playbook for config and runtime contract changes.
-    - path: docs/agent/module-boundaries.md
-      reason: Router boundary and hotspot guidance.
+  - path: docs/agent/module-boundaries.md
+    reason: Subsystem boundary and capability-placement guidance for the impacted surface.
   signal_runtime:
-    - path: docs/agent/playbooks/go-router.md
-      reason: Router playbook for signal-layer changes.
+  - path: docs/agent/module-boundaries.md
+    reason: Subsystem boundary and capability-placement guidance for the impacted surface.
   decision_logic:
-    - path: docs/agent/playbooks/go-router.md
-      reason: Router playbook for decision-layer changes.
+  - path: docs/agent/module-boundaries.md
+    reason: Subsystem boundary and capability-placement guidance for the impacted surface.
   routing_policy:
-    - path: docs/agent/playbooks/go-router.md
-      reason: Router playbook for decision and model-selection policy changes.
-    - path: docs/agent/module-boundaries.md
-      reason: Policy-layer boundaries between signal extraction, decision logic, and downstream model choice.
+  - path: docs/agent/module-boundaries.md
+    reason: Subsystem boundary and capability-placement guidance for the impacted surface.
   algorithm_selection:
-    - path: docs/agent/playbooks/go-router.md
-      reason: Router playbook for model-selection changes.
+  - path: docs/agent/module-boundaries.md
+    reason: Subsystem boundary and capability-placement guidance for the impacted surface.
   plugin_runtime:
-    - path: docs/agent/playbooks/go-router.md
-      reason: Router playbook for plugin runtime changes.
+  - path: docs/agent/module-boundaries.md
+    reason: Subsystem boundary and capability-placement guidance for the impacted surface.
   router_service_platform:
-    - path: docs/agent/playbooks/go-router.md
-      reason: Router playbook for service-layer API, storage, provider, and runtime support changes.
-    - path: docs/agent/module-boundaries.md
-      reason: Router service-layer boundaries and hotspot guidance.
+  - path: docs/agent/module-boundaries.md
+    reason: Subsystem boundary and capability-placement guidance for the impacted surface.
   native_binding:
-    - path: docs/agent/playbooks/rust-bindings.md
-      reason: Native binding workflow and validation expectations.
+  - path: docs/agent/module-boundaries.md
+    reason: Subsystem boundary and capability-placement guidance for the impacted surface.
   response_headers:
-    - path: docs/agent/playbooks/go-router.md
-      reason: Header contracts flow through router runtime behavior and testing.
+  - path: docs/agent/module-boundaries.md
+    reason: Subsystem boundary and capability-placement guidance for the impacted surface.
   python_cli_schema:
-    - path: docs/agent/playbooks/vllm-sr-cli-docker.md
-      reason: CLI schema, translation, and validation workflow.
+  - path: docs/agent/environments.md
+    reason: Canonical local build, serve, smoke, and environment behavior.
   python_cli_runtime:
-    - path: docs/agent/playbooks/vllm-sr-cli-docker.md
-      reason: CLI runtime and canonical local image workflow.
+  - path: docs/agent/environments.md
+    reason: Canonical local build, serve, smoke, and environment behavior.
   dashboard_platform:
-    - path: docs/agent/repo-map.md
-      reason: Dashboard subsystem entrypoints and ownership.
-    - path: docs/agent/module-boundaries.md
-      reason: Dashboard frontend and backend boundary rules.
+  - path: docs/agent/repo-map.md
+    reason: Dashboard subsystem entrypoints and ownership.
+  - path: docs/agent/module-boundaries.md
+    reason: Subsystem boundary and capability-placement guidance for the impacted surface.
   dashboard_config_ui:
-    - path: docs/agent/repo-map.md
-      reason: Dashboard subsystem entrypoints and hotspots.
-    - path: docs/agent/module-boundaries.md
-      reason: Dashboard page and component boundary rules.
+  - path: docs/agent/repo-map.md
+    reason: Dashboard subsystem entrypoints and hotspots.
+  - path: docs/agent/module-boundaries.md
+    reason: Subsystem boundary and capability-placement guidance for the impacted surface.
   dashboard_console_backend:
-    - path: docs/agent/repo-map.md
-      reason: Dashboard backend subsystem entrypoints and ownership.
+  - path: docs/agent/repo-map.md
+    reason: Dashboard backend subsystem entrypoints and ownership.
   topology_visualization:
-    - path: docs/agent/repo-map.md
-      reason: Topology feature entrypoints and related backend seam.
+  - path: docs/agent/repo-map.md
+    reason: Topology feature entrypoints and related backend seam.
   playground_reveal:
-    - path: docs/agent/repo-map.md
-      reason: Playground and reveal entrypoints for user-visible routing metadata.
+  - path: docs/agent/repo-map.md
+    reason: Playground and reveal entrypoints for user-visible routing metadata.
   dsl_crd:
-    - path: docs/agent/module-boundaries.md
-      reason: DSL and Kubernetes translation boundary guidance.
+  - path: docs/agent/module-boundaries.md
+    reason: Subsystem boundary and capability-placement guidance for the impacted surface.
   k8s_operator:
-    - path: docs/agent/module-boundaries.md
-      reason: Operator control-plane seams and affected subsystem boundaries.
+  - path: docs/agent/module-boundaries.md
+    reason: Subsystem boundary and capability-placement guidance for the impacted surface.
   deployment_profile_stack:
-    - path: docs/agent/playbooks/e2e-selection.md
-      reason: Deployment profiles are validated through the affected E2E profile map and execution policy.
+  - path: docs/agent/testing-strategy.md
+    reason: Validation ladder, E2E profile selection, and acceptance policy.
   k8s_platform:
-    - path: docs/agent/module-boundaries.md
-      reason: Kubernetes-facing control-plane and translation boundary guidance.
-    - path: docs/agent/playbooks/e2e-selection.md
-      reason: Kubernetes platform changes are validated through the affected profile map and execution policy.
+  - path: docs/agent/module-boundaries.md
+    reason: Subsystem boundary and capability-placement guidance for the impacted surface.
+  - path: docs/agent/testing-strategy.md
+    reason: Validation ladder, E2E profile selection, and acceptance policy.
   fleet_sim_runtime:
-    - path: src/fleet-sim/AGENTS.md
-      reason: Fleet simulator local rules and maintained package boundaries.
-    - path: docs/agent/repo-map.md
-      reason: Fleet simulator subsystem entrypoints and ownership.
+  - path: src/fleet-sim/AGENTS.md
+    reason: Fleet simulator local rules and maintained package boundaries.
+  - path: docs/agent/repo-map.md
+    reason: Fleet simulator subsystem entrypoints and ownership.
   training_stack:
-    - path: docs/agent/repo-map.md
-      reason: Training subsystem entrypoints and ownership.
+  - path: docs/agent/repo-map.md
+    reason: Training subsystem entrypoints and ownership.
   docs_examples:
-    - path: docs/agent/change-surfaces.md
-      reason: Surface ownership and rule mapping for docs or example changes.
+  - path: docs/agent/change-surfaces.md
+    reason: Surface ownership and rule mapping for docs or example changes.
   harness_docs:
-    - path: docs/agent/local-rules.md
-      reason: Index of hotspot supplements that can narrow active context.
+  - path: docs/agent/local-rules.md
+    reason: Index of hotspot supplements that can narrow active context.
   harness_exec:
-    - path: tools/agent/repo-manifest.yaml
-      reason: Canonical executable inventory and doc governance metadata.
-    - path: tools/agent/task-matrix.yaml
-      reason: Task classification and fast-test mapping.
-    - path: tools/agent/skill-registry.yaml
-      reason: Surface ownership and skill routing.
-    - path: tools/agent/e2e-profile-map.yaml
-      reason: E2E profile and CI fanout mapping for harness changes.
-    - path: tools/agent/scripts/agent_validation.py
-      reason: Validation orchestrator for the shared harness contract.
-    - path: tools/agent/scripts/agent_doc_validation.py
-      reason: Canonical doc and governance validation rules.
+  - path: tools/agent/repo-manifest.yaml
+    reason: Canonical executable inventory and doc governance metadata.
+  - path: tools/agent/task-matrix.yaml
+    reason: Task classification and fast-test mapping.
+  - path: tools/agent/skill-registry.yaml
+    reason: Surface ownership and skill routing.
+  - path: tools/agent/e2e-profile-map.yaml
+    reason: E2E profile and CI fanout mapping for harness changes.
+  - path: tools/agent/scripts/agent_validation.py
+    reason: Validation orchestrator for the shared harness contract.
+  - path: tools/agent/scripts/agent_doc_validation.py
+    reason: Canonical doc and governance validation rules.
   contributor_interface:
-    - path: README.md
-      reason: Top-level contributor entrypoint that should stay aligned with the harness.
-    - path: CONTRIBUTING.md
-      reason: Contributor-facing wrapper around the harness workflow.
-    - path: .github/PULL_REQUEST_TEMPLATE.md
-      reason: Canonical PR title, body, checklist, and signoff expectations for contributor-facing changes.
-    - path: .github/ISSUE_TEMPLATE/001_feature_request.yaml
-      reason: Canonical feature-request intake fields and default labels for issue creation.
-    - path: .github/ISSUE_TEMPLATE/002_bug_report.yaml
-      reason: Canonical bug-report intake fields and default labels for issue creation.
-    - path: .prowlabels.yaml
-      reason: Canonical maintainer label taxonomy for issue or PR triage.
+  - path: README.md
+    reason: Top-level contributor entrypoint that should stay aligned with the harness.
+  - path: CONTRIBUTING.md
+    reason: Contributor-facing wrapper around the harness workflow.
+  - path: .github/PULL_REQUEST_TEMPLATE.md
+    reason: Canonical PR title, body, checklist, and signoff expectations for contributor-facing changes.
+  - path: .github/ISSUE_TEMPLATE/001_feature_request.yaml
+    reason: Canonical feature-request intake fields and default labels for issue creation.
+  - path: .github/ISSUE_TEMPLATE/002_bug_report.yaml
+    reason: Canonical bug-report intake fields and default labels for issue creation.
+  - path: .prowlabels.yaml
+    reason: Canonical maintainer label taxonomy for issue or PR triage.
+  maintainer_ops:
+  - path: docs/agent/maintainer-ops.md
+    reason: Maintainer release, issue, PR, stale-work, and daily board workflow.
+  - path: tools/agent/maintainer-policy.yaml
+    reason: Machine-readable maintainer board grouping, labels, and stale thresholds.
+  - path: tools/agent/scripts/maintainer_board.py
+    reason: Generates the local issue and PR operating board under .agent-harness/maintainer.
   local_smoke:
-    - path: docs/agent/environments.md
-      reason: Local build, serve, and smoke behavior by environment.
+  - path: docs/agent/environments.md
+    reason: Canonical local build, serve, smoke, and environment behavior.
   local_e2e:
-    - path: docs/agent/playbooks/e2e-selection.md
-      reason: Affected local E2E profile selection and execution policy.
+  - path: docs/agent/testing-strategy.md
+    reason: Validation ladder, E2E profile selection, and acceptance policy.
   ci_e2e:
-    - path: docs/agent/playbooks/e2e-selection.md
-      reason: CI E2E profile fanout and targeted-versus-full selection rules.
+  - path: docs/agent/testing-strategy.md
+    reason: Validation ladder, E2E profile selection, and acceptance policy.
   cli_install:
-    - path: docs/agent/playbooks/vllm-sr-cli-docker.md
-      reason: CLI install workflow and session-scoped directory conventions.
-
+  - path: docs/agent/environments.md
+    reason: Canonical local build, serve, smoke, and environment behavior.
 envs:
   cpu-local:
-    - path: docs/agent/environments.md
-      reason: Canonical CPU-local workflow and local smoke path.
+  - path: docs/agent/environments.md
+    reason: Canonical local build, serve, smoke, and environment behavior.
   amd-local:
-    - path: docs/agent/environments.md
-      reason: Canonical local environment inventory and AMD entrypoint.
-    - path: docs/agent/amd-local.md
-      reason: AMD-specific workflow details and real-model deployment references.
+  - path: docs/agent/environments.md
+    reason: Canonical local build, serve, smoke, and environment behavior.
+  - path: docs/agent/amd-local.md
+    reason: AMD-specific workflow details and real-model deployment references.
   ci-k8s:
-    - path: docs/agent/playbooks/e2e-selection.md
-      reason: Canonical Kubernetes E2E execution path.
-
+  - path: docs/agent/testing-strategy.md
+    reason: Validation ladder, E2E profile selection, and acceptance policy.
 skills:
   harness-contract-change:
     resume_refs:
-      - path: docs/agent/plans/pl-0001-harness-roadmap.md
-        reason: Canonical execution plan for multi-loop harness refactors.
+    - path: docs/agent/plans/pl-0032-architecture-scorecard-ratchet.md
+      reason: Current non-release debt and harness cleanup execution plan.
+  maintainer-release-ops:
+    resume_refs:
+    - path: docs/agent/plans/pl-0033-v0-3-themis-release-closure.md
+      reason: Current release plan that owns milestone-bound maintainer work.
   cross-stack-bugfix:
     resume_refs:
-      - path: docs/agent/tech-debt-register.md
-        reason: Record remaining cross-surface architecture gaps if they stay open.
-  claude-code-install:
-    resume_refs:
-      - path: docs/agent/playbooks/vllm-sr-cli-docker.md
-        reason: CLI install workflow and session-scoped directory conventions.
+    - path: docs/agent/tech-debt-register.md
+      reason: Record remaining cross-surface architecture gaps if they stay open.

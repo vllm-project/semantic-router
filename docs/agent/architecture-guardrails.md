@@ -13,7 +13,7 @@
 - Prefer deep modules with narrow entrypoints over shallow managers with broad shared state
 - Keep backend bootstrap and request-time execution on separate seams
 - Keep shared storage lifecycle policy in one owner; let domain packages own schema and query semantics
-- Keep schema declaration, compatibility migration, and semantic validation on separate seams; canonical field inventories should have one clear owner
+- Keep schema declaration, schema migration, and semantic validation on separate seams; canonical field inventories should have one clear owner
 - Keep transport translation, semantic evaluation, and request enrichment on separate seams; request pipelines should compose phases instead of hiding them in one filter
 - Keep response normalization, streaming finalization, replay or cache persistence, and response-side warning shaping on separate seams
 - Keep dashboard backend handler transport, config persistence/deploy control, and runtime status collection on separate seams
@@ -79,9 +79,9 @@
 - shallow wrapper layers that simply re-express the same backend bootstrap logic in multiple packages
 - leaking test or docs dependencies into production code
 
-## Legacy Hotspots
+## Structural Exceptions
 
-These files are existing debt, not acceptable targets for new growth:
+These files are existing structural debt, not acceptable targets for new growth:
 
 - `src/semantic-router/pkg/config/config.go`
 - `src/semantic-router/pkg/config/validator.go`
@@ -114,7 +114,7 @@ When touching one of these files:
 - the structural gate applies a ratchet here: these files may still be over global limits, but they must not grow, and touched code should move toward the standard shape
 - for config hotspots, keep schema families, canonical conversion, plugin-family contracts, and semantic validation on separate seams
 - for classifier hotspots, keep model discovery, family-specific mapping or backend logic, and request-time orchestration on separate seams
-- for CLI orchestration hotspots, keep top-level command routing and user-facing flow in the main orchestration seams but move docker/runtime helpers, container wiring, and support types into adjacent modules; keep compatibility barrels such as `docker_cli.py` thin
+- for CLI orchestration hotspots, keep top-level command routing and user-facing flow in the main orchestration seams but move docker/runtime helpers, container wiring, and support types into adjacent modules; keep adapter barrels such as `docker_cli.py` thin
 - for extproc response hotspots, keep provider normalization, streaming finalization, replay/cache helpers, and response warning mutations on separate seams
 - for fleet-sim optimizer hotspots, keep analytical kernels, DES verification, power/flex helpers, and package exports on separate seams
 - for operator hotspots, keep CRD schema, admission validation, controller-side canonical translation, and generated/sample upkeep on separate seams

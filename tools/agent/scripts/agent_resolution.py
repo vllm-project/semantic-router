@@ -27,7 +27,6 @@ from agent_models import (
 )
 from agent_support import (
     REPO_ROOT,
-    build_skill_lookup,
     load_manifests,
     resolve_env_data,
 )
@@ -55,7 +54,6 @@ def resolve_environment(env_name: str) -> EnvironmentResolution:
         build_target=env_data["build_target"],
         serve_command=env_data["serve_command"],
         smoke_config=env_data.get("smoke_config"),
-        local_dev_fragment=env_data.get("local_dev_fragment"),
         local_env=env_data.get("local_env", False),
     )
 
@@ -127,33 +125,9 @@ def resolve_primary_skill(changed_files: list[str]) -> dict:
     raise KeyError("Primary skill 'cross-stack-bugfix' is missing from registry")
 
 
-def resolve_skill(changed_files: list[str], env_name: str | None) -> SkillResolution:
-    _, _, _, _, skill_registry = load_manifests()
-    skill_lookup = build_skill_lookup(skill_registry)
+def resolve_skill(changed_files: list[str]) -> SkillResolution:
     primary = resolve_primary_skill(changed_files)
-    context = resolve_context(changed_files)
     impacted_surfaces = resolve_impacted_surfaces(changed_files)
-    fragment_names = resolve_active_fragments(
-        primary,
-        impacted_surfaces,
-        skill_lookup,
-    )
-
-    if env_name:
-        env = resolve_environment(env_name)
-        should_add_local_fragment = env.local_env and (
-            context.requires_local_smoke or "local_smoke" in impacted_surfaces
-        )
-        if (
-            should_add_local_fragment
-            and env.local_dev_fragment
-            and env.local_dev_fragment not in fragment_names
-        ):
-            fragment_names.append(env.local_dev_fragment)
-
-    fragment_paths = [
-        skill_lookup[name]["path"] for name in fragment_names if name in skill_lookup
-    ]
     conditional_hit = [
         surface
         for surface in primary.get("conditional_surfaces", [])
@@ -167,8 +141,6 @@ def resolve_skill(changed_files: list[str], env_name: str | None) -> SkillResolu
     return SkillResolution(
         primary_skill=primary["name"],
         primary_skill_path=primary["path"],
-        fragment_skills=unique_preserve_order(fragment_names),
-        fragment_skill_paths=unique_preserve_order(fragment_paths),
         impacted_surfaces=impacted_surfaces,
         required_surfaces=primary.get("required_surfaces", []),
         conditional_surfaces_hit=conditional_hit,
@@ -176,32 +148,6 @@ def resolve_skill(changed_files: list[str], env_name: str | None) -> SkillResolu
         stop_conditions=primary.get("stop_conditions", []),
         acceptance_criteria=primary.get("acceptance_criteria", []),
     )
-
-
-def resolve_active_fragments(
-    primary: dict,
-    impacted_surfaces: list[str],
-    skill_lookup: dict[str, dict],
-) -> list[str]:
-    active_fragments: list[str] = []
-    impacted_surface_set = set(impacted_surfaces)
-    if primary.get("auto_surface_fragments"):
-        for fragment_name, fragment in skill_lookup.items():
-            if fragment.get("category") != "fragments":
-                continue
-            owned_surfaces = set(fragment.get("owned_surfaces", []))
-            if not owned_surfaces or owned_surfaces.intersection(impacted_surface_set):
-                active_fragments.append(fragment_name)
-        return unique_preserve_order(active_fragments)
-
-    for fragment_name in primary.get("fragments", []):
-        fragment = skill_lookup.get(fragment_name)
-        if fragment is None:
-            continue
-        owned_surfaces = set(fragment.get("owned_surfaces", []))
-        if not owned_surfaces or owned_surfaces.intersection(impacted_surface_set):
-            active_fragments.append(fragment_name)
-    return unique_preserve_order(active_fragments)
 
 
 def build_validation_commands(
@@ -221,7 +167,7 @@ def build_validation_commands(
 
 def build_report(changed_files: list[str], env_name: str) -> AgentReport:
     env = resolve_environment(env_name)
-    skill = resolve_skill(changed_files, env_name)
+    skill = resolve_skill(changed_files)
     context = resolve_context(changed_files)
     context_pack = build_context_pack(changed_files, env, skill, context)
     commands = build_validation_commands(env, context)

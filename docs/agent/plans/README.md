@@ -1,54 +1,53 @@
 # Execution Plans
 
-This directory stores canonical execution plans for long-horizon work that needs repeated loop execution across multiple sessions or contributors.
+Execution plans are the repo's current execution ledger. They are not an
+archive and they are not a second architecture handbook.
+
+## Maintainer Model
+
+- Every active release has exactly one release plan.
+- Non-release architecture debt is tracked by exactly one current debt plan.
+- Work that is not owned by a current plan is not current work.
+- Plan files in this directory describe only current work.
 
 ## When to Use an Execution Plan
 
-- Use an execution plan when the work cannot be completed reliably in one pass and needs a durable file-backed loop.
-- Use an execution plan when an agent should be able to resume from the repo alone, without relying on chat memory.
-- Use an execution plan when the work has ordered tasks, loop-level progress, or a durable completion boundary.
-
-Typical examples:
-
-- multi-step harness refactors
-- large architectural cleanup programs
-- staged subsystem migrations
-- extended testing or coverage rationalization loops
+- Use a release plan when maintainer-approved work belongs to a named release or
+  milestone.
+- Use the debt plan when architecture debt matters but is not release-bound.
+- Use a plan only when the work needs multiple resumable loops or multiple
+  contributors.
 
 ## What Belongs in an Execution Plan
 
-- the long-horizon goal
-- scope boundaries
+- release or debt objective
+- scope boundaries and non-goals
+- linked technical debt entries and related governance docs
+- issue or milestone ownership where applicable
+- stable task IDs
+- current loop state and next action
 - exit criteria
-- a stable task list with IDs
-- the current loop state
-- brief decision log notes for the loop
-- links to related ADRs or technical debt items
 
 ## What Does Not Belong in an Execution Plan
 
-- one-off branch scratch notes
-- private contributor reminders
-- durable architectural decisions that belong in ADRs
-- unresolved architecture gaps that belong in the debt register
-- local generated report or handoff artifacts under `.agent-harness/`
+- completed workstreams
+- branch-local notes
+- one-off bug triage
+- unresolved architecture gaps that belong in TD entries
+- daily GitHub issue or PR status; that belongs under `.agent-harness/maintainer/`
 
 ## Execution Plan Versus Other Governance Files
 
-- `docs/agent/plans/*.md`
-  - track active long-horizon execution loops
-- `docs/agent/adr/*.md`
-  - record durable decisions
-- `docs/agent/tech-debt-register.md` and `docs/agent/tech-debt/*.md`
-  - record the landing page plus detailed entries for durable unresolved gaps
-- `docs/agent/README.md`
-  - indexes the canonical harness
+- `docs/agent/plans/*.md`: current execution state.
+- `docs/agent/tech-debt/*.md`: unresolved architecture gaps.
+- `.agent-harness/maintainer/*`: local, gitignored issue and PR operating
+  board.
 
 Rule of thumb:
 
-- if the repo is still executing, use a plan
-- if the repo has decided, use an ADR
-- if the repo knows the gap but has not retired it, use the debt register
+- if the repo is executing it now, use a plan
+- if the repo knows the gap, use TD
+- if the state changes daily, keep it out of git
 
 ## Execution Plan Template
 
@@ -59,54 +58,24 @@ Every execution plan should include:
 - `## Scope`
 - `## Exit Criteria`
 - `## Task List`
-- `## Current Loop`
-- `## Decision Log`
-- `## Follow-up Debt / ADR Links`
+- `## Next Action`
+- `## Operating Rules`
+- `## Related Docs`
 
-Tasks should use stable IDs and explicit status markers such as:
+Tasks use stable IDs and checkbox status:
 
 - `- [ ]`
 - `- [x]`
 
-Prefer one active execution plan per workstream.
+## Current Release Plans
 
-Use file names such as `pl-0001-example.md`.
-Keep the numeric index unique within `docs/agent/plans/`.
+- [pl-0033-v0-3-themis-release-closure.md](pl-0033-v0-3-themis-release-closure.md)
+
+## Current Debt Plans
+
+- [pl-0032-architecture-scorecard-ratchet.md](pl-0032-architecture-scorecard-ratchet.md)
 
 ## Current Execution Plans
 
-- [pl-0006-design-elegance-ratchet.md](pl-0006-design-elegance-ratchet.md)
-- [pl-0009-fleet-sim-optimizer-and-operator-config-boundary-ratchet.md](pl-0009-fleet-sim-optimizer-and-operator-config-boundary-ratchet.md)
-- [pl-0010-extproc-response-and-dashboard-frontend-boundary-ratchet.md](pl-0010-extproc-response-and-dashboard-frontend-boundary-ratchet.md)
-- [pl-0011-runtime-and-dashboard-state-durability-and-telemetry-ratchet.md](pl-0011-runtime-and-dashboard-state-durability-and-telemetry-ratchet.md)
-- [pl-0012-dsl-conflict-free-routing-workstream.md](pl-0012-dsl-conflict-free-routing-workstream.md)
-- [pl-0015-agent-report-local-artifact-loop.md](pl-0015-agent-report-local-artifact-loop.md)
-- [pl-0018-generic-embedding-kb-workstream.md](pl-0018-generic-embedding-kb-workstream.md)
-- [pl-0021-local-runtime-three-image-rollout.md](pl-0021-local-runtime-three-image-rollout.md)
-- [pl-0022-dev-integration-consolidation-loop.md](pl-0022-dev-integration-consolidation-loop.md)
-- [pl-0023-dashboard-dsl-natural-language-mode-loop.md](pl-0023-dashboard-dsl-natural-language-mode-loop.md)
-- [pl-0024-balance-recipe-simplification-loop.md](pl-0024-balance-recipe-simplification-loop.md)
-- [pl-0025-prototype-aware-embedding-backed-signal-scoring-loop.md](pl-0025-prototype-aware-embedding-backed-signal-scoring-loop.md)
-- [pl-0030-session-aware-model-switch-workstream.md](pl-0030-session-aware-model-switch-workstream.md)
-- [pl-0031-router-api-vectorstore-harness-ratchet.md](pl-0031-router-api-vectorstore-harness-ratchet.md)
+- [pl-0033-v0-3-themis-release-closure.md](pl-0033-v0-3-themis-release-closure.md)
 - [pl-0032-architecture-scorecard-ratchet.md](pl-0032-architecture-scorecard-ratchet.md)
-
-## Completed Execution Plans
-
-- [pl-0001-harness-roadmap.md](pl-0001-harness-roadmap.md)
-- [pl-0002-e2e-rationalization-roadmap.md](pl-0002-e2e-rationalization-roadmap.md)
-- [pl-0003-v0-3-config-contract-rollout.md](pl-0003-v0-3-config-contract-rollout.md)
-- [pl-0004-fleet-sim-migration.md](pl-0004-fleet-sim-migration.md)
-- [pl-0005-skill-taxonomy-refresh.md](pl-0005-skill-taxonomy-refresh.md)
-- [pl-0007-hotspot-boundary-ratchet.md](pl-0007-hotspot-boundary-ratchet.md)
-- [pl-0008-dashboard-backend-and-go-config-boundary-ratchet.md](pl-0008-dashboard-backend-and-go-config-boundary-ratchet.md)
-- [pl-0013-openclaw-vsr-install-import-workstream.md](pl-0013-openclaw-vsr-install-import-workstream.md)
-- [pl-0014-structure-signal-family-implementation.md](pl-0014-structure-signal-family-implementation.md)
-- [pl-0016-harness-context-and-pr-parity-simplification.md](pl-0016-harness-context-and-pr-parity-simplification.md)
-- [pl-0017-taxonomy-classifier-platform-loop.md](pl-0017-taxonomy-classifier-platform-loop.md)
-- [pl-0019-wizmap-knowledge-map-integration.md](pl-0019-wizmap-knowledge-map-integration.md)
-- [pl-0020-local-runtime-topology-separation.md](pl-0020-local-runtime-topology-separation.md)
-- [pl-0026-model-runtime-lifecycle-orchestration-loop.md](pl-0026-model-runtime-lifecycle-orchestration-loop.md)
-- [pl-0027-router-runtime-composition-root-convergence-loop.md](pl-0027-router-runtime-composition-root-convergence-loop.md)
-- [pl-0028-knowledge-base-seed-and-steady-state-convergence-loop.md](pl-0028-knowledge-base-seed-and-steady-state-convergence-loop.md)
-- [pl-0029-control-plane-contract-boundary-ratchet.md](pl-0029-control-plane-contract-boundary-ratchet.md)

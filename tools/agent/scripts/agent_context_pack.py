@@ -95,10 +95,6 @@ def build_context_pack(
         "context-map:defaults.start_here",
     )
     add_skill_refs(builder, skill.primary_skill, skill.primary_skill_path, skill_lookup)
-    for fragment_name, fragment_path in zip(
-        skill.fragment_skills, skill.fragment_skill_paths, strict=False
-    ):
-        add_skill_refs(builder, fragment_name, fragment_path, skill_lookup)
 
     for rule_name in context.matched_rules:
         add_context_map_refs(

@@ -14,7 +14,7 @@ description: Implements end-to-end plugin changes spanning router config, post-d
 
 ## Workflow
 
-1. Read change surfaces, module boundaries, and Go router playbook for plugin context
+1. Read change surfaces and module boundaries for plugin context
 2. Modify plugin config schema, execution semantics, or chain behavior
 3. Run `make agent-report ENV=cpu CHANGED_FILES="..."` to identify impacted surfaces
 4. Run `make agent-ci-gate CHANGED_FILES="..."` to validate all constraints
@@ -29,7 +29,7 @@ description: Implements end-to-end plugin changes spanning router config, post-d
 
 - [docs/agent/change-surfaces.md](../../../../docs/agent/change-surfaces.md)
 - [docs/agent/module-boundaries.md](../../../../docs/agent/module-boundaries.md)
-- [docs/agent/playbooks/go-router.md](../../../../docs/agent/playbooks/go-router.md)
+- [docs/agent/testing-strategy.md](../../../../docs/agent/testing-strategy.md)
 
 ## Standard Commands
 

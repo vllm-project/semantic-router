@@ -23,7 +23,7 @@ description: Synchronizes config representations across router config, Python CL
 ## Gotchas
 
 - Do not update the router config contract without also checking CLI and dashboard config serialization in the same change.
-- If defaults, field names, or compatibility policy change, make the migration posture explicit or record the intentional gap as indexed debt.
+- If defaults, field names, or migration policy change, make the migration posture explicit or record the intentional gap as indexed debt.
 
 ## Must Read
 

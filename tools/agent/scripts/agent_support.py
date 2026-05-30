@@ -131,7 +131,7 @@ def collect_manifest_globs(
 
 def iter_registry_skills(skill_registry: dict) -> list[dict]:
     skills: list[dict] = []
-    for category in ("primary", "fragments", "support", "legacy_reference"):
+    for category in ("primary", "support"):
         for skill in skill_registry["skills"].get(category, []):
             enriched = dict(skill)
             enriched["category"] = category

@@ -15,7 +15,6 @@ from agent_support import (
     AGENT_DIR,
     REPO_ROOT,
     append_missing_make_target,
-    build_skill_lookup,
     collect_make_targets,
     collect_manifest_globs,
     load_context_map,
@@ -31,7 +30,6 @@ VALID_EXECUTION_PLAN_POLICIES = {"none", "long_horizon", "always"}
 def validate_supported_envs(
     repo_manifest: dict, skill_registry: dict, make_targets: set[str], errors: list[str]
 ) -> None:
-    skill_lookup = build_skill_lookup(skill_registry)
     for env_name, env_data in repo_manifest["supported_envs"].items():
         for key in ("build_target", "serve_command"):
             append_missing_make_target(
@@ -39,13 +37,12 @@ def validate_supported_envs(
             )
         if not env_data.get("local_env", False):
             continue
-        validate_local_env(env_name, env_data, skill_lookup, errors)
+        validate_local_env(env_name, env_data, errors)
 
 
 def validate_local_env(
     env_name: str,
     env_data: dict,
-    skill_lookup: dict[str, dict],
     errors: list[str],
 ) -> None:
     smoke_config = env_data.get("smoke_config")
@@ -53,12 +50,6 @@ def validate_local_env(
         errors.append(f"{env_name} is missing smoke_config")
     elif not (REPO_ROOT / smoke_config).exists():
         errors.append(f"{env_name} references missing smoke_config '{smoke_config}'")
-
-    fragment = env_data.get("local_dev_fragment")
-    if not fragment:
-        errors.append(f"{env_name} is missing local_dev_fragment")
-    elif fragment not in skill_lookup:
-        errors.append(f"{env_name} references unknown fragment skill '{fragment}'")
 
     for reference_key in ("deployment_reference", "example_config"):
         reference_path = env_data.get(reference_key)

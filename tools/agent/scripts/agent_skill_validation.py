@@ -24,13 +24,6 @@ SKILL_REQUIRED_SECTIONS = {
         "## Gotchas",
         "## Acceptance",
     ],
-    "fragments": [
-        "## Trigger",
-        "## Workflow",
-        "## Must Read",
-        "## Standard Commands",
-        "## Acceptance",
-    ],
     "support": [
         "## Trigger",
         "## Workflow",
@@ -39,26 +32,15 @@ SKILL_REQUIRED_SECTIONS = {
         "## Gotchas",
         "## Acceptance",
     ],
-    "legacy_reference": [
-        "## Trigger",
-        "## Workflow",
-        "## Must Read",
-        "## Standard Commands",
-        "## Acceptance",
-    ],
 }
 SKILL_FRONTMATTER_PATTERN = re.compile(r"\A---\n(.*?)\n---\n", re.DOTALL)
 SKILL_CATEGORY_FRONTMATTER = {
     "primary": "primary",
-    "fragments": "fragment",
     "support": "support",
-    "legacy_reference": "legacy_reference",
 }
 MAX_MUST_READ_LINKS_BY_CATEGORY = {
     "primary": 3,
-    "fragments": 3,
     "support": 4,
-    "legacy_reference": 4,
 }
 
 DEFERRED_MUST_READ_PATHS = {
@@ -152,8 +134,6 @@ def validate_skill_definition(
 
     if category == "primary":
         validate_primary_skill(skill, skill_lookup, skill_registry, errors)
-    elif category == "fragments":
-        validate_fragment_skill(skill, skill_registry, errors)
     elif category == "support" and not skill.get("acceptance_criteria"):
         errors.append(f"Support skill '{skill_name}' is missing acceptance_criteria")
 
@@ -287,15 +267,6 @@ def validate_primary_skill(
     priority = skill.get("priority")
     if not isinstance(priority, int):
         errors.append(f"Primary skill '{skill_name}' is missing integer priority")
-    auto_surface_fragments = skill.get("auto_surface_fragments")
-    if auto_surface_fragments not in (None, True, False):
-        errors.append(
-            f"Primary skill '{skill_name}' has non-boolean auto_surface_fragments"
-        )
-    if not skill.get("fragments") and not auto_surface_fragments:
-        errors.append(
-            f"Primary skill '{skill_name}' has no fragment refs or auto-surface fragment resolution"
-        )
     if not skill.get("required_surfaces"):
         errors.append(f"Primary skill '{skill_name}' has no required_surfaces")
     if not skill.get("stop_conditions"):
@@ -304,30 +275,6 @@ def validate_primary_skill(
         errors.append(f"Primary skill '{skill_name}' has no acceptance_criteria")
     if not skill.get("selector_paths") and skill_name != "cross-stack-bugfix":
         errors.append(f"Primary skill '{skill_name}' has no selector_paths")
-    for fragment in skill.get("fragments", []):
-        fragment_skill = skill_lookup.get(fragment)
-        if fragment_skill is None:
-            errors.append(
-                f"Primary skill '{skill_name}' references unknown fragment '{fragment}'"
-            )
-            continue
-        if fragment_skill["category"] != "fragments":
-            errors.append(
-                f"Primary skill '{skill_name}' references non-fragment skill '{fragment}'"
-            )
-    validate_surface_refs(skill_name, skill, skill_registry, errors)
-
-
-def validate_fragment_skill(
-    skill: dict, skill_registry: dict, errors: list[str]
-) -> None:
-    skill_name = skill["name"]
-    if not skill.get("owned_surfaces"):
-        errors.append(f"Fragment skill '{skill_name}' has no owned_surfaces")
-    if not skill.get("stop_conditions"):
-        errors.append(f"Fragment skill '{skill_name}' has no stop_conditions")
-    if not skill.get("acceptance_criteria"):
-        errors.append(f"Fragment skill '{skill_name}' has no acceptance_criteria")
     validate_surface_refs(skill_name, skill, skill_registry, errors)
 
 

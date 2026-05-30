@@ -15,7 +15,7 @@ from typing import Any
 
 import yaml
 
-from . import engine
+from . import engine, engine_selection
 from .client import RouterClient
 from .probes import load_probes
 
@@ -135,9 +135,9 @@ class TuningLoop:
             dsl = engine.load_dsl_config(cfg_raw)
 
             failures = [r for r in results if not r["correct"]]
-            diagnoses = [engine.diagnose_probe(r, dsl) for r in failures]
+            diagnoses = [engine_selection.diagnose_probe(r, dsl) for r in failures]
 
-            fix = engine.select_fix(
+            fix = engine_selection.select_fix(
                 diagnoses,
                 results,
                 dsl,
@@ -244,11 +244,11 @@ class TuningLoop:
 
     def _apply_fix(self, fix, cfg_raw, dsl):
         if isinstance(fix, engine.StructuralFix):
-            updated = engine.apply_structural_fix(cfg_raw, fix)
+            updated = engine_selection.apply_structural_fix(cfg_raw, fix)
             cfg_raw.update(updated)
             print(f"  Applied structural fix: {fix.description}")
         elif isinstance(fix, engine.Fix):
-            updated = engine.apply_fix_to_config(cfg_raw, fix, dsl)
+            updated = engine_selection.apply_fix_to_config(cfg_raw, fix, dsl)
             cfg_raw.update(updated)
             print(f"  Applied parametric fix: {fix.explanation}")
 

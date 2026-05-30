@@ -14,7 +14,7 @@ description: Modifies routing policy after signal extraction, including matched-
 
 ## Workflow
 
-1. Read change surfaces, module boundaries, and the Go router playbook for routing-policy context
+1. Read change surfaces and module boundaries for routing-policy context
 2. Modify decision predicates, downstream model selection, or matched-decision looper behavior
 3. Run `make agent-report ENV=cpu CHANGED_FILES="..."` to identify impacted surfaces
 4. Run `make agent-ci-gate CHANGED_FILES="..."` to validate all affected constraints
@@ -30,7 +30,7 @@ description: Modifies routing policy after signal extraction, including matched-
 
 - [docs/agent/change-surfaces.md](../../../../docs/agent/change-surfaces.md)
 - [docs/agent/module-boundaries.md](../../../../docs/agent/module-boundaries.md)
-- [docs/agent/playbooks/go-router.md](../../../../docs/agent/playbooks/go-router.md)
+- [docs/agent/testing-strategy.md](../../../../docs/agent/testing-strategy.md)
 
 ## Standard Commands
 

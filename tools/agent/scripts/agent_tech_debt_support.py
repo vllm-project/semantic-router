@@ -14,6 +14,8 @@ TECH_DEBT_FILENAME_PATTERN = re.compile(r"^td-(\d{3})-[a-z0-9-]+\.md$")
 TECH_DEBT_HEADING_PREFIX = "# TD"
 TECH_DEBT_ENTRY_REQUIRED_SECTIONS = [
     "## Status",
+    "## Owner Plan",
+    "## Release Relevance",
     "## Scope",
     "## Summary",
     "## Evidence",
@@ -43,8 +45,10 @@ def collect_open_tech_debt_items() -> list[str]:
             continue
         item_id = str(entry.get("id", "")).strip()
         title = str(entry.get("title", "")).strip()
+        owner_plan = str(entry.get("owner_plan", "")).strip()
         if item_id and title:
-            items.append(f"{item_id}: {title}")
+            suffix = f" [{owner_plan}]" if owner_plan else ""
+            items.append(f"{item_id}: {title}{suffix}")
     return items
 
 
@@ -57,6 +61,8 @@ def parse_tech_debt_entry(path: Path) -> dict[str, str | Path]:
         "id": item_id,
         "title": title,
         "status": first_markdown_section_value(text, "## Status"),
+        "owner_plan": first_markdown_section_value(text, "## Owner Plan"),
+        "release_relevance": first_markdown_section_value(text, "## Release Relevance"),
         "scope": first_markdown_section_value(text, "## Scope"),
     }
 

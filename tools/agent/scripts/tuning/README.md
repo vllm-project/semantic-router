@@ -61,9 +61,8 @@ tuning/
     └── calibration_verification.json   # Expected output for Case Study 2
 ```
 
-`engine.py` and `engine_selection.py` form the analytical core. All public
-symbols are re-exported from `engine.py` for backward compatibility, so
-existing code using `from tuning.engine import select_fix` continues to work.
+`engine.py` owns the core trace, scoring, and fix data structures.
+`engine_selection.py` owns diagnosis, fix selection, and config mutation.
 
 ## Scenario plugins
 
@@ -155,11 +154,13 @@ python3 -m tuning.cli tuning.scenarios.my_scenario:MyScenario --config ...
 3. Write a probes file (`my_scenario.probes.yaml`):
 
 ```yaml
-probes:
-  - id: example_probe
-    query: "What is the capital of France?"
+decisions:
+  - id: standard_route
     expected_decision: standard_route
-    tags: [baseline]
+    variants:
+      - id: capital_france
+        query: "What is the capital of France?"
+        tags: [baseline]
 ```
 
 ### Optional overrides

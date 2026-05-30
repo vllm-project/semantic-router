@@ -647,16 +647,3 @@ def check_regression_weight(
     fix.regressions = regressions
     fix.net_improvement = severity_gain - severity_loss
     return fix
-
-
-# ---------------------------------------------------------------------------
-# Re-exports from engine_selection for backward compatibility.
-# Callers can use ``from tuning.engine import select_fix`` etc.
-# ---------------------------------------------------------------------------
-from .engine_selection import (
-    analyze_priority_conflict,
-    apply_fix_to_config,
-    apply_structural_fix,
-    diagnose_probe,
-    select_fix,
-)
