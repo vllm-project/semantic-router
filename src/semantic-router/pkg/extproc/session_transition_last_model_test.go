@@ -2,6 +2,7 @@ package extproc
 
 import (
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -73,4 +74,66 @@ func TestChatCompletionsModelContinuityAcrossTurns(t *testing.T) {
 
 	require.Equal(t, turn1.SessionID, turn2.SessionID, "session must be stable across turns")
 	assert.Equal(t, "model-a", turn2.PreviousModel)
+}
+
+func TestRecordSessionTurn_PinnedSessionWithoutUserRecordsRouterUsage(t *testing.T) {
+	sessiontelemetry.ResetForTesting()
+	sessiontelemetry.ResetLastModelForTesting()
+	t.Cleanup(sessiontelemetry.ResetForTesting)
+	t.Cleanup(sessiontelemetry.ResetLastModelForTesting)
+
+	ctx := &RequestContext{
+		RequestID:              "req-pinned-usage",
+		RequestModel:           "frontier-model",
+		SessionID:              "pinned-agent-session",
+		Headers:                map[string]string{"x-session-id": "pinned-agent-session"},
+		ChatCompletionMessages: []ChatCompletionMessage{{Role: "user", Content: "continue the task"}},
+	}
+	recordSessionTurn(
+		ctx,
+		responseUsageMetrics{promptTokens: 1000, cachedPromptTokens: 400, completionTokens: 100},
+		sessiontelemetry.TurnPricing{
+			Currency:         "USD",
+			PromptPer1M:      10,
+			CachedInputPer1M: 1,
+			CompletionPer1M:  20,
+		},
+	)
+
+	snapshot, ok := sessiontelemetry.GetRouterSessionSnapshot("pinned-agent-session", time.Now())
+	require.True(t, ok, "expected router-owned session memory for pinned session")
+	assert.Equal(t, "frontier-model", snapshot.CurrentModel)
+	assert.Equal(t, int64(1000), snapshot.CumulativePromptTokens)
+	assert.Equal(t, int64(400), snapshot.CumulativeCachedTokens)
+	assert.Equal(t, int64(100), snapshot.CumulativeCompletionTokens)
+	assert.InDelta(t, 0.0084, snapshot.CumulativeCost, 0.0000001)
+
+	lastModel, ok := sessiontelemetry.GetLastModel("pinned-agent-session")
+	require.True(t, ok, "expected last-model continuity for pinned session")
+	assert.Equal(t, "frontier-model", lastModel)
+}
+
+func TestRecordSessionTurn_UserDerivedChatDoesNotDoubleCountRouterUsage(t *testing.T) {
+	sessiontelemetry.ResetForTesting()
+	t.Cleanup(sessiontelemetry.ResetForTesting)
+
+	messages := []ChatCompletionMessage{{Role: "user", Content: "hello there"}}
+	ctx := &RequestContext{
+		RequestID:              "req-user-derived",
+		RequestModel:           "small-model",
+		Headers:                map[string]string{"x-authz-user-id": "user-7"},
+		ChatCompletionMessages: messages,
+	}
+	populateSessionTransitionFields(ctx)
+	recordSessionTurn(
+		ctx,
+		responseUsageMetrics{promptTokens: 200, cachedPromptTokens: 50, completionTokens: 30},
+		sessiontelemetry.TurnPricing{},
+	)
+
+	snapshot, ok := sessiontelemetry.GetRouterSessionSnapshot(ctx.SessionID, time.Now())
+	require.True(t, ok, "expected router-owned session memory for user-derived chat")
+	assert.Equal(t, int64(200), snapshot.CumulativePromptTokens)
+	assert.Equal(t, int64(50), snapshot.CumulativeCachedTokens)
+	assert.Equal(t, int64(30), snapshot.CumulativeCompletionTokens)
 }
