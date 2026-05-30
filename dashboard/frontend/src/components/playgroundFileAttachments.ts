@@ -1,4 +1,4 @@
-export const PLAYGROUND_MAX_ATTACHMENT_BYTES = 10 * 1024 * 1024
+const PLAYGROUND_MAX_ATTACHMENT_BYTES = 10 * 1024 * 1024
 
 export interface PlaygroundAttachment {
   id: string
@@ -25,34 +25,18 @@ export const formatPlaygroundFileSize = (bytes: number): string => {
   return `${(bytes / (1024 * 1024)).toFixed(bytes < 10 * 1024 * 1024 ? 1 : 0)} MB`
 }
 
-export const playgroundAttachmentSizeError = (fileName: string, sizeBytes: number): string => {
+const playgroundAttachmentSizeError = (fileName: string, sizeBytes: number): string => {
   const limitLabel = formatPlaygroundFileSize(PLAYGROUND_MAX_ATTACHMENT_BYTES)
   const actualLabel = formatPlaygroundFileSize(sizeBytes)
   return `"${fileName}" is ${actualLabel}. Each attachment must be ${limitLabel} or smaller.`
 }
 
-export const validatePlaygroundAttachmentSize = (file: File): string | null => {
+const validatePlaygroundAttachmentSize = (file: File): string | null => {
   if (file.size > PLAYGROUND_MAX_ATTACHMENT_BYTES) {
     return playgroundAttachmentSizeError(file.name, file.size)
   }
   return null
 }
-
-const readFileAsText = (file: File): Promise<string> =>
-  new Promise((resolve, reject) => {
-    const reader = new FileReader()
-    reader.onload = () => {
-      if (typeof reader.result === 'string') {
-        resolve(reader.result)
-        return
-      }
-      reject(new Error('Unexpected file reader result'))
-    }
-    reader.onerror = () => {
-      reject(reader.error ?? new Error('Failed to read file'))
-    }
-    reader.readAsText(file)
-  })
 
 export const readPlaygroundAttachmentFile = async (file: File): Promise<PlaygroundAttachment> => {
   const sizeError = validatePlaygroundAttachmentSize(file)
@@ -61,7 +45,7 @@ export const readPlaygroundAttachmentFile = async (file: File): Promise<Playgrou
   }
 
   try {
-    const content = await readFileAsText(file)
+    const content = await file.text()
     return {
       id: generatePlaygroundAttachmentId(),
       fileName: file.name,
