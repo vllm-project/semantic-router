@@ -1,10 +1,16 @@
-import { useCallback, useEffect, useState, type KeyboardEventHandler, type ReactNode, type Ref } from 'react'
+import { useCallback, useEffect, useRef, useState, type ChangeEvent, type KeyboardEventHandler, type ReactNode, type Ref } from 'react'
 
 import styles from './ChatComponent.module.css'
 import { ClawModeToggle, ToolToggle } from './ChatComponentControls'
 import { useSpeechDictation } from '../hooks/useSpeechDictation'
+import {
+  formatPlaygroundFileSize,
+  type PlaygroundAttachment,
+} from './playgroundFileAttachments'
 
 interface ChatComponentInputBarProps {
+  attachments: PlaygroundAttachment[]
+  attachFilesDisabled: boolean
   enableClawMode: boolean
   enableWebSearch: boolean
   inputRef: Ref<HTMLTextAreaElement>
@@ -13,8 +19,10 @@ interface ChatComponentInputBarProps {
   isTogglingClawMode: boolean
   modeToggleDisabled: boolean
   voiceInputDisabled: boolean
+  onAttachFiles: (files: FileList | File[]) => void
   onChangeInput: (value: string) => void
   onKeyDown: KeyboardEventHandler<HTMLTextAreaElement>
+  onRemoveAttachment: (attachmentId: string) => void
   onSend: () => void
   onStop: () => void
   onToggleClawMode: () => void
@@ -23,6 +31,8 @@ interface ChatComponentInputBarProps {
 }
 
 export default function ChatComponentInputBar({
+  attachments,
+  attachFilesDisabled,
   enableClawMode,
   enableWebSearch,
   inputRef,
@@ -31,15 +41,18 @@ export default function ChatComponentInputBar({
   isTogglingClawMode,
   modeToggleDisabled,
   voiceInputDisabled,
+  onAttachFiles,
   onChangeInput,
   onKeyDown,
+  onRemoveAttachment,
   onSend,
   onStop,
   onToggleClawMode,
   onToggleWebSearch,
   roomChatToggleControl,
 }: ChatComponentInputBarProps) {
-  const canSend = Boolean(inputValue.trim())
+  const fileInputRef = useRef<HTMLInputElement>(null)
+  const canSend = Boolean(inputValue.trim()) || attachments.length > 0
   const [isComposing, setIsComposing] = useState(false)
   const { isSupported: voiceSupported, isListening, toggleListening, stopListening } = useSpeechDictation(onChangeInput)
 
@@ -69,9 +82,48 @@ export default function ChatComponentInputBar({
     onKeyDown(event)
   }, [isComposing, onKeyDown])
 
+  const handleFileInputChange = useCallback((event: ChangeEvent<HTMLInputElement>) => {
+    const { files } = event.target
+    if (files && files.length > 0) {
+      onAttachFiles(files)
+    }
+    event.target.value = ''
+  }, [onAttachFiles])
+
+  const handleAttachClick = useCallback(() => {
+    fileInputRef.current?.click()
+  }, [])
+
   return (
     <div className={styles.inputContainer} data-testid="chat-composer">
-      <div className={`${styles.inputWrapper} ${inputValue.trim() ? styles.hasContent : ''}`}>
+      <div className={`${styles.inputWrapper} ${canSend ? styles.hasContent : ''}`}>
+        {attachments.length > 0 ? (
+          <div className={styles.attachmentList} data-testid="playground-attachment-list">
+            {attachments.map(attachment => (
+              <div
+                key={attachment.id}
+                className={styles.attachmentChip}
+                data-testid={`playground-attachment-${attachment.id}`}
+              >
+                <span className={styles.attachmentChipName} title={attachment.fileName}>
+                  {attachment.fileName}
+                </span>
+                <span className={styles.attachmentChipSize}>
+                  {formatPlaygroundFileSize(attachment.sizeBytes)}
+                </span>
+                <button
+                  type="button"
+                  className={styles.attachmentChipRemove}
+                  onClick={() => onRemoveAttachment(attachment.id)}
+                  aria-label={`Remove attachment ${attachment.fileName}`}
+                  data-testid={`playground-attachment-remove-${attachment.id}`}
+                >
+                  ×
+                </button>
+              </div>
+            ))}
+          </div>
+        ) : null}
         <textarea
           ref={inputRef}
           value={inputValue}
@@ -85,6 +137,28 @@ export default function ChatComponentInputBar({
         />
         <div className={styles.inputActionsRow}>
           <div className={styles.inputActions}>
+            <input
+              ref={fileInputRef}
+              type="file"
+              multiple
+              className={styles.attachmentFileInput}
+              onChange={handleFileInputChange}
+              aria-hidden="true"
+              tabIndex={-1}
+            />
+            <button
+              type="button"
+              className={styles.attachButton}
+              onClick={handleAttachClick}
+              disabled={attachFilesDisabled || isLoading || isTogglingClawMode}
+              title="Attach files (max 10 MB each)"
+              aria-label="Attach files"
+              data-testid="playground-attach-files"
+            >
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <path d="M21.44 11.05l-9.19 9.19a6 6 0 1 1-8.49-8.49l9.19-9.19a4 4 0 1 1 5.66 5.66l-9.2 9.19a2 2 0 1 1-2.83-2.83l8.49-8.48" strokeLinecap="round" strokeLinejoin="round" />
+              </svg>
+            </button>
             <ToolToggle
               enabled={enableWebSearch}
               onToggle={onToggleWebSearch}

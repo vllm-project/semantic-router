@@ -25,6 +25,9 @@ import { isOpenClawMCPToolName, useMCPToolSync } from '../tools/mcp'
 import { ensureOpenClawServerConnected } from '../tools/mcp/api'
 import { useConversationStorage, usePlaygroundQueue } from '../hooks'
 import { useReadonly } from '../contexts/ReadonlyContext'
+import { usePlaygroundAttachments } from './usePlaygroundAttachments'
+import { useChatConversationState } from './useChatConversationState'
+import { usePlaygroundConversationMessages } from './usePlaygroundConversationMessages'
 
 interface ChatComponentProps {
   endpoint?: string
@@ -32,11 +35,6 @@ interface ChatComponentProps {
 }
 
 type ClawPlaygroundView = 'control' | 'room'
-
-interface ConversationHeaderRevealState {
-  headers: Record<string, string>
-  visible: boolean
-}
 
 const ChatComponent = ({
   endpoint = '/api/router/v1/chat/completions',
@@ -47,9 +45,14 @@ const ChatComponent = ({
   const [inputValue, setInputValue] = useState('')
   const [activeTasks, setActiveTasks] = useState<Record<string, PlaygroundTask>>({})
   const model = 'MoM' // Fixed to MoM
-  const [conversationErrors, setConversationErrors] = useState<Record<string, string>>({})
-  const [conversationThinking, setConversationThinking] = useState<Record<string, boolean>>({})
-  const [headerRevealStates, setHeaderRevealStates] = useState<Record<string, ConversationHeaderRevealState>>({})
+  const {
+    conversationErrors,
+    conversationThinking,
+    headerRevealStates,
+    setConversationError,
+    setConversationHeaderReveal,
+    setConversationThinkingState,
+  } = useChatConversationState()
   const [isFullscreen] = useState(isFullscreenMode)
   const [enableWebSearch, setEnableWebSearch] = useState(true)
   const [enableClawMode, setEnableClawMode] = useState<boolean>(() => {
@@ -70,7 +73,6 @@ const ChatComponent = ({
   const hasHydratedConversation = useRef(false)
   const activeTasksRef = useRef<Record<string, PlaygroundTask>>({})
   const conversationIdRef = useRef(conversationId)
-  const conversationMessagesRef = useRef<Record<string, Message[]>>({})
 
   const { conversations, saveConversation, getConversation, deleteConversation } = useConversationStorage<Message[]>({
     storageKey: 'sr:chat:conversations',
@@ -85,74 +87,29 @@ const ChatComponent = ({
     reorderTasks,
   } = usePlaygroundQueue()
 
-  const setConversationError = useCallback((targetConversationId: string, error: string | null) => {
-    setConversationErrors(prev => {
-      if (!error) {
-        if (!(targetConversationId in prev)) {
-          return prev
-        }
-        const next = { ...prev }
-        delete next[targetConversationId]
-        return next
-      }
-      if (prev[targetConversationId] === error) {
-        return prev
-      }
-      return {
-        ...prev,
-        [targetConversationId]: error,
-      }
-    })
-  }, [])
+  const {
+    clearPendingAttachments,
+    copyPendingAttachmentsForTask,
+    handleAttachFiles,
+    handleRemoveAttachment,
+    pendingAttachments,
+    restorePendingAttachments,
+  } = usePlaygroundAttachments({
+    conversationId,
+    setConversationError,
+  })
 
-  const setConversationThinkingState = useCallback((targetConversationId: string, visible: boolean) => {
-    setConversationThinking(prev => {
-      const current = prev[targetConversationId] ?? false
-      if (current === visible) {
-        return prev
-      }
-      if (!visible) {
-        if (!(targetConversationId in prev)) {
-          return prev
-        }
-        const next = { ...prev }
-        delete next[targetConversationId]
-        return next
-      }
-      return {
-        ...prev,
-        [targetConversationId]: true,
-      }
-    })
-  }, [])
-
-  const setConversationHeaderReveal = useCallback((
-    targetConversationId: string,
-    headers: Record<string, string> | null,
-    visible = false
-  ) => {
-    setHeaderRevealStates(prev => {
-      if (!headers || Object.keys(headers).length === 0) {
-        if (!(targetConversationId in prev)) {
-          return prev
-        }
-        const next = { ...prev }
-        delete next[targetConversationId]
-        return next
-      }
-      const current = prev[targetConversationId]
-      if (current && current.visible === visible && current.headers === headers) {
-        return prev
-      }
-      return {
-        ...prev,
-        [targetConversationId]: {
-          headers,
-          visible,
-        },
-      }
-    })
-  }, [])
+  const {
+    getConversationMessagesSnapshot,
+    getStoredMessagesForConversation,
+    removeConversationMessages,
+    restoreMessages,
+    updateConversationMessages,
+  } = usePlaygroundConversationMessages({
+    conversationMessages,
+    getConversation,
+    setConversationMessages,
+  })
 
   const setActiveTaskForConversation = useCallback((task: PlaygroundTask) => {
     if (activeTasksRef.current[task.conversationId]?.id === task.id) {
@@ -185,60 +142,9 @@ const ChatComponent = ({
     delete abortControllersRef.current[targetConversationId]
   }, [])
 
-  const restoreMessages = useCallback((payload: Message[]) => {
-    return payload.map(message => ({
-      ...message,
-      timestamp: new Date(message.timestamp),
-    }))
-  }, [])
-
-  const getStoredMessagesForConversation = useCallback((id: string): Message[] => {
-    const storedConversation = getConversation(id)
-    if (!storedConversation?.payload || !Array.isArray(storedConversation.payload)) {
-      return []
-    }
-    return restoreMessages(storedConversation.payload)
-  }, [getConversation, restoreMessages])
-
-  const updateConversationMessages = useCallback(
-    (targetConversationId: string, updater: (prev: Message[]) => Message[]) => {
-      setConversationMessages(prev => {
-        const baseMessages = prev[targetConversationId] ?? getStoredMessagesForConversation(targetConversationId)
-        const nextMessages = updater(baseMessages)
-        if (nextMessages === baseMessages) {
-          return prev
-        }
-        return {
-          ...prev,
-          [targetConversationId]: nextMessages,
-        }
-      })
-    },
-    [getStoredMessagesForConversation]
-  )
-
-  const removeConversationMessages = useCallback((targetConversationId: string) => {
-    setConversationMessages(prev => {
-      if (!(targetConversationId in prev)) {
-        return prev
-      }
-      const next = { ...prev }
-      delete next[targetConversationId]
-      return next
-    })
-  }, [])
-
-  const getConversationMessagesSnapshot = useCallback((targetConversationId: string) => (
-    conversationMessagesRef.current[targetConversationId] ?? getStoredMessagesForConversation(targetConversationId)
-  ), [getStoredMessagesForConversation])
-
   useEffect(() => {
     conversationIdRef.current = conversationId
   }, [conversationId])
-
-  useEffect(() => {
-    conversationMessagesRef.current = conversationMessages
-  }, [conversationMessages])
 
   // MCP 工具同步 - 自动将 MCP 服务器的工具同步到 toolRegistry
   const { refresh: refreshMCPTools } = useMCPToolSync({ enabled: true, pollInterval: 30000 })
@@ -529,12 +435,14 @@ const ChatComponent = ({
 
   const handleSend = useCallback(() => {
     const trimmedInput = inputValue.trim()
-    if (!trimmedInput) return
+    if (!trimmedInput && pendingAttachments.length === 0) return
 
+    const attachmentsForTask = copyPendingAttachmentsForTask()
     const nextTask: PlaygroundTask = {
       id: generatePlaygroundTaskId(),
       conversationId,
       prompt: trimmedInput,
+      attachments: attachmentsForTask.length > 0 ? attachmentsForTask : undefined,
       createdAt: Date.now(),
       requestOptions: buildTaskRequestOptions(),
     }
@@ -546,6 +454,7 @@ const ChatComponent = ({
 
     setConversationError(conversationId, null)
     setInputValue('')
+    clearPendingAttachments()
 
     if (!activeTasksRef.current[conversationId]) {
       startTask(nextTask)
@@ -559,6 +468,9 @@ const ChatComponent = ({
     enqueueTask,
     getConversationMessagesSnapshot,
     inputValue,
+    pendingAttachments,
+    clearPendingAttachments,
+    copyPendingAttachmentsForTask,
     saveConversation,
     setConversationError,
     startTask,
@@ -597,6 +509,7 @@ const ChatComponent = ({
 
     removeQueuedTask(conversationId, taskId)
     setInputValue(taskToEdit.prompt)
+    restorePendingAttachments(taskToEdit.attachments)
 
     if (typeof window !== 'undefined') {
       window.requestAnimationFrame(() => {
@@ -605,7 +518,7 @@ const ChatComponent = ({
         inputRef.current?.setSelectionRange(promptLength, promptLength)
       })
     }
-  }, [conversationId, queuedTasks, removeQueuedTask])
+  }, [conversationId, queuedTasks, removeQueuedTask, restorePendingAttachments])
 
   const handleReorderQueuedTasks = useCallback((sourceTaskId: string, targetTaskId: string) => {
     reorderTasks(conversationId, sourceTaskId, targetTaskId)
@@ -624,9 +537,10 @@ const ChatComponent = ({
 
   const handleNewConversation = useCallback(() => {
     setInputValue('')
+    clearPendingAttachments()
     setExpandedToolCards(new Set())
     setConversationId(generateConversationId())
-  }, [])
+  }, [clearPendingAttachments])
 
   const handleToggleClawMode = useCallback(() => {
     if (hasRunningTasks || isTogglingClawMode) return
@@ -770,6 +684,8 @@ const ChatComponent = ({
                   onReorderTasks={handleReorderQueuedTasks}
                 />
                 <ChatComponentInputBar
+                  attachments={pendingAttachments}
+                  attachFilesDisabled={readonlyLoading || isReadonly}
                   enableClawMode={enableClawMode}
                   enableWebSearch={enableWebSearch}
                   inputRef={inputRef}
@@ -778,8 +694,10 @@ const ChatComponent = ({
                   isTogglingClawMode={isTogglingClawMode}
                   modeToggleDisabled={modeToggleDisabled}
                   voiceInputDisabled={isCurrentConversationRunning || readonlyLoading || isReadonly}
+                  onAttachFiles={handleAttachFiles}
                   onChangeInput={setInputValue}
                   onKeyDown={handleKeyDown}
+                  onRemoveAttachment={handleRemoveAttachment}
                   onSend={handleSend}
                   onStop={handleStop}
                   onToggleClawMode={handleToggleClawMode}
