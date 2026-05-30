@@ -263,10 +263,10 @@ func TestSessionAwarePrefixPenaltyScalesWithModelCost(t *testing.T) {
 	})
 	selector.InitializeFromConfig(map[string]config.ModelParams{
 		"cheap": {
-			Pricing: config.ModelPricing{PromptPer1M: 0.05, CompletionPer1M: 0.10},
+			Pricing: config.ModelPricing{PromptPer1M: 0.05, CachedInputPer1M: 0.01, CompletionPer1M: 0.10},
 		},
 		"frontier": {
-			Pricing: config.ModelPricing{PromptPer1M: 10, CompletionPer1M: 30},
+			Pricing: config.ModelPricing{PromptPer1M: 10, CachedInputPer1M: 1, CompletionPer1M: 30},
 		},
 	})
 	session := &AgenticSessionContext{
@@ -281,6 +281,42 @@ func TestSessionAwarePrefixPenaltyScalesWithModelCost(t *testing.T) {
 	frontierPenalty := selector.prefixCachePenalty(session, "frontier", "cheap", false)
 	if frontierPenalty <= cheapPenalty {
 		t.Fatalf("expected frontier switch penalty %.4f > cheap penalty %.4f", frontierPenalty, cheapPenalty)
+	}
+}
+
+func TestSessionAwareCacheCostPressureUsesPrefixCheckoutDelta(t *testing.T) {
+	selector := NewSessionAwareSelector(&SessionAwareConfig{MaxCacheCostMultiplier: 3})
+	selector.InitializeFromConfig(map[string]config.ModelParams{
+		"uncached-frontier": {
+			Pricing: config.ModelPricing{PromptPer1M: 10, CachedInputPer1M: 0, CompletionPer1M: 1},
+		},
+		"cached-frontier": {
+			Pricing: config.ModelPricing{PromptPer1M: 10, CachedInputPer1M: 9, CompletionPer1M: 1},
+		},
+	})
+
+	uncachedPressure := selector.modelCostPressure("uncached-frontier")
+	cachedPressure := selector.modelCostPressure("cached-frontier")
+	if cachedPressure >= uncachedPressure {
+		t.Fatalf("expected cached-input discount to reduce pressure, got cached %.4f >= uncached %.4f", cachedPressure, uncachedPressure)
+	}
+}
+
+func TestSessionAwareCacheCostPressureIgnoresCompletionOnlyCost(t *testing.T) {
+	selector := NewSessionAwareSelector(&SessionAwareConfig{MaxCacheCostMultiplier: 3})
+	selector.InitializeFromConfig(map[string]config.ModelParams{
+		"output-heavy": {
+			Pricing: config.ModelPricing{PromptPer1M: 0.1, CompletionPer1M: 100},
+		},
+		"input-heavy": {
+			Pricing: config.ModelPricing{PromptPer1M: 10, CachedInputPer1M: 1, CompletionPer1M: 0},
+		},
+	})
+
+	outputHeavyPressure := selector.modelCostPressure("output-heavy")
+	inputHeavyPressure := selector.modelCostPressure("input-heavy")
+	if outputHeavyPressure >= inputHeavyPressure {
+		t.Fatalf("expected prompt checkout cost to dominate pressure, got output %.4f >= input %.4f", outputHeavyPressure, inputHeavyPressure)
 	}
 }
 
