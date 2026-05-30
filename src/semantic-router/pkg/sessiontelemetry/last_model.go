@@ -59,21 +59,35 @@ func RecordLastModel(sessionID, model string) {
 // GetLastModel returns the most recent model recorded for sessionID and whether
 // a non-expired entry exists.
 func GetLastModel(sessionID string) (string, bool) {
+	model, _, ok := GetLastModelInfo(sessionID, time.Time{})
+	return model, ok
+}
+
+// GetLastModelInfo returns the most recent model and idle age for sessionID.
+// Passing a zero now uses the store clock.
+func GetLastModelInfo(sessionID string, now time.Time) (string, time.Duration, bool) {
 	if sessionID == "" {
-		return "", false
+		return "", 0, false
 	}
 	s := globalLastModelStore
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	st := s.sessions[sessionID]
 	if st == nil {
-		return "", false
+		return "", 0, false
 	}
-	if s.nowFn().Sub(st.lastSeen) > ttl {
+	if now.IsZero() {
+		now = s.nowFn()
+	}
+	idleFor := now.Sub(st.lastSeen)
+	if idleFor < 0 {
+		idleFor = 0
+	}
+	if idleFor > ttl {
 		delete(s.sessions, sessionID)
-		return "", false
+		return "", 0, false
 	}
-	return st.model, true
+	return st.model, idleFor, true
 }
 
 func (s *lastModelStore) evictExpiredLocked(t time.Time) {

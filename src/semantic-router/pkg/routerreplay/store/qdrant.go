@@ -255,6 +255,7 @@ func (q *QdrantStore) UpdateHallucinationStatus(ctx context.Context, id string, 
 func (q *QdrantStore) UpdateUsageCost(ctx context.Context, id string, usage UsageCost) error {
 	return q.updateRecord(ctx, id, func(r *Record) {
 		r.PromptTokens = cloneIntPtr(usage.PromptTokens)
+		r.CachedPromptTokens = cloneIntPtr(usage.CachedPromptTokens)
 		r.CompletionTokens = cloneIntPtr(usage.CompletionTokens)
 		r.TotalTokens = cloneIntPtr(usage.TotalTokens)
 		r.ActualCost = cloneFloat64Ptr(usage.ActualCost)

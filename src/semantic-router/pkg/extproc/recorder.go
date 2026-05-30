@@ -1,6 +1,7 @@
 package extproc
 
 import (
+	"encoding/json"
 	"time"
 
 	ext_proc "github.com/envoyproxy/go-control-plane/envoy/service/ext_proc/v3"
@@ -200,6 +201,7 @@ func buildReplayRoutingRecord(
 		ReasoningMode:     replayReasoningMode(ctx),
 		ConfidenceScore:   ctx.VSRSelectedDecisionConfidence,
 		SelectionMethod:   ctx.VSRSelectionMethod,
+		SessionPolicy:     cloneReplayInterfaceMap(ctx.VSRSessionPolicy),
 		Signals:           replaySignalState(ctx),
 		Projections:       replayProjectionState(ctx),
 		ProjectionScores:  cloneReplayFloat64Map(ctx.VSRProjectionScores),
@@ -299,6 +301,21 @@ func replayProjectionState(ctx *RequestContext) []string {
 		return nil
 	}
 	return append([]string(nil), ctx.VSRMatchedProjection...)
+}
+
+func cloneReplayInterfaceMap(values map[string]interface{}) map[string]interface{} {
+	if values == nil {
+		return nil
+	}
+	b, err := json.Marshal(values)
+	if err != nil {
+		return nil
+	}
+	var cloned map[string]interface{}
+	if err := json.Unmarshal(b, &cloned); err != nil {
+		return nil
+	}
+	return cloned
 }
 
 func replayGuardrailState(ctx *RequestContext) (bool, bool, bool, bool) {

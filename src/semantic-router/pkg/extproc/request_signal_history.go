@@ -22,6 +22,8 @@ type signalConversationHistory struct {
 	assistantToolCallCount int
 	toolResultCount        int
 	assistantToolNames     []string
+	lastMessageRole        string
+	lastMessageToolResult  bool
 }
 
 func signalConversationHistoryFromFastExtract(result *FastExtractResult) signalConversationHistory {
@@ -42,6 +44,8 @@ func signalConversationHistoryFromFastExtract(result *FastExtractResult) signalC
 		assistantToolCallCount: result.AssistantToolCallCount,
 		toolResultCount:        result.ToolResultCount,
 		assistantToolNames:     append([]string(nil), result.AssistantToolNames...),
+		lastMessageRole:        result.LastMessageRole,
+		lastMessageToolResult:  result.LastMessageToolResult,
 	}
 }
 
@@ -67,6 +71,8 @@ func extractSignalConversationHistory(req *openai.ChatCompletionNewParams) signa
 
 	for _, msg := range req.Messages {
 		role, textContent := extractMessageRoleAndContent(msg)
+		history.lastMessageRole = role
+		history.lastMessageToolResult = false
 
 		switch role {
 		case "user":
@@ -99,6 +105,7 @@ func extractSignalConversationHistory(req *openai.ChatCompletionNewParams) signa
 		case "tool":
 			history.toolMessageCount++
 			history.toolResultCount++
+			history.lastMessageToolResult = true
 		}
 	}
 

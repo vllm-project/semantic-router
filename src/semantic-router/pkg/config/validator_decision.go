@@ -194,25 +194,7 @@ func validateDecisionAlgorithmConfig(decisionName string, algorithm *AlgorithmCo
 		displayType = "<empty>"
 	}
 
-	configuredBlocks := make([]string, 0, 10)
-	addBlock := func(name string, configured bool) {
-		if configured {
-			configuredBlocks = append(configuredBlocks, name)
-		}
-	}
-
-	addBlock("confidence", algorithm.Confidence != nil)
-	addBlock("ratings", algorithm.Ratings != nil)
-	addBlock("remom", algorithm.ReMoM != nil)
-	addBlock("elo", algorithm.Elo != nil)
-	addBlock("router_dc", algorithm.RouterDC != nil)
-	addBlock("automix", algorithm.AutoMix != nil)
-	addBlock("hybrid", algorithm.Hybrid != nil)
-	addBlock("rl_driven", algorithm.RLDriven != nil)
-	addBlock("gmtrouter", algorithm.GMTRouter != nil)
-	addBlock("latency_aware", algorithm.LatencyAware != nil)
-	addBlock("multi_factor", algorithm.MultiFactor != nil)
-
+	configuredBlocks := configuredAlgorithmBlocks(algorithm)
 	if len(configuredBlocks) > 1 {
 		return fmt.Errorf(
 			"decision '%s': algorithm.type=%s cannot be combined with multiple algorithm config blocks: %s",
@@ -222,21 +204,7 @@ func validateDecisionAlgorithmConfig(decisionName string, algorithm *AlgorithmCo
 		)
 	}
 
-	expectedBlockByType := map[string]string{
-		"confidence":    "confidence",
-		"ratings":       "ratings",
-		"remom":         "remom",
-		"elo":           "elo",
-		"router_dc":     "router_dc",
-		"automix":       "automix",
-		"hybrid":        "hybrid",
-		"rl_driven":     "rl_driven",
-		"gmtrouter":     "gmtrouter",
-		"latency_aware": "latency_aware",
-		"multi_factor":  "multi_factor",
-	}
-
-	expectedBlock, hasExpectedBlock := expectedBlockByType[normalizedType]
+	expectedBlock, hasExpectedBlock := expectedAlgorithmBlock(normalizedType)
 	if !hasExpectedBlock {
 		if len(configuredBlocks) > 0 {
 			return fmt.Errorf(
@@ -259,15 +227,72 @@ func validateDecisionAlgorithmConfig(decisionName string, algorithm *AlgorithmCo
 		)
 	}
 
-	if normalizedType == "latency_aware" {
+	if err := validateSpecializedAlgorithmConfig(decisionName, normalizedType, algorithm); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func configuredAlgorithmBlocks(algorithm *AlgorithmConfig) []string {
+	configuredBlocks := make([]string, 0, 12)
+	addBlock := func(name string, configured bool) {
+		if configured {
+			configuredBlocks = append(configuredBlocks, name)
+		}
+	}
+
+	addBlock("confidence", algorithm.Confidence != nil)
+	addBlock("ratings", algorithm.Ratings != nil)
+	addBlock("remom", algorithm.ReMoM != nil)
+	addBlock("elo", algorithm.Elo != nil)
+	addBlock("router_dc", algorithm.RouterDC != nil)
+	addBlock("automix", algorithm.AutoMix != nil)
+	addBlock("hybrid", algorithm.Hybrid != nil)
+	addBlock("rl_driven", algorithm.RLDriven != nil)
+	addBlock("gmtrouter", algorithm.GMTRouter != nil)
+	addBlock("latency_aware", algorithm.LatencyAware != nil)
+	addBlock("multi_factor", algorithm.MultiFactor != nil)
+	addBlock("session_aware", algorithm.SessionAware != nil)
+	return configuredBlocks
+}
+
+func expectedAlgorithmBlock(normalizedType string) (string, bool) {
+	expectedBlockByType := map[string]string{
+		"confidence":    "confidence",
+		"ratings":       "ratings",
+		"remom":         "remom",
+		"elo":           "elo",
+		"router_dc":     "router_dc",
+		"automix":       "automix",
+		"hybrid":        "hybrid",
+		"rl_driven":     "rl_driven",
+		"gmtrouter":     "gmtrouter",
+		"latency_aware": "latency_aware",
+		"multi_factor":  "multi_factor",
+		"session_aware": "session_aware",
+	}
+	expectedBlock, ok := expectedBlockByType[normalizedType]
+	return expectedBlock, ok
+}
+
+func validateSpecializedAlgorithmConfig(decisionName string, normalizedType string, algorithm *AlgorithmConfig) error {
+	switch normalizedType {
+	case "latency_aware":
 		if algorithm.LatencyAware == nil {
 			return fmt.Errorf("decision '%s': algorithm.type=latency_aware requires algorithm.latency_aware configuration", decisionName)
 		}
 		if err := validateLatencyAwareAlgorithmConfig(algorithm.LatencyAware); err != nil {
 			return fmt.Errorf("decision '%s', algorithm.latency_aware: %w", decisionName, err)
 		}
+	case "session_aware":
+		if algorithm.SessionAware == nil {
+			return nil
+		}
+		if err := validateSessionAwareSelectionConfig(*algorithm.SessionAware); err != nil {
+			return fmt.Errorf("decision '%s', algorithm.session_aware: %w", decisionName, err)
+		}
 	}
-
 	return nil
 }
 

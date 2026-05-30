@@ -33,14 +33,15 @@ type Signal struct {
 
 // UsageCost captures token usage and pricing-derived cost details for a record.
 type UsageCost struct {
-	PromptTokens     *int     `json:"prompt_tokens,omitempty"`
-	CompletionTokens *int     `json:"completion_tokens,omitempty"`
-	TotalTokens      *int     `json:"total_tokens,omitempty"`
-	ActualCost       *float64 `json:"actual_cost,omitempty"`
-	BaselineCost     *float64 `json:"baseline_cost,omitempty"`
-	CostSavings      *float64 `json:"cost_savings,omitempty"`
-	Currency         *string  `json:"currency,omitempty"`
-	BaselineModel    *string  `json:"baseline_model,omitempty"`
+	PromptTokens       *int     `json:"prompt_tokens,omitempty"`
+	CachedPromptTokens *int     `json:"cached_prompt_tokens,omitempty"`
+	CompletionTokens   *int     `json:"completion_tokens,omitempty"`
+	TotalTokens        *int     `json:"total_tokens,omitempty"`
+	ActualCost         *float64 `json:"actual_cost,omitempty"`
+	BaselineCost       *float64 `json:"baseline_cost,omitempty"`
+	CostSavings        *float64 `json:"cost_savings,omitempty"`
+	Currency           *string  `json:"currency,omitempty"`
+	BaselineModel      *string  `json:"baseline_model,omitempty"`
 }
 
 // ToolTrace captures the request-local assistant/tool exchange timeline.
@@ -103,6 +104,7 @@ type Record struct {
 	ReasoningMode         string                 `json:"reasoning_mode,omitempty"`
 	ConfidenceScore       float64                `json:"confidence_score,omitempty"`
 	SelectionMethod       string                 `json:"selection_method,omitempty"`
+	SessionPolicy         map[string]interface{} `json:"session_policy,omitempty"`
 	Signals               Signal                 `json:"signals"`
 	Projections           []string               `json:"projections,omitempty"`
 	ProjectionScores      map[string]float64     `json:"projection_scores,omitempty"`
@@ -164,14 +166,15 @@ type Record struct {
 	HallucinationSpans      []string `json:"hallucination_spans,omitempty"`
 
 	// Usage & Cost
-	PromptTokens     *int     `json:"prompt_tokens,omitempty"`
-	CompletionTokens *int     `json:"completion_tokens,omitempty"`
-	TotalTokens      *int     `json:"total_tokens,omitempty"`
-	ActualCost       *float64 `json:"actual_cost,omitempty"`
-	BaselineCost     *float64 `json:"baseline_cost,omitempty"`
-	CostSavings      *float64 `json:"cost_savings,omitempty"`
-	Currency         *string  `json:"currency,omitempty"`
-	BaselineModel    *string  `json:"baseline_model,omitempty"`
+	PromptTokens       *int     `json:"prompt_tokens,omitempty"`
+	CachedPromptTokens *int     `json:"cached_prompt_tokens,omitempty"`
+	CompletionTokens   *int     `json:"completion_tokens,omitempty"`
+	TotalTokens        *int     `json:"total_tokens,omitempty"`
+	ActualCost         *float64 `json:"actual_cost,omitempty"`
+	BaselineCost       *float64 `json:"baseline_cost,omitempty"`
+	CostSavings        *float64 `json:"cost_savings,omitempty"`
+	Currency           *string  `json:"currency,omitempty"`
+	BaselineModel      *string  `json:"baseline_model,omitempty"`
 }
 
 // Writer mutates router replay records.
@@ -236,6 +239,21 @@ func cloneFloat64Map(values map[string]float64) map[string]float64 {
 	return cloned
 }
 
+func cloneInterfaceMap(values map[string]interface{}) map[string]interface{} {
+	if values == nil {
+		return nil
+	}
+	b, err := json.Marshal(values)
+	if err != nil {
+		return nil
+	}
+	var cloned map[string]interface{}
+	if err := json.Unmarshal(b, &cloned); err != nil {
+		return nil
+	}
+	return cloned
+}
+
 func cloneProjectionTraceRecord(t *projectiontrace.Trace) *projectiontrace.Trace {
 	if t == nil {
 		return nil
@@ -286,6 +304,7 @@ func cloneSignal(signal Signal) Signal {
 		Jailbreak:    cloneStringSlice(signal.Jailbreak),
 		PII:          cloneStringSlice(signal.PII),
 		KB:           cloneStringSlice(signal.KB),
+		Conversation: cloneStringSlice(signal.Conversation),
 	}
 }
 
@@ -297,10 +316,12 @@ func cloneRecord(record Record) Record {
 	cloned.ProjectionTrace = cloneProjectionTraceRecord(record.ProjectionTrace)
 	cloned.SignalConfidences = cloneFloat64Map(record.SignalConfidences)
 	cloned.SignalValues = cloneFloat64Map(record.SignalValues)
+	cloned.SessionPolicy = cloneInterfaceMap(record.SessionPolicy)
 	cloned.ToolTrace = cloneToolTrace(record.ToolTrace)
 	cloned.PIIEntities = cloneStringSlice(record.PIIEntities)
 	cloned.HallucinationSpans = cloneStringSlice(record.HallucinationSpans)
 	cloned.PromptTokens = cloneIntPtr(record.PromptTokens)
+	cloned.CachedPromptTokens = cloneIntPtr(record.CachedPromptTokens)
 	cloned.CompletionTokens = cloneIntPtr(record.CompletionTokens)
 	cloned.TotalTokens = cloneIntPtr(record.TotalTokens)
 	cloned.ActualCost = cloneFloat64Ptr(record.ActualCost)

@@ -30,6 +30,8 @@ type FastExtractResult struct {
 	AssistantToolCallCount int
 	ToolResultCount        int
 	AssistantToolNames     []string
+	LastMessageRole        string
+	LastMessageToolResult  bool
 }
 
 // extractContentFast extracts model, stream, message content, and the first
@@ -96,6 +98,8 @@ func consumeFastExtractMessage(msg gjson.Result, result *FastExtractResult) {
 	role := msg.Get("role").String()
 	content := msg.Get("content")
 	text := extractTextFromContent(content)
+	result.LastMessageRole = role
+	result.LastMessageToolResult = false
 
 	switch role {
 	case "user":
@@ -114,6 +118,7 @@ func consumeFastExtractMessage(msg gjson.Result, result *FastExtractResult) {
 	case "tool":
 		result.ToolMessageCount++
 		result.ToolResultCount++
+		result.LastMessageToolResult = true
 	}
 }
 

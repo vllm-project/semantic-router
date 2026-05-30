@@ -179,6 +179,7 @@ def _resolve_container_specs(
         dashboard_image=dashboard_image,
         pull_policy=pull_policy,
         platform=normalized_platform,
+        include_dashboard=not minimal,
     )
     return _runtime_container_specs(
         runtime=runtime,

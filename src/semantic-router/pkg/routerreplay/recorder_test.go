@@ -20,6 +20,7 @@ func TestRecorderUpdateUsageCostClonesStoredValues(t *testing.T) {
 	}
 
 	promptTokens := 120
+	cachedPromptTokens := 40
 	completionTokens := 45
 	totalTokens := 165
 	actualCost := 0.0012
@@ -28,14 +29,15 @@ func TestRecorderUpdateUsageCostClonesStoredValues(t *testing.T) {
 	currency := "USD"
 	baselineModel := "premium-model"
 	usage := UsageCost{
-		PromptTokens:     &promptTokens,
-		CompletionTokens: &completionTokens,
-		TotalTokens:      &totalTokens,
-		ActualCost:       &actualCost,
-		BaselineCost:     &baselineCost,
-		CostSavings:      &costSavings,
-		Currency:         &currency,
-		BaselineModel:    &baselineModel,
+		PromptTokens:       &promptTokens,
+		CachedPromptTokens: &cachedPromptTokens,
+		CompletionTokens:   &completionTokens,
+		TotalTokens:        &totalTokens,
+		ActualCost:         &actualCost,
+		BaselineCost:       &baselineCost,
+		CostSavings:        &costSavings,
+		Currency:           &currency,
+		BaselineModel:      &baselineModel,
 	}
 
 	if err := recorder.UpdateUsageCost(recordID, usage); err != nil {
@@ -43,6 +45,7 @@ func TestRecorderUpdateUsageCostClonesStoredValues(t *testing.T) {
 	}
 
 	promptTokens = 999
+	cachedPromptTokens = 999
 	completionTokens = 999
 	totalTokens = 1998
 	actualCost = 9.9
@@ -57,6 +60,7 @@ func TestRecorderUpdateUsageCostClonesStoredValues(t *testing.T) {
 	}
 
 	assertIntPtr(t, record.PromptTokens, 120, "prompt tokens")
+	assertIntPtr(t, record.CachedPromptTokens, 40, "cached prompt tokens")
 	assertIntPtr(t, record.CompletionTokens, 45, "completion tokens")
 	assertIntPtr(t, record.TotalTokens, 165, "total tokens")
 	assertFloatPtr(t, record.ActualCost, 0.0012, "actual cost")
@@ -115,6 +119,7 @@ func TestRecorderUpdateToolTraceClonesStoredValues(t *testing.T) {
 
 func TestLogFieldsIncludesOptionalReplayMetadata(t *testing.T) {
 	promptTokens := 120
+	cachedPromptTokens := 40
 	completionTokens := 45
 	totalTokens := 165
 	actualCost := 0.0012
@@ -127,6 +132,7 @@ func TestLogFieldsIncludesOptionalReplayMetadata(t *testing.T) {
 	record := richReplayRoutingRecord(
 		timestamp,
 		&promptTokens,
+		&cachedPromptTokens,
 		&completionTokens,
 		&totalTokens,
 		&actualCost,
@@ -150,7 +156,9 @@ func TestLogFieldsIncludesOptionalReplayMetadata(t *testing.T) {
 	assertFieldValue(t, fields, "rag_backend", "milvus")
 	assertFieldValue(t, fields, "hallucination_spans", []string{"span-a"})
 	assertFieldValue(t, fields, "prompt_tokens", promptTokens)
+	assertFieldValue(t, fields, "cached_prompt_tokens", cachedPromptTokens)
 	assertFieldValue(t, fields, "currency", currency)
+	assertFieldValue(t, fields, "session_policy", map[string]interface{}{"decision_reason": "stay_has_best_adjusted_score"})
 	assertFieldValue(t, fields, "tool_trace_flow", "User Query -> LLM Tool Call -> Client Tool Result -> LLM Final Response")
 	assertFieldValue(t, fields, "tool_trace_stage", "LLM Final Response")
 	assertFieldValue(t, fields, "tool_names", []string{"get_weather"})
@@ -161,6 +169,7 @@ func TestLogFieldsIncludesOptionalReplayMetadata(t *testing.T) {
 func richReplayRoutingRecord(
 	timestamp time.Time,
 	promptTokens *int,
+	cachedPromptTokens *int,
 	completionTokens *int,
 	totalTokens *int,
 	actualCost *float64,
@@ -180,6 +189,7 @@ func richReplayRoutingRecord(
 		ReasoningMode:     "cot",
 		ConfidenceScore:   0.91,
 		SelectionMethod:   "router_dc",
+		SessionPolicy:     map[string]interface{}{"decision_reason": "stay_has_best_adjusted_score"},
 		RequestID:         "req-1",
 		SessionID:         "sess-log-test",
 		TurnIndex:         5,
@@ -233,6 +243,7 @@ func richReplayRoutingRecord(
 		HallucinationConfidence:     0.66,
 		HallucinationSpans:          []string{"span-a"},
 		PromptTokens:                promptTokens,
+		CachedPromptTokens:          cachedPromptTokens,
 		CompletionTokens:            completionTokens,
 		TotalTokens:                 totalTokens,
 		ActualCost:                  actualCost,

@@ -23,7 +23,7 @@ Inside canonical `config.yaml`:
 - structure `density` features now use built-in multilingual text-unit normalization; the contract no longer exposes a per-rule `normalize_by` switch
 - the dashboard and DSL builder now expose the same projection surface directly; see `website/docs/tutorials/signal/projections.md` and the maintained `deploy/recipes/balance.{yaml,dsl}` pair for end-to-end usage
 - `global.router`, `global.services`, `global.stores`, `global.integrations`, and `global.model_catalog` expose router-wide overrides explicitly
-- `global.router.model_selection.model_switch_gate` enables optional shadow or enforce-mode session-aware stay-vs-switch auditing after the configured selector runs; `mode: enforce` only takes effect on Response API requests with conversation history, Chat Completions traffic is audited in shadow regardless of mode until per-turn model history persistence ships
+- `decision.algorithm.type=session_aware` wraps a base selector with agentic session policy: tool loops stay on the current model, non-idle sessions pay handoff, switch-history, and prefix-cache costs before switching, idle sessions can reselect after `idle_timeout_seconds`, and router replay records the full policy trace for experiments
 - `global.services.router_replay.enabled` is the router-wide replay default; when it is on, decisions inherit replay capture unless a route-local `router_replay` plugin sets `enabled: false`
 - embedding fallback tuning such as `global.model_catalog.embeddings.semantic.embedding_config.top_k` lives under the router-owned model catalog, not under individual signal rules
 - prototype-aware exemplar compression and label scoring live alongside their owning signal families: `global.model_catalog.embeddings.semantic.embedding_config.prototype_scoring`, `global.model_catalog.modules.classifier.preference.prototype_scoring`, `global.model_catalog.kbs[].prototype_scoring`, and `global.model_catalog.modules.complexity.prototype_scoring`
@@ -47,7 +47,7 @@ Candidate iteration fragments must stay bounded to `decision.candidates` or an e
 `config/algorithm/` is organized by routing policy:
 
 - `looper/`: multi-model execution policies such as `confidence`, `ratings`, and `remom`
-- `selection/`: candidate-selection policies such as `elo`, `router_dc`, `automix`, and `latency_aware`
+- `selection/`: candidate-selection policies such as `elo`, `router_dc`, `automix`, `session_aware`, and `latency_aware`
 
 Each supported algorithm now has its own tutorial page under `website/docs/tutorials/algorithm/`.
 

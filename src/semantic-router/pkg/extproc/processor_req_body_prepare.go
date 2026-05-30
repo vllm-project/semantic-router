@@ -101,6 +101,7 @@ func (r *OpenAIRouter) runRequestPreRoutingStages(
 	fast *FastExtractResult,
 	ctx *RequestContext,
 ) (requestDecisionState, *ext_proc.ProcessingResponse) {
+	populatePinnedSessionFromHeaders(ctx)
 	history := signalConversationHistoryFromFastExtract(fast)
 	decisionName, _, reasoningDecision, selectedModel, authzErr := r.performDecisionEvaluation(
 		originalModel,

@@ -39,6 +39,8 @@ func (r *OpenAIRouter) prepareSignalEvaluationInput(history signalConversationHi
 			ToolDefinitionCount:    history.toolDefinitionCount,
 			AssistantToolCallCount: history.assistantToolCallCount,
 			ToolResultCount:        history.toolResultCount,
+			LastMessageRole:        history.lastMessageRole,
+			LastMessageToolResult:  history.lastMessageToolResult,
 		},
 	}
 

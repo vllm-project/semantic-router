@@ -447,6 +447,7 @@ func (m *MilvusStore) UpdateUsageCost(ctx context.Context, id string, usage Usag
 	}
 
 	record.PromptTokens = cloneIntPtr(usage.PromptTokens)
+	record.CachedPromptTokens = cloneIntPtr(usage.CachedPromptTokens)
 	record.CompletionTokens = cloneIntPtr(usage.CompletionTokens)
 	record.TotalTokens = cloneIntPtr(usage.TotalTokens)
 	record.ActualCost = cloneFloat64Ptr(usage.ActualCost)

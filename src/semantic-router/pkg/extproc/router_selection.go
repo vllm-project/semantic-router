@@ -103,6 +103,7 @@ func buildModelSelectionConfig(cfg *config.RouterConfig) *selection.ModelSelecti
 	modelSelectionCfg.RouterDC = buildRouterDCSelectionConfig(cfg, decisionCfgs.routerDC)
 	modelSelectionCfg.AutoMix = buildAutoMixSelectionConfig(cfg)
 	modelSelectionCfg.Hybrid = buildHybridSelectionConfig(cfg)
+	modelSelectionCfg.SessionAware = buildSessionAwareSelectionConfig(cfg, decisionCfgs.sessionAware)
 	modelSelectionCfg.ML = buildMLSelectionConfig(cfg)
 	modelSelectionCfg.RLDriven = buildRLDrivenSelectionConfig(decisionCfgs.rlDriven)
 	modelSelectionCfg.GMTRouter = buildGMTRouterSelectionConfig(decisionCfgs.gmtRouter)
@@ -110,10 +111,11 @@ func buildModelSelectionConfig(cfg *config.RouterConfig) *selection.ModelSelecti
 }
 
 type decisionScopedSelectionConfigs struct {
-	elo       *config.EloSelectionConfig
-	routerDC  *config.RouterDCSelectionConfig
-	rlDriven  *config.RLDrivenSelectionConfig
-	gmtRouter *config.GMTRouterSelectionConfig
+	elo          *config.EloSelectionConfig
+	routerDC     *config.RouterDCSelectionConfig
+	rlDriven     *config.RLDrivenSelectionConfig
+	gmtRouter    *config.GMTRouterSelectionConfig
+	sessionAware *config.SessionAwareSelectionConfig
 }
 
 func findDecisionScopedSelectionConfigs(cfg *config.RouterConfig) decisionScopedSelectionConfigs {
@@ -143,6 +145,11 @@ func findDecisionScopedSelectionConfigs(cfg *config.RouterConfig) decisionScoped
 			decision.Algorithm.GMTRouter != nil &&
 			result.gmtRouter == nil {
 			result.gmtRouter = decision.Algorithm.GMTRouter
+		}
+		if decision.Algorithm.Type == "session_aware" &&
+			decision.Algorithm.SessionAware != nil &&
+			result.sessionAware == nil {
+			result.sessionAware = decision.Algorithm.SessionAware
 		}
 	}
 
@@ -237,6 +244,61 @@ func buildHybridSelectionConfig(cfg *config.RouterConfig) *selection.HybridConfi
 		CostWeight:          hybridCfg.CostWeight,
 		QualityGapThreshold: hybridCfg.QualityGapThreshold,
 		NormalizeScores:     hybridCfg.NormalizeScores,
+	}
+}
+
+func buildSessionAwareSelectionConfig(
+	cfg *config.RouterConfig,
+	decisionCfg *config.SessionAwareSelectionConfig,
+) *selection.SessionAwareConfig {
+	global := cfg.IntelligentRouting.ModelSelection.SessionAware
+	result := selection.DefaultSessionAwareConfig()
+	applySessionAwareSelectionConfig(result, global)
+	if decisionCfg != nil {
+		applySessionAwareSelectionConfig(result, *decisionCfg)
+	}
+	return result
+}
+
+func applySessionAwareSelectionConfig(result *selection.SessionAwareConfig, cfg config.SessionAwareSelectionConfig) {
+	if cfg.FallbackMethod != "" {
+		result.FallbackMethod = selection.SelectionMethod(cfg.FallbackMethod)
+	}
+	if cfg.IdleTimeoutSeconds != 0 {
+		result.IdleTimeoutSeconds = cfg.IdleTimeoutSeconds
+	}
+	if cfg.MinTurnsBeforeSwitch != 0 {
+		result.MinTurnsBeforeSwitch = cfg.MinTurnsBeforeSwitch
+	}
+	if cfg.SwitchMargin != 0 {
+		result.SwitchMargin = cfg.SwitchMargin
+	}
+	if cfg.StayBias != 0 {
+		result.StayBias = cfg.StayBias
+	}
+	if cfg.ToolLoopHardLock != nil {
+		result.ToolLoopHardLock = *cfg.ToolLoopHardLock
+	}
+	if cfg.ToolLoopStayBias != 0 {
+		result.ToolLoopStayBias = cfg.ToolLoopStayBias
+	}
+	if cfg.PrefixCacheWeight != 0 {
+		result.PrefixCacheWeight = cfg.PrefixCacheWeight
+	}
+	if cfg.HandoffPenaltyWeight != 0 {
+		result.HandoffPenaltyWeight = cfg.HandoffPenaltyWeight
+	}
+	if cfg.DefaultHandoffPenalty != 0 {
+		result.DefaultHandoffPenalty = cfg.DefaultHandoffPenalty
+	}
+	if cfg.QualityGapMultiplier != 0 {
+		result.QualityGapMultiplier = cfg.QualityGapMultiplier
+	}
+	if cfg.MaxCacheCostMultiplier != 0 {
+		result.MaxCacheCostMultiplier = cfg.MaxCacheCostMultiplier
+	}
+	if cfg.SwitchHistoryWeight != 0 {
+		result.SwitchHistoryWeight = cfg.SwitchHistoryWeight
 	}
 }
 
