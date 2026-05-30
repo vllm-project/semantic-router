@@ -29,11 +29,15 @@ type SessionPolicyTrace struct {
 	DecisionReason string
 	MissingSignals []string
 
-	ContinuationMass float64
-	CacheWarmth      float64
-	CacheWarmthOK    bool
-	SwitchMargin     float64
-	StayBias         float64
+	ContinuationMass      float64
+	CacheWarmth           float64
+	CacheWarmthOK         bool
+	PortableHistoryTokens int
+	ContextPortability    float64
+	ContextPortabilityOK  bool
+	ProviderStateOnly     bool
+	SwitchMargin          float64
+	StayBias              float64
 
 	BaseScores      map[string]float64
 	FinalScores     map[string]float64
@@ -48,15 +52,16 @@ type SessionCandidateTrace struct {
 	BaseScore  float64
 	FinalScore float64
 
-	SelectorDelta          float64
-	QualityGap             float64
-	HandoffPenalty         float64
-	PrefixCacheBenefit     float64
-	PrefixCachePenalty     float64
-	ToolLoopPenalty        float64
-	SwitchHistoryPenalty   float64
-	FrontierCostMultiplier float64
-	NetSwitchAdvantage     float64
+	SelectorDelta             float64
+	QualityGap                float64
+	HandoffPenalty            float64
+	PrefixCacheBenefit        float64
+	PrefixCachePenalty        float64
+	ToolLoopPenalty           float64
+	SwitchHistoryPenalty      float64
+	ContextPortabilityPenalty float64
+	FrontierCostMultiplier    float64
+	NetSwitchAdvantage        float64
 }
 
 // ToMap converts the trace into a JSON-friendly representation for packages
@@ -88,6 +93,10 @@ func (t *SessionPolicyTrace) ToMap() map[string]interface{} {
 		"continuation_mass":       t.ContinuationMass,
 		"cache_warmth":            t.CacheWarmth,
 		"cache_warmth_ok":         t.CacheWarmthOK,
+		"portable_history_tokens": t.PortableHistoryTokens,
+		"context_portability":     t.ContextPortability,
+		"context_portability_ok":  t.ContextPortabilityOK,
+		"provider_state_only":     t.ProviderStateOnly,
 		"switch_margin":           t.SwitchMargin,
 		"stay_bias":               t.StayBias,
 		"base_scores":             cloneScores(t.BaseScores),
@@ -97,18 +106,19 @@ func (t *SessionPolicyTrace) ToMap() map[string]interface{} {
 		candidates := make(map[string]interface{}, len(t.CandidateTraces))
 		for model, trace := range t.CandidateTraces {
 			candidates[model] = map[string]interface{}{
-				"current":                  trace.Current,
-				"base_score":               trace.BaseScore,
-				"final_score":              trace.FinalScore,
-				"selector_delta":           trace.SelectorDelta,
-				"quality_gap":              trace.QualityGap,
-				"handoff_penalty":          trace.HandoffPenalty,
-				"prefix_cache_benefit":     trace.PrefixCacheBenefit,
-				"prefix_cache_penalty":     trace.PrefixCachePenalty,
-				"tool_loop_penalty":        trace.ToolLoopPenalty,
-				"switch_history_penalty":   trace.SwitchHistoryPenalty,
-				"frontier_cost_multiplier": trace.FrontierCostMultiplier,
-				"net_switch_advantage":     trace.NetSwitchAdvantage,
+				"current":                     trace.Current,
+				"base_score":                  trace.BaseScore,
+				"final_score":                 trace.FinalScore,
+				"selector_delta":              trace.SelectorDelta,
+				"quality_gap":                 trace.QualityGap,
+				"handoff_penalty":             trace.HandoffPenalty,
+				"prefix_cache_benefit":        trace.PrefixCacheBenefit,
+				"prefix_cache_penalty":        trace.PrefixCachePenalty,
+				"tool_loop_penalty":           trace.ToolLoopPenalty,
+				"switch_history_penalty":      trace.SwitchHistoryPenalty,
+				"context_portability_penalty": trace.ContextPortabilityPenalty,
+				"frontier_cost_multiplier":    trace.FrontierCostMultiplier,
+				"net_switch_advantage":        trace.NetSwitchAdvantage,
 			}
 		}
 		out["candidate_traces"] = candidates

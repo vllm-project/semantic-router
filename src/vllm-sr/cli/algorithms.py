@@ -249,6 +249,10 @@ class SessionAwareSelectionConfig(BaseModel):
     quality_gap_multiplier: float | None = Field(default=1.0, ge=0)
     max_cache_cost_multiplier: float | None = Field(default=2.5, ge=0)
     switch_history_weight: float | None = Field(default=0.04, ge=0)
+    context_portability_weight: float | None = Field(default=0.25, ge=0)
+    min_switch_context_portability: float | None = Field(default=0.20, ge=0, le=1)
+    provider_state_penalty: float | None = Field(default=0.35, ge=0)
+    provider_state_hard_lock: bool | None = True
 
 
 # =============================================================================

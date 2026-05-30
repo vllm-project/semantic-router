@@ -38,6 +38,16 @@ func validateModelSwitchGate(cfg ModelSwitchGateConfig) error {
 }
 
 func validateSessionAwareSelectionConfig(cfg SessionAwareSelectionConfig) error {
+	if err := validateSessionAwareTimingConfig(cfg); err != nil {
+		return err
+	}
+	if err := validateSessionAwareCostConfig(cfg); err != nil {
+		return err
+	}
+	return validateSessionAwareContextConfig(cfg)
+}
+
+func validateSessionAwareTimingConfig(cfg SessionAwareSelectionConfig) error {
 	if cfg.IdleTimeoutSeconds < 0 {
 		return fmt.Errorf("session_aware.idle_timeout_seconds must be >= 0, got %d", cfg.IdleTimeoutSeconds)
 	}
@@ -53,6 +63,10 @@ func validateSessionAwareSelectionConfig(cfg SessionAwareSelectionConfig) error 
 	if cfg.ToolLoopStayBias < 0 {
 		return fmt.Errorf("session_aware.tool_loop_stay_bias must be >= 0, got %v", cfg.ToolLoopStayBias)
 	}
+	return nil
+}
+
+func validateSessionAwareCostConfig(cfg SessionAwareSelectionConfig) error {
 	if cfg.PrefixCacheWeight < 0 {
 		return fmt.Errorf("session_aware.prefix_cache_weight must be >= 0, got %v", cfg.PrefixCacheWeight)
 	}
@@ -70,6 +84,19 @@ func validateSessionAwareSelectionConfig(cfg SessionAwareSelectionConfig) error 
 	}
 	if cfg.SwitchHistoryWeight < 0 {
 		return fmt.Errorf("session_aware.switch_history_weight must be >= 0, got %v", cfg.SwitchHistoryWeight)
+	}
+	return nil
+}
+
+func validateSessionAwareContextConfig(cfg SessionAwareSelectionConfig) error {
+	if cfg.ContextPortabilityWeight < 0 {
+		return fmt.Errorf("session_aware.context_portability_weight must be >= 0, got %v", cfg.ContextPortabilityWeight)
+	}
+	if cfg.MinSwitchContextPortability < 0 || cfg.MinSwitchContextPortability > 1 {
+		return fmt.Errorf("session_aware.min_switch_context_portability must be between 0 and 1, got %v", cfg.MinSwitchContextPortability)
+	}
+	if cfg.ProviderStatePenalty < 0 {
+		return fmt.Errorf("session_aware.provider_state_penalty must be >= 0, got %v", cfg.ProviderStatePenalty)
 	}
 	return nil
 }

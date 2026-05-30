@@ -43,6 +43,9 @@ class WorkloadScenario:
     history_max: int
     idle_mode: str
     token_growth: float = 1.0
+    provider_state_cycle: int = 0
+    provider_state_slots: tuple[int, ...] = ()
+    portable_context_floor: float = 0.25
 
 
 MODELS = (
@@ -52,12 +55,20 @@ MODELS = (
 )
 FRONTIER_DEMAND_THRESHOLD = 0.78
 MID_DEMAND_THRESHOLD = 0.55
-DEFAULT_SCENARIOS = ("balanced", "tool-heavy", "frontier-heavy", "idle-heavy")
+CONTEXT_PORTABILITY_THRESHOLD = 0.20
+DEFAULT_SCENARIOS = (
+    "balanced",
+    "tool-heavy",
+    "frontier-heavy",
+    "idle-heavy",
+    "provider-state-heavy",
+)
 DEFAULT_ABLATION_POLICIES = (
     "sticky-session",
     "acr-no-tool-lock",
     "acr-no-idle-boundary",
     "acr-no-frontier-cost",
+    "acr-no-context-portability",
     "acr-full",
 )
 SCENARIOS = {
@@ -114,6 +125,23 @@ SCENARIOS = {
         history_min=512,
         history_max=2048,
         idle_mode="frequent",
+    ),
+    "provider-state-heavy": WorkloadScenario(
+        name="provider-state-heavy",
+        base_demand=0.50,
+        progress_weight=0.30,
+        phase_bonus=0.14,
+        wave_amplitude=0.16,
+        noise=0.08,
+        tool_cycle=6,
+        tool_slots=(2, 3),
+        history_min=1024,
+        history_max=4096,
+        idle_mode="rare",
+        token_growth=1.16,
+        provider_state_cycle=4,
+        provider_state_slots=(1, 2),
+        portable_context_floor=0.08,
     ),
 }
 
@@ -180,6 +208,14 @@ def simulate_workload(
         for turn in range(turn_count):
             phase = phase_for_turn(turn, scenario)
             idle_expired = turn in idle_turns
+            provider_state_only = provider_state_only_for(turn, scenario)
+            portable_context_ratio = portable_context_ratio_for(
+                turn,
+                scenario,
+                history_tokens,
+                provider_state_only,
+                idle_expired,
+            )
             demand = demand_score(turn, turn_count, phase, rng, scenario)
             base_choice = choose_base_model(demand)
 
@@ -191,6 +227,8 @@ def simulate_workload(
                 turn=turn,
                 switch_count=switch_count,
                 history_tokens=history_tokens,
+                portable_context_ratio=portable_context_ratio,
+                provider_state_only=provider_state_only,
                 idle_expired=idle_expired,
                 policy=agentic_policy,
             )
@@ -220,8 +258,10 @@ def simulate_workload(
                     "turn": turn,
                     "phase": phase,
                     "idle_expired": idle_expired,
+                    "provider_state_only": provider_state_only,
                     "demand": round(demand, 4),
                     "history_tokens": history_tokens,
+                    "portable_context_ratio": round(portable_context_ratio, 4),
                     "baseline_model": baseline_next.name,
                     "agentic_model": agentic_next.name,
                     "baseline_switch": baseline_switch,
@@ -230,6 +270,18 @@ def simulate_workload(
                     and baseline_switch,
                     "tool_loop_switch_violation_agentic": phase == "tool_loop"
                     and agentic_switch,
+                    "context_loss_switch_violation_baseline": context_loss_switch_violation(
+                        baseline_switch,
+                        provider_state_only,
+                        portable_context_ratio,
+                        idle_expired,
+                    ),
+                    "context_loss_switch_violation_agentic": context_loss_switch_violation(
+                        agentic_switch,
+                        provider_state_only,
+                        portable_context_ratio,
+                        idle_expired,
+                    ),
                     "cached_prompt_ratio": round(cached_ratio, 4),
                     "baseline_quality": baseline_next.quality,
                     "agentic_quality": agentic_next.quality,
@@ -265,6 +317,40 @@ def phase_for_turn(turn: int, scenario: WorkloadScenario) -> str:
     if cycle in scenario.tool_slots:
         return "tool_loop"
     return "user_turn"
+
+
+def provider_state_only_for(turn: int, scenario: WorkloadScenario) -> bool:
+    if turn == 0 or scenario.provider_state_cycle <= 0:
+        return False
+    return turn % scenario.provider_state_cycle in scenario.provider_state_slots
+
+
+def portable_context_ratio_for(
+    turn: int,
+    scenario: WorkloadScenario,
+    history_tokens: int,
+    provider_state_only: bool,
+    idle_expired: bool,
+) -> float:
+    if turn == 0 or idle_expired:
+        return 1.0
+    if provider_state_only:
+        return 0.0
+    ratio = history_tokens / max(history_tokens + 800, 1)
+    return max(scenario.portable_context_floor, min(0.95, ratio))
+
+
+def context_loss_switch_violation(
+    switched: bool,
+    provider_state_only: bool,
+    portable_context_ratio: float,
+    idle_expired: bool,
+) -> bool:
+    if not switched:
+        return False
+    if provider_state_only:
+        return True
+    return portable_context_ratio < CONTEXT_PORTABILITY_THRESHOLD and not idle_expired
 
 
 def demand_score(
@@ -305,6 +391,8 @@ def choose_agentic_model(
     turn: int,
     switch_count: int,
     history_tokens: int,
+    portable_context_ratio: float,
+    provider_state_only: bool,
     idle_expired: bool,
     policy: str = "acr-full",
 ) -> tuple[ModelProfile, str]:
@@ -314,6 +402,8 @@ def choose_agentic_model(
         return base_choice, "cold_select"
     if phase == "tool_loop" and policy != "acr-no-tool-lock":
         return current, "tool_loop_hard_lock"
+    if provider_state_only and policy != "acr-no-context-portability":
+        return current, "provider_state_hard_lock"
     if idle_expired and policy != "acr-no-idle-boundary":
         return base_choice, "idle_select"
     if base_choice.name == current.name:
@@ -331,6 +421,12 @@ def choose_agentic_model(
         + 0.20 * continuation_mass * frontier_multiplier
         + 0.04 * min(switch_count / 8, 1)
     )
+    if policy != "acr-no-context-portability" and not idle_expired:
+        context_shortfall = (
+            max(0.0, CONTEXT_PORTABILITY_THRESHOLD - portable_context_ratio)
+            / CONTEXT_PORTABILITY_THRESHOLD
+        )
+        switch_cost += 0.25 * context_shortfall * frontier_multiplier
     if quality_gain > switch_cost:
         return base_choice, "quality_gain_clears_switch_cost"
     return current, "continuity_cost_blocks_switch"
@@ -380,8 +476,10 @@ def rows_from_replay(path: Path) -> list[dict[str, Any]]:
                 "turn": rec.get("turn_index", 0),
                 "phase": policy.get("phase", ""),
                 "idle_expired": policy.get("idle_expired", False),
+                "provider_state_only": policy.get("provider_state_only", False),
                 "demand": "",
                 "history_tokens": "",
+                "portable_context_ratio": policy.get("context_portability", ""),
                 "baseline_model": policy.get("fallback_selected_model", ""),
                 "agentic_model": rec.get("selected_model", ""),
                 "baseline_switch": "",
@@ -389,6 +487,11 @@ def rows_from_replay(path: Path) -> list[dict[str, Any]]:
                 != rec.get("selected_model"),
                 "tool_loop_switch_violation_baseline": "",
                 "tool_loop_switch_violation_agentic": policy.get("phase") == "tool_loop"
+                and policy.get("current_model") != rec.get("selected_model"),
+                "context_loss_switch_violation_baseline": "",
+                "context_loss_switch_violation_agentic": policy.get(
+                    "provider_state_only", False
+                )
                 and policy.get("current_model") != rec.get("selected_model"),
                 "cached_prompt_ratio": "",
                 "baseline_quality": "",
@@ -421,6 +524,16 @@ def summarize(rows: list[dict[str, Any]]) -> dict[str, Any]:
         for row in rows
         if row["tool_loop_switch_violation_agentic"] != ""
     )
+    baseline_context_loss_violations = sum(
+        bool(row["context_loss_switch_violation_baseline"])
+        for row in rows
+        if row.get("context_loss_switch_violation_baseline") != ""
+    )
+    agentic_context_loss_violations = sum(
+        bool(row["context_loss_switch_violation_agentic"])
+        for row in rows
+        if row.get("context_loss_switch_violation_agentic") != ""
+    )
     baseline_cost = sum(float(row["baseline_cost"] or 0) for row in rows)
     agentic_cost = sum(float(row["agentic_cost"] or 0) for row in rows)
     cached_values = [
@@ -442,6 +555,7 @@ def summarize(rows: list[dict[str, Any]]) -> dict[str, Any]:
     )
     idle_turns = [row for row in rows if bool(row.get("idle_expired"))]
     agentic_idle_switches = sum(bool(row.get("agentic_switch")) for row in idle_turns)
+    provider_state_turns = [row for row in rows if bool(row.get("provider_state_only"))]
     return {
         "sessions": len(sessions),
         "turns": len(rows),
@@ -450,6 +564,8 @@ def summarize(rows: list[dict[str, Any]]) -> dict[str, Any]:
         "switch_reduction": baseline_switches - agentic_switches,
         "baseline_tool_loop_switch_violations": baseline_tool_violations,
         "agentic_tool_loop_switch_violations": agentic_tool_violations,
+        "baseline_context_loss_switch_violations": baseline_context_loss_violations,
+        "agentic_context_loss_switch_violations": agentic_context_loss_violations,
         "baseline_cost": round(baseline_cost, 6),
         "agentic_cost": round(agentic_cost, 6),
         "cost_delta": round(agentic_cost - baseline_cost, 6),
@@ -468,6 +584,7 @@ def summarize(rows: list[dict[str, Any]]) -> dict[str, Any]:
         "frontier_turn_delta": agentic_frontier_turns - baseline_frontier_turns,
         "idle_turns": len(idle_turns),
         "agentic_idle_switches": agentic_idle_switches,
+        "provider_state_turns": len(provider_state_turns),
         "mean_cached_prompt_ratio": (
             round(mean(cached_values), 4) if cached_values else None
         ),
@@ -565,6 +682,9 @@ def summarize_baseline_policy(rows: list[dict[str, Any]]) -> dict[str, Any]:
         "switches": summary["baseline_switches"],
         "switch_reduction_pct": 0.0,
         "tool_loop_switch_violations": summary["baseline_tool_loop_switch_violations"],
+        "context_loss_switch_violations": summary[
+            "baseline_context_loss_switch_violations"
+        ],
         "estimated_cost": summary["baseline_cost"],
         "cost_reduction_pct": 0.0,
         "frontier_turns": summary["baseline_frontier_turns"],
@@ -583,6 +703,9 @@ def summarize_agentic_policy(policy: str, rows: list[dict[str, Any]]) -> dict[st
         "switches": summary["agentic_switches"],
         "switch_reduction_pct": summary["switch_reduction_pct"],
         "tool_loop_switch_violations": summary["agentic_tool_loop_switch_violations"],
+        "context_loss_switch_violations": summary[
+            "agentic_context_loss_switch_violations"
+        ],
         "estimated_cost": summary["agentic_cost"],
         "cost_reduction_pct": summary["cost_reduction_pct"],
         "frontier_turns": summary["agentic_frontier_turns"],
@@ -664,8 +787,18 @@ def render_svg(summary: dict[str, Any]) -> str:
             "Agentic tool violations",
             float(summary.get("agentic_tool_loop_switch_violations") or 0),
         ),
+        (
+            "Baseline context-loss switches",
+            float(summary.get("baseline_context_loss_switch_violations") or 0),
+        ),
+        (
+            "Agentic context-loss switches",
+            float(summary.get("agentic_context_loss_switch_violations") or 0),
+        ),
     ]
     max_value = max([value for _, value in metrics] + [1])
+    height = 72 + len(metrics) * 42
+    footer_y = height - 16
     bars = []
     for idx, (label, value) in enumerate(metrics):
         y = 48 + idx * 42
@@ -682,11 +815,11 @@ def render_svg(summary: dict[str, Any]) -> str:
         )
     return "\n".join(
         [
-            '<svg xmlns="http://www.w3.org/2000/svg" width="680" height="240" viewBox="0 0 680 240">',
-            '<rect width="680" height="240" fill="#f8fafc"/>',
+            f'<svg xmlns="http://www.w3.org/2000/svg" width="680" height="{height}" viewBox="0 0 680 {height}">',
+            f'<rect width="680" height="{height}" fill="#f8fafc"/>',
             '<text x="24" y="28" font-size="18" font-weight="700" fill="#111827">Agentic Continuity Routing</text>',
             *bars,
-            f'<text x="24" y="224" font-size="12" fill="#4b5563">Cost delta: {summary.get("cost_delta")} | Mean cached ratio: {summary.get("mean_cached_prompt_ratio")}</text>',
+            f'<text x="24" y="{footer_y}" font-size="12" fill="#4b5563">Cost delta: {summary.get("cost_delta")} | Mean cached ratio: {summary.get("mean_cached_prompt_ratio")}</text>',
             "</svg>",
         ]
     )
@@ -714,7 +847,7 @@ def render_matrix_svg(summary: dict[str, Any]) -> str:
                 f'<rect x="560" y="{y}" width="{baseline_cost_w}" height="14" rx="3" fill="#cbd5e1"/>',
                 f'<rect x="560" y="{y + 18}" width="{agentic_cost_w}" height="14" rx="3" fill="#22c55e"/>',
                 f'<text x="830" y="{y + 12}" font-size="11" fill="#475569">cost -{row["cost_reduction_pct"]}%</text>',
-                f'<text x="160" y="{y + 52}" font-size="11" fill="#64748b">tool-loop violations {row["baseline_tool_loop_switch_violations"]} -> {row["agentic_tool_loop_switch_violations"]}; quality delta {row["quality_delta"]}</text>',
+                f'<text x="160" y="{y + 52}" font-size="11" fill="#64748b">tool-loop violations {row["baseline_tool_loop_switch_violations"]} -> {row["agentic_tool_loop_switch_violations"]}; context-loss switches {row["baseline_context_loss_switch_violations"]} -> {row["agentic_context_loss_switch_violations"]}; quality delta {row["quality_delta"]}</text>',
             ]
         )
     height = 110 + len(scenarios) * 74

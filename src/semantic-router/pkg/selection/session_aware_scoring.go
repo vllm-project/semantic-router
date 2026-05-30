@@ -88,6 +88,7 @@ func (s *SessionAwareSelector) scoreSwitchCandidate(
 		toolPenalty = s.config.ToolLoopStayBias
 	}
 	switchHistoryPenalty := s.switchHistoryPenalty(session)
+	contextPortabilityPenalty := s.contextPortabilityPenalty(session, current, model, idleExpired)
 	switchMargin := s.config.SwitchMargin
 	if idleExpired {
 		handoffPenalty = 0
@@ -101,6 +102,7 @@ func (s *SessionAwareSelector) scoreSwitchCandidate(
 		prefixPenalty -
 		toolPenalty -
 		switchHistoryPenalty -
+		contextPortabilityPenalty -
 		switchMargin
 	if selectorDelta <= 0 && qualityGap <= 0 && !idleExpired {
 		score -= s.config.StayBias
@@ -112,6 +114,7 @@ func (s *SessionAwareSelector) scoreSwitchCandidate(
 	trace.PrefixCachePenalty = prefixPenalty
 	trace.ToolLoopPenalty = toolPenalty
 	trace.SwitchHistoryPenalty = switchHistoryPenalty
+	trace.ContextPortabilityPenalty = contextPortabilityPenalty
 	trace.FrontierCostMultiplier = frontierMultiplier
 	trace.NetSwitchAdvantage = score - currentAdjustedScore
 	trace.FinalScore = score
@@ -142,6 +145,39 @@ func (s *SessionAwareSelector) switchHistoryPenalty(session *AgenticSessionConte
 		return 0
 	}
 	return s.config.SwitchHistoryWeight * clampF(float64(session.MemorySwitchCount)/8.0, 0, 1)
+}
+
+func (s *SessionAwareSelector) providerStateHardLock(session *AgenticSessionContext) bool {
+	return s.config.ProviderStateHardLock &&
+		session != nil &&
+		session.ContextPortabilityOK &&
+		session.ProviderStateOnly
+}
+
+func (s *SessionAwareSelector) contextPortabilityPenalty(
+	session *AgenticSessionContext,
+	current string,
+	candidate string,
+	idleExpired bool,
+) float64 {
+	if session == nil || !session.ContextPortabilityOK || current == "" || candidate == "" || current == candidate {
+		return 0
+	}
+	portability := sessionContextPortability(session)
+	multiplier := s.cacheCostMultiplier(current, candidate)
+	if session.ProviderStateOnly {
+		shortfall := 1 - portability
+		return (s.config.ProviderStatePenalty + s.config.ContextPortabilityWeight*shortfall) * multiplier
+	}
+	if idleExpired {
+		return 0
+	}
+	minPortable := clamp01(s.config.MinSwitchContextPortability)
+	if minPortable <= 0 || portability >= minPortable {
+		return 0
+	}
+	shortfall := (minPortable - portability) / minPortable
+	return s.config.ContextPortabilityWeight * shortfall * multiplier
 }
 
 func (s *SessionAwareSelector) cacheCostMultiplier(current, candidate string) float64 {
@@ -209,6 +245,20 @@ func sessionContinuationMass(session *AgenticSessionContext) float64 {
 		reuseRatio = 0.15
 	}
 	return clampF(0.45*reuseRatio+0.35*historyMass+0.20*turnDepth, 0, 1)
+}
+
+func sessionContextPortability(session *AgenticSessionContext) float64 {
+	if session == nil {
+		return 1
+	}
+	if session.ContextPortabilityOK {
+		return clamp01(session.ContextPortability)
+	}
+	if session.HistoryTokens > 0 {
+		contextTokens := math.Max(float64(session.ContextTokens), float64(session.HistoryTokens))
+		return clamp01(float64(session.HistoryTokens) / math.Max(contextTokens, 1))
+	}
+	return 1
 }
 
 func sessionCacheWarmth(session *AgenticSessionContext, idleExpired bool) float64 {
