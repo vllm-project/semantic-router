@@ -264,41 +264,41 @@ func applySessionAwareSelectionConfig(result *selection.SessionAwareConfig, cfg 
 	if cfg.FallbackMethod != "" {
 		result.FallbackMethod = selection.SelectionMethod(cfg.FallbackMethod)
 	}
-	if cfg.IdleTimeoutSeconds != 0 {
-		result.IdleTimeoutSeconds = cfg.IdleTimeoutSeconds
+	if cfg.IdleTimeoutSeconds != nil {
+		result.IdleTimeoutSeconds = *cfg.IdleTimeoutSeconds
 	}
-	if cfg.MinTurnsBeforeSwitch != 0 {
-		result.MinTurnsBeforeSwitch = cfg.MinTurnsBeforeSwitch
+	if cfg.MinTurnsBeforeSwitch != nil {
+		result.MinTurnsBeforeSwitch = *cfg.MinTurnsBeforeSwitch
 	}
-	if cfg.SwitchMargin != 0 {
-		result.SwitchMargin = cfg.SwitchMargin
+	if cfg.SwitchMargin != nil {
+		result.SwitchMargin = *cfg.SwitchMargin
 	}
-	if cfg.StayBias != 0 {
-		result.StayBias = cfg.StayBias
+	if cfg.StayBias != nil {
+		result.StayBias = *cfg.StayBias
 	}
 	if cfg.ToolLoopHardLock != nil {
 		result.ToolLoopHardLock = *cfg.ToolLoopHardLock
 	}
-	if cfg.ToolLoopStayBias != 0 {
-		result.ToolLoopStayBias = cfg.ToolLoopStayBias
+	if cfg.ToolLoopStayBias != nil {
+		result.ToolLoopStayBias = *cfg.ToolLoopStayBias
 	}
-	if cfg.PrefixCacheWeight != 0 {
-		result.PrefixCacheWeight = cfg.PrefixCacheWeight
+	if cfg.PrefixCacheWeight != nil {
+		result.PrefixCacheWeight = *cfg.PrefixCacheWeight
 	}
-	if cfg.HandoffPenaltyWeight != 0 {
-		result.HandoffPenaltyWeight = cfg.HandoffPenaltyWeight
+	if cfg.HandoffPenaltyWeight != nil {
+		result.HandoffPenaltyWeight = *cfg.HandoffPenaltyWeight
 	}
-	if cfg.DefaultHandoffPenalty != 0 {
-		result.DefaultHandoffPenalty = cfg.DefaultHandoffPenalty
+	if cfg.DefaultHandoffPenalty != nil {
+		result.DefaultHandoffPenalty = *cfg.DefaultHandoffPenalty
 	}
-	if cfg.QualityGapMultiplier != 0 {
-		result.QualityGapMultiplier = cfg.QualityGapMultiplier
+	if cfg.QualityGapMultiplier != nil {
+		result.QualityGapMultiplier = *cfg.QualityGapMultiplier
 	}
-	if cfg.MaxCacheCostMultiplier != 0 {
-		result.MaxCacheCostMultiplier = cfg.MaxCacheCostMultiplier
+	if cfg.MaxCacheCostMultiplier != nil {
+		result.MaxCacheCostMultiplier = *cfg.MaxCacheCostMultiplier
 	}
-	if cfg.SwitchHistoryWeight != 0 {
-		result.SwitchHistoryWeight = cfg.SwitchHistoryWeight
+	if cfg.SwitchHistoryWeight != nil {
+		result.SwitchHistoryWeight = *cfg.SwitchHistoryWeight
 	}
 }
 

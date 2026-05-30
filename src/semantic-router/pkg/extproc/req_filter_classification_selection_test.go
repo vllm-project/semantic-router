@@ -127,6 +127,12 @@ func TestSelectModelFromCandidatesRecordsSingleCandidateInRouterMemory(t *testin
 }
 
 func TestSelectModelFromCandidatesUsesDecisionScopedSessionAwareConfig(t *testing.T) {
+	globalIdleTimeout := 300
+	decisionIdleTimeout := 1
+	minTurnsBeforeSwitch := 1
+	switchMargin := 0.05
+	stayBias := 0.10
+
 	registry := selection.NewRegistry()
 	registry.Register(selection.MethodStatic, selectionResultSelector{result: &selection.SelectionResult{
 		SelectedModel: "frontier",
@@ -143,7 +149,7 @@ func TestSelectModelFromCandidatesUsesDecisionScopedSessionAwareConfig(t *testin
 		Config: &config.RouterConfig{
 			IntelligentRouting: config.IntelligentRouting{
 				ModelSelection: config.ModelSelectionConfig{
-					SessionAware: config.SessionAwareSelectionConfig{IdleTimeoutSeconds: 300},
+					SessionAware: config.SessionAwareSelectionConfig{IdleTimeoutSeconds: &globalIdleTimeout},
 				},
 			},
 		},
@@ -165,10 +171,10 @@ func TestSelectModelFromCandidatesUsesDecisionScopedSessionAwareConfig(t *testin
 		Type: "session_aware",
 		SessionAware: &config.SessionAwareSelectionConfig{
 			FallbackMethod:       "static",
-			IdleTimeoutSeconds:   1,
-			MinTurnsBeforeSwitch: 1,
-			SwitchMargin:         0.05,
-			StayBias:             0.10,
+			IdleTimeoutSeconds:   &decisionIdleTimeout,
+			MinTurnsBeforeSwitch: &minTurnsBeforeSwitch,
+			SwitchMargin:         &switchMargin,
+			StayBias:             &stayBias,
 			ToolLoopHardLock:     &trueValue,
 		},
 	}, ctx)

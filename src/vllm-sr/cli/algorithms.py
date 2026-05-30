@@ -246,8 +246,8 @@ class SessionAwareSelectionConfig(BaseModel):
     prefix_cache_weight: float | None = Field(default=0.20, ge=0)
     handoff_penalty_weight: float | None = Field(default=1.0, ge=0)
     default_handoff_penalty: float | None = Field(default=0.05, ge=0)
-    quality_gap_multiplier: float | None = Field(default=1.0, ge=0)
-    max_cache_cost_multiplier: float | None = Field(default=2.5, ge=0)
+    quality_gap_multiplier: float | None = Field(default=1.0, gt=0)
+    max_cache_cost_multiplier: float | None = Field(default=2.5, gt=0)
     switch_history_weight: float | None = Field(default=0.04, ge=0)
 
 

@@ -93,6 +93,58 @@ func TestBuildModelSelectionConfigPreservesLearningDefaultsWhenUnset(t *testing.
 	}
 }
 
+func TestBuildSessionAwareSelectionConfigPreservesExplicitZeroOverrides(t *testing.T) {
+	baseIdleTimeout := 300
+	baseSwitchMargin := 0.20
+	baseStayBias := 0.20
+	basePrefixCacheWeight := 0.30
+	baseHandoffPenaltyWeight := 1.0
+	baseDefaultHandoffPenalty := 0.10
+	baseToolLoopStayBias := 0.40
+	baseSwitchHistoryWeight := 0.20
+	zeroInt := 0
+	zeroFloat := 0.0
+
+	routerCfg := &config.RouterConfig{
+		IntelligentRouting: config.IntelligentRouting{
+			ModelSelection: config.ModelSelectionConfig{
+				SessionAware: config.SessionAwareSelectionConfig{
+					IdleTimeoutSeconds:    &baseIdleTimeout,
+					SwitchMargin:          &baseSwitchMargin,
+					StayBias:              &baseStayBias,
+					PrefixCacheWeight:     &basePrefixCacheWeight,
+					HandoffPenaltyWeight:  &baseHandoffPenaltyWeight,
+					DefaultHandoffPenalty: &baseDefaultHandoffPenalty,
+					ToolLoopStayBias:      &baseToolLoopStayBias,
+					SwitchHistoryWeight:   &baseSwitchHistoryWeight,
+				},
+			},
+		},
+	}
+
+	got := buildSessionAwareSelectionConfig(routerCfg, &config.SessionAwareSelectionConfig{
+		IdleTimeoutSeconds:    &zeroInt,
+		MinTurnsBeforeSwitch:  &zeroInt,
+		SwitchMargin:          &zeroFloat,
+		StayBias:              &zeroFloat,
+		PrefixCacheWeight:     &zeroFloat,
+		HandoffPenaltyWeight:  &zeroFloat,
+		DefaultHandoffPenalty: &zeroFloat,
+		ToolLoopStayBias:      &zeroFloat,
+		SwitchHistoryWeight:   &zeroFloat,
+	})
+
+	assertInt(t, got.IdleTimeoutSeconds, 0, "session_aware.idle_timeout_seconds")
+	assertInt(t, got.MinTurnsBeforeSwitch, 0, "session_aware.min_turns_before_switch")
+	assertFloat(t, got.SwitchMargin, 0, "session_aware.switch_margin")
+	assertFloat(t, got.StayBias, 0, "session_aware.stay_bias")
+	assertFloat(t, got.PrefixCacheWeight, 0, "session_aware.prefix_cache_weight")
+	assertFloat(t, got.HandoffPenaltyWeight, 0, "session_aware.handoff_penalty_weight")
+	assertFloat(t, got.DefaultHandoffPenalty, 0, "session_aware.default_handoff_penalty")
+	assertFloat(t, got.ToolLoopStayBias, 0, "session_aware.tool_loop_stay_bias")
+	assertFloat(t, got.SwitchHistoryWeight, 0, "session_aware.switch_history_weight")
+}
+
 func assertFloat(t *testing.T, got, want float64, field string) {
 	t.Helper()
 	if got != want {

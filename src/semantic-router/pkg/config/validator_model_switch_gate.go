@@ -38,38 +38,59 @@ func validateModelSwitchGate(cfg ModelSwitchGateConfig) error {
 }
 
 func validateSessionAwareSelectionConfig(cfg SessionAwareSelectionConfig) error {
-	if cfg.IdleTimeoutSeconds < 0 {
-		return fmt.Errorf("session_aware.idle_timeout_seconds must be >= 0, got %d", cfg.IdleTimeoutSeconds)
+	if err := validateOptionalNonNegativeInt("session_aware.idle_timeout_seconds", cfg.IdleTimeoutSeconds); err != nil {
+		return err
 	}
-	if cfg.MinTurnsBeforeSwitch < 0 {
-		return fmt.Errorf("session_aware.min_turns_before_switch must be >= 0, got %d", cfg.MinTurnsBeforeSwitch)
+	if err := validateOptionalNonNegativeInt("session_aware.min_turns_before_switch", cfg.MinTurnsBeforeSwitch); err != nil {
+		return err
 	}
-	if cfg.SwitchMargin < 0 {
-		return fmt.Errorf("session_aware.switch_margin must be >= 0, got %v", cfg.SwitchMargin)
+	if err := validateOptionalNonNegativeFloat("session_aware.switch_margin", cfg.SwitchMargin); err != nil {
+		return err
 	}
-	if cfg.StayBias < 0 {
-		return fmt.Errorf("session_aware.stay_bias must be >= 0, got %v", cfg.StayBias)
+	if err := validateOptionalNonNegativeFloat("session_aware.stay_bias", cfg.StayBias); err != nil {
+		return err
 	}
-	if cfg.ToolLoopStayBias < 0 {
-		return fmt.Errorf("session_aware.tool_loop_stay_bias must be >= 0, got %v", cfg.ToolLoopStayBias)
+	if err := validateOptionalNonNegativeFloat("session_aware.tool_loop_stay_bias", cfg.ToolLoopStayBias); err != nil {
+		return err
 	}
-	if cfg.PrefixCacheWeight < 0 {
-		return fmt.Errorf("session_aware.prefix_cache_weight must be >= 0, got %v", cfg.PrefixCacheWeight)
+	if err := validateOptionalNonNegativeFloat("session_aware.prefix_cache_weight", cfg.PrefixCacheWeight); err != nil {
+		return err
 	}
-	if cfg.HandoffPenaltyWeight < 0 {
-		return fmt.Errorf("session_aware.handoff_penalty_weight must be >= 0, got %v", cfg.HandoffPenaltyWeight)
+	if err := validateOptionalNonNegativeFloat("session_aware.handoff_penalty_weight", cfg.HandoffPenaltyWeight); err != nil {
+		return err
 	}
-	if cfg.DefaultHandoffPenalty < 0 {
-		return fmt.Errorf("session_aware.default_handoff_penalty must be >= 0, got %v", cfg.DefaultHandoffPenalty)
+	if err := validateOptionalNonNegativeFloat("session_aware.default_handoff_penalty", cfg.DefaultHandoffPenalty); err != nil {
+		return err
 	}
-	if cfg.QualityGapMultiplier < 0 {
-		return fmt.Errorf("session_aware.quality_gap_multiplier must be >= 0, got %v", cfg.QualityGapMultiplier)
+	if err := validateOptionalPositiveFloat("session_aware.quality_gap_multiplier", cfg.QualityGapMultiplier); err != nil {
+		return err
 	}
-	if cfg.MaxCacheCostMultiplier < 0 {
-		return fmt.Errorf("session_aware.max_cache_cost_multiplier must be >= 0, got %v", cfg.MaxCacheCostMultiplier)
+	if err := validateOptionalPositiveFloat("session_aware.max_cache_cost_multiplier", cfg.MaxCacheCostMultiplier); err != nil {
+		return err
 	}
-	if cfg.SwitchHistoryWeight < 0 {
-		return fmt.Errorf("session_aware.switch_history_weight must be >= 0, got %v", cfg.SwitchHistoryWeight)
+	if err := validateOptionalNonNegativeFloat("session_aware.switch_history_weight", cfg.SwitchHistoryWeight); err != nil {
+		return err
+	}
+	return nil
+}
+
+func validateOptionalNonNegativeInt(name string, value *int) error {
+	if value != nil && *value < 0 {
+		return fmt.Errorf("%s must be >= 0, got %d", name, *value)
+	}
+	return nil
+}
+
+func validateOptionalNonNegativeFloat(name string, value *float64) error {
+	if value != nil && *value < 0 {
+		return fmt.Errorf("%s must be >= 0, got %v", name, *value)
+	}
+	return nil
+}
+
+func validateOptionalPositiveFloat(name string, value *float64) error {
+	if value != nil && *value <= 0 {
+		return fmt.Errorf("%s must be > 0, got %v", name, *value)
 	}
 	return nil
 }

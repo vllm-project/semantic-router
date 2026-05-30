@@ -56,6 +56,7 @@ routing:
 - Tool loops stay on the previous model while tool calls/results are still active.
 - Non-idle sessions pay a prefix-cache and handoff penalty before switching.
 - Idle sessions can reselect after `idle_timeout_seconds`.
+- Set disableable penalty or bias knobs such as `switch_margin`, `stay_bias`, `prefix_cache_weight`, `handoff_penalty_weight`, or `switch_history_weight` to `0` when running ablations or intentionally disabling that part of the policy.
 - Expensive/frontier models increase the prefix-cache penalty, so checkout churn is stricter for higher-cost candidates.
 - Recent switch history increases the cost of another switch, preventing long-horizon agents from bouncing between models.
 - Router replay stores `session_policy`, including base scores, adjusted scores, hard-lock reasons, cache warmth, handoff penalties, and net switch advantage.
