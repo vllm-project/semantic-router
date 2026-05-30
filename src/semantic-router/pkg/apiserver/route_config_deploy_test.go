@@ -212,6 +212,103 @@ func mustMarshalCanonicalConfigYAML(t *testing.T, cfg *config.RouterConfig) []by
 	return data
 }
 
+func rollbackErrorCode(t *testing.T, body []byte) string {
+	t.Helper()
+
+	var resp struct {
+		Error struct {
+			Code string `json:"code"`
+		} `json:"error"`
+	}
+	if err := json.Unmarshal(body, &resp); err != nil {
+		t.Fatalf("unmarshal error response %q: %v", string(body), err)
+	}
+	return resp.Error.Code
+}
+
+func postRollback(t *testing.T, configPath, version string) *httptest.ResponseRecorder {
+	t.Helper()
+
+	body, err := json.Marshal(map[string]string{"version": version})
+	if err != nil {
+		t.Fatalf("marshal rollback body: %v", err)
+	}
+	apiServer := &ClassificationAPIServer{configPath: configPath}
+	req := httptest.NewRequest(http.MethodPost, "/config/router/rollback", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	rr := httptest.NewRecorder()
+	apiServer.handleConfigRollback(rr, req)
+	return rr
+}
+
+// TestHandleConfigRollbackRejectsMaliciousVersion ensures the rollback endpoint
+// rejects any version that is not a canonical backup timestamp before it is used
+// to build a filesystem path, closing the path-traversal vector.
+func TestHandleConfigRollbackRejectsMaliciousVersion(t *testing.T) {
+	configPath := writeDeployTestBaseConfig(t)
+	originalConfig, err := os.ReadFile(configPath)
+	if err != nil {
+		t.Fatalf("read base config: %v", err)
+	}
+
+	cases := []struct {
+		name    string
+		version string
+	}{
+		{"parent traversal", "../../../../etc/passwd"},
+		{"deep traversal", "../../../../../../../../etc/hostname"},
+		{"url encoded traversal", "..%2f..%2fetc%2fpasswd"},
+		{"embedded traversal", "foo/../../bar"},
+		{"absolute path", "/etc/passwd"},
+		{"bare word", "config"},
+		{"valid prefix yaml suffix", "20240101-000000.yaml"},
+		{"valid prefix then traversal", "20240101-000000/../../secret"},
+		{"wrong separator", "20240101_000000"},
+		{"too short date", "2024010-000000"},
+		{"non numeric", "abcdefgh-ijklmn"},
+		{"shell metachars", "; rm -rf /"},
+		{"dot dot", ".."},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			rr := postRollback(t, configPath, tc.version)
+
+			if rr.Code != http.StatusBadRequest {
+				t.Fatalf("version %q: expected 400, got %d: %s", tc.version, rr.Code, rr.Body.String())
+			}
+			if code := rollbackErrorCode(t, rr.Body.Bytes()); code != "INVALID_INPUT" {
+				t.Fatalf("version %q: expected error code INVALID_INPUT, got %q", tc.version, code)
+			}
+		})
+	}
+
+	// A rejected rollback must never mutate the active config.
+	afterConfig, err := os.ReadFile(configPath)
+	if err != nil {
+		t.Fatalf("re-read base config: %v", err)
+	}
+	if !bytes.Equal(originalConfig, afterConfig) {
+		t.Fatal("rejected rollback mutated the active config")
+	}
+}
+
+// TestHandleConfigRollbackAcceptsWellFormedVersion proves the allowlist does not
+// over-reject the canonical YYYYMMDD-HHMMSS format: a correctly-formatted version
+// with no backup file passes validation and fails later at the lookup (404).
+func TestHandleConfigRollbackAcceptsWellFormedVersion(t *testing.T) {
+	configPath := writeDeployTestBaseConfig(t)
+
+	rr := postRollback(t, configPath, "20240101-000000")
+
+	if rr.Code != http.StatusNotFound {
+		t.Fatalf("expected 404 for well-formed missing version, got %d: %s", rr.Code, rr.Body.String())
+	}
+	if code := rollbackErrorCode(t, rr.Body.Bytes()); code != "VERSION_NOT_FOUND" {
+		t.Fatalf("expected error code VERSION_NOT_FOUND, got %q", code)
+	}
+}
+
 func TestHandleConfigHashReturnsHashAndNoPath(t *testing.T) {
 	configPath := writeDeployTestBaseConfig(t)
 	apiServer := &ClassificationAPIServer{configPath: configPath}
