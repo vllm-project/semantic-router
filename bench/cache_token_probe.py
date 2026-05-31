@@ -410,6 +410,29 @@ def write_outputs(
             writer.writerows(rows)
 
 
+def build_aggregate_summary(
+    output_dir: Path,
+    summary: dict[str, Any],
+    baseline_summary: dict[str, Any] | None,
+    failures: list[str],
+) -> dict[str, Any]:
+    aggregate: dict[str, Any] = {
+        "output_dir": str(output_dir),
+        "router": summary,
+        "validation_failures": failures,
+    }
+    if baseline_summary is not None:
+        aggregate["baseline"] = baseline_summary
+    return aggregate
+
+
+def write_aggregate_output(aggregate: dict[str, Any], output_dir: Path) -> None:
+    output_dir.mkdir(parents=True, exist_ok=True)
+    (output_dir / "aggregate-summary.json").write_text(
+        json.dumps(aggregate, indent=2, sort_keys=True) + "\n"
+    )
+
+
 def attach_evidence_identity(
     summary: dict[str, Any], args: argparse.Namespace
 ) -> dict[str, Any]:
@@ -454,7 +477,10 @@ def main() -> int:
     failures = validate_summary(args, summary, args.label)
     if baseline_summary is not None:
         failures.extend(validate_summary(args, baseline_summary, args.baseline_label))
+    aggregate = build_aggregate_summary(output_dir, summary, baseline_summary, failures)
+    write_aggregate_output(aggregate, output_dir)
     result["validation_failures"] = failures
+    result["aggregate_summary"] = aggregate
     print(json.dumps(result, indent=2, sort_keys=True))
     return 0 if not failures else 1
 

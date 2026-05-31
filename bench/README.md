@@ -147,10 +147,12 @@ python3 bench/cache_token_probe.py \
 ```
 
 The output is written under `.agent-harness/experiments/cache-token-probe/` by
-default. Each summary records `probe_kind` set to
-`repeated-prefix-cache-token-probe`, the repeated-prefix hash, the prefix length,
-and the repeat count so GA evidence is tied to this workload rather than an
-arbitrary JSON aggregate. The probe recognizes Chat Completions style
+default. It includes per-path `summary.json` files plus an
+`aggregate-summary.json` shaped for the GA report and branch-image assembler.
+Each summary records `probe_kind` set to `repeated-prefix-cache-token-probe`,
+the repeated-prefix hash, the prefix length, and the repeat count so GA
+evidence is tied to this workload rather than an arbitrary JSON aggregate. The
+probe recognizes Chat Completions style
 `usage.prompt_tokens_details.cached_tokens`, Responses style
 `usage.input_tokens_details.cached_tokens`, and common backend root counters
 such as `usage.cached_tokens` or `usage.prompt_cache_hit_tokens`; summaries

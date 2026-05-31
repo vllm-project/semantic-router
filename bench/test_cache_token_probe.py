@@ -1,4 +1,5 @@
 import importlib.util
+import json
 from argparse import Namespace
 from pathlib import Path
 
@@ -223,3 +224,28 @@ def test_validate_summary_fails_low_success_rate():
     assert probe.validate_summary(validation_args(), summary, "router") == [
         "router: success_rate 0.5 < 1.0"
     ]
+
+
+def test_aggregate_summary_output_matches_ga_report_shape(tmp_path):
+    probe = load_probe_module()
+    router_summary = probe.attach_evidence_identity(
+        probe.summarize([row(probe, 0), row(probe, 20)], 1.0, "router"),
+        Namespace(evidence_ref="77e6b573", evidence_image_tag="branch-image"),
+    )
+    baseline_summary = probe.summarize(
+        [row(probe, 0), row(probe, 20)], 1.0, "direct-backend"
+    )
+    failures = ["router: cached_token_reporting positive < impossible"]
+
+    aggregate = probe.build_aggregate_summary(
+        tmp_path, router_summary, baseline_summary, failures
+    )
+    probe.write_aggregate_output(aggregate, tmp_path)
+    written = json.loads((tmp_path / "aggregate-summary.json").read_text())
+
+    assert written["output_dir"] == str(tmp_path)
+    assert written["router"]["evidence_ref"] == "77e6b573"
+    assert written["router"]["evidence_image_tag"] == "branch-image"
+    assert written["router"]["probe_kind"] == "repeated-prefix-cache-token-probe"
+    assert written["baseline"]["label"] == "direct-backend"
+    assert written["validation_failures"] == failures
