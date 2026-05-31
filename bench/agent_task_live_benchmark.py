@@ -311,53 +311,54 @@ def long_horizon_task_specs() -> tuple[TaskSpec, ...]:
             ),
         ),
         TaskSpec(
-            name="fallback-policy",
+            name="cluster-boundary",
             suite="long-horizon",
             turns=(
                 TaskTurn(
                     phase="user_turn",
                     prompt=(
-                        "We are reviewing endpoint fallback behavior for a selected "
-                        "model. Identify the decision facts you need."
+                        "We are reviewing how ExtProc should route a selected model. "
+                        "Identify which layer owns cluster choice and which layer "
+                        "owns endpoint choice."
                     ),
                 ),
                 TaskTurn(
                     phase="tool_loop",
-                    prompt="Use the endpoint probe result.",
-                    tool_name="probe_endpoints",
+                    prompt="Use the Envoy routing fact.",
+                    tool_name="inspect_envoy_route_config",
                     tool_result=(
-                        "endpoint primary has unresolved provider metadata; endpoint "
-                        "secondary has protocol=http, base_url reachable, and supports "
-                        "the selected provider model id."
+                        "ExtProc can mutate request headers and body before routing; "
+                        "Envoy clusters own load balancing among endpoints."
                     ),
                 ),
                 TaskTurn(
                     phase="provider_state",
                     prompt=(
-                        "Continue with the same session state and decide the safe "
-                        "fallback action."
+                        "Continue from the same provider-managed state and decide "
+                        "whether the router should probe or fallback between endpoints."
                     ),
                 ),
                 TaskTurn(
                     phase="tool_loop",
-                    prompt="Use the validation result.",
-                    tool_name="run_endpoint_unit_test",
+                    prompt="Use the maintainer boundary rule.",
+                    tool_name="check_extproc_boundary",
                     tool_result=(
-                        "TestSelectBestEndpointWithDetails passes and reports the "
-                        "primary endpoint failure in the diagnostic list."
+                        "The router may emit selected-model, selected-decision, and "
+                        "cluster-routing signals, but endpoint failover remains an "
+                        "Envoy cluster/LB concern."
                     ),
                 ),
                 TaskTurn(
                     phase="final",
                     prompt=(
-                        "Return the fallback policy. Include exact tokens "
-                        "ACTION=skip-broken-endpoint, FALLBACK=secondary-endpoint, "
-                        "TRACE=include-resolution-errors."
+                        "Return the routing boundary. Include exact tokens "
+                        "ROUTER=cluster-signal, ENVOY=endpoint-lb, "
+                        "NO=endpoint-fallback."
                     ),
                     expected_terms=(
-                        "ACTION=skip-broken-endpoint",
-                        "FALLBACK=secondary-endpoint",
-                        "TRACE=include-resolution-errors",
+                        "ROUTER=cluster-signal",
+                        "ENVOY=endpoint-lb",
+                        "NO=endpoint-fallback",
                     ),
                 ),
             ),
