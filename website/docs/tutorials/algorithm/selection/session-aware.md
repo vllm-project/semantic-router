@@ -2,7 +2,7 @@
 
 ## Overview
 
-`session_aware` selects one model from a decision's `modelRefs` while respecting agentic multi-turn context. It wraps a base selector such as `hybrid`, then applies a router-owned stay-vs-switch policy for sessions, tool loops, idle timeout, handoff cost, switch history, and prefix-cache cost.
+`session_aware` selects one model from a decision's `modelRefs` while respecting agentic multi-turn context. It wraps a base selector such as `hybrid`, then applies a router-owned stay-vs-switch policy for sessions, tool loops, idle timeout, handoff cost, switch history, confidence-gated remaining-turn priors, and prefix-cache cost.
 
 Use it when clients send a stable `x-session-id` header or use Response API conversation IDs and you want long-running agent sessions to avoid unnecessary model churn. Provider conversation history is treated as cache; the router keeps its own session memory so model selection can reason about the conversation even when the next turn might move to another backend.
 
@@ -13,6 +13,7 @@ It aligns to `config/algorithm/selection/session-aware.yaml`.
 - Preserves KV/prefix-cache locality across long-horizon agent sessions.
 - Hard-locks active tool loops to avoid mid-loop model changes.
 - Lets idle sessions reselect after the cache is likely cold.
+- Uses replay-derived remaining-turn priors to be stricter for task families that usually continue for many turns.
 - Scales switch cost up for expensive/frontier model checkouts.
 - Records `session_policy` in router replay for audit, experiments, and paper/blog analysis.
 
@@ -49,6 +50,9 @@ routing:
           tool_loop_hard_lock: true
           prefix_cache_weight: 0.20
           switch_history_weight: 0.04
+          remaining_turn_prior_weight: 1.0
+          remaining_turn_prior_horizon: 8
+          min_remaining_turn_prior_samples: 3
 ```
 
 ## Policy
@@ -58,5 +62,6 @@ routing:
 - Idle sessions can reselect after `idle_timeout_seconds`.
 - Expensive/frontier models increase the prefix-cache penalty, so checkout churn is stricter for higher-cost candidates.
 - Recent switch history increases the cost of another switch, preventing long-horizon agents from bouncing between models.
-- Router replay stores `session_policy`, including base scores, adjusted scores, hard-lock reasons, cache warmth, handoff penalties, and net switch advantage.
+- If lookup tables contain `remaining_turn_prior` for the matched category or decision, a sufficiently sampled prior lifts continuation mass for early turns and decays as the session advances.
+- Router replay stores `session_policy`, including base scores, adjusted scores, hard-lock reasons, cache warmth, remaining-turn prior source and sample count, handoff penalties, and net switch advantage.
 - Provider-reported cached prompt tokens are recorded as telemetry and costed with `cached_input_per_1m`; client-facing usage is not rewritten.

@@ -14,3 +14,6 @@ algorithm:
     quality_gap_multiplier: 1.0
     max_cache_cost_multiplier: 2.5
     switch_history_weight: 0.04
+    remaining_turn_prior_weight: 1.0
+    remaining_turn_prior_horizon: 8
+    min_remaining_turn_prior_samples: 3

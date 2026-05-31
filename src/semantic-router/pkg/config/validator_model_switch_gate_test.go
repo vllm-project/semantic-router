@@ -60,3 +60,28 @@ var _ = Describe("validateModelSwitchGate", func() {
 		Expect(validateModelSwitchGate(cfg)).To(Succeed())
 	})
 })
+
+var _ = Describe("validateSessionAwareSelectionConfig", func() {
+	It("accepts remaining-turn prior controls", func() {
+		cfg := SessionAwareSelectionConfig{
+			RemainingTurnPriorWeight:     0.8,
+			RemainingTurnPriorHorizon:    12,
+			MinRemainingTurnPriorSamples: 5,
+		}
+		Expect(validateSessionAwareSelectionConfig(cfg)).To(Succeed())
+	})
+
+	It("rejects negative remaining-turn prior weight", func() {
+		cfg := SessionAwareSelectionConfig{RemainingTurnPriorWeight: -0.1}
+		err := validateSessionAwareSelectionConfig(cfg)
+		Expect(err).To(HaveOccurred())
+		Expect(err.Error()).To(ContainSubstring("remaining_turn_prior_weight"))
+	})
+
+	It("rejects negative remaining-turn prior sample floor", func() {
+		cfg := SessionAwareSelectionConfig{MinRemainingTurnPriorSamples: -1}
+		err := validateSessionAwareSelectionConfig(cfg)
+		Expect(err).To(HaveOccurred())
+		Expect(err.Error()).To(ContainSubstring("min_remaining_turn_prior_samples"))
+	})
+})
