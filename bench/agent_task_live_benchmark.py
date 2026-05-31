@@ -311,6 +311,180 @@ def long_horizon_task_specs() -> tuple[TaskSpec, ...]:
             ),
         ),
         TaskSpec(
+            name="code-review-followup",
+            suite="long-horizon",
+            turns=(
+                TaskTurn(
+                    phase="user_turn",
+                    prompt=(
+                        "Review a draft PR for a session-aware routing fix. Start by "
+                        "identifying what evidence you need before approving it."
+                    ),
+                ),
+                TaskTurn(
+                    phase="tool_loop",
+                    prompt="Use the PR diff summary before naming the risk.",
+                    tool_name="read_pr_diff",
+                    tool_result=(
+                        "The PR adds selected-model and replay-id headers to normal "
+                        "responses, but looper fast responses still return before "
+                        "selected-confidence and context-token-count are attached."
+                    ),
+                ),
+                TaskTurn(
+                    phase="tool_loop",
+                    prompt="Use the CI failure before deciding the requested change.",
+                    tool_name="read_ci_log",
+                    tool_result=(
+                        "go test ./pkg/extproc fails: expected looper response to "
+                        "include x-vsr-selected-confidence and x-vsr-context-token-count."
+                    ),
+                ),
+                TaskTurn(
+                    phase="provider_state",
+                    prompt=(
+                        "Continue the same PR review with provider-managed state. "
+                        "State whether the router should switch models during this "
+                        "review loop."
+                    ),
+                ),
+                TaskTurn(
+                    phase="topic_drift",
+                    prompt=(
+                        "Now turn the review into a concrete fix request and a "
+                        "validation command."
+                    ),
+                ),
+                TaskTurn(
+                    phase="final",
+                    prompt=(
+                        "Return the review decision. Include exact tokens "
+                        "FINDING=missing-looper-diagnostics, "
+                        "FIX=emit-tracked-headers, "
+                        "VALIDATE=extproc-header-tests."
+                    ),
+                    expected_terms=(
+                        "FINDING=missing-looper-diagnostics",
+                        "FIX=emit-tracked-headers",
+                        "VALIDATE=extproc-header-tests",
+                    ),
+                ),
+            ),
+        ),
+        TaskSpec(
+            name="research-synthesis",
+            suite="long-horizon",
+            turns=(
+                TaskTurn(
+                    phase="user_turn",
+                    prompt=(
+                        "Synthesize the research framing for session-aware agentic "
+                        "routing. Start from the problem, not from implementation."
+                    ),
+                ),
+                TaskTurn(
+                    phase="tool_loop",
+                    prompt="Use the related-work note before choosing the claim.",
+                    tool_name="read_related_work_note",
+                    tool_result=(
+                        "Single-turn LLM routing papers optimize per-request "
+                        "cost-quality. Agent serving papers emphasize long sessions, "
+                        "tool pauses, and KV-cache lifetime."
+                    ),
+                ),
+                TaskTurn(
+                    phase="tool_loop",
+                    prompt="Use the experiment summary before deciding the evidence.",
+                    tool_name="read_experiment_summary",
+                    tool_result=(
+                        "Synthetic policy matrix removes tool-loop and provider-state "
+                        "switch violations. AMD overlay runs show long-session and "
+                        "failure-recovery evidence, but branch-image and cached-token "
+                        "evidence are still blocked."
+                    ),
+                ),
+                TaskTurn(
+                    phase="provider_state",
+                    prompt=(
+                        "Continue the synthesis under the same provider-managed "
+                        "continuation state and preserve the framing."
+                    ),
+                ),
+                TaskTurn(
+                    phase="topic_drift",
+                    prompt=(
+                        "Now translate the paper framing into a blog-safe claim that "
+                        "does not overstate GA readiness."
+                    ),
+                ),
+                TaskTurn(
+                    phase="final",
+                    prompt=(
+                        "Return the synthesis. Include exact tokens "
+                        "CLAIM=session-continuity, EVIDENCE=policy-and-amd, "
+                        "LIMITATION=not-ga-ready."
+                    ),
+                    expected_terms=(
+                        "CLAIM=session-continuity",
+                        "EVIDENCE=policy-and-amd",
+                        "LIMITATION=not-ga-ready",
+                    ),
+                ),
+            ),
+        ),
+        TaskSpec(
+            name="maintainer-handoff",
+            suite="long-horizon",
+            turns=(
+                TaskTurn(
+                    phase="user_turn",
+                    prompt=(
+                        "Act as the maintainer orchestrating multiple coding agents. "
+                        "Decide what should be reviewed today."
+                    ),
+                ),
+                TaskTurn(
+                    phase="tool_loop",
+                    prompt="Use the issue board snapshot before assigning work.",
+                    tool_name="read_issue_board",
+                    tool_result=(
+                        "v0.3 tracker is open. Session-aware routing needs fresh AMD "
+                        "branch-image evidence, positive cached-token telemetry, and "
+                        "expanded real-agent tasks."
+                    ),
+                ),
+                TaskTurn(
+                    phase="tool_loop",
+                    prompt="Use the PR board snapshot before deciding next actions.",
+                    tool_name="read_pr_board",
+                    tool_result=(
+                        "Unified semantic-router PR is draft and mergeable. Blog PR "
+                        "is draft. Older scattered PRs should remain closed."
+                    ),
+                ),
+                TaskTurn(
+                    phase="provider_state",
+                    prompt=(
+                        "Continue the maintainer handoff with the same provider state "
+                        "and preserve the release-blocking priorities."
+                    ),
+                ),
+                TaskTurn(
+                    phase="final",
+                    prompt=(
+                        "Return the maintainer handoff. Include exact tokens "
+                        "ACTION=refresh-amd-evidence, ACTION=review-stale-prs, "
+                        "ROUTE=maintainer-ops."
+                    ),
+                    expected_terms=(
+                        "ACTION=refresh-amd-evidence",
+                        "ACTION=review-stale-prs",
+                        "ROUTE=maintainer-ops",
+                    ),
+                ),
+            ),
+        ),
+        TaskSpec(
             name="cluster-boundary",
             suite="long-horizon",
             turns=(

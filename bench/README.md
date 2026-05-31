@@ -182,8 +182,9 @@ summary, and a router-vs-direct-backend comparison when a baseline endpoint is
 configured.
 
 Use the long-horizon suite when the experiment should stress longer traces,
-provider-state continuations, topic drift, cache-accounting decisions, fallback
-triage, and observability explanations:
+provider-state continuations, topic drift, cache-accounting decisions,
+backend-failure/session-recovery triage, observability explanations, PR review
+follow-up, research synthesis, and maintainer handoff:
 
 ```bash
 python3 bench/agent_task_live_benchmark.py \

@@ -5,6 +5,8 @@ from pathlib import Path
 HALF_SCORE = 0.5
 MEAN_SCORE = 0.75
 MISSING_HEADER_COUNT = 2
+MIN_LONG_HORIZON_TASKS = 9
+MIN_LONG_HORIZON_TURNS = 49
 
 
 def load_benchmark_module():
@@ -96,6 +98,28 @@ def test_long_horizon_suite_repetitions_expand_task_instances():
     assert rows[0]["task_suite"] == "long-horizon"
     assert rows[0]["task_repetition"] == 0
     assert rows[-1]["task_repetition"] == 1
+
+
+def test_long_horizon_suite_covers_real_agent_workflows():
+    bench = load_benchmark_module()
+    tasks = bench.task_specs("long-horizon")
+    task_names = {task.name for task in tasks}
+    total_turns = sum(len(task.turns) for task in tasks)
+    phase_names = {turn.phase for task in tasks for turn in task.turns}
+
+    assert {
+        "code-review-followup",
+        "research-synthesis",
+        "maintainer-handoff",
+    } <= task_names
+    assert len(tasks) >= MIN_LONG_HORIZON_TASKS
+    assert total_turns >= MIN_LONG_HORIZON_TURNS
+    assert {
+        "tool_loop",
+        "provider_state",
+        "topic_drift",
+        "idle_boundary",
+    } <= phase_names
 
 
 def test_summary_tracks_quality_and_continuity_violations():
