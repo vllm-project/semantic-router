@@ -4,16 +4,16 @@ package selection
 // It records the facts and costs used to decide whether an agentic session may
 // switch models, so replay and experiments can reconstruct every stay/switch.
 type SessionPolicyTrace struct {
-	Algorithm      string
-	FallbackMethod string
+	Algorithm  string
+	BaseMethod string
 
 	SessionID string
 	UserID    string
 	Phase     AgenticPhase
 
-	CurrentModel          string
-	FallbackSelectedModel string
-	SelectedModel         string
+	CurrentModel      string
+	BaseSelectedModel string
+	SelectedModel     string
 
 	TurnIndex                   int
 	MemoryTurnCount             int
@@ -83,12 +83,12 @@ func (t *SessionPolicyTrace) ToMap() map[string]interface{} {
 	}
 	out := map[string]interface{}{
 		"algorithm":                         t.Algorithm,
-		"fallback_method":                   t.FallbackMethod,
+		"base_method":                       t.BaseMethod,
 		"session_id":                        t.SessionID,
 		"user_id":                           t.UserID,
 		"phase":                             string(t.Phase),
 		"current_model":                     t.CurrentModel,
-		"fallback_selected_model":           t.FallbackSelectedModel,
+		"base_selected_model":               t.BaseSelectedModel,
 		"selected_model":                    t.SelectedModel,
 		"turn_index":                        t.TurnIndex,
 		"memory_turn_count":                 t.MemoryTurnCount,

@@ -45,7 +45,7 @@ routing:
       algorithm:
         type: session_aware
         session_aware:
-          fallback_method: hybrid
+          base_method: hybrid
           idle_timeout_seconds: 300
           tool_loop_hard_lock: true
           context_portability_hard_lock: true

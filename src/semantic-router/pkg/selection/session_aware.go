@@ -13,7 +13,7 @@ import (
 
 // SessionAwareConfig configures agentic session-aware model selection.
 type SessionAwareConfig struct {
-	FallbackMethod               SelectionMethod
+	BaseMethod                   SelectionMethod
 	IdleTimeoutSeconds           int
 	MinTurnsBeforeSwitch         int
 	SwitchMargin                 float64
@@ -36,7 +36,7 @@ type SessionAwareConfig struct {
 // DefaultSessionAwareConfig returns the production-oriented default policy.
 func DefaultSessionAwareConfig() *SessionAwareConfig {
 	return &SessionAwareConfig{
-		FallbackMethod:               MethodHybrid,
+		BaseMethod:                   MethodHybrid,
 		IdleTimeoutSeconds:           300,
 		MinTurnsBeforeSwitch:         1,
 		SwitchMargin:                 0.05,
@@ -59,10 +59,10 @@ func DefaultSessionAwareConfig() *SessionAwareConfig {
 
 // SessionAwareSelector wraps a base selector with explicit session policy.
 type SessionAwareSelector struct {
-	config      *SessionAwareConfig
-	fallback    Selector
-	modelParams map[string]config.ModelParams
-	lookupTable lookuptable.LookupTable
+	config       *SessionAwareConfig
+	baseSelector Selector
+	modelParams  map[string]config.ModelParams
+	lookupTable  lookuptable.LookupTable
 }
 
 func NewSessionAwareSelector(cfg *SessionAwareConfig) *SessionAwareSelector {
@@ -79,7 +79,7 @@ func NewSessionAwareSelector(cfg *SessionAwareConfig) *SessionAwareSelector {
 
 func normalizeSessionAwareConfig(cfg SessionAwareConfig) *SessionAwareConfig {
 	defaults := DefaultSessionAwareConfig()
-	cfg.FallbackMethod = defaultSessionAwareFallback(cfg.FallbackMethod, defaults.FallbackMethod)
+	cfg.BaseMethod = defaultSessionAwareBaseMethod(cfg.BaseMethod, defaults.BaseMethod)
 	cfg.IdleTimeoutSeconds = defaultNonNegativeInt(cfg.IdleTimeoutSeconds, defaults.IdleTimeoutSeconds)
 	cfg.MinTurnsBeforeSwitch = defaultNonNegativeInt(cfg.MinTurnsBeforeSwitch, defaults.MinTurnsBeforeSwitch)
 	cfg.SwitchMargin = defaultNonNegativeFloat(cfg.SwitchMargin, defaults.SwitchMargin)
@@ -97,37 +97,37 @@ func normalizeSessionAwareConfig(cfg SessionAwareConfig) *SessionAwareConfig {
 	return &cfg
 }
 
-func defaultSessionAwareFallback(method, fallback SelectionMethod) SelectionMethod {
+func defaultSessionAwareBaseMethod(method, defaultMethod SelectionMethod) SelectionMethod {
 	if method == "" || method == MethodSessionAware {
-		return fallback
+		return defaultMethod
 	}
 	return method
 }
 
-func defaultNonNegativeInt(value, fallback int) int {
+func defaultNonNegativeInt(value, defaultValue int) int {
 	if value < 0 {
-		return fallback
+		return defaultValue
 	}
 	return value
 }
 
-func defaultPositiveInt(value, fallback int) int {
+func defaultPositiveInt(value, defaultValue int) int {
 	if value <= 0 {
-		return fallback
+		return defaultValue
 	}
 	return value
 }
 
-func defaultNonNegativeFloat(value, fallback float64) float64 {
+func defaultNonNegativeFloat(value, defaultValue float64) float64 {
 	if value < 0 {
-		return fallback
+		return defaultValue
 	}
 	return value
 }
 
-func defaultPositiveFloat(value, fallback float64) float64 {
+func defaultPositiveFloat(value, defaultValue float64) float64 {
 	if value <= 0 {
-		return fallback
+		return defaultValue
 	}
 	return value
 }
@@ -136,8 +136,8 @@ func (s *SessionAwareSelector) Method() SelectionMethod {
 	return MethodSessionAware
 }
 
-func (s *SessionAwareSelector) SetFallbackSelector(selector Selector) {
-	s.fallback = selector
+func (s *SessionAwareSelector) SetBaseSelector(selector Selector) {
+	s.baseSelector = selector
 }
 
 func (s *SessionAwareSelector) SetLookupTable(lt lookuptable.LookupTable) {
@@ -156,7 +156,7 @@ func (s *SessionAwareSelector) Select(ctx context.Context, selCtx *SelectionCont
 		return nil, err
 	}
 
-	base, err := s.selectFallback(ctx, selCtx)
+	base, err := s.selectBase(ctx, selCtx)
 	if err != nil {
 		return nil, err
 	}
@@ -164,7 +164,7 @@ func (s *SessionAwareSelector) Select(ctx context.Context, selCtx *SelectionCont
 	if session == nil {
 		trace := s.newPolicyTrace(selCtx, base, nil, "", false, false)
 		trace.MissingSignals = append(trace.MissingSignals, "session_context")
-		return s.wrapFallback(base, "missing_session_context", trace), nil
+		return s.wrapBaseSelection(base, "missing_session_context", trace), nil
 	}
 
 	current := strings.TrimSpace(session.PreviousModel)
@@ -172,7 +172,7 @@ func (s *SessionAwareSelector) Select(ctx context.Context, selCtx *SelectionCont
 	trace := s.newPolicyTrace(selCtx, base, session, current, false, driftDetected)
 	if signal, reason := currentModelIssue(selCtx.CandidateModels, current); signal != "" {
 		trace.MissingSignals = append(trace.MissingSignals, signal)
-		return s.wrapFallback(base, reason, trace), nil
+		return s.wrapBaseSelection(base, reason, trace), nil
 	}
 
 	timeout := secondsDuration(s.config.IdleTimeoutSeconds)
@@ -187,12 +187,12 @@ func (s *SessionAwareSelector) Select(ctx context.Context, selCtx *SelectionCont
 	bestRef, bestScore := bestCandidateByScore(selCtx.CandidateModels, adjusted)
 	if bestRef == nil {
 		trace.MissingSignals = append(trace.MissingSignals, "adjusted_scores")
-		return s.wrapFallback(base, "missing_adjusted_scores", trace), nil
+		return s.wrapBaseSelection(base, "missing_adjusted_scores", trace), nil
 	}
 
 	confidence := adjustedConfidence(bestRef.Model, adjusted)
 	reason := fmt.Sprintf(
-		"session_aware: fallback=%s current=%s selected=%s idle_expired=%t active_tool_loop=%t",
+		"session_aware: base=%s current=%s selected=%s idle_expired=%t active_tool_loop=%t",
 		base.Method, current, bestRef.Model, idleExpired, session.ActiveToolLoop,
 	)
 	trace.SelectedModel = bestRef.Model
@@ -267,24 +267,24 @@ func (s *SessionAwareSelector) decisionDriftDetected(selCtx *SelectionContext, s
 	return selCtx.DecisionName != session.LastDecisionName
 }
 
-func (s *SessionAwareSelector) selectFallback(ctx context.Context, selCtx *SelectionContext) (*SelectionResult, error) {
-	if s.fallback != nil && s.fallback.Method() != MethodSessionAware {
-		result, err := s.fallback.Select(ctx, selCtx)
+func (s *SessionAwareSelector) selectBase(ctx context.Context, selCtx *SelectionContext) (*SelectionResult, error) {
+	if s.baseSelector != nil && s.baseSelector.Method() != MethodSessionAware {
+		result, err := s.baseSelector.Select(ctx, selCtx)
 		if err == nil && result != nil {
 			ensureScoresForCandidates(result, selCtx.CandidateModels)
 			return result, nil
 		}
-		logging.Warnf("[SessionAwareSelector] fallback selector %s failed: %v", s.fallback.Method(), err)
+		logging.Warnf("[SessionAwareSelector] base selector %s failed: %v", s.baseSelector.Method(), err)
 	}
-	result := staticFallbackResult(selCtx)
+	result := staticBaseResult(selCtx)
 	return result, nil
 }
 
-func (s *SessionAwareSelector) wrapFallback(base *SelectionResult, reason string, trace *SessionPolicyTrace) *SelectionResult {
+func (s *SessionAwareSelector) wrapBaseSelection(base *SelectionResult, reason string, trace *SessionPolicyTrace) *SelectionResult {
 	wrapped := *base
 	wrapped.Method = MethodSessionAware
 	wrapped.Tier = TierSupported
-	wrapped.Reasoning = fmt.Sprintf("session_aware: %s; fallback=%s selected=%s", reason, base.Method, base.SelectedModel)
+	wrapped.Reasoning = fmt.Sprintf("session_aware: %s; base=%s selected=%s", reason, base.Method, base.SelectedModel)
 	if trace != nil {
 		trace.SelectedModel = base.SelectedModel
 		trace.DecisionReason = reason
@@ -331,7 +331,7 @@ func (s *SessionAwareSelector) forceCurrent(selCtx *SelectionContext, base *Sele
 		Confidence:    1.0,
 		Method:        MethodSessionAware,
 		Tier:          TierSupported,
-		Reasoning:     fmt.Sprintf("session_aware: %s current=%s fallback=%s", reason, current, base.Method),
+		Reasoning:     fmt.Sprintf("session_aware: %s current=%s base=%s", reason, current, base.Method),
 		AllScores:     allScores,
 		SessionPolicy: trace,
 	}
@@ -355,8 +355,8 @@ func (s *SessionAwareSelector) newPolicyTrace(
 		DecisionDrift: decisionDrift,
 	}
 	if base != nil {
-		trace.FallbackMethod = string(base.Method)
-		trace.FallbackSelectedModel = base.SelectedModel
+		trace.BaseMethod = string(base.Method)
+		trace.BaseSelectedModel = base.SelectedModel
 		trace.BaseScores = cloneScores(base.AllScores)
 	}
 	if session == nil {
@@ -399,10 +399,10 @@ func (s *SessionAwareSelector) newPolicyTrace(
 }
 
 func (s *SessionAwareSelector) UpdateFeedback(ctx context.Context, feedback *Feedback) error {
-	if s.fallback == nil {
+	if s.baseSelector == nil {
 		return nil
 	}
-	return s.fallback.UpdateFeedback(ctx, feedback)
+	return s.baseSelector.UpdateFeedback(ctx, feedback)
 }
 
 func (s *SessionAwareSelector) Tier() AlgorithmTier {
@@ -410,8 +410,8 @@ func (s *SessionAwareSelector) Tier() AlgorithmTier {
 }
 
 func (s *SessionAwareSelector) ExternalDependencies() []Dependency {
-	if s.fallback == nil {
+	if s.baseSelector == nil {
 		return nil
 	}
-	return s.fallback.ExternalDependencies()
+	return s.baseSelector.ExternalDependencies()
 }

@@ -166,7 +166,7 @@ func TestSelectModelFromCandidatesUsesDecisionScopedSessionAwareConfig(t *testin
 	}, &config.AlgorithmConfig{
 		Type: "session_aware",
 		SessionAware: &config.SessionAwareSelectionConfig{
-			FallbackMethod:       "static",
+			BaseMethod:           "static",
 			IdleTimeoutSeconds:   extprocIntPtr(1),
 			MinTurnsBeforeSwitch: extprocIntPtr(1),
 			SwitchMargin:         extprocFloat64Ptr(0.05),

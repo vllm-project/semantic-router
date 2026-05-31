@@ -156,9 +156,9 @@ func (r *OpenAIRouter) newDecisionSessionAwareSelector(decisionCfg *config.Sessi
 	if r.LookupTable != nil {
 		selector.SetLookupTable(r.LookupTable)
 	}
-	if r.ModelSelector != nil && cfg.FallbackMethod != "" && cfg.FallbackMethod != selection.MethodSessionAware {
-		fallback, _ := r.ModelSelector.Get(cfg.FallbackMethod)
-		selector.SetFallbackSelector(fallback)
+	if r.ModelSelector != nil && cfg.BaseMethod != "" && cfg.BaseMethod != selection.MethodSessionAware {
+		baseSelector, _ := r.ModelSelector.Get(cfg.BaseMethod)
+		selector.SetBaseSelector(baseSelector)
 	}
 	return selector
 }

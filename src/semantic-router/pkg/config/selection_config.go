@@ -193,7 +193,7 @@ type HybridSelectionConfig struct {
 // SessionAwareSelectionConfig configures the session_aware selector. It wraps
 // a base selector and adds agentic session stay-vs-switch policy.
 type SessionAwareSelectionConfig struct {
-	FallbackMethod               string   `yaml:"fallback_method,omitempty"`
+	BaseMethod                   string   `yaml:"base_method,omitempty"`
 	IdleTimeoutSeconds           *int     `yaml:"idle_timeout_seconds,omitempty"`
 	MinTurnsBeforeSwitch         *int     `yaml:"min_turns_before_switch,omitempty"`
 	SwitchMargin                 *float64 `yaml:"switch_margin,omitempty"`

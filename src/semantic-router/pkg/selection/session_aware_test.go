@@ -11,7 +11,7 @@ import (
 
 func TestSessionAwareSelectorToolLoopHardLocksCurrentModel(t *testing.T) {
 	selector := NewSessionAwareSelector(&SessionAwareConfig{
-		FallbackMethod:             MethodStatic,
+		BaseMethod:                 MethodStatic,
 		ToolLoopHardLock:           true,
 		ContextPortabilityHardLock: true,
 		ToolLoopStayBias:           0.35,
@@ -19,7 +19,7 @@ func TestSessionAwareSelectorToolLoopHardLocksCurrentModel(t *testing.T) {
 		QualityGapMultiplier:       1,
 		MaxCacheCostMultiplier:     2.5,
 	})
-	selector.SetFallbackSelector(stubSessionFallback{
+	selector.SetBaseSelector(stubSessionBase{
 		result: &SelectionResult{
 			SelectedModel: "frontier",
 			Score:         0.95,
@@ -57,14 +57,14 @@ func TestSessionAwareSelectorToolLoopHardLocksCurrentModel(t *testing.T) {
 
 func TestSessionAwareSelectorProviderStateHardLocksCurrentModel(t *testing.T) {
 	selector := NewSessionAwareSelector(&SessionAwareConfig{
-		FallbackMethod:             MethodStatic,
+		BaseMethod:                 MethodStatic,
 		ContextPortabilityHardLock: true,
 		ToolLoopStayBias:           0.35,
 		StayBias:                   0.10,
 		QualityGapMultiplier:       1,
 		MaxCacheCostMultiplier:     2.5,
 	})
-	selector.SetFallbackSelector(stubSessionFallback{
+	selector.SetBaseSelector(stubSessionBase{
 		result: &SelectionResult{
 			SelectedModel: "frontier",
 			Score:         0.95,
@@ -110,9 +110,9 @@ func TestSessionAwareSelectorProviderStateHardLocksCurrentModel(t *testing.T) {
 	}
 }
 
-func TestSessionAwareSelectorIdleSessionAllowsFallbackSwitch(t *testing.T) {
+func TestSessionAwareSelectorIdleSessionAllowsBaseSwitch(t *testing.T) {
 	selector := NewSessionAwareSelector(&SessionAwareConfig{
-		FallbackMethod:         MethodStatic,
+		BaseMethod:             MethodStatic,
 		IdleTimeoutSeconds:     60,
 		SwitchMargin:           0,
 		StayBias:               0,
@@ -123,7 +123,7 @@ func TestSessionAwareSelectorIdleSessionAllowsFallbackSwitch(t *testing.T) {
 		QualityGapMultiplier:   1,
 		MaxCacheCostMultiplier: 2.5,
 	})
-	selector.SetFallbackSelector(stubSessionFallback{
+	selector.SetBaseSelector(stubSessionBase{
 		result: &SelectionResult{
 			SelectedModel: "frontier",
 			Score:         0.90,
@@ -149,7 +149,7 @@ func TestSessionAwareSelectorIdleSessionAllowsFallbackSwitch(t *testing.T) {
 		t.Fatalf("Select returned error: %v", err)
 	}
 	if result.SelectedModel != "frontier" {
-		t.Fatalf("expected idle session to accept stronger fallback choice, got %q", result.SelectedModel)
+		t.Fatalf("expected idle session to accept stronger base choice, got %q", result.SelectedModel)
 	}
 	if result.SessionPolicy == nil || !result.SessionPolicy.IdleExpired {
 		t.Fatalf("expected idle-expired policy trace, got %#v", result.SessionPolicy)
@@ -161,7 +161,7 @@ func TestSessionAwareSelectorIdleSessionAllowsFallbackSwitch(t *testing.T) {
 
 func TestSessionAwareSelectorIdleSessionClearsContinuityPenalty(t *testing.T) {
 	selector := NewSessionAwareSelector(&SessionAwareConfig{
-		FallbackMethod:         MethodStatic,
+		BaseMethod:             MethodStatic,
 		IdleTimeoutSeconds:     60,
 		SwitchMargin:           0.05,
 		StayBias:               0.10,
@@ -173,7 +173,7 @@ func TestSessionAwareSelectorIdleSessionClearsContinuityPenalty(t *testing.T) {
 		MaxCacheCostMultiplier: 2.5,
 		SwitchHistoryWeight:    0.04,
 	})
-	selector.SetFallbackSelector(stubSessionFallback{
+	selector.SetBaseSelector(stubSessionBase{
 		result: &SelectionResult{
 			SelectedModel: "frontier",
 			Score:         1.0,
@@ -204,7 +204,7 @@ func TestSessionAwareSelectorIdleSessionClearsContinuityPenalty(t *testing.T) {
 		t.Fatalf("Select returned error: %v", err)
 	}
 	if result.SelectedModel != "frontier" {
-		t.Fatalf("expected idle boundary to reselect fallback frontier, got %q", result.SelectedModel)
+		t.Fatalf("expected idle boundary to reselect base frontier, got %q", result.SelectedModel)
 	}
 
 	trace := result.SessionPolicy.CandidateTraces["frontier"]
@@ -218,7 +218,7 @@ func TestSessionAwareSelectorIdleSessionClearsContinuityPenalty(t *testing.T) {
 
 func TestSessionAwareSelectorDecisionDriftClearsContinuityPenalty(t *testing.T) {
 	selector := NewSessionAwareSelector(&SessionAwareConfig{
-		FallbackMethod:         MethodStatic,
+		BaseMethod:             MethodStatic,
 		DecisionDriftReset:     true,
 		IdleTimeoutSeconds:     300,
 		SwitchMargin:           0.05,
@@ -231,7 +231,7 @@ func TestSessionAwareSelectorDecisionDriftClearsContinuityPenalty(t *testing.T) 
 		MaxCacheCostMultiplier: 2.5,
 		SwitchHistoryWeight:    0.04,
 	})
-	selector.SetFallbackSelector(stubSessionFallback{
+	selector.SetBaseSelector(stubSessionBase{
 		result: &SelectionResult{
 			SelectedModel: "frontier",
 			Score:         1.0,
@@ -262,7 +262,7 @@ func TestSessionAwareSelectorDecisionDriftClearsContinuityPenalty(t *testing.T) 
 		t.Fatalf("Select returned error: %v", err)
 	}
 	if result.SelectedModel != "frontier" {
-		t.Fatalf("expected decision drift boundary to reselect fallback frontier, got %q", result.SelectedModel)
+		t.Fatalf("expected decision drift boundary to reselect base frontier, got %q", result.SelectedModel)
 	}
 	if result.SessionPolicy == nil || !result.SessionPolicy.DecisionDrift {
 		t.Fatalf("expected decision-drift trace, got %#v", result.SessionPolicy)
@@ -278,7 +278,7 @@ func TestSessionAwareSelectorDecisionDriftClearsContinuityPenalty(t *testing.T) 
 
 func TestSessionAwareSelectorUsesRouterMemoryTurnCountBeforeFullParsing(t *testing.T) {
 	selector := NewSessionAwareSelector(&SessionAwareConfig{
-		FallbackMethod:         MethodStatic,
+		BaseMethod:             MethodStatic,
 		MinTurnsBeforeSwitch:   1,
 		SwitchMargin:           0,
 		StayBias:               0,
@@ -289,7 +289,7 @@ func TestSessionAwareSelectorUsesRouterMemoryTurnCountBeforeFullParsing(t *testi
 		QualityGapMultiplier:   1,
 		MaxCacheCostMultiplier: 2.5,
 	})
-	selector.SetFallbackSelector(stubSessionFallback{
+	selector.SetBaseSelector(stubSessionBase{
 		result: &SelectionResult{
 			SelectedModel: "frontier",
 			Score:         0.90,
@@ -323,7 +323,7 @@ func TestSessionAwareSelectorUsesRouterMemoryTurnCountBeforeFullParsing(t *testi
 
 func TestSessionAwareNetSwitchAdvantageUsesAdjustedCurrentScore(t *testing.T) {
 	selector := NewSessionAwareSelector(&SessionAwareConfig{
-		FallbackMethod:         MethodStatic,
+		BaseMethod:             MethodStatic,
 		SwitchMargin:           0,
 		StayBias:               0.10,
 		PrefixCacheWeight:      0,
@@ -332,7 +332,7 @@ func TestSessionAwareNetSwitchAdvantageUsesAdjustedCurrentScore(t *testing.T) {
 		QualityGapMultiplier:   1,
 		MaxCacheCostMultiplier: 1,
 	})
-	selector.SetFallbackSelector(stubSessionFallback{
+	selector.SetBaseSelector(stubSessionBase{
 		result: &SelectionResult{
 			SelectedModel: "frontier",
 			Score:         0.62,
@@ -438,7 +438,7 @@ func TestSessionAwareCacheCostPressureUsesInputCheckoutDelta(t *testing.T) {
 
 func TestSessionAwareRemainingTurnPriorRaisesContinuationMass(t *testing.T) {
 	selector := NewSessionAwareSelector(&SessionAwareConfig{
-		FallbackMethod:               MethodStatic,
+		BaseMethod:                   MethodStatic,
 		MinTurnsBeforeSwitch:         0,
 		SwitchMargin:                 0,
 		StayBias:                     0,
@@ -451,7 +451,7 @@ func TestSessionAwareRemainingTurnPriorRaisesContinuationMass(t *testing.T) {
 		RemainingTurnPriorHorizon:    8,
 		MinRemainingTurnPriorSamples: 3,
 	})
-	selector.SetFallbackSelector(stubSessionFallback{
+	selector.SetBaseSelector(stubSessionBase{
 		result: &SelectionResult{
 			SelectedModel: "frontier",
 			Score:         0.55,
@@ -515,7 +515,7 @@ func TestSessionAwareRemainingTurnPriorRaisesContinuationMass(t *testing.T) {
 
 func TestSessionAwareRemainingTurnPriorRejectsLowReplaySampleCount(t *testing.T) {
 	selector := NewSessionAwareSelector(&SessionAwareConfig{
-		FallbackMethod:               MethodStatic,
+		BaseMethod:                   MethodStatic,
 		MinTurnsBeforeSwitch:         0,
 		SwitchMargin:                 0,
 		StayBias:                     0,
@@ -528,7 +528,7 @@ func TestSessionAwareRemainingTurnPriorRejectsLowReplaySampleCount(t *testing.T)
 		RemainingTurnPriorHorizon:    8,
 		MinRemainingTurnPriorSamples: 3,
 	})
-	selector.SetFallbackSelector(stubSessionFallback{
+	selector.SetBaseSelector(stubSessionBase{
 		result: &SelectionResult{
 			SelectedModel: "frontier",
 			Score:         0.55,
@@ -578,7 +578,7 @@ func TestSessionAwareRemainingTurnPriorRejectsLowReplaySampleCount(t *testing.T)
 
 func TestSessionAwareRemainingTurnPriorTrustsConfigOverrideWithoutSamples(t *testing.T) {
 	selector := NewSessionAwareSelector(&SessionAwareConfig{
-		FallbackMethod:               MethodStatic,
+		BaseMethod:                   MethodStatic,
 		MinTurnsBeforeSwitch:         0,
 		SwitchMargin:                 0,
 		StayBias:                     0,
@@ -591,7 +591,7 @@ func TestSessionAwareRemainingTurnPriorTrustsConfigOverrideWithoutSamples(t *tes
 		RemainingTurnPriorHorizon:    8,
 		MinRemainingTurnPriorSamples: 3,
 	})
-	selector.SetFallbackSelector(stubSessionFallback{
+	selector.SetBaseSelector(stubSessionBase{
 		result: &SelectionResult{
 			SelectedModel: "frontier",
 			Score:         0.55,
@@ -645,20 +645,20 @@ func TestSessionAwareRouterMemorySwitchHistoryPenalty(t *testing.T) {
 	}
 }
 
-type stubSessionFallback struct {
+type stubSessionBase struct {
 	result *SelectionResult
 }
 
-func (s stubSessionFallback) Select(context.Context, *SelectionContext) (*SelectionResult, error) {
+func (s stubSessionBase) Select(context.Context, *SelectionContext) (*SelectionResult, error) {
 	copy := *s.result
 	copy.AllScores = cloneScores(s.result.AllScores)
 	return &copy, nil
 }
 
-func (s stubSessionFallback) Method() SelectionMethod { return MethodHybrid }
+func (s stubSessionBase) Method() SelectionMethod { return MethodHybrid }
 
-func (s stubSessionFallback) UpdateFeedback(context.Context, *Feedback) error { return nil }
+func (s stubSessionBase) UpdateFeedback(context.Context, *Feedback) error { return nil }
 
-func (s stubSessionFallback) Tier() AlgorithmTier { return TierSupported }
+func (s stubSessionBase) Tier() AlgorithmTier { return TierSupported }
 
-func (s stubSessionFallback) ExternalDependencies() []Dependency { return nil }
+func (s stubSessionBase) ExternalDependencies() []Dependency { return nil }

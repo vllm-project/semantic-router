@@ -261,8 +261,8 @@ func buildSessionAwareSelectionConfig(
 }
 
 func applySessionAwareSelectionConfig(result *selection.SessionAwareConfig, cfg config.SessionAwareSelectionConfig) {
-	if cfg.FallbackMethod != "" {
-		result.FallbackMethod = selection.SelectionMethod(cfg.FallbackMethod)
+	if cfg.BaseMethod != "" {
+		result.BaseMethod = selection.SelectionMethod(cfg.BaseMethod)
 	}
 	if cfg.IdleTimeoutSeconds != nil {
 		result.IdleTimeoutSeconds = *cfg.IdleTimeoutSeconds

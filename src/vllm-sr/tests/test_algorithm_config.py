@@ -15,6 +15,7 @@ from cli.algorithms import (
     RLDrivenSelectionConfig,
     RouterDCSelectionConfig,
     RouterR1Config,
+    SessionAwareSelectionConfig,
     ThompsonSamplingConfig,
 )
 from pydantic import ValidationError as PydanticValidationError
@@ -267,6 +268,18 @@ class TestRLDrivenSelectionConfig:
         assert config.llm_routing_fallback == "error"
         assert config.enable_multi_round_aggregation is True
         assert config.max_aggregation_rounds == 4
+
+
+class TestSessionAwareSelectionConfig:
+    """Test session-aware selection configuration."""
+
+    def test_base_method_field(self):
+        """Test that session-aware uses base_method rather than fallback_method."""
+        config = SessionAwareSelectionConfig(base_method="static")
+        assert config.base_method == "static"
+
+        with pytest.raises(PydanticValidationError):
+            SessionAwareSelectionConfig(fallback_method="static")
 
 
 class TestRouterR1Config:

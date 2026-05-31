@@ -1,6 +1,6 @@
 """Algorithm configuration models for multi-model orchestration."""
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class ModelRef(BaseModel):
@@ -236,7 +236,9 @@ class HybridSelectionConfig(BaseModel):
 class SessionAwareSelectionConfig(BaseModel):
     """Configuration for session-aware agentic model selection."""
 
-    fallback_method: str | None = "hybrid"
+    model_config = ConfigDict(extra="forbid")
+
+    base_method: str | None = "hybrid"
     idle_timeout_seconds: int | None = Field(default=300, ge=0)
     min_turns_before_switch: int | None = Field(default=1, ge=0)
     switch_margin: float | None = Field(default=0.05, ge=0)

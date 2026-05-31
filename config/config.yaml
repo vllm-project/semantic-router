@@ -1113,7 +1113,7 @@ routing:
       algorithm:
         type: session_aware
         session_aware:
-          fallback_method: hybrid
+          base_method: hybrid
           idle_timeout_seconds: 300
           min_turns_before_switch: 1
           switch_margin: 0.05
@@ -1389,7 +1389,7 @@ global:
         quality_gap_threshold: 0.08
         normalize_scores: true
       session_aware:
-        fallback_method: hybrid
+        base_method: hybrid
         idle_timeout_seconds: 300
         min_turns_before_switch: 1
         switch_margin: 0.05

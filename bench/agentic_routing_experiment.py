@@ -570,7 +570,7 @@ def rows_from_replay(path: Path) -> list[dict[str, Any]]:
                 "remaining_turns_estimate": policy.get("remaining_turns_estimate", ""),
                 "continuation_mass": policy.get("continuation_mass", ""),
                 "prior_mass": "",
-                "baseline_model": policy.get("fallback_selected_model", ""),
+                "baseline_model": policy.get("base_selected_model", ""),
                 "agentic_model": rec.get("selected_model", ""),
                 "baseline_switch": "",
                 "agentic_switch": policy.get("current_model")
