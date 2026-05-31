@@ -126,13 +126,14 @@ Do:
 
 - redesign the policy from current source rather than from stale PR structure
 - model session state, provider-state portability, cache reuse, long-session
-  drift, tool loops, fallback, reliability, and observability as one policy
+  drift, tool loops, backend failure recovery, session recovery, reliability,
+  and observability as one policy
 - update API and config without preserving legacy shape when the old shape makes
   GA harder to reason about
 - expand the experiment harness to compare non-agentic, non-session-aware,
   current initial implementation, and final GA policy across workload families,
   session lengths, routing strategies, model/back-end combinations, cold-start,
-  long-running, safety, fallback, and overhead cases
+  long-running, safety, recovery, and overhead cases
 - run local gates first, then AMD regression and benchmark loops using the
   local-only AMD skill
 - keep the research paper under `.agent-harness/` so it never enters git, but

@@ -227,7 +227,7 @@ const FIGURE3_LAYERS: Array<{
     title: translate({ id: 'homepage.paperFigures.figure3.layer.plugin.title', message: 'Plugin Chain' }),
     description: translate({
       id: 'homepage.paperFigures.figure3.layer.plugin.description',
-      message: 'Policy-bound pre/post plugins run before dispatch to the selected endpoint.',
+      message: 'Policy-bound pre/post plugins run before dispatch through the selected route.',
     }),
     focus: translate({
       id: 'homepage.paperFigures.figure3.layer.plugin.focus',
