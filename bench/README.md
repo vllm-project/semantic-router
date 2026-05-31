@@ -310,8 +310,8 @@ workstream. Measured result charts should come from this CSV-to-plot path.
 
 ```bash
 python3 bench/session_routing_ga_report.py \
-  --synthetic-matrix-summary .agent-harness/experiments/agentic-routing/20260531Tdiagnostic-gate-matrix/summary.json \
-  --synthetic-ablation-summary .agent-harness/experiments/agentic-routing/20260531Tdiagnostic-gate-ablation/summary.json \
+  --synthetic-matrix-summary .agent-harness/experiments/agentic-routing/current-initial-baseline-matrix/summary.json \
+  --synthetic-ablation-summary .agent-harness/experiments/agentic-routing/current-initial-baseline-ablation/summary.json \
   --live-aggregate .agent-harness/experiments/live-agentic-routing/amd-long-session-20260531/aggregate-summary.json \
   --failure-aggregate .agent-harness/experiments/live-agentic-routing/amd-repeat-failure-20260531/aggregate-summary.json \
   --agent-task-summary .agent-harness/experiments/live-agent-tasks/amd-long-agent-task-observability-20260531/summary.json \
