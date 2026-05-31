@@ -907,6 +907,17 @@ def write_report(report: dict[str, Any], output_dir: Path) -> None:
     (output_dir / "ga-readiness.md").write_text(render_markdown(report))
 
 
+def stdout_blocker_summary(report: dict[str, Any]) -> list[dict[str, Any]]:
+    return [
+        {
+            "id": item.get("id", ""),
+            "title": item.get("title", ""),
+            "status": item.get("status", ""),
+        }
+        for item in report.get("blockers", [])
+    ]
+
+
 def main(argv: list[str] | None = None) -> int:
     args = parse_args(argv)
     output_dir = args.output_dir or default_output_dir()
@@ -918,6 +929,7 @@ def main(argv: list[str] | None = None) -> int:
                 "output_dir": str(output_dir),
                 "ga_ready": report["ga_ready"],
                 "blocker_count": report["blocker_count"],
+                "blockers": stdout_blocker_summary(report),
             },
             indent=2,
             sort_keys=True,

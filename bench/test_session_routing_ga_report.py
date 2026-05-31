@@ -567,6 +567,63 @@ def test_main_writes_report_and_respects_allow_blockers(tmp_path):
     assert (output_dir / "ga-readiness.md").exists()
 
 
+def test_main_stdout_lists_blockers_for_maintainer_ops(tmp_path, capsys):
+    report_mod = load_report_module()
+    inputs = complete_inputs(tmp_path)
+    cache = write_json(
+        tmp_path / "cache-missing.json",
+        {
+            "router": {
+                "requests": 8,
+                "successes": 8,
+                "success_rate": 1.0,
+                "cached_token_reporting": "missing",
+                "cached_token_field_present": 0,
+                "cached_prompt_ratio": 0.0,
+            }
+        },
+    )
+
+    exit_code = report_mod.main(
+        [
+            "--synthetic-matrix-summary",
+            str(inputs["matrix"]),
+            "--synthetic-ablation-summary",
+            str(inputs["ablation"]),
+            "--live-aggregate",
+            str(inputs["live"]),
+            "--failure-aggregate",
+            str(inputs["failure"]),
+            "--agent-task-summary",
+            str(inputs["tasks"]),
+            "--cache-aggregate",
+            str(cache),
+            "--allow-blockers",
+            "--output-dir",
+            str(tmp_path / "out"),
+        ]
+    )
+
+    stdout = json.loads(capsys.readouterr().out)
+
+    expected_blockers = [
+        {
+            "id": "cache_token_reporting",
+            "status": "blocked",
+            "title": "Cache-token reporting",
+        },
+        {
+            "id": "branch_image_amd_validation",
+            "status": "missing",
+            "title": "Branch-image AMD benchmark",
+        },
+    ]
+
+    assert exit_code == 0
+    assert stdout["blocker_count"] == len(expected_blockers)
+    assert stdout["blockers"] == expected_blockers
+
+
 def test_markdown_groups_failures_under_blocker_column():
     report_mod = load_report_module()
     markdown = report_mod.render_markdown(
