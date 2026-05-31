@@ -166,6 +166,26 @@ default and includes per-turn CSV/JSONL, a machine-readable summary, a Markdown
 summary, and a router-vs-direct-backend comparison when a baseline endpoint is
 configured.
 
+Use the long-horizon suite when the experiment should stress longer traces,
+provider-state continuations, topic drift, cache-accounting decisions, fallback
+triage, and observability explanations:
+
+```bash
+python3 bench/agent_task_live_benchmark.py \
+  --base-url http://127.0.0.1:8899/v1 \
+  --model auto \
+  --baseline-base-url http://127.0.0.1:8090/v1 \
+  --baseline-model qwen/qwen3.5-rocm \
+  --include-previous-response-id \
+  --suite long-horizon \
+  --task-repetitions 3 \
+  --max-tokens 192 \
+  --min-success-rate 1.0 \
+  --min-task-success-rate 0.75 \
+  --max-tool-loop-violations 0 \
+  --max-context-portability-violations 0
+```
+
 ### Basic Usage
 
 ```bash
