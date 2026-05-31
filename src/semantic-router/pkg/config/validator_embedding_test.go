@@ -163,6 +163,55 @@ func TestValidateEmbeddingContracts_ExportedWrapperMatchesInternal(t *testing.T)
 	}
 }
 
+func TestValidateMmBertModelPath_RejectsClassicBERT(t *testing.T) {
+	err := validateMmBertModelPath("models/mom-embedding-light")
+	if err == nil {
+		t.Fatal("expected error when mmbert_model_path points to a classic BERT model, got nil")
+	}
+	msg := err.Error()
+	for _, want := range []string{"mom-embedding-light", "classic BERT", "bert_model_path", "all-MiniLM-L12-v2"} {
+		if !strings.Contains(msg, want) {
+			t.Errorf("error should contain %q, got: %s", want, msg)
+		}
+	}
+}
+
+func TestValidateMmBertModelPath_AcceptsModernBERT(t *testing.T) {
+	if err := validateMmBertModelPath("models/mmbert-embed-32k-2d-matryoshka"); err != nil {
+		t.Errorf("mmbert-embed-32k-2d-matryoshka should be accepted, got: %v", err)
+	}
+}
+
+func TestValidateMmBertModelPath_AcceptsEmpty(t *testing.T) {
+	if err := validateMmBertModelPath(""); err != nil {
+		t.Errorf("empty path should be accepted, got: %v", err)
+	}
+}
+
+func TestValidateMmBertModelPath_AcceptsUnknownPath(t *testing.T) {
+	if err := validateMmBertModelPath("models/some-custom-model"); err != nil {
+		t.Errorf("unknown model path should be accepted (not in registry), got: %v", err)
+	}
+}
+
+func TestValidateEmbeddingContracts_RejectsClassicBERTInMmBertSlot(t *testing.T) {
+	cfg := &RouterConfig{
+		InlineModels: InlineModels{
+			EmbeddingModels: EmbeddingModels{
+				MmBertModelPath: "models/mom-embedding-light",
+				EmbeddingConfig: HNSWConfig{ModelType: "mmbert"},
+			},
+		},
+	}
+	err := validateEmbeddingContracts(cfg)
+	if err == nil {
+		t.Fatal("expected validateEmbeddingContracts to reject classic BERT in mmbert slot, got nil")
+	}
+	if !strings.Contains(err.Error(), "classic BERT") {
+		t.Errorf("error should mention 'classic BERT', got: %s", err.Error())
+	}
+}
+
 func TestEmbeddingRule_EffectiveQueryModalityDefaultsToText(t *testing.T) {
 	cases := []struct {
 		input QueryModality
