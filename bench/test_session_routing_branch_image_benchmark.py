@@ -12,6 +12,9 @@ REQUIRED_LONG_HORIZON_TASKS = [
     "cache-economics",
     "release-triage",
     "observability-debug",
+    "test-fix-iteration",
+    "paper-evidence-audit",
+    "multi-agent-delegation",
 ]
 
 
@@ -82,23 +85,23 @@ def failure_aggregate():
 
 def complete_agent_task_summary():
     return {
-        "requests": 147,
+        "requests": 201,
         "success_rate": 1.0,
-        "successes": 147,
-        "task_count": 9,
-        "tasks": 9,
-        "task_instances": 27,
+        "successes": 201,
+        "task_count": 12,
+        "tasks": 12,
+        "task_instances": 36,
         "task_success_rate": 1.0,
         "task_score_mean": 1.0,
         "task_names": REQUIRED_LONG_HORIZON_TASKS,
         "scored_task_names": REQUIRED_LONG_HORIZON_TASKS,
         "phase_counts": {
-            "user_turn": 27,
-            "tool_loop": 51,
-            "provider_state": 24,
-            "topic_drift": 15,
-            "idle_boundary": 3,
-            "final": 27,
+            "user_turn": 36,
+            "tool_loop": 72,
+            "provider_state": 33,
+            "topic_drift": 18,
+            "idle_boundary": 6,
+            "final": 36,
         },
         "missing_router_header_counts": {
             "x-vsr-selected-model": 0,
@@ -193,7 +196,7 @@ def test_full_branch_image_summary_blocks_mounted_binary_and_stale_tasks(tmp_pat
         "mounted-binary evidence cannot satisfy branch-image benchmark"
         in summary["validation_failures"]
     )
-    assert "agent task requests 96.0 < 147" in summary["validation_failures"]
+    assert "agent task requests 96.0 < 201" in summary["validation_failures"]
     assert (
         "agent task missing router headers: "
         "{'x-vsr-session-phase': 96, 'x-vsr-selected-confidence': 96, "

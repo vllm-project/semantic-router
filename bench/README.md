@@ -210,9 +210,9 @@ python3 bench/agent_task_live_benchmark.py \
 ```
 
 The GA readiness gate expects the current long-horizon suite rather than stale
-diagnostics: 9 task types, all required phases (`user_turn`, `tool_loop`,
+diagnostics: 12 task types, all required phases (`user_turn`, `tool_loop`,
 `provider_state`, `topic_drift`, `idle_boundary`, `final`), and 3 repetitions.
-That produces at least 147 requests and 27 scored task instances for the
+That produces at least 201 requests and 36 scored task instances for the
 maintained suite. Smaller historical summaries remain useful diagnostics, but
 they intentionally block GA.
 
@@ -289,7 +289,7 @@ python3 bench/plot_session_routing_figures.py \
 The script writes `experiment-matrix.png`, `policy-ablation.png`, and
 `seed-stability.png`. When agent-task summaries are provided, it also writes
 `agent-task-readiness.png` from the same GA thresholds used by the report:
-147 requests, 9 task types, 27 scored instances, and the required router
+201 requests, 12 task types, 36 scored instances, and the required router
 diagnostic headers. Use image-generated bitmap assets for explanatory blog or
 paper schematics; do not hand-draw SVG architecture diagrams for this
 workstream. Measured result charts should come from this CSV-to-plot path.

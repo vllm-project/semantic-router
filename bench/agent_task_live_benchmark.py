@@ -746,6 +746,186 @@ def long_horizon_task_specs() -> tuple[TaskSpec, ...]:
                 ),
             ),
         ),
+        TaskSpec(
+            name="test-fix-iteration",
+            suite="long-horizon",
+            turns=(
+                TaskTurn(
+                    phase="user_turn",
+                    prompt=(
+                        "A coding agent has a failing session-aware routing test. "
+                        "Start with the smallest evidence you need before editing."
+                    ),
+                ),
+                TaskTurn(
+                    phase="tool_loop",
+                    prompt="Use the failed test output before naming the bug.",
+                    tool_name="run_targeted_tests",
+                    tool_result=(
+                        "go test ./pkg/extproc fails: expected x-vsr-session-phase "
+                        "on looper immediate responses, got headers without it."
+                    ),
+                ),
+                TaskTurn(
+                    phase="tool_loop",
+                    prompt="Use the relevant code search result before proposing a patch.",
+                    tool_name="rg_session_phase_header",
+                    tool_result=(
+                        "processor_res_header_mutation.go emits tracked headers for "
+                        "normal upstream responses. req_filter_looper_response.go "
+                        "builds the immediate looper response separately."
+                    ),
+                ),
+                TaskTurn(
+                    phase="tool_loop",
+                    prompt="Use the rerun result before finalizing.",
+                    tool_name="rerun_targeted_tests",
+                    tool_result=(
+                        "go test ./pkg/extproc -run TestCreateLooperResponseIncludes"
+                        "TrackedHeaders -count=1 passed after adding the session-phase "
+                        "header to the looper path."
+                    ),
+                ),
+                TaskTurn(
+                    phase="provider_state",
+                    prompt=(
+                        "Continue the same fix thread with provider-managed state. "
+                        "State whether the router should switch models mid-debug."
+                    ),
+                ),
+                TaskTurn(
+                    phase="final",
+                    prompt=(
+                        "Return the coding-agent fix summary. Include exact tokens "
+                        "BUG=looper-missing-session-phase, PATCH=tracked-header-path, "
+                        "VALIDATE=targeted-extproc-test."
+                    ),
+                    expected_terms=(
+                        "BUG=looper-missing-session-phase",
+                        "PATCH=tracked-header-path",
+                        "VALIDATE=targeted-extproc-test",
+                    ),
+                ),
+            ),
+        ),
+        TaskSpec(
+            name="paper-evidence-audit",
+            suite="long-horizon",
+            turns=(
+                TaskTurn(
+                    phase="user_turn",
+                    prompt=(
+                        "Audit a paper section before submission. Separate method "
+                        "claims from GA release claims."
+                    ),
+                ),
+                TaskTurn(
+                    phase="tool_loop",
+                    prompt="Use the paper excerpt before identifying the overclaim.",
+                    tool_name="read_paper_excerpt",
+                    tool_result=(
+                        "The draft says the system is GA-ready after synthetic and "
+                        "overlay AMD runs, but the branch-image benchmark and positive "
+                        "cached-token backend evidence are still missing."
+                    ),
+                ),
+                TaskTurn(
+                    phase="tool_loop",
+                    prompt="Use the machine-readable GA report before rewriting.",
+                    tool_name="read_ga_report",
+                    tool_result=(
+                        "ga_ready=false; blockers are branch_image_amd_validation, "
+                        "amd_agent_task_quality_1, and cache_token_reporting."
+                    ),
+                ),
+                TaskTurn(
+                    phase="topic_drift",
+                    prompt=(
+                        "Now translate the correction into a blog-safe limitation "
+                        "sentence without experiment-log detail."
+                    ),
+                ),
+                TaskTurn(
+                    phase="provider_state",
+                    prompt=(
+                        "Continue the same evidence audit under provider-managed "
+                        "state and preserve the limitation boundary."
+                    ),
+                ),
+                TaskTurn(
+                    phase="final",
+                    prompt=(
+                        "Return the paper audit. Include exact tokens "
+                        "CLAIM=method-evidence, BLOCKER=ga-evidence, "
+                        "FIX=separate-readiness."
+                    ),
+                    expected_terms=(
+                        "CLAIM=method-evidence",
+                        "BLOCKER=ga-evidence",
+                        "FIX=separate-readiness",
+                    ),
+                ),
+            ),
+        ),
+        TaskSpec(
+            name="multi-agent-delegation",
+            suite="long-horizon",
+            turns=(
+                TaskTurn(
+                    phase="user_turn",
+                    prompt=(
+                        "Act as a maintainer coordinating coding agents for the next "
+                        "release. Decide which agents to spawn and what each must prove."
+                    ),
+                ),
+                TaskTurn(
+                    phase="tool_loop",
+                    prompt="Use the release board before delegating.",
+                    tool_name="read_release_board",
+                    tool_result=(
+                        "Open work: branch-image AMD benchmark, expanded agent-task AMD "
+                        "rerun, cached-token backend probe, blog draft, and PR review."
+                    ),
+                ),
+                TaskTurn(
+                    phase="provider_state",
+                    prompt=(
+                        "Continue the delegation with provider-managed state. Keep "
+                        "the same priorities and do not switch away during handoff."
+                    ),
+                ),
+                TaskTurn(
+                    phase="tool_loop",
+                    prompt="Use the sub-agent status update before final scheduling.",
+                    tool_name="read_subagent_status",
+                    tool_result=(
+                        "AMD agent is waiting on image build capacity; docs agent has "
+                        "blog draft green; reviewer agent says semantic-router PR still "
+                        "needs evidence blockers documented."
+                    ),
+                ),
+                TaskTurn(
+                    phase="idle_boundary",
+                    prompt=(
+                        "Assume the maintainer returns after an idle interval. Decide "
+                        "what can be safely reselected and what state must be preserved."
+                    ),
+                ),
+                TaskTurn(
+                    phase="final",
+                    prompt=(
+                        "Return the multi-agent plan. Include exact tokens "
+                        "DELEGATE=amd-evidence, DELEGATE=docs-review, "
+                        "PRESERVE=release-blockers."
+                    ),
+                    expected_terms=(
+                        "DELEGATE=amd-evidence",
+                        "DELEGATE=docs-review",
+                        "PRESERVE=release-blockers",
+                    ),
+                ),
+            ),
+        ),
     )
 
 
