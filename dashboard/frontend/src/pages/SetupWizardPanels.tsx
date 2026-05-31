@@ -57,6 +57,163 @@ interface RoutingStarterPanelProps {
   onImportPresetConfig: () => void;
 }
 
+function PresetModelChecklist({
+  presetDelta,
+  presetImportedConfig,
+  counts,
+  presetError,
+  onImportPresetConfig,
+}: {
+  presetDelta: PresetDelta;
+  presetImportedConfig: ImportedSetupConfig | null;
+  counts: SetupConfigCounts;
+  presetError: string | null;
+  onImportPresetConfig: () => void;
+}) {
+  const total =
+    presetDelta.configured_models.length + presetDelta.missing_models.length;
+  const readyCount = presetDelta.configured_models.length;
+  const pct = total > 0 ? Math.round((readyCount / total) * 100) : 0;
+
+  return (
+    <div className={styles.remoteImportSummary}>
+      <div className={styles.remoteImportSummaryHeader}>
+        <h4 className={styles.presetCardTitle}>
+          {presetDelta.ready ? "Ready to activate" : "Model requirements"}
+        </h4>
+        <span className={styles.presetCardMeta}>
+          {readyCount}/{total} models ready
+        </span>
+      </div>
+
+      <div
+        style={{
+          height: 4,
+          borderRadius: 2,
+          background: "var(--color-border, #333)",
+          marginBottom: 12,
+          overflow: "hidden",
+        }}
+      >
+        <div
+          style={{
+            width: `${pct}%`,
+            height: "100%",
+            borderRadius: 2,
+            background: presetDelta.ready
+              ? "var(--color-success, #22c55e)"
+              : "var(--color-warning, #eab308)",
+            transition: "width 0.3s ease",
+          }}
+        />
+      </div>
+
+      <ul style={{ listStyle: "none", padding: 0, margin: 0 }}>
+        {presetDelta.configured_models.map((name) => (
+          <li
+            key={name}
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: 8,
+              padding: "4px 0",
+              color: "var(--color-success, #22c55e)",
+            }}
+          >
+            <span style={{ fontSize: 16, lineHeight: 1 }}>&#10003;</span>
+            <span style={{ color: "var(--color-text, #e5e5e5)" }}>
+              <strong>{name}</strong>
+            </span>
+            <span
+              style={{
+                fontSize: 12,
+                color: "var(--color-text-muted, #888)",
+              }}
+            >
+              configured
+            </span>
+          </li>
+        ))}
+        {presetDelta.missing_models.map((m) => (
+          <li
+            key={m.name}
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: 8,
+              padding: "4px 0",
+              color: "var(--color-warning, #eab308)",
+            }}
+          >
+            <span style={{ fontSize: 16, lineHeight: 1 }}>&#9675;</span>
+            <span style={{ color: "var(--color-text, #e5e5e5)" }}>
+              <strong>{m.name}</strong>
+            </span>
+            <span
+              style={{
+                fontSize: 12,
+                color: "var(--color-text-muted, #888)",
+              }}
+            >
+              {m.role} &mdash; add in step 1
+            </span>
+          </li>
+        ))}
+      </ul>
+
+      {!presetDelta.ready && (
+        <p className={styles.fieldHint} style={{ marginTop: 12 }}>
+          Missing models will use placeholder endpoints. You can update them
+          after activation from the config page.
+        </p>
+      )}
+
+      {presetError && (
+        <p className={styles.fieldErrorText} style={{ marginTop: 8 }}>
+          {presetError}
+        </p>
+      )}
+
+      {!presetImportedConfig && (
+        <div className={styles.remoteImportActions}>
+          <button
+            className={styles.secondaryButton}
+            onClick={onImportPresetConfig}
+          >
+            {presetDelta.ready
+              ? "Import preset config"
+              : "Import with placeholders"}
+          </button>
+        </div>
+      )}
+
+      {presetImportedConfig && (
+        <div
+          style={{
+            marginTop: 12,
+            padding: "8px 12px",
+            borderRadius: 6,
+            background: "var(--color-success-bg, rgba(34,197,94,0.1))",
+            border: "1px solid var(--color-success, #22c55e)",
+            display: "flex",
+            alignItems: "center",
+            gap: 8,
+          }}
+        >
+          <span style={{ color: "var(--color-success, #22c55e)", fontSize: 16 }}>
+            &#10003;
+          </span>
+          <span>
+            <strong>Preset config ready</strong> &mdash; {counts.models} models
+            &middot; {counts.decisions} decisions &middot; {counts.signals}{" "}
+            signals
+          </span>
+        </div>
+      )}
+    </div>
+  );
+}
+
 export function SetupRouteSummary({ currentRouteLabel }: RouteSummaryProps) {
   return (
     <div className={styles.routeSummary}>
@@ -352,24 +509,31 @@ export function RoutingStarterPanel({
             </p>
           </button>
 
-          {presets.length > 0 && (
-            <button
-              className={`${styles.presetCard} ${isPresetMode ? styles.presetCardActive : ""}`}
-              onClick={() => onSelectRoutingMode("preset")}
-            >
-              <div className={styles.presetCardHeader}>
-                <h4 className={styles.presetCardTitle}>Choose a mode</h4>
-                <span className={styles.presetCardMeta}>
-                  {presets.length} built-in
-                  {presets.length === 1 ? " mode" : " modes"}
-                </span>
-              </div>
-              <p className={styles.presetCardDescription}>
-                Pick a goal-oriented preset like Balance or Security, then fill
-                in only the models that are missing from your setup.
-              </p>
-            </button>
-          )}
+          {presets.map((preset) => {
+            const isActive =
+              isPresetMode && selectedPresetId === preset.id;
+            return (
+              <button
+                key={preset.id}
+                className={`${styles.presetCard} ${isActive ? styles.presetCardActive : ""}`}
+                onClick={() => {
+                  onSelectRoutingMode("preset");
+                  onSelectPreset(preset.id);
+                }}
+              >
+                <div className={styles.presetCardHeader}>
+                  <h4 className={styles.presetCardTitle}>{preset.label}</h4>
+                  <span className={styles.presetCardMeta}>
+                    {preset.required_models.length} model
+                    {preset.required_models.length === 1 ? "" : "s"}
+                  </span>
+                </div>
+                <p className={styles.presetCardDescription}>
+                  {preset.summary}
+                </p>
+              </button>
+            );
+          })}
 
           <button
             className={`${styles.presetCard} ${isRemoteMode ? styles.presetCardActive : ""}`}
@@ -390,101 +554,21 @@ export function RoutingStarterPanel({
           </button>
         </div>
 
-        {isPresetMode && (
+        {isPresetMode && presetDelta && (
           <div className={styles.remoteImportPanel}>
-            <div className={styles.presetGrid}>
-              {presets.map((preset) => (
-                <button
-                  key={preset.id}
-                  className={`${styles.presetCard} ${selectedPresetId === preset.id ? styles.presetCardActive : ""}`}
-                  onClick={() => onSelectPreset(preset.id)}
-                >
-                  <div className={styles.presetCardHeader}>
-                    <h4 className={styles.presetCardTitle}>{preset.label}</h4>
-                    <span className={styles.presetCardMeta}>
-                      {preset.required_models.length} model
-                      {preset.required_models.length === 1 ? "" : "s"}
-                    </span>
-                  </div>
-                  <p className={styles.presetCardDescription}>
-                    {preset.summary}
-                  </p>
-                </button>
-              ))}
-            </div>
+            <PresetModelChecklist
+              presetDelta={presetDelta}
+              presetImportedConfig={presetImportedConfig}
+              counts={counts}
+              presetError={presetError}
+              onImportPresetConfig={onImportPresetConfig}
+            />
+          </div>
+        )}
 
-            {presetError && (
-              <p className={styles.fieldErrorText}>{presetError}</p>
-            )}
-
-            {presetDelta && (
-              <div className={styles.remoteImportSummary}>
-                <div className={styles.remoteImportSummaryHeader}>
-                  <h4 className={styles.presetCardTitle}>
-                    {presetDelta.ready
-                      ? "All models configured"
-                      : "Missing models"}
-                  </h4>
-                  <span className={styles.presetCardMeta}>
-                    {presetDelta.configured_models.length} ready ·{" "}
-                    {presetDelta.missing_models.length} missing
-                  </span>
-                </div>
-
-                {presetDelta.configured_models.length > 0 && (
-                  <ul className={styles.errorList}>
-                    {presetDelta.configured_models.map((name) => (
-                      <li key={name}>
-                        <strong>{name}</strong> — configured
-                      </li>
-                    ))}
-                  </ul>
-                )}
-
-                {presetDelta.missing_models.length > 0 && (
-                  <ul className={styles.errorList}>
-                    {presetDelta.missing_models.map((m) => (
-                      <li key={m.name}>
-                        <strong>{m.name}</strong> — {m.role} (add this model in
-                        step 1)
-                      </li>
-                    ))}
-                  </ul>
-                )}
-
-                {!presetDelta.ready && (
-                  <p className={styles.fieldHint}>
-                    Go back to step 1 to add the missing models, then return
-                    here to continue.
-                  </p>
-                )}
-
-                {presetDelta.ready && !presetImportedConfig && (
-                  <div className={styles.remoteImportActions}>
-                    <button
-                      className={styles.secondaryButton}
-                      onClick={onImportPresetConfig}
-                    >
-                      Import preset config
-                    </button>
-                  </div>
-                )}
-
-                {presetImportedConfig && (
-                  <div className={styles.remoteImportSummary}>
-                    <div className={styles.remoteImportSummaryHeader}>
-                      <h4 className={styles.presetCardTitle}>
-                        Preset config ready
-                      </h4>
-                      <span className={styles.presetCardMeta}>
-                        {counts.models} models · {counts.decisions} decisions ·{" "}
-                        {counts.signals} signals
-                      </span>
-                    </div>
-                  </div>
-                )}
-              </div>
-            )}
+        {isPresetMode && !presetDelta && presetError && (
+          <div className={styles.remoteImportPanel}>
+            <p className={styles.fieldErrorText}>{presetError}</p>
           </div>
         )}
 
