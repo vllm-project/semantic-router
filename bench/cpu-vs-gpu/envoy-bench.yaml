@@ -24,7 +24,7 @@ static_resources:
               - match:
                   prefix: "/"
                 route:
-                  cluster: vllm_dynamic_cluster
+                  cluster: vllm_backend_cluster
                   timeout: 300s
           http_filters:
           - name: envoy.filters.http.ext_proc
@@ -75,18 +75,24 @@ static_resources:
                 address: 127.0.0.1
                 port_value: 50051
 
-  - name: vllm_dynamic_cluster
+  - name: vllm_backend_cluster
     connect_timeout: 300s
-    type: ORIGINAL_DST
-    lb_policy: CLUSTER_PROVIDED
-    original_dst_lb_config:
-      use_http_header: true
-      http_header_name: "x-vsr-destination-endpoint"
+    type: STATIC
+    lb_policy: ROUND_ROBIN
     typed_extension_protocol_options:
       envoy.extensions.upstreams.http.v3.HttpProtocolOptions:
         "@type": type.googleapis.com/envoy.extensions.upstreams.http.v3.HttpProtocolOptions
         explicit_http_config:
           http_protocol_options: {}
+    load_assignment:
+      cluster_name: vllm_backend_cluster
+      endpoints:
+      - lb_endpoints:
+        - endpoint:
+            address:
+              socket_address:
+                address: 127.0.0.1
+                port_value: 8000
 
 admin:
   address:

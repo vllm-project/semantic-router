@@ -156,7 +156,6 @@ sequenceDiagram
 
 | Header | 描述 | 示例 |
 |--------|-------------|---------|
-| `x-vsr-destination-endpoint` | 选定的后端端点 | `endpoint1` |
 | `x-selected-model` | 确定的模型类别 | `mathematics` |
 | `x-routing-confidence` | 分类置信度 | `0.956` |
 | `x-request-id` | 唯一请求标识符 | `req-abc123` |
