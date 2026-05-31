@@ -29,6 +29,7 @@ type AgenticSessionContext struct {
 	MemoryCachedTokens  int64
 	MemoryOutputTokens  int64
 	MemoryCost          float64
+	LastDecisionName    string
 	LastDecisionReason  string
 
 	HistoryTokens int
@@ -42,6 +43,9 @@ type AgenticSessionContext struct {
 
 	Phase          AgenticPhase
 	ActiveToolLoop bool
+
+	HasNonPortableContext    bool
+	NonPortableContextReason string
 
 	ToolCallCount     int
 	ToolResultCount   int

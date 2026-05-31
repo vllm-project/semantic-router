@@ -242,6 +242,8 @@ class SessionAwareSelectionConfig(BaseModel):
     switch_margin: float | None = Field(default=0.05, ge=0)
     stay_bias: float | None = Field(default=0.10, ge=0)
     tool_loop_hard_lock: bool | None = True
+    context_portability_hard_lock: bool | None = True
+    decision_drift_reset: bool | None = True
     tool_loop_stay_bias: float | None = Field(default=0.35, ge=0)
     prefix_cache_weight: float | None = Field(default=0.20, ge=0)
     handoff_penalty_weight: float | None = Field(default=1.0, ge=0)

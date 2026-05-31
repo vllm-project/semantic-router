@@ -1119,6 +1119,8 @@ routing:
           switch_margin: 0.05
           stay_bias: 0.10
           tool_loop_hard_lock: true
+          context_portability_hard_lock: true
+          decision_drift_reset: true
           tool_loop_stay_bias: 0.35
           prefix_cache_weight: 0.20
           handoff_penalty_weight: 1.0
@@ -1393,6 +1395,8 @@ global:
         switch_margin: 0.05
         stay_bias: 0.10
         tool_loop_hard_lock: true
+        context_portability_hard_lock: true
+        decision_drift_reset: true
         tool_loop_stay_bias: 0.35
         prefix_cache_weight: 0.20
         handoff_penalty_weight: 1.0

@@ -11,12 +11,13 @@ import (
 
 func TestSessionAwareSelectorToolLoopHardLocksCurrentModel(t *testing.T) {
 	selector := NewSessionAwareSelector(&SessionAwareConfig{
-		FallbackMethod:         MethodStatic,
-		ToolLoopHardLock:       true,
-		ToolLoopStayBias:       0.35,
-		StayBias:               0.10,
-		QualityGapMultiplier:   1,
-		MaxCacheCostMultiplier: 2.5,
+		FallbackMethod:             MethodStatic,
+		ToolLoopHardLock:           true,
+		ContextPortabilityHardLock: true,
+		ToolLoopStayBias:           0.35,
+		StayBias:                   0.10,
+		QualityGapMultiplier:       1,
+		MaxCacheCostMultiplier:     2.5,
 	})
 	selector.SetFallbackSelector(stubSessionFallback{
 		result: &SelectionResult{
@@ -51,6 +52,61 @@ func TestSessionAwareSelectorToolLoopHardLocksCurrentModel(t *testing.T) {
 	}
 	if result.SessionPolicy.HardLockReason != "hard_lock=tool_loop" {
 		t.Fatalf("unexpected hard-lock reason: %q", result.SessionPolicy.HardLockReason)
+	}
+}
+
+func TestSessionAwareSelectorProviderStateHardLocksCurrentModel(t *testing.T) {
+	selector := NewSessionAwareSelector(&SessionAwareConfig{
+		FallbackMethod:             MethodStatic,
+		ContextPortabilityHardLock: true,
+		ToolLoopStayBias:           0.35,
+		StayBias:                   0.10,
+		QualityGapMultiplier:       1,
+		MaxCacheCostMultiplier:     2.5,
+	})
+	selector.SetFallbackSelector(stubSessionFallback{
+		result: &SelectionResult{
+			SelectedModel: "frontier",
+			Score:         0.95,
+			Method:        MethodHybrid,
+			AllScores: map[string]float64{
+				"current":  0.40,
+				"frontier": 0.95,
+			},
+		},
+	})
+
+	result, err := selector.Select(context.Background(), &SelectionContext{
+		CandidateModels: []config.ModelRef{{Model: "current"}, {Model: "frontier"}},
+		AgenticSession: &AgenticSessionContext{
+			ID:                       "sess-stateful",
+			TurnIndex:                3,
+			PreviousModel:            "current",
+			PreviousResponseID:       "resp_previous",
+			HasNonPortableContext:    true,
+			NonPortableContextReason: "previous_response_id",
+		},
+	})
+	if err != nil {
+		t.Fatalf("Select returned error: %v", err)
+	}
+	if result.SelectedModel != "current" {
+		t.Fatalf("expected current model to be hard-locked for non-portable context, got %q", result.SelectedModel)
+	}
+	if result.SessionPolicy == nil || !result.SessionPolicy.HardLocked {
+		t.Fatalf("expected hard-lock policy trace, got %#v", result.SessionPolicy)
+	}
+	if result.SessionPolicy.HardLockReason != "hard_lock=context_portability:previous_response_id" {
+		t.Fatalf("unexpected hard-lock reason: %q", result.SessionPolicy.HardLockReason)
+	}
+	if !result.SessionPolicy.HasNonPortableContext ||
+		result.SessionPolicy.NonPortableContextReason != "previous_response_id" {
+		t.Fatalf("expected non-portable context trace, got %#v", result.SessionPolicy)
+	}
+	mapped := result.SessionPolicy.ToMap()
+	if mapped["has_non_portable_context"] != true ||
+		mapped["non_portable_context_reason"] != "previous_response_id" {
+		t.Fatalf("expected non-portable context in trace map, got %#v", mapped)
 	}
 }
 
@@ -157,6 +213,66 @@ func TestSessionAwareSelectorIdleSessionClearsContinuityPenalty(t *testing.T) {
 	}
 	if trace.NetSwitchAdvantage <= 0 {
 		t.Fatalf("expected positive net switch advantage at idle boundary, got %#v", trace)
+	}
+}
+
+func TestSessionAwareSelectorDecisionDriftClearsContinuityPenalty(t *testing.T) {
+	selector := NewSessionAwareSelector(&SessionAwareConfig{
+		FallbackMethod:         MethodStatic,
+		DecisionDriftReset:     true,
+		IdleTimeoutSeconds:     300,
+		SwitchMargin:           0.05,
+		StayBias:               0.10,
+		ToolLoopHardLock:       true,
+		PrefixCacheWeight:      0.20,
+		HandoffPenaltyWeight:   1,
+		DefaultHandoffPenalty:  0.05,
+		QualityGapMultiplier:   1,
+		MaxCacheCostMultiplier: 2.5,
+		SwitchHistoryWeight:    0.04,
+	})
+	selector.SetFallbackSelector(stubSessionFallback{
+		result: &SelectionResult{
+			SelectedModel: "frontier",
+			Score:         1.0,
+			Method:        MethodStatic,
+			AllScores: map[string]float64{
+				"current":  0.999,
+				"frontier": 1.0,
+			},
+		},
+	})
+
+	result, err := selector.Select(context.Background(), &SelectionContext{
+		DecisionName:    "new-task",
+		CandidateModels: []config.ModelRef{{Model: "frontier"}, {Model: "current"}},
+		AgenticSession: &AgenticSessionContext{
+			ID:                "sess-drift",
+			TurnIndex:         5,
+			PreviousModel:     "current",
+			LastDecisionName:  "old-task",
+			MemorySwitchCount: 4,
+			HistoryTokens:     4096,
+			ContextTokens:     8192,
+			CacheWarmth:       1,
+			CacheWarmthOK:     true,
+		},
+	})
+	if err != nil {
+		t.Fatalf("Select returned error: %v", err)
+	}
+	if result.SelectedModel != "frontier" {
+		t.Fatalf("expected decision drift boundary to reselect fallback frontier, got %q", result.SelectedModel)
+	}
+	if result.SessionPolicy == nil || !result.SessionPolicy.DecisionDrift {
+		t.Fatalf("expected decision-drift trace, got %#v", result.SessionPolicy)
+	}
+	trace := result.SessionPolicy.CandidateTraces["frontier"]
+	if trace.HandoffPenalty != 0 || trace.PrefixCachePenalty != 0 || trace.SwitchHistoryPenalty != 0 {
+		t.Fatalf("expected decision drift to clear continuity penalties, got %#v", trace)
+	}
+	if mapped := result.SessionPolicy.ToMap(); mapped["decision_drift"] != true {
+		t.Fatalf("expected decision drift in trace map, got %#v", mapped)
 	}
 }
 
@@ -283,6 +399,40 @@ func TestSessionAwarePrefixPenaltyScalesWithModelCost(t *testing.T) {
 	frontierPenalty := selector.prefixCachePenalty(session, "frontier", "cheap", false, continuationMass)
 	if frontierPenalty <= cheapPenalty {
 		t.Fatalf("expected frontier switch penalty %.4f > cheap penalty %.4f", frontierPenalty, cheapPenalty)
+	}
+}
+
+func TestSessionAwareCacheCostPressureUsesInputCheckoutDelta(t *testing.T) {
+	selector := NewSessionAwareSelector(&SessionAwareConfig{
+		PrefixCacheWeight:      0.2,
+		QualityGapMultiplier:   1,
+		MaxCacheCostMultiplier: 3,
+	})
+	selector.InitializeFromConfig(map[string]config.ModelParams{
+		"completion-heavy": {
+			Pricing: config.ModelPricing{
+				PromptPer1M:      0.20,
+				CompletionPer1M:  40.0,
+				CachedInputPer1M: 0.18,
+			},
+		},
+		"cache-expensive": {
+			Pricing: config.ModelPricing{
+				PromptPer1M:      8.0,
+				CompletionPer1M:  1.0,
+				CachedInputPer1M: 0.50,
+			},
+		},
+	})
+
+	completionHeavyPressure := selector.modelCostPressure("completion-heavy")
+	cacheExpensivePressure := selector.modelCostPressure("cache-expensive")
+	if cacheExpensivePressure <= completionHeavyPressure {
+		t.Fatalf(
+			"expected cache-expensive input checkout pressure %.4f > completion-heavy %.4f",
+			cacheExpensivePressure,
+			completionHeavyPressure,
+		)
 	}
 }
 

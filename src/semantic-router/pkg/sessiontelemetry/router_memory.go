@@ -29,6 +29,7 @@ type RouterSessionSnapshot struct {
 	CumulativeCost             float64
 
 	ActiveToolLoop     bool
+	LastDecisionName   string
 	LastDecisionReason string
 	LastPolicy         map[string]interface{}
 }
@@ -76,6 +77,7 @@ type routerSessionState struct {
 	cumulativeCost       float64
 
 	activeToolLoop     bool
+	lastDecisionName   string
 	lastDecisionReason string
 	lastPolicy         map[string]interface{}
 }
@@ -128,6 +130,7 @@ func RecordSessionDecision(p SessionDecisionParams) {
 	}
 	st.modelTurns[p.SelectedModel]++
 	st.activeToolLoop = p.ActiveToolLoop
+	st.lastDecisionName = p.DecisionName
 	if p.Policy != nil {
 		st.lastPolicy = clonePolicyMap(p.Policy)
 		st.lastDecisionReason = policyDecisionReason(p.Policy)
@@ -196,6 +199,7 @@ func GetRouterSessionSnapshot(sessionID string, now time.Time) (RouterSessionSna
 		CumulativeCompletionTokens: st.cumulativeCompletion,
 		CumulativeCost:             st.cumulativeCost,
 		ActiveToolLoop:             st.activeToolLoop,
+		LastDecisionName:           st.lastDecisionName,
 		LastDecisionReason:         st.lastDecisionReason,
 		LastPolicy:                 clonePolicyMap(st.lastPolicy),
 	}, true

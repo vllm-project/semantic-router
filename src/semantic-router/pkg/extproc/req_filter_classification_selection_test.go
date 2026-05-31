@@ -143,7 +143,9 @@ func TestSelectModelFromCandidatesUsesDecisionScopedSessionAwareConfig(t *testin
 		Config: &config.RouterConfig{
 			IntelligentRouting: config.IntelligentRouting{
 				ModelSelection: config.ModelSelectionConfig{
-					SessionAware: config.SessionAwareSelectionConfig{IdleTimeoutSeconds: 300},
+					SessionAware: config.SessionAwareSelectionConfig{
+						IdleTimeoutSeconds: extprocIntPtr(300),
+					},
 				},
 			},
 		},
@@ -165,10 +167,10 @@ func TestSelectModelFromCandidatesUsesDecisionScopedSessionAwareConfig(t *testin
 		Type: "session_aware",
 		SessionAware: &config.SessionAwareSelectionConfig{
 			FallbackMethod:       "static",
-			IdleTimeoutSeconds:   1,
-			MinTurnsBeforeSwitch: 1,
-			SwitchMargin:         0.05,
-			StayBias:             0.10,
+			IdleTimeoutSeconds:   extprocIntPtr(1),
+			MinTurnsBeforeSwitch: extprocIntPtr(1),
+			SwitchMargin:         extprocFloat64Ptr(0.05),
+			StayBias:             extprocFloat64Ptr(0.10),
 			ToolLoopHardLock:     &trueValue,
 		},
 	}, ctx)
@@ -258,4 +260,66 @@ func TestBuildSelectionContextMarksUserAfterToolResultAsToolLoop(t *testing.T) {
 	if selCtx.AgenticSession.Phase != selection.AgenticPhaseToolLoop {
 		t.Fatalf("expected tool-loop phase, got %q", selCtx.AgenticSession.Phase)
 	}
+}
+
+func TestBuildSelectionContextMarksPreviousResponseIDAsNonPortableContext(t *testing.T) {
+	router := &OpenAIRouter{Config: &config.RouterConfig{}}
+	reqCtx := &RequestContext{
+		SessionID:          "response-api-session",
+		PreviousModel:      "model-a",
+		PreviousResponseID: "resp_123",
+	}
+
+	selCtx := router.buildSelectionContext(
+		[]config.ModelRef{{Model: "model-a"}, {Model: "model-b"}},
+		"agentic",
+		"continue response",
+		nil,
+		"",
+		nil,
+		reqCtx,
+	)
+
+	if selCtx.AgenticSession == nil || !selCtx.AgenticSession.HasNonPortableContext {
+		t.Fatalf("expected previous_response_id to mark non-portable context: %#v", selCtx.AgenticSession)
+	}
+	if got := selCtx.AgenticSession.NonPortableContextReason; got != "previous_response_id" {
+		t.Fatalf("expected previous_response_id reason, got %q", got)
+	}
+}
+
+func TestApplySessionAwareSelectionConfigPreservesExplicitZeroValues(t *testing.T) {
+	cfg := selection.DefaultSessionAwareConfig()
+	falseValue := false
+	applySessionAwareSelectionConfig(cfg, config.SessionAwareSelectionConfig{
+		IdleTimeoutSeconds:         extprocIntPtr(0),
+		MinTurnsBeforeSwitch:       extprocIntPtr(0),
+		SwitchMargin:               extprocFloat64Ptr(0),
+		StayBias:                   extprocFloat64Ptr(0),
+		ToolLoopHardLock:           &falseValue,
+		ContextPortabilityHardLock: &falseValue,
+		DecisionDriftReset:         &falseValue,
+		PrefixCacheWeight:          extprocFloat64Ptr(0),
+		RemainingTurnPriorWeight:   extprocFloat64Ptr(0),
+	})
+
+	if cfg.IdleTimeoutSeconds != 0 ||
+		cfg.MinTurnsBeforeSwitch != 0 ||
+		cfg.SwitchMargin != 0 ||
+		cfg.StayBias != 0 ||
+		cfg.ToolLoopHardLock ||
+		cfg.ContextPortabilityHardLock ||
+		cfg.DecisionDriftReset ||
+		cfg.PrefixCacheWeight != 0 ||
+		cfg.RemainingTurnPriorWeight != 0 {
+		t.Fatalf("expected explicit zero/false session-aware config to be preserved, got %#v", cfg)
+	}
+}
+
+func extprocIntPtr(v int) *int {
+	return &v
+}
+
+func extprocFloat64Ptr(v float64) *float64 {
+	return &v
 }

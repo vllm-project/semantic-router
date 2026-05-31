@@ -272,34 +272,48 @@ func (r *OpenAIRouter) buildAgenticSessionContext(
 	if activeToolLoop {
 		phase = selection.AgenticPhaseToolLoop
 	}
+	hasNonPortableContext, nonPortableContextReason := nonPortableContextBinding(reqCtx)
 	return &selection.AgenticSessionContext{
-		ID:                  sessionID,
-		UserID:              userID,
-		TurnIndex:           reqCtx.TurnIndex,
-		PreviousModel:       previousModel,
-		PreviousResponseID:  reqCtx.PreviousResponseID,
-		MemoryPresent:       hasMemory,
-		MemoryTurnCount:     snapshot.TurnCount,
-		MemorySwitchCount:   snapshot.SwitchCount,
-		MemoryModelTurnCnts: snapshot.ModelTurns,
-		MemoryPromptTokens:  snapshot.CumulativePromptTokens,
-		MemoryCachedTokens:  snapshot.CumulativeCachedTokens,
-		MemoryOutputTokens:  snapshot.CumulativeCompletionTokens,
-		MemoryCost:          snapshot.CumulativeCost,
-		LastDecisionReason:  snapshot.LastDecisionReason,
-		HistoryTokens:       reqCtx.HistoryTokenCount,
-		ContextTokens:       reqCtx.VSRContextTokenCount,
-		IdleFor:             idleFor,
-		IdleKnown:           idleKnown,
-		CacheWarmth:         cacheWarmth,
-		CacheWarmthOK:       cacheWarmthOK,
-		Phase:               phase,
-		ActiveToolLoop:      activeToolLoop,
-		ToolCallCount:       facts.AssistantToolCallCount,
-		ToolResultCount:     facts.ToolResultCount,
-		ToolDefinitionCnt:   facts.ToolDefinitionCount,
-		ModelContextWindows: r.modelContextWindows(modelRefs),
+		ID:                       sessionID,
+		UserID:                   userID,
+		TurnIndex:                reqCtx.TurnIndex,
+		PreviousModel:            previousModel,
+		PreviousResponseID:       reqCtx.PreviousResponseID,
+		MemoryPresent:            hasMemory,
+		MemoryTurnCount:          snapshot.TurnCount,
+		MemorySwitchCount:        snapshot.SwitchCount,
+		MemoryModelTurnCnts:      snapshot.ModelTurns,
+		MemoryPromptTokens:       snapshot.CumulativePromptTokens,
+		MemoryCachedTokens:       snapshot.CumulativeCachedTokens,
+		MemoryOutputTokens:       snapshot.CumulativeCompletionTokens,
+		MemoryCost:               snapshot.CumulativeCost,
+		LastDecisionName:         snapshot.LastDecisionName,
+		LastDecisionReason:       snapshot.LastDecisionReason,
+		HistoryTokens:            reqCtx.HistoryTokenCount,
+		ContextTokens:            reqCtx.VSRContextTokenCount,
+		IdleFor:                  idleFor,
+		IdleKnown:                idleKnown,
+		CacheWarmth:              cacheWarmth,
+		CacheWarmthOK:            cacheWarmthOK,
+		Phase:                    phase,
+		ActiveToolLoop:           activeToolLoop,
+		HasNonPortableContext:    hasNonPortableContext,
+		NonPortableContextReason: nonPortableContextReason,
+		ToolCallCount:            facts.AssistantToolCallCount,
+		ToolResultCount:          facts.ToolResultCount,
+		ToolDefinitionCnt:        facts.ToolDefinitionCount,
+		ModelContextWindows:      r.modelContextWindows(modelRefs),
 	}
+}
+
+func nonPortableContextBinding(reqCtx *RequestContext) (bool, string) {
+	if reqCtx == nil {
+		return false, ""
+	}
+	if strings.TrimSpace(reqCtx.PreviousResponseID) != "" {
+		return true, "previous_response_id"
+	}
+	return false, ""
 }
 
 func conversationFactsIndicateActiveToolLoop(facts classification.ConversationFacts) bool {

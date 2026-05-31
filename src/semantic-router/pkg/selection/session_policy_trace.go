@@ -15,14 +15,19 @@ type SessionPolicyTrace struct {
 	FallbackSelectedModel string
 	SelectedModel         string
 
-	TurnIndex       int
-	MemoryTurnCount int
-	SwitchCount     int
+	TurnIndex        int
+	MemoryTurnCount  int
+	SwitchCount      int
+	LastDecisionName string
 
 	ActiveToolLoop bool
 	IdleKnown      bool
 	IdleForSeconds float64
 	IdleExpired    bool
+
+	HasNonPortableContext    bool
+	NonPortableContextReason string
+	DecisionDrift            bool
 
 	HardLocked     bool
 	HardLockReason string
@@ -83,10 +88,14 @@ func (t *SessionPolicyTrace) ToMap() map[string]interface{} {
 		"turn_index":                        t.TurnIndex,
 		"memory_turn_count":                 t.MemoryTurnCount,
 		"switch_count":                      t.SwitchCount,
+		"last_decision_name":                t.LastDecisionName,
 		"active_tool_loop":                  t.ActiveToolLoop,
 		"idle_known":                        t.IdleKnown,
 		"idle_for_seconds":                  t.IdleForSeconds,
 		"idle_expired":                      t.IdleExpired,
+		"has_non_portable_context":          t.HasNonPortableContext,
+		"non_portable_context_reason":       t.NonPortableContextReason,
+		"decision_drift":                    t.DecisionDrift,
 		"hard_locked":                       t.HardLocked,
 		"hard_lock_reason":                  t.HardLockReason,
 		"decision_reason":                   t.DecisionReason,
