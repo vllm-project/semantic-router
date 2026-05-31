@@ -436,17 +436,17 @@ vllm-sr-start: vllm-sr-dev
 # Tests are located in e2e/testing/vllm-sr-cli/
 
 vllm-sr-install-cli: ## Install vLLM-SR CLI in editable mode for local test execution
-vllm-sr-install-cli:
-	@python3 -m pip install -e src/vllm-sr
+vllm-sr-install-cli: agent-venv-install
+	@"$(AGENT_PYTHON)" -m pip install -e src/vllm-sr
 
 vllm-sr-sim-install-cli: ## Install vLLM-SR-Sim with dev extras for local execution
-vllm-sr-sim-install-cli:
-	@python3 -m pip install -e "$(VLLM_SR_SIM_DIR)[dev]"
+vllm-sr-sim-install-cli: agent-venv-install
+	@"$(AGENT_PYTHON)" -m pip install -e "$(VLLM_SR_SIM_DIR)[dev]"
 
 vllm-sr-sim-test: ## Run vLLM-SR-Sim tests
 vllm-sr-sim-test: vllm-sr-sim-install-cli
 	@$(LOG_TARGET)
-	@cd $(VLLM_SR_SIM_DIR) && python3 -m pytest tests -v
+	@cd $(VLLM_SR_SIM_DIR) && PATH="$(AGENT_VENV)/bin:$$PATH" "$(AGENT_PYTHON)" -m pytest tests -v
 
 vllm-sr-sim-build: ## Build the vLLM-SR-Sim service image
 vllm-sr-sim-build:
@@ -463,12 +463,12 @@ vllm-sr-sim-start: vllm-sr-sim-build
 vllm-sr-test: ## Run CLI unit tests (fast, no Docker image required)
 vllm-sr-test: vllm-sr-install-cli
 	@$(LOG_TARGET)
-	@cd e2e/testing/vllm-sr-cli && python run_cli_tests.py --verbose
+	@cd e2e/testing/vllm-sr-cli && PATH="$(AGENT_VENV)/bin:$$PATH" "$(AGENT_PYTHON)" run_cli_tests.py --verbose
 
 vllm-sr-test-integration: ## Run CLI unit + integration tests (requires local router + simulator images)
 vllm-sr-test-integration: vllm-sr-build vllm-sr-envoy-build vllm-sr-dashboard-build vllm-sr-sim-build vllm-sr-install-cli
 	@$(LOG_TARGET)
-	@cd e2e/testing/vllm-sr-cli && CONTAINER_RUNTIME=$(CONTAINER_RUNTIME) VLLM_SR_IMAGE=$(VLLM_SR_IMAGE) VLLM_SR_ROUTER_IMAGE=$(VLLM_SR_ROUTER_IMAGE) VLLM_SR_ENVOY_IMAGE=$(VLLM_SR_ENVOY_IMAGE) VLLM_SR_DASHBOARD_IMAGE=$(VLLM_SR_DASHBOARD_IMAGE) VLLM_SR_SIM_IMAGE=$(VLLM_SR_SIM_IMAGE) RUN_INTEGRATION_TESTS=true python run_cli_tests.py --verbose --integration
+	@cd e2e/testing/vllm-sr-cli && PATH="$(AGENT_VENV)/bin:$$PATH" CONTAINER_RUNTIME=$(CONTAINER_RUNTIME) VLLM_SR_IMAGE=$(VLLM_SR_IMAGE) VLLM_SR_ROUTER_IMAGE=$(VLLM_SR_ROUTER_IMAGE) VLLM_SR_ENVOY_IMAGE=$(VLLM_SR_ENVOY_IMAGE) VLLM_SR_DASHBOARD_IMAGE=$(VLLM_SR_DASHBOARD_IMAGE) VLLM_SR_SIM_IMAGE=$(VLLM_SR_SIM_IMAGE) RUN_INTEGRATION_TESTS=true "$(AGENT_PYTHON)" run_cli_tests.py --verbose --integration
 
 memory-test-integration: ## Run memory integration tests with local Milvus, llm-katan, and vllm-sr serve
 memory-test-integration: vllm-sr-build vllm-sr-envoy-build vllm-sr-dashboard-build vllm-sr-sim-build vllm-sr-install-cli docker-build-llm-katan
