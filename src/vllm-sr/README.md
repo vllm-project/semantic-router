@@ -19,6 +19,10 @@ pip install -e .
 
 ### Usage
 
+Local `vllm-sr serve` requires Docker on Linux, macOS, or WSL2 on Windows.
+Native Windows Python environments can install the CLI for configuration and
+validation tasks, but the local Docker runtime is not supported there.
+
 ```bash
 # Start the router (includes dashboard, simulator sidecar, and first-run setup)
 HF_TOKEN=hf_xxx vllm-sr serve
