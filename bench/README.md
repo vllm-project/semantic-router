@@ -232,6 +232,28 @@ branch-image benchmark requirement by itself. The readiness report treats
 diagnostic-only or mounted-binary artifacts as blockers until a full
 branch-image benchmark summary is available.
 
+After the branch image has produced the diagnostic probe, live matrix, failure
+recovery, and expanded agent-task summaries, assemble the full branch-image
+artifact:
+
+```bash
+python3 bench/session_routing_branch_image_benchmark.py \
+  --diagnostic-summary .agent-harness/experiments/branch-image-diagnostic/current/summary.json \
+  --live-aggregate .agent-harness/experiments/live-agentic-routing/branch-image-long-session/aggregate-summary.json \
+  --failure-aggregate .agent-harness/experiments/live-agentic-routing/branch-image-repeat-failure/aggregate-summary.json \
+  --agent-task-summary .agent-harness/experiments/live-agent-tasks/branch-image-long-horizon/summary.json \
+  --ref "$(git rev-parse --short HEAD)" \
+  --image-tag "$TAG" \
+  --output-dir .agent-harness/experiments/live-agentic-routing/branch-image-ga
+```
+
+This assembler is the only branch-image path that writes
+`validation_kind: full-branch-image-benchmark` and
+`branch_image_benchmark: true`. It still exits non-zero if the image tag or
+label looks like a mounted-binary run, if the diagnostic probe failed, if live
+or recovery summaries contain continuity failures, or if the agent-task summary
+does not meet the expanded GA gate.
+
 Use the GA readiness report after local, AMD, agent-task, cache-token, and
 branch-image runs have produced machine-readable summaries. The report does not
 replace the individual benchmark gates; it verifies that the required evidence
