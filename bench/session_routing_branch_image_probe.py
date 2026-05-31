@@ -186,6 +186,7 @@ def summarize(args: argparse.Namespace, result: dict[str, Any]) -> dict[str, Any
     )
     response_json = result.get("json") or {}
     return {
+        "validation_kind": "branch-image-diagnostic-probe",
         "label": args.label,
         "ref": args.ref,
         "image_tag": args.image_tag,

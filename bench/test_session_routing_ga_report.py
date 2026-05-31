@@ -123,6 +123,9 @@ def complete_inputs(tmp_path: Path) -> dict[str, Path]:
     branch = write_json(
         tmp_path / "branch.json",
         {
+            "validation_kind": "full-branch-image-benchmark",
+            "branch_image_benchmark": True,
+            "image_tag": "pr1989-current-branch-image",
             "checks": {
                 "chat_completion_ok": True,
                 "diagnostic_headers_ok": True,
@@ -209,6 +212,60 @@ def test_missing_positive_cache_and_branch_image_block_ga(tmp_path):
     assert report["ga_ready"] is False
     assert statuses["cache_token_reporting"] == "blocked"
     assert statuses["branch_image_amd_validation"] == "missing"
+
+
+def test_diagnostic_probe_does_not_satisfy_branch_image_benchmark(tmp_path):
+    report_mod = load_report_module()
+    inputs = complete_inputs(tmp_path)
+    diagnostic = write_json(
+        tmp_path / "branch-diagnostic.json",
+        {
+            "validation_kind": "branch-image-diagnostic-probe",
+            "label": "pr1989-current-mounted-binary",
+            "image_tag": "pr1989-current-mounted-binary",
+            "checks": {
+                "chat_completion_ok": True,
+                "diagnostic_headers_ok": True,
+            },
+            "validation_failures": [],
+        },
+    )
+    args = report_mod.parse_args(
+        [
+            "--synthetic-matrix-summary",
+            str(inputs["matrix"]),
+            "--synthetic-ablation-summary",
+            str(inputs["ablation"]),
+            "--live-aggregate",
+            str(inputs["live"]),
+            "--failure-aggregate",
+            str(inputs["failure"]),
+            "--agent-task-summary",
+            str(inputs["tasks"]),
+            "--cache-aggregate",
+            str(inputs["cache"]),
+            "--branch-image-summary",
+            str(diagnostic),
+        ]
+    )
+
+    report = report_mod.generate_report(args)
+    branch_requirement = next(
+        item
+        for item in report["requirements"]
+        if item["id"] == "branch_image_amd_validation"
+    )
+
+    assert report["ga_ready"] is False
+    assert branch_requirement["status"] == "blocked"
+    assert (
+        "full branch-image benchmark marker missing; diagnostic probes do not satisfy GA"
+        in branch_requirement["failures"]
+    )
+    assert (
+        "mounted-binary diagnostic does not satisfy full branch-image AMD benchmark"
+        in branch_requirement["failures"]
+    )
 
 
 def test_missing_initial_policy_baseline_blocks_ga(tmp_path):

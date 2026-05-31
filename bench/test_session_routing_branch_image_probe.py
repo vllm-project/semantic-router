@@ -79,6 +79,7 @@ def test_branch_image_probe_passes_with_diagnostic_headers(tmp_path):
         thread.join(timeout=2)
 
     assert summary["validation_failures"] == []
+    assert summary["validation_kind"] == "branch-image-diagnostic-probe"
     assert summary["checks"]["diagnostic_headers_ok"] is True
     probe.write_outputs(summary, tmp_path)
     assert (tmp_path / "summary.json").exists()

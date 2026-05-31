@@ -434,15 +434,21 @@ def render_amd_overhead(
     ax.set_xlabel("p95 overhead vs direct backend (ms)")
     ax.grid(axis="x")
     for idx, value in enumerate(values):
-        ha = "left" if value >= 0 else "right"
-        offset = 1.5 if value >= 0 else -1.5
+        if value >= 0:
+            x_pos = value + max(abs(value), 1.0) * 0.08
+            ha = "left"
+            color = "#334155"
+        else:
+            x_pos = value / 2
+            ha = "center"
+            color = "white"
         ax.text(
-            value + offset,
+            x_pos,
             idx,
             f"{value:+.1f} ms",
             va="center",
             ha=ha,
-            color="#334155",
+            color=color,
             fontsize=9,
         )
     ax.invert_yaxis()

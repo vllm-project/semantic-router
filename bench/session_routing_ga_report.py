@@ -14,6 +14,11 @@ CACHE_REPORTING_ORDER = {
     "reported_zero": 1,
     "positive": 2,
 }
+FULL_BRANCH_IMAGE_KINDS = {
+    "branch-image-benchmark",
+    "full-branch-image-benchmark",
+}
+MOUNTED_BINARY_MARKERS = ("mounted-binary", "mounted_binary", "mounted binary")
 PASSING_STATUS = "passed"
 BLOCKING_STATUS = "blocked"
 MISSING_STATUS = "missing"
@@ -568,12 +573,10 @@ def evaluate_branch_image_summary(args: argparse.Namespace) -> dict[str, Any]:
     if data is None:
         return requirement(
             "branch_image_amd_validation",
-            "Branch-image AMD validation",
+            "Branch-image AMD benchmark",
             MISSING_STATUS,
             evidence,
-            failures=[
-                "full branch-image AMD validation artifact is required before GA"
-            ],
+            failures=["full branch-image AMD benchmark artifact is required before GA"],
         )
     failures = [str(item) for item in validation_failures(data)]
     checks = data.get("checks") if isinstance(data.get("checks"), dict) else {}
@@ -584,16 +587,45 @@ def evaluate_branch_image_summary(args: argparse.Namespace) -> dict[str, Any]:
         failures.append(f"missing diagnostic header: {header}")
     for header in data.get("invalid_diagnostic_headers") or []:
         failures.append(f"invalid diagnostic header: {header}")
+    validation_kind = normalize_policy_name(
+        str(
+            data.get("validation_kind")
+            or data.get("benchmark_kind")
+            or data.get("kind")
+            or ""
+        )
+    )
+    image_tag = str(data.get("image_tag", ""))
+    label = str(data.get("label", ""))
+    full_branch_image = bool(data.get("branch_image_benchmark")) or (
+        validation_kind in FULL_BRANCH_IMAGE_KINDS
+    )
+    source_fingerprint = " ".join([validation_kind, image_tag, label]).lower()
+    mounted_binary = any(
+        marker in source_fingerprint for marker in MOUNTED_BINARY_MARKERS
+    )
+    if not full_branch_image:
+        failures.append(
+            "full branch-image benchmark marker missing; diagnostic probes do not "
+            "satisfy GA"
+        )
+    if mounted_binary:
+        failures.append(
+            "mounted-binary diagnostic does not satisfy full branch-image AMD "
+            "benchmark"
+        )
     failures = list(dict.fromkeys(failures))
     status = BLOCKING_STATUS if failures else PASSING_STATUS
     return requirement(
         "branch_image_amd_validation",
-        "Branch-image AMD validation",
+        "Branch-image AMD benchmark",
         status,
         evidence,
         {
+            "validation_kind": validation_kind,
             "checks": checks,
-            "image_tag": data.get("image_tag", ""),
+            "image_tag": image_tag,
+            "label": label,
             "ref": data.get("ref", ""),
         },
         failures,
