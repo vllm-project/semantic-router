@@ -9,16 +9,16 @@ import {
   type KeyboardEvent,
   type ReactNode,
 } from 'react'
-import MarkdownRenderer from './MarkdownRenderer'
 import styles from './ClawRoomChat.module.css'
 import { useReadonly } from '../contexts/ReadonlyContext'
 import ClawRoomSidebar from './ClawRoomSidebar'
-import ClawRoomMessageMeta from './ClawRoomMessageMeta'
+import ClawRoomTranscript from './ClawRoomTranscript'
+import ClawRoomTransportStatus from './ClawRoomTransportStatus'
+import { buildStreamingEntries } from './clawRoomStreamingUi'
 import {
   compareByCreatedAt,
   compareByName,
   findMentionRange,
-  formatMessageTime,
   type MentionAutocompleteState,
   type MentionOption,
   parseJSON,
@@ -299,6 +299,8 @@ const ClawRoomChat = ({
 
   const {
     streamingMessages,
+    streamingParticipants,
+    transportMode,
     wsConnected,
     wsRef,
   } = useClawRoomTransport({
@@ -308,7 +310,11 @@ const ClawRoomChat = ({
     setError,
     upsertMessage,
   })
-  void streamingMessages
+
+  const streamingEntries = useMemo(
+    () => buildStreamingEntries(messages, streamingMessages),
+    [messages, streamingMessages]
+  )
 
   useEffect(() => {
     let mounted = true
@@ -369,7 +375,7 @@ const ClawRoomChat = ({
 
   useEffect(() => {
     endRef.current?.scrollIntoView({ behavior: 'smooth' })
-  }, [messages])
+  }, [messages, streamingEntries])
 
   useEffect(() => {
     if (!selectedRoomId) {
@@ -707,57 +713,20 @@ const ClawRoomChat = ({
             <div className={styles.chatTitleWrap}>
               <h3 className={styles.chatTitle}>{selectedRoom?.name || selectedTeam?.name || 'No room selected'}</h3>
               {selectedRoomId && (
-                <span
-                  className={`${styles.chatTitleStatus} ${wsConnected ? styles.wsConnected : styles.wsDisconnected}`}
-                  title={wsConnected ? 'WebSocket connected' : 'WebSocket disconnected (using fallback)'}
-                >
-                  {wsConnected ? '● Live' : '○ Reconnecting...'}
-                </span>
+                <ClawRoomTransportStatus transportMode={transportMode} wsConnected={wsConnected} />
               )}
             </div>
           </header>
 
           <div className={styles.messages} data-testid="claw-room-transcript">
-            {!selectedRoomId ? (
-              <div className={styles.stateHint}>Select a room from the left panel.</div>
-            ) : messages.length === 0 ? (
-              <div className={styles.stateHint}>No messages yet. Start the conversation.</div>
-            ) : (
-              messages.map(message => {
-                const isUser = message.senderType === 'user'
-                const isSystem = message.senderType === 'system'
-                const isLeader = message.senderType === 'leader'
-                const isWorker = message.senderType === 'worker'
-                const senderVisual = resolveSenderVisual(message)
-                return (
-                  <div
-                    key={message.id}
-                    className={`${styles.messageRow} ${isUser ? styles.messageRowUser : styles.messageRowAgent}`}
-                    data-room-message-id={message.id}
-                    data-room-message-role={message.senderType}
-                  >
-                    <div className={styles.messageMain}>
-                      <ClawRoomMessageMeta
-                        displayName={senderVisual.displayName}
-                        isLeader={isLeader}
-                        isUser={isUser}
-                        isWorker={isWorker}
-                        roleLabel={senderVisual.roleLabel}
-                        timestamp={formatMessageTime(message.createdAt)}
-                      />
-                      <div
-                        className={`${styles.messageBubble} ${isUser ? styles.messageBubbleUser : styles.messageBubbleAgent} ${isSystem ? styles.messageBubbleSystem : ''}`}
-                        data-room-message-content
-                      >
-                        <div className={styles.messageMarkdown}>
-                          <MarkdownRenderer content={message.content} />
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                )
-              })
-            )}
+            <ClawRoomTranscript
+              messages={messages}
+              resolveSenderVisual={resolveSenderVisual}
+              selectedRoomId={selectedRoomId}
+              streamingEntries={streamingEntries}
+              streamingMessages={streamingMessages}
+              streamingParticipants={streamingParticipants}
+            />
             <div ref={endRef} />
           </div>
 
