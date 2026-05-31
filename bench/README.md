@@ -131,9 +131,9 @@ matching phase instead of only once per selected session.
 ### Cache Token Reporting Probe
 
 Use the cache-token probe when the question is whether an OpenAI-compatible
-backend reports `usage.prompt_tokens_details.cached_tokens` through the router
-or direct-backend path. The probe sends a stable repeated prefix for several
-turns and classifies reporting as `positive`, `reported_zero`, or `missing`:
+backend reports cached input tokens through the router or direct-backend path.
+The probe sends a stable repeated prefix for several turns and classifies
+reporting as `positive`, `reported_zero`, or `missing`:
 
 ```bash
 python3 bench/cache_token_probe.py \
@@ -150,10 +150,15 @@ The output is written under `.agent-harness/experiments/cache-token-probe/` by
 default. Each summary records `probe_kind` set to
 `repeated-prefix-cache-token-probe`, the repeated-prefix hash, the prefix length,
 and the repeat count so GA evidence is tied to this workload rather than an
-arbitrary JSON aggregate. Treat `missing` as an observability limitation: the
-backend response does not include the cached-token field, so router-level cache
-accounting cannot claim a positive cache-hit ratio from that run. For GA
-cache-accounting evidence, run with `--min-cached-token-reporting positive`,
+arbitrary JSON aggregate. The probe recognizes Chat Completions style
+`usage.prompt_tokens_details.cached_tokens`, Responses style
+`usage.input_tokens_details.cached_tokens`, and common backend root counters
+such as `usage.cached_tokens` or `usage.prompt_cache_hit_tokens`; summaries
+record `cached_token_source_counts` so the evidence names the backend field that
+was observed. Treat `missing` as an observability limitation: the backend
+response does not include a cached-token field, so router-level cache accounting
+cannot claim a positive cache-hit ratio from that run. For GA cache-accounting
+evidence, run with `--min-cached-token-reporting positive`,
 `--min-cached-token-field-rate 1.0`, and a deployment-specific
 `--min-cached-prompt-ratio` threshold. The GA report requires the repeated-prefix
 probe metadata and a direct-backend baseline before positive cached-token

@@ -9,6 +9,13 @@ EXPECTED_CACHED_RATIO = 0.2
 EXPECTED_FIELD_RATE = 1.0
 EXPECTED_RPS = 1.5
 EXPECTED_METADATA_REPEATS = 2
+CHAT_PROMPT_TOKENS = 100
+CHAT_COMPLETION_TOKENS = 3
+RESPONSES_PROMPT_TOKENS = 111
+RESPONSES_COMPLETION_TOKENS = 7
+CHAT_COMPLETIONS_CACHE_SOURCE = "usage.prompt_tokens_details.cached_tokens"
+RESPONSES_CACHE_SOURCE = "usage.input_tokens_details.cached_tokens"
+ROOT_CACHE_SOURCE = "usage.cached_tokens"
 
 
 def load_probe_module():
@@ -21,8 +28,12 @@ def load_probe_module():
     return module
 
 
-def response(cached=None, prompt_tokens=100):
-    usage = {"prompt_tokens": prompt_tokens, "completion_tokens": 3}
+def response(cached=None, prompt_tokens=100, usage=None):
+    usage = (
+        {"prompt_tokens": prompt_tokens, "completion_tokens": CHAT_COMPLETION_TOKENS}
+        if usage is None
+        else usage
+    )
     if cached is not None:
         usage["prompt_tokens_details"] = {"cached_tokens": cached}
     return {"usage": usage, "model": "test-model"}
@@ -37,6 +48,9 @@ def row(probe, cached=None, success=True):
         "completion_tokens": 3,
         "cached_tokens": int(cached or 0),
         "cached_token_field_present": cached is not None,
+        "cached_token_source": (
+            CHAT_COMPLETIONS_CACHE_SOURCE if cached is not None else ""
+        ),
         "error": "" if success else "injected",
     }
 
@@ -61,6 +75,52 @@ def test_cached_token_extraction_handles_missing_zero_and_positive_values():
     assert probe.cached_tokens(response(0)) == 0
     assert probe.cached_token_field_present(response(CACHED_TOKEN_SAMPLE)) is True
     assert probe.cached_tokens(response(CACHED_TOKEN_SAMPLE)) == CACHED_TOKEN_SAMPLE
+    assert (
+        probe.cached_token_source(response(CACHED_TOKEN_SAMPLE))
+        == CHAT_COMPLETIONS_CACHE_SOURCE
+    )
+    responses_usage = {
+        "input_tokens": 100,
+        "output_tokens": 3,
+        "input_tokens_details": {"cached_tokens": CACHED_TOKEN_SAMPLE},
+    }
+    assert probe.cached_token_field_present(response(usage=responses_usage)) is True
+    assert probe.cached_tokens(response(usage=responses_usage)) == CACHED_TOKEN_SAMPLE
+    assert (
+        probe.cached_token_source(response(usage=responses_usage))
+        == RESPONSES_CACHE_SOURCE
+    )
+    root_usage = {
+        "prompt_tokens": 100,
+        "completion_tokens": 3,
+        "cached_tokens": CACHED_TOKEN_SAMPLE,
+    }
+    assert probe.cached_token_field_present(response(usage=root_usage)) is True
+    assert probe.cached_tokens(response(usage=root_usage)) == CACHED_TOKEN_SAMPLE
+    assert probe.cached_token_source(response(usage=root_usage)) == ROOT_CACHE_SOURCE
+
+
+def test_usage_extraction_handles_chat_and_responses_token_names():
+    probe = load_probe_module()
+
+    assert probe.usage_value(response(), probe.PROMPT_TOKEN_KEYS) == CHAT_PROMPT_TOKENS
+    assert (
+        probe.usage_value(response(), probe.COMPLETION_TOKEN_KEYS)
+        == CHAT_COMPLETION_TOKENS
+    )
+    responses_usage = {
+        "input_tokens": RESPONSES_PROMPT_TOKENS,
+        "output_tokens": RESPONSES_COMPLETION_TOKENS,
+        "input_tokens_details": {"cached_tokens": 11},
+    }
+    assert (
+        probe.usage_value(response(usage=responses_usage), probe.PROMPT_TOKEN_KEYS)
+        == RESPONSES_PROMPT_TOKENS
+    )
+    assert (
+        probe.usage_value(response(usage=responses_usage), probe.COMPLETION_TOKEN_KEYS)
+        == RESPONSES_COMPLETION_TOKENS
+    )
 
 
 def test_cache_reporting_state_distinguishes_missing_zero_and_positive():
@@ -86,6 +146,9 @@ def test_summary_reports_cached_ratio_and_reporting_state():
     assert summary["cached_prompt_ratio"] == EXPECTED_CACHED_RATIO
     assert summary["cached_token_reporting"] == "positive"
     assert summary["cached_token_field_rate"] == EXPECTED_FIELD_RATE
+    assert summary["cached_token_source_counts"] == {
+        CHAT_COMPLETIONS_CACHE_SOURCE: EXPECTED_REQUESTS
+    }
     assert summary["probe_kind"] == probe.CACHE_PROBE_KIND
     assert summary["probe_repeats"] == EXPECTED_REQUESTS
     assert summary["requests_per_second"] == EXPECTED_RPS

@@ -23,6 +23,20 @@ CACHE_REPORTING_ORDER = {
 }
 CACHE_PROBE_KIND = "repeated-prefix-cache-token-probe"
 CACHE_PROBE_SUFFIX_PATTERN = "probe_turn_index"
+CACHED_TOKEN_USAGE_PATHS = (
+    (
+        "usage.prompt_tokens_details.cached_tokens",
+        ("prompt_tokens_details", "cached_tokens"),
+    ),
+    (
+        "usage.input_tokens_details.cached_tokens",
+        ("input_tokens_details", "cached_tokens"),
+    ),
+    ("usage.cached_tokens", ("cached_tokens",)),
+    ("usage.prompt_cache_hit_tokens", ("prompt_cache_hit_tokens",)),
+)
+PROMPT_TOKEN_KEYS = ("prompt_tokens", "input_tokens")
+COMPLETION_TOKEN_KEYS = ("completion_tokens", "output_tokens")
 
 
 def parse_args() -> argparse.Namespace:
@@ -196,19 +210,24 @@ def row_from_result(
         "status": int(result.get("status") or 0),
         "success": HTTP_OK <= int(result.get("status") or 0) < HTTP_REDIRECT_START,
         "latency_ms": round(float(result.get("latency_ms") or 0), 3),
-        "prompt_tokens": usage_value(response_json, "prompt_tokens"),
-        "completion_tokens": usage_value(response_json, "completion_tokens"),
+        "prompt_tokens": usage_value(response_json, PROMPT_TOKEN_KEYS),
+        "completion_tokens": usage_value(response_json, COMPLETION_TOKEN_KEYS),
         "cached_tokens": cached_tokens(response_json),
         "cached_token_field_present": cached_token_field_present(response_json),
+        "cached_token_source": cached_token_source(response_json),
         "response_model": response_json.get("model", ""),
         "error": result.get("error", ""),
     }
 
 
-def usage_value(response_json: dict[str, Any], key: str) -> int:
+def usage_value(response_json: dict[str, Any], keys: tuple[str, ...]) -> int:
     usage = response_json.get("usage") or {}
-    value = usage.get(key) if isinstance(usage, dict) else 0
-    return int(value or 0)
+    if not isinstance(usage, dict):
+        return 0
+    for key in keys:
+        if key in usage:
+            return int(usage.get(key) or 0)
+    return 0
 
 
 def cached_tokens(response_json: dict[str, Any]) -> int:
@@ -220,14 +239,34 @@ def cached_token_field_present(response_json: dict[str, Any]) -> bool:
     return cached_token_value(response_json) is not None
 
 
+def cached_token_source(response_json: dict[str, Any]) -> str:
+    _, source = cached_token_observation(response_json)
+    return source
+
+
 def cached_token_value(response_json: dict[str, Any]) -> Any:
+    value, _ = cached_token_observation(response_json)
+    return value
+
+
+def cached_token_observation(response_json: dict[str, Any]) -> tuple[Any, str]:
     usage = response_json.get("usage")
     if not isinstance(usage, dict):
-        return None
-    details = usage.get("prompt_tokens_details")
-    if not isinstance(details, dict):
-        return None
-    return details.get("cached_tokens")
+        return None, ""
+    for source, path in CACHED_TOKEN_USAGE_PATHS:
+        value = nested_value(usage, path)
+        if value is not None:
+            return value, source
+    return None, ""
+
+
+def nested_value(data: dict[str, Any], path: tuple[str, ...]) -> Any:
+    current: Any = data
+    for part in path:
+        if not isinstance(current, dict) or part not in current:
+            return None
+        current = current[part]
+    return current
 
 
 def run_probe(args: argparse.Namespace) -> tuple[list[dict[str, Any]], dict[str, Any]]:
@@ -267,6 +306,11 @@ def summarize(
         "cached_token_field_present": field_present,
         "cached_token_field_rate": (
             round(field_present / successes, 4) if successes else 0.0
+        ),
+        "cached_token_source_counts": counts(
+            row.get("cached_token_source", "")
+            for row in rows
+            if row["success"] and row.get("cached_token_source")
         ),
         **cache_probe_metadata(rows),
         "errors": counts(row["error"] for row in rows if row["error"]),
