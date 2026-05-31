@@ -93,7 +93,9 @@ Configure the router endpoint `base_url` for this run to
 For `vllm-sr serve` stacks, apply the proxy endpoint before serving or
 regenerate/restart the generated Envoy config as well; changing only the router
 runtime config after startup can leave Envoy still forwarding to the old
-backend cluster.
+backend cluster. When the stack uses a per-run Docker network, start the proxy
+on the same network as both Envoy and the upstream backend; otherwise Envoy will
+return `no healthy upstream` even though the proxy is healthy from the host.
 
 ```bash
 python3 bench/agentic_routing_live_benchmark.py \
