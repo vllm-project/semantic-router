@@ -300,6 +300,15 @@ func applySessionAwareSelectionConfig(result *selection.SessionAwareConfig, cfg 
 	if cfg.SwitchHistoryWeight != 0 {
 		result.SwitchHistoryWeight = cfg.SwitchHistoryWeight
 	}
+	if cfg.RemainingTurnPriorWeight != 0 {
+		result.RemainingTurnPriorWeight = cfg.RemainingTurnPriorWeight
+	}
+	if cfg.RemainingTurnPriorHorizon != 0 {
+		result.RemainingTurnPriorHorizon = cfg.RemainingTurnPriorHorizon
+	}
+	if cfg.MinRemainingTurnPriorSamples != 0 {
+		result.MinRemainingTurnPriorSamples = cfg.MinRemainingTurnPriorSamples
+	}
 }
 
 func buildMLSelectionConfig(cfg *config.RouterConfig) *selection.MLSelectorConfig {

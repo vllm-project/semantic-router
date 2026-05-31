@@ -38,38 +38,55 @@ func validateModelSwitchGate(cfg ModelSwitchGateConfig) error {
 }
 
 func validateSessionAwareSelectionConfig(cfg SessionAwareSelectionConfig) error {
-	if cfg.IdleTimeoutSeconds < 0 {
-		return fmt.Errorf("session_aware.idle_timeout_seconds must be >= 0, got %d", cfg.IdleTimeoutSeconds)
+	intFields := []nonNegativeIntField{
+		{"session_aware.idle_timeout_seconds", cfg.IdleTimeoutSeconds},
+		{"session_aware.min_turns_before_switch", cfg.MinTurnsBeforeSwitch},
+		{"session_aware.remaining_turn_prior_horizon", cfg.RemainingTurnPriorHorizon},
+		{"session_aware.min_remaining_turn_prior_samples", cfg.MinRemainingTurnPriorSamples},
 	}
-	if cfg.MinTurnsBeforeSwitch < 0 {
-		return fmt.Errorf("session_aware.min_turns_before_switch must be >= 0, got %d", cfg.MinTurnsBeforeSwitch)
+	if err := validateNonNegativeIntFields(intFields); err != nil {
+		return err
 	}
-	if cfg.SwitchMargin < 0 {
-		return fmt.Errorf("session_aware.switch_margin must be >= 0, got %v", cfg.SwitchMargin)
+
+	floatFields := []nonNegativeFloatField{
+		{"session_aware.switch_margin", cfg.SwitchMargin},
+		{"session_aware.stay_bias", cfg.StayBias},
+		{"session_aware.tool_loop_stay_bias", cfg.ToolLoopStayBias},
+		{"session_aware.prefix_cache_weight", cfg.PrefixCacheWeight},
+		{"session_aware.handoff_penalty_weight", cfg.HandoffPenaltyWeight},
+		{"session_aware.default_handoff_penalty", cfg.DefaultHandoffPenalty},
+		{"session_aware.quality_gap_multiplier", cfg.QualityGapMultiplier},
+		{"session_aware.max_cache_cost_multiplier", cfg.MaxCacheCostMultiplier},
+		{"session_aware.switch_history_weight", cfg.SwitchHistoryWeight},
+		{"session_aware.remaining_turn_prior_weight", cfg.RemainingTurnPriorWeight},
 	}
-	if cfg.StayBias < 0 {
-		return fmt.Errorf("session_aware.stay_bias must be >= 0, got %v", cfg.StayBias)
+	return validateNonNegativeFloatFields(floatFields)
+}
+
+type nonNegativeIntField struct {
+	name  string
+	value int
+}
+
+func validateNonNegativeIntFields(fields []nonNegativeIntField) error {
+	for _, field := range fields {
+		if field.value < 0 {
+			return fmt.Errorf("%s must be >= 0, got %d", field.name, field.value)
+		}
 	}
-	if cfg.ToolLoopStayBias < 0 {
-		return fmt.Errorf("session_aware.tool_loop_stay_bias must be >= 0, got %v", cfg.ToolLoopStayBias)
-	}
-	if cfg.PrefixCacheWeight < 0 {
-		return fmt.Errorf("session_aware.prefix_cache_weight must be >= 0, got %v", cfg.PrefixCacheWeight)
-	}
-	if cfg.HandoffPenaltyWeight < 0 {
-		return fmt.Errorf("session_aware.handoff_penalty_weight must be >= 0, got %v", cfg.HandoffPenaltyWeight)
-	}
-	if cfg.DefaultHandoffPenalty < 0 {
-		return fmt.Errorf("session_aware.default_handoff_penalty must be >= 0, got %v", cfg.DefaultHandoffPenalty)
-	}
-	if cfg.QualityGapMultiplier < 0 {
-		return fmt.Errorf("session_aware.quality_gap_multiplier must be >= 0, got %v", cfg.QualityGapMultiplier)
-	}
-	if cfg.MaxCacheCostMultiplier < 0 {
-		return fmt.Errorf("session_aware.max_cache_cost_multiplier must be >= 0, got %v", cfg.MaxCacheCostMultiplier)
-	}
-	if cfg.SwitchHistoryWeight < 0 {
-		return fmt.Errorf("session_aware.switch_history_weight must be >= 0, got %v", cfg.SwitchHistoryWeight)
+	return nil
+}
+
+type nonNegativeFloatField struct {
+	name  string
+	value float64
+}
+
+func validateNonNegativeFloatFields(fields []nonNegativeFloatField) error {
+	for _, field := range fields {
+		if field.value < 0 {
+			return fmt.Errorf("%s must be >= 0, got %v", field.name, field.value)
+		}
 	}
 	return nil
 }

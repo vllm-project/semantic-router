@@ -1,6 +1,10 @@
 package selection
 
-import "math"
+import (
+	"math"
+
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/selection/lookuptable"
+)
 
 func (s *SessionAwareSelector) adjustScores(
 	selCtx *SelectionContext,
@@ -9,6 +13,7 @@ func (s *SessionAwareSelector) adjustScores(
 	current string,
 	idleExpired bool,
 ) (map[string]float64, map[string]SessionCandidateTrace) {
+	continuation := s.continuationEvidence(selCtx, session)
 	baseScores := cloneScores(base.AllScores)
 	ensureScoresForCandidates(&SelectionResult{AllScores: baseScores, SelectedModel: base.SelectedModel, Score: base.Score}, selCtx.CandidateModels)
 	currentBaseScore := baseScores[current]
@@ -17,6 +22,7 @@ func (s *SessionAwareSelector) adjustScores(
 		session,
 		current,
 		idleExpired,
+		continuation.Mass,
 		SessionCandidateTrace{
 			Current:    true,
 			BaseScore:  currentBaseScore,
@@ -40,7 +46,7 @@ func (s *SessionAwareSelector) adjustScores(
 			continue
 		}
 
-		score, trace = s.scoreSwitchCandidate(selCtx, session, current, model, score, currentBaseScore, currentAdjustedScore, idleExpired, trace)
+		score, trace = s.scoreSwitchCandidate(selCtx, session, current, model, score, currentBaseScore, currentAdjustedScore, idleExpired, continuation.Mass, trace)
 		adjusted[model] = score
 		traces[model] = trace
 	}
@@ -52,12 +58,13 @@ func (s *SessionAwareSelector) scoreCurrentCandidate(
 	session *AgenticSessionContext,
 	current string,
 	idleExpired bool,
+	continuationMass float64,
 	trace SessionCandidateTrace,
 ) (float64, SessionCandidateTrace) {
 	prefixBenefit := 0.0
 	if !idleExpired {
 		score += s.config.StayBias
-		prefixBenefit = s.prefixCacheBenefit(session, current)
+		prefixBenefit = s.prefixCacheBenefit(session, current, continuationMass)
 		score += prefixBenefit
 	}
 	if session.ActiveToolLoop {
@@ -77,11 +84,12 @@ func (s *SessionAwareSelector) scoreSwitchCandidate(
 	currentBaseScore float64,
 	currentAdjustedScore float64,
 	idleExpired bool,
+	continuationMass float64,
 	trace SessionCandidateTrace,
 ) (float64, SessionCandidateTrace) {
 	qualityGap := s.lookupQualityGap(selCtx, current, model)
 	handoffPenalty := s.lookupHandoffPenalty(current, model)
-	prefixPenalty := s.prefixCachePenalty(session, current, model, idleExpired)
+	prefixPenalty := s.prefixCachePenalty(session, current, model, idleExpired, continuationMass)
 	frontierMultiplier := s.cacheCostMultiplier(current, model)
 	toolPenalty := 0.0
 	if session.ActiveToolLoop {
@@ -118,8 +126,12 @@ func (s *SessionAwareSelector) scoreSwitchCandidate(
 	return score, trace
 }
 
-func (s *SessionAwareSelector) prefixCacheBenefit(session *AgenticSessionContext, current string) float64 {
-	return s.config.PrefixCacheWeight * sessionContinuationMass(session) * sessionCacheWarmth(session, false) * s.cacheCostMultiplier(current, current)
+func (s *SessionAwareSelector) prefixCacheBenefit(
+	session *AgenticSessionContext,
+	current string,
+	continuationMass float64,
+) float64 {
+	return s.config.PrefixCacheWeight * continuationMass * sessionCacheWarmth(session, false) * s.cacheCostMultiplier(current, current)
 }
 
 func (s *SessionAwareSelector) prefixCachePenalty(
@@ -127,12 +139,13 @@ func (s *SessionAwareSelector) prefixCachePenalty(
 	current string,
 	candidate string,
 	idleExpired bool,
+	continuationMass float64,
 ) float64 {
 	if session == nil || current == "" || candidate == "" || current == candidate {
 		return 0
 	}
 	return s.config.PrefixCacheWeight *
-		sessionContinuationMass(session) *
+		continuationMass *
 		sessionCacheWarmth(session, idleExpired) *
 		s.cacheCostMultiplier(current, candidate)
 }
@@ -186,6 +199,87 @@ func (s *SessionAwareSelector) lookupQualityGap(selCtx *SelectionContext, curren
 		}
 	}
 	return 0
+}
+
+type continuationEvidence struct {
+	Mass                          float64
+	RemainingTurnPrior            float64
+	RemainingTurnPriorOK          bool
+	RemainingTurnsEstimate        float64
+	RemainingTurnPriorSource      string
+	RemainingTurnPriorSampleCount int
+	RemainingTurnPriorRejected    string
+}
+
+func (s *SessionAwareSelector) continuationEvidence(selCtx *SelectionContext, session *AgenticSessionContext) continuationEvidence {
+	base := sessionContinuationMass(session)
+	prior := s.lookupRemainingTurnPrior(selCtx)
+	evidence := continuationEvidence{
+		Mass:                          base,
+		RemainingTurnPrior:            prior.Value,
+		RemainingTurnPriorSource:      prior.Source,
+		RemainingTurnPriorSampleCount: prior.SampleCount,
+		RemainingTurnPriorRejected:    prior.RejectedReason,
+	}
+	if !prior.OK || s.config.RemainingTurnPriorWeight <= 0 {
+		return evidence
+	}
+	remaining := prior.Value - float64(effectiveSessionTurns(session))
+	if remaining < 0 {
+		remaining = 0
+	}
+	horizon := math.Max(float64(s.config.RemainingTurnPriorHorizon), 1)
+	priorMass := clampF(remaining/horizon, 0, 1)
+	priorLiftWeight := clamp01(s.config.RemainingTurnPriorWeight)
+	evidence.Mass = clamp01(base + math.Max(0, priorMass-base)*priorLiftWeight)
+	evidence.RemainingTurnPriorOK = true
+	evidence.RemainingTurnsEstimate = remaining
+	return evidence
+}
+
+type remainingTurnPriorEvidence struct {
+	Value          float64
+	Source         string
+	SampleCount    int
+	OK             bool
+	RejectedReason string
+}
+
+func (s *SessionAwareSelector) lookupRemainingTurnPrior(selCtx *SelectionContext) remainingTurnPriorEvidence {
+	if s.lookupTable == nil || selCtx == nil {
+		return remainingTurnPriorEvidence{}
+	}
+	var rejected remainingTurnPriorEvidence
+	for _, family := range []string{selCtx.CategoryName, selCtx.DecisionName} {
+		if family == "" {
+			continue
+		}
+		entry, ok := s.lookupTable.Get(lookuptable.RemainingTurnPriorKey(family))
+		if !ok {
+			continue
+		}
+		value := entry.Value
+		if value < 0 {
+			value = 0
+		}
+		evidence := remainingTurnPriorEvidence{
+			Value:       value,
+			Source:      entry.Source,
+			SampleCount: entry.SampleCount,
+			OK:          true,
+		}
+		if entry.Source == lookuptable.SourceReplayDerived &&
+			entry.SampleCount < s.config.MinRemainingTurnPriorSamples {
+			evidence.OK = false
+			evidence.RejectedReason = "low_sample_count"
+			if rejected.RejectedReason == "" {
+				rejected = evidence
+			}
+			continue
+		}
+		return evidence
+	}
+	return rejected
 }
 
 func (s *SessionAwareSelector) lookupHandoffPenalty(current, candidate string) float64 {
