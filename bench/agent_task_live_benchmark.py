@@ -809,6 +809,186 @@ def long_horizon_task_specs() -> tuple[TaskSpec, ...]:
             ),
         ),
         TaskSpec(
+            name="codebase-refactor-planning",
+            suite="long-horizon",
+            turns=(
+                TaskTurn(
+                    phase="user_turn",
+                    prompt=(
+                        "A coding agent is about to touch a known router hotspot. "
+                        "Plan a scoped refactor before changing code."
+                    ),
+                ),
+                TaskTurn(
+                    phase="tool_loop",
+                    prompt="Use the code search result before naming the boundary.",
+                    tool_name="rg_hotspot",
+                    tool_result=(
+                        "processor_req_body_routing.go currently owns request parsing, "
+                        "model selection, backend metadata resolution, and response "
+                        "header mutation."
+                    ),
+                ),
+                TaskTurn(
+                    phase="tool_loop",
+                    prompt="Use the module rule before choosing the patch shape.",
+                    tool_name="read_module_boundary",
+                    tool_result=(
+                        "Hotspot files must not grow in responsibility. Prefer a small "
+                        "orchestrator plus helpers, and validate affected extproc tests."
+                    ),
+                ),
+                TaskTurn(
+                    phase="provider_state",
+                    prompt=(
+                        "Continue the same refactor thread with provider-managed state "
+                        "and preserve the current model while reviewing tool output."
+                    ),
+                ),
+                TaskTurn(
+                    phase="topic_drift",
+                    prompt=(
+                        "Now convert the refactor plan into a PR review checklist "
+                        "without adding unrelated cleanup."
+                    ),
+                ),
+                TaskTurn(
+                    phase="final",
+                    prompt=(
+                        "Return the refactor plan. Include exact tokens "
+                        "PLAN=extract-helper, BOUNDARY=small-orchestrator, "
+                        "VALIDATE=agent-ci-gate."
+                    ),
+                    expected_terms=(
+                        "PLAN=extract-helper",
+                        "BOUNDARY=small-orchestrator",
+                        "VALIDATE=agent-ci-gate",
+                    ),
+                ),
+            ),
+        ),
+        TaskSpec(
+            name="research-artifact-review",
+            suite="long-horizon",
+            turns=(
+                TaskTurn(
+                    phase="user_turn",
+                    prompt=(
+                        "Review the paper evidence package for a session-aware routing "
+                        "submission. Start by deciding what belongs near the main claim."
+                    ),
+                ),
+                TaskTurn(
+                    phase="tool_loop",
+                    prompt="Use the figure inventory before choosing what to keep.",
+                    tool_name="read_figure_inventory",
+                    tool_result=(
+                        "Figures 7, 9, 10, 11, 12, 13, 16, and 17 mix multiple "
+                        "results per image and drift away from the sections that "
+                        "explain them."
+                    ),
+                ),
+                TaskTurn(
+                    phase="tool_loop",
+                    prompt="Use the result table before deciding the evidence boundary.",
+                    tool_name="read_result_table",
+                    tool_result=(
+                        "Synthetic matrix and ablation pass as policy evidence. "
+                        "Branch-image AMD and positive cached-token backend evidence "
+                        "are still missing."
+                    ),
+                ),
+                TaskTurn(
+                    phase="provider_state",
+                    prompt=(
+                        "Continue the same paper review with provider state and keep "
+                        "the claim boundary unchanged."
+                    ),
+                ),
+                TaskTurn(
+                    phase="idle_boundary",
+                    prompt=(
+                        "Assume the author returns after an idle gap and asks whether "
+                        "the blog should include every experiment detail."
+                    ),
+                ),
+                TaskTurn(
+                    phase="final",
+                    prompt=(
+                        "Return the paper review. Include exact tokens "
+                        "FIGURE=single-claim, APPENDIX=process-detail, "
+                        "LIMITATION=missing-amd-evidence."
+                    ),
+                    expected_terms=(
+                        "FIGURE=single-claim",
+                        "APPENDIX=process-detail",
+                        "LIMITATION=missing-amd-evidence",
+                    ),
+                ),
+            ),
+        ),
+        TaskSpec(
+            name="tool-error-recovery-loop",
+            suite="long-horizon",
+            turns=(
+                TaskTurn(
+                    phase="user_turn",
+                    prompt=(
+                        "A long-running coding agent hit a tool failure while "
+                        "validating session-aware routing. Decide how to recover."
+                    ),
+                ),
+                TaskTurn(
+                    phase="tool_loop",
+                    prompt="Use the failed command before naming the likely cause.",
+                    tool_name="run_branch_image_probe",
+                    tool_result=(
+                        "docker run ghcr.io/example/vllm-sr:pr1989 failed with "
+                        "image not found; local mounted-binary diagnostic still passes."
+                    ),
+                ),
+                TaskTurn(
+                    phase="tool_loop",
+                    prompt="Use the build log before deciding whether this is GA evidence.",
+                    tool_name="read_image_build_log",
+                    tool_result=(
+                        "ROCm branch image build was skipped after disk pressure. "
+                        "No immutable image tag or full branch-image summary exists."
+                    ),
+                ),
+                TaskTurn(
+                    phase="tool_loop",
+                    prompt="Use the rerun plan before finalizing recovery.",
+                    tool_name="plan_recovery_run",
+                    tool_result=(
+                        "Free disk, rebuild the branch image, rerun diagnostic, "
+                        "long-session, failure-recovery, and agent-task summaries, "
+                        "then assemble full-branch-image-benchmark evidence."
+                    ),
+                ),
+                TaskTurn(
+                    phase="provider_state",
+                    prompt=(
+                        "Continue the same recovery thread under provider-managed "
+                        "state and preserve the active session."
+                    ),
+                ),
+                TaskTurn(
+                    phase="final",
+                    prompt=(
+                        "Return the recovery plan. Include exact tokens "
+                        "ROOT_CAUSE=missing-branch-image, "
+                        "RECOVERY=rebuild-and-rerun, PRESERVE=session-state."
+                    ),
+                    expected_terms=(
+                        "ROOT_CAUSE=missing-branch-image",
+                        "RECOVERY=rebuild-and-rerun",
+                        "PRESERVE=session-state",
+                    ),
+                ),
+            ),
+        ),
+        TaskSpec(
             name="paper-evidence-audit",
             suite="long-horizon",
             turns=(

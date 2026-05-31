@@ -47,9 +47,9 @@ LABELS = {
     "single-turn": "single-turn",
     "sticky-session": "sticky",
 }
-DEFAULT_MIN_AGENT_TASK_REQUESTS = 201
-DEFAULT_MIN_AGENT_TASK_COUNT = 12
-DEFAULT_MIN_AGENT_TASK_INSTANCES = 36
+DEFAULT_MIN_AGENT_TASK_REQUESTS = 255
+DEFAULT_MIN_AGENT_TASK_COUNT = 15
+DEFAULT_MIN_AGENT_TASK_INSTANCES = 45
 DEFAULT_AGENT_TASK_HEADERS = (
     "x-vsr-selected-model",
     "x-vsr-selected-decision",

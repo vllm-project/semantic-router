@@ -5,8 +5,8 @@ from pathlib import Path
 HALF_SCORE = 0.5
 MEAN_SCORE = 0.75
 MISSING_HEADER_COUNT = 2
-MIN_LONG_HORIZON_TASKS = 12
-MIN_LONG_HORIZON_TURNS = 67
+MIN_LONG_HORIZON_TASKS = 15
+MIN_LONG_HORIZON_TURNS = 85
 
 
 def load_benchmark_module():
@@ -119,6 +119,9 @@ def test_long_horizon_suite_covers_real_agent_workflows():
         "research-synthesis",
         "maintainer-handoff",
         "test-fix-iteration",
+        "codebase-refactor-planning",
+        "research-artifact-review",
+        "tool-error-recovery-loop",
         "paper-evidence-audit",
         "multi-agent-delegation",
     } <= task_names

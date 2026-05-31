@@ -25,9 +25,9 @@ try:
         MOUNTED_BINARY_MARKERS,
     )
 except ImportError:  # pragma: no cover - used when loaded outside bench/.
-    DEFAULT_MIN_AGENT_TASK_REQUESTS = 201
-    DEFAULT_MIN_AGENT_TASK_COUNT = 12
-    DEFAULT_MIN_AGENT_TASK_INSTANCES = 36
+    DEFAULT_MIN_AGENT_TASK_REQUESTS = 255
+    DEFAULT_MIN_AGENT_TASK_COUNT = 15
+    DEFAULT_MIN_AGENT_TASK_INSTANCES = 45
     DEFAULT_REQUIRED_AGENT_TASK_NAMES = (
         "multi-file-regression",
         "code-review-followup",
@@ -39,6 +39,9 @@ except ImportError:  # pragma: no cover - used when loaded outside bench/.
         "release-triage",
         "observability-debug",
         "test-fix-iteration",
+        "codebase-refactor-planning",
+        "research-artifact-review",
+        "tool-error-recovery-loop",
         "paper-evidence-audit",
         "multi-agent-delegation",
     )
