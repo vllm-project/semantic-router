@@ -43,6 +43,7 @@ ignore_globs:
   - '**/*.pb.go'
   - '**/zz_generated*'
   - '**/node_modules/**'
+  - candle-binding/src/ffi/embedding.rs
 
 structure_exceptions:
   - paths:
