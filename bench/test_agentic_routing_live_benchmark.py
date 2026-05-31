@@ -92,6 +92,8 @@ def make_args(base_url, tmp_path, **overrides):
         "max_tool_loop_violations": -1,
         "max_context_portability_violations": -1,
         "max_overhead_p95_ms": 0.0,
+        "min_sessions_with_errors": 0,
+        "min_session_recovery_rate": 0.0,
         "dry_run": False,
         "output_dir": tmp_path,
     }
@@ -259,6 +261,25 @@ def test_summary_reports_session_recovery_after_transient_errors(tmp_path):
     assert summary["sessions_with_errors"] == EXPECTED_SESSIONS_WITH_ERRORS
     assert summary["sessions_recovered_after_error"] == 1
     assert summary["session_recovery_rate_after_error"] == EXPECTED_RECOVERY_RATE
+
+    passing_args = make_args(
+        "http://unused/v1",
+        tmp_path,
+        min_sessions_with_errors=2,
+        min_session_recovery_rate=0.5,
+    )
+    assert live.validate_summary(passing_args, summary, None) == []
+
+    strict_args = make_args(
+        "http://unused/v1",
+        tmp_path,
+        min_sessions_with_errors=3,
+        min_session_recovery_rate=0.75,
+    )
+    assert live.validate_summary(strict_args, summary, None) == [
+        "sessions_with_errors 2 < 3",
+        "session_recovery_rate_after_error 0.5 < 0.75",
+    ]
 
 
 def test_baseline_namespace_drops_previous_response_id_by_default(tmp_path):
