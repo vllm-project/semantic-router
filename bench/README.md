@@ -64,11 +64,13 @@ The output is written under `.agent-harness/experiments/live-agentic-routing/`
 by default and includes per-turn JSONL/CSV plus a summary with success rate,
 latency percentiles, selected-model switches, tool-loop switch violations,
 context-portability violations, token usage, cached-token ratio, and VSR
-decision headers. When `--baseline-base-url` is set, the benchmark also writes
-`baseline/summary.json`, `comparison.json`, and `comparison.md` with router
-latency overhead, throughput ratio, and status-count deltas. Threshold flags
-fail the run when success, latency, overhead, or session-continuity invariants
-fall outside the configured GA bounds.
+decision headers. It also reports how many sessions experienced transient
+errors and then recovered on a later turn, which is the failure-recovery metric
+to use in backend disruption runs. When `--baseline-base-url` is set, the
+benchmark also writes `baseline/summary.json`, `comparison.json`, and
+`comparison.md` with router latency overhead, throughput ratio, and status-count
+deltas. Threshold flags fail the run when success, latency, overhead, or
+session-continuity invariants fall outside the configured GA bounds.
 
 ### Basic Usage
 

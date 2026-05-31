@@ -10,6 +10,9 @@ from typing import ClassVar
 EXPECTED_REQUESTS = 4
 EXPECTED_P95_OVERHEAD_MS = 4.0
 EXPECTED_THROUGHPUT_RATIO = 0.8
+EXPECTED_SESSIONS_WITH_ERRORS = 2
+EXPECTED_RECOVERY_RATE = 0.5
+HTTP_OK = 200
 
 
 def load_live_module():
@@ -219,6 +222,43 @@ def test_router_vs_baseline_comparison_and_thresholds(tmp_path):
     )
     failures = live.validate_summary(strict_args, router, comparison)
     assert failures == ["router_p95_overhead_ms 4.0 > 3.0"]
+
+
+def test_summary_reports_session_recovery_after_transient_errors(tmp_path):
+    live = load_live_module()
+    args = make_args("http://unused/v1", tmp_path)
+
+    def row(session_id, turn, status):
+        return live.row_from_result(
+            args,
+            live.TurnPlan(session_id, turn, "user_turn", "prompt", ""),
+            {
+                "status": status,
+                "latency_ms": 1.0,
+                "headers": {"x-vsr-selected-model": "small"},
+                "json": {
+                    "id": f"resp_{session_id}_{turn}",
+                    "model": "small",
+                    "usage": {},
+                },
+                "error": "" if status == HTTP_OK else "upstream unavailable",
+            },
+            "small",
+        )
+
+    rows = [
+        row("s-recovered", 0, 200),
+        row("s-recovered", 1, 503),
+        row("s-recovered", 2, 200),
+        row("s-still-failed", 0, 200),
+        row("s-still-failed", 1, 503),
+    ]
+
+    summary = live.summarize(rows)
+
+    assert summary["sessions_with_errors"] == EXPECTED_SESSIONS_WITH_ERRORS
+    assert summary["sessions_recovered_after_error"] == 1
+    assert summary["session_recovery_rate_after_error"] == EXPECTED_RECOVERY_RATE
 
 
 def test_baseline_namespace_drops_previous_response_id_by_default(tmp_path):

@@ -415,6 +415,7 @@ def summarize(
     status_counts: dict[str, int] = {}
     for row in rows:
         status_counts[str(row["status"])] = status_counts.get(str(row["status"]), 0) + 1
+    recovery = session_recovery(rows)
     return {
         "requests": len(rows),
         "sessions": len({row["session_id"] for row in rows}),
@@ -451,6 +452,11 @@ def summarize(
         ),
         "phase_counts": counts(row["phase"] for row in rows),
         "error_counts": counts(row["error"] for row in rows if row["error"]),
+        "sessions_with_errors": recovery["sessions_with_errors"],
+        "sessions_recovered_after_error": recovery["sessions_recovered_after_error"],
+        "session_recovery_rate_after_error": recovery[
+            "session_recovery_rate_after_error"
+        ],
         "metrics_excerpt": metrics_text[:4000],
     }
 
@@ -462,6 +468,39 @@ def phase_latency(rows: list[dict[str, Any]]) -> dict[str, dict[str, float | Non
             by_phase.setdefault(str(row["phase"]), []).append(float(row["latency_ms"]))
     return {
         phase: latency_summary(values) for phase, values in sorted(by_phase.items())
+    }
+
+
+def session_recovery(rows: list[dict[str, Any]]) -> dict[str, int | float | None]:
+    by_session: dict[str, list[dict[str, Any]]] = {}
+    for row in rows:
+        by_session.setdefault(str(row["session_id"]), []).append(row)
+
+    sessions_with_errors = 0
+    sessions_recovered_after_error = 0
+    for session_rows in by_session.values():
+        ordered = sorted(session_rows, key=lambda row: int(row["turn"]))
+        seen_error = False
+        recovered = False
+        for row in ordered:
+            if bool(row["success"]):
+                if seen_error:
+                    recovered = True
+                continue
+            seen_error = True
+        if seen_error:
+            sessions_with_errors += 1
+        if recovered:
+            sessions_recovered_after_error += 1
+
+    return {
+        "sessions_with_errors": sessions_with_errors,
+        "sessions_recovered_after_error": sessions_recovered_after_error,
+        "session_recovery_rate_after_error": (
+            round(sessions_recovered_after_error / sessions_with_errors, 4)
+            if sessions_with_errors
+            else None
+        ),
     }
 
 
@@ -552,6 +591,7 @@ def render_markdown(summary: dict[str, Any]) -> str:
             f"- model switches: {summary['model_switches']}",
             f"- tool-loop switch violations: {summary['tool_loop_switch_violations']}",
             f"- context portability violations: {summary['context_portability_violations']}",
+            f"- sessions recovered after error: {summary['sessions_recovered_after_error']} / {summary['sessions_with_errors']}",
             f"- cached prompt ratio: {summary['cached_prompt_ratio']}",
             "",
         ]

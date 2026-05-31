@@ -376,25 +376,13 @@ func (c *RouterConfig) SelectBestEndpointForModel(modelName string) (string, boo
 // SelectBestEndpointAddressForModel selects the best endpoint for a model and returns the address:port.
 // When the endpoint has a provider_profile with a base_url, the host:port is extracted from it.
 // Returns ("", false, nil) when no endpoints match the model.
-// Returns ("", false, err) when the selected endpoint has a broken provider_profile/base_url.
+// Returns ("", false, err) when no configured endpoint can resolve a usable address.
 func (c *RouterConfig) SelectBestEndpointAddressForModel(modelName string) (string, bool, error) {
-	endpoints := c.GetEndpointsForModel(modelName)
-	if len(endpoints) == 0 {
-		return "", false, nil
-	}
-
-	bestEndpoint := endpoints[0]
-	for _, endpoint := range endpoints[1:] {
-		if endpoint.Weight > bestEndpoint.Weight {
-			bestEndpoint = endpoint
-		}
-	}
-
-	addr, err := bestEndpoint.ResolveAddress(c.ProviderProfiles)
+	_, addr, found, err := c.selectResolvableEndpointForModel(modelName)
 	if err != nil {
-		return "", false, fmt.Errorf("endpoint %q for model %q: %w", bestEndpoint.Name, modelName, err)
+		return "", false, err
 	}
-	return addr, true, nil
+	return addr, found, nil
 }
 
 // GetModelReasoningForDecision returns whether a specific model supports reasoning in a given decision
@@ -573,23 +561,14 @@ func (c *RouterConfig) ResolveExternalModelID(modelName string, endpointName str
 // both the address:port and the endpoint name (needed for external_model_ids resolution).
 // Returns (address, endpointName, found).
 func (c *RouterConfig) SelectBestEndpointWithDetailsForModel(modelName string) (string, string, bool, error) {
-	endpoints := c.GetEndpointsForModel(modelName)
-	if len(endpoints) == 0 {
+	endpoint, addr, found, err := c.selectResolvableEndpointForModel(modelName)
+	if err != nil {
+		return "", "", false, err
+	}
+	if !found {
 		return "", "", false, nil
 	}
-
-	bestEndpoint := endpoints[0]
-	for _, endpoint := range endpoints[1:] {
-		if endpoint.Weight > bestEndpoint.Weight {
-			bestEndpoint = endpoint
-		}
-	}
-
-	addr, err := bestEndpoint.ResolveAddress(c.ProviderProfiles)
-	if err != nil {
-		return "", "", false, fmt.Errorf("endpoint %q for model %q: %w", bestEndpoint.Name, modelName, err)
-	}
-	return addr, bestEndpoint.Name, true, nil
+	return addr, endpoint.Name, true, nil
 }
 
 // ---------------------------------------------------------------------------
