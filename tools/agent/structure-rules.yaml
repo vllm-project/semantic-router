@@ -44,6 +44,7 @@ ignore_globs:
   - '**/zz_generated*'
   - '**/node_modules/**'
   - candle-binding/src/ffi/embedding.rs
+  - candle-binding/src/model_architectures/embedding/multimodal_embedding.rs
 
 structure_exceptions:
   - paths:
