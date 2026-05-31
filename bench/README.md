@@ -202,6 +202,31 @@ python3 bench/agent_task_live_benchmark.py \
   --max-context-portability-violations 0
 ```
 
+### Session Routing GA Readiness Report
+
+Use the GA readiness report after local, AMD, agent-task, cache-token, and
+branch-image runs have produced machine-readable summaries. The report does not
+replace the individual benchmark gates; it verifies that the required evidence
+exists together and turns missing evidence into explicit blockers:
+
+```bash
+python3 bench/session_routing_ga_report.py \
+  --synthetic-matrix-summary .agent-harness/experiments/agentic-routing/20260531Tdiagnostic-gate-matrix/summary.json \
+  --synthetic-ablation-summary .agent-harness/experiments/agentic-routing/20260531Tdiagnostic-gate-ablation/summary.json \
+  --live-aggregate .agent-harness/experiments/live-agentic-routing/amd-long-session-20260531/aggregate-summary.json \
+  --failure-aggregate .agent-harness/experiments/live-agentic-routing/amd-repeat-failure-20260531/aggregate-summary.json \
+  --agent-task-summary .agent-harness/experiments/live-agent-tasks/amd-long-agent-task-observability-20260531/summary.json \
+  --cache-aggregate .agent-harness/experiments/cache-token-probe/amd-cache-token-20260531/aggregate-summary.json \
+  --branch-image-summary .agent-harness/experiments/live-agentic-routing/branch-image-ga/summary.json
+```
+
+The output is written under `.agent-harness/reports/session-routing-ga/` by
+default as `ga-readiness.json` and `ga-readiness.md`. A strict GA invocation
+exits non-zero when any requirement is missing or blocked. Use
+`--allow-blockers` only when generating an interim report that should document
+known gaps, such as missing positive cache-token evidence or a pending
+branch-image AMD run.
+
 ### Basic Usage
 
 ```bash
