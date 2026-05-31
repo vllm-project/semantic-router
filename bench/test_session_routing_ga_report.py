@@ -119,7 +119,16 @@ def complete_inputs(tmp_path: Path) -> dict[str, Path]:
             },
         },
     )
-    branch = write_json(tmp_path / "branch.json", {"validation_failures": []})
+    branch = write_json(
+        tmp_path / "branch.json",
+        {
+            "checks": {
+                "chat_completion_ok": True,
+                "diagnostic_headers_ok": True,
+            },
+            "validation_failures": [],
+        },
+    )
     return {
         "matrix": matrix,
         "ablation": ablation,

@@ -204,6 +204,23 @@ python3 bench/agent_task_live_benchmark.py \
 
 ### Session Routing GA Readiness Report
 
+Use the branch-image diagnostic probe first when validating a freshly built
+router stack. It sends one OpenAI-compatible chat completion and writes a
+branch-image summary that proves the standard diagnostic headers are present:
+
+```bash
+python3 bench/session_routing_branch_image_probe.py \
+  --base-url http://127.0.0.1:8899/v1 \
+  --model auto \
+  --ref "$(git rev-parse --short HEAD)" \
+  --image-tag "$TAG" \
+  --output-dir .agent-harness/experiments/branch-image-diagnostic/current
+```
+
+The probe fails when the running stack does not emit selected model, selected
+decision, replay id, selected confidence, or context-token count headers. Pass
+its `summary.json` to the readiness report with `--branch-image-summary`.
+
 Use the GA readiness report after local, AMD, agent-task, cache-token, and
 branch-image runs have produced machine-readable summaries. The report does not
 replace the individual benchmark gates; it verifies that the required evidence

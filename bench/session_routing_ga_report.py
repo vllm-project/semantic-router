@@ -573,15 +573,28 @@ def evaluate_branch_image_summary(args: argparse.Namespace) -> dict[str, Any]:
                 "full branch-image AMD validation artifact is required before GA"
             ],
         )
-    failures = validation_failures(data)
+    failures = [str(item) for item in validation_failures(data)]
+    checks = data.get("checks") if isinstance(data.get("checks"), dict) else {}
+    for key in ["chat_completion_ok", "diagnostic_headers_ok"]:
+        if key in checks and checks[key] is not True:
+            failures.append(f"{key} is not true")
+    for header in data.get("missing_diagnostic_headers") or []:
+        failures.append(f"missing diagnostic header: {header}")
+    for header in data.get("invalid_diagnostic_headers") or []:
+        failures.append(f"invalid diagnostic header: {header}")
+    failures = list(dict.fromkeys(failures))
     status = BLOCKING_STATUS if failures else PASSING_STATUS
     return requirement(
         "branch_image_amd_validation",
         "Branch-image AMD validation",
         status,
         evidence,
-        {"validation_failures": failures},
-        [str(item) for item in failures],
+        {
+            "checks": checks,
+            "image_tag": data.get("image_tag", ""),
+            "ref": data.get("ref", ""),
+        },
+        failures,
     )
 
 
