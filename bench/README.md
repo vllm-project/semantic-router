@@ -72,6 +72,44 @@ benchmark also writes `baseline/summary.json`, `comparison.json`, and
 deltas. Threshold flags fail the run when success, latency, overhead, or
 session-continuity invariants fall outside the configured GA bounds.
 
+For backend disruption experiments, run the fault proxy between the router and
+the upstream vLLM-compatible backend, then point the router endpoint at the
+proxy. The proxy injects selected OpenAI-compatible HTTP errors and forwards all
+other requests unchanged, which keeps the benchmark workload deterministic:
+
+```bash
+python3 bench/openai_fault_proxy.py \
+  --listen-host 0.0.0.0 \
+  --listen-port 18090 \
+  --upstream-base-url http://127.0.0.1:8000 \
+  --fail-turns 1 \
+  --fail-session-mod 2 \
+  --fail-session-remainder 0 \
+  --log-jsonl .agent-harness/experiments/live-agentic-routing/faults.jsonl
+```
+
+Configure the router endpoint `base_url` for this run to
+`http://127.0.0.1:18090/v1`, then gate recovery with explicit thresholds:
+
+```bash
+python3 bench/agentic_routing_live_benchmark.py \
+  --base-url http://127.0.0.1:8899/v1 \
+  --model auto \
+  --scenario tool-heavy \
+  --sessions 16 \
+  --turns 8 \
+  --concurrency 4 \
+  --min-success-rate 0.85 \
+  --min-sessions-with-errors 8 \
+  --min-session-recovery-rate 1.0 \
+  --max-tool-loop-violations 0
+```
+
+Use `--fail-phases tool_loop,provider_state` when the run needs to target
+agentic phases instead of fixed turn numbers. The default fault policy injects
+at most one fault per selected session so the recovery metric measures whether
+later turns can continue after a transient backend failure.
+
 ### Basic Usage
 
 ```bash

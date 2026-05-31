@@ -74,6 +74,8 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--max-tool-loop-violations", type=int, default=-1)
     parser.add_argument("--max-context-portability-violations", type=int, default=-1)
     parser.add_argument("--max-overhead-p95-ms", type=float, default=0.0)
+    parser.add_argument("--min-sessions-with-errors", type=int, default=0)
+    parser.add_argument("--min-session-recovery-rate", type=float, default=0.0)
     parser.add_argument("--dry-run", action="store_true")
     parser.add_argument("--output-dir", type=Path, default=None)
     return parser.parse_args()
@@ -601,6 +603,8 @@ def render_markdown(summary: dict[str, Any]) -> str:
 def render_comparison_markdown(comparison: dict[str, Any]) -> str:
     overhead = comparison["router_overhead_ms"]
     ratios = comparison["router_vs_baseline_ratio"]
+    router_recovery = comparison["router_recovery"]
+    baseline_recovery = comparison["baseline_recovery"]
     return "\n".join(
         [
             "# Router vs Direct Backend Comparison",
@@ -612,6 +616,12 @@ def render_comparison_markdown(comparison: dict[str, Any]) -> str:
             f"- p95 overhead ms: {overhead['p95']}",
             f"- p99 overhead ms: {overhead['p99']}",
             f"- throughput ratio: {ratios['requests_per_second']}",
+            "- router sessions recovered after error: "
+            f"{router_recovery['sessions_recovered_after_error']} / "
+            f"{router_recovery['sessions_with_errors']}",
+            "- baseline sessions recovered after error: "
+            f"{baseline_recovery['sessions_recovered_after_error']} / "
+            f"{baseline_recovery['sessions_with_errors']}",
             "",
         ]
     )
@@ -668,6 +678,24 @@ def compare_summaries(
             "tool_loop": router_summary["tool_loop_switch_violations"],
             "context_portability": router_summary["context_portability_violations"],
         },
+        "router_recovery": {
+            "sessions_with_errors": router_summary.get("sessions_with_errors", 0),
+            "sessions_recovered_after_error": router_summary.get(
+                "sessions_recovered_after_error", 0
+            ),
+            "session_recovery_rate_after_error": router_summary.get(
+                "session_recovery_rate_after_error"
+            ),
+        },
+        "baseline_recovery": {
+            "sessions_with_errors": baseline_summary.get("sessions_with_errors", 0),
+            "sessions_recovered_after_error": baseline_summary.get(
+                "sessions_recovered_after_error", 0
+            ),
+            "session_recovery_rate_after_error": baseline_summary.get(
+                "session_recovery_rate_after_error"
+            ),
+        },
         "baseline_status_counts": baseline_summary["status_counts"],
         "router_status_counts": router_summary["status_counts"],
     }
@@ -715,6 +743,23 @@ def validate_summary(
         failures.append(
             f"context_portability_violations {context_violations} > "
             f"{args.max_context_portability_violations}"
+        )
+    sessions_with_errors = int(summary.get("sessions_with_errors", 0))
+    if (
+        args.min_sessions_with_errors
+        and sessions_with_errors < args.min_sessions_with_errors
+    ):
+        failures.append(
+            f"sessions_with_errors {sessions_with_errors} < "
+            f"{args.min_sessions_with_errors}"
+        )
+    recovery_rate = summary.get("session_recovery_rate_after_error")
+    if args.min_session_recovery_rate and (
+        recovery_rate is None or recovery_rate < args.min_session_recovery_rate
+    ):
+        failures.append(
+            f"session_recovery_rate_after_error {recovery_rate} < "
+            f"{args.min_session_recovery_rate}"
         )
     if comparison and args.max_overhead_p95_ms:
         overhead_p95 = comparison["router_overhead_ms"]["p95"]
