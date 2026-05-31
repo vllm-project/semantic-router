@@ -19,6 +19,8 @@ REQUIRED_LONG_HORIZON_TASKS = [
     "tool-error-recovery-loop",
     "paper-evidence-audit",
     "multi-agent-delegation",
+    "issue-pr-maintenance-loop",
+    "configuration-contract-review",
 ]
 REQUIRED_LONG_HORIZON_PHASES = [
     "user_turn",
@@ -55,7 +57,7 @@ def write_json(path: Path, data: dict):
 
 def complete_agent_task_summary() -> dict:
     return {
-        "requests": 255,
+        "requests": 291,
         "tasks": len(REQUIRED_LONG_HORIZON_TASKS),
         "task_count": len(REQUIRED_LONG_HORIZON_TASKS),
         "task_names": REQUIRED_LONG_HORIZON_TASKS,
@@ -431,9 +433,9 @@ def test_stale_agent_task_suite_blocks_ga(tmp_path):
 
     assert report["ga_ready"] is False
     assert task_requirement["status"] == "blocked"
-    assert "requests 96.0 < 255" in task_requirement["failures"]
-    assert "task_count 6.0 < 15" in task_requirement["failures"]
-    assert "task_instances 18.0 < 45" in task_requirement["failures"]
+    assert "requests 96.0 < 291" in task_requirement["failures"]
+    assert "task_count 6.0 < 17" in task_requirement["failures"]
+    assert "task_instances 18.0 < 51" in task_requirement["failures"]
     assert (
         "missing router headers: {'x-vsr-session-phase': 96}"
         in task_requirement["failures"]

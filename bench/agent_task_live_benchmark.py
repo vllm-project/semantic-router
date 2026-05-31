@@ -1109,6 +1109,127 @@ def long_horizon_task_specs() -> tuple[TaskSpec, ...]:
                 ),
             ),
         ),
+        TaskSpec(
+            name="issue-pr-maintenance-loop",
+            suite="long-horizon",
+            turns=(
+                TaskTurn(
+                    phase="user_turn",
+                    prompt=(
+                        "Act as maintainer after a release planning pass. Reconcile "
+                        "the issue and PR board before assigning agents."
+                    ),
+                ),
+                TaskTurn(
+                    phase="tool_loop",
+                    prompt="Use the GitHub board snapshot before deciding actions.",
+                    tool_name="read_github_board",
+                    tool_result=(
+                        "v0.3 tracker is open. Missing release-blocker issues: AMD "
+                        "branch-image benchmark and positive cached-token backend "
+                        "evidence. Unified PR #1989 is draft. Older split PRs are "
+                        "conflicted or closed. Blog PR #224 is draft."
+                    ),
+                ),
+                TaskTurn(
+                    phase="tool_loop",
+                    prompt="Use the maintainer policy before updating the board.",
+                    tool_name="read_maintainer_policy",
+                    tool_result=(
+                        "Milestone-bound release blockers stay attached to the release "
+                        "plan. New user requests and bugs are triaged separately. Daily "
+                        "issue and PR state belongs under .agent-harness/maintainer."
+                    ),
+                ),
+                TaskTurn(
+                    phase="provider_state",
+                    prompt=(
+                        "Continue the same maintainer thread with provider-managed "
+                        "state and preserve the release scope."
+                    ),
+                ),
+                TaskTurn(
+                    phase="topic_drift",
+                    prompt=(
+                        "Now convert the board reconciliation into a short next-action "
+                        "summary without creating GitHub objects."
+                    ),
+                ),
+                TaskTurn(
+                    phase="final",
+                    prompt=(
+                        "Return the maintainer board action. Include exact tokens "
+                        "CREATE=release-blocker-issues, CLOSE=stale-split-prs, "
+                        "TRACK=maintainer-board."
+                    ),
+                    expected_terms=(
+                        "CREATE=release-blocker-issues",
+                        "CLOSE=stale-split-prs",
+                        "TRACK=maintainer-board",
+                    ),
+                ),
+            ),
+        ),
+        TaskSpec(
+            name="configuration-contract-review",
+            suite="long-horizon",
+            turns=(
+                TaskTurn(
+                    phase="user_turn",
+                    prompt=(
+                        "Review a configuration contract change for session-aware "
+                        "routing. Start by identifying the schema and ownership risks."
+                    ),
+                ),
+                TaskTurn(
+                    phase="tool_loop",
+                    prompt="Use the schema diff before naming the contract.",
+                    tool_name="read_config_schema_diff",
+                    tool_result=(
+                        "Model pricing now carries cached_input_per_1m alongside "
+                        "prompt_per_1m and completion_per_1m. Unknown pricing fields "
+                        "must be rejected by config loaders."
+                    ),
+                ),
+                TaskTurn(
+                    phase="tool_loop",
+                    prompt="Use the boundary audit before deciding what must not change.",
+                    tool_name="read_extproc_boundary_audit",
+                    tool_result=(
+                        "Semantic Router is an Envoy ExtProc component. It may emit "
+                        "cluster-level routing signals and diagnostics, but endpoint "
+                        "load balancing remains owned by Envoy clusters."
+                    ),
+                ),
+                TaskTurn(
+                    phase="provider_state",
+                    prompt=(
+                        "Continue the same review with provider-managed state and "
+                        "preserve the selected model while inspecting tool output."
+                    ),
+                ),
+                TaskTurn(
+                    phase="topic_drift",
+                    prompt=(
+                        "Now translate the review into a validation plan that avoids "
+                        "endpoint-selection overclaims."
+                    ),
+                ),
+                TaskTurn(
+                    phase="final",
+                    prompt=(
+                        "Return the configuration review. Include exact tokens "
+                        "SCHEMA=cached-input-rate, BOUNDARY=no-endpoint-selection, "
+                        "VALIDATE=config-loader-tests."
+                    ),
+                    expected_terms=(
+                        "SCHEMA=cached-input-rate",
+                        "BOUNDARY=no-endpoint-selection",
+                        "VALIDATE=config-loader-tests",
+                    ),
+                ),
+            ),
+        ),
     )
 
 
