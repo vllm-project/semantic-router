@@ -23,6 +23,30 @@ A comprehensive benchmark suite for evaluating **semantic router** performance a
 pip install vllm-semantic-router-bench
 ```
 
+### Live Session-Aware Routing Benchmark
+
+Use the live benchmark when a router or Envoy stack is already running and you
+need repeatable system evidence for session-aware agentic routing:
+
+```bash
+python3 bench/agentic_routing_live_benchmark.py \
+  --base-url http://127.0.0.1:8977/v1 \
+  --metrics-url http://127.0.0.1:9279/metrics \
+  --model auto \
+  --scenario tool-heavy \
+  --sessions 8 \
+  --turns 12 \
+  --concurrency 2
+```
+
+The output is written under `.agent-harness/experiments/live-agentic-routing/`
+by default and includes per-turn JSONL/CSV plus a summary with success rate,
+latency percentiles, selected-model switches, tool-loop switch violations,
+context-portability violations, token usage, cached-token ratio, and VSR
+decision headers. Run the same workload against different router configs or
+direct backends with distinct `--label` values to compare non-session-aware,
+baseline agentic, and GA-candidate policies.
+
 ### Basic Usage
 
 ```bash
