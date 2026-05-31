@@ -69,6 +69,16 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--baseline-metrics-url", default="")
     parser.add_argument("--baseline-include-previous-response-id", action="store_true")
     parser.add_argument("--extra-header", action="append", default=[])
+    parser.add_argument(
+        "--require-router-header",
+        action="append",
+        choices=VSR_HEADERS,
+        default=[],
+        help=(
+            "Require this x-vsr response header on every successful router request. "
+            "Can be repeated."
+        ),
+    )
     parser.add_argument("--min-success-rate", type=float, default=0.0)
     parser.add_argument("--max-p95-latency-ms", type=float, default=0.0)
     parser.add_argument("--max-tool-loop-violations", type=int, default=-1)
@@ -309,6 +319,7 @@ def dry_run_response(plan: TurnPlan) -> dict[str, Any]:
         "headers": {
             "x-vsr-selected-model": model,
             "x-vsr-selected-decision": "dry-run",
+            "x-vsr-replay-id": f"dry-replay-{plan.session_id}-{plan.turn}",
         },
         "json": {
             "id": f"dry_{plan.session_id}_{plan.turn}",
@@ -454,6 +465,7 @@ def summarize(
         ),
         "phase_counts": counts(row["phase"] for row in rows),
         "error_counts": counts(row["error"] for row in rows if row["error"]),
+        "missing_router_header_counts": missing_router_header_counts(rows),
         "sessions_with_errors": recovery["sessions_with_errors"],
         "sessions_recovered_after_error": recovery["sessions_recovered_after_error"],
         "session_recovery_rate_after_error": recovery[
@@ -503,6 +515,13 @@ def session_recovery(rows: list[dict[str, Any]]) -> dict[str, int | float | None
             if sessions_with_errors
             else None
         ),
+    }
+
+
+def missing_router_header_counts(rows: list[dict[str, Any]]) -> dict[str, int]:
+    return {
+        header: sum(1 for row in rows if row["success"] and not row.get(header))
+        for header in VSR_HEADERS
     }
 
 
@@ -593,6 +612,7 @@ def render_markdown(summary: dict[str, Any]) -> str:
             f"- model switches: {summary['model_switches']}",
             f"- tool-loop switch violations: {summary['tool_loop_switch_violations']}",
             f"- context portability violations: {summary['context_portability_violations']}",
+            f"- missing router headers: {summary['missing_router_header_counts']}",
             f"- sessions recovered after error: {summary['sessions_recovered_after_error']} / {summary['sessions_with_errors']}",
             f"- cached prompt ratio: {summary['cached_prompt_ratio']}",
             "",
@@ -761,6 +781,13 @@ def validate_summary(
             f"session_recovery_rate_after_error {recovery_rate} < "
             f"{args.min_session_recovery_rate}"
         )
+    missing_headers = summary.get("missing_router_header_counts", {})
+    for header in args.require_router_header:
+        missing = int(missing_headers.get(header, 0))
+        if missing:
+            failures.append(
+                f"missing_router_header {header}: {missing} successful requests"
+            )
     if comparison and args.max_overhead_p95_ms:
         overhead_p95 = comparison["router_overhead_ms"]["p95"]
         if overhead_p95 is not None and overhead_p95 > args.max_overhead_p95_ms:

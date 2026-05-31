@@ -55,6 +55,9 @@ python3 bench/agentic_routing_live_benchmark.py \
   --turns 24 \
   --concurrency 4 \
   --idle-pause-seconds 65 \
+  --require-router-header x-vsr-selected-model \
+  --require-router-header x-vsr-selected-decision \
+  --require-router-header x-vsr-replay-id \
   --min-success-rate 1.0 \
   --max-tool-loop-violations 0 \
   --max-context-portability-violations 0
@@ -71,6 +74,11 @@ benchmark also writes `baseline/summary.json`, `comparison.json`, and
 `comparison.md` with router latency overhead, throughput ratio, and status-count
 deltas. Threshold flags fail the run when success, latency, overhead, or
 session-continuity invariants fall outside the configured GA bounds.
+Use repeated `--require-router-header` flags when the run should prove
+observability readiness, not only routing continuity. This is useful for GA
+evidence that must show every successful router request emitted the selected
+model, selected decision, replay id, or other `x-vsr-*` diagnostics needed to
+debug a session after the fact.
 
 For backend disruption experiments, run the fault proxy between the router and
 the upstream vLLM-compatible backend, then point the router endpoint at the
@@ -180,6 +188,9 @@ python3 bench/agent_task_live_benchmark.py \
   --suite long-horizon \
   --task-repetitions 3 \
   --max-tokens 192 \
+  --require-router-header x-vsr-selected-model \
+  --require-router-header x-vsr-selected-decision \
+  --require-router-header x-vsr-replay-id \
   --min-success-rate 1.0 \
   --min-task-success-rate 0.75 \
   --max-tool-loop-violations 0 \

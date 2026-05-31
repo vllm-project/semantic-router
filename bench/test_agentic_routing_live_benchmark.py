@@ -87,6 +87,7 @@ def make_args(base_url, tmp_path, **overrides):
         "baseline_metrics_url": "",
         "baseline_include_previous_response_id": False,
         "extra_header": [],
+        "require_router_header": [],
         "min_success_rate": 0.0,
         "max_p95_latency_ms": 0.0,
         "max_tool_loop_violations": -1,
@@ -125,6 +126,25 @@ def test_live_benchmark_records_router_headers_and_violations(tmp_path):
     assert summary["model_switches"] == 1
     assert summary["tool_loop_switch_violations"] == 1
     assert summary["cached_prompt_ratio"] is not None
+    assert summary["missing_router_header_counts"]["x-vsr-selected-model"] == 0
+    assert summary["missing_router_header_counts"]["x-vsr-selected-decision"] == 0
+    assert summary["missing_router_header_counts"]["x-vsr-replay-id"] == len(rows)
+
+    decision_args = make_args(
+        "http://unused/v1",
+        tmp_path,
+        require_router_header=["x-vsr-selected-decision"],
+    )
+    assert live.validate_summary(decision_args, summary, None) == []
+
+    replay_args = make_args(
+        "http://unused/v1",
+        tmp_path,
+        require_router_header=["x-vsr-replay-id"],
+    )
+    assert live.validate_summary(replay_args, summary, None) == [
+        "missing_router_header x-vsr-replay-id: 4 successful requests"
+    ]
 
 
 def test_previous_response_id_marks_context_portability_violation(tmp_path):

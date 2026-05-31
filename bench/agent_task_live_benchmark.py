@@ -65,6 +65,16 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--baseline-label", default="direct-backend")
     parser.add_argument("--baseline-include-previous-response-id", action="store_true")
     parser.add_argument("--extra-header", action="append", default=[])
+    parser.add_argument(
+        "--require-router-header",
+        action="append",
+        choices=VSR_HEADERS,
+        default=[],
+        help=(
+            "Require this x-vsr response header on every successful router request. "
+            "Can be repeated."
+        ),
+    )
     parser.add_argument("--min-success-rate", type=float, default=0.0)
     parser.add_argument("--min-task-success-rate", type=float, default=0.0)
     parser.add_argument("--min-task-score", type=float, default=0.0)
@@ -712,7 +722,11 @@ def dry_response(task: TaskSpec, turn_index: int) -> dict[str, Any]:
     content = " ".join(turn.expected_terms) if turn.expected_terms else "Acknowledged."
     return {
         "status": HTTP_OK,
-        "headers": {"x-vsr-selected-model": "dry-model"},
+        "headers": {
+            "x-vsr-selected-model": "dry-model",
+            "x-vsr-selected-decision": "dry-run",
+            "x-vsr-replay-id": f"dry-replay-{task.name}-{turn_index}",
+        },
         "json": {
             "id": f"dry_{task.name}_{turn_index}",
             "model": "dry-model",
@@ -942,6 +956,7 @@ def summarize(
         "error_counts": counts(
             row.get("error", "") for row in rows if row.get("error")
         ),
+        "missing_router_header_counts": missing_router_header_counts(rows),
         "failed_tasks": sorted(
             {
                 task_key(row): row["missing_terms"]
@@ -958,6 +973,13 @@ def summarize(
 def task_key(row: dict[str, Any]) -> str:
     value = row.get("task_instance") or row.get("task")
     return str(value)
+
+
+def missing_router_header_counts(rows: list[dict[str, Any]]) -> dict[str, int]:
+    return {
+        header: sum(1 for row in rows if row["success"] and not row.get(header))
+        for header in VSR_HEADERS
+    }
 
 
 def validate_summary(args: argparse.Namespace, summary: dict[str, Any]) -> list[str]:
@@ -994,6 +1016,13 @@ def validate_summary(args: argparse.Namespace, summary: dict[str, Any]) -> list[
             f"{summary['context_portability_violations']} > "
             f"{args.max_context_portability_violations}"
         )
+    missing_headers = summary.get("missing_router_header_counts", {})
+    for header in args.require_router_header:
+        missing = int(missing_headers.get(header, 0))
+        if missing:
+            failures.append(
+                f"missing_router_header {header}: {missing} successful requests"
+            )
     return failures
 
 
@@ -1066,6 +1095,7 @@ def render_markdown(summary: dict[str, Any]) -> str:
             f"- model switches: {summary['model_switches']}",
             f"- tool-loop switch violations: {summary['tool_loop_switch_violations']}",
             f"- context portability violations: {summary['context_portability_violations']}",
+            f"- missing router headers: {summary['missing_router_header_counts']}",
             f"- cached prompt ratio: {summary['cached_prompt_ratio']}",
             "",
         ]

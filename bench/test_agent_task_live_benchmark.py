@@ -4,6 +4,7 @@ from pathlib import Path
 
 HALF_SCORE = 0.5
 MEAN_SCORE = 0.75
+MISSING_HEADER_COUNT = 2
 
 
 def load_benchmark_module():
@@ -49,6 +50,11 @@ def test_dry_run_completes_all_tasks(tmp_path):
     args.min_task_score = 1.0
     args.max_tool_loop_violations = 0
     args.max_context_portability_violations = 0
+    args.require_router_header = [
+        "x-vsr-selected-model",
+        "x-vsr-selected-decision",
+        "x-vsr-replay-id",
+    ]
 
     rows, summary = bench.run_tasks(args)
     bench.write_outputs(rows, summary, tmp_path)
@@ -60,6 +66,7 @@ def test_dry_run_completes_all_tasks(tmp_path):
     assert summary["task_success_rate"] == 1.0
     assert summary["task_instances"] == len(bench.task_specs())
     assert summary["task_exact_success_rate"] == 1.0
+    assert summary["missing_router_header_counts"]["x-vsr-replay-id"] == 0
     assert failures == []
     assert (tmp_path / "summary.json").exists()
     assert (tmp_path / "turns.csv").exists()
@@ -133,4 +140,13 @@ def test_summary_tracks_quality_and_continuity_violations():
     assert summary["task_exact_successes"] == 1
     assert summary["tool_loop_switch_violations"] == 1
     assert summary["model_switches"] == 1
+    assert (
+        summary["missing_router_header_counts"]["x-vsr-selected-model"]
+        == MISSING_HEADER_COUNT
+    )
     assert summary["failed_tasks"] == [("b", "FIX=default-factory")]
+
+    args = bench.parse_args(["--require-router-header", "x-vsr-selected-model"])
+    assert bench.validate_summary(args, summary) == [
+        "missing_router_header x-vsr-selected-model: 2 successful requests"
+    ]
