@@ -64,6 +64,8 @@ DEFAULT_REQUIRED_HEADERS = (
     "x-vsr-context-token-count",
 )
 FULL_BRANCH_IMAGE_KIND = "full-branch-image-benchmark"
+EVIDENCE_REF_KEYS = ("evidence_ref", "ref")
+EVIDENCE_IMAGE_TAG_KEYS = ("evidence_image_tag", "image_tag")
 
 
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
@@ -181,6 +183,42 @@ def agent_task_phases(data: dict[str, Any]) -> set[str]:
     return {str(key) for key, value in phase_counts.items() if int(value or 0) > 0}
 
 
+def first_string_value(
+    data: dict[str, Any], row: dict[str, Any] | None, keys: tuple[str, ...]
+) -> str:
+    for source in (row, data):
+        if not isinstance(source, dict):
+            continue
+        for key in keys:
+            value = source.get(key)
+            if value is not None and str(value):
+                return str(value)
+    return ""
+
+
+def add_evidence_identity_failures(
+    failures: list[str],
+    args: argparse.Namespace,
+    data: dict[str, Any],
+    row: dict[str, Any] | None,
+    name: str,
+) -> None:
+    actual_ref = first_string_value(data, row, EVIDENCE_REF_KEYS)
+    if args.ref:
+        if not actual_ref:
+            failures.append(f"{name} evidence_ref missing")
+        elif actual_ref != args.ref:
+            failures.append(f"{name} evidence_ref {actual_ref} != {args.ref}")
+
+    actual_image_tag = first_string_value(data, row, EVIDENCE_IMAGE_TAG_KEYS)
+    if not actual_image_tag:
+        failures.append(f"{name} evidence_image_tag missing")
+    elif actual_image_tag != args.image_tag:
+        failures.append(
+            f"{name} evidence_image_tag {actual_image_tag} != {args.image_tag}"
+        )
+
+
 def add_numeric_failure(
     failures: list[str], label: str, actual: Any, operator: str, expected: float
 ) -> None:
@@ -236,6 +274,7 @@ def evaluate_live_aggregate(
     metrics: list[dict[str, Any]] = []
     for row in rows_from_aggregate(data):
         name = str(row.get("name") or row.get("label") or evidence)
+        add_evidence_identity_failures(failures, args, data, row, name)
         success_rate = row.get("router_success_rate", row.get("success_rate"))
         add_numeric_failure(
             failures,
@@ -272,6 +311,7 @@ def evaluate_failure_aggregate(
     metrics: list[dict[str, Any]] = []
     for row in rows_from_aggregate(data):
         name = str(row.get("name") or row.get("label") or evidence)
+        add_evidence_identity_failures(failures, args, data, row, name)
         add_numeric_failure(
             failures,
             f"{name} success_rate",
@@ -325,6 +365,7 @@ def evaluate_agent_task_summary(
     if data is None:
         return {"evidence": evidence}, [evidence]
     failures: list[str] = []
+    add_evidence_identity_failures(failures, args, data, None, "agent task")
     add_numeric_failure(
         failures, "agent task success_rate", data.get("success_rate"), ">=", 1.0
     )

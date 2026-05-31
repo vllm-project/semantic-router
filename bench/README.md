@@ -246,7 +246,15 @@ branch-image benchmark summary is available.
 
 After the branch image has produced the diagnostic probe, live matrix, failure
 recovery, and expanded agent-task summaries, assemble the full branch-image
-artifact:
+artifact. The live, failure-recovery, cache-token, and agent-task benchmark
+commands used for branch-image evidence must include the same identity fields:
+
+```bash
+--evidence-ref "$(git rev-parse --short HEAD)" --evidence-image-tag "$TAG"
+```
+
+The assembler rejects child summaries that are missing those fields or whose
+identity does not match the diagnostic probe and requested image tag:
 
 ```bash
 python3 bench/session_routing_branch_image_benchmark.py \

@@ -53,8 +53,10 @@ def diagnostic_summary(ref="77e6b573", image_tag="pr1989-current-branch-image"):
     }
 
 
-def live_aggregate():
+def live_aggregate(ref="77e6b573", image_tag="pr1989-current-branch-image"):
     return {
+        "evidence_ref": ref,
+        "evidence_image_tag": image_tag,
         "rows": [
             {
                 "name": "balanced-branch-image",
@@ -64,12 +66,14 @@ def live_aggregate():
                 "context_portability_violations": 0,
                 "validation_failures": [],
             }
-        ]
+        ],
     }
 
 
-def failure_aggregate():
+def failure_aggregate(ref="77e6b573", image_tag="pr1989-current-branch-image"):
     return {
+        "evidence_ref": ref,
+        "evidence_image_tag": image_tag,
         "rows": [
             {
                 "name": "tool-loop-recovery",
@@ -82,12 +86,16 @@ def failure_aggregate():
                 "context_portability_violations": 0,
                 "validation_failures": [],
             }
-        ]
+        ],
     }
 
 
-def complete_agent_task_summary():
+def complete_agent_task_summary(
+    ref="77e6b573", image_tag="pr1989-current-branch-image"
+):
     return {
+        "evidence_ref": ref,
+        "evidence_image_tag": image_tag,
         "requests": 255,
         "success_rate": 1.0,
         "successes": 255,
@@ -204,6 +212,46 @@ def test_full_branch_image_summary_blocks_mounted_binary_and_stale_tasks(tmp_pat
         "agent task missing router headers: "
         "{'x-vsr-session-phase': 96, 'x-vsr-selected-confidence': 96, "
         "'x-vsr-context-token-count': 96}" in summary["validation_failures"]
+    )
+
+
+def test_full_branch_image_summary_blocks_unbound_subsummaries(tmp_path):
+    benchmark = load_benchmark_module()
+    arg_values = complete_args(tmp_path)
+    unbound_live = live_aggregate()
+    unbound_live.pop("evidence_ref")
+    unbound_live.pop("evidence_image_tag")
+    write_json(tmp_path / "live.json", unbound_live)
+    write_json(
+        tmp_path / "failure.json",
+        failure_aggregate(ref="old-ref", image_tag="old-image"),
+    )
+    write_json(
+        tmp_path / "tasks.json", complete_agent_task_summary(image_tag="old-image")
+    )
+    args = benchmark.parse_args(arg_values)
+
+    summary = benchmark.build_summary(args)
+
+    assert summary["checks"]["branch_image_benchmark_ok"] is False
+    assert (
+        "balanced-branch-image evidence_ref missing" in summary["validation_failures"]
+    )
+    assert (
+        "balanced-branch-image evidence_image_tag missing"
+        in summary["validation_failures"]
+    )
+    assert (
+        "tool-loop-recovery evidence_ref old-ref != 77e6b573"
+        in summary["validation_failures"]
+    )
+    assert (
+        "tool-loop-recovery evidence_image_tag old-image != "
+        "pr1989-current-branch-image"
+    ) in summary["validation_failures"]
+    assert (
+        "agent task evidence_image_tag old-image != pr1989-current-branch-image"
+        in summary["validation_failures"]
     )
 
 

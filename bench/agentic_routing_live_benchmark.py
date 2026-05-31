@@ -71,6 +71,8 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--temperature", type=float, default=0.0)
     parser.add_argument("--timeout", type=float, default=60.0)
     parser.add_argument("--label", default="live-router")
+    parser.add_argument("--evidence-ref", default="")
+    parser.add_argument("--evidence-image-tag", default="")
     parser.add_argument("--turn-delay-seconds", type=float, default=0.0)
     parser.add_argument("--idle-pause-seconds", type=float, default=0.0)
     parser.add_argument("--include-previous-response-id", action="store_true")
@@ -652,6 +654,16 @@ def write_outputs(
     (output_dir / "summary.md").write_text(render_markdown(summary))
 
 
+def attach_evidence_identity(
+    summary: dict[str, Any], args: argparse.Namespace
+) -> dict[str, Any]:
+    if args.evidence_ref:
+        summary["evidence_ref"] = args.evidence_ref
+    if args.evidence_image_tag:
+        summary["evidence_image_tag"] = args.evidence_image_tag
+    return summary
+
+
 def write_comparison(comparison: dict[str, Any], output_dir: Path) -> None:
     (output_dir / "comparison.json").write_text(
         json.dumps(comparison, indent=2, sort_keys=True) + "\n"
@@ -880,6 +892,7 @@ def main() -> int:
     output_dir = args.output_dir or default_output_dir()
     rows, summary = run_once(args)
     summary["label"] = args.label
+    attach_evidence_identity(summary, args)
     write_outputs(rows, summary, output_dir)
     comparison = None
     if args.baseline_base_url:
@@ -890,6 +903,8 @@ def main() -> int:
             label=args.baseline_label,
             metrics_url=args.baseline_metrics_url,
             include_previous_response_id=args.baseline_include_previous_response_id,
+            evidence_ref="",
+            evidence_image_tag="",
         )
         baseline_rows, baseline_summary = run_once(baseline_args)
         baseline_summary["label"] = baseline_args.label

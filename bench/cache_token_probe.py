@@ -51,6 +51,8 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--temperature", type=float, default=0.0)
     parser.add_argument("--timeout", type=float, default=120.0)
     parser.add_argument("--label", default="router")
+    parser.add_argument("--evidence-ref", default="")
+    parser.add_argument("--evidence-image-tag", default="")
     parser.add_argument("--extra-header", action="append", default=[])
     parser.add_argument("--baseline-base-url", default="")
     parser.add_argument("--baseline-model", default="")
@@ -408,6 +410,16 @@ def write_outputs(
             writer.writerows(rows)
 
 
+def attach_evidence_identity(
+    summary: dict[str, Any], args: argparse.Namespace
+) -> dict[str, Any]:
+    if args.evidence_ref:
+        summary["evidence_ref"] = args.evidence_ref
+    if args.evidence_image_tag:
+        summary["evidence_image_tag"] = args.evidence_image_tag
+    return summary
+
+
 def namespace_with(args: argparse.Namespace, **overrides: Any) -> argparse.Namespace:
     values = vars(args).copy()
     values.update(overrides)
@@ -418,6 +430,7 @@ def main() -> int:
     args = parse_args()
     output_dir = args.output_dir or default_output_dir()
     rows, summary = run_probe(args)
+    attach_evidence_identity(summary, args)
     write_outputs(rows, summary, output_dir)
 
     baseline_summary = None
@@ -427,6 +440,8 @@ def main() -> int:
             base_url=args.baseline_base_url,
             model=args.baseline_model or args.model,
             label=args.baseline_label,
+            evidence_ref="",
+            evidence_image_tag="",
         )
         baseline_rows, baseline_summary = run_probe(baseline_args)
         write_outputs(baseline_rows, baseline_summary, output_dir / "baseline")
