@@ -234,6 +234,24 @@ readiness report blocks GA when the initial-implementation baseline is absent,
 because the release claim must compare the final policy against both the
 non-session-aware path and the first merged agentic-routing implementation.
 
+Generate publication figures from the maintained CSV outputs with the plotting
+companion script. The experiment generator remains standard-library-only for
+AMD hosts; the plotting script is intentionally separate and requires the bench
+plotting dependencies:
+
+```bash
+python3 bench/plot_session_routing_figures.py \
+  --scenario-summary .agent-harness/experiments/agentic-routing/current-initial-baseline-matrix/scenario_summary.csv \
+  --scenario-seed-summary .agent-harness/experiments/agentic-routing/current-initial-baseline-matrix/scenario_seed_summary.csv \
+  --ablation-summary .agent-harness/experiments/agentic-routing/current-initial-baseline-ablation/ablation_summary.csv \
+  --output-dir .agent-harness/experiments/agentic-routing/current-initial-baseline-figures
+```
+
+The script writes `experiment-matrix.png`, `policy-ablation.png`, and
+`seed-stability.png`. Use image-generated bitmap assets for explanatory blog or
+paper schematics; do not hand-draw SVG architecture diagrams for this workstream.
+Measured result charts should come from this CSV-to-plot path.
+
 ```bash
 python3 bench/session_routing_ga_report.py \
   --synthetic-matrix-summary .agent-harness/experiments/agentic-routing/20260531Tdiagnostic-gate-matrix/summary.json \
