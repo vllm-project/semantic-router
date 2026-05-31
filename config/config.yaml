@@ -37,7 +37,7 @@ providers:
           weight: 80
           type: chat
           api_key_env: VLLM_SR_PRIMARY_API_KEY
-        - name: remote-fallback
+        - name: remote-secondary
           base_url: https://api.example.com/v1
           provider: openai
           auth_header: Authorization
