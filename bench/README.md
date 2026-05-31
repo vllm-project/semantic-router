@@ -89,7 +89,11 @@ python3 bench/openai_fault_proxy.py \
 ```
 
 Configure the router endpoint `base_url` for this run to
-`http://127.0.0.1:18090/v1`, then gate recovery with explicit thresholds:
+`http://127.0.0.1:18090/v1`, then gate recovery with explicit thresholds.
+For `vllm-sr serve` stacks, apply the proxy endpoint before serving or
+regenerate/restart the generated Envoy config as well; changing only the router
+runtime config after startup can leave Envoy still forwarding to the old
+backend cluster.
 
 ```bash
 python3 bench/agentic_routing_live_benchmark.py \
