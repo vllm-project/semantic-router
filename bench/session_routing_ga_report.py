@@ -104,6 +104,7 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
             "x-vsr-selected-model",
             "x-vsr-selected-decision",
             "x-vsr-replay-id",
+            "x-vsr-session-phase",
             "x-vsr-selected-confidence",
             "x-vsr-context-token-count",
         ],

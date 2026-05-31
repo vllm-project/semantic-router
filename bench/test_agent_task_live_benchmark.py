@@ -70,8 +70,10 @@ def test_dry_run_completes_all_tasks(tmp_path):
     assert summary["task_instances"] == len(bench.task_specs())
     assert summary["task_exact_success_rate"] == 1.0
     assert summary["missing_router_header_counts"]["x-vsr-replay-id"] == 0
+    assert summary["missing_router_header_counts"]["x-vsr-session-phase"] == 0
     assert summary["missing_router_header_counts"]["x-vsr-selected-confidence"] == 0
     assert summary["missing_router_header_counts"]["x-vsr-context-token-count"] == 0
+    assert summary["invalid_router_header_counts"]["x-vsr-session-phase"] == 0
     assert summary["invalid_router_header_counts"]["x-vsr-selected-confidence"] == 0
     assert summary["invalid_router_header_counts"]["x-vsr-context-token-count"] == 0
     assert failures == []
@@ -210,6 +212,7 @@ def test_router_diagnostics_validate_header_values():
             "answer_excerpt": "",
             "x-vsr-selected-model": "m1",
             "x-vsr-selected-decision": "agentic",
+            "x-vsr-session-phase": "unknown",
             "x-vsr-selected-confidence": "nan",
             "x-vsr-replay-id": "replay-1",
             "x-vsr-context-token-count": "-1",
@@ -219,9 +222,11 @@ def test_router_diagnostics_validate_header_values():
     summary = bench.summarize(rows, elapsed_seconds=1.0, label="router")
     args = bench.parse_args(["--require-router-diagnostics"])
 
+    assert summary["invalid_router_header_counts"]["x-vsr-session-phase"] == 1
     assert summary["invalid_router_header_counts"]["x-vsr-selected-confidence"] == 1
     assert summary["invalid_router_header_counts"]["x-vsr-context-token-count"] == 1
     assert bench.validate_summary(args, summary) == [
+        "invalid_router_header x-vsr-session-phase: 1 successful requests",
         "invalid_router_header x-vsr-selected-confidence: 1 successful requests",
         "invalid_router_header x-vsr-context-token-count: 1 successful requests",
     ]

@@ -25,6 +25,7 @@ class DiagnosticHandler(BaseHTTPRequestHandler):
         "x-vsr-selected-model": "qwen-small",
         "x-vsr-selected-decision": "agentic-session-route",
         "x-vsr-replay-id": "replay-1",
+        "x-vsr-session-phase": "user_turn",
         "x-vsr-selected-confidence": "0.0000",
         "x-vsr-context-token-count": "42",
     }
@@ -60,6 +61,7 @@ def test_branch_image_probe_passes_with_diagnostic_headers(tmp_path):
         "x-vsr-selected-model": "qwen-small",
         "x-vsr-selected-decision": "agentic-session-route",
         "x-vsr-replay-id": "replay-1",
+        "x-vsr-session-phase": "user_turn",
         "x-vsr-selected-confidence": "0.0000",
         "x-vsr-context-token-count": "42",
     }
@@ -92,6 +94,7 @@ def test_branch_image_probe_fails_missing_or_invalid_diagnostics(tmp_path):
         "x-vsr-selected-model": "qwen-small",
         "x-vsr-selected-decision": "agentic-session-route",
         "x-vsr-replay-id": "replay-1",
+        "x-vsr-session-phase": "unknown",
         "x-vsr-selected-confidence": "nan",
     }
     server, thread = run_server()
@@ -112,6 +115,10 @@ def test_branch_image_probe_fails_missing_or_invalid_diagnostics(tmp_path):
     assert summary["checks"]["diagnostic_headers_ok"] is False
     assert (
         "invalid diagnostic header: x-vsr-selected-confidence"
+        in summary["validation_failures"]
+    )
+    assert (
+        "invalid diagnostic header: x-vsr-session-phase"
         in summary["validation_failures"]
     )
     assert (

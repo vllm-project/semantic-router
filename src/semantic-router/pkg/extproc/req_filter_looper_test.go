@@ -120,6 +120,9 @@ func TestCreateLooperResponseIncludesTrackedHeaders(t *testing.T) {
 		VSRSelectedDecisionConfidence: 0,
 		VSRSelectedCategory:           "programming",
 		RouterReplayID:                "replay-123",
+		VSRSessionPolicy: map[string]interface{}{
+			"phase": "tool_loop",
+		},
 	}
 
 	response := (&OpenAIRouter{}).createLooperResponse(resp, reqCtx)
@@ -142,6 +145,7 @@ func TestCreateLooperResponseIncludesTrackedHeaders(t *testing.T) {
 	assert.Equal(t, "coding", headerMap[headers.VSRSelectedDecision])
 	assert.Equal(t, "0.0000", headerMap[headers.VSRSelectedConfidence])
 	assert.Equal(t, "programming", headerMap[headers.VSRSelectedCategory])
+	assert.Equal(t, "tool_loop", headerMap[headers.VSRSessionPhase])
 	assert.Equal(t, "replay-123", headerMap[headers.RouterReplayID])
 	assert.Equal(t, "42", headerMap[headers.VSRContextTokenCount])
 }

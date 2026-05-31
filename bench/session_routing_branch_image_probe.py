@@ -17,6 +17,7 @@ REQUIRED_DIAGNOSTIC_HEADERS = (
     "x-vsr-selected-model",
     "x-vsr-selected-decision",
     "x-vsr-replay-id",
+    "x-vsr-session-phase",
     "x-vsr-selected-confidence",
     "x-vsr-context-token-count",
 )
@@ -158,6 +159,12 @@ def validate_header_value(header: str, value: str) -> bool:
         except ValueError:
             return False
         return parsed >= 0
+    if header == "x-vsr-session-phase":
+        return value.strip() in {
+            "user_turn",
+            "tool_loop",
+            "provider_state",
+        }
     return bool(value.strip())
 
 

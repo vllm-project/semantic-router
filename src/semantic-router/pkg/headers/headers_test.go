@@ -19,6 +19,7 @@ func TestHeaderConstants(t *testing.T) {
 		{"VSRSelectedCategory", VSRSelectedCategory, "x-vsr-selected-category"},
 		{"VSRSelectedReasoning", VSRSelectedReasoning, "x-vsr-selected-reasoning"},
 		{"VSRSelectedModel", VSRSelectedModel, "x-vsr-selected-model"},
+		{"VSRSessionPhase", VSRSessionPhase, "x-vsr-session-phase"},
 		{"VSRInjectedSystemPrompt", VSRInjectedSystemPrompt, "x-vsr-injected-system-prompt"},
 		{"VSRCacheHit", VSRCacheHit, "x-vsr-cache-hit"},
 		{"VSRMatchedModality", VSRMatchedModality, "x-vsr-matched-modality"},

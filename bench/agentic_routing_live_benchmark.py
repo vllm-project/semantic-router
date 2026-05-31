@@ -29,6 +29,7 @@ HTTP_REDIRECT_START = 300
 VSR_HEADERS = (
     "x-vsr-selected-model",
     "x-vsr-selected-decision",
+    "x-vsr-session-phase",
     "x-vsr-selected-confidence",
     "x-vsr-replay-id",
     "x-vsr-context-token-count",
@@ -41,6 +42,7 @@ CORE_ROUTER_HEADERS = (
 )
 DIAGNOSTIC_ROUTER_HEADERS = (
     *CORE_ROUTER_HEADERS,
+    "x-vsr-session-phase",
     "x-vsr-selected-confidence",
     "x-vsr-context-token-count",
 )
@@ -337,6 +339,7 @@ def dry_run_response(plan: TurnPlan) -> dict[str, Any]:
         "headers": {
             "x-vsr-selected-model": model,
             "x-vsr-selected-decision": "dry-run",
+            "x-vsr-session-phase": plan.phase,
             "x-vsr-selected-confidence": "0.0000",
             "x-vsr-replay-id": f"dry-replay-{plan.session_id}-{plan.turn}",
             "x-vsr-context-token-count": "42",
@@ -572,6 +575,16 @@ def valid_router_header_value(header: str, value: str) -> bool:
         except ValueError:
             return False
         return parsed >= 0
+    if header == "x-vsr-session-phase":
+        return value.strip() in {
+            "user_turn",
+            "tool_loop",
+            "provider_state",
+            "idle_boundary",
+            "topic_drift",
+            "frontier_turn",
+            "final",
+        }
     return bool(value.strip())
 
 

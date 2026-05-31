@@ -66,10 +66,12 @@ def complete_agent_task_summary() -> dict:
             "x-vsr-selected-model": 0,
             "x-vsr-selected-decision": 0,
             "x-vsr-replay-id": 0,
+            "x-vsr-session-phase": 0,
             "x-vsr-selected-confidence": 0,
             "x-vsr-context-token-count": 0,
         },
         "invalid_router_header_counts": {
+            "x-vsr-session-phase": 0,
             "x-vsr-selected-confidence": 0,
             "x-vsr-context-token-count": 0,
         },

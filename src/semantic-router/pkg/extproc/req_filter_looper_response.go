@@ -113,6 +113,7 @@ func appendLooperRoutingHeaders(
 		)
 	}
 	appendOptionalHeader(setHeaders, headers.VSRSelectedCategory, reqCtx.VSRSelectedCategory)
+	appendOptionalHeader(setHeaders, headers.VSRSessionPhase, sessionPolicyPhase(reqCtx))
 	appendOptionalHeader(setHeaders, headers.RouterReplayID, reqCtx.RouterReplayID)
 }
 

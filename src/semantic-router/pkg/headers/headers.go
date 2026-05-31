@@ -74,6 +74,10 @@ const (
 	// Example values: "deepseek-v31", "phi4", "gpt-4"
 	VSRSelectedModel = "x-vsr-selected-model"
 
+	// VSRSessionPhase indicates the session-aware routing phase used by ACR.
+	// Example values: "user_turn", "tool_loop", "provider_state"
+	VSRSessionPhase = "x-vsr-session-phase"
+
 	// VSRInjectedSystemPrompt indicates whether a system prompt was injected into the request.
 	// Values: "true" or "false"
 	VSRInjectedSystemPrompt = "x-vsr-injected-system-prompt"

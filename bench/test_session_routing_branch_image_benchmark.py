@@ -104,6 +104,7 @@ def complete_agent_task_summary():
             "x-vsr-selected-model": 0,
             "x-vsr-selected-decision": 0,
             "x-vsr-replay-id": 0,
+            "x-vsr-session-phase": 0,
             "x-vsr-selected-confidence": 0,
             "x-vsr-context-token-count": 0,
         },
@@ -111,6 +112,7 @@ def complete_agent_task_summary():
             "x-vsr-selected-model": 0,
             "x-vsr-selected-decision": 0,
             "x-vsr-replay-id": 0,
+            "x-vsr-session-phase": 0,
             "x-vsr-selected-confidence": 0,
             "x-vsr-context-token-count": 0,
         },
@@ -169,6 +171,7 @@ def test_full_branch_image_summary_blocks_mounted_binary_and_stale_tasks(tmp_pat
                 "x-vsr-selected-model": 0,
                 "x-vsr-selected-decision": 0,
                 "x-vsr-replay-id": 0,
+                "x-vsr-session-phase": 96,
                 "x-vsr-selected-confidence": 96,
                 "x-vsr-context-token-count": 96,
             },
@@ -193,8 +196,8 @@ def test_full_branch_image_summary_blocks_mounted_binary_and_stale_tasks(tmp_pat
     assert "agent task requests 96.0 < 147" in summary["validation_failures"]
     assert (
         "agent task missing router headers: "
-        "{'x-vsr-selected-confidence': 96, 'x-vsr-context-token-count': 96}"
-        in summary["validation_failures"]
+        "{'x-vsr-session-phase': 96, 'x-vsr-selected-confidence': 96, "
+        "'x-vsr-context-token-count': 96}" in summary["validation_failures"]
     )
 
 

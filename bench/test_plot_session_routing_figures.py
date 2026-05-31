@@ -67,6 +67,7 @@ def test_agent_task_readiness_metrics_count_stale_summary():
             "x-vsr-selected-model": 0,
             "x-vsr-selected-decision": 0,
             "x-vsr-replay-id": 0,
+            "x-vsr-session-phase": 96,
             "x-vsr-selected-confidence": 96,
             "x-vsr-context-token-count": 96,
         },
@@ -103,8 +104,8 @@ def test_agent_task_readiness_metrics_count_stale_summary():
         {
             "label": "required diagnostics",
             "actual": 3,
-            "target": 5,
-            "text": "3/5 header types present",
+            "target": 6,
+            "text": "3/6 header types present",
         },
     ]
 

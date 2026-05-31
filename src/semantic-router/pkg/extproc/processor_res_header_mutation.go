@@ -101,6 +101,7 @@ func buildResponseHeaderMutation(
 	}
 	builder.addString(headers.VSRSelectedReasoning, ctx.VSRReasoningMode)
 	builder.addString(headers.VSRSelectedModel, ctx.VSRSelectedModel)
+	builder.addString(headers.VSRSessionPhase, sessionPolicyPhase(ctx))
 	builder.addBool(headers.VSRInjectedSystemPrompt, ctx.VSRInjectedSystemPrompt)
 	builder.addJoined(headers.VSRMatchedKeywords, ctx.VSRMatchedKeywords)
 	builder.addJoined(headers.VSRMatchedEmbeddings, ctx.VSRMatchedEmbeddings)
@@ -126,4 +127,15 @@ func buildResponseHeaderMutation(
 		builder.addFloat("x-vsr-cache-similarity", float64(ctx.VSRCacheSimilarity))
 	}
 	return builder.mutation()
+}
+
+func sessionPolicyPhase(ctx *RequestContext) string {
+	if ctx == nil || ctx.VSRSessionPolicy == nil {
+		return ""
+	}
+	phase, ok := ctx.VSRSessionPolicy["phase"].(string)
+	if !ok {
+		return ""
+	}
+	return strings.TrimSpace(phase)
 }
