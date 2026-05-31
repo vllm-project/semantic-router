@@ -1099,6 +1099,8 @@ def summarize(
     rows: list[dict[str, Any]], elapsed_seconds: float, label: str
 ) -> dict[str, Any]:
     scored = [row for row in rows if row["scored_turn"]]
+    task_names = sorted({str(row["task"]) for row in rows})
+    scored_task_names = sorted({str(row["task"]) for row in scored})
     scores = [
         float(row["answer_score"]) for row in scored if row["answer_score"] is not None
     ]
@@ -1110,7 +1112,10 @@ def summarize(
         "requests": len(rows),
         "tasks": len({row["task"] for row in rows}),
         "task_count": len({row["task"] for row in rows}),
+        "task_names": task_names,
         "task_instances": len({task_key(row) for row in scored}),
+        "scored_task_count": len(scored_task_names),
+        "scored_task_names": scored_task_names,
         "task_suites": counts(row.get("task_suite", "") for row in rows),
         "successes": sum(1 for row in rows if row["success"]),
         "success_rate": (

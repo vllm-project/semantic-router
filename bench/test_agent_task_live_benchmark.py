@@ -93,7 +93,12 @@ def test_long_horizon_suite_repetitions_expand_task_instances():
 
     assert len(rows) == expected_turns * 2
     assert summary["task_count"] == expected_tasks
+    assert summary["task_names"] == sorted(
+        task.name for task in bench.task_specs("long-horizon")
+    )
     assert summary["task_instances"] == expected_tasks * 2
+    assert summary["scored_task_count"] == expected_tasks
+    assert summary["scored_task_names"] == summary["task_names"]
     assert summary["task_success_rate"] == 1.0
     assert rows[0]["task_suite"] == "long-horizon"
     assert rows[0]["task_repetition"] == 0
@@ -167,6 +172,8 @@ def test_summary_tracks_quality_and_continuity_violations():
 
     assert summary["task_score_mean"] == MEAN_SCORE
     assert summary["task_exact_successes"] == 1
+    assert summary["task_names"] == ["a", "b"]
+    assert summary["scored_task_names"] == ["a", "b"]
     assert summary["tool_loop_switch_violations"] == 1
     assert summary["model_switches"] == 1
     assert (

@@ -203,6 +203,13 @@ python3 bench/agent_task_live_benchmark.py \
   --max-context-portability-violations 0
 ```
 
+The GA readiness gate expects the current long-horizon suite rather than stale
+diagnostics: 9 task types, all required phases (`user_turn`, `tool_loop`,
+`provider_state`, `topic_drift`, `idle_boundary`, `final`), and 3 repetitions.
+That produces at least 147 requests and 27 scored task instances for the
+maintained suite. Smaller historical summaries remain useful diagnostics, but
+they intentionally block GA.
+
 ### Session Routing GA Readiness Report
 
 Use the branch-image diagnostic probe first when validating a freshly built

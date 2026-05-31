@@ -24,6 +24,28 @@ BLOCKING_STATUS = "blocked"
 MISSING_STATUS = "missing"
 MARKDOWN_METRIC_LIMIT = 220
 MARKDOWN_METRIC_TRUNCATED_LIMIT = MARKDOWN_METRIC_LIMIT - 3
+DEFAULT_MIN_AGENT_TASK_REQUESTS = 147
+DEFAULT_MIN_AGENT_TASK_COUNT = 9
+DEFAULT_MIN_AGENT_TASK_INSTANCES = 27
+DEFAULT_REQUIRED_AGENT_TASK_NAMES = (
+    "multi-file-regression",
+    "code-review-followup",
+    "research-synthesis",
+    "maintainer-handoff",
+    "cluster-boundary",
+    "session-switch-policy",
+    "cache-economics",
+    "release-triage",
+    "observability-debug",
+)
+DEFAULT_REQUIRED_AGENT_TASK_PHASES = (
+    "user_turn",
+    "tool_loop",
+    "provider_state",
+    "topic_drift",
+    "idle_boundary",
+    "final",
+)
 
 
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
@@ -49,6 +71,31 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--min-sessions-with-errors", type=int, default=1)
     parser.add_argument("--min-agent-task-success-rate", type=float, default=0.75)
     parser.add_argument("--min-agent-task-score", type=float, default=0.75)
+    parser.add_argument(
+        "--min-agent-task-requests",
+        type=int,
+        default=DEFAULT_MIN_AGENT_TASK_REQUESTS,
+    )
+    parser.add_argument(
+        "--min-agent-task-count",
+        type=int,
+        default=DEFAULT_MIN_AGENT_TASK_COUNT,
+    )
+    parser.add_argument(
+        "--min-agent-task-instances",
+        type=int,
+        default=DEFAULT_MIN_AGENT_TASK_INSTANCES,
+    )
+    parser.add_argument(
+        "--required-agent-task-name",
+        action="append",
+        default=list(DEFAULT_REQUIRED_AGENT_TASK_NAMES),
+    )
+    parser.add_argument(
+        "--required-agent-task-phase",
+        action="append",
+        default=list(DEFAULT_REQUIRED_AGENT_TASK_PHASES),
+    )
     parser.add_argument(
         "--required-agent-task-header",
         action="append",
@@ -259,6 +306,34 @@ def normalize_policy_name(value: str) -> str:
     return value.strip().lower().replace("_", "-").replace(" ", "-")
 
 
+def task_name_from_instance(value: str) -> str:
+    if ":" not in value:
+        return value
+    return value.split(":", 1)[1]
+
+
+def strings_from_list(value: Any) -> set[str]:
+    if not isinstance(value, list):
+        return set()
+    return {str(item) for item in value if str(item)}
+
+
+def agent_task_names(data: dict[str, Any]) -> set[str]:
+    names = strings_from_list(data.get("task_names"))
+    names.update(strings_from_list(data.get("scored_task_names")))
+    final_scores = data.get("final_scores")
+    if isinstance(final_scores, dict):
+        names.update(task_name_from_instance(str(key)) for key in final_scores)
+    return {name for name in names if name}
+
+
+def agent_task_phases(data: dict[str, Any]) -> set[str]:
+    phase_counts = data.get("phase_counts")
+    if not isinstance(phase_counts, dict):
+        return set()
+    return {str(key) for key, value in phase_counts.items() if int(value or 0) > 0}
+
+
 def validation_failures(row: dict[str, Any]) -> list[Any]:
     failures = row.get("validation_failures")
     return failures if isinstance(failures, list) else []
@@ -440,6 +515,27 @@ def evaluate_agent_task_summary(
     )
     evaluate_numeric(
         failures,
+        "requests",
+        data.get("requests"),
+        ">=",
+        args.min_agent_task_requests,
+    )
+    evaluate_numeric(
+        failures,
+        "task_count",
+        data.get("task_count", data.get("tasks")),
+        ">=",
+        args.min_agent_task_count,
+    )
+    evaluate_numeric(
+        failures,
+        "task_instances",
+        data.get("task_instances"),
+        ">=",
+        args.min_agent_task_instances,
+    )
+    evaluate_numeric(
+        failures,
         "task_success_rate",
         data.get("task_success_rate"),
         ">=",
@@ -474,9 +570,25 @@ def evaluate_agent_task_summary(
         failures.append(f"missing router headers: {missing_headers}")
     if invalid_headers:
         failures.append(f"invalid router headers: {invalid_headers}")
+    task_names = agent_task_names(data)
+    required_task_names = set(args.required_agent_task_name or [])
+    missing_task_names = sorted(required_task_names - task_names)
+    if missing_task_names:
+        failures.append(f"missing task names: {missing_task_names}")
+    phase_names = agent_task_phases(data)
+    required_phases = set(args.required_agent_task_phase or [])
+    missing_phases = sorted(required_phases - phase_names)
+    if missing_phases:
+        failures.append(f"missing task phases: {missing_phases}")
     metrics = {
         "requests": data.get("requests"),
+        "task_count": data.get("task_count", data.get("tasks")),
         "task_instances": data.get("task_instances"),
+        "scored_task_count": data.get("scored_task_count"),
+        "task_names": sorted(task_names),
+        "required_task_names": sorted(required_task_names),
+        "phase_counts": data.get("phase_counts", {}),
+        "required_phases": sorted(required_phases),
         "success_rate": data.get("success_rate"),
         "task_success_rate": data.get("task_success_rate"),
         "task_score_mean": data.get("task_score_mean"),

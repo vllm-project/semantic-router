@@ -3,6 +3,26 @@ import json
 import sys
 from pathlib import Path
 
+REQUIRED_LONG_HORIZON_TASKS = [
+    "multi-file-regression",
+    "code-review-followup",
+    "research-synthesis",
+    "maintainer-handoff",
+    "cluster-boundary",
+    "session-switch-policy",
+    "cache-economics",
+    "release-triage",
+    "observability-debug",
+]
+REQUIRED_LONG_HORIZON_PHASES = [
+    "user_turn",
+    "tool_loop",
+    "provider_state",
+    "topic_drift",
+    "idle_boundary",
+    "final",
+]
+
 
 def load_report_module():
     path = Path(__file__).with_name("session_routing_ga_report.py")
@@ -18,6 +38,35 @@ def load_report_module():
 def write_json(path: Path, data: dict):
     path.write_text(json.dumps(data) + "\n")
     return path
+
+
+def complete_agent_task_summary() -> dict:
+    return {
+        "requests": 147,
+        "tasks": len(REQUIRED_LONG_HORIZON_TASKS),
+        "task_count": len(REQUIRED_LONG_HORIZON_TASKS),
+        "task_names": REQUIRED_LONG_HORIZON_TASKS,
+        "scored_task_count": len(REQUIRED_LONG_HORIZON_TASKS),
+        "scored_task_names": REQUIRED_LONG_HORIZON_TASKS,
+        "task_instances": len(REQUIRED_LONG_HORIZON_TASKS) * 3,
+        "success_rate": 1.0,
+        "task_success_rate": 1.0,
+        "task_score_mean": 1.0,
+        "tool_loop_switch_violations": 0,
+        "context_portability_violations": 0,
+        "phase_counts": dict.fromkeys(REQUIRED_LONG_HORIZON_PHASES, 3),
+        "missing_router_header_counts": {
+            "x-vsr-selected-model": 0,
+            "x-vsr-selected-decision": 0,
+            "x-vsr-replay-id": 0,
+            "x-vsr-selected-confidence": 0,
+            "x-vsr-context-token-count": 0,
+        },
+        "invalid_router_header_counts": {
+            "x-vsr-selected-confidence": 0,
+            "x-vsr-context-token-count": 0,
+        },
+    }
 
 
 def complete_inputs(tmp_path: Path) -> dict[str, Path]:
@@ -87,17 +136,7 @@ def complete_inputs(tmp_path: Path) -> dict[str, Path]:
     )
     tasks = write_json(
         tmp_path / "tasks.json",
-        {
-            "requests": 12,
-            "task_instances": 4,
-            "success_rate": 1.0,
-            "task_success_rate": 1.0,
-            "task_score_mean": 1.0,
-            "tool_loop_switch_violations": 0,
-            "context_portability_violations": 0,
-            "missing_router_header_counts": {"x-vsr-selected-model": 0},
-            "invalid_router_header_counts": {"x-vsr-selected-confidence": 0},
-        },
+        complete_agent_task_summary(),
     )
     cache = write_json(
         tmp_path / "cache.json",
@@ -212,6 +251,67 @@ def test_missing_positive_cache_and_branch_image_block_ga(tmp_path):
     assert report["ga_ready"] is False
     assert statuses["cache_token_reporting"] == "blocked"
     assert statuses["branch_image_amd_validation"] == "missing"
+
+
+def test_stale_agent_task_suite_blocks_ga(tmp_path):
+    report_mod = load_report_module()
+    inputs = complete_inputs(tmp_path)
+    stale_tasks = complete_agent_task_summary()
+    stale_tasks.update(
+        {
+            "requests": 96,
+            "task_count": 6,
+            "tasks": 6,
+            "task_instances": 18,
+            "task_names": REQUIRED_LONG_HORIZON_TASKS[:6],
+            "scored_task_count": 6,
+            "scored_task_names": REQUIRED_LONG_HORIZON_TASKS[:6],
+            "phase_counts": {
+                "user_turn": 18,
+                "tool_loop": 36,
+                "provider_state": 18,
+                "topic_drift": 12,
+                "final": 18,
+            },
+        }
+    )
+    tasks = write_json(tmp_path / "tasks-stale.json", stale_tasks)
+    args = report_mod.parse_args(
+        [
+            "--synthetic-matrix-summary",
+            str(inputs["matrix"]),
+            "--synthetic-ablation-summary",
+            str(inputs["ablation"]),
+            "--live-aggregate",
+            str(inputs["live"]),
+            "--failure-aggregate",
+            str(inputs["failure"]),
+            "--agent-task-summary",
+            str(tasks),
+            "--cache-aggregate",
+            str(inputs["cache"]),
+            "--branch-image-summary",
+            str(inputs["branch"]),
+        ]
+    )
+
+    report = report_mod.generate_report(args)
+    task_requirement = next(
+        item
+        for item in report["requirements"]
+        if item["id"] == "amd_agent_task_quality_1"
+    )
+
+    assert report["ga_ready"] is False
+    assert task_requirement["status"] == "blocked"
+    assert "requests 96.0 < 147" in task_requirement["failures"]
+    assert "task_count 6.0 < 9" in task_requirement["failures"]
+    assert "task_instances 18.0 < 27" in task_requirement["failures"]
+    assert any(
+        failure.startswith("missing task names:")
+        for failure in task_requirement["failures"]
+    )
+    assert "missing task phases: ['idle_boundary']" in task_requirement["failures"]
 
 
 def test_diagnostic_probe_does_not_satisfy_branch_image_benchmark(tmp_path):
