@@ -41,6 +41,7 @@ class TaskTurn:
 class TaskSpec:
     name: str
     turns: tuple[TaskTurn, ...]
+    suite: str = "smoke"
 
 
 def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
@@ -50,6 +51,10 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--api-key", default="")
     parser.add_argument("--session-header", default="x-session-id")
     parser.add_argument("--session-prefix", default="agent-task")
+    parser.add_argument(
+        "--suite", choices=("smoke", "long-horizon", "all"), default="smoke"
+    )
+    parser.add_argument("--task-repetitions", type=int, default=1)
     parser.add_argument("--max-tokens", type=int, default=96)
     parser.add_argument("--temperature", type=float, default=0.0)
     parser.add_argument("--timeout", type=float, default=120.0)
@@ -75,7 +80,14 @@ def default_output_dir() -> Path:
     return Path(".agent-harness/experiments/live-agent-tasks") / stamp
 
 
-def task_specs() -> tuple[TaskSpec, ...]:
+def task_specs(suite: str = "smoke") -> tuple[TaskSpec, ...]:
+    specs = smoke_task_specs() + long_horizon_task_specs()
+    if suite == "all":
+        return specs
+    return tuple(task for task in specs if task.suite == suite)
+
+
+def smoke_task_specs() -> tuple[TaskSpec, ...]:
     return (
         TaskSpec(
             name="python-debug",
@@ -210,6 +222,328 @@ def task_specs() -> tuple[TaskSpec, ...]:
     )
 
 
+def long_horizon_task_specs() -> tuple[TaskSpec, ...]:
+    return (
+        TaskSpec(
+            name="multi-file-regression",
+            suite="long-horizon",
+            turns=(
+                TaskTurn(
+                    phase="user_turn",
+                    prompt=(
+                        "A release-blocking regression appeared after a router config "
+                        "change. Build a short investigation plan."
+                    ),
+                ),
+                TaskTurn(
+                    phase="tool_loop",
+                    prompt="Use the failed smoke output to narrow the failure.",
+                    tool_name="run_agent_smoke",
+                    tool_result=(
+                        "make agent-smoke-local: router health OK, dashboard OK, "
+                        "Envoy chat returns HTTP 503 no healthy upstream."
+                    ),
+                ),
+                TaskTurn(
+                    phase="tool_loop",
+                    prompt="Use the generated Envoy config diff before choosing a fix.",
+                    tool_name="diff_envoy_config",
+                    tool_result=(
+                        "runtime config changed backend base_url to fault-proxy, but "
+                        "the generated Envoy cluster still points at the old upstream."
+                    ),
+                ),
+                TaskTurn(
+                    phase="provider_state",
+                    prompt=(
+                        "Continue from the same response state and state whether the "
+                        "router should switch models during this diagnosis."
+                    ),
+                ),
+                TaskTurn(
+                    phase="topic_drift",
+                    prompt=(
+                        "Now convert the diagnosis into a maintainer-facing release "
+                        "note and validation command."
+                    ),
+                ),
+                TaskTurn(
+                    phase="final",
+                    prompt=(
+                        "Return the release-blocking fix. Include exact tokens "
+                        "ROOT_CAUSE=stale-envoy-cluster, FIX=regenerate-envoy, "
+                        "VALIDATE=agent-smoke-local."
+                    ),
+                    expected_terms=(
+                        "ROOT_CAUSE=stale-envoy-cluster",
+                        "FIX=regenerate-envoy",
+                        "VALIDATE=agent-smoke-local",
+                    ),
+                ),
+            ),
+        ),
+        TaskSpec(
+            name="fallback-policy",
+            suite="long-horizon",
+            turns=(
+                TaskTurn(
+                    phase="user_turn",
+                    prompt=(
+                        "We are reviewing endpoint fallback behavior for a selected "
+                        "model. Identify the decision facts you need."
+                    ),
+                ),
+                TaskTurn(
+                    phase="tool_loop",
+                    prompt="Use the endpoint probe result.",
+                    tool_name="probe_endpoints",
+                    tool_result=(
+                        "endpoint primary has unresolved provider metadata; endpoint "
+                        "secondary has protocol=http, base_url reachable, and supports "
+                        "the selected provider model id."
+                    ),
+                ),
+                TaskTurn(
+                    phase="provider_state",
+                    prompt=(
+                        "Continue with the same session state and decide the safe "
+                        "fallback action."
+                    ),
+                ),
+                TaskTurn(
+                    phase="tool_loop",
+                    prompt="Use the validation result.",
+                    tool_name="run_endpoint_unit_test",
+                    tool_result=(
+                        "TestSelectBestEndpointWithDetails passes and reports the "
+                        "primary endpoint failure in the diagnostic list."
+                    ),
+                ),
+                TaskTurn(
+                    phase="final",
+                    prompt=(
+                        "Return the fallback policy. Include exact tokens "
+                        "ACTION=skip-broken-endpoint, FALLBACK=secondary-endpoint, "
+                        "TRACE=include-resolution-errors."
+                    ),
+                    expected_terms=(
+                        "ACTION=skip-broken-endpoint",
+                        "FALLBACK=secondary-endpoint",
+                        "TRACE=include-resolution-errors",
+                    ),
+                ),
+            ),
+        ),
+        TaskSpec(
+            name="session-switch-policy",
+            suite="long-horizon",
+            turns=(
+                TaskTurn(
+                    phase="user_turn",
+                    prompt=(
+                        "Design a model-switch policy for a long coding-agent session. "
+                        "Start by separating hard locks from soft costs."
+                    ),
+                ),
+                TaskTurn(
+                    phase="tool_loop",
+                    prompt="Use the agent phase observation.",
+                    tool_name="observe_phase",
+                    tool_result=(
+                        "The current turn is inside a tool-call/tool-result loop, has "
+                        "a stable session id, and has previous_response_id state."
+                    ),
+                ),
+                TaskTurn(
+                    phase="provider_state",
+                    prompt=(
+                        "Continue from provider-managed state. State what the router "
+                        "must not do."
+                    ),
+                ),
+                TaskTurn(
+                    phase="idle_boundary",
+                    prompt=(
+                        "Assume the same session later idles past the configured "
+                        "timeout and starts a new subtask."
+                    ),
+                ),
+                TaskTurn(
+                    phase="topic_drift",
+                    prompt=(
+                        "The matched decision changed from coding-debug to research. "
+                        "Decide whether reselection is allowed."
+                    ),
+                ),
+                TaskTurn(
+                    phase="final",
+                    prompt=(
+                        "Return the switch policy. Include exact tokens "
+                        "LOCK=tool-loop, LOCK=provider-state, RESET=idle-or-drift."
+                    ),
+                    expected_terms=(
+                        "LOCK=tool-loop",
+                        "LOCK=provider-state",
+                        "RESET=idle-or-drift",
+                    ),
+                ),
+            ),
+        ),
+        TaskSpec(
+            name="cache-economics",
+            suite="long-horizon",
+            turns=(
+                TaskTurn(
+                    phase="user_turn",
+                    prompt=(
+                        "We need to decide whether switching away from a long frontier "
+                        "model session is worth it. Identify the cache accounting input."
+                    ),
+                ),
+                TaskTurn(
+                    phase="tool_loop",
+                    prompt="Use the pricing table.",
+                    tool_name="read_pricing",
+                    tool_result=(
+                        "frontier prompt_per_1m=15.0, cached_input_per_1m=1.5; "
+                        "small prompt_per_1m=0.2, cached_input_per_1m=0.04."
+                    ),
+                ),
+                TaskTurn(
+                    phase="tool_loop",
+                    prompt="Use the cache probe result.",
+                    tool_name="read_cache_probe",
+                    tool_result=(
+                        "Current backend responses omit usage.prompt_tokens_details."
+                        "cached_tokens, so observed cached-token ratio is unavailable."
+                    ),
+                ),
+                TaskTurn(
+                    phase="provider_state",
+                    prompt="Continue the cost analysis in the same session state.",
+                ),
+                TaskTurn(
+                    phase="final",
+                    prompt=(
+                        "Return the cache economics conclusion. Include exact tokens "
+                        "COST=input-checkout-delta, FRONTIER=stricter-cache, "
+                        "LIMITATION=missing-cached-token-field."
+                    ),
+                    expected_terms=(
+                        "COST=input-checkout-delta",
+                        "FRONTIER=stricter-cache",
+                        "LIMITATION=missing-cached-token-field",
+                    ),
+                ),
+            ),
+        ),
+        TaskSpec(
+            name="release-triage",
+            suite="long-horizon",
+            turns=(
+                TaskTurn(
+                    phase="user_turn",
+                    prompt=(
+                        "Act as maintainer for a release candidate. Decide what evidence "
+                        "is still blocking GA."
+                    ),
+                ),
+                TaskTurn(
+                    phase="tool_loop",
+                    prompt="Use the benchmark status.",
+                    tool_name="read_benchmark_status",
+                    tool_result=(
+                        "Local matrix complete; AMD overlay non-disruption complete; "
+                        "repeat-failure recovery complete; full branch image blocked by "
+                        "host disk pressure; cached-token field missing."
+                    ),
+                ),
+                TaskTurn(
+                    phase="topic_drift",
+                    prompt=(
+                        "Now classify what belongs in release notes versus remaining "
+                        "GA blockers."
+                    ),
+                ),
+                TaskTurn(
+                    phase="tool_loop",
+                    prompt="Use the PR status.",
+                    tool_name="read_pr_status",
+                    tool_result=(
+                        "Unified PR is draft and mergeable; blog PR is open; branch-image "
+                        "benchmark and positive cached-token backend evidence are missing."
+                    ),
+                ),
+                TaskTurn(
+                    phase="final",
+                    prompt=(
+                        "Return the release triage. Include exact tokens "
+                        "READY=overlay-evidence, BLOCKER=branch-image, "
+                        "BLOCKER=positive-cached-tokens."
+                    ),
+                    expected_terms=(
+                        "READY=overlay-evidence",
+                        "BLOCKER=branch-image",
+                        "BLOCKER=positive-cached-tokens",
+                    ),
+                ),
+            ),
+        ),
+        TaskSpec(
+            name="observability-debug",
+            suite="long-horizon",
+            turns=(
+                TaskTurn(
+                    phase="user_turn",
+                    prompt=(
+                        "A maintainer asks why the logical model is auto but the physical "
+                        "model changed. Plan the observability answer."
+                    ),
+                ),
+                TaskTurn(
+                    phase="tool_loop",
+                    prompt="Use the route trace.",
+                    tool_name="read_route_trace",
+                    tool_result=(
+                        "trace includes current_model=qwen-small, selected_model="
+                        "frontier-reasoner, decision_drift=true, idle_expired=false, "
+                        "hard_locked=false, replay_id=abc123."
+                    ),
+                ),
+                TaskTurn(
+                    phase="provider_state",
+                    prompt=(
+                        "Continue the same explanation and decide which trace fields "
+                        "should be exposed."
+                    ),
+                ),
+                TaskTurn(
+                    phase="tool_loop",
+                    prompt="Use the dashboard fields.",
+                    tool_name="read_dashboard_headers",
+                    tool_result=(
+                        "response headers expose x-vsr-selected-model, x-vsr-selected-"
+                        "decision, and x-vsr-replay-id."
+                    ),
+                ),
+                TaskTurn(
+                    phase="final",
+                    prompt=(
+                        "Return the debug answer. Include exact tokens "
+                        "EXPLAIN=decision-drift, TRACE=replay-id, "
+                        "HEADER=x-vsr-selected-model."
+                    ),
+                    expected_terms=(
+                        "EXPLAIN=decision-drift",
+                        "TRACE=replay-id",
+                        "HEADER=x-vsr-selected-model",
+                    ),
+                ),
+            ),
+        ),
+    )
+
+
 def parse_extra_headers(values: list[str]) -> dict[str, str]:
     headers: dict[str, str] = {}
     for value in values:
@@ -258,8 +592,20 @@ def build_messages(task: TaskSpec, turn_index: int) -> list[dict[str, Any]]:
             )
     if turn.tool_result:
         messages.extend(tool_messages(task.name, turn_index, turn))
-    messages.append({"role": "user", "content": turn.prompt})
+    prompt = turn.prompt
+    if turn.expected_terms:
+        prompt = prompt + "\n\n" + scoring_instruction(turn.expected_terms)
+    messages.append({"role": "user", "content": prompt})
     return messages
+
+
+def scoring_instruction(expected_terms: tuple[str, ...]) -> str:
+    tokens = "\n".join(f"- {term}" for term in expected_terms)
+    return (
+        "Scoring uses exact substring matching. Copy every required token "
+        "exactly as written, one token per line, before any explanation:\n"
+        f"{tokens}"
+    )
 
 
 def tool_messages(
@@ -391,35 +737,48 @@ def error_message(parsed: Any, payload: str) -> str:
 def run_tasks(args: argparse.Namespace) -> tuple[list[dict[str, Any]], dict[str, Any]]:
     rows: list[dict[str, Any]] = []
     started = time.perf_counter()
-    for task_index, task in enumerate(task_specs()):
-        session_id = f"{args.session_prefix}-{task.name}-{task_index:02d}"
-        previous_response_id = ""
-        previous_selected_model = ""
-        for turn_index, turn in enumerate(task.turns):
-            result = send_chat(args, task, turn_index, session_id, previous_response_id)
-            row = row_from_result(
-                args,
-                task,
-                task_index,
-                turn_index,
-                turn,
-                session_id,
-                result,
-                previous_selected_model,
-                previous_response_id,
-            )
-            rows.append(row)
-            previous_response_id = response_id(result)
-            if row["selected_model"]:
-                previous_selected_model = row["selected_model"]
+    for repetition in range(max(1, args.task_repetitions)):
+        for task_index, task in enumerate(task_specs(args.suite)):
+            session_id = session_id_for(args, task, task_index, repetition)
+            previous_response_id = ""
+            previous_selected_model = ""
+            for turn_index, turn in enumerate(task.turns):
+                result = send_chat(
+                    args, task, turn_index, session_id, previous_response_id
+                )
+                row = row_from_result(
+                    args,
+                    task,
+                    task_index,
+                    repetition,
+                    turn_index,
+                    turn,
+                    session_id,
+                    result,
+                    previous_selected_model,
+                    previous_response_id,
+                )
+                rows.append(row)
+                previous_response_id = response_id(result)
+                if row["selected_model"]:
+                    previous_selected_model = row["selected_model"]
     elapsed = time.perf_counter() - started
     return rows, summarize(rows, elapsed, args.label)
+
+
+def session_id_for(
+    args: argparse.Namespace, task: TaskSpec, task_index: int, repetition: int
+) -> str:
+    if args.task_repetitions <= 1:
+        return f"{args.session_prefix}-{task.name}-{task_index:02d}"
+    return f"{args.session_prefix}-r{repetition:02d}-{task.name}-{task_index:02d}"
 
 
 def row_from_result(
     args: argparse.Namespace,
     task: TaskSpec,
     task_index: int,
+    task_repetition: int,
     turn_index: int,
     turn: TaskTurn,
     session_id: str,
@@ -443,7 +802,10 @@ def row_from_result(
     return {
         "label": args.label,
         "task_index": task_index,
+        "task_repetition": task_repetition,
         "task": task.name,
+        "task_suite": task.suite,
+        "task_instance": f"r{task_repetition:02d}:{task.name}",
         "session_id": session_id,
         "turn": turn_index,
         "phase": turn.phase,
@@ -462,6 +824,7 @@ def row_from_result(
         "cached_tokens": cached_tokens(response_json),
         "answer_score": score,
         "missing_terms": ",".join(missing),
+        "answer_excerpt": answer_excerpt(content),
         "scored_turn": bool(turn.expected_terms),
         "error": result.get("error", ""),
         **{
@@ -499,6 +862,10 @@ def score_answer(
     return round(found / len(expected_terms), 4), missing
 
 
+def answer_excerpt(content: str, limit: int = 600) -> str:
+    return content.replace("\n", "\\n")[:limit]
+
+
 def response_id(result: dict[str, Any]) -> str:
     response_json = result.get("json") or {}
     value = response_json.get("id")
@@ -534,6 +901,8 @@ def summarize(
         "requests": len(rows),
         "tasks": len({row["task"] for row in rows}),
         "task_count": len({row["task"] for row in rows}),
+        "task_instances": len({task_key(row) for row in scored}),
+        "task_suites": counts(row.get("task_suite", "") for row in rows),
         "successes": sum(1 for row in rows if row["success"]),
         "success_rate": (
             round(sum(1 for row in rows if row["success"]) / len(rows), 4)
@@ -548,7 +917,7 @@ def summarize(
         "task_exact_success_rate": (
             round(task_successes / len(scored), 4) if scored else None
         ),
-        "final_scores": {row["task"]: row["answer_score"] for row in scored},
+        "final_scores": {task_key(row): row["answer_score"] for row in scored},
         "status_counts": counts(str(row["status"]) for row in rows),
         "latency_ms": latency_summary(
             [float(row["latency_ms"]) for row in rows if row["success"]]
@@ -575,7 +944,7 @@ def summarize(
         ),
         "failed_tasks": sorted(
             {
-                row["task"]: row["missing_terms"]
+                task_key(row): row["missing_terms"]
                 for row in scored
                 if row["answer_score"] != 1.0
             }.items()
@@ -584,6 +953,11 @@ def summarize(
             round(len(rows) / elapsed_seconds, 3) if elapsed_seconds > 0 else None
         ),
     }
+
+
+def task_key(row: dict[str, Any]) -> str:
+    value = row.get("task_instance") or row.get("task")
+    return str(value)
 
 
 def validate_summary(args: argparse.Namespace, summary: dict[str, Any]) -> list[str]:

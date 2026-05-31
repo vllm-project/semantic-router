@@ -29,6 +29,17 @@ def test_score_answer_reports_missing_terms():
     assert missing == ["FIX=default-factory"]
 
 
+def test_scored_turn_messages_include_exact_matching_instruction():
+    bench = load_benchmark_module()
+    task = bench.task_specs("smoke")[0]
+
+    messages = bench.build_messages(task, 2)
+
+    assert "Scoring uses exact substring matching" in messages[-1]["content"]
+    assert "ROOT_CAUSE=mutable-default" in messages[-1]["content"]
+    assert "FIX=default-factory" in messages[-1]["content"]
+
+
 def test_dry_run_completes_all_tasks(tmp_path):
     bench = load_benchmark_module()
     args = bench.parse_args([])
@@ -47,12 +58,32 @@ def test_dry_run_completes_all_tasks(tmp_path):
     assert summary["success_rate"] == 1.0
     assert summary["task_score_mean"] == 1.0
     assert summary["task_success_rate"] == 1.0
+    assert summary["task_instances"] == len(bench.task_specs())
     assert summary["task_exact_success_rate"] == 1.0
     assert failures == []
     assert (tmp_path / "summary.json").exists()
     assert (tmp_path / "turns.csv").exists()
     assert (tmp_path / "turns.jsonl").exists()
     assert (tmp_path / "summary.md").exists()
+
+
+def test_long_horizon_suite_repetitions_expand_task_instances():
+    bench = load_benchmark_module()
+    args = bench.parse_args(["--suite", "long-horizon", "--task-repetitions", "2"])
+    args.dry_run = True
+
+    rows, summary = bench.run_tasks(args)
+    expected_tasks = len(bench.task_specs("long-horizon"))
+
+    expected_turns = sum(len(task.turns) for task in bench.task_specs("long-horizon"))
+
+    assert len(rows) == expected_turns * 2
+    assert summary["task_count"] == expected_tasks
+    assert summary["task_instances"] == expected_tasks * 2
+    assert summary["task_success_rate"] == 1.0
+    assert rows[0]["task_suite"] == "long-horizon"
+    assert rows[0]["task_repetition"] == 0
+    assert rows[-1]["task_repetition"] == 1
 
 
 def test_summary_tracks_quality_and_continuity_violations():
@@ -74,6 +105,7 @@ def test_summary_tracks_quality_and_continuity_violations():
             "phase": "final",
             "selected_model": "m1",
             "missing_terms": "",
+            "answer_excerpt": "",
         },
         {
             "task": "b",
@@ -91,6 +123,7 @@ def test_summary_tracks_quality_and_continuity_violations():
             "phase": "tool_loop",
             "selected_model": "m2",
             "missing_terms": "FIX=default-factory",
+            "answer_excerpt": "ROOT_CAUSE=mutable-default",
         },
     ]
 
