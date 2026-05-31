@@ -367,6 +367,7 @@ def test_stale_agent_task_suite_blocks_ga(tmp_path):
     report_mod = load_report_module()
     inputs = complete_inputs(tmp_path)
     stale_tasks = complete_agent_task_summary()
+    stale_tasks["missing_router_header_counts"].pop("x-vsr-session-phase")
     stale_tasks.update(
         {
             "requests": 96,
@@ -417,6 +418,10 @@ def test_stale_agent_task_suite_blocks_ga(tmp_path):
     assert "requests 96.0 < 147" in task_requirement["failures"]
     assert "task_count 6.0 < 9" in task_requirement["failures"]
     assert "task_instances 18.0 < 27" in task_requirement["failures"]
+    assert (
+        "missing router headers: {'x-vsr-session-phase': 96}"
+        in task_requirement["failures"]
+    )
     assert any(
         failure.startswith("missing task names:")
         for failure in task_requirement["failures"]

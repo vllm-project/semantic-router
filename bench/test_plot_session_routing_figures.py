@@ -67,7 +67,6 @@ def test_agent_task_readiness_metrics_count_stale_summary():
             "x-vsr-selected-model": 0,
             "x-vsr-selected-decision": 0,
             "x-vsr-replay-id": 0,
-            "x-vsr-session-phase": 96,
             "x-vsr-selected-confidence": 96,
             "x-vsr-context-token-count": 96,
         },

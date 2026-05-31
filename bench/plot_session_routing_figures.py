@@ -669,11 +669,12 @@ def agent_task_readiness_metrics(
     missing = missing_counts if isinstance(missing_counts, dict) else None
     invalid = invalid_counts if isinstance(invalid_counts, dict) else None
     present_headers = 0
-    if missing is not None or invalid is not None:
+    if missing is not None:
         present_headers = sum(
             1
             for header in required_headers
-            if int((missing or {}).get(header, 0) or 0) == 0
+            if header in missing
+            and int(missing.get(header, 0) or 0) == 0
             and int((invalid or {}).get(header, 0) or 0) == 0
         )
 
@@ -768,7 +769,7 @@ def render_agent_task_readiness(
         4.00,
         (
             f"Required before GA: {min_requests} requests, {min_task_count} task "
-            f"types, {min_task_instances} scored instances, and full diagnostics."
+            f"types, {min_task_instances} scored instances, and phase/confidence/token diagnostics."
         ),
         color="#64748b",
         fontsize=9,

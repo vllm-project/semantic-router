@@ -566,14 +566,9 @@ def evaluate_agent_task_summary(
         failures.append(
             f"continuity violations {continuity} > {args.max_continuity_violations}"
         )
-    missing_counts = data.get("missing_router_header_counts") or {}
-    invalid_counts = data.get("invalid_router_header_counts") or {}
     required_headers = list(dict.fromkeys(args.required_agent_task_header))
-    missing_headers = {
-        key: missing_counts.get(key, 0)
-        for key in required_headers
-        if int(missing_counts.get(key, 0) or 0) > 0
-    }
+    missing_headers = missing_required_router_headers(data, required_headers)
+    invalid_counts = data.get("invalid_router_header_counts") or {}
     invalid_headers = {
         key: invalid_counts.get(key, 0)
         for key in required_headers
@@ -616,6 +611,20 @@ def evaluate_agent_task_summary(
         metrics,
         failures,
     )
+
+
+def missing_required_router_headers(
+    data: dict[str, Any], required_headers: list[str]
+) -> dict[str, int]:
+    missing_counts = data.get("missing_router_header_counts")
+    missing = missing_counts if isinstance(missing_counts, dict) else {}
+    default_missing = int(data.get("successes", data.get("requests", 0)) or 0)
+    result: dict[str, int] = {}
+    for key in required_headers:
+        count = int(missing.get(key, default_missing) or 0)
+        if count > 0:
+            result[key] = count
+    return result
 
 
 def cache_paths(data: dict[str, Any]) -> list[tuple[str, dict[str, Any]]]:
