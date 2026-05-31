@@ -226,6 +226,7 @@ def test_complete_evidence_passes_ga_gate(tmp_path):
 
     assert report["ga_ready"] is True
     assert report["blocker_count"] == 0
+    assert report["blockers"] == []
     assert {item["status"] for item in report["requirements"]} == {"passed"}
 
 
@@ -266,6 +267,10 @@ def test_missing_positive_cache_and_branch_image_block_ga(tmp_path):
     statuses = {item["id"]: item["status"] for item in report["requirements"]}
 
     assert report["ga_ready"] is False
+    assert [item["id"] for item in report["blockers"]] == [
+        "cache_token_reporting",
+        "branch_image_amd_validation",
+    ]
     assert statuses["cache_token_reporting"] == "blocked"
     assert statuses["branch_image_amd_validation"] == "missing"
 

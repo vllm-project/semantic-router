@@ -845,6 +845,7 @@ def generate_report(args: argparse.Namespace) -> dict[str, Any]:
         "passed_count": sum(
             1 for item in requirements if item["status"] == PASSING_STATUS
         ),
+        "blockers": blockers,
         "requirements": requirements,
     }
 
