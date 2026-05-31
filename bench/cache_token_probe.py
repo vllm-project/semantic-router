@@ -1,0 +1,328 @@
+#!/usr/bin/env python3
+"""Probe OpenAI-compatible cached-token reporting for router experiments."""
+
+from __future__ import annotations
+
+import argparse
+import csv
+import json
+import statistics
+import time
+import urllib.error
+import urllib.request
+from pathlib import Path
+from typing import Any
+
+HTTP_OK = 200
+HTTP_REDIRECT_START = 300
+
+
+def parse_args() -> argparse.Namespace:
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--base-url", default="http://127.0.0.1:8000/v1")
+    parser.add_argument("--model", default="auto")
+    parser.add_argument("--api-key", default="")
+    parser.add_argument("--session-header", default="x-session-id")
+    parser.add_argument("--session-id", default="cache-probe-session")
+    parser.add_argument("--repeats", type=int, default=6)
+    parser.add_argument("--max-tokens", type=int, default=16)
+    parser.add_argument("--temperature", type=float, default=0.0)
+    parser.add_argument("--timeout", type=float, default=120.0)
+    parser.add_argument("--label", default="router")
+    parser.add_argument("--extra-header", action="append", default=[])
+    parser.add_argument("--baseline-base-url", default="")
+    parser.add_argument("--baseline-model", default="")
+    parser.add_argument("--baseline-label", default="direct-backend")
+    parser.add_argument("--output-dir", type=Path, default=None)
+    return parser.parse_args()
+
+
+def default_output_dir() -> Path:
+    stamp = time.strftime("%Y%m%dT%H%M%SZ", time.gmtime())
+    return Path(".agent-harness/experiments/cache-token-probe") / stamp
+
+
+def parse_extra_headers(values: list[str]) -> dict[str, str]:
+    headers: dict[str, str] = {}
+    for value in values:
+        if ":" not in value:
+            raise ValueError(f"extra header must be NAME:VALUE, got {value!r}")
+        name, raw = value.split(":", 1)
+        headers[name.strip()] = raw.strip()
+    return headers
+
+
+def request_headers(args: argparse.Namespace) -> dict[str, str]:
+    headers = {
+        "Content-Type": "application/json",
+        args.session_header: args.session_id,
+    }
+    if args.api_key:
+        headers["Authorization"] = f"Bearer {args.api_key}"
+    headers.update(parse_extra_headers(args.extra_header))
+    return headers
+
+
+def probe_prompt() -> str:
+    reusable = (
+        "You are validating prefix cache observability for a session-aware "
+        "LLM router. Keep the repeated context stable so the backend has an "
+        "opportunity to reuse the prompt prefix. "
+    )
+    return (reusable * 80).strip()
+
+
+def build_body(args: argparse.Namespace, repeat_index: int) -> dict[str, Any]:
+    return {
+        "model": args.model,
+        "messages": [
+            {
+                "role": "system",
+                "content": "You are a concise benchmark assistant.",
+            },
+            {
+                "role": "user",
+                "content": (
+                    f"{probe_prompt()}\n\n"
+                    f"Probe turn {repeat_index}: answer with one short sentence."
+                ),
+            },
+        ],
+        "temperature": args.temperature,
+        "max_tokens": args.max_tokens,
+    }
+
+
+def send_chat(args: argparse.Namespace, repeat_index: int) -> dict[str, Any]:
+    url = args.base_url.rstrip("/") + "/chat/completions"
+    body = json.dumps(build_body(args, repeat_index)).encode("utf-8")
+    started = time.perf_counter()
+    request = urllib.request.Request(
+        url,
+        data=body,
+        headers=request_headers(args),
+        method="POST",
+    )
+    try:
+        with urllib.request.urlopen(request, timeout=args.timeout) as response:
+            payload = response.read().decode("utf-8", errors="replace")
+            return response_record(
+                response.status, dict(response.headers), payload, started
+            )
+    except urllib.error.HTTPError as exc:
+        payload = exc.read().decode("utf-8", errors="replace")
+        return response_record(exc.code, dict(exc.headers), payload, started)
+    except Exception as exc:  # pragma: no cover - network errors vary by platform
+        return {
+            "status": 0,
+            "headers": {},
+            "json": {},
+            "payload": "",
+            "latency_ms": round((time.perf_counter() - started) * 1000, 3),
+            "error": str(exc),
+        }
+
+
+def response_record(
+    status: int, headers: dict[str, str], payload: str, started: float
+) -> dict[str, Any]:
+    try:
+        parsed = json.loads(payload)
+    except json.JSONDecodeError:
+        parsed = {}
+    return {
+        "status": status,
+        "headers": headers,
+        "json": parsed if isinstance(parsed, dict) else {},
+        "payload": payload,
+        "latency_ms": round((time.perf_counter() - started) * 1000, 3),
+        "error": (
+            error_message(parsed, payload) if status >= HTTP_REDIRECT_START else ""
+        ),
+    }
+
+
+def error_message(parsed: Any, payload: str) -> str:
+    error = parsed.get("error") if isinstance(parsed, dict) else None
+    if isinstance(error, dict):
+        return str(error.get("message", ""))
+    if isinstance(error, str):
+        return error
+    return payload[:300]
+
+
+def row_from_result(
+    args: argparse.Namespace, repeat_index: int, result: dict[str, Any]
+) -> dict[str, Any]:
+    response_json = result.get("json") or {}
+    return {
+        "label": args.label,
+        "repeat_index": repeat_index,
+        "status": int(result.get("status") or 0),
+        "success": HTTP_OK <= int(result.get("status") or 0) < HTTP_REDIRECT_START,
+        "latency_ms": round(float(result.get("latency_ms") or 0), 3),
+        "prompt_tokens": usage_value(response_json, "prompt_tokens"),
+        "completion_tokens": usage_value(response_json, "completion_tokens"),
+        "cached_tokens": cached_tokens(response_json),
+        "cached_token_field_present": cached_token_field_present(response_json),
+        "response_model": response_json.get("model", ""),
+        "error": result.get("error", ""),
+    }
+
+
+def usage_value(response_json: dict[str, Any], key: str) -> int:
+    usage = response_json.get("usage") or {}
+    value = usage.get(key) if isinstance(usage, dict) else 0
+    return int(value or 0)
+
+
+def cached_tokens(response_json: dict[str, Any]) -> int:
+    value = cached_token_value(response_json)
+    return int(value or 0)
+
+
+def cached_token_field_present(response_json: dict[str, Any]) -> bool:
+    return cached_token_value(response_json) is not None
+
+
+def cached_token_value(response_json: dict[str, Any]) -> Any:
+    usage = response_json.get("usage")
+    if not isinstance(usage, dict):
+        return None
+    details = usage.get("prompt_tokens_details")
+    if not isinstance(details, dict):
+        return None
+    return details.get("cached_tokens")
+
+
+def run_probe(args: argparse.Namespace) -> tuple[list[dict[str, Any]], dict[str, Any]]:
+    rows: list[dict[str, Any]] = []
+    started = time.perf_counter()
+    for repeat_index in range(args.repeats):
+        rows.append(row_from_result(args, repeat_index, send_chat(args, repeat_index)))
+    elapsed = time.perf_counter() - started
+    return rows, summarize(rows, elapsed, args.label)
+
+
+def summarize(
+    rows: list[dict[str, Any]], elapsed_seconds: float, label: str
+) -> dict[str, Any]:
+    prompt_tokens = sum(int(row["prompt_tokens"]) for row in rows)
+    cached = sum(int(row["cached_tokens"]) for row in rows)
+    return {
+        "label": label,
+        "requests": len(rows),
+        "successes": sum(1 for row in rows if row["success"]),
+        "success_rate": (
+            round(sum(1 for row in rows if row["success"]) / len(rows), 4)
+            if rows
+            else 0.0
+        ),
+        "status_counts": counts(str(row["status"]) for row in rows),
+        "latency_ms": latency_summary(
+            [float(row["latency_ms"]) for row in rows if row["success"]]
+        ),
+        "prompt_tokens": prompt_tokens,
+        "completion_tokens": sum(int(row["completion_tokens"]) for row in rows),
+        "cached_tokens": cached,
+        "cached_prompt_ratio": (
+            round(cached / prompt_tokens, 6) if prompt_tokens else 0.0
+        ),
+        "cached_token_reporting": cache_reporting_state(rows),
+        "cached_token_field_present": sum(
+            1 for row in rows if row["cached_token_field_present"]
+        ),
+        "errors": counts(row["error"] for row in rows if row["error"]),
+        "requests_per_second": (
+            round(len(rows) / elapsed_seconds, 3) if elapsed_seconds > 0 else None
+        ),
+    }
+
+
+def cache_reporting_state(rows: list[dict[str, Any]]) -> str:
+    if not rows:
+        return "missing"
+    present = [row for row in rows if row["cached_token_field_present"]]
+    if not present:
+        return "missing"
+    if any(int(row["cached_tokens"]) > 0 for row in present):
+        return "positive"
+    return "reported_zero"
+
+
+def counts(values: Any) -> dict[str, int]:
+    out: dict[str, int] = {}
+    for value in values:
+        key = str(value)
+        out[key] = out.get(key, 0) + 1
+    return dict(sorted(out.items()))
+
+
+def latency_summary(values: list[float]) -> dict[str, float | None]:
+    if not values:
+        return {"mean": None, "p50": None, "p95": None, "max": None}
+    ordered = sorted(values)
+    return {
+        "mean": round(statistics.fmean(ordered), 3),
+        "p50": round(percentile(ordered, 50), 3),
+        "p95": round(percentile(ordered, 95), 3),
+        "max": round(max(ordered), 3),
+    }
+
+
+def percentile(ordered: list[float], pct: float) -> float:
+    if len(ordered) == 1:
+        return ordered[0]
+    rank = (len(ordered) - 1) * pct / 100
+    lower = int(rank)
+    upper = min(lower + 1, len(ordered) - 1)
+    weight = rank - lower
+    return ordered[lower] * (1 - weight) + ordered[upper] * weight
+
+
+def write_outputs(
+    rows: list[dict[str, Any]], summary: dict[str, Any], output_dir: Path
+) -> None:
+    output_dir.mkdir(parents=True, exist_ok=True)
+    (output_dir / "summary.json").write_text(json.dumps(summary, indent=2) + "\n")
+    with (output_dir / "turns.csv").open("w", newline="") as f:
+        writer = csv.DictWriter(f, fieldnames=list(rows[0].keys()) if rows else [])
+        if rows:
+            writer.writeheader()
+            writer.writerows(rows)
+
+
+def namespace_with(args: argparse.Namespace, **overrides: Any) -> argparse.Namespace:
+    values = vars(args).copy()
+    values.update(overrides)
+    return argparse.Namespace(**values)
+
+
+def main() -> int:
+    args = parse_args()
+    output_dir = args.output_dir or default_output_dir()
+    rows, summary = run_probe(args)
+    write_outputs(rows, summary, output_dir)
+
+    baseline_summary = None
+    if args.baseline_base_url:
+        baseline_args = namespace_with(
+            args,
+            base_url=args.baseline_base_url,
+            model=args.baseline_model or args.model,
+            label=args.baseline_label,
+        )
+        baseline_rows, baseline_summary = run_probe(baseline_args)
+        write_outputs(baseline_rows, baseline_summary, output_dir / "baseline")
+
+    result = {
+        "output_dir": str(output_dir),
+        "summary": summary,
+        "baseline_summary": baseline_summary,
+    }
+    print(json.dumps(result, indent=2, sort_keys=True))
+    return 0 if summary["successes"] == summary["requests"] else 1
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

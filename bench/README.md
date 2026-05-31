@@ -115,6 +115,30 @@ Use `--fail-phases tool_loop,provider_state` when the run needs to target
 agentic phases instead of fixed turn numbers. The default fault policy injects
 at most one fault per selected session so the recovery metric measures whether
 later turns can continue after a transient backend failure.
+Use `--repeat-failures` for stress runs that should inject on every selected
+matching phase instead of only once per selected session.
+
+### Cache Token Reporting Probe
+
+Use the cache-token probe when the question is whether an OpenAI-compatible
+backend reports `usage.prompt_tokens_details.cached_tokens` through the router
+or direct-backend path. The probe sends a stable repeated prefix for several
+turns and classifies reporting as `positive`, `reported_zero`, or `missing`:
+
+```bash
+python3 bench/cache_token_probe.py \
+  --base-url http://127.0.0.1:8899/v1 \
+  --model auto \
+  --session-id cache-probe-router \
+  --repeats 8 \
+  --baseline-base-url http://127.0.0.1:8090/v1 \
+  --baseline-model qwen/qwen3.5-rocm
+```
+
+The output is written under `.agent-harness/experiments/cache-token-probe/` by
+default. Treat `missing` as an observability limitation: the backend response
+does not include the cached-token field, so router-level cache accounting cannot
+claim a positive cache-hit ratio from that run.
 
 ### Basic Usage
 
