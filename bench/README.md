@@ -140,6 +140,32 @@ default. Treat `missing` as an observability limitation: the backend response
 does not include the cached-token field, so router-level cache accounting cannot
 claim a positive cache-hit ratio from that run.
 
+### Live Agent Task Benchmark
+
+Use the agent-task benchmark when routing quality needs to be measured by
+deterministic multi-turn task completion instead of only continuity counters.
+The benchmark runs small coding-agent traces with simulated tool observations
+and scores the final turn against exact required labels, so the result is
+replayable without a judge model:
+
+```bash
+python3 bench/agent_task_live_benchmark.py \
+  --base-url http://127.0.0.1:8899/v1 \
+  --model auto \
+  --baseline-base-url http://127.0.0.1:8090/v1 \
+  --baseline-model qwen/qwen3.5-rocm \
+  --include-previous-response-id \
+  --min-success-rate 1.0 \
+  --min-task-success-rate 0.75 \
+  --max-tool-loop-violations 0 \
+  --max-context-portability-violations 0
+```
+
+The output is written under `.agent-harness/experiments/live-agent-tasks/` by
+default and includes per-turn CSV/JSONL, a machine-readable summary, a Markdown
+summary, and a router-vs-direct-backend comparison when a baseline endpoint is
+configured.
+
 ### Basic Usage
 
 ```bash
