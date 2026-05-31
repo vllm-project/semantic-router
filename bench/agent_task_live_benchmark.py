@@ -495,7 +495,7 @@ def long_horizon_task_specs() -> tuple[TaskSpec, ...]:
                     prompt=(
                         "We are reviewing how ExtProc should route a selected model. "
                         "Identify which layer owns cluster choice and which layer "
-                        "owns endpoint choice."
+                        "owns endpoint load balancing."
                     ),
                 ),
                 TaskTurn(
@@ -504,14 +504,14 @@ def long_horizon_task_specs() -> tuple[TaskSpec, ...]:
                     tool_name="inspect_envoy_route_config",
                     tool_result=(
                         "ExtProc can mutate request headers and body before routing; "
-                        "Envoy clusters own load balancing among endpoints."
+                        "Envoy clusters own endpoint load balancing among upstreams."
                     ),
                 ),
                 TaskTurn(
                     phase="provider_state",
                     prompt=(
                         "Continue from the same provider-managed state and decide "
-                        "whether the router should probe or fallback between endpoints."
+                        "whether the router should own endpoint load balancing."
                     ),
                 ),
                 TaskTurn(
@@ -520,8 +520,8 @@ def long_horizon_task_specs() -> tuple[TaskSpec, ...]:
                     tool_name="check_extproc_boundary",
                     tool_result=(
                         "The router may emit selected-model, selected-decision, and "
-                        "cluster-routing signals, but endpoint failover remains an "
-                        "Envoy cluster/LB concern."
+                        "cluster-routing signals, but endpoint load balancing remains "
+                        "an Envoy cluster/LB concern."
                     ),
                 ),
                 TaskTurn(
@@ -529,12 +529,12 @@ def long_horizon_task_specs() -> tuple[TaskSpec, ...]:
                     prompt=(
                         "Return the routing boundary. Include exact tokens "
                         "ROUTER=cluster-signal, ENVOY=endpoint-lb, "
-                        "NO=endpoint-fallback."
+                        "NO=router-owned-endpoints."
                     ),
                     expected_terms=(
                         "ROUTER=cluster-signal",
                         "ENVOY=endpoint-lb",
-                        "NO=endpoint-fallback",
+                        "NO=router-owned-endpoints",
                     ),
                 ),
             ),
@@ -824,9 +824,10 @@ def long_horizon_task_specs() -> tuple[TaskSpec, ...]:
                     prompt="Use the paper excerpt before identifying the overclaim.",
                     tool_name="read_paper_excerpt",
                     tool_result=(
-                        "The draft says the system is GA-ready after synthetic and "
-                        "overlay AMD runs, but the branch-image benchmark and positive "
-                        "cached-token backend evidence are still missing."
+                        "The draft says the system is ready for release after "
+                        "synthetic and overlay AMD runs, but the branch-image "
+                        "benchmark and positive cached-token backend evidence are "
+                        "still missing."
                     ),
                 ),
                 TaskTurn(
