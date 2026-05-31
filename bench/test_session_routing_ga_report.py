@@ -310,6 +310,57 @@ def test_positive_cache_without_probe_metadata_blocks_ga(tmp_path):
     )
 
 
+def test_positive_cache_without_direct_backend_baseline_blocks_ga(tmp_path):
+    report_mod = load_report_module()
+    inputs = complete_inputs(tmp_path)
+    cache = write_json(
+        tmp_path / "router-only-cache.json",
+        {
+            "router": {
+                "requests": 8,
+                "successes": 8,
+                "success_rate": 1.0,
+                "cached_token_reporting": "positive",
+                "cached_token_field_rate": 1.0,
+                "cached_prompt_ratio": 0.2,
+                **CACHE_PROBE_METADATA,
+            },
+        },
+    )
+    args = report_mod.parse_args(
+        [
+            "--synthetic-matrix-summary",
+            str(inputs["matrix"]),
+            "--synthetic-ablation-summary",
+            str(inputs["ablation"]),
+            "--live-aggregate",
+            str(inputs["live"]),
+            "--failure-aggregate",
+            str(inputs["failure"]),
+            "--agent-task-summary",
+            str(inputs["tasks"]),
+            "--cache-aggregate",
+            str(cache),
+            "--branch-image-summary",
+            str(inputs["branch"]),
+        ]
+    )
+
+    report = report_mod.generate_report(args)
+    cache_requirement = next(
+        item for item in report["requirements"] if item["id"] == "cache_token_reporting"
+    )
+
+    assert report["ga_ready"] is False
+    assert cache_requirement["status"] == "blocked"
+    assert (
+        "direct backend baseline cache evidence missing; run "
+        "cache_token_probe.py with --baseline-base-url" in cache_requirement["failures"]
+    )
+    assert cache_requirement["metrics"]["baseline_required"] is True
+    assert cache_requirement["metrics"]["baseline_present"] is False
+
+
 def test_stale_agent_task_suite_blocks_ga(tmp_path):
     report_mod = load_report_module()
     inputs = complete_inputs(tmp_path)

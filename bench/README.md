@@ -156,9 +156,10 @@ accounting cannot claim a positive cache-hit ratio from that run. For GA
 cache-accounting evidence, run with `--min-cached-token-reporting positive`,
 `--min-cached-token-field-rate 1.0`, and a deployment-specific
 `--min-cached-prompt-ratio` threshold. The GA report requires the repeated-prefix
-probe metadata before positive cached-token evidence can pass. When a
-direct-backend baseline is included, the same cache-reporting gates apply to both
-paths.
+probe metadata and a direct-backend baseline before positive cached-token
+evidence can pass, because the cached-token claim must prove backend behavior
+rather than only router summary shaping. The same cache-reporting gates apply to
+both router and direct-backend paths.
 
 ### Live Agent Task Benchmark
 

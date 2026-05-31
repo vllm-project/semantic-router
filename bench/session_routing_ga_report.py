@@ -116,6 +116,16 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--min-cached-token-field-rate", type=float, default=1.0)
     parser.add_argument("--min-cached-prompt-ratio", type=float, default=0.01)
     parser.add_argument("--min-cache-probe-repeats", type=int, default=2)
+    parser.add_argument(
+        "--require-cache-baseline",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help=(
+            "Require a direct backend baseline in cache-token evidence so "
+            "positive cached tokens prove backend behavior, not only router "
+            "summary shaping."
+        ),
+    )
     parser.add_argument("--allow-blockers", action="store_true")
     parser.add_argument("--output-dir", type=Path)
     return parser.parse_args(argv)
@@ -660,7 +670,14 @@ def evaluate_cache_aggregate(args: argparse.Namespace) -> dict[str, Any]:
     metrics: dict[str, Any] = {}
     required = args.min_cached_token_reporting
     require_probe_metadata = should_require_cache_probe_metadata(required)
-    for label, summary in cache_paths(data):
+    paths = cache_paths(data)
+    has_baseline = any(label == "baseline" for label, _ in paths)
+    if args.require_cache_baseline and not has_baseline:
+        failures.append(
+            "direct backend baseline cache evidence missing; run "
+            "cache_token_probe.py with --baseline-base-url"
+        )
+    for label, summary in paths:
         reporting = str(summary.get("cached_token_reporting", "missing"))
         if CACHE_REPORTING_ORDER.get(reporting, -1) < CACHE_REPORTING_ORDER[required]:
             failures.append(f"{label}: cached_token_reporting {reporting} < {required}")
@@ -701,6 +718,8 @@ def evaluate_cache_aggregate(args: argparse.Namespace) -> dict[str, Any]:
             "probe_repeats": probe_repeats,
             "stable_prefix_chars": summary.get("stable_prefix_chars"),
         }
+    metrics["baseline_required"] = args.require_cache_baseline
+    metrics["baseline_present"] = has_baseline
     return requirement(
         "cache_token_reporting",
         "Cache-token reporting",
