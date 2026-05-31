@@ -248,6 +248,7 @@ where
 /// # Returns
 /// - `true` if initialization succeeded
 /// - `false` if initialization failed
+#[allow(clippy::not_unsafe_ptr_arg_deref)]
 #[no_mangle]
 pub extern "C" fn init_mmbert_embedding_model(model_path: *const c_char, use_cpu: bool) -> bool {
     use candle_core::Device;
@@ -283,7 +284,7 @@ pub extern "C" fn init_mmbert_embedding_model(model_path: *const c_char, use_cpu
     };
 
     // Create or get factory
-    let factory = if let Some(_) = GLOBAL_MODEL_FACTORY.get() {
+    let factory = if GLOBAL_MODEL_FACTORY.get().is_some() {
         // Factory exists but mmbert not loaded - we can't modify OnceLock
         eprintln!("Error: ModelFactory already initialized without mmBERT. Initialize mmBERT first or use init_embedding_models_with_mmbert.");
         return false;
@@ -319,6 +320,7 @@ pub extern "C" fn init_mmbert_embedding_model(model_path: *const c_char, use_cpu
 /// # Returns
 /// - `true` if initialization succeeded
 /// - `false` if initialization failed
+#[allow(clippy::not_unsafe_ptr_arg_deref)]
 #[no_mangle]
 pub extern "C" fn init_embedding_models_with_mmbert(
     qwen3_model_path: *const c_char,
@@ -418,6 +420,7 @@ pub extern "C" fn init_embedding_models_with_mmbert(
 /// # Returns
 /// - `true` if initialization succeeded or already initialized
 /// - `false` if initialization failed
+#[allow(clippy::not_unsafe_ptr_arg_deref)]
 #[no_mangle]
 pub extern "C" fn init_embedding_models(
     qwen3_model_path: *const c_char,
@@ -725,11 +728,7 @@ fn generate_mmbert_embedding(
         .map_err(|e| format!("Tokenization failed: {:?}", e))?;
 
     let token_ids: Vec<u32> = encoding.get_ids().to_vec();
-    let attention_mask: Vec<u32> = encoding
-        .get_attention_mask()
-        .iter()
-        .map(|&x| x as u32)
-        .collect();
+    let attention_mask: Vec<u32> = encoding.get_attention_mask().to_vec();
     let seq_len = token_ids.len();
 
     // Create tensors
@@ -800,11 +799,7 @@ fn generate_multimodal_text_embedding(
         .map_err(|e| format!("Tokenization failed: {:?}", e))?;
 
     let token_ids: Vec<u32> = encoding.get_ids().to_vec();
-    let attention_mask: Vec<u32> = encoding
-        .get_attention_mask()
-        .iter()
-        .map(|&x| x as u32)
-        .collect();
+    let attention_mask: Vec<u32> = encoding.get_attention_mask().to_vec();
     let seq_len = token_ids.len();
 
     let device = model.device();
@@ -883,6 +878,7 @@ pub extern "C" fn get_embedding_smart(
 ///
 /// # Returns
 /// 0 on success, -1 on error
+#[allow(clippy::not_unsafe_ptr_arg_deref)]
 #[no_mangle]
 pub extern "C" fn get_embedding_with_dim(
     text: *const c_char,
@@ -950,12 +946,12 @@ pub extern "C" fn get_embedding_with_dim(
     // Check if selected model is available, fall back to mmbert if not
     let model_type_str = match model_type {
         ModelType::Qwen3Embedding => {
-            if factory.map_or(false, |f| f.get_qwen3_model().is_some()) {
+            if factory.is_some_and(|f| f.get_qwen3_model().is_some()) {
                 "qwen3"
-            } else if factory.map_or(false, |f| f.get_mmbert_model().is_some()) {
+            } else if factory.is_some_and(|f| f.get_mmbert_model().is_some()) {
                 eprintln!("INFO: Qwen3 not available, falling back to mmbert");
                 "mmbert"
-            } else if factory.map_or(false, |f| f.get_gemma_model().is_some()) {
+            } else if factory.is_some_and(|f| f.get_gemma_model().is_some()) {
                 eprintln!("INFO: Qwen3 not available, falling back to gemma");
                 "gemma"
             } else {
@@ -969,12 +965,12 @@ pub extern "C" fn get_embedding_with_dim(
             }
         }
         ModelType::GemmaEmbedding => {
-            if factory.map_or(false, |f| f.get_gemma_model().is_some()) {
+            if factory.is_some_and(|f| f.get_gemma_model().is_some()) {
                 "gemma"
-            } else if factory.map_or(false, |f| f.get_mmbert_model().is_some()) {
+            } else if factory.is_some_and(|f| f.get_mmbert_model().is_some()) {
                 eprintln!("INFO: Gemma not available, falling back to mmbert");
                 "mmbert"
-            } else if factory.map_or(false, |f| f.get_qwen3_model().is_some()) {
+            } else if factory.is_some_and(|f| f.get_qwen3_model().is_some()) {
                 eprintln!("INFO: Gemma not available, falling back to qwen3");
                 "qwen3"
             } else {
@@ -988,7 +984,7 @@ pub extern "C" fn get_embedding_with_dim(
             }
         }
         ModelType::MmBertEmbedding => {
-            if factory.map_or(false, |f| f.get_mmbert_model().is_some()) {
+            if factory.is_some_and(|f| f.get_mmbert_model().is_some()) {
                 "mmbert"
             } else {
                 eprintln!("Error: MmBertEmbedding selected but not available");
@@ -1064,6 +1060,7 @@ pub extern "C" fn get_embedding_with_model_type(
 ///
 /// # Returns
 /// 0 on success, -1 on error
+#[allow(clippy::not_unsafe_ptr_arg_deref)]
 #[no_mangle]
 pub extern "C" fn get_embedding_2d_matryoshka(
     text: *const c_char,
@@ -1216,6 +1213,7 @@ pub extern "C" fn get_embedding_2d_matryoshka(
 ///
 /// # Returns
 /// 0 on success, -1 on error
+#[allow(clippy::not_unsafe_ptr_arg_deref)]
 #[no_mangle]
 pub extern "C" fn calculate_embedding_similarity(
     text1: *const c_char,
@@ -1470,6 +1468,7 @@ pub extern "C" fn calculate_embedding_similarity(
 ///
 /// # Returns
 /// 0 on success, -1 on error
+#[allow(clippy::not_unsafe_ptr_arg_deref)]
 #[no_mangle]
 pub extern "C" fn calculate_similarity_batch(
     query: *const c_char,
@@ -1714,6 +1713,7 @@ pub extern "C" fn calculate_similarity_batch(
 ///
 /// # Parameters
 /// - `result`: Pointer to the BatchSimilarityResult to free
+#[allow(clippy::not_unsafe_ptr_arg_deref)]
 #[no_mangle]
 pub extern "C" fn free_batch_similarity_result(result: *mut BatchSimilarityResult) {
     if result.is_null() {
@@ -1748,6 +1748,7 @@ pub extern "C" fn free_batch_similarity_result(result: *mut BatchSimilarityResul
 ///
 /// # Returns
 /// 0 on success, -1 on error
+#[allow(clippy::not_unsafe_ptr_arg_deref)]
 #[no_mangle]
 pub extern "C" fn get_embedding_models_info(
     result: *mut crate::ffi::types::EmbeddingModelsInfoResult,
@@ -1839,6 +1840,7 @@ pub extern "C" fn get_embedding_models_info(
 ///
 /// # Parameters
 /// - `result`: Pointer to the EmbeddingModelsInfoResult to free
+#[allow(clippy::not_unsafe_ptr_arg_deref)]
 #[no_mangle]
 pub extern "C" fn free_embedding_models_info(
     result: *mut crate::ffi::types::EmbeddingModelsInfoResult,
@@ -1857,8 +1859,7 @@ pub extern "C" fn free_embedding_models_info(
             let models_slice =
                 std::slice::from_raw_parts_mut(info_result.models, info_result.num_models as usize);
 
-            for i in 0..models_slice.len() {
-                let model_info = &mut models_slice[i];
+            for model_info in models_slice.iter_mut() {
                 // Free model_name string
                 if !model_info.model_name.is_null() {
                     let _ = CString::from_raw(model_info.model_name);
@@ -1912,6 +1913,7 @@ static GLOBAL_BATCHED_MODEL: OnceLock<BatchedModelContext> = OnceLock::new();
 /// # Returns
 /// - `true` if initialization succeeded
 /// - `false` if initialization failed or already initialized
+#[allow(clippy::not_unsafe_ptr_arg_deref)]
 #[no_mangle]
 pub extern "C" fn init_embedding_models_batched(
     qwen3_model_path: *const c_char,
@@ -2015,6 +2017,7 @@ pub extern "C" fn init_embedding_models_batched(
 ///
 /// # Returns
 /// 0 on success, -1 on error
+#[allow(clippy::not_unsafe_ptr_arg_deref)]
 #[no_mangle]
 pub extern "C" fn get_embedding_batched(
     text: *const c_char,
@@ -2169,6 +2172,7 @@ pub extern "C" fn get_embedding_batched(
 /// # Returns
 /// - `true` if initialization succeeded
 /// - `false` if initialization failed
+#[allow(clippy::not_unsafe_ptr_arg_deref)]
 #[no_mangle]
 pub extern "C" fn init_multimodal_embedding_model(
     model_path: *const c_char,
@@ -2267,6 +2271,7 @@ pub extern "C" fn init_multimodal_embedding_model(
 ///
 /// # Returns
 /// 0 on success, -1 on error
+#[allow(clippy::not_unsafe_ptr_arg_deref)]
 #[no_mangle]
 pub extern "C" fn multimodal_encode_text(
     text: *const c_char,
@@ -2323,11 +2328,7 @@ pub extern "C" fn multimodal_encode_text(
     };
 
     let ids: Vec<u32> = encoding.get_ids().to_vec();
-    let mask: Vec<u32> = encoding
-        .get_attention_mask()
-        .iter()
-        .map(|&x| x as u32)
-        .collect();
+    let mask: Vec<u32> = encoding.get_attention_mask().to_vec();
     let seq_len = ids.len();
 
     let device = model.device();
@@ -2407,6 +2408,7 @@ pub extern "C" fn multimodal_encode_text(
 ///
 /// # Returns
 /// 0 on success, -1 on error
+#[allow(clippy::not_unsafe_ptr_arg_deref)]
 #[no_mangle]
 pub extern "C" fn multimodal_encode_image(
     pixel_data: *const f32,
@@ -2509,6 +2511,7 @@ pub extern "C" fn multimodal_encode_image(
 ///
 /// # Returns
 /// 0 on success, -1 on error
+#[allow(clippy::not_unsafe_ptr_arg_deref)]
 #[no_mangle]
 pub extern "C" fn multimodal_encode_audio(
     mel_data: *const f32,
@@ -2601,13 +2604,14 @@ pub extern "C" fn multimodal_encode_audio(
 }
 
 /// Free multi-modal embedding result data
+#[allow(clippy::not_unsafe_ptr_arg_deref)]
 #[no_mangle]
 pub extern "C" fn free_multimodal_embedding(data: *mut f32, length: i32) {
     if data.is_null() || length <= 0 {
         return;
     }
     unsafe {
-        let _ = Box::from_raw(std::slice::from_raw_parts_mut(data, length as usize));
+        let _ = Box::from_raw(std::ptr::slice_from_raw_parts_mut(data, length as usize));
     }
 }
 
