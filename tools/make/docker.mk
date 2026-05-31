@@ -481,4 +481,5 @@ memory-test-integration: vllm-sr-build vllm-sr-envoy-build vllm-sr-dashboard-bui
 	VLLM_SR_ENVOY_IMAGE=$(VLLM_SR_ENVOY_IMAGE) \
 	VLLM_SR_DASHBOARD_IMAGE=$(VLLM_SR_DASHBOARD_IMAGE) \
 	VLLM_SR_SIM_IMAGE=$(VLLM_SR_SIM_IMAGE) \
+	PATH="$(AGENT_VENV)/bin:$$PATH" \
 	bash e2e/testing/run_memory_integration.sh
