@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import argparse
 import csv
+import hashlib
 import json
 import statistics
 import time
@@ -20,6 +21,8 @@ CACHE_REPORTING_ORDER = {
     "reported_zero": 1,
     "positive": 2,
 }
+CACHE_PROBE_KIND = "repeated-prefix-cache-token-probe"
+CACHE_PROBE_SUFFIX_PATTERN = "probe_turn_index"
 
 
 def parse_args() -> argparse.Namespace:
@@ -88,6 +91,20 @@ def probe_prompt() -> str:
         "opportunity to reuse the prompt prefix. "
     )
     return (reusable * 80).strip()
+
+
+def probe_prompt_hash() -> str:
+    return hashlib.sha256(probe_prompt().encode("utf-8")).hexdigest()[:16]
+
+
+def cache_probe_metadata(rows: list[dict[str, Any]]) -> dict[str, Any]:
+    return {
+        "probe_kind": CACHE_PROBE_KIND,
+        "probe_repeats": len(rows),
+        "stable_prefix_chars": len(probe_prompt()),
+        "stable_prefix_sha256": probe_prompt_hash(),
+        "unique_suffix_pattern": CACHE_PROBE_SUFFIX_PATTERN,
+    }
 
 
 def build_body(args: argparse.Namespace, repeat_index: int) -> dict[str, Any]:
@@ -251,6 +268,7 @@ def summarize(
         "cached_token_field_rate": (
             round(field_present / successes, 4) if successes else 0.0
         ),
+        **cache_probe_metadata(rows),
         "errors": counts(row["error"] for row in rows if row["error"]),
         "requests_per_second": (
             round(len(rows) / elapsed_seconds, 3) if elapsed_seconds > 0 else None

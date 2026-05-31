@@ -14,6 +14,7 @@ CACHE_REPORTING_ORDER = {
     "reported_zero": 1,
     "positive": 2,
 }
+CACHE_PROBE_KIND = "repeated-prefix-cache-token-probe"
 FULL_BRANCH_IMAGE_KINDS = {
     "branch-image-benchmark",
     "full-branch-image-benchmark",
@@ -114,6 +115,7 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     )
     parser.add_argument("--min-cached-token-field-rate", type=float, default=1.0)
     parser.add_argument("--min-cached-prompt-ratio", type=float, default=0.01)
+    parser.add_argument("--min-cache-probe-repeats", type=int, default=2)
     parser.add_argument("--allow-blockers", action="store_true")
     parser.add_argument("--output-dir", type=Path)
     return parser.parse_args(argv)
@@ -629,6 +631,21 @@ def cached_token_field_rate(summary: dict[str, Any]) -> float:
     return round(float(present or 0) / float(successes), 4)
 
 
+def should_require_cache_probe_metadata(required_reporting: str) -> bool:
+    return (
+        CACHE_REPORTING_ORDER[required_reporting] >= CACHE_REPORTING_ORDER["positive"]
+    )
+
+
+def cache_probe_repeats(summary: dict[str, Any]) -> int:
+    for key in ("probe_repeats", "requests"):
+        try:
+            return int(summary.get(key) or 0)
+        except (TypeError, ValueError):
+            return 0
+    return 0
+
+
 def evaluate_cache_aggregate(args: argparse.Namespace) -> dict[str, Any]:
     data, evidence = load_json(args.cache_aggregate)
     if data is None:
@@ -642,10 +659,21 @@ def evaluate_cache_aggregate(args: argparse.Namespace) -> dict[str, Any]:
     failures: list[str] = []
     metrics: dict[str, Any] = {}
     required = args.min_cached_token_reporting
+    require_probe_metadata = should_require_cache_probe_metadata(required)
     for label, summary in cache_paths(data):
         reporting = str(summary.get("cached_token_reporting", "missing"))
         if CACHE_REPORTING_ORDER.get(reporting, -1) < CACHE_REPORTING_ORDER[required]:
             failures.append(f"{label}: cached_token_reporting {reporting} < {required}")
+        probe_kind = str(summary.get("probe_kind", ""))
+        probe_repeats = cache_probe_repeats(summary)
+        if require_probe_metadata and probe_kind != CACHE_PROBE_KIND:
+            failures.append(
+                f"{label}: probe_kind {probe_kind or 'missing'} != {CACHE_PROBE_KIND}"
+            )
+        if require_probe_metadata and probe_repeats < args.min_cache_probe_repeats:
+            failures.append(
+                f"{label}: probe_repeats {probe_repeats} < {args.min_cache_probe_repeats}"
+            )
         field_rate = cached_token_field_rate(summary)
         if field_rate < args.min_cached_token_field_rate:
             failures.append(
@@ -669,6 +697,9 @@ def evaluate_cache_aggregate(args: argparse.Namespace) -> dict[str, Any]:
             "cached_token_reporting": reporting,
             "cached_token_field_rate": field_rate,
             "cached_prompt_ratio": summary.get("cached_prompt_ratio"),
+            "probe_kind": probe_kind,
+            "probe_repeats": probe_repeats,
+            "stable_prefix_chars": summary.get("stable_prefix_chars"),
         }
     return requirement(
         "cache_token_reporting",

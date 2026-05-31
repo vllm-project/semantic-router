@@ -8,6 +8,7 @@ EXPECTED_CACHED_TOKENS = 60
 EXPECTED_CACHED_RATIO = 0.2
 EXPECTED_FIELD_RATE = 1.0
 EXPECTED_RPS = 1.5
+EXPECTED_METADATA_REPEATS = 2
 
 
 def load_probe_module():
@@ -85,7 +86,22 @@ def test_summary_reports_cached_ratio_and_reporting_state():
     assert summary["cached_prompt_ratio"] == EXPECTED_CACHED_RATIO
     assert summary["cached_token_reporting"] == "positive"
     assert summary["cached_token_field_rate"] == EXPECTED_FIELD_RATE
+    assert summary["probe_kind"] == probe.CACHE_PROBE_KIND
+    assert summary["probe_repeats"] == EXPECTED_REQUESTS
     assert summary["requests_per_second"] == EXPECTED_RPS
+
+
+def test_summary_records_repeated_prefix_probe_metadata():
+    probe = load_probe_module()
+    rows = [row(probe, 0), row(probe, 20)]
+
+    summary = probe.summarize(rows, elapsed_seconds=2.0, label="router")
+
+    assert summary["probe_kind"] == "repeated-prefix-cache-token-probe"
+    assert summary["probe_repeats"] == EXPECTED_METADATA_REPEATS
+    assert summary["stable_prefix_chars"] == len(probe.probe_prompt())
+    assert summary["stable_prefix_sha256"] == probe.probe_prompt_hash()
+    assert summary["unique_suffix_pattern"] == "probe_turn_index"
 
 
 def test_validate_summary_gates_positive_cache_evidence():

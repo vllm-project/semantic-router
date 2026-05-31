@@ -22,6 +22,13 @@ REQUIRED_LONG_HORIZON_PHASES = [
     "idle_boundary",
     "final",
 ]
+CACHE_PROBE_METADATA = {
+    "probe_kind": "repeated-prefix-cache-token-probe",
+    "probe_repeats": 8,
+    "stable_prefix_chars": 13000,
+    "stable_prefix_sha256": "abc123def4567890",
+    "unique_suffix_pattern": "probe_turn_index",
+}
 
 
 def load_report_module():
@@ -148,6 +155,7 @@ def complete_inputs(tmp_path: Path) -> dict[str, Path]:
                 "cached_token_reporting": "positive",
                 "cached_token_field_rate": 1.0,
                 "cached_prompt_ratio": 0.2,
+                **CACHE_PROBE_METADATA,
             },
             "baseline": {
                 "requests": 8,
@@ -156,6 +164,7 @@ def complete_inputs(tmp_path: Path) -> dict[str, Path]:
                 "cached_token_reporting": "positive",
                 "cached_token_field_rate": 1.0,
                 "cached_prompt_ratio": 0.15,
+                **CACHE_PROBE_METADATA,
             },
         },
     )
@@ -251,6 +260,54 @@ def test_missing_positive_cache_and_branch_image_block_ga(tmp_path):
     assert report["ga_ready"] is False
     assert statuses["cache_token_reporting"] == "blocked"
     assert statuses["branch_image_amd_validation"] == "missing"
+
+
+def test_positive_cache_without_probe_metadata_blocks_ga(tmp_path):
+    report_mod = load_report_module()
+    inputs = complete_inputs(tmp_path)
+    cache = write_json(
+        tmp_path / "cache-without-probe-metadata.json",
+        {
+            "router": {
+                "requests": 8,
+                "successes": 8,
+                "success_rate": 1.0,
+                "cached_token_reporting": "positive",
+                "cached_token_field_rate": 1.0,
+                "cached_prompt_ratio": 0.2,
+            }
+        },
+    )
+    args = report_mod.parse_args(
+        [
+            "--synthetic-matrix-summary",
+            str(inputs["matrix"]),
+            "--synthetic-ablation-summary",
+            str(inputs["ablation"]),
+            "--live-aggregate",
+            str(inputs["live"]),
+            "--failure-aggregate",
+            str(inputs["failure"]),
+            "--agent-task-summary",
+            str(inputs["tasks"]),
+            "--cache-aggregate",
+            str(cache),
+            "--branch-image-summary",
+            str(inputs["branch"]),
+        ]
+    )
+
+    report = report_mod.generate_report(args)
+    cache_requirement = next(
+        item for item in report["requirements"] if item["id"] == "cache_token_reporting"
+    )
+
+    assert report["ga_ready"] is False
+    assert cache_requirement["status"] == "blocked"
+    assert (
+        "router: probe_kind missing != repeated-prefix-cache-token-probe"
+        in cache_requirement["failures"]
+    )
 
 
 def test_stale_agent_task_suite_blocks_ga(tmp_path):

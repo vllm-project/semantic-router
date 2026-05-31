@@ -147,13 +147,18 @@ python3 bench/cache_token_probe.py \
 ```
 
 The output is written under `.agent-harness/experiments/cache-token-probe/` by
-default. Treat `missing` as an observability limitation: the backend response
-does not include the cached-token field, so router-level cache accounting cannot
-claim a positive cache-hit ratio from that run. For GA cache-accounting evidence,
-raise the gate to `--min-cached-token-reporting positive` and pair it with
-`--min-cached-token-field-rate 1.0` plus a deployment-specific
-`--min-cached-prompt-ratio` threshold. When a direct-backend baseline is included,
-the same cache-reporting gates apply to both paths.
+default. Each summary records `probe_kind` set to
+`repeated-prefix-cache-token-probe`, the repeated-prefix hash, the prefix length,
+and the repeat count so GA evidence is tied to this workload rather than an
+arbitrary JSON aggregate. Treat `missing` as an observability limitation: the
+backend response does not include the cached-token field, so router-level cache
+accounting cannot claim a positive cache-hit ratio from that run. For GA
+cache-accounting evidence, run with `--min-cached-token-reporting positive`,
+`--min-cached-token-field-rate 1.0`, and a deployment-specific
+`--min-cached-prompt-ratio` threshold. The GA report requires the repeated-prefix
+probe metadata before positive cached-token evidence can pass. When a
+direct-backend baseline is included, the same cache-reporting gates apply to both
+paths.
 
 ### Live Agent Task Benchmark
 
