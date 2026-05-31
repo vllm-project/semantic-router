@@ -88,8 +88,9 @@ release-readiness.md, and proposed-actions.json. Compare the active release
 plan with the milestone and summarize blockers, missing issues, PRs needing
 review, PRs needing rebase, close candidates, and the next coding-agent tasks.
 If the active release includes session-aware agentic routing, run the GA
-readiness report with `--allow-blockers`, include the stdout blocker summary in
-today.md, and link the generated `ga-readiness.md` for details.
+readiness report with `--allow-blockers`; the maintainer board will include the
+latest GA blocker summary in today.md and release-readiness.md, with a link to
+the generated `ga-readiness.json` for details.
 Do not mutate GitHub.
 ```
 

@@ -12,6 +12,7 @@ import sys
 from pathlib import Path
 from typing import Any
 
+import maintainer_ga_readiness
 import yaml
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
@@ -226,9 +227,9 @@ def render_today(snapshot: dict[str, Any]) -> str:
         f"Generated: {snapshot['generated_at']}",
         f"Milestone: {snapshot.get('active_milestone') or 'all'}",
         "",
-        "## PR Actions",
-        "",
     ]
+    lines.extend(maintainer_ga_readiness.render(snapshot))
+    lines.extend(["## PR Actions", ""])
     for group in (
         "merge-candidate",
         "review-now",
@@ -323,9 +324,14 @@ def render_release_readiness(snapshot: dict[str, Any], release_plan: Path) -> st
         f"Milestone: {milestone}",
         f"Milestone issues: {open_count} open, {closed_count} closed",
         "",
-        "## Open Plan Tasks",
-        "",
     ]
+    lines.extend(maintainer_ga_readiness.render(snapshot))
+    lines.extend(
+        [
+            "## Open Plan Tasks",
+            "",
+        ]
+    )
     if tasks:
         lines.extend(f"- {task}" for task in tasks)
     else:
@@ -469,6 +475,7 @@ def build_snapshot(
         },
     }
     snapshot["proposed_actions"] = proposed_actions(snapshot, policy)
+    maintainer_ga_readiness.attach_latest(snapshot)
     return snapshot
 
 
@@ -646,6 +653,7 @@ def handle_brief(args: argparse.Namespace) -> int:
     policy = load_policy()
     out_dir = output_dir(policy, args.output_dir)
     snapshot = load_current(out_dir)
+    maintainer_ga_readiness.attach_latest(snapshot)
     print(render_today(snapshot))
     return 0
 
@@ -654,6 +662,7 @@ def handle_release_report(args: argparse.Namespace) -> int:
     policy = load_policy()
     out_dir = output_dir(policy, args.output_dir)
     snapshot = load_current(out_dir)
+    maintainer_ga_readiness.attach_latest(snapshot)
     release_plan = resolve_repo_path(args.release_plan)
     report = render_release_readiness(snapshot, release_plan)
     if args.write:
