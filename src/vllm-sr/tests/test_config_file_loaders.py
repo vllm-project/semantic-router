@@ -79,6 +79,25 @@ def test_parse_user_config_rejects_empty_file(tmp_path: Path) -> None:
         parse_user_config(str(config_path))
 
 
+def test_parse_user_config_rejects_removed_session_aware_fallback_method(
+    tmp_path: Path,
+) -> None:
+    config_path = tmp_path / "config.yaml"
+    write_minimal_config(config_path)
+    data = yaml.safe_load(config_path.read_text(encoding="utf-8"))
+    data["routing"]["decisions"][0]["algorithm"] = {
+        "type": "session_aware",
+        "session_aware": {"fallback_method": "static"},
+    }
+    config_path.write_text(yaml.safe_dump(data, sort_keys=False), encoding="utf-8")
+
+    with pytest.raises(ConfigParseError) as exc:
+        parse_user_config(str(config_path))
+
+    assert "fallback_method" in str(exc.value)
+    assert "Extra inputs are not permitted" in str(exc.value)
+
+
 def test_load_config_file_rejects_missing_file(tmp_path: Path) -> None:
     missing = tmp_path / "missing.yaml"
 
