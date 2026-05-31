@@ -182,6 +182,35 @@ func TestHandleRequestHeadersSetsLooperAndStreamingFlags(t *testing.T) {
 	}
 }
 
+func TestHandleRequestHeadersForcesIdentityEncoding(t *testing.T) {
+	router := &OpenAIRouter{}
+	requestHeaders := &ext_proc.ProcessingRequest_RequestHeaders{
+		RequestHeaders: &ext_proc.HttpHeaders{
+			Headers: &core.HeaderMap{
+				Headers: []*core.HeaderValue{
+					{Key: ":method", Value: "POST"},
+					{Key: ":path", Value: "/v1/chat/completions"},
+					{Key: "accept-encoding", Value: "gzip, br"},
+				},
+			},
+		},
+	}
+
+	ctx := &RequestContext{Headers: make(map[string]string)}
+	response, err := router.handleRequestHeaders(requestHeaders, ctx)
+	if err != nil {
+		t.Fatalf("handleRequestHeaders failed: %v", err)
+	}
+
+	headerMutation := response.GetRequestHeaders().Response.GetHeaderMutation()
+	if headerMutation == nil {
+		t.Fatal("expected request header mutation")
+	}
+	if got := findSetHeader(headerMutation, "accept-encoding"); got != "identity" {
+		t.Fatalf("accept-encoding mutation = %q, want identity", got)
+	}
+}
+
 func TestHandleRequestHeadersReturnsMethodNotAllowedForChatCompletionsGet(t *testing.T) {
 	router := &OpenAIRouter{}
 	ctx := &RequestContext{Headers: make(map[string]string)}
@@ -245,6 +274,18 @@ func assertImmediateErrorResponse(
 	if decoded.Error.Message != wantMessage {
 		t.Fatalf("expected error message %q, got %q", wantMessage, decoded.Error.Message)
 	}
+}
+
+func findSetHeader(mutation *ext_proc.HeaderMutation, key string) string {
+	if mutation == nil {
+		return ""
+	}
+	for _, header := range mutation.SetHeaders {
+		if header.GetHeader().GetKey() == key {
+			return header.GetHeader().GetValue()
+		}
+	}
+	return ""
 }
 
 func TestValidateRequestHeaders_V1Messages(t *testing.T) {

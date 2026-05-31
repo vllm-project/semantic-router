@@ -5,6 +5,7 @@ import (
 	"strings"
 	"time"
 
+	core "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
 	ext_proc "github.com/envoyproxy/go-control-plane/envoy/service/ext_proc/v3"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/trace"
@@ -51,7 +52,7 @@ func (r *OpenAIRouter) handleRequestHeaders(v *ext_proc.ProcessingRequest_Reques
 	if validationResp := r.validateRequestHeaders(method, path); validationResp != nil {
 		return validationResp, nil
 	}
-	return newContinueRequestHeadersResponse(), nil
+	return newContinueRequestHeadersResponse(buildIdentityEncodingRequestMutation()), nil
 }
 
 func startRequestHeaderSpan(
@@ -166,12 +167,28 @@ func extractHeaderValue(header interface {
 	return headerValue
 }
 
-func newContinueRequestHeadersResponse() *ext_proc.ProcessingResponse {
+func buildIdentityEncodingRequestMutation() *ext_proc.HeaderMutation {
+	return &ext_proc.HeaderMutation{
+		SetHeaders: []*core.HeaderValueOption{{
+			Header: &core.HeaderValue{
+				Key:   "accept-encoding",
+				Value: "identity",
+			},
+		}},
+	}
+}
+
+func newContinueRequestHeadersResponse(headerMutation ...*ext_proc.HeaderMutation) *ext_proc.ProcessingResponse {
+	var mutation *ext_proc.HeaderMutation
+	if len(headerMutation) > 0 {
+		mutation = headerMutation[0]
+	}
 	return &ext_proc.ProcessingResponse{
 		Response: &ext_proc.ProcessingResponse_RequestHeaders{
 			RequestHeaders: &ext_proc.HeadersResponse{
 				Response: &ext_proc.CommonResponse{
-					Status: ext_proc.CommonResponse_CONTINUE,
+					Status:         ext_proc.CommonResponse_CONTINUE,
+					HeaderMutation: mutation,
 				},
 			},
 		},
