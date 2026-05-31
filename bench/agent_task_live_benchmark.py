@@ -685,11 +685,11 @@ def long_horizon_task_specs() -> tuple[TaskSpec, ...]:
                     phase="final",
                     prompt=(
                         "Return the release triage. Include exact tokens "
-                        "READY=overlay-evidence, BLOCKER=branch-image, "
+                        "EVIDENCE=overlay-only, BLOCKER=branch-image, "
                         "BLOCKER=positive-cached-tokens."
                     ),
                     expected_terms=(
-                        "READY=overlay-evidence",
+                        "EVIDENCE=overlay-only",
                         "BLOCKER=branch-image",
                         "BLOCKER=positive-cached-tokens",
                     ),

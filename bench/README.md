@@ -289,7 +289,8 @@ exists together and turns missing evidence into explicit blockers:
 Generate the synthetic ablation input with `bench/agentic_routing_experiment.py
 --ablation`. The maintained ablation matrix must include `single-turn` for the
 non-session-aware routing baseline, `acr-initial` for the merged #1974
-implementation baseline, and `acr-full` for the current GA candidate. The
+implementation baseline, and `acr-full` for the current full ACR policy under
+evaluation. The
 readiness report blocks GA when the initial-implementation baseline is absent,
 because the release claim must compare the final policy against both the
 non-session-aware path and the first merged agentic-routing implementation.
