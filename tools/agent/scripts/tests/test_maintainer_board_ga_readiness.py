@@ -98,6 +98,73 @@ class MaintainerBoardGAReadinessTests(unittest.TestCase):
             },
         )
 
+    def test_latest_ga_readiness_report_prefers_newer_generated_at(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            reports = root / ".agent-harness" / "reports" / "session-routing-ga"
+            current = reports / "current"
+            current.mkdir(parents=True)
+            (current / "ga-readiness.json").write_text(
+                json.dumps(
+                    {
+                        "generated_at": "2026-05-30T00:00:00Z",
+                        "ga_ready": False,
+                        "blocker_count": 1,
+                        "requirements": [
+                            {
+                                "id": "old_current",
+                                "title": "Old current",
+                                "status": "blocked",
+                            }
+                        ],
+                    }
+                ),
+                encoding="utf-8",
+            )
+            latest = reports / "20260531T222239Z"
+            latest.mkdir()
+            (latest / "ga-readiness.json").write_text(
+                json.dumps(
+                    {
+                        "generated_at": "2026-05-31T22:22:39Z",
+                        "ga_ready": False,
+                        "blocker_count": 1,
+                        "blockers": [
+                            {
+                                "id": "branch_image_amd_validation",
+                                "title": "Branch-image AMD benchmark",
+                                "status": "missing",
+                            }
+                        ],
+                    }
+                ),
+                encoding="utf-8",
+            )
+
+            with (
+                mock.patch.object(maintainer_ga_readiness, "REPO_ROOT", root),
+                mock.patch.object(
+                    maintainer_ga_readiness, "GA_READINESS_ROOT", reports
+                ),
+            ):
+                summary = maintainer_ga_readiness.latest_ga_readiness_report()
+
+        self.assertEqual(
+            summary["path"],
+            ".agent-harness/reports/session-routing-ga/20260531T222239Z/"
+            "ga-readiness.json",
+        )
+        self.assertEqual(
+            summary["blockers"],
+            [
+                {
+                    "id": "branch_image_amd_validation",
+                    "title": "Branch-image AMD benchmark",
+                    "status": "missing",
+                }
+            ],
+        )
+
     def test_today_and_release_report_include_ga_readiness(self) -> None:
         snapshot = empty_snapshot()
         snapshot["session_routing_ga_readiness"] = {

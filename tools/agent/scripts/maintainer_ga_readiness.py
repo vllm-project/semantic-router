@@ -13,24 +13,30 @@ GA_READINESS_ROOT = REPO_ROOT / ".agent-harness" / "reports" / "session-routing-
 def latest_ga_readiness_report() -> dict[str, Any] | None:
     if not GA_READINESS_ROOT.exists():
         return None
-    report_paths = sorted(
-        GA_READINESS_ROOT.glob("*/ga-readiness.json"),
-        key=lambda path: path.parent.name,
-        reverse=True,
-    )
-    for path in report_paths:
+    candidates = []
+    for path in GA_READINESS_ROOT.glob("*/ga-readiness.json"):
         try:
             data = json.loads(path.read_text(encoding="utf-8"))
         except json.JSONDecodeError:
             continue
-        return {
-            "path": str(path.relative_to(REPO_ROOT)),
-            "generated_at": data.get("generated_at", ""),
-            "ga_ready": bool(data.get("ga_ready", False)),
-            "blocker_count": int(data.get("blocker_count", 0)),
-            "blockers": blocker_summaries(data),
-        }
-    return None
+        candidates.append((report_sort_key(path, data), path, data))
+    if not candidates:
+        return None
+    _, path, data = max(candidates, key=lambda item: item[0])
+    return {
+        "path": str(path.relative_to(REPO_ROOT)),
+        "generated_at": data.get("generated_at", ""),
+        "ga_ready": bool(data.get("ga_ready", False)),
+        "blocker_count": int(data.get("blocker_count", 0)),
+        "blockers": blocker_summaries(data),
+    }
+
+
+def report_sort_key(path: Path, data: dict[str, Any]) -> tuple[str, float]:
+    generated_at = data.get("generated_at")
+    if isinstance(generated_at, str) and generated_at:
+        return generated_at, path.stat().st_mtime
+    return "", path.stat().st_mtime
 
 
 def blocker_summaries(report: dict[str, Any]) -> list[dict[str, str]]:
