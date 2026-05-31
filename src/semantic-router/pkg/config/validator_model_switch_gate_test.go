@@ -64,24 +64,32 @@ var _ = Describe("validateModelSwitchGate", func() {
 var _ = Describe("validateSessionAwareSelectionConfig", func() {
 	It("accepts remaining-turn prior controls", func() {
 		cfg := SessionAwareSelectionConfig{
-			RemainingTurnPriorWeight:     0.8,
-			RemainingTurnPriorHorizon:    12,
-			MinRemainingTurnPriorSamples: 5,
+			RemainingTurnPriorWeight:     sessionAwareFloat64Ptr(0.8),
+			RemainingTurnPriorHorizon:    sessionAwareIntPtr(12),
+			MinRemainingTurnPriorSamples: sessionAwareIntPtr(5),
 		}
 		Expect(validateSessionAwareSelectionConfig(cfg)).To(Succeed())
 	})
 
 	It("rejects negative remaining-turn prior weight", func() {
-		cfg := SessionAwareSelectionConfig{RemainingTurnPriorWeight: -0.1}
+		cfg := SessionAwareSelectionConfig{RemainingTurnPriorWeight: sessionAwareFloat64Ptr(-0.1)}
 		err := validateSessionAwareSelectionConfig(cfg)
 		Expect(err).To(HaveOccurred())
 		Expect(err.Error()).To(ContainSubstring("remaining_turn_prior_weight"))
 	})
 
 	It("rejects negative remaining-turn prior sample floor", func() {
-		cfg := SessionAwareSelectionConfig{MinRemainingTurnPriorSamples: -1}
+		cfg := SessionAwareSelectionConfig{MinRemainingTurnPriorSamples: sessionAwareIntPtr(-1)}
 		err := validateSessionAwareSelectionConfig(cfg)
 		Expect(err).To(HaveOccurred())
 		Expect(err.Error()).To(ContainSubstring("min_remaining_turn_prior_samples"))
 	})
 })
+
+func sessionAwareIntPtr(v int) *int {
+	return &v
+}
+
+func sessionAwareFloat64Ptr(v float64) *float64 {
+	return &v
+}

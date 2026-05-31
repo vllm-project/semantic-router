@@ -9,7 +9,9 @@ import yaml
 
 
 def _runtime_config_output_dir(config_path: Path) -> Path:
-    runtime_dir = config_path.parent / ".vllm-sr"
+    state_root = os.getenv("VLLM_SR_STATE_ROOT_DIR", "").strip()
+    base_dir = Path(state_root).expanduser() if state_root else config_path.parent
+    runtime_dir = base_dir / ".vllm-sr"
     runtime_dir.mkdir(parents=True, exist_ok=True)
     return runtime_dir
 

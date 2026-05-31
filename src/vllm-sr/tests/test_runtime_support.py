@@ -259,6 +259,50 @@ def test_configure_runtime_override_env_vars_sets_internal_runtime_path(tmp_path
     )
 
 
+def test_resolve_effective_config_path_uses_state_root_for_runtime_override(
+    tmp_path: Path, monkeypatch
+):
+    monkeypatch.delenv("VLLM_SR_STACK_NAME", raising=False)
+    state_root = tmp_path / "state"
+    monkeypatch.setenv("VLLM_SR_STATE_ROOT_DIR", str(state_root))
+
+    config_dir = tmp_path / "configs"
+    config_dir.mkdir()
+    config_path = config_dir / "config.yaml"
+    config_path.write_text(
+        yaml.safe_dump(
+            {
+                "version": "v0.3",
+                "listeners": [
+                    {
+                        "name": "http-8899",
+                        "address": "0.0.0.0",
+                        "port": 8899,
+                    }
+                ],
+            },
+            sort_keys=False,
+        )
+    )
+
+    effective_path = resolve_effective_config_path(
+        config_path=config_path,
+        algorithm=None,
+        setup_mode=False,
+        platform=None,
+    )
+
+    assert effective_path == state_root / ".vllm-sr" / "runtime-config.yaml"
+    assert effective_path.exists()
+    assert not (config_dir / ".vllm-sr" / "runtime-config.yaml").exists()
+
+    env_vars: dict[str, str] = {}
+    configure_runtime_override_env_vars(env_vars, config_path, effective_path)
+    assert (
+        env_vars["VLLM_SR_RUNTIME_CONFIG_PATH"] == "/app/.vllm-sr/runtime-config.yaml"
+    )
+
+
 def test_resolve_effective_config_path_injects_local_service_runtime_defaults(
     tmp_path: Path,
 ):

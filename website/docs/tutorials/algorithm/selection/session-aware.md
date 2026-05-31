@@ -48,6 +48,8 @@ routing:
           fallback_method: hybrid
           idle_timeout_seconds: 300
           tool_loop_hard_lock: true
+          context_portability_hard_lock: true
+          decision_drift_reset: true
           prefix_cache_weight: 0.20
           switch_history_weight: 0.04
           remaining_turn_prior_weight: 1.0
@@ -58,9 +60,11 @@ routing:
 ## Policy
 
 - Tool loops stay on the previous model while tool calls/results are still active.
+- Provider-state continuations such as Response API `previous_response_id` stay on the previous model because that context is not portable across backends.
+- Decision drift resets continuity penalties when a session moves to a different matched decision, so a new task direction can reselect without waiting for idle timeout.
 - Non-idle sessions pay a prefix-cache and handoff penalty before switching.
 - Idle sessions can reselect after `idle_timeout_seconds`.
-- Expensive/frontier models increase the prefix-cache penalty, so checkout churn is stricter for higher-cost candidates.
+- Expensive/frontier models increase the prefix-cache penalty according to input checkout cost (`prompt_per_1m - cached_input_per_1m`), so checkout churn is stricter when losing reusable prefix state is expensive.
 - Recent switch history increases the cost of another switch, preventing long-horizon agents from bouncing between models.
 - If lookup tables contain `remaining_turn_prior` for the matched category or decision, a sufficiently sampled prior lifts continuation mass for early turns and decays as the session advances.
 - Router replay stores `session_policy`, including base scores, adjusted scores, hard-lock reasons, cache warmth, remaining-turn prior source and sample count, handoff penalties, and net switch advantage.

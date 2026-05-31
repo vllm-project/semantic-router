@@ -3,6 +3,7 @@ package selection
 import (
 	"math"
 
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/selection/lookuptable"
 )
 
@@ -169,7 +170,7 @@ func (s *SessionAwareSelector) modelCostPressure(model string) float64 {
 	maxCost := 0.0
 	modelCost := 0.0
 	for name, params := range s.modelParams {
-		cost := params.Pricing.PromptPer1M + params.Pricing.CompletionPer1M
+		cost := cacheCheckoutCost(params)
 		if cost > maxCost {
 			maxCost = cost
 		}
@@ -184,6 +185,22 @@ func (s *SessionAwareSelector) modelCostPressure(model string) float64 {
 		return clamp01(params.QualityScore)
 	}
 	return 0.5
+}
+
+func cacheCheckoutCost(params config.ModelParams) float64 {
+	prompt := params.Pricing.PromptPer1M
+	if prompt <= 0 {
+		return 0
+	}
+	cached := params.Pricing.CachedInputPer1M
+	if cached < 0 {
+		cached = 0
+	}
+	delta := prompt - cached
+	if delta > 0 {
+		return delta
+	}
+	return prompt
 }
 
 func (s *SessionAwareSelector) lookupQualityGap(selCtx *SelectionContext, current, candidate string) float64 {

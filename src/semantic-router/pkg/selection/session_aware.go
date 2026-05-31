@@ -19,6 +19,8 @@ type SessionAwareConfig struct {
 	SwitchMargin                 float64
 	StayBias                     float64
 	ToolLoopHardLock             bool
+	ContextPortabilityHardLock   bool
+	DecisionDriftReset           bool
 	ToolLoopStayBias             float64
 	PrefixCacheWeight            float64
 	HandoffPenaltyWeight         float64
@@ -40,6 +42,8 @@ func DefaultSessionAwareConfig() *SessionAwareConfig {
 		SwitchMargin:                 0.05,
 		StayBias:                     0.10,
 		ToolLoopHardLock:             true,
+		ContextPortabilityHardLock:   true,
+		DecisionDriftReset:           true,
 		ToolLoopStayBias:             0.35,
 		PrefixCacheWeight:            0.20,
 		HandoffPenaltyWeight:         1.0,
@@ -158,33 +162,28 @@ func (s *SessionAwareSelector) Select(ctx context.Context, selCtx *SelectionCont
 	}
 	session := selCtx.AgenticSession
 	if session == nil {
-		trace := s.newPolicyTrace(selCtx, base, nil, "", false)
+		trace := s.newPolicyTrace(selCtx, base, nil, "", false, false)
 		trace.MissingSignals = append(trace.MissingSignals, "session_context")
 		return s.wrapFallback(base, "missing_session_context", trace), nil
 	}
 
 	current := strings.TrimSpace(session.PreviousModel)
-	trace := s.newPolicyTrace(selCtx, base, session, current, false)
-	if current == "" {
-		trace.MissingSignals = append(trace.MissingSignals, "previous_model")
-		return s.wrapFallback(base, "missing_previous_model", trace), nil
-	}
-	if !candidateSetContains(selCtx.CandidateModels, current) {
-		trace.MissingSignals = append(trace.MissingSignals, "previous_model_not_in_candidates")
-		return s.wrapFallback(base, "previous_model_not_in_candidates", trace), nil
+	driftDetected := s.decisionDriftDetected(selCtx, session)
+	trace := s.newPolicyTrace(selCtx, base, session, current, false, driftDetected)
+	if signal, reason := currentModelIssue(selCtx.CandidateModels, current); signal != "" {
+		trace.MissingSignals = append(trace.MissingSignals, signal)
+		return s.wrapFallback(base, reason, trace), nil
 	}
 
 	timeout := secondsDuration(s.config.IdleTimeoutSeconds)
 	idleExpired := session.idleExpired(timeout)
 	trace.IdleExpired = idleExpired
-	if session.ActiveToolLoop && s.config.ToolLoopHardLock {
-		return s.forceCurrent(selCtx, base, current, "hard_lock=tool_loop", trace), nil
-	}
-	if effectiveSessionTurns(session) < s.config.MinTurnsBeforeSwitch && !idleExpired {
-		return s.forceCurrent(selCtx, base, current, "hard_lock=min_turns", trace), nil
+	continuityReset := idleExpired || driftDetected
+	if reason := s.sessionHardLockReason(session, continuityReset); reason != "" {
+		return s.forceCurrent(selCtx, base, current, reason, trace), nil
 	}
 
-	adjusted, candidateTraces := s.adjustScores(selCtx, base, session, current, idleExpired)
+	adjusted, candidateTraces := s.adjustScores(selCtx, base, session, current, continuityReset)
 	bestRef, bestScore := bestCandidateByScore(selCtx.CandidateModels, adjusted)
 	if bestRef == nil {
 		trace.MissingSignals = append(trace.MissingSignals, "adjusted_scores")
@@ -217,6 +216,37 @@ func (s *SessionAwareSelector) Select(ctx context.Context, selCtx *SelectionCont
 	}, nil
 }
 
+func currentModelIssue(candidates []config.ModelRef, current string) (signal string, reason string) {
+	if current == "" {
+		return "previous_model", "missing_previous_model"
+	}
+	if !candidateSetContains(candidates, current) {
+		return "previous_model_not_in_candidates", "previous_model_not_in_candidates"
+	}
+	return "", ""
+}
+
+func (s *SessionAwareSelector) sessionHardLockReason(session *AgenticSessionContext, continuityReset bool) string {
+	if session.ActiveToolLoop && s.config.ToolLoopHardLock {
+		return "hard_lock=tool_loop"
+	}
+	if session.HasNonPortableContext && s.config.ContextPortabilityHardLock {
+		return contextPortabilityHardLockReason(session)
+	}
+	if effectiveSessionTurns(session) < s.config.MinTurnsBeforeSwitch && !continuityReset {
+		return "hard_lock=min_turns"
+	}
+	return ""
+}
+
+func contextPortabilityHardLockReason(session *AgenticSessionContext) string {
+	reason := "hard_lock=context_portability"
+	if session.NonPortableContextReason != "" {
+		reason += ":" + session.NonPortableContextReason
+	}
+	return reason
+}
+
 func effectiveSessionTurns(session *AgenticSessionContext) int {
 	if session == nil {
 		return 0
@@ -225,6 +255,16 @@ func effectiveSessionTurns(session *AgenticSessionContext) int {
 		return session.MemoryTurnCount
 	}
 	return session.TurnIndex
+}
+
+func (s *SessionAwareSelector) decisionDriftDetected(selCtx *SelectionContext, session *AgenticSessionContext) bool {
+	if !s.config.DecisionDriftReset || selCtx == nil || session == nil {
+		return false
+	}
+	if selCtx.DecisionName == "" || session.LastDecisionName == "" {
+		return false
+	}
+	return selCtx.DecisionName != session.LastDecisionName
 }
 
 func (s *SessionAwareSelector) selectFallback(ctx context.Context, selCtx *SelectionContext) (*SelectionResult, error) {
@@ -304,13 +344,15 @@ func (s *SessionAwareSelector) newPolicyTrace(
 	session *AgenticSessionContext,
 	current string,
 	idleExpired bool,
+	decisionDrift bool,
 ) *SessionPolicyTrace {
 	trace := &SessionPolicyTrace{
-		Algorithm:    "agentic_continuity_routing",
-		CurrentModel: current,
-		SwitchMargin: s.config.SwitchMargin,
-		StayBias:     s.config.StayBias,
-		IdleExpired:  idleExpired,
+		Algorithm:     "agentic_continuity_routing",
+		CurrentModel:  current,
+		SwitchMargin:  s.config.SwitchMargin,
+		StayBias:      s.config.StayBias,
+		IdleExpired:   idleExpired,
+		DecisionDrift: decisionDrift,
 	}
 	if base != nil {
 		trace.FallbackMethod = string(base.Method)
@@ -326,7 +368,10 @@ func (s *SessionAwareSelector) newPolicyTrace(
 	trace.TurnIndex = session.TurnIndex
 	trace.MemoryTurnCount = session.MemoryTurnCount
 	trace.SwitchCount = session.MemorySwitchCount
+	trace.LastDecisionName = session.LastDecisionName
 	trace.ActiveToolLoop = session.ActiveToolLoop
+	trace.HasNonPortableContext = session.HasNonPortableContext
+	trace.NonPortableContextReason = session.NonPortableContextReason
 	trace.IdleKnown = session.IdleKnown
 	trace.IdleForSeconds = session.IdleFor.Seconds()
 	continuation := s.continuationEvidence(selCtx, session)

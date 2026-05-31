@@ -15,6 +15,7 @@ func TestRouterSessionMemoryRecordsDecisionAndUsage(t *testing.T) {
 		SessionID:     "sess-agent",
 		UserID:        "user-a",
 		SelectedModel: "small",
+		DecisionName:  "coding",
 		TurnIndex:     0,
 		Policy: map[string]interface{}{
 			"decision_reason": "first_turn",
@@ -34,6 +35,7 @@ func TestRouterSessionMemoryRecordsDecisionAndUsage(t *testing.T) {
 		SessionID:     "sess-agent",
 		PreviousModel: "small",
 		SelectedModel: "frontier",
+		DecisionName:  "math",
 		TurnIndex:     1,
 		Timestamp:     base.Add(10 * time.Second),
 	})
@@ -53,6 +55,9 @@ func TestRouterSessionMemoryRecordsDecisionAndUsage(t *testing.T) {
 	}
 	if snapshot.LastDecisionReason != "first_turn" {
 		t.Fatalf("last decision reason = %q, want first_turn", snapshot.LastDecisionReason)
+	}
+	if snapshot.LastDecisionName != "math" {
+		t.Fatalf("last decision name = %q, want math", snapshot.LastDecisionName)
 	}
 	if snapshot.IdleFor != 10*time.Second {
 		t.Fatalf("idle = %s, want 10s", snapshot.IdleFor)
