@@ -2,7 +2,7 @@ export type SetupStep = 0 | 1 | 2;
 export type ProviderKind = "vllm" | "openai-compatible" | "anthropic";
 export type SetupValidationState = "idle" | "validating" | "valid" | "error";
 export type SetupActivationState = "idle" | "activating" | "error";
-export type SetupRoutingMode = "scratch" | "remote";
+export type SetupRoutingMode = "scratch" | "remote" | "preset";
 export type RemoteImportState = "idle" | "importing" | "imported" | "error";
 
 export interface ModelDraft {
@@ -330,6 +330,50 @@ export function buildSetupConfig(
   };
 
   return config;
+}
+
+export interface PresetModel {
+  name: string;
+  role: string;
+}
+
+export interface PresetInfo {
+  id: string;
+  label: string;
+  summary: string;
+  required_models: PresetModel[];
+  recipe_url: string;
+}
+
+export interface PresetDelta {
+  preset_id: string;
+  configured_models: string[];
+  missing_models: PresetModel[];
+  ready: boolean;
+  recipe_url: string;
+}
+
+export async function fetchPresets(): Promise<PresetInfo[]> {
+  const resp = await fetch("/api/setup/presets");
+  if (!resp.ok) {
+    throw new Error(`Failed to fetch presets: ${resp.status}`);
+  }
+  return resp.json();
+}
+
+export async function fetchPresetDelta(
+  presetId: string,
+  models: string[],
+): Promise<PresetDelta> {
+  const resp = await fetch("/api/setup/presets/delta", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ preset_id: presetId, models }),
+  });
+  if (!resp.ok) {
+    throw new Error(`Failed to fetch preset delta: ${resp.status}`);
+  }
+  return resp.json();
 }
 
 export function maskSecrets(config: Record<string, unknown> | null): string {
