@@ -104,19 +104,22 @@ func TestCreateLooperResponseIncludesTrackedHeaders(t *testing.T) {
 		AlgorithmType: "elo",
 	}
 	reqCtx := &RequestContext{
-		VSRMatchedKeywords:      []string{"python"},
-		VSRMatchedEmbeddings:    []string{"coding"},
-		VSRMatchedContext:       []string{"memory"},
-		VSRMatchedComplexity:    []string{"complexity:medium"},
-		VSRMatchedModality:      []string{"AR"},
-		VSRMatchedAuthz:         []string{"authz:team-a"},
-		VSRMatchedJailbreak:     []string{"jailbreak:block"},
-		VSRMatchedPII:           []string{"pii:email"},
-		VSRMatchedReask:         []string{"likely_dissatisfied"},
-		VSRMatchedProjection:    []string{"balance_reasoning"},
-		VSRContextTokenCount:    42,
-		VSRSelectedDecisionName: "coding",
-		VSRSelectedCategory:     "programming",
+		VSRMatchedKeywords:            []string{"python"},
+		VSRMatchedEmbeddings:          []string{"coding"},
+		VSRMatchedContext:             []string{"memory"},
+		VSRMatchedComplexity:          []string{"complexity:medium"},
+		VSRMatchedModality:            []string{"AR"},
+		VSRMatchedAuthz:               []string{"authz:team-a"},
+		VSRMatchedJailbreak:           []string{"jailbreak:block"},
+		VSRMatchedPII:                 []string{"pii:email"},
+		VSRMatchedReask:               []string{"likely_dissatisfied"},
+		VSRMatchedProjection:          []string{"balance_reasoning"},
+		VSRContextTokenCount:          42,
+		VSRSelectedModel:              "model-b",
+		VSRSelectedDecisionName:       "coding",
+		VSRSelectedDecisionConfidence: 0,
+		VSRSelectedCategory:           "programming",
+		RouterReplayID:                "replay-123",
 	}
 
 	response := (&OpenAIRouter{}).createLooperResponse(resp, reqCtx)
@@ -135,8 +138,11 @@ func TestCreateLooperResponseIncludesTrackedHeaders(t *testing.T) {
 	assert.Equal(t, "pii:email", headerMap[headers.VSRMatchedPII])
 	assert.Equal(t, "likely_dissatisfied", headerMap[headers.VSRMatchedReask])
 	assert.Equal(t, "balance_reasoning", headerMap[headers.VSRMatchedProjection])
+	assert.Equal(t, "model-b", headerMap[headers.VSRSelectedModel])
 	assert.Equal(t, "coding", headerMap[headers.VSRSelectedDecision])
+	assert.Equal(t, "0.0000", headerMap[headers.VSRSelectedConfidence])
 	assert.Equal(t, "programming", headerMap[headers.VSRSelectedCategory])
+	assert.Equal(t, "replay-123", headerMap[headers.RouterReplayID])
 	assert.Equal(t, "42", headerMap[headers.VSRContextTokenCount])
 }
 

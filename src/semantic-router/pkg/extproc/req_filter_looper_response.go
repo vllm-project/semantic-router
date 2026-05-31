@@ -36,7 +36,7 @@ func buildLooperResponseHeaders(
 ) []*core.HeaderValueOption {
 	setHeaders := baseLooperResponseHeaders(resp)
 	appendLooperSignalHeaders(&setHeaders, reqCtx)
-	appendLooperDecisionHeaders(&setHeaders, reqCtx)
+	appendLooperRoutingHeaders(&setHeaders, resp, reqCtx)
 	return setHeaders
 }
 
@@ -54,6 +54,9 @@ func appendLooperSignalHeaders(
 	setHeaders *[]*core.HeaderValueOption,
 	reqCtx *RequestContext,
 ) {
+	if reqCtx == nil {
+		return
+	}
 	appendJoinedHeader(setHeaders, headers.VSRMatchedKeywords, reqCtx.VSRMatchedKeywords)
 	appendJoinedHeader(setHeaders, headers.VSRMatchedEmbeddings, reqCtx.VSRMatchedEmbeddings)
 	appendJoinedHeader(setHeaders, headers.VSRMatchedDomains, reqCtx.VSRMatchedDomains)
@@ -84,12 +87,33 @@ func appendLooperSignalHeaders(
 	}
 }
 
-func appendLooperDecisionHeaders(
+func appendLooperRoutingHeaders(
 	setHeaders *[]*core.HeaderValueOption,
+	resp *looper.Response,
 	reqCtx *RequestContext,
 ) {
+	selectedModel := ""
+	if resp != nil {
+		selectedModel = resp.Model
+	}
+	if reqCtx == nil {
+		appendOptionalHeader(setHeaders, headers.VSRSelectedModel, selectedModel)
+		return
+	}
+	if reqCtx.VSRSelectedModel != "" {
+		selectedModel = reqCtx.VSRSelectedModel
+	}
+	appendOptionalHeader(setHeaders, headers.VSRSelectedModel, selectedModel)
 	appendOptionalHeader(setHeaders, headers.VSRSelectedDecision, reqCtx.VSRSelectedDecisionName)
+	if reqCtx.VSRSelectedDecisionName != "" && reqCtx.VSRSelectedDecisionConfidence >= 0 {
+		appendOptionalHeader(
+			setHeaders,
+			headers.VSRSelectedConfidence,
+			fmt.Sprintf("%.4f", reqCtx.VSRSelectedDecisionConfidence),
+		)
+	}
 	appendOptionalHeader(setHeaders, headers.VSRSelectedCategory, reqCtx.VSRSelectedCategory)
+	appendOptionalHeader(setHeaders, headers.RouterReplayID, reqCtx.RouterReplayID)
 }
 
 func appendJoinedHeader(
