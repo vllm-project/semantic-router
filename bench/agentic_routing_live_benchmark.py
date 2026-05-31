@@ -4,7 +4,9 @@
 The deterministic policy benchmark in ``agentic_routing_experiment.py`` checks
 control-plane invariants. This script measures a running router stack: request
 success, latency, selected-model continuity, cached-token evidence, and
-session-aware violation counters under repeatable agentic workloads.
+session-aware violation counters under repeatable agentic workloads. It can
+also run the same workload against a direct backend to quantify routing
+overhead with identical session and prompt schedules.
 """
 
 from __future__ import annotations
@@ -57,9 +59,21 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--temperature", type=float, default=0.0)
     parser.add_argument("--timeout", type=float, default=60.0)
     parser.add_argument("--label", default="live-router")
+    parser.add_argument("--turn-delay-seconds", type=float, default=0.0)
+    parser.add_argument("--idle-pause-seconds", type=float, default=0.0)
     parser.add_argument("--include-previous-response-id", action="store_true")
     parser.add_argument("--metrics-url", default="")
+    parser.add_argument("--baseline-base-url", default="")
+    parser.add_argument("--baseline-model", default="")
+    parser.add_argument("--baseline-label", default="direct-backend")
+    parser.add_argument("--baseline-metrics-url", default="")
+    parser.add_argument("--baseline-include-previous-response-id", action="store_true")
     parser.add_argument("--extra-header", action="append", default=[])
+    parser.add_argument("--min-success-rate", type=float, default=0.0)
+    parser.add_argument("--max-p95-latency-ms", type=float, default=0.0)
+    parser.add_argument("--max-tool-loop-violations", type=int, default=-1)
+    parser.add_argument("--max-context-portability-violations", type=int, default=-1)
+    parser.add_argument("--max-overhead-p95-ms", type=float, default=0.0)
     parser.add_argument("--dry-run", action="store_true")
     parser.add_argument("--output-dir", type=Path, default=None)
     return parser.parse_args()
@@ -249,6 +263,7 @@ def run_session(
 
     for turn in range(args.turns):
         phase = phase_for_turn(args.scenario, turn)
+        pause_before_turn(args, phase, turn)
         plan = TurnPlan(
             session_id=session_id,
             turn=turn,
@@ -268,6 +283,16 @@ def run_session(
             previous_selected_model = row["selected_model"]
         previous_response_id = response_id(result)
     return rows
+
+
+def pause_before_turn(args: argparse.Namespace, phase: str, turn: int) -> None:
+    if turn <= 0:
+        return
+    pause = args.turn_delay_seconds
+    if phase == "idle_boundary" and args.idle_pause_seconds > 0:
+        pause = args.idle_pause_seconds
+    if pause > 0:
+        time.sleep(pause)
 
 
 def dry_run_response(plan: TurnPlan) -> dict[str, Any]:
@@ -425,6 +450,7 @@ def summarize(
             row["selected_model"] for row in rows if row["selected_model"]
         ),
         "phase_counts": counts(row["phase"] for row in rows),
+        "error_counts": counts(row["error"] for row in rows if row["error"]),
         "metrics_excerpt": metrics_text[:4000],
     }
 
@@ -496,6 +522,13 @@ def write_outputs(
     (output_dir / "summary.md").write_text(render_markdown(summary))
 
 
+def write_comparison(comparison: dict[str, Any], output_dir: Path) -> None:
+    (output_dir / "comparison.json").write_text(
+        json.dumps(comparison, indent=2, sort_keys=True) + "\n"
+    )
+    (output_dir / "comparison.md").write_text(render_comparison_markdown(comparison))
+
+
 def write_csv(rows: list[dict[str, Any]], path: Path) -> None:
     if not rows:
         return
@@ -525,23 +558,175 @@ def render_markdown(summary: dict[str, Any]) -> str:
     )
 
 
-def main() -> int:
-    args = parse_args()
-    output_dir = args.output_dir or default_output_dir()
+def render_comparison_markdown(comparison: dict[str, Any]) -> str:
+    overhead = comparison["router_overhead_ms"]
+    ratios = comparison["router_vs_baseline_ratio"]
+    return "\n".join(
+        [
+            "# Router vs Direct Backend Comparison",
+            "",
+            f"- router label: {comparison['router_label']}",
+            f"- baseline label: {comparison['baseline_label']}",
+            f"- success rate delta: {comparison['success_rate_delta']}",
+            f"- mean overhead ms: {overhead['mean']}",
+            f"- p95 overhead ms: {overhead['p95']}",
+            f"- p99 overhead ms: {overhead['p99']}",
+            f"- throughput ratio: {ratios['requests_per_second']}",
+            "",
+        ]
+    )
+
+
+def namespace_with(args: argparse.Namespace, **overrides: Any) -> argparse.Namespace:
+    values = vars(args).copy()
+    values.update(overrides)
+    return argparse.Namespace(**values)
+
+
+def run_once(args: argparse.Namespace) -> tuple[list[dict[str, Any]], dict[str, Any]]:
     started = time.perf_counter()
     rows = run_benchmark(args)
     elapsed = time.perf_counter() - started
     metrics_text = fetch_metrics(args.metrics_url, args.timeout)
-    summary = summarize(rows, metrics_text, elapsed)
+    return rows, summarize(rows, metrics_text, elapsed)
+
+
+def compare_summaries(
+    router_summary: dict[str, Any], baseline_summary: dict[str, Any]
+) -> dict[str, Any]:
+    return {
+        "router_label": router_summary.get("label", "router"),
+        "baseline_label": baseline_summary.get("label", "baseline"),
+        "requests": {
+            "router": router_summary["requests"],
+            "baseline": baseline_summary["requests"],
+        },
+        "success_rate_delta": rounded_delta(
+            router_summary["success_rate"], baseline_summary["success_rate"]
+        ),
+        "router_overhead_ms": {
+            key: rounded_delta(
+                router_summary["latency_ms"].get(key),
+                baseline_summary["latency_ms"].get(key),
+            )
+            for key in ("mean", "p50", "p95", "p99", "max")
+        },
+        "router_vs_baseline_ratio": {
+            "requests_per_second": rounded_ratio(
+                router_summary["requests_per_second"],
+                baseline_summary["requests_per_second"],
+            ),
+            "prompt_tokens": rounded_ratio(
+                router_summary["prompt_tokens"], baseline_summary["prompt_tokens"]
+            ),
+            "completion_tokens": rounded_ratio(
+                router_summary["completion_tokens"],
+                baseline_summary["completion_tokens"],
+            ),
+        },
+        "router_violations": {
+            "tool_loop": router_summary["tool_loop_switch_violations"],
+            "context_portability": router_summary["context_portability_violations"],
+        },
+        "baseline_status_counts": baseline_summary["status_counts"],
+        "router_status_counts": router_summary["status_counts"],
+    }
+
+
+def rounded_delta(left: Any, right: Any) -> float | None:
+    if left is None or right is None:
+        return None
+    return round(float(left) - float(right), 3)
+
+
+def rounded_ratio(left: Any, right: Any) -> float | None:
+    if left is None or right in (None, 0):
+        return None
+    return round(float(left) / float(right), 4)
+
+
+def validate_summary(
+    args: argparse.Namespace,
+    summary: dict[str, Any],
+    comparison: dict[str, Any] | None,
+) -> list[str]:
+    failures: list[str] = []
+    if args.min_success_rate and summary["success_rate"] < args.min_success_rate:
+        failures.append(
+            f"success_rate {summary['success_rate']} < {args.min_success_rate}"
+        )
+    p95 = summary["latency_ms"]["p95"]
+    if args.max_p95_latency_ms and p95 is not None and p95 > args.max_p95_latency_ms:
+        failures.append(f"p95_latency_ms {p95} > {args.max_p95_latency_ms}")
+    tool_violations = summary["tool_loop_switch_violations"]
+    if (
+        args.max_tool_loop_violations >= 0
+        and tool_violations > args.max_tool_loop_violations
+    ):
+        failures.append(
+            f"tool_loop_switch_violations {tool_violations} > "
+            f"{args.max_tool_loop_violations}"
+        )
+    context_violations = summary["context_portability_violations"]
+    if (
+        args.max_context_portability_violations >= 0
+        and context_violations > args.max_context_portability_violations
+    ):
+        failures.append(
+            f"context_portability_violations {context_violations} > "
+            f"{args.max_context_portability_violations}"
+        )
+    if comparison and args.max_overhead_p95_ms:
+        overhead_p95 = comparison["router_overhead_ms"]["p95"]
+        if overhead_p95 is not None and overhead_p95 > args.max_overhead_p95_ms:
+            failures.append(
+                f"router_p95_overhead_ms {overhead_p95} > "
+                f"{args.max_overhead_p95_ms}"
+            )
+    return failures
+
+
+def main() -> int:
+    args = parse_args()
+    output_dir = args.output_dir or default_output_dir()
+    rows, summary = run_once(args)
+    summary["label"] = args.label
     write_outputs(rows, summary, output_dir)
+    comparison = None
+    if args.baseline_base_url:
+        baseline_args = namespace_with(
+            args,
+            base_url=args.baseline_base_url,
+            model=args.baseline_model or args.model,
+            label=args.baseline_label,
+            metrics_url=args.baseline_metrics_url,
+            include_previous_response_id=args.baseline_include_previous_response_id,
+        )
+        baseline_rows, baseline_summary = run_once(baseline_args)
+        baseline_summary["label"] = baseline_args.label
+        baseline_output_dir = output_dir / "baseline"
+        write_outputs(baseline_rows, baseline_summary, baseline_output_dir)
+        comparison = compare_summaries(summary, baseline_summary)
+        write_comparison(comparison, output_dir)
+
+    validation_failures = validate_summary(args, summary, comparison)
+    if validation_failures:
+        (output_dir / "validation_failures.json").write_text(
+            json.dumps(validation_failures, indent=2) + "\n"
+        )
     print(
         json.dumps(
-            {"output_dir": str(output_dir), "summary": summary},
+            {
+                "output_dir": str(output_dir),
+                "summary": summary,
+                "comparison": comparison,
+                "validation_failures": validation_failures,
+            },
             indent=2,
             sort_keys=True,
         )
     )
-    return 0
+    return 1 if validation_failures else 0
 
 
 if __name__ == "__main__":

@@ -8,6 +8,8 @@ from types import SimpleNamespace
 from typing import ClassVar
 
 EXPECTED_REQUESTS = 4
+EXPECTED_P95_OVERHEAD_MS = 4.0
+EXPECTED_THROUGHPUT_RATIO = 0.8
 
 
 def load_live_module():
@@ -72,9 +74,21 @@ def make_args(base_url, tmp_path, **overrides):
         "temperature": 0.0,
         "timeout": 5.0,
         "label": "test",
+        "turn_delay_seconds": 0.0,
+        "idle_pause_seconds": 0.0,
         "include_previous_response_id": False,
         "metrics_url": "",
+        "baseline_base_url": "",
+        "baseline_model": "",
+        "baseline_label": "direct-backend",
+        "baseline_metrics_url": "",
+        "baseline_include_previous_response_id": False,
         "extra_header": [],
+        "min_success_rate": 0.0,
+        "max_p95_latency_ms": 0.0,
+        "max_tool_loop_violations": -1,
+        "max_context_portability_violations": -1,
+        "max_overhead_p95_ms": 0.0,
         "dry_run": False,
         "output_dir": tmp_path,
     }
@@ -148,3 +162,81 @@ def test_previous_response_id_marks_context_portability_violation(tmp_path):
     assert rows[1]["previous_response_id_sent"]
     assert rows[1]["context_portability_violation"]
     assert summary["context_portability_violations"] == 1
+
+
+def test_router_vs_baseline_comparison_and_thresholds(tmp_path):
+    live = load_live_module()
+    router = {
+        "label": "router",
+        "requests": 4,
+        "success_rate": 1.0,
+        "requests_per_second": 8.0,
+        "latency_ms": {
+            "mean": 12.0,
+            "p50": 10.0,
+            "p95": 18.0,
+            "p99": 20.0,
+            "max": 21.0,
+        },
+        "prompt_tokens": 400,
+        "completion_tokens": 40,
+        "tool_loop_switch_violations": 0,
+        "context_portability_violations": 0,
+        "status_counts": {"200": 4},
+    }
+    baseline = {
+        "label": "direct",
+        "requests": 4,
+        "success_rate": 1.0,
+        "requests_per_second": 10.0,
+        "latency_ms": {"mean": 10.0, "p50": 9.0, "p95": 14.0, "p99": 16.0, "max": 17.0},
+        "prompt_tokens": 400,
+        "completion_tokens": 40,
+        "status_counts": {"200": 4},
+    }
+
+    comparison = live.compare_summaries(router, baseline)
+    args = make_args(
+        "http://unused/v1",
+        tmp_path,
+        min_success_rate=1.0,
+        max_tool_loop_violations=0,
+        max_context_portability_violations=0,
+        max_overhead_p95_ms=5.0,
+    )
+
+    assert comparison["router_overhead_ms"]["p95"] == EXPECTED_P95_OVERHEAD_MS
+    assert (
+        comparison["router_vs_baseline_ratio"]["requests_per_second"]
+        == EXPECTED_THROUGHPUT_RATIO
+    )
+    assert live.validate_summary(args, router, comparison) == []
+
+    strict_args = make_args(
+        "http://unused/v1",
+        tmp_path,
+        max_overhead_p95_ms=3.0,
+    )
+    failures = live.validate_summary(strict_args, router, comparison)
+    assert failures == ["router_p95_overhead_ms 4.0 > 3.0"]
+
+
+def test_baseline_namespace_drops_previous_response_id_by_default(tmp_path):
+    live = load_live_module()
+    args = make_args(
+        "http://router/v1",
+        tmp_path,
+        include_previous_response_id=True,
+        baseline_base_url="http://direct/v1",
+    )
+    baseline_args = live.namespace_with(
+        args,
+        base_url=args.baseline_base_url,
+        model=args.baseline_model or args.model,
+        label=args.baseline_label,
+        metrics_url=args.baseline_metrics_url,
+        include_previous_response_id=args.baseline_include_previous_response_id,
+    )
+
+    assert baseline_args.base_url == "http://direct/v1"
+    assert baseline_args.include_previous_response_id is False

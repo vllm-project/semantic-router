@@ -39,13 +39,36 @@ python3 bench/agentic_routing_live_benchmark.py \
   --concurrency 2
 ```
 
+For GA evidence, run the same schedule against the router and a direct backend
+in one invocation so the output includes both router metrics and an overhead
+comparison:
+
+```bash
+python3 bench/agentic_routing_live_benchmark.py \
+  --base-url http://127.0.0.1:8899/v1 \
+  --baseline-base-url http://127.0.0.1:8090/v1 \
+  --baseline-model qwen/qwen3.5-rocm \
+  --metrics-url http://127.0.0.1:9279/metrics \
+  --model auto \
+  --scenario idle-heavy \
+  --sessions 16 \
+  --turns 24 \
+  --concurrency 4 \
+  --idle-pause-seconds 65 \
+  --min-success-rate 1.0 \
+  --max-tool-loop-violations 0 \
+  --max-context-portability-violations 0
+```
+
 The output is written under `.agent-harness/experiments/live-agentic-routing/`
 by default and includes per-turn JSONL/CSV plus a summary with success rate,
 latency percentiles, selected-model switches, tool-loop switch violations,
 context-portability violations, token usage, cached-token ratio, and VSR
-decision headers. Run the same workload against different router configs or
-direct backends with distinct `--label` values to compare non-session-aware,
-baseline agentic, and GA-candidate policies.
+decision headers. When `--baseline-base-url` is set, the benchmark also writes
+`baseline/summary.json`, `comparison.json`, and `comparison.md` with router
+latency overhead, throughput ratio, and status-count deltas. Threshold flags
+fail the run when success, latency, overhead, or session-continuity invariants
+fall outside the configured GA bounds.
 
 ### Basic Usage
 
