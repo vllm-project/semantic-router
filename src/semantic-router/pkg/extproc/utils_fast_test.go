@@ -654,4 +654,25 @@ func TestExtractContentFast_ConversationFacts(t *testing.T) {
 	assert.Equal(t, 3, r.AssistantToolCallCount, "three tool_calls total (2+1)")
 	assert.Equal(t, []string{"read_file", "list_dir", "write_file"}, r.AssistantToolNames, "tool call names should preserve conversation order")
 	assert.Equal(t, 3, r.ToolResultCount, "three tool results")
+	assert.False(t, r.LastUserAfterToolResult, "last message is not a user continuation after tool output")
+}
+
+func TestExtractContentFast_LastUserAfterToolResult(t *testing.T) {
+	body := []byte(`{
+		"model": "auto",
+		"messages": [
+			{"role": "user", "content": "Find the error."},
+			{"role": "assistant", "content": null, "tool_calls": [
+				{"id": "c1", "type": "function", "function": {"name": "read_log", "arguments": "{}"}}
+			]},
+			{"role": "tool", "tool_call_id": "c1", "content": "TypeError: int + str"},
+			{"role": "user", "content": "Now give the fix."}
+		]
+	}`)
+	r, err := extractContentFast(body)
+	require.NoError(t, err)
+
+	assert.Equal(t, "user", r.LastMessageRole)
+	assert.False(t, r.LastMessageToolResult)
+	assert.True(t, r.LastUserAfterToolResult)
 }

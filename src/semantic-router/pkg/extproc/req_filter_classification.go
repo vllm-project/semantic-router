@@ -5,6 +5,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/classification"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/selection"
@@ -266,9 +267,7 @@ func (r *OpenAIRouter) buildAgenticSessionContext(
 	}
 	cacheWarmth, cacheWarmthOK := r.agenticCacheWarmth(reqCtx, previousModel, snapshot, hasMemory, now)
 	facts := reqCtx.VSRConversationFacts
-	activeToolLoop := facts.LastMessageToolResult ||
-		facts.LastMessageRole == "tool" ||
-		facts.AssistantToolCallCount > facts.ToolResultCount
+	activeToolLoop := conversationFactsIndicateActiveToolLoop(facts)
 	phase := selection.AgenticPhaseUserTurn
 	if activeToolLoop {
 		phase = selection.AgenticPhaseToolLoop
@@ -301,6 +300,13 @@ func (r *OpenAIRouter) buildAgenticSessionContext(
 		ToolDefinitionCnt:   facts.ToolDefinitionCount,
 		ModelContextWindows: r.modelContextWindows(modelRefs),
 	}
+}
+
+func conversationFactsIndicateActiveToolLoop(facts classification.ConversationFacts) bool {
+	return facts.LastMessageToolResult ||
+		facts.LastMessageRole == "tool" ||
+		facts.LastUserAfterToolResult ||
+		facts.AssistantToolCallCount > facts.ToolResultCount
 }
 
 func (r *OpenAIRouter) agenticCacheWarmth(
