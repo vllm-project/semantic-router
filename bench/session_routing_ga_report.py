@@ -19,6 +19,15 @@ FULL_BRANCH_IMAGE_KINDS = {
     "branch-image-benchmark",
     "full-branch-image-benchmark",
 }
+REQUIRED_FULL_BRANCH_IMAGE_CHECKS = (
+    "diagnostic_ok",
+    "live_matrix_ok",
+    "failure_recovery_ok",
+    "agent_task_ok",
+    "cache_token_probe_ok",
+    "mounted_binary_absent",
+    "branch_image_benchmark_ok",
+)
 MOUNTED_BINARY_MARKERS = ("mounted-binary", "mounted_binary", "mounted binary")
 PASSING_STATUS = "passed"
 BLOCKING_STATUS = "blocked"
@@ -761,6 +770,9 @@ def evaluate_branch_image_summary(args: argparse.Namespace) -> dict[str, Any]:
     for key in ["chat_completion_ok", "diagnostic_headers_ok"]:
         if key in checks and checks[key] is not True:
             failures.append(f"{key} is not true")
+    for key in REQUIRED_FULL_BRANCH_IMAGE_CHECKS:
+        if checks.get(key) is not True:
+            failures.append(f"branch-image check {key} is not true")
     for header in data.get("missing_diagnostic_headers") or []:
         failures.append(f"missing diagnostic header: {header}")
     for header in data.get("invalid_diagnostic_headers") or []:
