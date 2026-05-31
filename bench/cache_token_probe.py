@@ -15,6 +15,11 @@ from typing import Any
 
 HTTP_OK = 200
 HTTP_REDIRECT_START = 300
+CACHE_REPORTING_ORDER = {
+    "missing": 0,
+    "reported_zero": 1,
+    "positive": 2,
+}
 
 
 def parse_args() -> argparse.Namespace:
@@ -33,6 +38,19 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--baseline-base-url", default="")
     parser.add_argument("--baseline-model", default="")
     parser.add_argument("--baseline-label", default="direct-backend")
+    parser.add_argument("--min-success-rate", type=float, default=1.0)
+    parser.add_argument(
+        "--min-cached-token-reporting",
+        choices=tuple(CACHE_REPORTING_ORDER.keys()),
+        default="missing",
+        help=(
+            "Minimum cached-token reporting state required for each measured "
+            "path. Use 'reported_zero' to require the field and 'positive' to "
+            "require a positive cached-token observation."
+        ),
+    )
+    parser.add_argument("--min-cached-token-field-rate", type=float, default=0.0)
+    parser.add_argument("--min-cached-prompt-ratio", type=float, default=0.0)
     parser.add_argument("--output-dir", type=Path, default=None)
     return parser.parse_args()
 
@@ -209,15 +227,15 @@ def summarize(
 ) -> dict[str, Any]:
     prompt_tokens = sum(int(row["prompt_tokens"]) for row in rows)
     cached = sum(int(row["cached_tokens"]) for row in rows)
+    successes = sum(1 for row in rows if row["success"])
+    field_present = sum(
+        1 for row in rows if row["success"] and row["cached_token_field_present"]
+    )
     return {
         "label": label,
         "requests": len(rows),
-        "successes": sum(1 for row in rows if row["success"]),
-        "success_rate": (
-            round(sum(1 for row in rows if row["success"]) / len(rows), 4)
-            if rows
-            else 0.0
-        ),
+        "successes": successes,
+        "success_rate": (round(successes / len(rows), 4) if rows else 0.0),
         "status_counts": counts(str(row["status"]) for row in rows),
         "latency_ms": latency_summary(
             [float(row["latency_ms"]) for row in rows if row["success"]]
@@ -229,8 +247,9 @@ def summarize(
             round(cached / prompt_tokens, 6) if prompt_tokens else 0.0
         ),
         "cached_token_reporting": cache_reporting_state(rows),
-        "cached_token_field_present": sum(
-            1 for row in rows if row["cached_token_field_present"]
+        "cached_token_field_present": field_present,
+        "cached_token_field_rate": (
+            round(field_present / successes, 4) if successes else 0.0
         ),
         "errors": counts(row["error"] for row in rows if row["error"]),
         "requests_per_second": (
@@ -239,10 +258,45 @@ def summarize(
     }
 
 
+def validate_summary(
+    args: argparse.Namespace, summary: dict[str, Any], label: str
+) -> list[str]:
+    failures: list[str] = []
+    if args.min_success_rate and summary["success_rate"] < args.min_success_rate:
+        failures.append(
+            f"{label}: success_rate {summary['success_rate']} < {args.min_success_rate}"
+        )
+    required_state = args.min_cached_token_reporting
+    actual_state = str(summary["cached_token_reporting"])
+    if CACHE_REPORTING_ORDER[actual_state] < CACHE_REPORTING_ORDER[required_state]:
+        failures.append(
+            f"{label}: cached_token_reporting {actual_state} < {required_state}"
+        )
+    if (
+        args.min_cached_token_field_rate
+        and summary["cached_token_field_rate"] < args.min_cached_token_field_rate
+    ):
+        failures.append(
+            f"{label}: cached_token_field_rate {summary['cached_token_field_rate']} "
+            f"< {args.min_cached_token_field_rate}"
+        )
+    if (
+        args.min_cached_prompt_ratio
+        and summary["cached_prompt_ratio"] < args.min_cached_prompt_ratio
+    ):
+        failures.append(
+            f"{label}: cached_prompt_ratio {summary['cached_prompt_ratio']} "
+            f"< {args.min_cached_prompt_ratio}"
+        )
+    return failures
+
+
 def cache_reporting_state(rows: list[dict[str, Any]]) -> str:
     if not rows:
         return "missing"
-    present = [row for row in rows if row["cached_token_field_present"]]
+    present = [
+        row for row in rows if row["success"] and row["cached_token_field_present"]
+    ]
     if not present:
         return "missing"
     if any(int(row["cached_tokens"]) > 0 for row in present):
@@ -320,8 +374,12 @@ def main() -> int:
         "summary": summary,
         "baseline_summary": baseline_summary,
     }
+    failures = validate_summary(args, summary, args.label)
+    if baseline_summary is not None:
+        failures.extend(validate_summary(args, baseline_summary, args.baseline_label))
+    result["validation_failures"] = failures
     print(json.dumps(result, indent=2, sort_keys=True))
-    return 0 if summary["successes"] == summary["requests"] else 1
+    return 0 if not failures else 1
 
 
 if __name__ == "__main__":

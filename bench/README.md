@@ -142,13 +142,18 @@ python3 bench/cache_token_probe.py \
   --session-id cache-probe-router \
   --repeats 8 \
   --baseline-base-url http://127.0.0.1:8090/v1 \
-  --baseline-model qwen/qwen3.5-rocm
+  --baseline-model qwen/qwen3.5-rocm \
+  --min-cached-token-reporting reported_zero
 ```
 
 The output is written under `.agent-harness/experiments/cache-token-probe/` by
 default. Treat `missing` as an observability limitation: the backend response
 does not include the cached-token field, so router-level cache accounting cannot
-claim a positive cache-hit ratio from that run.
+claim a positive cache-hit ratio from that run. For GA cache-accounting evidence,
+raise the gate to `--min-cached-token-reporting positive` and pair it with
+`--min-cached-token-field-rate 1.0` plus a deployment-specific
+`--min-cached-prompt-ratio` threshold. When a direct-backend baseline is included,
+the same cache-reporting gates apply to both paths.
 
 ### Live Agent Task Benchmark
 
