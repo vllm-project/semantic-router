@@ -288,15 +288,18 @@ func TestSessionAwarePrefixPenaltyScalesWithModelCost(t *testing.T) {
 
 func TestSessionAwareRemainingTurnPriorRaisesContinuationMass(t *testing.T) {
 	selector := NewSessionAwareSelector(&SessionAwareConfig{
-		FallbackMethod:         MethodStatic,
-		MinTurnsBeforeSwitch:   0,
-		SwitchMargin:           0,
-		StayBias:               0,
-		PrefixCacheWeight:      0.2,
-		HandoffPenaltyWeight:   0,
-		DefaultHandoffPenalty:  0,
-		QualityGapMultiplier:   1,
-		MaxCacheCostMultiplier: 1,
+		FallbackMethod:               MethodStatic,
+		MinTurnsBeforeSwitch:         0,
+		SwitchMargin:                 0,
+		StayBias:                     0,
+		PrefixCacheWeight:            0.2,
+		HandoffPenaltyWeight:         0,
+		DefaultHandoffPenalty:        0,
+		QualityGapMultiplier:         1,
+		MaxCacheCostMultiplier:       1,
+		RemainingTurnPriorWeight:     1,
+		RemainingTurnPriorHorizon:    8,
+		MinRemainingTurnPriorSamples: 3,
 	})
 	selector.SetFallbackSelector(stubSessionFallback{
 		result: &SelectionResult{
@@ -310,7 +313,11 @@ func TestSessionAwareRemainingTurnPriorRaisesContinuationMass(t *testing.T) {
 		},
 	})
 	table := lookuptable.NewMemoryStorage()
-	if err := table.Set(lookuptable.RemainingTurnPriorKey("coding"), lookuptable.Entry{Value: 6}); err != nil {
+	if err := table.Set(lookuptable.RemainingTurnPriorKey("coding"), lookuptable.Entry{
+		Value:       6,
+		Source:      lookuptable.SourceReplayDerived,
+		SampleCount: 10,
+	}); err != nil {
 		t.Fatalf("set remaining turn prior: %v", err)
 	}
 	selector.SetLookupTable(table)
@@ -345,6 +352,137 @@ func TestSessionAwareRemainingTurnPriorRaisesContinuationMass(t *testing.T) {
 	}
 	if result.SessionPolicy.ContinuationMass < 0.74 {
 		t.Fatalf("expected prior to lift continuation mass, got %.4f", result.SessionPolicy.ContinuationMass)
+	}
+	if result.SessionPolicy.RemainingTurnPriorSource != lookuptable.SourceReplayDerived ||
+		result.SessionPolicy.RemainingTurnPriorSampleCount != 10 {
+		t.Fatalf("expected replay-derived prior provenance in trace, got %#v", result.SessionPolicy)
+	}
+	mapped := result.SessionPolicy.ToMap()
+	if mapped["remaining_turn_prior_sample_count"] != 10 {
+		t.Fatalf("expected mapped sample count, got %#v", mapped["remaining_turn_prior_sample_count"])
+	}
+}
+
+func TestSessionAwareRemainingTurnPriorRejectsLowReplaySampleCount(t *testing.T) {
+	selector := NewSessionAwareSelector(&SessionAwareConfig{
+		FallbackMethod:               MethodStatic,
+		MinTurnsBeforeSwitch:         0,
+		SwitchMargin:                 0,
+		StayBias:                     0,
+		PrefixCacheWeight:            0.2,
+		HandoffPenaltyWeight:         0,
+		DefaultHandoffPenalty:        0,
+		QualityGapMultiplier:         1,
+		MaxCacheCostMultiplier:       1,
+		RemainingTurnPriorWeight:     1,
+		RemainingTurnPriorHorizon:    8,
+		MinRemainingTurnPriorSamples: 3,
+	})
+	selector.SetFallbackSelector(stubSessionFallback{
+		result: &SelectionResult{
+			SelectedModel: "frontier",
+			Score:         0.55,
+			Method:        MethodHybrid,
+			AllScores: map[string]float64{
+				"current":  0.50,
+				"frontier": 0.55,
+			},
+		},
+	})
+	table := lookuptable.NewMemoryStorage()
+	if err := table.Set(lookuptable.RemainingTurnPriorKey("coding"), lookuptable.Entry{
+		Value:       6,
+		Source:      lookuptable.SourceReplayDerived,
+		SampleCount: 1,
+	}); err != nil {
+		t.Fatalf("set remaining turn prior: %v", err)
+	}
+	selector.SetLookupTable(table)
+
+	result, err := selector.Select(context.Background(), &SelectionContext{
+		CategoryName:    "coding",
+		CandidateModels: []config.ModelRef{{Model: "current"}, {Model: "frontier"}},
+		AgenticSession: &AgenticSessionContext{
+			ID:            "sess-low-sample-prior",
+			TurnIndex:     0,
+			PreviousModel: "current",
+			HistoryTokens: 0,
+			ContextTokens: 8192,
+			CacheWarmth:   1,
+			CacheWarmthOK: true,
+		},
+	})
+	if err != nil {
+		t.Fatalf("Select returned error: %v", err)
+	}
+	if result.SelectedModel != "frontier" {
+		t.Fatalf("expected low-sample replay prior to be ignored, got %q", result.SelectedModel)
+	}
+	if result.SessionPolicy.RemainingTurnPriorOK {
+		t.Fatalf("expected low-sample prior to be rejected, got %#v", result.SessionPolicy)
+	}
+	if result.SessionPolicy.RemainingTurnPriorRejected != "low_sample_count" {
+		t.Fatalf("expected low-sample rejection reason, got %#v", result.SessionPolicy)
+	}
+}
+
+func TestSessionAwareRemainingTurnPriorTrustsConfigOverrideWithoutSamples(t *testing.T) {
+	selector := NewSessionAwareSelector(&SessionAwareConfig{
+		FallbackMethod:               MethodStatic,
+		MinTurnsBeforeSwitch:         0,
+		SwitchMargin:                 0,
+		StayBias:                     0,
+		PrefixCacheWeight:            0.2,
+		HandoffPenaltyWeight:         0,
+		DefaultHandoffPenalty:        0,
+		QualityGapMultiplier:         1,
+		MaxCacheCostMultiplier:       1,
+		RemainingTurnPriorWeight:     1,
+		RemainingTurnPriorHorizon:    8,
+		MinRemainingTurnPriorSamples: 3,
+	})
+	selector.SetFallbackSelector(stubSessionFallback{
+		result: &SelectionResult{
+			SelectedModel: "frontier",
+			Score:         0.55,
+			Method:        MethodHybrid,
+			AllScores: map[string]float64{
+				"current":  0.50,
+				"frontier": 0.55,
+			},
+		},
+	})
+	table := lookuptable.NewMemoryStorage()
+	if err := table.Set(lookuptable.RemainingTurnPriorKey("coding"), lookuptable.Entry{
+		Value:  6,
+		Source: lookuptable.SourceConfigOverride,
+	}); err != nil {
+		t.Fatalf("set remaining turn prior: %v", err)
+	}
+	selector.SetLookupTable(table)
+
+	result, err := selector.Select(context.Background(), &SelectionContext{
+		CategoryName:    "coding",
+		CandidateModels: []config.ModelRef{{Model: "current"}, {Model: "frontier"}},
+		AgenticSession: &AgenticSessionContext{
+			ID:            "sess-config-prior",
+			TurnIndex:     0,
+			PreviousModel: "current",
+			HistoryTokens: 0,
+			ContextTokens: 8192,
+			CacheWarmth:   1,
+			CacheWarmthOK: true,
+		},
+	})
+	if err != nil {
+		t.Fatalf("Select returned error: %v", err)
+	}
+	if result.SelectedModel != "current" {
+		t.Fatalf("expected config override prior to preserve current model, got %q", result.SelectedModel)
+	}
+	if !result.SessionPolicy.RemainingTurnPriorOK ||
+		result.SessionPolicy.RemainingTurnPriorSource != lookuptable.SourceConfigOverride {
+		t.Fatalf("expected config override prior in trace, got %#v", result.SessionPolicy)
 	}
 }
 

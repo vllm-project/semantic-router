@@ -249,6 +249,9 @@ class SessionAwareSelectionConfig(BaseModel):
     quality_gap_multiplier: float | None = Field(default=1.0, ge=0)
     max_cache_cost_multiplier: float | None = Field(default=2.5, ge=0)
     switch_history_weight: float | None = Field(default=0.04, ge=0)
+    remaining_turn_prior_weight: float | None = Field(default=1.0, ge=0)
+    remaining_turn_prior_horizon: int | None = Field(default=8, ge=0)
+    min_remaining_turn_prior_samples: int | None = Field(default=3, ge=0)
 
 
 # =============================================================================

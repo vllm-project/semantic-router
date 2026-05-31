@@ -1,6 +1,10 @@
 package selection
 
-import "math"
+import (
+	"math"
+
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/selection/lookuptable"
+)
 
 func (s *SessionAwareSelector) adjustScores(
 	selCtx *SelectionContext,
@@ -198,47 +202,84 @@ func (s *SessionAwareSelector) lookupQualityGap(selCtx *SelectionContext, curren
 }
 
 type continuationEvidence struct {
-	Mass                   float64
-	RemainingTurnPrior     float64
-	RemainingTurnPriorOK   bool
-	RemainingTurnsEstimate float64
+	Mass                          float64
+	RemainingTurnPrior            float64
+	RemainingTurnPriorOK          bool
+	RemainingTurnsEstimate        float64
+	RemainingTurnPriorSource      string
+	RemainingTurnPriorSampleCount int
+	RemainingTurnPriorRejected    string
 }
 
 func (s *SessionAwareSelector) continuationEvidence(selCtx *SelectionContext, session *AgenticSessionContext) continuationEvidence {
 	base := sessionContinuationMass(session)
-	prior, ok := s.lookupRemainingTurnPrior(selCtx)
-	if !ok {
-		return continuationEvidence{Mass: base}
+	prior := s.lookupRemainingTurnPrior(selCtx)
+	evidence := continuationEvidence{
+		Mass:                          base,
+		RemainingTurnPrior:            prior.Value,
+		RemainingTurnPriorSource:      prior.Source,
+		RemainingTurnPriorSampleCount: prior.SampleCount,
+		RemainingTurnPriorRejected:    prior.RejectedReason,
 	}
-	remaining := prior - float64(effectiveSessionTurns(session))
+	if !prior.OK || s.config.RemainingTurnPriorWeight <= 0 {
+		return evidence
+	}
+	remaining := prior.Value - float64(effectiveSessionTurns(session))
 	if remaining < 0 {
 		remaining = 0
 	}
-	priorMass := clampF(remaining/8.0, 0, 1)
-	return continuationEvidence{
-		Mass:                   math.Max(base, priorMass),
-		RemainingTurnPrior:     prior,
-		RemainingTurnPriorOK:   true,
-		RemainingTurnsEstimate: remaining,
-	}
+	horizon := math.Max(float64(s.config.RemainingTurnPriorHorizon), 1)
+	priorMass := clampF(remaining/horizon, 0, 1)
+	priorLiftWeight := clamp01(s.config.RemainingTurnPriorWeight)
+	evidence.Mass = clamp01(base + math.Max(0, priorMass-base)*priorLiftWeight)
+	evidence.RemainingTurnPriorOK = true
+	evidence.RemainingTurnsEstimate = remaining
+	return evidence
 }
 
-func (s *SessionAwareSelector) lookupRemainingTurnPrior(selCtx *SelectionContext) (float64, bool) {
+type remainingTurnPriorEvidence struct {
+	Value          float64
+	Source         string
+	SampleCount    int
+	OK             bool
+	RejectedReason string
+}
+
+func (s *SessionAwareSelector) lookupRemainingTurnPrior(selCtx *SelectionContext) remainingTurnPriorEvidence {
 	if s.lookupTable == nil || selCtx == nil {
-		return 0, false
+		return remainingTurnPriorEvidence{}
 	}
+	var rejected remainingTurnPriorEvidence
 	for _, family := range []string{selCtx.CategoryName, selCtx.DecisionName} {
 		if family == "" {
 			continue
 		}
-		if prior, ok := s.lookupTable.RemainingTurnPrior(family); ok {
-			if prior < 0 {
-				prior = 0
-			}
-			return prior, true
+		entry, ok := s.lookupTable.Get(lookuptable.RemainingTurnPriorKey(family))
+		if !ok {
+			continue
 		}
+		value := entry.Value
+		if value < 0 {
+			value = 0
+		}
+		evidence := remainingTurnPriorEvidence{
+			Value:       value,
+			Source:      entry.Source,
+			SampleCount: entry.SampleCount,
+			OK:          true,
+		}
+		if entry.Source == lookuptable.SourceReplayDerived &&
+			entry.SampleCount < s.config.MinRemainingTurnPriorSamples {
+			evidence.OK = false
+			evidence.RejectedReason = "low_sample_count"
+			if rejected.RejectedReason == "" {
+				rejected = evidence
+			}
+			continue
+		}
+		return evidence
 	}
-	return 0, false
+	return rejected
 }
 
 func (s *SessionAwareSelector) lookupHandoffPenalty(current, candidate string) float64 {

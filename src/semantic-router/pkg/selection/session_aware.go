@@ -13,37 +13,43 @@ import (
 
 // SessionAwareConfig configures agentic session-aware model selection.
 type SessionAwareConfig struct {
-	FallbackMethod         SelectionMethod
-	IdleTimeoutSeconds     int
-	MinTurnsBeforeSwitch   int
-	SwitchMargin           float64
-	StayBias               float64
-	ToolLoopHardLock       bool
-	ToolLoopStayBias       float64
-	PrefixCacheWeight      float64
-	HandoffPenaltyWeight   float64
-	DefaultHandoffPenalty  float64
-	QualityGapMultiplier   float64
-	MaxCacheCostMultiplier float64
-	SwitchHistoryWeight    float64
+	FallbackMethod               SelectionMethod
+	IdleTimeoutSeconds           int
+	MinTurnsBeforeSwitch         int
+	SwitchMargin                 float64
+	StayBias                     float64
+	ToolLoopHardLock             bool
+	ToolLoopStayBias             float64
+	PrefixCacheWeight            float64
+	HandoffPenaltyWeight         float64
+	DefaultHandoffPenalty        float64
+	QualityGapMultiplier         float64
+	MaxCacheCostMultiplier       float64
+	SwitchHistoryWeight          float64
+	RemainingTurnPriorWeight     float64
+	RemainingTurnPriorHorizon    int
+	MinRemainingTurnPriorSamples int
 }
 
 // DefaultSessionAwareConfig returns the production-oriented default policy.
 func DefaultSessionAwareConfig() *SessionAwareConfig {
 	return &SessionAwareConfig{
-		FallbackMethod:         MethodHybrid,
-		IdleTimeoutSeconds:     300,
-		MinTurnsBeforeSwitch:   1,
-		SwitchMargin:           0.05,
-		StayBias:               0.10,
-		ToolLoopHardLock:       true,
-		ToolLoopStayBias:       0.35,
-		PrefixCacheWeight:      0.20,
-		HandoffPenaltyWeight:   1.0,
-		DefaultHandoffPenalty:  0.05,
-		QualityGapMultiplier:   1.0,
-		MaxCacheCostMultiplier: 2.5,
-		SwitchHistoryWeight:    0.04,
+		FallbackMethod:               MethodHybrid,
+		IdleTimeoutSeconds:           300,
+		MinTurnsBeforeSwitch:         1,
+		SwitchMargin:                 0.05,
+		StayBias:                     0.10,
+		ToolLoopHardLock:             true,
+		ToolLoopStayBias:             0.35,
+		PrefixCacheWeight:            0.20,
+		HandoffPenaltyWeight:         1.0,
+		DefaultHandoffPenalty:        0.05,
+		QualityGapMultiplier:         1.0,
+		MaxCacheCostMultiplier:       2.5,
+		SwitchHistoryWeight:          0.04,
+		RemainingTurnPriorWeight:     1.0,
+		RemainingTurnPriorHorizon:    8,
+		MinRemainingTurnPriorSamples: 3,
 	}
 }
 
@@ -81,6 +87,9 @@ func normalizeSessionAwareConfig(cfg SessionAwareConfig) *SessionAwareConfig {
 	cfg.QualityGapMultiplier = defaultPositiveFloat(cfg.QualityGapMultiplier, defaults.QualityGapMultiplier)
 	cfg.MaxCacheCostMultiplier = defaultPositiveFloat(cfg.MaxCacheCostMultiplier, defaults.MaxCacheCostMultiplier)
 	cfg.SwitchHistoryWeight = defaultNonNegativeFloat(cfg.SwitchHistoryWeight, defaults.SwitchHistoryWeight)
+	cfg.RemainingTurnPriorWeight = defaultNonNegativeFloat(cfg.RemainingTurnPriorWeight, defaults.RemainingTurnPriorWeight)
+	cfg.RemainingTurnPriorHorizon = defaultPositiveInt(cfg.RemainingTurnPriorHorizon, defaults.RemainingTurnPriorHorizon)
+	cfg.MinRemainingTurnPriorSamples = defaultNonNegativeInt(cfg.MinRemainingTurnPriorSamples, defaults.MinRemainingTurnPriorSamples)
 	return &cfg
 }
 
@@ -93,6 +102,13 @@ func defaultSessionAwareFallback(method, fallback SelectionMethod) SelectionMeth
 
 func defaultNonNegativeInt(value, fallback int) int {
 	if value < 0 {
+		return fallback
+	}
+	return value
+}
+
+func defaultPositiveInt(value, fallback int) int {
+	if value <= 0 {
 		return fallback
 	}
 	return value
@@ -318,6 +334,9 @@ func (s *SessionAwareSelector) newPolicyTrace(
 	trace.RemainingTurnPrior = continuation.RemainingTurnPrior
 	trace.RemainingTurnPriorOK = continuation.RemainingTurnPriorOK
 	trace.RemainingTurnsEstimate = continuation.RemainingTurnsEstimate
+	trace.RemainingTurnPriorSource = continuation.RemainingTurnPriorSource
+	trace.RemainingTurnPriorSampleCount = continuation.RemainingTurnPriorSampleCount
+	trace.RemainingTurnPriorRejected = continuation.RemainingTurnPriorRejected
 	trace.CacheWarmth = sessionCacheWarmth(session, idleExpired)
 	trace.CacheWarmthOK = session.CacheWarmthOK
 	if session.MemoryPresent && trace.MemoryTurnCount == 0 {
