@@ -503,7 +503,10 @@ def cost_pressure(model: ModelProfile) -> float:
 def cache_warmth_estimate(
     model: ModelProfile, phase: str, history_tokens: int, switched: bool = False
 ) -> float:
-    base = min(0.72, history_tokens / 48000)
+    # Mirror the live selector's conservative default when exact cache warmth is
+    # unknown: early sessions still have future-continuation risk even before a
+    # long prefix has accumulated.
+    base = max(0.5, min(0.72, history_tokens / 48000))
     if phase == "tool_loop":
         base += 0.12
     if phase == "provider_state":

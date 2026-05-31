@@ -26,6 +26,16 @@ VSR_HEADERS = (
     "x-vsr-context-token-count",
     "x-vsr-matched-conversation",
 )
+CORE_ROUTER_HEADERS = (
+    "x-vsr-selected-model",
+    "x-vsr-selected-decision",
+    "x-vsr-replay-id",
+)
+DIAGNOSTIC_ROUTER_HEADERS = (
+    *CORE_ROUTER_HEADERS,
+    "x-vsr-selected-confidence",
+    "x-vsr-context-token-count",
+)
 
 
 @dataclass(frozen=True)
@@ -73,6 +83,14 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
         help=(
             "Require this x-vsr response header on every successful router request. "
             "Can be repeated."
+        ),
+    )
+    parser.add_argument(
+        "--require-router-diagnostics",
+        action="store_true",
+        help=(
+            "Require selected model, decision, replay id, selected confidence, "
+            "and context-token-count headers on every successful router request."
         ),
     )
     parser.add_argument("--min-success-rate", type=float, default=0.0)
@@ -725,7 +743,9 @@ def dry_response(task: TaskSpec, turn_index: int) -> dict[str, Any]:
         "headers": {
             "x-vsr-selected-model": "dry-model",
             "x-vsr-selected-decision": "dry-run",
+            "x-vsr-selected-confidence": "0.0000",
             "x-vsr-replay-id": f"dry-replay-{task.name}-{turn_index}",
+            "x-vsr-context-token-count": "42",
         },
         "json": {
             "id": f"dry_{task.name}_{turn_index}",
@@ -957,6 +977,7 @@ def summarize(
             row.get("error", "") for row in rows if row.get("error")
         ),
         "missing_router_header_counts": missing_router_header_counts(rows),
+        "invalid_router_header_counts": invalid_router_header_counts(rows),
         "failed_tasks": sorted(
             {
                 task_key(row): row["missing_terms"]
@@ -980,6 +1001,42 @@ def missing_router_header_counts(rows: list[dict[str, Any]]) -> dict[str, int]:
         header: sum(1 for row in rows if row["success"] and not row.get(header))
         for header in VSR_HEADERS
     }
+
+
+def invalid_router_header_counts(rows: list[dict[str, Any]]) -> dict[str, int]:
+    return {
+        header: sum(
+            1
+            for row in rows
+            if row["success"]
+            and row.get(header)
+            and not valid_router_header_value(header, str(row[header]))
+        )
+        for header in VSR_HEADERS
+    }
+
+
+def valid_router_header_value(header: str, value: str) -> bool:
+    if header == "x-vsr-selected-confidence":
+        try:
+            parsed = float(value)
+        except ValueError:
+            return False
+        return 0.0 <= parsed <= 1.0
+    if header == "x-vsr-context-token-count":
+        try:
+            parsed = int(value)
+        except ValueError:
+            return False
+        return parsed >= 0
+    return bool(value.strip())
+
+
+def required_router_headers(args: argparse.Namespace) -> list[str]:
+    required = list(args.require_router_header)
+    if args.require_router_diagnostics:
+        required.extend(DIAGNOSTIC_ROUTER_HEADERS)
+    return list(dict.fromkeys(required))
 
 
 def validate_summary(args: argparse.Namespace, summary: dict[str, Any]) -> list[str]:
@@ -1017,11 +1074,17 @@ def validate_summary(args: argparse.Namespace, summary: dict[str, Any]) -> list[
             f"{args.max_context_portability_violations}"
         )
     missing_headers = summary.get("missing_router_header_counts", {})
-    for header in args.require_router_header:
+    invalid_headers = summary.get("invalid_router_header_counts", {})
+    for header in required_router_headers(args):
         missing = int(missing_headers.get(header, 0))
         if missing:
             failures.append(
                 f"missing_router_header {header}: {missing} successful requests"
+            )
+        invalid = int(invalid_headers.get(header, 0))
+        if invalid:
+            failures.append(
+                f"invalid_router_header {header}: {invalid} successful requests"
             )
     return failures
 
@@ -1096,6 +1159,7 @@ def render_markdown(summary: dict[str, Any]) -> str:
             f"- tool-loop switch violations: {summary['tool_loop_switch_violations']}",
             f"- context portability violations: {summary['context_portability_violations']}",
             f"- missing router headers: {summary['missing_router_header_counts']}",
+            f"- invalid router headers: {summary['invalid_router_header_counts']}",
             f"- cached prompt ratio: {summary['cached_prompt_ratio']}",
             "",
         ]

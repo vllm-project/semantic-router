@@ -88,6 +88,7 @@ def make_args(base_url, tmp_path, **overrides):
         "baseline_include_previous_response_id": False,
         "extra_header": [],
         "require_router_header": [],
+        "require_router_diagnostics": False,
         "min_success_rate": 0.0,
         "max_p95_latency_ms": 0.0,
         "max_tool_loop_violations": -1,
@@ -144,6 +145,60 @@ def test_live_benchmark_records_router_headers_and_violations(tmp_path):
     )
     assert live.validate_summary(replay_args, summary, None) == [
         "missing_router_header x-vsr-replay-id: 4 successful requests"
+    ]
+
+
+def test_dry_run_can_gate_router_diagnostics(tmp_path):
+    live = load_live_module()
+    args = make_args(
+        "http://unused/v1",
+        tmp_path,
+        dry_run=True,
+        require_router_diagnostics=True,
+    )
+
+    rows = live.run_benchmark(args)
+    summary = live.summarize(rows)
+
+    assert summary["missing_router_header_counts"]["x-vsr-selected-confidence"] == 0
+    assert summary["missing_router_header_counts"]["x-vsr-context-token-count"] == 0
+    assert summary["invalid_router_header_counts"]["x-vsr-selected-confidence"] == 0
+    assert summary["invalid_router_header_counts"]["x-vsr-context-token-count"] == 0
+    assert live.validate_summary(args, summary, None) == []
+
+
+def test_router_diagnostics_validate_header_values(tmp_path):
+    live = load_live_module()
+    args = make_args(
+        "http://unused/v1",
+        tmp_path,
+        require_router_diagnostics=True,
+    )
+    row = live.row_from_result(
+        args,
+        live.TurnPlan("s", 0, "user_turn", "prompt", ""),
+        {
+            "status": 200,
+            "latency_ms": 1.0,
+            "headers": {
+                "x-vsr-selected-model": "small",
+                "x-vsr-selected-decision": "agentic",
+                "x-vsr-selected-confidence": "1.5",
+                "x-vsr-replay-id": "replay-1",
+                "x-vsr-context-token-count": "-1",
+            },
+            "json": {"id": "resp_0", "model": "small", "usage": {}},
+            "error": "",
+        },
+        "",
+    )
+    summary = live.summarize([row])
+
+    assert summary["invalid_router_header_counts"]["x-vsr-selected-confidence"] == 1
+    assert summary["invalid_router_header_counts"]["x-vsr-context-token-count"] == 1
+    assert live.validate_summary(args, summary, None) == [
+        "invalid_router_header x-vsr-selected-confidence: 1 successful requests",
+        "invalid_router_header x-vsr-context-token-count: 1 successful requests",
     ]
 
 
