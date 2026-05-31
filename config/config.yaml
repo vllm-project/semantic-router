@@ -25,6 +25,7 @@ providers:
       pricing:
         currency: USD
         prompt_per_1m: 0.18
+        cached_input_per_1m: 0.04
         completion_per_1m: 0.42
       external_model_ids:
         openai: qwen3-8b
@@ -54,6 +55,7 @@ providers:
       pricing:
         currency: USD
         prompt_per_1m: 1.2
+        cached_input_per_1m: 0.3
         completion_per_1m: 3.4
       external_model_ids:
         internal: qwen3-32b
@@ -68,6 +70,7 @@ providers:
       pricing:
         currency: USD
         prompt_per_1m: 2.5
+        cached_input_per_1m: 0.5
         completion_per_1m: 4.0
       external_model_ids:
         openai: llava-omni-preview

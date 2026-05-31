@@ -20,6 +20,7 @@ providers:
           weight: 1
       name: qwen/qwen3.5-rocm
       pricing:
+        cached_input_per_1m: 0
         completion_per_1m: 0
         currency: USD
         prompt_per_1m: 0
@@ -32,6 +33,7 @@ providers:
           weight: 1
       name: google/gemini-2.5-flash-lite
       pricing:
+        cached_input_per_1m: 0.002
         completion_per_1m: 0.04
         currency: USD
         prompt_per_1m: 0.01
@@ -44,6 +46,7 @@ providers:
           weight: 1
       name: google/gemini-3.1-pro
       pricing:
+        cached_input_per_1m: 0.12
         completion_per_1m: 1.92
         currency: USD
         prompt_per_1m: 0.48
@@ -56,6 +59,7 @@ providers:
           weight: 1
       name: openai/gpt5.4
       pricing:
+        cached_input_per_1m: 0.3
         completion_per_1m: 4.8
         currency: USD
         prompt_per_1m: 1.2
@@ -68,6 +72,7 @@ providers:
           weight: 1
       name: anthropic/claude-opus-4.6
       pricing:
+        cached_input_per_1m: 0.45
         completion_per_1m: 7.2
         currency: USD
         prompt_per_1m: 1.8
