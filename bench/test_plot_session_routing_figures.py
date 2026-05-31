@@ -55,3 +55,71 @@ def test_ordered_keeps_publication_policy_order():
         "acr-initial",
         "acr-full",
     ]
+
+
+def test_agent_task_readiness_metrics_count_stale_summary():
+    plot = load_plot_module()
+    summary = {
+        "requests": 96,
+        "task_count": 6,
+        "task_instances": 18,
+        "missing_router_header_counts": {
+            "x-vsr-selected-model": 0,
+            "x-vsr-selected-decision": 0,
+            "x-vsr-replay-id": 0,
+            "x-vsr-selected-confidence": 96,
+            "x-vsr-context-token-count": 96,
+        },
+        "invalid_router_header_counts": {},
+    }
+
+    rows = plot.agent_task_readiness_metrics(
+        summary,
+        list(plot.DEFAULT_AGENT_TASK_HEADERS),
+        plot.DEFAULT_MIN_AGENT_TASK_REQUESTS,
+        plot.DEFAULT_MIN_AGENT_TASK_COUNT,
+        plot.DEFAULT_MIN_AGENT_TASK_INSTANCES,
+    )
+
+    assert rows == [
+        {
+            "label": "requests",
+            "actual": 96,
+            "target": 147,
+            "text": "96/147",
+        },
+        {
+            "label": "task types",
+            "actual": 6,
+            "target": 9,
+            "text": "6/9",
+        },
+        {
+            "label": "scored instances",
+            "actual": 18,
+            "target": 27,
+            "text": "18/27",
+        },
+        {
+            "label": "required diagnostics",
+            "actual": 3,
+            "target": 5,
+            "text": "3/5 header types present",
+        },
+    ]
+
+
+def test_agent_task_readiness_metrics_treat_missing_header_map_as_no_evidence():
+    plot = load_plot_module()
+    summary = {"requests": 147, "task_count": 9, "task_instances": 27}
+
+    rows = plot.agent_task_readiness_metrics(
+        summary,
+        list(plot.DEFAULT_AGENT_TASK_HEADERS),
+        plot.DEFAULT_MIN_AGENT_TASK_REQUESTS,
+        plot.DEFAULT_MIN_AGENT_TASK_COUNT,
+        plot.DEFAULT_MIN_AGENT_TASK_INSTANCES,
+    )
+
+    assert rows[-1]["label"] == "required diagnostics"
+    assert rows[-1]["actual"] == 0

@@ -47,6 +47,16 @@ LABELS = {
     "single-turn": "single-turn",
     "sticky-session": "sticky",
 }
+DEFAULT_MIN_AGENT_TASK_REQUESTS = 147
+DEFAULT_MIN_AGENT_TASK_COUNT = 9
+DEFAULT_MIN_AGENT_TASK_INSTANCES = 27
+DEFAULT_AGENT_TASK_HEADERS = (
+    "x-vsr-selected-model",
+    "x-vsr-selected-decision",
+    "x-vsr-replay-id",
+    "x-vsr-selected-confidence",
+    "x-vsr-context-token-count",
+)
 
 
 def parse_args() -> argparse.Namespace:
@@ -69,6 +79,26 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--long-agent-task-summary", type=Path)
     parser.add_argument("--long-agent-task-comparison", type=Path)
     parser.add_argument("--ga-readiness", type=Path)
+    parser.add_argument(
+        "--min-agent-task-requests",
+        type=int,
+        default=DEFAULT_MIN_AGENT_TASK_REQUESTS,
+    )
+    parser.add_argument(
+        "--min-agent-task-count",
+        type=int,
+        default=DEFAULT_MIN_AGENT_TASK_COUNT,
+    )
+    parser.add_argument(
+        "--min-agent-task-instances",
+        type=int,
+        default=DEFAULT_MIN_AGENT_TASK_INSTANCES,
+    )
+    parser.add_argument(
+        "--required-agent-task-header",
+        action="append",
+        default=list(DEFAULT_AGENT_TASK_HEADERS),
+    )
     parser.add_argument("--output-dir", required=True, type=Path)
     parser.add_argument("--dpi", type=int, default=200)
     return parser.parse_args()
@@ -626,6 +656,136 @@ def render_agent_task(
     plt.close(fig)
 
 
+def agent_task_readiness_metrics(
+    summary: dict[str, Any],
+    required_headers: list[str],
+    min_requests: int,
+    min_task_count: int,
+    min_task_instances: int,
+) -> list[dict[str, Any]]:
+    missing_counts = summary.get("missing_router_header_counts")
+    invalid_counts = summary.get("invalid_router_header_counts")
+    missing = missing_counts if isinstance(missing_counts, dict) else None
+    invalid = invalid_counts if isinstance(invalid_counts, dict) else None
+    present_headers = 0
+    if missing is not None or invalid is not None:
+        present_headers = sum(
+            1
+            for header in required_headers
+            if int((missing or {}).get(header, 0) or 0) == 0
+            and int((invalid or {}).get(header, 0) or 0) == 0
+        )
+
+    task_count = int(summary.get("task_count", summary.get("tasks", 0)) or 0)
+    instances = int(summary.get("task_instances") or 0)
+    requests = int(summary.get("requests") or 0)
+    return [
+        {
+            "label": "requests",
+            "actual": requests,
+            "target": min_requests,
+            "text": f"{requests}/{min_requests}",
+        },
+        {
+            "label": "task types",
+            "actual": task_count,
+            "target": min_task_count,
+            "text": f"{task_count}/{min_task_count}",
+        },
+        {
+            "label": "scored instances",
+            "actual": instances,
+            "target": min_task_instances,
+            "text": f"{instances}/{min_task_instances}",
+        },
+        {
+            "label": "required diagnostics",
+            "actual": present_headers,
+            "target": len(required_headers),
+            "text": f"{present_headers}/{len(required_headers)} header types present",
+        },
+    ]
+
+
+def render_agent_task_readiness(
+    summary: dict[str, Any] | None,
+    output: Path,
+    dpi: int,
+    required_headers: list[str],
+    min_requests: int,
+    min_task_count: int,
+    min_task_instances: int,
+) -> None:
+    if not summary:
+        return
+    plt, _ = load_pyplot()
+    apply_research_style(plt)
+    rows = agent_task_readiness_metrics(
+        summary,
+        required_headers,
+        min_requests,
+        min_task_count,
+        min_task_instances,
+    )
+    names = [str(row["label"]) for row in rows]
+    coverage = [
+        (
+            0.0
+            if int(row["target"]) <= 0
+            else min(float(row["actual"]) / float(row["target"]) * 100.0, 100.0)
+        )
+        for row in rows
+    ]
+    colors = ["#d88b5b", "#d88b5b", "#d88b5b", "#c66f68"]
+
+    fig, ax = plt.subplots(figsize=(9.6, 4.7))
+    fig.suptitle(
+        "Agent-task GA gate rejects stale AMD evidence",
+        x=0.03,
+        ha="left",
+        fontsize=15,
+        weight="bold",
+    )
+    fig.text(
+        0.03,
+        0.90,
+        "Light bars show the expanded gate; colored bars show current evidence.",
+        color="#64748b",
+        fontsize=10,
+    )
+    y_positions = list(range(len(rows)))
+    ax.barh(y_positions, [100] * len(rows), color="#eef3f7", height=0.50)
+    ax.barh(y_positions, coverage, color=colors, height=0.50)
+    ax.set_yticks(y_positions, names)
+    ax.set_xlim(0, 122)
+    ax.set_xlabel("coverage of required expanded-suite evidence")
+    ax.grid(axis="x")
+    for idx, row in enumerate(rows):
+        ax.text(104, idx, str(row["text"]), va="center", color="#334155", fontsize=10)
+    ax.text(
+        0,
+        4.00,
+        (
+            f"Required before GA: {min_requests} requests, {min_task_count} task "
+            f"types, {min_task_instances} scored instances, and full diagnostics."
+        ),
+        color="#64748b",
+        fontsize=9,
+    )
+    ax.text(
+        0,
+        4.32,
+        "Expanded dry-runs prove suite shape; AMD serving evidence must be rerun.",
+        color="#64748b",
+        fontsize=9,
+    )
+    ax.set_ylim(4.55, -0.65)
+    ax.spines[["top", "right", "left"]].set_visible(False)
+    fig.tight_layout(rect=[0, 0, 1, 0.86])
+    save(fig, output, dpi)
+    plt.close(fig)
+
+
 def render_ga_readiness(data: dict[str, Any] | None, output: Path, dpi: int) -> None:
     if not data:
         return
@@ -709,17 +869,30 @@ def main() -> None:
         args.output_dir / "amd-repeat-failure-matrix.png",
         args.dpi,
     )
+    agent_task_summary = read_json(args.agent_task_summary)
+    agent_task_comparison = read_json(args.agent_task_comparison)
+    long_agent_task_summary = read_json(args.long_agent_task_summary)
+    long_agent_task_comparison = read_json(args.long_agent_task_comparison)
     render_agent_task(
-        read_json(args.agent_task_summary),
-        read_json(args.agent_task_comparison),
+        agent_task_summary,
+        agent_task_comparison,
         args.output_dir / "amd-agent-task-results.png",
         args.dpi,
     )
     render_agent_task(
-        read_json(args.long_agent_task_summary),
-        read_json(args.long_agent_task_comparison),
+        long_agent_task_summary,
+        long_agent_task_comparison,
         args.output_dir / "amd-long-agent-task-results.png",
         args.dpi,
+    )
+    render_agent_task_readiness(
+        long_agent_task_summary or agent_task_summary,
+        args.output_dir / "agent-task-readiness.png",
+        args.dpi,
+        list(dict.fromkeys(args.required_agent_task_header)),
+        args.min_agent_task_requests,
+        args.min_agent_task_count,
+        args.min_agent_task_instances,
     )
     render_ga_readiness(
         read_json(args.ga_readiness),

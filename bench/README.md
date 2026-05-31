@@ -259,9 +259,12 @@ python3 bench/plot_session_routing_figures.py \
 ```
 
 The script writes `experiment-matrix.png`, `policy-ablation.png`, and
-`seed-stability.png`. Use image-generated bitmap assets for explanatory blog or
-paper schematics; do not hand-draw SVG architecture diagrams for this workstream.
-Measured result charts should come from this CSV-to-plot path.
+`seed-stability.png`. When agent-task summaries are provided, it also writes
+`agent-task-readiness.png` from the same GA thresholds used by the report:
+147 requests, 9 task types, 27 scored instances, and the required router
+diagnostic headers. Use image-generated bitmap assets for explanatory blog or
+paper schematics; do not hand-draw SVG architecture diagrams for this
+workstream. Measured result charts should come from this CSV-to-plot path.
 
 ```bash
 python3 bench/session_routing_ga_report.py \
