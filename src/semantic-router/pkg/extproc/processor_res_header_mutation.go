@@ -50,6 +50,13 @@ func (builder *responseHeaderMutationBuilder) addFloat(key string, value float64
 	builder.addString(key, fmt.Sprintf("%.4f", value))
 }
 
+func (builder *responseHeaderMutationBuilder) addNonNegativeFloat(key string, value float64) {
+	if value < 0 {
+		return
+	}
+	builder.addString(key, fmt.Sprintf("%.4f", value))
+}
+
 func (builder *responseHeaderMutationBuilder) addInt(key string, value int) {
 	if value <= 0 {
 		return
@@ -82,7 +89,9 @@ func buildResponseHeaderMutation(
 	builder := newResponseHeaderMutationBuilder()
 	builder.addString(headers.VSRSelectedCategory, ctx.VSRSelectedCategory)
 	builder.addString(headers.VSRSelectedDecision, ctx.VSRSelectedDecisionName)
-	builder.addFloat(headers.VSRSelectedConfidence, ctx.VSRSelectedDecisionConfidence)
+	if ctx.VSRSelectedDecisionName != "" {
+		builder.addNonNegativeFloat(headers.VSRSelectedConfidence, ctx.VSRSelectedDecisionConfidence)
+	}
 	if ctx.ModalityClassification != nil && ctx.ModalityClassification.Modality != "" {
 		modalityValue := ctx.ModalityClassification.Modality
 		if ctx.ModalityClassification.Method != "" {

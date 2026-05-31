@@ -99,6 +99,25 @@ func TestApplySignalResultsToContext_PropagatesSignalState(t *testing.T) {
 	assert.Equal(t, "AR", ctx.ModalityClassification.Modality)
 }
 
+func TestEnsureContextTokenCount_FillsFallbackWhenContextSignalSkipped(t *testing.T) {
+	ctx := &RequestContext{}
+	ensureContextTokenCount(ctx, signalEvaluationInput{
+		allMessagesText: "system prompt assistant state continue the task",
+		evaluationText:  "continue the task",
+	})
+
+	assert.Positive(t, ctx.VSRContextTokenCount)
+}
+
+func TestEnsureContextTokenCount_PreservesSignalTokenCount(t *testing.T) {
+	ctx := &RequestContext{VSRContextTokenCount: 2048}
+	ensureContextTokenCount(ctx, signalEvaluationInput{
+		allMessagesText: "short",
+	})
+
+	assert.Equal(t, 2048, ctx.VSRContextTokenCount)
+}
+
 func TestCollectMatchedSignalRules_PreservesFamilyOrder(t *testing.T) {
 	signals := &classification.SignalResults{
 		MatchedKeywordRules:      []string{"keyword:a"},
