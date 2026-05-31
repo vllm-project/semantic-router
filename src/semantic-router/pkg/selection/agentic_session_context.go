@@ -6,9 +6,10 @@ import "time"
 type AgenticPhase string
 
 const (
-	AgenticPhaseUnknown  AgenticPhase = ""
-	AgenticPhaseUserTurn AgenticPhase = "user_turn"
-	AgenticPhaseToolLoop AgenticPhase = "tool_loop"
+	AgenticPhaseUnknown       AgenticPhase = ""
+	AgenticPhaseUserTurn      AgenticPhase = "user_turn"
+	AgenticPhaseToolLoop      AgenticPhase = "tool_loop"
+	AgenticPhaseProviderState AgenticPhase = "provider_state"
 )
 
 // AgenticSessionContext is the selector-owned view of a multi-turn session.

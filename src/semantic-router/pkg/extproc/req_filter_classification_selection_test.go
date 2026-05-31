@@ -286,6 +286,9 @@ func TestBuildSelectionContextMarksPreviousResponseIDAsNonPortableContext(t *tes
 	if got := selCtx.AgenticSession.NonPortableContextReason; got != "previous_response_id" {
 		t.Fatalf("expected previous_response_id reason, got %q", got)
 	}
+	if got := selCtx.AgenticSession.Phase; got != selection.AgenticPhaseProviderState {
+		t.Fatalf("expected provider-state phase for previous_response_id, got %q", got)
+	}
 }
 
 func TestApplySessionAwareSelectionConfigPreservesExplicitZeroValues(t *testing.T) {

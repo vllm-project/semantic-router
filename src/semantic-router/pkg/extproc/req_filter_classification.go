@@ -268,11 +268,14 @@ func (r *OpenAIRouter) buildAgenticSessionContext(
 	cacheWarmth, cacheWarmthOK := r.agenticCacheWarmth(reqCtx, previousModel, snapshot, hasMemory, now)
 	facts := reqCtx.VSRConversationFacts
 	activeToolLoop := conversationFactsIndicateActiveToolLoop(facts)
+	hasNonPortableContext, nonPortableContextReason := nonPortableContextBinding(reqCtx)
 	phase := selection.AgenticPhaseUserTurn
+	if hasNonPortableContext {
+		phase = selection.AgenticPhaseProviderState
+	}
 	if activeToolLoop {
 		phase = selection.AgenticPhaseToolLoop
 	}
-	hasNonPortableContext, nonPortableContextReason := nonPortableContextBinding(reqCtx)
 	return &selection.AgenticSessionContext{
 		ID:                          sessionID,
 		UserID:                      userID,

@@ -83,6 +83,7 @@ func TestSessionAwareSelectorProviderStateHardLocksCurrentModel(t *testing.T) {
 			TurnIndex:                3,
 			PreviousModel:            "current",
 			PreviousResponseID:       "resp_previous",
+			Phase:                    AgenticPhaseProviderState,
 			HasNonPortableContext:    true,
 			NonPortableContextReason: "previous_response_id",
 		},
@@ -107,6 +108,9 @@ func TestSessionAwareSelectorProviderStateHardLocksCurrentModel(t *testing.T) {
 	if mapped["has_non_portable_context"] != true ||
 		mapped["non_portable_context_reason"] != "previous_response_id" {
 		t.Fatalf("expected non-portable context in trace map, got %#v", mapped)
+	}
+	if mapped["phase"] != string(AgenticPhaseProviderState) {
+		t.Fatalf("expected provider-state phase in trace map, got %#v", mapped)
 	}
 }
 
