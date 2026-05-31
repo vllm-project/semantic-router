@@ -107,26 +107,26 @@ func (r *OpenAIRouter) buildAnthropicRoutingResponse(
 	anthropicBody []byte,
 	ctx *RequestContext,
 ) *ext_proc.ProcessingResponse {
-	endpoint, endpointName, err := r.selectEndpointForModel(ctx, targetModel)
+	backendAddress, backendName, err := r.resolveBackendForModel(ctx, targetModel)
 	if err != nil {
-		logging.Errorf("Anthropic routing endpoint selection failed for model %s: %v", targetModel, err)
-		return r.createErrorResponse(500, fmt.Sprintf("Endpoint selection error: %v", err))
+		logging.Errorf("Anthropic routing backend resolution failed for model %s: %v", targetModel, err)
+		return r.createErrorResponse(500, fmt.Sprintf("Backend resolution error: %v", err))
 	}
-	if accessKey == "" && endpointName != "" {
-		if ep, ok := r.Config.GetEndpointByName(endpointName); ok && ep.APIKey != "" {
+	if accessKey == "" && backendName != "" {
+		if ep, ok := r.Config.GetEndpointByName(backendName); ok && ep.APIKey != "" {
 			accessKey = ep.APIKey
 		}
 	}
 
 	messagesPath := anthropic.AnthropicMessagesPath
-	profile, profileErr := r.Config.GetProviderProfileForEndpoint(endpointName)
+	profile, profileErr := r.Config.GetProviderProfileForEndpoint(backendName)
 	if profileErr != nil {
-		logging.Errorf("Anthropic routing profile resolution failed for endpoint %s: %v", endpointName, profileErr)
+		logging.Errorf("Anthropic routing profile resolution failed for backend %s: %v", backendName, profileErr)
 		return r.createErrorResponse(500, "Internal routing error. Contact your administrator.")
 	}
 	if profile != nil {
 		if chatPath, pathErr := profile.ResolveChatPath(); pathErr != nil {
-			logging.Errorf("Anthropic routing chat path resolution failed for endpoint %s: %v", endpointName, pathErr)
+			logging.Errorf("Anthropic routing chat path resolution failed for backend %s: %v", backendName, pathErr)
 			return r.createErrorResponse(500, "Internal routing error. Contact your administrator.")
 		} else if chatPath != "" {
 			messagesPath = chatPath
@@ -151,8 +151,8 @@ func (r *OpenAIRouter) buildAnthropicRoutingResponse(
 		})
 	}
 	appendProfileHeaders(&setHeaders, profile)
-	appendRoutingHeaders(&setHeaders, targetModel, endpoint)
-	setHeaders = append(setHeaders, r.startUpstreamSpanAndInjectHeaders(targetModel, endpoint, ctx)...)
+	appendRoutingHeaders(&setHeaders, targetModel)
+	setHeaders = append(setHeaders, r.startUpstreamSpanAndInjectHeaders(targetModel, backendAddress, ctx)...)
 	r.recordRoutingLatency(ctx)
 
 	return &ext_proc.ProcessingResponse{

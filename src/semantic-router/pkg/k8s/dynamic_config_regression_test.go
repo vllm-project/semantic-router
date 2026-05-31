@@ -114,7 +114,7 @@ func assertDynamicConfigRuntimeConfig(t *testing.T, runtimeCfg *config.RouterCon
 		t.Fatal("expected dynamic-config LoRA alias to inherit endpoints from base model")
 	}
 
-	address, endpointName, found, detailErr := runtimeCfg.SelectBestEndpointWithDetailsForModel("general-expert")
+	address, endpointName, found, detailErr := runtimeCfg.ResolvePrimaryBackendForModel("general-expert")
 	if detailErr != nil {
 		t.Fatalf("failed to resolve dynamic-config default endpoint: %v", detailErr)
 	}

@@ -59,7 +59,9 @@ const standaloneEnvoyConfigYAML = `static_resources:
                 route:
                   cluster: semantic_router_cluster
                   timeout: 300s
-              # Dynamic route - all other paths go through ExtProc then to vLLM backend
+              # Default route - all other paths go through ExtProc, then Envoy
+              # handles upstream routing. ExtProc only emits model/decision
+              # signals; it does not choose individual endpoints.
               - match:
                   prefix: "/"
                 route:
@@ -83,21 +85,6 @@ const standaloneEnvoyConfigYAML = `static_resources:
                 response_trailer_mode: "SKIP"
               failure_mode_allow: true
               message_timeout: 300s
-
-          # Lua filter to extract hostname from x-vsr-destination-endpoint header
-          - name: envoy.filters.http.lua
-            typed_config:
-              "@type": type.googleapis.com/envoy.extensions.filters.http.lua.v3.Lua
-              default_source_code:
-                inline_string: |
-                  function envoy_on_request(request_handle)
-                    local destination = request_handle:headers():get("x-vsr-destination-endpoint")
-                    if destination then
-                      -- Set the host header for Dynamic Forward Proxy
-                      request_handle:headers():replace(":authority", destination)
-                      request_handle:logInfo("Setting :authority to: " .. destination)
-                    end
-                  end
 
           # Dynamic Forward Proxy filter
           - name: envoy.filters.http.dynamic_forward_proxy
@@ -169,7 +156,7 @@ const standaloneEnvoyConfigYAML = `static_resources:
         explicit_http_config:
           http_protocol_options: {}
 
-  # Dynamic Forward Proxy cluster - routes based on :authority header
+  # Dynamic Forward Proxy cluster - Envoy-owned upstream routing based on :authority
   - name: dynamic_forward_proxy_cluster
     connect_timeout: 300s
     per_connection_buffer_limit_bytes: 52428800

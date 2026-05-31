@@ -58,9 +58,9 @@ routing:
 		t.Fatalf("expected LoRA alias endpoint name to inherit base endpoint, got %#v", endpoints[0])
 	}
 
-	address, endpointName, found, detailErr := cfg.SelectBestEndpointWithDetailsForModel("general-expert")
+	address, endpointName, found, detailErr := cfg.ResolvePrimaryBackendForModel("general-expert")
 	if detailErr != nil {
-		t.Fatalf("SelectBestEndpointWithDetailsForModel returned error: %v", detailErr)
+		t.Fatalf("ResolvePrimaryBackendForModel returned error: %v", detailErr)
 	}
 	if !found {
 		t.Fatal("expected LoRA alias endpoint to resolve")

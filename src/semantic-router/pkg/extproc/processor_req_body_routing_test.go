@@ -48,7 +48,7 @@ func TestHandleAutoModelRoutingPreservesSelectedModelHeaderAndRewritesUpstreamMo
 	openAIRequest := &openai.ChatCompletionNewParams{
 		Model: "MoM",
 		Messages: []openai.ChatCompletionMessageParamUnion{
-			openai.UserMessage("hello from multi-endpoint"),
+			openai.UserMessage("hello from routed model"),
 		},
 	}
 	baseResponse := &ext_proc.ProcessingResponse{
@@ -82,8 +82,8 @@ func TestHandleAutoModelRoutingPreservesSelectedModelHeaderAndRewritesUpstreamMo
 	if got := headerMap[headers.SelectedModel]; got != "qwen14b-dev" {
 		t.Fatalf("expected %s header to preserve router alias, got %q", headers.SelectedModel, got)
 	}
-	if got := headerMap[headers.GatewayDestinationEndpoint]; got != "127.0.0.1:8000" {
-		t.Fatalf("expected %s header to contain resolved endpoint, got %q", headers.GatewayDestinationEndpoint, got)
+	if got := headerMap["x-vsr-destination-endpoint"]; got != "" {
+		t.Fatalf("router must not emit endpoint destination header, got %q", got)
 	}
 
 	var body map[string]any

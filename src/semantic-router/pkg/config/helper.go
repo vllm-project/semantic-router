@@ -349,54 +349,6 @@ func (c *RouterConfig) GetAllModels() []string {
 	return models
 }
 
-// SelectBestEndpointForModel selects the best endpoint for a model based on weights and availability
-// Returns the endpoint name and whether selection was successful
-func (c *RouterConfig) SelectBestEndpointForModel(modelName string) (string, bool) {
-	endpoints := c.GetEndpointsForModel(modelName)
-	if len(endpoints) == 0 {
-		return "", false
-	}
-
-	// If only one endpoint, return it
-	if len(endpoints) == 1 {
-		return endpoints[0].Name, true
-	}
-
-	// Select endpoint with highest weight
-	bestEndpoint := endpoints[0]
-	for _, endpoint := range endpoints[1:] {
-		if endpoint.Weight > bestEndpoint.Weight {
-			bestEndpoint = endpoint
-		}
-	}
-
-	return bestEndpoint.Name, true
-}
-
-// SelectBestEndpointAddressForModel selects the best endpoint for a model and returns the address:port.
-// When the endpoint has a provider_profile with a base_url, the host:port is extracted from it.
-// Returns ("", false, nil) when no endpoints match the model.
-// Returns ("", false, err) when the selected endpoint has a broken provider_profile/base_url.
-func (c *RouterConfig) SelectBestEndpointAddressForModel(modelName string) (string, bool, error) {
-	endpoints := c.GetEndpointsForModel(modelName)
-	if len(endpoints) == 0 {
-		return "", false, nil
-	}
-
-	bestEndpoint := endpoints[0]
-	for _, endpoint := range endpoints[1:] {
-		if endpoint.Weight > bestEndpoint.Weight {
-			bestEndpoint = endpoint
-		}
-	}
-
-	addr, err := bestEndpoint.ResolveAddress(c.ProviderProfiles)
-	if err != nil {
-		return "", false, fmt.Errorf("endpoint %q for model %q: %w", bestEndpoint.Name, modelName, err)
-	}
-	return addr, true, nil
-}
-
 // GetModelReasoningForDecision returns whether a specific model supports reasoning in a given decision
 func (c *RouterConfig) GetModelReasoningForDecision(decisionName string, modelName string) bool {
 	for _, decision := range c.Decisions {
@@ -540,7 +492,7 @@ func (c *RouterConfig) GetCacheTTLSecondsForDecision(decisionName string) int {
 // ResolveExternalModelID resolves the external model ID for a given model name and endpoint.
 // When a model alias (e.g., "qwen14b-rack1") is configured with external_model_ids,
 // this returns the real model name that the backend expects (e.g., "Qwen/Qwen2.5-14B-Instruct").
-// The endpoint type (e.g., "vllm", "ollama") is looked up from the selected endpoint.
+// The endpoint type (e.g., "vllm", "ollama") is looked up from the resolved backend metadata.
 // Returns the original modelName if no mapping is found.
 func (c *RouterConfig) ResolveExternalModelID(modelName string, endpointName string) string {
 	if c == nil || c.ModelConfig == nil {
@@ -569,10 +521,11 @@ func (c *RouterConfig) ResolveExternalModelID(modelName string, endpointName str
 	return modelName
 }
 
-// SelectBestEndpointWithDetailsForModel selects the best endpoint for a model and returns
-// both the address:port and the endpoint name (needed for external_model_ids resolution).
-// Returns (address, endpointName, found).
-func (c *RouterConfig) SelectBestEndpointWithDetailsForModel(modelName string) (string, string, bool, error) {
+// ResolvePrimaryBackendForModel resolves backend metadata for a model and returns
+// the backend address plus the backend config name. This helper is for
+// provider-profile/body-shaping metadata; it does not choose an Envoy upstream
+// endpoint. Envoy owns endpoint load balancing inside the selected cluster.
+func (c *RouterConfig) ResolvePrimaryBackendForModel(modelName string) (string, string, bool, error) {
 	endpoints := c.GetEndpointsForModel(modelName)
 	if len(endpoints) == 0 {
 		return "", "", false, nil
@@ -636,7 +589,7 @@ func ValidProviderTypes() []string {
 //   - the endpoint references a provider_profile name that does not exist in the map
 func (c *RouterConfig) GetProviderProfileForEndpoint(endpointName string) (*ProviderProfile, error) {
 	if endpointName == "" {
-		return nil, nil // no endpoint selected (e.g., model has no preferred_endpoints)
+		return nil, nil // no backend metadata resolved (e.g., model has no preferred_endpoints)
 	}
 	ep, found := c.GetEndpointByName(endpointName)
 	if !found {

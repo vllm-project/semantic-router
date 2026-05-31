@@ -1085,78 +1085,13 @@ default_model: "model-b"
 			})
 		})
 
-		Describe("SelectBestEndpointForModel", func() {
-			It("should select endpoint with highest weight when multiple available", func() {
-				cfg, err := loadLegacyRuntimeConfigForTest(configFile)
-				Expect(err).NotTo(HaveOccurred())
-
-				// model-a has preferred endpoints: endpoint1 (weight 1) and endpoint3 (weight 1)
-				// Since they have the same weight, it should return the first one found
-				endpointName, found := cfg.SelectBestEndpointForModel("model-a")
-				Expect(found).To(BeTrue())
-				Expect(endpointName).To(BeElementOf("endpoint1", "endpoint3"))
-			})
-
-			It("should return false for non-existent model", func() {
-				cfg, err := loadLegacyRuntimeConfigForTest(configFile)
-				Expect(err).NotTo(HaveOccurred())
-
-				endpointName, found := cfg.SelectBestEndpointForModel("non-existent-model")
-				Expect(found).To(BeFalse())
-				Expect(endpointName).To(BeEmpty())
-			})
-
-			It("should return false when model has no preferred endpoints", func() {
-				cfg, err := loadLegacyRuntimeConfigForTest(configFile)
-				Expect(err).NotTo(HaveOccurred())
-
-				endpointName, found := cfg.SelectBestEndpointForModel("model-c")
-				Expect(found).To(BeFalse())
-				Expect(endpointName).To(BeEmpty())
-			})
-
-			Describe("SelectBestEndpointAddressForModel", func() {
-				It("should return endpoint address when model has preferred endpoints", func() {
-					cfg, err := loadLegacyRuntimeConfigForTest(configFile)
-					Expect(err).NotTo(HaveOccurred())
-
-					// model-a has preferred endpoints
-					endpointAddress, found, addrErr := cfg.SelectBestEndpointAddressForModel("model-a")
-					Expect(addrErr).NotTo(HaveOccurred())
-					Expect(found).To(BeTrue())
-					Expect(endpointAddress).To(MatchRegexp(`127\.0\.0\.1:\d+`))
-				})
-
-				It("should return false when model has no preferred endpoints", func() {
-					cfg, err := loadLegacyRuntimeConfigForTest(configFile)
-					Expect(err).NotTo(HaveOccurred())
-
-					// model-c has no preferred_endpoints configured
-					endpointAddress, found, addrErr := cfg.SelectBestEndpointAddressForModel("model-c")
-					Expect(addrErr).NotTo(HaveOccurred())
-					Expect(found).To(BeFalse())
-					Expect(endpointAddress).To(BeEmpty())
-				})
-
-				It("should return false for non-existent model", func() {
-					cfg, err := loadLegacyRuntimeConfigForTest(configFile)
-					Expect(err).NotTo(HaveOccurred())
-
-					endpointAddress, found, addrErr := cfg.SelectBestEndpointAddressForModel("non-existent-model")
-					Expect(addrErr).NotTo(HaveOccurred())
-					Expect(found).To(BeFalse())
-					Expect(endpointAddress).To(BeEmpty())
-				})
-			})
-		})
-
-		Describe("SelectBestEndpointWithDetailsForModel", func() {
+		Describe("ResolvePrimaryBackendForModel", func() {
 			It("should return address and endpoint name for model with single endpoint", func() {
 				cfg, err := loadLegacyRuntimeConfigForTest(configFile)
 				Expect(err).NotTo(HaveOccurred())
 
 				// model-b has a single preferred endpoint: endpoint2
-				address, endpointName, found, detailErr := cfg.SelectBestEndpointWithDetailsForModel("model-b")
+				address, endpointName, found, detailErr := cfg.ResolvePrimaryBackendForModel("model-b")
 				Expect(detailErr).NotTo(HaveOccurred())
 				Expect(found).To(BeTrue())
 				Expect(address).To(Equal("127.0.0.1:8000"))
@@ -1169,7 +1104,7 @@ default_model: "model-b"
 
 				// model-a has endpoint1 (weight 1) and endpoint3 (weight 1)
 				// Both have the same weight, so we get one of them
-				address, endpointName, found, detailErr := cfg.SelectBestEndpointWithDetailsForModel("model-a")
+				address, endpointName, found, detailErr := cfg.ResolvePrimaryBackendForModel("model-a")
 				Expect(detailErr).NotTo(HaveOccurred())
 				Expect(found).To(BeTrue())
 				Expect(address).To(Equal("127.0.0.1:8000"))
@@ -1180,7 +1115,7 @@ default_model: "model-b"
 				cfg, err := loadLegacyRuntimeConfigForTest(configFile)
 				Expect(err).NotTo(HaveOccurred())
 
-				address, endpointName, found, detailErr := cfg.SelectBestEndpointWithDetailsForModel("non-existent-model")
+				address, endpointName, found, detailErr := cfg.ResolvePrimaryBackendForModel("non-existent-model")
 				Expect(detailErr).NotTo(HaveOccurred())
 				Expect(found).To(BeFalse())
 				Expect(address).To(BeEmpty())
@@ -1192,14 +1127,14 @@ default_model: "model-b"
 				Expect(err).NotTo(HaveOccurred())
 
 				// model-c has no preferred endpoints configured
-				address, endpointName, found, detailErr := cfg.SelectBestEndpointWithDetailsForModel("model-c")
+				address, endpointName, found, detailErr := cfg.ResolvePrimaryBackendForModel("model-c")
 				Expect(detailErr).NotTo(HaveOccurred())
 				Expect(found).To(BeFalse())
 				Expect(address).To(BeEmpty())
 				Expect(endpointName).To(BeEmpty())
 			})
 
-			It("should select the endpoint with the highest weight when weights differ", func() {
+			It("should resolve the highest-weight backend metadata when weights differ", func() {
 				configContent := `
 vllm_endpoints:
   - name: "ep-low"
@@ -1229,7 +1164,7 @@ default_model: "weighted-model"
 				cfg, err := loadLegacyRuntimeConfigForTest(configFile)
 				Expect(err).NotTo(HaveOccurred())
 
-				address, endpointName, found, detailErr := cfg.SelectBestEndpointWithDetailsForModel("weighted-model")
+				address, endpointName, found, detailErr := cfg.ResolvePrimaryBackendForModel("weighted-model")
 				Expect(detailErr).NotTo(HaveOccurred())
 				Expect(found).To(BeTrue())
 				Expect(address).To(Equal("10.0.0.2:9001"))
@@ -3796,7 +3731,7 @@ model_config:
 			})
 		})
 
-		Context("SelectBestEndpointWithDetailsForModel with profiles", func() {
+		Context("ResolvePrimaryBackendForModel with profiles", func() {
 			It("should use base_url for address resolution", func() {
 				cfg := &RouterConfig{
 					BackendModels: BackendModels{
@@ -3812,7 +3747,7 @@ model_config:
 					},
 				}
 
-				addr, name, found, detailErr := cfg.SelectBestEndpointWithDetailsForModel("gpt-4o")
+				addr, name, found, detailErr := cfg.ResolvePrimaryBackendForModel("gpt-4o")
 				Expect(detailErr).NotTo(HaveOccurred())
 				Expect(found).To(BeTrue())
 				Expect(name).To(Equal("openai"))
