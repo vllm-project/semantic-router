@@ -31,11 +31,12 @@ func recordSessionTurn(ctx *RequestContext, usage responseUsageMetrics, pricing 
 	if ctx == nil || usage.promptTokens+usage.completionTokens <= 0 {
 		return
 	}
+	sessiontelemetry.RecordLastModel(ctx.SessionID, ctx.RequestModel)
+
 	domain := consts.UnknownLabel
 	if ctx.VSRSelectedCategory != "" {
 		domain = ctx.VSRSelectedCategory
 	}
-	sessiontelemetry.RecordLastModel(ctx.SessionID, ctx.RequestModel)
 	p := sessiontelemetry.TurnParams{
 		RequestID:          ctx.RequestID,
 		Model:              ctx.RequestModel,
@@ -56,6 +57,7 @@ func recordSessionTurn(ctx *RequestContext, usage responseUsageMetrics, pricing 
 	} else {
 		userID := extractUserID(ctx)
 		if userID == "" || len(ctx.ChatCompletionMessages) == 0 {
+			recordRouterSessionUsageFromContext(ctx, usage, pricing)
 			return
 		}
 		msgs := make([]sessiontelemetry.ChatMessage, len(ctx.ChatCompletionMessages))
@@ -68,6 +70,39 @@ func recordSessionTurn(ctx *RequestContext, usage responseUsageMetrics, pricing 
 		p.Chat = &sessiontelemetry.ChatInput{UserID: userID, Messages: msgs}
 	}
 	sessiontelemetry.RecordTurn(p)
+}
+
+func recordRouterSessionUsageFromContext(
+	ctx *RequestContext,
+	usage responseUsageMetrics,
+	pricing sessiontelemetry.TurnPricing,
+) {
+	if ctx == nil || ctx.SessionID == "" || ctx.RequestModel == "" {
+		return
+	}
+	sessiontelemetry.RecordSessionUsage(sessiontelemetry.SessionUsageParams{
+		SessionID:          ctx.SessionID,
+		Model:              ctx.RequestModel,
+		PromptTokens:       usage.promptTokens,
+		CachedPromptTokens: usage.cachedPromptTokens,
+		CompletionTokens:   usage.completionTokens,
+		Cost:               sessionTurnCost(usage, pricing),
+		Timestamp:          time.Now(),
+	})
+}
+
+func sessionTurnCost(usage responseUsageMetrics, pricing sessiontelemetry.TurnPricing) float64 {
+	if pricing.PromptPer1M == 0 &&
+		pricing.CompletionPer1M == 0 &&
+		pricing.CachedInputPer1M == 0 &&
+		pricing.Currency == "" {
+		return 0
+	}
+	cached := clampCachedPromptTokensInt(usage.promptTokens, usage.cachedPromptTokens)
+	uncachedPrompt := usage.promptTokens - cached
+	return (float64(uncachedPrompt)*pricing.PromptPer1M +
+		float64(cached)*pricing.CachedInputPer1M +
+		float64(usage.completionTokens)*pricing.CompletionPer1M) / 1_000_000.0
 }
 
 // maybeEmitTransitionEvent records a ModelTransitionEvent on model change.
