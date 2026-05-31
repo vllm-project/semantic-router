@@ -262,6 +262,7 @@ python3 bench/session_routing_branch_image_benchmark.py \
   --live-aggregate .agent-harness/experiments/live-agentic-routing/branch-image-long-session/aggregate-summary.json \
   --failure-aggregate .agent-harness/experiments/live-agentic-routing/branch-image-repeat-failure/aggregate-summary.json \
   --agent-task-summary .agent-harness/experiments/live-agent-tasks/branch-image-long-horizon/summary.json \
+  --cache-aggregate .agent-harness/experiments/cache-token-probe/branch-image-cache/aggregate-summary.json \
   --ref "$(git rev-parse --short HEAD)" \
   --image-tag "$TAG" \
   --output-dir .agent-harness/experiments/live-agentic-routing/branch-image-ga
@@ -272,7 +273,11 @@ This assembler is the only branch-image path that writes
 `branch_image_benchmark: true`. It still exits non-zero if the image tag or
 label looks like a mounted-binary run, if the diagnostic probe failed, if live
 or recovery summaries contain continuity failures, or if the agent-task summary
-does not meet the expanded GA gate.
+does not meet the expanded GA gate. It also requires a repeated-prefix
+cache-token probe summary with a direct-backend baseline and the same router
+evidence identity. The branch-image assembler does not require positive
+cached-token reporting by default; that remains a separate GA readiness blocker
+owned by the cache-token report gate.
 
 Use the GA readiness report after local, AMD, agent-task, cache-token, and
 branch-image runs have produced machine-readable summaries. The report does not

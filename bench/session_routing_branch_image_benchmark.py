@@ -17,6 +17,8 @@ from typing import Any
 
 try:
     from session_routing_ga_report import (
+        CACHE_PROBE_KIND,
+        CACHE_REPORTING_ORDER,
         DEFAULT_MIN_AGENT_TASK_COUNT,
         DEFAULT_MIN_AGENT_TASK_INSTANCES,
         DEFAULT_MIN_AGENT_TASK_REQUESTS,
@@ -25,6 +27,12 @@ try:
         MOUNTED_BINARY_MARKERS,
     )
 except ImportError:  # pragma: no cover - used when loaded outside bench/.
+    CACHE_REPORTING_ORDER = {
+        "missing": 0,
+        "reported_zero": 1,
+        "positive": 2,
+    }
+    CACHE_PROBE_KIND = "repeated-prefix-cache-token-probe"
     DEFAULT_MIN_AGENT_TASK_REQUESTS = 255
     DEFAULT_MIN_AGENT_TASK_COUNT = 15
     DEFAULT_MIN_AGENT_TASK_INSTANCES = 45
@@ -74,6 +82,7 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--live-aggregate", action="append", type=Path, default=[])
     parser.add_argument("--failure-aggregate", action="append", type=Path, default=[])
     parser.add_argument("--agent-task-summary", action="append", type=Path, default=[])
+    parser.add_argument("--cache-aggregate", action="append", type=Path, default=[])
     parser.add_argument("--ref", default="")
     parser.add_argument("--image-tag", required=True)
     parser.add_argument("--label", default="branch-image-ga")
@@ -113,6 +122,23 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         "--required-agent-task-header",
         action="append",
         default=list(DEFAULT_REQUIRED_HEADERS),
+    )
+    parser.add_argument(
+        "--min-cached-token-reporting",
+        choices=tuple(CACHE_REPORTING_ORDER.keys()),
+        default="missing",
+    )
+    parser.add_argument("--min-cached-token-field-rate", type=float, default=0.0)
+    parser.add_argument("--min-cached-prompt-ratio", type=float, default=0.0)
+    parser.add_argument("--min-cache-probe-repeats", type=int, default=2)
+    parser.add_argument(
+        "--require-cache-baseline",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help=(
+            "Require a direct backend baseline in cache-token evidence so the "
+            "branch-image artifact records both router and backend paths."
+        ),
     )
     parser.add_argument("--output-dir", type=Path, default=None)
     return parser.parse_args(argv)
@@ -234,6 +260,39 @@ def add_numeric_failure(
         failures.append(f"{label} {actual_float} < {expected}")
     elif operator == "<=" and actual_float > expected:
         failures.append(f"{label} {actual_float} > {expected}")
+
+
+def cache_paths(data: dict[str, Any]) -> list[tuple[str, dict[str, Any]]]:
+    if isinstance(data.get("router"), dict):
+        paths = [("router", data["router"])]
+        if isinstance(data.get("baseline"), dict):
+            paths.append(("baseline", data["baseline"]))
+        return paths
+    paths = []
+    if isinstance(data.get("summary"), dict):
+        paths.append(("router", data["summary"]))
+    if isinstance(data.get("baseline_summary"), dict):
+        paths.append(("baseline", data["baseline_summary"]))
+    return paths or [("router", data)]
+
+
+def cached_token_field_rate(summary: dict[str, Any]) -> float:
+    if "cached_token_field_rate" in summary:
+        return float(summary.get("cached_token_field_rate") or 0.0)
+    present = summary.get("cached_token_field_present")
+    successes = summary.get("successes") or summary.get("requests") or 0
+    if not successes:
+        return 0.0
+    return round(float(present or 0) / float(successes), 4)
+
+
+def cache_probe_repeats(summary: dict[str, Any]) -> int:
+    for key in ("probe_repeats", "requests"):
+        try:
+            return int(summary.get(key) or 0)
+        except (TypeError, ValueError):
+            return 0
+    return 0
 
 
 def evaluate_diagnostic(
@@ -451,6 +510,76 @@ def evaluate_agent_task_summary(
     }, failures
 
 
+def evaluate_cache_aggregate(
+    args: argparse.Namespace, data: dict[str, Any] | None, evidence: str
+) -> tuple[dict[str, Any], list[str]]:
+    if data is None:
+        return {"evidence": evidence, "paths": []}, [evidence]
+    failures: list[str] = []
+    metrics: dict[str, Any] = {"evidence": evidence, "paths": {}}
+    paths = cache_paths(data)
+    has_baseline = any(label == "baseline" for label, _ in paths)
+    if args.require_cache_baseline and not has_baseline:
+        failures.append(
+            "cache aggregate direct backend baseline missing; run "
+            "cache_token_probe.py with --baseline-base-url"
+        )
+    required = args.min_cached_token_reporting
+    for label, summary in paths:
+        name = f"cache {label}"
+        if label == "router":
+            add_evidence_identity_failures(failures, args, data, summary, name)
+        add_numeric_failure(
+            failures,
+            f"{name} success_rate",
+            summary.get("success_rate"),
+            ">=",
+            args.min_live_success_rate,
+        )
+        reporting = str(summary.get("cached_token_reporting", "missing"))
+        if CACHE_REPORTING_ORDER.get(reporting, -1) < CACHE_REPORTING_ORDER[required]:
+            failures.append(f"{name} cached_token_reporting {reporting} < {required}")
+        probe_kind = str(summary.get("probe_kind", ""))
+        if probe_kind != CACHE_PROBE_KIND:
+            failures.append(
+                f"{name} probe_kind {probe_kind or 'missing'} != {CACHE_PROBE_KIND}"
+            )
+        probe_repeats = cache_probe_repeats(summary)
+        if probe_repeats < args.min_cache_probe_repeats:
+            failures.append(
+                f"{name} probe_repeats {probe_repeats} < "
+                f"{args.min_cache_probe_repeats}"
+            )
+        field_rate = cached_token_field_rate(summary)
+        if field_rate < args.min_cached_token_field_rate:
+            failures.append(
+                f"{name} cached_token_field_rate {field_rate} < "
+                f"{args.min_cached_token_field_rate}"
+            )
+        ratio = float(summary.get("cached_prompt_ratio") or 0.0)
+        if ratio < args.min_cached_prompt_ratio:
+            failures.append(
+                f"{name} cached_prompt_ratio {ratio} < "
+                f"{args.min_cached_prompt_ratio}"
+            )
+        metrics["paths"][label] = {
+            "requests": summary.get("requests"),
+            "success_rate": summary.get("success_rate"),
+            "cached_token_reporting": reporting,
+            "cached_token_field_rate": field_rate,
+            "cached_prompt_ratio": summary.get("cached_prompt_ratio"),
+            "probe_kind": probe_kind,
+            "probe_repeats": probe_repeats,
+            "evidence_ref": first_string_value(summary, None, EVIDENCE_REF_KEYS),
+            "evidence_image_tag": first_string_value(
+                summary, None, EVIDENCE_IMAGE_TAG_KEYS
+            ),
+        }
+    metrics["baseline_required"] = args.require_cache_baseline
+    metrics["baseline_present"] = has_baseline
+    return metrics, failures
+
+
 def has_mounted_binary_marker(*values: str) -> bool:
     fingerprint = " ".join(values).lower()
     return any(marker in fingerprint for marker in MOUNTED_BINARY_MARKERS)
@@ -500,6 +629,18 @@ def build_summary(args: argparse.Namespace) -> dict[str, Any]:
     checks["agent_task_ok"] = not agent_task_failures
     failures.extend(agent_task_failures)
 
+    cache_metrics = []
+    cache_failures: list[str] = []
+    for path in args.cache_aggregate:
+        data, evidence = load_json(path)
+        metrics, cache_row_failures = evaluate_cache_aggregate(args, data, evidence)
+        cache_metrics.append(metrics)
+        cache_failures.extend(cache_row_failures)
+    if not args.cache_aggregate:
+        cache_failures.append("at least one cache aggregate is required")
+    checks["cache_token_probe_ok"] = not cache_failures
+    failures.extend(cache_failures)
+
     if has_mounted_binary_marker(args.image_tag, args.label):
         failures.append("mounted-binary evidence cannot satisfy branch-image benchmark")
     checks["mounted_binary_absent"] = not has_mounted_binary_marker(
@@ -521,6 +662,7 @@ def build_summary(args: argparse.Namespace) -> dict[str, Any]:
             "live_aggregates": live_metrics,
             "failure_aggregates": failure_metrics,
             "agent_task_summaries": agent_task_metrics,
+            "cache_aggregates": cache_metrics,
         },
         "validation_failures": failures,
     }

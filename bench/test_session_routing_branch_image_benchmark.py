@@ -136,11 +136,46 @@ def complete_agent_task_summary(
     }
 
 
+def cache_aggregate(ref="77e6b573", image_tag="pr1989-current-branch-image"):
+    router = {
+        "evidence_ref": ref,
+        "evidence_image_tag": image_tag,
+        "label": "branch-image-cache-router",
+        "requests": 8,
+        "successes": 8,
+        "success_rate": 1.0,
+        "cached_token_reporting": "missing",
+        "cached_token_field_present": 0,
+        "cached_token_field_rate": 0.0,
+        "cached_prompt_ratio": 0.0,
+        "probe_kind": "repeated-prefix-cache-token-probe",
+        "probe_repeats": 8,
+        "stable_prefix_chars": 12719,
+        "stable_prefix_sha256": "abc123",
+    }
+    baseline = {
+        "label": "branch-image-cache-baseline",
+        "requests": 8,
+        "successes": 8,
+        "success_rate": 1.0,
+        "cached_token_reporting": "missing",
+        "cached_token_field_present": 0,
+        "cached_token_field_rate": 0.0,
+        "cached_prompt_ratio": 0.0,
+        "probe_kind": "repeated-prefix-cache-token-probe",
+        "probe_repeats": 8,
+        "stable_prefix_chars": 12719,
+        "stable_prefix_sha256": "abc123",
+    }
+    return {"router": router, "baseline": baseline}
+
+
 def complete_args(tmp_path):
     diagnostic = write_json(tmp_path / "diagnostic.json", diagnostic_summary())
     live = write_json(tmp_path / "live.json", live_aggregate())
     failure = write_json(tmp_path / "failure.json", failure_aggregate())
     tasks = write_json(tmp_path / "tasks.json", complete_agent_task_summary())
+    cache = write_json(tmp_path / "cache.json", cache_aggregate())
     return [
         "--diagnostic-summary",
         str(diagnostic),
@@ -150,6 +185,8 @@ def complete_args(tmp_path):
         str(failure),
         "--agent-task-summary",
         str(tasks),
+        "--cache-aggregate",
+        str(cache),
         "--ref",
         "77e6b573",
         "--image-tag",
@@ -166,6 +203,8 @@ def test_full_branch_image_summary_passes_with_complete_evidence(tmp_path):
     assert summary["validation_kind"] == "full-branch-image-benchmark"
     assert summary["branch_image_benchmark"] is True
     assert summary["checks"]["branch_image_benchmark_ok"] is True
+    assert summary["checks"]["cache_token_probe_ok"] is True
+    assert summary["evidence"]["cache_aggregates"][0]["baseline_present"] is True
     assert summary["validation_failures"] == []
 
 
@@ -251,6 +290,61 @@ def test_full_branch_image_summary_blocks_unbound_subsummaries(tmp_path):
     ) in summary["validation_failures"]
     assert (
         "agent task evidence_image_tag old-image != pr1989-current-branch-image"
+        in summary["validation_failures"]
+    )
+
+
+def test_full_branch_image_summary_requires_cache_aggregate(tmp_path):
+    benchmark = load_benchmark_module()
+    arg_values = complete_args(tmp_path)
+    index = arg_values.index("--cache-aggregate")
+    del arg_values[index : index + 2]
+    args = benchmark.parse_args(arg_values)
+
+    summary = benchmark.build_summary(args)
+
+    assert summary["checks"]["cache_token_probe_ok"] is False
+    assert "at least one cache aggregate is required" in summary["validation_failures"]
+
+
+def test_full_branch_image_summary_blocks_unbound_cache_probe(tmp_path):
+    benchmark = load_benchmark_module()
+    arg_values = complete_args(tmp_path)
+    unbound_cache = cache_aggregate(ref="old-ref", image_tag="old-image")
+    write_json(tmp_path / "cache.json", unbound_cache)
+    args = benchmark.parse_args(arg_values)
+
+    summary = benchmark.build_summary(args)
+
+    assert summary["checks"]["cache_token_probe_ok"] is False
+    assert (
+        "cache router evidence_ref old-ref != 77e6b573"
+        in summary["validation_failures"]
+    )
+    assert (
+        "cache router evidence_image_tag old-image != pr1989-current-branch-image"
+        in summary["validation_failures"]
+    )
+
+
+def test_full_branch_image_summary_blocks_non_probe_cache_aggregate(tmp_path):
+    benchmark = load_benchmark_module()
+    arg_values = complete_args(tmp_path)
+    invalid_cache = cache_aggregate()
+    invalid_cache["router"].pop("probe_kind")
+    invalid_cache.pop("baseline")
+    write_json(tmp_path / "cache.json", invalid_cache)
+    args = benchmark.parse_args(arg_values)
+
+    summary = benchmark.build_summary(args)
+
+    assert summary["checks"]["cache_token_probe_ok"] is False
+    assert (
+        "cache aggregate direct backend baseline missing; run "
+        "cache_token_probe.py with --baseline-base-url"
+    ) in summary["validation_failures"]
+    assert (
+        "cache router probe_kind missing != repeated-prefix-cache-token-probe"
         in summary["validation_failures"]
     )
 
