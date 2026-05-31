@@ -560,3 +560,34 @@ def test_main_writes_report_and_respects_allow_blockers(tmp_path):
     assert exit_code == 0
     assert (output_dir / "ga-readiness.json").exists()
     assert (output_dir / "ga-readiness.md").exists()
+
+
+def test_markdown_groups_failures_under_blocker_column():
+    report_mod = load_report_module()
+    markdown = report_mod.render_markdown(
+        {
+            "generated_at": "2026-05-31T00:00:00Z",
+            "ga_ready": False,
+            "passed_count": 0,
+            "blocker_count": 1,
+            "requirements": [
+                {
+                    "title": "Cache-token reporting",
+                    "status": "blocked",
+                    "evidence": "cache.json",
+                    "metrics": {"cached_token_reporting": "missing"},
+                    "failures": [
+                        "router: cached_token_reporting missing < positive",
+                        "baseline: probe_kind missing != repeated-prefix-cache-token-probe",
+                    ],
+                }
+            ],
+        }
+    )
+
+    assert "| Requirement | Status | Evidence | Key Metrics | Blockers |" in markdown
+    assert "Cache-token reporting failure" not in markdown
+    assert (
+        "1. router: cached_token_reporting missing < positive<br>2. baseline"
+        in markdown
+    )

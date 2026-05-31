@@ -858,25 +858,35 @@ def render_markdown(report: dict[str, Any]) -> str:
         f"- passed: {report['passed_count']}",
         f"- blockers: {report['blocker_count']}",
         "",
-        "| Requirement | Status | Evidence | Key Metrics |",
-        "| --- | --- | --- | --- |",
+        "| Requirement | Status | Evidence | Key Metrics | Blockers |",
+        "| --- | --- | --- | --- | --- |",
     ]
     for item in report["requirements"]:
         metrics = compact_metrics(item.get("metrics", {}))
+        failures = compact_failures(item.get("failures", []))
         lines.append(
-            "| {title} | {status} | `{evidence}` | {metrics} |".format(
-                title=item["title"],
-                status=item["status"],
-                evidence=item["evidence"],
-                metrics=metrics,
+            "| {title} | {status} | `{evidence}` | {metrics} | {failures} |".format(
+                title=markdown_table_cell(item["title"]),
+                status=markdown_table_cell(item["status"]),
+                evidence=markdown_table_cell(item["evidence"]),
+                metrics=markdown_table_cell(metrics),
+                failures=markdown_table_cell(failures),
             )
         )
-        for failure in item.get("failures", []):
-            lines.append(
-                f"| {item['title']} failure | {item['status']} |  | {failure} |"
-            )
     lines.append("")
     return "\n".join(lines)
+
+
+def compact_failures(failures: list[Any]) -> str:
+    if not failures:
+        return ""
+    return "<br>".join(
+        f"{index}. {failure}" for index, failure in enumerate(failures, 1)
+    )
+
+
+def markdown_table_cell(value: Any) -> str:
+    return str(value).replace("\n", " ").replace("|", r"\|")
 
 
 def compact_metrics(metrics: Any) -> str:
