@@ -222,6 +222,8 @@ def evaluate_synthetic_ablation(args: argparse.Namespace) -> dict[str, Any]:
         failures.append(f"policy count {len(names)} < {args.min_ablation_policies}")
     if "single-turn" not in normalized_names:
         failures.append("single-turn baseline missing")
+    if "acr-initial" not in normalized_names:
+        failures.append("initial implementation baseline missing")
     if full is None:
         failures.append("full ACR policy missing")
     else:

@@ -80,8 +80,55 @@ def test_ablation_outputs_include_remaining_prior_policy_and_svg(tmp_path):
     )
 
     policies = {row["policy"] for row in summary["by_policy"]}
+    assert "acr-initial" in policies
     assert "acr-no-remaining-prior" in policies
     assert (tmp_path / "ablation_summary.csv").exists()
     svg = (tmp_path / "summary.svg").read_text()
     assert "Agentic Routing Ablation" in svg
+    assert "acr-initial" in svg
     assert "acr-no-remaining-prior" in svg
+
+
+def test_initial_policy_models_merged_1974_capability_boundary():
+    exp = load_experiment_module()
+
+    current = exp.MODELS[0]
+    stronger = exp.MODELS[1]
+
+    full_provider_state = exp.agentic_boundary_decision(
+        base_choice=stronger,
+        current=current,
+        phase="provider_state",
+        turn=3,
+        idle_expired=False,
+        policy="acr-full",
+    )
+    initial_provider_state = exp.agentic_boundary_decision(
+        base_choice=stronger,
+        current=current,
+        phase="provider_state",
+        turn=3,
+        idle_expired=False,
+        policy="acr-initial",
+    )
+    full_topic_drift = exp.agentic_boundary_decision(
+        base_choice=stronger,
+        current=current,
+        phase="topic_drift",
+        turn=3,
+        idle_expired=False,
+        policy="acr-full",
+    )
+    initial_topic_drift = exp.agentic_boundary_decision(
+        base_choice=stronger,
+        current=current,
+        phase="topic_drift",
+        turn=3,
+        idle_expired=False,
+        policy="acr-initial",
+    )
+
+    assert full_provider_state == (current, "context_portability_hard_lock")
+    assert initial_provider_state is None
+    assert full_topic_drift == (stronger, "decision_drift_select")
+    assert initial_topic_drift is None

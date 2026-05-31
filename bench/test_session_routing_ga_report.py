@@ -40,6 +40,7 @@ def complete_inputs(tmp_path: Path) -> dict[str, Path]:
             "by_policy": [
                 {"policy": "single-turn"},
                 {"policy": "sticky-session"},
+                {"policy": "acr-initial"},
                 {"policy": "ACR no tool lock"},
                 {
                     "policy": "full-acr",
@@ -208,6 +209,55 @@ def test_missing_positive_cache_and_branch_image_block_ga(tmp_path):
     assert report["ga_ready"] is False
     assert statuses["cache_token_reporting"] == "blocked"
     assert statuses["branch_image_amd_validation"] == "missing"
+
+
+def test_missing_initial_policy_baseline_blocks_ga(tmp_path):
+    report_mod = load_report_module()
+    inputs = complete_inputs(tmp_path)
+    ablation = write_json(
+        tmp_path / "ablation-no-initial.json",
+        {
+            "by_policy": [
+                {"policy": "single-turn"},
+                {"policy": "sticky-session"},
+                {"policy": "acr-no-tool-lock"},
+                {
+                    "policy": "acr-full",
+                    "tool_loop_switch_violations": 0,
+                    "context_portability_violations": 0,
+                },
+            ]
+        },
+    )
+    args = report_mod.parse_args(
+        [
+            "--synthetic-matrix-summary",
+            str(inputs["matrix"]),
+            "--synthetic-ablation-summary",
+            str(ablation),
+            "--live-aggregate",
+            str(inputs["live"]),
+            "--failure-aggregate",
+            str(inputs["failure"]),
+            "--agent-task-summary",
+            str(inputs["tasks"]),
+            "--cache-aggregate",
+            str(inputs["cache"]),
+            "--branch-image-summary",
+            str(inputs["branch"]),
+        ]
+    )
+
+    report = report_mod.generate_report(args)
+    ablation_requirement = next(
+        item
+        for item in report["requirements"]
+        if item["id"] == "synthetic_policy_ablation"
+    )
+
+    assert report["ga_ready"] is False
+    assert ablation_requirement["status"] == "blocked"
+    assert "initial implementation baseline missing" in ablation_requirement["failures"]
 
 
 def test_main_writes_report_and_respects_allow_blockers(tmp_path):

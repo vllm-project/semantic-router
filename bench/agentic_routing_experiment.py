@@ -76,6 +76,7 @@ DEFAULT_SCENARIOS = (
 )
 DEFAULT_ABLATION_POLICIES = (
     "sticky-session",
+    "acr-initial",
     "acr-no-tool-lock",
     "acr-no-context-portability",
     "acr-no-decision-drift-reset",
@@ -397,7 +398,7 @@ def choose_agentic_model(
         history_tokens=history_tokens,
         turn=turn,
         remaining_turn_prior=remaining_turn_prior,
-        use_remaining_prior=policy != "acr-no-remaining-prior",
+        use_remaining_prior=policy not in {"acr-no-remaining-prior", "acr-initial"},
     )
     boundary = agentic_boundary_decision(
         base_choice=base_choice,
@@ -469,9 +470,15 @@ def agentic_boundary_decision(
         return base_choice, "cold_select"
     if phase == "tool_loop" and policy != "acr-no-tool-lock":
         return current, "tool_loop_hard_lock"
-    if phase == "provider_state" and policy != "acr-no-context-portability":
+    if phase == "provider_state" and policy not in {
+        "acr-no-context-portability",
+        "acr-initial",
+    }:
         return current, "context_portability_hard_lock"
-    if phase == "topic_drift" and policy != "acr-no-decision-drift-reset":
+    if phase == "topic_drift" and policy not in {
+        "acr-no-decision-drift-reset",
+        "acr-initial",
+    }:
         return base_choice, "decision_drift_select"
     if idle_expired and policy != "acr-no-idle-boundary":
         return base_choice, "idle_select"
@@ -989,6 +996,12 @@ def render_ablation_svg(summary: dict[str, Any]) -> str:
         switch_w = int(250 * row["switches"] / max_switch)
         cost_w = int(250 * float(row["estimated_cost"] or 0) / max_cost)
         color = "#2563eb" if row["policy"] == "acr-full" else "#94a3b8"
+        drift_switches = row.get("drift_switches")
+        drift_label = (
+            "n/a"
+            if drift_switches in {None, ""}
+            else f'{drift_switches}/{row["decision_drift_turns"]}'
+        )
         rows.extend(
             [
                 f'<text x="28" y="{y + 14}" font-size="13" font-weight="700" fill="#0f172a">{row["policy"]}</text>',
@@ -996,7 +1009,7 @@ def render_ablation_svg(summary: dict[str, Any]) -> str:
                 f'<text x="490" y="{y + 12}" font-size="11" fill="#475569">{row["switches"]} switches</text>',
                 f'<rect x="610" y="{y}" width="{cost_w}" height="14" fill="{color}"/>',
                 f'<text x="870" y="{y + 12}" font-size="11" fill="#475569">${float(row["estimated_cost"] or 0):.4f}</text>',
-                f'<text x="230" y="{y + 34}" font-size="11" fill="#64748b">tool-loop violations {row["tool_loop_switch_violations"]}; context violations {row["context_portability_violations"]}; drift switches {row["drift_switches"]}/{row["decision_drift_turns"]}; cached {row["mean_cached_prompt_ratio"]}; continuation {row["mean_continuation_mass"]}</text>',
+                f'<text x="230" y="{y + 34}" font-size="11" fill="#64748b">tool-loop violations {row["tool_loop_switch_violations"]}; context violations {row["context_portability_violations"]}; drift switches {drift_label}; cached {row["mean_cached_prompt_ratio"]}; continuation {row["mean_continuation_mass"]}</text>',
             ]
         )
     height = 112 + len(policies) * 52

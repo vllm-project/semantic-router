@@ -226,6 +226,14 @@ branch-image runs have produced machine-readable summaries. The report does not
 replace the individual benchmark gates; it verifies that the required evidence
 exists together and turns missing evidence into explicit blockers:
 
+Generate the synthetic ablation input with `bench/agentic_routing_experiment.py
+--ablation`. The maintained ablation matrix must include `single-turn` for the
+non-session-aware routing baseline, `acr-initial` for the merged #1974
+implementation baseline, and `acr-full` for the current GA candidate. The
+readiness report blocks GA when the initial-implementation baseline is absent,
+because the release claim must compare the final policy against both the
+non-session-aware path and the first merged agentic-routing implementation.
+
 ```bash
 python3 bench/session_routing_ga_report.py \
   --synthetic-matrix-summary .agent-harness/experiments/agentic-routing/20260531Tdiagnostic-gate-matrix/summary.json \
