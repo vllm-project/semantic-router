@@ -369,6 +369,11 @@ func (s *SessionAwareSelector) newPolicyTrace(
 	trace.MemoryTurnCount = session.MemoryTurnCount
 	trace.SwitchCount = session.MemorySwitchCount
 	trace.LastDecisionName = session.LastDecisionName
+	trace.MemoryPromptTokens = session.MemoryPromptTokens
+	trace.MemoryCachedTokens = session.MemoryCachedTokens
+	trace.MemoryEstimatedCachedTokens = session.MemoryEstimatedCachedTokens
+	trace.MemoryEstimatedCacheSavings = session.MemoryEstimatedCacheSavings
+	trace.LastCacheAccountingSource = session.MemoryCacheAccountingSource
 	trace.ActiveToolLoop = session.ActiveToolLoop
 	trace.HasNonPortableContext = session.HasNonPortableContext
 	trace.NonPortableContextReason = session.NonPortableContextReason

@@ -21,16 +21,19 @@ type AgenticSessionContext struct {
 	PreviousModel      string
 	PreviousResponseID string
 
-	MemoryPresent       bool
-	MemoryTurnCount     int
-	MemorySwitchCount   int
-	MemoryModelTurnCnts map[string]int
-	MemoryPromptTokens  int64
-	MemoryCachedTokens  int64
-	MemoryOutputTokens  int64
-	MemoryCost          float64
-	LastDecisionName    string
-	LastDecisionReason  string
+	MemoryPresent               bool
+	MemoryTurnCount             int
+	MemorySwitchCount           int
+	MemoryModelTurnCnts         map[string]int
+	MemoryPromptTokens          int64
+	MemoryCachedTokens          int64
+	MemoryEstimatedCachedTokens int64
+	MemoryOutputTokens          int64
+	MemoryCost                  float64
+	MemoryEstimatedCacheSavings float64
+	MemoryCacheAccountingSource string
+	LastDecisionName            string
+	LastDecisionReason          string
 
 	HistoryTokens int
 	ContextTokens int

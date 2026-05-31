@@ -15,10 +15,15 @@ type SessionPolicyTrace struct {
 	FallbackSelectedModel string
 	SelectedModel         string
 
-	TurnIndex        int
-	MemoryTurnCount  int
-	SwitchCount      int
-	LastDecisionName string
+	TurnIndex                   int
+	MemoryTurnCount             int
+	SwitchCount                 int
+	LastDecisionName            string
+	MemoryPromptTokens          int64
+	MemoryCachedTokens          int64
+	MemoryEstimatedCachedTokens int64
+	MemoryEstimatedCacheSavings float64
+	LastCacheAccountingSource   string
 
 	ActiveToolLoop bool
 	IdleKnown      bool
@@ -89,6 +94,11 @@ func (t *SessionPolicyTrace) ToMap() map[string]interface{} {
 		"memory_turn_count":                 t.MemoryTurnCount,
 		"switch_count":                      t.SwitchCount,
 		"last_decision_name":                t.LastDecisionName,
+		"memory_prompt_tokens":              t.MemoryPromptTokens,
+		"memory_cached_tokens":              t.MemoryCachedTokens,
+		"memory_estimated_cached_tokens":    t.MemoryEstimatedCachedTokens,
+		"memory_estimated_cache_savings":    t.MemoryEstimatedCacheSavings,
+		"last_cache_accounting_source":      t.LastCacheAccountingSource,
 		"active_tool_loop":                  t.ActiveToolLoop,
 		"idle_known":                        t.IdleKnown,
 		"idle_for_seconds":                  t.IdleForSeconds,

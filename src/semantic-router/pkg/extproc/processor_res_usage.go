@@ -17,9 +17,10 @@ import (
 )
 
 type responseUsageMetrics struct {
-	promptTokens       int
-	cachedPromptTokens int
-	completionTokens   int
+	promptTokens               int
+	cachedPromptTokens         int
+	cachedPromptTokensReported bool
+	completionTokens           int
 }
 
 // =====================================================================
@@ -35,26 +36,28 @@ func parseResponseUsage(responseBody []byte, model string) responseUsageMetrics 
 
 	promptTokens := gjson.GetBytes(responseBody, "usage.prompt_tokens")
 	completionTokens := gjson.GetBytes(responseBody, "usage.completion_tokens")
-	cachedPromptTokens := firstNumericGJSON(
+	cachedPromptTokens := firstExistingGJSON(
 		gjson.GetBytes(responseBody, "usage.prompt_tokens_details.cached_tokens"),
 		gjson.GetBytes(responseBody, "usage.input_tokens_details.cached_tokens"),
 	)
+	cachedPromptTokensReported := cachedPromptTokens.Exists()
 	if (promptTokens.Exists() && promptTokens.Type != gjson.Number) ||
 		(completionTokens.Exists() && completionTokens.Type != gjson.Number) ||
-		(cachedPromptTokens.Exists() && cachedPromptTokens.Type != gjson.Number) {
+		(cachedPromptTokensReported && cachedPromptTokens.Type != gjson.Number) {
 		logging.Errorf("Error parsing tokens from response: usage fields must be numbers")
 		metrics.RecordRequestError(model, "parse_error")
 		return responseUsageMetrics{}
 	}
 
 	return responseUsageMetrics{
-		promptTokens:       int(promptTokens.Int()),
-		cachedPromptTokens: clampCachedPromptTokensInt(int(promptTokens.Int()), int(cachedPromptTokens.Int())),
-		completionTokens:   int(completionTokens.Int()),
+		promptTokens:               int(promptTokens.Int()),
+		cachedPromptTokens:         clampCachedPromptTokensInt(int(promptTokens.Int()), int(cachedPromptTokens.Int())),
+		cachedPromptTokensReported: cachedPromptTokensReported,
+		completionTokens:           int(completionTokens.Int()),
 	}
 }
 
-func firstNumericGJSON(values ...gjson.Result) gjson.Result {
+func firstExistingGJSON(values ...gjson.Result) gjson.Result {
 	for _, value := range values {
 		if value.Exists() {
 			return value
@@ -181,13 +184,13 @@ func extractStreamingUsage(ctx *RequestContext) openai.CompletionUsage {
 	return usage
 }
 
-func streamingCachedPromptTokens(ctx *RequestContext, promptTokens int) int {
+func streamingCachedPromptTokens(ctx *RequestContext, promptTokens int) (int, bool) {
 	if ctx == nil || ctx.StreamingMetadata == nil {
-		return 0
+		return 0, false
 	}
 	usageMap, ok := ctx.StreamingMetadata["usage"].(map[string]interface{})
 	if !ok {
-		return 0
+		return 0, false
 	}
 	for _, key := range []string{"prompt_tokens_details", "input_tokens_details"} {
 		details, ok := usageMap[key].(map[string]interface{})
@@ -195,20 +198,27 @@ func streamingCachedPromptTokens(ctx *RequestContext, promptTokens int) int {
 			continue
 		}
 		if cached, ok := details["cached_tokens"].(float64); ok {
-			return clampCachedPromptTokensInt(promptTokens, int(cached))
+			return clampCachedPromptTokensInt(promptTokens, int(cached)), true
 		}
 	}
-	return 0
+	return 0, false
 }
 
-func recordSessionTurnFromStreamingUsage(ctx *RequestContext, usage openai.CompletionUsage, cachedPromptTokens int, pricing sessiontelemetry.TurnPricing) {
+func recordSessionTurnFromStreamingUsage(
+	ctx *RequestContext,
+	usage openai.CompletionUsage,
+	cachedPromptTokens int,
+	cachedPromptTokensReported bool,
+	pricing sessiontelemetry.TurnPricing,
+) {
 	if usage.PromptTokens <= 0 && usage.CompletionTokens <= 0 {
 		return
 	}
 	recordSessionTurn(ctx, responseUsageMetrics{
-		promptTokens:       int(usage.PromptTokens),
-		cachedPromptTokens: cachedPromptTokens,
-		completionTokens:   int(usage.CompletionTokens),
+		promptTokens:               int(usage.PromptTokens),
+		cachedPromptTokens:         cachedPromptTokens,
+		cachedPromptTokensReported: cachedPromptTokensReported,
+		completionTokens:           int(usage.CompletionTokens),
 	}, pricing)
 }
 
@@ -224,8 +234,8 @@ func (r *OpenAIRouter) reportStreamingUsageMetrics(
 		})
 	}
 
-	cachedPromptTokens := streamingCachedPromptTokens(ctx, int(usage.PromptTokens))
-	recordSessionTurnFromStreamingUsage(ctx, usage, cachedPromptTokens, r.sessionTurnPricing(ctx.RequestModel))
+	cachedPromptTokens, cachedPromptTokensReported := streamingCachedPromptTokens(ctx, int(usage.PromptTokens))
+	recordSessionTurnFromStreamingUsage(ctx, usage, cachedPromptTokens, cachedPromptTokensReported, r.sessionTurnPricing(ctx.RequestModel))
 
 	if ctx.RequestModel == "" || (usage.PromptTokens == 0 && usage.CompletionTokens == 0) {
 		return
@@ -258,9 +268,10 @@ func (r *OpenAIRouter) reportStreamingUsageMetrics(
 		completionLatency = time.Since(ctx.StartTime)
 	}
 	replayUsage := r.recordResponseCost(ctx, completionLatency, responseUsageMetrics{
-		promptTokens:       int(usage.PromptTokens),
-		cachedPromptTokens: cachedPromptTokens,
-		completionTokens:   int(usage.CompletionTokens),
+		promptTokens:               int(usage.PromptTokens),
+		cachedPromptTokens:         cachedPromptTokens,
+		cachedPromptTokensReported: cachedPromptTokensReported,
+		completionTokens:           int(usage.CompletionTokens),
 	})
 	r.updateRouterReplayUsageCost(ctx, replayUsage)
 }

@@ -91,7 +91,12 @@ func TestRecordSessionTurn_PinnedSessionWithoutUserRecordsRouterUsage(t *testing
 	}
 	recordSessionTurn(
 		ctx,
-		responseUsageMetrics{promptTokens: 1000, cachedPromptTokens: 400, completionTokens: 100},
+		responseUsageMetrics{
+			promptTokens:               1000,
+			cachedPromptTokens:         400,
+			cachedPromptTokensReported: true,
+			completionTokens:           100,
+		},
 		sessiontelemetry.TurnPricing{
 			Currency:         "USD",
 			PromptPer1M:      10,
@@ -105,8 +110,10 @@ func TestRecordSessionTurn_PinnedSessionWithoutUserRecordsRouterUsage(t *testing
 	assert.Equal(t, "frontier-model", snapshot.CurrentModel)
 	assert.Equal(t, int64(1000), snapshot.CumulativePromptTokens)
 	assert.Equal(t, int64(400), snapshot.CumulativeCachedTokens)
+	assert.Equal(t, int64(0), snapshot.CumulativeEstimatedCachedTokens)
 	assert.Equal(t, int64(100), snapshot.CumulativeCompletionTokens)
 	assert.InDelta(t, 0.0084, snapshot.CumulativeCost, 0.0000001)
+	assert.Equal(t, "backend_reported", snapshot.LastCacheAccountingSource)
 
 	lastModel, ok := sessiontelemetry.GetLastModel("pinned-agent-session")
 	require.True(t, ok, "expected last-model continuity for pinned session")
@@ -136,4 +143,69 @@ func TestRecordSessionTurn_UserDerivedChatDoesNotDoubleCountRouterUsage(t *testi
 	assert.Equal(t, int64(200), snapshot.CumulativePromptTokens)
 	assert.Equal(t, int64(50), snapshot.CumulativeCachedTokens)
 	assert.Equal(t, int64(30), snapshot.CumulativeCompletionTokens)
+}
+
+func TestRecordSessionTurn_EstimatesRouterCacheReuseWhenBackendOmitsCachedTokens(t *testing.T) {
+	sessiontelemetry.ResetForTesting()
+	sessiontelemetry.ResetLastModelForTesting()
+	t.Cleanup(sessiontelemetry.ResetForTesting)
+	t.Cleanup(sessiontelemetry.ResetLastModelForTesting)
+
+	ctx := &RequestContext{
+		RequestID:              "req-router-estimate",
+		RequestModel:           "frontier-model",
+		SessionID:              "long-agent-session",
+		PreviousModel:          "frontier-model",
+		HistoryTokenCount:      800,
+		CacheWarmthEstimate:    0.75,
+		SessionIdleKnown:       true,
+		SessionIdleSeconds:     10,
+		ChatCompletionMessages: []ChatCompletionMessage{{Role: "user", Content: "continue the task"}},
+	}
+	recordSessionTurn(
+		ctx,
+		responseUsageMetrics{promptTokens: 1000, completionTokens: 100},
+		sessiontelemetry.TurnPricing{
+			Currency:         "USD",
+			PromptPer1M:      10,
+			CachedInputPer1M: 1,
+			CompletionPer1M:  20,
+		},
+	)
+
+	snapshot, ok := sessiontelemetry.GetRouterSessionSnapshot("long-agent-session", time.Now())
+	require.True(t, ok, "expected router-owned session memory for pinned session")
+	assert.Equal(t, int64(1000), snapshot.CumulativePromptTokens)
+	assert.Equal(t, int64(0), snapshot.CumulativeCachedTokens)
+	assert.Equal(t, int64(600), snapshot.CumulativeEstimatedCachedTokens)
+	assert.InDelta(t, 0.0054, snapshot.CumulativeEstimatedCacheSavings, 0.0000001)
+	assert.Equal(t, "router_estimated", snapshot.LastCacheAccountingSource)
+}
+
+func TestRecordSessionTurn_DoesNotEstimateCacheReuseAcrossPhysicalModelSwitch(t *testing.T) {
+	sessiontelemetry.ResetForTesting()
+	t.Cleanup(sessiontelemetry.ResetForTesting)
+
+	ctx := &RequestContext{
+		RequestID:           "req-router-switch",
+		RequestModel:        "frontier-model",
+		SessionID:           "switch-session",
+		PreviousModel:       "small-model",
+		HistoryTokenCount:   800,
+		CacheWarmthEstimate: 0.90,
+	}
+	recordSessionTurn(
+		ctx,
+		responseUsageMetrics{promptTokens: 1000, completionTokens: 100},
+		sessiontelemetry.TurnPricing{
+			Currency:         "USD",
+			PromptPer1M:      10,
+			CachedInputPer1M: 1,
+		},
+	)
+
+	snapshot, ok := sessiontelemetry.GetRouterSessionSnapshot("switch-session", time.Now())
+	require.True(t, ok)
+	assert.Equal(t, int64(0), snapshot.CumulativeEstimatedCachedTokens)
+	assert.Equal(t, "switch_checkout", snapshot.LastCacheAccountingSource)
 }
