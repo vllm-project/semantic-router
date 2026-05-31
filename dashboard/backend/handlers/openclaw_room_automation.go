@@ -258,11 +258,12 @@ func (h *OpenClawHandler) startRoomAutomationReply(
 	placeholderID := generateRoomEntityID("room-msg")
 	go func() {
 		onChunk := func(chunk string, done bool) {
-			h.publishRoomWSEvent(roomID, WSOutboundMessage{
-				Type:      "message_chunk",
-				MessageID: placeholderID,
-				Status:    "streaming",
-			})
+			if done || chunk != "" {
+				h.publishRoomCollaborationEvent(
+					roomID,
+					workerStreamChunkCollaborationEvent(room, target, placeholderID, chunk, done),
+				)
+			}
 		}
 
 		reply, err := h.runWorkerReplyStream(
@@ -304,6 +305,8 @@ func (h *OpenClawHandler) collectRoomAutomationReplies(
 			log.Printf("openclaw: failed to append room reply: %v", err)
 			continue
 		}
+		replyCopy := result.reply
+		h.publishRoomCollaborationEvent(roomID, messageUpdatedCollaborationEvent(replyCopy))
 		if len(result.reply.Mentions) > 0 {
 			next = append(next, result.reply.ID)
 		}

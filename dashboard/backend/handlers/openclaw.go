@@ -57,6 +57,7 @@ type OpenClawHandler struct {
 	routerConfigPath string
 	wf               *workflowstore.Store
 	mu               sync.RWMutex
+	roomWSClients    sync.Map
 	roomSSEClients   sync.Map
 	roomSSELastEvent sync.Map
 	roomAutomationMu sync.Map
