@@ -154,6 +154,30 @@ func writeKnowledgeBaseFixture(t *testing.T) string {
 	return root
 }
 
+func TestShouldDeferPreload_DefaultBackendDefers(t *testing.T) {
+	t.Setenv("EMBEDDING_BACKEND_OVERRIDE", "")
+	c := &KnowledgeBaseClassifier{}
+	if !c.shouldDeferPreload() {
+		t.Fatal("shouldDeferPreload must return true when no backend override is set (default = candle)")
+	}
+}
+
+func TestShouldDeferPreload_ExplicitCandleDefers(t *testing.T) {
+	t.Setenv("EMBEDDING_BACKEND_OVERRIDE", "candle")
+	c := &KnowledgeBaseClassifier{}
+	if !c.shouldDeferPreload() {
+		t.Fatal("shouldDeferPreload must return true when backend is explicitly 'candle'")
+	}
+}
+
+func TestShouldDeferPreload_OpenVINODoesNotDefer(t *testing.T) {
+	t.Setenv("EMBEDDING_BACKEND_OVERRIDE", "openvino")
+	c := &KnowledgeBaseClassifier{}
+	if c.shouldDeferPreload() {
+		t.Fatal("shouldDeferPreload must return false when backend is 'openvino'")
+	}
+}
+
 func containsString(values []string, target string) bool {
 	for _, value := range values {
 		if value == target {

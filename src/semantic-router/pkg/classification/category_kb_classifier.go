@@ -76,7 +76,8 @@ func (c *KnowledgeBaseClassifier) currentBackend() string {
 }
 
 func (c *KnowledgeBaseClassifier) shouldDeferPreload() bool {
-	return c.currentBackend() == "candle"
+	backend := c.currentBackend()
+	return backend == "" || backend == "candle"
 }
 
 func (c *KnowledgeBaseClassifier) ensureEmbeddingsPreloaded() error {
