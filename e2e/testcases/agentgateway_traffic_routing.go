@@ -15,7 +15,7 @@ import (
 
 func init() {
 	pkgtestcases.Register("agentgateway-traffic-routing", pkgtestcases.TestCase{
-		Description: "Test request routing through AgentGateway proxy to Semantic Router",
+		Description: "Test request routing through agentgateway proxy to Semantic Router",
 		Tags:        []string{"agentgateway", "gateway", "routing"},
 		Fn:          testAgentGatewayTrafficRouting,
 	})
@@ -34,7 +34,7 @@ func testAgentGatewayTrafficRouting(ctx context.Context, client *kubernetes.Clie
 
 	stopFunc, err := helpers.StartPortForward(ctx, client, opts.RestConfig, namespace, svcName, localPort+":80", opts.Verbose)
 	if err != nil {
-		return fmt.Errorf("failed to start port-forward to AgentGateway proxy: %w", err)
+		return fmt.Errorf("failed to start port-forward to agentgateway proxy: %w", err)
 	}
 	defer stopFunc()
 
@@ -56,7 +56,7 @@ func testAgentGatewayTrafficRouting(ctx context.Context, client *kubernetes.Clie
 	httpClient := &http.Client{Timeout: 30 * time.Second}
 	resp, err := httpClient.Do(req)
 	if err != nil {
-		return fmt.Errorf("failed to send request through AgentGateway: %w", err)
+		return fmt.Errorf("failed to send request through agentgateway: %w", err)
 	}
 	defer resp.Body.Close()
 
@@ -81,7 +81,7 @@ func testAgentGatewayTrafficRouting(ctx context.Context, client *kubernetes.Clie
 	}
 
 	if opts.Verbose {
-		fmt.Println("[Test] ✅ Traffic routing through AgentGateway successful")
+		fmt.Println("[Test] ✅ Traffic routing through agentgateway successful")
 	}
 
 	return nil

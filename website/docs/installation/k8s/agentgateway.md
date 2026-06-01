@@ -1,13 +1,13 @@
-# Install with AgentGateway
+# Install with agentgateway
 
-This guide provides step-by-step instructions for integrating the vLLM Semantic Router with [AgentGateway](https://agentgateway.dev/) on Kubernetes. AgentGateway acts as the Gateway API data plane for OpenAI-compatible traffic, and vLLM Semantic Router runs as an Envoy ExtProc server that classifies each request and mutates the request body before AgentGateway forwards it to vLLM.
+This guide provides step-by-step instructions for integrating the vLLM Semantic Router with [agentgateway](https://agentgateway.dev/) on Kubernetes. agentgateway acts as the Gateway API data plane for OpenAI-compatible traffic, and vLLM Semantic Router runs as an Envoy ExtProc server that classifies each request and mutates the request body before agentgateway forwards it to vLLM.
 
 ## Architecture Overview
 
 The deployment consists of:
 
 - **vLLM Semantic Router**: Provides prompt classification, model selection, request mutation, and response processing through ExtProc
-- **AgentGateway**: Provides the Kubernetes Gateway API proxy, `AgentgatewayBackend`, `HTTPRoute`, and `AgentgatewayPolicy` resources
+- **agentgateway**: Provides the Kubernetes Gateway API proxy, `AgentgatewayBackend`, `HTTPRoute`, and `AgentgatewayPolicy` resources
 - **Demo vLLM-compatible backend**: Serves a base model and LoRA adapters through an OpenAI-compatible API
 
 ## Prerequisites
@@ -18,7 +18,7 @@ Before starting, ensure you have the following tools installed:
 - [kubectl](https://kubernetes.io/docs/tasks/tools/) - Kubernetes CLI
 - [Helm](https://helm.sh/docs/intro/install/) - Package manager for Kubernetes
 
-This guide requires AgentGateway `v1.3.0-alpha.1` or newer because it uses the ExtProc `processingOptions` and `allowModeOverride` fields that were added after `v1.2.1`.
+This guide requires agentgateway `v1.3.0-alpha.1` or newer because it uses the ExtProc `processingOptions` and `allowModeOverride` fields that were added after `v1.2.1`.
 
 ## Step 1: Create Kind Cluster (Optional)
 
@@ -31,9 +31,9 @@ kind create cluster --name semantic-router-agentgateway
 kubectl wait --for=condition=Ready nodes --all --timeout=300s
 ```
 
-## Step 2: Install AgentGateway
+## Step 2: Install agentgateway
 
-Install the Kubernetes Gateway API CRDs and the AgentGateway control plane:
+Install the Kubernetes Gateway API CRDs and the agentgateway control plane:
 
 ```bash
 export AGENTGATEWAY_VERSION=v1.3.0-alpha.1
@@ -57,9 +57,9 @@ helm upgrade -i agentgateway oci://cr.agentgateway.dev/charts/agentgateway \
 kubectl get pods -n agentgateway-system
 ```
 
-## Step 3: Create an AgentGateway Proxy
+## Step 3: Create an agentgateway proxy
 
-Create a Gateway that uses the AgentGateway GatewayClass:
+Create a Gateway that uses the agentgateway GatewayClass:
 
 ```bash
 kubectl apply -f- <<'EOF'
@@ -159,7 +159,7 @@ kubectl wait --for=condition=Available deployment/vllm-llama3-8b-instruct \
 
 ## Step 5: Deploy vLLM Semantic Router
 
-Install the Semantic Router in the `agentgateway-system` namespace so the AgentGateway ExtProc policy can reference the `semantic-router` service directly:
+Install the Semantic Router in the `agentgateway-system` namespace so the agentgateway ExtProc policy can reference the `semantic-router` service directly:
 
 ```bash
 helm install semantic-router oci://ghcr.io/vllm-project/charts/semantic-router \
@@ -174,7 +174,7 @@ kubectl wait --for=condition=Available deployment/semantic-router \
 
 The values file configures Semantic Router to send traffic to `vllm-llama3-8b-instruct.default.svc.cluster.local:8000` and to select adapter names such as `math-expert`, `science-expert`, and `general-expert`.
 
-## Step 6: Create AgentGateway Routing Resources
+## Step 6: Create agentgateway routing resources
 
 Create an `AgentgatewayBackend` for the vLLM-compatible backend and route OpenAI-compatible requests to it:
 
@@ -210,7 +210,7 @@ spec:
 EOF
 ```
 
-The `openai.model` field is intentionally omitted so AgentGateway uses the model name from the request body after Semantic Router selects the target model or LoRA adapter.
+The `openai.model` field is intentionally omitted so agentgateway uses the model name from the request body after Semantic Router selects the target model or LoRA adapter.
 
 ## Step 7: Attach Semantic Router as ExtProc
 
@@ -243,11 +243,11 @@ spec:
 EOF
 ```
 
-The demo uses buffered request bodies to match the existing Envoy AI Gateway and Istio examples. For large prompts, use `requestBodyMode: FullDuplexStreamed` together with a Semantic Router configuration that enables streamed body handling. AgentGateway does not support `Streamed` mode; `FullDuplexStreamed` is the only streaming option.
+The demo uses buffered request bodies to match the existing Envoy AI Gateway and Istio examples. For large prompts, use `requestBodyMode: FullDuplexStreamed` together with a Semantic Router configuration that enables streamed body handling. agentgateway does not support `Streamed` mode; `FullDuplexStreamed` is the only streaming option.
 
 ## Testing the Deployment
 
-Start a port-forward to the AgentGateway proxy:
+Start a port-forward to the agentgateway proxy:
 
 ```bash
 kubectl port-forward -n agentgateway-system svc/agentgateway-proxy 8080:80
@@ -268,11 +268,11 @@ curl -i -X POST http://localhost:8080/v1/chat/completions \
   }'
 ```
 
-Semantic Router should classify the math prompt, select the configured math route, and mutate the request model before AgentGateway forwards the request to the vLLM-compatible backend. Use `-i` to inspect Semantic Router response headers such as the selected model metadata.
+Semantic Router should classify the math prompt, select the configured math route, and mutate the request model before agentgateway forwards the request to the vLLM-compatible backend. Use `-i` to inspect Semantic Router response headers such as the selected model metadata.
 
 ## Troubleshooting
 
-**AgentGateway proxy not ready:**
+**agentgateway proxy not ready:**
 
 ```bash
 kubectl get gateway agentgateway-proxy -n agentgateway-system
@@ -280,7 +280,7 @@ kubectl get deployment agentgateway-proxy -n agentgateway-system
 kubectl logs -n agentgateway-system deployment/agentgateway
 ```
 
-**HTTPRoute or AgentGateway backend not accepted:**
+**HTTPRoute or agentgateway backend not accepted:**
 
 ```bash
 kubectl describe httproute semantic-router-vllm -n agentgateway-system
