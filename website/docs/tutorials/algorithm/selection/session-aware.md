@@ -4,7 +4,7 @@
 
 `session_aware` selects one model from a decision's `modelRefs` while respecting agentic multi-turn context. It wraps a base selector such as `hybrid`, then applies a router-owned stay-vs-switch policy for sessions, tool loops, idle timeout, handoff cost, switch history, confidence-gated remaining-turn priors, and prefix-cache cost.
 
-Use it when clients send a stable `x-session-id` header or use Response API conversation IDs and you want long-running agent sessions to avoid unnecessary model churn. Provider conversation history is treated as cache; the router keeps its own session memory so model selection can reason about the conversation even when the next turn might move to another backend.
+Use it when clients send a stable `x-session-id` header and you want long-running agent sessions to avoid unnecessary model churn. Provider-managed continuation state, such as a Response API `previous_response_id`, is treated as non-portable state and hard-locks the session to the previous physical model. Router memory stores routing facts only, so model selection can reason about continuity without becoming application memory.
 
 It aligns to `config/algorithm/selection/session-aware.yaml`.
 
