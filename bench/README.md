@@ -362,6 +362,14 @@ blocker `id`, `title`, `status`, and `next_actions`; maintainer cron jobs can
 include that summary directly in a daily release brief while linking the full
 Markdown and JSON reports for details.
 
+The report also writes a `debug_evidence_chain` section. This is the operator
+view that connects the GA evidence in audit order: policy-only synthetic
+evidence, live continuity and recovery, router diagnostic response headers, the
+`x-vsr-replay-id` join back to router replay records, cache-token serving-path
+evidence, and the final branch-image artifact. Each chain stage has its own
+`passed`, `blocked`, or `missing` status, so a strong simulator result cannot
+hide a missing backend cache probe or an incomplete branch-image run.
+
 The full branch-image summary must identify itself as real branch-image
 benchmark evidence, for example with `validation_kind:
 full-branch-image-benchmark` or `branch_image_benchmark: true`. A diagnostic
