@@ -120,7 +120,7 @@ const FIGURE1_MAPPING = [
     vsr: translate({ id: 'homepage.paperFigures.figure1.mapping.destination.vsr', message: 'Selected Model' }),
     note: translate({
       id: 'homepage.paperFigures.figure1.mapping.destination.note',
-      message: 'A concrete model endpoint is chosen and receives the request.',
+      message: 'The selected model drives downstream cluster routing; endpoint load balancing remains infrastructure-owned.',
     }),
   },
 ] as const

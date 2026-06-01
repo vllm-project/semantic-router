@@ -1114,48 +1114,64 @@ def render_markdown(report: dict[str, Any]) -> str:
         f"- passed: {report['passed_count']}",
         f"- blockers: {report['blocker_count']}",
         "",
-        "| Requirement | Status | Evidence | Key Metrics | Blockers | Next Actions |",
-        "| --- | --- | --- | --- | --- | --- |",
     ]
+
+    blockers = [
+        item
+        for item in report["requirements"]
+        if item["status"] in {BLOCKING_STATUS, MISSING_STATUS}
+    ]
+    lines.extend(render_blocker_queue(blockers))
+    lines.extend(["", "## Requirement Details", ""])
+
     for item in report["requirements"]:
-        metrics = compact_metrics(item.get("metrics", {}))
-        failures = compact_failures(item.get("failures", []))
-        next_actions = compact_next_actions(item.get("next_actions", []))
-        lines.append(
-            (
-                "| {title} | {status} | `{evidence}` | {metrics} | {failures} | "
-                "{next_actions} |"
-            ).format(
-                title=markdown_table_cell(item["title"]),
-                status=markdown_table_cell(item["status"]),
-                evidence=markdown_table_cell(item["evidence"]),
-                metrics=markdown_table_cell(metrics),
-                failures=markdown_table_cell(failures),
-                next_actions=markdown_table_cell(next_actions),
-            )
-        )
+        lines.extend(render_requirement_section(item))
     lines.append("")
     return "\n".join(lines)
 
 
-def compact_failures(failures: list[Any]) -> str:
-    if not failures:
-        return ""
-    return "<br>".join(
-        f"{index}. {failure}" for index, failure in enumerate(failures, 1)
-    )
+def render_blocker_queue(blockers: list[dict[str, Any]]) -> list[str]:
+    lines = ["## Blocker Queue", ""]
+    if not blockers:
+        lines.append("No blockers.")
+        return lines
+    for index, item in enumerate(blockers, 1):
+        lines.append(f"{index}. **{item['title']}** (`{item['status']}`)")
+        lines.append(f"   - evidence: `{item['evidence']}`")
+        failures = item.get("failures", [])
+        if failures:
+            lines.append(f"   - first blocker: {failures[0]}")
+        next_actions = item.get("next_actions", [])
+        if next_actions:
+            lines.append(f"   - next action: {next_actions[0]}")
+    return lines
 
 
-def compact_next_actions(next_actions: list[Any]) -> str:
-    if not next_actions:
-        return ""
-    return "<br>".join(
-        f"{index}. {action}" for index, action in enumerate(next_actions, 1)
-    )
+def render_requirement_section(item: dict[str, Any]) -> list[str]:
+    lines = [
+        f"### {item['title']}",
+        "",
+        f"- status: `{item['status']}`",
+        f"- evidence: `{item['evidence']}`",
+    ]
+    metrics = compact_metrics(item.get("metrics", {}))
+    if metrics:
+        language = (
+            "json" if not metrics_was_truncated(item.get("metrics", {})) else "text"
+        )
+        lines.extend(["", "#### Key Metrics", "", f"```{language}", metrics, "```"])
+    failures = numbered_lines(item.get("failures", []))
+    if failures:
+        lines.extend(["", "#### Blockers", "", *failures])
+    next_actions = numbered_lines(item.get("next_actions", []))
+    if next_actions:
+        lines.extend(["", "#### Next Actions", "", *next_actions])
+    lines.append("")
+    return lines
 
 
-def markdown_table_cell(value: Any) -> str:
-    return str(value).replace("\n", " ").replace("|", r"\|")
+def numbered_lines(values: list[Any]) -> list[str]:
+    return [f"{index}. {value}" for index, value in enumerate(values, 1)]
 
 
 def compact_metrics(metrics: Any) -> str:
@@ -1165,6 +1181,12 @@ def compact_metrics(metrics: Any) -> str:
     if len(rendered) <= MARKDOWN_METRIC_LIMIT:
         return rendered
     return rendered[:MARKDOWN_METRIC_TRUNCATED_LIMIT] + "..."
+
+
+def metrics_was_truncated(metrics: Any) -> bool:
+    if not metrics:
+        return False
+    return len(json.dumps(metrics, sort_keys=True)) > MARKDOWN_METRIC_LIMIT
 
 
 def write_report(report: dict[str, Any], output_dir: Path) -> None:

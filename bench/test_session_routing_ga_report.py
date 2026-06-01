@@ -1000,7 +1000,7 @@ def test_main_stdout_lists_blockers_for_maintainer_ops(tmp_path, capsys):
     assert stdout["blockers"] == expected_blockers
 
 
-def test_markdown_groups_failures_under_blocker_column():
+def test_markdown_renders_blockers_as_readable_sections():
     report_mod = load_report_module()
     markdown = report_mod.render_markdown(
         {
@@ -1024,13 +1024,17 @@ def test_markdown_groups_failures_under_blocker_column():
         }
     )
 
-    assert (
-        "| Requirement | Status | Evidence | Key Metrics | Blockers | Next Actions |"
-        in markdown
-    )
+    assert "| Requirement | Status | Evidence |" not in markdown
+    assert "## Blocker Queue" in markdown
+    assert "1. **Cache-token reporting** (`blocked`)" in markdown
+    assert "### Cache-token reporting" in markdown
+    assert "#### Key Metrics" in markdown
     assert "Cache-token reporting failure" not in markdown
+    assert "#### Blockers" in markdown
+    assert "1. router: cached_token_reporting missing < positive" in markdown
     assert (
-        "1. router: cached_token_reporting missing < positive<br>2. baseline"
+        "2. baseline: probe_kind missing != repeated-prefix-cache-token-probe"
         in markdown
     )
+    assert "#### Next Actions" in markdown
     assert "1. rerun cache probe" in markdown
