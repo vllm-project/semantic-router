@@ -19,6 +19,7 @@ package selection
 import (
 	"context"
 	"errors"
+	"strings"
 	"testing"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/latency"
@@ -106,7 +107,7 @@ func seedCombinedLatencyStats() {
 	}
 }
 
-func TestLatencyAwareSelectorFallbacks(t *testing.T) {
+func TestLatencyAwareSelectorDefaults(t *testing.T) {
 	for _, tc := range []struct {
 		name   string
 		selCtx *SelectionContext
@@ -133,7 +134,10 @@ func TestLatencyAwareSelectorFallbacks(t *testing.T) {
 				t.Fatalf("unexpected error: %v", err)
 			}
 			if result.SelectedModel != "model-a" {
-				t.Errorf("expected fallback model-a, got %s", result.SelectedModel)
+				t.Errorf("expected default model-a, got %s", result.SelectedModel)
+			}
+			if !strings.Contains(result.Reasoning, "using first candidate as default") {
+				t.Errorf("expected default-candidate reasoning, got %q", result.Reasoning)
 			}
 		})
 	}
