@@ -505,6 +505,7 @@ export interface PromptCompressionConfig {
   position_weight?: number
   tfidf_weight?: number
   position_depth?: number
+  max_evaluation_chars?: number
 }
 
 export interface ModalityClassifierConfig {

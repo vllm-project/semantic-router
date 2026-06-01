@@ -222,6 +222,9 @@ const SIGNAL_TYPE_SUGGESTIONS = [
   { label: 'jailbreak', detail: 'Jailbreak detection signal' },
   { label: 'pii', detail: 'PII detection signal' },
   { label: 'kb', detail: 'Knowledge base signal' },
+  { label: 'conversation', detail: 'Conversation-shape signal' },
+  { label: 'session_metric', detail: 'Session-context metric signal' },
+  { label: 'event_context', detail: 'Structured event metadata signal' },
 ]
 
 const PLUGIN_TYPE_SUGGESTIONS = [
@@ -248,7 +251,15 @@ const ALGO_TYPE_SUGGESTIONS = [
   { label: 'router_dc', detail: 'Router DC algorithm' },
   { label: 'automix', detail: 'AutoMix algorithm' },
   { label: 'hybrid', detail: 'Hybrid routing' },
+  { label: 'rl_driven', detail: 'Reinforcement-learning model selection' },
+  { label: 'gmtrouter', detail: 'Graph-based personalized routing' },
   { label: 'latency_aware', detail: 'Latency-aware routing' },
+  { label: 'knn', detail: 'KNN model-selection classifier' },
+  { label: 'kmeans', detail: 'KMeans model-selection classifier' },
+  { label: 'svm', detail: 'SVM model-selection classifier' },
+  { label: 'mlp', detail: 'MLP model-selection classifier' },
+  { label: 'multi_factor', detail: 'Quality/latency/cost/load scoring' },
+  { label: 'session_aware', detail: 'Agentic stay-vs-switch policy' },
 ]
 
 /**

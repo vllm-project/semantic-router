@@ -133,163 +133,23 @@ func flattenRuleNode(node *config.RuleCombination, op string) []string {
 }
 
 func (d *decompiler) decompileAlgorithmFields(algo *config.AlgorithmConfig) string {
+	if algo == nil {
+		return ""
+	}
+	fields := d.algorithmToFields(algo)
+	if len(fields) == 0 {
+		return ""
+	}
+
 	var sb strings.Builder
-	decompileAlgorithmOnError(&sb, algo)
-	switch algo.Type {
-	case "confidence":
-		decompileConfidenceAlgorithmFields(&sb, algo.Confidence)
-	case "ratings":
-		decompileRatingsAlgorithmFields(&sb, algo.Ratings)
-	case "remom":
-		decompileReMoMAlgorithmFields(&sb, algo.ReMoM)
-	case "elo":
-		decompileEloAlgorithmFields(&sb, algo.Elo)
-	case "router_dc":
-		decompileRouterDCAlgorithmFields(&sb, algo.RouterDC)
-	case "automix":
-		decompileAutoMixAlgorithmFields(&sb, algo.AutoMix)
-	case "latency_aware":
-		decompileLatencyAwareAlgorithmFields(&sb, algo.LatencyAware)
+	for _, key := range sortedKeys(fields) {
+		fmt.Fprintf(&sb, "    %s: %s\n", key, formatDSLFieldValue(fields[key]))
 	}
 	return sb.String()
 }
 
-func decompileAlgorithmOnError(sb *strings.Builder, algo *config.AlgorithmConfig) {
-	switch algo.Type {
-	case "confidence", "ratings", "remom":
-		return
-	default:
-		if algo.OnError != "" {
-			fmt.Fprintf(sb, "    on_error: %q\n", algo.OnError)
-		}
-	}
-}
-
-func decompileConfidenceAlgorithmFields(sb *strings.Builder, c *config.ConfidenceAlgorithmConfig) {
-	if c == nil {
-		return
-	}
-	if c.ConfidenceMethod != "" {
-		fmt.Fprintf(sb, "    confidence_method: %q\n", c.ConfidenceMethod)
-	}
-	if c.Threshold != 0 {
-		fmt.Fprintf(sb, "    threshold: %v\n", c.Threshold)
-	}
-	if c.OnError != "" {
-		fmt.Fprintf(sb, "    on_error: %q\n", c.OnError)
-	}
-	if c.EscalationOrder != "" {
-		fmt.Fprintf(sb, "    escalation_order: %q\n", c.EscalationOrder)
-	}
-	if c.CostQualityTradeoff != 0 {
-		fmt.Fprintf(sb, "    cost_quality_tradeoff: %v\n", c.CostQualityTradeoff)
-	}
-	if c.HybridWeights != nil {
-		fmt.Fprintf(sb, "    hybrid_weights: { logprob_weight: %v, margin_weight: %v }\n",
-			c.HybridWeights.LogprobWeight, c.HybridWeights.MarginWeight)
-	}
-}
-
-func decompileRatingsAlgorithmFields(sb *strings.Builder, r *config.RatingsAlgorithmConfig) {
-	if r == nil {
-		return
-	}
-	if r.MaxConcurrent != 0 {
-		fmt.Fprintf(sb, "    max_concurrent: %d\n", r.MaxConcurrent)
-	}
-}
-
-func decompileReMoMAlgorithmFields(sb *strings.Builder, r *config.ReMoMAlgorithmConfig) {
-	if r == nil {
-		return
-	}
-	if len(r.BreadthSchedule) > 0 {
-		fmt.Fprintf(sb, "    breadth_schedule: %s\n", formatIntArray(r.BreadthSchedule))
-	}
-	if r.ModelDistribution != "" {
-		fmt.Fprintf(sb, "    model_distribution: %q\n", r.ModelDistribution)
-	}
-	if r.Temperature != 0 {
-		fmt.Fprintf(sb, "    temperature: %v\n", r.Temperature)
-	}
-	if r.IncludeReasoning {
-		fmt.Fprintf(sb, "    include_reasoning: true\n")
-	}
-	if r.CompactionStrategy != "" {
-		fmt.Fprintf(sb, "    compaction_strategy: %q\n", r.CompactionStrategy)
-	}
-	if r.CompactionTokens != 0 {
-		fmt.Fprintf(sb, "    compaction_tokens: %d\n", r.CompactionTokens)
-	}
-	if r.SynthesisTemplate != "" {
-		fmt.Fprintf(sb, "    synthesis_template: %q\n", r.SynthesisTemplate)
-	}
-	if r.MaxConcurrent != 0 {
-		fmt.Fprintf(sb, "    max_concurrent: %d\n", r.MaxConcurrent)
-	}
-	if r.OnError != "" {
-		fmt.Fprintf(sb, "    on_error: %q\n", r.OnError)
-	}
-}
-
-func decompileEloAlgorithmFields(sb *strings.Builder, e *config.EloSelectionConfig) {
-	if e == nil {
-		return
-	}
-	if e.InitialRating != 0 {
-		fmt.Fprintf(sb, "    initial_rating: %v\n", e.InitialRating)
-	}
-	if e.KFactor != 0 {
-		fmt.Fprintf(sb, "    k_factor: %v\n", e.KFactor)
-	}
-	if e.CategoryWeighted {
-		fmt.Fprintf(sb, "    category_weighted: true\n")
-	}
-	if e.DecayFactor != 0 {
-		fmt.Fprintf(sb, "    decay_factor: %v\n", e.DecayFactor)
-	}
-	if e.StoragePath != "" {
-		fmt.Fprintf(sb, "    storage_path: %q\n", e.StoragePath)
-	}
-}
-
-func decompileRouterDCAlgorithmFields(sb *strings.Builder, r *config.RouterDCSelectionConfig) {
-	if r == nil {
-		return
-	}
-	if r.Temperature != 0 {
-		fmt.Fprintf(sb, "    temperature: %v\n", r.Temperature)
-	}
-	if r.DimensionSize != 0 {
-		fmt.Fprintf(sb, "    dimension_size: %d\n", r.DimensionSize)
-	}
-	if r.MinSimilarity != 0 {
-		fmt.Fprintf(sb, "    min_similarity: %v\n", r.MinSimilarity)
-	}
-}
-
-func decompileAutoMixAlgorithmFields(sb *strings.Builder, a *config.AutoMixSelectionConfig) {
-	if a == nil {
-		return
-	}
-	if a.VerificationThreshold != 0 {
-		fmt.Fprintf(sb, "    verification_threshold: %v\n", a.VerificationThreshold)
-	}
-	if a.MaxEscalations != 0 {
-		fmt.Fprintf(sb, "    max_escalations: %d\n", a.MaxEscalations)
-	}
-}
-
-func decompileLatencyAwareAlgorithmFields(sb *strings.Builder, l *config.LatencyAwareAlgorithmConfig) {
-	if l == nil {
-		return
-	}
-	if l.TPOTPercentile != 0 {
-		fmt.Fprintf(sb, "    tpot_percentile: %d\n", l.TPOTPercentile)
-	}
-	if l.TTFTPercentile != 0 {
-		fmt.Fprintf(sb, "    ttft_percentile: %d\n", l.TTFTPercentile)
-	}
+func formatDSLFieldValue(value Value) string {
+	return formatPluginConfigValue(dslFieldValueFromValue(value).asInterface())
 }
 
 func decompileComposerObj(node *config.RuleCombination) string {

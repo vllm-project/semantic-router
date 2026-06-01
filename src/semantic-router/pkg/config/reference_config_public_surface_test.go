@@ -90,6 +90,7 @@ func assertReferenceConfigSignalCoverage(t testingT, signals map[string]interfac
 	assertReferenceConfigKBSignalCoverage(t, mustSliceAt(t, signals, "kb"))
 	assertReferenceConfigConversationSignalCoverage(t, mustSliceAt(t, signals, "conversation"))
 	assertSliceUnionCoversStructFields(t, mustSliceAt(t, signals, "session_metrics"), reflect.TypeOf(SessionMetricRule{}), "routing.signals.session_metrics")
+	assertSliceUnionCoversStructFields(t, mustSliceAt(t, signals, "event_context_rules"), reflect.TypeOf(EventContextRule{}), "routing.signals.event_context_rules")
 }
 
 func assertReferenceConfigProjectionCoverage(t testingT, projections map[string]interface{}) {

@@ -2090,9 +2090,9 @@ global:
         tfidf_weight: 0.3
         position_depth: 0.1
         # Hard safety limit applied before any signal processing, independent of
-        # the quality-aware compression above. 0 = no limit (default).
-        # Recommended production value: 8192 (~2K tokens).
-        max_evaluation_chars: 0
+        # the quality-aware compression above. Built-in default: 8192 chars
+        # (~2K tokens). Set 0 or -1 only after classifier capacity validation.
+        max_evaluation_chars: 8192
       prompt_guard:
         enabled: true
         model_ref: prompt_guard

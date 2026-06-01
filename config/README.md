@@ -21,7 +21,7 @@ Inside canonical `config.yaml`:
 - request-shape detectors such as `routing.signals.structure` stay in the signal layer as typed named facts; numeric thresholds live inside the detector config instead of turning decisions into a free-form expression language
 - `routing.signals.embeddings[].query_modality` declares which modality of incoming request payload the embedding rule's query is computed from. Defaults to `"text"`; `"image"` and `"audio"` require `global.model_catalog.embeddings.semantic.embedding_config.model_type=multimodal` so the query and candidate embeddings land in the same shared space. See `website/docs/tutorials/signal/learned/embedding.md` for the worked multimodal example.
 - structure `density` features now use built-in multilingual text-unit normalization; the contract no longer exposes a per-rule `normalize_by` switch
-- the dashboard and DSL builder now expose the same projection surface directly; see `website/docs/tutorials/signal/projections.md` and the maintained `deploy/recipes/balance.{yaml,dsl}` pair for end-to-end usage
+- the dashboard and DSL builder now expose the same projection surface directly; see `website/docs/tutorials/projection/overview.md` and the maintained `deploy/recipes/balance.{yaml,dsl}` pair for end-to-end usage
 - `global.router`, `global.services`, `global.stores`, `global.integrations`, and `global.model_catalog` expose router-wide overrides explicitly
 - `decision.algorithm.type=session_aware` wraps a base selector with agentic session policy: tool loops and non-portable provider-state continuations stay on the current model, decision drift and idle boundaries can reselect, non-idle sessions pay handoff, switch-history, confidence-gated remaining-turn-prior, and input checkout prefix-cache costs before switching, and router replay records the full policy trace for experiments. Cache-cost multipliers must be neutral-or-stricter (`max_cache_cost_multiplier >= 1`) and remaining-turn horizons must be positive.
 - `global.services.router_replay.enabled` is the router-wide replay default; when it is on, decisions inherit replay capture unless a route-local `router_replay` plugin sets `enabled: false`
@@ -32,6 +32,7 @@ Inside canonical `config.yaml`:
 - `global.router.config_source` selects the router's steady-state config source; the exhaustive reference uses `file`, while Kubernetes CRD reconciliation uses `kubernetes`
 - `global.router.skip_processing.enabled` opts the router into honoring the `x-vsr-skip-processing` request header; defaults to `false` so an arbitrary upstream caller cannot bypass router policy by injecting the header. Enable only when an authenticated upstream filter (ext_authz, etc.) is responsible for setting or stripping the header (see [#1808](https://github.com/vllm-project/semantic-router/issues/1808))
 - router-owned model-backed module config lives under `global.model_catalog.modules`
+- `global.model_catalog.modules.prompt_compression.max_evaluation_chars` caps signal-evaluation input before classifier, jailbreak, PII, and other signal processing. The built-in default is `8192`; set `0` or `-1` only after validating the classifier stack can safely process longer inputs.
 
 `config/decision/` is organized by boolean rule shape:
 

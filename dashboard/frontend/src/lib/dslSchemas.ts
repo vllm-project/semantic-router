@@ -12,7 +12,7 @@ export const SIGNAL_TYPES = [
   'keyword', 'embedding', 'domain', 'fact_check', 'user_feedback',
   'reask',
   'preference', 'language', 'context', 'structure', 'complexity', 'modality', 'authz',
-  'jailbreak', 'pii', 'kb',
+  'jailbreak', 'pii', 'kb', 'conversation', 'session_metric', 'event_context',
 ] as const
 
 export type SignalType = typeof SIGNAL_TYPES[number]
@@ -36,6 +36,7 @@ export function getSignalFieldSchema(signalType: string): FieldSchema[] {
         { key: 'threshold', label: 'Threshold', type: 'number', required: true, placeholder: '0.75' },
         { key: 'candidates', label: 'Candidates', type: 'string[]', required: true, placeholder: 'Add candidate...' },
         { key: 'aggregation_method', label: 'Aggregation', type: 'select', options: ['mean', 'max', 'any'] },
+        { key: 'query_modality', label: 'Query Modality', type: 'select', options: ['text', 'image', 'audio'] },
       ]
     case 'domain':
       return [
@@ -60,6 +61,8 @@ export function getSignalFieldSchema(signalType: string): FieldSchema[] {
     case 'preference':
       return [
         { key: 'description', label: 'Description', type: 'string', required: true },
+        { key: 'examples', label: 'Examples', type: 'string[]', placeholder: 'Add example...' },
+        { key: 'threshold', label: 'Threshold', type: 'number', placeholder: '0.70' },
       ]
     case 'language':
       return [
@@ -83,7 +86,7 @@ export function getSignalFieldSchema(signalType: string): FieldSchema[] {
         { key: 'hard', label: 'Hard Examples', type: 'json', description: 'e.g. { candidates: ["..."] }' },
         { key: 'easy', label: 'Easy Examples', type: 'json', description: 'e.g. { candidates: ["..."] }' },
         { key: 'description', label: 'Description', type: 'string' },
-        { key: 'composer', label: 'Composer', type: 'string' },
+        { key: 'composer', label: 'Composer', type: 'json', description: '{ operator: "OR", conditions: [{ type: "domain", name: "..." }] }' },
       ]
     case 'modality':
       return [
@@ -117,6 +120,29 @@ export function getSignalFieldSchema(signalType: string): FieldSchema[] {
         { key: 'target', label: 'Target', type: 'json', description: 'Match target, e.g. { kind: "group", value: "category" }' },
         { key: 'match', label: 'Match Strategy', type: 'select', options: ['best', 'all'], description: 'How to match against the KB' },
         { key: 'description', label: 'Description', type: 'string' },
+      ]
+    case 'conversation':
+      return [
+        { key: 'description', label: 'Description', type: 'string' },
+        { key: 'feature', label: 'Feature', type: 'json', required: true, description: '{ type: "count", source: { type: "message", role: "user" } }' },
+        { key: 'predicate', label: 'Predicate', type: 'json', description: '{ gte: 2 }' },
+      ]
+    case 'session_metric':
+      return [
+        { key: 'kind', label: 'Kind', type: 'select', options: ['state', 'lookup'] },
+        { key: 'state', label: 'State Path', type: 'string', placeholder: 'session_routing.cumulative_cost_usd' },
+        { key: 'normalize', label: 'Normalize', type: 'select', options: ['', 'minmax'] },
+        { key: 'min', label: 'Min', type: 'number' },
+        { key: 'max', label: 'Max', type: 'number' },
+        { key: 'table', label: 'Lookup Table', type: 'string', placeholder: 'handoff_penalties' },
+        { key: 'key', label: 'Lookup Key', type: 'string[]', placeholder: 'Add key part...' },
+      ]
+    case 'event_context':
+      return [
+        { key: 'event_types', label: 'Event Types', type: 'string[]', placeholder: 'payment_failed' },
+        { key: 'severities', label: 'Severities', type: 'string[]', placeholder: 'critical' },
+        { key: 'action_codes', label: 'Action Codes', type: 'string[]', placeholder: 'TXN_DECLINE' },
+        { key: 'temporal', label: 'Temporal', type: 'boolean' },
       ]
     default:
       return [
@@ -240,6 +266,7 @@ export const BACKEND_TYPES = [
 export const ALGORITHM_TYPES = [
   'confidence', 'ratings', 'remom', 'static', 'elo', 'router_dc', 'automix',
   'hybrid', 'rl_driven', 'gmtrouter', 'latency_aware', 'knn', 'kmeans', 'svm',
+  'mlp', 'multi_factor', 'session_aware',
 ] as const
 
 export type AlgorithmType = typeof ALGORITHM_TYPES[number]
@@ -259,6 +286,9 @@ export const ALGORITHM_DESCRIPTIONS: Record<string, string> = {
   knn: 'K-Nearest Neighbors for query-based model selection (no extra fields)',
   kmeans: 'KMeans clustering for model selection (no extra fields)',
   svm: 'Support Vector Machine for model classification (no extra fields)',
+  mlp: 'Neural model-selection classifier using shared ML settings (no extra fields)',
+  multi_factor: 'Combine quality, latency, cost, and load into one SLO-aware score',
+  session_aware: 'Agentic stay-vs-switch policy for multi-turn sessions',
 }
 
 export function getAlgorithmFieldSchema(algoType: string): FieldSchema[] {
@@ -270,6 +300,9 @@ export function getAlgorithmFieldSchema(algoType: string): FieldSchema[] {
         { key: 'on_error', label: 'On Error', type: 'select', options: ['', 'skip', 'fail'] },
         { key: 'escalation_order', label: 'Escalation Order', type: 'select', options: ['', 'size', 'cost', 'automix'], description: 'How models are ordered for cascade' },
         { key: 'cost_quality_tradeoff', label: 'Cost/Quality Tradeoff', type: 'number', placeholder: '0.3', description: '0.0=quality, 1.0=cost (for automix order)' },
+        { key: 'token_filter', label: 'Token Filter', type: 'string' },
+        { key: 'verifier_server_url', label: 'Verifier Server URL', type: 'string', placeholder: 'http://automix-verifier:8080' },
+        { key: 'verifier_timeout_seconds', label: 'Verifier Timeout', type: 'number', placeholder: '60' },
       ]
     case 'ratings':
       return [
@@ -287,6 +320,8 @@ export function getAlgorithmFieldSchema(algoType: string): FieldSchema[] {
         { key: 'max_concurrent', label: 'Max Concurrent', type: 'number', placeholder: '0 (no limit)' },
         { key: 'on_error', label: 'On Error', type: 'select', options: ['', 'skip', 'fail'] },
         { key: 'include_intermediate_responses', label: 'Include Intermediate', type: 'boolean', description: 'Save intermediate responses for dashboard' },
+        { key: 'shuffle_seed', label: 'Shuffle Seed', type: 'number' },
+        { key: 'max_responses_per_round', label: 'Max Responses/Round', type: 'number' },
       ]
     case 'elo':
       return [
@@ -297,6 +332,7 @@ export function getAlgorithmFieldSchema(algoType: string): FieldSchema[] {
         { key: 'min_comparisons', label: 'Min Comparisons', type: 'number', placeholder: '5' },
         { key: 'cost_scaling_factor', label: 'Cost Scaling', type: 'number', placeholder: '0', description: '0 = ignore cost' },
         { key: 'storage_path', label: 'Storage Path', type: 'string', placeholder: '/tmp/elo' },
+        { key: 'auto_save_interval', label: 'Auto-Save Interval', type: 'string', placeholder: '30s' },
       ]
     case 'router_dc':
       return [
@@ -305,6 +341,8 @@ export function getAlgorithmFieldSchema(algoType: string): FieldSchema[] {
         { key: 'min_similarity', label: 'Min Similarity', type: 'number', placeholder: '0.3' },
         { key: 'use_query_contrastive', label: 'Query Contrastive', type: 'boolean' },
         { key: 'use_model_contrastive', label: 'Model Contrastive', type: 'boolean' },
+        { key: 'require_descriptions', label: 'Require Descriptions', type: 'boolean' },
+        { key: 'use_capabilities', label: 'Use Capabilities', type: 'boolean' },
       ]
     case 'automix':
       return [
@@ -313,6 +351,7 @@ export function getAlgorithmFieldSchema(algoType: string): FieldSchema[] {
         { key: 'cost_aware_routing', label: 'Cost-Aware Routing', type: 'boolean' },
         { key: 'cost_quality_tradeoff', label: 'Cost/Quality Tradeoff', type: 'number', placeholder: '0.3' },
         { key: 'discount_factor', label: 'Discount Factor', type: 'number', placeholder: '0.95', description: 'POMDP value iteration' },
+        { key: 'use_logprob_verification', label: 'Logprob Verification', type: 'boolean' },
       ]
     case 'hybrid':
       return [
@@ -364,6 +403,34 @@ export function getAlgorithmFieldSchema(algoType: string): FieldSchema[] {
         { key: 'tpot_percentile', label: 'TPOT Percentile', type: 'number', required: true, placeholder: '20', description: 'Time Per Output Token (1-100)' },
         { key: 'ttft_percentile', label: 'TTFT Percentile', type: 'number', required: true, placeholder: '20', description: 'Time To First Token (1-100)' },
         { key: 'description', label: 'Description', type: 'string' },
+      ]
+    case 'multi_factor':
+      return [
+        { key: 'weights', label: 'Weights', type: 'json', placeholder: '{ "quality": 0.4, "latency": 0.3, "cost": 0.2, "load": 0.1 }', description: 'Per-signal weights for quality, latency, cost, and load' },
+        { key: 'slo', label: 'SLO Ceilings', type: 'json', placeholder: '{ "max_tpot_ms": 200, "max_ttft_ms": 800 }', description: 'Hard ceilings that prune unsafe candidates before scoring' },
+        { key: 'latency_percentile', label: 'Latency Percentile', type: 'number', placeholder: '95' },
+        { key: 'on_no_candidates', label: 'No Candidates Policy', type: 'select', options: ['', 'cheapest', 'first', 'fail'] },
+      ]
+    case 'session_aware':
+      return [
+        { key: 'base_method', label: 'Base Method', type: 'select', options: ['', 'static', 'elo', 'router_dc', 'automix', 'hybrid', 'multi_factor', 'latency_aware'] },
+        { key: 'idle_timeout_seconds', label: 'Idle Timeout Seconds', type: 'number', placeholder: '600' },
+        { key: 'min_turns_before_switch', label: 'Min Turns Before Switch', type: 'number', placeholder: '2' },
+        { key: 'switch_margin', label: 'Switch Margin', type: 'number', placeholder: '0.1' },
+        { key: 'stay_bias', label: 'Stay Bias', type: 'number', placeholder: '0.2' },
+        { key: 'tool_loop_hard_lock', label: 'Tool Loop Hard Lock', type: 'boolean' },
+        { key: 'context_portability_hard_lock', label: 'Context Portability Hard Lock', type: 'boolean' },
+        { key: 'decision_drift_reset', label: 'Decision Drift Reset', type: 'boolean' },
+        { key: 'tool_loop_stay_bias', label: 'Tool Loop Stay Bias', type: 'number' },
+        { key: 'prefix_cache_weight', label: 'Prefix Cache Weight', type: 'number' },
+        { key: 'handoff_penalty_weight', label: 'Handoff Penalty Weight', type: 'number' },
+        { key: 'default_handoff_penalty', label: 'Default Handoff Penalty', type: 'number' },
+        { key: 'quality_gap_multiplier', label: 'Quality Gap Multiplier', type: 'number' },
+        { key: 'max_cache_cost_multiplier', label: 'Max Cache Cost Multiplier', type: 'number', placeholder: '1.0' },
+        { key: 'switch_history_weight', label: 'Switch History Weight', type: 'number' },
+        { key: 'remaining_turn_prior_weight', label: 'Remaining Turn Prior Weight', type: 'number' },
+        { key: 'remaining_turn_prior_horizon', label: 'Remaining Turn Prior Horizon', type: 'number' },
+        { key: 'min_remaining_turn_prior_samples', label: 'Min Remaining Turn Samples', type: 'number' },
       ]
     default:
       return []

@@ -362,6 +362,9 @@ global:
 	if !cfg.Memory.Enabled || !cfg.Memory.AutoStore {
 		t.Fatalf("expected memory override to still apply, got enabled=%v auto_store=%v", cfg.Memory.Enabled, cfg.Memory.AutoStore)
 	}
+	if cfg.PromptCompression.MaxEvaluationChars != DefaultMaxEvaluationChars {
+		t.Fatalf("expected sparse global override to keep max_evaluation_chars default %d, got %d", DefaultMaxEvaluationChars, cfg.PromptCompression.MaxEvaluationChars)
+	}
 }
 
 func TestParseYAMLBytesPreservesDefaultSystemModelsForSparseModuleOverrides(t *testing.T) {

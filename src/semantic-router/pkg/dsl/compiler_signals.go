@@ -127,6 +127,9 @@ func (c *Compiler) compileEmbeddingSignal(s *SignalDecl) {
 	if v, ok := getStringField(s.Fields, "aggregation_method"); ok {
 		rule.AggregationMethodConfiged = config.AggregationMethod(v)
 	}
+	if v, ok := getStringField(s.Fields, "query_modality"); ok {
+		rule.QueryModality = config.QueryModality(v)
+	}
 	c.config.EmbeddingRules = append(c.config.EmbeddingRules, rule)
 }
 
@@ -152,6 +155,9 @@ func (c *Compiler) compileDomainSignal(s *SignalDecl) {
 			return
 		}
 		cat.MMLUCategories = v
+	}
+	if scores, ok := getModelScoresField(s.Fields, "model_scores"); ok {
+		cat.ModelScores = scores
 	}
 	c.config.Categories = append(c.config.Categories, cat)
 }
@@ -261,19 +267,26 @@ func (c *Compiler) compileComplexitySignal(s *SignalDecl) {
 	}
 	if obj, ok := s.Fields["hard"]; ok {
 		if ov, ok := obj.(ObjectValue); ok {
-			if candidates, ok := getStringArrayField(ov.Fields, "candidates"); ok {
-				rule.Hard = config.ComplexityCandidates{Candidates: candidates}
-			}
+			rule.Hard = compileComplexityCandidates(ov.Fields)
 		}
 	}
 	if obj, ok := s.Fields["easy"]; ok {
 		if ov, ok := obj.(ObjectValue); ok {
-			if candidates, ok := getStringArrayField(ov.Fields, "candidates"); ok {
-				rule.Easy = config.ComplexityCandidates{Candidates: candidates}
-			}
+			rule.Easy = compileComplexityCandidates(ov.Fields)
 		}
 	}
 	c.config.ComplexityRules = append(c.config.ComplexityRules, rule)
+}
+
+func compileComplexityCandidates(fields map[string]Value) config.ComplexityCandidates {
+	var candidates config.ComplexityCandidates
+	if values, ok := getStringArrayField(fields, "candidates"); ok {
+		candidates.Candidates = values
+	}
+	if values, ok := getStringArrayField(fields, "image_candidates"); ok {
+		candidates.ImageCandidates = values
+	}
+	return candidates
 }
 
 func (c *Compiler) compileModalitySignal(s *SignalDecl) {
@@ -345,6 +358,23 @@ func (c *Compiler) compileConversationSignal(s *SignalDecl) {
 		return
 	}
 	c.config.ConversationRules = append(c.config.ConversationRules, rule)
+}
+
+func (c *Compiler) compileEventContextSignal(s *SignalDecl) {
+	rule := config.EventContextRule{Name: s.Name}
+	if v, ok := getStringArrayField(s.Fields, "event_types"); ok {
+		rule.EventTypes = v
+	}
+	if v, ok := getStringArrayField(s.Fields, "severities"); ok {
+		rule.Severities = v
+	}
+	if v, ok := getStringArrayField(s.Fields, "action_codes"); ok {
+		rule.ActionCodes = v
+	}
+	if v, ok := getBoolField(s.Fields, "temporal"); ok {
+		rule.Temporal = v
+	}
+	c.config.EventContextRules = append(c.config.EventContextRules, rule)
 }
 
 func (c *Compiler) compileKBSignal(s *SignalDecl) {

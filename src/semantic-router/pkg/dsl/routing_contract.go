@@ -204,6 +204,9 @@ func (d *decompiler) appendOperationalSignals(prog *Program) {
 	for i := range d.cfg.ConversationRules {
 		prog.Signals = append(prog.Signals, d.conversationToSignal(&d.cfg.ConversationRules[i]))
 	}
+	for i := range d.cfg.EventContextRules {
+		prog.Signals = append(prog.Signals, d.eventContextRuleToDecl(&d.cfg.EventContextRules[i]))
+	}
 }
 
 func (d *decompiler) appendSafetySignals(prog *Program) {

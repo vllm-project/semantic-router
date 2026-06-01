@@ -69,6 +69,9 @@ def test_serve_help_describes_docker_only_runtime():
     assert "Podman" not in result.output
     assert "--topology" not in result.output
     assert "--log-level" in result.output
+    assert "session_aware" in result.output
+    assert "router_r1" not in result.output
+    assert "thompson" not in result.output
 
 
 def test_serve_passes_log_level_to_backend_env(monkeypatch, tmp_path: Path):
@@ -196,6 +199,52 @@ def test_inject_algorithm_into_config_updates_all_decisions(tmp_path: Path):
     assert [
         decision["algorithm"]["type"] for decision in rewritten["routing"]["decisions"]
     ] == ["elo", "elo"]
+
+
+def test_inject_algorithm_replaces_stale_type_specific_blocks(tmp_path: Path):
+    config_path = tmp_path / "config.yaml"
+    config_path.write_text(
+        yaml.safe_dump(
+            {
+                "version": "v0.3",
+                "routing": {
+                    "decisions": [
+                        {
+                            "name": "fast",
+                            "algorithm": {
+                                "type": "hybrid",
+                                "hybrid": {"cost_weight": 0.4},
+                            },
+                        },
+                        {
+                            "name": "slow",
+                            "algorithm": {
+                                "type": "rl_driven",
+                                "rl_driven": {"storage_path": "/tmp/rl.json"},
+                                "gmtrouter": {"storage_path": "/tmp/gmt.json"},
+                            },
+                        },
+                    ]
+                },
+            },
+            sort_keys=False,
+        )
+    )
+
+    rewritten_path = runtime_commands.inject_algorithm_into_config(
+        config_path, "multi_factor"
+    )
+
+    with rewritten_path.open() as handle:
+        rewritten = yaml.safe_load(handle)
+
+    algorithms = [
+        decision["algorithm"] for decision in rewritten["routing"]["decisions"]
+    ]
+    assert algorithms == [
+        {"type": "multi_factor"},
+        {"type": "multi_factor"},
+    ]
 
 
 def test_serve_uses_algorithm_translated_config(monkeypatch, tmp_path: Path):

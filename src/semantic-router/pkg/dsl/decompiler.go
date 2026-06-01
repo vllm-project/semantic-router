@@ -99,14 +99,6 @@ func formatStringArray(items []string) string {
 	return "[" + strings.Join(quoted, ", ") + "]"
 }
 
-func formatIntArray(items []int) string {
-	parts := make([]string, len(items))
-	for i, item := range items {
-		parts[i] = fmt.Sprintf("%d", item)
-	}
-	return "[" + strings.Join(parts, ", ") + "]"
-}
-
 func stringsToArray(items []string) ArrayValue {
 	vals := make([]Value, len(items))
 	for i, s := range items {

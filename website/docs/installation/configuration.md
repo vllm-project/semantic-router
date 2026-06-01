@@ -52,6 +52,7 @@ The detailed background is in [Unified Config Contract v0.3](../proposals/unifie
 - built-in knowledge bases keep canonical source paths like `knowledge_bases/privacy/`; local runtime seeds missing KBs into `.vllm-sr/knowledge_bases/<dir>/` once and then reads the shared runtime KB store from there
 - `global.model_catalog.classifiers[]` is the reusable registry for startup-loaded classifier packages such as taxonomy classifiers
 - `global.model_catalog.modules` groups capability modules such as `prompt_guard`, `classifier`, `complexity`, and `hallucination_mitigation`
+- `global.model_catalog.modules.prompt_compression.max_evaluation_chars` caps signal-evaluation input before model-backed signals run. The built-in default is `8192`; use `0` or `-1` only after validating classifier capacity for longer prompts.
 
 ## Canonical example
 
@@ -342,7 +343,8 @@ See [Kubernetes Operator](./k8s/operator).
 
 DSL only owns the `routing` surface.
 
-- Author `MODEL`, `SIGNAL`, and `ROUTE`
+- Author `MODEL`, `SIGNAL`, `PROJECTION`, and `ROUTE` blocks
+- Put per-decision model-selection policy in `ROUTE ... ALGORITHM`
 - Compile to a routing fragment
 - Keep `providers` and `global` in YAML
 
@@ -352,6 +354,7 @@ The DSL compiler emits:
 routing:
   modelCards:
   signals:
+  projections:
   decisions:
 ```
 

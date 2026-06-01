@@ -93,6 +93,51 @@ func TestBuildModelSelectionConfigPreservesLearningDefaultsWhenUnset(t *testing.
 	}
 }
 
+func TestBuildModelSelectionConfigUsesDecisionScopedMultiFactorConfig(t *testing.T) {
+	got := buildModelSelectionConfig(&config.RouterConfig{
+		IntelligentRouting: config.IntelligentRouting{
+			Decisions: []config.Decision{
+				{
+					Name: "weighted-latency-router",
+					Algorithm: &config.AlgorithmConfig{
+						Type: string(selection.MethodMultiFactor),
+						MultiFactor: &config.MultiFactorSelectionConfig{
+							Weights: &config.MultiFactorWeightsConfig{
+								Quality: 0.7,
+								Latency: 0.2,
+								Cost:    0.1,
+								Load:    0.0,
+							},
+							SLO: &config.MultiFactorSLOConfig{
+								MaxTPOTMs:    85,
+								MaxTTFTMs:    550,
+								MaxCostPer1M: 2.4,
+								MaxInflight:  32,
+							},
+							LatencyPercentile: 90,
+							OnNoCandidates:    "fail",
+						},
+					},
+				},
+			},
+		},
+	})
+
+	if got.MultiFactor == nil {
+		t.Fatal("expected MultiFactor config to be built")
+	}
+	assertFloat(t, got.MultiFactor.Weights.Quality, 0.7, "multi_factor.weights.quality")
+	assertFloat(t, got.MultiFactor.Weights.Latency, 0.2, "multi_factor.weights.latency")
+	assertFloat(t, got.MultiFactor.Weights.Cost, 0.1, "multi_factor.weights.cost")
+	assertFloat(t, got.MultiFactor.Weights.Load, 0.0, "multi_factor.weights.load")
+	assertFloat(t, got.MultiFactor.SLO.MaxTPOTMs, 85, "multi_factor.slo.max_tpot_ms")
+	assertFloat(t, got.MultiFactor.SLO.MaxTTFTMs, 550, "multi_factor.slo.max_ttft_ms")
+	assertFloat(t, got.MultiFactor.SLO.MaxCostPer1M, 2.4, "multi_factor.slo.max_cost_per_1m")
+	assertInt(t, got.MultiFactor.SLO.MaxInflight, 32, "multi_factor.slo.max_inflight")
+	assertInt(t, got.MultiFactor.LatencyPercentile, 90, "multi_factor.latency_percentile")
+	assertString(t, got.MultiFactor.OnNoCandidates, "fail", "multi_factor.on_no_candidates")
+}
+
 func assertFloat(t *testing.T, got, want float64, field string) {
 	t.Helper()
 	if got != want {

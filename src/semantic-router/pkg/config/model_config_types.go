@@ -100,6 +100,8 @@ type MCPCategoryModel struct {
 	TimeoutSeconds int               `yaml:"timeout_seconds,omitempty"`
 }
 
+const DefaultMaxEvaluationChars = 8192
+
 // PromptCompressionConfig controls NLP-based prompt compression before signal extraction.
 type PromptCompressionConfig struct {
 	Enabled        bool     `yaml:"enabled"`
@@ -113,8 +115,8 @@ type PromptCompressionConfig struct {
 	// MaxEvaluationChars is a hard safety limit applied to evaluationText before
 	// any signal processing. Unlike prompt_compression (which is quality-aware and
 	// optional), this truncation always runs when set to a positive value.
-	// Default 0 means no limit. Recommended production value: 8192 (~2K tokens).
-	// Set to -1 to explicitly disable even if a future default is introduced.
+	// Canonical configs default to 8192 chars (~2K tokens). Set 0 or a negative
+	// value to explicitly disable after validating classifier capacity.
 	MaxEvaluationChars int `yaml:"max_evaluation_chars,omitempty"`
 }
 

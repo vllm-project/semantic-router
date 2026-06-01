@@ -409,6 +409,7 @@ function summaryForKey(key: RouterSystemKey, data: unknown): RouterSectionSummar
     case 'prompt_compression':
       return [
         { label: 'Enabled', value: stringOrFallback(section?.enabled, 'Disabled') },
+        { label: 'Evaluation cap', value: stringOrFallback(section?.max_evaluation_chars) },
         { label: 'Max tokens', value: stringOrFallback(section?.max_tokens) },
         { label: 'Skip signals', value: (Array.isArray(section?.skip_signals) ? section?.skip_signals.join(', ') : 'Not set') || 'Not set' },
       ]
@@ -664,6 +665,7 @@ function fieldsForKey(key: RouterSystemKey): FieldConfig[] {
     case 'prompt_compression':
       return [
         { name: 'enabled', label: 'Enable Prompt Compression', type: 'boolean' },
+        { name: 'max_evaluation_chars', label: 'Evaluation Character Cap', type: 'number', placeholder: '8192' },
         { name: 'max_tokens', label: 'Max Tokens', type: 'number', placeholder: '512' },
         { name: 'min_length', label: 'Min Length', type: 'number', placeholder: '64' },
         { name: 'skip_signals', label: 'Skip Signals (JSON)', type: 'json', placeholder: '["jailbreak","pii"]' },

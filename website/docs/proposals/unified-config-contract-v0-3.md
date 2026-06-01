@@ -66,7 +66,7 @@ DSL now owns only:
 - `routing.modelCards`
 - `routing.signals`
 - `routing.projections` for signal coordination and derived routing outputs
-- `routing.decisions`, including bounded candidate-iteration metadata used by DSL `FOR ... IN` authoring
+- `routing.decisions`, including route-local `algorithm`, plugin references, emitted directives, and bounded candidate-iteration metadata used by DSL `FOR ... IN` authoring
 
 It no longer owns endpoints, API keys, listeners, or router-global runtime settings.
 
@@ -98,6 +98,7 @@ Router-global defaults are now owned by the router itself, not by a second user-
 - `global.integrations` groups helper runtime integrations
 - `global.model_catalog` groups router-owned model assets under `embeddings`, `system`, `external`, `classifiers`, `kbs`, and `modules`, including embedding fallback knobs such as `embedding_config.top_k`, shared prototype-aware scoring controls such as `prototype_scoring`, and built-in knowledge-base source paths such as `knowledge_bases/privacy/`
 - `global.model_catalog.modules` is the home for router-owned module settings such as `prompt_compression`, `prompt_guard`, `classifier`, `complexity`, `hallucination_mitigation`, `feedback_detector`, and `modality_detector`
+- `global.model_catalog.modules.prompt_compression.max_evaluation_chars` provides a router-owned safety bound before model-backed signal evaluation; omitted configs use the built-in `8192` character default, while `0` or `-1` explicitly disables the cap
 - omitted fields keep the built-in default
 
 This makes local, dashboard, Helm, and operator behavior converge on the same baseline.

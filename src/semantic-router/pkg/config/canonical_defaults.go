@@ -196,6 +196,9 @@ func defaultCanonicalEmbeddingModels() CanonicalEmbeddingModels {
 
 func defaultCanonicalModelModules() CanonicalModelModules {
 	return CanonicalModelModules{
+		PromptCompression: PromptCompressionConfig{
+			MaxEvaluationChars: DefaultMaxEvaluationChars,
+		},
 		PromptGuard:             defaultPromptGuardModule(),
 		Classifier:              defaultClassifierModule(),
 		Complexity:              ComplexityModelConfig{}.WithDefaults(),

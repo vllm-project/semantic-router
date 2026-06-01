@@ -74,23 +74,21 @@ Some workloads need a lightweight learned classifier with clearer decision bound
 ```yaml
 algorithm:
   type: svm
-  svm:
-    kernel: rbf                           # Kernel type: rbf, linear, polynomial
-    gamma: 1.0                            # RBF kernel width parameter
-    pretrained_path: .cache/ml-models/svm_model.json  # Pre-trained model
 ```
 
-### Global ML Settings (optional)
+### Global ML Settings
 
 ```yaml
-model_selection:
-  ml:
-    models_path: ".cache/ml-models"
-    embedding_dim: 768
-    svm:
-      kernel: rbf
-      gamma: 1.0
-      pretrained_path: .cache/ml-models/svm_model.json
+global:
+  router:
+    model_selection:
+      ml:
+        models_path: ".cache/ml-models"
+        embedding_dim: 768
+        svm:
+          kernel: rbf
+          gamma: 1.0
+          pretrained_path: .cache/ml-models/svm_model.json
 ```
 
 ### Parameters

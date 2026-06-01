@@ -11,6 +11,9 @@ func (d *decompiler) decompileDomainSignals() {
 		if len(cat.MMLUCategories) > 0 {
 			d.write("  mmlu_categories: %s\n", formatStringArray(cat.MMLUCategories))
 		}
+		if len(cat.ModelScores) > 0 {
+			d.write("  model_scores: %s\n", formatPluginConfigValue(modelScoresToList(cat.ModelScores)))
+		}
 		d.write("}\n\n")
 	}
 }
@@ -60,6 +63,9 @@ func (d *decompiler) decompileEmbeddingSignals() {
 		}
 		if emb.AggregationMethodConfiged != "" {
 			d.write("  aggregation_method: %q\n", string(emb.AggregationMethodConfiged))
+		}
+		if emb.QueryModality != "" && emb.QueryModality != config.QueryModalityText {
+			d.write("  query_modality: %q\n", string(emb.QueryModality))
 		}
 		d.write("}\n\n")
 	}
@@ -180,11 +186,11 @@ func (d *decompiler) decompileComplexitySignals() {
 		if comp.Composer != nil {
 			d.write("  composer: %s\n", decompileComposerObj(comp.Composer))
 		}
-		if len(comp.Hard.Candidates) > 0 {
-			d.write("  hard: { candidates: %s }\n", formatStringArray(comp.Hard.Candidates))
+		if len(comp.Hard.Candidates) > 0 || len(comp.Hard.ImageCandidates) > 0 {
+			d.write("  hard: %s\n", formatPluginConfigValue(complexityCandidatesToMap(comp.Hard)))
 		}
-		if len(comp.Easy.Candidates) > 0 {
-			d.write("  easy: { candidates: %s }\n", formatStringArray(comp.Easy.Candidates))
+		if len(comp.Easy.Candidates) > 0 || len(comp.Easy.ImageCandidates) > 0 {
+			d.write("  easy: %s\n", formatPluginConfigValue(complexityCandidatesToMap(comp.Easy)))
 		}
 		d.write("}\n\n")
 	}
@@ -284,6 +290,25 @@ func (d *decompiler) decompileSessionMetricSignals() {
 	}
 }
 
+func (d *decompiler) decompileEventContextSignals() {
+	for _, rule := range d.cfg.EventContextRules {
+		d.write("SIGNAL event_context %s {\n", quoteName(rule.Name))
+		if len(rule.EventTypes) > 0 {
+			d.write("  event_types: %s\n", formatStringArray(rule.EventTypes))
+		}
+		if len(rule.Severities) > 0 {
+			d.write("  severities: %s\n", formatStringArray(rule.Severities))
+		}
+		if len(rule.ActionCodes) > 0 {
+			d.write("  action_codes: %s\n", formatStringArray(rule.ActionCodes))
+		}
+		if rule.Temporal {
+			d.write("  temporal: true\n")
+		}
+		d.write("}\n\n")
+	}
+}
+
 func (d *decompiler) decompileSessionMetricRule(m config.SessionMetricRule) {
 	d.write("SIGNAL session_metric %s {\n", quoteName(m.Name))
 	kind := inferSessionMetricKind(&m)
@@ -322,6 +347,32 @@ func (d *decompiler) writeSessionMetricLookupFields(m *config.SessionMetricRule)
 	if len(m.Key) > 0 {
 		d.write("  key: %s\n", formatStringArray(m.Key))
 	}
+}
+
+func modelScoresToList(scores []config.ModelScore) []interface{} {
+	items := make([]interface{}, 0, len(scores))
+	for _, score := range scores {
+		item := map[string]interface{}{
+			"model": score.Model,
+			"score": score.Score,
+		}
+		if score.UseReasoning != nil {
+			item["use_reasoning"] = *score.UseReasoning
+		}
+		items = append(items, item)
+	}
+	return items
+}
+
+func complexityCandidatesToMap(candidates config.ComplexityCandidates) map[string]interface{} {
+	fields := make(map[string]interface{})
+	if len(candidates.Candidates) > 0 {
+		fields["candidates"] = candidates.Candidates
+	}
+	if len(candidates.ImageCandidates) > 0 {
+		fields["image_candidates"] = candidates.ImageCandidates
+	}
+	return fields
 }
 
 func (d *decompiler) decompileProjectionSignals() {

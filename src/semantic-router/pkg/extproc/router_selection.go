@@ -105,6 +105,7 @@ func buildModelSelectionConfig(cfg *config.RouterConfig) *selection.ModelSelecti
 	modelSelectionCfg.Hybrid = buildHybridSelectionConfig(cfg)
 	modelSelectionCfg.SessionAware = buildSessionAwareSelectionConfig(cfg, decisionCfgs.sessionAware)
 	modelSelectionCfg.ML = buildMLSelectionConfig(cfg)
+	modelSelectionCfg.MultiFactor = buildMultiFactorSelectionConfig(decisionCfgs.multiFactor)
 	modelSelectionCfg.RLDriven = buildRLDrivenSelectionConfig(decisionCfgs.rlDriven)
 	modelSelectionCfg.GMTRouter = buildGMTRouterSelectionConfig(decisionCfgs.gmtRouter)
 	return modelSelectionCfg
@@ -115,6 +116,7 @@ type decisionScopedSelectionConfigs struct {
 	routerDC     *config.RouterDCSelectionConfig
 	rlDriven     *config.RLDrivenSelectionConfig
 	gmtRouter    *config.GMTRouterSelectionConfig
+	multiFactor  *config.MultiFactorSelectionConfig
 	sessionAware *config.SessionAwareSelectionConfig
 }
 
@@ -145,6 +147,11 @@ func findDecisionScopedSelectionConfigs(cfg *config.RouterConfig) decisionScoped
 			decision.Algorithm.GMTRouter != nil &&
 			result.gmtRouter == nil {
 			result.gmtRouter = decision.Algorithm.GMTRouter
+		}
+		if decision.Algorithm.Type == "multi_factor" &&
+			decision.Algorithm.MultiFactor != nil &&
+			result.multiFactor == nil {
+			result.multiFactor = decision.Algorithm.MultiFactor
 		}
 		if decision.Algorithm.Type == "session_aware" &&
 			decision.Algorithm.SessionAware != nil &&
@@ -358,6 +365,37 @@ func buildMLSelectionConfig(cfg *config.RouterConfig) *selection.MLSelectorConfi
 			PretrainedPath: mlCfg.MLP.PretrainedPath,
 		},
 	}
+}
+
+func buildMultiFactorSelectionConfig(decisionCfg *config.MultiFactorSelectionConfig) *selection.MultiFactorConfig {
+	result := selection.DefaultMultiFactorConfig()
+	if decisionCfg == nil {
+		return result
+	}
+
+	if decisionCfg.Weights != nil {
+		result.Weights = selection.MultiFactorWeights{
+			Quality: decisionCfg.Weights.Quality,
+			Latency: decisionCfg.Weights.Latency,
+			Cost:    decisionCfg.Weights.Cost,
+			Load:    decisionCfg.Weights.Load,
+		}
+	}
+	if decisionCfg.SLO != nil {
+		result.SLO = selection.MultiFactorSLO{
+			MaxTPOTMs:    decisionCfg.SLO.MaxTPOTMs,
+			MaxTTFTMs:    decisionCfg.SLO.MaxTTFTMs,
+			MaxCostPer1M: decisionCfg.SLO.MaxCostPer1M,
+			MaxInflight:  decisionCfg.SLO.MaxInflight,
+		}
+	}
+	if decisionCfg.LatencyPercentile != 0 {
+		result.LatencyPercentile = decisionCfg.LatencyPercentile
+	}
+	if decisionCfg.OnNoCandidates != "" {
+		result.OnNoCandidates = decisionCfg.OnNoCandidates
+	}
+	return result
 }
 
 func buildRLDrivenSelectionConfig(decisionCfg *config.RLDrivenSelectionConfig) *selection.RLDrivenConfig {
