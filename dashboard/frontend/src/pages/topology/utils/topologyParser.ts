@@ -1,23 +1,22 @@
 // topology/utils/topologyParser.ts - Config to Topology Parser
 
-import {
+import type {
+  AlgorithmConfig,
   ConfigData,
-  ParsedTopology,
-  SignalConfig,
   DecisionConfig,
   GlobalPluginConfig,
   ModelConfig,
-  SignalType,
+  ModelRefConfig,
+  ParsedTopology,
+  PluginConfig,
+  RawRuleCombination,
+  RawRuleNode,
   RuleCombination,
   RuleNode,
-  RawRuleNode,
-  RawRuleCombination,
-  AlgorithmConfig,
-  PluginConfig,
-  ModelRefConfig,
-  KBSignalConfig,
+  SignalConfig,
+  SignalType,
 } from '../types'
-import { SIGNAL_LATENCY } from '../constants'
+import { extractSignals } from './topologySignalParser'
 
 /**
  * Parse raw config data into structured topology data
@@ -91,476 +90,6 @@ function extractGlobalPlugins(config: ConfigData): GlobalPluginConfig[] {
 }
 
 /**
- * Extract all signal definitions from config
- * Supports both Go format (keyword_rules, embedding_rules, etc.)
- * and Python CLI format (signals.keywords, signals.embeddings, etc.)
- */
-function extractSignals(config: ConfigData): SignalConfig[] {
-  const signals: SignalConfig[] = []
-  const addedSignals = new Set<string>() // Track added signals to avoid duplicates
-  const routingSignals = config.routing?.signals ?? config.signals
-
-  // Helper to add signal if not already added
-  const addSignal = (signal: SignalConfig) => {
-    const key = `${signal.type}:${signal.name}`
-    if (!addedSignals.has(key)) {
-      addedSignals.add(key)
-      signals.push(signal)
-    }
-  }
-
-  // 1. Keyword Rules → keyword signals
-  // From keyword_rules (Go/Router format)
-  config.keyword_rules?.forEach(rule => {
-    addSignal({
-      type: 'keyword',
-      name: rule.name,
-      latency: SIGNAL_LATENCY.keyword,
-      config: {
-        operator: rule.operator,
-        keywords: rule.keywords,
-        case_sensitive: rule.case_sensitive ?? false,
-      },
-    })
-  })
-  // From signals.keywords (Python CLI format)
-  routingSignals?.keywords?.forEach(rule => {
-    addSignal({
-      type: 'keyword',
-      name: rule.name,
-      latency: SIGNAL_LATENCY.keyword,
-      config: {
-        operator: rule.operator,
-        keywords: rule.keywords,
-        case_sensitive: rule.case_sensitive ?? false,
-      },
-    })
-  })
-
-  // 2. Embedding Rules → embedding signals
-  // From embedding_rules (Go/Router format)
-  config.embedding_rules?.forEach(rule => {
-    addSignal({
-      type: 'embedding',
-      name: rule.name,
-      latency: SIGNAL_LATENCY.embedding,
-      config: {
-        threshold: rule.threshold,
-        candidates: rule.candidates,
-        aggregation_method: rule.aggregation_method || 'max',
-      },
-    })
-  })
-  // From signals.embeddings (Python CLI format)
-  routingSignals?.embeddings?.forEach(rule => {
-    addSignal({
-      type: 'embedding',
-      name: rule.name,
-      latency: SIGNAL_LATENCY.embedding,
-      config: {
-        threshold: rule.threshold,
-        candidates: rule.candidates,
-        aggregation_method: rule.aggregation_method || 'max',
-      },
-    })
-  })
-
-  // 3. Categories/Domains → domain signals
-  // From signals.domains (Python CLI format)
-  routingSignals?.domains?.forEach(domain => {
-    addSignal({
-      type: 'domain',
-      name: domain.name,
-      description: domain.description,
-      latency: SIGNAL_LATENCY.domain,
-      config: {
-        mmlu_categories: domain.mmlu_categories,
-      },
-    })
-  })
-  // From categories (Go/Router format)
-  config.categories?.forEach(cat => {
-    // Only add if it has mmlu_categories (domain signal)
-    if (cat.mmlu_categories) {
-      addSignal({
-        type: 'domain',
-        name: cat.name,
-        description: cat.description,
-        latency: SIGNAL_LATENCY.domain,
-        config: {
-          mmlu_categories: cat.mmlu_categories,
-        },
-      })
-    }
-  })
-
-  // 4. Fact Check Rules
-  // From fact_check_rules (Go/Router format)
-  config.fact_check_rules?.forEach(rule => {
-    addSignal({
-      type: 'fact_check',
-      name: rule.name,
-      description: rule.description,
-      latency: SIGNAL_LATENCY.fact_check,
-      config: {},
-    })
-  })
-  // From signals.fact_check (Python CLI format)
-  routingSignals?.fact_check?.forEach(rule => {
-    addSignal({
-      type: 'fact_check',
-      name: rule.name,
-      description: rule.description,
-      latency: SIGNAL_LATENCY.fact_check,
-      config: {},
-    })
-  })
-
-  // 5. User Feedback Rules
-  // From user_feedback_rules (Go/Router format)
-  config.user_feedback_rules?.forEach(rule => {
-    addSignal({
-      type: 'user_feedback',
-      name: rule.name,
-      description: rule.description,
-      latency: SIGNAL_LATENCY.user_feedback,
-      config: {},
-    })
-  })
-  // From signals.user_feedbacks (Python CLI format)
-  routingSignals?.user_feedbacks?.forEach(rule => {
-    addSignal({
-      type: 'user_feedback',
-      name: rule.name,
-      description: rule.description,
-      latency: SIGNAL_LATENCY.user_feedback,
-      config: {},
-    })
-  })
-
-  // 6. Reask Rules
-  // From reask_rules (Go/Router format)
-  config.reask_rules?.forEach(rule => {
-    addSignal({
-      type: 'reask',
-      name: rule.name,
-      description: rule.description,
-      latency: SIGNAL_LATENCY.reask,
-      config: {
-        threshold: rule.threshold,
-        lookback_turns: rule.lookback_turns,
-      },
-    })
-  })
-  // From signals.reasks (Python CLI format)
-  routingSignals?.reasks?.forEach(rule => {
-    addSignal({
-      type: 'reask',
-      name: rule.name,
-      description: rule.description,
-      latency: SIGNAL_LATENCY.reask,
-      config: {
-        threshold: rule.threshold,
-        lookback_turns: rule.lookback_turns,
-      },
-    })
-  })
-
-  // 7. Preference Rules
-  // From preference_rules (Go/Router format)
-  config.preference_rules?.forEach(rule => {
-    addSignal({
-      type: 'preference',
-      name: rule.name,
-      description: rule.description,
-      latency: SIGNAL_LATENCY.preference,
-      config: {
-        examples: rule.examples,
-        threshold: rule.threshold,
-      },
-    })
-  })
-  // From signals.preferences (Python CLI format)
-  routingSignals?.preferences?.forEach(rule => {
-    addSignal({
-      type: 'preference',
-      name: rule.name,
-      description: rule.description,
-      latency: SIGNAL_LATENCY.preference,
-      config: {
-        examples: rule.examples,
-        threshold: rule.threshold,
-      },
-    })
-  })
-
-  // 7. Language Rules
-  // From language_rules (Go/Router format)
-  config.language_rules?.forEach(rule => {
-    addSignal({
-      type: 'language',
-      name: rule.name,
-      latency: SIGNAL_LATENCY.language,
-      config: {},
-    })
-  })
-  // From signals.language (Python CLI format)
-  routingSignals?.language?.forEach(rule => {
-    addSignal({
-      type: 'language',
-      name: rule.name,
-      description: rule.description,
-      latency: SIGNAL_LATENCY.language,
-      config: {},
-    })
-  })
-
-  // 8. Context Rules
-  // From context_rules (Go/Router format)
-  config.context_rules?.forEach(rule => {
-    addSignal({
-      type: 'context',
-      name: rule.name,
-      latency: SIGNAL_LATENCY.context,
-      config: {
-        min_tokens: rule.min_tokens,
-        max_tokens: rule.max_tokens,
-      },
-    })
-  })
-  // From signals.context (Python CLI format)
-  routingSignals?.context?.forEach(rule => {
-    addSignal({
-      type: 'context',
-      name: rule.name,
-      latency: SIGNAL_LATENCY.context,
-      config: {
-        min_tokens: rule.min_tokens,
-        max_tokens: rule.max_tokens,
-      },
-    })
-  })
-
-  // 9. Structure Rules
-  // From structure_rules (Go/Router format)
-  config.structure_rules?.forEach(rule => {
-    addSignal({
-      type: 'structure',
-      name: rule.name,
-      description: rule.description,
-      latency: SIGNAL_LATENCY.structure,
-      config: {
-        feature: rule.feature,
-        predicate: rule.predicate,
-      },
-    })
-  })
-  // From signals.structure (Python CLI format)
-  routingSignals?.structure?.forEach(rule => {
-    addSignal({
-      type: 'structure',
-      name: rule.name,
-      description: rule.description,
-      latency: SIGNAL_LATENCY.structure,
-      config: {
-        feature: rule.feature,
-        predicate: rule.predicate,
-      },
-    })
-  })
-
-  // 10. Complexity Rules
-  // From complexity_rules (Go/Router format)
-  config.complexity_rules?.forEach(rule => {
-    addSignal({
-      type: 'complexity',
-      name: rule.name,
-      description: rule.description,
-      latency: SIGNAL_LATENCY.complexity,
-      config: {
-        threshold: rule.threshold,
-        hard: rule.hard,
-        easy: rule.easy,
-      },
-    })
-  })
-  // From signals.complexity (Python CLI format)
-  routingSignals?.complexity?.forEach(rule => {
-    addSignal({
-      type: 'complexity',
-      name: rule.name,
-      description: rule.description,
-      latency: SIGNAL_LATENCY.complexity,
-      config: {
-        threshold: rule.threshold,
-        hard: rule.hard,
-        easy: rule.easy,
-      },
-    })
-  })
-
-  // 11. Modality Rules
-  // From modality_rules (Go/Router format)
-  config.modality_rules?.forEach(rule => {
-    addSignal({
-      type: 'modality',
-      name: rule.name,
-      description: rule.description,
-      latency: SIGNAL_LATENCY.modality,
-      config: {},
-    })
-  })
-  // From signals.modality (Python CLI format)
-  routingSignals?.modality?.forEach(rule => {
-    addSignal({
-      type: 'modality',
-      name: rule.name,
-      description: rule.description,
-      latency: SIGNAL_LATENCY.modality,
-      config: {},
-    })
-  })
-
-  // 12. Authz / RBAC Role Bindings
-  // From role_bindings (Go/Router format)
-  config.role_bindings?.forEach(rule => {
-    addSignal({
-      type: 'authz',
-      name: rule.name,
-      description: rule.description,
-      latency: SIGNAL_LATENCY.authz,
-      config: {
-        role: rule.role,
-      },
-    })
-  })
-  // From signals.role_bindings (Python CLI format)
-  routingSignals?.role_bindings?.forEach(rule => {
-    addSignal({
-      type: 'authz',
-      name: rule.name,
-      description: rule.description,
-      latency: SIGNAL_LATENCY.authz,
-      config: {
-        role: rule.role,
-      },
-    })
-  })
-
-  // 13. Jailbreak Rules
-  // From jailbreak (Go/Router format - top-level due to yaml:",inline")
-  config.jailbreak?.forEach(rule => {
-    addSignal({
-      type: 'jailbreak',
-      name: rule.name,
-      description: rule.description,
-      latency: SIGNAL_LATENCY.jailbreak,
-      config: {
-        threshold: rule.threshold,
-        include_history: rule.include_history,
-      },
-    })
-  })
-  // From signals.jailbreak (Python CLI format)
-  routingSignals?.jailbreak?.forEach(rule => {
-    addSignal({
-      type: 'jailbreak',
-      name: rule.name,
-      description: rule.description,
-      latency: SIGNAL_LATENCY.jailbreak,
-      config: {
-        threshold: rule.threshold,
-        include_history: rule.include_history,
-      },
-    })
-  })
-
-  // 14. PII Rules
-  // From pii (Go/Router format - top-level due to yaml:",inline")
-  config.pii?.forEach(rule => {
-    addSignal({
-      type: 'pii',
-      name: rule.name,
-      description: rule.description,
-      latency: SIGNAL_LATENCY.pii,
-      config: {
-        threshold: rule.threshold,
-        pii_types_allowed: rule.pii_types_allowed,
-        include_history: rule.include_history,
-      },
-    })
-  })
-  // From signals.pii (Python CLI format)
-  routingSignals?.pii?.forEach(rule => {
-    addSignal({
-      type: 'pii',
-      name: rule.name,
-      description: rule.description,
-      latency: SIGNAL_LATENCY.pii,
-      config: {
-        threshold: rule.threshold,
-        pii_types_allowed: rule.pii_types_allowed,
-        include_history: rule.include_history,
-      },
-    })
-  })
-
-  // 15. Knowledge-base Rules
-  routingSignals?.kb?.forEach(rule => {
-    addSignal({
-      type: 'kb',
-      name: rule.name,
-      description: rule.description || `KB bind ${rule.kb} ${rule.target.kind}=${rule.target.value}`,
-      latency: SIGNAL_LATENCY.kb,
-      config: {
-        kb: rule.kb,
-        target: rule.target,
-        match: rule.match,
-      } satisfies KBSignalConfig,
-    })
-  })
-
-  extractProjectionSignals(config).forEach(addSignal)
-
-  return signals
-}
-
-function extractProjectionSignals(config: ConfigData): SignalConfig[] {
-  const projectionSignals: SignalConfig[] = []
-  const projections = config.routing?.projections ?? config.projections
-  const scoreInputsByName = new Map(
-    (projections?.scores ?? []).map((score) => [
-      score.name,
-      (score.inputs ?? [])
-        .filter((input): input is NonNullable<typeof input> => Boolean(input?.type && input?.name))
-        .map((input) => ({
-          type: input.type,
-          name: input.name,
-        })),
-    ]),
-  )
-
-  projections?.mappings?.forEach(mapping => {
-    mapping.outputs?.forEach(output => {
-      projectionSignals.push({
-        type: 'projection',
-        name: output.name,
-        description: `Projection output from ${mapping.name}`,
-        latency: SIGNAL_LATENCY.projection,
-        config: {
-          source: mapping.source,
-          method: mapping.method || 'threshold_bands',
-          mapping: mapping.name,
-          upstreamSignals: scoreInputsByName.get(mapping.source) ?? [],
-        },
-      })
-    })
-  })
-
-  return projectionSignals
-}
-
-/**
  * Extract decisions from config
  */
 function extractDecisions(config: ConfigData): DecisionConfig[] {
@@ -571,15 +100,7 @@ function extractDecisions(config: ConfigData): DecisionConfig[] {
   if (routingDecisions && routingDecisions.length > 0) {
     routingDecisions.forEach(decision => {
       const rules = parseRuleCombination(decision.rules)
-
-      const algorithm: AlgorithmConfig | undefined = decision.algorithm
-        ? {
-          type: decision.algorithm.type as AlgorithmConfig['type'],
-          confidence: decision.algorithm.confidence,
-          concurrent: decision.algorithm.concurrent,
-          latency_aware: decision.algorithm.latency_aware,
-        }
-        : undefined
+      const algorithm = extractDecisionAlgorithm(decision.algorithm)
 
       const plugins: PluginConfig[] = (decision.plugins || []).map(p => ({
         type: p.type as PluginConfig['type'],
@@ -645,6 +166,36 @@ function extractDecisions(config: ConfigData): DecisionConfig[] {
 
   // Sort by priority (descending)
   return decisions.sort((a, b) => b.priority - a.priority)
+}
+
+function extractDecisionAlgorithm(
+  algorithm: NonNullable<ConfigData['decisions']>[number]['algorithm'] | undefined,
+): AlgorithmConfig | undefined {
+  if (!algorithm) {
+    return undefined
+  }
+
+  return {
+    type: algorithm.type as AlgorithmConfig['type'],
+    confidence: algorithm.confidence,
+    concurrent: algorithm.concurrent,
+    latency_aware: algorithm.latency_aware,
+    ratings: algorithm.ratings,
+    remom: algorithm.remom,
+    elo: algorithm.elo,
+    router_dc: algorithm.router_dc,
+    automix: algorithm.automix,
+    autoMix: algorithm.autoMix ?? algorithm.automix,
+    hybrid: algorithm.hybrid,
+    rl_driven: algorithm.rl_driven,
+    gmtrouter: algorithm.gmtrouter,
+    knn: algorithm.knn,
+    kmeans: algorithm.kmeans,
+    svm: algorithm.svm,
+    mlp: algorithm.mlp,
+    multi_factor: algorithm.multi_factor,
+    session_aware: algorithm.session_aware,
+  }
 }
 
 function normalizeRuleOperator(operator?: string): RuleCombination['operator'] {
@@ -767,6 +318,9 @@ export function groupSignalsByType(signals: SignalConfig[]): Record<SignalType, 
     jailbreak: [],
     pii: [],
     kb: [],
+    conversation: [],
+    session_metric: [],
+    event_context: [],
     projection: [],
   }
 
