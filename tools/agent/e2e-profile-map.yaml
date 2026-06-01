@@ -95,7 +95,7 @@ profile_rules:
     owner: e2e
     coverage_role: agentgateway-integration
     selection_mode: full-ci
-    summary: Integration coverage with Agentgateway's gateway controller, including backend routing and extproc policy enforcement.
+    summary: Integration coverage with agentgateway's gateway controller, including backend routing and extproc policy enforcement.
     paths:
       - e2e/profiles/agentgateway/**
       - deploy/kubernetes/agentgateway/**
