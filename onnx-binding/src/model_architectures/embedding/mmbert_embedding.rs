@@ -491,10 +491,23 @@ impl MmBertEmbeddingModel {
 
             #[cfg(feature = "cuda")]
             {
-                use ort::execution_providers::CUDAExecutionProvider;
+                use crate::core::gpu_memory;
+                use ort::execution_providers::{
+                    ArenaExtendStrategy as CudaArenaStrategy, CUDAExecutionProvider,
+                };
+                // Bound the per-session CUDA arena and request-sized arena
+                // growth, mirroring the classifier path. The 2D-Matryoshka
+                // embedding model opens one primary session plus one session
+                // per early-exit layer (3, 6, 11, 22), so without a memory
+                // limit each unbounded BFC arena tries to grab a large block
+                // up front and later sessions OOM (CUBLAS_STATUS_ALLOC_FAILED)
+                // on a shared/busy GPU, silently falling back to CPU.
+                let mem_limit = gpu_memory::get_gpu_mem_limit();
                 match Session::builder()
                     .map_err(|e: ort::Error| errors::ort_error(&e.to_string()))?
                     .with_execution_providers([CUDAExecutionProvider::default()
+                        .with_memory_limit(mem_limit)
+                        .with_arena_extend_strategy(CudaArenaStrategy::SameAsRequested)
                         .build()
                         .error_on_failure()])
                     .and_then(|b| b.commit_from_file(onnx_path.as_ref()))
