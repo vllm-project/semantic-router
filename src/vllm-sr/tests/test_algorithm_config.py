@@ -355,7 +355,7 @@ class TestAlgorithmConfigIntegration:
         assert config.rl_driven.storage_path == "/tmp/rl.json"
 
     def test_thompson_algorithm_config(self):
-        """Test AlgorithmConfig with legacy Thompson Sampling config."""
+        """Test AlgorithmConfig with Thompson Sampling config."""
         config = AlgorithmConfig(
             type="thompson",
             thompson=ThompsonSamplingConfig(per_user=True, min_samples=20),

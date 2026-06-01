@@ -186,8 +186,8 @@ type SelectionContext struct {
 	SessionID string
 
 	// AgenticSession carries request-time session facts used by
-	// session_aware selection. The legacy flat SessionID remains for selectors
-	// that only need a correlation key.
+	// session_aware selection. The flat SessionID remains the shared
+	// correlation key for selectors that do not need richer session facts.
 	AgenticSession *AgenticSessionContext
 
 	// LatencyAwareTPOTPercentile is the configured TPOT percentile (1-100) for latency_aware selection
