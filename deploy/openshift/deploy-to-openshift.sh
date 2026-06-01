@@ -323,7 +323,7 @@ spec:
     - ReadWriteOnce
   resources:
     requests:
-      storage: 10Gi
+      storage: 20Gi
   storageClassName: gp3-csi
 ---
 apiVersion: v1
@@ -470,11 +470,6 @@ rm -f "$TEMP_CONFIG"
 
 success "Deployment manifests applied"
 
-# Deploy Dashboard
-log "Deploying Dashboard..."
-oc apply -f "$SCRIPT_DIR/dashboard/dashboard-deployment.yaml" -n "$NAMESPACE"
-success "Dashboard deployment applied"
-
 # Create routes
 log "Creating OpenShift routes..."
 cat <<EOF | oc apply -n "$NAMESPACE" -f -
@@ -545,23 +540,23 @@ spec:
 EOF
 success "Routes created"
 
-# Deploy Jaeger for tracing
-log "Deploying Jaeger for distributed tracing..."
-if [[ -d "$SCRIPT_DIR/observability/jaeger" ]]; then
-    oc apply -f "$SCRIPT_DIR/observability/jaeger/deployment.yaml" -n "$NAMESPACE"
-    oc apply -f "$SCRIPT_DIR/observability/jaeger/service.yaml" -n "$NAMESPACE"
-    oc apply -f "$SCRIPT_DIR/observability/jaeger/route.yaml" -n "$NAMESPACE"
-    success "Jaeger deployed"
-else
-    warn "Jaeger deployment files not found at $SCRIPT_DIR/observability/jaeger, skipping..."
-fi
-
 log "Waiting for deployments to be ready..."
 log "This may take several minutes as models are downloaded..."
 
 # Deploy observability components if enabled
 if [[ "$DEPLOY_OBSERVABILITY" == "true" ]]; then
     log "Deploying observability components..."
+
+    # Deploy Jaeger for tracing
+    log "Deploying Jaeger for distributed tracing..."
+    if [[ -d "$SCRIPT_DIR/observability/jaeger" ]]; then
+        oc apply -f "$SCRIPT_DIR/observability/jaeger/deployment.yaml" -n "$NAMESPACE"
+        oc apply -f "$SCRIPT_DIR/observability/jaeger/service.yaml" -n "$NAMESPACE"
+        oc apply -f "$SCRIPT_DIR/observability/jaeger/route.yaml" -n "$NAMESPACE"
+        success "Jaeger deployed"
+    else
+        warn "Jaeger deployment files not found at $SCRIPT_DIR/observability/jaeger, skipping..."
+    fi
 
     # Deploy Grafana with dynamic route URL
     log "Deploying Grafana..."

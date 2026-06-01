@@ -446,6 +446,14 @@
   line-height: 1;
 }
 
+.wsFallback {
+  display: inline-flex;
+  align-items: center;
+  font-size: 0.72rem;
+  color: #fbbf24;
+  line-height: 1;
+}
+
 @keyframes pulse {
   0%, 100% { opacity: 1; }
   50% { opacity: 0.6; }
@@ -1185,6 +1193,31 @@
   background: rgba(255, 255, 255, 0.05);
   border-radius: 1.1rem;
   padding: 0.72rem 0.9rem;
+}
+
+.messageBubbleStreaming {
+  opacity: 0.94;
+}
+
+.streamingCursor {
+  display: inline-block;
+  width: 0.45rem;
+  height: 1rem;
+  margin-left: 0.15rem;
+  vertical-align: text-bottom;
+  background: rgba(255, 255, 255, 0.72);
+  animation: clawRoomStreamingBlink 1s step-end infinite;
+}
+
+@keyframes clawRoomStreamingBlink {
+  0%,
+  100% {
+    opacity: 1;
+  }
+
+  50% {
+    opacity: 0;
+  }
 }
 
 .messageMarkdown {

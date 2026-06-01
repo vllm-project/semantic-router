@@ -145,10 +145,10 @@ oc get route prometheus -n vllm-semantic-router-system -o jsonpath='{.spec.host}
 API_ROUTE=$(oc get route semantic-router-api -n vllm-semantic-router-system -o jsonpath='{.spec.host}')
 
 # Test health endpoint
-curl -k https://$API_ROUTE/health
+curl http://$API_ROUTE/health
 
 # Test classification
-curl -k -X POST https://$API_ROUTE/api/v1/classify/intent \
+curl -X POST http://$API_ROUTE/api/v1/classify/intent \
   -H "Content-Type: application/json" \
   -d '{"text": "What is machine learning?"}'
 
@@ -156,11 +156,11 @@ curl -k -X POST https://$API_ROUTE/api/v1/classify/intent \
 ENVOY_ROUTE=$(oc get route envoy-http -n vllm-semantic-router-system -o jsonpath='{.spec.host}')
 
 # Test auto routing (hits a model backend via Envoy)
-curl -k -X POST https://$ENVOY_ROUTE/v1/chat/completions \
+curl -X POST http://$ENVOY_ROUTE/v1/chat/completions \
   -H "Content-Type: application/json" \
   -d '{"model":"auto","messages":[{"role":"user","content":"Explain the elements of a contract under common law and give a simple example."}]}'
 
-curl -k -X POST https://$ENVOY_ROUTE/v1/chat/completions \
+curl -X POST http://$ENVOY_ROUTE/v1/chat/completions \
   -H "Content-Type: application/json" \
   -d '{"model":"auto","messages":[{"role":"user","content":"What is 2+2?"}]}'
 ```
@@ -176,17 +176,17 @@ API_ROUTE=$(oc get route semantic-router-kserve-api -n vllm-semantic-router-syst
 # Envoy route for chat completions
 ENVOY_ROUTE=$(oc get route semantic-router-kserve -n vllm-semantic-router-system -o jsonpath='{.spec.host}')
 
-curl -k https://$API_ROUTE/health
+curl http://$API_ROUTE/health
 
-curl -k -X POST https://$API_ROUTE/api/v1/classify/intent \
+curl -X POST http://$API_ROUTE/api/v1/classify/intent \
   -H "Content-Type: application/json" \
   -d '{"text": "What is machine learning?"}'
 
-curl -k -X POST https://$ENVOY_ROUTE/v1/chat/completions \
+curl -X POST http://$ENVOY_ROUTE/v1/chat/completions \
   -H "Content-Type: application/json" \
   -d '{"model":"auto","messages":[{"role":"user","content":"Explain the elements of a contract under common law and give a simple example."}]}'
 
-curl -k -X POST https://$ENVOY_ROUTE/v1/chat/completions \
+curl -X POST http://$ENVOY_ROUTE/v1/chat/completions \
   -H "Content-Type: application/json" \
   -d '{"model":"auto","messages":[{"role":"user","content":"What is 2+2?"}]}'
 ```
@@ -211,11 +211,11 @@ curl -k -X POST https://$ENVOY_ROUTE/v1/chat/completions \
 
 # 4) Test via Envoy route
 ENVOY_ROUTE=$(oc get route semantic-router-kserve -n vllm-semantic-router-system -o jsonpath='{.spec.host}')
-curl -sk "https://${ENVOY_ROUTE}/v1/chat/completions" \
+curl -s "http://${ENVOY_ROUTE}/v1/chat/completions" \
   -H "Content-Type: application/json" \
   -d '{"model":"auto","messages":[{"role":"user","content":"Explain the elements of a contract under common law and give a simple example."}]}'
 
-curl -sk "https://${ENVOY_ROUTE}/v1/chat/completions" \
+curl -s "http://${ENVOY_ROUTE}/v1/chat/completions" \
   -H "Content-Type: application/json" \
   -d '{"model":"auto","messages":[{"role":"user","content":"What is 2+2?"}]}'
 ```
@@ -259,12 +259,12 @@ This deploys:
 ENVOY_ROUTE=$(oc get route semantic-router-kserve -n vllm-semantic-router-system -o jsonpath='{.spec.host}')
 
 # Test auto-routing through vSR (single-model setups will route to Qwen)
-curl -sk "https://${ENVOY_ROUTE}/v1/chat/completions" \
+curl -s "http://${ENVOY_ROUTE}/v1/chat/completions" \
   -H "Content-Type: application/json" \
   -d '{"model":"auto","messages":[{"role":"user","content":"Explain the elements of a contract under common law and give a simple example."}]}'
 
 # (Optional) Force the backend model directly
-curl -sk "https://${ENVOY_ROUTE}/v1/chat/completions" \
+curl -s "http://${ENVOY_ROUTE}/v1/chat/completions" \
   -H "Content-Type: application/json" \
   -d '{"model":"Qwen/Qwen3-0.6B","messages":[{"role":"user","content":"What is 2+2?"}]}'
 
@@ -299,8 +299,8 @@ For custom models, create your own LLMInferenceService manifest based on `deploy
 ### Networking
 
 - Uses OpenShift Routes instead of port-forwarding for external access
-- TLS termination handled by OpenShift router
-- Automatic HTTPS certificates via OpenShift
+- Routes are created without TLS termination by default (HTTP only)
+- To enable HTTPS, add `tls: termination: edge` to route specs
 
 ### Storage
 
@@ -331,7 +331,7 @@ Access Prometheus metrics via the metrics route:
 
 ```bash
 METRICS_ROUTE=$(oc get route semantic-router-metrics -n vllm-semantic-router-system -o jsonpath='{.spec.host}')
-curl https://$METRICS_ROUTE/metrics
+curl http://$METRICS_ROUTE/metrics
 ```
 
 ## Cleanup
@@ -713,7 +713,7 @@ The deployment requires:
 
 - **Memory**: 3Gi request, 6Gi limit
 - **CPU**: 1 core request, 2 cores limit
-- **Storage**: 10Gi for model storage
+- **Storage**: 20Gi for model storage
 
 Adjust resource limits in `deployment.yaml` if needed for your cluster capacity.
 
