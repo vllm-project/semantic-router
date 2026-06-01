@@ -203,7 +203,7 @@ func collectMatchedSignalRules(signals *classification.SignalResults) []string {
 // buildCompressionConfig translates the YAML config into the promptcompression
 // package's Config struct, applying defaults for omitted fields.
 func buildCompressionConfig(pc config.PromptCompressionConfig) promptcompression.Config {
-	cfg := promptcompression.DefaultConfig(pc.MaxTokens)
+	cfg := promptcompression.ProfileConfig(pc.Profile, pc.MaxTokens)
 	if pc.TextRankWeight > 0 {
 		cfg.TextRankWeight = pc.TextRankWeight
 	}
@@ -213,8 +213,17 @@ func buildCompressionConfig(pc config.PromptCompressionConfig) promptcompression
 	if pc.TFIDFWeight > 0 {
 		cfg.TFIDFWeight = pc.TFIDFWeight
 	}
+	if pc.NoveltyWeight > 0 {
+		cfg.NoveltyWeight = pc.NoveltyWeight
+	}
 	if pc.PositionDepth > 0 {
 		cfg.PositionDepth = pc.PositionDepth
+	}
+	if pc.PreserveFirstN > 0 {
+		cfg.PreserveFirstN = pc.PreserveFirstN
+	}
+	if pc.PreserveLastN > 0 {
+		cfg.PreserveLastN = pc.PreserveLastN
 	}
 	return cfg
 }

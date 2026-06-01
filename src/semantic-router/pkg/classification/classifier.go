@@ -37,6 +37,8 @@ type Classifier struct {
 
 	// Context classifier for token count-based routing
 	contextClassifier *ContextClassifier
+	// tokenCalibrator learns provider-specific prompt token ratios for context routing.
+	tokenCalibrator *CalibratedTokenCounter
 
 	// Structure classifier for request-shape routing signals
 	structureClassifier *StructureClassifier
@@ -124,12 +126,6 @@ func withReaskClassifier(reaskClassifier *ReaskClassifier) option {
 func withKBClassifiers(classifiers map[string]*KnowledgeBaseClassifier) option {
 	return func(c *Classifier) {
 		c.kbClassifiers = classifiers
-	}
-}
-
-func withContextClassifier(contextClassifier *ContextClassifier) option {
-	return func(c *Classifier) {
-		c.contextClassifier = contextClassifier
 	}
 }
 

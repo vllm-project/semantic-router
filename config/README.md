@@ -33,6 +33,7 @@ Inside canonical `config.yaml`:
 - `global.router.skip_processing.enabled` opts the router into honoring the `x-vsr-skip-processing` request header; defaults to `false` so an arbitrary upstream caller cannot bypass router policy by injecting the header. Enable only when an authenticated upstream filter (ext_authz, etc.) is responsible for setting or stripping the header (see [#1808](https://github.com/vllm-project/semantic-router/issues/1808))
 - router-owned model-backed module config lives under `global.model_catalog.modules`
 - `global.model_catalog.modules.prompt_compression.max_evaluation_chars` caps signal-evaluation input before classifier, jailbreak, PII, and other signal processing. The built-in default is `8192`; set `0` or `-1` only after validating the classifier stack can safely process longer inputs.
+- `global.model_catalog.modules.prompt_compression.profile` selects built-in signal-compression scoring defaults (`default`, `coding`, `medical`, `security`, or `multi_turn`); explicit weight and preserve fields override the profile.
 
 `config/decision/` is organized by boolean rule shape:
 

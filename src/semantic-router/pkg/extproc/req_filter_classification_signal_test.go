@@ -116,6 +116,17 @@ func TestEnsureContextTokenCount_PreservesSignalTokenCount(t *testing.T) {
 	})
 
 	assert.Equal(t, 2048, ctx.VSRContextTokenCount)
+	assert.Equal(t, len("short"), ctx.VSRContextTextBytes)
+}
+
+func TestEnsureContextTokenCountRecordsContextTextBytes(t *testing.T) {
+	ctx := &RequestContext{}
+	ensureContextTokenCount(ctx, signalEvaluationInput{
+		allMessagesText: "system prompt and current user prompt",
+		evaluationText:  "current user prompt",
+	})
+
+	assert.Equal(t, len("system prompt and current user prompt"), ctx.VSRContextTextBytes)
 }
 
 func TestCollectMatchedSignalRules_PreservesFamilyOrder(t *testing.T) {
@@ -214,4 +225,22 @@ func TestPrepareSignalEvaluationInputRespectsEvalLimit(t *testing.T) {
 	})
 	require.Len(t, input.evaluationText, limit, "evaluationText must be capped at max_evaluation_chars")
 	assert.LessOrEqual(t, len(input.compressedText), limit, "compressedText must not exceed cap")
+}
+
+func TestBuildCompressionConfigAppliesProfileAndOverrides(t *testing.T) {
+	cfg := buildCompressionConfig(config.PromptCompressionConfig{
+		Profile:        "coding",
+		MaxTokens:      2048,
+		NoveltyWeight:  0.25,
+		PreserveLastN:  6,
+		PositionDepth:  0.7,
+		TextRankWeight: 0.2,
+	})
+
+	assert.Equal(t, 2048, cfg.MaxTokens)
+	assert.Equal(t, 0.25, cfg.NoveltyWeight)
+	assert.Equal(t, 6, cfg.PreserveLastN)
+	assert.Equal(t, 0.7, cfg.PositionDepth)
+	assert.Equal(t, 0.2, cfg.TextRankWeight)
+	assert.Equal(t, 2, cfg.PreserveFirstN, "coding profile should apply when not explicitly overridden")
 }

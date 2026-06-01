@@ -208,6 +208,7 @@ export const DEFAULT_SECTIONS: Record<RouterSystemKey, unknown> = {
   } satisfies EmbeddingModelsConfig,
   prompt_compression: {
     enabled: false,
+    profile: 'default',
     max_evaluation_chars: 8192,
   } satisfies PromptCompressionConfig,
   modality_detector: {
@@ -337,7 +338,7 @@ export const SECTION_META: Record<RouterSystemKey, { title: string; eyebrow: str
   prompt_compression: {
     title: 'Prompt Compression',
     eyebrow: 'Model Catalog',
-    description: 'Optional compression pass plus hard signal-evaluation input bounds.',
+    description: 'Optional signal-evaluation compression profiles plus hard input bounds.',
   },
   modality_detector: {
     title: 'Modality Detector',

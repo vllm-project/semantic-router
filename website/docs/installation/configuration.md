@@ -53,6 +53,7 @@ The detailed background is in [Unified Config Contract v0.3](../proposals/unifie
 - `global.model_catalog.classifiers[]` is the reusable registry for startup-loaded classifier packages such as taxonomy classifiers
 - `global.model_catalog.modules` groups capability modules such as `prompt_guard`, `classifier`, `complexity`, and `hallucination_mitigation`
 - `global.model_catalog.modules.prompt_compression.max_evaluation_chars` caps signal-evaluation input before model-backed signals run. The built-in default is `8192`; use `0` or `-1` only after validating classifier capacity for longer prompts.
+- `global.model_catalog.modules.prompt_compression.profile` provides built-in signal-compression scoring defaults for `default`, `coding`, `medical`, `security`, and `multi_turn` workloads. Explicit weights and preserve counts override the selected profile.
 
 ## Canonical example
 

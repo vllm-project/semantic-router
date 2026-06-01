@@ -5,6 +5,9 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/classification"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 )
 
 // =====================================================================
@@ -136,6 +139,41 @@ func TestExtractStreamingUsage_PartialFields(t *testing.T) {
 	assert.Equal(t, int64(10), usage.PromptTokens)
 	assert.Equal(t, int64(0), usage.CompletionTokens, "missing fields default to 0")
 	assert.Equal(t, int64(0), usage.TotalTokens, "missing fields default to 0")
+}
+
+func TestCalibrateTokenEstimatorUsesContextTextBytes(t *testing.T) {
+	classifier, err := classification.BuildClassifier(&config.RouterConfig{
+		IntelligentRouting: config.IntelligentRouting{
+			Signals: config.Signals{
+				ContextRules: []config.ContextRule{{
+					Name:      "long_context",
+					MinTokens: config.TokenCount("0"),
+					MaxTokens: config.TokenCount("10K"),
+				}},
+			},
+		},
+	}, nil, nil, nil)
+	assert.NoError(t, err)
+
+	router := &OpenAIRouter{Classifier: classifier}
+	ctx := &RequestContext{
+		OriginalRequestBody:     []byte(`{"messages":[{"role":"user","content":"short"}]}`),
+		VSRContextTextBytes:     2000,
+		VSRMatchedContext:       []string{"long_context"},
+		VSRSelectedDecisionName: "fallback_decision",
+	}
+
+	for i := 0; i < 20; i++ {
+		router.calibrateTokenEstimator(ctx, 1000)
+	}
+
+	defaultMean, _, _, defaultCalibrated := classifier.TokenCalibrationRatio("")
+	assert.True(t, defaultCalibrated)
+	assert.InDelta(t, 2.0, defaultMean, 0.1)
+
+	categoryMean, _, _, categoryCalibrated := classifier.TokenCalibrationRatio("long_context")
+	assert.True(t, categoryCalibrated)
+	assert.InDelta(t, 2.0, categoryMean, 0.1)
 }
 
 // =====================================================================

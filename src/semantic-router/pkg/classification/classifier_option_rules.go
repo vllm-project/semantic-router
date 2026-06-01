@@ -64,8 +64,8 @@ func (b *classifierOptionBuilder) buildContextClassifierOption() (option, error)
 	if len(b.cfg.ContextRules) == 0 {
 		return nil, nil
 	}
-	tokenCounter := &CharacterBasedTokenCounter{}
-	return withContextClassifier(NewContextClassifier(tokenCounter, b.cfg.ContextRules)), nil
+	tokenCounter := NewCalibratedTokenCounter(WithConservativeEstimate())
+	return withCalibratedContextClassifier(NewContextClassifier(tokenCounter, b.cfg.ContextRules), tokenCounter), nil
 }
 
 func (b *classifierOptionBuilder) buildStructureClassifierOption() (option, error) {

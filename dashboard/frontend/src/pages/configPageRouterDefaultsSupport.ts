@@ -409,6 +409,7 @@ function summaryForKey(key: RouterSystemKey, data: unknown): RouterSectionSummar
     case 'prompt_compression':
       return [
         { label: 'Enabled', value: stringOrFallback(section?.enabled, 'Disabled') },
+        { label: 'Profile', value: stringOrFallback(section?.profile) },
         { label: 'Evaluation cap', value: stringOrFallback(section?.max_evaluation_chars) },
         { label: 'Max tokens', value: stringOrFallback(section?.max_tokens) },
         { label: 'Skip signals', value: (Array.isArray(section?.skip_signals) ? section?.skip_signals.join(', ') : 'Not set') || 'Not set' },
@@ -665,6 +666,7 @@ function fieldsForKey(key: RouterSystemKey): FieldConfig[] {
     case 'prompt_compression':
       return [
         { name: 'enabled', label: 'Enable Prompt Compression', type: 'boolean' },
+        { name: 'profile', label: 'Profile', type: 'text', placeholder: 'default | coding | medical | security | multi_turn' },
         { name: 'max_evaluation_chars', label: 'Evaluation Character Cap', type: 'number', placeholder: '8192' },
         { name: 'max_tokens', label: 'Max Tokens', type: 'number', placeholder: '512' },
         { name: 'min_length', label: 'Min Length', type: 'number', placeholder: '64' },
@@ -672,7 +674,10 @@ function fieldsForKey(key: RouterSystemKey): FieldConfig[] {
         { name: 'textrank_weight', label: 'TextRank Weight', type: 'number', step: 0.01, placeholder: '1.0' },
         { name: 'position_weight', label: 'Position Weight', type: 'number', step: 0.01, placeholder: '1.0' },
         { name: 'tfidf_weight', label: 'TFIDF Weight', type: 'number', step: 0.01, placeholder: '1.0' },
+        { name: 'novelty_weight', label: 'Novelty Weight', type: 'number', step: 0.01, placeholder: '0.05' },
         { name: 'position_depth', label: 'Position Depth', type: 'number', step: 0.01, placeholder: '1.0' },
+        { name: 'preserve_first_n', label: 'Preserve First Sentences', type: 'number', placeholder: '3' },
+        { name: 'preserve_last_n', label: 'Preserve Last Sentences', type: 'number', placeholder: '2' },
       ]
     case 'modality_detector':
       return [
