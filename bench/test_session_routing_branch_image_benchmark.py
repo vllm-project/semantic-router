@@ -29,6 +29,8 @@ REQUIRED_LONG_HORIZON_TASKS = [
     "feature-implementation-loop",
     "research-claim-grounding-loop",
     "tool-timeout-retry-loop",
+    "ci-patch-review-loop",
+    "paper-rebuttal-revision-loop",
 ]
 
 
@@ -107,23 +109,23 @@ def complete_agent_task_summary(
     return {
         "evidence_ref": ref,
         "evidence_image_tag": image_tag,
-        "requests": 453,
+        "requests": 489,
         "success_rate": 1.0,
-        "successes": 453,
-        "task_count": 26,
-        "tasks": 26,
-        "task_instances": 78,
+        "successes": 489,
+        "task_count": 28,
+        "tasks": 28,
+        "task_instances": 84,
         "task_success_rate": 1.0,
         "task_score_mean": 1.0,
         "task_names": REQUIRED_LONG_HORIZON_TASKS,
         "scored_task_names": REQUIRED_LONG_HORIZON_TASKS,
         "phase_counts": {
-            "user_turn": 60,
-            "tool_loop": 126,
-            "provider_state": 57,
-            "topic_drift": 30,
-            "idle_boundary": 12,
-            "final": 60,
+            "user_turn": 84,
+            "tool_loop": 180,
+            "provider_state": 81,
+            "topic_drift": 45,
+            "idle_boundary": 15,
+            "final": 84,
         },
         "missing_router_header_counts": {
             "x-vsr-selected-model": 0,
@@ -263,7 +265,7 @@ def test_full_branch_image_summary_blocks_mounted_binary_and_stale_tasks(tmp_pat
         "mounted-binary evidence cannot satisfy branch-image benchmark"
         in summary["validation_failures"]
     )
-    assert "agent task requests 96.0 < 453" in summary["validation_failures"]
+    assert "agent task requests 96.0 < 489" in summary["validation_failures"]
     assert (
         "agent task missing router headers: "
         "{'x-vsr-session-phase': 96, 'x-vsr-selected-confidence': 96, "
