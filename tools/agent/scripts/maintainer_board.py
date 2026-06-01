@@ -354,12 +354,7 @@ def render_release_readiness(snapshot: dict[str, Any], release_plan: Path) -> st
             lines.append("- no matching milestone issue")
         lines.append("")
 
-    lines.extend(["## Release Blockers", ""])
-    blockers = snapshot["groups"]["pull_requests"]["unblock"]
-    if blockers:
-        lines.extend(f"- {summarize_item(pr)}" for pr in blockers)
-    else:
-        lines.append("- none")
+    lines.extend(render_release_blockers(snapshot))
 
     lines.extend(["", "## PR Queue", ""])
     for group in ("merge-candidate", "review-now", "needs-rebase", "close-candidate"):
@@ -367,6 +362,45 @@ def render_release_readiness(snapshot: dict[str, Any], release_plan: Path) -> st
         lines.append(f"- {group}: {len(items)}")
     lines.append("")
     return "\n".join(lines)
+
+
+def render_release_blockers(snapshot: dict[str, Any]) -> list[str]:
+    lines = ["## Release Blockers", ""]
+    groups = release_blocker_groups(snapshot)
+    if not groups:
+        lines.append("- none")
+        return lines
+    for index, (heading, items) in enumerate(groups):
+        if index:
+            lines.append("")
+        lines.append(f"### {heading}")
+        lines.extend(items)
+    return lines
+
+
+def release_blocker_groups(snapshot: dict[str, Any]) -> list[tuple[str, list[str]]]:
+    groups = []
+    ga_readiness = snapshot.get("session_routing_ga_readiness") or {}
+    ga_blockers = ga_readiness.get("blockers", [])
+    if ga_blockers:
+        groups.append(
+            (
+                "Session-Aware GA",
+                [
+                    f"- {item['status']}: {item['title']} (`{item['id']}`)"
+                    for item in ga_blockers
+                ],
+            )
+        )
+    pr_blockers = snapshot["groups"]["pull_requests"]["unblock"]
+    if pr_blockers:
+        groups.append(
+            (
+                "PRs Requiring Unblock",
+                [f"- {summarize_item(pr)}" for pr in pr_blockers],
+            )
+        )
+    return groups
 
 
 def match_release_tasks_to_issues(

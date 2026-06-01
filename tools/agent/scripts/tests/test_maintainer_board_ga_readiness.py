@@ -195,6 +195,8 @@ class MaintainerBoardGAReadinessTests(unittest.TestCase):
                 "- blocked: Cache-token reporting (`cache_token_reporting`)",
                 rendered,
             )
+        self.assertIn("## Release Blockers", release)
+        self.assertIn("### Session-Aware GA", release)
 
     def test_blocker_summary_falls_back_to_blocked_requirements(self) -> None:
         summary = maintainer_ga_readiness.blocker_summaries(
