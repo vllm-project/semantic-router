@@ -46,7 +46,7 @@ CACHE_PROBE_IDENTITY_FIELDS = (
     "stable_prefix_chars",
     "unique_suffix_pattern",
 )
-CACHE_PROBE_ENDPOINT_FIELDS = ("base_url", "model")
+CACHE_PROBE_SERVING_PATH_FIELDS = ("base_url", "model")
 DEFAULT_MIN_AGENT_TASK_REQUESTS = 453
 DEFAULT_MIN_AGENT_TASK_COUNT = 26
 DEFAULT_MIN_AGENT_TASK_INSTANCES = 78
@@ -843,7 +843,7 @@ def normalized_base_url(summary: dict[str, Any] | None) -> str:
     return str(summary.get("base_url") or "").rstrip("/")
 
 
-def add_cache_probe_endpoint_failures(
+def add_cache_probe_serving_path_failures(
     failures: list[str],
     router_summary: dict[str, Any] | None,
     baseline_summary: dict[str, Any] | None,
@@ -851,7 +851,7 @@ def add_cache_probe_endpoint_failures(
     for label, summary in (("router", router_summary), ("baseline", baseline_summary)):
         if not isinstance(summary, dict):
             continue
-        for field in CACHE_PROBE_ENDPOINT_FIELDS:
+        for field in CACHE_PROBE_SERVING_PATH_FIELDS:
             if not str(summary.get(field) or ""):
                 failures.append(f"{label}: {field} missing")
     router_base_url = normalized_base_url(router_summary)
@@ -859,7 +859,7 @@ def add_cache_probe_endpoint_failures(
     if router_base_url and baseline_base_url and router_base_url == baseline_base_url:
         failures.append(
             "baseline: base_url must differ from router base_url for direct-backend "
-            "cache evidence"
+            "serving-path cache evidence"
         )
 
 
@@ -955,7 +955,7 @@ def evaluate_cache_aggregate(args: argparse.Namespace) -> dict[str, Any]:
             path_summaries.get("baseline"),
         )
     if args.require_cache_baseline:
-        add_cache_probe_endpoint_failures(
+        add_cache_probe_serving_path_failures(
             failures,
             path_summaries.get("router"),
             path_summaries.get("baseline"),

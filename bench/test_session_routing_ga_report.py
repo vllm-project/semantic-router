@@ -471,11 +471,11 @@ def test_positive_cache_requires_router_baseline_probe_identity_match(tmp_path):
     )
 
 
-def test_positive_cache_requires_direct_backend_endpoint_identity(tmp_path):
+def test_positive_cache_requires_direct_backend_serving_path_identity(tmp_path):
     report_mod = load_report_module()
     inputs = complete_inputs(tmp_path)
     cache = write_json(
-        tmp_path / "cache-same-endpoint.json",
+        tmp_path / "cache-same-serving-path.json",
         {
             "router": {
                 "base_url": "http://router.local/v1",
@@ -529,7 +529,7 @@ def test_positive_cache_requires_direct_backend_endpoint_identity(tmp_path):
     assert cache_requirement["status"] == "blocked"
     assert (
         "baseline: base_url must differ from router base_url for direct-backend "
-        "cache evidence"
+        "serving-path cache evidence"
     ) in cache_requirement["failures"]
 
 

@@ -405,12 +405,14 @@ def test_full_branch_image_summary_blocks_cache_probe_identity_mismatch(tmp_path
     ) in summary["validation_failures"]
 
 
-def test_full_branch_image_summary_requires_direct_backend_endpoint_identity(tmp_path):
+def test_full_branch_image_summary_requires_direct_backend_serving_path_identity(
+    tmp_path,
+):
     benchmark = load_benchmark_module()
     arg_values = complete_args(tmp_path)
-    same_endpoint_cache = cache_aggregate()
-    same_endpoint_cache["baseline"]["base_url"] = "http://router.local/v1/"
-    write_json(tmp_path / "cache.json", same_endpoint_cache)
+    same_serving_path_cache = cache_aggregate()
+    same_serving_path_cache["baseline"]["base_url"] = "http://router.local/v1/"
+    write_json(tmp_path / "cache.json", same_serving_path_cache)
     args = benchmark.parse_args(arg_values)
 
     summary = benchmark.build_summary(args)
@@ -418,7 +420,7 @@ def test_full_branch_image_summary_requires_direct_backend_endpoint_identity(tmp
     assert summary["checks"]["cache_token_probe_ok"] is False
     assert (
         "cache baseline base_url must differ from router base_url for "
-        "direct-backend cache evidence"
+        "direct-backend serving-path cache evidence"
     ) in summary["validation_failures"]
 
 
