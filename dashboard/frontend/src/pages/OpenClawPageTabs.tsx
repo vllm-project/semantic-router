@@ -5,6 +5,14 @@ import {
   type OpenClawStatus,
   type TeamProfile,
 } from './OpenClawPageSupport'
+import {
+  listenForSurfaceEvents,
+  postRoomContextToFrame,
+  postRoomEventToFrame,
+  subscribeRoomEvents,
+  type RoomBridgeEnvelope,
+} from '../components/openclawRoomBridge'
+import type { WSOutboundMessage } from '../components/clawRoomChatSupport'
 
 export { ArchitectureTab } from './OpenClawArchitectureTab'
 export { TeamTab } from './OpenClawTeamTab'
@@ -325,7 +333,11 @@ export const StatusTab: React.FC<{
   const [selectedContainer, setSelectedContainer] = useState<string | null>(null)
   const [gatewayToken, setGatewayToken] = useState('')
   const [isFullscreen, setIsFullscreen] = useState(false)
+  const [linkedRoomId, setLinkedRoomId] = useState('')
+  const [roomBridgeEvents, setRoomBridgeEvents] = useState<WSOutboundMessage[]>([])
+  const [surfaceEvents, setSurfaceEvents] = useState<RoomBridgeEnvelope[]>([])
   const iframeContainerRef = useRef<HTMLDivElement | null>(null)
+  const iframeRef = useRef<HTMLIFrameElement | null>(null)
 
   const selected = containers.find(c => c.containerName === selectedContainer)
 
@@ -352,6 +364,86 @@ export const StatusTab: React.FC<{
       setSelectedContainer(null)
     }
   }, [readOnly, selectedContainer])
+
+  useEffect(() => {
+    if (!selected?.teamId) {
+      setLinkedRoomId('')
+      return
+    }
+
+    let cancelled = false
+    const loadRoom = async () => {
+      try {
+        const resp = await fetch(`/api/openclaw/rooms?teamId=${encodeURIComponent(selected.teamId || '')}`)
+        if (!resp.ok) {
+          throw new Error(`Failed to load rooms (${resp.status})`)
+        }
+        const rooms = await resp.json() as Array<{ id?: string }>
+        if (cancelled) {
+          return
+        }
+        setLinkedRoomId(Array.isArray(rooms) && rooms[0]?.id ? rooms[0].id : '')
+      } catch {
+        if (!cancelled) {
+          setLinkedRoomId('')
+        }
+      }
+    }
+
+    void loadRoom()
+    return () => {
+      cancelled = true
+    }
+  }, [selected?.teamId])
+
+  useEffect(() => {
+    if (!linkedRoomId || !selectedContainer || !selected?.healthy) {
+      setRoomBridgeEvents([])
+      return
+    }
+
+    const unsubscribe = subscribeRoomEvents(linkedRoomId, event => {
+      setRoomBridgeEvents(previous => [...previous.slice(-19), event])
+      if (iframeRef.current) {
+        postRoomEventToFrame(iframeRef.current, linkedRoomId, event)
+      }
+    })
+
+    return unsubscribe
+  }, [linkedRoomId, selected?.healthy, selectedContainer])
+
+  useEffect(() => {
+    if (!linkedRoomId || !selectedContainer || !selected?.healthy) {
+      setSurfaceEvents([])
+      return
+    }
+
+    return listenForSurfaceEvents(linkedRoomId, (_roomId, payload) => {
+      setSurfaceEvents(previous => [
+        ...previous.slice(-9),
+        {
+          source: 'clawos-room-bridge',
+          type: 'surface_event',
+          roomId: linkedRoomId,
+          payload,
+        },
+      ])
+    })
+  }, [linkedRoomId, selected?.healthy, selectedContainer])
+
+  const latestRoomBridgeEvent = useMemo(() => {
+    const last = roomBridgeEvents[roomBridgeEvents.length - 1]
+    if (!last) {
+      return ''
+    }
+    if (last.message?.content) {
+      return last.message.content
+    }
+    if (last.chunk) {
+      return last.chunk
+    }
+    return last.type
+  }, [roomBridgeEvents])
 
   const handleAction = async (action: 'start' | 'stop', name: string) => {
     if (readOnly) return
@@ -415,7 +507,8 @@ export const StatusTab: React.FC<{
     }
     const proxyBase = `/embedded/openclaw/${encodeURIComponent(selectedContainer)}/`
     const gatewayUrl = `${window.location.protocol === 'https:' ? 'wss' : 'ws'}://${window.location.host}${proxyBase}`
-    const iframeSrc = `${proxyBase}#gatewayUrl=${encodeURIComponent(gatewayUrl)}&token=${encodeURIComponent(gatewayToken)}`
+    const roomContext = linkedRoomId ? `&roomId=${encodeURIComponent(linkedRoomId)}` : ''
+    const iframeSrc = `${proxyBase}#gatewayUrl=${encodeURIComponent(gatewayUrl)}&token=${encodeURIComponent(gatewayToken)}${roomContext}`
     const openInNewTab = () => {
       window.open(iframeSrc, '_blank', 'noopener,noreferrer')
     }
@@ -462,12 +555,34 @@ export const StatusTab: React.FC<{
           </button>
         </div>
         <div ref={iframeContainerRef} className={styles.iframeContainer}>
+          {(linkedRoomId || latestRoomBridgeEvent || surfaceEvents.length > 0) && (
+            <div className={styles.roomBridgePanel} data-testid="claw-room-bridge-activity">
+              <div className={styles.roomBridgePanelHeader}>Room collaboration</div>
+              {linkedRoomId && (
+                <div className={styles.roomBridgeMeta}>Room: {linkedRoomId}</div>
+              )}
+              {latestRoomBridgeEvent && (
+                <div className={styles.roomBridgeEvent}>Latest: {truncateText(latestRoomBridgeEvent, 120)}</div>
+              )}
+              {surfaceEvents.length > 0 && (
+                <div className={styles.roomBridgeEvent}>
+                  Surface: {truncateText(JSON.stringify(surfaceEvents[surfaceEvents.length - 1].payload || {}), 120)}
+                </div>
+              )}
+            </div>
+          )}
           <iframe
-            key={gatewayToken}
+            ref={iframeRef}
+            key={`${gatewayToken}:${linkedRoomId}`}
             className={styles.iframe}
             src={iframeSrc}
             title={`OpenClaw Control UI — ${selectedContainer}`}
             sandbox="allow-same-origin allow-scripts allow-forms allow-popups"
+            onLoad={() => {
+              if (iframeRef.current && linkedRoomId) {
+                postRoomContextToFrame(iframeRef.current, linkedRoomId)
+              }
+            }}
           />
         </div>
       </div>
