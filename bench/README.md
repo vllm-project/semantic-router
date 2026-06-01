@@ -170,8 +170,10 @@ must share the same stable-prefix hash, prefix length, and unique-suffix pattern
 otherwise the GA report treats them as different probes. They must also record
 their `base_url` and `model`, and the direct-backend `base_url` must differ from
 the router `base_url`; otherwise a router-only probe cannot masquerade as
-backend-positive evidence. The same cache-reporting gates apply to both router
-and direct-backend paths.
+backend-positive evidence. The probe writes this as an aggregate validation
+failure immediately, and the GA report and branch-image assembler enforce the
+same rule. The same cache-reporting gates apply to both router and
+direct-backend paths.
 
 ### Live Agent Task Benchmark
 

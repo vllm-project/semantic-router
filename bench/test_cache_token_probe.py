@@ -234,6 +234,48 @@ def test_validate_summary_fails_low_success_rate():
     ]
 
 
+def test_validate_baseline_identity_rejects_same_base_url():
+    probe = load_probe_module()
+    router_summary = probe.summarize(
+        [row(probe, 0)],
+        1.0,
+        "router",
+        base_url="http://router.local/v1/",
+        model="auto",
+    )
+    baseline_summary = probe.summarize(
+        [row(probe, 0)],
+        1.0,
+        "direct-backend",
+        base_url="http://router.local/v1",
+        model="qwen/qwen3.5-rocm",
+    )
+
+    assert probe.validate_baseline_identity(router_summary, baseline_summary) == [
+        "direct-backend: base_url must differ from router base_url for cache evidence"
+    ]
+
+
+def test_validate_baseline_identity_accepts_direct_backend_url():
+    probe = load_probe_module()
+    router_summary = probe.summarize(
+        [row(probe, 0)],
+        1.0,
+        "router",
+        base_url="http://router.local/v1",
+        model="auto",
+    )
+    baseline_summary = probe.summarize(
+        [row(probe, 0)],
+        1.0,
+        "direct-backend",
+        base_url="http://backend.local/v1/",
+        model="qwen/qwen3.5-rocm",
+    )
+
+    assert probe.validate_baseline_identity(router_summary, baseline_summary) == []
+
+
 def test_aggregate_summary_output_matches_ga_report_shape(tmp_path):
     probe = load_probe_module()
     router_summary = probe.attach_evidence_identity(

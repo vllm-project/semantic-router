@@ -371,6 +371,28 @@ def validate_summary(
     return failures
 
 
+def validate_baseline_identity(
+    summary: dict[str, Any], baseline_summary: dict[str, Any]
+) -> list[str]:
+    failures: list[str] = []
+    router_base_url = normalized_base_url(str(summary.get("base_url") or ""))
+    baseline_base_url = normalized_base_url(str(baseline_summary.get("base_url") or ""))
+    if not router_base_url:
+        failures.append("router: base_url missing")
+    if not str(summary.get("model") or ""):
+        failures.append("router: model missing")
+    if not baseline_base_url:
+        failures.append("direct-backend: base_url missing")
+    if not str(baseline_summary.get("model") or ""):
+        failures.append("direct-backend: model missing")
+    if router_base_url and baseline_base_url and router_base_url == baseline_base_url:
+        failures.append(
+            "direct-backend: base_url must differ from router base_url for "
+            "cache evidence"
+        )
+    return failures
+
+
 def cache_reporting_state(rows: list[dict[str, Any]]) -> str:
     if not rows:
         return "missing"
@@ -493,6 +515,7 @@ def main() -> int:
     failures = validate_summary(args, summary, args.label)
     if baseline_summary is not None:
         failures.extend(validate_summary(args, baseline_summary, args.baseline_label))
+        failures.extend(validate_baseline_identity(summary, baseline_summary))
     aggregate = build_aggregate_summary(output_dir, summary, baseline_summary, failures)
     write_aggregate_output(aggregate, output_dir)
     result["validation_failures"] = failures
