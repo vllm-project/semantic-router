@@ -644,7 +644,7 @@ func TestMiniMaxProvider_CustomHeaderMap(t *testing.T) {
 		"x-custom-minimax-token": "custom-minimax-key",
 	}
 
-	got := p.GetKey(ProviderMiniMax, "MiniMax-M2.5", reqHeaders)
+	got := p.GetKey(ProviderMiniMax, "MiniMax-M3", reqHeaders)
 	if got != "custom-minimax-key" {
 		t.Errorf("GetKey(MiniMax, custom) = %q, want %q", got, "custom-minimax-key")
 	}
