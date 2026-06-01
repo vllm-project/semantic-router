@@ -346,7 +346,9 @@ python3 bench/session_routing_ga_report.py \
   --failure-aggregate .agent-harness/experiments/live-agentic-routing/amd-repeat-failure-20260531/aggregate-summary.json \
   --agent-task-summary .agent-harness/experiments/live-agent-tasks/amd-long-agent-task-observability-20260531/summary.json \
   --cache-aggregate .agent-harness/experiments/cache-token-probe/amd-cache-token-20260531/aggregate-summary.json \
-  --branch-image-summary .agent-harness/experiments/live-agentic-routing/branch-image-ga/summary.json
+  --branch-image-summary .agent-harness/experiments/live-agentic-routing/branch-image-ga/summary.json \
+  --expected-ref "$(git rev-parse --short HEAD)" \
+  --expected-image-tag "$TAG"
 ```
 
 The output is written under `.agent-harness/reports/session-routing-ga/` by
@@ -361,6 +363,9 @@ prints a small JSON summary to stdout with `ga_ready`, `blocker_count`, and each
 blocker `id`, `title`, `status`, and `next_actions`; maintainer cron jobs can
 include that summary directly in a daily release brief while linking the full
 Markdown and JSON reports for details.
+Use `--expected-ref` and `--expected-image-tag` for maintainer or release
+reports so stale branch-image summaries cannot be mistaken for evidence from
+the reviewed PR head and image.
 
 The report also writes a `debug_evidence_chain` section. This is the operator
 view that connects the GA evidence in audit order: policy-only synthetic

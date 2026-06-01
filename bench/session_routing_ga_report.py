@@ -99,6 +99,22 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--agent-task-summary", action="append", type=Path, default=[])
     parser.add_argument("--cache-aggregate", type=Path)
     parser.add_argument("--branch-image-summary", type=Path)
+    parser.add_argument(
+        "--expected-ref",
+        default="",
+        help=(
+            "Expected reviewed source ref for branch-image evidence. When set, "
+            "the GA report blocks summaries whose ref does not match."
+        ),
+    )
+    parser.add_argument(
+        "--expected-image-tag",
+        default="",
+        help=(
+            "Expected reviewed branch image tag. When set, the GA report blocks "
+            "summaries whose image_tag does not match."
+        ),
+    )
     parser.add_argument("--min-synthetic-turns", type=int, default=1000)
     parser.add_argument("--min-switch-reduction-pct", type=float, default=50.0)
     parser.add_argument("--min-cost-reduction-pct", type=float, default=30.0)
@@ -990,6 +1006,25 @@ def branch_image_evidence_failures(data: dict[str, Any]) -> list[str]:
     return failures
 
 
+def add_branch_image_identity_failures(
+    failures: list[str],
+    args: argparse.Namespace,
+    ref: str,
+    image_tag: str,
+) -> None:
+    if not ref:
+        failures.append("branch-image ref missing")
+    elif args.expected_ref and ref != args.expected_ref:
+        failures.append(f"branch-image ref {ref} != expected {args.expected_ref}")
+    if not image_tag:
+        failures.append("branch-image image_tag missing")
+    elif args.expected_image_tag and image_tag != args.expected_image_tag:
+        failures.append(
+            f"branch-image image_tag {image_tag} != expected "
+            f"{args.expected_image_tag}"
+        )
+
+
 def evaluate_branch_image_summary(args: argparse.Namespace) -> dict[str, Any]:
     data, evidence = load_json(args.branch_image_summary)
     if data is None:
@@ -1036,10 +1071,7 @@ def evaluate_branch_image_summary(args: argparse.Namespace) -> dict[str, Any]:
             "full branch-image benchmark marker missing; diagnostic probes do not "
             "satisfy GA"
         )
-    if not ref:
-        failures.append("branch-image ref missing")
-    if not image_tag:
-        failures.append("branch-image image_tag missing")
+    add_branch_image_identity_failures(failures, args, ref, image_tag)
     if mounted_binary:
         failures.append(
             "mounted-binary diagnostic does not satisfy full branch-image AMD "
@@ -1058,6 +1090,8 @@ def evaluate_branch_image_summary(args: argparse.Namespace) -> dict[str, Any]:
             "image_tag": image_tag,
             "label": label,
             "ref": ref,
+            "expected_ref": args.expected_ref,
+            "expected_image_tag": args.expected_image_tag,
         },
         failures,
     )

@@ -251,6 +251,10 @@ def test_complete_evidence_passes_ga_gate(tmp_path):
             str(inputs["cache"]),
             "--branch-image-summary",
             str(inputs["branch"]),
+            "--expected-ref",
+            "77e6b573",
+            "--expected-image-tag",
+            "pr1989-current-branch-image",
         ]
     )
 
@@ -851,6 +855,55 @@ def test_branch_image_summary_requires_assembler_identity_and_evidence(tmp_path)
     assert (
         "branch-image evidence live_aggregates missing"
         in branch_requirement["failures"]
+    )
+
+
+def test_branch_image_summary_blocks_expected_identity_mismatch(tmp_path):
+    report_mod = load_report_module()
+    inputs = complete_inputs(tmp_path)
+    branch_summary = complete_branch_image_summary()
+    branch_summary["ref"] = "old-ref"
+    branch_summary["image_tag"] = "old-image"
+    branch = write_json(tmp_path / "branch-stale.json", branch_summary)
+    args = report_mod.parse_args(
+        [
+            "--synthetic-matrix-summary",
+            str(inputs["matrix"]),
+            "--synthetic-ablation-summary",
+            str(inputs["ablation"]),
+            "--live-aggregate",
+            str(inputs["live"]),
+            "--failure-aggregate",
+            str(inputs["failure"]),
+            "--agent-task-summary",
+            str(inputs["tasks"]),
+            "--cache-aggregate",
+            str(inputs["cache"]),
+            "--branch-image-summary",
+            str(branch),
+            "--expected-ref",
+            "current-ref",
+            "--expected-image-tag",
+            "current-image",
+        ]
+    )
+
+    report = report_mod.generate_report(args)
+    branch_requirement = next(
+        item
+        for item in report["requirements"]
+        if item["id"] == "branch_image_amd_validation"
+    )
+
+    assert report["ga_ready"] is False
+    assert branch_requirement["status"] == "blocked"
+    assert branch_requirement["metrics"]["expected_ref"] == "current-ref"
+    assert branch_requirement["metrics"]["expected_image_tag"] == "current-image"
+    assert "branch-image ref old-ref != expected current-ref" in (
+        branch_requirement["failures"]
+    )
+    assert "branch-image image_tag old-image != expected current-image" in (
+        branch_requirement["failures"]
     )
 
 
