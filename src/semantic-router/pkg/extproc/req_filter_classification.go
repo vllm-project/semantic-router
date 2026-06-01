@@ -49,9 +49,9 @@ func (r *OpenAIRouter) performDecisionEvaluation(originalModel string, history s
 		return "", 0, entropy.ReasoningDecision{}, "", authzErr
 	}
 
-	result, fallbackModel := r.runDecisionEngine(originalModel, ctx, signals)
+	result, defaultModel := r.runDecisionEngine(originalModel, ctx, signals)
 	if result == nil {
-		return "", 0.0, entropy.ReasoningDecision{}, fallbackModel, nil
+		return "", 0.0, entropy.ReasoningDecision{}, defaultModel, nil
 	}
 
 	decisionName, evaluationConfidence, reasoningDecision, selectedModel = r.finalizeDecisionEvaluation(
@@ -64,26 +64,27 @@ func (r *OpenAIRouter) performDecisionEvaluation(originalModel string, history s
 }
 
 // selectModelFromCandidates uses the configured selection algorithm to choose the best model
-// from the decision's candidate models. Falls back to first model if selection fails.
+// from the decision's candidate models. If selection cannot produce a valid
+// candidate, the first valid configured candidate is used as the default.
 // The algorithm parameter allows per-decision algorithm override (aligned with looper pattern).
 // The selCtx parameter carries the pre-built SelectionContext, including request-time
 // inputs such as query text, candidate models, and cache-affinity signals.
 // Returns the selected model and the method name used for logging.
 func (r *OpenAIRouter) selectModelFromCandidates(selCtx *selection.SelectionContext, algorithm *config.AlgorithmConfig, ctx *RequestContext) (*config.ModelRef, string) {
-	fallbackModelRef := firstValidCandidateModelRef(selCtx)
-	if fallbackModelRef == nil {
+	defaultCandidateModelRef := firstValidCandidateModelRef(selCtx)
+	if defaultCandidateModelRef == nil {
 		return nil, ""
 	}
 	if err := selection.ValidateSelectionContext(selCtx); err != nil {
-		logging.Warnf("[ModelSelection] Invalid selection context: %v, using first valid model", err)
-		recordAgenticSessionDecision(selCtx, nil, fallbackModelRef, ctx)
-		return fallbackModelRef, ""
+		logging.Warnf("[ModelSelection] Invalid selection context: %v, using default candidate", err)
+		recordAgenticSessionDecision(selCtx, nil, defaultCandidateModelRef, ctx)
+		return defaultCandidateModelRef, ""
 	}
 
 	// If only one model, no need for selection algorithm
 	if len(selCtx.CandidateModels) == 1 {
-		recordAgenticSessionDecision(selCtx, nil, fallbackModelRef, ctx)
-		return fallbackModelRef, "single"
+		recordAgenticSessionDecision(selCtx, nil, defaultCandidateModelRef, ctx)
+		return defaultCandidateModelRef, "single"
 	}
 
 	// Determine selection method: per-decision algorithm takes precedence over global config
@@ -92,31 +93,31 @@ func (r *OpenAIRouter) selectModelFromCandidates(selCtx *selection.SelectionCont
 	// Get selector from registry
 	selector := r.selectorForDecisionMethod(method, algorithm)
 
-	// Fallback to first model if no selector available
+	// Use the configured default candidate if no selector is available.
 	if selector == nil {
-		logging.Warnf("[ModelSelection] No selector available for method %s, using first model", method)
-		recordAgenticSessionDecision(selCtx, nil, fallbackModelRef, ctx)
-		return fallbackModelRef, string(method)
+		logging.Warnf("[ModelSelection] No selector available for method %s, using default candidate", method)
+		recordAgenticSessionDecision(selCtx, nil, defaultCandidateModelRef, ctx)
+		return defaultCandidateModelRef, string(method)
 	}
 
 	// Perform selection
 	result, err := selector.Select(context.Background(), selCtx)
 	if err != nil {
-		logging.Warnf("[ModelSelection] Selection failed: %v, using first model", err)
-		recordAgenticSessionDecision(selCtx, nil, fallbackModelRef, ctx)
-		return fallbackModelRef, string(method)
+		logging.Warnf("[ModelSelection] Selection failed: %v, using default candidate", err)
+		recordAgenticSessionDecision(selCtx, nil, defaultCandidateModelRef, ctx)
+		return defaultCandidateModelRef, string(method)
 	}
 	if err := selection.ValidateSelectionResult(selCtx, result); err != nil {
-		logging.Warnf("[ModelSelection] Invalid selection result: %v, using first model", err)
-		recordAgenticSessionDecision(selCtx, result, fallbackModelRef, ctx)
-		return fallbackModelRef, string(method)
+		logging.Warnf("[ModelSelection] Invalid selection result: %v, using default candidate", err)
+		recordAgenticSessionDecision(selCtx, result, defaultCandidateModelRef, ctx)
+		return defaultCandidateModelRef, string(method)
 	}
 
 	selectedModelRef := selectedModelRefFromResult(selCtx, result)
 	if selectedModelRef == nil {
-		logging.Warnf("[ModelSelection] Selected model %s not found in candidates, using first model", result.SelectedModel)
-		recordAgenticSessionDecision(selCtx, result, fallbackModelRef, ctx)
-		return fallbackModelRef, string(method)
+		logging.Warnf("[ModelSelection] Selected model %s not found in candidates, using default candidate", result.SelectedModel)
+		recordAgenticSessionDecision(selCtx, result, defaultCandidateModelRef, ctx)
+		return defaultCandidateModelRef, string(method)
 	}
 	if result.SessionPolicy != nil && ctx != nil {
 		ctx.VSRSessionPolicy = result.SessionPolicy.ToMap()

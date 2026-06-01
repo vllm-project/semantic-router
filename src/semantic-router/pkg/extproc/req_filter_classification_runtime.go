@@ -137,12 +137,12 @@ func (r *OpenAIRouter) runDecisionEngine(
 		})
 		tracing.EndDecisionSpan(decisionSpan, 0.0, []string{}, r.Config.Strategy)
 		ctx.TraceContext = decisionCtx
-		return nil, r.defaultDecisionFallbackModel(originalModel)
+		return nil, r.defaultModelForUnmatchedDecision(originalModel)
 	}
 	if result == nil || result.Decision == nil {
 		tracing.EndDecisionSpan(decisionSpan, 0.0, []string{}, r.Config.Strategy)
 		ctx.TraceContext = decisionCtx
-		return nil, r.defaultDecisionFallbackModel(originalModel)
+		return nil, r.defaultModelForUnmatchedDecision(originalModel)
 	}
 
 	tracing.EndDecisionSpan(decisionSpan, result.Confidence, result.MatchedRules, r.Config.Strategy)
@@ -150,7 +150,7 @@ func (r *OpenAIRouter) runDecisionEngine(
 	return result, ""
 }
 
-func (r *OpenAIRouter) defaultDecisionFallbackModel(originalModel string) string {
+func (r *OpenAIRouter) defaultModelForUnmatchedDecision(originalModel string) string {
 	if r.Config.IsAutoModelName(originalModel) {
 		return r.Config.DefaultModel
 	}

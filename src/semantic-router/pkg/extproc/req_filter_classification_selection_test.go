@@ -52,7 +52,7 @@ func (s selectionResultSelector) ExternalDependencies() []selection.Dependency {
 	return nil
 }
 
-func TestSelectModelFromCandidatesFallsBackOnInvalidSelectionResult(t *testing.T) {
+func TestSelectModelFromCandidatesUsesDefaultCandidateOnInvalidSelectionResult(t *testing.T) {
 	for _, tc := range []struct {
 		name   string
 		result *selection.SelectionResult
@@ -75,7 +75,7 @@ func TestSelectModelFromCandidatesFallsBackOnInvalidSelectionResult(t *testing.T
 			}, nil, nil)
 
 			if selected == nil || selected.Model != "model-a" {
-				t.Fatalf("expected fallback model-a, got %#v", selected)
+				t.Fatalf("expected default candidate model-a, got %#v", selected)
 			}
 			if method != string(selection.MethodStatic) {
 				t.Fatalf("expected static method, got %q", method)
@@ -84,17 +84,17 @@ func TestSelectModelFromCandidatesFallsBackOnInvalidSelectionResult(t *testing.T
 	}
 }
 
-func TestSelectModelFromCandidatesFallsBackToFirstValidCandidateOnInvalidContext(t *testing.T) {
+func TestSelectModelFromCandidatesUsesFirstValidDefaultCandidateOnInvalidContext(t *testing.T) {
 	router := &OpenAIRouter{}
 	selected, method := router.selectModelFromCandidates(&selection.SelectionContext{
 		CandidateModels: []config.ModelRef{{Model: " "}, {Model: "model-b"}},
 	}, nil, nil)
 
 	if selected == nil || selected.Model != "model-b" {
-		t.Fatalf("expected fallback model-b, got %#v", selected)
+		t.Fatalf("expected default candidate model-b, got %#v", selected)
 	}
 	if method != "" {
-		t.Fatalf("expected empty method for invalid context fallback, got %q", method)
+		t.Fatalf("expected empty method for invalid context default, got %q", method)
 	}
 }
 
