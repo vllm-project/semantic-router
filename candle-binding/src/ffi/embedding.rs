@@ -15,6 +15,15 @@ use crate::model_architectures::config::{DualPathConfig, EmbeddingConfig};
 use crate::model_architectures::model_factory::ModelFactory;
 use std::sync::OnceLock;
 
+/// Maximum mmBERT sequence length for FFI embedding calls.
+///
+/// mmBERT's embedding encoder currently materializes dense attention masks and
+/// attention score tensors. Letting routing-time embedding signals use the full
+/// architectural 8K/32K window can spike memory into multi-GB territory for a
+/// single request. Embedding signals and KB chunk embeddings should use the
+/// same bounded window as classification inference.
+const MMBERT_EMBEDDING_MAX_SEQ_LEN: usize = 512;
+
 // ============================================================================
 // Refactoring: Shared embedding generation logic
 // ============================================================================
@@ -38,6 +47,21 @@ use tokenizers::Tokenizer as MmTokenizer;
 /// main ModelFactory (which uses OnceLock and can only be set once).
 static STANDALONE_MULTIMODAL: OnceLock<(MultiModalEmbeddingModel, MmTokenizer, String)> =
     OnceLock::new();
+
+fn mmbert_tokenizer_with_safe_truncation(
+    tokenizer: &tokenizers::Tokenizer,
+) -> Result<tokenizers::Tokenizer, String> {
+    let mut tokenizer = tokenizer.clone();
+    tokenizer
+        .with_truncation(Some(tokenizers::TruncationParams {
+            max_length: MMBERT_EMBEDDING_MAX_SEQ_LEN,
+            strategy: tokenizers::TruncationStrategy::LongestFirst,
+            stride: 0,
+            direction: tokenizers::TruncationDirection::Right,
+        }))
+        .map_err(|e| format!("Failed to configure mmBERT tokenizer truncation: {:?}", e))?;
+    Ok(tokenizer)
+}
 
 /// Get a reference to the multimodal model + tokenizer, checking standalone first
 /// then falling back to the factory.
@@ -721,6 +745,7 @@ fn generate_mmbert_embedding(
     let tokenizer = factory
         .get_mmbert_tokenizer()
         .ok_or_else(|| "mmBERT tokenizer not available".to_string())?;
+    let tokenizer = mmbert_tokenizer_with_safe_truncation(tokenizer)?;
 
     // Tokenize
     let encoding = tokenizer
@@ -770,10 +795,17 @@ fn generate_mmbert_embeddings_batch(
     let tokenizer = factory
         .get_mmbert_tokenizer()
         .ok_or_else(|| "mmBERT tokenizer not available".to_string())?;
+    let tokenizer = mmbert_tokenizer_with_safe_truncation(tokenizer)?;
 
     // Batch encode
     let embeddings = model
-        .encode_batch_with_matryoshka(tokenizer, texts, 8192, target_layer, target_dim)
+        .encode_batch_with_matryoshka(
+            &tokenizer,
+            texts,
+            MMBERT_EMBEDDING_MAX_SEQ_LEN,
+            target_layer,
+            target_dim,
+        )
         .map_err(|e| format!("mmBERT batch encoding failed: {:?}", e))?;
 
     // Convert to Vec<Vec<f32>>
@@ -2624,4 +2656,33 @@ pub extern "C" fn shutdown_embedding_batched() {
     // The scheduler thread will automatically stop when the model is dropped
     // This is handled by the Drop implementation of Qwen3EmbeddingModelBatched
     println!("INFO: Shutting down batched embedding model");
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::io::Write;
+    use tokenizers::models::wordlevel::WordLevel;
+
+    #[test]
+    fn mmbert_embedding_truncation_config_stays_bounded() {
+        let mut vocab_file = tempfile::NamedTempFile::new().expect("create vocab");
+        write!(vocab_file, r#"{{"[UNK]":0,"hello":1}}"#).expect("write vocab");
+        let vocab_path = vocab_file
+            .path()
+            .to_str()
+            .expect("vocab path should be UTF-8");
+        let model =
+            WordLevel::from_file(vocab_path, "[UNK]".to_string()).expect("build tokenizer model");
+        let tokenizer = tokenizers::Tokenizer::new(model);
+
+        let capped =
+            mmbert_tokenizer_with_safe_truncation(&tokenizer).expect("configure mmBERT truncation");
+        let truncation = capped
+            .get_truncation()
+            .expect("mmBERT embedding tokenizer must enable truncation");
+
+        assert_eq!(MMBERT_EMBEDDING_MAX_SEQ_LEN, 512);
+        assert_eq!(truncation.max_length, MMBERT_EMBEDDING_MAX_SEQ_LEN);
+    }
 }

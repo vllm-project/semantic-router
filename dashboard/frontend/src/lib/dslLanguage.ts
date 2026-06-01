@@ -68,19 +68,19 @@ export const monarchTokens: monacoNs.languages.IMonarchLanguage = {
     'keyword', 'embedding', 'domain', 'fact_check', 'user_feedback',
     'reask',
     'preference', 'language', 'context', 'structure', 'complexity', 'modality', 'authz',
-    'jailbreak', 'pii', 'kb',
+    'jailbreak', 'pii', 'kb', 'conversation', 'session_metric', 'event_context',
   ],
 
   pluginTypes: [
     'semantic_cache', 'memory', 'system_prompt',
     'header_mutation', 'hallucination', 'router_replay', 'rag', 'image_gen', 'tools',
-    'fast_response', 'request_params', 'response_jailbreak',
+    'fast_response', 'request_params', 'response_jailbreak', 'tool_selection',
   ],
 
   algoTypes: [
     'confidence', 'ratings', 'remom', 'static', 'elo', 'router_dc',
     'automix', 'hybrid', 'rl_driven', 'gmtrouter', 'latency_aware',
-    'knn', 'kmeans', 'svm',
+    'knn', 'kmeans', 'svm', 'mlp', 'multi_factor', 'session_aware',
   ],
 
   booleans: ['true', 'false'],
@@ -111,19 +111,19 @@ export const monarchTokens: monacoNs.languages.IMonarchLanguage = {
 
       // Signal types (after SIGNAL keyword)
       [
-        /\b(keyword|embedding|domain|fact_check|user_feedback|reask|preference|language|context|structure|complexity|modality|authz|jailbreak|pii|kb)\b/,
+        /\b(keyword|embedding|domain|fact_check|user_feedback|reask|preference|language|context|structure|complexity|modality|authz|jailbreak|pii|kb|conversation|session_metric|event_context)\b/,
         'type',
       ],
 
       // Plugin types
       [
-        /\b(semantic_cache|memory|system_prompt|header_mutation|hallucination|router_replay|rag|image_gen|tools|fast_response|request_params|response_jailbreak)\b/,
+        /\b(semantic_cache|memory|system_prompt|header_mutation|hallucination|router_replay|rag|image_gen|tools|fast_response|request_params|response_jailbreak|tool_selection)\b/,
         'type.plugin',
       ],
 
       // Algorithm types
       [
-        /\b(confidence|ratings|remom|static|elo|router_dc|automix|hybrid|rl_driven|gmtrouter|latency_aware|knn|kmeans|svm)\b/,
+        /\b(confidence|ratings|remom|static|elo|router_dc|automix|hybrid|rl_driven|gmtrouter|latency_aware|knn|kmeans|svm|mlp|multi_factor|session_aware)\b/,
         'type.algorithm',
       ],
 
@@ -237,6 +237,7 @@ const PLUGIN_TYPE_SUGGESTIONS = [
   { label: 'rag', detail: 'RAG (Retrieval Augmented Generation) plugin' },
   { label: 'image_gen', detail: 'Image generation plugin' },
   { label: 'tools', detail: 'Route-local tool policy and semantic selection plugin' },
+  { label: 'tool_selection', detail: 'Semantic tool add/filter plugin' },
   { label: 'fast_response', detail: 'Short-circuit fixed response plugin' },
   { label: 'request_params', detail: 'Request parameter mutation plugin' },
   { label: 'response_jailbreak', detail: 'Response-side jailbreak screening plugin' },

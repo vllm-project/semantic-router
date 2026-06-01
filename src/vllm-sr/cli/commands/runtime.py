@@ -201,7 +201,7 @@ def _execute_serve(
     type=click.Choice(ALGORITHM_TYPES, case_sensitive=False),
     default=None,
     help="Selection algorithm override: static, elo, router_dc, automix, hybrid, "
-    "knn, kmeans, svm, mlp, multi_factor, rl_driven, gmtrouter, or session_aware. "
+    "latency_aware, knn, kmeans, svm, mlp, multi_factor, rl_driven, gmtrouter, or session_aware. "
     "Overrides decision.algorithm.type in the config file.",
 )
 @click.option("--target", default=None, help=TARGET_HELP)

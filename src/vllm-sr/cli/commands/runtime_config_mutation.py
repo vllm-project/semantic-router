@@ -20,6 +20,7 @@ ALGORITHM_TYPES = [
     "hybrid",
     "rl_driven",
     "gmtrouter",
+    "latency_aware",
     "knn",
     "kmeans",
     "svm",
@@ -34,6 +35,7 @@ ALGORITHM_HINTS = {
     "automix": "  Tip: Configure model 'pricing' for cost optimization",
     "hybrid": "  Tip: Configure weights in decision.algorithm.hybrid",
     "rl_driven": "  Tip: Configure persistence in decision.algorithm.rl_driven.storage_path",
+    "latency_aware": "  Tip: Configure decision.algorithm.latency_aware with TPOT or TTFT percentiles",
     "knn": "  Tip: Configure global.router.model_selection.ml.knn for trained KNN routing",
     "kmeans": "  Tip: Configure global.router.model_selection.ml.kmeans for cluster routing",
     "svm": "  Tip: Configure global.router.model_selection.ml.svm for trained SVM routing",
@@ -65,8 +67,16 @@ EXPECTED_CONFIG_BLOCK_BY_ALGORITHM = {
     "hybrid": "hybrid",
     "rl_driven": "rl_driven",
     "gmtrouter": "gmtrouter",
+    "latency_aware": "latency_aware",
     "multi_factor": "multi_factor",
     "session_aware": "session_aware",
+}
+
+DEFAULT_CONFIG_BLOCK_BY_ALGORITHM: dict[str, dict[str, object]] = {
+    "latency_aware": {
+        "tpot_percentile": 90,
+        "ttft_percentile": 95,
+    },
 }
 
 AMD_OVERRIDE_PREVIEW_LIMIT = 8
@@ -268,6 +278,14 @@ def _replace_algorithm_config(
         if block != expected_block:
             algorithm_config.pop(block, None)
     algorithm_config["type"] = normalized_algorithm
+    if (
+        expected_block
+        and expected_block not in algorithm_config
+        and normalized_algorithm in DEFAULT_CONFIG_BLOCK_BY_ALGORITHM
+    ):
+        algorithm_config[expected_block] = dict(
+            DEFAULT_CONFIG_BLOCK_BY_ALGORITHM[normalized_algorithm]
+        )
 
 
 def _apply_algorithm_override(

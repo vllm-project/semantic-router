@@ -3,6 +3,7 @@ package extproc
 import (
 	"encoding/json"
 	"strings"
+	"unicode/utf8"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/classification"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
@@ -79,11 +80,29 @@ func (r *OpenAIRouter) prepareSignalEvaluationInput(history signalConversationHi
 // the actual request body forwarded to the model is never modified.
 func (r *OpenAIRouter) applyMaxEvaluationChars(text string) string {
 	limit := r.Config.PromptCompression.MaxEvaluationChars
-	if limit <= 0 || len(text) <= limit {
+	if limit <= 0 {
 		return text
 	}
-	logging.Infof("[SignalEval] evaluationText truncated by max_evaluation_chars: %d -> %d chars", len(text), limit)
-	return text[:limit]
+	chars := utf8.RuneCountInString(text)
+	if chars <= limit {
+		return text
+	}
+	logging.Infof("[SignalEval] evaluationText truncated by max_evaluation_chars: %d -> %d chars", chars, limit)
+	return truncateToRunes(text, limit)
+}
+
+func truncateToRunes(text string, limit int) string {
+	if limit <= 0 {
+		return ""
+	}
+	count := 0
+	for idx := range text {
+		if count == limit {
+			return text[:idx]
+		}
+		count++
+	}
+	return text
 }
 
 func (r *OpenAIRouter) compressSignalEvaluationText(evaluationText string) (string, map[string]bool) {

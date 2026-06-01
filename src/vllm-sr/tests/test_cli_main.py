@@ -69,6 +69,7 @@ def test_serve_help_describes_docker_only_runtime():
     assert "Podman" not in result.output
     assert "--topology" not in result.output
     assert "--log-level" in result.output
+    assert "latency_aware" in result.output
     assert "session_aware" in result.output
     assert "router_r1" not in result.output
     assert "thompson" not in result.output
@@ -245,6 +246,44 @@ def test_inject_algorithm_replaces_stale_type_specific_blocks(tmp_path: Path):
         {"type": "multi_factor"},
         {"type": "multi_factor"},
     ]
+
+
+def test_inject_latency_aware_algorithm_keeps_matching_config_block(tmp_path: Path):
+    config_path = tmp_path / "config.yaml"
+    config_path.write_text(
+        yaml.safe_dump(
+            {
+                "version": "v0.3",
+                "listeners": [
+                    {"name": "http-8899", "address": "0.0.0.0", "port": 8899}
+                ],
+                "routing": {
+                    "decisions": [
+                        {
+                            "name": "latency",
+                            "algorithm": {
+                                "type": "hybrid",
+                                "hybrid": {"elo_weight": 0.6},
+                            },
+                        },
+                    ]
+                },
+            },
+            sort_keys=False,
+        )
+    )
+
+    rewritten_path = runtime_commands.inject_algorithm_into_config(
+        config_path, "latency_aware"
+    )
+
+    with rewritten_path.open() as handle:
+        rewritten = yaml.safe_load(handle)
+
+    assert rewritten["routing"]["decisions"][0]["algorithm"] == {
+        "type": "latency_aware",
+        "latency_aware": {"tpot_percentile": 90, "ttft_percentile": 95},
+    }
 
 
 def test_serve_uses_algorithm_translated_config(monkeypatch, tmp_path: Path):

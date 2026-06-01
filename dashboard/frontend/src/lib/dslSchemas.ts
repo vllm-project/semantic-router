@@ -154,7 +154,7 @@ export function getSignalFieldSchema(signalType: string): FieldSchema[] {
 export const PLUGIN_TYPES = [
   'semantic_cache', 'memory', 'system_prompt',
   'header_mutation', 'hallucination', 'router_replay', 'rag', 'image_gen',
-  'fast_response', 'tools', 'request_params', 'response_jailbreak',
+  'fast_response', 'tools', 'tool_selection', 'request_params', 'response_jailbreak',
 ] as const
 
 export const PLUGIN_DESCRIPTIONS: Record<string, string> = {
@@ -168,6 +168,7 @@ export const PLUGIN_DESCRIPTIONS: Record<string, string> = {
   image_gen: 'Route to image generation backends',
   fast_response: 'Short-circuit and return a fixed response without calling upstream models',
   tools: 'Route-local tool filtering and semantic tool selection',
+  tool_selection: 'Semantic tool add/filter plugin for route-local tool catalogs',
   request_params: 'Mutate request parameters before forwarding to the model',
   response_jailbreak: 'Screen generated responses for jailbreak-like output before returning',
 }
@@ -237,6 +238,17 @@ export function getPluginFieldSchema(pluginType: string): FieldSchema[] {
         { key: 'semantic_selection', label: 'Semantic Selection', type: 'boolean', description: 'Run semantic tool selection from the global tools database' },
         { key: 'allow_tools', label: 'Allow Tools', type: 'string[]', placeholder: 'Tool name to allow' },
         { key: 'block_tools', label: 'Block Tools', type: 'string[]', placeholder: 'Tool name to block' },
+      ]
+    case 'tool_selection':
+      return [
+        { key: 'enabled', label: 'Enabled', type: 'boolean' },
+        { key: 'mode', label: 'Mode', type: 'select', options: ['', 'add', 'filter'], description: 'Add tools from a catalog or filter request-provided tools' },
+        { key: 'tools_db_path', label: 'Tools DB Path', type: 'string', placeholder: 'config/tools_db.json' },
+        { key: 'top_k', label: 'Top K', type: 'number', placeholder: '3' },
+        { key: 'similarity_threshold', label: 'Similarity Threshold', type: 'number', placeholder: '0.7' },
+        { key: 'strategy', label: 'Strategy', type: 'select', options: ['', 'default', 'weighted', 'hybrid_history'] },
+        { key: 'relevance_threshold', label: 'Relevance Threshold', type: 'number', placeholder: '0.5' },
+        { key: 'preserve_count', label: 'Preserve Count', type: 'number', placeholder: '0' },
       ]
     case 'request_params':
       return [

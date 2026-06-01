@@ -3,6 +3,7 @@ package extproc
 import (
 	"strings"
 	"testing"
+	"unicode/utf8"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -201,6 +202,15 @@ func TestApplyMaxEvaluationCharsTruncates(t *testing.T) {
 	text := strings.Repeat("x", 25000)
 	got := r.applyMaxEvaluationChars(text)
 	assert.Len(t, got, limit, "giant prompt must be capped to limit")
+}
+
+func TestApplyMaxEvaluationCharsTruncatesOnRuneBoundary(t *testing.T) {
+	r := routerWithEvalLimit(4)
+	got := r.applyMaxEvaluationChars("你好世界abc")
+
+	assert.Equal(t, "你好世界", got)
+	assert.True(t, utf8.ValidString(got), "truncation must preserve valid UTF-8")
+	assert.Equal(t, 4, utf8.RuneCountInString(got))
 }
 
 func TestApplyMaxEvaluationCharsBelowLimitUnchanged(t *testing.T) {

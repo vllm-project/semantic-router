@@ -20,6 +20,7 @@ router_dc  - Query-model matching via embedding similarity
 automix    - Cost-quality optimization using POMDP
 hybrid     - Combine multiple methods with configurable weights
 gmtrouter  - Graph neural network for personalized routing (RL-driven)
+latency_aware - TPOT/TTFT percentile-aware selection
 knn        - KNN selector using shared ML model-selection settings
 kmeans     - KMeans selector using shared ML model-selection settings
 svm        - SVM selector using shared ML model-selection settings
@@ -43,6 +44,9 @@ Examples:
 
     # Use cost-optimized selection
     vllm-sr serve --algorithm automix
+
+    # Use latency-aware selection
+    vllm-sr serve --algorithm latency_aware
 
     # Keep agentic sessions stable across tool loops
     vllm-sr serve --algorithm session_aware
