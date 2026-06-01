@@ -357,6 +357,10 @@ branch-image summary's child checks to pass, including diagnostic, live matrix,
 failure-recovery, expanded agent-task, cache-token probe, mounted-binary, and
 overall branch-image checks; an old or hand-written summary that only sets the
 top-level marker still blocks GA.
+The report also requires the assembler identity and evidence shape: non-empty
+`ref`, non-empty `image_tag`, and the diagnostic, live aggregate,
+failure-recovery aggregate, agent-task summary, and cache-token aggregate
+sections written by `session_routing_branch_image_benchmark.py`.
 
 ### Basic Usage
 

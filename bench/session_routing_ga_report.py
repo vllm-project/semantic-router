@@ -28,6 +28,13 @@ REQUIRED_FULL_BRANCH_IMAGE_CHECKS = (
     "mounted_binary_absent",
     "branch_image_benchmark_ok",
 )
+REQUIRED_FULL_BRANCH_IMAGE_EVIDENCE = (
+    "diagnostic",
+    "live_aggregates",
+    "failure_aggregates",
+    "agent_task_summaries",
+    "cache_aggregates",
+)
 MOUNTED_BINARY_MARKERS = ("mounted-binary", "mounted_binary", "mounted binary")
 PASSING_STATUS = "passed"
 BLOCKING_STATUS = "blocked"
@@ -809,6 +816,22 @@ def evaluate_cache_aggregate(args: argparse.Namespace) -> dict[str, Any]:
     )
 
 
+def branch_image_evidence_failures(data: dict[str, Any]) -> list[str]:
+    failures: list[str] = []
+    evidence_sections = data.get("evidence")
+    if not isinstance(evidence_sections, dict):
+        evidence_sections = {}
+        failures.append("branch-image assembler evidence sections missing")
+    for key in REQUIRED_FULL_BRANCH_IMAGE_EVIDENCE:
+        value = evidence_sections.get(key)
+        if key == "diagnostic":
+            if not isinstance(value, dict) or not value:
+                failures.append("branch-image evidence diagnostic missing")
+        elif not isinstance(value, list) or not value:
+            failures.append(f"branch-image evidence {key} missing")
+    return failures
+
+
 def evaluate_branch_image_summary(args: argparse.Namespace) -> dict[str, Any]:
     data, evidence = load_json(args.branch_image_summary)
     if data is None:
@@ -827,6 +850,7 @@ def evaluate_branch_image_summary(args: argparse.Namespace) -> dict[str, Any]:
     for key in REQUIRED_FULL_BRANCH_IMAGE_CHECKS:
         if checks.get(key) is not True:
             failures.append(f"branch-image check {key} is not true")
+    failures.extend(branch_image_evidence_failures(data))
     for header in data.get("missing_diagnostic_headers") or []:
         failures.append(f"missing diagnostic header: {header}")
     for header in data.get("invalid_diagnostic_headers") or []:
@@ -841,6 +865,7 @@ def evaluate_branch_image_summary(args: argparse.Namespace) -> dict[str, Any]:
     )
     image_tag = str(data.get("image_tag", ""))
     label = str(data.get("label", ""))
+    ref = str(data.get("ref", ""))
     full_branch_image = bool(data.get("branch_image_benchmark")) or (
         validation_kind in FULL_BRANCH_IMAGE_KINDS
     )
@@ -853,6 +878,10 @@ def evaluate_branch_image_summary(args: argparse.Namespace) -> dict[str, Any]:
             "full branch-image benchmark marker missing; diagnostic probes do not "
             "satisfy GA"
         )
+    if not ref:
+        failures.append("branch-image ref missing")
+    if not image_tag:
+        failures.append("branch-image image_tag missing")
     if mounted_binary:
         failures.append(
             "mounted-binary diagnostic does not satisfy full branch-image AMD "
@@ -870,7 +899,7 @@ def evaluate_branch_image_summary(args: argparse.Namespace) -> dict[str, Any]:
             "checks": checks,
             "image_tag": image_tag,
             "label": label,
-            "ref": data.get("ref", ""),
+            "ref": ref,
         },
         failures,
     )

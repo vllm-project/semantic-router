@@ -45,6 +45,33 @@ CACHE_PROBE_METADATA = {
 }
 
 
+def complete_branch_image_summary() -> dict:
+    return {
+        "validation_kind": "full-branch-image-benchmark",
+        "branch_image_benchmark": True,
+        "label": "branch-image-ga",
+        "ref": "77e6b573",
+        "image_tag": "pr1989-current-branch-image",
+        "checks": {
+            "diagnostic_ok": True,
+            "live_matrix_ok": True,
+            "failure_recovery_ok": True,
+            "agent_task_ok": True,
+            "cache_token_probe_ok": True,
+            "mounted_binary_absent": True,
+            "branch_image_benchmark_ok": True,
+        },
+        "evidence": {
+            "diagnostic": {"evidence": "diagnostic.json"},
+            "live_aggregates": [{"evidence": "live.json"}],
+            "failure_aggregates": [{"evidence": "failure.json"}],
+            "agent_task_summaries": [{"evidence": "tasks.json"}],
+            "cache_aggregates": [{"evidence": "cache.json"}],
+        },
+        "validation_failures": [],
+    }
+
+
 def load_report_module():
     path = Path(__file__).with_name("session_routing_ga_report.py")
     spec = importlib.util.spec_from_file_location("session_routing_ga_report", path)
@@ -184,24 +211,7 @@ def complete_inputs(tmp_path: Path) -> dict[str, Path]:
             },
         },
     )
-    branch = write_json(
-        tmp_path / "branch.json",
-        {
-            "validation_kind": "full-branch-image-benchmark",
-            "branch_image_benchmark": True,
-            "image_tag": "pr1989-current-branch-image",
-            "checks": {
-                "diagnostic_ok": True,
-                "live_matrix_ok": True,
-                "failure_recovery_ok": True,
-                "agent_task_ok": True,
-                "cache_token_probe_ok": True,
-                "mounted_binary_absent": True,
-                "branch_image_benchmark_ok": True,
-            },
-            "validation_failures": [],
-        },
-    )
+    branch = write_json(tmp_path / "branch.json", complete_branch_image_summary())
     return {
         "matrix": matrix,
         "ablation": ablation,
@@ -576,22 +586,11 @@ def test_diagnostic_probe_does_not_satisfy_branch_image_benchmark(tmp_path):
 def test_branch_image_summary_requires_all_child_checks(tmp_path):
     report_mod = load_report_module()
     inputs = complete_inputs(tmp_path)
+    branch_summary = complete_branch_image_summary()
+    branch_summary["checks"].pop("cache_token_probe_ok")
     branch = write_json(
         tmp_path / "branch-missing-cache-check.json",
-        {
-            "validation_kind": "full-branch-image-benchmark",
-            "branch_image_benchmark": True,
-            "image_tag": "pr1989-current-branch-image",
-            "checks": {
-                "diagnostic_ok": True,
-                "live_matrix_ok": True,
-                "failure_recovery_ok": True,
-                "agent_task_ok": True,
-                "mounted_binary_absent": True,
-                "branch_image_benchmark_ok": True,
-            },
-            "validation_failures": [],
-        },
+        branch_summary,
     )
     args = report_mod.parse_args(
         [
@@ -624,6 +623,54 @@ def test_branch_image_summary_requires_all_child_checks(tmp_path):
     assert branch_requirement["failures"] == [
         "branch-image check cache_token_probe_ok is not true"
     ]
+
+
+def test_branch_image_summary_requires_assembler_identity_and_evidence(tmp_path):
+    report_mod = load_report_module()
+    inputs = complete_inputs(tmp_path)
+    hand_written = complete_branch_image_summary()
+    hand_written.pop("ref")
+    hand_written.pop("image_tag")
+    hand_written.pop("evidence")
+    branch = write_json(tmp_path / "branch-hand-written.json", hand_written)
+    args = report_mod.parse_args(
+        [
+            "--synthetic-matrix-summary",
+            str(inputs["matrix"]),
+            "--synthetic-ablation-summary",
+            str(inputs["ablation"]),
+            "--live-aggregate",
+            str(inputs["live"]),
+            "--failure-aggregate",
+            str(inputs["failure"]),
+            "--agent-task-summary",
+            str(inputs["tasks"]),
+            "--cache-aggregate",
+            str(inputs["cache"]),
+            "--branch-image-summary",
+            str(branch),
+        ]
+    )
+
+    report = report_mod.generate_report(args)
+    branch_requirement = next(
+        item
+        for item in report["requirements"]
+        if item["id"] == "branch_image_amd_validation"
+    )
+
+    assert report["ga_ready"] is False
+    assert branch_requirement["status"] == "blocked"
+    assert "branch-image ref missing" in branch_requirement["failures"]
+    assert "branch-image image_tag missing" in branch_requirement["failures"]
+    assert (
+        "branch-image assembler evidence sections missing"
+        in branch_requirement["failures"]
+    )
+    assert (
+        "branch-image evidence live_aggregates missing"
+        in branch_requirement["failures"]
+    )
 
 
 def test_missing_initial_policy_baseline_blocks_ga(tmp_path):
