@@ -9,6 +9,7 @@ import (
 	typev3 "github.com/envoyproxy/go-control-plane/envoy/type/v3"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/ir"
 )
 
 type requestHeaderTestCase struct {
@@ -376,4 +377,147 @@ func TestHandleRequestHeadersSetsClientProtocol(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestApplyHeaderPassThroughPolicy_DropsHopByHopHeaders(t *testing.T) {
+	ctx := &RequestContext{
+		Headers: map[string]string{
+			"host":              "example.com",
+			"content-length":    "42",
+			"connection":        "keep-alive",
+			"keep-alive":        "timeout=5",
+			"transfer-encoding": "chunked",
+			"upgrade":           "websocket",
+			"te":                "trailers",
+			"trailer":           "Expires",
+			"expect":            "100-continue",
+			"proxy-connection":  "keep-alive",
+			"x-keep-this":       "kept",
+		},
+	}
+
+	applyHeaderPassThroughPolicy(ctx)
+
+	for _, dropped := range []string{
+		"host", "content-length", "connection", "keep-alive", "transfer-encoding",
+		"upgrade", "te", "trailer", "expect", "proxy-connection",
+	} {
+		if _, ok := ctx.Headers[dropped]; ok {
+			t.Errorf("expected %q to be dropped, but it is still present", dropped)
+		}
+	}
+	if got := ctx.Headers["x-keep-this"]; got != "kept" {
+		t.Errorf("expected x-keep-this preserved, got %q", got)
+	}
+}
+
+func TestApplyHeaderPassThroughPolicy_CapturesAnthropicHeadersOnAnthropicIngress(t *testing.T) {
+	ctx := &RequestContext{
+		ClientProtocol: config.ClientProtocolAnthropic,
+		Headers: map[string]string{
+			"anthropic-version":                         "2024-10-22",
+			"anthropic-beta":                            "prompt-caching-2024-07-31",
+			"anthropic-dangerous-direct-browser-access": "true",
+		},
+	}
+
+	applyHeaderPassThroughPolicy(ctx)
+
+	if ctx.IRExtensions == nil {
+		t.Fatalf("expected IRExtensions to be allocated")
+	}
+	if got := ctx.IRExtensions.InboundAnthropicVersion; got != "2024-10-22" {
+		t.Errorf("InboundAnthropicVersion = %q, want %q", got, "2024-10-22")
+	}
+	if got := ctx.IRExtensions.InboundAnthropicBeta; got != "prompt-caching-2024-07-31" {
+		t.Errorf("InboundAnthropicBeta = %q, want %q", got, "prompt-caching-2024-07-31")
+	}
+	if got := ctx.IRExtensions.InboundDangerousDirectBrowserAccess; got != "true" {
+		t.Errorf("InboundDangerousDirectBrowserAccess = %q, want %q", got, "true")
+	}
+	if got := ctx.IRExtensions.SourceProtocol; got != config.ClientProtocolAnthropic {
+		t.Errorf("SourceProtocol = %q, want %q", got, config.ClientProtocolAnthropic)
+	}
+	// KEEP-by-default: the captured headers also remain in ctx.Headers.
+	if got := ctx.Headers["anthropic-version"]; got != "2024-10-22" {
+		t.Errorf("expected anthropic-version preserved in headers, got %q", got)
+	}
+}
+
+func TestApplyHeaderPassThroughPolicy_DoesNotCaptureOnOpenAIIngress(t *testing.T) {
+	ctx := &RequestContext{
+		ClientProtocol: "",
+		Headers: map[string]string{
+			"anthropic-beta": "should-not-be-captured",
+		},
+	}
+
+	applyHeaderPassThroughPolicy(ctx)
+
+	if ctx.IRExtensions != nil {
+		t.Errorf("expected IRExtensions to remain nil on OpenAI ingress, got %+v", ctx.IRExtensions)
+	}
+	// KEEP-by-default still applies: the header passes through verbatim.
+	if got := ctx.Headers["anthropic-beta"]; got != "should-not-be-captured" {
+		t.Errorf("expected anthropic-beta preserved verbatim, got %q", got)
+	}
+}
+
+func TestApplyHeaderPassThroughPolicy_ToleratesExistingIRExtensions(t *testing.T) {
+	pre := &ir.IRExtensions{
+		SourceProtocol: config.ClientProtocolAnthropic,
+		MetadataUserID: "user-existing",
+	}
+	ctx := &RequestContext{
+		ClientProtocol: config.ClientProtocolAnthropic,
+		IRExtensions:   pre,
+		Headers: map[string]string{
+			"anthropic-version": "2023-06-01",
+		},
+	}
+
+	applyHeaderPassThroughPolicy(ctx)
+
+	if ctx.IRExtensions != pre {
+		t.Errorf("expected existing IRExtensions pointer to be reused")
+	}
+	if got := ctx.IRExtensions.InboundAnthropicVersion; got != "2023-06-01" {
+		t.Errorf("InboundAnthropicVersion = %q, want %q", got, "2023-06-01")
+	}
+	if got := ctx.IRExtensions.MetadataUserID; got != "user-existing" {
+		t.Errorf("expected existing MetadataUserID preserved, got %q", got)
+	}
+}
+
+func TestApplyHeaderPassThroughPolicy_HandlesMixedCaseHeaderKeys(t *testing.T) {
+	ctx := &RequestContext{
+		ClientProtocol: config.ClientProtocolAnthropic,
+		Headers: map[string]string{
+			"Anthropic-Version": "2024-10-22",
+		},
+	}
+
+	applyHeaderPassThroughPolicy(ctx)
+
+	if ctx.IRExtensions == nil || ctx.IRExtensions.InboundAnthropicVersion != "2024-10-22" {
+		t.Errorf("expected mixed-case header captured, got %+v", ctx.IRExtensions)
+	}
+}
+
+func TestApplyHeaderPassThroughPolicy_NoCapturesWhenHeadersAbsent(t *testing.T) {
+	ctx := &RequestContext{
+		ClientProtocol: config.ClientProtocolAnthropic,
+		Headers:        map[string]string{},
+	}
+
+	applyHeaderPassThroughPolicy(ctx)
+
+	if ctx.IRExtensions != nil {
+		t.Errorf("expected IRExtensions to remain nil when no pass-through headers present")
+	}
+}
+
+func TestApplyHeaderPassThroughPolicy_NilSafe(t *testing.T) {
+	applyHeaderPassThroughPolicy(nil)
+	applyHeaderPassThroughPolicy(&RequestContext{})
 }

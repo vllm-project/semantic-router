@@ -272,6 +272,7 @@ func (r *OpenAIRouter) buildRouteHeaderState(
 	}
 	state.removeHeaders = append(state.removeHeaders, r.CredentialResolver.HeadersToStrip()...)
 	appendProfileHeaders(&state.setHeaders, profile)
+	appendCapturedPassThroughHeaders(&state.setHeaders, profile, ctx)
 	appendRoutingHeaders(&state.setHeaders, model)
 
 	return state, nil
@@ -338,6 +339,41 @@ func appendProfileHeaders(setHeaders *[]*core.HeaderValueOption, profile *config
 	for key, value := range profile.ExtraHeaders {
 		*setHeaders = append(*setHeaders, &core.HeaderValueOption{
 			Header: &core.HeaderValue{Key: key, RawValue: []byte(value)},
+		})
+	}
+}
+
+// appendCapturedPassThroughHeaders layers inbound Anthropic
+// pass-through headers (captured at the request-header phase into
+// IRExtensions) under the provider-profile pin. ExtraHeaders wins on
+// any collision so deployments can pin a known-tested anthropic-version
+// without the client forcing a different one.
+//
+// Sibling mechanism: requests routed to an Anthropic-native upstream
+// take a different path that forwards the same headers via
+// anthropic.BuildRequestHeadersWithPassthrough (pkg/anthropic), using
+// the AnthropicPassthrough carrier on RequestContext. The two paths
+// fire on disjoint routing branches.
+func appendCapturedPassThroughHeaders(
+	setHeaders *[]*core.HeaderValueOption,
+	profile *config.ProviderProfile,
+	ctx *RequestContext,
+) {
+	if ctx == nil || ctx.IRExtensions == nil {
+		return
+	}
+	for _, h := range anthropicPassThroughHeaders {
+		value := h.read(ctx.IRExtensions)
+		if value == "" {
+			continue
+		}
+		if profile != nil {
+			if _, pinned := profile.ExtraHeaders[h.name]; pinned {
+				continue
+			}
+		}
+		*setHeaders = append(*setHeaders, &core.HeaderValueOption{
+			Header: &core.HeaderValue{Key: h.name, RawValue: []byte(value)},
 		})
 	}
 }

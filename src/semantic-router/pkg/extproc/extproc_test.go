@@ -20,6 +20,7 @@ import (
 	"github.com/prometheus/client_golang/prometheus"
 	dto "github.com/prometheus/client_model/go"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
@@ -2206,7 +2207,11 @@ func TestVSRHeadersAddedOnSuccessfulNonCachedResponse(t *testing.T) {
 	assert.NotNil(t, headerMutation, "HeaderMutation should not be nil for successful non-cached response")
 
 	setHeaders := headerMutation.GetSetHeaders()
-	assert.Len(t, setHeaders, 4, "Should have 4 VSR headers")
+	// 4 standard decision headers + x-vsr-inbound-protocol +
+	// x-vsr-outbound-protocol (translation-cell markers added by the
+	// Anthropic ingress series; emitted on every non-cache-hit response
+	// so operators can identify the cell that handled the request).
+	assert.Len(t, setHeaders, 6, "Should have 6 VSR headers")
 
 	// Verify each header
 	headerMap := make(map[string]string)
@@ -2218,6 +2223,8 @@ func TestVSRHeadersAddedOnSuccessfulNonCachedResponse(t *testing.T) {
 	assert.Equal(t, "on", headerMap["x-vsr-selected-reasoning"])
 	assert.Equal(t, "deepseek-v31", headerMap["x-vsr-selected-model"])
 	assert.Equal(t, "true", headerMap["x-vsr-injected-system-prompt"])
+	assert.Equal(t, "openai", headerMap["x-vsr-inbound-protocol"])
+	assert.Equal(t, "openai", headerMap["x-vsr-outbound-protocol"])
 }
 
 func TestVSRHeadersNotAddedOnCacheHit(t *testing.T) {
@@ -2287,9 +2294,23 @@ func TestVSRHeadersNotAddedOnErrorResponse(t *testing.T) {
 	assert.NoError(t, err)
 	assert.NotNil(t, response)
 
-	// Verify VSR headers were NOT added due to error status
+	// Decision/signal headers are NOT added on error responses, but the
+	// translation-cell protocol markers (x-vsr-inbound-protocol and
+	// x-vsr-outbound-protocol) ride on every non-cache-hit response —
+	// success or error — so operators can identify which translation
+	// cell handled a failed request. See processor_res_header_mutation.go.
 	headerMutation := response.GetResponseHeaders().GetResponse().GetHeaderMutation()
-	assert.Nil(t, headerMutation, "HeaderMutation should be nil for error response")
+	require.NotNil(t, headerMutation, "HeaderMutation should carry protocol markers even on error")
+	setHeaders := headerMutation.GetSetHeaders()
+	assert.Len(t, setHeaders, 2, "Error response should have only the 2 protocol-marker headers")
+	headerMap := make(map[string]string)
+	for _, header := range setHeaders {
+		headerMap[header.Header.Key] = string(header.Header.RawValue)
+	}
+	assert.Equal(t, "openai", headerMap["x-vsr-inbound-protocol"])
+	assert.Equal(t, "openai", headerMap["x-vsr-outbound-protocol"])
+	assert.NotContains(t, headerMap, "x-vsr-selected-category", "decision headers must not appear on error")
+	assert.NotContains(t, headerMap, "x-vsr-selected-model", "decision headers must not appear on error")
 }
 
 func TestVSRHeadersPartialInformation(t *testing.T) {
@@ -2329,7 +2350,10 @@ func TestVSRHeadersPartialInformation(t *testing.T) {
 	assert.NotNil(t, headerMutation)
 
 	setHeaders := headerMutation.GetSetHeaders()
-	assert.Len(t, setHeaders, 3, "Should have 3 VSR headers (excluding empty reasoning mode, but including injected-system-prompt)")
+	// 3 standard decision headers (excluding empty reasoning mode, but
+	// including injected-system-prompt) + 2 translation-cell protocol
+	// markers (x-vsr-inbound-protocol + x-vsr-outbound-protocol).
+	assert.Len(t, setHeaders, 5, "Should have 5 VSR headers")
 
 	// Verify each header
 	headerMap := make(map[string]string)
