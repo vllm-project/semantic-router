@@ -21,11 +21,15 @@ import {
   createModelDraft,
   createSetupConfigCounts,
   DEFAULT_REMOTE_SETUP_CONFIG_URL,
+  fetchPresetDelta,
+  fetchPresets,
   getStepOneErrors,
   maskSecrets,
   PROVIDER_OPTIONS,
   type ImportedSetupConfig,
   type ModelDraft,
+  type PresetDelta,
+  type PresetInfo,
   type ProviderKind,
   type RemoteImportState,
   type SetupActivationState,
@@ -54,6 +58,12 @@ const SetupWizardPage: React.FC = () => {
   );
   const [importedRemoteConfig, setImportedRemoteConfig] =
     useState<ImportedSetupConfig | null>(null);
+  const [presets, setPresets] = useState<PresetInfo[]>([]);
+  const [selectedPresetId, setSelectedPresetId] = useState<string | null>(null);
+  const [presetDelta, setPresetDelta] = useState<PresetDelta | null>(null);
+  const [presetImportedConfig, setPresetImportedConfig] =
+    useState<ImportedSetupConfig | null>(null);
+  const [presetError, setPresetError] = useState<string | null>(null);
   const [stepOneAttempted, setStepOneAttempted] = useState(false);
   const [validationState, setValidationState] =
     useState<SetupValidationState>("idle");
@@ -68,6 +78,12 @@ const SetupWizardPage: React.FC = () => {
   const [activationState, setActivationState] =
     useState<SetupActivationState>("idle");
   const [activationError, setActivationError] = useState<string | null>(null);
+
+  useEffect(() => {
+    fetchPresets()
+      .then(setPresets)
+      .catch(() => setPresets([]));
+  }, []);
 
   useEffect(() => {
     if (models.length === 0) {
@@ -94,6 +110,8 @@ const SetupWizardPage: React.FC = () => {
     setValidatedCounts(createSetupConfigCounts());
     setActivationState("idle");
     setActivationError(null);
+    setPresetDelta(null);
+    setPresetImportedConfig(null);
   };
 
   let scratchConfig: Record<string, unknown> | null = null;
@@ -119,16 +137,25 @@ const SetupWizardPage: React.FC = () => {
       scratchConfig.decisions.length > 0,
   });
 
+  const selectedPreset = presets.find((p) => p.id === selectedPresetId) ?? null;
   const currentRouteLabel =
-    routingMode === "remote" ? "From remote" : "From scratch";
+    routingMode === "preset" && selectedPreset
+      ? selectedPreset.label
+      : routingMode === "remote"
+        ? "From remote"
+        : "From scratch";
   const draftConfig =
-    routingMode === "remote"
-      ? (importedRemoteConfig?.config ?? null)
-      : scratchConfig;
+    routingMode === "preset"
+      ? (presetImportedConfig?.config ?? null)
+      : routingMode === "remote"
+        ? (importedRemoteConfig?.config ?? null)
+        : scratchConfig;
   const generatedCounts =
-    routingMode === "remote"
-      ? (importedRemoteConfig?.counts ?? createSetupConfigCounts())
-      : scratchCounts;
+    routingMode === "preset"
+      ? (presetImportedConfig?.counts ?? createSetupConfigCounts())
+      : routingMode === "remote"
+        ? (importedRemoteConfig?.counts ?? createSetupConfigCounts())
+        : scratchCounts;
 
   const previewSource = maskSecrets(validatedConfig ?? draftConfig);
   const validationSignature = draftConfig ? JSON.stringify(draftConfig) : "";
@@ -224,14 +251,25 @@ const SetupWizardPage: React.FC = () => {
     resetReviewState();
   };
 
+  const isStep2Blocked = () => {
+    if (routingMode === "remote" && !importedRemoteConfig) {
+      setRemoteImportError("Import a remote config before continuing.");
+      return true;
+    }
+    if (routingMode === "preset" && !presetImportedConfig) {
+      setPresetError("Select a mode and import its config before continuing.");
+      return true;
+    }
+    return false;
+  };
+
   const goToStep = (step: SetupStep) => {
     if (step > 0 && (hasStepOneIssues || scratchBuildError)) {
       setStepOneAttempted(true);
       return;
     }
 
-    if (step === 2 && routingMode === "remote" && !importedRemoteConfig) {
-      setRemoteImportError("Import a remote config before continuing.");
+    if (step === 2 && isStep2Blocked()) {
       return;
     }
 
@@ -249,12 +287,7 @@ const SetupWizardPage: React.FC = () => {
       return;
     }
 
-    if (
-      currentStep === 1 &&
-      routingMode === "remote" &&
-      !importedRemoteConfig
-    ) {
-      setRemoteImportError("Import a remote config before continuing.");
+    if (currentStep === 1 && isStep2Blocked()) {
       return;
     }
 
@@ -290,6 +323,59 @@ const SetupWizardPage: React.FC = () => {
       setValidationError(
         err instanceof Error ? err.message : "Setup validation failed.",
       );
+    }
+  };
+
+  const handleSelectPreset = async (presetId: string) => {
+    setSelectedPresetId(presetId);
+    setPresetDelta(null);
+    setPresetImportedConfig(null);
+    resetReviewState();
+
+    const userModelNames = models
+      .map((m) => m.name.trim())
+      .filter((n) => n.length > 0);
+    try {
+      const delta = await fetchPresetDelta(presetId, userModelNames);
+      setPresetDelta(delta);
+
+      if (delta.ready) {
+        const result = await importRemoteSetupConfig(delta.recipe_url);
+        setPresetImportedConfig({
+          config: result.config,
+          sourceUrl: result.sourceUrl,
+          counts: createSetupConfigCounts({
+            models: result.models,
+            decisions: result.decisions,
+            signals: result.signals,
+            canActivate: result.canActivate,
+          }),
+        });
+      }
+    } catch {
+      setPresetDelta(null);
+    }
+  };
+
+  const handleImportPresetConfig = async () => {
+    if (!presetDelta) {
+      return;
+    }
+    resetReviewState();
+    try {
+      const result = await importRemoteSetupConfig(presetDelta.recipe_url);
+      setPresetImportedConfig({
+        config: result.config,
+        sourceUrl: result.sourceUrl,
+        counts: createSetupConfigCounts({
+          models: result.models,
+          decisions: result.decisions,
+          signals: result.signals,
+          canActivate: result.canActivate,
+        }),
+      });
+    } catch {
+      setPresetImportedConfig(null);
     }
   };
 
@@ -413,9 +499,15 @@ const SetupWizardPage: React.FC = () => {
               remoteImportError={remoteImportError}
               importedConfig={importedRemoteConfig}
               counts={generatedCounts}
+              presets={presets}
+              selectedPresetId={selectedPresetId}
+              presetDelta={presetDelta}
+              presetImportedConfig={presetImportedConfig}
+              presetError={presetError}
               onSelectRoutingMode={(mode) => {
                 setRoutingMode(mode);
                 setRemoteImportError(null);
+                setPresetError(null);
                 resetReviewState();
               }}
               onChangeRemoteConfigUrl={(value) => {
@@ -435,6 +527,8 @@ const SetupWizardPage: React.FC = () => {
                 }
               }}
               onImportRemoteConfig={() => void handleImportRemote()}
+              onSelectPreset={(id) => void handleSelectPreset(id)}
+              onImportPresetConfig={() => void handleImportPresetConfig()}
             />
           )}
           {currentStep === 2 && (
