@@ -79,6 +79,11 @@ DEFAULT_REQUIRED_HEADERS = (
 FULL_BRANCH_IMAGE_KIND = "full-branch-image-benchmark"
 EVIDENCE_REF_KEYS = ("evidence_ref", "ref")
 EVIDENCE_IMAGE_TAG_KEYS = ("evidence_image_tag", "image_tag")
+CACHE_PROBE_IDENTITY_FIELDS = (
+    "stable_prefix_sha256",
+    "stable_prefix_chars",
+    "unique_suffix_pattern",
+)
 
 
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
@@ -298,6 +303,36 @@ def cache_probe_repeats(summary: dict[str, Any]) -> int:
         except (TypeError, ValueError):
             return 0
     return 0
+
+
+def add_cache_probe_identity_failures(
+    failures: list[str], name: str, summary: dict[str, Any]
+) -> None:
+    for key in CACHE_PROBE_IDENTITY_FIELDS:
+        value = summary.get(key)
+        if value is None or value == "":
+            failures.append(f"{name} {key} missing")
+
+
+def add_cache_probe_pair_failures(
+    failures: list[str],
+    router_summary: dict[str, Any] | None,
+    baseline_summary: dict[str, Any] | None,
+) -> None:
+    if not router_summary or not baseline_summary:
+        return
+    for key in CACHE_PROBE_IDENTITY_FIELDS:
+        router_value = router_summary.get(key)
+        baseline_value = baseline_summary.get(key)
+        if router_value is None or router_value == "":
+            continue
+        if baseline_value is None or baseline_value == "":
+            continue
+        if str(router_value) != str(baseline_value):
+            failures.append(
+                f"cache router/baseline {key} mismatch: "
+                f"{router_value} != {baseline_value}"
+            )
 
 
 def evaluate_diagnostic(
@@ -535,6 +570,7 @@ def evaluate_cache_aggregate(
     failures: list[str] = []
     metrics: dict[str, Any] = {"evidence": evidence, "paths": {}}
     paths = cache_paths(data)
+    path_summaries = dict(paths)
     has_baseline = any(label == "baseline" for label, _ in paths)
     if args.require_cache_baseline and not has_baseline:
         failures.append(
@@ -567,6 +603,7 @@ def evaluate_cache_aggregate(
                 f"{name} probe_repeats {probe_repeats} < "
                 f"{args.min_cache_probe_repeats}"
             )
+        add_cache_probe_identity_failures(failures, name, summary)
         field_rate = cached_token_field_rate(summary)
         if field_rate < args.min_cached_token_field_rate:
             failures.append(
@@ -587,11 +624,19 @@ def evaluate_cache_aggregate(
             "cached_prompt_ratio": summary.get("cached_prompt_ratio"),
             "probe_kind": probe_kind,
             "probe_repeats": probe_repeats,
+            "stable_prefix_sha256": summary.get("stable_prefix_sha256"),
+            "stable_prefix_chars": summary.get("stable_prefix_chars"),
+            "unique_suffix_pattern": summary.get("unique_suffix_pattern"),
             "evidence_ref": first_string_value(summary, None, EVIDENCE_REF_KEYS),
             "evidence_image_tag": first_string_value(
                 summary, None, EVIDENCE_IMAGE_TAG_KEYS
             ),
         }
+    add_cache_probe_pair_failures(
+        failures,
+        path_summaries.get("router"),
+        path_summaries.get("baseline"),
+    )
     metrics["baseline_required"] = args.require_cache_baseline
     metrics["baseline_present"] = has_baseline
     return metrics, failures

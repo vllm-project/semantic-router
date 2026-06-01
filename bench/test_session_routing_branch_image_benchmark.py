@@ -157,6 +157,7 @@ def cache_aggregate(ref="77e6b573", image_tag="pr1989-current-branch-image"):
         "probe_repeats": 8,
         "stable_prefix_chars": 12719,
         "stable_prefix_sha256": "abc123",
+        "unique_suffix_pattern": "probe_turn_index",
     }
     baseline = {
         "label": "branch-image-cache-baseline",
@@ -171,6 +172,7 @@ def cache_aggregate(ref="77e6b573", image_tag="pr1989-current-branch-image"):
         "probe_repeats": 8,
         "stable_prefix_chars": 12719,
         "stable_prefix_sha256": "abc123",
+        "unique_suffix_pattern": "probe_turn_index",
     }
     return {"router": router, "baseline": baseline}
 
@@ -374,6 +376,23 @@ def test_full_branch_image_summary_blocks_non_probe_cache_aggregate(tmp_path):
         "cache router probe_kind missing != repeated-prefix-cache-token-probe"
         in summary["validation_failures"]
     )
+
+
+def test_full_branch_image_summary_blocks_cache_probe_identity_mismatch(tmp_path):
+    benchmark = load_benchmark_module()
+    arg_values = complete_args(tmp_path)
+    mismatched_cache = cache_aggregate()
+    mismatched_cache["baseline"]["stable_prefix_sha256"] = "different-prefix"
+    write_json(tmp_path / "cache.json", mismatched_cache)
+    args = benchmark.parse_args(arg_values)
+
+    summary = benchmark.build_summary(args)
+
+    assert summary["checks"]["cache_token_probe_ok"] is False
+    assert (
+        "cache router/baseline stable_prefix_sha256 mismatch: "
+        "abc123 != different-prefix"
+    ) in summary["validation_failures"]
 
 
 def test_full_branch_image_summary_writes_outputs(tmp_path):

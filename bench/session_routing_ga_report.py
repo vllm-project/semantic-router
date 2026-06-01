@@ -34,6 +34,11 @@ BLOCKING_STATUS = "blocked"
 MISSING_STATUS = "missing"
 MARKDOWN_METRIC_LIMIT = 220
 MARKDOWN_METRIC_TRUNCATED_LIMIT = MARKDOWN_METRIC_LIMIT - 3
+CACHE_PROBE_IDENTITY_FIELDS = (
+    "stable_prefix_sha256",
+    "stable_prefix_chars",
+    "unique_suffix_pattern",
+)
 DEFAULT_MIN_AGENT_TASK_REQUESTS = 345
 DEFAULT_MIN_AGENT_TASK_COUNT = 20
 DEFAULT_MIN_AGENT_TASK_INSTANCES = 60
@@ -686,6 +691,36 @@ def cache_probe_repeats(summary: dict[str, Any]) -> int:
     return 0
 
 
+def add_cache_probe_identity_failures(
+    failures: list[str], label: str, summary: dict[str, Any]
+) -> None:
+    for key in CACHE_PROBE_IDENTITY_FIELDS:
+        value = summary.get(key)
+        if value is None or value == "":
+            failures.append(f"{label}: {key} missing")
+
+
+def add_cache_probe_pair_failures(
+    failures: list[str],
+    router_summary: dict[str, Any] | None,
+    baseline_summary: dict[str, Any] | None,
+) -> None:
+    if not router_summary or not baseline_summary:
+        return
+    for key in CACHE_PROBE_IDENTITY_FIELDS:
+        router_value = router_summary.get(key)
+        baseline_value = baseline_summary.get(key)
+        if router_value is None or router_value == "":
+            continue
+        if baseline_value is None or baseline_value == "":
+            continue
+        if str(router_value) != str(baseline_value):
+            failures.append(
+                f"router/baseline cache probe {key} mismatch: "
+                f"{router_value} != {baseline_value}"
+            )
+
+
 def evaluate_cache_aggregate(args: argparse.Namespace) -> dict[str, Any]:
     data, evidence = load_json(args.cache_aggregate)
     if data is None:
@@ -702,6 +737,7 @@ def evaluate_cache_aggregate(args: argparse.Namespace) -> dict[str, Any]:
     require_probe_metadata = should_require_cache_probe_metadata(required)
     paths = cache_paths(data)
     has_baseline = any(label == "baseline" for label, _ in paths)
+    path_summaries = dict(paths)
     if args.require_cache_baseline and not has_baseline:
         failures.append(
             "direct backend baseline cache evidence missing; run "
@@ -721,6 +757,8 @@ def evaluate_cache_aggregate(args: argparse.Namespace) -> dict[str, Any]:
             failures.append(
                 f"{label}: probe_repeats {probe_repeats} < {args.min_cache_probe_repeats}"
             )
+        if require_probe_metadata:
+            add_cache_probe_identity_failures(failures, label, summary)
         field_rate = cached_token_field_rate(summary)
         if field_rate < args.min_cached_token_field_rate:
             failures.append(
@@ -747,7 +785,15 @@ def evaluate_cache_aggregate(args: argparse.Namespace) -> dict[str, Any]:
             "probe_kind": probe_kind,
             "probe_repeats": probe_repeats,
             "stable_prefix_chars": summary.get("stable_prefix_chars"),
+            "stable_prefix_sha256": summary.get("stable_prefix_sha256"),
+            "unique_suffix_pattern": summary.get("unique_suffix_pattern"),
         }
+    if require_probe_metadata:
+        add_cache_probe_pair_failures(
+            failures,
+            path_summaries.get("router"),
+            path_summaries.get("baseline"),
+        )
     metrics["baseline_required"] = args.require_cache_baseline
     metrics["baseline_present"] = has_baseline
     return requirement(
