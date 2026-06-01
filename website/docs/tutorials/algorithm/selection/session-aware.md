@@ -10,7 +10,7 @@ It aligns to `config/algorithm/selection/session-aware.yaml`.
 
 ## Scope Boundary
 
-`session_aware` is an Agentic Context Routing policy for model selection. It chooses one model from the matched decision's `modelRefs` and emits router evidence for that decision. It does not choose an upstream endpoint, implement endpoint failover, or override Envoy load balancing inside a selected cluster. Endpoint membership, locality, and load-balancing behavior stay in the Envoy or Kubernetes configuration that serves the selected model.
+`session_aware` is an Agentic Context Routing policy for model selection. It chooses one model from the matched decision's `modelRefs` and emits router evidence for that decision. It does not choose upstream endpoints or override Envoy load balancing inside a selected cluster. Endpoint membership, locality, and load-balancing behavior stay in the Envoy or Kubernetes configuration that serves the selected model.
 
 ## Key Advantages
 
@@ -73,4 +73,4 @@ routing:
 - If lookup tables contain `remaining_turn_prior` for the matched category or decision, a sufficiently sampled prior lifts continuation mass for early turns and decays as the session advances.
 - Router replay stores `session_policy`, including base scores, adjusted scores, hard-lock reasons, cache warmth, remaining-turn prior source and sample count, handoff penalties, and net switch advantage.
 - Provider-reported cached prompt tokens are recorded as telemetry and costed with `cached_input_per_1m`; client-facing usage is not rewritten.
-- Backend errors should be handled as backend or session recovery. They are not modeled as endpoint fallback by this selector.
+- Backend errors should be handled as backend or session recovery, outside this selector's stay-vs-switch policy.
