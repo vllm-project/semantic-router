@@ -68,11 +68,23 @@ spec:
             # available in CI and the pipeline is not part of the dashboard contract.
             - name: ML_PIPELINE_ENABLED
               value: "false"
-            # Disable auth in E2E by pointing the auth DB to an impossible path.
-            # /dev/null is a char device so MkdirAll("/dev/null") fails, causing
-            # setupAuthRoutes to return nil and wrapWithAuth to skip the middleware.
+            # Keep auth enabled in E2E. The dashboard fails closed when the auth
+            # store cannot be initialized, so the tests use this bootstrap admin
+            # and a writable temporary SQLite store.
             - name: DASHBOARD_AUTH_DB_PATH
-              value: /dev/null/auth.db
+              value: /tmp/vllm-sr-dashboard/auth.db
+            - name: DASHBOARD_WORKFLOW_DB_PATH
+              value: /tmp/vllm-sr-dashboard/workflow.sqlite
+            - name: EVALUATION_DB_PATH
+              value: /tmp/vllm-sr-dashboard/evaluations.db
+            - name: DASHBOARD_JWT_SECRET
+              value: dashboard-e2e-jwt-secret
+            - name: DASHBOARD_ADMIN_EMAIL
+              value: e2e-dashboard-admin@example.com
+            - name: DASHBOARD_ADMIN_PASSWORD
+              value: dashboard-e2e-password
+            - name: DASHBOARD_ADMIN_NAME
+              value: Dashboard E2E Admin
           ports:
             - name: http
               containerPort: 8700

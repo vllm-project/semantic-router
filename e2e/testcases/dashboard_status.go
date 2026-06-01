@@ -34,7 +34,15 @@ func testDashboardStatus(ctx context.Context, client *kubernetes.Clientset, opts
 	}
 
 	httpClient := &http.Client{Timeout: 15 * time.Second}
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+	req, err := newAuthenticatedDashboardRequest(
+		ctx,
+		httpClient,
+		http.MethodGet,
+		url,
+		nil,
+		fmt.Sprintf("http://localhost:%s", localPort),
+		opts.Verbose,
+	)
 	if err != nil {
 		return fmt.Errorf("create request: %w", err)
 	}
