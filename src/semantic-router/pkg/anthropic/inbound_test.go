@@ -609,7 +609,7 @@ func TestParseAnthropicRequest_PreservesDocumentOrderUserToolUser(t *testing.T) 
 
 // --- test helpers ---
 
-func hasWarning(ext *ir.IRExtensions, reason string) bool {
+func hasWarning(ext *ir.IRExtensions, reason ir.WarningReason) bool {
 	if ext == nil {
 		return false
 	}
@@ -621,7 +621,7 @@ func hasWarning(ext *ir.IRExtensions, reason string) bool {
 	return false
 }
 
-func hasWarningWithDetail(ext *ir.IRExtensions, reason, detail string) bool {
+func hasWarningWithDetail(ext *ir.IRExtensions, reason ir.WarningReason, detail string) bool {
 	if ext == nil {
 		return false
 	}
