@@ -46,6 +46,7 @@ CACHE_PROBE_IDENTITY_FIELDS = (
     "stable_prefix_chars",
     "unique_suffix_pattern",
 )
+CACHE_PROBE_ENDPOINT_FIELDS = ("base_url", "model")
 DEFAULT_MIN_AGENT_TASK_REQUESTS = 399
 DEFAULT_MIN_AGENT_TASK_COUNT = 23
 DEFAULT_MIN_AGENT_TASK_INSTANCES = 69
@@ -731,6 +732,87 @@ def add_cache_probe_pair_failures(
             )
 
 
+def normalized_base_url(summary: dict[str, Any] | None) -> str:
+    if not isinstance(summary, dict):
+        return ""
+    return str(summary.get("base_url") or "").rstrip("/")
+
+
+def add_cache_probe_endpoint_failures(
+    failures: list[str],
+    router_summary: dict[str, Any] | None,
+    baseline_summary: dict[str, Any] | None,
+) -> None:
+    for label, summary in (("router", router_summary), ("baseline", baseline_summary)):
+        if not isinstance(summary, dict):
+            continue
+        for field in CACHE_PROBE_ENDPOINT_FIELDS:
+            if not str(summary.get(field) or ""):
+                failures.append(f"{label}: {field} missing")
+    router_base_url = normalized_base_url(router_summary)
+    baseline_base_url = normalized_base_url(baseline_summary)
+    if router_base_url and baseline_base_url and router_base_url == baseline_base_url:
+        failures.append(
+            "baseline: base_url must differ from router base_url for direct-backend "
+            "cache evidence"
+        )
+
+
+def evaluate_cache_path(
+    label: str,
+    summary: dict[str, Any],
+    args: argparse.Namespace,
+    require_probe_metadata: bool,
+) -> tuple[dict[str, Any], list[str]]:
+    failures: list[str] = []
+    reporting = str(summary.get("cached_token_reporting", "missing"))
+    required = args.min_cached_token_reporting
+    if CACHE_REPORTING_ORDER.get(reporting, -1) < CACHE_REPORTING_ORDER[required]:
+        failures.append(f"{label}: cached_token_reporting {reporting} < {required}")
+    probe_kind = str(summary.get("probe_kind", ""))
+    probe_repeats = cache_probe_repeats(summary)
+    if require_probe_metadata and probe_kind != CACHE_PROBE_KIND:
+        failures.append(
+            f"{label}: probe_kind {probe_kind or 'missing'} != {CACHE_PROBE_KIND}"
+        )
+    if require_probe_metadata and probe_repeats < args.min_cache_probe_repeats:
+        failures.append(
+            f"{label}: probe_repeats {probe_repeats} < {args.min_cache_probe_repeats}"
+        )
+    if require_probe_metadata:
+        add_cache_probe_identity_failures(failures, label, summary)
+    field_rate = cached_token_field_rate(summary)
+    if field_rate < args.min_cached_token_field_rate:
+        failures.append(
+            f"{label}: cached_token_field_rate {field_rate} < "
+            f"{args.min_cached_token_field_rate}"
+        )
+    ratio = float(summary.get("cached_prompt_ratio") or 0.0)
+    if ratio < args.min_cached_prompt_ratio:
+        failures.append(
+            f"{label}: cached_prompt_ratio {ratio} < {args.min_cached_prompt_ratio}"
+        )
+    if float(summary.get("success_rate") or 0.0) < args.min_live_success_rate:
+        failures.append(
+            f"{label}: success_rate {summary.get('success_rate')} < "
+            f"{args.min_live_success_rate}"
+        )
+    return {
+        "base_url": normalized_base_url(summary),
+        "model": summary.get("model"),
+        "requests": summary.get("requests"),
+        "success_rate": summary.get("success_rate"),
+        "cached_token_reporting": reporting,
+        "cached_token_field_rate": field_rate,
+        "cached_prompt_ratio": summary.get("cached_prompt_ratio"),
+        "probe_kind": probe_kind,
+        "probe_repeats": probe_repeats,
+        "stable_prefix_chars": summary.get("stable_prefix_chars"),
+        "stable_prefix_sha256": summary.get("stable_prefix_sha256"),
+        "unique_suffix_pattern": summary.get("unique_suffix_pattern"),
+    }, failures
+
+
 def evaluate_cache_aggregate(args: argparse.Namespace) -> dict[str, Any]:
     data, evidence = load_json(args.cache_aggregate)
     if data is None:
@@ -743,8 +825,9 @@ def evaluate_cache_aggregate(args: argparse.Namespace) -> dict[str, Any]:
         )
     failures: list[str] = []
     metrics: dict[str, Any] = {}
-    required = args.min_cached_token_reporting
-    require_probe_metadata = should_require_cache_probe_metadata(required)
+    require_probe_metadata = should_require_cache_probe_metadata(
+        args.min_cached_token_reporting
+    )
     paths = cache_paths(data)
     has_baseline = any(label == "baseline" for label, _ in paths)
     path_summaries = dict(paths)
@@ -754,52 +837,18 @@ def evaluate_cache_aggregate(args: argparse.Namespace) -> dict[str, Any]:
             "cache_token_probe.py with --baseline-base-url"
         )
     for label, summary in paths:
-        reporting = str(summary.get("cached_token_reporting", "missing"))
-        if CACHE_REPORTING_ORDER.get(reporting, -1) < CACHE_REPORTING_ORDER[required]:
-            failures.append(f"{label}: cached_token_reporting {reporting} < {required}")
-        probe_kind = str(summary.get("probe_kind", ""))
-        probe_repeats = cache_probe_repeats(summary)
-        if require_probe_metadata and probe_kind != CACHE_PROBE_KIND:
-            failures.append(
-                f"{label}: probe_kind {probe_kind or 'missing'} != {CACHE_PROBE_KIND}"
-            )
-        if require_probe_metadata and probe_repeats < args.min_cache_probe_repeats:
-            failures.append(
-                f"{label}: probe_repeats {probe_repeats} < {args.min_cache_probe_repeats}"
-            )
-        if require_probe_metadata:
-            add_cache_probe_identity_failures(failures, label, summary)
-        field_rate = cached_token_field_rate(summary)
-        if field_rate < args.min_cached_token_field_rate:
-            failures.append(
-                f"{label}: cached_token_field_rate {field_rate} < "
-                f"{args.min_cached_token_field_rate}"
-            )
-        ratio = float(summary.get("cached_prompt_ratio") or 0.0)
-        if ratio < args.min_cached_prompt_ratio:
-            failures.append(
-                f"{label}: cached_prompt_ratio {ratio} < "
-                f"{args.min_cached_prompt_ratio}"
-            )
-        if float(summary.get("success_rate") or 0.0) < args.min_live_success_rate:
-            failures.append(
-                f"{label}: success_rate {summary.get('success_rate')} < "
-                f"{args.min_live_success_rate}"
-            )
-        metrics[label] = {
-            "requests": summary.get("requests"),
-            "success_rate": summary.get("success_rate"),
-            "cached_token_reporting": reporting,
-            "cached_token_field_rate": field_rate,
-            "cached_prompt_ratio": summary.get("cached_prompt_ratio"),
-            "probe_kind": probe_kind,
-            "probe_repeats": probe_repeats,
-            "stable_prefix_chars": summary.get("stable_prefix_chars"),
-            "stable_prefix_sha256": summary.get("stable_prefix_sha256"),
-            "unique_suffix_pattern": summary.get("unique_suffix_pattern"),
-        }
+        metrics[label], path_failures = evaluate_cache_path(
+            label, summary, args, require_probe_metadata
+        )
+        failures.extend(path_failures)
     if require_probe_metadata:
         add_cache_probe_pair_failures(
+            failures,
+            path_summaries.get("router"),
+            path_summaries.get("baseline"),
+        )
+    if args.require_cache_baseline:
+        add_cache_probe_endpoint_failures(
             failures,
             path_summaries.get("router"),
             path_summaries.get("baseline"),

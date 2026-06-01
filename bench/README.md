@@ -167,8 +167,11 @@ probe metadata and a direct-backend baseline before positive cached-token
 evidence can pass, because the cached-token claim must prove backend behavior
 rather than only router summary shaping. The router and direct-backend summaries
 must share the same stable-prefix hash, prefix length, and unique-suffix pattern;
-otherwise the GA report treats them as different probes. The same
-cache-reporting gates apply to both router and direct-backend paths.
+otherwise the GA report treats them as different probes. They must also record
+their `base_url` and `model`, and the direct-backend `base_url` must differ from
+the router `base_url`; otherwise a router-only probe cannot masquerade as
+backend-positive evidence. The same cache-reporting gates apply to both router
+and direct-backend paths.
 
 ### Live Agent Task Benchmark
 
@@ -289,7 +292,8 @@ cache-token probe summary with a direct-backend baseline and the same router
 evidence identity. The branch-image assembler does not require positive
 cached-token reporting by default; that remains a separate GA readiness blocker
 owned by the cache-token report gate. It does require the router and
-direct-backend cache summaries to use the same repeated-prefix identity.
+direct-backend cache summaries to use the same repeated-prefix identity and
+different recorded `base_url` values.
 
 Use the GA readiness report after local, AMD, agent-task, cache-token, and
 branch-image runs have produced machine-readable summaries. The report does not

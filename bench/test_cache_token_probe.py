@@ -139,9 +139,17 @@ def test_summary_reports_cached_ratio_and_reporting_state():
     probe = load_probe_module()
     rows = [row(probe, 0), row(probe, 20), row(probe, 40)]
 
-    summary = probe.summarize(rows, elapsed_seconds=2.0, label="router")
+    summary = probe.summarize(
+        rows,
+        elapsed_seconds=2.0,
+        label="router",
+        base_url="http://router.local/v1/",
+        model="auto",
+    )
 
     assert summary["requests"] == EXPECTED_REQUESTS
+    assert summary["base_url"] == "http://router.local/v1"
+    assert summary["model"] == "auto"
     assert summary["success_rate"] == 1.0
     assert summary["cached_tokens"] == EXPECTED_CACHED_TOKENS
     assert summary["cached_prompt_ratio"] == EXPECTED_CACHED_RATIO
@@ -229,11 +237,21 @@ def test_validate_summary_fails_low_success_rate():
 def test_aggregate_summary_output_matches_ga_report_shape(tmp_path):
     probe = load_probe_module()
     router_summary = probe.attach_evidence_identity(
-        probe.summarize([row(probe, 0), row(probe, 20)], 1.0, "router"),
+        probe.summarize(
+            [row(probe, 0), row(probe, 20)],
+            1.0,
+            "router",
+            base_url="http://router.local/v1",
+            model="auto",
+        ),
         Namespace(evidence_ref="77e6b573", evidence_image_tag="branch-image"),
     )
     baseline_summary = probe.summarize(
-        [row(probe, 0), row(probe, 20)], 1.0, "direct-backend"
+        [row(probe, 0), row(probe, 20)],
+        1.0,
+        "direct-backend",
+        base_url="http://backend.local/v1",
+        model="qwen/qwen3.5-rocm",
     )
     failures = ["router: cached_token_reporting positive < impossible"]
 
@@ -248,4 +266,6 @@ def test_aggregate_summary_output_matches_ga_report_shape(tmp_path):
     assert written["router"]["evidence_image_tag"] == "branch-image"
     assert written["router"]["probe_kind"] == "repeated-prefix-cache-token-probe"
     assert written["baseline"]["label"] == "direct-backend"
+    assert written["baseline"]["base_url"] == "http://backend.local/v1"
+    assert written["baseline"]["model"] == "qwen/qwen3.5-rocm"
     assert written["validation_failures"] == failures

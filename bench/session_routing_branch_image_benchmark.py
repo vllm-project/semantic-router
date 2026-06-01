@@ -87,6 +87,7 @@ CACHE_PROBE_IDENTITY_FIELDS = (
     "stable_prefix_chars",
     "unique_suffix_pattern",
 )
+CACHE_PROBE_ENDPOINT_FIELDS = ("base_url", "model")
 
 
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
@@ -336,6 +337,32 @@ def add_cache_probe_pair_failures(
                 f"cache router/baseline {key} mismatch: "
                 f"{router_value} != {baseline_value}"
             )
+
+
+def normalized_base_url(summary: dict[str, Any] | None) -> str:
+    if not isinstance(summary, dict):
+        return ""
+    return str(summary.get("base_url") or "").rstrip("/")
+
+
+def add_cache_probe_endpoint_failures(
+    failures: list[str],
+    router_summary: dict[str, Any] | None,
+    baseline_summary: dict[str, Any] | None,
+) -> None:
+    for label, summary in (("router", router_summary), ("baseline", baseline_summary)):
+        if not isinstance(summary, dict):
+            continue
+        for field in CACHE_PROBE_ENDPOINT_FIELDS:
+            if not str(summary.get(field) or ""):
+                failures.append(f"cache {label} {field} missing")
+    router_base_url = normalized_base_url(router_summary)
+    baseline_base_url = normalized_base_url(baseline_summary)
+    if router_base_url and baseline_base_url and router_base_url == baseline_base_url:
+        failures.append(
+            "cache baseline base_url must differ from router base_url for "
+            "direct-backend cache evidence"
+        )
 
 
 def evaluate_diagnostic(
@@ -620,6 +647,8 @@ def evaluate_cache_aggregate(
                 f"{args.min_cached_prompt_ratio}"
             )
         metrics["paths"][label] = {
+            "base_url": normalized_base_url(summary),
+            "model": summary.get("model"),
             "requests": summary.get("requests"),
             "success_rate": summary.get("success_rate"),
             "cached_token_reporting": reporting,
@@ -640,6 +669,12 @@ def evaluate_cache_aggregate(
         path_summaries.get("router"),
         path_summaries.get("baseline"),
     )
+    if args.require_cache_baseline:
+        add_cache_probe_endpoint_failures(
+            failures,
+            path_summaries.get("router"),
+            path_summaries.get("baseline"),
+        )
     metrics["baseline_required"] = args.require_cache_baseline
     metrics["baseline_present"] = has_baseline
     return metrics, failures

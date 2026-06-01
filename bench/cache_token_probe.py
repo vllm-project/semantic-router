@@ -277,11 +277,21 @@ def run_probe(args: argparse.Namespace) -> tuple[list[dict[str, Any]], dict[str,
     for repeat_index in range(args.repeats):
         rows.append(row_from_result(args, repeat_index, send_chat(args, repeat_index)))
     elapsed = time.perf_counter() - started
-    return rows, summarize(rows, elapsed, args.label)
+    return rows, summarize(
+        rows,
+        elapsed,
+        args.label,
+        base_url=args.base_url,
+        model=args.model,
+    )
 
 
 def summarize(
-    rows: list[dict[str, Any]], elapsed_seconds: float, label: str
+    rows: list[dict[str, Any]],
+    elapsed_seconds: float,
+    label: str,
+    base_url: str = "",
+    model: str = "",
 ) -> dict[str, Any]:
     prompt_tokens = sum(int(row["prompt_tokens"]) for row in rows)
     cached = sum(int(row["cached_tokens"]) for row in rows)
@@ -291,6 +301,8 @@ def summarize(
     )
     return {
         "label": label,
+        "base_url": normalized_base_url(base_url),
+        "model": model,
         "requests": len(rows),
         "successes": successes,
         "success_rate": (round(successes / len(rows), 4) if rows else 0.0),
@@ -320,6 +332,10 @@ def summarize(
             round(len(rows) / elapsed_seconds, 3) if elapsed_seconds > 0 else None
         ),
     }
+
+
+def normalized_base_url(value: str) -> str:
+    return value.rstrip("/")
 
 
 def validate_summary(

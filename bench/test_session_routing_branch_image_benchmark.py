@@ -149,6 +149,8 @@ def cache_aggregate(ref="77e6b573", image_tag="pr1989-current-branch-image"):
         "evidence_ref": ref,
         "evidence_image_tag": image_tag,
         "label": "branch-image-cache-router",
+        "base_url": "http://router.local/v1",
+        "model": "auto",
         "requests": 8,
         "successes": 8,
         "success_rate": 1.0,
@@ -164,6 +166,8 @@ def cache_aggregate(ref="77e6b573", image_tag="pr1989-current-branch-image"):
     }
     baseline = {
         "label": "branch-image-cache-baseline",
+        "base_url": "http://backend.local/v1",
+        "model": "qwen/qwen3.5-rocm",
         "requests": 8,
         "successes": 8,
         "success_rate": 1.0,
@@ -395,6 +399,23 @@ def test_full_branch_image_summary_blocks_cache_probe_identity_mismatch(tmp_path
     assert (
         "cache router/baseline stable_prefix_sha256 mismatch: "
         "abc123 != different-prefix"
+    ) in summary["validation_failures"]
+
+
+def test_full_branch_image_summary_requires_direct_backend_endpoint_identity(tmp_path):
+    benchmark = load_benchmark_module()
+    arg_values = complete_args(tmp_path)
+    same_endpoint_cache = cache_aggregate()
+    same_endpoint_cache["baseline"]["base_url"] = "http://router.local/v1/"
+    write_json(tmp_path / "cache.json", same_endpoint_cache)
+    args = benchmark.parse_args(arg_values)
+
+    summary = benchmark.build_summary(args)
+
+    assert summary["checks"]["cache_token_probe_ok"] is False
+    assert (
+        "cache baseline base_url must differ from router base_url for "
+        "direct-backend cache evidence"
     ) in summary["validation_failures"]
 
 
