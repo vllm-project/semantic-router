@@ -431,6 +431,19 @@ fn prepare_bert_attention_mask(mask: &Tensor, dtype: DType) -> candle_core::Resu
 // SigLIP Vision Encoder
 // ============================================================================
 
+/// Per-channel mean for SigLIP image normalization.
+///
+/// From SigLIP base / SigLIP2 `preprocessor_config.json`. The Go-side
+/// `decodeAndResizeImage` in semantic-router.go produces CHW float32 pixels
+/// in `[0, 1]`. SigLIP was trained on inputs in `[-1, 1]`, normalized via
+/// `(x - mean) / std` per channel. We apply that normalization here, in the
+/// Rust encoder, so the Go side stays unchanged and the activations land in
+/// the distribution the model expects.
+const IMAGE_MEAN: [f32; 3] = [0.5, 0.5, 0.5];
+
+/// Per-channel std for SigLIP image normalization. See `IMAGE_MEAN`.
+const IMAGE_STD: [f32; 3] = [0.5, 0.5, 0.5];
+
 #[derive(Clone)]
 struct SigLIPPatchEmbedding {
     projection: candle_nn::Conv2d,
@@ -629,7 +642,22 @@ impl SigLIPVisionEncoder {
 
     /// Returns pooler_output: [batch, hidden_size]
     fn forward(&self, pixel_values: &Tensor) -> candle_core::Result<Tensor> {
-        let mut xs = self.patch_embedding.forward(pixel_values)?;
+        // SigLIP expects inputs in [-1, 1], normalized via (x - mean) / std
+        // per channel using IMAGE_MEAN / IMAGE_STD from the model's
+        // preprocessor_config.json. The Go-side image decoder produces pixels
+        // in [0, 1]; apply the normalization here so activations sit in the
+        // input distribution the encoder was trained on.
+        let device = pixel_values.device();
+        let dtype = pixel_values.dtype();
+        // Shape [1, 3, 1, 1] broadcasts cleanly against [B, 3, H, W].
+        let mean = Tensor::from_slice(&IMAGE_MEAN, (1, 3, 1, 1), device)?.to_dtype(dtype)?;
+        let std = Tensor::from_slice(&IMAGE_STD, (1, 3, 1, 1), device)?.to_dtype(dtype)?;
+        let normalized = pixel_values
+            .broadcast_sub(&mean)?
+            .broadcast_div(&std)?
+            .contiguous()?;
+
+        let mut xs = self.patch_embedding.forward(&normalized)?;
         for layer in &self.layers {
             xs = layer.forward(&xs)?;
         }
@@ -1305,6 +1333,47 @@ mod tests {
         let mask = Tensor::ones((2, 10), DType::U32, &device).unwrap();
         let ext = prepare_bert_attention_mask(&mask, DType::F32).unwrap();
         assert_eq!(ext.dims(), &[2, 1, 1, 10]);
+    }
+
+    #[test]
+    fn test_siglip_image_normalization_constants() {
+        // SigLIP image normalization maps [0, 1] -> [-1, 1] via
+        // (x - 0.5) / 0.5. Validate the arithmetic on a known input that
+        // spans the full [0, 1] range INCLUDING the 0.5 midpoint, using
+        // the IMAGE_MEAN / IMAGE_STD constants and the same broadcast
+        // pattern as SigLIPVisionEncoder::forward.
+        let device = Device::Cpu;
+        // [1, 3, 1, 3] tensor with values 0.0, 0.5, 1.0 per channel to
+        // exercise both endpoints and the midpoint.
+        let pixels = Tensor::from_slice(
+            &[
+                0.0f32, 0.5, 1.0, // channel 0
+                0.0, 0.5, 1.0, // channel 1
+                0.0, 0.5, 1.0, // channel 2
+            ],
+            (1, 3, 1, 3),
+            &device,
+        )
+        .unwrap();
+        let mean = Tensor::from_slice(&IMAGE_MEAN, (1, 3, 1, 1), &device).unwrap();
+        let std = Tensor::from_slice(&IMAGE_STD, (1, 3, 1, 1), &device).unwrap();
+        let normalized = pixels
+            .broadcast_sub(&mean)
+            .unwrap()
+            .broadcast_div(&std)
+            .unwrap();
+        let out: Vec<f32> = normalized.flatten_all().unwrap().to_vec1().unwrap();
+        // Expected per-element: 0.0 -> -1.0, 0.5 -> 0.0, 1.0 -> +1.0,
+        // all within tol.
+        let expected = [-1.0f32, 0.0, 1.0, -1.0, 0.0, 1.0, -1.0, 0.0, 1.0];
+        for (got, want) in out.iter().zip(expected.iter()) {
+            assert!(
+                (got - want).abs() < 1e-6,
+                "normalized pixel {} differs from expected {}",
+                got,
+                want
+            );
+        }
     }
 }
 
