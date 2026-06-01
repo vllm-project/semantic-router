@@ -68,9 +68,9 @@ routing:
 - Decision drift resets continuity penalties when a session moves to a different matched decision, so a new task direction can reselect without waiting for idle timeout.
 - Non-idle sessions pay a prefix-cache and handoff penalty before switching.
 - Idle sessions can reselect after `idle_timeout_seconds`.
-- Expensive/frontier models increase the prefix-cache penalty according to input checkout cost (`prompt_per_1m - cached_input_per_1m`), so checkout churn is stricter when losing reusable prefix state is expensive.
+- Expensive/frontier models increase the prefix-cache penalty according to input checkout cost (`prompt_per_1m - cached_input_per_1m`), so checkout churn is stricter when losing reusable prefix state is expensive. `max_cache_cost_multiplier` must be at least `1`, which keeps the multiplier neutral-or-stricter rather than weakening high-cost checkout discipline.
 - Recent switch history increases the cost of another switch, preventing long-horizon agents from bouncing between models.
-- If lookup tables contain `remaining_turn_prior` for the matched category or decision, a sufficiently sampled prior lifts continuation mass for early turns and decays as the session advances.
+- If lookup tables contain `remaining_turn_prior` for the matched category or decision, a sufficiently sampled prior lifts continuation mass for early turns and decays as the session advances. `remaining_turn_prior_horizon` must be positive so the decay window is explicit.
 - Router replay stores `session_policy`, including base scores, adjusted scores, hard-lock reasons, cache warmth, remaining-turn prior source and sample count, handoff penalties, and net switch advantage.
 - Provider-reported cached prompt tokens are recorded as telemetry and costed with `cached_input_per_1m`; client-facing usage is not rewritten.
 - Backend errors should be handled as backend or session recovery, outside this selector's stay-vs-switch policy.

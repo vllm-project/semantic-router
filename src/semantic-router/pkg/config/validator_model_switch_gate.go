@@ -41,11 +41,16 @@ func validateSessionAwareSelectionConfig(cfg SessionAwareSelectionConfig) error 
 	intFields := []optionalNonNegativeIntField{
 		{"session_aware.idle_timeout_seconds", cfg.IdleTimeoutSeconds},
 		{"session_aware.min_turns_before_switch", cfg.MinTurnsBeforeSwitch},
-		{"session_aware.remaining_turn_prior_horizon", cfg.RemainingTurnPriorHorizon},
 		{"session_aware.min_remaining_turn_prior_samples", cfg.MinRemainingTurnPriorSamples},
 	}
 	if err := validateOptionalNonNegativeIntFields(intFields); err != nil {
 		return err
+	}
+	if cfg.RemainingTurnPriorHorizon != nil && *cfg.RemainingTurnPriorHorizon <= 0 {
+		return fmt.Errorf(
+			"session_aware.remaining_turn_prior_horizon must be > 0, got %d",
+			*cfg.RemainingTurnPriorHorizon,
+		)
 	}
 
 	floatFields := []optionalNonNegativeFloatField{
@@ -56,11 +61,19 @@ func validateSessionAwareSelectionConfig(cfg SessionAwareSelectionConfig) error 
 		{"session_aware.handoff_penalty_weight", cfg.HandoffPenaltyWeight},
 		{"session_aware.default_handoff_penalty", cfg.DefaultHandoffPenalty},
 		{"session_aware.quality_gap_multiplier", cfg.QualityGapMultiplier},
-		{"session_aware.max_cache_cost_multiplier", cfg.MaxCacheCostMultiplier},
 		{"session_aware.switch_history_weight", cfg.SwitchHistoryWeight},
 		{"session_aware.remaining_turn_prior_weight", cfg.RemainingTurnPriorWeight},
 	}
-	return validateOptionalNonNegativeFloatFields(floatFields)
+	if err := validateOptionalNonNegativeFloatFields(floatFields); err != nil {
+		return err
+	}
+	if cfg.MaxCacheCostMultiplier != nil && *cfg.MaxCacheCostMultiplier < 1 {
+		return fmt.Errorf(
+			"session_aware.max_cache_cost_multiplier must be >= 1, got %v",
+			*cfg.MaxCacheCostMultiplier,
+		)
+	}
+	return nil
 }
 
 type optionalNonNegativeIntField struct {

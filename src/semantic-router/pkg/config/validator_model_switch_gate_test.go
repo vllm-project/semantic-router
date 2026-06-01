@@ -84,6 +84,20 @@ var _ = Describe("validateSessionAwareSelectionConfig", func() {
 		Expect(err).To(HaveOccurred())
 		Expect(err.Error()).To(ContainSubstring("min_remaining_turn_prior_samples"))
 	})
+
+	It("rejects a zero remaining-turn prior horizon", func() {
+		cfg := SessionAwareSelectionConfig{RemainingTurnPriorHorizon: sessionAwareIntPtr(0)}
+		err := validateSessionAwareSelectionConfig(cfg)
+		Expect(err).To(HaveOccurred())
+		Expect(err.Error()).To(ContainSubstring("remaining_turn_prior_horizon"))
+	})
+
+	It("rejects cache cost multipliers below one", func() {
+		cfg := SessionAwareSelectionConfig{MaxCacheCostMultiplier: sessionAwareFloat64Ptr(0.5)}
+		err := validateSessionAwareSelectionConfig(cfg)
+		Expect(err).To(HaveOccurred())
+		Expect(err.Error()).To(ContainSubstring("max_cache_cost_multiplier"))
+	})
 })
 
 func sessionAwareIntPtr(v int) *int {

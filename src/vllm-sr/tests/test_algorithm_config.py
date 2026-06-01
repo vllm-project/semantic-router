@@ -281,6 +281,22 @@ class TestSessionAwareSelectionConfig:
         with pytest.raises(PydanticValidationError):
             SessionAwareSelectionConfig(fallback_method="static")
 
+    def test_cache_cost_multiplier_is_not_inverted(self):
+        """Expensive-model cache pressure must not become weaker than neutral."""
+        config = SessionAwareSelectionConfig(max_cache_cost_multiplier=1.0)
+        assert config.max_cache_cost_multiplier == 1.0
+
+        with pytest.raises(PydanticValidationError):
+            SessionAwareSelectionConfig(max_cache_cost_multiplier=0.5)
+
+    def test_remaining_turn_prior_horizon_is_positive(self):
+        """The remaining-turn prior horizon must be explicit positive depth."""
+        config = SessionAwareSelectionConfig(remaining_turn_prior_horizon=1)
+        assert config.remaining_turn_prior_horizon == 1
+
+        with pytest.raises(PydanticValidationError):
+            SessionAwareSelectionConfig(remaining_turn_prior_horizon=0)
+
 
 class TestRouterR1Config:
     """Test Router-R1 (LLM-as-router) selection configuration."""
