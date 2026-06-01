@@ -89,7 +89,7 @@ func normalizeSessionAwareConfig(cfg SessionAwareConfig) *SessionAwareConfig {
 	cfg.HandoffPenaltyWeight = defaultNonNegativeFloat(cfg.HandoffPenaltyWeight, defaults.HandoffPenaltyWeight)
 	cfg.DefaultHandoffPenalty = defaultNonNegativeFloat(cfg.DefaultHandoffPenalty, defaults.DefaultHandoffPenalty)
 	cfg.QualityGapMultiplier = defaultPositiveFloat(cfg.QualityGapMultiplier, defaults.QualityGapMultiplier)
-	cfg.MaxCacheCostMultiplier = defaultPositiveFloat(cfg.MaxCacheCostMultiplier, defaults.MaxCacheCostMultiplier)
+	cfg.MaxCacheCostMultiplier = defaultAtLeastFloat(cfg.MaxCacheCostMultiplier, defaults.MaxCacheCostMultiplier, 1)
 	cfg.SwitchHistoryWeight = defaultNonNegativeFloat(cfg.SwitchHistoryWeight, defaults.SwitchHistoryWeight)
 	cfg.RemainingTurnPriorWeight = defaultNonNegativeFloat(cfg.RemainingTurnPriorWeight, defaults.RemainingTurnPriorWeight)
 	cfg.RemainingTurnPriorHorizon = defaultPositiveInt(cfg.RemainingTurnPriorHorizon, defaults.RemainingTurnPriorHorizon)
@@ -127,6 +127,13 @@ func defaultNonNegativeFloat(value, defaultValue float64) float64 {
 
 func defaultPositiveFloat(value, defaultValue float64) float64 {
 	if value <= 0 {
+		return defaultValue
+	}
+	return value
+}
+
+func defaultAtLeastFloat(value, defaultValue, minimum float64) float64 {
+	if value < minimum {
 		return defaultValue
 	}
 	return value

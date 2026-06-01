@@ -440,6 +440,41 @@ func TestSessionAwareCacheCostPressureUsesInputCheckoutDelta(t *testing.T) {
 	}
 }
 
+func TestSessionAwareConfigNormalizesCacheBounds(t *testing.T) {
+	selector := NewSessionAwareSelector(&SessionAwareConfig{
+		MaxCacheCostMultiplier:    0.5,
+		RemainingTurnPriorHorizon: 0,
+	})
+	defaults := DefaultSessionAwareConfig()
+	if selector.config.MaxCacheCostMultiplier != defaults.MaxCacheCostMultiplier {
+		t.Fatalf(
+			"expected weak cache cost multiplier to default to %.2f, got %.2f",
+			defaults.MaxCacheCostMultiplier,
+			selector.config.MaxCacheCostMultiplier,
+		)
+	}
+	if selector.config.RemainingTurnPriorHorizon != defaults.RemainingTurnPriorHorizon {
+		t.Fatalf(
+			"expected zero remaining-turn horizon to default to %d, got %d",
+			defaults.RemainingTurnPriorHorizon,
+			selector.config.RemainingTurnPriorHorizon,
+		)
+	}
+}
+
+func TestSessionAwareConfigPreservesNeutralCacheMultiplier(t *testing.T) {
+	selector := NewSessionAwareSelector(&SessionAwareConfig{
+		MaxCacheCostMultiplier:    1,
+		RemainingTurnPriorHorizon: 1,
+	})
+	if selector.config.MaxCacheCostMultiplier != 1 {
+		t.Fatalf("expected neutral cache multiplier to be preserved, got %.2f", selector.config.MaxCacheCostMultiplier)
+	}
+	if selector.config.RemainingTurnPriorHorizon != 1 {
+		t.Fatalf("expected positive remaining-turn horizon to be preserved, got %d", selector.config.RemainingTurnPriorHorizon)
+	}
+}
+
 func TestSessionAwareRemainingTurnPriorRaisesContinuationMass(t *testing.T) {
 	selector := NewSessionAwareSelector(&SessionAwareConfig{
 		BaseMethod:                   MethodStatic,
