@@ -10,6 +10,7 @@ from cli.commands.config import (
     import_config_from_source_command,
     migrate_config_command,
 )
+from cli.commands.model import model_list_command
 from cli.commands.validate import validate_command
 from cli.utils import get_logger
 
@@ -144,3 +145,33 @@ def validate(config: str) -> None:
         vllm-sr validate --config my-config.yaml  # Uses my-config.yaml
     """
     validate_command(config)
+
+
+@click.group(invoke_without_command=True)
+@click.pass_context
+@exit_with_logged_error(log)
+def model(ctx: click.Context) -> None:
+    """
+    Inspect the models Semantic Router is configured to route to.
+
+    Examples:
+        vllm-sr model list
+        vllm-sr model list --config my-config.yaml
+    """
+    if ctx.invoked_subcommand is not None:
+        return
+    click.echo(ctx.get_help())
+
+
+@model.command("list")
+@click.option(
+    "--config",
+    "config_path",
+    default="config.yaml",
+    help="Path to config file (default: config.yaml)",
+)
+@exit_with_logged_error(log)
+def model_list(config_path: str) -> None:
+    """Print provider models and routing model cards from the config."""
+
+    model_list_command(config_path)
