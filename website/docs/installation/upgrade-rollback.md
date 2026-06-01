@@ -109,6 +109,7 @@ Find the latest version on the [GitHub Releases page](https://github.com/vllm-pr
 # Pull by version tag (substitute podman for docker if using podman)
 docker pull ghcr.io/vllm-project/semantic-router/extproc:v0.3.0
 docker pull ghcr.io/vllm-project/semantic-router/vllm-sr:v0.3.0
+docker pull ghcr.io/vllm-project/semantic-router/anthropic-shim:v0.3.0
 
 # Get the immutable digest for maximum pinning stability
 DIGEST=$(docker inspect --format='{{index .RepoDigests 0}}' \
@@ -130,6 +131,7 @@ Published versioned images for a full release:
 | `ghcr.io/vllm-project/semantic-router/extproc-rocm:v0.3.0` | ROCm router ExtProc runtime |
 | `ghcr.io/vllm-project/semantic-router/vllm-sr:v0.3.0` | Local/runtime CLI image |
 | `ghcr.io/vllm-project/semantic-router/vllm-sr-rocm:v0.3.0` | ROCm local/runtime CLI image |
+| `ghcr.io/vllm-project/semantic-router/anthropic-shim:v0.3.0` | Anthropic-compatible API shim image |
 | `ghcr.io/vllm-project/semantic-router/dashboard:v0.3.0` | Dashboard backend/frontend image |
 | `ghcr.io/vllm-project/semantic-router/llm-katan:v0.3.0` | Fleet simulation service image |
 | `ghcr.io/vllm-project/semantic-router/operator:v0.3.0` | Kubernetes operator image |

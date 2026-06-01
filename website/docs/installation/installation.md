@@ -17,6 +17,7 @@ No GPU required - the router runs efficiently on CPU using optimized BERT models
 
 - **Python**: 3.10 or higher
 - **Container Runtime**: Docker (required for running the router container)
+- **Local host OS**: Linux, macOS, or WSL2 on Windows for `vllm-sr serve`
 
 ## Quick Start
 
@@ -43,7 +44,10 @@ Need the latest stable release instead? Run:
 curl -fsSL https://vllm-semantic-router.com/install.sh | bash -s -- --channel stable
 ```
 
-Windows users should use the manual PyPI flow below.
+Windows users should run the local `vllm-sr serve` workflow from WSL2 or another
+Linux environment with Docker. A native Windows Python environment can install
+the CLI for configuration and validation tasks, but the v0.3 local Docker
+runtime is not supported there.
 
 ### 2. Manual PyPI install
 
@@ -66,6 +70,8 @@ vllm-sr --version
 ```
 
 ### 3. Restart `vllm-sr` later
+
+Run the local Docker runtime from Linux, macOS, or WSL2 on Windows:
 
 ```bash
 vllm-sr serve

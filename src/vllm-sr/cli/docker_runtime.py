@@ -38,6 +38,13 @@ def _detect_container_runtime():
     Raises:
         SystemExit: If Docker is unavailable or resolves to Podman
     """
+    if sys.platform.startswith("win"):
+        _exit_unsupported_runtime(
+            "native Windows",
+            "Native Windows is not supported for local `vllm-sr serve` workflows. "
+            "Run `vllm-sr serve` from WSL2 or another Linux environment with Docker.",
+        )
+
     env_runtime = (os.getenv("CONTAINER_RUNTIME") or "").strip()
     if env_runtime:
         normalized_runtime = env_runtime.lower()

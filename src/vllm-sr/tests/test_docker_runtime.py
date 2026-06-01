@@ -12,7 +12,8 @@ from cli import docker_runtime  # noqa: E402
 
 
 @pytest.fixture(autouse=True)
-def clear_runtime_detection_cache():
+def clear_runtime_detection_cache(monkeypatch):
+    monkeypatch.setattr(docker_runtime.sys, "platform", "linux")
     docker_runtime._detect_container_runtime.cache_clear()
     yield
     docker_runtime._detect_container_runtime.cache_clear()
@@ -56,6 +57,13 @@ def test_detect_container_runtime_accepts_real_docker(monkeypatch):
 
 def test_detect_container_runtime_rejects_podman_env_override(monkeypatch):
     monkeypatch.setenv("CONTAINER_RUNTIME", "podman")
+
+    with pytest.raises(SystemExit):
+        docker_runtime.get_container_runtime()
+
+
+def test_detect_container_runtime_rejects_native_windows(monkeypatch):
+    monkeypatch.setattr(docker_runtime.sys, "platform", "win32")
 
     with pytest.raises(SystemExit):
         docker_runtime.get_container_runtime()
