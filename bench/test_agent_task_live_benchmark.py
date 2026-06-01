@@ -1,4 +1,5 @@
 import importlib.util
+import json
 import sys
 from pathlib import Path
 
@@ -77,6 +78,10 @@ def test_dry_run_completes_all_tasks(tmp_path):
     assert summary["invalid_router_header_counts"]["x-vsr-selected-confidence"] == 0
     assert summary["invalid_router_header_counts"]["x-vsr-context-token-count"] == 0
     assert failures == []
+    bench.attach_validation_failures(summary, failures)
+    bench.write_outputs(rows, summary, tmp_path / "validated")
+    written = json.loads((tmp_path / "validated" / "summary.json").read_text())
+    assert written["validation_failures"] == []
     assert (tmp_path / "summary.json").exists()
     assert (tmp_path / "turns.csv").exists()
     assert (tmp_path / "turns.jsonl").exists()

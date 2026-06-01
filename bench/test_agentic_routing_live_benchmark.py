@@ -307,6 +307,21 @@ def test_router_vs_baseline_comparison_and_thresholds(tmp_path):
     assert failures == ["router_p95_overhead_ms 4.0 > 3.0"]
 
 
+def test_live_summary_persists_validation_failures(tmp_path):
+    live = load_live_module()
+    args = make_args("http://unused/v1", tmp_path, dry_run=True)
+    rows = live.run_benchmark(args)
+    summary = live.summarize(rows)
+    summary["label"] = "router"
+    failures = ["missing_router_header x-vsr-replay-id: 4 successful requests"]
+
+    live.attach_validation_failures(summary, failures)
+    live.write_outputs(rows, summary, tmp_path)
+    written = json.loads((tmp_path / "summary.json").read_text())
+
+    assert written["validation_failures"] == failures
+
+
 def test_summary_reports_session_recovery_after_transient_errors(tmp_path):
     live = load_live_module()
     args = make_args("http://unused/v1", tmp_path)

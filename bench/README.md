@@ -288,8 +288,12 @@ This assembler is the only branch-image path that writes
 `validation_kind: full-branch-image-benchmark` and
 `branch_image_benchmark: true`. It still exits non-zero if the image tag or
 label looks like a mounted-binary run, if the diagnostic probe failed, if live
-or recovery summaries contain continuity failures, or if the agent-task summary
-does not meet the expanded GA gate. It also requires a repeated-prefix
+or recovery summaries contain continuity failures or runner-level
+`validation_failures`, or if the agent-task summary does not meet the expanded
+GA gate. The live and agent-task runners persist their own
+`validation_failures` directly in `summary.json`, so a copied branch-image
+artifact remains self-describing even when the separate
+`validation_failures.json` sidecar is not present. It also requires a repeated-prefix
 cache-token probe summary with a direct-backend baseline and the same router
 evidence identity. The branch-image assembler does not require positive
 cached-token reporting by default; that remains a separate GA readiness blocker

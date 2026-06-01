@@ -2182,6 +2182,13 @@ def attach_evidence_identity(
     return summary
 
 
+def attach_validation_failures(
+    summary: dict[str, Any], failures: list[str]
+) -> dict[str, Any]:
+    summary["validation_failures"] = failures
+    return summary
+
+
 def write_csv(rows: list[dict[str, Any]], path: Path) -> None:
     if not rows:
         return
@@ -2210,6 +2217,7 @@ def render_markdown(summary: dict[str, Any]) -> str:
             f"- missing router headers: {summary['missing_router_header_counts']}",
             f"- invalid router headers: {summary['invalid_router_header_counts']}",
             f"- cached prompt ratio: {summary['cached_prompt_ratio']}",
+            f"- validation failures: {summary.get('validation_failures', [])}",
             "",
         ]
     )
@@ -2318,9 +2326,9 @@ def main() -> int:
     output_dir = args.output_dir or default_output_dir()
     rows, summary = run_tasks(args)
     attach_evidence_identity(summary, args)
-    write_outputs(rows, summary, output_dir)
 
     baseline_summary = None
+    baseline_rows = None
     comparison = None
     if args.baseline_base_url:
         baseline_args = namespace_with(
@@ -2333,11 +2341,15 @@ def main() -> int:
             evidence_image_tag="",
         )
         baseline_rows, baseline_summary = run_tasks(baseline_args)
-        write_outputs(baseline_rows, baseline_summary, output_dir / "baseline")
         comparison = compare_summaries(summary, baseline_summary)
-        write_comparison(comparison, output_dir)
 
     validation_failures = validate_summary(args, summary)
+    attach_validation_failures(summary, validation_failures)
+    write_outputs(rows, summary, output_dir)
+    if baseline_rows is not None and baseline_summary is not None:
+        write_outputs(baseline_rows, baseline_summary, output_dir / "baseline")
+        if comparison is not None:
+            write_comparison(comparison, output_dir)
     if validation_failures:
         (output_dir / "validation_failures.json").write_text(
             json.dumps(validation_failures, indent=2) + "\n"
