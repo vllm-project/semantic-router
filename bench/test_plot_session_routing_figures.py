@@ -101,10 +101,10 @@ def test_agent_task_readiness_metrics_count_stale_summary():
             "text": "18/60",
         },
         {
-            "label": "required diagnostics",
+            "label": "diagnostics",
             "actual": 3,
             "target": 6,
-            "text": "3/6 header types present",
+            "text": "3/6 present",
         },
     ]
 
@@ -121,5 +121,5 @@ def test_agent_task_readiness_metrics_treat_missing_header_map_as_no_evidence():
         plot.DEFAULT_MIN_AGENT_TASK_INSTANCES,
     )
 
-    assert rows[-1]["label"] == "required diagnostics"
+    assert rows[-1]["label"] == "diagnostics"
     assert rows[-1]["actual"] == 0

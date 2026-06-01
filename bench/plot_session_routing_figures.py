@@ -701,10 +701,10 @@ def agent_task_readiness_metrics(
             "text": f"{instances}/{min_task_instances}",
         },
         {
-            "label": "required diagnostics",
+            "label": "diagnostics",
             "actual": present_headers,
             "target": len(required_headers),
-            "text": f"{present_headers}/{len(required_headers)} header types present",
+            "text": f"{present_headers}/{len(required_headers)} present",
         },
     ]
 
@@ -740,7 +740,7 @@ def render_agent_task_readiness(
     ]
     colors = ["#d88b5b", "#d88b5b", "#d88b5b", "#c66f68"]
 
-    fig, ax = plt.subplots(figsize=(9.6, 4.7))
+    fig, ax = plt.subplots(figsize=(8.8, 4.15))
     fig.suptitle(
         "Agent-task GA gate rejects stale AMD evidence",
         x=0.03,
@@ -751,7 +751,7 @@ def render_agent_task_readiness(
     fig.text(
         0.03,
         0.90,
-        "Light bars show the expanded gate; colored bars show current evidence.",
+        "Current AMD summary is below the expanded release threshold.",
         color="#64748b",
         fontsize=10,
     )
@@ -759,25 +759,22 @@ def render_agent_task_readiness(
     ax.barh(y_positions, [100] * len(rows), color="#eef3f7", height=0.50)
     ax.barh(y_positions, coverage, color=colors, height=0.50)
     ax.set_yticks(y_positions, names)
-    ax.set_xlim(0, 122)
-    ax.set_xlabel("coverage of required expanded-suite evidence")
+    ax.set_xlim(0, 112)
+    ax.set_xlabel("threshold coverage")
     ax.grid(axis="x")
     for idx, row in enumerate(rows):
-        ax.text(104, idx, str(row["text"]), va="center", color="#334155", fontsize=10)
+        ax.text(102, idx, str(row["text"]), va="center", color="#334155", fontsize=10)
     ax.text(
         0,
         4.00,
-        (
-            f"Required before GA: {min_requests} requests, {min_task_count} task "
-            f"types, {min_task_instances} scored instances, and phase/confidence/token diagnostics."
-        ),
+        f"GA threshold: {min_requests} requests, {min_task_count} tasks, {min_task_instances} scored instances, full diagnostics.",
         color="#64748b",
         fontsize=9,
     )
     ax.text(
         0,
         4.32,
-        "Expanded dry-runs prove suite shape; AMD serving evidence must be rerun.",
+        "Expanded dry-runs pass; AMD serving evidence must be rerun.",
         color="#64748b",
         fontsize=9,
     )
