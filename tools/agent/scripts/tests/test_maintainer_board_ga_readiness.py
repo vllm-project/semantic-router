@@ -198,6 +198,39 @@ class MaintainerBoardGAReadinessTests(unittest.TestCase):
         self.assertIn("## Release Blockers", release)
         self.assertIn("### Session-Aware GA", release)
 
+    def test_release_report_uses_plan_issue_anchors_when_snapshot_is_limited(
+        self,
+    ) -> None:
+        snapshot = empty_snapshot()
+        snapshot["groups"]["issues"]["milestone-bound"] = []
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            plan = Path(temp_dir) / "plan.md"
+            plan.write_text(
+                "\n".join(
+                    [
+                        "# Plan",
+                        "",
+                        "## Current issue anchors",
+                        "",
+                        "- [#1753](https://github.com/vllm-project/semantic-router/issues/1753) session-aware model switching.",
+                        "",
+                        "## Task List",
+                        "",
+                        "- [ ] `V030004` Land the Session-Aware Agentic Routing GA evaluation package.",
+                    ]
+                ),
+                encoding="utf-8",
+            )
+
+            release = maintainer_board.render_release_readiness(snapshot, plan)
+
+        self.assertIn("### V030004", release)
+        self.assertIn("#1753 session-aware model switching", release)
+        self.assertIn(
+            "## Plan Tasks Without Matching Milestone Issue\n\n- none", release
+        )
+
     def test_blocker_summary_falls_back_to_blocked_requirements(self) -> None:
         summary = maintainer_ga_readiness.blocker_summaries(
             {
