@@ -1410,6 +1410,188 @@ def long_horizon_task_specs() -> tuple[TaskSpec, ...]:
                 ),
             ),
         ),
+        TaskSpec(
+            name="stale-pr-rebase-triage",
+            suite="long-horizon",
+            turns=(
+                TaskTurn(
+                    phase="user_turn",
+                    prompt=(
+                        "Act as maintainer reviewing a draft PR that has been idle "
+                        "while main moved forward. Decide what evidence is needed "
+                        "before keeping it open."
+                    ),
+                ),
+                TaskTurn(
+                    phase="tool_loop",
+                    prompt="Use the PR diff and conflict summary before deciding.",
+                    tool_name="read_pr_conflicts",
+                    tool_result=(
+                        "The PR edits session-aware routing and benchmark thresholds. "
+                        "It now conflicts with main in the GA report defaults and its "
+                        "CI run is older than the latest branch-image evidence changes."
+                    ),
+                ),
+                TaskTurn(
+                    phase="tool_loop",
+                    prompt="Use the maintainer PR policy before choosing an action.",
+                    tool_name="read_pr_policy",
+                    tool_result=(
+                        "Stale split PRs that diverge from the unified branch should "
+                        "be closed. Useful work should be rebased into the unified PR "
+                        "and rerun with fresh CI."
+                    ),
+                ),
+                TaskTurn(
+                    phase="provider_state",
+                    prompt=(
+                        "Continue the same PR review under provider-managed state and "
+                        "preserve the stale-branch context."
+                    ),
+                ),
+                TaskTurn(
+                    phase="topic_drift",
+                    prompt=(
+                        "Now turn the review into a concise maintainer decision and "
+                        "validation expectation."
+                    ),
+                ),
+                TaskTurn(
+                    phase="final",
+                    prompt=(
+                        "Return the stale PR triage. Include exact tokens "
+                        "DECISION=close-or-rebase, BLOCKER=conflicts-and-drift, "
+                        "VALIDATE=fresh-ci."
+                    ),
+                    expected_terms=(
+                        "DECISION=close-or-rebase",
+                        "BLOCKER=conflicts-and-drift",
+                        "VALIDATE=fresh-ci",
+                    ),
+                ),
+            ),
+        ),
+        TaskSpec(
+            name="benchmark-regression-root-cause",
+            suite="long-horizon",
+            turns=(
+                TaskTurn(
+                    phase="user_turn",
+                    prompt=(
+                        "A new benchmark summary looks slower than the previous GA "
+                        "report. Start by separating measurement drift from a real "
+                        "routing regression."
+                    ),
+                ),
+                TaskTurn(
+                    phase="tool_loop",
+                    prompt="Use the long-session comparison before naming the metric.",
+                    tool_name="read_long_session_comparison",
+                    tool_result=(
+                        "Balanced and stateful sessions have low p95 router overhead. "
+                        "The idle workload includes real wall-clock sleeps, so its p95 "
+                        "overhead is not a hot-path regression signal."
+                    ),
+                ),
+                TaskTurn(
+                    phase="tool_loop",
+                    prompt="Use the evidence identity check before deciding release risk.",
+                    tool_name="read_evidence_identity",
+                    tool_result=(
+                        "The summary came from an overlay run, not the required "
+                        "branch-image run. It is useful serving-path evidence but "
+                        "cannot satisfy the branch-image GA blocker."
+                    ),
+                ),
+                TaskTurn(
+                    phase="idle_boundary",
+                    prompt=(
+                        "Assume the benchmark owner resumes after an idle interval "
+                        "with the same summary and asks whether the branch can release."
+                    ),
+                ),
+                TaskTurn(
+                    phase="provider_state",
+                    prompt=(
+                        "Continue the same regression analysis under provider-managed "
+                        "state and keep the evidence boundary intact."
+                    ),
+                ),
+                TaskTurn(
+                    phase="final",
+                    prompt=(
+                        "Return the benchmark diagnosis. Include exact tokens "
+                        "METRIC=p95-overhead, ROOT_CAUSE=stale-baseline, "
+                        "ACTION=rerun-branch-image."
+                    ),
+                    expected_terms=(
+                        "METRIC=p95-overhead",
+                        "ROOT_CAUSE=stale-baseline",
+                        "ACTION=rerun-branch-image",
+                    ),
+                ),
+            ),
+        ),
+        TaskSpec(
+            name="paper-figure-quality-review",
+            suite="long-horizon",
+            turns=(
+                TaskTurn(
+                    phase="user_turn",
+                    prompt=(
+                        "Review paper and blog figures for the session-aware routing "
+                        "draft. Start by identifying what makes a figure too dense."
+                    ),
+                ),
+                TaskTurn(
+                    phase="tool_loop",
+                    prompt="Use the figure audit before deciding the fix.",
+                    tool_name="inspect_figures",
+                    tool_result=(
+                        "Several charts combine readiness thresholds, result values, "
+                        "and long explanatory notes. The paper needs low-density, "
+                        "single-conclusion figures placed near the relevant text."
+                    ),
+                ),
+                TaskTurn(
+                    phase="tool_loop",
+                    prompt="Use the blog standard before choosing what belongs there.",
+                    tool_name="read_blog_standard",
+                    tool_result=(
+                        "The blog should explain why single-turn routing is not "
+                        "enough, how ACR works, key results, and current limitations. "
+                        "Detailed experiment process belongs in the paper."
+                    ),
+                ),
+                TaskTurn(
+                    phase="provider_state",
+                    prompt=(
+                        "Continue the same figure review under provider-managed state "
+                        "and preserve the paper-versus-blog boundary."
+                    ),
+                ),
+                TaskTurn(
+                    phase="topic_drift",
+                    prompt=(
+                        "Now convert the review into an action for the next paper/blog "
+                        "revision."
+                    ),
+                ),
+                TaskTurn(
+                    phase="final",
+                    prompt=(
+                        "Return the figure review. Include exact tokens "
+                        "FIGURE=single-conclusion, FIX=split-dense-chart, "
+                        "DESTINATION=paper-near-text."
+                    ),
+                    expected_terms=(
+                        "FIGURE=single-conclusion",
+                        "FIX=split-dense-chart",
+                        "DESTINATION=paper-near-text",
+                    ),
+                ),
+            ),
+        ),
     )
 
 

@@ -85,20 +85,20 @@ def test_agent_task_readiness_metrics_count_stale_summary():
         {
             "label": "requests",
             "actual": 96,
-            "target": 345,
-            "text": "96/345",
+            "target": 399,
+            "text": "96/399",
         },
         {
             "label": "task types",
             "actual": 6,
-            "target": 20,
-            "text": "6/20",
+            "target": 23,
+            "text": "6/23",
         },
         {
             "label": "scored instances",
             "actual": 18,
-            "target": 60,
-            "text": "18/60",
+            "target": 69,
+            "text": "18/69",
         },
         {
             "label": "diagnostics",
@@ -111,7 +111,7 @@ def test_agent_task_readiness_metrics_count_stale_summary():
 
 def test_agent_task_readiness_metrics_treat_missing_header_map_as_no_evidence():
     plot = load_plot_module()
-    summary = {"requests": 345, "task_count": 20, "task_instances": 60}
+    summary = {"requests": 399, "task_count": 23, "task_instances": 69}
 
     rows = plot.agent_task_readiness_metrics(
         summary,

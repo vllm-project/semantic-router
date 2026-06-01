@@ -33,9 +33,9 @@ except ImportError:  # pragma: no cover - used when loaded outside bench/.
         "positive": 2,
     }
     CACHE_PROBE_KIND = "repeated-prefix-cache-token-probe"
-    DEFAULT_MIN_AGENT_TASK_REQUESTS = 345
-    DEFAULT_MIN_AGENT_TASK_COUNT = 20
-    DEFAULT_MIN_AGENT_TASK_INSTANCES = 60
+    DEFAULT_MIN_AGENT_TASK_REQUESTS = 399
+    DEFAULT_MIN_AGENT_TASK_COUNT = 23
+    DEFAULT_MIN_AGENT_TASK_INSTANCES = 69
     DEFAULT_REQUIRED_AGENT_TASK_NAMES = (
         "multi-file-regression",
         "code-review-followup",
@@ -57,6 +57,9 @@ except ImportError:  # pragma: no cover - used when loaded outside bench/.
         "repo-bisect-debug",
         "dependency-upgrade-regression",
         "literature-data-extraction",
+        "stale-pr-rebase-triage",
+        "benchmark-regression-root-cause",
+        "paper-figure-quality-review",
     )
     DEFAULT_REQUIRED_AGENT_TASK_PHASES = (
         "user_turn",

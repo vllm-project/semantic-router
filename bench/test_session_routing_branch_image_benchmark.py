@@ -23,6 +23,9 @@ REQUIRED_LONG_HORIZON_TASKS = [
     "repo-bisect-debug",
     "dependency-upgrade-regression",
     "literature-data-extraction",
+    "stale-pr-rebase-triage",
+    "benchmark-regression-root-cause",
+    "paper-figure-quality-review",
 ]
 
 
@@ -101,12 +104,12 @@ def complete_agent_task_summary(
     return {
         "evidence_ref": ref,
         "evidence_image_tag": image_tag,
-        "requests": 345,
+        "requests": 399,
         "success_rate": 1.0,
-        "successes": 345,
-        "task_count": 20,
-        "tasks": 20,
-        "task_instances": 60,
+        "successes": 399,
+        "task_count": 23,
+        "tasks": 23,
+        "task_instances": 69,
         "task_success_rate": 1.0,
         "task_score_mean": 1.0,
         "task_names": REQUIRED_LONG_HORIZON_TASKS,
@@ -253,7 +256,7 @@ def test_full_branch_image_summary_blocks_mounted_binary_and_stale_tasks(tmp_pat
         "mounted-binary evidence cannot satisfy branch-image benchmark"
         in summary["validation_failures"]
     )
-    assert "agent task requests 96.0 < 345" in summary["validation_failures"]
+    assert "agent task requests 96.0 < 399" in summary["validation_failures"]
     assert (
         "agent task missing router headers: "
         "{'x-vsr-session-phase': 96, 'x-vsr-selected-confidence': 96, "
