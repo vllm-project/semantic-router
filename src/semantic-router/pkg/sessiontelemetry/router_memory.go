@@ -23,14 +23,18 @@ type RouterSessionSnapshot struct {
 	SwitchCount int
 	ModelTurns  map[string]int
 
-	CumulativePromptTokens     int64
-	CumulativeCachedTokens     int64
-	CumulativeCompletionTokens int64
-	CumulativeCost             float64
+	CumulativePromptTokens          int64
+	CumulativeCachedTokens          int64
+	CumulativeEstimatedCachedTokens int64
+	CumulativeCompletionTokens      int64
+	CumulativeCost                  float64
+	CumulativeEstimatedCacheSavings float64
 
-	ActiveToolLoop     bool
-	LastDecisionReason string
-	LastPolicy         map[string]interface{}
+	ActiveToolLoop            bool
+	LastDecisionName          string
+	LastDecisionReason        string
+	LastCacheAccountingSource string
+	LastPolicy                map[string]interface{}
 }
 
 // SessionDecisionParams records the pre-dispatch policy result for one session
@@ -50,13 +54,16 @@ type SessionDecisionParams struct {
 // SessionUsageParams records response-side usage into router-owned session
 // memory. Costs are in the pricing currency selected by the router config.
 type SessionUsageParams struct {
-	SessionID          string
-	Model              string
-	PromptTokens       int
-	CachedPromptTokens int
-	CompletionTokens   int
-	Cost               float64
-	Timestamp          time.Time
+	SessionID                   string
+	Model                       string
+	PromptTokens                int
+	CachedPromptTokens          int
+	EstimatedCachedPromptTokens int
+	CompletionTokens            int
+	Cost                        float64
+	EstimatedCacheSavings       float64
+	CacheAccountingSource       string
+	Timestamp                   time.Time
 }
 
 type routerSessionState struct {
@@ -70,14 +77,18 @@ type routerSessionState struct {
 	switchCount int
 	modelTurns  map[string]int
 
-	cumulativePrompt     int64
-	cumulativeCached     int64
-	cumulativeCompletion int64
-	cumulativeCost       float64
+	cumulativePrompt                int64
+	cumulativeCached                int64
+	cumulativeEstimatedCached       int64
+	cumulativeCompletion            int64
+	cumulativeCost                  float64
+	cumulativeEstimatedCacheSavings float64
 
-	activeToolLoop     bool
-	lastDecisionReason string
-	lastPolicy         map[string]interface{}
+	activeToolLoop            bool
+	lastDecisionName          string
+	lastDecisionReason        string
+	lastCacheAccountingSource string
+	lastPolicy                map[string]interface{}
 }
 
 type routerSessionMemoryStore struct {
@@ -128,6 +139,7 @@ func RecordSessionDecision(p SessionDecisionParams) {
 	}
 	st.modelTurns[p.SelectedModel]++
 	st.activeToolLoop = p.ActiveToolLoop
+	st.lastDecisionName = p.DecisionName
 	if p.Policy != nil {
 		st.lastPolicy = clonePolicyMap(p.Policy)
 		st.lastDecisionReason = policyDecisionReason(p.Policy)
@@ -154,8 +166,15 @@ func RecordSessionUsage(p SessionUsageParams) {
 	st.lastSeen = now
 	st.cumulativePrompt += int64(p.PromptTokens)
 	st.cumulativeCached += int64(clampCachedPromptTokens(p.PromptTokens, p.CachedPromptTokens))
+	st.cumulativeEstimatedCached += int64(clampCachedPromptTokens(p.PromptTokens, p.EstimatedCachedPromptTokens))
 	st.cumulativeCompletion += int64(p.CompletionTokens)
 	st.cumulativeCost += p.Cost
+	if p.EstimatedCacheSavings > 0 {
+		st.cumulativeEstimatedCacheSavings += p.EstimatedCacheSavings
+	}
+	if p.CacheAccountingSource != "" {
+		st.lastCacheAccountingSource = p.CacheAccountingSource
+	}
 }
 
 // GetRouterSessionSnapshot returns a clone of the router-owned session memory.
@@ -183,21 +202,25 @@ func GetRouterSessionSnapshot(sessionID string, now time.Time) (RouterSessionSna
 		return RouterSessionSnapshot{}, false
 	}
 	return RouterSessionSnapshot{
-		SessionID:                  st.sessionID,
-		UserID:                     st.userID,
-		CurrentModel:               st.currentModel,
-		LastSeen:                   st.lastSeen,
-		IdleFor:                    idleFor,
-		TurnCount:                  st.turnCount,
-		SwitchCount:                st.switchCount,
-		ModelTurns:                 cloneIntMap(st.modelTurns),
-		CumulativePromptTokens:     st.cumulativePrompt,
-		CumulativeCachedTokens:     st.cumulativeCached,
-		CumulativeCompletionTokens: st.cumulativeCompletion,
-		CumulativeCost:             st.cumulativeCost,
-		ActiveToolLoop:             st.activeToolLoop,
-		LastDecisionReason:         st.lastDecisionReason,
-		LastPolicy:                 clonePolicyMap(st.lastPolicy),
+		SessionID:                       st.sessionID,
+		UserID:                          st.userID,
+		CurrentModel:                    st.currentModel,
+		LastSeen:                        st.lastSeen,
+		IdleFor:                         idleFor,
+		TurnCount:                       st.turnCount,
+		SwitchCount:                     st.switchCount,
+		ModelTurns:                      cloneIntMap(st.modelTurns),
+		CumulativePromptTokens:          st.cumulativePrompt,
+		CumulativeCachedTokens:          st.cumulativeCached,
+		CumulativeEstimatedCachedTokens: st.cumulativeEstimatedCached,
+		CumulativeCompletionTokens:      st.cumulativeCompletion,
+		CumulativeCost:                  st.cumulativeCost,
+		CumulativeEstimatedCacheSavings: st.cumulativeEstimatedCacheSavings,
+		ActiveToolLoop:                  st.activeToolLoop,
+		LastDecisionName:                st.lastDecisionName,
+		LastDecisionReason:              st.lastDecisionReason,
+		LastCacheAccountingSource:       st.lastCacheAccountingSource,
+		LastPolicy:                      clonePolicyMap(st.lastPolicy),
 	}, true
 }
 

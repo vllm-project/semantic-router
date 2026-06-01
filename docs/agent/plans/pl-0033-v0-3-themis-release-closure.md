@@ -17,7 +17,10 @@ Release work:
 
 - v0.3.0 release contract and artifact documentation.
 - Current install, docs-site, Helm, and supported `vllm-sr serve` blockers.
-- Agentic routing through the session-aware model-switching workstream.
+- Agentic routing through the Session-Aware Agentic Routing GA evaluation
+  workstream, including implementation, systematic experiments, AMD validation,
+  observability, reliability, blog updates, a local-only research paper
+  workspace, and an explicit pass/block readiness judgment.
 - Triage of current crash or user-visible regressions that could make v0.3
   unsafe to publish.
 - Final release validation and release notes.
@@ -62,8 +65,10 @@ Out of scope:
 - `make release-check RELEASE_VERSION=0.3.0` passes.
 - Supported install, docs-site, Helm, and `vllm-sr serve` smoke paths have no
   open release-blocking regressions.
-- Session-aware routing is either shipped in a scoped v0.3 slice or explicitly
-  deferred with stale attempts closed or superseded.
+- Session-Aware Agentic Routing has a unified GA evaluation PR with tests,
+  systematic policy evidence, AMD validation evidence, blog updates, documented
+  limitations, an explicit GA readiness judgment, and stale attempts closed or
+  superseded.
 - Current crash and user-visible regression reports are fixed, rejected as not
   reproducible, moved out of scope, or accepted as release risks.
 - Release notes describe the shipped v0.3.0 artifacts and accepted risks.
@@ -73,7 +78,7 @@ Out of scope:
 - [ ] `V030001` Land the harness refresh that defines this release plan.
 - [ ] `V030002` Make the v0.3.0 release contract pass.
 - [ ] `V030003` Clear supported install and deployment blockers.
-- [ ] `V030004` Decide and land the agentic session-aware routing slice.
+- [ ] `V030004` Land the Session-Aware Agentic Routing GA evaluation package.
 - [ ] `V030005` Triage current crash and user-visible regressions.
 - [ ] `V030006` Produce the final release readiness result.
 
@@ -116,18 +121,33 @@ Do:
 Done when: supported install and deployment smoke paths are not blocked by
 those reports.
 
-### V030004: Session-Aware Agentic Routing
+### V030004: Session-Aware Agentic Routing GA Evaluation Package
 
 Do:
 
-- choose the v0.3 scope for #1753 and #1751
-- ship the smallest useful multi-turn routing behavior, or defer the feature
-  explicitly
-- close, rebase, or supersede stale session-routing PRs so the PR queue reflects
-  the decision
+- redesign the policy from current source rather than from stale PR structure
+- model session state, provider-state portability, cache reuse, long-session
+  drift, tool loops, backend failure recovery, session recovery, reliability,
+  and observability as one policy
+- update API and config without preserving legacy shape when the old shape makes
+  GA harder to reason about
+- expand the experiment harness to compare non-agentic, non-session-aware,
+  current initial implementation, and the full ACR policy under evaluation
+  across workload families,
+  session lengths, routing strategies, model/back-end combinations, cold-start,
+  long-running, safety, recovery, and overhead cases
+- run local gates first, then AMD regression and benchmark loops using the
+  local-only AMD skill
+- keep the research paper under `.agent-harness/` so it never enters git, but
+  update and compile it as implementation and experiment results change
+- update the blog PR with the final public narrative and real-data figures
+- close, rebase, or supersede stale session-routing PRs and issues so the PR
+  queue reflects the unified direction
 
-Done when: session-aware routing is either in v0.3 with tests or explicitly out
-of v0.3.
+Done when: the unified GA evaluation PR contains the implementation, tests,
+policy evidence, AMD validation evidence, blog update, limitations, and a GA
+readiness judgment that is allowed to block release until required evidence is
+present.
 
 ### V030005: Crash And Regression Triage
 
@@ -155,8 +175,9 @@ blockers.
 
 ## Next Action
 
-- Start with `V030002`, because the release contract check already fails on the
-  current source and has a concrete fix.
+- Start with `V030004`, because the maintainer has made Session-Aware Agentic
+  Routing the highest-priority workstream and requested a unified GA evaluation
+  package rather than another small release slice.
 
 ## Operating Rules
 

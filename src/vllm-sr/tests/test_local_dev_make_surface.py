@@ -34,3 +34,12 @@ def test_environment_docs_explain_default_split_without_user_topology_flags() ->
         in content
     )
     assert "VLLM_SR_TOPOLOGY=legacy" not in content
+
+
+def test_memory_integration_uses_installed_agent_venv_cli() -> None:
+    content = DOCKER_MK_PATH.read_text(encoding="utf-8")
+    target = content.split("memory-test-integration:", 1)[1]
+
+    assert "vllm-sr-install-cli" in target
+    assert 'PATH="$(AGENT_VENV)/bin:$$PATH" \\' in target
+    assert "run_memory_integration.sh" in target

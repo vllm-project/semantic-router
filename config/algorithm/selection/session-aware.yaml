@@ -1,12 +1,14 @@
 algorithm:
   type: session_aware
   session_aware:
-    fallback_method: hybrid
+    base_method: hybrid
     idle_timeout_seconds: 300
     min_turns_before_switch: 1
     switch_margin: 0.05
     stay_bias: 0.10
     tool_loop_hard_lock: true
+    context_portability_hard_lock: true
+    decision_drift_reset: true
     tool_loop_stay_bias: 0.35
     prefix_cache_weight: 0.20
     handoff_penalty_weight: 1.0

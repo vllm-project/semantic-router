@@ -12,11 +12,14 @@ import (
 const ttl = 1 * time.Hour
 
 type turnState struct {
-	cumulativePrompt     int64
-	cumulativeCached     int64
-	cumulativeCompletion int64
-	cumulativeCost       float64 // in the currency supplied by TurnPricing.Currency
-	lastSeen             time.Time
+	cumulativePrompt                int64
+	cumulativeCached                int64
+	cumulativeEstimatedCached       int64
+	cumulativeCompletion            int64
+	cumulativeCost                  float64 // in the currency supplied by TurnPricing.Currency
+	cumulativeEstimatedCacheSavings float64
+	lastCacheAccountingSource       string
+	lastSeen                        time.Time
 }
 
 var (
@@ -78,9 +81,13 @@ type TurnParams struct {
 	Model     string
 	Domain    string // VSR category; empty -> "unknown"
 
-	PromptTokens       int
-	CachedPromptTokens int
-	CompletionTokens   int
+	PromptTokens                int
+	CachedPromptTokens          int
+	EstimatedCachedPromptTokens int
+	CompletionTokens            int
+	EstimatedCacheSavings       float64
+	CacheAccountingSource       string
+	CacheAccountingConfidence   float64
 
 	// Pricing holds the active per-1M token rates for this dispatch.
 	// When zero, cost fields are omitted from the log event and no cost
@@ -163,8 +170,15 @@ func recordTurnState(key string, p TurnParams, costThisTurn float64, t time.Time
 	}
 	st.cumulativePrompt += int64(p.PromptTokens)
 	st.cumulativeCached += int64(clampCachedPromptTokens(p.PromptTokens, p.CachedPromptTokens))
+	st.cumulativeEstimatedCached += int64(clampCachedPromptTokens(p.PromptTokens, p.EstimatedCachedPromptTokens))
 	st.cumulativeCompletion += int64(p.CompletionTokens)
 	st.cumulativeCost += costThisTurn
+	if p.EstimatedCacheSavings > 0 {
+		st.cumulativeEstimatedCacheSavings += p.EstimatedCacheSavings
+	}
+	if p.CacheAccountingSource != "" {
+		st.lastCacheAccountingSource = p.CacheAccountingSource
+	}
 	st.lastSeen = t
 	return turnCumulativeState{
 		prompt:     st.cumulativePrompt,
@@ -176,13 +190,16 @@ func recordTurnState(key string, p TurnParams, costThisTurn float64, t time.Time
 
 func recordRouterSessionUsage(publicSessionID string, model string, p TurnParams, costThisTurn float64, t time.Time) {
 	RecordSessionUsage(SessionUsageParams{
-		SessionID:          publicSessionID,
-		Model:              model,
-		PromptTokens:       p.PromptTokens,
-		CachedPromptTokens: p.CachedPromptTokens,
-		CompletionTokens:   p.CompletionTokens,
-		Cost:               costThisTurn,
-		Timestamp:          t,
+		SessionID:                   publicSessionID,
+		Model:                       model,
+		PromptTokens:                p.PromptTokens,
+		CachedPromptTokens:          p.CachedPromptTokens,
+		EstimatedCachedPromptTokens: p.EstimatedCachedPromptTokens,
+		CompletionTokens:            p.CompletionTokens,
+		Cost:                        costThisTurn,
+		EstimatedCacheSavings:       p.EstimatedCacheSavings,
+		CacheAccountingSource:       p.CacheAccountingSource,
+		Timestamp:                   t,
 	})
 }
 
@@ -220,6 +237,14 @@ func logSessionTurn(
 		"cumulative_cached_prompt_tokens": cumulative.cached,
 		"cumulative_completion_tokens":    cumulative.completion,
 		"timestamp":                       t.UTC().Format(time.RFC3339Nano),
+	}
+	if p.CacheAccountingSource != "" {
+		fields["router_cache_accounting_source"] = p.CacheAccountingSource
+		fields["router_estimated_cached_prompt_tokens"] = clampCachedPromptTokens(p.PromptTokens, p.EstimatedCachedPromptTokens)
+		fields["router_cache_accounting_confidence"] = p.CacheAccountingConfidence
+		if p.EstimatedCacheSavings > 0 {
+			fields["router_estimated_cache_savings"] = p.EstimatedCacheSavings
+		}
 	}
 	if p.Pricing.isConfigured() {
 		fields["pricing_prompt_per_1m"] = p.Pricing.PromptPer1M

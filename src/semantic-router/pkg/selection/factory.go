@@ -197,7 +197,7 @@ func (f *Factory) Create() Selector {
 		if f.lookupTable != nil {
 			sessionAwareSelector.SetLookupTable(f.lookupTable)
 		}
-		sessionAwareSelector.SetFallbackSelector(f.createSessionAwareFallback(sessionAwareSelector.config.FallbackMethod))
+		sessionAwareSelector.SetBaseSelector(f.createSessionAwareBaseSelector(sessionAwareSelector.config.BaseMethod))
 		selector = sessionAwareSelector
 
 	default:
@@ -362,10 +362,10 @@ func (f *Factory) CreateAll() *Registry {
 	if f.lookupTable != nil {
 		sessionAwareSelector.SetLookupTable(f.lookupTable)
 	}
-	if fallback, ok := registry.Get(sessionAwareSelector.config.FallbackMethod); ok {
-		sessionAwareSelector.SetFallbackSelector(fallback)
-	} else if fallback, ok := registry.Get(MethodStatic); ok {
-		sessionAwareSelector.SetFallbackSelector(fallback)
+	if baseSelector, ok := registry.Get(sessionAwareSelector.config.BaseMethod); ok {
+		sessionAwareSelector.SetBaseSelector(baseSelector)
+	} else if baseSelector, ok := registry.Get(MethodStatic); ok {
+		sessionAwareSelector.SetBaseSelector(baseSelector)
 	}
 	registry.Register(MethodSessionAware, sessionAwareSelector)
 
@@ -376,7 +376,7 @@ func (f *Factory) CreateAll() *Registry {
 	return registry
 }
 
-func (f *Factory) createSessionAwareFallback(method SelectionMethod) Selector {
+func (f *Factory) createSessionAwareBaseSelector(method SelectionMethod) Selector {
 	if method == "" || method == MethodSessionAware {
 		method = MethodHybrid
 	}

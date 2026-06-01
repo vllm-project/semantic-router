@@ -4,25 +4,35 @@ package selection
 // It records the facts and costs used to decide whether an agentic session may
 // switch models, so replay and experiments can reconstruct every stay/switch.
 type SessionPolicyTrace struct {
-	Algorithm      string
-	FallbackMethod string
+	Algorithm  string
+	BaseMethod string
 
 	SessionID string
 	UserID    string
 	Phase     AgenticPhase
 
-	CurrentModel          string
-	FallbackSelectedModel string
-	SelectedModel         string
+	CurrentModel      string
+	BaseSelectedModel string
+	SelectedModel     string
 
-	TurnIndex       int
-	MemoryTurnCount int
-	SwitchCount     int
+	TurnIndex                   int
+	MemoryTurnCount             int
+	SwitchCount                 int
+	LastDecisionName            string
+	MemoryPromptTokens          int64
+	MemoryCachedTokens          int64
+	MemoryEstimatedCachedTokens int64
+	MemoryEstimatedCacheSavings float64
+	LastCacheAccountingSource   string
 
 	ActiveToolLoop bool
 	IdleKnown      bool
 	IdleForSeconds float64
 	IdleExpired    bool
+
+	HasNonPortableContext    bool
+	NonPortableContextReason string
+	DecisionDrift            bool
 
 	HardLocked     bool
 	HardLockReason string
@@ -73,20 +83,29 @@ func (t *SessionPolicyTrace) ToMap() map[string]interface{} {
 	}
 	out := map[string]interface{}{
 		"algorithm":                         t.Algorithm,
-		"fallback_method":                   t.FallbackMethod,
+		"base_method":                       t.BaseMethod,
 		"session_id":                        t.SessionID,
 		"user_id":                           t.UserID,
 		"phase":                             string(t.Phase),
 		"current_model":                     t.CurrentModel,
-		"fallback_selected_model":           t.FallbackSelectedModel,
+		"base_selected_model":               t.BaseSelectedModel,
 		"selected_model":                    t.SelectedModel,
 		"turn_index":                        t.TurnIndex,
 		"memory_turn_count":                 t.MemoryTurnCount,
 		"switch_count":                      t.SwitchCount,
+		"last_decision_name":                t.LastDecisionName,
+		"memory_prompt_tokens":              t.MemoryPromptTokens,
+		"memory_cached_tokens":              t.MemoryCachedTokens,
+		"memory_estimated_cached_tokens":    t.MemoryEstimatedCachedTokens,
+		"memory_estimated_cache_savings":    t.MemoryEstimatedCacheSavings,
+		"last_cache_accounting_source":      t.LastCacheAccountingSource,
 		"active_tool_loop":                  t.ActiveToolLoop,
 		"idle_known":                        t.IdleKnown,
 		"idle_for_seconds":                  t.IdleForSeconds,
 		"idle_expired":                      t.IdleExpired,
+		"has_non_portable_context":          t.HasNonPortableContext,
+		"non_portable_context_reason":       t.NonPortableContextReason,
+		"decision_drift":                    t.DecisionDrift,
 		"hard_locked":                       t.HardLocked,
 		"hard_lock_reason":                  t.HardLockReason,
 		"decision_reason":                   t.DecisionReason,

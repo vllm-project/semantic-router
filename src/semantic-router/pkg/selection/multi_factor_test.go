@@ -158,7 +158,7 @@ func TestMultiFactor_SLOExcludesViolators(t *testing.T) {
 	}
 }
 
-func TestMultiFactor_FallbackCheapestWhenAllSLOExcluded(t *testing.T) {
+func TestMultiFactor_DefaultCheapestWhenAllSLOExcluded(t *testing.T) {
 	cfg := DefaultMultiFactorConfig()
 	cfg.SLO.MaxTPOTMs = 1
 	cfg.OnNoCandidates = "cheapest"
@@ -176,14 +176,14 @@ func TestMultiFactor_FallbackCheapestWhenAllSLOExcluded(t *testing.T) {
 		t.Fatalf("unexpected error: %v", err)
 	}
 	if res.SelectedModel != "b" {
-		t.Errorf("expected cheapest fallback to pick b, got %s", res.SelectedModel)
+		t.Errorf("expected cheapest default to pick b, got %s", res.SelectedModel)
 	}
-	if !strings.Contains(res.Reasoning, "fallback") {
-		t.Errorf("expected fallback marker in reasoning, got %q", res.Reasoning)
+	if !strings.Contains(res.Reasoning, "no-candidate policy") {
+		t.Errorf("expected no-candidate policy marker in reasoning, got %q", res.Reasoning)
 	}
 }
 
-func TestMultiFactor_FallbackFailWhenAllSLOExcluded(t *testing.T) {
+func TestMultiFactor_FailWhenAllSLOExcluded(t *testing.T) {
 	cfg := DefaultMultiFactorConfig()
 	cfg.SLO.MaxTPOTMs = 1
 	cfg.OnNoCandidates = "fail"

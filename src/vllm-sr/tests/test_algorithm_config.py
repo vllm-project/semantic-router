@@ -15,6 +15,7 @@ from cli.algorithms import (
     RLDrivenSelectionConfig,
     RouterDCSelectionConfig,
     RouterR1Config,
+    SessionAwareSelectionConfig,
     ThompsonSamplingConfig,
 )
 from pydantic import ValidationError as PydanticValidationError
@@ -269,6 +270,34 @@ class TestRLDrivenSelectionConfig:
         assert config.max_aggregation_rounds == 4
 
 
+class TestSessionAwareSelectionConfig:
+    """Test session-aware selection configuration."""
+
+    def test_base_method_field(self):
+        """Test that session-aware uses base_method rather than fallback_method."""
+        config = SessionAwareSelectionConfig(base_method="static")
+        assert config.base_method == "static"
+
+        with pytest.raises(PydanticValidationError):
+            SessionAwareSelectionConfig(fallback_method="static")
+
+    def test_cache_cost_multiplier_is_not_inverted(self):
+        """Expensive-model cache pressure must not become weaker than neutral."""
+        config = SessionAwareSelectionConfig(max_cache_cost_multiplier=1.0)
+        assert config.max_cache_cost_multiplier == 1.0
+
+        with pytest.raises(PydanticValidationError):
+            SessionAwareSelectionConfig(max_cache_cost_multiplier=0.5)
+
+    def test_remaining_turn_prior_horizon_is_positive(self):
+        """The remaining-turn prior horizon must be explicit positive depth."""
+        config = SessionAwareSelectionConfig(remaining_turn_prior_horizon=1)
+        assert config.remaining_turn_prior_horizon == 1
+
+        with pytest.raises(PydanticValidationError):
+            SessionAwareSelectionConfig(remaining_turn_prior_horizon=0)
+
+
 class TestRouterR1Config:
     """Test Router-R1 (LLM-as-router) selection configuration."""
 
@@ -342,7 +371,7 @@ class TestAlgorithmConfigIntegration:
         assert config.rl_driven.storage_path == "/tmp/rl.json"
 
     def test_thompson_algorithm_config(self):
-        """Test AlgorithmConfig with legacy Thompson Sampling config."""
+        """Test AlgorithmConfig with Thompson Sampling config."""
         config = AlgorithmConfig(
             type="thompson",
             thompson=ThompsonSamplingConfig(per_user=True, min_samples=20),

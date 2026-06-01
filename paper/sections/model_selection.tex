@@ -345,6 +345,6 @@ This uniformity enables:
 
 \subsection{Cost-Aware Selection in Multi-Provider Settings}
 
-In multi-endpoint deployments where the same logical model may be served by different providers at different price points, the selection algorithms operate in conjunction with the endpoint router (\Cref{subsec:multi_endpoint}).
-The selection algorithm chooses the best \emph{model} based on semantic analysis, and the endpoint router resolves it to the most cost-effective \emph{provider endpoint}.
-This two-stage process separates quality optimization (which model is best for this query?) from cost optimization (which provider endpoint offers the best price for this model?), enabling fine-grained cost management across heterogeneous multi-cloud deployments.
+In multi-provider deployments where the same logical model may be served by different providers at different price points, the selection algorithms operate in conjunction with the configured provider/backend topology (\Cref{subsec:provider_backend}).
+The selection algorithm chooses the best \emph{model} based on semantic analysis, and the routing configuration binds that choice to a provider-backed target.
+This two-stage process separates quality optimization (which model is best for this query?) from deployment optimization (which configured backend target should serve this model?), while endpoint health, load balancing, and recovery stay in the gateway or orchestration layer.

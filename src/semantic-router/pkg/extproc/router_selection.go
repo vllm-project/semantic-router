@@ -261,53 +261,59 @@ func buildSessionAwareSelectionConfig(
 }
 
 func applySessionAwareSelectionConfig(result *selection.SessionAwareConfig, cfg config.SessionAwareSelectionConfig) {
-	if cfg.FallbackMethod != "" {
-		result.FallbackMethod = selection.SelectionMethod(cfg.FallbackMethod)
+	if cfg.BaseMethod != "" {
+		result.BaseMethod = selection.SelectionMethod(cfg.BaseMethod)
 	}
-	if cfg.IdleTimeoutSeconds != 0 {
-		result.IdleTimeoutSeconds = cfg.IdleTimeoutSeconds
+	if cfg.IdleTimeoutSeconds != nil {
+		result.IdleTimeoutSeconds = *cfg.IdleTimeoutSeconds
 	}
-	if cfg.MinTurnsBeforeSwitch != 0 {
-		result.MinTurnsBeforeSwitch = cfg.MinTurnsBeforeSwitch
+	if cfg.MinTurnsBeforeSwitch != nil {
+		result.MinTurnsBeforeSwitch = *cfg.MinTurnsBeforeSwitch
 	}
-	if cfg.SwitchMargin != 0 {
-		result.SwitchMargin = cfg.SwitchMargin
+	if cfg.SwitchMargin != nil {
+		result.SwitchMargin = *cfg.SwitchMargin
 	}
-	if cfg.StayBias != 0 {
-		result.StayBias = cfg.StayBias
+	if cfg.StayBias != nil {
+		result.StayBias = *cfg.StayBias
 	}
 	if cfg.ToolLoopHardLock != nil {
 		result.ToolLoopHardLock = *cfg.ToolLoopHardLock
 	}
-	if cfg.ToolLoopStayBias != 0 {
-		result.ToolLoopStayBias = cfg.ToolLoopStayBias
+	if cfg.ContextPortabilityHardLock != nil {
+		result.ContextPortabilityHardLock = *cfg.ContextPortabilityHardLock
 	}
-	if cfg.PrefixCacheWeight != 0 {
-		result.PrefixCacheWeight = cfg.PrefixCacheWeight
+	if cfg.DecisionDriftReset != nil {
+		result.DecisionDriftReset = *cfg.DecisionDriftReset
 	}
-	if cfg.HandoffPenaltyWeight != 0 {
-		result.HandoffPenaltyWeight = cfg.HandoffPenaltyWeight
+	if cfg.ToolLoopStayBias != nil {
+		result.ToolLoopStayBias = *cfg.ToolLoopStayBias
 	}
-	if cfg.DefaultHandoffPenalty != 0 {
-		result.DefaultHandoffPenalty = cfg.DefaultHandoffPenalty
+	if cfg.PrefixCacheWeight != nil {
+		result.PrefixCacheWeight = *cfg.PrefixCacheWeight
 	}
-	if cfg.QualityGapMultiplier != 0 {
-		result.QualityGapMultiplier = cfg.QualityGapMultiplier
+	if cfg.HandoffPenaltyWeight != nil {
+		result.HandoffPenaltyWeight = *cfg.HandoffPenaltyWeight
 	}
-	if cfg.MaxCacheCostMultiplier != 0 {
-		result.MaxCacheCostMultiplier = cfg.MaxCacheCostMultiplier
+	if cfg.DefaultHandoffPenalty != nil {
+		result.DefaultHandoffPenalty = *cfg.DefaultHandoffPenalty
 	}
-	if cfg.SwitchHistoryWeight != 0 {
-		result.SwitchHistoryWeight = cfg.SwitchHistoryWeight
+	if cfg.QualityGapMultiplier != nil {
+		result.QualityGapMultiplier = *cfg.QualityGapMultiplier
 	}
-	if cfg.RemainingTurnPriorWeight != 0 {
-		result.RemainingTurnPriorWeight = cfg.RemainingTurnPriorWeight
+	if cfg.MaxCacheCostMultiplier != nil {
+		result.MaxCacheCostMultiplier = *cfg.MaxCacheCostMultiplier
 	}
-	if cfg.RemainingTurnPriorHorizon != 0 {
-		result.RemainingTurnPriorHorizon = cfg.RemainingTurnPriorHorizon
+	if cfg.SwitchHistoryWeight != nil {
+		result.SwitchHistoryWeight = *cfg.SwitchHistoryWeight
 	}
-	if cfg.MinRemainingTurnPriorSamples != 0 {
-		result.MinRemainingTurnPriorSamples = cfg.MinRemainingTurnPriorSamples
+	if cfg.RemainingTurnPriorWeight != nil {
+		result.RemainingTurnPriorWeight = *cfg.RemainingTurnPriorWeight
+	}
+	if cfg.RemainingTurnPriorHorizon != nil {
+		result.RemainingTurnPriorHorizon = *cfg.RemainingTurnPriorHorizon
+	}
+	if cfg.MinRemainingTurnPriorSamples != nil {
+		result.MinRemainingTurnPriorSamples = *cfg.MinRemainingTurnPriorSamples
 	}
 }
 

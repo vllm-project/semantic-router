@@ -193,22 +193,24 @@ type HybridSelectionConfig struct {
 // SessionAwareSelectionConfig configures the session_aware selector. It wraps
 // a base selector and adds agentic session stay-vs-switch policy.
 type SessionAwareSelectionConfig struct {
-	FallbackMethod               string  `yaml:"fallback_method,omitempty"`
-	IdleTimeoutSeconds           int     `yaml:"idle_timeout_seconds,omitempty"`
-	MinTurnsBeforeSwitch         int     `yaml:"min_turns_before_switch,omitempty"`
-	SwitchMargin                 float64 `yaml:"switch_margin,omitempty"`
-	StayBias                     float64 `yaml:"stay_bias,omitempty"`
-	ToolLoopHardLock             *bool   `yaml:"tool_loop_hard_lock,omitempty"`
-	ToolLoopStayBias             float64 `yaml:"tool_loop_stay_bias,omitempty"`
-	PrefixCacheWeight            float64 `yaml:"prefix_cache_weight,omitempty"`
-	HandoffPenaltyWeight         float64 `yaml:"handoff_penalty_weight,omitempty"`
-	DefaultHandoffPenalty        float64 `yaml:"default_handoff_penalty,omitempty"`
-	QualityGapMultiplier         float64 `yaml:"quality_gap_multiplier,omitempty"`
-	MaxCacheCostMultiplier       float64 `yaml:"max_cache_cost_multiplier,omitempty"`
-	SwitchHistoryWeight          float64 `yaml:"switch_history_weight,omitempty"`
-	RemainingTurnPriorWeight     float64 `yaml:"remaining_turn_prior_weight,omitempty"`
-	RemainingTurnPriorHorizon    int     `yaml:"remaining_turn_prior_horizon,omitempty"`
-	MinRemainingTurnPriorSamples int     `yaml:"min_remaining_turn_prior_samples,omitempty"`
+	BaseMethod                   string   `yaml:"base_method,omitempty"`
+	IdleTimeoutSeconds           *int     `yaml:"idle_timeout_seconds,omitempty"`
+	MinTurnsBeforeSwitch         *int     `yaml:"min_turns_before_switch,omitempty"`
+	SwitchMargin                 *float64 `yaml:"switch_margin,omitempty"`
+	StayBias                     *float64 `yaml:"stay_bias,omitempty"`
+	ToolLoopHardLock             *bool    `yaml:"tool_loop_hard_lock,omitempty"`
+	ContextPortabilityHardLock   *bool    `yaml:"context_portability_hard_lock,omitempty"`
+	DecisionDriftReset           *bool    `yaml:"decision_drift_reset,omitempty"`
+	ToolLoopStayBias             *float64 `yaml:"tool_loop_stay_bias,omitempty"`
+	PrefixCacheWeight            *float64 `yaml:"prefix_cache_weight,omitempty"`
+	HandoffPenaltyWeight         *float64 `yaml:"handoff_penalty_weight,omitempty"`
+	DefaultHandoffPenalty        *float64 `yaml:"default_handoff_penalty,omitempty"`
+	QualityGapMultiplier         *float64 `yaml:"quality_gap_multiplier,omitempty"`
+	MaxCacheCostMultiplier       *float64 `yaml:"max_cache_cost_multiplier,omitempty"`
+	SwitchHistoryWeight          *float64 `yaml:"switch_history_weight,omitempty"`
+	RemainingTurnPriorWeight     *float64 `yaml:"remaining_turn_prior_weight,omitempty"`
+	RemainingTurnPriorHorizon    *int     `yaml:"remaining_turn_prior_horizon,omitempty"`
+	MinRemainingTurnPriorSamples *int     `yaml:"min_remaining_turn_prior_samples,omitempty"`
 }
 
 // MultiFactorSelectionConfig configures the multi_factor selector, which

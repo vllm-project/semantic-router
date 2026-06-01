@@ -25,6 +25,7 @@ providers:
       pricing:
         currency: USD
         prompt_per_1m: 0.18
+        cached_input_per_1m: 0.04
         completion_per_1m: 0.42
       external_model_ids:
         openai: qwen3-8b
@@ -36,7 +37,7 @@ providers:
           weight: 80
           type: chat
           api_key_env: VLLM_SR_PRIMARY_API_KEY
-        - name: remote-fallback
+        - name: remote-secondary
           base_url: https://api.example.com/v1
           provider: openai
           auth_header: Authorization
@@ -54,6 +55,7 @@ providers:
       pricing:
         currency: USD
         prompt_per_1m: 1.2
+        cached_input_per_1m: 0.3
         completion_per_1m: 3.4
       external_model_ids:
         internal: qwen3-32b
@@ -68,6 +70,7 @@ providers:
       pricing:
         currency: USD
         prompt_per_1m: 2.5
+        cached_input_per_1m: 0.5
         completion_per_1m: 4.0
       external_model_ids:
         openai: llava-omni-preview
@@ -1113,12 +1116,14 @@ routing:
       algorithm:
         type: session_aware
         session_aware:
-          fallback_method: hybrid
+          base_method: hybrid
           idle_timeout_seconds: 300
           min_turns_before_switch: 1
           switch_margin: 0.05
           stay_bias: 0.10
           tool_loop_hard_lock: true
+          context_portability_hard_lock: true
+          decision_drift_reset: true
           tool_loop_stay_bias: 0.35
           prefix_cache_weight: 0.20
           handoff_penalty_weight: 1.0
@@ -1387,12 +1392,14 @@ global:
         quality_gap_threshold: 0.08
         normalize_scores: true
       session_aware:
-        fallback_method: hybrid
+        base_method: hybrid
         idle_timeout_seconds: 300
         min_turns_before_switch: 1
         switch_margin: 0.05
         stay_bias: 0.10
         tool_loop_hard_lock: true
+        context_portability_hard_lock: true
+        decision_drift_reset: true
         tool_loop_stay_bias: 0.35
         prefix_cache_weight: 0.20
         handoff_penalty_weight: 1.0

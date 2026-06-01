@@ -149,13 +149,13 @@ func verifyLLMDResourceCheck(
 	}
 
 	return map[string]interface{}{
-		"route":                   check.routeName,
-		"inference_pool":          check.poolName,
-		"backend_service":         check.backendServiceName,
-		"endpoint_picker_service": check.endpointPickerService,
-		"scheduler_deployment":    check.schedulerDeployment,
-		"selected_model":          selectedModel,
-		"backend_endpoints":       addressCount,
+		"route":                check.routeName,
+		"inference_pool":       check.poolName,
+		"backend_service":      check.backendServiceName,
+		"epp_service":          check.endpointPickerService,
+		"scheduler_deployment": check.schedulerDeployment,
+		"selected_model":       selectedModel,
+		"backend_endpoints":    addressCount,
 	}, nil
 }
 
@@ -167,7 +167,7 @@ func verifyLLMDDeployments(ctx context.Context, client *kubernetes.Clientset, ch
 		return fmt.Errorf("scheduler deployment %s is not healthy: %w", check.schedulerDeployment, err)
 	}
 	if err := helpers.VerifyServicePodsRunning(ctx, client, "default", check.endpointPickerService, verbose); err != nil {
-		return fmt.Errorf("endpoint picker service %s is not healthy: %w", check.endpointPickerService, err)
+		return fmt.Errorf("LLM-D scheduler service %s is not healthy: %w", check.endpointPickerService, err)
 	}
 	return nil
 }

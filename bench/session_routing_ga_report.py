@@ -1,0 +1,1483 @@
+#!/usr/bin/env python3
+"""Aggregate Session-Aware Agentic Routing GA evidence into one gate."""
+
+from __future__ import annotations
+
+import argparse
+import json
+import time
+from pathlib import Path
+from typing import Any
+
+CACHE_REPORTING_ORDER = {
+    "missing": 0,
+    "reported_zero": 1,
+    "positive": 2,
+}
+CACHE_PROBE_KIND = "repeated-prefix-cache-token-probe"
+FULL_BRANCH_IMAGE_KINDS = {
+    "branch-image-benchmark",
+    "full-branch-image-benchmark",
+}
+REQUIRED_FULL_BRANCH_IMAGE_CHECKS = (
+    "diagnostic_ok",
+    "live_matrix_ok",
+    "failure_recovery_ok",
+    "agent_task_ok",
+    "cache_token_probe_ok",
+    "mounted_binary_absent",
+    "branch_image_benchmark_ok",
+)
+REQUIRED_FULL_BRANCH_IMAGE_EVIDENCE = (
+    "diagnostic",
+    "live_aggregates",
+    "failure_aggregates",
+    "agent_task_summaries",
+    "cache_aggregates",
+)
+MOUNTED_BINARY_MARKERS = ("mounted-binary", "mounted_binary", "mounted binary")
+PASSING_STATUS = "passed"
+BLOCKING_STATUS = "blocked"
+MISSING_STATUS = "missing"
+MARKDOWN_METRIC_LIMIT = 220
+MARKDOWN_METRIC_TRUNCATED_LIMIT = MARKDOWN_METRIC_LIMIT - 3
+CACHE_PROBE_IDENTITY_FIELDS = (
+    "stable_prefix_sha256",
+    "stable_prefix_chars",
+    "unique_suffix_pattern",
+)
+CACHE_PROBE_SERVING_PATH_FIELDS = ("base_url", "model")
+DEFAULT_MIN_AGENT_TASK_REQUESTS = 489
+DEFAULT_MIN_AGENT_TASK_COUNT = 28
+DEFAULT_MIN_AGENT_TASK_INSTANCES = 84
+DEFAULT_REQUIRED_AGENT_TASK_NAMES = (
+    "multi-file-regression",
+    "code-review-followup",
+    "research-synthesis",
+    "maintainer-handoff",
+    "cluster-boundary",
+    "session-switch-policy",
+    "cache-economics",
+    "release-triage",
+    "observability-debug",
+    "test-fix-iteration",
+    "codebase-refactor-planning",
+    "research-artifact-review",
+    "tool-error-recovery-loop",
+    "paper-evidence-audit",
+    "multi-agent-delegation",
+    "issue-pr-maintenance-loop",
+    "configuration-contract-review",
+    "repo-bisect-debug",
+    "dependency-upgrade-regression",
+    "literature-data-extraction",
+    "stale-pr-rebase-triage",
+    "benchmark-regression-root-cause",
+    "paper-figure-quality-review",
+    "feature-implementation-loop",
+    "research-claim-grounding-loop",
+    "tool-timeout-retry-loop",
+    "ci-patch-review-loop",
+    "paper-rebuttal-revision-loop",
+)
+DEFAULT_REQUIRED_AGENT_TASK_PHASES = (
+    "user_turn",
+    "tool_loop",
+    "provider_state",
+    "topic_drift",
+    "idle_boundary",
+    "final",
+)
+
+
+def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--synthetic-matrix-summary", type=Path)
+    parser.add_argument("--synthetic-ablation-summary", type=Path)
+    parser.add_argument("--live-aggregate", action="append", type=Path, default=[])
+    parser.add_argument("--failure-aggregate", action="append", type=Path, default=[])
+    parser.add_argument("--agent-task-summary", action="append", type=Path, default=[])
+    parser.add_argument("--cache-aggregate", type=Path)
+    parser.add_argument("--branch-image-summary", type=Path)
+    parser.add_argument(
+        "--expected-ref",
+        default="",
+        help=(
+            "Expected reviewed source ref for branch-image evidence. When set, "
+            "the GA report blocks summaries whose ref does not match."
+        ),
+    )
+    parser.add_argument(
+        "--expected-image-tag",
+        default="",
+        help=(
+            "Expected reviewed branch image tag. When set, the GA report blocks "
+            "summaries whose image_tag does not match."
+        ),
+    )
+    parser.add_argument("--min-synthetic-turns", type=int, default=1000)
+    parser.add_argument("--min-switch-reduction-pct", type=float, default=50.0)
+    parser.add_argument("--min-cost-reduction-pct", type=float, default=30.0)
+    parser.add_argument("--max-synthetic-quality-loss", type=float, default=0.08)
+    parser.add_argument("--min-ablation-policies", type=int, default=4)
+    parser.add_argument("--min-live-success-rate", type=float, default=1.0)
+    parser.add_argument("--min-failure-success-rate", type=float, default=0.75)
+    parser.add_argument("--min-rps-ratio", type=float, default=0.8)
+    parser.add_argument("--max-overhead-p95-ms", type=float, default=300.0)
+    parser.add_argument("--max-continuity-violations", type=int, default=0)
+    parser.add_argument("--min-session-recovery-rate", type=float, default=1.0)
+    parser.add_argument("--min-sessions-with-errors", type=int, default=1)
+    parser.add_argument("--min-agent-task-success-rate", type=float, default=0.75)
+    parser.add_argument("--min-agent-task-score", type=float, default=0.75)
+    parser.add_argument(
+        "--min-agent-task-requests",
+        type=int,
+        default=DEFAULT_MIN_AGENT_TASK_REQUESTS,
+    )
+    parser.add_argument(
+        "--min-agent-task-count",
+        type=int,
+        default=DEFAULT_MIN_AGENT_TASK_COUNT,
+    )
+    parser.add_argument(
+        "--min-agent-task-instances",
+        type=int,
+        default=DEFAULT_MIN_AGENT_TASK_INSTANCES,
+    )
+    parser.add_argument(
+        "--required-agent-task-name",
+        action="append",
+        default=list(DEFAULT_REQUIRED_AGENT_TASK_NAMES),
+    )
+    parser.add_argument(
+        "--required-agent-task-phase",
+        action="append",
+        default=list(DEFAULT_REQUIRED_AGENT_TASK_PHASES),
+    )
+    parser.add_argument(
+        "--required-agent-task-header",
+        action="append",
+        default=[
+            "x-vsr-selected-model",
+            "x-vsr-selected-decision",
+            "x-vsr-replay-id",
+            "x-vsr-session-phase",
+            "x-vsr-selected-confidence",
+            "x-vsr-context-token-count",
+        ],
+    )
+    parser.add_argument(
+        "--min-cached-token-reporting",
+        choices=tuple(CACHE_REPORTING_ORDER.keys()),
+        default="positive",
+    )
+    parser.add_argument("--min-cached-token-field-rate", type=float, default=1.0)
+    parser.add_argument("--min-cached-prompt-ratio", type=float, default=0.01)
+    parser.add_argument("--min-cache-probe-repeats", type=int, default=2)
+    parser.add_argument(
+        "--require-cache-baseline",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help=(
+            "Require a direct backend baseline in cache-token evidence so "
+            "positive cached tokens prove backend behavior, not only router "
+            "summary shaping."
+        ),
+    )
+    parser.add_argument("--allow-blockers", action="store_true")
+    parser.add_argument("--output-dir", type=Path)
+    return parser.parse_args(argv)
+
+
+def default_output_dir() -> Path:
+    stamp = time.strftime("%Y%m%dT%H%M%SZ", time.gmtime())
+    return Path(".agent-harness/reports/session-routing-ga") / stamp
+
+
+def load_json(path: Path | None) -> tuple[dict[str, Any] | None, str]:
+    if path is None:
+        return None, "not configured"
+    if not path.exists():
+        return None, f"missing file: {path}"
+    try:
+        data = json.loads(path.read_text())
+    except json.JSONDecodeError as exc:
+        return None, f"invalid JSON in {path}: {exc}"
+    if not isinstance(data, dict):
+        return None, f"expected JSON object in {path}"
+    return data, str(path)
+
+
+def requirement(
+    requirement_id: str,
+    title: str,
+    status: str,
+    evidence: str,
+    metrics: dict[str, Any] | None = None,
+    failures: list[str] | None = None,
+) -> dict[str, Any]:
+    return {
+        "id": requirement_id,
+        "title": title,
+        "status": status,
+        "evidence": evidence,
+        "metrics": metrics or {},
+        "failures": failures or [],
+    }
+
+
+def next_actions_for_requirement(item: dict[str, Any]) -> list[str]:
+    if item.get("status") not in {BLOCKING_STATUS, MISSING_STATUS}:
+        return []
+    requirement_id = str(item.get("id", ""))
+    actions_by_id = {
+        "cache_token_reporting": [
+            (
+                "Run `bench/cache_token_probe.py` against both router and "
+                "direct-backend paths with `--baseline-base-url`, "
+                "`--baseline-model`, `--min-cached-token-reporting positive`, "
+                "`--min-cached-token-field-rate 1.0`, and a backend-specific "
+                "`--min-cached-prompt-ratio`."
+            ),
+            (
+                "Use a backend that exposes cached-token accounting; if the "
+                "backend still reports no cached-token field, keep this as a "
+                "documented limitation instead of converting router estimates "
+                "into positive backend evidence."
+            ),
+        ],
+        "branch_image_amd_validation": [
+            (
+                "Build and serve the reviewed branch image, then run "
+                "`bench/session_routing_branch_image_probe.py` with the exact "
+                "`--ref` and `--image-tag` for that image."
+            ),
+            (
+                "Assemble the full branch-image artifact with "
+                "`bench/session_routing_branch_image_benchmark.py` using "
+                "diagnostic, live-matrix, failure-recovery, expanded "
+                "agent-task, and cache-token summaries from the same image "
+                "identity."
+            ),
+        ],
+        "synthetic_policy_matrix": [
+            (
+                "Regenerate the deterministic policy matrix with "
+                "`bench/agentic_routing_experiment.py` and keep it as policy "
+                "evidence, not release evidence."
+            )
+        ],
+        "synthetic_policy_ablation": [
+            (
+                "Regenerate the ablation matrix with `--ablation` and include "
+                "`single-turn`, `acr-initial`, and `acr-full` so the report can "
+                "compare the final policy against both baselines."
+            )
+        ],
+    }
+    if requirement_id in actions_by_id:
+        return actions_by_id[requirement_id]
+    if requirement_id.startswith("amd_agent_task_quality"):
+        return [
+            (
+                "Rerun the AMD long-horizon agent-task suite with "
+                "`--suite long-horizon --task-repetitions 3 "
+                "--require-router-diagnostics`, a router service URL, and a "
+                "distinct direct-backend baseline. The maintained gate is "
+                "28 tasks, 163 turns, 489 requests, and 84 scored instances."
+            ),
+            (
+                "For branch-image evidence, add matching "
+                "`--evidence-ref` and `--evidence-image-tag` values so the "
+                "summary can be assembled into the full branch-image artifact."
+            ),
+        ]
+    if requirement_id.startswith("amd_live_matrix"):
+        return [
+            (
+                "Rerun `bench/agentic_routing_live_benchmark.py` on AMD with "
+                "matched router and direct-backend schedules, router "
+                "diagnostics, continuity thresholds, and the required "
+                "evidence identity when the run is part of branch-image "
+                "evidence."
+            )
+        ]
+    if requirement_id.startswith("amd_failure_recovery"):
+        return [
+            (
+                "Rerun the AMD disruption matrix through "
+                "`bench/openai_fault_proxy.py` and gate "
+                "`session_recovery_rate_after_error`, injected failures, and "
+                "continuity violations."
+            )
+        ]
+    return [
+        (
+            "Inspect the blocker details, rerun the named evidence producer, "
+            "and keep the GA report blocked until the producer emits passing "
+            "machine-readable evidence."
+        )
+    ]
+
+
+def evaluate_numeric(
+    failures: list[str], label: str, actual: Any, operator: str, expected: float
+) -> None:
+    if actual is None:
+        failures.append(f"{label} missing")
+        return
+    try:
+        actual_float = float(actual)
+    except (TypeError, ValueError):
+        failures.append(f"{label} is not numeric: {actual!r}")
+        return
+    if operator == ">=" and actual_float < expected:
+        failures.append(f"{label} {actual_float} < {expected}")
+    elif operator == "<=" and actual_float > expected:
+        failures.append(f"{label} {actual_float} > {expected}")
+
+
+def evaluate_synthetic_matrix(args: argparse.Namespace) -> dict[str, Any]:
+    data, evidence = load_json(args.synthetic_matrix_summary)
+    if data is None:
+        return requirement(
+            "synthetic_policy_matrix",
+            "Synthetic policy matrix",
+            MISSING_STATUS,
+            evidence,
+            failures=[evidence],
+        )
+    overall = data.get("overall") if isinstance(data.get("overall"), dict) else data
+    failures: list[str] = []
+    evaluate_numeric(
+        failures, "turns", overall.get("turns"), ">=", args.min_synthetic_turns
+    )
+    evaluate_numeric(
+        failures,
+        "switch_reduction_pct",
+        overall.get("switch_reduction_pct"),
+        ">=",
+        args.min_switch_reduction_pct,
+    )
+    evaluate_numeric(
+        failures,
+        "cost_reduction_pct",
+        overall.get("cost_reduction_pct"),
+        ">=",
+        args.min_cost_reduction_pct,
+    )
+    evaluate_numeric(
+        failures,
+        "quality_delta",
+        overall.get("quality_delta"),
+        ">=",
+        -args.max_synthetic_quality_loss,
+    )
+    continuity = int(overall.get("agentic_tool_loop_switch_violations") or 0) + int(
+        overall.get("agentic_context_portability_violations") or 0
+    )
+    if continuity > args.max_continuity_violations:
+        failures.append(
+            f"agentic continuity violations {continuity} > "
+            f"{args.max_continuity_violations}"
+        )
+    metrics = {
+        key: overall.get(key)
+        for key in [
+            "turns",
+            "switch_reduction_pct",
+            "cost_reduction_pct",
+            "quality_delta",
+            "agentic_tool_loop_switch_violations",
+            "agentic_context_portability_violations",
+        ]
+    }
+    return requirement(
+        "synthetic_policy_matrix",
+        "Synthetic policy matrix",
+        BLOCKING_STATUS if failures else PASSING_STATUS,
+        evidence,
+        metrics,
+        failures,
+    )
+
+
+def evaluate_synthetic_ablation(args: argparse.Namespace) -> dict[str, Any]:
+    data, evidence = load_json(args.synthetic_ablation_summary)
+    if data is None:
+        return requirement(
+            "synthetic_policy_ablation",
+            "Synthetic policy ablation",
+            MISSING_STATUS,
+            evidence,
+            failures=[evidence],
+        )
+    policies = data.get("by_policy")
+    if not isinstance(policies, list):
+        return requirement(
+            "synthetic_policy_ablation",
+            "Synthetic policy ablation",
+            BLOCKING_STATUS,
+            evidence,
+            failures=["by_policy missing"],
+        )
+    names = [str(row.get("policy", "")) for row in policies if isinstance(row, dict)]
+    normalized_names = [normalize_policy_name(name) for name in names]
+    full = next(
+        (
+            row
+            for row in policies
+            if isinstance(row, dict)
+            and normalize_policy_name(str(row.get("policy", "")))
+            in {"full-acr", "acr-full"}
+        ),
+        None,
+    )
+    failures: list[str] = []
+    if len(names) < args.min_ablation_policies:
+        failures.append(f"policy count {len(names)} < {args.min_ablation_policies}")
+    if "single-turn" not in normalized_names:
+        failures.append("single-turn baseline missing")
+    if "acr-initial" not in normalized_names:
+        failures.append("initial implementation baseline missing")
+    if full is None:
+        failures.append("full ACR policy missing")
+    else:
+        continuity = int(full.get("tool_loop_switch_violations") or 0) + int(
+            full.get("context_portability_violations") or 0
+        )
+        if continuity > args.max_continuity_violations:
+            failures.append(
+                f"full ACR continuity violations {continuity} > "
+                f"{args.max_continuity_violations}"
+            )
+    metrics = {
+        "policy_count": len(names),
+        "policies": names,
+        "full_acr": full or {},
+    }
+    return requirement(
+        "synthetic_policy_ablation",
+        "Synthetic policy ablation",
+        BLOCKING_STATUS if failures else PASSING_STATUS,
+        evidence,
+        metrics,
+        failures,
+    )
+
+
+def normalize_policy_name(value: str) -> str:
+    return value.strip().lower().replace("_", "-").replace(" ", "-")
+
+
+def task_name_from_instance(value: str) -> str:
+    if ":" not in value:
+        return value
+    return value.split(":", 1)[1]
+
+
+def strings_from_list(value: Any) -> set[str]:
+    if not isinstance(value, list):
+        return set()
+    return {str(item) for item in value if str(item)}
+
+
+def agent_task_names(data: dict[str, Any]) -> set[str]:
+    names = strings_from_list(data.get("task_names"))
+    names.update(strings_from_list(data.get("scored_task_names")))
+    final_scores = data.get("final_scores")
+    if isinstance(final_scores, dict):
+        names.update(task_name_from_instance(str(key)) for key in final_scores)
+    return {name for name in names if name}
+
+
+def agent_task_phases(data: dict[str, Any]) -> set[str]:
+    phase_counts = data.get("phase_counts")
+    if not isinstance(phase_counts, dict):
+        return set()
+    return {str(key) for key, value in phase_counts.items() if int(value or 0) > 0}
+
+
+def validation_failures(row: dict[str, Any]) -> list[str]:
+    failures = row.get("validation_failures")
+    if isinstance(failures, list):
+        return [str(item) for item in failures]
+    return []
+
+
+def add_validation_failures(
+    failures: list[str], label: str, source: dict[str, Any]
+) -> None:
+    for item in validation_failures(source):
+        failures.append(f"{label} validation_failure: {item}")
+
+
+def continuity_violations(row: dict[str, Any]) -> int:
+    return int(row.get("tool_loop_switch_violations") or 0) + int(
+        row.get("context_portability_violations") or 0
+    )
+
+
+def rows_from_aggregate(data: dict[str, Any]) -> list[dict[str, Any]]:
+    rows = data.get("rows")
+    if isinstance(rows, list):
+        return [row for row in rows if isinstance(row, dict)]
+    return [data]
+
+
+def evaluate_live_aggregate(
+    args: argparse.Namespace, path: Path, index: int
+) -> dict[str, Any]:
+    data, evidence = load_json(path)
+    requirement_id = f"amd_live_matrix_{index}"
+    if data is None:
+        return requirement(
+            requirement_id,
+            "AMD live matrix",
+            MISSING_STATUS,
+            evidence,
+            failures=[evidence],
+        )
+    rows = rows_from_aggregate(data)
+    failures: list[str] = []
+    metrics_rows: list[dict[str, Any]] = []
+    for row in rows:
+        name = str(row.get("name") or row.get("label") or evidence)
+        success_rate = row.get("router_success_rate", row.get("success_rate"))
+        evaluate_numeric(
+            failures,
+            f"{name} success_rate",
+            success_rate,
+            ">=",
+            args.min_live_success_rate,
+        )
+        continuity = continuity_violations(row)
+        if continuity > args.max_continuity_violations:
+            failures.append(
+                f"{name} continuity violations {continuity} > "
+                f"{args.max_continuity_violations}"
+            )
+        add_validation_failures(failures, name, row)
+        rps_ratio = row.get("rps_ratio")
+        if rps_ratio is not None:
+            evaluate_numeric(
+                failures, f"{name} rps_ratio", rps_ratio, ">=", args.min_rps_ratio
+            )
+        overhead_p95 = row.get("overhead_p95_ms")
+        if overhead_p95 is not None and args.max_overhead_p95_ms:
+            evaluate_numeric(
+                failures,
+                f"{name} overhead_p95_ms",
+                overhead_p95,
+                "<=",
+                args.max_overhead_p95_ms,
+            )
+        metrics_rows.append(
+            {
+                "name": name,
+                "requests": row.get("router_requests", row.get("requests")),
+                "success_rate": success_rate,
+                "rps_ratio": rps_ratio,
+                "overhead_p95_ms": overhead_p95,
+                "continuity_violations": continuity,
+            }
+        )
+    return requirement(
+        requirement_id,
+        "AMD live matrix",
+        BLOCKING_STATUS if failures else PASSING_STATUS,
+        evidence,
+        {"rows": metrics_rows},
+        failures,
+    )
+
+
+def evaluate_failure_aggregate(
+    args: argparse.Namespace, path: Path, index: int
+) -> dict[str, Any]:
+    data, evidence = load_json(path)
+    requirement_id = f"amd_failure_recovery_{index}"
+    if data is None:
+        return requirement(
+            requirement_id,
+            "AMD failure recovery",
+            MISSING_STATUS,
+            evidence,
+            failures=[evidence],
+        )
+    rows = rows_from_aggregate(data)
+    failures: list[str] = []
+    metrics_rows: list[dict[str, Any]] = []
+    for row in rows:
+        name = str(row.get("name") or row.get("label") or evidence)
+        evaluate_numeric(
+            failures,
+            f"{name} success_rate",
+            row.get("success_rate"),
+            ">=",
+            args.min_failure_success_rate,
+        )
+        continuity = continuity_violations(row)
+        if continuity > args.max_continuity_violations:
+            failures.append(
+                f"{name} continuity violations {continuity} > "
+                f"{args.max_continuity_violations}"
+            )
+        add_validation_failures(failures, name, row)
+        injected = int(row.get("injected") or 0)
+        if injected <= 0:
+            failures.append(f"{name} injected failures missing")
+        sessions = int(row.get("sessions_with_errors") or 0)
+        if sessions < args.min_sessions_with_errors:
+            failures.append(
+                f"{name} sessions_with_errors {sessions} < "
+                f"{args.min_sessions_with_errors}"
+            )
+        evaluate_numeric(
+            failures,
+            f"{name} session_recovery_rate_after_error",
+            row.get("session_recovery_rate_after_error"),
+            ">=",
+            args.min_session_recovery_rate,
+        )
+        metrics_rows.append(
+            {
+                "name": name,
+                "requests": row.get("requests"),
+                "success_rate": row.get("success_rate"),
+                "injected": injected,
+                "sessions_with_errors": sessions,
+                "session_recovery_rate_after_error": row.get(
+                    "session_recovery_rate_after_error"
+                ),
+                "continuity_violations": continuity,
+            }
+        )
+    return requirement(
+        requirement_id,
+        "AMD failure recovery",
+        BLOCKING_STATUS if failures else PASSING_STATUS,
+        evidence,
+        {"rows": metrics_rows},
+        failures,
+    )
+
+
+def evaluate_agent_task_summary(
+    args: argparse.Namespace, path: Path, index: int
+) -> dict[str, Any]:
+    data, evidence = load_json(path)
+    requirement_id = f"amd_agent_task_quality_{index}"
+    if data is None:
+        return requirement(
+            requirement_id,
+            "AMD agent-task quality",
+            MISSING_STATUS,
+            evidence,
+            failures=[evidence],
+        )
+    failures: list[str] = []
+    evaluate_numeric(
+        failures,
+        "success_rate",
+        data.get("success_rate"),
+        ">=",
+        args.min_live_success_rate,
+    )
+    evaluate_numeric(
+        failures,
+        "requests",
+        data.get("requests"),
+        ">=",
+        args.min_agent_task_requests,
+    )
+    evaluate_numeric(
+        failures,
+        "task_count",
+        data.get("task_count", data.get("tasks")),
+        ">=",
+        args.min_agent_task_count,
+    )
+    evaluate_numeric(
+        failures,
+        "task_instances",
+        data.get("task_instances"),
+        ">=",
+        args.min_agent_task_instances,
+    )
+    evaluate_numeric(
+        failures,
+        "task_success_rate",
+        data.get("task_success_rate"),
+        ">=",
+        args.min_agent_task_success_rate,
+    )
+    evaluate_numeric(
+        failures,
+        "task_score_mean",
+        data.get("task_score_mean"),
+        ">=",
+        args.min_agent_task_score,
+    )
+    continuity = continuity_violations(data)
+    if continuity > args.max_continuity_violations:
+        failures.append(
+            f"continuity violations {continuity} > {args.max_continuity_violations}"
+        )
+    required_headers = list(dict.fromkeys(args.required_agent_task_header))
+    missing_headers = missing_required_router_headers(data, required_headers)
+    invalid_counts = data.get("invalid_router_header_counts") or {}
+    invalid_headers = {
+        key: invalid_counts.get(key, 0)
+        for key in required_headers
+        if int(invalid_counts.get(key, 0) or 0) > 0
+    }
+    if missing_headers:
+        failures.append(f"missing router headers: {missing_headers}")
+    if invalid_headers:
+        failures.append(f"invalid router headers: {invalid_headers}")
+    add_validation_failures(failures, "agent task", data)
+    task_names = agent_task_names(data)
+    required_task_names = set(args.required_agent_task_name or [])
+    missing_task_names = sorted(required_task_names - task_names)
+    if missing_task_names:
+        failures.append(f"missing task names: {missing_task_names}")
+    phase_names = agent_task_phases(data)
+    required_phases = set(args.required_agent_task_phase or [])
+    missing_phases = sorted(required_phases - phase_names)
+    if missing_phases:
+        failures.append(f"missing task phases: {missing_phases}")
+    metrics = {
+        "requests": data.get("requests"),
+        "task_count": data.get("task_count", data.get("tasks")),
+        "task_instances": data.get("task_instances"),
+        "scored_task_count": data.get("scored_task_count"),
+        "task_names": sorted(task_names),
+        "required_task_names": sorted(required_task_names),
+        "phase_counts": data.get("phase_counts", {}),
+        "required_phases": sorted(required_phases),
+        "success_rate": data.get("success_rate"),
+        "task_success_rate": data.get("task_success_rate"),
+        "task_score_mean": data.get("task_score_mean"),
+        "continuity_violations": continuity,
+        "required_headers": required_headers,
+    }
+    return requirement(
+        requirement_id,
+        "AMD agent-task quality",
+        BLOCKING_STATUS if failures else PASSING_STATUS,
+        evidence,
+        metrics,
+        failures,
+    )
+
+
+def missing_required_router_headers(
+    data: dict[str, Any], required_headers: list[str]
+) -> dict[str, int]:
+    missing_counts = data.get("missing_router_header_counts")
+    missing = missing_counts if isinstance(missing_counts, dict) else {}
+    default_missing = int(data.get("successes", data.get("requests", 0)) or 0)
+    result: dict[str, int] = {}
+    for key in required_headers:
+        count = int(missing.get(key, default_missing) or 0)
+        if count > 0:
+            result[key] = count
+    return result
+
+
+def cache_paths(data: dict[str, Any]) -> list[tuple[str, dict[str, Any]]]:
+    if isinstance(data.get("router"), dict):
+        paths = [("router", data["router"])]
+        if isinstance(data.get("baseline"), dict):
+            paths.append(("baseline", data["baseline"]))
+        return paths
+    paths = []
+    if isinstance(data.get("summary"), dict):
+        paths.append(("router", data["summary"]))
+    if isinstance(data.get("baseline_summary"), dict):
+        paths.append(("baseline", data["baseline_summary"]))
+    return paths or [("router", data)]
+
+
+def cached_token_field_rate(summary: dict[str, Any]) -> float:
+    if "cached_token_field_rate" in summary:
+        return float(summary.get("cached_token_field_rate") or 0.0)
+    present = summary.get("cached_token_field_present")
+    successes = summary.get("successes") or summary.get("requests") or 0
+    if not successes:
+        return 0.0
+    return round(float(present or 0) / float(successes), 4)
+
+
+def should_require_cache_probe_metadata(required_reporting: str) -> bool:
+    return (
+        CACHE_REPORTING_ORDER[required_reporting] >= CACHE_REPORTING_ORDER["positive"]
+    )
+
+
+def cache_probe_repeats(summary: dict[str, Any]) -> int:
+    for key in ("probe_repeats", "requests"):
+        try:
+            return int(summary.get(key) or 0)
+        except (TypeError, ValueError):
+            return 0
+    return 0
+
+
+def add_cache_probe_identity_failures(
+    failures: list[str], label: str, summary: dict[str, Any]
+) -> None:
+    for key in CACHE_PROBE_IDENTITY_FIELDS:
+        value = summary.get(key)
+        if value is None or value == "":
+            failures.append(f"{label}: {key} missing")
+
+
+def add_cache_probe_pair_failures(
+    failures: list[str],
+    router_summary: dict[str, Any] | None,
+    baseline_summary: dict[str, Any] | None,
+) -> None:
+    if not router_summary or not baseline_summary:
+        return
+    for key in CACHE_PROBE_IDENTITY_FIELDS:
+        router_value = router_summary.get(key)
+        baseline_value = baseline_summary.get(key)
+        if router_value is None or router_value == "":
+            continue
+        if baseline_value is None or baseline_value == "":
+            continue
+        if str(router_value) != str(baseline_value):
+            failures.append(
+                f"router/baseline cache probe {key} mismatch: "
+                f"{router_value} != {baseline_value}"
+            )
+
+
+def normalized_base_url(summary: dict[str, Any] | None) -> str:
+    if not isinstance(summary, dict):
+        return ""
+    return str(summary.get("base_url") or "").rstrip("/")
+
+
+def add_cache_probe_serving_path_failures(
+    failures: list[str],
+    router_summary: dict[str, Any] | None,
+    baseline_summary: dict[str, Any] | None,
+) -> None:
+    for label, summary in (("router", router_summary), ("baseline", baseline_summary)):
+        if not isinstance(summary, dict):
+            continue
+        for field in CACHE_PROBE_SERVING_PATH_FIELDS:
+            if not str(summary.get(field) or ""):
+                failures.append(f"{label}: {field} missing")
+    router_base_url = normalized_base_url(router_summary)
+    baseline_base_url = normalized_base_url(baseline_summary)
+    if router_base_url and baseline_base_url and router_base_url == baseline_base_url:
+        failures.append(
+            "baseline: base_url must differ from router base_url for direct-backend "
+            "serving-path cache evidence"
+        )
+
+
+def evaluate_cache_path(
+    label: str,
+    summary: dict[str, Any],
+    args: argparse.Namespace,
+    require_probe_metadata: bool,
+) -> tuple[dict[str, Any], list[str]]:
+    failures: list[str] = []
+    reporting = str(summary.get("cached_token_reporting", "missing"))
+    required = args.min_cached_token_reporting
+    if CACHE_REPORTING_ORDER.get(reporting, -1) < CACHE_REPORTING_ORDER[required]:
+        failures.append(f"{label}: cached_token_reporting {reporting} < {required}")
+    probe_kind = str(summary.get("probe_kind", ""))
+    probe_repeats = cache_probe_repeats(summary)
+    if require_probe_metadata and probe_kind != CACHE_PROBE_KIND:
+        failures.append(
+            f"{label}: probe_kind {probe_kind or 'missing'} != {CACHE_PROBE_KIND}"
+        )
+    if require_probe_metadata and probe_repeats < args.min_cache_probe_repeats:
+        failures.append(
+            f"{label}: probe_repeats {probe_repeats} < {args.min_cache_probe_repeats}"
+        )
+    if require_probe_metadata:
+        add_cache_probe_identity_failures(failures, label, summary)
+    field_rate = cached_token_field_rate(summary)
+    if field_rate < args.min_cached_token_field_rate:
+        failures.append(
+            f"{label}: cached_token_field_rate {field_rate} < "
+            f"{args.min_cached_token_field_rate}"
+        )
+    ratio = float(summary.get("cached_prompt_ratio") or 0.0)
+    if ratio < args.min_cached_prompt_ratio:
+        failures.append(
+            f"{label}: cached_prompt_ratio {ratio} < {args.min_cached_prompt_ratio}"
+        )
+    if float(summary.get("success_rate") or 0.0) < args.min_live_success_rate:
+        failures.append(
+            f"{label}: success_rate {summary.get('success_rate')} < "
+            f"{args.min_live_success_rate}"
+        )
+    return {
+        "base_url": normalized_base_url(summary),
+        "model": summary.get("model"),
+        "requests": summary.get("requests"),
+        "success_rate": summary.get("success_rate"),
+        "cached_token_reporting": reporting,
+        "cached_token_field_rate": field_rate,
+        "cached_prompt_ratio": summary.get("cached_prompt_ratio"),
+        "probe_kind": probe_kind,
+        "probe_repeats": probe_repeats,
+        "stable_prefix_chars": summary.get("stable_prefix_chars"),
+        "stable_prefix_sha256": summary.get("stable_prefix_sha256"),
+        "unique_suffix_pattern": summary.get("unique_suffix_pattern"),
+    }, failures
+
+
+def evaluate_cache_aggregate(args: argparse.Namespace) -> dict[str, Any]:
+    data, evidence = load_json(args.cache_aggregate)
+    if data is None:
+        return requirement(
+            "cache_token_reporting",
+            "Cache-token reporting",
+            MISSING_STATUS,
+            evidence,
+            failures=[evidence],
+        )
+    failures: list[str] = []
+    metrics: dict[str, Any] = {}
+    add_validation_failures(failures, "cache aggregate", data)
+    require_probe_metadata = should_require_cache_probe_metadata(
+        args.min_cached_token_reporting
+    )
+    paths = cache_paths(data)
+    has_baseline = any(label == "baseline" for label, _ in paths)
+    path_summaries = dict(paths)
+    if args.require_cache_baseline and not has_baseline:
+        failures.append(
+            "direct backend baseline cache evidence missing; run "
+            "cache_token_probe.py with --baseline-base-url"
+        )
+    for label, summary in paths:
+        add_validation_failures(failures, label, summary)
+        metrics[label], path_failures = evaluate_cache_path(
+            label, summary, args, require_probe_metadata
+        )
+        failures.extend(path_failures)
+    if require_probe_metadata:
+        add_cache_probe_pair_failures(
+            failures,
+            path_summaries.get("router"),
+            path_summaries.get("baseline"),
+        )
+    if args.require_cache_baseline:
+        add_cache_probe_serving_path_failures(
+            failures,
+            path_summaries.get("router"),
+            path_summaries.get("baseline"),
+        )
+    metrics["baseline_required"] = args.require_cache_baseline
+    metrics["baseline_present"] = has_baseline
+    return requirement(
+        "cache_token_reporting",
+        "Cache-token reporting",
+        BLOCKING_STATUS if failures else PASSING_STATUS,
+        evidence,
+        metrics,
+        failures,
+    )
+
+
+def branch_image_evidence_failures(data: dict[str, Any]) -> list[str]:
+    failures: list[str] = []
+    evidence_sections = data.get("evidence")
+    if not isinstance(evidence_sections, dict):
+        evidence_sections = {}
+        failures.append("branch-image assembler evidence sections missing")
+    for key in REQUIRED_FULL_BRANCH_IMAGE_EVIDENCE:
+        value = evidence_sections.get(key)
+        if key == "diagnostic":
+            if not isinstance(value, dict) or not value:
+                failures.append("branch-image evidence diagnostic missing")
+        elif not isinstance(value, list) or not value:
+            failures.append(f"branch-image evidence {key} missing")
+    return failures
+
+
+def add_branch_image_identity_failures(
+    failures: list[str],
+    args: argparse.Namespace,
+    ref: str,
+    image_tag: str,
+) -> None:
+    if not ref:
+        failures.append("branch-image ref missing")
+    elif args.expected_ref and ref != args.expected_ref:
+        failures.append(f"branch-image ref {ref} != expected {args.expected_ref}")
+    if not image_tag:
+        failures.append("branch-image image_tag missing")
+    elif args.expected_image_tag and image_tag != args.expected_image_tag:
+        failures.append(
+            f"branch-image image_tag {image_tag} != expected "
+            f"{args.expected_image_tag}"
+        )
+
+
+def evaluate_branch_image_summary(args: argparse.Namespace) -> dict[str, Any]:
+    data, evidence = load_json(args.branch_image_summary)
+    if data is None:
+        return requirement(
+            "branch_image_amd_validation",
+            "Branch-image AMD benchmark",
+            MISSING_STATUS,
+            evidence,
+            failures=["full branch-image AMD benchmark artifact is required before GA"],
+        )
+    failures = [str(item) for item in validation_failures(data)]
+    checks = data.get("checks") if isinstance(data.get("checks"), dict) else {}
+    for key in ["chat_completion_ok", "diagnostic_headers_ok"]:
+        if key in checks and checks[key] is not True:
+            failures.append(f"{key} is not true")
+    for key in REQUIRED_FULL_BRANCH_IMAGE_CHECKS:
+        if checks.get(key) is not True:
+            failures.append(f"branch-image check {key} is not true")
+    failures.extend(branch_image_evidence_failures(data))
+    for header in data.get("missing_diagnostic_headers") or []:
+        failures.append(f"missing diagnostic header: {header}")
+    for header in data.get("invalid_diagnostic_headers") or []:
+        failures.append(f"invalid diagnostic header: {header}")
+    validation_kind = normalize_policy_name(
+        str(
+            data.get("validation_kind")
+            or data.get("benchmark_kind")
+            or data.get("kind")
+            or ""
+        )
+    )
+    image_tag = str(data.get("image_tag", ""))
+    label = str(data.get("label", ""))
+    ref = str(data.get("ref", ""))
+    full_branch_image = bool(data.get("branch_image_benchmark")) or (
+        validation_kind in FULL_BRANCH_IMAGE_KINDS
+    )
+    source_fingerprint = " ".join([validation_kind, image_tag, label]).lower()
+    mounted_binary = any(
+        marker in source_fingerprint for marker in MOUNTED_BINARY_MARKERS
+    )
+    if not full_branch_image:
+        failures.append(
+            "full branch-image benchmark marker missing; diagnostic probes do not "
+            "satisfy GA"
+        )
+    add_branch_image_identity_failures(failures, args, ref, image_tag)
+    if mounted_binary:
+        failures.append(
+            "mounted-binary diagnostic does not satisfy full branch-image AMD "
+            "benchmark"
+        )
+    failures = list(dict.fromkeys(failures))
+    status = BLOCKING_STATUS if failures else PASSING_STATUS
+    return requirement(
+        "branch_image_amd_validation",
+        "Branch-image AMD benchmark",
+        status,
+        evidence,
+        {
+            "validation_kind": validation_kind,
+            "checks": checks,
+            "image_tag": image_tag,
+            "label": label,
+            "ref": ref,
+            "expected_ref": args.expected_ref,
+            "expected_image_tag": args.expected_image_tag,
+        },
+        failures,
+    )
+
+
+def generate_report(args: argparse.Namespace) -> dict[str, Any]:
+    requirements: list[dict[str, Any]] = [
+        evaluate_synthetic_matrix(args),
+        evaluate_synthetic_ablation(args),
+    ]
+    requirements.extend(
+        evaluate_live_aggregate(args, path, idx)
+        for idx, path in enumerate(args.live_aggregate, start=1)
+    )
+    requirements.extend(
+        evaluate_failure_aggregate(args, path, idx)
+        for idx, path in enumerate(args.failure_aggregate, start=1)
+    )
+    requirements.extend(
+        evaluate_agent_task_summary(args, path, idx)
+        for idx, path in enumerate(args.agent_task_summary, start=1)
+    )
+    requirements.extend(
+        [
+            evaluate_cache_aggregate(args),
+            evaluate_branch_image_summary(args),
+        ]
+    )
+    for item in requirements:
+        item["next_actions"] = next_actions_for_requirement(item)
+    blockers = [
+        item
+        for item in requirements
+        if item["status"] in {BLOCKING_STATUS, MISSING_STATUS}
+    ]
+    return {
+        "generated_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+        "ga_ready": not blockers,
+        "blocker_count": len(blockers),
+        "passed_count": sum(
+            1 for item in requirements if item["status"] == PASSING_STATUS
+        ),
+        "blockers": blockers,
+        "requirements": requirements,
+        "debug_evidence_chain": build_debug_evidence_chain(requirements),
+    }
+
+
+def build_debug_evidence_chain(
+    requirements: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    synthetic = requirement_subset(
+        requirements,
+        {"synthetic_policy_matrix", "synthetic_policy_ablation"},
+    )
+    live = requirement_prefix_subset(requirements, "amd_live_matrix")
+    failure = requirement_prefix_subset(requirements, "amd_failure_recovery")
+    agent_tasks = requirement_prefix_subset(requirements, "amd_agent_task_quality")
+    cache = requirement_subset(requirements, {"cache_token_reporting"})
+    branch = requirement_subset(requirements, {"branch_image_amd_validation"})
+
+    diagnostic_headers = collect_required_headers(agent_tasks)
+    replay_header_required = "x-vsr-replay-id" in diagnostic_headers
+    return [
+        {
+            "id": "policy_evidence",
+            "title": "Policy evidence",
+            "status": merged_requirement_status(synthetic),
+            "proves": (
+                "Synthetic matrix and ablation evidence cover policy behavior "
+                "only; they do not satisfy release evidence by themselves."
+            ),
+            "requirements": requirement_ids(synthetic),
+            "evidence": requirement_evidence(synthetic),
+            "details": {"claim_boundary": "policy evidence only"},
+        },
+        {
+            "id": "runtime_continuity",
+            "title": "Runtime continuity and recovery",
+            "status": merged_requirement_status([*live, *failure, *agent_tasks]),
+            "proves": (
+                "Live AMD traffic, disruption recovery, and agent-task loops "
+                "exercise hard locks, safe reselection boundaries, and "
+                "session recovery under OpenAI-compatible serving paths."
+            ),
+            "requirements": requirement_ids([*live, *failure, *agent_tasks]),
+            "evidence": requirement_evidence([*live, *failure, *agent_tasks]),
+            "details": {
+                "hard_locks": ["tool_loop", "provider_state"],
+                "safe_boundaries": ["idle_boundary", "decision_drift"],
+            },
+        },
+        {
+            "id": "router_diagnostic_headers",
+            "title": "Router diagnostic headers",
+            "status": merged_requirement_status(agent_tasks),
+            "proves": (
+                "Successful agent-task requests expose selected model, "
+                "decision, confidence, session phase, context-token count, "
+                "and replay id headers for request-level debugging."
+            ),
+            "requirements": requirement_ids(agent_tasks),
+            "evidence": requirement_evidence(agent_tasks),
+            "details": {"required_headers": diagnostic_headers},
+        },
+        {
+            "id": "replay_trace_join",
+            "title": "Replay trace join key",
+            "status": replay_trace_join_status(agent_tasks, replay_header_required),
+            "proves": (
+                "`x-vsr-replay-id` links response diagnostics back to router "
+                "replay records so session decisions can be audited after the "
+                "request completes."
+            ),
+            "requirements": requirement_ids(agent_tasks),
+            "evidence": requirement_evidence(agent_tasks),
+            "details": {"required_header": "x-vsr-replay-id"},
+        },
+        {
+            "id": "cache_serving_path",
+            "title": "Cache-token serving-path evidence",
+            "status": merged_requirement_status(cache),
+            "proves": (
+                "Cached-token claims require positive router and direct-backend "
+                "serving-path evidence with matching probe identity."
+            ),
+            "requirements": requirement_ids(cache),
+            "evidence": requirement_evidence(cache),
+            "details": {"baseline_required": True},
+        },
+        {
+            "id": "branch_image_artifact",
+            "title": "Branch-image artifact",
+            "status": merged_requirement_status(branch),
+            "proves": (
+                "The final GA package must be assembled from the reviewed "
+                "branch image, not from a mounted-binary diagnostic run."
+            ),
+            "requirements": requirement_ids(branch),
+            "evidence": requirement_evidence(branch),
+            "details": {
+                "required_child_evidence": list(REQUIRED_FULL_BRANCH_IMAGE_EVIDENCE)
+            },
+        },
+    ]
+
+
+def requirement_subset(
+    requirements: list[dict[str, Any]], ids: set[str]
+) -> list[dict[str, Any]]:
+    return [item for item in requirements if str(item.get("id", "")) in ids]
+
+
+def requirement_prefix_subset(
+    requirements: list[dict[str, Any]], prefix: str
+) -> list[dict[str, Any]]:
+    return [item for item in requirements if str(item.get("id", "")).startswith(prefix)]
+
+
+def merged_requirement_status(items: list[dict[str, Any]]) -> str:
+    if not items:
+        return MISSING_STATUS
+    statuses = {str(item.get("status", "")) for item in items}
+    if MISSING_STATUS in statuses:
+        return MISSING_STATUS
+    if BLOCKING_STATUS in statuses:
+        return BLOCKING_STATUS
+    return PASSING_STATUS
+
+
+def replay_trace_join_status(
+    agent_tasks: list[dict[str, Any]], replay_header_required: bool
+) -> str:
+    if not agent_tasks:
+        return MISSING_STATUS
+    if not replay_header_required:
+        return BLOCKING_STATUS
+    return merged_requirement_status(agent_tasks)
+
+
+def requirement_ids(items: list[dict[str, Any]]) -> list[str]:
+    return [str(item.get("id", "")) for item in items if str(item.get("id", ""))]
+
+
+def requirement_evidence(items: list[dict[str, Any]]) -> list[str]:
+    seen: dict[str, None] = {}
+    for item in items:
+        evidence = str(item.get("evidence", ""))
+        if evidence:
+            seen[evidence] = None
+    return list(seen.keys())
+
+
+def collect_required_headers(items: list[dict[str, Any]]) -> list[str]:
+    seen: dict[str, None] = {}
+    for item in items:
+        metrics = item.get("metrics", {})
+        if not isinstance(metrics, dict):
+            continue
+        headers = metrics.get("required_headers", [])
+        if not isinstance(headers, list):
+            continue
+        for header in headers:
+            value = str(header)
+            if value:
+                seen[value] = None
+    return list(seen.keys())
+
+
+def render_markdown(report: dict[str, Any]) -> str:
+    lines = [
+        "# Session-Aware Agentic Routing GA Readiness",
+        "",
+        f"- generated_at: {report['generated_at']}",
+        f"- ga_ready: {str(report['ga_ready']).lower()}",
+        f"- passed: {report['passed_count']}",
+        f"- blockers: {report['blocker_count']}",
+        "",
+    ]
+
+    blockers = [
+        item
+        for item in report["requirements"]
+        if item["status"] in {BLOCKING_STATUS, MISSING_STATUS}
+    ]
+    lines.extend(render_blocker_queue(blockers))
+    lines.extend(
+        ["", *render_debug_evidence_chain(report.get("debug_evidence_chain", []))]
+    )
+    lines.extend(["", "## Requirement Details", ""])
+
+    for item in report["requirements"]:
+        lines.extend(render_requirement_section(item))
+    lines.append("")
+    return "\n".join(lines)
+
+
+def render_blocker_queue(blockers: list[dict[str, Any]]) -> list[str]:
+    lines = ["## Blocker Queue", ""]
+    if not blockers:
+        lines.append("No blockers.")
+        return lines
+    for index, item in enumerate(blockers, 1):
+        lines.append(f"{index}. **{item['title']}** (`{item['status']}`)")
+        lines.append(f"   - evidence: `{item['evidence']}`")
+        failures = item.get("failures", [])
+        if failures:
+            lines.append(f"   - first blocker: {failures[0]}")
+        next_actions = item.get("next_actions", [])
+        if next_actions:
+            lines.append(f"   - next action: {next_actions[0]}")
+    return lines
+
+
+def render_debug_evidence_chain(chain: Any) -> list[str]:
+    lines = ["## Debug Evidence Chain", ""]
+    if not isinstance(chain, list) or not chain:
+        lines.append("No debug evidence chain was generated.")
+        return lines
+    for index, item in enumerate(chain, 1):
+        if not isinstance(item, dict):
+            continue
+        lines.append(
+            f"{index}. **{item.get('title', '')}** (`{item.get('status', '')}`)"
+        )
+        proves = item.get("proves")
+        if proves:
+            lines.append(f"   - proves: {proves}")
+        requirements = item.get("requirements", [])
+        if requirements:
+            lines.append(f"   - requirements: {inline_code_list(requirements)}")
+        evidence = item.get("evidence", [])
+        if evidence:
+            lines.append(f"   - evidence: {inline_code_list(evidence)}")
+        details = item.get("details", {})
+        if isinstance(details, dict):
+            lines.extend(render_debug_chain_details(details))
+    return lines
+
+
+def render_debug_chain_details(details: dict[str, Any]) -> list[str]:
+    lines: list[str] = []
+    for key in [
+        "claim_boundary",
+        "hard_locks",
+        "safe_boundaries",
+        "required_headers",
+        "required_header",
+        "baseline_required",
+        "required_child_evidence",
+    ]:
+        value = details.get(key)
+        if value in (None, "", [], {}):
+            continue
+        if isinstance(value, list):
+            lines.append(f"   - {key}: {inline_code_list(value)}")
+        else:
+            lines.append(f"   - {key}: `{value}`")
+    return lines
+
+
+def inline_code_list(values: list[Any]) -> str:
+    return ", ".join(f"`{value}`" for value in values)
+
+
+def render_requirement_section(item: dict[str, Any]) -> list[str]:
+    lines = [
+        f"### {item['title']}",
+        "",
+        f"- status: `{item['status']}`",
+        f"- evidence: `{item['evidence']}`",
+    ]
+    metrics = compact_metrics(item.get("metrics", {}))
+    if metrics:
+        language = (
+            "json" if not metrics_was_truncated(item.get("metrics", {})) else "text"
+        )
+        lines.extend(["", "#### Key Metrics", "", f"```{language}", metrics, "```"])
+    failures = numbered_lines(item.get("failures", []))
+    if failures:
+        lines.extend(["", "#### Blockers", "", *failures])
+    next_actions = numbered_lines(item.get("next_actions", []))
+    if next_actions:
+        lines.extend(["", "#### Next Actions", "", *next_actions])
+    lines.append("")
+    return lines
+
+
+def numbered_lines(values: list[Any]) -> list[str]:
+    return [f"{index}. {value}" for index, value in enumerate(values, 1)]
+
+
+def compact_metrics(metrics: Any) -> str:
+    if not metrics:
+        return ""
+    rendered = json.dumps(metrics, sort_keys=True)
+    if len(rendered) <= MARKDOWN_METRIC_LIMIT:
+        return rendered
+    return rendered[:MARKDOWN_METRIC_TRUNCATED_LIMIT] + "..."
+
+
+def metrics_was_truncated(metrics: Any) -> bool:
+    if not metrics:
+        return False
+    return len(json.dumps(metrics, sort_keys=True)) > MARKDOWN_METRIC_LIMIT
+
+
+def write_report(report: dict[str, Any], output_dir: Path) -> None:
+    output_dir.mkdir(parents=True, exist_ok=True)
+    (output_dir / "ga-readiness.json").write_text(
+        json.dumps(report, indent=2, sort_keys=True) + "\n"
+    )
+    (output_dir / "ga-readiness.md").write_text(render_markdown(report))
+
+
+def stdout_blocker_summary(report: dict[str, Any]) -> list[dict[str, Any]]:
+    return [
+        {
+            "id": item.get("id", ""),
+            "title": item.get("title", ""),
+            "status": item.get("status", ""),
+            "next_actions": item.get("next_actions", []),
+        }
+        for item in report.get("blockers", [])
+    ]
+
+
+def main(argv: list[str] | None = None) -> int:
+    args = parse_args(argv)
+    output_dir = args.output_dir or default_output_dir()
+    report = generate_report(args)
+    write_report(report, output_dir)
+    print(
+        json.dumps(
+            {
+                "output_dir": str(output_dir),
+                "ga_ready": report["ga_ready"],
+                "blocker_count": report["blocker_count"],
+                "blockers": stdout_blocker_summary(report),
+            },
+            indent=2,
+            sort_keys=True,
+        )
+    )
+    return 0 if report["ga_ready"] or args.allow_blockers else 1
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

@@ -40,3 +40,29 @@ func TestBuildResponseHeaderMutation_IncludesExtendedMatchedSignalHeaders(t *tes
 	assert.Equal(t, "likely_dissatisfied", headerMap[headers.VSRMatchedReask])
 	assert.Equal(t, "balance_reasoning", headerMap[headers.VSRMatchedProjection])
 }
+
+func TestBuildResponseHeaderMutation_EmitsZeroDecisionConfidence(t *testing.T) {
+	ctx := &RequestContext{
+		VSRSelectedDecisionName:       "agentic_routing",
+		VSRSelectedDecisionConfidence: 0,
+		VSRSelectedModel:              "qwen-small",
+		VSRContextTokenCount:          42,
+		VSRSessionPolicy: map[string]interface{}{
+			"phase": "provider_state",
+		},
+	}
+
+	mutation := buildResponseHeaderMutation(ctx, true)
+	require.NotNil(t, mutation)
+
+	headerMap := map[string]string{}
+	for _, header := range mutation.SetHeaders {
+		headerMap[header.Header.Key] = string(header.Header.RawValue)
+	}
+
+	assert.Equal(t, "agentic_routing", headerMap[headers.VSRSelectedDecision])
+	assert.Equal(t, "0.0000", headerMap[headers.VSRSelectedConfidence])
+	assert.Equal(t, "qwen-small", headerMap[headers.VSRSelectedModel])
+	assert.Equal(t, "provider_state", headerMap[headers.VSRSessionPhase])
+	assert.Equal(t, "42", headerMap[headers.VSRContextTokenCount])
+}

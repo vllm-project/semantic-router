@@ -12,13 +12,17 @@ import sys
 from pathlib import Path
 from typing import Any
 
+import maintainer_ga_readiness
 import yaml
+from maintainer_release_plan import (
+    match_release_tasks_to_issues,
+    open_release_tasks,
+    release_plan_issue_context,
+)
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
 POLICY_PATH = REPO_ROOT / "tools" / "agent" / "maintainer-policy.yaml"
 DEFAULT_ACTIONS = "proposed-actions.json"
-MIN_RELEASE_TASK_MATCH_TOKENS = 3
-MIN_SEARCH_TOKEN_LENGTH = 4
 
 
 def load_policy() -> dict[str, Any]:
@@ -226,9 +230,9 @@ def render_today(snapshot: dict[str, Any]) -> str:
         f"Generated: {snapshot['generated_at']}",
         f"Milestone: {snapshot.get('active_milestone') or 'all'}",
         "",
-        "## PR Actions",
-        "",
     ]
+    lines.extend(maintainer_ga_readiness.render(snapshot))
+    lines.extend(["## PR Actions", ""])
     for group in (
         "merge-candidate",
         "review-now",
@@ -312,7 +316,9 @@ def render_release_readiness(snapshot: dict[str, Any], release_plan: Path) -> st
     open_count = milestone_data.get("open_issues", "unknown")
     closed_count = milestone_data.get("closed_issues", "unknown")
     tasks = open_release_tasks(release_plan)
-    issues = snapshot["groups"]["issues"]["milestone-bound"]
+    issues = release_plan_issue_context(
+        snapshot["groups"]["issues"]["milestone-bound"], release_plan
+    )
     matches = match_release_tasks_to_issues(tasks, issues)
     missing = [item for item in matches if not item["matches"]]
 
@@ -323,9 +329,14 @@ def render_release_readiness(snapshot: dict[str, Any], release_plan: Path) -> st
         f"Milestone: {milestone}",
         f"Milestone issues: {open_count} open, {closed_count} closed",
         "",
-        "## Open Plan Tasks",
-        "",
     ]
+    lines.extend(maintainer_ga_readiness.render(snapshot))
+    lines.extend(
+        [
+            "## Open Plan Tasks",
+            "",
+        ]
+    )
     if tasks:
         lines.extend(f"- {task}" for task in tasks)
     else:
@@ -348,12 +359,7 @@ def render_release_readiness(snapshot: dict[str, Any], release_plan: Path) -> st
             lines.append("- no matching milestone issue")
         lines.append("")
 
-    lines.extend(["## Release Blockers", ""])
-    blockers = snapshot["groups"]["pull_requests"]["unblock"]
-    if blockers:
-        lines.extend(f"- {summarize_item(pr)}" for pr in blockers)
-    else:
-        lines.append("- none")
+    lines.extend(render_release_blockers(snapshot))
 
     lines.extend(["", "## PR Queue", ""])
     for group in ("merge-candidate", "review-now", "needs-rebase", "close-candidate"):
@@ -363,51 +369,43 @@ def render_release_readiness(snapshot: dict[str, Any], release_plan: Path) -> st
     return "\n".join(lines)
 
 
-def match_release_tasks_to_issues(
-    tasks: list[str], issues: list[dict[str, Any]]
-) -> list[dict[str, Any]]:
-    matches = []
-    for task in tasks:
-        task_tokens = searchable_tokens(task)
-        task_td_ids = set(re.findall(r"TD\d{3}", task, flags=re.IGNORECASE))
-        issue_matches = []
-        for issue in issues:
-            title = issue.get("title", "")
-            title_tokens = searchable_tokens(title)
-            title_td_ids = set(re.findall(r"TD\d{3}", title, flags=re.IGNORECASE))
-            if task_td_ids and task_td_ids.intersection(title_td_ids):
-                issue_matches.append(issue)
-                continue
-            if (
-                len(task_tokens.intersection(title_tokens))
-                >= MIN_RELEASE_TASK_MATCH_TOKENS
-            ):
-                issue_matches.append(issue)
-        matches.append({"task": task, "matches": issue_matches})
-    return matches
+def render_release_blockers(snapshot: dict[str, Any]) -> list[str]:
+    lines = ["## Release Blockers", ""]
+    groups = release_blocker_groups(snapshot)
+    if not groups:
+        lines.append("- none")
+        return lines
+    for index, (heading, items) in enumerate(groups):
+        if index:
+            lines.append("")
+        lines.append(f"### {heading}")
+        lines.extend(items)
+    return lines
 
 
-def searchable_tokens(value: str) -> set[str]:
-    stop_words = {
-        "and",
-        "the",
-        "for",
-        "with",
-        "into",
-        "this",
-        "that",
-        "using",
-        "covering",
-        "close",
-        "create",
-        "update",
-        "release",
-    }
-    return {
-        token.lower()
-        for token in re.findall(r"[A-Za-z0-9]+", value)
-        if len(token) >= MIN_SEARCH_TOKEN_LENGTH and token.lower() not in stop_words
-    }
+def release_blocker_groups(snapshot: dict[str, Any]) -> list[tuple[str, list[str]]]:
+    groups = []
+    ga_readiness = snapshot.get("session_routing_ga_readiness") or {}
+    ga_blockers = ga_readiness.get("blockers", [])
+    if ga_blockers:
+        groups.append(
+            (
+                "Session-Aware GA",
+                [
+                    f"- {item['status']}: {item['title']} (`{item['id']}`)"
+                    for item in ga_blockers
+                ],
+            )
+        )
+    pr_blockers = snapshot["groups"]["pull_requests"]["unblock"]
+    if pr_blockers:
+        groups.append(
+            (
+                "PRs Requiring Unblock",
+                [f"- {summarize_item(pr)}" for pr in pr_blockers],
+            )
+        )
+    return groups
 
 
 def proposed_actions(
@@ -469,6 +467,7 @@ def build_snapshot(
         },
     }
     snapshot["proposed_actions"] = proposed_actions(snapshot, policy)
+    maintainer_ga_readiness.attach_latest(snapshot)
     return snapshot
 
 
@@ -519,37 +518,6 @@ def sanitize_public_payload(text: str, policy: dict[str, Any]) -> None:
             raise SystemExit(f"Public payload matches forbidden pattern: {pattern}")
 
 
-def open_release_tasks(plan_path: Path) -> list[str]:
-    tasks: list[str] = []
-    current: list[str] | None = None
-    for line in plan_path.read_text(encoding="utf-8").splitlines():
-        stripped = line.strip()
-        if stripped.startswith("- [ ]"):
-            if current:
-                tasks.append(" ".join(current))
-            current = [stripped[6:].strip()]
-            continue
-        if stripped.startswith("- ["):
-            if current:
-                tasks.append(" ".join(current))
-            current = None
-            continue
-        if current is not None:
-            if line.startswith((" ", "\t")) and stripped:
-                current.append(stripped)
-                continue
-            if stripped:
-                tasks.append(" ".join(current))
-                current = None
-    if current:
-        tasks.append(" ".join(current))
-    normalized_tasks = []
-    for task in tasks:
-        normalized_task = re.sub(r"`([^`]+)`", r"\1", task)
-        normalized_tasks.append(normalized_task)
-    return normalized_tasks
-
-
 def create_issue_actions(
     args: argparse.Namespace, policy: dict[str, Any]
 ) -> list[dict[str, Any]]:
@@ -559,7 +527,9 @@ def create_issue_actions(
     tasks = open_release_tasks(plan_path)
     if not args.include_matched:
         snapshot = load_current(output_dir(policy, args.output_dir))
-        issues = snapshot["groups"]["issues"]["milestone-bound"]
+        issues = release_plan_issue_context(
+            snapshot["groups"]["issues"]["milestone-bound"], plan_path
+        )
         tasks = [
             item["task"]
             for item in match_release_tasks_to_issues(tasks, issues)
@@ -646,6 +616,7 @@ def handle_brief(args: argparse.Namespace) -> int:
     policy = load_policy()
     out_dir = output_dir(policy, args.output_dir)
     snapshot = load_current(out_dir)
+    maintainer_ga_readiness.attach_latest(snapshot)
     print(render_today(snapshot))
     return 0
 
@@ -654,6 +625,7 @@ def handle_release_report(args: argparse.Namespace) -> int:
     policy = load_policy()
     out_dir = output_dir(policy, args.output_dir)
     snapshot = load_current(out_dir)
+    maintainer_ga_readiness.attach_latest(snapshot)
     release_plan = resolve_repo_path(args.release_plan)
     report = render_release_readiness(snapshot, release_plan)
     if args.write:

@@ -186,8 +186,8 @@ type SelectionContext struct {
 	SessionID string
 
 	// AgenticSession carries request-time session facts used by
-	// session_aware selection. The legacy flat SessionID remains for selectors
-	// that only need a correlation key.
+	// session_aware selection. The flat SessionID remains the shared
+	// correlation key for selectors that do not need richer session facts.
 	AgenticSession *AgenticSessionContext
 
 	// LatencyAwareTPOTPercentile is the configured TPOT percentile (1-100) for latency_aware selection
@@ -329,11 +329,11 @@ func Select(ctx context.Context, method SelectionMethod, selCtx *SelectionContex
 
 	selector, ok := GlobalRegistry.Get(method)
 	if !ok {
-		// Fall back to static selection
+		// Default to static selection when the requested method is not registered.
 		selector, _ = GlobalRegistry.Get(MethodStatic)
 	}
 	if selector == nil {
-		// Ultimate fallback: return first candidate
+		// Last-resort default: return the first configured candidate.
 		return &SelectionResult{
 			SelectedModel: selCtx.CandidateModels[0].Model,
 			LoRAName:      selCtx.CandidateModels[0].LoRAName,

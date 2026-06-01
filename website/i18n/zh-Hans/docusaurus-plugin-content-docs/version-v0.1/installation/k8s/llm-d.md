@@ -1,8 +1,8 @@
 # 使用 LLM-D 安装
 
-本指南提供了将 vLLM Semantic Router (vsr) 与 [LLM-D](https://github.com/llm-d/llm-d) 结合部署的分步说明。这也将说明一个关键设计模式，即使用 vsr 作为 model selector，结合使用 LLM-D 作为 endpoint selector。
+本指南提供了将 vLLM Semantic Router (vsr) 与 [LLM-D](https://github.com/llm-d/llm-d) 结合部署的分步说明。这也将说明一个关键设计模式，即使用 vsr 作为 model selector，而 LLM-D 负责所选模型池内的副本调度。
 
-Model selector 提供将 LLM 查询路由到多个完全不同的 LLM 模型之一的能力，而 endpoint selector 则选择多个 endpoint 之一，每个 endpoint 服务一个等效模型（通常是完全相同的基础模型）。因此，此部署展示了 vLLM Semantic Router 作为 model selector 如何与 LLM-D 等 endpoint selector 解决方案完美互补。
+Model selector 提供将 LLM 查询路由到多个完全不同的 LLM 模型之一的能力，而 LLM-D 在服务等效模型（通常是完全相同基础模型）的多个副本之间调度。因此，此部署展示了 vLLM Semantic Router 作为 model selector 如何与 LLM-D 的后端调度器互补。
 
 由于 LLM-D 有多种部署配置，其中一些需要更大的硬件设置，我们将演示 LLM-D 与 vsr 配合工作的基线版本，以介绍核心概念。当使用更复杂的 LLM-D 配置和生产级良好路径时，这些核心概念同样适用，如 LLM-D 仓库中[此链接](https://github.com/llm-d/llm-d/tree/main/guides)所述。
 
@@ -99,11 +99,11 @@ phi4-mini                             ClusterIP      10.97.252.33     <none>    
 
 ## 步骤 4：部署 InferencePools 和 LLM-D 调度器
 
-LLM-D（和 Kubernetes IGW）使用一个名为 InferencePool 的 API 资源，以及一个调度器（称为 LLM-D 推理调度器，有时也等效地称为 EndPoint Picker/EPP）。
+LLM-D（和 Kubernetes IGW）使用一个名为 InferencePool 的 API 资源，以及一个调度器（在 LLM-D 和 Gateway API Inference Extension 文档中通常缩写为 EPP）。
 
 部署提供的清单以创建与本练习中使用的 2 个基础模型对应的 InferencePool 和 LLM-D 推理调度器。
 
-为了展示模型选择和端点选择的完整组合，通常需要至少 2 个 inferencepools，每个池至少有 2 个端点。由于这需要 4 个 vllm 服务 pods 实例和 4 个 GPU，这需要更复杂的硬件设置。本指南在两个 InferencePools 中各部署 1 个模型端点，以展示 vsr 的模型选择与 LLM-D 调度器的端点选择配合工作并相互补充的核心设计。
+为了展示模型选择和副本调度的完整组合，通常需要至少 2 个 inferencepools，每个池至少有 2 个副本。由于这需要 4 个 vllm 服务 pods 实例和 4 个 GPU，这需要更复杂的硬件设置。本指南在两个 InferencePools 中各部署 1 个模型端点，以展示 vsr 的模型选择与 LLM-D 调度器配合工作的核心设计。
 
 ```bash
 # 为 Llama3-8b 模型创建 LLM-D 调度器和 InferencePool

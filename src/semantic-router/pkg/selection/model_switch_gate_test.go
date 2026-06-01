@@ -93,7 +93,7 @@ func TestModelSwitchGateAllowsSwitchWhenAdvantageWins(t *testing.T) {
 
 func TestModelSwitchGateMissingPreviousModelBlocks(t *testing.T) {
 	// previous_model is the only blocking session signal: if it is missing the
-	// gate cannot compare stay vs. switch and must fall back to audit-only.
+	// gate cannot compare stay vs. switch and must stay in audit-only mode.
 	gate := NewModelSwitchGate(config.ModelSwitchGateConfig{
 		Enabled: true,
 		Mode:    ModelSwitchGateModeEnforce,
@@ -109,10 +109,10 @@ func TestModelSwitchGateMissingPreviousModelBlocks(t *testing.T) {
 	})
 
 	if decision.WouldSwitch || decision.EnforcedStay {
-		t.Fatalf("missing previous_model must fall back without enforcing, got decision: %+v", decision)
+		t.Fatalf("missing previous_model must stay audit-only without enforcing, got decision: %+v", decision)
 	}
-	if decision.Reason != "missing_signal_fallback" {
-		t.Fatalf("expected missing_signal_fallback, got %q", decision.Reason)
+	if decision.Reason != "missing_signal_audit_only" {
+		t.Fatalf("expected missing_signal_audit_only, got %q", decision.Reason)
 	}
 	if !slices.Contains(decision.MissingSignals, "previous_model") {
 		t.Fatalf("expected missing previous_model, got %v", decision.MissingSignals)
@@ -148,7 +148,7 @@ func TestModelSwitchGateSessionIDInformationalOnly(t *testing.T) {
 		CandidateModel: "candidate",
 	})
 
-	if decision.Reason == "missing_signal_fallback" {
+	if decision.Reason == "missing_signal_audit_only" {
 		t.Fatalf("session_id missing must not block evidence: %+v", decision)
 	}
 	if !decision.NetSwitchAdvantageOK {

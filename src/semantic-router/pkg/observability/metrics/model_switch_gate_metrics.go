@@ -12,7 +12,7 @@ import (
 // ModelSwitchGateDecisions counts every gate evaluation, labeled so operators
 // can diff shadow vs. enforce, would-switch vs. stay, and bucket the reasons
 // emitted by the gate (e.g., switch_advantage_exceeds_threshold,
-// stay_cost_not_exceeded, missing_signal_fallback, candidate_is_current_model).
+// stay_cost_not_exceeded, missing_signal_audit_only, candidate_is_current_model).
 var ModelSwitchGateDecisions = promauto.NewCounterVec(
 	prometheus.CounterOpts{
 		Name: "llm_model_switch_gate_decisions_total",

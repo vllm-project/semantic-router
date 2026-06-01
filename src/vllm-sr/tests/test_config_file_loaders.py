@@ -79,6 +79,64 @@ def test_parse_user_config_rejects_empty_file(tmp_path: Path) -> None:
         parse_user_config(str(config_path))
 
 
+def test_parse_user_config_preserves_cached_input_pricing(tmp_path: Path) -> None:
+    config_path = tmp_path / "config.yaml"
+    write_minimal_config(config_path)
+    data = yaml.safe_load(config_path.read_text(encoding="utf-8"))
+    data["providers"]["models"][0]["pricing"] = {
+        "currency": "USD",
+        "prompt_per_1m": 2.0,
+        "cached_input_per_1m": 0.25,
+        "completion_per_1m": 6.0,
+    }
+    config_path.write_text(yaml.safe_dump(data, sort_keys=False), encoding="utf-8")
+
+    parsed = parse_user_config(str(config_path))
+
+    pricing = parsed.providers.models[0].pricing
+    assert pricing is not None
+    assert pricing.cached_input_per_1m == 0.25
+    assert pricing.model_dump()["cached_input_per_1m"] == 0.25
+
+
+def test_parse_user_config_rejects_unknown_pricing_fields(tmp_path: Path) -> None:
+    config_path = tmp_path / "config.yaml"
+    write_minimal_config(config_path)
+    data = yaml.safe_load(config_path.read_text(encoding="utf-8"))
+    data["providers"]["models"][0]["pricing"] = {
+        "currency": "USD",
+        "prompt_per_1m": 2.0,
+        "cached_input": 0.25,
+        "completion_per_1m": 6.0,
+    }
+    config_path.write_text(yaml.safe_dump(data, sort_keys=False), encoding="utf-8")
+
+    with pytest.raises(ConfigParseError) as exc:
+        parse_user_config(str(config_path))
+
+    assert "cached_input" in str(exc.value)
+    assert "Extra inputs are not permitted" in str(exc.value)
+
+
+def test_parse_user_config_rejects_removed_session_aware_fallback_method(
+    tmp_path: Path,
+) -> None:
+    config_path = tmp_path / "config.yaml"
+    write_minimal_config(config_path)
+    data = yaml.safe_load(config_path.read_text(encoding="utf-8"))
+    data["routing"]["decisions"][0]["algorithm"] = {
+        "type": "session_aware",
+        "session_aware": {"fallback_method": "static"},
+    }
+    config_path.write_text(yaml.safe_dump(data, sort_keys=False), encoding="utf-8")
+
+    with pytest.raises(ConfigParseError) as exc:
+        parse_user_config(str(config_path))
+
+    assert "fallback_method" in str(exc.value)
+    assert "Extra inputs are not permitted" in str(exc.value)
+
+
 def test_load_config_file_rejects_missing_file(tmp_path: Path) -> None:
     missing = tmp_path / "missing.yaml"
 

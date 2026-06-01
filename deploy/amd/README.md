@@ -17,6 +17,8 @@ This playbook documents the AMD reference profile for a single real ROCm vLLM ba
   - executable probe manifest: [balance.probes.yaml](../recipes/balance.probes.yaml)
   - `providers.defaults.default_model` points at the SIMPLE tier
   - `providers.models[].pricing` is example pricing for Insights cost comparison
+    and session-aware prefix-cache checkout accounting; `cached_input_per_1m` is
+    the input-side cached-token rate, not a completion-token price
   - `global.model_catalog.modules` can still tighten learned-signal thresholds without changing the routing-owned DSL surface
 
 The active AMD profile contains 13 routing decisions:

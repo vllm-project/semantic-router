@@ -38,17 +38,22 @@ func validateModelSwitchGate(cfg ModelSwitchGateConfig) error {
 }
 
 func validateSessionAwareSelectionConfig(cfg SessionAwareSelectionConfig) error {
-	intFields := []nonNegativeIntField{
+	intFields := []optionalNonNegativeIntField{
 		{"session_aware.idle_timeout_seconds", cfg.IdleTimeoutSeconds},
 		{"session_aware.min_turns_before_switch", cfg.MinTurnsBeforeSwitch},
-		{"session_aware.remaining_turn_prior_horizon", cfg.RemainingTurnPriorHorizon},
 		{"session_aware.min_remaining_turn_prior_samples", cfg.MinRemainingTurnPriorSamples},
 	}
-	if err := validateNonNegativeIntFields(intFields); err != nil {
+	if err := validateOptionalNonNegativeIntFields(intFields); err != nil {
 		return err
 	}
+	if cfg.RemainingTurnPriorHorizon != nil && *cfg.RemainingTurnPriorHorizon <= 0 {
+		return fmt.Errorf(
+			"session_aware.remaining_turn_prior_horizon must be > 0, got %d",
+			*cfg.RemainingTurnPriorHorizon,
+		)
+	}
 
-	floatFields := []nonNegativeFloatField{
+	floatFields := []optionalNonNegativeFloatField{
 		{"session_aware.switch_margin", cfg.SwitchMargin},
 		{"session_aware.stay_bias", cfg.StayBias},
 		{"session_aware.tool_loop_stay_bias", cfg.ToolLoopStayBias},
@@ -56,36 +61,44 @@ func validateSessionAwareSelectionConfig(cfg SessionAwareSelectionConfig) error 
 		{"session_aware.handoff_penalty_weight", cfg.HandoffPenaltyWeight},
 		{"session_aware.default_handoff_penalty", cfg.DefaultHandoffPenalty},
 		{"session_aware.quality_gap_multiplier", cfg.QualityGapMultiplier},
-		{"session_aware.max_cache_cost_multiplier", cfg.MaxCacheCostMultiplier},
 		{"session_aware.switch_history_weight", cfg.SwitchHistoryWeight},
 		{"session_aware.remaining_turn_prior_weight", cfg.RemainingTurnPriorWeight},
 	}
-	return validateNonNegativeFloatFields(floatFields)
+	if err := validateOptionalNonNegativeFloatFields(floatFields); err != nil {
+		return err
+	}
+	if cfg.MaxCacheCostMultiplier != nil && *cfg.MaxCacheCostMultiplier < 1 {
+		return fmt.Errorf(
+			"session_aware.max_cache_cost_multiplier must be >= 1, got %v",
+			*cfg.MaxCacheCostMultiplier,
+		)
+	}
+	return nil
 }
 
-type nonNegativeIntField struct {
+type optionalNonNegativeIntField struct {
 	name  string
-	value int
+	value *int
 }
 
-func validateNonNegativeIntFields(fields []nonNegativeIntField) error {
+func validateOptionalNonNegativeIntFields(fields []optionalNonNegativeIntField) error {
 	for _, field := range fields {
-		if field.value < 0 {
-			return fmt.Errorf("%s must be >= 0, got %d", field.name, field.value)
+		if field.value != nil && *field.value < 0 {
+			return fmt.Errorf("%s must be >= 0, got %d", field.name, *field.value)
 		}
 	}
 	return nil
 }
 
-type nonNegativeFloatField struct {
+type optionalNonNegativeFloatField struct {
 	name  string
-	value float64
+	value *float64
 }
 
-func validateNonNegativeFloatFields(fields []nonNegativeFloatField) error {
+func validateOptionalNonNegativeFloatFields(fields []optionalNonNegativeFloatField) error {
 	for _, field := range fields {
-		if field.value < 0 {
-			return fmt.Errorf("%s must be >= 0, got %v", field.name, field.value)
+		if field.value != nil && *field.value < 0 {
+			return fmt.Errorf("%s must be >= 0, got %v", field.name, *field.value)
 		}
 	}
 	return nil

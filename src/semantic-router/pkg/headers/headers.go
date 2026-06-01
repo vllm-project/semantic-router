@@ -29,10 +29,6 @@ const (
 	// Example use case: App with Mem0 sends this header to prevent duplicate memory injection.
 	DisableRouterMemory = "x-disable-router-memory"
 
-	// GatewayDestinationEndpoint specifies the backend endpoint address selected by the router.
-	// This header is set by the router to direct Envoy to the appropriate upstream service.
-	GatewayDestinationEndpoint = "x-vsr-destination-endpoint"
-
 	// SelectedModel indicates the model that was selected by the router for processing.
 	// This header is set during the routing decision phase.
 	SelectedModel = "x-selected-model"
@@ -73,6 +69,10 @@ const (
 	// VSRSelectedModel indicates the model selected by VSR for processing the request.
 	// Example values: "deepseek-v31", "phi4", "gpt-4"
 	VSRSelectedModel = "x-vsr-selected-model"
+
+	// VSRSessionPhase indicates the session-aware routing phase used by ACR.
+	// Example values: "user_turn", "tool_loop", "provider_state"
+	VSRSessionPhase = "x-vsr-session-phase"
 
 	// VSRInjectedSystemPrompt indicates whether a system prompt was injected into the request.
 	// Values: "true" or "false"

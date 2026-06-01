@@ -148,7 +148,7 @@ func (s *MultiFactorSelector) Select(_ context.Context, selCtx *SelectionContext
 
 	kept, dropped := s.applySLOFilter(selCtx.CandidateModels)
 	if len(kept) == 0 {
-		return s.applyNoCandidateFallback(selCtx, dropped)
+		return s.applyNoCandidatePolicy(selCtx, dropped)
 	}
 
 	signals := s.gatherSignals(kept)
@@ -289,16 +289,16 @@ func (s *MultiFactorSelector) exceedsSLO(model string) (string, bool) {
 	return "", false
 }
 
-func (s *MultiFactorSelector) applyNoCandidateFallback(selCtx *SelectionContext, dropped []config.ModelRef) (*SelectionResult, error) {
+func (s *MultiFactorSelector) applyNoCandidatePolicy(selCtx *SelectionContext, dropped []config.ModelRef) (*SelectionResult, error) {
 	switch strings.ToLower(s.config.OnNoCandidates) {
 	case "fail":
 		return nil, fmt.Errorf("multi_factor: all %d candidates excluded by SLO", len(dropped))
 	case "first":
 		c := selCtx.CandidateModels[0]
-		return s.fallbackResult(c, "all_candidates_excluded_by_slo:first"), nil
+		return s.noCandidateResult(c, "all_candidates_excluded_by_slo:first"), nil
 	default:
 		c := s.cheapestCandidate(selCtx.CandidateModels)
-		return s.fallbackResult(c, "all_candidates_excluded_by_slo:cheapest"), nil
+		return s.noCandidateResult(c, "all_candidates_excluded_by_slo:cheapest"), nil
 	}
 }
 
@@ -318,7 +318,7 @@ func (s *MultiFactorSelector) cheapestCandidate(candidates []config.ModelRef) co
 	return best
 }
 
-func (s *MultiFactorSelector) fallbackResult(c config.ModelRef, reason string) *SelectionResult {
+func (s *MultiFactorSelector) noCandidateResult(c config.ModelRef, reason string) *SelectionResult {
 	return &SelectionResult{
 		SelectedModel: c.Model,
 		LoRAName:      c.LoRAName,
@@ -326,7 +326,7 @@ func (s *MultiFactorSelector) fallbackResult(c config.ModelRef, reason string) *
 		Confidence:    0.0,
 		Method:        MethodMultiFactor,
 		Tier:          TierSupported,
-		Reasoning:     "multi_factor fallback: " + reason,
+		Reasoning:     "multi_factor no-candidate policy: " + reason,
 	}
 }
 

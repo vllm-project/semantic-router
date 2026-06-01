@@ -348,6 +348,7 @@ def _legacy_model_catalog_config() -> dict:
                 "pricing": {
                     "currency": "USD",
                     "prompt_per_1m": 1.2,
+                    "cached_input_per_1m": 0.3,
                     "completion_per_1m": 3.4,
                 },
                 "external_model_ids": {"openai": "qwen3-32b"},
@@ -401,6 +402,7 @@ def test_migrate_config_data_promotes_legacy_lora_catalog_and_backend_refs():
             "pricing": {
                 "currency": "USD",
                 "prompt_per_1m": 1.2,
+                "cached_input_per_1m": 0.3,
                 "completion_per_1m": 3.4,
             },
             "api_format": "openai",

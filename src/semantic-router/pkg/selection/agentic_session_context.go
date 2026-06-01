@@ -6,9 +6,10 @@ import "time"
 type AgenticPhase string
 
 const (
-	AgenticPhaseUnknown  AgenticPhase = ""
-	AgenticPhaseUserTurn AgenticPhase = "user_turn"
-	AgenticPhaseToolLoop AgenticPhase = "tool_loop"
+	AgenticPhaseUnknown       AgenticPhase = ""
+	AgenticPhaseUserTurn      AgenticPhase = "user_turn"
+	AgenticPhaseToolLoop      AgenticPhase = "tool_loop"
+	AgenticPhaseProviderState AgenticPhase = "provider_state"
 )
 
 // AgenticSessionContext is the selector-owned view of a multi-turn session.
@@ -21,15 +22,19 @@ type AgenticSessionContext struct {
 	PreviousModel      string
 	PreviousResponseID string
 
-	MemoryPresent       bool
-	MemoryTurnCount     int
-	MemorySwitchCount   int
-	MemoryModelTurnCnts map[string]int
-	MemoryPromptTokens  int64
-	MemoryCachedTokens  int64
-	MemoryOutputTokens  int64
-	MemoryCost          float64
-	LastDecisionReason  string
+	MemoryPresent               bool
+	MemoryTurnCount             int
+	MemorySwitchCount           int
+	MemoryModelTurnCnts         map[string]int
+	MemoryPromptTokens          int64
+	MemoryCachedTokens          int64
+	MemoryEstimatedCachedTokens int64
+	MemoryOutputTokens          int64
+	MemoryCost                  float64
+	MemoryEstimatedCacheSavings float64
+	MemoryCacheAccountingSource string
+	LastDecisionName            string
+	LastDecisionReason          string
 
 	HistoryTokens int
 	ContextTokens int
@@ -42,6 +47,9 @@ type AgenticSessionContext struct {
 
 	Phase          AgenticPhase
 	ActiveToolLoop bool
+
+	HasNonPortableContext    bool
+	NonPortableContextReason string
 
 	ToolCallCount     int
 	ToolResultCount   int

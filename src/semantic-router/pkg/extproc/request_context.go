@@ -149,8 +149,6 @@ type RequestContext struct {
 	VSRSignalValues        map[string]float64
 	VSRProjectionTrace     *projectiontrace.Trace
 
-	// Endpoint tracking for windowed metrics
-	SelectedEndpoint string // The endpoint address selected for this request
 	// Hallucination mitigation tracking
 	FactCheckNeeded           bool                       // Result of fact-check classification
 	FactCheckConfidence       float32                    // Confidence score of fact-check classification

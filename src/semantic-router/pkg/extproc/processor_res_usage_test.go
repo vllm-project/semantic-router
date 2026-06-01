@@ -47,6 +47,25 @@ func TestParseResponseUsage_ExtractsUsageFields(t *testing.T) {
 	}, usage)
 }
 
+func TestParseResponseUsage_TracksCachedTokenReporting(t *testing.T) {
+	usage := parseResponseUsage([]byte(`{
+		"usage": {
+			"prompt_tokens": 100,
+			"completion_tokens": 7,
+			"prompt_tokens_details": {
+				"cached_tokens": 40
+			}
+		}
+	}`), "test-model")
+
+	assert.Equal(t, responseUsageMetrics{
+		promptTokens:               100,
+		cachedPromptTokens:         40,
+		cachedPromptTokensReported: true,
+		completionTokens:           7,
+	}, usage)
+}
+
 func TestParseResponseUsage_ReturnsZeroForInvalidUsageTypes(t *testing.T) {
 	usage := parseResponseUsage([]byte(`{
 		"usage": {
