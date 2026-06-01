@@ -1,10 +1,6 @@
 package dsl
 
-import (
-	"gopkg.in/yaml.v2"
-
-	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
-)
+import "gopkg.in/yaml.v2"
 
 type dslFieldObject map[string]dslFieldValue
 
@@ -51,10 +47,6 @@ func (o dslFieldObject) setString(key, value string) {
 
 func (o dslFieldObject) marshalYAML() ([]byte, error) {
 	return yaml.Marshal(o.asInterfaceMap())
-}
-
-func (o dslFieldObject) structuredPayload() (*config.StructuredPayload, error) {
-	return config.NewStructuredPayload(o.asInterfaceMap())
 }
 
 func (o dslFieldObject) asInterfaceMap() map[string]any {
