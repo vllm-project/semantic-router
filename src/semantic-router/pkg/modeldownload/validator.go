@@ -1,9 +1,12 @@
 package modeldownload
 
 import (
+	"errors"
 	"fmt"
+	"io/fs"
 	"os"
 	"path/filepath"
+	"strings"
 )
 
 // DefaultRequiredFiles are the files typically needed for a model to be considered complete
@@ -24,6 +27,8 @@ var modelWeightPatterns = []string{
 	"*.safetensors",
 	"*.bin",
 }
+
+var errModelWeightFound = errors.New("model weight found")
 
 // IsModelComplete checks if a model is fully downloaded by verifying required files exist
 func IsModelComplete(localPath string, requiredFiles []string) (bool, error) {
@@ -68,14 +73,41 @@ func IsModelComplete(localPath string, requiredFiles []string) (bool, error) {
 }
 
 func hasModelWeights(localPath string) (bool, error) {
-	for _, pattern := range modelWeightPatterns {
-		matches, err := filepath.Glob(filepath.Join(localPath, pattern))
-		if err != nil {
-			return false, fmt.Errorf("failed to scan weight files in %s: %w", localPath, err)
+	scanPath, err := filepath.EvalSymlinks(localPath)
+	if err != nil {
+		return false, fmt.Errorf("failed to resolve model directory %s: %w", localPath, err)
+	}
+
+	err = filepath.WalkDir(scanPath, func(path string, entry fs.DirEntry, walkErr error) error {
+		if walkErr != nil {
+			return fmt.Errorf("failed to scan weight files in %s: %w", scanPath, walkErr)
 		}
-		if len(matches) > 0 {
-			return true, nil
+		if path == scanPath {
+			return nil
 		}
+		if entry.IsDir() {
+			if strings.HasPrefix(entry.Name(), ".") {
+				return filepath.SkipDir
+			}
+			return nil
+		}
+
+		for _, pattern := range modelWeightPatterns {
+			matched, matchErr := filepath.Match(pattern, entry.Name())
+			if matchErr != nil {
+				return fmt.Errorf("failed to match weight pattern %q in %s: %w", pattern, scanPath, matchErr)
+			}
+			if matched {
+				return errModelWeightFound
+			}
+		}
+		return nil
+	})
+	if errors.Is(err, errModelWeightFound) {
+		return true, nil
+	}
+	if err != nil {
+		return false, err
 	}
 	return false, nil
 }
