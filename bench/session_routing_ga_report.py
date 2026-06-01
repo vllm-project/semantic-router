@@ -47,9 +47,9 @@ CACHE_PROBE_IDENTITY_FIELDS = (
     "unique_suffix_pattern",
 )
 CACHE_PROBE_SERVING_PATH_FIELDS = ("base_url", "model")
-DEFAULT_MIN_AGENT_TASK_REQUESTS = 453
-DEFAULT_MIN_AGENT_TASK_COUNT = 26
-DEFAULT_MIN_AGENT_TASK_INSTANCES = 78
+DEFAULT_MIN_AGENT_TASK_REQUESTS = 489
+DEFAULT_MIN_AGENT_TASK_COUNT = 28
+DEFAULT_MIN_AGENT_TASK_INSTANCES = 84
 DEFAULT_REQUIRED_AGENT_TASK_NAMES = (
     "multi-file-regression",
     "code-review-followup",
@@ -77,6 +77,8 @@ DEFAULT_REQUIRED_AGENT_TASK_NAMES = (
     "feature-implementation-loop",
     "research-claim-grounding-loop",
     "tool-timeout-retry-loop",
+    "ci-patch-review-loop",
+    "paper-rebuttal-revision-loop",
 )
 DEFAULT_REQUIRED_AGENT_TASK_PHASES = (
     "user_turn",
@@ -266,7 +268,7 @@ def next_actions_for_requirement(item: dict[str, Any]) -> list[str]:
                 "`--suite long-horizon --task-repetitions 3 "
                 "--require-router-diagnostics`, a router endpoint, and a "
                 "distinct direct-backend baseline. The maintained gate is "
-                "26 tasks, 151 turns, 453 requests, and 78 scored instances."
+                "28 tasks, 163 turns, 489 requests, and 84 scored instances."
             ),
             (
                 "For branch-image evidence, add matching "

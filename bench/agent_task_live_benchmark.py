@@ -1778,6 +1778,129 @@ def long_horizon_task_specs() -> tuple[TaskSpec, ...]:
                 ),
             ),
         ),
+        TaskSpec(
+            name="ci-patch-review-loop",
+            suite="long-horizon",
+            turns=(
+                TaskTurn(
+                    phase="user_turn",
+                    prompt=(
+                        "A coding agent must fix a CI-only failure in the session-aware "
+                        "routing PR. Start by deciding what evidence to inspect before "
+                        "editing."
+                    ),
+                ),
+                TaskTurn(
+                    phase="tool_loop",
+                    prompt="Use the failing GitHub Actions excerpt before naming the bug.",
+                    tool_name="read_github_actions_log",
+                    tool_result=(
+                        "Pre-commit failed in agent CI lint after changed-files "
+                        "classification included a generated paper artifact. Local "
+                        "agent-lint passed after removing the artifact."
+                    ),
+                ),
+                TaskTurn(
+                    phase="tool_loop",
+                    prompt="Use the worktree audit before deciding the patch.",
+                    tool_name="git_status_and_diff_check",
+                    tool_result=(
+                        "Only source files should be staged. The PDF build artifact "
+                        "must stay untracked, and git diff --check must remain clean."
+                    ),
+                ),
+                TaskTurn(
+                    phase="provider_state",
+                    prompt=(
+                        "Continue the same CI patch session with provider-managed "
+                        "state and keep the current model while reading tool output."
+                    ),
+                ),
+                TaskTurn(
+                    phase="tool_loop",
+                    prompt="Use the rerun result before finalizing the review note.",
+                    tool_name="rerun_pr_gate",
+                    tool_result=(
+                        "make agent-ci-gate on changed files passed; GitHub build-paper "
+                        "and unit checks are green; pre-commit is rerunning."
+                    ),
+                ),
+                TaskTurn(
+                    phase="final",
+                    prompt=(
+                        "Return the CI patch review. Include exact tokens "
+                        "BUG=generated-artifact-staged, FIX=source-only-commit, "
+                        "VALIDATE=agent-ci-gate."
+                    ),
+                    expected_terms=(
+                        "BUG=generated-artifact-staged",
+                        "FIX=source-only-commit",
+                        "VALIDATE=agent-ci-gate",
+                    ),
+                ),
+            ),
+        ),
+        TaskSpec(
+            name="paper-rebuttal-revision-loop",
+            suite="long-horizon",
+            turns=(
+                TaskTurn(
+                    phase="user_turn",
+                    prompt=(
+                        "A reviewer says the session-aware routing paper reads like an "
+                        "experiment log. Start by planning a revision that improves the "
+                        "scientific narrative."
+                    ),
+                ),
+                TaskTurn(
+                    phase="tool_loop",
+                    prompt="Use the reviewer note before deciding the main edit.",
+                    tool_name="read_reviewer_note",
+                    tool_result=(
+                        "The paper should foreground the problem formulation, hard "
+                        "continuity constraints, switch-cost model, and limitations. "
+                        "Dense experiment process should move to the appendix."
+                    ),
+                ),
+                TaskTurn(
+                    phase="tool_loop",
+                    prompt="Use the figure audit before choosing how to revise figures.",
+                    tool_name="read_figure_audit",
+                    tool_result=(
+                        "Result figures should each support one conclusion and appear "
+                        "near the text that interprets them. Blog figures should stay "
+                        "lower density than paper result plots."
+                    ),
+                ),
+                TaskTurn(
+                    phase="provider_state",
+                    prompt=(
+                        "Continue the same rebuttal with provider-managed state and "
+                        "preserve the claim boundary."
+                    ),
+                ),
+                TaskTurn(
+                    phase="topic_drift",
+                    prompt=(
+                        "Now turn the rebuttal into a concrete revision plan without "
+                        "claiming GA readiness."
+                    ),
+                ),
+                TaskTurn(
+                    phase="final",
+                    prompt=(
+                        "Return the paper revision plan. Include exact tokens "
+                        "NARRATIVE=problem-to-limitations, FIGURE=one-conclusion, "
+                        "CLAIM=no-ga-ready."
+                    ),
+                    expected_terms=(
+                        "NARRATIVE=problem-to-limitations",
+                        "FIGURE=one-conclusion",
+                        "CLAIM=no-ga-ready",
+                    ),
+                ),
+            ),
+        ),
     )
 
 
