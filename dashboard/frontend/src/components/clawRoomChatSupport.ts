@@ -44,7 +44,24 @@ export interface RoomStreamEvent {
   type: string
   roomId: string
   message?: RoomMessage
+  messageId?: string
+  chunk?: string
 }
+
+export interface StreamingParticipant {
+  participantType?: string
+  participantId?: string
+}
+
+export const ROOM_COLLABORATION_OUTBOUND_TYPES = {
+  connected: 'connected',
+  newMessage: 'new_message',
+  messageChunk: 'message_chunk',
+  messageUpdated: 'message_updated',
+  error: 'error',
+} as const
+
+export type RoomTransportMode = 'connecting' | 'websocket' | 'sse'
 
 export interface WSInboundMessage {
   type: 'send_message' | 'ping'
@@ -63,6 +80,106 @@ export interface WSOutboundMessage {
   status?: string
   error?: string
   timestamp?: string
+  participantType?: string
+  participantId?: string
+  sessionUser?: string
+}
+
+export interface CollaborationEventHandlers {
+  upsertMessage: (message: RoomMessage) => void
+  setStreamingMessages: (update: (previous: Map<string, string>) => Map<string, string>) => void
+  setStreamingParticipants?: (
+    update: (previous: Map<string, StreamingParticipant>) => Map<string, StreamingParticipant>
+  ) => void
+  setError?: (error: string) => void
+}
+
+export const applyCollaborationOutboundEvent = (
+  payload: WSOutboundMessage,
+  handlers: CollaborationEventHandlers
+): void => {
+  if (payload.type === ROOM_COLLABORATION_OUTBOUND_TYPES.newMessage && payload.message) {
+    handlers.upsertMessage(payload.message)
+    if (payload.message.id) {
+      handlers.setStreamingMessages(previous => {
+        const next = new Map(previous)
+        next.delete(payload.message!.id)
+        return next
+      })
+      handlers.setStreamingParticipants?.(previous => {
+        const next = new Map(previous)
+        next.delete(payload.message!.id)
+        return next
+      })
+    }
+    return
+  }
+
+  if (payload.type === ROOM_COLLABORATION_OUTBOUND_TYPES.messageUpdated && payload.message) {
+    handlers.upsertMessage(payload.message)
+    handlers.setStreamingMessages(previous => {
+      const next = new Map(previous)
+      next.delete(payload.message!.id)
+      return next
+    })
+    handlers.setStreamingParticipants?.(previous => {
+      const next = new Map(previous)
+      next.delete(payload.message!.id)
+      return next
+    })
+    return
+  }
+
+  if (payload.type === ROOM_COLLABORATION_OUTBOUND_TYPES.messageChunk && payload.messageId) {
+    if (payload.chunk) {
+      handlers.setStreamingMessages(previous => {
+        const next = new Map(previous)
+        const existing = next.get(payload.messageId!) || ''
+        next.set(payload.messageId!, existing + payload.chunk)
+        return next
+      })
+    }
+    if (payload.participantType || payload.participantId) {
+      handlers.setStreamingParticipants?.(previous => {
+        const next = new Map(previous)
+        next.set(payload.messageId!, {
+          participantType: payload.participantType,
+          participantId: payload.participantId,
+        })
+        return next
+      })
+    }
+    return
+  }
+
+  if (payload.type === ROOM_COLLABORATION_OUTBOUND_TYPES.error && payload.error) {
+    handlers.setError?.(payload.error)
+  }
+}
+
+export const applyRoomStreamEvent = (
+  payload: RoomStreamEvent,
+  handlers: CollaborationEventHandlers
+): void => {
+  if (payload.type === 'message' && payload.message) {
+    applyCollaborationOutboundEvent(
+      { type: ROOM_COLLABORATION_OUTBOUND_TYPES.newMessage, message: payload.message },
+      handlers
+    )
+    return
+  }
+
+  if (payload.type === ROOM_COLLABORATION_OUTBOUND_TYPES.messageUpdated && payload.message) {
+    applyCollaborationOutboundEvent(
+      { type: ROOM_COLLABORATION_OUTBOUND_TYPES.messageUpdated, message: payload.message },
+      handlers
+    )
+    return
+  }
+
+  if (payload.type === ROOM_COLLABORATION_OUTBOUND_TYPES.newMessage && payload.message) {
+    applyCollaborationOutboundEvent(payload, handlers)
+  }
 }
 
 export interface MentionOption {
