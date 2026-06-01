@@ -208,8 +208,9 @@ follow-up, codebase refactor planning, research artifact review, tool-error
 recovery, research synthesis, maintainer issue/PR board reconciliation,
 configuration contract review, repo bisect debugging, dependency-upgrade
 regression repair, literature/data extraction, stale PR rebase triage,
-benchmark-regression analysis, paper figure quality review, and maintainer
-handoff:
+benchmark-regression analysis, paper figure quality review, feature
+implementation, research-claim grounding, tool-timeout retry recovery, and
+maintainer handoff:
 
 ```bash
 python3 bench/agent_task_live_benchmark.py \
@@ -229,9 +230,9 @@ python3 bench/agent_task_live_benchmark.py \
 ```
 
 The GA readiness gate expects the current long-horizon suite rather than stale
-diagnostics: 23 task types, all required phases (`user_turn`, `tool_loop`,
+diagnostics: 26 task types, all required phases (`user_turn`, `tool_loop`,
 `provider_state`, `topic_drift`, `idle_boundary`, `final`), and 3 repetitions.
-That produces at least 399 requests and 69 scored task instances for the
+That produces at least 453 requests and 78 scored task instances for the
 maintained suite. Smaller historical summaries remain useful diagnostics, but
 they intentionally block GA.
 
@@ -332,7 +333,7 @@ python3 bench/plot_session_routing_figures.py \
 The script writes `experiment-matrix.png`, `policy-ablation.png`, and
 `seed-stability.png`. When agent-task summaries are provided, it also writes
 `agent-task-readiness.png` from the same GA thresholds used by the report:
-399 requests, 23 task types, 69 scored instances, and the required router
+453 requests, 26 task types, 78 scored instances, and the required router
 diagnostic headers. Use image-generated bitmap assets for explanatory blog or
 paper schematics; do not hand-draw SVG architecture diagrams for this
 workstream. Measured result charts should come from this CSV-to-plot path.

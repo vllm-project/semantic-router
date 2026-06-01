@@ -27,6 +27,9 @@ REQUIRED_LONG_HORIZON_TASKS = [
     "stale-pr-rebase-triage",
     "benchmark-regression-root-cause",
     "paper-figure-quality-review",
+    "feature-implementation-loop",
+    "research-claim-grounding-loop",
+    "tool-timeout-retry-loop",
 ]
 REQUIRED_LONG_HORIZON_PHASES = [
     "user_turn",
@@ -90,7 +93,7 @@ def write_json(path: Path, data: dict):
 
 def complete_agent_task_summary() -> dict:
     return {
-        "requests": 399,
+        "requests": 453,
         "tasks": len(REQUIRED_LONG_HORIZON_TASKS),
         "task_count": len(REQUIRED_LONG_HORIZON_TASKS),
         "task_names": REQUIRED_LONG_HORIZON_TASKS,
@@ -670,9 +673,9 @@ def test_stale_agent_task_suite_blocks_ga(tmp_path):
 
     assert report["ga_ready"] is False
     assert task_requirement["status"] == "blocked"
-    assert "requests 96.0 < 399" in task_requirement["failures"]
-    assert "task_count 6.0 < 23" in task_requirement["failures"]
-    assert "task_instances 18.0 < 69" in task_requirement["failures"]
+    assert "requests 96.0 < 453" in task_requirement["failures"]
+    assert "task_count 6.0 < 26" in task_requirement["failures"]
+    assert "task_instances 18.0 < 78" in task_requirement["failures"]
     assert (
         "missing router headers: {'x-vsr-session-phase': 96}"
         in task_requirement["failures"]
@@ -682,6 +685,10 @@ def test_stale_agent_task_suite_blocks_ga(tmp_path):
         for failure in task_requirement["failures"]
     )
     assert "missing task phases: ['idle_boundary']" in task_requirement["failures"]
+    assert (
+        "26 tasks, 151 turns, 453 requests, and 78 scored instances"
+        in task_requirement["next_actions"][0]
+    )
 
 
 def test_diagnostic_probe_does_not_satisfy_branch_image_benchmark(tmp_path):

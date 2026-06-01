@@ -1592,6 +1592,192 @@ def long_horizon_task_specs() -> tuple[TaskSpec, ...]:
                 ),
             ),
         ),
+        TaskSpec(
+            name="feature-implementation-loop",
+            suite="long-horizon",
+            turns=(
+                TaskTurn(
+                    phase="user_turn",
+                    prompt=(
+                        "A coding agent must implement a small session-aware routing "
+                        "fix without expanding a hotspot file. Start by identifying "
+                        "the minimal code path to inspect."
+                    ),
+                ),
+                TaskTurn(
+                    phase="tool_loop",
+                    prompt="Use the code search result before naming the change.",
+                    tool_name="rg_session_memory_guard",
+                    tool_result=(
+                        "session_aware.go owns stay-vs-switch scoring; "
+                        "req_filter_classification.go builds AgenticSessionContext; "
+                        "processor_res_header_mutation.go emits response evidence."
+                    ),
+                ),
+                TaskTurn(
+                    phase="tool_loop",
+                    prompt="Use the targeted test output before deciding the patch.",
+                    tool_name="run_targeted_selection_tests",
+                    tool_result=(
+                        "go test ./pkg/selection -run TestSessionAwareSelector "
+                        "passes except the new case for provider-state continuity, "
+                        "which needs HasNonPortableContext in the constructed session."
+                    ),
+                ),
+                TaskTurn(
+                    phase="provider_state",
+                    prompt=(
+                        "Continue the same implementation session under provider-managed "
+                        "state and keep the current model pinned while reviewing tools."
+                    ),
+                ),
+                TaskTurn(
+                    phase="topic_drift",
+                    prompt=(
+                        "Now convert the code fix into reviewer-facing validation and "
+                        "docs notes."
+                    ),
+                ),
+                TaskTurn(
+                    phase="final",
+                    prompt=(
+                        "Return the implementation summary. Include exact tokens "
+                        "IMPLEMENT=session-memory-guard, TEST=targeted-selection, "
+                        "DOC=scope-boundary."
+                    ),
+                    expected_terms=(
+                        "IMPLEMENT=session-memory-guard",
+                        "TEST=targeted-selection",
+                        "DOC=scope-boundary",
+                    ),
+                ),
+            ),
+        ),
+        TaskSpec(
+            name="research-claim-grounding-loop",
+            suite="long-horizon",
+            turns=(
+                TaskTurn(
+                    phase="user_turn",
+                    prompt=(
+                        "Ground a paper claim for session-aware agentic routing. Start "
+                        "by separating the method contribution from release readiness."
+                    ),
+                ),
+                TaskTurn(
+                    phase="tool_loop",
+                    prompt="Use the related-work extraction before framing the gap.",
+                    tool_name="read_related_work_extract",
+                    tool_result=(
+                        "Model routing literature focuses on single-request model "
+                        "choice. Agent-serving notes emphasize multi-turn state, "
+                        "tool pauses, and reusable prefixes."
+                    ),
+                ),
+                TaskTurn(
+                    phase="tool_loop",
+                    prompt="Use the evidence audit before writing the claim.",
+                    tool_name="read_evidence_audit",
+                    tool_result=(
+                        "Synthetic matrix and ablation are policy evidence. AMD "
+                        "overlay evidence is serving-path evidence. Branch-image and "
+                        "backend-positive cache accounting are still release blockers."
+                    ),
+                ),
+                TaskTurn(
+                    phase="provider_state",
+                    prompt=(
+                        "Continue the same research note with provider-managed state "
+                        "and keep the claim boundary stable."
+                    ),
+                ),
+                TaskTurn(
+                    phase="topic_drift",
+                    prompt=(
+                        "Now turn the grounded claim into one blog-safe sentence that "
+                        "does not read like an experiment log."
+                    ),
+                ),
+                TaskTurn(
+                    phase="final",
+                    prompt=(
+                        "Return the grounded claim. Include exact tokens "
+                        "CLAIM=long-horizon-routing, "
+                        "EVIDENCE=separate-policy-and-ga, "
+                        "LIMITATION=backend-cache-proof."
+                    ),
+                    expected_terms=(
+                        "CLAIM=long-horizon-routing",
+                        "EVIDENCE=separate-policy-and-ga",
+                        "LIMITATION=backend-cache-proof",
+                    ),
+                ),
+            ),
+        ),
+        TaskSpec(
+            name="tool-timeout-retry-loop",
+            suite="long-horizon",
+            turns=(
+                TaskTurn(
+                    phase="user_turn",
+                    prompt=(
+                        "A long-running coding agent is validating GA evidence when a "
+                        "tool call times out. Decide how to continue without losing "
+                        "the session state."
+                    ),
+                ),
+                TaskTurn(
+                    phase="tool_loop",
+                    prompt="Use the timeout result before deciding recovery.",
+                    tool_name="run_live_agent_task_suite",
+                    tool_result=(
+                        "agent_task_live_benchmark.py timed out after 120s during "
+                        "task repetition 2. Prior turns emitted replay ids and "
+                        "session-phase headers."
+                    ),
+                ),
+                TaskTurn(
+                    phase="tool_loop",
+                    prompt="Use the partial artifact before deciding what to report.",
+                    tool_name="read_partial_summary",
+                    tool_result=(
+                        "summary.json records validation_failures with timeout=true, "
+                        "successful_requests=281, and no tool-loop switch violations "
+                        "before the timeout."
+                    ),
+                ),
+                TaskTurn(
+                    phase="tool_loop",
+                    prompt="Use the retry plan before finalizing.",
+                    tool_name="plan_retry",
+                    tool_result=(
+                        "Keep the same session prefix, rerun the same suite with a "
+                        "higher timeout, and keep the partial validation failure "
+                        "attached to the GA evidence trail."
+                    ),
+                ),
+                TaskTurn(
+                    phase="provider_state",
+                    prompt=(
+                        "Continue the same retry thread under provider-managed state "
+                        "and preserve the timeout evidence."
+                    ),
+                ),
+                TaskTurn(
+                    phase="final",
+                    prompt=(
+                        "Return the retry decision. Include exact tokens "
+                        "RECOVER=retry-same-session, PRESERVE=tool-loop-lock, "
+                        "REPORT=validation-failure."
+                    ),
+                    expected_terms=(
+                        "RECOVER=retry-same-session",
+                        "PRESERVE=tool-loop-lock",
+                        "REPORT=validation-failure",
+                    ),
+                ),
+            ),
+        ),
     )
 
 

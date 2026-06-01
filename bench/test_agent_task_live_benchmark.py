@@ -6,8 +6,8 @@ from pathlib import Path
 HALF_SCORE = 0.5
 MEAN_SCORE = 0.75
 MISSING_HEADER_COUNT = 2
-MIN_LONG_HORIZON_TASKS = 23
-MIN_LONG_HORIZON_TURNS = 133
+MIN_LONG_HORIZON_TASKS = 26
+MIN_LONG_HORIZON_TURNS = 151
 
 
 def load_benchmark_module():
@@ -137,6 +137,9 @@ def test_long_horizon_suite_covers_real_agent_workflows():
         "stale-pr-rebase-triage",
         "benchmark-regression-root-cause",
         "paper-figure-quality-review",
+        "feature-implementation-loop",
+        "research-claim-grounding-loop",
+        "tool-timeout-retry-loop",
     } <= task_names
     assert len(tasks) >= MIN_LONG_HORIZON_TASKS
     assert total_turns >= MIN_LONG_HORIZON_TURNS

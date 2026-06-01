@@ -47,9 +47,9 @@ CACHE_PROBE_IDENTITY_FIELDS = (
     "unique_suffix_pattern",
 )
 CACHE_PROBE_ENDPOINT_FIELDS = ("base_url", "model")
-DEFAULT_MIN_AGENT_TASK_REQUESTS = 399
-DEFAULT_MIN_AGENT_TASK_COUNT = 23
-DEFAULT_MIN_AGENT_TASK_INSTANCES = 69
+DEFAULT_MIN_AGENT_TASK_REQUESTS = 453
+DEFAULT_MIN_AGENT_TASK_COUNT = 26
+DEFAULT_MIN_AGENT_TASK_INSTANCES = 78
 DEFAULT_REQUIRED_AGENT_TASK_NAMES = (
     "multi-file-regression",
     "code-review-followup",
@@ -74,6 +74,9 @@ DEFAULT_REQUIRED_AGENT_TASK_NAMES = (
     "stale-pr-rebase-triage",
     "benchmark-regression-root-cause",
     "paper-figure-quality-review",
+    "feature-implementation-loop",
+    "research-claim-grounding-loop",
+    "tool-timeout-retry-loop",
 )
 DEFAULT_REQUIRED_AGENT_TASK_PHASES = (
     "user_turn",
@@ -262,7 +265,8 @@ def next_actions_for_requirement(item: dict[str, Any]) -> list[str]:
                 "Rerun the AMD long-horizon agent-task suite with "
                 "`--suite long-horizon --task-repetitions 3 "
                 "--require-router-diagnostics`, a router endpoint, and a "
-                "distinct direct-backend baseline."
+                "distinct direct-backend baseline. The maintained gate is "
+                "26 tasks, 151 turns, 453 requests, and 78 scored instances."
             ),
             (
                 "For branch-image evidence, add matching "
