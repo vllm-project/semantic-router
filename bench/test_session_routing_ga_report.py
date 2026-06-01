@@ -300,6 +300,11 @@ def test_missing_positive_cache_and_branch_image_block_ga(tmp_path):
     ]
     assert statuses["cache_token_reporting"] == "blocked"
     assert statuses["branch_image_amd_validation"] == "missing"
+    assert "cache_token_probe.py" in report["blockers"][0]["next_actions"][0]
+    assert (
+        "session_routing_branch_image_probe.py"
+        in report["blockers"][1]["next_actions"][0]
+    )
 
 
 def test_positive_cache_without_probe_metadata_blocks_ga(tmp_path):
@@ -942,11 +947,40 @@ def test_main_stdout_lists_blockers_for_maintainer_ops(tmp_path, capsys):
     expected_blockers = [
         {
             "id": "cache_token_reporting",
+            "next_actions": [
+                (
+                    "Run `bench/cache_token_probe.py` against both router and "
+                    "direct-backend paths with `--baseline-base-url`, "
+                    "`--baseline-model`, `--min-cached-token-reporting positive`, "
+                    "`--min-cached-token-field-rate 1.0`, and a backend-specific "
+                    "`--min-cached-prompt-ratio`."
+                ),
+                (
+                    "Use a backend that exposes cached-token accounting; if the "
+                    "backend still reports no cached-token field, keep this as a "
+                    "documented limitation instead of converting router estimates "
+                    "into positive backend evidence."
+                ),
+            ],
             "status": "blocked",
             "title": "Cache-token reporting",
         },
         {
             "id": "branch_image_amd_validation",
+            "next_actions": [
+                (
+                    "Build and serve the reviewed branch image, then run "
+                    "`bench/session_routing_branch_image_probe.py` with the exact "
+                    "`--ref` and `--image-tag` for that image."
+                ),
+                (
+                    "Assemble the full branch-image artifact with "
+                    "`bench/session_routing_branch_image_benchmark.py` using "
+                    "diagnostic, live-matrix, failure-recovery, expanded "
+                    "agent-task, and cache-token summaries from the same image "
+                    "identity."
+                ),
+            ],
             "status": "missing",
             "title": "Branch-image AMD benchmark",
         },
@@ -975,14 +1009,19 @@ def test_markdown_groups_failures_under_blocker_column():
                         "router: cached_token_reporting missing < positive",
                         "baseline: probe_kind missing != repeated-prefix-cache-token-probe",
                     ],
+                    "next_actions": ["rerun cache probe"],
                 }
             ],
         }
     )
 
-    assert "| Requirement | Status | Evidence | Key Metrics | Blockers |" in markdown
+    assert (
+        "| Requirement | Status | Evidence | Key Metrics | Blockers | Next Actions |"
+        in markdown
+    )
     assert "Cache-token reporting failure" not in markdown
     assert (
         "1. router: cached_token_reporting missing < positive<br>2. baseline"
         in markdown
     )
+    assert "1. rerun cache probe" in markdown

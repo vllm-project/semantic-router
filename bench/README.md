@@ -353,10 +353,13 @@ default as `ga-readiness.json` and `ga-readiness.md`. A strict GA invocation
 exits non-zero when any requirement is missing or blocked. Use
 `--allow-blockers` only when generating an interim report that should document
 known gaps, such as missing positive cache-token evidence or a pending
-branch-image AMD run. The command also prints a small JSON summary to stdout
-with `ga_ready`, `blocker_count`, and each blocker `id`, `title`, and `status`;
-maintainer cron jobs can include that summary directly in a daily release brief
-while linking the full Markdown and JSON reports for details.
+branch-image AMD run. Each blocked or missing requirement includes
+`next_actions` so maintainer cron jobs can move directly from the report to the
+next AMD, cache-token, or branch-image evidence command. The command also
+prints a small JSON summary to stdout with `ga_ready`, `blocker_count`, and each
+blocker `id`, `title`, `status`, and `next_actions`; maintainer cron jobs can
+include that summary directly in a daily release brief while linking the full
+Markdown and JSON reports for details.
 
 The full branch-image summary must identify itself as real branch-image
 benchmark evidence, for example with `validation_kind:

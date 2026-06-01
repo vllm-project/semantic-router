@@ -205,6 +205,99 @@ def requirement(
     }
 
 
+def next_actions_for_requirement(item: dict[str, Any]) -> list[str]:
+    if item.get("status") not in {BLOCKING_STATUS, MISSING_STATUS}:
+        return []
+    requirement_id = str(item.get("id", ""))
+    actions_by_id = {
+        "cache_token_reporting": [
+            (
+                "Run `bench/cache_token_probe.py` against both router and "
+                "direct-backend paths with `--baseline-base-url`, "
+                "`--baseline-model`, `--min-cached-token-reporting positive`, "
+                "`--min-cached-token-field-rate 1.0`, and a backend-specific "
+                "`--min-cached-prompt-ratio`."
+            ),
+            (
+                "Use a backend that exposes cached-token accounting; if the "
+                "backend still reports no cached-token field, keep this as a "
+                "documented limitation instead of converting router estimates "
+                "into positive backend evidence."
+            ),
+        ],
+        "branch_image_amd_validation": [
+            (
+                "Build and serve the reviewed branch image, then run "
+                "`bench/session_routing_branch_image_probe.py` with the exact "
+                "`--ref` and `--image-tag` for that image."
+            ),
+            (
+                "Assemble the full branch-image artifact with "
+                "`bench/session_routing_branch_image_benchmark.py` using "
+                "diagnostic, live-matrix, failure-recovery, expanded "
+                "agent-task, and cache-token summaries from the same image "
+                "identity."
+            ),
+        ],
+        "synthetic_policy_matrix": [
+            (
+                "Regenerate the deterministic policy matrix with "
+                "`bench/agentic_routing_experiment.py` and keep it as policy "
+                "evidence, not release evidence."
+            )
+        ],
+        "synthetic_policy_ablation": [
+            (
+                "Regenerate the ablation matrix with `--ablation` and include "
+                "`single-turn`, `acr-initial`, and `acr-full` so the report can "
+                "compare the final policy against both baselines."
+            )
+        ],
+    }
+    if requirement_id in actions_by_id:
+        return actions_by_id[requirement_id]
+    if requirement_id.startswith("amd_agent_task_quality"):
+        return [
+            (
+                "Rerun the AMD long-horizon agent-task suite with "
+                "`--suite long-horizon --task-repetitions 3 "
+                "--require-router-diagnostics`, a router endpoint, and a "
+                "distinct direct-backend baseline."
+            ),
+            (
+                "For branch-image evidence, add matching "
+                "`--evidence-ref` and `--evidence-image-tag` values so the "
+                "summary can be assembled into the full branch-image artifact."
+            ),
+        ]
+    if requirement_id.startswith("amd_live_matrix"):
+        return [
+            (
+                "Rerun `bench/agentic_routing_live_benchmark.py` on AMD with "
+                "matched router and direct-backend schedules, router "
+                "diagnostics, continuity thresholds, and the required "
+                "evidence identity when the run is part of branch-image "
+                "evidence."
+            )
+        ]
+    if requirement_id.startswith("amd_failure_recovery"):
+        return [
+            (
+                "Rerun the AMD disruption matrix through "
+                "`bench/openai_fault_proxy.py` and gate "
+                "`session_recovery_rate_after_error`, injected failures, and "
+                "continuity violations."
+            )
+        ]
+    return [
+        (
+            "Inspect the blocker details, rerun the named evidence producer, "
+            "and keep the GA report blocked until the producer emits passing "
+            "machine-readable evidence."
+        )
+    ]
+
+
 def evaluate_numeric(
     failures: list[str], label: str, actual: Any, operator: str, expected: float
 ) -> None:
@@ -987,6 +1080,8 @@ def generate_report(args: argparse.Namespace) -> dict[str, Any]:
             evaluate_branch_image_summary(args),
         ]
     )
+    for item in requirements:
+        item["next_actions"] = next_actions_for_requirement(item)
     blockers = [
         item
         for item in requirements
@@ -1013,19 +1108,24 @@ def render_markdown(report: dict[str, Any]) -> str:
         f"- passed: {report['passed_count']}",
         f"- blockers: {report['blocker_count']}",
         "",
-        "| Requirement | Status | Evidence | Key Metrics | Blockers |",
-        "| --- | --- | --- | --- | --- |",
+        "| Requirement | Status | Evidence | Key Metrics | Blockers | Next Actions |",
+        "| --- | --- | --- | --- | --- | --- |",
     ]
     for item in report["requirements"]:
         metrics = compact_metrics(item.get("metrics", {}))
         failures = compact_failures(item.get("failures", []))
+        next_actions = compact_next_actions(item.get("next_actions", []))
         lines.append(
-            "| {title} | {status} | `{evidence}` | {metrics} | {failures} |".format(
+            (
+                "| {title} | {status} | `{evidence}` | {metrics} | {failures} | "
+                "{next_actions} |"
+            ).format(
                 title=markdown_table_cell(item["title"]),
                 status=markdown_table_cell(item["status"]),
                 evidence=markdown_table_cell(item["evidence"]),
                 metrics=markdown_table_cell(metrics),
                 failures=markdown_table_cell(failures),
+                next_actions=markdown_table_cell(next_actions),
             )
         )
     lines.append("")
@@ -1037,6 +1137,14 @@ def compact_failures(failures: list[Any]) -> str:
         return ""
     return "<br>".join(
         f"{index}. {failure}" for index, failure in enumerate(failures, 1)
+    )
+
+
+def compact_next_actions(next_actions: list[Any]) -> str:
+    if not next_actions:
+        return ""
+    return "<br>".join(
+        f"{index}. {action}" for index, action in enumerate(next_actions, 1)
     )
 
 
@@ -1067,6 +1175,7 @@ def stdout_blocker_summary(report: dict[str, Any]) -> list[dict[str, Any]]:
             "id": item.get("id", ""),
             "title": item.get("title", ""),
             "status": item.get("status", ""),
+            "next_actions": item.get("next_actions", []),
         }
         for item in report.get("blockers", [])
     ]
