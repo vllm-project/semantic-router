@@ -113,7 +113,8 @@ type BM25Index struct {
 // NewBM25Index builds a BM25 inverted index over the given chunks.
 func NewBM25Index(chunks map[string]EmbeddedChunk) *BM25Index {
 	idx := &BM25Index{
-		df: make(map[string]int),
+		docs: make([]bm25Doc, 0, len(chunks)),
+		df:   make(map[string]int),
 	}
 
 	totalLen := 0
@@ -128,22 +129,16 @@ func NewBM25Index(chunks map[string]EmbeddedChunk) *BM25Index {
 			terms:   tf,
 			length:  len(tokens),
 		})
+		// Count each term once for this document; tf keys are already unique.
+		for term := range tf {
+			idx.df[term]++
+		}
 		totalLen += len(tokens)
 	}
 
 	idx.n = len(idx.docs)
 	if idx.n > 0 {
 		idx.avgDL = float64(totalLen) / float64(idx.n)
-	}
-
-	for _, doc := range idx.docs {
-		seen := make(map[string]struct{}, len(doc.terms))
-		for term := range doc.terms {
-			if _, ok := seen[term]; !ok {
-				idx.df[term]++
-				seen[term] = struct{}{}
-			}
-		}
 	}
 
 	return idx
@@ -253,17 +248,23 @@ func (idx *NgramIndex) NgramN() int {
 // tokenize splits text into lowercase tokens on non-alphanumeric boundaries.
 func tokenize(text string) []string {
 	var tokens []string
-	var cur strings.Builder
-	for _, r := range strings.ToLower(text) {
+	lower := strings.ToLower(text)
+	start := -1
+	for i, r := range lower {
 		if unicode.IsLetter(r) || unicode.IsDigit(r) {
-			cur.WriteRune(r)
-		} else if cur.Len() > 0 {
-			tokens = append(tokens, cur.String())
-			cur.Reset()
+			if start < 0 {
+				start = i
+			}
+			continue
+		}
+		if start >= 0 {
+			// Clone token slices so retained index terms do not pin the full lowercased chunk in memory.
+			tokens = append(tokens, strings.Clone(lower[start:i]))
+			start = -1
 		}
 	}
-	if cur.Len() > 0 {
-		tokens = append(tokens, cur.String())
+	if start >= 0 {
+		tokens = append(tokens, strings.Clone(lower[start:]))
 	}
 	return tokens
 }
