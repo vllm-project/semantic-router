@@ -13,11 +13,11 @@ type PresetModel struct {
 }
 
 type PresetInfo struct {
-	ID       string        `json:"id"`
-	Label    string        `json:"label"`
-	Summary  string        `json:"summary"`
-	Models   []PresetModel `json:"required_models"`
-	RecipeURL string       `json:"recipe_url"`
+	ID        string        `json:"id"`
+	Label     string        `json:"label"`
+	Summary   string        `json:"summary"`
+	Models    []PresetModel `json:"required_models"`
+	RecipeURL string        `json:"recipe_url"`
 }
 
 type PresetDeltaRequest struct {
