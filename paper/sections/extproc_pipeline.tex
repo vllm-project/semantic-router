@@ -21,7 +21,7 @@ This architecture provides two key advantages:
 The request body phase implements the core routing logic as a sequential pipeline:
 
 \begin{equation}
-  r \xrightarrow{\text{parse}} r' \xrightarrow{\text{signals}} S(r') \xrightarrow{\text{decide}} d^* \xrightarrow{\Pi_\text{pre}} \xrightarrow{\text{select}} m^* \xrightarrow{\text{route}} e^*
+  r \xrightarrow{\text{parse}} r' \xrightarrow{\text{signals}} S(r') \xrightarrow{\text{decide}} d^* \xrightarrow{\Pi_\text{pre}} \xrightarrow{\text{select}} m^* \xrightarrow{\text{bind}} b^*
 \end{equation}
 
 \begin{figure}[t]
@@ -64,9 +64,9 @@ The request body phase implements the core routing logic as a sequential pipelin
     \textbf{Plugins (Pre)}\\[-1pt]
     {\scriptsize fast response, cache,}\\[-2pt]
     {\scriptsize RAG, modality, memory,}\\[-2pt]
-    {\scriptsize select $m^*$, route $e^*$}};
+    {\scriptsize select $m^*$, bind $b^*$}};
 
-  \node[io] (ep) at (12.6, 1.4) {$e^*$};
+  \node[io] (ep) at (12.6, 1.4) {$b^*$};
 
   % Request arrows
   \draw[arr] (req) -- (sig);
@@ -83,7 +83,7 @@ The request body phase implements the core routing logic as a sequential pipelin
   \node[pathlbl, anchor=east] at (-0.1, -1.4) {Response};
   \node[pathlbl, anchor=east] at (-0.1, -1.8) {path};
 
-  \node[io] (ep2) at (12.6, -1.6) {$e^*$};
+  \node[io] (ep2) at (12.6, -1.6) {$b^*$};
 
   % Layer 1: Signal (response) — first stage after e*
   \node[phase, fill=blue!6, minimum width=2.6cm] (rsig) at (10.2, -1.6) {%
@@ -111,12 +111,12 @@ The request body phase implements the core routing logic as a sequential pipelin
   \draw[arr] (rdec) -- (post);
   \draw[arr] (post) -- (resp);
 
-  % Vertical connection: provider endpoint shared
+  % Vertical connection: provider binding shared
   \draw[thin, densely dotted, gray!40] (ep.south) -- ++(0, -0.15) -| (ep2.north);
 
 \end{tikzpicture}%
 }
-\caption{Bidirectional request processing pipeline aligned with the three-layer architecture.  \textbf{Request path} (top, left$\to$right): the signal layer parses and extracts $S(r)$, including safety signals (jailbreak, PII); the decision layer evaluates Boolean formulas to select $d^*$; the plugin chain executes pre-processing (fast response for safety enforcement, caching, RAG, memory), model selection, and endpoint routing.  A cache hit or fast response short-circuits the pipeline (dashed).  \textbf{Response path} (bottom, right$\to$left): the same three layers operate in the same order---the signal layer extracts response-side signals (token usage, HaluGate hallucination scores, streaming latency metrics); the decision layer evaluates quality gating and cache eligibility; plugins perform format translation, cache writes, and API translation.}
+\caption{Bidirectional request processing pipeline aligned with the three-layer architecture.  \textbf{Request path} (top, left$\to$right): the signal layer parses and extracts $S(r)$, including safety signals (jailbreak, PII); the decision layer evaluates Boolean formulas to select $d^*$; the plugin chain executes pre-processing (fast response for safety enforcement, caching, RAG, memory), model selection, and provider/backend binding.  A cache hit or fast response short-circuits the pipeline (dashed).  \textbf{Response path} (bottom, right$\to$left): the same three layers operate in the same order---the signal layer extracts response-side signals (token usage, HaluGate hallucination scores, streaming latency metrics); the decision layer evaluates quality gating and cache eligibility; plugins perform format translation, cache writes, and API translation.}
 \label{fig:extproc_pipeline}
 \end{figure}
 
@@ -130,23 +130,22 @@ The stages execute in strict order:
 (7)~modality routing (text vs.\ diffusion);
 (8)~memory retrieval (\Cref{sec:memory_rag});
 (9)~model selection (\Cref{sec:model_selection}), system prompt injection, and header mutation;
-(10)~multi-endpoint resolution and provider-specific auth injection (\Cref{subsec:multi_endpoint,subsec:authz_factory}).
+(10)~provider/backend binding and provider-specific auth injection (\Cref{subsec:provider_backend,subsec:authz_factory}).
 
-\subsection{Multi-Endpoint and Multi-Provider Routing}
-\label{subsec:multi_endpoint}
+\subsection{Multi-Provider Backend Routing}
+\label{subsec:provider_backend}
 
 Production deployments often span multiple model backends across different providers and geographic regions.
-The system supports \emph{multi-endpoint routing} as a first-class concept:
+The system supports \emph{multi-provider backend routing} as a first-class concept while leaving endpoint placement to infrastructure:
 
-\begin{definition}[Endpoint Topology]
-An endpoint topology $\mathcal{E} = \{(e_i, w_i, p_i, \alpha_i)\}_{i=1}^{L}$ defines $L$ endpoints, each with a weight $w_i \in (0, 1]$ (normalized: $\sum_i w_i = 1$), a provider type $p_i \in \mathcal{P}$, and an auth profile $\alpha_i$.
+\begin{definition}[Provider Backend Topology]
+A provider backend topology $\mathcal{B} = \{(b_i, w_i, p_i, \alpha_i)\}_{i=1}^{L}$ defines $L$ provider or cluster bindings, each with a weight $w_i \in (0, 1]$ (normalized: $\sum_i w_i = 1$), a provider type $p_i \in \mathcal{P}$, and an auth profile $\alpha_i$.
 \end{definition}
 
-Once semantic model selection identifies a target model $m^*$, the endpoint router resolves $m^*$ to a concrete endpoint $e^*$ from the set of endpoints serving that model.
-Weighted random selection with sticky session affinity distributes load proportionally.
-Failover cascades to the next-weighted endpoint on backend errors.
+Once semantic model selection identifies a target model $m^*$, the router binds the request to a configured provider or cluster target $b^*$ for that model.
+Weighted selection can distribute traffic across configured backend targets, but Envoy or Kubernetes owns endpoint membership, health checks, load balancing, and failure recovery inside the selected target.
 
-Each endpoint may use a different provider (e.g., the same logical model ``gpt-4o'' served by both OpenAI and Azure OpenAI).
+Each backend target may use a different provider (e.g., the same logical model ``gpt-4o'' served by both OpenAI and Azure OpenAI).
 The system performs \emph{provider-specific protocol translation} transparently:
 
 \begin{itemize}[leftmargin=*]
@@ -157,7 +156,7 @@ The system performs \emph{provider-specific protocol translation} transparently:
   \item \textbf{vLLM / Local}: Direct OpenAI-compatible passthrough to self-hosted vLLM instances.
 \end{itemize}
 
-This abstraction allows routing decisions to reference models by capability (``best coding model'') rather than by provider-specific endpoint, and allows the same decision configuration to operate across different deployment topologies.
+This abstraction allows routing decisions to reference models by capability (``best coding model'') rather than by provider-specific serving details, and allows the same decision configuration to operate across different deployment topologies.
 
 \subsection{OpenAI Responses API Support}
 \label{subsec:responses_api}
@@ -183,13 +182,13 @@ Multi-provider deployments require diverse authentication mechanisms.
 The system implements a \emph{pluggable authorization factory} that abstracts auth concerns from routing logic:
 
 \begin{definition}[Auth Provider]
-An auth provider $\alpha: (\text{Request}, \text{Endpoint}) \to \text{Headers}'$ is a function that enriches outbound request headers with provider-appropriate credentials.
+An auth provider $\alpha: (\text{Request}, \text{Backend}) \to \text{Headers}'$ is a function that enriches outbound request headers with provider-appropriate credentials.
 \end{definition}
 
 The factory supports multiple auth provider types:
 
 \begin{itemize}[leftmargin=*]
-  \item \textbf{API Key}: Static bearer tokens or API keys, optionally per-endpoint, with header name customization (e.g., \texttt{Authorization}, \texttt{x-api-key}, \texttt{api-key}).
+  \item \textbf{API Key}: Static bearer tokens or API keys, optionally per backend binding, with header name customization (e.g., \texttt{Authorization}, \texttt{x-api-key}, \texttt{api-key}).
   \item \textbf{OAuth2 / OIDC}: Token acquisition with automatic refresh, supporting client credentials and authorization code flows.
   \item \textbf{Cloud IAM}: AWS SigV4 signing for Bedrock, Google service account tokens for Vertex AI, Azure AD tokens for Azure OpenAI.
   \item \textbf{Passthrough}: Forwarding the client's original credentials to the backend, used for deployments where the client authenticates directly.
@@ -197,7 +196,7 @@ The factory supports multiple auth provider types:
 \end{itemize}
 
 The auth factory is invoked \emph{after} decision evaluation and model selection, injecting provider-specific credentials into the outbound request headers.
-This separation ensures that routing decisions are auth-agnostic: the decision engine selects models based on capability and cost, and the auth layer handles the mechanics of reaching each provider's endpoint.
+This separation ensures that routing decisions are auth-agnostic: the decision engine selects models based on capability and cost, and the auth layer handles the mechanics of reaching each provider backend.
 
 The \texttt{authz} signal type in the signal engine (\Cref{sec:signal_engine}) is complementary but distinct: it performs \emph{inbound} authorization (verifying that the requesting user or API key has permission to access specific models or decisions), while the auth factory handles \emph{outbound} authentication (proving the router's identity to backend providers).
 

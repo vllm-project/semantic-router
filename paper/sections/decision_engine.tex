@@ -404,7 +404,7 @@ The functional completeness result of the previous section extends directly: the
 \subsection{Composable Decision Profiles}
 
 The decision model directly enables \emph{composable signal orchestration}: different deployment scenarios are expressed as different decision sets $\mathcal{D}$ over the same signal infrastructure.
-A healthcare deployment defines decisions with authz and domain conditions routing to compliant model pools; a developer-tool deployment defines decisions with complexity and keyword conditions routing to cost-optimized cascades; a multi-cloud deployment defines decisions with domain and modality conditions, using latency-aware model selection across provider endpoints.
+A healthcare deployment defines decisions with authz and domain conditions routing to compliant model pools; a developer-tool deployment defines decisions with complexity and keyword conditions routing to cost-optimized cascades; a multi-cloud deployment defines decisions with domain and modality conditions, using latency-aware model selection across provider-backed candidates.
 
 Formally, switching deployment scenarios corresponds to loading a different decision profile $\mathcal{D}_\Gamma$, while the signal extraction layer $\mathcal{S}$ and plugin implementations $\Pi$ remain unchanged.
 This separation of \emph{policy} (what decisions to evaluate) from \emph{mechanism} (how signals are computed and plugins execute) is the architectural basis for the composability claimed in \Cref{sec:architecture}.
