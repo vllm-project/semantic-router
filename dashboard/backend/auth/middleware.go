@@ -69,6 +69,28 @@ func AuthenticateRequest(service *Service) func(http.Handler) http.Handler {
 	}
 }
 
+// ServiceUnavailableGuard returns middleware that fails closed when the auth
+// service could not be initialized. It rejects every request to a route that
+// normally requires authentication with 503 Service Unavailable, while still
+// allowing public routes (login/bootstrap endpoints, setup state, embedded
+// assets, and the static frontend) through so the dashboard can render and
+// surface the "authentication service is not configured" state.
+//
+// This is the deny-by-default counterpart to AuthenticateRequest: it shares
+// the same requiresAuthentication policy so the set of protected routes cannot
+// drift between the two paths.
+func ServiceUnavailableGuard() func(http.Handler) http.Handler {
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if requiresAuthentication(r.URL.Path) {
+				http.Error(w, "Authentication service is not configured", http.StatusServiceUnavailable)
+				return
+			}
+			next.ServeHTTP(w, r)
+		})
+	}
+}
+
 func RequiredPermission(method, path string) string {
 	path = strings.TrimSpace(strings.ToLower(path))
 	for _, resolver := range []func(string, string) (string, bool){

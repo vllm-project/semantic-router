@@ -92,6 +92,13 @@ func wrapWithAuth(mux *http.ServeMux, authSvc *auth.Service) *http.ServeMux {
 		wrappedMux.Handle("/", auth.AuthenticateRequest(authSvc)(mux))
 		return wrappedMux
 	}
-	wrappedMux.Handle("/", mux)
+	// authSvc is nil only when the auth store failed to initialize. Fail
+	// closed: deny every route that requires authentication rather than
+	// serving the entire control plane (config deploy/rollback, admin user
+	// management, MCP tooling, proxy) unauthenticated. Public routes and the
+	// static frontend remain reachable so the dashboard can surface the
+	// misconfiguration.
+	log.Printf("WARNING: auth service unavailable; authenticated routes are failing closed (503). Check AuthDBPath/JWT configuration.")
+	wrappedMux.Handle("/", auth.ServiceUnavailableGuard()(mux))
 	return wrappedMux
 }
