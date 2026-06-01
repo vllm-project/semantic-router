@@ -88,7 +88,7 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--failure-aggregate", action="append", type=Path, default=[])
     parser.add_argument("--agent-task-summary", action="append", type=Path, default=[])
     parser.add_argument("--cache-aggregate", action="append", type=Path, default=[])
-    parser.add_argument("--ref", default="")
+    parser.add_argument("--ref", required=True)
     parser.add_argument("--image-tag", required=True)
     parser.add_argument("--label", default="branch-image-ga")
     parser.add_argument("--min-live-success-rate", type=float, default=1.0)
@@ -306,6 +306,12 @@ def evaluate_diagnostic(
     if data is None:
         return {"evidence": evidence}, [evidence]
     failures = validation_failures(data)
+    validation_kind = str(data.get("validation_kind") or "")
+    if validation_kind != "branch-image-diagnostic-probe":
+        failures.append(
+            "diagnostic validation_kind "
+            f"{validation_kind or 'missing'} != branch-image-diagnostic-probe"
+        )
     checks = data.get("checks") if isinstance(data.get("checks"), dict) else {}
     for key in ["chat_completion_ok", "diagnostic_headers_ok"]:
         if checks.get(key) is not True:
@@ -314,11 +320,17 @@ def evaluate_diagnostic(
         failures.append(f"diagnostic missing header: {header}")
     for header in data.get("invalid_diagnostic_headers") or []:
         failures.append(f"diagnostic invalid header: {header}")
-    if args.ref and data.get("ref") and str(data.get("ref")) != args.ref:
-        failures.append(f"diagnostic ref {data.get('ref')} != {args.ref}")
-    if data.get("image_tag") and str(data.get("image_tag")) != args.image_tag:
+    diagnostic_ref = str(data.get("ref") or "")
+    if not diagnostic_ref:
+        failures.append("diagnostic ref missing")
+    elif diagnostic_ref != args.ref:
+        failures.append(f"diagnostic ref {diagnostic_ref} != {args.ref}")
+    diagnostic_image_tag = str(data.get("image_tag") or "")
+    if not diagnostic_image_tag:
+        failures.append("diagnostic image_tag missing")
+    elif diagnostic_image_tag != args.image_tag:
         failures.append(
-            f"diagnostic image_tag {data.get('image_tag')} != {args.image_tag}"
+            f"diagnostic image_tag {diagnostic_image_tag} != {args.image_tag}"
         )
     return {
         "evidence": evidence,

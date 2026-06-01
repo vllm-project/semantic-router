@@ -299,6 +299,28 @@ def test_full_branch_image_summary_blocks_unbound_subsummaries(tmp_path):
     )
 
 
+def test_full_branch_image_summary_requires_diagnostic_identity(tmp_path):
+    benchmark = load_benchmark_module()
+    arg_values = complete_args(tmp_path)
+    diagnostic = diagnostic_summary()
+    diagnostic["validation_kind"] = "manual-diagnostic"
+    diagnostic.pop("ref")
+    diagnostic.pop("image_tag")
+    write_json(tmp_path / "diagnostic.json", diagnostic)
+    args = benchmark.parse_args(arg_values)
+
+    summary = benchmark.build_summary(args)
+
+    assert summary["checks"]["diagnostic_ok"] is False
+    assert summary["checks"]["branch_image_benchmark_ok"] is False
+    assert (
+        "diagnostic validation_kind manual-diagnostic != "
+        "branch-image-diagnostic-probe"
+    ) in summary["validation_failures"]
+    assert "diagnostic ref missing" in summary["validation_failures"]
+    assert "diagnostic image_tag missing" in summary["validation_failures"]
+
+
 def test_full_branch_image_summary_requires_cache_aggregate(tmp_path):
     benchmark = load_benchmark_module()
     arg_values = complete_args(tmp_path)

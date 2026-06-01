@@ -258,7 +258,10 @@ commands used for branch-image evidence must include the same identity fields:
 ```
 
 The assembler rejects child summaries that are missing those fields or whose
-identity does not match the diagnostic probe and requested image tag:
+identity does not match the requested commit ref and image tag. The diagnostic
+probe is part of the same identity contract: it must be a
+`branch-image-diagnostic-probe` summary with the same `--ref` and `--image-tag`
+used by the full branch-image assembler:
 
 ```bash
 python3 bench/session_routing_branch_image_benchmark.py \
