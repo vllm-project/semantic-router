@@ -266,7 +266,7 @@ def next_actions_for_requirement(item: dict[str, Any]) -> list[str]:
             (
                 "Rerun the AMD long-horizon agent-task suite with "
                 "`--suite long-horizon --task-repetitions 3 "
-                "--require-router-diagnostics`, a router endpoint, and a "
+                "--require-router-diagnostics`, a router service URL, and a "
                 "distinct direct-backend baseline. The maintained gate is "
                 "28 tasks, 163 turns, 489 requests, and 84 scored instances."
             ),
