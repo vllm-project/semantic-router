@@ -34,9 +34,9 @@ BLOCKING_STATUS = "blocked"
 MISSING_STATUS = "missing"
 MARKDOWN_METRIC_LIMIT = 220
 MARKDOWN_METRIC_TRUNCATED_LIMIT = MARKDOWN_METRIC_LIMIT - 3
-DEFAULT_MIN_AGENT_TASK_REQUESTS = 291
-DEFAULT_MIN_AGENT_TASK_COUNT = 17
-DEFAULT_MIN_AGENT_TASK_INSTANCES = 51
+DEFAULT_MIN_AGENT_TASK_REQUESTS = 345
+DEFAULT_MIN_AGENT_TASK_COUNT = 20
+DEFAULT_MIN_AGENT_TASK_INSTANCES = 60
 DEFAULT_REQUIRED_AGENT_TASK_NAMES = (
     "multi-file-regression",
     "code-review-followup",
@@ -55,6 +55,9 @@ DEFAULT_REQUIRED_AGENT_TASK_NAMES = (
     "multi-agent-delegation",
     "issue-pr-maintenance-loop",
     "configuration-contract-review",
+    "repo-bisect-debug",
+    "dependency-upgrade-regression",
+    "literature-data-extraction",
 )
 DEFAULT_REQUIRED_AGENT_TASK_PHASES = (
     "user_turn",

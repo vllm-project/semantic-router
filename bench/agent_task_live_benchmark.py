@@ -1230,6 +1230,186 @@ def long_horizon_task_specs() -> tuple[TaskSpec, ...]:
                 ),
             ),
         ),
+        TaskSpec(
+            name="repo-bisect-debug",
+            suite="long-horizon",
+            turns=(
+                TaskTurn(
+                    phase="user_turn",
+                    prompt=(
+                        "A coding agent is chasing a regression that only appears in "
+                        "the session-aware routing branch. Start with a bisect plan."
+                    ),
+                ),
+                TaskTurn(
+                    phase="tool_loop",
+                    prompt="Use the failing targeted test before selecting the next step.",
+                    tool_name="run_targeted_test",
+                    tool_result=(
+                        "go test ./pkg/extproc -run TestSessionPhaseHeaders "
+                        "fails: selected model is present but session phase is empty."
+                    ),
+                ),
+                TaskTurn(
+                    phase="tool_loop",
+                    prompt="Use the git bisect result before naming the fix.",
+                    tool_name="run_git_bisect",
+                    tool_result=(
+                        "First bad commit changed looper immediate responses to bypass "
+                        "the shared tracked-header writer."
+                    ),
+                ),
+                TaskTurn(
+                    phase="provider_state",
+                    prompt=(
+                        "Continue the same debug session with provider-managed state. "
+                        "State whether the router may switch models mid-bisect."
+                    ),
+                ),
+                TaskTurn(
+                    phase="topic_drift",
+                    prompt=(
+                        "Now turn the root cause into a short PR note and a validation "
+                        "command."
+                    ),
+                ),
+                TaskTurn(
+                    phase="final",
+                    prompt=(
+                        "Return the bisect result. Include exact tokens "
+                        "ROOT_CAUSE=looper-header-bypass, FIX=shared-header-writer, "
+                        "VALIDATE=session-phase-test."
+                    ),
+                    expected_terms=(
+                        "ROOT_CAUSE=looper-header-bypass",
+                        "FIX=shared-header-writer",
+                        "VALIDATE=session-phase-test",
+                    ),
+                ),
+            ),
+        ),
+        TaskSpec(
+            name="dependency-upgrade-regression",
+            suite="long-horizon",
+            turns=(
+                TaskTurn(
+                    phase="user_turn",
+                    prompt=(
+                        "A CI-only operator integration failure appeared after a "
+                        "dependency install path changed. Plan the investigation."
+                    ),
+                ),
+                TaskTurn(
+                    phase="tool_loop",
+                    prompt="Use the failing CI log before naming the dependency risk.",
+                    tool_name="read_ci_log",
+                    tool_result=(
+                        "make install failed while fetching raw.githubusercontent.com/"
+                        "kubernetes-sigs/kustomize/master/hack/install_kustomize.sh: "
+                        "Github rate-limiter failed the request."
+                    ),
+                ),
+                TaskTurn(
+                    phase="tool_loop",
+                    prompt="Use the Makefile snippet before proposing the repair.",
+                    tool_name="read_operator_makefile",
+                    tool_result=(
+                        "controller-gen already installs through go install. kustomize "
+                        "is the only operator tool that still depends on a raw GitHub "
+                        "install script."
+                    ),
+                ),
+                TaskTurn(
+                    phase="idle_boundary",
+                    prompt=(
+                        "Assume the same agent resumes after an idle gap and sees "
+                        "other operator backends pass. Decide the smallest fix."
+                    ),
+                ),
+                TaskTurn(
+                    phase="provider_state",
+                    prompt=(
+                        "Continue the same CI thread with provider-managed state and "
+                        "preserve the failure context."
+                    ),
+                ),
+                TaskTurn(
+                    phase="final",
+                    prompt=(
+                        "Return the CI repair. Include exact tokens "
+                        "ROOT_CAUSE=raw-script-rate-limit, FIX=go-install-kustomize, "
+                        "VALIDATE=operator-ci-gate."
+                    ),
+                    expected_terms=(
+                        "ROOT_CAUSE=raw-script-rate-limit",
+                        "FIX=go-install-kustomize",
+                        "VALIDATE=operator-ci-gate",
+                    ),
+                ),
+            ),
+        ),
+        TaskSpec(
+            name="literature-data-extraction",
+            suite="long-horizon",
+            turns=(
+                TaskTurn(
+                    phase="user_turn",
+                    prompt=(
+                        "Prepare a related-work and evidence note for a paper on "
+                        "session-aware agentic routing."
+                    ),
+                ),
+                TaskTurn(
+                    phase="tool_loop",
+                    prompt="Use the literature extraction before framing the gap.",
+                    tool_name="extract_related_work",
+                    tool_result=(
+                        "Routing papers optimize per-request cost-quality. Agent "
+                        "serving papers discuss tool pauses, long sessions, and "
+                        "KV-cache lifetime."
+                    ),
+                ),
+                TaskTurn(
+                    phase="tool_loop",
+                    prompt="Use the experiment table before choosing the evidence claim.",
+                    tool_name="extract_result_table",
+                    tool_result=(
+                        "Synthetic matrix removes unsafe switches; ablation identifies "
+                        "locks and reset boundaries; AMD overlay validates serving-path "
+                        "feasibility but not full branch-image release evidence."
+                    ),
+                ),
+                TaskTurn(
+                    phase="provider_state",
+                    prompt=(
+                        "Continue the same research note with provider-managed state "
+                        "and keep the claim boundary unchanged."
+                    ),
+                ),
+                TaskTurn(
+                    phase="tool_loop",
+                    prompt="Use the paper review note before finalizing the output.",
+                    tool_name="read_paper_review_note",
+                    tool_result=(
+                        "Do not present experimental process in the blog. Keep process "
+                        "detail in the paper experiment section or appendix."
+                    ),
+                ),
+                TaskTurn(
+                    phase="final",
+                    prompt=(
+                        "Return the research extraction. Include exact tokens "
+                        "GAP=single-turn-routing, EVIDENCE=session-policy, "
+                        "DESTINATION=paper-not-blog."
+                    ),
+                    expected_terms=(
+                        "GAP=single-turn-routing",
+                        "EVIDENCE=session-policy",
+                        "DESTINATION=paper-not-blog",
+                    ),
+                ),
+            ),
+        ),
     )
 
 
