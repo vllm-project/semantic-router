@@ -1102,7 +1102,169 @@ def generate_report(args: argparse.Namespace) -> dict[str, Any]:
         ),
         "blockers": blockers,
         "requirements": requirements,
+        "debug_evidence_chain": build_debug_evidence_chain(requirements),
     }
+
+
+def build_debug_evidence_chain(
+    requirements: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    synthetic = requirement_subset(
+        requirements,
+        {"synthetic_policy_matrix", "synthetic_policy_ablation"},
+    )
+    live = requirement_prefix_subset(requirements, "amd_live_matrix")
+    failure = requirement_prefix_subset(requirements, "amd_failure_recovery")
+    agent_tasks = requirement_prefix_subset(requirements, "amd_agent_task_quality")
+    cache = requirement_subset(requirements, {"cache_token_reporting"})
+    branch = requirement_subset(requirements, {"branch_image_amd_validation"})
+
+    diagnostic_headers = collect_required_headers(agent_tasks)
+    replay_header_required = "x-vsr-replay-id" in diagnostic_headers
+    return [
+        {
+            "id": "policy_evidence",
+            "title": "Policy evidence",
+            "status": merged_requirement_status(synthetic),
+            "proves": (
+                "Synthetic matrix and ablation evidence cover policy behavior "
+                "only; they do not satisfy release evidence by themselves."
+            ),
+            "requirements": requirement_ids(synthetic),
+            "evidence": requirement_evidence(synthetic),
+            "details": {"claim_boundary": "policy evidence only"},
+        },
+        {
+            "id": "runtime_continuity",
+            "title": "Runtime continuity and recovery",
+            "status": merged_requirement_status([*live, *failure, *agent_tasks]),
+            "proves": (
+                "Live AMD traffic, disruption recovery, and agent-task loops "
+                "exercise hard locks, safe reselection boundaries, and "
+                "session recovery under OpenAI-compatible serving paths."
+            ),
+            "requirements": requirement_ids([*live, *failure, *agent_tasks]),
+            "evidence": requirement_evidence([*live, *failure, *agent_tasks]),
+            "details": {
+                "hard_locks": ["tool_loop", "provider_state"],
+                "safe_boundaries": ["idle_boundary", "decision_drift"],
+            },
+        },
+        {
+            "id": "router_diagnostic_headers",
+            "title": "Router diagnostic headers",
+            "status": merged_requirement_status(agent_tasks),
+            "proves": (
+                "Successful agent-task requests expose selected model, "
+                "decision, confidence, session phase, context-token count, "
+                "and replay id headers for request-level debugging."
+            ),
+            "requirements": requirement_ids(agent_tasks),
+            "evidence": requirement_evidence(agent_tasks),
+            "details": {"required_headers": diagnostic_headers},
+        },
+        {
+            "id": "replay_trace_join",
+            "title": "Replay trace join key",
+            "status": replay_trace_join_status(agent_tasks, replay_header_required),
+            "proves": (
+                "`x-vsr-replay-id` links response diagnostics back to router "
+                "replay records so session decisions can be audited after the "
+                "request completes."
+            ),
+            "requirements": requirement_ids(agent_tasks),
+            "evidence": requirement_evidence(agent_tasks),
+            "details": {"required_header": "x-vsr-replay-id"},
+        },
+        {
+            "id": "cache_serving_path",
+            "title": "Cache-token serving-path evidence",
+            "status": merged_requirement_status(cache),
+            "proves": (
+                "Cached-token claims require positive router and direct-backend "
+                "serving-path evidence with matching probe identity."
+            ),
+            "requirements": requirement_ids(cache),
+            "evidence": requirement_evidence(cache),
+            "details": {"baseline_required": True},
+        },
+        {
+            "id": "branch_image_artifact",
+            "title": "Branch-image artifact",
+            "status": merged_requirement_status(branch),
+            "proves": (
+                "The final GA package must be assembled from the reviewed "
+                "branch image, not from a mounted-binary diagnostic run."
+            ),
+            "requirements": requirement_ids(branch),
+            "evidence": requirement_evidence(branch),
+            "details": {
+                "required_child_evidence": list(REQUIRED_FULL_BRANCH_IMAGE_EVIDENCE)
+            },
+        },
+    ]
+
+
+def requirement_subset(
+    requirements: list[dict[str, Any]], ids: set[str]
+) -> list[dict[str, Any]]:
+    return [item for item in requirements if str(item.get("id", "")) in ids]
+
+
+def requirement_prefix_subset(
+    requirements: list[dict[str, Any]], prefix: str
+) -> list[dict[str, Any]]:
+    return [item for item in requirements if str(item.get("id", "")).startswith(prefix)]
+
+
+def merged_requirement_status(items: list[dict[str, Any]]) -> str:
+    if not items:
+        return MISSING_STATUS
+    statuses = {str(item.get("status", "")) for item in items}
+    if MISSING_STATUS in statuses:
+        return MISSING_STATUS
+    if BLOCKING_STATUS in statuses:
+        return BLOCKING_STATUS
+    return PASSING_STATUS
+
+
+def replay_trace_join_status(
+    agent_tasks: list[dict[str, Any]], replay_header_required: bool
+) -> str:
+    if not agent_tasks:
+        return MISSING_STATUS
+    if not replay_header_required:
+        return BLOCKING_STATUS
+    return merged_requirement_status(agent_tasks)
+
+
+def requirement_ids(items: list[dict[str, Any]]) -> list[str]:
+    return [str(item.get("id", "")) for item in items if str(item.get("id", ""))]
+
+
+def requirement_evidence(items: list[dict[str, Any]]) -> list[str]:
+    seen: dict[str, None] = {}
+    for item in items:
+        evidence = str(item.get("evidence", ""))
+        if evidence:
+            seen[evidence] = None
+    return list(seen.keys())
+
+
+def collect_required_headers(items: list[dict[str, Any]]) -> list[str]:
+    seen: dict[str, None] = {}
+    for item in items:
+        metrics = item.get("metrics", {})
+        if not isinstance(metrics, dict):
+            continue
+        headers = metrics.get("required_headers", [])
+        if not isinstance(headers, list):
+            continue
+        for header in headers:
+            value = str(header)
+            if value:
+                seen[value] = None
+    return list(seen.keys())
 
 
 def render_markdown(report: dict[str, Any]) -> str:
@@ -1122,6 +1284,9 @@ def render_markdown(report: dict[str, Any]) -> str:
         if item["status"] in {BLOCKING_STATUS, MISSING_STATUS}
     ]
     lines.extend(render_blocker_queue(blockers))
+    lines.extend(
+        ["", *render_debug_evidence_chain(report.get("debug_evidence_chain", []))]
+    )
     lines.extend(["", "## Requirement Details", ""])
 
     for item in report["requirements"]:
@@ -1145,6 +1310,57 @@ def render_blocker_queue(blockers: list[dict[str, Any]]) -> list[str]:
         if next_actions:
             lines.append(f"   - next action: {next_actions[0]}")
     return lines
+
+
+def render_debug_evidence_chain(chain: Any) -> list[str]:
+    lines = ["## Debug Evidence Chain", ""]
+    if not isinstance(chain, list) or not chain:
+        lines.append("No debug evidence chain was generated.")
+        return lines
+    for index, item in enumerate(chain, 1):
+        if not isinstance(item, dict):
+            continue
+        lines.append(
+            f"{index}. **{item.get('title', '')}** (`{item.get('status', '')}`)"
+        )
+        proves = item.get("proves")
+        if proves:
+            lines.append(f"   - proves: {proves}")
+        requirements = item.get("requirements", [])
+        if requirements:
+            lines.append(f"   - requirements: {inline_code_list(requirements)}")
+        evidence = item.get("evidence", [])
+        if evidence:
+            lines.append(f"   - evidence: {inline_code_list(evidence)}")
+        details = item.get("details", {})
+        if isinstance(details, dict):
+            lines.extend(render_debug_chain_details(details))
+    return lines
+
+
+def render_debug_chain_details(details: dict[str, Any]) -> list[str]:
+    lines: list[str] = []
+    for key in [
+        "claim_boundary",
+        "hard_locks",
+        "safe_boundaries",
+        "required_headers",
+        "required_header",
+        "baseline_required",
+        "required_child_evidence",
+    ]:
+        value = details.get(key)
+        if value in (None, "", [], {}):
+            continue
+        if isinstance(value, list):
+            lines.append(f"   - {key}: {inline_code_list(value)}")
+        else:
+            lines.append(f"   - {key}: `{value}`")
+    return lines
+
+
+def inline_code_list(values: list[Any]) -> str:
+    return ", ".join(f"`{value}`" for value in values)
 
 
 def render_requirement_section(item: dict[str, Any]) -> list[str]:

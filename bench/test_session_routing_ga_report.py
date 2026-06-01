@@ -260,6 +260,19 @@ def test_complete_evidence_passes_ga_gate(tmp_path):
     assert report["blocker_count"] == 0
     assert report["blockers"] == []
     assert {item["status"] for item in report["requirements"]} == {"passed"}
+    chain = {item["id"]: item for item in report["debug_evidence_chain"]}
+    assert chain["policy_evidence"]["details"]["claim_boundary"] == (
+        "policy evidence only"
+    )
+    assert chain["runtime_continuity"]["status"] == "passed"
+    assert chain["router_diagnostic_headers"]["status"] == "passed"
+    assert (
+        "x-vsr-replay-id"
+        in chain["router_diagnostic_headers"]["details"]["required_headers"]
+    )
+    assert chain["replay_trace_join"]["status"] == "passed"
+    assert chain["cache_serving_path"]["status"] == "passed"
+    assert chain["branch_image_artifact"]["status"] == "passed"
 
 
 def test_missing_positive_cache_and_branch_image_block_ga(tmp_path):
@@ -1010,6 +1023,7 @@ def test_markdown_renders_blockers_as_readable_sections():
             "blocker_count": 1,
             "requirements": [
                 {
+                    "id": "cache_token_reporting",
                     "title": "Cache-token reporting",
                     "status": "blocked",
                     "evidence": "cache.json",
@@ -1021,11 +1035,43 @@ def test_markdown_renders_blockers_as_readable_sections():
                     "next_actions": ["rerun cache probe"],
                 }
             ],
+            "debug_evidence_chain": [
+                {
+                    "id": "router_diagnostic_headers",
+                    "title": "Router diagnostic headers",
+                    "status": "passed",
+                    "proves": "Successful requests expose routing diagnostics.",
+                    "requirements": ["amd_agent_task_quality_1"],
+                    "evidence": ["tasks.json"],
+                    "details": {
+                        "required_headers": [
+                            "x-vsr-selected-model",
+                            "x-vsr-replay-id",
+                        ]
+                    },
+                },
+                {
+                    "id": "policy_evidence",
+                    "title": "Policy evidence",
+                    "status": "passed",
+                    "proves": "Synthetic matrix evidence is policy evidence only.",
+                    "requirements": [
+                        "synthetic_policy_matrix",
+                        "synthetic_policy_ablation",
+                    ],
+                    "evidence": ["matrix.json", "ablation.json"],
+                    "details": {"claim_boundary": "policy evidence only"},
+                },
+            ],
         }
     )
 
     assert "| Requirement | Status | Evidence |" not in markdown
     assert "## Blocker Queue" in markdown
+    assert "## Debug Evidence Chain" in markdown
+    assert "1. **Router diagnostic headers** (`passed`)" in markdown
+    assert "required_headers: `x-vsr-selected-model`, `x-vsr-replay-id`" in markdown
+    assert "claim_boundary: `policy evidence only`" in markdown
     assert "1. **Cache-token reporting** (`blocked`)" in markdown
     assert "### Cache-token reporting" in markdown
     assert "#### Key Metrics" in markdown
