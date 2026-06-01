@@ -229,10 +229,10 @@ spec:
           value: /tmp/python_user/bin:/usr/local/bin:/usr/bin:/bin
         resources:
           requests:
-            memory: "512Mi"
+            memory: "2Gi"
             cpu: "250m"
           limits:
-            memory: "1Gi"
+            memory: "4Gi"
             cpu: "500m"
         volumeMounts:
         - name: models-volume
