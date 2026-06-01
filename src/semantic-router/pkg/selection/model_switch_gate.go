@@ -57,7 +57,7 @@ type ModelSwitchGateDecision struct {
 	CacheWarmthPenalty float64
 	NetSwitchAdvantage float64
 	// NetSwitchAdvantageOK is true when evidence collection ran and
-	// NetSwitchAdvantage reflects a real comparison (not a fallback default).
+	// NetSwitchAdvantage reflects a real comparison (not an audit-only default).
 	NetSwitchAdvantageOK bool
 
 	StayCostEstimate   float64
@@ -83,7 +83,7 @@ func (g *ModelSwitchGate) Evaluate(input ModelSwitchGateInput) ModelSwitchGateDe
 
 	blocking, informational := classifyModelSwitchSignals(input, candidateModel)
 	if len(blocking) > 0 {
-		return decision.withMissingFallback(append(blocking, informational...))
+		return decision.withMissingAuditOnly(append(blocking, informational...))
 	}
 	if input.CurrentModel == candidateModel {
 		decision.Reason = "candidate_is_current_model"
@@ -92,12 +92,12 @@ func (g *ModelSwitchGate) Evaluate(input ModelSwitchGateInput) ModelSwitchGateDe
 		return decision
 	}
 	if !candidateSetContains(input.SelectionContext.CandidateModels, input.CurrentModel) {
-		return decision.withMissingFallback(append([]string{"previous_model_not_in_candidates"}, informational...))
+		return decision.withMissingAuditOnly(append([]string{"previous_model_not_in_candidates"}, informational...))
 	}
 
 	evidence, evidenceMissing, ok := g.collectSwitchEvidence(input, candidateModel)
 	if !ok {
-		return decision.withMissingFallback(append([]string{"selector_score_or_quality_gap"}, informational...))
+		return decision.withMissingAuditOnly(append([]string{"selector_score_or_quality_gap"}, informational...))
 	}
 	missing := make([]string, len(informational), len(informational)+len(evidenceMissing))
 	copy(missing, informational)
@@ -231,7 +231,7 @@ func (d *ModelSwitchGateDecision) applyEvidence(
 
 // switchBenefit returns the quality benefit of switching to the candidate.
 // QualityGap (lookup-table evidence keyed on task family) is preferred when
-// available; SelectorScoreDelta is the fallback. The two are NOT summed —
+// available; SelectorScoreDelta is the secondary source. The two are NOT summed —
 // many selectors already incorporate quality into their score, so adding
 // QualityGap on top would double-count.
 func (e modelSwitchGateEvidence) switchBenefit() float64 {
@@ -270,9 +270,9 @@ func (d ModelSwitchGateDecision) LogFields() map[string]interface{} {
 	}
 }
 
-func (d ModelSwitchGateDecision) withMissingFallback(missing []string) ModelSwitchGateDecision {
+func (d ModelSwitchGateDecision) withMissingAuditOnly(missing []string) ModelSwitchGateDecision {
 	d.MissingSignals = append(d.MissingSignals, missing...)
-	d.Reason = "missing_signal_fallback"
+	d.Reason = "missing_signal_audit_only"
 	return d
 }
 

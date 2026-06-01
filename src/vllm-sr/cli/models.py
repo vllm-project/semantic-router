@@ -823,8 +823,11 @@ class Decision(BaseModel):
 class ModelPricing(BaseModel):
     """Model pricing configuration."""
 
+    model_config = ConfigDict(extra="forbid")
+
     currency: Optional[str] = "USD"
     prompt_per_1m: Optional[float] = 0.0
+    cached_input_per_1m: Optional[float] = 0.0
     completion_per_1m: Optional[float] = 0.0
 
 

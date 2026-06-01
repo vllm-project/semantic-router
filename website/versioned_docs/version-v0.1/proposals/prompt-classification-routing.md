@@ -154,7 +154,7 @@ import ZoomableMermaid from '@site/src/components/ZoomableMermaid';
     G -->|Boost| J[Apply Category<br/>Weights]
     G -->|Fallthrough| K[Use BERT<br/>Category]
     
-    I --> L[Endpoint Selection]
+    I --> L[Gateway Route]
     J --> L
     K --> L
     
@@ -517,7 +517,7 @@ The content scanning framework integrates seamlessly into the existing router's 
    - **Fallthrough Decision:** Use standard BERT classification
 
 5. **Continue Normal Flow**
-   - Selected model passed to endpoint selection
+   - Selected model passed to gateway routing; endpoint load balancing remains downstream
    - Request modified with new model and routing headers
    - Forwarded to appropriate vLLM backend
 

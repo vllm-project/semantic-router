@@ -11,14 +11,15 @@ import (
 
 func TestSessionAwareSelectorToolLoopHardLocksCurrentModel(t *testing.T) {
 	selector := NewSessionAwareSelector(&SessionAwareConfig{
-		FallbackMethod:         MethodStatic,
-		ToolLoopHardLock:       true,
-		ToolLoopStayBias:       0.35,
-		StayBias:               0.10,
-		QualityGapMultiplier:   1,
-		MaxCacheCostMultiplier: 2.5,
+		BaseMethod:                 MethodStatic,
+		ToolLoopHardLock:           true,
+		ContextPortabilityHardLock: true,
+		ToolLoopStayBias:           0.35,
+		StayBias:                   0.10,
+		QualityGapMultiplier:       1,
+		MaxCacheCostMultiplier:     2.5,
 	})
-	selector.SetFallbackSelector(stubSessionFallback{
+	selector.SetBaseSelector(stubSessionBase{
 		result: &SelectionResult{
 			SelectedModel: "frontier",
 			Score:         0.95,
@@ -54,9 +55,68 @@ func TestSessionAwareSelectorToolLoopHardLocksCurrentModel(t *testing.T) {
 	}
 }
 
-func TestSessionAwareSelectorIdleSessionAllowsFallbackSwitch(t *testing.T) {
+func TestSessionAwareSelectorProviderStateHardLocksCurrentModel(t *testing.T) {
 	selector := NewSessionAwareSelector(&SessionAwareConfig{
-		FallbackMethod:         MethodStatic,
+		BaseMethod:                 MethodStatic,
+		ContextPortabilityHardLock: true,
+		ToolLoopStayBias:           0.35,
+		StayBias:                   0.10,
+		QualityGapMultiplier:       1,
+		MaxCacheCostMultiplier:     2.5,
+	})
+	selector.SetBaseSelector(stubSessionBase{
+		result: &SelectionResult{
+			SelectedModel: "frontier",
+			Score:         0.95,
+			Method:        MethodHybrid,
+			AllScores: map[string]float64{
+				"current":  0.40,
+				"frontier": 0.95,
+			},
+		},
+	})
+
+	result, err := selector.Select(context.Background(), &SelectionContext{
+		CandidateModels: []config.ModelRef{{Model: "current"}, {Model: "frontier"}},
+		AgenticSession: &AgenticSessionContext{
+			ID:                       "sess-stateful",
+			TurnIndex:                3,
+			PreviousModel:            "current",
+			PreviousResponseID:       "resp_previous",
+			Phase:                    AgenticPhaseProviderState,
+			HasNonPortableContext:    true,
+			NonPortableContextReason: "previous_response_id",
+		},
+	})
+	if err != nil {
+		t.Fatalf("Select returned error: %v", err)
+	}
+	if result.SelectedModel != "current" {
+		t.Fatalf("expected current model to be hard-locked for non-portable context, got %q", result.SelectedModel)
+	}
+	if result.SessionPolicy == nil || !result.SessionPolicy.HardLocked {
+		t.Fatalf("expected hard-lock policy trace, got %#v", result.SessionPolicy)
+	}
+	if result.SessionPolicy.HardLockReason != "hard_lock=context_portability:previous_response_id" {
+		t.Fatalf("unexpected hard-lock reason: %q", result.SessionPolicy.HardLockReason)
+	}
+	if !result.SessionPolicy.HasNonPortableContext ||
+		result.SessionPolicy.NonPortableContextReason != "previous_response_id" {
+		t.Fatalf("expected non-portable context trace, got %#v", result.SessionPolicy)
+	}
+	mapped := result.SessionPolicy.ToMap()
+	if mapped["has_non_portable_context"] != true ||
+		mapped["non_portable_context_reason"] != "previous_response_id" {
+		t.Fatalf("expected non-portable context in trace map, got %#v", mapped)
+	}
+	if mapped["phase"] != string(AgenticPhaseProviderState) {
+		t.Fatalf("expected provider-state phase in trace map, got %#v", mapped)
+	}
+}
+
+func TestSessionAwareSelectorIdleSessionAllowsBaseSwitch(t *testing.T) {
+	selector := NewSessionAwareSelector(&SessionAwareConfig{
+		BaseMethod:             MethodStatic,
 		IdleTimeoutSeconds:     60,
 		SwitchMargin:           0,
 		StayBias:               0,
@@ -67,7 +127,7 @@ func TestSessionAwareSelectorIdleSessionAllowsFallbackSwitch(t *testing.T) {
 		QualityGapMultiplier:   1,
 		MaxCacheCostMultiplier: 2.5,
 	})
-	selector.SetFallbackSelector(stubSessionFallback{
+	selector.SetBaseSelector(stubSessionBase{
 		result: &SelectionResult{
 			SelectedModel: "frontier",
 			Score:         0.90,
@@ -93,7 +153,7 @@ func TestSessionAwareSelectorIdleSessionAllowsFallbackSwitch(t *testing.T) {
 		t.Fatalf("Select returned error: %v", err)
 	}
 	if result.SelectedModel != "frontier" {
-		t.Fatalf("expected idle session to accept stronger fallback choice, got %q", result.SelectedModel)
+		t.Fatalf("expected idle session to accept stronger base choice, got %q", result.SelectedModel)
 	}
 	if result.SessionPolicy == nil || !result.SessionPolicy.IdleExpired {
 		t.Fatalf("expected idle-expired policy trace, got %#v", result.SessionPolicy)
@@ -105,7 +165,7 @@ func TestSessionAwareSelectorIdleSessionAllowsFallbackSwitch(t *testing.T) {
 
 func TestSessionAwareSelectorIdleSessionClearsContinuityPenalty(t *testing.T) {
 	selector := NewSessionAwareSelector(&SessionAwareConfig{
-		FallbackMethod:         MethodStatic,
+		BaseMethod:             MethodStatic,
 		IdleTimeoutSeconds:     60,
 		SwitchMargin:           0.05,
 		StayBias:               0.10,
@@ -117,7 +177,7 @@ func TestSessionAwareSelectorIdleSessionClearsContinuityPenalty(t *testing.T) {
 		MaxCacheCostMultiplier: 2.5,
 		SwitchHistoryWeight:    0.04,
 	})
-	selector.SetFallbackSelector(stubSessionFallback{
+	selector.SetBaseSelector(stubSessionBase{
 		result: &SelectionResult{
 			SelectedModel: "frontier",
 			Score:         1.0,
@@ -148,7 +208,7 @@ func TestSessionAwareSelectorIdleSessionClearsContinuityPenalty(t *testing.T) {
 		t.Fatalf("Select returned error: %v", err)
 	}
 	if result.SelectedModel != "frontier" {
-		t.Fatalf("expected idle boundary to reselect fallback frontier, got %q", result.SelectedModel)
+		t.Fatalf("expected idle boundary to reselect base frontier, got %q", result.SelectedModel)
 	}
 
 	trace := result.SessionPolicy.CandidateTraces["frontier"]
@@ -160,9 +220,69 @@ func TestSessionAwareSelectorIdleSessionClearsContinuityPenalty(t *testing.T) {
 	}
 }
 
+func TestSessionAwareSelectorDecisionDriftClearsContinuityPenalty(t *testing.T) {
+	selector := NewSessionAwareSelector(&SessionAwareConfig{
+		BaseMethod:             MethodStatic,
+		DecisionDriftReset:     true,
+		IdleTimeoutSeconds:     300,
+		SwitchMargin:           0.05,
+		StayBias:               0.10,
+		ToolLoopHardLock:       true,
+		PrefixCacheWeight:      0.20,
+		HandoffPenaltyWeight:   1,
+		DefaultHandoffPenalty:  0.05,
+		QualityGapMultiplier:   1,
+		MaxCacheCostMultiplier: 2.5,
+		SwitchHistoryWeight:    0.04,
+	})
+	selector.SetBaseSelector(stubSessionBase{
+		result: &SelectionResult{
+			SelectedModel: "frontier",
+			Score:         1.0,
+			Method:        MethodStatic,
+			AllScores: map[string]float64{
+				"current":  0.999,
+				"frontier": 1.0,
+			},
+		},
+	})
+
+	result, err := selector.Select(context.Background(), &SelectionContext{
+		DecisionName:    "new-task",
+		CandidateModels: []config.ModelRef{{Model: "frontier"}, {Model: "current"}},
+		AgenticSession: &AgenticSessionContext{
+			ID:                "sess-drift",
+			TurnIndex:         5,
+			PreviousModel:     "current",
+			LastDecisionName:  "old-task",
+			MemorySwitchCount: 4,
+			HistoryTokens:     4096,
+			ContextTokens:     8192,
+			CacheWarmth:       1,
+			CacheWarmthOK:     true,
+		},
+	})
+	if err != nil {
+		t.Fatalf("Select returned error: %v", err)
+	}
+	if result.SelectedModel != "frontier" {
+		t.Fatalf("expected decision drift boundary to reselect base frontier, got %q", result.SelectedModel)
+	}
+	if result.SessionPolicy == nil || !result.SessionPolicy.DecisionDrift {
+		t.Fatalf("expected decision-drift trace, got %#v", result.SessionPolicy)
+	}
+	trace := result.SessionPolicy.CandidateTraces["frontier"]
+	if trace.HandoffPenalty != 0 || trace.PrefixCachePenalty != 0 || trace.SwitchHistoryPenalty != 0 {
+		t.Fatalf("expected decision drift to clear continuity penalties, got %#v", trace)
+	}
+	if mapped := result.SessionPolicy.ToMap(); mapped["decision_drift"] != true {
+		t.Fatalf("expected decision drift in trace map, got %#v", mapped)
+	}
+}
+
 func TestSessionAwareSelectorUsesRouterMemoryTurnCountBeforeFullParsing(t *testing.T) {
 	selector := NewSessionAwareSelector(&SessionAwareConfig{
-		FallbackMethod:         MethodStatic,
+		BaseMethod:             MethodStatic,
 		MinTurnsBeforeSwitch:   1,
 		SwitchMargin:           0,
 		StayBias:               0,
@@ -173,7 +293,7 @@ func TestSessionAwareSelectorUsesRouterMemoryTurnCountBeforeFullParsing(t *testi
 		QualityGapMultiplier:   1,
 		MaxCacheCostMultiplier: 2.5,
 	})
-	selector.SetFallbackSelector(stubSessionFallback{
+	selector.SetBaseSelector(stubSessionBase{
 		result: &SelectionResult{
 			SelectedModel: "frontier",
 			Score:         0.90,
@@ -207,7 +327,7 @@ func TestSessionAwareSelectorUsesRouterMemoryTurnCountBeforeFullParsing(t *testi
 
 func TestSessionAwareNetSwitchAdvantageUsesAdjustedCurrentScore(t *testing.T) {
 	selector := NewSessionAwareSelector(&SessionAwareConfig{
-		FallbackMethod:         MethodStatic,
+		BaseMethod:             MethodStatic,
 		SwitchMargin:           0,
 		StayBias:               0.10,
 		PrefixCacheWeight:      0,
@@ -216,7 +336,7 @@ func TestSessionAwareNetSwitchAdvantageUsesAdjustedCurrentScore(t *testing.T) {
 		QualityGapMultiplier:   1,
 		MaxCacheCostMultiplier: 1,
 	})
-	selector.SetFallbackSelector(stubSessionFallback{
+	selector.SetBaseSelector(stubSessionBase{
 		result: &SelectionResult{
 			SelectedModel: "frontier",
 			Score:         0.62,
@@ -286,9 +406,78 @@ func TestSessionAwarePrefixPenaltyScalesWithModelCost(t *testing.T) {
 	}
 }
 
+func TestSessionAwareCacheCostPressureUsesInputCheckoutDelta(t *testing.T) {
+	selector := NewSessionAwareSelector(&SessionAwareConfig{
+		PrefixCacheWeight:      0.2,
+		QualityGapMultiplier:   1,
+		MaxCacheCostMultiplier: 3,
+	})
+	selector.InitializeFromConfig(map[string]config.ModelParams{
+		"completion-heavy": {
+			Pricing: config.ModelPricing{
+				PromptPer1M:      0.20,
+				CompletionPer1M:  40.0,
+				CachedInputPer1M: 0.18,
+			},
+		},
+		"cache-expensive": {
+			Pricing: config.ModelPricing{
+				PromptPer1M:      8.0,
+				CompletionPer1M:  1.0,
+				CachedInputPer1M: 0.50,
+			},
+		},
+	})
+
+	completionHeavyPressure := selector.modelCostPressure("completion-heavy")
+	cacheExpensivePressure := selector.modelCostPressure("cache-expensive")
+	if cacheExpensivePressure <= completionHeavyPressure {
+		t.Fatalf(
+			"expected cache-expensive input checkout pressure %.4f > completion-heavy %.4f",
+			cacheExpensivePressure,
+			completionHeavyPressure,
+		)
+	}
+}
+
+func TestSessionAwareConfigNormalizesCacheBounds(t *testing.T) {
+	selector := NewSessionAwareSelector(&SessionAwareConfig{
+		MaxCacheCostMultiplier:    0.5,
+		RemainingTurnPriorHorizon: 0,
+	})
+	defaults := DefaultSessionAwareConfig()
+	if selector.config.MaxCacheCostMultiplier != defaults.MaxCacheCostMultiplier {
+		t.Fatalf(
+			"expected weak cache cost multiplier to default to %.2f, got %.2f",
+			defaults.MaxCacheCostMultiplier,
+			selector.config.MaxCacheCostMultiplier,
+		)
+	}
+	if selector.config.RemainingTurnPriorHorizon != defaults.RemainingTurnPriorHorizon {
+		t.Fatalf(
+			"expected zero remaining-turn horizon to default to %d, got %d",
+			defaults.RemainingTurnPriorHorizon,
+			selector.config.RemainingTurnPriorHorizon,
+		)
+	}
+}
+
+func TestSessionAwareConfigPreservesNeutralCacheMultiplier(t *testing.T) {
+	selector := NewSessionAwareSelector(&SessionAwareConfig{
+		MaxCacheCostMultiplier:    1,
+		RemainingTurnPriorHorizon: 1,
+	})
+	if selector.config.MaxCacheCostMultiplier != 1 {
+		t.Fatalf("expected neutral cache multiplier to be preserved, got %.2f", selector.config.MaxCacheCostMultiplier)
+	}
+	if selector.config.RemainingTurnPriorHorizon != 1 {
+		t.Fatalf("expected positive remaining-turn horizon to be preserved, got %d", selector.config.RemainingTurnPriorHorizon)
+	}
+}
+
 func TestSessionAwareRemainingTurnPriorRaisesContinuationMass(t *testing.T) {
 	selector := NewSessionAwareSelector(&SessionAwareConfig{
-		FallbackMethod:               MethodStatic,
+		BaseMethod:                   MethodStatic,
 		MinTurnsBeforeSwitch:         0,
 		SwitchMargin:                 0,
 		StayBias:                     0,
@@ -301,7 +490,7 @@ func TestSessionAwareRemainingTurnPriorRaisesContinuationMass(t *testing.T) {
 		RemainingTurnPriorHorizon:    8,
 		MinRemainingTurnPriorSamples: 3,
 	})
-	selector.SetFallbackSelector(stubSessionFallback{
+	selector.SetBaseSelector(stubSessionBase{
 		result: &SelectionResult{
 			SelectedModel: "frontier",
 			Score:         0.55,
@@ -365,7 +554,7 @@ func TestSessionAwareRemainingTurnPriorRaisesContinuationMass(t *testing.T) {
 
 func TestSessionAwareRemainingTurnPriorRejectsLowReplaySampleCount(t *testing.T) {
 	selector := NewSessionAwareSelector(&SessionAwareConfig{
-		FallbackMethod:               MethodStatic,
+		BaseMethod:                   MethodStatic,
 		MinTurnsBeforeSwitch:         0,
 		SwitchMargin:                 0,
 		StayBias:                     0,
@@ -378,7 +567,7 @@ func TestSessionAwareRemainingTurnPriorRejectsLowReplaySampleCount(t *testing.T)
 		RemainingTurnPriorHorizon:    8,
 		MinRemainingTurnPriorSamples: 3,
 	})
-	selector.SetFallbackSelector(stubSessionFallback{
+	selector.SetBaseSelector(stubSessionBase{
 		result: &SelectionResult{
 			SelectedModel: "frontier",
 			Score:         0.55,
@@ -428,7 +617,7 @@ func TestSessionAwareRemainingTurnPriorRejectsLowReplaySampleCount(t *testing.T)
 
 func TestSessionAwareRemainingTurnPriorTrustsConfigOverrideWithoutSamples(t *testing.T) {
 	selector := NewSessionAwareSelector(&SessionAwareConfig{
-		FallbackMethod:               MethodStatic,
+		BaseMethod:                   MethodStatic,
 		MinTurnsBeforeSwitch:         0,
 		SwitchMargin:                 0,
 		StayBias:                     0,
@@ -441,7 +630,7 @@ func TestSessionAwareRemainingTurnPriorTrustsConfigOverrideWithoutSamples(t *tes
 		RemainingTurnPriorHorizon:    8,
 		MinRemainingTurnPriorSamples: 3,
 	})
-	selector.SetFallbackSelector(stubSessionFallback{
+	selector.SetBaseSelector(stubSessionBase{
 		result: &SelectionResult{
 			SelectedModel: "frontier",
 			Score:         0.55,
@@ -495,20 +684,20 @@ func TestSessionAwareRouterMemorySwitchHistoryPenalty(t *testing.T) {
 	}
 }
 
-type stubSessionFallback struct {
+type stubSessionBase struct {
 	result *SelectionResult
 }
 
-func (s stubSessionFallback) Select(context.Context, *SelectionContext) (*SelectionResult, error) {
+func (s stubSessionBase) Select(context.Context, *SelectionContext) (*SelectionResult, error) {
 	copy := *s.result
 	copy.AllScores = cloneScores(s.result.AllScores)
 	return &copy, nil
 }
 
-func (s stubSessionFallback) Method() SelectionMethod { return MethodHybrid }
+func (s stubSessionBase) Method() SelectionMethod { return MethodHybrid }
 
-func (s stubSessionFallback) UpdateFeedback(context.Context, *Feedback) error { return nil }
+func (s stubSessionBase) UpdateFeedback(context.Context, *Feedback) error { return nil }
 
-func (s stubSessionFallback) Tier() AlgorithmTier { return TierSupported }
+func (s stubSessionBase) Tier() AlgorithmTier { return TierSupported }
 
-func (s stubSessionFallback) ExternalDependencies() []Dependency { return nil }
+func (s stubSessionBase) ExternalDependencies() []Dependency { return nil }

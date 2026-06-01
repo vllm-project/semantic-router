@@ -6,11 +6,11 @@
 We have presented \sysname{}, a signal-driven decision routing system for Mixture-of-Modality model deployments.
 The central contribution is \textbf{composable signal orchestration}: the three-layer architecture---signal extraction, Boolean decision evaluation, per-decision plugin chains---enables diverse deployment scenarios to be expressed as different configurations over the same framework, without code changes.
 
-Privacy-regulated deployments activate authz and PII signals with strict filtering plugins; cost-optimized deployments enable cascading selection with aggressive semantic caching; multi-cloud enterprises configure weighted multi-endpoint routing with provider-specific auth injection.
+Privacy-regulated deployments activate authz and PII signals with strict filtering plugins; cost-optimized deployments enable cascading selection with aggressive semantic caching; multi-cloud enterprises configure provider-backed model routing with provider-specific auth injection.
 All use the same signal-decision-plugin machinery, composed differently.
 
 Within this framework, \textbf{semantic model selection} analyzes each request's content through thirteen algorithms---spanning rating-based, contrastive, cascading, classical ML, reinforcement learning, and latency-aware families---to find the most cost-effective model while respecting per-decision privacy and safety constraints.
-The integration of full \textbf{OpenAI Responses API support} enables stateful multi-turn routing with conversation-consistent model assignment; \textbf{multi-endpoint and multi-provider routing} abstracts over heterogeneous backends (vLLM, OpenAI, Anthropic, Azure, Bedrock, Gemini, Vertex AI) with transparent protocol translation; and the \textbf{pluggable authorization factory} supports diverse auth mechanisms across providers without coupling auth logic to routing decisions.
+The integration of full \textbf{OpenAI Responses API support} enables stateful multi-turn routing with conversation-consistent model assignment; \textbf{multi-provider backend routing} abstracts over heterogeneous backends (vLLM, OpenAI, Anthropic, Azure, Bedrock, Gemini, Vertex AI) with transparent protocol translation; and the \textbf{pluggable authorization factory} supports diverse auth mechanisms across providers without coupling auth logic to routing decisions.
 
 Additional technical contributions include:
 (1)~the LoRA-based multi-task classification architecture that serves $n$ classifiers from a single base model, reducing aggregate model memory by $\sim$$n\times$;

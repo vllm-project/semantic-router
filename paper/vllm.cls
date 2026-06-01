@@ -30,7 +30,6 @@
 \RequirePackage{setspace}
 \RequirePackage{parskip}
 \RequirePackage[english]{babel}
-\IfFileExists{lipsum.sty}{\RequirePackage{lipsum}}{}
 \RequirePackage{etoolbox}
 
 \DisableLigatures[f]{family=sf*}
@@ -43,7 +42,6 @@
 % Tables %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
 \RequirePackage{booktabs}
-\IfFileExists{nicematrix.sty}{\RequirePackage{nicematrix}}{}
 \RequirePackage{multirow}
 \RequirePackage{bm}
 \newcommand{\nm}[1]{#1}

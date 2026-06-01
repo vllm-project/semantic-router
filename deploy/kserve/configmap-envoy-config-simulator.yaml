@@ -42,7 +42,6 @@ data:
                       upstream_local_address: "%UPSTREAM_LOCAL_ADDRESS%"
                       request_id: "%REQ(X-REQUEST-ID)%"
                       selected_model: "%REQ(X-SELECTED-MODEL)%"
-                      selected_endpoint: "%REQ(X-GATEWAY-DESTINATION-ENDPOINT)%"
               route_config:
                 name: local_route
                 virtual_hosts:
@@ -55,11 +54,31 @@ data:
                     route:
                       cluster: semantic_router_cluster
                       timeout: 300s
-                  # Dynamic route - destination determined by x-gateway-destination-endpoint header
+                  # Route by model signal. Envoy owns endpoint load balancing
+                  # inside each KServe backend cluster.
+                  - match:
+                      prefix: "/"
+                      headers:
+                      - name: x-selected-model
+                        string_match:
+                          exact: "{{MODEL_NAME_A}}"
+                    route:
+                      cluster: kserve_model_a_cluster
+                      timeout: 300s
+                  - match:
+                      prefix: "/"
+                      headers:
+                      - name: x-selected-model
+                        string_match:
+                          exact: "{{MODEL_NAME_B}}"
+                    route:
+                      cluster: kserve_model_b_cluster
+                      timeout: 300s
+                  # Default route uses the configured default model.
                   - match:
                       prefix: "/"
                     route:
-                      cluster: kserve_dynamic_cluster
+                      cluster: kserve_model_b_cluster
                       timeout: 300s
               http_filters:
               - name: envoy.filters.http.ext_proc
@@ -136,18 +155,44 @@ data:
             explicit_http_config:
               http_protocol_options: {}
 
-      # Dynamic cluster using ORIGINAL_DST with header-based destination
-      # The semantic router sets x-vsr-destination-endpoint header (IP:port)
-      # NOTE: This simulator config uses HTTP (no TLS). Use the main
-      # configmap-envoy-config.yaml if you switch simulator backends to TLS.
-      - name: kserve_dynamic_cluster
+      # KServe simulator model A cluster
+      - name: kserve_model_a_cluster
         connect_timeout: 300s
         per_connection_buffer_limit_bytes: 52428800
-        type: ORIGINAL_DST
-        lb_policy: CLUSTER_PROVIDED
-        original_dst_lb_config:
-          use_http_header: true
-          http_header_name: "x-vsr-destination-endpoint"
+        type: STRICT_DNS
+        lb_policy: ROUND_ROBIN
+        dns_lookup_family: V4_ONLY
+        load_assignment:
+          cluster_name: kserve_model_a_cluster
+          endpoints:
+          - lb_endpoints:
+            - endpoint:
+                address:
+                  socket_address:
+                    address: {{INFERENCESERVICE_NAME_A}}-predictor-stable.{{NAMESPACE}}.svc.cluster.local
+                    port_value: 8000
+        typed_extension_protocol_options:
+          envoy.extensions.upstreams.http.v3.HttpProtocolOptions:
+            "@type": type.googleapis.com/envoy.extensions.upstreams.http.v3.HttpProtocolOptions
+            explicit_http_config:
+              http_protocol_options: {}
+
+      # KServe simulator model B cluster
+      - name: kserve_model_b_cluster
+        connect_timeout: 300s
+        per_connection_buffer_limit_bytes: 52428800
+        type: STRICT_DNS
+        lb_policy: ROUND_ROBIN
+        dns_lookup_family: V4_ONLY
+        load_assignment:
+          cluster_name: kserve_model_b_cluster
+          endpoints:
+          - lb_endpoints:
+            - endpoint:
+                address:
+                  socket_address:
+                    address: {{INFERENCESERVICE_NAME_B}}-predictor-stable.{{NAMESPACE}}.svc.cluster.local
+                    port_value: 8000
         typed_extension_protocol_options:
           envoy.extensions.upstreams.http.v3.HttpProtocolOptions:
             "@type": type.googleapis.com/envoy.extensions.upstreams.http.v3.HttpProtocolOptions

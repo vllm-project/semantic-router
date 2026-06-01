@@ -44,6 +44,10 @@ class WorkloadScenario:
     idle_mode: str
     remaining_turn_prior: float
     token_growth: float = 1.0
+    state_cycle: int = 0
+    state_slots: tuple[int, ...] = ()
+    drift_cycle: int = 0
+    drift_slots: tuple[int, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -62,10 +66,20 @@ MODELS = (
 )
 FRONTIER_DEMAND_THRESHOLD = 0.78
 MID_DEMAND_THRESHOLD = 0.55
-DEFAULT_SCENARIOS = ("balanced", "tool-heavy", "frontier-heavy", "idle-heavy")
+DEFAULT_SCENARIOS = (
+    "balanced",
+    "tool-heavy",
+    "frontier-heavy",
+    "idle-heavy",
+    "stateful-heavy",
+    "drift-heavy",
+)
 DEFAULT_ABLATION_POLICIES = (
     "sticky-session",
+    "acr-initial",
     "acr-no-tool-lock",
+    "acr-no-context-portability",
+    "acr-no-decision-drift-reset",
     "acr-no-idle-boundary",
     "acr-no-remaining-prior",
     "acr-no-frontier-cost",
@@ -129,6 +143,40 @@ SCENARIOS = {
         history_max=2048,
         idle_mode="frequent",
         remaining_turn_prior=4.0,
+    ),
+    "stateful-heavy": WorkloadScenario(
+        name="stateful-heavy",
+        base_demand=0.58,
+        progress_weight=0.30,
+        phase_bonus=0.24,
+        wave_amplitude=0.15,
+        noise=0.08,
+        tool_cycle=6,
+        tool_slots=(3, 4),
+        history_min=128,
+        history_max=1024,
+        idle_mode="rare",
+        remaining_turn_prior=3.0,
+        token_growth=0.95,
+        state_cycle=5,
+        state_slots=(1, 2),
+    ),
+    "drift-heavy": WorkloadScenario(
+        name="drift-heavy",
+        base_demand=0.46,
+        progress_weight=0.28,
+        phase_bonus=0.26,
+        wave_amplitude=0.12,
+        noise=0.08,
+        tool_cycle=6,
+        tool_slots=(3,),
+        history_min=2048,
+        history_max=6144,
+        idle_mode="rare",
+        remaining_turn_prior=7.0,
+        token_growth=1.08,
+        drift_cycle=6,
+        drift_slots=(1, 2),
     ),
 }
 
@@ -253,6 +301,12 @@ def simulate_workload(
                     and baseline_switch,
                     "tool_loop_switch_violation_agentic": phase == "tool_loop"
                     and agentic_switch,
+                    "context_portability_violation_baseline": phase == "provider_state"
+                    and baseline_switch,
+                    "context_portability_violation_agentic": phase == "provider_state"
+                    and agentic_switch,
+                    "decision_drift": phase == "topic_drift",
+                    "agentic_drift_switch": phase == "topic_drift" and agentic_switch,
                     "cached_prompt_ratio": round(cached_ratio, 4),
                     "baseline_quality": baseline_next.quality,
                     "agentic_quality": agentic_next.quality,
@@ -284,6 +338,10 @@ def idle_turns_for(
 
 
 def phase_for_turn(turn: int, scenario: WorkloadScenario) -> str:
+    if scenario.drift_cycle > 0 and turn % scenario.drift_cycle in scenario.drift_slots:
+        return "topic_drift"
+    if scenario.state_cycle > 0 and turn % scenario.state_cycle in scenario.state_slots:
+        return "provider_state"
     cycle = turn % scenario.tool_cycle
     if cycle in scenario.tool_slots:
         return "tool_loop"
@@ -299,6 +357,10 @@ def demand_score(
 ) -> float:
     progress = turn / max(turn_count - 1, 1)
     phase_bonus = scenario.phase_bonus if phase == "tool_loop" else 0.0
+    if phase == "provider_state":
+        phase_bonus = scenario.phase_bonus
+    if phase == "topic_drift":
+        phase_bonus = scenario.phase_bonus
     wave = scenario.wave_amplitude * math.sin(turn * math.pi / 4)
     return max(
         0.0,
@@ -336,36 +398,21 @@ def choose_agentic_model(
         history_tokens=history_tokens,
         turn=turn,
         remaining_turn_prior=remaining_turn_prior,
-        use_remaining_prior=policy != "acr-no-remaining-prior",
+        use_remaining_prior=policy not in {"acr-no-remaining-prior", "acr-initial"},
     )
-    if policy == "sticky-session" and turn > 0:
+    boundary = agentic_boundary_decision(
+        base_choice=base_choice,
+        current=current,
+        phase=phase,
+        turn=turn,
+        idle_expired=idle_expired,
+        policy=policy,
+    )
+    if boundary is not None:
+        model, reason = boundary
         return AgenticDecision(
-            current,
-            "sticky_session",
-            continuation_mass,
-            prior_mass,
-            remaining_turns_estimate,
-        )
-    if turn == 0:
-        return AgenticDecision(
-            base_choice,
-            "cold_select",
-            continuation_mass,
-            prior_mass,
-            remaining_turns_estimate,
-        )
-    if phase == "tool_loop" and policy != "acr-no-tool-lock":
-        return AgenticDecision(
-            current,
-            "tool_loop_hard_lock",
-            continuation_mass,
-            prior_mass,
-            remaining_turns_estimate,
-        )
-    if idle_expired and policy != "acr-no-idle-boundary":
-        return AgenticDecision(
-            base_choice,
-            "idle_select",
+            model,
+            reason,
             continuation_mass,
             prior_mass,
             remaining_turns_estimate,
@@ -385,9 +432,10 @@ def choose_agentic_model(
         if policy == "acr-no-frontier-cost"
         else 1.0 + 1.6 * max(cost_pressure(base_choice), cost_pressure(current))
     )
+    cache_warmth = cache_warmth_estimate(current, phase, history_tokens)
     switch_cost = (
         0.05
-        + 0.20 * continuation_mass * frontier_multiplier
+        + 0.20 * continuation_mass * cache_warmth * frontier_multiplier
         + 0.04 * min(switch_count / 8, 1)
     )
     if quality_gain > switch_cost:
@@ -407,6 +455,36 @@ def choose_agentic_model(
     )
 
 
+def agentic_boundary_decision(
+    *,
+    base_choice: ModelProfile,
+    current: ModelProfile,
+    phase: str,
+    turn: int,
+    idle_expired: bool,
+    policy: str,
+) -> tuple[ModelProfile, str] | None:
+    if policy == "sticky-session" and turn > 0:
+        return current, "sticky_session"
+    if turn == 0:
+        return base_choice, "cold_select"
+    if phase == "tool_loop" and policy != "acr-no-tool-lock":
+        return current, "tool_loop_hard_lock"
+    if phase == "provider_state" and policy not in {
+        "acr-no-context-portability",
+        "acr-initial",
+    }:
+        return current, "context_portability_hard_lock"
+    if phase == "topic_drift" and policy not in {
+        "acr-no-decision-drift-reset",
+        "acr-initial",
+    }:
+        return base_choice, "decision_drift_select"
+    if idle_expired and policy != "acr-no-idle-boundary":
+        return base_choice, "idle_select"
+    return None
+
+
 def continuation_evidence(
     *,
     history_tokens: int,
@@ -423,21 +501,41 @@ def continuation_evidence(
 
 
 def cost_pressure(model: ModelProfile) -> float:
-    max_cost = max(m.prompt_per_1m + m.completion_per_1m for m in MODELS)
-    return (model.prompt_per_1m + model.completion_per_1m) / max_cost
+    max_cost = max(cache_checkout_cost(m) for m in MODELS)
+    if max_cost <= 0:
+        return 0.5
+    return cache_checkout_cost(model) / max_cost
 
 
-def cached_ratio_for(
-    model: ModelProfile, phase: str, history_tokens: int, switched: bool
+def cache_warmth_estimate(
+    model: ModelProfile, phase: str, history_tokens: int, switched: bool = False
 ) -> float:
-    base = min(0.72, history_tokens / 48000)
+    # Mirror the live selector's conservative default when exact cache warmth is
+    # unknown: early sessions still have future-continuation risk even before a
+    # long prefix has accumulated.
+    base = max(0.5, min(0.72, history_tokens / 48000))
     if phase == "tool_loop":
         base += 0.12
+    if phase == "provider_state":
+        base += 0.08
     if model.name == "frontier-reasoner":
         base += 0.06
     if switched:
         base *= 0.20
     return max(0.0, min(0.85, base))
+
+
+def cache_checkout_cost(model: ModelProfile) -> float:
+    delta = model.prompt_per_1m - model.cached_per_1m
+    if delta > 0:
+        return delta
+    return max(model.prompt_per_1m, 0.0)
+
+
+def cached_ratio_for(
+    model: ModelProfile, phase: str, history_tokens: int, switched: bool
+) -> float:
+    return cache_warmth_estimate(model, phase, history_tokens, switched)
 
 
 def turn_cost(
@@ -472,13 +570,21 @@ def rows_from_replay(path: Path) -> list[dict[str, Any]]:
                 "remaining_turns_estimate": policy.get("remaining_turns_estimate", ""),
                 "continuation_mass": policy.get("continuation_mass", ""),
                 "prior_mass": "",
-                "baseline_model": policy.get("fallback_selected_model", ""),
+                "baseline_model": policy.get("base_selected_model", ""),
                 "agentic_model": rec.get("selected_model", ""),
                 "baseline_switch": "",
                 "agentic_switch": policy.get("current_model")
                 != rec.get("selected_model"),
                 "tool_loop_switch_violation_baseline": "",
                 "tool_loop_switch_violation_agentic": policy.get("phase") == "tool_loop"
+                and policy.get("current_model") != rec.get("selected_model"),
+                "context_portability_violation_baseline": "",
+                "context_portability_violation_agentic": bool(
+                    policy.get("has_non_portable_context")
+                )
+                and policy.get("current_model") != rec.get("selected_model"),
+                "decision_drift": bool(policy.get("decision_drift")),
+                "agentic_drift_switch": bool(policy.get("decision_drift"))
                 and policy.get("current_model") != rec.get("selected_model"),
                 "cached_prompt_ratio": "",
                 "baseline_quality": "",
@@ -510,6 +616,20 @@ def summarize(rows: list[dict[str, Any]]) -> dict[str, Any]:
         bool(row["tool_loop_switch_violation_agentic"])
         for row in rows
         if row["tool_loop_switch_violation_agentic"] != ""
+    )
+    baseline_context_violations = sum(
+        bool(row["context_portability_violation_baseline"])
+        for row in rows
+        if row.get("context_portability_violation_baseline", "") != ""
+    )
+    agentic_context_violations = sum(
+        bool(row["context_portability_violation_agentic"])
+        for row in rows
+        if row.get("context_portability_violation_agentic", "") != ""
+    )
+    drift_turns = [row for row in rows if bool(row.get("decision_drift"))]
+    agentic_drift_switches = sum(
+        bool(row.get("agentic_drift_switch")) for row in drift_turns
     )
     baseline_cost = sum(float(row["baseline_cost"] or 0) for row in rows)
     agentic_cost = sum(float(row["agentic_cost"] or 0) for row in rows)
@@ -550,6 +670,10 @@ def summarize(rows: list[dict[str, Any]]) -> dict[str, Any]:
         "switch_reduction": baseline_switches - agentic_switches,
         "baseline_tool_loop_switch_violations": baseline_tool_violations,
         "agentic_tool_loop_switch_violations": agentic_tool_violations,
+        "baseline_context_portability_violations": baseline_context_violations,
+        "agentic_context_portability_violations": agentic_context_violations,
+        "decision_drift_turns": len(drift_turns),
+        "agentic_drift_switches": agentic_drift_switches,
         "baseline_cost": round(baseline_cost, 6),
         "agentic_cost": round(agentic_cost, 6),
         "cost_delta": round(agentic_cost - baseline_cost, 6),
@@ -671,6 +795,11 @@ def summarize_baseline_policy(rows: list[dict[str, Any]]) -> dict[str, Any]:
         "switches": summary["baseline_switches"],
         "switch_reduction_pct": 0.0,
         "tool_loop_switch_violations": summary["baseline_tool_loop_switch_violations"],
+        "context_portability_violations": summary[
+            "baseline_context_portability_violations"
+        ],
+        "decision_drift_turns": summary["decision_drift_turns"],
+        "drift_switches": "",
         "estimated_cost": summary["baseline_cost"],
         "cost_reduction_pct": 0.0,
         "frontier_turns": summary["baseline_frontier_turns"],
@@ -691,6 +820,11 @@ def summarize_agentic_policy(policy: str, rows: list[dict[str, Any]]) -> dict[st
         "switches": summary["agentic_switches"],
         "switch_reduction_pct": summary["switch_reduction_pct"],
         "tool_loop_switch_violations": summary["agentic_tool_loop_switch_violations"],
+        "context_portability_violations": summary[
+            "agentic_context_portability_violations"
+        ],
+        "decision_drift_turns": summary["decision_drift_turns"],
+        "drift_switches": summary["agentic_drift_switches"],
         "estimated_cost": summary["agentic_cost"],
         "cost_reduction_pct": summary["cost_reduction_pct"],
         "frontier_turns": summary["agentic_frontier_turns"],
@@ -775,6 +909,10 @@ def render_svg(summary: dict[str, Any]) -> str:
             "Agentic tool violations",
             float(summary.get("agentic_tool_loop_switch_violations") or 0),
         ),
+        (
+            "Agentic context violations",
+            float(summary.get("agentic_context_portability_violations") or 0),
+        ),
     ]
     max_value = max([value for _, value in metrics] + [1])
     bars = []
@@ -791,13 +929,14 @@ def render_svg(summary: dict[str, Any]) -> str:
         bars.append(
             f'<text x="{198 + width}" y="{y + 15}" font-size="12" fill="#111827">{int(value)}</text>'
         )
+    height = 270
     return "\n".join(
         [
-            '<svg xmlns="http://www.w3.org/2000/svg" width="680" height="240" viewBox="0 0 680 240">',
-            '<rect width="680" height="240" fill="#ffffff"/>',
+            f'<svg xmlns="http://www.w3.org/2000/svg" width="680" height="{height}" viewBox="0 0 680 {height}">',
+            f'<rect width="680" height="{height}" fill="#ffffff"/>',
             '<text x="24" y="28" font-size="18" font-weight="700" fill="#111827">Agentic Continuity Routing</text>',
             *bars,
-            f'<text x="24" y="224" font-size="12" fill="#4b5563">Cost delta: {summary.get("cost_delta")} | Mean cached ratio: {summary.get("mean_cached_prompt_ratio")}</text>',
+            f'<text x="24" y="{height - 16}" font-size="12" fill="#4b5563">Cost delta: {summary.get("cost_delta")} | Mean cached ratio: {summary.get("mean_cached_prompt_ratio")}</text>',
             "</svg>",
         ]
     )
@@ -825,7 +964,7 @@ def render_matrix_svg(summary: dict[str, Any]) -> str:
                 f'<rect x="560" y="{y}" width="{baseline_cost_w}" height="14" rx="3" fill="#cbd5e1"/>',
                 f'<rect x="560" y="{y + 18}" width="{agentic_cost_w}" height="14" rx="3" fill="#22c55e"/>',
                 f'<text x="830" y="{y + 12}" font-size="11" fill="#475569">cost -{row["cost_reduction_pct"]}%</text>',
-                f'<text x="160" y="{y + 52}" font-size="11" fill="#64748b">tool-loop violations {row["baseline_tool_loop_switch_violations"]} -> {row["agentic_tool_loop_switch_violations"]}; quality delta {row["quality_delta"]}</text>',
+                f'<text x="160" y="{y + 52}" font-size="11" fill="#64748b">tool-loop violations {row["baseline_tool_loop_switch_violations"]} -> {row["agentic_tool_loop_switch_violations"]}; context violations {row["baseline_context_portability_violations"]} -> {row["agentic_context_portability_violations"]}; drift switches {row["agentic_drift_switches"]}/{row["decision_drift_turns"]}; quality delta {row["quality_delta"]}</text>',
             ]
         )
     height = 110 + len(scenarios) * 74
@@ -857,6 +996,12 @@ def render_ablation_svg(summary: dict[str, Any]) -> str:
         switch_w = int(250 * row["switches"] / max_switch)
         cost_w = int(250 * float(row["estimated_cost"] or 0) / max_cost)
         color = "#2563eb" if row["policy"] == "acr-full" else "#94a3b8"
+        drift_switches = row.get("drift_switches")
+        drift_label = (
+            "n/a"
+            if drift_switches in {None, ""}
+            else f'{drift_switches}/{row["decision_drift_turns"]}'
+        )
         rows.extend(
             [
                 f'<text x="28" y="{y + 14}" font-size="13" font-weight="700" fill="#0f172a">{row["policy"]}</text>',
@@ -864,7 +1009,7 @@ def render_ablation_svg(summary: dict[str, Any]) -> str:
                 f'<text x="490" y="{y + 12}" font-size="11" fill="#475569">{row["switches"]} switches</text>',
                 f'<rect x="610" y="{y}" width="{cost_w}" height="14" fill="{color}"/>',
                 f'<text x="870" y="{y + 12}" font-size="11" fill="#475569">${float(row["estimated_cost"] or 0):.4f}</text>',
-                f'<text x="230" y="{y + 34}" font-size="11" fill="#64748b">tool-loop violations {row["tool_loop_switch_violations"]}; cached {row["mean_cached_prompt_ratio"]}; continuation {row["mean_continuation_mass"]}</text>',
+                f'<text x="230" y="{y + 34}" font-size="11" fill="#64748b">tool-loop violations {row["tool_loop_switch_violations"]}; context violations {row["context_portability_violations"]}; drift switches {drift_label}; cached {row["mean_cached_prompt_ratio"]}; continuation {row["mean_continuation_mass"]}</text>',
             ]
         )
     height = 112 + len(policies) * 52

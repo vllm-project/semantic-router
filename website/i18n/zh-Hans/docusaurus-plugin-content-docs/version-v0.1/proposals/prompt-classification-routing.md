@@ -154,7 +154,7 @@ import ZoomableMermaid from '@site/src/components/ZoomableMermaid';
     G -->|Boost| J[Apply Category<br/>Weights]
     G -->|Fallthrough| K[Use BERT<br/>Category]
     
-    I --> L[Endpoint Selection]
+    I --> L[Gateway Route]
     J --> L
     K --> L
     
@@ -517,7 +517,7 @@ Regex 模式定义结构化数据检测和安全检查：
     - **回退决策：** 使用标准 BERT 分类。
 
 5. **继续正常流程**
-    - 选择的模型传递给端点选择。
+    - 选择的模型传递给网关路由；端点负载均衡由下游网关或服务网格处理。
     - 请求被修改，包含新的模型和路由标头。
     - 转发到适当的 vLLM 后端。
 

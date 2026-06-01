@@ -14,7 +14,7 @@ func secondsDuration(seconds int) time.Duration {
 	return time.Duration(seconds) * time.Second
 }
 
-func staticFallbackResult(selCtx *SelectionContext) *SelectionResult {
+func staticBaseResult(selCtx *SelectionContext) *SelectionResult {
 	ref := selCtx.CandidateModels[0]
 	allScores := make(map[string]float64, len(selCtx.CandidateModels))
 	for i, candidate := range selCtx.CandidateModels {
@@ -31,7 +31,7 @@ func staticFallbackResult(selCtx *SelectionContext) *SelectionResult {
 		Confidence:    1.0,
 		Method:        MethodStatic,
 		Tier:          TierSupported,
-		Reasoning:     "static fallback",
+		Reasoning:     "static base selection",
 		AllScores:     allScores,
 	}
 }

@@ -4,7 +4,7 @@
 \label{sec:introduction}
 
 The landscape of large language models has fragmented along multiple axes: modality (text, code, vision, diffusion), scale (1B to 1T+ parameters), cost (10$\times$ variation in per-token pricing), and specialization (general-purpose vs.\ domain-specific fine-tuning).
-Organizations increasingly operate \emph{heterogeneous model fleets}---local vLLM instances alongside cloud endpoints from OpenAI, Anthropic, Azure, Bedrock, Gemini, and Vertex AI---each with different capabilities, pricing, and compliance characteristics.
+Organizations increasingly operate \emph{heterogeneous model fleets}---local vLLM instances alongside cloud-hosted APIs from OpenAI, Anthropic, Azure, Bedrock, Gemini, and Vertex AI---each with different capabilities, pricing, and compliance characteristics.
 This heterogeneity creates a fundamental inference-time optimization problem: \emph{given a user query, a fleet of diverse models, and deployment-specific constraints, which model should serve it, and what safety and privacy policies should apply?}
 
 Viewed through the lens of information theory~\cite{shannon1948mathematical}, routing is an \emph{uncertainty-reduction} problem.
@@ -132,7 +132,7 @@ A production routing system must simultaneously consider:
   \item \textbf{Multi-dimensional signals}: Query domain, modality, complexity, language, user identity, and real-time performance metrics all inform the optimal routing decision.
   \item \textbf{Privacy and safety}: Prompt injection, PII leakage, and hallucinated responses must be detected and mitigated---often with \emph{different policies for different query types and user roles}.
   \item \textbf{Cost-effective model selection}: Algorithms must balance response quality against inference cost and latency, selecting from a heterogeneous pool of local and cloud-hosted models.
-  \item \textbf{Deployment diversity}: The same routing framework must serve a privacy-regulated healthcare deployment (strict PII filtering, on-premise models only), a cost-optimized developer tool (aggressive caching, cheapest model first), and a multi-cloud enterprise (failover across providers)---through configuration, not code changes.
+  \item \textbf{Deployment diversity}: The same routing framework must serve a privacy-regulated healthcare deployment (strict PII filtering, on-premise models only), a cost-optimized developer tool (aggressive caching, cheapest model first), and a multi-cloud enterprise (provider diversity and deployment-level recovery)---through configuration, not code changes.
   \item \textbf{Multi-turn statefulness}: Routing decisions must be consistent across conversation turns, requiring stateful session management and context preservation.
 \end{itemize}
 
@@ -158,8 +158,8 @@ Our contributions are:
   \item \textbf{HaluGate: Gated Hallucination Detection} (\Cref{sec:halugate}):
     A three-stage pipeline---sentinel gating, token-level detection, NLI-based explanation---that avoids unnecessary verification on non-factual queries while providing span-level diagnostics when hallucination is detected.
 
-  \item \textbf{Multi-Provider and Multi-Endpoint Routing} (\Cref{sec:extproc}):
-    Native support for routing across heterogeneous backends (vLLM, OpenAI, Anthropic, Azure, Bedrock, Gemini, Vertex AI) with provider-specific protocol translation, a pluggable authorization factory for diverse auth mechanisms, weighted multi-endpoint load distribution, and full OpenAI Responses API support for stateful multi-turn conversations.
+  \item \textbf{Multi-Provider Backend Routing} (\Cref{sec:extproc}):
+    Native support for routing across heterogeneous backends (vLLM, OpenAI, Anthropic, Azure, Bedrock, Gemini, Vertex AI) with provider-specific protocol translation, a pluggable authorization factory for diverse auth mechanisms, infrastructure-owned endpoint load balancing, and full OpenAI Responses API support for stateful multi-turn conversations.
 
   \item \textbf{LoRA-Based Multi-Task Classification} (\Cref{sec:lora_mom,sec:ml_inference}):
     A memory-efficient architecture using Low-Rank Adaptation that serves $n$ classification tasks from a single base model with lightweight adapter heads, reducing aggregate model memory from $n$ full copies to one base plus negligible adapter overhead.

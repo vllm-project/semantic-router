@@ -120,7 +120,7 @@ const FIGURE1_MAPPING = [
     vsr: translate({ id: 'homepage.paperFigures.figure1.mapping.destination.vsr', message: 'Selected Model' }),
     note: translate({
       id: 'homepage.paperFigures.figure1.mapping.destination.note',
-      message: 'A concrete model endpoint is chosen and receives the request.',
+      message: 'The selected model drives downstream cluster routing; endpoint load balancing remains infrastructure-owned.',
     }),
   },
 ] as const
@@ -227,7 +227,7 @@ const FIGURE3_LAYERS: Array<{
     title: translate({ id: 'homepage.paperFigures.figure3.layer.plugin.title', message: 'Plugin Chain' }),
     description: translate({
       id: 'homepage.paperFigures.figure3.layer.plugin.description',
-      message: 'Policy-bound pre/post plugins run before dispatch to the selected endpoint.',
+      message: 'Policy-bound pre/post plugins run before dispatch through the selected route.',
     }),
     focus: translate({
       id: 'homepage.paperFigures.figure3.layer.plugin.focus',

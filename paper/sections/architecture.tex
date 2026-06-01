@@ -9,13 +9,13 @@ We formalize the routing problem and present the three-layer architecture that d
 
 Let $\mathcal{M} = \{m_1, \ldots, m_K\}$ denote a set of $K$ available model backends, each characterized by capability profile, cost, and latency.
 Each backend may be served by a different provider $p_k \in \mathcal{P}$ (e.g., local vLLM, OpenAI, Anthropic, Azure, Bedrock, Gemini), with provider-specific API protocols and authentication mechanisms.
-A deployment may expose multiple endpoints $\mathcal{E} = \{e_1, \ldots, e_L\}$ with weighted load distribution across backends.
+A deployment may expose multiple provider or cluster bindings $\mathcal{B} = \{b_1, \ldots, b_L\}$; Envoy or Kubernetes remains responsible for endpoint membership and load balancing inside those bindings.
 
 Given an incoming request $r$ (consisting of a message sequence, metadata, user identity, and headers), the routing problem is to:
 \begin{enumerate}[leftmargin=*]
   \item Select a model $m^* \in \mathcal{M}$ that maximizes response quality while respecting cost and latency constraints;
   \item Apply deployment-specific safety and privacy transformations $\mathcal{T}(r)$ before and after model invocation;
-  \item Route through the correct provider endpoint with appropriate authentication.
+  \item Forward through the configured provider or cluster binding with appropriate authentication.
 \end{enumerate}
 
 Na\"ive approaches either fix $m^*$ statically or route based on a single dimension (e.g., estimated difficulty).
@@ -26,14 +26,14 @@ We argue that production routing requires reasoning over \emph{multiple orthogon
 The key architectural innovation is that the same signal extraction, decision evaluation, and plugin execution machinery can be \emph{composed differently} for different deployment scenarios:
 
 \begin{definition}[Programmable Neural-Symbolic Configuration Language]
-A deployment configuration $\Gamma = (\mathcal{S}_\Gamma, \mathcal{D}_\Gamma, \Pi_\Gamma, \mathcal{E}_\Gamma)$ specifies which signal types $\mathcal{S}_\Gamma \subseteq \mathcal{S}$ are active, what decisions $\mathcal{D}_\Gamma$ are evaluated, which plugin chains $\Pi_\Gamma$ are attached, and which endpoints $\mathcal{E}_\Gamma$ are available.
+A deployment configuration $\Gamma = (\mathcal{S}_\Gamma, \mathcal{D}_\Gamma, \Pi_\Gamma, \mathcal{B}_\Gamma)$ specifies which signal types $\mathcal{S}_\Gamma \subseteq \mathcal{S}$ are active, what decisions $\mathcal{D}_\Gamma$ are evaluated, which plugin chains $\Pi_\Gamma$ are attached, and which provider or cluster bindings $\mathcal{B}_\Gamma$ are available.
 \end{definition}
 
 \noindent\textbf{Example configurations:}
 \begin{itemize}[leftmargin=*]
   \item \emph{Privacy-regulated (healthcare)}: Active signals include domain, authz, and language. Decisions route sensitive queries to on-premise models only. Plugins enforce strict PII redaction with no caching.
   \item \emph{Cost-optimized (developer tool)}: Active signals include complexity, embedding, and keyword. Decisions cascade from cheap to expensive models. Plugins enable aggressive semantic caching.
-  \item \emph{Multi-cloud enterprise}: Active signals include domain, modality, and authz. Decisions distribute across multiple provider endpoints using latency-aware model selection with weighted failover. Plugins inject provider-specific auth headers.
+  \item \emph{Multi-cloud enterprise}: Active signals include domain, modality, and authz. Decisions select across multiple provider-backed model bindings using latency-aware model selection. Plugins inject provider-specific auth headers, while deployment infrastructure handles endpoint health and load balancing.
 \end{itemize}
 
 All three scenarios use the same architecture; only $\Gamma$ differs. This composability is the central design contribution.
@@ -68,7 +68,7 @@ The architecture decomposes routing into three layers, each with a well-defined 
      $\Gamma = (\mathcal{S}_\Gamma,\;
      \mathcal{D}_\Gamma,\;
      \Pi_\Gamma,\;
-     \mathcal{E}_\Gamma)$};
+     \mathcal{B}_\Gamma)$};
 
   % Input
   \node[io] (req) at (-1.2, 0.8) {Request\\$r$};
@@ -131,7 +131,7 @@ The architecture decomposes routing into three layers, each with a well-defined 
 
   \end{tikzpicture}%
 }
-  \caption{Three-layer architecture with closed-loop feedback. A deployment configuration~$\Gamma$ selects which signals, decisions, and plugins are active. Layer~1 extracts a signal vector~$\mathbf{s}$ from the request. Layer~2 evaluates Boolean decision formulas to select~$d^*$. Layer~3 executes the per-decision plugin chain, selects a model from~$d^*$'s candidate set, and routes to the provider endpoint. Response-side signals feed back to enable adaptive routing.}
+  \caption{Three-layer architecture with closed-loop feedback. A deployment configuration~$\Gamma$ selects which signals, decisions, and plugins are active. Layer~1 extracts a signal vector~$\mathbf{s}$ from the request. Layer~2 evaluates Boolean decision formulas to select~$d^*$. Layer~3 executes the per-decision plugin chain, selects a model from~$d^*$'s candidate set, and forwards through the configured provider or cluster binding. Response-side signals feed back to enable adaptive routing.}
   \label{fig:architecture}
 \end{figure*}
 
@@ -184,5 +184,5 @@ Safety thresholds, caching policies, model candidates, and auth mechanisms are s
 A coding-focused decision can omit PII signal conditions while a customer-support decision enforces strict PII filtering via signal-matched fast response---using the same system configuration.
 
 \noindent\textbf{Provider abstraction.}
-The architecture abstracts over provider-specific protocols, authentication, and endpoint topologies.
-Multi-endpoint routing with weighted distribution and failover is handled at the infrastructure layer, enabling decisions to reference models by capability rather than by provider-specific endpoint.
+The architecture abstracts over provider-specific protocols, authentication, and deployment topologies.
+Endpoint membership, weighted distribution, and failure handling remain at the infrastructure layer, enabling decisions to reference models by capability rather than by provider-specific serving details.

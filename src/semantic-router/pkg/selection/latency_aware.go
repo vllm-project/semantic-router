@@ -67,7 +67,8 @@ type latencyCandidateScore struct {
 var ErrLatencyAwarePercentileInvalid = errors.New("latency-aware percentile must be between 1 and 100")
 
 // Select chooses the best model based on configured TPOT/TTFT percentiles.
-// If percentile data is missing for all candidates, falls back to the first candidate.
+// If percentile data is missing for all candidates, uses the first candidate as
+// the default candidate.
 func (s *LatencyAwareSelector) Select(ctx context.Context, selCtx *SelectionContext) (*SelectionResult, error) {
 	_ = ctx
 
@@ -81,14 +82,14 @@ func (s *LatencyAwareSelector) Select(ctx context.Context, selCtx *SelectionCont
 	hasTPOT := selCtx.LatencyAwareTPOTPercentile > 0
 	hasTTFT := selCtx.LatencyAwareTTFTPercentile > 0
 	if !hasTPOT && !hasTTFT {
-		logging.Warnf("[LatencyAwareSelector] Missing TPOT/TTFT percentile configuration, using first candidate")
-		return s.fallbackToFirst(selCtx, "Latency-aware percentile config missing, using first candidate"), nil
+		logging.Warnf("[LatencyAwareSelector] Missing TPOT/TTFT percentile configuration, using first candidate as default")
+		return s.defaultToFirst(selCtx, "Latency-aware percentile config missing; using first candidate as default"), nil
 	}
 
 	candidates, minTPOT, minTTFT := collectLatencyCandidates(selCtx, hasTPOT, hasTTFT)
 	if len(candidates) == 0 {
-		logging.Warnf("[LatencyAwareSelector] No latency percentile data for candidates=%v, using first candidate", getModelNames(selCtx.CandidateModels))
-		return s.fallbackToFirst(selCtx, "No latency stats available, using first candidate"), nil
+		logging.Warnf("[LatencyAwareSelector] No latency percentile data for candidates=%v, using first candidate as default", getModelNames(selCtx.CandidateModels))
+		return s.defaultToFirst(selCtx, "No latency stats available; using first candidate as default"), nil
 	}
 
 	scored := scoreLatencyCandidates(candidates, latencyScoreOptions{
@@ -98,8 +99,8 @@ func (s *LatencyAwareSelector) Select(ctx context.Context, selCtx *SelectionCont
 		minTTFT: minTTFT,
 	})
 	if !scored.ok {
-		logging.Warnf("[LatencyAwareSelector] Failed to score candidates=%v, using first candidate", getModelNames(selCtx.CandidateModels))
-		return s.fallbackToFirst(selCtx, "Latency-aware scoring failed, using first candidate"), nil
+		logging.Warnf("[LatencyAwareSelector] Failed to score candidates=%v, using first candidate as default", getModelNames(selCtx.CandidateModels))
+		return s.defaultToFirst(selCtx, "Latency-aware scoring failed; using first candidate as default"), nil
 	}
 
 	confidence := latencyConfidence(scored.bestScore, scored.secondBestScore)
@@ -273,7 +274,7 @@ func latencyReasoning(hasTPOT, hasTTFT bool, tpotPercentile, ttftPercentile int)
 	return fmt.Sprintf("Latency-aware selection using TTFT p%d percentile", ttftPercentile)
 }
 
-func (s *LatencyAwareSelector) fallbackToFirst(selCtx *SelectionContext, reason string) *SelectionResult {
+func (s *LatencyAwareSelector) defaultToFirst(selCtx *SelectionContext, reason string) *SelectionResult {
 	first := selCtx.CandidateModels[0]
 	return &SelectionResult{
 		SelectedModel: first.Model,

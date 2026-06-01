@@ -167,7 +167,7 @@ A key claim of this work is that the same architecture serves diverse deployment
 \midrule
 Privacy-regulated (healthcare) & authz, domain, language & Static (compliant models only) & Strict PII redaction, no caching, audit logging \\
 Cost-optimized (developer tool) & complexity, embedding, keyword & AutoMix cascade & Aggressive semantic cache, header mutation for LoRA adapter \\
-Multi-cloud enterprise & domain, modality, authz & Latency-aware & Multi-endpoint failover, provider auth factory, system prompt injection \\
+Multi-cloud enterprise & domain, modality, authz & Latency-aware & Backend failure recovery, provider auth factory, system prompt injection \\
 Multi-turn assistant & embedding, feedback, preference & Elo with session pin & Responses API state, memory retrieval, RAG injection \\
 \bottomrule
 \end{tabularx}
@@ -188,7 +188,7 @@ The end-to-end test framework validates routing behavior across eight scenario p
 \toprule
 \textbf{Profile} & \textbf{Validated Behavior} \\
 \midrule
-Multi-endpoint      & Multi-provider routing with weighted distribution and failover across heterogeneous backends \\
+Multi-provider backend & Multi-provider backend routing with weighted policy distribution and backend failure recovery \\
 Multi-provider auth & Provider-specific auth injection (API key, OAuth2, cloud IAM) via authorization factory \\
 AuthZ-RBAC          & Role-based model access (admin/premium/free tiers) with authz signal \\
 ML model selection  & KNN, KMeans, SVM, MLP selection accuracy on held-out queries \\
@@ -200,7 +200,7 @@ Routing strategies  & Static, Elo, RouterDC, AutoMix, Hybrid algorithm compariso
 \end{tabularx}
 \end{table}
 
-Each profile validates correct model selection, safety enforcement (jailbreak blocked, PII detected), cache behavior (hits after similar queries), multi-provider routing (correct endpoint resolution and auth injection), and header propagation.
+Each profile validates correct model selection, safety enforcement (jailbreak blocked, PII detected), cache behavior (hits after similar queries), multi-provider backend routing, provider auth injection, and header propagation.
 
 \subsection{Semantic Cache Effectiveness}
 

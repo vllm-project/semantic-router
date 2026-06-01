@@ -38,6 +38,48 @@ func TestRequiresAuthentication(t *testing.T) {
 	}
 }
 
+func TestServiceUnavailableGuard(t *testing.T) {
+	t.Parallel()
+
+	testCases := []struct {
+		name     string
+		path     string
+		wantCode int
+		wantNext bool
+	}{
+		{name: "protected api denied", path: "/api/router/config", wantCode: http.StatusServiceUnavailable, wantNext: false},
+		{name: "admin denied", path: "/api/admin/users", wantCode: http.StatusServiceUnavailable, wantNext: false},
+		{name: "embedded denied", path: "/embedded/grafana/", wantCode: http.StatusServiceUnavailable, wantNext: false},
+		{name: "login public", path: "/api/auth/login", wantCode: http.StatusOK, wantNext: true},
+		{name: "setup state public", path: "/api/setup/state", wantCode: http.StatusOK, wantNext: true},
+		{name: "static frontend public", path: "/dashboard", wantCode: http.StatusOK, wantNext: true},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
+			nextCalled := false
+			next := http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+				nextCalled = true
+				w.WriteHeader(http.StatusOK)
+			})
+			handler := ServiceUnavailableGuard()(next)
+
+			req := httptest.NewRequest(http.MethodGet, tc.path, nil)
+			rec := httptest.NewRecorder()
+			handler.ServeHTTP(rec, req)
+
+			if rec.Code != tc.wantCode {
+				t.Fatalf("status = %d, want %d", rec.Code, tc.wantCode)
+			}
+			if nextCalled != tc.wantNext {
+				t.Fatalf("next handler called = %v, want %v", nextCalled, tc.wantNext)
+			}
+		})
+	}
+}
+
 func TestExtractAccessToken(t *testing.T) {
 	t.Parallel()
 

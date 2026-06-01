@@ -65,11 +65,31 @@ func (r *OpenAIRouter) evaluateSignalsForDecision(
 
 	signalLatency := time.Since(signalStart).Milliseconds()
 	r.applySignalResultsToContext(ctx, signals)
+	ensureContextTokenCount(ctx, signalInput)
 	logSignalEvaluationResults(ctx, signalLatency, signals)
 	tracing.EndSignalSpan(signalSpan, collectMatchedSignalRules(signals), 1.0, signalLatency)
 	ctx.TraceContext = signalCtx
 	r.processUserFeedbackForElo(signals.MatchedUserFeedbackRules, originalModel, ctx)
 	return signals, nil
+}
+
+func ensureContextTokenCount(ctx *RequestContext, signalInput signalEvaluationInput) {
+	if ctx == nil || ctx.VSRContextTokenCount > 0 {
+		return
+	}
+	text := strings.TrimSpace(signalInput.allMessagesText)
+	if text == "" {
+		text = strings.TrimSpace(signalInput.evaluationText)
+	}
+	if text == "" {
+		return
+	}
+	counter := classification.CharacterBasedTokenCounter{}
+	count, err := counter.CountTokens(text)
+	if err != nil || count <= 0 {
+		return
+	}
+	ctx.VSRContextTokenCount = count
 }
 
 func logSignalEvaluationResults(ctx *RequestContext, signalLatencyMs int64, signals *classification.SignalResults) {
@@ -117,12 +137,12 @@ func (r *OpenAIRouter) runDecisionEngine(
 		})
 		tracing.EndDecisionSpan(decisionSpan, 0.0, []string{}, r.Config.Strategy)
 		ctx.TraceContext = decisionCtx
-		return nil, r.defaultDecisionFallbackModel(originalModel)
+		return nil, r.defaultModelForUnmatchedDecision(originalModel)
 	}
 	if result == nil || result.Decision == nil {
 		tracing.EndDecisionSpan(decisionSpan, 0.0, []string{}, r.Config.Strategy)
 		ctx.TraceContext = decisionCtx
-		return nil, r.defaultDecisionFallbackModel(originalModel)
+		return nil, r.defaultModelForUnmatchedDecision(originalModel)
 	}
 
 	tracing.EndDecisionSpan(decisionSpan, result.Confidence, result.MatchedRules, r.Config.Strategy)
@@ -130,7 +150,7 @@ func (r *OpenAIRouter) runDecisionEngine(
 	return result, ""
 }
 
-func (r *OpenAIRouter) defaultDecisionFallbackModel(originalModel string) string {
+func (r *OpenAIRouter) defaultModelForUnmatchedDecision(originalModel string) string {
 	if r.Config.IsAutoModelName(originalModel) {
 		return r.Config.DefaultModel
 	}

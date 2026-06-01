@@ -1,0 +1,1139 @@
+import importlib.util
+import json
+import sys
+from pathlib import Path
+
+REQUIRED_LONG_HORIZON_TASKS = [
+    "multi-file-regression",
+    "code-review-followup",
+    "research-synthesis",
+    "maintainer-handoff",
+    "cluster-boundary",
+    "session-switch-policy",
+    "cache-economics",
+    "release-triage",
+    "observability-debug",
+    "test-fix-iteration",
+    "codebase-refactor-planning",
+    "research-artifact-review",
+    "tool-error-recovery-loop",
+    "paper-evidence-audit",
+    "multi-agent-delegation",
+    "issue-pr-maintenance-loop",
+    "configuration-contract-review",
+    "repo-bisect-debug",
+    "dependency-upgrade-regression",
+    "literature-data-extraction",
+    "stale-pr-rebase-triage",
+    "benchmark-regression-root-cause",
+    "paper-figure-quality-review",
+    "feature-implementation-loop",
+    "research-claim-grounding-loop",
+    "tool-timeout-retry-loop",
+    "ci-patch-review-loop",
+    "paper-rebuttal-revision-loop",
+]
+REQUIRED_LONG_HORIZON_PHASES = [
+    "user_turn",
+    "tool_loop",
+    "provider_state",
+    "topic_drift",
+    "idle_boundary",
+    "final",
+]
+CACHE_PROBE_METADATA = {
+    "probe_kind": "repeated-prefix-cache-token-probe",
+    "probe_repeats": 8,
+    "stable_prefix_chars": 13000,
+    "stable_prefix_sha256": "abc123def4567890",
+    "unique_suffix_pattern": "probe_turn_index",
+}
+
+
+def complete_branch_image_summary() -> dict:
+    return {
+        "validation_kind": "full-branch-image-benchmark",
+        "branch_image_benchmark": True,
+        "label": "branch-image-ga",
+        "ref": "77e6b573",
+        "image_tag": "pr1989-current-branch-image",
+        "checks": {
+            "diagnostic_ok": True,
+            "live_matrix_ok": True,
+            "failure_recovery_ok": True,
+            "agent_task_ok": True,
+            "cache_token_probe_ok": True,
+            "mounted_binary_absent": True,
+            "branch_image_benchmark_ok": True,
+        },
+        "evidence": {
+            "diagnostic": {"evidence": "diagnostic.json"},
+            "live_aggregates": [{"evidence": "live.json"}],
+            "failure_aggregates": [{"evidence": "failure.json"}],
+            "agent_task_summaries": [{"evidence": "tasks.json"}],
+            "cache_aggregates": [{"evidence": "cache.json"}],
+        },
+        "validation_failures": [],
+    }
+
+
+def load_report_module():
+    path = Path(__file__).with_name("session_routing_ga_report.py")
+    spec = importlib.util.spec_from_file_location("session_routing_ga_report", path)
+    assert spec is not None
+    module = importlib.util.module_from_spec(spec)
+    sys.modules[spec.name] = module
+    assert spec.loader is not None
+    spec.loader.exec_module(module)
+    return module
+
+
+def write_json(path: Path, data: dict):
+    path.write_text(json.dumps(data) + "\n")
+    return path
+
+
+def complete_agent_task_summary() -> dict:
+    return {
+        "requests": 489,
+        "tasks": len(REQUIRED_LONG_HORIZON_TASKS),
+        "task_count": len(REQUIRED_LONG_HORIZON_TASKS),
+        "task_names": REQUIRED_LONG_HORIZON_TASKS,
+        "scored_task_count": len(REQUIRED_LONG_HORIZON_TASKS),
+        "scored_task_names": REQUIRED_LONG_HORIZON_TASKS,
+        "task_instances": len(REQUIRED_LONG_HORIZON_TASKS) * 3,
+        "success_rate": 1.0,
+        "task_success_rate": 1.0,
+        "task_score_mean": 1.0,
+        "tool_loop_switch_violations": 0,
+        "context_portability_violations": 0,
+        "phase_counts": dict.fromkeys(REQUIRED_LONG_HORIZON_PHASES, 3),
+        "missing_router_header_counts": {
+            "x-vsr-selected-model": 0,
+            "x-vsr-selected-decision": 0,
+            "x-vsr-replay-id": 0,
+            "x-vsr-session-phase": 0,
+            "x-vsr-selected-confidence": 0,
+            "x-vsr-context-token-count": 0,
+        },
+        "invalid_router_header_counts": {
+            "x-vsr-session-phase": 0,
+            "x-vsr-selected-confidence": 0,
+            "x-vsr-context-token-count": 0,
+        },
+    }
+
+
+def complete_inputs(tmp_path: Path) -> dict[str, Path]:
+    matrix = write_json(
+        tmp_path / "matrix.json",
+        {
+            "overall": {
+                "turns": 1200,
+                "switch_reduction_pct": 80.0,
+                "cost_reduction_pct": 70.0,
+                "quality_delta": -0.02,
+                "agentic_tool_loop_switch_violations": 0,
+                "agentic_context_portability_violations": 0,
+            }
+        },
+    )
+    ablation = write_json(
+        tmp_path / "ablation.json",
+        {
+            "by_policy": [
+                {"policy": "single-turn"},
+                {"policy": "sticky-session"},
+                {"policy": "acr-initial"},
+                {"policy": "ACR no tool lock"},
+                {
+                    "policy": "full-acr",
+                    "tool_loop_switch_violations": 0,
+                    "context_portability_violations": 0,
+                },
+            ]
+        },
+    )
+    live = write_json(
+        tmp_path / "live.json",
+        {
+            "rows": [
+                {
+                    "name": "balanced",
+                    "router_requests": 64,
+                    "router_success_rate": 1.0,
+                    "rps_ratio": 0.92,
+                    "overhead_p95_ms": 18.0,
+                    "tool_loop_switch_violations": 0,
+                    "context_portability_violations": 0,
+                    "validation_failures": [],
+                }
+            ]
+        },
+    )
+    failure = write_json(
+        tmp_path / "failure.json",
+        {
+            "rows": [
+                {
+                    "name": "tool-loop-recovery",
+                    "requests": 40,
+                    "success_rate": 0.9,
+                    "injected": 4,
+                    "sessions_with_errors": 2,
+                    "session_recovery_rate_after_error": 1.0,
+                    "tool_loop_switch_violations": 0,
+                    "context_portability_violations": 0,
+                    "validation_failures": [],
+                }
+            ]
+        },
+    )
+    tasks = write_json(
+        tmp_path / "tasks.json",
+        complete_agent_task_summary(),
+    )
+    cache = write_json(
+        tmp_path / "cache.json",
+        {
+            "router": {
+                "base_url": "http://router.local/v1",
+                "model": "auto",
+                "requests": 8,
+                "successes": 8,
+                "success_rate": 1.0,
+                "cached_token_reporting": "positive",
+                "cached_token_field_rate": 1.0,
+                "cached_prompt_ratio": 0.2,
+                **CACHE_PROBE_METADATA,
+            },
+            "baseline": {
+                "base_url": "http://backend.local/v1",
+                "model": "qwen/qwen3.5-rocm",
+                "requests": 8,
+                "successes": 8,
+                "success_rate": 1.0,
+                "cached_token_reporting": "positive",
+                "cached_token_field_rate": 1.0,
+                "cached_prompt_ratio": 0.15,
+                **CACHE_PROBE_METADATA,
+            },
+        },
+    )
+    branch = write_json(tmp_path / "branch.json", complete_branch_image_summary())
+    return {
+        "matrix": matrix,
+        "ablation": ablation,
+        "live": live,
+        "failure": failure,
+        "tasks": tasks,
+        "cache": cache,
+        "branch": branch,
+    }
+
+
+def test_complete_evidence_passes_ga_gate(tmp_path):
+    report_mod = load_report_module()
+    inputs = complete_inputs(tmp_path)
+    args = report_mod.parse_args(
+        [
+            "--synthetic-matrix-summary",
+            str(inputs["matrix"]),
+            "--synthetic-ablation-summary",
+            str(inputs["ablation"]),
+            "--live-aggregate",
+            str(inputs["live"]),
+            "--failure-aggregate",
+            str(inputs["failure"]),
+            "--agent-task-summary",
+            str(inputs["tasks"]),
+            "--cache-aggregate",
+            str(inputs["cache"]),
+            "--branch-image-summary",
+            str(inputs["branch"]),
+            "--expected-ref",
+            "77e6b573",
+            "--expected-image-tag",
+            "pr1989-current-branch-image",
+        ]
+    )
+
+    report = report_mod.generate_report(args)
+
+    assert report["ga_ready"] is True
+    assert report["blocker_count"] == 0
+    assert report["blockers"] == []
+    assert {item["status"] for item in report["requirements"]} == {"passed"}
+    chain = {item["id"]: item for item in report["debug_evidence_chain"]}
+    assert chain["policy_evidence"]["details"]["claim_boundary"] == (
+        "policy evidence only"
+    )
+    assert chain["runtime_continuity"]["status"] == "passed"
+    assert chain["router_diagnostic_headers"]["status"] == "passed"
+    assert (
+        "x-vsr-replay-id"
+        in chain["router_diagnostic_headers"]["details"]["required_headers"]
+    )
+    assert chain["replay_trace_join"]["status"] == "passed"
+    assert chain["cache_serving_path"]["status"] == "passed"
+    assert chain["branch_image_artifact"]["status"] == "passed"
+
+
+def test_missing_positive_cache_and_branch_image_block_ga(tmp_path):
+    report_mod = load_report_module()
+    inputs = complete_inputs(tmp_path)
+    cache = write_json(
+        tmp_path / "cache-missing.json",
+        {
+            "router": {
+                "requests": 8,
+                "successes": 8,
+                "success_rate": 1.0,
+                "cached_token_reporting": "missing",
+                "cached_token_field_present": 0,
+                "cached_prompt_ratio": 0.0,
+            }
+        },
+    )
+    args = report_mod.parse_args(
+        [
+            "--synthetic-matrix-summary",
+            str(inputs["matrix"]),
+            "--synthetic-ablation-summary",
+            str(inputs["ablation"]),
+            "--live-aggregate",
+            str(inputs["live"]),
+            "--failure-aggregate",
+            str(inputs["failure"]),
+            "--agent-task-summary",
+            str(inputs["tasks"]),
+            "--cache-aggregate",
+            str(cache),
+        ]
+    )
+
+    report = report_mod.generate_report(args)
+    statuses = {item["id"]: item["status"] for item in report["requirements"]}
+
+    assert report["ga_ready"] is False
+    assert [item["id"] for item in report["blockers"]] == [
+        "cache_token_reporting",
+        "branch_image_amd_validation",
+    ]
+    assert statuses["cache_token_reporting"] == "blocked"
+    assert statuses["branch_image_amd_validation"] == "missing"
+    assert "cache_token_probe.py" in report["blockers"][0]["next_actions"][0]
+    assert (
+        "session_routing_branch_image_probe.py"
+        in report["blockers"][1]["next_actions"][0]
+    )
+
+
+def test_positive_cache_without_probe_metadata_blocks_ga(tmp_path):
+    report_mod = load_report_module()
+    inputs = complete_inputs(tmp_path)
+    cache = write_json(
+        tmp_path / "cache-without-probe-metadata.json",
+        {
+            "router": {
+                "requests": 8,
+                "successes": 8,
+                "success_rate": 1.0,
+                "cached_token_reporting": "positive",
+                "cached_token_field_rate": 1.0,
+                "cached_prompt_ratio": 0.2,
+            }
+        },
+    )
+    args = report_mod.parse_args(
+        [
+            "--synthetic-matrix-summary",
+            str(inputs["matrix"]),
+            "--synthetic-ablation-summary",
+            str(inputs["ablation"]),
+            "--live-aggregate",
+            str(inputs["live"]),
+            "--failure-aggregate",
+            str(inputs["failure"]),
+            "--agent-task-summary",
+            str(inputs["tasks"]),
+            "--cache-aggregate",
+            str(cache),
+            "--branch-image-summary",
+            str(inputs["branch"]),
+        ]
+    )
+
+    report = report_mod.generate_report(args)
+    cache_requirement = next(
+        item for item in report["requirements"] if item["id"] == "cache_token_reporting"
+    )
+
+    assert report["ga_ready"] is False
+    assert cache_requirement["status"] == "blocked"
+    assert (
+        "router: probe_kind missing != repeated-prefix-cache-token-probe"
+        in cache_requirement["failures"]
+    )
+
+
+def test_positive_cache_without_direct_backend_baseline_blocks_ga(tmp_path):
+    report_mod = load_report_module()
+    inputs = complete_inputs(tmp_path)
+    cache = write_json(
+        tmp_path / "router-only-cache.json",
+        {
+            "router": {
+                "requests": 8,
+                "successes": 8,
+                "success_rate": 1.0,
+                "cached_token_reporting": "positive",
+                "cached_token_field_rate": 1.0,
+                "cached_prompt_ratio": 0.2,
+                **CACHE_PROBE_METADATA,
+            },
+        },
+    )
+    args = report_mod.parse_args(
+        [
+            "--synthetic-matrix-summary",
+            str(inputs["matrix"]),
+            "--synthetic-ablation-summary",
+            str(inputs["ablation"]),
+            "--live-aggregate",
+            str(inputs["live"]),
+            "--failure-aggregate",
+            str(inputs["failure"]),
+            "--agent-task-summary",
+            str(inputs["tasks"]),
+            "--cache-aggregate",
+            str(cache),
+            "--branch-image-summary",
+            str(inputs["branch"]),
+        ]
+    )
+
+    report = report_mod.generate_report(args)
+    cache_requirement = next(
+        item for item in report["requirements"] if item["id"] == "cache_token_reporting"
+    )
+
+    assert report["ga_ready"] is False
+    assert cache_requirement["status"] == "blocked"
+    assert (
+        "direct backend baseline cache evidence missing; run "
+        "cache_token_probe.py with --baseline-base-url" in cache_requirement["failures"]
+    )
+    assert cache_requirement["metrics"]["baseline_required"] is True
+    assert cache_requirement["metrics"]["baseline_present"] is False
+
+
+def test_positive_cache_requires_router_baseline_probe_identity_match(tmp_path):
+    report_mod = load_report_module()
+    inputs = complete_inputs(tmp_path)
+    mismatched_metadata = {
+        **CACHE_PROBE_METADATA,
+        "stable_prefix_sha256": "different-prefix",
+    }
+    cache = write_json(
+        tmp_path / "cache-mismatched-prefix.json",
+        {
+            "router": {
+                "requests": 8,
+                "successes": 8,
+                "success_rate": 1.0,
+                "cached_token_reporting": "positive",
+                "cached_token_field_rate": 1.0,
+                "cached_prompt_ratio": 0.2,
+                **CACHE_PROBE_METADATA,
+            },
+            "baseline": {
+                "requests": 8,
+                "successes": 8,
+                "success_rate": 1.0,
+                "cached_token_reporting": "positive",
+                "cached_token_field_rate": 1.0,
+                "cached_prompt_ratio": 0.15,
+                **mismatched_metadata,
+            },
+        },
+    )
+    args = report_mod.parse_args(
+        [
+            "--synthetic-matrix-summary",
+            str(inputs["matrix"]),
+            "--synthetic-ablation-summary",
+            str(inputs["ablation"]),
+            "--live-aggregate",
+            str(inputs["live"]),
+            "--failure-aggregate",
+            str(inputs["failure"]),
+            "--agent-task-summary",
+            str(inputs["tasks"]),
+            "--cache-aggregate",
+            str(cache),
+            "--branch-image-summary",
+            str(inputs["branch"]),
+        ]
+    )
+
+    report = report_mod.generate_report(args)
+    cache_requirement = next(
+        item for item in report["requirements"] if item["id"] == "cache_token_reporting"
+    )
+
+    assert report["ga_ready"] is False
+    assert cache_requirement["status"] == "blocked"
+    assert (
+        "router/baseline cache probe stable_prefix_sha256 mismatch: "
+        "abc123def4567890 != different-prefix" in cache_requirement["failures"]
+    )
+
+
+def test_positive_cache_requires_direct_backend_serving_path_identity(tmp_path):
+    report_mod = load_report_module()
+    inputs = complete_inputs(tmp_path)
+    cache = write_json(
+        tmp_path / "cache-same-serving-path.json",
+        {
+            "router": {
+                "base_url": "http://router.local/v1",
+                "model": "auto",
+                "requests": 8,
+                "successes": 8,
+                "success_rate": 1.0,
+                "cached_token_reporting": "positive",
+                "cached_token_field_rate": 1.0,
+                "cached_prompt_ratio": 0.2,
+                **CACHE_PROBE_METADATA,
+            },
+            "baseline": {
+                "base_url": "http://router.local/v1/",
+                "model": "qwen/qwen3.5-rocm",
+                "requests": 8,
+                "successes": 8,
+                "success_rate": 1.0,
+                "cached_token_reporting": "positive",
+                "cached_token_field_rate": 1.0,
+                "cached_prompt_ratio": 0.15,
+                **CACHE_PROBE_METADATA,
+            },
+        },
+    )
+    args = report_mod.parse_args(
+        [
+            "--synthetic-matrix-summary",
+            str(inputs["matrix"]),
+            "--synthetic-ablation-summary",
+            str(inputs["ablation"]),
+            "--live-aggregate",
+            str(inputs["live"]),
+            "--failure-aggregate",
+            str(inputs["failure"]),
+            "--agent-task-summary",
+            str(inputs["tasks"]),
+            "--cache-aggregate",
+            str(cache),
+            "--branch-image-summary",
+            str(inputs["branch"]),
+        ]
+    )
+
+    report = report_mod.generate_report(args)
+    cache_requirement = next(
+        item for item in report["requirements"] if item["id"] == "cache_token_reporting"
+    )
+
+    assert report["ga_ready"] is False
+    assert cache_requirement["status"] == "blocked"
+    assert (
+        "baseline: base_url must differ from router base_url for direct-backend "
+        "serving-path cache evidence"
+    ) in cache_requirement["failures"]
+
+
+def test_cache_runner_validation_failures_block_ga(tmp_path):
+    report_mod = load_report_module()
+    inputs = complete_inputs(tmp_path)
+    cache_data = json.loads(inputs["cache"].read_text())
+    cache_data["validation_failures"] = [
+        "direct-backend: base_url must differ from router base_url"
+    ]
+    cache_data["router"]["validation_failures"] = [
+        "router: cached_token_reporting missing < positive"
+    ]
+    cache = write_json(tmp_path / "cache-validation-failure.json", cache_data)
+    args = report_mod.parse_args(
+        [
+            "--synthetic-matrix-summary",
+            str(inputs["matrix"]),
+            "--synthetic-ablation-summary",
+            str(inputs["ablation"]),
+            "--live-aggregate",
+            str(inputs["live"]),
+            "--failure-aggregate",
+            str(inputs["failure"]),
+            "--agent-task-summary",
+            str(inputs["tasks"]),
+            "--cache-aggregate",
+            str(cache),
+            "--branch-image-summary",
+            str(inputs["branch"]),
+        ]
+    )
+
+    report = report_mod.generate_report(args)
+    cache_requirement = next(
+        item for item in report["requirements"] if item["id"] == "cache_token_reporting"
+    )
+
+    assert report["ga_ready"] is False
+    assert cache_requirement["status"] == "blocked"
+    assert (
+        "cache aggregate validation_failure: "
+        "direct-backend: base_url must differ from router base_url"
+    ) in cache_requirement["failures"]
+    assert (
+        "router validation_failure: router: cached_token_reporting missing < positive"
+    ) in cache_requirement["failures"]
+
+
+def test_agent_task_runner_validation_failures_block_ga(tmp_path):
+    report_mod = load_report_module()
+    inputs = complete_inputs(tmp_path)
+    tasks_data = complete_agent_task_summary()
+    tasks_data["validation_failures"] = [
+        "missing_router_header x-vsr-replay-id: 1 successful requests"
+    ]
+    tasks = write_json(tmp_path / "tasks-validation-failure.json", tasks_data)
+    args = report_mod.parse_args(
+        [
+            "--synthetic-matrix-summary",
+            str(inputs["matrix"]),
+            "--synthetic-ablation-summary",
+            str(inputs["ablation"]),
+            "--live-aggregate",
+            str(inputs["live"]),
+            "--failure-aggregate",
+            str(inputs["failure"]),
+            "--agent-task-summary",
+            str(tasks),
+            "--cache-aggregate",
+            str(inputs["cache"]),
+            "--branch-image-summary",
+            str(inputs["branch"]),
+        ]
+    )
+
+    report = report_mod.generate_report(args)
+    task_requirement = next(
+        item
+        for item in report["requirements"]
+        if item["id"] == "amd_agent_task_quality_1"
+    )
+
+    assert report["ga_ready"] is False
+    assert task_requirement["status"] == "blocked"
+    assert (
+        "agent task validation_failure: "
+        "missing_router_header x-vsr-replay-id: 1 successful requests"
+    ) in task_requirement["failures"]
+
+
+def test_stale_agent_task_suite_blocks_ga(tmp_path):
+    report_mod = load_report_module()
+    inputs = complete_inputs(tmp_path)
+    stale_tasks = complete_agent_task_summary()
+    stale_tasks["missing_router_header_counts"].pop("x-vsr-session-phase")
+    stale_tasks.update(
+        {
+            "requests": 96,
+            "task_count": 6,
+            "tasks": 6,
+            "task_instances": 18,
+            "task_names": REQUIRED_LONG_HORIZON_TASKS[:6],
+            "scored_task_count": 6,
+            "scored_task_names": REQUIRED_LONG_HORIZON_TASKS[:6],
+            "phase_counts": {
+                "user_turn": 18,
+                "tool_loop": 36,
+                "provider_state": 18,
+                "topic_drift": 12,
+                "final": 18,
+            },
+        }
+    )
+    tasks = write_json(tmp_path / "tasks-stale.json", stale_tasks)
+    args = report_mod.parse_args(
+        [
+            "--synthetic-matrix-summary",
+            str(inputs["matrix"]),
+            "--synthetic-ablation-summary",
+            str(inputs["ablation"]),
+            "--live-aggregate",
+            str(inputs["live"]),
+            "--failure-aggregate",
+            str(inputs["failure"]),
+            "--agent-task-summary",
+            str(tasks),
+            "--cache-aggregate",
+            str(inputs["cache"]),
+            "--branch-image-summary",
+            str(inputs["branch"]),
+        ]
+    )
+
+    report = report_mod.generate_report(args)
+    task_requirement = next(
+        item
+        for item in report["requirements"]
+        if item["id"] == "amd_agent_task_quality_1"
+    )
+
+    assert report["ga_ready"] is False
+    assert task_requirement["status"] == "blocked"
+    assert "requests 96.0 < 489" in task_requirement["failures"]
+    assert "task_count 6.0 < 28" in task_requirement["failures"]
+    assert "task_instances 18.0 < 84" in task_requirement["failures"]
+    assert (
+        "missing router headers: {'x-vsr-session-phase': 96}"
+        in task_requirement["failures"]
+    )
+    assert any(
+        failure.startswith("missing task names:")
+        for failure in task_requirement["failures"]
+    )
+    assert "missing task phases: ['idle_boundary']" in task_requirement["failures"]
+    assert (
+        "28 tasks, 163 turns, 489 requests, and 84 scored instances"
+        in task_requirement["next_actions"][0]
+    )
+
+
+def test_diagnostic_probe_does_not_satisfy_branch_image_benchmark(tmp_path):
+    report_mod = load_report_module()
+    inputs = complete_inputs(tmp_path)
+    diagnostic = write_json(
+        tmp_path / "branch-diagnostic.json",
+        {
+            "validation_kind": "branch-image-diagnostic-probe",
+            "label": "pr1989-current-mounted-binary",
+            "image_tag": "pr1989-current-mounted-binary",
+            "checks": {
+                "chat_completion_ok": True,
+                "diagnostic_headers_ok": True,
+            },
+            "validation_failures": [],
+        },
+    )
+    args = report_mod.parse_args(
+        [
+            "--synthetic-matrix-summary",
+            str(inputs["matrix"]),
+            "--synthetic-ablation-summary",
+            str(inputs["ablation"]),
+            "--live-aggregate",
+            str(inputs["live"]),
+            "--failure-aggregate",
+            str(inputs["failure"]),
+            "--agent-task-summary",
+            str(inputs["tasks"]),
+            "--cache-aggregate",
+            str(inputs["cache"]),
+            "--branch-image-summary",
+            str(diagnostic),
+        ]
+    )
+
+    report = report_mod.generate_report(args)
+    branch_requirement = next(
+        item
+        for item in report["requirements"]
+        if item["id"] == "branch_image_amd_validation"
+    )
+
+    assert report["ga_ready"] is False
+    assert branch_requirement["status"] == "blocked"
+    assert (
+        "full branch-image benchmark marker missing; diagnostic probes do not satisfy GA"
+        in branch_requirement["failures"]
+    )
+    assert (
+        "mounted-binary diagnostic does not satisfy full branch-image AMD benchmark"
+        in branch_requirement["failures"]
+    )
+    assert (
+        "branch-image check cache_token_probe_ok is not true"
+        in branch_requirement["failures"]
+    )
+
+
+def test_branch_image_summary_requires_all_child_checks(tmp_path):
+    report_mod = load_report_module()
+    inputs = complete_inputs(tmp_path)
+    branch_summary = complete_branch_image_summary()
+    branch_summary["checks"].pop("cache_token_probe_ok")
+    branch = write_json(
+        tmp_path / "branch-missing-cache-check.json",
+        branch_summary,
+    )
+    args = report_mod.parse_args(
+        [
+            "--synthetic-matrix-summary",
+            str(inputs["matrix"]),
+            "--synthetic-ablation-summary",
+            str(inputs["ablation"]),
+            "--live-aggregate",
+            str(inputs["live"]),
+            "--failure-aggregate",
+            str(inputs["failure"]),
+            "--agent-task-summary",
+            str(inputs["tasks"]),
+            "--cache-aggregate",
+            str(inputs["cache"]),
+            "--branch-image-summary",
+            str(branch),
+        ]
+    )
+
+    report = report_mod.generate_report(args)
+    branch_requirement = next(
+        item
+        for item in report["requirements"]
+        if item["id"] == "branch_image_amd_validation"
+    )
+
+    assert report["ga_ready"] is False
+    assert branch_requirement["status"] == "blocked"
+    assert branch_requirement["failures"] == [
+        "branch-image check cache_token_probe_ok is not true"
+    ]
+
+
+def test_branch_image_summary_requires_assembler_identity_and_evidence(tmp_path):
+    report_mod = load_report_module()
+    inputs = complete_inputs(tmp_path)
+    hand_written = complete_branch_image_summary()
+    hand_written.pop("ref")
+    hand_written.pop("image_tag")
+    hand_written.pop("evidence")
+    branch = write_json(tmp_path / "branch-hand-written.json", hand_written)
+    args = report_mod.parse_args(
+        [
+            "--synthetic-matrix-summary",
+            str(inputs["matrix"]),
+            "--synthetic-ablation-summary",
+            str(inputs["ablation"]),
+            "--live-aggregate",
+            str(inputs["live"]),
+            "--failure-aggregate",
+            str(inputs["failure"]),
+            "--agent-task-summary",
+            str(inputs["tasks"]),
+            "--cache-aggregate",
+            str(inputs["cache"]),
+            "--branch-image-summary",
+            str(branch),
+        ]
+    )
+
+    report = report_mod.generate_report(args)
+    branch_requirement = next(
+        item
+        for item in report["requirements"]
+        if item["id"] == "branch_image_amd_validation"
+    )
+
+    assert report["ga_ready"] is False
+    assert branch_requirement["status"] == "blocked"
+    assert "branch-image ref missing" in branch_requirement["failures"]
+    assert "branch-image image_tag missing" in branch_requirement["failures"]
+    assert (
+        "branch-image assembler evidence sections missing"
+        in branch_requirement["failures"]
+    )
+    assert (
+        "branch-image evidence live_aggregates missing"
+        in branch_requirement["failures"]
+    )
+
+
+def test_branch_image_summary_blocks_expected_identity_mismatch(tmp_path):
+    report_mod = load_report_module()
+    inputs = complete_inputs(tmp_path)
+    branch_summary = complete_branch_image_summary()
+    branch_summary["ref"] = "old-ref"
+    branch_summary["image_tag"] = "old-image"
+    branch = write_json(tmp_path / "branch-stale.json", branch_summary)
+    args = report_mod.parse_args(
+        [
+            "--synthetic-matrix-summary",
+            str(inputs["matrix"]),
+            "--synthetic-ablation-summary",
+            str(inputs["ablation"]),
+            "--live-aggregate",
+            str(inputs["live"]),
+            "--failure-aggregate",
+            str(inputs["failure"]),
+            "--agent-task-summary",
+            str(inputs["tasks"]),
+            "--cache-aggregate",
+            str(inputs["cache"]),
+            "--branch-image-summary",
+            str(branch),
+            "--expected-ref",
+            "current-ref",
+            "--expected-image-tag",
+            "current-image",
+        ]
+    )
+
+    report = report_mod.generate_report(args)
+    branch_requirement = next(
+        item
+        for item in report["requirements"]
+        if item["id"] == "branch_image_amd_validation"
+    )
+
+    assert report["ga_ready"] is False
+    assert branch_requirement["status"] == "blocked"
+    assert branch_requirement["metrics"]["expected_ref"] == "current-ref"
+    assert branch_requirement["metrics"]["expected_image_tag"] == "current-image"
+    assert "branch-image ref old-ref != expected current-ref" in (
+        branch_requirement["failures"]
+    )
+    assert "branch-image image_tag old-image != expected current-image" in (
+        branch_requirement["failures"]
+    )
+
+
+def test_missing_initial_policy_baseline_blocks_ga(tmp_path):
+    report_mod = load_report_module()
+    inputs = complete_inputs(tmp_path)
+    ablation = write_json(
+        tmp_path / "ablation-no-initial.json",
+        {
+            "by_policy": [
+                {"policy": "single-turn"},
+                {"policy": "sticky-session"},
+                {"policy": "acr-no-tool-lock"},
+                {
+                    "policy": "acr-full",
+                    "tool_loop_switch_violations": 0,
+                    "context_portability_violations": 0,
+                },
+            ]
+        },
+    )
+    args = report_mod.parse_args(
+        [
+            "--synthetic-matrix-summary",
+            str(inputs["matrix"]),
+            "--synthetic-ablation-summary",
+            str(ablation),
+            "--live-aggregate",
+            str(inputs["live"]),
+            "--failure-aggregate",
+            str(inputs["failure"]),
+            "--agent-task-summary",
+            str(inputs["tasks"]),
+            "--cache-aggregate",
+            str(inputs["cache"]),
+            "--branch-image-summary",
+            str(inputs["branch"]),
+        ]
+    )
+
+    report = report_mod.generate_report(args)
+    ablation_requirement = next(
+        item
+        for item in report["requirements"]
+        if item["id"] == "synthetic_policy_ablation"
+    )
+
+    assert report["ga_ready"] is False
+    assert ablation_requirement["status"] == "blocked"
+    assert "initial implementation baseline missing" in ablation_requirement["failures"]
+
+
+def test_main_writes_report_and_respects_allow_blockers(tmp_path):
+    report_mod = load_report_module()
+    inputs = complete_inputs(tmp_path)
+    output_dir = tmp_path / "out"
+
+    exit_code = report_mod.main(
+        [
+            "--synthetic-matrix-summary",
+            str(inputs["matrix"]),
+            "--synthetic-ablation-summary",
+            str(inputs["ablation"]),
+            "--cache-aggregate",
+            str(inputs["cache"]),
+            "--allow-blockers",
+            "--output-dir",
+            str(output_dir),
+        ]
+    )
+
+    assert exit_code == 0
+    assert (output_dir / "ga-readiness.json").exists()
+    assert (output_dir / "ga-readiness.md").exists()
+
+
+def test_main_stdout_lists_blockers_for_maintainer_ops(tmp_path, capsys):
+    report_mod = load_report_module()
+    inputs = complete_inputs(tmp_path)
+    cache = write_json(
+        tmp_path / "cache-missing.json",
+        {
+            "router": {
+                "requests": 8,
+                "successes": 8,
+                "success_rate": 1.0,
+                "cached_token_reporting": "missing",
+                "cached_token_field_present": 0,
+                "cached_prompt_ratio": 0.0,
+            }
+        },
+    )
+
+    exit_code = report_mod.main(
+        [
+            "--synthetic-matrix-summary",
+            str(inputs["matrix"]),
+            "--synthetic-ablation-summary",
+            str(inputs["ablation"]),
+            "--live-aggregate",
+            str(inputs["live"]),
+            "--failure-aggregate",
+            str(inputs["failure"]),
+            "--agent-task-summary",
+            str(inputs["tasks"]),
+            "--cache-aggregate",
+            str(cache),
+            "--allow-blockers",
+            "--output-dir",
+            str(tmp_path / "out"),
+        ]
+    )
+
+    stdout = json.loads(capsys.readouterr().out)
+
+    expected_blockers = [
+        {
+            "id": "cache_token_reporting",
+            "next_actions": [
+                (
+                    "Run `bench/cache_token_probe.py` against both router and "
+                    "direct-backend paths with `--baseline-base-url`, "
+                    "`--baseline-model`, `--min-cached-token-reporting positive`, "
+                    "`--min-cached-token-field-rate 1.0`, and a backend-specific "
+                    "`--min-cached-prompt-ratio`."
+                ),
+                (
+                    "Use a backend that exposes cached-token accounting; if the "
+                    "backend still reports no cached-token field, keep this as a "
+                    "documented limitation instead of converting router estimates "
+                    "into positive backend evidence."
+                ),
+            ],
+            "status": "blocked",
+            "title": "Cache-token reporting",
+        },
+        {
+            "id": "branch_image_amd_validation",
+            "next_actions": [
+                (
+                    "Build and serve the reviewed branch image, then run "
+                    "`bench/session_routing_branch_image_probe.py` with the exact "
+                    "`--ref` and `--image-tag` for that image."
+                ),
+                (
+                    "Assemble the full branch-image artifact with "
+                    "`bench/session_routing_branch_image_benchmark.py` using "
+                    "diagnostic, live-matrix, failure-recovery, expanded "
+                    "agent-task, and cache-token summaries from the same image "
+                    "identity."
+                ),
+            ],
+            "status": "missing",
+            "title": "Branch-image AMD benchmark",
+        },
+    ]
+
+    assert exit_code == 0
+    assert stdout["blocker_count"] == len(expected_blockers)
+    assert stdout["blockers"] == expected_blockers
+
+
+def test_markdown_renders_blockers_as_readable_sections():
+    report_mod = load_report_module()
+    markdown = report_mod.render_markdown(
+        {
+            "generated_at": "2026-05-31T00:00:00Z",
+            "ga_ready": False,
+            "passed_count": 0,
+            "blocker_count": 1,
+            "requirements": [
+                {
+                    "id": "cache_token_reporting",
+                    "title": "Cache-token reporting",
+                    "status": "blocked",
+                    "evidence": "cache.json",
+                    "metrics": {"cached_token_reporting": "missing"},
+                    "failures": [
+                        "router: cached_token_reporting missing < positive",
+                        "baseline: probe_kind missing != repeated-prefix-cache-token-probe",
+                    ],
+                    "next_actions": ["rerun cache probe"],
+                }
+            ],
+            "debug_evidence_chain": [
+                {
+                    "id": "router_diagnostic_headers",
+                    "title": "Router diagnostic headers",
+                    "status": "passed",
+                    "proves": "Successful requests expose routing diagnostics.",
+                    "requirements": ["amd_agent_task_quality_1"],
+                    "evidence": ["tasks.json"],
+                    "details": {
+                        "required_headers": [
+                            "x-vsr-selected-model",
+                            "x-vsr-replay-id",
+                        ]
+                    },
+                },
+                {
+                    "id": "policy_evidence",
+                    "title": "Policy evidence",
+                    "status": "passed",
+                    "proves": "Synthetic matrix evidence is policy evidence only.",
+                    "requirements": [
+                        "synthetic_policy_matrix",
+                        "synthetic_policy_ablation",
+                    ],
+                    "evidence": ["matrix.json", "ablation.json"],
+                    "details": {"claim_boundary": "policy evidence only"},
+                },
+            ],
+        }
+    )
+
+    assert "| Requirement | Status | Evidence |" not in markdown
+    assert "## Blocker Queue" in markdown
+    assert "## Debug Evidence Chain" in markdown
+    assert "1. **Router diagnostic headers** (`passed`)" in markdown
+    assert "required_headers: `x-vsr-selected-model`, `x-vsr-replay-id`" in markdown
+    assert "claim_boundary: `policy evidence only`" in markdown
+    assert "1. **Cache-token reporting** (`blocked`)" in markdown
+    assert "### Cache-token reporting" in markdown
+    assert "#### Key Metrics" in markdown
+    assert "Cache-token reporting failure" not in markdown
+    assert "#### Blockers" in markdown
+    assert "1. router: cached_token_reporting missing < positive" in markdown
+    assert (
+        "2. baseline: probe_kind missing != repeated-prefix-cache-token-probe"
+        in markdown
+    )
+    assert "#### Next Actions" in markdown
+    assert "1. rerun cache probe" in markdown

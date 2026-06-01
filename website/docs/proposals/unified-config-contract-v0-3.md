@@ -91,7 +91,7 @@ Router-global defaults are now owned by the router itself, not by a second user-
 - `global:` only overrides what you need to change
 - `global.router` groups router-engine control knobs, including `config_source`
 - `global.router.model_selection.model_switch_gate` is the optional shadow/enforce policy seam for auditing session-aware model stay-vs-switch decisions
-- `session_aware` selection can consume replay-derived `remaining_turn_prior` lookup-table entries, gated by sample count and exposed in `session_policy` traces for experiments
+- `session_aware` selection can consume replay-derived `remaining_turn_prior` lookup-table entries, hard-lock non-portable provider-state continuations, reset continuity on decision drift, price prefix-cache loss by input checkout cost, and expose those facts in `session_policy` traces for experiments. Its cache-cost multiplier is constrained to neutral-or-stricter values and its remaining-turn prior horizon must be positive.
 - `global.services` groups shared APIs and runtime services
 - `global.services.router_replay.enabled` provides the router-wide replay default, while route-local `router_replay.enabled: false` is the explicit opt-out
 - `global.stores` groups storage-backed services

@@ -181,7 +181,7 @@ histogram_quantile(0.95, rate(llm_model_completion_latency_seconds_bucket[5m]))
 
 ## 6. Windowed Model Metrics (Load Balancing)
 
-Enhanced time-windowed metrics for model performance tracking, useful for load balancing decisions in Kubernetes environments where model selection matters more than endpoint selection.
+Enhanced time-windowed metrics for model performance tracking, useful for Kubernetes environments where model selection and downstream endpoint load balancing are separate responsibilities.
 
 ### Configuration
 

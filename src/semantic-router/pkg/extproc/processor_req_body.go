@@ -168,18 +168,19 @@ func (r *OpenAIRouter) handleAutoModelRouting(openAIRequest *openai.ChatCompleti
 	// Track model routing metrics
 	metrics.RecordModelRouting(originalModel, matchedModel)
 
-	// Select endpoint for the matched model
-	selectedEndpoint, selectedEndpointName, endpointErr := r.selectEndpointForModel(ctx, matchedModel)
-	if endpointErr != nil {
-		return nil, fmt.Errorf("auto routing: %w", endpointErr)
+	// Resolve backend metadata for provider-specific request shaping. This is
+	// not an endpoint routing decision; Envoy owns endpoint load balancing.
+	backendAddress, backendName, backendErr := r.resolveBackendForModel(ctx, matchedModel)
+	if backendErr != nil {
+		return nil, fmt.Errorf("auto routing: %w", backendErr)
 	}
 
-	// Resolve model name alias to real model name for the selected endpoint
+	// Resolve model name alias to the real model name expected by the backend
 	// e.g., "qwen14b-rack1" -> "Qwen/Qwen2.5-14B-Instruct"
-	upstreamModel := r.resolveModelNameForEndpoint(matchedModel, selectedEndpointName)
+	upstreamModel := r.resolveModelNameForBackend(matchedModel, backendName)
 
 	// Modify request body with resolved model name, reasoning mode, and system prompt
-	profile, profileErr := r.Config.GetProviderProfileForEndpoint(selectedEndpointName)
+	profile, profileErr := r.Config.GetProviderProfileForEndpoint(backendName)
 	if profileErr != nil {
 		return nil, fmt.Errorf("auto routing provider profile: %w", profileErr)
 	}
@@ -197,7 +198,7 @@ func (r *OpenAIRouter) handleAutoModelRouting(openAIRequest *openai.ChatCompleti
 	}
 
 	// Create response with mutations (use original alias for headers/tracing, upstream model in body)
-	response = r.createRoutingResponse(matchedModel, selectedEndpoint, selectedEndpointName, modifiedBody, ctx)
+	response = r.createRoutingResponse(matchedModel, backendAddress, backendName, modifiedBody, ctx)
 
 	// Log routing decision
 	r.logRoutingDecision(ctx, "auto_routing", originalModel, matchedModel, decisionName, reasoningDecision.UseReasoning)
@@ -236,17 +237,18 @@ func (r *OpenAIRouter) handleSpecifiedModelRouting(openAIRequest *openai.ChatCom
 	// Security checks (jailbreak/PII) are handled at the signal level via fast_response plugin
 	// Memory injection already happened in handleMemoryRetrieval (before routing diverged)
 
-	// Select endpoint for the specified model
-	selectedEndpoint, selectedEndpointName, endpointErr := r.selectEndpointForModel(ctx, originalModel)
-	if endpointErr != nil {
-		return nil, fmt.Errorf("specified model routing: %w", endpointErr)
+	// Resolve backend metadata for provider-specific request shaping. This is
+	// not an endpoint routing decision; Envoy owns endpoint load balancing.
+	backendAddress, backendName, backendErr := r.resolveBackendForModel(ctx, originalModel)
+	if backendErr != nil {
+		return nil, fmt.Errorf("specified model routing: %w", backendErr)
 	}
 
-	// Resolve model name alias to real model name for the selected endpoint
-	upstreamModel := r.resolveModelNameForEndpoint(originalModel, selectedEndpointName)
+	// Resolve model name alias to the real model name expected by the backend
+	upstreamModel := r.resolveModelNameForBackend(originalModel, backendName)
 
 	// Create response with headers (and body mutation if model name changed)
-	response := r.createSpecifiedModelResponse(originalModel, upstreamModel, selectedEndpoint, selectedEndpointName, ctx)
+	response := r.createSpecifiedModelResponse(originalModel, upstreamModel, backendAddress, backendName, ctx)
 
 	// Handle route cache clearing
 	if r.shouldClearRouteCache() {
@@ -270,7 +272,3 @@ func (r *OpenAIRouter) handleSpecifiedModelRouting(openAIRequest *openai.ChatCom
 
 	return response, nil
 }
-
-// selectEndpointForModel selects the best endpoint for the given model.
-// Returns the endpoint address:port, the endpoint name, and any error.
-// Backend selection is now part of the model layer (upstream request span)

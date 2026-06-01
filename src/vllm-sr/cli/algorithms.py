@@ -1,6 +1,6 @@
 """Algorithm configuration models for multi-model orchestration."""
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class ModelRef(BaseModel):
@@ -236,21 +236,25 @@ class HybridSelectionConfig(BaseModel):
 class SessionAwareSelectionConfig(BaseModel):
     """Configuration for session-aware agentic model selection."""
 
-    fallback_method: str | None = "hybrid"
+    model_config = ConfigDict(extra="forbid")
+
+    base_method: str | None = "hybrid"
     idle_timeout_seconds: int | None = Field(default=300, ge=0)
     min_turns_before_switch: int | None = Field(default=1, ge=0)
     switch_margin: float | None = Field(default=0.05, ge=0)
     stay_bias: float | None = Field(default=0.10, ge=0)
     tool_loop_hard_lock: bool | None = True
+    context_portability_hard_lock: bool | None = True
+    decision_drift_reset: bool | None = True
     tool_loop_stay_bias: float | None = Field(default=0.35, ge=0)
     prefix_cache_weight: float | None = Field(default=0.20, ge=0)
     handoff_penalty_weight: float | None = Field(default=1.0, ge=0)
     default_handoff_penalty: float | None = Field(default=0.05, ge=0)
     quality_gap_multiplier: float | None = Field(default=1.0, ge=0)
-    max_cache_cost_multiplier: float | None = Field(default=2.5, ge=0)
+    max_cache_cost_multiplier: float | None = Field(default=2.5, ge=1)
     switch_history_weight: float | None = Field(default=0.04, ge=0)
     remaining_turn_prior_weight: float | None = Field(default=1.0, ge=0)
-    remaining_turn_prior_horizon: int | None = Field(default=8, ge=0)
+    remaining_turn_prior_horizon: int | None = Field(default=8, ge=1)
     min_remaining_turn_prior_samples: int | None = Field(default=3, ge=0)
 
 

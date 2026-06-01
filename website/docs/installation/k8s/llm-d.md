@@ -1,8 +1,8 @@
 # Install with LLM-D
 
-This guide provides step-by-step instructions for deploying the vLLM Semantic Router (vsr) in combination with [LLM-D](https://github.com/llm-d/llm-d). This will also illustrate a key design pattern namely use of the vsr as a model picker in combination with the use of LLM-D as endpoint picker.
+This guide provides step-by-step instructions for deploying the vLLM Semantic Router (vsr) in combination with [LLM-D](https://github.com/llm-d/llm-d). This will also illustrate a key design pattern namely use of vsr as a model picker while LLM-D owns replica scheduling within each selected model pool.
 
-A model picker provides the ability to route an LLM query to one of multiple LLM models that are entirely different from each other, whereas an endpoint picker selects one of multiple endpoints that each serve an equivalent model (and most often the exact same base model). Hence this deployment shows how vLLM Semantic Router in its role as a model picker is perfectly complementary to endpoint picker solutions such as LLM-D.
+A model picker provides the ability to route an LLM query to one of multiple LLM models that are entirely different from each other, whereas LLM-D schedules among multiple replicas that each serve an equivalent model (and most often the exact same base model). Hence this deployment shows how vLLM Semantic Router in its role as a model picker is complementary to LLM-D's backend scheduler.
 
 Since LLM-D has a number of deployment configurations some of which require a larger hardware setup we will demonstrate a baseline version of LLM-D  working in combination with vsr to introduce the core concepts. These same core concepts will also apply when using vsr with more complex LLM-D configurations and production grade well-lit paths as described in the LLM-D repo at [this link](https://github.com/llm-d/llm-d/tree/main/guides).
 
@@ -100,11 +100,11 @@ phi4-mini                             ClusterIP      10.97.252.33     <none>    
 
 ## Step 4: Deploy InferencePools and LLM-D schedulers
 
-LLM-D (and Kubernetes IGW) use an API resource called InferencePool alongwith a scheduler (referred to as the LLM-D inference scheduler and sometimes equivalently as EndPoint Picker/ EPP).
+LLM-D (and Kubernetes IGW) use an API resource called InferencePool alongwith a scheduler (often abbreviated as EPP in LLM-D and Gateway API Inference Extension materials).
 
 Deploy the provided manifests in order to create InferencePool and LLM-D inference schedulers corresponding to the 2 base models used in this exercise.
 
-In order to show a full combination of model picking and endpoint picking, one would normally need at least 2 inferencepools with at least 2 endpoints per pool. Since that would require 4 instances of vllm serving pods and 4 GPUs in our exercise, that would require a more complex hardware setup. This guide deploys 1 model endpoint per each of the two InferencePools in order to show the core design of vsr's model picking working with and complementing LLM-D scheduler's endpoint picking.
+In order to show a full combination of model picking and replica scheduling, one would normally need at least 2 inferencepools with at least 2 replicas per pool. Since that would require 4 instances of vllm serving pods and 4 GPUs in our exercise, that would require a more complex hardware setup. This guide deploys 1 model endpoint per each of the two InferencePools in order to show the core design of vsr's model picking working with and complementing LLM-D scheduler behavior.
 
 ```bash
 # Create the LLM-D scheduler and InferencePool for the Llama3-8b model
@@ -192,7 +192,7 @@ Try the following cases with and without model "auto" selection to confirm that 
 Example queries to try include the following
 
 ```bash
-# Model name llama3-8b provided explicitly, no model alteration, send to llama EPP for endpoint picking
+# Model name llama3-8b provided explicitly, no model alteration, send to llama EPP scheduling
 curl http://192.168.49.2:32293/v1/chat/completions   -H "Content-Type: application/json"   -d '{
         "model": "llama3-8b",
         "messages": [
@@ -216,7 +216,7 @@ curl http://192.168.49.2:32293/v1/chat/completions   -H "Content-Type: applicati
 ```
 
 ```bash
-# Model name phi4-mini provided explicitly, no model alteration, send to phi4-mini EPP for endpoint picking
+# Model name phi4-mini provided explicitly, no model alteration, send to phi4-mini EPP scheduling
 curl http://192.168.49.2:32293/v1/chat/completions   -H "Content-Type: application/json"   -d '{
         "model": "phi4-mini",
         "messages": [

@@ -87,7 +87,7 @@ Edit `configmap-router-config.yaml`:
 
 Edit `configmap-envoy-config.yaml`:
 
-1. Update `kserve_dynamic_cluster` address to: `<llminferenceservice>-predictor.<namespace>.svc.cluster.local`
+1. Update `kserve_backend_cluster` address to: `<llminferenceservice>-predictor.<namespace>.svc.cluster.local`
 
 ### Step 3: Deploy Resources
 
