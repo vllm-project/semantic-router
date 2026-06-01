@@ -20,7 +20,7 @@ const (
 	semanticRouterValuesFile = "deploy/kubernetes/agentgateway/semantic-router-values/values.yaml"
 )
 
-// Profile implements the AgentGateway test profile.
+// Profile implements the agentgateway test profile.
 type Profile struct {
 	verbose bool
 }
@@ -35,7 +35,7 @@ type setupState struct {
 	extProcPolicyApplied    bool
 }
 
-// NewProfile creates a new AgentGateway profile.
+// NewProfile creates a new agentgateway profile.
 func NewProfile() *Profile {
 	return &Profile{}
 }
@@ -47,13 +47,13 @@ func (p *Profile) Name() string {
 
 // Description returns the profile description.
 func (p *Profile) Description() string {
-	return fmt.Sprintf("Tests Semantic Router through AgentGateway (version: %s)", agentGatewayVersion)
+	return fmt.Sprintf("Tests Semantic Router through agentgateway (version: %s)", agentGatewayVersion)
 }
 
-// Setup deploys all required components for AgentGateway testing.
+// Setup deploys all required components for agentgateway testing.
 func (p *Profile) Setup(ctx context.Context, opts *framework.SetupOptions) error {
 	p.verbose = opts.Verbose
-	p.log("Setting up AgentGateway test environment")
+	p.log("Setting up agentgateway test environment")
 
 	deployer := helm.NewDeployer(opts.KubeConfig, opts.Verbose)
 	state := &setupState{}
@@ -72,13 +72,13 @@ func (p *Profile) Setup(ctx context.Context, opts *framework.SetupOptions) error
 	}
 	state.gatewayAPICRDsInstalled = true
 
-	p.log("Step 2/7: Installing AgentGateway CRDs and controller")
+	p.log("Step 2/7: Installing agentgateway CRDs and controller")
 	if err := p.installAgentGateway(ctx, deployer, opts); err != nil {
-		return p.failSetup(ctx, opts, state, fmt.Errorf("install AgentGateway: %w", err))
+		return p.failSetup(ctx, opts, state, fmt.Errorf("install agentgateway: %w", err))
 	}
 	state.agentGatewayInstalled = true
 
-	p.log("Step 3/7: Creating AgentGateway proxy")
+	p.log("Step 3/7: Creating agentgateway proxy")
 	if err := p.applyManifest(ctx, opts.KubeConfig, "deploy/kubernetes/agentgateway/gateway.yaml"); err != nil {
 		return p.failSetup(ctx, opts, state, fmt.Errorf("create Gateway proxy: %w", err))
 	}
@@ -96,7 +96,7 @@ func (p *Profile) Setup(ctx context.Context, opts *framework.SetupOptions) error
 	}
 	state.semanticRouterDeployed = true
 
-	p.log("Step 6/7: Applying AgentGateway routing resources")
+	p.log("Step 6/7: Applying agentgateway routing resources")
 	if err := p.applyManifest(ctx, opts.KubeConfig, "deploy/kubernetes/agentgateway/routing-resources.yaml"); err != nil {
 		return p.failSetup(ctx, opts, state, fmt.Errorf("apply routing resources: %w", err))
 	}
@@ -108,14 +108,14 @@ func (p *Profile) Setup(ctx context.Context, opts *framework.SetupOptions) error
 	}
 	state.extProcPolicyApplied = true
 
-	p.log("AgentGateway test environment setup complete")
+	p.log("agentgateway test environment setup complete")
 	return nil
 }
 
 // Teardown cleans up all deployed resources.
 func (p *Profile) Teardown(ctx context.Context, opts *framework.TeardownOptions) error {
 	p.verbose = opts.Verbose
-	p.log("Tearing down AgentGateway test environment")
+	p.log("Tearing down agentgateway test environment")
 
 	deployer := helm.NewDeployer(opts.KubeConfig, opts.Verbose)
 
@@ -127,7 +127,7 @@ func (p *Profile) Teardown(ctx context.Context, opts *framework.TeardownOptions)
 	_ = deployer.Uninstall(ctx, "agentgateway", agentGatewayNamespace)
 	_ = deployer.Uninstall(ctx, "agentgateway-crds", agentGatewayNamespace)
 
-	p.log("AgentGateway test environment teardown complete")
+	p.log("agentgateway test environment teardown complete")
 	return nil
 }
 
@@ -139,7 +139,7 @@ func (p *Profile) GetTestCases() []string {
 	)
 }
 
-// GetServiceConfig returns the service configuration for accessing the AgentGateway proxy.
+// GetServiceConfig returns the service configuration for accessing the agentgateway proxy.
 func (p *Profile) GetServiceConfig() framework.ServiceConfig {
 	return framework.ServiceConfig{
 		Name:        agentGatewayProxyService,
