@@ -383,9 +383,18 @@ def agent_task_phases(data: dict[str, Any]) -> set[str]:
     return {str(key) for key, value in phase_counts.items() if int(value or 0) > 0}
 
 
-def validation_failures(row: dict[str, Any]) -> list[Any]:
+def validation_failures(row: dict[str, Any]) -> list[str]:
     failures = row.get("validation_failures")
-    return failures if isinstance(failures, list) else []
+    if isinstance(failures, list):
+        return [str(item) for item in failures]
+    return []
+
+
+def add_validation_failures(
+    failures: list[str], label: str, source: dict[str, Any]
+) -> None:
+    for item in validation_failures(source):
+        failures.append(f"{label} validation_failure: {item}")
 
 
 def continuity_violations(row: dict[str, Any]) -> int:
@@ -433,8 +442,7 @@ def evaluate_live_aggregate(
                 f"{name} continuity violations {continuity} > "
                 f"{args.max_continuity_violations}"
             )
-        if validation_failures(row):
-            failures.append(f"{name} validation_failures={validation_failures(row)}")
+        add_validation_failures(failures, name, row)
         rps_ratio = row.get("rps_ratio")
         if rps_ratio is not None:
             evaluate_numeric(
@@ -500,8 +508,7 @@ def evaluate_failure_aggregate(
                 f"{name} continuity violations {continuity} > "
                 f"{args.max_continuity_violations}"
             )
-        if validation_failures(row):
-            failures.append(f"{name} validation_failures={validation_failures(row)}")
+        add_validation_failures(failures, name, row)
         injected = int(row.get("injected") or 0)
         if injected <= 0:
             failures.append(f"{name} injected failures missing")
@@ -614,6 +621,7 @@ def evaluate_agent_task_summary(
         failures.append(f"missing router headers: {missing_headers}")
     if invalid_headers:
         failures.append(f"invalid router headers: {invalid_headers}")
+    add_validation_failures(failures, "agent task", data)
     task_names = agent_task_names(data)
     required_task_names = set(args.required_agent_task_name or [])
     missing_task_names = sorted(required_task_names - task_names)
@@ -825,6 +833,7 @@ def evaluate_cache_aggregate(args: argparse.Namespace) -> dict[str, Any]:
         )
     failures: list[str] = []
     metrics: dict[str, Any] = {}
+    add_validation_failures(failures, "cache aggregate", data)
     require_probe_metadata = should_require_cache_probe_metadata(
         args.min_cached_token_reporting
     )
@@ -837,6 +846,7 @@ def evaluate_cache_aggregate(args: argparse.Namespace) -> dict[str, Any]:
             "cache_token_probe.py with --baseline-base-url"
         )
     for label, summary in paths:
+        add_validation_failures(failures, label, summary)
         metrics[label], path_failures = evaluate_cache_path(
             label, summary, args, require_probe_metadata
         )

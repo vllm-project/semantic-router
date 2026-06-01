@@ -191,6 +191,13 @@ def validation_failures(row: dict[str, Any]) -> list[str]:
     return []
 
 
+def add_validation_failures(
+    failures: list[str], label: str, source: dict[str, Any]
+) -> None:
+    for item in validation_failures(source):
+        failures.append(f"{label} validation_failure: {item}")
+
+
 def continuity_violations(row: dict[str, Any]) -> int:
     return int(row.get("tool_loop_switch_violations") or 0) + int(
         row.get("context_portability_violations") or 0
@@ -430,8 +437,7 @@ def evaluate_live_aggregate(
                 f"{name} continuity violations {continuity} > "
                 f"{args.max_continuity_violations}"
             )
-        if validation_failures(row):
-            failures.append(f"{name} validation_failures={validation_failures(row)}")
+        add_validation_failures(failures, name, row)
         metrics.append(
             {
                 "name": name,
@@ -466,8 +472,7 @@ def evaluate_failure_aggregate(
                 f"{name} continuity violations {continuity} > "
                 f"{args.max_continuity_violations}"
             )
-        if validation_failures(row):
-            failures.append(f"{name} validation_failures={validation_failures(row)}")
+        add_validation_failures(failures, name, row)
         injected = int(row.get("injected") or row.get("injected_503") or 0)
         if injected <= 0:
             failures.append(f"{name} injected failures missing")
@@ -551,8 +556,7 @@ def evaluate_agent_task_summary(
             f"agent task continuity violations {continuity} > "
             f"{args.max_continuity_violations}"
         )
-    if validation_failures(data):
-        failures.append(f"agent task validation_failures={validation_failures(data)}")
+    add_validation_failures(failures, "agent task", data)
 
     required_headers = list(dict.fromkeys(args.required_agent_task_header))
     missing_counts = data.get("missing_router_header_counts") or {}
@@ -599,6 +603,7 @@ def evaluate_cache_aggregate(
         return {"evidence": evidence, "paths": []}, [evidence]
     failures: list[str] = []
     metrics: dict[str, Any] = {"evidence": evidence, "paths": {}}
+    add_validation_failures(failures, "cache aggregate", data)
     paths = cache_paths(data)
     path_summaries = dict(paths)
     has_baseline = any(label == "baseline" for label, _ in paths)
@@ -610,6 +615,7 @@ def evaluate_cache_aggregate(
     required = args.min_cached_token_reporting
     for label, summary in paths:
         name = f"cache {label}"
+        add_validation_failures(failures, name, summary)
         if label == "router":
             add_evidence_identity_failures(failures, args, data, summary, name)
         add_numeric_failure(

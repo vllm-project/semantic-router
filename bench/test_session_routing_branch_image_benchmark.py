@@ -419,6 +419,32 @@ def test_full_branch_image_summary_requires_direct_backend_endpoint_identity(tmp
     ) in summary["validation_failures"]
 
 
+def test_full_branch_image_summary_blocks_cache_runner_validation_failures(tmp_path):
+    benchmark = load_benchmark_module()
+    arg_values = complete_args(tmp_path)
+    invalid_cache = cache_aggregate()
+    invalid_cache["validation_failures"] = [
+        "direct-backend: base_url must differ from router base_url"
+    ]
+    invalid_cache["router"]["validation_failures"] = [
+        "router: cached_token_reporting missing < reported_zero"
+    ]
+    write_json(tmp_path / "cache.json", invalid_cache)
+    args = benchmark.parse_args(arg_values)
+
+    summary = benchmark.build_summary(args)
+
+    assert summary["checks"]["cache_token_probe_ok"] is False
+    assert (
+        "cache aggregate validation_failure: "
+        "direct-backend: base_url must differ from router base_url"
+    ) in summary["validation_failures"]
+    assert (
+        "cache router validation_failure: "
+        "router: cached_token_reporting missing < reported_zero"
+    ) in summary["validation_failures"]
+
+
 def test_full_branch_image_summary_writes_outputs(tmp_path):
     benchmark = load_benchmark_module()
     output_dir = tmp_path / "out"
