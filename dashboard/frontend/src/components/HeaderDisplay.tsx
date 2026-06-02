@@ -118,6 +118,10 @@ const HEADER_INFO: Record<string, { label: string; type: 'info' | 'success' | 'w
     label: 'Conversation Signal',
     type: 'info',
   },
+  'x-vsr-matched-event': {
+    label: 'Event Signal',
+    type: 'info',
+  },
   'x-vsr-matched-projections': {
     label: 'Projection',
     type: 'info',

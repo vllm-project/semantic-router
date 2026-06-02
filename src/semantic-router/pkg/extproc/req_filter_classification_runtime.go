@@ -124,6 +124,7 @@ func logSignalEvaluationResults(ctx *RequestContext, signalLatencyMs int64, sign
 		"pii":            signals.MatchedPIIRules,
 		"kb":             signals.MatchedKBRules,
 		"conversation":   signals.MatchedConversationRules,
+		"event":          signals.MatchedEventRules,
 		"projection":     signals.MatchedProjectionRules,
 		"context_tokens": signals.TokenCount,
 	})

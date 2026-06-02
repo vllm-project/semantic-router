@@ -26,6 +26,7 @@ func TestHeaderConstants(t *testing.T) {
 		{"VSRMatchedJailbreak", VSRMatchedJailbreak, "x-vsr-matched-jailbreak"},
 		{"VSRMatchedPII", VSRMatchedPII, "x-vsr-matched-pii"},
 		{"VSRMatchedReask", VSRMatchedReask, "x-vsr-matched-reask"},
+		{"VSRMatchedEvent", VSRMatchedEvent, "x-vsr-matched-event"},
 		{"VSRMatchedProjection", VSRMatchedProjection, "x-vsr-matched-projections"},
 		// Legacy security headers (kept for backward compatibility)
 		{"VSRPIIViolation", VSRPIIViolation, "x-vsr-pii-violation"},

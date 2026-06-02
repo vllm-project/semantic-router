@@ -293,6 +293,7 @@ func replaySignalState(ctx *RequestContext) routerreplay.Signal {
 		PII:          ctx.VSRMatchedPII,
 		KB:           ctx.VSRMatchedKB,
 		Conversation: ctx.VSRMatchedConversation,
+		Event:        ctx.VSRMatchedEvent,
 	}
 }
 

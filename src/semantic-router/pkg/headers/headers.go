@@ -183,6 +183,10 @@ const (
 	// VSRMatchedConversation contains comma-separated list of matched conversation-shape signal names.
 	VSRMatchedConversation = "x-vsr-matched-conversation"
 
+	// VSRMatchedEvent contains comma-separated list of matched event signal names.
+	// Example: "critical_payment_event,payment_failed"
+	VSRMatchedEvent = "x-vsr-matched-event"
+
 	// VSRMatchedProjection contains comma-separated list of matched projection outputs.
 	// Example: "balance_medium,verification_required"
 	VSRMatchedProjection = "x-vsr-matched-projections"

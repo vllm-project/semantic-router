@@ -78,6 +78,10 @@ const HEADER_INFO: Record<string, { label: string; description: string }> = {
     label: 'Conversation',
     description: 'Conversation structure signal matched (e.g. multi-turn, tool usage)',
   },
+  'x-vsr-matched-event': {
+    label: 'Event',
+    description: 'Event signal matched',
+  },
   'x-vsr-matched-projections': {
     label: 'Projection',
     description: 'Projection mapping output matched',

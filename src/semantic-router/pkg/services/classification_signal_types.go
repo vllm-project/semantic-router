@@ -40,6 +40,7 @@ type MatchedSignals struct {
 	PII          []string `json:"pii,omitempty"`
 	KB           []string `json:"kb,omitempty"`
 	Conversation []string `json:"conversation,omitempty"`
+	Event        []string `json:"event,omitempty"`
 	Projection   []string `json:"projection,omitempty"`
 }
 
