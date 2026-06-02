@@ -85,7 +85,7 @@ func classifierBuildParallelism(stepCount int) int {
 		return 1
 	}
 	backend := embeddingBackendOverride()
-	if backend == "candle" {
+	if backend == "" || backend == "candle" {
 		return 1
 	}
 	parallelism := runtime.NumCPU()

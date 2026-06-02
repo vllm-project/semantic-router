@@ -98,6 +98,13 @@ func appendComplexityTasks(
 }
 
 func complexityWorkerCount(taskCount int) int {
+	if taskCount <= 1 {
+		return 1
+	}
+	backend := embeddingBackendOverride()
+	if backend == "" || backend == "candle" {
+		return 1
+	}
 	numWorkers := runtime.NumCPU() * 2
 	if numWorkers > taskCount {
 		return taskCount

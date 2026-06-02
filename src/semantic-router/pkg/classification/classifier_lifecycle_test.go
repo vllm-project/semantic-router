@@ -73,6 +73,22 @@ func TestNewClassifierWithOptionsDefersRuntimeInitialization(t *testing.T) {
 	}
 }
 
+func TestClassifierBuildParallelismSerializesDefaultCandleRuntime(t *testing.T) {
+	t.Setenv("EMBEDDING_BACKEND_OVERRIDE", "")
+
+	if got := classifierBuildParallelism(8); got != 1 {
+		t.Fatalf("classifierBuildParallelism() = %d, want 1 for default candle runtime", got)
+	}
+}
+
+func TestClassifierBuildParallelismSerializesExplicitCandleRuntime(t *testing.T) {
+	t.Setenv("EMBEDDING_BACKEND_OVERRIDE", "candle")
+
+	if got := classifierBuildParallelism(8); got != 1 {
+		t.Fatalf("classifierBuildParallelism() = %d, want 1 for explicit candle runtime", got)
+	}
+}
+
 func TestInitializeRuntimeWarmsEmbeddingCandidatesAfterBackendInit(t *testing.T) {
 	cfg := &config.RouterConfig{
 		IntelligentRouting: config.IntelligentRouting{
