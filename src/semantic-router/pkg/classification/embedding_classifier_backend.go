@@ -118,7 +118,7 @@ func (c *Classifier) IsKeywordEmbeddingClassifierEnabled() bool {
 
 // initializeKeywordEmbeddingClassifier initializes the keyword-embedding classification model.
 func (c *Classifier) initializeKeywordEmbeddingClassifier() error {
-	if !c.IsKeywordEmbeddingClassifierEnabled() || c.keywordEmbeddingInitializer == nil {
+	if !c.IsKeywordEmbeddingClassifierEnabled() || c.keywordEmbeddingInitializer == nil || c.keywordEmbeddingClassifier == nil {
 		return fmt.Errorf("keyword embedding similarity match is not properly configured")
 	}
 
@@ -136,17 +136,20 @@ func (c *Classifier) initializeKeywordEmbeddingClassifier() error {
 			"model_ref": mmPath,
 			"use_cpu":   c.Config.UseCPU,
 		})
-		return nil
+		return c.keywordEmbeddingClassifier.WarmupCandidateEmbeddings()
 	}
 
-	return c.keywordEmbeddingInitializer.Init(
+	if err := c.keywordEmbeddingInitializer.Init(
 		c.Config.Qwen3ModelPath,
 		c.Config.GemmaModelPath,
 		c.Config.MmBertModelPath,
 		c.Config.UseCPU,
 		c.Config.EmbeddingConfig.Backend,
 		c.Config.EmbeddingConfig.ModelType,
-	)
+	); err != nil {
+		return err
+	}
+	return c.keywordEmbeddingClassifier.WarmupCandidateEmbeddings()
 }
 
 func (c *EmbeddingClassifier) getBackend() string {

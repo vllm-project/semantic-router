@@ -140,6 +140,8 @@ func cosineSimilarity(a, b []float32) float32 {
 
 // GetPreloadStats returns statistics about preloaded embeddings.
 func (c *EmbeddingClassifier) GetPreloadStats() int {
+	c.preloadMu.Lock()
+	defer c.preloadMu.Unlock()
 	return len(c.candidateEmbeddings)
 }
 

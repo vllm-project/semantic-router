@@ -50,7 +50,11 @@ func handleOpenWeb(w http.ResponseWriter, r *http.Request) {
 
 	result, fetchErr := fetchOpenWeb(plan)
 	if fetchErr != nil {
-		log.Printf("[OpenWeb] ❌ All fetch methods failed: %v", fetchErr)
+		log.Printf(
+			"[OpenWeb] All fetch methods failed for %s: %v",
+			redactURLForLog(req.URL),
+			redactURLsForLog(fetchErr.Error()),
+		)
 		writeOpenWebJSON(w, http.StatusBadGateway, OpenWebResponse{
 			URL:   req.URL,
 			Error: fmt.Sprintf("Unable to fetch web content: %v", fetchErr),
@@ -112,7 +116,7 @@ func buildOpenWebFetchPlan(req OpenWebRequest) openWebFetchPlan {
 func logOpenWebFetchPlan(plan openWebFetchPlan) {
 	log.Printf(
 		"[OpenWeb] Request: url=%s, timeout=%v, force_jina=%v, format=%s, max_length=%d, with_images=%v",
-		plan.request.URL,
+		redactURLForLog(plan.request.URL),
 		plan.timeout,
 		plan.forceJina,
 		plan.format,
@@ -126,10 +130,10 @@ func fetchOpenWeb(plan openWebFetchPlan) (*OpenWebResponse, error) {
 		log.Printf("[OpenWeb] Strategy 1: Trying direct fetch...")
 		result, err := fetchWebDirect(plan.request.URL, plan.timeout, plan.maxLength)
 		if err == nil {
-			log.Printf("[OpenWeb] ✅ Direct fetch succeeded")
+			log.Printf("[OpenWeb] Direct fetch succeeded")
 			return result, nil
 		}
-		log.Printf("[OpenWeb] ⚠️ Direct fetch failed: %v", err)
+		log.Printf("[OpenWeb] Direct fetch failed: %v", redactURLsForLog(err.Error()))
 		log.Printf("[OpenWeb] Strategy 2: Falling back to Jina Reader...")
 	} else {
 		log.Printf("[OpenWeb] Skipping direct fetch, using Jina Reader directly")
@@ -146,7 +150,7 @@ func fetchOpenWeb(plan openWebFetchPlan) (*OpenWebResponse, error) {
 		return nil, err
 	}
 
-	log.Printf("[OpenWeb] ✅ Jina Reader fetch succeeded")
+	log.Printf("[OpenWeb] Jina Reader fetch succeeded")
 	return result, nil
 }
 

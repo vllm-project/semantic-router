@@ -49,8 +49,7 @@ func (c *Classifier) getAllSignalTypes() map[string]bool {
 	collectSignalKeys(allSignals, config.SignalTypePII, c.Config.PIIRules, func(r config.PIIRule) string { return r.Name })
 	collectSignalKeys(allSignals, config.SignalTypeKB, c.Config.KBRules, func(r config.KBSignalRule) string { return r.Name })
 	collectSignalKeys(allSignals, config.SignalTypeConversation, c.Config.ConversationRules, func(r config.ConversationRule) string { return r.Name })
-	collectSignalKeys(allSignals, config.SignalTypeSessionMetric, c.Config.SessionMetricRules, func(r config.SessionMetricRule) string { return r.Name })
-	collectSignalKeys(allSignals, config.SignalTypeEventContext, c.Config.EventContextRules, func(r config.EventContextRule) string { return r.Name })
+	collectSignalKeys(allSignals, config.SignalTypeEvent, c.Config.EventRules, func(r config.EventRule) string { return r.Name })
 	for _, mapping := range c.Config.Projections.Mappings {
 		for _, output := range mapping.Outputs {
 			allSignals[strings.ToLower(config.SignalTypeProjection+":"+output.Name)] = true

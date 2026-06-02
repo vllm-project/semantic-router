@@ -3760,6 +3760,51 @@ model_config:
 	// PromptCompressionConfig
 	// -----------------------------------------------------------------------
 	Describe("PromptCompressionConfig", func() {
+		Context("profiles", func() {
+			It("should expose the stable built-in profile list", func() {
+				Expect(ValidPromptCompressionProfiles()).To(Equal([]string{
+					"default",
+					"coding",
+					"medical",
+					"security",
+					"multi_turn",
+				}))
+			})
+
+			It("should normalize omitted and hyphenated profile names", func() {
+				Expect((PromptCompressionConfig{}).NormalizedProfile()).To(Equal("default"))
+				Expect((PromptCompressionConfig{Profile: "Multi-Turn"}).NormalizedProfile()).To(Equal("multi_turn"))
+			})
+
+			It("should reject unknown profile names during config validation", func() {
+				cfg := &RouterConfig{
+					InlineModels: InlineModels{
+						PromptCompression: PromptCompressionConfig{
+							Enabled:   true,
+							Profile:   "finance",
+							MaxTokens: 512,
+						},
+					},
+				}
+				err := validateConfigContracts(cfg, configValidationScopeFile)
+				Expect(err).To(MatchError(ContainSubstring("unknown prompt_compression.profile")))
+				Expect(err).To(MatchError(ContainSubstring("default, coding, medical, security, multi_turn")))
+			})
+
+			It("should accept the multi-turn profile alias during config validation", func() {
+				cfg := &RouterConfig{
+					InlineModels: InlineModels{
+						PromptCompression: PromptCompressionConfig{
+							Enabled:   true,
+							Profile:   "multi-turn",
+							MaxTokens: 512,
+						},
+					},
+				}
+				Expect(validateConfigContracts(cfg, configValidationScopeFile)).To(Succeed())
+			})
+		})
+
 		Context("SkipSignalsSet", func() {
 			It("should default to jailbreak and pii when SkipSignals is empty", func() {
 				pc := PromptCompressionConfig{Enabled: true, MaxTokens: 512}

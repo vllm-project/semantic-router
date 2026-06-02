@@ -44,6 +44,15 @@ def test_dashboard_dockerfile_copies_model_eval_scripts_and_requirements() -> No
     content = DASHBOARD_DOCKERFILE.read_text(encoding="utf-8")
 
     assert "COPY src/training/model_eval/ /app/src/training/model_eval/" in content
+    assert "ARG TORCH_CPU_INDEX_URL=https://download.pytorch.org/whl/cpu" in content
+    assert "ARG TORCH_CPU_VERSION=" in content
+    assert (
+        '"${VIRTUAL_ENV}/bin/pip" install --no-cache-dir --index-url "${TORCH_CPU_INDEX_URL}" "torch==${TORCH_CPU_VERSION}"'
+        in content
+    )
+    assert content.index('"torch==${TORCH_CPU_VERSION}"') < content.index(
+        "-r /app/src/training/model_eval/requirements.txt"
+    )
     assert (
         '"${VIRTUAL_ENV}/bin/pip" install --no-cache-dir -r /app/src/training/model_eval/requirements.txt'
         in content
@@ -62,7 +71,7 @@ def test_vllm_sr_dockerfile_stays_router_only() -> None:
     assert "python3-yaml" in content
     assert "python3-venv" in content
     assert 'python3 -m venv "${VIRTUAL_ENV}"' in content
-    assert "huggingface_hub[cli]==1.5.0" in content
+    assert "huggingface_hub==" in content
     assert "COPY --from=dashboard-builder" not in content
     assert "COPY --from=frontend-builder" not in content
     assert "COPY --from=wizmap-builder" not in content

@@ -34,10 +34,16 @@ func testDashboardConfigVersions(ctx context.Context, client *kubernetes.Clients
 	}
 
 	httpClient := &http.Client{Timeout: 10 * time.Second}
+	token, err := dashboardAuthToken(ctx, httpClient, fmt.Sprintf("http://localhost:%s", localPort), opts.Verbose)
+	if err != nil {
+		return err
+	}
+
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 	if err != nil {
 		return fmt.Errorf("create versions request: %w", err)
 	}
+	setDashboardAuth(req, token)
 
 	resp, err := httpClient.Do(req)
 	if err != nil {

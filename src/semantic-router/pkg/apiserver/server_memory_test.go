@@ -144,6 +144,22 @@ func TestResolveClassificationServicePreservesLegacyGlobalFallback(t *testing.T)
 	}
 }
 
+func TestEnsureClassificationServiceWaitsForRuntimeRegistry(t *testing.T) {
+	cfg := &config.RouterConfig{}
+	registry := routerruntime.NewRegistry(cfg)
+
+	svc := ensureClassificationService(cfg, registry, nil)
+	if svc == nil {
+		t.Fatal("ensureClassificationService() returned nil, want placeholder service")
+	}
+	if svc.HasClassifier() {
+		t.Fatal("placeholder service unexpectedly has a classifier before runtime registry publication")
+	}
+	if got := registry.ClassificationService(); got != nil {
+		t.Fatalf("runtime registry classification service = %v, want nil before router runtime publication", got)
+	}
+}
+
 func TestBuildConfigUpdaterPreservesLegacyGlobalFallback(t *testing.T) {
 	globalCfg := &config.RouterConfig{ConfigSource: config.ConfigSourceFile}
 	nextCfg := &config.RouterConfig{ConfigSource: config.ConfigSourceKubernetes}

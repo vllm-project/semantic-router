@@ -90,6 +90,11 @@ var (
 			validate: validateAdvancedToolFilteringConfig,
 			scopes:   configValidationScopeFile | configValidationScopeKubernetes,
 		},
+		{
+			name:     "prompt_compression",
+			validate: validatePromptCompressionContracts,
+			scopes:   configValidationScopeFile | configValidationScopeKubernetes,
+		},
 	}
 )
 

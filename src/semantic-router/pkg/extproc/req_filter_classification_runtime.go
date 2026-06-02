@@ -74,14 +74,17 @@ func (r *OpenAIRouter) evaluateSignalsForDecision(
 }
 
 func ensureContextTokenCount(ctx *RequestContext, signalInput signalEvaluationInput) {
-	if ctx == nil || ctx.VSRContextTokenCount > 0 {
+	if ctx == nil {
 		return
 	}
-	text := strings.TrimSpace(signalInput.allMessagesText)
+	text := contextTokenText(signalInput)
 	if text == "" {
-		text = strings.TrimSpace(signalInput.evaluationText)
+		return
 	}
-	if text == "" {
+	if ctx.VSRContextTextBytes <= 0 {
+		ctx.VSRContextTextBytes = len(text)
+	}
+	if ctx.VSRContextTokenCount > 0 {
 		return
 	}
 	counter := classification.CharacterBasedTokenCounter{}
@@ -90,6 +93,14 @@ func ensureContextTokenCount(ctx *RequestContext, signalInput signalEvaluationIn
 		return
 	}
 	ctx.VSRContextTokenCount = count
+}
+
+func contextTokenText(signalInput signalEvaluationInput) string {
+	text := strings.TrimSpace(signalInput.allMessagesText)
+	if text == "" {
+		text = strings.TrimSpace(signalInput.evaluationText)
+	}
+	return text
 }
 
 func logSignalEvaluationResults(ctx *RequestContext, signalLatencyMs int64, signals *classification.SignalResults) {

@@ -20,6 +20,8 @@ export type SignalType =
   | 'jailbreak'
   | 'pii'
   | 'kb'
+  | 'conversation'
+  | 'event'
   | 'projection'
 
 export interface SignalConfig {
@@ -179,14 +181,41 @@ export type AlgorithmType =
   | 'automix'
   | 'hybrid'
   | 'remom'
+  | 'rl_driven'
+  | 'gmtrouter'
   | 'latency_aware'
+  | 'knn'
+  | 'kmeans'
+  | 'svm'
+  | 'mlp'
+  | 'multi_factor'
+  | 'session_aware'
 
 export interface AlgorithmConfig {
   type: AlgorithmType
   confidence?: ConfidenceAlgorithmConfig
   concurrent?: ConcurrentAlgorithmConfig
   latency_aware?: LatencyAwareAlgorithmConfig
-  autoMix?: AutoMixConfig
+  ratings?: GenericAlgorithmConfig
+  remom?: GenericAlgorithmConfig
+  elo?: GenericAlgorithmConfig
+  router_dc?: GenericAlgorithmConfig
+  automix?: GenericAlgorithmConfig
+  autoMix?: GenericAlgorithmConfig
+  hybrid?: GenericAlgorithmConfig
+  rl_driven?: GenericAlgorithmConfig
+  gmtrouter?: GenericAlgorithmConfig
+  knn?: GenericAlgorithmConfig
+  kmeans?: GenericAlgorithmConfig
+  svm?: GenericAlgorithmConfig
+  mlp?: GenericAlgorithmConfig
+  multi_factor?: GenericAlgorithmConfig
+  session_aware?: GenericAlgorithmConfig
+}
+
+export type RawDecisionAlgorithmConfig = Omit<Partial<AlgorithmConfig>, 'type'> & {
+  type: string
+  autoMix?: GenericAlgorithmConfig
 }
 
 export interface ConfidenceAlgorithmConfig {
@@ -208,8 +237,7 @@ export interface LatencyAwareAlgorithmConfig {
   description?: string
 }
 
-export interface AutoMixConfig {
-  // POMDP cascade config
+export interface GenericAlgorithmConfig {
   [key: string]: unknown
 }
 
@@ -227,6 +255,7 @@ export type PluginType =
   | 'request_params'
   | 'response_jailbreak'
   | 'tools'
+  | 'tool_selection'
 
 export interface PluginConfig {
   type: PluginType
@@ -496,6 +525,19 @@ export interface ConfigData {
     match?: 'best' | 'threshold'
     description?: string
   }>
+  conversation?: Array<{
+    name: string
+    description?: string
+    feature?: Record<string, unknown>
+    predicate?: Record<string, unknown>
+  }>
+  events?: Array<{
+    name: string
+    event_types?: string[]
+    severities?: string[]
+    action_codes?: string[]
+    temporal?: boolean
+  }>
   projections?: {
     scores?: Array<{
       name: string
@@ -635,26 +677,26 @@ export interface ConfigData {
       match?: 'best' | 'threshold'
       description?: string
     }>
+    conversation?: Array<{
+      name: string
+      description?: string
+      feature?: Record<string, unknown>
+      predicate?: Record<string, unknown>
+    }>
+    events?: Array<{
+      name: string
+      event_types?: string[]
+      severities?: string[]
+      action_codes?: string[]
+      temporal?: boolean
+    }>
   }
   decisions?: Array<{
     name: string
     description?: string
     priority?: number
     rules?: RawRuleCombination
-    algorithm?: {
-      type: string
-      confidence?: {
-        threshold?: number
-      }
-      concurrent?: {
-        timeout_seconds?: number
-      }
-      latency_aware?: {
-        tpot_percentile?: number
-        ttft_percentile?: number
-        description?: string
-      }
-    }
+    algorithm?: RawDecisionAlgorithmConfig
     modelRefs?: Array<{
       model: string
       use_reasoning?: boolean

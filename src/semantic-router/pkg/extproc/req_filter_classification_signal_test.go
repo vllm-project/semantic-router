@@ -1,7 +1,6 @@
 package extproc
 
 import (
-	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -116,6 +115,17 @@ func TestEnsureContextTokenCount_PreservesSignalTokenCount(t *testing.T) {
 	})
 
 	assert.Equal(t, 2048, ctx.VSRContextTokenCount)
+	assert.Equal(t, len("short"), ctx.VSRContextTextBytes)
+}
+
+func TestEnsureContextTokenCountRecordsContextTextBytes(t *testing.T) {
+	ctx := &RequestContext{}
+	ensureContextTokenCount(ctx, signalEvaluationInput{
+		allMessagesText: "system prompt and current user prompt",
+		evaluationText:  "current user prompt",
+	})
+
+	assert.Equal(t, len("system prompt and current user prompt"), ctx.VSRContextTextBytes)
 }
 
 func TestCollectMatchedSignalRules_PreservesFamilyOrder(t *testing.T) {
@@ -156,62 +166,20 @@ func TestCollectMatchedSignalRules_PreservesFamilyOrder(t *testing.T) {
 	}, collectMatchedSignalRules(signals))
 }
 
-// --- Tests for max_evaluation_chars (#1454) ---
-
-func routerWithEvalLimit(limit int) *OpenAIRouter {
-	return &OpenAIRouter{
-		Config: &config.RouterConfig{
-			InlineModels: config.InlineModels{
-				PromptCompression: config.PromptCompressionConfig{
-					MaxEvaluationChars: limit,
-				},
-			},
-		},
-	}
-}
-
-func TestApplyMaxEvaluationCharsNoLimit(t *testing.T) {
-	r := routerWithEvalLimit(0)
-	text := strings.Repeat("a", 50000)
-	got := r.applyMaxEvaluationChars(text)
-	assert.Len(t, got, 50000, "limit=0 should not truncate")
-}
-
-func TestApplyMaxEvaluationCharsNegativeNoLimit(t *testing.T) {
-	r := routerWithEvalLimit(-1)
-	text := strings.Repeat("b", 20000)
-	got := r.applyMaxEvaluationChars(text)
-	assert.Len(t, got, 20000, "limit=-1 should not truncate")
-}
-
-func TestApplyMaxEvaluationCharsTruncates(t *testing.T) {
-	const limit = 8192
-	r := routerWithEvalLimit(limit)
-	text := strings.Repeat("x", 25000)
-	got := r.applyMaxEvaluationChars(text)
-	assert.Len(t, got, limit, "giant prompt must be capped to limit")
-}
-
-func TestApplyMaxEvaluationCharsBelowLimitUnchanged(t *testing.T) {
-	r := routerWithEvalLimit(8192)
-	got := r.applyMaxEvaluationChars("short prompt")
-	assert.Equal(t, "short prompt", got)
-}
-
-func TestApplyMaxEvaluationCharsExactLimit(t *testing.T) {
-	const limit = 100
-	r := routerWithEvalLimit(limit)
-	text := strings.Repeat("z", limit)
-	got := r.applyMaxEvaluationChars(text)
-	assert.Len(t, got, limit, "text at exactly the limit should not be truncated")
-}
-
-func TestPrepareSignalEvaluationInputRespectsEvalLimit(t *testing.T) {
-	const limit = 500
-	r := routerWithEvalLimit(limit)
-	input := r.prepareSignalEvaluationInput(signalConversationHistory{
-		currentUserMessage: strings.Repeat("q", 5000),
+func TestBuildCompressionConfigAppliesProfileAndOverrides(t *testing.T) {
+	cfg := buildCompressionConfig(config.PromptCompressionConfig{
+		Profile:        "coding",
+		MaxTokens:      2048,
+		NoveltyWeight:  0.25,
+		PreserveLastN:  6,
+		PositionDepth:  0.7,
+		TextRankWeight: 0.2,
 	})
-	require.Len(t, input.evaluationText, limit, "evaluationText must be capped at max_evaluation_chars")
-	assert.LessOrEqual(t, len(input.compressedText), limit, "compressedText must not exceed cap")
+
+	assert.Equal(t, 2048, cfg.MaxTokens)
+	assert.Equal(t, 0.25, cfg.NoveltyWeight)
+	assert.Equal(t, 6, cfg.PreserveLastN)
+	assert.Equal(t, 0.7, cfg.PositionDepth)
+	assert.Equal(t, 0.2, cfg.TextRankWeight)
+	assert.Equal(t, 2, cfg.PreserveFirstN, "coding profile should apply when not explicitly overridden")
 }

@@ -160,6 +160,7 @@ func convertSignals(signals v1alpha1.Signals) config.CanonicalSignals {
 		Structure:    make([]config.StructureRule, 0, len(signals.Structure)),
 		FactCheck:    make([]config.FactCheckRule, 0, len(signals.FactCheckRules)),
 		Conversation: make([]config.ConversationRule, 0, len(signals.Conversation)),
+		EventRules:   make([]config.EventRule, 0, len(signals.Events)),
 	}
 
 	for _, signal := range signals.Keywords {
@@ -240,6 +241,23 @@ func convertSignals(signals v1alpha1.Signals) config.CanonicalSignals {
 		})
 	}
 
+	converted.EventRules = convertEventSignals(signals.Events)
+
+	return converted
+}
+
+func convertEventSignals(rules []v1alpha1.EventSignal) []config.EventRule {
+	converted := make([]config.EventRule, 0, len(rules))
+	for _, rule := range rules {
+		converted = append(converted, config.EventRule{
+			Name:        rule.Name,
+			Description: rule.Description,
+			EventTypes:  append([]string(nil), rule.EventTypes...),
+			Severities:  append([]string(nil), rule.Severities...),
+			ActionCodes: append([]string(nil), rule.ActionCodes...),
+			Temporal:    rule.Temporal,
+		})
+	}
 	return converted
 }
 

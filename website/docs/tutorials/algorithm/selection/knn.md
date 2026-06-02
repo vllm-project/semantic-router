@@ -66,21 +66,20 @@ When routing should follow precedent from similar historical prompts, hand-writt
 ```yaml
 algorithm:
   type: knn
-  knn:
-    k: 5                                # Number of neighbors
-    pretrained_path: .cache/ml-models/knn_model.json  # Pre-trained model
 ```
 
-### Global ML Settings (optional)
+### Global ML Settings
 
 ```yaml
-model_selection:
-  ml:
-    models_path: ".cache/ml-models"
-    embedding_dim: 768
-    knn:
-      k: 5
-      pretrained_path: .cache/ml-models/knn_model.json
+global:
+  router:
+    model_selection:
+      ml:
+        models_path: ".cache/ml-models"
+        embedding_dim: 768
+        knn:
+          k: 5
+          pretrained_path: .cache/ml-models/knn_model.json
 ```
 
 ### Parameters

@@ -181,7 +181,7 @@ spec:
                                 minLength: 1
                                 type: string
                               type:
-                                description: Type defines the type of signal (keyword/embedding/domain/fact_check/context/structure/conversation)
+                                description: Type defines the type of signal (keyword/embedding/domain/fact_check/context/structure/conversation/event)
                                 enum:
                                 - keyword
                                 - embedding
@@ -190,6 +190,7 @@ spec:
                                 - context
                                 - structure
                                 - conversation
+                                - event
                                 type: string
                             required:
                             - name
@@ -387,6 +388,38 @@ spec:
                       - candidates
                       - name
                       - threshold
+                      type: object
+                    maxItems: 100
+                    type: array
+                  events:
+                    description: Events defines structured event metadata routing
+                      signals.
+                    items:
+                      description: |-
+                        EventSignal defines a structured event metadata routing signal.
+                        It detects event types, severities, action codes, and temporal urgency
+                        from incident, audit, alert, or workflow payloads in the request.
+                      properties:
+                        actionCodes:
+                          items:
+                            type: string
+                          type: array
+                        description:
+                          type: string
+                        eventTypes:
+                          items:
+                            type: string
+                          type: array
+                        name:
+                          type: string
+                        severities:
+                          items:
+                            type: string
+                          type: array
+                        temporal:
+                          type: boolean
+                      required:
+                      - name
                       type: object
                     maxItems: 100
                     type: array

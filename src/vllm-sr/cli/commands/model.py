@@ -4,11 +4,14 @@ from __future__ import annotations
 
 import sys
 from pathlib import Path
+from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 
 from cli.parser import ConfigParseError, parse_user_config
 from cli.utils import get_logger
 
 log = get_logger(__name__)
+
+_SENSITIVE_QUERY_KEY_FRAGMENTS = ("key", "token", "secret", "password")
 
 
 def model_list_command(config_path: str = "config.yaml") -> None:
@@ -71,7 +74,7 @@ def _print_provider_models(user_config) -> None:
                 # Never print api_key / api_key_env values; expose only the
                 # transport identity so credentials cannot leak via CLI output.
                 provider = ref.provider or "-"
-                base_url = ref.base_url or ref.endpoint or "-"
+                base_url = _redact_url(ref.base_url or ref.endpoint or "-")
                 label = ref.name or "(unnamed)"
                 log.info(
                     f"        * {label}  provider={provider}  base_url={base_url}  "
@@ -103,3 +106,30 @@ def _print_model_cards(user_config) -> None:
         if card.loras:
             lora_names = ", ".join(a.name for a in card.loras)
             log.info(f"      loras:           {lora_names}")
+
+
+def _redact_url(value: str) -> str:
+    """Return a display-safe URL without embedded credentials."""
+    if value == "-":
+        return value
+
+    try:
+        parsed = urlsplit(value)
+    except ValueError:
+        return value
+
+    netloc = parsed.netloc
+    if "@" in netloc:
+        netloc = "***@" + netloc.rsplit("@", 1)[1]
+
+    query_items = []
+    for key, item_value in parse_qsl(parsed.query, keep_blank_values=True):
+        if any(fragment in key.lower() for fragment in _SENSITIVE_QUERY_KEY_FRAGMENTS):
+            query_items.append((key, "***"))
+        else:
+            query_items.append((key, item_value))
+
+    redacted_query = urlencode(query_items, doseq=True, safe="*")
+    return urlunsplit(
+        (parsed.scheme, netloc, parsed.path, redacted_query, parsed.fragment)
+    )

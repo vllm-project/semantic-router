@@ -1,7 +1,8 @@
 routing:
   signals:
-    event_context_rules:
+    events:
       - name: critical_payment_event
+        description: Critical payment or transaction events that need incident-grade routing.
         event_types:
           - payment_failed
           - transaction_declined

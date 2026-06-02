@@ -28,7 +28,7 @@ type jinaReaderResponse struct {
 }
 
 func fetchWebWithJina(targetURL string, timeout time.Duration, outputFormat string, maxLength int, withImages bool) (*OpenWebResponse, error) {
-	log.Printf("[OpenWeb:Jina] Starting fetch: %s", targetURL)
+	log.Printf("[OpenWeb:Jina] Starting fetch: %s", redactURLForLog(targetURL))
 	startTime := time.Now()
 
 	req, err := newJinaRequest(targetURL, timeout, outputFormat, withImages)
@@ -62,13 +62,13 @@ func fetchWebWithJina(targetURL string, timeout time.Duration, outputFormat stri
 		log.Printf("[OpenWeb:Jina] Content truncated to %d characters", maxLength)
 	}
 
-	log.Printf("[OpenWeb:Jina] ✅ Fetch succeeded, total elapsed: %v", time.Since(startTime))
+	log.Printf("[OpenWeb:Jina] Fetch succeeded, total elapsed: %v", time.Since(startTime))
 	return result, nil
 }
 
 func newJinaRequest(targetURL string, timeout time.Duration, outputFormat string, withImages bool) (*http.Request, error) {
 	jinaURL := fmt.Sprintf("%s/%s", jinaReaderBaseURL, targetURL)
-	log.Printf("[OpenWeb:Jina] Jina URL: %s", jinaURL)
+	log.Printf("[OpenWeb:Jina] Jina target: %s", redactURLForLog(targetURL))
 
 	req, err := http.NewRequest("GET", jinaURL, nil)
 	if err != nil {

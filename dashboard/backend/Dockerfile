@@ -95,6 +95,8 @@ RUN CGO_ENABLED=1 GOOS=${TARGETOS} GOARCH=${TARGETARCH} go build -ldflags="-w -s
 
 # Stage 3: Final runtime image
 FROM python:3.11-slim-bookworm
+ARG TORCH_CPU_INDEX_URL=https://download.pytorch.org/whl/cpu
+ARG TORCH_CPU_VERSION=2.12.0
 ENV PYTHONPATH=/app
 ENV VIRTUAL_ENV=/opt/vllm-sr-dashboard-venv
 ENV PATH="${VIRTUAL_ENV}/bin:${PATH}"
@@ -130,6 +132,7 @@ COPY dashboard/backend/skillpacks/ /app/skills/
 COPY dashboard/backend/entrypoint.sh /app/entrypoint.sh
 RUN python3 -m venv "${VIRTUAL_ENV}" && \
     "${VIRTUAL_ENV}/bin/pip" install --no-cache-dir --upgrade pip && \
+    "${VIRTUAL_ENV}/bin/pip" install --no-cache-dir --index-url "${TORCH_CPU_INDEX_URL}" "torch==${TORCH_CPU_VERSION}" && \
     "${VIRTUAL_ENV}/bin/pip" install --no-cache-dir -r /app/requirements.txt && \
     "${VIRTUAL_ENV}/bin/pip" install --no-cache-dir -r /app/src/training/model_eval/requirements.txt && \
     chmod +x /app/entrypoint.sh /app/start-dashboard.sh

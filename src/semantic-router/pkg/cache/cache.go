@@ -120,3 +120,22 @@ func normalizeEmbeddingModel(model string) string {
 	}
 	return normalized
 }
+
+func semanticCacheEmbeddingDimension(configured int, embeddingModel string) int {
+	if configured > 0 {
+		return configured
+	}
+
+	switch normalizeEmbeddingModel(embeddingModel) {
+	case "qwen3":
+		return 1024
+	case "gemma":
+		return 768
+	case "mmbert":
+		return 768
+	case "multimodal":
+		return 384
+	default:
+		return 384
+	}
+}

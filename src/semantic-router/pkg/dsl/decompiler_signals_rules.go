@@ -11,6 +11,9 @@ func (d *decompiler) decompileDomainSignals() {
 		if len(cat.MMLUCategories) > 0 {
 			d.write("  mmlu_categories: %s\n", formatStringArray(cat.MMLUCategories))
 		}
+		if len(cat.ModelScores) > 0 {
+			d.write("  model_scores: %s\n", formatPluginConfigValue(modelScoresToList(cat.ModelScores)))
+		}
 		d.write("}\n\n")
 	}
 }
@@ -60,6 +63,9 @@ func (d *decompiler) decompileEmbeddingSignals() {
 		}
 		if emb.AggregationMethodConfiged != "" {
 			d.write("  aggregation_method: %q\n", string(emb.AggregationMethodConfiged))
+		}
+		if emb.QueryModality != "" && emb.QueryModality != config.QueryModalityText {
+			d.write("  query_modality: %q\n", string(emb.QueryModality))
 		}
 		d.write("}\n\n")
 	}
@@ -180,11 +186,11 @@ func (d *decompiler) decompileComplexitySignals() {
 		if comp.Composer != nil {
 			d.write("  composer: %s\n", decompileComposerObj(comp.Composer))
 		}
-		if len(comp.Hard.Candidates) > 0 {
-			d.write("  hard: { candidates: %s }\n", formatStringArray(comp.Hard.Candidates))
+		if len(comp.Hard.Candidates) > 0 || len(comp.Hard.ImageCandidates) > 0 {
+			d.write("  hard: %s\n", formatPluginConfigValue(complexityCandidatesToMap(comp.Hard)))
 		}
-		if len(comp.Easy.Candidates) > 0 {
-			d.write("  easy: { candidates: %s }\n", formatStringArray(comp.Easy.Candidates))
+		if len(comp.Easy.Candidates) > 0 || len(comp.Easy.ImageCandidates) > 0 {
+			d.write("  easy: %s\n", formatPluginConfigValue(complexityCandidatesToMap(comp.Easy)))
 		}
 		d.write("}\n\n")
 	}
@@ -278,50 +284,49 @@ func (d *decompiler) decompileKBSignals() {
 	}
 }
 
-func (d *decompiler) decompileSessionMetricSignals() {
-	for _, m := range d.cfg.SessionMetricRules {
-		d.decompileSessionMetricRule(m)
+func (d *decompiler) decompileEventSignals() {
+	for _, rule := range d.cfg.EventRules {
+		d.write("SIGNAL event %s {\n", quoteName(rule.Name))
+		if len(rule.EventTypes) > 0 {
+			d.write("  event_types: %s\n", formatStringArray(rule.EventTypes))
+		}
+		if len(rule.Severities) > 0 {
+			d.write("  severities: %s\n", formatStringArray(rule.Severities))
+		}
+		if len(rule.ActionCodes) > 0 {
+			d.write("  action_codes: %s\n", formatStringArray(rule.ActionCodes))
+		}
+		if rule.Temporal {
+			d.write("  temporal: true\n")
+		}
+		d.write("}\n\n")
 	}
 }
 
-func (d *decompiler) decompileSessionMetricRule(m config.SessionMetricRule) {
-	d.write("SIGNAL session_metric %s {\n", quoteName(m.Name))
-	kind := inferSessionMetricKind(&m)
-	d.write("  kind: %q\n", kind)
-	d.writeSessionMetricKindFields(&m, kind)
-	d.write("}\n\n")
+func modelScoresToList(scores []config.ModelScore) []interface{} {
+	items := make([]interface{}, 0, len(scores))
+	for _, score := range scores {
+		item := map[string]interface{}{
+			"model": score.Model,
+			"score": score.Score,
+		}
+		if score.UseReasoning != nil {
+			item["use_reasoning"] = *score.UseReasoning
+		}
+		items = append(items, item)
+	}
+	return items
 }
 
-func (d *decompiler) writeSessionMetricKindFields(m *config.SessionMetricRule, kind string) {
-	if kind == "state" {
-		d.writeSessionMetricStateFields(m)
-		return
+func complexityCandidatesToMap(candidates config.ComplexityCandidates) map[string]interface{} {
+	fields := make(map[string]interface{})
+	if len(candidates.Candidates) > 0 {
+		fields["candidates"] = candidates.Candidates
 	}
-	d.writeSessionMetricLookupFields(m)
-}
-
-func (d *decompiler) writeSessionMetricStateFields(m *config.SessionMetricRule) {
-	if m.State != "" {
-		d.write("  state: %q\n", m.State)
+	if len(candidates.ImageCandidates) > 0 {
+		fields["image_candidates"] = candidates.ImageCandidates
 	}
-	if m.Normalize != "" {
-		d.write("  normalize: %q\n", m.Normalize)
-	}
-	if m.Min != nil {
-		d.write("  min: %v\n", *m.Min)
-	}
-	if m.Max != nil {
-		d.write("  max: %v\n", *m.Max)
-	}
-}
-
-func (d *decompiler) writeSessionMetricLookupFields(m *config.SessionMetricRule) {
-	if m.Table != "" {
-		d.write("  table: %q\n", m.Table)
-	}
-	if len(m.Key) > 0 {
-		d.write("  key: %s\n", formatStringArray(m.Key))
-	}
+	return fields
 }
 
 func (d *decompiler) decompileProjectionSignals() {

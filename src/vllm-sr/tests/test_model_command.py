@@ -133,7 +133,14 @@ def test_model_list_prints_provider_models_and_model_cards(tmp_path: Path, caplo
 
 def test_model_list_never_leaks_api_key_or_env_var(tmp_path: Path, caplog):
     runner = CliRunner()
-    config_path = _write_config(tmp_path)
+    config_data = yaml.safe_load(yaml.safe_dump(_VALID_CONFIG, sort_keys=False))
+    config_data["providers"]["models"][0]["backend_refs"][0][
+        "base_url"
+    ] = "https://sk-url-secret@api.openai.com/v1?api_key=SECRET_QUERY_KEY&project=public"
+    config_data["providers"]["models"][1]["backend_refs"][0][
+        "base_url"
+    ] = "http://localhost:8000/v1?token=SECRET_QUERY_TOKEN&tenant=dev"
+    config_path = _write_config(tmp_path, config_data)
 
     with caplog.at_level("INFO"):
         result = runner.invoke(main, ["model", "list", "--config", str(config_path)])
@@ -143,6 +150,25 @@ def test_model_list_never_leaks_api_key_or_env_var(tmp_path: Path, caplog):
     # The whole point of the command: inspection without credential exposure.
     assert "SECRET_API_KEY_DO_NOT_LEAK" not in combined
     assert "SECRET_ENV_VAR_NAME_DO_NOT_LEAK" not in combined
+    assert "sk-url-secret" not in combined
+    assert "SECRET_QUERY_KEY" not in combined
+    assert "SECRET_QUERY_TOKEN" not in combined
+    assert "https://***@api.openai.com/v1?api_key=***&project=public" in combined
+    assert "http://localhost:8000/v1?token=***&tenant=dev" in combined
+
+
+def test_model_list_tolerates_malformed_backend_url(tmp_path: Path, caplog):
+    runner = CliRunner()
+    config_data = yaml.safe_load(yaml.safe_dump(_VALID_CONFIG, sort_keys=False))
+    config_data["providers"]["models"][0]["backend_refs"][0]["base_url"] = "http://[::1"
+    config_path = _write_config(tmp_path, config_data)
+
+    with caplog.at_level("INFO"):
+        result = runner.invoke(main, ["model", "list", "--config", str(config_path)])
+
+    assert result.exit_code == 0
+    combined = "\n".join(record.message for record in caplog.records)
+    assert "http://[::1" in combined
 
 
 def test_model_list_reports_missing_config(tmp_path: Path, caplog):

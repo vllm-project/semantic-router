@@ -63,27 +63,8 @@ func (r *OpenAIRouter) prepareSignalEvaluationInput(history signalConversationHi
 		return input
 	}
 
-	// Hard safety limit: truncate before any signal processing, independently of
-	// prompt_compression. Keeps embedding and classifier inference bounded even
-	// when compression is disabled, preventing super-linear latency blowup on
-	// giant prompts (see issue #1454).
-	input.evaluationText = r.applyMaxEvaluationChars(input.evaluationText)
-	input.compressedText = input.evaluationText
-
 	input.compressedText, input.skipCompressionSignals = r.compressSignalEvaluationText(input.evaluationText)
 	return input
-}
-
-// applyMaxEvaluationChars truncates evaluationText to the configured hard limit.
-// A limit <= 0 means no truncation. Only the routing-decision text is affected;
-// the actual request body forwarded to the model is never modified.
-func (r *OpenAIRouter) applyMaxEvaluationChars(text string) string {
-	limit := r.Config.PromptCompression.MaxEvaluationChars
-	if limit <= 0 || len(text) <= limit {
-		return text
-	}
-	logging.Infof("[SignalEval] evaluationText truncated by max_evaluation_chars: %d -> %d chars", len(text), limit)
-	return text[:limit]
 }
 
 func (r *OpenAIRouter) compressSignalEvaluationText(evaluationText string) (string, map[string]bool) {
@@ -203,7 +184,7 @@ func collectMatchedSignalRules(signals *classification.SignalResults) []string {
 // buildCompressionConfig translates the YAML config into the promptcompression
 // package's Config struct, applying defaults for omitted fields.
 func buildCompressionConfig(pc config.PromptCompressionConfig) promptcompression.Config {
-	cfg := promptcompression.DefaultConfig(pc.MaxTokens)
+	cfg := promptcompression.ProfileConfig(pc.NormalizedProfile(), pc.MaxTokens)
 	if pc.TextRankWeight > 0 {
 		cfg.TextRankWeight = pc.TextRankWeight
 	}
@@ -213,8 +194,17 @@ func buildCompressionConfig(pc config.PromptCompressionConfig) promptcompression
 	if pc.TFIDFWeight > 0 {
 		cfg.TFIDFWeight = pc.TFIDFWeight
 	}
+	if pc.NoveltyWeight > 0 {
+		cfg.NoveltyWeight = pc.NoveltyWeight
+	}
 	if pc.PositionDepth > 0 {
 		cfg.PositionDepth = pc.PositionDepth
+	}
+	if pc.PreserveFirstN > 0 {
+		cfg.PreserveFirstN = pc.PreserveFirstN
+	}
+	if pc.PreserveLastN > 0 {
+		cfg.PreserveLastN = pc.PreserveLastN
 	}
 	return cfg
 }

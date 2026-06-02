@@ -90,6 +90,7 @@ SIGNAL_FAMILY_SPECS = (
     SignalFamilySpec("pii", "pii", "pii", "pii"),
     SignalFamilySpec("kb", "kb", "kb", "kb"),
     SignalFamilySpec("conversation", "conversation", "conversation", "conversation"),
+    SignalFamilySpec("events", "events", "event", "events"),
 )
 
 LEGACY_SIGNAL_KEY_TO_CANONICAL = {

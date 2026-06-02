@@ -110,11 +110,7 @@ func (c *QdrantCache) ensureCollection() error {
 		return nil
 	}
 
-	testEmb, err := c.getEmbedding("test")
-	if err != nil {
-		return fmt.Errorf("failed to detect embedding dimension: %w", err)
-	}
-	dim := len(testEmb)
+	dim := semanticCacheEmbeddingDimension(0, c.embeddingModel)
 
 	if err := c.client.CreateCollection(ctx, &qdrant.CreateCollection{
 		CollectionName: c.collectionName,
@@ -147,25 +143,25 @@ func (c *QdrantCache) getEmbedding(text string) ([]float32, error) {
 
 	switch modelName {
 	case "qwen3":
-		out, err := candle_binding.GetEmbeddingBatched(text, "qwen3", 0)
+		out, err := candle_binding.GetEmbeddingBatched(text, "qwen3", c.embeddingDimension())
 		if err != nil {
 			return nil, err
 		}
 		return out.Embedding, nil
 	case "gemma":
-		out, err := candle_binding.GetEmbeddingWithModelType(text, "gemma", 0)
+		out, err := candle_binding.GetEmbeddingWithModelType(text, "gemma", c.embeddingDimension())
 		if err != nil {
 			return nil, err
 		}
 		return out.Embedding, nil
 	case "mmbert":
-		out, err := candle_binding.GetEmbedding2DMatryoshka(text, "mmbert", 0, 0)
+		out, err := candle_binding.GetEmbeddingWithModelType(text, "mmbert", c.embeddingDimension())
 		if err != nil {
 			return nil, err
 		}
 		return out.Embedding, nil
 	case "multimodal":
-		out, err := candle_binding.GetEmbeddingWithModelType(text, "multimodal", 384)
+		out, err := candle_binding.GetEmbeddingWithModelType(text, "multimodal", c.embeddingDimension())
 		if err != nil {
 			return nil, err
 		}
@@ -175,6 +171,13 @@ func (c *QdrantCache) getEmbedding(text string) ([]float32, error) {
 	default:
 		return nil, fmt.Errorf("unsupported embedding model: %s (must be 'bert', 'qwen3', 'gemma', 'mmbert', or 'multimodal')", c.embeddingModel)
 	}
+}
+
+func (c *QdrantCache) embeddingDimension() int {
+	if c == nil {
+		return semanticCacheEmbeddingDimension(0, "")
+	}
+	return semanticCacheEmbeddingDimension(0, c.embeddingModel)
 }
 
 // Qdrant only allows UUIDs and +ve integers.

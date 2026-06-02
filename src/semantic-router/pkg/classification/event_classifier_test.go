@@ -6,19 +6,19 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 )
 
-func TestEventContextClassifier_NoRules(t *testing.T) {
-	ec := NewEventContextClassifier(nil)
+func TestEventClassifier_NoRules(t *testing.T) {
+	ec := NewEventClassifier(nil)
 	matches := ec.Classify("payment_failed critical TXN_DECLINE urgent")
 	if len(matches) != 0 {
 		t.Fatalf("expected no matches with no rules, got %d", len(matches))
 	}
 }
 
-func TestEventContextClassifier_EventTypeMatch(t *testing.T) {
-	rules := []config.EventContextRule{
+func TestEventClassifier_EventTypeMatch(t *testing.T) {
+	rules := []config.EventRule{
 		{Name: "payment_rule", EventTypes: []string{"payment_failed"}},
 	}
-	ec := NewEventContextClassifier(rules)
+	ec := NewEventClassifier(rules)
 
 	matches := ec.Classify("User reported a payment_failed error in checkout")
 	if len(matches) != 1 {
@@ -32,22 +32,22 @@ func TestEventContextClassifier_EventTypeMatch(t *testing.T) {
 	}
 }
 
-func TestEventContextClassifier_NoMatchOnUnrelatedText(t *testing.T) {
-	rules := []config.EventContextRule{
+func TestEventClassifier_NoMatchOnUnrelatedText(t *testing.T) {
+	rules := []config.EventRule{
 		{Name: "payment_rule", EventTypes: []string{"payment_failed"}},
 	}
-	ec := NewEventContextClassifier(rules)
+	ec := NewEventClassifier(rules)
 	matches := ec.Classify("What is the weather like today?")
 	if len(matches) != 0 {
 		t.Fatalf("expected no matches, got %d", len(matches))
 	}
 }
 
-func TestEventContextClassifier_SeverityMatch(t *testing.T) {
-	rules := []config.EventContextRule{
+func TestEventClassifier_SeverityMatch(t *testing.T) {
+	rules := []config.EventRule{
 		{Name: "critical_rule", Severities: []string{"critical"}},
 	}
-	ec := NewEventContextClassifier(rules)
+	ec := NewEventClassifier(rules)
 
 	matches := ec.Classify("CRITICAL: database connection lost")
 	if len(matches) != 1 {
@@ -58,11 +58,11 @@ func TestEventContextClassifier_SeverityMatch(t *testing.T) {
 	}
 }
 
-func TestEventContextClassifier_TemporalMatch(t *testing.T) {
-	rules := []config.EventContextRule{
+func TestEventClassifier_TemporalMatch(t *testing.T) {
+	rules := []config.EventRule{
 		{Name: "urgent_rule", Temporal: true},
 	}
-	ec := NewEventContextClassifier(rules)
+	ec := NewEventClassifier(rules)
 
 	matches := ec.Classify("Please handle this urgent request immediately")
 	if len(matches) != 1 {
@@ -73,11 +73,11 @@ func TestEventContextClassifier_TemporalMatch(t *testing.T) {
 	}
 }
 
-func TestEventContextClassifier_ActionCodeMatch(t *testing.T) {
-	rules := []config.EventContextRule{
+func TestEventClassifier_ActionCodeMatch(t *testing.T) {
+	rules := []config.EventRule{
 		{Name: "txn_rule", ActionCodes: []string{"TXN_DECLINE"}},
 	}
-	ec := NewEventContextClassifier(rules)
+	ec := NewEventClassifier(rules)
 
 	matches := ec.Classify("Error code TXN_DECLINE received from payment gateway")
 	if len(matches) != 1 {
@@ -85,8 +85,8 @@ func TestEventContextClassifier_ActionCodeMatch(t *testing.T) {
 	}
 }
 
-func TestEventContextClassifier_MultiCriteriaHighConfidence(t *testing.T) {
-	rules := []config.EventContextRule{
+func TestEventClassifier_MultiCriteriaHighConfidence(t *testing.T) {
+	rules := []config.EventRule{
 		{
 			Name:        "full_rule",
 			EventTypes:  []string{"auth_error"},
@@ -95,7 +95,7 @@ func TestEventContextClassifier_MultiCriteriaHighConfidence(t *testing.T) {
 			Temporal:    true,
 		},
 	}
-	ec := NewEventContextClassifier(rules)
+	ec := NewEventClassifier(rules)
 
 	text := "auth_error detected: AUTH_FAIL code, high severity, urgent action required"
 	matches := ec.Classify(text)
@@ -108,15 +108,15 @@ func TestEventContextClassifier_MultiCriteriaHighConfidence(t *testing.T) {
 	}
 }
 
-func TestEventContextClassifier_PartialCriteriaLowerConfidence(t *testing.T) {
-	rules := []config.EventContextRule{
+func TestEventClassifier_PartialCriteriaLowerConfidence(t *testing.T) {
+	rules := []config.EventRule{
 		{
 			Name:       "partial_rule",
 			EventTypes: []string{"payment_failed"},
 			Severities: []string{"critical"},
 		},
 	}
-	ec := NewEventContextClassifier(rules)
+	ec := NewEventClassifier(rules)
 
 	// Only event type matches, not severity
 	matches := ec.Classify("payment_failed occurred")
@@ -129,12 +129,12 @@ func TestEventContextClassifier_PartialCriteriaLowerConfidence(t *testing.T) {
 	}
 }
 
-func TestEventContextClassifier_MultipleRulesMultipleMatches(t *testing.T) {
-	rules := []config.EventContextRule{
+func TestEventClassifier_MultipleRulesMultipleMatches(t *testing.T) {
+	rules := []config.EventRule{
 		{Name: "rule_a", EventTypes: []string{"payment_failed"}},
 		{Name: "rule_b", Severities: []string{"critical"}},
 	}
-	ec := NewEventContextClassifier(rules)
+	ec := NewEventClassifier(rules)
 
 	matches := ec.Classify("payment_failed with critical severity")
 	if len(matches) != 2 {
@@ -142,23 +142,23 @@ func TestEventContextClassifier_MultipleRulesMultipleMatches(t *testing.T) {
 	}
 }
 
-func TestEventContextClassifier_CaseInsensitiveMatching(t *testing.T) {
-	rules := []config.EventContextRule{
+func TestEventClassifier_CaseInsensitiveMatching(t *testing.T) {
+	rules := []config.EventRule{
 		{Name: "rule", EventTypes: []string{"Payment_Failed"}},
 	}
-	ec := NewEventContextClassifier(rules)
+	ec := NewEventClassifier(rules)
 
 	if matches := ec.Classify("PAYMENT_FAILED in production"); len(matches) != 1 {
 		t.Fatalf("expected case-insensitive match, got %d matches", len(matches))
 	}
 }
 
-func TestEventContextClassifier_EmptyRuleNeverMatches(t *testing.T) {
+func TestEventClassifier_EmptyRuleNeverMatches(t *testing.T) {
 	// A rule with no criteria configured should never match anything.
-	rules := []config.EventContextRule{
+	rules := []config.EventRule{
 		{Name: "empty_rule"},
 	}
-	ec := NewEventContextClassifier(rules)
+	ec := NewEventClassifier(rules)
 	matches := ec.Classify("critical payment_failed TXN_DECLINE urgent")
 	if len(matches) != 0 {
 		t.Fatalf("empty rule should not match, got %d matches", len(matches))

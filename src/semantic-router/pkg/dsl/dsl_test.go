@@ -1554,6 +1554,80 @@ func TestCompileAllAlgorithmTypes(t *testing.T) {
 				}
 			},
 		},
+		{
+			name:     "kmeans",
+			algoType: "kmeans",
+			body:     ``,
+			verify: func(t *testing.T, algo *config.AlgorithmConfig) {
+				if algo.Type != "kmeans" {
+					t.Errorf("type = %q, want kmeans", algo.Type)
+				}
+			},
+		},
+		{
+			name:     "svm",
+			algoType: "svm",
+			body:     ``,
+			verify: func(t *testing.T, algo *config.AlgorithmConfig) {
+				if algo.Type != "svm" {
+					t.Errorf("type = %q, want svm", algo.Type)
+				}
+			},
+		},
+		{
+			name:     "mlp",
+			algoType: "mlp",
+			body:     ``,
+			verify: func(t *testing.T, algo *config.AlgorithmConfig) {
+				if algo.Type != "mlp" {
+					t.Errorf("type = %q, want mlp", algo.Type)
+				}
+			},
+		},
+		{
+			name:     "multi_factor",
+			algoType: "multi_factor",
+			body:     `weights: { quality: 0.4, latency: 0.3, cost: 0.2, load: 0.1 } slo: { max_tpot_ms: 200, max_ttft_ms: 800, max_cost_per_1m: 5, max_inflight: 20 } latency_percentile: 99 on_no_candidates: "fail"`,
+			verify: func(t *testing.T, algo *config.AlgorithmConfig) {
+				if algo.MultiFactor == nil {
+					t.Fatal("expected multi_factor config")
+				}
+				if algo.MultiFactor.Weights == nil || algo.MultiFactor.Weights.Quality != 0.4 {
+					t.Fatalf("weights.quality = %#v, want 0.4", algo.MultiFactor.Weights)
+				}
+				if algo.MultiFactor.SLO == nil || algo.MultiFactor.SLO.MaxInflight != 20 {
+					t.Fatalf("slo.max_inflight = %#v, want 20", algo.MultiFactor.SLO)
+				}
+				if algo.MultiFactor.LatencyPercentile != 99 {
+					t.Errorf("latency_percentile = %d, want 99", algo.MultiFactor.LatencyPercentile)
+				}
+				if algo.MultiFactor.OnNoCandidates != "fail" {
+					t.Errorf("on_no_candidates = %q, want fail", algo.MultiFactor.OnNoCandidates)
+				}
+			},
+		},
+		{
+			name:     "session_aware",
+			algoType: "session_aware",
+			body:     `base_method: "hybrid" idle_timeout_seconds: 600 min_turns_before_switch: 2 switch_margin: 0.12 stay_bias: 0.2 tool_loop_hard_lock: true context_portability_hard_lock: false decision_drift_reset: true max_cache_cost_multiplier: 1.5 remaining_turn_prior_horizon: 6`,
+			verify: func(t *testing.T, algo *config.AlgorithmConfig) {
+				if algo.SessionAware == nil {
+					t.Fatal("expected session_aware config")
+				}
+				if algo.SessionAware.BaseMethod != "hybrid" {
+					t.Errorf("base_method = %q, want hybrid", algo.SessionAware.BaseMethod)
+				}
+				if algo.SessionAware.IdleTimeoutSeconds == nil || *algo.SessionAware.IdleTimeoutSeconds != 600 {
+					t.Fatalf("idle_timeout_seconds = %#v, want 600", algo.SessionAware.IdleTimeoutSeconds)
+				}
+				if algo.SessionAware.ContextPortabilityHardLock == nil || *algo.SessionAware.ContextPortabilityHardLock {
+					t.Fatalf("context_portability_hard_lock = %#v, want false", algo.SessionAware.ContextPortabilityHardLock)
+				}
+				if algo.SessionAware.MaxCacheCostMultiplier == nil || *algo.SessionAware.MaxCacheCostMultiplier != 1.5 {
+					t.Fatalf("max_cache_cost_multiplier = %#v, want 1.5", algo.SessionAware.MaxCacheCostMultiplier)
+				}
+			},
+		},
 	}
 
 	for _, tc := range algoDSLs {
@@ -1584,6 +1658,100 @@ ROUTE test {
 			}
 			tc.verify(t, algo)
 		})
+	}
+}
+
+func TestDecompileCurrentAlgorithmSurfaceRoundTrips(t *testing.T) {
+	falseValue := false
+	trueValue := true
+	idleTimeout := 600
+	stayBias := 0.2
+	cacheMultiplier := 1.5
+
+	cfg := &config.RouterConfig{
+		IntelligentRouting: config.IntelligentRouting{Decisions: []config.Decision{
+			{
+				Name: "multi-factor-route",
+				ModelRefs: []config.ModelRef{
+					{Model: "m1"},
+					{Model: "m2"},
+				},
+				Algorithm: &config.AlgorithmConfig{
+					Type: "multi_factor",
+					MultiFactor: &config.MultiFactorSelectionConfig{
+						Weights: &config.MultiFactorWeightsConfig{
+							Quality: 0.4,
+							Latency: 0.3,
+							Cost:    0.2,
+							Load:    0.1,
+						},
+						SLO: &config.MultiFactorSLOConfig{
+							MaxTPOTMs:    200,
+							MaxTTFTMs:    800,
+							MaxCostPer1M: 5,
+							MaxInflight:  20,
+						},
+						LatencyPercentile: 99,
+						OnNoCandidates:    "fail",
+					},
+				},
+			},
+			{
+				Name: "session-aware-route",
+				ModelRefs: []config.ModelRef{
+					{Model: "m1"},
+					{Model: "m2"},
+				},
+				Algorithm: &config.AlgorithmConfig{
+					Type: "session_aware",
+					SessionAware: &config.SessionAwareSelectionConfig{
+						BaseMethod:                 "hybrid",
+						IdleTimeoutSeconds:         &idleTimeout,
+						StayBias:                   &stayBias,
+						ToolLoopHardLock:           &trueValue,
+						ContextPortabilityHardLock: &falseValue,
+						MaxCacheCostMultiplier:     &cacheMultiplier,
+					},
+				},
+			},
+		}},
+	}
+
+	dslText, err := DecompileRouting(cfg)
+	if err != nil {
+		t.Fatalf("decompile failed: %v", err)
+	}
+	for _, fragment := range []string{
+		"ALGORITHM multi_factor",
+		"latency_percentile: 99",
+		"weights:",
+		"ALGORITHM session_aware",
+		"context_portability_hard_lock: false",
+		"max_cache_cost_multiplier: 1.5",
+	} {
+		if !strings.Contains(dslText, fragment) {
+			t.Fatalf("decompiled DSL missing %q:\n%s", fragment, dslText)
+		}
+	}
+
+	roundTripped, errs := Compile(dslText)
+	if len(errs) > 0 {
+		t.Fatalf("round-trip compile errors: %v\n%s", errs, dslText)
+	}
+
+	byName := map[string]*config.AlgorithmConfig{}
+	for i := range roundTripped.Decisions {
+		decision := &roundTripped.Decisions[i]
+		byName[decision.Name] = decision.Algorithm
+	}
+
+	multiFactor := byName["multi-factor-route"].MultiFactor
+	if multiFactor == nil || multiFactor.Weights == nil || multiFactor.Weights.Quality != 0.4 {
+		t.Fatalf("round-trip multi_factor weights = %#v", multiFactor)
+	}
+	sessionAware := byName["session-aware-route"].SessionAware
+	if sessionAware == nil || sessionAware.ContextPortabilityHardLock == nil || *sessionAware.ContextPortabilityHardLock {
+		t.Fatalf("round-trip session_aware context_portability_hard_lock = %#v", sessionAware)
 	}
 }
 
@@ -3289,17 +3457,40 @@ func TestDecompileToAST(t *testing.T) {
 func TestDecompileAllSignalTypes(t *testing.T) {
 	input := `
 SIGNAL keyword kw { operator: "any" keywords: ["test"] }
-SIGNAL embedding emb { threshold: 0.75 candidates: ["test"] }
-SIGNAL domain dom { description: "test" mmlu_categories: ["math"] }
+SIGNAL embedding emb { threshold: 0.75 candidates: ["test"] query_modality: "image" }
+SIGNAL domain dom {
+  description: "test"
+  mmlu_categories: ["math"]
+  model_scores: [{ model: "m:1b", score: 0.8, use_reasoning: false }]
+}
 SIGNAL fact_check fc { description: "fact check" }
 SIGNAL user_feedback uf { description: "feedback" }
 SIGNAL reask ra { description: "repeat question" threshold: 0.8 lookback_turns: 2 }
 SIGNAL preference pref { description: "preference" threshold: 0.7 examples: ["keep it concise", "bullet points only"] }
 SIGNAL language lang { description: "English" }
 SIGNAL context ctx { min_tokens: "1K" max_tokens: "32K" }
-SIGNAL complexity comp { threshold: 0.1 hard: { candidates: ["hard"] } easy: { candidates: ["easy"] } }
+SIGNAL structure struct { feature: { type: "count", source: { type: "regex", pattern: "[?]" } } predicate: { gte: 1 } }
+SIGNAL conversation conv {
+  feature: { type: "count", source: { type: "message", role: "user" } }
+  predicate: { gte: 2 }
+}
+SIGNAL complexity comp {
+  threshold: 0.1
+  hard: { candidates: ["hard"], image_candidates: ["diagram"] }
+  easy: { candidates: ["easy"] }
+  composer: { operator: "OR", conditions: [{ type: "domain", name: "dom" }, { type: "keyword", name: "kw" }] }
+}
 SIGNAL modality mod { description: "image" }
 SIGNAL authz auth { role: "admin" subjects: [{ kind: "User", name: "admin" }] }
+SIGNAL jailbreak jb { method: "classifier" threshold: 0.9 include_history: true }
+SIGNAL pii pii_rule { threshold: 0.8 pii_types_allowed: ["EMAIL_ADDRESS"] include_history: true }
+SIGNAL kb kb_rule { kb: "privacy_kb" target: { kind: "group", value: "privacy_policy" } match: "best" }
+SIGNAL event critical_event {
+  event_types: ["payment_failed"]
+  severities: ["critical", "high"]
+  action_codes: ["TXN_DECLINE"]
+  temporal: true
+}
 ROUTE test_route { PRIORITY 1 WHEN domain("dom") MODEL "m:1b" }
 `
 	cfg, errs := Compile(input)
@@ -3316,8 +3507,10 @@ ROUTE test_route { PRIORITY 1 WHEN domain("dom") MODEL "m:1b" }
 		"SIGNAL domain dom", "SIGNAL keyword kw", "SIGNAL embedding emb",
 		"SIGNAL fact_check fc", "SIGNAL user_feedback uf", "SIGNAL reask ra",
 		"SIGNAL preference pref", "SIGNAL language lang",
-		"SIGNAL context ctx", "SIGNAL complexity comp",
-		"SIGNAL modality mod", "SIGNAL authz auth",
+		"SIGNAL context ctx", "SIGNAL structure struct", "SIGNAL conversation conv",
+		"SIGNAL complexity comp", "SIGNAL modality mod", "SIGNAL authz auth",
+		"SIGNAL jailbreak jb", "SIGNAL pii pii_rule", "SIGNAL kb kb_rule",
+		"SIGNAL event critical_event",
 	}
 	for _, sig := range expectedSignals {
 		if !strings.Contains(dslText, sig) {
@@ -3332,6 +3525,18 @@ ROUTE test_route { PRIORITY 1 WHEN domain("dom") MODEL "m:1b" }
 	}
 	if !strings.Contains(dslText, `lookback_turns: 2`) {
 		t.Error("decompiled DSL missing reask lookback_turns")
+	}
+	for _, want := range []string{
+		`query_modality: "image"`,
+		`model_scores:`,
+		`image_candidates`,
+		`composer:`,
+		`event_types: ["payment_failed"]`,
+		`temporal: true`,
+	} {
+		if !strings.Contains(dslText, want) {
+			t.Errorf("decompiled DSL missing %q:\n%s", want, dslText)
+		}
 	}
 }
 
@@ -5791,153 +5996,19 @@ func assertConflictFreeRoundTrip(t *testing.T, cfg *config.RouterConfig) {
 	}
 }
 
-// ---------- SESSION_STATE Tests ----------
+// ---------- Removed Session Public Surface Tests ----------
 
-const sessionStateDSL = `SESSION_STATE session_routing {
-  turn_number: int
-  current_model: string
-  cumulative_cost_usd: float
-  retry_count_ema: float
-  quality_score_ema: float
-  kv_cache_warm: float
-}`
-
-func TestCompileSessionState(t *testing.T) {
-	cfg, errs := Compile(sessionStateDSL)
-	if len(errs) > 0 {
-		t.Fatalf("compile errors: %v", errs)
-	}
-	if len(cfg.SessionStates) != 1 {
-		t.Fatalf("expected 1 SessionState in config, got %d", len(cfg.SessionStates))
-	}
-	ss := cfg.SessionStates[0]
-	if ss.Name != "session_routing" {
-		t.Errorf("name: expected %q, got %q", "session_routing", ss.Name)
-	}
-	wantFields := []struct{ name, typeName string }{
-		{"turn_number", "int"},
-		{"current_model", "string"},
-		{"cumulative_cost_usd", "float"},
-		{"retry_count_ema", "float"},
-		{"quality_score_ema", "float"},
-		{"kv_cache_warm", "float"},
-	}
-	if len(ss.Fields) != len(wantFields) {
-		t.Fatalf("expected %d fields, got %d", len(wantFields), len(ss.Fields))
-	}
-	for i, w := range wantFields {
-		if ss.Fields[i].Name != w.name || ss.Fields[i].TypeName != w.typeName {
-			t.Errorf("field[%d]: expected {%s: %s}, got {%s: %s}",
-				i, w.name, w.typeName, ss.Fields[i].Name, ss.Fields[i].TypeName)
-		}
+func TestSessionStateDSLIsNotSupported(t *testing.T) {
+	_, errs := Compile(`SESSION_STATE session_routing { turn_number: int }`)
+	if len(errs) == 0 {
+		t.Fatal("SESSION_STATE should not compile in the v0.3 routing DSL")
 	}
 }
 
-func TestSessionStateRoundTrip(t *testing.T) {
-	cfg, errs := Compile(sessionStateDSL)
-	if len(errs) > 0 {
-		t.Fatalf("compile errors: %v", errs)
-	}
-	dslText, err := DecompileRouting(cfg)
-	if err != nil {
-		t.Fatalf("decompile error: %v", err)
-	}
-	if !strings.Contains(dslText, "SESSION_STATE session_routing") {
-		t.Errorf("round-trip lost SESSION_STATE declaration\nDSL:\n%s", dslText)
-	}
-	// Types must survive as bare identifiers, not quoted strings.
-	for _, typeName := range []string{"int", "string", "float"} {
-		if !strings.Contains(dslText, ": "+typeName) {
-			t.Errorf("round-trip DSL missing bare type %q\nDSL:\n%s", typeName, dslText)
-		}
-	}
-	prog2, errs2 := Parse(dslText)
-	if len(errs2) > 0 {
-		t.Fatalf("re-parse errors after round-trip: %v\nDSL:\n%s", errs2, dslText)
-	}
-	if len(prog2.SessionStates) != 1 {
-		t.Fatalf("re-parsed session states = %d, want 1\nDSL:\n%s", len(prog2.SessionStates), dslText)
-	}
-	if prog2.SessionStates[0].Name != "session_routing" {
-		t.Errorf("round-trip name: expected %q, got %q", "session_routing", prog2.SessionStates[0].Name)
-	}
-}
-
-func TestSessionStateRoundTripAST(t *testing.T) {
-	cfg, errs := Compile(sessionStateDSL)
-	if len(errs) > 0 {
-		t.Fatalf("compile errors: %v", errs)
-	}
-	prog := DecompileToAST(cfg)
-	if len(prog.SessionStates) != 1 {
-		t.Fatalf("expected 1 SessionState in AST round-trip, got %d", len(prog.SessionStates))
-	}
-	ss := prog.SessionStates[0]
-	if ss.Name != "session_routing" {
-		t.Errorf("AST round-trip name: expected %q, got %q", "session_routing", ss.Name)
-	}
-	if len(ss.Fields) != 6 {
-		t.Errorf("AST round-trip field count: expected 6, got %d", len(ss.Fields))
-	}
-}
-
-func TestValidateSessionStateDuplicateName(t *testing.T) {
-	input := `
-SESSION_STATE foo { x: int }
-SESSION_STATE foo { y: string }
-`
-	diags, _ := Validate(input)
-	found := false
-	for _, d := range diags {
-		if d.Level == DiagConstraint && strings.Contains(d.Message, "duplicate") {
-			found = true
-			break
-		}
-	}
-	if !found {
-		t.Errorf("expected DiagConstraint for duplicate SESSION_STATE name, got: %v", diags)
-	}
-}
-
-func TestValidateSessionStateInvalidType(t *testing.T) {
-	input := `SESSION_STATE foo { x: bool }`
-	diags, _ := Validate(input)
-	found := false
-	for _, d := range diags {
-		if d.Level == DiagConstraint &&
-			strings.Contains(d.Message, "invalid type") &&
-			strings.Contains(d.Message, "bool") {
-			found = true
-			break
-		}
-	}
-	if !found {
-		t.Errorf("expected DiagConstraint for invalid type %q, got: %v", "bool", diags)
-	}
-}
-
-func TestValidateSessionStateDuplicateField(t *testing.T) {
-	input := `SESSION_STATE foo { x: int, x: string }`
-	diags, _ := Validate(input)
-	found := false
-	for _, d := range diags {
-		if d.Level == DiagConstraint && strings.Contains(d.Message, "duplicate field") {
-			found = true
-			break
-		}
-	}
-	if !found {
-		t.Errorf("expected DiagConstraint for duplicate field name, got: %v", diags)
-	}
-}
-
-func TestValidateSessionStateValidTypes(t *testing.T) {
-	input := `SESSION_STATE ok { a: int, b: string, c: float }`
-	diags, _ := Validate(input)
-	for _, d := range diags {
-		if d.Level == DiagConstraint {
-			t.Errorf("unexpected constraint diagnostic for valid types: %v", d)
-		}
+func TestSessionMetricSignalIsNotSupported(t *testing.T) {
+	_, errs := Compile(`SIGNAL session_metric session_cost { kind: "state" state: "session.cost" }`)
+	if len(errs) == 0 {
+		t.Fatal("session_metric should not compile in the v0.3 routing DSL")
 	}
 }
 
