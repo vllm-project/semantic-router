@@ -72,11 +72,11 @@ spec:
             # store cannot be initialized, so the tests use this bootstrap admin
             # and a writable temporary SQLite store.
             - name: DASHBOARD_AUTH_DB_PATH
-              value: /tmp/vllm-sr-dashboard/auth.db
+              value: /tmp/dashboard-auth.db
             - name: DASHBOARD_WORKFLOW_DB_PATH
-              value: /tmp/vllm-sr-dashboard/workflow.sqlite
+              value: /tmp/dashboard-workflow.sqlite
             - name: EVALUATION_DB_PATH
-              value: /tmp/vllm-sr-dashboard/evaluations.db
+              value: /tmp/dashboard-evaluations.db
             - name: DASHBOARD_JWT_SECRET
               value: dashboard-e2e-jwt-secret
             - name: DASHBOARD_ADMIN_EMAIL

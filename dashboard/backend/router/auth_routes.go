@@ -4,6 +4,8 @@ import (
 	"context"
 	"log"
 	"net/http"
+	"os"
+	"path/filepath"
 
 	auth "github.com/vllm-project/semantic-router/dashboard/backend/auth"
 	"github.com/vllm-project/semantic-router/dashboard/backend/config"
@@ -24,7 +26,21 @@ var dashboardAuthRouteSpecs = []authRouteSpec{
 
 const authUnavailableResponse = `{"error":"Service not available","message":"Authentication service is not configured"}`
 
+func ensureAuthDBDir(dbPath string) error {
+	dir := filepath.Dir(dbPath)
+	if dir == "." || dir == "" {
+		return nil
+	}
+	return os.MkdirAll(dir, 0o755)
+}
+
 func setupAuthRoutes(mux *http.ServeMux, cfg *config.Config) *auth.Service {
+	if err := ensureAuthDBDir(cfg.AuthDBPath); err != nil {
+		log.Printf("failed to prepare auth DB directory for %q: %v", cfg.AuthDBPath, err)
+		registerAuthUnavailableRoutes(mux)
+		return nil
+	}
+
 	store, err := auth.NewStore(cfg.AuthDBPath)
 	if err != nil {
 		log.Printf("failed to init auth store: %v", err)
