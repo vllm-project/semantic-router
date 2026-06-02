@@ -70,6 +70,30 @@ def test_docker_start_milvus_uses_explicit_state_root(monkeypatch, tmp_path):
     assert f"{expected_data_dir}:/var/lib/milvus:z" in commands[0]
 
 
+def test_docker_start_milvus_fails_on_port_conflict_without_container(
+    monkeypatch, tmp_path
+):
+    def fail_run(_cmd, _label):
+        raise AssertionError("Milvus container should not start when the port is busy")
+
+    monkeypatch.setattr(docker_services, "get_container_runtime", lambda: "docker")
+    monkeypatch.setattr(
+        docker_services, "docker_container_status", lambda _name: "not found"
+    )
+    monkeypatch.setattr(docker_services, "_is_port_in_use", lambda _port: True)
+    monkeypatch.setattr(docker_services, "_run_service_start", fail_run)
+
+    return_code, _stdout, stderr = docker_start_milvus(
+        "test-network",
+        resolve_runtime_stack(),
+        state_root_dir=str(tmp_path),
+    )
+
+    assert return_code == 1
+    assert "Milvus port" in stderr
+    assert "not a running reusable container" in stderr
+
+
 def test_detect_required_backends_uses_defaults_for_setup_mode_bootstrap_config():
     assert detect_required_backends(build_bootstrap_config()) == {
         "redis",

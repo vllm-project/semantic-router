@@ -325,18 +325,19 @@ def docker_start_redis(
     container_name = stack_layout.redis_container_name
     network_name = network_name or stack_layout.network_name
 
-    if _reuse_running_storage_container(container_name, "Redis"):
-        return 0, "", ""
-
-    if _is_port_in_use(stack_layout.redis_port):
-        log.info(
-            "Redis port %d is already in use — assuming an external Redis "
-            "instance is available, skipping container provisioning",
-            stack_layout.redis_port,
-        )
-        return 0, "", ""
+    reuse_result = _reuse_running_storage_container(
+        container_name, "Redis", network_name
+    )
+    if reuse_result is not None:
+        return reuse_result
 
     _replace_existing_container(container_name)
+
+    if _is_port_in_use(stack_layout.redis_port):
+        return _storage_port_conflict_result(
+            "Redis", stack_layout.redis_port, container_name
+        )
+
     cmd = [
         runtime,
         "run",
@@ -366,18 +367,19 @@ def docker_start_postgres(
     container_name = stack_layout.postgres_container_name
     network_name = network_name or stack_layout.network_name
 
-    if _reuse_running_storage_container(container_name, "Postgres"):
-        return 0, "", ""
-
-    if _is_port_in_use(stack_layout.postgres_port):
-        log.info(
-            "Postgres port %d is already in use — assuming an external Postgres "
-            "instance is available, skipping container provisioning",
-            stack_layout.postgres_port,
-        )
-        return 0, "", ""
+    reuse_result = _reuse_running_storage_container(
+        container_name, "Postgres", network_name
+    )
+    if reuse_result is not None:
+        return reuse_result
 
     _replace_existing_container(container_name)
+
+    if _is_port_in_use(stack_layout.postgres_port):
+        return _storage_port_conflict_result(
+            "Postgres", stack_layout.postgres_port, container_name
+        )
+
     cmd = [
         runtime,
         "run",
@@ -416,18 +418,18 @@ def docker_start_milvus(
     container_name = stack_layout.milvus_container_name
     network_name = network_name or stack_layout.network_name
 
-    if _reuse_running_storage_container(container_name, "Milvus"):
-        return 0, "", ""
-
-    if _is_port_in_use(stack_layout.milvus_port):
-        log.info(
-            "Milvus port %d is already in use — assuming an external Milvus "
-            "instance is available, skipping container provisioning",
-            stack_layout.milvus_port,
-        )
-        return 0, "", ""
+    reuse_result = _reuse_running_storage_container(
+        container_name, "Milvus", network_name
+    )
+    if reuse_result is not None:
+        return reuse_result
 
     _replace_existing_container(container_name)
+
+    if _is_port_in_use(stack_layout.milvus_port):
+        return _storage_port_conflict_result(
+            "Milvus", stack_layout.milvus_port, container_name
+        )
 
     config_dir = _ensure_hidden_config_dir(state_root_dir)
     milvus_data_dir = os.path.join(config_dir, "milvus-data")
@@ -561,13 +563,34 @@ def load_openclaw_registry(data_dir):
         return []
 
 
-def _reuse_running_storage_container(container_name: str, label: str) -> bool:
-    """Return True if the storage container is already running and should be reused."""
+def _reuse_running_storage_container(
+    container_name: str, label: str, network_name: str | None
+) -> tuple[int, str, str] | None:
+    """Return a success/failure tuple when a running storage container is reused."""
     status = docker_container_status(container_name)
     if status == "running":
         log.info(f"{label} container already running, reusing to preserve data")
-        return True
-    return False
+        if network_name:
+            return_code, stdout, stderr = docker_network_connect(
+                network_name, container_name
+            )
+            if return_code != 0:
+                return return_code, stdout, stderr
+        return 0, "", ""
+    return None
+
+
+def _storage_port_conflict_result(
+    label: str, port: int, container_name: str
+) -> tuple[int, str, str]:
+    message = (
+        f"{label} port {port} is already in use, but {container_name} is not a "
+        f"running reusable container. Stop the process using port {port}, set a "
+        "different VLLM_SR_PORT_OFFSET, or point the config at an explicitly "
+        f"reachable external {label} service."
+    )
+    log.error(message)
+    return 1, "", message
 
 
 def _is_port_in_use(port: int) -> bool:
