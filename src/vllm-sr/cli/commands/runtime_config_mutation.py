@@ -195,10 +195,11 @@ def _platform_requires_gpu_defaults(platform: str | None) -> bool:
     if normalized_platform != "amd":
         return False
 
-    force_gpu = os.getenv("VLLM_SR_AMD_FORCE_GPU", "1").strip().lower()
-    if force_gpu in {"0", "false", "no", "off"}:
+    force_gpu = os.getenv("VLLM_SR_AMD_FORCE_GPU", "").strip().lower()
+    if force_gpu not in {"1", "true", "yes", "on"}:
         log.info(
-            "Platform amd detected but GPU default override disabled by VLLM_SR_AMD_FORCE_GPU"
+            "Platform amd detected: keeping router internal model use_cpu settings; "
+            "set VLLM_SR_AMD_FORCE_GPU=1 to opt into GPU defaults"
         )
         return False
     return True
@@ -210,8 +211,9 @@ def apply_platform_gpu_defaults(
     """
     Apply platform-specific GPU defaults.
 
-    For AMD platform, default all `use_cpu` flags to false so inference prefers GPU.
-    Can be disabled by setting VLLM_SR_AMD_FORCE_GPU=0/false/no/off.
+    For AMD platform, preserve router internal model `use_cpu` settings by default.
+    Set VLLM_SR_AMD_FORCE_GPU=1/true/yes/on to rewrite `use_cpu` flags to false
+    when the router has dedicated GPU headroom for internal signal models.
     """
     if not _platform_requires_gpu_defaults(platform):
         return False

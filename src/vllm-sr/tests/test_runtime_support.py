@@ -67,7 +67,9 @@ def test_append_passthrough_env_vars_includes_router_logging_settings(monkeypatc
     assert env_vars["SR_LOG_ENCODING"] == "console"
 
 
-def test_resolve_effective_config_path_applies_amd_gpu_defaults(tmp_path: Path):
+def test_resolve_effective_config_path_preserves_amd_use_cpu_by_default(
+    tmp_path: Path,
+):
     config_path = tmp_path / "config.yaml"
     config_path.write_text(
         yaml.safe_dump(
@@ -101,22 +103,20 @@ def test_resolve_effective_config_path_applies_amd_gpu_defaults(tmp_path: Path):
         platform="amd",
     )
 
-    assert effective_path != config_path
-    assert effective_path == tmp_path / ".vllm-sr" / "runtime-config.yaml"
     effective = yaml.safe_load(effective_path.read_text())
     assert (
         effective["global"]["model_catalog"]["embeddings"]["semantic"]["use_cpu"]
-        is False
+        is True
     )
     assert (
         effective["global"]["model_catalog"]["modules"]["prompt_guard"]["use_cpu"]
-        is False
+        is True
     )
     assert (
         effective["global"]["model_catalog"]["modules"]["classifier"]["domain"][
             "use_cpu"
         ]
-        is False
+        is True
     )
 
 
@@ -156,13 +156,14 @@ def test_resolve_effective_config_path_combines_algorithm_and_platform_overrides
     assert effective["routing"]["decisions"][0]["algorithm"]["type"] == "elo"
     assert (
         effective["global"]["model_catalog"]["embeddings"]["semantic"]["use_cpu"]
-        is False
+        is True
     )
 
 
-def test_resolve_effective_config_path_injects_missing_amd_gpu_defaults(
-    tmp_path: Path,
+def test_resolve_effective_config_path_injects_missing_amd_gpu_defaults_when_enabled(
+    tmp_path: Path, monkeypatch
 ):
+    monkeypatch.setenv("VLLM_SR_AMD_FORCE_GPU", "1")
     config_path = tmp_path / "config.yaml"
     config_path.write_text(
         yaml.safe_dump(
@@ -222,9 +223,10 @@ def test_resolve_effective_config_path_injects_missing_amd_gpu_defaults(
     assert "bert" not in model_catalog["embeddings"]
 
 
-def test_resolve_effective_config_path_does_not_reintroduce_deprecated_bert_for_amd(
-    tmp_path: Path,
+def test_resolve_effective_config_path_keeps_bert_deprecated_with_amd_gpu_opt_in(
+    tmp_path: Path, monkeypatch
 ):
+    monkeypatch.setenv("VLLM_SR_AMD_FORCE_GPU", "1")
     config_path = tmp_path / "config.yaml"
     balance_recipe = REPO_ROOT / "deploy" / "recipes" / "balance.yaml"
     config_path.write_text(balance_recipe.read_text(encoding="utf-8"))
