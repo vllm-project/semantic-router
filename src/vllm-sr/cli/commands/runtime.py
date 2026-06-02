@@ -68,6 +68,7 @@ def _execute_serve(
     router_image: str | None,
     envoy_image: str | None,
     dashboard_image: str | None,
+    sim_image: str | None,
     image_pull_policy: str,
     readonly: bool,
     minimal: bool,
@@ -124,6 +125,7 @@ def _execute_serve(
         router_image=router_image,
         envoy_image=envoy_image,
         dashboard_image=dashboard_image,
+        sim_image=sim_image,
         pull_policy=image_pull_policy,
         enable_observability=not minimal,
     )
@@ -154,6 +156,11 @@ def _execute_serve(
     "--dashboard-image",
     default=None,
     help="Docker image for the dashboard container (Docker target only; defaults to --image or VLLM_SR_IMAGE)",
+)
+@click.option(
+    "--sim-image",
+    default=None,
+    help="Docker image for the simulator sidecar (Docker target only; defaults to VLLM_SR_SIM_IMAGE)",
 )
 @click.option(
     "--image-pull-policy",
@@ -226,6 +233,7 @@ def serve(
     router_image: str | None,
     envoy_image: str | None,
     dashboard_image: str | None,
+    sim_image: str | None,
     image_pull_policy: str,
     readonly: bool,
     minimal: bool,
@@ -244,6 +252,7 @@ def serve(
         router_image,
         envoy_image,
         dashboard_image,
+        sim_image,
         image_pull_policy,
         readonly,
         minimal,
