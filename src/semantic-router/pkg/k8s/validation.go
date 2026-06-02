@@ -30,6 +30,7 @@ type crdValidationContext struct {
 	domains      map[string]struct{}
 	structure    map[string]struct{}
 	conversation map[string]struct{}
+	events       map[string]struct{}
 }
 
 func validatePoolRoute(
@@ -81,6 +82,12 @@ func buildCRDValidationContext(
 	if err != nil {
 		return nil, err
 	}
+	events, err := collectUniqueNames(route.Spec.Signals.Events, "event signal", func(signal v1alpha1.EventSignal) string {
+		return signal.Name
+	})
+	if err != nil {
+		return nil, err
+	}
 
 	return &crdValidationContext{
 		models:       buildValidationModelMap(pool.Spec.Models),
@@ -89,6 +96,7 @@ func buildCRDValidationContext(
 		domains:      domains,
 		structure:    structures,
 		conversation: conversations,
+		events:       events,
 	}, nil
 }
 
@@ -155,6 +163,8 @@ func validateSignalReference(
 		known = ctx.structure
 	case "conversation":
 		known = ctx.conversation
+	case "event":
+		known = ctx.events
 	default:
 		return nil
 	}

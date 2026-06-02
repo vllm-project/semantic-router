@@ -33,6 +33,7 @@ routing:
   signals:
     events:
       - name: critical_payment_event
+        description: Critical payment or transaction events that need incident-grade routing.
         event_types:
           - payment_failed
           - transaction_declined
@@ -49,6 +50,7 @@ routing:
 | Field | Type | Description |
 |-------|------|-------------|
 | `name` | string | Rule name referenced in `routing.decisions[].rules` |
+| `description` | string | Optional human-readable explanation of when the rule should match |
 | `event_types` | list of strings | Event type patterns to match (case-insensitive word boundary) |
 | `severities` | list of strings | Severity keywords: `critical`, `high`, `medium`, `low` |
 | `action_codes` | list of strings | Domain-specific action codes (case-insensitive word boundary) |
@@ -66,5 +68,5 @@ routing:
         type: event
         name: critical_payment_event
       modelRefs:
-        - name: fast-response-model
+        - model: fast-response-model
 ```

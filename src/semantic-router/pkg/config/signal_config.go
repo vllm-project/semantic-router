@@ -32,6 +32,7 @@ type Signals struct {
 // to specialized model pools based on event type, severity, and temporal urgency.
 type EventRule struct {
 	Name        string   `yaml:"name"`
+	Description string   `yaml:"description,omitempty"`
 	EventTypes  []string `yaml:"event_types,omitempty"`  // e.g. ["payment_failed", "auth_error"]
 	Severities  []string `yaml:"severities,omitempty"`   // e.g. ["critical", "high"]
 	ActionCodes []string `yaml:"action_codes,omitempty"` // domain-specific codes, e.g. ["TXN_DECLINE"]
