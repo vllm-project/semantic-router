@@ -40,7 +40,10 @@ func testDashboardDeployPreview(ctx context.Context, client *kubernetes.Clientse
 		fmt.Printf("[Dashboard] POST %s\n", url)
 	}
 
-	httpClient := &http.Client{Timeout: 15 * time.Second}
+	httpClient, err := newAuthenticatedDashboardClient(ctx, fmt.Sprintf("http://localhost:%s", localPort), 15*time.Second)
+	if err != nil {
+		return err
+	}
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, bytes.NewBuffer(body))
 	if err != nil {
 		return fmt.Errorf("create deploy/preview request: %w", err)

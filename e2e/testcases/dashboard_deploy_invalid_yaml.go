@@ -40,7 +40,10 @@ func testDashboardDeployInvalidYAML(ctx context.Context, client *kubernetes.Clie
 		fmt.Printf("[Dashboard] POST %s (invalid YAML — expecting 400)\n", url)
 	}
 
-	httpClient := &http.Client{Timeout: 10 * time.Second}
+	httpClient, err := newAuthenticatedDashboardClient(ctx, fmt.Sprintf("http://localhost:%s", localPort), 10*time.Second)
+	if err != nil {
+		return err
+	}
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, bytes.NewBuffer(body))
 	if err != nil {
 		return fmt.Errorf("create request: %w", err)

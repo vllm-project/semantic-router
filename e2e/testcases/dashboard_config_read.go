@@ -29,8 +29,11 @@ func testDashboardConfigRead(ctx context.Context, client *kubernetes.Clientset, 
 	}
 	defer stop()
 
-	httpClient := &http.Client{Timeout: 15 * time.Second}
 	baseURL := fmt.Sprintf("http://localhost:%s", localPort)
+	httpClient, err := newAuthenticatedDashboardClient(ctx, baseURL, 15*time.Second)
+	if err != nil {
+		return err
+	}
 
 	configJSON, err := fetchDashboardJSONConfig(ctx, httpClient, baseURL, opts.Verbose)
 	if err != nil {

@@ -68,11 +68,21 @@ spec:
             # available in CI and the pipeline is not part of the dashboard contract.
             - name: ML_PIPELINE_ENABLED
               value: "false"
-            # Disable auth in E2E by pointing the auth DB to an impossible path.
-            # /dev/null is a char device so MkdirAll("/dev/null") fails, causing
-            # setupAuthRoutes to return nil and wrapWithAuth to skip the middleware.
+            # Auth runs for real in E2E. The auth store is initialized in a
+            # writable emptyDir so #1993's fail-closed guard (503 on protected
+            # routes when authSvc == nil) is exercised, not bypassed. A bootstrap
+            # admin is provisioned at startup and the dashboard testcases log in
+            # via /api/auth/login and attach the bearer token to every request.
             - name: DASHBOARD_AUTH_DB_PATH
-              value: /dev/null/auth.db
+              value: /var/lib/dashboard/auth.db
+            - name: DASHBOARD_JWT_SECRET
+              value: e2e-dashboard-jwt-secret
+            - name: DASHBOARD_ADMIN_EMAIL
+              value: admin@e2e.local
+            - name: DASHBOARD_ADMIN_PASSWORD
+              value: e2e-admin-password
+            - name: DASHBOARD_ADMIN_NAME
+              value: E2E Admin
           ports:
             - name: http
               containerPort: 8700
@@ -80,7 +90,11 @@ spec:
             - name: router-config
               mountPath: /app/config
               readOnly: true
+            - name: dashboard-auth-data
+              mountPath: /var/lib/dashboard
       volumes:
         - name: router-config
           configMap:
             name: semantic-router-config
+        - name: dashboard-auth-data
+          emptyDir: {}

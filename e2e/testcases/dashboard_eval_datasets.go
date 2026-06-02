@@ -33,7 +33,10 @@ func testDashboardEvalDatasets(ctx context.Context, client *kubernetes.Clientset
 		fmt.Printf("[Dashboard] GET %s\n", url)
 	}
 
-	httpClient := &http.Client{Timeout: 10 * time.Second}
+	httpClient, err := newAuthenticatedDashboardClient(ctx, fmt.Sprintf("http://localhost:%s", localPort), 10*time.Second)
+	if err != nil {
+		return err
+	}
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 	if err != nil {
 		return fmt.Errorf("create request: %w", err)
