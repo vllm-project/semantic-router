@@ -281,7 +281,7 @@ def test_inject_local_store_runtime_defaults_populates_milvus_connection():
     assert conn["timeout"] == 30
     coll = milvus["collection"]
     assert coll["name"] == "semantic_cache"
-    assert coll["vector_field"]["dimension"] == 384
+    assert coll["vector_field"]["dimension"] == 768
     search = milvus["search"]
     assert search["params"]["ef"] == 64
     assert search["topk"] == 10

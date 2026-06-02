@@ -69,8 +69,9 @@ func NewRedisCache(options RedisCacheOptions) (*RedisCache, error) {
 	} else {
 		redisConfig = options.Config
 	}
-	logging.Debugf("RedisCache: config loaded - host=%s:%d, index=%s, dimension=auto-detect",
-		redisConfig.Connection.Host, redisConfig.Connection.Port, redisConfig.Index.Name)
+	logging.Debugf("RedisCache: config loaded - host=%s:%d, index=%s, dimension=%d",
+		redisConfig.Connection.Host, redisConfig.Connection.Port, redisConfig.Index.Name,
+		semanticCacheEmbeddingDimension(redisConfig.Index.VectorField.Dimension, options.EmbeddingModel))
 
 	// Establish connection to Redis server
 	resolvedHost := normalizeLocalHostForContainerRuntimes(redisConfig.Connection.Host)
@@ -220,28 +221,26 @@ func (c *RedisCache) getEmbedding(text string) ([]float32, error) {
 	switch modelName {
 	case "qwen3":
 		// Use GetEmbeddingBatched for Qwen3 with batching support
-		output, err := candle_binding.GetEmbeddingBatched(text, modelName, 0)
+		output, err := candle_binding.GetEmbeddingBatched(text, modelName, c.embeddingDimension())
 		if err != nil {
 			return nil, err
 		}
 		return output.Embedding, nil
 	case "gemma":
 		// Use GetEmbeddingWithModelType for Gemma
-		output, err := candle_binding.GetEmbeddingWithModelType(text, modelName, 0)
+		output, err := candle_binding.GetEmbeddingWithModelType(text, modelName, c.embeddingDimension())
 		if err != nil {
 			return nil, err
 		}
 		return output.Embedding, nil
 	case "mmbert":
-		// Use GetEmbedding2DMatryoshka for mmBERT
-		output, err := candle_binding.GetEmbedding2DMatryoshka(text, modelName, 0, 0)
+		output, err := candle_binding.GetEmbeddingWithModelType(text, modelName, c.embeddingDimension())
 		if err != nil {
 			return nil, err
 		}
 		return output.Embedding, nil
 	case "multimodal":
-		// Use multimodal text encoder branch (384-dim default)
-		output, err := candle_binding.GetEmbeddingWithModelType(text, modelName, 384)
+		output, err := candle_binding.GetEmbeddingWithModelType(text, modelName, c.embeddingDimension())
 		if err != nil {
 			return nil, err
 		}
@@ -254,18 +253,21 @@ func (c *RedisCache) getEmbedding(text string) ([]float32, error) {
 	}
 }
 
+func (c *RedisCache) embeddingDimension() int {
+	if c == nil || c.config == nil {
+		return semanticCacheEmbeddingDimension(0, "")
+	}
+	return semanticCacheEmbeddingDimension(c.config.Index.VectorField.Dimension, c.embeddingModel)
+}
+
 // createIndex builds the Redis index with the appropriate schema
 func (c *RedisCache) createIndex() error {
 	ctx := context.Background()
 
-	// Determine embedding dimension automatically
-	testEmbedding, err := c.getEmbedding("test")
-	if err != nil {
-		return fmt.Errorf("failed to detect embedding dimension: %w", err)
-	}
-	actualDimension := len(testEmbedding)
+	actualDimension := c.embeddingDimension()
+	c.config.Index.VectorField.Dimension = actualDimension
 
-	logging.Debugf("RedisCache.createIndex: auto-detected embedding dimension: %d", actualDimension)
+	logging.Debugf("RedisCache.createIndex: using embedding dimension: %d", actualDimension)
 
 	// Determine distance metric for Redis
 	var distanceMetric string
@@ -304,7 +306,7 @@ func (c *RedisCache) createIndex() error {
 	}
 
 	// Create the index with proper schema
-	_, err = c.client.FTCreate(ctx,
+	_, err := c.client.FTCreate(ctx,
 		c.indexName,
 		&redis.FTCreateOptions{
 			OnHash: true,

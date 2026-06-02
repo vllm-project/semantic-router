@@ -69,8 +69,9 @@ func NewMilvusCache(options MilvusCacheOptions) (*MilvusCache, error) {
 	} else {
 		milvusConfig = options.Config
 	}
-	logging.Debugf("MilvusCache: config loaded - host=%s:%d, collection=%s, dimension=auto-detect",
-		milvusConfig.Connection.Host, milvusConfig.Connection.Port, milvusConfig.Collection.Name)
+	logging.Debugf("MilvusCache: config loaded - host=%s:%d, collection=%s, dimension=%d",
+		milvusConfig.Connection.Host, milvusConfig.Connection.Port, milvusConfig.Collection.Name,
+		semanticCacheEmbeddingDimension(milvusConfig.Collection.VectorField.Dimension, options.EmbeddingModel))
 
 	// Establish connection to Milvus server
 	connectionString := fmt.Sprintf("%s:%d", milvusConfig.Connection.Host, milvusConfig.Connection.Port)
@@ -253,28 +254,26 @@ func (c *MilvusCache) getEmbedding(text string) ([]float32, error) {
 	switch modelName {
 	case "qwen3":
 		// Use GetEmbeddingBatched for Qwen3 with batching support
-		output, err := candle_binding.GetEmbeddingBatched(text, modelName, 0)
+		output, err := candle_binding.GetEmbeddingBatched(text, modelName, c.embeddingDimension())
 		if err != nil {
 			return nil, err
 		}
 		return output.Embedding, nil
 	case "gemma":
 		// Use GetEmbeddingWithModelType for Gemma
-		output, err := candle_binding.GetEmbeddingWithModelType(text, modelName, 0)
+		output, err := candle_binding.GetEmbeddingWithModelType(text, modelName, c.embeddingDimension())
 		if err != nil {
 			return nil, err
 		}
 		return output.Embedding, nil
 	case "mmbert":
-		// Use GetEmbedding2DMatryoshka for mmBERT
-		output, err := candle_binding.GetEmbedding2DMatryoshka(text, modelName, 0, 0)
+		output, err := candle_binding.GetEmbeddingWithModelType(text, modelName, c.embeddingDimension())
 		if err != nil {
 			return nil, err
 		}
 		return output.Embedding, nil
 	case "multimodal":
-		// Use multimodal text encoder branch (384-dim default)
-		output, err := candle_binding.GetEmbeddingWithModelType(text, modelName, 384)
+		output, err := candle_binding.GetEmbeddingWithModelType(text, modelName, c.embeddingDimension())
 		if err != nil {
 			return nil, err
 		}
@@ -287,16 +286,19 @@ func (c *MilvusCache) getEmbedding(text string) ([]float32, error) {
 	}
 }
 
+func (c *MilvusCache) embeddingDimension() int {
+	if c == nil || c.config == nil {
+		return semanticCacheEmbeddingDimension(0, "")
+	}
+	return semanticCacheEmbeddingDimension(c.config.Collection.VectorField.Dimension, c.embeddingModel)
+}
+
 // createCollection builds the Milvus collection with the appropriate schema
 func (c *MilvusCache) createCollection(ctx context.Context) error {
-	// Determine embedding dimension automatically
-	testEmbedding, err := c.getEmbedding("test")
-	if err != nil {
-		return fmt.Errorf("failed to detect embedding dimension: %w", err)
-	}
-	actualDimension := len(testEmbedding)
+	actualDimension := c.embeddingDimension()
+	c.config.Collection.VectorField.Dimension = actualDimension
 
-	logging.Debugf("MilvusCache.createCollection: auto-detected embedding dimension: %d", actualDimension)
+	logging.Debugf("MilvusCache.createCollection: using embedding dimension: %d", actualDimension)
 
 	// Define schema with auto-detected dimension
 	schema := &entity.Schema{
@@ -338,7 +340,7 @@ func (c *MilvusCache) createCollection(ctx context.Context) error {
 				Name:     c.config.Collection.VectorField.Name,
 				DataType: entity.FieldTypeFloatVector,
 				TypeParams: map[string]string{
-					"dim": fmt.Sprintf("%d", actualDimension), // Use auto-detected dimension
+					"dim": fmt.Sprintf("%d", actualDimension),
 				},
 			},
 			{
