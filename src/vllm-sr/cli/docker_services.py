@@ -402,7 +402,10 @@ def docker_start_postgres(
 
 
 def docker_start_milvus(
-    network_name=None, stack_layout: RuntimeStackLayout | None = None
+    network_name=None,
+    stack_layout: RuntimeStackLayout | None = None,
+    *,
+    state_root_dir: str | None = None,
 ):
     """Start a Milvus container for the semantic cache backend.
 
@@ -426,7 +429,7 @@ def docker_start_milvus(
 
     _replace_existing_container(container_name)
 
-    config_dir = _ensure_hidden_config_dir(None)
+    config_dir = _ensure_hidden_config_dir(state_root_dir)
     milvus_data_dir = os.path.join(config_dir, "milvus-data")
     os.makedirs(milvus_data_dir, exist_ok=True)
 

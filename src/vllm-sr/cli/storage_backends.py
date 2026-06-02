@@ -28,6 +28,8 @@ def start_storage_backends(
     required_backends: set[str],
     network_name: str,
     stack_layout: RuntimeStackLayout,
+    *,
+    state_root_dir: str | None = None,
 ) -> set[str]:
     """Start Docker containers for the required storage backends.
 
@@ -53,7 +55,12 @@ def start_storage_backends(
 
     if "milvus" in required_backends:
         _start_backend(
-            "Milvus", lambda: docker_start_milvus(network_name, stack_layout)
+            "Milvus",
+            lambda: docker_start_milvus(
+                network_name,
+                stack_layout,
+                state_root_dir=state_root_dir,
+            ),
         )
         started.add("milvus")
 
@@ -64,10 +71,17 @@ def provision_storage_backends(
     config: dict,
     network_name: str,
     stack_layout: RuntimeStackLayout,
+    *,
+    state_root_dir: str | None = None,
 ) -> set[str]:
     """Detect which storage backends the config requires and start them."""
     required = detect_required_backends(config)
-    return start_storage_backends(required, network_name, stack_layout)
+    return start_storage_backends(
+        required,
+        network_name,
+        stack_layout,
+        state_root_dir=state_root_dir,
+    )
 
 
 def _start_backend(name: str, starter) -> None:
