@@ -3,7 +3,6 @@ package extproc
 import (
 	"encoding/json"
 	"strings"
-	"unicode/utf8"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/classification"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
@@ -64,45 +63,8 @@ func (r *OpenAIRouter) prepareSignalEvaluationInput(history signalConversationHi
 		return input
 	}
 
-	// Hard safety limit: truncate before any signal processing, independently of
-	// prompt_compression. Keeps embedding and classifier inference bounded even
-	// when compression is disabled, preventing super-linear latency blowup on
-	// giant prompts (see issue #1454).
-	input.evaluationText = r.applyMaxEvaluationChars(input.evaluationText)
-	input.compressedText = input.evaluationText
-
 	input.compressedText, input.skipCompressionSignals = r.compressSignalEvaluationText(input.evaluationText)
 	return input
-}
-
-// applyMaxEvaluationChars truncates evaluationText to the configured hard limit.
-// A limit <= 0 means no truncation. Only the routing-decision text is affected;
-// the actual request body forwarded to the model is never modified.
-func (r *OpenAIRouter) applyMaxEvaluationChars(text string) string {
-	limit := r.Config.PromptCompression.MaxEvaluationChars
-	if limit <= 0 {
-		return text
-	}
-	chars := utf8.RuneCountInString(text)
-	if chars <= limit {
-		return text
-	}
-	logging.Infof("[SignalEval] evaluationText truncated by max_evaluation_chars: %d -> %d chars", chars, limit)
-	return truncateToRunes(text, limit)
-}
-
-func truncateToRunes(text string, limit int) string {
-	if limit <= 0 {
-		return ""
-	}
-	count := 0
-	for idx := range text {
-		if count == limit {
-			return text[:idx]
-		}
-		count++
-	}
-	return text
 }
 
 func (r *OpenAIRouter) compressSignalEvaluationText(evaluationText string) (string, map[string]bool) {
@@ -222,7 +184,7 @@ func collectMatchedSignalRules(signals *classification.SignalResults) []string {
 // buildCompressionConfig translates the YAML config into the promptcompression
 // package's Config struct, applying defaults for omitted fields.
 func buildCompressionConfig(pc config.PromptCompressionConfig) promptcompression.Config {
-	cfg := promptcompression.ProfileConfig(pc.Profile, pc.MaxTokens)
+	cfg := promptcompression.ProfileConfig(pc.NormalizedProfile(), pc.MaxTokens)
 	if pc.TextRankWeight > 0 {
 		cfg.TextRankWeight = pc.TextRankWeight
 	}

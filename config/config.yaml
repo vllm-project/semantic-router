@@ -2083,7 +2083,8 @@ global:
       prompt_compression:
         enabled: true
         # Built-in profile for scoring/preserve defaults: default, coding, medical,
-        # security, or multi_turn. Explicit weights below override the profile.
+        # security, or multi_turn. The multi-turn alias is normalized to multi_turn.
+        # Unknown profiles fail config validation. Explicit weights override the profile.
         profile: default
         max_tokens: 4096
         min_length: 512
@@ -2095,10 +2096,6 @@ global:
         position_depth: 0.1
         preserve_first_n: 3
         preserve_last_n: 2
-        # Hard safety limit applied before any signal processing, independent of
-        # the quality-aware compression above. Built-in default: 8192 chars
-        # (~2K tokens). Set 0 or -1 only after classifier capacity validation.
-        max_evaluation_chars: 8192
       prompt_guard:
         enabled: true
         model_ref: prompt_guard

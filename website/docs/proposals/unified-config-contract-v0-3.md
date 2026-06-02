@@ -98,8 +98,7 @@ Router-global defaults are now owned by the router itself, not by a second user-
 - `global.integrations` groups helper runtime integrations
 - `global.model_catalog` groups router-owned model assets under `embeddings`, `system`, `external`, `classifiers`, `kbs`, and `modules`, including embedding fallback knobs such as `embedding_config.top_k`, shared prototype-aware scoring controls such as `prototype_scoring`, and built-in knowledge-base source paths such as `knowledge_bases/privacy/`
 - `global.model_catalog.modules` is the home for router-owned module settings such as `prompt_compression`, `prompt_guard`, `classifier`, `complexity`, `hallucination_mitigation`, `feedback_detector`, and `modality_detector`
-- `global.model_catalog.modules.prompt_compression.max_evaluation_chars` provides a router-owned safety bound before model-backed signal evaluation; omitted configs use the built-in `8192` character default, while `0` or `-1` explicitly disables the cap
-- `global.model_catalog.modules.prompt_compression.profile` keeps prompt-compression presets in the signal-evaluation layer. It does not rewrite the upstream model request body; post-decision request mutation belongs under decision/plugin surfaces.
+- `global.model_catalog.modules.prompt_compression.profile` keeps prompt-compression presets in the signal-evaluation layer as a validated enum (`default`, `coding`, `medical`, `security`, `multi_turn`, with `multi-turn` accepted as an alias). It does not rewrite the upstream model request body; post-decision request mutation belongs under decision/plugin surfaces.
 - omitted fields keep the built-in default
 
 This makes local, dashboard, Helm, and operator behavior converge on the same baseline.

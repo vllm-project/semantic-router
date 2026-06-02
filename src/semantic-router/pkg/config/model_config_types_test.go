@@ -39,10 +39,3 @@ func TestComplexityModelConfigWithDefaultsEnablesPrototypeScoring(t *testing.T) 
 		t.Fatal("expected complexity prototype scoring to inherit default enablement")
 	}
 }
-
-func TestDefaultGlobalConfigBoundsEvaluationTextByDefault(t *testing.T) {
-	cfg := DefaultGlobalConfig()
-	if cfg.PromptCompression.MaxEvaluationChars != DefaultMaxEvaluationChars {
-		t.Fatalf("expected max_evaluation_chars default %d, got %d", DefaultMaxEvaluationChars, cfg.PromptCompression.MaxEvaluationChars)
-	}
-}

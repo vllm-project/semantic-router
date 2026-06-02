@@ -509,7 +509,6 @@ export interface PromptCompressionConfig {
   position_depth?: number
   preserve_first_n?: number
   preserve_last_n?: number
-  max_evaluation_chars?: number
 }
 
 export interface ModalityClassifierConfig {

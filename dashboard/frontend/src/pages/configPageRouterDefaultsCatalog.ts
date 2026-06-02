@@ -209,7 +209,6 @@ export const DEFAULT_SECTIONS: Record<RouterSystemKey, unknown> = {
   prompt_compression: {
     enabled: false,
     profile: 'default',
-    max_evaluation_chars: 8192,
   } satisfies PromptCompressionConfig,
   modality_detector: {
     enabled: false,
