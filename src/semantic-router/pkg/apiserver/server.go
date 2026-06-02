@@ -131,6 +131,13 @@ func ensureClassificationService(
 		return svc
 	}
 
+	if runtimeRegistry != nil {
+		logging.ComponentEvent("apiserver", "classification_service_waiting_for_runtime", map[string]interface{}{
+			"using_placeholder": true,
+		})
+		return services.NewPlaceholderClassificationService()
+	}
+
 	// If no global service exists, try auto-discovery unified classifier.
 	logging.ComponentEvent("apiserver", "classification_service_autodiscovery_started", map[string]interface{}{})
 	autoSvc, err := services.NewClassificationServiceWithAutoDiscovery(cfg)
@@ -143,9 +150,6 @@ func ensureClassificationService(
 	}
 
 	logging.ComponentEvent("apiserver", "classification_service_autodiscovery_succeeded", map[string]interface{}{})
-	if runtimeRegistry != nil {
-		runtimeRegistry.SetClassificationService(autoSvc)
-	}
 	return autoSvc
 }
 

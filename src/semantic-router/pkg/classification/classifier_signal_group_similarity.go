@@ -164,13 +164,27 @@ func (c *Classifier) embeddingRuleCentroid(
 }
 
 func (c *EmbeddingClassifier) ensureCandidateEmbeddings() error {
+	c.preloadMu.Lock()
+	defer c.preloadMu.Unlock()
+
+	if c.preloadComplete {
+		return nil
+	}
 	if len(c.candidateEmbeddings) > 0 {
 		if len(c.rulePrototypeBanks) == 0 {
 			c.rebuildRulePrototypeBanks()
 		}
+		c.preloadComplete = true
 		return nil
 	}
-	return c.preloadCandidateEmbeddings()
+	if err := c.preloadCandidateEmbeddings(); err != nil {
+		c.candidateEmbeddings = make(map[string][]float32)
+		c.rulePrototypeBanks = make(map[string]*prototypeBank)
+		c.preloadComplete = false
+		return err
+	}
+	c.preloadComplete = true
+	return nil
 }
 
 func (c *EmbeddingClassifier) ruleCentroid(rule config.EmbeddingRule) ([]float32, error) {

@@ -366,6 +366,68 @@ func newTestEmbeddingClassifier(
 	return classifier
 }
 
+func TestEmbeddingClassifierConstructorDoesNotPreloadCandidates(t *testing.T) {
+	calls := 0
+	originalFunc := getEmbeddingWithModelType
+	getEmbeddingWithModelType = func(text string, modelType string, targetDim int) (*candle_binding.EmbeddingOutput, error) {
+		calls++
+		return nil, errors.New("constructor must not call embedding backend")
+	}
+	t.Cleanup(func() {
+		getEmbeddingWithModelType = originalFunc
+	})
+
+	classifier, err := NewEmbeddingClassifier(topicRules(), config.HNSWConfig{PreloadEmbeddings: true})
+	if err != nil {
+		t.Fatalf("NewEmbeddingClassifier failed: %v", err)
+	}
+	if calls != 0 {
+		t.Fatalf("constructor called embedding backend %d times, want 0", calls)
+	}
+	if got := classifier.GetPreloadStats(); got != 0 {
+		t.Fatalf("constructor preloaded %d candidates, want 0", got)
+	}
+}
+
+func TestEmbeddingClassifierWarmupFailureDoesNotPublishPartialEmbeddings(t *testing.T) {
+	failBadCandidate := true
+	originalFunc := getEmbeddingWithModelType
+	getEmbeddingWithModelType = func(text string, modelType string, targetDim int) (*candle_binding.EmbeddingOutput, error) {
+		if text == "bad" && failBadCandidate {
+			return nil, errors.New("synthetic embedding failure")
+		}
+		return &candle_binding.EmbeddingOutput{Embedding: makeEmbedding(1.0, 0.0, 0.0)}, nil
+	}
+	t.Cleanup(func() {
+		getEmbeddingWithModelType = originalFunc
+	})
+
+	classifier, err := NewEmbeddingClassifier([]config.EmbeddingRule{{
+		Name:                      "safe_publish",
+		Candidates:                []string{"good", "bad"},
+		SimilarityThreshold:       0.70,
+		AggregationMethodConfiged: config.AggregationMethodMax,
+	}}, config.HNSWConfig{PreloadEmbeddings: true})
+	if err != nil {
+		t.Fatalf("NewEmbeddingClassifier failed: %v", err)
+	}
+
+	if err := classifier.WarmupCandidateEmbeddings(); err == nil {
+		t.Fatal("expected warmup failure, got nil")
+	}
+	if got := classifier.GetPreloadStats(); got != 0 {
+		t.Fatalf("failed warmup published %d partial candidates, want 0", got)
+	}
+
+	failBadCandidate = false
+	if err := classifier.WarmupCandidateEmbeddings(); err != nil {
+		t.Fatalf("retrying warmup failed: %v", err)
+	}
+	if got := classifier.GetPreloadStats(); got != 2 {
+		t.Fatalf("retry preloaded %d candidates, want 2", got)
+	}
+}
+
 func stubEmbeddingLookup(t *testing.T, mockEmbeddings map[string][]float32) {
 	t.Helper()
 
@@ -605,6 +667,12 @@ func TestEmbeddingClassifier_PreloadCoversImageModalityCandidates(t *testing.T) 
 	classifier, err := NewEmbeddingClassifier(chipFabImageRules(), multimodalHNSWConfig(true))
 	if err != nil {
 		t.Fatalf("NewEmbeddingClassifier failed: %v", err)
+	}
+	if got := classifier.GetPreloadStats(); got != 0 {
+		t.Fatalf("constructor should not preload candidates, got %d", got)
+	}
+	if err := classifier.WarmupCandidateEmbeddings(); err != nil {
+		t.Fatalf("WarmupCandidateEmbeddings failed: %v", err)
 	}
 
 	// All four candidates across both image-modality rules should be preloaded.

@@ -3,6 +3,7 @@ package classification
 import (
 	"os"
 	"strings"
+	"sync"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
@@ -23,14 +24,16 @@ type EmbeddingClassifier struct {
 	rulePrototypeBanks  map[string]*prototypeBank
 
 	optimizationConfig config.HNSWConfig
-	preloadEnabled     bool
+	preloadRequested   bool
+	preloadComplete    bool
+	preloadMu          sync.Mutex
 	modelType          string
 	backend            string
 }
 
 // NewEmbeddingClassifier creates a new EmbeddingClassifier.
-// If optimization config has PreloadEmbeddings enabled, candidate embeddings
-// will be precomputed at initialization time for better runtime performance.
+// Construction is side-effect free: model-backed candidate embedding warmup is
+// owned by InitializeRuntime or by the first classification request.
 func NewEmbeddingClassifier(cfgRules []config.EmbeddingRule, optConfig config.HNSWConfig) (*EmbeddingClassifier, error) {
 	optConfig = optConfig.WithDefaults()
 
@@ -40,7 +43,7 @@ func NewEmbeddingClassifier(cfgRules []config.EmbeddingRule, optConfig config.HN
 		candidateEmbeddings: make(map[string][]float32),
 		rulePrototypeBanks:  make(map[string]*prototypeBank),
 		optimizationConfig:  optConfig,
-		preloadEnabled:      optConfig.PreloadEmbeddings,
+		preloadRequested:    optConfig.PreloadEmbeddings,
 		modelType:           optConfig.ModelType,
 		backend:             strings.ToLower(strings.TrimSpace(optConfig.Backend)),
 	}
@@ -54,18 +57,6 @@ func NewEmbeddingClassifier(cfgRules []config.EmbeddingRule, optConfig config.HN
 		"prototype_scoring":   optConfig.PrototypeScoring.IsEnabled(),
 		"multimodal_prepared": optConfig.ModelType == "multimodal",
 	})
-
-	if optConfig.PreloadEmbeddings {
-		if err := c.preloadCandidateEmbeddings(); err != nil {
-			logging.ComponentWarnEvent("classifier", "embedding_candidates_preload_failed", map[string]interface{}{
-				"model_type":       c.modelType,
-				"target_dimension": c.optimizationConfig.TargetDimension,
-				"error":            err.Error(),
-				"fallback":         "runtime_computation",
-			})
-			c.preloadEnabled = false
-		}
-	}
 
 	return c, nil
 }

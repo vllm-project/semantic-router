@@ -1,17 +1,23 @@
 package classification
 
 import (
+	"errors"
 	"testing"
 
+	candle_binding "github.com/vllm-project/semantic-router/candle-binding"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 )
 
 type countingEmbeddingInitializer struct {
-	calls int
+	calls  int
+	onInit func()
 }
 
 func (i *countingEmbeddingInitializer) Init(string, string, string, bool, string, string) error {
 	i.calls++
+	if i.onInit != nil {
+		i.onInit()
+	}
 	return nil
 }
 
@@ -64,6 +70,64 @@ func TestNewClassifierWithOptionsDefersRuntimeInitialization(t *testing.T) {
 	}
 	if initializer.calls != 1 {
 		t.Fatalf("initializer calls = %d, want 1", initializer.calls)
+	}
+}
+
+func TestInitializeRuntimeWarmsEmbeddingCandidatesAfterBackendInit(t *testing.T) {
+	cfg := &config.RouterConfig{
+		IntelligentRouting: config.IntelligentRouting{
+			Signals: config.Signals{
+				EmbeddingRules: []config.EmbeddingRule{{
+					Name:       "support",
+					Candidates: []string{"hello"},
+				}},
+			},
+		},
+		InlineModels: config.InlineModels{
+			EmbeddingModels: config.EmbeddingModels{
+				EmbeddingConfig: config.HNSWConfig{
+					ModelType:         "mmbert",
+					PreloadEmbeddings: true,
+				},
+			},
+		},
+	}
+
+	backendInitialized := false
+	initializer := &countingEmbeddingInitializer{onInit: func() {
+		backendInitialized = true
+	}}
+	originalFunc := getEmbeddingWithModelType
+	getEmbeddingWithModelType = func(text string, modelType string, targetDim int) (*candle_binding.EmbeddingOutput, error) {
+		if !backendInitialized {
+			return nil, errors.New("embedding preload ran before backend initialization")
+		}
+		return &candle_binding.EmbeddingOutput{Embedding: makeEmbedding(1.0, 0.0, 0.0)}, nil
+	}
+	t.Cleanup(func() {
+		getEmbeddingWithModelType = originalFunc
+	})
+
+	embeddingClassifier, err := NewEmbeddingClassifier(cfg.EmbeddingRules, cfg.EmbeddingConfig)
+	if err != nil {
+		t.Fatalf("NewEmbeddingClassifier() error = %v", err)
+	}
+	classifier, err := newClassifierWithOptions(
+		cfg,
+		withKeywordEmbeddingClassifier(initializer, embeddingClassifier),
+	)
+	if err != nil {
+		t.Fatalf("newClassifierWithOptions() error = %v", err)
+	}
+
+	if err := classifier.InitializeRuntime(); err != nil {
+		t.Fatalf("InitializeRuntime() error = %v", err)
+	}
+	if initializer.calls != 1 {
+		t.Fatalf("initializer calls = %d, want 1", initializer.calls)
+	}
+	if got := embeddingClassifier.GetPreloadStats(); got != 1 {
+		t.Fatalf("preloaded candidates = %d, want 1", got)
 	}
 }
 
