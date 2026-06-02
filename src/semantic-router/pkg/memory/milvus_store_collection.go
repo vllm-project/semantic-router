@@ -15,9 +15,9 @@ import (
 func (m *MilvusStore) ensureCollection(ctx context.Context) error {
 	logging.Infof("MilvusStore: ensuring collection '%s' (dimension=%d)", m.collectionName, m.config.Milvus.Dimension)
 
-	err := milvuslifecycle.EnsureCollectionLoaded(ctx, m.client, m.collectionName, func(innerCtx context.Context) error {
+	err := milvuslifecycle.EnsureCollectionLoadedWithRetry(ctx, m.client, m.collectionName, func(innerCtx context.Context) error {
 		return m.createMemoryCollection(innerCtx)
-	})
+	}, milvuslifecycle.CollectionRetryOptions{})
 	if err != nil {
 		return err
 	}
