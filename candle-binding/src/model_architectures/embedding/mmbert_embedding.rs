@@ -62,6 +62,14 @@ pub struct MmBertEmbeddingConfig {
     pub local_rope_theta: f64,
 }
 
+/// Query-block size for chunked (memory-bounded) attention.
+///
+/// Attention is computed in blocks of this many query positions so the full
+/// `seq×seq` score matrix is never materialized (~3.2 GB at 8K tokens), which is
+/// what crashed the router on long inputs (issue #1957). 512 is a good CPU
+/// memory/throughput trade-off; short inputs fit in a single block.
+const ATTN_QUERY_BLOCK: usize = 512;
+
 impl MmBertEmbeddingConfig {
     /// Load configuration from a pretrained model directory
     pub fn from_pretrained<P: AsRef<Path>>(model_path: P) -> UnifiedResult<Self> {
@@ -250,12 +258,32 @@ impl MmBertAttention {
         })
     }
 
+    /// Chunked (memory-bounded) self-attention.
+    ///
+    /// Instead of materializing the full `(b, heads, seq, seq)` score matrix — which
+    /// is ~3.2 GB at 8K tokens and the cause of OOM crashes (issue #1957) — this
+    /// processes the query dimension in blocks of `block_size`. For each query block:
+    /// - **global** layers attend to all keys (`(b, heads, block, seq)` transient),
+    /// - **local** layers attend only to the sliced `±window` key band
+    ///   (`(b, heads, block, ~block+2*window)` transient).
+    ///
+    /// The result is numerically identical to dense attention (each query attends to
+    /// exactly the same keys with the same pre-softmax scores); only the memory layout
+    /// and arithmetic grouping differ. RoPE is applied to the full `q`/`k` before
+    /// chunking so sliced blocks keep position-correct rotations.
+    ///
+    /// `pad_mask` is the `(b, 1, 1, seq)` padding mask (0 for real tokens, large
+    /// negative for padding), broadcast over query positions.
     fn forward(
         &self,
         hidden_states: &Tensor,
-        attention_mask: &Tensor,
+        pad_mask: &Tensor,
+        uses_local_attention: bool,
+        window: usize,
+        block_size: usize,
     ) -> candle_core::Result<Tensor> {
         let (b, seq_len, d) = hidden_states.dims3()?;
+        let device = hidden_states.device();
         let qkv = hidden_states
             .apply(&self.qkv)?
             .reshape((
@@ -271,21 +299,61 @@ impl MmBertAttention {
         let k = qkv.i(1)?;
         let v = qkv.i(2)?;
 
+        // Apply RoPE on the full q/k (cheap, O(seq*d)) before chunking.
         let (q, k) = self.rotary_emb.apply_rotary_emb_qkv(&q, &k)?;
 
         let scale = (self.attention_head_size as f64).powf(-0.5);
-        let q = (q * scale)?;
-
-        // Ensure contiguous tensors for matmul
-        let q = q.contiguous()?;
-        let k_t = k.transpose(D::Minus2, D::Minus1)?.contiguous()?;
-        let att = q.matmul(&k_t)?;
-        let att = att.broadcast_add(attention_mask)?;
-        let att = candle_nn::ops::softmax(&att, D::Minus1)?;
-
-        // Ensure v is contiguous for matmul
+        let q = (q * scale)?.contiguous()?;
+        let k = k.contiguous()?;
         let v = v.contiguous()?;
-        let xs = att.matmul(&v)?;
+
+        // A non-positive block size means "no chunking" (single block over the whole
+        // sequence); guard against a zero so the loop always makes progress.
+        let block = if block_size == 0 {
+            seq_len.max(1)
+        } else {
+            block_size
+        };
+
+        let mut out_blocks: Vec<Tensor> = Vec::new();
+        let mut qs = 0usize;
+        while qs < seq_len {
+            let blk = block.min(seq_len - qs);
+            let qe = qs + blk;
+
+            // Key/value range for this query block.
+            let (ks, ke) = if uses_local_attention {
+                (qs.saturating_sub(window), (qe + window).min(seq_len))
+            } else {
+                (0, seq_len)
+            };
+            let kw = ke - ks;
+
+            let q_blk = q.narrow(2, qs, blk)?.contiguous()?; // (b, heads, blk, hd)
+            let k_win = k.narrow(2, ks, kw)?;
+            let v_win = v.narrow(2, ks, kw)?.contiguous()?; // (b, heads, kw, hd)
+            let k_t = k_win.transpose(D::Minus2, D::Minus1)?.contiguous()?; // (b, heads, hd, kw)
+
+            // (b, heads, blk, kw)
+            let mut scores = q_blk.matmul(&k_t)?;
+
+            // Padding mask slice over the key range: (b, 1, 1, kw), broadcasts.
+            let pad_slice = pad_mask.narrow(D::Minus1, ks, kw)?;
+            scores = scores.broadcast_add(&pad_slice)?;
+
+            // Sliding-window band: keep only |i - j| <= window within the key superset.
+            if uses_local_attention {
+                let band = build_local_band_mask(qs, blk, ks, kw, window, device)?;
+                scores = scores.broadcast_add(&band)?;
+            }
+
+            let probs = candle_nn::ops::softmax(&scores, D::Minus1)?;
+            out_blocks.push(probs.matmul(&v_win)?); // (b, heads, blk, hd)
+
+            qs = qe;
+        }
+
+        let xs = Tensor::cat(&out_blocks, 2)?; // (b, heads, seq, hd)
         let xs = xs.transpose(1, 2)?.reshape((b, seq_len, d))?;
         xs.apply(&self.proj)
     }
@@ -363,8 +431,9 @@ impl MmBertLayer {
     fn forward(
         &self,
         xs: &Tensor,
-        global_attention_mask: &Tensor,
-        local_attention_mask: &Tensor,
+        pad_mask: &Tensor,
+        window: usize,
+        block_size: usize,
     ) -> candle_core::Result<Tensor> {
         let residual = xs.clone();
         let mut xs = xs.clone();
@@ -372,12 +441,9 @@ impl MmBertLayer {
             xs = xs.apply(norm)?;
         }
 
-        let attention_mask = if self.uses_local_attention {
-            &global_attention_mask.broadcast_add(local_attention_mask)?
-        } else {
-            global_attention_mask
-        };
-        let xs = self.attn.forward(&xs, attention_mask)?;
+        let xs = self
+            .attn
+            .forward(&xs, pad_mask, self.uses_local_attention, window, block_size)?;
         let xs = (xs + residual)?;
         let mlp_out = xs.apply(&self.mlp_norm)?.apply(&self.mlp)?;
         xs + mlp_out
@@ -388,42 +454,46 @@ impl MmBertLayer {
 // Attention Mask Helpers
 // ============================================================================
 
-fn prepare_4d_attention_mask(
-    mask: &Tensor,
-    dtype: DType,
-    tgt_len: Option<usize>,
-) -> candle_core::Result<Tensor> {
-    let bsz = mask.dim(0)?;
-    let src_len = mask.dim(1)?;
-    let tgt_len = tgt_len.unwrap_or(src_len);
-
-    let expanded_mask = mask
-        .unsqueeze(1)?
-        .unsqueeze(2)?
-        .expand((bsz, 1, tgt_len, src_len))?
-        .to_dtype(dtype)?;
-
+/// Build the additive padding mask in `(b, 1, 1, seq)` form.
+///
+/// Real tokens map to `0`, padding tokens to a large negative value, so that
+/// `scores.broadcast_add(pad_mask)` zeroes out padding after softmax. Unlike the
+/// previous `(b, 1, seq, seq)` expansion, this keeps the mask O(seq) — the value
+/// depends only on the key position and broadcasts over query positions.
+fn prepare_padding_mask(mask: &Tensor, dtype: DType) -> candle_core::Result<Tensor> {
+    let expanded_mask = mask.unsqueeze(1)?.unsqueeze(2)?.to_dtype(dtype)?; // (b, 1, 1, seq)
     let inverted_mask = (1.0 - expanded_mask)?;
     (inverted_mask * f32::MIN as f64)?.to_dtype(dtype)
 }
 
-fn get_local_attention_mask(
-    seq_len: usize,
-    max_distance: usize,
+/// Build the additive sliding-window band mask for one query block.
+///
+/// Returns a `(q_len, k_len)` tensor (broadcasts over batch/heads) where entry
+/// `(a, c)` — query at absolute index `q_start + a`, key at `k_start + c` — is `0`
+/// when within the window (`|i - j| <= window`) and `-inf` otherwise. Called only
+/// for local-attention layers; the key range is the per-block superset `[k_start,
+/// k_start + k_len)`, so this mask removes the edge keys that fall outside an
+/// individual query's window.
+fn build_local_band_mask(
+    q_start: usize,
+    q_len: usize,
+    k_start: usize,
+    k_len: usize,
+    window: usize,
     device: &Device,
 ) -> candle_core::Result<Tensor> {
-    let mask: Vec<_> = (0..seq_len)
-        .flat_map(|i| {
-            (0..seq_len).map(move |j| {
-                if (j as i32 - i as i32).abs() > max_distance as i32 {
-                    f32::NEG_INFINITY
-                } else {
-                    0.
-                }
-            })
-        })
-        .collect();
-    Tensor::from_slice(&mask, (seq_len, seq_len), device)
+    let window = window as i64;
+    let mut mask = vec![0f32; q_len * k_len];
+    for a in 0..q_len {
+        let i = (q_start + a) as i64;
+        for c in 0..k_len {
+            let j = (k_start + c) as i64;
+            if (i - j).abs() > window {
+                mask[a * k_len + c] = f32::NEG_INFINITY;
+            }
+        }
+    }
+    Tensor::from_slice(&mask, (q_len, k_len), device)
 }
 
 // ============================================================================
@@ -509,18 +579,17 @@ impl MmBertEncoder {
         mask: &Tensor,
         target_layer: usize,
     ) -> candle_core::Result<Tensor> {
-        let seq_len = xs.shape().dims()[1];
-        let global_attention_mask =
-            prepare_4d_attention_mask(mask, DType::F32, None)?.to_device(xs.device())?;
-        let local_attention_mask =
-            get_local_attention_mask(seq_len, self.local_attention_size / 2, xs.device())?;
+        // Padding mask (b, 1, 1, seq), sliced per query block inside attention.
+        let pad_mask = prepare_padding_mask(mask, DType::F32)?.to_device(xs.device())?;
+        let window = self.local_attention_size / 2;
+        let block_size = ATTN_QUERY_BLOCK;
 
         let mut xs = xs.apply(&self.word_embeddings)?.apply(&self.norm)?;
 
         // Only iterate through layers up to target_layer
         let num_layers_to_run = target_layer.min(self.layers.len());
         for layer in self.layers.iter().take(num_layers_to_run) {
-            xs = layer.forward(&xs, &global_attention_mask, &local_attention_mask)?;
+            xs = layer.forward(&xs, &pad_mask, window, block_size)?;
         }
 
         xs.apply(&self.final_norm)
@@ -560,14 +629,18 @@ impl MmBertEmbeddingModel {
 
         let safetensors_path = format!("{}/model.safetensors", model_path);
         let vb = unsafe {
-            VarBuilder::from_mmaped_safetensors(&[safetensors_path.clone()], DType::F32, device)
-                .map_err(|e| {
-                    from_candle_error(
-                        e,
-                        &format!("failed to load safetensors from {}", safetensors_path),
-                        Some(model_path),
-                    )
-                })?
+            VarBuilder::from_mmaped_safetensors(
+                std::slice::from_ref(&safetensors_path),
+                DType::F32,
+                device,
+            )
+            .map_err(|e| {
+                from_candle_error(
+                    e,
+                    &format!("failed to load safetensors from {}", safetensors_path),
+                    Some(model_path),
+                )
+            })?
         };
 
         Self::load_with_vb(model_path, &config, vb, device)
@@ -756,7 +829,7 @@ impl MmBertEmbeddingModel {
             for i in 0..seq_len {
                 if i < ids.len() {
                     input_ids_vec.push(ids[i]);
-                    attention_mask_vec.push(mask[i] as u32);
+                    attention_mask_vec.push(mask[i]);
                 } else {
                     input_ids_vec.push(0);
                     attention_mask_vec.push(0);
@@ -982,8 +1055,9 @@ mod tests {
         let local_window = 128;
         let half_window = local_window / 2;
 
-        // Generate mask (same logic as get_local_attention_mask)
-        let mask = get_local_attention_mask(seq_len, half_window, &device)
+        // The full-range band mask (q_start=0, k_start=0, covering the whole
+        // sequence) reproduces the dense local-attention mask semantics.
+        let mask = build_local_band_mask(0, seq_len, 0, seq_len, half_window, &device)
             .expect("Failed to create local attention mask");
 
         assert_eq!(mask.dims(), &[seq_len, seq_len]);
@@ -1005,6 +1079,209 @@ mod tests {
         }
 
         println!("Local attention mask verified for seq_len={}", seq_len);
+    }
+
+    // ------------------------------------------------------------------
+    // Chunked windowed attention equivalence (issue #1957)
+    // ------------------------------------------------------------------
+
+    /// Minimal config for exercising the attention math without model weights.
+    fn tiny_attention_config() -> MmBertEmbeddingConfig {
+        MmBertEmbeddingConfig {
+            vocab_size: 100,
+            hidden_size: 32,
+            num_hidden_layers: 1,
+            num_attention_heads: 4,
+            intermediate_size: 64,
+            max_position_embeddings: 256,
+            layer_norm_eps: 1e-5,
+            pad_token_id: 0,
+            global_attn_every_n_layers: 3,
+            global_rope_theta: 160000.0,
+            local_attention: 8, // window = 4 each side
+            local_rope_theta: 160000.0,
+        }
+    }
+
+    /// Build an attention block with deterministic random weights.
+    fn make_test_attention(config: &MmBertEmbeddingConfig, device: &Device) -> MmBertAttention {
+        let hidden = config.hidden_size;
+        let wqkv = Tensor::randn(0f32, 0.2f32, (hidden * 3, hidden), device).unwrap();
+        let wo = Tensor::randn(0f32, 0.2f32, (hidden, hidden), device).unwrap();
+        let rotary = Arc::new(
+            RotaryEmbedding::new(DType::F32, config, config.global_rope_theta, device).unwrap(),
+        );
+        MmBertAttention {
+            qkv: Linear::new(wqkv, None),
+            proj: Linear::new(wo, None),
+            num_attention_heads: config.num_attention_heads,
+            attention_head_size: hidden / config.num_attention_heads,
+            rotary_emb: rotary,
+        }
+    }
+
+    /// Reference dense attention: the pre-chunking implementation. Materializes the
+    /// full `(b, heads, seq, seq)` score matrix and applies the same additive masks.
+    fn dense_reference_attention(
+        attn: &MmBertAttention,
+        hidden_states: &Tensor,
+        pad_mask: &Tensor,
+        uses_local_attention: bool,
+        window: usize,
+    ) -> Tensor {
+        let (b, seq_len, d) = hidden_states.dims3().unwrap();
+        let device = hidden_states.device();
+        let qkv = hidden_states
+            .apply(&attn.qkv)
+            .unwrap()
+            .reshape((
+                b,
+                seq_len,
+                3,
+                attn.num_attention_heads,
+                attn.attention_head_size,
+            ))
+            .unwrap()
+            .permute((2, 0, 3, 1, 4))
+            .unwrap();
+        let q = qkv.i(0).unwrap();
+        let k = qkv.i(1).unwrap();
+        let v = qkv.i(2).unwrap();
+        let (q, k) = attn.rotary_emb.apply_rotary_emb_qkv(&q, &k).unwrap();
+        let scale = (attn.attention_head_size as f64).powf(-0.5);
+        let q = (q * scale).unwrap().contiguous().unwrap();
+        let k_t = k
+            .transpose(D::Minus2, D::Minus1)
+            .unwrap()
+            .contiguous()
+            .unwrap();
+        let mut att = q.matmul(&k_t).unwrap(); // (b, heads, seq, seq)
+        att = att.broadcast_add(pad_mask).unwrap();
+        if uses_local_attention {
+            let band = build_local_band_mask(0, seq_len, 0, seq_len, window, device).unwrap();
+            att = att.broadcast_add(&band).unwrap();
+        }
+        let att = candle_nn::ops::softmax(&att, D::Minus1).unwrap();
+        let v = v.contiguous().unwrap();
+        let xs = att.matmul(&v).unwrap();
+        let xs = xs
+            .transpose(1, 2)
+            .unwrap()
+            .reshape((b, seq_len, d))
+            .unwrap();
+        xs.apply(&attn.proj).unwrap()
+    }
+
+    fn max_abs_diff(a: &Tensor, b: &Tensor) -> f32 {
+        a.broadcast_sub(b)
+            .unwrap()
+            .abs()
+            .unwrap()
+            .flatten_all()
+            .unwrap()
+            .max(0)
+            .unwrap()
+            .to_scalar::<f32>()
+            .unwrap()
+    }
+
+    /// Zero padding mask (all tokens real): shape (b, 1, 1, seq).
+    fn zero_pad_mask(b: usize, seq_len: usize, device: &Device) -> Tensor {
+        Tensor::zeros((b, 1, 1, seq_len), DType::F32, device).unwrap()
+    }
+
+    #[test]
+    fn test_chunked_attention_matches_dense() {
+        let device = Device::Cpu;
+        let config = tiny_attention_config();
+        let attn = make_test_attention(&config, &device);
+        let window = config.local_attention / 2;
+
+        // Cover global + local layers, several block sizes (including divisor,
+        // non-divisor, single-block, block smaller than window).
+        for &uses_local in &[false, true] {
+            for &seq_len in &[1usize, 5, 16, 40] {
+                let hidden =
+                    Tensor::randn(0f32, 1f32, (1, seq_len, config.hidden_size), &device).unwrap();
+                let pad = zero_pad_mask(1, seq_len, &device);
+                let reference = dense_reference_attention(&attn, &hidden, &pad, uses_local, window);
+
+                for &block in &[1usize, 3, 8, 16, 512] {
+                    let chunked = attn
+                        .forward(&hidden, &pad, uses_local, window, block)
+                        .unwrap();
+                    let diff = max_abs_diff(&chunked, &reference);
+                    assert!(
+                        diff < 1e-4,
+                        "local={} seq={} block={}: max|Δ|={}",
+                        uses_local,
+                        seq_len,
+                        block,
+                        diff
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn test_chunked_attention_matches_dense_with_padding() {
+        let device = Device::Cpu;
+        let config = tiny_attention_config();
+        let attn = make_test_attention(&config, &device);
+        let window = config.local_attention / 2;
+        let seq_len = 24;
+
+        // Last 7 positions are padding.
+        let mut mask_vec = vec![1u32; seq_len];
+        for m in mask_vec.iter_mut().skip(seq_len - 7) {
+            *m = 0;
+        }
+        let raw_mask = Tensor::from_vec(mask_vec, (1, seq_len), &device).unwrap();
+        let pad = prepare_padding_mask(&raw_mask, DType::F32).unwrap();
+
+        let hidden = Tensor::randn(0f32, 1f32, (1, seq_len, config.hidden_size), &device).unwrap();
+
+        for &uses_local in &[false, true] {
+            let reference = dense_reference_attention(&attn, &hidden, &pad, uses_local, window);
+            for &block in &[3usize, 8, 512] {
+                let chunked = attn
+                    .forward(&hidden, &pad, uses_local, window, block)
+                    .unwrap();
+                let diff = max_abs_diff(&chunked, &reference);
+                assert!(
+                    diff < 1e-4,
+                    "padding local={} block={}: max|Δ|={}",
+                    uses_local,
+                    block,
+                    diff
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn test_band_mask_window_semantics() {
+        let device = Device::Cpu;
+        // Offset block: queries [10,14), keys [6,20), window 4.
+        let band = build_local_band_mask(10, 4, 6, 14, 4, &device).unwrap();
+        assert_eq!(band.dims(), &[4, 14]);
+        let data: Vec<f32> = band.flatten_all().unwrap().to_vec1().unwrap();
+        for a in 0..4usize {
+            let i = 10 + a as i64;
+            for c in 0..14usize {
+                let j = 6 + c as i64;
+                let v = data[a * 14 + c];
+                if (i - j).abs() > 4 {
+                    assert!(
+                        v.is_infinite() && v.is_sign_negative(),
+                        "expected -inf at ({a},{c})"
+                    );
+                } else {
+                    assert_eq!(v, 0.0, "expected 0 at ({a},{c})");
+                }
+            }
+        }
     }
 
     #[test]
@@ -1068,11 +1345,7 @@ mod integration_tests {
         let text = "Hello world";
         let encoding = tokenizer.encode(text, true).unwrap();
         let input_ids: Vec<u32> = encoding.get_ids().to_vec();
-        let attention_mask: Vec<u32> = encoding
-            .get_attention_mask()
-            .iter()
-            .map(|&x| x as u32)
-            .collect();
+        let attention_mask: Vec<u32> = encoding.get_attention_mask().to_vec();
         let seq_len = input_ids.len();
 
         let input_ids = Tensor::from_vec(input_ids, (1, seq_len), &device).unwrap();
@@ -1087,7 +1360,7 @@ mod integration_tests {
                     Some(target_layer),
                     None,
                 )
-                .expect(&format!("Failed at layer {}", target_layer));
+                .unwrap_or_else(|_| panic!("Failed at layer {}", target_layer));
 
             let shape = embeddings.dims();
             assert_eq!(shape[0], 1);
@@ -1125,11 +1398,7 @@ mod integration_tests {
         let text = "Test 2D Matryoshka";
         let encoding = tokenizer.encode(text, true).unwrap();
         let input_ids: Vec<u32> = encoding.get_ids().to_vec();
-        let attention_mask: Vec<u32> = encoding
-            .get_attention_mask()
-            .iter()
-            .map(|&x| x as u32)
-            .collect();
+        let attention_mask: Vec<u32> = encoding.get_attention_mask().to_vec();
         let seq_len = input_ids.len();
 
         let input_ids = Tensor::from_vec(input_ids, (1, seq_len), &device).unwrap();
@@ -1145,7 +1414,7 @@ mod integration_tests {
                         Some(target_layer),
                         Some(target_dim),
                     )
-                    .expect(&format!("Failed at L{}/{}d", target_layer, target_dim));
+                    .unwrap_or_else(|_| panic!("Failed at L{}/{}d", target_layer, target_dim));
 
                 let shape = embeddings.dims();
                 assert_eq!(shape[0], 1);
@@ -1235,7 +1504,7 @@ mod integration_tests {
             let start = std::time::Instant::now();
             let embeddings = model
                 .embedding_forward(&input_ids, Some(&attention_mask))
-                .expect(&format!("Failed at seq_len={}", seq_len));
+                .unwrap_or_else(|_| panic!("Failed at seq_len={}", seq_len));
             let elapsed = start.elapsed();
 
             let shape = embeddings.dims();
