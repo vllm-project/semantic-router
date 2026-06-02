@@ -37,6 +37,43 @@ func ShouldSkipCacheWrite(ctx *RequestContext) (bool, string) {
 	return false, ""
 }
 
+// retentionDefaultSecondsPerTurn converts a retention `ttl_turns` directive into
+// a per-entry cache TTL. The retention contract expresses lifetime in
+// conversation turns, but the semantic cache backends key expiry on wall-clock
+// seconds, so one turn is approximated as this many seconds. This is a
+// deliberate MVP simplification (issue #2009); promoting it to a configurable
+// knob (e.g. global.router.retention.seconds_per_turn) is a follow-up.
+const retentionDefaultSecondsPerTurn = 60
+
+// retentionTTLOverrideSeconds converts an emitted retention `ttl_turns`
+// directive into a per-entry cache TTL in seconds. Only a positive ttl_turns
+// produces an override; nil and zero fall through — config/DSL validation
+// already rejects negatives, forbids drop=true together with ttl_turns>0, and
+// treats ttl_turns=0 as a no-op (validator_decision_emit.go). Returns
+// (seconds, true) only when an override applies.
+func retentionTTLOverrideSeconds(ctx *RequestContext) (int, bool) {
+	if ctx == nil || ctx.EmittedRetention == nil || ctx.EmittedRetention.TTLTurns == nil {
+		return 0, false
+	}
+	turns := *ctx.EmittedRetention.TTLTurns
+	if turns <= 0 {
+		return 0, false
+	}
+	return turns * retentionDefaultSecondsPerTurn, true
+}
+
+// applyRetentionTTLOverride returns the cache-write TTL (seconds) to use,
+// preferring an emitted retention `ttl_turns` override over the decision/global
+// default. Callers compute the base TTL (GetCacheTTLSecondsForDecision) first
+// and pass it here. This runs only after the drop gate (ShouldSkipCacheWrite);
+// drop and ttl_turns are mutually exclusive by validation.
+func applyRetentionTTLOverride(base int, ctx *RequestContext) int {
+	if override, ok := retentionTTLOverrideSeconds(ctx); ok {
+		return override
+	}
+	return base
+}
+
 // observeRetentionDirective records every declared field of the emitted
 // retention directive to log + trace. It is invoked once per matched decision
 // (right after the deep clone in applyDecisionResultToContext). Fields that

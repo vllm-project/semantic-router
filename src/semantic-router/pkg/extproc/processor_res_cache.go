@@ -52,6 +52,9 @@ func (r *OpenAIRouter) updateResponseCache(ctx *RequestContext, responseBody []b
 	if r != nil && r.Config != nil {
 		ttlSeconds = r.Config.GetCacheTTLSecondsForDecision(decisionName)
 	}
+	// Retention ttl_turns (when set) overrides the decision/global default,
+	// scoping this entry to a turn-bounded lifetime (§2.8 order: ... -> TTL -> write).
+	ttlSeconds = applyRetentionTTLOverride(ttlSeconds, ctx)
 	if err := r.Cache.UpdateWithResponse(ctx.RequestID, responseBody, ttlSeconds); err != nil {
 		logging.Errorf("Error updating cache: %v", err)
 		return
@@ -242,6 +245,9 @@ func (r *OpenAIRouter) cacheReconstructedStreamingResponse(
 	if r != nil && r.Config != nil {
 		ttlSeconds = r.Config.GetCacheTTLSecondsForDecision(decisionName)
 	}
+	// Retention ttl_turns (when set) overrides the decision/global default for
+	// the reconstructed streaming entry, mirroring the non-streaming path.
+	ttlSeconds = applyRetentionTTLOverride(ttlSeconds, ctx)
 
 	if ctx.RequestID == "" {
 		logging.Warnf("No request ID available, cannot cache streaming response")
