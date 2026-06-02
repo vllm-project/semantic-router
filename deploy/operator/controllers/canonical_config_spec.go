@@ -105,6 +105,13 @@ func (r *SemanticRouterReconciler) applyOperatorServices(canonical *routerconfig
 }
 
 func (r *SemanticRouterReconciler) applyOperatorRouting(canonical *routerconfig.CanonicalConfig, spec vllmv1alpha1.ConfigSpec) error {
+	if spec.Routing != nil {
+		routing, fields, err := canonicalRoutingFromKubernetesJSON(spec.Routing)
+		if err != nil {
+			return formatCanonicalRoutingOverrideError(err)
+		}
+		applyCanonicalRoutingOverrides(canonical, routing, fields)
+	}
 	if len(spec.ComplexityRules) > 0 {
 		complexity, err := r.convertComplexityRules(spec.ComplexityRules)
 		if err != nil {

@@ -259,6 +259,15 @@ type PersistenceSpec struct {
 
 // ConfigSpec defines the semantic router configuration
 type ConfigSpec struct {
+	// Routing contains canonical v0.3 routing configuration under config.routing.
+	// It is intentionally preserved as an object so the operator can pass through
+	// the router-owned signal, projection, decision, and algorithm contract without
+	// lagging behind every router schema addition.
+	// +optional
+	// +kubebuilder:pruning:PreserveUnknownFields
+	// +kubebuilder:validation:Type=object
+	Routing *apiextensionsv1.JSON `json:"routing,omitempty" yaml:"routing,omitempty"`
+
 	// Embedding models configuration (qwen3, gemma, mmbert)
 	// +optional
 	EmbeddingModels *EmbeddingModelsConfig `json:"embedding_models,omitempty"`
@@ -1232,6 +1241,14 @@ type DecisionConfig struct {
 	// Plugins contains policy configurations applied after rule matching
 	// +optional
 	Plugins []runtime.RawExtension `json:"plugins,omitempty" yaml:"plugins,omitempty"`
+
+	// Algorithm configures model selection for this decision. It is preserved as
+	// a router-owned object so supported algorithms such as session_aware can
+	// evolve without requiring the operator CRD to duplicate every nested field.
+	// +optional
+	// +kubebuilder:pruning:PreserveUnknownFields
+	// +kubebuilder:validation:Type=object
+	Algorithm *apiextensionsv1.JSON `json:"algorithm,omitempty" yaml:"algorithm,omitempty"`
 }
 
 // RuleCombinationConfig defines how to combine multiple rule conditions
@@ -1247,8 +1264,8 @@ type RuleCombinationConfig struct {
 
 // RuleConditionConfig references a specific rule by type and name
 type RuleConditionConfig struct {
-	// Type specifies the rule type: "keyword", "embedding", "domain", "complexity", or "fact_check"
-	// +kubebuilder:validation:Enum=keyword;embedding;domain;complexity;fact_check;context
+	// Type specifies the signal or projection type referenced by this condition.
+	// +kubebuilder:validation:Enum=keyword;embedding;domain;fact_check;user_feedback;reask;preference;language;context;structure;complexity;modality;authz;jailbreak;pii;kb;conversation;event;projection
 	Type string `json:"type" yaml:"type"`
 
 	// Name is the name of the rule to reference

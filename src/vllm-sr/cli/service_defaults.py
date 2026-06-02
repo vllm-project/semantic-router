@@ -40,7 +40,9 @@ def is_setup_mode_config(config: Mapping[str, Any]) -> bool:
     return isinstance(setup_config, Mapping) and setup_config.get("mode") is True
 
 
-def detect_canonical_storage_backends(config: Mapping[str, Any]) -> set[str]:
+def detect_canonical_storage_backends(
+    config: Mapping[str, Any], stack_layout: RuntimeStackLayout | None = None
+) -> set[str]:
     """Return provisionable backends implied by canonical service and store defaults.
 
     Setup-mode bootstrap still uses the local default sidecar stack so the
@@ -53,8 +55,7 @@ def detect_canonical_storage_backends(config: Mapping[str, Any]) -> set[str]:
         if backend in {"redis", "postgres"}:
             backends.add(backend)
 
-    store_backend = _effective_store_backend(config, "semantic_cache", "backend_type")
-    if store_backend == "milvus":
+    if _semantic_cache_requires_managed_milvus(config, stack_layout):
         backends.add("milvus")
 
     vs_metadata = _vector_store_metadata_backend(config)
@@ -62,6 +63,45 @@ def detect_canonical_storage_backends(config: Mapping[str, Any]) -> set[str]:
         backends.add("postgres")
 
     return backends
+
+
+def _semantic_cache_requires_managed_milvus(
+    config: Mapping[str, Any], stack_layout: RuntimeStackLayout | None
+) -> bool:
+    if _effective_store_backend(config, "semantic_cache", "backend_type") != "milvus":
+        return False
+
+    if stack_layout is None:
+        return True
+
+    host = _semantic_cache_milvus_connection_host(config)
+    if not host:
+        return True
+
+    return host == stack_layout.milvus_container_name
+
+
+def _semantic_cache_milvus_connection_host(config: Mapping[str, Any]) -> str | None:
+    stores = _stores_mapping(config)
+    if stores is _INVALID_MAPPING:
+        return None
+
+    cache_config = stores.get("semantic_cache")
+    if not isinstance(cache_config, Mapping):
+        return None
+
+    milvus_config = cache_config.get("milvus")
+    if not isinstance(milvus_config, Mapping):
+        return None
+
+    connection_config = milvus_config.get("connection")
+    if not isinstance(connection_config, Mapping):
+        return None
+
+    host = connection_config.get("host")
+    if host is None:
+        return None
+    return str(host).strip() or None
 
 
 def effective_service_backend(
