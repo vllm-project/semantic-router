@@ -242,6 +242,19 @@ class ConversationRule(BaseModel):
     predicate: Optional[NumericPredicate] = None
 
 
+class EventRule(BaseModel):
+    """Structured event metadata routing signal configuration."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    name: str
+    event_types: Optional[List[str]] = None
+    severities: Optional[List[str]] = None
+    action_codes: Optional[List[str]] = None
+    temporal: bool = False
+    description: Optional[str] = None
+
+
 class ComplexityCandidates(BaseModel):
     """Complexity candidates configuration."""
 
@@ -397,6 +410,7 @@ class Signals(BaseModel):
     pii: Optional[List[PIIRule]] = []
     kb: Optional[List[KBSignal]] = []
     conversation: Optional[List[ConversationRule]] = []
+    events: Optional[List[EventRule]] = []
 
 
 class Condition(BaseModel):

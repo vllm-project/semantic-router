@@ -1,6 +1,10 @@
 package handlers
 
-import "testing"
+import (
+	"strings"
+	"testing"
+	"unicode/utf8"
+)
 
 func TestShouldPreferJinaFetch(t *testing.T) {
 	t.Parallel()
@@ -69,5 +73,20 @@ func TestNormalizeOpenWebMaxLength(t *testing.T) {
 			got,
 			openWebMaxContentLength,
 		)
+	}
+}
+
+func TestTruncateOpenWebContentPreservesUTF8(t *testing.T) {
+	t.Parallel()
+
+	got, truncated := truncateOpenWebContent("你好世界🌏abc", 4)
+	if !truncated {
+		t.Fatal("truncateOpenWebContent did not report truncation")
+	}
+	if !utf8.ValidString(got) {
+		t.Fatalf("truncateOpenWebContent returned invalid UTF-8: %q", got)
+	}
+	if !strings.HasPrefix(got, "你好世界") {
+		t.Fatalf("truncateOpenWebContent prefix = %q, want rune boundary prefix", got)
 	}
 }

@@ -10,6 +10,8 @@ from cli.models import Projections, Signals
 def test_legacy_signal_inventory_covers_flat_authz_and_context_blocks():
     assert LEGACY_SIGNAL_KEY_TO_CANONICAL["role_bindings"] == "role_bindings"
     assert LEGACY_SIGNAL_KEY_TO_CANONICAL["context_rules"] == "context"
+    assert LEGACY_SIGNAL_KEY_TO_CANONICAL["events"] == "events"
+    assert "session_metrics" not in LEGACY_SIGNAL_KEY_TO_CANONICAL
 
 
 def test_build_signal_reference_index_expands_complexity_levels_and_authz_names():
@@ -28,6 +30,13 @@ def test_build_signal_reference_index_expands_complexity_levels_and_authz_names(
                 "subjects": [{"kind": "User", "name": "alice"}],
             }
         ],
+        events=[
+            {
+                "name": "critical_event",
+                "event_types": ["payment_failed"],
+                "severities": ["critical"],
+            }
+        ],
     )
 
     signal_names = build_signal_reference_index(signals)
@@ -36,6 +45,7 @@ def test_build_signal_reference_index_expands_complexity_levels_and_authz_names(
     assert "difficulty:medium" in signal_names
     assert "difficulty:hard" in signal_names
     assert "admin-access" in signal_names
+    assert "critical_event" in signal_names
 
 
 def test_signal_reference_exists_strips_suffixes_for_non_complexity_signals():

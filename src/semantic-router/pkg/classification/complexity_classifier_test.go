@@ -1,10 +1,42 @@
 package classification
 
 import (
+	"runtime"
 	"testing"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 )
+
+func TestComplexityWorkerCountSerializesDefaultCandleRuntime(t *testing.T) {
+	t.Setenv("EMBEDDING_BACKEND_OVERRIDE", "")
+
+	if got := complexityWorkerCount(60); got != 1 {
+		t.Fatalf("complexityWorkerCount() = %d, want 1 for default candle runtime", got)
+	}
+}
+
+func TestComplexityWorkerCountSerializesExplicitCandleRuntime(t *testing.T) {
+	t.Setenv("EMBEDDING_BACKEND_OVERRIDE", "candle")
+
+	if got := complexityWorkerCount(60); got != 1 {
+		t.Fatalf("complexityWorkerCount() = %d, want 1 for explicit candle runtime", got)
+	}
+}
+
+func TestComplexityWorkerCountBoundsNonCandleRuntime(t *testing.T) {
+	t.Setenv("EMBEDDING_BACKEND_OVERRIDE", "openvino")
+
+	got := complexityWorkerCount(3)
+	if got != 3 {
+		t.Fatalf("complexityWorkerCount() = %d, want task-count bound 3", got)
+	}
+
+	got = complexityWorkerCount(1000)
+	want := runtime.NumCPU() * 2
+	if got != want {
+		t.Fatalf("complexityWorkerCount() = %d, want CPU bound %d", got, want)
+	}
+}
 
 func TestComplexityClassifier_ClassifyDetailedWithImageUsesPrototypeBanks(t *testing.T) {
 	stubEmbeddingLookup(t, map[string][]float32{

@@ -158,7 +158,7 @@ def start_vllm_sr(
     )
 
     started_backends = provision_storage_backends(
-        user_config, shared_network_name, stack_layout
+        user_config, shared_network_name, stack_layout, state_root_dir=state_root_dir
     )
 
     observability_network_name = start_observability_stack(

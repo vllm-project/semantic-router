@@ -221,6 +221,15 @@ def wait_for_router_health(stack_layout: RuntimeStackLayout) -> None:
         _emit_router_startup_logs(router_container, int(last_log_time))
         last_log_time = time.time()
 
+        status = docker_container_status(router_container)
+        if status != "running":
+            log.error(
+                f"Router container is not running during readiness wait: {status}"
+            )
+            log.info("Showing Router container logs:")
+            docker_logs(router_container, follow=False, tail=120)
+            raise SystemExit(1)
+
         return_code, _stdout, _stderr = docker_exec(
             router_container,
             ["curl", "-f", "-s", f"http://localhost:{DEFAULT_API_PORT}/ready"],

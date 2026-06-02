@@ -70,23 +70,21 @@ Some prompt traffic naturally falls into recurring regions where the same model 
 ```yaml
 algorithm:
   type: kmeans
-  kmeans:
-    num_clusters: 8                            # Number of clusters
-    efficiency_weight: 0.0                     # Quality vs. efficiency tradeoff
-    pretrained_path: .cache/ml-models/kmeans_model.json  # Pre-trained model
 ```
 
-### Global ML Settings (optional)
+### Global ML Settings
 
 ```yaml
-model_selection:
-  ml:
-    models_path: ".cache/ml-models"
-    embedding_dim: 768
-    kmeans:
-      num_clusters: 8
-      efficiency_weight: 0.0
-      pretrained_path: .cache/ml-models/kmeans_model.json
+global:
+  router:
+    model_selection:
+      ml:
+        models_path: ".cache/ml-models"
+        embedding_dim: 768
+        kmeans:
+          num_clusters: 8
+          efficiency_weight: 0.0
+          pretrained_path: .cache/ml-models/kmeans_model.json
 ```
 
 ### Parameters

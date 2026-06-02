@@ -385,7 +385,6 @@ func isProjectionInputTypeSupported(signalType string) bool {
 		SignalTypePII,
 		SignalTypeKB,
 		SignalTypeConversation,
-		SignalTypeSessionMetric,
 		ProjectionInputKBMetric,
 		SignalTypeProjection:
 		return true
@@ -396,37 +395,25 @@ func isProjectionInputTypeSupported(signalType string) bool {
 
 func projectionDeclaredSignals(cfg *RouterConfig) map[string]map[string]struct{} {
 	declared := map[string]map[string]struct{}{
-		SignalTypeKeyword:       collectKeywordRuleNames(cfg.KeywordRules),
-		SignalTypeEmbedding:     collectEmbeddingRuleNames(cfg.EmbeddingRules),
-		SignalTypeDomain:        collectDomainNames(cfg.Categories),
-		SignalTypeFactCheck:     collectFactCheckRuleNames(cfg.FactCheckRules),
-		SignalTypeUserFeedback:  collectUserFeedbackRuleNames(cfg.UserFeedbackRules),
-		SignalTypeReask:         collectReaskRuleNames(cfg.ReaskRules),
-		SignalTypePreference:    collectPreferenceRuleNames(cfg.PreferenceRules),
-		SignalTypeLanguage:      collectLanguageRuleNames(cfg.LanguageRules),
-		SignalTypeContext:       collectContextRuleNames(cfg.ContextRules),
-		SignalTypeStructure:     collectStructureRuleNames(cfg.StructureRules),
-		SignalTypeComplexity:    collectComplexityRuleNames(cfg.ComplexityRules),
-		SignalTypeModality:      collectModalityRuleNames(cfg.ModalityRules),
-		SignalTypeAuthz:         collectRoleBindingNames(cfg.GetRoleBindings()),
-		SignalTypeJailbreak:     collectJailbreakRuleNames(cfg.JailbreakRules),
-		SignalTypePII:           collectPIIRuleNames(cfg.PIIRules),
-		SignalTypeKB:            collectKBRuleNames(cfg.KBRules),
-		SignalTypeConversation:  collectConversationRuleNames(cfg.ConversationRules),
-		SignalTypeSessionMetric: collectSessionMetricRuleNames(cfg.SessionMetricRules),
+		SignalTypeKeyword:      collectKeywordRuleNames(cfg.KeywordRules),
+		SignalTypeEmbedding:    collectEmbeddingRuleNames(cfg.EmbeddingRules),
+		SignalTypeDomain:       collectDomainNames(cfg.Categories),
+		SignalTypeFactCheck:    collectFactCheckRuleNames(cfg.FactCheckRules),
+		SignalTypeUserFeedback: collectUserFeedbackRuleNames(cfg.UserFeedbackRules),
+		SignalTypeReask:        collectReaskRuleNames(cfg.ReaskRules),
+		SignalTypePreference:   collectPreferenceRuleNames(cfg.PreferenceRules),
+		SignalTypeLanguage:     collectLanguageRuleNames(cfg.LanguageRules),
+		SignalTypeContext:      collectContextRuleNames(cfg.ContextRules),
+		SignalTypeStructure:    collectStructureRuleNames(cfg.StructureRules),
+		SignalTypeComplexity:   collectComplexityRuleNames(cfg.ComplexityRules),
+		SignalTypeModality:     collectModalityRuleNames(cfg.ModalityRules),
+		SignalTypeAuthz:        collectRoleBindingNames(cfg.GetRoleBindings()),
+		SignalTypeJailbreak:    collectJailbreakRuleNames(cfg.JailbreakRules),
+		SignalTypePII:          collectPIIRuleNames(cfg.PIIRules),
+		SignalTypeKB:           collectKBRuleNames(cfg.KBRules),
+		SignalTypeConversation: collectConversationRuleNames(cfg.ConversationRules),
 	}
 	return declared
-}
-
-func collectSessionMetricRuleNames(rules []SessionMetricRule) map[string]struct{} {
-	out := make(map[string]struct{}, len(rules))
-	for _, r := range rules {
-		if r.Name == "" {
-			continue
-		}
-		out[r.Name] = struct{}{}
-	}
-	return out
 }
 
 func projectionInputDeclared(declared map[string]map[string]struct{}, signalType string, name string) bool {

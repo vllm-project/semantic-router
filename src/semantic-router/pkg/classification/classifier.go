@@ -37,6 +37,8 @@ type Classifier struct {
 
 	// Context classifier for token count-based routing
 	contextClassifier *ContextClassifier
+	// tokenCalibrator learns provider-specific prompt token ratios for context routing.
+	tokenCalibrator *CalibratedTokenCounter
 
 	// Structure classifier for request-shape routing signals
 	structureClassifier *StructureClassifier
@@ -44,8 +46,8 @@ type Classifier struct {
 	// Complexity classifier for complexity-based routing using embedding similarity
 	complexityClassifier *ComplexityClassifier
 
-	// Event context classifier for event-driven request routing
-	eventContextClassifier *EventContextClassifier
+	// Event classifier for event-driven request routing
+	eventClassifier *EventClassifier
 
 	// Contrastive jailbreak classifiers keyed by rule name.
 	// Only populated for JailbreakRules with Method == "contrastive".
@@ -127,12 +129,6 @@ func withKBClassifiers(classifiers map[string]*KnowledgeBaseClassifier) option {
 	}
 }
 
-func withContextClassifier(contextClassifier *ContextClassifier) option {
-	return func(c *Classifier) {
-		c.contextClassifier = contextClassifier
-	}
-}
-
 func withStructureClassifier(structureClassifier *StructureClassifier) option {
 	return func(c *Classifier) {
 		c.structureClassifier = structureClassifier
@@ -145,9 +141,9 @@ func withComplexityClassifier(complexityClassifier *ComplexityClassifier) option
 	}
 }
 
-func withEventContextClassifier(eventContextClassifier *EventContextClassifier) option {
+func withEventClassifier(eventClassifier *EventClassifier) option {
 	return func(c *Classifier) {
-		c.eventContextClassifier = eventContextClassifier
+		c.eventClassifier = eventClassifier
 	}
 }
 

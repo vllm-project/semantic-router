@@ -22,26 +22,25 @@ const (
 
 // Signal type constants for rule conditions.
 const (
-	SignalTypeKeyword       = "keyword"
-	SignalTypeEmbedding     = "embedding"
-	SignalTypeDomain        = "domain"
-	SignalTypeFactCheck     = "fact_check"
-	SignalTypeUserFeedback  = "user_feedback"
-	SignalTypeReask         = "reask"
-	SignalTypePreference    = "preference"
-	SignalTypeLanguage      = "language"
-	SignalTypeContext       = "context"
-	SignalTypeStructure     = "structure"
-	SignalTypeComplexity    = "complexity"
-	SignalTypeModality      = "modality"
-	SignalTypeAuthz         = "authz"
-	SignalTypeJailbreak     = "jailbreak"
-	SignalTypePII           = "pii"
-	SignalTypeKB            = "kb"
-	SignalTypeConversation  = "conversation"
-	SignalTypeSessionMetric = "session_metric"
-	SignalTypeProjection    = "projection"
-	SignalTypeEventContext  = "event_context"
+	SignalTypeKeyword      = "keyword"
+	SignalTypeEmbedding    = "embedding"
+	SignalTypeDomain       = "domain"
+	SignalTypeFactCheck    = "fact_check"
+	SignalTypeUserFeedback = "user_feedback"
+	SignalTypeReask        = "reask"
+	SignalTypePreference   = "preference"
+	SignalTypeLanguage     = "language"
+	SignalTypeContext      = "context"
+	SignalTypeStructure    = "structure"
+	SignalTypeComplexity   = "complexity"
+	SignalTypeModality     = "modality"
+	SignalTypeAuthz        = "authz"
+	SignalTypeJailbreak    = "jailbreak"
+	SignalTypePII          = "pii"
+	SignalTypeKB           = "kb"
+	SignalTypeConversation = "conversation"
+	SignalTypeEvent        = "event"
+	SignalTypeProjection   = "projection"
 )
 
 // API format constants for model backends.
@@ -207,7 +206,6 @@ type IntelligentRouting struct {
 	Strategy        string               `yaml:"strategy,omitempty"`
 	ModelSelection  ModelSelectionConfig `yaml:"model_selection,omitempty"`
 	ReasoningConfig `yaml:",inline"`
-	SessionStates   []SessionStateConfig `yaml:"session_states,omitempty"`
 }
 
 // BackendModels captures configured backend endpoints and model metadata.

@@ -86,6 +86,7 @@ func (r *OpenAIRouter) finalizeStreamingResponse(ctx *RequestContext) {
 
 	usage := extractStreamingUsage(ctx)
 	r.reportStreamingUsageMetrics(ctx, usage)
+	r.calibrateTokenEstimator(ctx, int(usage.PromptTokens))
 
 	if err := r.cacheStreamingResponse(ctx); err != nil {
 		logging.Errorf("Failed to cache streaming response: %v", err)

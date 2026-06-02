@@ -35,6 +35,14 @@ export const AlgorithmNode = memo<NodeProps<AlgorithmNodeData>>(({ data }) => {
       }
       return parts.length > 0 ? parts.join(', ') : null
     }
+    if (algorithm.type === 'multi_factor' && algorithm.multi_factor) {
+      const latencyPercentile = algorithm.multi_factor.latency_percentile
+      return typeof latencyPercentile === 'number' ? `P${latencyPercentile} latency` : null
+    }
+    if (algorithm.type === 'session_aware' && algorithm.session_aware) {
+      const baseMethod = algorithm.session_aware.base_method
+      return typeof baseMethod === 'string' && baseMethod ? `base: ${baseMethod}` : null
+    }
     return null
   }
 

@@ -61,7 +61,7 @@ func FetchRawHandler() http.HandlerFunc {
 			return
 		}
 
-		log.Printf("[FetchRaw] Fetching: %s", targetURL)
+		log.Printf("[FetchRaw] Fetching: %s", redactURLForLog(targetURL))
 
 		client := &http.Client{
 			Timeout: fetchRawTimeout,
@@ -110,7 +110,7 @@ func FetchRawHandler() http.HandlerFunc {
 			return
 		}
 
-		log.Printf("[FetchRaw] Success, %d bytes from %s", len(body), targetURL)
+		log.Printf("[FetchRaw] Success, %d bytes from %s", len(body), redactURLForLog(targetURL))
 
 		_ = json.NewEncoder(w).Encode(FetchRawResponse{Content: string(body)})
 	}

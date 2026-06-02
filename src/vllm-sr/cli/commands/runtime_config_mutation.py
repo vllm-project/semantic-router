@@ -19,9 +19,14 @@ ALGORITHM_TYPES = [
     "automix",
     "hybrid",
     "rl_driven",
-    "thompson",
     "gmtrouter",
-    "router_r1",
+    "latency_aware",
+    "knn",
+    "kmeans",
+    "svm",
+    "mlp",
+    "multi_factor",
+    "session_aware",
 ]
 
 ALGORITHM_HINTS = {
@@ -30,9 +35,48 @@ ALGORITHM_HINTS = {
     "automix": "  Tip: Configure model 'pricing' for cost optimization",
     "hybrid": "  Tip: Configure weights in decision.algorithm.hybrid",
     "rl_driven": "  Tip: Configure persistence in decision.algorithm.rl_driven.storage_path",
-    "thompson": "  Tip: Balances exploration vs exploitation automatically",
+    "latency_aware": "  Tip: Configure decision.algorithm.latency_aware with TPOT or TTFT percentiles",
+    "knn": "  Tip: Configure global.router.model_selection.ml.knn for trained KNN routing",
+    "kmeans": "  Tip: Configure global.router.model_selection.ml.kmeans for cluster routing",
+    "svm": "  Tip: Configure global.router.model_selection.ml.svm for trained SVM routing",
+    "mlp": "  Tip: Configure global.router.model_selection.ml.mlp for trained MLP routing",
+    "multi_factor": "  Tip: Configure decision.algorithm.multi_factor for SLO-aware scoring",
+    "session_aware": "  Tip: Preserve agentic continuity with decision.algorithm.session_aware",
     "gmtrouter": "  Tip: Learns user preferences via graph neural network",
-    "router_r1": "  Tip: Requires Router-R1 server (see training docs)",
+}
+
+ALGORITHM_CONFIG_BLOCKS = (
+    "confidence",
+    "ratings",
+    "remom",
+    "elo",
+    "router_dc",
+    "automix",
+    "hybrid",
+    "rl_driven",
+    "gmtrouter",
+    "latency_aware",
+    "multi_factor",
+    "session_aware",
+)
+
+EXPECTED_CONFIG_BLOCK_BY_ALGORITHM = {
+    "elo": "elo",
+    "router_dc": "router_dc",
+    "automix": "automix",
+    "hybrid": "hybrid",
+    "rl_driven": "rl_driven",
+    "gmtrouter": "gmtrouter",
+    "latency_aware": "latency_aware",
+    "multi_factor": "multi_factor",
+    "session_aware": "session_aware",
+}
+
+DEFAULT_CONFIG_BLOCK_BY_ALGORITHM: dict[str, dict[str, object]] = {
+    "latency_aware": {
+        "tpot_percentile": 90,
+        "ttft_percentile": 95,
+    },
 }
 
 AMD_OVERRIDE_PREVIEW_LIMIT = 8
@@ -151,10 +195,11 @@ def _platform_requires_gpu_defaults(platform: str | None) -> bool:
     if normalized_platform != "amd":
         return False
 
-    force_gpu = os.getenv("VLLM_SR_AMD_FORCE_GPU", "1").strip().lower()
-    if force_gpu in {"0", "false", "no", "off"}:
+    force_gpu = os.getenv("VLLM_SR_AMD_FORCE_GPU", "").strip().lower()
+    if force_gpu not in {"1", "true", "yes", "on"}:
         log.info(
-            "Platform amd detected but GPU default override disabled by VLLM_SR_AMD_FORCE_GPU"
+            "Platform amd detected: keeping router internal model use_cpu settings; "
+            "set VLLM_SR_AMD_FORCE_GPU=1 to opt into GPU defaults"
         )
         return False
     return True
@@ -166,8 +211,9 @@ def apply_platform_gpu_defaults(
     """
     Apply platform-specific GPU defaults.
 
-    For AMD platform, default all `use_cpu` flags to false so inference prefers GPU.
-    Can be disabled by setting VLLM_SR_AMD_FORCE_GPU=0/false/no/off.
+    For AMD platform, preserve router internal model `use_cpu` settings by default.
+    Set VLLM_SR_AMD_FORCE_GPU=1/true/yes/on to rewrite `use_cpu` flags to false
+    when the router has dedicated GPU headroom for internal signal models.
     """
     if not _platform_requires_gpu_defaults(platform):
         return False
@@ -225,6 +271,25 @@ def log_algorithm_hint(algorithm: str) -> None:
         log.info(hint)
 
 
+def _replace_algorithm_config(
+    algorithm_config: dict[str, object],
+    normalized_algorithm: str,
+) -> None:
+    expected_block = EXPECTED_CONFIG_BLOCK_BY_ALGORITHM.get(normalized_algorithm)
+    for block in ALGORITHM_CONFIG_BLOCKS:
+        if block != expected_block:
+            algorithm_config.pop(block, None)
+    algorithm_config["type"] = normalized_algorithm
+    if (
+        expected_block
+        and expected_block not in algorithm_config
+        and normalized_algorithm in DEFAULT_CONFIG_BLOCK_BY_ALGORITHM
+    ):
+        algorithm_config[expected_block] = dict(
+            DEFAULT_CONFIG_BLOCK_BY_ALGORITHM[normalized_algorithm]
+        )
+
+
 def _apply_algorithm_override(
     config: dict[str, object], normalized_algorithm: str
 ) -> bool:
@@ -237,7 +302,9 @@ def _apply_algorithm_override(
     for decision in decisions:
         if "algorithm" not in decision:
             decision["algorithm"] = {}
-        decision["algorithm"]["type"] = normalized_algorithm
+        if not isinstance(decision["algorithm"], dict):
+            decision["algorithm"] = {}
+        _replace_algorithm_config(decision["algorithm"], normalized_algorithm)
         log.info(
             "  Injected algorithm.type=%s into decision '%s'",
             normalized_algorithm,
@@ -251,12 +318,15 @@ def inject_algorithm_into_config(config_path: Path, algorithm: str) -> Path:
     with config_path.open() as handle:
         config = yaml.safe_load(handle) or {}
 
+    normalized_algorithm = algorithm.lower()
     for decision in _routing_decisions(config):
         if "algorithm" not in decision:
             decision["algorithm"] = {}
-        decision["algorithm"]["type"] = algorithm
+        if not isinstance(decision["algorithm"], dict):
+            decision["algorithm"] = {}
+        _replace_algorithm_config(decision["algorithm"], normalized_algorithm)
         log.info(
-            f"  Injected algorithm.type={algorithm} into decision '{decision.get('name', 'unnamed')}'"
+            f"  Injected algorithm.type={normalized_algorithm} into decision '{decision.get('name', 'unnamed')}'"
         )
 
     runtime_config_path = _write_runtime_config(config_path, config)

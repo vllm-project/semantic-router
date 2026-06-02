@@ -117,6 +117,44 @@ func (r *OpenAIRouter) reportNonStreamingUsage(
 	r.updateRouterReplayUsageCost(ctx, replayUsage)
 }
 
+func (r *OpenAIRouter) calibrateTokenEstimator(ctx *RequestContext, actualPromptTokens int) {
+	if r == nil || r.Classifier == nil || ctx == nil || actualPromptTokens <= 0 {
+		return
+	}
+	byteLen := tokenCalibrationByteLen(ctx)
+	if byteLen <= 0 {
+		return
+	}
+
+	r.Classifier.ObserveTokenUsage("", byteLen, actualPromptTokens)
+	if category := tokenCalibrationCategory(ctx); category != "" {
+		r.Classifier.ObserveTokenUsage(category, byteLen, actualPromptTokens)
+	}
+}
+
+func tokenCalibrationByteLen(ctx *RequestContext) int {
+	if ctx == nil {
+		return 0
+	}
+	if ctx.VSRContextTextBytes > 0 {
+		return ctx.VSRContextTextBytes
+	}
+	if ctx.RequestQuery != "" {
+		return len(ctx.RequestQuery)
+	}
+	return len(ctx.OriginalRequestBody)
+}
+
+func tokenCalibrationCategory(ctx *RequestContext) string {
+	if ctx == nil {
+		return ""
+	}
+	if len(ctx.VSRMatchedContext) > 0 {
+		return ctx.VSRMatchedContext[0]
+	}
+	return ctx.VSRSelectedDecisionName
+}
+
 func (r *OpenAIRouter) recordResponseCost(
 	ctx *RequestContext,
 	completionLatency time.Duration,

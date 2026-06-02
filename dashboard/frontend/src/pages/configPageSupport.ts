@@ -498,13 +498,17 @@ export interface VectorStoreConfig {
 
 export interface PromptCompressionConfig {
   enabled?: boolean
+  profile?: string
   max_tokens?: number
   min_length?: number
   skip_signals?: string[]
   textrank_weight?: number
   position_weight?: number
   tfidf_weight?: number
+  novelty_weight?: number
   position_depth?: number
+  preserve_first_n?: number
+  preserve_last_n?: number
 }
 
 export interface ModalityClassifierConfig {

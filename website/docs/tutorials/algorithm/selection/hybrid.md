@@ -13,7 +13,6 @@ It aligns to `config/algorithm/selection/hybrid.yaml`.
 - Blends multiple selectors instead of committing to only one.
 - Makes weighting explicit and easy to audit.
 - Supports gradual migration between ranking policies (e.g., transition from static to Elo).
-- Optional MLP-based quality gap prediction for advanced use cases.
 - Cost-aware scoring to balance quality and operational expense.
 
 ## Algorithm Principle
@@ -24,7 +23,7 @@ $$S(m) = w_{\text{elo}} \cdot \hat{R}_{\text{elo}}(m) + w_{\text{rdc}} \cdot \ha
 
 When `normalize_scores` is enabled (default), each component is min-max normalized to [0, 1] before combination, ensuring fair weighting regardless of scale differences.
 
-If `use_mlp` is enabled and the quality gap between the top two candidates exceeds `quality_gap_threshold`, an MLP model predicts whether escalation would actually improve quality before triggering it.
+`quality_gap_threshold` is retained in the selector contract for data-driven upgrade policy experiments, while the current online selector uses the weighted composite score directly for the final pick.
 
 ## Select Flow
 
@@ -39,11 +38,8 @@ flowchart TD
     E --> G
     F --> G
     G --> H[Compute weighted composite score]
-    H --> I{Quality gap check}
-    I -- Gap > threshold AND use_mlp --> J[MLP predicts escalation benefit?]
-    I -- Gap <= threshold OR not use_mlp --> K[Return top-scored model]
-    J -- Yes --> K
-    J -- No --> L[Return current best, skip escalation]
+    H --> I[Apply cost and cache-affinity adjustments]
+    I --> J[Return top-scored model]
 ```
 
 ## Component Selectors
@@ -73,7 +69,7 @@ No single ranking signal is reliable for every workload: pure cost, pure similar
 
 - Higher computational cost than any single selector (runs 3 sub-selectors per request).
 - Weight tuning requires domain knowledge — suboptimal weights can degrade performance.
-- MLP quality gap prediction requires a pre-trained MLP model.
+- `quality_gap_threshold` is exposed for compatibility with lookup-table and upgrade-policy work, but it does not currently run an MLP escalation pass.
 
 ## Configuration
 
@@ -85,9 +81,8 @@ algorithm:
     router_dc_weight: 0.3        # Weight for embedding similarity
     automix_weight: 0.2          # Weight for POMDP value
     cost_weight: 0.2             # Weight for cost consideration
-    quality_gap_threshold: 0.1   # Threshold for MLP escalation check
+    quality_gap_threshold: 0.1   # Reserved quality-gap threshold
     normalize_scores: true       # Normalize component scores to [0,1]
-    use_mlp: false               # Enable MLP quality gap prediction
 ```
 
 ### Parameters
@@ -98,9 +93,8 @@ algorithm:
 | `router_dc_weight` | float | `0.3` | Weight for RouterDC embedding similarity (0–1) |
 | `automix_weight` | float | `0.2` | Weight for AutoMix POMDP value (0–1) |
 | `cost_weight` | float | `0.2` | Weight for cost consideration (0–1) |
-| `quality_gap_threshold` | float | `0.1` | Quality gap to trigger escalation check (0–1) |
+| `quality_gap_threshold` | float | `0.1` | Reserved quality-gap threshold for upgrade-policy experiments |
 | `normalize_scores` | bool | `true` | Normalize component scores before combination |
-| `use_mlp` | bool | `false` | Enable MLP-based quality gap prediction |
 
 ## Feedback
 

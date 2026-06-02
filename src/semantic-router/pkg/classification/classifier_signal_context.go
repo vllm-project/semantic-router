@@ -27,7 +27,7 @@ func (c *Classifier) signalReadiness() map[string]bool {
 		config.SignalTypePII:          len(c.Config.PIIRules) > 0 && c.IsPIIEnabled(),
 		config.SignalTypeKB:           len(c.kbClassifiers) > 0,
 		config.SignalTypeConversation: len(c.Config.ConversationRules) > 0,
-		config.SignalTypeEventContext: c.eventContextClassifier != nil,
+		config.SignalTypeEvent:        c.eventClassifier != nil,
 	}
 }
 
@@ -51,7 +51,7 @@ func textForSignalFunc(text, uncompressedText string, skipCompressionSignals map
 // uncompressedText: original text before prompt compression (empty = no compression happened)
 // skipCompressionSignals: signal types that must use uncompressedText instead of text
 // imageURL: optional image URL for multimodal signals
-func (c *Classifier) EvaluateAllSignalsWithContext(text string, contextText string, currentUserText string, priorUserMessages []string, nonUserMessages []string, hasPriorAssistantReply bool, forceEvaluateAll bool, uncompressedText string, skipCompressionSignals map[string]bool, convFacts ConversationFacts, sessionCtx *SignalSessionContext, imageURL ...string) *SignalResults {
+func (c *Classifier) EvaluateAllSignalsWithContext(text string, contextText string, currentUserText string, priorUserMessages []string, nonUserMessages []string, hasPriorAssistantReply bool, forceEvaluateAll bool, uncompressedText string, skipCompressionSignals map[string]bool, convFacts ConversationFacts, imageURL ...string) *SignalResults {
 	defer c.enterSignalEvaluationLoadGate()()
 	// Determine which signals (type:name) should be evaluated
 	var usedSignals map[string]bool
@@ -96,7 +96,6 @@ func (c *Classifier) EvaluateAllSignalsWithContext(text string, contextText stri
 	results = c.applySignalGroups(results)
 	results = c.applySignalComposers(results)
 	results = c.applySignalOutputPolicies(results)
-	_ = c.hydrateSessionLookupRulesForProjections(results, sessionCtx)
 	results = c.applyProjections(results)
 	return results
 }

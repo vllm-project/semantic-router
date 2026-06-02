@@ -9,6 +9,7 @@ import (
 	"regexp"
 	"strings"
 	"time"
+	"unicode/utf8"
 )
 
 // ========================
@@ -138,8 +139,17 @@ func normalizeOpenWebMaxLength(maxLength int) int {
 }
 
 func truncateOpenWebContent(content string, maxLength int) (string, bool) {
-	if len(content) > maxLength {
-		return content[:maxLength] + "\n\n...[Content truncated]", true
+	if maxLength >= 0 && utf8.RuneCountInString(content) > maxLength {
+		var builder strings.Builder
+		count := 0
+		for _, r := range content {
+			if count >= maxLength {
+				break
+			}
+			builder.WriteRune(r)
+			count++
+		}
+		return builder.String() + "\n\n...[Content truncated]", true
 	}
 	return content, false
 }
@@ -173,7 +183,7 @@ func shouldPreferJinaFetch(targetURL string, req OpenWebRequest) bool {
 
 // fetchDirect fetches web page directly
 func fetchWebDirect(targetURL string, timeout time.Duration, maxLength int) (*OpenWebResponse, error) {
-	log.Printf("[OpenWeb:Direct] Starting fetch: %s", targetURL)
+	log.Printf("[OpenWeb:Direct] Starting fetch: %s", redactURLForLog(targetURL))
 	startTime := time.Now()
 
 	client := &http.Client{
@@ -241,7 +251,7 @@ func fetchWebDirect(targetURL string, timeout time.Duration, maxLength int) (*Op
 		log.Printf("[OpenWeb:Direct] Content truncated to %d characters", maxLength)
 	}
 
-	log.Printf("[OpenWeb:Direct] ✅ Fetch succeeded, total elapsed: %v", time.Since(startTime))
+	log.Printf("[OpenWeb:Direct] Fetch succeeded, total elapsed: %v", time.Since(startTime))
 
 	return result, nil
 }

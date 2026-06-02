@@ -15,6 +15,9 @@ func (d *decompiler) categoryToSignal(cat *config.Category) *SignalDecl {
 	if len(cat.MMLUCategories) > 0 {
 		fields["mmlu_categories"] = stringsToArray(cat.MMLUCategories)
 	}
+	if len(cat.ModelScores) > 0 {
+		fields["model_scores"] = modelScoresValue(cat.ModelScores)
+	}
 	return &SignalDecl{SignalType: "domain", Name: cat.Name, Fields: fields}
 }
 
@@ -45,6 +48,9 @@ func (d *decompiler) embeddingToSignal(emb *config.EmbeddingRule) *SignalDecl {
 	}
 	if emb.AggregationMethodConfiged != "" {
 		fields["aggregation_method"] = StringValue{V: string(emb.AggregationMethodConfiged)}
+	}
+	if emb.QueryModality != "" && emb.QueryModality != config.QueryModalityText {
+		fields["query_modality"] = StringValue{V: string(emb.QueryModality)}
 	}
 	return &SignalDecl{SignalType: "embedding", Name: emb.Name, Fields: fields}
 }
@@ -144,15 +150,14 @@ func (d *decompiler) complexityToSignal(comp *config.ComplexityRule) *SignalDecl
 	if comp.Description != "" {
 		fields["description"] = StringValue{V: comp.Description}
 	}
-	if len(comp.Hard.Candidates) > 0 {
-		fields["hard"] = ObjectValue{Fields: map[string]Value{
-			"candidates": stringsToArray(comp.Hard.Candidates),
-		}}
+	if len(comp.Hard.Candidates) > 0 || len(comp.Hard.ImageCandidates) > 0 {
+		fields["hard"] = complexityCandidatesValue(comp.Hard)
 	}
-	if len(comp.Easy.Candidates) > 0 {
-		fields["easy"] = ObjectValue{Fields: map[string]Value{
-			"candidates": stringsToArray(comp.Easy.Candidates),
-		}}
+	if len(comp.Easy.Candidates) > 0 || len(comp.Easy.ImageCandidates) > 0 {
+		fields["easy"] = complexityCandidatesValue(comp.Easy)
+	}
+	if comp.Composer != nil {
+		fields["composer"] = ruleCombinationValue(comp.Composer)
 	}
 	return &SignalDecl{SignalType: "complexity", Name: comp.Name, Fields: fields}
 }
@@ -238,64 +243,70 @@ func (d *decompiler) kbSignalToDecl(rule *config.KBSignalRule) *SignalDecl {
 	return &SignalDecl{SignalType: "kb", Name: rule.Name, Fields: fields}
 }
 
-func (d *decompiler) sessionMetricRuleToDecl(rule *config.SessionMetricRule) *SignalDecl {
+func (d *decompiler) eventRuleToDecl(rule *config.EventRule) *SignalDecl {
 	fields := make(map[string]Value)
-	kind := inferSessionMetricKind(rule)
-	fields["kind"] = StringValue{V: kind}
-	for k, v := range sessionMetricKindFields(rule, kind) {
-		fields[k] = v
+	if len(rule.EventTypes) > 0 {
+		fields["event_types"] = stringsToArray(rule.EventTypes)
 	}
-	return &SignalDecl{SignalType: "session_metric", Name: rule.Name, Fields: fields}
+	if len(rule.Severities) > 0 {
+		fields["severities"] = stringsToArray(rule.Severities)
+	}
+	if len(rule.ActionCodes) > 0 {
+		fields["action_codes"] = stringsToArray(rule.ActionCodes)
+	}
+	if rule.Temporal {
+		fields["temporal"] = BoolValue{V: true}
+	}
+	return &SignalDecl{SignalType: "event", Name: rule.Name, Fields: fields}
 }
 
-func inferSessionMetricKind(rule *config.SessionMetricRule) string {
-	kind := strings.ToLower(strings.TrimSpace(rule.Kind))
-	if kind != "" {
-		return kind
+func modelScoresValue(scores []config.ModelScore) ArrayValue {
+	items := make([]Value, 0, len(scores))
+	for _, score := range scores {
+		fields := map[string]Value{
+			"model": StringValue{V: score.Model},
+			"score": FloatValue{V: score.Score},
+		}
+		if score.UseReasoning != nil {
+			fields["use_reasoning"] = BoolValue{V: *score.UseReasoning}
+		}
+		items = append(items, ObjectValue{Fields: fields})
 	}
-	if strings.TrimSpace(rule.Table) != "" {
-		return "lookup"
-	}
-	return "state"
+	return ArrayValue{Items: items}
 }
 
-func sessionMetricKindFields(rule *config.SessionMetricRule, kind string) map[string]Value {
-	if kind == "state" {
-		return sessionMetricStateFields(rule)
-	}
-	return sessionMetricLookupFields(rule)
-}
-
-func sessionMetricStateFields(rule *config.SessionMetricRule) map[string]Value {
+func complexityCandidatesValue(candidates config.ComplexityCandidates) ObjectValue {
 	fields := make(map[string]Value)
-	if rule.State != "" {
-		fields["state"] = StringValue{V: rule.State}
+	if len(candidates.Candidates) > 0 {
+		fields["candidates"] = stringsToArray(candidates.Candidates)
 	}
-	if rule.Normalize != "" {
-		fields["normalize"] = StringValue{V: rule.Normalize}
+	if len(candidates.ImageCandidates) > 0 {
+		fields["image_candidates"] = stringsToArray(candidates.ImageCandidates)
 	}
-	if rule.Min != nil {
-		fields["min"] = FloatValue{V: *rule.Min}
-	}
-	if rule.Max != nil {
-		fields["max"] = FloatValue{V: *rule.Max}
-	}
-	return fields
+	return ObjectValue{Fields: fields}
 }
 
-func sessionMetricLookupFields(rule *config.SessionMetricRule) map[string]Value {
+func ruleCombinationValue(node *config.RuleCombination) ObjectValue {
 	fields := make(map[string]Value)
-	if rule.Table != "" {
-		fields["table"] = StringValue{V: rule.Table}
+	if node == nil {
+		return ObjectValue{Fields: fields}
 	}
-	items := make([]Value, 0, len(rule.Key))
-	for _, k := range rule.Key {
-		items = append(items, StringValue{V: k})
+	if node.Type != "" {
+		fields["type"] = StringValue{V: node.Type}
+		fields["name"] = StringValue{V: node.Name}
+		return ObjectValue{Fields: fields}
 	}
-	if len(items) > 0 {
-		fields["key"] = ArrayValue{Items: items}
+	if node.Operator != "" {
+		fields["operator"] = StringValue{V: node.Operator}
 	}
-	return fields
+	if len(node.Conditions) > 0 {
+		items := make([]Value, 0, len(node.Conditions))
+		for i := range node.Conditions {
+			items = append(items, ruleCombinationValue(&node.Conditions[i]))
+		}
+		fields["conditions"] = ArrayValue{Items: items}
+	}
+	return ObjectValue{Fields: fields}
 }
 
 func (d *decompiler) decisionToRoute(dec *config.Decision) *RouteDecl {
@@ -452,104 +463,4 @@ func modelRefOptions(mr *config.ModelRef, modelConfig map[string]config.ModelPar
 		}
 	}
 	return strings.Join(opts, ", ")
-}
-
-func (d *decompiler) algorithmToFields(algo *config.AlgorithmConfig) map[string]Value {
-	fields := make(map[string]Value)
-	algorithmOnErrorToFields(algo, fields)
-	switch algo.Type {
-	case "remom":
-		remomAlgorithmToFields(algo.ReMoM, fields)
-	case "latency_aware":
-		latencyAwareAlgorithmToFields(algo.LatencyAware, fields)
-	case "confidence":
-		confidenceAlgorithmToFields(algo.Confidence, fields)
-	case "elo":
-		eloAlgorithmToFields(algo.Elo, fields)
-	}
-	return fields
-}
-
-func algorithmOnErrorToFields(algo *config.AlgorithmConfig, fields map[string]Value) {
-	switch algo.Type {
-	case "confidence", "ratings", "remom":
-		return
-	default:
-		if algo.OnError != "" {
-			fields["on_error"] = StringValue{V: algo.OnError}
-		}
-	}
-}
-
-func remomAlgorithmToFields(r *config.ReMoMAlgorithmConfig, fields map[string]Value) {
-	if r == nil {
-		return
-	}
-	if len(r.BreadthSchedule) > 0 {
-		items := make([]Value, len(r.BreadthSchedule))
-		for i, v := range r.BreadthSchedule {
-			items[i] = IntValue{V: v}
-		}
-		fields["breadth_schedule"] = ArrayValue{Items: items}
-	}
-	if r.ModelDistribution != "" {
-		fields["model_distribution"] = StringValue{V: r.ModelDistribution}
-	}
-	if r.CompactionStrategy != "" {
-		fields["compaction_strategy"] = StringValue{V: r.CompactionStrategy}
-	}
-	if r.OnError != "" {
-		fields["on_error"] = StringValue{V: r.OnError}
-	}
-	if r.Temperature != 0 {
-		fields["temperature"] = FloatValue{V: r.Temperature}
-	}
-	if r.MaxConcurrent != 0 {
-		fields["max_concurrent"] = IntValue{V: r.MaxConcurrent}
-	}
-}
-
-func latencyAwareAlgorithmToFields(l *config.LatencyAwareAlgorithmConfig, fields map[string]Value) {
-	if l == nil {
-		return
-	}
-	if l.TPOTPercentile != 0 {
-		fields["tpot_percentile"] = IntValue{V: l.TPOTPercentile}
-	}
-	if l.TTFTPercentile != 0 {
-		fields["ttft_percentile"] = IntValue{V: l.TTFTPercentile}
-	}
-}
-
-func confidenceAlgorithmToFields(c *config.ConfidenceAlgorithmConfig, fields map[string]Value) {
-	if c == nil {
-		return
-	}
-	if c.ConfidenceMethod != "" {
-		fields["confidence_method"] = StringValue{V: c.ConfidenceMethod}
-	}
-	if c.Threshold != 0 {
-		fields["threshold"] = FloatValue{V: c.Threshold}
-	}
-	if c.OnError != "" {
-		fields["on_error"] = StringValue{V: c.OnError}
-	}
-	if c.EscalationOrder != "" {
-		fields["escalation_order"] = StringValue{V: c.EscalationOrder}
-	}
-}
-
-func eloAlgorithmToFields(e *config.EloSelectionConfig, fields map[string]Value) {
-	if e == nil {
-		return
-	}
-	if e.InitialRating != 0 {
-		fields["initial_rating"] = FloatValue{V: e.InitialRating}
-	}
-	if e.KFactor != 0 {
-		fields["k_factor"] = FloatValue{V: e.KFactor}
-	}
-	if e.StoragePath != "" {
-		fields["storage_path"] = StringValue{V: e.StoragePath}
-	}
 }

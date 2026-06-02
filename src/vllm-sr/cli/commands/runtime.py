@@ -200,10 +200,9 @@ def _execute_serve(
     "--algorithm",
     type=click.Choice(ALGORITHM_TYPES, case_sensitive=False),
     default=None,
-    help="Model selection algorithm: static (default), elo (rating-based), "
-    "router_dc (embedding similarity), automix (cost-quality optimization), "
-    "hybrid (combined methods), rl_driven (online learning). "
-    "Overrides config file setting.",
+    help="Selection algorithm override: static, elo, router_dc, automix, hybrid, "
+    "latency_aware, knn, kmeans, svm, mlp, multi_factor, rl_driven, gmtrouter, or session_aware. "
+    "Overrides decision.algorithm.type in the config file.",
 )
 @click.option("--target", default=None, help=TARGET_HELP)
 @click.option(

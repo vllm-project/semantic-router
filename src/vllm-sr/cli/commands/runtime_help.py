@@ -19,10 +19,15 @@ elo        - Rating-based selection using user feedback
 router_dc  - Query-model matching via embedding similarity
 automix    - Cost-quality optimization using POMDP
 hybrid     - Combine multiple methods with configurable weights
-rl_driven  - Online learning selector with optional persistence
-thompson   - Thompson Sampling with exploration/exploitation (RL-driven)
 gmtrouter  - Graph neural network for personalized routing (RL-driven)
-router_r1  - LLM-as-router with think/route actions (RL-driven)
+latency_aware - TPOT/TTFT percentile-aware selection
+knn        - KNN selector using shared ML model-selection settings
+kmeans     - KMeans selector using shared ML model-selection settings
+svm        - SVM selector using shared ML model-selection settings
+mlp        - MLP selector using shared ML model-selection settings
+multi_factor - Quality, latency, cost, and load scoring
+rl_driven  - Online learning selector with optional Thompson / Router-R1 modes
+session_aware - Agentic stay-vs-switch policy for long sessions
 
 Examples:
     # Basic usage (uses config.yaml, Docker target)
@@ -39,6 +44,12 @@ Examples:
 
     # Use cost-optimized selection
     vllm-sr serve --algorithm automix
+
+    # Use latency-aware selection
+    vllm-sr serve --algorithm latency_aware
+
+    # Keep agentic sessions stable across tool loops
+    vllm-sr serve --algorithm session_aware
 
     # Custom image
     vllm-sr serve --image ghcr.io/vllm-project/semantic-router/vllm-sr:latest

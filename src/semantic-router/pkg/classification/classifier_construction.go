@@ -33,7 +33,7 @@ func (b *classifierOptionBuilder) build(categoryMapping *CategoryMapping) ([]opt
 		b.buildContrastiveJailbreakClassifiersOption,
 		b.buildAuthzClassifierOption,
 		b.buildKBClassifiersOption,
-		b.buildEventContextClassifierOption,
+		b.buildEventClassifierOption,
 	}
 	parallelOptions, err := b.buildParallelOptions(steps)
 	if err != nil {
@@ -85,7 +85,7 @@ func classifierBuildParallelism(stepCount int) int {
 		return 1
 	}
 	backend := embeddingBackendOverride()
-	if backend == "candle" {
+	if backend == "" || backend == "candle" {
 		return 1
 	}
 	parallelism := runtime.NumCPU()

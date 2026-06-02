@@ -41,11 +41,17 @@ func testDashboardDeployInvalidYAML(ctx context.Context, client *kubernetes.Clie
 	}
 
 	httpClient := &http.Client{Timeout: 10 * time.Second}
+	token, err := dashboardAuthToken(ctx, httpClient, fmt.Sprintf("http://localhost:%s", localPort), opts.Verbose)
+	if err != nil {
+		return err
+	}
+
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, bytes.NewBuffer(body))
 	if err != nil {
 		return fmt.Errorf("create request: %w", err)
 	}
 	req.Header.Set("Content-Type", "application/json")
+	setDashboardAuth(req, token)
 
 	resp, err := httpClient.Do(req)
 	if err != nil {

@@ -356,7 +356,7 @@ def _inject_semantic_cache_milvus_defaults(
         "description": "Semantic cache for LLM request-response pairs",
         "vector_field": {
             "name": "embedding",
-            "dimension": 384,
+            "dimension": 768,
             "metric_type": "IP",
         },
         "index": {

@@ -141,9 +141,16 @@ def validate_algorithm_one_of(config: UserConfig) -> List[ValidationError]:
 
     expected_block_by_type = {
         "confidence": "confidence",
-        "concurrent": "concurrent",
+        "ratings": "ratings",
         "remom": "remom",
+        "elo": "elo",
+        "router_dc": "router_dc",
+        "automix": "automix",
+        "hybrid": "hybrid",
+        "rl_driven": "rl_driven",
+        "gmtrouter": "gmtrouter",
         "latency_aware": "latency_aware",
+        "multi_factor": "multi_factor",
         "session_aware": "session_aware",
     }
 
@@ -155,12 +162,26 @@ def validate_algorithm_one_of(config: UserConfig) -> List[ValidationError]:
         configured_blocks = []
         if algorithm.confidence is not None:
             configured_blocks.append("confidence")
-        if algorithm.concurrent is not None:
-            configured_blocks.append("concurrent")
+        if algorithm.ratings is not None:
+            configured_blocks.append("ratings")
         if algorithm.remom is not None:
             configured_blocks.append("remom")
+        if algorithm.elo is not None:
+            configured_blocks.append("elo")
+        if algorithm.router_dc is not None:
+            configured_blocks.append("router_dc")
+        if algorithm.automix is not None:
+            configured_blocks.append("automix")
+        if algorithm.hybrid is not None:
+            configured_blocks.append("hybrid")
+        if algorithm.rl_driven is not None:
+            configured_blocks.append("rl_driven")
+        if algorithm.gmtrouter is not None:
+            configured_blocks.append("gmtrouter")
         if algorithm.latency_aware is not None:
             configured_blocks.append("latency_aware")
+        if algorithm.multi_factor is not None:
+            configured_blocks.append("multi_factor")
         if algorithm.session_aware is not None:
             configured_blocks.append("session_aware")
 
@@ -518,9 +539,10 @@ def validate_algorithm_configurations(config: UserConfig) -> List[ValidationErro
     """
     Validate algorithm configurations in decisions.
 
-    Validates both looper algorithms (confidence, concurrent, sequential, remom)
+    Validates both looper algorithms (confidence, ratings, remom)
     and selection algorithms (static, elo, router_dc, automix, hybrid,
-    latency_aware, rl_driven, thompson, gmtrouter, router_r1).
+    knn, kmeans, svm, mlp, multi_factor, latency_aware, session_aware,
+    rl_driven, gmtrouter).
 
     Args:
         config: User configuration
@@ -531,19 +553,22 @@ def validate_algorithm_configurations(config: UserConfig) -> List[ValidationErro
     errors = []
 
     # Valid algorithm types
-    looper_types = {"confidence", "concurrent", "sequential", "remom"}
+    looper_types = {"confidence", "ratings", "remom"}
     selection_types = {
         "static",
         "elo",
         "router_dc",
         "automix",
         "hybrid",
+        "knn",
+        "kmeans",
+        "svm",
+        "mlp",
+        "multi_factor",
         "session_aware",
         "latency_aware",
         "rl_driven",
-        "thompson",
         "gmtrouter",
-        "router_r1",
     }
     all_types = looper_types | selection_types
 

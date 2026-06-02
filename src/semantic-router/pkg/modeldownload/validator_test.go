@@ -110,6 +110,44 @@ func TestIsModelCompleteRecognizesWeightArtifacts(t *testing.T) {
 			requiredFiles: DefaultRequiredFiles,
 			wantComplete:  true,
 		},
+		{
+			name: "nested onnx artifact counts as model weights",
+			setup: func(t *testing.T, tmpDir string) string {
+				return writeModelDir(t, tmpDir, "nested-onnx-model", map[string]string{
+					"config.json":                     "{}",
+					"onnx/layer-6/config.json":        "{}",
+					"onnx/layer-6/model_fa_fp16.onnx": "",
+				})
+			},
+			requiredFiles: DefaultRequiredFiles,
+			wantComplete:  true,
+		},
+		{
+			name: "root symlink to nested onnx model counts as model weights",
+			setup: func(t *testing.T, tmpDir string) string {
+				target := writeModelDir(t, tmpDir, "nested-onnx-symlink-target", map[string]string{
+					"config.json":             "{}",
+					"onnx/layer-6/model.onnx": "",
+				})
+				link := filepath.Join(tmpDir, "nested-onnx-symlink")
+				if err := os.Symlink(target, link); err != nil {
+					t.Fatalf("Symlink(%q, %q) failed: %v", target, link, err)
+				}
+				return link
+			},
+			requiredFiles: DefaultRequiredFiles,
+			wantComplete:  true,
+		},
+		{
+			name: "download cache artifacts do not count as model weights",
+			setup: func(t *testing.T, tmpDir string) string {
+				return writeModelDir(t, tmpDir, "cache-only-model", map[string]string{
+					"config.json":                            "{}",
+					".cache/huggingface/download/model.onnx": "",
+				})
+			},
+			requiredFiles: DefaultRequiredFiles,
+		},
 	})
 }
 
@@ -140,7 +178,11 @@ func writeModelDir(t *testing.T, tmpDir, modelName string, files map[string]stri
 		t.Fatalf("MkdirAll(%q) failed: %v", modelDir, err)
 	}
 	for name, contents := range files {
-		if err := os.WriteFile(filepath.Join(modelDir, name), []byte(contents), 0o644); err != nil {
+		path := filepath.Join(modelDir, name)
+		if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+			t.Fatalf("MkdirAll(%q) failed: %v", filepath.Dir(path), err)
+		}
+		if err := os.WriteFile(path, []byte(contents), 0o644); err != nil {
 			t.Fatalf("WriteFile(%q) failed: %v", name, err)
 		}
 	}

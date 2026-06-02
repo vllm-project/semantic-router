@@ -77,6 +77,37 @@ func getStringArrayField(fields map[string]Value, key string) ([]string, bool) {
 	return nil, false
 }
 
+func getModelScoresField(fields map[string]Value, key string) ([]config.ModelScore, bool) {
+	raw, ok := fields[key]
+	if !ok {
+		return nil, false
+	}
+	items, ok := raw.(ArrayValue)
+	if !ok {
+		return nil, false
+	}
+	result := make([]config.ModelScore, 0, len(items.Items))
+	for _, item := range items.Items {
+		obj, ok := item.(ObjectValue)
+		if !ok {
+			continue
+		}
+		score := config.ModelScore{}
+		if model, ok := getStringField(obj.Fields, "model"); ok {
+			score.Model = model
+		}
+		if value, ok := getFloat64Field(obj.Fields, "score"); ok {
+			score.Score = value
+		}
+		if useReasoning, ok := getBoolField(obj.Fields, "use_reasoning"); ok {
+			value := useReasoning
+			score.UseReasoning = &value
+		}
+		result = append(result, score)
+	}
+	return result, true
+}
+
 func compileDomainSuggestionSuffix(value string) string {
 	suggestion := config.SuggestSupportedRoutingDomainName(value)
 	if suggestion == "" || suggestion == value {

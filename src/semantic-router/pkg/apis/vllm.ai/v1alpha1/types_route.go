@@ -69,6 +69,11 @@ type Signals struct {
 	// +optional
 	// +kubebuilder:validation:MaxItems=100
 	Conversation []ConversationSignal `json:"conversation,omitempty" yaml:"conversation,omitempty"`
+
+	// Events defines structured event metadata routing signals.
+	// +optional
+	// +kubebuilder:validation:MaxItems=100
+	Events []EventSignal `json:"events,omitempty" yaml:"events,omitempty"`
 }
 
 // FactCheckRule defines a rule for fact-check signal classification
@@ -149,6 +154,18 @@ type ConversationCRDFeature struct {
 type ConversationCRDSource struct {
 	Type string `json:"type" yaml:"type"`
 	Role string `json:"role,omitempty" yaml:"role,omitempty"`
+}
+
+// EventSignal defines a structured event metadata routing signal.
+// It detects event types, severities, action codes, and temporal urgency
+// from incident, audit, alert, or workflow payloads in the request.
+type EventSignal struct {
+	Name        string   `json:"name" yaml:"name"`
+	Description string   `json:"description,omitempty" yaml:"description,omitempty"`
+	EventTypes  []string `json:"eventTypes,omitempty" yaml:"event_types,omitempty"`
+	Severities  []string `json:"severities,omitempty" yaml:"severities,omitempty"`
+	ActionCodes []string `json:"actionCodes,omitempty" yaml:"action_codes,omitempty"`
+	Temporal    bool     `json:"temporal,omitempty" yaml:"temporal,omitempty"`
 }
 
 type NumericPredicate struct {
@@ -297,9 +314,9 @@ type SignalCombination struct {
 
 // SignalCondition defines a single signal condition
 type SignalCondition struct {
-	// Type defines the type of signal (keyword/embedding/domain/fact_check/context/structure/conversation)
+	// Type defines the type of signal (keyword/embedding/domain/fact_check/context/structure/conversation/event)
 	// +kubebuilder:validation:Required
-	// +kubebuilder:validation:Enum=keyword;embedding;domain;fact_check;context;structure;conversation
+	// +kubebuilder:validation:Enum=keyword;embedding;domain;fact_check;context;structure;conversation;event
 	Type string `json:"type" yaml:"type"`
 
 	// Name is the name of the signal to reference

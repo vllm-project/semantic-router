@@ -75,21 +75,20 @@ Use this fragment inside `routing.decisions[].algorithm`:
 ```yaml
 algorithm:
   type: mlp
-  mlp:
-    device: cuda              # Options: cpu, cuda, metal
-    pretrained_path: .cache/ml-models/mlp_model.json
 ```
 
-### Global ML Settings (optional)
+### Global ML Settings
 
 ```yaml
-model_selection:
-  ml:
-    models_path: ".cache/ml-models"
-    embedding_dim: 768
-    mlp:
-      device: cuda
-      pretrained_path: .cache/ml-models/mlp_model.json
+global:
+  router:
+    model_selection:
+      ml:
+        models_path: ".cache/ml-models"
+        embedding_dim: 768
+        mlp:
+          device: cuda
+          pretrained_path: .cache/ml-models/mlp_model.json
 ```
 
 ### Parameters

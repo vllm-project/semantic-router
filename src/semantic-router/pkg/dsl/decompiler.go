@@ -30,16 +30,6 @@ type pluginTemplate struct {
 	usageCount int
 }
 
-func (d *decompiler) decompileSessionStates() {
-	for _, ss := range d.cfg.SessionStates {
-		d.write("SESSION_STATE %s {\n", quoteName(ss.Name))
-		for _, f := range ss.Fields {
-			d.write("  %s: %s\n", f.Name, f.TypeName)
-		}
-		d.write("}\n\n")
-	}
-}
-
 func (d *decompiler) extractPluginTemplates() {
 	// Count plugin usage across decisions to find repeated plugins
 	type pluginKey struct {
@@ -97,14 +87,6 @@ func formatStringArray(items []string) string {
 		quoted[i] = fmt.Sprintf("%q", item)
 	}
 	return "[" + strings.Join(quoted, ", ") + "]"
-}
-
-func formatIntArray(items []int) string {
-	parts := make([]string, len(items))
-	for i, item := range items {
-		parts[i] = fmt.Sprintf("%d", item)
-	}
-	return "[" + strings.Join(parts, ", ") + "]"
 }
 
 func stringsToArray(items []string) ArrayValue {

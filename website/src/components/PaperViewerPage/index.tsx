@@ -31,6 +31,18 @@ interface PaperViewerContentProps {
   pdfUrl: string
 }
 
+function isKeyboardInputTarget(target: EventTarget | null): boolean {
+  if (!(target instanceof HTMLElement))
+    return false
+
+  if (target.isContentEditable)
+    return true
+
+  return target instanceof HTMLInputElement
+    || target instanceof HTMLTextAreaElement
+    || target instanceof HTMLSelectElement
+}
+
 function PaperViewerContent({ pdfUrl }: PaperViewerContentProps): JSX.Element {
   // Lazily load react-pdf only in the browser to avoid SSG DOMMatrix errors.
   // eslint-disable-next-line @typescript-eslint/no-require-imports
@@ -112,8 +124,10 @@ function PaperViewerContent({ pdfUrl }: PaperViewerContentProps): JSX.Element {
   const step = isMobile || !isSpread
     ? 1
     : 2
-  const goToPrev = () => setPageNumber(p => Math.max(1, p - step))
-  const goToNext = () => setPageNumber(p => Math.min(numPages, p + step))
+  const goToPrev = useCallback(() => setPageNumber(p => Math.max(1, p - step)), [step])
+  const goToNext = useCallback(() => {
+    setPageNumber(p => Math.min(Math.max(1, numPages), p + step))
+  }, [numPages, step])
 
   const rightPage = pageNumber + 1
   const hasRight = isSpread && rightPage <= numPages
@@ -122,6 +136,29 @@ function PaperViewerContent({ pdfUrl }: PaperViewerContentProps): JSX.Element {
   const documentClassName = isDesktopSinglePage
     ? `${styles.document} ${styles.documentSinglePage}`
     : styles.document
+
+  useEffect(() => {
+    if (loading || error)
+      return undefined
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.metaKey || event.ctrlKey || event.altKey || isKeyboardInputTarget(event.target))
+        return
+
+      if (event.key === 'ArrowLeft' && pageNumber > 1) {
+        event.preventDefault()
+        goToPrev()
+      }
+
+      if (event.key === 'ArrowRight' && !isNextDisabled) {
+        event.preventDefault()
+        goToNext()
+      }
+    }
+
+    window.addEventListener('keydown', handleKeyDown)
+    return () => window.removeEventListener('keydown', handleKeyDown)
+  }, [error, goToNext, goToPrev, isNextDisabled, loading, pageNumber])
 
   return (
     <div className={styles.viewerShell}>

@@ -16,6 +16,22 @@ type embeddingPreloadResult struct {
 	err       error
 }
 
+// WarmupCandidateEmbeddings eagerly computes candidate embeddings when
+// preloading is enabled. Constructors intentionally do not call this because
+// model-backed FFI runtimes must be initialized before warmup starts.
+func (c *EmbeddingClassifier) WarmupCandidateEmbeddings() error {
+	if c == nil {
+		return fmt.Errorf("embedding classifier is nil")
+	}
+	if !c.preloadRequested {
+		logging.ComponentDebugEvent("classifier", "embedding_candidates_preload_skipped", map[string]interface{}{
+			"reason": "preload_disabled",
+		})
+		return nil
+	}
+	return c.ensureCandidateEmbeddings()
+}
+
 // preloadCandidateEmbeddings computes embeddings for all unique candidates across all rules.
 // Uses concurrent processing for better performance.
 func (c *EmbeddingClassifier) preloadCandidateEmbeddings() error {
@@ -36,7 +52,7 @@ func (c *EmbeddingClassifier) preloadCandidateEmbeddings() error {
 	})
 
 	numWorkers := c.preloadWorkerCount(len(candidates))
-	successCount, firstError := c.collectCandidateEmbeddingResults(
+	candidateEmbeddings, successCount, firstError := c.collectCandidateEmbeddingResults(
 		c.startCandidateEmbeddingWorkers(candidates, modelType, numWorkers),
 	)
 
@@ -54,6 +70,7 @@ func (c *EmbeddingClassifier) preloadCandidateEmbeddings() error {
 		return firstError
 	}
 
+	c.candidateEmbeddings = candidateEmbeddings
 	c.rebuildRulePrototypeBanks()
 	return nil
 }
@@ -126,7 +143,8 @@ func (c *EmbeddingClassifier) startCandidateEmbeddingWorkers(
 
 func (c *EmbeddingClassifier) collectCandidateEmbeddingResults(
 	resultChan <-chan embeddingPreloadResult,
-) (int, error) {
+) (map[string][]float32, int, error) {
+	candidateEmbeddings := make(map[string][]float32)
 	var firstError error
 	successCount := 0
 	for res := range resultChan {
@@ -137,8 +155,8 @@ func (c *EmbeddingClassifier) collectCandidateEmbeddingResults(
 			logging.Warnf("Failed to compute embedding for candidate %q: %v", res.candidate, res.err)
 			continue
 		}
-		c.candidateEmbeddings[res.candidate] = res.embedding
+		candidateEmbeddings[res.candidate] = res.embedding
 		successCount++
 	}
-	return successCount, firstError
+	return candidateEmbeddings, successCount, firstError
 }

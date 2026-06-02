@@ -25,13 +25,13 @@ func (c *Classifier) evaluateDecisionInternal(signals *SignalResults, trace bool
 		return nil, nil, fmt.Errorf("no decisions configured")
 	}
 
-	logging.Debugf("Signal evaluation results: keyword=%v, embedding=%v, domain=%v, fact_check=%v, user_feedback=%v, reask=%v, preference=%v, language=%v, context=%v, structure=%v, complexity=%v, modality=%v, authz=%v, jailbreak=%v, pii=%v, kb=%v, session_metric=%v, event_context=%v",
+	logging.Debugf("Signal evaluation results: keyword=%v, embedding=%v, domain=%v, fact_check=%v, user_feedback=%v, reask=%v, preference=%v, language=%v, context=%v, structure=%v, complexity=%v, modality=%v, authz=%v, jailbreak=%v, pii=%v, kb=%v, conversation=%v, event=%v",
 		signals.MatchedKeywordRules, signals.MatchedEmbeddingRules, signals.MatchedDomainRules,
 		signals.MatchedFactCheckRules, signals.MatchedUserFeedbackRules, signals.MatchedReaskRules, signals.MatchedPreferenceRules,
 		signals.MatchedLanguageRules, signals.MatchedContextRules, signals.MatchedStructureRules,
 		signals.MatchedComplexityRules, signals.MatchedModalityRules, signals.MatchedAuthzRules,
 		signals.MatchedJailbreakRules, signals.MatchedPIIRules, signals.MatchedKBRules,
-		signals.MatchedSessionMetricRules, signals.MatchedEventContextRules)
+		signals.MatchedConversationRules, signals.MatchedEventRules)
 
 	engine := decision.NewDecisionEngine(
 		c.Config.KeywordRules,
@@ -42,27 +42,26 @@ func (c *Classifier) evaluateDecisionInternal(signals *SignalResults, trace bool
 	)
 
 	sm := &decision.SignalMatches{
-		KeywordRules:       signals.MatchedKeywordRules,
-		EmbeddingRules:     signals.MatchedEmbeddingRules,
-		DomainRules:        signals.MatchedDomainRules,
-		FactCheckRules:     signals.MatchedFactCheckRules,
-		UserFeedbackRules:  signals.MatchedUserFeedbackRules,
-		ReaskRules:         signals.MatchedReaskRules,
-		PreferenceRules:    signals.MatchedPreferenceRules,
-		LanguageRules:      signals.MatchedLanguageRules,
-		ContextRules:       signals.MatchedContextRules,
-		StructureRules:     signals.MatchedStructureRules,
-		ComplexityRules:    signals.MatchedComplexityRules,
-		ModalityRules:      signals.MatchedModalityRules,
-		SignalConfidences:  signals.SignalConfidences,
-		AuthzRules:         signals.MatchedAuthzRules,
-		JailbreakRules:     signals.MatchedJailbreakRules,
-		PIIRules:           signals.MatchedPIIRules,
-		KBRules:            signals.MatchedKBRules,
-		ConversationRules:  signals.MatchedConversationRules,
-		SessionMetricRules: signals.MatchedSessionMetricRules,
-		EventContextRules:  signals.MatchedEventContextRules,
-		ProjectionRules:    signals.MatchedProjectionRules,
+		KeywordRules:      signals.MatchedKeywordRules,
+		EmbeddingRules:    signals.MatchedEmbeddingRules,
+		DomainRules:       signals.MatchedDomainRules,
+		FactCheckRules:    signals.MatchedFactCheckRules,
+		UserFeedbackRules: signals.MatchedUserFeedbackRules,
+		ReaskRules:        signals.MatchedReaskRules,
+		PreferenceRules:   signals.MatchedPreferenceRules,
+		LanguageRules:     signals.MatchedLanguageRules,
+		ContextRules:      signals.MatchedContextRules,
+		StructureRules:    signals.MatchedStructureRules,
+		ComplexityRules:   signals.MatchedComplexityRules,
+		ModalityRules:     signals.MatchedModalityRules,
+		SignalConfidences: signals.SignalConfidences,
+		AuthzRules:        signals.MatchedAuthzRules,
+		JailbreakRules:    signals.MatchedJailbreakRules,
+		PIIRules:          signals.MatchedPIIRules,
+		KBRules:           signals.MatchedKBRules,
+		ConversationRules: signals.MatchedConversationRules,
+		EventRules:        signals.MatchedEventRules,
+		ProjectionRules:   signals.MatchedProjectionRules,
 	}
 
 	var result *decision.DecisionResult

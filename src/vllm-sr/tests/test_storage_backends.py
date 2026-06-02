@@ -1,13 +1,15 @@
+import os
 import socket
 
+from cli import docker_services
 from cli.bootstrap import build_bootstrap_config
-from cli.docker_services import _is_port_in_use
+from cli.docker_services import _is_port_in_use, docker_start_milvus
 from cli.runtime_stack import resolve_runtime_stack
 from cli.service_defaults import (
     inject_local_service_runtime_defaults,
     inject_local_store_runtime_defaults,
 )
-from cli.storage_backends import detect_required_backends
+from cli.storage_backends import detect_required_backends, start_storage_backends
 
 
 def test_detect_required_backends_uses_canonical_defaults():
@@ -17,6 +19,79 @@ def test_detect_required_backends_uses_canonical_defaults():
     }
 
     assert detect_required_backends(config) == {"redis", "postgres", "milvus"}
+
+
+def test_start_storage_backends_passes_state_root_to_milvus(monkeypatch, tmp_path):
+    captured = {}
+
+    def fake_start_milvus(network_name, stack_layout, *, state_root_dir=None):
+        captured["network_name"] = network_name
+        captured["stack_layout"] = stack_layout
+        captured["state_root_dir"] = state_root_dir
+        return 0, "", ""
+
+    monkeypatch.setattr("cli.storage_backends.docker_start_milvus", fake_start_milvus)
+
+    stack_layout = resolve_runtime_stack()
+    started = start_storage_backends(
+        {"milvus"},
+        "test-network",
+        stack_layout,
+        state_root_dir=str(tmp_path),
+    )
+
+    assert started == {"milvus"}
+    assert captured["network_name"] == "test-network"
+    assert captured["stack_layout"] is stack_layout
+    assert captured["state_root_dir"] == str(tmp_path)
+
+
+def test_docker_start_milvus_uses_explicit_state_root(monkeypatch, tmp_path):
+    commands = []
+
+    monkeypatch.setattr(docker_services, "get_container_runtime", lambda: "docker")
+    monkeypatch.setattr(
+        docker_services, "docker_container_status", lambda _name: "not found"
+    )
+    monkeypatch.setattr(docker_services, "_is_port_in_use", lambda _port: False)
+    monkeypatch.setattr(
+        docker_services,
+        "_run_service_start",
+        lambda cmd, _label: (commands.append(cmd) or (0, "", "")),
+    )
+
+    docker_start_milvus(
+        "test-network",
+        resolve_runtime_stack(),
+        state_root_dir=str(tmp_path),
+    )
+
+    expected_data_dir = os.path.abspath(tmp_path / ".vllm-sr" / "milvus-data")
+    assert f"{expected_data_dir}:/var/lib/milvus:z" in commands[0]
+
+
+def test_docker_start_milvus_fails_on_port_conflict_without_container(
+    monkeypatch, tmp_path
+):
+    def fail_run(_cmd, _label):
+        raise AssertionError("Milvus container should not start when the port is busy")
+
+    monkeypatch.setattr(docker_services, "get_container_runtime", lambda: "docker")
+    monkeypatch.setattr(
+        docker_services, "docker_container_status", lambda _name: "not found"
+    )
+    monkeypatch.setattr(docker_services, "_is_port_in_use", lambda _port: True)
+    monkeypatch.setattr(docker_services, "_run_service_start", fail_run)
+
+    return_code, _stdout, stderr = docker_start_milvus(
+        "test-network",
+        resolve_runtime_stack(),
+        state_root_dir=str(tmp_path),
+    )
+
+    assert return_code == 1
+    assert "Milvus port" in stderr
+    assert "not a running reusable container" in stderr
 
 
 def test_detect_required_backends_uses_defaults_for_setup_mode_bootstrap_config():
@@ -206,7 +281,7 @@ def test_inject_local_store_runtime_defaults_populates_milvus_connection():
     assert conn["timeout"] == 30
     coll = milvus["collection"]
     assert coll["name"] == "semantic_cache"
-    assert coll["vector_field"]["dimension"] == 384
+    assert coll["vector_field"]["dimension"] == 768
     search = milvus["search"]
     assert search["params"]["ef"] == 64
     assert search["topk"] == 10

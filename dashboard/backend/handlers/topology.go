@@ -210,8 +210,8 @@ func callRouterAPI(req TestQueryRequest, routerAPIURL, configPath string) *TestQ
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		body, _ := io.ReadAll(resp.Body)
-		log.Printf("Router API returned %d: %s", resp.StatusCode, string(body))
+		_, _ = io.Copy(io.Discard, io.LimitReader(resp.Body, 4096))
+		log.Printf("Router API returned %d for topology eval", resp.StatusCode)
 		return &TestQueryResult{
 			Query:           req.Query,
 			Mode:            req.Mode,

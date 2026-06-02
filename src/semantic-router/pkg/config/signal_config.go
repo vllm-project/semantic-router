@@ -7,46 +7,32 @@ import (
 )
 
 type Signals struct {
-	KeywordRules       []KeywordRule       `yaml:"keyword_rules,omitempty"`
-	EmbeddingRules     []EmbeddingRule     `yaml:"embedding_rules,omitempty"`
-	Categories         []Category          `yaml:"categories"`
-	FactCheckRules     []FactCheckRule     `yaml:"fact_check_rules,omitempty"`
-	UserFeedbackRules  []UserFeedbackRule  `yaml:"user_feedback_rules,omitempty"`
-	ReaskRules         []ReaskRule         `yaml:"reask_rules,omitempty"`
-	PreferenceRules    []PreferenceRule    `yaml:"preference_rules,omitempty"`
-	LanguageRules      []LanguageRule      `yaml:"language_rules,omitempty"`
-	ContextRules       []ContextRule       `yaml:"context_rules,omitempty"`
-	StructureRules     []StructureRule     `yaml:"structure_rules,omitempty"`
-	ComplexityRules    []ComplexityRule    `yaml:"complexity_rules,omitempty"`
-	ModalityRules      []ModalityRule      `yaml:"modality_rules,omitempty"`
-	RoleBindings       []RoleBinding       `yaml:"role_bindings,omitempty"`
-	JailbreakRules     []JailbreakRule     `yaml:"jailbreak,omitempty"`
-	PIIRules           []PIIRule           `yaml:"pii,omitempty"`
-	KBRules            []KBSignalRule      `yaml:"kb,omitempty"`
-	ConversationRules  []ConversationRule  `yaml:"conversation,omitempty"`
-	SessionMetricRules []SessionMetricRule `yaml:"session_metrics,omitempty"`
-	EventContextRules  []EventContextRule  `yaml:"event_context_rules,omitempty"`
+	KeywordRules      []KeywordRule      `yaml:"keyword_rules,omitempty"`
+	EmbeddingRules    []EmbeddingRule    `yaml:"embedding_rules,omitempty"`
+	Categories        []Category         `yaml:"categories"`
+	FactCheckRules    []FactCheckRule    `yaml:"fact_check_rules,omitempty"`
+	UserFeedbackRules []UserFeedbackRule `yaml:"user_feedback_rules,omitempty"`
+	ReaskRules        []ReaskRule        `yaml:"reask_rules,omitempty"`
+	PreferenceRules   []PreferenceRule   `yaml:"preference_rules,omitempty"`
+	LanguageRules     []LanguageRule     `yaml:"language_rules,omitempty"`
+	ContextRules      []ContextRule      `yaml:"context_rules,omitempty"`
+	StructureRules    []StructureRule    `yaml:"structure_rules,omitempty"`
+	ComplexityRules   []ComplexityRule   `yaml:"complexity_rules,omitempty"`
+	ModalityRules     []ModalityRule     `yaml:"modality_rules,omitempty"`
+	RoleBindings      []RoleBinding      `yaml:"role_bindings,omitempty"`
+	JailbreakRules    []JailbreakRule    `yaml:"jailbreak,omitempty"`
+	PIIRules          []PIIRule          `yaml:"pii,omitempty"`
+	KBRules           []KBSignalRule     `yaml:"kb,omitempty"`
+	ConversationRules []ConversationRule `yaml:"conversation,omitempty"`
+	EventRules        []EventRule        `yaml:"events,omitempty"`
 }
 
-// SessionMetricRule is a unified session-context routing metric.
-// Use kind "state" for SESSION_STATE scalars (with optional normalize), or kind "lookup"
-// for table-backed values resolved via LookupResolver at request time.
-type SessionMetricRule struct {
-	Name      string   `yaml:"name"`
-	Kind      string   `yaml:"kind"` // "state" or "lookup"
-	State     string   `yaml:"state,omitempty"`
-	Normalize string   `yaml:"normalize,omitempty"`
-	Min       *float64 `yaml:"min,omitempty"`
-	Max       *float64 `yaml:"max,omitempty"`
-	Table     string   `yaml:"table,omitempty"`
-	Key       []string `yaml:"key,omitempty"`
-}
-
-// EventContextRule matches structured event metadata extracted from request text.
+// EventRule matches structured event metadata extracted from request text.
 // It routes event-driven requests (error alerts, audit logs, incident payloads)
 // to specialized model pools based on event type, severity, and temporal urgency.
-type EventContextRule struct {
+type EventRule struct {
 	Name        string   `yaml:"name"`
+	Description string   `yaml:"description,omitempty"`
 	EventTypes  []string `yaml:"event_types,omitempty"`  // e.g. ["payment_failed", "auth_error"]
 	Severities  []string `yaml:"severities,omitempty"`   // e.g. ["critical", "high"]
 	ActionCodes []string `yaml:"action_codes,omitempty"` // domain-specific codes, e.g. ["TXN_DECLINE"]

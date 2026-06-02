@@ -64,23 +64,23 @@ export const monarchTokens: monacoNs.languages.IMonarchLanguage = {
 
   operators: ['AND', 'OR', 'NOT'],
 
-  signalTypes: [
-    'keyword', 'embedding', 'domain', 'fact_check', 'user_feedback',
-    'reask',
-    'preference', 'language', 'context', 'structure', 'complexity', 'modality', 'authz',
-    'jailbreak', 'pii', 'kb',
-  ],
+	signalTypes: [
+	  'keyword', 'embedding', 'domain', 'fact_check', 'user_feedback',
+	  'reask',
+	  'preference', 'language', 'context', 'structure', 'complexity', 'modality', 'authz',
+	  'jailbreak', 'pii', 'kb', 'conversation', 'event',
+	],
 
   pluginTypes: [
     'semantic_cache', 'memory', 'system_prompt',
     'header_mutation', 'hallucination', 'router_replay', 'rag', 'image_gen', 'tools',
-    'fast_response', 'request_params', 'response_jailbreak',
+    'fast_response', 'request_params', 'response_jailbreak', 'tool_selection',
   ],
 
   algoTypes: [
     'confidence', 'ratings', 'remom', 'static', 'elo', 'router_dc',
     'automix', 'hybrid', 'rl_driven', 'gmtrouter', 'latency_aware',
-    'knn', 'kmeans', 'svm',
+    'knn', 'kmeans', 'svm', 'mlp', 'multi_factor', 'session_aware',
   ],
 
   booleans: ['true', 'false'],
@@ -111,19 +111,19 @@ export const monarchTokens: monacoNs.languages.IMonarchLanguage = {
 
       // Signal types (after SIGNAL keyword)
       [
-        /\b(keyword|embedding|domain|fact_check|user_feedback|reask|preference|language|context|structure|complexity|modality|authz|jailbreak|pii|kb)\b/,
+		/\b(keyword|embedding|domain|fact_check|user_feedback|reask|preference|language|context|structure|complexity|modality|authz|jailbreak|pii|kb|conversation|event)\b/,
         'type',
       ],
 
       // Plugin types
       [
-        /\b(semantic_cache|memory|system_prompt|header_mutation|hallucination|router_replay|rag|image_gen|tools|fast_response|request_params|response_jailbreak)\b/,
+        /\b(semantic_cache|memory|system_prompt|header_mutation|hallucination|router_replay|rag|image_gen|tools|fast_response|request_params|response_jailbreak|tool_selection)\b/,
         'type.plugin',
       ],
 
       // Algorithm types
       [
-        /\b(confidence|ratings|remom|static|elo|router_dc|automix|hybrid|rl_driven|gmtrouter|latency_aware|knn|kmeans|svm)\b/,
+        /\b(confidence|ratings|remom|static|elo|router_dc|automix|hybrid|rl_driven|gmtrouter|latency_aware|knn|kmeans|svm|mlp|multi_factor|session_aware)\b/,
         'type.algorithm',
       ],
 
@@ -222,6 +222,8 @@ const SIGNAL_TYPE_SUGGESTIONS = [
   { label: 'jailbreak', detail: 'Jailbreak detection signal' },
   { label: 'pii', detail: 'PII detection signal' },
   { label: 'kb', detail: 'Knowledge base signal' },
+  { label: 'conversation', detail: 'Conversation-shape signal' },
+  { label: 'event', detail: 'Structured event metadata signal' },
 ]
 
 const PLUGIN_TYPE_SUGGESTIONS = [
@@ -234,6 +236,7 @@ const PLUGIN_TYPE_SUGGESTIONS = [
   { label: 'rag', detail: 'RAG (Retrieval Augmented Generation) plugin' },
   { label: 'image_gen', detail: 'Image generation plugin' },
   { label: 'tools', detail: 'Route-local tool policy and semantic selection plugin' },
+  { label: 'tool_selection', detail: 'Semantic tool add/filter plugin' },
   { label: 'fast_response', detail: 'Short-circuit fixed response plugin' },
   { label: 'request_params', detail: 'Request parameter mutation plugin' },
   { label: 'response_jailbreak', detail: 'Response-side jailbreak screening plugin' },
@@ -248,7 +251,15 @@ const ALGO_TYPE_SUGGESTIONS = [
   { label: 'router_dc', detail: 'Router DC algorithm' },
   { label: 'automix', detail: 'AutoMix algorithm' },
   { label: 'hybrid', detail: 'Hybrid routing' },
+  { label: 'rl_driven', detail: 'Reinforcement-learning model selection' },
+  { label: 'gmtrouter', detail: 'Graph-based personalized routing' },
   { label: 'latency_aware', detail: 'Latency-aware routing' },
+  { label: 'knn', detail: 'KNN model-selection classifier' },
+  { label: 'kmeans', detail: 'KMeans model-selection classifier' },
+  { label: 'svm', detail: 'SVM model-selection classifier' },
+  { label: 'mlp', detail: 'MLP model-selection classifier' },
+  { label: 'multi_factor', detail: 'Quality/latency/cost/load scoring' },
+  { label: 'session_aware', detail: 'Agentic stay-vs-switch policy' },
 ]
 
 /**

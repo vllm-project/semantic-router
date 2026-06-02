@@ -31,13 +31,17 @@ func testDashboardConfigRead(ctx context.Context, client *kubernetes.Clientset, 
 
 	httpClient := &http.Client{Timeout: 15 * time.Second}
 	baseURL := fmt.Sprintf("http://localhost:%s", localPort)
-
-	configJSON, err := fetchDashboardJSONConfig(ctx, httpClient, baseURL, opts.Verbose)
+	token, err := dashboardAuthToken(ctx, httpClient, baseURL, opts.Verbose)
 	if err != nil {
 		return err
 	}
 
-	yamlSize, err := fetchDashboardYAMLConfig(ctx, httpClient, baseURL, opts.Verbose)
+	configJSON, err := fetchDashboardJSONConfig(ctx, httpClient, baseURL, token, opts.Verbose)
+	if err != nil {
+		return err
+	}
+
+	yamlSize, err := fetchDashboardYAMLConfig(ctx, httpClient, baseURL, token, opts.Verbose)
 	if err != nil {
 		return err
 	}
@@ -56,7 +60,7 @@ func testDashboardConfigRead(ctx context.Context, client *kubernetes.Clientset, 
 	return nil
 }
 
-func fetchDashboardJSONConfig(ctx context.Context, client *http.Client, baseURL string, verbose bool) (map[string]interface{}, error) {
+func fetchDashboardJSONConfig(ctx context.Context, client *http.Client, baseURL, token string, verbose bool) (map[string]interface{}, error) {
 	url := baseURL + "/api/router/config/all"
 	if verbose {
 		fmt.Printf("[Dashboard] GET %s\n", url)
@@ -66,6 +70,7 @@ func fetchDashboardJSONConfig(ctx context.Context, client *http.Client, baseURL 
 	if err != nil {
 		return nil, fmt.Errorf("create JSON config request: %w", err)
 	}
+	setDashboardAuth(req, token)
 
 	resp, err := client.Do(req)
 	if err != nil {
@@ -91,7 +96,7 @@ func fetchDashboardJSONConfig(ctx context.Context, client *http.Client, baseURL 
 	return result, nil
 }
 
-func fetchDashboardYAMLConfig(ctx context.Context, client *http.Client, baseURL string, verbose bool) (int, error) {
+func fetchDashboardYAMLConfig(ctx context.Context, client *http.Client, baseURL, token string, verbose bool) (int, error) {
 	url := baseURL + "/api/router/config/yaml"
 	if verbose {
 		fmt.Printf("[Dashboard] GET %s\n", url)
@@ -101,6 +106,7 @@ func fetchDashboardYAMLConfig(ctx context.Context, client *http.Client, baseURL 
 	if err != nil {
 		return 0, fmt.Errorf("create YAML config request: %w", err)
 	}
+	setDashboardAuth(req, token)
 
 	resp, err := client.Do(req)
 	if err != nil {

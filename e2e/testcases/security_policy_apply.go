@@ -51,7 +51,23 @@ type rateLimitTierPayload struct {
 type securityPolicyTestEnv struct {
 	baseURL    string
 	httpClient *http.Client
+	authToken  string
 	verbose    bool
+}
+
+func newSecurityPolicyTestEnv(ctx context.Context, localPort string, verbose bool) (*securityPolicyTestEnv, error) {
+	baseURL := fmt.Sprintf("http://localhost:%s", localPort)
+	httpClient := &http.Client{Timeout: 30 * time.Second}
+	token, err := dashboardAuthToken(ctx, httpClient, baseURL, verbose)
+	if err != nil {
+		return nil, err
+	}
+	return &securityPolicyTestEnv{
+		baseURL:    baseURL,
+		httpClient: httpClient,
+		authToken:  token,
+		verbose:    verbose,
+	}, nil
 }
 
 func newTestPolicy() securityPolicyPayload {
@@ -92,6 +108,7 @@ func (env *securityPolicyTestEnv) putSecurityPolicy(ctx context.Context, body []
 		return false, false, fmt.Errorf("create PUT request: %w", err)
 	}
 	req.Header.Set("Content-Type", "application/json")
+	setDashboardAuth(req, env.authToken)
 
 	resp, err := env.httpClient.Do(req)
 	if err != nil {
@@ -142,6 +159,7 @@ func (env *securityPolicyTestEnv) getSecurityPolicy(ctx context.Context) error {
 	if err != nil {
 		return fmt.Errorf("create GET request: %w", err)
 	}
+	setDashboardAuth(req, env.authToken)
 
 	resp, err := env.httpClient.Do(req)
 	if err != nil {
@@ -183,6 +201,7 @@ func (env *securityPolicyTestEnv) previewFragment(ctx context.Context, body []by
 		return fmt.Errorf("create preview POST request: %w", err)
 	}
 	req.Header.Set("Content-Type", "application/json")
+	setDashboardAuth(req, env.authToken)
 
 	resp, err := env.httpClient.Do(req)
 	if err != nil {
@@ -222,6 +241,7 @@ func (env *securityPolicyTestEnv) verifyConfigApplied(ctx context.Context) error
 	if err != nil {
 		return fmt.Errorf("create config GET request: %w", err)
 	}
+	setDashboardAuth(req, env.authToken)
 
 	resp, err := env.httpClient.Do(req)
 	if err != nil {
@@ -255,10 +275,9 @@ func testSecurityPolicyApply(ctx context.Context, client *kubernetes.Clientset, 
 	}
 	defer stop()
 
-	env := &securityPolicyTestEnv{
-		baseURL:    fmt.Sprintf("http://localhost:%s", localPort),
-		httpClient: &http.Client{Timeout: 30 * time.Second},
-		verbose:    opts.Verbose,
+	env, err := newSecurityPolicyTestEnv(ctx, localPort, opts.Verbose)
+	if err != nil {
+		return err
 	}
 
 	policy := newTestPolicy()
@@ -293,8 +312,6 @@ func testSecurityPolicyApply(ctx context.Context, client *kubernetes.Clientset, 
 		if err := env.verifyConfigApplied(ctx); err != nil {
 			return err
 		}
-	} else if env.verbose {
-		fmt.Printf("[SecurityPolicy] Auto-apply skipped (read-only config or path not configured); fragment generation verified\n")
 	}
 
 	if opts.SetDetails != nil {

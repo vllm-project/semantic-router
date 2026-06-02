@@ -30,7 +30,7 @@ import (
 // See: https://github.com/vllm-project/semantic-router/issues/1093
 var (
 	// ModelSelectionTotal tracks the total number of model selections
-	// Labels: method (elo/router_dc/automix/hybrid/static/knn/kmeans/svm/rl_driven/gmtrouter/latency_aware), model, decision
+	// Labels: method (elo/router_dc/automix/hybrid/static/knn/kmeans/svm/mlp/rl_driven/gmtrouter/latency_aware/multi_factor/session_aware), model, decision
 	ModelSelectionTotal *prometheus.CounterVec
 
 	// ModelSelectionDuration tracks the duration of model selection operations
@@ -359,7 +359,22 @@ func registerAlgorithmMetrics() {
 // This is necessary because Prometheus Vec metrics only appear after WithLabelValues is called
 func preInitializeMetrics() {
 	// All selection methods - pre-initialize so they appear in Grafana dropdowns immediately
-	methods := []string{"elo", "router_dc", "automix", "hybrid", "static", "knn", "kmeans", "svm", "rl_driven", "gmtrouter", "latency_aware"}
+	methods := []string{
+		"elo",
+		"router_dc",
+		"automix",
+		"hybrid",
+		"static",
+		"knn",
+		"kmeans",
+		"svm",
+		"mlp",
+		"rl_driven",
+		"gmtrouter",
+		"latency_aware",
+		"multi_factor",
+		"session_aware",
+	}
 
 	// Initialize selection metrics for all methods
 	for _, method := range methods {

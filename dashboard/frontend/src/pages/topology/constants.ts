@@ -20,6 +20,8 @@ export const SIGNAL_ICONS: Record<SignalType, string> = {
   jailbreak: 'JB',
   pii: 'PII',
   kb: 'KB',
+  conversation: 'CONV',
+  event: 'EVT',
   projection: 'PRJ',
 }
 
@@ -41,6 +43,8 @@ export const SIGNAL_COLORS: Record<SignalType, { background: string; border: str
   jailbreak: { background: '#4a5568', border: '#2d3748' },    // Dark Gray
   pii: { background: '#4a5568', border: '#2d3748' },          // Dark Gray
   kb: { background: '#4a5568', border: '#2d3748' },           // Dark Gray
+  conversation: { background: '#4a5568', border: '#2d3748' }, // Dark Gray
+  event: { background: '#4a5568', border: '#2d3748' }, // Dark Gray
   projection: { background: '#4a5568', border: '#2d3748' },   // Dark Gray
 }
 
@@ -62,6 +66,8 @@ export const SIGNAL_LATENCY: Record<SignalType, string> = {
   jailbreak: '10-50ms',
   pii: '10-50ms',
   kb: '10-50ms',
+  conversation: '<1ms',
+  event: '<1ms',
   projection: '<1ms',
 }
 
@@ -79,6 +85,7 @@ export const PLUGIN_ICONS: Record<PluginType, string> = {
   'request_params': 'RP',
   'response_jailbreak': 'RJ',
   'tools': 'TL',
+  'tool_selection': 'TS',
 }
 
 // ============== Plugin Colors (NVIDIA Dark Theme) ==============
@@ -95,6 +102,7 @@ export const PLUGIN_COLORS: Record<PluginType, { background: string; border: str
   'request_params': { background: '#805ad5', border: '#6b46c1' },
   'response_jailbreak': { background: '#c05621', border: '#9c4221' },
   'tools': { background: '#5a6c7d', border: '#3d4a59' },
+  'tool_selection': { background: '#4b6f7f', border: '#344f5c' },
 }
 
 // ============== Algorithm Icons ==============
@@ -109,7 +117,15 @@ export const ALGORITHM_ICONS: Record<AlgorithmType, string> = {
   automix: 'AM',
   hybrid: 'HY',
   remom: 'RM',
+  rl_driven: 'RL',
+  gmtrouter: 'GMT',
   latency_aware: 'LAT',
+  knn: 'KNN',
+  kmeans: 'KM',
+  svm: 'SVM',
+  mlp: 'MLP',
+  multi_factor: 'MF',
+  session_aware: 'SA',
 }
 
 // ============== Algorithm Colors (NVIDIA Dark Theme) ==============
@@ -124,7 +140,15 @@ export const ALGORITHM_COLORS: Record<AlgorithmType, { background: string; borde
   remom: { background: '#76b900', border: '#5a8f00' },         // NVIDIA Green (same as plugins)
   automix: { background: '#5d6d7e', border: '#3d4a59' },       // Steel Gray
   hybrid: { background: '#4a5568', border: '#2d3748' },        // Dark Gray
+  rl_driven: { background: '#556b7d', border: '#3d4a59' },     // Cool Gray
+  gmtrouter: { background: '#4f5f6f', border: '#364555' },     // Steel Gray
   latency_aware: { background: '#5a6c7d', border: '#3d4a59' }, // Blue Gray
+  knn: { background: '#687887', border: '#4b5968' },
+  kmeans: { background: '#596b5d', border: '#3f5144' },
+  svm: { background: '#6d687a', border: '#504a5c' },
+  mlp: { background: '#586d7a', border: '#40515d' },
+  multi_factor: { background: '#4e6f63', border: '#38534a' },
+  session_aware: { background: '#6a704d', border: '#4f5438' },
 }
 
 // ============== Reasoning Effort Display (NVIDIA Dark Theme) ==============
@@ -283,6 +307,8 @@ export const SIGNAL_TYPES: SignalType[] = [
   'jailbreak',
   'pii',
   'kb',
+  'conversation',
+  'event',
   'projection',
 ]
 
@@ -300,4 +326,5 @@ export const PLUGIN_TYPES: PluginType[] = [
   'request_params',
   'response_jailbreak',
   'tools',
+  'tool_selection',
 ]

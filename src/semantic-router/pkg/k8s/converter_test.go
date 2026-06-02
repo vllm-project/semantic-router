@@ -213,6 +213,47 @@ func testDecision(
 	}
 }
 
+func TestCRDConverterConvertsEventSignals(t *testing.T) {
+	pool := testPoolWithModels(v1alpha1.ModelConfig{Name: "test-model"})
+	route := &v1alpha1.IntelligentRoute{
+		Spec: v1alpha1.IntelligentRouteSpec{
+			Signals: v1alpha1.Signals{
+				Events: []v1alpha1.EventSignal{
+					{
+						Name:        "critical_payment_event",
+						Description: "Critical payment incident payload.",
+						EventTypes:  []string{"payment_failed"},
+						Severities:  []string{"critical"},
+						ActionCodes: []string{"TXN_DECLINE"},
+						Temporal:    true,
+					},
+				},
+			},
+			Decisions: []v1alpha1.Decision{
+				testDecision(
+					[]v1alpha1.ModelRef{{Model: "test-model"}},
+					v1alpha1.SignalCondition{Type: "event", Name: "critical_payment_event"},
+				),
+			},
+		},
+	}
+
+	err := validateCRDs(pool, route, testValidationBaseConfig())
+	require.NoError(t, err)
+
+	outputConfig, err := NewCRDConverter().Convert(pool, route, &config.CanonicalConfig{})
+	require.NoError(t, err)
+	require.Len(t, outputConfig.Routing.Signals.EventRules, 1)
+
+	eventRule := outputConfig.Routing.Signals.EventRules[0]
+	assert.Equal(t, "critical_payment_event", eventRule.Name)
+	assert.Equal(t, "Critical payment incident payload.", eventRule.Description)
+	assert.Equal(t, []string{"payment_failed"}, eventRule.EventTypes)
+	assert.Equal(t, []string{"critical"}, eventRule.Severities)
+	assert.Equal(t, []string{"TXN_DECLINE"}, eventRule.ActionCodes)
+	assert.True(t, eventRule.Temporal)
+}
+
 // TestCRDValidationErrors tests that validation catches various error conditions
 func TestCRDValidationErrors(t *testing.T) {
 	testCases := []struct {
@@ -243,6 +284,24 @@ func TestCRDValidationErrors(t *testing.T) {
 				),
 			),
 			wantError: "references unknown keyword signal: nonexistent",
+		},
+		{
+			name: "UnknownEventSignalReference",
+			pool: testPoolWithModels(v1alpha1.ModelConfig{Name: "test-model"}),
+			route: &v1alpha1.IntelligentRoute{
+				Spec: v1alpha1.IntelligentRouteSpec{
+					Signals: v1alpha1.Signals{
+						Events: []v1alpha1.EventSignal{{Name: "critical_event"}},
+					},
+					Decisions: []v1alpha1.Decision{
+						testDecision(
+							[]v1alpha1.ModelRef{{Model: "test-model"}},
+							v1alpha1.SignalCondition{Type: "event", Name: "missing_event"},
+						),
+					},
+				},
+			},
+			wantError: "references unknown event signal: missing_event",
 		},
 		{
 			name: "UnknownModelReference",
