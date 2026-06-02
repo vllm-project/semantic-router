@@ -117,6 +117,7 @@ structure_exceptions:
     file_checks: relaxed
     function_checks: relaxed
   - paths:
+      - candle-binding/src/model_architectures/embedding/mmbert_embedding.rs
       - candle-binding/src/model_architectures/traditional/modernbert.rs
       - candle-binding/src/model_architectures/traditional/modernbert_test.rs
       - onnx-binding/src/model_architectures/classification/mmbert_classifier.rs
