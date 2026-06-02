@@ -19,71 +19,6 @@ func (c *Compiler) compileSignals() {
 	}
 }
 
-func (c *Compiler) compileSessionMetricRule(s *SignalDecl) {
-	rule := config.SessionMetricRule{Name: s.Name}
-	kind := inferSessionMetricKindFromDecl(s)
-	rule.Kind = kind
-	switch kind {
-	case "state":
-		fillSessionMetricStateRule(&rule, s.Fields)
-	case "lookup":
-		fillSessionMetricLookupRule(&rule, s)
-	default:
-		c.addError(s.Pos, "session_metric %q: kind must be state or lookup (or omit kind and set state or table)", s.Name)
-		return
-	}
-	c.config.SessionMetricRules = append(c.config.SessionMetricRules, rule)
-}
-
-func inferSessionMetricKindFromDecl(s *SignalDecl) string {
-	kind := strings.ToLower(strings.TrimSpace(getStringFieldOrEmpty(s.Fields, "kind")))
-	if kind != "" {
-		return kind
-	}
-	if _, ok := getStringField(s.Fields, "table"); ok {
-		return "lookup"
-	}
-	return "state"
-}
-
-func fillSessionMetricStateRule(rule *config.SessionMetricRule, fields map[string]Value) {
-	if v, ok := getStringField(fields, "state"); ok {
-		rule.State = v
-	}
-	if v, ok := getStringField(fields, "normalize"); ok {
-		rule.Normalize = v
-	}
-	if v, ok := getFloat64Field(fields, "min"); ok {
-		x := v
-		rule.Min = &x
-	}
-	if v, ok := getFloat64Field(fields, "max"); ok {
-		x := v
-		rule.Max = &x
-	}
-}
-
-func fillSessionMetricLookupRule(rule *config.SessionMetricRule, s *SignalDecl) {
-	if v, ok := getStringField(s.Fields, "table"); ok {
-		rule.Table = v
-	}
-	raw, ok := s.Fields["key"]
-	if !ok {
-		return
-	}
-	av, ok := raw.(ArrayValue)
-	if !ok {
-		return
-	}
-	for _, item := range av.Items {
-		sv, ok := item.(StringValue)
-		if !ok {
-			continue
-		}
-		rule.Key = append(rule.Key, sv.V)
-	}
-}
-
 func (c *Compiler) compileKeywordSignal(s *SignalDecl) {
 	rule := config.KeywordRule{Name: s.Name}
 	if v, ok := getStringField(s.Fields, "operator"); ok {
@@ -360,8 +295,8 @@ func (c *Compiler) compileConversationSignal(s *SignalDecl) {
 	c.config.ConversationRules = append(c.config.ConversationRules, rule)
 }
 
-func (c *Compiler) compileEventContextSignal(s *SignalDecl) {
-	rule := config.EventContextRule{Name: s.Name}
+func (c *Compiler) compileEventSignal(s *SignalDecl) {
+	rule := config.EventRule{Name: s.Name}
 	if v, ok := getStringArrayField(s.Fields, "event_types"); ok {
 		rule.EventTypes = v
 	}
@@ -374,7 +309,7 @@ func (c *Compiler) compileEventContextSignal(s *SignalDecl) {
 	if v, ok := getBoolField(s.Fields, "temporal"); ok {
 		rule.Temporal = v
 	}
-	c.config.EventContextRules = append(c.config.EventContextRules, rule)
+	c.config.EventRules = append(c.config.EventRules, rule)
 }
 
 func (c *Compiler) compileKBSignal(s *SignalDecl) {

@@ -12,7 +12,7 @@ export const SIGNAL_TYPES = [
   'keyword', 'embedding', 'domain', 'fact_check', 'user_feedback',
   'reask',
   'preference', 'language', 'context', 'structure', 'complexity', 'modality', 'authz',
-  'jailbreak', 'pii', 'kb', 'conversation', 'session_metric', 'event_context',
+  'jailbreak', 'pii', 'kb', 'conversation', 'event',
 ] as const
 
 export type SignalType = typeof SIGNAL_TYPES[number]
@@ -127,17 +127,7 @@ export function getSignalFieldSchema(signalType: string): FieldSchema[] {
         { key: 'feature', label: 'Feature', type: 'json', required: true, description: '{ type: "count", source: { type: "message", role: "user" } }' },
         { key: 'predicate', label: 'Predicate', type: 'json', description: '{ gte: 2 }' },
       ]
-    case 'session_metric':
-      return [
-        { key: 'kind', label: 'Kind', type: 'select', options: ['state', 'lookup'] },
-        { key: 'state', label: 'State Path', type: 'string', placeholder: 'session_routing.cumulative_cost_usd' },
-        { key: 'normalize', label: 'Normalize', type: 'select', options: ['', 'minmax'] },
-        { key: 'min', label: 'Min', type: 'number' },
-        { key: 'max', label: 'Max', type: 'number' },
-        { key: 'table', label: 'Lookup Table', type: 'string', placeholder: 'handoff_penalties' },
-        { key: 'key', label: 'Lookup Key', type: 'string[]', placeholder: 'Add key part...' },
-      ]
-    case 'event_context':
+    case 'event':
       return [
         { key: 'event_types', label: 'Event Types', type: 'string[]', placeholder: 'payment_failed' },
         { key: 'severities', label: 'Severities', type: 'string[]', placeholder: 'critical' },

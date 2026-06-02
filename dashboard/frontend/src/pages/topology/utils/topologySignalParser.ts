@@ -354,25 +354,10 @@ export function extractSignals(config: ConfigData): SignalConfig[] {
     },
   }))
 
-  addRuleSignals(addSignal, mergeRules(config.session_metrics, routingSignals?.session_metrics), rule => ({
-    type: 'session_metric',
+  addRuleSignals(addSignal, mergeRules(config.events, routingSignals?.events), rule => ({
+    type: 'event',
     name: rule.name,
-    latency: SIGNAL_LATENCY.session_metric,
-    config: {
-      kind: rule.kind,
-      state: rule.state,
-      normalize: rule.normalize,
-      min: rule.min,
-      max: rule.max,
-      table: rule.table,
-      key: rule.key,
-    },
-  }))
-
-  addRuleSignals(addSignal, mergeRules(config.event_context_rules, routingSignals?.event_context_rules), rule => ({
-    type: 'event_context',
-    name: rule.name,
-    latency: SIGNAL_LATENCY.event_context,
+    latency: SIGNAL_LATENCY.event,
     config: {
       event_types: rule.event_types,
       severities: rule.severities,

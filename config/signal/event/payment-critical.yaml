@@ -1,6 +1,6 @@
 routing:
   signals:
-    event_context_rules:
+    events:
       - name: critical_payment_event
         event_types:
           - payment_failed

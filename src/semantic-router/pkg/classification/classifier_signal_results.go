@@ -10,32 +10,31 @@ type SignalMetrics struct {
 
 // SignalResults contains all evaluated signal results.
 type SignalResults struct {
-	MatchedKeywordRules       []string
-	MatchedKeywords           []string // The actual keywords that matched (not rule names)
-	MatchedEmbeddingRules     []string
-	MatchedDomainRules        []string
-	MatchedFactCheckRules     []string // "needs_fact_check" or "no_fact_check_needed"
-	MatchedUserFeedbackRules  []string // "satisfied", "need_clarification", "wrong_answer", "want_different"
-	MatchedReaskRules         []string // History-aware repeated-question dissatisfaction signals
-	MatchedPreferenceRules    []string // Route preference names matched via external LLM
-	MatchedLanguageRules      []string // Language codes: "en", "es", "zh", "fr", etc.
-	MatchedContextRules       []string // Matched context rule names (e.g. "low_token_count")
-	TokenCount                int      // Total token count
-	MatchedStructureRules     []string // Matched structure rule names (e.g. "many_questions")
-	MatchedComplexityRules    []string // Matched complexity rules with difficulty level (e.g. "code_complexity:hard")
-	MatchedModalityRules      []string // Matched modality: "AR", "DIFFUSION", or "BOTH"
-	MatchedAuthzRules         []string // Matched authz role names for user-level RBAC routing
-	MatchedJailbreakRules     []string // Matched jailbreak rule names (confidence >= threshold)
-	MatchedPIIRules           []string // Matched PII rule names (denied PII types detected)
-	MatchedKBRules            []string
-	KBClassifierResults       map[string]*KBClassifyResult
-	KBMetricValues            map[string]float64
-	MatchedConversationRules  []string
-	MatchedSessionMetricRules []string
-	MatchedEventContextRules  []string // Matched event_context rule names (event type, severity, temporal, action codes)
-	MatchedProjectionRules    []string // Matched derived routing outputs from routing.projections.mappings
-	ProjectionScores          map[string]float64
-	ProjectionTrace           *projectiontrace.Trace // Explainability payload for projections (replay / dashboard)
+	MatchedKeywordRules      []string
+	MatchedKeywords          []string // The actual keywords that matched (not rule names)
+	MatchedEmbeddingRules    []string
+	MatchedDomainRules       []string
+	MatchedFactCheckRules    []string // "needs_fact_check" or "no_fact_check_needed"
+	MatchedUserFeedbackRules []string // "satisfied", "need_clarification", "wrong_answer", "want_different"
+	MatchedReaskRules        []string // History-aware repeated-question dissatisfaction signals
+	MatchedPreferenceRules   []string // Route preference names matched via external LLM
+	MatchedLanguageRules     []string // Language codes: "en", "es", "zh", "fr", etc.
+	MatchedContextRules      []string // Matched context rule names (e.g. "low_token_count")
+	TokenCount               int      // Total token count
+	MatchedStructureRules    []string // Matched structure rule names (e.g. "many_questions")
+	MatchedComplexityRules   []string // Matched complexity rules with difficulty level (e.g. "code_complexity:hard")
+	MatchedModalityRules     []string // Matched modality: "AR", "DIFFUSION", or "BOTH"
+	MatchedAuthzRules        []string // Matched authz role names for user-level RBAC routing
+	MatchedJailbreakRules    []string // Matched jailbreak rule names (confidence >= threshold)
+	MatchedPIIRules          []string // Matched PII rule names (denied PII types detected)
+	MatchedKBRules           []string
+	KBClassifierResults      map[string]*KBClassifyResult
+	KBMetricValues           map[string]float64
+	MatchedConversationRules []string
+	MatchedEventRules        []string // Matched event rule names (event type, severity, temporal, action codes)
+	MatchedProjectionRules   []string // Matched derived routing outputs from routing.projections.mappings
+	ProjectionScores         map[string]float64
+	ProjectionTrace          *projectiontrace.Trace // Explainability payload for projections (replay / dashboard)
 
 	// Jailbreak detection metadata (populated when jailbreak signal is evaluated)
 	JailbreakDetected   bool    // Whether any jailbreak was detected (across all rules)
@@ -72,5 +71,5 @@ type SignalMetricsCollection struct {
 	PII          SignalMetrics `json:"pii"`
 	KB           SignalMetrics `json:"kb"`
 	Conversation SignalMetrics `json:"conversation"`
-	EventContext SignalMetrics `json:"event_context"`
+	Event        SignalMetrics `json:"event"`
 }

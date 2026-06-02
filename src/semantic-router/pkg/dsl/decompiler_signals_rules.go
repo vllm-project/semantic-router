@@ -284,15 +284,9 @@ func (d *decompiler) decompileKBSignals() {
 	}
 }
 
-func (d *decompiler) decompileSessionMetricSignals() {
-	for _, m := range d.cfg.SessionMetricRules {
-		d.decompileSessionMetricRule(m)
-	}
-}
-
-func (d *decompiler) decompileEventContextSignals() {
-	for _, rule := range d.cfg.EventContextRules {
-		d.write("SIGNAL event_context %s {\n", quoteName(rule.Name))
+func (d *decompiler) decompileEventSignals() {
+	for _, rule := range d.cfg.EventRules {
+		d.write("SIGNAL event %s {\n", quoteName(rule.Name))
 		if len(rule.EventTypes) > 0 {
 			d.write("  event_types: %s\n", formatStringArray(rule.EventTypes))
 		}
@@ -306,46 +300,6 @@ func (d *decompiler) decompileEventContextSignals() {
 			d.write("  temporal: true\n")
 		}
 		d.write("}\n\n")
-	}
-}
-
-func (d *decompiler) decompileSessionMetricRule(m config.SessionMetricRule) {
-	d.write("SIGNAL session_metric %s {\n", quoteName(m.Name))
-	kind := inferSessionMetricKind(&m)
-	d.write("  kind: %q\n", kind)
-	d.writeSessionMetricKindFields(&m, kind)
-	d.write("}\n\n")
-}
-
-func (d *decompiler) writeSessionMetricKindFields(m *config.SessionMetricRule, kind string) {
-	if kind == "state" {
-		d.writeSessionMetricStateFields(m)
-		return
-	}
-	d.writeSessionMetricLookupFields(m)
-}
-
-func (d *decompiler) writeSessionMetricStateFields(m *config.SessionMetricRule) {
-	if m.State != "" {
-		d.write("  state: %q\n", m.State)
-	}
-	if m.Normalize != "" {
-		d.write("  normalize: %q\n", m.Normalize)
-	}
-	if m.Min != nil {
-		d.write("  min: %v\n", *m.Min)
-	}
-	if m.Max != nil {
-		d.write("  max: %v\n", *m.Max)
-	}
-}
-
-func (d *decompiler) writeSessionMetricLookupFields(m *config.SessionMetricRule) {
-	if m.Table != "" {
-		d.write("  table: %q\n", m.Table)
-	}
-	if len(m.Key) > 0 {
-		d.write("  key: %s\n", formatStringArray(m.Key))
 	}
 }
 

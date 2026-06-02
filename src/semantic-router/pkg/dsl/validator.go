@@ -454,8 +454,6 @@ func (v *Validator) checkSignalConstraints(s *SignalDecl) {
 		v.checkStructureSignalConstraints(s)
 	case "conversation":
 		v.checkConversationSignalConstraints(s)
-	case "session_metric":
-		v.checkSessionMetricRuleConstraints(s, context)
 	}
 }
 

@@ -19,15 +19,7 @@ describe('topology v0.3 surface alignment', () => {
               predicate: { gte: 3 },
             },
           ],
-          session_metrics: [
-            {
-              name: 'handoff_penalty',
-              kind: 'lookup',
-              table: 'handoff_penalty',
-              key: ['current_model', 'candidate_model'],
-            },
-          ],
-          event_context_rules: [
+          events: [
             {
               name: 'incident',
               event_types: ['service_incident'],
@@ -60,7 +52,7 @@ describe('topology v0.3 surface alignment', () => {
     const topology = parseConfigToTopology(config)
 
     expect(topology.signals.map(signal => signal.type)).toEqual(
-      expect.arrayContaining(['conversation', 'session_metric', 'event_context']),
+      expect.arrayContaining(['conversation', 'event']),
     )
     expect(topology.decisions[0].algorithm?.type).toBe('session_aware')
     expect(topology.decisions[0].algorithm?.session_aware).toEqual({ base_method: 'multi_factor' })
@@ -69,7 +61,7 @@ describe('topology v0.3 surface alignment', () => {
 
   it('declares display metadata for v0.3 topology surfaces', () => {
     expect(SIGNAL_TYPES).toEqual(
-      expect.arrayContaining(['conversation', 'session_metric', 'event_context']),
+      expect.arrayContaining(['conversation', 'event']),
     )
     expect(ALGORITHM_ICONS).toMatchObject({
       mlp: 'MLP',

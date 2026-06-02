@@ -243,17 +243,7 @@ func (d *decompiler) kbSignalToDecl(rule *config.KBSignalRule) *SignalDecl {
 	return &SignalDecl{SignalType: "kb", Name: rule.Name, Fields: fields}
 }
 
-func (d *decompiler) sessionMetricRuleToDecl(rule *config.SessionMetricRule) *SignalDecl {
-	fields := make(map[string]Value)
-	kind := inferSessionMetricKind(rule)
-	fields["kind"] = StringValue{V: kind}
-	for k, v := range sessionMetricKindFields(rule, kind) {
-		fields[k] = v
-	}
-	return &SignalDecl{SignalType: "session_metric", Name: rule.Name, Fields: fields}
-}
-
-func (d *decompiler) eventContextRuleToDecl(rule *config.EventContextRule) *SignalDecl {
+func (d *decompiler) eventRuleToDecl(rule *config.EventRule) *SignalDecl {
 	fields := make(map[string]Value)
 	if len(rule.EventTypes) > 0 {
 		fields["event_types"] = stringsToArray(rule.EventTypes)
@@ -267,7 +257,7 @@ func (d *decompiler) eventContextRuleToDecl(rule *config.EventContextRule) *Sign
 	if rule.Temporal {
 		fields["temporal"] = BoolValue{V: true}
 	}
-	return &SignalDecl{SignalType: "event_context", Name: rule.Name, Fields: fields}
+	return &SignalDecl{SignalType: "event", Name: rule.Name, Fields: fields}
 }
 
 func modelScoresValue(scores []config.ModelScore) ArrayValue {
@@ -317,56 +307,6 @@ func ruleCombinationValue(node *config.RuleCombination) ObjectValue {
 		fields["conditions"] = ArrayValue{Items: items}
 	}
 	return ObjectValue{Fields: fields}
-}
-
-func inferSessionMetricKind(rule *config.SessionMetricRule) string {
-	kind := strings.ToLower(strings.TrimSpace(rule.Kind))
-	if kind != "" {
-		return kind
-	}
-	if strings.TrimSpace(rule.Table) != "" {
-		return "lookup"
-	}
-	return "state"
-}
-
-func sessionMetricKindFields(rule *config.SessionMetricRule, kind string) map[string]Value {
-	if kind == "state" {
-		return sessionMetricStateFields(rule)
-	}
-	return sessionMetricLookupFields(rule)
-}
-
-func sessionMetricStateFields(rule *config.SessionMetricRule) map[string]Value {
-	fields := make(map[string]Value)
-	if rule.State != "" {
-		fields["state"] = StringValue{V: rule.State}
-	}
-	if rule.Normalize != "" {
-		fields["normalize"] = StringValue{V: rule.Normalize}
-	}
-	if rule.Min != nil {
-		fields["min"] = FloatValue{V: *rule.Min}
-	}
-	if rule.Max != nil {
-		fields["max"] = FloatValue{V: *rule.Max}
-	}
-	return fields
-}
-
-func sessionMetricLookupFields(rule *config.SessionMetricRule) map[string]Value {
-	fields := make(map[string]Value)
-	if rule.Table != "" {
-		fields["table"] = StringValue{V: rule.Table}
-	}
-	items := make([]Value, 0, len(rule.Key))
-	for _, k := range rule.Key {
-		items = append(items, StringValue{V: k})
-	}
-	if len(items) > 0 {
-		fields["key"] = ArrayValue{Items: items}
-	}
-	return fields
 }
 
 func (d *decompiler) decisionToRoute(dec *config.Decision) *RouteDecl {

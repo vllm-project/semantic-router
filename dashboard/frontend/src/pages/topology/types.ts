@@ -21,8 +21,7 @@ export type SignalType =
   | 'pii'
   | 'kb'
   | 'conversation'
-  | 'session_metric'
-  | 'event_context'
+  | 'event'
   | 'projection'
 
 export interface SignalConfig {
@@ -532,17 +531,7 @@ export interface ConfigData {
     feature?: Record<string, unknown>
     predicate?: Record<string, unknown>
   }>
-  session_metrics?: Array<{
-    name: string
-    kind?: string
-    state?: string
-    normalize?: string
-    min?: number
-    max?: number
-    table?: string
-    key?: string[]
-  }>
-  event_context_rules?: Array<{
+  events?: Array<{
     name: string
     event_types?: string[]
     severities?: string[]
@@ -694,17 +683,7 @@ export interface ConfigData {
       feature?: Record<string, unknown>
       predicate?: Record<string, unknown>
     }>
-    session_metrics?: Array<{
-      name: string
-      kind?: string
-      state?: string
-      normalize?: string
-      min?: number
-      max?: number
-      table?: string
-      key?: string[]
-    }>
-    event_context_rules?: Array<{
+    events?: Array<{
       name: string
       event_types?: string[]
       severities?: string[]

@@ -1,10 +1,10 @@
-# Event context signal
+# Event Signal
 
 ## Overview
 
-`event_context` is a heuristic routing signal family for **structured event metadata** extracted from request text: event type, severity level, temporal urgency, and domain-specific action codes.
+`event` is a heuristic routing signal family for **structured event metadata** extracted from request text: event type, severity level, temporal urgency, and domain-specific action codes.
 
-It maps to `config/signal/event-context/` and is declared under `routing.signals.event_context_rules`.
+It maps to `config/signal/event/` and is declared under `routing.signals.events`.
 
 ## Key Advantages
 
@@ -15,11 +15,11 @@ It maps to `config/signal/event-context/` and is declared under `routing.signals
 
 ## What Problem Does It Solve?
 
-Keyword and embedding signals are tuned for natural-language queries. Structured event payloads — JSON fragments, alert messages, transaction error codes — contain well-defined fields that keyword matching cannot model cleanly. `event_context` provides a named, composable signal for each class of event without forcing operators to write fragile regex keyword rules.
+Keyword and embedding signals are tuned for natural-language queries. Structured event payloads — JSON fragments, alert messages, transaction error codes — contain well-defined fields that keyword matching cannot model cleanly. `event` provides a named, composable signal for each class of event without forcing operators to write fragile regex keyword rules.
 
 ## When to Use
 
-Use `event_context` when:
+Use `event` when:
 
 - requests contain machine-generated event payloads (error alerts, audit logs, transaction failures)
 - you want to route by severity tier independently of event type
@@ -31,7 +31,7 @@ Use `event_context` when:
 ```yaml
 routing:
   signals:
-    event_context_rules:
+    events:
       - name: critical_payment_event
         event_types:
           - payment_failed
@@ -63,7 +63,7 @@ routing:
   decisions:
     - name: route_critical_event
       rules:
-        type: event_context
+        type: event
         name: critical_payment_event
       modelRefs:
         - name: fast-response-model

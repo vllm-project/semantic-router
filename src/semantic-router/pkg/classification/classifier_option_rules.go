@@ -82,11 +82,11 @@ func (b *classifierOptionBuilder) buildStructureClassifierOption() (option, erro
 	return withStructureClassifier(structureClassifier), nil
 }
 
-func (b *classifierOptionBuilder) buildEventContextClassifierOption() (option, error) {
-	if len(b.cfg.EventContextRules) == 0 {
+func (b *classifierOptionBuilder) buildEventClassifierOption() (option, error) {
+	if len(b.cfg.EventRules) == 0 {
 		return nil, nil
 	}
-	return withEventContextClassifier(NewEventContextClassifier(b.cfg.EventContextRules)), nil
+	return withEventClassifier(NewEventClassifier(b.cfg.EventRules)), nil
 }
 
 func (b *classifierOptionBuilder) buildReaskClassifierOption() (option, error) {

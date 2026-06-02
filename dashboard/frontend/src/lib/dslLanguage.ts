@@ -64,12 +64,12 @@ export const monarchTokens: monacoNs.languages.IMonarchLanguage = {
 
   operators: ['AND', 'OR', 'NOT'],
 
-  signalTypes: [
-    'keyword', 'embedding', 'domain', 'fact_check', 'user_feedback',
-    'reask',
-    'preference', 'language', 'context', 'structure', 'complexity', 'modality', 'authz',
-    'jailbreak', 'pii', 'kb', 'conversation', 'session_metric', 'event_context',
-  ],
+	signalTypes: [
+	  'keyword', 'embedding', 'domain', 'fact_check', 'user_feedback',
+	  'reask',
+	  'preference', 'language', 'context', 'structure', 'complexity', 'modality', 'authz',
+	  'jailbreak', 'pii', 'kb', 'conversation', 'event',
+	],
 
   pluginTypes: [
     'semantic_cache', 'memory', 'system_prompt',
@@ -111,7 +111,7 @@ export const monarchTokens: monacoNs.languages.IMonarchLanguage = {
 
       // Signal types (after SIGNAL keyword)
       [
-        /\b(keyword|embedding|domain|fact_check|user_feedback|reask|preference|language|context|structure|complexity|modality|authz|jailbreak|pii|kb|conversation|session_metric|event_context)\b/,
+		/\b(keyword|embedding|domain|fact_check|user_feedback|reask|preference|language|context|structure|complexity|modality|authz|jailbreak|pii|kb|conversation|event)\b/,
         'type',
       ],
 
@@ -223,8 +223,7 @@ const SIGNAL_TYPE_SUGGESTIONS = [
   { label: 'pii', detail: 'PII detection signal' },
   { label: 'kb', detail: 'Knowledge base signal' },
   { label: 'conversation', detail: 'Conversation-shape signal' },
-  { label: 'session_metric', detail: 'Session-context metric signal' },
-  { label: 'event_context', detail: 'Structured event metadata signal' },
+  { label: 'event', detail: 'Structured event metadata signal' },
 ]
 
 const PLUGIN_TYPE_SUGGESTIONS = [

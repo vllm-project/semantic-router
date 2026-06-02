@@ -140,6 +140,12 @@ routing:
         keywords: ["code", "function", "debug", "algorithm", "refactor"]
         case_sensitive: false
         bm25_threshold: 0.1
+      - name: machine_learning
+        operator: OR
+        method: bm25
+        keywords: ["machine learning", "model training", "gradient", "neural network", "classifier"]
+        case_sensitive: false
+        bm25_threshold: 0.1
       - name: urgent_keywords
         operator: OR
         method: ngram
@@ -472,21 +478,7 @@ routing:
           gt: 5
           lte: 99
 
-    session_metrics:
-      - name: session_cost_pressure
-        kind: state
-        state: session_routing.cumulative_cost_usd
-        normalize: minmax
-        min: 0
-        max: 10
-      - name: handoff_penalty
-        kind: lookup
-        table: handoff_penalties
-        key:
-          - session_routing.current_model
-          - session_routing.candidate_model
-
-    event_context_rules:
+    events:
       - name: critical_payment_event
         event_types:
           - payment_failed
@@ -556,24 +548,6 @@ routing:
             lt: 0.45
           - name: support_escalated
             gte: 0.45
-
-  session_states:
-    - name: session_routing
-      fields:
-        - name: turn_number
-          type: int
-        - name: current_model
-          type: string
-        - name: cumulative_cost_usd
-          type: float
-        - name: retry_count_ema
-          type: float
-        - name: quality_score_ema
-          type: float
-        - name: kv_cache_warm
-          type: float
-        - name: candidate_model
-          type: string
 
   decisions:
     - name: static_business_route
@@ -686,8 +660,8 @@ routing:
           configuration:
             enabled: true
             use_nli: true
-            hallucination_action: annotate
-            unverified_factual_action: warn
+            hallucination_action: header
+            unverified_factual_action: header
             include_hallucination_details: true
         # Disabled sample: filter mode only (reference config union coverage for ToolSelectionPluginConfig filter fields).
         - type: tool_selection
@@ -746,7 +720,7 @@ routing:
           - type: domain
             name: "computer science"
           - type: complexity
-            name: needs_reasoning
+            name: needs_reasoning:hard
       modelRefs:
         - model: qwen3-8b
           use_reasoning: true
@@ -897,7 +871,7 @@ routing:
           configuration:
             enabled: true
             threshold: 0.85
-            action: annotate
+            action: header
 
     - name: safe_hybrid_route
       description: Composite route combining AND, OR, and NOT with Hybrid selection.
@@ -912,7 +886,7 @@ routing:
               - type: keyword
                 name: urgent_keywords
               - type: complexity
-                name: needs_reasoning
+                name: needs_reasoning:hard
           - operator: NOT
             conditions:
               - type: jailbreak
@@ -926,7 +900,7 @@ routing:
         type: hybrid
         hybrid:
           elo_weight: 0.4
-          router_dc_weight: 0.4
+          router_dc_weight: 0.3
           automix_weight: 0.2
           cost_weight: 0.1
           quality_gap_threshold: 0.08
@@ -1221,7 +1195,7 @@ routing:
         - type: header_mutation
           configuration:
             add:
-              - key: x-escalation-reason
+              - name: x-escalation-reason
                 value: repeated-question
 
     - name: safe_only_svm_route
@@ -1386,7 +1360,7 @@ global:
         use_logprob_verification: true
       hybrid:
         elo_weight: 0.4
-        router_dc_weight: 0.35
+        router_dc_weight: 0.25
         automix_weight: 0.25
         cost_weight: 0.1
         quality_gap_threshold: 0.08

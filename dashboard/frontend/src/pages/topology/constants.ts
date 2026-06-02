@@ -21,8 +21,7 @@ export const SIGNAL_ICONS: Record<SignalType, string> = {
   pii: 'PII',
   kb: 'KB',
   conversation: 'CONV',
-  session_metric: 'SM',
-  event_context: 'EVT',
+  event: 'EVT',
   projection: 'PRJ',
 }
 
@@ -45,8 +44,7 @@ export const SIGNAL_COLORS: Record<SignalType, { background: string; border: str
   pii: { background: '#4a5568', border: '#2d3748' },          // Dark Gray
   kb: { background: '#4a5568', border: '#2d3748' },           // Dark Gray
   conversation: { background: '#4a5568', border: '#2d3748' }, // Dark Gray
-  session_metric: { background: '#4a5568', border: '#2d3748' }, // Dark Gray
-  event_context: { background: '#4a5568', border: '#2d3748' }, // Dark Gray
+  event: { background: '#4a5568', border: '#2d3748' }, // Dark Gray
   projection: { background: '#4a5568', border: '#2d3748' },   // Dark Gray
 }
 
@@ -69,8 +67,7 @@ export const SIGNAL_LATENCY: Record<SignalType, string> = {
   pii: '10-50ms',
   kb: '10-50ms',
   conversation: '<1ms',
-  session_metric: '<1ms',
-  event_context: '<1ms',
+  event: '<1ms',
   projection: '<1ms',
 }
 
@@ -311,8 +308,7 @@ export const SIGNAL_TYPES: SignalType[] = [
   'pii',
   'kb',
   'conversation',
-  'session_metric',
-  'event_context',
+  'event',
   'projection',
 ]
 

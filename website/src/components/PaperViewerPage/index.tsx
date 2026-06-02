@@ -138,7 +138,7 @@ function PaperViewerContent({ pdfUrl }: PaperViewerContentProps): JSX.Element {
     : styles.document
 
   useEffect(() => {
-    if (loading || error || isMobile)
+    if (loading || error)
       return undefined
 
     const handleKeyDown = (event: KeyboardEvent) => {
@@ -158,7 +158,7 @@ function PaperViewerContent({ pdfUrl }: PaperViewerContentProps): JSX.Element {
 
     window.addEventListener('keydown', handleKeyDown)
     return () => window.removeEventListener('keydown', handleKeyDown)
-  }, [error, goToNext, goToPrev, isMobile, isNextDisabled, loading, pageNumber])
+  }, [error, goToNext, goToPrev, isNextDisabled, loading, pageNumber])
 
   return (
     <div className={styles.viewerShell}>

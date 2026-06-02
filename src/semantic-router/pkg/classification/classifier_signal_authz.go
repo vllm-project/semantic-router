@@ -25,14 +25,13 @@ import (
 //   - uncompressedText (string): original text before prompt compression
 //   - skipCompressionSignals (map[string]bool): signal types that must use uncompressedText
 //   - convFacts (ConversationFacts): optional conversation facts for conversation signals
-//   - sessionCtx (*SignalSessionContext): optional session/lookup runtime snapshots
 func (c *Classifier) EvaluateAllSignalsWithHeaders(text string, contextText string, currentUserText string, priorUserMessages []string, nonUserMessages []string, hasPriorAssistantReply bool, headers map[string]string, forceEvaluateAll bool, imageURL string, extra ...interface{}) (*SignalResults, error) {
 	opts := parseEvaluateSignalsExtra(extra)
 	var img []string
 	if strings.TrimSpace(imageURL) != "" {
 		img = []string{imageURL}
 	}
-	results := c.EvaluateAllSignalsWithContext(text, contextText, currentUserText, priorUserMessages, nonUserMessages, hasPriorAssistantReply, forceEvaluateAll, opts.uncompressedText, opts.skipCompressionSignals, opts.convFacts, opts.sessionCtx, img...)
+	results := c.EvaluateAllSignalsWithContext(text, contextText, currentUserText, priorUserMessages, nonUserMessages, hasPriorAssistantReply, forceEvaluateAll, opts.uncompressedText, opts.skipCompressionSignals, opts.convFacts, img...)
 	if err := c.appendAuthzFromHeaders(results, headers, forceEvaluateAll); err != nil {
 		return nil, err
 	}
@@ -44,7 +43,6 @@ type evaluateSignalsExtra struct {
 	uncompressedText       string
 	skipCompressionSignals map[string]bool
 	convFacts              ConversationFacts
-	sessionCtx             *SignalSessionContext
 }
 
 func parseEvaluateSignalsExtra(extra []interface{}) evaluateSignalsExtra {
@@ -61,11 +59,6 @@ func parseEvaluateSignalsExtra(extra []interface{}) evaluateSignalsExtra {
 	if len(extra) >= 3 {
 		if cf, ok := extra[2].(ConversationFacts); ok {
 			e.convFacts = cf
-		}
-	}
-	if len(extra) >= 4 {
-		if sc, ok := extra[3].(*SignalSessionContext); ok {
-			e.sessionCtx = sc
 		}
 	}
 	return e

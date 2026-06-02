@@ -33,7 +33,7 @@ func (b *classifierOptionBuilder) build(categoryMapping *CategoryMapping) ([]opt
 		b.buildContrastiveJailbreakClassifiersOption,
 		b.buildAuthzClassifierOption,
 		b.buildKBClassifiersOption,
-		b.buildEventContextClassifierOption,
+		b.buildEventClassifierOption,
 	}
 	parallelOptions, err := b.buildParallelOptions(steps)
 	if err != nil {

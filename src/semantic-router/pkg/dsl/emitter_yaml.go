@@ -78,8 +78,7 @@ func denormalizeSignals(raw map[string]interface{}) {
 		"pii":                 "pii",
 		"kb":                  "kb",
 		"conversation":        "conversation",
-		"session_metrics":     "session_metrics",
-		"event_context_rules": "event_context_rules",
+		"events":              "events",
 	}
 
 	signals := make(map[string]interface{})
@@ -550,7 +549,7 @@ func buildCRDConfigSpec(cfg *config.RouterConfig) map[string]interface{} {
 		"fact_check_rules", "user_feedback_rules", "reask_rules", "preference_rules",
 		"language_rules", "context_rules", "structure_rules",
 		"modality_rules", "role_bindings", "jailbreak", "pii",
-		"kb", "conversation", "session_metrics", "event_context_rules",
+		"kb", "conversation", "events",
 	}
 	for _, key := range signalKeys {
 		moveKey(flat, configSpec, key)

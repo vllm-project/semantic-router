@@ -319,8 +319,7 @@ export function groupSignalsByType(signals: SignalConfig[]): Record<SignalType, 
     pii: [],
     kb: [],
     conversation: [],
-    session_metric: [],
-    event_context: [],
+    event: [],
     projection: [],
   }
 

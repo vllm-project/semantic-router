@@ -86,7 +86,9 @@ These signals route from explicit rules, request form, or lightweight detectors 
 | Signal family | Fragment directory         | Purpose                                                                      | Doc                                |
 | ------------- | -------------------------- | ---------------------------------------------------------------------------- | ---------------------------------- |
 | `authz`       | `config/signal/authz/`     | route from identity, role, or tenant policy                                  | [Authz](./heuristic/authz)         |
+| `conversation` | `config/signal/conversation/` | route from chat/request structure such as tool loops and multi-turn shape | [Conversation](./heuristic/conversation) |
 | `context`     | `config/signal/context/`   | route by effective token-window needs                                        | [Context](./heuristic/context)     |
+| `event`       | `config/signal/event/`     | route from structured event metadata, severity, action codes, and urgency    | [Event](./heuristic/event)         |
 | `keyword`     | `config/signal/keyword/`   | route from lexical or BM25-style matches                                     | [Keyword](./heuristic/keyword)     |
 | `language`    | `config/signal/language/`  | route by detected request language                                           | [Language](./heuristic/language)   |
 | `structure`   | `config/signal/structure/` | route from request shape such as question counts or ordered workflow markers | [Structure](./heuristic/structure) |

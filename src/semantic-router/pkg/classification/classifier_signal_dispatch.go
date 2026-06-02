@@ -107,8 +107,8 @@ func (c *Classifier) buildSignalDispatchers(
 			func() { c.evaluateConversationSignal(results, mu, convFacts) },
 		},
 		{
-			config.SignalTypeEventContext, "EventContext",
-			func() { c.evaluateEventContextSignal(results, mu, textForSignal(config.SignalTypeEventContext)) },
+			config.SignalTypeEvent, "Event",
+			func() { c.evaluateEventSignal(results, mu, textForSignal(config.SignalTypeEvent)) },
 		},
 	}
 }

@@ -35,14 +35,14 @@ var severityKeywords = map[string]*regexp.Regexp{
 // temporalMarkers matches urgency indicators common in incident and alert payloads.
 var temporalMarkers = regexp.MustCompile(`(?i)\b(urgent|immediate|asap|deadline|time.sensitive|now|critical.window)\b`)
 
-// EventContextClassifier evaluates EventContextRules against request text.
+// EventClassifier evaluates EventRules against request text.
 // It extracts structured event metadata — event type, severity, temporal urgency,
 // and domain-specific action codes — without requiring an ML model.
-type EventContextClassifier struct {
-	rules []compiledEventContextRule
+type EventClassifier struct {
+	rules []compiledEventRule
 }
 
-type compiledEventContextRule struct {
+type compiledEventRule struct {
 	name        string
 	eventTypes  []*regexp.Regexp
 	severities  []string // matched against severityKeywords
@@ -50,15 +50,15 @@ type compiledEventContextRule struct {
 	temporal    bool
 }
 
-// NewEventContextClassifier compiles EventContextRules into regex patterns.
+// NewEventClassifier compiles EventRules into regex patterns.
 // Empty or whitespace-only event type and action code strings are skipped to
 // prevent the degenerate pattern \b\b from matching unintended text.
 // Severity values are normalised (trimmed, lowercased) at compile time; unknown
 // severities are dropped and do not count as a configured criterion.
-func NewEventContextClassifier(rules []config.EventContextRule) *EventContextClassifier {
-	compiled := make([]compiledEventContextRule, 0, len(rules))
+func NewEventClassifier(rules []config.EventRule) *EventClassifier {
+	compiled := make([]compiledEventRule, 0, len(rules))
 	for _, r := range rules {
-		cr := compiledEventContextRule{
+		cr := compiledEventRule{
 			name:     r.Name,
 			temporal: r.Temporal,
 		}
@@ -87,11 +87,11 @@ func NewEventContextClassifier(rules []config.EventContextRule) *EventContextCla
 		}
 		compiled = append(compiled, cr)
 	}
-	return &EventContextClassifier{rules: compiled}
+	return &EventClassifier{rules: compiled}
 }
 
-// EventContextMatch holds the details of a single rule match.
-type EventContextMatch struct {
+// EventMatch holds the details of a single rule match.
+type EventMatch struct {
 	RuleName        string
 	MatchedSeverity string
 	TemporalMatch   bool
@@ -101,8 +101,8 @@ type EventContextMatch struct {
 // Classify evaluates all rules against text and returns matches.
 // A rule matches when at least one of its configured criteria is satisfied.
 // Confidence is proportional to how many criteria matched (0.5 base + bonus per criterion).
-func (ec *EventContextClassifier) Classify(text string) []EventContextMatch {
-	var matches []EventContextMatch
+func (ec *EventClassifier) Classify(text string) []EventMatch {
+	var matches []EventMatch
 	for _, rule := range ec.rules {
 		match, ok := ec.evaluateRule(rule, text)
 		if ok {
@@ -112,8 +112,8 @@ func (ec *EventContextClassifier) Classify(text string) []EventContextMatch {
 	return matches
 }
 
-func (ec *EventContextClassifier) evaluateRule(rule compiledEventContextRule, text string) (EventContextMatch, bool) {
-	match := EventContextMatch{RuleName: rule.name}
+func (ec *EventClassifier) evaluateRule(rule compiledEventRule, text string) (EventMatch, bool) {
+	match := EventMatch{RuleName: rule.name}
 	criteriaCount, matchedCount := 0, 0
 
 	criteriaCount, matchedCount = matchEventTypes(rule, text, criteriaCount, matchedCount)
@@ -122,7 +122,7 @@ func (ec *EventContextClassifier) evaluateRule(rule compiledEventContextRule, te
 	criteriaCount, matchedCount, match.TemporalMatch = matchTemporal(rule, text, criteriaCount, matchedCount)
 
 	if criteriaCount == 0 || matchedCount == 0 {
-		return EventContextMatch{}, false
+		return EventMatch{}, false
 	}
 
 	// Confidence: 0.5 base + up to 0.5 proportional to matched criteria.
@@ -130,7 +130,7 @@ func (ec *EventContextClassifier) evaluateRule(rule compiledEventContextRule, te
 	return match, true
 }
 
-func matchEventTypes(rule compiledEventContextRule, text string, criteria, matched int) (int, int) {
+func matchEventTypes(rule compiledEventRule, text string, criteria, matched int) (int, int) {
 	if len(rule.eventTypes) == 0 {
 		return criteria, matched
 	}
@@ -143,9 +143,9 @@ func matchEventTypes(rule compiledEventContextRule, text string, criteria, match
 	return criteria, matched
 }
 
-func matchSeverities(rule compiledEventContextRule, text string, criteria, matched int) (int, int, string) {
+func matchSeverities(rule compiledEventRule, text string, criteria, matched int) (int, int, string) {
 	// Severities are already normalised (trimmed, lowercased, validated) at
-	// compile time in NewEventContextClassifier; unknown values were dropped.
+	// compile time in NewEventClassifier; unknown values were dropped.
 	if len(rule.severities) == 0 {
 		return criteria, matched, ""
 	}
@@ -158,7 +158,7 @@ func matchSeverities(rule compiledEventContextRule, text string, criteria, match
 	return criteria, matched, ""
 }
 
-func matchActionCodes(rule compiledEventContextRule, text string, criteria, matched int) (int, int) {
+func matchActionCodes(rule compiledEventRule, text string, criteria, matched int) (int, int) {
 	if len(rule.actionCodes) == 0 {
 		return criteria, matched
 	}
@@ -171,7 +171,7 @@ func matchActionCodes(rule compiledEventContextRule, text string, criteria, matc
 	return criteria, matched
 }
 
-func matchTemporal(rule compiledEventContextRule, text string, criteria, matched int) (int, int, bool) {
+func matchTemporal(rule compiledEventRule, text string, criteria, matched int) (int, int, bool) {
 	if !rule.temporal {
 		return criteria, matched, false
 	}
