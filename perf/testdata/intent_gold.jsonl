@@ -1,0 +1,8 @@
+# JSONL format: one object per line with fields {"text":"...", "gold_intent":"..."}
+# Allowed alternatives for label key: "label" or "intent"
+{"text":"What is the derivative of x^2 + 3x + 5?","gold_intent":"math"}
+{"text":"How do I implement a binary search tree in Python?","gold_intent":"computer science"}
+{"text":"Explain photosynthesis in plants.","gold_intent":"biology"}
+{"text":"What are supply and demand basics?","gold_intent":"economics"}
+{"text":"Summarize key causes of World War I.","gold_intent":"history"}
+{"text":"What rights does a tenant have in a lease dispute?","gold_intent":"law"}
