@@ -22,6 +22,8 @@ spec:
         {{- include "semantic-router.selectorLabels" . | nindent 8 }}
         app.kubernetes.io/component: dashboard
     spec:
+      securityContext:
+        {{- toYaml .Values.dashboard.podSecurityContext | nindent 8 }}
       {{- with .Values.imagePullSecrets }}
       imagePullSecrets:
         {{- toYaml . | nindent 8 }}
@@ -35,8 +37,10 @@ spec:
           name: http
           protocol: TCP
         env:
-        - name: ROUTER_API_URL
+        - name: TARGET_ROUTER_API_URL
           value: "http://{{ include "semantic-router.fullname" . }}:{{ .Values.service.api.port }}"
+        - name: TARGET_ROUTER_METRICS_URL
+          value: "http://{{ include "semantic-router.fullname" . }}-metrics:{{ .Values.service.metrics.port }}/metrics"
         {{- if .Values.dashboard.readonly }}
         - name: DASHBOARD_READONLY
           value: "true"
