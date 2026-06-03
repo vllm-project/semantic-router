@@ -62,6 +62,7 @@ func TestApplySignalResultsToContext_PropagatesSignalState(t *testing.T) {
 		MatchedAuthzRules:        []string{"authz:team-a"},
 		MatchedJailbreakRules:    []string{"jailbreak:block"},
 		MatchedPIIRules:          []string{"pii:email"},
+		MatchedEventRules:        []string{"critical_payment_event"},
 		MatchedProjectionRules:   []string{"balance_reasoning"},
 		JailbreakDetected:        true,
 		JailbreakType:            "prompt_injection",
@@ -87,6 +88,7 @@ func TestApplySignalResultsToContext_PropagatesSignalState(t *testing.T) {
 	assert.Equal(t, []string{"authz:team-a"}, ctx.VSRMatchedAuthz)
 	assert.Equal(t, []string{"jailbreak:block"}, ctx.VSRMatchedJailbreak)
 	assert.Equal(t, []string{"pii:email"}, ctx.VSRMatchedPII)
+	assert.Equal(t, []string{"critical_payment_event"}, ctx.VSRMatchedEvent)
 	assert.Equal(t, []string{"balance_reasoning"}, ctx.VSRMatchedProjection)
 	assert.True(t, ctx.JailbreakDetected)
 	assert.Equal(t, "prompt_injection", ctx.JailbreakType)
@@ -144,6 +146,7 @@ func TestCollectMatchedSignalRules_PreservesFamilyOrder(t *testing.T) {
 		MatchedAuthzRules:        []string{"authz:j"},
 		MatchedJailbreakRules:    []string{"jailbreak:k"},
 		MatchedPIIRules:          []string{"pii:l"},
+		MatchedEventRules:        []string{"event:m"},
 		MatchedProjectionRules:   []string{"projection:m"},
 	}
 
@@ -162,6 +165,7 @@ func TestCollectMatchedSignalRules_PreservesFamilyOrder(t *testing.T) {
 		"authz:j",
 		"jailbreak:k",
 		"pii:l",
+		"event:m",
 		"projection:m",
 	}, collectMatchedSignalRules(signals))
 }

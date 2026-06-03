@@ -385,6 +385,7 @@ func isProjectionInputTypeSupported(signalType string) bool {
 		SignalTypePII,
 		SignalTypeKB,
 		SignalTypeConversation,
+		SignalTypeEvent,
 		ProjectionInputKBMetric,
 		SignalTypeProjection:
 		return true
@@ -412,6 +413,7 @@ func projectionDeclaredSignals(cfg *RouterConfig) map[string]map[string]struct{}
 		SignalTypePII:          collectPIIRuleNames(cfg.PIIRules),
 		SignalTypeKB:           collectKBRuleNames(cfg.KBRules),
 		SignalTypeConversation: collectConversationRuleNames(cfg.ConversationRules),
+		SignalTypeEvent:        collectEventRuleNames(cfg.EventRules),
 	}
 	return declared
 }
@@ -679,6 +681,14 @@ func collectKBRuleNames(rules []KBSignalRule) map[string]struct{} {
 }
 
 func collectConversationRuleNames(rules []ConversationRule) map[string]struct{} {
+	names := make(map[string]struct{}, len(rules))
+	for _, rule := range rules {
+		names[rule.Name] = struct{}{}
+	}
+	return names
+}
+
+func collectEventRuleNames(rules []EventRule) map[string]struct{} {
 	names := make(map[string]struct{}, len(rules))
 	for _, rule := range rules {
 		names[rule.Name] = struct{}{}

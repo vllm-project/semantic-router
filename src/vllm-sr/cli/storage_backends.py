@@ -14,14 +14,16 @@ from cli.utils import get_logger
 log = get_logger(__name__)
 
 
-def detect_required_backends(config: dict) -> set[str]:
+def detect_required_backends(
+    config: dict, stack_layout: RuntimeStackLayout | None = None
+) -> set[str]:
     """Read store_backend values from the config and return backends that need provisioning.
 
     Reads from the canonical v0.3 path: global.services.<key>.store_backend and
     falls back to router-owned canonical defaults for local serve workflows.
     Returns only backends the CLI knows how to provision (redis, postgres).
     """
-    return detect_canonical_storage_backends(config)
+    return detect_canonical_storage_backends(config, stack_layout)
 
 
 def start_storage_backends(
@@ -75,7 +77,7 @@ def provision_storage_backends(
     state_root_dir: str | None = None,
 ) -> set[str]:
     """Detect which storage backends the config requires and start them."""
-    required = detect_required_backends(config)
+    required = detect_required_backends(config, stack_layout)
     return start_storage_backends(
         required,
         network_name,

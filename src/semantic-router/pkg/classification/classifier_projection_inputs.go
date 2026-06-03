@@ -27,6 +27,7 @@ var projectionMatchAccessors = map[string]projectionMatchAccessor{
 	config.SignalTypePII:          func(results *SignalResults) []string { return results.MatchedPIIRules },
 	config.SignalTypeKB:           func(results *SignalResults) []string { return results.MatchedKBRules },
 	config.SignalTypeConversation: func(results *SignalResults) []string { return results.MatchedConversationRules },
+	config.SignalTypeEvent:        func(results *SignalResults) []string { return results.MatchedEventRules },
 	config.SignalTypeProjection:   func(results *SignalResults) []string { return results.MatchedProjectionRules },
 }
 

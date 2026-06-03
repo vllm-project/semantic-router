@@ -31,6 +31,7 @@ func replayRoutingRecordMetadataTestContext() *RequestContext {
 		VSRMatchedPII:          []string{"email_block"},
 		VSRMatchedKB:           []string{"privacy_kb"},
 		VSRMatchedConversation: []string{"multi_turn_user"},
+		VSRMatchedEvent:        []string{"critical_payment_event"},
 		VSRMatchedProjection:   []string{"balance_reasoning"},
 		VSRProjectionScores: map[string]float64{
 			"reasoning_pressure": 0.73,
@@ -99,6 +100,9 @@ func assertReplayMatchedSignals(t *testing.T, record routerreplay.RoutingRecord)
 	}
 	if !reflect.DeepEqual(record.Signals.Conversation, []string{"multi_turn_user"}) {
 		t.Fatalf("unexpected conversation signals: %#v", record.Signals.Conversation)
+	}
+	if !reflect.DeepEqual(record.Signals.Event, []string{"critical_payment_event"}) {
+		t.Fatalf("unexpected event signals: %#v", record.Signals.Event)
 	}
 }
 

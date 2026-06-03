@@ -25,6 +25,7 @@ var matchedSignalResolvers = map[string]func(*MatchedSignals) *[]string{
 	config.SignalTypePII:          func(target *MatchedSignals) *[]string { return &target.PII },
 	config.SignalTypeKB:           func(target *MatchedSignals) *[]string { return &target.KB },
 	config.SignalTypeConversation: func(target *MatchedSignals) *[]string { return &target.Conversation },
+	config.SignalTypeEvent:        func(target *MatchedSignals) *[]string { return &target.Event },
 	config.SignalTypeProjection:   func(target *MatchedSignals) *[]string { return &target.Projection },
 }
 
@@ -51,6 +52,7 @@ func buildMatchedSignals(signals *classification.SignalResults) *MatchedSignals 
 		PII:          signals.MatchedPIIRules,
 		KB:           signals.MatchedKBRules,
 		Conversation: signals.MatchedConversationRules,
+		Event:        signals.MatchedEventRules,
 		Projection:   signals.MatchedProjectionRules,
 	}
 }
