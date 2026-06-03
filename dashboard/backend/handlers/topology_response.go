@@ -76,6 +76,7 @@ func topologySignalMappings(matchedSignals *RouterMatchedSignals) []topologySign
 		{signalType: "pii", names: matchedSignals.PII, defaultConfidence: 1.0, reason: "PII signal matched", addPath: true},
 		{signalType: "kb", names: matchedSignals.KB, defaultConfidence: 1.0, reason: "Knowledge base signal matched", addPath: true},
 		{signalType: "conversation", names: matchedSignals.Conversation, defaultConfidence: 1.0, reason: "Conversation structure signal matched", addPath: true},
+		{signalType: "event", names: matchedSignals.Event, defaultConfidence: 1.0, reason: "Event signal matched", addPath: true},
 		{signalType: "projection", names: matchedSignals.Projection, defaultConfidence: 1.0, reason: "Projection mapping matched", addPath: true},
 	}
 }

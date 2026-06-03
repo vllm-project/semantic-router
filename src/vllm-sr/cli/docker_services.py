@@ -423,6 +423,11 @@ def docker_start_milvus(
     )
     if reuse_result is not None:
         return reuse_result
+    reuse_result = _reuse_running_storage_network_alias(
+        runtime, container_name, "Milvus", network_name
+    )
+    if reuse_result is not None:
+        return reuse_result
 
     _replace_existing_container(container_name)
 
@@ -577,6 +582,63 @@ def _reuse_running_storage_container(
             if return_code != 0:
                 return return_code, stdout, stderr
         return 0, "", ""
+    return None
+
+
+def _reuse_running_storage_network_alias(
+    runtime: str, alias: str, label: str, network_name: str | None
+) -> tuple[int, str, str] | None:
+    """Return success when a running storage service already owns the alias."""
+    container_name = _running_container_for_network_alias(runtime, network_name, alias)
+    if not container_name:
+        return None
+
+    log.info(
+        f"{label} service already attached to {network_name} as {alias} "
+        f"via container {container_name}, reusing"
+    )
+    return 0, "", ""
+
+
+def _running_container_for_network_alias(
+    runtime: str, network_name: str | None, alias: str
+) -> str | None:
+    if not network_name:
+        return None
+
+    try:
+        result = subprocess.run(
+            [
+                runtime,
+                "network",
+                "inspect",
+                network_name,
+                "--format",
+                "{{json .Containers}}",
+            ],
+            capture_output=True,
+            text=True,
+            check=True,
+        )
+    except subprocess.CalledProcessError:
+        return None
+
+    try:
+        containers = json.loads(result.stdout or "{}")
+    except json.JSONDecodeError:
+        return None
+
+    if not isinstance(containers, dict):
+        return None
+
+    for metadata in containers.values():
+        if not isinstance(metadata, dict):
+            continue
+        name = str(metadata.get("Name") or "").lstrip("/")
+        aliases = metadata.get("Aliases") or []
+        if name == alias or alias in aliases:
+            return name or alias
+
     return None
 
 

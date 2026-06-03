@@ -8,6 +8,60 @@ from cli.validator import print_validation_errors, validate_user_config
 
 log = get_logger(__name__)
 
+_SIGNAL_SUMMARY_FIELDS = (
+    ("Keyword signals", "keywords"),
+    ("Embedding signals", "embeddings"),
+    ("Domains", "domains"),
+    ("Fact check signals", "fact_check"),
+    ("User feedback signals", "user_feedbacks"),
+    ("Reask signals", "reasks"),
+    ("Preference signals", "preferences"),
+    ("Language signals", "language"),
+    ("Context signals", "context"),
+    ("Structure signals", "structure"),
+    ("Complexity signals", "complexity"),
+    ("Modality signals", "modality"),
+    ("Authz signals", "role_bindings"),
+    ("Jailbreak signals", "jailbreak"),
+    ("PII signals", "pii"),
+    ("Knowledge-base signals", "kb"),
+    ("Conversation signals", "conversation"),
+    ("Event signals", "events"),
+)
+
+
+def _count_items(value) -> int:
+    return len(value or [])
+
+
+def _signal_summary_lines(signals) -> list[str]:
+    """Return non-empty signal summary lines for the canonical v0.3 surface."""
+    if not signals:
+        return []
+
+    lines = []
+    for label, field_name in _SIGNAL_SUMMARY_FIELDS:
+        count = _count_items(getattr(signals, field_name, None))
+        if count > 0:
+            lines.append(f"  {label}: {count}")
+    return lines
+
+
+def _projection_summary_lines(projections) -> list[str]:
+    if not projections:
+        return []
+
+    lines = []
+    for label, field_name in (
+        ("Projection partitions", "partitions"),
+        ("Projection scores", "scores"),
+        ("Projection mappings", "mappings"),
+    ):
+        count = _count_items(getattr(projections, field_name, None))
+        if count > 0:
+            lines.append(f"  {label}: {count}")
+    return lines
+
 
 def validate_command(config_path: str):
     """
@@ -44,18 +98,17 @@ def validate_command(config_path: str):
     log.info(f"  Version: {user_config.version}")
     log.info(f"  Listeners: {len(user_config.listeners)}")
 
-    if user_config.signals:
-        log.info(f"  Keyword signals: {len(user_config.signals.keywords)}")
-        log.info(f"  Embedding signals: {len(user_config.signals.embeddings)}")
-        if user_config.signals.fact_check:
-            log.info(f"  Fact check signals: {len(user_config.signals.fact_check)}")
-        log.info(f"  Domains: {len(user_config.signals.domains)}")
-        if user_config.signals.structure:
-            log.info(f"  Structure signals: {len(user_config.signals.structure)}")
+    signal_lines = _signal_summary_lines(user_config.signals)
+    if signal_lines:
+        for line in signal_lines:
+            log.info(line)
     else:
         log.info(
             "  Signals: None (catch-all routing is supported; domain categories will auto-generate when needed)"
         )
+
+    for line in _projection_summary_lines(user_config.routing.projections):
+        log.info(line)
 
     log.info(f"  Decisions: {len(user_config.decisions)}")
 

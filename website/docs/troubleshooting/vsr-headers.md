@@ -1,112 +1,110 @@
-# VSR Decision Tracking Headers
+# VSR Routing Headers
 
-This document describes the VSR (Vector Semantic Router) decision tracking headers that are automatically added to successful responses for debugging and monitoring purposes.
+This page documents the public `x-vsr-*` headers emitted by vLLM Semantic Router for routing observability, replay correlation, and debugging.
 
-## Overview
+## Emission Rules
 
-The semantic router automatically adds response headers to track VSR decision-making information. These headers help developers and operations teams understand how requests are being processed and routed.
+The router emits protocol headers on every non-cache-hit response. It emits routing decision and matched-signal headers only when all of the following are true:
 
-**Headers are only added when:**
+1. The upstream response is successful (`2xx`).
+2. The response was not served from semantic cache.
+3. The router evaluated a routing decision or signal for the request.
 
-1. The request is successful (HTTP status 200-299)
-2. The request did not hit the cache
-3. VSR made routing decisions during request processing
+Cache-hit responses can emit cache headers, but they do not re-run routing and therefore do not attach fresh matched-signal headers.
 
-## Headers Added
+## Request Headers
 
-### `x-vsr-selected-category`
+| Header | Direction | Description |
+| ------ | --------- | ----------- |
+| `x-session-id` | request | Stable client-provided session identifier for Chat Completions. `session_aware` uses this to reason about stay-vs-switch decisions across turns. |
+| `x-vsr-skip-processing` | request | Opts a request out of router processing when `global.router.skip_processing.enabled` is enabled. Use value `true`. |
 
-**Description**: The category selected by VSR during classification.
+## Protocol And Replay Headers
 
-**Example Values**:
+| Header | Description |
+| ------ | ----------- |
+| `x-vsr-inbound-protocol` | Inbound protocol shape seen by the router, for example `openai` or `anthropic`. |
+| `x-vsr-outbound-protocol` | Protocol shape sent to the selected upstream backend. |
+| `x-vsr-lossiness-warnings` | Comma-separated protocol translation warnings encoded as `severity;reason;field`. |
+| `x-vsr-replay-id` | Opaque router replay record identifier for correlating a response with replay/Insights data. |
 
-- `math`
-- `business`
-- `biology`
-- `computer science`
+## Decision Headers
 
-**When Added**: When VSR successfully classifies the request into a category.
+| Header | Description | Example |
+| ------ | ----------- | ------- |
+| `x-vsr-selected-category` | Domain/category classifier result when domain routing runs. | `math` |
+| `x-vsr-selected-decision` | Final decision selected by the decision engine. | `formal_math_proof` |
+| `x-vsr-selected-confidence` | Confidence score for the selected decision. | `0.9100` |
+| `x-vsr-selected-reasoning` | Reasoning mode selected for the request. | `on` |
+| `x-vsr-selected-modality` | Modality result and optional method. | `AR;classifier` |
+| `x-vsr-selected-model` | Logical model alias selected by the router. | `qwen/qwen3.5-rocm` |
+| `x-vsr-session-phase` | Session-aware phase from the selected policy trace. | `user_turn`, `tool_loop`, `provider_state` |
+| `x-vsr-injected-system-prompt` | Whether a system-prompt plugin injected text into the request. | `true` |
 
-### `x-vsr-selected-reasoning`
+## Matched Signal Headers
 
-**Description**: Whether reasoning mode was determined to be used for this request.
+Matched signal headers contain comma-separated rule names. They are omitted when the corresponding signal family did not match.
 
-**Values**:
+| Header | Signal family |
+| ------ | ------------- |
+| `x-vsr-matched-keywords` | `keyword` |
+| `x-vsr-matched-embeddings` | `embedding` |
+| `x-vsr-matched-domains` | `domain` |
+| `x-vsr-matched-fact-check` | `fact_check` |
+| `x-vsr-matched-user-feedback` | `user_feedback` |
+| `x-vsr-matched-reask` | `reask` |
+| `x-vsr-matched-preference` | `preference` |
+| `x-vsr-matched-language` | `language` |
+| `x-vsr-matched-context` | `context` |
+| `x-vsr-context-token-count` | Context token estimate used by `context` |
+| `x-vsr-matched-structure` | `structure` |
+| `x-vsr-matched-complexity` | `complexity` |
+| `x-vsr-matched-modality` | `modality` |
+| `x-vsr-matched-authz` | `authz` |
+| `x-vsr-matched-jailbreak` | `jailbreak` |
+| `x-vsr-matched-pii` | `pii` |
+| `x-vsr-matched-kb` | `kb` |
+| `x-vsr-matched-conversation` | `conversation` |
+| `x-vsr-matched-event` | `event` |
 
-- `on` - Reasoning mode was enabled
-- `off` - Reasoning mode was disabled
+## Projection Headers
 
-**When Added**: When VSR makes a reasoning mode decision (both for auto and explicit model selection).
+| Header | Description |
+| ------ | ----------- |
+| `x-vsr-matched-projections` | Comma-separated projection mapping outputs that matched the request. |
 
-### `x-vsr-selected-model`
+Projection scores and full projection traces are stored in router replay records rather than expanded into response headers. Use `x-vsr-replay-id` to inspect those details in the dashboard or replay APIs.
 
-**Description**: The model selected by VSR for processing the request.
+## Cache And Plugin Headers
 
-**Example Values**:
-
-- `deepseek-v31`
-- `phi4`
-- `gpt-4`
-
-**When Added**: When VSR selects a model (either through auto-routing or explicit model specification).
-
-## Use Cases
-
-### Debugging
-
-These headers help developers understand:
-
-- Which category VSR classified their request into
-- Whether reasoning mode was applied
-- Which model was ultimately selected
-
-### Monitoring
-
-Operations teams can use these headers to:
-
-- Track category distribution across requests
-- Monitor reasoning mode usage patterns
-- Analyze model selection patterns
-
-### Analytics
-
-Product teams can analyze:
-
-- Request categorization accuracy
-- Reasoning mode effectiveness
-- Model performance by category
+| Header | Description |
+| ------ | ----------- |
+| `x-vsr-cache-hit` | Response came from semantic cache. |
+| `x-vsr-cache-similarity` | Similarity score from the semantic-cache lookup. |
+| `x-vsr-fast-response` | Response was generated by the `fast_response` plugin without an upstream model call. |
+| `x-vsr-tools-strategy` | Semantic tool-selection retriever strategy used for the request. |
+| `x-vsr-tools-confidence` | Highest tool-selection retriever similarity score. |
+| `x-vsr-tools-latency-ms` | Tool-selection retriever latency in milliseconds. |
 
 ## Example Response
 
 ```http
 HTTP/1.1 200 OK
 Content-Type: application/json
-x-vsr-selected-category: math
-x-vsr-selected-reasoning: on
-x-vsr-selected-model: deepseek-v31
-
-{
-  "id": "chatcmpl-123",
-  "object": "chat.completion",
-  "created": 1677652288,
-  "model": "deepseek-v31",
-  "choices": [
-    {
-      "index": 0,
-      "message": {
-        "role": "assistant",
-        "content": "The derivative of x^2 + 3x + 1 is 2x + 3."
-      },
-      "finish_reason": "stop"
-    }
-  ]
-}
+x-vsr-inbound-protocol: openai
+x-vsr-outbound-protocol: openai
+x-vsr-selected-decision: critical_event_tool_session_route
+x-vsr-selected-confidence: 1.0000
+x-vsr-selected-model: anthropic/claude-opus-4.6
+x-vsr-session-phase: tool_loop
+x-vsr-matched-conversation: active_tool_use
+x-vsr-matched-event: critical_payment_event
+x-vsr-matched-projections: verification_required
+x-vsr-replay-id: replay_01J...
 ```
 
-## When Headers Are NOT Added
+## Notes
 
-Headers are not added in the following cases:
-
-1. **Cache Hit**: When the response comes from cache, no VSR processing occurs
-2. **Error Responses**: When the upstream returns 4xx or 5xx status codes
-3. **Missing VSR Information**: When VSR decision information is not available (shouldn't happen in normal operation)
+- `x-vsr-matched-projections` is the v0.3 projection header. The old singular form is not part of the public v0.3 contract.
+- `event` is the public signal type used by decisions and DSL. Canonical YAML stores event rules under `routing.signals.events`, matching other plural signal containers.
+- `session_aware` uses router-owned session state internally. Users configure it through `routing.decisions[].algorithm.session_aware` and pass stable session identity with `x-session-id`; there is no separate user-managed session-state block in the v0.3 public contract.

@@ -161,7 +161,11 @@ function PaperViewerContent({ pdfUrl }: PaperViewerContentProps): JSX.Element {
   }, [error, goToNext, goToPrev, isNextDisabled, loading, pageNumber])
 
   return (
-    <div className={styles.viewerShell}>
+    <div
+      className={styles.viewerShell}
+      tabIndex={-1}
+      aria-keyshortcuts="ArrowLeft ArrowRight"
+    >
       <div className={styles.viewerArea}>
         {error
           ? (

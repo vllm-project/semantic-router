@@ -12,11 +12,19 @@
   display: flex;
   flex-direction: column;
   min-height: 72vh;
-  border: 1px solid var(--site-border);
-  background:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.02), transparent 12%),
-    var(--site-surface);
-  box-shadow: var(--site-shadow);
+  border: 1px solid rgba(15, 23, 42, 0.1);
+  border-radius: 8px;
+  overflow: hidden;
+  background: #f8fafc;
+  box-shadow: 0 24px 70px rgba(15, 23, 42, 0.12);
+  color: #111827;
+  outline: none;
+}
+
+.viewerShell:focus-visible {
+  box-shadow:
+    0 0 0 3px rgba(48, 162, 255, 0.25),
+    0 24px 70px rgba(15, 23, 42, 0.12);
 }
 
 .viewerArea {
@@ -28,8 +36,8 @@
   align-items: flex-start;
   padding: 1.5rem;
   background:
-    radial-gradient(circle at 50% 0%, rgba(37, 99, 235, 0.05), transparent 34rem),
-    linear-gradient(180deg, #f7f9fc 0%, #eef2f7 100%);
+    radial-gradient(circle at 50% 0%, rgba(48, 162, 255, 0.08), transparent 34rem),
+    linear-gradient(180deg, #f8fafc 0%, #eef3f8 100%);
 }
 
 .document {
@@ -63,9 +71,8 @@
   grid-template-columns: 1fr auto 1fr;
   align-items: center;
   padding: 0.85rem 1.5rem;
-  background:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(247, 249, 252, 0.98));
-  border-top: 1px solid var(--site-border);
+  background: #ffffff;
+  border-top: 1px solid rgba(15, 23, 42, 0.1);
   flex-shrink: 0;
 }
 
@@ -79,14 +86,14 @@
 .pageBtn {
   padding: 0.55rem 1.05rem;
   border-radius: 999px;
-  border: 1px solid var(--site-border);
-  background: var(--site-surface);
-  color: var(--site-text);
+  border: 1px solid rgba(15, 23, 42, 0.12);
+  background: #ffffff;
+  color: #111827;
   font-size: 0.74rem;
   text-transform: uppercase;
   letter-spacing: 0.08em;
   cursor: pointer;
-  box-shadow: var(--site-shadow-soft);
+  box-shadow: 0 8px 22px rgba(15, 23, 42, 0.08);
   transition:
     background 0.15s,
     color 0.15s,
@@ -94,9 +101,9 @@
 }
 
 .pageBtn:hover:not(:disabled) {
-  background: var(--site-text);
-  color: var(--site-bg);
-  border-color: var(--site-text);
+  background: #111827;
+  color: #ffffff;
+  border-color: #111827;
 }
 
 .pageBtn:disabled {
@@ -107,13 +114,13 @@
 .pageInfo {
   min-width: 84px;
   text-align: center;
-  color: var(--site-muted-bright);
+  color: #475569;
   font-size: 0.84rem;
 }
 
 .loadingText {
   padding: 4rem 0;
-  color: var(--site-muted-bright);
+  color: #475569;
   font-size: 0.95rem;
 }
 
@@ -124,12 +131,12 @@
   justify-content: center;
   min-height: 50vh;
   gap: 1rem;
-  color: var(--site-muted-bright);
+  color: #475569;
   font-size: 0.95rem;
 }
 
 .fallback a {
-  color: var(--site-text);
+  color: #111827;
   text-decoration: underline;
   text-underline-offset: 0.18em;
 }

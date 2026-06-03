@@ -15,7 +15,7 @@ from cli.docker_cli import (
     docker_stop_container,
     load_openclaw_registry,
 )
-from cli.docker_images import get_runtime_images
+from cli.docker_images import get_fleet_sim_docker_image, get_runtime_images
 from cli.logo import print_vllm_logo
 from cli.runtime_lifecycle import (
     connect_runtime_container,
@@ -76,6 +76,7 @@ def _prepare_runtime_network(
     router_image,
     envoy_image,
     dashboard_image,
+    sim_image,
     pull_policy,
     dashboard_disabled,
 ):
@@ -87,6 +88,7 @@ def _prepare_runtime_network(
         router_image,
         envoy_image,
         dashboard_image,
+        sim_image,
         pull_policy,
         env_vars,
         dashboard_disabled=dashboard_disabled,
@@ -99,10 +101,12 @@ def ensure_runtime_images_for_pull_policy(
     router_image,
     envoy_image,
     dashboard_image,
-    pull_policy,
-    env_vars,
+    sim_image=None,
+    pull_policy=None,
+    env_vars=None,
     dashboard_disabled=False,
 ):
+    env_vars = env_vars or {}
     if pull_policy != IMAGE_PULL_POLICY_NEVER:
         return
     get_runtime_images(
@@ -114,6 +118,20 @@ def ensure_runtime_images_for_pull_policy(
         platform=env_vars.get("VLLM_SR_PLATFORM"),
         include_dashboard=not dashboard_disabled,
     )
+    if _fleet_sim_required(env_vars):
+        get_fleet_sim_docker_image(image=sim_image, pull_policy=pull_policy)
+
+
+def _fleet_sim_required(env_vars):
+    external_url = env_vars.get("TARGET_FLEET_SIM_URL") or os.getenv(
+        "TARGET_FLEET_SIM_URL"
+    )
+    if external_url:
+        return False
+    raw_enabled = env_vars.get(
+        "VLLM_SR_SIM_ENABLED", os.getenv("VLLM_SR_SIM_ENABLED", "true")
+    )
+    return str(raw_enabled).lower() != "false"
 
 
 def start_vllm_sr(
@@ -123,6 +141,7 @@ def start_vllm_sr(
     router_image=None,
     envoy_image=None,
     dashboard_image=None,
+    sim_image=None,
     topology=None,
     pull_policy=None,
     enable_observability=True,
@@ -153,30 +172,21 @@ def start_vllm_sr(
         router_image,
         envoy_image,
         dashboard_image,
+        sim_image,
         pull_policy,
         dashboard_disabled,
     )
 
-    started_backends = provision_storage_backends(
-        user_config, shared_network_name, stack_layout, state_root_dir=state_root_dir
-    )
-
-    observability_network_name = start_observability_stack(
-        enable_observability,
+    started_backends, runtime_network_name, fleet_sim_enabled = _start_support_services(
+        user_config,
         shared_network_name,
         state_root_dir,
         env_vars,
         stack_layout,
+        sim_image,
+        pull_policy,
+        enable_observability,
     )
-    runtime_network_name = observability_network_name or shared_network_name
-    fleet_sim_enabled = start_fleet_sim_sidecar(
-        state_root_dir,
-        env_vars,
-        stack_layout,
-        pull_policy=pull_policy,
-    )
-    if fleet_sim_enabled:
-        env_vars.setdefault("TARGET_FLEET_SIM_URL", stack_layout.fleet_sim_service_url)
 
     setup_mode = str(env_vars.get("VLLM_SR_SETUP_MODE", "")).lower() == "true"
     return_code, _stdout, stderr = _start_runtime_containers(
@@ -215,6 +225,39 @@ def start_vllm_sr(
         fleet_sim_enabled,
         started_backends=started_backends,
     )
+
+
+def _start_support_services(
+    user_config,
+    shared_network_name,
+    state_root_dir,
+    env_vars,
+    stack_layout,
+    sim_image,
+    pull_policy,
+    enable_observability,
+):
+    started_backends = provision_storage_backends(
+        user_config, shared_network_name, stack_layout, state_root_dir=state_root_dir
+    )
+    observability_network_name = start_observability_stack(
+        enable_observability,
+        shared_network_name,
+        state_root_dir,
+        env_vars,
+        stack_layout,
+    )
+    runtime_network_name = observability_network_name or shared_network_name
+    fleet_sim_enabled = start_fleet_sim_sidecar(
+        state_root_dir,
+        env_vars,
+        stack_layout,
+        sim_image=sim_image,
+        pull_policy=pull_policy,
+    )
+    if fleet_sim_enabled:
+        env_vars.setdefault("TARGET_FLEET_SIM_URL", stack_layout.fleet_sim_service_url)
+    return started_backends, runtime_network_name, fleet_sim_enabled
 
 
 def _start_runtime_containers(

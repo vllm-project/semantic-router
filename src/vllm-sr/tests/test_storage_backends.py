@@ -46,6 +46,57 @@ def test_start_storage_backends_passes_state_root_to_milvus(monkeypatch, tmp_pat
     assert captured["state_root_dir"] == str(tmp_path)
 
 
+def test_detect_required_backends_skips_external_semantic_cache_milvus():
+    config = {
+        "version": "v0.3",
+        "global": {
+            "stores": {
+                "semantic_cache": {
+                    "enabled": True,
+                    "backend_type": "milvus",
+                    "milvus": {
+                        "connection": {
+                            "host": "external-milvus",
+                            "port": 19530,
+                        }
+                    },
+                }
+            }
+        },
+    }
+
+    required = detect_required_backends(config, resolve_runtime_stack())
+
+    assert "milvus" not in required
+    assert "redis" in required
+    assert "postgres" in required
+
+
+def test_docker_start_milvus_reuses_network_alias(monkeypatch, tmp_path):
+    def fail_run(_cmd, _label):
+        raise AssertionError("Milvus container should not start when alias is present")
+
+    monkeypatch.setattr(docker_services, "get_container_runtime", lambda: "docker")
+    monkeypatch.setattr(
+        docker_services, "docker_container_status", lambda _name: "not found"
+    )
+    monkeypatch.setattr(
+        docker_services,
+        "_running_container_for_network_alias",
+        lambda _runtime, _network, _alias: "milvus-semantic-cache",
+    )
+    monkeypatch.setattr(docker_services, "_is_port_in_use", lambda _port: True)
+    monkeypatch.setattr(docker_services, "_run_service_start", fail_run)
+
+    return_code, _stdout, _stderr = docker_start_milvus(
+        "test-network",
+        resolve_runtime_stack(),
+        state_root_dir=str(tmp_path),
+    )
+
+    assert return_code == 0
+
+
 def test_docker_start_milvus_uses_explicit_state_root(monkeypatch, tmp_path):
     commands = []
 
@@ -57,7 +108,7 @@ def test_docker_start_milvus_uses_explicit_state_root(monkeypatch, tmp_path):
     monkeypatch.setattr(
         docker_services,
         "_run_service_start",
-        lambda cmd, _label: (commands.append(cmd) or (0, "", "")),
+        lambda cmd, _label: commands.append(cmd) or (0, "", ""),
     )
 
     docker_start_milvus(

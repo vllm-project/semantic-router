@@ -4,6 +4,8 @@ import (
 	"context"
 	"testing"
 
+	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
+
 	vllmv1alpha1 "github.com/vllm-project/semantic-router/operator/api/v1alpha1"
 	routerconfig "github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 )
@@ -67,6 +69,150 @@ func TestBuildCanonicalConfigAppliesOperatorSpecFamilies(t *testing.T) {
 	assertOperatorComplexityConfig(t, canonical.Routing.Signals.Complexity)
 }
 
+func TestBuildCanonicalConfigAppliesCanonicalRoutingOverride(t *testing.T) {
+	r := &SemanticRouterReconciler{}
+	sr := &vllmv1alpha1.SemanticRouter{
+		Spec: vllmv1alpha1.SemanticRouterSpec{
+			Config: vllmv1alpha1.ConfigSpec{
+				Routing: rawCanonicalRoutingJSON(t, `{
+					"signals": {
+						"conversation": [
+							{
+								"name": "active_tool_use",
+								"feature": {
+									"type": "count",
+									"source": {"type": "assistant_tool_cycle"}
+								},
+								"predicate": {"gte": 1}
+							}
+						],
+						"events": [
+							{
+								"name": "critical_payment_event",
+								"event_types": ["payment_failed"],
+								"severities": ["critical"],
+								"temporal": true
+							}
+						]
+					},
+					"projections": {
+						"scores": [
+							{
+								"name": "session_risk_score",
+								"method": "weighted_sum",
+								"inputs": [
+									{"type": "event", "name": "critical_payment_event", "weight": 1.0, "value_source": "binary"}
+								]
+							}
+						],
+						"mappings": [
+							{
+								"name": "session_risk_band",
+								"source": "session_risk_score",
+								"method": "threshold_bands",
+								"outputs": [
+									{"name": "risk_high", "gte": 0.8}
+								]
+							}
+						]
+					},
+					"decisions": [
+						{
+							"name": "agentic_session_route",
+							"rules": {
+								"operator": "AND",
+								"conditions": [
+									{"type": "conversation", "name": "active_tool_use"},
+									{"type": "event", "name": "critical_payment_event"},
+									{"type": "projection", "name": "risk_high"}
+								]
+							},
+							"modelRefs": [
+								{"model": "fast-model"},
+								{"model": "deep-model"}
+							],
+							"algorithm": {
+								"type": "session_aware",
+								"session_aware": {
+									"base_method": "hybrid",
+									"tool_loop_hard_lock": true,
+									"context_portability_hard_lock": true,
+									"prefix_cache_weight": 0.2,
+									"handoff_penalty_weight": 1.0
+								}
+							}
+						}
+					]
+				}`),
+			},
+		},
+	}
+
+	canonical, err := r.buildCanonicalConfig(context.Background(), sr)
+	if err != nil {
+		t.Fatalf("buildCanonicalConfig failed: %v", err)
+	}
+
+	assertCanonicalV03RoutingConfig(t, canonical)
+}
+
+func TestBuildCanonicalConfigPreservesLegacyDecisionAlgorithm(t *testing.T) {
+	r := &SemanticRouterReconciler{}
+	sr := &vllmv1alpha1.SemanticRouter{
+		Spec: vllmv1alpha1.SemanticRouterSpec{
+			Config: vllmv1alpha1.ConfigSpec{
+				Decisions: []vllmv1alpha1.DecisionConfig{
+					{
+						Name: "legacy-session-route",
+						Rules: vllmv1alpha1.RuleCombinationConfig{
+							Operator: "AND",
+							Conditions: []vllmv1alpha1.RuleConditionConfig{
+								{Type: "event", Name: "critical_payment_event"},
+							},
+						},
+						ModelRefs: []vllmv1alpha1.ModelRefConfig{
+							{Model: "fast-model"},
+							{Model: "deep-model"},
+						},
+						Algorithm: rawCanonicalRoutingJSON(t, `{
+							"type": "session_aware",
+							"session_aware": {
+								"base_method": "hybrid",
+								"tool_loop_hard_lock": true
+							}
+						}`),
+					},
+				},
+			},
+		},
+	}
+
+	canonical, err := r.buildCanonicalConfig(context.Background(), sr)
+	if err != nil {
+		t.Fatalf("buildCanonicalConfig failed: %v", err)
+	}
+
+	if len(canonical.Routing.Decisions) != 1 {
+		t.Fatalf("expected one decision, got %#v", canonical.Routing.Decisions)
+	}
+	algorithm := canonical.Routing.Decisions[0].Algorithm
+	if algorithm == nil || algorithm.Type != "session_aware" || algorithm.SessionAware == nil {
+		t.Fatalf("expected session_aware algorithm to survive typed decision conversion, got %#v", algorithm)
+	}
+	if algorithm.SessionAware.ToolLoopHardLock == nil || !*algorithm.SessionAware.ToolLoopHardLock {
+		t.Fatalf("expected tool_loop_hard_lock to survive typed decision conversion, got %#v", algorithm.SessionAware)
+	}
+	if canonical.Routing.Decisions[0].Rules.Conditions[0].Type != "event" {
+		t.Fatalf("expected event condition to survive typed decision conversion, got %#v", canonical.Routing.Decisions[0].Rules)
+	}
+}
+
+func rawCanonicalRoutingJSON(t *testing.T, raw string) *apiextensionsv1.JSON {
+	t.Helper()
+
+	return &apiextensionsv1.JSON{Raw: []byte(raw)}
+}
+
 func assertOperatorRouterProviderConfig(t *testing.T, canonical *routerconfig.CanonicalConfig) {
 	t.Helper()
 
@@ -79,6 +225,76 @@ func assertOperatorRouterProviderConfig(t *testing.T, canonical *routerconfig.Ca
 	family := canonical.Providers.Defaults.ReasoningFamilies["qwen3"]
 	if family.Type != "reasoning_effort" || family.Parameter != "think" {
 		t.Fatalf("unexpected reasoning family: %#v", family)
+	}
+}
+
+func assertCanonicalV03RoutingConfig(t *testing.T, canonical *routerconfig.CanonicalConfig) {
+	t.Helper()
+
+	assertCanonicalConversationSignal(t, canonical.Routing.Signals.Conversation)
+	assertCanonicalEventSignal(t, canonical.Routing.Signals.EventRules)
+	assertCanonicalProjectionConfig(t, canonical.Routing.Projections)
+	assertCanonicalSessionAwareDecision(t, canonical.Routing.Decisions)
+}
+
+func assertCanonicalConversationSignal(t *testing.T, signals []routerconfig.ConversationRule) {
+	t.Helper()
+
+	if len(signals) != 1 {
+		t.Fatalf("expected one conversation signal, got %#v", signals)
+	}
+	conversation := signals[0]
+	if conversation.Name != "active_tool_use" || conversation.Feature.Type != "count" {
+		t.Fatalf("unexpected conversation signal: %#v", conversation)
+	}
+	if conversation.Predicate == nil || conversation.Predicate.GTE == nil || *conversation.Predicate.GTE != 1 {
+		t.Fatalf("unexpected conversation predicate: %#v", conversation.Predicate)
+	}
+}
+
+func assertCanonicalEventSignal(t *testing.T, signals []routerconfig.EventRule) {
+	t.Helper()
+
+	if len(signals) != 1 {
+		t.Fatalf("expected one event signal, got %#v", signals)
+	}
+	event := signals[0]
+	if event.Name != "critical_payment_event" || len(event.EventTypes) != 1 || event.EventTypes[0] != "payment_failed" {
+		t.Fatalf("unexpected event signal: %#v", event)
+	}
+}
+
+func assertCanonicalProjectionConfig(t *testing.T, projections routerconfig.CanonicalProjections) {
+	t.Helper()
+
+	if len(projections.Scores) != 1 || len(projections.Mappings) != 1 {
+		t.Fatalf("expected projection score and mapping, got %#v", projections)
+	}
+	if projections.Mappings[0].Outputs[0].Name != "risk_high" {
+		t.Fatalf("unexpected projection mapping: %#v", projections.Mappings[0])
+	}
+}
+
+func assertCanonicalSessionAwareDecision(t *testing.T, decisions []routerconfig.Decision) {
+	t.Helper()
+
+	if len(decisions) != 1 {
+		t.Fatalf("expected one decision, got %#v", decisions)
+	}
+	decision := decisions[0]
+	if decision.Rules.Operator != "AND" || len(decision.Rules.Conditions) != 3 {
+		t.Fatalf("unexpected decision rules: %#v", decision.Rules)
+	}
+	if decision.Rules.Conditions[0].Type != "conversation" ||
+		decision.Rules.Conditions[1].Type != "event" ||
+		decision.Rules.Conditions[2].Type != "projection" {
+		t.Fatalf("unexpected decision condition types: %#v", decision.Rules.Conditions)
+	}
+	if decision.Algorithm == nil || decision.Algorithm.Type != "session_aware" || decision.Algorithm.SessionAware == nil {
+		t.Fatalf("expected session_aware algorithm, got %#v", decision.Algorithm)
+	}
+	if decision.Algorithm.SessionAware.ToolLoopHardLock == nil || !*decision.Algorithm.SessionAware.ToolLoopHardLock {
+		t.Fatalf("expected tool loop hard lock, got %#v", decision.Algorithm.SessionAware)
 	}
 }
 

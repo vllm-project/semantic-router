@@ -132,18 +132,25 @@ def test_show_status_reports_not_running_when_docker_daemon_unreachable(monkeypa
 
 def test_never_pull_preflight_skips_dashboard_when_disabled(monkeypatch):
     captured = {}
+    sim_checks = []
 
     def fake_get_runtime_images(**kwargs):
         captured.update(kwargs)
         return {"router": "router:test", "envoy": "envoy:test"}
 
     monkeypatch.setattr(core, "get_runtime_images", fake_get_runtime_images)
+    monkeypatch.setattr(
+        core,
+        "get_fleet_sim_docker_image",
+        lambda image=None, pull_policy=None: sim_checks.append((image, pull_policy)),
+    )
 
     core.ensure_runtime_images_for_pull_policy(
         image="router:test",
         router_image=None,
         envoy_image=None,
         dashboard_image="dashboard:missing",
+        sim_image="sim:test",
         pull_policy="never",
         env_vars={"VLLM_SR_PLATFORM": "amd"},
         dashboard_disabled=True,
@@ -151,3 +158,30 @@ def test_never_pull_preflight_skips_dashboard_when_disabled(monkeypatch):
 
     assert captured["dashboard_image"] is None
     assert captured["include_dashboard"] is False
+    assert sim_checks == [("sim:test", "never")]
+
+
+def test_never_pull_preflight_skips_sim_when_disabled(monkeypatch):
+    sim_checks = []
+    monkeypatch.setattr(
+        core,
+        "get_runtime_images",
+        lambda **kwargs: {"router": "router:test", "envoy": "envoy:test"},
+    )
+    monkeypatch.setattr(
+        core,
+        "get_fleet_sim_docker_image",
+        lambda image=None, pull_policy=None: sim_checks.append((image, pull_policy)),
+    )
+
+    core.ensure_runtime_images_for_pull_policy(
+        image="router:test",
+        router_image=None,
+        envoy_image=None,
+        dashboard_image=None,
+        sim_image="sim:test",
+        pull_policy="never",
+        env_vars={"VLLM_SR_SIM_ENABLED": "false"},
+    )
+
+    assert sim_checks == []
