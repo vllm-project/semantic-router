@@ -74,6 +74,14 @@ func applyRetentionTTLOverride(base int, ctx *RequestContext) int {
 	return base
 }
 
+// retentionWantsKeepCurrentModel reports whether the emitted retention directive
+// explicitly set keep_current_model: true. The model-switch gate consumes this
+// as a forced-stay directive (honored regardless of shadow/enforce mode).
+func retentionWantsKeepCurrentModel(ctx *RequestContext) bool {
+	return ctx != nil && ctx.EmittedRetention != nil &&
+		ctx.EmittedRetention.KeepCurrentModel != nil && *ctx.EmittedRetention.KeepCurrentModel
+}
+
 // observeRetentionDirective records every declared field of the emitted
 // retention directive to log + trace. It is invoked once per matched decision
 // (right after the deep clone in applyDecisionResultToContext). Fields that

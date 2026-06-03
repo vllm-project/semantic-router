@@ -201,6 +201,84 @@ func TestModelSwitchGateSwitchBenefitPrefersQualityGap(t *testing.T) {
 	}
 }
 
+func TestModelSwitchGateForceKeepCurrentModelEnforcesEvenInShadow(t *testing.T) {
+	// keep_current_model is an explicit operator directive, not a heuristic:
+	// it forces a stay on the known current model even in shadow mode and even
+	// when the heuristic would strongly prefer switching.
+	lt := lookuptable.NewMemoryStorage()
+	mustSetLookupEntry(t, lt, lookuptable.QualityGapKey("coding", "current", "candidate"), 0.9)
+
+	gate := NewModelSwitchGate(config.ModelSwitchGateConfig{
+		Enabled:            true,
+		Mode:               ModelSwitchGateModeShadow,
+		MinSwitchAdvantage: 0,
+	}, lt)
+
+	decision := gate.Evaluate(ModelSwitchGateInput{
+		SelectionContext: selectionContextForGate(),
+		SelectionResult: &SelectionResult{
+			SelectedModel: "candidate",
+			AllScores:     map[string]float64{"current": 0.1, "candidate": 0.99},
+		},
+		CurrentModel:          "current",
+		CandidateModel:        "candidate",
+		ForceKeepCurrentModel: true,
+	})
+
+	if decision.WouldSwitch {
+		t.Fatalf("keep_current_model must not switch, got %+v", decision)
+	}
+	if !decision.EnforcedStay {
+		t.Fatalf("keep_current_model must enforce stay even in shadow mode")
+	}
+	if decision.FinalModel != "current" {
+		t.Fatalf("expected final model current, got %q", decision.FinalModel)
+	}
+	if decision.Reason != "retention_keep_current_model" {
+		t.Fatalf("expected reason retention_keep_current_model, got %q", decision.Reason)
+	}
+}
+
+func TestModelSwitchGateForceKeepCurrentModelMissingPreviousModelStaysAuditOnly(t *testing.T) {
+	// keep_current_model cannot stay on a model we do not know: with no previous
+	// model the gate stays audit-only instead of fabricating an enforced stay.
+	gate := NewModelSwitchGate(config.ModelSwitchGateConfig{
+		Enabled: true,
+		Mode:    ModelSwitchGateModeEnforce,
+	}, nil)
+
+	decision := gate.Evaluate(ModelSwitchGateInput{
+		SelectionContext: &SelectionContext{
+			CandidateModels: []config.ModelRef{{Model: "current"}, {Model: "candidate"}},
+		},
+		SelectionResult:       &SelectionResult{SelectedModel: "candidate"},
+		CurrentModel:          "",
+		CandidateModel:        "candidate",
+		ForceKeepCurrentModel: true,
+	})
+
+	if decision.EnforcedStay {
+		t.Fatalf("cannot force-keep an unknown previous model, got %+v", decision)
+	}
+	if decision.Reason != "missing_signal_audit_only" {
+		t.Fatalf("expected missing_signal_audit_only, got %q", decision.Reason)
+	}
+}
+
+func TestModelSwitchGateForceKeepCurrentModelDisabledIsNoOp(t *testing.T) {
+	gate := NewModelSwitchGate(config.ModelSwitchGateConfig{Enabled: false}, nil)
+	decision := gate.Evaluate(ModelSwitchGateInput{
+		SelectionContext:      selectionContextForGate(),
+		SelectionResult:       &SelectionResult{SelectedModel: "candidate"},
+		CurrentModel:          "current",
+		CandidateModel:        "candidate",
+		ForceKeepCurrentModel: true,
+	})
+	if decision.EnforcedStay {
+		t.Fatalf("disabled gate must not enforce even with keep_current_model")
+	}
+}
+
 func selectionContextForGate() *SelectionContext {
 	return &SelectionContext{
 		DecisionName:    "coding-route",
