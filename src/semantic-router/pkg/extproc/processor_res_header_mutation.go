@@ -265,6 +265,18 @@ func addStandardDecisionHeaders(builder *responseHeaderMutationBuilder, ctx *Req
 	if ctx.VSRCacheSimilarity > 0 {
 		builder.addFloat("x-vsr-cache-similarity", float64(ctx.VSRCacheSimilarity))
 	}
+	addSessionBudgetResponseHeaders(builder, ctx)
+}
+
+// addSessionBudgetResponseHeaders reports the session token-budget decision
+// (Opp-5) on a normal, non-terminate response. The terminate short-circuit emits
+// its own headers (including x-vsr-budget-exceeded) on the immediate response.
+func addSessionBudgetResponseHeaders(builder *responseHeaderMutationBuilder, ctx *RequestContext) {
+	if ctx.SessionBudget == nil {
+		return
+	}
+	builder.addString(headers.VSRBudgetStage, ctx.SessionBudget.Stage.String())
+	builder.addString(headers.VSRBudgetRatio, fmt.Sprintf("%.2f", ctx.SessionBudget.Ratio))
 }
 
 // addMatchedSignalHeaders adds the signal-evaluation headers (matched
