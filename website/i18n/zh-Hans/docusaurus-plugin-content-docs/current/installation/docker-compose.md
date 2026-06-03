@@ -13,7 +13,7 @@ sidebar_position: 3
 不再是本地运行 vLLM Semantic Router 的受支持方式。
 
 如需使用 Docker 进行本地开发，请改用 `vllm-sr` CLI —— `vllm-sr serve` 会为你
-启动 Router、Envoy 与 Dashboard。当前流程请参阅 **[快速开始](installation)**。
+启动 Router、Envoy 与 Dashboard。当前流程请参阅 **[快速开始](./installation.md)**。
 :::
 
 ## 为什么有此变更
@@ -32,7 +32,7 @@ pip install --pre vllm-sr
 vllm-sr serve
 ```
 
-**[快速开始](installation)** 涵盖了前提条件、模型下载，以及完整的 `vllm-sr`
+**[快速开始](./installation.md)** 涵盖了前提条件、模型下载，以及完整的 `vllm-sr`
 命令集（`vllm-sr status`、`vllm-sr logs`、`vllm-sr stop`）。
 
 ## Kubernetes 与生产环境

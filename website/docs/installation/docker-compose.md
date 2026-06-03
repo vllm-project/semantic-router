@@ -10,7 +10,7 @@ Compose is no longer the supported way to run vLLM Semantic Router locally.
 
 For local development with Docker, use the `vllm-sr` CLI instead — `vllm-sr serve`
 provisions the router, Envoy, and dashboard for you. See the
-**[Quickstart](installation)** for the current workflow.
+**[Quickstart](./installation.md)** for the current workflow.
 :::
 
 ## Why this changed
@@ -29,7 +29,7 @@ pip install --pre vllm-sr
 vllm-sr serve
 ```
 
-The **[Quickstart](installation)** covers prerequisites, model downloads, and the
+The **[Quickstart](./installation.md)** covers prerequisites, model downloads, and the
 full set of `vllm-sr` commands (`vllm-sr status`, `vllm-sr logs`, `vllm-sr stop`).
 
 ## Kubernetes and production
