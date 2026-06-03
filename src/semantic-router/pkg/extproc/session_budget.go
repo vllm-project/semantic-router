@@ -91,6 +91,8 @@ func (r *OpenAIRouter) maybeTerminateForBudget(ctx *RequestContext) *ext_proc.Pr
 		"Session token budget exceeded: %d cumulative tokens is %.2fx the configured budget of %d.",
 		d.Cumulative, d.Ratio, d.Budget,
 	)
+	// Marshal cannot fail: the map holds only string/int values. The error is
+	// safely ignored here as in the sibling error-response builders.
 	body, _ := json.Marshal(map[string]interface{}{
 		"error": map[string]interface{}{
 			"message": message,
