@@ -20,11 +20,13 @@ const retentionDropReason = "retention.drop"
 // The boolean indicates skip; the string is the canonical reason for
 // metrics/log/trace observability.
 //
-// Contract (issue #1747, MVP):
-//   - Only `retention.drop=true` triggers a skip.
-//   - `ttl_turns`, `keep_current_model`, `prefer_prefix_retention` are
-//     contract-only in this PR (observed but not consumed at the cache write
-//     surface).
+// Contract (issues #1747, #2009):
+//   - Only `retention.drop=true` triggers a write skip here.
+//   - `ttl_turns` is consumed separately as a per-entry TTL override
+//     (applyRetentionTTLOverride), not as a skip; `drop` and `ttl_turns` are
+//     mutually exclusive by validation.
+//   - `keep_current_model` is consumed by the model-switch gate;
+//     `prefer_prefix_retention` is emitted to the pool as a response header.
 //   - This gate does NOT affect cache reads; read-side gating lives in
 //     req_filter_cache.go.
 func ShouldSkipCacheWrite(ctx *RequestContext) (bool, string) {
@@ -88,10 +90,9 @@ func retentionWantsKeepCurrentModel(ctx *RequestContext) bool {
 // are nil are not recorded — preserving the tri-state (unset vs explicit zero)
 // semantics of the schema.
 //
-// This helper closes the contract loop for the three contract-only fields
-// (ttl_turns / keep_current_model / prefer_prefix_retention): even though
-// runtime does not consume them in this PR, they remain auditable end-to-end
-// (DSL → AST → config → ctx → log/trace) so operators can verify wiring.
+// This records every declared field for audit (DSL → AST → config → ctx →
+// log/trace) regardless of which fields the runtime consumes, complementing the
+// x-vsr-retention-* response headers so operators can verify wiring end-to-end.
 func observeRetentionDirective(ctx *RequestContext) {
 	if ctx == nil || ctx.EmittedRetention == nil {
 		return

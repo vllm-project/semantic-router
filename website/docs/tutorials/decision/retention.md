@@ -30,15 +30,25 @@ structured and reviewable.
 
 ## Runtime Scope
 
-The current runtime consumer is intentionally narrow:
+The runtime now consumes every retention field, with one scoring bias deferred:
 
 - `drop: true` skips the response-side semantic-cache write for the matched
-  decision.
-- It does not block semantic-cache reads for the current request.
-- `ttl_turns`, `keep_current_model`, and `prefer_prefix_retention` are
-  contract-only in this release: they round-trip through DSL/config and are
-  emitted to logs/traces, but their business effects are reserved for follow-up
-  runtime consumers.
+  decision. It does not block semantic-cache reads for the current request.
+- `ttl_turns` (when `> 0`) overrides the decision/global semantic-cache TTL for
+  this entry, scoping it to roughly that many future turns (turns are mapped to
+  seconds at the cache-write seam; a configurable seconds-per-turn knob is
+  follow-up work).
+- `keep_current_model: true` forces the session-aware model-switch gate to stay
+  on the current model, regardless of gate mode (shadow or enforce), as long as
+  the current model is known and a valid candidate.
+- `prefer_prefix_retention: true` is emitted to the inference pool as an
+  `x-vsr-retention-prefer-prefix` response header; the session-aware scoring
+  bias and provider/KV-cache eviction integration remain follow-up work.
+
+Every explicitly set field is also emitted to the response as an
+`x-vsr-retention-*` header and recorded in logs/traces, so the pool and
+operators can audit the router's retention intent. `drop` and positive
+`ttl_turns` are mutually exclusive (validation rejects setting both).
 
 ## Retention Target Inventory
 
@@ -48,9 +58,9 @@ for these state signals or runtime hints:
 | Target | Why retention matters | Current status |
 |--------|-----------------------|----------------|
 | Semantic-cache response write | Prevents low-value, private, or unstable turns from becoming future cache hits. | Enforced by `drop: true`. |
-| Cache-write lifetime | Keeps a reusable response only for a bounded number of future turns instead of using a wall-clock-only TTL. | `ttl_turns` is typed and observed; runtime consumption needs a turn-to-TTL mapping. |
-| Current model affinity | Avoids bouncing a multi-turn session away from the model that owns the conversation context. | `keep_current_model` is typed and observed; the model-switch gate consumes this in a follow-up path. |
-| Prefix or KV cache warmth | Protects expensive prompt prefixes or warm worker state when a follow-up turn is likely. | `prefer_prefix_retention` is typed and observed; provider/cache-manager eviction integration is follow-up work. |
+| Cache-write lifetime | Keeps a reusable response only for a bounded number of future turns instead of using a wall-clock-only TTL. | `ttl_turns` overrides the per-entry semantic-cache TTL (turns mapped to seconds); a configurable seconds-per-turn knob is follow-up. |
+| Current model affinity | Avoids bouncing a multi-turn session away from the model that owns the conversation context. | `keep_current_model` forces a stay via the model-switch gate in any mode. |
+| Prefix or KV cache warmth | Protects expensive prompt prefixes or warm worker state when a follow-up turn is likely. | `prefer_prefix_retention` is emitted to the pool as a response header; scoring bias and provider/cache-manager eviction integration are follow-up work. |
 | Turn and transition telemetry | Records turn index, selected model, token/cost totals, retry/quality trends, and model transitions so stay-vs-switch policy can be audited. | Produced by session telemetry and transition logging surfaces, not by this directive alone. |
 | Conversation, tool, and replay history | Preserves the history needed for follow-up classification, tool retrieval, and offline lookup-table generation. | Owned by Response API, tool-history, and router-replay surfaces; retention directives should not duplicate those stores. |
 
@@ -122,9 +132,9 @@ routing:
 | Field | Type | Runtime behavior |
 |-------|------|------------------|
 | `drop` | boolean | When `true`, skips response-side semantic-cache writes for the matched decision. |
-| `ttl_turns` | integer >= 0 | Contract-only and observed in logs/traces until turn-aware TTL consumption lands. |
-| `keep_current_model` | boolean | Contract-only and observed until model-switch-gate consumption lands. |
-| `prefer_prefix_retention` | boolean | Contract-only and observed until prefix/KV-cache retention integration lands. |
+| `ttl_turns` | integer >= 0 | When `> 0`, overrides the matched decision's semantic-cache entry TTL (turns mapped to seconds). Also emitted as `x-vsr-retention-ttl-turns`. |
+| `keep_current_model` | boolean | When `true`, forces the model-switch gate to keep the current model regardless of gate mode. Also emitted as `x-vsr-retention-keep-current-model`. |
+| `prefer_prefix_retention` | boolean | Emitted to the pool as `x-vsr-retention-prefer-prefix`; session-aware scoring bias and KV-cache eviction integration are follow-up. |
 
 Validation rejects duplicate `EMIT retention` blocks on the same route, unknown
 fields, invalid field types, negative `ttl_turns`, and contradictory
