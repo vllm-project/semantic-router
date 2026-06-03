@@ -73,8 +73,8 @@ def append_host_gateway(cmd, runtime):
 
 def append_custom_dns(cmd):
     """Inject --dns servers from the comma-separated VLLM_SR_DNS env var."""
-    for dns in os.getenv("VLLM_SR_DNS", "").split(","):
-        dns = dns.strip()
+    for raw_dns in os.getenv("VLLM_SR_DNS", "").split(","):
+        dns = raw_dns.strip()
         if dns:
             cmd.extend(["--dns", dns])
 
