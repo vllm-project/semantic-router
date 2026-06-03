@@ -139,6 +139,7 @@ docs:
 - docs/agent/tech-debt/td-017-fleet-sim-structure-gate-migration-gap.md
 - docs/agent/tech-debt/td-020-classification-subsystem-boundary-collapse.md
 - docs/agent/tech-debt/td-027-fleet-sim-optimizer-and-public-surface-boundary-collapse.md
+- docs/agent/tech-debt/td-042-ffi-embedding-structure-debt.md
 local_agent_rules:
 - path: src/vllm-sr/cli/AGENTS.md
   scope: src/vllm-sr/cli/**
@@ -276,6 +277,9 @@ doc_governance:
   - path: docs/agent/tech-debt/td-027-fleet-sim-optimizer-and-public-surface-boundary-collapse.md
     steward: fleet-sim
     freshness: update when the TD027 debt record changes materially
+  - path: docs/agent/tech-debt/td-042-ffi-embedding-structure-debt.md
+    steward: candle-binding
+    freshness: update when the TD042 debt record changes materially
 skills:
 - tools/agent/skills/config-platform-change/SKILL.md
 - tools/agent/skills/cross-stack-bugfix/SKILL.md

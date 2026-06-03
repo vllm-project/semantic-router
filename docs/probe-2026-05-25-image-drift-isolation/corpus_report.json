@@ -1,0 +1,147 @@
+{
+  "probe_date": "2026-05-25",
+  "fixture_set": "docs/probe-2026-05-20-calibration/fixtures (20 images)",
+  "summary": {
+    "image_count": 20,
+    "cosine": {
+      "min": 0.9995571374893188,
+      "max": 0.9999778270721436,
+      "mean": 0.9999187976121903,
+      "median": 0.9999457597732544
+    },
+    "max_abs_diff": {
+      "min": 0.0008203461766242981,
+      "max": 0.004327654838562012,
+      "mean": 0.0018439491046592592,
+      "median": 0.0016932850703597069
+    },
+    "mean_abs_diff": {
+      "min": 0.00027700865757651627,
+      "max": 0.0011967542814090848,
+      "mean": 0.0004703980157501064,
+      "median": 0.00042120607395190746
+    }
+  },
+  "per_image": [
+    {
+      "image": "adversarial_atm_keypad.jpg",
+      "cos": 0.999962329864502,
+      "max_abs": 0.001283489167690277,
+      "mean_abs": 0.00035034315078519285
+    },
+    {
+      "image": "adversarial_restaurant_menu.jpg",
+      "cos": 0.9999386072158813,
+      "max_abs": 0.0017835181206464767,
+      "mean_abs": 0.00044487067498266697
+    },
+    {
+      "image": "adversarial_server_rack.jpg",
+      "cos": 0.9999768137931824,
+      "max_abs": 0.0012484490871429443,
+      "mean_abs": 0.00027700865757651627
+    },
+    {
+      "image": "adversarial_stock_chart_monitor.jpg",
+      "cos": 0.9999778270721436,
+      "max_abs": 0.0008203461766242981,
+      "mean_abs": 0.0002783672825898975
+    },
+    {
+      "image": "inrule_ambient_conference_room.jpg",
+      "cos": 0.9999419450759888,
+      "max_abs": 0.0019690445624291897,
+      "mean_abs": 0.00043564033694565296
+    },
+    {
+      "image": "inrule_ambient_desk_coffee.jpg",
+      "cos": 0.9999624490737915,
+      "max_abs": 0.0012714788317680359,
+      "mean_abs": 0.00035645460593514144
+    },
+    {
+      "image": "inrule_ambient_factory.jpg",
+      "cos": 0.99994957447052,
+      "max_abs": 0.001603052020072937,
+      "mean_abs": 0.00040677181095816195
+    },
+    {
+      "image": "inrule_ambient_whiteboard.jpg",
+      "cos": 0.9999051094055176,
+      "max_abs": 0.00237877294421196,
+      "mean_abs": 0.0005592542584054172
+    },
+    {
+      "image": "inrule_code_github_pr.png",
+      "cos": 0.9999357461929321,
+      "max_abs": 0.0019520418718457222,
+      "mean_abs": 0.00046054142876528203
+    },
+    {
+      "image": "inrule_code_stacktrace.png",
+      "cos": 0.9999693632125854,
+      "max_abs": 0.001305868849158287,
+      "mean_abs": 0.00031701521947979927
+    },
+    {
+      "image": "inrule_code_terminal.jpg",
+      "cos": 0.999973475933075,
+      "max_abs": 0.001081099733710289,
+      "mean_abs": 0.00029815317247994244
+    },
+    {
+      "image": "inrule_code_vscode.png",
+      "cos": 0.9999675750732422,
+      "max_abs": 0.001418381929397583,
+      "mean_abs": 0.00031803513411432505
+    },
+    {
+      "image": "inrule_identifier_credit_card.jpg",
+      "cos": 0.9999602437019348,
+      "max_abs": 0.001466142013669014,
+      "mean_abs": 0.00035266755730845034
+    },
+    {
+      "image": "inrule_identifier_drivers_license.png",
+      "cos": 0.9998319149017334,
+      "max_abs": 0.003240767866373062,
+      "mean_abs": 0.0007473284495063126
+    },
+    {
+      "image": "inrule_identifier_passport.jpg",
+      "cos": 0.9999023675918579,
+      "max_abs": 0.0021201148629188538,
+      "mean_abs": 0.0005583129823207855
+    },
+    {
+      "image": "inrule_identifier_wristband.jpg",
+      "cos": 0.9995571374893188,
+      "max_abs": 0.004327654838562012,
+      "mean_abs": 0.0011967542814090848
+    },
+    {
+      "image": "ood_beach.jpg",
+      "cos": 0.999974250793457,
+      "max_abs": 0.0012594908475875854,
+      "mean_abs": 0.00029190556961111724
+    },
+    {
+      "image": "ood_meal.jpg",
+      "cos": 0.9999131560325623,
+      "max_abs": 0.001963060349225998,
+      "mean_abs": 0.0005450351745821536
+    },
+    {
+      "image": "ood_pet.jpg",
+      "cos": 0.9998944401741028,
+      "max_abs": 0.0021711429581046104,
+      "mean_abs": 0.0005856531788595021
+    },
+    {
+      "image": "ood_sports.jpg",
+      "cos": 0.9998816251754761,
+      "max_abs": 0.002215065062046051,
+      "mean_abs": 0.0006278473883867264
+    }
+  ]
+}

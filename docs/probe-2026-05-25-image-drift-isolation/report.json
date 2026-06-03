@@ -1,0 +1,24 @@
+{
+  "probe_date": "2026-05-25",
+  "image": "inrule_identifier_passport.jpg",
+  "norms": {
+    "python": 0.9999999403953552,
+    "pilpipe": 0.9999999403953552,
+    "gopipe": 1.0
+  },
+  "cosine": {
+    "python_vs_candle_pil": 0.9999887943267822,
+    "python_vs_candle_go": 0.9999023675918579,
+    "candle_pil_vs_candle_go": 0.9999160170555115
+  },
+  "max_abs_diff": {
+    "python_vs_candle_pil": 0.000911414623260498,
+    "python_vs_candle_go": 0.0021201148629188538,
+    "candle_pil_vs_candle_go": 0.0019923895597457886
+  },
+  "mean_abs_diff": {
+    "python_vs_candle_pil": 0.0001857075112638995,
+    "python_vs_candle_go": 0.0005583129823207855,
+    "candle_pil_vs_candle_go": 0.0005233500269241631
+  }
+}
