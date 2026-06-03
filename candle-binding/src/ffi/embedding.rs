@@ -2487,6 +2487,7 @@ fn decode_resize_to_chw_f32(
 ///
 /// # Returns
 /// 0 on success, -1 on error
+#[allow(clippy::not_unsafe_ptr_arg_deref)]
 #[no_mangle]
 pub extern "C" fn multimodal_encode_image_from_bytes(
     bytes_ptr: *const u8,
