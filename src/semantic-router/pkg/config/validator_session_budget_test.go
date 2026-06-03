@@ -31,6 +31,17 @@ var _ = Describe("validateSessionTokenBudget", func() {
 		Expect(err.Error()).To(ContainSubstring("budget_tokens"))
 	})
 
+	It("rejects enabled with a zero budget (silent no-op footgun)", func() {
+		cfg := SessionTokenBudgetConfig{Enabled: true, BudgetTokens: 0}
+		err := validateSessionTokenBudget(cfg)
+		Expect(err).To(HaveOccurred())
+		Expect(err.Error()).To(ContainSubstring("budget_tokens"))
+	})
+
+	It("allows disabled with a zero budget", func() {
+		Expect(validateSessionTokenBudget(SessionTokenBudgetConfig{Enabled: false, BudgetTokens: 0})).To(Succeed())
+	})
+
 	It("rejects a negative threshold", func() {
 		cfg := SessionTokenBudgetConfig{
 			Enabled:      true,

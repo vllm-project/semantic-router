@@ -20,6 +20,12 @@ func validateSessionTokenBudget(cfg SessionTokenBudgetConfig) error {
 	if cfg.BudgetTokens < 0 {
 		return fmt.Errorf("session_token_budget.budget_tokens must be >= 0, got %d", cfg.BudgetTokens)
 	}
+	if cfg.Enabled && cfg.BudgetTokens == 0 {
+		return fmt.Errorf(
+			"session_token_budget.budget_tokens must be > 0 when session_token_budget.enabled is true " +
+				"(enforcement would otherwise silently no-op)",
+		)
+	}
 
 	t := cfg.Thresholds
 	stages := []struct {
@@ -33,11 +39,13 @@ func validateSessionTokenBudget(cfg SessionTokenBudgetConfig) error {
 	}
 	for _, s := range stages {
 		if s.value < 0 {
-			return fmt.Errorf("session_token_budget.thresholds.%s must be > 0, got %v", s.name, s.value)
+			return fmt.Errorf("session_token_budget.thresholds.%s must not be negative (0 = use default), got %v", s.name, s.value)
 		}
 	}
 
-	// Explicit (non-zero) thresholds must be ascending in stage order.
+	// Explicit (non-zero) thresholds must be ascending in stage order. Equal
+	// adjacent thresholds are allowed and intentionally collapse the lower stage
+	// (the higher-priority stage wins in sessionbudget.Evaluate).
 	prevName, prev := "", 0.0
 	for _, s := range stages {
 		if s.value == 0 {
