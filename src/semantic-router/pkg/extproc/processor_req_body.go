@@ -86,6 +86,11 @@ func (r *OpenAIRouter) handleRequestBody(v *ext_proc.ProcessingRequest_RequestBo
 		return nil, err
 	}
 
+	// Session token-budget evaluation (Opp-5): runs after session-transition
+	// fields are populated so the cumulative-vs-budget stage is available to the
+	// routing path and the response-header writer. No-op unless enabled.
+	r.evaluateSessionBudget(ctx)
+
 	return r.handleModelRouting(
 		openAIRequest,
 		originalModel,
