@@ -158,6 +158,80 @@ test.describe('Claw room collaboration', () => {
     await expect(page.locator('[data-room-message-streaming="true"]')).toContainText('Typing now')
   })
 
+  test('renders streaming tool trace cards from websocket events', async ({ page }) => {
+    await mockCollaborationBootstrap(page)
+    await enableClawRoom(page)
+
+    await page.evaluate(() => {
+      const sockets = (window as typeof window & {
+        __mockRoomSockets?: Array<{ emit: (payload: Record<string, unknown>) => void }>
+      }).__mockRoomSockets
+      const socket = sockets?.[sockets.length - 1]
+      socket?.emit({
+        type: 'message_chunk',
+        messageId: 'stream-worker-tools',
+        chunk: 'Done.',
+        participantType: 'worker',
+        participantId: 'worker-a',
+      })
+      socket?.emit({
+        type: 'tool_trace_update',
+        messageId: 'stream-worker-tools',
+        payload: {
+          revision: 1,
+          steps: [
+            { id: 'call_1', name: 'exec', arguments: '{"command":"pwd"}', status: 'running' },
+          ],
+        },
+      })
+      socket?.emit({
+        type: 'tool_trace_update',
+        messageId: 'stream-worker-tools',
+        payload: {
+          revision: 2,
+          steps: [
+            {
+              id: 'call_1',
+              name: 'exec',
+              arguments: '{"command":"pwd"}',
+              status: 'completed',
+              result: '/workspace',
+            },
+          ],
+        },
+      })
+      socket?.emit({
+        type: 'message_updated',
+        message: {
+          id: 'stream-worker-tools',
+          roomId: 'room-alpha',
+          teamId: 'team-alpha',
+          senderType: 'worker',
+          senderName: 'worker-a',
+          content: 'Done.',
+          createdAt: '2026-05-31T00:00:00Z',
+          metadata: {
+            toolTrace: JSON.stringify([
+              {
+                id: 'call_1',
+                name: 'exec',
+                arguments: '{"command":"pwd"}',
+                status: 'completed',
+                result: '/workspace',
+              },
+            ]),
+          },
+        },
+      })
+    })
+
+    await expect(page.getByTestId('claw-room-tool-trace')).toBeVisible()
+    await expect(page.getByTestId('claw-room-tool-trace')).toContainText('exec')
+    await expect(page.getByTestId('claw-room-tool-trace')).toContainText('/workspace')
+    await expect(page.locator('[data-room-message-streaming="true"]')).toHaveCount(0)
+    await expect(page.locator('[data-room-message-id="stream-worker-tools"]')).toContainText('Done.')
+  })
+
   test('falls back to SSE when websocket disconnects', async ({ page }) => {
     await mockCollaborationBootstrap(page)
 
