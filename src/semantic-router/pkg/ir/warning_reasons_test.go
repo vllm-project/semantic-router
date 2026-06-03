@@ -34,6 +34,8 @@ func TestWarningReason_StableTokens(t *testing.T) {
 		ReasonTopKDropOnOpenAIBackend:       "top_k_drop_on_openai_backend",
 		ReasonBetaDropOnOpenAIBackend:       "beta_drop_on_openai_backend",
 		ReasonWarningsTruncated:             "warnings_truncated",
+		ReasonCacheFieldsAbsent:             "cache_fields_absent",
+		ReasonAnthropicStopReasonCoerced:    "anthropic_stop_reason_coerced",
 	}
 	for reason, want := range expected {
 		if string(reason) != want {

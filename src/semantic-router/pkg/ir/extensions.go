@@ -92,6 +92,47 @@ type IRExtensions struct {
 	// ingress for pass-through to compatible backends.
 	InboundDangerousDirectBrowserAccess string
 
+	// CacheReadInputTokens mirrors anthropic.Usage.CacheReadInputTokens
+	// from the upstream response. Captured by the Anthropic→OpenAI
+	// normalization step so the symmetric Anthropic outbound emitter can
+	// replay it. Zero for OpenAI backends.
+	CacheReadInputTokens int64
+
+	// CacheCreationInputTokens mirrors
+	// anthropic.Usage.CacheCreationInputTokens. Same capture/replay
+	// trajectory as CacheReadInputTokens.
+	CacheCreationInputTokens int64
+
+	// Ephemeral5mInputTokens mirrors
+	// anthropic.Usage.CacheCreation.Ephemeral5mInputTokens, the 5-minute
+	// TTL slice of the cache-creation breakdown. Zero when the upstream
+	// did not populate the per-TTL breakdown.
+	Ephemeral5mInputTokens int64
+
+	// Ephemeral1hInputTokens mirrors
+	// anthropic.Usage.CacheCreation.Ephemeral1hInputTokens, the 1-hour
+	// TTL slice of the cache-creation breakdown.
+	Ephemeral1hInputTokens int64
+
+	// ServerToolUseCounts mirrors anthropic.Usage.ServerToolUse counters
+	// keyed by tool name ("web_search", "web_fetch"). Empty when the
+	// upstream returned no server-tool invocations or when the backend is
+	// OpenAI.
+	ServerToolUseCounts map[string]int64
+
+	// AnthropicStopReason captures the upstream Anthropic stop_reason when
+	// it is one of the Anthropic-only values that has no OpenAI
+	// equivalent ("pause_turn", "refusal"). When non-empty it overrides
+	// the OpenAI-derived stop_reason on the outbound emit path. Empty for
+	// stop_reasons that round-trip cleanly through OpenAI finish_reason.
+	AnthropicStopReason string
+
+	// AnthropicStopSequence mirrors anthropic.Message.StopSequence and is
+	// non-empty only when stop_reason == "stop_sequence". OpenAI
+	// finish_reason "length"/"stop" does not surface which sequence
+	// matched, so this is populated only on Anthropic-backend cells.
+	AnthropicStopSequence string
+
 	// Warnings accumulates parse- and emit-time observations. Surfaced via
 	// response headers, structured logging, and metrics.
 	Warnings []Warning
@@ -138,6 +179,20 @@ func (e *IRExtensions) SetToolStrict(toolName string, strict bool) {
 		e.ToolStrict = make(map[string]bool)
 	}
 	e.ToolStrict[toolName] = strict
+}
+
+// SetServerToolUseCount is nil-safe and lazily initializes the underlying
+// map. Zero counts are recorded as-is so callers can distinguish "tool not
+// invoked" (absent key) from "tool invoked zero times" (rare; present key
+// with zero value).
+func (e *IRExtensions) SetServerToolUseCount(toolName string, count int64) {
+	if e == nil {
+		return
+	}
+	if e.ServerToolUseCounts == nil {
+		e.ServerToolUseCounts = make(map[string]int64)
+	}
+	e.ServerToolUseCounts[toolName] = count
 }
 
 // SystemBlock records the shape of one Anthropic system block. When the

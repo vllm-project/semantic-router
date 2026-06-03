@@ -70,7 +70,49 @@ func TestNilExtensions_AccessorsAreNoOps(t *testing.T) {
 	ext.SetCacheControl("x", CacheControlSpec{})
 	ext.SetThinkingSignature("x", "y")
 	ext.SetToolStrict("x", true)
+	ext.SetServerToolUseCount("web_search", 1)
 	ext.AppendWarning(Warning{})
+}
+
+func TestSetServerToolUseCount_LazyInit(t *testing.T) {
+	ext := &IRExtensions{}
+	ext.SetServerToolUseCount("web_search", 3)
+	ext.SetServerToolUseCount("web_fetch", 0)
+
+	if got := ext.ServerToolUseCounts["web_search"]; got != 3 {
+		t.Fatalf("expected web_search=3, got %d", got)
+	}
+	if _, ok := ext.ServerToolUseCounts["web_fetch"]; !ok {
+		t.Fatalf("expected web_fetch key present even when count is zero")
+	}
+}
+
+func TestResponseUsageFields_ZeroValueDefaults(t *testing.T) {
+	// Newly added response-side fields must default to zero / nil so
+	// that an OpenAI-only request that never touches the Anthropic
+	// emit path leaves them untouched.
+	ext := &IRExtensions{}
+	if ext.CacheReadInputTokens != 0 {
+		t.Errorf("CacheReadInputTokens default = %d, want 0", ext.CacheReadInputTokens)
+	}
+	if ext.CacheCreationInputTokens != 0 {
+		t.Errorf("CacheCreationInputTokens default = %d, want 0", ext.CacheCreationInputTokens)
+	}
+	if ext.Ephemeral5mInputTokens != 0 {
+		t.Errorf("Ephemeral5mInputTokens default = %d, want 0", ext.Ephemeral5mInputTokens)
+	}
+	if ext.Ephemeral1hInputTokens != 0 {
+		t.Errorf("Ephemeral1hInputTokens default = %d, want 0", ext.Ephemeral1hInputTokens)
+	}
+	if ext.ServerToolUseCounts != nil {
+		t.Errorf("ServerToolUseCounts default = %v, want nil", ext.ServerToolUseCounts)
+	}
+	if ext.AnthropicStopReason != "" {
+		t.Errorf("AnthropicStopReason default = %q, want empty", ext.AnthropicStopReason)
+	}
+	if ext.AnthropicStopSequence != "" {
+		t.Errorf("AnthropicStopSequence default = %q, want empty", ext.AnthropicStopSequence)
+	}
 }
 
 func TestWarningSeverityValues(t *testing.T) {

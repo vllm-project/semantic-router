@@ -61,4 +61,17 @@ const (
 	// header size limit. The associated field carries the count of
 	// dropped entries.
 	ReasonWarningsTruncated WarningReason = "warnings_truncated"
+
+	// ReasonCacheFieldsAbsent indicates an Anthropic-source response had all
+	// cache usage counters at zero. This covers both the case where the user
+	// did not annotate any prompt segment with cache_control (no cache was
+	// requested) and the case where an OpenAI backend was used (no cache
+	// support). Info-level so it does not surface as a lossy warning.
+	ReasonCacheFieldsAbsent WarningReason = "cache_fields_absent"
+
+	// ReasonAnthropicStopReasonCoerced indicates an OpenAI finish_reason
+	// could not be mapped to a known Anthropic stop_reason and was
+	// coerced to "end_turn". Surfaced for diagnostics so clients can
+	// detect unexpected upstream behavior.
+	ReasonAnthropicStopReasonCoerced WarningReason = "anthropic_stop_reason_coerced"
 )

@@ -5,6 +5,7 @@ import (
 	agentgateway "github.com/vllm-project/semantic-router/e2e/profiles/agentgateway"
 	aigateway "github.com/vllm-project/semantic-router/e2e/profiles/ai-gateway"
 	aibrix "github.com/vllm-project/semantic-router/e2e/profiles/aibrix"
+	anthropicshim "github.com/vllm-project/semantic-router/e2e/profiles/anthropic-shim"
 	authzrbac "github.com/vllm-project/semantic-router/e2e/profiles/authz-rbac"
 	dashboard "github.com/vllm-project/semantic-router/e2e/profiles/dashboard"
 	dynamicconfig "github.com/vllm-project/semantic-router/e2e/profiles/dynamic-config"
@@ -37,6 +38,7 @@ func init() {
 	register("agentgateway", func() framework.Profile { return agentgateway.NewProfile() }, framework.ProfileCapabilities{})
 	register("kubernetes", func() framework.Profile { return aigateway.NewProfile() }, framework.ProfileCapabilities{})
 	register("aibrix", func() framework.Profile { return aibrix.NewProfile() }, framework.ProfileCapabilities{})
+	register("anthropic-shim", func() framework.Profile { return anthropicshim.NewProfile() }, framework.ProfileCapabilities{})
 	register("authz-rbac", func() framework.Profile { return authzrbac.NewProfile() }, framework.ProfileCapabilities{})
 	register("dashboard", func() framework.Profile { return dashboard.NewProfile() }, framework.ProfileCapabilities{})
 	register("dynamic-config", func() framework.Profile { return dynamicconfig.NewProfile() }, framework.ProfileCapabilities{})

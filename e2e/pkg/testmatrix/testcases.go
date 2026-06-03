@@ -10,6 +10,7 @@ var BaselineRouterContract = []string{
 	"chat-completions-request",
 	"anthropic-messages-request",
 	"anthropic-messages-protocol-headers",
+	"anthropic-messages-response-shape",
 	"apiserver-runtime-config-endpoints",
 	"apiserver-classification-endpoints",
 	"chat-completions-stress-request",
@@ -45,6 +46,16 @@ var DashboardContract = []string{
 	"dashboard-eval-datasets",
 	// Security Policy RBAC + ratelimit apply
 	"security-policy-apply",
+}
+
+// AnthropicShimContract is the test suite that exercises the Anthropic-
+// shaped backend (llama.cpp + anthropic-shim). These tests require the
+// anthropic-shim profile and will not run correctly against the baseline
+// OpenAI-shaped backends because they assert on Anthropic-specific
+// behaviour such as cache-token synthesis and stop-reason mapping.
+var AnthropicShimContract = []string{
+	"anthropic-messages-cache-cycle",
+	"anthropic-messages-stop-sequence",
 }
 
 // Combine preserves order while removing duplicate testcase names.
