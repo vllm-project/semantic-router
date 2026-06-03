@@ -1,9 +1,13 @@
 package extproc
 
 import (
+	"strings"
 	"testing"
 
+	typev3 "github.com/envoyproxy/go-control-plane/envoy/type/v3"
+
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/headers"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/sessionbudget"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/sessiontelemetry"
 )
@@ -106,5 +110,58 @@ func TestEvaluateSessionBudgetTerminate(t *testing.T) {
 	}
 	if ctx.SessionBudget.Ratio != 3.5 {
 		t.Fatalf("ratio = %v, want 3.5", ctx.SessionBudget.Ratio)
+	}
+}
+
+func TestMaybeTerminateForBudgetNilDecision(t *testing.T) {
+	r := budgetRouter(true, 1000)
+	if resp := r.maybeTerminateForBudget(&RequestContext{}); resp != nil {
+		t.Fatalf("nil SessionBudget must not terminate, got %v", resp)
+	}
+}
+
+func TestMaybeTerminateForBudgetBelowTerminateStage(t *testing.T) {
+	r := budgetRouter(true, 1000)
+	ctx := &RequestContext{SessionBudget: &SessionBudgetDecision{Stage: sessionbudget.StageDowngrade, Ratio: 2.1}}
+	if resp := r.maybeTerminateForBudget(ctx); resp != nil {
+		t.Fatalf("downgrade stage must not terminate, got %v", resp)
+	}
+}
+
+func TestMaybeTerminateForBudgetTerminates(t *testing.T) {
+	r := budgetRouter(true, 1000)
+	ctx := &RequestContext{
+		RequestID: "req-term",
+		SessionBudget: &SessionBudgetDecision{
+			Stage:      sessionbudget.StageTerminate,
+			Ratio:      3.5,
+			Cumulative: 3500,
+			Budget:     1000,
+		},
+	}
+
+	resp := r.maybeTerminateForBudget(ctx)
+	if resp == nil {
+		t.Fatal("terminate stage must return an immediate response")
+	}
+	imm := resp.GetImmediateResponse()
+	if imm == nil {
+		t.Fatal("expected an ImmediateResponse")
+	}
+	if imm.GetStatus().GetCode() != typev3.StatusCode_TooManyRequests {
+		t.Fatalf("status = %v, want TooManyRequests (429)", imm.GetStatus().GetCode())
+	}
+	if !strings.Contains(string(imm.GetBody()), "budget_exceeded") {
+		t.Fatalf("body should name budget_exceeded, got %s", imm.GetBody())
+	}
+
+	var exceeded string
+	for _, h := range imm.GetHeaders().GetSetHeaders() {
+		if h.GetHeader().GetKey() == headers.VSRBudgetExceeded {
+			exceeded = string(h.GetHeader().GetRawValue())
+		}
+	}
+	if exceeded != "true" {
+		t.Fatalf("expected %s=true header, got %q", headers.VSRBudgetExceeded, exceeded)
 	}
 }

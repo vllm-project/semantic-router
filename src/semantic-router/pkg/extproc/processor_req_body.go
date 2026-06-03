@@ -90,6 +90,9 @@ func (r *OpenAIRouter) handleRequestBody(v *ext_proc.ProcessingRequest_RequestBo
 	// fields are populated so the cumulative-vs-budget stage is available to the
 	// routing path and the response-header writer. No-op unless enabled.
 	r.evaluateSessionBudget(ctx)
+	if terminateResp := r.maybeTerminateForBudget(ctx); terminateResp != nil {
+		return terminateResp, nil
+	}
 
 	return r.handleModelRouting(
 		openAIRequest,
