@@ -277,6 +277,39 @@ func TestNoCacheBypassWhenMemoryExplicitlyDisabledPerDecision(t *testing.T) {
 	assert.True(t, hit, "should report a cache hit")
 }
 
+func TestCacheBypassWhenDecisionProvidedByCategoryName(t *testing.T) {
+	spy := &spyCache{shouldHit: true, hitResponse: []byte(`{"choices":[]}`)}
+
+	decision := config.Decision{
+		Name:      "rag-by-name",
+		ModelRefs: []config.ModelRef{{Model: "m"}},
+		Plugins: []config.DecisionPlugin{
+			{Type: "rag", Configuration: config.MustStructuredPayload(map[string]interface{}{
+				"enabled": true,
+				"backend": "external_api",
+			})},
+		},
+	}
+
+	cfg := &config.RouterConfig{}
+	cfg.Enabled = true
+	cfg.Decisions = []config.Decision{decision}
+
+	router := &OpenAIRouter{Config: cfg, Cache: spy}
+	ctx := &RequestContext{
+		Headers:             make(map[string]string),
+		RequestID:           "category-name-bypass-1",
+		StartTime:           time.Now(),
+		OriginalRequestBody: makeOpenAIRequestBody("m", "What are my recent orders?"),
+	}
+
+	resp, hit := router.handleCaching(ctx, "rag-by-name")
+
+	assert.False(t, spy.findCalled, "cache read must be skipped when decision is resolved by category name")
+	assert.Nil(t, resp)
+	assert.False(t, hit)
+}
+
 // --- decisionWillPersonalize predicate tests ---
 
 func TestDecisionWillPersonalize_RAGEnabled(t *testing.T) {

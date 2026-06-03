@@ -78,6 +78,29 @@ func TestDecisionWillPersonalize(t *testing.T) {
 			cfg:  &config.RouterConfig{},
 			want: false,
 		},
+		{
+			name: "decision name lookup without decision object",
+			ctx: &RequestContext{
+				VSRSelectedDecisionName: "rag-only",
+			},
+			cfg: func() *config.RouterConfig {
+				cfg := &config.RouterConfig{}
+				cfg.Decisions = []config.Decision{
+					{
+						Name:      "rag-only",
+						ModelRefs: []config.ModelRef{{Model: "m"}},
+						Plugins: []config.DecisionPlugin{
+							{Type: "rag", Configuration: config.MustStructuredPayload(map[string]interface{}{
+								"enabled": true,
+								"backend": "milvus",
+							})},
+						},
+					},
+				}
+				return cfg
+			}(),
+			want: true,
+		},
 	}
 
 	for _, tt := range tests {
@@ -85,6 +108,25 @@ func TestDecisionWillPersonalize(t *testing.T) {
 			assert.Equal(t, tt.want, decisionWillPersonalize(tt.ctx, tt.cfg))
 		})
 	}
+}
+
+func TestDecisionWillPersonalizeForDecision_UsesCategoryFallback(t *testing.T) {
+	ctx := &RequestContext{}
+	cfg := &config.RouterConfig{}
+	cfg.Decisions = []config.Decision{
+		{
+			Name:      "rag-from-category",
+			ModelRefs: []config.ModelRef{{Model: "m"}},
+			Plugins: []config.DecisionPlugin{
+				{Type: "rag", Configuration: config.MustStructuredPayload(map[string]interface{}{
+					"enabled": true,
+					"backend": "milvus",
+				})},
+			},
+		},
+	}
+
+	assert.True(t, decisionWillPersonalizeForDecision(ctx, cfg, "rag-from-category"))
 }
 
 func TestUpdateResponseCacheSkipsPersonalizedContext(t *testing.T) {

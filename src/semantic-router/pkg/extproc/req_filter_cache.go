@@ -22,21 +22,38 @@ import (
 //
 // This avoids orphaned pending cache entries and unnecessary embedding work.
 func decisionWillPersonalize(ctx *RequestContext, cfg *config.RouterConfig) bool {
-	d := ctx.VSRSelectedDecision
-	if d == nil {
+	return decisionWillPersonalizeForDecision(ctx, cfg, "")
+}
+
+func decisionWillPersonalizeForDecision(ctx *RequestContext, cfg *config.RouterConfig, decisionName string) bool {
+	if ctx == nil {
 		return false
 	}
-	if ragCfg := d.GetRAGConfig(); ragCfg != nil && ragCfg.Enabled {
+
+	if d := ctx.VSRSelectedDecision; d != nil {
+		if ragCfg := d.GetRAGConfig(); ragCfg != nil && ragCfg.Enabled {
+			return true
+		}
+		// Per-decision memory plugin takes priority over global setting.
+		if memCfg := d.GetMemoryConfig(); memCfg != nil {
+			return memCfg.Enabled
+		}
+	}
+
+	if cfg == nil {
+		return false
+	}
+
+	if decisionName == "" {
+		decisionName = ctx.VSRSelectedDecisionName
+	}
+	if decisionName == "" && ctx.VSRSelectedDecision != nil {
+		decisionName = ctx.VSRSelectedDecision.Name
+	}
+	if decisionName != "" && cfg.HasPersonalizationPlugins(decisionName) {
 		return true
 	}
-	// Per-decision memory plugin takes priority over global setting.
-	if memCfg := d.GetMemoryConfig(); memCfg != nil {
-		return memCfg.Enabled
-	}
-	if cfg != nil && cfg.Memory.Enabled {
-		return true
-	}
-	return false
+	return cfg.Memory.Enabled
 }
 
 // handleCaching handles cache lookup and storage with category-specific settings
@@ -44,7 +61,7 @@ func (r *OpenAIRouter) handleCaching(ctx *RequestContext, categoryName string) (
 	// Skip entire cache path for decisions that will inject user-specific context.
 	// Both reads (would serve stale generic answers) and writes (would leak
 	// personalized data) are wrong when RAG or memory is enabled.
-	if decisionWillPersonalize(ctx, r.Config) {
+	if decisionWillPersonalizeForDecision(ctx, r.Config, categoryName) {
 		logging.Debugf("[Cache] Skipping cache for decision '%s': RAG or memory enabled", categoryName)
 		return nil, false
 	}
