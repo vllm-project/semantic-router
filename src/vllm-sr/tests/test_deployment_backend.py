@@ -67,6 +67,7 @@ class TestDockerBackend:
             router_image="test:router",
             envoy_image="test:envoy",
             dashboard_image="test:dashboard",
+            sim_image="test:sim",
             topology="split",
             pull_policy="always",
             enable_observability=False,
@@ -78,6 +79,7 @@ class TestDockerBackend:
         assert captured["router_image"] == "test:router"
         assert captured["envoy_image"] == "test:envoy"
         assert captured["dashboard_image"] == "test:dashboard"
+        assert captured["sim_image"] == "test:sim"
         assert captured["topology"] == "split"
         assert captured["pull_policy"] == "always"
         assert captured["enable_observability"] is False

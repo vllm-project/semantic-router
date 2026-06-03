@@ -110,6 +110,7 @@ func (r *OpenAIRouter) applySignalResultsToContext(ctx *RequestContext, signals 
 	ctx.VSRMatchedPII = signals.MatchedPIIRules
 	ctx.VSRMatchedKB = signals.MatchedKBRules
 	ctx.VSRMatchedConversation = signals.MatchedConversationRules
+	ctx.VSRMatchedEvent = signals.MatchedEventRules
 	ctx.VSRMatchedProjection = signals.MatchedProjectionRules
 	ctx.VSRProjectionScores = cloneReplayFloat64Map(signals.ProjectionScores)
 	ctx.VSRSignalConfidences = cloneReplayFloat64Map(signals.SignalConfidences)
@@ -177,6 +178,7 @@ func collectMatchedSignalRules(signals *classification.SignalResults) []string {
 	allMatchedRules = append(allMatchedRules, signals.MatchedPIIRules...)
 	allMatchedRules = append(allMatchedRules, signals.MatchedKBRules...)
 	allMatchedRules = append(allMatchedRules, signals.MatchedConversationRules...)
+	allMatchedRules = append(allMatchedRules, signals.MatchedEventRules...)
 	allMatchedRules = append(allMatchedRules, signals.MatchedProjectionRules...)
 	return allMatchedRules
 }

@@ -93,7 +93,7 @@ func NewMilvusStore(cfg *MilvusConfig, ttlSeconds int, asyncWrites bool) (*Milvu
 //
 //nolint:gocognit
 func (m *MilvusStore) createCollection(ctx context.Context, cfg *MilvusConfig) error {
-	return milvuslifecycle.EnsureCollectionLoadedWithHooks(
+	return milvuslifecycle.EnsureCollectionLoadedWithHooksRetry(
 		ctx,
 		m.client,
 		m.collectionName,
@@ -189,6 +189,7 @@ func (m *MilvusStore) createCollection(ctx context.Context, cfg *MilvusConfig) e
 			}
 			return nil
 		},
+		milvuslifecycle.CollectionRetryOptions{},
 	)
 }
 

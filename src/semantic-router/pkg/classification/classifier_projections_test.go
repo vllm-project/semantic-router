@@ -193,6 +193,53 @@ func TestProjectionInputValueRawReadsSignalValues(t *testing.T) {
 	}
 }
 
+func TestApplyProjectionsConsumesEventSignalInputs(t *testing.T) {
+	classifier := &Classifier{
+		Config: &config.RouterConfig{
+			IntelligentRouting: config.IntelligentRouting{
+				Projections: config.Projections{
+					Scores: []config.ProjectionScore{{
+						Name:   "event_risk_score",
+						Method: "weighted_sum",
+						Inputs: []config.ProjectionScoreInput{{
+							Type:        config.SignalTypeEvent,
+							Name:        "critical_payment_event",
+							Weight:      1.0,
+							ValueSource: "confidence",
+						}},
+					}},
+					Mappings: []config.ProjectionMapping{{
+						Name:   "event_risk_band",
+						Source: "event_risk_score",
+						Method: "threshold_bands",
+						Outputs: []config.ProjectionMappingOutput{
+							{Name: "event_risk_high", GTE: float64Ptr(0.8)},
+						},
+					}},
+				},
+			},
+		},
+	}
+
+	results := &SignalResults{
+		MatchedEventRules: []string{"critical_payment_event"},
+		SignalConfidences: map[string]float64{
+			"event:critical_payment_event": 0.9,
+		},
+	}
+
+	got := classifier.applyProjections(results)
+	if got == nil {
+		t.Fatal("applyProjections returned nil")
+	}
+	if score := got.ProjectionScores["event_risk_score"]; score < 0.89 || score > 0.91 {
+		t.Fatalf("event_risk_score = %.3f, want about 0.9", score)
+	}
+	if len(got.MatchedProjectionRules) != 1 || got.MatchedProjectionRules[0] != "event_risk_high" {
+		t.Fatalf("matched projection rules = %v, want [event_risk_high]", got.MatchedProjectionRules)
+	}
+}
+
 func TestApplyProjectionsScoreConsumesEarlierScore(t *testing.T) {
 	classifier := &Classifier{
 		Config: &config.RouterConfig{

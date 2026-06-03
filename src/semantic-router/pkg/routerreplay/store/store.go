@@ -29,6 +29,7 @@ type Signal struct {
 	PII          []string `json:"pii,omitempty"`
 	KB           []string `json:"kb,omitempty"`
 	Conversation []string `json:"conversation,omitempty"`
+	Event        []string `json:"event,omitempty"`
 }
 
 // UsageCost captures token usage and pricing-derived cost details for a record.
