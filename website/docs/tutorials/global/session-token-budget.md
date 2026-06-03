@@ -19,6 +19,18 @@ The router is the natural enforcement point: it sees the actual token flow acros
 all turns of a session, while an agent SDK sees only its own session and a billing
 layer operates on aggregated cost with delay.
 
+## Key Advantages
+
+- Enforces a cumulative **per-active-session** budget the router already tracks —
+  no extra bookkeeping and no client changes.
+- **Graduated** rather than binary: softer responses precede hard termination, so
+  legitimate work is less likely to be killed outright.
+- **Opt-in and tri-state**: a complete no-op until explicitly enabled with a
+  positive budget.
+- Fully **auditable** via `x-vsr-budget-*` response headers and
+  `vsr_session_budget_*` metrics.
+- Lives at the **global** layer, independent of which decision matched.
+
 ## What Problem Does It Solve?
 
 Existing controls are insufficient for this concern:
@@ -73,6 +85,15 @@ global:
 The static budget is the MVP. A per-`(domain, turn)` percentile budget model and a
 system-prompt-fingerprint prior are planned follow-ups; until then, prefer a
 conservative ceiling.
+
+## When to Use
+
+- Enable for **agentic / multi-turn deployments** where a single user request fans
+  out into many LLM calls and context grows each turn.
+- Enable when you need a **router-side cost guardrail** that existing per-user/model
+  rate limits cannot express (those deny binarily and are not per-session).
+- Leave **disabled** for simple single-turn chat traffic, or until you have observed
+  `vsr_session_budget_ratio` long enough to pick a safe `budget_tokens`.
 
 ## Runtime Scope
 
