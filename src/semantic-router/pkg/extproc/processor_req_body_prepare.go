@@ -182,6 +182,7 @@ func (r *OpenAIRouter) applyRateLimitAndCacheChecks(
 func (r *OpenAIRouter) prepareRequestForModelRouting(
 	requestBody []byte,
 	userContent string,
+	selectedModel string,
 	ctx *RequestContext,
 ) (*openai.ChatCompletionNewParams, *ext_proc.ProcessingResponse, error) {
 	r.maybeForceImageGenerationModality(userContent, ctx)
@@ -202,6 +203,19 @@ func (r *OpenAIRouter) prepareRequestForModelRouting(
 		// We store the raw request body to allow dev builds to extract it later.
 		ctx.ChatCompletionRequestBody = requestBody
 		populateSessionTransitionFields(ctx)
+	}
+
+	// Session token-budget evaluation (Opp-5): session-transition fields are now
+	// populated for both Chat Completions and Response API, so the cumulative
+	// tokens can be compared against the configured budget. Terminate over-budget
+	// sessions before any further routing work, releasing the in-flight admission
+	// taken in runRequestPreRoutingStages (the backend is never reached). No-op
+	// unless enforcement is enabled.
+	r.evaluateSessionBudget(ctx)
+	if terminateResp := r.maybeTerminateForBudget(ctx); terminateResp != nil {
+		inflight.End(selectedModel, ctx.InflightToken)
+		ctx.InflightToken = 0
+		return nil, terminateResp, nil
 	}
 
 	if resp, err := r.handleModalityFromDecision(ctx, openAIRequest); err != nil {

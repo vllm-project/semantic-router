@@ -8,7 +8,6 @@ import (
 	"github.com/openai/openai-go"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
-	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/inflight"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/metrics"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/utils/entropy"
@@ -76,7 +75,10 @@ func (r *OpenAIRouter) handleRequestBody(v *ext_proc.ProcessingRequest_RequestBo
 		return earlyResponse, nil
 	}
 
-	openAIRequest, earlyResponse, err := r.prepareRequestForModelRouting(requestBody, fast.UserContent, ctx)
+	// Session token-budget evaluation + terminate happen inside
+	// prepareRequestForModelRouting (once session-transition fields are
+	// populated); an over-budget-terminate session surfaces here as earlyResponse.
+	openAIRequest, earlyResponse, err := r.prepareRequestForModelRouting(requestBody, fast.UserContent, decisionState.selectedModel, ctx)
 	if earlyResponse != nil {
 		return earlyResponse, nil
 	}
@@ -85,19 +87,6 @@ func (r *OpenAIRouter) handleRequestBody(v *ext_proc.ProcessingRequest_RequestBo
 	}
 	if err != nil {
 		return nil, err
-	}
-
-	// Session token-budget evaluation (Opp-5): runs after session-transition
-	// fields are populated so the cumulative-vs-budget stage is available to the
-	// routing path and the response-header writer. No-op unless enabled.
-	r.evaluateSessionBudget(ctx)
-	if terminateResp := r.maybeTerminateForBudget(ctx); terminateResp != nil {
-		// Release the in-flight admission taken in runRequestPreRoutingStages;
-		// the backend is never reached on this short-circuit. Mirrors the other
-		// early-return sites that release before returning an immediate response.
-		inflight.End(decisionState.selectedModel, ctx.InflightToken)
-		ctx.InflightToken = 0
-		return terminateResp, nil
 	}
 
 	return r.handleModelRouting(
