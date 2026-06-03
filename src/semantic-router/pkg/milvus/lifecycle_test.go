@@ -79,6 +79,25 @@ func TestRetry_AllAttemptsFail(t *testing.T) {
 	}
 }
 
+func TestRetryIf_StopsOnNonRetryableError(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+	calls := 0
+
+	err := RetryIf(ctx, 3, time.Millisecond, "op", func(context.Context) error {
+		calls++
+		return errors.New("permanent")
+	}, func(error) bool {
+		return false
+	})
+	if err == nil {
+		t.Fatal("expected error")
+	}
+	if calls != 1 {
+		t.Fatalf("expected one call for non-retryable error, got %d", calls)
+	}
+}
+
 func TestRetry_ContextCancellation(t *testing.T) {
 	t.Parallel()
 	ctx, cancel := context.WithCancel(context.Background())
@@ -89,6 +108,20 @@ func TestRetry_ContextCancellation(t *testing.T) {
 	})
 	if err == nil {
 		t.Fatal("expected error")
+	}
+}
+
+func TestIsTransientLifecycleError(t *testing.T) {
+	t.Parallel()
+
+	transient := errors.New("InvalidateCollectionMetaCache failed: expectedNodeID=1, actualNodeID=2: node not match")
+	if !IsTransientLifecycleError(transient) {
+		t.Fatal("expected node mismatch to be retryable")
+	}
+
+	permanent := errors.New("collection semantic_cache does not exist and auto-creation is disabled")
+	if IsTransientLifecycleError(permanent) {
+		t.Fatal("expected disabled auto-create error to be non-retryable")
 	}
 }
 
@@ -114,6 +147,72 @@ func TestEnsureCollectionLoaded_CreatesAndLoads(t *testing.T) {
 	}
 	if f.loadCalls != 1 {
 		t.Fatalf("expected LoadCollection once, got %d", f.loadCalls)
+	}
+}
+
+func TestEnsureCollectionLoadedWithRetry_RetriesTransientCreateFailure(t *testing.T) {
+	t.Parallel()
+
+	f := &fakeLifecycleClient{}
+	createCalls := 0
+
+	err := EnsureCollectionLoadedWithRetry(
+		context.Background(),
+		f,
+		"demo",
+		func(context.Context) error {
+			createCalls++
+			if createCalls == 1 {
+				return errors.New("InvalidateCollectionMetaCache failed: expectedNodeID=1, actualNodeID=2: node not match")
+			}
+			return nil
+		},
+		CollectionRetryOptions{
+			Attempts:  3,
+			BaseDelay: time.Millisecond,
+		},
+	)
+	if err != nil {
+		t.Fatalf("expected retry success, got %v", err)
+	}
+	if createCalls != 2 {
+		t.Fatalf("expected create twice, got %d", createCalls)
+	}
+	if f.hasCalls != 2 {
+		t.Fatalf("expected HasCollection twice, got %d", f.hasCalls)
+	}
+	if f.loadCalls != 1 {
+		t.Fatalf("expected LoadCollection once, got %d", f.loadCalls)
+	}
+}
+
+func TestEnsureCollectionLoadedWithRetry_DoesNotRetryPermanentCreateFailure(t *testing.T) {
+	t.Parallel()
+
+	f := &fakeLifecycleClient{}
+	createCalls := 0
+
+	err := EnsureCollectionLoadedWithRetry(
+		context.Background(),
+		f,
+		"demo",
+		func(context.Context) error {
+			createCalls++
+			return errors.New("collection demo does not exist and auto-creation is disabled")
+		},
+		CollectionRetryOptions{
+			Attempts:  3,
+			BaseDelay: time.Millisecond,
+		},
+	)
+	if err == nil {
+		t.Fatal("expected error")
+	}
+	if createCalls != 1 {
+		t.Fatalf("expected one create attempt, got %d", createCalls)
+	}
+	if f.loadCalls != 0 {
+		t.Fatalf("expected no LoadCollection calls, got %d", f.loadCalls)
 	}
 }
 

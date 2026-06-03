@@ -116,6 +116,7 @@ def start_fleet_sim_sidecar(
     config_dir: str,
     env_vars: dict[str, str],
     stack_layout: RuntimeStackLayout,
+    sim_image: str | None = None,
     pull_policy: str | None = None,
 ) -> bool:
     """Start the local simulator sidecar unless an external URL is configured."""
@@ -138,6 +139,7 @@ def start_fleet_sim_sidecar(
     _start_named_service(
         "vllm-sr-sim",
         lambda: docker_start_fleet_sim(
+            image=sim_image,
             network_name=stack_layout.network_name,
             config_dir=config_dir,
             stack_layout=stack_layout,

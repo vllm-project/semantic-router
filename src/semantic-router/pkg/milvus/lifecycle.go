@@ -7,6 +7,7 @@ package milvus
 import (
 	"context"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/milvus-io/milvus-sdk-go/v2/client"
@@ -17,6 +18,23 @@ import (
 type LifecycleClient interface {
 	HasCollection(ctx context.Context, collectionName string) (bool, error)
 	LoadCollection(ctx context.Context, collectionName string, async bool, opts ...client.LoadCollectionOption) error
+}
+
+// CollectionRetryOptions controls retry behavior for collection lifecycle
+// operations during backend startup.
+type CollectionRetryOptions struct {
+	Attempts  int
+	BaseDelay time.Duration
+}
+
+func normalizedCollectionRetryOptions(opts CollectionRetryOptions) CollectionRetryOptions {
+	if opts.Attempts <= 0 {
+		opts.Attempts = 3
+	}
+	if opts.BaseDelay <= 0 {
+		opts.BaseDelay = 2 * time.Second
+	}
+	return opts
 }
 
 // ConnectGRPC creates a Milvus gRPC client with an optional timeout.
@@ -106,6 +124,67 @@ func EnsureCollectionLoadedWithHooks(
 	return nil
 }
 
+// EnsureCollectionLoadedWithRetry retries collection lifecycle operations when
+// Milvus is running but still converging internal node or metadata state.
+func EnsureCollectionLoadedWithRetry(
+	ctx context.Context,
+	milvusClient LifecycleClient,
+	collectionName string,
+	createIfMissing func(context.Context) error,
+	opts CollectionRetryOptions,
+) error {
+	return EnsureCollectionLoadedWithHooksRetry(ctx, milvusClient, collectionName, createIfMissing, nil, opts)
+}
+
+// EnsureCollectionLoadedWithHooksRetry extends EnsureCollectionLoadedWithHooks
+// with bounded retries for transient Milvus startup/lifecycle failures.
+func EnsureCollectionLoadedWithHooksRetry(
+	ctx context.Context,
+	milvusClient LifecycleClient,
+	collectionName string,
+	createIfMissing func(context.Context) error,
+	onExists func(context.Context) error,
+	opts CollectionRetryOptions,
+) error {
+	retryOpts := normalizedCollectionRetryOptions(opts)
+	return RetryIf(
+		ctx,
+		retryOpts.Attempts,
+		retryOpts.BaseDelay,
+		fmt.Sprintf("ensure/load collection %s", collectionName),
+		func(innerCtx context.Context) error {
+			return EnsureCollectionLoadedWithHooks(innerCtx, milvusClient, collectionName, createIfMissing, onExists)
+		},
+		IsTransientLifecycleError,
+	)
+}
+
+// IsTransientLifecycleError identifies Milvus lifecycle errors that can appear
+// while standalone Milvus has opened its gRPC port but is still reconciling
+// proxy/data node metadata after a restart.
+func IsTransientLifecycleError(err error) bool {
+	if err == nil {
+		return false
+	}
+	msg := strings.ToLower(err.Error())
+	transientMarkers := []string{
+		"context deadline exceeded",
+		"connection refused",
+		"grpc: the client connection is closing",
+		"invalidatecollectionmetacache failed",
+		"node not match",
+		"server is not ready",
+		"transport is closing",
+		"unavailable",
+	}
+	for _, marker := range transientMarkers {
+		if strings.Contains(msg, marker) {
+			return true
+		}
+	}
+	return false
+}
+
 // Retry retries lifecycle operations with bounded exponential backoff.
 func Retry(
 	ctx context.Context,
@@ -113,6 +192,19 @@ func Retry(
 	baseDelay time.Duration,
 	opName string,
 	op func(context.Context) error,
+) error {
+	return RetryIf(ctx, attempts, baseDelay, opName, op, func(error) bool { return true })
+}
+
+// RetryIf retries lifecycle operations with bounded exponential backoff while
+// the supplied predicate marks failures as retryable.
+func RetryIf(
+	ctx context.Context,
+	attempts int,
+	baseDelay time.Duration,
+	opName string,
+	op func(context.Context) error,
+	shouldRetry func(error) bool,
 ) error {
 	if opName == "" {
 		opName = "operation"
@@ -134,6 +226,9 @@ func Retry(
 			return nil
 		} else {
 			lastErr = err
+			if shouldRetry != nil && !shouldRetry(err) {
+				return fmt.Errorf("%s failed with non-retryable error: %w", opName, err)
+			}
 		}
 
 		if i == attempts-1 {

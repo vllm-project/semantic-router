@@ -114,7 +114,7 @@ func (m *MilvusBackend) CreateCollection(ctx context.Context, vectorStoreID stri
 		return fmt.Errorf("collection %q already exists", colName)
 	}
 
-	return milvuslifecycle.EnsureCollectionLoaded(ctx, m.client, colName, func(innerCtx context.Context) error {
+	return milvuslifecycle.EnsureCollectionLoadedWithRetry(ctx, m.client, colName, func(innerCtx context.Context) error {
 		schema := &entity.Schema{
 			CollectionName: colName,
 			Description:    fmt.Sprintf("Vector store: %s", vectorStoreID),
@@ -171,7 +171,7 @@ func (m *MilvusBackend) CreateCollection(ctx context.Context, vectorStoreID stri
 			return fmt.Errorf("failed to create index on %s: %w", colName, err)
 		}
 		return nil
-	})
+	}, milvuslifecycle.CollectionRetryOptions{})
 }
 
 // DeleteCollection drops a Milvus collection.

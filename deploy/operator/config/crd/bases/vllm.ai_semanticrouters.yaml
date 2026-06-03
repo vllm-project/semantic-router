@@ -1185,6 +1185,13 @@ spec:
                     items:
                       description: DecisionConfig defines a routing decision
                       properties:
+                        algorithm:
+                          description: |-
+                            Algorithm configures model selection for this decision. It is preserved as
+                            a router-owned object so supported algorithms such as session_aware can
+                            evolve without requiring the operator CRD to duplicate every nested field.
+                          type: object
+                          x-kubernetes-preserve-unknown-fields: true
                         description:
                           description: Description provides information about what
                             this decision handles
@@ -1250,15 +1257,28 @@ spec:
                                     description: Name is the name of the rule to reference
                                     type: string
                                   type:
-                                    description: 'Type specifies the rule type: "keyword",
-                                      "embedding", "domain", "complexity", or "fact_check"'
+                                    description: Type specifies the signal or projection
+                                      type referenced by this condition.
                                     enum:
                                     - keyword
                                     - embedding
                                     - domain
-                                    - complexity
                                     - fact_check
+                                    - user_feedback
+                                    - reask
+                                    - preference
+                                    - language
                                     - context
+                                    - structure
+                                    - complexity
+                                    - modality
+                                    - authz
+                                    - jailbreak
+                                    - pii
+                                    - kb
+                                    - conversation
+                                    - event
+                                    - projection
                                     type: string
                                 required:
                                 - name
@@ -1453,6 +1473,14 @@ spec:
                       type: object
                     description: Reasoning families
                     type: object
+                  routing:
+                    description: |-
+                      Routing contains canonical v0.3 routing configuration under config.routing.
+                      It is intentionally preserved as an object so the operator can pass through
+                      the router-owned signal, projection, decision, and algorithm contract without
+                      lagging behind every router schema addition.
+                    type: object
+                    x-kubernetes-preserve-unknown-fields: true
                   semantic_cache:
                     description: Semantic cache configuration
                     properties:

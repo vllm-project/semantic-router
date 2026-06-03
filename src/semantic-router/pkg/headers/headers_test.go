@@ -1,6 +1,9 @@
 package headers
 
 import (
+	"os"
+	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -26,7 +29,8 @@ func TestHeaderConstants(t *testing.T) {
 		{"VSRMatchedJailbreak", VSRMatchedJailbreak, "x-vsr-matched-jailbreak"},
 		{"VSRMatchedPII", VSRMatchedPII, "x-vsr-matched-pii"},
 		{"VSRMatchedReask", VSRMatchedReask, "x-vsr-matched-reask"},
-		{"VSRMatchedProjection", VSRMatchedProjection, "x-vsr-matched-projection"},
+		{"VSRMatchedEvent", VSRMatchedEvent, "x-vsr-matched-event"},
+		{"VSRMatchedProjection", VSRMatchedProjection, "x-vsr-matched-projections"},
 		// Legacy security headers (kept for backward compatibility)
 		{"VSRPIIViolation", VSRPIIViolation, "x-vsr-pii-violation"},
 		{"VSRJailbreakBlocked", VSRJailbreakBlocked, "x-vsr-jailbreak-blocked"},
@@ -83,5 +87,62 @@ func TestUnverifiedFactualResponseHeaders(t *testing.T) {
 	// These headers should be used together
 	if FactCheckNeeded != "x-vsr-fact-check-needed" {
 		t.Errorf("FactCheckNeeded header has wrong value: %s", FactCheckNeeded)
+	}
+}
+
+func TestVSRRoutingHeadersAreDocumented(t *testing.T) {
+	docPath := filepath.Join("..", "..", "..", "..", "website", "docs", "troubleshooting", "vsr-headers.md")
+	content, err := os.ReadFile(docPath)
+	if err != nil {
+		t.Fatalf("failed to read %s: %v", docPath, err)
+	}
+	doc := string(content)
+
+	headers := []string{
+		XSessionID,
+		VSRSkipProcessing,
+		VSRInboundProtocol,
+		VSROutboundProtocol,
+		VSRLossinessWarnings,
+		RouterReplayID,
+		VSRSelectedCategory,
+		VSRSelectedDecision,
+		VSRSelectedConfidence,
+		VSRSelectedReasoning,
+		VSRSelectedModality,
+		VSRSelectedModel,
+		VSRSessionPhase,
+		VSRInjectedSystemPrompt,
+		VSRMatchedKeywords,
+		VSRMatchedEmbeddings,
+		VSRMatchedDomains,
+		VSRMatchedFactCheck,
+		VSRMatchedUserFeedback,
+		VSRMatchedReask,
+		VSRMatchedPreference,
+		VSRMatchedLanguage,
+		VSRMatchedContext,
+		VSRContextTokenCount,
+		VSRMatchedStructure,
+		VSRMatchedComplexity,
+		VSRMatchedModality,
+		VSRMatchedAuthz,
+		VSRMatchedJailbreak,
+		VSRMatchedPII,
+		VSRMatchedKB,
+		VSRMatchedConversation,
+		VSRMatchedEvent,
+		VSRMatchedProjection,
+		VSRCacheHit,
+		VSRFastResponse,
+		VSRToolsStrategy,
+		VSRToolsConfidence,
+		VSRToolsLatencyMs,
+	}
+
+	for _, header := range headers {
+		if !strings.Contains(doc, header) {
+			t.Fatalf("%s should document public routing header %q", docPath, header)
+		}
 	}
 }

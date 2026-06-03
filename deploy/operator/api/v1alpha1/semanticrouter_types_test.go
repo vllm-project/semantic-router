@@ -18,8 +18,10 @@ package v1alpha1
 
 import (
 	"encoding/json"
+	"strings"
 	"testing"
 
+	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
@@ -474,6 +476,55 @@ func TestConfigSpecWithNewFields(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+func TestConfigSpecPreservesCanonicalRoutingAndAlgorithmObjects(t *testing.T) {
+	config := ConfigSpec{
+		Routing: &apiextensionsv1.JSON{Raw: []byte(`{
+			"signals": {
+				"events": [{"name": "critical_payment_event", "event_types": ["payment_failed"]}]
+			}
+		}`)},
+		Decisions: []DecisionConfig{
+			{
+				Name: "agentic-session-route",
+				Rules: RuleCombinationConfig{
+					Operator: "AND",
+					Conditions: []RuleConditionConfig{
+						{Type: "event", Name: "critical_payment_event"},
+					},
+				},
+				Algorithm: &apiextensionsv1.JSON{Raw: []byte(`{
+					"type": "session_aware",
+					"session_aware": {"base_method": "hybrid"}
+				}`)},
+			},
+		},
+	}
+
+	data, err := json.Marshal(config)
+	if err != nil {
+		t.Fatalf("json.Marshal() error = %v", err)
+	}
+	serialized := string(data)
+	if !strings.Contains(serialized, `"routing"`) ||
+		!strings.Contains(serialized, `"events"`) ||
+		!strings.Contains(serialized, `"session_aware"`) {
+		t.Fatalf("expected canonical routing and algorithm objects to serialize as public fields, got %s", serialized)
+	}
+
+	var decoded ConfigSpec
+	if err := json.Unmarshal(data, &decoded); err != nil {
+		t.Fatalf("json.Unmarshal() error = %v", err)
+	}
+	if decoded.Routing == nil || !strings.Contains(string(decoded.Routing.Raw), "critical_payment_event") {
+		t.Fatalf("expected routing raw object to round-trip, got %#v", decoded.Routing)
+	}
+	if len(decoded.Decisions) != 1 ||
+		decoded.Decisions[0].Algorithm == nil ||
+		!strings.Contains(string(decoded.Decisions[0].Algorithm.Raw), "session_aware") {
+		t.Fatalf("expected decision algorithm raw object to round-trip, got %#v", decoded.Decisions)
 	}
 }
 

@@ -334,11 +334,60 @@ routing:
 	}
 }
 
-func TestIsProjectionInputTypeSupported_ConversationAndProjection(t *testing.T) {
-	for _, typ := range []string{SignalTypeConversation, SignalTypeProjection} {
+func TestIsProjectionInputTypeSupported_ConversationEventAndProjection(t *testing.T) {
+	for _, typ := range []string{SignalTypeConversation, SignalTypeEvent, SignalTypeProjection} {
 		if !isProjectionInputTypeSupported(typ) {
 			t.Fatalf("expected supported input type %q", typ)
 		}
+	}
+}
+
+func TestParseRoutingYAMLBytesAcceptsEventProjectionScoreInput(t *testing.T) {
+	yaml := []byte(`
+routing:
+  signals:
+    events:
+      - name: critical_payment_event
+        event_types: ["payment_failed"]
+        severities: ["critical"]
+        temporal: true
+  projections:
+    scores:
+      - name: event_risk_score
+        method: weighted_sum
+        inputs:
+          - type: event
+            name: critical_payment_event
+            weight: 1.0
+            value_source: confidence
+    mappings:
+      - name: event_risk_band
+        source: event_risk_score
+        method: threshold_bands
+        outputs:
+          - name: event_risk_high
+            gte: 0.5
+  decisions:
+    - name: event_risk_route
+      rules:
+        operator: AND
+        conditions:
+          - type: event
+            name: critical_payment_event
+          - type: projection
+            name: event_risk_high
+      modelRefs:
+        - model: qwen3-8b
+`)
+	cfg, err := ParseRoutingYAMLBytes(yaml)
+	if err != nil {
+		t.Fatalf("expected valid config with event projection input, got: %v", err)
+	}
+	if len(cfg.EventRules) != 1 || cfg.EventRules[0].Name != "critical_payment_event" {
+		t.Fatalf("event rules = %#v, want critical_payment_event", cfg.EventRules)
+	}
+	if got := cfg.Projections.Scores[0].Inputs[0].Type; got != SignalTypeEvent {
+		t.Fatalf("projection input type = %q, want %q", got, SignalTypeEvent)
 	}
 }
 

@@ -143,6 +143,7 @@ type RequestContext struct {
 	VSRMatchedPII          []string // Matched PII rule names (denied PII types detected)
 	VSRMatchedKB           []string // Matched knowledge-base signal names
 	VSRMatchedConversation []string // Matched conversation-shape signal names
+	VSRMatchedEvent        []string // Matched event signal names
 	VSRConversationFacts   classification.ConversationFacts
 	VSRMatchedProjection   []string // Matched projection mapping outputs
 	VSRProjectionScores    map[string]float64

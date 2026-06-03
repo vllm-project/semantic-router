@@ -222,6 +222,7 @@ func TestBuildIntentResponseFromSignals_IncludesExtendedMatchedSignals(t *testin
 		MatchedJailbreakRules:  []string{"jailbreak:block"},
 		MatchedPIIRules:        []string{"pii:email"},
 		MatchedReaskRules:      []string{"likely_dissatisfied"},
+		MatchedEventRules:      []string{"critical_payment_event"},
 		MatchedProjectionRules: []string{"balance_reasoning"},
 	}
 	decisionResult := &decision.DecisionResult{
@@ -243,6 +244,7 @@ func TestBuildIntentResponseFromSignals_IncludesExtendedMatchedSignals(t *testin
 	assert.Equal(t, []string{"jailbreak:block"}, response.MatchedSignals.Jailbreak)
 	assert.Equal(t, []string{"pii:email"}, response.MatchedSignals.PII)
 	assert.Equal(t, []string{"likely_dissatisfied"}, response.MatchedSignals.Reask)
+	assert.Equal(t, []string{"critical_payment_event"}, response.MatchedSignals.Event)
 	assert.Equal(t, []string{"balance_reasoning"}, response.MatchedSignals.Projection)
 }
 

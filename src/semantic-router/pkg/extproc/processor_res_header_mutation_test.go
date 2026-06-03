@@ -25,6 +25,7 @@ func TestBuildResponseHeaderMutation_IncludesExtendedMatchedSignalHeaders(t *tes
 		VSRMatchedJailbreak:  []string{"jailbreak:block"},
 		VSRMatchedPII:        []string{"pii:email"},
 		VSRMatchedReask:      []string{"likely_dissatisfied"},
+		VSRMatchedEvent:      []string{"critical_payment_event"},
 		VSRMatchedProjection: []string{"balance_reasoning"},
 	}
 
@@ -39,6 +40,7 @@ func TestBuildResponseHeaderMutation_IncludesExtendedMatchedSignalHeaders(t *tes
 	assert.Equal(t, "jailbreak:block", headerMap[headers.VSRMatchedJailbreak])
 	assert.Equal(t, "pii:email", headerMap[headers.VSRMatchedPII])
 	assert.Equal(t, "likely_dissatisfied", headerMap[headers.VSRMatchedReask])
+	assert.Equal(t, "critical_payment_event", headerMap[headers.VSRMatchedEvent])
 	assert.Equal(t, "balance_reasoning", headerMap[headers.VSRMatchedProjection])
 }
 
