@@ -178,12 +178,6 @@ vllm-sr serve --image ghcr.io/vllm-project/semantic-router/vllm-sr:latest
 vllm-sr serve --image-pull-policy always
 ```
 
-## Docker Compose
-
-For local development and testing:
-
-- **[Docker Compose](docker-compose)** - Quick local deployment
-
 ## Next Steps
 
 - **[Install with Operator](k8s/operator)** - Deploy on Kubernetes or OpenShift with the operator
