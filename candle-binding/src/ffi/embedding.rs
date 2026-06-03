@@ -2816,3 +2816,102 @@ pub extern "C" fn shutdown_embedding_batched() {
     // This is handled by the Drop implementation of Qwen3EmbeddingModelBatched
     println!("INFO: Shutting down batched embedding model");
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use image::{ImageBuffer, ImageFormat, Rgb};
+    use std::io::Cursor;
+
+    /// Encode a solid-color RGB image as PNG bytes for use as a test fixture.
+    fn make_test_png(width: u32, height: u32, r: u8, g: u8, b: u8) -> Vec<u8> {
+        let img: ImageBuffer<Rgb<u8>, Vec<u8>> =
+            ImageBuffer::from_fn(width, height, |_, _| Rgb([r, g, b]));
+        let mut bytes = Vec::new();
+        image::DynamicImage::ImageRgb8(img)
+            .write_to(&mut Cursor::new(&mut bytes), ImageFormat::Png)
+            .expect("failed to encode test PNG");
+        bytes
+    }
+
+    #[test]
+    fn decode_resize_to_chw_f32_produces_chw_layout_in_unit_range() {
+        // Use distinct R/G/B values so plane means and first-pixel checks both
+        // detect channel-order regressions (a G/B swap on a solid-red input
+        // would pass; on (255, 128, 64) it can't).
+        let bytes = make_test_png(4, 4, 255, 128, 64);
+        let pixels = decode_resize_to_chw_f32(&bytes, 8, 8)
+            .expect("decode_resize_to_chw_f32 should succeed on a valid PNG");
+
+        let n = 8 * 8;
+        assert_eq!(pixels.len(), 3 * n, "expected 3 channels x 8 x 8 floats");
+        assert!(
+            pixels.iter().all(|v| (0.0..=1.0).contains(v)),
+            "all pixel values should be in [0, 1]"
+        );
+
+        // CHW layout: plane 0 = R, plane 1 = G, plane 2 = B. Distinct channel
+        // values mean any swap would shift the per-plane means.
+        let r_mean: f32 = pixels[0..n].iter().sum::<f32>() / n as f32;
+        let g_mean: f32 = pixels[n..2 * n].iter().sum::<f32>() / n as f32;
+        let b_mean: f32 = pixels[2 * n..3 * n].iter().sum::<f32>() / n as f32;
+        assert!(
+            (r_mean - 1.0).abs() < 0.05,
+            "R plane mean = {} should be ~1.0",
+            r_mean
+        );
+        assert!(
+            (g_mean - 128.0 / 255.0).abs() < 0.05,
+            "G plane mean = {} should be ~0.502",
+            g_mean
+        );
+        assert!(
+            (b_mean - 64.0 / 255.0).abs() < 0.05,
+            "B plane mean = {} should be ~0.251",
+            b_mean
+        );
+
+        // First-pixel direct check - catches HWC vs CHW transposition that
+        // aggregate means could mask on certain shuffle patterns.
+        assert!(
+            (pixels[0] - 1.0).abs() < 0.05,
+            "first R pixel = {} should be ~1.0",
+            pixels[0]
+        );
+        assert!(
+            (pixels[n] - 128.0 / 255.0).abs() < 0.05,
+            "first G pixel = {} should be ~0.502",
+            pixels[n]
+        );
+        assert!(
+            (pixels[2 * n] - 64.0 / 255.0).abs() < 0.05,
+            "first B pixel = {} should be ~0.251",
+            pixels[2 * n]
+        );
+    }
+
+    #[test]
+    fn decode_resize_to_chw_f32_rejects_invalid_bytes() {
+        let garbage = b"not a real image file";
+        let result = decode_resize_to_chw_f32(garbage, 8, 8);
+        assert!(result.is_err(), "decoder should reject garbage bytes");
+        assert!(
+            result.unwrap_err().contains("image decode failed"),
+            "error should mention decode failure"
+        );
+    }
+
+    #[test]
+    fn decode_resize_to_chw_f32_overflow_guard_on_huge_dims() {
+        let bytes = make_test_png(2, 2, 128, 128, 128);
+        let result = decode_resize_to_chw_f32(&bytes, u32::MAX, u32::MAX);
+        assert!(
+            result.is_err(),
+            "u32::MAX x u32::MAX dimensions should be rejected"
+        );
+        assert!(
+            result.unwrap_err().contains("overflow"),
+            "error should mention overflow"
+        );
+    }
+}
