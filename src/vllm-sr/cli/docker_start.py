@@ -16,6 +16,7 @@ from cli.docker_images import (
 )
 from cli.docker_openclaw_support import configure_openclaw_support
 from cli.docker_run_command import (
+    append_custom_dns,
     append_env_vars,
     append_host_gateway,
     append_mount_specs,
@@ -567,6 +568,7 @@ def _build_service_run_command(
     maybe_append_amd_gpu_passthrough(cmd, enable_amd_gpu)
     maybe_append_nvidia_gpu_passthrough(cmd, enable_nvidia_gpu)
     append_host_gateway(cmd, runtime)
+    append_custom_dns(cmd)
     append_mount_specs(cmd, mount_specs)
     append_port_mappings(cmd, port_mappings)
     cmd.extend(["--entrypoint", entrypoint])
