@@ -83,6 +83,10 @@ type RouterConfig struct {
 	Authz     AuthzConfig     `yaml:"authz,omitempty"`
 	RateLimit RateLimitConfig `yaml:"ratelimit,omitempty"`
 
+	// SessionTokenBudget configures runtime per-session token-budget enforcement
+	// (Opp-5). Global cross-cutting; opt-in and a no-op when disabled.
+	SessionTokenBudget SessionTokenBudgetConfig `yaml:"session_token_budget,omitempty"`
+
 	// Runtime-only knowledge bases loaded from global.model_catalog.
 	KnowledgeBases []KnowledgeBaseConfig `yaml:"knowledge_bases,omitempty"`
 	ConfigBaseDir  string                `yaml:"-"`

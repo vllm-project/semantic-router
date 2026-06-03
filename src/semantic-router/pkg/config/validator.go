@@ -95,6 +95,11 @@ var (
 			validate: validatePromptCompressionContracts,
 			scopes:   configValidationScopeFile | configValidationScopeKubernetes,
 		},
+		{
+			name:     "session_token_budget",
+			validate: validateSessionTokenBudgetContracts,
+			scopes:   configValidationScopeFile | configValidationScopeKubernetes,
+		},
 	}
 )
 
