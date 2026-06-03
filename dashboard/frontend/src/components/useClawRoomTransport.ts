@@ -132,6 +132,22 @@ export const useClawRoomTransport = ({
         }
       }) as EventListener)
 
+      source.addEventListener('surface_event', ((event: MessageEvent<string>) => {
+        try {
+          const payload = JSON.parse(event.data) as RoomStreamEvent
+          onRoomEventRef.current?.({
+            type: 'surface_event',
+            roomId: payload.roomId,
+            payload: payload.payload,
+            participantType: payload.participantType,
+            participantId: payload.participantId,
+            sessionUser: payload.sessionUser,
+          })
+        } catch {
+          // ignore malformed stream events
+        }
+      }) as EventListener)
+
       source.addEventListener('message_updated', ((event: MessageEvent<string>) => {
         try {
           const payload = JSON.parse(event.data) as RoomStreamEvent

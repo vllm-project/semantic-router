@@ -18,6 +18,7 @@ type ClawRoomCollaborationEvent struct {
 	ParticipantType string           `json:"participantType,omitempty"`
 	ParticipantID   string           `json:"participantId,omitempty"`
 	SessionUser     string           `json:"sessionUser,omitempty"`
+	Payload         map[string]any   `json:"payload,omitempty"`
 	Timestamp       string           `json:"timestamp,omitempty"`
 }
 
@@ -41,15 +42,32 @@ func newMessageCollaborationEvent(message ClawRoomMessage) ClawRoomCollaboration
 	}
 }
 
-func messageUpdatedCollaborationEvent(message ClawRoomMessage) ClawRoomCollaborationEvent {
+func messageUpdatedCollaborationEvent(room ClawRoomEntry, message ClawRoomMessage) ClawRoomCollaborationEvent {
 	copyMsg := message
 	participantType := normalizeRoomSenderType(message.SenderType)
-	return ClawRoomCollaborationEvent{
+	event := ClawRoomCollaborationEvent{
 		Type:            WSTypeMessageUpdated,
 		Message:         &copyMsg,
 		MessageID:       message.ID,
 		ParticipantType: participantType,
 		ParticipantID:   message.SenderID,
+	}
+	if participantType == "worker" && message.SenderID != "" {
+		event.SessionUser = roomScopedSessionUser(room, ContainerEntry{Name: message.SenderID})
+	}
+	return event
+}
+
+func surfaceEventCollaborationEvent(participantType, participantID string, payload map[string]any) ClawRoomCollaborationEvent {
+	payloadCopy := make(map[string]any, len(payload))
+	for key, value := range payload {
+		payloadCopy[key] = value
+	}
+	return ClawRoomCollaborationEvent{
+		Type:            WSTypeSurfaceEvent,
+		ParticipantType: participantType,
+		ParticipantID:   participantID,
+		Payload:         payloadCopy,
 	}
 }
 
@@ -87,6 +105,7 @@ func collaborationEventToWSOutbound(event ClawRoomCollaborationEvent) WSOutbound
 		ParticipantType: event.ParticipantType,
 		ParticipantID:   event.ParticipantID,
 		SessionUser:     event.SessionUser,
+		Payload:         event.Payload,
 	}
 	if event.Message != nil {
 		copyMsg := *event.Message
@@ -101,8 +120,15 @@ func collaborationEventToSSE(event ClawRoomCollaborationEvent) clawRoomStreamEve
 		sseType = "message"
 	}
 	sseEvent := clawRoomStreamEvent{
-		Type:   sseType,
-		RoomID: event.RoomID,
+		Type:            sseType,
+		RoomID:          event.RoomID,
+		MessageID:       event.MessageID,
+		Chunk:           event.Chunk,
+		Status:          event.Status,
+		ParticipantType: event.ParticipantType,
+		ParticipantID:   event.ParticipantID,
+		SessionUser:     event.SessionUser,
+		Payload:         event.Payload,
 	}
 	if event.Message != nil {
 		copyMsg := *event.Message

@@ -48,9 +48,16 @@ type clawRoomMessagePayload struct {
 }
 
 type clawRoomStreamEvent struct {
-	Type    string           `json:"type"`
-	RoomID  string           `json:"roomId"`
-	Message *ClawRoomMessage `json:"message,omitempty"`
+	Type            string           `json:"type"`
+	RoomID          string           `json:"roomId"`
+	Message         *ClawRoomMessage `json:"message,omitempty"`
+	MessageID       string           `json:"messageId,omitempty"`
+	Chunk           string           `json:"chunk,omitempty"`
+	Status          string           `json:"status,omitempty"`
+	ParticipantType string           `json:"participantType,omitempty"`
+	ParticipantID   string           `json:"participantId,omitempty"`
+	SessionUser     string           `json:"sessionUser,omitempty"`
+	Payload         map[string]any   `json:"payload,omitempty"`
 }
 
 var roomMentionPattern = regexp.MustCompile(`@([a-zA-Z0-9_.-]+)`)
@@ -685,6 +692,8 @@ func defaultSenderID(senderType, senderName string) string {
 	}
 }
 
+// handleRoomStream serves legacy SSE clients when WebSocket is unavailable.
+// Primary room collaboration transport is WebSocket (/rooms/{id}/ws).
 func (h *OpenClawHandler) handleRoomStream(w http.ResponseWriter, r *http.Request, roomID string) {
 	if r.Method != http.MethodGet {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)

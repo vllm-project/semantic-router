@@ -46,6 +46,11 @@ export interface RoomStreamEvent {
   message?: RoomMessage
   messageId?: string
   chunk?: string
+  status?: string
+  participantType?: string
+  participantId?: string
+  sessionUser?: string
+  payload?: Record<string, unknown>
 }
 
 export interface StreamingParticipant {
@@ -58,17 +63,19 @@ export const ROOM_COLLABORATION_OUTBOUND_TYPES = {
   newMessage: 'new_message',
   messageChunk: 'message_chunk',
   messageUpdated: 'message_updated',
+  surfaceEvent: 'surface_event',
   error: 'error',
 } as const
 
 export type RoomTransportMode = 'connecting' | 'websocket' | 'sse'
 
 export interface WSInboundMessage {
-  type: 'send_message' | 'ping'
+  type: 'send_message' | 'surface_event' | 'ping'
   content?: string
   senderType?: string
   senderId?: string
   senderName?: string
+  payload?: Record<string, unknown>
 }
 
 export interface WSOutboundMessage {
@@ -83,6 +90,7 @@ export interface WSOutboundMessage {
   participantType?: string
   participantId?: string
   sessionUser?: string
+  payload?: Record<string, unknown>
 }
 
 export interface CollaborationEventHandlers {
@@ -152,6 +160,10 @@ export const applyCollaborationOutboundEvent = (
     return
   }
 
+  if (payload.type === ROOM_COLLABORATION_OUTBOUND_TYPES.surfaceEvent) {
+    return
+  }
+
   if (payload.type === ROOM_COLLABORATION_OUTBOUND_TYPES.error && payload.error) {
     handlers.setError?.(payload.error)
   }
@@ -179,6 +191,14 @@ export const applyRoomStreamEvent = (
 
   if (payload.type === ROOM_COLLABORATION_OUTBOUND_TYPES.newMessage && payload.message) {
     applyCollaborationOutboundEvent(payload, handlers)
+    return
+  }
+
+  if (payload.type === ROOM_COLLABORATION_OUTBOUND_TYPES.surfaceEvent) {
+    applyCollaborationOutboundEvent(
+      { type: ROOM_COLLABORATION_OUTBOUND_TYPES.surfaceEvent, payload: payload.payload },
+      handlers
+    )
   }
 }
 

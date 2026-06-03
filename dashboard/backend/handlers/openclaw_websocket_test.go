@@ -214,7 +214,7 @@ func TestPublishRoomCollaborationEvent_StreamingChunkSequence(t *testing.T) {
 		Content:    "Hello world",
 		CreatedAt:  time.Now().UTC().Format(time.RFC3339),
 	}
-	h.publishRoomCollaborationEvent(room.ID, messageUpdatedCollaborationEvent(reply))
+	h.publishRoomCollaborationEvent(room.ID, messageUpdatedCollaborationEvent(room, reply))
 
 	events := collectWSOutboundUntil(t, conn, 2*time.Second, func(outbound WSOutboundMessage) bool {
 		return outbound.Type == WSTypeMessageUpdated

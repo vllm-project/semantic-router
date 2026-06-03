@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 import {
   buildRoomBridgeEnvelope,
+  buildRoomSurfaceWSMessage,
   CLAWOS_ROOM_BRIDGE_SOURCE,
   isRoomBridgeEnvelope,
   postRoomEventToFrame,
@@ -63,6 +64,19 @@ describe('openclawRoomBridge', () => {
       }),
       '*'
     )
+  })
+
+  it('builds websocket surface_event payloads with worker identity', () => {
+    expect(buildRoomSurfaceWSMessage(
+      { kind: 'tool_call', name: 'search' },
+      { senderType: 'worker', senderId: 'worker-a', senderName: 'worker-a' }
+    )).toEqual({
+      type: 'surface_event',
+      payload: { kind: 'tool_call', name: 'search' },
+      senderType: 'worker',
+      senderId: 'worker-a',
+      senderName: 'worker-a',
+    })
   })
 
   it('builds iframe to parent surface_event payloads', () => {

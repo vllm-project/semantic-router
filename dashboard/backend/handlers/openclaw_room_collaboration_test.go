@@ -5,6 +5,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/gorilla/websocket"
 )
 
 func TestRoomCollaborationBus_WSAndSSEReceiveSameEvent(t *testing.T) {
@@ -205,6 +207,135 @@ func TestRoomCollaborationBus_HTTPPostAndWSSendEquivalent(t *testing.T) {
 	}
 	if len(messages) != 2 {
 		t.Fatalf("expected two persisted room messages, got %d", len(messages))
+	}
+}
+
+func TestRoomCollaboration_WorkerMessageUpdatedCarriesSessionIdentity(t *testing.T) {
+	room := ClawRoomEntry{ID: "room-1", TeamID: "team-1"}
+	reply := ClawRoomMessage{
+		ID:         "msg-worker-final",
+		RoomID:     room.ID,
+		TeamID:     room.TeamID,
+		SenderType: "worker",
+		SenderID:   "worker-a",
+		SenderName: "Worker A",
+		Content:    "done",
+		CreatedAt:  time.Now().UTC().Format(time.RFC3339),
+	}
+	event := messageUpdatedCollaborationEvent(room, reply)
+	if event.SessionUser != "room-1:worker-a" {
+		t.Fatalf("expected room-scoped session user on message_updated, got %q", event.SessionUser)
+	}
+	if event.ParticipantType != "worker" || event.ParticipantID != "worker-a" {
+		t.Fatalf("unexpected participant identity: %+v", event)
+	}
+}
+
+func TestRoomCollaboration_SurfaceEventReachAllWSClients(t *testing.T) {
+	tempDir := t.TempDir()
+	h := newTestOpenClawHandler(t, tempDir, false)
+	room := seedCollaborationTestRoom(t, h)
+
+	server := httptest.NewServer(h.RoomByIDHandler())
+	defer server.Close()
+
+	connA := dialRoomWebSocket(t, server.URL, room.ID)
+	readWSConnected(t, connA)
+	connB := dialRoomWebSocket(t, server.URL, room.ID)
+	readWSConnected(t, connB)
+
+	if writeErr := connA.WriteJSON(WSInboundMessage{
+		Type:       WSTypeSurfaceEvent,
+		SenderType: "worker",
+		SenderID:   "worker-a",
+		Payload:    map[string]any{"kind": "tool_call", "name": "search"},
+	}); writeErr != nil {
+		t.Fatalf("failed to send surface_event: %v", writeErr)
+	}
+
+	matchSurface := func(outbound WSOutboundMessage) bool {
+		return outbound.Type == WSTypeSurfaceEvent &&
+			outbound.ParticipantID == "worker-a" &&
+			outbound.Payload != nil &&
+			outbound.Payload["kind"] == "tool_call"
+	}
+	outA := waitForWSOutboundMessage(t, connA, "client A surface event", matchSurface)
+	outB := waitForWSOutboundMessage(t, connB, "client B surface event", matchSurface)
+	if outA.Payload == nil || outB.Payload == nil {
+		t.Fatalf("expected surface payload on both clients")
+	}
+}
+
+func TestRoomCollaboration_FullFlowUserWorkerSurface(t *testing.T) {
+	tempDir := t.TempDir()
+	h := newTestOpenClawHandler(t, tempDir, false)
+	room := seedCollaborationTestRoom(t, h)
+	worker := ContainerEntry{Name: "worker-a", RoleKind: "worker"}
+
+	server := httptest.NewServer(h.RoomByIDHandler())
+	defer server.Close()
+
+	userConn := dialRoomWebSocket(t, server.URL, room.ID)
+	readWSConnected(t, userConn)
+	embeddedConn := dialRoomWebSocket(t, server.URL, room.ID)
+	readWSConnected(t, embeddedConn)
+	observerConn := dialRoomWebSocket(t, server.URL, room.ID)
+	readWSConnected(t, observerConn)
+
+	messageID := "room-msg-flow"
+	h.publishRoomCollaborationEvent(
+		room.ID,
+		workerStreamChunkCollaborationEvent(room, worker, messageID, "Hello", false),
+	)
+
+	for _, conn := range []*websocket.Conn{userConn, embeddedConn, observerConn} {
+		outbound := waitForWSOutboundMessage(t, conn, "worker chunk", func(message WSOutboundMessage) bool {
+			return message.Type == WSTypeMessageChunk &&
+				message.Chunk == "Hello" &&
+				message.SessionUser == "room-collab:worker-a"
+		})
+		if outbound.ParticipantID != "worker-a" {
+			t.Fatalf("unexpected chunk participant: %+v", outbound)
+		}
+	}
+
+	if writeErr := embeddedConn.WriteJSON(WSInboundMessage{
+		Type:       WSTypeSurfaceEvent,
+		SenderType: "worker",
+		SenderID:   "worker-a",
+		Payload:    map[string]any{"kind": "status", "value": "thinking"},
+	}); writeErr != nil {
+		t.Fatalf("failed to send embedded surface_event: %v", writeErr)
+	}
+
+	for _, conn := range []*websocket.Conn{userConn, observerConn} {
+		waitForWSOutboundMessage(t, conn, "surface fanout", func(message WSOutboundMessage) bool {
+			return message.Type == WSTypeSurfaceEvent && message.Payload != nil && message.Payload["value"] == "thinking"
+		})
+	}
+
+	reply := ClawRoomMessage{
+		ID:         messageID,
+		RoomID:     room.ID,
+		TeamID:     room.TeamID,
+		SenderType: "worker",
+		SenderID:   "worker-a",
+		SenderName: "Worker A",
+		Content:    "Hello",
+		CreatedAt:  time.Now().UTC().Format(time.RFC3339),
+	}
+	h.publishRoomCollaborationEvent(room.ID, messageUpdatedCollaborationEvent(room, reply))
+
+	for _, conn := range []*websocket.Conn{userConn, embeddedConn, observerConn} {
+		updated := waitForWSOutboundMessage(t, conn, "message_updated", func(message WSOutboundMessage) bool {
+			return message.Type == WSTypeMessageUpdated &&
+				message.Message != nil &&
+				message.Message.Content == "Hello" &&
+				message.SessionUser == "room-collab:worker-a"
+		})
+		if updated.ParticipantID != "worker-a" {
+			t.Fatalf("unexpected updated participant: %+v", updated)
+		}
 	}
 }
 
