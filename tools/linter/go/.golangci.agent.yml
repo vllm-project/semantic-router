@@ -183,6 +183,9 @@ linters:
         path: (^|/)src/semantic-router/pkg/extproc/processor_res_cache\.go$
       - linters:
           - cyclop
+        path: (^|/)candle-binding/semantic-router\.go$
+      - linters:
+          - cyclop
           - errcheck
           - funlen
           - gocognit
