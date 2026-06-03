@@ -8,92 +8,33 @@ sidebar_position: 3
 
 # 使用 Docker Compose 安装
 
-本指南提供了使用 Docker Compose 部署带有 Envoy AI Gateway 的 vLLM Semantic Router 的分步说明。
+:::warning 已弃用
+仓库内置的 `deploy/docker-compose/docker-compose.yml` 已被移除，Docker Compose
+不再是本地运行 vLLM Semantic Router 的受支持方式。
 
-## 通用前提条件
+如需使用 Docker 进行本地开发，请改用 `vllm-sr` CLI —— `vllm-sr serve` 会为你
+启动 Router、Envoy 与 Dashboard。当前流程请参阅 **[快速开始](installation)**。
+:::
 
-- **Docker Engine:** 更多信息请参阅 [Docker Engine 安装](https://docs.docker.com/engine/install/)
+## 为什么有此变更
 
-- **克隆仓库:**
+早期版本在 `deploy/docker-compose/` 下提供 `docker-compose.yml`。现在本地 Docker
+编排统一由 `vllm-sr` CLI 处理，它会让容器接线、配置初始化与 Dashboard 始终与
+每个版本保持一致。
 
-  ```bash
-  git clone https://github.com/vllm-project/semantic-router.git
-  cd semantic-router
-  ```
-
-- **下载分类模型（约 1.5GB，仅首次运行需要）:**
-
-  ```bash
-  # 提示：如果遇到错误 'hf: command not found'，请运行 'pip install huggingface_hub hf_transfer'
-  make download-models
-  ```
-
-  这将下载 Router 使用的分类模型：
-
-  - Category classifier（ModernBERT-base）
-  - PII classifier（ModernBERT-base）
-  - Jailbreak classifier（ModernBERT-base）
-
----
-
-### 要求
-
-- Docker Compose v2（`docker compose` 命令，而不是旧版的 `docker-compose`）
-
-  安装 Docker Compose 插件（如果缺失），更多信息请参阅 [Docker Compose 插件安装](https://docs.docker.com/compose/install/linux/#install-using-the-repository)
-
-  ```bash
-  # 对于 Debian / Ubuntu
-  sudo apt-get update
-  sudo apt-get install -y docker-compose-plugin
-
-  # 对于 RHEL / CentOS / Fedora
-  sudo yum update -y
-  sudo yum install -y docker-compose-plugin
-
-  # 验证
-  docker compose version
-  ```
-
-- 确保端口 8801、50051、19000、3000 和 9090 空闲
-
-### 启动服务
+## 使用 CLI 在本地运行
 
 ```bash
-# 核心（router + envoy）
-docker compose -f deploy/docker-compose/docker-compose.yml up --build
+# 安装 CLI（前提条件请参阅快速开始）
+pip install --pre vllm-sr
 
-# 后台运行（确认无误后推荐）
-docker compose -f deploy/docker-compose/docker-compose.yml up -d --build
-
-# 包含 mock vLLM + testing profile（将 Router 指向 mock endpoint）
-CONFIG_FILE=/app/config/testing/config.testing.yaml \
-  docker compose -f deploy/docker-compose/docker-compose.yml --profile testing up --build
+# 在 Docker 中启动 Router、Envoy 与 Dashboard
+vllm-sr serve
 ```
 
-### 验证
+**[快速开始](installation)** 涵盖了前提条件、模型下载，以及完整的 `vllm-sr`
+命令集（`vllm-sr status`、`vllm-sr logs`、`vllm-sr stop`）。
 
-- gRPC: `localhost:50051`
-- Envoy HTTP: `http://localhost:8801`
-- Envoy Admin: `http://localhost:19000`
-- Prometheus: `http://localhost:9090`
-- Grafana: `http://localhost:3000`（首次登录使用 `admin` / `admin`）
+## Kubernetes 与生产环境
 
-### 常用操作
-
-```bash
-# 查看服务状态
-docker compose ps
-
-# 跟踪 Router 服务的日志
-docker compose logs -f semantic-router
-
-# 进入 Router 容器
-docker compose exec semantic-router bash
-
-# 更改配置后重新创建
-docker compose -f deploy/docker-compose/docker-compose.yml up -d --build
-
-# 停止并清理容器
-docker compose down
-```
+集群部署请使用 **[Operator](k8s/operator)** 或 `deploy/helm/` 下的 Helm Chart。
