@@ -195,9 +195,13 @@ const config: Config = {
         {
           type: 'dropdown',
           className: 'nav-primary',
-          label: 'About',
+          label: 'Research',
           position: 'left',
           items: [
+            {
+              label: 'Paper & Talks',
+              to: '/publications',
+            },
             {
               label: 'White Paper',
               to: '/white-paper',
@@ -207,12 +211,6 @@ const config: Config = {
               to: '/vision-paper',
             },
           ],
-        },
-        {
-          to: '/publications',
-          className: 'nav-primary',
-          label: 'Research',
-          position: 'left',
         },
         {
           to: '/blog',
@@ -253,6 +251,12 @@ const config: Config = {
               href: 'https://github.com/vllm-project/semantic-router/issues',
             },
           ],
+        },
+        {
+          to: '/community/contributors',
+          className: 'nav-primary',
+          label: 'Leaderboard',
+          position: 'left',
         },
         {
           label: 'GitHub',
@@ -306,6 +310,10 @@ const config: Config = {
             {
               label: 'GitHub Discussions',
               href: 'https://github.com/vllm-project/semantic-router/discussions',
+            },
+            {
+              label: 'Leaderboard',
+              to: '/community/contributors',
             },
           ],
         },
