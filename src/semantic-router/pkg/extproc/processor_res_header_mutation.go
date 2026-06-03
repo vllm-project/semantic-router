@@ -238,7 +238,34 @@ func buildResponseHeaderMutation(
 
 	addStandardDecisionHeaders(builder, ctx)
 	addMatchedSignalHeaders(builder, ctx)
+	addRetentionDirectiveHeaders(builder, ctx)
 	return builder.mutation()
+}
+
+// addRetentionDirectiveHeaders emits the matched decision's EMIT retention
+// directive to the response as x-vsr-retention-* headers so the inference pool
+// and operators can observe the router's retention intent at the wire
+// (issue #2009). Only fields the directive explicitly set are emitted, mirroring
+// the tri-state semantics of config.RetentionDirective; an unset field is
+// omitted rather than sent as a default. Emitted only on successful,
+// non-cache-hit responses (same gate as the standard decision headers).
+func addRetentionDirectiveHeaders(builder *responseHeaderMutationBuilder, ctx *RequestContext) {
+	r := ctx.EmittedRetention
+	if r == nil {
+		return
+	}
+	if r.Drop != nil {
+		builder.addBool(headers.VSRRetentionDrop, *r.Drop)
+	}
+	if r.TTLTurns != nil && *r.TTLTurns > 0 {
+		builder.addInt(headers.VSRRetentionTTLTurns, *r.TTLTurns)
+	}
+	if r.KeepCurrentModel != nil {
+		builder.addBool(headers.VSRRetentionKeepCurrentModel, *r.KeepCurrentModel)
+	}
+	if r.PreferPrefixRetention != nil {
+		builder.addBool(headers.VSRRetentionPreferPrefix, *r.PreferPrefixRetention)
+	}
 }
 
 // addStandardDecisionHeaders adds the per-request decision headers

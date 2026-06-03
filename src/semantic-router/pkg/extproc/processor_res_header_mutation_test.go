@@ -125,6 +125,54 @@ func TestBuildResponseHeaderMutation_NilContextReturnsNil(t *testing.T) {
 	assert.Nil(t, buildResponseHeaderMutation(nil, true))
 }
 
+func TestBuildResponseHeaderMutation_EmitsRetentionDirectiveHeaders(t *testing.T) {
+	ctx := &RequestContext{
+		VSRSelectedDecisionName: "agentic_routing",
+		VSRSelectedModel:        "qwen-small",
+		EmittedRetention: &config.RetentionDirective{
+			TTLTurns:              intPtr(3),
+			KeepCurrentModel:      boolPtr(true),
+			PreferPrefixRetention: boolPtr(true),
+		},
+	}
+
+	mutation := buildResponseHeaderMutation(ctx, true)
+	require.NotNil(t, mutation)
+
+	headerMap := mutationToMap(mutation.SetHeaders)
+	assert.Equal(t, "3", headerMap[headers.VSRRetentionTTLTurns])
+	assert.Equal(t, "true", headerMap[headers.VSRRetentionKeepCurrentModel])
+	assert.Equal(t, "true", headerMap[headers.VSRRetentionPreferPrefix])
+}
+
+func TestBuildResponseHeaderMutation_OmitsUnsetRetentionHeaders(t *testing.T) {
+	// Tri-state: only fields the directive explicitly set are emitted.
+	ctx := &RequestContext{
+		VSRSelectedDecisionName: "agentic_routing",
+		VSRSelectedModel:        "qwen-small",
+		EmittedRetention:        &config.RetentionDirective{PreferPrefixRetention: boolPtr(true)},
+	}
+
+	mutation := buildResponseHeaderMutation(ctx, true)
+	require.NotNil(t, mutation)
+
+	headerMap := mutationToMap(mutation.SetHeaders)
+	assert.Equal(t, "true", headerMap[headers.VSRRetentionPreferPrefix])
+	assert.NotContains(t, headerMap, headers.VSRRetentionTTLTurns)
+	assert.NotContains(t, headerMap, headers.VSRRetentionKeepCurrentModel)
+	assert.NotContains(t, headerMap, headers.VSRRetentionDrop)
+}
+
+func TestBuildResponseHeaderMutation_CacheHitSkipsRetentionHeaders(t *testing.T) {
+	ctx := &RequestContext{
+		VSRCacheHit:      true,
+		EmittedRetention: &config.RetentionDirective{PreferPrefixRetention: boolPtr(true)},
+	}
+
+	mutation := buildResponseHeaderMutation(ctx, true)
+	assert.Nil(t, mutation, "cache hit must not emit retention headers")
+}
+
 func TestAddLossinessWarnings_EmptyProducesNoHeader(t *testing.T) {
 	ctx := &RequestContext{ClientProtocol: config.ClientProtocolAnthropic}
 	builder := newResponseHeaderMutationBuilder()
