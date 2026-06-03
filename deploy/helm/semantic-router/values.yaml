@@ -566,6 +566,22 @@ dashboard:
     mountPath: /app/data
     # -- Annotations for the dashboard-local state PVC.
     annotations: {}
+  # Gateway API HTTPRoute for the dashboard
+  httpRoute:
+    # -- Enable HTTPRoute for the dashboard (requires Gateway API CRDs and a Gateway in the cluster)
+    enabled: false
+    # -- Annotations to add to the HTTPRoute
+    annotations: {}
+    # -- Hostname the HTTPRoute will accept traffic for
+    hostname: semantic-router-dashboard.local
+    # -- Reference to the parent Gateway
+    parentRef:
+      # -- Name of the Gateway resource
+      name: ""
+      # -- Namespace of the Gateway resource
+      namespace: ""
+      # -- Optional: listener section name on the Gateway (e.g. "https")
+      sectionName: ""
 
 dependencies:
   semanticCache:
