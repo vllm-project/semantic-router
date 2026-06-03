@@ -71,6 +71,14 @@ def append_host_gateway(cmd, runtime):
         cmd.append("--add-host=host.docker.internal:host-gateway")
 
 
+def append_custom_dns(cmd):
+    """Inject --dns servers from the comma-separated VLLM_SR_DNS env var."""
+    for dns in os.getenv("VLLM_SR_DNS", "").split(","):
+        dns = dns.strip()
+        if dns:
+            cmd.extend(["--dns", dns])
+
+
 def append_mount_specs(cmd, mount_specs: list[str]):
     for mount_spec in mount_specs:
         cmd.extend(["-v", mount_spec])
