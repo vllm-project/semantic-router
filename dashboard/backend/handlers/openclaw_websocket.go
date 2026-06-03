@@ -10,9 +10,11 @@ import (
 	"github.com/gorilla/websocket"
 )
 
-// WebSocket message types for ClawRoom
+// WebSocket message types for ClawRoom.
+// WebSocket is the primary room collaboration transport; SSE (/stream) is a legacy fallback.
 const (
 	WSTypeSendMessage    = "send_message"
+	WSTypeSurfaceEvent   = "surface_event"
 	WSTypePing           = "ping"
 	WSTypePong           = "pong"
 	WSTypeNewMessage     = "new_message"
@@ -28,12 +30,13 @@ const (
 
 // WSInboundMessage represents a message from client to server
 type WSInboundMessage struct {
-	Type       string   `json:"type"`
-	Content    string   `json:"content,omitempty"`
-	SenderType string   `json:"senderType,omitempty"`
-	SenderID   string   `json:"senderId,omitempty"`
-	SenderName string   `json:"senderName,omitempty"`
-	Mentions   []string `json:"mentions,omitempty"`
+	Type       string         `json:"type"`
+	Content    string         `json:"content,omitempty"`
+	SenderType string         `json:"senderType,omitempty"`
+	SenderID   string         `json:"senderId,omitempty"`
+	SenderName string         `json:"senderName,omitempty"`
+	Mentions   []string       `json:"mentions,omitempty"`
+	Payload    map[string]any `json:"payload,omitempty"`
 }
 
 // WSOutboundMessage represents a message from server to client
@@ -48,6 +51,7 @@ type WSOutboundMessage struct {
 	ParticipantType string           `json:"participantType,omitempty"`
 	ParticipantID   string           `json:"participantId,omitempty"`
 	SessionUser     string           `json:"sessionUser,omitempty"`
+	Payload         map[string]any   `json:"payload,omitempty"`
 	Timestamp       string           `json:"timestamp,omitempty"`
 }
 
@@ -225,9 +229,42 @@ func (c *WSClient) handleMessage(msg WSInboundMessage) {
 	case WSTypeSendMessage:
 		c.handleSendMessage(msg)
 
+	case WSTypeSurfaceEvent:
+		c.handleSurfaceEvent(msg)
+
 	default:
 		c.sendError("unknown message type: " + msg.Type)
 	}
+}
+
+// handleSurfaceEvent publishes embedded OpenClaw surface activity to the room bus.
+func (c *WSClient) handleSurfaceEvent(msg WSInboundMessage) {
+	if msg.Payload == nil {
+		c.sendError("payload is required")
+		return
+	}
+
+	participantType := normalizeRoomSenderType(msg.SenderType)
+	if participantType != "user" && participantType != "leader" && participantType != "worker" && participantType != "system" {
+		participantType = "user"
+	}
+
+	participantID := msg.SenderID
+	if participantID == "" {
+		switch participantType {
+		case "user":
+			participantID = "playground-user"
+		case "leader", "worker":
+			participantID = sanitizeContainerName(msg.SenderName)
+		case "system":
+			participantID = "clawos-system"
+		}
+	}
+
+	c.handler.publishRoomCollaborationEvent(
+		c.roomID,
+		surfaceEventCollaborationEvent(participantType, participantID, msg.Payload),
+	)
 }
 
 // handleSendMessage handles sending a new message to the room

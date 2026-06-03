@@ -399,26 +399,23 @@ export const StatusTab: React.FC<{
   useEffect(() => {
     if (!linkedRoomId || !selectedContainer || !selected?.healthy) {
       setRoomBridgeEvents([])
+      setSurfaceEvents([])
       return
     }
 
-    const unsubscribe = subscribeRoomEvents(linkedRoomId, event => {
+    const subscription = subscribeRoomEvents(linkedRoomId, event => {
       setRoomBridgeEvents(previous => [...previous.slice(-19), event])
       if (iframeRef.current) {
         postRoomEventToFrame(iframeRef.current, linkedRoomId, event)
       }
     })
 
-    return unsubscribe
-  }, [linkedRoomId, selected?.healthy, selectedContainer])
-
-  useEffect(() => {
-    if (!linkedRoomId || !selectedContainer || !selected?.healthy) {
-      setSurfaceEvents([])
-      return
-    }
-
-    return listenForSurfaceEvents(linkedRoomId, (_roomId, payload) => {
+    const unsubscribeSurface = listenForSurfaceEvents(linkedRoomId, (_roomId, payload) => {
+      subscription.sendSurfaceEvent(payload, {
+        senderType: 'worker',
+        senderId: selectedContainer,
+        senderName: selectedContainer,
+      })
       setSurfaceEvents(previous => [
         ...previous.slice(-9),
         {
@@ -429,6 +426,11 @@ export const StatusTab: React.FC<{
         },
       ])
     })
+
+    return () => {
+      unsubscribeSurface()
+      subscription.close()
+    }
   }, [linkedRoomId, selected?.healthy, selectedContainer])
 
   const latestRoomBridgeEvent = useMemo(() => {

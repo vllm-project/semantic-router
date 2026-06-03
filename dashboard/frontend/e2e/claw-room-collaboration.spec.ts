@@ -241,6 +241,7 @@ test.describe('Claw room collaboration', () => {
     await page.addInitScript(() => {
       class MockWebSocket {
         static instances: MockWebSocket[] = []
+        sent: string[] = []
         readyState = 1
         onopen: ((event: Event) => void) | null = null
         onmessage: ((event: MessageEvent) => void) | null = null
@@ -252,7 +253,10 @@ test.describe('Claw room collaboration', () => {
           window.setTimeout(() => this.onopen?.(new Event('open')), 0)
         }
 
-        send() {}
+        send(data: string) {
+          this.sent.push(data)
+        }
+
         close() {}
 
         emit(payload: Record<string, unknown>) {
@@ -365,5 +369,13 @@ test.describe('Claw room collaboration', () => {
     })
 
     await expect(page.getByTestId('claw-room-bridge-activity')).toContainText('Surface')
+
+    const surfaceWrites = await page.evaluate(() => {
+      const sockets = (window as typeof window & {
+        __mockRoomSockets?: Array<{ sent: string[] }>
+      }).__mockRoomSockets
+      return sockets?.flatMap(socket => socket.sent) || []
+    })
+    expect(surfaceWrites.some(entry => entry.includes('surface_event') && entry.includes('tool_call'))).toBeTruthy()
   })
 })

@@ -306,7 +306,7 @@ func (h *OpenClawHandler) collectRoomAutomationReplies(
 			continue
 		}
 		replyCopy := result.reply
-		h.publishRoomCollaborationEvent(roomID, messageUpdatedCollaborationEvent(replyCopy))
+		h.publishRoomCollaborationEvent(roomID, messageUpdatedCollaborationEvent(room, replyCopy))
 		if len(result.reply.Mentions) > 0 {
 			next = append(next, result.reply.ID)
 		}

@@ -99,6 +99,14 @@ func registerOpenClawProxyRoute(mux *http.ServeMux, openClawHandler *handlers.Op
 			handler, _ = proxyCache.LoadOrStore(cacheKey, h)
 		}
 
+		roomID := strings.TrimSpace(r.Header.Get("X-ClawOS-Room-Id"))
+		if roomID == "" {
+			roomID = strings.TrimSpace(r.URL.Query().Get("roomId"))
+		}
+		if roomID != "" {
+			r.Header.Set("X-ClawOS-Room-Id", roomID)
+		}
+
 		handler.(http.Handler).ServeHTTP(w, r)
 	})
 }

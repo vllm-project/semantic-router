@@ -1,4 +1,4 @@
-import type { WSOutboundMessage } from './clawRoomChatSupport'
+import type { WSInboundMessage, WSOutboundMessage } from './clawRoomChatSupport'
 
 export const CLAWOS_ROOM_BRIDGE_SOURCE = 'clawos-room-bridge'
 
@@ -14,6 +14,17 @@ export interface RoomBridgeEnvelope {
 
 export type RoomEventListener = (event: WSOutboundMessage) => void
 export type SurfaceEventListener = (roomId: string, payload: Record<string, unknown>) => void
+
+export interface RoomSurfaceEventSender {
+  senderType?: string
+  senderId?: string
+  senderName?: string
+}
+
+export interface RoomWebSocketSubscription {
+  close: () => void
+  sendSurfaceEvent: (payload: Record<string, unknown>, sender?: RoomSurfaceEventSender) => void
+}
 
 export const isRoomBridgeEnvelope = (data: unknown): data is RoomBridgeEnvelope => {
   if (!data || typeof data !== 'object') {
@@ -60,7 +71,21 @@ export const publishSurfaceEvent = (roomId: string, payload: Record<string, unkn
   window.parent.postMessage(buildRoomBridgeEnvelope('surface_event', roomId, { payload }), '*')
 }
 
-export const subscribeRoomEvents = (roomId: string, onEvent: RoomEventListener): (() => void) => {
+export const buildRoomSurfaceWSMessage = (
+  payload: Record<string, unknown>,
+  sender: RoomSurfaceEventSender = {}
+): WSInboundMessage => ({
+  type: 'surface_event',
+  payload,
+  senderType: sender.senderType || 'user',
+  senderId: sender.senderId || 'playground-user',
+  senderName: sender.senderName,
+})
+
+export const subscribeRoomEvents = (
+  roomId: string,
+  onEvent: RoomEventListener
+): RoomWebSocketSubscription => {
   const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
   const wsUrl = `${protocol}//${window.location.host}/api/openclaw/rooms/${encodeURIComponent(roomId)}/ws`
   const ws = new WebSocket(wsUrl)
@@ -74,10 +99,20 @@ export const subscribeRoomEvents = (roomId: string, onEvent: RoomEventListener):
     }
   }
 
-  return () => {
-    if (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING) {
-      ws.close()
+  const sendSurfaceEvent = (payload: Record<string, unknown>, sender: RoomSurfaceEventSender = {}) => {
+    if (ws.readyState !== WebSocket.OPEN) {
+      return
     }
+    ws.send(JSON.stringify(buildRoomSurfaceWSMessage(payload, sender)))
+  }
+
+  return {
+    close: () => {
+      if (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING) {
+        ws.close()
+      }
+    },
+    sendSurfaceEvent,
   }
 }
 
