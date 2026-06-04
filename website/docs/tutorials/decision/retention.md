@@ -46,9 +46,10 @@ The runtime now consumes every retention field, with one scoring bias deferred:
   bias and provider/KV-cache eviction integration remain follow-up work.
 
 Every explicitly set field is also emitted to the response as an
-`x-vsr-retention-*` header and recorded in logs/traces, so the pool and
-operators can audit the router's retention intent. `drop` and positive
-`ttl_turns` are mutually exclusive (validation rejects setting both).
+`x-vsr-retention-*` header (including an explicit `ttl_turns: 0`) and recorded
+in logs/traces, so the pool and operators can audit the router's retention
+intent. `drop` and positive `ttl_turns` are mutually exclusive (validation
+rejects setting both).
 
 ## Retention Target Inventory
 
@@ -132,7 +133,7 @@ routing:
 | Field | Type | Runtime behavior |
 |-------|------|------------------|
 | `drop` | boolean | When `true`, skips response-side semantic-cache writes for the matched decision. |
-| `ttl_turns` | integer >= 0 | When `> 0`, overrides the matched decision's semantic-cache entry TTL (turns mapped to seconds). Also emitted as `x-vsr-retention-ttl-turns`. |
+| `ttl_turns` | integer >= 0 | When `> 0`, overrides the matched decision's semantic-cache entry TTL (turns mapped to seconds). Emitted as `x-vsr-retention-ttl-turns` whenever explicitly set, including an explicit `0`. |
 | `keep_current_model` | boolean | When `true`, forces the model-switch gate to keep the current model regardless of gate mode. Also emitted as `x-vsr-retention-keep-current-model`. |
 | `prefer_prefix_retention` | boolean | Emitted to the pool as `x-vsr-retention-prefer-prefix`; session-aware scoring bias and KV-cache eviction integration are follow-up. |
 

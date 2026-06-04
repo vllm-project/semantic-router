@@ -39,20 +39,14 @@ func ShouldSkipCacheWrite(ctx *RequestContext) (bool, string) {
 	return false, ""
 }
 
-// retentionDefaultSecondsPerTurn converts a retention `ttl_turns` directive into
-// a per-entry cache TTL. The retention contract expresses lifetime in
-// conversation turns, but the semantic cache backends key expiry on wall-clock
-// seconds, so one turn is approximated as this many seconds. This is a
-// deliberate MVP simplification (issue #2009); promoting it to a configurable
-// knob (e.g. global.router.retention.seconds_per_turn) is a follow-up.
+// retentionDefaultSecondsPerTurn approximates one conversation turn as this many
+// wall-clock seconds, bridging the turn-based `ttl_turns` directive to the
+// seconds-based semantic-cache expiry. A configurable knob is follow-up work.
 const retentionDefaultSecondsPerTurn = 60
 
-// retentionTTLOverrideSeconds converts an emitted retention `ttl_turns`
-// directive into a per-entry cache TTL in seconds. Only a positive ttl_turns
-// produces an override; nil and zero fall through — config/DSL validation
-// already rejects negatives, forbids drop=true together with ttl_turns>0, and
-// treats ttl_turns=0 as a no-op (validator_decision_emit.go). Returns
-// (seconds, true) only when an override applies.
+// retentionTTLOverrideSeconds converts an emitted retention `ttl_turns` into a
+// per-entry cache TTL in seconds. Only a positive ttl_turns produces an override
+// (nil and zero fall through); returns (seconds, true) only when one applies.
 func retentionTTLOverrideSeconds(ctx *RequestContext) (int, bool) {
 	if ctx == nil || ctx.EmittedRetention == nil || ctx.EmittedRetention.TTLTurns == nil {
 		return 0, false
