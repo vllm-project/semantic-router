@@ -36,7 +36,7 @@ cd semantic-router/deploy/operator
 make install
 
 # Deploy the operator
-make deploy IMG=ghcr.io/vllm-project/semantic-router-operator:latest
+make deploy IMG=ghcr.io/vllm-project/semantic-router/operator:latest
 ```
 
 Verify the operator is running:
