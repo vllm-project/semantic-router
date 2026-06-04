@@ -143,6 +143,23 @@ const HEADER_INFO: Record<string, { label: string; type: 'info' | 'success' | 'w
     label: 'Algorithm',
     type: 'info',
   },
+  // Retention directive headers (issue #2009)
+  'x-vsr-retention-drop': {
+    label: 'Retention: Drop',
+    type: 'warning',
+  },
+  'x-vsr-retention-ttl-turns': {
+    label: 'Retention TTL (turns)',
+    type: 'info',
+  },
+  'x-vsr-retention-keep-current-model': {
+    label: 'Keep Current Model',
+    type: 'info',
+  },
+  'x-vsr-retention-prefer-prefix': {
+    label: 'Prefer Prefix',
+    type: 'info',
+  },
 }
 
 function shouldSummarizeHeaderValue(key: string, values: string[]): boolean {
