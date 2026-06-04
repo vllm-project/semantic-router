@@ -34,7 +34,8 @@ pub struct ChunkedSdpaConfig {
     /// `None` = global attention (every query attends to every key).
     pub window: Option<usize>,
     /// Decoder causal masking. **Reserved — not yet implemented**; callers must pass
-    /// `false`. Causal support lands with the generative-model migration.
+    /// `false` (passing `true` is rejected with an error). Causal support lands with
+    /// the generative-model migration.
     pub causal: bool,
     /// Softmax scale applied to the queries, typically `head_dim^-0.5`.
     pub scale: f64,
@@ -55,6 +56,16 @@ pub fn chunked_sdpa(
     pad_mask: Option<&Tensor>,
     cfg: &ChunkedSdpaConfig,
 ) -> candle_core::Result<Tensor> {
+    // Causal masking is reserved for the generative-model migration and not yet
+    // applied. Hard-fail instead of silently returning non-causal attention, so a
+    // future caller that sets `causal: true` gets a clear error rather than wrong
+    // (and hard-to-debug) results.
+    if cfg.causal {
+        candle_core::bail!(
+            "chunked_sdpa: causal masking is not yet implemented; cfg.causal must be false"
+        );
+    }
+
     let (_b, _heads, seq_len, _head_dim) = q.dims4()?;
     let device = q.device();
 

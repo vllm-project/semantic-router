@@ -3,7 +3,8 @@
 //! These exercise the free function in isolation (random `q`/`k`/`v`, no model) and
 //! assert it is numerically identical to a dense reference that materializes the full
 //! `(b, heads, seq, seq)` score matrix. Causal masking is reserved and not yet
-//! implemented, so it is not tested here (it lands with the generative migration).
+//! implemented; the only causal coverage here asserts the kernel hard-fails when a
+//! caller sets `causal: true` (the implementation lands with the generative migration).
 
 use super::chunked_sdpa::*;
 use candle_core::{DType, Device, Tensor, D};
@@ -80,14 +81,15 @@ fn test_chunked_sdpa_matches_dense() {
     let scale = (head_dim as f64).powf(-0.5);
     let window_size = 4;
 
-    // Cover global + local paths, several block sizes (divisor, non-divisor,
-    // single-block, block smaller than window, block larger than seq).
+    // Cover global + local paths, several block sizes (zero-coercion, divisor,
+    // non-divisor, single-block, block smaller than window, block larger than seq).
+    // `block == 0` exercises the "no chunking" coercion path (coerced to seq_len).
     for window in [None, Some(window_size)] {
         for &seq_len in &[1usize, 5, 16, 40] {
             let (q, k, v) = random_qkv(heads, seq_len, head_dim, &device);
             let reference = dense_sdpa_reference(&q, &k, &v, None, window, scale);
 
-            for &block in &[1usize, 3, 8, 16, 512] {
+            for &block in &[0usize, 1, 3, 8, 16, 512] {
                 let cfg = ChunkedSdpaConfig {
                     block_size: block,
                     window,
@@ -179,6 +181,26 @@ fn test_chunked_sdpa_matches_dense_f64() {
         let diff = max_abs_diff(&chunked, &reference);
         assert!(diff < 1e-4, "f64 block={}: max|Δ|={}", block, diff);
     }
+}
+
+#[test]
+fn test_chunked_sdpa_rejects_causal() {
+    // `causal` is reserved and not yet implemented: the kernel must hard-fail rather
+    // than silently return non-causal attention. Locks in the guard so a future
+    // caller can't accidentally rely on unsupported semantics.
+    let device = Device::Cpu;
+    let head_dim = 8;
+    let (q, k, v) = random_qkv(2, 5, head_dim, &device);
+    let cfg = ChunkedSdpaConfig {
+        block_size: 512,
+        window: None,
+        causal: true,
+        scale: (head_dim as f64).powf(-0.5),
+    };
+    assert!(
+        chunked_sdpa(&q, &k, &v, None, &cfg).is_err(),
+        "causal=true must return an error until causal masking is implemented"
+    );
 }
 
 #[test]
