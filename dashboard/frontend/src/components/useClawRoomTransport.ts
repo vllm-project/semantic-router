@@ -2,12 +2,14 @@ import { useEffect, useRef, useState, type Dispatch, type SetStateAction } from 
 import {
   applyCollaborationOutboundEvent,
   applyRoomStreamEvent,
+  ROOM_COLLABORATION_OUTBOUND_TYPES,
   type RoomMessage,
   type RoomStreamEvent,
   type RoomTransportMode,
   type StreamingParticipant,
   type WSOutboundMessage,
 } from './clawRoomChatSupport'
+import type { ClawRoomStreamingToolTraceEntry } from './clawRoomToolTrace'
 
 interface UseClawRoomTransportParams {
   selectedRoomId: string
@@ -35,6 +37,9 @@ export const useClawRoomTransport = ({
   const [wsConnected, setWsConnected] = useState(false)
   const [transportMode, setTransportMode] = useState<RoomTransportMode>('connecting')
   const [streamingMessages, setStreamingMessages] = useState<Map<string, string>>(new Map())
+  const [streamingToolTraces, setStreamingToolTraces] = useState<
+    Map<string, ClawRoomStreamingToolTraceEntry>
+  >(new Map())
   const [streamingParticipants, setStreamingParticipants] = useState<Map<string, StreamingParticipant>>(
     new Map()
   )
@@ -49,6 +54,7 @@ export const useClawRoomTransport = ({
       setWsConnected(false)
       setTransportMode('connecting')
       setStreamingMessages(new Map())
+      setStreamingToolTraces(new Map())
       setStreamingParticipants(new Map())
       if (wsRef.current) {
         wsRef.current.close()
@@ -75,6 +81,7 @@ export const useClawRoomTransport = ({
     const collaborationHandlers = {
       upsertMessage,
       setStreamingMessages,
+      setStreamingToolTraces,
       setStreamingParticipants,
       setError: (message: string) => setError(message),
     }
@@ -143,6 +150,15 @@ export const useClawRoomTransport = ({
             participantId: payload.participantId,
             sessionUser: payload.sessionUser,
           })
+        } catch {
+          // ignore malformed stream events
+        }
+      }) as EventListener)
+
+      source.addEventListener(ROOM_COLLABORATION_OUTBOUND_TYPES.toolTraceUpdate, ((event: MessageEvent<string>) => {
+        try {
+          const payload = JSON.parse(event.data) as RoomStreamEvent
+          applyRoomStreamEvent(payload, collaborationHandlers)
         } catch {
           // ignore malformed stream events
         }
@@ -282,6 +298,7 @@ export const useClawRoomTransport = ({
 
   return {
     streamingMessages,
+    streamingToolTraces,
     streamingParticipants,
     transportMode,
     wsConnected,

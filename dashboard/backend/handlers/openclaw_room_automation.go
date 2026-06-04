@@ -257,6 +257,16 @@ func (h *OpenClawHandler) startRoomAutomationReply(
 
 	placeholderID := generateRoomEntityID("room-msg")
 	go func() {
+		sessionFile, baselineOffset := h.captureOpenClawSessionToolTraceBaseline(room, target)
+		traceDone, _ := h.bindOpenClawSessionToolTraceWatcher(
+			roomID,
+			room,
+			target,
+			placeholderID,
+			sessionFile,
+			baselineOffset,
+		)
+
 		onChunk := func(chunk string, done bool) {
 			if done || chunk != "" {
 				h.publishRoomCollaborationEvent(
@@ -278,6 +288,17 @@ func (h *OpenClawHandler) startRoomAutomationReply(
 		)
 		if err == nil {
 			reply.ID = placeholderID
+			h.attachOpenClawSessionToolTraceToReply(
+				placeholderID,
+				traceDone,
+				room,
+				target,
+				sessionFile,
+				baselineOffset,
+				&reply,
+			)
+		} else {
+			finishOpenClawSessionToolTraceWatcher(placeholderID, traceDone)
 		}
 		results <- targetReplyResult{
 			target: target,

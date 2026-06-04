@@ -1108,6 +1108,14 @@
   align-items: flex-end;
 }
 
+.toolTraceList {
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+  width: 100%;
+  max-width: min(72%, 560px);
+}
+
 .messageMeta {
   display: flex;
   align-items: center;

@@ -11,6 +11,7 @@ import {
 } from 'react'
 import styles from './ClawRoomChat.module.css'
 import { useReadonly } from '../contexts/ReadonlyContext'
+import ClawRoomMentionMenu from './ClawRoomMentionMenu'
 import ClawRoomSidebar from './ClawRoomSidebar'
 import ClawRoomTranscript from './ClawRoomTranscript'
 import ClawRoomTransportStatus from './ClawRoomTransportStatus'
@@ -299,6 +300,7 @@ const ClawRoomChat = ({
 
   const {
     streamingMessages,
+    streamingToolTraces,
     streamingParticipants,
     transportMode,
     wsConnected,
@@ -312,8 +314,8 @@ const ClawRoomChat = ({
   })
 
   const streamingEntries = useMemo(
-    () => buildStreamingEntries(messages, streamingMessages),
-    [messages, streamingMessages]
+    () => buildStreamingEntries(messages, streamingMessages, streamingToolTraces),
+    [messages, streamingMessages, streamingToolTraces]
   )
 
   useEffect(() => {
@@ -725,6 +727,7 @@ const ClawRoomChat = ({
               selectedRoomId={selectedRoomId}
               streamingEntries={streamingEntries}
               streamingMessages={streamingMessages}
+              streamingToolTraces={streamingToolTraces}
               streamingParticipants={streamingParticipants}
             />
             <div ref={endRef} />
@@ -766,32 +769,17 @@ const ClawRoomChat = ({
                 </div>
               </div>
 
-              {mentionAutocomplete && mentionAutocomplete.options.length > 0 && (
-                <div className={styles.mentionMenu} role="listbox" aria-label="Mention suggestions">
-                  {mentionAutocomplete.options.map((option, index) => {
-                    const isActive = mentionAutocomplete.activeIndex === index
-                    return (
-                      <button
-                        key={option.token}
-                        type="button"
-                        className={`${styles.mentionItem} ${isActive ? styles.mentionItemActive : ''}`}
-                        onMouseDown={event => {
-                          event.preventDefault()
-                          selectMentionOption(option)
-                        }}
-                        onMouseEnter={() => {
-                          setMentionAutocomplete(previous => {
-                            if (!previous) return previous
-                            return { ...previous, activeIndex: index }
-                          })
-                        }}
-                      >
-                        <span className={styles.mentionToken}>{option.token}</span>
-                        <span className={styles.mentionDescription}>{option.description}</span>
-                      </button>
-                    )
-                  })}
-                </div>
+              {mentionAutocomplete && (
+                <ClawRoomMentionMenu
+                  mentionAutocomplete={mentionAutocomplete}
+                  onSelect={selectMentionOption}
+                  onActiveIndexChange={index => {
+                    setMentionAutocomplete(previous => {
+                      if (!previous) return previous
+                      return { ...previous, activeIndex: index }
+                    })
+                  }}
+                />
               )}
             </div>
           </div>

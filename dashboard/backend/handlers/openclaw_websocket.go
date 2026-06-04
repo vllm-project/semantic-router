@@ -13,15 +13,16 @@ import (
 // WebSocket message types for ClawRoom.
 // WebSocket is the primary room collaboration transport; SSE (/stream) is a legacy fallback.
 const (
-	WSTypeSendMessage    = "send_message"
-	WSTypeSurfaceEvent   = "surface_event"
-	WSTypePing           = "ping"
-	WSTypePong           = "pong"
-	WSTypeNewMessage     = "new_message"
-	WSTypeMessageUpdated = "message_updated"
-	WSTypeMessageChunk   = "message_chunk"
-	WSTypeConnected      = "connected"
-	WSTypeError          = "error"
+	WSTypeSendMessage     = "send_message"
+	WSTypeSurfaceEvent    = "surface_event"
+	WSTypePing            = "ping"
+	WSTypePong            = "pong"
+	WSTypeNewMessage      = "new_message"
+	WSTypeMessageUpdated  = "message_updated"
+	WSTypeMessageChunk    = "message_chunk"
+	WSTypeToolTraceUpdate = "tool_trace_update"
+	WSTypeConnected       = "connected"
+	WSTypeError           = "error"
 
 	roomWSPingInterval = 5 * time.Minute
 	roomWSWriteTimeout = 5 * time.Minute
