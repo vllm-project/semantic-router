@@ -1531,6 +1531,12 @@ global:
               unit: hour
     startup_status:
       store_backend: file
+    mcp_config:
+      enabled: false
+      loopback_only: false
+      allow_destructive: false
+      allowed_tools: []
+      rate_limit_per_minute: 60
     router_replay:
       enabled: true
       store_backend: postgres

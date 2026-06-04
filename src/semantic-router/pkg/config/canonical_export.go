@@ -155,6 +155,7 @@ func CanonicalGlobalFromRouterConfig(cfg *RouterConfig) *CanonicalGlobal {
 			RateLimit:     cfg.RateLimit,
 			RouterReplay:  cfg.RouterReplay,
 			StartupStatus: cfg.StartupStatus,
+			MCPConfig:     cfg.MCPConfig,
 		},
 		Stores: CanonicalStoreGlobal{
 			SemanticCache: cfg.SemanticCache,

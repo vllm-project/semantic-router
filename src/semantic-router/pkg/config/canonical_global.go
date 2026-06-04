@@ -38,13 +38,14 @@ type CanonicalStreamedBody struct {
 
 // CanonicalServiceGlobal groups shared runtime services exposed by the router.
 type CanonicalServiceGlobal struct {
-	API           APIConfig           `yaml:"api"`
-	ResponseAPI   ResponseAPIConfig   `yaml:"response_api"`
-	Observability ObservabilityConfig `yaml:"observability"`
-	Authz         AuthzConfig         `yaml:"authz"`
-	RateLimit     RateLimitConfig     `yaml:"ratelimit"`
-	RouterReplay  RouterReplayConfig  `yaml:"router_replay"`
-	StartupStatus StartupStatusConfig `yaml:"startup_status"`
+	API           APIConfig             `yaml:"api"`
+	ResponseAPI   ResponseAPIConfig     `yaml:"response_api"`
+	Observability ObservabilityConfig   `yaml:"observability"`
+	Authz         AuthzConfig           `yaml:"authz"`
+	RateLimit     RateLimitConfig       `yaml:"ratelimit"`
+	RouterReplay  RouterReplayConfig    `yaml:"router_replay"`
+	StartupStatus StartupStatusConfig   `yaml:"startup_status"`
+	MCPConfig     MCPConfigServerConfig `yaml:"mcp_config,omitempty"`
 }
 
 // CanonicalStoreGlobal groups storage-backed runtime facilities.
@@ -223,6 +224,7 @@ func applyCanonicalGlobal(cfg *RouterConfig, global *CanonicalGlobal) error {
 	cfg.RateLimit = global.Services.RateLimit
 	cfg.RouterReplay = global.Services.RouterReplay
 	cfg.StartupStatus = global.Services.StartupStatus
+	cfg.MCPConfig = global.Services.MCPConfig.WithDefaults()
 
 	cfg.SemanticCache = global.Stores.SemanticCache
 	cfg.Memory = global.Stores.Memory

@@ -250,6 +250,7 @@ func (s *ClassificationAPIServer) setupRoutes() *http.ServeMux {
 	for _, route := range apiRoutes() {
 		mux.HandleFunc(route.pattern(), route.bind(s))
 	}
+	s.registerMCPConfigRoutes(mux)
 	return mux
 }
 

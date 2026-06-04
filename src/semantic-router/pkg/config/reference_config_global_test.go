@@ -40,6 +40,11 @@ func assertReferenceConfigServiceGlobalCoverage(t testingT, services map[string]
 	assertReferenceConfigAuthzCoverage(t, mustMapAt(t, services, "authz"))
 	assertReferenceConfigRateLimitCoverage(t, mustMapAt(t, services, "ratelimit"))
 	assertReferenceConfigRouterReplayCoverage(t, mustMapAt(t, services, "router_replay"))
+	assertReferenceConfigMCPConfigCoverage(t, mustMapAt(t, services, "mcp_config"))
+}
+
+func assertReferenceConfigMCPConfigCoverage(t testingT, mcpConfig map[string]interface{}) {
+	assertMapCoversStructFields(t, mcpConfig, reflect.TypeOf(MCPConfigServerConfig{}), "global.services.mcp_config")
 }
 
 func assertReferenceConfigAPIServiceCoverage(t testingT, api map[string]interface{}) {

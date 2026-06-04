@@ -65,12 +65,13 @@ type RouterConfig struct {
 	InlineModels     `yaml:",inline"`
 	ExternalModels   []ExternalModelConfig `yaml:"external_models,omitempty"`
 	SemanticCache    `yaml:"semantic_cache"`
-	Memory           MemoryConfig        `yaml:"memory"`
-	VectorStore      *VectorStoreConfig  `yaml:"vector_store,omitempty"`
-	ResponseAPI      ResponseAPIConfig   `yaml:"response_api"`
-	RouterReplay     RouterReplayConfig  `yaml:"router_replay"`
-	StartupStatus    StartupStatusConfig `yaml:"startup_status"`
-	Looper           LooperConfig        `yaml:"looper,omitempty"`
+	Memory           MemoryConfig          `yaml:"memory"`
+	VectorStore      *VectorStoreConfig    `yaml:"vector_store,omitempty"`
+	ResponseAPI      ResponseAPIConfig     `yaml:"response_api"`
+	RouterReplay     RouterReplayConfig    `yaml:"router_replay"`
+	StartupStatus    StartupStatusConfig   `yaml:"startup_status"`
+	MCPConfig        MCPConfigServerConfig `yaml:"mcp_config,omitempty"`
+	Looper           LooperConfig          `yaml:"looper,omitempty"`
 	LLMObservability `yaml:",inline"`
 	APIServer        `yaml:",inline"`
 	RouterOptions    `yaml:",inline"`

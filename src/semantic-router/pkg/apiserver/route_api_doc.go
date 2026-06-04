@@ -46,6 +46,7 @@ func (s *ClassificationAPIServer) handleAPIOverview(w http.ResponseWriter, _ *ht
 			"models_info":   "/info/models",
 			"health":        "/health",
 			"ready":         "/ready",
+			"mcp_config":    internalMCPConfigPath,
 		},
 	}
 
