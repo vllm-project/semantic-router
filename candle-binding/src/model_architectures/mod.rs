@@ -2,6 +2,7 @@
 
 #![allow(dead_code)]
 
+pub mod attention; // NEW: Shared attention kernels (chunked SDPA)
 pub mod embedding;
 pub mod generative; // NEW: Generative/causal language models (Qwen3ForCausalLM)
 pub mod lora;
