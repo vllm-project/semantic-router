@@ -51,6 +51,24 @@ config:
           - type: fast_response
             configuration:
               message: Your request contains personal information. Please remove any sensitive data and try again.
+      - name: retention_probe_decision
+        description: Deterministic keyword-gated route used by the retention-directive E2E to assert x-vsr-retention-* response headers (issue #2009).
+        priority: 600
+        rules:
+          operator: OR
+          conditions:
+            - type: keyword
+              name: retention_probe_keywords
+        modelRefs:
+          - model: base-model
+            lora_name: general-expert
+            use_reasoning: false
+        emits:
+          - kind: retention
+            retention:
+              ttl_turns: 0
+              keep_current_model: true
+              prefer_prefix_retention: true
       - name: tool_selection_add_weather_decision
         description: Contract route for tool_selection add mode (weather-aligned retrieval)
         priority: 500
@@ -558,6 +576,11 @@ config:
           operator: OR
           keywords:
             - __TOOL_SELECTION_WITH_SYSTEM_PROMPT__
+          case_sensitive: false
+        - name: retention_probe_keywords
+          operator: OR
+          keywords:
+            - __RETENTION_PROBE__
           case_sensitive: false
       domains:
         - name: business
