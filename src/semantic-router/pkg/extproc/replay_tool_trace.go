@@ -297,7 +297,7 @@ func buildReplayResponseToolTrace(
 	if ctx == nil {
 		return nil
 	}
-	if len(ctx.StreamingChunks) > 0 || len(ctx.StreamingToolCalls) > 0 {
+	if ctx.HasStreamingChunks || len(ctx.StreamingToolCalls) > 0 {
 		return buildReplayStreamingToolTrace(ctx)
 	}
 	if isResponseAPIRequest(ctx) {

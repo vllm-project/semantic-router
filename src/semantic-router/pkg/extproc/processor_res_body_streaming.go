@@ -21,7 +21,7 @@ func (r *OpenAIRouter) handleStreamingResponseBody(
 	ensureStreamingState(ctx)
 
 	chunk := string(responseBody)
-	ctx.StreamingChunks = append(ctx.StreamingChunks, chunk)
+	ctx.HasStreamingChunks = true
 	r.parseStreamingChunk(chunk, ctx)
 
 	if strings.Contains(chunk, "data: [DONE]") {
@@ -54,9 +54,6 @@ func recordStreamingTTFT(ctx *RequestContext) {
 }
 
 func ensureStreamingState(ctx *RequestContext) {
-	if ctx.StreamingChunks == nil {
-		ctx.StreamingChunks = make([]string, 0)
-	}
 	if ctx.StreamingMetadata == nil {
 		ctx.StreamingMetadata = make(map[string]interface{})
 	}
