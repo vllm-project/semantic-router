@@ -36,6 +36,10 @@ docs-lint-fix: ## Fix lint issues in documentation website source files
 	@$(LOG_TARGET)
 	cd website && npm run lint:fix
 
+docs-contributors-rank: ## Generate contributor leaderboard data
+	@$(LOG_TARGET)
+	cd website && npm run contributors:rank
+
 ##@ CRD Documentation
 
 CRD_REF_DOCS_VERSION ?= latest
@@ -98,4 +102,3 @@ docs-crd-watch: ## Watch for CRD changes and regenerate documentation
 docs-all: docs-crd docs-build ## Generate all documentation (CRD + website)
 	@$(LOG_TARGET)
 	@echo "All documentation generated successfully"
-

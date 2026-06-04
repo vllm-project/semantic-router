@@ -5,7 +5,6 @@ import { FaGithub } from 'react-icons/fa'
 import {
   contributorRankData,
   contributorRankGeneratedAt,
-  newContributorsSinceRelease,
 } from '../../data/contributorRank.generated'
 import type {
   ContributorRankEntry,
@@ -60,7 +59,7 @@ const ContributorsPage: React.FC = () => {
 
         <section className={styles.metrics} aria-label="Contributor rank summary">
           <Metric label="Contributors" value={snapshot.totalContributors.toLocaleString('en-US')} />
-          <Metric label="New Contributors" value={newContributorsSinceRelease.totalContributors.toLocaleString('en-US')} />
+          <Metric label="New Contributors" value={snapshot.newContributors.toLocaleString('en-US')} />
           <Metric label="Commits" value={snapshot.totalCommits.toLocaleString('en-US')} />
         </section>
 

@@ -199,6 +199,7 @@ const identityOverrides = [
   {
     key: 'liuqihao',
     name: '刘启灏',
+    login: 'BruceLoveDecimal',
     emails: ['liuqihao@liuqihaodemacbook-pro.local'],
   },
   {
@@ -222,6 +223,8 @@ const identityOverrides = [
 const overrideByEmail = new Map()
 const overrideByName = new Map()
 const overrideByLogin = new Map()
+const githubProfileByLogin = new Map()
+const pullAuthorBySha = new Map()
 
 for (const identity of identityOverrides) {
   if (identity.login) {
@@ -291,6 +294,7 @@ function buildSnapshot(range, generatedAt, allRows, newContributorKeys) {
   const byContributor = collectContributorStats(rows)
   const totalCommits = [...byContributor.values()].reduce((sum, entry) => sum + entry.commits, 0)
   const entries = rankContributorEntries(byContributor, totalCommits, newContributorKeys)
+  const newContributors = entries.filter(entry => entry.isNewContributorSinceRelease).length
 
   return {
     id: range.id,
@@ -301,6 +305,7 @@ function buildSnapshot(range, generatedAt, allRows, newContributorKeys) {
     description: range.description,
     totalCommits,
     totalContributors: entries.length,
+    newContributors,
     entries,
   }
 }
@@ -542,14 +547,22 @@ function readGitHubCommitRows(startDate) {
   return pages
     .flat()
     .filter(commit => (commit.parents ?? []).length <= 1)
-    .map(commit => ({
-      sha: commit.sha,
-      name: commit.commit?.author?.name ?? '',
-      email: commit.commit?.author?.email ?? '',
-      date: commit.commit?.author?.date ?? commit.commit?.committer?.date ?? '',
-      githubLogin: commit.author?.login,
-      avatarUrl: commit.author?.avatar_url,
-    }))
+    .map((commit) => {
+      const name = commit.commit?.author?.name ?? ''
+      const email = commit.commit?.author?.email ?? ''
+      const githubLogin = commit.author?.login
+      const pullAuthor = githubLogin ? null : readAssociatedPullAuthorIfNeeded(commit.sha, name, email)
+
+      return {
+        sha: commit.sha,
+        name,
+        email,
+        date: commit.commit?.author?.date ?? commit.commit?.committer?.date ?? '',
+        githubLogin: githubLogin ?? pullAuthor?.login,
+        githubLoginSource: githubLogin ? 'commit' : pullAuthor ? 'pull' : undefined,
+        avatarUrl: commit.author?.avatar_url ?? pullAuthor?.avatarUrl,
+      }
+    })
     .filter(row => row.date)
 }
 
@@ -595,52 +608,150 @@ function resolveIdentity(name, email, source = {}) {
   const normalizedName = normalizeName(name)
   const githubLogin = source.githubLogin
   const avatarUrl = source.avatarUrl
+  const isPullLogin = source.githubLoginSource === 'pull'
   const normalizedGithubLogin = normalizeLogin(githubLogin)
+  const override = overrideByEmail.get(normalizedEmail) ?? overrideByName.get(normalizedName)
 
   if (isBotAuthor(normalizedName, normalizedEmail, normalizedGithubLogin)) {
     return { key: normalizedEmail || normalizedName || normalizedGithubLogin, name, isBot: true }
   }
 
-  if (githubLogin) {
+  if (githubLogin && !isPullLogin) {
     const login = String(githubLogin)
     const override = overrideByLogin.get(normalizedGithubLogin)
+    const profile = avatarUrl ? null : readGitHubUserProfile(login)
 
     return {
-      key: `github:${normalizedGithubLogin}`,
+      key: `github:${normalizeLogin(profile?.login ?? login)}`,
       name: override?.name ?? name ?? login,
-      login,
-      avatarLogin: login,
-      avatarUrl,
-      avatarSeed: normalizeLogin(login),
+      login: profile?.login ?? login,
+      avatarLogin: profile?.login ?? login,
+      avatarUrl: avatarUrl ?? profile?.avatarUrl,
+      avatarSeed: normalizeLogin(profile?.login ?? login),
       isBot: false,
     }
   }
 
-  const override = overrideByEmail.get(normalizedEmail) ?? overrideByName.get(normalizedName)
-
   if (override) {
+    const login = override.login ?? githubLogin
+    const profile = login ? readGitHubUserProfile(login) : null
+
     return {
-      key: override.login ? `github:${normalizeLogin(override.login)}` : override.key,
+      key: login ? `github:${normalizeLogin(profile?.login ?? login)}` : override.key,
       name: override.name,
-      login: override.login,
-      avatarLogin: override.avatarLogin ?? override.login,
-      avatarUrl: undefined,
+      login: profile?.login ?? login,
+      avatarLogin: override.avatarLogin ?? profile?.login ?? login,
+      avatarUrl: avatarUrl ?? profile?.avatarUrl,
       avatarSeed: override.key,
       isBot: false,
     }
   }
 
   const localGithubLogin = extractGithubLogin(normalizedEmail)
-  const key = localGithubLogin ? `github:${localGithubLogin.toLowerCase()}` : `email:${normalizedEmail || normalizedName}`
+  const resolvedGithubLogin = localGithubLogin ?? githubLogin
+  const profile = resolvedGithubLogin ? readGitHubUserProfile(resolvedGithubLogin) : null
+  const login = profile?.login ?? resolvedGithubLogin
+  const key = login ? `github:${normalizeLogin(login)}` : `email:${normalizedEmail || normalizedName}`
 
   return {
     key,
-    name: name || localGithubLogin || 'Unknown contributor',
-    login: localGithubLogin,
-    avatarLogin: localGithubLogin,
-    avatarUrl: undefined,
+    name: name || profile?.name || login || 'Unknown contributor',
+    login,
+    avatarLogin: login,
+    avatarUrl: avatarUrl ?? profile?.avatarUrl,
     avatarSeed: normalizedEmail || normalizedName || key,
     isBot: false,
+  }
+}
+
+function readAssociatedPullAuthorIfNeeded(sha, name, email) {
+  const normalizedEmail = normalizeEmail(email)
+  const override = overrideByEmail.get(normalizedEmail) ?? overrideByName.get(normalizeName(name))
+
+  if (override?.login || extractGithubLogin(normalizedEmail)) {
+    return null
+  }
+
+  return readAssociatedPullAuthor(sha)
+}
+
+function readAssociatedPullAuthor(sha) {
+  if (!sha) {
+    return null
+  }
+
+  if (pullAuthorBySha.has(sha)) {
+    return pullAuthorBySha.get(sha)
+  }
+
+  try {
+    const output = execFileSync('gh', [
+      'api',
+      '-H',
+      'Accept: application/vnd.github+json',
+      `repos/${githubRepo}/commits/${sha}/pulls`,
+    ], {
+      cwd: repoRoot,
+      encoding: 'utf8',
+      maxBuffer: 1024 * 1024 * 2,
+      stdio: ['ignore', 'pipe', 'ignore'],
+    }).trim()
+    const pull = JSON.parse(output).find((candidate) => {
+      const login = normalizeLogin(candidate?.user?.login)
+
+      return login && login !== 'ghost'
+    })
+    const author = pull
+      ? {
+          login: pull.user.login,
+          avatarUrl: pull.user.avatar_url,
+        }
+      : null
+
+    pullAuthorBySha.set(sha, author)
+
+    return author
+  }
+  catch {
+    pullAuthorBySha.set(sha, null)
+
+    return null
+  }
+}
+
+function readGitHubUserProfile(login) {
+  const normalizedLogin = normalizeLogin(login)
+
+  if (!normalizedLogin) {
+    return null
+  }
+
+  if (githubProfileByLogin.has(normalizedLogin)) {
+    return githubProfileByLogin.get(normalizedLogin)
+  }
+
+  try {
+    const output = execFileSync('gh', ['api', `users/${encodeURIComponent(String(login))}`], {
+      cwd: repoRoot,
+      encoding: 'utf8',
+      maxBuffer: 1024 * 1024,
+      stdio: ['ignore', 'pipe', 'ignore'],
+    }).trim()
+    const user = JSON.parse(output)
+    const profile = {
+      login: user.login ?? login,
+      name: user.name,
+      avatarUrl: user.avatar_url,
+    }
+
+    githubProfileByLogin.set(normalizedLogin, profile)
+
+    return profile
+  }
+  catch {
+    githubProfileByLogin.set(normalizedLogin, null)
+
+    return null
   }
 }
 
@@ -734,6 +845,7 @@ export interface ContributorRankSnapshot {
   description: string
   totalCommits: number
   totalContributors: number
+  newContributors: number
   entries: ContributorRankEntry[]
 }
 
