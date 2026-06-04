@@ -2397,10 +2397,201 @@ pub extern "C" fn multimodal_encode_text(
     0
 }
 
-/// Encode image pixel data using the multi-modal embedding model
+/// Decode JPEG/PNG image bytes, resize to `(target_w, target_h)`, and convert
+/// to CHW float32 pixels in `[0, 1]`. Returns `Err(String)` with a human-readable
+/// cause on decode failure or dimension overflow.
+///
+/// Filter: `image::imageops::FilterType::CatmullRom` (cubic B-spline, B=0, C=0.5),
+/// applied via `image::imageops::resize` which is support-window-weighted -
+/// approximates PIL's `Image.BICUBIC` resampling with similar antialias
+/// behavior on downscale. Empirical equivalence against PIL bicubic+antialias=True
+/// is validated end-to-end in `docs/probe-2026-05-25-image-drift-isolation/`
+/// (cosine >= 0.999 vs PyTorch reference across a 20-image corpus).
+///
+/// Known limitations: RGBA inputs have alpha discarded via `to_rgb8` (not
+/// composited against any background; PIL's `convert("RGB")` composites against
+/// black, so RGBA inputs with non-trivial transparency will differ slightly from
+/// PIL). EXIF orientation is not auto-applied (matches PIL default; callers that
+/// need orientation must transpose before calling). For the SigLIP-base / mmes
+/// inference path used by this crate, neither matters: training data and
+/// reference inference both use opaque JPEG/PNG without orientation metadata
+/// applied.
+fn decode_resize_to_chw_f32(
+    bytes: &[u8],
+    target_w: u32,
+    target_h: u32,
+) -> Result<Vec<f32>, String> {
+    let w = target_w as usize;
+    let h = target_h as usize;
+    let n_pixels = w
+        .checked_mul(h)
+        .and_then(|n| n.checked_mul(3))
+        .ok_or_else(|| {
+            format!(
+                "target dimensions overflow usize: {}x{}x3",
+                target_w, target_h
+            )
+        })?;
+
+    let img = image::load_from_memory(bytes)
+        .map_err(|e| format!("image decode failed: {:?}", e))?
+        .to_rgb8();
+    let resized = image::imageops::resize(
+        &img,
+        target_w,
+        target_h,
+        image::imageops::FilterType::CatmullRom,
+    );
+
+    // `image::imageops::resize` returns an interleaved HWC u8 buffer
+    // (`ImageBuffer<Rgb<u8>, Vec<u8>>`). Transpose to planar CHW float32
+    // in [0, 1] so the downstream `Tensor::from_slice(.., (1, 3, h, w), ..)`
+    // call gets the layout it expects.
+    let raw = resized.as_raw();
+    debug_assert_eq!(
+        raw.len(),
+        n_pixels,
+        "resize produced unexpected pixel count"
+    );
+    let mut pixels = vec![0f32; n_pixels];
+    let plane = h * w;
+    let inv = 1.0f32 / 255.0;
+    for i in 0..plane {
+        let base = i * 3;
+        pixels[i] = raw[base] as f32 * inv;
+        pixels[plane + i] = raw[base + 1] as f32 * inv;
+        pixels[2 * plane + i] = raw[base + 2] as f32 * inv;
+    }
+    Ok(pixels)
+}
+
+/// Encode image bytes: decode + resize (Catmull-Rom cubic, support-weighted) +
+/// forward.
+///
+/// Preferred entry point for image embedding from raw JPEG/PNG bytes. All
+/// preprocessing happens in Rust via `decode_resize_to_chw_f32`, which
+/// approximates PIL's `Image.BICUBIC` + `antialias=True` behavior used by
+/// `SiglipProcessor`. Validated end-to-end against the PyTorch reference in
+/// `docs/probe-2026-05-25-image-drift-isolation/`: cosine >= 0.999 across a
+/// 20-image corpus; the prior Go-side 4-tap bilinear path averaged cosine
+/// 0.99 on the same fixtures.
+///
+/// See `decode_resize_to_chw_f32` for the resize-filter discussion, known
+/// limitations (RGBA alpha discard, no EXIF auto-apply), and rationale.
 ///
 /// # Parameters
-/// - `pixel_data`: Raw pixel data as float array (RGB, normalized 0-1), shape [3 * H * W]
+/// - `bytes_ptr`: Pointer to raw JPEG/PNG bytes
+/// - `bytes_len`: Number of bytes
+/// - `target_dim`: Target embedding dimension (0 for default 384)
+/// - `result`: Output pointer for embedding result
+///
+/// # Returns
+/// 0 on success, -1 on error
+#[allow(clippy::not_unsafe_ptr_arg_deref)]
+#[no_mangle]
+pub extern "C" fn multimodal_encode_image_from_bytes(
+    bytes_ptr: *const u8,
+    bytes_len: usize,
+    target_dim: i32,
+    result: *mut crate::ffi::types::MultiModalEmbeddingResult,
+) -> i32 {
+    use crate::ffi::types::MultiModalEmbeddingResult;
+
+    if bytes_ptr.is_null() || result.is_null() || bytes_len == 0 {
+        eprintln!("Error: null/empty input to multimodal_encode_image_from_bytes");
+        return -1;
+    }
+
+    let (model, _tokenizer) = match get_multimodal_refs() {
+        Some(refs) => refs,
+        None => {
+            eprintln!("Error: Multi-modal model not loaded");
+            unsafe {
+                (*result) = MultiModalEmbeddingResult::default();
+            }
+            return -1;
+        }
+    };
+
+    let start_time = std::time::Instant::now();
+    let bytes = unsafe { std::slice::from_raw_parts(bytes_ptr, bytes_len) };
+
+    const TARGET_W: u32 = 512;
+    const TARGET_H: u32 = 512;
+    let pixels = match decode_resize_to_chw_f32(bytes, TARGET_W, TARGET_H) {
+        Ok(p) => p,
+        Err(e) => {
+            eprintln!("Error: {}", e);
+            unsafe {
+                (*result) = MultiModalEmbeddingResult::default();
+            }
+            return -1;
+        }
+    };
+
+    let h = TARGET_H as usize;
+    let w = TARGET_W as usize;
+    let device = model.device();
+    let pixel_tensor = match candle_core::Tensor::from_slice(&pixels, (1, 3, h, w), device) {
+        Ok(t) => t,
+        Err(e) => {
+            eprintln!("Error: pixel tensor creation failed: {:?}", e);
+            unsafe {
+                (*result) = MultiModalEmbeddingResult::default();
+            }
+            return -1;
+        }
+    };
+
+    let target_dimension = if target_dim > 0 {
+        Some(target_dim as usize)
+    } else {
+        None
+    };
+
+    let embedding = match model.encode_image_with_dim(&pixel_tensor, target_dimension) {
+        Ok(emb) => emb,
+        Err(e) => {
+            eprintln!("Error: image encoding failed: {:?}", e);
+            unsafe {
+                (*result) = MultiModalEmbeddingResult::default();
+            }
+            return -1;
+        }
+    };
+
+    let embedding_vec = match embedding.squeeze(0).and_then(|t| t.to_vec1::<f32>()) {
+        Ok(v) => v,
+        Err(e) => {
+            eprintln!("Error: embedding conversion failed: {:?}", e);
+            unsafe {
+                (*result) = MultiModalEmbeddingResult::default();
+            }
+            return -1;
+        }
+    };
+
+    let length = embedding_vec.len() as i32;
+    let data = Box::into_raw(embedding_vec.into_boxed_slice()) as *mut f32;
+    let processing_time_ms = start_time.elapsed().as_secs_f32() * 1000.0;
+
+    unsafe {
+        (*result) = MultiModalEmbeddingResult {
+            data,
+            length,
+            error: false,
+            modality: 1, // image
+            processing_time_ms,
+        };
+    }
+
+    0
+}
+
+/// Encode image pixel data using the multi-modal embedding model.
+///
+/// # Parameters
+/// - `pixel_data`: Raw pixel data as float array (RGB, normalized [0, 1]), shape [3 * H * W]
 /// - `height`: Image height (must be 512 for SigLIP-base-patch16-512)
 /// - `width`: Image width (must be 512)
 /// - `target_dim`: Target dimension (0 for default 384)
@@ -2624,4 +2815,103 @@ pub extern "C" fn shutdown_embedding_batched() {
     // The scheduler thread will automatically stop when the model is dropped
     // This is handled by the Drop implementation of Qwen3EmbeddingModelBatched
     println!("INFO: Shutting down batched embedding model");
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use image::{ImageBuffer, ImageFormat, Rgb};
+    use std::io::Cursor;
+
+    /// Encode a solid-color RGB image as PNG bytes for use as a test fixture.
+    fn make_test_png(width: u32, height: u32, r: u8, g: u8, b: u8) -> Vec<u8> {
+        let img: ImageBuffer<Rgb<u8>, Vec<u8>> =
+            ImageBuffer::from_fn(width, height, |_, _| Rgb([r, g, b]));
+        let mut bytes = Vec::new();
+        image::DynamicImage::ImageRgb8(img)
+            .write_to(&mut Cursor::new(&mut bytes), ImageFormat::Png)
+            .expect("failed to encode test PNG");
+        bytes
+    }
+
+    #[test]
+    fn decode_resize_to_chw_f32_produces_chw_layout_in_unit_range() {
+        // Use distinct R/G/B values so plane means and first-pixel checks both
+        // detect channel-order regressions (a G/B swap on a solid-red input
+        // would pass; on (255, 128, 64) it can't).
+        let bytes = make_test_png(4, 4, 255, 128, 64);
+        let pixels = decode_resize_to_chw_f32(&bytes, 8, 8)
+            .expect("decode_resize_to_chw_f32 should succeed on a valid PNG");
+
+        let n = 8 * 8;
+        assert_eq!(pixels.len(), 3 * n, "expected 3 channels x 8 x 8 floats");
+        assert!(
+            pixels.iter().all(|v| (0.0..=1.0).contains(v)),
+            "all pixel values should be in [0, 1]"
+        );
+
+        // CHW layout: plane 0 = R, plane 1 = G, plane 2 = B. Distinct channel
+        // values mean any swap would shift the per-plane means.
+        let r_mean: f32 = pixels[0..n].iter().sum::<f32>() / n as f32;
+        let g_mean: f32 = pixels[n..2 * n].iter().sum::<f32>() / n as f32;
+        let b_mean: f32 = pixels[2 * n..3 * n].iter().sum::<f32>() / n as f32;
+        assert!(
+            (r_mean - 1.0).abs() < 0.05,
+            "R plane mean = {} should be ~1.0",
+            r_mean
+        );
+        assert!(
+            (g_mean - 128.0 / 255.0).abs() < 0.05,
+            "G plane mean = {} should be ~0.502",
+            g_mean
+        );
+        assert!(
+            (b_mean - 64.0 / 255.0).abs() < 0.05,
+            "B plane mean = {} should be ~0.251",
+            b_mean
+        );
+
+        // First-pixel direct check - catches HWC vs CHW transposition that
+        // aggregate means could mask on certain shuffle patterns.
+        assert!(
+            (pixels[0] - 1.0).abs() < 0.05,
+            "first R pixel = {} should be ~1.0",
+            pixels[0]
+        );
+        assert!(
+            (pixels[n] - 128.0 / 255.0).abs() < 0.05,
+            "first G pixel = {} should be ~0.502",
+            pixels[n]
+        );
+        assert!(
+            (pixels[2 * n] - 64.0 / 255.0).abs() < 0.05,
+            "first B pixel = {} should be ~0.251",
+            pixels[2 * n]
+        );
+    }
+
+    #[test]
+    fn decode_resize_to_chw_f32_rejects_invalid_bytes() {
+        let garbage = b"not a real image file";
+        let result = decode_resize_to_chw_f32(garbage, 8, 8);
+        assert!(result.is_err(), "decoder should reject garbage bytes");
+        assert!(
+            result.unwrap_err().contains("image decode failed"),
+            "error should mention decode failure"
+        );
+    }
+
+    #[test]
+    fn decode_resize_to_chw_f32_overflow_guard_on_huge_dims() {
+        let bytes = make_test_png(2, 2, 128, 128, 128);
+        let result = decode_resize_to_chw_f32(&bytes, u32::MAX, u32::MAX);
+        assert!(
+            result.is_err(),
+            "u32::MAX x u32::MAX dimensions should be rejected"
+        );
+        assert!(
+            result.unwrap_err().contains("overflow"),
+            "error should mention overflow"
+        );
+    }
 }

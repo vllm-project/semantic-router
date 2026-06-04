@@ -47,6 +47,9 @@ rand = "0.9.3"
 rayon = "1.8"
 parking_lot = "0.12"
 crossbeam-channel = "0.5"  # Efficient multi-channel select for scheduler wakeup
+# Image decode + PIL-equivalent bicubic+antialias resize, used by
+# multimodal_encode_image_from_bytes to match SiglipProcessor preprocessing.
+image = { version = "0.25", default-features = false, features = ["jpeg", "png"] }
 
 [dev-dependencies]
 rstest = "0.18"
@@ -55,7 +58,6 @@ tempfile = "3.8"
 serial_test = "3.0"
 criterion = "0.5"
 async-std = { version = "1.12", features = ["attributes"] }
-image = { version = "0.25", default-features = false, features = ["jpeg", "png"] }
 ureq = "2.9"
 base64 = "0.22"
 

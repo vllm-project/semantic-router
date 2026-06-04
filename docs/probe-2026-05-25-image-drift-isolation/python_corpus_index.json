@@ -1,0 +1,28 @@
+{
+  "images": [
+    "adversarial_atm_keypad.jpg",
+    "adversarial_restaurant_menu.jpg",
+    "adversarial_server_rack.jpg",
+    "adversarial_stock_chart_monitor.jpg",
+    "inrule_ambient_conference_room.jpg",
+    "inrule_ambient_desk_coffee.jpg",
+    "inrule_ambient_factory.jpg",
+    "inrule_ambient_whiteboard.jpg",
+    "inrule_code_github_pr.png",
+    "inrule_code_stacktrace.png",
+    "inrule_code_terminal.jpg",
+    "inrule_code_vscode.png",
+    "inrule_identifier_credit_card.jpg",
+    "inrule_identifier_drivers_license.png",
+    "inrule_identifier_passport.jpg",
+    "inrule_identifier_wristband.jpg",
+    "ood_beach.jpg",
+    "ood_meal.jpg",
+    "ood_pet.jpg",
+    "ood_sports.jpg"
+  ],
+  "shape": [
+    20,
+    384
+  ]
+}
