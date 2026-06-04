@@ -79,6 +79,16 @@ func (builder *responseHeaderMutationBuilder) addInt(key string, value int) {
 	builder.addString(key, strconv.Itoa(value))
 }
 
+// addNonNegativeInt emits the value when it is >= 0, so an explicit zero is
+// still written. Mirrors addNonNegativeFloat; used for tri-state retention
+// fields where 0 is a meaningful, explicitly-set value (not "unset").
+func (builder *responseHeaderMutationBuilder) addNonNegativeInt(key string, value int) {
+	if value < 0 {
+		return
+	}
+	builder.addString(key, strconv.Itoa(value))
+}
+
 func (builder *responseHeaderMutationBuilder) addJoined(key string, values []string) {
 	if len(values) == 0 {
 		return
@@ -257,8 +267,11 @@ func addRetentionDirectiveHeaders(builder *responseHeaderMutationBuilder, ctx *R
 	if r.Drop != nil {
 		builder.addBool(headers.VSRRetentionDrop, *r.Drop)
 	}
-	if r.TTLTurns != nil && *r.TTLTurns > 0 {
-		builder.addInt(headers.VSRRetentionTTLTurns, *r.TTLTurns)
+	if r.TTLTurns != nil {
+		// Tri-state: emit whenever explicitly set, including ttl_turns: 0
+		// (a valid no-op the validator permits). The runtime TTL override
+		// still applies only when > 0; the header reflects intent, not effect.
+		builder.addNonNegativeInt(headers.VSRRetentionTTLTurns, *r.TTLTurns)
 	}
 	if r.KeepCurrentModel != nil {
 		builder.addBool(headers.VSRRetentionKeepCurrentModel, *r.KeepCurrentModel)
