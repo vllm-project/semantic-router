@@ -248,39 +248,10 @@ func (r *OpenAIRouter) cacheReconstructedStreamingResponse(
 		return nil
 	}
 
-	if cacheQueryForContext(ctx) == "" || ctx.RequestModel == "" {
-		return r.updateStreamingCacheEntry(ctx.RequestID, reconstructedJSON, ttlSeconds)
-	}
-
-	if err := r.addStreamingCacheEntry(ctx, reconstructedJSON, ttlSeconds); err != nil {
-		logging.Errorf("Error caching streaming response with AddEntry: %v", err)
-		return r.updateStreamingCacheEntry(ctx.RequestID, reconstructedJSON, ttlSeconds)
-	}
-
-	logging.Infof("Successfully cached streaming response (via AddEntry) for request ID: %s", ctx.RequestID)
-	return nil
-}
-
-func (r *OpenAIRouter) addStreamingCacheEntry(
-	ctx *RequestContext,
-	reconstructedJSON []byte,
-	ttlSeconds int,
-) error {
-	return r.Cache.AddEntry(
-		ctx.RequestID,
-		ctx.RequestModel,
-		cacheQueryForContext(ctx),
-		streamingCacheRequestBody(ctx),
-		reconstructedJSON,
-		ttlSeconds,
-	)
-}
-
-func streamingCacheRequestBody(ctx *RequestContext) []byte {
-	if ctx.OriginalRequestBody == nil {
-		return []byte("{}")
-	}
-	return ctx.OriginalRequestBody
+	// Must finalize in place (by request_id) like the non-streaming path.
+	// AddEntry would mint a new key and orphan the empty pending entry,
+	// which then shadows KNN lookups and causes cache misses (issue #2030).
+	return r.updateStreamingCacheEntry(ctx.RequestID, reconstructedJSON, ttlSeconds)
 }
 
 func (r *OpenAIRouter) updateStreamingCacheEntry(
