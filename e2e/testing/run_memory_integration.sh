@@ -27,6 +27,7 @@ if [[ "${MODEL_DIR}" != /* ]]; then
     MODEL_DIR="${REPO_ROOT}/${MODEL_DIR}"
 fi
 MODEL_MOUNT_DIR="${TEST_DIR}/models"
+USE_DETERMINISTIC_MEMORY_EMBEDDINGS="${USE_DETERMINISTIC_MEMORY_EMBEDDINGS:-1}"
 
 VLLM_SR_PID=""
 
@@ -97,7 +98,11 @@ trap cleanup EXIT INT TERM
 
 echo "Using memory integration temp dir: ${TEST_DIR}"
 
-python3 -m pip install -U "huggingface_hub[cli]" hf_transfer requests pymilvus
+if [[ "${USE_DETERMINISTIC_MEMORY_EMBEDDINGS}" == "1" ]]; then
+    python3 -m pip install -U requests pymilvus
+else
+    python3 -m pip install -U "huggingface_hub[cli]" hf_transfer requests pymilvus
+fi
 
 prepare_model_dir() {
     mkdir -p "${MODEL_DIR}"
@@ -168,7 +173,12 @@ PY
 
 prepare_model_dir
 echo "Using memory integration model dir: ${MODEL_DIR}"
-download_hf_snapshot "llm-semantic-router/mmbert-embed-32k-2d-matryoshka" "${MODEL_DIR}/mmbert-embed-32k-2d-matryoshka"
+if [[ "${USE_DETERMINISTIC_MEMORY_EMBEDDINGS}" == "1" ]]; then
+    export VLLM_SR_DETERMINISTIC_EMBEDDINGS=1
+    echo "Using deterministic memory embeddings for CI; skipping Hugging Face model download"
+else
+    download_hf_snapshot "llm-semantic-router/mmbert-embed-32k-2d-matryoshka" "${MODEL_DIR}/mmbert-embed-32k-2d-matryoshka"
+fi
 make -C "${REPO_ROOT}" start-milvus
 
 # Double-check Milvus readiness with pymilvus probe (gRPC-level, not just HTTP)
