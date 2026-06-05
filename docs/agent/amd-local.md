@@ -8,8 +8,8 @@
 - Expected behavior:
   - ROCm image defaults are selected
   - `VLLM_SR_PLATFORM=amd` is passed through to the container
-  - router internal signal model `use_cpu` settings are preserved by default
-  - `VLLM_SR_AMD_FORCE_GPU=1` opts router internal signal models into AMD GPU defaults
+  - router internal signal model `use_cpu` settings default to `false`
+  - `VLLM_SR_AMD_PRESERVE_CPU=1` preserves CPU settings when the router has no dedicated GPU headroom
 
 ## When To Use Which Config
 

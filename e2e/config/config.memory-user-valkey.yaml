@@ -26,10 +26,6 @@ routing:
     - name: qwen3
       modality: text
   signals:
-    domains:
-      - name: general
-        description: General queries for memory testing
-        mmlu_categories: [other]
     keywords:
       - name: no_memory_trigger
         operator: OR
@@ -85,10 +81,8 @@ routing:
       description: Default route for memory testing
       priority: 1
       rules:
-        operator: OR
-        conditions:
-          - type: domain
-            name: general
+        operator: AND
+        conditions: []
       modelRefs:
         - model: qwen3
           use_reasoning: false
@@ -132,3 +126,15 @@ global:
       embedding_model: mmbert
     vector_store:
       embedding_model: mmbert
+  model_catalog:
+    embeddings:
+      semantic:
+        qwen3_model_path: ""
+        gemma_model_path: ""
+        mmbert_model_path: ""
+        multimodal_model_path: ""
+        bert_model_path: ""
+        use_cpu: true
+        embedding_config:
+          model_type: mmbert
+          target_dimension: 384

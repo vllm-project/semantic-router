@@ -71,6 +71,14 @@
     "message": "最新版",
     "description": "Navbar item with label Latest"
   },
+  "item.label.v0.3": {
+    "message": "v0.3",
+    "description": "Navbar item with label v0.3"
+  },
+  "item.label.v0.2": {
+    "message": "v0.2",
+    "description": "Navbar item with label v0.2"
+  },
   "item.label.v0.1": {
     "message": "v0.1",
     "description": "Navbar item with label v0.1"
