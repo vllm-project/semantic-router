@@ -142,6 +142,15 @@
   box-shadow: none;
 }
 
+.navbar__item.navbar__link.nav-utility:hover,
+.navbar__item.navbar__link.nav-utility:focus-visible,
+.navbar__items--right > .navbar__item.navbar__link.nav-utility:hover,
+.navbar__items--right > .navbar__item.navbar__link.nav-utility:focus-visible {
+  background: var(--site-text);
+  color: var(--site-bg);
+  border-color: var(--site-text);
+}
+
 html[data-route-kind='home'] .nav-docs-only,
 html[data-route-kind='page'] .nav-docs-only,
 html[data-route-kind='blog'] .nav-docs-only {
