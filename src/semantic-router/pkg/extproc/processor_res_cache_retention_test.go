@@ -288,6 +288,103 @@ func TestCacheStreamingResponseChecksScopeBeforeRetentionDrop(t *testing.T) {
 	}
 }
 
+func TestRetentionTTLOverrideSeconds(t *testing.T) {
+	cases := []struct {
+		name    string
+		ctx     *RequestContext
+		wantSec int
+		wantOK  bool
+	}{
+		{name: "nil_ctx", ctx: nil, wantSec: 0, wantOK: false},
+		{name: "no_retention", ctx: &RequestContext{}, wantSec: 0, wantOK: false},
+		{
+			name:    "ttl_turns_unset",
+			ctx:     &RequestContext{EmittedRetention: &config.RetentionDirective{Drop: retBool(false)}},
+			wantSec: 0, wantOK: false,
+		},
+		{
+			name:    "ttl_turns_zero_is_noop",
+			ctx:     &RequestContext{EmittedRetention: &config.RetentionDirective{TTLTurns: intPtr(0)}},
+			wantSec: 0, wantOK: false,
+		},
+		{
+			name:    "ttl_turns_positive",
+			ctx:     &RequestContext{EmittedRetention: &config.RetentionDirective{TTLTurns: intPtr(3)}},
+			wantSec: 3 * retentionDefaultSecondsPerTurn, wantOK: true,
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			sec, ok := retentionTTLOverrideSeconds(tc.ctx)
+			if sec != tc.wantSec || ok != tc.wantOK {
+				t.Fatalf("got (%d,%v), want (%d,%v)", sec, ok, tc.wantSec, tc.wantOK)
+			}
+		})
+	}
+}
+
+func TestApplyRetentionTTLOverride(t *testing.T) {
+	const base = 42
+	if got := applyRetentionTTLOverride(base, &RequestContext{}); got != base {
+		t.Fatalf("no retention: got %d, want base %d", got, base)
+	}
+	ctx := &RequestContext{EmittedRetention: &config.RetentionDirective{TTLTurns: intPtr(2)}}
+	if got := applyRetentionTTLOverride(base, ctx); got != 2*retentionDefaultSecondsPerTurn {
+		t.Fatalf("ttl_turns override: got %d, want %d", got, 2*retentionDefaultSecondsPerTurn)
+	}
+}
+
+func TestUpdateResponseCacheAppliesRetentionTTL(t *testing.T) {
+	mockCache := &mockStreamingCache{}
+	router := &OpenAIRouter{
+		Cache: mockCache,
+		Config: &config.RouterConfig{
+			SemanticCache: config.SemanticCache{Enabled: true},
+			IntelligentRouting: config.IntelligentRouting{
+				Decisions: []config.Decision{retentionCacheDecision("cache-decision", true)},
+			},
+		},
+	}
+	ctx := &RequestContext{
+		RequestID:               "req-retention-ttl",
+		VSRSelectedDecisionName: "cache-decision",
+		EmittedRetention:        &config.RetentionDirective{TTLTurns: intPtr(2)},
+	}
+
+	router.updateResponseCache(ctx, []byte(`{"choices":[]}`))
+	if !mockCache.updateCalled {
+		t.Fatalf("ttl_turns must still write the cache entry")
+	}
+	if mockCache.lastTTLSeconds != 2*retentionDefaultSecondsPerTurn {
+		t.Fatalf("non-streaming ttl_turns override: got %d, want %d", mockCache.lastTTLSeconds, 2*retentionDefaultSecondsPerTurn)
+	}
+}
+
+func TestCacheStreamingResponseAppliesRetentionTTL(t *testing.T) {
+	mockCache := &mockStreamingCache{}
+	router := &OpenAIRouter{
+		Cache: mockCache,
+		Config: &config.RouterConfig{
+			SemanticCache: config.SemanticCache{Enabled: true},
+			IntelligentRouting: config.IntelligentRouting{
+				Decisions: []config.Decision{retentionCacheDecision("cache-decision", true)},
+			},
+		},
+	}
+	ctx := retentionStreamingContext("cache-decision")
+	ctx.EmittedRetention = &config.RetentionDirective{TTLTurns: intPtr(4)}
+
+	if err := router.cacheStreamingResponse(ctx); err != nil {
+		t.Fatalf("cacheStreamingResponse() error = %v", err)
+	}
+	if !mockCache.addEntryCalled && !mockCache.updateCalled {
+		t.Fatalf("ttl_turns streaming must still write the cache entry")
+	}
+	if mockCache.lastTTLSeconds != 4*retentionDefaultSecondsPerTurn {
+		t.Fatalf("streaming ttl_turns override: got %d, want %d", mockCache.lastTTLSeconds, 4*retentionDefaultSecondsPerTurn)
+	}
+}
+
 func retentionCacheDecision(name string, cacheEnabled bool) config.Decision {
 	decision := config.Decision{
 		Name:      name,

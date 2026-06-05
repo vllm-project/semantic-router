@@ -26,6 +26,8 @@ var BaselineRouterContract = []string{
 	"plugin-config-variations",
 	"chat-completions-progressive-stress",
 	"anthropic-passthrough-openai-regression",
+	// Retention directive response-header contract (issue #2009)
+	"retention-directive",
 	// Session observability
 	"session-telemetry-metrics",
 	"session-pricing-chat-completions",

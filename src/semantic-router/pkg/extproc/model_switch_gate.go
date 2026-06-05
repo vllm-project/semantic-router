@@ -37,12 +37,13 @@ func (r *OpenAIRouter) applyModelSwitchGate(
 
 	gate := selection.NewModelSwitchGate(cfg, r.LookupTable)
 	decision := gate.Evaluate(selection.ModelSwitchGateInput{
-		SelectionContext: selCtx,
-		SelectionResult:  result,
-		CurrentModel:     currentModel,
-		CandidateModel:   selectedModelRef.Model,
-		CacheWarmth:      cacheWarmth,
-		CacheWarmthOK:    cacheWarmthOK,
+		SelectionContext:      selCtx,
+		SelectionResult:       result,
+		CurrentModel:          currentModel,
+		CandidateModel:        selectedModelRef.Model,
+		CacheWarmth:           cacheWarmth,
+		CacheWarmthOK:         cacheWarmthOK,
+		ForceKeepCurrentModel: retentionWantsKeepCurrentModel(ctx),
 	})
 
 	fields := decision.LogFields()

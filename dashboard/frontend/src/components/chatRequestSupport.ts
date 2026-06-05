@@ -50,6 +50,10 @@ const RESPONSE_HEADER_KEYS = [
   'x-vsr-looper-models-used',
   'x-vsr-looper-iterations',
   'x-vsr-looper-algorithm',
+  'x-vsr-retention-drop',
+  'x-vsr-retention-ttl-turns',
+  'x-vsr-retention-keep-current-model',
+  'x-vsr-retention-prefer-prefix',
 ] as const
 
 export const buildChatMessages = (

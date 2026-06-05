@@ -34,6 +34,14 @@ type ModelSwitchGateInput struct {
 	// When false the gate records cache_warmth as a missing signal but still
 	// evaluates evidence (cache warmth contributes zero penalty in that case).
 	CacheWarmthOK bool
+
+	// ForceKeepCurrentModel carries an explicit operator directive — EMIT
+	// retention { keep_current_model: true } — to stay on the current model.
+	// Unlike the heuristic evidence path, it forces a stay regardless of gate
+	// mode (shadow or enforce), provided the current model is known and is a
+	// valid candidate. It is a directive, not a signal, so it is not subject to
+	// the net-switch-advantage comparison.
+	ForceKeepCurrentModel bool
 }
 
 // ModelSwitchGateDecision is the auditable stay-vs-switch decision.
@@ -93,6 +101,19 @@ func (g *ModelSwitchGate) Evaluate(input ModelSwitchGateInput) ModelSwitchGateDe
 	}
 	if !candidateSetContains(input.SelectionContext.CandidateModels, input.CurrentModel) {
 		return decision.withMissingAuditOnly(append([]string{"previous_model_not_in_candidates"}, informational...))
+	}
+
+	// Explicit retention directive (keep_current_model) forces a stay on the
+	// known current model and skips the heuristic evidence path. It is honored
+	// regardless of gate mode because the operator asked for it directly; the
+	// reason field keeps the override auditable (e.g. mode=shadow + enforced_stay).
+	if input.ForceKeepCurrentModel {
+		decision.WouldSwitch = false
+		decision.EnforcedStay = true
+		decision.FinalModel = input.CurrentModel
+		decision.MissingSignals = append(decision.MissingSignals, informational...)
+		decision.Reason = "retention_keep_current_model"
+		return decision
 	}
 
 	evidence, evidenceMissing, ok := g.collectSwitchEvidence(input, candidateModel)

@@ -150,6 +150,23 @@ const HEADER_INFO: Record<string, { label: string; description: string }> = {
     label: 'Algorithm',
     description: 'The multi-model algorithm used (confidence, ratings)',
   },
+  // Retention directive headers (issue #2009)
+  'x-vsr-retention-drop': {
+    label: 'Retention: Drop',
+    description: 'Matched decision asked to skip the semantic-cache write',
+  },
+  'x-vsr-retention-ttl-turns': {
+    label: 'Retention TTL (turns)',
+    description: 'Per-entry semantic-cache lifetime override, in conversation turns',
+  },
+  'x-vsr-retention-keep-current-model': {
+    label: 'Keep Current Model',
+    description: 'Forces the model-switch gate to stay on the current model',
+  },
+  'x-vsr-retention-prefer-prefix': {
+    label: 'Prefer Prefix',
+    description: 'Hints the inference pool to keep the prompt prefix / KV cache warm',
+  },
 }
 
 const HeaderReveal = ({ headers, onComplete, displayDuration = 2000 }: HeaderRevealProps) => {
@@ -200,6 +217,10 @@ const HeaderReveal = ({ headers, onComplete, displayDuration = 2000 }: HeaderRev
     looper: displayHeaders.filter(([key]) =>
       key.startsWith('x-vsr-looper-')
     ),
+    // Retention directive headers: all x-vsr-retention-*
+    retention: displayHeaders.filter(([key]) =>
+      key.startsWith('x-vsr-retention-')
+    ),
   }
 
   const renderSection = (title: string, items: [string, string][], isPrimary = false) => {
@@ -232,6 +253,7 @@ const HeaderReveal = ({ headers, onComplete, displayDuration = 2000 }: HeaderRev
           {renderSection('SIGNALS', groupedHeaders.signals)}
           {renderSection('PLUGIN', groupedHeaders.plugin)}
           {renderSection('LOOPER', groupedHeaders.looper)}
+          {renderSection('RETENTION', groupedHeaders.retention)}
         </div>
         <div className={styles.hint}>
           Response will appear shortly...

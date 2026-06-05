@@ -23,6 +23,7 @@ type mockStreamingCache struct {
 	updateResponseBody []byte
 	addEntryErr        error
 	updateErr          error
+	lastTTLSeconds     int
 }
 
 func (m *mockStreamingCache) IsEnabled() bool { return true }
@@ -40,10 +41,11 @@ func (m *mockStreamingCache) AddPendingRequest(
 	return nil
 }
 
-func (m *mockStreamingCache) UpdateWithResponse(requestID string, responseBody []byte, _ int) error {
+func (m *mockStreamingCache) UpdateWithResponse(requestID string, responseBody []byte, ttlSeconds int) error {
 	m.updateCalled = true
 	m.updateRequestID = requestID
 	m.updateResponseBody = append([]byte(nil), responseBody...)
+	m.lastTTLSeconds = ttlSeconds
 	return m.updateErr
 }
 
@@ -53,9 +55,10 @@ func (m *mockStreamingCache) AddEntry(
 	_ string,
 	_ []byte,
 	_ []byte,
-	_ int,
+	ttlSeconds int,
 ) error {
 	m.addEntryCalled = true
+	m.lastTTLSeconds = ttlSeconds
 	return m.addEntryErr
 }
 

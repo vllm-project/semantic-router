@@ -79,6 +79,16 @@ func (builder *responseHeaderMutationBuilder) addInt(key string, value int) {
 	builder.addString(key, strconv.Itoa(value))
 }
 
+// addNonNegativeInt emits the value when it is >= 0, so an explicit zero is
+// still written. Mirrors addNonNegativeFloat; used for tri-state retention
+// fields where 0 is a meaningful, explicitly-set value (not "unset").
+func (builder *responseHeaderMutationBuilder) addNonNegativeInt(key string, value int) {
+	if value < 0 {
+		return
+	}
+	builder.addString(key, strconv.Itoa(value))
+}
+
 func (builder *responseHeaderMutationBuilder) addJoined(key string, values []string) {
 	if len(values) == 0 {
 		return
@@ -238,7 +248,37 @@ func buildResponseHeaderMutation(
 
 	addStandardDecisionHeaders(builder, ctx)
 	addMatchedSignalHeaders(builder, ctx)
+	addRetentionDirectiveHeaders(builder, ctx)
 	return builder.mutation()
+}
+
+// addRetentionDirectiveHeaders emits the matched decision's EMIT retention
+// directive to the response as x-vsr-retention-* headers so the inference pool
+// and operators can observe the router's retention intent at the wire
+// (issue #2009). Only fields the directive explicitly set are emitted, mirroring
+// the tri-state semantics of config.RetentionDirective; an unset field is
+// omitted rather than sent as a default. Emitted only on successful,
+// non-cache-hit responses (same gate as the standard decision headers).
+func addRetentionDirectiveHeaders(builder *responseHeaderMutationBuilder, ctx *RequestContext) {
+	r := ctx.EmittedRetention
+	if r == nil {
+		return
+	}
+	if r.Drop != nil {
+		builder.addBool(headers.VSRRetentionDrop, *r.Drop)
+	}
+	if r.TTLTurns != nil {
+		// Tri-state: emit whenever explicitly set, including ttl_turns: 0
+		// (a valid no-op the validator permits). The runtime TTL override
+		// still applies only when > 0; the header reflects intent, not effect.
+		builder.addNonNegativeInt(headers.VSRRetentionTTLTurns, *r.TTLTurns)
+	}
+	if r.KeepCurrentModel != nil {
+		builder.addBool(headers.VSRRetentionKeepCurrentModel, *r.KeepCurrentModel)
+	}
+	if r.PreferPrefixRetention != nil {
+		builder.addBool(headers.VSRRetentionPreferPrefix, *r.PreferPrefixRetention)
+	}
 }
 
 // addStandardDecisionHeaders adds the per-request decision headers
