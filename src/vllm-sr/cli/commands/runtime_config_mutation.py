@@ -80,6 +80,8 @@ DEFAULT_CONFIG_BLOCK_BY_ALGORITHM: dict[str, dict[str, object]] = {
 }
 
 AMD_OVERRIDE_PREVIEW_LIMIT = 8
+TRUTHY_ENV_VALUES = {"1", "true", "yes", "on"}
+FALSEY_ENV_VALUES = {"0", "false", "no", "off"}
 AMD_GPU_USE_CPU_PATHS: tuple[tuple[str, ...], ...] = (
     ("global", "model_catalog", "embeddings", "semantic", "use_cpu"),
     ("global", "model_catalog", "modules", "prompt_guard", "use_cpu"),
@@ -196,10 +198,20 @@ def _platform_requires_gpu_defaults(platform: str | None) -> bool:
         return False
 
     force_gpu = os.getenv("VLLM_SR_AMD_FORCE_GPU", "").strip().lower()
-    if force_gpu not in {"1", "true", "yes", "on"}:
+    if force_gpu in TRUTHY_ENV_VALUES:
+        return True
+    if force_gpu in FALSEY_ENV_VALUES:
         log.info(
             "Platform amd detected: keeping router internal model use_cpu settings; "
-            "set VLLM_SR_AMD_FORCE_GPU=1 to opt into GPU defaults"
+            "VLLM_SR_AMD_FORCE_GPU is explicitly disabled"
+        )
+        return False
+
+    preserve_cpu = os.getenv("VLLM_SR_AMD_PRESERVE_CPU", "").strip().lower()
+    if preserve_cpu in TRUTHY_ENV_VALUES:
+        log.info(
+            "Platform amd detected: keeping router internal model use_cpu settings; "
+            "VLLM_SR_AMD_PRESERVE_CPU is enabled"
         )
         return False
     return True
@@ -211,9 +223,10 @@ def apply_platform_gpu_defaults(
     """
     Apply platform-specific GPU defaults.
 
-    For AMD platform, preserve router internal model `use_cpu` settings by default.
-    Set VLLM_SR_AMD_FORCE_GPU=1/true/yes/on to rewrite `use_cpu` flags to false
-    when the router has dedicated GPU headroom for internal signal models.
+    For AMD platform, rewrite router internal model `use_cpu` flags to false by
+    default so `--platform amd` uses ROCm for local signal models. Set
+    VLLM_SR_AMD_PRESERVE_CPU=1/true/yes/on or VLLM_SR_AMD_FORCE_GPU=0/false/no/off
+    to preserve CPU settings when the router does not have dedicated GPU headroom.
     """
     if not _platform_requires_gpu_defaults(platform):
         return False

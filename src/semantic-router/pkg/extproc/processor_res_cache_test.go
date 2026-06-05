@@ -1,7 +1,6 @@
 package extproc
 
 import (
-	"errors"
 	"testing"
 
 	"github.com/openai/openai-go"
@@ -16,13 +15,15 @@ import (
 // =====================================================================
 
 type mockStreamingCache struct {
-	addEntryCalled      bool
-	addPendingCalled    bool
-	findSimilarCalled   bool
-	updateCalled        bool
-	addEntryRequestBody []byte
-	addEntryErr         error
-	updateErr           error
+	addEntryCalled     bool
+	addPendingCalled   bool
+	findSimilarCalled  bool
+	updateCalled       bool
+	updateRequestID    string
+	updateResponseBody []byte
+	addEntryErr        error
+	updateErr          error
+	lastTTLSeconds     int
 }
 
 func (m *mockStreamingCache) IsEnabled() bool { return true }
@@ -40,8 +41,11 @@ func (m *mockStreamingCache) AddPendingRequest(
 	return nil
 }
 
-func (m *mockStreamingCache) UpdateWithResponse(_ string, _ []byte, _ int) error {
+func (m *mockStreamingCache) UpdateWithResponse(requestID string, responseBody []byte, ttlSeconds int) error {
 	m.updateCalled = true
+	m.updateRequestID = requestID
+	m.updateResponseBody = append([]byte(nil), responseBody...)
+	m.lastTTLSeconds = ttlSeconds
 	return m.updateErr
 }
 
@@ -49,12 +53,12 @@ func (m *mockStreamingCache) AddEntry(
 	_ string,
 	_ string,
 	_ string,
-	requestBody []byte,
 	_ []byte,
-	_ int,
+	_ []byte,
+	ttlSeconds int,
 ) error {
 	m.addEntryCalled = true
-	m.addEntryRequestBody = append([]byte(nil), requestBody...)
+	m.lastTTLSeconds = ttlSeconds
 	return m.addEntryErr
 }
 
@@ -204,7 +208,9 @@ func TestUpdateResponseCache_SkipsWhenNoDecisionSelectedButDecisionsConfigured(t
 // STREAMING: cacheReconstructedStreamingResponse
 // =====================================================================
 
-func TestCacheReconstructedStreamingResponseUsesAddEntry(t *testing.T) {
+// Regression for #2030: streaming finalize must update the pending entry in
+// place (by request_id), not mint a new key via AddEntry that orphans it.
+func TestCacheReconstructedStreamingResponseUpdatesInPlace(t *testing.T) {
 	mockCache := &mockStreamingCache{}
 	router := &OpenAIRouter{Cache: mockCache}
 	ctx := &RequestContext{
@@ -215,26 +221,28 @@ func TestCacheReconstructedStreamingResponseUsesAddEntry(t *testing.T) {
 
 	err := router.cacheReconstructedStreamingResponse(ctx, []byte(`{"ok":true}`))
 	assert.NoError(t, err)
-	assert.True(t, mockCache.addEntryCalled)
-	assert.False(t, mockCache.updateCalled)
-	assert.JSONEq(t, `{}`, string(mockCache.addEntryRequestBody))
+	assert.True(t, mockCache.updateCalled, "streaming finalize must update the pending entry in place")
+	assert.False(t, mockCache.addEntryCalled, "streaming finalize must not mint a new cache key via AddEntry")
+	assert.Equal(t, "req-1", mockCache.updateRequestID)
+	assert.JSONEq(t, `{"ok":true}`, string(mockCache.updateResponseBody))
 }
 
-func TestCacheReconstructedStreamingResponseFallsBackToUpdate(t *testing.T) {
-	mockCache := &mockStreamingCache{addEntryErr: errors.New("boom")}
+// Regression for #2030: ctx.RequestModel is overwritten from the client alias
+// to the resolved model by finalize time, so finalize must key off request_id.
+func TestCacheReconstructedStreamingResponseUpdatesAfterModelResolved(t *testing.T) {
+	mockCache := &mockStreamingCache{}
 	router := &OpenAIRouter{Cache: mockCache}
 	ctx := &RequestContext{
-		RequestID:           "req-1",
-		RequestModel:        "test-model",
-		RequestQuery:        "hello",
-		OriginalRequestBody: []byte(`{"messages":[]}`),
+		RequestID:    "req-1",
+		RequestModel: "doubao-1-5-lite-32k-250115",
+		RequestQuery: "who discovered gravity?",
 	}
 
 	err := router.cacheReconstructedStreamingResponse(ctx, []byte(`{"ok":true}`))
 	assert.NoError(t, err)
-	assert.True(t, mockCache.addEntryCalled)
 	assert.True(t, mockCache.updateCalled)
-	assert.JSONEq(t, `{"messages":[]}`, string(mockCache.addEntryRequestBody))
+	assert.False(t, mockCache.addEntryCalled)
+	assert.Equal(t, "req-1", mockCache.updateRequestID)
 }
 
 func TestCacheReconstructedStreamingResponseUpdatesWithoutQueryMetadata(t *testing.T) {
@@ -352,7 +360,8 @@ func TestCacheReconstructedStreamingResponse_StoresWhenDecisionCacheEnabled(t *t
 
 	err := router.cacheReconstructedStreamingResponse(ctx, []byte(`{"ok":true}`))
 	assert.NoError(t, err)
-	assert.True(t, mockCache.addEntryCalled, "should call AddEntry when decision has semantic-cache enabled")
+	assert.True(t, mockCache.updateCalled, "should finalize the pending entry when decision has semantic-cache enabled")
+	assert.False(t, mockCache.addEntryCalled, "should not mint a new cache key via AddEntry")
 }
 
 // =====================================================================
@@ -430,7 +439,7 @@ func TestCacheStreamingAllowedForGenericRequest(t *testing.T) {
 
 	err := router.cacheStreamingResponse(ctx)
 	assert.NoError(t, err)
-	assert.True(t, mockCache.addEntryCalled || mockCache.updateCalled,
+	assert.True(t, mockCache.updateCalled,
 		"cache write must proceed for generic requests without personalized context")
 }
 

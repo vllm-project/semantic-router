@@ -27,59 +27,71 @@ type EmbeddingConfig struct {
 
 // GenerateEmbedding generates an embedding using the configured model
 func GenerateEmbedding(text string, cfg EmbeddingConfig) ([]float32, error) {
-	modelName := strings.ToLower(strings.TrimSpace(string(cfg.Model)))
+	if deterministicEmbeddingsEnabled() {
+		return generateDeterministicEmbedding(text, cfg), nil
+	}
 
+	modelName := strings.ToLower(strings.TrimSpace(string(cfg.Model)))
 	switch modelName {
 	case "qwen3":
-		// Use GetEmbeddingBatched for Qwen3 with continuous batching
-		output, err := candle_binding.GetEmbeddingBatched(text, modelName, 0)
-		if err != nil {
-			return nil, fmt.Errorf("qwen3 embedding failed: %w", err)
-		}
-		return output.Embedding, nil
-
+		return generateQwen3Embedding(text, modelName)
 	case "gemma":
-		// Use GetEmbeddingWithModelType for Gemma
-		output, err := candle_binding.GetEmbeddingWithModelType(text, modelName, 0)
-		if err != nil {
-			return nil, fmt.Errorf("gemma embedding failed: %w", err)
-		}
-		return output.Embedding, nil
-
+		return generateGemmaEmbedding(text, modelName)
 	case "mmbert":
-		// Use GetEmbedding2DMatryoshka for mmBERT with configurable dimension
-		// Default to 256 if not specified (99% quality retention)
-		targetDim := cfg.Dimension
-		if targetDim <= 0 {
-			targetDim = 256
-		}
-		targetLayer := cfg.Layer
-		output, err := candle_binding.GetEmbedding2DMatryoshka(text, modelName, targetLayer, targetDim)
-		if err != nil {
-			return nil, fmt.Errorf("mmbert embedding failed: %w", err)
-		}
-		return output.Embedding, nil
-
+		return generateMmBertEmbedding(text, modelName, cfg)
 	case "multimodal":
-		targetDim := cfg.Dimension
-		if targetDim <= 0 {
-			targetDim = 384
-		}
-		output, err := candle_binding.GetEmbeddingWithModelType(text, modelName, targetDim)
-		if err != nil {
-			return nil, fmt.Errorf("multimodal embedding failed: %w", err)
-		}
-		return output.Embedding, nil
-
+		return generateMultiModalEmbedding(text, modelName, cfg)
 	case "bert", "":
-		// Use traditional GetEmbedding for BERT (default)
-		embedding, err := candle_binding.GetEmbedding(text, 0)
-		if err != nil {
-			return nil, fmt.Errorf("bert embedding failed: %w", err)
-		}
-		return embedding, nil
-
+		return generateBertEmbedding(text)
 	default:
 		return nil, fmt.Errorf("unsupported embedding model: %s (must be 'bert', 'qwen3', 'gemma', 'mmbert', or 'multimodal')", modelName)
 	}
+}
+
+func generateQwen3Embedding(text, modelName string) ([]float32, error) {
+	output, err := candle_binding.GetEmbeddingBatched(text, modelName, 0)
+	if err != nil {
+		return nil, fmt.Errorf("qwen3 embedding failed: %w", err)
+	}
+	return output.Embedding, nil
+}
+
+func generateGemmaEmbedding(text, modelName string) ([]float32, error) {
+	output, err := candle_binding.GetEmbeddingWithModelType(text, modelName, 0)
+	if err != nil {
+		return nil, fmt.Errorf("gemma embedding failed: %w", err)
+	}
+	return output.Embedding, nil
+}
+
+func generateMmBertEmbedding(text, modelName string, cfg EmbeddingConfig) ([]float32, error) {
+	targetDim := cfg.Dimension
+	if targetDim <= 0 {
+		targetDim = 256
+	}
+	output, err := candle_binding.GetEmbedding2DMatryoshka(text, modelName, cfg.Layer, targetDim)
+	if err != nil {
+		return nil, fmt.Errorf("mmbert embedding failed: %w", err)
+	}
+	return output.Embedding, nil
+}
+
+func generateMultiModalEmbedding(text, modelName string, cfg EmbeddingConfig) ([]float32, error) {
+	targetDim := cfg.Dimension
+	if targetDim <= 0 {
+		targetDim = 384
+	}
+	output, err := candle_binding.GetEmbeddingWithModelType(text, modelName, targetDim)
+	if err != nil {
+		return nil, fmt.Errorf("multimodal embedding failed: %w", err)
+	}
+	return output.Embedding, nil
+}
+
+func generateBertEmbedding(text string) ([]float32, error) {
+	embedding, err := candle_binding.GetEmbedding(text, 0)
+	if err != nil {
+		return nil, fmt.Errorf("bert embedding failed: %w", err)
+	}
+	return embedding, nil
 }

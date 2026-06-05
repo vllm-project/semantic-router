@@ -14,6 +14,11 @@ export interface ModelDraft {
   endpointName: string;
 }
 
+export interface ModelDraftFieldErrors {
+  name?: string;
+  baseUrl?: string;
+}
+
 interface BuiltModel {
   name: string;
   provider_model_id: string;
@@ -82,6 +87,9 @@ export const SETUP_STEP_LABELS: ReadonlyArray<[string, string]> = [
 export const DEFAULT_REMOTE_SETUP_CONFIG_URL =
   "https://raw.githubusercontent.com/vllm-project/semantic-router/main/deploy/recipes/balance.yaml";
 
+const DEFAULT_MODEL_NAME = "qwen/qwen3.5-rocm";
+const DEFAULT_VLLM_BASE_URL = "vllm:8000";
+
 export function createSetupConfigCounts(
   overrides: Partial<SetupConfigCounts> = {},
 ): SetupConfigCounts {
@@ -94,15 +102,60 @@ export function createSetupConfigCounts(
   };
 }
 
-export function createModelDraft(seed: number): ModelDraft {
+export function createModelDraft(
+  seed: number,
+  existingModels: ModelDraft[] = [],
+): ModelDraft {
   return {
     id: `model-${Date.now()}-${seed}`,
-    name: "qwen/qwen3.5-rocm",
+    name: existingModels.length === 0 ? DEFAULT_MODEL_NAME : "",
     providerKind: "vllm",
-    baseUrl: "vllm:8000",
+    baseUrl: nextVllmBaseUrl(existingModels),
     accessKey: "",
     endpointName: "primary",
   };
+}
+
+function nextVllmBaseUrl(existingModels: ModelDraft[]): string {
+  const usedEndpoints = new Set(
+    existingModels
+      .map((model) => normalizeVllmEndpoint(model))
+      .filter((endpoint): endpoint is string => Boolean(endpoint)),
+  );
+
+  let port = 8000;
+  let candidate = DEFAULT_VLLM_BASE_URL;
+  while (usedEndpoints.has(normalizeBaseUrl(candidate, "vllm") ?? "")) {
+    port += 1;
+    candidate = `vllm:${port}`;
+  }
+
+  return candidate;
+}
+
+function normalizeModelName(value: string): string {
+  return value.trim().toLowerCase();
+}
+
+function normalizeVllmEndpoint(
+  model: Pick<ModelDraft, "baseUrl" | "providerKind">,
+): string | null {
+  if (model.providerKind !== "vllm") {
+    return null;
+  }
+
+  return normalizeBaseUrl(model.baseUrl, model.providerKind);
+}
+
+function normalizeBaseUrl(
+  rawValue: string,
+  providerKind: ProviderKind,
+): string | null {
+  try {
+    return parseBaseUrl(rawValue, providerKind).endpoint.toLowerCase();
+  } catch {
+    return null;
+  }
 }
 
 function slugify(value: string): string {
@@ -175,6 +228,82 @@ export function parseBaseUrl(
   };
 }
 
+export function getModelDraftFieldErrors(
+  models: ModelDraft[],
+): Record<string, ModelDraftFieldErrors> {
+  const errors: Record<string, ModelDraftFieldErrors> = {};
+  const modelIdsByName = new Map<string, string[]>();
+  const modelIdsByEndpoint = new Map<string, string[]>();
+  const endpointLabels = new Map<string, string>();
+
+  models.forEach((model) => {
+    errors[model.id] = {};
+
+    const trimmedName = model.name.trim();
+    if (!trimmedName) {
+      errors[model.id].name = "Model name is required.";
+    } else {
+      const normalizedName = normalizeModelName(trimmedName);
+      modelIdsByName.set(normalizedName, [
+        ...(modelIdsByName.get(normalizedName) ?? []),
+        model.id,
+      ]);
+    }
+
+    if (!model.baseUrl.trim()) {
+      errors[model.id].baseUrl = "Base URL or host is required.";
+      return;
+    }
+
+    let parsedEndpoint = "";
+    try {
+      parsedEndpoint = parseBaseUrl(
+        model.baseUrl,
+        model.providerKind,
+      ).endpoint;
+    } catch {
+      errors[model.id].baseUrl =
+        "Enter a valid base URL or host before continuing.";
+      return;
+    }
+
+    if (model.providerKind !== "vllm") {
+      return;
+    }
+
+    const endpointKey = parsedEndpoint.toLowerCase();
+    endpointLabels.set(endpointKey, parsedEndpoint);
+    modelIdsByEndpoint.set(endpointKey, [
+      ...(modelIdsByEndpoint.get(endpointKey) ?? []),
+      model.id,
+    ]);
+  });
+
+  modelIdsByName.forEach((ids) => {
+    if (ids.length < 2) {
+      return;
+    }
+
+    ids.forEach((id) => {
+      const model = models.find((candidate) => candidate.id === id);
+      errors[id].name = `Model name "${model?.name.trim() ?? ""}" is duplicated.`;
+    });
+  });
+
+  modelIdsByEndpoint.forEach((ids, endpointKey) => {
+    if (ids.length < 2) {
+      return;
+    }
+
+    const endpoint = endpointLabels.get(endpointKey) ?? endpointKey;
+    ids.forEach((id) => {
+      errors[id].baseUrl = `Endpoint "${endpoint}" is already used by another local model.`;
+    });
+  });
+
+  return errors;
+}
+
 export function getStepOneErrors(
   models: ModelDraft[],
   defaultModelId: string,
@@ -187,6 +316,7 @@ export function getStepOneErrors(
   }
 
   const names = new Set<string>();
+  const localEndpoints = new Set<string>();
   let hasDefault = false;
 
   models.forEach((model, index) => {
@@ -196,7 +326,7 @@ export function getStepOneErrors(
     if (!trimmedName) {
       errors.push(`Model ${position} is missing a model name.`);
     } else {
-      const normalizedName = trimmedName.toLowerCase();
+      const normalizedName = normalizeModelName(trimmedName);
       if (names.has(normalizedName)) {
         errors.push(`Model name "${trimmedName}" is duplicated.`);
       }
@@ -207,7 +337,19 @@ export function getStepOneErrors(
       errors.push(`Model ${position} is missing a base URL.`);
     } else {
       try {
-        parseBaseUrl(model.baseUrl, model.providerKind);
+        const parsedEndpoint = parseBaseUrl(
+          model.baseUrl,
+          model.providerKind,
+        ).endpoint;
+        if (model.providerKind === "vllm") {
+          const endpointKey = parsedEndpoint.toLowerCase();
+          if (localEndpoints.has(endpointKey)) {
+            errors.push(
+              `Endpoint "${parsedEndpoint}" is already used by another local model.`,
+            );
+          }
+          localEndpoints.add(endpointKey);
+        }
       } catch (err) {
         errors.push(
           err instanceof Error

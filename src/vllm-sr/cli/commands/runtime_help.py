@@ -66,6 +66,9 @@ Examples:
     # Start router with debug logs
     vllm-sr serve --log-level debug
 
-    # Platform branding (for AMD deployments)
+    # AMD ROCm image, device passthrough, and router internal GPU defaults
     vllm-sr serve --platform amd
+
+    # Preserve CPU settings for router internal signal models on AMD
+    VLLM_SR_AMD_PRESERVE_CPU=1 vllm-sr serve --platform amd
 """

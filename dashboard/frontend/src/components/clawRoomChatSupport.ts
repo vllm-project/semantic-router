@@ -1,3 +1,9 @@
+import {
+  applyClawRoomToolTraceRevision,
+  parseClawRoomToolTracePayload,
+  type ClawRoomStreamingToolTraceEntry,
+} from './clawRoomToolTrace'
+
 export interface TeamProfile {
   id: string
   name: string
@@ -63,6 +69,7 @@ export const ROOM_COLLABORATION_OUTBOUND_TYPES = {
   newMessage: 'new_message',
   messageChunk: 'message_chunk',
   messageUpdated: 'message_updated',
+  toolTraceUpdate: 'tool_trace_update',
   surfaceEvent: 'surface_event',
   error: 'error',
 } as const
@@ -96,6 +103,11 @@ export interface WSOutboundMessage {
 export interface CollaborationEventHandlers {
   upsertMessage: (message: RoomMessage) => void
   setStreamingMessages: (update: (previous: Map<string, string>) => Map<string, string>) => void
+  setStreamingToolTraces?: (
+    update: (
+      previous: Map<string, ClawRoomStreamingToolTraceEntry>
+    ) => Map<string, ClawRoomStreamingToolTraceEntry>
+  ) => void
   setStreamingParticipants?: (
     update: (previous: Map<string, StreamingParticipant>) => Map<string, StreamingParticipant>
   ) => void
@@ -106,35 +118,42 @@ export const applyCollaborationOutboundEvent = (
   payload: WSOutboundMessage,
   handlers: CollaborationEventHandlers
 ): void => {
+  const clearStreamingTextState = (messageId: string) => {
+    handlers.setStreamingMessages(previous => {
+      const next = new Map(previous)
+      next.delete(messageId)
+      return next
+    })
+    handlers.setStreamingParticipants?.(previous => {
+      const next = new Map(previous)
+      next.delete(messageId)
+      return next
+    })
+  }
+
+  const clearStreamingToolTrace = (messageId: string) => {
+    handlers.setStreamingToolTraces?.(previous => {
+      const next = new Map(previous)
+      next.delete(messageId)
+      return next
+    })
+  }
+
   if (payload.type === ROOM_COLLABORATION_OUTBOUND_TYPES.newMessage && payload.message) {
     handlers.upsertMessage(payload.message)
     if (payload.message.id) {
-      handlers.setStreamingMessages(previous => {
-        const next = new Map(previous)
-        next.delete(payload.message!.id)
-        return next
-      })
-      handlers.setStreamingParticipants?.(previous => {
-        const next = new Map(previous)
-        next.delete(payload.message!.id)
-        return next
-      })
+      clearStreamingToolTrace(payload.message.id)
+      clearStreamingTextState(payload.message.id)
     }
     return
   }
 
   if (payload.type === ROOM_COLLABORATION_OUTBOUND_TYPES.messageUpdated && payload.message) {
     handlers.upsertMessage(payload.message)
-    handlers.setStreamingMessages(previous => {
-      const next = new Map(previous)
-      next.delete(payload.message!.id)
-      return next
-    })
-    handlers.setStreamingParticipants?.(previous => {
-      const next = new Map(previous)
-      next.delete(payload.message!.id)
-      return next
-    })
+    if (payload.message.id) {
+      clearStreamingToolTrace(payload.message.id)
+      clearStreamingTextState(payload.message.id)
+    }
     return
   }
 
@@ -157,6 +176,23 @@ export const applyCollaborationOutboundEvent = (
         return next
       })
     }
+    return
+  }
+
+  if (payload.type === ROOM_COLLABORATION_OUTBOUND_TYPES.toolTraceUpdate && payload.messageId) {
+    const parsed = parseClawRoomToolTracePayload(payload.payload)
+    if (!parsed?.steps?.length) {
+      return
+    }
+    handlers.setStreamingToolTraces?.(previous => {
+      const applied = applyClawRoomToolTraceRevision(previous.get(payload.messageId!), parsed)
+      if (!applied) {
+        return previous
+      }
+      const next = new Map(previous)
+      next.set(payload.messageId!, applied)
+      return next
+    })
     return
   }
 
@@ -191,6 +227,21 @@ export const applyRoomStreamEvent = (
 
   if (payload.type === ROOM_COLLABORATION_OUTBOUND_TYPES.newMessage && payload.message) {
     applyCollaborationOutboundEvent(payload, handlers)
+    return
+  }
+
+  if (payload.type === ROOM_COLLABORATION_OUTBOUND_TYPES.toolTraceUpdate) {
+    applyCollaborationOutboundEvent(
+      {
+        type: ROOM_COLLABORATION_OUTBOUND_TYPES.toolTraceUpdate,
+        messageId: payload.messageId,
+        payload: payload.payload,
+        participantType: payload.participantType,
+        participantId: payload.participantId,
+        sessionUser: payload.sessionUser,
+      },
+      handlers
+    )
     return
   }
 

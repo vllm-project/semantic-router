@@ -31,7 +31,7 @@ make docker-build docker-push IMG=<your-registry>/semantic-router-operator:lates
 make install
 
 # Deploy operator
-make deploy IMG=ghcr.io/vllm-project/semantic-router-operator:latest
+make deploy IMG=ghcr.io/vllm-project/semantic-router/operator:latest
 ```
 
 #### Option 2: OpenShift OperatorHub

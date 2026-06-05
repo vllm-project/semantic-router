@@ -28,10 +28,12 @@ type EmitDirective struct {
 // response/cache surface. All fields are tri-state pointers so we can
 // distinguish "unset" from an explicit zero value.
 //
-// MVP runtime consumes only Drop. The remaining fields are contract-only and
-// observed via log + trace attributes; their runtime consumers will land in
-// follow-up PRs (#1742 turn telemetry, #1749 model_switch_gate, prefix cache
-// eviction hints).
+// Runtime consumes Drop (semantic-cache write skip), TTLTurns (per-entry
+// cache TTL override), and KeepCurrentModel (model-switch-gate forced stay).
+// PreferPrefixRetention is emitted to the pool as an x-vsr-retention-prefer-prefix
+// header; its session-aware scoring bias and KV-cache eviction integration are
+// follow-up work. All set fields are also observed via log + trace attributes
+// and emitted as x-vsr-retention-* response headers (issues #1747, #2009).
 type RetentionDirective struct {
 	Drop                  *bool `yaml:"drop,omitempty" json:"drop,omitempty"`
 	TTLTurns              *int  `yaml:"ttl_turns,omitempty" json:"ttl_turns,omitempty"`

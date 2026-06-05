@@ -67,6 +67,16 @@ const config: Config = {
               path: '',
               badge: true,
             },
+            'v0.3': {
+              label: 'v0.3',
+              path: 'v0.3',
+              badge: true,
+            },
+            'v0.2': {
+              label: 'v0.2',
+              path: 'v0.2',
+              badge: true,
+            },
             'v0.1': {
               label: 'v0.1',
               path: 'v0.1',

@@ -1,16 +1,41 @@
+import type { ClawRoomStreamingToolTraceEntry } from './clawRoomToolTrace'
 import type { RoomMessage, RoomTransportMode, StreamingParticipant } from './clawRoomChatSupport'
+
+const hasActiveStreamingText = (
+  messageId: string,
+  content: string,
+  messages: RoomMessage[]
+): boolean => {
+  if (!content.trim()) {
+    return false
+  }
+  const persisted = messages.find(message => message.id === messageId)
+  return !persisted || persisted.content !== content
+}
 
 export const buildStreamingEntries = (
   messages: RoomMessage[],
-  streamingMessages: Map<string, string>
+  streamingMessages: Map<string, string>,
+  streamingToolTraces: Map<string, ClawRoomStreamingToolTraceEntry> = new Map()
 ): Array<[string, string]> => {
-  return Array.from(streamingMessages.entries()).filter(([messageId, content]) => {
-    if (!content.trim()) {
-      return false
+  const messageIds = new Set<string>()
+
+  for (const [messageId, content] of streamingMessages.entries()) {
+    if (hasActiveStreamingText(messageId, content, messages)) {
+      messageIds.add(messageId)
     }
-    const persisted = messages.find(message => message.id === messageId)
-    return !persisted || persisted.content !== content
-  })
+  }
+
+  for (const [messageId, entry] of streamingToolTraces.entries()) {
+    if (entry.steps.length > 0 && !messages.some(message => message.id === messageId)) {
+      messageIds.add(messageId)
+    }
+  }
+
+  return Array.from(messageIds).map(messageId => [
+    messageId,
+    streamingMessages.get(messageId) || '',
+  ] as [string, string])
 }
 
 export const resolveTransportStatusLabel = (

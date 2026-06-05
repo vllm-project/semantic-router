@@ -22,6 +22,12 @@ SERVE_LOG="${TEST_DIR}/serve.log"
 CONFIG_FILE="${TEST_DIR}/config.yaml"
 KEEP_TEST_DIR="${KEEP_MEMORY_TEST_DIR:-0}"
 ROUTER_API_HEALTH_URL="${ROUTER_API_HEALTH_URL:-http://localhost:8080/ready}"
+MODEL_DIR="${MEMORY_TEST_MODEL_DIR:-${TEST_DIR}/models}"
+if [[ "${MODEL_DIR}" != /* ]]; then
+    MODEL_DIR="${REPO_ROOT}/${MODEL_DIR}"
+fi
+MODEL_MOUNT_DIR="${TEST_DIR}/models"
+USE_DETERMINISTIC_MEMORY_EMBEDDINGS="${USE_DETERMINISTIC_MEMORY_EMBEDDINGS:-1}"
 
 VLLM_SR_PID=""
 
@@ -92,14 +98,87 @@ trap cleanup EXIT INT TERM
 
 echo "Using memory integration temp dir: ${TEST_DIR}"
 
-python3 -m pip install -U "huggingface_hub[cli]" hf_transfer requests pymilvus
+if [[ "${USE_DETERMINISTIC_MEMORY_EMBEDDINGS}" == "1" ]]; then
+    python3 -m pip install -U requests pymilvus
+else
+    python3 -m pip install -U "huggingface_hub[cli]" hf_transfer requests pymilvus
+fi
 
-mkdir -p "${TEST_DIR}/models"
-HF_HUB_ENABLE_HF_TRANSFER=1 \
-python3 -c "from huggingface_hub import snapshot_download; snapshot_download('sentence-transformers/all-MiniLM-L12-v2', local_dir='${TEST_DIR}/models/mom-embedding-light', local_dir_use_symlinks=False)"
+prepare_model_dir() {
+    mkdir -p "${MODEL_DIR}"
+    if [[ "${MODEL_DIR}" == "${MODEL_MOUNT_DIR}" ]]; then
+        return 0
+    fi
 
-HF_HUB_ENABLE_HF_TRANSFER=1 \
-python3 -c "from huggingface_hub import snapshot_download; snapshot_download('llm-semantic-router/mmbert-embed-32k-2d-matryoshka', local_dir='${TEST_DIR}/models/mmbert-embed-32k-2d-matryoshka', local_dir_use_symlinks=False)" || echo "Warning: mmbert-embed-32k-2d-matryoshka download failed (may be gated); router will skip it"
+    rm -rf "${MODEL_MOUNT_DIR}"
+    ln -s "${MODEL_DIR}" "${MODEL_MOUNT_DIR}"
+}
+
+download_hf_snapshot() {
+    local repo_id="$1"
+    local local_dir="$2"
+    local required="${3:-required}"
+    local max_attempts="${HF_DOWNLOAD_ATTEMPTS:-6}"
+    local attempt delay exit_code marker
+
+    if ! [[ "${max_attempts}" =~ ^[0-9]+$ ]] || (( max_attempts < 1 )); then
+        max_attempts=6
+    fi
+
+    marker="${local_dir}/.vsr-download-complete"
+    if [[ -f "${marker}" ]]; then
+        echo "Using cached Hugging Face model ${repo_id} from ${local_dir}"
+        return 0
+    fi
+
+    mkdir -p "${local_dir}"
+    exit_code=1
+    for attempt in $(seq 1 "${max_attempts}"); do
+        echo "Downloading Hugging Face model ${repo_id} to ${local_dir} (attempt ${attempt}/${max_attempts})"
+        if HF_HUB_ENABLE_HF_TRANSFER=1 python3 - "${repo_id}" "${local_dir}" <<'PY'
+import sys
+
+from huggingface_hub import snapshot_download
+
+repo_id, local_dir = sys.argv[1], sys.argv[2]
+snapshot_download(repo_id, local_dir=local_dir, local_dir_use_symlinks=False)
+PY
+        then
+            touch "${marker}"
+            return 0
+        else
+            exit_code=$?
+        fi
+
+        if (( attempt == max_attempts )); then
+            break
+        fi
+
+        delay=$((attempt * attempt * 10))
+        if (( delay > 120 )); then
+            delay=120
+        fi
+        echo "Hugging Face download failed for ${repo_id}; retrying in ${delay}s" >&2
+        sleep "${delay}"
+    done
+
+    if [[ "${required}" == "optional" ]]; then
+        echo "Warning: ${repo_id} download failed; router will skip it" >&2
+        return 0
+    fi
+
+    echo "ERROR: failed to download required Hugging Face model ${repo_id}" >&2
+    return "${exit_code}"
+}
+
+prepare_model_dir
+echo "Using memory integration model dir: ${MODEL_DIR}"
+if [[ "${USE_DETERMINISTIC_MEMORY_EMBEDDINGS}" == "1" ]]; then
+    export VLLM_SR_DETERMINISTIC_EMBEDDINGS=1
+    echo "Using deterministic memory embeddings for CI; skipping Hugging Face model download"
+else
+    download_hf_snapshot "llm-semantic-router/mmbert-embed-32k-2d-matryoshka" "${MODEL_DIR}/mmbert-embed-32k-2d-matryoshka"
+fi
 make -C "${REPO_ROOT}" start-milvus
 
 # Double-check Milvus readiness with pymilvus probe (gRPC-level, not just HTTP)

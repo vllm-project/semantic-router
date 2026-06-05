@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import type { ClawRoomStreamingToolTraceEntry } from './clawRoomToolTrace'
 import {
   applyCollaborationOutboundEvent,
   applyRoomStreamEvent,
@@ -67,5 +68,85 @@ describe('clawRoomChatSupport collaboration events', () => {
     )
 
     expect(state.persisted?.id).toBe('msg-1')
+  })
+
+  it('accumulates tool trace updates and clears streaming on message_updated', () => {
+    let toolTraces = new Map<string, ClawRoomStreamingToolTraceEntry>()
+    const state: { persisted: RoomMessage | null } = { persisted: null }
+
+    const handlers = {
+      upsertMessage: (message: RoomMessage) => {
+        state.persisted = message
+      },
+      setStreamingMessages: (update: (previous: Map<string, string>) => Map<string, string>) => update(new Map()),
+      setStreamingToolTraces: (
+        update: (
+          previous: Map<string, ClawRoomStreamingToolTraceEntry>
+        ) => Map<string, ClawRoomStreamingToolTraceEntry>
+      ) => {
+        toolTraces = update(toolTraces)
+      },
+    }
+
+    applyCollaborationOutboundEvent(
+      {
+        type: 'tool_trace_update',
+        messageId: 'stream-1',
+        payload: {
+          revision: 1,
+          steps: [{ id: 'call_1', name: 'exec', status: 'running' }],
+        },
+      },
+      handlers
+    )
+    applyCollaborationOutboundEvent(
+      {
+        type: 'tool_trace_update',
+        messageId: 'stream-1',
+        payload: {
+          revision: 2,
+          steps: [{ id: 'call_1', name: 'exec', status: 'completed', result: '/workspace' }],
+        },
+      },
+      handlers
+    )
+
+    expect(toolTraces.get('stream-1')?.steps).toHaveLength(1)
+    expect(toolTraces.get('stream-1')?.steps?.[0]?.status).toBe('completed')
+    expect(toolTraces.get('stream-1')?.revision).toBe(2)
+
+    applyCollaborationOutboundEvent(
+      {
+        type: 'tool_trace_update',
+        messageId: 'stream-1',
+        payload: {
+          revision: 1,
+          steps: [{ id: 'call_1', name: 'exec', status: 'running' }],
+        },
+      },
+      handlers
+    )
+
+    expect(toolTraces.get('stream-1')?.revision).toBe(2)
+    expect(toolTraces.get('stream-1')?.steps?.[0]?.status).toBe('completed')
+
+    applyCollaborationOutboundEvent(
+      {
+        type: 'message_updated',
+        message: {
+          ...baseMessage,
+          id: 'stream-1',
+          metadata: {
+            toolTrace: JSON.stringify([
+              { id: 'call_1', name: 'exec', status: 'completed', result: '/workspace' },
+            ]),
+          },
+        },
+      },
+      handlers
+    )
+
+    expect(toolTraces.has('stream-1')).toBe(false)
+    expect(state.persisted?.metadata?.toolTrace).toContain('call_1')
   })
 })

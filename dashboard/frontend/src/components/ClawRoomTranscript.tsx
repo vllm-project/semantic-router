@@ -1,6 +1,11 @@
 import MarkdownRenderer from './MarkdownRenderer'
 import ClawRoomMessageMeta from './ClawRoomMessageMeta'
+import ClawRoomStreamingToolCards from './ClawRoomStreamingToolCards'
 import styles from './ClawRoomChat.module.css'
+import {
+  parseClawRoomToolTraceFromMessageMetadata,
+  type ClawRoomStreamingToolTraceEntry,
+} from './clawRoomToolTrace'
 import {
   formatMessageTime,
   type RoomMessage,
@@ -19,6 +24,7 @@ interface ClawRoomTranscriptProps {
   streamingMessages: Map<string, string>
   streamingParticipants: Map<string, StreamingParticipant>
   streamingEntries: Array<[string, string]>
+  streamingToolTraces: Map<string, ClawRoomStreamingToolTraceEntry>
   resolveSenderVisual: (message: RoomMessage) => SenderVisual
 }
 
@@ -28,6 +34,7 @@ const ClawRoomTranscript = ({
   streamingMessages,
   streamingParticipants,
   streamingEntries,
+  streamingToolTraces,
   resolveSenderVisual,
 }: ClawRoomTranscriptProps) => {
   if (!selectedRoomId) {
@@ -51,6 +58,9 @@ const ClawRoomTranscript = ({
           ? streamingContent
           : message.content
         const isStreaming = Boolean(streamingContent && streamingContent !== message.content)
+        const liveToolSteps = streamingToolTraces.get(message.id)?.steps || []
+        const metadataToolSteps = parseClawRoomToolTraceFromMessageMetadata(message.metadata)
+        const toolSteps = liveToolSteps.length > 0 ? liveToolSteps : metadataToolSteps
         return (
           <div
             key={message.id}
@@ -68,6 +78,7 @@ const ClawRoomTranscript = ({
                 roleLabel={senderVisual.roleLabel}
                 timestamp={formatMessageTime(message.createdAt)}
               />
+              {!isUser && toolSteps.length > 0 && <ClawRoomStreamingToolCards steps={toolSteps} />}
               <div
                 className={`${styles.messageBubble} ${isUser ? styles.messageBubbleUser : styles.messageBubbleAgent} ${isSystem ? styles.messageBubbleSystem : ''} ${isStreaming ? styles.messageBubbleStreaming : ''}`}
                 data-room-message-content
@@ -86,6 +97,7 @@ const ClawRoomTranscript = ({
           messageId,
           streamingParticipants
         )
+        const toolSteps = streamingToolTraces.get(messageId)?.steps || []
         return (
           <div
             key={`streaming-${messageId}`}
@@ -103,15 +115,18 @@ const ClawRoomTranscript = ({
                 roleLabel={isLeader ? 'LEADER' : 'WORKER'}
                 timestamp="..."
               />
-              <div
-                className={`${styles.messageBubble} ${styles.messageBubbleAgent} ${styles.messageBubbleStreaming}`}
-                data-room-message-content
-              >
-                <div className={styles.messageMarkdown}>
-                  <MarkdownRenderer content={content} />
-                  <span className={styles.streamingCursor} aria-hidden="true" />
+              <ClawRoomStreamingToolCards steps={toolSteps} />
+              {content.trim() ? (
+                <div
+                  className={`${styles.messageBubble} ${styles.messageBubbleAgent} ${styles.messageBubbleStreaming}`}
+                  data-room-message-content
+                >
+                  <div className={styles.messageMarkdown}>
+                    <MarkdownRenderer content={content} />
+                    <span className={styles.streamingCursor} aria-hidden="true" />
+                  </div>
                 </div>
-              </div>
+              ) : null}
             </div>
           </div>
         )

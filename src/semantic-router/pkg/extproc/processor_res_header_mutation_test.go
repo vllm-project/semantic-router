@@ -125,6 +125,95 @@ func TestBuildResponseHeaderMutation_NilContextReturnsNil(t *testing.T) {
 	assert.Nil(t, buildResponseHeaderMutation(nil, true))
 }
 
+func TestBuildResponseHeaderMutation_EmitsRetentionDirectiveHeaders(t *testing.T) {
+	ctx := &RequestContext{
+		VSRSelectedDecisionName: "agentic_routing",
+		VSRSelectedModel:        "qwen-small",
+		EmittedRetention: &config.RetentionDirective{
+			TTLTurns:              intPtr(3),
+			KeepCurrentModel:      boolPtr(true),
+			PreferPrefixRetention: boolPtr(true),
+		},
+	}
+
+	mutation := buildResponseHeaderMutation(ctx, true)
+	require.NotNil(t, mutation)
+
+	headerMap := mutationToMap(mutation.SetHeaders)
+	assert.Equal(t, "3", headerMap[headers.VSRRetentionTTLTurns])
+	assert.Equal(t, "true", headerMap[headers.VSRRetentionKeepCurrentModel])
+	assert.Equal(t, "true", headerMap[headers.VSRRetentionPreferPrefix])
+}
+
+func TestBuildResponseHeaderMutation_OmitsUnsetRetentionHeaders(t *testing.T) {
+	// Tri-state: only fields the directive explicitly set are emitted.
+	ctx := &RequestContext{
+		VSRSelectedDecisionName: "agentic_routing",
+		VSRSelectedModel:        "qwen-small",
+		EmittedRetention:        &config.RetentionDirective{PreferPrefixRetention: boolPtr(true)},
+	}
+
+	mutation := buildResponseHeaderMutation(ctx, true)
+	require.NotNil(t, mutation)
+
+	headerMap := mutationToMap(mutation.SetHeaders)
+	assert.Equal(t, "true", headerMap[headers.VSRRetentionPreferPrefix])
+	assert.NotContains(t, headerMap, headers.VSRRetentionTTLTurns)
+	assert.NotContains(t, headerMap, headers.VSRRetentionKeepCurrentModel)
+	assert.NotContains(t, headerMap, headers.VSRRetentionDrop)
+}
+
+func TestBuildResponseHeaderMutation_EmitsExplicitZeroTTLTurns(t *testing.T) {
+	// Tri-state: an explicitly set ttl_turns: 0 is still an explicit field, so
+	// it must be emitted (the validator permits 0 as a no-op; only negatives
+	// are rejected). Regression guard against the old "*TTLTurns > 0" gate that
+	// silently dropped the header for an explicit zero.
+	ctx := &RequestContext{
+		VSRSelectedDecisionName: "agentic_routing",
+		VSRSelectedModel:        "qwen-small",
+		EmittedRetention:        &config.RetentionDirective{TTLTurns: intPtr(0)},
+	}
+
+	mutation := buildResponseHeaderMutation(ctx, true)
+	require.NotNil(t, mutation)
+
+	headerMap := mutationToMap(mutation.SetHeaders)
+	assert.Equal(t, "0", headerMap[headers.VSRRetentionTTLTurns])
+}
+
+func TestBuildResponseHeaderMutation_EmitsExplicitFalseRetentionBools(t *testing.T) {
+	// Tri-state companion to the explicit-zero ttl_turns guard: an explicitly
+	// set bool field of value false must still be emitted as "false" (not
+	// suppressed), so the wire contract is symmetric across every field.
+	ctx := &RequestContext{
+		VSRSelectedDecisionName: "agentic_routing",
+		VSRSelectedModel:        "qwen-small",
+		EmittedRetention: &config.RetentionDirective{
+			Drop:             boolPtr(false),
+			KeepCurrentModel: boolPtr(false),
+		},
+	}
+
+	mutation := buildResponseHeaderMutation(ctx, true)
+	require.NotNil(t, mutation)
+
+	headerMap := mutationToMap(mutation.SetHeaders)
+	assert.Equal(t, "false", headerMap[headers.VSRRetentionDrop])
+	assert.Equal(t, "false", headerMap[headers.VSRRetentionKeepCurrentModel])
+	// PreferPrefixRetention was left unset -> its header must be omitted.
+	assert.NotContains(t, headerMap, headers.VSRRetentionPreferPrefix)
+}
+
+func TestBuildResponseHeaderMutation_CacheHitSkipsRetentionHeaders(t *testing.T) {
+	ctx := &RequestContext{
+		VSRCacheHit:      true,
+		EmittedRetention: &config.RetentionDirective{PreferPrefixRetention: boolPtr(true)},
+	}
+
+	mutation := buildResponseHeaderMutation(ctx, true)
+	assert.Nil(t, mutation, "cache hit must not emit retention headers")
+}
+
 func TestAddLossinessWarnings_EmptyProducesNoHeader(t *testing.T) {
 	ctx := &RequestContext{ClientProtocol: config.ClientProtocolAnthropic}
 	builder := newResponseHeaderMutationBuilder()

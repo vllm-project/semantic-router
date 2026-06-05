@@ -103,7 +103,8 @@
         },
         "replicaCount": {
           "type": "integer",
-          "minimum": 0
+          "minimum": 0,
+          "maximum": 1
         },
         "persistence": {
           "type": "object",
@@ -125,6 +126,27 @@
               "type": "string"
             },
             "mountPath": {
+              "type": "string"
+            }
+          }
+        },
+        "podSecurityContext": {
+          "type": "object",
+          "additionalProperties": true,
+          "properties": {
+            "fsGroup": {
+              "type": "integer"
+            }
+          }
+        },
+        "jwtSecret": {
+          "type": "object",
+          "additionalProperties": true,
+          "properties": {
+            "existingSecret": {
+              "type": "string"
+            },
+            "existingSecretKey": {
               "type": "string"
             }
           }
