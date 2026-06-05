@@ -33,6 +33,7 @@ func setupAuthRoutes(mux *http.ServeMux, cfg *config.Config) *auth.Service {
 	}
 
 	authSvc := auth.NewService(store, cfg.JWTSecret, cfg.JWTExpiryHours)
+	authSvc.SetAllowOpenBootstrap(cfg.AllowOpenBootstrap)
 	if err := authSvc.EnsureBootstrapAdmin(
 		context.Background(),
 		cfg.BootstrapAdminEmail,

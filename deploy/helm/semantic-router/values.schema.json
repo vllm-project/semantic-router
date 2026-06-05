@@ -101,6 +101,9 @@
         "enabled": {
           "type": "boolean"
         },
+        "allowOpenBootstrap": {
+          "type": "boolean"
+        },
         "replicaCount": {
           "type": "integer",
           "minimum": 0,

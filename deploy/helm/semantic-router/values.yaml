@@ -527,6 +527,13 @@ dashboard:
     pullPolicy: IfNotPresent
   # -- Run dashboard in read-only mode
   readonly: false
+  # -- Allow first-admin creation via the public, unauthenticated web-form bootstrap
+  # endpoint. Off by default: a fresh, internet-reachable deployment should not be
+  # claimable by the first stranger who finds it. Production provisions the admin via
+  # the DASHBOARD_ADMIN_* env vars (which create it at startup and close the bootstrap
+  # path automatically). Set this to true only for demos where signing up the first
+  # admin through the UI is acceptable.
+  allowOpenBootstrap: false
   # -- JWT signing secret for dashboard auth sessions. Point this at a Secret you
   # manage (ideally an ExternalSecret) so the signing key is stable. If you leave
   # it unset, the dashboard binary falls back to generating a random secret on

@@ -35,6 +35,11 @@ type Config struct {
 	ReadonlyMode bool
 	SetupMode    bool
 
+	// AllowOpenBootstrap enables first-admin creation via the public, unauthenticated
+	// web-form bootstrap endpoint. Off by default; production should provision the
+	// admin via DASHBOARD_ADMIN_* instead of exposing an open registration path.
+	AllowOpenBootstrap bool
+
 	// Platform branding (e.g., "amd" for AMD GPU deployments)
 	Platform string
 
@@ -127,6 +132,7 @@ type parsedFlags struct {
 	fleetSimURL          *string
 	readonlyMode         *bool
 	setupMode            *bool
+	allowOpenBootstrap   *bool
 	platform             *string
 	evaluationEnabled    *bool
 	evaluationDBPath     *string
@@ -155,6 +161,7 @@ func applyCoreConfig(cfg *Config, flags parsedFlags) {
 	cfg.FleetSimURL = *flags.fleetSimURL
 	cfg.ReadonlyMode = *flags.readonlyMode
 	cfg.SetupMode = *flags.setupMode
+	cfg.AllowOpenBootstrap = *flags.allowOpenBootstrap
 	cfg.Platform = *flags.platform
 }
 
@@ -224,6 +231,7 @@ func LoadConfig() (*Config, error) {
 	// Read-only mode for public beta deployments
 	readonlyMode := flag.Bool("readonly", env("DASHBOARD_READONLY", "false") == "true", "enable read-only mode (disable config editing)")
 	setupMode := flag.Bool("setup-mode", env("DASHBOARD_SETUP_MODE", "false") == "true", "enable dashboard setup mode")
+	allowOpenBootstrap := flag.Bool("allow-open-bootstrap", env("DASHBOARD_ALLOW_OPEN_BOOTSTRAP", "false") == "true", "allow first-admin creation via the public web-form bootstrap endpoint (off by default; production should provision the admin via DASHBOARD_ADMIN_*)")
 
 	// Platform branding
 	platform := flag.String("platform", env("DASHBOARD_PLATFORM", ""), "platform branding (e.g., 'amd' for AMD GPU deployments)")
@@ -263,6 +271,7 @@ func LoadConfig() (*Config, error) {
 		fleetSimURL:          fleetSimURL,
 		readonlyMode:         readonlyMode,
 		setupMode:            setupMode,
+		allowOpenBootstrap:   allowOpenBootstrap,
 		platform:             platform,
 		evaluationEnabled:    evaluationEnabled,
 		evaluationDBPath:     evaluationDBPath,
