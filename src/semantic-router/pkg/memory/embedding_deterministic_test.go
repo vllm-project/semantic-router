@@ -56,6 +56,23 @@ func TestDeterministicEmbeddingKeepsRelatedMemorySearchAboveThreshold(t *testing
 	}
 }
 
+func TestDeterministicEmbeddingDoesNotApplySemanticRules(t *testing.T) {
+	t.Setenv(deterministicEmbeddingsEnv, "1")
+
+	cfg := EmbeddingConfig{Model: EmbeddingModelMMBERT, Dimension: 4096}
+	dog, err := GenerateEmbedding("dog", cfg)
+	if err != nil {
+		t.Fatalf("GenerateEmbedding(dog) error = %v", err)
+	}
+	pet, err := GenerateEmbedding("pet", cfg)
+	if err != nil {
+		t.Fatalf("GenerateEmbedding(pet) error = %v", err)
+	}
+	if score := cosine(dog, pet); score != 0 {
+		t.Fatalf("dog/pet cosine = %.3f, want no semantic aliasing", score)
+	}
+}
+
 func cosine(a, b []float32) float64 {
 	if len(a) != len(b) {
 		return 0

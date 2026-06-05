@@ -10,29 +10,6 @@ import (
 
 const deterministicEmbeddingsEnv = "VLLM_SR_DETERMINISTIC_EMBEDDINGS"
 
-var deterministicStopwords = map[string]struct{}{
-	"a": {}, "an": {}, "and": {}, "are": {}, "as": {}, "at": {}, "be": {},
-	"for": {}, "from": {}, "he": {}, "her": {}, "his": {}, "i": {}, "in": {},
-	"is": {}, "it": {}, "me": {}, "my": {}, "of": {}, "on": {}, "or": {},
-	"she": {}, "that": {}, "the": {}, "this": {}, "to": {}, "what": {},
-	"with": {}, "you": {},
-}
-
-var deterministicConceptTerms = map[string][]string{
-	"concept:car": {
-		"car", "camry", "drive", "model", "tesla", "toyota", "vehicle",
-	},
-	"concept:color": {
-		"color", "colour", "favorite", "favourite", "purple",
-	},
-	"concept:pet": {
-		"breed", "cat", "dog", "golden", "luna", "max", "pet", "retriever", "siamese",
-	},
-	"concept:restaurant": {
-		"avenue", "italian", "place", "restaurant",
-	},
-}
-
 func deterministicEmbeddingsEnabled() bool {
 	switch strings.ToLower(strings.TrimSpace(os.Getenv(deterministicEmbeddingsEnv))) {
 	case "1", "true", "yes", "on", "deterministic":
@@ -46,9 +23,9 @@ func generateDeterministicEmbedding(text string, cfg EmbeddingConfig) []float32 
 	dim := deterministicEmbeddingDimension(cfg)
 	features := deterministicEmbeddingFeatures(text)
 	vector := make([]float32, dim)
-	for feature, weight := range features {
+	for _, feature := range features {
 		idx := deterministicFeatureIndex(feature, dim)
-		vector[idx] += weight
+		vector[idx]++
 	}
 	normalizeVector(vector)
 	return vector
@@ -68,27 +45,14 @@ func deterministicEmbeddingDimension(cfg EmbeddingConfig) int {
 	}
 }
 
-func deterministicEmbeddingFeatures(text string) map[string]float32 {
+func deterministicEmbeddingFeatures(text string) []string {
 	tokens := tokenizeDeterministicEmbeddingText(text)
-	features := make(map[string]float32, len(tokens)+len(deterministicConceptTerms))
-	tokenSet := make(map[string]struct{}, len(tokens))
+	if len(tokens) == 0 {
+		return []string{"text:" + strings.TrimSpace(strings.ToLower(text))}
+	}
+	features := make([]string, 0, len(tokens))
 	for _, token := range tokens {
-		if _, stopword := deterministicStopwords[token]; stopword {
-			continue
-		}
-		tokenSet[token] = struct{}{}
-		features["tok:"+token] = 1.0
-	}
-	for concept, terms := range deterministicConceptTerms {
-		for _, term := range terms {
-			if _, ok := tokenSet[term]; ok {
-				features[concept] = 2.0
-				break
-			}
-		}
-	}
-	if len(features) == 0 {
-		features["text:"+strings.TrimSpace(strings.ToLower(text))] = 1.0
+		features = append(features, "tok:"+token)
 	}
 	return features
 }
@@ -102,9 +66,6 @@ func tokenizeDeterministicEmbeddingText(text string) []string {
 		}
 		token := current.String()
 		tokens = append(tokens, token)
-		if len(token) > 3 && strings.HasSuffix(token, "s") {
-			tokens = append(tokens, strings.TrimSuffix(token, "s"))
-		}
 		current.Reset()
 	}
 	for _, r := range strings.ToLower(text) {
