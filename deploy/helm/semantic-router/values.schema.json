@@ -129,6 +129,15 @@
               "type": "string"
             }
           }
+        },
+        "podSecurityContext": {
+          "type": "object",
+          "additionalProperties": true,
+          "properties": {
+            "fsGroup": {
+              "type": "integer"
+            }
+          }
         }
       }
     }

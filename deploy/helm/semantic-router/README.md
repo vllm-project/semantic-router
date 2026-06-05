@@ -136,6 +136,7 @@ the locked chart dependencies.
 | dashboard.persistence.mountPath | string | `"/app/data"` | Container mount path for dashboard-local state |
 | dashboard.persistence.size | string | `"1Gi"` | Requested dashboard-local state size |
 | dashboard.persistence.storageClassName | string | `""` | Storage class name. Leave empty for the cluster default; use "-" to render storageClassName: "". |
+| dashboard.podSecurityContext | object | `{"fsGroup":65532}` | Pod-level security context. The default fsGroup matches the non-root user (UID/GID 65532) baked into the upstream dashboard image, ensuring the persistence PVC mount at /app/data is writable by the binary. Without this, the dashboard crashloops with "unable to open database file" when persistence is enabled on storage classes that mount as root:root 0755 (which is the default behavior for most cloud-provider CSI drivers). Override if you build a custom dashboard image with a different non-root UID. |
 | dashboard.readonly | bool | `false` | Run dashboard in read-only mode |
 | dashboard.replicaCount | int | `1` | Dashboard replica count. Must stay 1 until the dashboard auth/session store supports a shared multi-replica backend. |
 | dashboard.resources.limits | object | `{"cpu":"500m","memory":"512Mi"}` |  |
