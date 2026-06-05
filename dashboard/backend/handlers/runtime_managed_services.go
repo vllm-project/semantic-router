@@ -9,32 +9,31 @@ const (
 	routerContainerNameEnv    = "VLLM_SR_ROUTER_CONTAINER_NAME"
 	envoyContainerNameEnv     = "VLLM_SR_ENVOY_CONTAINER_NAME"
 	dashboardContainerNameEnv = "VLLM_SR_DASHBOARD_CONTAINER_NAME"
+
+	defaultRouterContainerName    = "vllm-sr-router-container"
+	defaultEnvoyContainerName     = "vllm-sr-envoy-container"
+	defaultDashboardContainerName = "vllm-sr-dashboard-container"
 )
 
 func managedContainerNameForService(service string) string {
 	switch service {
 	case "router":
-		return envOrDefaultTrimmed(routerContainerNameEnv, vllmSrContainerName)
+		return envOrDefaultTrimmed(routerContainerNameEnv, defaultRouterContainerName)
 	case "envoy":
-		return envOrDefaultTrimmed(envoyContainerNameEnv, vllmSrContainerName)
+		return envOrDefaultTrimmed(envoyContainerNameEnv, defaultEnvoyContainerName)
 	case "dashboard":
 		return managedDashboardContainerName()
 	default:
-		return vllmSrContainerName
+		return defaultRouterContainerName
 	}
 }
 
 func managedDashboardContainerName() string {
-	return envOrDefaultTrimmed(dashboardContainerNameEnv, vllmSrContainerName)
+	return envOrDefaultTrimmed(dashboardContainerNameEnv, defaultDashboardContainerName)
 }
 
 func managedRuntimeSyncContainerName() string {
 	return managedDashboardContainerName()
-}
-
-func managedServiceCanBeControlledLocally(service string) bool {
-	return isRunningInContainer() &&
-		managedContainerNameForService(service) == managedDashboardContainerName()
 }
 
 func managedRuntimeUsesSplitContainers() bool {

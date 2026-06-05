@@ -36,9 +36,6 @@ type SystemStatus struct {
 	Version        string               `json:"version,omitempty"`
 }
 
-// vllmSrContainerName is the container name used by the Python vllm-sr CLI
-const vllmSrContainerName = "vllm-sr-container"
-
 // StatusHandler returns the status of vLLM-SR services
 // Aligns with the vllm-sr Python CLI by using the same Docker-based detection
 func StatusHandler(routerAPIURL, configDir string) http.HandlerFunc {

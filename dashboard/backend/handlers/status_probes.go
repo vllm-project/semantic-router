@@ -36,29 +36,6 @@ func isRunningInContainer() bool {
 	return false
 }
 
-// checkServiceFromContainerLogs checks service status from supervisorctl within the same container.
-func checkServiceFromContainerLogs(service string) (bool, string) {
-	cmd := exec.Command("supervisorctl", "status", service)
-	output, err := cmd.CombinedOutput()
-	if err != nil {
-		return false, "Status unknown"
-	}
-
-	outputStr := string(output)
-	switch {
-	case strings.Contains(outputStr, "RUNNING"):
-		return true, "Running"
-	case strings.Contains(outputStr, "STOPPED"):
-		return false, "Stopped"
-	case strings.Contains(outputStr, "FATAL"), strings.Contains(outputStr, "EXITED"):
-		return false, "Failed"
-	case strings.Contains(outputStr, "STARTING"):
-		return false, "Starting"
-	default:
-		return false, "Status unknown"
-	}
-}
-
 func boolToStatus(healthy bool) string {
 	if healthy {
 		return "running"
