@@ -35,6 +35,10 @@
     "message": "社区",
     "description": "Navbar item with label Community"
   },
+  "item.label.Leaderboard": {
+    "message": "排行榜",
+    "description": "Navbar item with label Leaderboard"
+  },
   "item.label.Governance": {
     "message": "治理机制",
     "description": "Navbar item with label Governance"
