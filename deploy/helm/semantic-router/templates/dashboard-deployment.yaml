@@ -7,6 +7,14 @@
 {{- end }}
 {{- end }}
 {{- if .Values.dashboard.enabled }}
+{{- $psc := .Values.dashboard.podSecurityContext | default dict }}
+{{- if kindIs "map" $psc }}
+{{- if or (dig "runAsNonRoot" false $psc | toString | eq "true") (and (hasKey $psc "runAsUser") (ne (int (dig "runAsUser" 0 $psc)) 0)) }}
+{{- fail "dashboard.podSecurityContext must let the container start as root (UID 0): the dashboard image entrypoint starts as root to fix ownership of the mounted config file and then drops to the nonroot user (UID 65532) via gosu. Setting runAsNonRoot: true or runAsUser to a non-zero value prevents the root start and the container will fail; this pod is therefore incompatible with the PodSecurity 'restricted' profile. Use a custom image with a true non-root entrypoint if you require non-root start" }}
+{{- end }}
+{{- end }}
+{{- end }}
+{{- if .Values.dashboard.enabled }}
 apiVersion: apps/v1
 kind: Deployment
 metadata:
