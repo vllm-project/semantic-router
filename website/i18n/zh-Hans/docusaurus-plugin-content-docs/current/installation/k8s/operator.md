@@ -819,4 +819,3 @@ spec:
 - [配置监控与可观测性](../../tutorials/global/api-and-observability)
 - [探索其他部署方式](/docs/installation)
 - [加入社区](../../community/overview)
-

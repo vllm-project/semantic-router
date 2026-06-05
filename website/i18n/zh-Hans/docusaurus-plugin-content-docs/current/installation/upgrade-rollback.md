@@ -334,4 +334,3 @@ kubectl describe pod -n vllm-semantic-router-system <pod-name>
 ```bash
 helm rollback semantic-router -n vllm-semantic-router-system
 ```
-
