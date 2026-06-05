@@ -29,6 +29,7 @@ metadata:
   namespace: {{ include "semantic-router.namespace" . }}
   labels:
     {{- include "semantic-router.labels" . | nindent 4 }}
+    app.kubernetes.io/component: router
 spec:
   {{- if not .Values.autoscaling.enabled }}
   replicas: {{ .Values.replicaCount }}
@@ -45,6 +46,7 @@ spec:
       {{- end }}
       labels:
         {{- include "semantic-router.selectorLabels" . | nindent 8 }}
+        app.kubernetes.io/component: router
     spec:
       {{- with .Values.imagePullSecrets }}
       imagePullSecrets:
