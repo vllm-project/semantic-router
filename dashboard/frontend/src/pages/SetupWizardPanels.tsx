@@ -1,7 +1,7 @@
 import styles from "./SetupWizardPage.module.css";
 import {
   DEFAULT_REMOTE_SETUP_CONFIG_URL,
-  parseBaseUrl,
+  getModelDraftFieldErrors,
   PROVIDER_OPTIONS,
   SETUP_STEP_LABELS,
   type ImportedSetupConfig,
@@ -262,6 +262,8 @@ export function ModelStepPanel({
   onRemoveModel,
   onSelectDefaultModel,
 }: ModelStepPanelProps) {
+  const fieldErrorsByModelId = getModelDraftFieldErrors(models);
+
   return (
     <div className={styles.stepBody}>
       <div className={styles.sectionHeader}>
@@ -286,18 +288,15 @@ export function ModelStepPanel({
           const providerMeta = PROVIDER_OPTIONS.find(
             (option) => option.id === model.providerKind,
           );
-          const hasNameError = shouldShowStepOneIssues && !model.name.trim();
-          const hasBaseUrlError =
-            shouldShowStepOneIssues &&
-            (!model.baseUrl.trim() ||
-              (() => {
-                try {
-                  parseBaseUrl(model.baseUrl, model.providerKind);
-                  return false;
-                } catch {
-                  return true;
-                }
-              })());
+          const fieldErrors = fieldErrorsByModelId[model.id] ?? {};
+          const nameError = shouldShowStepOneIssues
+            ? fieldErrors.name
+            : undefined;
+          const baseUrlError = shouldShowStepOneIssues
+            ? fieldErrors.baseUrl
+            : undefined;
+          const hasNameError = Boolean(nameError);
+          const hasBaseUrlError = Boolean(baseUrlError);
 
           return (
             <div key={model.id} className={styles.modelCard}>
@@ -345,7 +344,7 @@ export function ModelStepPanel({
                   />
                   {hasNameError && (
                     <span className={styles.fieldErrorText}>
-                      Model name is required.
+                      {nameError}
                     </span>
                   )}
                 </label>
@@ -389,7 +388,7 @@ export function ModelStepPanel({
                   </span>
                   {hasBaseUrlError && (
                     <span className={styles.fieldErrorText}>
-                      Enter a valid base URL or host before continuing.
+                      {baseUrlError}
                     </span>
                   )}
                 </label>

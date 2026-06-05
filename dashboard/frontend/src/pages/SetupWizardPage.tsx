@@ -214,7 +214,7 @@ const SetupWizardPage: React.FC = () => {
   }, [currentStep, validationSignature]);
 
   const addModel = () => {
-    setModels((prev) => [...prev, createModelDraft(prev.length + 1)]);
+    setModels((prev) => [...prev, createModelDraft(prev.length + 1, prev)]);
     resetReviewState();
   };
 
