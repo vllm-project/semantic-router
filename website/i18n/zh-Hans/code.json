@@ -2395,5 +2395,92 @@
   },
   "acknowledgements.projectLink": {
     "message": "查看项目"
+  },
+  "community.contributors.pageTitle": {
+    "message": "贡献者排行榜"
+  },
+  "community.contributors.pageDescription": {
+    "message": "vLLM Semantic Router 贡献者排行榜：按近期与历史提交活跃度统计。"
+  },
+  "community.contributors.eyebrow": {
+    "message": "社区"
+  },
+  "community.contributors.h1": {
+    "message": "贡献者排行榜"
+  },
+  "community.contributors.startContributing": {
+    "message": "开始贡献"
+  },
+  "community.contributors.metrics.aria": {
+    "message": "贡献者排行概览"
+  },
+  "community.contributors.metrics.contributors": {
+    "message": "贡献者"
+  },
+  "community.contributors.metrics.newContributors": {
+    "message": "新增贡献者"
+  },
+  "community.contributors.metrics.commits": {
+    "message": "提交数"
+  },
+  "community.contributors.podium.aria": {
+    "message": "贡献者领奖台"
+  },
+  "community.contributors.leaderboard.aria": {
+    "message": "{rangeLabel} 贡献者排行"
+  },
+  "community.contributors.range.label": {
+    "message": "范围"
+  },
+  "community.contributors.range.aria": {
+    "message": "贡献者排行榜时间范围"
+  },
+  "community.contributors.range.through": {
+    "message": "截至 {date}"
+  },
+  "community.contributors.updated": {
+    "message": "更新于"
+  },
+  "community.contributors.table.rank": {
+    "message": "排名"
+  },
+  "community.contributors.table.contributor": {
+    "message": "贡献者"
+  },
+  "community.contributors.table.commits": {
+    "message": "提交"
+  },
+  "community.contributors.table.share": {
+    "message": "占比"
+  },
+  "community.contributors.table.latest": {
+    "message": "最新提交"
+  },
+  "community.contributors.gitAuthor": {
+    "message": "Git 作者"
+  },
+  "community.contributors.newContributor": {
+    "message": "新贡献者"
+  },
+  "community.contributors.avatarAlt": {
+    "message": "{name} 头像"
+  },
+  "community.contributors.range.last3months.label": {
+    "message": "近 3 个月"
+  },
+  "community.contributors.range.last3months.caption": {
+    "message": "默认"
+  },
+  "community.contributors.range.last365days.label": {
+    "message": "近 365 天"
+  },
+  "community.contributors.range.last365days.caption": {
+    "message": "过去一年"
+  },
+  "community.contributors.range.all.label": {
+    "message": "全部历史"
+  },
+  "community.contributors.range.all.caption": {
+    "message": "仓库全量历史"
   }
 }

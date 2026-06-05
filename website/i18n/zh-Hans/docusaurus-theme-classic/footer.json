@@ -39,6 +39,10 @@
     "message": "GitHub 讨论区",
     "description": "The label of footer link with label=GitHub Discussions linking to https://github.com/vllm-project/semantic-router/discussions"
   },
+  "link.item.label.Leaderboard": {
+    "message": "排行榜",
+    "description": "The label of footer link with label=Leaderboard linking to /community/contributors"
+  },
   "link.item.label.Blog": {
     "message": "博客",
     "description": "The label of footer link with label=Blog linking to /blog"
