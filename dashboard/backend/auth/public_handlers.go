@@ -2,6 +2,7 @@ package auth
 
 import (
 	"encoding/json"
+	"errors"
 	"net/http"
 	"strings"
 )
@@ -10,6 +11,14 @@ func bootstrapCanRegisterHandler(svc *Service) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodGet {
 			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
+
+		// When the open web-form bootstrap is disabled, always report false. This
+		// also avoids leaking to unauthenticated callers whether the instance is
+		// freshly deployed and claimable.
+		if !svc.OpenBootstrapEnabled() {
+			respondJSON(w, BootstrapStatusResponse{CanRegister: false})
 			return
 		}
 
@@ -30,6 +39,11 @@ func bootstrapRegisterHandler(svc *Service) http.HandlerFunc {
 			return
 		}
 
+		if !svc.OpenBootstrapEnabled() {
+			http.Error(w, "open bootstrap is disabled; provision an admin via DASHBOARD_ADMIN_* or set DASHBOARD_ALLOW_OPEN_BOOTSTRAP=true to enable web-form bootstrap", http.StatusForbidden)
+			return
+		}
+
 		var req BootstrapRegistrationRequest
 		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 			http.Error(w, "invalid body", http.StatusBadRequest)
@@ -40,23 +54,19 @@ func bootstrapRegisterHandler(svc *Service) http.HandlerFunc {
 			return
 		}
 
-		allowed, err := svc.CanBootstrap(r.Context())
-		if err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
-			return
-		}
-		if !allowed {
-			http.Error(w, "bootstrap is disabled", http.StatusConflict)
-			return
-		}
-
 		hash, err := svc.HashPassword(req.Password)
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
 
-		user, err := svc.store.CreateUser(r.Context(), req.Email, req.Name, hash, RoleAdmin, "active")
+		// Atomic check-and-create: only one admin can be created via this path even
+		// under concurrent requests (see Service.BootstrapRegister).
+		user, err := svc.BootstrapRegister(r.Context(), req.Email, req.Name, hash)
+		if errors.Is(err, ErrBootstrapClosed) {
+			http.Error(w, "bootstrap is disabled", http.StatusConflict)
+			return
+		}
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusBadRequest)
 			return
