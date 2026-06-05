@@ -164,6 +164,8 @@ The repo ships an opt-in image-modality embedding pack at `config/signal/embeddi
 - Authoring 8-15 anchors per category gives a robust signal without overfitting. Add anchors for the negative space too (a separate "ambient_office_imagery" rule with anchors for whiteboards, conference rooms, generic infographics) so a low-confidence image stays low-confidence rather than landing closer to a sensitive anchor by accident.
 - Do not gate on a single anchor; cosine similarity is noisy enough that one anchor and one image will produce false positives at scale. The anchor pack as a whole is the signal, not any individual phrase.
 
+These tips generalize to text-modality packs as well. See [Embedding Anchor Design Principles](./embedding-design-principles) for the consolidated guidance.
+
 ### Distinction from the `modality` signal type
 
 `query_modality` (this section) declares **input modality** for an embedding rule — which modality of payload the query is computed from. The separate [`modality`](modality) signal type declares **output modality** (`AR`, `DIFFUSION`, `BOTH`) for routing image-generation requests. The two concepts share a name but solve different problems and live on different config surfaces.

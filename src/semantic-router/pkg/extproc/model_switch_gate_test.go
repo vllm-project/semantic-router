@@ -81,6 +81,27 @@ func TestEstimateGateCacheWarmthEmptyModel(t *testing.T) {
 	}
 }
 
+func TestApplyModelSwitchGateHonorsRetentionKeepCurrentModel(t *testing.T) {
+	// Even in shadow mode, an explicit EMIT retention { keep_current_model: true }
+	// forces a stay on the previous model (the directive is not a heuristic).
+	router := routerWithModelSwitchGate(selection.ModelSwitchGateModeShadow)
+	selCtx, result := modelSwitchGateSelectionInput()
+	selected := &selCtx.CandidateModels[1] // "candidate"
+
+	got, applied := router.applyModelSwitchGate(selCtx, result, selected, &RequestContext{
+		RequestID:        "req-keep",
+		PreviousModel:    "current",
+		EmittedRetention: &config.RetentionDirective{KeepCurrentModel: boolPtr(true)},
+	})
+
+	if !applied {
+		t.Fatalf("keep_current_model must override the selected model even in shadow mode")
+	}
+	if got.Model != "current" {
+		t.Fatalf("expected current model, got %q", got.Model)
+	}
+}
+
 func routerWithModelSwitchGate(mode string) *OpenAIRouter {
 	lt := lookuptable.NewMemoryStorage()
 	_ = lt.Set(lookuptable.HandoffPenaltyKey("current", "candidate"), lookuptable.Entry{Value: 0.05})

@@ -175,7 +175,7 @@ helm-safety-validate: helm-ci-setup
 		cat "$$tmp_dir/invalid-guard.out"; \
 		exit 1; \
 	fi; \
-	grep -q "safetyGuards.rejectMultiReplicaLocalSelectorState: Invalid type" "$$tmp_dir/invalid-guard.out"; \
+	grep -Eq "rejectMultiReplicaLocalSelectorState.*(Invalid type|want boolean)" "$$tmp_dir/invalid-guard.out"; \
 	echo "Validating schema rejection for invalid replicaCount type..."; \
 	if helm template $(HELM_RELEASE_NAME) $(HELM_CHART_PATH) \
 		--set replicaCount=oops \
@@ -184,7 +184,7 @@ helm-safety-validate: helm-ci-setup
 		cat "$$tmp_dir/invalid-replica.out"; \
 		exit 1; \
 	fi; \
-	grep -q "replicaCount: Invalid type" "$$tmp_dir/invalid-replica.out"; \
+	grep -Eq "replicaCount.*(Invalid type|want integer)" "$$tmp_dir/invalid-replica.out"; \
 	echo "Validating RL-driven selector local-state multi-replica rejection..."; \
 	if helm template $(HELM_RELEASE_NAME) $(HELM_CHART_PATH) \
 		--set autoscaling.enabled=false \

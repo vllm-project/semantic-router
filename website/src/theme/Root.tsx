@@ -10,7 +10,7 @@ function normalizePath(pathname: string): string {
 }
 
 function stripLocalePrefix(pathname: string): string {
-  return normalizePath(pathname.replace(/^\/zh-Hans(?=\/|$)/, ''))
+  return normalizePath(pathname.replace(/^\/zh-Hans(?=\/|$)/i, ''))
 }
 
 function toAbsoluteUrl(base: string, pathname: string): string {

@@ -90,6 +90,17 @@ const (
 	// Value: "true"
 	VSRCacheHit = "x-vsr-cache-hit"
 
+	// Retention directive headers expose the matched decision's EMIT retention
+	// block to the inference pool / operators (issue #2009). They are emitted
+	// only on successful, non-cache-hit responses, and only for the fields the
+	// directive explicitly set (tri-state). They let the pool observe the
+	// router's KV/cache retention intent at the wire; the router itself also
+	// consumes drop (cache-write skip) and ttl_turns (per-entry cache TTL).
+	VSRRetentionDrop             = "x-vsr-retention-drop"
+	VSRRetentionTTLTurns         = "x-vsr-retention-ttl-turns"
+	VSRRetentionKeepCurrentModel = "x-vsr-retention-keep-current-model"
+	VSRRetentionPreferPrefix     = "x-vsr-retention-prefer-prefix"
+
 	// RouterReplayID carries the identifier for a captured replay record.
 	// Value: opaque replay token
 	RouterReplayID = "x-vsr-replay-id"

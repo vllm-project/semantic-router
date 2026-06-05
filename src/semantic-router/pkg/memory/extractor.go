@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"regexp"
 	"strings"
+	"sync/atomic"
 	"time"
 
 	"github.com/openai/openai-go"
@@ -174,6 +175,7 @@ func NewMemoryChunkStore(store Store) *MemoryExtractor {
 var (
 	thinkClosedPattern   = regexp.MustCompile(`(?s)<think>.*?</think>\s*`)
 	thinkUnclosedPattern = regexp.MustCompile(`(?s)<think>.*`)
+	memoryIDSequence     atomic.Uint64
 )
 
 // StripThinkTags removes <think>...</think> blocks (and unclosed <think> tails)
@@ -470,5 +472,5 @@ func isLowEntropy(userMessage, assistantResponse string) bool {
 // =============================================================================
 
 func generateMemoryID() string {
-	return fmt.Sprintf("mem_%d", time.Now().UnixNano())
+	return fmt.Sprintf("mem_%d_%d", time.Now().UnixNano(), memoryIDSequence.Add(1))
 }
