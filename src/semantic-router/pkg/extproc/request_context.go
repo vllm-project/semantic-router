@@ -72,7 +72,7 @@ type RequestContext struct {
 	StreamedBody *StreamedBodyHandler
 
 	// Streaming accumulation for caching
-	StreamingChunks    []string                        // Accumulated SSE chunks
+	HasStreamingChunks bool                            // True when at least one SSE chunk has been received
 	StreamingContent   string                          // Accumulated content from delta.content
 	StreamingMetadata  map[string]interface{}          // id, model, created from first chunk
 	StreamingToolCalls map[int]*StreamingToolCallState // Accumulated delta.tool_calls keyed by tool index

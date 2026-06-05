@@ -39,7 +39,7 @@ func (r *OpenAIRouter) handleAnthropicStreamingResponseBody(
 	}
 
 	chunkStr := string(transformed)
-	ctx.StreamingChunks = append(ctx.StreamingChunks, chunkStr)
+	ctx.HasStreamingChunks = true
 	r.parseStreamingChunk(chunkStr, ctx)
 
 	if strings.Contains(chunkStr, "data: [DONE]") || streamDone {

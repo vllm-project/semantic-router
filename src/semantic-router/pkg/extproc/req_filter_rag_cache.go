@@ -26,8 +26,11 @@ type ragLRUItem struct {
 }
 
 // RAGResultCache provides in-memory caching for RAG retrieval results.
-// Uses a doubly-linked list + map for O(1) get, set, and LRU eviction.
-// Reads (cache hits) use RLock; only writes and evictions use Lock.
+// Uses a doubly-linked list + map for O(1) get, set, and eviction.
+// Eviction order is write/update-recency: only setRAGCache (new insert or
+// re-set of an existing key) moves an entry to MRU. Reads do not promote
+// entries, avoiding a write-lock on every cache hit. Reads use RLock; only
+// writes and evictions use Lock.
 type RAGResultCache struct {
 	cache   map[string]*list.Element // key → list element
 	lru     *list.List               // front = LRU, back = MRU
