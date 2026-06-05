@@ -27,7 +27,9 @@ if [[ "${MODEL_DIR}" != /* ]]; then
     MODEL_DIR="${REPO_ROOT}/${MODEL_DIR}"
 fi
 MODEL_MOUNT_DIR="${TEST_DIR}/models"
-USE_DETERMINISTIC_MEMORY_EMBEDDINGS="${USE_DETERMINISTIC_MEMORY_EMBEDDINGS:-1}"
+# Set to 1 to skip mmbert download and use deterministic embeddings (lower quality,
+# emergency-only for HuggingFace rate-limit mitigation). Default 0 = use real mmbert.
+USE_DETERMINISTIC_MEMORY_EMBEDDINGS="${USE_DETERMINISTIC_MEMORY_EMBEDDINGS:-0}"
 
 VLLM_SR_PID=""
 

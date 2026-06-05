@@ -66,8 +66,7 @@ jobs:
 
       - name: Run memory integration tests
         run: |
-          USE_DETERMINISTIC_MEMORY_EMBEDDINGS=1 \
-            make memory-test-integration DOCKER_TAG=ci VLLM_SR_IMAGE=vllm-sr:ci
+          make memory-test-integration DOCKER_TAG=ci VLLM_SR_IMAGE=vllm-sr:ci
 
       - name: Collect logs
         if: always()
