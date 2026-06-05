@@ -103,7 +103,8 @@
         },
         "replicaCount": {
           "type": "integer",
-          "minimum": 0
+          "minimum": 0,
+          "maximum": 1
         },
         "persistence": {
           "type": "object",
