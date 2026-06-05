@@ -1,6 +1,8 @@
 import React, { useState } from 'react'
 import Layout from '@theme/Layout'
 import Link from '@docusaurus/Link'
+import Translate, { translate } from '@docusaurus/Translate'
+import useDocusaurusContext from '@docusaurus/useDocusaurusContext'
 import { FaGithub } from 'react-icons/fa'
 import {
   contributorRankData,
@@ -12,81 +14,145 @@ import type {
 } from '../../data/contributorRank.generated'
 import styles from './contributors.module.css'
 
-const rangeOptions: Array<{
+type RangeOption = {
   id: ContributorRankRange
   label: string
   caption: string
-}> = [
-  {
-    id: 'last3months',
-    label: 'Last 3 months',
-    caption: 'Default',
-  },
-  {
-    id: 'last365days',
-    label: 'Last 365 days',
-    caption: 'Trailing year',
-  },
-  {
-    id: 'all',
-    label: 'All time',
-    caption: 'Repository history',
-  },
-]
+}
 
 const ContributorsPage: React.FC = () => {
+  const { i18n } = useDocusaurusContext()
+  const currentLocale = i18n.currentLocale
+  const numberLocale = currentLocale === 'zh-Hans' ? 'zh-CN' : 'en-US'
+  const dateLocale = currentLocale === 'zh-Hans' ? 'zh-CN' : 'en'
+
+  const rangeOptions: RangeOption[] = [
+    {
+      id: 'last3months',
+      label: translate({
+        id: 'community.contributors.range.last3months.label',
+        message: 'Last 3 months',
+      }),
+      caption: translate({
+        id: 'community.contributors.range.last3months.caption',
+        message: 'Default',
+      }),
+    },
+    {
+      id: 'last365days',
+      label: translate({
+        id: 'community.contributors.range.last365days.label',
+        message: 'Last 365 days',
+      }),
+      caption: translate({
+        id: 'community.contributors.range.last365days.caption',
+        message: 'Trailing year',
+      }),
+    },
+    {
+      id: 'all',
+      label: translate({
+        id: 'community.contributors.range.all.label',
+        message: 'All time',
+      }),
+      caption: translate({
+        id: 'community.contributors.range.all.caption',
+        message: 'Repository history',
+      }),
+    },
+  ]
+
   const [selectedRange, setSelectedRange] = useState<ContributorRankRange>('last3months')
   const snapshot = contributorRankData[selectedRange]
   const topContributors = snapshot.entries.slice(0, 5)
+  const selectedRangeLabel = rangeOptions.find(option => option.id === selectedRange)?.label ?? snapshot.label
 
   return (
     <Layout
-      title="Contributor Leaderboard"
-      description="vLLM Semantic Router contributor leaderboard by recent and historical repository commit activity."
+      title={translate({
+        id: 'community.contributors.pageTitle',
+        message: 'Contributor Leaderboard',
+      })}
+      description={translate({
+        id: 'community.contributors.pageDescription',
+        message: 'vLLM Semantic Router contributor leaderboard by recent and historical repository commit activity.',
+      })}
     >
       <main className={styles.container}>
         <header className={styles.header}>
           <div className={styles.titleBlock}>
-            <p className={styles.eyebrow}>Community</p>
+            <p className={styles.eyebrow}>
+              <Translate id="community.contributors.eyebrow">Community</Translate>
+            </p>
             <div className={styles.titleRow}>
-              <h1>Contributor Leaderboard</h1>
+              <h1>
+                <Translate id="community.contributors.h1">Contributor Leaderboard</Translate>
+              </h1>
               <Link className={styles.contributeLink} to="/community/contributing">
-                Start contributing
+                <Translate id="community.contributors.startContributing">Start contributing</Translate>
               </Link>
             </div>
           </div>
         </header>
 
-        <section className={styles.metrics} aria-label="Contributor rank summary">
-          <Metric label="Contributors" value={snapshot.totalContributors.toLocaleString('en-US')} />
-          <Metric label="New Contributors" value={snapshot.newContributors.toLocaleString('en-US')} />
-          <Metric label="Commits" value={snapshot.totalCommits.toLocaleString('en-US')} />
+        <section
+          className={styles.metrics}
+          aria-label={translate({ id: 'community.contributors.metrics.aria', message: 'Contributor rank summary' })}
+        >
+          <Metric
+            label={translate({ id: 'community.contributors.metrics.contributors', message: 'Contributors' })}
+            value={snapshot.totalContributors.toLocaleString(numberLocale)}
+          />
+          <Metric
+            label={translate({ id: 'community.contributors.metrics.newContributors', message: 'New Contributors' })}
+            value={snapshot.newContributors.toLocaleString(numberLocale)}
+          />
+          <Metric
+            label={translate({ id: 'community.contributors.metrics.commits', message: 'Commits' })}
+            value={snapshot.totalCommits.toLocaleString(numberLocale)}
+          />
         </section>
 
-        <section className={styles.podiumSection} aria-label="Contributor podium">
+        <section
+          className={styles.podiumSection}
+          aria-label={translate({ id: 'community.contributors.podium.aria', message: 'Contributor podium' })}
+        >
           {topContributors.map(entry => (
-            <TopContributorCard key={`${snapshot.id}-top-${entry.rank}`} entry={entry} />
+            <TopContributorCard key={`${snapshot.id}-top-${entry.rank}`} entry={entry} numberLocale={numberLocale} />
           ))}
         </section>
 
-        <section className={styles.leaderboardSection} aria-label={`${snapshot.label} contributor rank`}>
+        <section
+          className={styles.leaderboardSection}
+          aria-label={translate({
+            id: 'community.contributors.leaderboard.aria',
+            message: '{rangeLabel} contributor rank',
+          }, { rangeLabel: selectedRangeLabel })}
+        >
           <div className={styles.sectionHeader}>
             <div>
-              <h2>{snapshot.label}</h2>
+              <h2>{selectedRangeLabel}</h2>
               <p>
-                {formatRange(snapshot.startDate, snapshot.endDate)}
+                {formatRange(snapshot.startDate, snapshot.endDate, dateLocale)}
                 {' '}
-                · Updated
+                ·
                 {' '}
-                {formatDate(contributorRankGeneratedAt)}
+                {translate({ id: 'community.contributors.updated', message: 'Updated' })}
+                {' '}
+                {formatDate(contributorRankGeneratedAt, dateLocale)}
               </p>
             </div>
             <label className={styles.rangeSelectLabel}>
-              <span>Range</span>
+              <span>
+                <Translate id="community.contributors.range.label">Range</Translate>
+              </span>
               <select
                 className={styles.rangeSelect}
                 value={selectedRange}
-                aria-label="Contributor leaderboard time range"
+                aria-label={translate({
+                  id: 'community.contributors.range.aria',
+                  message: 'Contributor leaderboard time range',
+                })}
                 onChange={event => setSelectedRange(event.target.value as ContributorRankRange)}
               >
                 {rangeOptions.map(option => (
@@ -99,16 +165,16 @@ const ContributorsPage: React.FC = () => {
           </div>
 
           <div className={styles.rankListHeader} aria-hidden="true">
-            <span>Rank</span>
-            <span>Contributor</span>
-            <span>Commits</span>
-            <span>Share</span>
-            <span>Latest</span>
+            <span><Translate id="community.contributors.table.rank">Rank</Translate></span>
+            <span><Translate id="community.contributors.table.contributor">Contributor</Translate></span>
+            <span><Translate id="community.contributors.table.commits">Commits</Translate></span>
+            <span><Translate id="community.contributors.table.share">Share</Translate></span>
+            <span><Translate id="community.contributors.table.latest">Latest</Translate></span>
           </div>
 
           <div className={styles.rankList}>
             {snapshot.entries.map(entry => (
-              <ContributorRow key={`${snapshot.id}-${entry.rank}-${entry.name}`} entry={entry} />
+              <ContributorRow key={`${snapshot.id}-${entry.rank}-${entry.name}`} entry={entry} dateLocale={dateLocale} numberLocale={numberLocale} />
             ))}
           </div>
         </section>
@@ -124,7 +190,7 @@ const Metric: React.FC<{ label: string, value: string }> = ({ label, value }) =>
   </div>
 )
 
-const TopContributorCard: React.FC<{ entry: ContributorRankEntry }> = ({ entry }) => {
+const TopContributorCard: React.FC<{ entry: ContributorRankEntry, numberLocale: string }> = ({ entry, numberLocale }) => {
   const profileUrl = entry.login ? `https://github.com/${entry.login}` : undefined
 
   return (
@@ -142,18 +208,24 @@ const TopContributorCard: React.FC<{ entry: ContributorRankEntry }> = ({ entry }
               </a>
             )
           : (
-              <span>Git author</span>
+              <span>
+                <Translate id="community.contributors.gitAuthor">Git author</Translate>
+              </span>
             )}
       </div>
       <div className={styles.podiumStats}>
-        <strong>{entry.commits.toLocaleString('en-US')}</strong>
+        <strong>{entry.commits.toLocaleString(numberLocale)}</strong>
         <span>{formatPercent(entry.share)}</span>
       </div>
     </article>
   )
 }
 
-const ContributorRow: React.FC<{ entry: ContributorRankEntry }> = ({ entry }) => {
+const ContributorRow: React.FC<{
+  entry: ContributorRankEntry
+  numberLocale: string
+  dateLocale: string
+}> = ({ entry, numberLocale, dateLocale }) => {
   const profileUrl = entry.login ? `https://github.com/${entry.login}` : undefined
   const sharePercent = formatPercent(entry.share)
   const barWidth = `${Math.max(entry.share * 100, 1.5)}%`
@@ -171,7 +243,7 @@ const ContributorRow: React.FC<{ entry: ContributorRankEntry }> = ({ entry }) =>
             <span className={styles.name}>{entry.name}</span>
             {entry.isNewContributorSinceRelease && (
               <span className={styles.newContributorPill}>
-                New Contributor
+                <Translate id="community.contributors.newContributor">New Contributor</Translate>
               </span>
             )}
           </span>
@@ -183,14 +255,16 @@ const ContributorRow: React.FC<{ entry: ContributorRankEntry }> = ({ entry }) =>
                 </a>
               )
             : (
-                <span className={styles.handle}>Git author</span>
+                <span className={styles.handle}>
+                  <Translate id="community.contributors.gitAuthor">Git author</Translate>
+                </span>
               )}
         </div>
       </div>
 
       <div className={styles.statBlock}>
-        <span>Commits</span>
-        <strong>{entry.commits.toLocaleString('en-US')}</strong>
+        <span><Translate id="community.contributors.table.commits">Commits</Translate></span>
+        <strong>{entry.commits.toLocaleString(numberLocale)}</strong>
       </div>
 
       <div className={styles.share}>
@@ -201,8 +275,8 @@ const ContributorRow: React.FC<{ entry: ContributorRankEntry }> = ({ entry }) =>
       </div>
 
       <div className={styles.statBlock}>
-        <span>Latest</span>
-        <strong>{formatDate(entry.latestCommitDate)}</strong>
+        <span><Translate id="community.contributors.table.latest">Latest</Translate></span>
+        <strong>{formatDate(entry.latestCommitDate, dateLocale)}</strong>
       </div>
     </article>
   )
@@ -221,23 +295,29 @@ const ContributorAvatar: React.FC<{
     <img
       className={`${styles.avatar} ${size === 'large' ? styles.avatarLarge : ''}`}
       src={avatarUrl}
-      alt={`${entry.name} avatar`}
+      alt={translate({
+        id: 'community.contributors.avatarAlt',
+        message: '{name} avatar',
+      }, { name: entry.name })}
       loading="lazy"
       onError={() => setDidFail(true)}
     />
   )
 }
 
-function formatRange(startDate: string | null, endDate: string): string {
+function formatRange(startDate: string | null, endDate: string, locale: string): string {
   if (!startDate) {
-    return `Through ${formatDate(endDate)}`
+    return translate({
+      id: 'community.contributors.range.through',
+      message: 'Through {date}',
+    }, { date: formatDate(endDate, locale) })
   }
 
-  return `${formatDate(startDate)} - ${formatDate(endDate)}`
+  return `${formatDate(startDate, locale)} - ${formatDate(endDate, locale)}`
 }
 
-function formatDate(value: string): string {
-  return new Intl.DateTimeFormat('en', {
+function formatDate(value: string, locale: string): string {
+  return new Intl.DateTimeFormat(locale, {
     month: 'short',
     day: 'numeric',
     year: 'numeric',
