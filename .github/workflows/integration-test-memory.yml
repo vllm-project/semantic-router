@@ -61,12 +61,19 @@ jobs:
           echo "=== Disk space after cleanup ==="
           df -h /
 
+      - name: Restore memory model cache
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/vllm-sr-memory-models
+          key: memory-test-models-v2-${{ runner.os }}
+
       - name: Pre-pull Milvus image
         run: docker pull milvusdb/milvus:v2.3.3
 
       - name: Run memory integration tests
         run: |
-          make memory-test-integration DOCKER_TAG=ci VLLM_SR_IMAGE=vllm-sr:ci
+          MEMORY_TEST_MODEL_DIR="${HOME}/.cache/vllm-sr-memory-models" \
+            make memory-test-integration DOCKER_TAG=ci VLLM_SR_IMAGE=vllm-sr:ci
 
       - name: Collect logs
         if: always()
