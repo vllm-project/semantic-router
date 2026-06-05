@@ -59,6 +59,13 @@ spec:
           value: "http://{{ include "semantic-router.fullname" . }}:{{ .Values.service.api.port }}"
         - name: TARGET_ROUTER_METRICS_URL
           value: "http://{{ include "semantic-router.fullname" . }}-metrics:{{ .Values.service.metrics.port }}/metrics"
+        {{- if .Values.dashboard.jwtSecret.existingSecret }}
+        - name: DASHBOARD_JWT_SECRET
+          valueFrom:
+            secretKeyRef:
+              name: {{ .Values.dashboard.jwtSecret.existingSecret }}
+              key: {{ .Values.dashboard.jwtSecret.existingSecretKey }}
+        {{- end }}
         {{- if .Values.dashboard.readonly }}
         - name: DASHBOARD_READONLY
           value: "true"

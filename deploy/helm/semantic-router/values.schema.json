@@ -138,6 +138,18 @@
               "type": "integer"
             }
           }
+        },
+        "jwtSecret": {
+          "type": "object",
+          "additionalProperties": true,
+          "properties": {
+            "existingSecret": {
+              "type": "string"
+            },
+            "existingSecretKey": {
+              "type": "string"
+            }
+          }
         }
       }
     }
