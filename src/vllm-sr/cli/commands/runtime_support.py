@@ -43,7 +43,6 @@ PASSTHROUGH_ENV_RULES = (
     ("HF_TOKEN", True),
     ("HF_HOME", False),
     ("HF_HUB_CACHE", False),
-    ("VLLM_SR_DETERMINISTIC_EMBEDDINGS", False),
     ("ANTHROPIC_API_KEY", True),
     ("OPENAI_API_KEY", True),
     ("OPENCLAW_BASE_IMAGE", False),
