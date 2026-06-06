@@ -6,7 +6,33 @@ This page consolidates the design principles for authoring **embedding anchor pa
 
 Read this after the [Embedding Signal](./embedding) tutorial. That page covers the mechanics (`candidates`, `threshold`, `aggregation_method`, `query_modality`); this page covers how to make a pack that routes reliably instead of one that looks reasonable and misfires at scale.
 
-## Principle 1: anchors describe what the input *is*, not the words in it
+## Key Advantages
+
+A pack authored with these principles in mind gives you:
+
+- **Generalization over memorization** - anchors describe the *signature* of the content, so the rule keeps working on inputs it has never seen rather than overfitting to specific phrasing.
+- **Robustness at scale** - redundancy across the pack absorbs the inherent noise of cosine similarity, so no single weak anchor can sink a routing decision.
+- **Fewer false positives** - explicit negative-space anchors keep benign inputs low-confidence instead of letting them drift toward a sensitive anchor by accident.
+- **Portability of method, not magic numbers** - calibrating to your own model and corpus means the pack behaves predictably when you change models or content distribution.
+
+## What Problem Does It Solve?
+
+Embedding anchor packs are easy to write and hard to write *well*. The common failure mode is a pack that looks reasonable in review but misfires once it sees real traffic: anchors that match literal tokens instead of meaning, single load-bearing anchors that produce false positives, benign inputs that land near a sensitive anchor because nothing describes the benign case, or thresholds copied from an example pack that were never valid for your model. These principles exist to turn a pack from "looks plausible" into "routes reliably."
+
+## When to Use
+
+Apply these principles whenever you author or edit an embedding anchor pack - text-modality or image-modality - especially when:
+
+- You are adding a new `embedding` signal rule under `routing.signals.embeddings`.
+- An existing pack is producing false positives or false negatives in production.
+- You are adapting the opt-in image pack to your own deployment surface.
+- You are calibrating or re-calibrating a pack against a new embedding model or content distribution.
+
+## Configuration
+
+The five principles below are the working rules for building a pack. The opt-in image pack (`config/signal/embedding/image-routing.yaml`) is referenced throughout as a worked example.
+
+### Principle 1: anchors describe what the input *is*, not the words in it
 
 An embedding anchor is matched in the model's semantic space, so it should describe the **signature** of the content, not a literal string you expect to appear.
 
@@ -15,7 +41,7 @@ An embedding anchor is matched in the model's semantic space, so it should descr
 
 A quick self-check: if an anchor only matches when a specific literal token is present, it is describing text, not signature, and it will generalize poorly.
 
-## Principle 2: the pack is the signal, not any single anchor
+### Principle 2: the pack is the signal, not any single anchor
 
 Cosine similarity is noisy. One anchor matched against one input will produce false positives at scale. Robustness comes from **redundancy across the pack**, not from any individual phrase.
 
@@ -23,13 +49,13 @@ Cosine similarity is noisy. One anchor matched against one input will produce fa
 - Do not gate a routing decision on a single anchor firing. Treat the pack as a whole as the evidence.
 - Because any one anchor can be weak, the pack should still behave correctly even if its least-discriminating anchor is removed. If a single anchor is load-bearing, the pack is under-built.
 
-## Principle 3: cover the benign classes explicitly (negative-space anchors)
+### Principle 3: cover the benign classes explicitly (negative-space anchors)
 
 The most common failure mode is a benign input drifting closer to a sensitive anchor than to anything describing benign content - simply because nothing in the pack describes the benign case. The fix is **additive**: add anchors that positively describe the benign / ambient classes, rather than trying to subtract or blocklist them.
 
 The image pack ships `ambient_office_imagery` for exactly this reason: whiteboards, conference rooms, generic office scenes, and wide factory/warehouse shots give low-sensitivity inputs something to match so they stay low-confidence instead of landing near a sensitive anchor by accident. Mirror this for any pack: for every sensitive category you route on, give the routine, non-sensitive content of the same surface its own anchors.
 
-## Principle 4: calibrate the threshold to your model and corpus
+### Principle 4: calibrate the threshold to your model and corpus
 
 Thresholds are not portable across embedding models or modalities.
 
@@ -37,7 +63,7 @@ Thresholds are not portable across embedding models or modalities.
 - A different embedding model, or the same model on a different content distribution, will have a different operating range. Always calibrate against your own labeled evaluation set rather than copying a threshold from an example pack.
 - `aggregation_method: max` is usually right for distinct sensitive categories: any single strong match is enough to fire. Use `mean` only when you intend the whole category to need broad support.
 
-## Principle 5: validate the pack as a unit before relying on it
+### Principle 5: validate the pack as a unit before relying on it
 
 A pack is a small classifier. Treat changes to it the way you would treat a model change:
 
@@ -45,7 +71,7 @@ A pack is a small classifier. Treat changes to it the way you would treat a mode
 - When you add or remove an anchor, re-check that the benign corpus still stays below threshold - adding a sensitive anchor can pull benign inputs up with it.
 - Record the model and threshold the corpus was calibrated against; both are part of the pack's contract.
 
-## Reference: the opt-in image pack
+### Reference: the opt-in image pack
 
 `config/signal/embedding/image-routing.yaml` is a worked example of all five principles: three categories (`identifier_document_imagery`, `code_or_terminal_imagery`, `ambient_office_imagery`), 8 anchors each, `aggregation_method: max`, and a model-calibrated `0.10` threshold. Inline it under `routing.signals.embeddings`, then replace the `ambient_office_imagery` anchors with content specific to your own deployment surface and recalibrate.
 
