@@ -365,23 +365,12 @@ func createQdrantMemoryStore(cfg *config.RouterConfig) (memory.Store, error) {
 func detectMemoryEmbeddingModel(cfg *config.RouterConfig) string {
 	model := modellifecycle.ResolveMemoryEmbeddingModel(cfg)
 	if cfg.Memory.EmbeddingModel != "" {
+		logging.Infof("Memory: Using configured embedding model %s", model)
 		return model
 	}
 	if model == "bert" && cfg.BertModelPath == "" {
-		logging.Warnf("Memory: No embedding models configured, bert will be used but may fail without bert_model_path")
+		logging.Warnf("Memory: No memory embedding_model configured; defaulting to bert")
 		return model
-	}
-	switch model {
-	case "bert":
-		logging.Infof("Memory: Auto-selected bert from embedding_models config (384-dim, recommended for memory)")
-	case "mmbert":
-		logging.Infof("Memory: Auto-selected mmbert from embedding_models config")
-	case "multimodal":
-		logging.Infof("Memory: Auto-selected multimodal from embedding_models config")
-	case "qwen3":
-		logging.Infof("Memory: Auto-selected qwen3 from embedding_models config")
-	case "gemma":
-		logging.Infof("Memory: Auto-selected gemma from embedding_models config")
 	}
 	return model
 }

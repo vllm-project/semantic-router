@@ -1,5 +1,7 @@
 package config
 
+const defaultSemanticEmbeddingModel = "mmbert"
+
 // DefaultCanonicalGlobal returns the router-owned runtime defaults used when
 // canonical config omits all or part of the global block.
 func DefaultCanonicalGlobal() CanonicalGlobal {
@@ -74,6 +76,7 @@ func defaultCanonicalStoreGlobal() CanonicalStoreGlobal {
 		Memory: MemoryConfig{
 			Enabled:                    false,
 			AutoStore:                  false,
+			EmbeddingModel:             defaultSemanticEmbeddingModel,
 			Milvus:                     MemoryMilvusConfig{Collection: "agentic_memory", Dimension: 384},
 			DefaultRetrievalLimit:      5,
 			DefaultSimilarityThreshold: 0.70,
@@ -85,6 +88,7 @@ func defaultCanonicalStoreGlobal() CanonicalStoreGlobal {
 			MaxEntries:     1000,
 			TTLSeconds:     3600,
 			EvictionPolicy: "fifo",
+			EmbeddingModel: defaultSemanticEmbeddingModel,
 		},
 	}
 }

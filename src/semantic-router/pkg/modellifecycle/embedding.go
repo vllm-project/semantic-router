@@ -15,19 +15,7 @@ func ResolveSemanticCacheEmbeddingModel(cfg *config.RouterConfig) string {
 	if embeddingModel != "" {
 		return embeddingModel
 	}
-
-	switch {
-	case cfg.MmBertModelPath != "":
-		return "mmbert"
-	case cfg.MultiModalModelPath != "":
-		return "multimodal"
-	case cfg.Qwen3ModelPath != "":
-		return "qwen3"
-	case cfg.GemmaModelPath != "":
-		return "gemma"
-	default:
-		return "bert"
-	}
+	return "bert"
 }
 
 func ResolveMemoryEmbeddingModel(cfg *config.RouterConfig) string {
@@ -39,20 +27,5 @@ func ResolveMemoryEmbeddingModel(cfg *config.RouterConfig) string {
 	if embeddingModel != "" {
 		return embeddingModel
 	}
-
-	embeddingModels := cfg.EmbeddingModels
-	switch {
-	case embeddingModels.BertModelPath != "":
-		return "bert"
-	case embeddingModels.MmBertModelPath != "":
-		return "mmbert"
-	case embeddingModels.MultiModalModelPath != "":
-		return "multimodal"
-	case embeddingModels.Qwen3ModelPath != "":
-		return "qwen3"
-	case embeddingModels.GemmaModelPath != "":
-		return "gemma"
-	default:
-		return "bert"
-	}
+	return "bert"
 }

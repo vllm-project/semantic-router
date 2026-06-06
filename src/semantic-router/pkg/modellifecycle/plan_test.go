@@ -118,6 +118,36 @@ func TestResolveMemoryEmbeddingModelPrefersConfiguredCanonicalDefault(t *testing
 	}
 }
 
+func TestResolveSemanticCacheEmbeddingModelDoesNotInferFromModelPaths(t *testing.T) {
+	cfg := &config.RouterConfig{
+		SemanticCache: config.SemanticCache{Enabled: true},
+		InlineModels: config.InlineModels{
+			EmbeddingModels: config.EmbeddingModels{
+				MmBertModelPath: "models/mmbert-embed-32k-2d-matryoshka",
+			},
+		},
+	}
+
+	if got := ResolveSemanticCacheEmbeddingModel(cfg); got != "bert" {
+		t.Fatalf("ResolveSemanticCacheEmbeddingModel() = %q, want bert fallback", got)
+	}
+}
+
+func TestResolveMemoryEmbeddingModelDoesNotInferFromModelPaths(t *testing.T) {
+	cfg := &config.RouterConfig{
+		Memory: config.MemoryConfig{Enabled: true},
+		InlineModels: config.InlineModels{
+			EmbeddingModels: config.EmbeddingModels{
+				MmBertModelPath: "models/mmbert-embed-32k-2d-matryoshka",
+			},
+		},
+	}
+
+	if got := ResolveMemoryEmbeddingModel(cfg); got != "bert" {
+		t.Fatalf("ResolveMemoryEmbeddingModel() = %q, want bert fallback", got)
+	}
+}
+
 func assertDownloadPaths(t *testing.T, plan Plan, want ...string) {
 	t.Helper()
 
