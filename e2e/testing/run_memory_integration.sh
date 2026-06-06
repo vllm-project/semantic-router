@@ -100,7 +100,9 @@ echo "Using memory integration temp dir: ${TEST_DIR}"
 if [[ -n "${HF_TOKEN:-}" || -n "${HUGGING_FACE_HUB_TOKEN:-}" ]]; then
     echo "Using authenticated Hugging Face downloads for memory integration"
 else
-    echo "Warning: HF_TOKEN/HUGGING_FACE_HUB_TOKEN not set; memory model downloads may hit rate limits" >&2
+    echo "HF_TOKEN/HUGGING_FACE_HUB_TOKEN not set; enabling deterministic embeddings for CI to avoid download failures" >&2
+    export VLLM_SR_DETERMINISTIC_EMBEDDINGS=1
+    export USE_DETERMINISTIC_MEMORY_EMBEDDINGS=1
 fi
 
 echo "Memory integration uses mmbert embeddings by default for acceptance coverage"

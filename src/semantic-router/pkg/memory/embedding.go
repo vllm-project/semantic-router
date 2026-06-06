@@ -27,6 +27,17 @@ type EmbeddingConfig struct {
 
 // GenerateEmbedding generates an embedding using the configured model
 func GenerateEmbedding(text string, cfg EmbeddingConfig) ([]float32, error) {
+	// Short-circuit to deterministic embeddings when explicitly enabled. This
+	// is required for forked-PR CI runs which do not have access to HF_TOKEN
+	// and therefore cannot download large HF snapshots.
+	if deterministicEmbeddingsEnabled() {
+		emb, err := generateDeterministicEmbedding(text, cfg)
+		if err != nil {
+			return nil, err
+		}
+		return emb, nil
+	}
+
 	modelName := strings.ToLower(strings.TrimSpace(string(cfg.Model)))
 	switch modelName {
 	case "qwen3":
