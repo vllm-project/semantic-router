@@ -8,33 +8,35 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 )
 
-const (
-	DefaultBERTEmbeddingModelPath = "models/mom-embedding-light"
-)
+var DefaultBERTEmbeddingModelPath = config.DefaultModelPathForLifecycleRole(config.ModelLifecycleRoleBERTEmbedding)
 
-type AssetRole string
+type AssetRole = config.ModelLifecycleRole
 
 const (
-	RoleQwen3Embedding      AssetRole = "qwen3_embedding"
-	RoleGemmaEmbedding      AssetRole = "gemma_embedding"
-	RoleMmBERTEmbedding     AssetRole = "mmbert_embedding"
-	RoleMultiModalEmbedding AssetRole = "multimodal_embedding"
-	RoleBERTEmbedding       AssetRole = "bert_embedding"
-	RoleDomainClassifier    AssetRole = "domain_classifier"
-	RolePIIClassifier       AssetRole = "pii_classifier"
-	RolePromptGuard         AssetRole = "prompt_guard"
-	RoleFactCheckClassifier AssetRole = "fact_check_classifier"
-	RoleHallucinationModel  AssetRole = "hallucination_detector"
-	RoleHallucinationNLI    AssetRole = "hallucination_explainer"
-	RoleFeedbackDetector    AssetRole = "feedback_detector"
-	RoleModalityClassifier  AssetRole = "modality_classifier"
+	RoleQwen3Embedding      AssetRole = config.ModelLifecycleRoleQwen3Embedding
+	RoleGemmaEmbedding      AssetRole = config.ModelLifecycleRoleGemmaEmbedding
+	RoleMmBERTEmbedding     AssetRole = config.ModelLifecycleRoleMmBERTEmbedding
+	RoleMultiModalEmbedding AssetRole = config.ModelLifecycleRoleMultiModalEmbedding
+	RoleBERTEmbedding       AssetRole = config.ModelLifecycleRoleBERTEmbedding
+	RoleDomainClassifier    AssetRole = config.ModelLifecycleRoleDomainClassifier
+	RolePIIClassifier       AssetRole = config.ModelLifecycleRolePIIClassifier
+	RolePromptGuard         AssetRole = config.ModelLifecycleRolePromptGuard
+	RoleFactCheckClassifier AssetRole = config.ModelLifecycleRoleFactCheckClassifier
+	RoleHallucinationModel  AssetRole = config.ModelLifecycleRoleHallucinationModel
+	RoleHallucinationNLI    AssetRole = config.ModelLifecycleRoleHallucinationNLI
+	RoleFeedbackDetector    AssetRole = config.ModelLifecycleRoleFeedbackDetector
+	RoleModalityClassifier  AssetRole = config.ModelLifecycleRoleModalityClassifier
 )
 
 type Asset struct {
-	Role          AssetRole
-	LocalPath     string
-	RequiredFiles []string
-	UseCPU        bool
+	Role                 AssetRole
+	Kind                 config.ModelLifecycleKind
+	RuntimeName          string
+	LocalPath            string
+	RequiredFiles        []string
+	UseCPU               bool
+	DownloadTiming       string
+	InitializationTiming string
 }
 
 type EmbeddingPaths struct {
@@ -74,6 +76,16 @@ func (p Plan) AssetForRole(role AssetRole) (Asset, bool) {
 		}
 	}
 	return Asset{}, false
+}
+
+func (p Plan) AssetsByKind(kind config.ModelLifecycleKind) []Asset {
+	assets := make([]Asset, 0)
+	for _, asset := range p.configured {
+		if asset.Kind == kind {
+			assets = append(assets, asset)
+		}
+	}
+	return cloneAssets(assets)
 }
 
 func (p Plan) DownloadAssets() []Asset {
@@ -248,11 +260,16 @@ func (b *planBuilder) plan() Plan {
 }
 
 func newAsset(role AssetRole, path string, requiredFiles []string, useCPU bool) Asset {
+	binding, _ := config.ModelLifecycleBindingForRole(role)
 	return Asset{
-		Role:          role,
-		LocalPath:     config.ResolveModelPath(strings.TrimSpace(path)),
-		RequiredFiles: cloneStrings(requiredFiles),
-		UseCPU:        useCPU,
+		Role:                 role,
+		Kind:                 binding.Kind,
+		RuntimeName:          binding.RuntimeName,
+		LocalPath:            config.ResolveModelPath(strings.TrimSpace(path)),
+		RequiredFiles:        cloneStrings(requiredFiles),
+		UseCPU:               useCPU,
+		DownloadTiming:       binding.DownloadTiming,
+		InitializationTiming: binding.InitializationTiming,
 	}
 }
 

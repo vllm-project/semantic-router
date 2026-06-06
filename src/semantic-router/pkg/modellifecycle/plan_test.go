@@ -1,6 +1,7 @@
 package modellifecycle
 
 import (
+	"path/filepath"
 	"reflect"
 	"testing"
 
@@ -62,6 +63,27 @@ func TestBuildPlanEmbeddingPathsExposeUseCPUPolicy(t *testing.T) {
 	}
 }
 
+func TestConfiguredAssetsCarryLifecycleMetadata(t *testing.T) {
+	cfg := config.DefaultGlobalConfig()
+
+	asset, ok := BuildPlan(&cfg).AssetForRole(RoleMmBERTEmbedding)
+	if !ok {
+		t.Fatal("missing mmBERT embedding asset")
+	}
+	if asset.Kind != config.ModelLifecycleKindEmbedding {
+		t.Fatalf("asset kind = %q", asset.Kind)
+	}
+	if asset.RuntimeName != "mmbert" {
+		t.Fatalf("runtime name = %q", asset.RuntimeName)
+	}
+	if asset.DownloadTiming != config.ModelLifecycleDownloadOnUse {
+		t.Fatalf("download timing = %q", asset.DownloadTiming)
+	}
+	if asset.InitializationTiming != config.ModelLifecycleInitRouterStartup {
+		t.Fatalf("init timing = %q", asset.InitializationTiming)
+	}
+}
+
 func TestBuildPlanGatesClassifierDownloadsByRoutingUsage(t *testing.T) {
 	cfg := &config.RouterConfig{
 		InlineModels: config.InlineModels{
@@ -108,6 +130,24 @@ func TestBuildPlanIncludesClassifierWhenSignalIsUsed(t *testing.T) {
 	want := []string{"category_mapping.json"}
 	if !reflect.DeepEqual(files["models/mmbert32k-intent-classifier-merged"], want) {
 		t.Fatalf("required files = %#v, want %#v", files["models/mmbert32k-intent-classifier-merged"], want)
+	}
+}
+
+func TestBalanceRecipeLifecyclePlanDownloadsOnlyActivatedBuiltIns(t *testing.T) {
+	cfg, err := config.Parse(filepath.Join("..", "..", "..", "..", "deploy", "recipes", "balance.yaml"))
+	if err != nil {
+		t.Fatalf("parse balance recipe: %v", err)
+	}
+
+	plan := BuildPlan(cfg)
+	assertDownloadPaths(t, plan,
+		config.DefaultModelPathForLifecycleRole(config.ModelLifecycleRoleMmBERTEmbedding),
+		config.DefaultModelPathForLifecycleRole(config.ModelLifecycleRoleDomainClassifier),
+		config.DefaultModelPathForLifecycleRole(config.ModelLifecycleRoleFactCheckClassifier),
+		config.DefaultModelPathForLifecycleRole(config.ModelLifecycleRoleFeedbackDetector),
+	)
+	if _, ok := plan.AssetForRole(RoleBERTEmbedding); ok {
+		t.Fatal("balance recipe should not require the legacy BERT embedding fallback")
 	}
 }
 

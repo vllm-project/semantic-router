@@ -974,7 +974,7 @@ class EmbeddingModelsConfig(BaseModel):
     )
     bert_model_path: Optional[str] = Field(
         None,
-        description="Path to BERT/MiniLM model (recommended for memory retrieval)",
+        description="Path to legacy BERT/SentenceTransformer fallback embedding model",
     )
     embedding_config: Optional[EmbeddingClassifierConfig] = Field(
         default=None,

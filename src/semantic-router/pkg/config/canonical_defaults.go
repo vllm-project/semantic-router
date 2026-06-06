@@ -184,7 +184,7 @@ func defaultCalibrationKnowledgeBase() KnowledgeBaseConfig {
 func defaultCanonicalEmbeddingModels() CanonicalEmbeddingModels {
 	return CanonicalEmbeddingModels{
 		Semantic: EmbeddingModels{
-			MmBertModelPath: "models/mmbert-embed-32k-2d-matryoshka",
+			MmBertModelPath: DefaultModelPathForLifecycleRole(ModelLifecycleRoleMmBERTEmbedding),
 			UseCPU:          true,
 			EmbeddingConfig: HNSWConfig{
 				ModelType:         "mmbert",
@@ -216,7 +216,7 @@ func defaultPromptGuardModule() CanonicalPromptGuardModule {
 			Threshold:            0.7,
 			UseCPU:               true,
 			UseMmBERT32K:         true,
-			JailbreakMappingPath: "models/mmbert32k-jailbreak-detector-merged/jailbreak_type_mapping.json",
+			JailbreakMappingPath: DefaultCompanionPathForLifecycleRole(ModelLifecycleRolePromptGuard),
 		},
 	}
 }
@@ -229,7 +229,7 @@ func defaultClassifierModule() CanonicalClassifierModule {
 				Threshold:           0.5,
 				UseCPU:              true,
 				UseMmBERT32K:        true,
-				CategoryMappingPath: "models/mmbert32k-intent-classifier-merged/category_mapping.json",
+				CategoryMappingPath: DefaultCompanionPathForLifecycleRole(ModelLifecycleRoleDomainClassifier),
 			},
 		},
 		PII: CanonicalPIIModule{
@@ -238,7 +238,7 @@ func defaultClassifierModule() CanonicalClassifierModule {
 				Threshold:      0.9,
 				UseCPU:         true,
 				UseMmBERT32K:   true,
-				PIIMappingPath: "models/mmbert32k-pii-detector-merged/pii_type_mapping.json",
+				PIIMappingPath: DefaultCompanionPathForLifecycleRole(ModelLifecycleRolePIIClassifier),
 			},
 		},
 		Preference: PreferenceModelConfig{
@@ -295,13 +295,13 @@ func defaultFeedbackDetectorModule() CanonicalFeedbackDetectorModule {
 // DefaultSystemModels returns stable capability bindings for built-in runtime models.
 func DefaultSystemModels() CanonicalSystemModels {
 	return CanonicalSystemModels{
-		PromptGuard:            "models/mmbert32k-jailbreak-detector-merged",
-		DomainClassifier:       "models/mmbert32k-intent-classifier-merged",
-		PIIClassifier:          "models/mmbert32k-pii-detector-merged",
-		FactCheckClassifier:    "models/mmbert32k-factcheck-classifier-merged",
-		HallucinationDetector:  "models/mom-halugate-detector",
-		HallucinationExplainer: "models/mom-halugate-explainer",
-		FeedbackDetector:       "models/mmbert32k-feedback-detector-merged",
+		PromptGuard:            DefaultModelPathForLifecycleRole(ModelLifecycleRolePromptGuard),
+		DomainClassifier:       DefaultModelPathForLifecycleRole(ModelLifecycleRoleDomainClassifier),
+		PIIClassifier:          DefaultModelPathForLifecycleRole(ModelLifecycleRolePIIClassifier),
+		FactCheckClassifier:    DefaultModelPathForLifecycleRole(ModelLifecycleRoleFactCheckClassifier),
+		HallucinationDetector:  DefaultModelPathForLifecycleRole(ModelLifecycleRoleHallucinationModel),
+		HallucinationExplainer: DefaultModelPathForLifecycleRole(ModelLifecycleRoleHallucinationNLI),
+		FeedbackDetector:       DefaultModelPathForLifecycleRole(ModelLifecycleRoleFeedbackDetector),
 	}
 }
 

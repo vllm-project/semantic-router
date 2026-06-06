@@ -108,26 +108,20 @@ type embeddingModelCandidate struct {
 }
 
 func configuredEmbeddingModelCandidates(plan modellifecycle.Plan) []embeddingModelCandidate {
-	return []embeddingModelCandidate{
-		embeddingModelCandidateForRole(plan, modellifecycle.RoleQwen3Embedding, "qwen3"),
-		embeddingModelCandidateForRole(plan, modellifecycle.RoleGemmaEmbedding, "gemma"),
-		embeddingModelCandidateForRole(plan, modellifecycle.RoleMmBERTEmbedding, "mmbert"),
-		embeddingModelCandidateForRole(plan, modellifecycle.RoleMultiModalEmbedding, "multimodal"),
-		embeddingModelCandidateForRole(plan, modellifecycle.RoleBERTEmbedding, "bert"),
+	assets := plan.AssetsByKind(routerconfig.ModelLifecycleKindEmbedding)
+	candidates := make([]embeddingModelCandidate, 0, len(assets))
+	for _, asset := range assets {
+		modelType := asset.RuntimeName
+		if modelType == "" {
+			modelType = string(asset.Role)
+		}
+		candidates = append(candidates, embeddingModelCandidate{
+			name:      fmt.Sprintf("%s_embedding_model", modelType),
+			modelType: modelType,
+			path:      asset.LocalPath,
+		})
 	}
-}
-
-func embeddingModelCandidateForRole(
-	plan modellifecycle.Plan,
-	role modellifecycle.AssetRole,
-	modelType string,
-) embeddingModelCandidate {
-	asset, _ := plan.AssetForRole(role)
-	return embeddingModelCandidate{
-		name:      fmt.Sprintf("%s_embedding_model", modelType),
-		modelType: modelType,
-		path:      asset.LocalPath,
-	}
+	return candidates
 }
 
 func normalizeEmbeddingModelPath(runtimePath, modelName string) string {
