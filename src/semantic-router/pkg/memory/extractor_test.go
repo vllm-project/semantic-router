@@ -6,6 +6,8 @@ import (
 	"testing"
 
 	"github.com/openai/openai-go"
+	"github.com/prometheus/client_golang/prometheus"
+	dto "github.com/prometheus/client_model/go"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -407,6 +409,74 @@ func TestProcessResponseWithHistory_NilHistory(t *testing.T) {
 	results, err := store.List(ctx, ListOptions{UserID: "user1", Limit: 100})
 	require.NoError(t, err)
 	assert.Len(t, results.Memories, 1, "nil history should still store per-turn chunk")
+}
+
+func TestProcessResponseWithHistory_RecordsStoredChunkCountMetric(t *testing.T) {
+	snapshot := func(t *testing.T) (uint64, float64) {
+		metric := &dto.Metric{}
+		writable, ok := MemoryExtractionFactsCount.WithLabelValues("episodic").(prometheus.Metric)
+		require.True(t, ok)
+		require.NoError(t, writable.Write(metric))
+		histogram := metric.GetHistogram()
+		require.NotNil(t, histogram)
+		return histogram.GetSampleCount(), histogram.GetSampleSum()
+	}
+
+	tests := []struct {
+		name       string
+		user       string
+		assistant  string
+		history    []openai.ChatCompletionMessageParamUnion
+		wantStored int
+	}{
+		{
+			name:       "per turn only",
+			user:       "What is Go and why is it useful for backend services?",
+			assistant:  "Go is a compiled language with concurrency features and simple deployment.",
+			wantStored: 1,
+		},
+		{
+			name:      "per turn plus session window",
+			user:      "Tell me about Go concurrency.",
+			assistant: "Go uses goroutines and channels for concurrency.",
+			history: []openai.ChatCompletionMessageParamUnion{
+				sdkUserMessage("What is your name?"),
+				sdkAssistantMessage("I am an AI assistant."),
+				sdkUserMessage("What languages do you know?"),
+				sdkAssistantMessage("I can help with Go, Python, and more."),
+			},
+			wantStored: 2,
+		},
+		{
+			name:       "sanitize rejected",
+			user:       "This message includes invalid UTF-8: " + string([]byte{0xff}),
+			assistant:  "This response is long enough to avoid the low entropy filter.",
+			wantStored: 0,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			store := NewInMemoryStore()
+			extractor := NewMemoryChunkStore(store)
+			ctx := context.Background()
+
+			beforeCount, beforeSum := snapshot(t)
+			err := extractor.ProcessResponseWithHistory(
+				ctx, "session1", "user1",
+				tt.user, tt.assistant, tt.history,
+			)
+			require.NoError(t, err)
+
+			results, err := store.List(ctx, ListOptions{UserID: "user1", Limit: 100})
+			require.NoError(t, err)
+			assert.Len(t, results.Memories, tt.wantStored)
+
+			afterCount, afterSum := snapshot(t)
+			assert.Equal(t, beforeCount+1, afterCount)
+			assert.InDelta(t, beforeSum+float64(tt.wantStored), afterSum, 0.000001)
+		})
+	}
 }
 
 // =============================================================================
