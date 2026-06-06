@@ -212,6 +212,25 @@ except Exception as e:
     sleep 2
 done
 
+# Drop any stale collection left over from a previous run (e.g. wrong dimension).
+# The router recreates it with the correct schema on first write.
+echo "Dropping stale Milvus collection (if present)..."
+python3 - "${MILVUS_COLLECTION:-memory_test_ci}" <<'PY'
+import sys
+from pymilvus import MilvusClient
+
+collection = sys.argv[1]
+try:
+    client = MilvusClient(uri="http://localhost:19530")
+    if client.has_collection(collection):
+        client.drop_collection(collection)
+        print(f"Dropped stale collection: {collection}")
+    else:
+        print(f"Collection '{collection}' does not exist; nothing to drop")
+except Exception as e:
+    print(f"Warning: could not drop collection '{collection}': {e}", file=sys.stderr)
+PY
+
 cp "${REPO_ROOT}/e2e/config/config.memory-user.yaml" "${CONFIG_FILE}"
 python3 - "${CONFIG_FILE}" <<'PY'
 from pathlib import Path
