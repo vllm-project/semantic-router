@@ -27,6 +27,7 @@ if [[ "${MODEL_DIR}" != /* ]]; then
     MODEL_DIR="${REPO_ROOT}/${MODEL_DIR}"
 fi
 MODEL_MOUNT_DIR="${TEST_DIR}/models"
+MEMORY_EMBEDDING_REPO_ID="llm-semantic-router/mmbert-embed-32k-2d-matryoshka"
 
 VLLM_SR_PID=""
 
@@ -96,7 +97,13 @@ cleanup() {
 trap cleanup EXIT INT TERM
 
 echo "Using memory integration temp dir: ${TEST_DIR}"
+if [[ -n "${HF_TOKEN:-}" || -n "${HUGGING_FACE_HUB_TOKEN:-}" ]]; then
+    echo "Using authenticated Hugging Face downloads for memory integration"
+else
+    echo "Warning: HF_TOKEN/HUGGING_FACE_HUB_TOKEN not set; memory model downloads may hit rate limits" >&2
+fi
 
+echo "Memory integration uses mmbert embeddings by default for acceptance coverage"
 python3 -m pip install -U "huggingface_hub[cli]" hf_transfer requests pymilvus
 
 prepare_model_dir() {
@@ -168,7 +175,7 @@ PY
 
 prepare_model_dir
 echo "Using memory integration model dir: ${MODEL_DIR}"
-download_hf_snapshot "llm-semantic-router/mmbert-embed-32k-2d-matryoshka" "${MODEL_DIR}/mmbert-embed-32k-2d-matryoshka"
+download_hf_snapshot "${MEMORY_EMBEDDING_REPO_ID}" "${MODEL_DIR}/mmbert-embed-32k-2d-matryoshka"
 make -C "${REPO_ROOT}" start-milvus
 
 # Double-check Milvus readiness with pymilvus probe (gRPC-level, not just HTTP)
