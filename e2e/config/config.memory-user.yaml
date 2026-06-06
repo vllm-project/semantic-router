@@ -72,7 +72,7 @@ routing:
           configuration:
             enabled: true
             retrieval_limit: 5
-            similarity_threshold: 0.99
+            similarity_threshold: 0.80
             auto_store: true
 
     - name: default_route
@@ -93,7 +93,7 @@ routing:
           configuration:
             enabled: true
             retrieval_limit: 5
-            similarity_threshold: 0.45
+            similarity_threshold: 0.30
             auto_store: true
 global:
   services:
