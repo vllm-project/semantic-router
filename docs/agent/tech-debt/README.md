@@ -65,6 +65,7 @@ Every debt entry should include:
 - [TD027 Fleet Sim Optimizer and Public Surface Boundaries Still Collapse Analytical Sizing, DES Verification, and Export Policy](td-027-fleet-sim-optimizer-and-public-surface-boundary-collapse.md)
 - [TD042 FFI Embedding File Carries Pre-Existing Structure-Rules Debt](td-042-ffi-embedding-structure-debt.md)
 - [TD043 candle-binding/semantic-router.go Carries Pre-Existing Cyclomatic Complexity Debt](td-043-semantic-router-go-cyclop-debt.md)
+- [TD044 Router-Owned Model Lifecycle Is Split Across Download, Runtime, and API Surfaces](td-044-router-model-lifecycle-split.md)
 
 ## Retired Debt Policy
 

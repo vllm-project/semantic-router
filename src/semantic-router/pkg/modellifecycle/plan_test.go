@@ -1,0 +1,132 @@
+package modellifecycle
+
+import (
+	"reflect"
+	"testing"
+
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
+)
+
+func TestBuildPlanUsesCanonicalMmBERTDefaultWithoutLegacyBERT(t *testing.T) {
+	cfg := config.DefaultGlobalConfig()
+
+	plan := BuildPlan(&cfg)
+	paths := plan.EmbeddingPaths()
+
+	if paths.MmBERT != "models/mmbert-embed-32k-2d-matryoshka" {
+		t.Fatalf("MmBERT path = %q", paths.MmBERT)
+	}
+	if paths.BERT != "" {
+		t.Fatalf("BERT path = %q, want empty when canonical mmBERT is configured", paths.BERT)
+	}
+	assertDownloadPaths(t, plan, "models/mmbert-embed-32k-2d-matryoshka")
+}
+
+func TestBuildPlanAddsManagedBERTFallbackWhenBERTIsRequired(t *testing.T) {
+	cfg := &config.RouterConfig{
+		InlineModels: config.InlineModels{
+			EmbeddingModels: config.EmbeddingModels{UseCPU: true},
+		},
+		SemanticCache: config.SemanticCache{
+			Enabled:        true,
+			EmbeddingModel: "bert",
+		},
+		MoMRegistry: config.ToLegacyRegistry(),
+	}
+
+	plan := BuildPlan(cfg)
+	paths := plan.EmbeddingPaths()
+
+	if paths.BERT != DefaultBERTEmbeddingModelPath {
+		t.Fatalf("BERT path = %q, want %q", paths.BERT, DefaultBERTEmbeddingModelPath)
+	}
+	assertDownloadPaths(t, plan, DefaultBERTEmbeddingModelPath)
+}
+
+func TestBuildPlanEmbeddingPathsExposeUseCPUPolicy(t *testing.T) {
+	cfg := &config.RouterConfig{
+		InlineModels: config.InlineModels{
+			EmbeddingModels: config.EmbeddingModels{
+				MmBertModelPath: "models/mmbert-embed-32k-2d-matryoshka",
+				UseCPU:          false,
+			},
+		},
+	}
+
+	paths := BuildPlan(cfg).EmbeddingPaths()
+	if paths.MmBERT == "" {
+		t.Fatal("MmBERT path is empty")
+	}
+	if paths.UseCPU {
+		t.Fatal("EmbeddingPaths.UseCPU = true, want false from lifecycle plan")
+	}
+}
+
+func TestBuildPlanGatesClassifierDownloadsByRoutingUsage(t *testing.T) {
+	cfg := &config.RouterConfig{
+		InlineModels: config.InlineModels{
+			Classifier: config.Classifier{
+				CategoryModel: config.CategoryModel{
+					ModelID:             "models/mmbert32k-intent-classifier-merged",
+					CategoryMappingPath: "models/mmbert32k-intent-classifier-merged/category_mapping.json",
+				},
+			},
+		},
+	}
+
+	plan := BuildPlan(cfg)
+	if len(plan.DownloadAssets()) != 0 {
+		t.Fatalf("DownloadAssets() = %#v, want no unused classifier assets", plan.DownloadAssets())
+	}
+	if got := plan.ConfiguredModelPaths(); !reflect.DeepEqual(got, []string{"models/mmbert32k-intent-classifier-merged"}) {
+		t.Fatalf("ConfiguredModelPaths() = %#v", got)
+	}
+}
+
+func TestBuildPlanIncludesClassifierWhenSignalIsUsed(t *testing.T) {
+	cfg := &config.RouterConfig{
+		MoMRegistry: config.ToLegacyRegistry(),
+		InlineModels: config.InlineModels{
+			Classifier: config.Classifier{
+				CategoryModel: config.CategoryModel{
+					ModelID:             "models/mmbert32k-intent-classifier-merged",
+					CategoryMappingPath: "models/mmbert32k-intent-classifier-merged/category_mapping.json",
+				},
+			},
+		},
+		IntelligentRouting: config.IntelligentRouting{
+			Decisions: []config.Decision{{
+				Name:  "domain-route",
+				Rules: config.RuleNode{Type: config.SignalTypeDomain, Name: "billing"},
+			}},
+		},
+	}
+
+	plan := BuildPlan(cfg)
+	assertDownloadPaths(t, plan, "models/mmbert32k-intent-classifier-merged")
+	files := plan.RequiredFilesByModel()
+	want := []string{"category_mapping.json"}
+	if !reflect.DeepEqual(files["models/mmbert32k-intent-classifier-merged"], want) {
+		t.Fatalf("required files = %#v, want %#v", files["models/mmbert32k-intent-classifier-merged"], want)
+	}
+}
+
+func TestResolveMemoryEmbeddingModelPrefersConfiguredCanonicalDefault(t *testing.T) {
+	cfg := config.DefaultGlobalConfig()
+	if got := ResolveMemoryEmbeddingModel(&cfg); got != "mmbert" {
+		t.Fatalf("ResolveMemoryEmbeddingModel() = %q, want mmbert", got)
+	}
+}
+
+func assertDownloadPaths(t *testing.T, plan Plan, want ...string) {
+	t.Helper()
+
+	assets := plan.DownloadAssets()
+	got := make([]string, 0, len(assets))
+	for _, asset := range assets {
+		got = append(got, asset.LocalPath)
+	}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("download paths = %#v, want %#v", got, want)
+	}
+}

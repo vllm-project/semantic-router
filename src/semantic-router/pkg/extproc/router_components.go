@@ -6,6 +6,7 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/cache"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/classification"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modellifecycle"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/services"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/tools"
@@ -90,28 +91,13 @@ func createSemanticCache(cfg *config.RouterConfig) (cache.CacheBackend, error) {
 }
 
 func detectSemanticCacheEmbeddingModel(cfg *config.RouterConfig) string {
-	semanticCacheCfg := cfg.SemanticCache
-	embeddingModels := cfg.EmbeddingModels
-	embeddingModel := semanticCacheCfg.EmbeddingModel
-	if embeddingModel != "" {
-		return embeddingModel
-	}
-
-	switch {
-	case embeddingModels.MmBertModelPath != "":
-		return "mmbert"
-	case embeddingModels.MultiModalModelPath != "":
-		return "multimodal"
-	case embeddingModels.Qwen3ModelPath != "":
-		return "qwen3"
-	case embeddingModels.GemmaModelPath != "":
-		return "gemma"
-	default:
+	embeddingModel := modellifecycle.ResolveSemanticCacheEmbeddingModel(cfg)
+	if cfg == nil || (cfg.SemanticCache.EmbeddingModel == "" && embeddingModel == "bert") {
 		logging.ComponentWarnEvent("extproc", "semantic_cache_embedding_fallback", map[string]interface{}{
 			"fallback_model": "bert",
 		})
-		return "bert"
 	}
+	return embeddingModel
 }
 
 func createToolsDatabase(cfg *config.RouterConfig) *tools.ToolsDatabase {

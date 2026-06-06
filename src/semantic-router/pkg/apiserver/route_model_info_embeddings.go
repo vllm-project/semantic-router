@@ -9,6 +9,7 @@ import (
 
 	candle_binding "github.com/vllm-project/semantic-router/candle-binding"
 	routerconfig "github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modellifecycle"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/startupstatus"
 )
@@ -20,37 +21,113 @@ func (s *ClassificationAPIServer) getEmbeddingModelsInfo(runtimeState *startupst
 	embeddingInfo, err := candle_binding.GetEmbeddingModelsInfo()
 	if err != nil {
 		logging.Warnf("Failed to get embedding models info: %v", err)
-		return models
+	} else {
+		for _, model := range embeddingInfo.Models {
+			modelPath := normalizeEmbeddingModelPath(model.ModelPath, model.ModelName)
+			if modelPath == "" {
+				modelPath = strings.TrimSpace(model.ModelPath)
+			}
+			if modelPath == "" {
+				modelPath = strings.TrimSpace(model.ModelName)
+			}
+
+			models = append(models, ModelInfo{
+				Name:      fmt.Sprintf("%s_embedding_model", model.ModelName),
+				Type:      "embedding",
+				Loaded:    model.IsLoaded,
+				ModelPath: modelPath,
+				Metadata: map[string]string{
+					"model_type":           model.ModelName,
+					"max_sequence_length":  fmt.Sprintf("%d", model.MaxSequenceLength),
+					"default_dimension":    fmt.Sprintf("%d", model.DefaultDimension),
+					"matryoshka_supported": "true",
+				},
+			})
+		}
 	}
 
-	for _, model := range embeddingInfo.Models {
-		modelPath := normalizeEmbeddingModelPath(model.ModelPath, model.ModelName)
-		if modelPath == "" {
-			modelPath = strings.TrimSpace(model.ModelPath)
-		}
-		if modelPath == "" {
-			modelPath = strings.TrimSpace(model.ModelName)
-		}
-
-		models = append(models, ModelInfo{
-			Name:      fmt.Sprintf("%s_embedding_model", model.ModelName),
-			Type:      "embedding",
-			Loaded:    model.IsLoaded,
-			ModelPath: modelPath,
-			Metadata: map[string]string{
-				"model_type":           model.ModelName,
-				"max_sequence_length":  fmt.Sprintf("%d", model.MaxSequenceLength),
-				"default_dimension":    fmt.Sprintf("%d", model.DefaultDimension),
-				"matryoshka_supported": "true",
-			},
-		})
-	}
-
+	models = appendConfiguredEmbeddingModelPlaceholders(models, s.currentConfig())
 	for i := range models {
 		models[i] = enrichModelInfo(models[i], runtimeState)
 	}
 
 	return models
+}
+
+func appendConfiguredEmbeddingModelPlaceholders(models []ModelInfo, cfg *routerconfig.RouterConfig) []ModelInfo {
+	if cfg == nil {
+		return models
+	}
+
+	seen := configuredEmbeddingModelPathSet(models)
+	plan := modellifecycle.BuildPlan(cfg)
+	for _, candidate := range configuredEmbeddingModelCandidates(plan) {
+		if candidate.path == "" {
+			continue
+		}
+		canonicalPath := canonicalModelPath(candidate.path)
+		if canonicalPath == "" {
+			canonicalPath = candidate.path
+		}
+		if _, ok := seen[canonicalPath]; ok {
+			continue
+		}
+		seen[canonicalPath] = struct{}{}
+		models = append(models, ModelInfo{
+			Name:      candidate.name,
+			Type:      "embedding",
+			Loaded:    false,
+			ModelPath: canonicalPath,
+			Metadata: map[string]string{
+				"model_type": candidate.modelType,
+				"source":     "model_lifecycle_plan",
+			},
+		})
+	}
+	return models
+}
+
+func configuredEmbeddingModelPathSet(models []ModelInfo) map[string]struct{} {
+	seen := make(map[string]struct{}, len(models))
+	for _, model := range models {
+		modelPath := canonicalModelPath(model.ModelPath)
+		if modelPath == "" {
+			modelPath = model.ModelPath
+		}
+		if modelPath != "" {
+			seen[modelPath] = struct{}{}
+		}
+	}
+	return seen
+}
+
+type embeddingModelCandidate struct {
+	name      string
+	modelType string
+	path      string
+}
+
+func configuredEmbeddingModelCandidates(plan modellifecycle.Plan) []embeddingModelCandidate {
+	return []embeddingModelCandidate{
+		embeddingModelCandidateForRole(plan, modellifecycle.RoleQwen3Embedding, "qwen3"),
+		embeddingModelCandidateForRole(plan, modellifecycle.RoleGemmaEmbedding, "gemma"),
+		embeddingModelCandidateForRole(plan, modellifecycle.RoleMmBERTEmbedding, "mmbert"),
+		embeddingModelCandidateForRole(plan, modellifecycle.RoleMultiModalEmbedding, "multimodal"),
+		embeddingModelCandidateForRole(plan, modellifecycle.RoleBERTEmbedding, "bert"),
+	}
+}
+
+func embeddingModelCandidateForRole(
+	plan modellifecycle.Plan,
+	role modellifecycle.AssetRole,
+	modelType string,
+) embeddingModelCandidate {
+	asset, _ := plan.AssetForRole(role)
+	return embeddingModelCandidate{
+		name:      fmt.Sprintf("%s_embedding_model", modelType),
+		modelType: modelType,
+		path:      asset.LocalPath,
+	}
 }
 
 func normalizeEmbeddingModelPath(runtimePath, modelName string) string {

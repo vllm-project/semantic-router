@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modellifecycle"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/services"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/startupstatus"
 )
@@ -285,4 +286,62 @@ func TestNormalizeEmbeddingModelPathFallsBackToRegistryAlias(t *testing.T) {
 	if got := normalizeEmbeddingModelPath("", "gemma"); got != "models/mom-embedding-flash" {
 		t.Fatalf("expected alias to resolve to registry local path, got %q", got)
 	}
+}
+
+func TestEmbeddingModelsInfoIncludesConfiguredLifecyclePlanModels(t *testing.T) {
+	t.Parallel()
+
+	cfg := config.DefaultGlobalConfig()
+	apiServer := &ClassificationAPIServer{
+		config: cfgPtr(cfg),
+		runtimeConfig: newLiveRuntimeConfig(
+			cfgPtr(cfg),
+			func() *config.RouterConfig { return cfgPtr(cfg) },
+			nil,
+		),
+	}
+
+	models := apiServer.getEmbeddingModelsInfo(nil)
+	mmbertModel := requireModelInfo(t, models, "mmbert_embedding_model")
+	if mmbertModel.ModelPath != "models/mmbert-embed-32k-2d-matryoshka" {
+		t.Fatalf("expected mmbert lifecycle path, got %q", mmbertModel.ModelPath)
+	}
+	if mmbertModel.Registry == nil {
+		t.Fatalf("expected registry metadata for configured mmbert embedding")
+	}
+}
+
+func TestModelsInfoIncludesManagedBERTFallbackPath(t *testing.T) {
+	t.Parallel()
+
+	cfg := &config.RouterConfig{
+		InlineModels: config.InlineModels{
+			EmbeddingModels: config.EmbeddingModels{UseCPU: true},
+		},
+		SemanticCache: config.SemanticCache{
+			Enabled:        true,
+			EmbeddingModel: "bert",
+		},
+	}
+	apiServer := &ClassificationAPIServer{
+		config: cfg,
+		runtimeConfig: newLiveRuntimeConfig(
+			cfg,
+			func() *config.RouterConfig { return cfg },
+			nil,
+		),
+	}
+
+	resp := apiServer.buildModelsInfoResponse()
+	bertModel := requireModelInfo(t, resp.Models, "bert_similarity_model")
+	if bertModel.ModelPath != modellifecycle.DefaultBERTEmbeddingModelPath {
+		t.Fatalf("expected managed BERT fallback path, got %q", bertModel.ModelPath)
+	}
+	if bertModel.Registry == nil {
+		t.Fatalf("expected registry metadata for managed BERT fallback")
+	}
+}
+
+func cfgPtr(cfg config.RouterConfig) *config.RouterConfig {
+	return &cfg
 }

@@ -111,8 +111,8 @@ type LlamaStackVectorStoreConfig struct {
 	// AuthToken is an optional bearer token for Llama Stack authentication.
 	AuthToken string `json:"auth_token,omitempty" yaml:"auth_token,omitempty"`
 
-	// EmbeddingModel is the embedding model ID registered in Llama Stack
-	// (e.g. "all-MiniLM-L6-v2"). Llama Stack uses this to embed chunks and queries.
+	// EmbeddingModel is the embedding model ID registered in Llama Stack.
+	// Llama Stack uses this to embed chunks and queries.
 	// If empty, Llama Stack uses its configured default embedding model.
 	EmbeddingModel string `json:"embedding_model,omitempty" yaml:"embedding_model,omitempty"`
 

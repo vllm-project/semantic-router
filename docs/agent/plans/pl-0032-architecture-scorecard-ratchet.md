@@ -45,11 +45,13 @@ Out of scope:
   seams that are still doing request-time policy work.
 - [ ] `ADC006` Retire or narrow TD027 by splitting fleet-sim optimizer analysis,
   verification, and export ownership.
+- [ ] `ADC007` Retire TD044 by consolidating router-owned model lifecycle
+  planning across download, initialization, API reporting, and AMD validation.
 
 ## Next Action
 
-- Choose one non-release TD and either retire it with current-source evidence or
-  split it into a release-bound issue if it blocks the active milestone.
+- Continue ADC007 by completing local image smoke and AMD/ROCm regression for
+  the shared model lifecycle plan.
 
 ## Operating Rules
 

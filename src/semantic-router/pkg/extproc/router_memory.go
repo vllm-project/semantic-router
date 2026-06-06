@@ -12,6 +12,7 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/memory"
 	milvuslifecycle "github.com/vllm-project/semantic-router/src/semantic-router/pkg/milvus"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modellifecycle"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 )
 
@@ -362,30 +363,25 @@ func createQdrantMemoryStore(cfg *config.RouterConfig) (memory.Store, error) {
 }
 
 func detectMemoryEmbeddingModel(cfg *config.RouterConfig) string {
-	embeddingModels := cfg.EmbeddingModels
-	embeddingModel := cfg.Memory.EmbeddingModel
-	if embeddingModel != "" {
-		return embeddingModel
+	model := modellifecycle.ResolveMemoryEmbeddingModel(cfg)
+	if cfg.Memory.EmbeddingModel != "" {
+		return model
 	}
-
-	switch {
-	case embeddingModels.BertModelPath != "":
-		logging.Infof("Memory: Auto-selected bert from embedding_models config (384-dim, recommended for memory)")
-		return "bert"
-	case embeddingModels.MmBertModelPath != "":
-		logging.Infof("Memory: Auto-selected mmbert from embedding_models config")
-		return "mmbert"
-	case embeddingModels.MultiModalModelPath != "":
-		logging.Infof("Memory: Auto-selected multimodal from embedding_models config")
-		return "multimodal"
-	case embeddingModels.Qwen3ModelPath != "":
-		logging.Infof("Memory: Auto-selected qwen3 from embedding_models config")
-		return "qwen3"
-	case embeddingModels.GemmaModelPath != "":
-		logging.Infof("Memory: Auto-selected gemma from embedding_models config")
-		return "gemma"
-	default:
+	if model == "bert" && cfg.BertModelPath == "" {
 		logging.Warnf("Memory: No embedding models configured, bert will be used but may fail without bert_model_path")
-		return "bert"
+		return model
 	}
+	switch model {
+	case "bert":
+		logging.Infof("Memory: Auto-selected bert from embedding_models config (384-dim, recommended for memory)")
+	case "mmbert":
+		logging.Infof("Memory: Auto-selected mmbert from embedding_models config")
+	case "multimodal":
+		logging.Infof("Memory: Auto-selected multimodal from embedding_models config")
+	case "qwen3":
+		logging.Infof("Memory: Auto-selected qwen3 from embedding_models config")
+	case "gemma":
+		logging.Infof("Memory: Auto-selected gemma from embedding_models config")
+	}
+	return model
 }

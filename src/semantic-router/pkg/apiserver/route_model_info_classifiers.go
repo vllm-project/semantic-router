@@ -6,6 +6,7 @@ import (
 	"fmt"
 
 	routerconfig "github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modellifecycle"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/startupstatus"
 )
 
@@ -33,7 +34,8 @@ func (s *ClassificationAPIServer) getClassifierModelsInfo(
 		return s.getPlaceholderModelsInfo(runtimeState)
 	}
 
-	models := appendConfiguredModels(nil, cfg, availability)
+	plan := modellifecycle.BuildPlan(cfg)
+	models := appendConfiguredModels(nil, cfg, availability, plan)
 
 	for i := range models {
 		models[i] = enrichModelInfo(models[i], runtimeState)
@@ -46,16 +48,18 @@ func appendConfiguredModels(
 	models []ModelInfo,
 	cfg *routerconfig.RouterConfig,
 	availability classifierModelAvailability,
+	plan modellifecycle.Plan,
 ) []ModelInfo {
-	models = append(models, buildRoutingClassifierModels(cfg, availability)...)
-	models = append(models, buildHallucinationModels(cfg, availability)...)
-	models = append(models, buildFeedbackAndSimilarityModels(cfg, availability)...)
+	models = append(models, buildRoutingClassifierModels(cfg, availability, plan)...)
+	models = append(models, buildHallucinationModels(cfg, availability, plan)...)
+	models = append(models, buildFeedbackAndSimilarityModels(cfg, availability, plan)...)
 	return models
 }
 
 func buildRoutingClassifierModels(
 	cfg *routerconfig.RouterConfig,
 	availability classifierModelAvailability,
+	plan modellifecycle.Plan,
 ) []ModelInfo {
 	var models []ModelInfo
 	categoryModel := cfg.CategoryModel
@@ -64,7 +68,7 @@ func buildRoutingClassifierModels(
 			Name:       "category_classifier",
 			Type:       "intent_classification",
 			Loaded:     availability.core,
-			ModelPath:  categoryModel.ModelID,
+			ModelPath:  modelPathForRole(plan, modellifecycle.RoleDomainClassifier, categoryModel.ModelID),
 			Categories: configuredCategoryNames(cfg),
 			Metadata: map[string]string{
 				"mapping_path": categoryModel.CategoryMappingPath,
@@ -80,7 +84,7 @@ func buildRoutingClassifierModels(
 			Name:      "pii_classifier",
 			Type:      "pii_detection",
 			Loaded:    availability.core,
-			ModelPath: piiModel.ModelID,
+			ModelPath: modelPathForRole(plan, modellifecycle.RolePIIClassifier, piiModel.ModelID),
 			Metadata: map[string]string{
 				"mapping_path": piiModel.PIIMappingPath,
 				"model_type":   resolveInlineModelType(piiModel.UseMmBERT32K, false, true),
@@ -95,7 +99,7 @@ func buildRoutingClassifierModels(
 			Name:      "jailbreak_classifier",
 			Type:      "security_detection",
 			Loaded:    availability.core,
-			ModelPath: promptGuard.ModelID,
+			ModelPath: modelPathForRole(plan, modellifecycle.RolePromptGuard, promptGuard.ModelID),
 			Metadata: map[string]string{
 				"enabled":                "true",
 				"jailbreak_mapping_path": promptGuard.JailbreakMappingPath,
@@ -110,6 +114,7 @@ func buildRoutingClassifierModels(
 func buildHallucinationModels(
 	cfg *routerconfig.RouterConfig,
 	availability classifierModelAvailability,
+	plan modellifecycle.Plan,
 ) []ModelInfo {
 	var models []ModelInfo
 	factCheckModel := cfg.HallucinationMitigation.FactCheckModel
@@ -118,7 +123,7 @@ func buildHallucinationModels(
 			Name:      "fact_check_classifier",
 			Type:      "fact_check_classification",
 			Loaded:    availability.factCheck,
-			ModelPath: factCheckModel.ModelID,
+			ModelPath: modelPathForRole(plan, modellifecycle.RoleFactCheckClassifier, factCheckModel.ModelID),
 			Metadata: map[string]string{
 				"model_type": resolveInlineModelType(factCheckModel.UseMmBERT32K, false, false),
 				"threshold":  fmt.Sprintf("%.2f", factCheckModel.Threshold),
@@ -136,7 +141,7 @@ func buildHallucinationModels(
 		Name:      "hallucination_detector",
 		Type:      "hallucination_detection",
 		Loaded:    availability.hallucination,
-		ModelPath: hallucinationModel.ModelID,
+		ModelPath: modelPathForRole(plan, modellifecycle.RoleHallucinationModel, hallucinationModel.ModelID),
 		Metadata: map[string]string{
 			"model_type":            "modernbert",
 			"threshold":             fmt.Sprintf("%.2f", hallucinationModel.Threshold),
@@ -154,7 +159,7 @@ func buildHallucinationModels(
 			Name:      "hallucination_explainer",
 			Type:      "nli_explainer",
 			Loaded:    availability.hallucinationExplainer,
-			ModelPath: nliModel.ModelID,
+			ModelPath: modelPathForRole(plan, modellifecycle.RoleHallucinationNLI, nliModel.ModelID),
 			Metadata: map[string]string{
 				"model_type": "modernbert_nli",
 				"threshold":  fmt.Sprintf("%.2f", nliModel.Threshold),
@@ -169,6 +174,7 @@ func buildHallucinationModels(
 func buildFeedbackAndSimilarityModels(
 	cfg *routerconfig.RouterConfig,
 	availability classifierModelAvailability,
+	plan modellifecycle.Plan,
 ) []ModelInfo {
 	var models []ModelInfo
 	feedbackModel := cfg.FeedbackDetector
@@ -177,7 +183,7 @@ func buildFeedbackAndSimilarityModels(
 			Name:      "feedback_detector",
 			Type:      "feedback_detection",
 			Loaded:    availability.feedback,
-			ModelPath: feedbackModel.ModelID,
+			ModelPath: modelPathForRole(plan, modellifecycle.RoleFeedbackDetector, feedbackModel.ModelID),
 			Metadata: map[string]string{
 				"model_type": resolveInlineModelType(feedbackModel.UseMmBERT32K, feedbackModel.UseModernBERT, false),
 				"threshold":  fmt.Sprintf("%.2f", feedbackModel.Threshold),
@@ -186,13 +192,12 @@ func buildFeedbackAndSimilarityModels(
 		})
 	}
 
-	bertModelPath := cfg.BertModelPath
-	if bertModelPath != "" {
+	if bertAsset, ok := plan.AssetForRole(modellifecycle.RoleBERTEmbedding); ok {
 		models = append(models, ModelInfo{
 			Name:      "bert_similarity_model",
 			Type:      "similarity",
 			Loaded:    availability.core,
-			ModelPath: bertModelPath,
+			ModelPath: bertAsset.LocalPath,
 			Metadata: map[string]string{
 				"model_type": "sentence_transformer",
 				"threshold":  fmt.Sprintf("%.2f", cfg.MinSimilarityThreshold()),
@@ -202,6 +207,13 @@ func buildFeedbackAndSimilarityModels(
 	}
 
 	return models
+}
+
+func modelPathForRole(plan modellifecycle.Plan, role modellifecycle.AssetRole, fallback string) string {
+	if asset, ok := plan.AssetForRole(role); ok {
+		return asset.LocalPath
+	}
+	return fallback
 }
 
 func configuredCategoryNames(cfg *routerconfig.RouterConfig) []string {
