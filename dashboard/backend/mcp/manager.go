@@ -6,21 +6,65 @@ import (
 	"fmt"
 	"sync"
 	"time"
+
+	"github.com/vllm-project/semantic-router/dashboard/backend/workflowstore"
 )
 
-// Manager is the MCP client manager (in-memory only, no persistence)
+// Manager is the MCP client manager. Server configs are persisted in workflowstore;
+// active client connections remain in memory only.
 type Manager struct {
 	mu      sync.RWMutex
 	clients map[string]*Client
 	configs map[string]*ServerConfig
+	store   *workflowstore.Store
 }
 
-// NewManager creates a new manager
-func NewManager() *Manager {
-	return &Manager{
+// NewManager loads persisted server configs from store and returns a new manager.
+func NewManager(store *workflowstore.Store) (*Manager, error) {
+	m := &Manager{
 		clients: make(map[string]*Client),
 		configs: make(map[string]*ServerConfig),
+		store:   store,
 	}
+	if store == nil {
+		return m, nil
+	}
+	if err := m.loadConfigs(); err != nil {
+		return nil, fmt.Errorf("load MCP server configs: %w", err)
+	}
+	return m, nil
+}
+
+func (m *Manager) loadConfigs() error {
+	if m.store == nil {
+		return nil
+	}
+	rows, err := m.store.ListMCPServerJSON()
+	if err != nil {
+		return err
+	}
+	for _, row := range rows {
+		var config ServerConfig
+		if err := json.Unmarshal([]byte(row), &config); err != nil {
+			return fmt.Errorf("decode MCP server config: %w", err)
+		}
+		if config.ID == "" {
+			continue
+		}
+		m.configs[config.ID] = &config
+	}
+	return nil
+}
+
+func (m *Manager) persistConfig(config *ServerConfig) error {
+	if m.store == nil {
+		return nil
+	}
+	data, err := json.Marshal(config)
+	if err != nil {
+		return fmt.Errorf("encode MCP server config: %w", err)
+	}
+	return m.store.PutMCPServerJSON(config.ID, string(data))
 }
 
 // GetServers returns all server configurations
@@ -43,7 +87,7 @@ func (m *Manager) GetServer(id string) (*ServerConfig, bool) {
 	return config, ok
 }
 
-// AddServer adds a server configuration (in-memory)
+// AddServer adds a server configuration and persists it.
 func (m *Manager) AddServer(config *ServerConfig) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
@@ -52,10 +96,28 @@ func (m *Manager) AddServer(config *ServerConfig) error {
 		return fmt.Errorf("server with ID %s already exists", config.ID)
 	}
 	m.configs[config.ID] = config
+	if err := m.persistConfig(config); err != nil {
+		delete(m.configs, config.ID)
+		return err
+	}
 	return nil
 }
 
-// UpdateServer updates a server configuration (in-memory)
+// UpsertServer inserts or replaces a server configuration and persists it.
+func (m *Manager) UpsertServer(config *ServerConfig) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	if client, ok := m.clients[config.ID]; ok {
+		_ = client.Disconnect()
+		delete(m.clients, config.ID)
+	}
+
+	m.configs[config.ID] = config
+	return m.persistConfig(config)
+}
+
+// UpdateServer updates a server configuration and persists it.
 func (m *Manager) UpdateServer(config *ServerConfig) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
@@ -64,32 +126,38 @@ func (m *Manager) UpdateServer(config *ServerConfig) error {
 		return fmt.Errorf("server with ID %s not found", config.ID)
 	}
 
-	// Disconnect if already connected
 	if client, ok := m.clients[config.ID]; ok {
 		_ = client.Disconnect()
 		delete(m.clients, config.ID)
 	}
 
 	m.configs[config.ID] = config
-	return nil
+	return m.persistConfig(config)
 }
 
-// DeleteServer deletes a server configuration (in-memory)
+// DeleteServer deletes a server configuration and removes it from the store.
 func (m *Manager) DeleteServer(id string) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
-	if _, exists := m.configs[id]; !exists {
+	config, exists := m.configs[id]
+	if !exists {
 		return fmt.Errorf("server with ID %s not found", id)
 	}
 
-	// Disconnect if already connected
 	if client, ok := m.clients[id]; ok {
 		_ = client.Disconnect()
 		delete(m.clients, id)
 	}
 
 	delete(m.configs, id)
+	if m.store == nil {
+		return nil
+	}
+	if err := m.store.DeleteMCPServer(id); err != nil {
+		m.configs[id] = config
+		return err
+	}
 	return nil
 }
 

@@ -28,7 +28,7 @@ func Setup(cfg *config.Config) *http.ServeMux {
 
 	registerCoreRoutes(mux, cfg)
 	registerEvaluationRoutes(mux, cfg)
-	SetupMCP(mux, cfg, openClawHandler)
+	SetupMCP(mux, cfg, wf, openClawHandler)
 	registerMLPipelineRoutes(mux, cfg, wf)
 	registerOpenClawRoutes(mux, cfg, openClawHandler)
 	registerProxyRoutes(mux, cfg)
