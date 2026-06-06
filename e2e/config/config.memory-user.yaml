@@ -108,7 +108,7 @@ global:
       milvus:
         address: host.docker.internal:19530
         collection: memory_test_ci
-        dimension: 384
+        dimension: 256
       embedding_model: mmbert
       default_retrieval_limit: 5
       default_similarity_threshold: 0.45
@@ -128,4 +128,4 @@ global:
         use_cpu: true
         embedding_config:
           model_type: mmbert
-          target_dimension: 384
+          target_dimension: 256

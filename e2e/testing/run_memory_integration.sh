@@ -176,6 +176,18 @@ PY
 prepare_model_dir
 echo "Using memory integration model dir: ${MODEL_DIR}"
 download_hf_snapshot "${MEMORY_EMBEDDING_REPO_ID}" "${MODEL_DIR}/mmbert-embed-32k-2d-matryoshka"
+
+# Sanity check: ensure the Hugging Face mmbert snapshot was downloaded and contains files.
+MODEL_SNAPSHOT_DIR="${MODEL_DIR}/mmbert-embed-32k-2d-matryoshka"
+if [ ! -d "${MODEL_SNAPSHOT_DIR}" ] || [ -z "$(ls -A "${MODEL_SNAPSHOT_DIR}" 2>/dev/null)" ]; then
+    echo "ERROR: Hugging Face model ${MEMORY_EMBEDDING_REPO_ID} not present or empty in ${MODEL_SNAPSHOT_DIR}" >&2
+    echo "Listing model dir contents:" >&2
+    ls -la "${MODEL_DIR}" || true
+    exit 1
+fi
+
+echo "Verified mmbert model snapshot present at ${MODEL_SNAPSHOT_DIR} (files: $(ls -1 "${MODEL_SNAPSHOT_DIR}" | wc -l))"
+
 make -C "${REPO_ROOT}" start-milvus
 
 # Double-check Milvus readiness with pymilvus probe (gRPC-level, not just HTTP)
