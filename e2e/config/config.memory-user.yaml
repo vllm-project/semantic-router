@@ -108,15 +108,15 @@ global:
       milvus:
         address: host.docker.internal:19530
         collection: memory_test_ci
-        dimension: 256
-      embedding_model: mmbert
+        dimension: 384
+      embedding_model: bert
       default_retrieval_limit: 5
       default_similarity_threshold: 0.45
     semantic_cache:
       enabled: false
-      embedding_model: mmbert
+      embedding_model: bert
     vector_store:
-      embedding_model: mmbert
+      embedding_model: bert
   model_catalog:
     embeddings:
       semantic:
@@ -127,5 +127,5 @@ global:
         bert_model_path: ""
         use_cpu: true
         embedding_config:
-          model_type: mmbert
-          target_dimension: 256
+          model_type: bert
+          target_dimension: 384
