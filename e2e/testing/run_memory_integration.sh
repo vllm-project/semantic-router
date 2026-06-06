@@ -27,7 +27,7 @@ if [[ "${MODEL_DIR}" != /* ]]; then
     MODEL_DIR="${REPO_ROOT}/${MODEL_DIR}"
 fi
 MODEL_MOUNT_DIR="${TEST_DIR}/models"
-MEMORY_EMBEDDING_REPO_ID="llm-semantic-router/mmbert-embed-32k-2d-matryoshka"
+MEMORY_EMBEDDING_REPO_ID="sentence-transformers/all-MiniLM-L6-v2"
 
 VLLM_SR_PID=""
 
@@ -103,7 +103,7 @@ else
     echo "Warning: HF_TOKEN/HUGGING_FACE_HUB_TOKEN not set; memory model downloads may hit rate limits" >&2
 fi
 
-echo "Memory integration uses mmbert embeddings by default for acceptance coverage"
+echo "Memory integration uses bert (MiniLM-L6-v2) embeddings for acceptance coverage"
 python3 -m pip install -U "huggingface_hub[cli]" hf_transfer requests pymilvus
 
 prepare_model_dir() {
@@ -175,10 +175,10 @@ PY
 
 prepare_model_dir
 echo "Using memory integration model dir: ${MODEL_DIR}"
-download_hf_snapshot "${MEMORY_EMBEDDING_REPO_ID}" "${MODEL_DIR}/mmbert-embed-32k-2d-matryoshka"
+download_hf_snapshot "${MEMORY_EMBEDDING_REPO_ID}" "${MODEL_DIR}/mom-embedding-light"
 
-# Sanity check: ensure the Hugging Face mmbert snapshot was downloaded and contains files.
-MODEL_SNAPSHOT_DIR="${MODEL_DIR}/mmbert-embed-32k-2d-matryoshka"
+# Sanity check: ensure the bert (MiniLM-L6-v2) snapshot was downloaded and contains files.
+MODEL_SNAPSHOT_DIR="${MODEL_DIR}/mom-embedding-light"
 if [ ! -d "${MODEL_SNAPSHOT_DIR}" ] || [ -z "$(ls -A "${MODEL_SNAPSHOT_DIR}" 2>/dev/null)" ]; then
     echo "ERROR: Hugging Face model ${MEMORY_EMBEDDING_REPO_ID} not present or empty in ${MODEL_SNAPSHOT_DIR}" >&2
     echo "Listing model dir contents:" >&2
@@ -186,7 +186,7 @@ if [ ! -d "${MODEL_SNAPSHOT_DIR}" ] || [ -z "$(ls -A "${MODEL_SNAPSHOT_DIR}" 2>/
     exit 1
 fi
 
-echo "Verified mmbert model snapshot present at ${MODEL_SNAPSHOT_DIR} (files: $(ls -1 "${MODEL_SNAPSHOT_DIR}" | wc -l))"
+echo "Verified bert model snapshot present at ${MODEL_SNAPSHOT_DIR} (files: $(find "${MODEL_SNAPSHOT_DIR}" -maxdepth 1 -mindepth 1 | wc -l))"
 
 make -C "${REPO_ROOT}" start-milvus
 
@@ -213,7 +213,7 @@ except Exception as e:
 done
 
 cp "${REPO_ROOT}/e2e/config/config.memory-user.yaml" "${CONFIG_FILE}"
-python3 -c 'from pathlib import Path; path = Path("'"${CONFIG_FILE}"'"); t = path.read_text(); t = t.replace("host.docker.internal:8000", "llm-katan:8000"); t = t.replace("host.docker.internal:19530", "vllm-sr-milvus:19530"); path.write_text(t)'
+python3 -c 'from pathlib import Path; path = Path("'"${CONFIG_FILE}"'"); t = path.read_text(); t = t.replace("host.docker.internal:8000", "llm-katan:8000"); t = t.replace("host.docker.internal:19530", "vllm-sr-milvus:19530"); t = t.replace("bert_model_path: \"\"", "bert_model_path: \"/app/models/mom-embedding-light\""); path.write_text(t)'
 
 if ! "${CONTAINER_RUNTIME}" network inspect "${VLLM_SR_NETWORK}" >/dev/null 2>&1; then
     "${CONTAINER_RUNTIME}" network create "${VLLM_SR_NETWORK}" >/dev/null
