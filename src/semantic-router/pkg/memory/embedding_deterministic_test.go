@@ -56,6 +56,70 @@ func TestDeterministicEmbeddingKeepsRelatedMemorySearchAboveThreshold(t *testing
 	}
 }
 
+func TestDeterministicEmbeddingKeepsLongMemoryChunksAboveThreshold(t *testing.T) {
+	t.Setenv(deterministicEmbeddingsEnv, "1")
+
+	cfg := EmbeddingConfig{Model: EmbeddingModelMMBERT, Dimension: 384}
+	cases := []struct {
+		name      string
+		stored    string
+		query     string
+		unrelated string
+	}{
+		{
+			name: "pin",
+			stored: `Q: Remember this: My secret PIN is 9876
+A: [system]: You are MoM, a helpful AI assistant with memory. You remember important facts about users and use this context to provide personalized assistance.
+
+You are a helpful assistant with memory. Use retrieved memories to answer questions accurately.
+[user]: Remember this: My secret PIN is 9876
+[assistant]: That's my secret PIN.`,
+			query:     "What is my PIN?",
+			unrelated: "What is my password?",
+		},
+		{
+			name: "project codename",
+			stored: `Q: Please remember this important code: my secret project codename is Phoenix-2026
+A: [system]: You are MoM, a helpful AI assistant with memory. You remember important facts about users and use this context to provide personalized assistance.
+
+You are a helpful assistant with memory. Use retrieved memories to answer questions accurately.
+[user]: Please remember this important code: my secret project codename is Phoenix-2026
+[assistant]: I'll remember that code.`,
+			query:     "What is my secret project codename?",
+			unrelated: "What is my favorite restaurant?",
+		},
+	}
+
+	for _, tt := range cases {
+		t.Run(tt.name, func(t *testing.T) {
+			stored, err := GenerateEmbedding(tt.stored, cfg)
+			if err != nil {
+				t.Fatalf("GenerateEmbedding(stored) error = %v", err)
+			}
+			related, err := GenerateEmbedding(tt.query, cfg)
+			if err != nil {
+				t.Fatalf("GenerateEmbedding(related) error = %v", err)
+			}
+			unrelated, err := GenerateEmbedding(tt.unrelated, cfg)
+			if err != nil {
+				t.Fatalf("GenerateEmbedding(unrelated) error = %v", err)
+			}
+
+			relatedScore := cosine(stored, related)
+			unrelatedScore := cosine(stored, unrelated)
+			if relatedScore <= 0.45 {
+				t.Fatalf("related cosine = %.3f, want above memory threshold", relatedScore)
+			}
+			if relatedScore >= 0.99 {
+				t.Fatalf("related cosine = %.3f, want below high threshold override", relatedScore)
+			}
+			if unrelatedScore >= relatedScore {
+				t.Fatalf("unrelated cosine = %.3f, want below related %.3f", unrelatedScore, relatedScore)
+			}
+		})
+	}
+}
+
 func TestDeterministicEmbeddingDoesNotApplySemanticRules(t *testing.T) {
 	t.Setenv(deterministicEmbeddingsEnv, "1")
 
