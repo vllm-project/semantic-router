@@ -190,6 +190,36 @@ def test_migrate_config_data_moves_global_modules_under_model_catalog():
     }
 
 
+def test_migrate_config_data_adds_lifecycle_refs_for_router_models():
+    migrated = migrate_config_data(
+        {
+            "version": "v0.3",
+            "global": {
+                "embedding_models": {
+                    "mmbert_model_path": "models/custom-mmbert",
+                    "bert_model_path": "models/custom-bert",
+                },
+                "modality_detector": {
+                    "enabled": True,
+                    "method": "hybrid",
+                    "classifier": {"model_path": "models/custom-modality"},
+                },
+            },
+        }
+    )
+
+    model_catalog = migrated["global"]["model_catalog"]
+    semantic = model_catalog["embeddings"]["semantic"]
+    assert semantic["model_refs"] == {
+        "mmbert": "mmbert_embedding",
+        "bert": "bert_embedding",
+    }
+    assert (
+        model_catalog["modules"]["modality_detector"]["classifier"]["model_ref"]
+        == "modality_classifier"
+    )
+
+
 def test_parse_user_config_rejects_deprecated_global_modules(tmp_path: Path):
     config_path = tmp_path / "config.yaml"
     config_path.write_text(

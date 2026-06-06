@@ -14,6 +14,14 @@ from cli.config_contract import (
     LEGACY_SIGNAL_KEY_TO_CANONICAL,
 )
 
+EMBEDDING_MODEL_REF_BY_PATH_FIELD = {
+    "qwen3_model_path": ("qwen3", "qwen3_embedding"),
+    "gemma_model_path": ("gemma", "gemma_embedding"),
+    "mmbert_model_path": ("mmbert", "mmbert_embedding"),
+    "multimodal_model_path": ("multimodal", "multimodal_embedding"),
+    "bert_model_path": ("bert", "bert_embedding"),
+}
+
 
 def migrate_config_data(data: dict[str, Any]) -> dict[str, Any]:
     """Return a canonical v0.3 config dict from legacy or mixed input data."""
@@ -604,7 +612,10 @@ def _place_global_block(global_config: dict[str, Any], key: str, value: Any) -> 
         global_config.pop(key, None)
         return
     if key == "embedding_models":
-        embeddings.setdefault("semantic", deepcopy(value))
+        semantic = deepcopy(value)
+        if isinstance(semantic, dict):
+            _ensure_embedding_model_refs(semantic)
+        embeddings.setdefault("semantic", semantic)
         global_config.pop(key, None)
         return
     if key == "bert_model":
@@ -612,6 +623,7 @@ def _place_global_block(global_config: dict[str, Any], key: str, value: Any) -> 
         legacy_bert = deepcopy(value) if isinstance(value, dict) else {}
         if "model_id" in legacy_bert and "bert_model_path" not in semantic:
             semantic["bert_model_path"] = deepcopy(legacy_bert["model_id"])
+            _ensure_embedding_model_refs(semantic)
         if "use_cpu" in legacy_bert and "use_cpu" not in semantic:
             semantic["use_cpu"] = deepcopy(legacy_bert["use_cpu"])
         if "threshold" in legacy_bert:
@@ -702,8 +714,29 @@ def _place_global_block(global_config: dict[str, Any], key: str, value: Any) -> 
         global_config.pop(key, None)
         return
     if key == "modality_detector":
-        modules.setdefault(key, deepcopy(value))
+        modality = deepcopy(value) if isinstance(value, dict) else {}
+        _ensure_modality_model_ref(modality)
+        modules.setdefault(key, modality)
         global_config.pop(key, None)
+
+
+def _ensure_embedding_model_refs(semantic: dict[str, Any]) -> None:
+    refs = semantic.get("model_refs")
+    if not isinstance(refs, dict):
+        refs = {}
+
+    for path_field, (ref_key, model_ref) in EMBEDDING_MODEL_REF_BY_PATH_FIELD.items():
+        if path_field in semantic and ref_key not in refs:
+            refs[ref_key] = model_ref
+
+    if refs:
+        semantic["model_refs"] = refs
+
+
+def _ensure_modality_model_ref(modality: dict[str, Any]) -> None:
+    classifier = modality.get("classifier")
+    if isinstance(classifier, dict) and "model_ref" not in classifier:
+        classifier["model_ref"] = "modality_classifier"
 
 
 def _ensure_dict(target: dict[str, Any], key: str) -> dict[str, Any]:

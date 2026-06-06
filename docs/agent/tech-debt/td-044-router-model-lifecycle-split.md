@@ -2,7 +2,8 @@
 
 ## Status
 
-Open - narrowed by the model lifecycle catalog consolidation.
+Open - lifecycle schema and runtime plan are consolidated; pending AMD
+regression evidence before retirement.
 
 ## Owner Plan
 
@@ -24,13 +25,15 @@ and AMD-local model validation paths.
 ## Summary
 
 Router-owned model assets are now bound through a config-owned lifecycle
-catalog and materialized into a shared `pkg/modellifecycle` plan. Canonical
-defaults, system-model bindings, companion mapping files, downloader specs,
-embedding-runtime path resolution, memory embedding selection, and model-info
-API placeholders consume that shared model plan.
+catalog and materialized into a shared `pkg/modellifecycle` plan. The canonical
+schema exposes all built-in embedding, classifier, and detector assets under
+`global.model_catalog.system`; semantic embedding `model_refs`, module
+`model_ref` fields, and modality classifier refs resolve through that shared
+catalog while direct `model_id` or `model_path` fields remain explicit
+overrides.
 
-The remaining debt is narrower: legacy model registry metadata still serves
-alias lookup and Hugging Face repo IDs, and some non-router examples/tests still
+The remaining debt is narrow: legacy model registry metadata still serves alias
+lookup and Hugging Face repo IDs, and some non-router examples/tests still
 mention MiniLM-era external embedding models. Those references must not become
 canonical router defaults again.
 
@@ -38,11 +41,13 @@ canonical router defaults again.
 
 - [src/semantic-router/pkg/modeldownload/config_parser.go](../../../src/semantic-router/pkg/modeldownload/config_parser.go)
 - [src/semantic-router/pkg/config/model_lifecycle_catalog.go](../../../src/semantic-router/pkg/config/model_lifecycle_catalog.go)
+- [src/semantic-router/pkg/config/canonical_global.go](../../../src/semantic-router/pkg/config/canonical_global.go)
 - [src/semantic-router/pkg/modelruntime/router_runtime.go](../../../src/semantic-router/pkg/modelruntime/router_runtime.go)
 - [src/semantic-router/pkg/modellifecycle/plan.go](../../../src/semantic-router/pkg/modellifecycle/plan.go)
 - [src/semantic-router/pkg/apiserver/route_model_info_classifiers.go](../../../src/semantic-router/pkg/apiserver/route_model_info_classifiers.go)
 - [src/semantic-router/pkg/apiserver/route_model_info_embeddings.go](../../../src/semantic-router/pkg/apiserver/route_model_info_embeddings.go)
 - [src/semantic-router/pkg/extproc/router_memory.go](../../../src/semantic-router/pkg/extproc/router_memory.go)
+- [config/config.yaml](../../../config/config.yaml)
 - [deploy/recipes/balance.yaml](../../../deploy/recipes/balance.yaml)
 
 ## Why It Matters

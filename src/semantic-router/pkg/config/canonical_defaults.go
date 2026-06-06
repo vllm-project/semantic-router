@@ -184,8 +184,10 @@ func defaultCalibrationKnowledgeBase() KnowledgeBaseConfig {
 func defaultCanonicalEmbeddingModels() CanonicalEmbeddingModels {
 	return CanonicalEmbeddingModels{
 		Semantic: EmbeddingModels{
-			MmBertModelPath: DefaultModelPathForLifecycleRole(ModelLifecycleRoleMmBERTEmbedding),
-			UseCPU:          true,
+			ModelRefs: EmbeddingModelRefs{
+				MmBERT: string(ModelLifecycleRoleMmBERTEmbedding),
+			},
+			UseCPU: true,
 			EmbeddingConfig: HNSWConfig{
 				ModelType:         "mmbert",
 				PreloadEmbeddings: true,
@@ -210,7 +212,7 @@ func defaultCanonicalModelModules() CanonicalModelModules {
 
 func defaultPromptGuardModule() CanonicalPromptGuardModule {
 	return CanonicalPromptGuardModule{
-		ModelRef: "prompt_guard",
+		ModelRef: string(ModelLifecycleRolePromptGuard),
 		PromptGuardConfig: PromptGuardConfig{
 			Enabled:              true,
 			Threshold:            0.7,
@@ -224,7 +226,7 @@ func defaultPromptGuardModule() CanonicalPromptGuardModule {
 func defaultClassifierModule() CanonicalClassifierModule {
 	return CanonicalClassifierModule{
 		Domain: CanonicalCategoryModule{
-			ModelRef: "domain_classifier",
+			ModelRef: string(ModelLifecycleRoleDomainClassifier),
 			CategoryModel: CategoryModel{
 				Threshold:           0.5,
 				UseCPU:              true,
@@ -233,7 +235,7 @@ func defaultClassifierModule() CanonicalClassifierModule {
 			},
 		},
 		PII: CanonicalPIIModule{
-			ModelRef: "pii_classifier",
+			ModelRef: string(ModelLifecycleRolePIIClassifier),
 			PIIModel: PIIModel{
 				Threshold:      0.9,
 				UseCPU:         true,
@@ -251,7 +253,7 @@ func defaultHallucinationModule() CanonicalHallucinationModule {
 	return CanonicalHallucinationModule{
 		Enabled: false,
 		FactCheck: CanonicalFactCheckModule{
-			ModelRef: "fact_check_classifier",
+			ModelRef: string(ModelLifecycleRoleFactCheckClassifier),
 			FactCheckModelConfig: FactCheckModelConfig{
 				Threshold:    0.6,
 				UseCPU:       true,
@@ -259,7 +261,7 @@ func defaultHallucinationModule() CanonicalHallucinationModule {
 			},
 		},
 		Detector: CanonicalHallucinationDetector{
-			ModelRef: "hallucination_detector",
+			ModelRef: string(ModelLifecycleRoleHallucinationModel),
 			HallucinationModelConfig: HallucinationModelConfig{
 				Threshold:              0.8,
 				UseCPU:                 true,
@@ -271,7 +273,7 @@ func defaultHallucinationModule() CanonicalHallucinationModule {
 			},
 		},
 		Explainer: CanonicalExplainerModule{
-			ModelRef: "hallucination_explainer",
+			ModelRef: string(ModelLifecycleRoleHallucinationNLI),
 			NLIModelConfig: NLIModelConfig{
 				Threshold: 0.9,
 				UseCPU:    true,
@@ -282,7 +284,7 @@ func defaultHallucinationModule() CanonicalHallucinationModule {
 
 func defaultFeedbackDetectorModule() CanonicalFeedbackDetectorModule {
 	return CanonicalFeedbackDetectorModule{
-		ModelRef: "feedback_detector",
+		ModelRef: string(ModelLifecycleRoleFeedbackDetector),
 		FeedbackDetectorConfig: FeedbackDetectorConfig{
 			Enabled:      true,
 			Threshold:    0.7,
@@ -294,15 +296,11 @@ func defaultFeedbackDetectorModule() CanonicalFeedbackDetectorModule {
 
 // DefaultSystemModels returns stable capability bindings for built-in runtime models.
 func DefaultSystemModels() CanonicalSystemModels {
-	return CanonicalSystemModels{
-		PromptGuard:            DefaultModelPathForLifecycleRole(ModelLifecycleRolePromptGuard),
-		DomainClassifier:       DefaultModelPathForLifecycleRole(ModelLifecycleRoleDomainClassifier),
-		PIIClassifier:          DefaultModelPathForLifecycleRole(ModelLifecycleRolePIIClassifier),
-		FactCheckClassifier:    DefaultModelPathForLifecycleRole(ModelLifecycleRoleFactCheckClassifier),
-		HallucinationDetector:  DefaultModelPathForLifecycleRole(ModelLifecycleRoleHallucinationModel),
-		HallucinationExplainer: DefaultModelPathForLifecycleRole(ModelLifecycleRoleHallucinationNLI),
-		FeedbackDetector:       DefaultModelPathForLifecycleRole(ModelLifecycleRoleFeedbackDetector),
+	system := CanonicalSystemModels{}
+	for _, binding := range DefaultModelLifecycleBindings() {
+		system.SetModelPath(binding.Role, binding.DefaultLocalPath)
 	}
+	return system
 }
 
 // DefaultGlobalConfig materializes canonical global defaults into the runtime RouterConfig.

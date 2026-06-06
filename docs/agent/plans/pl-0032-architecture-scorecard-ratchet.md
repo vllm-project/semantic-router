@@ -15,6 +15,7 @@
   - [TD017](../tech-debt/td-017-fleet-sim-structure-gate-migration-gap.md)
   - [TD020](../tech-debt/td-020-classification-subsystem-boundary-collapse.md)
   - [TD027](../tech-debt/td-027-fleet-sim-optimizer-and-public-surface-boundary-collapse.md)
+  - [TD044](../tech-debt/td-044-router-model-lifecycle-split.md)
 - [../architecture-scorecard.md](../architecture-scorecard.md)
 - Harness scoring and validation logic that decides what is current.
 
@@ -50,8 +51,8 @@ Out of scope:
 
 ## Next Action
 
-- Continue ADC007 by completing local image smoke and AMD/ROCm regression for
-  the shared model lifecycle plan.
+- Continue ADC007 by running the local gates and AMD/ROCm regression for the
+  lifecycle schema implementation, then retire TD044 if the current PR passes.
 
 ## Operating Rules
 

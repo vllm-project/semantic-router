@@ -89,6 +89,11 @@ type CanonicalModelModules struct {
 
 // CanonicalSystemModels centralizes stable capability bindings for built-in models.
 type CanonicalSystemModels struct {
+	Qwen3Embedding         string `yaml:"qwen3_embedding,omitempty"`
+	GemmaEmbedding         string `yaml:"gemma_embedding,omitempty"`
+	MmBERTEmbedding        string `yaml:"mmbert_embedding,omitempty"`
+	MultiModalEmbedding    string `yaml:"multimodal_embedding,omitempty"`
+	BERTEmbedding          string `yaml:"bert_embedding,omitempty"`
 	PromptGuard            string `yaml:"prompt_guard,omitempty"`
 	DomainClassifier       string `yaml:"domain_classifier,omitempty"`
 	PIIClassifier          string `yaml:"pii_classifier,omitempty"`
@@ -96,6 +101,51 @@ type CanonicalSystemModels struct {
 	HallucinationDetector  string `yaml:"hallucination_detector,omitempty"`
 	HallucinationExplainer string `yaml:"hallucination_explainer,omitempty"`
 	FeedbackDetector       string `yaml:"feedback_detector,omitempty"`
+	ModalityClassifier     string `yaml:"modality_classifier,omitempty"`
+}
+
+func (m CanonicalSystemModels) ModelPath(role ModelLifecycleRole) string {
+	for _, slot := range (&m).modelSlots() {
+		if slot.role == role {
+			return *slot.modelPath
+		}
+	}
+	return ""
+}
+
+func (m *CanonicalSystemModels) SetModelPath(role ModelLifecycleRole, modelPath string) {
+	if m == nil {
+		return
+	}
+	for _, slot := range m.modelSlots() {
+		if slot.role == role {
+			*slot.modelPath = modelPath
+			return
+		}
+	}
+}
+
+type canonicalSystemModelSlot struct {
+	role      ModelLifecycleRole
+	modelPath *string
+}
+
+func (m *CanonicalSystemModels) modelSlots() []canonicalSystemModelSlot {
+	return []canonicalSystemModelSlot{
+		{role: ModelLifecycleRoleQwen3Embedding, modelPath: &m.Qwen3Embedding},
+		{role: ModelLifecycleRoleGemmaEmbedding, modelPath: &m.GemmaEmbedding},
+		{role: ModelLifecycleRoleMmBERTEmbedding, modelPath: &m.MmBERTEmbedding},
+		{role: ModelLifecycleRoleMultiModalEmbedding, modelPath: &m.MultiModalEmbedding},
+		{role: ModelLifecycleRoleBERTEmbedding, modelPath: &m.BERTEmbedding},
+		{role: ModelLifecycleRolePromptGuard, modelPath: &m.PromptGuard},
+		{role: ModelLifecycleRoleDomainClassifier, modelPath: &m.DomainClassifier},
+		{role: ModelLifecycleRolePIIClassifier, modelPath: &m.PIIClassifier},
+		{role: ModelLifecycleRoleFactCheckClassifier, modelPath: &m.FactCheckClassifier},
+		{role: ModelLifecycleRoleHallucinationModel, modelPath: &m.HallucinationDetector},
+		{role: ModelLifecycleRoleHallucinationNLI, modelPath: &m.HallucinationExplainer},
+		{role: ModelLifecycleRoleFeedbackDetector, modelPath: &m.FeedbackDetector},
+		{role: ModelLifecycleRoleModalityClassifier, modelPath: &m.ModalityClassifier},
+	}
 }
 
 // CanonicalPromptGuardModule keeps prompt-guard settings visible as a module
@@ -252,6 +302,9 @@ func resolveModuleModelRefs(global *CanonicalGlobal) error {
 	}
 
 	var err error
+	if err = resolveEmbeddingModelRefs(&global.ModelCatalog.Embeddings.Semantic, global.ModelCatalog.System); err != nil {
+		return fmt.Errorf("global.model_catalog.embeddings.semantic: %w", err)
+	}
 	if global.ModelCatalog.Modules.PromptGuard.ModelID, err = resolveSystemModelRef(
 		global.ModelCatalog.Modules.PromptGuard.ModelRef,
 		global.ModelCatalog.Modules.PromptGuard.ModelID,
@@ -301,7 +354,47 @@ func resolveModuleModelRefs(global *CanonicalGlobal) error {
 	); err != nil {
 		return fmt.Errorf("global.model_catalog.modules.feedback_detector: %w", err)
 	}
+	if global.ModelCatalog.Modules.ModalityDetector.Classifier != nil {
+		if global.ModelCatalog.Modules.ModalityDetector.Classifier.ModelPath, err = resolveSystemModelRef(
+			global.ModelCatalog.Modules.ModalityDetector.Classifier.ModelRef,
+			global.ModelCatalog.Modules.ModalityDetector.Classifier.ModelPath,
+			global.ModelCatalog.System,
+		); err != nil {
+			return fmt.Errorf("global.model_catalog.modules.modality_detector.classifier: %w", err)
+		}
+	}
 	return nil
+}
+
+func resolveEmbeddingModelRefs(embeddings *EmbeddingModels, catalog CanonicalSystemModels) error {
+	if embeddings == nil {
+		return nil
+	}
+
+	for _, slot := range embeddingModelRefSlots(embeddings) {
+		resolved, err := resolveSystemModelRef(slot.ref, *slot.modelPath, catalog)
+		if err != nil {
+			return fmt.Errorf("model_refs.%s: %w", slot.name, err)
+		}
+		*slot.modelPath = resolved
+	}
+	return nil
+}
+
+type embeddingModelRefSlot struct {
+	name      string
+	ref       string
+	modelPath *string
+}
+
+func embeddingModelRefSlots(embeddings *EmbeddingModels) []embeddingModelRefSlot {
+	return []embeddingModelRefSlot{
+		{name: "qwen3", ref: embeddings.ModelRefs.Qwen3, modelPath: &embeddings.Qwen3ModelPath},
+		{name: "gemma", ref: embeddings.ModelRefs.Gemma, modelPath: &embeddings.GemmaModelPath},
+		{name: "mmbert", ref: embeddings.ModelRefs.MmBERT, modelPath: &embeddings.MmBertModelPath},
+		{name: "multimodal", ref: embeddings.ModelRefs.MultiModal, modelPath: &embeddings.MultiModalModelPath},
+		{name: "bert", ref: embeddings.ModelRefs.BERT, modelPath: &embeddings.BertModelPath},
+	}
 }
 
 func resolveSystemModelRef(ref string, explicitModelID string, catalog CanonicalSystemModels) (string, error) {
@@ -312,25 +405,11 @@ func resolveSystemModelRef(ref string, explicitModelID string, catalog Canonical
 		return "", nil
 	}
 
-	var modelID string
-	switch ref {
-	case "prompt_guard":
-		modelID = catalog.PromptGuard
-	case "domain_classifier":
-		modelID = catalog.DomainClassifier
-	case "pii_classifier":
-		modelID = catalog.PIIClassifier
-	case "fact_check_classifier":
-		modelID = catalog.FactCheckClassifier
-	case "hallucination_detector":
-		modelID = catalog.HallucinationDetector
-	case "hallucination_explainer":
-		modelID = catalog.HallucinationExplainer
-	case "feedback_detector":
-		modelID = catalog.FeedbackDetector
-	default:
+	role := ModelLifecycleRole(ref)
+	if _, ok := ModelLifecycleBindingForRole(role); !ok {
 		return "", fmt.Errorf("unknown model_ref %q", ref)
 	}
+	modelID := catalog.ModelPath(role)
 	if modelID == "" {
 		return "", fmt.Errorf("model_ref %q is not configured in global.model_catalog.system", ref)
 	}

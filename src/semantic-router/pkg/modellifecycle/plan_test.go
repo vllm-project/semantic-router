@@ -151,6 +151,62 @@ func TestBalanceRecipeLifecyclePlanDownloadsOnlyActivatedBuiltIns(t *testing.T) 
 	}
 }
 
+func TestBuildPlanIncludesResolvedModalityClassifier(t *testing.T) {
+	cfg, err := config.ParseYAMLBytes([]byte(`
+version: v0.3
+listeners:
+  - name: http
+    address: 0.0.0.0
+    port: 8888
+providers:
+  defaults:
+    default_model: qwen3
+  models:
+    - name: qwen3
+      backend_refs:
+        - endpoint: 127.0.0.1:8000
+routing:
+  modelCards:
+    - name: qwen3
+  decisions:
+    - name: default_route
+      priority: 1
+      rules:
+        operator: AND
+        conditions: []
+      modelRefs:
+        - model: qwen3
+global:
+  model_catalog:
+    system:
+      modality_classifier: models/custom-modality-router
+    modules:
+      modality_detector:
+        enabled: true
+        method: classifier
+        classifier:
+          model_ref: modality_classifier
+          use_cpu: true
+        confidence_threshold: 0.7
+`))
+	if err != nil {
+		t.Fatalf("parse config: %v", err)
+	}
+
+	plan := BuildPlan(cfg)
+	asset, ok := plan.AssetForRole(RoleModalityClassifier)
+	if !ok {
+		t.Fatal("missing modality classifier asset")
+	}
+	if asset.LocalPath != "models/custom-modality-router" {
+		t.Fatalf("modality classifier path = %q", asset.LocalPath)
+	}
+	assertDownloadPaths(t, plan,
+		config.DefaultModelPathForLifecycleRole(config.ModelLifecycleRoleMmBERTEmbedding),
+		"models/custom-modality-router",
+	)
+}
+
 func TestResolveMemoryEmbeddingModelPrefersConfiguredCanonicalDefault(t *testing.T) {
 	cfg := config.DefaultGlobalConfig()
 	if got := ResolveMemoryEmbeddingModel(&cfg); got != "mmbert" {

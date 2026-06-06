@@ -244,6 +244,9 @@ type ModalityDetectionConfig struct {
 
 // ModalityClassifierConfig configures the ML-based modality classifier
 type ModalityClassifierConfig struct {
+	// ModelRef resolves through global.model_catalog.system when ModelPath is empty.
+	ModelRef string `json:"model_ref,omitempty" yaml:"model_ref,omitempty"`
+
 	// ModelPath is the path to the merged modality classifier model directory.
 	// Required when method is "classifier" or "hybrid" with a classifier.
 	ModelPath string `json:"model_path,omitempty" yaml:"model_path,omitempty"`
@@ -403,24 +406,47 @@ func (c *ModalityDetectionConfig) Validate() error {
 	}
 
 	method := c.GetMethod()
+	if err := validateModalityDetectionMethod(method); err != nil {
+		return err
+	}
+	if err := c.validateMethodInputs(method); err != nil {
+		return err
+	}
+	if err := validateOptionalRatio("modality_detection.confidence_threshold", c.ConfidenceThreshold); err != nil {
+		return err
+	}
+	if methodUsesModalityClassifier(method) && c.ConfidenceThreshold == 0 {
+		return fmt.Errorf("modality_detection.confidence_threshold is required when method is %q (e.g. 0.6)", method)
+	}
+	if err := validateOptionalRatio("modality_detection.lower_threshold_ratio", c.LowerThresholdRatio); err != nil {
+		return err
+	}
+	if method == ModalityDetectionHybrid && c.LowerThresholdRatio == 0 {
+		return fmt.Errorf("modality_detection.lower_threshold_ratio is required when method is %q (e.g. 0.7)", method)
+	}
+
+	return nil
+}
+
+func validateModalityDetectionMethod(method string) error {
 	if method == "" {
 		return fmt.Errorf("modality_detection.method is required (one of %q, %q, or %q)",
 			ModalityDetectionClassifier, ModalityDetectionKeyword, ModalityDetectionHybrid)
 	}
 
-	// Validate method value
 	switch method {
 	case ModalityDetectionClassifier, ModalityDetectionKeyword, ModalityDetectionHybrid:
-		// valid
+		return nil
 	default:
 		return fmt.Errorf("modality_detection.method must be one of %q, %q, or %q, got %q",
 			ModalityDetectionClassifier, ModalityDetectionKeyword, ModalityDetectionHybrid, method)
 	}
+}
 
-	// Method-specific validation
+func (c *ModalityDetectionConfig) validateMethodInputs(method string) error {
 	switch method {
 	case ModalityDetectionClassifier:
-		if c.Classifier == nil || c.Classifier.ModelPath == "" {
+		if !c.hasClassifierModelPath() {
 			return fmt.Errorf("modality_detection: method %q requires classifier.model_path to be set", method)
 		}
 
@@ -430,37 +456,31 @@ func (c *ModalityDetectionConfig) Validate() error {
 		}
 
 	case ModalityDetectionHybrid:
-		hasClassifier := c.Classifier != nil && c.Classifier.ModelPath != ""
+		hasClassifier := c.hasClassifierModelPath()
 		hasKeywords := len(c.Keywords) > 0
 		if !hasClassifier && !hasKeywords {
 			return fmt.Errorf("modality_detection: method %q requires at least one of classifier.model_path or keywords to be configured", method)
 		}
 	}
-
-	// Validate confidence threshold
-	if c.ConfidenceThreshold != 0 {
-		if c.ConfidenceThreshold < 0 || c.ConfidenceThreshold > 1 {
-			return fmt.Errorf("modality_detection.confidence_threshold must be between 0 and 1, got %.4f", c.ConfidenceThreshold)
-		}
-	}
-
-	// confidence_threshold is required when the classifier is involved
-	if (method == ModalityDetectionClassifier || method == ModalityDetectionHybrid) && c.ConfidenceThreshold == 0 {
-		return fmt.Errorf("modality_detection.confidence_threshold is required when method is %q (e.g. 0.6)", method)
-	}
-
-	// lower_threshold_ratio validation
-	if c.LowerThresholdRatio != 0 {
-		if c.LowerThresholdRatio < 0 || c.LowerThresholdRatio > 1 {
-			return fmt.Errorf("modality_detection.lower_threshold_ratio must be between 0 and 1, got %.4f", c.LowerThresholdRatio)
-		}
-	}
-	// lower_threshold_ratio is required for hybrid (controls classifier-vs-keyword disagreement)
-	if method == ModalityDetectionHybrid && c.LowerThresholdRatio == 0 {
-		return fmt.Errorf("modality_detection.lower_threshold_ratio is required when method is %q (e.g. 0.7)", method)
-	}
-
 	return nil
+}
+
+func (c *ModalityDetectionConfig) hasClassifierModelPath() bool {
+	return c != nil && c.Classifier != nil && c.Classifier.ModelPath != ""
+}
+
+func validateOptionalRatio(fieldName string, value float32) error {
+	if value == 0 {
+		return nil
+	}
+	if value < 0 || value > 1 {
+		return fmt.Errorf("%s must be between 0 and 1, got %.4f", fieldName, value)
+	}
+	return nil
+}
+
+func methodUsesModalityClassifier(method string) bool {
+	return method == ModalityDetectionClassifier || method == ModalityDetectionHybrid
 }
 
 // Validate validates the image generation plugin configuration
