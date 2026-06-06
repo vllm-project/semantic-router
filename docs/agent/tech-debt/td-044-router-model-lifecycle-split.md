@@ -2,8 +2,9 @@
 
 ## Status
 
-Open - lifecycle schema and runtime plan are consolidated; pending AMD
-regression evidence before retirement.
+Open - lifecycle schema, runtime plan, and AMD reduced-model regression are
+covered; pending PR CI and a retirement decision for the remaining registry
+alias/example cleanup.
 
 ## Owner Plan
 
@@ -50,6 +51,20 @@ canonical router defaults again.
 - [config/config.yaml](../../../config/config.yaml)
 - [deploy/recipes/balance.yaml](../../../deploy/recipes/balance.yaml)
 
+## Current Validation
+
+- Lifecycle schema and runtime consolidation are implemented in PR #2066 through
+  commit `56e1dc47`.
+- AMD/ROCm reduced-model validation passed for `deploy/recipes/balance.yaml` at
+  commit `56e1dc47`. Startup downloaded only the active lifecycle assets:
+  `models/mmbert-embed-32k-2d-matryoshka`,
+  `models/mmbert32k-intent-classifier-merged`,
+  `models/mmbert32k-factcheck-classifier-merged`, and
+  `models/mmbert32k-feedback-detector-merged`.
+- The latest PR head includes an additional deterministic memory CI fix at
+  commit `6fb1aad5`; that change does not alter the canonical lifecycle plan or
+  the AMD balance-recipe model set.
+
 ## Why It Matters
 
 - Registry metadata, default bindings, download planning, initialization, and
@@ -87,4 +102,7 @@ canonical router defaults again.
   defaults, BERT fallback, and AMD balance recipe model plans.
 - `make agent-feature-gate ENV=cpu CHANGED_FILES="..."` passes.
 - `make agent-feature-gate ENV=amd CHANGED_FILES="..."` or the documented
-  AMD-local equivalent passes on an AMD/ROCm machine.
+  AMD-local equivalent passes on an AMD/ROCm machine. The reduced-model
+  AMD-local equivalent has passed for PR #2066; keep this criterion open until
+  the PR CI result is captured and TD044 is either retired or narrowed to the
+  remaining registry alias/example cleanup.

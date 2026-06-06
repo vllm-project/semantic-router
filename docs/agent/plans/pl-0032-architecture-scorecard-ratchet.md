@@ -46,13 +46,15 @@ Out of scope:
   seams that are still doing request-time policy work.
 - [ ] `ADC006` Retire or narrow TD027 by splitting fleet-sim optimizer analysis,
   verification, and export ownership.
-- [ ] `ADC007` Retire TD044 by consolidating router-owned model lifecycle
-  planning across download, initialization, API reporting, and AMD validation.
+- [ ] `ADC007` Retire or narrow TD044 after PR #2066 validation lands: the
+  router-owned lifecycle schema, download plan, initialization plan, API
+  reporting, and AMD reduced-model regression are covered; remaining work is to
+  decide whether the registry alias/example cleanup keeps TD044 open.
 
 ## Next Action
 
-- Continue ADC007 by running the local gates and AMD/ROCm regression for the
-  lifecycle schema implementation, then retire TD044 if the current PR passes.
+- Continue ADC007 by watching PR #2066 CI, then retire TD044 or narrow it to the
+  remaining registry alias/example cleanup based on the final PR evidence.
 
 ## Operating Rules
 
