@@ -28,6 +28,7 @@ if [[ "${MODEL_DIR}" != /* ]]; then
 fi
 MODEL_MOUNT_DIR="${TEST_DIR}/models"
 MEMORY_EMBEDDING_REPO_ID="sentence-transformers/all-MiniLM-L6-v2"
+MEMORY_COLLECTION="${MEMORY_TEST_COLLECTION:-memory_test_ci_${GITHUB_RUN_ID:-local}_$$}"
 
 VLLM_SR_PID=""
 
@@ -175,6 +176,7 @@ PY
 
 prepare_model_dir
 echo "Using memory integration model dir: ${MODEL_DIR}"
+echo "Using Milvus memory collection: ${MEMORY_COLLECTION}"
 download_hf_snapshot "${MEMORY_EMBEDDING_REPO_ID}" "${MODEL_DIR}/mom-embedding-light"
 
 # Sanity check: ensure the bert (MiniLM-L6-v2) snapshot was downloaded and contains files.
@@ -212,34 +214,19 @@ except Exception as e:
     sleep 2
 done
 
-# Drop any stale collection left over from a previous run (e.g. wrong dimension).
-# The router recreates it with the correct schema on first write.
-echo "Dropping stale Milvus collection (if present)..."
-python3 - "${MILVUS_COLLECTION:-memory_test_ci}" <<'PY'
-import sys
-from pymilvus import MilvusClient
-
-collection = sys.argv[1]
-try:
-    client = MilvusClient(uri="http://localhost:19530")
-    if client.has_collection(collection):
-        client.drop_collection(collection)
-        print(f"Dropped stale collection: {collection}")
-    else:
-        print(f"Collection '{collection}' does not exist; nothing to drop")
-except Exception as e:
-    print(f"Warning: could not drop collection '{collection}': {e}", file=sys.stderr)
-PY
-
+# Use an isolated collection per run so stale schemas from prior runs cannot
+# block writes after embedding model or dimension changes.
 cp "${REPO_ROOT}/e2e/config/config.memory-user.yaml" "${CONFIG_FILE}"
-python3 - "${CONFIG_FILE}" <<'PY'
+python3 - "${CONFIG_FILE}" "${MEMORY_COLLECTION}" <<'PY'
 from pathlib import Path
 import sys
 
 path = Path(sys.argv[1])
+collection = sys.argv[2]
 text = path.read_text()
 text = text.replace("host.docker.internal:8000", "llm-katan:8000")
 text = text.replace("host.docker.internal:19530", "vllm-sr-milvus:19530")
+text = text.replace("collection: memory_test_ci", f"collection: {collection}")
 text = text.replace("bert_model_path: \"\"", "bert_model_path: \"/app/models/mom-embedding-light\"")
 path.write_text(text)
 PY
@@ -323,5 +310,5 @@ PYTHONUNBUFFERED=1 \
 ROUTER_ENDPOINT=http://localhost:8888 \
 ROUTER_HEALTH_ENDPOINT="${ROUTER_API_HEALTH_URL}" \
 MILVUS_ADDRESS=localhost:19530 \
-MILVUS_COLLECTION=memory_test_ci \
+MILVUS_COLLECTION="${MEMORY_COLLECTION}" \
 python3 09-memory-features-test.py
