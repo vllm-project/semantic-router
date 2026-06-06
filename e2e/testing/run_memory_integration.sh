@@ -118,7 +118,7 @@ download_hf_snapshot() {
     local repo_id="$1"
     local local_dir="$2"
     local required="${3:-required}"
-    local max_attempts="${HF_DOWNLOAD_ATTEMPTS:-6}"
+    local max_attempts="${HF_DOWNLOAD_ATTEMPTS:-12}"
     local attempt delay exit_code marker
 
     if ! [[ "${max_attempts}" =~ ^[0-9]+$ ]] || (( max_attempts < 1 )); then
@@ -177,12 +177,12 @@ if [[ "${USE_DETERMINISTIC_MEMORY_EMBEDDINGS}" == "1" ]]; then
     export VLLM_SR_DETERMINISTIC_EMBEDDINGS=1
     echo "Using deterministic memory embeddings for CI; skipping Hugging Face model download"
 else
-    echo "Attempting to download Hugging Face model for embeddings (will fall back to deterministic on failure)"
+    echo "Attempting to download Hugging Face model for embeddings (required for memory integration tests)"
     if download_hf_snapshot "llm-semantic-router/mmbert-embed-32k-2d-matryoshka" "${MODEL_DIR}/mmbert-embed-32k-2d-matryoshka"; then
         echo "Hugging Face model downloaded successfully"
     else
-        echo "Warning: Hugging Face model download failed; falling back to deterministic embeddings"
-        export VLLM_SR_DETERMINISTIC_EMBEDDINGS=1
+        echo "ERROR: Hugging Face model download failed; aborting memory integration tests" >&2
+        exit 1
     fi
 fi
 make -C "${REPO_ROOT}" start-milvus
