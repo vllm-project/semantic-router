@@ -31,6 +31,7 @@ const (
 	// and sets ML_PIPELINE_ENABLED=false. All other spec comes from the same image
 	// and configmap as the production deployment.
 	dashboardE2EDeploymentManifest = "e2e/profiles/dashboard/dashboard-deployment.yaml"
+	dashboardE2EPVCManifest        = "e2e/profiles/dashboard/dashboard-pvc.yaml"
 
 	deploymentDashboard = "semantic-router-dashboard"
 	serviceDashboard    = "semantic-router-dashboard"
@@ -72,7 +73,7 @@ func (p *Profile) Name() string { return profileName }
 
 // Description returns the profile description.
 func (p *Profile) Description() string {
-	return "Tests the dashboard API surface: health, status, config read, deploy preview, config versions, and input validation"
+	return "Tests the dashboard API surface: health, status, config read, deploy preview, config versions, restart recovery, and input validation"
 }
 
 // Setup deploys the shared gateway stack then the standalone dashboard.
@@ -134,6 +135,10 @@ func (p *Profile) deployDashboard(ctx context.Context, opts *framework.SetupOpti
 		return fmt.Errorf("failed to apply dashboard configmap: %w", err)
 	}
 
+	if err := p.kubectlApplyWithNamespace(ctx, opts.KubeConfig, namespaceRouter, dashboardE2EPVCManifest); err != nil {
+		return fmt.Errorf("failed to apply dashboard PVC: %w", err)
+	}
+
 	if err := p.kubectlApplyWithNamespace(ctx, opts.KubeConfig, namespaceRouter, dashboardE2EDeploymentManifest); err != nil {
 		return fmt.Errorf("failed to apply dashboard deployment: %w", err)
 	}
@@ -179,6 +184,7 @@ func (p *Profile) deployDashboard(ctx context.Context, opts *framework.SetupOpti
 func (p *Profile) cleanupDashboard(ctx context.Context, opts *framework.TeardownOptions) error {
 	_ = p.kubectl(ctx, opts.KubeConfig, "delete", "-f", dashboardManifestDir+"/service.yaml", "-n", namespaceRouter, "--ignore-not-found=true")
 	_ = p.kubectl(ctx, opts.KubeConfig, "delete", "-f", dashboardE2EDeploymentManifest, "-n", namespaceRouter, "--ignore-not-found=true")
+	_ = p.kubectl(ctx, opts.KubeConfig, "delete", "-f", dashboardE2EPVCManifest, "-n", namespaceRouter, "--ignore-not-found=true")
 	_ = p.kubectl(ctx, opts.KubeConfig, "delete", "-f", dashboardManifestDir+"/configmap.yaml", "-n", namespaceRouter, "--ignore-not-found=true")
 	return nil
 }

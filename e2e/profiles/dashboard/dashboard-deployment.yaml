@@ -92,7 +92,12 @@ spec:
             - name: router-config
               mountPath: /app/config
               readOnly: true
+            - name: dashboard-data
+              mountPath: /tmp/vllm-sr-dashboard
       volumes:
         - name: router-config
           configMap:
             name: semantic-router-config
+        - name: dashboard-data
+          persistentVolumeClaim:
+            claimName: semantic-router-dashboard-data
