@@ -65,6 +65,9 @@ jobs:
         run: docker pull milvusdb/milvus:v2.3.3
 
       - name: Run memory integration tests
+        env:
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}
+          HUGGING_FACE_HUB_TOKEN: ${{ secrets.HF_TOKEN }}
         run: |
           make memory-test-integration DOCKER_TAG=ci VLLM_SR_IMAGE=vllm-sr:ci
 
