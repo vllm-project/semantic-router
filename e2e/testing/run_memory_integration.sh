@@ -213,7 +213,17 @@ except Exception as e:
 done
 
 cp "${REPO_ROOT}/e2e/config/config.memory-user.yaml" "${CONFIG_FILE}"
-python3 -c 'from pathlib import Path; path = Path("'"${CONFIG_FILE}"'"); t = path.read_text(); t = t.replace("host.docker.internal:8000", "llm-katan:8000"); t = t.replace("host.docker.internal:19530", "vllm-sr-milvus:19530"); t = t.replace("bert_model_path: \"\"", "bert_model_path: \"/app/models/mom-embedding-light\""); path.write_text(t)'
+python3 - "${CONFIG_FILE}" <<'PY'
+from pathlib import Path
+import sys
+
+path = Path(sys.argv[1])
+text = path.read_text()
+text = text.replace("host.docker.internal:8000", "llm-katan:8000")
+text = text.replace("host.docker.internal:19530", "vllm-sr-milvus:19530")
+text = text.replace("bert_model_path: \"\"", "bert_model_path: \"/app/models/mom-embedding-light\"")
+path.write_text(text)
+PY
 
 if ! "${CONTAINER_RUNTIME}" network inspect "${VLLM_SR_NETWORK}" >/dev/null 2>&1; then
     "${CONTAINER_RUNTIME}" network create "${VLLM_SR_NETWORK}" >/dev/null
