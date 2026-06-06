@@ -166,9 +166,45 @@ PY
     return "${exit_code}"
 }
 
+download_hf_snapshot_via_git() {
+    local repo_id="$1"
+    local local_dir="$2"
+    local tmp_dir
+
+    tmp_dir="${local_dir}.gitclone"
+    rm -rf "${tmp_dir}"
+
+    echo "Falling back to git clone for ${repo_id}"
+    if ! git clone --depth 1 "https://huggingface.co/${repo_id}" "${tmp_dir}"; then
+        echo "Git fallback clone failed for ${repo_id}" >&2
+        rm -rf "${tmp_dir}"
+        return 1
+    fi
+
+    # Try to materialize LFS blobs when git-lfs is available.
+    if command -v git-lfs >/dev/null 2>&1; then
+        git -C "${tmp_dir}" lfs pull >/dev/null 2>&1 || true
+    fi
+
+    # Detect unresolved LFS pointers (means model payload was not fetched).
+    if grep -R --include='*.safetensors' -m1 '^version https://git-lfs.github.com/spec/v1' "${tmp_dir}" >/dev/null 2>&1; then
+        echo "Git fallback produced unresolved LFS pointers for ${repo_id}" >&2
+        rm -rf "${tmp_dir}"
+        return 1
+    fi
+
+    rm -rf "${local_dir}"
+    mv "${tmp_dir}" "${local_dir}"
+    return 0
+}
+
 prepare_model_dir
 echo "Using memory integration model dir: ${MODEL_DIR}"
-download_hf_snapshot "llm-semantic-router/mmbert-embed-32k-2d-matryoshka" "${MODEL_DIR}/mmbert-embed-32k-2d-matryoshka"
+MMBERT_REPO="llm-semantic-router/mmbert-embed-32k-2d-matryoshka"
+MMBERT_DIR="${MODEL_DIR}/mmbert-embed-32k-2d-matryoshka"
+if ! download_hf_snapshot "${MMBERT_REPO}" "${MMBERT_DIR}"; then
+    download_hf_snapshot_via_git "${MMBERT_REPO}" "${MMBERT_DIR}"
+fi
 make -C "${REPO_ROOT}" start-milvus
 
 # Double-check Milvus readiness with pymilvus probe (gRPC-level, not just HTTP)
