@@ -72,6 +72,8 @@ See [environments.md](environments.md) for the concrete commands.
 - The current workflow-driven suites are:
   - `vllm-sr-cli-integration` via `make vllm-sr-test-integration`
   - `memory-integration` via `make memory-test-integration`
+    - this suite uses the real mmbert memory embedding path by default because the deterministic fallback does not meet the acceptance thresholds in the memory retrieval tests
+    - provide `HF_TOKEN` (and, in CI, mirror it to `HUGGING_FACE_HUB_TOKEN`) so the scripted Hugging Face snapshot download can authenticate and reuse its retry path
 - Manual-only Go profiles are valid durable suites, but they must be named in `manual_profile_rules` instead of existing as undocumented runner-only paths.
 
 ## Acceptance Versus Reporting
