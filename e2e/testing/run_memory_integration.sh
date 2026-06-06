@@ -27,7 +27,7 @@ if [[ "${MODEL_DIR}" != /* ]]; then
     MODEL_DIR="${REPO_ROOT}/${MODEL_DIR}"
 fi
 MODEL_MOUNT_DIR="${TEST_DIR}/models"
-USE_DETERMINISTIC_MEMORY_EMBEDDINGS="${USE_DETERMINISTIC_MEMORY_EMBEDDINGS:-1}"
+USE_DETERMINISTIC_MEMORY_EMBEDDINGS="${USE_DETERMINISTIC_MEMORY_EMBEDDINGS:-0}"
 
 VLLM_SR_PID=""
 
@@ -177,7 +177,13 @@ if [[ "${USE_DETERMINISTIC_MEMORY_EMBEDDINGS}" == "1" ]]; then
     export VLLM_SR_DETERMINISTIC_EMBEDDINGS=1
     echo "Using deterministic memory embeddings for CI; skipping Hugging Face model download"
 else
-    download_hf_snapshot "llm-semantic-router/mmbert-embed-32k-2d-matryoshka" "${MODEL_DIR}/mmbert-embed-32k-2d-matryoshka"
+    echo "Attempting to download Hugging Face model for embeddings (will fall back to deterministic on failure)"
+    if download_hf_snapshot "llm-semantic-router/mmbert-embed-32k-2d-matryoshka" "${MODEL_DIR}/mmbert-embed-32k-2d-matryoshka"; then
+        echo "Hugging Face model downloaded successfully"
+    else
+        echo "Warning: Hugging Face model download failed; falling back to deterministic embeddings"
+        export VLLM_SR_DETERMINISTIC_EMBEDDINGS=1
+    fi
 fi
 make -C "${REPO_ROOT}" start-milvus
 
