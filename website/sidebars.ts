@@ -126,6 +126,7 @@ const sidebars: SidebarsConfig = {
             'tutorials/decision/or',
             'tutorials/decision/not',
             'tutorials/decision/composite',
+            'tutorials/decision/multi-step-pipeline',
             'tutorials/decision/retention',
           ],
         },
