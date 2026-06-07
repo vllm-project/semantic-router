@@ -8,7 +8,6 @@ import (
 	"github.com/qdrant/go-client/qdrant"
 	glide "github.com/valkey-io/valkey-glide/go/v2"
 	glideconfig "github.com/valkey-io/valkey-glide/go/v2/config"
-	candle_binding "github.com/vllm-project/semantic-router/candle-binding"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/memory"
@@ -135,10 +134,6 @@ func createMilvusMemoryStore(cfg *config.RouterConfig) (memory.Store, error) {
 		Dimension: cfg.Memory.Milvus.Dimension,
 	}
 
-	if err := initializeMemoryEmbeddingModel(cfg, string(embeddingConfig.Model)); err != nil {
-		return nil, err
-	}
-
 	logging.Infof("Memory: connecting to Milvus at %s, collection=%s, embedding=%s", milvusAddress, collectionName, embeddingConfig.Model)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
@@ -177,21 +172,6 @@ func createMilvusMemoryStore(cfg *config.RouterConfig) (memory.Store, error) {
 	return store, nil
 }
 
-func initializeMemoryEmbeddingModel(cfg *config.RouterConfig, model string) error {
-	switch memory.EmbeddingModelType(model) {
-	case memory.EmbeddingModelBERT, "":
-		return candle_binding.InitModel(cfg.BertModelPath, cfg.UseCPU)
-	case memory.EmbeddingModelMMBERT:
-		return candle_binding.InitMmBertEmbeddingModel(cfg.MmBertModelPath, cfg.UseCPU)
-	case memory.EmbeddingModelMulti:
-		return candle_binding.InitMultiModalEmbeddingModel(cfg.MultiModalModelPath, cfg.UseCPU)
-	case memory.EmbeddingModelQwen3, memory.EmbeddingModelGemma:
-		return candle_binding.InitEmbeddingModels(cfg.Qwen3ModelPath, cfg.GemmaModelPath, "", cfg.UseCPU)
-	default:
-		return fmt.Errorf("unsupported memory embedding model: %s", model)
-	}
-}
-
 // createValkeyMemoryStore creates a ValkeyStore backend.
 func createValkeyMemoryStore(cfg *config.RouterConfig) (memory.Store, error) {
 	vc := cfg.Memory.Valkey
@@ -214,10 +194,6 @@ func createValkeyMemoryStore(cfg *config.RouterConfig) (memory.Store, error) {
 	embeddingConfig := &memory.EmbeddingConfig{
 		Model:     embeddingModel,
 		Dimension: vc.Dimension,
-	}
-
-	if err := initializeMemoryEmbeddingModel(cfg, string(embeddingConfig.Model)); err != nil {
-		return nil, err
 	}
 
 	logging.Infof("Memory: connecting to Valkey at %s:%d, embedding=%s", host, port, embeddingConfig.Model)
@@ -345,10 +321,6 @@ func createQdrantMemoryStore(cfg *config.RouterConfig) (memory.Store, error) {
 	embeddingConfig := &memory.EmbeddingConfig{
 		Model:     embeddingModel,
 		Dimension: qc.Dimension,
-	}
-
-	if err := initializeMemoryEmbeddingModel(cfg, string(embeddingConfig.Model)); err != nil {
-		return nil, err
 	}
 
 	logging.Infof("Memory: connecting to Qdrant at %s:%d, collection=%s, embedding=%s",
