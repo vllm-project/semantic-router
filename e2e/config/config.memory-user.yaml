@@ -109,14 +109,14 @@ global:
         address: host.docker.internal:19530
         collection: memory_test_ci
         dimension: 384
-      embedding_model: bert
+      embedding_model: mmbert
       default_retrieval_limit: 5
       default_similarity_threshold: 0.45
     semantic_cache:
       enabled: false
-      embedding_model: bert
+      embedding_model: mmbert
     vector_store:
-      embedding_model: bert
+      embedding_model: mmbert
   model_catalog:
     embeddings:
       semantic:
@@ -127,5 +127,5 @@ global:
         bert_model_path: ""
         use_cpu: true
         embedding_config:
-          model_type: bert
+          model_type: mmbert
           target_dimension: 384
