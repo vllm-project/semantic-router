@@ -37,6 +37,15 @@ func createConfigBackup(configDir string, existingData []byte) string {
 	return version
 }
 
+func readArchivedDSL(configDir string) string {
+	dslFile := filepath.Join(configDir, ".vllm-sr", "config.dsl")
+	data, err := os.ReadFile(dslFile)
+	if err != nil {
+		return ""
+	}
+	return string(data)
+}
+
 func archiveDeployDSL(configDir string, dsl string) {
 	if strings.TrimSpace(dsl) == "" {
 		return

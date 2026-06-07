@@ -5,6 +5,7 @@ import (
 	"net/http"
 
 	"github.com/vllm-project/semantic-router/dashboard/backend/config"
+	"github.com/vllm-project/semantic-router/dashboard/backend/configprojection"
 	"github.com/vllm-project/semantic-router/dashboard/backend/handlers"
 	"github.com/vllm-project/semantic-router/dashboard/backend/workflowstore"
 )
@@ -20,6 +21,12 @@ func Setup(cfg *config.Config) *http.ServeMux {
 	if err != nil {
 		log.Fatalf("workflow store: %v", err)
 	}
+
+	cp, err := configprojection.Open(cfg.ConfigProjectionDBPath)
+	if err != nil {
+		log.Fatalf("config projection store: %v", err)
+	}
+	handlers.SetConfigProjectionStore(cp)
 
 	mux.HandleFunc("/api/workflows/health", handlers.WorkflowHealthHandler(wf))
 	log.Printf("Workflow health API registered: /api/workflows/health")
