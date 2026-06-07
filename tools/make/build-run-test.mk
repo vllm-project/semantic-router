@@ -17,9 +17,9 @@ build-router: $(if $(CI),rust-ci,rust)
 	@$(LOG_TARGET)
 	@mkdir -p bin
 ifdef DEV
-	@cd src/semantic-router && go build -tags=dev,milvus -o ../../bin/router ./cmd
+	@cd src/semantic-router && CGO_LDFLAGS="-L$(PWD)/candle-binding/target/release" go build -tags=dev,milvus -o ../../bin/router ./cmd
 else
-	@cd src/semantic-router && go build -tags=milvus -o ../../bin/router ./cmd
+	@cd src/semantic-router && CGO_LDFLAGS="-L$(PWD)/candle-binding/target/release" go build -tags=milvus -o ../../bin/router ./cmd
 endif
 
 # Run the router
