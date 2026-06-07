@@ -173,11 +173,24 @@ PY
 
 prepare_model_dir
 echo "Using memory integration model dir: ${MODEL_DIR}"
+# Detect requested embedding model from the e2e config so we can make a best-effort
+# attempt to ensure a compatible model is available during CI runs. This avoids
+# silent mismatches between the config and the model the test script downloads.
+CONFIG_EMBEDDING_MODEL="$(grep -m1 '^ *embedding_model:' "${REPO_ROOT}/e2e/config/config.memory-user.yaml" 2>/dev/null | awk -F: '{print $2}' | tr -d ' \"')"
+if [[ -z "${CONFIG_EMBEDDING_MODEL}" ]]; then
+    CONFIG_EMBEDDING_MODEL="mmbert"
+fi
+if [[ "${CONFIG_EMBEDDING_MODEL}" != "mmbert" ]]; then
+    echo "Note: config requests embedding_model='${CONFIG_EMBEDDING_MODEL}'. For CI stability we will still ensure the mmbert embeddings model is present unless deterministic mode is explicitly requested."
+fi
 if [[ "${USE_DETERMINISTIC_MEMORY_EMBEDDINGS}" == "1" ]]; then
     export VLLM_SR_DETERMINISTIC_EMBEDDINGS=1
     echo "Using deterministic memory embeddings for CI; skipping Hugging Face model download"
 else
     echo "Attempting to download Hugging Face model for embeddings (will fall back to deterministic on failure)"
+    # Ensure the mmbert model used by the CI harness is available. Tests and
+    # configs may accidentally request a different model; providing mmbert keeps
+    # the CI stable and compatible with the rest of the harness (collection dims, etc.).
     if download_hf_snapshot "llm-semantic-router/mmbert-embed-32k-2d-matryoshka" "${MODEL_DIR}/mmbert-embed-32k-2d-matryoshka"; then
         echo "Hugging Face model downloaded successfully"
     else
