@@ -17,9 +17,9 @@ build-router: $(if $(CI),rust-ci,rust)
 	@$(LOG_TARGET)
 	@mkdir -p bin
 ifdef DEV
-	@cd src/semantic-router && go build -tags=dev,milvus -o ../../bin/router ./cmd
+	@cd src/semantic-router && CGO_LDFLAGS="-L$(PWD)/candle-binding/target/release" go build -tags=dev,milvus -o ../../bin/router ./cmd
 else
-	@cd src/semantic-router && go build -tags=milvus -o ../../bin/router ./cmd
+	@cd src/semantic-router && CGO_LDFLAGS="-L$(PWD)/candle-binding/target/release" go build -tags=milvus -o ../../bin/router ./cmd
 endif
 
 # Run the router
@@ -81,7 +81,10 @@ test-semantic-router: build-router
 	export SKIP_VALKEY_TESTS=$${SKIP_VALKEY_TESTS:-true} && \
 	export SKIP_LLAMA_STACK_TESTS=$${SKIP_LLAMA_STACK_TESTS:-true} && \
 	export SR_TEST_MODE=true && \
-		cd src/semantic-router && CGO_ENABLED=1 go test -v $$(go list ./...)
+		cd src/semantic-router && \
+		CGO_ENABLED=1 \
+		CGO_LDFLAGS="-L$(PWD)/candle-binding/target/release -L$(PWD)/ml-binding/target/release -L$(PWD)/nlp-binding/target/release" \
+		go test -v $$(go list ./...)
 
 # Test the Rust library and the Go binding
 # In CI, split test-binding into two phases to save disk space:
