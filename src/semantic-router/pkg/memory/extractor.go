@@ -267,7 +267,7 @@ func (e *MemoryExtractor) storeTurnChunk(ctx context.Context, userMessage, assis
 	chunk := formatTurnChunk(userMessage, assistantResponse)
 	sanitized, err := sanitizeMemoryContent(chunk)
 	if err != nil {
-		logging.Debugf("Memory chunk store: REJECTED - %v (user=%s)", err, userID)
+		logging.Debugf("Memory chunk store: sanitization rejected: not stored - %v (user=%s)", err, userID)
 		return false, nil
 	}
 	mem := &Memory{
