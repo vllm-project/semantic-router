@@ -14,6 +14,8 @@ spec:
       labels:
         app: semantic-router-dashboard
     spec:
+      securityContext:
+        fsGroup: 65532
       containers:
         - name: dashboard
           image: ghcr.io/vllm-project/semantic-router/dashboard:latest
