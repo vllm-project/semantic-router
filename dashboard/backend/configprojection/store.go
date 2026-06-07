@@ -15,6 +15,8 @@ import (
 	_ "github.com/mattn/go-sqlite3"
 )
 
+const currentSchemaVersion = 1
+
 // Store is a SQLite-backed deployment projection store.
 type Store struct {
 	db *sql.DB
@@ -49,6 +51,13 @@ func Open(dbPath string) (*Store, error) {
 
 func (s *Store) initSchema() error {
 	schema := `
+CREATE TABLE IF NOT EXISTS config_projection_schema_version (
+	id INTEGER PRIMARY KEY CHECK (id = 1),
+	version INTEGER NOT NULL
+);
+INSERT OR IGNORE INTO config_projection_schema_version (id, version)
+VALUES (1, 0);
+
 CREATE TABLE IF NOT EXISTS config_deployments (
 	version TEXT PRIMARY KEY,
 	source TEXT NOT NULL,
@@ -74,8 +83,30 @@ CREATE TABLE IF NOT EXISTS config_projection_active (
 INSERT OR IGNORE INTO config_projection_active (id, active_version, status, last_error, updated_at)
 VALUES (1, '', 'failed', 'projection not initialized', datetime('now'));
 `
-	_, err := s.db.Exec(schema)
-	return err
+	if _, err := s.db.Exec(schema); err != nil {
+		return fmt.Errorf("configprojection: init schema: %w", err)
+	}
+	return s.ensureSchemaVersion()
+}
+
+func (s *Store) ensureSchemaVersion() error {
+	var version int
+	err := s.db.QueryRow(`SELECT version FROM config_projection_schema_version WHERE id = 1`).Scan(&version)
+	if err != nil {
+		return fmt.Errorf("configprojection: read schema version: %w", err)
+	}
+	if version > currentSchemaVersion {
+		return fmt.Errorf("configprojection: unsupported schema version %d (max %d)", version, currentSchemaVersion)
+	}
+	if version < currentSchemaVersion {
+		if _, err := s.db.Exec(
+			`UPDATE config_projection_schema_version SET version = ? WHERE id = 1`,
+			currentSchemaVersion,
+		); err != nil {
+			return fmt.Errorf("configprojection: bump schema version: %w", err)
+		}
+	}
+	return nil
 }
 
 // Close closes the underlying database handle.

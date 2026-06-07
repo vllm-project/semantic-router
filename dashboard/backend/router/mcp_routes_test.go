@@ -215,8 +215,9 @@ func startDashboardServer(t *testing.T) string {
 		MLPipelineEnabled:      false,
 	}
 
+	dashboard := Setup(cfg)
 	server := &http.Server{
-		Handler:           Setup(cfg),
+		Handler:           dashboard.Handler,
 		ReadHeaderTimeout: 5 * time.Second,
 	}
 	go func() {
@@ -227,6 +228,7 @@ func startDashboardServer(t *testing.T) string {
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
 		_ = server.Shutdown(ctx)
+		_ = dashboard.Close()
 	})
 
 	return "http://" + listener.Addr().String()

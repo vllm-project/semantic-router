@@ -16,13 +16,16 @@ func setupTestConfigProjectionStore(t *testing.T) *configprojection.Store {
 	t.Helper()
 
 	previous := configProjectionStore
+	previousAsync := configProjectionRefreshAsync
 	store, err := configprojection.Open(filepath.Join(t.TempDir(), "projection.sqlite"))
 	if err != nil {
 		t.Fatalf("open config projection store: %v", err)
 	}
 	SetConfigProjectionStore(store)
+	SetConfigProjectionRefreshAsync(false)
 	t.Cleanup(func() {
 		SetConfigProjectionStore(previous)
+		SetConfigProjectionRefreshAsync(previousAsync)
 		_ = store.Close()
 	})
 	return store
