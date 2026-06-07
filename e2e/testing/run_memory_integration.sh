@@ -228,6 +228,30 @@ except Exception as e:
 done
 
 cp "${REPO_ROOT}/e2e/config/config.memory-user.yaml" "${CONFIG_FILE}"
+# If the e2e config requests the BERT embedding model, ensure the BERT snapshot is available and patch the generated config to reference it.
+if grep -m1 -q '^ *embedding_model: *bert' "${REPO_ROOT}/e2e/config/config.memory-user.yaml" 2>/dev/null; then
+    BERT_REPO="${MEMORY_EMBEDDING_REPO_ID:-sentence-transformers/all-MiniLM-L6-v2}"
+    BERT_LOCAL_DIR="${MODEL_DIR}/all-MiniLM-L6-v2"
+    echo "Config requests bert embeddings; ensuring Hugging Face model ${BERT_REPO} is present at ${BERT_LOCAL_DIR}"
+    if download_hf_snapshot "${BERT_REPO}" "${BERT_LOCAL_DIR}"; then
+        echo "BERT Hugging Face model downloaded successfully"
+        # Patch config to reference bert instead of mmbert and set bert_model_path
+        python3 - <<PY
+from pathlib import Path
+p = Path("${CONFIG_FILE}")
+t = p.read_text()
+# Replace mmbert mentions with bert so router selects bert embedding code path
+t = t.replace('embedding_model: mmbert', 'embedding_model: bert')
+t = t.replace('model_type: mmbert', 'model_type: bert')
+# Set the bert_model_path to the local snapshot if empty
+if 'bert_model_path:' in t:
+    t = t.replace('bert_model_path: ""', 'bert_model_path: "' + "${BERT_LOCAL_DIR}" + '"')
+p.write_text(t)
+PY
+    else
+        echo "Warning: failed to download requested BERT model ${BERT_REPO}; tests may fall back to deterministic embeddings" >&2
+    fi
+fi
 python3 -c 'from pathlib import Path; path = Path("'"${CONFIG_FILE}"'"); t = path.read_text(); t = t.replace("host.docker.internal:8000", "llm-katan:8000"); t = t.replace("host.docker.internal:19530", "vllm-sr-milvus:19530"); path.write_text(t)'
 
 if ! "${CONTAINER_RUNTIME}" network inspect "${VLLM_SR_NETWORK}" >/dev/null 2>&1; then
