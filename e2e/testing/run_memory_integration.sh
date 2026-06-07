@@ -194,8 +194,13 @@ else
     if download_hf_snapshot "llm-semantic-router/mmbert-embed-32k-2d-matryoshka" "${MODEL_DIR}/mmbert-embed-32k-2d-matryoshka"; then
         echo "Hugging Face model downloaded successfully"
     else
-        echo "Warning: Hugging Face model download failed; falling back to deterministic embeddings"
-        export VLLM_SR_DETERMINISTIC_EMBEDDINGS=1
+        if [[ "${USE_DETERMINISTIC_MEMORY_EMBEDDINGS}" == "1" ]]; then
+            echo "Warning: Hugging Face model download failed; using deterministic embeddings due to USE_DETERMINISTIC_MEMORY_EMBEDDINGS=1"
+            export VLLM_SR_DETERMINISTIC_EMBEDDINGS=1
+        else
+            echo "ERROR: Hugging Face model download failed and deterministic fallback is disabled for CI. Exiting." >&2
+            exit 1
+        fi
     fi
 fi
 make -C "${REPO_ROOT}" start-milvus
