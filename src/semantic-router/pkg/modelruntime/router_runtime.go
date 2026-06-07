@@ -61,6 +61,7 @@ func PrepareRouterRuntime(
 	tasks := append([]Task{}, embeddingTasks...)
 	tasks = append(tasks, semanticCacheBERTTask(cfg, component)...)
 	tasks = append(tasks, vectorStoreBERTTask(cfg, component)...)
+	tasks = append(tasks, memoryBERTTask(cfg, component)...)
 	tasks = append(tasks, modalityClassifierTask(cfg, component, options.InitModalityClassifierFunc)...)
 	if len(tasks) == 0 {
 		return state, nil
@@ -139,7 +140,7 @@ func embeddingRuntimeTasks(
 }
 
 func semanticCacheBERTTask(cfg *config.RouterConfig, component string) []Task {
-	if !cfg.Enabled || resolveSemanticCacheEmbeddingModel(cfg) != "bert" {
+	if !semanticCacheNeedsBERT(cfg) {
 		return nil
 	}
 
@@ -167,7 +168,7 @@ func semanticCacheBERTTask(cfg *config.RouterConfig, component string) []Task {
 }
 
 func vectorStoreBERTTask(cfg *config.RouterConfig, component string) []Task {
-	if cfg.VectorStore == nil || !cfg.VectorStore.Enabled || cfg.VectorStore.EmbeddingModel != "bert" || cfg.Enabled {
+	if !vectorStoreNeedsBERT(cfg) {
 		return nil
 	}
 
@@ -187,6 +188,34 @@ func vectorStoreBERTTask(cfg *config.RouterConfig, component string) []Task {
 				return fmt.Errorf("failed to initialize vector store bert model: %w", err)
 			}
 			logging.ComponentEvent(component, "vector_store_bert_initialized", map[string]interface{}{
+				"model_ref": bertModelID,
+			})
+			return nil
+		},
+	}}
+}
+
+func memoryBERTTask(cfg *config.RouterConfig, component string) []Task {
+	if !memoryNeedsBERT(cfg) || semanticCacheNeedsBERT(cfg) || vectorStoreNeedsBERT(cfg) {
+		return nil
+	}
+
+	bertModelID := resolveBertModelID(cfg.BertModelPath)
+	return []Task{{
+		Name: "router.memory.bert",
+		Run: func(context.Context) error {
+			logging.ComponentEvent(component, "memory_bert_init_started", map[string]interface{}{
+				"model_ref": bertModelID,
+				"use_cpu":   cfg.UseCPU,
+			})
+			if err := candle_binding.InitModel(bertModelID, cfg.UseCPU); err != nil {
+				logging.ComponentErrorEvent(component, "memory_bert_init_failed", map[string]interface{}{
+					"model_ref": bertModelID,
+					"error":     err.Error(),
+				})
+				return fmt.Errorf("failed to initialize memory bert model: %w", err)
+			}
+			logging.ComponentEvent(component, "memory_bert_initialized", map[string]interface{}{
 				"model_ref": bertModelID,
 			})
 			return nil
@@ -378,8 +407,55 @@ func toolsUseMultiModalEmbeddings(cfg *config.RouterConfig) bool {
 	return strings.EqualFold(strings.TrimSpace(cfg.EmbeddingConfig.ModelType), "multimodal")
 }
 
+func semanticCacheNeedsBERT(cfg *config.RouterConfig) bool {
+	return cfg.Enabled && resolveSemanticCacheEmbeddingModel(cfg) == "bert"
+}
+
+func vectorStoreNeedsBERT(cfg *config.RouterConfig) bool {
+	return cfg.VectorStore != nil && cfg.VectorStore.Enabled && cfg.VectorStore.EmbeddingModel == "bert" && !cfg.Enabled
+}
+
+func memoryNeedsBERT(cfg *config.RouterConfig) bool {
+	if !memoryConfigured(cfg) {
+		return false
+	}
+	return resolveMemoryEmbeddingModel(cfg) == "bert"
+}
+
+func memoryConfigured(cfg *config.RouterConfig) bool {
+	if cfg.Memory.Enabled {
+		return true
+	}
+	for _, decision := range cfg.Decisions {
+		if decision.HasPlugin("memory") {
+			return true
+		}
+	}
+	return false
+}
+
 func resolveSemanticCacheEmbeddingModel(cfg *config.RouterConfig) string {
 	embeddingModel := strings.ToLower(strings.TrimSpace(cfg.EmbeddingModel))
+	if embeddingModel != "" {
+		return embeddingModel
+	}
+
+	switch {
+	case cfg.MmBertModelPath != "":
+		return "mmbert"
+	case cfg.MultiModalModelPath != "":
+		return "multimodal"
+	case cfg.Qwen3ModelPath != "":
+		return "qwen3"
+	case cfg.GemmaModelPath != "":
+		return "gemma"
+	default:
+		return "bert"
+	}
+}
+
+func resolveMemoryEmbeddingModel(cfg *config.RouterConfig) string {
+	embeddingModel := strings.ToLower(strings.TrimSpace(cfg.Memory.EmbeddingModel))
 	if embeddingModel != "" {
 		return embeddingModel
 	}

@@ -8,7 +8,8 @@ import (
 )
 
 // ResponseAPIRequest represents a request to create a response.
-// It follows the OpenAI Response API specification.
+// It follows the OpenAI Response API specification, with router extensions
+// used by the memory integration tests.
 type ResponseAPIRequest struct {
 	// Model is the model deployment name to use
 	Model string `json:"model"`
@@ -25,6 +26,9 @@ type ResponseAPIRequest struct {
 
 	// Store determines if the response should be stored (default: true)
 	Store *bool `json:"store,omitempty"`
+
+	// AutoStore is the router-side memory store toggle used by e2e tests.
+	AutoStore *bool `json:"auto_store,omitempty"`
 
 	// MaxOutputTokens limits the response length
 	MaxOutputTokens *int `json:"max_output_tokens,omitempty"`

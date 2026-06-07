@@ -6,6 +6,32 @@ This page consolidates the design principles for authoring **embedding anchor pa
 
 Read this after the [Embedding Signal](./embedding) tutorial. That page covers the mechanics (`candidates`, `threshold`, `aggregation_method`, `query_modality`); this page covers how to make a pack that routes reliably instead of one that looks reasonable and misfires at scale.
 
+## Key Advantages
+
+- Turns anchor authoring into a repeatable pack-design workflow instead of trial-and-error phrase tweaking.
+- Helps reduce false positives by treating the full anchor pack as the signal, not any single phrase.
+- Makes threshold calibration and validation explicit so packs stay aligned with the embedding model in production.
+
+## What Problem Does It Solve?
+
+Embedding rules can look plausible in review and still route poorly in practice when anchors overfit to literal wording, omit benign counterexamples, or reuse thresholds from a different model. This guide explains how to build anchor packs that generalize across real traffic instead of only matching hand-picked examples.
+
+## When to Use
+
+Use these principles whenever you create or revise `embedding` signal rules, especially when you are:
+
+- adding a new text or image routing category,
+- recalibrating thresholds for a different embedding model, or
+- debugging false positives or false negatives from an existing anchor pack.
+
+## Configuration
+
+Apply these principles to the same `embedding` signal fields described in the [Embedding Signal](./embedding) tutorial:
+
+- `candidates` should cover the full category with multiple semantically distinct anchors,
+- `aggregation_method` should match whether any strong anchor or broad pack agreement should trigger routing, and
+- `threshold` must be calibrated against the deployed model and labeled corpus.
+
 ## Principle 1: anchors describe what the input *is*, not the words in it
 
 An embedding anchor is matched in the model's semantic space, so it should describe the **signature** of the content, not a literal string you expect to appear.

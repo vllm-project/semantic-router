@@ -17,9 +17,8 @@ import (
 // extractAutoStore Tests
 // =============================================================================
 
-// Note: Request-level MemoryConfig was removed for OpenAI API compatibility.
-// Memory configuration is now controlled server-side via plugin config.
-// See: extractAutoStore_PerDecisionPlugin tests below.
+// Note: request-level auto_store is handled separately from per-decision
+// plugin config so tests can explicitly opt in/out of memory storage.
 
 func TestExtractAutoStore_ResponseAPI_NoPluginConfig(t *testing.T) {
 	// Without plugin config, auto_store defaults to false
@@ -64,6 +63,38 @@ func TestExtractAutoStore_ResponseAPI_NotSet(t *testing.T) {
 
 	result := extractAutoStore(ctx)
 	assert.False(t, result, "should return false when IsResponseAPIRequest is false")
+}
+
+func TestExtractRequestAutoStore_ResponseAPI_Enabled(t *testing.T) {
+	autoStoreTrue := true
+	ctx := &RequestContext{
+		ResponseAPICtx: &ResponseAPIContext{
+			IsResponseAPIRequest: true,
+			OriginalRequest: &responseapi.ResponseAPIRequest{
+				AutoStore: &autoStoreTrue,
+			},
+		},
+	}
+
+	result, ok := extractRequestAutoStore(ctx)
+	require.True(t, ok, "should detect request-level auto_store override")
+	assert.True(t, result, "should return the request-level auto_store value")
+}
+
+func TestExtractRequestAutoStore_ResponseAPI_Disabled(t *testing.T) {
+	autoStoreFalse := false
+	ctx := &RequestContext{
+		ResponseAPICtx: &ResponseAPIContext{
+			IsResponseAPIRequest: true,
+			OriginalRequest: &responseapi.ResponseAPIRequest{
+				AutoStore: &autoStoreFalse,
+			},
+		},
+	}
+
+	result, ok := extractRequestAutoStore(ctx)
+	require.True(t, ok, "should detect request-level auto_store override")
+	assert.False(t, result, "should return the request-level auto_store value")
 }
 
 // =============================================================================

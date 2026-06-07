@@ -16,8 +16,9 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/responseapi"
 )
 
-// extractAutoStore checks if auto_store is enabled.
-// Priority: per-decision plugin config > global config.
+// extractAutoStore checks if auto_store is enabled from per-decision plugin config.
+// Response API request overrides are resolved separately so request-level
+// false values can still disable router-level fallback.
 // Supported for both Response API and Chat Completions.
 func extractAutoStore(ctx *RequestContext) bool {
 	if ctx.VSRSelectedDecision != nil {
@@ -32,6 +33,8 @@ func extractAutoStore(ctx *RequestContext) bool {
 	// Default: auto_store disabled unless explicitly enabled via plugin config
 	return false
 }
+
+// extractRequestAutoStore is defined in dev/prod build-tagged files.
 
 // extractUserID is defined in user_id_dev.go (with metadata fallback) and
 // user_id_prod.go (auth header only) using build tags.
