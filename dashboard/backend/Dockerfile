@@ -36,7 +36,7 @@ COPY dashboard/frontend/index.html ./
 COPY --from=wasm-builder /build/signal-compiler.wasm /build/wasm_exec.js ./public/
 # Use official npm registry to avoid mirror timeouts
 RUN npm config set registry https://registry.npmjs.org/ && \
-    npm install --include=dev  # Ensure TypeScript/Vite are installed regardless of NODE_ENV
+    npm ci --include=dev  # Use npm ci for deterministic, lockfile-based installs in CI
 RUN npm run build
 
 FROM node:20-alpine AS wizmap-builder
