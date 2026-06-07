@@ -2,6 +2,7 @@ package memory
 
 import (
 	"context"
+	"errors"
 	"strings"
 	"testing"
 
@@ -11,6 +12,14 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
+
+type failingMemoryStore struct {
+	*InMemoryStore
+}
+
+func (s *failingMemoryStore) Store(ctx context.Context, memory *Memory) error {
+	return errors.New("store failed")
+}
 
 // =============================================================================
 // NewMemoryChunkStore Tests
@@ -412,6 +421,7 @@ func TestProcessResponseWithHistory_NilHistory(t *testing.T) {
 }
 
 func TestProcessResponseWithHistory_RecordsStoredChunkCountMetric(t *testing.T) {
+	defer MemoryExtractionFactsCount.Reset()
 	snapshot := func(t *testing.T) (uint64, float64) {
 		metric := &dto.Metric{}
 		writable, ok := MemoryExtractionFactsCount.WithLabelValues("episodic").(prometheus.Metric)
@@ -427,7 +437,9 @@ func TestProcessResponseWithHistory_RecordsStoredChunkCountMetric(t *testing.T) 
 		user       string
 		assistant  string
 		history    []openai.ChatCompletionMessageParamUnion
+		store      Store
 		wantStored int
+		wantErr    bool
 	}{
 		{
 			name:       "per turn only",
@@ -453,11 +465,23 @@ func TestProcessResponseWithHistory_RecordsStoredChunkCountMetric(t *testing.T) 
 			assistant:  "This response is long enough to avoid the low entropy filter.",
 			wantStored: 0,
 		},
+		{
+			name:       "store error",
+			store:      &failingMemoryStore{InMemoryStore: NewInMemoryStore()},
+			user:       "What should be remembered from this detailed request?",
+			assistant:  "This detailed response should attempt to store a conversation memory.",
+			wantStored: 0,
+			wantErr:    true,
+		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			store := NewInMemoryStore()
+			MemoryExtractionFactsCount.Reset()
+			store := tt.store
+			if store == nil {
+				store = NewInMemoryStore()
+			}
 			extractor := NewMemoryChunkStore(store)
 			ctx := context.Background()
 
@@ -466,15 +490,24 @@ func TestProcessResponseWithHistory_RecordsStoredChunkCountMetric(t *testing.T) 
 				ctx, "session1", "user1",
 				tt.user, tt.assistant, tt.history,
 			)
-			require.NoError(t, err)
+			if tt.wantErr {
+				require.Error(t, err)
+			} else {
+				require.NoError(t, err)
+			}
 
 			results, err := store.List(ctx, ListOptions{UserID: "user1", Limit: 100})
 			require.NoError(t, err)
 			assert.Len(t, results.Memories, tt.wantStored)
 
 			afterCount, afterSum := snapshot(t)
-			assert.Equal(t, beforeCount+1, afterCount)
-			assert.InDelta(t, beforeSum+float64(tt.wantStored), afterSum, 0.000001)
+			if tt.wantErr {
+				assert.Equal(t, beforeCount, afterCount)
+				assert.Equal(t, beforeSum, afterSum)
+			} else {
+				assert.Equal(t, beforeCount+1, afterCount)
+				assert.InDelta(t, beforeSum+float64(tt.wantStored), afterSum, 0.000001)
+			}
 		})
 	}
 }
