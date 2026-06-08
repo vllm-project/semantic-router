@@ -4,7 +4,7 @@ This profile demonstrates user-level RBAC model routing where different users (a
 
 ## Security Requirements
 
-**IMPORTANT**: Identity headers (`x-authz-user-id`, `x-authz-user-groups`) must **ONLY** come from validated auth backends (JWT, Authorino, etc.), **NOT** from client requests.
+**IMPORTANT**: This profile trusts JWT-derived identity headers (`x-jwt-sub`, `x-jwt-groups`) only after Envoy validates a bearer token. Clients must not be allowed to set those headers directly.
 
 ### Envoy Configuration
 
@@ -21,9 +21,9 @@ The header removal filter runs **before** the JWT/auth filter and ext_proc filte
 
 For e2e tests:
 
-- **DO NOT** send `x-authz-user-id` or `x-authz-user-groups` headers directly from the test client
+- **DO NOT** send `x-jwt-sub` or `x-jwt-groups` headers directly from the test client
 - **DO** send JWT tokens in the `Authorization: Bearer <token>` header
-- Envoy Gateway validates the JWT and extracts claims into identity headers
+- Envoy Gateway validates the JWT and copies claims into `x-jwt-sub` / `x-jwt-groups`
 - The router receives only JWT-derived identity headers
 
 ### Production Deployment
@@ -68,11 +68,19 @@ spec:
               fromHeaders:
                 - name: Authorization
                   valuePrefix: "Bearer "
+              claimToHeaders:
+                - headerName: x-jwt-sub
+                  claimName: sub
+                - headerName: x-jwt-groups
+                  claimName: groups
           rules:
             - match:
                 prefix: /
               requires:
-                providerName: jwt_provider
+                requiresAny:
+                  requirements:
+                    - providerName: jwt_provider
+                    - allowMissing: {}
     type: type.googleapis.com/envoy.config.listener.v3.Listener
   - name: jwt_provider_cluster
     operation:
@@ -104,7 +112,7 @@ spec:
 **Important Notes:**
 
 - The JWT filter should be added **after** the Lua filter that strips client-supplied headers
-- The JWT filter extracts claims from the validated token and sets them as headers (e.g., `x-authz-user-id`, `x-authz-user-groups`)
+- The JWT filter copies validated claims into headers (for this profile: `x-jwt-sub`, `x-jwt-groups`)
 - Replace `your-auth-server.com` and `your-audience` with your actual authentication server details
 - The JWT provider configuration must match your authentication server's JWT signing key and claims structure
 
@@ -129,10 +137,11 @@ Instead of configuring JWT directly in Envoy, you can use [Authorino](https://gi
 The authz-rbac profile includes the following test cases:
 
 - **chat-completions-request**: Basic functional test that validates end-to-end routing
-- **chat-completions-request-authz**: Sends identity headers from the client; Lua strips them before ext_proc (same as spoofing defense). Asserts HTTP 200.
-- **authz-header-spoofing**: Security test that verifies client-supplied identity headers are stripped and cannot be used for unauthorized access
+- **chat-completions-request-authz**: Sends a valid JWT in `Authorization` and asserts HTTP 200.
+- **authz-rbac-routing**: Verifies admin/premium/free routing decisions from validated JWT claims.
+- **authz-header-spoofing**: Security test that verifies client-supplied identity headers are stripped and cannot override JWT-derived identity.
 
-**Rate limiting (`ratelimit-limitor`)** is intentionally **not** part of this profile: that test requires `x-authz-user-id` / `x-authz-user-groups` to reach the router from the HTTP client, which conflicts with the Lua filter that strips client-supplied identity headers (Issue #1447). Run `ratelimit-limitor` from a profile without that strip, or drive identity via JWT placed **after** the strip in the filter chain.
+**Rate limiting (`ratelimit-limitor`)** is intentionally **not** part of this profile: that test still requires raw `x-authz-user-id` / `x-authz-user-groups` headers from the HTTP client, which conflicts with the Lua filter that strips client-supplied identity headers in favor of JWT-derived `x-jwt-*` headers. Run `ratelimit-limitor` from a profile without that strip, or update the testcase to send JWTs.
 
 To run the security test:
 

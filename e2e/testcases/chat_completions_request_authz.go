@@ -8,13 +8,12 @@ import (
 )
 
 var authzChatRequestHeaders = map[string]string{
-	"x-authz-user-id":     "e2e-authz-free-user",
-	"x-authz-user-groups": "free-tier",
+	"Authorization": "Bearer " + authzJWTChatToken,
 }
 
 func init() {
 	pkgtestcases.Register("chat-completions-request-authz", pkgtestcases.TestCase{
-		Description: "Send a chat completions request with authz identity headers and verify 200 OK response",
+		Description: "Send a chat completions request with a valid authz JWT and verify 200 OK response",
 		Tags:        []string{"llm", "functional", "authz"},
 		Fn:          testChatCompletionsRequestAuthz,
 	})

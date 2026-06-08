@@ -12,11 +12,11 @@
 # Architecture:
 #   Client -> Envoy -> ext_proc (semantic router) -> vLLM endpoints
 #
-# Identity headers (x-authz-user-id, x-authz-user-groups) must come from
+# JWT-derived identity headers (x-jwt-sub, x-jwt-groups) must come from
 # validated auth backends (JWT, Authorino, etc.), not from client requests.
 # SECURITY: The Envoy configuration strips any client-supplied identity headers
-# to prevent spoofing attacks. For e2e tests, use JWT tokens in the Authorization
-# header; Envoy validates the JWT and extracts claims into identity headers.
+# before jwt_authn runs, then injects validated JWT claims into x-jwt-* headers.
+# For e2e tests, send JWT tokens in the Authorization header.
 #
 # Test Users:
 #   alice / platform-admins  → admin
@@ -192,8 +192,8 @@ config:
       authz:
         fail_open: true
         identity:
-          user_id_header: x-authz-user-id
-          user_groups_header: x-authz-user-groups
+          user_id_header: x-jwt-sub
+          user_groups_header: x-jwt-groups
       ratelimit:
         fail_open: false
         providers:

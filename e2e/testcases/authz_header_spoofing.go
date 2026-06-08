@@ -16,11 +16,20 @@ import (
 
 func init() {
 	pkgtestcases.Register("authz-header-spoofing", pkgtestcases.TestCase{
-		Description: "Test that client-supplied identity headers are stripped and cannot be used for unauthorized access",
+		Description: "Test that client-supplied JWT-derived identity headers are stripped and cannot override validated JWT claims",
 		Tags:        []string{"authz-rbac", "security", "authz"},
 		Fn:          testAuthzHeaderSpoofing,
 	})
 }
+
+const (
+	authzJWTAdminToken    = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCIsImtpZCI6ImF1dGh6LXJiYWMtZTJlIn0.eyJpc3MiOiJzZW1hbnRpYy1yb3V0ZXItZTJlIiwiYXVkIjoic2VtYW50aWMtcm91dGVyIiwiZXhwIjo0MTAyNDQ0ODAwLCJzdWIiOiJhbGljZSIsImdyb3VwcyI6WyJwbGF0Zm9ybS1hZG1pbnMiXX0.sH2fDyG6a4xBT_ZCIFiz5rt_moAJA0MP2oIioUeBWo4"
+	authzJWTPremiumToken  = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCIsImtpZCI6ImF1dGh6LXJiYWMtZTJlIn0.eyJpc3MiOiJzZW1hbnRpYy1yb3V0ZXItZTJlIiwiYXVkIjoic2VtYW50aWMtcm91dGVyIiwiZXhwIjo0MTAyNDQ0ODAwLCJzdWIiOiJib2IiLCJncm91cHMiOlsicHJlbWl1bS10aWVyIl19.899EGXc0PK9zNfbKW4Esf8irr1zV2gOWQ6BAwqthqz4"
+	authzJWTFreeToken     = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCIsImtpZCI6ImF1dGh6LXJiYWMtZTJlIn0.eyJpc3MiOiJzZW1hbnRpYy1yb3V0ZXItZTJlIiwiYXVkIjoic2VtYW50aWMtcm91dGVyIiwiZXhwIjo0MTAyNDQ0ODAwLCJzdWIiOiJjYXJvbCIsImdyb3VwcyI6WyJmcmVlLXRpZXIiXX0.pr0d9VRO1YaqmPvbNzINDssobi6Oiwm7M0yML-WWbUo"
+	authzJWTChatToken     = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCIsImtpZCI6ImF1dGh6LXJiYWMtZTJlIn0.eyJpc3MiOiJzZW1hbnRpYy1yb3V0ZXItZTJlIiwiYXVkIjoic2VtYW50aWMtcm91dGVyIiwiZXhwIjo0MTAyNDQ0ODAwLCJzdWIiOiJlMmUtYXV0aHotZnJlZS11c2VyIiwiZ3JvdXBzIjpbImZyZWUtdGllciJdfQ.y4M5ph86xrChM9ll8WiFEG1s0KAh7cgzEK5H0ZOX1XI"
+	authzUserIDHeader     = "x-jwt-sub"
+	authzUserGroupsHeader = "x-jwt-groups"
+)
 
 // AuthzSpoofingTestCase represents a test case for identity header spoofing
 type AuthzSpoofingTestCase struct {
@@ -62,15 +71,15 @@ func testAuthzHeaderSpoofing(ctx context.Context, client *kubernetes.Clientset, 
 	// Define test cases
 	testCases := []AuthzSpoofingTestCase{
 		{
-			Description:     "Client sends x-authz-user-id header directly - should be stripped and route to default model",
-			UserID:          "admin",
+			Description:     "Client sends x-jwt-sub header directly - should be stripped and route to default model",
+			UserID:          "alice",
 			UserGroups:      "platform-admins",
 			ExpectedModel:   "Qwen/Qwen2.5-7B-Instruct", // Should route to default, not admin model
 			ExpectedBlocked: false,
 			ShouldUseJWT:    false,
 		},
 		{
-			Description:     "Client sends x-authz-user-groups header directly - should be stripped",
+			Description:     "Client sends x-jwt-groups header directly - should be stripped",
 			UserID:          "",
 			UserGroups:      "premium-tier",
 			ExpectedModel:   "Qwen/Qwen2.5-7B-Instruct", // Should route to default
@@ -78,12 +87,21 @@ func testAuthzHeaderSpoofing(ctx context.Context, client *kubernetes.Clientset, 
 			ShouldUseJWT:    false,
 		},
 		{
-			Description:     "Client sends both identity headers directly - should be stripped",
-			UserID:          "premium-user",
+			Description:     "Client sends both x-jwt-* headers directly - should be stripped",
+			UserID:          "bob",
 			UserGroups:      "premium-tier",
 			ExpectedModel:   "Qwen/Qwen2.5-7B-Instruct", // Should route to default
 			ExpectedBlocked: false,
 			ShouldUseJWT:    false,
+		},
+		{
+			Description:     "Valid free-tier JWT with spoofed admin x-jwt-* headers - JWT claims should win",
+			UserID:          "alice",
+			UserGroups:      "platform-admins",
+			ExpectedModel:   "Qwen/Qwen2.5-7B-Instruct",
+			ExpectedBlocked: false,
+			ShouldUseJWT:    true,
+			JWTToken:        authzJWTFreeToken,
 		},
 		{
 			Description:     "Request without identity headers - should route to default model",
@@ -203,10 +221,10 @@ func createAuthzSpoofingRequest(ctx context.Context, testCase AuthzSpoofingTestC
 	req.Header.Set("Content-Type", "application/json")
 
 	if testCase.UserID != "" {
-		req.Header.Set("x-authz-user-id", testCase.UserID)
+		req.Header.Set(authzUserIDHeader, testCase.UserID)
 	}
 	if testCase.UserGroups != "" {
-		req.Header.Set("x-authz-user-groups", testCase.UserGroups)
+		req.Header.Set(authzUserGroupsHeader, testCase.UserGroups)
 	}
 	if testCase.ShouldUseJWT && testCase.JWTToken != "" {
 		req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", testCase.JWTToken))

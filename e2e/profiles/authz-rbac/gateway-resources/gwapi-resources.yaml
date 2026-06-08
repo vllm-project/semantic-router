@@ -95,10 +95,10 @@ spec:
       request: 60s
       backendRequest: 60s
 ---
-# EnvoyPatchPolicy to add ExtProc filter for semantic-router
-# Also strips client-supplied identity headers before JWT/auth processing
-# SECURITY: Identity headers (x-authz-user-id, x-authz-user-groups) must only come
-# from validated auth backends (JWT, Authorino, etc.), not from client requests.
+# EnvoyPatchPolicy to add JWT authn + ExtProc filters for semantic-router.
+# Also strips any client-supplied identity headers before jwt_authn runs.
+# SECURITY: The router trusts x-jwt-sub and x-jwt-groups only after Envoy
+# validates the bearer token and copies claims into those headers.
 apiVersion: gateway.envoyproxy.io/v1alpha1
 kind: EnvoyPatchPolicy
 metadata:
@@ -106,8 +106,8 @@ metadata:
   namespace: default
 spec:
   jsonPatches:
-  # Add header removal filter BEFORE ext_proc to strip client-supplied identity headers
-  # This prevents header spoofing attacks - identity headers should only come from validated JWT
+  # Add header removal filter BEFORE jwt_authn/ext_proc to strip client-supplied identity headers.
+  # This prevents spoofing of both legacy x-authz-* headers and the active x-jwt-* headers.
   - name: default/semantic-router/http
     operation:
       op: add
@@ -118,17 +118,52 @@ spec:
           '@type': type.googleapis.com/envoy.extensions.filters.http.lua.v3.Lua
           inlineCode: |
             function envoy_on_request(request_handle)
-              -- Remove client-supplied identity headers to prevent spoofing
-              -- These headers should only be set by validated auth backends (JWT, Authorino, etc.)
+              -- Remove client-supplied identity headers to prevent spoofing.
+              -- jwt_authn repopulates x-jwt-* from verified bearer-token claims.
               request_handle:headers():remove("x-authz-user-id")
               request_handle:headers():remove("x-authz-user-groups")
+              request_handle:headers():remove("x-jwt-sub")
+              request_handle:headers():remove("x-jwt-groups")
             end
     type: type.googleapis.com/envoy.config.listener.v3.Listener
-  # Add ExtProc filter for semantic-router
+  # Add JWT authn filter so authz routing uses verified bearer-token claims.
   - name: default/semantic-router/http
     operation:
       op: add
       path: /default_filter_chain/filters/0/typed_config/http_filters/1
+      value:
+        name: envoy.filters.http.jwt_authn
+        typedConfig:
+          '@type': type.googleapis.com/envoy.extensions.filters.http.jwt_authn.v3.JwtAuthentication
+          providers:
+            authz_rbac:
+              issuer: semantic-router-e2e
+              audiences:
+              - semantic-router
+              localJwks:
+                inlineString: '{"keys":[{"kty":"oct","k":"c2VtYW50aWMtcm91dGVyLWF1dGh6LXJiYWMtaHMyNTYtc2VjcmV0","alg":"HS256","kid":"authz-rbac-e2e"}]}'
+              fromHeaders:
+              - name: Authorization
+                valuePrefix: "Bearer "
+              claimToHeaders:
+              - headerName: x-jwt-sub
+                claimName: sub
+              - headerName: x-jwt-groups
+                claimName: groups
+          rules:
+          - match:
+              prefix: /
+            requires:
+              requiresAny:
+                requirements:
+                - providerName: authz_rbac
+                - allowMissing: {}
+    type: type.googleapis.com/envoy.config.listener.v3.Listener
+  # Add ExtProc filter for semantic-router after jwt_authn populates x-jwt-* headers.
+  - name: default/semantic-router/http
+    operation:
+      op: add
+      path: /default_filter_chain/filters/0/typed_config/http_filters/2
       value:
         name: semantic-router-extproc
         typedConfig:

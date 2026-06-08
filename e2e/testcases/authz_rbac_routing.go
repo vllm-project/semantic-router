@@ -23,6 +23,7 @@ type authzRoutingCase struct {
 	name         string
 	userID       string
 	groups       string
+	token        string
 	prompt       string
 	wantDecision string // expected x-vsr-selected-decision; empty = any 200 OK is sufficient
 }
@@ -46,6 +47,7 @@ func testAuthzRBACRouting(ctx context.Context, client *kubernetes.Clientset, opt
 			name:         "admin_unrestricted",
 			userID:       "alice",
 			groups:       "platform-admins",
+			token:        authzJWTAdminToken,
 			prompt:       "Explain quantum entanglement",
 			wantDecision: "admin_unrestricted",
 		},
@@ -54,6 +56,7 @@ func testAuthzRBACRouting(ctx context.Context, client *kubernetes.Clientset, opt
 			name:         "premium_complex",
 			userID:       "bob",
 			groups:       "premium-tier",
+			token:        authzJWTPremiumToken,
 			prompt:       "Please analyze and compare the trade-offs between microservices and monolithic architecture",
 			wantDecision: "premium_complex",
 		},
@@ -62,6 +65,7 @@ func testAuthzRBACRouting(ctx context.Context, client *kubernetes.Clientset, opt
 			name:         "premium_code",
 			userID:       "bob",
 			groups:       "premium-tier",
+			token:        authzJWTPremiumToken,
 			prompt:       "Can you implement a binary search function and debug the edge cases?",
 			wantDecision: "premium_code",
 		},
@@ -70,6 +74,7 @@ func testAuthzRBACRouting(ctx context.Context, client *kubernetes.Clientset, opt
 			name:         "premium_default",
 			userID:       "bob",
 			groups:       "premium-tier",
+			token:        authzJWTPremiumToken,
 			prompt:       "Hello, what time is it?",
 			wantDecision: "premium_default",
 		},
@@ -78,6 +83,7 @@ func testAuthzRBACRouting(ctx context.Context, client *kubernetes.Clientset, opt
 			name:         "free_default",
 			userID:       "carol",
 			groups:       "free-tier",
+			token:        authzJWTFreeToken,
 			prompt:       "Hello, how are you today?",
 			wantDecision: "free_default",
 		},
@@ -121,11 +127,8 @@ func testAuthzRBACRouting(ctx context.Context, client *kubernetes.Clientset, opt
 
 func checkAuthzRoutingCase(ctx context.Context, chatClient *fixtures.ChatCompletionsClient, tc authzRoutingCase, verbose bool) error {
 	headers := map[string]string{}
-	if tc.userID != "" {
-		headers["x-authz-user-id"] = tc.userID
-	}
-	if tc.groups != "" {
-		headers["x-authz-user-groups"] = tc.groups
+	if tc.token != "" {
+		headers["Authorization"] = "Bearer " + tc.token
 	}
 
 	resp, err := chatClient.Create(ctx, fixtures.ChatCompletionsRequest{
@@ -147,7 +150,7 @@ func checkAuthzRoutingCase(ctx context.Context, chatClient *fixtures.ChatComplet
 	gotDecision := resp.Headers.Get("x-vsr-selected-decision")
 	if gotDecision != tc.wantDecision {
 		if verbose {
-			fmt.Printf("[AuthzRBAC]   user=%q groups=%q: decision=%q, want=%q\n",
+			fmt.Printf("[AuthzRBAC]   jwt sub=%q groups=%q: decision=%q, want=%q\n",
 				tc.userID, tc.groups, gotDecision, tc.wantDecision)
 		}
 		return fmt.Errorf("x-vsr-selected-decision: got %q, want %q", gotDecision, tc.wantDecision)

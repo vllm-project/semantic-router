@@ -68,10 +68,10 @@ const (
 // Profile implements the authz-rbac test profile.
 // It demonstrates user-level RBAC model routing where different users
 // (admin, premium, free) are routed to different models (14B vs 7B)
-// based on identity headers extracted from validated JWT tokens.
-// SECURITY: Identity headers (x-authz-user-id, x-authz-user-groups) must only
-// come from validated auth backends (JWT, Authorino, etc.), not from client requests.
-// The Envoy configuration strips any client-supplied identity headers before processing.
+// based on JWT claims copied into x-jwt-sub/x-jwt-groups after validation.
+// SECURITY: Those headers must only come from validated auth backends (JWT, Authorino, etc.),
+// not from client requests. The Envoy configuration strips any client-supplied identity
+// headers before jwt_authn/ext_proc processing.
 type Profile struct {
 	verbose bool
 }
@@ -88,7 +88,7 @@ func (p *Profile) Name() string {
 
 // Description returns the profile description
 func (p *Profile) Description() string {
-	return "Tests RBAC-based model routing with JWT-validated user identity headers (admin→14B, premium→14B/7B, free→7B)"
+	return "Tests RBAC-based model routing with JWT-validated x-jwt-* identity headers (admin→14B, premium→14B/7B, free→7B)"
 }
 
 // Setup deploys all required components for authz-rbac testing
@@ -176,16 +176,15 @@ func (p *Profile) GetTestCases() []string {
 	return []string{
 		// Standard functional test — validates end-to-end routing
 		"chat-completions-request",
-		// Authz-specific functional test (200 OK; identity headers are stripped by Envoy Lua before ext_proc)
+		// Authz-specific functional test using a validated JWT; jwt_authn copies claims into x-jwt-* headers.
 		"chat-completions-request-authz",
-		// Functional RBAC routing test using the profile's configured authz identity headers
+		// Functional RBAC routing test using validated JWT claims instead of client-supplied identity headers.
 		"authz-rbac-routing",
-		// Security test — validates that client-supplied identity headers are stripped
+		// Security test — validates that client-supplied identity headers are stripped before jwt_authn runs.
 		"authz-header-spoofing",
-		// NOTE: ratelimit-limitor is NOT run here because it requires x-authz-* headers from the
-		// client to reach the router, but EnvoyPatchPolicy Lua strips those headers before ext_proc
-		// (same as production anti-spoofing). Run it from a profile without header stripping, or
-		// after a JWT validation stage that re-injects identity headers post-strip.
+		// NOTE: ratelimit-limitor is NOT run here because it still sends raw x-authz-* headers from the
+		// client, while this profile now strips client-supplied identity headers and relies on JWT-derived
+		// x-jwt-* headers. Run it from a profile without header stripping, or after the testcase supports JWTs.
 	}
 }
 
