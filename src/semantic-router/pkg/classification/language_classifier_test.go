@@ -43,18 +43,28 @@ func findThresholdSensitiveLanguageSample(t *testing.T, classifier *LanguageClas
 		"Bonjour, comment allez-vous? Je m'appelle Marie et j'habite à Paris. Pouvez-vous me dire où se trouve la gare la plus proche ?",
 	}
 
+	var (
+		bestSample string
+		bestResult *LanguageResult
+	)
 	for _, sample := range samples {
 		result, err := classifier.Classify(sample)
 		if err != nil {
 			t.Fatalf("classification failed: %v", err)
 		}
-		if result.LanguageCode != "en" && result.Confidence > defaultLanguageThreshold+0.05 {
-			return sample, result
+		if result.LanguageCode == "en" || result.Confidence <= defaultLanguageThreshold {
+			continue
+		}
+		if bestResult == nil || result.Confidence > bestResult.Confidence {
+			bestSample = sample
+			bestResult = result
 		}
 	}
 
-	t.Fatal("failed to find a threshold-sensitive language sample")
-	return "", nil
+	if bestResult == nil {
+		t.Fatal("failed to find a threshold-sensitive language sample")
+	}
+	return bestSample, bestResult
 }
 
 func TestLanguageClassifier_DetectsCommonLanguages(t *testing.T) {
@@ -169,7 +179,7 @@ func TestLanguageClassifier_CustomThreshold(t *testing.T) {
 		t.Fatalf("expected explicit default threshold confidence %f, got %f", defaultResult.Confidence, explicitDefaultResult.Confidence)
 	}
 
-	customThreshold := float32(defaultResult.Confidence - 0.02)
+	customThreshold := float32((defaultLanguageThreshold + defaultResult.Confidence) / 2)
 	customResult, err := classifier.ClassifyWithThreshold(sample, customThreshold)
 	if err != nil {
 		t.Fatalf("classification with custom threshold failed: %v", err)
@@ -186,7 +196,7 @@ func TestLanguageClassifier_ThresholdEnforcement(t *testing.T) {
 	classifier := newLanguageClassifierForTest(t)
 	sample, baseResult := findThresholdSensitiveLanguageSample(t, classifier)
 
-	strictThreshold := float32(baseResult.Confidence + 0.01)
+	strictThreshold := float32(baseResult.Confidence) + 0.01
 	result, err := classifier.ClassifyWithThreshold(sample, strictThreshold)
 	if err != nil {
 		t.Fatalf("classification with strict threshold failed: %v", err)
