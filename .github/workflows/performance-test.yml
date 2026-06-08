@@ -73,6 +73,8 @@ jobs:
         run: make rust-ci
 
       - name: Install HuggingFace CLI
+        env:
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}
         run: |
           pip install -U "huggingface_hub[cli]" hf_transfer
 
