@@ -17,6 +17,8 @@ func (c *Classifier) evaluateLanguageSignal(results *SignalResults, mu *sync.Mut
 	// the built-in default. This preserves backward compatibility: when no rule
 	// sets a threshold the behaviour is identical to the previous Classify() call.
 	threshold := lowestLanguageThreshold(c.Config.LanguageRules)
+	logging.Infof("[Signal Computation] Language signal evaluation starting: text_len=%d rules=%d shared_threshold=%.2f",
+		len(text), len(c.Config.LanguageRules), threshold)
 	languageResult, err := c.languageClassifier.ClassifyWithThreshold(text, threshold)
 	elapsed := time.Since(start)
 	latencySeconds := elapsed.Seconds()
@@ -70,18 +72,24 @@ func (c *Classifier) evaluateLanguageSignal(results *SignalResults, mu *sync.Mut
 // and default-threshold rules.
 func lowestLanguageThreshold(rules []config.LanguageRule) float32 {
 	if len(rules) == 0 {
+		logging.Infof("[Signal Computation] Language threshold evaluation saw no rules; classifier default threshold handling will apply")
 		return 0
 	}
 
 	var min float32
 	for _, r := range rules {
-		threshold := r.Threshold
-		if threshold <= 0 {
-			threshold = float32(defaultLanguageThreshold)
+		rawThreshold := r.Threshold
+		effectiveThreshold := rawThreshold
+		if effectiveThreshold <= 0 {
+			effectiveThreshold = float32(defaultLanguageThreshold)
 		}
-		if min == 0 || threshold < min {
-			min = threshold
+		logging.Infof("[Signal Computation] Language threshold candidate: rule=%q raw_threshold=%.2f effective_threshold=%.2f",
+			r.Name, rawThreshold, effectiveThreshold)
+		if min == 0 || effectiveThreshold < min {
+			min = effectiveThreshold
 		}
 	}
+
+	logging.Infof("[Signal Computation] Language threshold evaluation selected effective minimum %.2f across %d rules", min, len(rules))
 	return min
 }
