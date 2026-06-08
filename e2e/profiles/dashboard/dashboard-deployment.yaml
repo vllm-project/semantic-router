@@ -92,7 +92,13 @@ spec:
             - name: router-config
               mountPath: /app/config
               readOnly: true
+            - name: dashboard-tmp
+              mountPath: /tmp/vllm-sr-dashboard
+      securityContext:
+        fsGroup: 65532
       volumes:
         - name: router-config
           configMap:
             name: semantic-router-config
+        - name: dashboard-tmp
+          emptyDir: {}
