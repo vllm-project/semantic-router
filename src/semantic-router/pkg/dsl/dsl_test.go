@@ -433,6 +433,24 @@ ROUTE math_route {
 	}
 }
 
+func TestCompileLanguageSignalThreshold(t *testing.T) {
+	input := `SIGNAL language myLang { description: "Test language" threshold: 0.6 }`
+	cfg, errs := Compile(input)
+	if len(errs) > 0 {
+		t.Fatalf("compile errors: %v", errs)
+	}
+	if len(cfg.LanguageRules) != 1 {
+		t.Fatalf("expected 1 language rule, got %d", len(cfg.LanguageRules))
+	}
+	lr := cfg.LanguageRules[0]
+	if lr.Name != "myLang" {
+		t.Errorf("language name = %q, want %q", lr.Name, "myLang")
+	}
+	if lr.Threshold != 0.6 {
+		t.Errorf("language threshold = %v, want 0.6", lr.Threshold)
+	}
+}
+
 func TestCompilePluginTemplate(t *testing.T) {
 	input := `PLUGIN my_hallu hallucination {
   enabled: true
@@ -3537,6 +3555,37 @@ ROUTE test_route { PRIORITY 1 WHEN domain("dom") MODEL "m:1b" }
 		if !strings.Contains(dslText, want) {
 			t.Errorf("decompiled DSL missing %q:\n%s", want, dslText)
 		}
+	}
+}
+
+func TestLanguageSignalThresholdRoundTrip(t *testing.T) {
+	input := `SIGNAL language lang { description: "English" threshold: 0.6 }`
+	cfg, errs := Compile(input)
+	if len(errs) > 0 {
+		t.Fatalf("compile errors: %v", errs)
+	}
+	if len(cfg.LanguageRules) != 1 {
+		t.Fatalf("expected 1 language rule, got %d", len(cfg.LanguageRules))
+	}
+	expected := float32(0.6)
+	if cfg.LanguageRules[0].Threshold != expected {
+		t.Fatalf("unexpected language threshold: %v", cfg.LanguageRules[0].Threshold)
+	}
+
+	dslText, err := Decompile(cfg)
+	if err != nil {
+		t.Fatalf("decompile error: %v", err)
+	}
+
+	cfg2, errs := Compile(dslText)
+	if len(errs) > 0 {
+		t.Fatalf("recompile errors: %v\nDSL:\n%s", errs, dslText)
+	}
+	if len(cfg2.LanguageRules) != 1 {
+		t.Fatalf("expected 1 language rule after roundtrip, got %d", len(cfg2.LanguageRules))
+	}
+	if cfg2.LanguageRules[0].Threshold != expected {
+		t.Fatalf("roundtripped language threshold mismatch: %v", cfg2.LanguageRules[0].Threshold)
 	}
 }
 
