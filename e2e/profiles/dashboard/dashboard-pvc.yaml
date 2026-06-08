@@ -8,6 +8,7 @@ metadata:
     app.kubernetes.io/component: e2e-data
     vllm.ai/e2e-managed: "true"
 spec:
+  storageClassName: standard
   accessModes:
     - ReadWriteOnce
   resources:
