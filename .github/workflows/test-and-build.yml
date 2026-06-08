@@ -212,7 +212,9 @@ jobs:
           make start-valkey
 
       - name: Run semantic router tests
-        run: make test
+        run: |
+          set -x
+          make test
         env:
           CI: true
           CI_MINIMAL_MODELS: ${{ github.event_name == 'pull_request' }}
