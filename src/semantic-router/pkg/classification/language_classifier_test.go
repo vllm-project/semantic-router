@@ -129,3 +129,63 @@ func TestLanguageClassifier_HandlesMixedAndSpecialInputs(t *testing.T) {
 		})
 	}
 }
+
+func TestLanguageClassifier_RespectPerRuleThreshold(t *testing.T) {
+	classifier := newLanguageClassifierForTest(t)
+
+	// Use a reasonably long Spanish text to get a decent confidence score.
+	text := "Hola, ¿cómo estás? Me llamo Juan y vivo en Madrid. ¿De dónde eres tú? Esta es una pregunta en español sobre mi ubicación."
+
+	// Very high threshold should force a fallback to English (confidence 0.5).
+	high, err := classifier.ClassifyWithThreshold(text, 0.99)
+	if err != nil {
+		t.Fatalf("classification failed: %v", err)
+	}
+	if high.LanguageCode != "en" || high.Confidence != 0.5 {
+		t.Fatalf("expected fallback to english with confidence 0.5 for high threshold, got: %v", high)
+	}
+
+	// Low threshold should allow a real language detection (not the fallback).
+	low, err := classifier.ClassifyWithThreshold(text, 0.1)
+	if err != nil {
+		t.Fatalf("classification failed: %v", err)
+	}
+	if low.LanguageCode == "en" && low.Confidence == 0.5 {
+		t.Fatalf("expected non-fallback result for low threshold, got fallback: %v", low)
+	}
+}
+
+func TestLanguageClassifier_DefaultThresholdWhenUnset(t *testing.T) {
+	classifier := newLanguageClassifierForTest(t)
+
+	text := "Bonjour, comment allez-vous?"
+
+	// threshold == 0 should use defaultLanguageThreshold internally and thus
+	// behave the same as Classify().
+	withZero, err := classifier.ClassifyWithThreshold(text, 0)
+	if err != nil {
+		t.Fatalf("classification failed: %v", err)
+	}
+	without, err := classifier.Classify(text)
+	if err != nil {
+		t.Fatalf("classification failed: %v", err)
+	}
+	if withZero.LanguageCode != without.LanguageCode || withZero.Confidence != without.Confidence {
+		t.Fatalf("expected ClassifyWithThreshold(...,0) to match Classify(): got %v vs %v", withZero, without)
+	}
+}
+
+func TestLanguageClassifier_CustomThresholdRejects(t *testing.T) {
+	classifier := newLanguageClassifierForTest(t)
+
+	// Very short text which may have low confidence; a very high threshold should reject it.
+	text := "Hi"
+
+	res, err := classifier.ClassifyWithThreshold(text, 0.9)
+	if err != nil {
+		t.Fatalf("classification failed: %v", err)
+	}
+	if res.LanguageCode != "en" || res.Confidence != 0.5 {
+		t.Fatalf("expected fallback to english with confidence 0.5 for high threshold on short text, got: %v", res)
+	}
+}
