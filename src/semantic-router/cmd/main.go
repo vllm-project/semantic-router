@@ -32,6 +32,28 @@ func main() {
 		"namespace":     opts.namespace,
 		"cert_path_set": opts.certPath != "",
 	})
+
+	// Diagnostic: record select environment variables to aid CI debugging. This is observability-only.
+	envKeys := []string{
+		"KUBECONFIG",
+		"EMBEDDING_BACKEND_OVERRIDE",
+		"OMP_NUM_THREADS",
+		"MKL_NUM_THREADS",
+		"OPENBLAS_NUM_THREADS",
+		"RAYON_NUM_THREADS",
+		"TOKENIZERS_PARALLELISM",
+		"GOMAXPROCS",
+		"HTTP_PROXY",
+		"HTTPS_PROXY",
+		"NO_PROXY",
+	}
+	envSnapshot := map[string]interface{}{"env_count": len(os.Environ())}
+	for _, k := range envKeys {
+		v, ok := os.LookupEnv(k)
+		envSnapshot[k] = map[string]interface{}{"set": ok, "value": v}
+	}
+	logging.ComponentDebugEvent("router", "env_snapshot", envSnapshot)
+
 	applyBackendRuntimeTuningDefaults()
 
 	cfg := loadRuntimeConfigOrFatal(opts.configPath)
