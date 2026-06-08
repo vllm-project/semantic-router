@@ -66,6 +66,7 @@ make agent-ci-gate CHANGED_FILES="..."
 
 - [governance.md](governance.md)
 - [architecture-guardrails.md](architecture-guardrails.md)
+- [openai-api-contracts.md](openai-api-contracts.md)
 - [glossary.md](glossary.md)
 - [amd-local.md](amd-local.md)
 
