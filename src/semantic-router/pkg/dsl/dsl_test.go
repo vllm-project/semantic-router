@@ -597,7 +597,7 @@ SIGNAL fact_check fc { description: "fact check" }
 SIGNAL user_feedback uf { description: "feedback" }
 SIGNAL reask ra { description: "repeat question" threshold: 0.8 lookback_turns: 2 }
 SIGNAL preference pref { description: "preference" threshold: 0.7 examples: ["keep it concise", "bullet points only"] }
-SIGNAL language lang { description: "English" }
+SIGNAL language lang { description: "English" threshold: 0.6 }
 SIGNAL context ctx { min_tokens: "1K" max_tokens: "32K" }
 SIGNAL complexity comp { threshold: 0.1 hard: { candidates: ["hard task"] } easy: { candidates: ["easy task"] } }
 SIGNAL modality mod { description: "image" }
@@ -640,6 +640,9 @@ SIGNAL authz auth { role: "admin" subjects: [{ kind: "User", name: "admin" }] }
 	}
 	if len(cfg.LanguageRules) != 1 {
 		t.Errorf("expected 1 language rule, got %d", len(cfg.LanguageRules))
+	}
+	if cfg.LanguageRules[0].Threshold != 0.6 {
+		t.Errorf("unexpected language threshold: %v", cfg.LanguageRules[0].Threshold)
 	}
 	if len(cfg.ContextRules) != 1 {
 		t.Errorf("expected 1 context rule, got %d", len(cfg.ContextRules))
@@ -2507,7 +2510,7 @@ SIGNAL fact_check fc { description: "fact check" }
 SIGNAL user_feedback uf { description: "feedback" }
 SIGNAL reask ra { description: "repeat question" threshold: 0.8 lookback_turns: 2 }
 SIGNAL preference pref { description: "preference" threshold: 0.7 examples: ["keep it concise", "bullet points only"] }
-SIGNAL language lang { description: "English" }
+SIGNAL language lang { description: "English" threshold: 0.6 }
 SIGNAL context ctx { min_tokens: "1K" max_tokens: "32K" }
 SIGNAL complexity comp { threshold: 0.1 hard: { candidates: ["hard"] } easy: { candidates: ["easy"] } }
 SIGNAL modality mod { description: "image" }
@@ -2561,6 +2564,9 @@ ROUTE test_route {
 	if len(rt.LanguageRules) != 1 {
 		t.Errorf("language rules: %d", len(rt.LanguageRules))
 	}
+	if rt.LanguageRules[0].Threshold != 0.6 {
+		t.Errorf("unexpected language threshold round-trip: %v", rt.LanguageRules[0].Threshold)
+	}
 	if len(rt.ContextRules) != 1 {
 		t.Errorf("context rules: %d", len(rt.ContextRules))
 	}
@@ -2576,6 +2582,46 @@ ROUTE test_route {
 }
 
 // ---------- P2-5: Multiple Routes Same Priority ----------
+
+func TestLanguageSignalThresholdRoundTrip(t *testing.T) {
+	input := `
+SIGNAL language lang { description: "English" threshold: 0.6 }
+`
+	cfg, errs := Compile(input)
+	if len(errs) > 0 {
+		t.Fatalf("compile errors: %v", errs)
+	}
+	if len(cfg.LanguageRules) != 1 {
+		t.Fatalf("expected 1 language rule, got %d", len(cfg.LanguageRules))
+	}
+	if cfg.LanguageRules[0].Threshold != 0.6 {
+		t.Fatalf("expected language threshold 0.6, got %v", cfg.LanguageRules[0].Threshold)
+	}
+
+	yamlBytes, err := EmitYAMLFromConfig(cfg)
+	if err != nil {
+		t.Fatalf("emit YAML error: %v", err)
+	}
+
+	var rt config.RouterConfig
+	if err := yaml.Unmarshal(yamlBytes, &rt); err != nil {
+		t.Fatalf("unmarshal YAML error: %v\nYAML:\n%s", err, string(yamlBytes))
+	}
+	if len(rt.LanguageRules) != 1 {
+		t.Fatalf("expected 1 round-tripped language rule, got %d", len(rt.LanguageRules))
+	}
+	if rt.LanguageRules[0].Threshold != 0.6 {
+		t.Fatalf("expected round-tripped language threshold 0.6, got %v", rt.LanguageRules[0].Threshold)
+	}
+
+	dslText, err := Decompile(cfg)
+	if err != nil {
+		t.Fatalf("decompile error: %v", err)
+	}
+	if !strings.Contains(dslText, `threshold: 0.6`) {
+		t.Fatalf("decompiled DSL missing language threshold:\n%s", dslText)
+	}
+}
 
 func TestMultipleRoutesSamePriority(t *testing.T) {
 	input := `
@@ -3467,7 +3513,7 @@ SIGNAL fact_check fc { description: "fact check" }
 SIGNAL user_feedback uf { description: "feedback" }
 SIGNAL reask ra { description: "repeat question" threshold: 0.8 lookback_turns: 2 }
 SIGNAL preference pref { description: "preference" threshold: 0.7 examples: ["keep it concise", "bullet points only"] }
-SIGNAL language lang { description: "English" }
+SIGNAL language lang { description: "English" threshold: 0.6 }
 SIGNAL context ctx { min_tokens: "1K" max_tokens: "32K" }
 SIGNAL structure struct { feature: { type: "count", source: { type: "regex", pattern: "[?]" } } predicate: { gte: 1 } }
 SIGNAL conversation conv {
@@ -3519,6 +3565,9 @@ ROUTE test_route { PRIORITY 1 WHEN domain("dom") MODEL "m:1b" }
 	}
 	if !strings.Contains(dslText, `threshold: 0.7`) {
 		t.Error("decompiled DSL missing preference threshold")
+	}
+	if !strings.Contains(dslText, `threshold: 0.6`) {
+		t.Error("decompiled DSL missing language threshold")
 	}
 	if !strings.Contains(dslText, `examples: ["keep it concise", "bullet points only"]`) {
 		t.Error("decompiled DSL missing preference examples")
