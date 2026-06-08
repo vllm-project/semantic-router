@@ -104,6 +104,9 @@ func (d *decompiler) languageToSignal(lang *config.LanguageRule) *SignalDecl {
 	if lang.Description != "" {
 		fields["description"] = StringValue{V: lang.Description}
 	}
+	if lang.Threshold != 0 {
+		fields["threshold"] = FloatValue{V: float64(lang.Threshold)}
+	}
 	return &SignalDecl{SignalType: "language", Name: lang.Name, Fields: fields}
 }
 
