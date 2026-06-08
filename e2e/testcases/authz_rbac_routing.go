@@ -93,9 +93,11 @@ func testAuthzRBACRouting(ctx context.Context, client *kubernetes.Clientset, opt
 	}
 
 	passed := 0
+	var failures []string
 	for _, tc := range cases {
 		if err := checkAuthzRoutingCase(ctx, chatClient, tc, opts.Verbose); err != nil {
 			fmt.Printf("[AuthzRBAC] FAIL %s: %v\n", tc.name, err)
+			failures = append(failures, tc.name)
 			continue
 		}
 		if opts.Verbose {
@@ -111,8 +113,8 @@ func testAuthzRBACRouting(ctx context.Context, client *kubernetes.Clientset, opt
 		})
 	}
 
-	if passed == 0 {
-		return fmt.Errorf("authz-rbac-routing: 0/%d cases passed", len(cases))
+	if len(failures) > 0 {
+		return fmt.Errorf("authz-rbac-routing: %d/%d cases failed: %v", len(failures), len(cases), failures)
 	}
 	return nil
 }

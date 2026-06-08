@@ -130,16 +130,10 @@ func testAuthzHeaderSpoofing(ctx context.Context, client *kubernetes.Clientset, 
 			correctTests, totalTests, successRate)
 	}
 
-	// Return error if all tests failed
-	if correctTests == 0 {
-		return fmt.Errorf("authz header spoofing test failed: 0%% success rate (0/%d correct)", totalTests)
-	}
-
-	// Warn if success rate is low (but don't fail)
-	if successRate < 100 {
-		if opts.Verbose {
-			fmt.Printf("[Test] Warning: Some tests failed. Success rate: %.2f%%\n", successRate)
-		}
+	// Security tests must all pass — a partial pass means header stripping is broken for some cases.
+	if correctTests < totalTests {
+		return fmt.Errorf("authz header spoofing test failed: %d/%d cases passed (%.2f%% success rate) — identity headers not stripped for all requests",
+			correctTests, totalTests, successRate)
 	}
 
 	return nil

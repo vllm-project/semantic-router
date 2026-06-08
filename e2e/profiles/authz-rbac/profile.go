@@ -178,13 +178,14 @@ func (p *Profile) GetTestCases() []string {
 		"chat-completions-request",
 		// Authz-specific functional test (200 OK; identity headers are stripped by Envoy Lua before ext_proc)
 		"chat-completions-request-authz",
-		// RBAC routing test — validates role-based decision selection when authz identity headers are present
+		// Functional RBAC routing test using the profile's configured authz identity headers
 		"authz-rbac-routing",
 		// Security test — validates that client-supplied identity headers are stripped
 		"authz-header-spoofing",
-		// NOTE: ratelimit-limitor is NOT run here: it requires x-authz-* from the client to reach
-		// the router, but EnvoyPatchPolicy Lua strips those headers (same as production anti-spoofing).
-		// Run ratelimit-limitor from a profile without header stripping, or after JWT sets headers post-strip.
+		// NOTE: ratelimit-limitor is NOT run here because it requires x-authz-* headers from the
+		// client to reach the router, but EnvoyPatchPolicy Lua strips those headers before ext_proc
+		// (same as production anti-spoofing). Run it from a profile without header stripping, or
+		// after a JWT validation stage that re-injects identity headers post-strip.
 	}
 }
 
