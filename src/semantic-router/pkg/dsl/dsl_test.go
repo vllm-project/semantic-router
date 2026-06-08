@@ -597,7 +597,7 @@ SIGNAL fact_check fc { description: "fact check" }
 SIGNAL user_feedback uf { description: "feedback" }
 SIGNAL reask ra { description: "repeat question" threshold: 0.8 lookback_turns: 2 }
 SIGNAL preference pref { description: "preference" threshold: 0.7 examples: ["keep it concise", "bullet points only"] }
-SIGNAL language lang { description: "English" }
+SIGNAL language lang { description: "English" threshold: 0.5 }
 SIGNAL context ctx { min_tokens: "1K" max_tokens: "32K" }
 SIGNAL complexity comp { threshold: 0.1 hard: { candidates: ["hard task"] } easy: { candidates: ["easy task"] } }
 SIGNAL modality mod { description: "image" }
@@ -640,6 +640,9 @@ SIGNAL authz auth { role: "admin" subjects: [{ kind: "User", name: "admin" }] }
 	}
 	if len(cfg.LanguageRules) != 1 {
 		t.Errorf("expected 1 language rule, got %d", len(cfg.LanguageRules))
+	}
+	if cfg.LanguageRules[0].Threshold != 0.5 {
+		t.Errorf("unexpected language threshold: %v", cfg.LanguageRules[0].Threshold)
 	}
 	if len(cfg.ContextRules) != 1 {
 		t.Errorf("expected 1 context rule, got %d", len(cfg.ContextRules))
