@@ -33,9 +33,7 @@ const (
 	dashboardE2EDeploymentManifest = "e2e/profiles/dashboard/dashboard-deployment.yaml"
 	dashboardE2EPVCManifest        = "e2e/profiles/dashboard/dashboard-pvc.yaml"
 
-	dashboardE2EPVCName       = "semantic-router-dashboard-e2e-data"
-	dashboardE2EManagedLabel  = "vllm.ai/e2e-managed=true"
-	dashboardE2EPVCWaitPeriod = 2 * time.Minute
+	dashboardE2EManagedLabel = "vllm.ai/e2e-managed=true"
 
 	deploymentDashboard = "semantic-router-dashboard"
 	serviceDashboard    = "semantic-router-dashboard"
@@ -143,10 +141,6 @@ func (p *Profile) deployDashboard(ctx context.Context, opts *framework.SetupOpti
 		return fmt.Errorf("failed to apply dashboard PVC: %w", err)
 	}
 
-	if err := p.waitForDashboardPVC(ctx, opts.KubeConfig); err != nil {
-		return fmt.Errorf("dashboard PVC not ready (check storage class and PVC quotas): %w", err)
-	}
-
 	if err := p.kubectlApplyWithNamespace(ctx, opts.KubeConfig, namespaceRouter, dashboardE2EDeploymentManifest); err != nil {
 		return fmt.Errorf("failed to apply dashboard deployment: %w", err)
 	}
@@ -196,22 +190,6 @@ func (p *Profile) cleanupDashboard(ctx context.Context, opts *framework.Teardown
 	_ = p.kubectl(ctx, opts.KubeConfig, "delete", "pvc", "-l", dashboardE2EManagedLabel, "-n", namespaceRouter, "--ignore-not-found=true")
 	_ = p.kubectl(ctx, opts.KubeConfig, "delete", "-f", dashboardManifestDir+"/configmap.yaml", "-n", namespaceRouter, "--ignore-not-found=true")
 	return nil
-}
-
-func (p *Profile) waitForDashboardPVC(ctx context.Context, kubeConfig string) error {
-	p.log("Waiting for dashboard PVC %s to bind", dashboardE2EPVCName)
-	waitCtx, cancel := context.WithTimeout(ctx, dashboardE2EPVCWaitPeriod)
-	defer cancel()
-
-	return p.runKubectl(
-		waitCtx,
-		kubeConfig,
-		"wait",
-		"--for=jsonpath={.status.phase}=Bound",
-		"pvc/"+dashboardE2EPVCName,
-		"-n", namespaceRouter,
-		"--timeout="+dashboardE2EPVCWaitPeriod.String(),
-	)
 }
 
 // ---------------------------------------------------------------------------
