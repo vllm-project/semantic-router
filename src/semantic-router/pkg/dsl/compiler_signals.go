@@ -149,6 +149,9 @@ func (c *Compiler) compileLanguageSignal(s *SignalDecl) {
 	}
 	if v, ok := getFloat32Field(s.Fields, "threshold"); ok {
 		rule.Threshold = v
+		fmt.Printf("DSL compileLanguageSignal: name=%s threshold=%v\n", s.Name, v)
+	} else {
+		fmt.Printf("DSL compileLanguageSignal: name=%s threshold not set\n", s.Name)
 	}
 	c.config.LanguageRules = append(c.config.LanguageRules, rule)
 }

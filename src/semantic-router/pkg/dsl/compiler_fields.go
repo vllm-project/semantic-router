@@ -32,9 +32,15 @@ func getIntField(fields map[string]Value, key string) (int, bool) {
 func getFloat32Field(fields map[string]Value, key string) (float32, bool) {
 	if v, ok := fields[key]; ok {
 		if fv, ok := v.(FloatValue); ok {
+			if key == "threshold" {
+				fmt.Printf("getFloat32Field: key=%s value_type=FloatValue raw=%v\n", key, fv.V)
+			}
 			return float32(fv.V), true
 		}
 		if iv, ok := v.(IntValue); ok {
+			if key == "threshold" {
+				fmt.Printf("getFloat32Field: key=%s value_type=IntValue raw=%v\n", key, iv.V)
+			}
 			return float32(iv.V), true
 		}
 	}
