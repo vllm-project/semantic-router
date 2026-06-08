@@ -19,6 +19,19 @@ func main() {
 	logo.PrintVLLMLogo()
 	opts := parseRuntimeOptions()
 	initializeRuntimeLogger()
+	// Diagnostic: record parsed runtime options for CI debugging.
+	logging.ComponentDebugEvent("router", "runtime_options_parsed", map[string]interface{}{
+		"config_path":   opts.configPath,
+		"port":          opts.port,
+		"api_port":      opts.apiPort,
+		"metrics_port":  opts.metricsPort,
+		"enable_api":    opts.enableAPI,
+		"secure":        opts.secure,
+		"download_only": opts.downloadOnly,
+		"kubeconfig_set": opts.kubeconfig != "",
+		"namespace":     opts.namespace,
+		"cert_path_set": opts.certPath != "",
+	})
 	applyBackendRuntimeTuningDefaults()
 
 	cfg := loadRuntimeConfigOrFatal(opts.configPath)
