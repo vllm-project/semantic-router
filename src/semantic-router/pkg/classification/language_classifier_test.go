@@ -1,6 +1,7 @@
 package classification
 
 import (
+	"math"
 	"strings"
 	"testing"
 
@@ -127,5 +128,104 @@ func TestLanguageClassifier_HandlesMixedAndSpecialInputs(t *testing.T) {
 				t.Fatalf("expected confidence >= %f, got %f", tt.minScore, result.Confidence)
 			}
 		})
+	}
+}
+
+func TestClassifyWithThreshold_DefaultThreshold(t *testing.T) {
+	classifier := newLanguageClassifierForTest(t)
+	text := "Hello, how are you?"
+
+	result, err := classifier.ClassifyWithThreshold(text, 0)
+	if err != nil {
+		t.Fatalf("classification with implicit default threshold failed: %v", err)
+	}
+
+	expected, err := classifier.ClassifyWithThreshold(text, defaultLanguageThreshold)
+	if err != nil {
+		t.Fatalf("classification with explicit default threshold failed: %v", err)
+	}
+
+	if result.LanguageCode != expected.LanguageCode {
+		t.Fatalf("expected language %q, got %q", expected.LanguageCode, result.LanguageCode)
+	}
+	if math.Abs(result.Confidence-expected.Confidence) > 1e-9 {
+		t.Fatalf("expected confidence %f, got %f", expected.Confidence, result.Confidence)
+	}
+}
+
+func TestClassifyWithThreshold_HighThresholdFallsBackToEnglish(t *testing.T) {
+	classifier := newLanguageClassifierForTest(t)
+
+	result, err := classifier.ClassifyWithThreshold("Hello, bonjour, hola", 0.999)
+	if err != nil {
+		t.Fatalf("classification failed: %v", err)
+	}
+	if result.LanguageCode != "en" {
+		t.Fatalf("expected fallback language %q, got %q", "en", result.LanguageCode)
+	}
+	if result.Confidence != 0.5 {
+		t.Fatalf("expected fallback confidence %f, got %f", 0.5, result.Confidence)
+	}
+}
+
+func TestClassifyWithThreshold_LowThresholdAllowsDetection(t *testing.T) {
+	classifier := newLanguageClassifierForTest(t)
+
+	result, err := classifier.ClassifyWithThreshold("你好，世界，这是一个中文句子，用来测试语言检测。", 0.01)
+	if err != nil {
+		t.Fatalf("classification failed: %v", err)
+	}
+	if result.LanguageCode != "zh" {
+		t.Fatalf("expected language %q, got %q", "zh", result.LanguageCode)
+	}
+	if result.Confidence < 0.01 {
+		t.Fatalf("expected confidence >= %f, got %f", 0.01, result.Confidence)
+	}
+}
+
+func TestLowestLanguageThreshold_NoRules(t *testing.T) {
+	if got := lowestLanguageThreshold(nil); got != 0 {
+		t.Fatalf("expected threshold %f, got %f", 0.0, got)
+	}
+}
+
+func TestLowestLanguageThreshold_AllZeroThresholds(t *testing.T) {
+	rules := []config.LanguageRule{{Name: "en"}, {Name: "es", Threshold: 0}, {Name: "fr"}}
+
+	if got := lowestLanguageThreshold(rules); got != 0 {
+		t.Fatalf("expected threshold %f, got %f", 0.0, got)
+	}
+}
+
+func TestLowestLanguageThreshold_SingleRule(t *testing.T) {
+	rules := []config.LanguageRule{{Name: "zh", Threshold: 0.65}}
+
+	if got := lowestLanguageThreshold(rules); got != 0.65 {
+		t.Fatalf("expected threshold %f, got %f", 0.65, got)
+	}
+}
+
+func TestLowestLanguageThreshold_MultipleRulesReturnsMinimum(t *testing.T) {
+	rules := []config.LanguageRule{
+		{Name: "en", Threshold: 0.7},
+		{Name: "es", Threshold: 0.2},
+		{Name: "fr", Threshold: 0.5},
+	}
+
+	if got := lowestLanguageThreshold(rules); got != 0.2 {
+		t.Fatalf("expected threshold %f, got %f", 0.2, got)
+	}
+}
+
+func TestLowestLanguageThreshold_MixedZeroAndNonZero(t *testing.T) {
+	rules := []config.LanguageRule{
+		{Name: "en"},
+		{Name: "es", Threshold: 0.45},
+		{Name: "fr", Threshold: 0},
+		{Name: "zh", Threshold: 0.15},
+	}
+
+	if got := lowestLanguageThreshold(rules); got != 0.15 {
+		t.Fatalf("expected threshold %f, got %f", 0.15, got)
 	}
 }
