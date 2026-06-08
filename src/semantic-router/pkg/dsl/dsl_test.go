@@ -2506,8 +2506,9 @@ func TestLanguageSignalThresholdRoundTrip(t *testing.T) {
 
 	cfg, errs := Compile(input)
 	if len(errs) > 0 {
-		t.Fatalf("compile errors: %v", errs)
+		t.Fatalf("compile errors: %v\n--- source ---\n%s", errs, input)
 	}
+	t.Logf("compiled language rules: %+v", cfg.LanguageRules)
 	if len(cfg.LanguageRules) != 1 {
 		t.Fatalf("expected 1 language rule, got %d", len(cfg.LanguageRules))
 	}
@@ -2517,16 +2518,18 @@ func TestLanguageSignalThresholdRoundTrip(t *testing.T) {
 
 	dslText, err := Decompile(cfg)
 	if err != nil {
-		t.Fatalf("decompile error: %v", err)
+		t.Fatalf("decompile error: %v\ncompiled language rules: %+v", err, cfg.LanguageRules)
 	}
+	t.Logf("decompiled DSL:\n%s", dslText)
 	if !strings.Contains(dslText, `threshold: 0.6`) {
 		t.Fatalf("decompiled DSL missing language threshold:\n%s", dslText)
 	}
 
 	rt, rtErrs := Compile(dslText)
 	if len(rtErrs) > 0 {
-		t.Fatalf("round-trip compile errors: %v", rtErrs)
+		t.Fatalf("round-trip compile errors: %v\n--- decompiled DSL ---\n%s", rtErrs, dslText)
 	}
+	t.Logf("round-trip language rules: %+v", rt.LanguageRules)
 	if len(rt.LanguageRules) != 1 || rt.LanguageRules[0].Threshold != 0.6 {
 		t.Fatalf("unexpected language threshold after round-trip: %+v", rt.LanguageRules)
 	}
@@ -2562,11 +2565,13 @@ ROUTE test_route {
 	if err != nil {
 		t.Fatalf("emit error: %v", err)
 	}
+	t.Logf("round-trip YAML:\n%s", string(yamlBytes))
 
 	var rt config.RouterConfig
 	if err := yaml.Unmarshal(yamlBytes, &rt); err != nil {
 		t.Fatalf("unmarshal error: %v\nYAML:\n%s", err, string(yamlBytes))
 	}
+	t.Logf("language rules after YAML round-trip: %+v", rt.LanguageRules)
 
 	if len(rt.KeywordRules) != 1 {
 		t.Errorf("keyword rules: %d", len(rt.KeywordRules))
