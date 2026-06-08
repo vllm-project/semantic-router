@@ -1,6 +1,10 @@
 package dsl
 
-import "github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
+import (
+	"strconv"
+
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
+)
 
 func (d *decompiler) decompileDomainSignals() {
 	for _, cat := range d.cfg.Categories {
@@ -98,7 +102,8 @@ func (d *decompiler) decompileReaskSignals() {
 			d.write("  description: %q\n", rule.Description)
 		}
 		if rule.Threshold != 0 {
-			d.write("  threshold: %g\n", rule.Threshold)
+			v := strconv.FormatFloat(float64(rule.Threshold), 'g', -1, 32)
+			d.write("  threshold: %s\n", v)
 		}
 		if rule.LookbackTurns != 0 {
 			d.write("  lookback_turns: %d\n", rule.LookbackTurns)
@@ -117,7 +122,8 @@ func (d *decompiler) decompilePreferenceSignals() {
 			d.write("  examples: %s\n", formatStringArray(pref.Examples))
 		}
 		if pref.Threshold != 0 {
-			d.write("  threshold: %g\n", pref.Threshold)
+			v := strconv.FormatFloat(float64(pref.Threshold), 'g', -1, 32)
+			d.write("  threshold: %s\n", v)
 		}
 		d.write("}\n\n")
 	}
@@ -130,7 +136,8 @@ func (d *decompiler) decompileLanguageSignals() {
 			d.write("  description: %q\n", lang.Description)
 		}
 		if lang.Threshold != 0 {
-			d.write("  threshold: %g\n", lang.Threshold)
+			v := strconv.FormatFloat(float64(lang.Threshold), 'g', -1, 32)
+			d.write("  threshold: %s\n", v)
 		}
 		d.write("}\n\n")
 	}
