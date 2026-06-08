@@ -162,6 +162,8 @@ if !hasImage {
 // Now simulate OCR producing no readable text; the stage-2-only image rule
 // should be filtered out.
 getImageOCR = func(p string) (string, error) { return "", nil }
+// Recreate OCR cache so the previous confirmed OCR result isn't reused.
+ocrCache = newRequestImageOCRCache()
 results2 := newSignalResultsForTest()
 classifier.evaluateEmbeddingSignal(results2, &mu, "", imagePayload, cache, ocrCache)
 hasImage2 := false
