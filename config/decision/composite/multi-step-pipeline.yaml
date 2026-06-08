@@ -13,7 +13,7 @@ routing:
               - type: keyword
                 name: pipeline_step_extract
       modelRefs:
-        - model: summarizer-model
+        - model: qwen3-8b
           use_reasoning: false
     - name: pipeline_extract_step
       description: Pin the extraction stage of a client-orchestrated pipeline.
@@ -28,5 +28,5 @@ routing:
               - type: keyword
                 name: pipeline_step_summarize
       modelRefs:
-        - model: insight-model
+        - model: qwen3-32b
           use_reasoning: true

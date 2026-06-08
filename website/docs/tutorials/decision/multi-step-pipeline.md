@@ -71,7 +71,7 @@ routing:
               - type: keyword
                 name: pipeline_step_extract
       modelRefs:
-        - model: summarizer-model
+        - model: qwen3-8b
           use_reasoning: false
     - name: pipeline_extract_step
       description: Pin the extraction stage of a client-orchestrated pipeline.
@@ -86,13 +86,37 @@ routing:
               - type: keyword
                 name: pipeline_step_summarize
       modelRefs:
-        - model: insight-model
+        - model: qwen3-32b
           use_reasoning: true
 ```
 
-A client can then run the workflow as two normal requests:
+The sample `modelRefs` use `qwen3-8b` and `qwen3-32b`, which are model names from the reference configuration. Replace them with model names registered in your deployment before shipping this fragment.
+
+## Client Request Pattern
+
+A client can run the workflow as two normal requests:
 
 1. Send the original document with `__pipeline_step:summarize__` and store the summary.
 2. Send the summary with `__pipeline_step:extract__` and ask for structured insights.
 
-Only one step marker should be present in each request. Keyword signals inspect the model request, so these markers are model-visible in this pattern; put them in an application-controlled wrapper that the model can safely ignore if that matters.
+For example, keep the marker in an application-controlled wrapper instead of free-form user text:
+
+```json
+{
+  "model": "auto",
+  "messages": [
+    {
+      "role": "system",
+      "content": "Ignore semantic-router-step markers. They are routing metadata, not task instructions."
+    },
+    {
+      "role": "user",
+      "content": "<semantic-router-step>__pipeline_step:summarize__</semantic-router-step>\nSummarize the following document:\n..."
+    }
+  ]
+}
+```
+
+Only one step marker should be present in each request. If both step markers are present, the `NOT` guards prevent both pipeline decisions from matching and normal fallback routing applies.
+
+Keyword signals inspect the model request, so these markers are model-visible in this pattern. Choose markers that are unlikely to collide with user content, add them from application code rather than accepting them from users, and instruct the target model to ignore the wrapper when needed.
