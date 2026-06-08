@@ -164,6 +164,31 @@ func TestLanguageClassifier_HandlesMixedAndSpecialInputs(t *testing.T) {
 	}
 }
 
+func TestLanguageClassifier_ClassifyWithThresholdHonorsCallerThreshold(t *testing.T) {
+	classifier := newLanguageClassifierForTest(t)
+	text := "Bonjour, comment allez-vous?"
+
+	baseline, err := classifier.Classify(text)
+	if err != nil {
+		t.Fatalf("classification failed: %v", err)
+	}
+	if baseline.LanguageCode != "fr" {
+		t.Fatalf("expected baseline classification to detect French, got %q", baseline.LanguageCode)
+	}
+
+	strictThreshold := float32(baseline.Confidence + 0.05)
+	strictResult, err := classifier.ClassifyWithThreshold(text, strictThreshold)
+	if err != nil {
+		t.Fatalf("strict classification failed: %v", err)
+	}
+	if strictResult.LanguageCode != "en" {
+		t.Fatalf("expected strict threshold fallback to English, got %q", strictResult.LanguageCode)
+	}
+	if strictResult.Confidence != 0.5 {
+		t.Fatalf("expected fallback confidence 0.5, got %f", strictResult.Confidence)
+	}
+}
+
 func TestLanguageClassifier_CustomThreshold(t *testing.T) {
 	classifier := newLanguageClassifierForTest(t)
 	sample, defaultResult := findThresholdSensitiveLanguageSample(t, classifier)

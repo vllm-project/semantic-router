@@ -63,14 +63,24 @@ func (c *Classifier) evaluateLanguageSignal(results *SignalResults, mu *sync.Mut
 	}
 }
 
-// lowestLanguageThreshold returns the smallest non-zero Threshold across all
-// configured LanguageRules, or 0 if none is set. This value is passed to
-// ClassifyWithThreshold so that a single lingua-go call covers all rules.
+// lowestLanguageThreshold returns the smallest effective threshold across all
+// configured LanguageRules, treating an unset Threshold as the built-in
+// defaultLanguageThreshold used by ClassifyWithThreshold. This value is passed
+// to ClassifyWithThreshold so that one lingua-go call can satisfy both custom
+// and default-threshold rules.
 func lowestLanguageThreshold(rules []config.LanguageRule) float32 {
+	if len(rules) == 0 {
+		return 0
+	}
+
 	var min float32
 	for _, r := range rules {
-		if r.Threshold > 0 && (min == 0 || r.Threshold < min) {
-			min = r.Threshold
+		threshold := r.Threshold
+		if threshold <= 0 {
+			threshold = float32(defaultLanguageThreshold)
+		}
+		if min == 0 || threshold < min {
+			min = threshold
 		}
 	}
 	return min
