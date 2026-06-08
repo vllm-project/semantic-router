@@ -54,16 +54,17 @@ canonical router defaults again.
 ## Current Validation
 
 - Lifecycle schema and runtime consolidation are implemented in PR #2066 through
-  commit `56e1dc47`.
-- AMD/ROCm reduced-model validation passed for `deploy/recipes/balance.yaml` at
-  commit `56e1dc47`. Startup downloaded only the active lifecycle assets:
+  rebased commit `5560955a`.
+- AMD/ROCm reduced-model validation passed for `deploy/recipes/balance.yaml` on
+  the pre-rebase equivalent lifecycle patch at commit `56e1dc47`. Startup
+  downloaded only the active lifecycle assets:
   `models/mmbert-embed-32k-2d-matryoshka`,
   `models/mmbert32k-intent-classifier-merged`,
   `models/mmbert32k-factcheck-classifier-merged`, and
   `models/mmbert32k-feedback-detector-merged`.
-- The latest PR head includes an additional deterministic memory CI fix at
-  commit `6fb1aad5`; that change does not alter the canonical lifecycle plan or
-  the AMD balance-recipe model set.
+- Latest rebased PR head `1baeed95` includes the deterministic memory CI fix and
+  plan/debt status update; those changes do not alter the canonical lifecycle
+  plan or the AMD balance-recipe model set.
 
 ## Why It Matters
 
