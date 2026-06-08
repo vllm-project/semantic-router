@@ -178,6 +178,8 @@ func (p *Profile) GetTestCases() []string {
 		"chat-completions-request",
 		// Authz-specific functional test (200 OK; identity headers are stripped by Envoy Lua before ext_proc)
 		"chat-completions-request-authz",
+		// RBAC routing test — validates role-based decision selection when authz identity headers are present
+		"authz-rbac-routing",
 		// Security test — validates that client-supplied identity headers are stripped
 		"authz-header-spoofing",
 		// NOTE: ratelimit-limitor is NOT run here: it requires x-authz-* from the client to reach

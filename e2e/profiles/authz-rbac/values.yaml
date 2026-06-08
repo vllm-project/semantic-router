@@ -191,6 +191,9 @@ config:
     services:
       authz:
         fail_open: true
+        identity:
+          user_id_header: x-authz-user-id
+          user_groups_header: x-authz-user-groups
       ratelimit:
         fail_open: false
         providers:
