@@ -88,10 +88,6 @@ func loadRouterRuntimeState(runtimePath string) (*startupstatus.State, error) {
 	return startupstatus.Load(fallbackPath)
 }
 
-func getContainerLogsTail(lines int) string {
-	return getContainerLogsTailForContainer(vllmSrContainerName, lines)
-}
-
 func getContainerLogsTailForContainer(containerName string, lines int) string {
 	// #nosec G204 -- containerName is repository-managed and lines is converted from int.
 	tailArg := strconv.Itoa(lines)

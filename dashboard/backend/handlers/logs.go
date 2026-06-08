@@ -128,100 +128,11 @@ func populateDirectRuntimeMessage(response *LogsResponse, routerAPIURL string) {
 }
 
 func runtimeContainerStatusForLogs() string {
-	if managedRuntimeUsesSplitContainers() {
-		if status := managedRuntimeContainerStatus(); status != "not found" {
-			return status
-		}
-	}
-	return getDockerContainerStatus(vllmSrContainerName)
+	return managedRuntimeContainerStatus()
 }
 
-// fetchContainerLogs gets logs from supervisor-managed services
-// When running inside the container, use supervisorctl to get logs
-// When running outside, use docker logs
 func fetchContainerLogs(component string, lines int) ([]string, error) {
-	// First, try to use supervisorctl when the requested service is local to this container.
-	if shouldReadLocalSupervisorLogs(component) {
-		logs, err := fetchLogsFromSupervisor(component, lines)
-		if err == nil && len(logs) > 0 {
-			return logs, nil
-		}
-	}
-
-	// Fallback: try docker logs (when running outside container)
-	return fetchLogsFromDocker(component, lines)
-}
-
-func shouldReadLocalSupervisorLogs(component string) bool {
-	if !isRunningInContainer() {
-		return false
-	}
-
-	switch component {
-	case "router", "envoy", "dashboard":
-		return managedServiceCanBeControlledLocally(component)
-	case "all":
-		return managedServiceCanBeControlledLocally("router") &&
-			managedServiceCanBeControlledLocally("envoy") &&
-			managedServiceCanBeControlledLocally("dashboard")
-	default:
-		return false
-	}
-}
-
-// fetchLogsFromSupervisor gets logs by reading supervisor log files directly
-// Reads both stdout and stderr logs for each component
-func fetchLogsFromSupervisor(component string, lines int) ([]string, error) {
-	var result []string
-
-	// Map component names to log file paths (both stdout and stderr)
-	logFiles := map[string][]string{
-		"router":    {"/var/log/supervisor/router.log", "/var/log/supervisor/router-error.log"},
-		"envoy":     {"/var/log/supervisor/envoy.log", "/var/log/supervisor/envoy-error.log"},
-		"dashboard": {"/var/log/supervisor/dashboard.log", "/var/log/supervisor/dashboard-error.log"},
-		"all": {
-			"/var/log/supervisor/router.log", "/var/log/supervisor/router-error.log",
-			"/var/log/supervisor/envoy.log", "/var/log/supervisor/envoy-error.log",
-			"/var/log/supervisor/dashboard.log", "/var/log/supervisor/dashboard-error.log",
-		},
-	}
-
-	files, ok := logFiles[component]
-	if !ok {
-		files = []string{
-			"/var/log/supervisor/" + component + ".log",
-			"/var/log/supervisor/" + component + "-error.log",
-		}
-	}
-
-	for _, logFile := range files {
-		// Use tail command to get last N lines from log file
-		// #nosec G204 - logFile is validated and lines is converted from int
-		cmd := exec.Command("tail", "-n", strconv.Itoa(lines), logFile)
-		output, err := cmd.CombinedOutput()
-		if err != nil {
-			// File might not exist yet, skip
-			continue
-		}
-
-		// Parse output and add to result
-		logLines := splitLogLines(string(output))
-		result = append(result, logLines...)
-	}
-
-	// Return last N lines (in case we read from multiple files)
-	if len(result) > lines {
-		return result[len(result)-lines:], nil
-	}
-	return result, nil
-}
-
-// fetchLogsFromDocker gets logs from Docker container (fallback for external access)
-func fetchLogsFromDocker(component string, lines int) ([]string, error) {
-	if managedRuntimeUsesSplitContainers() {
-		return fetchLogsFromManagedDocker(component, lines)
-	}
-	return fetchLogsFromLegacyDocker(component, lines)
+	return fetchLogsFromManagedDocker(component, lines)
 }
 
 func fetchLogsFromManagedDocker(component string, lines int) ([]string, error) {
@@ -250,76 +161,6 @@ func fetchLogsFromManagedDocker(component string, lines int) ([]string, error) {
 		return result[len(result)-lines:], nil
 	}
 	return result, nil
-}
-
-func fetchLogsFromLegacyDocker(component string, lines int) ([]string, error) {
-	// Get logs directly from Docker without shell interpolation
-	// #nosec G204 -- vllmSrContainerName is a compile-time constant, lines is validated integer
-	tailArg := strconv.Itoa(lines * 2) // Get more lines for filtering
-	cmd := exec.Command("docker", "logs", "--tail", tailArg, vllmSrContainerName)
-	output, err := cmd.CombinedOutput()
-	if err != nil {
-		if len(output) == 0 {
-			return []string{}, nil
-		}
-	}
-
-	// Filter logs in Go instead of using shell grep (safer, avoids gosec warning)
-	allLines := splitLogLines(string(output))
-
-	if component == "all" {
-		// Return all logs, limited to requested count
-		if len(allLines) > lines {
-			return allLines[len(allLines)-lines:], nil
-		}
-		return allLines, nil
-	}
-
-	// Filter for specific component
-	var filtered []string
-	for _, line := range allLines {
-		lineLower := strings.ToLower(line)
-		switch component {
-		case "router":
-			// Match router-specific logs: Go router logs contain "caller" field in JSON
-			// Also include supervisor messages about router and router startup messages
-			if strings.Contains(line, `"caller"`) ||
-				strings.Contains(line, "spawned: 'router'") ||
-				strings.Contains(lineLower, "success: router") ||
-				strings.Contains(lineLower, "router entered running") ||
-				strings.Contains(line, "Starting router") ||
-				strings.Contains(line, "Starting insecure LLM Router ExtProc server") {
-				filtered = append(filtered, line)
-			}
-		case "envoy":
-			// Match envoy-specific logs and supervisor messages
-			// Envoy logs have timestamp format [YYYY-MM-DD HH:MM:SS.mmm][level]
-			if (strings.Contains(line, "[20") && strings.Contains(line, "][")) ||
-				strings.Contains(line, "spawned: 'envoy'") ||
-				strings.Contains(lineLower, "success: envoy") ||
-				strings.Contains(lineLower, "envoy entered running") ||
-				strings.Contains(line, "Generating Envoy config") {
-				filtered = append(filtered, line)
-			}
-		case "dashboard":
-			// Match dashboard-specific logs: Dashboard logs start with timestamp YYYY/MM/DD
-			// Also include supervisor messages about dashboard
-			if (strings.Contains(line, "2026/") || strings.Contains(line, "2025/") || strings.Contains(line, "2027/")) ||
-				strings.Contains(line, "spawned: 'dashboard'") ||
-				strings.Contains(lineLower, "success: dashboard") ||
-				strings.Contains(lineLower, "dashboard entered running") ||
-				strings.Contains(line, "Starting dashboard") ||
-				strings.Contains(line, "Dashboard listening") {
-				filtered = append(filtered, line)
-			}
-		}
-	}
-
-	// Return last N lines
-	if len(filtered) > lines {
-		return filtered[len(filtered)-lines:], nil
-	}
-	return filtered, nil
 }
 
 // checkRouterHealth checks if router is accessible via HTTP

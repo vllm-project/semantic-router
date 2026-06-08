@@ -16,7 +16,6 @@ VLLM_SR_DOCKER_IMAGE_RELEASE = f"vllm-sr:{__version__}"
 VLLM_SR_SIM_DOCKER_IMAGE_DEFAULT = (
     "ghcr.io/vllm-project/semantic-router/vllm-sr-sim:latest"
 )
-VLLM_SR_DOCKER_NAME = "vllm-sr-container"
 VLLM_SR_SIM_DOCKER_NAME = "vllm-sr-sim-container"
 DEFAULT_STACK_NAME = "vllm-sr"
 PLATFORM_AMD = "amd"
