@@ -85,11 +85,13 @@ func (c *Classifier) EvaluateAllSignalsWithContext(text string, contextText stri
 	// turning two SigLIP forward passes into one. With no image attached,
 	// neither signal touches the cache, so leaving it nil is correct.
 	var imgCache *requestImageEmbeddingCache
+	var ocrCache *requestImageOCRCache
 	if imgArg != "" {
 		imgCache = newRequestImageEmbeddingCache()
+		ocrCache = newRequestImageOCRCache()
 	}
 
-	dispatchers := c.buildSignalDispatchers(results, &mu, textForSignal, contextText, currentUserText, priorUserMessages, nonUserMessages, hasPriorAssistantReply, imgArg, imgCache, convFacts)
+	dispatchers := c.buildSignalDispatchers(results, &mu, textForSignal, contextText, currentUserText, priorUserMessages, nonUserMessages, hasPriorAssistantReply, imgArg, imgCache, ocrCache, convFacts)
 	runSignalDispatchers(dispatchers, usedSignals, ready, &wg)
 
 	wg.Wait()

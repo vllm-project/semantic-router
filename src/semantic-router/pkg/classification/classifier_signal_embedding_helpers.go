@@ -10,7 +10,7 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/metrics"
 )
 
-func (c *Classifier) evaluateEmbeddingSignal(results *SignalResults, mu *sync.Mutex, text string, imageURL string, imgCache *requestImageEmbeddingCache) {
+func (c *Classifier) evaluateEmbeddingSignal(results *SignalResults, mu *sync.Mutex, text string, imageURL string, imgCache *requestImageEmbeddingCache, ocrCache *requestImageOCRCache) {
 	start := time.Now()
 
 	// Text-modality evaluation: scores rules whose query_modality is unset
@@ -77,9 +77,110 @@ func (c *Classifier) evaluateEmbeddingSignal(results *SignalResults, mu *sync.Mu
 		bestConfidence = recordEmbeddingResult(results, textResult, textElapsed, bestConfidence)
 	}
 	if imageResult != nil {
-		bestConfidence = recordEmbeddingResult(results, imageResult, imageElapsed, bestConfidence)
+		// Determine whether any matched image rules opt into a stage-2 text
+		// verification. If none do, fall back to the old behaviour and record
+		// the image result wholesale.
+		needsStage2 := false
+		for _, mr := range imageResult.Matches {
+			for _, r := range c.keywordEmbeddingClassifier.rules {
+				if r.Name == mr.RuleName && r.EffectiveQueryModality() == config.QueryModalityImage && r.Stage2TextCheck {
+					needsStage2 = true
+					break
+				}
+			}
+			if needsStage2 {
+				break
+			}
+		}
+
+		if !needsStage2 {
+			bestConfidence = recordEmbeddingResult(results, imageResult, imageElapsed, bestConfidence)
+		} else {
+			// Perform OCR once for the image (cached) and run a text-modality
+			// classification over the OCR'd text. If OCR or text-classification
+			// fails or yields no match, conservatively drop the image-only
+			// matches that requested a stage-2 check.
+			ocrText, ocrErr := c.keywordEmbeddingClassifier.ExtractImageOCR(imageURL, ocrCache)
+			if ocrErr != nil {
+				logging.Errorf("image OCR failed: %v", ocrErr)
+				// On OCR failure, record only the image matches that did not opt
+				// into stage-2.
+				filtered := filterImageResultByStage2(imageResult, c.keywordEmbeddingClassifier, false)
+				bestConfidence = recordEmbeddingResult(results, filtered, imageElapsed, bestConfidence)
+			} else if strings.TrimSpace(ocrText) == "" {
+				// No readable text found: drop stage-2-only matches.
+				filtered := filterImageResultByStage2(imageResult, c.keywordEmbeddingClassifier, false)
+				bestConfidence = recordEmbeddingResult(results, filtered, imageElapsed, bestConfidence)
+			} else {
+				textStart := time.Now()
+				textResultFromOCR, textErrFromOCR := c.keywordEmbeddingClassifier.ClassifyDetailed(ocrText)
+				textElapsedFromOCR := time.Since(textStart)
+				if textErrFromOCR != nil {
+					logging.Errorf("text-modality embedding rule evaluation on OCR'd image failed: %v", textErrFromOCR)
+					// Conservative: drop stage-2-only matches.
+					filtered := filterImageResultByStage2(imageResult, c.keywordEmbeddingClassifier, false)
+					bestConfidence = recordEmbeddingResult(results, filtered, imageElapsed, bestConfidence)
+				} else {
+					// If the OCR'd text produced at least one text-modality match, we
+					// consider stage-2 satisfied and keep stage-2 matches; otherwise
+					// drop them.
+					keepStage2 := len(textResultFromOCR.Matches) > 0
+					filtered := filterImageResultByStage2(imageResult, c.keywordEmbeddingClassifier, keepStage2)
+					bestConfidence = recordEmbeddingResult(results, filtered, imageElapsed, bestConfidence)
+					// Also merge text-result scores into the metrics so the OCR
+					// classification's latency is observable separately.
+					if len(textResultFromOCR.Scores) > 0 {
+						// Record per-rule latencies/metrics for the OCR text pass.
+						for _, mr := range textResultFromOCR.Matches {
+							metrics.RecordSignalExtraction(config.SignalTypeEmbedding, mr.RuleName, textElapsedFromOCR.Seconds())
+							metrics.RecordSignalMatch(config.SignalTypeEmbedding, mr.RuleName)
+							results.SignalConfidences["embedding:"+mr.RuleName] = mr.Score
+							results.MatchedEmbeddingRules = append(results.MatchedEmbeddingRules, mr.RuleName)
+						}
+					}
+				}
+			}
+		}
 	}
 	results.Metrics.Embedding.Confidence = bestConfidence
+}
+
+// filterImageResultByStage2 returns a copy of detailedResult retaining only
+// the scores and matches that should be kept given keepStage2. If
+// keepStage2==true, all matches are retained. If false, any rule that had
+// Stage2TextCheck==true and declared QueryModality=image is filtered out.
+func filterImageResultByStage2(detailedResult *EmbeddingClassificationResult, ec *EmbeddingClassifier, keepStage2 bool) *EmbeddingClassificationResult {
+	if detailedResult == nil {
+		return &EmbeddingClassificationResult{}
+	}
+	if keepStage2 {
+		return detailedResult
+	}
+	// Build a set of rule names to retain.
+	retain := make(map[string]bool)
+	for _, score := range detailedResult.Scores {
+		retain[score.Name] = true
+	}
+	for _, r := range ec.rules {
+		if r.EffectiveQueryModality() == config.QueryModalityImage && r.Stage2TextCheck {
+			// Drop stage-2 rules.
+			delete(retain, r.Name)
+		}
+	}
+
+	filteredScores := make([]EmbeddingRuleScore, 0, len(detailedResult.Scores))
+	for _, s := range detailedResult.Scores {
+		if retain[s.Name] {
+			filteredScores = append(filteredScores, s)
+		}
+	}
+	filteredMatches := make([]MatchedRule, 0, len(detailedResult.Matches))
+	for _, m := range detailedResult.Matches {
+		if retain[m.RuleName] {
+			filteredMatches = append(filteredMatches, m)
+		}
+	}
+	return &EmbeddingClassificationResult{Scores: filteredScores, Matches: filteredMatches}
 }
 
 // recordEmbeddingResult merges scores and matches from a single classification

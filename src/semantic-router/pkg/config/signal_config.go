@@ -87,6 +87,12 @@ type EmbeddingRule struct {
 	// the query embedding is computed from. Defaults to "text" when omitted,
 	// preserving existing behavior.
 	QueryModality QueryModality `yaml:"query_modality,omitempty"`
+	// Stage2TextCheck, when true, requires an OCR-based text-modality
+	// re-check for image-derived matches before the image rule is
+	// recorded. This is an opt-in, conservative check to avoid over-firing
+	// on image-only embedding matches for images that contain no readable
+	// sensitive text.
+	Stage2TextCheck bool `yaml:"stage2_text_check,omitempty"`
 }
 
 // EffectiveQueryModality returns the rule's declared query modality, or

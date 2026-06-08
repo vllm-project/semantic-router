@@ -24,6 +24,7 @@ func (c *Classifier) buildSignalDispatchers(
 	hasPriorAssistantReply bool,
 	imgArg string,
 	imgCache *requestImageEmbeddingCache, // may be nil; both image-consuming evaluators handle nil via cache.resolve's nil-receiver fallthrough
+	ocrCache *requestImageOCRCache,
 	convFacts ConversationFacts,
 ) []signalDispatch {
 	return []signalDispatch{
@@ -34,7 +35,7 @@ func (c *Classifier) buildSignalDispatchers(
 		{
 			config.SignalTypeEmbedding, "Embedding",
 			func() {
-				c.evaluateEmbeddingSignal(results, mu, textForSignal(config.SignalTypeEmbedding), imgArg, imgCache)
+				c.evaluateEmbeddingSignal(results, mu, textForSignal(config.SignalTypeEmbedding), imgArg, imgCache, ocrCache)
 			},
 		},
 		{

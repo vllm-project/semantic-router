@@ -55,7 +55,7 @@ func TestEvaluateEmbeddingSignal_TextOnly_PreservesExistingBehavior(t *testing.T
 	results := newSignalResultsForTest()
 	var mu sync.Mutex
 
-	classifier.evaluateEmbeddingSignal(results, &mu, "TensorFlow pipeline", "", nil)
+	classifier.evaluateEmbeddingSignal(results, &mu, "TensorFlow pipeline", "", nil, nil)
 
 	if len(results.MatchedEmbeddingRules) == 0 {
 		t.Fatalf("expected at least one matched rule on text-only path, got 0")
@@ -86,7 +86,7 @@ func TestEvaluateEmbeddingSignal_ImageProvidedActivatesImageRules(t *testing.T) 
 	results := newSignalResultsForTest()
 	var mu sync.Mutex
 
-	classifier.evaluateEmbeddingSignal(results, &mu, "TensorFlow training pipeline", "data:image/png;base64,FAKE_WAFER_BYTES", nil)
+	classifier.evaluateEmbeddingSignal(results, &mu, "TensorFlow training pipeline", "data:image/png;base64,FAKE_WAFER_BYTES", nil, nil)
 
 	// The text rule should match the text query.
 	hasText := false
@@ -107,6 +107,72 @@ func TestEvaluateEmbeddingSignal_ImageProvidedActivatesImageRules(t *testing.T) 
 		t.Errorf("expected image rule 'chip_fab_sensitive_imagery' to match the image attachment, got: %v",
 			results.MatchedEmbeddingRules)
 	}
+}
+
+// TestEvaluateEmbeddingSignal_TextBearingImage_Stage2Filters verifies that
+// image-modality rules that opt into Stage2TextCheck are subject to an OCR
+// + text-modality re-check and are filtered out when OCR yields no
+// confirming text.
+func TestEvaluateEmbeddingSignal_TextBearingImage_Stage2Filters(t *testing.T) {
+imagePayload := "data:image/png;base64,FAKE_CODE_IMAGE"
+stubMultiModalImageLookup(t, map[string][]float32{
+	imagePayload: makeEmbedding(0.92, 0.0, 0.0),
+})
+stubEmbeddingLookup(t, map[string][]float32{
+	"screenshot of source code in an editor": makeEmbedding(0.92, 0.0, 0.0),
+	"grep secret_key myfile.py":             makeEmbedding(0.0, 0.95, 0.0),
+})
+
+rules := []config.EmbeddingRule{{
+	Name:                      "code_or_terminal_imagery",
+	SimilarityThreshold:       0.10,
+	Candidates:                []string{"screenshot of source code in an editor"},
+	AggregationMethodConfiged: config.AggregationMethodMax,
+	QueryModality:             config.QueryModalityImage,
+	Stage2TextCheck:           true,
+}, {
+	Name:                      "text_code_snippet",
+	SimilarityThreshold:       0.10,
+	Candidates:                []string{"grep secret_key myfile.py"},
+	AggregationMethodConfiged: config.AggregationMethodMax,
+}}
+
+classifier := classifierWithEmbeddingOnly(t, rules, "multimodal")
+// Stub OCR to return confirming text.
+originalOCR := getImageOCR
+getImageOCR = func(p string) (string, error) { return "grep secret_key myfile.py", nil }
+t.Cleanup(func() { getImageOCR = originalOCR })
+
+results := newSignalResultsForTest()
+var mu sync.Mutex
+cache := newRequestImageEmbeddingCache()
+ocrCache := newRequestImageOCRCache()
+classifier.evaluateEmbeddingSignal(results, &mu, "", imagePayload, cache, ocrCache)
+
+hasImage := false
+for _, name := range results.MatchedEmbeddingRules {
+	if name == "code_or_terminal_imagery" {
+		hasImage = true
+	}
+}
+if !hasImage {
+	t.Fatalf("expected image rule to be kept when OCR confirms text, got %v", results.MatchedEmbeddingRules)
+}
+
+// Now simulate OCR producing no readable text; the stage-2-only image rule
+// should be filtered out.
+getImageOCR = func(p string) (string, error) { return "", nil }
+results2 := newSignalResultsForTest()
+classifier.evaluateEmbeddingSignal(results2, &mu, "", imagePayload, cache, ocrCache)
+hasImage2 := false
+for _, name := range results2.MatchedEmbeddingRules {
+	if name == "code_or_terminal_imagery" {
+		hasImage2 = true
+	}
+}
+if hasImage2 {
+	t.Fatalf("expected image rule to be filtered when OCR empty, got %v", results2.MatchedEmbeddingRules)
+}
 }
 
 // TestEvaluateEmbeddingSignal_TextErrorDoesNotSkipImagePass exercises the
@@ -139,7 +205,7 @@ func TestEvaluateEmbeddingSignal_TextErrorDoesNotSkipImagePass(t *testing.T) {
 
 	// Despite the text-FFI error, the image classification should still run
 	// and surface the chip-fab image rule.
-	classifier.evaluateEmbeddingSignal(results, &mu, "TensorFlow training pipeline", "data:image/png;base64,FAKE_WAFER_BYTES", nil)
+	classifier.evaluateEmbeddingSignal(results, &mu, "TensorFlow training pipeline", "data:image/png;base64,FAKE_WAFER_BYTES", nil, nil)
 
 	hasImage := false
 	for _, name := range results.MatchedEmbeddingRules {
@@ -181,7 +247,7 @@ func TestEvaluateEmbeddingSignal_ImageOnlyContent_SkipsTextFFI(t *testing.T) {
 	results := newSignalResultsForTest()
 	var mu sync.Mutex
 
-	classifier.evaluateEmbeddingSignal(results, &mu, "", "data:image/png;base64,FAKE_WAFER_BYTES", nil)
+	classifier.evaluateEmbeddingSignal(results, &mu, "", "data:image/png;base64,FAKE_WAFER_BYTES", nil, nil)
 
 	if got := atomic.LoadInt32(&textCalls); got != 0 {
 		t.Errorf("text-FFI must not be invoked when text is empty, got %d calls", got)
@@ -270,6 +336,7 @@ func TestEvaluateAllSignals_DedupsImageFFIAcrossDispatchers(t *testing.T) {
 	results := newSignalResultsForTest()
 	var mu sync.Mutex
 	cache := newRequestImageEmbeddingCache()
+	ocrCache := newRequestImageOCRCache()
 
 	const imageURL = "data:image/png;base64,FAKE_WAFER_REQUEST_BYTES"
 
@@ -277,7 +344,7 @@ func TestEvaluateAllSignals_DedupsImageFFIAcrossDispatchers(t *testing.T) {
 	wg.Add(2)
 	go func() {
 		defer wg.Done()
-		classifier.evaluateEmbeddingSignal(results, &mu, "wafer photo query", imageURL, cache)
+		classifier.evaluateEmbeddingSignal(results, &mu, "wafer photo query", imageURL, cache, ocrCache)
 	}()
 	go func() {
 		defer wg.Done()
@@ -351,7 +418,7 @@ func TestEvaluateEmbeddingSignal_ImageURLWithNoImageRules_GracefulNoOp(t *testin
 	// the multimodal image FFI (that's the point of the no-rules early-return
 	// in ClassifyDetailedMultimodal), and should produce the same matches as
 	// the no-image case.
-	classifier.evaluateEmbeddingSignal(results, &mu, "TensorFlow pipeline", "data:image/png;base64,IGNORED_BYTES", nil)
+	classifier.evaluateEmbeddingSignal(results, &mu, "TensorFlow pipeline", "data:image/png;base64,IGNORED_BYTES", nil, nil)
 
 	if len(results.MatchedEmbeddingRules) == 0 {
 		t.Fatalf("expected text rule to still match when image URL is present but no image rules exist, got 0 matches")
