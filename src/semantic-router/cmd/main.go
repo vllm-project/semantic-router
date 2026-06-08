@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"runtime"
 	"strings"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
@@ -19,6 +20,13 @@ func main() {
 	logo.PrintVLLMLogo()
 	opts := parseRuntimeOptions()
 	initializeRuntimeLogger()
+	// Diagnostic: record process runtime info for CI debugging.
+	logging.ComponentDebugEvent("router", "process_runtime_info", map[string]interface{}{
+		"go_version":     runtime.Version(),
+		"num_cpu":        runtime.NumCPU(),
+		"num_goroutine":  runtime.NumGoroutine(),
+		"command_line":   os.Args,
+	})
 	// Diagnostic: record parsed runtime options for CI debugging.
 	logging.ComponentDebugEvent("router", "runtime_options_parsed", map[string]interface{}{
 		"config_path":   opts.configPath,

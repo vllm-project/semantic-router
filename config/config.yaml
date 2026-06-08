@@ -189,6 +189,7 @@ routing:
         query_modality: text
         threshold: 0.72
         aggregation_method: max
+        stage2_text_check: false
         candidates:
           - patient symptoms or clinical question
           - medication interaction or dosage question
