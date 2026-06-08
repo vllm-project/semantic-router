@@ -211,6 +211,18 @@ jobs:
           echo "Starting Valkey bundle..."
           make start-valkey
 
+      - name: Verify Rust library paths
+        env:
+          LD_LIBRARY_PATH: ${{ github.workspace }}/candle-binding/target/release
+        run: |
+          echo "Checking candle libraries..."
+          if compgen -G "${LD_LIBRARY_PATH}/*.so" > /dev/null; then
+            ls -la "${LD_LIBRARY_PATH}"/*.so
+          else
+            echo "No candle shared libraries found in ${LD_LIBRARY_PATH}"
+          fi
+          echo "LD_LIBRARY_PATH: ${LD_LIBRARY_PATH}"
+
       - name: Run semantic router tests
         run: make test
         env:

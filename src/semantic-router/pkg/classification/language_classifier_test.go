@@ -1,6 +1,7 @@
 package classification
 
 import (
+	"os"
 	"strings"
 	"sync"
 	"testing"
@@ -19,6 +20,8 @@ func newLanguageClassifierForTest(t *testing.T) *LanguageClassifier {
 		{Name: "fr"},
 	})
 	if err != nil {
+		t.Logf("NewLanguageClassifier error details: %+v", err)
+		t.Logf("LD_LIBRARY_PATH: %s", os.Getenv("LD_LIBRARY_PATH"))
 		t.Fatalf("failed to create language classifier: %v", err)
 	}
 
@@ -39,6 +42,8 @@ func newLanguageSignalClassifierForTest(t *testing.T, rules []config.LanguageRul
 
 	languageClassifier, err := NewLanguageClassifier(rules)
 	if err != nil {
+		t.Logf("NewLanguageClassifier error details: %+v", err)
+		t.Logf("LD_LIBRARY_PATH: %s", os.Getenv("LD_LIBRARY_PATH"))
 		t.Fatalf("failed to create language classifier: %v", err)
 	}
 
@@ -84,6 +89,8 @@ func reliableLanguageThresholdProbe(t *testing.T, classifier *LanguageClassifier
 		}
 	}
 
+	t.Logf("lingua-go detection attempts in CI: %v", attempts)
+	t.Logf("Environment: CI=%s, CI_MINIMAL_MODELS=%s", os.Getenv("CI"), os.Getenv("CI_MINIMAL_MODELS"))
 	t.Skipf("lingua-go did not confidently detect any non-English threshold probe; attempts: %s", strings.Join(attempts, ", "))
 	return "", nil
 }
