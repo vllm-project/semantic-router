@@ -8,6 +8,7 @@ import (
 	"os"
 	"path/filepath"
 
+	"github.com/vllm-project/semantic-router/dashboard/backend/configprojection"
 	routerconfig "github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 )
 
@@ -132,6 +133,13 @@ func UpdateConfigHandler(configPath string, readonlyMode bool, configDir string)
 			http.Error(w, formatRuntimeApplyError("Failed to apply config to runtime", err), http.StatusInternalServerError)
 			return
 		}
+
+		refreshConfigProjection(configprojection.RefreshInput{
+			Version:     newActivationVersion(),
+			Source:      configprojection.SourceManual,
+			YAMLBytes:   yamlData,
+			DSLSnapshot: readArchivedDSL(configDir),
+		})
 
 		if err := writeYAMLTaggedJSON(w, map[string]string{"status": "success"}); err != nil {
 			log.Printf("Error encoding response: %v", err)

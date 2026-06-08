@@ -8,31 +8,31 @@ Read this after the [Embedding Signal](./embedding) tutorial. That page covers t
 
 ## Key Advantages
 
-A pack authored with these principles in mind gives you:
-
-- **Generalization over memorization** - anchors describe the *signature* of the content, so the rule keeps working on inputs it has never seen rather than overfitting to specific phrasing.
-- **Robustness at scale** - redundancy across the pack absorbs the inherent noise of cosine similarity, so no single weak anchor can sink a routing decision.
-- **Fewer false positives** - explicit negative-space anchors keep benign inputs low-confidence instead of letting them drift toward a sensitive anchor by accident.
-- **Portability of method, not magic numbers** - calibrating to your own model and corpus means the pack behaves predictably when you change models or content distribution.
+- Turns anchor authoring into a repeatable pack-design workflow instead of trial-and-error phrase tweaking.
+- Helps reduce false positives by treating the full anchor pack as the signal, not any single phrase.
+- Makes threshold calibration and validation explicit so packs stay aligned with the embedding model in production.
 
 ## What Problem Does It Solve?
 
-Embedding anchor packs are easy to write and hard to write *well*. The common failure mode is a pack that looks reasonable in review but misfires once it sees real traffic: anchors that match literal tokens instead of meaning, single load-bearing anchors that produce false positives, benign inputs that land near a sensitive anchor because nothing describes the benign case, or thresholds copied from an example pack that were never valid for your model. These principles exist to turn a pack from "looks plausible" into "routes reliably."
+Embedding rules can look plausible in review and still route poorly in practice when anchors overfit to literal wording, omit benign counterexamples, or reuse thresholds from a different model. This guide explains how to build anchor packs that generalize across real traffic instead of only matching hand-picked examples.
 
 ## When to Use
 
-Apply these principles whenever you author or edit an embedding anchor pack - text-modality or image-modality - especially when:
+Use these principles whenever you create or revise `embedding` signal rules, especially when you are:
 
-- You are adding a new `embedding` signal rule under `routing.signals.embeddings`.
-- An existing pack is producing false positives or false negatives in production.
-- You are adapting the opt-in image pack to your own deployment surface.
-- You are calibrating or re-calibrating a pack against a new embedding model or content distribution.
+- adding a new text or image routing category,
+- recalibrating thresholds for a different embedding model, or
+- debugging false positives or false negatives from an existing anchor pack.
 
 ## Configuration
 
-The five principles below are the working rules for building a pack. The opt-in image pack (`config/signal/embedding/image-routing.yaml`) is referenced throughout as a worked example.
+Apply these principles to the same `embedding` signal fields described in the [Embedding Signal](./embedding) tutorial:
 
-### Principle 1: anchors describe what the input *is*, not the words in it
+- `candidates` should cover the full category with multiple semantically distinct anchors,
+- `aggregation_method` should match whether any strong anchor or broad pack agreement should trigger routing, and
+- `threshold` must be calibrated against the deployed model and labeled corpus.
+
+## Principle 1: anchors describe what the input *is*, not the words in it
 
 An embedding anchor is matched in the model's semantic space, so it should describe the **signature** of the content, not a literal string you expect to appear.
 

@@ -75,7 +75,7 @@ func openClawModelGatewayContainerName() string {
 	if candidate := strings.TrimSpace(os.Getenv("OPENCLAW_DASHBOARD_CONTAINER_NAME")); candidate != "" {
 		return candidate
 	}
-	return vllmSrContainerName
+	return defaultRouterContainerName
 }
 
 func openClawContainerHostFromURL(rawURL string) string {

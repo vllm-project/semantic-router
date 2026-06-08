@@ -251,6 +251,7 @@ class MemoryFeaturesTest(SemanticRouterTestBase):
         payload = {
             "model": "MoM",
             "input": message,
+            "auto_store": auto_store,
             "instructions": (
                 "You are a helpful assistant with memory. "
                 "Use retrieved memories to answer questions accurately."

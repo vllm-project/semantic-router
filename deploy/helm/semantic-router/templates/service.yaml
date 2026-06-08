@@ -18,6 +18,7 @@ spec:
     name: classify-api
   selector:
     {{- include "semantic-router.selectorLabels" . | nindent 4 }}
+    app.kubernetes.io/component: router
 ---
 {{- if .Values.service.metrics.enabled }}
 apiVersion: v1
@@ -37,4 +38,5 @@ spec:
     name: metrics
   selector:
     {{- include "semantic-router.selectorLabels" . | nindent 4 }}
+    app.kubernetes.io/component: router
 {{- end }}

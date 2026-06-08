@@ -335,6 +335,58 @@ global:
 
 ---
 
+## Image Pull Errors
+
+### No matching manifest for linux/amd64 (after pinning a digest built on Apple Silicon)
+
+**Symptoms:** Pods on `amd64` nodes stay in `ImagePullBackOff` with an event like
+`no matching manifest for linux/amd64 in the manifest list entries`, while the
+same image reference runs fine on `arm64` nodes or on an Apple Silicon laptop.
+The exact wording varies by container runtime (Docker vs containerd), but it
+always reports that no image matches the node's `linux/amd64` platform.
+
+**Cause:** The published images (`ghcr.io/vllm-project/semantic-router/extproc`
+and `.../dashboard`) are multi-arch manifest lists covering `linux/amd64` and
+`linux/arm64`. You are most likely to hit this if you pin images by digest (a
+common supply-chain or GitOps practice) and resolved that digest on an arm64
+build host such as an Apple Silicon laptop or an arm64 CI runner; a default
+tag-based install is not affected. Resolving a floating tag such as `:latest` to
+a digest on an Apple Silicon machine (for example `docker pull` followed by
+`docker inspect` of `RepoDigests`) returns the **arm64-specific** image digest,
+not the
+manifest-list (index) digest. Pinning a deployment to that single-arch digest
+(in a raw manifest, via `kubectl set image`, or any tooling that consumes a
+`name@sha256:...` reference) leaves `amd64` nodes without a matching manifest.
+
+**Fixes:**
+
+- Reference images by tag (for example `:latest` or a release tag like
+  `:v0.3.0`) so the kubelet selects the correct architecture per node from the
+  manifest list. The bundled Helm chart references images this way, through
+  `image.tag` and `dashboard.image.tag`.
+- If you pin by digest for immutability, pin the **manifest-list (index)
+  digest** in the `name@sha256:...` form, not a platform-specific one. Read the
+  index digest without pulling a single architecture:
+
+```bash
+# Index (manifest-list) digest, safe to pin; resolves correctly on amd64 and arm64.
+docker buildx imagetools inspect \
+  ghcr.io/vllm-project/semantic-router/extproc:latest \
+  --format '{{.Manifest.Digest}}'
+```
+
+- Avoid deriving the digest from a plain `docker pull` + `docker inspect` on
+  Apple Silicon; that yields the per-architecture digest for the host platform
+  (arm64), which is the root cause above.
+
+> Note: the bundled Helm chart builds image references as `repository:tag` (from
+> `image.tag` and `dashboard.image.tag` in
+> [the chart values](https://github.com/vllm-project/semantic-router/blob/main/deploy/helm/semantic-router/values.yaml)),
+> so it does not construct `name@sha256:...` digest references. Digest pinning is
+> done in your own deployment manifest, not through these values.
+
+---
+
 ## Performance Issues
 
 ### Low cache hit ratio

@@ -96,10 +96,10 @@ func propagateConfigToRuntime(configPath string, configDir string) error {
 	}
 
 	if isRunningInContainer() && isManagedContainerConfigPath(configPath) {
-		if !managedServiceCanBeControlledLocally("envoy") && getDockerContainerStatus(managedContainerNameForService("envoy")) == "running" {
+		if getDockerContainerStatus(managedContainerNameForService("envoy")) == "running" {
 			return regenerateAndReloadManagedSplitEnvoyLocally(effectiveConfigPath)
 		}
-		return regenerateAndReloadEnvoyLocally(effectiveConfigPath)
+		return nil
 	}
 
 	if getDockerContainerStatus(managedContainerNameForService("envoy")) == "running" {
@@ -111,31 +111,6 @@ func propagateConfigToRuntime(configPath string, configDir string) error {
 
 func isManagedContainerConfigPath(configPath string) bool {
 	return filepath.Clean(configPath) == "/app/config.yaml"
-}
-
-func regenerateAndReloadEnvoyLocally(configPath string) error {
-	if _, err := exec.LookPath("supervisorctl"); err != nil {
-		log.Printf("Config propagation: supervisorctl not available, skipping managed Envoy reload")
-		return nil
-	}
-
-	envoyConfigPath := detectEnvoyConfigPath()
-	if envoyConfigPath == "" {
-		log.Printf("Config propagation: Envoy config path not found, skipping managed Envoy reload")
-		return nil
-	}
-
-	output, err := generateEnvoyConfigWithPython(configPath, envoyConfigPath)
-	if err != nil {
-		return fmt.Errorf("failed to regenerate Envoy config: %w (output: %s)", err, strings.TrimSpace(output))
-	}
-	log.Printf("Config propagation: %s", strings.TrimSpace(output))
-
-	if err := restartOrStartSupervisorService("envoy", 20*time.Second); err != nil {
-		return fmt.Errorf("failed to restart Envoy: %w", err)
-	}
-
-	return nil
 }
 
 func regenerateAndReloadManagedSplitEnvoyLocally(configPath string) error {
@@ -318,12 +293,7 @@ func validateManagedContainerExecArgs(args []string) error {
 		return validateManagedContainerPythonArgs(args)
 	}
 
-	switch args[0] {
-	case "supervisorctl":
-		return validateManagedContainerSupervisorArgs(args)
-	default:
-		return fmt.Errorf("unsupported managed container command: %s", args[0])
-	}
+	return fmt.Errorf("unsupported managed container command: %s", args[0])
 }
 
 func validateManagedContainerPythonArgs(args []string) error {
@@ -339,95 +309,11 @@ func isPythonCommand(command string) bool {
 	return base != "" && strings.HasPrefix(base, "python")
 }
 
-func validateManagedContainerSupervisorArgs(args []string) error {
-	if len(args) != 3 {
-		return fmt.Errorf("unsupported supervisorctl invocation in managed container")
-	}
-
-	switch args[1] {
-	case "restart", "start", "status":
-	default:
-		return fmt.Errorf("unsupported supervisorctl action: %s", args[1])
-	}
-
-	switch args[2] {
-	case "router", "envoy", "dashboard":
-		return nil
-	default:
-		return fmt.Errorf("unsupported supervisorctl service: %s", args[2])
-	}
-}
-
-func restartOrStartSupervisorService(service string, timeout time.Duration) error {
-	cmd := exec.Command("supervisorctl", "restart", service)
-	if output, err := cmd.CombinedOutput(); err != nil {
-		startCmd := exec.Command("supervisorctl", "start", service)
-		if startOutput, startErr := startCmd.CombinedOutput(); startErr != nil {
-			return fmt.Errorf("%s restart failed: %s / start failed: %s", service, strings.TrimSpace(string(output)), strings.TrimSpace(string(startOutput)))
-		}
-	}
-
-	return waitForSupervisorService(service, timeout)
-}
-
-func restartOrStartManagedContainerService(service string, timeout time.Duration) error {
-	containerName := managedContainerNameForService(service)
-	if output, err := execInManagedContainer(containerName, 15*time.Second, "supervisorctl", "restart", service); err != nil {
-		startOutput, startErr := execInManagedContainer(containerName, 15*time.Second, "supervisorctl", "start", service)
-		if startErr != nil {
-			return fmt.Errorf("%s restart failed: %s / start failed: %s", service, strings.TrimSpace(output), strings.TrimSpace(startOutput))
-		}
-	}
-
-	return waitForManagedContainerService(containerName, service, timeout)
-}
-
 func restartManagedService(service string, timeout time.Duration) error {
-	if managedServiceCanBeControlledLocally(service) {
-		return restartOrStartSupervisorService(service, timeout)
+	if !managedServiceUsesContainerLifecycle(service) {
+		return fmt.Errorf("unsupported managed service restart: %s", service)
 	}
-	if managedServiceUsesContainerLifecycle(service) {
-		return restartOrStartManagedSplitContainerService(service, timeout)
-	}
-	return restartOrStartManagedContainerService(service, timeout)
-}
-
-func waitForSupervisorService(service string, timeout time.Duration) error {
-	deadline := time.Now().Add(timeout)
-	lastStatus := ""
-
-	for time.Now().Before(deadline) {
-		output, err := exec.Command("supervisorctl", "status", service).CombinedOutput()
-		lastStatus = strings.TrimSpace(string(output))
-		if err == nil && strings.Contains(lastStatus, "RUNNING") {
-			return nil
-		}
-		if strings.Contains(lastStatus, "FATAL") || strings.Contains(lastStatus, "EXITED") || strings.Contains(lastStatus, "BACKOFF") {
-			return fmt.Errorf("%s failed to start: %s", service, lastStatus)
-		}
-		time.Sleep(500 * time.Millisecond)
-	}
-
-	return fmt.Errorf("timed out waiting for %s to become RUNNING (last status: %s)", service, lastStatus)
-}
-
-func waitForManagedContainerService(containerName string, service string, timeout time.Duration) error {
-	deadline := time.Now().Add(timeout)
-	lastStatus := ""
-
-	for time.Now().Before(deadline) {
-		output, err := execInManagedContainer(containerName, 10*time.Second, "supervisorctl", "status", service)
-		lastStatus = strings.TrimSpace(output)
-		if err == nil && strings.Contains(lastStatus, "RUNNING") {
-			return nil
-		}
-		if strings.Contains(lastStatus, "FATAL") || strings.Contains(lastStatus, "EXITED") || strings.Contains(lastStatus, "BACKOFF") {
-			return fmt.Errorf("%s failed to start: %s", service, lastStatus)
-		}
-		time.Sleep(500 * time.Millisecond)
-	}
-
-	return fmt.Errorf("timed out waiting for %s in %s to become RUNNING (last status: %s)", service, containerName, lastStatus)
+	return restartOrStartManagedSplitContainerService(service, timeout)
 }
 
 func detectPythonCLIRoot() string {

@@ -122,6 +122,7 @@ docs:
 - docs/agent/tech-debt/README.md
 - docs/agent/amd-local.md
 - docs/agent/architecture-guardrails.md
+- docs/agent/openai-api-contracts.md
 - docs/agent/architecture-scorecard.md
 - docs/agent/change-surfaces.md
 - docs/agent/environments.md
@@ -227,6 +228,9 @@ doc_governance:
   - path: docs/agent/architecture-guardrails.md
     steward: agent-contract
     freshness: update when structural or modularity guardrails change
+  - path: docs/agent/openai-api-contracts.md
+    steward: agent-contract
+    freshness: update when OpenAI API type inventory, SDK alignment, or documented differences change
   - path: docs/agent/architecture-scorecard.md
     steward: agent-contract
     freshness: update when whole-repository architecture scores, score evidence, or PR-chain priorities change

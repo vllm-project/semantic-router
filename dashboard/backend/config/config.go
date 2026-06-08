@@ -35,6 +35,11 @@ type Config struct {
 	ReadonlyMode bool
 	SetupMode    bool
 
+	// AllowOpenBootstrap enables first-admin creation via the public, unauthenticated
+	// web-form bootstrap endpoint. Off by default; production should provision the
+	// admin via DASHBOARD_ADMIN_* instead of exposing an open registration path.
+	AllowOpenBootstrap bool
+
 	// Platform branding (e.g., "amd" for AMD GPU deployments)
 	Platform string
 
@@ -61,6 +66,9 @@ type Config struct {
 
 	// Durable workflow state (ML pipeline jobs, OpenClaw entities)
 	WorkflowDBPath string
+
+	// Durable deployed-config projection read model
+	ConfigProjectionDBPath string
 }
 
 // env returns the env var or default
@@ -115,31 +123,33 @@ func defaultPythonBinary() string {
 }
 
 type parsedFlags struct {
-	port                 *string
-	staticDir            *string
-	configFile           *string
-	grafanaURL           *string
-	promURL              *string
-	routerAPI            *string
-	routerMetrics        *string
-	jaegerURL            *string
-	envoyURL             *string
-	fleetSimURL          *string
-	readonlyMode         *bool
-	setupMode            *bool
-	platform             *string
-	evaluationEnabled    *bool
-	evaluationDBPath     *string
-	evaluationResultsDir *string
-	pythonPath           *string
-	mcpEnabled           *bool
-	mlPipelineEnabled    *bool
-	mlPipelineDataDir    *string
-	mlTrainingDir        *string
-	mlServiceURL         *string
-	workflowDBPath       *string
-	auth                 authFlags
-	openClaw             openClawFlags
+	port                   *string
+	staticDir              *string
+	configFile             *string
+	grafanaURL             *string
+	promURL                *string
+	routerAPI              *string
+	routerMetrics          *string
+	jaegerURL              *string
+	envoyURL               *string
+	fleetSimURL            *string
+	readonlyMode           *bool
+	setupMode              *bool
+	allowOpenBootstrap     *bool
+	platform               *string
+	evaluationEnabled      *bool
+	evaluationDBPath       *string
+	evaluationResultsDir   *string
+	pythonPath             *string
+	mcpEnabled             *bool
+	mlPipelineEnabled      *bool
+	mlPipelineDataDir      *string
+	mlTrainingDir          *string
+	mlServiceURL           *string
+	workflowDBPath         *string
+	configProjectionDBPath *string
+	auth                   authFlags
+	openClaw               openClawFlags
 }
 
 func applyCoreConfig(cfg *Config, flags parsedFlags) {
@@ -155,6 +165,7 @@ func applyCoreConfig(cfg *Config, flags parsedFlags) {
 	cfg.FleetSimURL = *flags.fleetSimURL
 	cfg.ReadonlyMode = *flags.readonlyMode
 	cfg.SetupMode = *flags.setupMode
+	cfg.AllowOpenBootstrap = *flags.allowOpenBootstrap
 	cfg.Platform = *flags.platform
 }
 
@@ -169,6 +180,7 @@ func applyFeatureConfig(cfg *Config, flags parsedFlags) {
 	cfg.MLTrainingDir = *flags.mlTrainingDir
 	cfg.MLServiceURL = *flags.mlServiceURL
 	cfg.WorkflowDBPath = *flags.workflowDBPath
+	cfg.ConfigProjectionDBPath = *flags.configProjectionDBPath
 }
 
 func applyAuthConfig(cfg *Config, flags authFlags) error {
@@ -224,6 +236,7 @@ func LoadConfig() (*Config, error) {
 	// Read-only mode for public beta deployments
 	readonlyMode := flag.Bool("readonly", env("DASHBOARD_READONLY", "false") == "true", "enable read-only mode (disable config editing)")
 	setupMode := flag.Bool("setup-mode", env("DASHBOARD_SETUP_MODE", "false") == "true", "enable dashboard setup mode")
+	allowOpenBootstrap := flag.Bool("allow-open-bootstrap", env("DASHBOARD_ALLOW_OPEN_BOOTSTRAP", "false") == "true", "allow first-admin creation via the public web-form bootstrap endpoint (off by default; production should provision the admin via DASHBOARD_ADMIN_*)")
 
 	// Platform branding
 	platform := flag.String("platform", env("DASHBOARD_PLATFORM", ""), "platform branding (e.g., 'amd' for AMD GPU deployments)")
@@ -243,6 +256,7 @@ func LoadConfig() (*Config, error) {
 	mlTrainingDir := flag.String("ml-training-dir", env("ML_TRAINING_DIR", ""), "path to src/training/model_selection/ml_model_selection")
 	mlServiceURL := flag.String("ml-service-url", env("ML_SERVICE_URL", ""), "URL of Python ML service sidecar (empty = subprocess mode)")
 	workflowDBPath := flag.String("workflow-db", env("DASHBOARD_WORKFLOW_DB_PATH", "./data/workflow.sqlite"), "SQLite path for durable dashboard workflow state")
+	configProjectionDBPath := flag.String("config-projection-db", env("DASHBOARD_CONFIG_PROJECTION_DB_PATH", "./data/config-projection.sqlite"), "SQLite path for deployed config projection state")
 
 	// Authentication configuration
 	auth := bindAuthFlags()
@@ -251,31 +265,33 @@ func LoadConfig() (*Config, error) {
 	openClaw := bindOpenClawFlags()
 
 	flags := parsedFlags{
-		port:                 port,
-		staticDir:            staticDir,
-		configFile:           configFile,
-		grafanaURL:           grafanaURL,
-		promURL:              promURL,
-		routerAPI:            routerAPI,
-		routerMetrics:        routerMetrics,
-		jaegerURL:            jaegerURL,
-		envoyURL:             envoyURL,
-		fleetSimURL:          fleetSimURL,
-		readonlyMode:         readonlyMode,
-		setupMode:            setupMode,
-		platform:             platform,
-		evaluationEnabled:    evaluationEnabled,
-		evaluationDBPath:     evaluationDBPath,
-		evaluationResultsDir: evaluationResultsDir,
-		pythonPath:           pythonPath,
-		mcpEnabled:           mcpEnabled,
-		mlPipelineEnabled:    mlPipelineEnabled,
-		mlPipelineDataDir:    mlPipelineDataDir,
-		mlTrainingDir:        mlTrainingDir,
-		mlServiceURL:         mlServiceURL,
-		workflowDBPath:       workflowDBPath,
-		auth:                 auth,
-		openClaw:             openClaw,
+		port:                   port,
+		staticDir:              staticDir,
+		configFile:             configFile,
+		grafanaURL:             grafanaURL,
+		promURL:                promURL,
+		routerAPI:              routerAPI,
+		routerMetrics:          routerMetrics,
+		jaegerURL:              jaegerURL,
+		envoyURL:               envoyURL,
+		fleetSimURL:            fleetSimURL,
+		readonlyMode:           readonlyMode,
+		setupMode:              setupMode,
+		allowOpenBootstrap:     allowOpenBootstrap,
+		platform:               platform,
+		evaluationEnabled:      evaluationEnabled,
+		evaluationDBPath:       evaluationDBPath,
+		evaluationResultsDir:   evaluationResultsDir,
+		pythonPath:             pythonPath,
+		mcpEnabled:             mcpEnabled,
+		mlPipelineEnabled:      mlPipelineEnabled,
+		mlPipelineDataDir:      mlPipelineDataDir,
+		mlTrainingDir:          mlTrainingDir,
+		mlServiceURL:           mlServiceURL,
+		workflowDBPath:         workflowDBPath,
+		configProjectionDBPath: configProjectionDBPath,
+		auth:                   auth,
+		openClaw:               openClaw,
 	}
 
 	flag.Parse()

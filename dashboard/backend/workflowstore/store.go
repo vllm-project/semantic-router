@@ -109,6 +109,11 @@ CREATE TABLE IF NOT EXISTS openclaw_room_message (
 	UNIQUE(room_id, message_id)
 );
 CREATE INDEX IF NOT EXISTS idx_oc_msg_room ON openclaw_room_message(room_id, seq);
+
+CREATE TABLE IF NOT EXISTS mcp_server (
+	id TEXT PRIMARY KEY,
+	json TEXT NOT NULL
+);
 `
 	_, err := s.db.Exec(schema)
 	return err

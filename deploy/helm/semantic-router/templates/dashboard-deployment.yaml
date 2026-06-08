@@ -70,6 +70,10 @@ spec:
         - name: DASHBOARD_READONLY
           value: "true"
         {{- end }}
+        {{- if .Values.dashboard.allowOpenBootstrap }}
+        - name: DASHBOARD_ALLOW_OPEN_BOOTSTRAP
+          value: "true"
+        {{- end }}
         {{- if .Values.dashboard.persistence.enabled }}
         - name: DASHBOARD_AUTH_DB_PATH
           value: "{{ .Values.dashboard.persistence.mountPath }}/auth.db"

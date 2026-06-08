@@ -2,14 +2,6 @@ package handlers
 
 import "strings"
 
-func checkServiceInLogContent(service, logContent string) (bool, string) {
-	if serviceLogLooksHealthy(service, logContent) {
-		return true, "Running"
-	}
-
-	return false, "Status unknown (check logs)"
-}
-
 func serviceLogLooksHealthy(service, logContent string) bool {
 	logContentLower := strings.ToLower(logContent)
 

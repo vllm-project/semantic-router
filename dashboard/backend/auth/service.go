@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/golang-jwt/jwt/v5"
@@ -19,7 +20,19 @@ type Service struct {
 	store       *Store
 	jwtSecret   []byte
 	ttlDuration time.Duration
+
+	// allowOpenBootstrap gates the public web-form bootstrap endpoint (off by default).
+	allowOpenBootstrap bool
+	// bootstrapMu serializes the check-then-create in BootstrapRegister so that two
+	// concurrent requests cannot both pass the "no users yet" check and each create an
+	// admin. The dashboard runs single-replica (enforced by the chart's replicaCount
+	// guard), so a process-level mutex is sufficient; a multi-writer deployment would
+	// need a transactional guard in the store instead.
+	bootstrapMu sync.Mutex
 }
+
+// ErrBootstrapClosed is returned by BootstrapRegister when an admin already exists.
+var ErrBootstrapClosed = errors.New("bootstrap is disabled")
 
 type TokenClaims struct {
 	UserID string `json:"userId"`
@@ -38,6 +51,29 @@ func NewService(store *Store, secret string, ttlHours int) *Service {
 		secret = base64.RawStdEncoding.EncodeToString(b)
 	}
 	return &Service{store: store, jwtSecret: []byte(secret), ttlDuration: time.Duration(ttlHours) * time.Hour}
+}
+
+// SetAllowOpenBootstrap toggles the public web-form bootstrap endpoint.
+func (s *Service) SetAllowOpenBootstrap(v bool) { s.allowOpenBootstrap = v }
+
+// OpenBootstrapEnabled reports whether the public web-form bootstrap endpoint is enabled.
+func (s *Service) OpenBootstrapEnabled() bool { return s.allowOpenBootstrap }
+
+// BootstrapRegister atomically creates the first admin. The "no users yet" check and
+// the create run under bootstrapMu, so two concurrent requests cannot each create an
+// admin (closing the time-of-check-to-time-of-use race in the public bootstrap path).
+// Returns ErrBootstrapClosed if any user already exists.
+func (s *Service) BootstrapRegister(ctx context.Context, email, name, hash string) (*User, error) {
+	s.bootstrapMu.Lock()
+	defer s.bootstrapMu.Unlock()
+	ok, err := s.CanBootstrap(ctx)
+	if err != nil {
+		return nil, err
+	}
+	if !ok {
+		return nil, ErrBootstrapClosed
+	}
+	return s.store.CreateUser(ctx, email, defaultAdminName(name), hash, RoleAdmin, "active")
 }
 
 func (s *Service) HashPassword(password string) (string, error) {

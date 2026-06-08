@@ -9,6 +9,7 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/vllm-project/semantic-router/dashboard/backend/configprojection"
 	routerconfig "github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 )
 
@@ -273,6 +274,13 @@ func deployDirectWrite(w http.ResponseWriter, configPath string, configDir strin
 	// Step 7: Clean up old backups (keep only maxBackups most recent)
 	cleanupBackups(configBackupDir(configDir))
 
+	refreshConfigProjection(configprojection.RefreshInput{
+		Version:     newActivationVersion(),
+		Source:      configprojection.SourceDSL,
+		YAMLBytes:   yamlBytes,
+		DSLSnapshot: req.DSL,
+	})
+
 	w.Header().Set("Content-Type", "application/json")
 	_ = json.NewEncoder(w).Encode(DeployResponse{
 		Status:  "success",
@@ -467,6 +475,13 @@ func rollbackDirectWrite(w http.ResponseWriter, configPath string, configDir str
 		http.Error(w, formatRuntimeApplyError("Failed to apply rolled back config to runtime", err), http.StatusInternalServerError)
 		return
 	}
+
+	refreshConfigProjection(configprojection.RefreshInput{
+		Version:     version,
+		Source:      configprojection.SourceRollback,
+		YAMLBytes:   backupData,
+		DSLSnapshot: readArchivedDSL(configDir),
+	})
 
 	w.Header().Set("Content-Type", "application/json")
 	_ = json.NewEncoder(w).Encode(DeployResponse{
