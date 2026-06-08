@@ -1,7 +1,12 @@
 apiVersion: v1
 kind: PersistentVolumeClaim
 metadata:
-  name: semantic-router-dashboard-data
+  name: semantic-router-dashboard-e2e-data
+  namespace: vllm-semantic-router-system
+  labels:
+    app.kubernetes.io/name: semantic-router-dashboard
+    app.kubernetes.io/component: e2e-data
+    vllm.ai/e2e-managed: "true"
 spec:
   accessModes:
     - ReadWriteOnce
