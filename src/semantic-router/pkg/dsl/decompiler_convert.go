@@ -196,6 +196,9 @@ func (d *decompiler) roleBindingToSignal(rb *config.RoleBinding) *SignalDecl {
 	if rb.Role != "" {
 		fields["role"] = StringValue{V: rb.Role}
 	}
+	if rb.Description != "" {
+		fields["description"] = StringValue{V: rb.Description}
+	}
 	if len(rb.Subjects) > 0 {
 		var items []Value
 		for _, subj := range rb.Subjects {

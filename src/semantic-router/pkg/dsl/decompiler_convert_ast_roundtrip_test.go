@@ -1,6 +1,8 @@
 package dsl
 
 import (
+	"math"
+	"strings"
 	"testing"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
@@ -73,6 +75,57 @@ func TestDecompileToASTPreservesContextRuleFields(t *testing.T) {
 	requireStringField(t, sig, "min_tokens", "1K")
 	requireStringField(t, sig, "max_tokens", "32K")
 	requireStringField(t, sig, "description", "Long requests requiring large context window")
+}
+
+// TestDecompileToASTPreservesAuthzDescription locks in the AST emit contract
+// for RoleBinding.Description. compileAuthzSignal reads this field, so the
+// decompiler must emit it to avoid a lossy runtime config -> AST round trip.
+func TestDecompileToASTPreservesAuthzDescription(t *testing.T) {
+	cfg := &config.RouterConfig{
+		IntelligentRouting: config.IntelligentRouting{
+			Signals: config.Signals{
+				RoleBindings: []config.RoleBinding{{
+					Name:        "admins",
+					Role:        "admin",
+					Description: "Admin callers",
+					Subjects: []config.Subject{{
+						Kind: "User",
+						Name: "alice",
+					}},
+				}},
+			},
+		},
+	}
+
+	prog := DecompileToAST(cfg)
+
+	sig := findSignal(t, prog, "authz", "admins")
+	requireStringField(t, sig, "role", "admin")
+	requireStringField(t, sig, "description", "Admin callers")
+	requireFieldExists(t, sig, "subjects")
+}
+
+func TestDecompilePreservesAuthzDescription(t *testing.T) {
+	cfg := &config.RouterConfig{
+		IntelligentRouting: config.IntelligentRouting{
+			Signals: config.Signals{
+				RoleBindings: []config.RoleBinding{{
+					Name:        "admins",
+					Role:        "admin",
+					Description: "Admin callers",
+				}},
+			},
+		},
+	}
+
+	out, err := Decompile(cfg)
+	if err != nil {
+		t.Fatalf("Decompile: %v", err)
+	}
+
+	if !strings.Contains(out, `description: "Admin callers"`) {
+		t.Fatalf("expected authz description in decompiled DSL, got:\n%s", out)
+	}
 }
 
 // TestDecompileToASTOmitsZeroValuedKeywordRuleFields documents the
@@ -186,7 +239,7 @@ func requireFloatField(t *testing.T, sig *SignalDecl, name string, want float64)
 		t.Errorf("field %q: expected FloatValue, got %T", name, v)
 		return
 	}
-	if fv.V != want {
+	if math.Abs(fv.V-want) > 0.000001 {
 		t.Errorf("field %q: want %v, got %v", name, want, fv.V)
 	}
 }
