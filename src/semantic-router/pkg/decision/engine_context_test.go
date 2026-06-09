@@ -67,35 +67,79 @@ func TestDecisionEngine_EvaluateDecisionsWithContext(t *testing.T) {
 			)
 
 			result, err := engine.EvaluateDecisionsWithSignals(tt.signals)
-
-			if tt.expectError {
-				if err == nil {
-					t.Errorf("Expected error but got none")
-				}
-				return
-			}
-
-			if err != nil {
-				t.Errorf("Unexpected error: %v", err)
-				return
-			}
-
-			if tt.expectedDecision == "" {
-				if result != nil {
-					t.Errorf("Expected nil result but got decision: %s", result.Decision.Name)
-				}
-				return
-			}
-
-			if result == nil {
-				t.Errorf("Expected result but got nil")
-				return
-			}
-
-			if result.Decision.Name != tt.expectedDecision {
-				t.Errorf("Expected decision %s, got %s", tt.expectedDecision, result.Decision.Name)
-			}
+			assertExpectedDecisionResult(t, result, err, tt.expectError, tt.expectedDecision)
 		})
+	}
+}
+
+func assertExpectedDecisionResult(
+	t *testing.T,
+	result *DecisionResult,
+	err error,
+	expectError bool,
+	expectedDecision string,
+) {
+	t.Helper()
+
+	if expectError {
+		if err == nil {
+			t.Errorf("Expected error but got none")
+		}
+		return
+	}
+
+	if err != nil {
+		t.Errorf("Unexpected error: %v", err)
+		return
+	}
+
+	if expectedDecision == "" {
+		if result != nil {
+			t.Errorf("Expected nil result but got decision: %s", result.Decision.Name)
+		}
+		return
+	}
+
+	if result == nil {
+		t.Errorf("Expected result but got nil")
+		return
+	}
+
+	if result.Decision.Name != expectedDecision {
+		t.Errorf("Expected decision %s, got %s", expectedDecision, result.Decision.Name)
+	}
+}
+
+func evaluateDecisionsWithSignalsForTest(
+	t *testing.T,
+	decisions []config.Decision,
+	signals *SignalMatches,
+) *DecisionResult {
+	t.Helper()
+
+	engine := NewDecisionEngine(
+		[]config.KeywordRule{},
+		[]config.EmbeddingRule{},
+		[]config.Category{},
+		decisions,
+		"priority",
+	)
+
+	result, err := engine.EvaluateDecisionsWithSignals(signals)
+	if err != nil {
+		t.Fatalf("Unexpected error: %v", err)
+	}
+	if result == nil {
+		t.Fatalf("Expected decision, got nil")
+	}
+	return result
+}
+
+func assertDecisionName(t *testing.T, result *DecisionResult, expectedDecision string) {
+	t.Helper()
+
+	if result.Decision.Name != expectedDecision {
+		t.Fatalf("Expected decision %s, got %s", expectedDecision, result.Decision.Name)
 	}
 }
 
@@ -171,24 +215,8 @@ func TestDecisionEngine_ContextGuardPreventsLowTokenRouteShadowing(t *testing.T)
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			engine := NewDecisionEngine(
-				[]config.KeywordRule{},
-				[]config.EmbeddingRule{},
-				[]config.Category{},
-				tt.decisions,
-				"priority",
-			)
-
-			result, err := engine.EvaluateDecisionsWithSignals(tt.signals)
-			if err != nil {
-				t.Fatalf("Unexpected error: %v", err)
-			}
-			if result == nil {
-				t.Fatalf("Expected decision %s, got nil", tt.expectedDecision)
-			}
-			if result.Decision.Name != tt.expectedDecision {
-				t.Fatalf("Expected decision %s, got %s", tt.expectedDecision, result.Decision.Name)
-			}
+			result := evaluateDecisionsWithSignalsForTest(t, tt.decisions, tt.signals)
+			assertDecisionName(t, result, tt.expectedDecision)
 		})
 	}
 }
