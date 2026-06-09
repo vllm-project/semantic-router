@@ -146,6 +146,9 @@ func (c *Compiler) compileLanguageSignal(s *SignalDecl) {
 	if v, ok := getStringField(s.Fields, "description"); ok {
 		rule.Description = v
 	}
+	if v, ok := getFloat32Field(s.Fields, "threshold"); ok {
+		rule.Threshold = v
+	}
 	c.config.LanguageRules = append(c.config.LanguageRules, rule)
 }
 

@@ -46,6 +46,8 @@ var DashboardContract = []string{
 	"dashboard-deploy-invalid-yaml",
 	// Evaluation endpoints (tasks/CRUD require CGO — only datasets works without it)
 	"dashboard-eval-datasets",
+	// Workflow persistence survives dashboard pod restart (requires dashboard PVC)
+	"dashboard-restart-recovery",
 	// Security Policy RBAC + ratelimit apply
 	"security-policy-apply",
 }

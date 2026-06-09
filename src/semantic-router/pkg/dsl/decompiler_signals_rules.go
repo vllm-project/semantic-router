@@ -129,6 +129,9 @@ func (d *decompiler) decompileLanguageSignals() {
 		if lang.Description != "" {
 			d.write("  description: %q\n", lang.Description)
 		}
+		if lang.Threshold != 0 {
+			d.write("  threshold: %g\n", lang.Threshold)
+		}
 		d.write("}\n\n")
 	}
 }
