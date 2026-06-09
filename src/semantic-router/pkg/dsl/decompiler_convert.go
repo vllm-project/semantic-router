@@ -144,6 +144,9 @@ func (d *decompiler) conversationToSignal(rule *config.ConversationRule) *Signal
 
 func (d *decompiler) complexityToSignal(comp *config.ComplexityRule) *SignalDecl {
 	fields := make(map[string]Value)
+	if comp.Method != "" {
+		fields["method"] = StringValue{V: comp.Method}
+	}
 	if comp.Threshold != 0 {
 		fields["threshold"] = FloatValue{V: float64(comp.Threshold)}
 	}
