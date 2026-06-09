@@ -157,6 +157,38 @@ func TestEviction(t *testing.T) {
 	assert.Len(t, store, 1)
 }
 
+// TestEvictionScanThrottled verifies the full-store TTL sweep in evictLocked is
+// throttled to at most once per evictInterval. A stale entry planted just after a
+// sweep must survive a sub-interval call (scan skipped) and be removed only once
+// evictInterval has elapsed (scan runs). This keeps the per-turn hot path O(1)
+// amortized instead of scanning every session on every RecordTurn.
+func TestEvictionScanThrottled(t *testing.T) {
+	ResetForTesting()
+	t.Cleanup(ResetForTesting)
+
+	base := time.Date(2026, 1, 2, 3, 4, 5, 0, time.UTC)
+
+	// Prime the throttle with one sweep at base, then plant an already-stale entry.
+	mu.Lock()
+	evictLocked(base)
+	store["stale"] = &turnState{lastSeen: base.Add(-2 * ttl)}
+	mu.Unlock()
+
+	// Within evictInterval of the last sweep: scan is skipped, stale entry survives.
+	mu.Lock()
+	evictLocked(base.Add(evictInterval / 2))
+	_, present := store["stale"]
+	mu.Unlock()
+	require.True(t, present, "scan must be throttled within evictInterval; stale entry should survive")
+
+	// After evictInterval has elapsed: scan runs and removes the stale entry.
+	mu.Lock()
+	evictLocked(base.Add(evictInterval + time.Second))
+	_, present = store["stale"]
+	mu.Unlock()
+	require.False(t, present, "scan must run after evictInterval and evict the stale entry")
+}
+
 // =====================================================================
 // PR 2 — per-turn pricing metadata and cumulative_cost
 // =====================================================================
