@@ -50,3 +50,35 @@ routing:
 ```
 
 Use `AND` when a model should only activate for a narrow, high-confidence slice of traffic.
+
+For token-count routing, keep low-context and high-context routes mutually guarded. A route named for low-token traffic should include the matching context signal; otherwise a broad domain-only route with higher priority can still win for long prompts that also match the domain:
+
+```yaml
+routing:
+  decisions:
+    - name: low_token_code_route
+      description: Route short code prompts to the code model.
+      priority: 180
+      rules:
+        operator: AND
+        conditions:
+          - type: domain
+            name: code_generation
+          - type: context
+            name: low_token_count
+      modelRefs:
+        - model: code-lite
+          use_reasoning: false
+
+    - name: high_token_route
+      description: Route long prompts to the long-context model.
+      priority: 170
+      rules:
+        operator: AND
+        conditions:
+          - type: context
+            name: high_token_count
+      modelRefs:
+        - model: long-context
+          use_reasoning: false
+```
