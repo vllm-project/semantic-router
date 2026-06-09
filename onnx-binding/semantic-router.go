@@ -900,6 +900,16 @@ func ClassifyFactCheckText(text string) (ClassResult, error) {
 	return classifyWithClassifier("factcheck", text)
 }
 
+// InitComplexityClassifier initializes the complexity classifier (ONNX backend).
+func InitComplexityClassifier(modelPath string, useCPU bool) error {
+	return initClassifier("complexity", modelPath, !useCPU)
+}
+
+// ClassifyComplexityText classifies text for reasoning complexity (ONNX backend).
+func ClassifyComplexityText(text string) (ClassResult, error) {
+	return classifyWithClassifier("complexity", text)
+}
+
 // ============================================================================
 // Feedback Detector Functions
 // ============================================================================

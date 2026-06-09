@@ -4,6 +4,7 @@
 
 // FFI modules
 pub mod classify; //  classification functions
+pub mod complexity; //  complexity classifier functions
 pub mod embedding; //  embedding functions
 pub mod generative_classifier; // Qwen3 LoRA generative classifier
 pub mod generative_guard; // Qwen3Guard safety classifier
@@ -20,6 +21,7 @@ pub mod state_manager; // Global state management system
 
 // Re-export types and functions
 pub use classify::*;
+pub use complexity::*; // Complexity classifier functions
 pub use embedding::*; // Intelligent embedding functions
 pub use generative_classifier::*; // Qwen3 LoRA generative classifier functions
 pub use generative_guard::*; // Qwen3Guard safety classifier functions

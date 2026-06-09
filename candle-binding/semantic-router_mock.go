@@ -792,6 +792,17 @@ func ClassifyFactCheckText(text string) (FactCheckResult, error) {
 	}, nil
 }
 
+// InitComplexityClassifier initializes the complexity classifier (mock).
+func InitComplexityClassifier(modelPath string, useCPU bool) error {
+	log.Printf("[MOCK] Initializing Complexity Classifier: %s", modelPath)
+	return nil
+}
+
+// ClassifyComplexityText classifies text for reasoning complexity (mock).
+func ClassifyComplexityText(text string) (ClassResult, error) {
+	return ClassResult{Class: 0, Confidence: 0.99}, nil
+}
+
 // FeedbackResult represents the result of feedback detection
 type FeedbackResult struct {
 	Class      int
