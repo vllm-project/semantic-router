@@ -574,7 +574,7 @@ dashboard:
       memory: "128Mi"
       cpu: "100m"
   persistence:
-    # -- Persist dashboard-local SQLite state for auth/session/workflow data.
+    # -- Persist dashboard-local SQLite state for auth/session/workflow/config-projection data.
     # This is restart-safe for one dashboard replica, not a shared HA session store.
     enabled: false
     # -- Existing PVC to mount for dashboard-local state.
