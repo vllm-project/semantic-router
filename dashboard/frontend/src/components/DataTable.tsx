@@ -26,6 +26,36 @@ export interface DataTableProps<T> {
   readonly?: boolean
 }
 
+function getColumnValue<T>(row: T, key: string): unknown {
+  if (row !== null && typeof row === 'object') {
+    return (row as Record<string, unknown>)[key]
+  }
+
+  return undefined
+}
+
+function compareColumnValues(aValue: unknown, bValue: unknown): number {
+  if (aValue === bValue) return 0
+  if (aValue === null || typeof aValue === 'undefined') return -1
+  if (bValue === null || typeof bValue === 'undefined') return 1
+
+  if (typeof aValue === 'number' && typeof bValue === 'number') {
+    return aValue > bValue ? 1 : -1
+  }
+
+  const aText = String(aValue)
+  const bText = String(bValue)
+  if (aText === bText) return 0
+  return aText > bText ? 1 : -1
+}
+
+function renderColumnValue(value: unknown): React.ReactNode {
+  if (value === null || typeof value === 'undefined') return ''
+  if (typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean') return value
+  if (React.isValidElement(value)) return value
+  return String(value)
+}
+
 export function DataTable<T>({
   columns,
   data,
@@ -61,14 +91,10 @@ export function DataTable<T>({
     if (!sortColumn) return data
 
     return [...data].sort((a, b) => {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const aValue = (a as any)[sortColumn]
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const bValue = (b as any)[sortColumn]
+      const aValue = getColumnValue(a, sortColumn)
+      const bValue = getColumnValue(b, sortColumn)
 
-      if (aValue === bValue) return 0
-      
-      const comparison = aValue > bValue ? 1 : -1
+      const comparison = compareColumnValues(aValue, bValue)
       return sortDirection === 'asc' ? comparison : -comparison
     })
   }, [data, sortColumn, sortDirection])
@@ -138,8 +164,7 @@ export function DataTable<T>({
                         className={styles.td}
                         style={{ textAlign: column.align || 'left' }}
                       >
-                        {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
-                        {column.render ? column.render(row) : (row as any)[column.key]}
+                        {column.render ? column.render(row) : renderColumnValue(getColumnValue(row, column.key))}
                       </td>
                     ))}
                     {(onView || onEdit || onDelete) && (
