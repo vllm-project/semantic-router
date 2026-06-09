@@ -69,6 +69,67 @@ func TestIntentRequestResolveSignalInput_FallsBackToText(t *testing.T) {
 	assert.False(t, input.hasAssistantReply)
 }
 
+func TestIntentRequestResolveSignalInput_ExtractsImageFromCurrentUserTurn(t *testing.T) {
+	const dataURI = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAAB"
+	req := IntentRequest{
+		Messages: []IntentMessage{
+			{
+				Role: "user",
+				Content: mustMessageContent(t, []map[string]interface{}{
+					{"type": "text", "text": "What does this screenshot show?"},
+					{"type": "image_url", "image_url": map[string]string{"url": dataURI}},
+				}),
+			},
+		},
+	}
+
+	input, err := req.resolveSignalInput()
+	require.NoError(t, err)
+
+	assert.Equal(t, "What does this screenshot show?", input.evaluationText)
+	assert.Equal(t, dataURI, input.imageURL)
+}
+
+func TestIntentRequestResolveSignalInput_AcceptsImageOnlyUserTurn(t *testing.T) {
+	const dataURI = "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD"
+	req := IntentRequest{
+		Messages: []IntentMessage{
+			{
+				Role: "user",
+				Content: mustMessageContent(t, []map[string]interface{}{
+					{"type": "image_url", "image_url": map[string]string{"url": dataURI}},
+				}),
+			},
+		},
+	}
+
+	input, err := req.resolveSignalInput()
+	require.NoError(t, err)
+
+	assert.Empty(t, input.evaluationText)
+	assert.Equal(t, dataURI, input.imageURL)
+}
+
+func TestIntentRequestResolveSignalInput_DropsUnsafeImageURL(t *testing.T) {
+	req := IntentRequest{
+		Messages: []IntentMessage{
+			{
+				Role: "user",
+				Content: mustMessageContent(t, []map[string]interface{}{
+					{"type": "text", "text": "Describe it."},
+					{"type": "image_url", "image_url": map[string]string{"url": "https://example.com/cat.png"}},
+				}),
+			},
+		},
+	}
+
+	input, err := req.resolveSignalInput()
+	require.NoError(t, err)
+
+	assert.Equal(t, "Describe it.", input.evaluationText)
+	assert.Empty(t, input.imageURL, "non-data-URI image references must be rejected to prevent SSRF")
+}
+
 func TestClassificationServiceClassifyIntentForEval_AcceptsMessagesWithoutText(t *testing.T) {
 	service := &ClassificationService{classifier: nil}
 	req := IntentRequest{
