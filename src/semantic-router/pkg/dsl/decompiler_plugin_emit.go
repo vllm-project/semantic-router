@@ -255,6 +255,9 @@ func emitRAGPluginConfig(sb *strings.Builder, p *config.DecisionPlugin) {
 	if cfg.InjectionMode != "" {
 		fmt.Fprintf(sb, "    injection_mode: %q\n", cfg.InjectionMode)
 	}
+	if cfg.OnFailure != "" {
+		fmt.Fprintf(sb, "    on_failure: %q\n", cfg.OnFailure)
+	}
 }
 
 func emitHeaderMutationPluginConfig(sb *strings.Builder, p *config.DecisionPlugin) {
