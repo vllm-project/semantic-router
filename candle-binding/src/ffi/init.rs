@@ -3,6 +3,10 @@
 //! This module contains all C FFI initialization functions for dual-path architecture.
 //! Provides 13 initialization functions with 100% backward compatibility.
 
+// These `extern "C"` entry points intentionally take raw C pointers and document
+// their invariants in per-function `# Safety` sections; matches ffi/mlp.rs.
+#![allow(clippy::not_unsafe_ptr_arg_deref)]
+
 use std::ffi::{c_char, c_int, CStr};
 use std::path::Path;
 use std::sync::{Arc, OnceLock};
@@ -140,10 +144,10 @@ fn check_for_lora_weights(weights_path: &Path) -> Result<bool, Box<dyn std::erro
     // Read a portion of the safetensors file to check for LoRA weight names
     let mut file = File::open(weights_path)?;
     let mut buffer = vec![0u8; BUFFER_SIZE];
-    file.read(&mut buffer)?;
+    let bytes_read = file.read(&mut buffer)?;
 
-    // Convert to string and check for LoRA weight patterns
-    let content = String::from_utf8_lossy(&buffer);
+    // Convert to string and check for LoRA weight patterns (only the bytes actually read)
+    let content = String::from_utf8_lossy(&buffer[..bytes_read]);
 
     // Check for any LoRA weight pattern
     for pattern in LORA_WEIGHT_PATTERNS {
