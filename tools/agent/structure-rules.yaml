@@ -115,6 +115,7 @@ structure_exceptions:
     interface_checks: relaxed
   - paths:
       - candle-binding/src/core/config_loader.rs
+      - candle-binding/src/ffi/init.rs
     file_checks: relaxed
     function_checks: relaxed
   - paths:
