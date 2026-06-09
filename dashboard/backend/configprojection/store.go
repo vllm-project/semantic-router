@@ -15,8 +15,6 @@ import (
 	_ "github.com/mattn/go-sqlite3"
 )
 
-const currentSchemaVersion = 1
-
 // Store is a SQLite-backed deployment projection store.
 type Store struct {
 	db *sql.DB
@@ -51,18 +49,12 @@ func Open(dbPath string) (*Store, error) {
 
 func (s *Store) initSchema() error {
 	schema := `
-CREATE TABLE IF NOT EXISTS config_projection_schema_version (
-	id INTEGER PRIMARY KEY CHECK (id = 1),
-	version INTEGER NOT NULL
-);
-INSERT OR IGNORE INTO config_projection_schema_version (id, version)
-VALUES (1, 0);
-
 CREATE TABLE IF NOT EXISTS config_deployments (
 	version TEXT PRIMARY KEY,
 	source TEXT NOT NULL,
 	created_at TEXT NOT NULL,
 	dsl_snapshot TEXT NOT NULL DEFAULT '',
+	yaml_snapshot TEXT NOT NULL DEFAULT '',
 	yaml_hash TEXT NOT NULL,
 	validation_json TEXT NOT NULL,
 	models_json TEXT NOT NULL,
@@ -81,30 +73,10 @@ CREATE TABLE IF NOT EXISTS config_projection_active (
 	updated_at TEXT NOT NULL
 );
 INSERT OR IGNORE INTO config_projection_active (id, active_version, status, last_error, updated_at)
-VALUES (1, '', 'failed', 'projection not initialized', datetime('now'));
+VALUES (1, '', 'failed', 'projection not initialized', '1970-01-01T00:00:00.000000000Z');
 `
 	if _, err := s.db.Exec(schema); err != nil {
 		return fmt.Errorf("configprojection: init schema: %w", err)
-	}
-	return s.ensureSchemaVersion()
-}
-
-func (s *Store) ensureSchemaVersion() error {
-	var version int
-	err := s.db.QueryRow(`SELECT version FROM config_projection_schema_version WHERE id = 1`).Scan(&version)
-	if err != nil {
-		return fmt.Errorf("configprojection: read schema version: %w", err)
-	}
-	if version > currentSchemaVersion {
-		return fmt.Errorf("configprojection: unsupported schema version %d (max %d)", version, currentSchemaVersion)
-	}
-	if version < currentSchemaVersion {
-		if _, err := s.db.Exec(
-			`UPDATE config_projection_schema_version SET version = ? WHERE id = 1`,
-			currentSchemaVersion,
-		); err != nil {
-			return fmt.Errorf("configprojection: bump schema version: %w", err)
-		}
 	}
 	return nil
 }
@@ -145,13 +117,14 @@ func (s *Store) RefreshFromCanonical(input RefreshInput) error {
 
 	if _, err := tx.Exec(`
 INSERT INTO config_deployments (
-	version, source, created_at, dsl_snapshot, yaml_hash, validation_json,
+	version, source, created_at, dsl_snapshot, yaml_snapshot, yaml_hash, validation_json,
 	models_json, signals_json, decisions_json, plugins_json, projections_json
-) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 ON CONFLICT(version) DO UPDATE SET
 	source = excluded.source,
 	created_at = excluded.created_at,
 	dsl_snapshot = excluded.dsl_snapshot,
+	yaml_snapshot = excluded.yaml_snapshot,
 	yaml_hash = excluded.yaml_hash,
 	validation_json = excluded.validation_json,
 	models_json = excluded.models_json,
@@ -164,6 +137,7 @@ ON CONFLICT(version) DO UPDATE SET
 		snapshot.Source,
 		snapshot.CreatedAt.Format(time.RFC3339Nano),
 		snapshot.DSLSnapshot,
+		string(input.YAMLBytes),
 		snapshot.YAMLHash,
 		string(validationJSON),
 		string(snapshot.Models),
@@ -244,10 +218,7 @@ ORDER BY created_at DESC
 		}
 		parsedAt, parseErr := time.Parse(time.RFC3339Nano, createdAt)
 		if parseErr != nil {
-			parsedAt, parseErr = time.Parse(time.RFC3339, createdAt)
-			if parseErr != nil {
-				return nil, fmt.Errorf("configprojection: parse created_at: %w", parseErr)
-			}
+			return nil, fmt.Errorf("configprojection: parse created_at: %w", parseErr)
 		}
 		summaries = append(summaries, DeploymentSummary{
 			Version:   version,
@@ -270,7 +241,7 @@ func (s *Store) GetDeployment(version string) (*DeploymentRecord, error) {
 	}
 
 	row := s.db.QueryRow(`
-SELECT version, source, created_at, dsl_snapshot, yaml_hash, validation_json,
+SELECT version, source, created_at, dsl_snapshot, yaml_snapshot, yaml_hash, validation_json,
 	models_json, signals_json, decisions_json, plugins_json, projections_json
 FROM config_deployments
 WHERE version = ?
@@ -325,10 +296,7 @@ WHERE id = 1
 
 	parsedAt, err := time.Parse(time.RFC3339Nano, updatedAt)
 	if err != nil {
-		parsedAt, err = time.Parse(time.RFC3339, updatedAt)
-		if err != nil {
-			return nil, fmt.Errorf("configprojection: parse updated_at: %w", err)
-		}
+		return nil, fmt.Errorf("configprojection: parse updated_at: %w", err)
 	}
 
 	return &ActiveProjectionStatus{
@@ -355,6 +323,7 @@ func scanDeploymentRow(row *sql.Row, version string) (*DeploymentRecord, error) 
 		&record.Source,
 		&createdAt,
 		&record.DSLSnapshot,
+		&record.YAMLSnapshot,
 		&record.YAMLHash,
 		&validationRaw,
 		&modelsRaw,
@@ -371,10 +340,7 @@ func scanDeploymentRow(row *sql.Row, version string) (*DeploymentRecord, error) 
 
 	parsedAt, err := time.Parse(time.RFC3339Nano, createdAt)
 	if err != nil {
-		parsedAt, err = time.Parse(time.RFC3339, createdAt)
-		if err != nil {
-			return nil, fmt.Errorf("configprojection: parse created_at: %w", err)
-		}
+		return nil, fmt.Errorf("configprojection: parse created_at: %w", err)
 	}
 	record.CreatedAt = parsedAt
 

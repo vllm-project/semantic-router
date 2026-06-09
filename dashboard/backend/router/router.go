@@ -38,6 +38,7 @@ func Setup(cfg *config.Config) *Server {
 	} else {
 		cp = opened
 		handlers.SetConfigProjectionStore(cp)
+		handlers.BootstrapConfigProjectionFromFile(cfg.AbsConfigPath, cfg.ConfigDir)
 	}
 
 	mux.HandleFunc("/api/workflows/health", handlers.WorkflowHealthHandler(wf))
