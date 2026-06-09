@@ -115,6 +115,12 @@ func pluginFieldsHallucination(p *config.DecisionPlugin) map[string]Value {
 	if cfg.Enabled {
 		fields["enabled"] = BoolValue{V: true}
 	}
+	if cfg.UseNLI {
+		fields["use_nli"] = BoolValue{V: true}
+	}
+	if cfg.HallucinationAction != "" {
+		fields["hallucination_action"] = StringValue{V: cfg.HallucinationAction}
+	}
 	return fields
 }
 
@@ -256,6 +262,9 @@ func pluginFieldsRAG(p *config.DecisionPlugin) map[string]Value {
 	}
 	if cfg.InjectionMode != "" {
 		fields["injection_mode"] = StringValue{V: cfg.InjectionMode}
+	}
+	if cfg.OnFailure != "" {
+		fields["on_failure"] = StringValue{V: cfg.OnFailure}
 	}
 	return fields
 }
