@@ -40,6 +40,9 @@ func (c *Compiler) compileRAGPlugin(fields map[string]Value) config.RAGPluginCon
 	if v, ok := getFloat32Field(fields, "similarity_threshold"); ok {
 		cfg.SimilarityThreshold = &v
 	}
+	if v, ok := getIntField(fields, "max_context_length"); ok {
+		cfg.MaxContextLength = &v
+	}
 	if v, ok := getStringField(fields, "injection_mode"); ok {
 		cfg.InjectionMode = v
 	}
