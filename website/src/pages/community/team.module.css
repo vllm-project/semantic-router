@@ -13,10 +13,10 @@
 
 .header h1 {
   margin: 0;
-  font-size: clamp(2.8rem, 8vw, 5rem);
+  font-size: 4.2rem;
   line-height: 0.92;
   font-weight: 400;
-  letter-spacing: -0.05em;
+  letter-spacing: 0;
 }
 
 .subtitle,
@@ -39,7 +39,7 @@
 
 .section h2 {
   margin: 0;
-  font-size: clamp(1.8rem, 4vw, 2.7rem);
+  font-size: 2.4rem;
   line-height: 1;
 }
 
@@ -49,8 +49,13 @@
   gap: 1rem;
 }
 
+.steeringGrid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1rem;
+}
+
 .memberCard,
-.recognitionCard,
 .involvementCard {
   padding: 1.3rem;
   border: 1px solid var(--site-border);
@@ -60,6 +65,7 @@
 .memberCard {
   display: grid;
   gap: 1rem;
+  align-content: start;
 }
 
 .memberHeader {
@@ -104,7 +110,11 @@
   letter-spacing: 0.08em;
 }
 
-.maintainer,
+.steering {
+  border-color: var(--site-text);
+  color: var(--site-text);
+}
+
 .committer,
 .contributor {
   border-color: var(--site-border-strong);
@@ -122,6 +132,24 @@
 
 .memberBio {
   margin: 0;
+}
+
+.expertiseList {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem;
+  margin: -0.2rem 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.expertiseList li {
+  max-width: 100%;
+  padding: 0.35rem 0.6rem;
+  border: 1px solid var(--site-border);
+  color: var(--site-muted-bright);
+  font-size: 0.74rem;
+  line-height: 1.25;
 }
 
 .company {
@@ -168,45 +196,6 @@
   text-decoration: none;
 }
 
-.recognitionCard {
-  display: grid;
-  gap: 1rem;
-}
-
-.pathToMaintainer {
-  display: grid;
-  gap: 1rem;
-}
-
-.steps {
-  display: grid;
-  gap: 0.9rem;
-}
-
-.step {
-  display: grid;
-  grid-template-columns: auto 1fr;
-  gap: 0.9rem;
-  padding: 1rem 0;
-  border-top: 1px solid rgba(255, 255, 255, 0.06);
-}
-
-.step:first-child {
-  border-top: 0;
-  padding-top: 0;
-}
-
-.stepNumber {
-  display: grid;
-  place-items: center;
-  width: 2rem;
-  height: 2rem;
-  border: 1px solid var(--site-border-strong);
-  border-radius: 999px;
-  color: var(--site-text);
-  font-size: 0.78rem;
-}
-
 .involvementGrid {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -220,6 +209,7 @@
 }
 
 @media (max-width: 996px) {
+  .steeringGrid,
   .teamGrid,
   .involvementGrid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -232,13 +222,21 @@
     padding-top: 1.5rem;
   }
 
+  .header h1 {
+    font-size: 2.7rem;
+  }
+
+  .section h2 {
+    font-size: 1.8rem;
+  }
+
+  .steeringGrid,
   .teamGrid,
   .involvementGrid {
     grid-template-columns: 1fr;
   }
 
   .memberCard,
-  .recognitionCard,
   .involvementCard {
     padding: 1.1rem;
   }
