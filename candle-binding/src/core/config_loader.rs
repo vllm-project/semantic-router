@@ -453,6 +453,40 @@ pub fn is_mmbert_model(model_path: &str) -> Result<bool, UnifiedError> {
     Ok(vocab_size >= 200000 && model_type == "modernbert" && position_embedding_type == "sans_pos")
 }
 
+/// Detect if a model is a ModernBERT architecture from its config.json.
+///
+/// ModernBERT models cannot be loaded by the traditional/Candle BERT loader (their
+/// config.json uses `position_embedding_type: sans_pos` and omits `hidden_act`), so
+/// callers use this to route them to the dedicated ModernBERT initializer instead of
+/// attempting — and noisily failing — the traditional load first.
+///
+/// Recognized via `model_type == "modernbert"` or an `architectures` entry that starts
+/// with `ModernBert` (e.g. `ModernBertForSequenceClassification`,
+/// `ModernBertForTokenClassification`).
+pub fn is_modernbert_model(model_path: &str) -> Result<bool, UnifiedError> {
+    let config_json = UnifiedConfigLoader::load_json_config(model_path)?;
+
+    let model_type = config_json
+        .get("model_type")
+        .and_then(|v| v.as_str())
+        .unwrap_or("");
+    if model_type == "modernbert" {
+        return Ok(true);
+    }
+
+    if let Some(architectures) = config_json.get("architectures").and_then(|v| v.as_array()) {
+        if architectures
+            .iter()
+            .filter_map(|a| a.as_str())
+            .any(|a| a.starts_with("ModernBert"))
+        {
+            return Ok(true);
+        }
+    }
+
+    Ok(false)
+}
+
 /// Load mmBERT configuration from model path
 pub fn load_mmbert_config(model_path: &str) -> Result<MmBertConfig, UnifiedError> {
     MmBertConfigLoader::load_from_path(std::path::Path::new(model_path))
@@ -1008,5 +1042,53 @@ global:
             .as_deref(),
             Some("0.82")
         );
+    }
+}
+
+#[cfg(test)]
+mod modernbert_detection_tests {
+    use super::is_modernbert_model;
+    use std::fs;
+    use tempfile::TempDir;
+
+    fn write_config(dir: &TempDir, body: &str) {
+        fs::write(dir.path().join("config.json"), body).unwrap();
+    }
+
+    #[test]
+    fn detects_modernbert_via_model_type() {
+        let dir = TempDir::new().unwrap();
+        write_config(
+            &dir,
+            r#"{"model_type": "modernbert", "position_embedding_type": "sans_pos"}"#,
+        );
+        assert!(is_modernbert_model(dir.path().to_str().unwrap()).unwrap());
+    }
+
+    #[test]
+    fn detects_modernbert_via_architectures() {
+        let dir = TempDir::new().unwrap();
+        // No model_type field; only the architectures entry identifies ModernBERT.
+        write_config(
+            &dir,
+            r#"{"architectures": ["ModernBertForTokenClassification"]}"#,
+        );
+        assert!(is_modernbert_model(dir.path().to_str().unwrap()).unwrap());
+    }
+
+    #[test]
+    fn does_not_flag_traditional_bert() {
+        let dir = TempDir::new().unwrap();
+        write_config(
+            &dir,
+            r#"{"model_type": "bert", "hidden_act": "gelu", "architectures": ["BertForSequenceClassification"]}"#,
+        );
+        assert!(!is_modernbert_model(dir.path().to_str().unwrap()).unwrap());
+    }
+
+    #[test]
+    fn errors_when_config_missing() {
+        let dir = TempDir::new().unwrap();
+        assert!(is_modernbert_model(dir.path().to_str().unwrap()).is_err());
     }
 }

@@ -63,6 +63,7 @@ pub static LORA_JAILBREAK_CLASSIFIER: OnceLock<
 #[derive(Debug, Clone, PartialEq)]
 enum ModelType {
     LoRA,
+    ModernBert,
     Traditional,
 }
 
@@ -71,7 +72,7 @@ enum ModelType {
 /// This function implements intelligent routing by checking:
 /// 1. Actual LoRA weights in model.safetensors (unmerged LoRA)
 /// 2. lora_config.json existence (merged LoRA models)
-/// 3. Model path naming patterns (contains "lora")
+/// 3. ModernBERT architecture (config.json model_type/architectures)
 /// 4. Fallback to traditional model
 fn detect_model_type(model_path: &str) -> ModelType {
     let path = Path::new(model_path);
@@ -91,6 +92,15 @@ fn detect_model_type(model_path: &str) -> ModelType {
     let lora_config_path = path.join("lora_config.json");
     if lora_config_path.exists() {
         return ModelType::LoRA;
+    }
+
+    // Check 3: ModernBERT models cannot be parsed by the traditional/Candle BERT
+    // loader (their config.json uses `sans_pos` position embeddings and omits
+    // `hidden_act`). Detect them up front so callers route to the dedicated
+    // ModernBERT initializer instead of attempting — and noisily failing — the
+    // traditional load first.
+    if let Ok(true) = crate::core::config_loader::is_modernbert_model(model_path) {
+        return ModelType::ModernBert;
     }
 
     // Default to traditional model
@@ -292,6 +302,12 @@ pub extern "C" fn init_jailbreak_classifier(
                     false
                 }
             }
+        }
+        ModelType::ModernBert => {
+            // ModernBERT model: not loadable by the traditional/Candle BERT path.
+            // Return false so the caller falls back to the dedicated ModernBERT
+            // initializer (no traditional load is attempted, so no error is logged).
+            false
         }
         ModelType::Traditional => {
             eprintln!("🔍 Detected Traditional BERT model for jailbreak classification");
@@ -1275,6 +1291,12 @@ pub extern "C" fn init_candle_bert_classifier(
                 }
             }
         }
+        ModelType::ModernBert => {
+            // ModernBERT model: not loadable by the traditional/Candle BERT path.
+            // Return false so the caller falls back to the dedicated ModernBERT
+            // initializer (no traditional load is attempted, so no error is logged).
+            false
+        }
         ModelType::Traditional => {
             // Initialize TraditionalBertClassifier
             match crate::model_architectures::traditional::bert::TraditionalBertClassifier::new(
@@ -1338,6 +1360,12 @@ pub extern "C" fn init_candle_bert_token_classifier(
                     false
                 }
             }
+        }
+        ModelType::ModernBert => {
+            // ModernBERT model: not loadable by the traditional/Candle BERT path.
+            // Return false so the caller falls back to the dedicated ModernBERT token
+            // initializer (no traditional load is attempted, so no error is logged).
+            false
         }
         ModelType::Traditional => {
             // Check if already initialized
