@@ -109,7 +109,8 @@ func (r *OpenAIRouter) retrieveFromMilvus(traceCtx context.Context, ctx *Request
 	// Combine context parts
 	retrievedContext := strings.Join(contextParts, "\n\n---\n\n")
 
-	// Store best similarity score
+	// Store best similarity score and result count
+	ctx.RAGResultCount = len(contextParts)
 	bestScore := float32(0.0)
 	if len(scores) > 0 {
 		bestScore = scores[0] // Scores are already sorted
