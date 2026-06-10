@@ -74,6 +74,7 @@ type RequestContext struct {
 	// Streaming accumulation for caching
 	HasStreamingChunks bool                            // True when at least one SSE chunk has been received
 	StreamingContent   string                          // Accumulated content from delta.content
+	StreamingReasoning string                          // Accumulated reasoning from delta.reasoning_content
 	StreamingMetadata  map[string]interface{}          // id, model, created from first chunk
 	StreamingToolCalls map[int]*StreamingToolCallState // Accumulated delta.tool_calls keyed by tool index
 	StreamingComplete  bool                            // True when [DONE] marker received
