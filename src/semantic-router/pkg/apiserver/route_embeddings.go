@@ -30,10 +30,7 @@ func (s *ClassificationAPIServer) handleEmbeddings(w http.ResponseWriter, r *htt
 		return
 	}
 
-	avgProcessingTime := 0.0
-	if len(results) > 0 {
-		avgProcessingTime = float64(totalProcessingTime) / float64(len(results))
-	}
+	avgProcessingTime := averageEmbeddingProcessingTime(totalProcessingTime, req)
 	response := EmbeddingResponse{
 		Embeddings:            results,
 		TotalCount:            len(results),
@@ -61,6 +58,14 @@ func (s *ClassificationAPIServer) parseEmbeddingRequest(w http.ResponseWriter, r
 	}
 
 	return req, true
+}
+
+func averageEmbeddingProcessingTime(totalProcessingTime int64, req EmbeddingRequest) float64 {
+	inputCount := len(req.Texts) + len(req.Images)
+	if inputCount == 0 {
+		return 0
+	}
+	return float64(totalProcessingTime) / float64(inputCount)
 }
 
 func applyEmbeddingDefaults(req *EmbeddingRequest) {

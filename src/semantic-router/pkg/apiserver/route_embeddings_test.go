@@ -76,6 +76,19 @@ func TestValidateEmbeddingRequestRejectsUnsafeImage(t *testing.T) {
 	}
 }
 
+func TestAverageEmbeddingProcessingTimeUsesInputCount(t *testing.T) {
+	req := EmbeddingRequest{
+		Texts:  []string{"first", "second"},
+		Images: []string{"data:image/png;base64,iVBORw0KGgo="},
+	}
+
+	got := averageEmbeddingProcessingTime(90, req)
+
+	if got != 30 {
+		t.Fatalf("expected average processing time to use text plus image inputs, got %.2f", got)
+	}
+}
+
 func TestNormalizeBatchSimilarityLimitCapsTopKAtCandidateCount(t *testing.T) {
 	req := BatchSimilarityRequest{
 		Candidates: []string{"a", "b"},
