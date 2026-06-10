@@ -28,7 +28,13 @@ func sendResponse(stream ext_proc.ExternalProcessor_ProcessServer, response *ext
 		}
 	}
 
-	logging.Debugf("Processing at stage [%s]: %+v", msgType, response)
+	// Redact credentials (Authorization / x-api-key / ...) before dumping the
+	// mutation: the credential resolver injects the upstream provider key as a
+	// set-header, so a verbatim %+v would leak it to the log (CWE-532). Gate on
+	// the debug level so the clone+redact cost is paid only when it is logged.
+	if logging.DebugEnabled() {
+		logging.Debugf("Processing at stage [%s]: %+v", msgType, redactProcessingResponseForLog(response))
+	}
 
 	if err := stream.Send(response); err != nil {
 		logging.Errorf("Error sending %s response: %v", msgType, err)
