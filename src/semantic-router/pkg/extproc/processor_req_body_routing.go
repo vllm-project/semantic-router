@@ -64,6 +64,7 @@ func (r *OpenAIRouter) resolveModelNameForBackend(modelName string, backendName 
 func (r *OpenAIRouter) modifyRequestBodyForAutoRouting(
 	openAIRequest *openai.ChatCompletionNewParams,
 	matchedModel string,
+	routingModelName string,
 	decisionName string,
 	useReasoning bool,
 	profile *config.ProviderProfile,
@@ -84,6 +85,7 @@ func (r *OpenAIRouter) modifyRequestBodyForAutoRouting(
 			useReasoning,
 			decisionName,
 			profile,
+			routingModelName,
 		)
 		if err != nil {
 			logging.Errorf("Error setting reasoning mode %v to request: %v", useReasoning, err)
