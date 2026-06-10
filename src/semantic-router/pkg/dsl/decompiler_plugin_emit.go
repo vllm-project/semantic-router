@@ -237,6 +237,12 @@ func emitRAGPluginConfig(sb *strings.Builder, p *config.DecisionPlugin) {
 	if !ok {
 		return
 	}
+	emitRAGCorePluginConfig(sb, cfg)
+	emitRAGBackendAndFailureConfig(sb, cfg)
+	emitRAGCacheConfig(sb, cfg)
+}
+
+func emitRAGCorePluginConfig(sb *strings.Builder, cfg *config.RAGPluginConfig) {
 	if cfg.Enabled {
 		fmt.Fprintf(sb, "    enabled: true\n")
 	}
@@ -255,8 +261,26 @@ func emitRAGPluginConfig(sb *strings.Builder, p *config.DecisionPlugin) {
 	if cfg.InjectionMode != "" {
 		fmt.Fprintf(sb, "    injection_mode: %q\n", cfg.InjectionMode)
 	}
+}
+
+func emitRAGBackendAndFailureConfig(sb *strings.Builder, cfg *config.RAGPluginConfig) {
+	if backendConfig, ok := normalizePluginConfigMap(cfg.BackendConfig); ok && len(backendConfig) > 0 {
+		fmt.Fprintf(sb, "    backend_config: %s\n", formatPluginConfigValue(backendConfig))
+	}
 	if cfg.OnFailure != "" {
 		fmt.Fprintf(sb, "    on_failure: %q\n", cfg.OnFailure)
+	}
+}
+
+func emitRAGCacheConfig(sb *strings.Builder, cfg *config.RAGPluginConfig) {
+	if cfg.CacheResults {
+		fmt.Fprintf(sb, "    cache_results: true\n")
+	}
+	if cfg.CacheTTLSeconds != nil {
+		fmt.Fprintf(sb, "    cache_ttl_seconds: %d\n", *cfg.CacheTTLSeconds)
+	}
+	if cfg.MinConfidenceThreshold != nil {
+		fmt.Fprintf(sb, "    min_confidence_threshold: %v\n", *cfg.MinConfidenceThreshold)
 	}
 }
 
