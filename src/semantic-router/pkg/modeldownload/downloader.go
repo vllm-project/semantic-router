@@ -62,13 +62,11 @@ func IsGatedModelError(err error, repoID string, hfToken string) bool {
 		strings.Contains(errStr, "404") ||
 		strings.Contains(errStr, "authentication required")
 
-	// When no HF_TOKEN is set, the HF CLI streams its output directly to os.Stderr
-	// (not captured in err), so auth failures surface only as a plain "exit status 1".
-	// Treat any download failure without a token as a soft skip so the router
-	// degrades gracefully instead of crashing (e.g., CI forks without secrets).
-	noToken := hfToken == ""
-
-	return isKnownGated || isAuthError || noToken
+	// When no HF_TOKEN is set, the HF CLI may stream auth details directly to
+	// os.Stderr, leaving cmd.Run with only "exit status 1". Keep that graceful
+	// skip only for repos known to be gated; public-repo download failures such
+	// as rate limits or network errors must surface the original error.
+	return isKnownGated || isAuthError
 }
 
 // DownloadModelWithProgress downloads a model with real-time progress output
