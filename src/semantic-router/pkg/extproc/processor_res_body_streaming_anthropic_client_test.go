@@ -183,43 +183,55 @@ func TestHandleResponseBody_StreamingDispatchMatrix(t *testing.T) {
 		"", "",
 	}, "\n")
 
+	// Each cell routes to a distinct handler with an observably distinct
+	// result, so the assertions positively distinguish the four handlers
+	// rather than checking only for the absence of a shape:
+	//   - anthropic-client cells: handler replaces the body with Anthropic
+	//     SSE (non-nil mutation containing "event:", never OpenAI chunk shape).
+	//   - openai client + anthropic backend: legacy handler emits the
+	//     translated OpenAI chunk (non-nil mutation containing
+	//     "chat.completion.chunk").
+	//   - openai client + openai backend: generic streamer passes through
+	//     with a nil BodyMutation (no rewrite).
+	const (
+		wireAnthropic = "anthropic-sse"   // non-nil mutation, Anthropic events
+		wireOpenAI    = "openai-chunk"    // non-nil mutation, OpenAI chunk shape
+		wirePassThru  = "passthrough-nil" // nil mutation (no rewrite)
+	)
 	cases := []struct {
 		name           string
 		clientProtocol string
 		apiFormat      string
 		body           string
-		// wantAnthropicWire asserts the client sees Anthropic SSE (event: lines).
-		wantAnthropicWire bool
-		// wantOpenAIChunkWire asserts the client sees OpenAI chat.completion.chunk SSE.
-		wantOpenAIChunkWire bool
+		wantWire       string
 	}{
 		{
-			name:              "anthropic client + anthropic backend → Anthropic SSE",
-			clientProtocol:    config.ClientProtocolAnthropic,
-			apiFormat:         config.APIFormatAnthropic,
-			body:              anthropicChunk,
-			wantAnthropicWire: true,
+			name:           "anthropic client + anthropic backend → Anthropic SSE",
+			clientProtocol: config.ClientProtocolAnthropic,
+			apiFormat:      config.APIFormatAnthropic,
+			body:           anthropicChunk,
+			wantWire:       wireAnthropic,
 		},
 		{
-			name:              "anthropic client + openai backend → Anthropic SSE",
-			clientProtocol:    config.ClientProtocolAnthropic,
-			apiFormat:         config.APIFormatOpenAI,
-			body:              openAIChunk,
-			wantAnthropicWire: true,
+			name:           "anthropic client + openai backend → Anthropic SSE",
+			clientProtocol: config.ClientProtocolAnthropic,
+			apiFormat:      config.APIFormatOpenAI,
+			body:           openAIChunk,
+			wantWire:       wireAnthropic,
 		},
 		{
-			name:                "openai client + anthropic backend → OpenAI SSE",
-			clientProtocol:      "",
-			apiFormat:           config.APIFormatAnthropic,
-			body:                anthropicChunk,
-			wantOpenAIChunkWire: true,
+			name:           "openai client + anthropic backend → OpenAI SSE",
+			clientProtocol: "",
+			apiFormat:      config.APIFormatAnthropic,
+			body:           anthropicChunk,
+			wantWire:       wireOpenAI,
 		},
 		{
-			name:                "openai client + openai backend → OpenAI pass-through",
-			clientProtocol:      "",
-			apiFormat:           config.APIFormatOpenAI,
-			body:                openAIChunk,
-			wantOpenAIChunkWire: true,
+			name:           "openai client + openai backend → OpenAI pass-through",
+			clientProtocol: "",
+			apiFormat:      config.APIFormatOpenAI,
+			body:           openAIChunk,
+			wantWire:       wirePassThru,
 		},
 	}
 
@@ -242,22 +254,21 @@ func TestHandleResponseBody_StreamingDispatchMatrix(t *testing.T) {
 			require.NoError(t, err)
 			require.NotNil(t, resp)
 
-			// The Anthropic-client cells own the wire and always replace the
-			// body; the OpenAI-client cells route through handlers that emit
-			// their accumulated chunk (anthropic backend) or pass through
-			// (openai backend). We inspect whatever body mutation is present.
 			mutation := resp.GetResponseBody().GetResponse().GetBodyMutation()
-			var wire string
-			if mutation != nil {
-				wire = string(mutation.GetBody())
-			}
 
-			if tc.wantAnthropicWire {
+			switch tc.wantWire {
+			case wireAnthropic:
+				require.NotNil(t, mutation, "anthropic-client cell must replace the body")
+				wire := string(mutation.GetBody())
 				assert.Contains(t, wire, "event:", "anthropic-client cell must emit Anthropic SSE to the wire")
 				assert.NotContains(t, wire, "chat.completion.chunk", "anthropic-client cell must not leak OpenAI chunk shape")
-			}
-			if tc.wantOpenAIChunkWire {
+			case wireOpenAI:
+				require.NotNil(t, mutation, "openai-client + anthropic-backend cell must emit the translated chunk")
+				wire := string(mutation.GetBody())
+				assert.Contains(t, wire, "chat.completion.chunk", "legacy Anthropic handler must emit OpenAI chunk shape")
 				assert.NotContains(t, wire, "event: content_block", "openai-client cell must not emit Anthropic content_block events")
+			case wirePassThru:
+				assert.Nil(t, mutation, "openai client + openai backend must pass through with a nil BodyMutation (no rewrite)")
 			}
 		})
 	}
