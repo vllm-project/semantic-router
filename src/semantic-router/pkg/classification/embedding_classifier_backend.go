@@ -69,6 +69,9 @@ func (c *ExternalModelBasedEmbeddingInitializer) Init(qwen3ModelPath string, gem
 	gemmaModelPath = config.ResolveModelPath(gemmaModelPath)
 	mmBertModelPath = config.ResolveModelPath(mmBertModelPath)
 
+	// NOTE: pkg/modeldownload's collectCandleEmbeddingRequiredFiles mirrors
+	// this backend resolution to derive download-completeness requirements.
+	// Keep the two in sync if the resolution changes.
 	backend = strings.ToLower(strings.TrimSpace(backend))
 	if backend == "" {
 		backend = "candle"
@@ -122,6 +125,10 @@ func (c *Classifier) initializeKeywordEmbeddingClassifier() error {
 		return fmt.Errorf("keyword embedding similarity match is not properly configured")
 	}
 
+	// NOTE: pkg/modeldownload's collectCandleEmbeddingRequiredFiles mirrors
+	// this model_type resolution (and the image_candidates trigger in
+	// classifier_option_rules.go) to derive download-completeness
+	// requirements. Keep them in sync if the triggers change.
 	modelType := strings.ToLower(strings.TrimSpace(c.Config.EmbeddingConfig.ModelType))
 	if modelType == "multimodal" {
 		mmPath := config.ResolveModelPath(c.Config.MultiModalModelPath)
