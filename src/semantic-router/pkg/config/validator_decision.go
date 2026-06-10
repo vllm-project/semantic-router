@@ -8,6 +8,11 @@ import (
 )
 
 func validateDecisionContracts(cfg *RouterConfig) error {
+	for _, decision := range cfg.Decisions {
+		if err := validateDecisionRuleOperators(decision.Name, &decision.Rules); err != nil {
+			return err
+		}
+	}
 	if err := validateDecisionModelContracts(cfg); err != nil {
 		return err
 	}
@@ -15,6 +20,32 @@ func validateDecisionContracts(cfg *RouterConfig) error {
 		return err
 	}
 	return validateDecisionPluginContracts(cfg)
+}
+
+// validRuleOperators is the closed set of combination operators understood by
+// the decision rule evaluator (see classification.evalComposerNode). An omitted
+// operator is allowed and defaults to AND.
+var validRuleOperators = map[string]struct{}{"AND": {}, "OR": {}, "NOT": {}}
+
+// validateDecisionRuleOperators rejects combination nodes whose (non-empty)
+// operator is not one of AND/OR/NOT. Without this, an invalid operator (e.g. a
+// typo like "XOR") is accepted at load and silently evaluated as AND at runtime,
+// changing routing semantics with no feedback.
+func validateDecisionRuleOperators(decisionName string, node *RuleNode) error {
+	if node == nil || node.IsLeaf() {
+		return nil
+	}
+	if op := strings.TrimSpace(node.Operator); op != "" {
+		if _, ok := validRuleOperators[strings.ToUpper(op)]; !ok {
+			return fmt.Errorf("routing.decisions[%s]: invalid rule operator %q (valid: AND, OR, NOT)", decisionName, node.Operator)
+		}
+	}
+	for i := range node.Conditions {
+		if err := validateDecisionRuleOperators(decisionName, &node.Conditions[i]); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func validateDecisionModelContracts(cfg *RouterConfig) error {
