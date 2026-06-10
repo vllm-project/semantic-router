@@ -151,9 +151,17 @@ func emitChunkEvents(
 	}
 
 	if len(chunk.Choices) == 0 {
-		// Usage-only chunks (no choices) still drive the terminal
-		// emission if usage arrived after finish_reason on a prior
-		// chunk. Without choices there is nothing else to emit.
+		// Usage-only chunk (no choices). If it carries usage and no prior
+		// chunk has already driven the terminal sequence, treat it as the
+		// terminal chunk so message_stop still fires — otherwise an Anthropic
+		// client would hang waiting for an end event. In the common path the
+		// finish_reason chunk already sent message_stop (caught by the
+		// MessageStopSent guard above), so this only fires when usage is the
+		// sole terminal signal. With no choices there is nothing else to emit.
+		if chunkHasUsage(chunk) {
+			out.Write(emitTerminalEvents(state, "", chunk.Usage, ext))
+			return out.Bytes(), true, nil
+		}
 		return out.Bytes(), false, nil
 	}
 	choice := chunk.Choices[0]

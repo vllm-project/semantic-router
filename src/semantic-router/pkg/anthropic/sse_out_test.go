@@ -341,6 +341,35 @@ func TestEmitAnthropicSSEChunk_SplitFinishReasonAndUsage(t *testing.T) {
 	assert.Equal(t, 1, strings.Count(combined, "event: message_stop"), "exactly one message_stop total across split chunks")
 }
 
+// TestEmitAnthropicSSEChunk_UsageOnlyTerminal covers a backend that ends
+// the stream with a usage-only chunk (no choices, no prior finish_reason).
+// The emitter must treat usage as the terminal signal and fire message_stop,
+// otherwise an Anthropic client hangs waiting for an end event. This differs
+// from SplitFinishReasonAndUsage, where finish_reason already drove the
+// terminal sequence and the usage chunk is a guarded no-op.
+func TestEmitAnthropicSSEChunk_UsageOnlyTerminal(t *testing.T) {
+	state := NewStreamState()
+
+	// Chunk 1: content only, no finish_reason.
+	chunk1 := buildOpenAISSE(
+		`{"id":"c","object":"chat.completion.chunk","model":"m","choices":[{"index":0,"delta":{"role":"assistant","content":"hi"}}]}`,
+	)
+	_, done1, err := EmitAnthropicSSEChunk(chunk1, state, nil, "claude-sonnet-4-5")
+	require.NoError(t, err)
+	assert.False(t, done1, "content-only chunk must not end the stream")
+
+	// Chunk 2: usage-only terminal — empty choices, usage present, never a
+	// finish_reason. This is the sole terminal signal.
+	chunk2 := buildOpenAISSE(
+		`{"id":"c","object":"chat.completion.chunk","model":"m","choices":[],"usage":{"prompt_tokens":4,"completion_tokens":2,"total_tokens":6}}`,
+	)
+	out2, done2, err := EmitAnthropicSSEChunk(chunk2, state, nil, "claude-sonnet-4-5")
+	require.NoError(t, err)
+	assert.True(t, done2, "usage-only terminal chunk must end the stream")
+	assert.Equal(t, 1, strings.Count(string(out2), "event: message_stop"), "usage-only terminal must emit exactly one message_stop")
+	assert.True(t, state.MessageStopSent, "MessageStopSent must be set after usage-only terminal")
+}
+
 // TestEmitAnthropicSSEChunk_ErrorPath covers the IsError emitter branch:
 // an error event followed by terminal state flags and no second emission.
 func TestEmitAnthropicSSEChunk_ErrorPath(t *testing.T) {
