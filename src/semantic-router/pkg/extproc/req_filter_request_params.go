@@ -73,6 +73,9 @@ func (r *OpenAIRouter) buildRequestParamsMutations(
 
 	modified := applyBlockedParams(body, paramsConfig.BlockedParams, decision.Name)
 	modified = capIntField(body, "max_tokens", paramsConfig.MaxTokensLimit, decision.Name, metrics.RecordMaxTokensCapped) || modified
+	// max_completion_tokens is the current OpenAI name for the same knob; cap it
+	// with the same limit so clients cannot bypass max_tokens_limit by renaming.
+	modified = capIntField(body, "max_completion_tokens", paramsConfig.MaxTokensLimit, decision.Name, metrics.RecordMaxTokensCapped) || modified
 	modified = capIntField(body, "n", paramsConfig.MaxN, decision.Name, metrics.RecordMaxNCapped) || modified
 	modified = stripUnknownFields(body, paramsConfig.StripUnknown, decision.Name) || modified
 
