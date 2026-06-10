@@ -62,7 +62,7 @@ func (r *OpenAIRouter) handleAnthropicClientStreamingResponseBody(
 	openAIBytes, err := r.translateUpstreamToOpenAI(responseBody, ctx)
 	if err != nil {
 		logging.Errorf("Failed to translate upstream streaming chunk to OpenAI: %v", err)
-		return buildResponseBodyContinueResponse(nil, nil)
+		return emptyAnthropicBodyMutation()
 	}
 
 	chunkStr := string(openAIBytes)
@@ -76,7 +76,7 @@ func (r *OpenAIRouter) handleAnthropicClientStreamingResponseBody(
 	)
 	if err != nil {
 		logging.Errorf("Failed to emit Anthropic SSE chunk: %v", err)
-		return buildResponseBodyContinueResponse(nil, nil)
+		return emptyAnthropicBodyMutation()
 	}
 
 	if streamDone || strings.Contains(chunkStr, "data: [DONE]") {
@@ -92,16 +92,22 @@ func (r *OpenAIRouter) handleAnthropicClientStreamingResponseBody(
 	combined := make([]byte, 0, len(pingBytes)+len(anthropicBytes))
 	combined = append(combined, pingBytes...)
 	combined = append(combined, anthropicBytes...)
-	// Always replace the body, even when our emitter produced zero
-	// bytes for this chunk. A nil BodyMutation makes Envoy forward the
-	// raw upstream chunk unmodified, which would leak Anthropic-shape
-	// bytes from the backend onto the wire on top of the Anthropic
-	// events we have already synthesized — most visibly a second
-	// message_stop event after the emitter's own message_stop. Once we
-	// have entered this handler we own the wire, so an empty mutation
-	// is the correct way to swallow upstream noise.
 	return buildResponseBodyContinueResponse(&ext_proc.BodyMutation{
 		Mutation: &ext_proc.BodyMutation_Body{Body: combined},
+	}, nil)
+}
+
+// emptyAnthropicBodyMutation returns a non-nil BodyMutation carrying an
+// empty body. Once execution enters the Anthropic-client streaming
+// handler, vsr owns the wire: every return must replace the body so
+// Envoy never forwards the raw upstream chunk. A nil BodyMutation would
+// make Envoy pass the upstream bytes through unmodified, leaking
+// Anthropic-shape backend frames on top of the events we synthesize —
+// most visibly a second message_stop. Error and zero-emission paths use
+// this so that invariant holds even when we have no content to send.
+func emptyAnthropicBodyMutation() *ext_proc.ProcessingResponse {
+	return buildResponseBodyContinueResponse(&ext_proc.BodyMutation{
+		Mutation: &ext_proc.BodyMutation_Body{Body: []byte{}},
 	}, nil)
 }
 
