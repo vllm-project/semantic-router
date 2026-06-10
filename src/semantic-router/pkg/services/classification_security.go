@@ -34,8 +34,8 @@ type SecurityResponse struct {
 func (s *ClassificationService) CheckSecurity(req SecurityRequest) (*SecurityResponse, error) {
 	start := time.Now()
 
-	if req.Text == "" {
-		return nil, fmt.Errorf("text cannot be empty")
+	if blankText(req.Text) {
+		return nil, ErrEmptyText
 	}
 
 	if s.classifier == nil {
