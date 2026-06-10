@@ -190,6 +190,10 @@ interface PrismaticBurstProps {
   mixBlendMode?: string;
 }
 
+type RemovableMesh = Mesh<Triangle, Program> & {
+  remove?: () => void;
+};
+
 const hexToRgb01 = (hex: string): [number, number, number] => {
   let h = hex.trim();
   if (h.startsWith('#')) h = h.slice(1);
@@ -226,21 +230,16 @@ const PrismaticBurst: React.FC<PrismaticBurstProps> = ({
   mixBlendMode = 'lighten'
 }) => {
   const containerRef = useRef<HTMLDivElement>(null);
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const programRef = useRef<any>(null);
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const rendererRef = useRef<any>(null);
+  const programRef = useRef<Program | null>(null);
+  const rendererRef = useRef<Renderer | null>(null);
   const mouseTargetRef = useRef([0.5, 0.5]);
   const mouseSmoothRef = useRef([0.5, 0.5]);
   const pausedRef = useRef(paused);
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const gradTexRef = useRef<any>(null);
+  const gradTexRef = useRef<Texture | null>(null);
   const hoverDampRef = useRef(hoverDampness);
   const isVisibleRef = useRef(true);
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const meshRef = useRef<any>(null);
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const triRef = useRef<any>(null);
+  const meshRef = useRef<RemovableMesh | null>(null);
+  const triRef = useRef<Triangle | null>(null);
 
   useEffect(() => {
     pausedRef.current = paused;
@@ -355,7 +354,7 @@ const PrismaticBurst: React.FC<PrismaticBurstProps> = ({
 
       program.uniforms.uMouse.value = sm;
       program.uniforms.uTime.value = accumTime;
-      renderer.render({ scene: meshRef.current });
+      renderer.render({ scene: meshRef.current ?? mesh });
       raf = requestAnimationFrame(update);
     };
     raf = requestAnimationFrame(update);
@@ -368,8 +367,8 @@ const PrismaticBurst: React.FC<PrismaticBurstProps> = ({
       io?.disconnect();
       try { container.removeChild(gl.canvas); } catch { /* already removed */ }
       try { meshRef.current?.remove?.(); } catch { /* ignore */ }
-      try { triRef.current?.remove?.(); } catch { /* ignore */ }
-      try { programRef.current?.remove?.(); } catch { /* ignore */ }
+      try { triRef.current?.remove(); } catch { /* ignore */ }
+      try { programRef.current?.remove(); } catch { /* ignore */ }
       try {
         const glCtx = rendererRef.current?.gl;
         if (glCtx && gradTexRef.current?.texture) {
