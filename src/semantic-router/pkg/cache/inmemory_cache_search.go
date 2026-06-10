@@ -35,6 +35,7 @@ func (c *InMemoryCache) refreshHNSWIfStaleDuringSearch() {
 
 func (c *InMemoryCache) scanHNSWCandidates(
 	queryEmbedding []float32,
+	queryScope string,
 	now time.Time,
 ) (bestIndex int, bestSimilarity float32, entriesChecked int, expiredCount int) {
 	bestIndex = -1
@@ -45,6 +46,11 @@ func (c *InMemoryCache) scanHNSWCandidates(
 		}
 		entry := c.entries[entryIndex]
 		if entry.ResponseBody == nil {
+			continue
+		}
+		// Hard user-scope gate: never return another user's entry even if its
+		// embedding is the nearest neighbor (see SameCacheScope).
+		if CacheScopeNamespaceOf(entry.Query) != queryScope {
 			continue
 		}
 		if c.isExpired(entry, now) {
@@ -64,11 +70,17 @@ func (c *InMemoryCache) scanHNSWCandidates(
 
 func (c *InMemoryCache) scanLinearForSimilarity(
 	queryEmbedding []float32,
+	queryScope string,
 	now time.Time,
 ) (bestIndex int, bestSimilarity float32, entriesChecked int, expiredCount int) {
 	bestIndex = -1
 	for entryIndex, entry := range c.entries {
 		if entry.ResponseBody == nil {
+			continue
+		}
+		// Hard user-scope gate: never return another user's entry even if its
+		// embedding is the nearest neighbor (see SameCacheScope).
+		if CacheScopeNamespaceOf(entry.Query) != queryScope {
 			continue
 		}
 		if c.isExpired(entry, now) {
@@ -114,7 +126,7 @@ func (c *InMemoryCache) FindSimilarWithThreshold(model string, query string, thr
 		return nil, false, fmt.Errorf("failed to generate embedding: %w", err)
 	}
 
-	bestIndex, bestEntry, bestSimilarity, entriesChecked, expiredCount := c.runFindSimilarEmbeddingSearch(queryEmbedding)
+	bestIndex, bestEntry, bestSimilarity, entriesChecked, expiredCount := c.runFindSimilarEmbeddingSearch(queryEmbedding, CacheScopeNamespaceOf(query))
 
 	return c.finishFindSimilarSearch(
 		start, model, threshold,
@@ -122,7 +134,7 @@ func (c *InMemoryCache) FindSimilarWithThreshold(model string, query string, thr
 	)
 }
 
-func (c *InMemoryCache) runFindSimilarEmbeddingSearch(queryEmbedding []float32) (
+func (c *InMemoryCache) runFindSimilarEmbeddingSearch(queryEmbedding []float32, queryScope string) (
 	bestIndex int,
 	bestEntry CacheEntry,
 	bestSimilarity float32,
@@ -133,9 +145,9 @@ func (c *InMemoryCache) runFindSimilarEmbeddingSearch(queryEmbedding []float32) 
 	now := time.Now()
 	if c.useHNSW && c.hnswIndex != nil {
 		c.refreshHNSWIfStaleDuringSearch()
-		bestIndex, bestSimilarity, entriesChecked, expiredCount = c.scanHNSWCandidates(queryEmbedding, now)
+		bestIndex, bestSimilarity, entriesChecked, expiredCount = c.scanHNSWCandidates(queryEmbedding, queryScope, now)
 	} else {
-		bestIndex, bestSimilarity, entriesChecked, expiredCount = c.scanLinearForSimilarity(queryEmbedding, now)
+		bestIndex, bestSimilarity, entriesChecked, expiredCount = c.scanLinearForSimilarity(queryEmbedding, queryScope, now)
 	}
 	if bestIndex >= 0 {
 		bestEntry = c.entries[bestIndex]

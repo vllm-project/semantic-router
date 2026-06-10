@@ -75,7 +75,39 @@ func ScopeQueryToUser(query string, userID string) string {
 		tokens[i] = namespace
 	}
 	// Single-line prefix so log/trace consumers never see raw newlines from user text.
-	return fmt.Sprintf("cache-scope %s %s", strings.Join(tokens, " "), query)
+	return fmt.Sprintf("%s%s %s", cacheScopePrefix, strings.Join(tokens, " "), query)
+}
+
+// cacheScopePrefix is the marker ScopeQueryToUser writes before the repeated
+// user namespace tokens. Backends use it to recover the namespace for a hard
+// scope check (see CacheScopeNamespaceOf / SameCacheScope).
+const cacheScopePrefix = "cache-scope "
+
+// CacheScopeNamespaceOf returns the user-scope namespace embedded in a scoped
+// query, or "" if the query is unscoped (the global/anonymous scope).
+// ScopeQueryToUser formats scoped queries as
+// "cache-scope <ns> <ns> <ns> <query>", so the namespace is the first
+// whitespace-delimited token after the prefix.
+func CacheScopeNamespaceOf(query string) string {
+	if !strings.HasPrefix(query, cacheScopePrefix) {
+		return ""
+	}
+	rest := query[len(cacheScopePrefix):]
+	if i := strings.IndexByte(rest, ' '); i >= 0 {
+		return rest[:i]
+	}
+	return rest
+}
+
+// SameCacheScope reports whether two queries belong to the same user scope.
+// It is a HARD equality check on the namespace, independent of embedding
+// similarity: a cache backend must require it before returning a hit so one
+// user can never receive another user's cached response (the embedding prefix
+// alone does not separate users reliably for long queries). Two unscoped
+// queries share the empty global scope; a scoped query never matches an
+// unscoped one.
+func SameCacheScope(a, b string) bool {
+	return CacheScopeNamespaceOf(a) == CacheScopeNamespaceOf(b)
 }
 
 var (
