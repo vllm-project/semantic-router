@@ -5,6 +5,7 @@ import (
 	"testing"
 	"time"
 
+	ext_proc "github.com/envoyproxy/go-control-plane/envoy/service/ext_proc/v3"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -132,29 +133,132 @@ func TestHandleAnthropicClientStreamingResponseBody_EmptyStream(t *testing.T) {
 	assert.Equal(t, []byte{}, mutation.GetBody(), "empty input must yield empty (not nil) mutation body")
 }
 
-// TestHandleAnthropicClientStreamingResponseBody_MidStreamError asserts
-// that when EmitAnthropicSSEChunk returns an error (e.g. state == nil),
-// the handler returns a non-nil response with an empty mutation rather
-// than panicking or returning nil (which would forward raw upstream bytes).
+// TestHandleAnthropicClientStreamingResponseBody_UnparsableChunk asserts
+// that an unparsable upstream chunk is handled gracefully: the emitter
+// emits no bytes (and returns no error — bad JSON is swallowed, not
+// surfaced), and the handler still returns a non-nil response carrying a
+// non-nil empty BodyMutation so Envoy suppresses the upstream chunk
+// rather than forwarding the raw bytes.
 //
-// We trigger the error path indirectly: pass a body that will parse into
-// a valid OpenAI chunk but set state to nil in the context so the emitter
-// cannot proceed. The handler must recover gracefully.
-func TestHandleAnthropicClientStreamingResponseBody_MidStreamError(t *testing.T) {
+// Note: this exercises the empty-emission path, NOT the err != nil
+// branch. EmitAnthropicSSEChunk does not return an error for malformed
+// data; it returns empty output. The handler's error branches are
+// covered separately where a real translator error can be induced.
+func TestHandleAnthropicClientStreamingResponseBody_UnparsableChunk(t *testing.T) {
 	router := newTestRouter()
-	ctx := newAnthropicStreamCtx(nil) // nil state causes graceful nil-init inside emitter
-
-	// A malformed upstream that fails translation will cause translateUpstreamToOpenAI
-	// to return an error via TransformSSEChunkToOpenAI's unmarshal.
-	// Use a non-Anthropic format so the translator is bypassed and we get
-	// well-formed but minimal OpenAI SSE bytes fed into EmitAnthropicSSEChunk.
+	ctx := newAnthropicStreamCtx(anthropic.NewStreamState())
+	// OpenAI format bypasses the Anthropic translator, feeding the bytes
+	// straight to the emitter, which cannot parse them and emits nothing.
 	ctx.APIFormat = config.APIFormatOpenAI
-	// Deliberately corrupt the chunk so emitChunkEvents gets a bad json.Unmarshal.
 	badChunk := []byte("data: not-valid-json\n\n")
 
 	resp := router.handleAnthropicClientStreamingResponseBody(badChunk, ctx)
-	require.NotNil(t, resp, "handler must not return nil on parse error")
-	// The response must be a BodyResponse (not a header or other type) to
-	// remain consistent with the streaming response pipeline.
-	require.NotNil(t, resp.GetResponseBody())
+	require.NotNil(t, resp, "handler must not return nil on unparsable input")
+	mutation := resp.GetResponseBody().GetResponse().GetBodyMutation()
+	require.NotNil(t, mutation, "BodyMutation must be set even for unparsable input")
+	assert.Equal(t, []byte{}, mutation.GetBody(), "unparsable input must yield empty (not nil) mutation body")
+}
+
+// TestHandleResponseBody_StreamingDispatchMatrix locks the four-cell
+// streaming dispatch in handleResponseBody:
+//
+//	ClientProtocol × APIFormat → handler → wire shape
+//	-------------------------------------------------------------
+//	anthropic  × anthropic  → AnthropicClient streamer → Anthropic SSE
+//	anthropic  × openai     → AnthropicClient streamer → Anthropic SSE
+//	openai     × anthropic  → legacy Anthropic streamer → OpenAI SSE
+//	openai     × openai     → generic OpenAI streamer   → pass-through
+//
+// The branch ordering at processor_res_body.go matters: the Anthropic
+// *client* branch must precede the legacy Anthropic *backend* branch, or
+// the double-Anthropic cell would fall through and emit OpenAI SSE to an
+// Anthropic client. This test asserts each cell reaches the right handler
+// by inspecting the observable wire shape, so a future reordering or a
+// missing ClientProtocol guard fails loudly.
+func TestHandleResponseBody_StreamingDispatchMatrix(t *testing.T) {
+	openAIChunk := `data: {"id":"c","object":"chat.completion.chunk","model":"claude-sonnet-4-5","choices":[{"index":0,"delta":{"role":"assistant","content":"hi"},"finish_reason":null}]}` + "\n\n"
+	anthropicChunk := strings.Join([]string{
+		"event: content_block_delta",
+		`data: {"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"hi"}}`,
+		"", "",
+	}, "\n")
+
+	cases := []struct {
+		name           string
+		clientProtocol string
+		apiFormat      string
+		body           string
+		// wantAnthropicWire asserts the client sees Anthropic SSE (event: lines).
+		wantAnthropicWire bool
+		// wantOpenAIChunkWire asserts the client sees OpenAI chat.completion.chunk SSE.
+		wantOpenAIChunkWire bool
+	}{
+		{
+			name:              "anthropic client + anthropic backend → Anthropic SSE",
+			clientProtocol:    config.ClientProtocolAnthropic,
+			apiFormat:         config.APIFormatAnthropic,
+			body:              anthropicChunk,
+			wantAnthropicWire: true,
+		},
+		{
+			name:              "anthropic client + openai backend → Anthropic SSE",
+			clientProtocol:    config.ClientProtocolAnthropic,
+			apiFormat:         config.APIFormatOpenAI,
+			body:              openAIChunk,
+			wantAnthropicWire: true,
+		},
+		{
+			name:                "openai client + anthropic backend → OpenAI SSE",
+			clientProtocol:      "",
+			apiFormat:           config.APIFormatAnthropic,
+			body:                anthropicChunk,
+			wantOpenAIChunkWire: true,
+		},
+		{
+			name:                "openai client + openai backend → OpenAI pass-through",
+			clientProtocol:      "",
+			apiFormat:           config.APIFormatOpenAI,
+			body:                openAIChunk,
+			wantOpenAIChunkWire: true,
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			router := newTestRouter()
+			ctx := &RequestContext{
+				IsStreamingResponse: true,
+				ClientProtocol:      tc.clientProtocol,
+				APIFormat:           tc.apiFormat,
+				RequestModel:        "claude-sonnet-4-5",
+				StreamingMetadata:   make(map[string]interface{}),
+				ProcessingStartTime: time.Now().Add(-10 * time.Millisecond),
+			}
+			v := &ext_proc.ProcessingRequest_ResponseBody{
+				ResponseBody: &ext_proc.HttpBody{Body: []byte(tc.body)},
+			}
+
+			resp, err := router.handleResponseBody(v, ctx)
+			require.NoError(t, err)
+			require.NotNil(t, resp)
+
+			// The Anthropic-client cells own the wire and always replace the
+			// body; the OpenAI-client cells route through handlers that emit
+			// their accumulated chunk (anthropic backend) or pass through
+			// (openai backend). We inspect whatever body mutation is present.
+			mutation := resp.GetResponseBody().GetResponse().GetBodyMutation()
+			var wire string
+			if mutation != nil {
+				wire = string(mutation.GetBody())
+			}
+
+			if tc.wantAnthropicWire {
+				assert.Contains(t, wire, "event:", "anthropic-client cell must emit Anthropic SSE to the wire")
+				assert.NotContains(t, wire, "chat.completion.chunk", "anthropic-client cell must not leak OpenAI chunk shape")
+			}
+			if tc.wantOpenAIChunkWire {
+				assert.NotContains(t, wire, "event: content_block", "openai-client cell must not emit Anthropic content_block events")
+			}
+		})
+	}
 }

@@ -141,7 +141,11 @@ func TestTransformSSEChunkToOpenAI_ThinkingBlockStart(t *testing.T) {
 	out, _, err := TransformSSEChunkToOpenAI([]byte(events), state, "claude-sonnet-4-5", nil)
 	require.NoError(t, err)
 	assert.Contains(t, string(out), `"reasoning_content"`)
-	assert.True(t, state.BlockIndexToThinkingActive[0], "block index should be tracked as thinking")
+	// Assert the key is present before asserting its value: a bare map
+	// read returns the bool zero value, so a missing key would silently
+	// pass assert.True's negation. require.Contains fails loudly instead.
+	require.Contains(t, state.BlockIndexToThinkingActive, int64(0), "block index 0 must be tracked as thinking")
+	assert.True(t, state.BlockIndexToThinkingActive[0], "block index 0 should be marked thinking-active")
 }
 
 // TestTransformSSEChunkToOpenAI_ThinkingDelta asserts that thinking_delta
