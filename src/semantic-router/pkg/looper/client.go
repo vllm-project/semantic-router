@@ -208,6 +208,10 @@ func (c *Client) CallModel(ctx context.Context, req *openai.ChatCompletionNewPar
 	// Add looper identification headers
 	// These allow extproc to identify looper requests and lookup decision configuration
 	httpReq.Header.Set("x-vsr-looper-request", "true")
+	// Authenticate the internal call. extproc only honors the looper fast-path
+	// (which skips the security pipeline) when this secret is valid, so an
+	// external client cannot forge x-vsr-looper-request to bypass it (issue #1443).
+	httpReq.Header.Set("x-vsr-looper-secret", Secret())
 	httpReq.Header.Set("x-vsr-looper-iteration", fmt.Sprintf("%d", iteration))
 
 	// Add decision name header for extproc to lookup decision configuration

@@ -356,6 +356,15 @@ const (
 	// Used by extproc to lookup decision configuration and apply plugins.
 	// Value: decision name (e.g., "remom_low_effort")
 	VSRLooperDecision = "x-vsr-looper-decision"
+
+	// VSRLooperSecret authenticates internal looper requests. The router owns a
+	// per-process secret (or a shared VSR_LOOPER_SECRET for multi-replica
+	// deployments) that the in-process looper client attaches to every internal
+	// call. extproc validates it with a constant-time comparison before honoring
+	// the VSRLooperRequest fast-path, so an external client cannot forge
+	// VSRLooperRequest to skip the security pipeline. See issue #1443.
+	// Value: opaque secret string.
+	VSRLooperSecret = "x-vsr-looper-secret"
 )
 
 // Looper Response Headers
