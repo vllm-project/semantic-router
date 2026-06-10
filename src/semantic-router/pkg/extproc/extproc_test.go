@@ -1548,7 +1548,11 @@ var _ = Describe("Edge Cases and Error Conditions", func() {
 
 			response, err := router.HandleRequestBody(bodyRequest, ctx)
 			Expect(err).NotTo(HaveOccurred())
-			Expect(response.GetRequestBody().Response.Status).To(Equal(ext_proc.CommonResponse_CONTINUE))
+			// A model that is not configured is rejected with a clear 400 rather
+			// than being silently forwarded to a backend with no resolvable
+			// credential (which surfaced as a misleading upstream "401 No api key").
+			Expect(response.GetImmediateResponse()).NotTo(BeNil())
+			Expect(int(response.GetImmediateResponse().GetStatus().GetCode())).To(Equal(400))
 		})
 
 		It("should handle requests with extremely long message chains", func() {
