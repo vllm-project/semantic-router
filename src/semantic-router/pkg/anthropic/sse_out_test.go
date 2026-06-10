@@ -368,6 +368,44 @@ func TestEmitAnthropicSSEChunk_UsageOnlyTerminal(t *testing.T) {
 	assert.True(t, done2, "usage-only terminal chunk must end the stream")
 	assert.Equal(t, 1, strings.Count(string(out2), "event: message_stop"), "usage-only terminal must emit exactly one message_stop")
 	assert.True(t, state.MessageStopSent, "MessageStopSent must be set after usage-only terminal")
+	// The open text block must be closed before the terminal events.
+	assert.Equal(t, 1, strings.Count(string(out2), "event: content_block_stop"), "open text block must be closed by the usage-only terminal")
+}
+
+// TestEmitAnthropicSSEChunk_UsageOnlyTerminalClosesThinkingAndToolBlocks
+// guards the other two branches of closeAllOpenBlocks reached on the
+// usage-only terminal path: a thinking block and tool blocks left open
+// when the stream ends with a usage-only chunk. Each open block must
+// receive a content_block_stop before message_delta/message_stop, or an
+// Anthropic SDK accumulator sees an unterminated block and breaks.
+func TestEmitAnthropicSSEChunk_UsageOnlyTerminalClosesThinkingAndToolBlocks(t *testing.T) {
+	state := NewStreamState()
+
+	// Open a thinking block, then two tool blocks, all without a
+	// finish_reason, then end with a usage-only terminal chunk.
+	chunks := buildOpenAISSE(
+		`{"id":"c","object":"chat.completion.chunk","model":"m","choices":[{"index":0,"delta":{"role":"assistant","reasoning_content":"hmm"}}]}`,
+		`{"id":"c","object":"chat.completion.chunk","model":"m","choices":[{"index":0,"delta":{"tool_calls":[{"index":0,"id":"call_1","type":"function","function":{"name":"a","arguments":"{}"}}]}}]}`,
+		`{"id":"c","object":"chat.completion.chunk","model":"m","choices":[{"index":0,"delta":{"tool_calls":[{"index":1,"id":"call_2","type":"function","function":{"name":"b","arguments":"{}"}}]}}]}`,
+		`{"id":"c","object":"chat.completion.chunk","model":"m","choices":[],"usage":{"prompt_tokens":4,"completion_tokens":3,"total_tokens":7}}`,
+	)
+
+	out, done, err := EmitAnthropicSSEChunk(chunks, state, nil, "claude-sonnet-4-5")
+	require.NoError(t, err)
+	assert.True(t, done, "usage-only terminal must end the stream")
+	body := string(out)
+
+	// One thinking block + two tool blocks = three content_block_start,
+	// and all three must be closed (three content_block_stop) before the
+	// single terminal message_stop.
+	assert.Equal(t, 3, strings.Count(body, "event: content_block_start"), "thinking + two tool blocks must each open")
+	assert.Equal(t, 3, strings.Count(body, "event: content_block_stop"), "every open block must be closed on the usage-only terminal")
+	assert.Equal(t, 1, strings.Count(body, "event: message_stop"), "exactly one message_stop")
+	lastStop := strings.LastIndex(body, "event: content_block_stop")
+	msgStop := strings.Index(body, "event: message_stop")
+	require.GreaterOrEqual(t, lastStop, 0)
+	require.GreaterOrEqual(t, msgStop, 0)
+	assert.Less(t, lastStop, msgStop, "all content_block_stop events must precede message_stop")
 }
 
 // TestEmitAnthropicSSEChunk_ErrorPath covers the IsError emitter branch:
@@ -395,6 +433,29 @@ func TestEmitAnthropicSSEChunk_ErrorPath(t *testing.T) {
 	require.NoError(t, err2)
 	assert.True(t, streamDone2)
 	assert.Equal(t, 0, strings.Count(string(out2), "event: message_stop"), "no second message_stop on re-entry")
+}
+
+// TestEmitAnthropicSSEChunk_ErrorAsFirstChunk locks the contract for an
+// error that arrives before any content (MessageStartSent == false): the
+// emitter sends a standalone error event followed by message_stop, with
+// NO message_start. This matches Anthropic's own streaming API, which
+// surfaces an early request failure as a bare error event rather than
+// opening a message lifecycle first. The test guards against a future
+// change that would synthesize a spurious message_start here.
+func TestEmitAnthropicSSEChunk_ErrorAsFirstChunk(t *testing.T) {
+	state := NewStreamState() // MessageStartSent == false: error is the first chunk
+
+	errInput := []byte("event: error\ndata: {\"type\":\"error\",\"error\":{\"type\":\"api_error\",\"message\":\"overloaded\"}}\n\n")
+	out, streamDone, err := EmitAnthropicSSEChunk(errInput, state, nil, "claude-sonnet-4-5")
+	require.NoError(t, err)
+	body := string(out)
+
+	assert.True(t, streamDone, "error-first chunk must end the stream")
+	assert.True(t, state.MessageStopSent, "MessageStopSent must be set after an error-first chunk")
+	assert.Contains(t, body, "event: error", "error event must be emitted")
+	assert.Equal(t, 1, strings.Count(body, "event: message_stop"), "exactly one message_stop")
+	assert.NotContains(t, body, "event: message_start",
+		"a pre-content error must not synthesize a message_start (matches Anthropic API)")
 }
 
 // TestEmitAnthropicSSEChunk_DeterministicToolClose asserts that
