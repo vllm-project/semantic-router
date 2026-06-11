@@ -4,7 +4,7 @@ description: vLLM Semantic Router 的研究导论，介绍这套基于 Envoy 的
 translation:
   source_commit: "ab2aa160"
   source_file: "docs/intro.md"
-  outdated: false
+  outdated: true
 ---
 
 # vLLM Semantic Router
