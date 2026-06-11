@@ -1,6 +1,7 @@
 package extproc
 
 import (
+	"encoding/json"
 	"fmt"
 	"net/url"
 	"sort"
@@ -105,7 +106,106 @@ func (r *OpenAIRouter) handleRouterReplayListAPI(method string, rawQuery string)
 
 	records := filterRouterReplayRecords(r.collectRouterReplayRecords(), query.filters)
 	payload := buildRouterReplayListPayload(records, query)
+	boundRouterReplayListPayloadSize(&payload)
 	return r.createRouterReplayJSONResponse(200, payload)
+}
+
+// boundRouterReplayListPayloadSize guarantees the list page serializes under
+// the ext-proc message-size cap regardless of per-record capture config.
+//
+// The list response embeds whole records, and the heavy text fields
+// (tool-trace step Arguments/Output, request/response bodies, prompt,
+// tool_definitions) are individually capped only by the replay capture policy
+// — which an operator may raise or disable (max_tool_trace_bytes: 0). A single
+// large request, or a long agent tool-trace under the default config, can
+// therefore push a normal page past the cap. Hard-failing the whole history
+// list with a 413 in that case is the wrong behavior for a read endpoint, so
+// this trims the heaviest fields on the page records (which are clones from the
+// store, never the stored originals) until the page fits, setting the existing
+// *_truncated flags so callers can see fidelity was reduced for transport. Full
+// fidelity remains available via the single-record GET /v1/router_replay/{id}.
+//
+// Trimming order is heaviest-first so the cheapest loss of fidelity is taken
+// first: per-step tool-trace text, then response/request bodies, then the
+// structured prompt and tool definitions.
+func boundRouterReplayListPayloadSize(payload *routerReplayListResponse) {
+	if listPayloadSizeWithinLimit(*payload) {
+		return
+	}
+	// Budget per heavy field per record, shrunk on each pass until the page
+	// fits or we reach a hard floor. A floor keeps each record minimally useful
+	// (id, decision, metadata, a snippet of each text field) rather than
+	// blanking them entirely.
+	for _, budget := range []int{4096, 1024, 256, 0} {
+		for i := range payload.Data {
+			trimRoutingRecordForList(&payload.Data[i], budget)
+		}
+		if listPayloadSizeWithinLimit(*payload) {
+			return
+		}
+	}
+	// Even fully trimmed the page is too large (pathological: a huge page of
+	// records whose non-text metadata alone exceeds the cap). Fall back to
+	// halving the page until it fits, recording the reduced count.
+	for len(payload.Data) > 1 && !listPayloadSizeWithinLimit(*payload) {
+		keep := len(payload.Data) / 2
+		payload.Data = payload.Data[:keep]
+		payload.Count = keep
+		payload.HasMore = true
+		nextOffset := payload.Offset + keep
+		payload.NextOffset = &nextOffset
+	}
+}
+
+// listPayloadSizeWithinLimit reports whether the payload serializes (as the
+// ext-proc immediate response) within the size cap. It measures the same
+// proto envelope createRouterReplayJSONResponse will emit.
+func listPayloadSizeWithinLimit(payload routerReplayListResponse) bool {
+	body, err := json.Marshal(payload)
+	if err != nil {
+		return false
+	}
+	// The immediate-response envelope adds fixed framing around the JSON body;
+	// measuring the JSON length against the cap is a safe lower bound, and the
+	// final proto.Size check in createRouterReplayJSONResponse remains the
+	// authoritative gate.
+	return len(body) <= routerReplayMaxImmediateResponseMB
+}
+
+// trimRoutingRecordForList shrinks the heavy text fields of a single list
+// record to at most budget bytes each, setting the matching *_truncated flag
+// when it cuts. budget == 0 trims the fields to empty (flag still set). The
+// record is a per-request clone, so this never mutates the stored original.
+func trimRoutingRecordForList(record *routerreplay.RoutingRecord, budget int) {
+	if record.ToolTrace != nil {
+		for i := range record.ToolTrace.Steps {
+			trimToolTraceStepForList(&record.ToolTrace.Steps[i], budget)
+		}
+	}
+	truncateListField(&record.ResponseBody, &record.ResponseBodyTruncated, budget)
+	truncateListField(&record.RequestBody, &record.RequestBodyTruncated, budget)
+	truncateListField(&record.Prompt, &record.PromptTruncated, budget)
+	truncateListField(&record.ToolDefinitions, &record.ToolDefinitionsTruncated, budget)
+}
+
+// trimToolTraceStepForList trims every free-text field a tool-trace step can
+// carry (each can hold a full message or tool payload) to budget bytes,
+// flagging Truncated if any field is cut.
+func trimToolTraceStepForList(step *routerreplay.ToolTraceStep, budget int) {
+	truncateListField(&step.Arguments, &step.Truncated, budget)
+	truncateListField(&step.RawArguments, &step.Truncated, budget)
+	truncateListField(&step.Output, &step.Truncated, budget)
+	truncateListField(&step.RawOutput, &step.Truncated, budget)
+	truncateListField(&step.Text, &step.Truncated, budget)
+}
+
+// truncateListField cuts *field to at most budget bytes, setting *flag true
+// when it removes anything. A no-op when the field already fits.
+func truncateListField(field *string, flag *bool, budget int) {
+	if len(*field) > budget {
+		*field = (*field)[:budget]
+		*flag = true
+	}
 }
 
 func (r *OpenAIRouter) collectRouterReplayRecords() []routerreplay.RoutingRecord {
