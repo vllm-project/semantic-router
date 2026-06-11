@@ -523,9 +523,31 @@ func applyOpenAIToolsToAnthropicParams(
 
 	toolChoice, hasChoice := openAIToolChoiceToAnthropic(openAIRequest.ToolChoice)
 	if hasChoice {
+		applyDisableParallelToolUse(&toolChoice, openAIRequest)
 		params.ToolChoice = toolChoice
 	}
 	return nil
+}
+
+// applyDisableParallelToolUse restores the Anthropic
+// tool_choice.disable_parallel_tool_use flag from the OpenAI
+// parallel_tool_calls field. Inbound maps Anthropic
+// disable_parallel_tool_use:true onto parallel_tool_calls:false; without this
+// the flag would be silently dropped on the Anthropic→Anthropic path, so a
+// client that asked the backend to serialize tool calls would not get it. Only
+// an explicit false triggers the flag (parallel is the Anthropic default).
+func applyDisableParallelToolUse(choice *anthropic.ToolChoiceUnionParam, req *openai.ChatCompletionNewParams) {
+	if req == nil || !req.ParallelToolCalls.Valid() || req.ParallelToolCalls.Value {
+		return
+	}
+	switch {
+	case choice.OfAuto != nil:
+		choice.OfAuto.DisableParallelToolUse = anthropic.Bool(true)
+	case choice.OfAny != nil:
+		choice.OfAny.DisableParallelToolUse = anthropic.Bool(true)
+	case choice.OfTool != nil:
+		choice.OfTool.DisableParallelToolUse = anthropic.Bool(true)
+	}
 }
 
 func openAIToolsToAnthropic(tools []openai.ChatCompletionToolParam) ([]anthropic.ToolUnionParam, error) {

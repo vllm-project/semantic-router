@@ -224,6 +224,45 @@ func TestReplay_ThinkingRoundTripFromRawBody(t *testing.T) {
 	assert.Equal(t, int64(2048), gjson.GetBytes(body, "thinking.budget_tokens").Int())
 }
 
+// TestReplay_ToolChoiceDisableParallel verifies the
+// tool_choice.disable_parallel_tool_use flag survives the
+// Anthropic→IR→Anthropic round-trip. Inbound mirrors it onto the OpenAI
+// parallel_tool_calls field; without applyDisableParallelToolUse on the
+// outbound side it would be silently dropped and the backend would run tools
+// in parallel against the client's explicit request.
+func TestReplay_ToolChoiceDisableParallel(t *testing.T) {
+	tools := `"tools":[{"name":"w","description":"d","input_schema":{"type":"object"}}]`
+	cases := []struct {
+		name    string
+		choice  string
+		wantSet bool
+	}{
+		{"any_disabled", `{"type":"any","disable_parallel_tool_use":true}`, true},
+		{"tool_disabled", `{"type":"tool","name":"w","disable_parallel_tool_use":true}`, true},
+		{"any_default", `{"type":"any"}`, false},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			raw := []byte(`{"model":"claude-sonnet-4-5","max_tokens":50,` + tools +
+				`,"tool_choice":` + tc.choice + `,"messages":[{"role":"user","content":"hi"}]}`)
+			params, _, err := ParseAnthropicRequest(raw)
+			require.NoError(t, err)
+			pt, err := BuildPassthroughFromAnthropicBody(raw)
+			require.NoError(t, err)
+
+			body, err := ToAnthropicRequestBodyWithPassthrough(params, pt)
+			require.NoError(t, err)
+
+			got := gjson.GetBytes(body, "tool_choice.disable_parallel_tool_use")
+			if tc.wantSet {
+				assert.True(t, got.Exists() && got.Bool(), "disable_parallel_tool_use must round-trip as true")
+			} else {
+				assert.False(t, got.Exists(), "disable_parallel_tool_use must stay omitted when not set")
+			}
+		})
+	}
+}
+
 func TestReplay_MetadataUserID(t *testing.T) {
 	req := &openai.ChatCompletionNewParams{
 		Model:    "claude-sonnet-4-5",
