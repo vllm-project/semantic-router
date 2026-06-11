@@ -21,9 +21,8 @@ func (s *ClassificationAPIServer) handleOpenAIModels(w http.ResponseWriter, _ *h
 
 	// Add the effective auto model name (configured or default "MoM")
 	if cfg != nil {
-		effectiveAutoModelName := cfg.GetEffectiveAutoModelName()
 		models = append(models, OpenAIModel{
-			ID:          effectiveAutoModelName,
+			ID:          cfg.GetEffectiveAutoModelName(),
 			Object:      "model",
 			Created:     now,
 			OwnedBy:     "vllm-semantic-router",
@@ -44,7 +43,7 @@ func (s *ClassificationAPIServer) handleOpenAIModels(w http.ResponseWriter, _ *h
 	if cfg != nil && cfg.IncludeConfigModelsInList {
 		for _, m := range cfg.GetAllModels() {
 			// Skip if already added as the configured auto model name (avoid duplicates)
-			if m == cfg.GetEffectiveAutoModelName() {
+			if cfg.IsAutoModelName(m) {
 				continue
 			}
 			models = append(models, OpenAIModel{

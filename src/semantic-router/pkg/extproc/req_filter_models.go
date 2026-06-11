@@ -34,9 +34,8 @@ func (r *OpenAIRouter) handleModelsRequest(_ string) (*ext_proc.ProcessingRespon
 
 	// Add the effective auto model name (configured or default "MoM")
 	if r.Config != nil {
-		effectiveAutoModelName := r.Config.GetEffectiveAutoModelName()
 		models = append(models, OpenAIModel{
-			ID:          effectiveAutoModelName,
+			ID:          r.Config.GetEffectiveAutoModelName(),
 			Object:      "model",
 			Created:     now,
 			OwnedBy:     "vllm-semantic-router",
@@ -59,7 +58,7 @@ func (r *OpenAIRouter) handleModelsRequest(_ string) (*ext_proc.ProcessingRespon
 	if r.Config != nil && r.Config.IncludeConfigModelsInList {
 		for _, m := range r.Config.GetAllModels() {
 			// Skip if already added as the configured auto model name (avoid duplicates)
-			if m == r.Config.GetEffectiveAutoModelName() {
+			if r.Config.IsAutoModelName(m) {
 				continue
 			}
 			models = append(models, OpenAIModel{

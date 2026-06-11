@@ -167,6 +167,8 @@ type LLMObservability struct {
 }
 
 type RouterOptions struct {
+	// AutoModelName supports comma-separated names to trigger automatic routing.
+	// The first name is the primary model ID returned by /v1/models.
 	AutoModelName             string               `yaml:"auto_model_name,omitempty"`
 	IncludeConfigModelsInList bool                 `yaml:"include_config_models_in_list,omitempty"`
 	ClearRouteCache           bool                 `yaml:"clear_route_cache"`

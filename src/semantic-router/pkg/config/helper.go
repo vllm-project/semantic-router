@@ -69,23 +69,52 @@ func (c *RouterConfig) resolveModelConfigKey(modelName string) (string, bool) {
 	return "", false
 }
 
-// GetEffectiveAutoModelName returns the effective auto model name for automatic model selection
-// Returns the configured AutoModelName if set, otherwise defaults to "MoM"
-// This is the primary model name that triggers automatic routing
+// GetEffectiveAutoModelName returns the primary auto model name for automatic model selection.
+// Returns the first configured AutoModelName if set, otherwise defaults to "MoM".
 func (c *RouterConfig) GetEffectiveAutoModelName() string {
-	if c.AutoModelName != "" {
-		return c.AutoModelName
+	names := c.GetEffectiveAutoModelNames()
+	if len(names) > 1 {
+		return names[1]
 	}
-	return "MoM" // Default value
+	return "MoM"
 }
 
-// IsAutoModelName checks if the given model name should trigger automatic model selection
-// Returns true if the model name is either the configured AutoModelName or "auto" (for backward compatibility)
-func (c *RouterConfig) IsAutoModelName(modelName string) bool {
-	if modelName == "auto" {
-		return true // Always support "auto" for backward compatibility
+// GetEffectiveAutoModelNames returns all effective auto model names for automatic model selection.
+// Supports comma-separated AutoModelName values, plus "auto" for backward compatibility.
+func (c *RouterConfig) GetEffectiveAutoModelNames() []string {
+	raw := c.AutoModelName
+	if raw == "" {
+		raw = "MoM"
 	}
-	return modelName == c.GetEffectiveAutoModelName()
+
+	names := []string{"auto"}
+	seen := map[string]struct{}{"auto": {}}
+	for _, part := range strings.Split(raw, ",") {
+		name := strings.TrimSpace(part)
+		if name == "" {
+			continue
+		}
+		if _, ok := seen[name]; ok {
+			continue
+		}
+		seen[name] = struct{}{}
+		names = append(names, name)
+	}
+
+	if len(names) == 1 {
+		names = append(names, "MoM")
+	}
+	return names
+}
+
+// IsAutoModelName checks if the given model name should trigger automatic model selection.
+func (c *RouterConfig) IsAutoModelName(modelName string) bool {
+	for _, name := range c.GetEffectiveAutoModelNames() {
+		if modelName == name {
+			return true
+		}
+	}
+	return false
 }
 
 // GetCategoryDescriptions returns all category descriptions for similarity matching

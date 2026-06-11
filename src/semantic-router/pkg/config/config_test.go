@@ -2262,6 +2262,15 @@ api:
 				cfg := &RouterConfig{}
 				Expect(cfg.GetEffectiveAutoModelName()).To(Equal("MoM"))
 			})
+
+			It("should return the first comma-separated AutoModelName as primary", func() {
+				cfg := &RouterConfig{
+					RouterOptions: RouterOptions{
+						AutoModelName: "MoM, MoM[1M], router",
+					},
+				}
+				Expect(cfg.GetEffectiveAutoModelName()).To(Equal("MoM"))
+			})
 		})
 
 		Context("IsAutoModelName", func() {
@@ -2311,6 +2320,33 @@ api:
 				Expect(cfg.IsAutoModelName("auto")).To(BeTrue())
 				Expect(cfg.IsAutoModelName("MoM")).To(BeTrue())
 				Expect(cfg.IsAutoModelName("other")).To(BeFalse())
+			})
+
+			It("should recognize comma-separated AutoModelName values", func() {
+				cfg := &RouterConfig{
+					RouterOptions: RouterOptions{
+						AutoModelName: "MoM, MoM[1M], router",
+					},
+				}
+				Expect(cfg.GetEffectiveAutoModelNames()).To(Equal([]string{
+					"auto", "MoM", "MoM[1M]", "router",
+				}))
+				Expect(cfg.IsAutoModelName("auto")).To(BeTrue())
+				Expect(cfg.IsAutoModelName("MoM")).To(BeTrue())
+				Expect(cfg.IsAutoModelName("MoM[1M]")).To(BeTrue())
+				Expect(cfg.IsAutoModelName("router")).To(BeTrue())
+				Expect(cfg.IsAutoModelName("gpt-4")).To(BeFalse())
+			})
+
+			It("should trim whitespace and ignore empty AutoModelName entries", func() {
+				cfg := &RouterConfig{
+					RouterOptions: RouterOptions{
+						AutoModelName: "  MoM  , ,  MoM[1M]  ",
+					},
+				}
+				Expect(cfg.GetEffectiveAutoModelNames()).To(Equal([]string{
+					"auto", "MoM", "MoM[1M]",
+				}))
 			})
 		})
 
