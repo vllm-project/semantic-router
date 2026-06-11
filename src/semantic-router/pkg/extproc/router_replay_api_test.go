@@ -10,6 +10,7 @@ import (
 	ext_proc "github.com/envoyproxy/go-control-plane/envoy/service/ext_proc/v3"
 	typev3 "github.com/envoyproxy/go-control-plane/envoy/type/v3"
 
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/routerreplay"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/routerreplay/store"
 )
@@ -203,6 +204,63 @@ func TestHandleRouterReplayAPIListReturnsPayloadTooLargeForOversizedPage(t *test
 	}
 	if got := errorBody["message"]; got == nil || !strings.Contains(got.(string), "ext-proc message size limit") {
 		t.Fatalf("expected oversized response guidance, got %#v", got)
+	}
+}
+
+// TestHandleRouterReplayAPIListBoundedByDefaultConfigForLargeInput is the
+// regression test for the reported 413 on the history list when a large request
+// is recorded. The structured Prompt/ToolDefinitions fields are extracted from
+// the full request before MaxBodyBytes truncation; before the fix the default
+// config left MaxToolTraceBytes=0 (unbounded), so a single multi-MB input
+// produced a multi-MB Prompt that pushed a normal page past the ext-proc size
+// cap and returned 413. With the default config wired through the real
+// configureReplayRecorder path, the list endpoint must return 200.
+func TestHandleRouterReplayAPIListBoundedByDefaultConfigForLargeInput(t *testing.T) {
+	bigInput := strings.Repeat("x", 5*1024*1024) // 5 MB user input
+
+	cfg := config.DefaultRouterReplayPluginConfig()
+	recorder := routerreplay.NewRecorder(store.NewMemoryStore(100, 0))
+	// Use the production wiring so the test exercises the actual default policy,
+	// not a hand-set recorder limit.
+	configureReplayRecorder(recorder, &cfg)
+
+	// Build records the way buildReplayRoutingRecord does: Prompt and
+	// ToolDefinitions come from the full request body, RequestBody is the raw body.
+	for i := 0; i < 25; i++ {
+		if _, err := recorder.AddRecord(routerreplay.RoutingRecord{
+			ID:              fmt.Sprintf("replay-%03d", i),
+			Decision:        "decision-a",
+			RequestID:       fmt.Sprintf("req-%03d", i),
+			RequestBody:     bigInput,
+			Prompt:          bigInput,
+			ToolDefinitions: bigInput,
+			Timestamp:       time.Unix(int64(i+1), 0).UTC(),
+		}); err != nil {
+			t.Fatalf("failed to add replay record %d: %v", i, err)
+		}
+	}
+
+	// Each heavy field must have been truncated to the default cap.
+	stored, ok := recorder.GetRecord("replay-000")
+	if !ok {
+		t.Fatal("expected stored record")
+	}
+	if len(stored.Prompt) != 4096 || !stored.PromptTruncated {
+		t.Fatalf("prompt should be truncated to 4096, got len=%d truncated=%v", len(stored.Prompt), stored.PromptTruncated)
+	}
+	if len(stored.ToolDefinitions) != 4096 || !stored.ToolDefinitionsTruncated {
+		t.Fatalf("tool_definitions should be truncated to 4096, got len=%d truncated=%v", len(stored.ToolDefinitions), stored.ToolDefinitionsTruncated)
+	}
+
+	router := &OpenAIRouter{
+		ReplayRecorders: map[string]*routerreplay.Recorder{"decision-a": recorder},
+	}
+	response := router.handleRouterReplayAPI("GET", "/v1/router_replay?limit=25&offset=0")
+	if response == nil || response.GetImmediateResponse() == nil {
+		t.Fatal("expected immediate response")
+	}
+	if got := response.GetImmediateResponse().GetStatus().GetCode(); got != typev3.StatusCode_OK {
+		t.Fatalf("expected 200 OK for a full page of large-input records under the default config, got %v", got)
 	}
 }
 
