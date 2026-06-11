@@ -87,6 +87,25 @@ func applyMetadata(params *anthropic.MessageNewParams, req *openai.ChatCompletio
 	params.Metadata = anthropic.MetadataParam{UserID: anthropic.String(userID)}
 }
 
+// applyThinking restores the Anthropic extended-thinking request parameter from
+// the passthrough. The thinking config has no OpenAI representation, so without
+// this the same-protocol (Anthropic→Anthropic) path would silently drop it and
+// the backend would not enable extended thinking. nil passthrough or unset
+// Thinking is a no-op, leaving the field omitted.
+func applyThinking(params *anthropic.MessageNewParams, pt *AnthropicPassthrough) {
+	if pt == nil || pt.Thinking == nil {
+		return
+	}
+	switch pt.Thinking.Type {
+	case "enabled":
+		params.Thinking = anthropic.ThinkingConfigParamOfEnabled(pt.Thinking.BudgetTokens)
+	case "disabled":
+		params.Thinking = anthropic.ThinkingConfigParamUnion{
+			OfDisabled: &anthropic.ThinkingConfigDisabledParam{},
+		}
+	}
+}
+
 // applyToolsCacheControl attaches cache_control markers to tool definitions
 // based on the `tools[i]` keys in the passthrough.
 func applyToolsCacheControl(params *anthropic.MessageNewParams, pt *AnthropicPassthrough) {

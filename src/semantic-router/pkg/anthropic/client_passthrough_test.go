@@ -170,6 +170,60 @@ func TestReplay_TopK_OmittedWhenNil(t *testing.T) {
 	assert.False(t, gjson.GetBytes(body, "top_k").Exists())
 }
 
+func TestReplay_ThinkingEnabled(t *testing.T) {
+	req := &openai.ChatCompletionNewParams{
+		Model:    "claude-sonnet-4-5",
+		Messages: []openai.ChatCompletionMessageParamUnion{userStringMessage("hi")},
+	}
+	pt := &AnthropicPassthrough{Thinking: &ThinkingConfig{Type: "enabled", BudgetTokens: 2048}}
+
+	body, err := ToAnthropicRequestBodyWithPassthrough(req, pt)
+	require.NoError(t, err)
+	assert.Equal(t, "enabled", gjson.GetBytes(body, "thinking.type").String())
+	assert.Equal(t, int64(2048), gjson.GetBytes(body, "thinking.budget_tokens").Int())
+}
+
+func TestReplay_ThinkingDisabled(t *testing.T) {
+	req := &openai.ChatCompletionNewParams{
+		Model:    "claude-sonnet-4-5",
+		Messages: []openai.ChatCompletionMessageParamUnion{userStringMessage("hi")},
+	}
+	pt := &AnthropicPassthrough{Thinking: &ThinkingConfig{Type: "disabled"}}
+
+	body, err := ToAnthropicRequestBodyWithPassthrough(req, pt)
+	require.NoError(t, err)
+	assert.Equal(t, "disabled", gjson.GetBytes(body, "thinking.type").String())
+	// budget_tokens has no meaning for disabled and must not be emitted.
+	assert.False(t, gjson.GetBytes(body, "thinking.budget_tokens").Exists())
+}
+
+func TestReplay_ThinkingOmittedWhenNil(t *testing.T) {
+	req := &openai.ChatCompletionNewParams{
+		Model:    "claude-sonnet-4-5",
+		Messages: []openai.ChatCompletionMessageParamUnion{userStringMessage("hi")},
+	}
+	body, err := ToAnthropicRequestBodyWithPassthrough(req, &AnthropicPassthrough{})
+	require.NoError(t, err)
+	assert.False(t, gjson.GetBytes(body, "thinking").Exists())
+}
+
+// TestReplay_ThinkingRoundTripFromRawBody is the end-to-end transparency
+// check: a raw Anthropic request carrying thinking, parsed and rebuilt through
+// the full passthrough pipeline, must preserve the field verbatim. This is the
+// path that was silently dropping thinking before the applyThinking fix.
+func TestReplay_ThinkingRoundTripFromRawBody(t *testing.T) {
+	raw := []byte(`{"model":"claude-sonnet-4-5","max_tokens":1024,"thinking":{"type":"enabled","budget_tokens":2048},"messages":[{"role":"user","content":"hi"}]}`)
+	params, _, err := ParseAnthropicRequest(raw)
+	require.NoError(t, err)
+	pt, err := BuildPassthroughFromAnthropicBody(raw)
+	require.NoError(t, err)
+
+	body, err := ToAnthropicRequestBodyWithPassthrough(params, pt)
+	require.NoError(t, err)
+	assert.Equal(t, "enabled", gjson.GetBytes(body, "thinking.type").String())
+	assert.Equal(t, int64(2048), gjson.GetBytes(body, "thinking.budget_tokens").Int())
+}
+
 func TestReplay_MetadataUserID(t *testing.T) {
 	req := &openai.ChatCompletionNewParams{
 		Model:    "claude-sonnet-4-5",
