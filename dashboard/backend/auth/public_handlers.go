@@ -14,9 +14,9 @@ func bootstrapCanRegisterHandler(svc *Service) http.HandlerFunc {
 			return
 		}
 
-		// When the open web-form bootstrap is disabled, always report false. This
-		// also avoids leaking to unauthenticated callers whether the instance is
-		// freshly deployed and claimable.
+		// When neither explicit open bootstrap nor dashboard setup mode is active,
+		// always report false. This avoids leaking to unauthenticated callers
+		// whether a non-bootstrap instance is freshly deployed and claimable.
 		if !svc.OpenBootstrapEnabled() {
 			respondJSON(w, BootstrapStatusResponse{CanRegister: false})
 			return
