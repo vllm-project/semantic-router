@@ -30,9 +30,13 @@ class AgentMemoryClassifierTests(unittest.TestCase):
 
         self.assertTrue(result.memory_required)
         self.assertFalse(result.memory_present)
+        self.assertFalse(result.memory_invalid)
+        self.assertIsNone(result.invalid_reason)
         self.assertFalse(result.gate_passed)
         self.assertIn("required", result.gate_reason or "")
         self.assertIn("Hard gate: failed", result.comment_body)
+        self.assertIn("Memory context: missing", result.comment_body)
+        self.assertNotIn("Memory context: invalid", result.comment_body)
         self.assertEqual(result.labels_to_add, ["agent-memory-missing"])
 
     def test_large_pr_with_valid_changed_brief_is_present(self) -> None:

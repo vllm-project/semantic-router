@@ -80,14 +80,16 @@ def classify_pr(
     changed = {normalize_path(path) for path in changed_files}
     memory_path = extract_review_brief_path(body)
     invalid_reason = None
-    if memory_required or memory_path is not None:
+    if memory_path is not None:
         invalid_reason = validate_memory_reference(memory_path, changed, repo_root)
-    memory_invalid = invalid_reason is not None
+    memory_missing = memory_path is None
+    memory_invalid = memory_path is not None and invalid_reason is not None
     memory_present = memory_path is not None and not memory_invalid
     gate_reason = review_brief_gate_failure_reason(
         memory_required=memory_required,
         memory_present=memory_present,
         memory_invalid=memory_invalid,
+        memory_missing=memory_missing,
         invalid_reason=invalid_reason,
     )
     gate_passed = gate_reason is None
@@ -131,28 +133,23 @@ def review_brief_gate_failure_reason(
     memory_required: bool,
     memory_present: bool,
     memory_invalid: bool,
+    memory_missing: bool,
     invalid_reason: str | None,
 ) -> str | None:
-    if (
-        memory_required
-        and not memory_present
-        and invalid_reason == "Missing review brief reference"
-    ):
-        return "Review brief is required for this PR size but no valid brief was found"
     if memory_invalid:
         return invalid_reason or "Review brief reference is invalid"
+    if memory_required and memory_missing:
+        return "Review brief is required for this PR size but no valid brief was found"
     if memory_required and not memory_present:
         return "Review brief is required for this PR size but no valid brief was found"
     return None
 
 
 def validate_memory_reference(
-    memory_path: str | None,
+    memory_path: str,
     changed_files: set[str],
     repo_root: Path,
 ) -> str | None:
-    if memory_path is None:
-        return "Missing review brief reference"
     if not valid_brief_path(memory_path):
         return (
             "Review brief path must match "
