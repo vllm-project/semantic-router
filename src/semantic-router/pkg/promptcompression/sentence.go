@@ -168,46 +168,35 @@ func CountTokensApprox(text string) int {
 
 	var cjkRunes int
 	var nonCJKWords int
+	hasFields := false
 
-	// Split on whitespace; within each field count CJK runes separately
-	for _, field := range strings.Fields(text) {
-		fieldRunes := []rune(field)
-		hasCJK := false
-		for _, r := range fieldRunes {
+	// Split on whitespace lazily; within each field count CJK runes separately.
+	for field := range strings.FieldsSeq(text) {
+		hasFields = true
+		fieldCJKRunes := 0
+		hasNonCJK := false
+		for _, r := range field {
 			if isCJK(r) {
-				cjkRunes++
-				hasCJK = true
+				fieldCJKRunes++
+			} else {
+				hasNonCJK = true
 			}
 		}
-		// Non-CJK portion of the field counts as a word
-		if !hasCJK {
+
+		cjkRunes += fieldCJKRunes
+		// Non-CJK fields and mixed fields (e.g. "Python函数") each add one word.
+		if fieldCJKRunes == 0 || hasNonCJK {
 			nonCJKWords++
-		} else {
-			// Mixed field (e.g. "Python函数"): count non-CJK chars as partial word
-			nonCJKCount := len(fieldRunes) - cjkRunesInField(fieldRunes)
-			if nonCJKCount > 0 {
-				nonCJKWords++
-			}
 		}
 	}
 
 	cjkTokens := float64(cjkRunes) * 1.5
 	wordTokens := float64(nonCJKWords) * 1.3
 	total := int(cjkTokens + wordTokens)
-	if total == 0 && len(strings.Fields(text)) > 0 {
+	if total == 0 && hasFields {
 		total = 1
 	}
 	return total
-}
-
-func cjkRunesInField(runes []rune) int {
-	n := 0
-	for _, r := range runes {
-		if isCJK(r) {
-			n++
-		}
-	}
-	return n
 }
 
 // TokenizeWords splits text into tokens suitable for bag-of-words scoring.
