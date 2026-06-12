@@ -196,9 +196,12 @@ fn test_free_batch_similarity_result_uses_full_slice_layout() {
     assert_eq!(result.num_matches, 0);
 }
 
-/// Mirrors the producer of model info results: the models array is allocated
-/// as `Vec<EmbeddingModelInfo>` -> `into_boxed_slice()` -> `Box::into_raw`,
-/// with `CString::into_raw` string fields.
+/// Mirrors the producer's allocation pattern (`Vec<EmbeddingModelInfo>` ->
+/// `into_boxed_slice()` -> `Box::into_raw`, `CString::into_raw` string
+/// fields) but deliberately uses a 2-entry array: the production array
+/// currently holds a single entry, for which the element-pointer free
+/// happens to use the right layout; more than one element is what exposes
+/// the mismatch this test exists to catch.
 #[test]
 fn test_free_embedding_models_info_uses_full_slice_layout() {
     let _guard = WINDOW_GUARD.lock().unwrap_or_else(|e| e.into_inner());

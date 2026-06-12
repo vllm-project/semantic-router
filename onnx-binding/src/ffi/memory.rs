@@ -7,6 +7,7 @@ use std::ffi::{c_char, CString};
 /// # Safety
 /// - `data` must be a valid pointer allocated by Rust
 /// - `length` must match the original allocation length
+#[allow(clippy::not_unsafe_ptr_arg_deref)]
 #[no_mangle]
 pub extern "C" fn free_embedding(data: *mut f32, length: i32) {
     if data.is_null() || length <= 0 {
@@ -14,7 +15,7 @@ pub extern "C" fn free_embedding(data: *mut f32, length: i32) {
     }
 
     unsafe {
-        let _ = Box::from_raw(std::slice::from_raw_parts_mut(data, length as usize));
+        let _ = Box::from_raw(std::ptr::slice_from_raw_parts_mut(data, length as usize));
     }
 }
 
@@ -22,6 +23,7 @@ pub extern "C" fn free_embedding(data: *mut f32, length: i32) {
 ///
 /// # Safety
 /// - `s` must be a valid CString pointer allocated by Rust
+#[allow(clippy::not_unsafe_ptr_arg_deref)]
 #[no_mangle]
 pub extern "C" fn free_cstring(s: *mut c_char) {
     if s.is_null() {
@@ -37,6 +39,7 @@ pub extern "C" fn free_cstring(s: *mut c_char) {
 ///
 /// # Safety
 /// - `result` must be a valid pointer to BatchSimilarityResult
+#[allow(clippy::not_unsafe_ptr_arg_deref)]
 #[no_mangle]
 pub extern "C" fn free_batch_similarity_result(result: *mut super::types::BatchSimilarityResult) {
     if result.is_null() {
@@ -65,6 +68,7 @@ pub extern "C" fn free_batch_similarity_result(result: *mut super::types::BatchS
 ///
 /// # Safety
 /// - `result` must be a valid pointer to EmbeddingModelsInfoResult
+#[allow(clippy::not_unsafe_ptr_arg_deref)]
 #[no_mangle]
 pub extern "C" fn free_embedding_models_info(result: *mut super::types::EmbeddingModelsInfoResult) {
     if result.is_null() {
