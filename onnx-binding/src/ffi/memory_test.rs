@@ -33,6 +33,10 @@ struct AllocRecord {
 }
 
 /// A tracked pointer freed with a layout differing from its allocation layout.
+// The fields are read only through the Debug-formatted assertion message, which
+// dead-code analysis does not count as a use; allow rather than drop them, since
+// the byte counts are the whole diagnostic value when this fires.
+#[allow(dead_code)]
 #[derive(Debug, Clone, Copy)]
 struct LayoutMismatch {
     ptr: usize,
