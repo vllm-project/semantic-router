@@ -32,14 +32,23 @@ type PIIModel struct {
 	PIIMappingPath string  `yaml:"pii_mapping_path"`
 }
 
+type EmbeddingModelRefs struct {
+	Qwen3      string `yaml:"qwen3,omitempty"`
+	Gemma      string `yaml:"gemma,omitempty"`
+	MmBERT     string `yaml:"mmbert,omitempty"`
+	MultiModal string `yaml:"multimodal,omitempty"`
+	BERT       string `yaml:"bert,omitempty"`
+}
+
 type EmbeddingModels struct {
-	Qwen3ModelPath      string     `yaml:"qwen3_model_path"`
-	GemmaModelPath      string     `yaml:"gemma_model_path"`
-	MmBertModelPath     string     `yaml:"mmbert_model_path"`
-	MultiModalModelPath string     `yaml:"multimodal_model_path,omitempty"`
-	BertModelPath       string     `yaml:"bert_model_path"`
-	UseCPU              bool       `yaml:"use_cpu"`
-	EmbeddingConfig     HNSWConfig `yaml:"embedding_config,omitempty"`
+	ModelRefs           EmbeddingModelRefs `yaml:"model_refs,omitempty"`
+	Qwen3ModelPath      string             `yaml:"qwen3_model_path"`
+	GemmaModelPath      string             `yaml:"gemma_model_path"`
+	MmBertModelPath     string             `yaml:"mmbert_model_path"`
+	MultiModalModelPath string             `yaml:"multimodal_model_path,omitempty"`
+	BertModelPath       string             `yaml:"bert_model_path"`
+	UseCPU              bool               `yaml:"use_cpu"`
+	EmbeddingConfig     HNSWConfig         `yaml:"embedding_config,omitempty"`
 }
 
 func (e EmbeddingModels) MinSimilarityThreshold() float32 {

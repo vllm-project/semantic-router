@@ -953,12 +953,38 @@ class Routing(BaseModel):
     decisions: List[Decision] = Field(default_factory=list)
 
 
+class EmbeddingModelRefsConfig(BaseModel):
+    """Stable system-model refs for semantic embedding runtimes."""
+
+    model_config = ConfigDict(extra="allow")
+
+    qwen3: Optional[str] = Field(
+        None, description="System model ref for Qwen3 embeddings"
+    )
+    gemma: Optional[str] = Field(
+        None, description="System model ref for Gemma embeddings"
+    )
+    mmbert: Optional[str] = Field(
+        None, description="System model ref for mmBERT embeddings"
+    )
+    multimodal: Optional[str] = Field(
+        None, description="System model ref for multimodal embeddings"
+    )
+    bert: Optional[str] = Field(
+        None, description="System model ref for legacy BERT embeddings"
+    )
+
+
 class EmbeddingModelsConfig(BaseModel):
     """Embedding models configuration for memory and semantic features."""
 
     # Preserve advanced nested fields when users pass through custom config blocks.
     model_config = ConfigDict(extra="allow")
 
+    model_refs: Optional[EmbeddingModelRefsConfig] = Field(
+        default=None,
+        description="Stable refs resolved through global.model_catalog.system; direct paths override refs.",
+    )
     qwen3_model_path: Optional[str] = Field(
         None, description="Path to Qwen3-Embedding model"
     )
@@ -974,7 +1000,7 @@ class EmbeddingModelsConfig(BaseModel):
     )
     bert_model_path: Optional[str] = Field(
         None,
-        description="Path to BERT/MiniLM model (recommended for memory retrieval)",
+        description="Path to legacy BERT/SentenceTransformer fallback embedding model",
     )
     embedding_config: Optional[EmbeddingClassifierConfig] = Field(
         default=None,

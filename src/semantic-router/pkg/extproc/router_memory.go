@@ -12,6 +12,7 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/memory"
 	milvuslifecycle "github.com/vllm-project/semantic-router/src/semantic-router/pkg/milvus"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modellifecycle"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 )
 
@@ -362,30 +363,14 @@ func createQdrantMemoryStore(cfg *config.RouterConfig) (memory.Store, error) {
 }
 
 func detectMemoryEmbeddingModel(cfg *config.RouterConfig) string {
-	embeddingModels := cfg.EmbeddingModels
-	embeddingModel := cfg.Memory.EmbeddingModel
-	if embeddingModel != "" {
-		return embeddingModel
+	model := modellifecycle.ResolveMemoryEmbeddingModel(cfg)
+	if cfg.Memory.EmbeddingModel != "" {
+		logging.Infof("Memory: Using configured embedding model %s", model)
+		return model
 	}
-
-	switch {
-	case embeddingModels.BertModelPath != "":
-		logging.Infof("Memory: Auto-selected bert from embedding_models config (384-dim, recommended for memory)")
-		return "bert"
-	case embeddingModels.MmBertModelPath != "":
-		logging.Infof("Memory: Auto-selected mmbert from embedding_models config")
-		return "mmbert"
-	case embeddingModels.MultiModalModelPath != "":
-		logging.Infof("Memory: Auto-selected multimodal from embedding_models config")
-		return "multimodal"
-	case embeddingModels.Qwen3ModelPath != "":
-		logging.Infof("Memory: Auto-selected qwen3 from embedding_models config")
-		return "qwen3"
-	case embeddingModels.GemmaModelPath != "":
-		logging.Infof("Memory: Auto-selected gemma from embedding_models config")
-		return "gemma"
-	default:
-		logging.Warnf("Memory: No embedding models configured, bert will be used but may fail without bert_model_path")
-		return "bert"
+	if model == "bert" && cfg.BertModelPath == "" {
+		logging.Warnf("Memory: No memory embedding_model configured; defaulting to bert")
+		return model
 	}
+	return model
 }

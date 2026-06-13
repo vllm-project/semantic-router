@@ -129,6 +129,12 @@ global:
   model_catalog:
     embeddings:
       semantic:
+        model_refs:
+          qwen3: ""
+          gemma: ""
+          mmbert: ""
+          multimodal: ""
+          bert: ""
         qwen3_model_path: ""
         gemma_model_path: ""
         mmbert_model_path: ""

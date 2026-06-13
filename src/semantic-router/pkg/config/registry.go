@@ -139,7 +139,7 @@ var DefaultModelRegistry = []ModelSpec{
 
 	// Hallucination Detection - Detector
 	{
-		LocalPath:        "models/mom-halugate-detector",
+		LocalPath:        defaultHallucinationDetectorPath,
 		RepoID:           "KRLabsOrg/lettucedect-base-modernbert-en-v1",
 		Aliases:          []string{"hallucination-detector", "halugate-detector", "lettucedect"},
 		Purpose:          PurposeHallucinationDetector,
@@ -152,7 +152,7 @@ var DefaultModelRegistry = []ModelSpec{
 
 	// Hallucination Detection - Explainer
 	{
-		LocalPath:        "models/mom-halugate-explainer",
+		LocalPath:        defaultHallucinationExplainerPath,
 		RepoID:           "tasksource/ModernBERT-base-nli",
 		Aliases:          []string{"hallucination-explainer", "halugate-explainer", "nli-explainer"},
 		Purpose:          PurposeHallucinationExplainer,
@@ -178,7 +178,7 @@ var DefaultModelRegistry = []ModelSpec{
 
 	// Modality Detection - mmBERT-32K Router Classifier
 	{
-		LocalPath:        "models/mmbert32k-modality-router-merged",
+		LocalPath:        defaultModalityClassifierPath,
 		RepoID:           "llm-semantic-router/mmbert32k-modality-router-merged",
 		Aliases:          []string{"modality-classifier", "modality-router", "mmbert32k-modality-router"},
 		Purpose:          PurposeModalityDetection,
@@ -191,7 +191,7 @@ var DefaultModelRegistry = []ModelSpec{
 
 	// Embedding Models - Pro (High Quality)
 	{
-		LocalPath:        "models/mom-embedding-pro",
+		LocalPath:        defaultQwen3EmbeddingPath,
 		RepoID:           "Qwen/Qwen3-Embedding-0.6B",
 		Aliases:          []string{"Qwen3-Embedding-0.6B", "embedding-pro", "qwen3"},
 		Purpose:          PurposeEmbedding,
@@ -204,7 +204,7 @@ var DefaultModelRegistry = []ModelSpec{
 
 	// Embedding Models - Flash (Balanced)
 	{
-		LocalPath:        "models/mom-embedding-flash",
+		LocalPath:        defaultGemmaEmbeddingPath,
 		RepoID:           "google/embeddinggemma-300m",
 		Aliases:          []string{"embeddinggemma-300m", "embedding-flash", "gemma"},
 		Purpose:          PurposeEmbedding,
@@ -217,7 +217,7 @@ var DefaultModelRegistry = []ModelSpec{
 
 	// Embedding Models - Light (Fast)
 	{
-		LocalPath:        "models/mom-embedding-light",
+		LocalPath:        defaultBERTEmbeddingPath,
 		RepoID:           "sentence-transformers/all-MiniLM-L12-v2",
 		Aliases:          []string{"all-MiniLM-L12-v2", "embedding-light", "bert-light"},
 		Purpose:          PurposeSemanticSimilarity,
@@ -230,7 +230,7 @@ var DefaultModelRegistry = []ModelSpec{
 
 	// Embedding Models - mmBERT 2D Matryoshka (Multilingual)
 	{
-		LocalPath:        "models/mmbert-embed-32k-2d-matryoshka",
+		LocalPath:        defaultMmBERTEmbeddingPath,
 		RepoID:           "llm-semantic-router/mmbert-embed-32k-2d-matryoshka",
 		Aliases:          []string{"mom-embedding-ultra", "mmbert-embed-32k-2d-matryoshka", "mmbert-embedding", "embedding-mmbert", "mmbert", "embedding-ultra"},
 		Purpose:          PurposeEmbedding,
@@ -243,7 +243,7 @@ var DefaultModelRegistry = []ModelSpec{
 
 	// Embedding Models - Multi-Modal (Text/Image/Audio)
 	{
-		LocalPath:        "models/mom-embedding-multimodal",
+		LocalPath:        defaultMultiModalEmbeddingPath,
 		RepoID:           "llm-semantic-router/multi-modal-embed-small",
 		Aliases:          []string{"multi-modal-embed-small", "multimodal-embedding", "embedding-multimodal", "multimodal", "mom-embedding-multimodal"},
 		Purpose:          PurposeEmbedding,
@@ -317,7 +317,7 @@ var DefaultModelRegistry = []ModelSpec{
 
 	// mmBERT-32K Feedback Detector (Merged - for Rust/Go inference)
 	{
-		LocalPath:        "models/mmbert32k-feedback-detector-merged",
+		LocalPath:        defaultFeedbackDetectorPath,
 		RepoID:           "llm-semantic-router/mmbert32k-feedback-detector-merged",
 		Aliases:          []string{"mmbert32k-feedback-merged", "feedback-detector-32k-merged"},
 		Purpose:          PurposeFeedbackDetection,
@@ -331,7 +331,7 @@ var DefaultModelRegistry = []ModelSpec{
 
 	// mmBERT-32K Intent Classifier (Merged)
 	{
-		LocalPath:        "models/mmbert32k-intent-classifier-merged",
+		LocalPath:        defaultDomainClassifierPath,
 		RepoID:           "llm-semantic-router/mmbert32k-intent-classifier-merged",
 		Aliases:          []string{"mmbert32k-intent-merged", "intent-classifier-32k-merged"},
 		Purpose:          PurposeDomainClassification,
@@ -345,7 +345,7 @@ var DefaultModelRegistry = []ModelSpec{
 
 	// mmBERT-32K Fact-Check Classifier (Merged)
 	{
-		LocalPath:        "models/mmbert32k-factcheck-classifier-merged",
+		LocalPath:        defaultFactCheckClassifierPath,
 		RepoID:           "llm-semantic-router/mmbert32k-factcheck-classifier-merged",
 		Aliases:          []string{"mmbert32k-factcheck-merged", "factcheck-classifier-32k-merged"},
 		Purpose:          PurposeHallucinationSentinel,
@@ -359,7 +359,7 @@ var DefaultModelRegistry = []ModelSpec{
 
 	// mmBERT-32K Jailbreak Detector (Merged)
 	{
-		LocalPath:        "models/mmbert32k-jailbreak-detector-merged",
+		LocalPath:        defaultPromptGuardPath,
 		RepoID:           "llm-semantic-router/mmbert32k-jailbreak-detector-merged",
 		Aliases:          []string{"mmbert32k-jailbreak-merged", "jailbreak-detector-32k-merged"},
 		Purpose:          PurposeJailbreakDetection,
@@ -373,7 +373,7 @@ var DefaultModelRegistry = []ModelSpec{
 
 	// mmBERT-32K PII Detector (Merged)
 	{
-		LocalPath:        "models/mmbert32k-pii-detector-merged",
+		LocalPath:        defaultPIIClassifierPath,
 		RepoID:           "llm-semantic-router/mmbert32k-pii-detector-merged",
 		Aliases:          []string{"mmbert32k-pii-merged", "pii-detector-32k-merged"},
 		Purpose:          PurposePIIDetection,

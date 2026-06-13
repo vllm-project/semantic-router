@@ -181,6 +181,12 @@ func assertReferenceConfigEmbeddingCatalogCoverage(t testingT, embeddings map[st
 	assertMapCoversStructFields(t, mustMapAt(t, embeddings, "semantic"), reflect.TypeOf(EmbeddingModels{}), "global.model_catalog.embeddings.semantic")
 	assertMapCoversStructFields(
 		t,
+		mustMapAt(t, embeddings, "semantic", "model_refs"),
+		reflect.TypeOf(EmbeddingModelRefs{}),
+		"global.model_catalog.embeddings.semantic.model_refs",
+	)
+	assertMapCoversStructFields(
+		t,
 		mustMapAt(t, embeddings, "semantic", "embedding_config"),
 		reflect.TypeOf(HNSWConfig{}),
 		"global.model_catalog.embeddings.semantic.embedding_config",

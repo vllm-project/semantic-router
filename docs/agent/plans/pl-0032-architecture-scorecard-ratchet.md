@@ -15,6 +15,7 @@
   - [TD017](../tech-debt/td-017-fleet-sim-structure-gate-migration-gap.md)
   - [TD020](../tech-debt/td-020-classification-subsystem-boundary-collapse.md)
   - [TD027](../tech-debt/td-027-fleet-sim-optimizer-and-public-surface-boundary-collapse.md)
+  - [TD044](../tech-debt/td-044-router-model-lifecycle-split.md)
 - [../architecture-scorecard.md](../architecture-scorecard.md)
 - Harness scoring and validation logic that decides what is current.
 
@@ -45,11 +46,15 @@ Out of scope:
   seams that are still doing request-time policy work.
 - [ ] `ADC006` Retire or narrow TD027 by splitting fleet-sim optimizer analysis,
   verification, and export ownership.
+- [ ] `ADC007` Retire or narrow TD044 after PR #2066 validation lands: the
+  router-owned lifecycle schema, download plan, initialization plan, API
+  reporting, and AMD reduced-model regression are covered; remaining work is to
+  decide whether the registry alias/example cleanup keeps TD044 open.
 
 ## Next Action
 
-- Choose one non-release TD and either retire it with current-source evidence or
-  split it into a release-bound issue if it blocks the active milestone.
+- Continue ADC007 by watching PR #2066 CI, then retire TD044 or narrow it to the
+  remaining registry alias/example cleanup based on the final PR evidence.
 
 ## Operating Rules
 

@@ -8,29 +8,21 @@ Read this after the [Embedding Signal](./embedding) tutorial. That page covers t
 
 ## Key Advantages
 
-- Turns anchor authoring into a repeatable pack-design workflow instead of trial-and-error phrase tweaking.
-- Helps reduce false positives by treating the full anchor pack as the signal, not any single phrase.
-- Makes threshold calibration and validation explicit so packs stay aligned with the embedding model in production.
+- Provides a repeatable authoring pattern for embedding anchor packs across text and image modalities.
+- Reduces false positives by treating benign examples as first-class anchors rather than relying on negative filters.
+- Makes threshold calibration explicit so examples are not copied across models or modalities without validation.
 
 ## What Problem Does It Solve?
 
-Embedding rules can look plausible in review and still route poorly in practice when anchors overfit to literal wording, omit benign counterexamples, or reuse thresholds from a different model. This guide explains how to build anchor packs that generalize across real traffic instead of only matching hand-picked examples.
+Embedding rules are easy to write but hard to make robust. A few plausible phrases can look correct in a demo while producing unstable cosine matches in production. This guide gives anchor-pack authors a practical checklist for building, calibrating, and validating those candidate sets as small classifiers.
 
 ## When to Use
 
-Use these principles whenever you create or revise `embedding` signal rules, especially when you are:
-
-- adding a new text or image routing category,
-- recalibrating thresholds for a different embedding model, or
-- debugging false positives or false negatives from an existing anchor pack.
+Use these principles when you create or revise `embedding` signal rules, especially when a route depends on learned semantic similarity rather than exact keyword matching. They are most important for sensitive routing categories, multimodal inputs, recalibrating a different embedding model, and any deployment where benign traffic is close to the sensitive examples.
 
 ## Configuration
 
-Apply these principles to the same `embedding` signal fields described in the [Embedding Signal](./embedding) tutorial:
-
-- `candidates` should cover the full category with multiple semantically distinct anchors,
-- `aggregation_method` should match whether any strong anchor or broad pack agreement should trigger routing, and
-- `threshold` must be calibrated against the deployed model and labeled corpus.
+This page does not add new config fields. Apply the guidance to `routing.signals.embeddings` entries by choosing better `candidates`, calibrating `threshold`, and selecting the appropriate `aggregation_method` and `query_modality` for the model you serve.
 
 ## Principle 1: anchors describe what the input *is*, not the words in it
 

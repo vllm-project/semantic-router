@@ -1274,6 +1274,7 @@ routing:
             modality_detection:
               method: hybrid
               classifier:
+                model_ref: modality_classifier
                 model_path: models/mmbert32k-modality-router-merged
                 use_cpu: true
               keywords:
@@ -1917,6 +1918,12 @@ global:
   model_catalog:
     embeddings:
       semantic:
+        model_refs:
+          qwen3: qwen3_embedding
+          gemma: gemma_embedding
+          mmbert: mmbert_embedding
+          multimodal: multimodal_embedding
+          bert: bert_embedding
         qwen3_model_path: models/mom-embedding-pro
         gemma_model_path: models/mom-embedding-flash
         mmbert_model_path: models/mmbert-embed-32k-2d-matryoshka
@@ -1940,6 +1947,11 @@ global:
             top_m: 2
             margin_threshold: 0.0
     system:
+      qwen3_embedding: models/mom-embedding-pro
+      gemma_embedding: models/mom-embedding-flash
+      mmbert_embedding: models/mmbert-embed-32k-2d-matryoshka
+      multimodal_embedding: models/mom-embedding-multimodal
+      bert_embedding: models/mom-embedding-light
       prompt_guard: models/mmbert32k-jailbreak-detector-merged
       domain_classifier: models/mmbert32k-intent-classifier-merged
       pii_classifier: models/mmbert32k-pii-detector-merged
@@ -1947,6 +1959,7 @@ global:
       hallucination_detector: models/mom-halugate-detector
       hallucination_explainer: models/mom-halugate-explainer
       feedback_detector: models/mmbert32k-feedback-detector-merged
+      modality_classifier: models/mmbert32k-modality-router-merged
     external:
       - llm_provider: openai
         model_role: guardrail
@@ -2168,6 +2181,7 @@ global:
           - create a picture of
         method: hybrid
         classifier:
+          model_ref: modality_classifier
           model_path: models/mmbert32k-modality-router-merged
           use_cpu: true
         keywords:

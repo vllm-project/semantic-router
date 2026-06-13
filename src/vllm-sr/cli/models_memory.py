@@ -48,8 +48,8 @@ class MemoryConfig(BaseModel):
     with role="memory_rewrite" or role="memory_extraction".
     See external_models configuration in providers section for details.
 
-    The embedding_model is auto-detected from embedding_models if not specified.
-    Priority: bert > mmbert > multimodal > qwen3 > gemma
+    The embedding_model defaults to the canonical mmbert runtime model unless
+    an explicit value is configured.
     """
 
     enabled: bool = True
@@ -60,8 +60,7 @@ class MemoryConfig(BaseModel):
     redis_cache: MemoryRedisCacheConfig | None = None
     # Embedding model to use for memory vectors
     # Options: "bert", "mmbert", "multimodal", "qwen3", "gemma"
-    # If not set, auto-detected from embedding_models section (bert preferred)
-    embedding_model: str | None = None
+    embedding_model: str | None = "mmbert"
     default_retrieval_limit: int = 5
     default_similarity_threshold: float = 0.70
     extraction_batch_size: int = 10  # Extract every N turns

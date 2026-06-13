@@ -167,34 +167,26 @@ func CanonicalGlobalFromRouterConfig(cfg *RouterConfig) *CanonicalGlobal {
 		},
 		ModelCatalog: CanonicalModelCatalog{
 			Embeddings: CanonicalEmbeddingModels{
-				Semantic: cfg.EmbeddingModels,
+				Semantic: canonicalEmbeddingModelsFromRouterConfig(cfg),
 			},
-			System: CanonicalSystemModels{
-				PromptGuard:            cfg.PromptGuard.ModelID,
-				DomainClassifier:       cfg.CategoryModel.ModelID,
-				PIIClassifier:          cfg.PIIModel.ModelID,
-				FactCheckClassifier:    cfg.HallucinationMitigation.FactCheckModel.ModelID,
-				HallucinationDetector:  cfg.HallucinationMitigation.HallucinationModel.ModelID,
-				HallucinationExplainer: cfg.HallucinationMitigation.NLIModel.ModelID,
-				FeedbackDetector:       cfg.FeedbackDetector.ModelID,
-			},
+			System:   canonicalSystemModelsFromRouterConfig(cfg),
 			External: append([]ExternalModelConfig(nil), cfg.ExternalModels...),
 			KBs:      append([]KnowledgeBaseConfig(nil), cfg.KnowledgeBases...),
 			Modules: CanonicalModelModules{
 				PromptCompression: cfg.PromptCompression,
 				PromptGuard: CanonicalPromptGuardModule{
 					PromptGuardConfig: cfg.PromptGuard,
-					ModelRef:          "prompt_guard",
+					ModelRef:          string(ModelLifecycleRolePromptGuard),
 				},
 				Classifier: CanonicalClassifierModule{
 					Domain: CanonicalCategoryModule{
 						CategoryModel: cfg.CategoryModel,
-						ModelRef:      "domain_classifier",
+						ModelRef:      string(ModelLifecycleRoleDomainClassifier),
 					},
 					MCP: cfg.MCPCategoryModel,
 					PII: CanonicalPIIModule{
 						PIIModel: cfg.PIIModel,
-						ModelRef: "pii_classifier",
+						ModelRef: string(ModelLifecycleRolePIIClassifier),
 					},
 					Preference: cfg.PreferenceModel.WithDefaults(),
 				},
@@ -204,27 +196,134 @@ func CanonicalGlobalFromRouterConfig(cfg *RouterConfig) *CanonicalGlobal {
 					OnHallucinationDetected: cfg.HallucinationMitigation.OnHallucinationDetected,
 					FactCheck: CanonicalFactCheckModule{
 						FactCheckModelConfig: cfg.HallucinationMitigation.FactCheckModel,
-						ModelRef:             "fact_check_classifier",
+						ModelRef:             string(ModelLifecycleRoleFactCheckClassifier),
 					},
 					Detector: CanonicalHallucinationDetector{
 						HallucinationModelConfig: cfg.HallucinationMitigation.HallucinationModel,
-						ModelRef:                 "hallucination_detector",
+						ModelRef:                 string(ModelLifecycleRoleHallucinationModel),
 					},
 					Explainer: CanonicalExplainerModule{
 						NLIModelConfig: cfg.HallucinationMitigation.NLIModel,
-						ModelRef:       "hallucination_explainer",
+						ModelRef:       string(ModelLifecycleRoleHallucinationNLI),
 					},
 				},
 				FeedbackDetector: CanonicalFeedbackDetectorModule{
 					FeedbackDetectorConfig: cfg.FeedbackDetector,
-					ModelRef:               "feedback_detector",
+					ModelRef:               string(ModelLifecycleRoleFeedbackDetector),
 				},
-				ModalityDetector: cfg.ModalityDetector,
+				ModalityDetector: canonicalModalityDetectorFromRouterConfig(cfg),
 			},
 		},
 	}
 
 	return global
+}
+
+func canonicalSystemModelsFromRouterConfig(cfg *RouterConfig) CanonicalSystemModels {
+	system := DefaultSystemModels()
+	if cfg == nil {
+		return system
+	}
+
+	for _, binding := range DefaultModelLifecycleBindings() {
+		if modelPath := routerConfigModelPathForLifecycleRole(cfg, binding.Role); modelPath != "" {
+			system.SetModelPath(binding.Role, modelPath)
+		}
+	}
+	return system
+}
+
+func canonicalEmbeddingModelsFromRouterConfig(cfg *RouterConfig) EmbeddingModels {
+	if cfg == nil {
+		return EmbeddingModels{}
+	}
+	embeddings := cfg.EmbeddingModels
+	embeddings.ModelRefs = EmbeddingModelRefs{}
+	for _, binding := range DefaultModelLifecycleBindings() {
+		if binding.Kind != ModelLifecycleKindEmbedding {
+			continue
+		}
+		if routerConfigModelPathForLifecycleRole(cfg, binding.Role) != "" {
+			setEmbeddingModelRef(&embeddings.ModelRefs, binding.Role)
+		}
+	}
+	return embeddings
+}
+
+func canonicalModalityDetectorFromRouterConfig(cfg *RouterConfig) ModalityDetectorConfig {
+	if cfg == nil {
+		return ModalityDetectorConfig{}
+	}
+	detector := cfg.ModalityDetector
+	if detector.Classifier == nil {
+		return detector
+	}
+
+	classifier := *detector.Classifier
+	if classifier.ModelRef == "" && classifier.ModelPath != "" {
+		classifier.ModelRef = string(ModelLifecycleRoleModalityClassifier)
+	}
+	detector.Classifier = &classifier
+	return detector
+}
+
+func routerConfigModelPathForLifecycleRole(cfg *RouterConfig, role ModelLifecycleRole) string {
+	for _, slot := range routerConfigModelPathSlots(cfg) {
+		if slot.role == role {
+			return slot.modelPath
+		}
+	}
+	return ""
+}
+
+type routerConfigModelPathSlot struct {
+	role      ModelLifecycleRole
+	modelPath string
+}
+
+func routerConfigModelPathSlots(cfg *RouterConfig) []routerConfigModelPathSlot {
+	if cfg == nil {
+		return nil
+	}
+
+	modalityClassifierPath := ""
+	if cfg.ModalityDetector.Classifier != nil {
+		modalityClassifierPath = cfg.ModalityDetector.Classifier.ModelPath
+	}
+
+	return []routerConfigModelPathSlot{
+		{role: ModelLifecycleRoleQwen3Embedding, modelPath: cfg.EmbeddingModels.Qwen3ModelPath},
+		{role: ModelLifecycleRoleGemmaEmbedding, modelPath: cfg.EmbeddingModels.GemmaModelPath},
+		{role: ModelLifecycleRoleMmBERTEmbedding, modelPath: cfg.EmbeddingModels.MmBertModelPath},
+		{role: ModelLifecycleRoleMultiModalEmbedding, modelPath: cfg.EmbeddingModels.MultiModalModelPath},
+		{role: ModelLifecycleRoleBERTEmbedding, modelPath: cfg.EmbeddingModels.BertModelPath},
+		{role: ModelLifecycleRolePromptGuard, modelPath: cfg.PromptGuard.ModelID},
+		{role: ModelLifecycleRoleDomainClassifier, modelPath: cfg.CategoryModel.ModelID},
+		{role: ModelLifecycleRolePIIClassifier, modelPath: cfg.PIIModel.ModelID},
+		{role: ModelLifecycleRoleFactCheckClassifier, modelPath: cfg.HallucinationMitigation.FactCheckModel.ModelID},
+		{role: ModelLifecycleRoleHallucinationModel, modelPath: cfg.HallucinationMitigation.HallucinationModel.ModelID},
+		{role: ModelLifecycleRoleHallucinationNLI, modelPath: cfg.HallucinationMitigation.NLIModel.ModelID},
+		{role: ModelLifecycleRoleFeedbackDetector, modelPath: cfg.FeedbackDetector.ModelID},
+		{role: ModelLifecycleRoleModalityClassifier, modelPath: modalityClassifierPath},
+	}
+}
+
+func setEmbeddingModelRef(refs *EmbeddingModelRefs, role ModelLifecycleRole) {
+	if refs == nil {
+		return
+	}
+	switch role {
+	case ModelLifecycleRoleQwen3Embedding:
+		refs.Qwen3 = string(role)
+	case ModelLifecycleRoleGemmaEmbedding:
+		refs.Gemma = string(role)
+	case ModelLifecycleRoleMmBERTEmbedding:
+		refs.MmBERT = string(role)
+	case ModelLifecycleRoleMultiModalEmbedding:
+		refs.MultiModal = string(role)
+	case ModelLifecycleRoleBERTEmbedding:
+		refs.BERT = string(role)
+	}
 }
 
 func canonicalProviderModelsFromRouterConfig(cfg *RouterConfig) []CanonicalProviderModel {

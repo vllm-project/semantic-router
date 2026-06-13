@@ -20,7 +20,7 @@ func validateEmbeddingContracts(cfg *RouterConfig) error {
 }
 
 // validateMmBertModelPath rejects classic BERT models in the mmbert_model_path
-// slot. Classic BERT (e.g. all-MiniLM-L12-v2) uses a different tensor layout
+// slot. Classic BERT sentence-transformers use a different tensor layout
 // than ModernBERT/mmBERT and will crash the Rust loader with a cryptic tensor
 // name mismatch. Catching it here gives the user a clear message at config-load
 // time instead of a crash at model-init time.

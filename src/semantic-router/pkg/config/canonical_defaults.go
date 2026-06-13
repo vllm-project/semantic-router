@@ -1,5 +1,7 @@
 package config
 
+const defaultSemanticEmbeddingModel = "mmbert"
+
 // DefaultCanonicalGlobal returns the router-owned runtime defaults used when
 // canonical config omits all or part of the global block.
 func DefaultCanonicalGlobal() CanonicalGlobal {
@@ -74,6 +76,7 @@ func defaultCanonicalStoreGlobal() CanonicalStoreGlobal {
 		Memory: MemoryConfig{
 			Enabled:                    false,
 			AutoStore:                  false,
+			EmbeddingModel:             defaultSemanticEmbeddingModel,
 			Milvus:                     MemoryMilvusConfig{Collection: "agentic_memory", Dimension: 384},
 			DefaultRetrievalLimit:      5,
 			DefaultSimilarityThreshold: 0.70,
@@ -85,6 +88,7 @@ func defaultCanonicalStoreGlobal() CanonicalStoreGlobal {
 			MaxEntries:     1000,
 			TTLSeconds:     3600,
 			EvictionPolicy: "fifo",
+			EmbeddingModel: defaultSemanticEmbeddingModel,
 		},
 	}
 }
@@ -180,8 +184,10 @@ func defaultCalibrationKnowledgeBase() KnowledgeBaseConfig {
 func defaultCanonicalEmbeddingModels() CanonicalEmbeddingModels {
 	return CanonicalEmbeddingModels{
 		Semantic: EmbeddingModels{
-			MmBertModelPath: "models/mmbert-embed-32k-2d-matryoshka",
-			UseCPU:          true,
+			ModelRefs: EmbeddingModelRefs{
+				MmBERT: string(ModelLifecycleRoleMmBERTEmbedding),
+			},
+			UseCPU: true,
 			EmbeddingConfig: HNSWConfig{
 				ModelType:         "mmbert",
 				PreloadEmbeddings: true,
@@ -206,13 +212,13 @@ func defaultCanonicalModelModules() CanonicalModelModules {
 
 func defaultPromptGuardModule() CanonicalPromptGuardModule {
 	return CanonicalPromptGuardModule{
-		ModelRef: "prompt_guard",
+		ModelRef: string(ModelLifecycleRolePromptGuard),
 		PromptGuardConfig: PromptGuardConfig{
 			Enabled:              true,
 			Threshold:            0.7,
 			UseCPU:               true,
 			UseMmBERT32K:         true,
-			JailbreakMappingPath: "models/mmbert32k-jailbreak-detector-merged/jailbreak_type_mapping.json",
+			JailbreakMappingPath: DefaultCompanionPathForLifecycleRole(ModelLifecycleRolePromptGuard),
 		},
 	}
 }
@@ -220,21 +226,21 @@ func defaultPromptGuardModule() CanonicalPromptGuardModule {
 func defaultClassifierModule() CanonicalClassifierModule {
 	return CanonicalClassifierModule{
 		Domain: CanonicalCategoryModule{
-			ModelRef: "domain_classifier",
+			ModelRef: string(ModelLifecycleRoleDomainClassifier),
 			CategoryModel: CategoryModel{
 				Threshold:           0.5,
 				UseCPU:              true,
 				UseMmBERT32K:        true,
-				CategoryMappingPath: "models/mmbert32k-intent-classifier-merged/category_mapping.json",
+				CategoryMappingPath: DefaultCompanionPathForLifecycleRole(ModelLifecycleRoleDomainClassifier),
 			},
 		},
 		PII: CanonicalPIIModule{
-			ModelRef: "pii_classifier",
+			ModelRef: string(ModelLifecycleRolePIIClassifier),
 			PIIModel: PIIModel{
 				Threshold:      0.9,
 				UseCPU:         true,
 				UseMmBERT32K:   true,
-				PIIMappingPath: "models/mmbert32k-pii-detector-merged/pii_type_mapping.json",
+				PIIMappingPath: DefaultCompanionPathForLifecycleRole(ModelLifecycleRolePIIClassifier),
 			},
 		},
 		Preference: PreferenceModelConfig{
@@ -247,7 +253,7 @@ func defaultHallucinationModule() CanonicalHallucinationModule {
 	return CanonicalHallucinationModule{
 		Enabled: false,
 		FactCheck: CanonicalFactCheckModule{
-			ModelRef: "fact_check_classifier",
+			ModelRef: string(ModelLifecycleRoleFactCheckClassifier),
 			FactCheckModelConfig: FactCheckModelConfig{
 				Threshold:    0.6,
 				UseCPU:       true,
@@ -255,7 +261,7 @@ func defaultHallucinationModule() CanonicalHallucinationModule {
 			},
 		},
 		Detector: CanonicalHallucinationDetector{
-			ModelRef: "hallucination_detector",
+			ModelRef: string(ModelLifecycleRoleHallucinationModel),
 			HallucinationModelConfig: HallucinationModelConfig{
 				Threshold:              0.8,
 				UseCPU:                 true,
@@ -267,7 +273,7 @@ func defaultHallucinationModule() CanonicalHallucinationModule {
 			},
 		},
 		Explainer: CanonicalExplainerModule{
-			ModelRef: "hallucination_explainer",
+			ModelRef: string(ModelLifecycleRoleHallucinationNLI),
 			NLIModelConfig: NLIModelConfig{
 				Threshold: 0.9,
 				UseCPU:    true,
@@ -278,7 +284,7 @@ func defaultHallucinationModule() CanonicalHallucinationModule {
 
 func defaultFeedbackDetectorModule() CanonicalFeedbackDetectorModule {
 	return CanonicalFeedbackDetectorModule{
-		ModelRef: "feedback_detector",
+		ModelRef: string(ModelLifecycleRoleFeedbackDetector),
 		FeedbackDetectorConfig: FeedbackDetectorConfig{
 			Enabled:      true,
 			Threshold:    0.7,
@@ -290,15 +296,11 @@ func defaultFeedbackDetectorModule() CanonicalFeedbackDetectorModule {
 
 // DefaultSystemModels returns stable capability bindings for built-in runtime models.
 func DefaultSystemModels() CanonicalSystemModels {
-	return CanonicalSystemModels{
-		PromptGuard:            "models/mmbert32k-jailbreak-detector-merged",
-		DomainClassifier:       "models/mmbert32k-intent-classifier-merged",
-		PIIClassifier:          "models/mmbert32k-pii-detector-merged",
-		FactCheckClassifier:    "models/mmbert32k-factcheck-classifier-merged",
-		HallucinationDetector:  "models/mom-halugate-detector",
-		HallucinationExplainer: "models/mom-halugate-explainer",
-		FeedbackDetector:       "models/mmbert32k-feedback-detector-merged",
+	system := CanonicalSystemModels{}
+	for _, binding := range DefaultModelLifecycleBindings() {
+		system.SetModelPath(binding.Role, binding.DefaultLocalPath)
 	}
+	return system
 }
 
 // DefaultGlobalConfig materializes canonical global defaults into the runtime RouterConfig.
