@@ -4,7 +4,6 @@ import Translate from '@docusaurus/Translate'
 import Link from '@docusaurus/Link'
 import styles from './team.module.css'
 import { FaExternalLinkAlt, FaGithub, FaLinkedin } from 'react-icons/fa'
-import { newContributorsSinceRelease } from '../../data/contributorRank.generated'
 
 interface MemberLink {
   label: string
@@ -27,8 +26,6 @@ interface TeamMember {
 interface TeamMemberProps {
   member: TeamMember
 }
-
-type NewContributorProfile = Pick<TeamMember, 'role' | 'bio'> & Pick<TeamMember, 'company' | 'externalLinks' | 'expertise' | 'linkedin'>
 
 const steeringCommitteeMembers: TeamMember[] = [
   {
@@ -134,66 +131,77 @@ const steeringCommitteeMembers: TeamMember[] = [
   },
 ]
 
-const topNewContributorProfiles: Record<string, NewContributorProfile> = {
-  'FAUST-BENCHOU': {
+const topNewContributorMembers: TeamMember[] = [
+  {
+    name: 'FAUST',
     role: <Translate id="team.members.FAUST-BENCHOU.role">Cloud-native Open Source Contributor</Translate>,
     company: 'Tongji University',
+    avatar: 'https://github.com/FAUST-BENCHOU.png',
+    github: 'https://github.com/FAUST-BENCHOU',
     bio: <Translate id="team.members.FAUST-BENCHOU.bio">Cloud-native open source contributor across Karmada and Volcano.</Translate>,
+    memberType: 'committer',
   },
-  'shraderdm': {
+  {
+    name: 'David Shrader',
     role: <Translate id="team.members.shraderdm.role">GTM Tech Lead</Translate>,
     company: 'Google',
+    avatar: 'https://github.com/shraderdm.png',
+    github: 'https://github.com/shraderdm',
     linkedin: 'https://www.linkedin.com/in/shraderdm/',
     externalLinks: [
       { label: 'Website', href: 'https://shrader.dev' },
     ],
     bio: <Translate id="team.members.shraderdm.bio">GTM Tech Lead at Google.</Translate>,
+    memberType: 'committer',
   },
-  'drivebyer': {
+  {
+    name: 'yangw',
     role: <Translate id="team.members.drivebyer.role">Cloud-native Engineer</Translate>,
     company: 'DaoCloud',
+    avatar: 'https://github.com/drivebyer.png',
+    github: 'https://github.com/drivebyer',
     bio: <Translate id="team.members.drivebyer.bio">DaoCloud engineer and open-source contributor focused on practical infrastructure improvements.</Translate>,
+    memberType: 'committer',
   },
-  'ramkrishs': {
+  {
+    name: 'Ramakrishnan Sathyavageeswaran',
     role: <Translate id="team.members.ramkrishs.role">Computer Science Engineer</Translate>,
     company: 'Intuit',
+    avatar: 'https://github.com/ramkrishs.png',
+    github: 'https://github.com/ramkrishs',
     externalLinks: [
       { label: 'Website', href: 'http://ramakrishnan.me' },
     ],
     bio: <Translate id="team.members.ramkrishs.bio">Computer science engineer at Intuit focused on software systems.</Translate>,
+    memberType: 'committer',
   },
-  'WUKUNTAI-0211': {
+  {
+    name: 'WUKUNTAI',
     role: <Translate id="team.members.WUKUNTAI-0211.role">Software Engineer</Translate>,
     company: 'DELTA ELECTRONICS, INC.',
+    avatar: 'https://github.com/WUKUNTAI-0211.png',
+    github: 'https://github.com/WUKUNTAI-0211',
     bio: <Translate id="team.members.WUKUNTAI-0211.bio">Software engineer at Delta Electronics in Taiwan.</Translate>,
+    memberType: 'committer',
   },
-  'AayushSaini101': {
+  {
+    name: 'Aayush Saini',
     role: <Translate id="team.members.AayushSaini101.role">SDE, Data and AI</Translate>,
     company: 'Red Hat',
+    avatar: 'https://github.com/AayushSaini101.png',
+    github: 'https://github.com/AayushSaini101',
     bio: <Translate id="team.members.AayushSaini101.bio">SDE in Red Hat Data and AI, GSoC 2025 participant, and AsyncAPI Steering Committee member.</Translate>,
-  },
-  'siloteemu': {
-    role: <Translate id="team.members.siloteemu.role">Open Source Contributor</Translate>,
-    bio: <Translate id="team.members.siloteemu.bio">Open-source contributor on GitHub.</Translate>,
-  },
-}
-
-const topNewContributorMembers: TeamMember[] = newContributorsSinceRelease.entries.slice(0, 7).map((entry) => {
-  const profile = entry.login ? topNewContributorProfiles[entry.login] : undefined
-
-  return {
-    name: entry.name,
-    role: profile?.role ?? <Translate id="team.members.topNewContributor.role">Release Window Committer</Translate>,
-    company: profile?.company,
-    avatar: entry.avatarUrl ?? (entry.avatarLogin ? `https://github.com/${entry.avatarLogin}.png` : '/img/team/huamin.png'),
-    github: entry.login ? `https://github.com/${entry.login}` : undefined,
-    linkedin: profile?.linkedin,
-    externalLinks: profile?.externalLinks,
-    bio: profile?.bio ?? <Translate id="team.members.topNewContributor.bio">New committer recognized from recent contributor rankings.</Translate>,
-    expertise: profile?.expertise,
     memberType: 'committer',
-  }
-})
+  },
+  {
+    name: 'siloteemu',
+    role: <Translate id="team.members.siloteemu.role">Open Source Contributor</Translate>,
+    avatar: 'https://github.com/siloteemu.png',
+    github: 'https://github.com/siloteemu',
+    bio: <Translate id="team.members.siloteemu.bio">Open-source contributor on GitHub.</Translate>,
+    memberType: 'committer',
+  },
+]
 
 const committerMembers: TeamMember[] = [
   ...topNewContributorMembers,
