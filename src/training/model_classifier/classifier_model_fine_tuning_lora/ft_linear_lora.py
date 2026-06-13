@@ -1,73 +1,25 @@
 """
-MMLU-Pro Category Classification Fine-tuning with Enhanced LoRA Training
-Uses PEFT (Parameter-Efficient Fine-Tuning) with LoRA adapters for efficient intent classification.
+MMLU-Pro Category Classification Fine-tuning with Enhanced LoRA Training.
 
-🚀 **ENHANCED VERSION**: This is the LoRA-enhanced version of ft_linear.py
-   Benefits: 99% parameter reduction, 67% memory savings, higher confidence scores
-   Original: src/training/classifier_model_fine_tuning/ft_linear.py
+Uses PEFT with LoRA adapters for efficient intent classification on MMLU-Pro.
 
 Usage:
-    # Train with recommended parameters (CPU-optimized)
-    python ft_linear_lora.py --mode train --model bert-base-uncased --epochs 8 --lora-rank 16 --max-samples 2000
-
-    # Train with custom LoRA parameters
-    python ft_linear_lora.py --mode train --lora-rank 16 --lora-alpha 32 --batch-size 2
-
-    # Train specific model with optimized settings
-    python ft_linear_lora.py --mode train --model roberta-base --epochs 8 --learning-rate 3e-4
-
-    # Test inference with trained LoRA model
+    python ft_linear_lora.py --mode train --model bert-base-uncased --epochs 8 --lora-rank 16
     python ft_linear_lora.py --mode test --model-path lora_intent_classifier_bert-base-uncased_r16_model
-
-    # Quick training test (for debugging)
-    python ft_linear_lora.py --mode train --model bert-base-uncased --epochs 1 --max-samples 50
-
-Supported models:
-    - mmbert-base: mmBERT base model (149M parameters, 1800+ languages, RECOMMENDED)
-    - bert-base-uncased: Standard BERT base model (110M parameters, most stable)
-    - roberta-base: RoBERTa base model (125M parameters, better context understanding)
-    - modernbert-base: ModernBERT base model (149M parameters, latest architecture)
-
-Dataset:
-    - TIGER-Lab/MMLU-Pro: Multi-domain academic question classification dataset
-      * Categories: business, law, psychology, etc.
-      * Sample size: configurable via --max-samples parameter (recommended: 2000-5000)
-      * Format: Question-answer pairs with category labels
-      * Source: Downloaded from Hugging Face with automatic caching
-      * Quality: High-quality academic questions with verified category labels
-
-Key Features:
-    - LoRA (Low-Rank Adaptation) for multi-class intent classification
-    - 99%+ parameter reduction (only ~0.02% trainable parameters)
-    - 67% memory usage reduction compared to full fine-tuning
-    - Support for multiple academic domains and categories
-    - Dynamic model path configuration via command line
-    - Configurable LoRA hyperparameters (rank, alpha, dropout)
-    - Real-time MMLU-Pro dataset loading and preprocessing
-    - Comprehensive evaluation metrics (accuracy, F1, precision, recall)
-    - Automatic train/validation/test split with stratification
-    - Model checkpointing and best model selection
-    - Built-in inference testing with sample questions
-    - Auto-merge functionality: Generates both LoRA adapters and Rust-compatible models
-    - Multi-architecture support: Dynamic target_modules configuration for all models
-    - CPU optimization: Efficient training on CPU with memory management
-    - Production-ready: Robust error handling and validation throughout
 """
 
 import json
-import logging
 import os
 import shutil
 import sys
 from pathlib import Path
-from typing import Dict, List, Optional
 
 import torch
-import torch.nn as nn
 from datasets import Dataset, load_dataset
 from peft import LoraConfig, PeftConfig, PeftModel, TaskType, get_peft_model
-from sklearn.metrics import accuracy_score, f1_score, precision_recall_fscore_support
+from sklearn.metrics import accuracy_score, f1_score
 from sklearn.model_selection import train_test_split
+from torch import nn
 from transformers import (
     AutoModelForSequenceClassification,
     AutoTokenizer,
@@ -80,13 +32,12 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from common_lora_utils import (
     clear_gpu_memory,
     create_lora_config,
-    find_free_gpu,
     get_all_gpu_info,
     log_memory_usage,
     resolve_model_path,
+    select_training_split,
     set_gpu_device,
     setup_logging,
-    validate_lora_config,
 )
 
 # Setup logging
@@ -111,7 +62,7 @@ REQUIRED_CATEGORIES = [
 ]
 
 
-def create_tokenizer_for_model(model_path: str, base_model_name: str = None):
+def create_tokenizer_for_model(model_path: str, base_model_name: str | None = None):
     """
     Create tokenizer with model-specific configuration.
 
@@ -133,7 +84,7 @@ def create_tokenizer_for_model(model_path: str, base_model_name: str = None):
 DEFAULT_SUPPLEMENT_DATASET = "LLM-Semantic-Router/category-classifier-supplement"
 
 
-class MMLU_Dataset:
+class MMLU_Dataset:  # noqa: N801
     """Dataset class for MMLU-Pro category classification fine-tuning with supplement data."""
 
     def __init__(
@@ -172,7 +123,7 @@ class MMLU_Dataset:
             data = (
                 supplement["train"]
                 if "train" in supplement
-                else supplement[list(supplement.keys())[0]]
+                else supplement[next(iter(supplement.keys()))]
             )
 
             samples = [(item["text"], item["label"]) for item in data]
@@ -182,36 +133,86 @@ class MMLU_Dataset:
             logger.warning(f"Failed to load supplement dataset: {e}")
             return []
 
+    def _balanced_sample_categories(self, category_samples, max_samples):
+        """Sample balanced data from each required category."""
+        available_required_categories = [
+            cat for cat in REQUIRED_CATEGORIES if cat in category_samples
+        ]
+
+        min_samples_per_category = max(
+            50, max_samples // (len(available_required_categories) * 2)
+        )
+        target_samples_per_category = max_samples // len(available_required_categories)
+
+        logger.info(f"Available categories: {len(available_required_categories)}")
+        logger.info(f"Target samples per category: {target_samples_per_category}")
+
+        filtered_texts = []
+        filtered_labels = []
+        category_counts = {}
+        insufficient_categories = []
+
+        for category in available_required_categories:
+            available = len(category_samples[category])
+            if available < min_samples_per_category:
+                insufficient_categories.append(category)
+                samples_to_take = available
+            else:
+                samples_to_take = min(target_samples_per_category, available)
+
+            category_texts = category_samples[category][:samples_to_take]
+            filtered_texts.extend(category_texts)
+            filtered_labels.extend([category] * len(category_texts))
+            category_counts[category] = len(category_texts)
+
+        if insufficient_categories:
+            logger.warning(
+                f"Categories with insufficient samples: {insufficient_categories}"
+            )
+
+        logger.info(f"Final category distribution: {category_counts}")
+        logger.info(f"Total filtered samples: {len(filtered_texts)}")
+
+        missing = set(available_required_categories) - set(category_counts.keys())
+        if missing:
+            logger.error(f"CRITICAL: Categories with no samples: {missing}")
+
+        if len(category_counts) < len(REQUIRED_CATEGORIES) * 0.8:
+            logger.error(
+                f"CRITICAL: Only {len(category_counts)}/{len(REQUIRED_CATEGORIES)} categories have samples!"
+            )
+
+        return filtered_texts, filtered_labels
+
     def load_huggingface_dataset(self, max_samples=1000):
         """Load the MMLU-Pro dataset from HuggingFace with balanced category sampling and supplement data."""
         logger.info(f"Loading dataset from HuggingFace: {self.dataset_name}")
 
         try:
-            # Load the dataset
             dataset = load_dataset(self.dataset_name)
             logger.info(f"Dataset splits: {dataset.keys()}")
 
-            # Extract questions and categories from the test split
-            # Note: MMLU-Pro typically uses 'test' split for training data
-            all_texts = list(dataset["test"]["question"])
-            all_labels = list(dataset["test"]["category"])
+            training_split_name, training_split = select_training_split(
+                dataset, self.dataset_name
+            )
+            all_texts = list(training_split["question"])
+            all_labels = list(training_split["category"])
 
-            logger.info(f"MMLU-Pro base samples: {len(all_texts)}")
+            logger.info(
+                f"MMLU-Pro base samples from {training_split_name}: {len(all_texts)}"
+            )
 
-            # Load and merge supplementary training data
-            # This includes casual "other" examples for better fallback detection
             supplement_samples = self._load_supplement_data()
             if supplement_samples:
-                supp_texts, supp_labels = zip(*supplement_samples)
+                supp_texts, supp_labels = zip(*supplement_samples, strict=False)
                 all_texts.extend(supp_texts)
                 all_labels.extend(supp_labels)
                 logger.info(f"Added {len(supplement_samples)} supplement samples")
 
             logger.info(f"Total samples in dataset: {len(all_texts)}")
 
-            # Group samples by category
             category_samples = {}
-            for text, label in zip(all_texts, all_labels):
+            for text, label in zip(all_texts, all_labels, strict=False):
                 if label not in category_samples:
                     category_samples[label] = []
                 category_samples[label].append(text)
@@ -219,88 +220,12 @@ class MMLU_Dataset:
             logger.info(
                 f"Available categories in dataset: {sorted(category_samples.keys())}"
             )
-            logger.info(f"Required categories: {REQUIRED_CATEGORIES}")
 
-            # Check which required categories are missing
             missing_categories = set(REQUIRED_CATEGORIES) - set(category_samples.keys())
             if missing_categories:
                 logger.warning(f"Missing categories in dataset: {missing_categories}")
 
-            # Calculate samples per category for balanced sampling
-            available_required_categories = [
-                cat for cat in REQUIRED_CATEGORIES if cat in category_samples
-            ]
-
-            # Ensure minimum samples per category for stable training
-            min_samples_per_category = max(
-                50, max_samples // (len(available_required_categories) * 2)
-            )
-            target_samples_per_category = max_samples // len(
-                available_required_categories
-            )
-
-            logger.info(f"Available categories: {len(available_required_categories)}")
-            logger.info(f"Min samples per category: {min_samples_per_category}")
-            logger.info(f"Target samples per category: {target_samples_per_category}")
-
-            # Collect balanced samples from required categories with improved strategy
-            filtered_texts = []
-            filtered_labels = []
-            category_counts = {}
-            insufficient_categories = []
-
-            # First pass: collect available samples for each category
-            for category in available_required_categories:
-                if category in category_samples:
-                    available_samples = len(category_samples[category])
-
-                    if available_samples < min_samples_per_category:
-                        insufficient_categories.append(category)
-                        samples_to_take = available_samples  # Take all available
-                    else:
-                        samples_to_take = min(
-                            target_samples_per_category, available_samples
-                        )
-
-                    category_texts = category_samples[category][:samples_to_take]
-                    filtered_texts.extend(category_texts)
-                    filtered_labels.extend([category] * len(category_texts))
-                    category_counts[category] = len(category_texts)
-
-            # Log insufficient categories
-            if insufficient_categories:
-                logger.warning(
-                    f"Categories with insufficient samples: {insufficient_categories}"
-                )
-                for cat in insufficient_categories:
-                    logger.warning(
-                        f"  {cat}: only {category_counts.get(cat, 0)} samples available"
-                    )
-
-            logger.info(f"Final category distribution: {category_counts}")
-            logger.info(f"Total filtered samples: {len(filtered_texts)}")
-
-            # Ensure we have samples for all required categories
-            missing_categories = set(available_required_categories) - set(
-                category_counts.keys()
-            )
-            if missing_categories:
-                logger.error(
-                    f"CRITICAL: Categories with no samples: {missing_categories}"
-                )
-
-            # Validate minimum category coverage
-            if (
-                len(category_counts) < len(REQUIRED_CATEGORIES) * 0.8
-            ):  # At least 80% of categories
-                logger.error(
-                    f"CRITICAL: Only {len(category_counts)}/{len(REQUIRED_CATEGORIES)} categories have samples!"
-                )
-                logger.error(
-                    "This will result in poor model performance. Consider increasing max_samples or using a different dataset."
-                )
-
-            return filtered_texts, filtered_labels
+            return self._balanced_sample_categories(category_samples, max_samples)
 
         except Exception as e:
             logger.error(f"Error loading dataset: {e}")
@@ -313,7 +238,7 @@ class MMLU_Dataset:
         texts, labels = self.load_huggingface_dataset(max_samples)
 
         # Create label mapping using required categories order for consistency
-        unique_labels = sorted(list(set(labels)))
+        unique_labels = sorted(set(labels))
 
         # Ensure we use the same order as legacy model for consistency
         ordered_labels = [cat for cat in REQUIRED_CATEGORIES if cat in unique_labels]
@@ -343,7 +268,7 @@ class MMLU_Dataset:
             stratify=temp_labels,
         )
 
-        logger.info(f"Dataset sizes:")
+        logger.info("Dataset sizes:")
         logger.info(f"  Train: {len(train_texts)}")
         logger.info(f"  Validation: {len(val_texts)}")
         logger.info(f"  Test: {len(test_texts)}")
@@ -365,7 +290,9 @@ def create_mmlu_dataset(max_samples=1000):
 
     # Convert to the format expected by our training
     sample_data = []
-    for text, label in zip(train_texts + val_texts, train_labels + val_labels):
+    for text, label in zip(
+        train_texts + val_texts, train_labels + val_labels, strict=False
+    ):
         sample_data.append({"text": text, "label": label})
 
     logger.info(f"Created dataset with {len(sample_data)} samples")
@@ -478,32 +405,15 @@ def compute_metrics(eval_pred):
     return {"accuracy": accuracy, "f1": f1}
 
 
-def main(
-    model_name: str = "modernbert-base",
-    lora_rank: int = 8,
-    lora_alpha: int = 16,
-    lora_dropout: float = 0.1,
-    num_epochs: int = 3,
-    batch_size: int = 8,
-    learning_rate: float = 3e-5,  # Reduced from 1e-4 to prevent gradient explosion
-    max_samples: int = 1000,
-    output_dir: str = None,
-    enable_feature_alignment: bool = False,
-    alignment_weight: float = 0.1,
-    gpu_id: int = None,
-):
-    """Main training function for LoRA intent classification."""
-    logger.info("Starting Enhanced LoRA Intent Classification Training")
-
-    # GPU selection and device configuration
+def _setup_gpu_and_memory(gpu_id):
+    """Select GPU, log info, and clear memory."""
     if gpu_id is not None:
         logger.info(f"Using specified GPU: {gpu_id}")
-        device_str, selected_gpu = set_gpu_device(gpu_id=gpu_id, auto_select=False)
+        _device_str, selected_gpu = set_gpu_device(gpu_id=gpu_id, auto_select=False)
     else:
         logger.info("Auto-selecting best available GPU...")
-        device_str, selected_gpu = set_gpu_device(gpu_id=None, auto_select=True)
+        _device_str, selected_gpu = set_gpu_device(gpu_id=None, auto_select=True)
 
-    # Log all GPU info
     all_gpus = get_all_gpu_info()
     if all_gpus:
         logger.info(f"Available GPUs: {len(all_gpus)}")
@@ -514,15 +424,52 @@ def main(
                 f"{gpu['free_memory_gb']:.2f}GB free / {gpu['total_memory_gb']:.2f}GB total"
             )
 
-    # Clear memory on selected device
     clear_gpu_memory()
     log_memory_usage("Pre-training")
 
-    # Get actual model path
+
+def _save_training_artifacts(
+    trainer, tokenizer, output_dir, category_to_idx, idx_to_category
+):
+    """Save model, tokenizer, and label mappings after training."""
+    trainer.save_model(output_dir)
+    tokenizer.save_pretrained(output_dir)
+
+    label_mapping = {
+        "category_to_idx": category_to_idx,
+        "idx_to_category": idx_to_category,
+    }
+    with open(os.path.join(output_dir, "label_mapping.json"), "w") as f:
+        json.dump(label_mapping, f, indent=2)
+
+    with open(os.path.join(output_dir, "category_mapping.json"), "w") as f:
+        json.dump(label_mapping, f, indent=2)
+
+    logger.info(f"LoRA intent classification model saved to: {output_dir}")
+
+
+def main(
+    model_name: str = "modernbert-base",
+    lora_rank: int = 8,
+    lora_alpha: int = 16,
+    lora_dropout: float = 0.1,
+    num_epochs: int = 3,
+    batch_size: int = 8,
+    learning_rate: float = 3e-5,
+    max_samples: int = 1000,
+    output_dir: str | None = None,
+    enable_feature_alignment: bool = False,
+    alignment_weight: float = 0.1,
+    gpu_id: int | None = None,
+):
+    """Main training function for LoRA intent classification."""
+    logger.info("Starting Enhanced LoRA Intent Classification Training")
+
+    _setup_gpu_and_memory(gpu_id)
+
     model_path = resolve_model_path(model_name)
     logger.info(f"Using model: {model_name} -> {model_path}")
 
-    # Create LoRA configuration with dynamic target_modules
     try:
         lora_config = create_lora_config(
             model_name, lora_rank, lora_alpha, lora_dropout
@@ -531,7 +478,6 @@ def main(
         logger.error(f"Failed to create LoRA config: {e}")
         raise
 
-    # Load real MMLU-Pro dataset
     all_data, category_to_idx, idx_to_category = create_mmlu_dataset(max_samples)
     train_data, val_data = train_test_split(all_data, test_size=0.2, random_state=42)
 
@@ -539,28 +485,21 @@ def main(
     logger.info(f"Validation samples: {len(val_data)}")
     logger.info(f"Categories: {len(category_to_idx)}")
 
-    # Create LoRA model
     model, tokenizer = create_lora_model(model_path, len(category_to_idx), lora_config)
 
-    # Prepare datasets
     train_dataset = tokenize_data(train_data, tokenizer)
     val_dataset = tokenize_data(val_data, tokenizer)
 
-    # Setup output directory
     if output_dir is None:
         output_dir = f"lora_intent_classifier_{model_name}_r{lora_rank}"
     os.makedirs(output_dir, exist_ok=True)
 
-    logger.info(f"Model will be saved to: {output_dir}")
-
-    # Training arguments optimized for LoRA sequence classification based on PEFT best practices
-    # Enhanced with anti-overfitting measures from ft_linear.py
     training_args = TrainingArguments(
         output_dir=output_dir,
         num_train_epochs=num_epochs,
         per_device_train_batch_size=batch_size,
         per_device_eval_batch_size=batch_size,
-        weight_decay=0.1,  # Higher weight decay for better regularization (was 0.01)
+        weight_decay=0.1,
         logging_dir=f"{output_dir}/logs",
         logging_steps=10,
         eval_strategy="epoch",
@@ -569,17 +508,14 @@ def main(
         metric_for_best_model="eval_f1",
         greater_is_better=True,
         learning_rate=learning_rate,
-        # PEFT optimization: Enhanced stability measures
-        max_grad_norm=1.0,  # Gradient clipping to prevent explosion
-        lr_scheduler_type="cosine",  # More stable learning rate schedule for LoRA
-        warmup_ratio=0.06,  # PEFT recommended warmup ratio for sequence classification
-        # Additional stability measures for intent classification
+        max_grad_norm=1.0,
+        lr_scheduler_type="cosine",
+        warmup_ratio=0.06,
         dataloader_drop_last=False,
         eval_accumulation_steps=1,
-        gradient_accumulation_steps=2,  # Effective larger batch size for stability
+        gradient_accumulation_steps=2,
     )
 
-    # Create trainer
     trainer = EnhancedLoRATrainer(
         enable_feature_alignment=enable_feature_alignment,
         alignment_weight=alignment_weight,
@@ -593,34 +529,12 @@ def main(
     logger.info("Starting training...")
     trainer.train()
 
-    # Save the model and tokenizer
-    trainer.save_model(output_dir)
-    tokenizer.save_pretrained(output_dir)
+    _save_training_artifacts(
+        trainer, tokenizer, output_dir, category_to_idx, idx_to_category
+    )
 
-    # Save label mapping
-    label_mapping = {
-        "category_to_idx": category_to_idx,
-        "idx_to_category": idx_to_category,
-    }
-    with open(os.path.join(output_dir, "label_mapping.json"), "w") as f:
-        json.dump(label_mapping, f, indent=2)
-
-    # Save category mapping for Go verifier compatibility
-    with open(os.path.join(output_dir, "category_mapping.json"), "w") as f:
-        json.dump(label_mapping, f, indent=2)
-
-    logger.info(f"LoRA intent classification model saved to: {output_dir}")
-    logger.info("Saved both label_mapping.json and category_mapping.json")
-
-    # NOTE: LoRA adapters are kept separate from base model
-    # To merge later, use: merge_lora_adapter_to_full_model(output_dir, merged_output_dir, model_path)
-    logger.info(f"LoRA adapter saved to: {output_dir}")
-    logger.info(f"Base model: {model_path} (not merged - adapters kept separate)")
-
-    # Final evaluation
     logger.info("Final evaluation on validation set...")
     val_results = trainer.evaluate()
-    logger.info("Validation Results:")
     logger.info(f"  Accuracy: {val_results['eval_accuracy']:.4f}")
     logger.info(f"  F1: {val_results['eval_f1']:.4f}")
 
@@ -636,7 +550,7 @@ def merge_lora_adapter_to_full_model(
     logger.info(f"Loading base model: {base_model_path}")
 
     # Load label mapping to get correct number of labels
-    with open(os.path.join(lora_adapter_path, "label_mapping.json"), "r") as f:
+    with open(os.path.join(lora_adapter_path, "label_mapping.json")) as f:
         mapping_data = json.load(f)
     num_labels = len(mapping_data["idx_to_category"])
 
@@ -670,7 +584,7 @@ def merge_lora_adapter_to_full_model(
     # Fix config.json to include correct id2label mapping for Rust compatibility
     config_path = os.path.join(output_path, "config.json")
     if os.path.exists(config_path):
-        with open(config_path, "r") as f:
+        with open(config_path) as f:
             config = json.load(f)
 
         # Update id2label mapping with actual intent classification labels
@@ -730,7 +644,7 @@ def demo_inference(model_path: str, model_name: str = "modernbert-base"):
 
     try:
         # Load label mapping first to get the correct number of labels
-        with open(os.path.join(model_path, "label_mapping.json"), "r") as f:
+        with open(os.path.join(model_path, "label_mapping.json")) as f:
             mapping_data = json.load(f)
         idx_to_category = {
             int(k): v for k, v in mapping_data["idx_to_category"].items()
