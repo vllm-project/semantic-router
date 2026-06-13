@@ -2,8 +2,8 @@ package config
 
 import "testing"
 
-func TestNeedsCoreMappingsForRouting(t *testing.T) {
-	cfg := &RouterConfig{
+func newRoutingSignalUsageTestConfig() *RouterConfig {
+	return &RouterConfig{
 		InlineModels: InlineModels{
 			Classifier: Classifier{
 				CategoryModel: CategoryModel{
@@ -44,6 +44,10 @@ func TestNeedsCoreMappingsForRouting(t *testing.T) {
 			},
 		},
 	}
+}
+
+func TestNeedsCoreMappingsForRouting(t *testing.T) {
+	cfg := newRoutingSignalUsageTestConfig()
 
 	tests := []struct {
 		name          string
@@ -80,6 +84,15 @@ func TestNeedsCoreMappingsForRouting(t *testing.T) {
 			decisions: []Decision{{
 				Name:  "safety-route",
 				Rules: RuleNode{Operator: "OR", Conditions: []RuleNode{{Type: SignalTypePII, Name: "contains_pii"}, {Type: SignalTypeJailbreak, Name: "detector"}}},
+			}},
+			wantPII:       true,
+			wantJailbreak: true,
+		},
+		{
+			name: "direct safety signals with mixed case and whitespace",
+			decisions: []Decision{{
+				Name:  "safety-route",
+				Rules: RuleNode{Operator: "OR", Conditions: []RuleNode{{Type: " PII ", Name: "contains_pii"}, {Type: "JailBreak", Name: "detector"}}},
 			}},
 			wantPII:       true,
 			wantJailbreak: true,
