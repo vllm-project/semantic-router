@@ -1,0 +1,141 @@
+name: Agent Memory Classifier
+
+on:
+  pull_request_target:
+    types: [opened, edited, synchronize, reopened, ready_for_review]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+  pull-requests: write
+  issues: write
+
+jobs:
+  classify:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout workflow tools
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.workflow_sha }}
+          persist-credentials: false
+
+      - name: Collect PR metadata
+        id: metadata
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const {owner, repo} = context.repo;
+            const pull_number = context.payload.pull_request.number;
+            const pr = context.payload.pull_request;
+            const files = await github.paginate(github.rest.pulls.listFiles, {
+              owner,
+              repo,
+              pull_number,
+              per_page: 100
+            });
+            const metadata = {
+              number: pull_number,
+              title: pr.title,
+              body: pr.body || '',
+              additions: pr.additions,
+              deletions: pr.deletions,
+              changed_files: files.map(file => file.filename)
+            };
+            fs.writeFileSync('agent-memory-metadata.json', JSON.stringify(metadata, null, 2));
+
+      - name: Classify review brief
+        id: classify
+        run: |
+          python3 tools/agent/scripts/agent_memory_classifier.py \
+            --metadata agent-memory-metadata.json \
+            --output agent-memory-classification.json
+
+      - name: Update memory labels
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const {owner, repo} = context.repo;
+            const issue_number = context.payload.pull_request.number;
+            const classification = JSON.parse(fs.readFileSync('agent-memory-classification.json', 'utf8'));
+            const labelsToAdd = classification.labels_to_add || [];
+            const labelsToRemove = classification.labels_to_remove || [];
+            const labelDefinitions = {
+              'agent-memory-present': {
+                color: '0e8a16',
+                description: 'PR has the requested agent review brief'
+              },
+              'agent-memory-missing': {
+                color: 'd93f0b',
+                description: 'PR requires an agent review brief, but none is valid'
+              },
+              'agent-memory-not-required': {
+                color: 'cfd3d7',
+                description: 'PR does not require an agent review brief'
+              }
+            };
+            for (const [name, definition] of Object.entries(labelDefinitions)) {
+              try {
+                await github.rest.issues.getLabel({owner, repo, name});
+              } catch (error) {
+                if (error.status !== 404) throw error;
+                await github.rest.issues.createLabel({
+                  owner,
+                  repo,
+                  name,
+                  color: definition.color,
+                  description: definition.description
+                });
+              }
+            }
+            const issueLabels = await github.paginate(github.rest.issues.listLabelsOnIssue, {
+              owner,
+              repo,
+              issue_number,
+              per_page: 100
+            });
+            const currentLabelNames = new Set(issueLabels.map(label => label.name));
+            for (const name of labelsToRemove) {
+              if (currentLabelNames.has(name)) {
+                await github.rest.issues.removeLabel({owner, repo, issue_number, name});
+              }
+            }
+            if (labelsToAdd.length > 0) {
+              await github.rest.issues.addLabels({owner, repo, issue_number, labels: labelsToAdd});
+            }
+
+      - name: Comment review brief status
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const {owner, repo} = context.repo;
+            const issue_number = context.payload.pull_request.number;
+            const marker = '<!-- agent-memory-classifier -->';
+            const classification = JSON.parse(fs.readFileSync('agent-memory-classification.json', 'utf8'));
+            const body = `${marker}\n${classification.comment_body}`;
+            const comments = await github.paginate(github.rest.issues.listComments, {
+              owner,
+              repo,
+              issue_number,
+              per_page: 100
+            });
+            const existing = comments.find(comment => comment.body && comment.body.includes(marker));
+            if (existing) {
+              await github.rest.issues.updateComment({owner, repo, comment_id: existing.id, body});
+            } else {
+              await github.rest.issues.createComment({owner, repo, issue_number, body});
+            }
+
+      - name: Enforce review brief hard gate
+        run: |
+          python3 tools/agent/scripts/agent_memory_review_gate.py \
+            --classifier agent-memory-classification.json \
+            --output agent-memory-classifier-gate.json \
+            --classifier-only \
+            --fail-on-gate
