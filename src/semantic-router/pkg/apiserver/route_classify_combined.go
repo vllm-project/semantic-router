@@ -41,7 +41,7 @@ func (s *ClassificationAPIServer) handleCombinedClassification(w http.ResponseWr
 		Options: req.IntentOptions,
 	})
 	if err != nil {
-		s.writeErrorResponse(w, http.StatusInternalServerError, "CLASSIFICATION_ERROR", err.Error())
+		s.writeClassificationError(w, err)
 		return
 	}
 
@@ -50,7 +50,7 @@ func (s *ClassificationAPIServer) handleCombinedClassification(w http.ResponseWr
 		Options: req.PIIOptions,
 	})
 	if err != nil {
-		s.writeErrorResponse(w, http.StatusInternalServerError, "CLASSIFICATION_ERROR", err.Error())
+		s.writeClassificationError(w, err)
 		return
 	}
 
@@ -59,7 +59,7 @@ func (s *ClassificationAPIServer) handleCombinedClassification(w http.ResponseWr
 		Options: req.SecurityOptions,
 	})
 	if err != nil {
-		s.writeErrorResponse(w, http.StatusInternalServerError, "CLASSIFICATION_ERROR", err.Error())
+		s.writeClassificationError(w, err)
 		return
 	}
 
