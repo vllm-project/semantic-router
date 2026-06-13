@@ -11,6 +11,7 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/headers"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/ir"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/sessionbudget"
 )
 
 func TestBuildResponseHeaderMutation_IncludesExtendedMatchedSignalHeaders(t *testing.T) {
@@ -362,4 +363,34 @@ func mutationToMap(setHeaders []*core.HeaderValueOption) map[string]string {
 		headerMap[h.Header.Key] = string(h.Header.RawValue)
 	}
 	return headerMap
+}
+
+func TestBuildResponseHeaderMutation_EmitsSessionBudgetHeaders(t *testing.T) {
+	ctx := &RequestContext{
+		SessionBudget: &SessionBudgetDecision{
+			Stage:      sessionbudget.StageShapeTools,
+			Ratio:      1.25,
+			Cumulative: 1250,
+			Budget:     1000,
+		},
+	}
+
+	mutation := buildResponseHeaderMutation(ctx, true)
+	require.NotNil(t, mutation)
+	headerMap := mutationToMap(mutation.SetHeaders)
+
+	assert.Equal(t, "shape_tools", headerMap[headers.VSRBudgetStage])
+	assert.Equal(t, "1.25", headerMap[headers.VSRBudgetRatio])
+	// exceeded is only set on the terminate immediate response, not here.
+	assert.NotContains(t, headerMap, headers.VSRBudgetExceeded)
+}
+
+func TestBuildResponseHeaderMutation_NoSessionBudgetHeadersWhenAbsent(t *testing.T) {
+	ctx := &RequestContext{VSRSelectedModel: "m"}
+	mutation := buildResponseHeaderMutation(ctx, true)
+	require.NotNil(t, mutation)
+	headerMap := mutationToMap(mutation.SetHeaders)
+
+	assert.NotContains(t, headerMap, headers.VSRBudgetStage)
+	assert.NotContains(t, headerMap, headers.VSRBudgetRatio)
 }

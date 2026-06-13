@@ -213,6 +213,7 @@ const sidebars: SidebarsConfig = {
             'tutorials/global/api-and-observability',
             'tutorials/global/stores-and-tools',
             'tutorials/global/safety-models-and-policy',
+            'tutorials/global/session-token-budget',
           ],
         },
       ],

@@ -39,7 +39,13 @@ func assertReferenceConfigServiceGlobalCoverage(t testingT, services map[string]
 	assertReferenceConfigObservabilityCoverage(t, mustMapAt(t, services, "observability"))
 	assertReferenceConfigAuthzCoverage(t, mustMapAt(t, services, "authz"))
 	assertReferenceConfigRateLimitCoverage(t, mustMapAt(t, services, "ratelimit"))
+	assertReferenceConfigSessionTokenBudgetCoverage(t, mustMapAt(t, services, "session_token_budget"))
 	assertReferenceConfigRouterReplayCoverage(t, mustMapAt(t, services, "router_replay"))
+}
+
+func assertReferenceConfigSessionTokenBudgetCoverage(t testingT, budget map[string]interface{}) {
+	assertMapCoversStructFields(t, budget, reflect.TypeOf(SessionTokenBudgetConfig{}), "global.services.session_token_budget")
+	assertMapCoversStructFields(t, mustMapAt(t, budget, "thresholds"), reflect.TypeOf(SessionTokenBudgetThresholds{}), "global.services.session_token_budget.thresholds")
 }
 
 func assertReferenceConfigAPIServiceCoverage(t testingT, api map[string]interface{}) {

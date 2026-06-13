@@ -75,7 +75,10 @@ func (r *OpenAIRouter) handleRequestBody(v *ext_proc.ProcessingRequest_RequestBo
 		return earlyResponse, nil
 	}
 
-	openAIRequest, earlyResponse, err := r.prepareRequestForModelRouting(requestBody, fast.UserContent, ctx)
+	// Session token-budget evaluation + terminate happen inside
+	// prepareRequestForModelRouting (once session-transition fields are
+	// populated); an over-budget-terminate session surfaces here as earlyResponse.
+	openAIRequest, earlyResponse, err := r.prepareRequestForModelRouting(requestBody, fast.UserContent, decisionState.selectedModel, ctx)
 	if earlyResponse != nil {
 		return earlyResponse, nil
 	}
