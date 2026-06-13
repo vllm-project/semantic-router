@@ -38,6 +38,57 @@ func TestBuildBatchSimilarityMatchesIncludesCandidateText(t *testing.T) {
 	}
 }
 
+func TestValidateEmbeddingRequestRequiresTextsOrImages(t *testing.T) {
+	req := EmbeddingRequest{Dimension: defaultEmbeddingDimension}
+
+	code, message, ok := validateEmbeddingRequest(req)
+	if ok {
+		t.Fatalf("expected empty texts and images to be invalid")
+	}
+	if code != "INVALID_INPUT" || message != "at least one of texts or images must be provided" {
+		t.Fatalf("unexpected validation error %q: %q", code, message)
+	}
+}
+
+func TestValidateEmbeddingRequestAcceptsImagesOnly(t *testing.T) {
+	req := EmbeddingRequest{
+		Images:    []string{"data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAAB"},
+		Dimension: defaultEmbeddingDimension,
+	}
+
+	if _, _, ok := validateEmbeddingRequest(req); !ok {
+		t.Fatalf("expected image-only request to be valid")
+	}
+}
+
+func TestValidateEmbeddingRequestRejectsUnsafeImage(t *testing.T) {
+	req := EmbeddingRequest{
+		Images:    []string{"https://example.com/cat.png"},
+		Dimension: defaultEmbeddingDimension,
+	}
+
+	code, message, ok := validateEmbeddingRequest(req)
+	if ok {
+		t.Fatalf("expected non-data-URI image to be rejected (SSRF guard)")
+	}
+	if code != "INVALID_IMAGE" {
+		t.Fatalf("unexpected validation error code %q: %q", code, message)
+	}
+}
+
+func TestAverageEmbeddingProcessingTimeUsesInputCount(t *testing.T) {
+	req := EmbeddingRequest{
+		Texts:  []string{"first", "second"},
+		Images: []string{"data:image/png;base64,iVBORw0KGgo="},
+	}
+
+	got := averageEmbeddingProcessingTime(90, req)
+
+	if got != 30 {
+		t.Fatalf("expected average processing time to use text plus image inputs, got %.2f", got)
+	}
+}
+
 func TestNormalizeBatchSimilarityLimitCapsTopKAtCandidateCount(t *testing.T) {
 	req := BatchSimilarityRequest{
 		Candidates: []string{"a", "b"},
