@@ -216,71 +216,53 @@ func CountTokensApprox(text string) int {
 func TokenizeWords(text string) []string {
 	var tokens []string
 
-	for _, field := range strings.Fields(text) {
-		// Trim leading/trailing non-letter/digit runes, lowercasing as we go.
-		// First, find byte bounds of the "cleaned" substring.
-		cleanStart := 0
-		for cleanStart < len(field) {
-			r, sz := utf8.DecodeRuneInString(field[cleanStart:])
-			if unicode.IsLetter(r) || unicode.IsDigit(r) {
-				break
-			}
-			cleanStart += sz
-		}
-		cleanEnd := len(field)
-		for cleanEnd > cleanStart {
-			r, sz := utf8.DecodeLastRuneInString(field[:cleanEnd])
-			if unicode.IsLetter(r) || unicode.IsDigit(r) {
-				break
-			}
-			cleanEnd -= sz
-		}
-		if cleanStart >= cleanEnd {
-			continue
-		}
-		cleaned := field[cleanStart:cleanEnd]
-
-		// Check if there's any CJK content.
-		hasCJK := false
-		for i := 0; i < len(cleaned); {
-			r, sz := utf8.DecodeRuneInString(cleaned[i:])
-			if isCJK(r) {
-				hasCJK = true
-				break
-			}
-			i += sz
-		}
-
-		if !hasCJK {
-			tokens = append(tokens, strings.ToLower(cleaned))
-			continue
-		}
-
-		// Mixed or pure CJK: extract bigrams and lowercased non-CJK words.
+	for field := range strings.FieldsSeq(text) {
 		var nonCJK []byte
+		var pending []byte
+		// Pending runes replace the old cleanEnd trim: commit them only if another token rune follows.
 		var prevCJK rune
 		prevIsCJK := false
+		started := false
 
-		for i := 0; i < len(cleaned); {
-			r, sz := utf8.DecodeRuneInString(cleaned[i:])
-			if isCJK(r) {
-				if len(nonCJK) > 0 {
-					tokens = append(tokens, string(nonCJK))
-					nonCJK = nonCJK[:0]
-				}
-				tokens = append(tokens, string(r))
-				if prevIsCJK {
-					tokens = append(tokens, string([]rune{prevCJK, r}))
-				}
-				prevCJK = r
-				prevIsCJK = true
-			} else {
-				lr := unicode.ToLower(r)
-				nonCJK = utf8.AppendRune(nonCJK, lr)
-				prevIsCJK = false
+		for _, r := range field {
+			isTokenRune := unicode.IsLetter(r) || unicode.IsDigit(r)
+			if !started && !isTokenRune {
+				continue
 			}
-			i += sz
+			started = true
+
+			if !isTokenRune {
+				pending = utf8.AppendRune(pending, unicode.ToLower(r))
+				prevIsCJK = false
+				continue
+			}
+
+			// A following token rune makes pending punctuation internal, so keep it.
+			if len(pending) > 0 {
+				nonCJK = append(nonCJK, pending...)
+				pending = pending[:0]
+			}
+
+			if !isCJK(r) {
+				nonCJK = utf8.AppendRune(nonCJK, unicode.ToLower(r))
+				prevIsCJK = false
+				continue
+			}
+
+			// CJK tokens stand alone; flush any accumulated non-CJK word before them.
+			if len(nonCJK) > 0 {
+				tokens = append(tokens, string(nonCJK))
+				nonCJK = nonCJK[:0]
+			}
+			tokens = append(tokens, string(r))
+			// Only adjacent CJK runes form bigrams; punctuation and non-CJK runes reset adjacency.
+			if prevIsCJK {
+				tokens = append(tokens, string([]rune{prevCJK, r}))
+			}
+			prevCJK = r
+			prevIsCJK = true
 		}
+
 		if len(nonCJK) > 0 {
 			tokens = append(tokens, string(nonCJK))
 		}
