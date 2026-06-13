@@ -220,6 +220,13 @@ func registerEffectiveRouterReplayConfigForDecisionSpecs() {
 		Expect(replayCfg.CaptureRequestBody).To(BeTrue())
 		Expect(replayCfg.CaptureResponseBody).To(BeTrue())
 		Expect(replayCfg.MaxBodyBytes).To(Equal(4096))
+		// MaxToolTraceBytes must default to a positive cap: the structured
+		// fields (prompt, tool_definitions) are extracted from the full request
+		// before MaxBodyBytes truncation, so leaving this unbounded lets a large
+		// request produce a multi-MB prompt that breaks the /v1/router_replay
+		// history list with a 413. Mirrors MaxBodyBytes.
+		Expect(replayCfg.MaxToolTraceBytes).To(Equal(4096))
+		Expect(replayCfg.MaxToolTraceSteps).To(Equal(100))
 	})
 
 	Describe("decision plugin overrides", registerRouterReplayPluginOverrideSpecs)

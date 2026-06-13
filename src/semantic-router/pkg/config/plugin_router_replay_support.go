@@ -5,6 +5,19 @@ import "github.com/vllm-project/semantic-router/src/semantic-router/pkg/observab
 const (
 	defaultRouterReplayMaxRecords   = 10000
 	defaultRouterReplayMaxBodyBytes = 4096
+	// defaultRouterReplayMaxToolTraceBytes caps each structured text field
+	// (Prompt, ToolDefinitions, and per-step tool-trace Arguments/Output) by
+	// default. Without a default these fields are unbounded (0 = no limit):
+	// they are extracted from the *full* request before MaxBodyBytes truncation,
+	// so a single large request (e.g. a 10 MB input) produces a multi-MB Prompt
+	// that survives in the record. A page of such records then exceeds the
+	// ext-proc message-size cap, and the /v1/router_replay list endpoint returns
+	// 413 — breaking the history view for everyone (reported by internal users).
+	// Mirroring the raw-body budget (4096) keeps prompts useful for debugging
+	// while bounding growth, consistent with the MaxBodyBytes and
+	// MaxToolTraceSteps defaults. Operators who need fuller structured fields
+	// can raise or zero (unlimited) this explicitly.
+	defaultRouterReplayMaxToolTraceBytes = 4096
 	// defaultRouterReplayMaxToolTraceSteps caps the per-record tool-trace
 	// step count by default so an agentic session that loops forever can't
 	// drive the router to OOM (see #1835). 100 covers normal multi-tool
@@ -20,6 +33,7 @@ func DefaultRouterReplayPluginConfig() RouterReplayPluginConfig {
 		CaptureRequestBody:  true,
 		CaptureResponseBody: true,
 		MaxBodyBytes:        defaultRouterReplayMaxBodyBytes,
+		MaxToolTraceBytes:   defaultRouterReplayMaxToolTraceBytes,
 		MaxToolTraceSteps:   defaultRouterReplayMaxToolTraceSteps,
 	}
 }

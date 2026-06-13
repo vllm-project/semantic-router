@@ -10,6 +10,7 @@ import (
 	ext_proc "github.com/envoyproxy/go-control-plane/envoy/service/ext_proc/v3"
 	typev3 "github.com/envoyproxy/go-control-plane/envoy/type/v3"
 
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/routerreplay"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/routerreplay/store"
 )
@@ -181,29 +182,151 @@ func TestHandleRouterReplayAPIListRejectsInvalidQuery(t *testing.T) {
 	}
 }
 
-func TestHandleRouterReplayAPIListReturnsPayloadTooLargeForOversizedPage(t *testing.T) {
+// TestHandleRouterReplayAPIListBoundsOversizedPageInsteadOf413 verifies the
+// list endpoint degrades gracefully rather than hard-failing: an oversized
+// record (here a 5 MB body stored untruncated, e.g. via an explicit
+// max_tool_trace_bytes:0 / raised-limit capture config) must still yield a
+// 200 list response, with the heavy field trimmed for transport and its
+// *_truncated flag set. Full fidelity remains available via the per-record
+// GET endpoint. This replaces the previous behavior that returned 413 and
+// broke the whole history view for everyone.
+func TestHandleRouterReplayAPIListBoundsOversizedPageInsteadOf413(t *testing.T) {
 	oversizedBody := strings.Repeat("x", 5*1024*1024)
 	router := newReplayAPITestRouterWithRecords(t, 1, oversizedBody)
 
 	response := router.handleRouterReplayAPI("GET", "/v1/router_replay?limit=1")
 	if response == nil || response.GetImmediateResponse() == nil {
-		t.Fatal("expected immediate error response")
+		t.Fatal("expected immediate response")
 	}
-	if got := response.GetImmediateResponse().GetStatus().GetCode(); got != typev3.StatusCode_PayloadTooLarge {
-		t.Fatalf("expected payload too large status, got %v", got)
+	if got := response.GetImmediateResponse().GetStatus().GetCode(); got != typev3.StatusCode_OK {
+		t.Fatalf("expected 200 OK (bounded), got %v", got)
 	}
 
 	body := decodeJSONBody(t, response.GetImmediateResponse().Body)
-	errorBody, ok := body["error"].(map[string]interface{})
+	data, ok := body["data"].([]interface{})
+	if !ok || len(data) != 1 {
+		t.Fatalf("expected one record in data, got %#v", body["data"])
+	}
+	record, ok := data[0].(map[string]interface{})
 	if !ok {
-		t.Fatalf("expected error payload, got %#v", body)
+		t.Fatalf("expected record object, got %#v", data[0])
 	}
-	if got := int(errorBody["code"].(float64)); got != 413 {
-		t.Fatalf("expected error code 413, got %d", got)
+	if trimmed, _ := record["request_body"].(string); len(trimmed) >= len(oversizedBody) {
+		t.Fatalf("expected request_body to be trimmed for transport, got len=%d", len(trimmed))
 	}
-	if got := errorBody["message"]; got == nil || !strings.Contains(got.(string), "ext-proc message size limit") {
-		t.Fatalf("expected oversized response guidance, got %#v", got)
+	if truncated, _ := record["request_body_truncated"].(bool); !truncated {
+		t.Fatal("expected request_body_truncated flag to be set after transport trimming")
 	}
+}
+
+// TestHandleRouterReplayAPIListBoundedByDefaultConfigForLargeInput is the
+// regression test for the reported 413 on the history list when a large request
+// is recorded. The structured Prompt/ToolDefinitions fields are extracted from
+// the full request before MaxBodyBytes truncation; before the fix the default
+// config left MaxToolTraceBytes=0 (unbounded), so a single multi-MB input
+// produced a multi-MB Prompt that pushed a normal page past the ext-proc size
+// cap and returned 413. With the default config wired through the real
+// configureReplayRecorder path, the list endpoint must return 200.
+func TestHandleRouterReplayAPIListBoundedByDefaultConfigForLargeInput(t *testing.T) {
+	bigInput := strings.Repeat("x", 5*1024*1024) // 5 MB user input
+
+	cfg := config.DefaultRouterReplayPluginConfig()
+	recorder := routerreplay.NewRecorder(store.NewMemoryStore(100, 0))
+	// Use the production wiring so the test exercises the actual default policy,
+	// not a hand-set recorder limit.
+	configureReplayRecorder(recorder, &cfg)
+
+	// Build records the way buildReplayRoutingRecord does: Prompt and
+	// ToolDefinitions come from the full request body, RequestBody is the raw body.
+	for i := 0; i < 25; i++ {
+		if _, err := recorder.AddRecord(routerreplay.RoutingRecord{
+			ID:              fmt.Sprintf("replay-%03d", i),
+			Decision:        "decision-a",
+			RequestID:       fmt.Sprintf("req-%03d", i),
+			RequestBody:     bigInput,
+			Prompt:          bigInput,
+			ToolDefinitions: bigInput,
+			Timestamp:       time.Unix(int64(i+1), 0).UTC(),
+		}); err != nil {
+			t.Fatalf("failed to add replay record %d: %v", i, err)
+		}
+	}
+
+	// Each heavy field must have been truncated to the default cap.
+	stored, ok := recorder.GetRecord("replay-000")
+	if !ok {
+		t.Fatal("expected stored record")
+	}
+	if len(stored.Prompt) != 4096 || !stored.PromptTruncated {
+		t.Fatalf("prompt should be truncated to 4096, got len=%d truncated=%v", len(stored.Prompt), stored.PromptTruncated)
+	}
+	if len(stored.ToolDefinitions) != 4096 || !stored.ToolDefinitionsTruncated {
+		t.Fatalf("tool_definitions should be truncated to 4096, got len=%d truncated=%v", len(stored.ToolDefinitions), stored.ToolDefinitionsTruncated)
+	}
+
+	router := &OpenAIRouter{
+		ReplayRecorders: map[string]*routerreplay.Recorder{"decision-a": recorder},
+	}
+	response := router.handleRouterReplayAPI("GET", "/v1/router_replay?limit=25&offset=0")
+	if response == nil || response.GetImmediateResponse() == nil {
+		t.Fatal("expected immediate response")
+	}
+	if got := response.GetImmediateResponse().GetStatus().GetCode(); got != typev3.StatusCode_OK {
+		t.Fatalf("expected 200 OK for a full page of large-input records under the default config, got %v", got)
+	}
+}
+
+// TestHandleRouterReplayAPIListBoundsPageRegardlessOfCaptureConfig locks the
+// transport-layer fix for the two cases the capture-default change alone does
+// NOT cover: (1) an operator who explicitly disables structured-field
+// truncation (max_tool_trace_bytes:0), and (2) a long agent tool-trace under
+// the default config (many steps, each at the per-step byte cap). In both, a
+// normal page would otherwise exceed the ext-proc cap; the list endpoint must
+// still return 200 by trimming heavy fields for transport.
+func TestHandleRouterReplayAPIListBoundsPageRegardlessOfCaptureConfig(t *testing.T) {
+	big := strings.Repeat("x", 5*1024*1024)
+
+	t.Run("explicit unlimited opt-out", func(t *testing.T) {
+		recorder := routerreplay.NewRecorder(store.NewMemoryStore(100, 0))
+		recorder.SetCapturePolicy(true, true, 4096)
+		recorder.SetMaxToolTraceBytes(0) // operator opts out of structured-field truncation
+		for i := 0; i < 25; i++ {
+			if _, err := recorder.AddRecord(routerreplay.RoutingRecord{
+				ID: fmt.Sprintf("u%02d", i), Decision: "d", RequestID: fmt.Sprintf("q%02d", i),
+				Prompt: big, Timestamp: time.Unix(int64(i+1), 0).UTC(),
+			}); err != nil {
+				t.Fatalf("add record: %v", err)
+			}
+		}
+		router := &OpenAIRouter{ReplayRecorders: map[string]*routerreplay.Recorder{"d": recorder}}
+		resp := router.handleRouterReplayAPI("GET", "/v1/router_replay?limit=25&offset=0")
+		if got := resp.GetImmediateResponse().GetStatus().GetCode(); got != typev3.StatusCode_OK {
+			t.Fatalf("expected 200 OK with unlimited capture config, got %v", got)
+		}
+	})
+
+	t.Run("default config with long agent tool-trace", func(t *testing.T) {
+		cfg := config.DefaultRouterReplayPluginConfig()
+		recorder := routerreplay.NewRecorder(store.NewMemoryStore(100, 0))
+		configureReplayRecorder(recorder, &cfg)
+		for i := 0; i < 25; i++ {
+			steps := make([]routerreplay.ToolTraceStep, 100)
+			for s := range steps {
+				steps[s] = routerreplay.ToolTraceStep{Arguments: big, Output: big}
+			}
+			if _, err := recorder.AddRecord(routerreplay.RoutingRecord{
+				ID: fmt.Sprintf("a%02d", i), Decision: "d", RequestID: fmt.Sprintf("q%02d", i),
+				ToolTrace: &routerreplay.ToolTrace{Steps: steps}, Timestamp: time.Unix(int64(i+1), 0).UTC(),
+			}); err != nil {
+				t.Fatalf("add record: %v", err)
+			}
+		}
+		router := &OpenAIRouter{ReplayRecorders: map[string]*routerreplay.Recorder{"d": recorder}}
+		resp := router.handleRouterReplayAPI("GET", "/v1/router_replay?limit=25&offset=0")
+		if got := resp.GetImmediateResponse().GetStatus().GetCode(); got != typev3.StatusCode_OK {
+			t.Fatalf("expected 200 OK with a long agent tool-trace under default config, got %v", got)
+		}
+	})
 }
 
 func TestHandleRouterReplayAPIReturnsErrorsForInvalidRequests(t *testing.T) {

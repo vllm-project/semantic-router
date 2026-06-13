@@ -62,6 +62,7 @@ func (p *Profile) GetTestCases() []string {
 		"router-replay-restart-recovery",
 		"router-replay-session-list-filter",
 		"router-replay-session-turn-progression",
+		"router-replay-large-request-list-ok",
 	}
 }
 
