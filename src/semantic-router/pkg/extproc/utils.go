@@ -33,7 +33,7 @@ func sendResponse(stream ext_proc.ExternalProcessor_ProcessServer, response *ext
 	// set-header, so a verbatim %+v would leak it to the log (CWE-532). Gate on
 	// the debug level so the clone+redact cost is paid only when it is logged.
 	if logging.DebugEnabled() {
-		logging.Debugf("Processing at stage [%s]: %+v", msgType, redactProcessingResponseForLog(response))
+		logging.Debugf("Processing at stage [%s]: %+v", msgType, redactResponseForLog(response))
 	}
 
 	if err := stream.Send(response); err != nil {

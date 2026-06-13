@@ -53,7 +53,7 @@ func TestRedactProcessingResponseMasksCredentialsAndKeepsOriginal(t *testing.T) 
 		&core.HeaderValueOption{Header: &core.HeaderValue{Key: "x-selected-model", RawValue: []byte("qwen3-122b")}},
 	)
 
-	redacted := redactProcessingResponseForLog(resp)
+	redacted := redactResponseForLog(resp)
 
 	// 1. The dump string must not contain either credential value.
 	dump := strings.ToLower(redactedResponseDump(redacted))
@@ -61,7 +61,7 @@ func TestRedactProcessingResponseMasksCredentialsAndKeepsOriginal(t *testing.T) 
 		t.Fatalf("redacted dump still contains a credential: %s", dump)
 	}
 
-	rm := commonResponseHeaderMutation(redacted)
+	rm := responseHeaderMutation(redacted)
 	gotAuth := headerValueByKey(rm, "Authorization")
 	gotApiKey := headerValueByKey(rm, "x-api-key")
 	gotModel := headerValueByKey(rm, "x-selected-model")
@@ -76,14 +76,14 @@ func TestRedactProcessingResponseMasksCredentialsAndKeepsOriginal(t *testing.T) 
 	}
 
 	// 2. The ORIGINAL response (sent to Envoy) must still carry the real value.
-	origRM := commonResponseHeaderMutation(resp)
+	origRM := responseHeaderMutation(resp)
 	if string(origRM.SetHeaders[0].Header.RawValue) != authCanary {
 		t.Fatalf("original response was mutated: %q", origRM.SetHeaders[0].Header.RawValue)
 	}
 }
 
 func TestRedactProcessingResponseNilSafe(t *testing.T) {
-	if redactProcessingResponseForLog(nil) != nil {
+	if redactResponseForLog(nil) != nil {
 		t.Fatal("nil response must return nil")
 	}
 }
@@ -107,7 +107,7 @@ func headerValueByKey(hm *ext_proc.HeaderMutation, key string) string {
 }
 
 func redactedResponseDump(r *ext_proc.ProcessingResponse) string {
-	rm := commonResponseHeaderMutation(r)
+	rm := responseHeaderMutation(r)
 	var b strings.Builder
 	if rm != nil {
 		for _, opt := range rm.SetHeaders {

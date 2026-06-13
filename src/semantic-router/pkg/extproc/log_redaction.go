@@ -39,11 +39,11 @@ func isSensitiveHeaderKey(key string) bool {
 		strings.Contains(k, "secret")
 }
 
-// redactProcessingResponseForLog returns a deep copy of response with the
+// redactResponseForLog returns a deep copy of response with the
 // values of sensitive headers masked, so a debug-level dump of the ext_proc
 // mutation never writes the upstream provider credential to the log. The
 // original response (the one actually sent to Envoy) is left untouched.
-func redactProcessingResponseForLog(response *ext_proc.ProcessingResponse) *ext_proc.ProcessingResponse {
+func redactResponseForLog(response *ext_proc.ProcessingResponse) *ext_proc.ProcessingResponse {
 	if response == nil {
 		return nil
 	}
@@ -52,16 +52,16 @@ func redactProcessingResponseForLog(response *ext_proc.ProcessingResponse) *ext_
 		// Cloning failed: never fall back to the unredacted original.
 		return nil
 	}
-	redactHeaderMutation(commonResponseHeaderMutation(clone))
+	redactHeaderMutation(responseHeaderMutation(clone))
 	if imm := clone.GetImmediateResponse(); imm != nil {
 		redactHeaderMutation(imm.GetHeaders())
 	}
 	return clone
 }
 
-// commonResponseHeaderMutation returns the HeaderMutation carried by whichever
+// responseHeaderMutation returns the HeaderMutation carried by whichever
 // request/response phase variant the ProcessingResponse holds, or nil.
-func commonResponseHeaderMutation(r *ext_proc.ProcessingResponse) *ext_proc.HeaderMutation {
+func responseHeaderMutation(r *ext_proc.ProcessingResponse) *ext_proc.HeaderMutation {
 	switch v := r.Response.(type) {
 	case *ext_proc.ProcessingResponse_RequestHeaders:
 		return v.RequestHeaders.GetResponse().GetHeaderMutation()
