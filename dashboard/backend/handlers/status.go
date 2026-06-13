@@ -27,13 +27,14 @@ type RouterRuntimeStatus struct {
 
 // SystemStatus represents the overall system status
 type SystemStatus struct {
-	Overall        string               `json:"overall"`
-	DeploymentType string               `json:"deployment_type"`
-	Services       []ServiceStatus      `json:"services"`
-	RouterRuntime  *RouterRuntimeStatus `json:"router_runtime,omitempty"`
-	Models         *RouterModelsInfo    `json:"models,omitempty"`
-	Endpoints      []string             `json:"endpoints,omitempty"`
-	Version        string               `json:"version,omitempty"`
+	Overall         string                 `json:"overall"`
+	DeploymentType  string                 `json:"deployment_type"`
+	Services        []ServiceStatus        `json:"services"`
+	RouterRuntime   *RouterRuntimeStatus   `json:"router_runtime,omitempty"`
+	Models          *RouterModelsInfo      `json:"models,omitempty"`
+	Endpoints       []string               `json:"endpoints,omitempty"`
+	Version         string                 `json:"version,omitempty"`
+	ProjectionDrift *ConfigProjectionDrift `json:"projection_drift,omitempty"`
 }
 
 // StatusHandler returns the status of vLLM-SR services
@@ -47,6 +48,7 @@ func StatusHandler(routerAPIURL, configDir string) http.HandlerFunc {
 
 		w.Header().Set("Content-Type", "application/json")
 		status := detectSystemStatus(routerAPIURL, configDir)
+		status.ProjectionDrift = currentConfigProjectionDrift()
 
 		if err := json.NewEncoder(w).Encode(status); err != nil {
 			http.Error(w, `{"error":"Failed to encode response"}`, http.StatusInternalServerError)
