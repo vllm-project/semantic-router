@@ -112,6 +112,11 @@ class AgentMemoryClassifierTests(unittest.TestCase):
             SCRIPT_DIR.parents[2] / ".github/workflows/agent-memory-classifier.yml"
         )
         workflow = yaml.safe_load(workflow_path.read_text(encoding="utf-8"))
+        self.assertEqual(
+            workflow["concurrency"]["group"],
+            "${{ github.workflow }}-${{ github.event.pull_request.number }}",
+        )
+        self.assertTrue(workflow["concurrency"]["cancel-in-progress"])
         steps = workflow["jobs"]["classify"]["steps"]
         names = [step.get("name") for step in steps]
 

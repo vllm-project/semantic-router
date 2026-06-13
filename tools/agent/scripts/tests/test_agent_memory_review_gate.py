@@ -110,6 +110,28 @@ class AgentMemoryReviewGateTests(unittest.TestCase):
         self.assertEqual(result.review_brief_match, "unknown")
         self.assertIn("parseable", result.gate_reason or "")
 
+    def test_present_brief_not_applicable_verdict_fails_closed(self) -> None:
+        result = review_gate.evaluate_gate(
+            classifier={
+                "memory_required": False,
+                "memory_present": True,
+                "memory_invalid": False,
+                "gate_passed": True,
+            },
+            review_response="\n".join(
+                [
+                    "## Brief / Diff Consistency",
+                    "",
+                    "- Review brief matches diff: not-applicable",
+                    "- Hard gate: pass",
+                ]
+            ),
+        )
+
+        self.assertFalse(result.gate_passed)
+        self.assertEqual(result.review_brief_match, "unknown")
+        self.assertIn("not-applicable", result.gate_reason or "")
+
     def test_classifier_only_present_brief_passes_without_ai_review(self) -> None:
         result = review_gate.evaluate_gate(
             classifier={
@@ -144,9 +166,22 @@ class AgentMemoryReviewGateTests(unittest.TestCase):
             SCRIPT_DIR.parents[2] / ".github/workflows/agent-memory-review.yml"
         )
         workflow = yaml.safe_load(workflow_path.read_text(encoding="utf-8"))
+        self.assertEqual(
+            workflow["concurrency"]["group"],
+            "${{ github.workflow }}-${{ github.event.pull_request.number }}",
+        )
+        self.assertTrue(workflow["concurrency"]["cancel-in-progress"])
         steps = workflow["jobs"]["review"]["steps"]
         names = [step.get("name") for step in steps]
 
+        self.assertLess(
+            names.index("Classify review brief"),
+            names.index("Fetch classified review brief"),
+        )
+        self.assertLess(
+            names.index("Fetch classified review brief"),
+            names.index("Build review context pack"),
+        )
         self.assertLess(
             names.index("Evaluate memory review hard gate"),
             names.index("Publish review comment"),
@@ -158,6 +193,10 @@ class AgentMemoryReviewGateTests(unittest.TestCase):
         enforce_step = steps[names.index("Enforce memory review hard gate")]
         self.assertIn("agent_memory_review_gate.py", enforce_step["run"])
         self.assertIn("--fail-on-gate", enforce_step["run"])
+        collect_step = steps[names.index("Collect PR metadata and diff")]
+        fetch_step = steps[names.index("Fetch classified review brief")]
+        self.assertNotIn("briefMatch", collect_step["with"]["script"])
+        self.assertIn("classification.memory_path", fetch_step["with"]["script"])
 
 
 if __name__ == "__main__":

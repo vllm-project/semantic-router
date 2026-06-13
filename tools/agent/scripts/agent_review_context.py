@@ -95,7 +95,14 @@ def truncate_text(text: str, max_bytes: int) -> str:
 def read_existing_file(path: Path, max_bytes: int) -> str | None:
     if not path.is_file():
         return None
-    return truncate_text(path.read_text(encoding="utf-8", errors="replace"), max_bytes)
+    with path.open("rb") as handle:
+        data = handle.read(max_bytes + 1)
+    if len(data) <= max_bytes:
+        return data.decode("utf-8", errors="replace")
+    suffix = f"\n\n[truncated to {max_bytes} bytes]\n"
+    suffix_bytes = suffix.encode("utf-8")
+    clipped_bytes = data[: max(0, max_bytes - len(suffix_bytes))]
+    return clipped_bytes.decode("utf-8", errors="ignore") + suffix
 
 
 def current_brief_text(inputs: ContextInputs) -> tuple[str | None, str | None]:
@@ -131,8 +138,7 @@ def historical_briefs(
         if relative == current_path:
             continue
         haystack = (
-            f"{relative}\n"
-            f"{path.read_text(encoding='utf-8', errors='replace')[:4000]}"
+            f"{relative}\n" f"{read_existing_file(path, DEFAULT_MAX_BRIEF_BYTES) or ''}"
         ).lower()
         if any(token in haystack for token in module_tokens):
             candidates.append(path)
@@ -168,6 +174,7 @@ def build_review_prompt(inputs: ContextInputs, *, max_historical_briefs: int) ->
     memory_required = bool(classifier.get("memory_required"))
     memory_present = bool(classifier.get("memory_present")) and current_text is not None
     memory_invalid = bool(classifier.get("memory_invalid"))
+    invalid_reason = str(classifier.get("invalid_reason") or "")
     memory_status = "present" if memory_present else "missing"
     if memory_invalid:
         memory_status = "invalid"
@@ -213,8 +220,11 @@ def build_review_prompt(inputs: ContextInputs, *, max_historical_briefs: int) ->
         )
     else:
         parts.extend(
-            ["## Author-provided review brief", "", "Memory context: missing", ""]
+            ["## Author-provided review brief", "", f"Memory context: {memory_status}"]
         )
+        if memory_invalid and invalid_reason:
+            parts.append(f"Invalid reason: {invalid_reason}")
+        parts.append("")
 
     include_historical_briefs = not (memory_required and not memory_present)
     if include_historical_briefs:

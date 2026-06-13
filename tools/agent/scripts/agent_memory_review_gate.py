@@ -140,6 +140,17 @@ def evaluate_gate(
             review_brief_match=status,
             comment_body=build_comment(False, reason, status),
         )
+    if status == "not-applicable":
+        reason = (
+            "Memory-assisted review marked brief/diff consistency as "
+            "not-applicable even though a review brief is present"
+        )
+        return ReviewGateResult(
+            gate_passed=False,
+            gate_reason=reason,
+            review_brief_match="unknown",
+            comment_body=build_comment(False, reason, "unknown"),
+        )
     if status == "unknown":
         reason = parsed_reason or "Memory-assisted review gate verdict is unknown"
         return ReviewGateResult(

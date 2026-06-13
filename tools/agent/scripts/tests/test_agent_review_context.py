@@ -92,6 +92,23 @@ class AgentReviewContextTests(unittest.TestCase):
         self.assertIn("## PR Diff", prompt)
         self.assertIn("## Findings", prompt)
 
+    def test_invalid_memory_status_is_reported_in_brief_section(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            prompt = self.build_prompt(
+                Path(temp_dir),
+                body="Review brief: docs/agent/reviews/nope.md",
+                classifier_data={
+                    "memory_required": False,
+                    "memory_present": False,
+                    "memory_invalid": True,
+                    "invalid_reason": "Review brief path must match docs/agent/reviews",
+                },
+            )
+
+        self.assertIn("- Memory context: invalid", prompt)
+        self.assertIn("Memory context: invalid", prompt)
+        self.assertIn("Invalid reason: Review brief path must match", prompt)
+
     def test_large_missing_memory_prompt_stays_under_context_limit(self) -> None:
         diff_lines = [
             "diff --git a/src/semantic-router/pkg/example.go b/src/semantic-router/pkg/example.go\n",

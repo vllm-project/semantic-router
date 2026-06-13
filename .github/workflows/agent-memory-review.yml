@@ -4,6 +4,10 @@ on:
   pull_request_target:
     types: [opened, edited, synchronize, reopened, ready_for_review]
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
 permissions:
   contents: read
   pull-requests: write
@@ -44,26 +48,6 @@ jobs:
               changed_files: files.map(file => file.filename),
               review_brief_text_by_path: {}
             };
-            const briefMatch = (pr.body || '').match(/docs\/agent\/reviews\/[0-9]{4}\/[A-Za-z0-9._/-]+\.md/);
-            if (briefMatch) {
-              const briefPath = briefMatch[0];
-              const briefFile = files.find(file => file.filename === briefPath);
-              if (briefFile || fs.existsSync(briefPath)) {
-                try {
-                  const {data} = await github.rest.repos.getContent({
-                    owner,
-                    repo,
-                    path: briefPath,
-                    ref: briefFile ? pr.head.sha : pr.base.sha
-                  });
-                  if (data && data.content) {
-                    metadata.review_brief_text_by_path[briefPath] = Buffer.from(data.content, 'base64').toString('utf8');
-                  }
-                } catch (error) {
-                  core.warning(`Could not read review brief ${briefPath}: ${error.message}`);
-                }
-              }
-            }
             const diffResponse = await github.request('GET /repos/{owner}/{repo}/pulls/{pull_number}', {
               owner,
               repo,
@@ -78,6 +62,35 @@ jobs:
           python3 tools/agent/scripts/agent_memory_classifier.py \
             --metadata agent-memory-metadata.json \
             --output agent-memory-classification.json
+
+      - name: Fetch classified review brief
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const {owner, repo} = context.repo;
+            const pr = context.payload.pull_request;
+            const metadata = JSON.parse(fs.readFileSync('agent-memory-metadata.json', 'utf8'));
+            const classification = JSON.parse(fs.readFileSync('agent-memory-classification.json', 'utf8'));
+            const briefPath = classification.memory_path;
+            if (briefPath && !classification.memory_invalid) {
+              const changedFiles = new Set(metadata.changed_files || []);
+              try {
+                const {data} = await github.rest.repos.getContent({
+                  owner,
+                  repo,
+                  path: briefPath,
+                  ref: changedFiles.has(briefPath) ? pr.head.sha : pr.base.sha
+                });
+                if (data && data.content) {
+                  metadata.review_brief_text_by_path = metadata.review_brief_text_by_path || {};
+                  metadata.review_brief_text_by_path[briefPath] = Buffer.from(data.content, 'base64').toString('utf8');
+                }
+              } catch (error) {
+                core.warning(`Could not read review brief ${briefPath}: ${error.message}`);
+              }
+            }
+            fs.writeFileSync('agent-memory-metadata.json', JSON.stringify(metadata, null, 2));
 
       - name: Build review context pack
         run: |
