@@ -63,6 +63,15 @@ func ensureStreamingState(ctx *RequestContext) {
 }
 
 func (r *OpenAIRouter) finalizeStreamingResponse(ctx *RequestContext) {
+	// Idempotency guard: finalization records completion-latency metrics,
+	// ends the inflight token, and attaches the replay body — all of which
+	// must happen exactly once. The Anthropic-client streaming cell can
+	// reach this twice for one stream (the emitter's streamDone fires on
+	// one chunk, then a later terminal chunk still matches the
+	// "data: [DONE]" guard), so a second entry must be a no-op.
+	if ctx.StreamingComplete {
+		return
+	}
 	ctx.StreamingComplete = true
 	logging.ComponentDebugEvent("extproc", "streaming_response_finalized", map[string]interface{}{
 		"model":            ctx.RequestModel,

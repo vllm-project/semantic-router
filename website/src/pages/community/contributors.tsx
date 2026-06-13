@@ -28,25 +28,47 @@ const ContributorsPage: React.FC = () => {
 
   const rangeOptions: RangeOption[] = [
     {
-      id: 'last3months',
+      id: 'v03ToNow',
       label: translate({
-        id: 'community.contributors.range.last3months.label',
-        message: 'Last 3 months',
+        id: 'community.contributors.range.v03ToNow.label',
+        message: 'v0.3 -> Now',
       }),
       caption: translate({
-        id: 'community.contributors.range.last3months.caption',
-        message: 'Default',
+        id: 'community.contributors.range.v03ToNow.caption',
+        message: 'Current release',
       }),
     },
     {
-      id: 'last365days',
+      id: 'v02ToV03',
       label: translate({
-        id: 'community.contributors.range.last365days.label',
-        message: 'Last 365 days',
+        id: 'community.contributors.range.v02ToV03.label',
+        message: 'v0.2 -> v0.3',
       }),
       caption: translate({
-        id: 'community.contributors.range.last365days.caption',
-        message: 'Trailing year',
+        id: 'community.contributors.range.v02ToV03.caption',
+        message: 'Release gap',
+      }),
+    },
+    {
+      id: 'v01ToV02',
+      label: translate({
+        id: 'community.contributors.range.v01ToV02.label',
+        message: 'v0.1 -> v0.2',
+      }),
+      caption: translate({
+        id: 'community.contributors.range.v01ToV02.caption',
+        message: 'Release gap',
+      }),
+    },
+    {
+      id: 'v0ToV01',
+      label: translate({
+        id: 'community.contributors.range.v0ToV01.label',
+        message: 'v0 -> v0.1',
+      }),
+      caption: translate({
+        id: 'community.contributors.range.v0ToV01.caption',
+        message: 'Initial release',
       }),
     },
     {
@@ -62,7 +84,7 @@ const ContributorsPage: React.FC = () => {
     },
   ]
 
-  const [selectedRange, setSelectedRange] = useState<ContributorRankRange>('last3months')
+  const [selectedRange, setSelectedRange] = useState<ContributorRankRange>('v03ToNow')
   const snapshot = contributorRankData[selectedRange]
   const topContributors = snapshot.entries.slice(0, 5)
   const selectedRangeLabel = rangeOptions.find(option => option.id === selectedRange)?.label ?? snapshot.label
@@ -151,7 +173,7 @@ const ContributorsPage: React.FC = () => {
                 value={selectedRange}
                 aria-label={translate({
                   id: 'community.contributors.range.aria',
-                  message: 'Contributor leaderboard time range',
+                  message: 'Contributor leaderboard release window',
                 })}
                 onChange={event => setSelectedRange(event.target.value as ContributorRankRange)}
               >
