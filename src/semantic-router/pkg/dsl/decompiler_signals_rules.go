@@ -215,6 +215,9 @@ func (d *decompiler) decompileAuthzSignals() {
 		if rb.Role != "" {
 			d.write("  role: %q\n", rb.Role)
 		}
+		if rb.Description != "" {
+			d.write("  description: %q\n", rb.Description)
+		}
 		if len(rb.Subjects) > 0 {
 			d.write("  subjects: [")
 			for i, subj := range rb.Subjects {

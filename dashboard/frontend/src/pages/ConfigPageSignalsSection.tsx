@@ -782,8 +782,8 @@ export default function ConfigPageSignalsSection({
       {
         name: 'aggregation_method',
         label: 'Aggregation Method (embeddings only)',
-        type: 'text',
-        placeholder: 'mean',
+        type: 'select',
+        options: ['mean', 'max', 'any'],
         shouldHide: conditionallyHideFieldExceptType('Embeddings')
       },
       {

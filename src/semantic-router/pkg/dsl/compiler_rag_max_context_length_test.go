@@ -38,6 +38,42 @@ ROUTE rag_route (description = "RAG route") {
 	}
 }
 
+func TestCompileRAGPluginReadsCacheAndConfidenceFields(t *testing.T) {
+	input := `
+SIGNAL domain test { description: "test" }
+ROUTE rag_route (description = "RAG route") {
+  PRIORITY 100
+  WHEN domain("test")
+  MODEL "m:1b"
+  PLUGIN rag {
+    enabled: true
+    backend: "milvus"
+    cache_results: true
+    cache_ttl_seconds: 60
+    min_confidence_threshold: 0.4
+  }
+}
+`
+	cfg := mustCompile(t, input)
+	ragCfg := mustExtractRAGPluginConfig(t, cfg)
+
+	if !ragCfg.CacheResults {
+		t.Fatal("expected CacheResults to be true")
+	}
+	if ragCfg.CacheTTLSeconds == nil {
+		t.Fatal("expected CacheTTLSeconds to be set, got nil")
+	}
+	if *ragCfg.CacheTTLSeconds != 60 {
+		t.Errorf("CacheTTLSeconds: want 60, got %d", *ragCfg.CacheTTLSeconds)
+	}
+	if ragCfg.MinConfidenceThreshold == nil {
+		t.Fatal("expected MinConfidenceThreshold to be set, got nil")
+	}
+	if *ragCfg.MinConfidenceThreshold != 0.4 {
+		t.Errorf("MinConfidenceThreshold: want 0.4, got %v", *ragCfg.MinConfidenceThreshold)
+	}
+}
+
 // TestCompileRAGPluginOmitsMaxContextLengthWhenAbsent documents the
 // omit-default contract: when the DSL author does not specify
 // max_context_length, the compiled runtime config carries a nil pointer
