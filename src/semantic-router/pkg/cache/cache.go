@@ -106,6 +106,12 @@ func CacheScopeNamespaceOf(query string) string {
 // alone does not separate users reliably for long queries). Two unscoped
 // queries share the empty global scope; a scoped query never matches an
 // unscoped one.
+//
+// This is a convenience helper for backends that compare two raw queries
+// (e.g. Redis/Milvus/Qdrant/Valkey, when they adopt the gate). The in-memory
+// search path intentionally does NOT use it: it recovers the requester's
+// namespace once via CacheScopeNamespaceOf and compares that against each
+// candidate, instead of re-parsing the full query on both sides per entry.
 func SameCacheScope(a, b string) bool {
 	return CacheScopeNamespaceOf(a) == CacheScopeNamespaceOf(b)
 }

@@ -33,9 +33,37 @@ func (c *InMemoryCache) refreshHNSWIfStaleDuringSearch() {
 	c.mu.RLock()
 }
 
+// entryEligible reports whether an entry may be returned as a search match for
+// the requester's scope (ok), and separately whether it was skipped because it
+// has expired (expired). The two search paths share it so the per-candidate
+// skip logic — and the security-critical scope gate in particular — lives in
+// exactly one place that neither path can silently drop.
+//
+// The check order is load-bearing:
+//  1. entries without a stored response are not matchable;
+//  2. the hard user-scope gate (see CacheScopeNamespaceOf) drops a different
+//     user's entry BEFORE the expiry check, so an out-of-scope entry never
+//     counts toward expiredCount;
+//  3. expired entries are not matchable but are reported via expired=true so
+//     the caller can tally them.
+func (c *InMemoryCache) entryEligible(entry CacheEntry, scopeNamespace string, now time.Time) (ok bool, expired bool) {
+	if entry.ResponseBody == nil {
+		return false, false
+	}
+	// Hard user-scope gate: never return another user's entry even if its
+	// embedding is the nearest neighbor.
+	if CacheScopeNamespaceOf(entry.Query) != scopeNamespace {
+		return false, false
+	}
+	if c.isExpired(entry, now) {
+		return false, true
+	}
+	return true, false
+}
+
 func (c *InMemoryCache) scanHNSWCandidates(
 	queryEmbedding []float32,
-	queryScope string,
+	scopeNamespace string,
 	now time.Time,
 ) (bestIndex int, bestSimilarity float32, entriesChecked int, expiredCount int) {
 	bestIndex = -1
@@ -45,16 +73,11 @@ func (c *InMemoryCache) scanHNSWCandidates(
 			continue
 		}
 		entry := c.entries[entryIndex]
-		if entry.ResponseBody == nil {
-			continue
-		}
-		// Hard user-scope gate: never return another user's entry even if its
-		// embedding is the nearest neighbor (see SameCacheScope).
-		if CacheScopeNamespaceOf(entry.Query) != queryScope {
-			continue
-		}
-		if c.isExpired(entry, now) {
+		ok, expired := c.entryEligible(entry, scopeNamespace, now)
+		if expired {
 			expiredCount++
+		}
+		if !ok {
 			continue
 		}
 		dotProduct := embeddingDotProduct(queryEmbedding, entry.Embedding)
@@ -70,21 +93,16 @@ func (c *InMemoryCache) scanHNSWCandidates(
 
 func (c *InMemoryCache) scanLinearForSimilarity(
 	queryEmbedding []float32,
-	queryScope string,
+	scopeNamespace string,
 	now time.Time,
 ) (bestIndex int, bestSimilarity float32, entriesChecked int, expiredCount int) {
 	bestIndex = -1
 	for entryIndex, entry := range c.entries {
-		if entry.ResponseBody == nil {
-			continue
-		}
-		// Hard user-scope gate: never return another user's entry even if its
-		// embedding is the nearest neighbor (see SameCacheScope).
-		if CacheScopeNamespaceOf(entry.Query) != queryScope {
-			continue
-		}
-		if c.isExpired(entry, now) {
+		ok, expired := c.entryEligible(entry, scopeNamespace, now)
+		if expired {
 			expiredCount++
+		}
+		if !ok {
 			continue
 		}
 		dotProduct := embeddingDotProduct(queryEmbedding, entry.Embedding)
@@ -134,7 +152,7 @@ func (c *InMemoryCache) FindSimilarWithThreshold(model string, query string, thr
 	)
 }
 
-func (c *InMemoryCache) runFindSimilarEmbeddingSearch(queryEmbedding []float32, queryScope string) (
+func (c *InMemoryCache) runFindSimilarEmbeddingSearch(queryEmbedding []float32, scopeNamespace string) (
 	bestIndex int,
 	bestEntry CacheEntry,
 	bestSimilarity float32,
@@ -145,9 +163,9 @@ func (c *InMemoryCache) runFindSimilarEmbeddingSearch(queryEmbedding []float32, 
 	now := time.Now()
 	if c.useHNSW && c.hnswIndex != nil {
 		c.refreshHNSWIfStaleDuringSearch()
-		bestIndex, bestSimilarity, entriesChecked, expiredCount = c.scanHNSWCandidates(queryEmbedding, queryScope, now)
+		bestIndex, bestSimilarity, entriesChecked, expiredCount = c.scanHNSWCandidates(queryEmbedding, scopeNamespace, now)
 	} else {
-		bestIndex, bestSimilarity, entriesChecked, expiredCount = c.scanLinearForSimilarity(queryEmbedding, queryScope, now)
+		bestIndex, bestSimilarity, entriesChecked, expiredCount = c.scanLinearForSimilarity(queryEmbedding, scopeNamespace, now)
 	}
 	if bestIndex >= 0 {
 		bestEntry = c.entries[bestIndex]
