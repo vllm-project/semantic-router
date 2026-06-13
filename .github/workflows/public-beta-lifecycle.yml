@@ -1,0 +1,835 @@
+name: "Public Beta: PR Lifecycle Manager"
+
+# This workflow manages the entire lifecycle of public beta instances
+# - PR approved → Instance created
+# - PR synchronized (new commits) → Instance configuration updated
+# - PR closed/merged → Instance deleted
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, closed]
+    branches:
+      - main
+    paths:
+      - 'public-betas/**'
+      - '!public-betas/README.md'
+      - '!public-betas/_template/**'
+  
+  pull_request_review:
+    types: [submitted]
+
+permissions:
+  contents: read
+  pull-requests: write
+  actions: write
+
+# Only one lifecycle action per PR at a time
+concurrency:
+  group: public-beta-lifecycle-pr-${{ github.event.pull_request.number }}
+  cancel-in-progress: false
+
+env:
+  # Store droplet ID in a file artifact for persistence across workflow runs
+  DROPLET_STATE_KEY: public-beta-pr-${{ github.event.pull_request.number }}
+
+jobs:
+  # ==========================================================================
+  # DETECT CHANGES AND VALIDATE
+  # ==========================================================================
+  detect:
+    name: Detect Beta Configuration
+    runs-on: ubuntu-latest
+    outputs:
+      beta_name: ${{ steps.detect.outputs.beta_name }}
+      beta_path: ${{ steps.detect.outputs.beta_path }}
+      is_valid: ${{ steps.validate.outputs.is_valid }}
+      owners: ${{ steps.validate.outputs.owners }}
+      region: ${{ steps.validate.outputs.region }}
+      size: ${{ steps.validate.outputs.size }}
+      model: ${{ steps.validate.outputs.model }}
+      tp_size: ${{ steps.validate.outputs.tp_size }}
+      pr_approved: ${{ steps.check-approval.outputs.approved }}
+      action_type: ${{ steps.determine-action.outputs.action }}
+    
+    steps:
+      - name: Check out the repo
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Detect changed beta directories
+        id: detect
+        run: |
+          if [ "${{ github.event_name }}" = "pull_request" ] && [ "${{ github.event.action }}" = "closed" ]; then
+            # For closed PRs, we need to detect from the PR's head
+            changed_files=$(git diff --name-only ${{ github.event.pull_request.base.sha }} ${{ github.event.pull_request.head.sha }} -- 'public-betas/' | grep -v 'README.md' | grep -v '_template/' || true)
+          else
+            changed_files=$(git diff --name-only ${{ github.event.pull_request.base.sha }} ${{ github.sha }} -- 'public-betas/' | grep -v 'README.md' | grep -v '_template/' || true)
+          fi
+          
+          if [ -z "$changed_files" ]; then
+            echo "No public beta changes detected"
+            echo "beta_name=" >> $GITHUB_OUTPUT
+            echo "beta_path=" >> $GITHUB_OUTPUT
+            exit 0
+          fi
+          
+          echo "Changed files:"
+          echo "$changed_files"
+          
+          beta_dirs=$(echo "$changed_files" | cut -d'/' -f2 | sort -u)
+          beta_count=$(echo "$beta_dirs" | wc -l)
+          
+          if [ "$beta_count" -gt 1 ]; then
+            echo "::error::Multiple beta directories modified in single PR. Please submit separate PRs."
+            exit 1
+          fi
+          
+          beta_name=$(echo "$beta_dirs" | head -1)
+          beta_path="public-betas/$beta_name"
+          
+          echo "beta_name=$beta_name" >> $GITHUB_OUTPUT
+          echo "beta_path=$beta_path" >> $GITHUB_OUTPUT
+
+      - name: Install yq
+        if: steps.detect.outputs.beta_name != ''
+        run: |
+          sudo wget -qO /usr/local/bin/yq https://github.com/mikefarah/yq/releases/latest/download/yq_linux_amd64
+          sudo chmod +x /usr/local/bin/yq
+
+      - name: Validate configuration
+        id: validate
+        if: steps.detect.outputs.beta_name != '' && github.event.action != 'closed'
+        run: |
+          config_file="${{ steps.detect.outputs.beta_path }}/config.yaml"
+          
+          if [ ! -f "$config_file" ]; then
+            echo "::error::Config file not found: $config_file"
+            echo "is_valid=false" >> $GITHUB_OUTPUT
+            exit 1
+          fi
+          
+          # Validate YAML syntax
+          if ! yq eval '.' "$config_file" > /dev/null 2>&1; then
+            echo "::error::Invalid YAML syntax"
+            echo "is_valid=false" >> $GITHUB_OUTPUT
+            exit 1
+          fi
+          
+          # Extract values
+          name=$(yq eval '.name' "$config_file")
+          owners=$(yq eval '.owners | join(",")' "$config_file")
+          region=$(yq eval '.instance.region' "$config_file")
+          size=$(yq eval '.instance.size' "$config_file")
+          model=$(yq eval '.vllm.model // "Qwen/Qwen2.5-7B-Instruct"' "$config_file")
+          tp_size=$(yq eval '.vllm.tensor_parallel_size // 1' "$config_file")
+          
+          errors=""
+          
+          # Validate name matches directory
+          expected_name="${{ steps.detect.outputs.beta_name }}"
+          if [ "$name" != "$expected_name" ]; then
+            errors="$errors\n- name '$name' must match directory name '$expected_name'"
+          fi
+          
+          # Validate owners exist
+          if [ "$owners" = "" ] || [ "$owners" = "null" ]; then
+            errors="$errors\n- at least one owner is required"
+          fi
+          
+          # Validate region (DigitalOcean GPU regions)
+          valid_regions="nyc1 nyc3 sfo2 sfo3 ams3 tor1"
+          if ! echo "$valid_regions" | grep -qw "$region"; then
+            errors="$errors\n- invalid region '$region'. Valid GPU regions: $valid_regions"
+          fi
+          
+          # Validate size (AMD GPU droplets)
+          valid_sizes="gpu-h100x1-80gb gpu-h100x8-640gb gd-40vcpu-160gb-400gb-1x-amd-mi300x gd-intel-xeon-32vcpu-128gb s-1vcpu-1gb"
+          if ! echo "$valid_sizes" | grep -qw "$size"; then
+            errors="$errors\n- invalid size '$size'"
+          fi
+          
+          if [ -n "$errors" ]; then
+            echo "::error::Validation failed:$errors"
+            echo "is_valid=false" >> $GITHUB_OUTPUT
+            exit 1
+          fi
+          
+          echo "is_valid=true" >> $GITHUB_OUTPUT
+          echo "owners=$owners" >> $GITHUB_OUTPUT
+          echo "region=$region" >> $GITHUB_OUTPUT
+          echo "size=$size" >> $GITHUB_OUTPUT
+          echo "model=$model" >> $GITHUB_OUTPUT
+          echo "tp_size=$tp_size" >> $GITHUB_OUTPUT
+
+      - name: Check PR approval status
+        id: check-approval
+        if: steps.detect.outputs.beta_name != ''
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          pr_number="${{ github.event.pull_request.number }}"
+          
+          # Check if this is an approval event
+          if [ "${{ github.event_name }}" = "pull_request_review" ]; then
+            if [ "${{ github.event.review.state }}" = "approved" ]; then
+              echo "✅ PR just approved"
+              echo "approved=true" >> $GITHUB_OUTPUT
+              exit 0
+            fi
+          fi
+          
+          # Check existing approvals
+          reviews=$(gh pr view "$pr_number" --json reviews --jq '[.reviews[] | select(.state == "APPROVED")] | length')
+          
+          if [ "$reviews" -gt 0 ]; then
+            echo "✅ PR has $reviews approval(s)"
+            echo "approved=true" >> $GITHUB_OUTPUT
+          else
+            echo "⏳ PR not yet approved"
+            echo "approved=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Determine action type
+        id: determine-action
+        if: steps.detect.outputs.beta_name != ''
+        run: |
+          event="${{ github.event_name }}"
+          action="${{ github.event.action }}"
+          approved="${{ steps.check-approval.outputs.approved }}"
+          
+          echo "Event: $event, Action: $action, Approved: $approved"
+          
+          if [ "$action" = "closed" ]; then
+            echo "action=delete" >> $GITHUB_OUTPUT
+            echo "📛 PR closed - will delete instance"
+          elif [ "$event" = "pull_request_review" ] && [ "${{ github.event.review.state }}" = "approved" ]; then
+            echo "action=create" >> $GITHUB_OUTPUT
+            echo "🚀 PR approved - will create instance"
+          elif [ "$action" = "synchronize" ] && [ "$approved" = "true" ]; then
+            echo "action=update" >> $GITHUB_OUTPUT
+            echo "🔄 PR updated - will sync configuration"
+          elif [ "$action" = "opened" ] || [ "$action" = "reopened" ]; then
+            echo "action=validate" >> $GITHUB_OUTPUT
+            echo "✅ PR opened - validation only"
+          else
+            echo "action=none" >> $GITHUB_OUTPUT
+            echo "ℹ️ No action needed"
+          fi
+
+  # ==========================================================================
+  # CREATE INSTANCE (on PR approval)
+  # ==========================================================================
+  create-instance:
+    name: Create GPU Instance
+    needs: detect
+    if: needs.detect.outputs.action_type == 'create' && needs.detect.outputs.is_valid == 'true'
+    runs-on: ubuntu-latest
+    outputs:
+      droplet_id: ${{ steps.create.outputs.droplet_id }}
+      droplet_ip: ${{ steps.create.outputs.droplet_ip }}
+    
+    steps:
+      - name: Check out the repo
+        uses: actions/checkout@v4
+
+      - name: Create DigitalOcean Droplet
+        id: create
+        env:
+          DO_TOKEN: ${{ secrets.DO_PERSONAL_ACCESS_TOKEN }}
+        run: |
+          pr_number="${{ github.event.pull_request.number }}"
+          beta_name="${{ needs.detect.outputs.beta_name }}"
+          region="${{ needs.detect.outputs.region }}"
+          size="${{ needs.detect.outputs.size }}"
+          
+          droplet_name="public-beta-pr-${pr_number}"
+          
+          echo "Creating droplet: $droplet_name"
+          echo "Region: $region, Size: $size"
+          
+          # Get SSH key IDs
+          ssh_keys=$(curl -s -X GET \
+            -H "Authorization: Bearer $DO_TOKEN" \
+            "https://api.digitalocean.com/v2/account/keys" | \
+            jq -r '[.ssh_keys[].id] | join(",")')
+          
+          # Create droplet with cloud-init user data
+          user_data=$(cat << 'USERDATA'
+          #!/bin/bash
+          set -e
+          
+          # Wait for cloud-init to complete
+          cloud-init status --wait
+          
+          # Install basic dependencies
+          apt-get update
+          apt-get install -y curl wget git jq docker.io docker-compose-v2 ufw
+          
+          # Start Docker
+          systemctl enable docker
+          systemctl start docker
+          
+          # Setup UFW firewall
+          ufw default deny incoming
+          ufw default allow outgoing
+          ufw allow ssh
+          ufw allow 8080/tcp comment 'Semantic Router API'
+          ufw allow 8801/tcp comment 'Envoy Proxy'
+          ufw allow 9190/tcp comment 'Metrics'
+          ufw --force enable
+          
+          # Create working directory
+          mkdir -p /opt/semantic-router
+          
+          # Signal ready
+          touch /opt/semantic-router/.cloud-init-complete
+          USERDATA
+          )
+          
+          # Create the droplet
+          response=$(curl -s -X POST \
+            -H "Content-Type: application/json" \
+            -H "Authorization: Bearer $DO_TOKEN" \
+            -d "{
+              \"name\": \"$droplet_name\",
+              \"region\": \"$region\",
+              \"size\": \"$size\",
+              \"image\": \"ubuntu-22-04-x64\",
+              \"ssh_keys\": [$ssh_keys],
+              \"tags\": [\"public-beta\", \"semantic-router\", \"pr-$pr_number\"],
+              \"user_data\": $(echo "$user_data" | jq -Rs .)
+            }" \
+            "https://api.digitalocean.com/v2/droplets")
+          
+          droplet_id=$(echo "$response" | jq -r '.droplet.id')
+          
+          if [ "$droplet_id" = "null" ] || [ -z "$droplet_id" ]; then
+            echo "::error::Failed to create droplet: $response"
+            exit 1
+          fi
+          
+          echo "Droplet created with ID: $droplet_id"
+          echo "droplet_id=$droplet_id" >> $GITHUB_OUTPUT
+          
+          # Wait for droplet to be active and get IP
+          echo "Waiting for droplet to be active..."
+          for i in {1..60}; do
+            status=$(curl -s \
+              -H "Authorization: Bearer $DO_TOKEN" \
+              "https://api.digitalocean.com/v2/droplets/$droplet_id" | \
+              jq -r '.droplet.status')
+            
+            if [ "$status" = "active" ]; then
+              break
+            fi
+            echo "Status: $status (attempt $i/60)"
+            sleep 10
+          done
+          
+          # Get IP address
+          droplet_ip=$(curl -s \
+            -H "Authorization: Bearer $DO_TOKEN" \
+            "https://api.digitalocean.com/v2/droplets/$droplet_id" | \
+            jq -r '.droplet.networks.v4[] | select(.type == "public") | .ip_address')
+          
+          echo "Droplet IP: $droplet_ip"
+          echo "droplet_ip=$droplet_ip" >> $GITHUB_OUTPUT
+
+      - name: Wait for cloud-init
+        run: |
+          droplet_ip="${{ steps.create.outputs.droplet_ip }}"
+          
+          echo "Waiting for cloud-init to complete on $droplet_ip..."
+          
+          # Wait for SSH to be available
+          for i in {1..30}; do
+            if ssh -o StrictHostKeyChecking=no -o ConnectTimeout=5 root@$droplet_ip "test -f /opt/semantic-router/.cloud-init-complete" 2>/dev/null; then
+              echo "✅ Cloud-init complete"
+              break
+            fi
+            echo "Waiting for cloud-init (attempt $i/30)..."
+            sleep 10
+          done
+        env:
+          SSH_PRIVATE_KEY: ${{ secrets.DO_SSH_PRIVATE_KEY }}
+
+      - name: Save droplet state
+        uses: actions/cache/save@v4
+        with:
+          path: |
+            droplet-state.json
+          key: ${{ env.DROPLET_STATE_KEY }}-${{ github.run_id }}
+        env:
+          DROPLET_STATE: |
+            {
+              "droplet_id": "${{ steps.create.outputs.droplet_id }}",
+              "droplet_ip": "${{ steps.create.outputs.droplet_ip }}",
+              "pr_number": "${{ github.event.pull_request.number }}",
+              "beta_name": "${{ needs.detect.outputs.beta_name }}",
+              "created_at": "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+            }
+
+      - name: Create state file
+        run: |
+          cat > droplet-state.json << EOF
+          {
+            "droplet_id": "${{ steps.create.outputs.droplet_id }}",
+            "droplet_ip": "${{ steps.create.outputs.droplet_ip }}",
+            "pr_number": "${{ github.event.pull_request.number }}",
+            "beta_name": "${{ needs.detect.outputs.beta_name }}",
+            "created_at": "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          }
+          EOF
+
+  # ==========================================================================
+  # DEPLOY SERVICES (after instance creation or on config update)
+  # ==========================================================================
+  deploy:
+    name: Deploy Services
+    needs: [detect, create-instance]
+    if: always() && (needs.create-instance.result == 'success' || needs.detect.outputs.action_type == 'update')
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Check out the repo
+        uses: actions/checkout@v4
+
+      - name: Get droplet info
+        id: get-droplet
+        env:
+          DO_TOKEN: ${{ secrets.DO_PERSONAL_ACCESS_TOKEN }}
+        run: |
+          pr_number="${{ github.event.pull_request.number }}"
+          
+          # If this is an update, find existing droplet
+          if [ "${{ needs.detect.outputs.action_type }}" = "update" ]; then
+            droplet=$(curl -s \
+              -H "Authorization: Bearer $DO_TOKEN" \
+              "https://api.digitalocean.com/v2/droplets?tag_name=pr-$pr_number" | \
+              jq -r '.droplets[0]')
+            
+            droplet_id=$(echo "$droplet" | jq -r '.id')
+            droplet_ip=$(echo "$droplet" | jq -r '.networks.v4[] | select(.type == "public") | .ip_address')
+          else
+            droplet_id="${{ needs.create-instance.outputs.droplet_id }}"
+            droplet_ip="${{ needs.create-instance.outputs.droplet_ip }}"
+          fi
+          
+          echo "droplet_id=$droplet_id" >> $GITHUB_OUTPUT
+          echo "droplet_ip=$droplet_ip" >> $GITHUB_OUTPUT
+
+      - name: Install yq
+        run: |
+          sudo wget -qO /usr/local/bin/yq https://github.com/mikefarah/yq/releases/latest/download/yq_linux_amd64
+          sudo chmod +x /usr/local/bin/yq
+
+      - name: Prepare deployment package
+        run: |
+          beta_path="${{ needs.detect.outputs.beta_path }}"
+          model="${{ needs.detect.outputs.model }}"
+          tp_size="${{ needs.detect.outputs.tp_size }}"
+          
+          mkdir -p deploy-package
+          
+          # Copy config files
+          cp -r config deploy-package/
+          
+          # Process semantic router config
+          config_source=$(yq eval '.semantic_router.config_source // "default"' "$beta_path/config.yaml")
+          
+          if [ "$config_source" = "custom" ]; then
+            yq eval-all 'select(fileIndex == 0) * select(fileIndex == 1).semantic_router.custom_config' \
+              config/config.yaml "$beta_path/config.yaml" > deploy-package/config/config.yaml
+          fi
+          
+          # Update vLLM endpoint to point to local container
+          yq eval -i '.vllm_endpoints = [{"name": "local-gpu", "address": "vllm", "port": 8000, "weight": 1}]' \
+            deploy-package/config/config.yaml
+          
+          # Create docker-compose for AMD GPU (ROCm)
+          model_dir=$(echo "$model" | tr '/' '_')
+          
+          cat > deploy-package/docker-compose.yml << EOF
+          services:
+            vllm:
+              image: rocm/vllm:latest
+              container_name: vllm
+              restart: unless-stopped
+              ports:
+                - "8000:8000"
+              volumes:
+                - /data/models:/models:ro
+                - /dev/kfd:/dev/kfd
+                - /dev/dri:/dev/dri
+              environment:
+                - HF_TOKEN=\${HF_TOKEN}
+                - HUGGINGFACE_HUB_TOKEN=\${HUGGINGFACE_HUB_TOKEN}
+                - HSA_OVERRIDE_GFX_VERSION=11.0.0
+              command: >
+                --model /models/$model_dir
+                --tensor-parallel-size $tp_size
+                --gpu-memory-utilization 0.9
+                --max-model-len 32768
+                --host 0.0.0.0
+                --port 8000
+              group_add:
+                - video
+                - render
+              devices:
+                - /dev/kfd
+                - /dev/dri
+              security_opt:
+                - seccomp:unconfined
+              healthcheck:
+                test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+                interval: 30s
+                timeout: 10s
+                retries: 5
+                start_period: 300s
+            
+            semantic-router:
+              image: ghcr.io/vllm-project/semantic-router/extproc:latest
+              container_name: semantic-router
+              restart: unless-stopped
+              ports:
+                - "8080:8080"
+                - "50051:50051"
+                - "9190:9190"
+              volumes:
+                - ./config:/app/config:ro
+                - /data/models:/app/models:rw
+              environment:
+                - HF_TOKEN=\${HF_TOKEN}
+                - HUGGINGFACE_HUB_TOKEN=\${HUGGINGFACE_HUB_TOKEN}
+              depends_on:
+                vllm:
+                  condition: service_healthy
+              healthcheck:
+                test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+                interval: 30s
+                timeout: 10s
+                retries: 5
+                start_period: 120s
+            
+            envoy:
+              image: envoyproxy/envoy:v1.31-latest
+              container_name: envoy-proxy
+              restart: unless-stopped
+              ports:
+                - "8801:8801"
+                - "19000:19000"
+              volumes:
+                - ./config/envoy.yaml:/etc/envoy/envoy.yaml:ro
+              depends_on:
+                semantic-router:
+                  condition: service_healthy
+          EOF
+          
+          # Create deployment script
+          cat > deploy-package/deploy.sh << 'DEPLOY'
+          #!/bin/bash
+          set -e
+          
+          cd /opt/semantic-router
+          
+          # Download model if not exists
+          MODEL="${MODEL_ID}"
+          MODEL_DIR=$(echo "$MODEL" | tr '/' '_')
+          
+          if [ ! -d "/data/models/$MODEL_DIR" ]; then
+            echo "Downloading model: $MODEL"
+            pip install -U huggingface_hub[cli] hf_transfer
+            mkdir -p /data/models
+            HF_HUB_ENABLE_HF_TRANSFER=1 huggingface-cli download "$MODEL" --local-dir "/data/models/$MODEL_DIR"
+          fi
+          
+          # Setup UFW rules
+          ufw status | grep -q "Status: active" || {
+            ufw default deny incoming
+            ufw default allow outgoing
+            ufw allow ssh
+            ufw allow 8080/tcp comment 'Semantic Router API'
+            ufw allow 8801/tcp comment 'Envoy Proxy'
+            ufw allow 9190/tcp comment 'Metrics'
+            ufw --force enable
+          }
+          
+          # Stop existing services
+          docker compose down 2>/dev/null || true
+          
+          # Start services
+          docker compose up -d
+          
+          echo "Deployment complete"
+          DEPLOY
+          
+          chmod +x deploy-package/deploy.sh
+          
+          # Create tarball
+          tar -czvf deploy-package.tar.gz -C deploy-package .
+
+      - name: Deploy to instance
+        env:
+          SSH_PRIVATE_KEY: ${{ secrets.DO_SSH_PRIVATE_KEY }}
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}
+        run: |
+          droplet_ip="${{ steps.get-droplet.outputs.droplet_ip }}"
+          model="${{ needs.detect.outputs.model }}"
+          
+          # Setup SSH
+          mkdir -p ~/.ssh
+          echo "$SSH_PRIVATE_KEY" > ~/.ssh/id_rsa
+          chmod 600 ~/.ssh/id_rsa
+          ssh-keyscan -H "$droplet_ip" >> ~/.ssh/known_hosts 2>/dev/null || true
+          
+          # Copy deployment package
+          scp -o StrictHostKeyChecking=no deploy-package.tar.gz root@$droplet_ip:/tmp/
+          
+          # Extract and deploy
+          ssh -o StrictHostKeyChecking=no root@$droplet_ip << EOF
+          set -e
+          cd /opt/semantic-router
+          tar -xzvf /tmp/deploy-package.tar.gz
+          
+          export HF_TOKEN="$HF_TOKEN"
+          export HUGGINGFACE_HUB_TOKEN="$HF_TOKEN"
+          export MODEL_ID="$model"
+          
+          ./deploy.sh
+          EOF
+
+      - name: Wait for services
+        run: |
+          droplet_ip="${{ steps.get-droplet.outputs.droplet_ip }}"
+          
+          echo "Waiting for services to be healthy..."
+          
+          for i in {1..60}; do
+            if curl -sf "http://$droplet_ip:8080/health" > /dev/null 2>&1; then
+              echo "✅ Semantic Router is healthy"
+              if curl -sf "http://$droplet_ip:8000/health" > /dev/null 2>&1; then
+                echo "✅ vLLM is healthy"
+                echo "🎉 All services are ready!"
+                exit 0
+              fi
+            fi
+            echo "Waiting for services (attempt $i/60)..."
+            sleep 15
+          done
+          
+          echo "::warning::Services may not be fully healthy yet"
+
+      - name: Post deployment comment
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const dropletIp = '${{ steps.get-droplet.outputs.droplet_ip }}';
+            const dropletId = '${{ steps.get-droplet.outputs.droplet_id }}';
+            const betaName = '${{ needs.detect.outputs.beta_name }}';
+            const model = '${{ needs.detect.outputs.model }}';
+            const actionType = '${{ needs.detect.outputs.action_type }}';
+            
+            let title = actionType === 'create' ? '🚀 Instance Created' : '🔄 Configuration Updated';
+            
+            const body = `## ${title}: \`${betaName}\`
+            
+            ### Instance Details
+            
+            | Field | Value |
+            |-------|-------|
+            | **Droplet ID** | \`${dropletId}\` |
+            | **IP Address** | \`${dropletIp}\` |
+            | **Model** | \`${model}\` |
+            | **PR** | #${{ github.event.pull_request.number }} |
+            
+            ### Access Endpoints
+            
+            | Endpoint | URL |
+            |----------|-----|
+            | **Chat API** | \`http://${dropletIp}:8801/v1/chat/completions\` |
+            | **vLLM Direct** | \`http://${dropletIp}:8000/v1/completions\` |
+            | **Health** | \`http://${dropletIp}:8080/health\` |
+            | **Metrics** | \`http://${dropletIp}:9190/metrics\` |
+            
+            ### SSH Access
+            
+            \`\`\`bash
+            ssh root@${dropletIp}
+            \`\`\`
+            
+            ### Example Request
+            
+            \`\`\`bash
+            curl -X POST http://${dropletIp}:8801/v1/chat/completions \\
+              -H "Content-Type: application/json" \\
+              -d '{
+                "model": "${model.split('/').pop()}",
+                "messages": [{"role": "user", "content": "Hello!"}]
+              }'
+            \`\`\`
+            
+            ### Lifecycle
+            
+            - ✅ Instance is running
+            - 🔄 Push commits to this PR to update configuration
+            - 🗑️ Close or merge this PR to delete the instance
+            `;
+            
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+              body: body
+            });
+
+  # ==========================================================================
+  # DELETE INSTANCE (on PR close/merge)
+  # ==========================================================================
+  delete-instance:
+    name: Delete Instance
+    needs: detect
+    if: needs.detect.outputs.action_type == 'delete'
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Find and delete droplet
+        env:
+          DO_TOKEN: ${{ secrets.DO_PERSONAL_ACCESS_TOKEN }}
+        run: |
+          pr_number="${{ github.event.pull_request.number }}"
+          
+          echo "Finding droplet for PR #$pr_number..."
+          
+          # Find droplet by tag
+          droplet=$(curl -s \
+            -H "Authorization: Bearer $DO_TOKEN" \
+            "https://api.digitalocean.com/v2/droplets?tag_name=pr-$pr_number" | \
+            jq -r '.droplets[0]')
+          
+          droplet_id=$(echo "$droplet" | jq -r '.id')
+          
+          if [ "$droplet_id" = "null" ] || [ -z "$droplet_id" ]; then
+            echo "No droplet found for PR #$pr_number"
+            exit 0
+          fi
+          
+          echo "Deleting droplet $droplet_id..."
+          
+          response=$(curl -s -X DELETE \
+            -H "Authorization: Bearer $DO_TOKEN" \
+            "https://api.digitalocean.com/v2/droplets/$droplet_id" \
+            -w "%{http_code}")
+          
+          if [ "$response" = "204" ]; then
+            echo "✅ Droplet $droplet_id deleted successfully"
+          else
+            echo "::warning::Unexpected response when deleting droplet: $response"
+          fi
+
+      - name: Post deletion comment
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const prMerged = ${{ github.event.pull_request.merged }};
+            const status = prMerged ? 'merged' : 'closed';
+            
+            const body = `## 🗑️ Instance Deleted
+            
+            The public beta instance has been **deleted** because this PR was ${status}.
+            
+            | Field | Value |
+            |-------|-------|
+            | **PR Status** | ${status} |
+            | **Deleted At** | ${new Date().toISOString()} |
+            
+            Thank you for using the public beta system!
+            `;
+            
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+              body: body
+            });
+
+  # ==========================================================================
+  # VALIDATION ONLY (for non-approved PRs)
+  # ==========================================================================
+  post-validation:
+    name: Post Validation Status
+    needs: detect
+    if: needs.detect.outputs.action_type == 'validate' && needs.detect.outputs.beta_name != ''
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Post validation comment
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const betaName = '${{ needs.detect.outputs.beta_name }}';
+            const isValid = '${{ needs.detect.outputs.is_valid }}' === 'true';
+            const owners = '${{ needs.detect.outputs.owners }}'.split(',').filter(o => o);
+            
+            let body;
+            
+            if (isValid) {
+              body = `## ✅ Public Beta Configuration Valid: \`${betaName}\`
+              
+              ### Configuration Summary
+              
+              | Field | Value |
+              |-------|-------|
+              | **Beta Name** | \`${betaName}\` |
+              | **Owners** | ${owners.map(o => \`@\${o}\`).join(', ')} |
+              | **Region** | \`${{ needs.detect.outputs.region }}\` |
+              | **Size** | \`${{ needs.detect.outputs.size }}\` |
+              | **Model** | \`${{ needs.detect.outputs.model }}\` |
+              
+              ### Next Steps
+              
+              1. ⏳ **Wait for approval** - A maintainer needs to approve this PR
+              2. 🚀 **Auto-provisioning** - Once approved, the GPU instance will be created automatically
+              3. 📝 **Access details** - Connection info will be posted as a comment
+              
+              ### Lifecycle
+              
+              - **PR Approved** → Instance created automatically
+              - **PR Updated** → Configuration synced to instance  
+              - **PR Closed/Merged** → Instance deleted automatically
+              `;
+            } else {
+              body = `## ❌ Configuration Validation Failed: \`${betaName}\`
+              
+              Please check the workflow logs and fix the configuration issues.
+              `;
+            }
+            
+            // Find and update existing comment or create new one
+            const { data: comments } = await github.rest.issues.listComments({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+            });
+            
+            const botComment = comments.find(c => 
+              c.user.type === 'Bot' && 
+              c.body.includes('Public Beta Configuration')
+            );
+            
+            if (botComment) {
+              await github.rest.issues.updateComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                comment_id: botComment.id,
+                body: body
+              });
+            } else {
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: context.issue.number,
+                body: body
+              });
+            }
+
