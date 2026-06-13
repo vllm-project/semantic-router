@@ -41,7 +41,7 @@ func (r *OpenAIRouter) setReasoningModeToRequestBodyForProvider(
 	if enabled {
 		r.applyEnabledReasoningMutation(mutation, familyConfig, categoryName, profile)
 	} else {
-		applyDisabledReasoningMutation(mutation, familyConfig, profile)
+		r.applyDisabledReasoningMutation(mutation, familyConfig, profile)
 	}
 
 	logReasoningMutation(mutation, enabled)
@@ -108,6 +108,11 @@ func (r *OpenAIRouter) applyEnabledReasoningMutation(
 	if familyConfig == nil {
 		return
 	}
+	if r.usesDeepSeekOfficialReasoning(mutation.model, familyConfig, profile) {
+		effort := r.getReasoningEffort(categoryName, mutation.model)
+		applyDeepSeekOfficialReasoningMutation(mutation, true, effort)
+		return
+	}
 	switch familyConfig.Type {
 	case "chat_template_kwargs":
 		mutation.chatTemplateKwargs[familyConfig.Parameter] = true
@@ -123,12 +128,16 @@ func (r *OpenAIRouter) applyEnabledReasoningMutation(
 	}
 }
 
-func applyDisabledReasoningMutation(
+func (r *OpenAIRouter) applyDisabledReasoningMutation(
 	mutation *reasoningRequestMutation,
 	familyConfig *config.ReasoningFamilyConfig,
 	profile *config.ProviderProfile,
 ) {
 	if familyConfig == nil {
+		return
+	}
+	if r.usesDeepSeekOfficialReasoning(mutation.model, familyConfig, profile) {
+		applyDeepSeekOfficialReasoningMutation(mutation, false, "")
 		return
 	}
 	switch familyConfig.Type {
@@ -241,6 +250,40 @@ func usesTopLevelReasoningEffort(profile *config.ProviderProfile) bool {
 	return strings.EqualFold(u.Hostname(), "api.openai.com")
 }
 
+func (r *OpenAIRouter) usesDeepSeekOfficialReasoning(
+	_ string,
+	familyConfig *config.ReasoningFamilyConfig,
+	profile *config.ProviderProfile,
+) bool {
+	return familyConfig != nil && isOfficialDeepSeekAPIProfile(profile)
+}
+
+func isOfficialDeepSeekAPIProfile(profile *config.ProviderProfile) bool {
+	if profile == nil || profile.Type != "openai" || profile.BaseURL == "" {
+		return false
+	}
+	u, err := url.Parse(profile.BaseURL)
+	if err != nil {
+		return false
+	}
+	return strings.EqualFold(u.Hostname(), "api.deepseek.com")
+}
+
+func applyDeepSeekOfficialReasoningMutation(mutation *reasoningRequestMutation, enabled bool, effort string) {
+	delete(mutation.requestMap, "chat_template_kwargs")
+	mutation.chatTemplateKwargs = map[string]interface{}{}
+
+	if enabled {
+		mutation.requestMap["thinking"] = map[string]interface{}{"type": "enabled"}
+		mutation.requestMap["reasoning_effort"] = effort
+		mutation.appliedEffort = effort
+	} else {
+		mutation.requestMap["thinking"] = map[string]interface{}{"type": "disabled"}
+		delete(mutation.requestMap, "reasoning_effort")
+	}
+	mutation.reasoningApplied = true
+}
+
 // getReasoningEffort returns the reasoning effort level for a given decision and model
 func (r *OpenAIRouter) getReasoningEffort(categoryName string, modelName string) string {
 	// Handle case where Config is nil (e.g., in tests)
@@ -304,6 +347,13 @@ func (r *OpenAIRouter) buildReasoningRequestFieldsForProvider(
 	}
 
 	// When reasoning is enabled, use the configured family syntax
+	if r.usesDeepSeekOfficialReasoning(model, familyConfig, profile) {
+		effort := r.getReasoningEffort(categoryName, model)
+		return map[string]interface{}{
+			"thinking":         map[string]interface{}{"type": "enabled"},
+			"reasoning_effort": effort,
+		}, effort
+	}
 	switch familyConfig.Type {
 	case "chat_template_kwargs":
 		kwargs := map[string]interface{}{
