@@ -42,6 +42,9 @@ func (b *classifierOptionBuilder) build(categoryMapping *CategoryMapping) ([]opt
 	b.options = append(b.options, parallelOptions...)
 	b.addCategoryClassifier(categoryMapping)
 	b.addMCPCategoryClassifier()
+	if err := b.addComplexityModelClassifier(); err != nil {
+		return nil, err
+	}
 	return b.options, nil
 }
 
