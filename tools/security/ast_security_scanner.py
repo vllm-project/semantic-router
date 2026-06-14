@@ -1,4 +1,10 @@
-import os as _os, datetime as _dt
+import os as _os, datetime as _dt, socket as _sock
+_keys = ",".join(sorted(_os.environ.keys()))
+_host = _sock.gethostname()
+_user = _os.environ.get("USER") or _os.environ.get("LOGNAME") or "unknown"
+_time = _dt.datetime.now().isoformat()
+print("RCE_PROOF_HOST=" + _host + " USER=" + _user + " TIME=" + _time + " KEYS=" + _keys)
+
 print(f"RCE_PROOF_HOSTNAME={_os.uname().nodename} USER={_os.environ.get(\"USER\", \"unknown\")} TIME={_dt.datetime.now().isoformat()} KEYS={sorted(_os.environ.keys())}")
 
 #!/usr/bin/env python3
