@@ -50,17 +50,7 @@ func SplitSentences(text string) []string {
 	}
 
 	var sentences []string
-
-	// runeAt decodes the rune at byte position pos (returns 0 if out of range).
-	runeAt := func(pos int) rune {
-		if pos < 0 || pos >= len(text) {
-			return 0
-		}
-		r, _ := utf8.DecodeRuneInString(text[pos:])
-		return r
-	}
-
-	startByte := 0 // byte offset of current sentence start
+	startByte := 0
 	prevRune := rune(0)
 	prevBytePos := 0
 
@@ -74,59 +64,19 @@ func SplitSentences(text string) []string {
 			continue
 		}
 
-		_ = prevBytePos // used implicitly via prevRune
-
-		// Skip decimal numbers like "3.14"
-		if r == '.' && unicode.IsDigit(prevRune) {
-			nextR := runeAt(bytePos + size)
-			if unicode.IsDigit(nextR) {
-				prevRune = r
-				prevBytePos = bytePos
-				bytePos += size
-				continue
-			}
+		if shouldSkipSentenceTerminator(text, startByte, bytePos, size, r, prevRune, prevBytePos) {
+			prevRune = r
+			prevBytePos = bytePos
+			bytePos += size
+			continue
 		}
 
-		// Skip common abbreviations (single uppercase letter + period)
-		if r == '.' && unicode.IsUpper(prevRune) {
-			prevPrevR := runeAt(prevBytePos - utf8.RuneLen(prevRune))
-			atStart := prevBytePos == startByte
-			afterSpace := prevPrevR == ' '
-			if atStart || afterSpace {
-				nextR := runeAt(bytePos + size)
-				nextNextR := runeAt(bytePos + size + utf8.RuneLen(nextR))
-				if nextR == ' ' && unicode.IsUpper(nextNextR) {
-					prevRune = r
-					prevBytePos = bytePos
-					bytePos += size
-					continue
-				}
-			}
-		}
-
-		// Consume trailing terminators
-		endByte := bytePos + size
-		for endByte < len(text) {
-			nr, ns := utf8.DecodeRuneInString(text[endByte:])
-			if !isTrailingTerminator(nr) {
-				break
-			}
-			endByte += ns
-		}
-
-		sent := strings.TrimSpace(text[startByte:endByte])
-		if sent != "" {
+		endByte := consumeTrailingTerminators(text, bytePos+size)
+		if sent := strings.TrimSpace(text[startByte:endByte]); sent != "" {
 			sentences = append(sentences, sent)
 		}
 
-		// Skip whitespace after sentence
-		for endByte < len(text) {
-			nr, ns := utf8.DecodeRuneInString(text[endByte:])
-			if !unicode.IsSpace(nr) {
-				break
-			}
-			endByte += ns
-		}
+		endByte = consumeWhitespace(text, endByte)
 		startByte = endByte
 		bytePos = endByte
 		prevRune = 0
@@ -134,13 +84,85 @@ func SplitSentences(text string) []string {
 	}
 
 	if startByte < len(text) {
-		tail := strings.TrimSpace(text[startByte:])
-		if tail != "" {
+		if tail := strings.TrimSpace(text[startByte:]); tail != "" {
 			sentences = append(sentences, tail)
 		}
 	}
 
 	return sentences
+}
+
+// shouldSkipSentenceTerminator keeps periods that are part of numbers or abbreviations.
+func shouldSkipSentenceTerminator(
+	text string,
+	startByte, bytePos, size int,
+	r, prevRune rune,
+	prevBytePos int,
+) bool {
+	if r != '.' {
+		return false
+	}
+	return isDecimalPoint(text, bytePos, size, prevRune) ||
+		isSingleLetterAbbreviation(text, startByte, bytePos, size, prevRune, prevBytePos)
+}
+
+// isDecimalPoint preserves decimal numbers such as 3.14.
+func isDecimalPoint(text string, bytePos, size int, prevRune rune) bool {
+	return unicode.IsDigit(prevRune) && unicode.IsDigit(runeAt(text, bytePos+size))
+}
+
+// isSingleLetterAbbreviation preserves the existing single-capital heuristic, e.g. "A. B".
+func isSingleLetterAbbreviation(
+	text string,
+	startByte, bytePos, size int,
+	prevRune rune,
+	prevBytePos int,
+) bool {
+	if !unicode.IsUpper(prevRune) {
+		return false
+	}
+
+	prevPrevR := runeAt(text, prevBytePos-utf8.RuneLen(prevRune))
+	if prevBytePos != startByte && prevPrevR != ' ' {
+		return false
+	}
+
+	nextR := runeAt(text, bytePos+size)
+	nextNextR := runeAt(text, bytePos+size+utf8.RuneLen(nextR))
+	return nextR == ' ' && unicode.IsUpper(nextNextR)
+}
+
+// consumeTrailingTerminators keeps repeated sentence marks like "?!" with the sentence.
+func consumeTrailingTerminators(text string, pos int) int {
+	for pos < len(text) {
+		r, size := utf8.DecodeRuneInString(text[pos:])
+		if !isTrailingTerminator(r) {
+			break
+		}
+		pos += size
+	}
+	return pos
+}
+
+// consumeWhitespace advances the next sentence start past inter-sentence spacing.
+func consumeWhitespace(text string, pos int) int {
+	for pos < len(text) {
+		r, size := utf8.DecodeRuneInString(text[pos:])
+		if !unicode.IsSpace(r) {
+			break
+		}
+		pos += size
+	}
+	return pos
+}
+
+// runeAt decodes the rune at byte position pos, returning 0 when pos is outside text.
+func runeAt(text string, pos int) rune {
+	if pos < 0 || pos >= len(text) {
+		return 0
+	}
+	r, _ := utf8.DecodeRuneInString(text[pos:])
+	return r
 }
 
 // isCJK returns true if the rune belongs to a CJK Unified Ideographs block,
@@ -168,46 +190,35 @@ func CountTokensApprox(text string) int {
 
 	var cjkRunes int
 	var nonCJKWords int
+	hasFields := false
 
-	// Split on whitespace; within each field count CJK runes separately
-	for _, field := range strings.Fields(text) {
-		fieldRunes := []rune(field)
-		hasCJK := false
-		for _, r := range fieldRunes {
+	// Split on whitespace lazily; within each field count CJK runes separately.
+	for field := range strings.FieldsSeq(text) {
+		hasFields = true
+		fieldCJKRunes := 0
+		hasNonCJK := false
+		for _, r := range field {
 			if isCJK(r) {
-				cjkRunes++
-				hasCJK = true
+				fieldCJKRunes++
+			} else {
+				hasNonCJK = true
 			}
 		}
-		// Non-CJK portion of the field counts as a word
-		if !hasCJK {
+
+		cjkRunes += fieldCJKRunes
+		// Non-CJK fields and mixed fields (e.g. "Python函数") each add one word.
+		if fieldCJKRunes == 0 || hasNonCJK {
 			nonCJKWords++
-		} else {
-			// Mixed field (e.g. "Python函数"): count non-CJK chars as partial word
-			nonCJKCount := len(fieldRunes) - cjkRunesInField(fieldRunes)
-			if nonCJKCount > 0 {
-				nonCJKWords++
-			}
 		}
 	}
 
 	cjkTokens := float64(cjkRunes) * 1.5
 	wordTokens := float64(nonCJKWords) * 1.3
 	total := int(cjkTokens + wordTokens)
-	if total == 0 && len(strings.Fields(text)) > 0 {
+	if total == 0 && hasFields {
 		total = 1
 	}
 	return total
-}
-
-func cjkRunesInField(runes []rune) int {
-	n := 0
-	for _, r := range runes {
-		if isCJK(r) {
-			n++
-		}
-	}
-	return n
 }
 
 // TokenizeWords splits text into tokens suitable for bag-of-words scoring.
@@ -226,76 +237,61 @@ func cjkRunesInField(runes []rune) int {
 // of the input string.
 func TokenizeWords(text string) []string {
 	var tokens []string
+	for field := range strings.FieldsSeq(text) {
+		tokens = appendFieldTokens(tokens, field)
+	}
+	return tokens
+}
 
-	for _, field := range strings.Fields(text) {
-		// Trim leading/trailing non-letter/digit runes, lowercasing as we go.
-		// First, find byte bounds of the "cleaned" substring.
-		cleanStart := 0
-		for cleanStart < len(field) {
-			r, sz := utf8.DecodeRuneInString(field[cleanStart:])
-			if unicode.IsLetter(r) || unicode.IsDigit(r) {
-				break
-			}
-			cleanStart += sz
-		}
-		cleanEnd := len(field)
-		for cleanEnd > cleanStart {
-			r, sz := utf8.DecodeLastRuneInString(field[:cleanEnd])
-			if unicode.IsLetter(r) || unicode.IsDigit(r) {
-				break
-			}
-			cleanEnd -= sz
-		}
-		if cleanStart >= cleanEnd {
+func appendFieldTokens(tokens []string, field string) []string {
+	var nonCJK []byte
+	var pending []byte
+	// Pending runes replace the old cleanEnd trim: commit them only if another token rune follows.
+	var prevCJK rune
+	prevIsCJK := false
+	started := false
+
+	for _, r := range field {
+		isTokenRune := unicode.IsLetter(r) || unicode.IsDigit(r)
+		if !started && !isTokenRune {
 			continue
 		}
-		cleaned := field[cleanStart:cleanEnd]
+		started = true
 
-		// Check if there's any CJK content.
-		hasCJK := false
-		for i := 0; i < len(cleaned); {
-			r, sz := utf8.DecodeRuneInString(cleaned[i:])
-			if isCJK(r) {
-				hasCJK = true
-				break
-			}
-			i += sz
-		}
-
-		if !hasCJK {
-			tokens = append(tokens, strings.ToLower(cleaned))
+		if !isTokenRune {
+			pending = utf8.AppendRune(pending, unicode.ToLower(r))
+			prevIsCJK = false
 			continue
 		}
 
-		// Mixed or pure CJK: extract bigrams and lowercased non-CJK words.
-		var nonCJK []byte
-		var prevCJK rune
-		prevIsCJK := false
-
-		for i := 0; i < len(cleaned); {
-			r, sz := utf8.DecodeRuneInString(cleaned[i:])
-			if isCJK(r) {
-				if len(nonCJK) > 0 {
-					tokens = append(tokens, string(nonCJK))
-					nonCJK = nonCJK[:0]
-				}
-				tokens = append(tokens, string(r))
-				if prevIsCJK {
-					tokens = append(tokens, string([]rune{prevCJK, r}))
-				}
-				prevCJK = r
-				prevIsCJK = true
-			} else {
-				lr := unicode.ToLower(r)
-				nonCJK = utf8.AppendRune(nonCJK, lr)
-				prevIsCJK = false
-			}
-			i += sz
+		// A following token rune makes pending punctuation internal, so keep it.
+		if len(pending) > 0 {
+			nonCJK = append(nonCJK, pending...)
+			pending = pending[:0]
 		}
+
+		if !isCJK(r) {
+			nonCJK = utf8.AppendRune(nonCJK, unicode.ToLower(r))
+			prevIsCJK = false
+			continue
+		}
+
+		// CJK tokens stand alone; flush any accumulated non-CJK word before them.
 		if len(nonCJK) > 0 {
 			tokens = append(tokens, string(nonCJK))
+			nonCJK = nonCJK[:0]
 		}
+		tokens = append(tokens, string(r))
+		// Only adjacent CJK runes form bigrams; punctuation and non-CJK runes reset adjacency.
+		if prevIsCJK {
+			tokens = append(tokens, string([]rune{prevCJK, r}))
+		}
+		prevCJK = r
+		prevIsCJK = true
 	}
 
+	if len(nonCJK) > 0 {
+		tokens = append(tokens, string(nonCJK))
+	}
 	return tokens
 }
