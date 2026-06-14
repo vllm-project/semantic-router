@@ -415,15 +415,94 @@ impl MultiModalEmbeddingModel {
         emb: Array1<f32>,
         target_dim: Option<usize>,
     ) -> UnifiedResult<Array1<f32>> {
-        let norm: f32 = emb.iter().map(|x| x * x).sum::<f32>().sqrt();
-        let norm_safe = if norm > 1e-12 { norm } else { 1e-12 };
-        let normalized = emb.mapv(|x| x / norm_safe);
+        Ok(truncate_embedding_to_dimension(emb, target_dim))
+    }
+}
 
-        if let Some(dim) = target_dim {
-            if dim > 0 && dim < normalized.len() {
-                return Ok(normalized.slice(ndarray::s![..dim]).to_owned());
-            }
+/// L2-normalize an embedding to unit norm, guarding against a near-zero norm.
+fn l2_normalize(emb: Array1<f32>) -> Array1<f32> {
+    let norm: f32 = emb.iter().map(|x| x * x).sum::<f32>().sqrt();
+    let norm_safe = if norm > 1e-12 { norm } else { 1e-12 };
+    emb.mapv(|x| x / norm_safe)
+}
+
+/// Normalize an embedding to unit L2 norm and optionally truncate it to
+/// `target_dim` (Matryoshka representation learning).
+///
+/// After a prefix truncation the L2 norm is no longer 1.0, so the prefix must
+/// be re-normalized: downstream similarity scoring treats embeddings as already
+/// unit-normalized and computes cosine similarity as a plain dot product (see
+/// `cosineSimilarity` in `embedding_classifier_scoring.go`). A truncated vector
+/// with `||v|| < 1` would otherwise shrink every similarity score. Mirrors the
+/// candle-binding fix (PR #2145).
+fn truncate_embedding_to_dimension(emb: Array1<f32>, target_dim: Option<usize>) -> Array1<f32> {
+    let normalized = l2_normalize(emb);
+
+    if let Some(dim) = target_dim {
+        if dim > 0 && dim < normalized.len() {
+            let prefix = normalized.slice(ndarray::s![..dim]).to_owned();
+            return l2_normalize(prefix);
         }
-        Ok(normalized)
+    }
+    normalized
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn l2_norm(values: &Array1<f32>) -> f32 {
+        values.iter().map(|v| v * v).sum::<f32>().sqrt()
+    }
+
+    #[test]
+    fn test_truncate_embedding_renormalizes_prefix() {
+        // Already unit-norm input; the length-1 prefix [0.6] has norm 0.6, so
+        // without re-normalization it would shrink downstream similarity scores.
+        let full = Array1::from_vec(vec![0.6, 0.0, 0.8]);
+
+        let truncated = truncate_embedding_to_dimension(full, Some(1));
+
+        assert_eq!(truncated.len(), 1);
+        assert_eq!(truncated[0], 1.0);
+        assert!(
+            (l2_norm(&truncated) - 1.0).abs() < 1e-6,
+            "truncated embedding must stay unit-normalized"
+        );
+    }
+
+    #[test]
+    fn test_truncate_general_prefix_is_unit_norm() {
+        let full = Array1::from_vec(vec![1.0, 2.0, 2.0, 4.0]);
+
+        let truncated = truncate_embedding_to_dimension(full, Some(3));
+
+        assert_eq!(truncated.len(), 3);
+        assert!(
+            (l2_norm(&truncated) - 1.0).abs() < 1e-6,
+            "re-normalized prefix must have unit L2 norm"
+        );
+    }
+
+    #[test]
+    fn test_no_truncation_still_normalizes() {
+        let full = Array1::from_vec(vec![3.0, 4.0]);
+
+        let out = truncate_embedding_to_dimension(full, None);
+
+        assert!((l2_norm(&out) - 1.0).abs() < 1e-6);
+        assert!((out[0] - 0.6).abs() < 1e-6);
+        assert!((out[1] - 0.8).abs() < 1e-6);
+    }
+
+    #[test]
+    fn test_out_of_range_dim_is_ignored() {
+        let full = Array1::from_vec(vec![3.0, 4.0]);
+
+        // dim >= len: no truncation, full vector returned (still normalized).
+        let out = truncate_embedding_to_dimension(full, Some(5));
+
+        assert_eq!(out.len(), 2);
+        assert!((l2_norm(&out) - 1.0).abs() < 1e-6);
     }
 }
