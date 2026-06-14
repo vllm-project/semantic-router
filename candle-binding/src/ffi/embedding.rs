@@ -226,6 +226,21 @@ where
         .to_vec2::<f32>()
         .map_err(|e| format!("Failed to convert embeddings to vec: {:?}", e))?;
 
+    let target_dim = if let Some(dim) = target_dim {
+        let embedding_dim = embeddings_data.first().map_or(0, Vec::len);
+        if dim > embedding_dim {
+            eprintln!(
+                "WARNING: Requested dimension {} exceeds model dimension {}, using full dimension",
+                dim, embedding_dim
+            );
+            Some(embedding_dim)
+        } else {
+            Some(dim)
+        }
+    } else {
+        None
+    };
+
     Ok(embeddings_data
         .into_iter()
         .map(|emb| truncate_embedding_to_dimension(emb, target_dim))
