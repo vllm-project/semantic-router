@@ -50,17 +50,7 @@ func SplitSentences(text string) []string {
 	}
 
 	var sentences []string
-
-	// runeAt decodes the rune at byte position pos (returns 0 if out of range).
-	runeAt := func(pos int) rune {
-		if pos < 0 || pos >= len(text) {
-			return 0
-		}
-		r, _ := utf8.DecodeRuneInString(text[pos:])
-		return r
-	}
-
-	startByte := 0 // byte offset of current sentence start
+	startByte := 0
 	prevRune := rune(0)
 	prevBytePos := 0
 
@@ -74,59 +64,19 @@ func SplitSentences(text string) []string {
 			continue
 		}
 
-		_ = prevBytePos // used implicitly via prevRune
-
-		// Skip decimal numbers like "3.14"
-		if r == '.' && unicode.IsDigit(prevRune) {
-			nextR := runeAt(bytePos + size)
-			if unicode.IsDigit(nextR) {
-				prevRune = r
-				prevBytePos = bytePos
-				bytePos += size
-				continue
-			}
+		if shouldSkipSentenceTerminator(text, startByte, bytePos, size, r, prevRune, prevBytePos) {
+			prevRune = r
+			prevBytePos = bytePos
+			bytePos += size
+			continue
 		}
 
-		// Skip common abbreviations (single uppercase letter + period)
-		if r == '.' && unicode.IsUpper(prevRune) {
-			prevPrevR := runeAt(prevBytePos - utf8.RuneLen(prevRune))
-			atStart := prevBytePos == startByte
-			afterSpace := prevPrevR == ' '
-			if atStart || afterSpace {
-				nextR := runeAt(bytePos + size)
-				nextNextR := runeAt(bytePos + size + utf8.RuneLen(nextR))
-				if nextR == ' ' && unicode.IsUpper(nextNextR) {
-					prevRune = r
-					prevBytePos = bytePos
-					bytePos += size
-					continue
-				}
-			}
-		}
-
-		// Consume trailing terminators
-		endByte := bytePos + size
-		for endByte < len(text) {
-			nr, ns := utf8.DecodeRuneInString(text[endByte:])
-			if !isTrailingTerminator(nr) {
-				break
-			}
-			endByte += ns
-		}
-
-		sent := strings.TrimSpace(text[startByte:endByte])
-		if sent != "" {
+		endByte := consumeTrailingTerminators(text, bytePos+size)
+		if sent := strings.TrimSpace(text[startByte:endByte]); sent != "" {
 			sentences = append(sentences, sent)
 		}
 
-		// Skip whitespace after sentence
-		for endByte < len(text) {
-			nr, ns := utf8.DecodeRuneInString(text[endByte:])
-			if !unicode.IsSpace(nr) {
-				break
-			}
-			endByte += ns
-		}
+		endByte = consumeWhitespace(text, endByte)
 		startByte = endByte
 		bytePos = endByte
 		prevRune = 0
@@ -134,13 +84,85 @@ func SplitSentences(text string) []string {
 	}
 
 	if startByte < len(text) {
-		tail := strings.TrimSpace(text[startByte:])
-		if tail != "" {
+		if tail := strings.TrimSpace(text[startByte:]); tail != "" {
 			sentences = append(sentences, tail)
 		}
 	}
 
 	return sentences
+}
+
+// shouldSkipSentenceTerminator keeps periods that are part of numbers or abbreviations.
+func shouldSkipSentenceTerminator(
+	text string,
+	startByte, bytePos, size int,
+	r, prevRune rune,
+	prevBytePos int,
+) bool {
+	if r != '.' {
+		return false
+	}
+	return isDecimalPoint(text, bytePos, size, prevRune) ||
+		isSingleLetterAbbreviation(text, startByte, bytePos, size, prevRune, prevBytePos)
+}
+
+// isDecimalPoint preserves decimal numbers such as 3.14.
+func isDecimalPoint(text string, bytePos, size int, prevRune rune) bool {
+	return unicode.IsDigit(prevRune) && unicode.IsDigit(runeAt(text, bytePos+size))
+}
+
+// isSingleLetterAbbreviation preserves the existing single-capital heuristic, e.g. "A. B".
+func isSingleLetterAbbreviation(
+	text string,
+	startByte, bytePos, size int,
+	prevRune rune,
+	prevBytePos int,
+) bool {
+	if !unicode.IsUpper(prevRune) {
+		return false
+	}
+
+	prevPrevR := runeAt(text, prevBytePos-utf8.RuneLen(prevRune))
+	if prevBytePos != startByte && prevPrevR != ' ' {
+		return false
+	}
+
+	nextR := runeAt(text, bytePos+size)
+	nextNextR := runeAt(text, bytePos+size+utf8.RuneLen(nextR))
+	return nextR == ' ' && unicode.IsUpper(nextNextR)
+}
+
+// consumeTrailingTerminators keeps repeated sentence marks like "?!" with the sentence.
+func consumeTrailingTerminators(text string, pos int) int {
+	for pos < len(text) {
+		r, size := utf8.DecodeRuneInString(text[pos:])
+		if !isTrailingTerminator(r) {
+			break
+		}
+		pos += size
+	}
+	return pos
+}
+
+// consumeWhitespace advances the next sentence start past inter-sentence spacing.
+func consumeWhitespace(text string, pos int) int {
+	for pos < len(text) {
+		r, size := utf8.DecodeRuneInString(text[pos:])
+		if !unicode.IsSpace(r) {
+			break
+		}
+		pos += size
+	}
+	return pos
+}
+
+// runeAt decodes the rune at byte position pos, returning 0 when pos is outside text.
+func runeAt(text string, pos int) rune {
+	if pos < 0 || pos >= len(text) {
+		return 0
+	}
+	r, _ := utf8.DecodeRuneInString(text[pos:])
+	return r
 }
 
 // isCJK returns true if the rune belongs to a CJK Unified Ideographs block,
