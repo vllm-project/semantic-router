@@ -11,10 +11,13 @@ import (
 	"testing"
 )
 
-func newBootstrapService(t *testing.T, allowOpen bool) *Service {
+func newBootstrapService(t *testing.T, allowOpen bool, setupMode ...bool) *Service {
 	t.Helper()
 	svc := newTestAuthService(t)
 	svc.SetAllowOpenBootstrap(allowOpen)
+	if len(setupMode) > 0 {
+		svc.SetSetupMode(setupMode[0])
+	}
 	return svc
 }
 
@@ -46,6 +49,32 @@ func TestBootstrapCanRegister_DisabledByDefaultReportsFalse(t *testing.T) {
 	svc := newBootstrapService(t, false)
 	if canRegister(t, svc) {
 		t.Fatal("canRegister = true with open bootstrap disabled; want false")
+	}
+}
+
+func TestBootstrapCanRegister_SetupModeAllowsWhenNoUsers(t *testing.T) {
+	svc := newBootstrapService(t, false, true)
+	if !canRegister(t, svc) {
+		t.Fatal("canRegister = false with setup mode and no users; want true")
+	}
+}
+
+func TestBootstrapCanRegister_SetupModeClosedAfterAdminExists(t *testing.T) {
+	svc := newBootstrapService(t, false, true)
+	newTestUser(t, svc, "admin@example.com", RoleAdmin, "active")
+	if canRegister(t, svc) {
+		t.Fatal("canRegister = true with setup mode after an admin exists; want false")
+	}
+}
+
+func TestBootstrapRegister_SetupModeCreatesFirstAdmin(t *testing.T) {
+	svc := newBootstrapService(t, false, true)
+	rec := postRegister(svc, "admin@example.com")
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200; body=%s", rec.Code, rec.Body.String())
+	}
+	if n, _ := svc.store.CountUsers(context.Background()); n != 1 {
+		t.Fatalf("user count = %d, want 1", n)
 	}
 }
 

@@ -5,7 +5,11 @@ import "strings"
 // HasSignalType returns true if the decision's rules tree references at least
 // one signal of the given type (e.g., "jailbreak", "pii").
 func (d *Decision) HasSignalType(signalType string) bool {
-	return len(collectSignalNames(&d.Rules, signalType)) > 0
+	normalizedType := strings.ToLower(strings.TrimSpace(signalType))
+	if normalizedType == "" {
+		return false
+	}
+	return len(collectSignalNames(&d.Rules, normalizedType)) > 0
 }
 
 // UsesSignalTypeInRouting returns true when any routing decision uses the given
@@ -123,7 +127,7 @@ func collectSignalNames(node *RuleNode, signalType string) []string {
 	if node == nil {
 		return nil
 	}
-	if node.Type == signalType && node.Name != "" {
+	if strings.ToLower(strings.TrimSpace(node.Type)) == signalType && node.Name != "" {
 		return []string{node.Name}
 	}
 	var names []string

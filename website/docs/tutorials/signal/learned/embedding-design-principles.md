@@ -41,7 +41,7 @@ An embedding anchor is matched in the model's semantic space, so it should descr
 
 A quick self-check: if an anchor only matches when a specific literal token is present, it is describing text, not signature, and it will generalize poorly.
 
-## Principle 2: the pack is the signal, not any single anchor
+### Principle 2: the pack is the signal, not any single anchor
 
 Cosine similarity is noisy. One anchor matched against one input will produce false positives at scale. Robustness comes from **redundancy across the pack**, not from any individual phrase.
 
@@ -49,13 +49,13 @@ Cosine similarity is noisy. One anchor matched against one input will produce fa
 - Do not gate a routing decision on a single anchor firing. Treat the pack as a whole as the evidence.
 - Because any one anchor can be weak, the pack should still behave correctly even if its least-discriminating anchor is removed. If a single anchor is load-bearing, the pack is under-built.
 
-## Principle 3: cover the benign classes explicitly (negative-space anchors)
+### Principle 3: cover the benign classes explicitly (negative-space anchors)
 
 The most common failure mode is a benign input drifting closer to a sensitive anchor than to anything describing benign content - simply because nothing in the pack describes the benign case. The fix is **additive**: add anchors that positively describe the benign / ambient classes, rather than trying to subtract or blocklist them.
 
 The image pack ships `ambient_office_imagery` for exactly this reason: whiteboards, conference rooms, generic office scenes, and wide factory/warehouse shots give low-sensitivity inputs something to match so they stay low-confidence instead of landing near a sensitive anchor by accident. Mirror this for any pack: for every sensitive category you route on, give the routine, non-sensitive content of the same surface its own anchors.
 
-## Principle 4: calibrate the threshold to your model and corpus
+### Principle 4: calibrate the threshold to your model and corpus
 
 Thresholds are not portable across embedding models or modalities.
 
@@ -63,7 +63,7 @@ Thresholds are not portable across embedding models or modalities.
 - A different embedding model, or the same model on a different content distribution, will have a different operating range. Always calibrate against your own labeled evaluation set rather than copying a threshold from an example pack.
 - `aggregation_method: max` is usually right for distinct sensitive categories: any single strong match is enough to fire. Use `mean` only when you intend the whole category to need broad support.
 
-## Principle 5: validate the pack as a unit before relying on it
+### Principle 5: validate the pack as a unit before relying on it
 
 A pack is a small classifier. Treat changes to it the way you would treat a model change:
 
@@ -71,7 +71,7 @@ A pack is a small classifier. Treat changes to it the way you would treat a mode
 - When you add or remove an anchor, re-check that the benign corpus still stays below threshold - adding a sensitive anchor can pull benign inputs up with it.
 - Record the model and threshold the corpus was calibrated against; both are part of the pack's contract.
 
-## Reference: the opt-in image pack
+### Reference: the opt-in image pack
 
 `config/signal/embedding/image-routing.yaml` is a worked example of all five principles: three categories (`identifier_document_imagery`, `code_or_terminal_imagery`, `ambient_office_imagery`), 8 anchors each, `aggregation_method: max`, and a model-calibrated `0.10` threshold. Inline it under `routing.signals.embeddings`, then replace the `ambient_office_imagery` anchors with content specific to your own deployment surface and recalibrate.
 
