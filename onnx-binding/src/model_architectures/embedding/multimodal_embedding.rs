@@ -382,30 +382,20 @@ impl MultiModalEmbeddingModel {
             "pooler_output",
             "last_hidden_state",
         ];
-        for name in &names {
-            if let Some(output_value) = outputs.get(*name) {
-                if let Ok((shape, data)) = output_value.try_extract_tensor::<f32>() {
-                    let dims: Vec<usize> = shape.iter().map(|&d| d as usize).collect();
-                    if dims.len() == 2 && dims[0] >= 1 {
-                        let dim = dims[1];
-                        let vec: Vec<f32> = data.iter().take(dim).copied().collect();
-                        return Ok(Array1::from_vec(vec));
-                    } else if dims.len() == 1 {
-                        return Ok(Array1::from_vec(data.to_vec()));
-                    }
-                }
-            }
+        if let Some(embedding) = names
+            .iter()
+            .find_map(|name| outputs.get(*name).and_then(extract_embedding_from_value))
+        {
+            return Ok(embedding);
         }
+
         // Fallback: first output
-        if let Some((_, output_value)) = outputs.iter().next() {
-            if let Ok((shape, data)) = output_value.try_extract_tensor::<f32>() {
-                let dims: Vec<usize> = shape.iter().map(|&d| d as usize).collect();
-                let dim = *dims.last().unwrap_or(&0);
-                if dim > 0 {
-                    let vec: Vec<f32> = data.iter().take(dim).copied().collect();
-                    return Ok(Array1::from_vec(vec));
-                }
-            }
+        if let Some(embedding) = outputs
+            .iter()
+            .next()
+            .and_then(|(_, output_value)| extract_embedding_from_fallback_value(&output_value))
+        {
+            return Ok(embedding);
         }
         Err(errors::ort_error("no valid embedding output found"))
     }
@@ -417,6 +407,39 @@ impl MultiModalEmbeddingModel {
     ) -> UnifiedResult<Array1<f32>> {
         Ok(truncate_embedding_to_dimension(emb, target_dim))
     }
+}
+
+fn extract_embedding_from_value(value: &ort::value::Value) -> Option<Array1<f32>> {
+    let Ok((shape, data)) = value.try_extract_tensor::<f32>() else {
+        return None;
+    };
+    let dims: Vec<usize> = shape.iter().map(|&d| d as usize).collect();
+    embedding_from_tensor_data(&dims, data.as_ref())
+}
+
+fn extract_embedding_from_fallback_value(value: &ort::value::Value) -> Option<Array1<f32>> {
+    let Ok((shape, data)) = value.try_extract_tensor::<f32>() else {
+        return None;
+    };
+    let dims: Vec<usize> = shape.iter().map(|&d| d as usize).collect();
+    let dim = *dims.last().unwrap_or(&0);
+    if dim == 0 {
+        return None;
+    }
+    let vec: Vec<f32> = data.iter().take(dim).copied().collect();
+    Some(Array1::from_vec(vec))
+}
+
+fn embedding_from_tensor_data(dims: &[usize], data: &[f32]) -> Option<Array1<f32>> {
+    if dims.len() == 2 && dims[0] >= 1 {
+        let dim = dims[1];
+        let vec: Vec<f32> = data.iter().take(dim).copied().collect();
+        return Some(Array1::from_vec(vec));
+    }
+    if dims.len() == 1 {
+        return Some(Array1::from_vec(data.to_vec()));
+    }
+    None
 }
 
 /// L2-normalize an embedding to unit norm, guarding against a near-zero norm.
