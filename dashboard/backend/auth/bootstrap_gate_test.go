@@ -42,6 +42,21 @@ func postRegister(svc *Service, email string) *httptest.ResponseRecorder {
 	return rec
 }
 
+// trackHashCalls swaps hashBootstrapPassword for a counting wrapper for the
+// duration of the test and returns a pointer to the live invocation count, so a
+// test can assert how many bcrypt rounds a register attempt actually performed.
+func trackHashCalls(t *testing.T) *int {
+	t.Helper()
+	calls := 0
+	orig := hashBootstrapPassword
+	hashBootstrapPassword = func(svc *Service, password string) (string, error) {
+		calls++
+		return orig(svc, password)
+	}
+	t.Cleanup(func() { hashBootstrapPassword = orig })
+	return &calls
+}
+
 // With open bootstrap disabled (the default), can-register must report false even
 // when no users exist - both to disable the path and to avoid leaking to an
 // unauthenticated caller that the instance is freshly deployed and claimable.
@@ -158,20 +173,14 @@ func TestBootstrapRegister_ClosedWindowRejectsBeforeHashing(t *testing.T) {
 	svc := newBootstrapService(t, false, true)
 	newTestUser(t, svc, "admin@example.com", RoleAdmin, "active")
 
-	hashCalls := 0
-	orig := hashBootstrapPassword
-	hashBootstrapPassword = func(svc *Service, password string) (string, error) {
-		hashCalls++
-		return orig(svc, password)
-	}
-	t.Cleanup(func() { hashBootstrapPassword = orig })
+	hashCalls := trackHashCalls(t)
 
 	rec := postRegister(svc, "second@example.com")
 	if rec.Code != http.StatusConflict {
 		t.Fatalf("status = %d, want 409 when an admin already exists", rec.Code)
 	}
-	if hashCalls != 0 {
-		t.Fatalf("bcrypt hash invoked %d times on a closed bootstrap window; want 0", hashCalls)
+	if *hashCalls != 0 {
+		t.Fatalf("bcrypt hash invoked %d times on a closed bootstrap window; want 0", *hashCalls)
 	}
 }
 
@@ -180,19 +189,13 @@ func TestBootstrapRegister_ClosedWindowRejectsBeforeHashing(t *testing.T) {
 func TestBootstrapRegister_OpenWindowStillHashesAndCreates(t *testing.T) {
 	svc := newBootstrapService(t, false, true)
 
-	hashCalls := 0
-	orig := hashBootstrapPassword
-	hashBootstrapPassword = func(svc *Service, password string) (string, error) {
-		hashCalls++
-		return orig(svc, password)
-	}
-	t.Cleanup(func() { hashBootstrapPassword = orig })
+	hashCalls := trackHashCalls(t)
 
 	rec := postRegister(svc, "admin@example.com")
 	if rec.Code != http.StatusOK {
 		t.Fatalf("status = %d, want 200; body=%s", rec.Code, rec.Body.String())
 	}
-	if hashCalls != 1 {
-		t.Fatalf("bcrypt hash invoked %d times on the open path; want 1", hashCalls)
+	if *hashCalls != 1 {
+		t.Fatalf("bcrypt hash invoked %d times on the open path; want 1", *hashCalls)
 	}
 }
