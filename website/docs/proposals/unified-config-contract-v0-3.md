@@ -95,7 +95,7 @@ Router-global defaults are now owned by the router itself, not by a second user-
 - `global.services` groups shared APIs and runtime services
 - `global.services.router_replay.enabled` provides the router-wide replay default, while route-local `router_replay.enabled: false` is the explicit opt-out
 - `global.stores` groups storage-backed services
-- `global.integrations` groups helper runtime integrations
+- `global.integrations` groups helper runtime integrations, including looper-owned Fusion direct model slug registration for `vllm-sr/fusion`. Compatibility aliases such as `openrouter/fusion` are opt-in through `global.integrations.looper.fusion.model_names`; judge and panel policy remains on `routing.decisions[].algorithm.fusion`.
 - `global.model_catalog` groups router-owned model assets under `embeddings`, `system`, `external`, `classifiers`, `kbs`, and `modules`, including embedding fallback knobs such as `embedding_config.top_k`, shared prototype-aware scoring controls such as `prototype_scoring`, and built-in knowledge-base source paths such as `knowledge_bases/privacy/`
 - `global.model_catalog.modules` is the home for router-owned module settings such as `prompt_compression`, `prompt_guard`, `classifier`, `complexity`, `hallucination_mitigation`, `feedback_detector`, and `modality_detector`
 - `global.model_catalog.modules.prompt_compression.profile` keeps prompt-compression presets in the signal-evaluation layer as a validated enum (`default`, `coding`, `medical`, `security`, `multi_turn`, with `multi-turn` accepted as an alias). It does not rewrite the upstream model request body; post-decision request mutation belongs under decision/plugin surfaces.
@@ -124,7 +124,7 @@ The repo no longer ships large full-example trees under `config/intelligent-rout
 - `config/config.yaml` is the exhaustive canonical reference config
 - `config/signal/`, `config/decision/`, `config/algorithm/`, and `config/plugin/` hold reusable routing fragments
 - `config/decision/` is organized by boolean rule shape (`single`, `and`, `or`, `not`, `composite`)
-- `config/algorithm/` is organized by routing policy family (`looper`, `selection`)
+- `config/algorithm/` is organized by routing policy family (`looper`, `selection`), with `fusion` as the looper fragment for panel-and-judge deliberation
 - latest `docs/tutorials/` source tree mirrors `signal/decision/algorithm/plugin/global`, and the older tutorial trees were removed from the active docs surface
 - runtime support examples such as `deploy/examples/runtime/semantic-cache/`, `deploy/examples/runtime/response-api/`, and `deploy/examples/runtime/tools/` stay separate because they are not part of the user-facing config contract
 - harness-only manifests live under `e2e/config/`

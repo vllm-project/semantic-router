@@ -771,6 +771,42 @@ routing:
                 - api key
                 - password
 
+    - name: deliberation-fusion-route
+      description: Fusion route for prompts that benefit from panel deliberation.
+      priority: 165
+      rules:
+        operator: AND
+        conditions:
+          - type: domain
+            name: business
+          - type: complexity
+            name: needs_reasoning:hard
+      modelRefs:
+        - model: qwen3-8b
+          use_reasoning: true
+          reasoning_effort: medium
+          weight: 0.5
+        - model: qwen3-32b
+          use_reasoning: true
+          reasoning_effort: high
+          weight: 0.5
+      algorithm:
+        type: fusion
+        fusion:
+          model: qwen3-32b
+          analysis_models:
+            - qwen3-8b
+            - qwen3-32b
+          max_concurrent: 2
+          max_completion_tokens: 512
+          temperature: 0.2
+          include_analysis: true
+          include_intermediate_responses: true
+          on_error: skip
+          analysis_template: ""
+          synthesis_template: ""
+          judge_prompt_version: fusion-v1
+
     - name: terse_elo_route
       description: Personalized terse-answer route using Elo selection.
       priority: 160
@@ -1913,6 +1949,9 @@ global:
       retry_count: 2
       headers:
         X-Trace-Source: looper
+      fusion:
+        model_names:
+          - vllm-sr/fusion
 
   model_catalog:
     embeddings:

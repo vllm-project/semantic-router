@@ -46,6 +46,7 @@ The detailed background is in [Unified Config Contract v0.3](../proposals/unifie
   - `global.services.router_replay.enabled` acts as the default replay switch for every decision; route-local `router_replay.enabled: false` is the explicit opt-out
   - `global.stores` groups shared storage-backed services such as `semantic_cache`, `memory`, and `vector_store`
 - `global.integrations` groups helper runtime integrations such as `tools` and `looper`
+- `global.integrations.looper.fusion` defines direct Fusion model slugs. The built-in default is `vllm-sr/fusion`; add aliases such as `openrouter/fusion` explicitly only when you want them. Judge and panel settings stay per-decision under `routing.decisions[].algorithm.fusion`.
 - `global.model_catalog` groups router-owned model assets such as embeddings, system models, external models, reusable classifiers, and model-backed modules
 - `global.model_catalog.embeddings.semantic.embedding_config.top_k` limits how many ranked embedding rules are emitted for routing after scoring; the built-in default is `1`
 - `prototype_scoring` is the shared prototype-aware scoring block for embedding-backed signal families; use it under `global.model_catalog.embeddings.semantic.embedding_config`, `global.model_catalog.modules.classifier.preference`, `global.model_catalog.kbs[]`, and `global.model_catalog.modules.complexity` when you want exemplar banks compressed into representative prototypes
@@ -208,7 +209,7 @@ The repository now separates the exhaustive canonical reference config from reus
 - `config/plugin/`: reusable route-plugin snippets
 
 `config/decision/` is organized by boolean case shape: `single/`, `and/`, `or/`, `not/`, and `composite/`.
-`config/algorithm/` is organized by routing policy family: `looper/` and `selection/`.
+`config/algorithm/` is organized by routing policy family: `looper/` and `selection/`; looper fragments include `confidence`, `ratings`, `remom`, and `fusion`.
 `config/plugin/` is organized one plugin or reusable bundle per directory.
 The repository enforces this fragment catalog in `go test ./pkg/config/...`, so routing-surface changes must update the `config/` tree in the same change.
 

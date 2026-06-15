@@ -60,6 +60,24 @@ func TestShouldUseLooper(t *testing.T) {
 		assert.True(t, router.shouldUseLooper(decision))
 	})
 
+	t.Run("allows fusion with algorithm analysis models", func(t *testing.T) {
+		router := &OpenAIRouter{
+			Config: &config.RouterConfig{Looper: config.LooperConfig{Endpoint: "http://looper"}},
+		}
+		decision := &config.Decision{
+			Name: "fusion",
+			Algorithm: &config.AlgorithmConfig{
+				Type: "fusion",
+				Fusion: &config.FusionAlgorithmConfig{
+					Model:          "judge",
+					AnalysisModels: []string{"model-a"},
+				},
+			},
+		}
+
+		assert.True(t, router.shouldUseLooper(decision))
+	})
+
 	t.Run("requires multiple models for non-remom algorithms", func(t *testing.T) {
 		router := &OpenAIRouter{
 			Config: &config.RouterConfig{Looper: config.LooperConfig{Endpoint: "http://looper"}},
@@ -77,7 +95,7 @@ func TestShouldUseLooper(t *testing.T) {
 		router := &OpenAIRouter{
 			Config: &config.RouterConfig{Looper: config.LooperConfig{Endpoint: "http://looper"}},
 		}
-		looperAlgorithms := []string{"confidence", "ratings"}
+		looperAlgorithms := []string{"confidence", "ratings", "fusion"}
 
 		for _, algorithmType := range looperAlgorithms {
 			decision := &config.Decision{
@@ -92,6 +110,109 @@ func TestShouldUseLooper(t *testing.T) {
 			assert.True(t, router.shouldUseLooper(decision), "algorithm %s should use looper routing", algorithmType)
 		}
 	})
+}
+
+func TestParseFusionRequestConfig(t *testing.T) {
+	fusion, err := parseFusionRequestConfig([]byte(`{
+		"model":"vllm-sr/fusion",
+		"plugins":[{
+			"id":"fusion",
+			"model":"judge",
+			"analysis_models":["panel-a","panel-b"],
+			"max_concurrent":2,
+			"max_completion_tokens":512,
+			"temperature":0.2
+		}]
+	}`))
+	require.NoError(t, err)
+	require.NotNil(t, fusion)
+	assert.Equal(t, "judge", fusion.Model)
+	assert.Equal(t, []string{"panel-a", "panel-b"}, fusion.AnalysisModels)
+	assert.Equal(t, 2, fusion.MaxConcurrent)
+	assert.Equal(t, 512, fusion.MaxCompletionTokens)
+	require.NotNil(t, fusion.Temperature)
+	assert.Equal(t, 0.2, *fusion.Temperature)
+}
+
+func TestParseFusionRequestConfigRejectsInvalidOnError(t *testing.T) {
+	_, err := parseFusionRequestConfig([]byte(`{
+		"model":"vllm-sr/fusion",
+		"plugins":[{
+			"id":"fusion",
+			"on_error":"ignore"
+		}]
+	}`))
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "on_error must be one of")
+}
+
+func TestResolveDirectFusionDecisionUsesMatchedFusionDecision(t *testing.T) {
+	matchedDecision := &config.Decision{
+		Name: "fusion-route",
+		ModelRefs: []config.ModelRef{
+			{Model: "panel-a"},
+			{Model: "panel-b"},
+		},
+		Algorithm: &config.AlgorithmConfig{
+			Type: "fusion",
+			Fusion: &config.FusionAlgorithmConfig{
+				Model: "judge",
+			},
+		},
+	}
+	router := &OpenAIRouter{
+		Config: &config.RouterConfig{},
+	}
+
+	decision, status, err := router.resolveDirectFusionDecision(&RequestContext{
+		VSRSelectedDecision: matchedDecision,
+	})
+	require.NoError(t, err)
+	assert.Zero(t, status)
+	require.NotNil(t, decision)
+	assert.Equal(t, "fusion-route", decision.Name)
+	assert.Equal(t, "fusion", decision.Algorithm.Type)
+	assert.Equal(t, "judge", decision.Algorithm.Fusion.Model)
+	require.Len(t, decision.ModelRefs, 2)
+	assert.Equal(t, "panel-a", decision.ModelRefs[0].Model)
+}
+
+func TestResolveDirectFusionDecisionRejectsNonFusionMatchedDecision(t *testing.T) {
+	router := &OpenAIRouter{
+		Config: &config.RouterConfig{},
+	}
+
+	_, status, err := router.resolveDirectFusionDecision(&RequestContext{
+		VSRSelectedDecision: &config.Decision{
+			Name:      "static-route",
+			Algorithm: &config.AlgorithmConfig{Type: "static"},
+		},
+	})
+	require.Error(t, err)
+	assert.Equal(t, 500, status)
+	assert.Contains(t, err.Error(), "matched routing decision")
+}
+
+func TestResolveDirectFusionDecisionAllowsRequestOnlyPluginPanel(t *testing.T) {
+	router := &OpenAIRouter{Config: &config.RouterConfig{}}
+	ctx := &RequestContext{
+		OriginalRequestBody: []byte(`{
+			"model":"vllm-sr/fusion",
+			"plugins":[{
+				"id":"fusion",
+				"model":"judge",
+				"analysis_models":["panel-a","panel-b"]
+			}]
+		}`),
+	}
+
+	decision, status, err := router.resolveDirectFusionDecision(ctx)
+	require.NoError(t, err)
+	assert.Zero(t, status)
+	require.NotNil(t, decision)
+	assert.Equal(t, directFusionDecisionName, decision.Name)
+	assert.Equal(t, "fusion", decision.Algorithm.Type)
+	assert.Empty(t, decision.ModelRefs)
 }
 
 func TestCreateLooperResponseIncludesTrackedHeaders(t *testing.T) {
@@ -214,6 +335,7 @@ func TestBuildHeaderMutationsForLooperIncludesAuthorizationAndPluginHeaders(t *t
 	setHeaders, removeHeaders := router.buildHeaderMutationsForLooper(decision, "model-a")
 	headerMap := headerValuesByName(setHeaders)
 
+	assert.Equal(t, "model-a", headerMap[headers.SelectedModel])
 	assert.Equal(t, "model-a", headerMap[headers.VSRSelectedModel])
 	assert.Equal(t, "Bearer secret", headerMap["Authorization"])
 	assert.Equal(t, "1", headerMap["x-extra"])
@@ -236,6 +358,64 @@ func TestHandleLooperInternalRequestRewritesModel(t *testing.T) {
 		`{"model":"model-b","messages":[{"role":"user","content":"hi"}]}`,
 		string(body),
 	)
+
+	headerMap := headerValuesByName(response.GetRequestBody().Response.HeaderMutation.SetHeaders)
+	assert.Equal(t, "model-b", headerMap[headers.SelectedModel])
+	assert.Equal(t, "model-b", headerMap[headers.VSRSelectedModel])
+	assert.Contains(t, response.GetRequestBody().Response.HeaderMutation.RemoveHeaders, "content-length")
+}
+
+func TestHandleLooperInternalRequestWithPluginsResolvesProviderModelAlias(t *testing.T) {
+	router := &OpenAIRouter{
+		Cache: &spyCache{},
+		Config: &config.RouterConfig{
+			IntelligentRouting: config.IntelligentRouting{
+				Decisions: []config.Decision{
+					{
+						Name:      "fusion_alias",
+						ModelRefs: []config.ModelRef{{Model: "panel-a"}},
+					},
+				},
+			},
+			BackendModels: config.BackendModels{
+				ModelConfig: map[string]config.ModelParams{
+					"panel-a": {
+						PreferredEndpoints: []string{"panel-backend"},
+						ExternalModelIDs: map[string]string{
+							"vllm": "qwen2.5-omni-7b",
+						},
+					},
+				},
+				VLLMEndpoints: []config.VLLMEndpoint{
+					{
+						Name:    "panel-backend",
+						Address: "127.0.0.1",
+						Port:    8000,
+						Type:    "vllm",
+						Weight:  1,
+					},
+				},
+			},
+		},
+	}
+	ctx := &RequestContext{
+		LooperRequest: true,
+		Headers: map[string]string{
+			headers.VSRLooperDecision: "fusion_alias",
+		},
+		OriginalRequestBody: []byte(`{"model":"panel-a","messages":[{"role":"user","content":"hi"}]}`),
+	}
+
+	response, err := router.handleLooperInternalRequestWithPlugins("panel-a", ctx)
+	require.NoError(t, err)
+	require.NotNil(t, response.GetRequestBody())
+
+	body := response.GetRequestBody().Response.GetBodyMutation().GetBody()
+	assert.Contains(t, string(body), `"model":"qwen2.5-omni-7b"`)
+
+	headerMap := headerValuesByName(response.GetRequestBody().Response.HeaderMutation.SetHeaders)
+	assert.Equal(t, "panel-a", headerMap[headers.SelectedModel])
+	assert.Equal(t, "panel-a", headerMap[headers.VSRSelectedModel])
 }
 
 func headerValuesByName(headers []*core.HeaderValueOption) map[string]string {
