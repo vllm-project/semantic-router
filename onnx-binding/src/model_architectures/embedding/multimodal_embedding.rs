@@ -382,35 +382,20 @@ impl MultiModalEmbeddingModel {
             "pooler_output",
             "last_hidden_state",
         ];
-        for name in &names {
-            let Some(output_value) = outputs.get(*name) else {
-                continue;
-            };
-            let Ok((shape, data)) = output_value.try_extract_tensor::<f32>() else {
-                continue;
-            };
-
-            let dims: Vec<usize> = shape.iter().map(|&d| d as usize).collect();
-            if dims.len() == 2 && dims[0] >= 1 {
-                let dim = dims[1];
-                let vec: Vec<f32> = data.iter().take(dim).copied().collect();
-                return Ok(Array1::from_vec(vec));
-            } else if dims.len() == 1 {
-                return Ok(Array1::from_vec(data.to_vec()));
-            }
+        if let Some(embedding) = names
+            .iter()
+            .find_map(|name| outputs.get(*name).and_then(extract_embedding_from_value))
+        {
+            return Ok(embedding);
         }
-        // Fallback: first output
-        if let Some((_, output_value)) = outputs.iter().next() {
-            let Ok((shape, data)) = output_value.try_extract_tensor::<f32>() else {
-                return Err(errors::ort_error("no valid embedding output found"));
-            };
 
-            let dims: Vec<usize> = shape.iter().map(|&d| d as usize).collect();
-            let dim = *dims.last().unwrap_or(&0);
-            if dim > 0 {
-                let vec: Vec<f32> = data.iter().take(dim).copied().collect();
-                return Ok(Array1::from_vec(vec));
-            }
+        // Fallback: first output
+        if let Some(embedding) = outputs
+            .iter()
+            .next()
+            .and_then(|(_, output_value)| extract_embedding_from_fallback_value(&output_value))
+        {
+            return Ok(embedding);
         }
         Err(errors::ort_error("no valid embedding output found"))
     }
@@ -510,4 +495,58 @@ mod tests {
         assert_eq!(out.len(), 2);
         assert!((l2_norm(&out) - 1.0).abs() < 1e-6);
     }
+
+    #[test]
+    fn test_embedding_from_tensor_data_uses_first_row_for_2d_tensor() {
+        let embedding = embedding_from_tensor_data(&[2, 3], &[1.0, 2.0, 3.0, 4.0, 5.0, 6.0])
+            .expect("2D tensor should produce first-row embedding");
+
+        assert_eq!(embedding.to_vec(), vec![1.0, 2.0, 3.0]);
+    }
+
+    #[test]
+    fn test_embedding_from_tensor_data_passes_through_1d_tensor() {
+        let embedding = embedding_from_tensor_data(&[3], &[1.0, 2.0, 3.0])
+            .expect("1D tensor should produce embedding");
+
+        assert_eq!(embedding.to_vec(), vec![1.0, 2.0, 3.0]);
+    }
+
+    #[test]
+    fn test_embedding_from_tensor_data_rejects_unsupported_rank() {
+        assert!(embedding_from_tensor_data(&[1, 2, 3], &[1.0, 2.0, 3.0]).is_none());
+    }
+}
+
+fn extract_embedding_from_value(value: &ort::value::Value) -> Option<Array1<f32>> {
+    let Ok((shape, data)) = value.try_extract_tensor::<f32>() else {
+        return None;
+    };
+    let dims: Vec<usize> = shape.iter().map(|&d| d as usize).collect();
+    embedding_from_tensor_data(&dims, data)
+}
+
+fn extract_embedding_from_fallback_value(value: &ort::value::Value) -> Option<Array1<f32>> {
+    let Ok((shape, data)) = value.try_extract_tensor::<f32>() else {
+        return None;
+    };
+    let dims: Vec<usize> = shape.iter().map(|&d| d as usize).collect();
+    let dim = *dims.last().unwrap_or(&0);
+    if dim == 0 {
+        return None;
+    }
+    let vec: Vec<f32> = data.iter().take(dim).copied().collect();
+    Some(Array1::from_vec(vec))
+}
+
+fn embedding_from_tensor_data(dims: &[usize], data: &[f32]) -> Option<Array1<f32>> {
+    if dims.len() == 2 && dims[0] >= 1 {
+        let dim = dims[1];
+        let vec: Vec<f32> = data.iter().take(dim).copied().collect();
+        return Some(Array1::from_vec(vec));
+    }
+    if dims.len() == 1 {
+        return Some(Array1::from_vec(data.to_vec()));
+    }
+    None
 }
