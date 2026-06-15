@@ -243,7 +243,7 @@ spec:
 EOF
 ```
 
-The demo uses buffered request bodies to match the existing Envoy AI Gateway and Istio examples. For large prompts, use `requestBodyMode: FullDuplexStreamed` together with a Semantic Router configuration that enables streamed body handling. agentgateway does not support `Streamed` mode; `FullDuplexStreamed` is the only streaming option.
+The demo uses buffered request bodies to match the existing Envoy AI Gateway and Istio examples. For large prompts, use `requestBodyMode: FullDuplexStreamed` together with a Semantic Router configuration that enables streamed body handling. agentgateway does not support `Streamed` mode; `FullDuplexStreamed` is the only streaming option. See [Streamed ExtProc and immediate responses](./streamed-extproc.md) for the full configuration, immediate-response behavior, and verification checklist.
 
 ## Testing the Deployment
 
