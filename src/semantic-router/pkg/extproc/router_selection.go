@@ -66,14 +66,47 @@ func resolveSelectionEmbeddingFunc(cfg *config.RouterConfig) func(string) ([]flo
 	case "openvino":
 		return openvinoEmbeddingFunc(modelType)
 	default:
+		// The candle batched embedding path (GetEmbeddingBatched) is only
+		// implemented for the qwen3 continuous-batching model; it rejects any
+		// other model_type with "unsupported model type ... (only 'qwen3'
+		// supported)". The default embedding model_type is "mmbert", so
+		// unconditionally using the batched path makes every selection
+		// embedding fail for the default config — RouterDC/hybrid then fall
+		// back to flat scores. Route non-qwen3 model types through the
+		// single-text FFI (GetEmbeddingWithModelType), which supports mmbert,
+		// gemma, etc. and is what the rest of the router already uses.
+		//
+		// target_dim differs by path: the qwen3 batched model emits 1024-dim
+		// vectors, but mmbert is a 2D-Matryoshka model whose native dimension
+		// is 768 and cannot be truncated upward — passing 1024 fails the
+		// forward pass. Use 0 (native dimension) for the single-text path so
+		// each model returns its own dimension; the selector only needs the
+		// per-model embeddings to be mutually consistent, which they are.
+		if candleEmbeddingSupportsBatched(modelType) {
+			return func(text string) ([]float32, error) {
+				output, err := candle_binding.GetEmbeddingBatched(text, modelType, 1024)
+				if err != nil {
+					return nil, err
+				}
+				return output.Embedding, nil
+			}
+		}
 		return func(text string) ([]float32, error) {
-			output, err := candle_binding.GetEmbeddingBatched(text, modelType, 1024)
+			output, err := candle_binding.GetEmbeddingWithModelType(text, modelType, 0)
 			if err != nil {
 				return nil, err
 			}
 			return output.Embedding, nil
 		}
 	}
+}
+
+// candleEmbeddingSupportsBatched reports whether the candle continuous-batching
+// embedding FFI (GetEmbeddingBatched) supports the given model type. Only qwen3
+// is implemented for batching; all other model types must use the single-text
+// FFI (GetEmbeddingWithModelType).
+func candleEmbeddingSupportsBatched(modelType string) bool {
+	return modelType == "qwen3"
 }
 
 func collectConfiguredAlgorithmMethods(cfg *config.RouterConfig) []selection.SelectionMethod {
