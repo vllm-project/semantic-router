@@ -2,12 +2,8 @@ package extproc
 
 import "testing"
 
-// TestCandleEmbeddingSupportsBatched guards the selection-embedding dispatch:
-// the candle batched FFI (GetEmbeddingBatched) is implemented only for qwen3,
-// so every other model type — including the default "mmbert" — must be routed
-// to the single-text FFI (GetEmbeddingWithModelType). Regressing this makes
-// selection embeddings fail for the default config and collapses RouterDC /
-// hybrid / session_aware base scores to a flat tie.
+// TestCandleEmbeddingSupportsBatched checks only qwen3 uses the batched FFI;
+// other types (incl. default mmbert) must use the single-text FFI.
 func TestCandleEmbeddingSupportsBatched(t *testing.T) {
 	cases := []struct {
 		modelType string
