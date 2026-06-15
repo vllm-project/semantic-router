@@ -215,6 +215,11 @@ func Errorf(format string, args ...interface{}) { zap.S().Errorf(format, args...
 func Debugf(format string, args ...interface{}) { zap.S().Debugf(format, args...) }
 func Fatalf(format string, args ...interface{}) { zap.S().Fatalf(format, args...) }
 
+// DebugEnabled reports whether the global logger emits at debug level. Callers
+// use it to skip building expensive debug-only payloads (e.g. cloning and
+// redacting a protobuf message) when debug logging is disabled.
+func DebugEnabled() bool { return zap.L().Core().Enabled(zapcore.DebugLevel) }
+
 // WithComponent returns a named sub-logger that carries a "component" field
 // in every log line, making it trivial to filter by subsystem.
 //
