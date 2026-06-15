@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"sort"
 )
 
 // Builder handles Docker image building and loading
@@ -23,18 +24,7 @@ func NewBuilder(verbose bool) *Builder {
 func (b *Builder) Build(ctx context.Context, opts BuildOptions) error {
 	b.log("Building Docker image: %s", opts.Tag)
 
-	args := []string{"build"}
-
-	if opts.Dockerfile != "" {
-		args = append(args, "-f", opts.Dockerfile)
-	}
-
-	args = append(args, "-t", opts.Tag)
-
-	if opts.BuildContext == "" {
-		opts.BuildContext = "."
-	}
-	args = append(args, opts.BuildContext)
+	args := buildCommandArgs(opts)
 
 	cmd := exec.CommandContext(ctx, "docker", args...)
 	if b.Verbose {
@@ -93,4 +83,33 @@ type BuildOptions struct {
 
 	// BuildContext is the build context directory
 	BuildContext string
+
+	// BuildArgs are passed to docker build as --build-arg KEY=VALUE entries.
+	BuildArgs map[string]string
+}
+
+func buildCommandArgs(opts BuildOptions) []string {
+	args := []string{"build"}
+
+	if opts.Dockerfile != "" {
+		args = append(args, "-f", opts.Dockerfile)
+	}
+
+	keys := make([]string, 0, len(opts.BuildArgs))
+	for key := range opts.BuildArgs {
+		keys = append(keys, key)
+	}
+	sort.Strings(keys)
+	for _, key := range keys {
+		args = append(args, "--build-arg", fmt.Sprintf("%s=%s", key, opts.BuildArgs[key]))
+	}
+
+	args = append(args, "-t", opts.Tag)
+
+	if opts.BuildContext == "" {
+		opts.BuildContext = "."
+	}
+	args = append(args, opts.BuildContext)
+
+	return args
 }

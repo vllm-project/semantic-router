@@ -74,11 +74,13 @@ func TestConfidenceEvaluator_Creation(t *testing.T) {
 		method       string
 		wantLogprobs bool
 		wantSelfVer  bool
+		wantAutoMix  bool
 	}{
-		{"avg_logprob", "avg_logprob", true, false},
-		{"margin", "margin", true, false},
-		{"hybrid", "hybrid", true, false},
-		{"self_verify", "self_verify", false, true},
+		{"avg_logprob", "avg_logprob", true, false, false},
+		{"margin", "margin", true, false, false},
+		{"hybrid", "hybrid", true, false, false},
+		{"self_verify", "self_verify", false, true, false},
+		{"automix_entailment", MethodAutoMixEntailment, false, false, true},
 	}
 
 	for _, tt := range tests {
@@ -94,6 +96,10 @@ func TestConfidenceEvaluator_Creation(t *testing.T) {
 
 			if eval.IsSelfVerify() != tt.wantSelfVer {
 				t.Errorf("IsSelfVerify() = %v, want %v", eval.IsSelfVerify(), tt.wantSelfVer)
+			}
+
+			if eval.IsAutoMixEntailment() != tt.wantAutoMix {
+				t.Errorf("IsAutoMixEntailment() = %v, want %v", eval.IsAutoMixEntailment(), tt.wantAutoMix)
 			}
 		})
 	}

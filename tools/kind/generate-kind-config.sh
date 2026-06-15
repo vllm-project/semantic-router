@@ -44,7 +44,7 @@ echo "  Output file:  ${OUTPUT_FILE}"
 export PROJECT_ROOT
 envsubst < "${TEMPLATE_FILE}" > "${OUTPUT_FILE}"
 
-echo -e "${GREEN}✓ Generated ${OUTPUT_FILE}${NC}"
+echo -e "${GREEN}Generated ${OUTPUT_FILE}${NC}"
 echo ""
 echo "You can now create the kind cluster with:"
 echo "  kind create cluster --config ${OUTPUT_FILE}"

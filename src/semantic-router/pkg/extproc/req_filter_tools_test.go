@@ -2,6 +2,7 @@ package extproc
 
 import (
 	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
 
@@ -16,6 +17,27 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/tools"
 )
+
+func testToolsDecision(mode string, semanticSelection *bool, allowTools, blockTools []string) *config.Decision {
+	payload, err := config.NewStructuredPayload(config.ToolsPluginConfig{
+		Enabled:           true,
+		Mode:              mode,
+		SemanticSelection: semanticSelection,
+		AllowTools:        allowTools,
+		BlockTools:        blockTools,
+	})
+	Expect(err).NotTo(HaveOccurred())
+	return &config.Decision{
+		Name: "test_tools_route",
+		Plugins: []config.DecisionPlugin{
+			{Type: config.DecisionPluginTools, Configuration: payload},
+		},
+	}
+}
+
+func toolsBoolPtr(v bool) *bool {
+	return &v
+}
 
 var _ = Describe("Tool Selection Request Filter", func() {
 	var (
@@ -32,37 +54,35 @@ var _ = Describe("Tool Selection Request Filter", func() {
 		Expect(err).NotTo(HaveOccurred())
 
 		// Initialize embedding models (ModelFactory) for tools tests
-		// Try to find Qwen3 or Gemma models in the models directory
-		qwen3Path := "../../../../models/mom-embedding-pro"
-		gemmaPath := "../../../../models/mom-embedding-flash"
-
-		// Check if at least one model exists
-		qwen3Exists := false
-		gemmaExists := false
-		if _, statErr := os.Stat(qwen3Path); statErr == nil {
-			qwen3Exists = true
+		qwen3Candidates := []string{
+			resolveExtprocTestPath("../../../../models/mom-embedding-pro"),
+			resolveExtprocTestPath("../../../../models/mom-embedding-ultra"),
 		}
-		if _, statErr := os.Stat(gemmaPath); statErr == nil {
-			gemmaExists = true
+		gemmaCandidates := []string{
+			resolveExtprocTestPath("../../../../models/mom-embedding-flash"),
+		}
+		qwen3ToUse := ""
+		for _, candidate := range qwen3Candidates {
+			if extprocTestModelArtifactsAvailable(candidate) {
+				qwen3ToUse = candidate
+				break
+			}
+		}
+		gemmaToUse := ""
+		for _, candidate := range gemmaCandidates {
+			if extprocTestModelArtifactsAvailable(candidate) {
+				gemmaToUse = candidate
+				break
+			}
 		}
 
-		// Initialize ModelFactory if at least one model is available
-		if qwen3Exists || gemmaExists {
-			qwen3ToUse := ""
-			gemmaToUse := ""
-			if qwen3Exists {
-				qwen3ToUse = qwen3Path
-			}
-			if gemmaExists {
-				gemmaToUse = gemmaPath
-			}
+		if qwen3ToUse == "" && gemmaToUse == "" {
+			Skip("Skipping tool selection tests: embedding models are not available")
+		}
 
-			err = candle_binding.InitEmbeddingModels(qwen3ToUse, gemmaToUse, true)
-			if err != nil {
-				// Log warning but don't fail - tests will skip if ModelFactory is not initialized
-				GinkgoWriter.Printf("Warning: Failed to initialize embedding models: %v\n", err)
-				GinkgoWriter.Printf("Tools tests requiring ModelFactory will be skipped\n")
-			}
+		err = candle_binding.InitEmbeddingModels(qwen3ToUse, gemmaToUse, "", true)
+		if err != nil {
+			Skip(fmt.Sprintf("Skipping tool selection tests: failed to initialize embedding models: %v", err))
 		}
 
 		// Create temporary directory for tools database
@@ -156,10 +176,15 @@ var _ = Describe("Tool Selection Request Filter", func() {
 
 				allTools := router.ToolsDatabase.GetAllTools()
 				Expect(allTools).To(HaveLen(4))
-				Expect(allTools[0].Function.Name).To(Equal("get_weather"))
-				Expect(allTools[1].Function.Name).To(Equal("search_web"))
-				Expect(allTools[2].Function.Name).To(Equal("calculate"))
-				Expect(allTools[3].Function.Name).To(Equal("send_email"))
+				// Check that all tools are loaded (order may vary due to concurrent processing)
+				toolNames := make([]string, len(allTools))
+				for i, tool := range allTools {
+					toolNames[i] = tool.Function.Name
+				}
+				Expect(toolNames).To(ContainElement("get_weather"))
+				Expect(toolNames).To(ContainElement("search_web"))
+				Expect(toolNames).To(ContainElement("calculate"))
+				Expect(toolNames).To(ContainElement("send_email"))
 			})
 		})
 
@@ -374,6 +399,7 @@ var _ = Describe("Tool Selection Request Filter", func() {
 
 			ctx = &RequestContext{
 				ExpectStreamingResponse: false,
+				VSRSelectedDecision:     testToolsDecision(config.ToolsPluginModePassthrough, toolsBoolPtr(true), nil, nil),
 			}
 		})
 
@@ -388,6 +414,7 @@ var _ = Describe("Tool Selection Request Filter", func() {
 				err = testRouter.handleToolSelection(openAIRequest, "xyzabc nonsense", []string{}, &response, ctx)
 				Expect(err).NotTo(HaveOccurred())
 				Expect(openAIRequest.Tools).To(BeNil())
+				Expect(param.IsOmitted(openAIRequest.ToolChoice.OfAuto)).To(BeFalse())
 			})
 
 			It("should return empty tools on database error", func() {
@@ -428,6 +455,43 @@ var _ = Describe("Tool Selection Request Filter", func() {
 				// Should not be nil but empty array
 				Expect(openAIRequest.Tools).NotTo(BeNil())
 			})
+		})
+	})
+
+	Describe("Tool choice normalization", func() {
+		It("clears auto tool_choice when no tools remain", func() {
+			requestJSON := []byte(`{
+				"model": "test-model",
+				"messages": [{"role": "user", "content": "你好"}],
+				"tool_choice": "auto"
+			}`)
+			openAIRequest, err := parseOpenAIRequest(requestJSON)
+			Expect(err).NotTo(HaveOccurred())
+
+			changed := clearToolChoiceWhenNoTools(openAIRequest)
+
+			Expect(changed).To(BeTrue())
+			Expect(param.IsOmitted(openAIRequest.ToolChoice.OfAuto)).To(BeTrue())
+			Expect(openAIRequest.ToolChoice.OfChatCompletionNamedToolChoice).To(BeNil())
+		})
+
+		It("keeps tool_choice when tools are present", func() {
+			requestJSON := []byte(`{
+				"model": "test-model",
+				"messages": [{"role": "user", "content": "天气如何"}],
+				"tool_choice": "auto",
+				"tools": [{
+					"type": "function",
+					"function": {"name": "lookup_weather"}
+				}]
+			}`)
+			openAIRequest, err := parseOpenAIRequest(requestJSON)
+			Expect(err).NotTo(HaveOccurred())
+
+			changed := clearToolChoiceWhenNoTools(openAIRequest)
+
+			Expect(changed).To(BeFalse())
+			Expect(param.IsOmitted(openAIRequest.ToolChoice.OfAuto)).To(BeFalse())
 		})
 	})
 
@@ -526,6 +590,7 @@ var _ = Describe("Tool Selection Request Filter", func() {
 
 			ctx = &RequestContext{
 				ExpectStreamingResponse: false,
+				VSRSelectedDecision:     testToolsDecision(config.ToolsPluginModePassthrough, toolsBoolPtr(true), nil, nil),
 			}
 		})
 

@@ -413,4 +413,4 @@ decisions:
 
 ## Reference
 
-See [bert_classification.yaml](https://github.com/vllm-project/semantic-router/blob/main/config/intelligent-routing/in-tree/bert_classification.yaml) for complete configuration.
+Use the snippet on this page as the v0.1 reference configuration. The main branch no longer carries the old full example file.

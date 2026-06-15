@@ -1,0 +1,10 @@
+algorithm:
+  type: remom
+  remom:
+    breadth_schedule: [3, 2, 1]
+    model_distribution: round_robin
+    temperature: 0.7
+    max_concurrent: 3
+    include_intermediate_responses: false
+    on_error: skip
+

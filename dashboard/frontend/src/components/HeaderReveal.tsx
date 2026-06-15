@@ -30,6 +30,10 @@ const HEADER_INFO: Record<string, { label: string; description: string }> = {
     label: 'User Feedback',
     description: 'Based on user feedback patterns',
   },
+  'x-vsr-matched-reask': {
+    label: 'Reask',
+    description: 'Detected repeated-question dissatisfaction across recent user turns',
+  },
   'x-vsr-matched-preference': {
     label: 'Preference',
     description: 'User preference match',
@@ -38,17 +42,49 @@ const HEADER_INFO: Record<string, { label: string; description: string }> = {
     label: 'Language',
     description: 'Detected language match',
   },
-  'x-vsr-matched-latency': {
-    label: 'Latency',
-    description: 'Matched latency rule based on model TPOT',
-  },
   'x-vsr-matched-context': {
     label: 'Context',
     description: 'Token count-based context classification',
   },
+  'x-vsr-matched-structure': {
+    label: 'Structure',
+    description: 'Matched request-shape and structural heuristic signals',
+  },
   'x-vsr-matched-complexity': {
     label: 'Complexity',
     description: 'Query complexity classification (hard/easy/medium)',
+  },
+  'x-vsr-matched-modality': {
+    label: 'Modality',
+    description: 'Matched modality classification signal',
+  },
+  'x-vsr-matched-authz': {
+    label: 'Authz',
+    description: 'Matched authorization routing signal',
+  },
+  'x-vsr-matched-jailbreak': {
+    label: 'Jailbreak',
+    description: 'Jailbreak detection signal matched',
+  },
+  'x-vsr-matched-pii': {
+    label: 'PII',
+    description: 'PII detection signal matched',
+  },
+  'x-vsr-matched-kb': {
+    label: 'Knowledge Base',
+    description: 'Matched knowledge-base label or group routing signal',
+  },
+  'x-vsr-matched-conversation': {
+    label: 'Conversation',
+    description: 'Conversation structure signal matched (e.g. multi-turn, tool usage)',
+  },
+  'x-vsr-matched-event': {
+    label: 'Event',
+    description: 'Event signal matched',
+  },
+  'x-vsr-matched-projections': {
+    label: 'Projection',
+    description: 'Projection mapping output matched',
   },
   // Decision headers
   'x-vsr-selected-decision': {
@@ -59,6 +95,10 @@ const HEADER_INFO: Record<string, { label: string; description: string }> = {
   'x-vsr-selected-model': {
     label: 'Selected Model',
     description: 'The model chosen by the router',
+  },
+  'x-vsr-selected-modality': {
+    label: 'Selected Modality',
+    description: 'The modality chosen by the router',
   },
   // Plugin status headers
   'x-vsr-cache-hit': {
@@ -73,13 +113,17 @@ const HEADER_INFO: Record<string, { label: string; description: string }> = {
     label: 'Context Count',
     description: 'Estimated token count for the request',
   },
+  'x-vsr-fast-response': {
+    label: 'Fast Response',
+    description: 'Request short-circuited by fast_response plugin',
+  },
   'x-vsr-jailbreak-blocked': {
-    label: 'Security: Jailbreak',
-    description: 'Jailbreak attempt detected and blocked',
+    label: 'Jailbreak Blocked',
+    description: 'Request blocked by jailbreak protection',
   },
   'x-vsr-pii-violation': {
-    label: 'Security: PII',
-    description: 'Personal information detected',
+    label: 'PII Violation',
+    description: 'Request blocked by PII protection',
   },
   'x-vsr-hallucination-detected': {
     label: 'Quality: Hallucination',
@@ -105,6 +149,23 @@ const HEADER_INFO: Record<string, { label: string; description: string }> = {
   'x-vsr-looper-algorithm': {
     label: 'Algorithm',
     description: 'The multi-model algorithm used (confidence, ratings)',
+  },
+  // Retention directive headers (issue #2009)
+  'x-vsr-retention-drop': {
+    label: 'Retention: Drop',
+    description: 'Matched decision asked to skip the semantic-cache write',
+  },
+  'x-vsr-retention-ttl-turns': {
+    label: 'Retention TTL (turns)',
+    description: 'Per-entry semantic-cache lifetime override, in conversation turns',
+  },
+  'x-vsr-retention-keep-current-model': {
+    label: 'Keep Current Model',
+    description: 'Forces the model-switch gate to stay on the current model',
+  },
+  'x-vsr-retention-prefer-prefix': {
+    label: 'Prefer Prefix',
+    description: 'Hints the inference pool to keep the prompt prefix / KV cache warm',
   },
 }
 
@@ -138,12 +199,14 @@ const HeaderReveal = ({ headers, onComplete, displayDuration = 2000 }: HeaderRev
     ),
     // Model selection headers: selected-model
     model: displayHeaders.filter(([key]) =>
-      key === 'x-vsr-selected-model'
+      key === 'x-vsr-selected-model' ||
+      key === 'x-vsr-selected-modality'
     ),
     // Plugin status headers: cache, reasoning, context, security, quality
     plugin: displayHeaders.filter(([key]) =>
       key === 'x-vsr-cache-hit' ||
       key === 'x-vsr-selected-reasoning' ||
+      key === 'x-vsr-fast-response' ||
       key === 'x-vsr-context-token-count' ||
       key === 'x-vsr-jailbreak-blocked' ||
       key === 'x-vsr-pii-violation' ||
@@ -153,6 +216,10 @@ const HeaderReveal = ({ headers, onComplete, displayDuration = 2000 }: HeaderRev
     // Looper headers: all x-vsr-looper-*
     looper: displayHeaders.filter(([key]) =>
       key.startsWith('x-vsr-looper-')
+    ),
+    // Retention directive headers: all x-vsr-retention-*
+    retention: displayHeaders.filter(([key]) =>
+      key.startsWith('x-vsr-retention-')
     ),
   }
 
@@ -186,6 +253,7 @@ const HeaderReveal = ({ headers, onComplete, displayDuration = 2000 }: HeaderRev
           {renderSection('SIGNALS', groupedHeaders.signals)}
           {renderSection('PLUGIN', groupedHeaders.plugin)}
           {renderSection('LOOPER', groupedHeaders.looper)}
+          {renderSection('RETENTION', groupedHeaders.retention)}
         </div>
         <div className={styles.hint}>
           Response will appear shortly...
@@ -196,4 +264,3 @@ const HeaderReveal = ({ headers, onComplete, displayDuration = 2000 }: HeaderRev
 }
 
 export default HeaderReveal
-

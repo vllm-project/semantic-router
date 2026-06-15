@@ -30,6 +30,32 @@
     "tool": {
       "type": "function",
       "function": {
+        "name": "current_time",
+        "description": "Get the current date and time",
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "timezone": {
+              "type": "string",
+              "description": "Optional IANA timezone name, for example Asia/Shanghai or America/New_York"
+            },
+            "locale": {
+              "type": "string",
+              "description": "Optional locale tag, for example en-US or zh-CN"
+            }
+          },
+          "required": []
+        }
+      }
+    },
+    "description": "Get the current date and time, current timezone, local time, time now, today's date, current timestamp, or convert time to another timezone",
+    "category": "time",
+    "tags": ["time", "date", "timezone", "clock", "now"]
+  },
+  {
+    "tool": {
+      "type": "function",
+      "function": {
         "name": "search_web",
         "description": "Search the web for information",
         "parameters": {

@@ -5,24 +5,37 @@
   left: 0;
   right: 0;
   bottom: 0;
-  background: rgba(0, 0, 0, 0.75);
+  background: linear-gradient(180deg, rgba(4, 6, 6, 0.76), rgba(3, 5, 5, 0.9));
   display: flex;
   align-items: center;
   justify-content: center;
   z-index: 1000;
-  backdrop-filter: blur(4px);
+  backdrop-filter: blur(16px) saturate(120%);
 }
 
 .modal {
-  background: var(--color-bg-secondary);
-  border: 1px solid var(--color-border);
+  background:
+    linear-gradient(180deg, rgba(18, 23, 23, 0.92), rgba(10, 14, 14, 0.96)),
+    rgba(10, 14, 14, 0.92);
+  border: 1px solid rgba(255, 255, 255, 0.18);
   border-radius: var(--radius-lg);
   width: 90%;
   max-width: 800px;
   max-height: 85vh;
   display: flex;
   flex-direction: column;
-  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
+  box-shadow:
+    0 28px 80px rgba(0, 0, 0, 0.45),
+    inset 0 1px 0 rgba(255, 255, 255, 0.06);
+  backdrop-filter: blur(20px);
+}
+
+.modalStandalone {
+  width: 100%;
+  max-width: 1120px;
+  max-height: none;
+  min-height: 0;
+  margin: 0 auto;
 }
 
 /* Header */
@@ -30,39 +43,46 @@
   display: flex;
   justify-content: space-between;
   align-items: center;
+  gap: 1rem;
   padding: 1.25rem 1.5rem;
-  border-bottom: 2px solid var(--color-primary);
-  background: linear-gradient(135deg, rgba(118, 185, 0, 0.05) 0%, rgba(0, 212, 255, 0.03) 100%);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.14);
+  background:
+    linear-gradient(135deg, rgba(118, 185, 0, 0.12), transparent 48%),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.05), rgba(255, 255, 255, 0.02));
 }
 
 .title {
   font-size: 1.25rem;
-  font-weight: 600;
-  color: var(--color-text);
+  font-weight: 700;
+  color: #ffffff;
   margin: 0;
   letter-spacing: -0.02em;
+  min-width: 0;
+  overflow-wrap: anywhere;
 }
 
 .closeButton {
-  background: transparent;
-  border: none;
-  color: var(--color-text-secondary);
-  font-size: 1.75rem;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  color: rgba(255, 255, 255, 0.88);
+  font-size: 1.5rem;
   cursor: pointer;
   padding: 0;
-  width: 32px;
-  height: 32px;
+  width: 36px;
+  height: 36px;
   display: flex;
   align-items: center;
   justify-content: center;
+  flex-shrink: 0;
   border-radius: var(--radius-sm);
   transition: all var(--transition-fast);
   line-height: 1;
 }
 
 .closeButton:hover {
-  background: rgba(239, 68, 68, 0.1);
-  color: var(--color-danger);
+  background: rgba(118, 185, 0, 0.12);
+  border-color: rgba(118, 185, 0, 0.35);
+  color: #ffffff;
 }
 
 /* Content */
@@ -72,8 +92,19 @@
   padding: 1.5rem;
 }
 
+.contentStandalone {
+  overflow: visible;
+}
+
 .section {
-  margin-bottom: 2rem;
+  margin-bottom: 1.15rem;
+  padding: 1rem;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: calc(var(--radius-md) + 2px);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.045), rgba(255, 255, 255, 0.018)),
+    rgba(255, 255, 255, 0.01);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.045);
 }
 
 .section:last-child {
@@ -82,13 +113,13 @@
 
 .sectionTitle {
   font-size: 1rem;
-  font-weight: 600;
-  color: var(--color-primary);
+  font-weight: 700;
+  color: #ffffff;
   margin: 0 0 1rem 0;
   text-transform: uppercase;
-  letter-spacing: 0.05em;
-  border-bottom: 1px solid var(--color-border);
-  padding-bottom: 0.5rem;
+  letter-spacing: 0.08em;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.12);
+  padding-bottom: 0.65rem;
 }
 
 /* Fields Grid */
@@ -110,33 +141,39 @@
 
 .fieldLabel {
   font-size: 0.8125rem;
-  font-weight: 600;
-  color: var(--color-text-secondary);
+  font-weight: 700;
+  color: rgba(255, 255, 255, 0.72);
   text-transform: uppercase;
-  letter-spacing: 0.05em;
+  letter-spacing: 0.07em;
 }
 
 .fieldValue {
   font-size: 0.9375rem;
-  color: var(--color-text);
-  padding: 0.75rem;
-  background: var(--color-bg-tertiary);
-  border: 1px solid var(--color-border);
+  color: #ffffff;
+  padding: 0.95rem 1rem;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.045), rgba(255, 255, 255, 0.02)),
+    rgba(255, 255, 255, 0.02);
+  border: 1px solid rgba(255, 255, 255, 0.16);
   border-radius: var(--radius-md);
-  min-height: 2.5rem;
-  display: flex;
-  align-items: center;
+  min-height: 3rem;
+  display: block;
+  line-height: 1.6;
   word-break: break-word;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04);
 }
 
 /* Footer */
 .footer {
   display: flex;
   justify-content: flex-end;
+  flex-wrap: wrap;
   gap: 0.75rem;
   padding: 1.25rem 1.5rem;
-  border-top: 1px solid var(--color-border);
-  background: var(--color-bg-tertiary);
+  border-top: 1px solid rgba(255, 255, 255, 0.12);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.03), rgba(255, 255, 255, 0.015)),
+    rgba(255, 255, 255, 0.01);
 }
 
 .closeFooterButton,
@@ -147,7 +184,7 @@
   border-radius: var(--radius-md);
   cursor: pointer;
   transition: all var(--transition-fast);
-  border: 1px solid var(--color-border);
+  border: 1px solid rgba(255, 255, 255, 0.18);
 }
 
 .primaryFooterButton {
@@ -157,15 +194,15 @@
   border-radius: var(--radius-md);
   cursor: pointer;
   transition: all var(--transition-fast);
-  border: 1px solid var(--color-accent-cyan);
-  background: var(--color-accent-cyan);
-  color: #000000;
-  box-shadow: var(--glow-primary);
+  border: 1px solid rgba(118, 185, 0, 0.48);
+  background: linear-gradient(180deg, rgba(118, 185, 0, 0.88), rgba(118, 185, 0, 0.72));
+  color: #021502;
+  box-shadow: 0 10px 24px rgba(118, 185, 0, 0.22);
 }
 
 .primaryFooterButton:hover {
-  background: rgba(0, 212, 255, 0.85);
-  box-shadow: var(--glow-primary);
+  background: linear-gradient(180deg, rgba(141, 211, 19, 0.94), rgba(118, 185, 0, 0.78));
+  box-shadow: 0 12px 28px rgba(118, 185, 0, 0.26);
 }
 
 .primaryFooterButton:disabled {
@@ -175,25 +212,25 @@
 }
 
 .closeFooterButton {
-  background: transparent;
-  color: var(--color-text-secondary);
+  background: rgba(255, 255, 255, 0.02);
+  color: rgba(255, 255, 255, 0.86);
 }
 
 .closeFooterButton:hover {
-  background: var(--color-bg-elevated);
-  color: var(--color-text);
-  border-color: var(--color-border-hover);
+  background: rgba(255, 255, 255, 0.06);
+  color: #ffffff;
+  border-color: rgba(255, 255, 255, 0.28);
 }
 
 .editFooterButton {
-  background: var(--color-primary);
-  color: #000000;
-  border-color: var(--color-primary);
+  background: rgba(255, 255, 255, 0.08);
+  color: #ffffff;
+  border-color: rgba(255, 255, 255, 0.2);
 }
 
 .editFooterButton:hover {
-  background: var(--color-primary-light);
-  box-shadow: var(--glow-primary);
+  background: rgba(255, 255, 255, 0.12);
+  border-color: rgba(118, 185, 0, 0.34);
 }
 
 /* Responsive */

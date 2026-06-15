@@ -1,0 +1,7 @@
+routing:
+  signals:
+    context:
+      - name: long_context
+        min_tokens: 32K
+        max_tokens: 256K
+        description: Requests that need a larger effective context window.

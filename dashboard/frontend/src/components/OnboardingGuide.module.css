@@ -1,0 +1,248 @@
+.overlay {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1rem;
+  background:
+    radial-gradient(circle at top center, rgba(143, 212, 0, 0.08), transparent 42%),
+    radial-gradient(circle at bottom right, rgba(118, 185, 0, 0.12), transparent 34%),
+    rgba(3, 7, 2, 0.56);
+  backdrop-filter: blur(24px) saturate(130%);
+  z-index: 1200;
+  pointer-events: auto;
+}
+
+.card {
+  width: min(560px, calc(100vw - 2rem));
+  max-height: calc(100vh - 2rem);
+  overflow: auto;
+  padding: 1.35rem;
+  border: 1px solid rgba(118, 185, 0, 0.25);
+  border-radius: 1.25rem;
+  background:
+    radial-gradient(circle at top right, rgba(143, 212, 0, 0.14), transparent 32%),
+    linear-gradient(180deg, rgba(17, 22, 13, 0.97), rgba(7, 9, 6, 0.99));
+  box-shadow:
+    0 28px 72px rgba(0, 0, 0, 0.48),
+    inset 0 1px 0 rgba(255, 255, 255, 0.04);
+  backdrop-filter: blur(18px);
+}
+
+.header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.eyebrow {
+  color: var(--color-primary-light);
+  font-size: 0.78rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  font-weight: 600;
+}
+
+.title {
+  margin-top: 0.35rem;
+  font-size: 1.45rem;
+  line-height: 1.15;
+}
+
+.closeButton {
+  width: 2rem;
+  height: 2rem;
+  border-radius: 999px;
+  border: 1px solid rgba(118, 185, 0, 0.18);
+  background: rgba(118, 185, 0, 0.08);
+  color: var(--color-text-secondary);
+  font-size: 1.4rem;
+}
+
+.progressRow {
+  display: flex;
+  gap: 0.45rem;
+  margin-top: 0.9rem;
+}
+
+.progressDot {
+  flex: 1;
+  height: 0.35rem;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.12);
+}
+
+.progressDotActive {
+  background: var(--color-primary);
+}
+
+.progressDotDone {
+  background: rgba(143, 212, 0, 0.55);
+}
+
+.description {
+  margin-top: 0.95rem;
+  color: var(--color-text-secondary);
+  line-height: 1.55;
+}
+
+.detailCard {
+  margin-top: 1rem;
+  padding: 1rem 1.05rem;
+  border: 1px solid rgba(118, 185, 0, 0.16);
+  border-radius: 1rem;
+  background:
+    radial-gradient(circle at top right, rgba(118, 185, 0, 0.08), transparent 40%),
+    rgba(255, 255, 255, 0.025);
+}
+
+.detailLabel {
+  color: var(--color-text-muted);
+  font-size: 0.8rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  font-weight: 600;
+}
+
+.detailList {
+  display: grid;
+  gap: 0.65rem;
+  margin: 0.85rem 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.detailItem {
+  position: relative;
+  padding-left: 1rem;
+  color: var(--color-text-secondary);
+  line-height: 1.5;
+}
+
+.detailItem::before {
+  content: '';
+  position: absolute;
+  top: 0.58rem;
+  left: 0;
+  width: 0.38rem;
+  height: 0.38rem;
+  border-radius: 999px;
+  background: var(--color-primary);
+  box-shadow: 0 0 0 3px rgba(118, 185, 0, 0.16);
+}
+
+.detailHint {
+  display: inline-flex;
+  align-items: center;
+  min-height: 2rem;
+  margin-top: 0.85rem;
+  padding: 0 0.8rem;
+  border-radius: 999px;
+  border: 1px solid rgba(118, 185, 0, 0.18);
+  background: rgba(118, 185, 0, 0.08);
+  color: var(--color-primary-light);
+  font-size: 0.84rem;
+  font-weight: 600;
+}
+
+.footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-top: 1.15rem;
+  padding-top: 0.95rem;
+  border-top: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.footerLeft,
+.footerRight {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.65rem;
+}
+
+.primaryButton,
+.secondaryButton,
+.replayButton {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 2.5rem;
+  padding: 0 0.95rem;
+  border-radius: 0.8rem;
+  font-weight: 600;
+}
+
+.primaryButton {
+  background: var(--color-primary);
+  color: #081000;
+}
+
+.secondaryButton,
+.replayButton {
+  background: rgba(118, 185, 0, 0.06);
+  border: 1px solid rgba(118, 185, 0, 0.18);
+  color: var(--color-text);
+}
+
+.replayButton {
+  position: fixed;
+  right: 1.5rem;
+  bottom: 1.5rem;
+  z-index: 1100;
+  backdrop-filter: blur(10px);
+}
+
+.card::-webkit-scrollbar {
+  width: 10px;
+}
+
+.card::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.card::-webkit-scrollbar-thumb {
+  border: 2px solid transparent;
+  border-radius: 999px;
+  background: rgba(118, 185, 0, 0.25);
+  background-clip: padding-box;
+}
+
+@media (max-width: 640px) {
+  .overlay {
+    padding: 0.75rem;
+  }
+
+  .card {
+    width: 100%;
+    max-height: calc(100vh - 1.5rem);
+    padding: 1rem;
+  }
+
+  .title {
+    font-size: 1.25rem;
+  }
+
+  .footer {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .footerLeft,
+  .footerRight {
+    width: 100%;
+  }
+
+  .footerRight button,
+  .footerLeft button {
+    flex: 1;
+  }
+
+  .replayButton {
+    right: 0.75rem;
+    bottom: 0.75rem;
+  }
+}

@@ -1,0 +1,52 @@
+# Router-R1 Training Configuration
+# Reference: arXiv:2506.09033
+
+# Model configuration
+base_model: "microsoft/Phi-3-mini-4k-instruct"  # Router backbone
+model_max_length: 2048
+
+# Training configuration
+learning_rate: 1.0e-5
+num_epochs: 10
+batch_size: 8
+gradient_accumulation_steps: 4
+warmup_ratio: 0.1
+weight_decay: 0.01
+max_grad_norm: 1.0
+
+# RL-specific configuration
+gamma: 0.99  # Discount factor
+gae_lambda: 0.95  # GAE lambda
+clip_epsilon: 0.2  # PPO clip
+value_coef: 0.5  # Value loss coefficient
+entropy_coef: 0.01  # Entropy bonus for exploration
+
+# Reward configuration (from Router-R1 paper)
+format_reward_weight: 0.1  # Reward for correct output format
+outcome_reward_weight: 0.7  # Reward for correct model selection
+cost_reward_weight: 0.2  # Reward for cost efficiency
+
+# Model costs ($/1M tokens) - adjust to your models
+model_costs:
+  gpt-4: 30.0
+  gpt-4-turbo: 10.0
+  claude-3-opus: 15.0
+  claude-3-sonnet: 3.0
+  mistral-7b: 0.5
+  llama3-8b: 0.25
+  deepseek-coder: 0.25
+  phi-3-mini: 0.1
+
+# Output configuration
+output_dir: "./checkpoints/router_r1"
+save_steps: 500
+eval_steps: 100
+logging_steps: 10
+
+# Data configuration
+train_data_path: "./data/train_routing.json"
+eval_data_path: "./data/eval_routing.json"
+
+# Hardware
+fp16: true
+device: "cuda"

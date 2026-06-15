@@ -1,0 +1,182 @@
+import React, { useEffect, useId } from 'react'
+import { createPortal } from 'react-dom'
+import styles from './LayoutAccountControl.module.css'
+
+interface LayoutAccountControlProps {
+  accountName: string
+  accountEmail: string
+  accountRole?: string
+  accountPermissions: string[]
+  isOpen: boolean
+  onToggle: () => void
+  onClose: () => void
+  onLogout: () => void
+  variant?: 'header' | 'rail'
+}
+
+function getAccountInitials(name?: string, email?: string): string {
+  const source = (name || email || 'User').trim()
+  if (!source) {
+    return 'U'
+  }
+
+  const words = source.split(/\s+/).filter(Boolean)
+  if (words.length >= 2) {
+    return `${words[0][0]}${words[1][0]}`.toUpperCase()
+  }
+
+  return source.slice(0, 2).toUpperCase()
+}
+
+function formatRoleLabel(role?: string): string {
+  if (!role) {
+    return 'Unknown role'
+  }
+
+  return `${role.charAt(0).toUpperCase()}${role.slice(1)}`
+}
+
+const LayoutAccountControl: React.FC<LayoutAccountControlProps> = ({
+  accountName,
+  accountEmail,
+  accountRole,
+  accountPermissions,
+  isOpen,
+  onToggle,
+  onClose,
+  onLogout,
+  variant = 'header',
+}) => {
+  const initials = getAccountInitials(accountName, accountEmail)
+  const roleLabel = formatRoleLabel(accountRole)
+  const dialogId = useId()
+  const dialogTitleId = `${dialogId}-title`
+  const isRail = variant === 'rail'
+
+  useEffect(() => {
+    if (!isOpen) {
+      return
+    }
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        onClose()
+      }
+    }
+
+    const previousOverflow = document.body.style.overflow
+    document.body.style.overflow = 'hidden'
+    window.addEventListener('keydown', handleKeyDown)
+
+    return () => {
+      document.body.style.overflow = previousOverflow
+      window.removeEventListener('keydown', handleKeyDown)
+    }
+  }, [isOpen, onClose])
+
+  return (
+    <>
+      <button
+        type="button"
+        className={`${styles.trigger} ${isOpen ? styles.triggerActive : ''} ${isRail ? styles.triggerRail : ''}`}
+        aria-controls={isOpen ? dialogId : undefined}
+        aria-expanded={isOpen}
+        aria-haspopup="dialog"
+        aria-label={`View account details for ${accountName}`}
+        data-testid={isRail ? 'playground-account-control' : undefined}
+        onClick={onToggle}
+        title={isRail ? accountName : 'View account details'}
+      >
+        <span className={`${styles.triggerAvatar} ${isRail ? styles.triggerAvatarRail : ''}`} aria-hidden="true">
+          {initials}
+        </span>
+        {isRail ? null : <span className={styles.triggerName}>{accountName}</span>}
+      </button>
+
+      {isOpen && typeof document !== 'undefined'
+        ? createPortal(
+        <div className={styles.overlay} data-testid="layout-account-overlay" onClick={onClose}>
+          <div
+            id={dialogId}
+            className={styles.dialog}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby={dialogTitleId}
+            data-testid="layout-account-dialog"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <div className={styles.header}>
+              <div className={styles.headerCopy}>
+                <span className={styles.eyebrow}>Account</span>
+                <h2 id={dialogTitleId} className={styles.title}>
+                  Account details
+                </h2>
+              </div>
+              <button
+                type="button"
+                className={styles.closeButton}
+                aria-label="Close account dialog"
+                onClick={onClose}
+              >
+                ×
+              </button>
+            </div>
+
+            <div className={styles.body}>
+              <section className={styles.identitySection}>
+                <div className={styles.identityAvatar} aria-hidden="true">
+                  {initials}
+                </div>
+                <dl className={styles.identityGrid}>
+                  <div className={styles.identityRow}>
+                    <dt>Name</dt>
+                    <dd>{accountName}</dd>
+                  </div>
+                  <div className={styles.identityRow}>
+                    <dt>Email</dt>
+                    <dd>{accountEmail}</dd>
+                  </div>
+                  <div className={styles.identityRow}>
+                    <dt>Role</dt>
+                    <dd>{roleLabel}</dd>
+                  </div>
+                </dl>
+              </section>
+
+              <section className={styles.permissionsSection}>
+                <div className={styles.sectionHeading}>
+                  <span>Permissions</span>
+                  <span className={styles.permissionCount}>{accountPermissions.length}</span>
+                </div>
+                {accountPermissions.length > 0 ? (
+                  <ul className={styles.permissionList}>
+                    {accountPermissions.map((permission) => (
+                      <li key={permission} className={styles.permissionPill}>
+                        {permission}
+                      </li>
+                    ))}
+                  </ul>
+                ) : (
+                  <p className={styles.emptyState}>No permissions returned for this session.</p>
+                )}
+              </section>
+            </div>
+
+            <div className={styles.footer}>
+              <button type="button" className={styles.secondaryButton} onClick={onClose}>
+                Close
+              </button>
+              <button type="button" className={styles.logoutButton} onClick={onLogout}>
+                Logout
+              </button>
+            </div>
+          </div>
+        </div>,
+          document.body,
+        )
+        : null}
+    </>
+  )
+}
+
+export default LayoutAccountControl

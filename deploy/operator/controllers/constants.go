@@ -19,6 +19,10 @@ package controllers
 const (
 	// SemanticRouterFinalizer is the finalizer for SemanticRouter resources
 	SemanticRouterFinalizer = "semanticrouter.vllm.ai/finalizer"
+
+	typeAvailableSemanticRouter   = "Available"
+	typeProgressingSemanticRouter = "Progressing"
+	typeDegradedSemanticRouter    = "Degraded"
 )
 
 // Default values for SemanticRouter resources
@@ -30,7 +34,7 @@ const (
 	DefaultReplicas = int32(1)
 
 	// DefaultPVCSize is the default PVC storage size
-	DefaultPVCSize = "10Gi"
+	DefaultPVCSize = "15Gi"
 
 	// Port numbers
 	DefaultGRPCPort    = int32(50051)

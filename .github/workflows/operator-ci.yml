@@ -5,6 +5,8 @@ on:
     branches:
       - main
       - develop
+    tags:
+      - 'v*'
     paths:
       - 'deploy/operator/**'
       - '.github/workflows/operator-ci.yml'
@@ -148,12 +150,17 @@ jobs:
         run: |
           echo "operator=semantic-router-operator:test" >> $GITHUB_OUTPUT
           echo "bundle=semantic-router-operator-bundle:test" >> $GITHUB_OUTPUT
+          echo "extproc=semantic-router-extproc:test" >> $GITHUB_OUTPUT
 
       - name: Generate remote tags for operator
         id: operator-remote-tags
         if: github.event_name != 'pull_request'
         run: |
-          TAG="${{ github.sha }}"
+          if [[ "${GITHUB_REF}" == refs/tags/v* ]]; then
+            TAG="${GITHUB_REF#refs/tags/}"
+          else
+            TAG="${{ github.sha }}"
+          fi
           TAGS="ghcr.io/${REPOSITORY_OWNER_LOWER}/semantic-router/operator:${TAG},ghcr.io/${REPOSITORY_OWNER_LOWER}/semantic-router/operator:latest"
           echo "tags=${TAGS}" >> $GITHUB_OUTPUT
 
@@ -161,27 +168,31 @@ jobs:
         id: bundle-remote-tags
         if: github.event_name != 'pull_request'
         run: |
-          TAG="${{ github.sha }}"
+          if [[ "${GITHUB_REF}" == refs/tags/v* ]]; then
+            TAG="${GITHUB_REF#refs/tags/}"
+          else
+            TAG="${{ github.sha }}"
+          fi
           TAGS="ghcr.io/${REPOSITORY_OWNER_LOWER}/semantic-router/operator-bundle:${TAG},ghcr.io/${REPOSITORY_OWNER_LOWER}/semantic-router/operator-bundle:latest"
           echo "tags=${TAGS}" >> $GITHUB_OUTPUT
 
       - name: Build operator image (local for tests)
         uses: docker/build-push-action@v5
         with:
-          context: ./deploy/operator
+          context: .
           file: ./deploy/operator/Dockerfile
           platforms: linux/amd64
           push: false
           load: true
           tags: ${{ steps.local-tags.outputs.operator }}
           cache-from: type=gha,scope=operator
-          cache-to: type=gha,mode=max,scope=operator
+          cache-to: type=gha,mode=max,scope=operator,ignore-error=true
 
       - name: Build and push operator image (multi-arch to registry)
         if: github.event_name != 'pull_request'
         uses: docker/build-push-action@v5
         with:
-          context: ./deploy/operator
+          context: .
           file: ./deploy/operator/Dockerfile
           platforms: linux/amd64,linux/arm64
           push: true
@@ -198,7 +209,7 @@ jobs:
           load: true
           tags: ${{ steps.local-tags.outputs.bundle }}
           cache-from: type=gha,scope=operator-bundle
-          cache-to: type=gha,mode=max,scope=operator-bundle
+          cache-to: type=gha,mode=max,scope=operator-bundle,ignore-error=true
 
       - name: Build and push bundle image (multi-arch to registry)
         if: github.event_name != 'pull_request'
@@ -211,11 +222,26 @@ jobs:
           tags: ${{ steps.bundle-remote-tags.outputs.tags }}
           cache-from: type=gha,scope=operator-bundle
 
+      - name: Build extproc image (local for tests)
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: ./tools/docker/Dockerfile.extproc
+          platforms: linux/amd64
+          push: false
+          load: true
+          tags: ${{ steps.local-tags.outputs.extproc }}
+          cache-from: type=gha,scope=extproc
+          cache-to: type=gha,mode=max,scope=extproc,ignore-error=true
+
       - name: Save operator image for integration tests
         run: docker save -o /tmp/operator-image.tar ${{ steps.local-tags.outputs.operator }}
 
       - name: Save bundle image for validation
         run: docker save -o /tmp/bundle-image.tar ${{ steps.local-tags.outputs.bundle }}
+
+      - name: Save extproc image for integration tests
+        run: docker save -o /tmp/extproc-image.tar ${{ steps.local-tags.outputs.extproc }}
 
       - name: Upload operator image artifact
         uses: actions/upload-artifact@v4
@@ -229,6 +255,13 @@ jobs:
         with:
           name: bundle-image
           path: /tmp/bundle-image.tar
+          retention-days: 1
+
+      - name: Upload extproc image artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: extproc-image
+          path: /tmp/extproc-image.tar
           retention-days: 1
 
   bundle-validate:
@@ -261,24 +294,43 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        cache-backend: [memory, redis, milvus, hybrid]
+        cache-backend: [memory, redis, milvus, qdrant, hybrid, mmbert, complexity]
         include:
           - cache-backend: memory
             deploy-redis: false
             deploy-milvus: false
+            deploy-qdrant: false
             router-name: test-router
           - cache-backend: redis
             deploy-redis: true
             deploy-milvus: false
+            deploy-qdrant: false
             router-name: test-router-redis
           - cache-backend: milvus
             deploy-redis: false
             deploy-milvus: true
+            deploy-qdrant: false
             router-name: test-router-milvus
+          - cache-backend: qdrant
+            deploy-redis: false
+            deploy-milvus: false
+            deploy-qdrant: true
+            router-name: test-router-qdrant
           - cache-backend: hybrid
             deploy-redis: false
             deploy-milvus: true
+            deploy-qdrant: false
             router-name: test-router-hybrid
+          - cache-backend: mmbert
+            deploy-redis: false
+            deploy-milvus: false
+            deploy-qdrant: false
+            router-name: test-router-mmbert
+          - cache-backend: complexity
+            deploy-redis: false
+            deploy-milvus: false
+            deploy-qdrant: false
+            router-name: test-router-complexity
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -439,6 +491,64 @@ jobs:
           echo "Milvus deployed successfully"
           sleep 10
 
+      - name: Deploy Qdrant
+        if: matrix.deploy-qdrant == true
+        run: |
+          echo "Deploying Qdrant..."
+          kubectl create namespace cache-backends || true
+
+          cat <<EOF | kubectl apply -f -
+          apiVersion: apps/v1
+          kind: Deployment
+          metadata:
+            name: qdrant
+            namespace: cache-backends
+          spec:
+            replicas: 1
+            selector:
+              matchLabels:
+                app: qdrant
+            template:
+              metadata:
+                labels:
+                  app: qdrant
+              spec:
+                containers:
+                - name: qdrant
+                  image: qdrant/qdrant:latest
+                  ports:
+                  - containerPort: 6333
+                    name: rest
+                  - containerPort: 6334
+                    name: grpc
+                  resources:
+                    requests:
+                      cpu: 250m
+                      memory: 512Mi
+                    limits:
+                      cpu: 1000m
+                      memory: 1Gi
+          ---
+          apiVersion: v1
+          kind: Service
+          metadata:
+            name: qdrant
+            namespace: cache-backends
+          spec:
+            selector:
+              app: qdrant
+            ports:
+            - port: 6333
+              targetPort: 6333
+              name: rest
+            - port: 6334
+              targetPort: 6334
+              name: grpc
+          EOF
+
+          kubectl wait --for=condition=available --timeout=120s deployment/qdrant -n cache-backends
+          echo "Qdrant deployed successfully"
+
       - name: Create cache credentials secrets
         if: matrix.deploy-redis == true || matrix.deploy-milvus == true
         run: |
@@ -483,6 +593,38 @@ jobs:
           echo "Verifying operator image is available in kind cluster..."
           docker exec operator-test-${{ matrix.cache-backend }}-control-plane crictl images | grep semantic-router-operator || {
             echo "ERROR: semantic-router-operator:test image not found in kind!"
+            echo "Available images in kind:"
+            docker exec operator-test-${{ matrix.cache-backend }}-control-plane crictl images
+            exit 1
+          }
+
+      - name: Download extproc image artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: extproc-image
+          path: /tmp
+
+      - name: Load extproc image into Docker
+        run: docker load --input /tmp/extproc-image.tar
+
+      - name: Verify extproc image loaded
+        run: |
+          echo "Verifying extproc image is available..."
+          docker images | grep semantic-router-extproc || {
+            echo "ERROR: semantic-router-extproc:test image not found!"
+            echo "Available images:"
+            docker images
+            exit 1
+          }
+
+      - name: Load extproc image into kind
+        run: kind load docker-image semantic-router-extproc:test --name operator-test-${{ matrix.cache-backend }}
+
+      - name: Verify extproc image in kind
+        run: |
+          echo "Verifying extproc image is available in kind cluster..."
+          docker exec operator-test-${{ matrix.cache-backend }}-control-plane crictl images | grep semantic-router-extproc || {
+            echo "ERROR: semantic-router-extproc:test image not found in kind!"
             echo "Available images in kind:"
             docker exec operator-test-${{ matrix.cache-backend }}-control-plane crictl images
             exit 1
@@ -561,6 +703,7 @@ jobs:
               semantic_cache:
                 enabled: true
                 backend_type: "memory"
+                embedding_model: "mmbert"
                 max_entries: 100'
               ;;
             redis)
@@ -570,7 +713,7 @@ jobs:
                 backend_type: "redis"
                 similarity_threshold: "0.85"
                 ttl_seconds: 3600
-                embedding_model: "bert"
+                embedding_model: "mmbert"
                 redis:
                   connection:
                     host: redis.cache-backends.svc.cluster.local
@@ -607,7 +750,7 @@ jobs:
                 backend_type: "milvus"
                 similarity_threshold: "0.90"
                 ttl_seconds: 7200
-                embedding_model: "bert"
+                embedding_model: "mmbert"
                 milvus:
                   connection:
                     host: milvus-standalone.cache-backends.svc.cluster.local
@@ -660,6 +803,22 @@ jobs:
                     auto_create_collection: true
                     verbose_errors: true'
               ;;
+            qdrant)
+              CACHE_CONFIG='
+              semantic_cache:
+                enabled: true
+                backend_type: "qdrant"
+                similarity_threshold: "0.90"
+                ttl_seconds: 7200
+                embedding_model: "mmbert"
+                qdrant:
+                  host: qdrant.cache-backends.svc.cluster.local
+                  port: 6334
+                  api_key: ""
+                  use_tls: false
+                  collection_name: semantic_cache
+                  connect_timeout: 10'
+              ;;
             hybrid)
               CACHE_CONFIG='
               semantic_cache:
@@ -669,7 +828,7 @@ jobs:
                 ttl_seconds: 3600
                 max_entries: 5000
                 eviction_policy: lru
-                embedding_model: "bert"
+                embedding_model: "mmbert"
                 hnsw:
                   use_hnsw: true
                   hnsw_m: 32
@@ -727,6 +886,52 @@ jobs:
                     auto_create_collection: true
                     verbose_errors: false'
               ;;
+            mmbert)
+              CACHE_CONFIG='
+              semantic_cache:
+                enabled: true
+                backend_type: "memory"
+                embedding_model: "mmbert"
+                similarity_threshold: "0.85"
+                max_entries: 1000
+                ttl_seconds: 3600
+                hnsw:
+                  use_hnsw: true
+                  hnsw_m: 16
+                  hnsw_ef_construction: 200
+                  max_memory_entries: 1000'
+              ;;
+            complexity)
+              CACHE_CONFIG='
+              semantic_cache:
+                enabled: true
+                backend_type: "memory"
+                embedding_model: "mmbert"
+                max_entries: 5000
+                similarity_threshold: "0.85"
+                ttl_seconds: 7200
+              complexity_rules:
+                - name: "code-complexity"
+                  description: "Classify coding tasks by complexity"
+                  threshold: "0.3"
+                  hard:
+                    candidates:
+                      - "Implement a distributed lock manager"
+                      - "Design a database migration system"
+                  easy:
+                    candidates:
+                      - "Write a function to reverse a string"
+                      - "Create a simple counter"
+                - name: "reasoning-complexity"
+                  description: "Classify reasoning tasks"
+                  threshold: "0.3"
+                  hard:
+                    candidates:
+                      - "Analyze geopolitical implications"
+                  easy:
+                    candidates:
+                      - "What is the capital of France?"'
+              ;;
           esac
 
           cat <<EOF | kubectl apply -f -
@@ -738,9 +943,9 @@ jobs:
           spec:
             replicas: 1
             image:
-              repository: ghcr.io/vllm-project/semantic-router/extproc
-              tag: latest
-              pullPolicy: IfNotPresent
+              repository: semantic-router-extproc
+              tag: test
+              pullPolicy: Never
             service:
               type: ClusterIP
               grpc:
@@ -751,11 +956,11 @@ jobs:
                 targetPort: 8080
             resources:
               limits:
-                memory: "2Gi"
-                cpu: "1"
+                memory: "8Gi"
+                cpu: "4000m"
               requests:
-                memory: "1Gi"
-                cpu: "500m"
+                memory: "4Gi"
+                cpu: "2000m"
             persistence:
               enabled: false
             startupProbe:
@@ -764,10 +969,14 @@ jobs:
               timeoutSeconds: 5
               failureThreshold: 60
             config:
-              bert_model:
-                model_id: "models/mom-embedding-light"
-                threshold: "0.6"
+              embedding_models:
+                mmbert_model_path: "models/mmbert-embed-32k-2d-matryoshka"
                 use_cpu: true
+                embedding_config:
+                  model_type: "mmbert"
+                  preload_embeddings: true
+                  enable_soft_matching: true
+                  min_score_threshold: "0.6"
           ${CACHE_CONFIG}
               tools:
                 enabled: false
@@ -775,10 +984,10 @@ jobs:
                 enabled: false
               classifier:
                 category_model:
-                  model_id: "models/lora_intent_classifier_bert-base-uncased_model"
+                  model_id: "models/mmbert32k-intent-classifier-merged"
                   use_cpu: true
                 pii_model:
-                  model_id: "models/pii_classifier_modernbert-base_presidio_token_model"
+                  model_id: "models/mmbert32k-pii-detector-merged"
                   use_cpu: true
               api:
                 batch_classification:

@@ -1,0 +1,74 @@
+# Valkey Vector Store — Example Configuration
+#
+# Inline the `vector_store` block below into your canonical config.yaml under
+# `global.stores`. All field names match the ValkeyVectorStoreConfig schema
+# (flat, no sub-sections).
+#
+# Prerequisites:
+#   • Valkey running with the valkey-search module enabled.
+#   • The valkey-bundle image ships the module out of the box:
+#       docker run -d --name valkey -p 6379:6379 valkey/valkey-bundle:latest
+#
+# Note: CI and local dev targets use valkey-bundle:unstable because
+# valkey-search 1.2.0-rc3+ (text search support) is only in that tag for now.
+
+global:
+  stores:
+    vector_store:
+      enabled: true
+      backend_type: valkey
+      valkey:
+        # Valkey server hostname.
+        host: "localhost"
+
+        # Valkey server port.
+        port: 6379
+
+        # Database index (0–15).
+        database: 0
+
+        # Password for Valkey AUTH (omit or leave empty for no auth).
+        # password: ""
+
+        # Connection timeout in seconds.
+        connect_timeout: 10
+
+        # Prefix applied to all hash keys and index names created by this backend.
+        collection_prefix: "vsr_vs_"
+
+        # Distance metric used by the HNSW index.
+        # Options: COSINE (default), L2, IP
+        metric_type: COSINE
+
+        # HNSW graph connectivity parameter (M). Higher = better recall, more memory.
+        index_m: 16
+
+        # HNSW build-time search scope (efConstruction). Higher = better index
+        # quality at the cost of slower indexing.
+        index_ef_construction: 200
+
+# ---------------------------------------------------------------------------
+# Environment-specific overrides (inline into config.yaml as needed)
+# ---------------------------------------------------------------------------
+#
+# Local development:
+#   valkey:
+#     host: "localhost"
+#     port: 6379
+#     connect_timeout: 5
+#
+# Production (with auth):
+#   valkey:
+#     host: "valkey.production.svc.cluster.local"
+#     port: 6379
+#     password: "${VALKEY_PASSWORD}"
+#     connect_timeout: 10
+#     metric_type: COSINE
+#     index_m: 16
+#     index_ef_construction: 200
+#
+# Kubernetes (in-cluster):
+#   valkey:
+#     host: "valkey-service.valkey-system.svc.cluster.local"
+#     port: 6379
+#     connect_timeout: 10

@@ -1,19 +1,22 @@
 // topology/utils/topologyParser.ts - Config to Topology Parser
 
-import {
+import type {
+  AlgorithmConfig,
   ConfigData,
-  ParsedTopology,
-  SignalConfig,
   DecisionConfig,
   GlobalPluginConfig,
   ModelConfig,
-  SignalType,
-  RuleCombination,
-  AlgorithmConfig,
-  PluginConfig,
   ModelRefConfig,
+  ParsedTopology,
+  PluginConfig,
+  RawRuleCombination,
+  RawRuleNode,
+  RuleCombination,
+  RuleNode,
+  SignalConfig,
+  SignalType,
 } from '../types'
-import { SIGNAL_LATENCY } from '../constants'
+import { extractSignals } from './topologySignalParser'
 
 /**
  * Parse raw config data into structured topology data
@@ -23,8 +26,8 @@ export function parseConfigToTopology(config: ConfigData): ParsedTopology {
   const signals = extractSignals(config)
   const decisions = extractDecisions(config)
   const models = extractModels(config)
-  const strategy = 'priority' // Default strategy
-  const defaultModel = config.providers?.default_model
+  const strategy = config.global?.router?.strategy || 'priority'
+  const defaultModel = config.providers?.defaults?.default_model
 
   return { globalPlugins, signals, decisions, models, strategy, defaultModel }
 }
@@ -34,29 +37,34 @@ export function parseConfigToTopology(config: ConfigData): ParsedTopology {
  */
 function extractGlobalPlugins(config: ConfigData): GlobalPluginConfig[] {
   const plugins: GlobalPluginConfig[] = []
+  const promptGuard = config.global?.model_catalog?.modules?.prompt_guard || config.prompt_guard
+  const piiModel = config.global?.model_catalog?.modules?.classifier?.pii || config.classifier?.pii_model
+  const semanticCache = config.global?.stores?.semantic_cache || config.semantic_cache
+  const promptGuardModel = promptGuard?.model_id || promptGuard?.model_ref
+  const piiModelRef = piiModel?.model_id || piiModel?.model_ref
 
   // 1. Prompt Guard (Jailbreak Detection)
-  if (config.prompt_guard) {
+  if (promptGuard) {
     plugins.push({
       type: 'prompt_guard',
-      enabled: config.prompt_guard.enabled ?? false,
-      modelId: config.prompt_guard.model_id || 'vLLM-SR-Jailbreak',
-      threshold: config.prompt_guard.threshold,
+      enabled: promptGuard.enabled ?? !!promptGuardModel,
+      modelId: promptGuardModel || 'vLLM-SR-Jailbreak',
+      threshold: promptGuard.threshold,
       config: {
-        use_modernbert: config.prompt_guard.use_modernbert,
-        use_vllm: config.prompt_guard.use_vllm,
+        use_modernbert: promptGuard.use_modernbert,
+        use_vllm: promptGuard.use_vllm,
       },
     })
   }
 
   // 2. PII Detection
   // Note: Global PII only loads the model. Actual detection requires decision-level pii plugin.
-  if (config.classifier?.pii_model) {
+  if (piiModel) {
     plugins.push({
       type: 'pii_detection',
-      enabled: !!config.classifier.pii_model.model_id,
-      modelId: config.classifier.pii_model.model_id || 'vLLM-SR-PII',
-      threshold: config.classifier.pii_model.threshold,
+      enabled: piiModel.enabled ?? !!piiModelRef,
+      modelId: piiModelRef || 'vLLM-SR-PII',
+      threshold: piiModel.threshold,
       config: {
         // Mark as "model loaded" not "active detection"
         mode: 'model_loaded',
@@ -66,14 +74,14 @@ function extractGlobalPlugins(config: ConfigData): GlobalPluginConfig[] {
   }
 
   // 3. Semantic Cache (Global)
-  if (config.semantic_cache) {
+  if (semanticCache) {
     plugins.push({
       type: 'semantic_cache',
-      enabled: config.semantic_cache.enabled ?? false,
+      enabled: semanticCache.enabled ?? false,
       config: {
-        backend_type: config.semantic_cache.backend_type,
-        similarity_threshold: config.semantic_cache.similarity_threshold,
-        ttl_seconds: config.semantic_cache.ttl_seconds,
+        backend_type: semanticCache.backend_type,
+        similarity_threshold: semanticCache.similarity_threshold,
+        ttl_seconds: semanticCache.ttl_seconds,
       },
     })
   }
@@ -82,304 +90,17 @@ function extractGlobalPlugins(config: ConfigData): GlobalPluginConfig[] {
 }
 
 /**
- * Extract all signal definitions from config
- * Supports both Go format (keyword_rules, embedding_rules, etc.)
- * and Python CLI format (signals.keywords, signals.embeddings, etc.)
- */
-function extractSignals(config: ConfigData): SignalConfig[] {
-  const signals: SignalConfig[] = []
-  const addedSignals = new Set<string>() // Track added signals to avoid duplicates
-
-  // Helper to add signal if not already added
-  const addSignal = (signal: SignalConfig) => {
-    const key = `${signal.type}:${signal.name}`
-    if (!addedSignals.has(key)) {
-      addedSignals.add(key)
-      signals.push(signal)
-    }
-  }
-
-  // 1. Keyword Rules → keyword signals
-  // From keyword_rules (Go/Router format)
-  config.keyword_rules?.forEach(rule => {
-    addSignal({
-      type: 'keyword',
-      name: rule.name,
-      latency: SIGNAL_LATENCY.keyword,
-      config: {
-        operator: rule.operator,
-        keywords: rule.keywords,
-        case_sensitive: rule.case_sensitive ?? false,
-      },
-    })
-  })
-  // From signals.keywords (Python CLI format)
-  config.signals?.keywords?.forEach(rule => {
-    addSignal({
-      type: 'keyword',
-      name: rule.name,
-      latency: SIGNAL_LATENCY.keyword,
-      config: {
-        operator: rule.operator,
-        keywords: rule.keywords,
-        case_sensitive: rule.case_sensitive ?? false,
-      },
-    })
-  })
-
-  // 2. Embedding Rules → embedding signals
-  // From embedding_rules (Go/Router format)
-  config.embedding_rules?.forEach(rule => {
-    addSignal({
-      type: 'embedding',
-      name: rule.name,
-      latency: SIGNAL_LATENCY.embedding,
-      config: {
-        threshold: rule.threshold,
-        candidates: rule.candidates,
-        aggregation_method: rule.aggregation_method || 'max',
-      },
-    })
-  })
-  // From signals.embeddings (Python CLI format)
-  config.signals?.embeddings?.forEach(rule => {
-    addSignal({
-      type: 'embedding',
-      name: rule.name,
-      latency: SIGNAL_LATENCY.embedding,
-      config: {
-        threshold: rule.threshold,
-        candidates: rule.candidates,
-        aggregation_method: rule.aggregation_method || 'max',
-      },
-    })
-  })
-
-  // 3. Categories/Domains → domain signals
-  // From signals.domains (Python CLI format)
-  config.signals?.domains?.forEach(domain => {
-    addSignal({
-      type: 'domain',
-      name: domain.name,
-      description: domain.description,
-      latency: SIGNAL_LATENCY.domain,
-      config: {
-        mmlu_categories: domain.mmlu_categories,
-      },
-    })
-  })
-  // From categories (Go/Router format)
-  config.categories?.forEach(cat => {
-    // Only add if it has mmlu_categories (domain signal)
-    if (cat.mmlu_categories) {
-      addSignal({
-        type: 'domain',
-        name: cat.name,
-        description: cat.description,
-        latency: SIGNAL_LATENCY.domain,
-        config: {
-          mmlu_categories: cat.mmlu_categories,
-        },
-      })
-    }
-  })
-
-  // 4. Fact Check Rules
-  // From fact_check_rules (Go/Router format)
-  config.fact_check_rules?.forEach(rule => {
-    addSignal({
-      type: 'fact_check',
-      name: rule.name,
-      description: rule.description,
-      latency: SIGNAL_LATENCY.fact_check,
-      config: {},
-    })
-  })
-  // From signals.fact_check (Python CLI format)
-  config.signals?.fact_check?.forEach(rule => {
-    addSignal({
-      type: 'fact_check',
-      name: rule.name,
-      description: rule.description,
-      latency: SIGNAL_LATENCY.fact_check,
-      config: {},
-    })
-  })
-
-  // 5. User Feedback Rules
-  // From user_feedback_rules (Go/Router format)
-  config.user_feedback_rules?.forEach(rule => {
-    addSignal({
-      type: 'user_feedback',
-      name: rule.name,
-      description: rule.description,
-      latency: SIGNAL_LATENCY.user_feedback,
-      config: {},
-    })
-  })
-  // From signals.user_feedbacks (Python CLI format)
-  config.signals?.user_feedbacks?.forEach(rule => {
-    addSignal({
-      type: 'user_feedback',
-      name: rule.name,
-      description: rule.description,
-      latency: SIGNAL_LATENCY.user_feedback,
-      config: {},
-    })
-  })
-
-  // 6. Preference Rules
-  // From preference_rules (Go/Router format)
-  config.preference_rules?.forEach(rule => {
-    addSignal({
-      type: 'preference',
-      name: rule.name,
-      description: rule.description,
-      latency: SIGNAL_LATENCY.preference,
-      config: {},
-    })
-  })
-  // From signals.preferences (Python CLI format)
-  config.signals?.preferences?.forEach(rule => {
-    addSignal({
-      type: 'preference',
-      name: rule.name,
-      description: rule.description,
-      latency: SIGNAL_LATENCY.preference,
-      config: {},
-    })
-  })
-
-  // 7. Language Rules
-  // From language_rules (Go/Router format)
-  config.language_rules?.forEach(rule => {
-    addSignal({
-      type: 'language',
-      name: rule.name,
-      latency: SIGNAL_LATENCY.language,
-      config: {},
-    })
-  })
-  // From signals.language (Python CLI format)
-  config.signals?.language?.forEach(rule => {
-    addSignal({
-      type: 'language',
-      name: rule.name,
-      description: rule.description,
-      latency: SIGNAL_LATENCY.language,
-      config: {},
-    })
-  })
-
-  // 8. Latency Rules
-  // From latency_rules (Go/Router format)
-  config.latency_rules?.forEach(rule => {
-    addSignal({
-      type: 'latency',
-      name: rule.name,
-      description: rule.description,
-      latency: SIGNAL_LATENCY.latency,
-      config: {
-        max_tpot: rule.max_tpot,
-      },
-    })
-  })
-  // From signals.latency (Python CLI format)
-  config.signals?.latency?.forEach(rule => {
-    addSignal({
-      type: 'latency',
-      name: rule.name,
-      description: rule.description,
-      latency: SIGNAL_LATENCY.latency,
-      config: {
-        max_tpot: rule.max_tpot,
-      },
-    })
-  })
-
-  // 9. Context Rules
-  // From context_rules (Go/Router format)
-  config.context_rules?.forEach(rule => {
-    addSignal({
-      type: 'context',
-      name: rule.name,
-      latency: SIGNAL_LATENCY.context,
-      config: {
-        min_tokens: rule.min_tokens,
-        max_tokens: rule.max_tokens,
-      },
-    })
-  })
-  // From signals.context (Python CLI format)
-  config.signals?.context?.forEach(rule => {
-    addSignal({
-      type: 'context',
-      name: rule.name,
-      latency: SIGNAL_LATENCY.context,
-      config: {
-        min_tokens: rule.min_tokens,
-        max_tokens: rule.max_tokens,
-      },
-    })
-  })
-
-  // 10. Complexity Rules
-  // From complexity_rules (Go/Router format)
-  config.complexity_rules?.forEach(rule => {
-    addSignal({
-      type: 'complexity',
-      name: rule.name,
-      description: rule.description,
-      latency: SIGNAL_LATENCY.complexity,
-      config: {
-        threshold: rule.threshold,
-        hard: rule.hard,
-        easy: rule.easy,
-      },
-    })
-  })
-  // From signals.complexity (Python CLI format)
-  config.signals?.complexity?.forEach(rule => {
-    addSignal({
-      type: 'complexity',
-      name: rule.name,
-      description: rule.description,
-      latency: SIGNAL_LATENCY.complexity,
-      config: {
-        threshold: rule.threshold,
-        hard: rule.hard,
-        easy: rule.easy,
-      },
-    })
-  })
-
-  return signals
-}
-
-/**
  * Extract decisions from config
  */
 function extractDecisions(config: ConfigData): DecisionConfig[] {
   const decisions: DecisionConfig[] = []
+  const routingDecisions = config.routing?.decisions ?? config.decisions
 
   // Python CLI format: decisions array
-  if (config.decisions && config.decisions.length > 0) {
-    config.decisions.forEach(decision => {
-      const rules: RuleCombination = {
-        operator: (decision.rules?.operator as 'AND' | 'OR') || 'AND',
-        conditions: (decision.rules?.conditions || []).map(cond => ({
-          type: cond.type as SignalType,
-          name: cond.name,
-        })),
-      }
-
-      const algorithm: AlgorithmConfig | undefined = decision.algorithm
-        ? {
-            type: decision.algorithm.type as AlgorithmConfig['type'],
-            confidence: decision.algorithm.confidence,
-            concurrent: decision.algorithm.concurrent,
-          }
-        : undefined
+  if (routingDecisions && routingDecisions.length > 0) {
+    routingDecisions.forEach(decision => {
+      const rules = parseRuleCombination(decision.rules)
+      const algorithm = extractDecisionAlgorithm(decision.algorithm)
 
       const plugins: PluginConfig[] = (decision.plugins || []).map(p => ({
         type: p.type as PluginConfig['type'],
@@ -387,7 +108,6 @@ function extractDecisions(config: ConfigData): DecisionConfig[] {
         configuration: p.configuration,
       }))
 
-      // Find reasoning_family from providers.models
       const modelRefs: ModelRefConfig[] = (decision.modelRefs || []).map(ref => {
         const modelConfig = config.providers?.models?.find(m => m.name === ref.model)
         return {
@@ -448,6 +168,75 @@ function extractDecisions(config: ConfigData): DecisionConfig[] {
   return decisions.sort((a, b) => b.priority - a.priority)
 }
 
+function extractDecisionAlgorithm(
+  algorithm: NonNullable<ConfigData['decisions']>[number]['algorithm'] | undefined,
+): AlgorithmConfig | undefined {
+  if (!algorithm) {
+    return undefined
+  }
+
+  return {
+    type: algorithm.type as AlgorithmConfig['type'],
+    confidence: algorithm.confidence,
+    concurrent: algorithm.concurrent,
+    latency_aware: algorithm.latency_aware,
+    ratings: algorithm.ratings,
+    remom: algorithm.remom,
+    elo: algorithm.elo,
+    router_dc: algorithm.router_dc,
+    automix: algorithm.automix,
+    autoMix: algorithm.autoMix ?? algorithm.automix,
+    hybrid: algorithm.hybrid,
+    rl_driven: algorithm.rl_driven,
+    gmtrouter: algorithm.gmtrouter,
+    knn: algorithm.knn,
+    kmeans: algorithm.kmeans,
+    svm: algorithm.svm,
+    mlp: algorithm.mlp,
+    multi_factor: algorithm.multi_factor,
+    session_aware: algorithm.session_aware,
+  }
+}
+
+function normalizeRuleOperator(operator?: string): RuleCombination['operator'] {
+  if (operator === 'OR' || operator === 'NOT') {
+    return operator
+  }
+
+  return 'AND'
+}
+
+function parseRuleNode(node: RawRuleNode): RuleNode | null {
+  if (Array.isArray(node.conditions)) {
+    return {
+      operator: normalizeRuleOperator(node.operator),
+      conditions: node.conditions
+        .map((condition) => parseRuleNode(condition))
+        .filter((condition): condition is RuleNode => condition !== null),
+    }
+  }
+
+  if (node.type && node.name) {
+    return {
+      type: node.type as SignalType,
+      name: node.name,
+    }
+  }
+
+  return null
+}
+
+function parseRuleCombination(rules?: RawRuleCombination): RuleCombination {
+  const conditions = (rules?.conditions || [])
+    .map((condition: RawRuleNode) => parseRuleNode(condition))
+    .filter((condition: RuleNode | null): condition is RuleNode => condition !== null)
+
+  return {
+    operator: normalizeRuleOperator(rules?.operator),
+    conditions,
+  }
+}
+
 /**
  * Extract models from config
  */
@@ -461,6 +250,15 @@ function extractModels(config: ConfigData): ModelConfig[] {
       reasoning_family: model.reasoning_family,
     })
   })
+
+  for (const card of config.routing?.modelCards || []) {
+    if (!models.find((model) => model.name === card.name)) {
+      models.push({
+        name: card.name,
+        reasoning_family: undefined,
+      })
+    }
+  }
 
   // From model_config (Legacy)
   if (config.model_config) {
@@ -509,11 +307,20 @@ export function groupSignalsByType(signals: SignalConfig[]): Record<SignalType, 
     domain: [],
     fact_check: [],
     user_feedback: [],
+    reask: [],
     preference: [],
     language: [],
-    latency: [],
     context: [],
+    structure: [],
     complexity: [],
+    modality: [],
+    authz: [],
+    jailbreak: [],
+    pii: [],
+    kb: [],
+    conversation: [],
+    event: [],
+    projection: [],
   }
 
   signals.forEach(signal => {

@@ -2,7 +2,12 @@ package store
 
 import (
 	"context"
+	"encoding/json"
+	"io"
 	"time"
+
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/postgres"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/projectiontrace"
 )
 
 // Signal represents various routing signals captured during a request.
@@ -12,39 +17,171 @@ type Signal struct {
 	Domain       []string `json:"domain,omitempty"`
 	FactCheck    []string `json:"fact_check,omitempty"`
 	UserFeedback []string `json:"user_feedback,omitempty"`
+	Reask        []string `json:"reask,omitempty"`
 	Preference   []string `json:"preference,omitempty"`
+	Language     []string `json:"language,omitempty"`
+	Context      []string `json:"context,omitempty"`
+	Structure    []string `json:"structure,omitempty"`
+	Complexity   []string `json:"complexity,omitempty"`
+	Modality     []string `json:"modality,omitempty"`
+	Authz        []string `json:"authz,omitempty"`
+	Jailbreak    []string `json:"jailbreak,omitempty"`
+	PII          []string `json:"pii,omitempty"`
+	KB           []string `json:"kb,omitempty"`
+	Conversation []string `json:"conversation,omitempty"`
+	Event        []string `json:"event,omitempty"`
+}
+
+// UsageCost captures token usage and pricing-derived cost details for a record.
+type UsageCost struct {
+	PromptTokens       *int     `json:"prompt_tokens,omitempty"`
+	CachedPromptTokens *int     `json:"cached_prompt_tokens,omitempty"`
+	CompletionTokens   *int     `json:"completion_tokens,omitempty"`
+	TotalTokens        *int     `json:"total_tokens,omitempty"`
+	ActualCost         *float64 `json:"actual_cost,omitempty"`
+	BaselineCost       *float64 `json:"baseline_cost,omitempty"`
+	CostSavings        *float64 `json:"cost_savings,omitempty"`
+	Currency           *string  `json:"currency,omitempty"`
+	BaselineModel      *string  `json:"baseline_model,omitempty"`
+}
+
+// ToolTrace captures the request-local assistant/tool exchange timeline.
+type ToolTrace struct {
+	Flow      string          `json:"flow,omitempty"`
+	Stage     string          `json:"stage,omitempty"`
+	ToolNames []string        `json:"tool_names,omitempty"`
+	Steps     []ToolTraceStep `json:"steps,omitempty"`
+	// StepsTruncated is true when older Steps were dropped to enforce the
+	// MaxToolTraceSteps cap. Long agent sessions can otherwise produce
+	// hundreds of steps per record and OOM the router (see issue #1835).
+	StepsTruncated bool `json:"steps_truncated,omitempty"`
+	// DroppedStepCount records how many steps were dropped from the head of
+	// the timeline when StepsTruncated is true. Zero when no truncation
+	// happened.
+	DroppedStepCount int `json:"dropped_step_count,omitempty"`
+}
+
+// ToolTraceStep represents a single step in a request-local tool-calling flow.
+type ToolTraceStep struct {
+	Type       string `json:"type"`
+	Source     string `json:"source,omitempty"`
+	Role       string `json:"role,omitempty"`
+	Text       string `json:"text,omitempty"`
+	ToolName   string `json:"tool_name,omitempty"`
+	ToolCallID string `json:"tool_call_id,omitempty"`
+	Arguments  string `json:"arguments,omitempty"`
+	// RawArguments preserves the original arguments JSON.
+	// Currently identical to Arguments because no normalization is performed,
+	// but retained for fidelity in case future processing diverges.
+	RawArguments string `json:"raw_arguments,omitempty"`
+	RawOutput    string `json:"raw_output,omitempty"`
+
+	// Output preserves the raw tool result (string or JSON array for the
+	// Responses API). Mirrors RawOutput but is explicitly named for
+	// alignment with the OpenAI API spec.
+	Output string `json:"output,omitempty"`
+	// APIType indicates the API variant this step was extracted from:
+	// "chat_completions" or "responses".
+	APIType string `json:"api_type,omitempty"`
+	// Truncated is true when Arguments or Output was cut to MaxToolTraceBytes.
+	Truncated bool `json:"truncated,omitempty"`
 }
 
 // Record represents a routing decision record with metadata and captured payloads.
 type Record struct {
-	ID                    string    `json:"id"`
-	Timestamp             time.Time `json:"timestamp"`
-	RequestID             string    `json:"request_id,omitempty"`
-	Decision              string    `json:"decision,omitempty"`
-	Category              string    `json:"category,omitempty"`
-	OriginalModel         string    `json:"original_model,omitempty"`
-	SelectedModel         string    `json:"selected_model,omitempty"`
-	ReasoningMode         string    `json:"reasoning_mode,omitempty"`
-	Signals               Signal    `json:"signals"`
-	RequestBody           string    `json:"request_body,omitempty"`
-	ResponseBody          string    `json:"response_body,omitempty"`
-	ResponseStatus        int       `json:"response_status,omitempty"`
-	FromCache             bool      `json:"from_cache,omitempty"`
-	Streaming             bool      `json:"streaming,omitempty"`
-	RequestBodyTruncated  bool      `json:"request_body_truncated,omitempty"`
-	ResponseBodyTruncated bool      `json:"response_body_truncated,omitempty"`
+	ID                    string                 `json:"id"`
+	Timestamp             time.Time              `json:"timestamp"`
+	RequestID             string                 `json:"request_id,omitempty"`
+	SessionID             string                 `json:"session_id,omitempty"`
+	TurnIndex             int                    `json:"turn_index"`
+	PreviousResponseID    string                 `json:"previous_response_id,omitempty"`
+	ConversationID        string                 `json:"conversation_id,omitempty"`
+	Decision              string                 `json:"decision,omitempty"`
+	DecisionTier          int                    `json:"decision_tier"`
+	DecisionPriority      int                    `json:"decision_priority"`
+	Category              string                 `json:"category,omitempty"`
+	OriginalModel         string                 `json:"original_model,omitempty"`
+	SelectedModel         string                 `json:"selected_model,omitempty"`
+	ReasoningMode         string                 `json:"reasoning_mode,omitempty"`
+	ConfidenceScore       float64                `json:"confidence_score,omitempty"`
+	SelectionMethod       string                 `json:"selection_method,omitempty"`
+	SessionPolicy         map[string]interface{} `json:"session_policy,omitempty"`
+	Signals               Signal                 `json:"signals"`
+	Projections           []string               `json:"projections,omitempty"`
+	ProjectionScores      map[string]float64     `json:"projection_scores,omitempty"`
+	ProjectionTrace       *projectiontrace.Trace `json:"projection_trace,omitempty"`
+	SignalConfidences     map[string]float64     `json:"signal_confidences,omitempty"`
+	SignalValues          map[string]float64     `json:"signal_values,omitempty"`
+	ToolTrace             *ToolTrace             `json:"tool_trace,omitempty"`
+	RequestBody           string                 `json:"request_body,omitempty"`
+	ResponseBody          string                 `json:"response_body,omitempty"`
+	ResponseStatus        int                    `json:"response_status,omitempty"`
+	FromCache             bool                   `json:"from_cache,omitempty"`
+	Streaming             bool                   `json:"streaming,omitempty"`
+	RequestBodyTruncated  bool                   `json:"request_body_truncated,omitempty"`
+	ResponseBodyTruncated bool                   `json:"response_body_truncated,omitempty"`
+
+	// Guardrails
+	GuardrailsEnabled bool `json:"guardrails_enabled,omitempty"`
+	JailbreakEnabled  bool `json:"jailbreak_enabled,omitempty"`
+	PIIEnabled        bool `json:"pii_enabled,omitempty"`
+
+	// Jailbreak Detection Results (request-level)
+	JailbreakDetected   bool    `json:"jailbreak_detected,omitempty"`
+	JailbreakType       string  `json:"jailbreak_type,omitempty"`
+	JailbreakConfidence float32 `json:"jailbreak_confidence,omitempty"`
+
+	// Response Jailbreak Detection Results
+	ResponseJailbreakDetected   bool    `json:"response_jailbreak_detected,omitempty"`
+	ResponseJailbreakType       string  `json:"response_jailbreak_type,omitempty"`
+	ResponseJailbreakConfidence float32 `json:"response_jailbreak_confidence,omitempty"`
+
+	// PII Detection Results
+	PIIDetected bool     `json:"pii_detected,omitempty"`
+	PIIEntities []string `json:"pii_entities,omitempty"`
+	PIIBlocked  bool     `json:"pii_blocked,omitempty"`
+
+	// Structured tool-call fields (extracted from the full request before body truncation).
+	// These fields are stored independently of RequestBody / ResponseBody so
+	// that they are complete even when the raw body is truncated by MaxBodyBytes.
+	Prompt          string `json:"prompt,omitempty"`
+	PromptTruncated bool   `json:"prompt_truncated,omitempty"`
+	// ToolDefinitions is the JSON array of tool schemas from the request
+	// (the "tools" field in Chat Completions, or ResponseAPIRequest.Tools).
+	ToolDefinitions string `json:"tool_definitions,omitempty"`
+	// ToolDefinitionsTruncated is true when ToolDefinitions was cut to
+	// MaxToolTraceBytes. Mirrors PromptTruncated / ToolTraceStep.Truncated
+	// so truncation of tool schemas is never silent.
+	ToolDefinitionsTruncated bool `json:"tool_definitions_truncated,omitempty"`
+
+	// RAG (Retrieval-Augmented Generation)
+	RAGEnabled         bool    `json:"rag_enabled,omitempty"`
+	RAGBackend         string  `json:"rag_backend,omitempty"`
+	RAGContextLength   int     `json:"rag_context_length,omitempty"`
+	RAGSimilarityScore float32 `json:"rag_similarity_score,omitempty"`
+
+	// Hallucination Detection
+	HallucinationEnabled    bool     `json:"hallucination_enabled,omitempty"`
+	HallucinationDetected   bool     `json:"hallucination_detected,omitempty"`
+	HallucinationConfidence float32  `json:"hallucination_confidence,omitempty"`
+	HallucinationSpans      []string `json:"hallucination_spans,omitempty"`
+
+	// Usage & Cost
+	PromptTokens       *int     `json:"prompt_tokens,omitempty"`
+	CachedPromptTokens *int     `json:"cached_prompt_tokens,omitempty"`
+	CompletionTokens   *int     `json:"completion_tokens,omitempty"`
+	TotalTokens        *int     `json:"total_tokens,omitempty"`
+	ActualCost         *float64 `json:"actual_cost,omitempty"`
+	BaselineCost       *float64 `json:"baseline_cost,omitempty"`
+	CostSavings        *float64 `json:"cost_savings,omitempty"`
+	Currency           *string  `json:"currency,omitempty"`
+	BaselineModel      *string  `json:"baseline_model,omitempty"`
 }
 
-// Storage is the interface that all storage backends must implement.
-type Storage interface {
+// Writer mutates router replay records.
+type Writer interface {
 	// Add inserts a new record. Returns the record ID.
 	Add(ctx context.Context, record Record) (string, error)
-
-	// Get retrieves a record by ID. Returns false if not found.
-	Get(ctx context.Context, id string) (Record, bool, error)
-
-	// List retrieves all records, ordered by timestamp descending.
-	List(ctx context.Context) ([]Record, error)
 
 	// UpdateStatus updates the response status and flags for an existing record.
 	UpdateStatus(ctx context.Context, id string, status int, fromCache bool, streaming bool) error
@@ -54,22 +191,185 @@ type Storage interface {
 
 	// AttachResponse updates the response body for an existing record.
 	AttachResponse(ctx context.Context, id string, body string, truncated bool) error
+}
 
-	// Close releases resources held by the storage backend.
-	Close() error
+// Reader retrieves router replay records.
+type Reader interface {
+	// Get retrieves a record by ID. Returns false if not found.
+	Get(ctx context.Context, id string) (Record, bool, error)
+
+	// List retrieves all records, ordered by timestamp descending.
+	List(ctx context.Context) ([]Record, error)
+}
+
+// Enricher updates derived signal analysis fields after the initial record write.
+type Enricher interface {
+	// UpdateHallucinationStatus updates hallucination detection results for an existing record.
+	UpdateHallucinationStatus(ctx context.Context, id string, detected bool, confidence float32, spans []string) error
+
+	// UpdateUsageCost updates token usage and pricing-derived cost fields for an existing record.
+	UpdateUsageCost(ctx context.Context, id string, usage UsageCost) error
+
+	// UpdateToolTrace updates the request-local tool-calling timeline for an existing record.
+	UpdateToolTrace(ctx context.Context, id string, trace ToolTrace) error
+}
+
+// Storage is the interface that all storage backends must implement.
+type Storage interface {
+	Writer
+	Reader
+	Enricher
+	io.Closer
+}
+
+func cloneStringSlice(values []string) []string {
+	if values == nil {
+		return nil
+	}
+	return append([]string(nil), values...)
+}
+
+func cloneFloat64Map(values map[string]float64) map[string]float64 {
+	if values == nil {
+		return nil
+	}
+	cloned := make(map[string]float64, len(values))
+	for key, value := range values {
+		cloned[key] = value
+	}
+	return cloned
+}
+
+func cloneInterfaceMap(values map[string]interface{}) map[string]interface{} {
+	if values == nil {
+		return nil
+	}
+	b, err := json.Marshal(values)
+	if err != nil {
+		return nil
+	}
+	var cloned map[string]interface{}
+	if err := json.Unmarshal(b, &cloned); err != nil {
+		return nil
+	}
+	return cloned
+}
+
+func cloneProjectionTraceRecord(t *projectiontrace.Trace) *projectiontrace.Trace {
+	if t == nil {
+		return nil
+	}
+	b, err := json.Marshal(t)
+	if err != nil {
+		return nil
+	}
+	var out projectiontrace.Trace
+	if err := json.Unmarshal(b, &out); err != nil {
+		return nil
+	}
+	return &out
+}
+
+func cloneToolTraceSteps(steps []ToolTraceStep) []ToolTraceStep {
+	if steps == nil {
+		return nil
+	}
+	return append([]ToolTraceStep(nil), steps...)
+}
+
+func cloneToolTrace(trace *ToolTrace) *ToolTrace {
+	if trace == nil {
+		return nil
+	}
+	cloned := *trace
+	cloned.ToolNames = cloneStringSlice(trace.ToolNames)
+	cloned.Steps = cloneToolTraceSteps(trace.Steps)
+	return &cloned
+}
+
+func cloneSignal(signal Signal) Signal {
+	return Signal{
+		Keyword:      cloneStringSlice(signal.Keyword),
+		Embedding:    cloneStringSlice(signal.Embedding),
+		Domain:       cloneStringSlice(signal.Domain),
+		FactCheck:    cloneStringSlice(signal.FactCheck),
+		UserFeedback: cloneStringSlice(signal.UserFeedback),
+		Reask:        cloneStringSlice(signal.Reask),
+		Preference:   cloneStringSlice(signal.Preference),
+		Language:     cloneStringSlice(signal.Language),
+		Context:      cloneStringSlice(signal.Context),
+		Structure:    cloneStringSlice(signal.Structure),
+		Complexity:   cloneStringSlice(signal.Complexity),
+		Modality:     cloneStringSlice(signal.Modality),
+		Authz:        cloneStringSlice(signal.Authz),
+		Jailbreak:    cloneStringSlice(signal.Jailbreak),
+		PII:          cloneStringSlice(signal.PII),
+		KB:           cloneStringSlice(signal.KB),
+		Conversation: cloneStringSlice(signal.Conversation),
+	}
+}
+
+func cloneRecord(record Record) Record {
+	cloned := record
+	cloned.Signals = cloneSignal(record.Signals)
+	cloned.Projections = cloneStringSlice(record.Projections)
+	cloned.ProjectionScores = cloneFloat64Map(record.ProjectionScores)
+	cloned.ProjectionTrace = cloneProjectionTraceRecord(record.ProjectionTrace)
+	cloned.SignalConfidences = cloneFloat64Map(record.SignalConfidences)
+	cloned.SignalValues = cloneFloat64Map(record.SignalValues)
+	cloned.SessionPolicy = cloneInterfaceMap(record.SessionPolicy)
+	cloned.ToolTrace = cloneToolTrace(record.ToolTrace)
+	cloned.PIIEntities = cloneStringSlice(record.PIIEntities)
+	cloned.HallucinationSpans = cloneStringSlice(record.HallucinationSpans)
+	cloned.PromptTokens = cloneIntPtr(record.PromptTokens)
+	cloned.CachedPromptTokens = cloneIntPtr(record.CachedPromptTokens)
+	cloned.CompletionTokens = cloneIntPtr(record.CompletionTokens)
+	cloned.TotalTokens = cloneIntPtr(record.TotalTokens)
+	cloned.ActualCost = cloneFloat64Ptr(record.ActualCost)
+	cloned.BaselineCost = cloneFloat64Ptr(record.BaselineCost)
+	cloned.CostSavings = cloneFloat64Ptr(record.CostSavings)
+	cloned.Currency = cloneStringPtr(record.Currency)
+	cloned.BaselineModel = cloneStringPtr(record.BaselineModel)
+	return cloned
+}
+
+func cloneIntPtr(value *int) *int {
+	if value == nil {
+		return nil
+	}
+	cloned := *value
+	return &cloned
+}
+
+func cloneFloat64Ptr(value *float64) *float64 {
+	if value == nil {
+		return nil
+	}
+	cloned := *value
+	return &cloned
+}
+
+func cloneStringPtr(value *string) *string {
+	if value == nil {
+		return nil
+	}
+	cloned := *value
+	return &cloned
 }
 
 // Config holds common configuration options for all storage backends.
 type Config struct {
-	Backend      string // "memory", "redis", "postgres", "milvus"
-	TTLSeconds   int    // Time-to-live for records (0 = no expiration)
-	AsyncWrites  bool   // Enable asynchronous writes
-	MaxBodyBytes int    // Maximum bytes to store for request/response bodies
+	Backend           string // "memory", "redis", "postgres", "milvus", "qdrant"
+	TTLSeconds        int    // Time-to-live for records (0 = no expiration)
+	AsyncWrites       bool   // Enable asynchronous writes
+	MaxBodyBytes      int    // Maximum bytes to store for request/response bodies
+	MaxToolTraceBytes int    // Maximum bytes for each structured tool-trace field (0 = no limit)
 
 	// Backend-specific configurations
 	Redis    *RedisConfig
 	Postgres *PostgresConfig
 	Milvus   *MilvusConfig
+	Qdrant   *QdrantConfig
 }
 
 // RedisConfig holds Redis-specific configuration.
@@ -85,20 +385,8 @@ type RedisConfig struct {
 	KeyPrefix     string `json:"key_prefix,omitempty" yaml:"key_prefix,omitempty"`
 }
 
-// PostgresConfig holds PostgreSQL-specific configuration.
-type PostgresConfig struct {
-	Host     string `json:"host" yaml:"host"`
-	Port     int    `json:"port" yaml:"port"`
-	Database string `json:"database" yaml:"database"`
-	User     string `json:"user" yaml:"user"`
-	Password string `json:"password" yaml:"password"`
-	SSLMode  string `json:"ssl_mode,omitempty" yaml:"ssl_mode,omitempty"` // disable, require, verify-ca, verify-full
-	// Connection pool settings
-	MaxOpenConns    int    `json:"max_open_conns,omitempty" yaml:"max_open_conns,omitempty"`
-	MaxIdleConns    int    `json:"max_idle_conns,omitempty" yaml:"max_idle_conns,omitempty"`
-	ConnMaxLifetime int    `json:"conn_max_lifetime,omitempty" yaml:"conn_max_lifetime,omitempty"` // seconds
-	TableName       string `json:"table_name,omitempty" yaml:"table_name,omitempty"`
-}
+// PostgresConfig is an alias for the shared postgres.Config type.
+type PostgresConfig = postgres.Config
 
 // MilvusConfig holds Milvus-specific configuration.
 type MilvusConfig struct {
@@ -109,4 +397,13 @@ type MilvusConfig struct {
 	// Milvus specific settings
 	ConsistencyLevel string `json:"consistency_level,omitempty" yaml:"consistency_level,omitempty"` // Strong, Session, Bounded, Eventually
 	ShardNum         int    `json:"shard_num,omitempty" yaml:"shard_num,omitempty"`
+}
+
+// QdrantConfig holds Qdrant-specific configuration for the replay store.
+type QdrantConfig struct {
+	Host           string `json:"host" yaml:"host"`
+	Port           int    `json:"port,omitempty" yaml:"port,omitempty"`
+	APIKey         string `json:"api_key,omitempty" yaml:"api_key,omitempty"`
+	UseTLS         bool   `json:"use_tls,omitempty" yaml:"use_tls,omitempty"`
+	CollectionName string `json:"collection_name,omitempty" yaml:"collection_name,omitempty"`
 }

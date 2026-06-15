@@ -1,0 +1,60 @@
+---
+# SemanticRouter with Qdrant Cache Backend
+# This example demonstrates how to configure the semantic router to use Qdrant for caching.
+# Qdrant is a high-performance vector search engine with native gRPC support and simple deployment.
+apiVersion: vllm.ai/v1alpha1
+kind: SemanticRouter
+metadata:
+  name: semantic-router-qdrant
+  namespace: default
+spec:
+  replicas: 1
+
+  # Configure vLLM backend endpoints
+  vllmEndpoints:
+    - name: llama-model
+      model: llama3-70b
+      reasoningFamily: qwen3
+      backend:
+        type: service
+        service:
+          name: vllm-llama
+          port: 8000
+
+  # Persistence for model cache
+  persistence:
+    enabled: true
+    size: 10Gi
+
+  # Basic resource limits
+  resources:
+    requests:
+      cpu: 2000m
+      memory: 4Gi
+    limits:
+      cpu: 4000m
+      memory: 8Gi
+
+  # Semantic router configuration
+  config:
+    embedding_models:
+      mmbert_model_path: "models/mom-embedding-ultra"
+      use_cpu: true
+
+    # Semantic cache with Qdrant backend
+    semantic_cache:
+      enabled: true
+      backend_type: qdrant
+      similarity_threshold: "0.90"
+      ttl_seconds: 7200
+      embedding_model: bert
+
+      # Qdrant configuration
+      # NOTE: Update host to match your Qdrant deployment namespace
+      qdrant:
+        host: qdrant.cache-backends.svc.cluster.local
+        port: 6334
+        api_key: ""
+        use_tls: false
+        collection_name: semantic_cache
+        connect_timeout: 10

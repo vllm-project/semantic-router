@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN" "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<svg width="100%" height="100%" viewBox="0 0 157 184" version="1.1" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" xml:space="preserve" xmlns:serif="http://www.serif.com/" style="fill-rule:evenodd;clip-rule:evenodd;stroke-linejoin:round;stroke-miterlimit:2;">
+    <g transform="matrix(1,0,0,1,-20300,-9901)">
+        <g transform="matrix(1.30552,0,0,1.07514,20166.5,-141.76)">
+            <g id="icon-wizmap" transform="matrix(1,0,0,1,-3205.6,106.033)">
+                <g transform="matrix(1.42038,6.43683,-5.30094,1.72474,3424.17,9215.3)">
+                    <path d="M13.503,3.017C14.962,3.017 16.147,8.052 16.147,14.267C16.147,20.482 14.962,25.517 13.503,25.517C12.038,25.517 10.853,20.482 10.853,14.267C10.853,8.052 12.038,3.017 13.503,3.017" style="fill-rule:nonzero;"/>
+                </g>
+                <g transform="matrix(5.23418,0,0,-6.35577,3298.45,9563.02)">
+                    <path d="M16.5,25.875C16.5,24.375 10.5,24.375 10.5,25.875C10.5,27.375 16.5,27.375 16.5,25.875" style="fill-rule:nonzero;"/>
+                </g>
+                <g transform="matrix(5.23418,2.94039e-16,-2.42151e-16,-3.95475,3298.45,9433.16)">
+                    <path d="M10.754,26.25C10.754,26.25 12.672,8.043 13.5,8.043C14.328,8.043 16.246,26.25 16.246,26.25L10.754,26.25Z" style="fill:rgb(41,47,51);fill-rule:nonzero;"/>
+                </g>
+                <g transform="matrix(0,6.35577,-5.23418,0,3400.52,9242.4)">
+                    <path d="M13.5,0C16.812,0 19.5,2.688 19.5,6C19.5,9.312 16.812,12 13.5,12C10.188,12 7.5,9.312 7.5,6C7.5,2.688 10.188,0 13.5,0" style="fill:rgb(186,104,200);fill-rule:nonzero;"/>
+                </g>
+                <g transform="matrix(5.30094,-1.72474,-1.42038,-6.43683,3296.13,9349.97)">
+                    <path d="M19.324,2.883C18.402,4.898 14.094,14.25 13.5,14.25C12.906,14.25 8.598,4.898 7.676,2.883C4.062,2.25 2.25,1.055 2.25,0C6.75,1.5 10.5,1.832 13.5,1.832C16.5,1.832 20.25,1.5 24.75,0C24.75,1.055 22.938,2.25 19.324,2.883Z" style="fill:rgb(41,47,51);fill-rule:nonzero;"/>
+                </g>
+            </g>
+        </g>
+    </g>
+</svg>

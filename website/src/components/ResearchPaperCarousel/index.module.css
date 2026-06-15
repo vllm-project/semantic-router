@@ -1,0 +1,307 @@
+.section {
+  position: relative;
+  overflow: hidden;
+  padding: 5rem 0;
+  border-bottom: 1px solid var(--site-border);
+  background:
+    linear-gradient(180deg, rgba(15, 23, 42, 0.018), transparent 42%),
+    linear-gradient(180deg, #ffffff 0%, var(--site-bg-alt) 100%);
+}
+
+.section::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background:
+    radial-gradient(circle at 18% 18%, rgba(15, 23, 42, 0.045), transparent 24%),
+    radial-gradient(circle at 82% 78%, rgba(15, 23, 42, 0.03), transparent 28%),
+    linear-gradient(90deg, rgba(15, 23, 42, 0.028) 1px, transparent 1px),
+    linear-gradient(180deg, rgba(15, 23, 42, 0.028) 1px, transparent 1px);
+  background-size: auto, auto, 34px 34px, 34px 34px;
+  opacity: 0.34;
+}
+
+.header,
+.carouselShell,
+.footer {
+  position: relative;
+  z-index: 1;
+}
+
+.header {
+  display: grid;
+  grid-template-columns: minmax(220px, 0.34fr) minmax(0, 0.66fr);
+  gap: 2rem;
+  margin-bottom: 2rem;
+}
+
+.title {
+  max-width: 12ch;
+  margin: 0.8rem 0 0;
+  font-size: clamp(2.4rem, 5vw, 4.4rem);
+  line-height: 0.95;
+  font-weight: 400;
+  letter-spacing: -0.05em;
+  color: var(--site-text);
+}
+
+.subtitle {
+  max-width: 38rem;
+  margin: 2.25rem 0 0;
+  color: var(--site-muted-bright);
+  font-size: 1rem;
+  line-height: 1.7;
+}
+
+.carouselShell {
+  position: relative;
+  border: 1px solid var(--site-border);
+  border-radius: 1.45rem;
+  background:
+    radial-gradient(circle at top, rgba(15, 23, 42, 0.045), transparent 34%),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.94), rgba(243, 246, 250, 0.98)),
+    var(--site-surface-raised);
+  box-shadow: var(--site-shadow-raised);
+  overflow: hidden;
+}
+
+.carouselShell::before,
+.carouselShell::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  z-index: 2;
+  width: clamp(1.25rem, 4vw, 3.5rem);
+  pointer-events: none;
+}
+
+.carouselShell::before {
+  left: 0;
+  background: linear-gradient(90deg, rgba(251, 252, 254, 0.98), rgba(251, 252, 254, 0));
+}
+
+.carouselShell::after {
+  right: 0;
+  background: linear-gradient(270deg, rgba(251, 252, 254, 0.98), rgba(251, 252, 254, 0));
+}
+
+.carouselContainer {
+  position: relative;
+  overflow: hidden;
+  padding: 1.4rem 1rem;
+  mask-image: none;
+  -webkit-mask-image: none;
+}
+
+.carouselContainerStatic {
+  overflow-x: auto;
+  padding: 1.4rem 1rem 1.55rem;
+  mask-image: none;
+  -webkit-mask-image: none;
+}
+
+.carouselTrack {
+  display: flex;
+  gap: 1rem;
+  align-items: stretch;
+  will-change: transform;
+}
+
+.paperCard {
+  flex: 0 0 25rem;
+  min-width: 25rem;
+  display: grid;
+  align-content: space-between;
+  gap: 1rem;
+  min-height: 19rem;
+  padding: 1.2rem;
+  border: 1px solid var(--site-border);
+  background:
+    radial-gradient(circle at top right, rgba(15, 23, 42, 0.03), transparent 36%),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.92), rgba(248, 250, 253, 0.96)),
+    var(--site-surface);
+  box-shadow: 0 8px 24px rgba(15, 23, 42, 0.035);
+  transition:
+    border-color 180ms ease,
+    transform 180ms ease,
+    background 180ms ease,
+    box-shadow 180ms ease;
+}
+
+.paperCard:hover {
+  transform: translateY(-2px);
+  border-color: var(--site-border-strong);
+  background:
+    radial-gradient(circle at top right, rgba(15, 23, 42, 0.04), transparent 38%),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(243, 246, 250, 0.98)),
+    var(--site-surface-alt);
+  box-shadow: 0 14px 30px rgba(15, 23, 42, 0.06);
+}
+
+.spotlightCard {
+  background:
+    radial-gradient(circle at top right, rgba(15, 23, 42, 0.055), transparent 34%),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.96), rgba(243, 246, 250, 0.98)),
+    var(--site-surface-raised);
+}
+
+.cardTop,
+.cardFooter {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.8rem;
+}
+
+.cardMeta,
+.categoryBadge {
+  display: inline-flex;
+  width: fit-content;
+  padding: 0.2rem 0.5rem;
+  border: 1px solid var(--site-border);
+  font-family: var(--ifm-font-family-monospace);
+  font-size: 0.68rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.cardMeta {
+  color: var(--site-muted-bright);
+  background: rgba(15, 23, 42, 0.045);
+}
+
+.categoryBadge {
+  color: var(--site-bg);
+  background: var(--site-text);
+  border-color: var(--site-text);
+}
+
+.cardCopy {
+  display: grid;
+  gap: 0.7rem;
+}
+
+.paperTitle {
+  margin: 0;
+  color: var(--site-text);
+  font-size: clamp(1.2rem, 2.1vw, 1.5rem);
+  line-height: 1.15;
+}
+
+.paperAuthors,
+.paperVenue,
+.paperAbstract,
+.footer p {
+  margin: 0;
+  color: var(--site-muted-bright);
+  line-height: 1.65;
+}
+
+.paperAuthors,
+.paperVenue {
+  font-size: 0.9rem;
+}
+
+.paperVenue {
+  color: var(--site-muted);
+}
+
+.paperAbstract {
+  display: -webkit-box;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 4;
+}
+
+.paperLink {
+  display: inline-flex;
+  align-items: center;
+  min-height: 2.45rem;
+  padding: 0.6rem 0.95rem;
+  border: 1px solid var(--site-border);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.68);
+  color: var(--site-text);
+  font-size: 0.74rem;
+  text-decoration: none;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.72);
+  transition:
+    background 180ms ease,
+    color 180ms ease,
+    border-color 180ms ease,
+    box-shadow 180ms ease;
+}
+
+.paperLink:hover {
+  background: var(--site-text);
+  color: var(--site-bg);
+  border-color: var(--site-text);
+  box-shadow: 0 12px 24px rgba(15, 23, 42, 0.12);
+  text-decoration: none;
+}
+
+.footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-top: 1rem;
+}
+
+.footer p {
+  max-width: 42rem;
+}
+
+@media (max-width: 996px) {
+  .header {
+    grid-template-columns: 1fr;
+  }
+
+  .subtitle {
+    margin-top: 0;
+  }
+}
+
+@media (max-width: 768px) {
+  .section {
+    padding: 3.5rem 0;
+  }
+
+  .paperCard {
+    flex-basis: min(21rem, calc(100vw - 4rem));
+    min-width: min(21rem, calc(100vw - 4rem));
+    min-height: 17rem;
+    padding: 1rem;
+  }
+
+  .footer {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+}
+
+@media (max-width: 480px) {
+  .carouselShell::before,
+  .carouselShell::after {
+    width: 1rem;
+  }
+
+  .carouselContainer {
+    padding: 1rem 0.75rem;
+    mask-image: none;
+    -webkit-mask-image: none;
+  }
+
+  .carouselContainerStatic {
+    padding-inline: 0.75rem;
+  }
+
+  .paperCard {
+    flex-basis: min(18rem, calc(100vw - 3rem));
+    min-width: min(18rem, calc(100vw - 3rem));
+  }
+}

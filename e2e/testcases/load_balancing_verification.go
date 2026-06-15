@@ -1,11 +1,8 @@
 package testcases
 
 import (
-	"bytes"
 	"context"
 	"fmt"
-	"io"
-	"net/http"
 	"strings"
 	"sync"
 	"time"
@@ -18,7 +15,7 @@ import (
 
 func init() {
 	pkgtestcases.Register("load-balancing-verification", pkgtestcases.TestCase{
-		Description: "Send concurrent requests and verify vLLM service has >=2 endpoints and all replicas respond OK",
+		Description: "Send concurrent benign requests and verify backend-routed traffic succeeds while vLLM has >=2 endpoints",
 		Tags:        []string{"lb", "ha"},
 		Fn:          testLoadBalancingVerification,
 	})
@@ -30,38 +27,54 @@ func testLoadBalancingVerification(ctx context.Context, client *kubernetes.Clien
 		return fmt.Errorf("service endpoints check failed: %w", err)
 	}
 
-	// Drive concurrent traffic through Envoy -> router -> vLLM
-	localPort, stopPF, err := setupServiceConnection(ctx, client, opts)
+	// Drive concurrent benign traffic through Envoy -> router -> vLLM.
+	session, chatClient, err := openProductionStackChatSession(ctx, client, opts, 20*time.Second)
 	if err != nil {
 		return err
 	}
-	defer stopPF()
+	defer session.Close()
+
+	requestID := 1
+	var warmup productionStackWarmupSummary
+	requestID, warmup, err = warmProductionStackBackend(ctx, chatClient, requestID, 5, 12)
+	if err != nil {
+		return fmt.Errorf("backend warmup failed before load-balancing verification: %w", err)
+	}
 
 	total := 100
 	concurrency := 10
-	errCount := 0
+	requestErrors := 0
+	fastResponses := 0
+	backendSuccessCount := 0
+	fastResponseDecisions := map[string]int{}
+	backendDecisions := map[string]int{}
 	mu := sync.Mutex{}
 	wg := sync.WaitGroup{}
 	wg.Add(concurrency)
 
 	work := make(chan int, total)
 	for i := 0; i < total; i++ {
-		work <- i + 1
+		work <- requestID + i
 	}
 	close(work)
-
-	clientHTTP := &http.Client{Timeout: 20 * time.Second}
-	url := fmt.Sprintf("http://localhost:%s/v1/chat/completions", localPort)
 
 	for w := 0; w < concurrency; w++ {
 		go func() {
 			defer wg.Done()
 			for id := range work {
-				if err := sendBasicChatRequest(ctx, clientHTTP, url, id); err != nil {
-					mu.Lock()
-					errCount++
-					mu.Unlock()
+				result, err := sendProductionStackChatRequest(ctx, chatClient, id)
+				mu.Lock()
+				switch {
+				case err != nil:
+					requestErrors++
+				case result.FastResponse:
+					fastResponses++
+					recordDecisionCount(fastResponseDecisions, result.SelectedDecision)
+				default:
+					backendSuccessCount++
+					recordDecisionCount(backendDecisions, result.SelectedDecision)
 				}
+				mu.Unlock()
 			}
 		}()
 	}
@@ -69,15 +82,32 @@ func testLoadBalancingVerification(ctx context.Context, client *kubernetes.Clien
 
 	if opts.SetDetails != nil {
 		opts.SetDetails(map[string]interface{}{
-			"total":         total,
-			"errors":        errCount,
-			"success_count": total - errCount,
+			"total":                   total,
+			"warmup_attempts":         warmup.Attempts,
+			"warmup_successes":        warmup.Successes,
+			"warmup_fast_responses":   warmup.FastResponses,
+			"warmup_request_errors":   warmup.RequestErrors,
+			"errors":                  requestErrors,
+			"fast_responses":          fastResponses,
+			"success_count":           backendSuccessCount,
+			"backend_success_count":   backendSuccessCount,
+			"fast_response_decisions": fastResponseDecisions,
+			"backend_decisions":       backendDecisions,
 		})
 	}
 
-	// Basic assertion: expect high success rate (>=95%) under LB across replicas
-	if float64(errCount) > float64(total)*0.05 {
-		return fmt.Errorf("too many errors under load: %d/%d", errCount, total)
+	if fastResponses > 0 {
+		return fmt.Errorf(
+			"unexpected fast_response under load: %d/%d requests were short-circuited before reaching upstream backends (%s)",
+			fastResponses,
+			total,
+			formatDecisionCounts(fastResponseDecisions),
+		)
+	}
+
+	// Basic assertion: expect high success rate (>=95%) for backend-routed traffic.
+	if float64(requestErrors) > float64(total)*0.05 {
+		return fmt.Errorf("too many backend request errors under load: %d/%d", requestErrors, total)
 	}
 	return nil
 }
@@ -120,25 +150,6 @@ func ensureServiceHasAtLeastNEndpoints(ctx context.Context, client *kubernetes.C
 		if verbose {
 			fmt.Printf("[Test] %d/%d pods Running behind service %s/%s\n", running, len(pods.Items), namespace, name)
 		}
-	}
-	return nil
-}
-
-func sendBasicChatRequest(ctx context.Context, httpClient *http.Client, url string, id int) error {
-	body := []byte(`{"model":"MoM","messages":[{"role":"user","content":"ping ` + fmt.Sprint(id) + `"}]}`)
-	req, err := http.NewRequestWithContext(ctx, "POST", url, bytes.NewBuffer(body))
-	if err != nil {
-		return err
-	}
-	req.Header.Set("Content-Type", "application/json")
-	resp, err := httpClient.Do(req)
-	if err != nil {
-		return err
-	}
-	defer resp.Body.Close()
-	if resp.StatusCode != 200 {
-		b, _ := io.ReadAll(resp.Body)
-		return fmt.Errorf("status %d: %s", resp.StatusCode, string(b))
 	}
 	return nil
 }

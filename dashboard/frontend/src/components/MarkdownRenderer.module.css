@@ -1,11 +1,19 @@
 .markdown {
   font-size: 0.9375rem;
-  line-height: 1.6;
+  line-height: 1.72;
   color: var(--color-text);
   /* Prevent content overflow on mobile */
   max-width: 100%;
   overflow-wrap: break-word;
   word-wrap: break-word;
+}
+
+.markdown > :first-child {
+  margin-top: 0;
+}
+
+.markdown > :last-child {
+  margin-bottom: 0;
 }
 
 /* Headings */
@@ -50,7 +58,7 @@
 /* Paragraphs */
 .markdown p {
   margin-top: 0;
-  margin-bottom: 1em;
+  margin-bottom: 0.95em;
 }
 
 /* Lists */
@@ -62,11 +70,15 @@
 }
 
 .markdown li {
-  margin-bottom: 0.25em;
+  margin-bottom: 0.35em;
 }
 
 .markdown li > p {
   margin-bottom: 0.5em;
+}
+
+.markdown li > :last-child {
+  margin-bottom: 0;
 }
 
 /* Code blocks */
@@ -175,6 +187,29 @@
 .markdown a:hover {
   opacity: 0.8;
   text-decoration: underline;
+}
+
+.citationLink {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  margin: 0 0.125rem;
+  padding: 0.1rem 0.3rem;
+  border-radius: 999px;
+  background: rgba(59, 130, 246, 0.12);
+  color: #7dd3fc;
+  font-size: 0.72em;
+  font-weight: 600;
+  line-height: 1;
+  text-decoration: none;
+  vertical-align: super;
+}
+
+.citationLink:hover {
+  background: rgba(59, 130, 246, 0.22);
+  color: #bae6fd;
+  text-decoration: none;
+  opacity: 1;
 }
 
 /* Horizontal rules */

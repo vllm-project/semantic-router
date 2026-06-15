@@ -1,0 +1,428 @@
+package config
+
+import (
+	. "github.com/onsi/ginkgo/v2"
+	. "github.com/onsi/gomega"
+)
+
+func boolPtr(b bool) *bool { return &b }
+
+var _ = Describe("validateLatencyAwareAlgorithmConfig", func() {
+	It("accepts both percentiles set", func() {
+		cfg := &LatencyAwareAlgorithmConfig{TPOTPercentile: 10, TTFTPercentile: 50}
+		Expect(validateLatencyAwareAlgorithmConfig(cfg)).To(Succeed())
+	})
+
+	It("accepts TPOT-only", func() {
+		cfg := &LatencyAwareAlgorithmConfig{TPOTPercentile: 50}
+		Expect(validateLatencyAwareAlgorithmConfig(cfg)).To(Succeed())
+	})
+
+	It("accepts TTFT-only", func() {
+		cfg := &LatencyAwareAlgorithmConfig{TTFTPercentile: 50}
+		Expect(validateLatencyAwareAlgorithmConfig(cfg)).To(Succeed())
+	})
+
+	It("accepts boundary values 1 and 100", func() {
+		cfg := &LatencyAwareAlgorithmConfig{TPOTPercentile: 1, TTFTPercentile: 100}
+		Expect(validateLatencyAwareAlgorithmConfig(cfg)).To(Succeed())
+	})
+
+	It("rejects zero percentiles", func() {
+		cfg := &LatencyAwareAlgorithmConfig{}
+		err := validateLatencyAwareAlgorithmConfig(cfg)
+		Expect(err).To(HaveOccurred())
+		Expect(err.Error()).To(ContainSubstring("must specify at least one of"))
+	})
+
+	It("rejects TPOT > 100", func() {
+		cfg := &LatencyAwareAlgorithmConfig{TPOTPercentile: 101}
+		err := validateLatencyAwareAlgorithmConfig(cfg)
+		Expect(err).To(HaveOccurred())
+		Expect(err.Error()).To(ContainSubstring("tpot_percentile must be between 1 and 100"))
+	})
+
+	It("rejects TTFT > 100", func() {
+		cfg := &LatencyAwareAlgorithmConfig{TTFTPercentile: 200}
+		err := validateLatencyAwareAlgorithmConfig(cfg)
+		Expect(err).To(HaveOccurred())
+		Expect(err.Error()).To(ContainSubstring("ttft_percentile must be between 1 and 100"))
+	})
+})
+
+var _ = Describe("validateLoRAName", func() {
+	loraConfig := func(model string, loras ...string) *RouterConfig {
+		adapters := make([]LoRAAdapter, len(loras))
+		for i, n := range loras {
+			adapters[i] = LoRAAdapter{Name: n}
+		}
+		return &RouterConfig{
+			BackendModels: BackendModels{
+				ModelConfig: map[string]ModelParams{
+					model: {LoRAs: adapters},
+				},
+			},
+		}
+	}
+
+	It("accepts known adapter", func() {
+		cfg := loraConfig("qwen3", "sql-expert", "code-review")
+		Expect(validateLoRAName(cfg, "qwen3", "sql-expert")).To(Succeed())
+		Expect(validateLoRAName(cfg, "qwen3", "code-review")).To(Succeed())
+	})
+
+	It("rejects model not in config", func() {
+		cfg := &RouterConfig{BackendModels: BackendModels{ModelConfig: map[string]ModelParams{}}}
+		err := validateLoRAName(cfg, "ghost", "adapter")
+		Expect(err).To(HaveOccurred())
+		Expect(err.Error()).To(ContainSubstring("is not declared in routing.modelCards"))
+	})
+
+	It("rejects model with no loras", func() {
+		cfg := loraConfig("qwen3") // zero adapters
+		err := validateLoRAName(cfg, "qwen3", "adapter")
+		Expect(err).To(HaveOccurred())
+		Expect(err.Error()).To(ContainSubstring("declares no routing.modelCards[].loras"))
+	})
+
+	It("rejects unknown name and lists available", func() {
+		cfg := loraConfig("qwen3", "sql-expert", "code-review")
+		err := validateLoRAName(cfg, "qwen3", "nope")
+		Expect(err).To(HaveOccurred())
+		Expect(err.Error()).To(ContainSubstring("sql-expert"))
+		Expect(err.Error()).To(ContainSubstring("code-review"))
+	})
+})
+
+func registerValidateConfigStructureCoreSpecs() {
+	It("skips everything in k8s mode", func() {
+		cfg := &RouterConfig{
+			ConfigSource: ConfigSourceKubernetes,
+			IntelligentRouting: IntelligentRouting{
+				Decisions: []Decision{{Name: "bad", ModelRefs: nil}},
+			},
+		}
+		Expect(validateConfigStructure(cfg)).To(Succeed())
+	})
+
+	It("validates shared family contracts after k8s CRD conversion", func() {
+		cfg := &RouterConfig{
+			ConfigSource: ConfigSourceKubernetes,
+			IntelligentRouting: IntelligentRouting{
+				Decisions: []Decision{{
+					Name: "bad",
+					ModelRefs: []ModelRef{{
+						Model:                 "",
+						ModelReasoningControl: ModelReasoningControl{UseReasoning: boolPtr(false)},
+					}},
+				}},
+			},
+		}
+
+		err := ValidateKubernetesConfigContracts(cfg)
+		Expect(err).To(HaveOccurred())
+		Expect(err.Error()).To(ContainSubstring("model name cannot be empty"))
+	})
+
+	It("keeps the shared dispatch table wired for file and k8s validation", func() {
+		Expect(sharedConfigContractValidators).NotTo(BeEmpty())
+		for _, validator := range sharedConfigContractValidators {
+			Expect(validator.name).NotTo(BeEmpty())
+			Expect(validator.scopes&configValidationScopeFile).NotTo(BeZero(), "validator %s must run for file config", validator.name)
+			Expect(validator.scopes&configValidationScopeKubernetes).NotTo(BeZero(), "validator %s must run after k8s CRD conversion", validator.name)
+		}
+	})
+
+	It("accepts empty config", func() {
+		Expect(validateConfigStructure(&RouterConfig{})).To(Succeed())
+	})
+
+	It("accepts valid decision", func() {
+		cfg := &RouterConfig{
+			IntelligentRouting: IntelligentRouting{
+				Decisions: []Decision{{
+					Name: "ok",
+					ModelRefs: []ModelRef{{
+						Model:                 "model-a",
+						ModelReasoningControl: ModelReasoningControl{UseReasoning: boolPtr(true)},
+					}},
+				}},
+			},
+		}
+		Expect(validateConfigStructure(cfg)).To(Succeed())
+	})
+
+	It("accepts empty modelRefs", func() {
+		cfg := &RouterConfig{
+			IntelligentRouting: IntelligentRouting{
+				Decisions: []Decision{{Name: "x", ModelRefs: []ModelRef{}}},
+			},
+		}
+		Expect(validateConfigStructure(cfg)).To(Succeed())
+	})
+
+	It("rejects blank model name", func() {
+		cfg := &RouterConfig{
+			IntelligentRouting: IntelligentRouting{
+				Decisions: []Decision{{
+					Name: "x",
+					ModelRefs: []ModelRef{{
+						Model:                 "",
+						ModelReasoningControl: ModelReasoningControl{UseReasoning: boolPtr(false)},
+					}},
+				}},
+			},
+		}
+		err := validateConfigStructure(cfg)
+		Expect(err).To(HaveOccurred())
+		Expect(err.Error()).To(ContainSubstring("model name cannot be empty"))
+	})
+
+	It("rejects nil use_reasoning", func() {
+		cfg := &RouterConfig{
+			IntelligentRouting: IntelligentRouting{
+				Decisions: []Decision{{
+					Name:      "x",
+					ModelRefs: []ModelRef{{Model: "model-a"}},
+				}},
+			},
+		}
+		err := validateConfigStructure(cfg)
+		Expect(err).To(HaveOccurred())
+		Expect(err.Error()).To(ContainSubstring("missing required field 'use_reasoning'"))
+	})
+}
+
+func registerValidateConfigStructureLoRASpecs() {
+	It("validates lora ref in decision", func() {
+		cfg := &RouterConfig{
+			IntelligentRouting: IntelligentRouting{
+				Decisions: []Decision{{
+					Name: "x",
+					ModelRefs: []ModelRef{{
+						Model:                 "qwen3",
+						LoRAName:              "sql-expert",
+						ModelReasoningControl: ModelReasoningControl{UseReasoning: boolPtr(true)},
+					}},
+				}},
+			},
+			BackendModels: BackendModels{
+				ModelConfig: map[string]ModelParams{
+					"qwen3": {LoRAs: []LoRAAdapter{{Name: "sql-expert"}}},
+				},
+			},
+		}
+		Expect(validateConfigStructure(cfg)).To(Succeed())
+	})
+
+	It("rejects bad lora ref", func() {
+		cfg := &RouterConfig{
+			IntelligentRouting: IntelligentRouting{
+				Decisions: []Decision{{
+					Name: "x",
+					ModelRefs: []ModelRef{{
+						Model:                 "qwen3",
+						LoRAName:              "nope",
+						ModelReasoningControl: ModelReasoningControl{UseReasoning: boolPtr(true)},
+					}},
+				}},
+			},
+			BackendModels: BackendModels{
+				ModelConfig: map[string]ModelParams{
+					"qwen3": {LoRAs: []LoRAAdapter{{Name: "sql-expert"}}},
+				},
+			},
+		}
+		err := validateConfigStructure(cfg)
+		Expect(err).To(HaveOccurred())
+		Expect(err.Error()).To(ContainSubstring("is not declared in routing.modelCards"))
+	})
+}
+
+func registerValidateConfigStructureAlgorithmSpecs() {
+	registerValidateConfigStructureAlgorithmSchemaSpecs()
+	registerValidateConfigStructureAlgorithmTypeMismatchSpecs()
+	registerValidateConfigStructureLegacyLatencySpecs()
+}
+
+func registerValidateConfigStructureAlgorithmSchemaSpecs() {
+	It("rejects latency_aware without algorithm.latency_aware", func() {
+		cfg := &RouterConfig{
+			IntelligentRouting: IntelligentRouting{
+				Decisions: []Decision{{
+					Name: "x",
+					ModelRefs: []ModelRef{{
+						Model:                 "model-a",
+						ModelReasoningControl: ModelReasoningControl{UseReasoning: boolPtr(true)},
+					}},
+					Algorithm: &AlgorithmConfig{
+						Type: "latency_aware",
+					},
+				}},
+			},
+		}
+		err := validateConfigStructure(cfg)
+		Expect(err).To(HaveOccurred())
+		Expect(err.Error()).To(ContainSubstring("algorithm.type=latency_aware requires algorithm.latency_aware configuration"))
+	})
+
+	It("accepts latency_aware-only configuration", func() {
+		cfg := &RouterConfig{
+			IntelligentRouting: IntelligentRouting{
+				Decisions: []Decision{{
+					Name: "new-latency-aware",
+					ModelRefs: []ModelRef{{
+						Model:                 "model-a",
+						ModelReasoningControl: ModelReasoningControl{UseReasoning: boolPtr(true)},
+					}},
+					Algorithm: &AlgorithmConfig{
+						Type:         "latency_aware",
+						LatencyAware: &LatencyAwareAlgorithmConfig{TPOTPercentile: 20, TTFTPercentile: 20},
+					},
+				}},
+			},
+		}
+
+		Expect(validateConfigStructure(cfg)).To(Succeed())
+	})
+
+	It("rejects multiple algorithm config blocks in one decision", func() {
+		cfg := &RouterConfig{
+			IntelligentRouting: IntelligentRouting{
+				Decisions: []Decision{{
+					Name: "mixed-algo-blocks",
+					ModelRefs: []ModelRef{{
+						Model:                 "model-a",
+						ModelReasoningControl: ModelReasoningControl{UseReasoning: boolPtr(true)},
+					}},
+					Algorithm: &AlgorithmConfig{
+						Type:         "latency_aware",
+						LatencyAware: &LatencyAwareAlgorithmConfig{TPOTPercentile: 20},
+						AutoMix:      &AutoMixSelectionConfig{},
+					},
+				}},
+			},
+		}
+
+		err := validateConfigStructure(cfg)
+		Expect(err).To(HaveOccurred())
+		Expect(err.Error()).To(ContainSubstring("cannot be combined with multiple algorithm config blocks"))
+	})
+}
+
+func registerValidateConfigStructureAlgorithmTypeMismatchSpecs() {
+	It("rejects algorithm type and config block mismatch", func() {
+		cfg := &RouterConfig{
+			IntelligentRouting: IntelligentRouting{
+				Decisions: []Decision{{
+					Name: "mismatched-algo-block",
+					ModelRefs: []ModelRef{{
+						Model:                 "model-a",
+						ModelReasoningControl: ModelReasoningControl{UseReasoning: boolPtr(true)},
+					}},
+					Algorithm: &AlgorithmConfig{
+						Type:   "automix",
+						Hybrid: &HybridSelectionConfig{},
+					},
+				}},
+			},
+		}
+
+		err := validateConfigStructure(cfg)
+		Expect(err).To(HaveOccurred())
+		Expect(err.Error()).To(ContainSubstring("requires algorithm.automix configuration; found algorithm.hybrid"))
+	})
+
+	It("rejects unsupported algorithm block for static type", func() {
+		cfg := &RouterConfig{
+			IntelligentRouting: IntelligentRouting{
+				Decisions: []Decision{{
+					Name: "static-with-block",
+					ModelRefs: []ModelRef{{
+						Model:                 "model-a",
+						ModelReasoningControl: ModelReasoningControl{UseReasoning: boolPtr(true)},
+					}},
+					Algorithm: &AlgorithmConfig{
+						Type:    "static",
+						AutoMix: &AutoMixSelectionConfig{},
+					},
+				}},
+			},
+		}
+
+		err := validateConfigStructure(cfg)
+		Expect(err).To(HaveOccurred())
+		Expect(err.Error()).To(ContainSubstring("algorithm.type=static cannot be used with algorithm.automix configuration"))
+	})
+}
+
+func registerValidateConfigStructureLegacyLatencySpecs() {
+	It("rejects legacy latency conditions", func() {
+		cfg := &RouterConfig{
+			IntelligentRouting: IntelligentRouting{
+				Decisions: []Decision{{
+					Name: "legacy-latency",
+					Rules: RuleCombination{
+						Operator: "AND",
+						Conditions: []RuleCondition{
+							{Type: "latency", Name: "low_latency"},
+						},
+					},
+					ModelRefs: []ModelRef{{
+						Model:                 "model-a",
+						ModelReasoningControl: ModelReasoningControl{UseReasoning: boolPtr(true)},
+					}},
+					Algorithm: &AlgorithmConfig{Type: "static"},
+				}},
+			},
+		}
+
+		err := validateConfigStructure(cfg)
+		Expect(err).To(HaveOccurred())
+		Expect(err.Error()).To(ContainSubstring("legacy latency config is no longer supported"))
+	})
+
+	It("rejects mixed latency condition and latency_aware configurations", func() {
+		cfg := &RouterConfig{
+			IntelligentRouting: IntelligentRouting{
+				Decisions: []Decision{
+					{
+						Name: "legacy-latency",
+						Rules: RuleCombination{
+							Operator: "AND",
+							Conditions: []RuleCondition{
+								{Type: "latency", Name: "low_latency"},
+							},
+						},
+						ModelRefs: []ModelRef{{
+							Model:                 "model-a",
+							ModelReasoningControl: ModelReasoningControl{UseReasoning: boolPtr(true)},
+						}},
+						Algorithm: &AlgorithmConfig{Type: "static"},
+					},
+					{
+						Name: "new-latency-aware",
+						ModelRefs: []ModelRef{{
+							Model:                 "model-b",
+							ModelReasoningControl: ModelReasoningControl{UseReasoning: boolPtr(true)},
+						}},
+						Algorithm: &AlgorithmConfig{
+							Type:         "latency_aware",
+							LatencyAware: &LatencyAwareAlgorithmConfig{TPOTPercentile: 20, TTFTPercentile: 20},
+						},
+					},
+				},
+			},
+		}
+
+		err := validateConfigStructure(cfg)
+		Expect(err).To(HaveOccurred())
+		Expect(err.Error()).To(ContainSubstring("legacy latency config is no longer supported"))
+	})
+}
+
+var _ = Describe("validateConfigStructure", func() {
+	registerValidateConfigStructureCoreSpecs()
+	registerValidateConfigStructureLoRASpecs()
+	registerValidateConfigStructureAlgorithmSpecs()
+})

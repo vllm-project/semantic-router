@@ -4,13 +4,32 @@
 
 ##@ Helm
 
-# Configuration
+# ── Configuration ────────────────────────────────────────────────────────────
 HELM_RELEASE_NAME ?= semantic-router
 HELM_NAMESPACE ?= vllm-semantic-router-system
 HELM_CHART_PATH ?= deploy/helm/semantic-router
 HELM_VALUES_FILE ?=
 HELM_SET_VALUES ?=
 HELM_TIMEOUT ?= 10m
+HELM_TEMPLATE_OUTPUT ?= /tmp/semantic-router-helm/default-template.yaml
+HELM_REPO_UPDATE ?= true
+
+# ── Remote OCI chart registry ────────────────────────────────────────────────
+# Used by helm-install-version, helm-upgrade-version, and related targets.
+# Override to point at a fork or mirror.
+HELM_OCI_REGISTRY ?= ghcr.io/vllm-project/charts
+HELM_OCI_CHART    ?= $(HELM_OCI_REGISTRY)/semantic-router
+
+# CHART_VERSION: pin to an exact chart version for remote install/upgrade.
+#
+# Release channels:
+#   CHART_VERSION=0.3.0              specific release — recommended for production
+#   CHART_VERSION=0.0.0-latest       latest main-branch build
+#   CHART_VERSION=0.0.0-nightly.YYYYMMDD  specific nightly
+#
+# When CHART_VERSION is empty, targets that require a remote chart will fail
+# with a clear error rather than silently pulling an unintended version.
+CHART_VERSION ?=
 
 # Colors for output (reuse from common.mk if available, otherwise define)
 BLUE ?= \033[0;34m
@@ -19,11 +38,71 @@ YELLOW ?= \033[1;33m
 RED ?= \033[0;31m
 NC ?= \033[0m
 
-.PHONY: helm-lint helm-template helm-install helm-upgrade helm-install-or-upgrade \
+.PHONY: helm-lint helm-template helm-ci-setup helm-ci-validate helm-safety-validate helm-install helm-upgrade helm-install-or-upgrade \
 	helm-uninstall helm-status helm-list helm-history helm-rollback helm-test \
 	helm-package helm-dev helm-prod helm-values helm-manifest \
 	helm-port-forward-api helm-port-forward-grpc helm-port-forward-metrics \
-	helm-logs helm-clean helm-setup helm-cleanup helm-reinstall help-helm _check-k8s
+	helm-logs helm-clean helm-setup helm-cleanup helm-reinstall help-helm _check-k8s \
+	helm-install-version helm-upgrade-version helm-check-version _assert-chart-version
+
+##@ Helm — Remote (OCI) Version-Pinned Operations
+
+# Internal guard: fail early with a helpful message if CHART_VERSION is unset.
+_assert-chart-version:
+	@if [ -z "$(CHART_VERSION)" ]; then \
+		echo "$(RED)[ERROR]$(NC) CHART_VERSION is required for this target."; \
+		echo "$(BLUE)[INFO]$(NC) Set it to a specific release, e.g.:"; \
+		echo "  make helm-install-version  CHART_VERSION=0.3.0"; \
+		echo "  make helm-upgrade-version  CHART_VERSION=0.3.0"; \
+		echo "  make helm-install-version  CHART_VERSION=0.0.0-nightly.20260115"; \
+		exit 1; \
+	fi
+
+helm-install-version: ## Install a specific chart version from OCI — requires CHART_VERSION=x.y.z
+helm-install-version: _check-k8s _assert-chart-version
+	@$(LOG_TARGET)
+	@echo "$(BLUE)[INFO]$(NC) Installing $(HELM_OCI_CHART) version $(CHART_VERSION)"
+	@kubectl get namespace $(HELM_NAMESPACE) &>/dev/null \
+		|| kubectl create namespace $(HELM_NAMESPACE)
+	@helm install $(HELM_RELEASE_NAME) "oci://$(HELM_OCI_CHART)" \
+		--version "$(CHART_VERSION)" \
+		$(if $(HELM_VALUES_FILE),-f $(HELM_VALUES_FILE)) \
+		$(if $(HELM_SET_VALUES),--set $(HELM_SET_VALUES)) \
+		--namespace $(HELM_NAMESPACE) \
+		--wait \
+		--timeout $(HELM_TIMEOUT)
+	@echo "$(GREEN)[SUCCESS]$(NC) Installed $(HELM_RELEASE_NAME) at chart version $(CHART_VERSION)"
+	@$(MAKE) helm-status
+
+helm-upgrade-version: ## Upgrade to a specific chart version from OCI — requires CHART_VERSION=x.y.z
+helm-upgrade-version: _check-k8s _assert-chart-version
+	@$(LOG_TARGET)
+	@echo "$(BLUE)[INFO]$(NC) Upgrading $(HELM_RELEASE_NAME) → $(HELM_OCI_CHART):$(CHART_VERSION)"
+	@helm upgrade $(HELM_RELEASE_NAME) "oci://$(HELM_OCI_CHART)" \
+		--version "$(CHART_VERSION)" \
+		$(if $(HELM_VALUES_FILE),-f $(HELM_VALUES_FILE)) \
+		$(if $(HELM_SET_VALUES),--set $(HELM_SET_VALUES)) \
+		--namespace $(HELM_NAMESPACE) \
+		--reset-then-reuse-values \
+		--wait \
+		--timeout $(HELM_TIMEOUT)
+	@echo "$(GREEN)[SUCCESS]$(NC) Upgraded $(HELM_RELEASE_NAME) to chart version $(CHART_VERSION)"
+	@$(MAKE) helm-status
+
+helm-check-version: ## Show the currently deployed chart version and available remote versions
+helm-check-version: _check-k8s
+	@$(LOG_TARGET)
+	@echo "$(BLUE)[INFO]$(NC) Deployed release:"
+	@helm list -n $(HELM_NAMESPACE) \
+		--filter "^$(HELM_RELEASE_NAME)$$" \
+		--output table 2>/dev/null \
+		|| echo "  (no release found in namespace $(HELM_NAMESPACE))"
+	@echo ""
+	@echo "$(BLUE)[INFO]$(NC) Release history:"
+	@helm history $(HELM_RELEASE_NAME) -n $(HELM_NAMESPACE) 2>/dev/null \
+		|| echo "  (no history found)"
+
+##@ Helm — Local Chart Operations
 
 helm-lint: ## Lint the Helm chart
 helm-lint:
@@ -38,6 +117,120 @@ helm-template:
 		$(if $(HELM_VALUES_FILE),-f $(HELM_VALUES_FILE)) \
 		$(if $(HELM_SET_VALUES),--set $(HELM_SET_VALUES)) \
 		--namespace $(HELM_NAMESPACE)
+
+helm-ci-setup: ## Prepare Helm repositories and chart dependencies for CI-style validation
+helm-ci-setup:
+	@$(LOG_TARGET)
+	@if [ "$(HELM_REPO_UPDATE)" = "true" ]; then \
+		helm repo add bitnami https://charts.bitnami.com/bitnami --force-update; \
+		helm repo add milvus https://milvus-io.github.io/milvus-helm/ --force-update; \
+		helm repo add jaegertracing https://jaegertracing.github.io/helm-charts --force-update; \
+		helm repo add prometheus-community https://prometheus-community.github.io/helm-charts --force-update; \
+		helm repo add grafana https://grafana.github.io/helm-charts --force-update; \
+		helm repo update; \
+		helm dependency build $(HELM_CHART_PATH); \
+	else \
+		echo "$(YELLOW)[WARN]$(NC) Skipping helm repo add/update; using Chart.lock dependency versions"; \
+		helm dependency build $(HELM_CHART_PATH) --skip-refresh; \
+	fi
+
+helm-ci-validate: ## Run the CI Helm lint and template validation flow
+helm-ci-validate: helm-ci-setup
+	@$(LOG_TARGET)
+	@$(MAKE) helm-lint
+	@mkdir -p "$$(dirname "$(HELM_TEMPLATE_OUTPUT)")"
+	@helm template $(HELM_RELEASE_NAME) $(HELM_CHART_PATH) \
+		$(if $(HELM_VALUES_FILE),-f $(HELM_VALUES_FILE)) \
+		$(if $(HELM_SET_VALUES),--set $(HELM_SET_VALUES)) \
+		--namespace $(HELM_NAMESPACE) > "$(HELM_TEMPLATE_OUTPUT)"
+	@python3 -c "import yamllint" >/dev/null 2>&1 || python3 -m pip install --user yamllint
+	@python3 -m yamllint -d '{extends: default, rules: {line-length: {max: 120}, indentation: {spaces: 2}}}' "$(HELM_TEMPLATE_OUTPUT)" || echo "Some yamllint warnings are expected for Helm templates"
+	@required_resources="ServiceAccount PersistentVolumeClaim ConfigMap Deployment Service"; \
+	for resource in $$required_resources; do \
+		if grep -q "kind: $$resource" "$(HELM_TEMPLATE_OUTPUT)"; then \
+			echo "Found resource: $$resource"; \
+		else \
+			echo "Missing resource: $$resource"; \
+			exit 1; \
+		fi; \
+	done
+	@echo "$(GREEN)[SUCCESS]$(NC) Helm CI validation completed successfully"
+
+helm-safety-validate: ## Validate Helm schema and local-state safety guards
+helm-safety-validate: helm-ci-setup
+	@$(LOG_TARGET)
+	@set -e; \
+	tmp_dir="$$(mktemp -d)"; \
+	trap 'rm -rf "$$tmp_dir"' EXIT; \
+	echo "Validating production Helm render..."; \
+	helm template $(HELM_RELEASE_NAME) $(HELM_CHART_PATH) \
+		-f "$(HELM_CHART_PATH)/values-prod.yaml" \
+		--namespace $(HELM_NAMESPACE) > "$$tmp_dir/prod.yaml"; \
+	grep -q "kind: HorizontalPodAutoscaler" "$$tmp_dir/prod.yaml"; \
+	echo "Validating schema rejection for invalid selector guard type..."; \
+	if helm template $(HELM_RELEASE_NAME) $(HELM_CHART_PATH) \
+		--set safetyGuards.rejectMultiReplicaLocalSelectorState=maybe \
+		--namespace $(HELM_NAMESPACE) > "$$tmp_dir/invalid-guard.out" 2>&1; then \
+		echo "Expected invalid selector guard type to fail schema validation"; \
+		cat "$$tmp_dir/invalid-guard.out"; \
+		exit 1; \
+	fi; \
+	grep -Eq "rejectMultiReplicaLocalSelectorState.*(Invalid type|want boolean)" "$$tmp_dir/invalid-guard.out"; \
+	echo "Validating schema rejection for invalid replicaCount type..."; \
+	if helm template $(HELM_RELEASE_NAME) $(HELM_CHART_PATH) \
+		--set replicaCount=oops \
+		--namespace $(HELM_NAMESPACE) > "$$tmp_dir/invalid-replica.out" 2>&1; then \
+		echo "Expected invalid replicaCount type to fail schema validation"; \
+		cat "$$tmp_dir/invalid-replica.out"; \
+		exit 1; \
+	fi; \
+	grep -Eq "replicaCount.*(Invalid type|want integer)" "$$tmp_dir/invalid-replica.out"; \
+	echo "Validating RL-driven selector local-state multi-replica rejection..."; \
+	if helm template $(HELM_RELEASE_NAME) $(HELM_CHART_PATH) \
+		--set autoscaling.enabled=false \
+		--set replicaCount=2 \
+		--set 'config.routing.decisions[0].name=adaptive' \
+		--set 'config.routing.decisions[0].algorithm.type=rl_driven' \
+		--namespace $(HELM_NAMESPACE) > "$$tmp_dir/rl-driven.out" 2>&1; then \
+		echo "Expected RL-driven local selector state to reject multi-replica render"; \
+		cat "$$tmp_dir/rl-driven.out"; \
+		exit 1; \
+	fi; \
+	grep -q "multi-replica router deployments cannot use local learning selector state" "$$tmp_dir/rl-driven.out"; \
+	echo "Validating explicit selector local-state opt-out escape hatch..."; \
+	helm template $(HELM_RELEASE_NAME) $(HELM_CHART_PATH) \
+		--set autoscaling.enabled=false \
+		--set replicaCount=2 \
+		--set safetyGuards.rejectMultiReplicaLocalSelectorState=false \
+		--set 'config.routing.decisions[0].name=adaptive' \
+		--set 'config.routing.decisions[0].algorithm.type=rl_driven' \
+		--namespace $(HELM_NAMESPACE) > "$$tmp_dir/unsafe-rl-driven.yaml"; \
+	grep -q "type: rl_driven" "$$tmp_dir/unsafe-rl-driven.yaml"; \
+	grep -q "replicas: 2" "$$tmp_dir/unsafe-rl-driven.yaml"; \
+	echo "Validating HPA replica bound rejection..."; \
+	if helm template $(HELM_RELEASE_NAME) $(HELM_CHART_PATH) \
+		--set autoscaling.enabled=true \
+		--set autoscaling.minReplicas=3 \
+		--set autoscaling.maxReplicas=2 \
+		--namespace $(HELM_NAMESPACE) > "$$tmp_dir/hpa-bounds.out" 2>&1; then \
+		echo "Expected HPA minReplicas > maxReplicas to fail template validation"; \
+		cat "$$tmp_dir/hpa-bounds.out"; \
+		exit 1; \
+	fi; \
+	grep -q "autoscaling.minReplicas (3) cannot be greater than autoscaling.maxReplicas (2)" "$$tmp_dir/hpa-bounds.out"; \
+	echo "Validating GMTRouter selector local-state HPA rejection..."; \
+	if helm template $(HELM_RELEASE_NAME) $(HELM_CHART_PATH) \
+		--set autoscaling.enabled=true \
+		--set autoscaling.maxReplicas=2 \
+		--set 'config.routing.decisions[0].name=adaptive' \
+		--set 'config.routing.decisions[0].algorithm.type=gmtrouter' \
+		--namespace $(HELM_NAMESPACE) > "$$tmp_dir/gmtrouter.out" 2>&1; then \
+		echo "Expected GMTRouter local selector state to reject HPA multi-replica render"; \
+		cat "$$tmp_dir/gmtrouter.out"; \
+		exit 1; \
+	fi; \
+	grep -q "multi-replica router deployments cannot use local learning selector state" "$$tmp_dir/gmtrouter.out"
+	@echo "$(GREEN)[SUCCESS]$(NC) Helm safety validation completed successfully"
 
 helm-install: ## Install the Helm chart
 helm-install: _check-k8s

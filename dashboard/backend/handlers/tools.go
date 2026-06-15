@@ -6,20 +6,16 @@ import (
 	"log"
 	"net/http"
 	"os"
-	"path/filepath"
 )
 
 // ToolsDBHandler reads and serves the tools_db.json file
-func ToolsDBHandler(configDir string) http.HandlerFunc {
+func ToolsDBHandler(toolsDBPath string) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		// Only allow GET requests
 		if r.Method != http.MethodGet {
 			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 			return
 		}
-
-		// Construct the tools_db.json path
-		toolsDBPath := filepath.Join(configDir, "tools_db.json")
 
 		// Read the tools database file
 		data, err := os.ReadFile(toolsDBPath)

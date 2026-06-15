@@ -1,0 +1,70 @@
+version: v0.3
+
+listeners:
+  - name: "agent-smoke-http-amd"
+    address: "0.0.0.0"
+    port: 8888
+    timeout: "60s"
+
+providers:
+  defaults:
+    default_model: "smoke-model"
+  models:
+    - name: "smoke-model"
+      provider_model_id: "smoke-model"
+      backend_refs:
+        - name: "primary"
+          weight: 100
+          endpoint: "host.docker.internal:8000/v1"
+          protocol: "http"
+
+routing:
+  modelCards:
+    - name: "smoke-model"
+      modality: "text"
+  decisions:
+    - name: "default-route"
+      description: "Minimal AMD default route for agent smoke validation"
+      priority: 100
+      rules:
+        operator: "AND"
+        conditions: []
+      modelRefs:
+        - model: "smoke-model"
+          use_reasoning: false
+
+global:
+  stores:
+    semantic_cache:
+      enabled: false
+  model_catalog:
+    embeddings:
+      semantic:
+        mmbert_model_path: ""
+        qwen3_model_path: ""
+        gemma_model_path: ""
+        bert_model_path: ""
+        multimodal_model_path: ""
+    modules:
+      prompt_guard:
+        enabled: false
+        model_ref: ""
+        model_id: ""
+        jailbreak_mapping_path: ""
+        use_mmbert_32k: false
+      classifier:
+        domain:
+          model_ref: ""
+          model_id: ""
+          category_mapping_path: ""
+          use_mmbert_32k: false
+        pii:
+          model_ref: ""
+          model_id: ""
+          pii_mapping_path: ""
+          use_mmbert_32k: false
+      feedback_detector:
+        enabled: false
+        model_ref: ""
+        model_id: ""
+        use_mmbert_32k: false

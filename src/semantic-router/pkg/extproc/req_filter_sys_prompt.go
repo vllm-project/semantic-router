@@ -8,7 +8,6 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 
-	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/metrics"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/tracing"
@@ -20,21 +19,14 @@ func (r *OpenAIRouter) addSystemPromptIfConfigured(modifiedBody []byte, category
 		return modifiedBody, nil
 	}
 
-	// Try to get the most up-to-date decision configuration from global config first
-	globalConfig := config.Get()
-	var decision *config.Decision
-	if globalConfig != nil {
-		decision = globalConfig.GetDecisionByName(categoryName)
-	}
-
-	// If not found in global config, fall back to router's config
+	decision := r.decisionByName(categoryName)
 	if decision == nil {
-		decision = r.Classifier.GetDecisionByName(categoryName)
+		return modifiedBody, nil
 	}
 
 	// Get system prompt configuration from plugins
 	systemPromptConfig := decision.GetSystemPromptConfig()
-	if decision == nil || systemPromptConfig == nil || systemPromptConfig.SystemPrompt == "" {
+	if systemPromptConfig == nil || systemPromptConfig.SystemPrompt == "" {
 		return modifiedBody, nil
 	}
 
@@ -79,8 +71,6 @@ func (r *OpenAIRouter) addSystemPromptIfConfigured(modifiedBody []byte, category
 	return modifiedBody, nil
 }
 
-// addSystemPromptToRequestBody adds system prompt to the JSON request body
-
 // addSystemPromptToRequestBody adds a system prompt to the beginning of the messages array in the JSON request body
 // Returns the modified body, whether the system prompt was actually injected, and any error
 func addSystemPromptToRequestBody(requestBody []byte, systemPrompt string, mode string) ([]byte, bool, error) {
@@ -88,84 +78,80 @@ func addSystemPromptToRequestBody(requestBody []byte, systemPrompt string, mode 
 		return requestBody, false, nil
 	}
 
-	// Parse the JSON request body
-	var requestMap map[string]interface{}
-	if err := json.Unmarshal(requestBody, &requestMap); err != nil {
+	requestMap, messages, ok, err := parseRequestMessages(requestBody)
+	if err != nil {
 		return nil, false, err
 	}
-
-	// Get the messages array
-	messagesInterface, ok := requestMap["messages"]
 	if !ok {
-		return requestBody, false, nil // No messages array, return original
+		return requestBody, false, nil
 	}
 
-	messages, ok := messagesInterface.([]interface{})
-	if !ok {
-		return requestBody, false, nil // Messages is not an array, return original
-	}
-
-	// Check if there's already a system message at the beginning
-	hasSystemMessage := false
-	var existingSystemContent string
-	if len(messages) > 0 {
-		if firstMsg, ok := messages[0].(map[string]interface{}); ok {
-			if role, ok := firstMsg["role"].(string); ok && role == "system" {
-				hasSystemMessage = true
-				if content, ok := firstMsg["content"].(string); ok {
-					existingSystemContent = content
-				}
-			}
-		}
-	}
-
-	// Handle different injection modes
-	var finalSystemContent string
-	var logMessage string
-
-	switch mode {
-	case "insert":
-		if hasSystemMessage {
-			// Insert mode: prepend category prompt to existing system message
-			finalSystemContent = systemPrompt + "\n\n" + existingSystemContent
-			logMessage = "Inserted category-specific system prompt before existing system message"
-		} else {
-			// No existing system message, just use the category prompt
-			finalSystemContent = systemPrompt
-			logMessage = "Added category-specific system prompt (insert mode, no existing system message)"
-		}
-	case "replace":
-		fallthrough
-	default:
-		// Replace mode: use only the category prompt
-		finalSystemContent = systemPrompt
-		if hasSystemMessage {
-			logMessage = "Replaced existing system message with category-specific system prompt"
-		} else {
-			logMessage = "Added category-specific system prompt to the beginning of messages"
-		}
-	}
-
-	// Create the final system message
-	systemMessage := map[string]interface{}{
-		"role":    "system",
-		"content": finalSystemContent,
-	}
-
-	if hasSystemMessage {
-		// Update the existing system message
-		messages[0] = systemMessage
-	} else {
-		// Prepend the system message to the beginning of the messages array
-		messages = append([]interface{}{systemMessage}, messages...)
-	}
+	existingSystemContent, hasSystemMessage := firstSystemMessage(messages)
+	finalSystemContent, logMessage := systemPromptContent(systemPrompt, mode, existingSystemContent, hasSystemMessage)
+	requestMap["messages"] = upsertSystemMessage(messages, finalSystemContent, hasSystemMessage)
 
 	logging.Infof("%s (mode: %s)", logMessage, mode)
 
-	// Update the messages in the request map
-	requestMap["messages"] = messages
-
-	// Marshal back to JSON
 	modifiedBody, err := json.Marshal(requestMap)
 	return modifiedBody, true, err
+}
+
+func parseRequestMessages(requestBody []byte) (map[string]interface{}, []interface{}, bool, error) {
+	var requestMap map[string]interface{}
+	if err := json.Unmarshal(requestBody, &requestMap); err != nil {
+		return nil, nil, false, err
+	}
+	messagesInterface, ok := requestMap["messages"]
+	if !ok {
+		return requestMap, nil, false, nil
+	}
+	messages, ok := messagesInterface.([]interface{})
+	return requestMap, messages, ok, nil
+}
+
+func firstSystemMessage(messages []interface{}) (string, bool) {
+	if len(messages) == 0 {
+		return "", false
+	}
+	firstMsg, ok := messages[0].(map[string]interface{})
+	if !ok {
+		return "", false
+	}
+	role, ok := firstMsg["role"].(string)
+	if !ok || role != "system" {
+		return "", false
+	}
+	content, _ := firstMsg["content"].(string)
+	return content, true
+}
+
+func systemPromptContent(systemPrompt string, mode string, existingSystemContent string, hasSystemMessage bool) (string, string) {
+	switch mode {
+	case "insert":
+		if hasSystemMessage {
+			return systemPrompt + "\n\n" + existingSystemContent,
+				"Inserted category-specific system prompt before existing system message"
+		}
+		return systemPrompt,
+			"Added category-specific system prompt (insert mode, no existing system message)"
+	case "replace":
+		fallthrough
+	default:
+		if hasSystemMessage {
+			return systemPrompt, "Replaced existing system message with category-specific system prompt"
+		}
+		return systemPrompt, "Added category-specific system prompt to the beginning of messages"
+	}
+}
+
+func upsertSystemMessage(messages []interface{}, content string, hasSystemMessage bool) []interface{} {
+	systemMessage := map[string]interface{}{
+		"role":    "system",
+		"content": content,
+	}
+	if hasSystemMessage {
+		messages[0] = systemMessage
+		return messages
+	}
+	return append([]interface{}{systemMessage}, messages...)
 }

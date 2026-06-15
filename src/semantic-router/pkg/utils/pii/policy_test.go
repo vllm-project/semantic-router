@@ -6,6 +6,32 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 )
 
+// helper to build a RouterConfig with a decision that references a PII signal
+func makeSignalBasedPIIConfig(decisionName, piiSignalName string, piiTypesAllowed []string) *config.RouterConfig {
+	return &config.RouterConfig{
+		IntelligentRouting: config.IntelligentRouting{
+			Decisions: []config.Decision{
+				{
+					Name: decisionName,
+					Rules: config.RuleCombination{
+						Type: "pii",
+						Name: piiSignalName,
+					},
+				},
+			},
+			Signals: config.Signals{
+				PIIRules: []config.PIIRule{
+					{
+						Name:            piiSignalName,
+						Threshold:       0.5,
+						PIITypesAllowed: piiTypesAllowed,
+					},
+				},
+			},
+		},
+	}
+}
+
 func TestIsPIIEnabled(t *testing.T) {
 	tests := []struct {
 		name         string
@@ -37,23 +63,7 @@ func TestIsPIIEnabled(t *testing.T) {
 			name:         "PII enabled for decision",
 			decisionName: "finance",
 			setupConfig: func() *config.RouterConfig {
-				return &config.RouterConfig{
-					IntelligentRouting: config.IntelligentRouting{
-						Decisions: []config.Decision{
-							{
-								Name: "finance",
-								Plugins: []config.DecisionPlugin{
-									{
-										Type: "pii",
-										Configuration: map[string]interface{}{
-											"enabled": true,
-										},
-									},
-								},
-							},
-						},
-					},
-				}
+				return makeSignalBasedPIIConfig("finance", "pii_deny_all", []string{})
 			},
 			expected: true,
 		},
@@ -61,18 +71,15 @@ func TestIsPIIEnabled(t *testing.T) {
 			name:         "PII disabled for decision",
 			decisionName: "general",
 			setupConfig: func() *config.RouterConfig {
+				// Decision exists but has no PII signal reference in rules
 				return &config.RouterConfig{
 					IntelligentRouting: config.IntelligentRouting{
 						Decisions: []config.Decision{
 							{
 								Name: "general",
-								Plugins: []config.DecisionPlugin{
-									{
-										Type: "pii",
-										Configuration: map[string]interface{}{
-											"enabled": false,
-										},
-									},
+								Rules: config.RuleCombination{
+									Type: "domain",
+									Name: "general",
 								},
 							},
 						},
@@ -109,18 +116,15 @@ func TestCheckPolicy(t *testing.T) {
 			decisionName: "general",
 			detectedPII:  []string{"PERSON", "EMAIL_ADDRESS"},
 			setupConfig: func() *config.RouterConfig {
+				// No PII signal reference → PII disabled
 				return &config.RouterConfig{
 					IntelligentRouting: config.IntelligentRouting{
 						Decisions: []config.Decision{
 							{
 								Name: "general",
-								Plugins: []config.DecisionPlugin{
-									{
-										Type: "pii",
-										Configuration: map[string]interface{}{
-											"enabled": false,
-										},
-									},
+								Rules: config.RuleCombination{
+									Type: "domain",
+									Name: "general",
 								},
 							},
 						},
@@ -135,27 +139,7 @@ func TestCheckPolicy(t *testing.T) {
 			decisionName: "public",
 			detectedPII:  []string{"PERSON", "ORGANIZATION"},
 			setupConfig: func() *config.RouterConfig {
-				return &config.RouterConfig{
-					IntelligentRouting: config.IntelligentRouting{
-						Decisions: []config.Decision{
-							{
-								Name: "public",
-								Plugins: []config.DecisionPlugin{
-									{
-										Type: "pii",
-										Configuration: map[string]interface{}{
-											"enabled": true,
-											"pii_types_allowed": []interface{}{
-												"PERSON",
-												"ORGANIZATION",
-											},
-										},
-									},
-								},
-							},
-						},
-					},
-				}
+				return makeSignalBasedPIIConfig("public", "pii_allow_person_org", []string{"PERSON", "ORGANIZATION"})
 			},
 			expectAllowed: true,
 			expectDenied:  nil,
@@ -165,28 +149,7 @@ func TestCheckPolicy(t *testing.T) {
 			decisionName: "restricted",
 			detectedPII:  []string{"PERSON", "EMAIL_ADDRESS", "CREDIT_CARD"},
 			setupConfig: func() *config.RouterConfig {
-				return &config.RouterConfig{
-					IntelligentRouting: config.IntelligentRouting{
-						Decisions: []config.Decision{
-							{
-								Name: "restricted",
-								Plugins: []config.DecisionPlugin{
-									{
-										Type: "pii",
-										Configuration: map[string]interface{}{
-											"enabled":          true,
-											"allow_by_default": false,
-											"pii_types_allowed": []interface{}{
-												"PERSON",
-												"EMAIL_ADDRESS",
-											},
-										},
-									},
-								},
-							},
-						},
-					},
-				}
+				return makeSignalBasedPIIConfig("restricted", "pii_allow_person_email", []string{"PERSON", "EMAIL_ADDRESS"})
 			},
 			expectAllowed: false,
 			expectDenied:  []string{"CREDIT_CARD"},
@@ -196,25 +159,7 @@ func TestCheckPolicy(t *testing.T) {
 			decisionName: "restricted",
 			detectedPII:  []string{"NO_PII", "PERSON"},
 			setupConfig: func() *config.RouterConfig {
-				return &config.RouterConfig{
-					IntelligentRouting: config.IntelligentRouting{
-						Decisions: []config.Decision{
-							{
-								Name: "restricted",
-								Plugins: []config.DecisionPlugin{
-									{
-										Type: "pii",
-										Configuration: map[string]interface{}{
-											"enabled":           true,
-											"allow_by_default":  false,
-											"pii_types_allowed": []interface{}{"PERSON"},
-										},
-									},
-								},
-							},
-						},
-					},
-				}
+				return makeSignalBasedPIIConfig("restricted", "pii_allow_person", []string{"PERSON"})
 			},
 			expectAllowed: true,
 			expectDenied:  nil,
@@ -224,28 +169,7 @@ func TestCheckPolicy(t *testing.T) {
 			decisionName: "restricted",
 			detectedPII:  []string{"PERSON", "EMAIL_ADDRESS"},
 			setupConfig: func() *config.RouterConfig {
-				return &config.RouterConfig{
-					IntelligentRouting: config.IntelligentRouting{
-						Decisions: []config.Decision{
-							{
-								Name: "restricted",
-								Plugins: []config.DecisionPlugin{
-									{
-										Type: "pii",
-										Configuration: map[string]interface{}{
-											"enabled":          true,
-											"allow_by_default": false,
-											"pii_types_allowed": []interface{}{
-												"PERSON",
-												"EMAIL_ADDRESS",
-											},
-										},
-									},
-								},
-							},
-						},
-					},
-				}
+				return makeSignalBasedPIIConfig("restricted", "pii_allow_all", []string{"PERSON", "EMAIL_ADDRESS"})
 			},
 			expectAllowed: true,
 			expectDenied:  nil,
@@ -479,29 +403,7 @@ func TestCheckPolicy_NilDecision(t *testing.T) {
 }
 
 func TestCheckPolicy_ComplexScenario(t *testing.T) {
-	cfg := &config.RouterConfig{
-		IntelligentRouting: config.IntelligentRouting{
-			Decisions: []config.Decision{
-				{
-					Name: "banking",
-					Plugins: []config.DecisionPlugin{
-						{
-							Type: "pii",
-							Configuration: map[string]interface{}{
-								"enabled":          true,
-								"allow_by_default": false,
-								"pii_types_allowed": []interface{}{
-									"PERSON",
-									"DATE_TIME",
-									"ORGANIZATION",
-								},
-							},
-						},
-					},
-				},
-			},
-		},
-	}
+	cfg := makeSignalBasedPIIConfig("banking", "pii_banking", []string{"PERSON", "DATE_TIME", "ORGANIZATION"})
 
 	checker := NewPolicyChecker(cfg)
 

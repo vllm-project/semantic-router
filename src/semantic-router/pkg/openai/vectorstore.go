@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
@@ -30,7 +31,7 @@ func NewVectorStoreClient(baseURL string, apiKey string) *VectorStoreClient {
 				IdleConnTimeout:     90 * time.Second,
 			},
 		},
-		baseURL: baseURL,
+		baseURL: strings.TrimRight(strings.TrimSuffix(strings.TrimRight(baseURL, "/"), "/v1"), "/"),
 		apiKey:  apiKey,
 	}
 }

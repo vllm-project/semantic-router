@@ -59,7 +59,7 @@ func (m *MemoryStore) Add(ctx context.Context, record Record) (string, error) {
 	}
 
 	// Make a copy to avoid external mutations
-	copyRec := record
+	copyRec := cloneRecord(record)
 	m.records = append(m.records, &copyRec)
 	m.byID[copyRec.ID] = &copyRec
 
@@ -76,7 +76,7 @@ func (m *MemoryStore) Get(ctx context.Context, id string) (Record, bool, error) 
 		return Record{}, false, nil
 	}
 
-	return *rec, true, nil
+	return cloneRecord(*rec), true, nil
 }
 
 // List returns all records ordered by timestamp descending.
@@ -86,7 +86,7 @@ func (m *MemoryStore) List(ctx context.Context) ([]Record, error) {
 
 	result := make([]Record, len(m.records))
 	for i := len(m.records) - 1; i >= 0; i-- {
-		result[len(m.records)-1-i] = *m.records[i]
+		result[len(m.records)-1-i] = cloneRecord(*m.records[i])
 	}
 
 	return result, nil
@@ -140,6 +140,60 @@ func (m *MemoryStore) AttachResponse(ctx context.Context, id string, body string
 	rec.ResponseBody = body
 	rec.ResponseBodyTruncated = rec.ResponseBodyTruncated || truncated
 
+	return nil
+}
+
+// UpdateHallucinationStatus updates hallucination detection results for a record.
+func (m *MemoryStore) UpdateHallucinationStatus(ctx context.Context, id string, detected bool, confidence float32, spans []string) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	rec, ok := m.byID[id]
+	if !ok {
+		return fmt.Errorf("record with ID %s not found", id)
+	}
+
+	rec.HallucinationDetected = detected
+	rec.HallucinationConfidence = confidence
+	rec.HallucinationSpans = cloneStringSlice(spans)
+
+	return nil
+}
+
+// UpdateUsageCost updates token usage and pricing-derived cost fields for a record.
+func (m *MemoryStore) UpdateUsageCost(ctx context.Context, id string, usage UsageCost) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	rec, ok := m.byID[id]
+	if !ok {
+		return fmt.Errorf("record with ID %s not found", id)
+	}
+
+	rec.PromptTokens = cloneIntPtr(usage.PromptTokens)
+	rec.CachedPromptTokens = cloneIntPtr(usage.CachedPromptTokens)
+	rec.CompletionTokens = cloneIntPtr(usage.CompletionTokens)
+	rec.TotalTokens = cloneIntPtr(usage.TotalTokens)
+	rec.ActualCost = cloneFloat64Ptr(usage.ActualCost)
+	rec.BaselineCost = cloneFloat64Ptr(usage.BaselineCost)
+	rec.CostSavings = cloneFloat64Ptr(usage.CostSavings)
+	rec.Currency = cloneStringPtr(usage.Currency)
+	rec.BaselineModel = cloneStringPtr(usage.BaselineModel)
+
+	return nil
+}
+
+// UpdateToolTrace updates tool-calling trace details for a record.
+func (m *MemoryStore) UpdateToolTrace(ctx context.Context, id string, trace ToolTrace) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	rec, ok := m.byID[id]
+	if !ok {
+		return fmt.Errorf("record with ID %s not found", id)
+	}
+
+	rec.ToolTrace = cloneToolTrace(&trace)
 	return nil
 }
 

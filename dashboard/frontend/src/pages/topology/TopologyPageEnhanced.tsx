@@ -1,6 +1,6 @@
 // topology/TopologyPageEnhanced.tsx - Full Signal-Driven Decision Pipeline Visualization
 
-import React, { useCallback, useEffect, useState } from 'react'
+import React, { useCallback, useEffect, useMemo, useState } from 'react'
 import ReactFlow, {
   Node,
   Background,
@@ -20,7 +20,7 @@ import { useTheme } from '../../hooks'
 import { customNodeTypes } from './components/CustomNodes'
 import { TestQueryInput } from './components/ControlPanel'
 import { ResultCard } from './components/ResultCard'
-import { calculateFullLayout } from './utils/layoutCalculator'
+import { calculateFullLayout, type DecisionDensityMode } from './utils/layoutCalculator'
 import styles from './TopologyPageEnhanced.module.css'
 
 // ============== Inner Flow Component ==============
@@ -41,34 +41,98 @@ const TopologyFlow: React.FC = () => {
   const [edges, setEdges, onEdgesChange] = useEdgesState([])
   const { fitView } = useReactFlow()
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
+  const [densityMode, setDensityMode] = useState<DecisionDensityMode>('balanced')
+  const [expandHiddenDecisions, setExpandHiddenDecisions] = useState(false)
+  const [focusMode, setFocusMode] = useState(true)
+  const [focusedDecisionName, setFocusedDecisionName] = useState<string | null>(null)
+  const [layoutMeta, setLayoutMeta] = useState({
+    hiddenDecisionCount: 0,
+    visibleDecisionCount: 0,
+    totalDecisionCount: 0,
+  })
+
+  const handleExpandHiddenDecisions = useCallback(() => {
+    setExpandHiddenDecisions(true)
+  }, [])
+
+  const handleDecisionFocus = useCallback((decisionName: string) => {
+    setFocusedDecisionName(prev => (prev === decisionName ? null : decisionName))
+    setFocusMode(true)
+  }, [])
+
+  const layoutOptions = useMemo(() => ({
+    densityMode,
+    expandHiddenDecisions,
+    onExpandHiddenDecisions: handleExpandHiddenDecisions,
+    focusMode,
+    focusedDecisionName: focusMode ? focusedDecisionName : null,
+    onFocusDecision: handleDecisionFocus,
+  }), [
+    densityMode,
+    expandHiddenDecisions,
+    handleExpandHiddenDecisions,
+    focusMode,
+    focusedDecisionName,
+    handleDecisionFocus,
+  ])
+
+  const stageGuide = useMemo(() => {
+    if (!data) return []
+
+    const projectionCount = data.signals.filter(signal => signal.type === 'projection').length
+    const runtimeCount = data.decisions.reduce((count, decision) => {
+      const hasAlgorithm = Boolean(decision.algorithm && decision.algorithm.type !== 'static')
+      const hasPluginChain = Boolean(decision.plugins && decision.plugins.length > 0)
+      return count + (hasAlgorithm ? 1 : 0) + (hasPluginChain ? 1 : 0)
+    }, 0)
+
+    return [
+      { id: 'signals', label: 'Signal Fabric', count: data.signals.length },
+      { id: 'projections', label: 'Projection Maps', count: projectionCount },
+      { id: 'decisions', label: 'Decision Lanes', count: data.decisions.length },
+      { id: 'runtime', label: 'Runtime Chain', count: runtimeCount },
+      { id: 'models', label: 'Model Pool', count: data.models.length },
+    ]
+  }, [data])
+
+  useEffect(() => {
+    setExpandHiddenDecisions(false)
+  }, [densityMode])
 
   // Generate full topology layout
   useEffect(() => {
     if (!data) return
 
     const highlightedPath = testResult?.highlightedPath || []
-    const { nodes: newNodes, edges: newEdges } = calculateFullLayout(
+    const { nodes: newNodes, edges: newEdges, meta } = calculateFullLayout(
       data,
       collapseState,
       highlightedPath,
-      testResult
+      testResult,
+      layoutOptions
     )
     setNodes(newNodes)
     setEdges(newEdges)
-  }, [data, collapseState, testResult, setNodes, setEdges])
+    setLayoutMeta(meta)
+  }, [data, collapseState, testResult, layoutOptions, setNodes, setEdges])
 
-  // Fit view after nodes change
+  // Fit view after nodes change - with extra bottom padding for input panel
   useEffect(() => {
     if (nodes.length > 0) {
       const timer = setTimeout(() => {
-        fitView({ padding: 0.2, duration: 300 })
+        fitView({
+          padding: 0.16,
+          duration: 300,
+          minZoom: 0.15,
+          maxZoom: 1.0
+        })
       }, 100)
       return () => clearTimeout(timer)
     }
   }, [nodes.length, fitView])
 
   const getNodeColor = useCallback((node: Node) => {
-    const style = node.style as any
+    const style = node.style as Record<string, string> | undefined
     return style?.background || '#ccc'
   }, [])
 
@@ -102,20 +166,103 @@ const TopologyFlow: React.FC = () => {
       <div className={styles.content}>
         {/* Flow Canvas */}
         <div className={styles.flowContainer}>
+          <div className={styles.layoutToolbar}>
+            <div className={`${styles.toolbarSection} ${styles.densitySection}`}>
+              <span className={styles.toolbarLabel}>Density</span>
+              <div className={styles.modeSwitch}>
+                {(['compact', 'balanced', 'cinematic'] as DecisionDensityMode[]).map(mode => (
+                  <button
+                    key={mode}
+                    className={`${styles.modeBtn} ${densityMode === mode ? styles.modeBtnActive : ''}`}
+                    onClick={() => setDensityMode(mode)}
+                    type="button"
+                  >
+                    {mode}
+                  </button>
+                ))}
+              </div>
+              {stageGuide.length > 0 && (
+                <div className={styles.densitySummary} aria-label="Brain topology stage summary">
+                  {stageGuide.map(stage => (
+                    <span key={stage.id} className={styles.densitySummaryItem}>
+                      <span className={styles.densitySummaryValue}>{stage.count}</span>
+                      <span className={styles.densitySummaryLabel}>{stage.label}</span>
+                    </span>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            <div className={styles.toolbarSection}>
+              <span className={styles.toolbarLabel}>Decisions</span>
+              <div className={styles.toolbarRow}>
+                <span className={styles.toolbarValue}>
+                  {layoutMeta.visibleDecisionCount}/{layoutMeta.totalDecisionCount}
+                </span>
+                {layoutMeta.hiddenDecisionCount > 0 && !expandHiddenDecisions && (
+                  <button
+                    type="button"
+                    className={styles.toolBtn}
+                    onClick={() => setExpandHiddenDecisions(true)}
+                  >
+                    +{layoutMeta.hiddenDecisionCount} more
+                  </button>
+                )}
+                {expandHiddenDecisions && layoutMeta.hiddenDecisionCount > 0 && (
+                  <button
+                    type="button"
+                    className={styles.toolBtn}
+                    onClick={() => setExpandHiddenDecisions(false)}
+                  >
+                    Fold Low Priority
+                  </button>
+                )}
+              </div>
+            </div>
+
+            <div className={styles.toolbarSection}>
+              <span className={styles.toolbarLabel}>Focus</span>
+              <div className={styles.toolbarRow}>
+                <button
+                  type="button"
+                  className={`${styles.toolBtn} ${focusMode ? styles.toolBtnActive : ''}`}
+                  onClick={() => {
+                    setFocusMode(prev => {
+                      const next = !prev
+                      if (!next) setFocusedDecisionName(null)
+                      return next
+                    })
+                  }}
+                >
+                  {focusMode ? 'On' : 'Off'}
+                </button>
+                {focusedDecisionName && (
+                  <button
+                    type="button"
+                    className={styles.toolBtn}
+                    onClick={() => setFocusedDecisionName(null)}
+                  >
+                    Clear
+                  </button>
+                )}
+              </div>
+            </div>
+          </div>
+
           <ReactFlow
             nodes={nodes}
             edges={edges}
             onNodesChange={onNodesChange}
             onEdgesChange={onEdgesChange}
             nodeTypes={customNodeTypes}
-            connectionLineType={ConnectionLineType.Bezier}
+            connectionLineType={ConnectionLineType.SmoothStep}
             defaultEdgeOptions={{
-              type: 'bezier',
+              type: 'smoothstep',
               style: { strokeWidth: 1.5 },
             }}
             fitView
-            fitViewOptions={{ padding: 0.3, minZoom: 0.3, maxZoom: 1.5 }}
-            defaultViewport={{ x: 0, y: 0, zoom: 0.6 }}
+            fitViewOptions={{ padding: 0.16, minZoom: 0.15, maxZoom: 1.0 }}
+            defaultViewport={{ x: 0, y: 0, zoom: 0.32 }}
           >
             <Background 
               variant={BackgroundVariant.Dots}

@@ -1,8 +1,10 @@
 ---
 slug: q4-roadmap-iris
 title: "Semantic Router Q4 2025 Roadmap: Journey to Iris"
+description: The Q4 2025 roadmap for vLLM Semantic Router, outlining the path to the v0.1 Iris release and the project's early system-intelligence milestones.
 authors: [Xunzhuo, rootfs, wangchen615, yuezhu1]
 tags: [roadmap, release, iris, v0.1]
+image: /img/q4.png
 ---
 
 # Semantic Router Q4 2025 Roadmap: Journey to Iris

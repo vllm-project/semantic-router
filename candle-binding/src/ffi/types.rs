@@ -557,6 +557,30 @@ impl Default for EnhancedHallucinationDetectionResult {
     }
 }
 
+/// Multi-modal embedding result (text, image, or audio)
+#[repr(C)]
+#[derive(Debug)]
+pub struct MultiModalEmbeddingResult {
+    pub data: *mut f32,
+    pub length: i32,
+    pub error: bool,
+    /// Modality that was encoded: 0=text, 1=image, 2=audio
+    pub modality: i32,
+    pub processing_time_ms: f32,
+}
+
+impl Default for MultiModalEmbeddingResult {
+    fn default() -> Self {
+        Self {
+            data: std::ptr::null_mut(),
+            length: 0,
+            error: true,
+            modality: -1,
+            processing_time_ms: 0.0,
+        }
+    }
+}
+
 /// Validate that a C structure pointer is not null and properly aligned
 pub unsafe fn validate_c_struct_ptr<T>(ptr: *const T) -> bool {
     !ptr.is_null() && (ptr as usize) % std::mem::align_of::<T>() == 0

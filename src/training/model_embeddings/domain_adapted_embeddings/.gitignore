@@ -1,0 +1,25 @@
+# Data files (too large for git)
+data/
+*.pkl
+*.json
+
+# Model files (too large for git)
+models/
+*.bin
+*.safetensors
+*.pt
+*.pth
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+
+# Results
+evaluation_results.pkl
+small_sample_results.json
+
+# Logs
+*.log

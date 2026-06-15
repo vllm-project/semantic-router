@@ -29,6 +29,9 @@ type TestCaseOptions struct {
 	// Verbose enables verbose logging
 	Verbose bool
 
+	// Profile is the active E2E profile name running this testcase.
+	Profile string
+
 	// Namespace is the Kubernetes namespace to use
 	Namespace string
 
@@ -61,8 +64,15 @@ type ServiceConfig struct {
 	// Name is the service name (optional, if not using label selector)
 	Name string
 
-	// PortMapping is the port mapping for port-forwarding
-	// Format: "localPort:servicePort" (e.g., "8080:80")
+	// ServicePort is the port exposed by the Kubernetes Service.
+	ServicePort string
+
+	// LocalPort is an optional fixed local port for port-forwarding.
+	// Empty means the framework chooses an ephemeral local port.
+	LocalPort string
+
+	// PortMapping is a deprecated compatibility shim for older profiles.
+	// The service-side port is still honored, but the local port is ignored unless LocalPort is set.
 	PortMapping string
 }
 
@@ -81,6 +91,7 @@ func Register(name string, tc TestCase) {
 	}
 
 	tc.Name = name
+	tc.Fn = wrapWithAcceptanceContract(name, tc.Fn)
 	registry[name] = tc
 }
 

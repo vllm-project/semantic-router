@@ -13,6 +13,10 @@ E2E_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 LOGS_DIR="$E2E_DIR/logs"
 PIDS_FILE="$E2E_DIR/llm_katan_pids.txt"
 
+# Backend type: "transformers" (default), "vllm", or "echo"
+# Use "echo" for memory tests - returns the full prompt for verification
+BACKEND="${LLM_KATAN_BACKEND:-transformers}"
+
 # Model configurations for LLM Katan servers
 # Format: "port:real_model::served_model_name"
 LLM_KATAN_MODELS=(
@@ -76,10 +80,12 @@ start_servers_foreground() {
         served_name="${model_spec##*::}"
 
         echo "🚀 Starting LLM Katan server on port $port..."
+        echo "   Backend: $BACKEND"
         echo "   Real model: $real_model"
         echo "   Served as: $served_name"
 
         # Start server and capture PID
+        # For echo backend, model is ignored but still required by CLI
         llm-katan \
             --model "$real_model" \
             --served-model-name "$served_name" \
@@ -87,6 +93,7 @@ start_servers_foreground() {
             --host 127.0.0.1 \
             --max-tokens 512 \
             --temperature 0.7 \
+            --backend "$BACKEND" \
             --log-level DEBUG &
         local pid=$!
         PIDS+=("$pid")

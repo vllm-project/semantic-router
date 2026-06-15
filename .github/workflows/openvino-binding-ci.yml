@@ -1,0 +1,120 @@
+name: OpenVINO Binding CI
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+    paths:
+      - 'openvino-binding/**'
+      - '.github/workflows/openvino-binding-ci.yml'
+    branches:
+      - main
+  push:
+    paths:
+      - 'openvino-binding/**'
+      - '.github/workflows/openvino-binding-ci.yml'
+    branches:
+      - main
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-and-test:
+    if: ${{ !github.event.pull_request.draft }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out the repo
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: "1.24"
+          cache: false
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            build-essential \
+            cmake \
+            pkg-config \
+            python3 \
+            python3-pip
+
+      - name: Install OpenVINO
+        run: |
+          pip3 install --no-cache-dir \
+            openvino==2025.1.0 \
+            openvino-tokenizers==2025.1.0 \
+            optimum[openvino] \
+            Pillow \
+            huggingface_hub[cli]
+
+      - name: Build OpenVINO C++ library
+        run: |
+          mkdir -p openvino-binding/build
+          cd openvino-binding/build
+          cmake ..
+          make -j$(nproc)
+          echo "=== Verifying library ==="
+          ls -la libopenvino_semantic_router.so
+          nm -D libopenvino_semantic_router.so | grep -c "T " || true
+
+      - name: Verify Go binding compiles
+        run: |
+          export LD_LIBRARY_PATH=${{ github.workspace }}/openvino-binding/build:$LD_LIBRARY_PATH
+          cd openvino-binding
+          CGO_ENABLED=1 go build -v .
+
+      - name: Convert test models
+        run: |
+          export LD_LIBRARY_PATH=${{ github.workspace }}/openvino-binding/build:$LD_LIBRARY_PATH
+          export TORCHDYNAMO_DISABLE=1
+          cd openvino-binding
+          mkdir -p test_models
+          # Convert embedding model to OpenVINO IR
+          optimum-cli export openvino \
+            --model sentence-transformers/all-MiniLM-L6-v2 \
+            --task feature-extraction \
+            test_models/all-MiniLM-L6-v2
+          # Convert classifier model to OpenVINO IR
+          optimum-cli export openvino \
+            --model LLM-Semantic-Router/category_classifier_modernbert-base_model \
+            --task text-classification \
+            test_models/category_classifier_modernbert
+          # Convert tokenizers
+          python3 scripts/convert_test_tokenizers.py
+
+      - name: Run Go tests
+        run: |
+          OV_LIB_DIR=$(python3 -c "import openvino; import os; print(os.path.join(os.path.dirname(openvino.__file__), 'libs'))")
+          export LD_LIBRARY_PATH=${{ github.workspace }}/openvino-binding/build:${OV_LIB_DIR}:$LD_LIBRARY_PATH
+          export OPENVINO_TOKENIZERS_LIB=$(python3 -c "import openvino_tokenizers, os; print(os.path.join(os.path.dirname(openvino_tokenizers.__file__), 'lib', 'libopenvino_tokenizers.so'))")
+          echo "LD_LIBRARY_PATH=$LD_LIBRARY_PATH"
+          echo "OPENVINO_TOKENIZERS_LIB=$OPENVINO_TOKENIZERS_LIB"
+          cd openvino-binding
+          CGO_ENABLED=1 go test -v -timeout 10m ./...
+
+  docker-build:
+    if: ${{ !github.event.pull_request.draft }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out the repo
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build OpenVINO binding Docker image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: openvino-binding/Dockerfile
+          push: false
+          tags: openvino-binding:test
+          target: builder
+          cache-from: type=gha
+          cache-to: type=gha,mode=max

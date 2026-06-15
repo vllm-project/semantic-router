@@ -36,7 +36,7 @@ jobs:
       - name: Set up Node
         uses: actions/setup-node@v5
         with:
-          node-version: 23
+          node-version: 20
 
       - name: Set up Rust
         uses: dtolnay/rust-toolchain@stable
@@ -52,8 +52,6 @@ jobs:
             build-essential \
             pkg-config \
             shellcheck
-          npm install -g markdownlint-cli
-          pip install --user yamllint codespell
 
       - name: Set up golangci-lint
         uses: golangci/golangci-lint-action@v7
@@ -101,11 +99,58 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-precommit-
 
-      - name: Install pre-commit
-        run: make precommit-install
+      - name: Install tree-sitter for security scan
+        run: |
+          pip install \
+            tree-sitter \
+            tree-sitter-python \
+            tree-sitter-javascript \
+            tree-sitter-typescript \
+            tree-sitter-go \
+            tree-sitter-rust
 
-      - name: Run Code Spell Check
-        run: make codespell
+      - name: Run AST supply chain security scan
+        run: |
+          python3 tools/security/ast_security_scanner.py \
+            scan . --fail-on HIGH
+
+      - name: Run AST PR diff security scan
+        if: github.event_name == 'pull_request'
+        run: |
+          python3 tools/security/ast_security_scanner.py \
+            diff "origin/${{ github.base_ref }}" --fail-on HIGH
+
+      - name: Run agent CI lint on changed files
+        run: |
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            export AGENT_BASE_REF="origin/${{ github.base_ref }}"
+          else
+            export AGENT_BASE_REF="HEAD^"
+          fi
+          make agent-ci-lint
+
+      - name: Diagnose gofmt state before pre-commit
+        run: |
+          echo "=== Go version ==="
+          go version
+          echo "=== gofmt version ==="
+          gofmt -h 2>&1 | head -3 || true
+          echo "=== Files needing gofmt (gofmt -l) ==="
+          NEEDS_FMT=$(gofmt -l $(find . -name "*.go" -not -path "./.git/*" -not -path "./.venv/*") 2>/dev/null)
+          if [ -n "$NEEDS_FMT" ]; then
+            echo "Files that need formatting:"
+            echo "$NEEDS_FMT"
+            echo ""
+            echo "=== Diffs ==="
+            for f in $NEEDS_FMT; do
+              echo "--- $f ---"
+              gofmt -d "$f" || true
+            done
+          else
+            echo "All Go files are properly formatted"
+          fi
+          echo "=== git status (any working tree changes) ==="
+          git status --short || true
 
       - name: Run pre-commit check
         run: make precommit-check
@@ -116,7 +161,24 @@ jobs:
         if: failure()
         run: |
           echo "::error::Pre-commit hooks failed. Please fix the issues and commit again."
-          echo "To run pre-commit locally:"
-          echo "  pip install pre-commit"
-          echo "  pre-commit install"
-          echo "  pre-commit run --all-files"
+          echo ""
+          echo "=== Files with gofmt issues (gofmt -l) ==="
+          gofmt -l $(find . -name "*.go" -not -path "./.git/*") || true
+          echo ""
+          echo "=== gofmt diff for all modified Go files ==="
+          gofmt -d $(find . -name "*.go" -not -path "./.git/*") || true
+          echo ""
+          echo "=== Working tree changes after pre-commit run ==="
+          git diff --name-only || true
+          echo ""
+          echo "=== Full git diff ==="
+          git diff || true
+          echo ""
+          echo "To reproduce the full PR pre-commit baseline locally:"
+          echo "  make agent-pr-gate"
+          echo ""
+          echo "To run the local branch prelint bundle manually:"
+          echo "  make precommit-branch-gate AGENT_BASE_REF=origin/${{ github.base_ref }}"
+          echo ""
+          echo "To run only the pre-commit workflow locally:"
+          echo "  make precommit-local"

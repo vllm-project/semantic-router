@@ -25,6 +25,7 @@ import (
 	"github.com/openai/openai-go"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/selection"
 )
 
 // Request contains the input for looper execution
@@ -44,6 +45,10 @@ type Request struct {
 
 	// IsStreaming indicates if the client expects a streaming response
 	IsStreaming bool
+
+	// DecisionName is the name of the decision that triggered this looper execution
+	// Used by extproc to lookup decision configuration and apply plugins
+	DecisionName string
 }
 
 // Response contains the output from looper execution
@@ -68,21 +73,43 @@ type Response struct {
 
 	// Logprobs contains the logprobs from the final response (if available)
 	Logprobs []float64
+
+	// IntermediateResponses contains intermediate responses from multi-round algorithms (e.g., ReMoM)
+	// This is used for visualization in the dashboard
+	IntermediateResponses interface{} `json:"intermediate_responses,omitempty"`
 }
 
 // Looper defines the interface for multi-model execution strategies
 type Looper interface {
 	// Execute runs the looper algorithm and returns an aggregated response
 	Execute(ctx context.Context, req *Request) (*Response, error)
+
+	// SetEndpointOverrides sets per-model endpoint URL overrides so
+	// each model can be reached at its own backend address.
+	SetEndpointOverrides(overrides map[string]string)
 }
 
 // Factory creates a Looper instance based on the algorithm type
 func Factory(cfg *config.LooperConfig, algorithmType string) Looper {
+	return FactoryWithSelectionRegistry(cfg, algorithmType, nil)
+}
+
+// FactoryWithSelectionRegistry creates a Looper using runtime-owned model
+// selectors when an algorithm needs selector state.
+func FactoryWithSelectionRegistry(
+	cfg *config.LooperConfig,
+	algorithmType string,
+	selectorRegistry *selection.Registry,
+) Looper {
 	switch algorithmType {
 	case "confidence":
 		return NewConfidenceLooper(cfg)
 	case "ratings":
 		return NewRatingsLooper(cfg)
+	case "remom":
+		return NewReMoMLooper(cfg)
+	case "rl_driven":
+		return NewRLDrivenLooperWithSelectionRegistry(cfg, selectorRegistry)
 	default:
 		// Default to simple looper that just calls models sequentially
 		return NewBaseLooper(cfg)

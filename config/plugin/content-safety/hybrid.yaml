@@ -1,0 +1,16 @@
+plugins:
+  - type: system_prompt
+    configuration:
+      enabled: true
+      mode: insert
+      system_prompt: Apply the platform safety policy before answering and clearly note when a request needs additional review.
+  - type: header_mutation
+    configuration:
+      add:
+        - name: X-Safety-Profile
+          value: standard
+  - type: response_jailbreak
+    configuration:
+      enabled: true
+      threshold: 0.8
+      action: header

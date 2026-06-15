@@ -18,7 +18,7 @@ import (
 func init() {
 	pkgtestcases.Register("domain-classify", pkgtestcases.TestCase{
 		Description: "Test domain classification accuracy and verify VSR decision headers",
-		Tags:        []string{"ai-gateway", "classification", "routing"},
+		Tags:        []string{"kubernetes", "classification", "routing"},
 		Fn:          testDomainClassify,
 	})
 }

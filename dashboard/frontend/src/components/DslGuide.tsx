@@ -1,0 +1,492 @@
+import React, { useState, useCallback } from 'react'
+import {
+  SIGNAL_TYPES,
+  PLUGIN_TYPES,
+  ALGORITHM_TYPES,
+  PLUGIN_DESCRIPTIONS,
+  ALGORITHM_DESCRIPTIONS,
+  getSignalFieldSchema,
+  getPluginFieldSchema,
+  getAlgorithmFieldSchema,
+} from '@/lib/dslMutations'
+import styles from './DslGuide.module.css'
+
+interface DslGuideProps {
+  onInsertSnippet?: (snippet: string) => void
+}
+
+// Collapsible section
+const Section: React.FC<{
+  title: string
+  icon: string
+  defaultOpen?: boolean
+  children: React.ReactNode
+}> = ({ title, icon, defaultOpen = false, children }) => {
+  const [open, setOpen] = useState(defaultOpen)
+  return (
+    <div className={styles.section}>
+      <button className={styles.sectionHeader} onClick={() => setOpen(!open)}>
+        <span className={styles.sectionChevron}>{open ? '▾' : '▸'}</span>
+        <span className={styles.sectionIcon}>{icon}</span>
+        <span className={styles.sectionTitle}>{title}</span>
+      </button>
+      {open && <div className={styles.sectionBody}>{children}</div>}
+    </div>
+  )
+}
+
+// Code block with optional insert button
+const CodeBlock: React.FC<{
+  code: string
+  label?: string
+  onInsert?: (code: string) => void
+}> = ({ code, label, onInsert }) => (
+  <div className={styles.codeBlock}>
+    {label && <div className={styles.codeLabel}>{label}</div>}
+    <pre className={styles.codeContent}>{code}</pre>
+    {onInsert && (
+      <button className={styles.insertBtn} onClick={() => onInsert(code)} title="Insert into editor">
+        + Insert
+      </button>
+    )}
+  </div>
+)
+
+// Field schema table
+const FieldTable: React.FC<{
+  fields: { key: string; label: string; type: string; required?: boolean; description?: string; options?: string[] }[]
+}> = ({ fields }) => {
+  if (fields.length === 0) return <div className={styles.muted}>No configurable fields</div>
+  return (
+    <table className={styles.fieldTable}>
+      <thead>
+        <tr><th>Field</th><th>Type</th><th>Info</th></tr>
+      </thead>
+      <tbody>
+        {fields.map((f) => (
+          <tr key={f.key}>
+            <td>
+              <code>{f.key}</code>
+              {f.required && <span className={styles.required}>*</span>}
+            </td>
+            <td className={styles.fieldType}>
+              {f.type}
+              {f.options && f.options.length > 0 && (
+                <span className={styles.fieldOptions}> ({f.options.join(' | ')})</span>
+              )}
+            </td>
+            <td className={styles.fieldDesc}>{f.description || ''}</td>
+          </tr>
+        ))}
+      </tbody>
+    </table>
+  )
+}
+
+// Sub-section for a type (signal type, plugin type, etc.)
+const TypeDetail: React.FC<{
+  name: string
+  description?: string
+  fields: { key: string; label: string; type: string; required?: boolean; description?: string; options?: string[] }[]
+}> = ({ name, description, fields }) => {
+  const [expanded, setExpanded] = useState(false)
+  return (
+    <div className={styles.typeItem}>
+      <button className={styles.typeHeader} onClick={() => setExpanded(!expanded)}>
+        <span className={styles.typeChevron}>{expanded ? '▾' : '▸'}</span>
+        <code className={styles.typeName}>{name}</code>
+        {description && <span className={styles.typeDesc}>{description}</span>}
+      </button>
+      {expanded && (
+        <div className={styles.typeBody}>
+          <FieldTable fields={fields} />
+        </div>
+      )}
+    </div>
+  )
+}
+
+// ---------- Snippet templates ----------
+
+const QUICK_START_SNIPPET = `# ============================================
+# MODELS
+# ============================================
+
+MODEL "qwen2.5:3b" {
+  modality: "text"
+  capabilities: ["general", "reasoning"]
+}
+
+# ============================================
+# SIGNALS
+# ============================================
+
+SIGNAL keyword urgent_request {
+  operator: "any"
+  keywords: ["urgent", "asap", "emergency"]
+  method: "regex"
+  case_sensitive: false
+}
+
+SIGNAL embedding ai_topics {
+  threshold: 0.75
+  candidates: ["machine learning", "neural network", "deep learning"]
+  aggregation_method: "max"
+}
+
+SIGNAL domain math {
+  description: "Mathematics and quantitative reasoning"
+  mmlu_categories: ["math"]
+}
+
+# ============================================
+# PLUGINS
+# ============================================
+
+PLUGIN safe_pii pii {
+  enabled: true
+  pii_types_allowed: []
+}
+
+# ============================================
+# ROUTES
+# ============================================
+
+ROUTE ai_route (description = "AI-related requests") {
+  PRIORITY 100
+
+  WHEN keyword("urgent_request") AND embedding("ai_topics")
+
+  MODEL "qwen2.5:3b" (reasoning = false)
+
+  ALGORITHM confidence {
+    confidence_method: "hybrid"
+    threshold: 0.5
+    on_error: "skip"
+  }
+
+  PLUGIN safe_pii
+}
+
+# ============================================
+}`
+
+const MODEL_SNIPPET = `MODEL "qwen2.5:3b" {
+  param_size: "3b"
+  modality: "text"
+  capabilities: ["general", "reasoning"]
+}`
+
+const SIGNAL_SNIPPET = `SIGNAL keyword my_signal {
+  operator: "any"
+  keywords: ["hello", "world"]
+  method: "regex"
+  case_sensitive: false
+}`
+
+const ROUTE_SNIPPET = `ROUTE my_route (description = "Description") {
+  PRIORITY 100
+
+  WHEN keyword("my_signal")
+
+  MODEL "qwen2.5:3b" (reasoning = false)
+
+  ALGORITHM confidence {
+    confidence_method: "hybrid"
+    threshold: 0.5
+  }
+}`
+
+const PLUGIN_SNIPPET = `PLUGIN my_plugin pii {
+  enabled: true
+  pii_types_allowed: []
+}`
+
+// Signal type descriptions
+const SIGNAL_DESCRIPTIONS: Record<string, string> = {
+  keyword: 'Match queries by keyword lists (regex, BM25, n-gram)',
+  embedding: 'Semantic similarity matching via embedding vectors',
+  domain: 'MMLU-based academic domain detection',
+  fact_check: 'Flag queries requiring factual verification',
+  user_feedback: 'Route based on user feedback signals',
+  reask: 'Detect repeated user questions as implicit dissatisfaction',
+  preference: 'User preference-based routing',
+  language: 'Detect query language',
+  context: 'Context window length requirements',
+  structure: 'Detect request-shape features such as counts, density, and ordered markers',
+  complexity: 'Estimate query difficulty via embedding similarity',
+  modality: 'Detect multi-modal input (text, image, audio)',
+  authz: 'Authorization-based routing (RBAC)',
+  jailbreak: 'Detect jailbreak attempts via classifier or contrastive methods',
+  pii: 'Detect personally identifiable information in queries',
+  kb: 'Knowledge base signal for taxonomy-driven classification',
+}
+
+const DslGuide: React.FC<DslGuideProps> = ({ onInsertSnippet }) => {
+  const [searchQuery, setSearchQuery] = useState('')
+
+  const handleInsert = useCallback((snippet: string) => {
+    onInsertSnippet?.(snippet)
+  }, [onInsertSnippet])
+
+  const q = searchQuery.toLowerCase().trim()
+  const matchesSearch = (text: string) => !q || text.toLowerCase().includes(q)
+
+  return (
+    <div className={styles.guide}>
+      {/* Search */}
+      <div className={styles.searchBox}>
+        <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5">
+          <circle cx="6.5" cy="6.5" r="5" />
+          <path d="M10 10l4.5 4.5" strokeLinecap="round" />
+        </svg>
+        <input
+          className={styles.searchInput}
+          type="text"
+          placeholder="Search keywords, types, fields..."
+          value={searchQuery}
+          onChange={(e) => setSearchQuery(e.target.value)}
+        />
+        {searchQuery && (
+          <button className={styles.searchClear} onClick={() => setSearchQuery('')}>
+            <svg width="10" height="10" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2">
+              <path d="M4 4l8 8M12 4l-8 8" strokeLinecap="round" />
+            </svg>
+          </button>
+        )}
+      </div>
+
+      {/* Quick Start */}
+      {matchesSearch('quick start template example') && (
+        <Section title="Quick Start" icon="⚡" defaultOpen>
+          <p className={styles.hint}>
+            A DSL file defines <strong>signals</strong> (what to detect),{' '}
+            <strong>routes</strong> (how to decide),{' '}
+            <strong>models</strong> (semantic catalog), and{' '}
+            <strong>plugins</strong> (reusable route helpers).
+          </p>
+          <CodeBlock code={QUICK_START_SNIPPET} label="Full Example" onInsert={handleInsert} />
+          <div className={styles.snippetGrid}>
+            <CodeBlock code={MODEL_SNIPPET} label="Model" onInsert={handleInsert} />
+            <CodeBlock code={SIGNAL_SNIPPET} label="Signal" onInsert={handleInsert} />
+            <CodeBlock code={ROUTE_SNIPPET} label="Route" onInsert={handleInsert} />
+            <CodeBlock code={PLUGIN_SNIPPET} label="Plugin" onInsert={handleInsert} />
+          </div>
+        </Section>
+      )}
+
+      {/* Models */}
+      {matchesSearch('model catalog reasoning family capability modality') && (
+        <Section title="Model Catalog" icon="📦">
+          <p className={styles.hint}>
+            Top-level models define the semantic routing catalog. Syntax:{' '}
+            <code>MODEL &lt;name&gt; {'{ fields }'}</code>
+          </p>
+          <table className={styles.fieldTable}>
+            <thead><tr><th>Field</th><th>Type</th><th>Description</th></tr></thead>
+            <tbody>
+              <tr><td><code>param_size</code></td><td>string</td><td>Logical size hint such as <code>3b</code> or <code>70b</code></td></tr>
+              <tr><td><code>description</code></td><td>string</td><td>Human-readable routing summary</td></tr>
+              <tr><td><code>capabilities</code></td><td>string[]</td><td>Semantic tags used by selection or tooling</td></tr>
+              <tr><td><code>quality_score</code></td><td>number</td><td>Optional quality hint for selection logic</td></tr>
+              <tr><td><code>modality</code></td><td>string</td><td>Expected modality such as <code>text</code> or <code>image</code></td></tr>
+            </tbody>
+          </table>
+          <CodeBlock code={MODEL_SNIPPET} label="Model catalog example" onInsert={handleInsert} />
+        </Section>
+      )}
+
+      {/* Signals */}
+      {matchesSearch('signal keyword embedding domain') && (
+        <Section title={`Signals (${SIGNAL_TYPES.length} types)`} icon="📡">
+          <p className={styles.hint}>
+            Signals detect patterns in user queries. Syntax:{' '}
+            <code>SIGNAL &lt;type&gt; &lt;name&gt; {'{ fields }'}</code>
+          </p>
+          {SIGNAL_TYPES.filter((t) => matchesSearch(`signal ${t} ${SIGNAL_DESCRIPTIONS[t] || ''}`)).map((t) => (
+            <TypeDetail
+              key={t}
+              name={t}
+              description={SIGNAL_DESCRIPTIONS[t]}
+              fields={getSignalFieldSchema(t)}
+            />
+          ))}
+        </Section>
+      )}
+
+      {/* Routes & WHEN Expressions */}
+      {matchesSearch('route when expression boolean model algorithm priority') && (
+        <Section title="Routes & WHEN Expressions" icon="🔀">
+          <p className={styles.hint}>
+            Routes define decision logic. Syntax:{' '}
+            <code>ROUTE &lt;name&gt; (description = &quot;...&quot;) {'{ ... }'}</code>
+          </p>
+
+          <div className={styles.subsection}>
+            <h4>Route Structure</h4>
+            <table className={styles.fieldTable}>
+              <thead><tr><th>Clause</th><th>Required</th><th>Description</th></tr></thead>
+              <tbody>
+                <tr><td><code>PRIORITY</code></td><td>Yes</td><td>Integer priority (higher = matched first)</td></tr>
+                <tr><td><code>TIER</code></td><td>No</td><td>Integer tier grouping for route classification</td></tr>
+                <tr><td><code>DESCRIPTION</code></td><td>No</td><td>Route description (can also be set in header)</td></tr>
+                <tr><td><code>WHEN</code></td><td>No</td><td>Boolean expression of signal references</td></tr>
+                <tr><td><code>MODEL</code></td><td>Yes</td><td>One or more model references with attributes</td></tr>
+                <tr><td><code>ALGORITHM</code></td><td>No</td><td>Model selection algorithm with config</td></tr>
+                <tr><td><code>PLUGIN</code></td><td>No</td><td>Plugin references (with optional inline overrides)</td></tr>
+              </tbody>
+            </table>
+          </div>
+
+          <div className={styles.subsection}>
+            <h4>WHEN Boolean Expressions</h4>
+            <p className={styles.hint}>Combine signal references with <code>AND</code>, <code>OR</code>, <code>NOT</code>, and parentheses.</p>
+            <table className={styles.fieldTable}>
+              <thead><tr><th>Operator</th><th>Precedence</th><th>Example</th></tr></thead>
+              <tbody>
+                <tr><td><code>NOT</code></td><td>Highest</td><td><code>NOT domain(&quot;other&quot;)</code></td></tr>
+                <tr><td><code>AND</code></td><td>Medium</td><td><code>keyword(&quot;a&quot;) AND embedding(&quot;b&quot;)</code></td></tr>
+                <tr><td><code>OR</code></td><td>Lowest</td><td><code>domain(&quot;math&quot;) OR domain(&quot;code&quot;)</code></td></tr>
+              </tbody>
+            </table>
+            <CodeBlock
+              code={`WHEN keyword("urgent") AND (domain("math") OR domain("code")) AND NOT embedding("general")`}
+              label="Complex WHEN example"
+            />
+          </div>
+
+          <div className={styles.subsection}>
+            <h4>MODEL Attributes</h4>
+            <table className={styles.fieldTable}>
+              <thead><tr><th>Attribute</th><th>Type</th><th>Description</th></tr></thead>
+              <tbody>
+                <tr><td><code>reasoning</code></td><td>boolean</td><td>Enable reasoning mode</td></tr>
+                <tr><td><code>effort</code></td><td>string</td><td><code>low</code> | <code>medium</code> | <code>high</code></td></tr>
+                <tr><td><code>param_size</code></td><td>string</td><td>e.g. <code>3b</code>, <code>70b</code></td></tr>
+                <tr><td><code>weight</code></td><td>number</td><td>Routing weight (0-1)</td></tr>
+                <tr><td><code>lora</code></td><td>string</td><td>LoRA adapter name</td></tr>
+                <tr><td><code>reasoning_family</code></td><td>string</td><td>e.g. <code>qwen3</code>, <code>deepseek</code></td></tr>
+              </tbody>
+            </table>
+            <CodeBlock
+              code={`MODEL "qwen3:70b" (reasoning = true, effort = "high", param_size = "70b"),
+      "qwen2.5:3b" (reasoning = false, param_size = "3b")`}
+              label="Multi-model example"
+            />
+          </div>
+        </Section>
+      )}
+
+      {/* Algorithms */}
+      {matchesSearch('algorithm confidence ratings remom static elo') && (
+        <Section title={`Algorithms (${ALGORITHM_TYPES.length} types)`} icon="🧮">
+          <p className={styles.hint}>
+            Algorithms determine how to select among multiple models. Syntax:{' '}
+            <code>ALGORITHM &lt;type&gt; {'{ fields }'}</code> (inside a ROUTE)
+          </p>
+          {ALGORITHM_TYPES.filter((t) => matchesSearch(`algorithm ${t} ${ALGORITHM_DESCRIPTIONS[t] || ''}`)).map((t) => (
+            <TypeDetail
+              key={t}
+              name={t}
+              description={ALGORITHM_DESCRIPTIONS[t]}
+              fields={getAlgorithmFieldSchema(t)}
+            />
+          ))}
+        </Section>
+      )}
+
+      {/* Plugins */}
+      {matchesSearch('plugin jailbreak pii cache memory rag image_gen request_params fast_response response_jailbreak tools') && (
+        <Section title={`Plugins (${PLUGIN_TYPES.length} types)`} icon="🔌">
+          <p className={styles.hint}>
+            Plugins add pre/post processing. Declare with{' '}
+            <code>PLUGIN &lt;name&gt; &lt;type&gt; {'{ fields }'}</code>, reference in routes with{' '}
+            <code>PLUGIN &lt;name&gt;</code>.
+          </p>
+          {PLUGIN_TYPES.filter((t) => matchesSearch(`plugin ${t} ${PLUGIN_DESCRIPTIONS[t] || ''}`)).map((t) => (
+            <TypeDetail
+              key={t}
+              name={t}
+              description={PLUGIN_DESCRIPTIONS[t]}
+              fields={getPluginFieldSchema(t)}
+            />
+          ))}
+        </Section>
+      )}
+
+      {/* Cheat Sheet */}
+      {matchesSearch('cheat sheet syntax grammar reference') && (
+        <Section title="Cheat Sheet" icon="📋">
+          <div className={styles.cheatSheet}>
+            <div className={styles.cheatItem}>
+              <code className={styles.cheatSyntax}>MODEL &lt;name&gt; {'{ ... }'}</code>
+              <span>Declare a routing model catalog entry</span>
+            </div>
+            <div className={styles.cheatItem}>
+              <code className={styles.cheatSyntax}>SIGNAL &lt;type&gt; &lt;name&gt; {'{ ... }'}</code>
+              <span>Declare a signal</span>
+            </div>
+            <div className={styles.cheatItem}>
+              <code className={styles.cheatSyntax}>ROUTE &lt;name&gt; (description = &quot;...&quot;) {'{ ... }'}</code>
+              <span>Define a route</span>
+            </div>
+            <div className={styles.cheatItem}>
+              <code className={styles.cheatSyntax}>DECISION_TREE &lt;name&gt; {'{ IF ... ELSE ... }'}</code>
+              <span>Define if/else conditional routing logic</span>
+            </div>
+            <div className={styles.cheatItem}>
+              <code className={styles.cheatSyntax}>PROJECTION &lt;score|mapping|partition&gt; &lt;name&gt; {'{ ... }'}</code>
+              <span>Declare a signal projection</span>
+            </div>
+            <div className={styles.cheatItem}>
+              <code className={styles.cheatSyntax}>PLUGIN &lt;name&gt; &lt;type&gt; {'{ ... }'}</code>
+              <span>Declare a plugin template</span>
+            </div>
+            <div className={styles.cheatItem}>
+              <code className={styles.cheatSyntax}>PRIORITY &lt;number&gt;</code>
+              <span>Route priority (higher = matched first)</span>
+            </div>
+            <div className={styles.cheatItem}>
+              <code className={styles.cheatSyntax}>TIER &lt;number&gt;</code>
+              <span>Tier grouping (inside ROUTE)</span>
+            </div>
+            <div className={styles.cheatItem}>
+              <code className={styles.cheatSyntax}>DESCRIPTION &quot;text&quot;</code>
+              <span>Route description (inside ROUTE body)</span>
+            </div>
+            <div className={styles.cheatItem}>
+              <code className={styles.cheatSyntax}>WHEN &lt;bool_expr&gt;</code>
+              <span>Condition (inside ROUTE)</span>
+            </div>
+            <div className={styles.cheatItem}>
+              <code className={styles.cheatSyntax}>MODEL &quot;name&quot; (attrs...)</code>
+              <span>Model ref (inside ROUTE)</span>
+            </div>
+            <div className={styles.cheatItem}>
+              <code className={styles.cheatSyntax}>ALGORITHM &lt;type&gt; {'{ ... }'}</code>
+              <span>Algorithm (inside ROUTE)</span>
+            </div>
+            <div className={styles.cheatItem}>
+              <code className={styles.cheatSyntax}>providers / global live in config.yaml</code>
+              <span>Deployment bindings and runtime defaults are outside the DSL</span>
+            </div>
+            <div className={styles.cheatItem}>
+              <code className={styles.cheatSyntax}># comment</code>
+              <span>Line comment</span>
+            </div>
+            <div className={styles.cheatItem}>
+              <code className={styles.cheatSyntax}>&quot;string&quot; | 123 | true | [a, b]</code>
+              <span>Value types</span>
+            </div>
+            <div className={styles.cheatItem}>
+              <code className={styles.cheatSyntax}>{'{ key: value, ... }'}</code>
+              <span>Nested object</span>
+            </div>
+          </div>
+        </Section>
+      )}
+    </div>
+  )
+}
+
+export default DslGuide

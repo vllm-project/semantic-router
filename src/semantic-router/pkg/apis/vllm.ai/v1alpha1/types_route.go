@@ -57,8 +57,23 @@ type Signals struct {
 	// +optional
 	ContextRules []ContextRule `json:"contextRules,omitempty" yaml:"context_rules,omitempty"`
 
+	// Structure defines request-shape routing signals.
+	// +optional
+	// +kubebuilder:validation:MaxItems=100
+	Structure []StructureSignal `json:"structure,omitempty" yaml:"structure,omitempty"`
+
 	// +optional
 	FactCheckRules []FactCheckRule `json:"factCheckRules,omitempty" yaml:"fact_check_rules,omitempty"`
+
+	// Conversation defines conversation-shape routing signals.
+	// +optional
+	// +kubebuilder:validation:MaxItems=100
+	Conversation []ConversationSignal `json:"conversation,omitempty" yaml:"conversation,omitempty"`
+
+	// Events defines structured event metadata routing signals.
+	// +optional
+	// +kubebuilder:validation:MaxItems=100
+	Events []EventSignal `json:"events,omitempty" yaml:"events,omitempty"`
 }
 
 // FactCheckRule defines a rule for fact-check signal classification
@@ -97,6 +112,67 @@ type ContextRule struct {
 	// +optional
 	// +kubebuilder:validation:MaxLength=500
 	Description string `json:"description,omitempty" yaml:"description,omitempty"`
+}
+
+type StructureSignal struct {
+	Name        string            `json:"name" yaml:"name"`
+	Description string            `json:"description,omitempty" yaml:"description,omitempty"`
+	Feature     StructureFeature  `json:"feature" yaml:"feature"`
+	Predicate   *NumericPredicate `json:"predicate,omitempty" yaml:"predicate,omitempty"`
+}
+
+type StructureFeature struct {
+	Type   string          `json:"type" yaml:"type"`
+	Source StructureSource `json:"source" yaml:"source"`
+}
+
+type StructureSource struct {
+	Type          string     `json:"type" yaml:"type"`
+	Pattern       string     `json:"pattern,omitempty" yaml:"pattern,omitempty"`
+	Keywords      []string   `json:"keywords,omitempty" yaml:"keywords,omitempty"`
+	CaseSensitive bool       `json:"caseSensitive,omitempty" yaml:"case_sensitive,omitempty"`
+	Sequences     [][]string `json:"sequences,omitempty" yaml:"sequences,omitempty"`
+}
+
+// ConversationSignal defines a conversation-shape routing signal.
+// It detects multi-turn history, developer instructions, tool presence, and
+// assistant-tool interaction patterns in the request.
+type ConversationSignal struct {
+	Name        string                 `json:"name" yaml:"name"`
+	Description string                 `json:"description,omitempty" yaml:"description,omitempty"`
+	Feature     ConversationCRDFeature `json:"feature" yaml:"feature"`
+	Predicate   *NumericPredicate      `json:"predicate,omitempty" yaml:"predicate,omitempty"`
+}
+
+// ConversationCRDFeature selects what to measure (count / exists) and where.
+type ConversationCRDFeature struct {
+	Type   string                `json:"type" yaml:"type"`
+	Source ConversationCRDSource `json:"source" yaml:"source"`
+}
+
+// ConversationCRDSource identifies the message role or tool-related entity to measure.
+type ConversationCRDSource struct {
+	Type string `json:"type" yaml:"type"`
+	Role string `json:"role,omitempty" yaml:"role,omitempty"`
+}
+
+// EventSignal defines a structured event metadata routing signal.
+// It detects event types, severities, action codes, and temporal urgency
+// from incident, audit, alert, or workflow payloads in the request.
+type EventSignal struct {
+	Name        string   `json:"name" yaml:"name"`
+	Description string   `json:"description,omitempty" yaml:"description,omitempty"`
+	EventTypes  []string `json:"eventTypes,omitempty" yaml:"event_types,omitempty"`
+	Severities  []string `json:"severities,omitempty" yaml:"severities,omitempty"`
+	ActionCodes []string `json:"actionCodes,omitempty" yaml:"action_codes,omitempty"`
+	Temporal    bool     `json:"temporal,omitempty" yaml:"temporal,omitempty"`
+}
+
+type NumericPredicate struct {
+	GT  *float64 `json:"gt,omitempty" yaml:"gt,omitempty"`
+	GTE *float64 `json:"gte,omitempty" yaml:"gte,omitempty"`
+	LT  *float64 `json:"lt,omitempty" yaml:"lt,omitempty"`
+	LTE *float64 `json:"lte,omitempty" yaml:"lte,omitempty"`
 }
 
 // DomainSignal defines a domain category for classification
@@ -163,6 +239,25 @@ type EmbeddingSignal struct {
 	// +kubebuilder:validation:Enum=mean;max;any
 	// +kubebuilder:default=max
 	AggregationMethod string `json:"aggregationMethod,omitempty" yaml:"aggregationMethod,omitempty"`
+
+	// QueryModality declares which modality of the incoming request payload
+	// the query embedding is computed from. Candidates always remain text;
+	// the rule cosine-matches the text-anchor set against a query embedding
+	// produced from the declared modality, all in the shared multimodal
+	// embedding space.
+	//
+	// "text"  (default, backward-compatible): query embedded from request text.
+	// "image": query embedded from an image attachment (base64 data URI or
+	//          path). Requires the multi-modal embedding model to be loaded
+	//          via global.model_catalog.embeddings.semantic with
+	//          embedding_config.model_type=multimodal.
+	// "audio": query embedded from an audio attachment. Same requirement.
+	//
+	// Omitting this field is equivalent to "text" so existing rules behave
+	// identically.
+	// +optional
+	// +kubebuilder:validation:Enum=text;image;audio
+	QueryModality string `json:"queryModality,omitempty" yaml:"queryModality,omitempty"`
 }
 
 // Decision defines a routing decision based on rule combinations
@@ -204,9 +299,10 @@ type Decision struct {
 
 // SignalCombination defines how to combine multiple signals
 type SignalCombination struct {
-	// Operator defines the logical operator for combining conditions (AND/OR)
+	// Operator defines the logical operator for combining conditions (AND/OR/NOT)
+	// NOT uses NOR semantics: matches only when none of the conditions match.
 	// +kubebuilder:validation:Required
-	// +kubebuilder:validation:Enum=AND;OR
+	// +kubebuilder:validation:Enum=AND;OR;NOT
 	Operator string `json:"operator" yaml:"operator"`
 
 	// Conditions defines the list of signal conditions
@@ -218,9 +314,9 @@ type SignalCombination struct {
 
 // SignalCondition defines a single signal condition
 type SignalCondition struct {
-	// Type defines the type of signal (keyword/embedding/domain/fact_check/context)
+	// Type defines the type of signal (keyword/embedding/domain/fact_check/context/structure/conversation/event)
 	// +kubebuilder:validation:Required
-	// +kubebuilder:validation:Enum=keyword;embedding;domain;fact_check;context
+	// +kubebuilder:validation:Enum=keyword;embedding;domain;fact_check;context;structure;conversation;event
 	Type string `json:"type" yaml:"type"`
 
 	// Name is the name of the signal to reference
@@ -262,9 +358,9 @@ type ModelRef struct {
 
 // DecisionPlugin defines a plugin configuration for a decision
 type DecisionPlugin struct {
-	// Type is the plugin type (semantic-cache, jailbreak, pii, system_prompt, header_mutation, hallucination)
+	// Type is the plugin type (fast_response, hallucination, header_mutation, image_gen, memory, rag, request_params, response_jailbreak, router_replay, semantic-cache, system_prompt, tools)
 	// +kubebuilder:validation:Required
-	// +kubebuilder:validation:Enum=semantic-cache;jailbreak;pii;system_prompt;header_mutation;hallucination
+	// +kubebuilder:validation:Enum=fast_response;hallucination;header_mutation;image_gen;memory;rag;request_params;response_jailbreak;router_replay;semantic-cache;system_prompt;tools
 	Type string `json:"type" yaml:"type"`
 
 	// Configuration is the plugin-specific configuration as a raw JSON object

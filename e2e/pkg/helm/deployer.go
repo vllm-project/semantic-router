@@ -2,12 +2,15 @@ package helm
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
 	"time"
+
+	"github.com/vllm-project/semantic-router/e2e/pkg/helpers"
 )
 
 // Deployer handles Helm chart deployments
@@ -24,9 +27,16 @@ func NewDeployer(kubeConfig string, verbose bool) *Deployer {
 	}
 }
 
-// Install installs a Helm chart
+// Install installs or upgrades a Helm chart (helm upgrade --install) so re-runs and CI
+// do not fail with "cannot reuse a name that is still in use" when the release exists.
 func (d *Deployer) Install(ctx context.Context, opts InstallOptions) error {
 	d.log("Installing Helm chart: %s/%s", opts.Namespace, opts.ReleaseName)
+
+	timeout, err := installTimeoutForRelease(opts.ReleaseName, opts.Timeout)
+	if err != nil {
+		return err
+	}
+	opts.Timeout = timeout
 
 	chart, cleanup, err := d.prepareLocalChartWithDeps(ctx, opts.Chart)
 	if err != nil {
@@ -37,7 +47,8 @@ func (d *Deployer) Install(ctx context.Context, opts InstallOptions) error {
 	}
 
 	args := []string{
-		"install", opts.ReleaseName, chart,
+		"upgrade", opts.ReleaseName, chart,
+		"--install",
 		"--namespace", opts.Namespace,
 		"--create-namespace",
 		"--kubeconfig", d.KubeConfig,
@@ -69,10 +80,10 @@ func (d *Deployer) Install(ctx context.Context, opts InstallOptions) error {
 	}
 
 	if err := cmd.Run(); err != nil {
-		return fmt.Errorf("failed to install chart: %w", err)
+		return fmt.Errorf("failed to install/upgrade chart: %w", err)
 	}
 
-	d.log("Chart %s installed successfully", opts.ReleaseName)
+	d.log("Chart %s installed/upgraded successfully", opts.ReleaseName)
 	return nil
 }
 
@@ -101,6 +112,12 @@ func (d *Deployer) prepareLocalChartWithDeps(ctx context.Context, chartRef strin
 		return "", nil, fmt.Errorf("failed to copy chart to temp dir: %w", err)
 	}
 
+	// Ensure required Helm repositories are registered before building dependencies.
+	if err := d.ensureHelmRepos(ctx); err != nil {
+		cleanup()
+		return "", nil, fmt.Errorf("failed to add helm repos: %w", err)
+	}
+
 	// Build dependencies for local chart (creates charts/ and Chart.lock in temp copy).
 	cmd := exec.CommandContext(ctx, "helm", "dependency", "build", tmpChart)
 	if d.Verbose {
@@ -113,6 +130,37 @@ func (d *Deployer) prepareLocalChartWithDeps(ctx context.Context, chartRef strin
 	}
 
 	return tmpChart, cleanup, nil
+}
+
+var requiredHelmRepos = []struct{ name, url string }{
+	{"bitnami", "https://charts.bitnami.com/bitnami"},
+	{"milvus", "https://milvus-io.github.io/milvus-helm/"},
+	{"jaegertracing", "https://jaegertracing.github.io/helm-charts"},
+	{"prometheus-community", "https://prometheus-community.github.io/helm-charts"},
+	{"grafana", "https://grafana.github.io/helm-charts"},
+}
+
+func (d *Deployer) ensureHelmRepos(ctx context.Context) error {
+	for _, repo := range requiredHelmRepos {
+		cmd := exec.CommandContext(ctx, "helm", "repo", "add", repo.name, repo.url, "--force-update")
+		if d.Verbose {
+			cmd.Stdout = os.Stdout
+			cmd.Stderr = os.Stderr
+		}
+		if err := cmd.Run(); err != nil {
+			return fmt.Errorf("failed to add helm repo %s: %w", repo.name, err)
+		}
+	}
+
+	cmd := exec.CommandContext(ctx, "helm", "repo", "update")
+	if d.Verbose {
+		cmd.Stdout = os.Stdout
+		cmd.Stderr = os.Stderr
+	}
+	if err := cmd.Run(); err != nil {
+		d.log("Warning: helm repo update failed: %v", err)
+	}
+	return nil
 }
 
 func copyDir(src, dst string) error {
@@ -141,23 +189,31 @@ func copyDir(src, dst string) error {
 			return err
 		}
 
-		in, err := os.Open(path)
-		if err != nil {
-			return err
-		}
-		defer in.Close()
-
-		out, err := os.OpenFile(target, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, info.Mode())
-		if err != nil {
-			return err
-		}
-		defer out.Close()
-
-		if _, err := out.ReadFrom(in); err != nil {
-			return err
-		}
-		return nil
+		return copyFile(path, target, info.Mode())
 	})
+}
+
+func copyFile(src, dst string, mode os.FileMode) (err error) {
+	in, err := os.Open(src)
+	if err != nil {
+		return err
+	}
+	defer func() {
+		err = errors.Join(err, in.Close())
+	}()
+
+	out, err := os.OpenFile(dst, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, mode)
+	if err != nil {
+		return err
+	}
+	defer func() {
+		err = errors.Join(err, out.Close())
+	}()
+
+	if _, err = out.ReadFrom(in); err != nil {
+		return err
+	}
+	return nil
 }
 
 // Uninstall uninstalls a Helm release
@@ -185,24 +241,20 @@ func (d *Deployer) Uninstall(ctx context.Context, releaseName, namespace string)
 func (d *Deployer) WaitForDeployment(ctx context.Context, namespace, deploymentName string, timeout time.Duration) error {
 	d.log("Waiting for deployment %s/%s to be ready", namespace, deploymentName)
 
-	ctx, cancel := context.WithTimeout(ctx, timeout)
-	defer cancel()
-
-	// Convert timeout to seconds for kubectl
-	timeoutSeconds := int(timeout.Seconds())
-	cmd := exec.CommandContext(ctx, "kubectl", "wait",
-		"--for=condition=Available",
-		fmt.Sprintf("deployment/%s", deploymentName),
-		"-n", namespace,
-		fmt.Sprintf("--timeout=%ds", timeoutSeconds),
-		"--kubeconfig", d.KubeConfig)
-
-	if d.Verbose {
-		cmd.Stdout = os.Stdout
-		cmd.Stderr = os.Stderr
+	client, err := helpers.NewKubeClient(d.KubeConfig)
+	if err != nil {
+		return fmt.Errorf("create kube client for deployment wait: %w", err)
 	}
 
-	if err := cmd.Run(); err != nil {
+	if err := helpers.WaitForDeploymentReady(
+		ctx,
+		client,
+		namespace,
+		deploymentName,
+		timeout,
+		5*time.Second,
+		d.Verbose,
+	); err != nil {
 		return fmt.Errorf("deployment failed to become ready: %w", err)
 	}
 
@@ -242,3 +294,54 @@ type InstallOptions struct {
 	// Timeout is the timeout for waiting
 	Timeout string
 }
+
+// Clone returns a copy that callers can safely mutate without changing shared defaults.
+func (o InstallOptions) Clone() InstallOptions {
+	cloned := o
+	cloned.ValuesFiles = append([]string(nil), o.ValuesFiles...)
+	if o.Set != nil {
+		cloned.Set = make(map[string]string, len(o.Set))
+		for key, value := range o.Set {
+			cloned.Set[key] = value
+		}
+	}
+	return cloned
+}
+
+var (
+	SemanticRouterRelease = InstallOptions{
+		ReleaseName: "semantic-router",
+		Chart:       "deploy/helm/semantic-router",
+		Namespace:   "vllm-semantic-router-system",
+		Wait:        true,
+		Timeout:     "30m",
+	}
+
+	EnvoyGatewayRelease = InstallOptions{
+		ReleaseName: "eg",
+		Chart:       "oci://docker.io/envoyproxy/gateway-helm",
+		Namespace:   "envoy-gateway-system",
+		Version:     "v1.6.0",
+		ValuesFiles: []string{"https://raw.githubusercontent.com/envoyproxy/ai-gateway/main/manifests/envoy-gateway-values.yaml"},
+		Wait:        true,
+		Timeout:     "10m",
+	}
+
+	AIGatewayCRDRelease = InstallOptions{
+		ReleaseName: "aieg-crd",
+		Chart:       "oci://docker.io/envoyproxy/ai-gateway-crds-helm",
+		Namespace:   "envoy-ai-gateway-system",
+		Version:     "v0.4.0",
+		Wait:        true,
+		Timeout:     "10m",
+	}
+
+	AIGatewayRelease = InstallOptions{
+		ReleaseName: "aieg",
+		Chart:       "oci://docker.io/envoyproxy/ai-gateway-helm",
+		Namespace:   "envoy-ai-gateway-system",
+		Version:     "v0.4.0",
+		Wait:        true,
+		Timeout:     "10m",
+	}
+)

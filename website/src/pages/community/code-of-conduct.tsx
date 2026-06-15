@@ -11,7 +11,7 @@ const CodeOfConduct: React.FC = () => {
     >
       <div className={styles.container}>
         <header className={styles.header}>
-          <h1><Translate id="codeOfConduct.title">Code of Conduct 📜</Translate></h1>
+          <h1><Translate id="codeOfConduct.title">Code of Conduct</Translate></h1>
           <p className={styles.subtitle}>
             <Translate id="codeOfConduct.subtitle">Our commitment to fostering an open, welcoming, and inclusive community.</Translate>
           </p>
@@ -20,7 +20,6 @@ const CodeOfConduct: React.FC = () => {
         <main className={styles.main}>
           <section className={styles.section}>
             <h2>
-              🤝
               <Translate id="codeOfConduct.pledge.title">Our Pledge</Translate>
             </h2>
             <div className={styles.card}>
@@ -45,7 +44,6 @@ const CodeOfConduct: React.FC = () => {
 
           <section className={styles.section}>
             <h2>
-              ✅
               <Translate id="codeOfConduct.standards.title">Our Standards</Translate>
             </h2>
             <div className={styles.grid}>
@@ -75,7 +73,6 @@ const CodeOfConduct: React.FC = () => {
 
           <section className={styles.section}>
             <h2>
-              🛡️
               <Translate id="codeOfConduct.enforcement.title">Enforcement Responsibilities</Translate>
             </h2>
             <div className={styles.card}>
@@ -100,7 +97,6 @@ const CodeOfConduct: React.FC = () => {
 
           <section className={styles.section}>
             <h2>
-              🌍
               <Translate id="codeOfConduct.scope.title">Scope</Translate>
             </h2>
             <div className={styles.card}>
@@ -118,7 +114,6 @@ const CodeOfConduct: React.FC = () => {
 
           <section className={styles.section}>
             <h2>
-              📢
               <Translate id="codeOfConduct.reporting.title">Reporting</Translate>
             </h2>
             <div className={styles.card}>
@@ -149,7 +144,6 @@ const CodeOfConduct: React.FC = () => {
 
           <section className={styles.section}>
             <h2>
-              ⚖️
               <Translate id="codeOfConduct.guidelines.title">Enforcement Guidelines</Translate>
             </h2>
             <div className={styles.card}>
@@ -222,7 +216,6 @@ const CodeOfConduct: React.FC = () => {
 
           <section className={styles.section}>
             <h2>
-              📚
               <Translate id="codeOfConduct.attribution.title">Attribution</Translate>
             </h2>
             <div className={styles.card}>

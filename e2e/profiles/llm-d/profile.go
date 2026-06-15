@@ -12,11 +12,11 @@ import (
 
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
-	"k8s.io/client-go/tools/clientcmd"
 
 	"github.com/vllm-project/semantic-router/e2e/pkg/framework"
 	"github.com/vllm-project/semantic-router/e2e/pkg/helm"
 	"github.com/vllm-project/semantic-router/e2e/pkg/helpers"
+	"github.com/vllm-project/semantic-router/e2e/pkg/testmatrix"
 
 	_ "github.com/vllm-project/semantic-router/e2e/testcases"
 )
@@ -32,6 +32,23 @@ const (
 
 type Profile struct {
 	verbose bool
+}
+
+type rollbackStack struct {
+	funcs []func()
+}
+
+type apiCheck struct {
+	groupVersion      string
+	expectedResources []string
+	optional          bool
+}
+
+var requiredAPIChecks = []apiCheck{
+	{groupVersion: "gateway.networking.k8s.io/v1", expectedResources: []string{"gateways", "httproutes"}},
+	{groupVersion: "inference.networking.k8s.io/v1", expectedResources: []string{"inferencepools"}},
+	// EndpointPickerConfig CRD is optional in some environments; treat as best-effort.
+	{groupVersion: "inference.networking.x-k8s.io/v1alpha1", expectedResources: []string{"endpointpickerconfigs"}, optional: true},
 }
 
 func NewProfile() *Profile {
@@ -52,12 +69,7 @@ func (p *Profile) Setup(ctx context.Context, opts *framework.SetupOptions) error
 	fmt.Printf("[Profile] llm-d setup start (istio=%s, gatewayCRD=%s, inferenceCRD=%s)\\n",
 		istioVersion, gatewayCRDURL, inferenceCRDURL)
 
-	rollback := []func(){}
-	rollbackAll := func() {
-		for i := len(rollback) - 1; i >= 0; i-- {
-			rollback[i]()
-		}
-	}
+	rollbacks := &rollbackStack{}
 
 	istioctlPath, err := p.ensureIstioctl(ctx)
 	if err != nil {
@@ -67,101 +79,21 @@ func (p *Profile) Setup(ctx context.Context, opts *framework.SetupOptions) error
 		fmt.Printf("[Profile] istioctl ready at %s\n", istioctlPath)
 	}
 
-	if err := p.kubectlApply(ctx, gatewayCRDURL); err != nil {
-		return fmt.Errorf("gateway CRDs: %w", err)
-	}
-	rollback = append(rollback, func() { _ = p.kubectlDelete(ctx, gatewayCRDURL) })
-	if p.verbose {
-		fmt.Println("[Profile] applied gateway CRDs")
-	}
-	if err := p.kubectlApply(ctx, inferenceCRDURL); err != nil {
-		rollbackAll()
-		return fmt.Errorf("inference CRDs: %w", err)
-	}
-	rollback = append(rollback, func() { _ = p.kubectlDelete(ctx, inferenceCRDURL) })
-	if p.verbose {
-		fmt.Println("[Profile] applied inference CRDs")
-	}
-
-	if err := p.installIstio(ctx, istioctlPath); err != nil {
-		rollbackAll()
-		return fmt.Errorf("install istio: %w", err)
-	}
-	rollback = append(rollback, func() { _ = p.uninstallIstio(ctx) })
-	if p.verbose {
-		fmt.Println("[Profile] istio installed")
-	}
-
-	if err := p.deploySemanticRouter(ctx, opts); err != nil {
-		rollbackAll()
-		return fmt.Errorf("deploy semantic router: %w", err)
-	}
-	rollback = append(rollback, func() {
-		deployer := helm.NewDeployer(opts.KubeConfig, opts.Verbose)
-		_ = deployer.Uninstall(ctx, "semantic-router", semanticNamespace)
-	})
-	if p.verbose {
-		fmt.Println("[Profile] semantic-router deployed")
-	}
-
-	if err := p.deployInferenceSim(ctx, opts); err != nil {
-		rollbackAll()
-		return fmt.Errorf("deploy inference sim: %w", err)
-	}
-	rollback = append(rollback, func() { _ = p.kubectlDelete(ctx, "e2e/profiles/llm-d/manifests/inference-sim.yaml") })
-	if p.verbose {
-		fmt.Println("[Profile] inference simulators deployed")
-	}
-
-	if err := p.deployLLMD(ctx); err != nil {
-		rollbackAll()
-		return fmt.Errorf("deploy llm-d resources: %w", err)
-	}
-	rollback = append(rollback, func() {
-		_ = p.kubectlDelete(ctx, "e2e/profiles/llm-d/manifests/rbac.yaml")
-		_ = p.kubectlDelete(ctx, "deploy/kubernetes/llmd-base/dest-rule-epp-llama.yaml")
-		_ = p.kubectlDelete(ctx, "deploy/kubernetes/llmd-base/dest-rule-epp-phi4.yaml")
-		_ = p.kubectlDelete(ctx, "deploy/kubernetes/llmd-base/inferencepool-llama.yaml")
-		_ = p.kubectlDelete(ctx, "deploy/kubernetes/llmd-base/inferencepool-phi4.yaml")
-	})
-	if p.verbose {
-		fmt.Println("[Profile] llm-d schedulers and pools deployed")
-	}
-
-	if err := p.deployGatewayRoutes(ctx); err != nil {
-		rollbackAll()
-		return fmt.Errorf("deploy gateway routes: %w", err)
-	}
-	rollback = append(rollback, func() {
-		_ = p.kubectlDelete(ctx, "deploy/kubernetes/istio/envoyfilter.yaml")
-		_ = p.kubectlDelete(ctx, "deploy/kubernetes/istio/destinationrule.yaml")
-		_ = p.kubectlDelete(ctx, "e2e/profiles/llm-d/manifests/httproute-services.yaml")
-		_ = p.kubectlDelete(ctx, "deploy/kubernetes/istio/gateway.yaml")
-	})
-	if p.verbose {
-		fmt.Println("[Profile] gateway routes deployed")
-	}
-
-	if err := p.waitHTTPRouteAccepted(ctx, "vsr-llama8b-svc", "default", 2*time.Minute); err != nil {
-		rollbackAll()
+	if err := p.setupGatewayAPIs(ctx, rollbacks); err != nil {
 		return err
 	}
-	if err := p.waitHTTPRouteResolvedRefs(ctx, "vsr-llama8b-svc", "default", 2*time.Minute); err != nil {
-		rollbackAll()
-		return err
+	if err := p.installLLMDIstio(ctx, istioctlPath, rollbacks); err != nil {
+		return failWithRollback(rollbacks, "install istio: %w", err)
 	}
-	if err := p.waitHTTPRouteAccepted(ctx, "vsr-phi4-mini-svc", "default", 2*time.Minute); err != nil {
-		rollbackAll()
-		return err
+	if err := p.deployLLMDRuntime(ctx, opts, rollbacks); err != nil {
+		return failWithRollback(rollbacks, "%w", err)
 	}
-	if err := p.waitHTTPRouteResolvedRefs(ctx, "vsr-phi4-mini-svc", "default", 2*time.Minute); err != nil {
-		rollbackAll()
-		return err
+	if err := p.deployRoutesAndWait(ctx, rollbacks); err != nil {
+		return failWithRollback(rollbacks, "%w", err)
 	}
 
 	if err := p.verifyEnvironment(ctx, opts); err != nil {
-		rollbackAll()
-		return fmt.Errorf("verify environment: %w", err)
+		return failWithRollback(rollbacks, "verify environment: %w", err)
 	}
 
 	if p.verbose {
@@ -185,7 +117,7 @@ func (p *Profile) Teardown(ctx context.Context, opts *framework.TeardownOptions)
 	_ = p.kubectlDelete(ctx, "deploy/kubernetes/istio/gateway.yaml")
 
 	deployer := helm.NewDeployer(opts.KubeConfig, opts.Verbose)
-	deployer.Uninstall(ctx, "semantic-router", semanticNamespace)
+	_ = deployer.Uninstall(ctx, "semantic-router", semanticNamespace)
 
 	_ = p.uninstallIstio(ctx)
 	_ = p.kubectlDelete(ctx, gatewayCRDURL)
@@ -196,17 +128,12 @@ func (p *Profile) Teardown(ctx context.Context, opts *framework.TeardownOptions)
 }
 
 func (p *Profile) GetTestCases() []string {
-	// Shared router testcases that we also want to validate in the llm-d environment
-	shared := []string{
-		"chat-completions-request",
-		"chat-completions-stress-request",
-		"chat-completions-progressive-stress",
-		"domain-classify",
-	}
-
-	// For llm-d we currently only reuse shared router testcases.
-	// llm-d-specific HA/traffic semantics are expected to be covered in LLM-D / infra tests.
-	return shared
+	return testmatrix.Combine(
+		testmatrix.RouterSmoke,
+		[]string{
+			"llm-d-inference-gateway-health",
+		},
+	)
 }
 
 func (p *Profile) GetServiceConfig() framework.ServiceConfig {
@@ -215,6 +142,117 @@ func (p *Profile) GetServiceConfig() framework.ServiceConfig {
 		Namespace:   kindNamespace,
 		PortMapping: "8080:80",
 	}
+}
+
+func (r *rollbackStack) Add(fn func()) {
+	r.funcs = append(r.funcs, fn)
+}
+
+func (r *rollbackStack) Run() {
+	for i := len(r.funcs) - 1; i >= 0; i-- {
+		r.funcs[i]()
+	}
+}
+
+func failWithRollback(rollbacks *rollbackStack, format string, err error) error {
+	rollbacks.Run()
+	return fmt.Errorf(format, err)
+}
+
+func (p *Profile) setupGatewayAPIs(ctx context.Context, rollbacks *rollbackStack) error {
+	if err := p.applyManifestWithRollback(ctx, gatewayCRDURL, "applied gateway CRDs", rollbacks); err != nil {
+		return fmt.Errorf("gateway CRDs: %w", err)
+	}
+	if err := p.applyManifestWithRollback(ctx, inferenceCRDURL, "applied inference CRDs", rollbacks); err != nil {
+		return fmt.Errorf("inference CRDs: %w", err)
+	}
+	return nil
+}
+
+func (p *Profile) applyManifestWithRollback(ctx context.Context, target, successMsg string, rollbacks *rollbackStack) error {
+	if err := p.kubectlApply(ctx, target); err != nil {
+		return err
+	}
+	rollbacks.Add(func() { _ = p.kubectlDelete(ctx, target) })
+	if p.verbose {
+		fmt.Println("[Profile]", successMsg)
+	}
+	return nil
+}
+
+func (p *Profile) installLLMDIstio(ctx context.Context, istioctlPath string, rollbacks *rollbackStack) error {
+	if err := p.installIstio(ctx, istioctlPath); err != nil {
+		return err
+	}
+	rollbacks.Add(func() { _ = p.uninstallIstio(ctx) })
+	if p.verbose {
+		fmt.Println("[Profile] istio installed")
+	}
+	return nil
+}
+
+func (p *Profile) deployLLMDRuntime(ctx context.Context, opts *framework.SetupOptions, rollbacks *rollbackStack) error {
+	if err := p.deploySemanticRouter(ctx, opts); err != nil {
+		return fmt.Errorf("deploy semantic router: %w", err)
+	}
+	rollbacks.Add(func() {
+		deployer := helm.NewDeployer(opts.KubeConfig, opts.Verbose)
+		_ = deployer.Uninstall(ctx, "semantic-router", semanticNamespace)
+	})
+	if p.verbose {
+		fmt.Println("[Profile] semantic-router deployed")
+	}
+
+	if err := p.deployInferenceSim(ctx, opts); err != nil {
+		return fmt.Errorf("deploy inference sim: %w", err)
+	}
+	rollbacks.Add(func() { _ = p.kubectlDelete(ctx, "e2e/profiles/llm-d/manifests/inference-sim.yaml") })
+	if p.verbose {
+		fmt.Println("[Profile] inference simulators deployed")
+	}
+
+	if err := p.deployLLMD(ctx); err != nil {
+		return fmt.Errorf("deploy llm-d resources: %w", err)
+	}
+	rollbacks.Add(func() {
+		_ = p.kubectlDelete(ctx, "e2e/profiles/llm-d/manifests/rbac.yaml")
+		_ = p.kubectlDelete(ctx, "deploy/kubernetes/llmd-base/dest-rule-epp-llama.yaml")
+		_ = p.kubectlDelete(ctx, "deploy/kubernetes/llmd-base/dest-rule-epp-phi4.yaml")
+		_ = p.kubectlDelete(ctx, "deploy/kubernetes/llmd-base/inferencepool-llama.yaml")
+		_ = p.kubectlDelete(ctx, "deploy/kubernetes/llmd-base/inferencepool-phi4.yaml")
+	})
+	if p.verbose {
+		fmt.Println("[Profile] llm-d schedulers and pools deployed")
+	}
+	return nil
+}
+
+func (p *Profile) deployRoutesAndWait(ctx context.Context, rollbacks *rollbackStack) error {
+	if err := p.deployGatewayRoutes(ctx); err != nil {
+		return fmt.Errorf("deploy gateway routes: %w", err)
+	}
+	rollbacks.Add(func() {
+		_ = p.kubectlDelete(ctx, "deploy/kubernetes/istio/envoyfilter.yaml")
+		_ = p.kubectlDelete(ctx, "deploy/kubernetes/istio/destinationrule.yaml")
+		_ = p.kubectlDelete(ctx, "e2e/profiles/llm-d/manifests/httproute-services.yaml")
+		_ = p.kubectlDelete(ctx, "deploy/kubernetes/istio/gateway.yaml")
+	})
+	if p.verbose {
+		fmt.Println("[Profile] gateway routes deployed")
+	}
+	return p.waitForGatewayRoutes(ctx)
+}
+
+func (p *Profile) waitForGatewayRoutes(ctx context.Context) error {
+	for _, routeName := range []string{"vsr-llama8b-svc", "vsr-phi4-mini-svc"} {
+		if err := p.waitHTTPRouteAccepted(ctx, routeName, kindNamespace, 2*time.Minute); err != nil {
+			return err
+		}
+		if err := p.waitHTTPRouteResolvedRefs(ctx, routeName, kindNamespace, 2*time.Minute); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func (p *Profile) ensureIstioctl(ctx context.Context) (string, error) {
@@ -329,112 +367,108 @@ func (p *Profile) deployGatewayRoutes(ctx context.Context) error {
 }
 
 func (p *Profile) verifyEnvironment(ctx context.Context, opts *framework.SetupOptions) error {
-	config, err := clientcmd.BuildConfigFromFlags("", opts.KubeConfig)
+	client, err := helpers.NewKubeClient(opts.KubeConfig)
 	if err != nil {
 		return err
 	}
-	client, err := kubernetes.NewForConfig(config)
-	if err != nil {
+	if err := p.verifyRequiredAPIGroups(client); err != nil {
 		return err
 	}
-
-	// Verify required CRDs/APIs from Gateway API and Inference Extension are registered.
-	type apiCheck struct {
-		groupVersion      string
-		expectedResources []string
-		optional          bool
+	if err := p.waitForCriticalDeployments(ctx, opts); err != nil {
+		return err
 	}
-	checkAPIGroup := func(c apiCheck) error {
-		resources, err := client.Discovery().ServerResourcesForGroupVersion(c.groupVersion)
-		if err != nil {
-			if c.optional {
-				if p.verbose {
-					fmt.Printf("[Verify] API group %s not found (optional): %v\n", c.groupVersion, err)
-				}
-				return nil
-			}
-			return fmt.Errorf("discover %s: %w", c.groupVersion, err)
-		}
-		found := make(map[string]bool, len(resources.APIResources))
-		for _, r := range resources.APIResources {
-			found[r.Name] = true
-		}
-		for _, r := range c.expectedResources {
-			if !found[r] {
-				if c.optional {
-					if p.verbose {
-						fmt.Printf("[Verify] Missing optional resource %s in %s\n", r, c.groupVersion)
-					}
-					return nil
-				}
-				return fmt.Errorf("missing %s in %s", r, c.groupVersion)
-			}
-		}
-		if p.verbose {
-			fmt.Printf("[Verify] API group %s present with %v\n", c.groupVersion, c.expectedResources)
-		}
-		return nil
+	if err := p.verifyCriticalDeployments(ctx, client); err != nil {
+		return err
 	}
+	if err := helpers.VerifyServicePodsRunning(ctx, client, kindNamespace, "inference-gateway-istio", p.verbose); err != nil {
+		return err
+	}
+	return p.verifyInferencePoolEndpoints(ctx, client)
+}
 
-	for _, c := range []apiCheck{
-		{groupVersion: "gateway.networking.k8s.io/v1", expectedResources: []string{"gateways", "httproutes"}},
-		{groupVersion: "inference.networking.k8s.io/v1", expectedResources: []string{"inferencepools"}},
-		// EndpointPickerConfig CRD is optional in some environments; treat as best-effort.
-		{groupVersion: "inference.networking.x-k8s.io/v1alpha1", expectedResources: []string{"endpointpickerconfigs"}, optional: true},
-	} {
-		if err := checkAPIGroup(c); err != nil {
+func (p *Profile) verifyRequiredAPIGroups(client *kubernetes.Clientset) error {
+	for _, check := range requiredAPIChecks {
+		if err := p.verifyAPIGroup(client, check); err != nil {
 			return err
 		}
 	}
+	return nil
+}
 
-	// endpoints readiness check moved after deployments ready
-
-	// Actively wait for critical deployments to become Available before checking readiness counts.
-	// This avoids flakiness when resources are still pulling images just after creation.
-	deployer := helm.NewDeployer(opts.KubeConfig, opts.Verbose)
-	deploymentsToWait := []struct {
-		ns, name string
-	}{
-		{semanticNamespace, "semantic-router"},
-		{gatewayNamespace, "istiod"},
-		{"default", "vllm-llama3-8b-instruct"},
-		{"default", "phi4-mini"},
-		{"default", "llm-d-inference-scheduler-llama3-8b"},
-		{"default", "llm-d-inference-scheduler-phi4-mini"},
-		{"default", "inference-gateway-istio"},
+func (p *Profile) verifyAPIGroup(client *kubernetes.Clientset, check apiCheck) error {
+	resources, err := client.Discovery().ServerResourcesForGroupVersion(check.groupVersion)
+	if err != nil {
+		if check.optional {
+			if p.verbose {
+				fmt.Printf("[Verify] API group %s not found (optional): %v\n", check.groupVersion, err)
+			}
+			return nil
+		}
+		return fmt.Errorf("discover %s: %w", check.groupVersion, err)
 	}
-	for _, d := range deploymentsToWait {
-		if err := deployer.WaitForDeployment(ctx, d.ns, d.name, 10*time.Minute); err != nil {
-			return fmt.Errorf("wait for deployment %s/%s: %w", d.ns, d.name, err)
+
+	found := make(map[string]bool, len(resources.APIResources))
+	for _, resource := range resources.APIResources {
+		found[resource.Name] = true
+	}
+	for _, resourceName := range check.expectedResources {
+		if found[resourceName] {
+			continue
+		}
+		if check.optional {
+			if p.verbose {
+				fmt.Printf("[Verify] Missing optional resource %s in %s\n", resourceName, check.groupVersion)
+			}
+			return nil
+		}
+		return fmt.Errorf("missing %s in %s", resourceName, check.groupVersion)
+	}
+
+	if p.verbose {
+		fmt.Printf("[Verify] API group %s present with %v\n", check.groupVersion, check.expectedResources)
+	}
+	return nil
+}
+
+func (p *Profile) waitForCriticalDeployments(ctx context.Context, opts *framework.SetupOptions) error {
+	deployer := helm.NewDeployer(opts.KubeConfig, opts.Verbose)
+	for _, deployment := range []helpers.DeploymentRef{
+		{Namespace: semanticNamespace, Name: "semantic-router"},
+		{Namespace: gatewayNamespace, Name: "istiod"},
+		{Namespace: kindNamespace, Name: "vllm-llama3-8b-instruct"},
+		{Namespace: kindNamespace, Name: "phi4-mini"},
+		{Namespace: kindNamespace, Name: "llm-d-inference-scheduler-llama3-8b"},
+		{Namespace: kindNamespace, Name: "llm-d-inference-scheduler-phi4-mini"},
+		{Namespace: kindNamespace, Name: "inference-gateway-istio"},
+	} {
+		if err := deployer.WaitForDeployment(ctx, deployment.Namespace, deployment.Name, 10*time.Minute); err != nil {
+			return fmt.Errorf("wait for deployment %s/%s: %w", deployment.Namespace, deployment.Name, err)
 		}
 	}
+	return nil
+}
 
-	if err := helpers.CheckDeployment(ctx, client, semanticNamespace, "semantic-router", p.verbose); err != nil {
-		return err
-	}
-	if err := helpers.CheckDeployment(ctx, client, gatewayNamespace, "istiod", p.verbose); err != nil {
-		return err
-	}
-	if err := helpers.CheckDeployment(ctx, client, "default", "vllm-llama3-8b-instruct", p.verbose); err != nil {
-		return err
-	}
-	if err := helpers.CheckDeployment(ctx, client, "default", "phi4-mini", p.verbose); err != nil {
-		return err
-	}
-	if err := helpers.CheckDeployment(ctx, client, "default", "llm-d-inference-scheduler-llama3-8b", p.verbose); err != nil {
-		return err
-	}
-	if err := helpers.CheckDeployment(ctx, client, "default", "llm-d-inference-scheduler-phi4-mini", p.verbose); err != nil {
-		return err
-	}
-	if err := helpers.VerifyServicePodsRunning(ctx, client, "default", "inference-gateway-istio", p.verbose); err != nil {
-		return err
-	}
-	if err := p.checkInferencePoolEndpointReady(ctx, client, "default", "vllm-llama3-8b-instruct", 2*time.Minute); err != nil {
-		return err
-	}
-	if err := p.checkInferencePoolEndpointReady(ctx, client, "default", "phi4-mini", 2*time.Minute); err != nil {
-		return err
+func (p *Profile) verifyCriticalDeployments(ctx context.Context, client *kubernetes.Clientset) error {
+	return helpers.VerifyDeployments(
+		ctx,
+		client,
+		[]helpers.DeploymentRef{
+			{Namespace: semanticNamespace, Name: "semantic-router"},
+			{Namespace: gatewayNamespace, Name: "istiod"},
+			{Namespace: kindNamespace, Name: "vllm-llama3-8b-instruct"},
+			{Namespace: kindNamespace, Name: "phi4-mini"},
+			{Namespace: kindNamespace, Name: "llm-d-inference-scheduler-llama3-8b"},
+			{Namespace: kindNamespace, Name: "llm-d-inference-scheduler-phi4-mini"},
+		},
+		p.verbose,
+	)
+}
+
+func (p *Profile) verifyInferencePoolEndpoints(ctx context.Context, client *kubernetes.Clientset) error {
+	for _, serviceName := range []string{"vllm-llama3-8b-instruct", "phi4-mini"} {
+		if err := p.checkInferencePoolEndpointReady(ctx, client, kindNamespace, serviceName, 2*time.Minute); err != nil {
+			return err
+		}
 	}
 	return nil
 }

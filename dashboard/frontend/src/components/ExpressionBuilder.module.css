@@ -1,0 +1,1384 @@
+/* ===== Expression Builder — ReactFlow Canvas (v4) ===== */
+
+.container {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-sm);
+  position: relative;
+  height: 100%;
+  min-height: 0;
+}
+
+/* ═══ Main layout: canvas left, toolbox right ═══ */
+
+.mainLayout {
+  display: flex;
+  gap: var(--spacing-md);
+  min-height: 280px;
+  flex: 1;
+}
+
+/* ---- Canvas wrapper (canvas + zoom bar) ---- */
+
+.canvasWrapper {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+}
+
+/* Zoom toolbar */
+.zoomBar {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0.375rem 0.5rem;
+  background: var(--color-bg-secondary);
+  border: 1px solid var(--color-border);
+  border-bottom: none;
+  border-radius: var(--radius-md) var(--radius-md) 0 0;
+}
+
+.toolbarGroup {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+}
+
+.toolbarSep {
+  width: 1px;
+  height: 16px;
+  background: var(--color-border);
+  margin: 0 0.25rem;
+  flex-shrink: 0;
+}
+
+.toolbarSpacer {
+  flex: 1;
+}
+
+.zoomBtn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 28px;
+  height: 22px;
+  padding: 0 0.375rem;
+  font-size: 0.625rem;
+  font-weight: 700;
+  font-family: var(--font-mono);
+  color: var(--color-text-secondary);
+  background: var(--color-bg-tertiary);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition: all var(--transition-fast);
+  user-select: none;
+}
+
+.zoomBtn:hover {
+  color: var(--color-text);
+  border-color: var(--color-primary);
+  background: rgba(118, 185, 0, 0.08);
+}
+
+.zoomBtn:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+  pointer-events: none;
+}
+
+.zoomHint {
+  font-size: 0.5625rem;
+  color: var(--color-primary);
+  margin-left: auto;
+  font-family: var(--font-mono);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 200px;
+}
+
+/* ---- ReactFlow canvas area ---- */
+
+.rfCanvas {
+  flex: 1;
+  position: relative;
+  min-height: 200px;
+  border: 1px solid var(--color-border);
+  border-top: none;
+  border-radius: 0 0 var(--radius-md) var(--radius-md);
+  overflow: hidden;
+}
+
+/* ReactFlow overrides for dark theme */
+.rfCanvas .react-flow__background {
+  background: var(--color-bg-tertiary);
+}
+
+.rfCanvas .react-flow__controls button {
+  background: var(--color-bg-secondary);
+  border: 1px solid var(--color-border);
+  color: var(--color-text-secondary);
+  fill: var(--color-text-secondary);
+  width: 24px;
+  height: 24px;
+}
+
+.rfCanvas .react-flow__controls button:hover {
+  background: var(--color-bg-tertiary);
+  border-color: var(--color-primary);
+  color: var(--color-text);
+  fill: var(--color-text);
+}
+
+.rfCanvas .react-flow__controls {
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+}
+
+.rfCanvas .react-flow__minimap {
+  background: var(--color-bg-secondary);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+  opacity: 0.75;
+  transition: opacity 0.2s ease;
+}
+
+.rfCanvas .react-flow__minimap:hover {
+  opacity: 1;
+}
+
+.rfCanvas .react-flow__edge-path {
+  stroke: rgba(118, 185, 0, 0.5);
+}
+
+.rfCanvas :global(.react-flow__node) {
+  background: transparent !important;
+  border: none !important;
+  border-radius: 0 !important;
+  padding: 0 !important;
+  box-shadow: none !important;
+}
+
+/* ── ReactFlow Custom Nodes ── */
+
+.rfOperatorWrapper {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+}
+
+.rfOperatorNode {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 54px;
+  height: 34px;
+  padding: 0 14px;
+  background: rgba(99, 102, 241, 0.12);
+  border: 2px solid rgba(99, 102, 241, 0.4);
+  border-radius: 10px;
+  font-family: var(--font-mono);
+  font-weight: 800;
+  font-size: 12px;
+  color: rgb(99, 102, 241);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  user-select: none;
+}
+
+.rfOperatorNode:hover {
+  border-color: rgb(99, 102, 241);
+  box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.15);
+  background: rgba(99, 102, 241, 0.18);
+}
+
+/* ── Logic Gate Node (SVG-based) ── */
+
+.rfGateNode {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  width: 88px;
+  height: 78px;
+  cursor: pointer;
+  user-select: none;
+  transition: all 0.15s ease;
+}
+
+.rfGateNode:hover .gateSvg {
+  filter: drop-shadow(0 0 6px rgba(99, 102, 241, 0.4));
+}
+
+.rfGateNode:hover {
+  transform: scale(1.05);
+}
+
+.gateSvg {
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  pointer-events: none;
+  transition: filter 0.15s ease;
+}
+
+.rfGateLabel {
+  position: relative;
+  z-index: 1;
+  font-family: var(--font-mono);
+  font-weight: 800;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  pointer-events: none;
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  margin-top: -6px;
+  white-space: nowrap;
+}
+
+.rfGateLabelNot {
+  margin-top: -22px;
+}
+
+.rfGateBadge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 14px;
+  height: 14px;
+  padding: 0 3px;
+  border-radius: 7px;
+  background: rgba(99, 102, 241, 0.15);
+  font-size: 8px;
+  font-weight: 700;
+  line-height: 1;
+  opacity: 0.7;
+}
+
+.rfGateSelected {
+  filter: drop-shadow(0 0 8px rgba(118, 185, 0, 0.5));
+}
+
+.rfGateSelected .gateSvg path,
+.rfGateSelected .gateSvg circle {
+  stroke: var(--color-primary) !important;
+  stroke-width: 3;
+}
+
+.rfGateDragOver {
+  filter: drop-shadow(0 0 10px rgba(118, 185, 0, 0.6));
+}
+
+.rfGateDragOver .gateSvg path,
+.rfGateDragOver .gateSvg circle {
+  stroke: var(--color-primary) !important;
+  stroke-dasharray: 4 3;
+}
+
+/* Depth-based operator colors for visual hierarchy */
+.rfOpDepth0 {
+  background: rgba(99, 102, 241, 0.15);
+  border-color: rgba(99, 102, 241, 0.6);
+  color: rgb(129, 132, 255);
+  font-size: 13px;
+}
+
+.rfOpDepth1 {
+  background: rgba(99, 102, 241, 0.1);
+  border-color: rgba(99, 102, 241, 0.4);
+  color: rgb(99, 102, 241);
+}
+
+.rfOpDepth2 {
+  background: rgba(147, 130, 220, 0.1);
+  border-color: rgba(147, 130, 220, 0.4);
+  color: rgb(147, 130, 220);
+}
+
+.rfOpDepth3 {
+  background: rgba(168, 152, 200, 0.1);
+  border-color: rgba(168, 152, 200, 0.35);
+  color: rgb(168, 152, 200);
+}
+
+/* "+" add child button beneath operator nodes */
+.rfAddBtn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  border: 1.5px dashed rgba(118, 185, 0, 0.4);
+  background: rgba(118, 185, 0, 0.04);
+  color: rgba(118, 185, 0, 0.5);
+  font-size: 14px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  user-select: none;
+}
+
+.rfAddBtn:hover {
+  border-color: var(--color-primary);
+  background: rgba(118, 185, 0, 0.15);
+  color: var(--color-primary);
+  transform: scale(1.2);
+  box-shadow: 0 0 0 4px rgba(118, 185, 0, 0.1);
+}
+
+.rfAddBtnActive {
+  border-color: var(--color-primary) !important;
+  background: rgba(118, 185, 0, 0.2) !important;
+  color: var(--color-primary) !important;
+  transform: scale(1.3);
+  box-shadow: 0 0 0 6px rgba(118, 185, 0, 0.15);
+}
+
+.rfSignalNode {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 100px;
+  height: 36px;
+  padding: 0 14px;
+  background: rgba(118, 185, 0, 0.12);
+  border: 2px solid rgba(118, 185, 0, 0.40);
+  border-radius: 10px;
+  font-family: var(--font-mono);
+  font-weight: 600;
+  font-size: 12px;
+  color: var(--color-text);
+  cursor: pointer;
+  transition: all 0.15s ease;
+  user-select: none;
+  white-space: nowrap;
+}
+
+.rfSignalNode:hover {
+  border-color: var(--color-primary);
+  box-shadow: 0 0 0 3px rgba(118, 185, 0, 0.18);
+  background: rgba(118, 185, 0, 0.20);
+}
+
+.rfNodeSelected {
+  box-shadow: 0 0 0 3px rgba(118, 185, 0, 0.4) !important;
+  border-color: var(--color-primary) !important;
+}
+
+.rfOperatorLabel {
+  pointer-events: none;
+}
+
+.rfOperatorBadge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 14px;
+  height: 14px;
+  padding: 0 3px;
+  border-radius: 7px;
+  background: rgba(255, 255, 255, 0.12);
+  font-size: 9px;
+  font-weight: 700;
+  line-height: 1;
+  pointer-events: none;
+  margin-left: 2px;
+  opacity: 0.7;
+}
+
+.rfSignalType {
+  font-size: 10px;
+  color: var(--color-text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  pointer-events: none;
+  background: rgba(118, 185, 0, 0.12);
+  padding: 1px 6px;
+  border-radius: 3px;
+  font-weight: 700;
+  line-height: 1.4;
+}
+
+.rfSignalName {
+  color: var(--color-text);
+  font-size: 12px;
+  pointer-events: none;
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.rfHandle {
+  width: 8px !important;
+  height: 8px !important;
+  background: rgba(118, 185, 0, 0.6) !important;
+  border: 1.5px solid rgba(118, 185, 0, 0.8) !important;
+  min-width: 0 !important;
+  min-height: 0 !important;
+}
+
+/* ── Canvas empty state ── */
+
+.canvasEmpty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 1rem;
+  min-height: 280px;
+  height: 100%;
+  color: var(--color-text-muted);
+  font-size: var(--text-sm);
+  user-select: none;
+  text-align: center;
+  padding: 2rem 1rem;
+  width: 100%;
+  background:
+    radial-gradient(circle, var(--color-border) 0.8px, transparent 0.8px),
+    var(--color-bg-tertiary);
+  background-size: 20px 20px;
+}
+
+.canvasEmptyIcon {
+  font-size: 2.5rem;
+  opacity: 0.25;
+}
+
+.canvasEmptyHint {
+  font-size: var(--text-xs);
+  opacity: 0.6;
+}
+
+.canvasTemplates {
+  display: flex;
+  gap: 0.75rem;
+  margin-top: 0.5rem;
+  flex-wrap: wrap;
+  justify-content: center;
+}
+
+.canvasTemplateCard {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.375rem;
+  padding: 0.75rem 1rem;
+  background: var(--color-bg);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  transition: all var(--transition-fast);
+  min-width: 120px;
+  pointer-events: all;
+}
+
+.canvasTemplateCard:hover {
+  border-color: var(--color-primary);
+  box-shadow: 0 2px 8px rgba(118, 185, 0, 0.12);
+  transform: translateY(-1px);
+}
+
+.canvasTemplateIcon {
+  font-size: 1.25rem;
+  opacity: 0.7;
+}
+
+.canvasTemplateGate {
+  display: inline-flex;
+  width: 36px;
+  height: 28px;
+  align-items: center;
+  justify-content: center;
+  opacity: 0.8;
+}
+
+.canvasTemplateGate svg {
+  width: 36px;
+  height: 28px;
+}
+
+.canvasTemplateName {
+  font-size: 0.6875rem;
+  font-weight: 600;
+  color: var(--color-text);
+}
+
+.canvasTemplateDesc {
+  font-size: 0.5625rem;
+  color: var(--color-text-muted);
+}
+
+/* ---- Toolbox sidebar ---- */
+
+.toolbox {
+  width: 260px;
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  background: var(--color-bg);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  overflow: hidden;
+}
+
+.toolbox.toolboxCollapsed {
+  width: auto;
+}
+
+.toolboxHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.5rem 0.625rem;
+  background: var(--color-bg-secondary);
+  border-bottom: 1px solid var(--color-border);
+  cursor: pointer;
+  user-select: none;
+}
+
+.toolboxHeader:hover {
+  background: var(--color-bg-tertiary);
+}
+
+.toolboxHeaderTitle {
+  font-size: 0.6875rem;
+  font-weight: 700;
+  color: var(--color-text);
+  letter-spacing: 0.02em;
+}
+
+.toolboxHeaderCount {
+  font-size: 0.5625rem;
+  color: var(--color-text-muted);
+}
+
+.toolboxContent {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  overflow-y: auto;
+  max-height: 400px;
+}
+
+/* Operators strip */
+.toolboxOperators {
+  display: flex;
+  gap: 0.5rem;
+  padding: 0.625rem 0.625rem;
+  border-bottom: 1px solid var(--color-border);
+  flex-wrap: wrap;
+}
+
+.toolboxOp {
+  display: flex;
+  align-items: center;
+  gap: 0.375rem;
+  padding: 0.3rem 0.75rem;
+  font-size: 0.6875rem;
+  font-weight: 700;
+  font-family: var(--font-mono);
+  color: rgb(99, 102, 241);
+  background: rgba(99, 102, 241, 0.08);
+  border: 1px solid rgba(99, 102, 241, 0.25);
+  border-radius: var(--radius-sm);
+  cursor: grab;
+  transition: all var(--transition-fast);
+  user-select: none;
+}
+
+.toolboxOpIcon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  border-radius: 4px;
+  font-size: 14px;
+  font-weight: 800;
+  line-height: 1;
+  flex-shrink: 0;
+  background: rgba(255, 255, 255, 0.06);
+}
+
+/* AND — indigo */
+.toolboxOpAND {
+  color: #a5b4fc;
+  background: rgba(129, 140, 248, 0.10);
+  border-color: rgba(129, 140, 248, 0.30);
+}
+.toolboxOpAND:hover {
+  border-color: #818cf8;
+  background: rgba(129, 140, 248, 0.18);
+  box-shadow: 0 0 0 2px rgba(129, 140, 248, 0.12);
+}
+
+/* OR — emerald */
+.toolboxOpOR {
+  color: #6ee7b7;
+  background: rgba(52, 211, 153, 0.10);
+  border-color: rgba(52, 211, 153, 0.30);
+}
+.toolboxOpOR:hover {
+  border-color: #34d399;
+  background: rgba(52, 211, 153, 0.18);
+  box-shadow: 0 0 0 2px rgba(52, 211, 153, 0.12);
+}
+
+/* NOT — rose */
+.toolboxOpNOT {
+  color: #fca5a5;
+  background: rgba(248, 113, 113, 0.10);
+  border-color: rgba(248, 113, 113, 0.30);
+}
+.toolboxOpNOT:hover {
+  border-color: #f87171;
+  background: rgba(248, 113, 113, 0.18);
+  box-shadow: 0 0 0 2px rgba(248, 113, 113, 0.12);
+}
+
+.toolboxOp:active {
+  cursor: grabbing;
+  opacity: 0.7;
+}
+
+.clearBtn {
+  padding: 0.25rem 0.625rem;
+  font-size: 0.6875rem;
+  font-weight: 600;
+  font-family: var(--font-mono);
+  color: var(--color-text-secondary);
+  background: transparent;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+
+.clearBtn:hover {
+  color: var(--color-danger);
+  border-color: var(--color-danger);
+  background: rgba(239, 68, 68, 0.08);
+}
+
+/* Search */
+.toolboxSearch {
+  position: relative;
+  padding: 0.375rem 0.625rem;
+  border-bottom: 1px solid var(--color-border);
+}
+
+.toolboxSearchInput {
+  width: 100%;
+  padding: 0.25rem 1.5rem 0.25rem 0.375rem;
+  font-size: 0.6875rem;
+  font-family: var(--font-mono);
+  background: var(--color-bg-tertiary);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  color: var(--color-text);
+  outline: none;
+  transition: border-color var(--transition-fast);
+}
+
+.toolboxSearchInput:focus {
+  border-color: var(--color-primary);
+}
+
+.toolboxSearchInput::placeholder {
+  color: var(--color-text-muted);
+}
+
+.toolboxSearchClear {
+  position: absolute;
+  right: 0.75rem;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  border: none;
+  background: transparent;
+  color: var(--color-text-muted);
+  font-size: 0.75rem;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+}
+
+.toolboxSearchClear:hover {
+  color: var(--color-text);
+  background: var(--color-bg-tertiary);
+}
+
+/* Signal groups */
+.toolboxSignals {
+  display: flex;
+  flex-direction: column;
+}
+
+.toolboxEmpty {
+  padding: 0.75rem 0.625rem;
+  font-size: 0.625rem;
+  color: var(--color-text-muted);
+  text-align: center;
+}
+
+.signalGroup {
+  border-bottom: 1px solid var(--color-border);
+}
+
+.signalGroup:last-child {
+  border-bottom: none;
+}
+
+.signalGroupHeader {
+  display: flex;
+  align-items: center;
+  gap: 0.375rem;
+  padding: 0.375rem 0.625rem;
+  cursor: pointer;
+  user-select: none;
+  transition: background var(--transition-fast);
+}
+
+.signalGroupHeader:hover {
+  background: var(--color-bg-tertiary);
+}
+
+.signalGroupToggle {
+  font-size: 0.5rem;
+  color: var(--color-text-muted);
+  width: 0.75rem;
+}
+
+.signalGroupName {
+  font-size: 0.625rem;
+  font-weight: 700;
+  color: var(--color-text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  flex: 1;
+}
+
+.signalGroupCount {
+  font-size: 0.5625rem;
+  color: var(--color-text-muted);
+  background: var(--color-bg-tertiary);
+  padding: 0.0625rem 0.375rem;
+  border-radius: 999px;
+}
+
+.signalGroupItems {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem;
+  padding: 0 0.625rem 0.5rem 1.25rem;
+}
+
+.toolboxChip {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.1875rem 0.375rem;
+  background: var(--color-bg-tertiary);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  cursor: grab;
+  transition: all var(--transition-fast);
+  font-size: 0.625rem;
+  font-family: var(--font-mono);
+  color: var(--color-text);
+  user-select: none;
+  line-height: 1.3;
+}
+
+.toolboxChip:hover {
+  border-color: var(--color-primary);
+  background: rgba(118, 185, 0, 0.08);
+  color: var(--color-primary);
+}
+
+.toolboxChip:active {
+  cursor: grabbing;
+  opacity: 0.7;
+}
+
+/* ── Result Display ── */
+
+.result {
+  padding: 0.5rem 0.75rem;
+  background: var(--color-bg);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  display: flex;
+  align-items: flex-start;
+  gap: var(--spacing-sm);
+  min-height: 2rem;
+  max-height: 5rem;
+  overflow-y: auto;
+}
+
+.resultLabel {
+  font-size: 0.625rem;
+  font-weight: 700;
+  color: var(--color-primary);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  flex-shrink: 0;
+  padding: 1px 6px;
+  background: rgba(118, 185, 0, 0.1);
+  border-radius: 3px;
+  line-height: 1.6;
+}
+
+.resultExpr {
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  color: var(--color-primary);
+  overflow-wrap: break-word;
+  word-break: break-word;
+  line-height: 1.5;
+  flex: 1;
+}
+
+.resultPlaceholder {
+  font-size: var(--text-xs);
+  color: var(--color-text-muted);
+  font-style: italic;
+}
+
+/* ── Raw text input ── */
+
+.rawToggle {
+  font-size: 0.625rem;
+  color: var(--color-text-muted);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+}
+
+.rawInput {
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  padding: 0.375rem 0.5rem;
+  background: var(--color-bg);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  color: var(--color-text);
+  outline: none;
+  width: 100%;
+  transition: border-color var(--transition-fast);
+}
+
+.rawInput:focus {
+  border-color: var(--color-primary);
+}
+
+/* ── Validation ── */
+
+.validation {
+  display: flex;
+  align-items: center;
+  gap: 0.375rem;
+  font-size: var(--text-xs);
+  padding: 0.25rem 0;
+}
+
+.validationOk {
+  composes: validation;
+  color: var(--color-primary);
+}
+
+.validationWarn {
+  composes: validation;
+  color: var(--color-warning, #f59e0b);
+}
+
+.validationError {
+  composes: validation;
+  color: var(--color-danger);
+}
+
+/* ── Context Menu ── */
+
+.ctxMenu {
+  position: fixed;
+  z-index: 9999;
+  min-width: 180px;
+  background: var(--color-bg);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
+  padding: 0.25rem 0;
+  font-size: 0.6875rem;
+}
+
+.ctxMenuItem {
+  padding: 0.375rem 0.75rem;
+  cursor: pointer;
+  transition: background var(--transition-fast);
+  color: var(--color-text);
+}
+
+.ctxMenuItem:hover {
+  background: var(--color-bg-tertiary);
+}
+
+.ctxMenuDanger {
+  color: var(--color-danger);
+}
+
+.ctxMenuDanger:hover {
+  background: rgba(239, 68, 68, 0.08);
+}
+
+.ctxMenuDivider {
+  height: 1px;
+  background: var(--color-border);
+  margin: 0.25rem 0;
+}
+
+/* ── Maximize / Fullscreen ── */
+
+.maximizeBtn {
+  font-size: 0.75rem !important;
+  letter-spacing: 0;
+}
+
+.fullscreenOverlay {
+  position: fixed;
+  inset: 0;
+  z-index: 10000;
+  background: rgba(0, 0, 0, 0.7);
+  backdrop-filter: blur(4px);
+  display: flex;
+  align-items: stretch;
+  justify-content: stretch;
+  padding: 24px;
+  animation: fadeIn 0.15s ease-out;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+.fullscreenContainer {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  background: var(--color-bg);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5), 0 0 0 1px rgba(118, 185, 0, 0.1);
+  overflow: hidden;
+  min-height: 0;
+}
+
+.fullscreenHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.625rem 1rem;
+  background: var(--color-bg-secondary);
+  border-bottom: 1px solid var(--color-border);
+  flex-shrink: 0;
+}
+
+.fullscreenTitle {
+  font-size: 0.8125rem;
+  font-weight: 700;
+  color: var(--color-text);
+  letter-spacing: 0.02em;
+}
+
+.fullscreenCloseBtn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--color-border);
+  background: var(--color-bg-tertiary);
+  color: var(--color-text-secondary);
+  font-size: 0.75rem;
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+
+.fullscreenCloseBtn:hover {
+  border-color: var(--color-danger);
+  background: rgba(239, 68, 68, 0.1);
+  color: var(--color-danger);
+}
+
+/* Container in maximized mode fills the fullscreen panel */
+.containerMaximized {
+  flex: 1;
+  min-height: 0;
+}
+
+.containerMaximized .mainLayout {
+  min-height: 0;
+}
+
+.containerMaximized .rfCanvas {
+  border: none;
+  border-radius: 0;
+}
+
+.containerMaximized .zoomBar {
+  border-radius: 0;
+  border-left: none;
+  border-right: none;
+}
+
+.containerMaximized .toolbox {
+  border-radius: 0;
+  border-right: none;
+  border-bottom: none;
+}
+
+.containerMaximized .toolboxContent {
+  max-height: none;
+  flex: 1;
+}
+
+/* ── Drag over node highlight ── */
+
+.rfNodeDragOver {
+  outline: 2px dashed var(--color-primary) !important;
+  outline-offset: 2px;
+  background: rgba(118, 185, 0, 0.12) !important;
+}
+
+/* ── Edit Signal Dialog ── */
+
+.editOverlay {
+  position: fixed;
+  inset: 0;
+  z-index: 10001;
+  background: rgba(0, 0, 0, 0.5);
+  backdrop-filter: blur(2px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  animation: fadeIn 0.1s ease-out;
+}
+
+.editDialog {
+  background: var(--color-bg);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  box-shadow: 0 16px 48px rgba(0, 0, 0, 0.4);
+  width: 340px;
+  max-height: 80vh;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+.editDialogHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.75rem 1rem;
+  border-bottom: 1px solid var(--color-border);
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: var(--color-text);
+}
+
+.editDialogClose {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border-radius: var(--radius-sm);
+  border: none;
+  background: transparent;
+  color: var(--color-text-muted);
+  cursor: pointer;
+  font-size: 1rem;
+  transition: all var(--transition-fast);
+}
+
+.editDialogClose:hover {
+  background: var(--color-bg-tertiary);
+  color: var(--color-text);
+}
+
+.editDialogBody {
+  padding: 0.75rem 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.625rem;
+}
+
+.editLabel {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  font-size: 0.6875rem;
+  font-weight: 500;
+  color: var(--color-text-secondary);
+}
+
+.editSelect,
+.editInput {
+  padding: 0.375rem 0.5rem;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  background: var(--color-bg);
+  color: var(--color-text);
+  font-size: var(--text-xs);
+  outline: none;
+  transition: border-color var(--transition-fast);
+}
+
+.editSelect:focus,
+.editInput:focus {
+  border-color: var(--color-primary);
+}
+
+.editSignalList {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.editSearchInput {
+  padding: 0.25rem 0.375rem;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  background: var(--color-bg-secondary);
+  color: var(--color-text);
+  font-size: 0.625rem;
+  outline: none;
+}
+
+.editSearchInput:focus {
+  border-color: var(--color-primary);
+}
+
+.editSignalOptions {
+  max-height: 120px;
+  overflow-y: auto;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  background: var(--color-bg-secondary);
+}
+
+.editSignalOption {
+  padding: 0.25rem 0.5rem;
+  font-size: 0.625rem;
+  cursor: pointer;
+  color: var(--color-text);
+  transition: background var(--transition-fast);
+}
+
+.editSignalOption:hover {
+  background: var(--color-bg-tertiary);
+}
+
+.editSignalOptionActive {
+  background: rgba(118, 185, 0, 0.15);
+  color: var(--color-primary);
+  font-weight: 500;
+}
+
+.editDialogActions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.5rem;
+  padding-top: 0.375rem;
+}
+
+.editBtnCancel,
+.editBtnSave {
+  padding: 0.375rem 0.75rem;
+  border-radius: var(--radius-sm);
+  font-size: 0.6875rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+
+.editBtnCancel {
+  border: 1px solid var(--color-border);
+  background: var(--color-bg-secondary);
+  color: var(--color-text-secondary);
+}
+
+.editBtnCancel:hover {
+  background: var(--color-bg-tertiary);
+}
+
+.editBtnSave {
+  border: 1px solid var(--color-primary);
+  background: var(--color-primary);
+  color: #fff;
+}
+
+.editBtnSave:hover {
+  opacity: 0.9;
+}
+
+.editBtnSave:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+/* ── Add Child Picker Dialog ── */
+
+.addPickerDialog {
+  background: var(--color-bg);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  box-shadow: 0 16px 48px rgba(0, 0, 0, 0.4);
+  width: 380px;
+  max-height: 70vh;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+.addPickerBody {
+  padding: 0.5rem 0.75rem 0.75rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  overflow-y: auto;
+}
+
+.addPickerSection {
+  display: flex;
+  flex-direction: column;
+  gap: 0.375rem;
+}
+
+.addPickerSectionTitle {
+  font-size: 0.625rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--color-text-muted);
+}
+
+.addPickerOps {
+  display: flex;
+  gap: 0.375rem;
+}
+
+.addPickerOpBtn {
+  padding: 0.375rem 0.75rem;
+  border-radius: var(--radius-sm);
+  border: 1px solid rgba(99, 102, 241, 0.3);
+  background: rgba(99, 102, 241, 0.08);
+  color: rgb(99, 102, 241);
+  font-family: var(--font-mono);
+  font-weight: 700;
+  font-size: 0.75rem;
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+
+.addPickerOpBtn:hover {
+  background: rgba(99, 102, 241, 0.18);
+  border-color: rgb(99, 102, 241);
+}
+
+.addPickerSignalList {
+  max-height: 250px;
+  overflow-y: auto;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  background: var(--color-bg-secondary);
+}
+
+.addPickerGroupTitle {
+  padding: 0.25rem 0.5rem;
+  font-size: 0.5625rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--color-text-muted);
+  background: var(--color-bg-tertiary);
+  position: sticky;
+  top: 0;
+  z-index: 1;
+}
+
+.addPickerGroupItems {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem;
+  padding: 0.25rem 0.5rem;
+}
+
+.addPickerSignalItem {
+  padding: 0.1875rem 0.375rem;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  background: var(--color-bg);
+  color: var(--color-text);
+  font-family: var(--font-mono);
+  font-size: 0.625rem;
+  cursor: pointer;
+  transition: all var(--transition-fast);
+  user-select: none;
+}
+
+.addPickerSignalItem:hover {
+  background: rgba(118, 185, 0, 0.12);
+  border-color: var(--color-primary);
+  color: var(--color-primary);
+}
+
+.addPickerEmpty {
+  padding: 0.75rem;
+  text-align: center;
+  font-size: 0.6875rem;
+  color: var(--color-text-muted);
+}
+
+/* ── Toast feedback ── */
+
+.toast {
+  position: fixed;
+  bottom: 2rem;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 10002;
+  padding: 0.5rem 1rem;
+  border-radius: var(--radius-lg);
+  background: rgba(30, 30, 30, 0.92);
+  color: #fff;
+  font-size: 0.75rem;
+  font-weight: 500;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.3);
+  pointer-events: none;
+  animation: toastIn 0.2s ease-out;
+}
+
+@keyframes toastIn {
+  from { opacity: 0; transform: translateX(-50%) translateY(8px); }
+  to { opacity: 1; transform: translateX(-50%) translateY(0); }
+}

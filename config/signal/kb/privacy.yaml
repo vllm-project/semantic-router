@@ -1,0 +1,15 @@
+routing:
+  signals:
+    kb:
+      - name: privacy_policy
+        kb: privacy_kb
+        target:
+          kind: group
+          value: privacy_policy
+        match: best
+      - name: proprietary_code
+        kb: privacy_kb
+        target:
+          kind: label
+          value: proprietary_code
+        match: threshold

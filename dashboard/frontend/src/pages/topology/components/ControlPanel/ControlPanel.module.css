@@ -18,7 +18,8 @@
   flex-direction: column;
   gap: 8px;
   flex: 1;
-  max-width: 600px;
+  max-width: 100%;
+  width: 100%;
 }
 
 .sectionTitle {

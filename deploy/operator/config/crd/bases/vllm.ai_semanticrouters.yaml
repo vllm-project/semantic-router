@@ -1001,7 +1001,12 @@ spec:
                     type: integer
                 type: object
               config:
-                description: Configuration for the semantic router
+                description: |-
+                  Configuration overrides merged into the canonical v0.3 config.yaml.
+                  Router-wide runtime overrides land under config.global.router/services/stores/
+                  integrations/model_catalog, with model-backed modules nested under
+                  config.global.model_catalog.modules. Provider defaults land under
+                  config.providers.defaults.
                 properties:
                   api:
                     description: API configuration
@@ -1052,22 +1057,6 @@ spec:
                             type: object
                         type: object
                     type: object
-                  bert_model:
-                    description: BERT model configuration
-                    properties:
-                      model_id:
-                        default: models/mom-embedding-light
-                        type: string
-                      threshold:
-                        default: "0.6"
-                        description: Threshold for embedding similarity (0.0-1.0).
-                          Stored as string to avoid float precision issues.
-                        pattern: ^0(\.[0-9]+)?$|^1(\.0+)?$
-                        type: string
-                      use_cpu:
-                        default: true
-                        type: boolean
-                    type: object
                   classifier:
                     description: Classifier configuration
                     properties:
@@ -1106,6 +1095,214 @@ spec:
                             type: boolean
                         type: object
                     type: object
+                  complexity_rules:
+                    description: Complexity rules for complexity-aware routing
+                    items:
+                      description: ComplexityRulesConfig defines complexity-based
+                        signal classification
+                      properties:
+                        composer:
+                          description: Composer allows filtering based on other signals
+                            (e.g., only apply this rule if domain:medical)
+                          properties:
+                            conditions:
+                              description: List of conditions that must be met
+                              items:
+                                description: CompositionCondition defines a single
+                                  composition condition
+                                properties:
+                                  name:
+                                    description: Name of the specific signal/rule
+                                      value to match
+                                    type: string
+                                  type:
+                                    description: Type of signal to check (e.g., "domain",
+                                      "language", "category")
+                                    type: string
+                                required:
+                                - name
+                                - type
+                                type: object
+                              type: array
+                            operator:
+                              description: Operator for combining conditions (AND,
+                                OR, NOT). NOT is strictly unary and negates its single
+                                child.
+                              enum:
+                              - AND
+                              - OR
+                              - NOT
+                              type: string
+                          required:
+                          - conditions
+                          - operator
+                          type: object
+                        description:
+                          description: Description of what this rule classifies
+                          type: string
+                        easy:
+                          description: Easy candidates represent simple/easy examples
+                          properties:
+                            candidates:
+                              description: List of candidate phrases or examples
+                              items:
+                                type: string
+                              type: array
+                          required:
+                          - candidates
+                          type: object
+                        hard:
+                          description: Hard candidates represent complex/difficult
+                            examples
+                          properties:
+                            candidates:
+                              description: List of candidate phrases or examples
+                              items:
+                                type: string
+                              type: array
+                          required:
+                          - candidates
+                          type: object
+                        name:
+                          description: Name of the complexity rule (e.g., "code-complexity",
+                            "reasoning-complexity")
+                          type: string
+                        threshold:
+                          description: |-
+                            Threshold for difficulty classification (0.0-1.0). Stored as string to avoid float precision issues.
+                            Queries scoring above this threshold are classified as "hard"
+                          pattern: ^0(\.[0-9]+)?$|^1(\.0+)?$
+                          type: string
+                      required:
+                      - easy
+                      - hard
+                      - name
+                      type: object
+                    type: array
+                  decisions:
+                    description: Routing decisions based on signals (domain, complexity,
+                      etc.)
+                    items:
+                      description: DecisionConfig defines a routing decision
+                      properties:
+                        algorithm:
+                          description: |-
+                            Algorithm configures model selection for this decision. It is preserved as
+                            a router-owned object so supported algorithms such as session_aware can
+                            evolve without requiring the operator CRD to duplicate every nested field.
+                          type: object
+                          x-kubernetes-preserve-unknown-fields: true
+                        description:
+                          description: Description provides information about what
+                            this decision handles
+                          type: string
+                        modelRefs:
+                          description: ModelRefs contains model references for this
+                            decision
+                          items:
+                            description: ModelRefConfig defines a model reference
+                              for routing
+                            properties:
+                              lora_name:
+                                description: LoRAName is the optional LoRA adapter
+                                  name
+                                type: string
+                              model:
+                                description: Model name to route to
+                                type: string
+                              reasoning_effort:
+                                description: ReasoningEffort specifies the reasoning
+                                  effort level (low, medium, high)
+                                type: string
+                              use_reasoning:
+                                description: UseReasoning enables reasoning mode for
+                                  this model
+                                type: boolean
+                            required:
+                            - model
+                            type: object
+                          type: array
+                        name:
+                          description: Name is the unique identifier for this decision
+                          type: string
+                        plugins:
+                          description: Plugins contains policy configurations applied
+                            after rule matching
+                          items:
+                            type: object
+                            x-kubernetes-preserve-unknown-fields: true
+                          type: array
+                        preferred_endpoints:
+                          description: PreferredEndpoints specifies which vLLM endpoints
+                            to prefer for this decision
+                          items:
+                            type: string
+                          type: array
+                        priority:
+                          description: Priority is used for decision ordering - higher
+                            priority decisions are evaluated first
+                          type: integer
+                        rules:
+                          description: Rules defines the combination of conditions
+                            using AND/OR logic
+                          properties:
+                            conditions:
+                              description: Conditions is the list of rule references
+                                to evaluate
+                              items:
+                                description: RuleConditionConfig references a specific
+                                  rule by type and name
+                                properties:
+                                  name:
+                                    description: Name is the name of the rule to reference
+                                    type: string
+                                  type:
+                                    description: Type specifies the signal or projection
+                                      type referenced by this condition.
+                                    enum:
+                                    - keyword
+                                    - embedding
+                                    - domain
+                                    - fact_check
+                                    - user_feedback
+                                    - reask
+                                    - preference
+                                    - language
+                                    - context
+                                    - structure
+                                    - complexity
+                                    - modality
+                                    - authz
+                                    - jailbreak
+                                    - pii
+                                    - kb
+                                    - conversation
+                                    - event
+                                    - projection
+                                    type: string
+                                required:
+                                - name
+                                - type
+                                type: object
+                              type: array
+                            operator:
+                              description: |-
+                                Operator specifies how to combine conditions: "AND", "OR", or "NOT". NOT is strictly unary: it takes
+                                exactly one child condition and negates its result. Compose NOR/NAND by nesting NOT around OR/AND.
+                              enum:
+                              - AND
+                              - OR
+                              - NOT
+                              type: string
+                          required:
+                          - conditions
+                          - operator
+                          type: object
+                      required:
+                      - name
+                      - rules
+                      type: object
+                    type: array
                   default_reasoning_effort:
                     description: Default reasoning effort
                     enum:
@@ -1113,6 +1310,80 @@ spec:
                     - medium
                     - high
                     type: string
+                  embedding_models:
+                    description: Embedding models configuration (qwen3, gemma, mmbert)
+                    properties:
+                      embedding_config:
+                        description: Embedding configuration for embedding-based classification
+                        properties:
+                          enable_soft_matching:
+                            default: true
+                            description: EnableSoftMatching enables soft matching
+                              mode
+                            type: boolean
+                          min_score_threshold:
+                            default: "0.5"
+                            description: MinScoreThreshold for matching (0.0-1.0).
+                              Stored as string to avoid float precision issues.
+                            pattern: ^0(\.[0-9]+)?$|^1(\.0+)?$
+                            type: string
+                          model_type:
+                            description: |-
+                              ModelType specifies which embedding model to use
+                              Options: "qwen3" (1024-dim, 32K context), "gemma" (768-dim, 8K context), "mmbert" (64-768-dim, multilingual)
+                            enum:
+                            - qwen3
+                            - gemma
+                            - mmbert
+                            type: string
+                          preload_embeddings:
+                            default: true
+                            description: PreloadEmbeddings enables precomputing candidate
+                              embeddings at startup
+                            type: boolean
+                          target_dimension:
+                            description: |-
+                              TargetDimension is the embedding dimension to use (default: 768)
+                              Supported dimensions: 64, 128, 256, 512, 768
+                              For mmBERT, lower dimensions provide faster performance with slight accuracy trade-off
+                            enum:
+                            - 64
+                            - 128
+                            - 256
+                            - 512
+                            - 768
+                            type: integer
+                          target_layer:
+                            description: |-
+                              TargetLayer is the layer for mmBERT early exit (only used when ModelType is "mmbert")
+                              Layer 3: ~7x speedup, Layer 6: ~3.6x speedup, Layer 11: ~2x speedup, Layer 22: full accuracy
+                            enum:
+                            - 3
+                            - 6
+                            - 11
+                            - 22
+                            type: integer
+                        type: object
+                      gemma_model_path:
+                        description: |-
+                          Path to EmbeddingGemma-300M model directory
+                          Gemma provides 8K context and fast embeddings (768 dimensions)
+                        type: string
+                      mmbert_model_path:
+                        description: |-
+                          Path to mmBERT 2D Matryoshka embedding model directory
+                          Supports layer early exit (3/6/11/22) and dimension reduction (64-768)
+                        type: string
+                      qwen3_model_path:
+                        description: |-
+                          Path to Qwen3-Embedding-0.6B model directory
+                          Qwen3 provides 32K context and high quality embeddings (1024 dimensions)
+                        type: string
+                      use_cpu:
+                        default: true
+                        description: 'Use CPU for inference (default: true)'
+                        type: boolean
+                    type: object
                   observability:
                     description: Observability configuration
                     properties:
@@ -1176,7 +1447,7 @@ spec:
                       jailbreak_mapping_path:
                         type: string
                       model_id:
-                        default: models/mom-jailbreak-classifier
+                        default: models/mmbert32k-jailbreak-detector-merged
                         type: string
                       threshold:
                         default: "0.7"
@@ -1202,6 +1473,14 @@ spec:
                       type: object
                     description: Reasoning families
                     type: object
+                  routing:
+                    description: |-
+                      Routing contains canonical v0.3 routing configuration under config.routing.
+                      It is intentionally preserved as an object so the operator can pass through
+                      the router-owned signal, projection, decision, and algorithm contract without
+                      lagging behind every router schema addition.
+                    type: object
+                    x-kubernetes-preserve-unknown-fields: true
                   semantic_cache:
                     description: Semantic cache configuration
                     properties:
@@ -1209,22 +1488,25 @@ spec:
                         default: memory
                         description: |-
                           BackendType specifies the cache backend to use
-                          Options: "memory" (default), "redis", "milvus", "hybrid"
+                          Options: "memory" (default), "redis", "valkey", "milvus", "qdrant", "hybrid"
                         enum:
                         - memory
                         - redis
+                        - valkey
                         - milvus
+                        - qdrant
                         - hybrid
                         type: string
                       embedding_model:
-                        default: bert
+                        default: mmbert
                         description: |-
                           EmbeddingModel specifies which embedding model to use for semantic similarity
-                          Options: "bert" (default), "qwen3", "gemma"
+                          Options: "mmbert" (default), "bert", "qwen3", "gemma"
                         enum:
                         - bert
                         - qwen3
                         - gemma
+                        - mmbert
                         type: string
                       enabled:
                         default: true
@@ -1548,6 +1830,38 @@ spec:
                                 type: integer
                             type: object
                         type: object
+                      qdrant:
+                        description: Qdrant configuration (required when backend_type
+                          is "qdrant")
+                        properties:
+                          api_key:
+                            description: APIKey for Qdrant authentication
+                            type: string
+                          collection_name:
+                            default: semantic_cache
+                            description: CollectionName is the Qdrant collection to
+                              use for semantic cache
+                            type: string
+                          connect_timeout:
+                            default: 10
+                            description: ConnectTimeout is the timeout in seconds
+                              for Qdrant connection
+                            type: integer
+                          host:
+                            description: Host is the Qdrant server hostname or IP
+                              address
+                            type: string
+                          port:
+                            default: 6334
+                            description: Port is the Qdrant gRPC port
+                            maximum: 65535
+                            minimum: 1
+                            type: integer
+                          use_tls:
+                            default: false
+                            description: UseTLS enables TLS for the Qdrant connection
+                            type: boolean
+                        type: object
                       redis:
                         description: Redis configuration (required when backend_type
                           is "redis")
@@ -1733,7 +2047,187 @@ spec:
                         description: TTLSeconds is the time-to-live for cache entries
                           in seconds
                         type: integer
+                      valkey:
+                        description: Valkey configuration (required when backend_type
+                          is "valkey")
+                        properties:
+                          connection:
+                            description: Connection settings for Valkey server
+                            properties:
+                              database:
+                                default: 0
+                                description: Database is the Valkey database number
+                                  to use
+                                minimum: 0
+                                type: integer
+                              host:
+                                description: |-
+                                  Host is the Valkey server hostname or IP address
+                                  Example: "valkey.default.svc.cluster.local"
+                                type: string
+                              password:
+                                description: Password for Valkey authentication (plaintext
+                                  - consider using PasswordSecretRef instead)
+                                type: string
+                              password_secret_ref:
+                                description: |-
+                                  PasswordSecretRef references a Secret containing the Valkey password
+                                  Preferred over plaintext Password field for security
+                                properties:
+                                  key:
+                                    description: The key of the secret to select from.  Must
+                                      be a valid secret key.
+                                    type: string
+                                  name:
+                                    default: ""
+                                    description: |-
+                                      Name of the referent.
+                                      This field is effectively required, but due to backwards compatibility is
+                                      allowed to be empty. Instances of this type with an empty value here are
+                                      almost certainly wrong.
+                                      More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names
+                                    type: string
+                                  optional:
+                                    description: Specify whether the Secret or its
+                                      key must be defined
+                                    type: boolean
+                                required:
+                                - key
+                                type: object
+                                x-kubernetes-map-type: atomic
+                              port:
+                                default: 6379
+                                description: Port is the Valkey server port
+                                maximum: 65535
+                                minimum: 1
+                                type: integer
+                              timeout:
+                                default: 30
+                                description: Timeout for Valkey operations in seconds
+                                minimum: 0
+                                type: integer
+                              tls:
+                                description: TLS configuration for secure Valkey connections
+                                properties:
+                                  ca_file:
+                                    description: CAFile is the path to CA certificate
+                                      file
+                                    type: string
+                                  cert_file:
+                                    description: CertFile is the path to client certificate
+                                      file
+                                    type: string
+                                  enabled:
+                                    default: false
+                                    description: Enabled controls whether to use TLS
+                                      for Valkey connection
+                                    type: boolean
+                                  key_file:
+                                    description: KeyFile is the path to client key
+                                      file
+                                    type: string
+                                type: object
+                            type: object
+                          development:
+                            description: Development settings for Valkey cache
+                            properties:
+                              auto_create_index:
+                                default: true
+                                description: AutoCreateIndex automatically creates
+                                  the index if it doesn't exist
+                                type: boolean
+                              drop_index_on_startup:
+                                default: false
+                                description: DropIndexOnStartup clears the index when
+                                  router starts (for testing)
+                                type: boolean
+                              verbose_errors:
+                                default: true
+                                description: VerboseErrors includes detailed error
+                                  messages in logs
+                                type: boolean
+                            type: object
+                          index:
+                            description: Index settings for Valkey vector search
+                            properties:
+                              index_type:
+                                default: HNSW
+                                description: |-
+                                  IndexType specifies the index algorithm
+                                  Options: "HNSW" (recommended), "FLAT"
+                                enum:
+                                - HNSW
+                                - FLAT
+                                type: string
+                              name:
+                                default: semantic_cache_idx
+                                description: Name of the Valkey index
+                                type: string
+                              params:
+                                description: Params for HNSW index
+                                properties:
+                                  M:
+                                    default: 16
+                                    description: |-
+                                      M is the number of bi-directional links per node
+                                      Higher values = better recall, more memory
+                                    minimum: 2
+                                    type: integer
+                                  efConstruction:
+                                    default: 64
+                                    description: |-
+                                      EfConstruction is the size of dynamic candidate list during construction
+                                      Higher values = better quality, slower indexing
+                                    minimum: 1
+                                    type: integer
+                                type: object
+                              prefix:
+                                default: 'doc:'
+                                description: Prefix for Valkey keys
+                                type: string
+                              vector_field:
+                                description: VectorField configuration for embeddings
+                                properties:
+                                  dimension:
+                                    description: |-
+                                      Dimension of the embedding vectors
+                                      For BERT: 384, for Qwen3: 1024, for Gemma: 768
+                                    minimum: 1
+                                    type: integer
+                                  metric_type:
+                                    default: COSINE
+                                    description: |-
+                                      MetricType for vector similarity
+                                      Options: "COSINE", "IP" (inner product), "L2" (Euclidean)
+                                    enum:
+                                    - COSINE
+                                    - IP
+                                    - L2
+                                    type: string
+                                  name:
+                                    default: embedding
+                                    description: Name of the vector field
+                                    type: string
+                                type: object
+                            type: object
+                          search:
+                            description: Search settings for Valkey queries
+                            properties:
+                              topk:
+                                default: 1
+                                description: TopK is the number of results to return
+                                  from vector search
+                                minimum: 1
+                                type: integer
+                            type: object
+                        type: object
                     type: object
+                  strategy:
+                    description: Decision routing strategy ("priority" for priority-based
+                      matching)
+                    enum:
+                    - priority
+                    type: string
                   tools:
                     description: Tools configuration
                     properties:
@@ -2836,8 +3330,10 @@ spec:
                   type: object
                 type: array
               vllmEndpoints:
-                description: VLLMEndpoints configuration - generates vllm_endpoints
-                  and model_config in config.yaml
+                description: |-
+                  VLLMEndpoints is a Kubernetes-native backend discovery adapter.
+                  It generates canonical config.providers.models[].backend_refs
+                  and config.routing.modelCards entries.
                 items:
                   description: VLLMEndpointSpec defines a vLLM model backend endpoint
                   properties:
@@ -2882,13 +3378,36 @@ spec:
                       required:
                       - type
                       type: object
+                    loras:
+                      description: LoRAs declares the LoRA adapters exposed for this
+                        logical model in routing.modelCards.
+                      items:
+                        description: LoRAAdapterSpec defines one LoRA adapter exposed
+                          by a VLLMEndpoint model.
+                        properties:
+                          description:
+                            description: Description provides a short human-readable
+                              summary for UI and docs surfaces.
+                            maxLength: 500
+                            type: string
+                          name:
+                            description: Name is the unique adapter identifier referenced
+                              by decision.modelRefs[].lora_name.
+                            maxLength: 100
+                            minLength: 1
+                            type: string
+                        required:
+                        - name
+                        type: object
+                      maxItems: 50
+                      type: array
                     model:
                       description: Model name as reported by vLLM (e.g., "Model-A",
                         "llama3-8b")
                       minLength: 1
                       type: string
                     name:
-                      description: Name of the endpoint (used in model_config.preferred_endpoints)
+                      description: Name of the backend ref generated under config.providers.models[].backend_refs
                       minLength: 1
                       type: string
                     reasoningFamily:

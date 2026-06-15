@@ -7,53 +7,31 @@ import (
 	"strings"
 	"time"
 
+	"github.com/vllm-project/semantic-router/e2e/pkg/fixtures"
 	"k8s.io/client-go/kubernetes"
 
-	"github.com/vllm-project/semantic-router/e2e/pkg/helpers"
 	pkgtestcases "github.com/vllm-project/semantic-router/e2e/pkg/testcases"
 )
 
 // setupServiceConnection sets up port forwarding to the configured service
 // and returns the local port to use for HTTP requests and a cleanup function
 func setupServiceConnection(ctx context.Context, client *kubernetes.Clientset, opts pkgtestcases.TestCaseOptions) (string, func(), error) {
-	svcConfig := opts.ServiceConfig
-	if svcConfig.LabelSelector == "" && svcConfig.Name == "" {
-		return "", nil, fmt.Errorf("service configuration is required: either LabelSelector or Name must be provided")
-	}
-
-	// Get the service name
-	var serviceName string
-	if svcConfig.LabelSelector != "" {
-		var err error
-		serviceName, err = helpers.GetServiceByLabelInNamespace(ctx, client, svcConfig.Namespace, svcConfig.LabelSelector, opts.Verbose)
-		if err != nil {
-			return "", nil, fmt.Errorf("failed to get service by label selector: %w", err)
-		}
-	} else {
-		serviceName = svcConfig.Name
-	}
-
-	if opts.Verbose {
-		fmt.Printf("[Test] Using service: %s/%s\n", svcConfig.Namespace, serviceName)
-	}
-
-	// Start port forwarding
-	stopFunc, err := helpers.StartPortForward(ctx, client, opts.RestConfig, svcConfig.Namespace, serviceName, svcConfig.PortMapping, opts.Verbose)
+	session, err := fixtures.OpenServiceSession(ctx, client, opts)
 	if err != nil {
-		return "", nil, fmt.Errorf("failed to start port forwarding: %w", err)
+		return "", nil, err
 	}
+	return session.LocalPort(), session.Close, nil
+}
 
-	// Wait a bit for port forwarding to stabilize
-	time.Sleep(2 * time.Second)
-
-	// Extract local port from port mapping (e.g., "8080:80" -> "8080")
-	portParts := strings.Split(svcConfig.PortMapping, ":")
-	if len(portParts) != 2 {
-		stopFunc() // Clean up before returning error
-		return "", nil, fmt.Errorf("invalid port mapping format: %s (expected localPort:servicePort)", svcConfig.PortMapping)
+// setupRouterAPIConnection sets up port forwarding to the semantic-router API service
+// This is used for accessing /api/v1/feedback and /api/v1/ratings endpoints
+// which are not exposed through the Envoy Gateway
+func setupRouterAPIConnection(ctx context.Context, client *kubernetes.Clientset, opts pkgtestcases.TestCaseOptions) (string, func(), error) {
+	session, err := fixtures.OpenRouterAPISession(ctx, client, opts)
+	if err != nil {
+		return "", nil, err
 	}
-
-	return portParts[0], stopFunc, nil
+	return session.LocalPort(), session.Close, nil
 }
 
 // Random content generation for stress tests

@@ -1,0 +1,9 @@
+routing:
+  signals:
+    modality:
+      - name: AR
+        description: Text-only autoregressive requests.
+      - name: DIFFUSION
+        description: Requests that should route into image generation flows.
+      - name: BOTH
+        description: Requests that need both text and image generation behavior.

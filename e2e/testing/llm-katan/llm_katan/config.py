@@ -17,7 +17,7 @@ class ServerConfig:
     served_model_name: Optional[str] = None
     port: int = 8000
     host: str = "0.0.0.0"
-    backend: str = "transformers"  # "transformers" or "vllm"
+    backend: str = "transformers"  # "transformers", "vllm", or "echo"
     max_tokens: int = 512
     temperature: float = 0.7
     device: str = "auto"  # "auto", "cpu", "cuda", "xpu"
@@ -39,9 +39,9 @@ class ServerConfig:
         self.host = os.getenv("YLLM_HOST", self.host)
 
         # Validate backend
-        if self.backend not in ["transformers", "vllm"]:
+        if self.backend not in ["transformers", "vllm", "echo"]:
             raise ValueError(
-                f"Invalid backend: {self.backend}. Must be 'transformers' or 'vllm'"
+                f"Invalid backend: {self.backend}. Must be 'transformers', 'vllm', or 'echo'"
             )
 
     @property

@@ -20,15 +20,25 @@ on:
         value: ${{ jobs.filter.outputs.docker }}
       make:
         value: ${{ jobs.filter.outputs.make }}
+      agent_text:
+        value: ${{ jobs.filter.outputs.agent_text }}
+      agent_exec:
+        value: ${{ jobs.filter.outputs.agent_exec }}
       # Per-profile e2e change detection
       e2e_istio:
         value: ${{ jobs.filter.outputs.e2e_istio }}
-      e2e_ai_gateway:
-        value: ${{ jobs.filter.outputs.e2e_ai_gateway }}
+      e2e_agentgateway:
+        value: ${{ jobs.filter.outputs.e2e_agentgateway }}
+      e2e_kubernetes:
+        value: ${{ jobs.filter.outputs.e2e_kubernetes }}
       e2e_aibrix:
         value: ${{ jobs.filter.outputs.e2e_aibrix }}
+      e2e_dashboard:
+        value: ${{ jobs.filter.outputs.e2e_dashboard }}
       e2e_dynamic_config:
         value: ${{ jobs.filter.outputs.e2e_dynamic_config }}
+      e2e_multimodal_routing:
+        value: ${{ jobs.filter.outputs.e2e_multimodal_routing }}
       e2e_llm_d:
         value: ${{ jobs.filter.outputs.e2e_llm_d }}
       e2e_routing_strategies:
@@ -41,6 +51,16 @@ on:
         value: ${{ jobs.filter.outputs.e2e_response_api_redis }}
       e2e_response_api_redis_cluster:
         value: ${{ jobs.filter.outputs.e2e_response_api_redis_cluster }}
+      e2e_ml_model_selection:
+        value: ${{ jobs.filter.outputs.e2e_ml_model_selection }}
+      e2e_multi_endpoint:
+        value: ${{ jobs.filter.outputs.e2e_multi_endpoint }}
+      e2e_authz_rbac:
+        value: ${{ jobs.filter.outputs.e2e_authz_rbac }}
+      e2e_streaming:
+        value: ${{ jobs.filter.outputs.e2e_streaming }}
+      e2e_anthropic_shim:
+        value: ${{ jobs.filter.outputs.e2e_anthropic_shim }}
       e2e_common:
         value: ${{ jobs.filter.outputs.e2e_common }}
 
@@ -57,17 +77,27 @@ jobs:
       ci: ${{ steps.changes.outputs.ci }}
       docker: ${{ steps.changes.outputs.docker }}
       make: ${{ steps.changes.outputs.make }}
+      agent_text: ${{ steps.changes.outputs.agent_text }}
+      agent_exec: ${{ steps.changes.outputs.agent_exec }}
       # Per-profile e2e outputs
       e2e_istio: ${{ steps.changes.outputs.e2e_istio }}
-      e2e_ai_gateway: ${{ steps.changes.outputs.e2e_ai_gateway }}
+      e2e_agentgateway: ${{ steps.changes.outputs.e2e_agentgateway }}
+      e2e_kubernetes: ${{ steps.changes.outputs.e2e_kubernetes }}
       e2e_aibrix: ${{ steps.changes.outputs.e2e_aibrix }}
+      e2e_dashboard: ${{ steps.changes.outputs.e2e_dashboard }}
       e2e_dynamic_config: ${{ steps.changes.outputs.e2e_dynamic_config }}
+      e2e_multimodal_routing: ${{ steps.changes.outputs.e2e_multimodal_routing }}
       e2e_llm_d: ${{ steps.changes.outputs.e2e_llm_d }}
       e2e_routing_strategies: ${{ steps.changes.outputs.e2e_routing_strategies }}
       e2e_production_stack: ${{ steps.changes.outputs.e2e_production_stack }}
       e2e_response_api: ${{ steps.changes.outputs.e2e_response_api }}
       e2e_response_api_redis: ${{ steps.changes.outputs.e2e_response_api_redis }}
       e2e_response_api_redis_cluster: ${{ steps.changes.outputs.e2e_response_api_redis_cluster }}
+      e2e_ml_model_selection: ${{ steps.changes.outputs.e2e_ml_model_selection }}
+      e2e_multi_endpoint: ${{ steps.changes.outputs.e2e_multi_endpoint }}
+      e2e_authz_rbac: ${{ steps.changes.outputs.e2e_authz_rbac }}
+      e2e_streaming: ${{ steps.changes.outputs.e2e_streaming }}
+      e2e_anthropic_shim: ${{ steps.changes.outputs.e2e_anthropic_shim }}
       e2e_common: ${{ steps.changes.outputs.e2e_common }}
     steps:
       - uses: actions/checkout@v4
@@ -81,6 +111,7 @@ jobs:
             core:
               - 'src/**'
               - 'candle-binding/**'
+              - 'openvino-binding/**'
               - 'bench/**'
               - 'config/**'
               - 'scripts/**'
@@ -92,6 +123,7 @@ jobs:
               - 'Cargo.lock'
               - 'pyproject.toml'
               - 'e2e/testing/llm-katan/**'
+              - 'e2e/testing/anthropic-shim/**'
             dashboard:
               - 'dashboard/**'
             website:
@@ -105,33 +137,74 @@ jobs:
             e2e:
               - 'e2e/testing/**'
               - 'e2e/**'
-              - 'scripts/quickstart.sh'
-              - 'deploy/docker-compose/**'
               - 'deploy/kubernetes/**'
               - 'deploy/kserve/**'
               - 'deploy/openshift/**'
             ci:
               - '.github/workflows/**'
             docker:
+              - 'src/vllm-sr/Dockerfile*'
+              - 'dashboard/backend/Dockerfile'
               - 'tools/docker/Dockerfile*'
               - 'docker/**'
-              - 'docker-compose*'
-              - 'deploy/docker-compose/**'
             make:
               - 'Makefile'
               - 'tools/make/**'
+            agent_text:
+              - 'AGENTS.md'
+              - 'docs/agent/**'
+              - 'tools/agent/skills/**'
+              - 'src/fleet-sim/AGENTS.md'
+              - 'src/fleet-sim/fleet_sim/optimizer/AGENTS.md'
+              - 'src/vllm-sr/cli/AGENTS.md'
+              - 'src/semantic-router/pkg/config/AGENTS.md'
+              - 'src/semantic-router/pkg/classification/AGENTS.md'
+              - 'src/semantic-router/pkg/extproc/AGENTS.md'
+              - 'deploy/operator/api/v1alpha1/AGENTS.md'
+              - 'deploy/operator/controllers/AGENTS.md'
+              - 'dashboard/frontend/src/AGENTS.md'
+              - 'dashboard/frontend/src/pages/AGENTS.md'
+              - 'dashboard/frontend/src/components/AGENTS.md'
+              - 'dashboard/backend/handlers/AGENTS.md'
+              - 'e2e/testcases/AGENTS.md'
+              - '.github/copilot-instructions.md'
+              - '.github/PULL_REQUEST_TEMPLATE.md'
+              - '.github/ISSUE_TEMPLATE/**'
+              - '.prowlabels.yaml'
+            agent_exec:
+              - 'tools/agent/*.yaml'
+              - 'tools/agent/scripts/**'
+              - 'tools/make/agent.mk'
+              - '.github/workflows/ci-changes.yml'
+              - '.github/workflows/integration-test-k8s.yml'
+              - '.github/workflows/integration-test-memory.yml'
+              - '.github/workflows/integration-test-vllm-sr-cli.yml'
+              - '.github/workflows/pre-commit.yml'
             # Per-profile e2e filters
             e2e_istio:
               - 'e2e/profiles/istio/**'
               - 'deploy/kubernetes/istio/**'
-            e2e_ai_gateway:
+            e2e_agentgateway:
+              - 'e2e/profiles/agentgateway/**'
+              - 'deploy/kubernetes/agentgateway/**'
+            e2e_kubernetes:
               - 'e2e/profiles/ai-gateway/**'
               - 'deploy/kubernetes/ai-gateway/**'
             e2e_aibrix:
               - 'e2e/profiles/aibrix/**'
               - 'deploy/kubernetes/aibrix/**'
+            e2e_dashboard:
+              - 'e2e/profiles/dashboard/**'
+              - 'e2e/testcases/dashboard_*.go'
+              - 'e2e/testcases/security_policy_apply.go'
+              - 'deploy/kubernetes/observability/dashboard/**'
+              - 'dashboard/backend/handlers/security_policy*.go'
+              - 'dashboard/backend/handlers/deploy.go'
+              - 'dashboard/backend/handlers/canonical_transport.go'
             e2e_dynamic_config:
               - 'e2e/profiles/dynamic-config/**'
+            e2e_multimodal_routing:
+              - 'e2e/profiles/multimodal-routing/**'
             e2e_llm_d:
               - 'e2e/profiles/llm-d/**'
               - 'deploy/kubernetes/llmd-base/**'
@@ -140,14 +213,44 @@ jobs:
               - 'deploy/kubernetes/routing-strategies/**'
             e2e_production_stack:
               - 'e2e/profiles/production-stack/**'
+              - 'deploy/kubernetes/ai-gateway/aigw-resources/base-model.yaml'
+              - 'deploy/kubernetes/ai-gateway/aigw-resources/gwapi-resources.yaml'
             e2e_response_api:
               - 'e2e/profiles/response-api/**'
+              - 'e2e/profiles/response-api-redis/**'
+              - 'e2e/profiles/response-api-redis-cluster/**'
+              - 'deploy/kubernetes/response-api/**'
             e2e_response_api_redis:
               - 'e2e/profiles/response-api-redis/**'
-              - 'deploy/kubernetes/response-api/**'
+              - 'deploy/kubernetes/response-api/redis.yaml'
             e2e_response_api_redis_cluster:
               - 'e2e/profiles/response-api-redis-cluster/**'
               - 'deploy/kubernetes/response-api/redis-cluster.yaml'
+            e2e_ml_model_selection:
+              - 'e2e/profiles/ml-model-selection/**'
+              - 'src/semantic-router/pkg/modelselection/**'
+              - 'src/training/model_selection/ml_model_selection/**'
+              - 'ml-binding/**'
+            e2e_multi_endpoint:
+              - 'e2e/profiles/multi-endpoint/**'
+              - 'e2e/config/config.multi-endpoint.yaml'
+              - 'scripts/multi-endpoint/**'
+            e2e_authz_rbac:
+              - 'e2e/profiles/authz-rbac/**'
+              - 'e2e/config/config.authz-rbac.yaml'
+              - 'e2e/config/authz-profile-*.yaml'
+              - 'src/semantic-router/pkg/classification/authz*.go'
+              - 'src/semantic-router/pkg/authz/**'
+              - 'dashboard/backend/handlers/security_policy*.go'
+            e2e_streaming:
+              - 'e2e/profiles/streaming/**'
+              - 'deploy/kubernetes/streaming/**'
+              - 'src/semantic-router/pkg/extproc/processor_req_body_streamed*.go'
+            e2e_anthropic_shim:
+              - 'e2e/profiles/anthropic-shim/**'
+              - 'e2e/testing/anthropic-shim/**'
+              - 'deploy/kubernetes/anthropic-backend/**'
+              - 'src/semantic-router/pkg/anthropic/outbound*.go'
             # Common e2e code that affects all profiles
             e2e_common:
               - 'e2e/pkg/**'

@@ -1,6 +1,29 @@
-openai>=1.0.0
+# Core utils
+tqdm>=4.60.0
+requests>=2.25.0
+
+# Data stuff
+
 numpy>=1.20.0
 pandas>=1.3.0
-requests>=2.25.0
 datasets>=2.10.0
-tqdm>=4.60.0
+
+# Hugging Face ecosystem (v. imp. !!!)
+transformers>=4.35.0    
+peft>=0.10.0           
+torch>=2.0.0    
+
+# Eval & metr
+
+scikit-learn>=1.3.0
+seqeval>=1.2.2
+
+# Vis
+matplotlib>=3.5.0
+seaborn>=0.11.0
+
+# Optional but very useful (logging, better error messages)
+rich>=13.0.0       
+
+# Optional: only if you plan to use OpenAI API fallback or something
+# openai>=1.0.0          # not used in current script

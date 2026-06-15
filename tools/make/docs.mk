@@ -12,6 +12,10 @@ docs-dev: docs-install ## Start documentation website in dev mode
 	@$(LOG_TARGET)
 	cd website && npm start
 
+docs-dev-zh: docs-install ## Start documentation website in dev mode
+	@$(LOG_TARGET)
+	cd website && npm run start:zh
+
 docs-build: docs-install ## Build static documentation website
 	@$(LOG_TARGET)
 	cd website && npm run build
@@ -31,6 +35,10 @@ docs-lint: ## Lint documentation website source files
 docs-lint-fix: ## Fix lint issues in documentation website source files
 	@$(LOG_TARGET)
 	cd website && npm run lint:fix
+
+docs-contributors-rank: ## Generate contributor leaderboard data
+	@$(LOG_TARGET)
+	cd website && npm run contributors:rank
 
 ##@ CRD Documentation
 
@@ -57,14 +65,14 @@ docs-crd: install-crd-ref-docs markdown-lint-fix ## Generate CRD API reference d
 			--config=.crd-ref-docs.yaml \
 			--renderer=markdown \
 			--output-path=./website/docs/api/crd-reference.md; \
-		echo "✅ CRD documentation generated at website/docs/api/crd-reference.md"; \
+		echo "CRD documentation generated at website/docs/api/crd-reference.md"; \
 	else \
 		echo "⚠️  API directory not found, generating from CRD YAML files..."; \
 		crd-ref-docs \
 			--source-path=./deploy/kubernetes/crds \
 			--renderer=markdown \
 			--output-path=./website/docs/api/crd-reference.md; \
-		echo "✅ CRD documentation generated from YAML at website/docs/api/crd-reference.md"; \
+		echo "CRD documentation generated from YAML at website/docs/api/crd-reference.md"; \
 	fi
 	@echo "📝 Adding Docusaurus frontmatter..."
 	@if ! grep -q "^---" website/docs/api/crd-reference.md; then \
@@ -76,9 +84,9 @@ docs-crd: install-crd-ref-docs markdown-lint-fix ## Generate CRD API reference d
 		echo "" >> website/docs/api/crd-reference.md.tmp; \
 		cat website/docs/api/crd-reference.md >> website/docs/api/crd-reference.md.tmp; \
 		mv website/docs/api/crd-reference.md.tmp website/docs/api/crd-reference.md; \
-		echo "✅ Frontmatter added"; \
+		echo "Frontmatter added"; \
 	else \
-		echo "✅ Frontmatter already exists"; \
+		echo "Frontmatter already exists"; \
 	fi
 
 .PHONY: docs-crd-watch
@@ -93,5 +101,4 @@ docs-crd-watch: ## Watch for CRD changes and regenerate documentation
 .PHONY: docs-all
 docs-all: docs-crd docs-build ## Generate all documentation (CRD + website)
 	@$(LOG_TARGET)
-	@echo "✅ All documentation generated successfully"
-
+	@echo "All documentation generated successfully"

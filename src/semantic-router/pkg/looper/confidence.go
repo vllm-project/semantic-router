@@ -25,11 +25,14 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"sync"
+	"time"
 
 	"github.com/openai/openai-go"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/selection"
 )
 
 // SelfVerificationPrompt is the prompt template for AutoMix self-verification
@@ -294,12 +297,27 @@ func getCostQualityTradeoff(cfg *config.ConfidenceAlgorithmConfig) float64 {
 	return cfg.CostQualityTradeoff
 }
 
+// MethodAutoMixEntailment is the confidence method name for paper-faithful
+// AutoMix self-verification (arXiv:2310.12963 §3.2). Unlike "self_verify",
+// which prompts the generation model to grade its own answer, this method
+// delegates verification to a separate entailment verifier reached over HTTP
+// via selection.AutoMixVerifierClient (reference server:
+// src/training/model_selection/rl_model_selection/automix_verifier.py).
+const MethodAutoMixEntailment = "automix_entailment"
+
 // ConfidenceEvaluator evaluates model response confidence based on configured method
 type ConfidenceEvaluator struct {
-	Method        string  // "avg_logprob", "margin", "hybrid", or "self_verify" (AutoMix)
+	Method        string  // "avg_logprob", "margin", "hybrid", "self_verify", or "automix_entailment"
 	Threshold     float64 // Threshold for the chosen method
 	LogprobWeight float64 // Weight for logprob in hybrid mode
 	MarginWeight  float64 // Weight for margin in hybrid mode
+	TokenFilter   string  // "all", "tool_call_args" — selects which tokens feed confidence
+
+	// VerifierServerURL and VerifierTimeoutSeconds carry the AutoMix
+	// entailment verifier configuration when Method == "automix_entailment".
+	// Empty/zero values when the method is anything else.
+	VerifierServerURL      string
+	VerifierTimeoutSeconds int
 }
 
 // NewConfidenceEvaluator creates a confidence evaluator from algorithm config
@@ -334,6 +352,8 @@ func NewConfidenceEvaluator(cfg *config.ConfidenceAlgorithmConfig) *ConfidenceEv
 			eval.Threshold = 0.5 // Normalized score
 		case "self_verify":
 			eval.Threshold = 0.7 // AutoMix paper default
+		case MethodAutoMixEntailment:
+			eval.Threshold = 0.7 // AutoMix paper default (k-sample entailment)
 		}
 	}
 
@@ -346,6 +366,13 @@ func NewConfidenceEvaluator(cfg *config.ConfidenceAlgorithmConfig) *ConfidenceEv
 			eval.MarginWeight = cfg.HybridWeights.MarginWeight
 		}
 	}
+
+	if cfg.TokenFilter != "" {
+		eval.TokenFilter = cfg.TokenFilter
+	}
+
+	eval.VerifierServerURL = cfg.VerifierServerURL
+	eval.VerifierTimeoutSeconds = cfg.VerifierTimeoutSeconds
 
 	return eval
 }
@@ -382,44 +409,62 @@ func normalizeMargin(margin float64) float64 {
 	return normalized
 }
 
-// Evaluate checks if the response meets the confidence threshold
-// All methods return normalized confidence in 0-1 range (1 = most confident)
-// Returns (confidence_score, meets_threshold)
+// Evaluate checks if the response meets the confidence threshold.
+// When a TokenFilter is active and filtered metrics are available, those are
+// used instead of the all-token averages.
+// All methods return normalized confidence in 0-1 range (1 = most confident).
+// Returns (confidence_score, meets_threshold).
 func (e *ConfidenceEvaluator) Evaluate(resp *ModelResponse) (float64, bool) {
+	avgLP := resp.AverageLogprob
+	avgM := resp.AverageMargin
+
+	useFiltered := e.TokenFilter != "" && e.TokenFilter != "all"
+	if useFiltered {
+		if resp.FilteredAverageLogprob != 0 {
+			avgLP = resp.FilteredAverageLogprob
+		}
+		if resp.FilteredAverageMargin != 0 {
+			avgM = resp.FilteredAverageMargin
+		}
+	}
+
 	switch e.Method {
 	case "margin":
-		// Use average margin between top-1 and top-2 logprobs
-		// Normalized to 0-1 range
-		confidence := normalizeMargin(resp.AverageMargin)
+		confidence := normalizeMargin(avgM)
 		return confidence, confidence >= e.Threshold
 
 	case "hybrid":
-		// Combine both methods with weights
-		normalizedLogprob := normalizeLogprob(resp.AverageLogprob)
-		normalizedMargin := normalizeMargin(resp.AverageMargin)
+		normalizedLogprob := normalizeLogprob(avgLP)
+		normalizedMargin := normalizeMargin(avgM)
 		confidence := e.LogprobWeight*normalizedLogprob + e.MarginWeight*normalizedMargin
 		return confidence, confidence >= e.Threshold
 
 	default: // "avg_logprob"
-		// Use average logprob across all tokens
-		// Normalized to 0-1 range
-		confidence := normalizeLogprob(resp.AverageLogprob)
+		confidence := normalizeLogprob(avgLP)
 		return confidence, confidence >= e.Threshold
 	}
 }
 
 // NeedsLogprobs returns whether this evaluator needs logprobs enabled
 func (e *ConfidenceEvaluator) NeedsLogprobs() bool {
-	// self_verify uses model self-assessment, not logprobs
-	if e.Method == "self_verify" {
+	// self_verify and automix_entailment use external verification signals
+	// rather than logprobs from the generation call.
+	switch e.Method {
+	case "self_verify", MethodAutoMixEntailment:
 		return false
 	}
-	return true // All other methods need logprobs
+	return true
 }
 
 // IsSelfVerify returns true if using AutoMix self-verification method
 func (e *ConfidenceEvaluator) IsSelfVerify() bool {
 	return e.Method == "self_verify"
+}
+
+// IsAutoMixEntailment returns true when the evaluator delegates verification
+// to an external AutoMix entailment server (arXiv:2310.12963 §3.2).
+func (e *ConfidenceEvaluator) IsAutoMixEntailment() bool {
+	return e.Method == MethodAutoMixEntailment
 }
 
 // NeedsTopLogprobs returns the number of top_logprobs needed (0 if not needed)
@@ -441,6 +486,9 @@ func (l *ConfidenceLooper) Execute(ctx context.Context, req *Request) (*Response
 	if len(req.ModelRefs) == 0 {
 		return nil, fmt.Errorf("no models configured")
 	}
+
+	// Set decision name in client for header transmission
+	l.client.SetDecisionName(req.DecisionName)
 
 	// Get config from algorithm
 	onError := "skip"
@@ -469,20 +517,49 @@ func (l *ConfidenceLooper) Execute(ctx context.Context, req *Request) (*Response
 	case "cost":
 		// AutoMix-style: order by pricing (cheapest first)
 		sortedRefs = sortModelRefsByCost(req.ModelRefs, req.ModelParams)
-		logging.Infof("[ConfidenceLooper] Using cost-based escalation order (cheapest first)")
+		logging.ComponentDebugEvent("looper", "confidence_escalation_order_selected", map[string]interface{}{
+			"looper":           "confidence",
+			"decision":         req.DecisionName,
+			"escalation_order": escalationOrder,
+			"strategy":         "cost",
+		})
 	case "automix":
 		// POMDP-optimized: cost-quality tradeoff
 		tradeoff := getCostQualityTradeoff(sizeAwareCfg)
 		sortedRefs = sortModelRefsByAutoMix(req.ModelRefs, req.ModelParams, tradeoff)
-		logging.Infof("[ConfidenceLooper] Using AutoMix escalation order (tradeoff=%.2f)", tradeoff)
+		logging.ComponentDebugEvent("looper", "confidence_escalation_order_selected", map[string]interface{}{
+			"looper":           "confidence",
+			"decision":         req.DecisionName,
+			"escalation_order": escalationOrder,
+			"strategy":         "automix",
+			"tradeoff":         tradeoff,
+		})
 	default:
 		// Default: order by param_size (smallest first)
 		sortedRefs = sortModelRefsBySize(req.ModelRefs, req.ModelParams)
-		logging.Infof("[ConfidenceLooper] Using size-based escalation order (smallest first)")
+		logging.ComponentDebugEvent("looper", "confidence_escalation_order_selected", map[string]interface{}{
+			"looper":           "confidence",
+			"decision":         req.DecisionName,
+			"escalation_order": escalationOrder,
+			"strategy":         "size",
+		})
 	}
 
-	logging.Infof("[ConfidenceLooper] Starting with %d models, method=%s, threshold=%.4f, on_error=%s, streaming=%v, escalation=%s",
-		len(sortedRefs), evaluator.Method, evaluator.Threshold, onError, req.IsStreaming, escalationOrder)
+	tokenFilterLabel := "all"
+	if evaluator.TokenFilter != "" {
+		tokenFilterLabel = evaluator.TokenFilter
+	}
+	logging.ComponentEvent("looper", "execution_started", map[string]interface{}{
+		"looper":           "confidence",
+		"decision":         req.DecisionName,
+		"candidate_models": len(sortedRefs),
+		"method":           evaluator.Method,
+		"threshold":        evaluator.Threshold,
+		"token_filter":     tokenFilterLabel,
+		"on_error":         onError,
+		"streaming":        req.IsStreaming,
+		"escalation_order": escalationOrder,
+	})
 
 	// Helper to get param_size for logging
 	getParamSize := func(modelName string) string {
@@ -500,7 +577,13 @@ func (l *ConfidenceLooper) Execute(ctx context.Context, req *Request) (*Response
 		if ref.LoRAName != "" {
 			modelName = ref.LoRAName
 		}
-		logging.Debugf("[ConfidenceLooper] Model order[%d]: %s (param_size=%s)", i, modelName, getParamSize(ref.Model))
+		logging.ComponentDebugEvent("looper", "confidence_model_order", map[string]interface{}{
+			"looper":     "confidence",
+			"decision":   req.DecisionName,
+			"index":      i,
+			"model_ref":  modelName,
+			"param_size": getParamSize(ref.Model),
+		})
 	}
 
 	var lastResponse *ModelResponse
@@ -522,16 +605,30 @@ func (l *ConfidenceLooper) Execute(ctx context.Context, req *Request) (*Response
 			}
 		}
 
-		logging.Infof("[ConfidenceLooper] Trying model: %s (iteration=%d)", modelName, iteration)
+		logging.ComponentDebugEvent("looper", "model_dispatch_started", map[string]interface{}{
+			"looper":    "confidence",
+			"decision":  req.DecisionName,
+			"model_ref": modelName,
+			"iteration": iteration,
+		})
 
-		resp, err := l.client.CallModel(ctx, req.OriginalRequest, modelName, false, iteration, logprobsCfg, accessKey)
+		resp, err := l.client.CallModel(ctx, req.OriginalRequest, modelName, req.IsStreaming, iteration, logprobsCfg, accessKey)
 		if err != nil {
-			logging.Errorf("[ConfidenceLooper] Model %s failed: %v", modelName, err)
+			logging.ComponentWarnEvent("looper", "model_dispatch_failed", map[string]interface{}{
+				"looper":    "confidence",
+				"decision":  req.DecisionName,
+				"model_ref": modelName,
+				"iteration": iteration,
+				"error":     err.Error(),
+			})
 			if onError == "fail" {
 				return nil, fmt.Errorf("model %s failed: %w", modelName, err)
 			}
 			continue
 		}
+
+		// Apply token filter before confidence evaluation (e.g., exclude JSON boilerplate)
+		ApplyTokenFilter(resp, evaluator.TokenFilter)
 
 		lastResponse = resp
 		modelsUsed = append(modelsUsed, modelName)
@@ -540,24 +637,88 @@ func (l *ConfidenceLooper) Execute(ctx context.Context, req *Request) (*Response
 		var meetsThreshold bool
 
 		// Evaluate confidence using configured method
-		if evaluator.IsSelfVerify() {
+		switch {
+		case evaluator.IsAutoMixEntailment():
+			// AutoMix entailment cascade (arXiv:2310.12963 §3.2): delegate
+			// verification to an external few-shot entailment server.
+			var verifyErr error
+			confidence, meetsThreshold, verifyErr = l.performAutoMixEntailment(ctx, req, evaluator, modelName, resp.Content)
+			if verifyErr != nil {
+				logging.ComponentWarnEvent("looper", "automix_entailment_failed", map[string]interface{}{
+					"looper":    "confidence",
+					"decision":  req.DecisionName,
+					"model_ref": modelName,
+					"error":     verifyErr.Error(),
+				})
+				if onError == "fail" {
+					return nil, fmt.Errorf("automix_entailment verification for %s failed: %w", modelName, verifyErr)
+				}
+			}
+			logging.ComponentDebugEvent("looper", "automix_entailment_completed", map[string]interface{}{
+				"looper":     "confidence",
+				"decision":   req.DecisionName,
+				"model_ref":  modelName,
+				"confidence": confidence,
+				"threshold":  evaluator.Threshold,
+				"accepted":   meetsThreshold,
+			})
+		case evaluator.IsSelfVerify():
 			// AutoMix self-verification: ask the model to evaluate its own answer
 			confidence, meetsThreshold = l.performSelfVerification(ctx, req, modelName, resp.Content, accessKey, evaluator.Threshold)
-			logging.Infof("[ConfidenceLooper] Model %s: self-verification confidence=%.4f, threshold=%.4f, meets=%v",
-				modelName, confidence, evaluator.Threshold, meetsThreshold)
-		} else {
-			// Standard logprob-based confidence evaluation
+			logging.ComponentDebugEvent("looper", "self_verification_completed", map[string]interface{}{
+				"looper":     "confidence",
+				"decision":   req.DecisionName,
+				"model_ref":  modelName,
+				"confidence": confidence,
+				"threshold":  evaluator.Threshold,
+				"accepted":   meetsThreshold,
+			})
+		default:
 			confidence, meetsThreshold = evaluator.Evaluate(resp)
-			logging.Infof("[ConfidenceLooper] Model %s: confidence=%.4f (method=%s), threshold=%.4f, meets=%v",
-				modelName, confidence, evaluator.Method, evaluator.Threshold, meetsThreshold)
+			if evaluator.TokenFilter != "" && evaluator.TokenFilter != "all" && resp.FilteredAverageLogprob != 0 {
+				logging.ComponentDebugEvent("looper", "confidence_evaluated", map[string]interface{}{
+					"looper":             "confidence",
+					"decision":           req.DecisionName,
+					"model_ref":          modelName,
+					"confidence":         confidence,
+					"method":             evaluator.Method,
+					"token_filter":       evaluator.TokenFilter,
+					"threshold":          evaluator.Threshold,
+					"accepted":           meetsThreshold,
+					"unfiltered_logprob": resp.AverageLogprob,
+				})
+			} else {
+				logging.ComponentDebugEvent("looper", "confidence_evaluated", map[string]interface{}{
+					"looper":     "confidence",
+					"decision":   req.DecisionName,
+					"model_ref":  modelName,
+					"confidence": confidence,
+					"method":     evaluator.Method,
+					"threshold":  evaluator.Threshold,
+					"accepted":   meetsThreshold,
+				})
+			}
 		}
 
 		if meetsThreshold {
-			logging.Infof("[ConfidenceLooper] Confidence acceptable, using model %s", modelName)
+			logging.ComponentEvent("looper", "execution_completed", map[string]interface{}{
+				"looper":         "confidence",
+				"decision":       req.DecisionName,
+				"models_used":    modelsUsed,
+				"iterations":     iteration,
+				"selected_model": modelName,
+				"reason":         "threshold_met",
+			})
 			break
 		}
 
-		logging.Infof("[ConfidenceLooper] Confidence below threshold, trying next model")
+		logging.ComponentDebugEvent("looper", "confidence_threshold_not_met", map[string]interface{}{
+			"looper":     "confidence",
+			"decision":   req.DecisionName,
+			"model_ref":  modelName,
+			"confidence": confidence,
+			"threshold":  evaluator.Threshold,
+		})
 	}
 
 	if lastResponse == nil {
@@ -571,6 +732,7 @@ func (l *ConfidenceLooper) Execute(ctx context.Context, req *Request) (*Response
 		CombinedContent: lastResponse.Content,
 		FinalModel:      lastResponse.Model,
 		AverageLogprob:  lastResponse.AverageLogprob,
+		HasToolCalls:    lastResponse.HasToolCalls,
 	}
 
 	if req.IsStreaming {
@@ -607,7 +769,10 @@ func (l *ConfidenceLooper) performSelfVerification(
 		return 0.5, false
 	}
 
-	logging.Infof("[SelfVerify] Asking %s to verify its own response", modelName)
+	logging.ComponentDebugEvent("looper", "self_verification_started", map[string]interface{}{
+		"looper":    "confidence",
+		"model_ref": modelName,
+	})
 
 	// Call the same model to evaluate its answer
 	verifyResp, err := l.client.CallModel(ctx, verifyRequest, modelName, false, 0, nil, accessKey)
@@ -628,8 +793,12 @@ func (l *ConfidenceLooper) performSelfVerification(
 		return 0.5, false
 	}
 
-	logging.Infof("[SelfVerify] Model self-assessment: confidence=%.2f, reason=%s",
-		result.Confidence, result.Reason)
+	logging.ComponentDebugEvent("looper", "self_verification_result_parsed", map[string]interface{}{
+		"looper":     "confidence",
+		"model_ref":  modelName,
+		"confidence": result.Confidence,
+		"reason":     result.Reason,
+	})
 
 	return result.Confidence, result.Confidence >= threshold
 }
@@ -716,6 +885,71 @@ func (l *ConfidenceLooper) buildSelfVerificationRequest(verificationPrompt strin
 	}
 
 	return &params
+}
+
+// automixVerifierCache memoises one selection.AutoMixVerifierClient per
+// (server_url, timeout_seconds) pair so repeated requests share a single
+// http.Client (and its underlying connection pool) instead of reconstructing
+// one per evaluation.
+var automixVerifierCache sync.Map
+
+type automixVerifierCacheKey struct {
+	url            string
+	timeoutSeconds int
+}
+
+func getAutoMixVerifierClient(serverURL string, timeoutSeconds int) *selection.AutoMixVerifierClient {
+	key := automixVerifierCacheKey{url: serverURL, timeoutSeconds: timeoutSeconds}
+	if existing, ok := automixVerifierCache.Load(key); ok {
+		return existing.(*selection.AutoMixVerifierClient)
+	}
+	client := selection.NewAutoMixVerifierClient(serverURL)
+	if timeoutSeconds > 0 {
+		client.SetTimeout(time.Duration(timeoutSeconds) * time.Second)
+	}
+	actual, _ := automixVerifierCache.LoadOrStore(key, client)
+	return actual.(*selection.AutoMixVerifierClient)
+}
+
+// performAutoMixEntailment runs the AutoMix paper-faithful self-verification
+// step (arXiv:2310.12963 §3.2) for one candidate model: it sends the original
+// question and the candidate's answer to an external entailment verifier and
+// returns (confidence, accepted, err). A non-nil err signals an unrecoverable
+// verifier failure; the caller decides how to react via the looper's on_error
+// policy. Missing or malformed configuration is reported as a hard error so it
+// fails loudly at the first request rather than silently degrading.
+func (l *ConfidenceLooper) performAutoMixEntailment(
+	ctx context.Context,
+	req *Request,
+	evaluator *ConfidenceEvaluator,
+	modelName string,
+	responseContent string,
+) (float64, bool, error) {
+	if evaluator.VerifierServerURL == "" {
+		return 0, false, fmt.Errorf("confidence_method=%s requires verifier_server_url", MethodAutoMixEntailment)
+	}
+
+	question := l.extractQuestionFromRequest(req.OriginalRequest)
+	if question == "" {
+		return 0, false, fmt.Errorf("could not extract user question from request")
+	}
+
+	client := getAutoMixVerifierClient(evaluator.VerifierServerURL, evaluator.VerifierTimeoutSeconds)
+
+	logging.ComponentDebugEvent("looper", "automix_entailment_started", map[string]interface{}{
+		"looper":     "confidence",
+		"decision":   req.DecisionName,
+		"model_ref":  modelName,
+		"server_url": evaluator.VerifierServerURL,
+	})
+
+	verifyResp, err := client.Verify(ctx, question, responseContent, "", evaluator.Threshold)
+	if err != nil {
+		return 0, false, fmt.Errorf("verifier call failed: %w", err)
+	}
+
+	accepted := verifyResp.Confidence >= evaluator.Threshold
+	return verifyResp.Confidence, accepted, nil
 }
 
 // formatConfidenceJSONResponse creates response with confidence algorithm type

@@ -1,0 +1,7 @@
+plugin:
+  type: tool_selection
+  configuration:
+    enabled: true
+    mode: filter
+    relevance_threshold: 0.25
+    preserve_count: 2

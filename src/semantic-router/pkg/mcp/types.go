@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	"github.com/mark3labs/mcp-go/mcp"
+	"github.com/openai/openai-go"
 )
 
 // JSONRPCVersion represents the JSON-RPC version
@@ -396,60 +397,28 @@ func CreateToolResult(content []ContentBlock, isError bool) *ToolResult {
 	}
 }
 
-// Helper functions for OpenAI compatibility
-
-// These types are defined in client.go to avoid duplication
-
-// OpenAITool represents an OpenAI-compatible tool definition
-type OpenAITool struct {
-	Type     string             `json:"type"`
-	Function OpenAIToolFunction `json:"function"`
-}
-
-// OpenAIToolFunction represents the function part of an OpenAI tool
-type OpenAIToolFunction struct {
-	Name        string                 `json:"name"`
-	Description string                 `json:"description,omitempty"`
-	Parameters  map[string]interface{} `json:"parameters,omitempty"`
-}
-
-// OpenAIToolCall represents an OpenAI tool call
-type OpenAIToolCall struct {
-	ID       string                 `json:"id"`
-	Type     string                 `json:"type"`
-	Function OpenAIToolCallFunction `json:"function"`
-}
-
-// OpenAIToolCallFunction represents the function call part
-type OpenAIToolCallFunction struct {
-	Name      string `json:"name"`
-	Arguments string `json:"arguments"`
-}
-
-// ConvertToolToOpenAI converts an MCP tool to OpenAI format
-func ConvertToolToOpenAI(tool mcp.Tool) OpenAITool {
-	openAITool := OpenAITool{
-		Type: "function",
-		Function: OpenAIToolFunction{
+// ConvertToolToOpenAI converts an MCP tool to the official OpenAI SDK tool param type.
+func ConvertToolToOpenAI(tool mcp.Tool) openai.ChatCompletionToolParam {
+	param := openai.ChatCompletionToolParam{
+		Function: openai.FunctionDefinitionParam{
 			Name:        tool.Name,
-			Description: tool.Description,
+			Description: openai.String(tool.Description),
 		},
 	}
 
-	// Convert input schema to OpenAI parameters format
 	if tool.InputSchema.Type != "" || len(tool.InputSchema.Properties) > 0 {
-		openAITool.Function.Parameters = map[string]interface{}{
+		param.Function.Parameters = openai.FunctionParameters{
 			"type":       "object",
 			"properties": tool.InputSchema.Properties,
 			"required":   tool.InputSchema.Required,
 		}
 	}
 
-	return openAITool
+	return param
 }
 
-// ConvertOpenAIToMCPCall converts an OpenAI tool call to MCP format
-func ConvertOpenAIToMCPCall(openAICall OpenAIToolCall) (mcp.CallToolRequest, error) {
+// ConvertOpenAIToMCPCall converts an OpenAI SDK tool call to MCP format.
+func ConvertOpenAIToMCPCall(openAICall openai.ChatCompletionMessageToolCall) (mcp.CallToolRequest, error) {
 	var arguments map[string]interface{}
 	if openAICall.Function.Arguments != "" {
 		if err := json.Unmarshal([]byte(openAICall.Function.Arguments), &arguments); err != nil {
@@ -462,20 +431,13 @@ func ConvertOpenAIToMCPCall(openAICall OpenAIToolCall) (mcp.CallToolRequest, err
 		}
 	}
 
-	// Convert map[string]interface{} to map[string]string for MCP library compatibility
-	stringArgs := make(map[string]string)
+	interfaceArgs := make(map[string]interface{})
 	for k, v := range arguments {
 		if str, ok := v.(string); ok {
-			stringArgs[k] = str
+			interfaceArgs[k] = str
 		} else {
-			stringArgs[k] = fmt.Sprintf("%v", v)
+			interfaceArgs[k] = fmt.Sprintf("%v", v)
 		}
-	}
-
-	// Convert string args to map[string]interface{} for MCP API
-	interfaceArgs := make(map[string]interface{})
-	for k, v := range stringArgs {
-		interfaceArgs[k] = v
 	}
 
 	req := mcp.CallToolRequest{}
@@ -522,6 +484,15 @@ func ConvertMCPResultToOpenAI(result *mcp.CallToolResult) map[string]interface{}
 	}
 }
 
+func toolInList(name string, list []string) bool {
+	for _, entry := range list {
+		if name == entry {
+			return true
+		}
+	}
+	return false
+}
+
 // FilterTools applies tool filtering based on the configuration
 func FilterTools(tools []mcp.Tool, filter ToolFilter) []mcp.Tool {
 	if filter.Mode == "" || len(filter.List) == 0 {
@@ -529,34 +500,18 @@ func FilterTools(tools []mcp.Tool, filter ToolFilter) []mcp.Tool {
 	}
 
 	filtered := make([]mcp.Tool, 0)
-
 	for _, tool := range tools {
-		shouldInclude := false
-
-		if filter.Mode == "allow" {
-			// In allow mode, only include tools in the list
-			for _, allowedTool := range filter.List {
-				if tool.Name == allowedTool {
-					shouldInclude = true
-					break
-				}
+		switch filter.Mode {
+		case "allow":
+			if toolInList(tool.Name, filter.List) {
+				filtered = append(filtered, tool)
 			}
-		} else if filter.Mode == "block" {
-			// In block mode, include all tools except those in the list
-			shouldInclude = true
-			for _, blockedTool := range filter.List {
-				if tool.Name == blockedTool {
-					shouldInclude = false
-					break
-				}
+		case "block":
+			if !toolInList(tool.Name, filter.List) {
+				filtered = append(filtered, tool)
 			}
-		}
-
-		if shouldInclude {
-			filtered = append(filtered, tool)
 		}
 	}
-
 	return filtered
 }
 

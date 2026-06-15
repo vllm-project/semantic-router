@@ -1,0 +1,415 @@
+"""Algorithm configuration models for multi-model orchestration."""
+
+from pydantic import BaseModel, ConfigDict, Field
+
+
+class ModelRef(BaseModel):
+    """Model reference in decision."""
+
+    model: str
+    use_reasoning: bool | None = False
+    reasoning_description: str | None = None
+    reasoning_effort: str | None = (
+        None  # Model-specific reasoning effort level (low, medium, high)
+    )
+    lora_name: str | None = None  # LoRA adapter name (if using LoRA)
+    weight: float | None = None
+
+
+class HybridWeightsConfig(BaseModel):
+    """Weights configuration for hybrid confidence method."""
+
+    logprob_weight: float | None = 0.5  # Weight for avg_logprob (default: 0.5)
+    margin_weight: float | None = 0.5  # Weight for margin (default: 0.5)
+
+
+class ConfidenceAlgorithmConfig(BaseModel):
+    """Configuration for confidence algorithm.
+
+    This algorithm tries smaller models first and escalates to larger models if confidence is low.
+    """
+
+    # Confidence evaluation method
+    # - "avg_logprob": Use average logprob across all tokens (default)
+    # - "margin": Use average margin between top-1 and top-2 logprobs (more accurate)
+    # - "hybrid": Use weighted combination of both methods
+    confidence_method: str | None = "avg_logprob"
+
+    # Threshold for escalation (meaning depends on confidence_method)
+    # For avg_logprob: negative, closer to 0 = more confident (default: -1.0)
+    # For margin: positive, higher = more confident (default: 0.5)
+    # For hybrid: 0-1 normalized score (default: 0.5)
+    threshold: float | None = None
+
+    # Hybrid weights (only used when confidence_method="hybrid")
+    hybrid_weights: HybridWeightsConfig | None = None
+
+    # Behavior on model call failure: "skip" or "fail"
+    on_error: str | None = "skip"
+
+
+class RatingsAlgorithmConfig(BaseModel):
+    """Configuration for the ratings looper algorithm."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    max_concurrent: int | None = Field(default=None, ge=1)
+    on_error: str | None = "skip"
+
+
+class ReMoMAlgorithmConfig(BaseModel):
+    """Configuration for ReMoM (Reasoning for Mixture of Models) algorithm.
+
+    This algorithm performs multi-round parallel reasoning with intelligent synthesis.
+    Inspired by PaCoRe (arXiv:2601.05593) but extended to support mixture of models.
+    """
+
+    # Breadth schedule: array of parallel calls per round
+    # e.g., [32, 4] means 32 calls in round 1, 4 in round 2, then 1 final
+    breadth_schedule: list[int]
+
+    # Model distribution strategy: "weighted", "equal", or "first_only"
+    model_distribution: str | None = "weighted"
+
+    # Temperature for model calls (default: 1.0 for diverse exploration)
+    temperature: float | None = 1.0
+
+    # Whether to include reasoning content in synthesis prompts
+    include_reasoning: bool | None = False
+
+    # Compaction strategy: "full" or "last_n_tokens"
+    compaction_strategy: str | None = "full"
+
+    # Number of tokens to keep when using last_n_tokens compaction
+    compaction_tokens: int | None = 1000
+
+    # Custom synthesis template (uses default if not provided)
+    synthesis_template: str | None = None
+
+    # Maximum concurrent model calls per round
+    max_concurrent: int | None = None
+
+    # Behavior on model call failure: "skip" or "fail"
+    on_error: str | None = "skip"
+
+    # Random seed for shuffling responses (for reproducibility)
+    shuffle_seed: int | None = 42
+
+    # Whether to include intermediate responses in the response body
+    include_intermediate_responses: bool | None = True
+
+    # Maximum number of responses to keep per round (for memory efficiency)
+    max_responses_per_round: int | None = None
+
+
+class LatencyAwareAlgorithmConfig(BaseModel):
+    """Configuration for latency_aware algorithm."""
+
+    tpot_percentile: int | None = None
+    ttft_percentile: int | None = None
+    description: str | None = None
+
+
+# =============================================================================
+# Model Selection Algorithm Configs
+# Reference papers:
+#   - Elo: RouteLLM (arXiv:2406.18665) - Bradley-Terry model
+#   - RouterDC: Query-Based Router by Dual Contrastive Learning (arXiv:2409.19886)
+#   - AutoMix: Automatically Mixing Language Models (arXiv:2310.12963)
+#   - Hybrid: Cost-Efficient Quality-Aware Query Routing (arXiv:2404.14618)
+# =============================================================================
+
+
+class EloSelectionConfig(BaseModel):
+    """Configuration for Elo rating-based model selection.
+
+    Uses Bradley-Terry model for pairwise comparisons, learning from user feedback.
+    """
+
+    # Starting Elo rating for new models (default: 1500)
+    initial_rating: float | None = Field(default=1500.0, ge=0)
+
+    # Controls rating volatility - higher = faster adaptation (default: 32)
+    k_factor: float | None = Field(default=32.0, ge=1, le=100)
+
+    # Enable per-category Elo ratings (default: true)
+    category_weighted: bool | None = True
+
+    # Time decay for old comparisons (0-1, 0 = no decay)
+    decay_factor: float | None = Field(default=0.0, ge=0, le=1)
+
+    # Minimum comparisons before rating is stable
+    min_comparisons: int | None = Field(default=5, ge=0)
+
+    # Cost consideration factor (0 = ignore cost)
+    cost_scaling_factor: float | None = Field(default=0.0, ge=0)
+
+    # File path for persisting Elo ratings (optional)
+    storage_path: str | None = None
+
+    # Auto-save interval (e.g., "5m", "30s")
+    auto_save_interval: str | None = "1m"
+
+
+class RouterDCSelectionConfig(BaseModel):
+    """Configuration for RouterDC (Dual-Contrastive) model selection.
+
+    Matches queries to models using embedding similarity based on model descriptions.
+    """
+
+    # Temperature for softmax scaling (default: 0.07)
+    temperature: float | None = Field(default=0.07, gt=0)
+
+    # Embedding dimension size (default: 768)
+    dimension_size: int | None = Field(default=768, gt=0)
+
+    # Minimum similarity threshold for valid matches
+    min_similarity: float | None = Field(default=0.3, ge=0, le=1)
+
+    # Enable query-side contrastive learning
+    use_query_contrastive: bool | None = False
+
+    # Enable model-side contrastive learning
+    use_model_contrastive: bool | None = False
+
+    # Require all models to have descriptions
+    require_descriptions: bool | None = False
+
+    # Include capability tags in embeddings
+    use_capabilities: bool | None = False
+
+
+class AutoMixSelectionConfig(BaseModel):
+    """Configuration for AutoMix (POMDP-based) model selection.
+
+    Optimizes cost-quality tradeoff using Partially Observable MDP.
+    """
+
+    # Self-verification confidence threshold (default: 0.7)
+    verification_threshold: float | None = Field(default=0.7, ge=0, le=1)
+
+    # Maximum escalation attempts (default: 2)
+    max_escalations: int | None = Field(default=2, ge=0)
+
+    # Enable cost-quality tradeoff optimization
+    cost_aware_routing: bool | None = True
+
+    # Balance between cost (1.0) and quality (0.0) (default: 0.3)
+    cost_quality_tradeoff: float | None = Field(default=0.3, ge=0, le=1)
+
+    # POMDP discount factor (default: 0.95)
+    discount_factor: float | None = Field(default=0.95, ge=0, le=1)
+
+    # Use logprobs for confidence verification
+    use_logprob_verification: bool | None = True
+
+
+class HybridSelectionConfig(BaseModel):
+    """Configuration for Hybrid model selection.
+
+    Combines multiple selection methods with configurable weights.
+    """
+
+    # Weight for Elo rating contribution (0-1)
+    elo_weight: float | None = Field(default=0.3, ge=0, le=1)
+
+    # Weight for RouterDC embedding similarity (0-1)
+    router_dc_weight: float | None = Field(default=0.3, ge=0, le=1)
+
+    # Weight for AutoMix POMDP value (0-1)
+    automix_weight: float | None = Field(default=0.2, ge=0, le=1)
+
+    # Weight for cost consideration (0-1)
+    cost_weight: float | None = Field(default=0.2, ge=0, le=1)
+
+    # Quality gap threshold for escalation
+    quality_gap_threshold: float | None = Field(default=0.1, ge=0, le=1)
+
+    # Normalize scores before combination
+    normalize_scores: bool | None = True
+
+
+class SessionAwareSelectionConfig(BaseModel):
+    """Configuration for session-aware agentic model selection."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    base_method: str | None = "hybrid"
+    idle_timeout_seconds: int | None = Field(default=300, ge=0)
+    min_turns_before_switch: int | None = Field(default=1, ge=0)
+    switch_margin: float | None = Field(default=0.05, ge=0)
+    stay_bias: float | None = Field(default=0.10, ge=0)
+    tool_loop_hard_lock: bool | None = True
+    context_portability_hard_lock: bool | None = True
+    decision_drift_reset: bool | None = True
+    tool_loop_stay_bias: float | None = Field(default=0.35, ge=0)
+    prefix_cache_weight: float | None = Field(default=0.20, ge=0)
+    handoff_penalty_weight: float | None = Field(default=1.0, ge=0)
+    default_handoff_penalty: float | None = Field(default=0.05, ge=0)
+    quality_gap_multiplier: float | None = Field(default=1.0, ge=0)
+    max_cache_cost_multiplier: float | None = Field(default=2.5, ge=1)
+    switch_history_weight: float | None = Field(default=0.04, ge=0)
+    remaining_turn_prior_weight: float | None = Field(default=1.0, ge=0)
+    remaining_turn_prior_horizon: int | None = Field(default=8, ge=1)
+    min_remaining_turn_prior_samples: int | None = Field(default=3, ge=0)
+
+
+class MultiFactorWeightsConfig(BaseModel):
+    """Weights for the multi_factor selector."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    quality: float | None = Field(default=None, ge=0)
+    latency: float | None = Field(default=None, ge=0)
+    cost: float | None = Field(default=None, ge=0)
+    load: float | None = Field(default=None, ge=0)
+
+
+class MultiFactorSLOConfig(BaseModel):
+    """SLO ceilings for the multi_factor selector."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    max_tpot_ms: float | None = Field(default=None, ge=0)
+    max_ttft_ms: float | None = Field(default=None, ge=0)
+    max_cost_per_1m: float | None = Field(default=None, ge=0)
+    max_inflight: int | None = Field(default=None, ge=0)
+
+
+class MultiFactorSelectionConfig(BaseModel):
+    """Configuration for the canonical multi_factor selector."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    weights: MultiFactorWeightsConfig | None = None
+    slo: MultiFactorSLOConfig | None = None
+    latency_percentile: int | None = Field(default=95, ge=1, le=100)
+    on_no_candidates: str | None = "cheapest"
+
+
+# =============================================================================
+# RL-Driven Model Selection Algorithm Configs (from PR #1196 / Issue #994)
+# Reference papers:
+#   - Thompson Sampling: Exploration/exploitation via posterior sampling
+#   - GMTRouter: Heterogeneous GNN for personalized routing (arXiv:2511.08590)
+#   - Router-R1: LLM-as-router with think/route actions (arXiv:2506.09033)
+# =============================================================================
+
+
+class RLDrivenSelectionConfig(BaseModel):
+    """Configuration for the canonical rl_driven selection algorithm.
+
+    Matches decision.algorithm.rl_driven in the router config contract.
+    """
+
+    exploration_rate: float | None = Field(default=0.3, ge=0, le=1)
+    exploration_decay: float | None = Field(default=0.99, ge=0, le=1)
+    min_exploration: float | None = Field(default=0.05, ge=0, le=1)
+    use_thompson_sampling: bool | None = True
+    enable_personalization: bool | None = True
+    personalization_blend: float | None = Field(default=0.7, ge=0, le=1)
+    session_context_weight: float | None = Field(default=0.3, ge=0, le=1)
+    implicit_feedback_weight: float | None = Field(default=0.5, ge=0, le=1)
+    cost_awareness: bool | None = True
+    cost_weight: float | None = Field(default=0.2, ge=0)
+    storage_path: str | None = None
+    auto_save_interval: str | None = "30s"
+    use_router_r1_rewards: bool | None = True
+    cost_reward_alpha: float | None = Field(default=0.3, ge=0, le=1)
+    format_reward_penalty: float | None = -1.0
+    enable_llm_routing: bool | None = False
+    router_r1_server_url: str | None = None
+    llm_routing_fallback: str | None = "thompson"
+    enable_multi_round_aggregation: bool | None = False
+    max_aggregation_rounds: int | None = Field(default=None, ge=1)
+
+
+class GMTRouterConfig(BaseModel):
+    """Configuration for GMTRouter (Graph-based) model selection.
+
+    Uses heterogeneous GNN for personalized routing decisions.
+    """
+
+    # Canonical router config fields.
+    enable_personalization: bool | None = True
+    history_sample_size: int | None = Field(default=5, gt=0)
+    embedding_dimension: int | None = Field(default=768, gt=0)
+    num_gnn_layers: int | None = Field(default=2, ge=1, le=5)
+    attention_heads: int | None = Field(default=8, ge=1)
+    min_interactions_for_personalization: int | None = Field(default=3, ge=0)
+    max_interactions_per_user: int | None = Field(default=100, gt=0)
+    feedback_types: list[str] | None = Field(
+        default_factory=lambda: ["rating", "ranking"]
+    )
+    model_path: str | None = None
+    storage_path: str | None = None
+
+    # Legacy CLI aliases retained for compatibility with older local scripts.
+    # Number of GNN layers (default: 2)
+    num_layers: int | None = Field(default=2, ge=1, le=5)
+
+    # Hidden dimension size (default: 64)
+    hidden_dim: int | None = Field(default=64, gt=0)
+
+    # Attention heads (default: 4)
+    num_heads: int | None = Field(default=4, ge=1)
+
+    # Enable user preference learning
+    learn_preferences: bool | None = True
+
+
+class AlgorithmConfig(BaseModel):
+    """Algorithm configuration for multi-model decisions.
+
+    Specifies how multiple models in a decision should be orchestrated.
+
+    Supports three categories of algorithms:
+
+    1. Looper algorithms (multi-model execution):
+       - "confidence": Try smaller models first, escalate if confidence is low
+       - "ratings": Coordinate bounded candidate execution
+       - "remom": Multi-round parallel reasoning with intelligent synthesis
+
+    2. Selection algorithms (single model selection from candidates):
+       - "static": Use first model (default)
+       - "elo": Use Elo rating system with Bradley-Terry model
+       - "router_dc": Use embedding similarity for query-model matching
+       - "automix": Use POMDP-based cost-quality optimization
+       - "hybrid": Combine multiple selection methods
+       - "knn", "kmeans", "svm", "mlp": Shared ML model-selection selectors
+       - "multi_factor": Combine quality, latency, cost, and load
+       - "session_aware": Agentic long-horizon routing with router-owned session memory
+
+    3. RL-driven selection algorithms:
+       - "rl_driven": Canonical online learning with optional Thompson / Router-R1 modes
+       - "gmtrouter": Graph neural network for personalized routing
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    # Algorithm type: looper ("confidence", "ratings", "remom") or
+    # selection ("static", "elo", "router_dc", "automix", "hybrid",
+    #            "knn", "kmeans", "svm", "mlp", "multi_factor",
+    #            "rl_driven", "gmtrouter", "latency_aware", "session_aware")
+    type: str
+
+    # Looper algorithm configurations
+    confidence: ConfidenceAlgorithmConfig | None = None
+    ratings: RatingsAlgorithmConfig | None = None
+    remom: ReMoMAlgorithmConfig | None = None
+    latency_aware: LatencyAwareAlgorithmConfig | None = None
+
+    # Selection algorithm configurations (from PR #1089, #1104)
+    elo: EloSelectionConfig | None = None
+    router_dc: RouterDCSelectionConfig | None = None
+    automix: AutoMixSelectionConfig | None = None
+    hybrid: HybridSelectionConfig | None = None
+    multi_factor: MultiFactorSelectionConfig | None = None
+    session_aware: SessionAwareSelectionConfig | None = None
+
+    # RL-driven and personalized selection algorithms
+    rl_driven: RLDrivenSelectionConfig | None = None
+    gmtrouter: GMTRouterConfig | None = None
+
+    # Behavior on algorithm failure: "skip" or "fail"
+    on_error: str | None = "skip"

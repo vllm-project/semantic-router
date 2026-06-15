@@ -1,0 +1,13 @@
+plugin:
+  type: rag
+  configuration:
+    enabled: true
+    backend: qdrant
+    top_k: 5
+    similarity_threshold: 0.78
+    injection_mode: tool_role
+    on_failure: warn
+    backend_config:
+      collection: docs
+      reuse_cache_connection: true
+      content_field: content

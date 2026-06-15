@@ -9,18 +9,20 @@ go-lint: ## Run golangci-lint for src/semantic-router
 	@echo "Running golangci-lint for src/semantic-router..."
 	@cd src/semantic-router/ && \
 		export GOROOT=$$(dirname $$(dirname $$(readlink -f $$(which go)))) && \
-		export GOPATH=$${GOPATH:-$$HOME/go} && \
+		export GOPATH=$$(go env GOPATH 2>/dev/null || echo "$$HOME/go") && \
+		export PATH="$$GOPATH/bin:$$PATH" && \
 		golangci-lint run ./... --config ../../tools/linter/go/.golangci.yml
-	@echo "✅ src/semantic-router go module lint passed"
+	@echo "src/semantic-router go module lint passed"
 
 go-lint-fix: ## Auto-fix lint issues in src/semantic-router (may need manual fix)
 	@$(LOG_TARGET)
 	@echo "Running golangci-lint fix for src/semantic-router..."
 	@cd src/semantic-router/ && \
 		export GOROOT=$$(dirname $$(dirname $$(readlink -f $$(which go)))) && \
-		export GOPATH=$${GOPATH:-$$HOME/go} && \
+		export GOPATH=$$(go env GOPATH 2>/dev/null || echo "$$HOME/go") && \
+		export PATH="$$GOPATH/bin:$$PATH" && \
 		golangci-lint run ./... --fix --config ../../tools/linter/go/.golangci.yml
-	@echo "✅ src/semantic-router go module lint fix applied"
+	@echo "src/semantic-router go module lint fix applied"
 
 vet: $(if $(CI),rust-ci,rust) ## Run go vet for all Go modules (build Rust library first)
 	@$(LOG_TARGET)
@@ -34,7 +36,7 @@ check-go-mod-tidy: ## Check go mod tidy for all Go modules
 	@cd candle-binding && go mod tidy && \
 		(git diff --exit-code go.mod 2>/dev/null || (echo "ERROR: go.mod file is not tidy in candle-binding. Please run 'go mod tidy' in candle-binding directory and commit the changes." && git diff go.mod && exit 1)) && \
 		(test ! -f go.sum || git diff --exit-code go.sum 2>/dev/null || (echo "ERROR: go.sum file is not tidy in candle-binding. Please run 'go mod tidy' in candle-binding directory and commit the changes." && git diff go.sum && exit 1))
-	@echo "✅ candle-binding go mod tidy check passed"
+	@echo "candle-binding go mod tidy check passed"
 	@echo "Checking src/semantic-router..."
 	@cd src/semantic-router && go mod tidy && \
 		if ! git diff --exit-code go.mod go.sum; then \
@@ -42,12 +44,17 @@ check-go-mod-tidy: ## Check go mod tidy for all Go modules
 			git diff go.mod go.sum; \
 			exit 1; \
 		fi
-	@echo "✅ src/semantic-router go mod tidy check passed"
-	@echo "✅ All go mod tidy checks passed"
+	@echo "src/semantic-router go mod tidy check passed"
+	@echo "All go mod tidy checks passed"
 
 install-controller-gen: ## Install controller-gen for code generation
-	@echo "Installing controller-gen..."
-	@cd src/semantic-router && go install sigs.k8s.io/controller-tools/cmd/controller-gen@latest
+	@echo "Ensuring controller-gen is available..."
+	@if command -v controller-gen >/dev/null 2>&1; then \
+		echo "Using existing controller-gen at $$(command -v controller-gen)"; \
+	else \
+		echo "Installing controller-gen..."; \
+		cd src/semantic-router && go install sigs.k8s.io/controller-tools/cmd/controller-gen@latest; \
+	fi
 
 generate-crd: install-controller-gen ## Generate CRD manifests using controller-gen
 	@echo "Generating CRD manifests..."
@@ -56,7 +63,7 @@ generate-crd: install-controller-gen ## Generate CRD manifests using controller-
 	@mkdir -p deploy/helm/semantic-router/crds
 	@cp deploy/kubernetes/crds/vllm.ai_intelligentpools.yaml deploy/helm/semantic-router/crds/
 	@cp deploy/kubernetes/crds/vllm.ai_intelligentroutes.yaml deploy/helm/semantic-router/crds/
-	@echo "✅ CRDs generated and copied to Helm chart"
+	@echo "CRDs generated and copied to Helm chart"
 
 generate-deepcopy: install-controller-gen ## Generate deepcopy methods using controller-gen
 	@echo "Generating deepcopy methods..."

@@ -140,6 +140,13 @@
   margin-top: 6px;
 }
 
+.signalGroupSubtitle {
+  margin-bottom: 6px;
+  font-size: 10px;
+  line-height: 1.4;
+  opacity: 0.82;
+}
+
 .signalLatency {
   display: flex;
   align-items: center;
@@ -214,6 +221,12 @@
   border-style: dashed !important;
 }
 
+.decisionNode.focusTarget {
+  box-shadow:
+    0 0 0 2px rgba(118, 185, 0, 0.95),
+    0 0 20px rgba(118, 185, 0, 0.55);
+}
+
 .unreachableBanner {
   width: 100%;
   padding: 4px 8px;
@@ -254,6 +267,28 @@
   font-weight: 600;
 }
 
+.focusDecisionBtn {
+  border: 1px solid rgba(255, 255, 255, 0.35);
+  background: rgba(0, 0, 0, 0.25);
+  color: #eaf2e4;
+  font-size: 10px;
+  line-height: 1;
+  border-radius: 999px;
+  width: 18px;
+  height: 18px;
+  padding: 0;
+  cursor: pointer;
+}
+
+.focusDecisionBtn:hover {
+  border-color: rgba(118, 185, 0, 0.9);
+}
+
+.focusDecisionBtnActive {
+  background: rgba(118, 185, 0, 0.26);
+  border-color: rgba(118, 185, 0, 0.95);
+}
+
 .rulesSection {
   width: 100%;
   margin-top: 8px;
@@ -284,17 +319,58 @@
   margin-top: 4px;
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: 4px;
+  width: 100%;
 }
 
-.condition {
-  font-size: 10px;
-  padding: 2px 4px;
-  background: rgba(255, 255, 255, 0.1);
-  border-radius: 2px;
+.conditionTree {
+  width: 100%;
+  padding: 4px;
+  border-radius: 6px;
+  background: rgba(0, 0, 0, 0.12);
+}
+
+.conditionRow {
+  width: 100%;
+  min-width: 0;
+}
+
+.conditionLeafRow,
+.conditionMoreRow {
   display: flex;
+}
+
+.conditionOperatorRow {
+  display: flex;
+}
+
+.conditionText {
+  width: 100%;
+  min-width: 0;
+  font-size: 10px;
+  padding: 2px 6px;
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 4px;
+  line-height: 1.35;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.conditionOperatorBadge {
+  display: inline-flex;
   align-items: center;
-  gap: 4px;
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  padding: 2px 6px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  background: rgba(0, 0, 0, 0.22);
+  border-radius: 999px;
+}
+
+.conditionMoreRow .conditionText {
+  opacity: 0.7;
 }
 
 .decisionMeta {
@@ -421,7 +497,10 @@
 /* ============== Model Node ============== */
 .modelNode {
   composes: nodeBase;
-  min-width: 160px;
+  width: 220px;
+  min-width: 220px;
+  max-width: 220px;
+  box-sizing: border-box;
   color: white;
 }
 
@@ -442,7 +521,7 @@
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  max-width: 120px;
+  max-width: 164px;
 }
 
 .modelFeatures {
@@ -503,7 +582,7 @@
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  max-width: 100px;
+  max-width: 150px;
 }
 
 .modelSource {
@@ -526,7 +605,7 @@
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  max-width: 140px;
+  max-width: 180px;
 }
 
 /* ============== Multi-Mode Model Styles ============== */
@@ -571,53 +650,19 @@
 
 /* ============== Default Route Node ============== */
 .defaultRouteNode {
-  composes: nodeBase;
-  background: linear-gradient(135deg, #607D8B, #455A64);
+  composes: decisionNode;
+  background: linear-gradient(135deg, #556270, #41505d);
   color: white;
   border: 2px dashed #90A4AE;
-  min-width: 160px;
+  min-width: 200px;
 }
 
 .defaultRouteHeader {
   display: flex;
   align-items: center;
   gap: 6px;
-  margin-bottom: 6px;
-}
-
-.defaultRouteIcon {
-  font-size: 18px;
-}
-
-.defaultRouteTitle {
-  font-weight: 600;
-  font-size: 13px;
-}
-
-.defaultRouteInfo {
-  display: flex;
-  flex-direction: column;
   gap: 4px;
   width: 100%;
-  padding-top: 6px;
-  border-top: 1px solid rgba(255, 255, 255, 0.2);
-}
-
-.defaultRouteLabel {
-  font-size: 10px;
-  opacity: 0.8;
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
-}
-
-.defaultRouteModel {
-  font-size: 11px;
-  background: rgba(255, 255, 255, 0.15);
-  padding: 3px 8px;
-  border-radius: 4px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
 }
 
 /* ============== Fallback Decision Node ============== */
@@ -683,6 +728,41 @@
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+/* ============== More Decisions Node ============== */
+.moreDecisionsNode {
+  padding: 12px 14px;
+  border-radius: 10px;
+  min-width: 180px;
+  border: 1px dashed rgba(118, 185, 0, 0.65);
+  background: rgba(20, 30, 20, 0.86);
+  color: #e8efe1;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.32);
+}
+
+.moreDecisionsTitle {
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.moreDecisionsButton {
+  border: 1px solid rgba(118, 185, 0, 0.75);
+  background: rgba(118, 185, 0, 0.16);
+  color: #f0f6ea;
+  border-radius: 8px;
+  padding: 4px 8px;
+  font-size: 11px;
+  cursor: pointer;
+}
+
+.moreDecisionsButton:hover {
+  border-color: rgba(118, 185, 0, 0.95);
+  background: rgba(118, 185, 0, 0.25);
 }
 
 /* Mobile Responsive */

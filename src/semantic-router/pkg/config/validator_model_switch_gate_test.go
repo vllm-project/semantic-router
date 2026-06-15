@@ -1,0 +1,109 @@
+package config
+
+import (
+	. "github.com/onsi/ginkgo/v2"
+	. "github.com/onsi/gomega"
+)
+
+var _ = Describe("validateModelSwitchGate", func() {
+	It("accepts default zero-value config (empty mode)", func() {
+		Expect(validateModelSwitchGate(ModelSwitchGateConfig{})).To(Succeed())
+	})
+
+	It("accepts mode=shadow", func() {
+		cfg := ModelSwitchGateConfig{Enabled: true, Mode: "shadow"}
+		Expect(validateModelSwitchGate(cfg)).To(Succeed())
+	})
+
+	It("accepts mode=enforce", func() {
+		cfg := ModelSwitchGateConfig{Enabled: true, Mode: "enforce"}
+		Expect(validateModelSwitchGate(cfg)).To(Succeed())
+	})
+
+	It("rejects misspelled mode", func() {
+		cfg := ModelSwitchGateConfig{Enabled: true, Mode: "enforced"}
+		err := validateModelSwitchGate(cfg)
+		Expect(err).To(HaveOccurred())
+		Expect(err.Error()).To(ContainSubstring("model_switch_gate.mode"))
+		Expect(err.Error()).To(ContainSubstring("enforced"))
+	})
+
+	It("rejects negative min_switch_advantage", func() {
+		cfg := ModelSwitchGateConfig{Enabled: true, Mode: "shadow", MinSwitchAdvantage: -0.1}
+		err := validateModelSwitchGate(cfg)
+		Expect(err).To(HaveOccurred())
+		Expect(err.Error()).To(ContainSubstring("min_switch_advantage"))
+	})
+
+	It("rejects negative default_handoff_penalty", func() {
+		cfg := ModelSwitchGateConfig{Enabled: true, Mode: "shadow", DefaultHandoffPenalty: -0.05}
+		err := validateModelSwitchGate(cfg)
+		Expect(err).To(HaveOccurred())
+		Expect(err.Error()).To(ContainSubstring("default_handoff_penalty"))
+	})
+
+	It("rejects negative cache_warmth_weight", func() {
+		cfg := ModelSwitchGateConfig{Enabled: true, Mode: "shadow", CacheWarmthWeight: -0.5}
+		err := validateModelSwitchGate(cfg)
+		Expect(err).To(HaveOccurred())
+		Expect(err.Error()).To(ContainSubstring("cache_warmth_weight"))
+	})
+
+	It("accepts zero weights and penalties", func() {
+		cfg := ModelSwitchGateConfig{
+			Enabled:               true,
+			Mode:                  "enforce",
+			MinSwitchAdvantage:    0,
+			DefaultHandoffPenalty: 0,
+			CacheWarmthWeight:     0,
+		}
+		Expect(validateModelSwitchGate(cfg)).To(Succeed())
+	})
+})
+
+var _ = Describe("validateSessionAwareSelectionConfig", func() {
+	It("accepts remaining-turn prior controls", func() {
+		cfg := SessionAwareSelectionConfig{
+			RemainingTurnPriorWeight:     sessionAwareFloat64Ptr(0.8),
+			RemainingTurnPriorHorizon:    sessionAwareIntPtr(12),
+			MinRemainingTurnPriorSamples: sessionAwareIntPtr(5),
+		}
+		Expect(validateSessionAwareSelectionConfig(cfg)).To(Succeed())
+	})
+
+	It("rejects negative remaining-turn prior weight", func() {
+		cfg := SessionAwareSelectionConfig{RemainingTurnPriorWeight: sessionAwareFloat64Ptr(-0.1)}
+		err := validateSessionAwareSelectionConfig(cfg)
+		Expect(err).To(HaveOccurred())
+		Expect(err.Error()).To(ContainSubstring("remaining_turn_prior_weight"))
+	})
+
+	It("rejects negative remaining-turn prior sample floor", func() {
+		cfg := SessionAwareSelectionConfig{MinRemainingTurnPriorSamples: sessionAwareIntPtr(-1)}
+		err := validateSessionAwareSelectionConfig(cfg)
+		Expect(err).To(HaveOccurred())
+		Expect(err.Error()).To(ContainSubstring("min_remaining_turn_prior_samples"))
+	})
+
+	It("rejects a zero remaining-turn prior horizon", func() {
+		cfg := SessionAwareSelectionConfig{RemainingTurnPriorHorizon: sessionAwareIntPtr(0)}
+		err := validateSessionAwareSelectionConfig(cfg)
+		Expect(err).To(HaveOccurred())
+		Expect(err.Error()).To(ContainSubstring("remaining_turn_prior_horizon"))
+	})
+
+	It("rejects cache cost multipliers below one", func() {
+		cfg := SessionAwareSelectionConfig{MaxCacheCostMultiplier: sessionAwareFloat64Ptr(0.5)}
+		err := validateSessionAwareSelectionConfig(cfg)
+		Expect(err).To(HaveOccurred())
+		Expect(err.Error()).To(ContainSubstring("max_cache_cost_multiplier"))
+	})
+})
+
+func sessionAwareIntPtr(v int) *int {
+	return &v
+}
+
+func sessionAwareFloat64Ptr(v float64) *float64 {
+	return &v
+}

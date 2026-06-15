@@ -1,0 +1,172 @@
+# Authz-RBAC Backend Resources
+# Two vLLM simulator deployments representing different model tiers:
+#   vllm-14b — high-capability model (admin + premium complex)
+#   vllm-7b  — efficient model (premium simple + free tier)
+# Both use the llm-d inference simulator.
+
+# ── 14B Backend (high capability) ─────────────────────────────────────────────
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: vllm-14b
+  namespace: default
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: vllm-14b
+  template:
+    metadata:
+      labels:
+        app: vllm-14b
+        tier: premium
+    spec:
+      containers:
+      - name: vllm-sim
+        image: ghcr.io/llm-d/llm-d-inference-sim:v0.5.0
+        imagePullPolicy: IfNotPresent
+        args:
+        - --model
+        - Qwen/Qwen2.5-14B-Instruct
+        - --port
+        - '8000'
+        env:
+        - name: POD_NAME
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.name
+        - name: NAMESPACE
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.namespace
+        ports:
+        - containerPort: 8000
+          name: http
+          protocol: TCP
+        resources:
+          requests:
+            cpu: 10m
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: vllm-14b
+  namespace: default
+  labels:
+    app: vllm-14b
+spec:
+  type: ClusterIP
+  ports:
+  - port: 8000
+    targetPort: 8000
+    protocol: TCP
+  selector:
+    app: vllm-14b
+---
+apiVersion: aigateway.envoyproxy.io/v1alpha1
+kind: AIServiceBackend
+metadata:
+  name: vllm-14b
+  namespace: default
+spec:
+  schema:
+    name: OpenAI
+  backendRef:
+    name: vllm-14b
+    kind: Backend
+    group: gateway.envoyproxy.io
+---
+apiVersion: gateway.envoyproxy.io/v1alpha1
+kind: Backend
+metadata:
+  name: vllm-14b
+  namespace: default
+spec:
+  endpoints:
+  - fqdn:
+      hostname: vllm-14b.default.svc.cluster.local
+      port: 8000
+
+# ── 7B Backend (efficient) ───────────────────────────────────────────────────
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: vllm-7b
+  namespace: default
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: vllm-7b
+  template:
+    metadata:
+      labels:
+        app: vllm-7b
+        tier: free
+    spec:
+      containers:
+      - name: vllm-sim
+        image: ghcr.io/llm-d/llm-d-inference-sim:v0.5.0
+        imagePullPolicy: IfNotPresent
+        args:
+        - --model
+        - Qwen/Qwen2.5-7B-Instruct
+        - --port
+        - '8000'
+        env:
+        - name: POD_NAME
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.name
+        - name: NAMESPACE
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.namespace
+        ports:
+        - containerPort: 8000
+          name: http
+          protocol: TCP
+        resources:
+          requests:
+            cpu: 10m
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: vllm-7b
+  namespace: default
+  labels:
+    app: vllm-7b
+spec:
+  type: ClusterIP
+  ports:
+  - port: 8000
+    targetPort: 8000
+    protocol: TCP
+  selector:
+    app: vllm-7b
+---
+apiVersion: aigateway.envoyproxy.io/v1alpha1
+kind: AIServiceBackend
+metadata:
+  name: vllm-7b
+  namespace: default
+spec:
+  schema:
+    name: OpenAI
+  backendRef:
+    name: vllm-7b
+    kind: Backend
+    group: gateway.envoyproxy.io
+---
+apiVersion: gateway.envoyproxy.io/v1alpha1
+kind: Backend
+metadata:
+  name: vllm-7b
+  namespace: default
+spec:
+  endpoints:
+  - fqdn:
+      hostname: vllm-7b.default.svc.cluster.local
+      port: 8000

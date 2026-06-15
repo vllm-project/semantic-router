@@ -1,9 +1,9 @@
 """CLI commands for vLLM Semantic Router."""
 
-from .init import init_command
 from .config import config_command
+from .model import model_list_command
 
 __all__ = [
-    "init_command",
     "config_command",
+    "model_list_command",
 ]

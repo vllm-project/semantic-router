@@ -49,7 +49,7 @@ spec:
         aggregationMethod: "max"
 
     domains:
-      - name: "computer_science"
+      - name: "computer science"
         description: "Computer science and programming"
       - name: "math"
         description: "Mathematics and quantitative reasoning"
@@ -68,7 +68,7 @@ spec:
           - type: "embedding"
             name: "learning_intent"
           - type: "domain"
-            name: "computer_science"
+            name: "computer science"
       modelRefs:
         - model: "qwen-2.5-32b"
           use_reasoning: true

@@ -1,0 +1,111 @@
+replicaCount: 1
+image:
+  repository: ghcr.io/vllm-project/semantic-router/extproc
+  tag: latest
+  pullPolicy: Never
+config:
+  version: v0.3
+  listeners: []
+  providers:
+    defaults:
+      default_model: openai/gpt-oss-20b
+    models:
+      - name: openai/gpt-oss-20b
+        backend_refs:
+          - name: test-endpoint
+            endpoint: mock-vllm.default.svc.cluster.local:8000
+            weight: 1
+  routing:
+    decisions:
+      - name: default_decision
+        description: Default catch-all decision
+        priority: 1
+        rules:
+          operator: AND
+          conditions: []
+        modelRefs:
+          - model: openai/gpt-oss-20b
+            use_reasoning: false
+        plugins:
+          - type: router_replay
+            configuration:
+              enabled: true
+              max_records: 1000
+              capture_request_body: true
+              capture_response_body: true
+              max_body_bytes: 65536
+    signals: {}
+    modelCards:
+      - name: openai/gpt-oss-20b
+  global:
+    router:
+      strategy: priority
+    services:
+      response_api:
+        enabled: true
+        store_backend: memory
+        ttl_seconds: 86400
+        max_responses: 1000
+      router_replay:
+        store_backend: postgres
+        ttl_seconds: 2592000
+        async_writes: false
+        postgres:
+          host: postgres.default.svc.cluster.local
+          port: 5432
+          database: vsr
+          user: router
+          password: router-secret
+          ssl_mode: disable
+          max_open_conns: 10
+          max_idle_conns: 5
+          conn_max_lifetime: 300
+          table_name: router_replay
+      api:
+        batch_classification:
+          max_batch_size: 100
+          concurrency_threshold: 5
+          max_concurrency: 8
+          metrics:
+            enabled: true
+            detailed_goroutine_tracking: false
+            high_resolution_timing: false
+            sample_rate: 1.0
+      observability:
+        tracing:
+          enabled: false
+    stores:
+      semantic_cache:
+        embedding_model: mmbert
+      memory:
+        embedding_model: mmbert
+      vector_store:
+        embedding_model: mmbert
+    integrations: {}
+    model_catalog:
+      kbs: []
+      modules:
+        prompt_guard:
+          enabled: false
+          model_ref: ""
+          model_id: ""
+          jailbreak_mapping_path: ""
+          use_mmbert_32k: false
+        classifier:
+          domain:
+            model_ref: ""
+            model_id: ""
+            category_mapping_path: ""
+            use_mmbert_32k: false
+          pii:
+            model_ref: ""
+            model_id: ""
+            pii_mapping_path: ""
+            use_mmbert_32k: false
+resources:
+  limits:
+    cpu: '2'
+    memory: 10Gi
+  requests:
+    cpu: 500m
+    memory: 2Gi

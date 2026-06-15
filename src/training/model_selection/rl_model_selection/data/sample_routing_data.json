@@ -1,0 +1,74 @@
+[
+  {
+    "query": "What is the capital of France?",
+    "query_type": "factual",
+    "complexity": "simple",
+    "candidate_models": ["gpt-4", "claude-3-sonnet", "mistral-7b", "llama3-8b"],
+    "optimal_model": "mistral-7b",
+    "ground_truth": "Paris",
+    "reasoning": "Simple factual query, cheaper model sufficient"
+  },
+  {
+    "query": "Explain the mathematical foundations of quantum computing, including how qubits leverage superposition and entanglement for computational advantages.",
+    "query_type": "science",
+    "complexity": "complex",
+    "candidate_models": ["gpt-4", "claude-3-sonnet", "mistral-7b", "llama3-8b"],
+    "optimal_model": "gpt-4",
+    "ground_truth": "Quantum computing uses qubits that can exist in superposition...",
+    "reasoning": "Complex technical explanation requires high-capability model"
+  },
+  {
+    "query": "Write a Python function to implement binary search",
+    "query_type": "coding",
+    "complexity": "medium",
+    "candidate_models": ["gpt-4", "claude-3-sonnet", "mistral-7b", "deepseek-coder"],
+    "optimal_model": "deepseek-coder",
+    "ground_truth": "def binary_search(arr, target): ...",
+    "reasoning": "Code-specialized model is best for coding tasks"
+  },
+  {
+    "query": "What is 15 + 27?",
+    "query_type": "math",
+    "complexity": "simple",
+    "candidate_models": ["gpt-4", "claude-3-sonnet", "mistral-7b", "llama3-8b"],
+    "optimal_model": "llama3-8b",
+    "ground_truth": "42",
+    "reasoning": "Trivial arithmetic, use cheapest model"
+  },
+  {
+    "query": "Analyze the themes of isolation and identity in Kafka's 'The Metamorphosis' and their relevance to modern society.",
+    "query_type": "literature",
+    "complexity": "complex",
+    "candidate_models": ["gpt-4", "claude-3-sonnet", "mistral-7b"],
+    "optimal_model": "claude-3-sonnet",
+    "ground_truth": "Kafka's novella explores themes of alienation...",
+    "reasoning": "Literary analysis benefits from Claude's nuanced writing"
+  },
+  {
+    "query": "How do I make a cup of tea?",
+    "query_type": "instructions",
+    "complexity": "simple",
+    "candidate_models": ["gpt-4", "claude-3-sonnet", "mistral-7b", "llama3-8b"],
+    "optimal_model": "mistral-7b",
+    "ground_truth": "1. Boil water. 2. Add tea bag to cup...",
+    "reasoning": "Simple instructions don't require advanced model"
+  },
+  {
+    "query": "Debug this code: for i in range(10) print(i)",
+    "query_type": "coding",
+    "complexity": "simple",
+    "candidate_models": ["gpt-4", "claude-3-sonnet", "deepseek-coder", "llama3-8b"],
+    "optimal_model": "deepseek-coder",
+    "ground_truth": "Missing colon: for i in range(10): print(i)",
+    "reasoning": "Simple syntax error, code-specialized model efficient"
+  },
+  {
+    "query": "Compare and contrast the economic policies of Keynesianism and monetarism, discussing their historical applications and outcomes.",
+    "query_type": "economics",
+    "complexity": "complex",
+    "candidate_models": ["gpt-4", "claude-3-sonnet", "mistral-7b"],
+    "optimal_model": "gpt-4",
+    "ground_truth": "Keynesianism emphasizes government intervention...",
+    "reasoning": "Complex comparative analysis requires strong reasoning"
+  }
+]

@@ -1,6 +1,6 @@
 [
   {
-    "description": "Psychology question - high similarity threshold (0.92)",
+    "description": "Psychology question - kubernetes cache threshold (0.8)",
     "category": "psychology",
     "original_question": "What is cognitive dissonance?",
     "similar_questions": [
@@ -12,7 +12,7 @@
     ]
   },
   {
-    "description": "Health question - very high similarity threshold (0.95)",
+    "description": "Health question - kubernetes cache threshold (0.8)",
     "category": "health",
     "original_question": "What are the benefits of regular exercise?",
     "similar_questions": [
@@ -34,30 +34,5 @@
       "How can I brew a delicious cup of coffee?",
       "What's the method for making good coffee?"
     ]
-  },
-  {
-    "description": "Math question - default threshold (0.8)",
-    "category": "math",
-    "original_question": "What is the Pythagorean theorem?",
-    "similar_questions": [
-      "Can you explain the Pythagorean theorem?",
-      "Tell me about the Pythagorean theorem",
-      "What does the Pythagorean theorem state?",
-      "Explain the Pythagorean theorem to me",
-      "What is Pythagoras' theorem?"
-    ]
-  },
-  {
-    "description": "Biology question - default threshold (0.8)",
-    "category": "biology",
-    "original_question": "How does photosynthesis work?",
-    "similar_questions": [
-      "Can you explain the process of photosynthesis?",
-      "What is the photosynthesis process?",
-      "Describe how photosynthesis works",
-      "Explain photosynthesis to me",
-      "What happens during photosynthesis?"
-    ]
   }
 ]
-

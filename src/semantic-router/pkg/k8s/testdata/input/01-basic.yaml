@@ -46,7 +46,7 @@ spec:
           - "Something is not working correctly"
         aggregationMethod: "max"
     domains:
-      - name: "computer_science"
+      - name: "computer science"
         description: "Computer science and programming"
       - name: "math"
         description: "Mathematics and quantitative reasoning"
@@ -82,7 +82,7 @@ spec:
           - type: "embedding"
             name: "tech_support"
           - type: "domain"
-            name: "computer_science"
+            name: "computer science"
       modelRefs:
         - model: "qwen-2.5-7b"
           loraName: "tech-support"

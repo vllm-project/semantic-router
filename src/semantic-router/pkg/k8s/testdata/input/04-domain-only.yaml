@@ -38,7 +38,7 @@ spec:
         description: "Mathematics and quantitative reasoning"
       - name: "physics"
         description: "Physics and physical sciences"
-      - name: "computer_science"
+      - name: "computer science"
         description: "Computer science and programming"
       - name: "chemistry"
         description: "Chemistry and chemical sciences"
@@ -55,7 +55,7 @@ spec:
           - type: "domain"
             name: "physics"
           - type: "domain"
-            name: "computer_science"
+            name: "computer science"
       modelRefs:
         - model: "mistral-large"
           loraName: "math-expert"

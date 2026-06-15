@@ -1,12 +1,11 @@
 /**
  * Open Web Tool Executor
- * 网页内容提取工具执行器
+ * Web content extraction tool executor
  * 
- * 参考 DuckDuckGo MCP Server 的 jina_fetch.py 实现
- * - 使用 Jina Reader API (r.jina.ai) 抓取网页
- * - 支持 markdown/json 输出格式
- * - 支持内容长度限制
- * - 支持图片 alt 文本生成
+ * Fetches web content through the dashboard backend proxy
+ * - Avoids TLS/CORS issues from browser-side requests to third-party services
+ * - Preserves the existing open_web argument contract
+ * - Keeps the response shape stable
  */
 
 import { createTool } from '../registry'
@@ -17,20 +16,17 @@ export type { OpenWebArgs, OpenWebResult }
 
 // ========== Constants ==========
 
-/** Jina Reader API base URL */
-const JINA_READER_BASE_URL = 'https://r.jina.ai/'
-
-/** 默认最大内容长度（字符） */
+/** Default maximum content length in characters */
 const DEFAULT_MAX_LENGTH = 15000
 
-/** 默认超时时间（秒） */
+/** Default timeout in seconds */
 const DEFAULT_TIMEOUT = 30
 
 // ========== Helper Functions ==========
 
 /**
- * 验证 URL 格式
- * 对应 Python: _validate_url
+ * Validate URL format
+ * Mirrors Python: _validate_url
  */
 function validateUrl(url: string): void {
   if (!url || typeof url !== 'string') {
@@ -51,30 +47,8 @@ function validateUrl(url: string): void {
 }
 
 /**
- * 构建请求头
- * 对应 Python: _build_headers
- */
-function buildHeaders(outputFormat: string, withImages: boolean): Record<string, string> {
-  const headers: Record<string, string> = {
-    'x-no-cache': 'true',
-  }
-
-  if (outputFormat.toLowerCase() === 'json') {
-    headers['Accept'] = 'application/json'
-  } else if (outputFormat.toLowerCase() !== 'markdown') {
-    console.warn(`[OpenWeb] Unsupported format: ${outputFormat}. Using markdown as default.`)
-  }
-
-  if (withImages) {
-    headers['X-With-Generated-Alt'] = 'true'
-  }
-
-  return headers
-}
-
-/**
- * 截断内容
- * 对应 Python: _truncate_content
+ * Truncate content
+ * Mirrors Python: _truncate_content
  */
 function truncateContent(content: string, maxLength: number | null): { content: string; truncated: boolean } {
   if (maxLength && content.length > maxLength) {
@@ -86,47 +60,25 @@ function truncateContent(content: string, maxLength: number | null): { content: 
   return { content, truncated: false }
 }
 
-/**
- * 处理响应数据
- * 对应 Python: _process_response
- */
-function processResponse(
-  data: unknown,
-  outputFormat: string,
-  maxLength: number | null
-): { title: string; content: string; truncated: boolean } {
-  if (outputFormat.toLowerCase() === 'json') {
-    const jsonData = data as Record<string, unknown>
-    let content = String(jsonData.content || '')
-    let truncated = false
+interface OpenWebProxyResponse {
+  url?: string
+  title?: string
+  content?: string
+  length?: number
+  truncated?: boolean
+  error?: string
+}
 
-    if (maxLength && content.length > maxLength) {
-      const result = truncateContent(content, maxLength)
-      content = result.content
-      truncated = result.truncated
-    }
-
-    return {
-      title: String(jsonData.title || 'Untitled'),
-      content,
-      truncated,
-    }
+function isPdfUrl(url: string): boolean {
+  try {
+    return new URL(url).pathname.toLowerCase().endsWith('.pdf')
+  } catch {
+    return false
   }
-
-  // markdown 格式
-  const text = typeof data === 'string' ? data : String(data)
-  const { content, truncated } = truncateContent(text, maxLength)
-  
-  // 尝试从 markdown 中提取标题
-  const titleMatch = text.match(/^#\s+(.+)$/m)
-  const title = titleMatch ? titleMatch[1] : 'Untitled'
-
-  return { title, content, truncated }
 }
 
 /**
- * 使用 Jina Reader 抓取 URL
- * 对应 Python: fetch_url
+ * Fetch a URL through the dashboard backend proxy
  */
 async function fetchUrl(
   url: string,
@@ -136,57 +88,75 @@ async function fetchUrl(
   context: ToolExecutionContext
 ): Promise<OpenWebResult> {
   validateUrl(url)
-  const headers = buildHeaders(outputFormat, withImages)
-  // 注意：不使用 encodeURIComponent，因为 Jina Reader 接受完整的原始 URL
-  // Python 版本使用 quote(url)，默认 safe='/'，也不会编码 URL 中的斜杠
-  const jinaUrl = `${JINA_READER_BASE_URL}${url}`
   const startTime = Date.now()
 
-  console.log(`[OpenWeb] 开始抓取: ${url}`)
-  console.log(`[OpenWeb] Jina URL: ${jinaUrl}`)
-  console.log(`[OpenWeb] 输出格式: ${outputFormat}, 包含图片: ${withImages}`)
+  console.log(`[OpenWeb] Starting fetch: ${url}`)
+  console.log(`[OpenWeb] Output format: ${outputFormat}, include images: ${withImages}`)
 
   const controller = new AbortController()
   const timeoutId = setTimeout(() => controller.abort(), DEFAULT_TIMEOUT * 1000)
 
   try {
-    const response = await fetch(jinaUrl, {
-      method: 'GET',
+    const response = await fetch('/api/tools/open-web', {
+      method: 'POST',
       headers: {
-        ...headers,
+        'Content-Type': 'application/json',
         ...context.headers,
       },
+      body: JSON.stringify({
+        url,
+        timeout: DEFAULT_TIMEOUT,
+        // Prefer direct server-side fetches for ordinary pages, but preserve
+        // Jina-only paths for PDFs and image-alt enrichment.
+        force_jina: withImages || isPdfUrl(url),
+        format: outputFormat,
+        max_length: maxLength,
+        with_images: withImages,
+      }),
       signal: context.signal || controller.signal,
     })
 
     clearTimeout(timeoutId)
     const responseTime = Date.now() - startTime
 
-    console.log(`[OpenWeb] 响应状态: ${response.status} ${response.statusText}`)
-    console.log(`[OpenWeb] 响应耗时: ${responseTime}ms`)
+    console.log(`[OpenWeb] Response status: ${response.status} ${response.statusText}`)
+    console.log(`[OpenWeb] Response time: ${responseTime}ms`)
+
+    let payload: OpenWebProxyResponse | null = null
+    const contentType = response.headers.get('content-type') || ''
+
+    if (contentType.includes('application/json')) {
+      const parsedPayload = await response.json()
+      payload = parsedPayload as OpenWebProxyResponse
+    } else {
+      const text = await response.text()
+      payload = { error: text || response.statusText }
+    }
 
     if (!response.ok) {
-      throw new Error(`HTTP ${response.status}: ${response.statusText}`)
+      throw new Error(payload?.error || `HTTP ${response.status}: ${response.statusText}`)
     }
 
-    let data: unknown
-    if (outputFormat.toLowerCase() === 'json') {
-      data = await response.json()
-    } else {
-      data = await response.text()
+    if (payload?.error) {
+      throw new Error(payload.error)
     }
 
-    const { title, content, truncated } = processResponse(data, outputFormat, maxLength)
+    const rawContent = typeof payload?.content === 'string' ? payload.content : ''
+    const truncationResult = truncateContent(rawContent, maxLength)
+    const content = truncationResult.content
+    const truncated = Boolean(payload?.truncated) || truncationResult.truncated
+    const title = payload?.title || 'Untitled'
+    const resolvedUrl = payload?.url || url
 
-    console.log(`[OpenWeb] 获取标题: ${title}`)
-    console.log(`[OpenWeb] 内容长度: ${content.length} 字符`)
+    console.log(`[OpenWeb] Resolved title: ${title}`)
+    console.log(`[OpenWeb] Content length: ${content.length} chars`)
     if (truncated) {
-      console.log(`[OpenWeb] 内容已截断`)
+      console.log(`[OpenWeb] Content truncated`)
     }
-    console.log(`[OpenWeb] ✅ 抓取成功，总耗时: ${Date.now() - startTime}ms`)
+    console.log(`[OpenWeb] Success, total time: ${Date.now() - startTime}ms`)
 
     return {
-      url,
+      url: resolvedUrl,
       title,
       content,
       length: content.length,
@@ -195,10 +165,10 @@ async function fetchUrl(
   } catch (error) {
     const elapsed = Date.now() - startTime
     if (error instanceof Error && error.name === 'AbortError') {
-      console.error(`[OpenWeb] ❌ 请求超时 (${DEFAULT_TIMEOUT}s)`)
+      console.error(`[OpenWeb] Request timed out (${DEFAULT_TIMEOUT}s)`)
       throw new Error(`Error fetching URL (${url}): Request timeout`)
     }
-    console.error(`[OpenWeb] ❌ 抓取失败 (${elapsed}ms):`, error)
+    console.error(`[OpenWeb] Fetch failed (${elapsed}ms):`, error)
     throw new Error(`Error fetching URL (${url}): ${error instanceof Error ? error.message : String(error)}`)
   } finally {
     clearTimeout(timeoutId)
@@ -209,7 +179,7 @@ async function fetchUrl(
 
 /**
  * Validate open web arguments
- * 对应 Python: jina_fetch 的参数验证
+ * Mirrors Python: jina_fetch argument validation
  */
 function validateOpenWebArgs(args: unknown): OpenWebArgs {
   if (typeof args !== 'object' || args === null) {
@@ -218,7 +188,7 @@ function validateOpenWebArgs(args: unknown): OpenWebArgs {
 
   const { url, format, max_length, with_images } = args as Record<string, unknown>
 
-  // 验证 url（必需）
+  // Validate required url
   if (!url) {
     throw new Error('Missing required parameter: url')
   }
@@ -226,7 +196,7 @@ function validateOpenWebArgs(args: unknown): OpenWebArgs {
     throw new Error('url must be a non-empty string')
   }
 
-  // 验证 format
+  // Validate format
   let parsedFormat: 'markdown' | 'json' = 'markdown'
   if (format !== undefined) {
     const fmt = String(format).toLowerCase()
@@ -236,7 +206,7 @@ function validateOpenWebArgs(args: unknown): OpenWebArgs {
     parsedFormat = fmt as 'markdown' | 'json'
   }
 
-  // 验证 max_length
+  // Validate max_length
   let parsedMaxLength: number | undefined = DEFAULT_MAX_LENGTH
   if (max_length !== undefined && max_length !== null) {
     const len = typeof max_length === 'number' ? max_length : parseInt(String(max_length), 10)
@@ -246,7 +216,7 @@ function validateOpenWebArgs(args: unknown): OpenWebArgs {
     parsedMaxLength = len
   }
 
-  // 验证 with_images
+  // Validate with_images
   const parsedWithImages = typeof with_images === 'boolean' ? with_images : false
 
   return {
@@ -261,7 +231,7 @@ function validateOpenWebArgs(args: unknown): OpenWebArgs {
 
 /**
  * Execute open web
- * 对应 Python: jina_fetch
+ * Mirrors Python: jina_fetch
  */
 async function executeOpenWeb(
   args: OpenWebArgs,
@@ -275,7 +245,7 @@ async function executeOpenWeb(
   } = args
 
   console.log(`\n${'='.repeat(60)}`)
-  console.log(`[OpenWeb] 🚀 开始抓取网页`)
+  console.log(`[OpenWeb] Starting web fetch`)
   console.log(`[OpenWeb] URL: ${url}`)
   console.log(`[OpenWeb] Format: ${format}, MaxLength: ${max_length}, WithImages: ${with_images}`)
   console.log(`${'='.repeat(60)}`)
@@ -305,7 +275,7 @@ function formatOpenWebResult(result: OpenWebResult): string {
 
 /**
  * Open Web Tool Definition
- * 对应 Python: @mcp.tool() jina_fetch
+ * Mirrors Python: @mcp.tool() jina_fetch
  */
 export const openWebTool = createTool<OpenWebArgs, OpenWebResult>({
   metadata: {
@@ -314,7 +284,7 @@ export const openWebTool = createTool<OpenWebArgs, OpenWebResult>({
     category: 'search',
     icon: 'globe',
     enabled: true,
-    version: '2.0.0',
+    version: '2.1.0',
   },
 
   definition: {
@@ -322,7 +292,7 @@ export const openWebTool = createTool<OpenWebArgs, OpenWebResult>({
     function: {
       name: 'open_web',
       description:
-        'Fetch a URL and convert it to markdown or JSON using Jina Reader. Supports HTML and PDF content extraction.',
+        'Fetch a URL through the dashboard backend proxy and return extracted page content. Supports HTML and PDF extraction.',
       parameters: {
         type: 'object',
         properties: {

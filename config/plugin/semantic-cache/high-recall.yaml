@@ -1,0 +1,6 @@
+plugin:
+  type: semantic-cache
+  configuration:
+    enabled: true
+    similarity_threshold: 0.92
+    ttl_seconds: 86400

@@ -1,0 +1,16 @@
+algorithm:
+  type: gmtrouter
+  gmtrouter:
+    enable_personalization: true
+    history_sample_size: 50
+    embedding_dimension: 768
+    num_gnn_layers: 2
+    attention_heads: 8
+    min_interactions_for_personalization: 5
+    max_interactions_per_user: 200
+    feedback_types:
+      - rating
+      - ranking
+      - response
+    model_path: models/gmtrouter.pt
+    storage_path: state/gmtrouter.db

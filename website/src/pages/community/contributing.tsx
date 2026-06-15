@@ -12,7 +12,7 @@ const Contributing: React.FC = () => {
     >
       <div className={styles.container}>
         <header className={styles.header}>
-          <h1><Translate id="contributing.title">Contributing to vLLM Semantic Router 🤝</Translate></h1>
+          <h1><Translate id="contributing.title">Contributing to vLLM Semantic Router</Translate></h1>
           <p className={styles.subtitle}>
             <Translate id="contributing.subtitle">We welcome contributions from the community! Here's how you can help make vLLM Semantic Router better.</Translate>
           </p>
@@ -21,12 +21,11 @@ const Contributing: React.FC = () => {
         <main className={styles.main}>
           <section className={styles.section}>
             <h2>
-              🎯
               <Translate id="contributing.waysToContribute">Ways to Contribute</Translate>
             </h2>
             <div className={styles.contributeGrid}>
               <div className={styles.card}>
-                <h3><Translate id="contributing.bugReports.title">🐛 Bug Reports</Translate></h3>
+                <h3><Translate id="contributing.bugReports.title">Bug Reports</Translate></h3>
                 <p>
                   <Translate id="contributing.bugReports.desc.prefix">Found a bug? Please report it on our</Translate>
                   {' '}
@@ -50,7 +49,7 @@ const Contributing: React.FC = () => {
               </div>
 
               <div className={styles.card}>
-                <h3><Translate id="contributing.featureRequests.title">✨ Feature Requests</Translate></h3>
+                <h3><Translate id="contributing.featureRequests.title">Feature Requests</Translate></h3>
                 <p><Translate id="contributing.featureRequests.desc">Have an idea for a new feature? We'd love to hear it!</Translate></p>
                 <ul>
                   <li>
@@ -69,7 +68,7 @@ const Contributing: React.FC = () => {
               </div>
 
               <div className={styles.card}>
-                <h3><Translate id="contributing.documentation.title">📝 Documentation</Translate></h3>
+                <h3><Translate id="contributing.documentation.title">Documentation</Translate></h3>
                 <p><Translate id="contributing.documentation.desc">Help improve our documentation and examples.</Translate></p>
                 <ul>
                   <li>
@@ -88,7 +87,7 @@ const Contributing: React.FC = () => {
               </div>
 
               <div className={styles.card}>
-                <h3><Translate id="contributing.code.title">💻 Code Contributions</Translate></h3>
+                <h3><Translate id="contributing.code.title">Code Contributions</Translate></h3>
                 <p><Translate id="contributing.code.desc">Contribute to the core functionality.</Translate></p>
                 <ul>
                   <li>
@@ -110,7 +109,6 @@ const Contributing: React.FC = () => {
 
           <section className={styles.section}>
             <h2>
-              📋
               <Translate id="contributing.process.title">Contribution Process</Translate>
             </h2>
             <div className={styles.card}>
@@ -170,7 +168,6 @@ const Contributing: React.FC = () => {
 
           <section className={styles.section}>
             <h2>
-              ⚙️
               <Translate id="contributing.precommit.title">Precommit hooks</Translate>
             </h2>
             <p><Translate id="contributing.precommit.desc1">The Semantic-router project provides a precommit hook to standardize the entire project, including Go, Python, Rust, Markdown, and spelling error checking.</Translate></p>
@@ -316,7 +313,6 @@ pre-commit install && pre-commit run --all-files`}
 
           <section className={styles.section}>
             <h2>
-              🏷️
               <Translate id="contributing.workGroups.title">Working Group Areas</Translate>
             </h2>
             <p>
@@ -339,7 +335,6 @@ pre-commit install && pre-commit run --all-files`}
 
           <section className={styles.section}>
             <h2>
-              📞
               <Translate id="contributing.getHelp.title">Get Help</Translate>
             </h2>
             <div className={styles.card}>

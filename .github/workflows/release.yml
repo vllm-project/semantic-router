@@ -1,0 +1,169 @@
+name: Release Validation
+
+# This workflow is the release guard: it validates that all versioned surfaces
+# (Python package, Rust crate) agree with the pushed tag before any of the
+# independent publish workflows can drift.  It also produces a single, unified
+# GitHub Release note that links every published artifact.
+#
+# Individual publish workflows (docker-release, helm-publish, pypi-publish,
+# publish-crate) still trigger independently on v* tags so they remain
+# self-contained.  This workflow adds the cross-surface sanity check on top.
+
+on:
+  push:
+    tags:
+      - "v*"
+  # Allow running the validation step manually against any ref for pre-release
+  # testing (e.g. before actually pushing the tag).
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Version to validate (e.g. 0.3.0) — no leading 'v'"
+        required: true
+        type: string
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+permissions:
+  contents: write # needed to create/update the GitHub Release
+
+jobs:
+  # ─────────────────────────────────────────────────────────────────────────────
+  # validate: check that every versioned source file matches the git tag.
+  # A mismatch here means a developer forgot to bump a version before tagging —
+  # fail loudly so it is caught before artifacts land in production registries.
+  # ─────────────────────────────────────────────────────────────────────────────
+  validate:
+    name: Cross-Surface Version Validation
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.extract.outputs.version }}
+      tag: ${{ steps.extract.outputs.tag }}
+      sim_version: ${{ steps.check_versions.outputs.sim_version }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      # ── Derive version ────────────────────────────────────────────────────────
+      - name: Extract version
+        id: extract
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            VERSION="${{ inputs.version }}"
+            TAG="v${VERSION}"
+          else
+            TAG="${GITHUB_REF#refs/tags/}"
+            VERSION="${TAG#v}"
+          fi
+          echo "tag=${TAG}"     >> "$GITHUB_OUTPUT"
+          echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
+          echo "Validating release: ${TAG} (version: ${VERSION})"
+
+      # ── Cross-surface release contract ───────────────────────────────────────
+      # The script is also used by `make release-check` and `make release`, so
+      # tag validation, local release prep, Helm packaging semantics, and release
+      # notes stay on the same parser instead of drifting across workflow-local
+      # grep/sed snippets.
+      - name: Validate release version contract
+        id: check_versions
+        run: |
+          python3 tools/release/check_version_contract.py \
+            --version "${{ steps.extract.outputs.version }}" \
+            --github-output "$GITHUB_OUTPUT"
+
+  # ─────────────────────────────────────────────────────────────────────────────
+  # release-notes: create or update the GitHub Release with a cross-surface
+  # summary so operators can find every artifact from one place.
+  # Runs only on actual tag pushes (not workflow_dispatch test runs).
+  # ─────────────────────────────────────────────────────────────────────────────
+  release-notes:
+    name: Publish GitHub Release Notes
+    needs: validate
+    if: github.event_name == 'push'
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Resolve GHCR owner (lowercase)
+        id: owner
+        run: |
+          echo "lower=$(echo '${{ github.repository_owner }}' | tr '[:upper:]' '[:lower:]')" \
+            >> "$GITHUB_OUTPUT"
+
+      - name: Create or update GitHub Release
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: ${{ needs.validate.outputs.tag }}
+          name: "Release ${{ needs.validate.outputs.tag }}"
+          draft: false
+          prerelease: false
+          generate_release_notes: true
+          body: |
+            ## Release ${{ needs.validate.outputs.tag }}
+
+            ### Container Images (GHCR)
+
+            Always pin to a version tag in production — it is immutable.
+
+            ```bash
+            docker pull ghcr.io/${{ steps.owner.outputs.lower }}/semantic-router/extproc:${{ needs.validate.outputs.tag }}
+            docker pull ghcr.io/${{ steps.owner.outputs.lower }}/semantic-router/vllm-sr:${{ needs.validate.outputs.tag }}
+            docker pull ghcr.io/${{ steps.owner.outputs.lower }}/semantic-router/anthropic-shim:${{ needs.validate.outputs.tag }}
+            docker pull ghcr.io/${{ steps.owner.outputs.lower }}/semantic-router/dashboard:${{ needs.validate.outputs.tag }}
+            docker pull ghcr.io/${{ steps.owner.outputs.lower }}/semantic-router/operator:${{ needs.validate.outputs.tag }}
+            docker pull ghcr.io/${{ steps.owner.outputs.lower }}/semantic-router/operator-bundle:${{ needs.validate.outputs.tag }}
+            ```
+
+            | Image | Tags pushed |
+            |-------|-------------|
+            | `extproc` | `${{ needs.validate.outputs.tag }}` · `latest` |
+            | `vllm-sr` | `${{ needs.validate.outputs.tag }}` · `latest` |
+            | `anthropic-shim` | `${{ needs.validate.outputs.tag }}` · `latest` |
+            | `extproc-rocm` | `${{ needs.validate.outputs.tag }}` · `latest` |
+            | `vllm-sr-rocm` | `${{ needs.validate.outputs.tag }}` · `latest` |
+            | `llm-katan` | `${{ needs.validate.outputs.tag }}` · `latest` |
+            | `dashboard` | `${{ needs.validate.outputs.tag }}` · `latest` |
+            | `operator` | `${{ needs.validate.outputs.tag }}` · `latest` |
+            | `operator-bundle` | `${{ needs.validate.outputs.tag }}` · `latest` |
+
+            ### Helm Chart
+
+            ```bash
+            # Install a specific version
+            helm install semantic-router \
+              oci://ghcr.io/${{ steps.owner.outputs.lower }}/charts/semantic-router \
+              --version ${{ needs.validate.outputs.version }} \
+              --namespace vllm-semantic-router-system --create-namespace
+
+            # Upgrade to this version
+            helm upgrade semantic-router \
+              oci://ghcr.io/${{ steps.owner.outputs.lower }}/charts/semantic-router \
+              --version ${{ needs.validate.outputs.version }} \
+              --namespace vllm-semantic-router-system
+            ```
+
+            ### Python Package (PyPI)
+
+            ```bash
+            pip install vllm-sr==${{ needs.validate.outputs.version }}
+            ```
+
+            ### Rust Crate (crates.io)
+
+            ```toml
+            [dependencies]
+            candle-semantic-router = "${{ needs.validate.outputs.version }}"
+            ```
+
+            ---
+
+            **vllm-sr-sim** ships on its own `vllm-sr-sim-v*` tag and is currently at
+            `${{ needs.validate.outputs.sim_version }}`.
+
+            See the [upgrade and rollback runbook](https://github.com/${{ github.repository }}/blob/main/website/docs/installation/upgrade-rollback.md)
+            for step-by-step upgrade and rollback instructions.
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

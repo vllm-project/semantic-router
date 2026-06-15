@@ -1,0 +1,527 @@
+version: v0.3
+
+listeners:
+  - name: http-8899
+    address: 0.0.0.0
+    port: 8899
+    timeout: 1200s
+
+providers:
+  defaults:
+    default_model: qwen/qwen3.5-rocm
+    reasoning_families:
+      qwen3:
+        type: chat_template_kwargs
+        parameter: enable_thinking
+    default_reasoning_effort: medium
+  models:
+    - name: qwen/qwen3.5-rocm
+      provider_model_id: qwen/qwen3.5-rocm
+      reasoning_family: qwen3
+      pricing:
+        currency: USD
+        prompt_per_1m: 0.00
+        completion_per_1m: 0.00
+      backend_refs:
+        - name: vllm_primary
+          endpoint: vllm:8000
+          protocol: http
+          weight: 1
+    - name: google/gemini-3.1-pro
+      provider_model_id: google/gemini-3.1-pro
+      reasoning_family: qwen3
+      pricing:
+        currency: USD
+        prompt_per_1m: 0.48
+        completion_per_1m: 1.92
+      backend_refs:
+        - name: vllm_primary
+          endpoint: vllm:8000
+          protocol: http
+          weight: 1
+    - name: openai/gpt5.4
+      provider_model_id: openai/gpt5.4
+      reasoning_family: qwen3
+      pricing:
+        currency: USD
+        prompt_per_1m: 1.20
+        completion_per_1m: 4.80
+      backend_refs:
+        - name: vllm_primary
+          endpoint: vllm:8000
+          protocol: http
+          weight: 1
+
+routing:
+  modelCards:
+    - name: qwen/qwen3.5-rocm
+      context_window_size: 131072
+      description: Cheap default lane for standard follow-ups and lightweight clarification.
+      capabilities: [cheap_followup, concise_rewrite, general_chat]
+      quality_score: 0.72
+      modality: text
+      tags: [tier:cheap, purpose:default_feedback]
+    - name: google/gemini-3.1-pro
+      context_window_size: 262144
+      description: Mid-cost recovery lane for repeated dissatisfaction, debugging, and answer repair.
+      capabilities: [answer_repair, debugging, reasoning]
+      quality_score: 0.88
+      modality: text
+      tags: [tier:repair, purpose:feedback_recovery]
+    - name: openai/gpt5.4
+      context_window_size: 262144
+      description: Premium lane reserved for verified or high-stakes dissatisfaction recovery.
+      capabilities: [verified_reasoning, evidence_synthesis, high_stakes]
+      quality_score: 0.94
+      modality: text
+      tags: [tier:verified, purpose:feedback_recovery]
+
+  # This recipe mirrors the heuristics in .augment/feedback.md:
+  # 1. explicit dissatisfaction via repeated same-question reasks
+  # 2. implicit frustration keywords
+  # 3. code-error follow-ups
+  # 4. verification-sensitive recovery for high-stakes corrections
+  signals:
+    keywords:
+      - name: verification_markers
+        operator: OR
+        keywords:
+          - verify this
+          - fact check
+          - with sources
+          - cite sources
+          - cite the source
+          - give evidence
+          - provide evidence
+          - 给出处
+          - 给来源
+          - 请核实
+          - 请给证据
+        case_sensitive: false
+      - name: code_error_markers
+        operator: OR
+        keywords:
+          - traceback
+          - exception
+          - syntaxerror
+          - typeerror
+          - valueerror
+          - stack trace
+          - stacktrace
+          - notimplementederror
+          - assertionerror
+          - runtimeerror
+        case_sensitive: false
+      - name: clarification_feedback_markers
+        operator: OR
+        keywords:
+          - clarify
+          - explain more clearly
+          - simpler
+          - simpler answer
+          - one example
+          - walk me through it
+          - 讲清楚一点
+          - 简单一点
+          - 举个例子
+        case_sensitive: false
+      - name: frustration_feedback_markers
+        operator: OR
+        keywords:
+          - wrong
+          - that's wrong
+          - this is wrong
+          - doesn't work
+          - does not work
+          - mistake
+          - invalid
+          - that failed
+          - try again
+          - fix this
+          - 不对
+          - 错了
+          - 这不行
+          - 重新来
+          - 再试一次
+        case_sensitive: false
+
+    user_feedbacks:
+      - name: wrong_answer
+        description: Explicit correction or dissatisfaction.
+      - name: need_clarification
+        description: Explicit request to restate the answer more clearly.
+
+    reasks:
+      - name: likely_dissatisfied
+        description: Current user turn closely repeats the immediately previous user turn.
+        threshold: 0.8
+        lookback_turns: 1
+      - name: persistently_dissatisfied
+        description: Current user turn repeats the last two user turns in a row.
+        threshold: 0.8
+        lookback_turns: 2
+
+    fact_check:
+      - name: needs_fact_check
+        description: Request needs factual verification or sources.
+
+    domains:
+      - name: computer science
+        description: Coding, debugging, systems, APIs, and software engineering.
+      - name: health
+        description: Medical, clinical, or health-sensitive questions.
+      - name: law
+        description: Legal, policy, compliance, and regulatory topics.
+      - name: other
+        description: General-purpose follow-up traffic.
+
+    context:
+      - name: short_context
+        min_tokens: "0"
+        max_tokens: "999"
+      - name: medium_context
+        min_tokens: 1K
+        max_tokens: "7999"
+      - name: long_context
+        min_tokens: 8K
+        max_tokens: 256K
+
+  projections:
+    scores:
+      - name: feedback_recovery_pressure
+        method: weighted_sum
+        inputs:
+          - type: user_feedback
+            name: wrong_answer
+            weight: 0.36
+          - type: reask
+            name: likely_dissatisfied
+            weight: 0.24
+            value_source: confidence
+          - type: reask
+            name: persistently_dissatisfied
+            weight: 0.46
+            value_source: confidence
+          - type: keyword
+            name: frustration_feedback_markers
+            weight: 0.18
+            value_source: confidence
+          - type: keyword
+            name: code_error_markers
+            weight: 0.30
+            value_source: confidence
+          - type: fact_check
+            name: needs_fact_check
+            weight: 0.18
+          - type: domain
+            name: health
+            weight: 0.16
+          - type: domain
+            name: law
+            weight: 0.16
+          - type: context
+            name: long_context
+            weight: 0.06
+
+      - name: verification_pressure
+        method: weighted_sum
+        inputs:
+          - type: fact_check
+            name: needs_fact_check
+            weight: 0.34
+          - type: keyword
+            name: verification_markers
+            weight: 0.28
+            value_source: confidence
+          - type: domain
+            name: health
+            weight: 0.18
+          - type: domain
+            name: law
+            weight: 0.18
+          - type: user_feedback
+            name: wrong_answer
+            weight: 0.08
+          - type: reask
+            name: persistently_dissatisfied
+            weight: 0.08
+            value_source: confidence
+
+    mappings:
+      - name: feedback_recovery_band
+        source: feedback_recovery_pressure
+        method: threshold_bands
+        outputs:
+          - name: feedback_retry
+            gte: 0.24
+            lt: 0.55
+          - name: feedback_escalate
+            gte: 0.55
+            lt: 0.85
+          - name: feedback_verified_escalate
+            gte: 0.85
+      - name: verification_band
+        source: verification_pressure
+        method: threshold_bands
+        outputs:
+          - name: feedback_needs_evidence
+            gte: 0.42
+
+  decisions:
+    - name: feedback_verified_recovery
+      description: Premium recovery lane for explicit or persistent dissatisfaction on evidence-sensitive follow-ups.
+      priority: 240
+      rules:
+        operator: AND
+        conditions:
+          - operator: OR
+            conditions:
+              - type: projection
+                name: feedback_verified_escalate
+              - type: reask
+                name: persistently_dissatisfied
+              - type: user_feedback
+                name: wrong_answer
+          - operator: OR
+            conditions:
+              - type: projection
+                name: feedback_needs_evidence
+              - type: fact_check
+                name: needs_fact_check
+              - type: keyword
+                name: verification_markers
+              - type: domain
+                name: health
+              - type: domain
+                name: law
+          - operator: NOT
+            conditions:
+              - operator: OR
+                conditions:
+                  - type: keyword
+                    name: code_error_markers
+                  - type: domain
+                    name: computer science
+      modelRefs:
+        - model: openai/gpt5.4
+          use_reasoning: true
+          reasoning_effort: high
+      plugins:
+        - type: system_prompt
+          configuration:
+            enabled: true
+            mode: insert
+            system_prompt: You are handling a dissatisfied follow-up on a high-stakes or verification-sensitive question. Briefly acknowledge the miss, correct the answer directly, state uncertainty when needed, and cite evidence when the user asks for verification.
+        - type: header_mutation
+          configuration:
+            add:
+              - name: X-Feedback-Lane
+                value: verified-recovery
+            update:
+              - name: X-Route-Source
+                value: feedback-recipe
+
+    - name: feedback_persistent_code_recovery
+      description: Premium code-repair lane for repeated same-question retries that already failed on a cheaper recovery pass.
+      priority: 230
+      rules:
+        operator: AND
+        conditions:
+          - operator: OR
+            conditions:
+              - type: keyword
+                name: code_error_markers
+              - type: domain
+                name: computer science
+          - type: reask
+            name: persistently_dissatisfied
+      modelRefs:
+        - model: openai/gpt5.4
+          use_reasoning: true
+          reasoning_effort: high
+      plugins:
+        - type: system_prompt
+          configuration:
+            enabled: true
+            mode: insert
+            system_prompt: The user has repeated the same failing coding question multiple times. Rebuild the diagnosis from first principles, identify the faulty assumption in the earlier answer, and return a corrected implementation plus a concrete validation step.
+        - type: header_mutation
+          configuration:
+            add:
+              - name: X-Feedback-Lane
+                value: persistent-code-recovery
+            update:
+              - name: X-Route-Source
+                value: feedback-recipe
+
+    - name: feedback_code_recovery
+      description: Repair lane for code follow-ups that include execution failures or repeated dissatisfaction.
+      priority: 220
+      rules:
+        operator: AND
+        conditions:
+          - operator: OR
+            conditions:
+              - type: keyword
+                name: code_error_markers
+              - type: domain
+                name: computer science
+          - operator: OR
+            conditions:
+              - type: user_feedback
+                name: wrong_answer
+              - type: reask
+                name: likely_dissatisfied
+              - type: projection
+                name: feedback_escalate
+          - operator: NOT
+            conditions:
+              - type: reask
+                name: persistently_dissatisfied
+      modelRefs:
+        - model: google/gemini-3.1-pro
+          use_reasoning: true
+          reasoning_effort: medium
+      plugins:
+        - type: system_prompt
+          configuration:
+            enabled: true
+            mode: insert
+            system_prompt: The previous answer likely failed in execution. Diagnose the failing assumption, explain the bug briefly, and return corrected code plus the smallest useful validation step.
+        - type: header_mutation
+          configuration:
+            add:
+              - name: X-Feedback-Lane
+                value: code-recovery
+            update:
+              - name: X-Route-Source
+                value: feedback-recipe
+
+    - name: feedback_persistent_recovery
+      description: Premium general recovery lane for repeated same-question retries that have already failed on a cheaper recovery pass.
+      priority: 210
+      rules:
+        operator: AND
+        conditions:
+          - type: reask
+            name: persistently_dissatisfied
+          - operator: NOT
+            conditions:
+              - operator: OR
+                conditions:
+                  - type: projection
+                    name: feedback_needs_evidence
+                  - type: keyword
+                    name: code_error_markers
+                  - type: domain
+                    name: computer science
+      modelRefs:
+        - model: openai/gpt5.4
+          use_reasoning: true
+          reasoning_effort: high
+      plugins:
+        - type: system_prompt
+          configuration:
+            enabled: true
+            mode: insert
+            system_prompt: "The user has re-asked essentially the same question multiple times. Treat this as a hard recovery task: do not paraphrase the old answer, rebuild the answer from first principles, and make the improvement obvious."
+        - type: header_mutation
+          configuration:
+            add:
+              - name: X-Feedback-Lane
+                value: persistent-recovery
+            update:
+              - name: X-Route-Source
+                value: feedback-recipe
+
+    - name: feedback_general_recovery
+      description: General recovery lane for repeated dissatisfaction that is neither verification-heavy nor code-specific.
+      priority: 200
+      rules:
+        operator: AND
+        conditions:
+          - operator: OR
+            conditions:
+              - type: projection
+                name: feedback_retry
+              - type: projection
+                name: feedback_escalate
+              - type: reask
+                name: likely_dissatisfied
+          - operator: NOT
+            conditions:
+              - operator: OR
+                conditions:
+                  - type: reask
+                    name: persistently_dissatisfied
+                  - type: projection
+                    name: feedback_needs_evidence
+                  - type: keyword
+                    name: code_error_markers
+                  - type: domain
+                    name: computer science
+      modelRefs:
+        - model: google/gemini-3.1-pro
+          use_reasoning: true
+          reasoning_effort: medium
+      plugins:
+        - type: system_prompt
+          configuration:
+            enabled: true
+            mode: insert
+            system_prompt: The user is likely dissatisfied with the previous answer. Do not repeat the earlier wording. Answer the same question again with a cleaner structure, tighter reasoning, and one concrete improvement over the last reply.
+        - type: header_mutation
+          configuration:
+            add:
+              - name: X-Feedback-Lane
+                value: general-recovery
+            update:
+              - name: X-Route-Source
+                value: feedback-recipe
+
+    - name: feedback_need_clarification
+      description: Keep explicit clarification follow-ups on the cheap lane unless dissatisfaction has clearly escalated.
+      priority: 180
+      rules:
+        operator: AND
+        conditions:
+          - operator: OR
+            conditions:
+              - type: user_feedback
+                name: need_clarification
+              - type: keyword
+                name: clarification_feedback_markers
+          - operator: OR
+            conditions:
+              - type: context
+                name: short_context
+              - type: context
+                name: medium_context
+          - operator: NOT
+            conditions:
+              - operator: OR
+                conditions:
+                  - type: reask
+                    name: persistently_dissatisfied
+                  - type: projection
+                    name: feedback_verified_escalate
+                  - type: user_feedback
+                    name: wrong_answer
+                  - type: keyword
+                    name: verification_markers
+                  - type: keyword
+                    name: code_error_markers
+      modelRefs:
+        - model: qwen/qwen3.5-rocm
+          use_reasoning: false
+      plugins:
+        - type: system_prompt
+          configuration:
+            enabled: true
+            mode: insert
+            system_prompt: The user wants a clearer restatement, not a brand-new policy. Rewrite the answer simply, keep it concise, and give one small example when it helps.
+        - type: semantic-cache
+          configuration:
+            enabled: true
+            similarity_threshold: 0.86
+            ttl_seconds: 1800

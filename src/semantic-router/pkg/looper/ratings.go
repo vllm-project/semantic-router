@@ -47,6 +47,9 @@ func (l *RatingsLooper) Execute(ctx context.Context, req *Request) (*Response, e
 		return nil, fmt.Errorf("no models configured")
 	}
 
+	// Set decision name in client for header transmission
+	l.client.SetDecisionName(req.DecisionName)
+
 	// Get config from algorithm
 	maxConcurrent := len(req.ModelRefs)
 	onError := "skip"
@@ -59,8 +62,14 @@ func (l *RatingsLooper) Execute(ctx context.Context, req *Request) (*Response, e
 		}
 	}
 
-	logging.Infof("[RatingsLooper] Starting with %d models, max_concurrent=%d, on_error=%s, streaming=%v",
-		len(req.ModelRefs), maxConcurrent, onError, req.IsStreaming)
+	logging.ComponentEvent("looper", "execution_started", map[string]interface{}{
+		"looper":           "ratings",
+		"decision":         req.DecisionName,
+		"candidate_models": len(req.ModelRefs),
+		"max_concurrent":   maxConcurrent,
+		"on_error":         onError,
+		"streaming":        req.IsStreaming,
+	})
 
 	// Use semaphore to limit concurrency
 	sem := make(chan struct{}, maxConcurrent)
@@ -92,17 +101,28 @@ func (l *RatingsLooper) Execute(ctx context.Context, req *Request) (*Response, e
 				}
 			}
 
-			logging.Infof("[RatingsLooper] Calling model: %s (slot=%d)", modelName, idx+1)
+			logging.ComponentDebugEvent("looper", "model_dispatch_started", map[string]interface{}{
+				"looper":    "ratings",
+				"decision":  req.DecisionName,
+				"model_ref": modelName,
+				"slot":      idx + 1,
+			})
 
-			// Use idx+1 as iteration number for concurrent requests
-			// RatingsLooper doesn't need logprobs (no confidence-based routing)
-			resp, err := l.client.CallModel(ctx, req.OriginalRequest, modelName, false, idx+1, nil, accessKey)
+			// Use idx+1 as iteration number for concurrent requests.
+			// RatingsLooper doesn't need logprobs (no confidence-based routing).
+			resp, err := l.client.CallModel(ctx, req.OriginalRequest, modelName, req.IsStreaming, idx+1, nil, accessKey)
 
 			mu.Lock()
 			defer mu.Unlock()
 
 			if err != nil {
-				logging.Errorf("[RatingsLooper] Model %s failed: %v", modelName, err)
+				logging.ComponentWarnEvent("looper", "model_dispatch_failed", map[string]interface{}{
+					"looper":    "ratings",
+					"decision":  req.DecisionName,
+					"model_ref": modelName,
+					"slot":      idx + 1,
+					"error":     err.Error(),
+				})
 				errors[idx] = err
 			} else {
 				responses[idx] = resp
@@ -137,7 +157,13 @@ func (l *RatingsLooper) Execute(ctx context.Context, req *Request) (*Response, e
 		return nil, fmt.Errorf("all models failed")
 	}
 
-	logging.Infof("[RatingsLooper] %d/%d models succeeded", len(successResponses), len(req.ModelRefs))
+	logging.ComponentEvent("looper", "execution_completed", map[string]interface{}{
+		"looper":            "ratings",
+		"decision":          req.DecisionName,
+		"successful_models": len(successResponses),
+		"total_models":      len(req.ModelRefs),
+		"models_used":       successModels,
+	})
 
 	// Iterations = total calls made (including failures)
 	iterations := len(req.ModelRefs)

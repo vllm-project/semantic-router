@@ -1,0 +1,336 @@
+replicaCount: 1
+image:
+  repository: ghcr.io/vllm-project/semantic-router/extproc
+  pullPolicy: Never
+  tag: e2e-test
+service:
+  type: ClusterIP
+  port: 8080
+config:
+  version: v0.3
+  listeners: []
+  providers:
+    defaults:
+      default_model: mistral-7b
+    models:
+      - name: llama-3.2-1b
+        external_model_ids:
+          mock-llm: llama-3.2-1b
+        backend_refs:
+          - name: mock-llm
+            endpoint: mock-llm-service.default.svc.cluster.local:8000
+            weight: 1
+            type: vllm
+      - name: llama-3.2-3b
+        external_model_ids:
+          mock-llm: llama-3.2-3b
+        backend_refs:
+          - name: mock-llm
+            endpoint: mock-llm-service.default.svc.cluster.local:8000
+            weight: 1
+            type: vllm
+      - name: codellama-7b
+        external_model_ids:
+          mock-llm: codellama-7b
+        backend_refs:
+          - name: mock-llm
+            endpoint: mock-llm-service.default.svc.cluster.local:8000
+            weight: 1
+            type: vllm
+      - name: mistral-7b
+        external_model_ids:
+          mock-llm: mistral-7b
+        backend_refs:
+          - name: mock-llm
+            endpoint: mock-llm-service.default.svc.cluster.local:8000
+            weight: 1
+            type: vllm
+  routing:
+    decisions:
+      - name: math_decision
+        description: Mathematics queries - uses MLP for neural network routing
+        priority: 100
+        rules:
+          operator: AND
+          conditions:
+            - type: domain
+              name: math
+        algorithm:
+          type: mlp
+        modelRefs:
+          - model: llama-3.2-1b
+            use_reasoning: false
+          - model: llama-3.2-3b
+            use_reasoning: false
+          - model: codellama-7b
+            use_reasoning: false
+          - model: mistral-7b
+            use_reasoning: false
+      - name: code_decision
+        description: Programming queries - uses MLP
+        priority: 100
+        rules:
+          operator: AND
+          conditions:
+            - type: domain
+              name: computer science
+        algorithm:
+          type: mlp
+        modelRefs:
+          - model: llama-3.2-1b
+            use_reasoning: false
+          - model: llama-3.2-3b
+            use_reasoning: false
+          - model: codellama-7b
+            use_reasoning: false
+          - model: mistral-7b
+            use_reasoning: false
+      - name: science_decision
+        description: Science queries (chemistry, biology) - uses KNN
+        priority: 100
+        rules:
+          operator: OR
+          conditions:
+            - type: domain
+              name: chemistry
+            - type: domain
+              name: biology
+        algorithm:
+          type: knn
+        modelRefs:
+          - model: llama-3.2-1b
+            use_reasoning: false
+          - model: llama-3.2-3b
+            use_reasoning: false
+          - model: codellama-7b
+            use_reasoning: false
+          - model: mistral-7b
+            use_reasoning: false
+      - name: health_decision
+        description: Health and medical queries - uses KMeans
+        priority: 100
+        rules:
+          operator: AND
+          conditions:
+            - type: domain
+              name: health
+        algorithm:
+          type: kmeans
+        modelRefs:
+          - model: llama-3.2-1b
+            use_reasoning: false
+          - model: llama-3.2-3b
+            use_reasoning: false
+          - model: codellama-7b
+            use_reasoning: false
+          - model: mistral-7b
+            use_reasoning: false
+      - name: physics_decision
+        description: Physics queries - uses KMeans
+        priority: 100
+        rules:
+          operator: AND
+          conditions:
+            - type: domain
+              name: physics
+        algorithm:
+          type: kmeans
+        modelRefs:
+          - model: llama-3.2-1b
+            use_reasoning: false
+          - model: llama-3.2-3b
+            use_reasoning: false
+          - model: codellama-7b
+            use_reasoning: false
+          - model: mistral-7b
+            use_reasoning: false
+      - name: business_decision
+        description: Business and economics queries - uses SVM
+        priority: 100
+        rules:
+          operator: OR
+          conditions:
+            - type: domain
+              name: business
+            - type: domain
+              name: economics
+        algorithm:
+          type: svm
+        modelRefs:
+          - model: llama-3.2-1b
+            use_reasoning: false
+          - model: llama-3.2-3b
+            use_reasoning: false
+          - model: codellama-7b
+            use_reasoning: false
+          - model: mistral-7b
+            use_reasoning: false
+      - name: law_decision
+        description: Law queries - uses KNN
+        priority: 100
+        rules:
+          operator: AND
+          conditions:
+            - type: domain
+              name: law
+        algorithm:
+          type: knn
+        modelRefs:
+          - model: llama-3.2-1b
+            use_reasoning: false
+          - model: llama-3.2-3b
+            use_reasoning: false
+          - model: codellama-7b
+            use_reasoning: false
+          - model: mistral-7b
+            use_reasoning: false
+      - name: engineering_decision
+        description: Engineering queries - uses KMeans
+        priority: 100
+        rules:
+          operator: AND
+          conditions:
+            - type: domain
+              name: engineering
+        algorithm:
+          type: kmeans
+        modelRefs:
+          - model: llama-3.2-1b
+            use_reasoning: false
+          - model: llama-3.2-3b
+            use_reasoning: false
+          - model: codellama-7b
+            use_reasoning: false
+          - model: mistral-7b
+            use_reasoning: false
+      - name: humanities_decision
+        description: History, philosophy, psychology - uses KNN
+        priority: 90
+        rules:
+          operator: OR
+          conditions:
+            - type: domain
+              name: history
+            - type: domain
+              name: philosophy
+            - type: domain
+              name: psychology
+        algorithm:
+          type: knn
+        modelRefs:
+          - model: llama-3.2-1b
+            use_reasoning: false
+          - model: llama-3.2-3b
+            use_reasoning: false
+          - model: codellama-7b
+            use_reasoning: false
+          - model: mistral-7b
+            use_reasoning: false
+      - name: general_decision
+        description: General / other - catch-all for domain 'other' and low-confidence
+        priority: 1
+        rules:
+          operator: AND
+          conditions:
+            - type: domain
+              name: other
+        algorithm:
+          type: knn
+        modelRefs:
+          - model: llama-3.2-1b
+            use_reasoning: false
+          - model: llama-3.2-3b
+            use_reasoning: false
+          - model: codellama-7b
+            use_reasoning: false
+          - model: mistral-7b
+            use_reasoning: false
+    signals:
+      domains:
+        - name: math
+          description: Mathematics and quantitative reasoning
+        - name: computer science
+          description: Computer science and programming
+        - name: physics
+          description: Physics and physical sciences
+        - name: chemistry
+          description: Chemistry and chemical sciences
+        - name: biology
+          description: Biology and life sciences
+        - name: health
+          description: Health and medical sciences
+        - name: engineering
+          description: Engineering disciplines
+        - name: economics
+          description: Economics and finance
+        - name: business
+          description: Business and management
+        - name: history
+          description: History and historical events
+        - name: law
+          description: Law and legal matters
+        - name: philosophy
+          description: Philosophy and ethics
+        - name: psychology
+          description: Psychology and behavioral science
+        - name: other
+          description: General knowledge and miscellaneous
+    modelCards:
+      - name: llama-3.2-1b
+      - name: llama-3.2-3b
+      - name: codellama-7b
+      - name: mistral-7b
+  global:
+    model_catalog:
+      kbs: []
+    router:
+      model_selection:
+        enabled: true
+        ml:
+          models_path: /tmp/ml-models
+          embedding_dim: 1024
+          knn:
+            k: 5
+            pretrained_path: /tmp/ml-models/knn_model.json
+          kmeans:
+            num_clusters: 8
+            efficiency_weight: 0.1
+            pretrained_path: /tmp/ml-models/kmeans_model.json
+          svm:
+            kernel: rbf
+            gamma: 1.0
+            pretrained_path: /tmp/ml-models/svm_model.json
+          mlp:
+            device: cpu
+            pretrained_path: /tmp/ml-models/mlp_model.json
+      strategy: priority
+    services:
+      observability:
+        metrics:
+          enabled: true
+        tracing:
+          enabled: false
+    stores:
+      semantic_cache:
+        embedding_model: mmbert
+      memory:
+        embedding_model: mmbert
+      vector_store:
+        embedding_model: mmbert
+    integrations: {}
+resources:
+  limits:
+    cpu: 2000m
+    memory: 8Gi
+  requests:
+    cpu: 500m
+    memory: 2Gi
+extraVolumes:
+  - name: ml-models
+    hostPath:
+      path: /tmp/ml-models
+      type: DirectoryOrCreate
+extraVolumeMounts:
+  - name: ml-models
+    mountPath: /tmp/ml-models
+    readOnly: true

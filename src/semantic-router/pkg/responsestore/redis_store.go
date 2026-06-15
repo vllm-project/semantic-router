@@ -40,8 +40,11 @@ const (
 
 // The function validates configuration, establishes connection, and tests connectivity.
 func NewRedisStore(config StoreConfig) (*RedisStore, error) {
-	logging.Debugf("RedisStore: Initializing with cluster_mode=%v, config_path=%s",
-		config.Redis.ClusterMode, config.Redis.ConfigPath)
+	logging.ComponentEvent("responsestore", "redis_store_init_started", map[string]interface{}{
+		"cluster_mode":    config.Redis.ClusterMode,
+		"external_config": config.Redis.ConfigPath != "",
+		"ttl_seconds":     config.TTLSeconds,
+	})
 
 	ttl := DefaultTTL
 	if config.TTLSeconds > 0 {
@@ -86,8 +89,17 @@ func NewRedisStore(config StoreConfig) (*RedisStore, error) {
 		return nil, fmt.Errorf("failed to connect to Redis: %w", err)
 	}
 
-	logging.Infof("RedisStore: initialized successfully (cluster_mode=%v, key_prefix=%s, ttl=%s)",
-		finalCfg.ClusterMode, keyPrefix, ttl)
+	mode := "standalone"
+	if finalCfg.ClusterMode {
+		mode = "cluster"
+	}
+	logging.ComponentEvent("responsestore", "redis_store_initialized", map[string]interface{}{
+		"mode":         mode,
+		"cluster_mode": finalCfg.ClusterMode,
+		"key_prefix":   keyPrefix,
+		"ttl_seconds":  ttl.Seconds(),
+		"pool_size":    finalCfg.PoolSize,
+	})
 
 	return store, nil
 }
@@ -95,12 +107,17 @@ func NewRedisStore(config StoreConfig) (*RedisStore, error) {
 func loadRedisStoreConfig(cfg RedisStoreConfig) (RedisStoreConfig, error) {
 	// If no external config, return inline config as-is
 	if cfg.ConfigPath == "" {
-		logging.Debugf("RedisStore: using inline configuration")
+		logging.ComponentDebugEvent("responsestore", "redis_store_config_source_selected", map[string]interface{}{
+			"source": "inline",
+		})
 		return cfg, nil
 	}
 
 	// Load external configuration
-	logging.Debugf("RedisStore: loading config from file: %s", cfg.ConfigPath)
+	logging.ComponentDebugEvent("responsestore", "redis_store_config_source_selected", map[string]interface{}{
+		"source":      "file",
+		"config_path": cfg.ConfigPath,
+	})
 
 	data, err := os.ReadFile(cfg.ConfigPath)
 	if err != nil {
@@ -112,8 +129,11 @@ func loadRedisStoreConfig(cfg RedisStoreConfig) (RedisStoreConfig, error) {
 		return cfg, fmt.Errorf("failed to parse config file %s: %w", cfg.ConfigPath, err)
 	}
 
-	logging.Debugf("RedisStore: external config loaded (address=%s, cluster_mode=%v)",
-		fileCfg.Address, fileCfg.ClusterMode)
+	logging.ComponentDebugEvent("responsestore", "redis_store_config_loaded", map[string]interface{}{
+		"cluster_mode": fileCfg.ClusterMode,
+		"address":      fileCfg.Address,
+		"nodes":        len(fileCfg.ClusterAddresses),
+	})
 
 	// External file takes precedence
 	return fileCfg, nil
@@ -208,13 +228,18 @@ func createRedisClient(cfg RedisStoreConfig) (redis.UniversalClient, error) {
 			tlsConfig.RootCAs = caCertPool
 		}
 
-		logging.Debugf("RedisStore: TLS enabled")
+		logging.ComponentDebugEvent("responsestore", "redis_store_tls_enabled", map[string]interface{}{
+			"ca_configured": cfg.TLSCAPath != "",
+		})
 	}
 
 	// Create client based on mode
 	if cfg.ClusterMode {
-		logging.Infof("RedisStore: creating cluster client (nodes=%d, pool_size=%d)",
-			len(cfg.ClusterAddresses), cfg.PoolSize)
+		logging.ComponentDebugEvent("responsestore", "redis_client_create_started", map[string]interface{}{
+			"mode":      "cluster",
+			"nodes":     len(cfg.ClusterAddresses),
+			"pool_size": cfg.PoolSize,
+		})
 
 		return redis.NewClusterClient(&redis.ClusterOptions{
 			Addrs:        cfg.ClusterAddresses,
@@ -230,8 +255,12 @@ func createRedisClient(cfg RedisStoreConfig) (redis.UniversalClient, error) {
 	}
 
 	// Standalone mode
-	logging.Infof("RedisStore: creating standalone client (address=%s, db=%d, pool_size=%d)",
-		cfg.Address, cfg.DB, cfg.PoolSize)
+	logging.ComponentDebugEvent("responsestore", "redis_client_create_started", map[string]interface{}{
+		"mode":      "standalone",
+		"address":   cfg.Address,
+		"db":        cfg.DB,
+		"pool_size": cfg.PoolSize,
+	})
 
 	return redis.NewClient(&redis.Options{
 		Addr:         cfg.Address,

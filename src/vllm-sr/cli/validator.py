@@ -1,35 +1,224 @@
 """Configuration validator for vLLM Semantic Router."""
 
 from typing import Dict, Any, List
+from cli.config_contract import (
+    build_projection_reference_index,
+    build_signal_reference_index,
+    is_signal_condition_type,
+    signal_reference_exists,
+)
 from cli.models import (
     UserConfig,
     PluginType,
     SemanticCachePluginConfig,
-    JailbreakPluginConfig,
-    PIIPluginConfig,
+    FastResponsePluginConfig,
+    RequestParamsPluginConfig,
+    ResponseJailbreakPluginConfig,
+    ToolsPluginConfig,
+    ToolSelectionPluginConfig,
     SystemPromptPluginConfig,
     HeaderMutationPluginConfig,
     HallucinationPluginConfig,
     RouterReplayPluginConfig,
+    MemoryPluginConfig,
+    RAGPluginConfig,
+    ImageGenPluginConfig,
 )
 from pydantic import ValidationError as PydanticValidationError
-from cli.utils import getLogger
+from cli.utils import get_logger
 from cli.consts import EXTERNAL_API_MODEL_FORMATS
+from cli.validation_error import ValidationError
+from cli.validator_projection_embedding import (
+    validate_embedding_modality_compatibility,
+    validate_projection_score_dependencies,
+)
 
-log = getLogger(__name__)
+log = get_logger(__name__)
 
 
-class ValidationError:
-    """Validation error."""
+def _is_latency_condition(condition_type: str) -> bool:
+    if not condition_type:
+        return False
+    return condition_type.strip().lower() == "latency"
 
-    def __init__(self, message: str, field: str = None):
-        self.message = message
-        self.field = field
 
-    def __str__(self):
-        if self.field:
-            return f"[{self.field}] {self.message}"
-        return self.message
+def _iter_condition_nodes(conditions):
+    """Depth-first traversal over recursive condition trees."""
+    if not conditions:
+        return
+    for condition in conditions:
+        yield condition
+        if getattr(condition, "conditions", None):
+            yield from _iter_condition_nodes(condition.conditions)
+
+
+def _iter_merged_condition_nodes(conditions):
+    """Depth-first traversal over merged router condition dicts."""
+    if not conditions:
+        return
+    for condition in conditions:
+        if not isinstance(condition, dict):
+            continue
+        yield condition
+        if condition.get("conditions"):
+            yield from _iter_merged_condition_nodes(condition["conditions"])
+
+
+def _is_latency_aware_algorithm(decision) -> bool:
+    if not decision.algorithm:
+        return False
+    return (decision.algorithm.type or "").strip().lower() == "latency_aware"
+
+
+def validate_latency_compatibility(config: UserConfig) -> List[ValidationError]:
+    errors = []
+    has_legacy_conditions = any(
+        _is_latency_condition(condition.type)
+        for decision in config.decisions
+        for condition in _iter_condition_nodes(decision.rules.conditions)
+    )
+
+    if has_legacy_conditions:
+        errors.append(
+            ValidationError(
+                "legacy latency config is no longer supported; use decision.algorithm.type=latency_aware and remove conditions.type=latency",
+                field="decisions.rules.conditions",
+            )
+        )
+
+    return errors
+
+
+def validate_latency_aware_algorithm_config(
+    config: UserConfig,
+) -> List[ValidationError]:
+    errors = []
+    for decision in config.decisions:
+        if not _is_latency_aware_algorithm(decision):
+            continue
+        latency_cfg = decision.algorithm.latency_aware
+        if latency_cfg is None:
+            errors.append(
+                ValidationError(
+                    f"decision '{decision.name}' requires algorithm.latency_aware when algorithm.type=latency_aware",
+                    field=f"decisions.{decision.name}.algorithm.latency_aware",
+                )
+            )
+            continue
+
+        has_tpot = (
+            latency_cfg.tpot_percentile is not None and latency_cfg.tpot_percentile > 0
+        )
+        has_ttft = (
+            latency_cfg.ttft_percentile is not None and latency_cfg.ttft_percentile > 0
+        )
+        if not has_tpot and not has_ttft:
+            errors.append(
+                ValidationError(
+                    f"decision '{decision.name}' must set tpot_percentile or ttft_percentile in algorithm.latency_aware",
+                    field=f"decisions.{decision.name}.algorithm.latency_aware",
+                )
+            )
+        if has_tpot and not (1 <= latency_cfg.tpot_percentile <= 100):
+            errors.append(
+                ValidationError(
+                    f"decision '{decision.name}' algorithm.latency_aware.tpot_percentile must be between 1 and 100",
+                    field=f"decisions.{decision.name}.algorithm.latency_aware.tpot_percentile",
+                )
+            )
+        if has_ttft and not (1 <= latency_cfg.ttft_percentile <= 100):
+            errors.append(
+                ValidationError(
+                    f"decision '{decision.name}' algorithm.latency_aware.ttft_percentile must be between 1 and 100",
+                    field=f"decisions.{decision.name}.algorithm.latency_aware.ttft_percentile",
+                )
+            )
+    return errors
+
+
+def validate_algorithm_one_of(config: UserConfig) -> List[ValidationError]:
+    errors = []
+
+    expected_block_by_type = {
+        "confidence": "confidence",
+        "ratings": "ratings",
+        "remom": "remom",
+        "elo": "elo",
+        "router_dc": "router_dc",
+        "automix": "automix",
+        "hybrid": "hybrid",
+        "rl_driven": "rl_driven",
+        "gmtrouter": "gmtrouter",
+        "latency_aware": "latency_aware",
+        "multi_factor": "multi_factor",
+        "session_aware": "session_aware",
+    }
+
+    for decision in config.decisions:
+        if decision.algorithm is None:
+            continue
+
+        algorithm = decision.algorithm
+        configured_blocks = []
+        if algorithm.confidence is not None:
+            configured_blocks.append("confidence")
+        if algorithm.ratings is not None:
+            configured_blocks.append("ratings")
+        if algorithm.remom is not None:
+            configured_blocks.append("remom")
+        if algorithm.elo is not None:
+            configured_blocks.append("elo")
+        if algorithm.router_dc is not None:
+            configured_blocks.append("router_dc")
+        if algorithm.automix is not None:
+            configured_blocks.append("automix")
+        if algorithm.hybrid is not None:
+            configured_blocks.append("hybrid")
+        if algorithm.rl_driven is not None:
+            configured_blocks.append("rl_driven")
+        if algorithm.gmtrouter is not None:
+            configured_blocks.append("gmtrouter")
+        if algorithm.latency_aware is not None:
+            configured_blocks.append("latency_aware")
+        if algorithm.multi_factor is not None:
+            configured_blocks.append("multi_factor")
+        if algorithm.session_aware is not None:
+            configured_blocks.append("session_aware")
+
+        display_type = (algorithm.type or "").strip() or "<empty>"
+        normalized_type = (algorithm.type or "").strip().lower()
+
+        if len(configured_blocks) > 1:
+            errors.append(
+                ValidationError(
+                    f"decision '{decision.name}' algorithm.type={display_type} cannot be combined with multiple algorithm config blocks: "
+                    f"{', '.join(configured_blocks)}",
+                    field=f"decisions.{decision.name}.algorithm",
+                )
+            )
+            continue
+
+        expected_block = expected_block_by_type.get(normalized_type)
+        if expected_block is None:
+            if configured_blocks:
+                errors.append(
+                    ValidationError(
+                        f"decision '{decision.name}' algorithm.type={display_type} cannot be used with algorithm.{configured_blocks[0]} configuration",
+                        field=f"decisions.{decision.name}.algorithm.{configured_blocks[0]}",
+                    )
+                )
+            continue
+
+        if len(configured_blocks) == 1 and configured_blocks[0] != expected_block:
+            errors.append(
+                ValidationError(
+                    f"decision '{decision.name}' algorithm.type={display_type} requires algorithm.{expected_block} configuration; "
+                    f"found algorithm.{configured_blocks[0]}",
+                    field=f"decisions.{decision.name}.algorithm.{configured_blocks[0]}",
+                )
+            )
+
+    return errors
 
 
 def validate_signal_references(config: UserConfig) -> List[ValidationError]:
@@ -44,31 +233,32 @@ def validate_signal_references(config: UserConfig) -> List[ValidationError]:
     """
     errors = []
 
-    # Build signal name index
-    signal_names = set()
-    if config.signals:
-        for signal in config.signals.keywords:
-            signal_names.add(signal.name)
-        for signal in config.signals.embeddings:
-            signal_names.add(signal.name)
-        if config.signals.fact_check:
-            for signal in config.signals.fact_check:
-                signal_names.add(signal.name)
-        if config.signals.context:
-            for signal in config.signals.context:
-                signal_names.add(signal.name)
+    signal_names = build_signal_reference_index(config.signals)
+    projection_names = build_projection_reference_index(config.routing.projections)
 
     # Check decision conditions
     for decision in config.decisions:
-        for condition in decision.rules.conditions:
-            if condition.type in ["keyword", "embedding", "fact_check", "context"]:
-                if condition.name not in signal_names:
-                    errors.append(
-                        ValidationError(
-                            f"Decision '{decision.name}' references unknown signal '{condition.name}'",
-                            field=f"decisions.{decision.name}.rules.conditions",
-                        )
+        for condition in _iter_condition_nodes(decision.rules.conditions):
+            if (condition.type or "").strip().lower() == "projection":
+                if condition.name in projection_names:
+                    continue
+                errors.append(
+                    ValidationError(
+                        f"Decision '{decision.name}' references unknown projection '{condition.name}'",
+                        field=f"decisions.{decision.name}.rules.conditions",
                     )
+                )
+                continue
+            if not is_signal_condition_type(condition.type):
+                continue
+            if signal_reference_exists(signal_names, condition.type, condition.name):
+                continue
+            errors.append(
+                ValidationError(
+                    f"Decision '{decision.name}' references unknown signal '{condition.name}'",
+                    field=f"decisions.{decision.name}.rules.conditions",
+                )
+            )
 
     return errors
 
@@ -94,13 +284,13 @@ def validate_domain_references(config: UserConfig) -> List[ValidationError]:
     # If no domains defined, collect from decisions (will be auto-generated)
     if not domain_names:
         for decision in config.decisions:
-            for condition in decision.rules.conditions:
+            for condition in _iter_condition_nodes(decision.rules.conditions):
                 if condition.type == "domain":
                     domain_names.add(condition.name)
 
     # Check decision conditions
     for decision in config.decisions:
-        for condition in decision.rules.conditions:
+        for condition in _iter_condition_nodes(decision.rules.conditions):
             if condition.type == "domain":
                 if not domain_names:
                     errors.append(
@@ -125,99 +315,127 @@ def validate_model_references(config: UserConfig) -> List[ValidationError]:
     """
     errors = []
 
-    # Build model name index
-    model_names = {model.name for model in config.providers.models}
+    provider_model_names = {model.name for model in config.providers.models}
+    routing_cards = {card.name: card for card in config.routing.model_cards}
+    routing_model_names = set(routing_cards.keys())
+
+    for model in config.providers.models:
+        if model.name not in routing_model_names:
+            errors.append(
+                ValidationError(
+                    f"Provider model '{model.name}' is missing from routing.modelCards",
+                    field=f"providers.models.{model.name}",
+                )
+            )
+
+    for model in config.providers.models:
+        if (
+            model.reasoning_family
+            and model.reasoning_family not in config.providers.reasoning_families
+        ):
+            errors.append(
+                ValidationError(
+                    f"Provider model '{model.name}' references unknown reasoning family '{model.reasoning_family}'",
+                    field=f"providers.models.{model.name}.reasoning_family",
+                )
+            )
 
     # Check decision model references
     for decision in config.decisions:
         for model_ref in decision.modelRefs:
-            if model_ref.model not in model_names:
+            if model_ref.model not in provider_model_names:
                 errors.append(
                     ValidationError(
                         f"Decision '{decision.name}' references unknown model '{model_ref.model}'",
                         field=f"decisions.{decision.name}.modelRefs",
                     )
                 )
+                continue
+            if model_ref.model not in routing_model_names:
+                errors.append(
+                    ValidationError(
+                        f"Decision '{decision.name}' references model '{model_ref.model}' without a routing.modelCards entry",
+                        field=f"decisions.{decision.name}.modelRefs",
+                    )
+                )
+                continue
+            if model_ref.lora_name:
+                declared_loras = {
+                    adapter.name
+                    for adapter in (routing_cards[model_ref.model].loras or [])
+                    if adapter.name
+                }
+                if not declared_loras:
+                    errors.append(
+                        ValidationError(
+                            f"Decision '{decision.name}' references LoRA '{model_ref.lora_name}' for model '{model_ref.model}', "
+                            "but routing.modelCards declares no loras for that model",
+                            field=f"decisions.{decision.name}.modelRefs",
+                        )
+                    )
+                elif model_ref.lora_name not in declared_loras:
+                    errors.append(
+                        ValidationError(
+                            f"Decision '{decision.name}' references unknown LoRA '{model_ref.lora_name}' for model '{model_ref.model}'",
+                            field=f"decisions.{decision.name}.modelRefs",
+                        )
+                    )
 
     # Check default model
-    if config.providers.default_model not in model_names:
+    if config.providers.default_model not in provider_model_names:
         errors.append(
             ValidationError(
                 f"Default model '{config.providers.default_model}' not found in models",
-                field="providers.default_model",
+                field="providers.defaults.default_model",
+            )
+        )
+    elif config.providers.default_model not in routing_model_names:
+        errors.append(
+            ValidationError(
+                f"Default model '{config.providers.default_model}' not found in routing.modelCards",
+                field="providers.defaults.default_model",
             )
         )
 
     return errors
 
 
-def validate_merged_config(merged_config: Dict[str, Any]) -> List[ValidationError]:
-    """
-    Validate the merged router configuration.
+def _collect_pydantic_error_messages(exc: PydanticValidationError) -> List[str]:
+    messages: List[str] = []
+    for error in exc.errors():
+        field = " -> ".join(str(x) for x in error["loc"])
+        messages.append(f"{field}: {error['msg']}")
+    return messages
 
-    Args:
-        merged_config: Merged configuration dictionary
 
-    Returns:
-        list: List of validation errors
-    """
-    errors = []
-
-    # Validate required fields
-    required_fields = [
-        "vllm_endpoints",
-        "model_config",
-        "default_model",
-        "decisions",
-        "categories",
-    ]
-    for field in required_fields:
-        if field not in merged_config:
-            errors.append(
-                ValidationError(f"Missing required field: {field}", field=field)
+def _validate_single_plugin_configuration(
+    decision_name: str,
+    idx: int,
+    plugin_type: str,
+    plugin_config: dict,
+    config_model: type | None,
+) -> List[ValidationError]:
+    if config_model is None:
+        return []
+    field = f"decisions.{decision_name}.plugins[{idx}]"
+    try:
+        config_model(**plugin_config)
+        return []
+    except PydanticValidationError as exc:
+        joined = ", ".join(_collect_pydantic_error_messages(exc))
+        return [
+            ValidationError(
+                f"Decision '{decision_name}' plugin #{idx + 1} ({plugin_type}) has invalid configuration: {joined}",
+                field=field,
             )
-
-    # Validate endpoints
-    if "vllm_endpoints" in merged_config:
-        endpoints = merged_config["vllm_endpoints"]
-
-        # Check if all models use external API backends (no vLLM endpoints needed)
-        all_external_api = False
-        if "model_config" in merged_config and merged_config["model_config"]:
-            all_external_api = all(
-                model_cfg.get("api_format") in EXTERNAL_API_MODEL_FORMATS
-                for model_cfg in merged_config["model_config"].values()
-                if isinstance(model_cfg, dict)
+        ]
+    except Exception as exc:
+        return [
+            ValidationError(
+                f"Decision '{decision_name}' plugin #{idx + 1} ({plugin_type}) configuration validation failed: {exc}",
+                field=field,
             )
-
-        if not endpoints and not all_external_api:
-            errors.append(
-                ValidationError("No vLLM endpoints configured", field="vllm_endpoints")
-            )
-
-        # Check for duplicate endpoint names
-        endpoint_names = set()
-        for endpoint in endpoints:
-            if endpoint["name"] in endpoint_names:
-                errors.append(
-                    ValidationError(
-                        f"Duplicate endpoint name: {endpoint['name']}",
-                        field="vllm_endpoints",
-                    )
-                )
-            endpoint_names.add(endpoint["name"])
-
-    # Validate categories
-    if "categories" in merged_config:
-        categories = merged_config["categories"]
-        if not categories:
-            errors.append(
-                ValidationError(
-                    "No categories configured or auto-generated", field="categories"
-                )
-            )
-
-    return errors
+        ]
 
 
 def validate_plugin_configurations(config: UserConfig) -> List[ValidationError]:
@@ -235,12 +453,18 @@ def validate_plugin_configurations(config: UserConfig) -> List[ValidationError]:
     # Map plugin types to their configuration models
     config_models = {
         PluginType.SEMANTIC_CACHE.value: SemanticCachePluginConfig,
-        PluginType.JAILBREAK.value: JailbreakPluginConfig,
-        PluginType.PII.value: PIIPluginConfig,
+        PluginType.FAST_RESPONSE.value: FastResponsePluginConfig,
+        PluginType.REQUEST_PARAMS.value: RequestParamsPluginConfig,
+        PluginType.RESPONSE_JAILBREAK.value: ResponseJailbreakPluginConfig,
         PluginType.SYSTEM_PROMPT.value: SystemPromptPluginConfig,
         PluginType.HEADER_MUTATION.value: HeaderMutationPluginConfig,
         PluginType.HALLUCINATION.value: HallucinationPluginConfig,
         PluginType.ROUTER_REPLAY.value: RouterReplayPluginConfig,
+        PluginType.MEMORY.value: MemoryPluginConfig,
+        PluginType.RAG.value: RAGPluginConfig,
+        PluginType.IMAGE_GEN.value: ImageGenPluginConfig,
+        PluginType.TOOLS.value: ToolsPluginConfig,
+        PluginType.TOOL_SELECTION.value: ToolSelectionPluginConfig,
     }
 
     for decision in config.decisions:
@@ -248,37 +472,130 @@ def validate_plugin_configurations(config: UserConfig) -> List[ValidationError]:
             continue
 
         for idx, plugin in enumerate(decision.plugins):
-            # plugin.type is now a PluginType enum, get its string value
             plugin_type = (
                 plugin.type.value if hasattr(plugin.type, "value") else str(plugin.type)
             )
-            plugin_config = plugin.configuration
-
-            # Get the appropriate config model for this plugin type
             config_model = config_models.get(plugin_type)
-            if config_model:
-                try:
-                    # Validate configuration against the plugin-specific model
-                    config_model(**plugin_config)
-                except PydanticValidationError as e:
-                    error_messages = []
-                    for error in e.errors():
-                        field = " -> ".join(str(x) for x in error["loc"])
-                        msg = error["msg"]
-                        error_messages.append(f"{field}: {msg}")
-                    errors.append(
-                        ValidationError(
-                            f"Decision '{decision.name}' plugin #{idx + 1} ({plugin_type}) has invalid configuration: {', '.join(error_messages)}",
-                            field=f"decisions.{decision.name}.plugins[{idx}]",
-                        )
-                    )
-                except Exception as e:
-                    errors.append(
-                        ValidationError(
-                            f"Decision '{decision.name}' plugin #{idx + 1} ({plugin_type}) configuration validation failed: {e}",
-                            field=f"decisions.{decision.name}.plugins[{idx}]",
-                        )
-                    )
+            errors.extend(
+                _validate_single_plugin_configuration(
+                    decision.name,
+                    idx,
+                    plugin_type,
+                    plugin.configuration,
+                    config_model,
+                )
+            )
+
+    return errors
+
+
+def _router_dc_missing_description_errors(
+    decision, algo, config: UserConfig
+) -> List[ValidationError]:
+    if (
+        algo.type != "router_dc"
+        or not algo.router_dc
+        or not algo.router_dc.require_descriptions
+    ):
+        return []
+    errs: List[ValidationError] = []
+    routing_cards = {card.name: card for card in config.routing.model_cards}
+    for model_ref in decision.modelRefs:
+        model_card = routing_cards.get(model_ref.model)
+        if model_card is None or model_card.description:
+            continue
+        errs.append(
+            ValidationError(
+                f"Decision '{decision.name}' uses router_dc with require_descriptions=true, "
+                f"but model '{model_ref.model}' has no description",
+                field=f"routing.modelCards.{model_ref.model}.description",
+            )
+        )
+    return errs
+
+
+def _maybe_hybrid_weight_error(
+    decision_name: str, algo_type: str, algo
+) -> ValidationError | None:
+    if algo_type != "hybrid" or not algo.hybrid:
+        return None
+    h = algo.hybrid
+    total = (
+        (0.3 if h.elo_weight is None else h.elo_weight)
+        + (0.3 if h.router_dc_weight is None else h.router_dc_weight)
+        + (0.2 if h.automix_weight is None else h.automix_weight)
+        + (0.2 if h.cost_weight is None else h.cost_weight)
+    )
+    if abs(total - 1.0) <= 0.01:
+        return None
+    return ValidationError(
+        f"Decision '{decision_name}' hybrid weights sum to {total:.2f}, "
+        "should sum to 1.0",
+        field=f"decisions.{decision_name}.algorithm.hybrid",
+    )
+
+
+def validate_algorithm_configurations(config: UserConfig) -> List[ValidationError]:
+    """
+    Validate algorithm configurations in decisions.
+
+    Validates both looper algorithms (confidence, ratings, remom)
+    and selection algorithms (static, elo, router_dc, automix, hybrid,
+    knn, kmeans, svm, mlp, multi_factor, latency_aware, session_aware,
+    rl_driven, gmtrouter).
+
+    Args:
+        config: User configuration
+
+    Returns:
+        list: List of validation errors
+    """
+    errors = []
+
+    # Valid algorithm types
+    looper_types = {"confidence", "ratings", "remom"}
+    selection_types = {
+        "static",
+        "elo",
+        "router_dc",
+        "automix",
+        "hybrid",
+        "knn",
+        "kmeans",
+        "svm",
+        "mlp",
+        "multi_factor",
+        "session_aware",
+        "latency_aware",
+        "rl_driven",
+        "gmtrouter",
+    }
+    all_types = looper_types | selection_types
+
+    for decision in config.decisions:
+        if not decision.algorithm:
+            continue
+
+        algo = decision.algorithm
+        algo_type = algo.type
+
+        # Validate algorithm type
+        if algo_type not in all_types:
+            errors.append(
+                ValidationError(
+                    f"Decision '{decision.name}' has invalid algorithm type '{algo_type}'. "
+                    f"Valid types: {', '.join(sorted(all_types))}",
+                    field=f"decisions.{decision.name}.algorithm.type",
+                )
+            )
+            continue
+
+        # elo config is optional (uses defaults)
+        errors.extend(_router_dc_missing_description_errors(decision, algo, config))
+
+        hybrid_err = _maybe_hybrid_weight_error(decision.name, algo_type, algo)
+        if hybrid_err is not None:
+            errors.append(hybrid_err)
 
     return errors
 
@@ -299,6 +616,9 @@ def validate_user_config(config: UserConfig) -> List[ValidationError]:
 
     # Validate signal references
     errors.extend(validate_signal_references(config))
+    errors.extend(validate_latency_compatibility(config))
+    errors.extend(validate_algorithm_one_of(config))
+    errors.extend(validate_latency_aware_algorithm_config(config))
 
     # Validate domain references
     errors.extend(validate_domain_references(config))
@@ -309,12 +629,21 @@ def validate_user_config(config: UserConfig) -> List[ValidationError]:
     # Validate plugin configurations
     errors.extend(validate_plugin_configurations(config))
 
+    # Validate algorithm configurations
+    errors.extend(validate_algorithm_configurations(config))
+
+    # Validate projection score dependency ordering
+    errors.extend(validate_projection_score_dependencies(config))
+
+    # Validate embedding query_modality compatibility with embedding model
+    errors.extend(validate_embedding_modality_compatibility(config))
+
     if errors:
         log.warning(f"Found {len(errors)} validation error(s)")
         for error in errors:
             log.warning(f"  • {error}")
     else:
-        log.info("✓ Configuration validation passed")
+        log.info("Configuration validation passed")
 
     return errors
 

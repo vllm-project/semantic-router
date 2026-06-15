@@ -1,0 +1,70 @@
+config:
+  version: v0.3
+  listeners: []
+  providers:
+    defaults:
+      default_model: general-expert
+      reasoning_families:
+        qwen3:
+          type: chat_template_kwargs
+          parameter: enable_thinking
+    models:
+      - name: base-model
+        reasoning_family: qwen3
+        backend_refs:
+          - name: local-vllm
+            endpoint: vllm-llama3-8b-instruct.default.svc.cluster.local:8000
+            weight: 1
+  routing:
+    decisions:
+      - name: other_decision
+        description: General knowledge and miscellaneous topics
+        priority: 1
+        rules:
+          operator: OR
+          conditions:
+            - type: domain
+              name: other
+        modelRefs:
+          - model: base-model
+            lora_name: general-expert
+            use_reasoning: false
+    signals:
+      domains:
+        - name: other
+          description: General knowledge and miscellaneous topics
+    modelCards:
+      - name: base-model
+        loras:
+          - name: general-expert
+            description: General-purpose adapter
+      - name: general-expert
+  global:
+    model_catalog:
+      kbs: []
+    router:
+      strategy: priority
+    services: {}
+    stores:
+      vector_store:
+        enabled: true
+        backend_type: llama_stack
+        file_storage_dir: /tmp/vsr-data
+        max_file_size_mb: 50
+        embedding_model: mmbert
+        embedding_dimension: 384
+        ingestion_workers: 2
+        supported_formats:
+          - .txt
+          - .md
+        llama_stack:
+          endpoint: http://llama-stack.llama-stack-system.svc.cluster.local:8321
+          embedding_model: sentence-transformers/all-MiniLM-L6-v2
+          request_timeout_seconds: 120
+          search_type: hybrid
+      semantic_cache:
+        enabled: false
+        embedding_model: mmbert
+      memory:
+        embedding_model: mmbert
+    integrations: {}

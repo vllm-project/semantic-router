@@ -132,7 +132,9 @@ func (r *RouterDCSelector) InitializeModelEmbeddings(modelDescriptions map[strin
 		r.modelEmbeddings[model] = embedding
 	}
 
-	logging.Infof("[RouterDC] Initialized embeddings for %d models", len(r.modelEmbeddings))
+	logging.ComponentDebugEvent("selection", "router_dc_embeddings_initialized", map[string]interface{}{
+		"models": len(r.modelEmbeddings),
+	})
 	return nil
 }
 
@@ -177,11 +179,15 @@ func (r *RouterDCSelector) InitializeFromConfig(modelConfig map[string]config.Mo
 
 		r.modelEmbeddings[model] = embedding
 		modelsWithDescriptions++
-		logging.Debugf("[RouterDC] Initialized embedding for model %s", model)
+		logging.ComponentDebugEvent("selection", "router_dc_model_embedding_initialized", map[string]interface{}{
+			"model": model,
+		})
 	}
 
-	logging.Infof("[RouterDC] Initialized embeddings: %d with descriptions, %d without",
-		modelsWithDescriptions, modelsWithoutDescriptions)
+	logging.ComponentDebugEvent("selection", "router_dc_config_embeddings_initialized", map[string]interface{}{
+		"models_with_descriptions":    modelsWithDescriptions,
+		"models_without_descriptions": modelsWithoutDescriptions,
+	})
 
 	// Validate if require_descriptions is set
 	if r.config.RequireDescriptions && len(missingModels) > 0 {
@@ -240,22 +246,21 @@ func (r *RouterDCSelector) ValidateConfig(modelConfig map[string]config.ModelPar
 
 // Select chooses the best model using dual-contrastive matching
 func (r *RouterDCSelector) Select(ctx context.Context, selCtx *SelectionContext) (*SelectionResult, error) {
-	if len(selCtx.CandidateModels) == 0 {
-		return nil, fmt.Errorf("no candidate models provided")
+	if err := ValidateSelectionContext(selCtx); err != nil {
+		return nil, err
 	}
 
 	// Get or compute query embedding
 	queryEmbedding := selCtx.QueryEmbedding
 	if queryEmbedding == nil {
 		if r.embeddingFunc == nil {
-			// Fall back to first candidate if no embedding capability
-			return r.fallbackSelection(selCtx, "no embedding function available")
+			return r.defaultSelection(selCtx, "no embedding function available")
 		}
 
 		var err error
 		queryEmbedding, err = r.embeddingFunc(selCtx.Query)
 		if err != nil {
-			return r.fallbackSelection(selCtx, fmt.Sprintf("embedding error: %v", err))
+			return r.defaultSelection(selCtx, fmt.Sprintf("embedding error: %v", err))
 		}
 	}
 
@@ -295,7 +300,7 @@ func (r *RouterDCSelector) Select(ctx context.Context, selCtx *SelectionContext)
 	}
 
 	if bestModel == nil || bestScore < r.config.MinSimilarity {
-		return r.fallbackSelection(selCtx, "no model above similarity threshold")
+		return r.defaultSelection(selCtx, "no model above similarity threshold")
 	}
 
 	// Apply softmax with temperature to get calibrated probabilities
@@ -325,8 +330,8 @@ func (r *RouterDCSelector) Select(ctx context.Context, selCtx *SelectionContext)
 
 // UpdateFeedback updates model-query affinity based on feedback
 func (r *RouterDCSelector) UpdateFeedback(ctx context.Context, feedback *Feedback) error {
-	if feedback.WinnerModel == "" {
-		return fmt.Errorf("winner model is required")
+	if err := normalizeWinnerFeedback(feedback); err != nil {
+		return err
 	}
 
 	// Create a simple hash for the query to track affinity
@@ -443,8 +448,9 @@ func (r *RouterDCSelector) hashQuery(query string) string {
 	return fmt.Sprintf("%x", query[:32])
 }
 
-// fallbackSelection returns a fallback result when embedding-based selection fails
-func (r *RouterDCSelector) fallbackSelection(selCtx *SelectionContext, reason string) (*SelectionResult, error) {
+// defaultSelection returns the first configured candidate when embedding-based
+// selection cannot produce a scored choice.
+func (r *RouterDCSelector) defaultSelection(selCtx *SelectionContext, reason string) (*SelectionResult, error) {
 	if len(selCtx.CandidateModels) == 0 {
 		return nil, fmt.Errorf("no candidate models")
 	}
@@ -455,7 +461,7 @@ func (r *RouterDCSelector) fallbackSelection(selCtx *SelectionContext, reason st
 		allScores[selCtx.CandidateModels[i].Model] = 1.0 / float64(len(selCtx.CandidateModels))
 	}
 
-	logging.Warnf("[RouterDC] Fallback selection: %s, using first candidate %s", reason, firstModel.Model)
+	logging.Warnf("[RouterDC] Default candidate selection: %s, using first candidate %s", reason, firstModel.Model)
 
 	return &SelectionResult{
 		SelectedModel: firstModel.Model,
@@ -463,7 +469,7 @@ func (r *RouterDCSelector) fallbackSelection(selCtx *SelectionContext, reason st
 		Score:         allScores[firstModel.Model],
 		Confidence:    0.5,
 		Method:        MethodRouterDC,
-		Reasoning:     fmt.Sprintf("Fallback selection: %s", reason),
+		Reasoning:     fmt.Sprintf("Default candidate selection: %s", reason),
 		AllScores:     allScores,
 	}, nil
 }

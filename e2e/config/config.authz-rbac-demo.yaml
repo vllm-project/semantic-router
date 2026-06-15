@@ -1,0 +1,110 @@
+version: v0.3
+listeners: []
+providers:
+  defaults:
+    default_model: qwen14b-free
+  models:
+    - name: qwen14b-admin
+      external_model_ids:
+        vllm: Qwen/Qwen2.5-14B-Instruct
+      backend_refs:
+        - name: vllm-14b-admin
+          endpoint: 127.0.0.1:8100
+          weight: 1
+          type: vllm
+    - name: qwen14b-free
+      external_model_ids:
+        vllm: Qwen/Qwen2.5-14B-Instruct
+      backend_refs:
+        - name: vllm-14b-free
+          endpoint: 127.0.0.1:8200
+          weight: 1
+          type: vllm
+routing:
+  decisions:
+    - name: admin_to_admin_tier
+      description: Admin → admin tier (:8100)
+      priority: 300
+      rules:
+        operator: AND
+        conditions:
+          - type: authz
+            name: admin
+      modelRefs:
+        - model: qwen14b-admin
+          use_reasoning: true
+    - name: premium_to_admin_tier
+      description: Premium → admin tier (:8100)
+      priority: 200
+      rules:
+        operator: AND
+        conditions:
+          - type: authz
+            name: premium_user
+      modelRefs:
+        - model: qwen14b-admin
+          use_reasoning: false
+    - name: free_to_free_tier
+      description: Free → free tier (:8200)
+      priority: 100
+      rules:
+        operator: AND
+        conditions:
+          - type: authz
+            name: free_user
+      modelRefs:
+        - model: qwen14b-free
+          use_reasoning: false
+  signals:
+    role_bindings:
+      - name: admin-binding
+        subjects:
+          - kind: Group
+            name: platform-admins
+        role: admin
+      - name: premium-binding
+        subjects:
+          - kind: Group
+            name: premium-tier
+        role: premium_user
+      - name: free-binding
+        subjects:
+          - kind: Group
+            name: free-tier
+        role: free_user
+  modelCards:
+    - name: qwen14b-admin
+      param_size: 14b
+      description: Qwen2.5 14B — admin/premium tier (port 8100)
+      capabilities:
+        - chat
+        - code
+        - reasoning
+        - math
+      quality_score: 0.9
+    - name: qwen14b-free
+      param_size: 14b
+      description: Qwen2.5 14B — free tier (port 8200)
+      capabilities:
+        - chat
+        - code
+      quality_score: 0.7
+global:
+  router:
+    strategy: priority
+    clear_route_cache: true
+  services:
+    authz:
+      fail_open: true
+      identity:
+        user_id_header: x-jwt-sub
+        user_groups_header: x-jwt-groups
+  stores:
+    semantic_cache:
+      enabled: false
+      embedding_model: mmbert
+    memory:
+      embedding_model: mmbert
+    vector_store:
+      embedding_model: mmbert
+  integrations: {}

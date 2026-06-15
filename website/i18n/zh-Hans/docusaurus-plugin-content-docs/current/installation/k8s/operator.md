@@ -1,32 +1,31 @@
 ---
-sidebar_position: 8
+sidebar_position: 3
+sidebar_label: 使用 Operator 安装
 ---
 
-# Kubernetes Operator
+# 使用 Operator 安装
 
-The Semantic Router Operator provides a Kubernetes-native way to deploy and manage vLLM Semantic Router instances using Custom Resource Definitions (CRDs). It simplifies deployment, configuration, and lifecycle management across Kubernetes and OpenShift platforms.
+Semantic Router Operator 提供了一种 Kubernetes 原生的方式，通过自定义资源定义（CRD）来部署与管理 vLLM Semantic Router 实例。它可以在 Kubernetes 与 OpenShift 平台上简化部署、配置与生命周期管理。
 
-## Features
+## 特性
 
-- **🚀 Declarative Deployment**: Define semantic router instances using Kubernetes CRDs
-- **🔄 Automatic Configuration**: Generates and manages ConfigMaps for semantic router configuration
-- **📦 Persistent Storage**: Manages PVCs for ML model storage with automatic lifecycle
-- **🔐 Platform Detection**: Automatically detects and configures for OpenShift or standard Kubernetes
-- **📊 Built-in Observability**: Metrics, tracing, and monitoring support out of the box
-- **🎯 Production Features**: HPA, ingress, service mesh integration, and pod disruption budgets
-- **🛡️ Secure by Default**: Drops all capabilities, prevents privilege escalation
+- **声明式部署**：使用 Kubernetes CRD 定义语义路由实例
+- **自动配置**：生成并管理用于语义路由配置的 ConfigMap
+- **持久化存储**：管理用于 ML 模型存储的 PVC，并自动处理生命周期
+- **平台探测**：自动识别 OpenShift 或标准 Kubernetes，并做相应配置
+- **内置可观测性**：默认支持指标、链路追踪与监控
+- **生产能力**：HPA、Ingress、Service Mesh 集成、Pod Disruption Budget
+- **默认安全**：移除全部 capability，禁止特权提升
 
-## Quick Start
+## 前置条件
 
-### Prerequisites
+- Kubernetes 1.24+ 或 OpenShift 4.12+
+- 已配置好的 `kubectl` 或 `oc` 命令行
+- 集群管理员权限（用于安装 CRD）
 
-- Kubernetes 1.24+ or OpenShift 4.12+
-- `kubectl` or `oc` CLI configured
-- Cluster admin access (for CRD installation)
+## 安装
 
-### Installation
-
-#### Option 1: Using Kustomize (Standard Kubernetes)
+### 选项 1：使用 Kustomize（标准 Kubernetes）
 
 ```bash
 # Clone the repository
@@ -37,18 +36,18 @@ cd semantic-router/deploy/operator
 make install
 
 # Deploy the operator
-make deploy IMG=ghcr.io/vllm-project/semantic-router-operator:latest
+make deploy IMG=ghcr.io/vllm-project/semantic-router/operator:latest
 ```
 
-Verify the operator is running:
+验证 operator 正在运行：
 
 ```bash
 kubectl get pods -n semantic-router-operator-system
 ```
 
-#### Option 2: Using OLM (OpenShift)
+### 选项 2：使用 OLM（OpenShift）
 
-For OpenShift deployments using Operator Lifecycle Manager:
+适用于通过 Operator Lifecycle Manager 部署到 OpenShift 的场景：
 
 ```bash
 cd semantic-router/deploy/operator
@@ -62,13 +61,11 @@ make podman-push IMG=quay.io/<your-org>/semantic-router-operator:latest
 make openshift-deploy
 ```
 
-See the [OpenShift Quick Start Guide](https://github.com/vllm-project/semantic-router/blob/main/deploy/operator/OPENSHIFT_QUICKSTART.md) for detailed instructions.
+## 部署你的第一个 Router
 
-### Deploy Your First Router
+### 使用示例配置快速开始
 
-#### Quick Start with Sample Configurations
-
-Choose a pre-configured sample based on your infrastructure:
+根据你的基础设施选择一个预配置示例：
 
 ```bash
 # Simple standalone deployment with KServe backend
@@ -91,11 +88,17 @@ kubectl apply -f https://raw.githubusercontent.com/vllm-project/semantic-router/
 
 # Hybrid cache backend for optimal performance
 kubectl apply -f https://raw.githubusercontent.com/vllm-project/semantic-router/main/deploy/operator/config/samples/vllm.ai_v1alpha1_semanticrouter_hybrid_cache.yaml
+
+# mmBERT 2D Matryoshka embeddings with layer early exit
+kubectl apply -f https://raw.githubusercontent.com/vllm-project/semantic-router/main/deploy/operator/config/samples/vllm.ai_v1alpha1_semanticrouter_mmbert.yaml
+
+# Complexity-aware routing for intelligent model selection
+kubectl apply -f https://raw.githubusercontent.com/vllm-project/semantic-router/main/deploy/operator/config/samples/vllm.ai_v1alpha1_semanticrouter_complexity.yaml
 ```
 
-#### Custom Configuration
+### 自定义配置
 
-Create a `my-router.yaml` file:
+创建一个 `my-router.yaml` 文件：
 
 ```yaml
 apiVersion: vllm.ai/v1alpha1
@@ -116,6 +119,9 @@ spec:
     - name: llama3-8b-endpoint
       model: llama3-8b
       reasoningFamily: qwen3
+      loras:
+        - name: computer-science-expert
+          description: Adapter for advanced computer science prompts
       backend:
         type: kserve
         inferenceServiceName: llama-3-8b
@@ -135,25 +141,58 @@ spec:
     storageClassName: "standard"
 
   config:
-    bert_model:
-      model_id: "models/mom-embedding-light"
-      threshold: "0.6"
-      use_cpu: true
+    providers:
+      defaults:
+        default_model: llama3-8b
+        default_reasoning_effort: medium
+        reasoning_families:
+          qwen3:
+            type: chat_template_kwargs
+            parameter: enable_thinking
+      models:
+        - name: llama3-8b
+          provider_model_id: llama3-8b
+          backend_refs:
+            - name: llama3-8b-endpoint
+              endpoint: llama-3-8b-predictor.default.svc.cluster.local:80
+              protocol: http
 
-    semantic_cache:
-      enabled: true
-      backend_type: "memory"
-      max_entries: 1000
-      ttl_seconds: 3600
+    routing:
+      modelCards:
+        - name: llama3-8b
+          modality: text
+          capabilities: ["chat", "reasoning"]
+      decisions:
+        - name: default-route
+          description: Catch-all route
+          priority: 100
+          rules:
+            operator: AND
+            conditions: []
+          modelRefs:
+            - model: llama3-8b
+              use_reasoning: false
 
-    tools:
-      enabled: true
-      top_k: 3
-      similarity_threshold: "0.2"
-
-    prompt_guard:
-      enabled: true
-      threshold: "0.7"
+    global:
+      stores:
+        semantic_cache:
+          enabled: true
+          backend_type: memory
+          max_entries: 1000
+          ttl_seconds: 3600
+      integrations:
+        tools:
+          enabled: true
+          top_k: 3
+          similarity_threshold: 0.2
+      model_catalog:
+        system:
+          prompt_guard: models/mmbert32k-jailbreak-detector-merged
+        modules:
+          prompt_guard:
+            enabled: true
+            model_ref: prompt_guard
+            threshold: 0.7
 
   toolsDb:
     - tool:
@@ -173,13 +212,198 @@ spec:
       tags: ["weather", "temperature"]
 ```
 
-Apply the configuration:
+应用配置：
 
 ```bash
 kubectl apply -f my-router.yaml
 ```
 
-### Verify Deployment
+`spec.config` 应使用与本地 `config.yaml` 相同的规范化 `providers/routing/global` 布局。`spec.vllmEndpoints` 仍是 Kubernetes 适配层，用于发现后端与 served-model alias；operator 在渲染 runtime config 时，会将其转换为规范化的 `providers.models[].backend_refs[]` 与 `routing.modelCards` 条目（包含可选的 `loras`）。
+
+## 高级特性
+
+### Embedding 模型配置
+
+operator 支持三种高性能 embedding 模型，用于语义理解与缓存。你可以根据场景配置这些模型以优化效果。
+
+#### 可用的 embedding 模型
+
+1. **Qwen3-Embedding**（1024 维，32K 上下文）
+   - 适合：高质量语义理解与长上下文
+   - 场景：复杂查询、研究文档、细致分析
+
+2. **EmbeddingGemma**（768 维，8K 上下文）
+   - 适合：更快性能与较好精度
+   - 场景：实时应用、高吞吐
+
+3. **mmBERT 2D Matryoshka**（64-768 维，多语言）
+   - 适合：可通过 layer early exit 自适应权衡速度与质量
+   - 场景：多语言部署、需要灵活的质量/速度权衡
+
+#### 示例：mmBERT + Layer Early Exit
+
+```yaml
+spec:
+  config:
+    global:
+      model_catalog:
+        embeddings:
+          semantic:
+            mmbert_model_path: "models/mom-embedding-ultra"
+            use_cpu: true
+            embedding_config:
+              model_type: "mmbert"
+              # Layer early exit: balance speed vs accuracy
+              # Layer 3: ~7x speedup (fast, good for high-volume queries)
+              # Layer 6: ~3.6x speedup (balanced - recommended)
+              # Layer 11: ~2x speedup (higher accuracy)
+              # Layer 22: full model (maximum accuracy)
+              target_layer: 6
+              # Dimension reduction for faster similarity search
+              # Options: 64, 128, 256, 512, 768
+              target_dimension: 256
+              preload_embeddings: true
+              enable_soft_matching: true
+              top_k: 1
+              min_score_threshold: "0.5"
+      stores:
+        semantic_cache:
+          enabled: true
+          backend_type: "memory"
+          embedding_model: "mmbert"
+          similarity_threshold: "0.85"
+          max_entries: 5000
+          ttl_seconds: 7200
+```
+
+完整示例可参考 [mmbert sample configuration](https://raw.githubusercontent.com/vllm-project/semantic-router/main/deploy/operator/config/samples/vllm.ai_v1alpha1_semanticrouter_mmbert.yaml)。
+
+#### 示例：Qwen3 + Redis Cache
+
+```yaml
+spec:
+  config:
+    global:
+      model_catalog:
+        embeddings:
+          semantic:
+            qwen3_model_path: "models/qwen3-embedding"
+            use_cpu: true
+      stores:
+        semantic_cache:
+          enabled: true
+          backend_type: "redis"
+          embedding_model: "qwen3"
+          redis:
+            connection:
+              host: redis.cache-backends.svc.cluster.local
+              port: 6379
+        index:
+          vector_field:
+            dimension: 1024  # Qwen3 dimension
+```
+
+完整示例可参考 [redis cache sample configuration](https://raw.githubusercontent.com/vllm-project/semantic-router/main/deploy/operator/config/samples/vllm.ai_v1alpha1_semanticrouter_redis_cache.yaml)。
+
+### 基于复杂度的路由（Complexity-Aware Routing）
+
+根据复杂度分类将请求路由到不同模型：简单请求走更快的模型，复杂请求走更强的模型。
+
+#### 示例配置
+
+```yaml
+spec:
+  # Configure multiple backends with different capabilities
+  vllmEndpoints:
+    - name: llama-8b-fast
+      model: llama3-8b
+      reasoningFamily: qwen3
+      backend:
+        type: kserve
+        inferenceServiceName: llama-3-8b
+      weight: 2  # Prefer for simple queries
+
+    - name: llama-70b-reasoning
+      model: llama3-70b
+      reasoningFamily: deepseek
+      backend:
+        type: kserve
+        inferenceServiceName: llama-3-70b
+      weight: 1  # Use for complex queries
+
+  config:
+    # Define complexity rules
+    complexity_rules:
+      # Rule 1: Code complexity
+      - name: "code-complexity"
+        description: "Classify coding tasks by complexity"
+        threshold: "0.3"  # Lower threshold works better for embedding-based similarity
+
+        # Examples of complex coding tasks
+        hard:
+          candidates:
+            - "Implement a distributed lock manager with leader election"
+            - "Design a database migration system with rollback support"
+            - "Create a compiler optimization pass for loop unrolling"
+
+        # Examples of simple coding tasks
+        easy:
+          candidates:
+            - "Write a function to reverse a string"
+            - "Create a class to represent a rectangle"
+            - "Implement a simple counter with increment/decrement"
+
+      # Rule 2: Reasoning complexity
+      - name: "reasoning-complexity"
+        description: "Classify reasoning and problem-solving tasks"
+        threshold: "0.3"  # Lower threshold works better for embedding-based similarity
+
+        hard:
+          candidates:
+            - "Analyze the geopolitical implications of renewable energy adoption"
+            - "Evaluate the ethical considerations of AI in healthcare"
+            - "Design a multi-stage marketing strategy for a new product launch"
+
+        easy:
+          candidates:
+            - "What is the capital of France?"
+            - "How many days are in a week?"
+            - "Name three common pets"
+
+      # Rule 3: Domain-specific complexity with conditional application
+      - name: "medical-complexity"
+        description: "Classify medical queries (only for medical domain)"
+        threshold: "0.3"  # Lower threshold works better for embedding-based similarity
+
+        hard:
+          candidates:
+            - "Differential diagnosis for chest pain with dyspnea"
+            - "Treatment protocol for multi-drug resistant tuberculosis"
+
+        easy:
+          candidates:
+            - "What is the normal body temperature?"
+            - "What are common symptoms of a cold?"
+
+        # Only apply this rule if domain signal indicates medical domain
+        composer:
+          operator: "AND"
+          conditions:
+            - type: "domain"
+              name: "medical"
+```
+
+**工作原理：**
+
+1. 输入查询会与 `hard` 与 `easy` 的候选示例做相似度比较
+2. 相似度分数用于判定复杂度
+3. 输出 signals：`{rule-name}:hard`、`{rule-name}:easy` 或 `{rule-name}:medium`
+4. Router 根据 signals 选择后端模型
+5. `composer` 支持根据其他 signals 做条件性规则应用
+
+完整示例可参考 [complexity routing sample configuration](https://raw.githubusercontent.com/vllm-project/semantic-router/main/deploy/operator/config/samples/vllm.ai_v1alpha1_semanticrouter_complexity.yaml)。
+
+## 验证部署
 
 ```bash
 # Check the SemanticRouter resource
@@ -195,20 +419,20 @@ kubectl describe semanticrouter my-router
 kubectl logs -f deployment/my-router
 ```
 
-Expected output:
+期望输出示例：
 
 ```
 NAME                        PHASE     REPLICAS   READY   AGE
 semanticrouter.vllm.ai/my-router   Running   2          2       5m
 ```
 
-## Backend Discovery Types
+## 后端发现类型（Backend Discovery Types）
 
-The operator supports three types of backend discovery for connecting semantic router to vLLM model servers. Choose the type that matches your infrastructure.
+operator 支持三种后端发现方式，用于连接 semantic router 与 vLLM 模型服务。选择与你的基础设施匹配的类型即可。
 
-### KServe InferenceService Discovery
+### KServe InferenceService 发现
 
-For RHOAI 3.x or standalone KServe deployments. The operator automatically discovers the predictor service created by KServe.
+适用于 RHOAI 3.x 或独立 KServe 部署。operator 会自动发现 KServe 创建的 predictor service。
 
 ```yaml
 spec:
@@ -222,21 +446,21 @@ spec:
       weight: 1
 ```
 
-**When to use:**
+**适用场景：**
 
-- Running on Red Hat OpenShift AI (RHOAI) 3.x
-- Using KServe for model serving
-- Want automatic service discovery
+- 运行在 Red Hat OpenShift AI（RHOAI）3.x
+- 使用 KServe 做模型服务
+- 需要自动服务发现
 
-**How it works:**
+**工作原理：**
 
-- Discovers the predictor service: `{inferenceServiceName}-predictor`
-- Uses port 8443 (KServe default HTTPS port)
-- Works in the same namespace as SemanticRouter
+- 发现 predictor service：`{inferenceServiceName}-predictor`
+- 使用 8443 端口（KServe 默认 HTTPS 端口）
+- 与 `SemanticRouter` 在同一命名空间内工作
 
-### Llama Stack Service Discovery
+### Llama Stack Service 发现
 
-Discovers Llama Stack deployments using Kubernetes label selectors.
+通过 Kubernetes label selector 发现 Llama Stack 部署。
 
 ```yaml
 spec:
@@ -252,21 +476,21 @@ spec:
       weight: 1
 ```
 
-**When to use:**
+**适用场景：**
 
-- Using Meta's Llama Stack for model serving
-- Multiple Llama Stack services with different models
-- Want label-based service discovery
+- 使用 Meta 的 Llama Stack 做模型服务
+- 同时有多个 Llama Stack 服务、不同模型
+- 需要基于 label 做服务发现
 
-**How it works:**
+**工作原理：**
 
-- Lists services matching the label selector
-- Uses first matching service if multiple found
-- Extracts port from service definition
+- 列出匹配 label selector 的 services
+- 若匹配多个，默认使用第一个
+- 从 service 定义中提取端口
 
-### Direct Kubernetes Service
+### 直连 Kubernetes Service
 
-Direct connection to any Kubernetes service (vLLM, TGI, etc.).
+可直连任意 Kubernetes service（vLLM、TGI 等）。
 
 ```yaml
 spec:
@@ -283,22 +507,22 @@ spec:
       weight: 1
 ```
 
-**When to use:**
+**适用场景：**
 
-- Direct vLLM deployments
-- Custom model servers with OpenAI-compatible API
-- Cross-namespace service references
-- Maximum control over service endpoints
+- 直接部署的 vLLM 服务
+- 自定义模型服务器（OpenAI 兼容 API）
+- 跨命名空间引用 service
+- 希望完全控制 service endpoint
 
-**How it works:**
+**工作原理：**
 
-- Connects to specified service directly
-- No discovery - uses explicit configuration
-- Supports cross-namespace references
+- 直接连接指定 service
+- 不做 discovery，完全按显式配置
+- 支持跨命名空间引用
 
-### Multiple Backends
+### 多后端（Multiple Backends）
 
-You can configure multiple backends with load balancing weights:
+你可以配置多个后端，并用权重做负载均衡：
 
 ```yaml
 spec:
@@ -324,27 +548,27 @@ spec:
       weight: 1
 ```
 
-## Deployment Modes
+## 部署模式（Deployment Modes）
 
-The operator supports two deployment modes with different architectures.
+operator 支持两种部署模式，对应不同架构。
 
-### Standalone Mode (Default)
+### Standalone 模式（默认）
 
-Deploys semantic router with an **Envoy sidecar container** that acts as an ingress gateway.
+部署 semantic router，并带一个 **Envoy sidecar 容器**作为入口网关。
 
-**Architecture:**
+**架构：**
 
-```
+```text
 Client → Service (8080) → Envoy Sidecar → ExtProc gRPC → Semantic Router → vLLM
 ```
 
-**When to use:**
+**适用场景：**
 
-- Simple deployments without existing service mesh
-- Testing and development
-- Self-contained deployment with minimal dependencies
+- 没有现成 service mesh 的简单部署
+- 测试与开发
+- 自包含部署、依赖最少
 
-**Configuration:**
+**配置：**
 
 ```yaml
 spec:
@@ -359,30 +583,32 @@ spec:
       targetPort: 50051
 ```
 
-**Operator behavior:**
+**operator 行为：**
 
-- Deploys pod with two containers: semantic router + Envoy sidecar
-- Envoy handles ingress and forwards to semantic router via ExtProc gRPC
-- Status shows `gatewayMode: "standalone"`
+1. 在 pod spec 中部署两个容器：semantic router + Envoy sidecar
+2. Envoy 负责 ingress，并通过 ExtProc gRPC 转发到 semantic router
+3. status 显示 `gatewayMode: "standalone"`
 
-### Gateway Integration Mode
+### Gateway Integration 模式
 
-Reuses an **existing Gateway** (Istio, Envoy Gateway, etc.) and creates an HTTPRoute.
+复用 **已有 Gateway**（Istio、Envoy Gateway 等），并要求你自行管理匹配的 HTTPRoute。
 
-**Architecture:**
+当前状态：controller 能解析所引用的 Gateway 并切换到 gateway mode，但自动创建 HTTPRoute 仍是占位实现。
 
+**架构：**
+
+```text
+Client → Gateway (Istio/Envoy) → user-managed HTTPRoute → Service (8080) → Semantic Router API → vLLM
 ```
-Client → Gateway (Istio/Envoy) → HTTPRoute → Service (8080) → Semantic Router API → vLLM
-```
 
-**When to use:**
+**适用场景：**
 
-- Existing Istio or Envoy Gateway deployment
-- Centralized ingress management
-- Multi-tenancy with shared gateway
-- Advanced traffic management (circuit breaking, retries, rate limiting)
+- 已有 Istio 或 Envoy Gateway 部署
+- 统一的 ingress 管理
+- 共享网关的多租户场景
+- 高级流量治理（熔断、重试、限流等）
 
-**Configuration:**
+**配置：**
 
 ```yaml
 spec:
@@ -399,20 +625,23 @@ spec:
       targetPort: 8080
 ```
 
-**Operator behavior:**
+**operator 行为：**
 
-1. Creates HTTPRoute resource pointing to the specified Gateway
-2. Skips Envoy sidecar container in pod spec
-3. Sets `status.gatewayMode: "gateway-integration"`
-4. Semantic router operates in pure API mode (no ExtProc)
+1. 解析 referenced Gateway 并进入 gateway integration 模式
+2. 目前不创建 HTTPRoute，你需要自行 apply 与管理该资源
+3. pod spec 中不再部署 Envoy sidecar
+4. 设置 `status.gatewayMode: "gateway-integration"`
+5. semantic router 以纯 API 模式运行（不启用 ExtProc）
 
-**Example:** See [`vllm.ai_v1alpha1_semanticrouter_gateway.yaml`](https://github.com/vllm-project/semantic-router/blob/main/deploy/operator/config/samples/vllm.ai_v1alpha1_semanticrouter_gateway.yaml)
+**示例：** 参考 [`vllm.ai_v1alpha1_semanticrouter_gateway.yaml`](https://github.com/vllm-project/semantic-router/blob/main/deploy/operator/config/samples/vllm.ai_v1alpha1_semanticrouter_gateway.yaml)。
+
+该示例仅为 gateway mode 配置 `SemanticRouter` 资源，并不会替你安装 Gateway 或 HTTPRoute。
 
 ## OpenShift Routes
 
-For OpenShift deployments, the operator can create Routes for external access with TLS termination.
+在 OpenShift 上，operator 可创建 Route 用于外部访问，并支持 TLS 终止。
 
-### Basic OpenShift Route
+### 基础 OpenShift Route
 
 ```yaml
 spec:
@@ -425,28 +654,28 @@ spec:
         insecureEdgeTerminationPolicy: Redirect  # Redirect HTTP to HTTPS
 ```
 
-### TLS Termination Options
+### TLS 终止方式
 
-- **edge** (recommended): TLS terminates at Route, plain HTTP to backend
-- **passthrough**: TLS passthrough to backend (requires backend TLS)
-- **reencrypt**: TLS terminates at Route, re-encrypts to backend
+- **edge**（推荐）：TLS 终止在 Route，后端走明文 HTTP
+- **passthrough**：TLS 透传到后端（要求后端支持 TLS）
+- **reencrypt**：TLS 终止在 Route，并对后端重新加密
 
-### When to Use OpenShift Routes
+### 何时使用 OpenShift Routes
 
-- Running on OpenShift 4.x
-- Need external access without configuring Ingress
-- Want auto-generated hostnames
-- Require OpenShift-native TLS management
+- 运行在 OpenShift 4.x
+- 希望无需配置 Ingress 就提供外部访问
+- 希望自动生成 hostname
+- 需要 OpenShift 原生的 TLS 管理能力
 
-### Status Information
+### 状态信息
 
-After creating a Route, check the status:
+创建 Route 后可查看状态：
 
 ```bash
 kubectl get semanticrouter my-router -o jsonpath='{.status.openshiftFeatures}'
 ```
 
-Output:
+输出示例：
 
 ```json
 {
@@ -455,11 +684,11 @@ Output:
 }
 ```
 
-**Example:** See [`vllm.ai_v1alpha1_semanticrouter_route.yaml`](https://github.com/vllm-project/semantic-router/blob/main/deploy/operator/config/samples/vllm.ai_v1alpha1_semanticrouter_route.yaml)
+**示例：** 参考 [`vllm.ai_v1alpha1_semanticrouter_route.yaml`](https://github.com/vllm-project/semantic-router/blob/main/deploy/operator/config/samples/vllm.ai_v1alpha1_semanticrouter_route.yaml)。
 
-## Choosing Your Configuration
+## 如何选择配置
 
-Use this decision tree to select the right configuration:
+使用下面的决策树选择合适的配置：
 
 ```
 ┌─ Need to run on OpenShift?
@@ -477,7 +706,7 @@ Use this decision tree to select the right configuration:
 └─ Simple deployment → Use simple sample (standalone mode)
 ```
 
-**Backend choice:**
+**后端选择：**
 
 ```
 ┌─ Running RHOAI 3.x or KServe?
@@ -491,9 +720,9 @@ Use this decision tree to select the right configuration:
 └─ Have direct vLLM service? → Use service backend type
 ```
 
-## Architecture
+## 架构
 
-The operator manages a complete stack of resources for each SemanticRouter:
+operator 会为每个 `SemanticRouter` 管理一整套资源：
 
 ```
 ┌─────────────────────────────────────────────────────┐
@@ -520,49 +749,47 @@ The operator manages a complete stack of resources for each SemanticRouter:
 └─────────┘  └─────────┘  └─────────┘  └─────────┘
 ```
 
-**Managed Resources:**
+**管理的资源：**
 
-- **Deployment**: Runs semantic router pods with configurable replicas
-- **Service**: Exposes gRPC (50051), HTTP API (8080), and metrics (9190)
-- **ConfigMap**: Contains semantic router configuration and tools database
-- **ServiceAccount**: For RBAC (optional, created when specified)
-- **PersistentVolumeClaim**: For ML model storage (optional, when persistence enabled)
-- **HorizontalPodAutoscaler**: For auto-scaling (optional, when autoscaling enabled)
-- **Ingress**: For external access (optional, when ingress enabled)
+- **Deployment**：运行 semantic router pods，可配置副本数
+- **Service**：暴露 gRPC（50051）、HTTP API（8080）与 metrics（9190）
+- **ConfigMap**：包含 semantic router 配置与 tools database
+- **ServiceAccount**：RBAC（可选，仅当指定时创建）
+- **PersistentVolumeClaim**：ML 模型存储（可选，仅当启用 persistence 时创建）
+- **HorizontalPodAutoscaler**：自动伸缩（可选，仅当启用 autoscaling 时创建）
+- **Ingress**：外部访问（可选，仅当启用 ingress 时创建）
 
-## Platform Detection and Security
+## 平台探测与安全
 
-The operator automatically detects the platform and configures security contexts appropriately.
+operator 会自动识别平台，并设置适配的安全上下文。
 
-### OpenShift Platform
+### OpenShift 平台
 
-When running on OpenShift, the operator:
+当运行在 OpenShift 时，operator 会：
 
-- **Detects**: Checks for `route.openshift.io` API resources
-- **Security Context**: Does NOT set `runAsUser`, `runAsGroup`, or `fsGroup`
-- **Rationale**: Lets OpenShift SCCs assign UIDs/GIDs from the namespace's allowed range
-- **Compatible with**: `restricted` SCC (default) and custom SCCs
-- **Log Message**: `"Detected OpenShift platform - will use OpenShift-compatible security contexts"`
+- **探测**：检查是否存在 `route.openshift.io` API 资源
+- **安全上下文**：不会设置 `runAsUser`、`runAsGroup`、`fsGroup`
+- **原因**：让 OpenShift SCC 从 namespace 允许的 UID/GID 范围里分配
+- **兼容性**：`restricted` SCC（默认）与自定义 SCC
 
-### Standard Kubernetes
+### 标准 Kubernetes
 
-When running on standard Kubernetes, the operator:
+当运行在标准 Kubernetes 时，operator 会：
 
-- **Security Context**: Sets `runAsUser: 1000`, `fsGroup: 1000`, `runAsNonRoot: true`
-- **Rationale**: Provides secure defaults for pod security policies/standards
-- **Log Message**: `"Detected standard Kubernetes platform - will use standard security contexts"`
+- **安全上下文**：设置 `runAsUser: 1000`、`fsGroup: 1000`、`runAsNonRoot: true`
+- **原因**：提供安全的默认值，满足常见的 Pod 安全标准
 
-### Both Platforms
+### 两个平台通用
 
-Regardless of platform:
+无论平台如何：
 
-- Drops ALL capabilities (`drop: [ALL]`)
-- Prevents privilege escalation (`allowPrivilegeEscalation: false`)
-- No special permissions or SCCs required beyond defaults
+- 移除全部 capability（`drop: [ALL]`）
+- 禁止特权提升（`allowPrivilegeEscalation: false`）
+- 除默认权限外不需要额外权限或 SCC
 
-### Override Security Context
+### 覆盖安全上下文
 
-You can override automatic security contexts in your CR:
+你也可以在 CR 中覆盖自动安全上下文：
 
 ```yaml
 spec:
@@ -582,613 +809,13 @@ spec:
     fsGroup: 2000
 ```
 
-:::caution OpenShift Note
-When running on OpenShift, it's recommended to omit `runAsUser` and `fsGroup` and let SCCs handle UID/GID assignment automatically.
-:::
-
-## Configuration Reference
-
-### Image Configuration
-
-```yaml
-spec:
-  image:
-    repository: ghcr.io/vllm-project/semantic-router/extproc
-    tag: latest
-    pullPolicy: IfNotPresent
-    imageRegistry: ""  # Optional: custom registry prefix
-
-  # Optional: Image pull secrets
-  imagePullSecrets:
-    - name: ghcr-secret
-```
-
-### Service Configuration
-
-```yaml
-spec:
-  service:
-    type: ClusterIP  # or NodePort, LoadBalancer
-
-    grpc:
-      port: 50051
-      targetPort: 50051
-
-    api:
-      port: 8080
-      targetPort: 8080
-
-    metrics:
-      enabled: true
-      port: 9190
-      targetPort: 9190
-```
-
-### Persistence Configuration
-
-```yaml
-spec:
-  persistence:
-    enabled: true
-    storageClassName: "standard"  # Adjust for your cluster
-    accessMode: ReadWriteOnce
-    size: 10Gi
-
-    # Optional: Use existing PVC
-    existingClaim: "my-existing-pvc"
-
-    # Optional: PVC annotations
-    annotations:
-      backup.velero.io/backup-volumes: "models"
-```
-
-:::info Storage Validation
-The operator validates that the specified StorageClass exists before creating the PVC. If `storageClassName` is omitted, the cluster's default StorageClass is used.
-:::
-
-**Storage Class Examples:**
-
-- **AWS EKS**: `gp3-csi`, `gp2`
-- **GKE**: `standard`, `premium-rwo`
-- **Azure AKS**: `managed`, `managed-premium`
-- **OpenShift**: `gp3-csi`, `thin`, `ocs-storagecluster-ceph-rbd`
-
-### Semantic Router Configuration
-
-Full semantic router configuration is embedded in the CR. See the complete example in [`deploy/operator/config/samples/vllm_v1alpha1_semanticrouter.yaml`](https://github.com/vllm-project/semantic-router/blob/main/deploy/operator/config/samples/vllm_v1alpha1_semanticrouter.yaml).
-
-Key configuration sections:
-
-```yaml
-spec:
-  config:
-    # BERT model for embeddings
-    bert_model:
-      model_id: "models/mom-embedding-light"
-      threshold: 0.6
-      use_cpu: true
-
-    # Semantic cache
-    semantic_cache:
-      enabled: true
-      backend_type: "memory"  # or "milvus"
-      similarity_threshold: 0.8
-      max_entries: 1000
-      ttl_seconds: 3600
-      eviction_policy: "fifo"
-
-    # Tools auto-selection
-    tools:
-      enabled: true
-      top_k: 3
-      similarity_threshold: 0.2
-      tools_db_path: "config/tools_db.json"
-      fallback_to_empty: true
-
-    # Prompt guard (jailbreak detection)
-    prompt_guard:
-      enabled: true
-      model_id: "models/mom-jailbreak-classifier"
-      threshold: 0.7
-      use_cpu: true
-
-    # Classifiers
-    classifier:
-      category_model:
-        model_id: "models/lora_intent_classifier_bert-base-uncased_model"
-        threshold: 0.6
-        use_cpu: true
-      pii_model:
-        model_id: "models/pii_classifier_modernbert-base_presidio_token_model"
-        threshold: 0.7
-        use_cpu: true
-
-    # Reasoning configuration per model family
-    reasoning_families:
-      deepseek:
-        type: "chat_template_kwargs"
-        parameter: "thinking"
-      qwen3:
-        type: "chat_template_kwargs"
-        parameter: "enable_thinking"
-      gpt:
-        type: "reasoning_effort"
-        parameter: "reasoning_effort"
-
-    # API batch classification
-    api:
-      batch_classification:
-        max_batch_size: 100
-        concurrency_threshold: 5
-        max_concurrency: 8
-        metrics:
-          enabled: true
-          detailed_goroutine_tracking: true
-          sample_rate: 1.0
-
-    # Observability
-    observability:
-      tracing:
-        enabled: false
-        provider: "opentelemetry"
-        exporter:
-          type: "otlp"
-          endpoint: "jaeger:4317"
-```
-
-### Tools Database
-
-Define available tools for auto-selection:
-
-```yaml
-spec:
-  toolsDb:
-    - tool:
-        type: "function"
-        function:
-          name: "search_web"
-          description: "Search the web for information"
-          parameters:
-            type: "object"
-            properties:
-              query:
-                type: "string"
-                description: "Search query"
-            required: ["query"]
-      description: "Search the internet, web search, find information online"
-      category: "search"
-      tags: ["search", "web", "internet"]
-
-    - tool:
-        type: "function"
-        function:
-          name: "calculate"
-          description: "Perform mathematical calculations"
-          parameters:
-            type: "object"
-            properties:
-              expression:
-                type: "string"
-            required: ["expression"]
-      description: "Calculate mathematical expressions"
-      category: "math"
-      tags: ["math", "calculation"]
-```
-
-### Autoscaling (HPA)
-
-```yaml
-spec:
-  autoscaling:
-    enabled: true
-    minReplicas: 2
-    maxReplicas: 10
-    targetCPUUtilizationPercentage: 70
-    targetMemoryUtilizationPercentage: 80
-```
-
-### Ingress Configuration
-
-```yaml
-spec:
-  ingress:
-    enabled: true
-    className: "nginx"  # or "haproxy", "traefik", etc.
-    annotations:
-      cert-manager.io/cluster-issuer: "letsencrypt-prod"
-    hosts:
-      - host: router.example.com
-        paths:
-          - path: /
-            pathType: Prefix
-            servicePort: 8080
-    tls:
-      - secretName: router-tls
-        hosts:
-          - router.example.com
-```
-
-## Production Deployment
-
-### High Availability Setup
-
-```yaml
-apiVersion: vllm.ai/v1alpha1
-kind: SemanticRouter
-metadata:
-  name: prod-router
-spec:
-  replicas: 3
-
-  # Anti-affinity for spreading across nodes
-  affinity:
-    podAntiAffinity:
-      requiredDuringSchedulingIgnoredDuringExecution:
-        - labelSelector:
-            matchLabels:
-              app.kubernetes.io/instance: prod-router
-          topologyKey: kubernetes.io/hostname
-
-  # Autoscaling
-  autoscaling:
-    enabled: true
-    minReplicas: 3
-    maxReplicas: 20
-    targetCPUUtilizationPercentage: 70
-
-  # Production resources
-  resources:
-    limits:
-      memory: "10Gi"
-      cpu: "4"
-    requests:
-      memory: "5Gi"
-      cpu: "2"
-
-  # Strict probes
-  livenessProbe:
-    enabled: true
-    initialDelaySeconds: 60
-    periodSeconds: 30
-    failureThreshold: 3
-
-  readinessProbe:
-    enabled: true
-    initialDelaySeconds: 30
-    periodSeconds: 10
-    failureThreshold: 3
-```
-
-### Pod Disruption Budget
-
-Create a PDB to ensure availability during updates:
-
-```yaml
-apiVersion: policy/v1
-kind: PodDisruptionBudget
-metadata:
-  name: prod-router-pdb
-spec:
-  maxUnavailable: 1
-  selector:
-    matchLabels:
-      app.kubernetes.io/instance: prod-router
-```
-
-### Resource Allocation Guidelines
-
-| Workload Type | Memory Request | CPU Request | Memory Limit | CPU Limit |
-|---------------|----------------|-------------|--------------|-----------|
-| Development   | 1Gi            | 500m        | 2Gi          | 1         |
-| Staging       | 3Gi            | 1           | 7Gi          | 2         |
-| Production    | 5Gi            | 2           | 10Gi         | 4         |
-
-## Monitoring and Observability
-
-### Metrics
-
-Prometheus metrics are exposed on port 9190:
-
-```bash
-# Port-forward to access metrics locally
-kubectl port-forward svc/my-router 9190:9190
-
-# View metrics
-curl http://localhost:9190/metrics
-```
-
-**Key Metrics:**
-
-- `semantic_router_request_duration_seconds` - Request latency
-- `semantic_router_cache_hit_total` - Cache hit rate
-- `semantic_router_classification_duration_seconds` - Classification latency
-- `semantic_router_tokens_total` - Token usage
-- `semantic_router_reasoning_requests_total` - Reasoning mode usage
-
-### ServiceMonitor (Prometheus Operator)
-
-```yaml
-apiVersion: monitoring.coreos.com/v1
-kind: ServiceMonitor
-metadata:
-  name: semantic-router-metrics
-spec:
-  selector:
-    matchLabels:
-      app.kubernetes.io/instance: my-router
-  endpoints:
-    - port: metrics
-      interval: 30s
-      path: /metrics
-```
-
-### Distributed Tracing
-
-Enable OpenTelemetry tracing:
-
-```yaml
-spec:
-  config:
-    observability:
-      tracing:
-        enabled: true
-        provider: "opentelemetry"
-        exporter:
-          type: "otlp"
-          endpoint: "jaeger-collector:4317"
-          insecure: true
-        sampling:
-          type: "always_on"
-          rate: 1.0
-```
-
-## Troubleshooting
-
-### Common Issues
-
-#### Backend Discovery Failures
-
-**Symptom:** "No backends found" or "Failed to discover backend" in logs
-
-**For KServe backends:**
-
-```bash
-# Check InferenceService exists and is ready
-kubectl get inferenceservice llama-3-8b
-
-# Check predictor service was created by KServe
-kubectl get service llama-3-8b-predictor
-
-# Verify InferenceService status
-kubectl describe inferenceservice llama-3-8b
-```
-
-**For Llama Stack backends:**
-
-```bash
-# Verify services exist with correct labels
-kubectl get services -l app=llama-stack,model=llama-3.3-70b
-
-# Check service labels match discoveryLabels in CR
-kubectl get service <service-name> -o jsonpath='{.metadata.labels}'
-```
-
-**For direct service backends:**
-
-```bash
-# Verify service exists in specified namespace
-kubectl get service vllm-deepseek -n vllm-serving
-
-# Check service has ports defined
-kubectl get service vllm-deepseek -n vllm-serving -o jsonpath='{.spec.ports[0]}'
-```
-
-#### Gateway Integration Issues
-
-**Symptom:** HTTPRoute not created or traffic not reaching semantic router
-
-```bash
-# Verify Gateway exists
-kubectl get gateway istio-ingressgateway -n istio-system
-
-# Check HTTPRoute was created
-kubectl get httproute -l app.kubernetes.io/instance=my-router
-
-# Verify Gateway supports HTTPRoute (Gateway API v1)
-kubectl get gateway istio-ingressgateway -n istio-system -o yaml | grep -A5 listeners
-
-# Check operator status
-kubectl get semanticrouter my-router -o jsonpath='{.status.gatewayMode}'
-# Should show: "gateway-integration"
-```
-
-#### OpenShift Route Issues
-
-**Symptom:** Route not created on OpenShift
-
-```bash
-# Verify running on OpenShift cluster
-kubectl api-resources | grep route.openshift.io
-
-# Check if Route was created
-kubectl get route -l app.kubernetes.io/instance=my-router
-
-# Check operator detected OpenShift
-kubectl logs -n semantic-router-operator-system \
-  deployment/semantic-router-operator-controller-manager \
-  | grep -i "openshift\|route"
-
-# Verify Route status
-kubectl get semanticrouter my-router -o jsonpath='{.status.openshiftFeatures}'
-```
-
-#### Pod stuck in `ImagePullBackOff`
-
-```bash
-# Check image pull secrets
-kubectl describe pod <pod-name>
-
-# Create image pull secret
-kubectl create secret docker-registry ghcr-secret \
-  --docker-server=ghcr.io \
-  --docker-username=<username> \
-  --docker-password=<personal-access-token>
-
-# Add to SemanticRouter
-spec:
-  imagePullSecrets:
-    - name: ghcr-secret
-```
-
-#### PVC stuck in `Pending`
-
-```bash
-# Check storage class exists
-kubectl get storageclass
-
-# Check PVC events
-kubectl describe pvc my-router-models
-
-# Update storage class in CR
-spec:
-  persistence:
-    storageClassName: "your-available-storage-class"
-```
-
-#### Models not downloading
-
-```bash
-# Check if HF token secret exists
-kubectl get secret hf-token-secret
-
-# Create HF token secret
-kubectl create secret generic hf-token-secret \
-  --from-literal=token=hf_xxxxxxxxxxxxx
-
-# Add to SemanticRouter CR
-spec:
-  env:
-    - name: HF_TOKEN
-      valueFrom:
-        secretKeyRef:
-          name: hf-token-secret
-          key: token
-```
-
-#### Operator not detecting platform correctly
-
-```bash
-# Check operator logs for platform detection
-kubectl logs -n semantic-router-operator-system \
-  deployment/semantic-router-operator-controller-manager \
-  | grep -i "platform\|openshift"
-
-# Should see one of:
-# "Detected OpenShift platform - will use OpenShift-compatible security contexts"
-# "Detected standard Kubernetes platform - will use standard security contexts"
-```
-
-## Migration from Helm
-
-If you're currently using Helm to deploy semantic router:
-
-### 1. Export Current Configuration
-
-```bash
-# Get current Helm values
-helm get values my-router -n semantic-router > current-values.yaml
-```
-
-### 2. Convert to SemanticRouter CR
-
-Map Helm values to CR format (most fields map directly):
-
-```yaml
-# Helm: replicas
-# CR: spec.replicas
-
-# Helm: image.repository + image.tag
-# CR: spec.image.repository + spec.image.tag
-
-# Helm: config.bert_model
-# CR: spec.config.bert_model
-```
-
-### 3. Apply CR and Verify
-
-```bash
-# Apply the SemanticRouter CR
-kubectl apply -f semantic-router-cr.yaml
-
-# Wait for resources to be created
-kubectl wait --for=condition=Available semanticrouter/my-router --timeout=5m
-
-# Verify
-kubectl get semanticrouter,deployment,service
-```
-
-### 4. Delete Helm Release
-
-Once verified:
-
-```bash
-helm uninstall my-router -n semantic-router
-```
-
-**Benefits of Operator vs Helm:**
-
-- ✅ Better lifecycle management and automatic updates
-- ✅ Platform-aware security contexts (OpenShift/Kubernetes)
-- ✅ Easier configuration updates (just edit CR)
-- ✅ Status conditions and health reporting
-- ✅ Integrated with Kubernetes ecosystem (kubectl, GitOps)
-
-## Development and Contributing
-
-### Local Development
-
-```bash
-cd deploy/operator
-
-# Run tests
-make test
-
-# Generate CRDs and code
-make generate
-make manifests
-
-# Build operator binary
-make build
-
-# Run locally against your kubeconfig
-make run
-```
-
-### Testing with kind
-
-```bash
-# Create kind cluster
-kind create cluster --name operator-test
-
-# Build and load image
-make docker-build IMG=semantic-router-operator:dev
-kind load docker-image semantic-router-operator:dev --name operator-test
-
-# Deploy
-make install
-make deploy IMG=semantic-router-operator:dev
-
-# Create test instance
-kubectl apply -f config/samples/vllm_v1alpha1_semanticrouter.yaml
-```
-
-## API Reference
-
-For the complete CRD API reference, see [CRD Reference](../../api/crd-reference).
-
-## Next Steps
-
-- [Configure semantic router features](../configuration)
-- [Set up monitoring and observability](../../tutorials/observability/dashboard)
-- [Deploy with different deployment strategies](../installation.md)
-- [Join the community](../../community/overview)
+::::caution OpenShift Note
+在 OpenShift 上，建议省略 `runAsUser` 与 `fsGroup`，让 SCC 自动分配 UID/GID。
+::::
+
+## 下一步
+
+- [配置 semantic router 功能](../configuration)
+- [配置监控与可观测性](../../tutorials/global/api-and-observability)
+- [探索其他部署方式](/docs/installation)
+- [加入社区](../../community/overview)

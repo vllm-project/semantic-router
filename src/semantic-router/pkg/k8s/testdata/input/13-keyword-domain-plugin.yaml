@@ -47,7 +47,7 @@ spec:
 
   decisions:
     - name: "medical_query"
-      description: "Medical queries with PII protection"
+      description: "Medical queries with guided handling"
       priority: 100
       signals:
         operator: "AND"
@@ -61,11 +61,6 @@ spec:
           use_reasoning: true
           reasoning_effort: "high"
       plugins:
-        - type: "pii"
-          configuration:
-            enabled: true
-            threshold: 0.9
-            pii_types_allowed: ["PERSON", "DATE_OF_BIRTH", "MEDICAL_RECORD"]
         - type: "system_prompt"
           configuration:
             system_prompt: "You are a medical information assistant. Provide general health information but always advise users to consult healthcare professionals."
@@ -73,4 +68,3 @@ spec:
           configuration:
             enabled: true
             similarity_threshold: 0.88
-

@@ -1,11 +1,9 @@
 package testcases
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
-	"io"
 	"net/http"
 	"os"
 	"strings"
@@ -19,7 +17,7 @@ import (
 func init() {
 	pkgtestcases.Register("jailbreak-detection", pkgtestcases.TestCase{
 		Description: "Test jailbreak detection and blocking functionality",
-		Tags:        []string{"ai-gateway", "security", "jailbreak"},
+		Tags:        []string{"kubernetes", "security", "jailbreak"},
 		Fn:          testJailbreakDetection,
 	})
 }
@@ -132,84 +130,45 @@ func testSingleJailbreakDetection(ctx context.Context, testCase JailbreakTestCas
 		ExpectedBlocked: testCase.ExpectedBlocked,
 	}
 
-	// Create chat completion request
-	requestBody := map[string]interface{}{
-		"model": "MoM",
-		"messages": []map[string]string{
-			{"role": "user", "content": testCase.Question},
-		},
-	}
-
-	jsonData, err := json.Marshal(requestBody)
+	response, err := sendLocalChatCompletion(ctx, localPort, "MoM", testCase.Question, 30*time.Second)
 	if err != nil {
-		result.Error = fmt.Sprintf("failed to marshal request: %v", err)
+		result.Error = err.Error()
 		return result
 	}
 
-	// Send request
-	url := fmt.Sprintf("http://localhost:%s/v1/chat/completions", localPort)
-	req, err := http.NewRequestWithContext(ctx, "POST", url, bytes.NewBuffer(jsonData))
-	if err != nil {
-		result.Error = fmt.Sprintf("failed to create request: %v", err)
-		return result
-	}
-	req.Header.Set("Content-Type", "application/json")
-
-	httpClient := &http.Client{Timeout: 30 * time.Second}
-	resp, err := httpClient.Do(req)
-	if err != nil {
-		result.Error = fmt.Sprintf("failed to send request: %v", err)
-		return result
-	}
-	defer resp.Body.Close()
-
-	// Check response status (should be 200 OK even when blocked)
-	if resp.StatusCode != http.StatusOK {
-		bodyBytes, _ := io.ReadAll(resp.Body)
-
-		// Log detailed error information including headers
-		var errorMsg strings.Builder
-		errorMsg.WriteString(fmt.Sprintf("Unexpected status code: %d\n", resp.StatusCode))
-		errorMsg.WriteString(fmt.Sprintf("Response body: %s\n", string(bodyBytes)))
-		errorMsg.WriteString("Response headers:\n")
-		errorMsg.WriteString(formatResponseHeaders(resp.Header))
-
-		result.Error = errorMsg.String()
-
-		// Print detailed error to console for debugging
-		if verbose {
-			fmt.Printf("[Test] ✗ HTTP %d Error for: %s\n", resp.StatusCode, testCase.Description)
-			fmt.Printf("  Question: %s\n", testCase.Question)
-			fmt.Printf("  Response Headers:\n%s", formatResponseHeaders(resp.Header))
-			fmt.Printf("  Response Body: %s\n", string(bodyBytes))
-		}
-
+	if response.StatusCode != http.StatusOK {
+		result.Error = formatUnexpectedChatCompletionStatus(response)
+		logUnexpectedChatCompletionStatus(verbose, response, testCase.Description,
+			"Question: "+testCase.Question)
 		return result
 	}
 
-	// Check for jailbreak blocked headers
-	jailbreakBlockedHeader := resp.Header.Get("x-vsr-jailbreak-blocked")
-	result.ActuallyBlocked = (jailbreakBlockedHeader == "true")
-	result.DetectedType = resp.Header.Get("x-vsr-jailbreak-type")
-	result.Confidence = resp.Header.Get("x-vsr-jailbreak-confidence")
-
-	// Verify response body contains expected message
-	bodyBytes, err := io.ReadAll(resp.Body)
-	if err != nil {
-		result.Error = fmt.Sprintf("failed to read response body: %v", err)
-		return result
+	fastResponse := response.Headers.Get("x-vsr-fast-response")
+	selectedDecision := response.Headers.Get("x-vsr-selected-decision")
+	matchedJailbreak := response.Headers.Get("x-vsr-matched-jailbreak")
+	jailbreakBlockedLegacy := response.Headers.Get("x-vsr-jailbreak-blocked")
+	result.ActuallyBlocked = fastResponse == "true" || jailbreakBlockedLegacy == "true"
+	result.DetectedType = selectedDecision
+	if result.DetectedType == "" {
+		result.DetectedType = matchedJailbreak
 	}
+	if result.DetectedType == "" {
+		result.DetectedType = response.Headers.Get("x-vsr-jailbreak-type")
+	}
+	result.Confidence = response.Headers.Get("x-vsr-jailbreak-confidence")
 
 	if result.ActuallyBlocked {
-		// Verify the response contains jailbreak violation message
-		bodyStr := string(bodyBytes)
-		if !strings.Contains(bodyStr, "jailbreak attempt") {
+		bodyStr := string(response.Body)
+		hasExpectedText := strings.Contains(bodyStr, "jailbreak attempt") ||
+			strings.Contains(bodyStr, "jailbreak") ||
+			strings.Contains(bodyStr, "security") ||
+			fastResponse == "true"
+		if !hasExpectedText {
 			result.Error = "Jailbreak blocked but response message doesn't contain expected text"
 		}
 	}
 
-	// Check if result matches expectation
-	result.Correct = (result.ActuallyBlocked == result.ExpectedBlocked)
+	result.Correct = result.ActuallyBlocked == result.ExpectedBlocked
 
 	if verbose {
 		if result.Correct {

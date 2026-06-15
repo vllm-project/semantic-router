@@ -1,0 +1,82 @@
+version: v0.3
+listeners: []
+providers:
+  defaults:
+    reasoning_families:
+      qwen3:
+        type: chat_template_kwargs
+        parameter: enable_thinking
+  models:
+  - name: qwen2.5:3b
+    reasoning_family: qwen3
+    backend_refs:
+    - name: ollama
+      endpoint: 127.0.0.1:11434
+      weight: 1
+routing:
+  decisions:
+  - name: default
+    description: Default routing
+    priority: 100
+    rules:
+      operator: OR
+      conditions:
+      - type: domain
+        name: general
+    modelRefs:
+    - model: qwen2.5:3b
+      use_reasoning: false
+      weight: 100
+  signals:
+    domains:
+    - name: general
+      description: General queries
+    - name: engineering
+      description: Technical questions
+  modelCards:
+  - name: qwen2.5:3b
+global:
+  model_catalog:
+    embeddings:
+      semantic:
+        use_cpu: true
+        mmbert_model_path: onnx-binding/mmbert-32k-yarn-onnx
+    modules:
+      classifier:
+        domain:
+          enabled: false
+        pii:
+          enabled: false
+      hallucination_mitigation:
+        enabled: false
+      prompt_guard:
+        enabled: false
+      feedback_detector:
+        enabled: false
+  router: {}
+  services:
+    response_api:
+      enabled: true
+      store_backend: memory
+      ttl_seconds: 86400
+      max_responses: 1000
+    router_replay:
+      store_backend: memory
+      ttl_seconds: 2592000
+      async_writes: true
+  stores:
+    semantic_cache:
+      enabled: true
+      backend_type: memory
+      similarity_threshold: 0.85
+      max_entries: 1000
+      ttl_seconds: 3600
+      eviction_policy: fifo
+      embedding_model: mmbert
+  integrations:
+    tools:
+      enabled: true
+      tools_db_path: deploy/examples/runtime/tools/tools_db.json
+      model_type: mmbert
+      target_dim: 0
+      similarity_threshold: 0.7

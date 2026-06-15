@@ -1,8 +1,10 @@
 ---
 slug: semantic-tool-selection
 title: "Semantic Tool Selection: Building Smarter AI Agents with Context-Aware Routing"
+description: How semantic tool selection uses context-aware routing to choose the right tools for AI agents before the request reaches the LLM.
 authors: [Xunzhuo, rootfs]
 tags: [tools, semantic-routing, mcp, performance, agents]
+image: /img/tools.png
 ---
 
 # Semantic Tool Selection: Building Smarter AI Agents with Context-Aware Routing

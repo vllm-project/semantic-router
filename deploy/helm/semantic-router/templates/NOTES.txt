@@ -38,7 +38,9 @@
   kubectl --namespace {{ include "semantic-router.namespace" . }} port-forward svc/{{ include "semantic-router.fullname" . }} 50051:50051
 
 {{- $config := (get .Values "config") | default (dict) -}}
-{{- $responseAPI := (get $config "response_api") | default (dict) -}}
+{{- $global := (get $config "global") | default (dict) -}}
+{{- $services := (get $global "services") | default (dict) -}}
+{{- $responseAPI := (get $services "response_api") | default (dict) -}}
 {{- $responseEnabled := (get $responseAPI "enabled") | default false -}}
 {{- $responseBackend := (get $responseAPI "store_backend") | default "" -}}
 {{- if and $responseEnabled (eq $responseBackend "redis") }}

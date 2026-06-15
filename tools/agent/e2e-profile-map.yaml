@@ -1,0 +1,254 @@
+version: 2
+
+default_local_profiles:
+  - kubernetes
+
+full_ci_profiles:
+  - kubernetes
+  - dashboard
+
+full_ci_triggers:
+  - src/semantic-router/**
+  - src/vllm-sr/**
+  - src/vllm-sr/Dockerfile*
+  - tools/make/**
+  - tools/agent/*.yaml
+  - tools/agent/scripts/**
+  - tools/make/agent.mk
+  - .github/workflows/**
+  - e2e/pkg/**
+  - e2e/cmd/**
+  - e2e/testcases/**
+  - e2e/go.mod
+  - e2e/go.sum
+  - e2e/config/**
+
+profile_rules:
+  kubernetes:
+    owner: e2e
+    coverage_role: baseline-router-contract
+    selection_mode: default-local,full-ci
+    summary: Baseline router contract for general routing, safety, cache, and decision behavior.
+    paths:
+      - e2e/profiles/ai-gateway/**
+      - deploy/kubernetes/ai-gateway/**
+  dashboard:
+    owner: e2e
+    coverage_role: dashboard-api-contract
+    selection_mode: full-ci
+    summary: Dashboard API surface — health, status, config read (JSON/YAML), deploy preview, config versions, input validation, and security policy RBAC + ratelimit apply.
+    paths:
+      - e2e/profiles/dashboard/**
+      - e2e/testcases/dashboard_*.go
+      - e2e/testcases/security_policy_apply.go
+      - deploy/kubernetes/observability/dashboard/**
+      - dashboard/backend/handlers/security_policy*.go
+      - dashboard/backend/handlers/deploy.go
+      - dashboard/backend/handlers/canonical_transport.go
+  aibrix:
+    owner: e2e
+    coverage_role: aibrix-control-plane-and-gateway
+    selection_mode: full-ci
+    summary: AIBrix-specific gateway and control-plane health plus a minimal router smoke path.
+    paths:
+      - e2e/profiles/aibrix/**
+      - deploy/kubernetes/aibrix/**
+  routing-strategies:
+    owner: e2e
+    coverage_role: routing-strategy-contracts
+    selection_mode: full-ci
+    summary: Keyword, entropy, and fallback routing strategy behavior.
+    paths:
+      - e2e/profiles/routing-strategies/**
+      - deploy/kubernetes/routing-strategies/**
+  dynamic-config:
+    owner: e2e
+    coverage_role: dynamic-crd-routing-contracts
+    selection_mode: full-ci
+    summary: CRD-driven routing semantics and embedding-signal behavior.
+    paths:
+      - e2e/profiles/dynamic-config/**
+  multimodal-routing:
+    owner: e2e
+    coverage_role: image-modality-embedding-signal-routing
+    selection_mode: full-ci
+    summary: Image-modality EmbeddingSignal routing via the multi-modal-embed-small model.
+    paths:
+      - e2e/profiles/multimodal-routing/**
+  llm-d:
+    owner: e2e
+    coverage_role: llm-d-inference-gateway-health
+    selection_mode: full-ci
+    summary: LLM-D inference-gateway health with a minimal router smoke path.
+    paths:
+      - e2e/profiles/llm-d/**
+      - deploy/kubernetes/llmd-base/**
+  istio:
+    owner: e2e
+    coverage_role: istio-service-mesh-contracts
+    selection_mode: full-ci
+    summary: Istio sidecar, traffic, mTLS, and tracing behavior through the router.
+    paths:
+      - e2e/profiles/istio/**
+      - deploy/kubernetes/istio/**
+  agentgateway:
+    owner: e2e
+    coverage_role: agentgateway-integration
+    selection_mode: full-ci
+    summary: Integration coverage with agentgateway's gateway controller, including backend routing and extproc policy enforcement.
+    paths:
+      - e2e/profiles/agentgateway/**
+      - deploy/kubernetes/agentgateway/**
+  production-stack:
+    owner: e2e
+    coverage_role: production-ha-load-observability
+    selection_mode: full-ci
+    summary: HA, load-balancing, failover, and performance checks for the production stack.
+    paths:
+      - e2e/profiles/production-stack/**
+      - deploy/kubernetes/ai-gateway/aigw-resources/base-model.yaml
+      - deploy/kubernetes/ai-gateway/aigw-resources/gwapi-resources.yaml
+  ml-model-selection:
+    owner: e2e
+    coverage_role: ml-model-selection-contracts
+    selection_mode: full-ci
+    summary: ML-based model-selection behavior across trained selector backends.
+    paths:
+      - e2e/profiles/ml-model-selection/**
+      - src/semantic-router/pkg/modelselection/**
+      - src/training/model_selection/ml_model_selection/**
+      - ml-binding/**
+  multi-endpoint:
+    owner: e2e
+    coverage_role: environment-policy-routing
+    selection_mode: full-ci
+    summary: Environment-specific routing and safety policy enforcement across multiple backends.
+    paths:
+      - e2e/profiles/multi-endpoint/**
+      - e2e/config/config.multi-endpoint.yaml
+      - scripts/multi-endpoint/**
+  authz-rbac:
+    owner: e2e
+    coverage_role: authz-and-rate-limit-contracts
+    selection_mode: full-ci
+    summary: Authz-driven routing and per-user rate-limiting behavior, including dashboard security policy apply.
+    paths:
+      - e2e/profiles/authz-rbac/**
+      - e2e/config/config.authz-rbac.yaml
+      - e2e/config/authz-profile-*.yaml
+      - src/semantic-router/pkg/classification/authz*.go
+      - src/semantic-router/pkg/authz/**
+      - dashboard/backend/handlers/security_policy*.go
+  streaming:
+    owner: e2e
+    coverage_role: streaming-request-and-cache
+    selection_mode: full-ci
+    summary: Streamed request-body routing and streaming cache round-trip behavior.
+    paths:
+      - e2e/profiles/streaming/**
+      - deploy/kubernetes/streaming/**
+      - src/semantic-router/pkg/extproc/processor_req_body_streamed*.go
+  anthropic-shim:
+    owner: e2e
+    coverage_role: anthropic-shape-backend-translation-contracts
+    selection_mode: full-ci
+    summary: Anthropic-shape backend (llama.cpp + shim) for verifying outbound translation cells — cache-cycle synthesis, stop-reason mapping, and request-side field preservation.
+    paths:
+      - e2e/profiles/anthropic-shim/**
+      - e2e/testing/anthropic-shim/**
+      - deploy/kubernetes/anthropic-backend/**
+      - src/semantic-router/pkg/anthropic/outbound*.go
+
+manual_profile_rules:
+  response-api:
+    owner: e2e
+    coverage_role: responses-api-memory
+    selection_mode: manual-only
+    summary: Memory-backed Responses API coverage, kept out of the standard CI profile matrix until the profile is re-enabled.
+    paths:
+      - e2e/profiles/response-api/**
+      - deploy/kubernetes/response-api/gwapi-resources.yaml
+      - deploy/kubernetes/response-api/mock-vllm.yaml
+  response-api-redis:
+    owner: e2e
+    coverage_role: responses-api-redis-ttl
+    selection_mode: manual-only
+    summary: Responses API coverage for Redis-backed persistence and TTL expiry when debugging that backend directly.
+    paths:
+      - e2e/profiles/response-api-redis/**
+      - deploy/kubernetes/response-api/redis.yaml
+  response-api-redis-cluster:
+    owner: e2e
+    coverage_role: responses-api-redis-cluster-ttl
+    selection_mode: manual-only
+    summary: Responses API coverage for Redis Cluster-backed persistence and TTL expiry when debugging that backend directly.
+    paths:
+      - e2e/profiles/response-api-redis-cluster/**
+      - deploy/kubernetes/response-api/redis-cluster.yaml
+  router-replay:
+    owner: e2e
+    coverage_role: router-replay-restart-recovery
+    selection_mode: manual-only
+    summary: Router Replay restart-recovery coverage with Postgres backend, validating that replay records survive pod restarts.
+    paths:
+      - e2e/profiles/router-replay/**
+      - deploy/kubernetes/router-replay/**
+      - src/semantic-router/pkg/routerreplay/**
+      - src/semantic-router/pkg/extproc/router_replay_setup.go
+  dynamo:
+    owner: e2e
+    coverage_role: dynamo-gpu-and-batching
+    selection_mode: manual-only
+    summary: NVIDIA Dynamo deployment, batching, and GPU-health checks that require a manual execution path.
+    paths:
+      - e2e/profiles/dynamo/**
+  vectorstore-registry:
+    owner: e2e
+    coverage_role: vectorstore-registry-restart-recovery
+    selection_mode: manual-only
+    summary: Vector Store Registry restart-recovery coverage with Postgres metadata backend, validating that store and file metadata survive pod restarts.
+    paths:
+      - e2e/profiles/vectorstore-registry/**
+      - deploy/kubernetes/router-replay/postgres.yaml
+      - src/semantic-router/pkg/vectorstore/metadata_registry*.go
+      - src/semantic-router/pkg/postgres/**
+  rag-hybrid-search:
+    owner: e2e
+    coverage_role: rag-hybrid-search
+    selection_mode: manual-only
+    summary: Llama Stack-backed RAG vector-store and hybrid-search behavior that runs outside the standard CI profile matrix.
+    paths:
+      - e2e/profiles/rag-hybrid-search/**
+
+workflow_suite_rules:
+  vllm-sr-cli-integration:
+    owner: vllm-sr-cli
+    kind: workflow-integration
+    summary: Real-container CLI integration coverage for serve, status, logs, stop, and image-pull behavior.
+    workflow: .github/workflows/integration-test-vllm-sr-cli.yml
+    local_command: make vllm-sr-test-integration
+    paths:
+      - src/vllm-sr/**
+      - src/vllm-sr/Dockerfile*
+      - tools/make/docker.mk
+      - e2e/testing/vllm-sr-cli/**
+      - .github/workflows/integration-test-vllm-sr-cli.yml
+  memory-integration:
+    owner: router-core
+    kind: workflow-integration
+    summary: Memory extraction, Milvus persistence, and injection behavior through the served router stack.
+    workflow: .github/workflows/integration-test-memory.yml
+    local_command: make memory-test-integration
+    paths:
+      - src/semantic-router/pkg/memory/**
+      - src/semantic-router/pkg/extproc/*memory*
+      - src/semantic-router/pkg/responseapi/**
+      - src/vllm-sr/**
+      - src/vllm-sr/Dockerfile*
+      - tools/make/docker.mk
+      - tools/make/milvus.mk
+      - e2e/testing/09-memory-features-test.py
+      - e2e/testing/run_memory_integration.sh
+      - e2e/testing/llm-katan/**
+      - e2e/config/config.memory*.yaml
+      - .github/workflows/integration-test-memory.yml

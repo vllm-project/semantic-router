@@ -2,8 +2,8 @@ package cache
 
 import (
 	"fmt"
-	"os"
 
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 )
 
@@ -41,79 +41,57 @@ func NewCacheBackend(config CacheConfig) (CacheBackend, error) {
 		return NewInMemoryCache(options), nil
 
 	case MilvusCacheType:
-		var options MilvusCacheOptions
-		if config.Milvus != nil {
-			logging.Debugf("Creating Milvus cache backend - Config: %v, TTL: %ds, Threshold: %.3f",
-				config.Milvus, config.TTLSeconds, config.SimilarityThreshold)
-			options = MilvusCacheOptions{
-				Enabled:             config.Enabled,
-				SimilarityThreshold: config.SimilarityThreshold,
-				TTLSeconds:          config.TTLSeconds,
-				Config:              config.Milvus,
-			}
-		} else {
-			logging.Debugf("(Deprecated) Creating Milvus cache backend - ConfigPath: %s, TTL: %ds, Threshold: %.3f",
-				config.BackendConfigPath, config.TTLSeconds, config.SimilarityThreshold)
-			options = MilvusCacheOptions{
-				Enabled:             config.Enabled,
-				SimilarityThreshold: config.SimilarityThreshold,
-				TTLSeconds:          config.TTLSeconds,
-				ConfigPath:          config.BackendConfigPath,
-			}
-		}
-		return NewMilvusCache(options)
+		logging.Debugf("Creating Milvus cache backend - Config: %v, TTL: %ds, Threshold: %.3f, EmbeddingModel: %s",
+			config.Milvus, config.TTLSeconds, config.SimilarityThreshold, config.EmbeddingModel)
+		return NewMilvusCache(MilvusCacheOptions{
+			Enabled:             config.Enabled,
+			SimilarityThreshold: config.SimilarityThreshold,
+			TTLSeconds:          config.TTLSeconds,
+			Config:              config.Milvus,
+			EmbeddingModel:      config.EmbeddingModel,
+		})
 
 	case RedisCacheType:
-		var options RedisCacheOptions
-		if config.Redis != nil {
-			logging.Debugf("Creating Redis cache backend - Config: %v, TTL: %ds, Threshold: %.3f",
-				config.Redis, config.TTLSeconds, config.SimilarityThreshold)
-			options = RedisCacheOptions{
-				Enabled:             config.Enabled,
-				SimilarityThreshold: config.SimilarityThreshold,
-				TTLSeconds:          config.TTLSeconds,
-				Config:              config.Redis,
-			}
-		} else {
-			logging.Debugf("(Deprecated) Creating Redis cache backend - ConfigPath: %s, TTL: %ds, Threshold: %.3f",
-				config.BackendConfigPath, config.TTLSeconds, config.SimilarityThreshold)
-			options = RedisCacheOptions{
-				Enabled:             config.Enabled,
-				SimilarityThreshold: config.SimilarityThreshold,
-				TTLSeconds:          config.TTLSeconds,
-				ConfigPath:          config.BackendConfigPath,
-			}
+		logging.Debugf("Creating Redis cache backend - Config: %v, TTL: %ds, Threshold: %.3f, EmbeddingModel: %s",
+			config.Redis, config.TTLSeconds, config.SimilarityThreshold, config.EmbeddingModel)
+		return NewRedisCache(RedisCacheOptions{
+			Enabled:             config.Enabled,
+			SimilarityThreshold: config.SimilarityThreshold,
+			TTLSeconds:          config.TTLSeconds,
+			Config:              config.Redis,
+			EmbeddingModel:      config.EmbeddingModel,
+		})
+
+	case ValkeyCacheType:
+		if config.Valkey == nil {
+			return nil, fmt.Errorf("valkey configuration is required for Valkey cache backend")
 		}
-		return NewRedisCache(options)
+		logging.Debugf("Creating Valkey cache backend - Config: %v, TTL: %ds, Threshold: %.3f, EmbeddingModel: %s",
+			config.Valkey, config.TTLSeconds, config.SimilarityThreshold, config.EmbeddingModel)
+		options := ValkeyCacheOptions{
+			Enabled:             config.Enabled,
+			SimilarityThreshold: config.SimilarityThreshold,
+			TTLSeconds:          config.TTLSeconds,
+			Config:              config.Valkey,
+			EmbeddingModel:      config.EmbeddingModel,
+		}
+		return NewValkeyCache(options)
 
 	case HybridCacheType:
-		var options HybridCacheOptions
-		if config.Milvus != nil {
-			logging.Debugf("Creating Hybrid cache backend - Config: %v, TTL: %ds, Threshold: %.3f",
-				config.Milvus, config.TTLSeconds, config.SimilarityThreshold)
-			options = HybridCacheOptions{
-				Enabled:             config.Enabled,
-				SimilarityThreshold: config.SimilarityThreshold,
-				TTLSeconds:          config.TTLSeconds,
-				MaxMemoryEntries:    config.MaxMemoryEntries,
-				HNSWM:               config.HNSWM,
-				HNSWEfConstruction:  config.HNSWEfConstruction,
-				Milvus:              config.Milvus,
-			}
-		} else {
-			logging.Debugf("(Deprecated) Creating Hybrid cache backend - MaxMemory: %d, TTL: %ds, Threshold: %.3f",
-				config.MaxMemoryEntries, config.TTLSeconds, config.SimilarityThreshold)
-			options = HybridCacheOptions{
-				Enabled:             config.Enabled,
-				SimilarityThreshold: config.SimilarityThreshold,
-				TTLSeconds:          config.TTLSeconds,
-				MaxMemoryEntries:    config.MaxMemoryEntries,
-				HNSWM:               config.HNSWM,
-				HNSWEfConstruction:  config.HNSWEfConstruction,
-				MilvusConfigPath:    config.BackendConfigPath,
-			}
-		}
-		return NewHybridCache(options)
+		logging.Debugf("Creating Hybrid cache backend - Config: %v, TTL: %ds, Threshold: %.3f, EmbeddingModel: %s",
+			config.Milvus, config.TTLSeconds, config.SimilarityThreshold, config.EmbeddingModel)
+		return NewHybridCache(hybridCacheOptionsFromConfig(config))
+
+	case QdrantCacheType:
+		logging.Debugf("Creating Qdrant cache backend - Config: %v, TTL: %ds, Threshold: %.3f, EmbeddingModel: %s",
+			config.Qdrant, config.TTLSeconds, config.SimilarityThreshold, config.EmbeddingModel)
+		return NewQdrantCache(QdrantCacheOptions{
+			Enabled:             config.Enabled,
+			SimilarityThreshold: config.SimilarityThreshold,
+			TTLSeconds:          config.TTLSeconds,
+			Config:              config.Qdrant,
+			EmbeddingModel:      config.EmbeddingModel,
+		})
 
 	default:
 		logging.Debugf("Unsupported cache backend type: %s", config.BackendType)
@@ -121,64 +99,79 @@ func NewCacheBackend(config CacheConfig) (CacheBackend, error) {
 	}
 }
 
+func hybridCacheOptionsFromConfig(config CacheConfig) HybridCacheOptions {
+	return HybridCacheOptions{
+		Enabled:             config.Enabled,
+		SimilarityThreshold: config.SimilarityThreshold,
+		TTLSeconds:          config.TTLSeconds,
+		MaxMemoryEntries:    config.MaxMemoryEntries,
+		HNSWM:               config.HNSWM,
+		HNSWEfConstruction:  config.HNSWEfConstruction,
+		Milvus:              config.Milvus,
+		EmbeddingModel:      config.EmbeddingModel,
+	}
+}
+
 // ValidateCacheConfig validates cache configuration parameters
 func ValidateCacheConfig(config CacheConfig) error {
 	if !config.Enabled {
-		return nil // Skip validation for disabled cache
+		return nil
 	}
-
-	// Check similarity threshold range
 	if config.SimilarityThreshold < 0.0 || config.SimilarityThreshold > 1.0 {
 		return fmt.Errorf("similarity_threshold must be between 0.0 and 1.0, got: %f", config.SimilarityThreshold)
 	}
-
-	// Check TTL value
 	if config.TTLSeconds < 0 {
 		return fmt.Errorf("ttl_seconds cannot be negative, got: %d", config.TTLSeconds)
 	}
+	return validateCacheBackend(config)
+}
 
-	// Check backend-specific requirements
+func validateCacheBackend(config CacheConfig) error {
 	switch config.BackendType {
 	case InMemoryCacheType, "":
-		if config.MaxEntries < 0 {
-			return fmt.Errorf("max_entries cannot be negative for in-memory cache, got: %d", config.MaxEntries)
-		}
-		// Validate eviction policy
-		switch config.EvictionPolicy {
-		case "", FIFOEvictionPolicyType, LRUEvictionPolicyType, LFUEvictionPolicyType:
-			// "" is allowed, treated as FIFO by default
-		default:
-			return fmt.Errorf("unsupported eviction_policy: %s", config.EvictionPolicy)
-		}
+		return validateInMemoryCacheConfig(config)
 	case MilvusCacheType:
 		if config.Milvus == nil {
-			logging.Debugf("Milvus configuration not provided. Using backend_config_path: %s", config.BackendConfigPath)
-			if config.BackendConfigPath == "" {
-				return fmt.Errorf("backend_config_path is required for Milvus cache backend")
-			}
-			// Ensure the Milvus configuration file exists
-			if _, err := os.Stat(config.BackendConfigPath); os.IsNotExist(err) {
-				logging.Debugf("Milvus config file not found: %s", config.BackendConfigPath)
-				return fmt.Errorf("milvus config file not found: %s", config.BackendConfigPath)
-			}
-			logging.Debugf("Milvus config file found: %s", config.BackendConfigPath)
+			return fmt.Errorf("milvus configuration is required for Milvus cache backend")
 		}
 		logging.Debugf("Milvus configuration: %+v", config.Milvus)
 	case RedisCacheType:
 		if config.Redis == nil {
-			logging.Debugf("Redis configuration not provided. Using backend_config_path: %s", config.BackendConfigPath)
-			if config.BackendConfigPath == "" {
-				return fmt.Errorf("backend_config_path is required for Redis cache backend")
-			}
-			// Ensure the Redis configuration file exists
-			if _, err := os.Stat(config.BackendConfigPath); os.IsNotExist(err) {
-				logging.Debugf("Redis config file not found: %s", config.BackendConfigPath)
-				return fmt.Errorf("redis config file not found: %s", config.BackendConfigPath)
-			}
-			logging.Debugf("Redis config file found: %s", config.BackendConfigPath)
+			return fmt.Errorf("redis configuration is required for Redis cache backend")
 		}
+	case HybridCacheType:
+		if config.Milvus == nil {
+			return fmt.Errorf("milvus configuration is required for hybrid cache backend")
+		}
+	case ValkeyCacheType:
+		if config.Valkey == nil {
+			return fmt.Errorf("valkey configuration is required for Valkey cache backend")
+		}
+	case QdrantCacheType:
+		return validateQdrantCacheConfig(config.Qdrant)
 	}
+	return nil
+}
 
+func validateInMemoryCacheConfig(config CacheConfig) error {
+	if config.MaxEntries < 0 {
+		return fmt.Errorf("max_entries cannot be negative for in-memory cache, got: %d", config.MaxEntries)
+	}
+	switch config.EvictionPolicy {
+	case "", FIFOEvictionPolicyType, LRUEvictionPolicyType, LFUEvictionPolicyType:
+	default:
+		return fmt.Errorf("unsupported eviction_policy: %s", config.EvictionPolicy)
+	}
+	return nil
+}
+
+func validateQdrantCacheConfig(cfg *config.QdrantConfig) error {
+	if cfg == nil {
+		return fmt.Errorf("qdrant configuration is required for Qdrant cache backend")
+	}
+	if cfg.Host == "" {
+		return fmt.Errorf("qdrant.host is required for Qdrant cache backend")
+	}
 	return nil
 }
 
@@ -239,6 +232,19 @@ func GetAvailableCacheBackends() []CacheBackendInfo {
 				"Scalable with Redis Cluster",
 				"HNSW and FLAT indexing",
 				"Wide ecosystem support",
+				"TTL support",
+			},
+		},
+		{
+			Type:        ValkeyCacheType,
+			Name:        "Valkey Vector Database",
+			Description: "High-performance semantic cache powered by Valkey with vector search",
+			Features: []string{
+				"Fast in-memory performance",
+				"Persistent storage with AOF/RDB",
+				"Scalable with Valkey Cluster",
+				"HNSW and FLAT indexing",
+				"Redis-compatible protocol",
 				"TTL support",
 			},
 		},

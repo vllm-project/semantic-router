@@ -23,21 +23,13 @@ Pages:
 
 - Landing: Intro and quick links
 
-![Dashboard Landing](/img/dashboard/landing.png)
-
 - Playground: Built-in chat playground for quick testing
 
 - Config: Real-time configuration viewer/editor with structured panels and raw view
 
-![Configuration Page](/img/dashboard/config.png)
-
 - Topology: Visual flow from user request to model selection
 
-![Topology View](/img/dashboard/topology.png)
-
 - Monitoring: Embedded Grafana dashboard
-
-![Grafana Embedded](/img/dashboard/grafana.png)
 
 ### Backend (Go HTTP Server)
 

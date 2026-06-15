@@ -1,24 +1,41 @@
-apiVersion: serving.kserve.io/v1beta1
-kind: InferenceService
+apiVersion: serving.kserve.io/v1alpha2
+kind: LLMInferenceService
 metadata:
   name: model-a
-  labels:
-    app: model-a
   annotations:
-    serving.kserve.io/deploymentMode: RawDeployment
+    serving.kserve.io/storage-initializer-uid: "0"
 spec:
-  predictor:
+  model:
+    uri: hf://facebook/opt-125m
+    name: Model-A
+  replicas: 1
+  template:
+    securityContext:
+      runAsUser: 0
+    serviceAccountName: llmisvc-workload
     containers:
-      - name: llm-d-inference-sim
+      - name: main
         image: ghcr.io/llm-d/llm-d-inference-sim:v0.6.1
         imagePullPolicy: Always
+        command: ["/app/llm-d-inference-sim"]
         args:
           - --port
-          - "8080"
+          - "8000"
           - --model
           - Model-A
           - --mode
           - random
         ports:
-          - containerPort: 8080
+          - name: http
+            containerPort: 8000
             protocol: TCP
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: http
+            scheme: HTTP
+        readinessProbe:
+          httpGet:
+            path: /ready
+            port: http
+            scheme: HTTP

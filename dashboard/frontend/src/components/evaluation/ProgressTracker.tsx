@@ -1,5 +1,5 @@
 import { useEffect } from 'react';
-import { DIMENSION_INFO, STATUS_INFO, formatDuration } from '../../types/evaluation';
+import { DIMENSION_INFO, STATUS_INFO, LEVEL_INFO, formatDuration } from '../../types/evaluation';
 import { useProgress, useTask } from '../../hooks/useEvaluation';
 import styles from './ProgressTracker.module.css';
 
@@ -10,15 +10,30 @@ interface ProgressTrackerProps {
 }
 
 export function ProgressTracker({ taskId, onComplete, onCancel }: ProgressTrackerProps) {
-  const { task, refresh: refreshTask } = useTask(taskId);
-  const { progress, connected, completed, error } = useProgress(taskId, task?.status === 'running');
+  const { task, refresh: refreshTask } = useTask(taskId, true, 1000);
+  const { progress, connected, completed, error, disconnect } = useProgress(taskId, true);
 
   useEffect(() => {
     if (completed) {
       refreshTask();
-      onComplete?.();
     }
-  }, [completed, refreshTask, onComplete]);
+  }, [completed, refreshTask]);
+
+  useEffect(() => {
+    if (!task) {
+      return;
+    }
+
+    if (task.status === 'completed') {
+      disconnect();
+      onComplete?.();
+      return;
+    }
+
+    if (task.status === 'failed' || task.status === 'cancelled') {
+      disconnect();
+    }
+  }, [task, disconnect, onComplete]);
 
   if (!task) {
     return (
@@ -73,6 +88,12 @@ export function ProgressTracker({ taskId, onComplete, onCancel }: ProgressTracke
       </div>
 
       <div className={styles.details}>
+        <div className={styles.detailItem}>
+          <span className={styles.detailLabel}>Level</span>
+          <span className={styles.detailValue} style={{ color: LEVEL_INFO[task.config.level].color }}>
+            {LEVEL_INFO[task.config.level].label}
+          </span>
+        </div>
         <div className={styles.detailItem}>
           <span className={styles.detailLabel}>Started</span>
           <span className={styles.detailValue}>

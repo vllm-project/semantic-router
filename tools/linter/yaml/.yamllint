@@ -9,9 +9,10 @@ ignore: |
   .crd-ref-docs.yaml
   deploy/helm
   .venv
+  **/build
   # Jinja2 template files (contain {% %} and {{ }} syntax)
   **/*.template.yaml
-  **/.vllm-sr/*.yaml
+  **/.vllm-sr/**
 
 rules:
   braces:

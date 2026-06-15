@@ -31,7 +31,7 @@ make docker-build docker-push IMG=<your-registry>/semantic-router-operator:lates
 make install
 
 # Deploy operator
-make deploy IMG=ghcr.io/vllm-project/semantic-router-operator:latest
+make deploy IMG=ghcr.io/vllm-project/semantic-router/operator:latest
 ```
 
 #### Option 2: OpenShift OperatorHub
@@ -85,9 +85,15 @@ kubectl apply -f config/samples/vllm.ai_v1alpha1_semanticrouter_milvus_cache.yam
 
 # Hybrid cache backend (in-memory HNSW + persistent Milvus)
 kubectl apply -f config/samples/vllm.ai_v1alpha1_semanticrouter_hybrid_cache.yaml
+
+# mmBERT 2D Matryoshka embeddings with layer early exit
+kubectl apply -f config/samples/vllm.ai_v1alpha1_semanticrouter_mmbert.yaml
+
+# Complexity-aware routing for intelligent model selection
+kubectl apply -f config/samples/vllm.ai_v1alpha1_semanticrouter_complexity.yaml
 ```
 
-**Note:** All cache backend samples include the required `bert_model` configuration and will automatically download embedding models on startup. Update the Redis/Milvus hostnames to match your deployment environment.
+**Note:** All cache backend samples include the required `embedding_models` configuration and will automatically download embedding models on startup. Update the Redis/Milvus hostnames to match your deployment environment.
 
 #### Backend Discovery Types
 
@@ -302,7 +308,7 @@ spec:
       backend_type: milvus
       similarity_threshold: "0.90"
       ttl_seconds: 7200
-      embedding_model: qwen3  # bert, qwen3, or gemma
+      embedding_model: mmbert
 
       milvus:
         connection:
@@ -437,22 +443,100 @@ kubectl explain semanticrouter.spec.config.semantic_cache.hnsw
 
 ### Embedding Models
 
-The semantic cache supports different embedding models for similarity calculation:
+The operator supports advanced embedding models through the unified `embedding_models` configuration. These models provide semantic understanding for caching, classification, and routing decisions.
 
-- **bert** (default): Lightweight, 384 dimensions, good for general use
-- **qwen3**: Higher quality, 1024 dimensions, better accuracy
-- **gemma**: Balanced, 768 dimensions, moderate performance
+#### Available Models
 
-Configure via:
+1. **Qwen3-Embedding** - 1024 dimensions, 32K context
+   - High-quality semantic understanding
+   - Best for: Complex queries, research documents, detailed analysis
+   - Use case: Production deployments requiring maximum accuracy
+
+2. **EmbeddingGemma** - 768 dimensions, 8K context
+   - Balanced performance and accuracy
+   - Best for: Fast performance with good quality
+   - Use case: Real-time applications, high-throughput scenarios
+
+3. **mmBERT 2D Matryoshka** - 64-768 dimensions, multilingual
+   - Adaptive quality/speed trade-offs via layer early exit
+   - Layer 3: ~7x speedup, Layer 6: ~3.6x speedup, Layer 11: ~2x speedup, Layer 22: full accuracy
+   - Dimension reduction: 64, 128, 256, 512, 768
+   - Best for: Multilingual deployments, flexible performance tuning
+   - Use case: Multi-language support, budget-constrained environments
+
+#### Configuration Examples
+
+**Using mmBERT with layer early exit:**
 
 ```yaml
 spec:
   config:
+    embedding_models:
+      mmbert_model_path: "models/mom-embedding-ultra"
+      use_cpu: true
+
+      embedding_config:
+        model_type: "mmbert"
+        target_layer: 6      # Balanced speed/quality (3.6x speedup)
+        target_dimension: 256  # Reduced dimension for faster search
+        preload_embeddings: true
+        enable_soft_matching: true
+        min_score_threshold: "0.5"
+
     semantic_cache:
-      embedding_model: bert  # or qwen3, gemma
+      enabled: true
+      embedding_model: "mmbert"
+      similarity_threshold: "0.85"
 ```
 
-**Note:** Ensure `dimension` in cache config matches your chosen embedding model.
+**Using Qwen3 with Redis cache:**
+
+```yaml
+spec:
+  config:
+    embedding_models:
+      mmbert_model_path: "models/mom-embedding-ultra"
+      use_cpu: true
+
+    semantic_cache:
+      enabled: true
+      backend_type: "redis"
+      embedding_model: "mmbert"
+      redis:
+        index:
+          vector_field:
+            dimension: 768  # Match mmBERT dimension
+```
+
+**Using Gemma with Milvus cache:**
+
+```yaml
+spec:
+  config:
+    embedding_models:
+      mmbert_model_path: "models/mom-embedding-ultra"
+      use_cpu: true
+
+    semantic_cache:
+      enabled: true
+      backend_type: "milvus"
+      embedding_model: "mmbert"
+      milvus:
+        collection:
+          vector_field:
+            dimension: 768  # Match mmBERT dimension
+```
+
+**Dimension Reference:**
+
+| Model | Dimensions | Context | Performance |
+|-------|-----------|---------|-------------|
+| BERT | 384 | 512 | Fast |
+| Gemma | 768 | 8K | Balanced |
+| Qwen3 | 1024 | 32K | High Quality |
+| mmBERT | 64-768 (adaptive) | Varies | Tunable |
+
+**Important:** Ensure `dimension` in cache config matches your chosen embedding model's dimension.
 
 ### Migration Path
 
@@ -464,6 +548,106 @@ Migrating from memory cache to Redis or Milvus is straightforward:
 4. Apply the changes - operator will perform rolling update
 
 The cache will be empty after migration but will populate naturally as queries are processed.
+
+## Complexity-Aware Routing
+
+Route queries to different models based on complexity classification using few-shot learning. This enables cost optimization by sending simple queries to fast models and complex queries to powerful models.
+
+### Configuration
+
+```yaml
+spec:
+  # Configure multiple backends with different capabilities
+  vllmEndpoints:
+    - name: llama-8b-fast
+      model: llama3-8b
+      reasoningFamily: qwen3
+      backend:
+        type: kserve
+        inferenceServiceName: llama-3-8b
+      weight: 2  # Prefer for simple queries
+
+    - name: llama-70b-reasoning
+      model: llama3-70b
+      reasoningFamily: deepseek
+      backend:
+        type: kserve
+        inferenceServiceName: llama-3-70b
+      weight: 1  # Use for complex queries
+
+  config:
+    # Define complexity rules with few-shot examples
+    complexity_rules:
+      - name: "code-complexity"
+        description: "Classify coding tasks by complexity"
+        threshold: "0.3"  # Lower threshold works better for embedding-based similarity
+
+        # Examples of complex coding tasks
+        hard:
+          candidates:
+            - "Implement a distributed lock manager with leader election"
+            - "Design a database migration system with rollback support"
+            - "Create a compiler optimization pass for loop unrolling"
+
+        # Examples of simple coding tasks
+        easy:
+          candidates:
+            - "Write a function to reverse a string"
+            - "Create a class to represent a rectangle"
+            - "Implement a simple counter with increment/decrement"
+
+      - name: "reasoning-complexity"
+        description: "Classify reasoning tasks"
+        threshold: "0.3"  # Lower threshold works better for embedding-based similarity
+
+        hard:
+          candidates:
+            - "Analyze geopolitical implications of renewable energy adoption"
+            - "Evaluate ethical considerations of AI in healthcare"
+
+        easy:
+          candidates:
+            - "What is the capital of France?"
+            - "How many days are in a week?"
+```
+
+### How It Works
+
+1. **Query Analysis**: Incoming query is compared against `hard` and `easy` candidate examples using embedding similarity
+2. **Complexity Scoring**: Similarity scores determine if query is closer to hard or easy examples
+3. **Signal Generation**: Outputs classification signals: `{rule-name}:hard`, `{rule-name}:easy`, or `{rule-name}:medium`
+4. **Routing Decision**: Router uses complexity signals to select appropriate backend model
+5. **Cost Optimization**: Simple queries → fast/cheap models, Complex queries → powerful/expensive models
+
+### Advanced: Conditional Rules with Composer
+
+Apply rules conditionally based on other signals (e.g., domain, language):
+
+```yaml
+complexity_rules:
+  - name: "medical-complexity"
+    description: "Classify medical queries (only for medical domain)"
+    threshold: "0.7"
+
+    hard:
+      candidates:
+        - "Differential diagnosis for chest pain with dyspnea"
+        - "Treatment protocol for multi-drug resistant tuberculosis"
+
+    easy:
+      candidates:
+        - "What is the normal body temperature?"
+        - "What are common symptoms of a cold?"
+
+    # Only apply this rule if domain:medical signal is present
+    composer:
+      operator: "AND"
+      conditions:
+        - type: "domain"
+          name: "medical"
+```
+
+**Example:** See [config/samples/vllm.ai_v1alpha1_semanticrouter_complexity.yaml](config/samples/vllm.ai_v1alpha1_semanticrouter_complexity.yaml)
 
 ## Verification
 
@@ -507,7 +691,7 @@ Deploys semantic router with an **Envoy sidecar container** that acts as an ingr
 
 **Architecture:**
 
-```
+```text
 Client → Service (port 8080) → Envoy Sidecar → ExtProc (semantic router) → vLLM Backend
 ```
 
@@ -534,12 +718,14 @@ spec:
 
 ### Gateway Integration Mode
 
-Reuses an **existing Gateway** (Istio, Envoy Gateway, etc.) and creates an HTTPRoute. The operator skips deploying the Envoy sidecar container.
+Reuses an **existing Gateway** (Istio, Envoy Gateway, etc.) and expects you to manage the matching HTTPRoute separately. The operator skips deploying the Envoy sidecar container.
+
+Current status: the controller resolves the referenced Gateway and switches the deployment into gateway mode, but automatic HTTPRoute creation is still a placeholder.
 
 **Architecture:**
 
-```
-Client → Gateway → HTTPRoute → Service (port 8080) → Semantic Router API → vLLM Backend
+```text
+Client → Gateway → user-managed HTTPRoute → Service (port 8080) → Semantic Router API → vLLM Backend
 ```
 
 **When to use:**
@@ -568,10 +754,13 @@ spec:
 
 **Operator behavior in gateway mode:**
 
-1. Creates HTTPRoute resource pointing to the specified Gateway
-2. Skips Envoy sidecar container in pod spec
-3. Sets `status.gatewayMode: "gateway-integration"`
-4. Semantic router operates in pure API mode (no ExtProc)
+1. Resolves the referenced Gateway and enters gateway integration mode
+2. Does not create an HTTPRoute yet; you must apply and manage the route separately
+3. Skips Envoy sidecar container in pod spec
+4. Sets `status.gatewayMode: "gateway-integration"`
+5. Semantic router operates in pure API mode (no ExtProc)
+
+The gateway sample configures the `SemanticRouter` resource for gateway mode only. It does not install the Gateway or HTTPRoute resources for you.
 
 ## OpenShift Routes
 

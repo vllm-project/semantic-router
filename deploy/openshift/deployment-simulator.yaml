@@ -165,10 +165,10 @@ spec:
           from huggingface_hub import snapshot_download
 
           models = [
-              ("LLM-Semantic-Router/category_classifier_modernbert-base_model", "category_classifier_modernbert-base_model"),
-              ("LLM-Semantic-Router/pii_classifier_modernbert-base_model", "pii_classifier_modernbert-base_model"),
-              ("LLM-Semantic-Router/jailbreak_classifier_modernbert-base_model", "jailbreak_classifier_modernbert-base_model"),
-              ("LLM-Semantic-Router/pii_classifier_modernbert-base_presidio_token_model", "pii_classifier_modernbert-base_presidio_token_model")
+              ("llm-semantic-router/mmbert32k-intent-classifier-merged", "mmbert32k-intent-classifier-merged"),
+              ("llm-semantic-router/mmbert32k-pii-detector-merged", "mmbert32k-pii-detector-merged"),
+              ("llm-semantic-router/mmbert32k-jailbreak-detector-merged", "mmbert32k-jailbreak-detector-merged"),
+              ("llm-semantic-router/mmbert-embed-32k-2d-matryoshka", "mom-embedding-ultra")
           ]
 
           cache_dir = "/app/cache/hf"
@@ -206,12 +206,12 @@ spec:
           ls -la /app/models/
 
           echo "Setting proper permissions..."
-          find /app/models -type f -exec chmod 644 {} \; || true
-          find /app/models -type d -exec chmod 755 {} \; || true
+          find /app/models -type f -exec chmod 644 {} \; 2>/dev/null || true
+          find /app/models -type d -exec chmod 755 {} \; 2>/dev/null || true
 
           echo "Creating cache directories..."
           mkdir -p /app/cache/hf /app/cache/transformers /app/cache/sentence_transformers /app/cache/xdg /app/cache/bert
-          chmod -R 777 /app/cache/ || true
+          chmod -R 777 /app/cache/ 2>/dev/null || true
 
           echo "Model download complete!"
         env:
@@ -229,10 +229,10 @@ spec:
           value: /tmp/python_user/bin:/usr/local/bin:/usr/bin:/bin
         resources:
           requests:
-            memory: "512Mi"
+            memory: "2Gi"
             cpu: "250m"
           limits:
-            memory: "1Gi"
+            memory: "4Gi"
             cpu: "500m"
         volumeMounts:
         - name: models-volume
@@ -274,7 +274,12 @@ spec:
           value: "/tmp/home"
         volumeMounts:
         - name: config-volume
-          mountPath: /app/config
+          mountPath: /app/config/config.yaml
+          subPath: config.yaml
+          readOnly: true
+        - name: config-volume
+          mountPath: /app/config/tools_db.json
+          subPath: tools_db.json
           readOnly: true
         - name: models-volume
           mountPath: /app/models

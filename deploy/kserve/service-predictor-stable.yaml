@@ -13,11 +13,10 @@ metadata:
 spec:
   type: ClusterIP
   selector:
-    serving.kserve.io/inferenceservice: "{{INFERENCESERVICE_NAME}}"
+    "{{PREDICTOR_SELECTOR_LABEL}}": "{{PREDICTOR_SELECTOR_VALUE}}"
   ports:
   - name: http
-    port: 8080
-    targetPort: 8080
+    port: 8000
+    targetPort: 8000
     protocol: TCP
   sessionAffinity: None
-

@@ -1,0 +1,11 @@
+plugin:
+  type: tools
+  configuration:
+    enabled: true
+    mode: filtered
+    semantic_selection: true
+    allow_tools:
+      - docs.search
+      - tickets.lookup
+    block_tools:
+      - admin.delete

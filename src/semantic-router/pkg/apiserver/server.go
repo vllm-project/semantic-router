@@ -5,39 +5,36 @@ package apiserver
 import (
 	"encoding/json"
 	"fmt"
-	"io"
 	"net/http"
 	"time"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/memory"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/metrics"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/routerruntime"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/selection"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/services"
 )
 
-// Init starts the API server
-func Init(configPath string, port int, enableSystemPromptAPI bool) error {
+// Init starts the API server.
+func Init(configPath string, port int) error {
+	return InitWithRuntime(configPath, port, nil)
+}
+
+// InitWithRuntime starts the API server using the shared runtime registry when
+// one is available. Legacy callers can continue using Init and fall back to the
+// compatibility globals.
+func InitWithRuntime(configPath string, port int, runtimeRegistry *routerruntime.Registry) error {
 	// Get the global configuration instead of loading from file
 	// This ensures we use the same config as the rest of the application
-	cfg := config.Get()
+	cfg := resolveAPIServerConfig(runtimeRegistry)
 	if cfg == nil {
 		return fmt.Errorf("configuration not initialized")
 	}
 
-	// Create classification service - try to get global service with retry
-	classificationSvc := initClassify(5, 500*time.Millisecond)
-	if classificationSvc == nil {
-		// If no global service exists, try auto-discovery unified classifier
-		logging.Infof("No global classification service found, attempting auto-discovery...")
-		autoSvc, err := services.NewClassificationServiceWithAutoDiscovery(cfg)
-		if err != nil {
-			logging.Warnf("Auto-discovery failed: %v, using placeholder service", err)
-			classificationSvc = services.NewPlaceholderClassificationService()
-		} else {
-			logging.Infof("Auto-discovery successful, using unified classifier service")
-			classificationSvc = autoSvc
-		}
-	}
+	classificationSvc := resolveClassificationService(cfg, runtimeRegistry)
+	classificationSvc = ensureClassificationService(cfg, runtimeRegistry, classificationSvc)
 
 	// Initialize batch metrics configuration
 	if cfg.API.BatchClassification.Metrics.Enabled {
@@ -53,11 +50,43 @@ func Init(configPath string, port int, enableSystemPromptAPI bool) error {
 		metrics.SetBatchMetricsConfig(metricsConfig)
 	}
 
+	// Get memory store if available (set by ExtProc router during init)
+	var memoryStore memory.Store
+	if shouldInitMemoryStore(cfg) {
+		memoryStore = resolveMemoryStore(cfg, runtimeRegistry)
+		if memoryStore != nil {
+			logging.ComponentEvent("apiserver", "memory_api_enabled", map[string]interface{}{})
+		} else {
+			logging.ComponentWarnEvent("apiserver", "memory_api_degraded", map[string]interface{}{
+				"reason": "memory_store_unavailable",
+				"status": 503,
+			})
+		}
+	} else {
+		logging.ComponentEvent("apiserver", "memory_api_disabled", map[string]interface{}{
+			"reason": "config_disabled",
+		})
+	}
+
+	liveClassificationSvc := newLiveClassificationService(
+		classificationSvc,
+		func() classificationService {
+			if runtimeRegistry != nil {
+				return runtimeRegistry.ClassificationService()
+			}
+			return services.GetGlobalClassificationService()
+		},
+	)
+
 	// Create server instance
 	apiServer := &ClassificationAPIServer{
-		classificationSvc:     classificationSvc,
+		classificationSvc:     liveClassificationSvc,
 		config:                cfg,
-		enableSystemPromptAPI: enableSystemPromptAPI,
+		runtimeConfig:         newLiveRuntimeConfig(cfg, buildConfigResolver(runtimeRegistry), buildConfigUpdater(runtimeRegistry, liveClassificationSvc)),
+		runtimeRegistry:       runtimeRegistry,
+		configPath:            configPath,
+		memoryStore:           memoryStore,
+		knowledgeBaseMapCache: newKnowledgeBaseMapCache(),
 	}
 
 	// Create HTTP server with routes
@@ -70,8 +99,87 @@ func Init(configPath string, port int, enableSystemPromptAPI bool) error {
 		IdleTimeout:  60 * time.Second,
 	}
 
-	logging.Infof("Classification API server listening on port %d", port)
+	logging.ComponentEvent("apiserver", "server_listening", map[string]interface{}{
+		"port": port,
+	})
 	return server.ListenAndServe()
+}
+
+func resolveAPIServerConfig(runtimeRegistry *routerruntime.Registry) *config.RouterConfig {
+	if runtimeRegistry != nil {
+		return runtimeRegistry.CurrentConfig()
+	}
+	return config.Get()
+}
+
+func resolveClassificationService(
+	cfg *config.RouterConfig,
+	runtimeRegistry *routerruntime.Registry,
+) *services.ClassificationService {
+	if runtimeRegistry != nil {
+		return runtimeRegistry.ClassificationService()
+	}
+	return initClassify(5, 500*time.Millisecond)
+}
+
+func ensureClassificationService(
+	cfg *config.RouterConfig,
+	runtimeRegistry *routerruntime.Registry,
+	svc *services.ClassificationService,
+) *services.ClassificationService {
+	if svc != nil {
+		return svc
+	}
+
+	if runtimeRegistry != nil {
+		logging.ComponentEvent("apiserver", "classification_service_waiting_for_runtime", map[string]interface{}{
+			"using_placeholder": true,
+		})
+		return services.NewPlaceholderClassificationService()
+	}
+
+	// If no global service exists, try auto-discovery unified classifier.
+	logging.ComponentEvent("apiserver", "classification_service_autodiscovery_started", map[string]interface{}{})
+	autoSvc, err := services.NewClassificationServiceWithAutoDiscovery(cfg)
+	if err != nil {
+		logging.ComponentWarnEvent("apiserver", "classification_service_autodiscovery_failed", map[string]interface{}{
+			"error":             err.Error(),
+			"using_placeholder": true,
+		})
+		return services.NewPlaceholderClassificationService()
+	}
+
+	logging.ComponentEvent("apiserver", "classification_service_autodiscovery_succeeded", map[string]interface{}{})
+	return autoSvc
+}
+
+func resolveMemoryStore(cfg *config.RouterConfig, runtimeRegistry *routerruntime.Registry) memory.Store {
+	if runtimeRegistry != nil {
+		return runtimeRegistry.MemoryStore()
+	}
+	return initMemoryStore(5, 500*time.Millisecond)
+}
+
+func buildConfigResolver(runtimeRegistry *routerruntime.Registry) func() *config.RouterConfig {
+	if runtimeRegistry == nil {
+		return config.Get
+	}
+	return runtimeRegistry.CurrentConfig
+}
+
+func buildConfigUpdater(
+	runtimeRegistry *routerruntime.Registry,
+	liveClassificationSvc classificationService,
+) func(*config.RouterConfig) {
+	if runtimeRegistry == nil {
+		return func(newCfg *config.RouterConfig) {
+			if liveClassificationSvc != nil {
+				liveClassificationSvc.RefreshRuntimeConfig(newCfg)
+			}
+			config.Replace(newCfg)
+		}
+	}
+	return runtimeRegistry.RefreshRuntimeConfig
 }
 
 // initClassify attempts to get the global classification service with retry logic
@@ -82,69 +190,66 @@ func initClassify(maxRetries int, retryInterval time.Duration) *services.Classif
 		}
 
 		if i < maxRetries-1 { // Don't sleep on the last attempt
-			logging.Infof("Global classification service not ready, retrying in %v (attempt %d/%d)", retryInterval, i+1, maxRetries)
+			logging.ComponentDebugEvent("apiserver", "classification_service_retry_pending", map[string]interface{}{
+				"retry_interval_ms": retryInterval.Milliseconds(),
+				"attempt":           i + 1,
+				"max_retries":       maxRetries,
+			})
 			time.Sleep(retryInterval)
 		}
 	}
 
-	logging.Warnf("Failed to find global classification service after %d attempts", maxRetries)
+	logging.ComponentWarnEvent("apiserver", "classification_service_unavailable", map[string]interface{}{
+		"max_retries": maxRetries,
+	})
 	return nil
+}
+
+// initMemoryStore attempts to get the global memory store with retry logic.
+// The memory store is created by the ExtProc router which may start concurrently.
+func initMemoryStore(maxRetries int, retryInterval time.Duration) memory.Store {
+	for i := 0; i < maxRetries; i++ {
+		if store := memory.GetGlobalMemoryStore(); store != nil {
+			return store
+		}
+
+		if i < maxRetries-1 {
+			logging.ComponentDebugEvent("apiserver", "memory_store_retry_pending", map[string]interface{}{
+				"retry_interval_ms": retryInterval.Milliseconds(),
+				"attempt":           i + 1,
+				"max_retries":       maxRetries,
+			})
+			time.Sleep(retryInterval)
+		}
+	}
+
+	logging.ComponentWarnEvent("apiserver", "memory_store_unavailable", map[string]interface{}{
+		"max_retries": maxRetries,
+	})
+	return nil
+}
+
+func shouldInitMemoryStore(cfg *config.RouterConfig) bool {
+	if cfg == nil {
+		return false
+	}
+	if cfg.Memory.Enabled {
+		return true
+	}
+	for _, decision := range cfg.Decisions {
+		if decision.HasPlugin("memory") {
+			return true
+		}
+	}
+	return false
 }
 
 // setupRoutes configures all API routes
 func (s *ClassificationAPIServer) setupRoutes() *http.ServeMux {
 	mux := http.NewServeMux()
-
-	// Health check endpoint
-	mux.HandleFunc("GET /health", s.handleHealth)
-
-	// API discovery endpoint
-	mux.HandleFunc("GET /api/v1", s.handleAPIOverview)
-
-	// OpenAPI and documentation endpoints
-	mux.HandleFunc("GET /openapi.json", s.handleOpenAPISpec)
-	mux.HandleFunc("GET /docs", s.handleSwaggerUI)
-
-	// Classification endpoints
-	mux.HandleFunc("POST /api/v1/classify/intent", s.handleIntentClassification)
-	mux.HandleFunc("POST /api/v1/classify/pii", s.handlePIIDetection)
-	mux.HandleFunc("POST /api/v1/classify/security", s.handleSecurityDetection)
-	mux.HandleFunc("POST /api/v1/classify/combined", s.handleCombinedClassification)
-	mux.HandleFunc("POST /api/v1/classify/batch", s.handleBatchClassification)
-
-	// Embedding endpoints
-	mux.HandleFunc("POST /api/v1/embeddings", s.handleEmbeddings)
-	mux.HandleFunc("POST /api/v1/similarity", s.handleSimilarity)
-	mux.HandleFunc("POST /api/v1/similarity/batch", s.handleBatchSimilarity)
-
-	// Information endpoints
-	mux.HandleFunc("GET /info/models", s.handleModelsInfo) // All models (classification + embedding)
-	mux.HandleFunc("GET /info/classifier", s.handleClassifierInfo)
-	mux.HandleFunc("GET /api/v1/embeddings/models", s.handleEmbeddingModelsInfo) // Only embedding models
-
-	// OpenAI-compatible endpoints
-	mux.HandleFunc("GET /v1/models", s.handleOpenAIModels)
-
-	// Metrics endpoints
-	mux.HandleFunc("GET /metrics/classification", s.handleClassificationMetrics)
-
-	// Model selection feedback endpoints
-	mux.HandleFunc("POST /api/v1/feedback", s.handleFeedback)
-	mux.HandleFunc("GET /api/v1/ratings", s.handleGetRatings)
-
-	// Configuration endpoints
-	mux.HandleFunc("GET /config/classification", s.handleGetConfig)
-	mux.HandleFunc("PUT /config/classification", s.handleUpdateConfig)
-
-	// System prompt configuration endpoints (only if explicitly enabled)
-	if s.enableSystemPromptAPI {
-		logging.Infof("System prompt configuration endpoints enabled")
-		mux.HandleFunc("GET /config/system-prompts", s.handleGetSystemPrompts)
-		mux.HandleFunc("PUT /config/system-prompts", s.handleUpdateSystemPrompts)
-	} else {
-		logging.Infof("System prompt configuration endpoints disabled for security")
+	for _, route := range apiRoutes() {
+		mux.HandleFunc(route.pattern(), route.bind(s))
 	}
-
 	return mux
 }
 
@@ -155,27 +260,78 @@ func (s *ClassificationAPIServer) handleHealth(w http.ResponseWriter, _ *http.Re
 	_, _ = w.Write([]byte(`{"status": "healthy", "service": "classification-api"}`))
 }
 
-// Helper methods for JSON handling
-func (s *ClassificationAPIServer) parseJSONRequest(r *http.Request, v interface{}) error {
-	body, err := io.ReadAll(r.Body)
-	if err != nil {
-		return fmt.Errorf("failed to read request body: %w", err)
-	}
-	defer r.Body.Close()
+// handleReady reports whether router startup has completed enough for traffic.
+func (s *ClassificationAPIServer) handleReady(w http.ResponseWriter, _ *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
 
-	if err := json.Unmarshal(body, v); err != nil {
-		return fmt.Errorf("failed to parse JSON: %w", err)
+	state := s.loadStartupState()
+	if state == nil {
+		w.WriteHeader(http.StatusServiceUnavailable)
+		_, _ = w.Write([]byte(`{"status":"starting","service":"classification-api","ready":false}`))
+		return
 	}
 
-	return nil
+	if !state.Ready {
+		s.writeJSONResponse(w, http.StatusServiceUnavailable, map[string]interface{}{
+			"status":            "starting",
+			"service":           "classification-api",
+			"ready":             false,
+			"phase":             state.Phase,
+			"message":           state.Message,
+			"downloading_model": state.DownloadingModel,
+			"pending_models":    state.PendingModels,
+			"ready_models":      state.ReadyModels,
+			"total_models":      state.TotalModels,
+		})
+		return
+	}
+
+	s.writeJSONResponse(w, http.StatusOK, map[string]interface{}{
+		"status":            "ready",
+		"service":           "classification-api",
+		"ready":             true,
+		"phase":             state.Phase,
+		"message":           state.Message,
+		"downloading_model": state.DownloadingModel,
+		"pending_models":    state.PendingModels,
+		"ready_models":      state.ReadyModels,
+		"total_models":      state.TotalModels,
+	})
 }
 
 func (s *ClassificationAPIServer) writeJSONResponse(w http.ResponseWriter, statusCode int, data interface{}) {
+	payload, err := json.Marshal(data)
+	if err != nil {
+		logging.Errorf("Failed to encode JSON response: %v", err)
+		s.writeJSONEncodingError(w)
+		return
+	}
+
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(statusCode)
+	if _, err := w.Write(append(payload, '\n')); err != nil {
+		logging.Errorf("Failed to write JSON response: %v", err)
+	}
+}
 
-	if err := json.NewEncoder(w).Encode(data); err != nil {
-		logging.Errorf("Failed to encode JSON response: %v", err)
+func (s *ClassificationAPIServer) writeJSONEncodingError(w http.ResponseWriter) {
+	payload, err := json.Marshal(map[string]interface{}{
+		"error": map[string]interface{}{
+			"code":      "JSON_ENCODE_ERROR",
+			"message":   "failed to encode response",
+			"timestamp": time.Now().UTC().Format(time.RFC3339),
+		},
+	})
+	if err != nil {
+		logging.Errorf("Failed to encode JSON error response: %v", err)
+		http.Error(w, "failed to encode response", http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusInternalServerError)
+	if _, err := w.Write(append(payload, '\n')); err != nil {
+		logging.Errorf("Failed to write JSON error response: %v", err)
 	}
 }
 
@@ -189,4 +345,35 @@ func (s *ClassificationAPIServer) writeErrorResponse(w http.ResponseWriter, stat
 	}
 
 	s.writeJSONResponse(w, statusCode, errorResponse)
+}
+
+// handleRLState returns the current state of RL-based selectors for debugging
+func (s *ClassificationAPIServer) handleRLState(w http.ResponseWriter, r *http.Request) {
+	userID := r.URL.Query().Get("user_id")
+
+	state := map[string]interface{}{
+		"timestamp": time.Now().UTC().Format(time.RFC3339),
+	}
+
+	registry := s.currentSelectionRegistry()
+	if registry == nil {
+		s.writeJSONResponse(w, http.StatusOK, state)
+		return
+	}
+
+	// Get RLDriven selector state
+	if rlSelector, ok := registry.Get(selection.MethodRLDriven); ok {
+		if rlDriven, ok := rlSelector.(*selection.RLDrivenSelector); ok {
+			state["rl_driven"] = rlDriven.GetDebugState(userID)
+		}
+	}
+
+	// Get GMTRouter selector state
+	if gmtSelector, ok := registry.Get(selection.MethodGMTRouter); ok {
+		if gmtRouter, ok := gmtSelector.(*selection.GMTRouterSelector); ok {
+			state["gmtrouter"] = gmtRouter.GetDebugState(userID)
+		}
+	}
+
+	s.writeJSONResponse(w, http.StatusOK, state)
 }

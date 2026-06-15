@@ -1,0 +1,14 @@
+routing:
+  signals:
+    events:
+      - name: critical_payment_event
+        description: Critical payment or transaction events that need incident-grade routing.
+        event_types:
+          - payment_failed
+          - transaction_declined
+        severities:
+          - critical
+          - high
+        action_codes:
+          - TXN_DECLINE
+        temporal: true

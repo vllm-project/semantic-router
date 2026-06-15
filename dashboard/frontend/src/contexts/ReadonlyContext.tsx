@@ -1,18 +1,26 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react'
-import { preloadPlatformAssets } from '../components/PlatformBranding'
+import { useAuth } from './AuthContext'
+import { preloadPlatformAssets } from '../utils/platformAssets'
 
 interface ReadonlyContextType {
   isReadonly: boolean
   isLoading: boolean
   platform: string
+  envoyUrl: string
+  routerEvalEndpoint: string
+  fleetSimEnabled: boolean
 }
 
 const ReadonlyContext = createContext<ReadonlyContextType>({
   isReadonly: false,
   isLoading: true,
   platform: '',
+  envoyUrl: '',
+  routerEvalEndpoint: '',
+  fleetSimEnabled: false,
 })
 
+// eslint-disable-next-line react-refresh/only-export-components
 export const useReadonly = (): ReadonlyContextType => useContext(ReadonlyContext)
 
 interface ReadonlyProviderProps {
@@ -20,12 +28,17 @@ interface ReadonlyProviderProps {
 }
 
 export const ReadonlyProvider: React.FC<ReadonlyProviderProps> = ({ children }) => {
+  const { token } = useAuth()
   const [isReadonly, setIsReadonly] = useState(false)
   const [isLoading, setIsLoading] = useState(true)
   const [platform, setPlatform] = useState('')
+  const [envoyUrl, setEnvoyUrl] = useState('')
+  const [routerEvalEndpoint, setRouterEvalEndpoint] = useState('')
+  const [fleetSimEnabled, setFleetSimEnabled] = useState(false)
 
   useEffect(() => {
     const fetchSettings = async () => {
+      setIsLoading(true)
       try {
         const response = await fetch('/api/settings')
         if (response.ok) {
@@ -33,6 +46,9 @@ export const ReadonlyProvider: React.FC<ReadonlyProviderProps> = ({ children }) 
           setIsReadonly(data.readonlyMode || false)
           const platformValue = data.platform || ''
           setPlatform(platformValue)
+          setEnvoyUrl(data.envoyUrl || '')
+          setRouterEvalEndpoint(data.routerEvalEndpoint || '')
+          setFleetSimEnabled(Boolean(data.fleetSimEnabled))
           // Preload platform-specific assets immediately
           preloadPlatformAssets(platformValue)
         }
@@ -44,10 +60,12 @@ export const ReadonlyProvider: React.FC<ReadonlyProviderProps> = ({ children }) 
     }
 
     fetchSettings()
-  }, [])
+  }, [token])
 
   return (
-    <ReadonlyContext.Provider value={{ isReadonly, isLoading, platform }}>
+    <ReadonlyContext.Provider
+      value={{ isReadonly, isLoading, platform, envoyUrl, routerEvalEndpoint, fleetSimEnabled }}
+    >
       {children}
     </ReadonlyContext.Provider>
   )

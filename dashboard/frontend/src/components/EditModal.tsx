@@ -1,19 +1,22 @@
-import React, { useState, useEffect } from 'react'
+import React, { useEffect, useId, useState } from 'react'
 import styles from './EditModal.module.css'
+
+export type EditFormData = Record<string, unknown>
+type BivariantCallback<T extends (...args: never[]) => unknown> = {
+  bivarianceHack: T
+}['bivarianceHack']
 
 interface EditModalProps {
   isOpen: boolean
   onClose: () => void
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  onSave: (data: any) => Promise<void>
+  onSave: (data: EditFormData) => Promise<void>
   title: string
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  data: any
+  data: EditFormData | null
   fields: FieldConfig[]
   mode?: 'edit' | 'add'
 }
 
-export interface FieldConfig {
+export interface FieldConfig<TForm extends object = EditFormData> {
   name: string
   label: string
   type: 'text' | 'number' | 'boolean' | 'select' | 'multiselect' | 'textarea' | 'json' | 'percentage' | 'custom'
@@ -24,10 +27,8 @@ export interface FieldConfig {
   min?: number
   max?: number
   step?: number
-  shouldHide?: (data: // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    any) => boolean
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  customRender?: (value: any, onChange: (value: any) => void) => React.ReactNode
+  shouldHide?: BivariantCallback<(data: TForm) => boolean>
+  customRender?: BivariantCallback<(value: unknown, onChange: (value: unknown) => void) => React.ReactNode>
 }
 
 const EditModal: React.FC<EditModalProps> = ({
@@ -39,29 +40,51 @@ const EditModal: React.FC<EditModalProps> = ({
   fields,
   mode = 'edit'
 }) => {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const [formData, setFormData] = useState<any>({})
+  const [formData, setFormData] = useState<EditFormData>({})
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const titleId = useId()
+
+  const readField = (fieldName: string): unknown => formData[fieldName]
+  const readString = (fieldName: string): string => {
+    const value = readField(fieldName)
+    return typeof value === 'string' ? value : ''
+  }
+  const readNumberInput = (fieldName: string): string | number => {
+    const value = readField(fieldName)
+    return typeof value === 'number' || typeof value === 'string' ? value : ''
+  }
+  const readBoolean = (fieldName: string): boolean => readField(fieldName) === true
+  const readStringArray = (fieldName: string): string[] => {
+    const value = readField(fieldName)
+    return Array.isArray(value) ? value.filter((item): item is string => typeof item === 'string') : []
+  }
 
   useEffect(() => {
     if (isOpen) {
       // Convert percentage fields from 0-1 to 0-100 for display
-      const convertedData = { ...data }
+      const convertedData: EditFormData = { ...(data || {}) }
       fields.forEach(field => {
-        if (field.type === 'percentage' && convertedData[field.name] !== undefined) {
-          convertedData[field.name] = Math.round(convertedData[field.name] * 100)
+        if (field.type !== 'percentage') {
+          return
+        }
+        const rawValue = convertedData[field.name]
+        const numericValue = typeof rawValue === 'number'
+          ? rawValue
+          : typeof rawValue === 'string' && rawValue.trim() !== ''
+            ? Number(rawValue)
+            : NaN
+        if (Number.isFinite(numericValue)) {
+          convertedData[field.name] = Math.round(numericValue * 100)
         }
       })
-      setFormData(convertedData || {})
+      setFormData(convertedData)
       setError(null)
     }
   }, [isOpen, data, fields])
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const handleChange = (fieldName: string, value: any) => {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    setFormData((prev: any) => ({
+  const handleChange = (fieldName: string, value: unknown) => {
+    setFormData((prev) => ({
       ...prev,
       [fieldName]: value
     }))
@@ -74,10 +97,19 @@ const EditModal: React.FC<EditModalProps> = ({
 
     try {
       // Convert percentage fields from 0-100 back to 0-1 before saving
-      const convertedData = { ...formData }
+      const convertedData: EditFormData = { ...formData }
       fields.forEach(field => {
-        if (field.type === 'percentage' && convertedData[field.name] !== undefined) {
-          convertedData[field.name] = convertedData[field.name] / 100
+        if (field.type !== 'percentage') {
+          return
+        }
+        const rawValue = convertedData[field.name]
+        const numericValue = typeof rawValue === 'number'
+          ? rawValue
+          : typeof rawValue === 'string' && rawValue.trim() !== ''
+            ? Number(rawValue)
+            : NaN
+        if (Number.isFinite(numericValue)) {
+          convertedData[field.name] = numericValue / 100
         }
       })
       await onSave(convertedData)
@@ -93,16 +125,21 @@ const EditModal: React.FC<EditModalProps> = ({
 
   return (
     <div className={styles.overlay} onClick={onClose}>
-      <div className={styles.modal} onClick={(e) => e.stopPropagation()}>
+      <div
+        className={styles.modal}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby={titleId}
+        onClick={(e) => e.stopPropagation()}
+      >
         <div className={styles.header}>
-          <h2 className={styles.title}>{title}</h2>
+          <h2 id={titleId} className={styles.title}>{title}</h2>
           <button className={styles.closeButton} onClick={onClose}>✕</button>
         </div>
 
         <form onSubmit={handleSubmit} className={styles.form}>
           {error && (
             <div className={styles.error}>
-              <span className={styles.errorIcon}>⚠️</span>
               {error}
             </div>
           )}
@@ -122,7 +159,7 @@ const EditModal: React.FC<EditModalProps> = ({
                   <input
                     type="text"
                     className={styles.input}
-                    value={formData[field.name] || ''}
+                    value={readString(field.name)}
                     onChange={(e) => handleChange(field.name, e.target.value)}
                     placeholder={field.placeholder}
                     required={field.required}
@@ -136,7 +173,7 @@ const EditModal: React.FC<EditModalProps> = ({
                     min={field.min}
                     max={field.max}
                     className={styles.input}
-                    value={formData[field.name] || ''}
+                    value={readNumberInput(field.name)}
                     onChange={(e) => handleChange(field.name, parseFloat(e.target.value))}
                     placeholder={field.placeholder}
                     required={field.required}
@@ -151,7 +188,7 @@ const EditModal: React.FC<EditModalProps> = ({
                       min={0}
                       max={100}
                       className={styles.input}
-                      value={formData[field.name] !== undefined ? formData[field.name] : ''}
+                      value={readField(field.name) !== undefined ? readNumberInput(field.name) : ''}
                       onChange={(e) => {
                         const val = e.target.value
                         handleChange(field.name, val === '' ? '' : parseFloat(val))
@@ -178,7 +215,7 @@ const EditModal: React.FC<EditModalProps> = ({
                   <label className={styles.checkbox}>
                     <input
                       type="checkbox"
-                      checked={formData[field.name] || false}
+                      checked={readBoolean(field.name)}
                       onChange={(e) => handleChange(field.name, e.target.checked)}
                     />
                     <span>Enable</span>
@@ -188,7 +225,7 @@ const EditModal: React.FC<EditModalProps> = ({
                 {field.type === 'select' && (
                   <select
                     className={styles.select}
-                    value={formData[field.name] || ''}
+                    value={readString(field.name)}
                     onChange={(e) => handleChange(field.name, e.target.value)}
                     required={field.required}
                   >
@@ -206,9 +243,9 @@ const EditModal: React.FC<EditModalProps> = ({
                       <label key={option} className={styles.multiselectOption}>
                         <input
                           type="checkbox"
-                          checked={(formData[field.name] || []).includes(option)}
+                          checked={readStringArray(field.name).includes(option)}
                           onChange={(e) => {
-                            const currentValues = formData[field.name] || []
+                            const currentValues = readStringArray(field.name)
                             const newValues = e.target.checked
                               ? [...currentValues, option]
                               : currentValues.filter((v: string) => v !== option)
@@ -224,7 +261,7 @@ const EditModal: React.FC<EditModalProps> = ({
                 {field.type === 'textarea' && (
                   <textarea
                     className={styles.textarea}
-                    value={formData[field.name] || ''}
+                    value={readString(field.name)}
                     onChange={(e) => handleChange(field.name, e.target.value)}
                     placeholder={field.placeholder}
                     required={field.required}
@@ -236,9 +273,9 @@ const EditModal: React.FC<EditModalProps> = ({
                   <textarea
                     className={styles.textarea}
                     value={
-                      typeof formData[field.name] === 'object'
-                        ? JSON.stringify(formData[field.name], null, 2)
-                        : formData[field.name] || ''
+                      typeof readField(field.name) === 'object' && readField(field.name) !== null
+                        ? JSON.stringify(readField(field.name), null, 2)
+                        : readString(field.name)
                     }
                     onChange={(e) => {
                       try {
@@ -256,7 +293,7 @@ const EditModal: React.FC<EditModalProps> = ({
 
                 {field.type === 'custom' && field.customRender && (
                   <div>
-                    {field.customRender(formData[field.name], (value) => handleChange(field.name, value))}
+                    {field.customRender(readField(field.name), (value) => handleChange(field.name, value))}
                   </div>
                 )}
               </div>
@@ -287,4 +324,3 @@ const EditModal: React.FC<EditModalProps> = ({
 }
 
 export default EditModal
-

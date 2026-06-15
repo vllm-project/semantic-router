@@ -12,14 +12,27 @@ interface SignalGroupNodeData {
   collapsed?: boolean
   isHighlighted?: boolean
   isDynamic?: boolean // True if signals were detected dynamically (not from config)
+  title?: string
+  subtitle?: string
+  latencyLabel?: string
   onToggleCollapse?: () => void
 }
 
 export const SignalGroupNode = memo<NodeProps<SignalGroupNodeData>>(({ data }) => {
-  const { signalType, signals, collapsed = false, isHighlighted, isDynamic = false, onToggleCollapse } = data
+  const {
+    signalType,
+    signals,
+    collapsed = false,
+    isHighlighted,
+    isDynamic = false,
+    title,
+    subtitle,
+    latencyLabel,
+    onToggleCollapse,
+  } = data
   const color = SIGNAL_COLORS[signalType]
   const icon = SIGNAL_ICONS[signalType]
-  const latency = SIGNAL_LATENCY[signalType]
+  const latency = latencyLabel || SIGNAL_LATENCY[signalType]
 
   return (
     <div
@@ -31,18 +44,21 @@ export const SignalGroupNode = memo<NodeProps<SignalGroupNodeData>>(({ data }) =
       onClick={onToggleCollapse}
       title={isDynamic ? 'Detected by ML model (not in config)' : undefined}
     >
-      <Handle type="target" position={Position.Top} />
+      <Handle type="target" position={Position.Left} />
 
       <div className={styles.signalGroupHeader}>
         <span className={styles.signalGroupIcon}>{icon}</span>
         <span className={styles.signalGroupTitle}>
-          {signalType.replace('_', ' ')}
+          {title || signalType.replace('_', ' ')}
         </span>
         <span className={styles.signalGroupBadge}>{signals.length}</span>
         {isDynamic && <span className={styles.dynamicBadge}>ML</span>}
       </div>
 
       <div className={styles.signalGroupContent}>
+        {subtitle ? (
+          <div className={styles.signalGroupSubtitle}>{subtitle}</div>
+        ) : null}
         <div className={styles.signalLatency}>
           <span>⏱️</span>
           <span>{latency}</span>
@@ -56,7 +72,7 @@ export const SignalGroupNode = memo<NodeProps<SignalGroupNodeData>>(({ data }) =
             {signals.slice(0, 5).map(signal => (
               <div key={signal.name} className={styles.signalItem}>
                 {signal.name}
-                {(signal as any).isDynamic && <span className={styles.mlTag}>🤖</span>}
+                {(signal as SignalConfig & { isDynamic?: boolean }).isDynamic && <span className={styles.mlTag}>🤖</span>}
               </div>
             ))}
             {signals.length > 5 && (
@@ -68,7 +84,7 @@ export const SignalGroupNode = memo<NodeProps<SignalGroupNodeData>>(({ data }) =
         )}
       </div>
 
-      <Handle type="source" position={Position.Bottom} />
+      <Handle type="source" position={Position.Right} />
     </div>
   )
 })

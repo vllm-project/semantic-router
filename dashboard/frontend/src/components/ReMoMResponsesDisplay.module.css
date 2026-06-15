@@ -1,0 +1,214 @@
+.container {
+  margin-top: 1rem;
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  background: var(--color-bg-secondary);
+  overflow: hidden;
+}
+
+.header {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.75rem 1rem;
+  background: var(--color-bg-tertiary);
+  border-bottom: 1px solid var(--color-border);
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: var(--color-text);
+}
+
+.header svg {
+  opacity: 0.7;
+}
+
+.badge {
+  margin-left: auto;
+  padding: 0.125rem 0.5rem;
+  background: var(--color-primary);
+  color: white;
+  border-radius: 12px;
+  font-size: 0.75rem;
+  font-weight: 500;
+}
+
+.rounds {
+  padding: 0.75rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.round {
+  border: 1px solid var(--color-border);
+  border-radius: 6px;
+  background: var(--color-bg);
+  overflow: hidden;
+}
+
+.roundHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.625rem 0.875rem;
+  background: var(--color-bg-tertiary);
+  border-bottom: 1px solid var(--color-border);
+}
+
+.roundTitle {
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: var(--color-text);
+}
+
+.roundBreadth {
+  font-size: 0.75rem;
+  color: var(--color-text-secondary);
+}
+
+.responses {
+  padding: 0.5rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.responseCard {
+  border: 1px solid var(--color-border);
+  border-radius: 4px;
+  background: var(--color-bg);
+  overflow: hidden;
+  transition: border-color 0.2s;
+}
+
+.responseCard:hover {
+  border-color: var(--color-primary);
+}
+
+.responseHeader {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.625rem 0.75rem;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  text-align: left;
+  transition: background-color 0.2s;
+}
+
+.responseHeader:hover {
+  background: var(--color-bg-secondary);
+}
+
+.responseInfo {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  flex: 1;
+}
+
+.modelName {
+  font-size: 0.8125rem;
+  font-weight: 500;
+  color: var(--color-text);
+  font-family: 'SF Mono', 'Monaco', 'Inconsolata', 'Fira Code', monospace;
+}
+
+.tokenCount {
+  font-size: 0.75rem;
+  color: var(--color-text-secondary);
+  padding: 0.125rem 0.375rem;
+  background: var(--color-bg-tertiary);
+  border-radius: 4px;
+}
+
+.expandIcon {
+  flex-shrink: 0;
+  opacity: 0.5;
+  transition: transform 0.2s, opacity 0.2s;
+}
+
+.expandIcon.expanded {
+  transform: rotate(180deg);
+}
+
+.responseHeader:hover .expandIcon {
+  opacity: 1;
+}
+
+.responseContent {
+  padding: 0.75rem;
+  border-top: 1px solid var(--color-border);
+  background: var(--color-bg-secondary);
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.contentSection {
+  display: flex;
+  flex-direction: column;
+  gap: 0.375rem;
+}
+
+.contentLabel {
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--color-text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.025em;
+}
+
+.contentText {
+  font-size: 0.8125rem;
+  line-height: 1.5;
+  color: var(--color-text);
+  padding: 0.5rem;
+  background: var(--color-bg);
+  border: 1px solid var(--color-border);
+  border-radius: 4px;
+  overflow-x: auto;
+  max-width: 100%;
+}
+
+/* Markdown content styling */
+.contentText :global(pre) {
+  overflow-x: auto;
+  max-width: 100%;
+}
+
+.contentText :global(code) {
+  font-family: 'SF Mono', 'Monaco', 'Inconsolata', 'Fira Code', monospace;
+  font-size: 0.875em;
+}
+
+.contentText :global(table) {
+  display: block;
+  overflow-x: auto;
+  max-width: 100%;
+}
+
+.contentText :global(p) {
+  margin: 0.5em 0;
+  word-wrap: break-word;
+  overflow-wrap: break-word;
+}
+
+.contentText :global(ul),
+.contentText :global(ol) {
+  margin: 0.5em 0;
+  padding-left: 1.5em;
+}
+
+.contentText :global(h1),
+.contentText :global(h2),
+.contentText :global(h3),
+.contentText :global(h4),
+.contentText :global(h5),
+.contentText :global(h6) {
+  margin: 0.75em 0 0.5em 0;
+  font-weight: 600;
+}
+

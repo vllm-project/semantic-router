@@ -6,7 +6,11 @@ on:
 
 jobs:
   notify-owners:
-    if: ${{ github.repository == 'vllm-project/semantic-router' && !github.event.pull_request.draft }}
+    if: >-
+      ${{
+        github.repository == 'vllm-project/semantic-router' &&
+        !github.event.pull_request.draft
+      }}
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -27,7 +31,8 @@ jobs:
         with:
           result-encoding: string
           script: |
-            // Retrieve changed files via GitHub API to avoid relying on fork refs
+            // Retrieve changed files via GitHub API to avoid relying on fork
+            // refs.
             const files = await github.paginate(github.rest.pulls.listFiles, {
               owner: context.repo.owner,
               repo: context.repo.repo,
@@ -45,37 +50,43 @@ jobs:
             const path = require('path');
 
             // Get changed files
-            const changedFiles = `${{ steps.changed-files.outputs.all_changed_files }}`.split(' ');
+            const changedFiles =
+              `${{ steps.changed-files.outputs.all_changed_files }}`.split(' ');
             console.log('Changed files:', changedFiles);
 
-            // Function to find OWNER file for a given file path
-            function findOwnerFile(filePath) {
-               const parts = filePath.split('/');
+            function readOwners(ownerPath) {
+              if (!fs.existsSync(ownerPath)) {
+                return [];
+              }
 
-               // Check first level directory FIRST (prioritize more specific owners)
-               if (parts.length > 1) {
-                 const firstLevelDir = parts[0];
-                 const ownerPath = path.join(firstLevelDir, 'OWNER');
-                 if (fs.existsSync(ownerPath)) {
-                   const content = fs.readFileSync(ownerPath, 'utf8');
-                   const owners = content.split('\n')
-                     .filter(line => line.trim().startsWith('@'))
-                     .map(line => line.trim());
-                   if (owners.length > 0) {
-                     return { path: firstLevelDir, owners };
-                   }
+              return fs.readFileSync(ownerPath, 'utf8')
+                .split('\n')
+                .map(line => line.trim())
+                .filter(line => line.startsWith('@'));
+            }
+
+            // Find the nearest OWNER file by walking from the changed file's
+            // directory back toward the repository root.
+            function findOwnerFile(filePath) {
+               let currentDir = path.dirname(filePath);
+
+               while (currentDir && currentDir !== '.') {
+                 const ownerPath = path.join(currentDir, 'OWNER');
+                 const owners = readOwners(ownerPath);
+                 if (owners.length > 0) {
+                   return { path: currentDir, owners };
                  }
+
+                 const parentDir = path.dirname(currentDir);
+                 if (parentDir === currentDir) {
+                   break;
+                 }
+                 currentDir = parentDir;
                }
 
-               // Fall back to root directory
-               if (fs.existsSync('OWNER')) {
-                 const content = fs.readFileSync('OWNER', 'utf8');
-                 const owners = content.split('\n')
-                   .filter(line => line.trim().startsWith('@'))
-                   .map(line => line.trim());
-                 if (owners.length > 0) {
-                   return { path: '.', owners };
-                 }
+               const rootOwners = readOwners('OWNER');
+               if (rootOwners.length > 0) {
+                 return { path: '.', owners: rootOwners };
                }
 
                return null;
@@ -122,7 +133,9 @@ jobs:
                   issue_number: context.issue.number,
                   assignees: Array.from(allOwners)
                 });
-                console.log(`Assigned PR to: ${Array.from(allOwners).join(', ')}`);
+                console.log(
+                  `Assigned PR to: ${Array.from(allOwners).join(', ')}`
+                );
               } catch (error) {
                 console.log(`Failed to assign PR: ${error.message}`);
                 // Continue with comment creation even if assignment fails
@@ -131,10 +144,13 @@ jobs:
 
             // Create comment content
             let commentBody = '## 👥 vLLM Semantic Team Notification\n\n';
-            commentBody += 'The following members have been identified for the changed files in this PR and have been automatically assigned:\n\n';
+            commentBody +=
+              'The following members have been identified for the changed ' +
+              'files in this PR and have been automatically assigned:\n\n';
 
             for (const [dirPath, info] of ownerMap) {
-              commentBody += `### 📁 \`${dirPath === '.' ? 'Root Directory' : dirPath}\`\n`;
+              commentBody +=
+                `### 📁 \`${dirPath === '.' ? 'Root Directory' : dirPath}\`\n`;
               commentBody += `**Owners:** ${info.owners.join(', ')}\n`;
               commentBody += `**Files changed:**\n`;
               for (const file of info.files) {
@@ -145,10 +161,16 @@ jobs:
 
             commentBody += '---\n';
             commentBody += '<div align="center">\n';
-            commentBody += '<img src="https://raw.githubusercontent.com/vllm-project/semantic-router/main/website/static/img/repo.png" alt="vLLM" width="80%"/>';
+            commentBody +=
+              '<img src="https://raw.githubusercontent.com/' +
+              'vllm-project/semantic-router/main/website/static/' +
+              'img/repo.png" ' +
+              'alt="vLLM" width="80%"/>';
             commentBody += '</div>\n\n';
             commentBody += '## 🎉 Thanks for your contributions!\n\n';
-            commentBody += '*This comment was automatically generated based on the OWNER files in the repository.*';
+            commentBody +=
+              '*This comment was automatically generated based on the OWNER ' +
+              'files in the repository.*';
 
             // Get existing comments
             const { data: comments } = await github.rest.issues.listComments({

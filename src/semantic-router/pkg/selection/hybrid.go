@@ -18,12 +18,14 @@ package selection
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"math"
 	"strings"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/selection/lookuptable"
 )
 
 // HybridConfig configures the Hybrid selector that combines multiple methods
@@ -77,6 +79,10 @@ type HybridSelector struct {
 
 	// Model costs for cost-aware selection
 	modelCosts map[string]float64
+
+	// lookupTable provides data-driven values (e.g. quality-gap estimates)
+	// that replace hardcoded config constants. May be nil.
+	lookupTable lookuptable.LookupTable
 }
 
 // NewHybridSelector creates a new Hybrid selector
@@ -139,10 +145,31 @@ func (h *HybridSelector) SetModelCost(model string, cost float64) {
 	h.modelCosts[model] = cost
 }
 
+// SetLookupTable attaches a lookup table for data-driven constant resolution.
+func (h *HybridSelector) SetLookupTable(lt lookuptable.LookupTable) {
+	h.lookupTable = lt
+}
+
+// resolveQualityGap returns the quality-gap threshold between currentModel and
+// candidateModel for the given task family. It first checks the lookup table;
+// if no entry is found it falls back to config.QualityGapThreshold.
+//
+// TODO: integrate into model upgrade decision logic in Select.
+//
+//nolint:unused // Reserved for upcoming lookup-table consumption.
+func (h *HybridSelector) resolveQualityGap(taskFamily, currentModel, candidateModel string) float64 {
+	if h.lookupTable != nil && taskFamily != "" && currentModel != "" && candidateModel != "" {
+		if gap, ok := h.lookupTable.QualityGap(taskFamily, currentModel, candidateModel); ok {
+			return gap
+		}
+	}
+	return h.config.QualityGapThreshold
+}
+
 // Select chooses the best model by combining multiple selection methods
 func (h *HybridSelector) Select(ctx context.Context, selCtx *SelectionContext) (*SelectionResult, error) {
-	if len(selCtx.CandidateModels) == 0 {
-		return nil, fmt.Errorf("no candidate models provided")
+	if err := ValidateSelectionContext(selCtx); err != nil {
+		return nil, err
 	}
 
 	// Collect scores from each component
@@ -191,6 +218,8 @@ func (h *HybridSelector) Select(ctx context.Context, selCtx *SelectionContext) (
 		h.applyCostAdjustment(combinedScores, selCtx.CostWeight)
 	}
 
+	h.applyCacheAffinity(combinedScores, selCtx)
+
 	logging.Infof("[HybridSelector] Combining scores (weights: elo=%.2f, dc=%.2f, am=%.2f, cost=%.2f):",
 		h.config.EloWeight, h.config.RouterDCWeight, h.config.AutoMixWeight, h.config.CostWeight)
 	for _, model := range selCtx.CandidateModels {
@@ -208,19 +237,7 @@ func (h *HybridSelector) Select(ctx context.Context, selCtx *SelectionContext) (
 			model.Model, eloScore, dcScore, amScore, combinedScores[model.Model])
 	}
 
-	// Find best model
-	var bestModel *config.ModelRef
-	var bestScore float64
-
-	for i := range selCtx.CandidateModels {
-		model := &selCtx.CandidateModels[i]
-		score := combinedScores[model.Model]
-
-		if score > bestScore || bestModel == nil {
-			bestScore = score
-			bestModel = model
-		}
-	}
+	bestModel, bestScore := h.selectBestModel(selCtx.CandidateModels, combinedScores)
 
 	if bestModel == nil {
 		return nil, fmt.Errorf("could not select a model")
@@ -229,17 +246,7 @@ func (h *HybridSelector) Select(ctx context.Context, selCtx *SelectionContext) (
 	// Calculate confidence from component agreement
 	confidence := h.calculateConfidence(componentResults, bestModel.Model)
 
-	// Record component agreement metric for evolution tracking
-	if len(componentResults) > 1 {
-		agreementRatio := float64(0)
-		for _, r := range componentResults {
-			if r.SelectedModel == bestModel.Model {
-				agreementRatio++
-			}
-		}
-		agreementRatio /= float64(len(componentResults))
-		RecordComponentAgreement(agreementRatio)
-	}
+	h.recordComponentAgreement(componentResults, bestModel.Model)
 
 	// Build reasoning
 	reasoning := h.buildReasoning(componentScores, bestModel.Model)
@@ -258,34 +265,105 @@ func (h *HybridSelector) Select(ctx context.Context, selCtx *SelectionContext) (
 	}, nil
 }
 
+func (h *HybridSelector) applyCacheAffinity(combinedScores map[string]float64, selCtx *SelectionContext) {
+	if selCtx.CacheAffinityCtx == nil {
+		return
+	}
+
+	affinityResult := ComputeCacheAffinityAdjustments(
+		selCtx.CacheAffinityCtx, selCtx.CandidateModels, combinedScores)
+	for model, adj := range affinityResult.Adjustments {
+		if adj != 0 {
+			combinedScores[model] += adj
+		}
+	}
+}
+
+func (h *HybridSelector) selectBestModel(candidates []config.ModelRef, combinedScores map[string]float64) (*config.ModelRef, float64) {
+	var bestModel *config.ModelRef
+	var bestScore float64
+
+	for i := range candidates {
+		model := &candidates[i]
+		score := combinedScores[model.Model]
+
+		if score > bestScore || bestModel == nil {
+			bestScore = score
+			bestModel = model
+		}
+	}
+
+	return bestModel, bestScore
+}
+
+func (h *HybridSelector) recordComponentAgreement(componentResults []*SelectionResult, bestModel string) {
+	if len(componentResults) <= 1 {
+		return
+	}
+
+	agreementRatio := float64(0)
+	for _, r := range componentResults {
+		if r.SelectedModel == bestModel {
+			agreementRatio++
+		}
+	}
+	agreementRatio /= float64(len(componentResults))
+	RecordComponentAgreement(agreementRatio)
+}
+
 // UpdateFeedback propagates feedback to all component selectors
 func (h *HybridSelector) UpdateFeedback(ctx context.Context, feedback *Feedback) error {
+	if err := h.normalizeFeedbackForComponents(feedback); err != nil {
+		return err
+	}
+
 	var errs []error
+	updatedComponents := 0
 
 	if h.eloSelector != nil {
 		if err := h.eloSelector.UpdateFeedback(ctx, feedback); err != nil {
 			errs = append(errs, fmt.Errorf("elo: %w", err))
+		} else {
+			updatedComponents++
 		}
 	}
 
 	if h.routerDCSelector != nil {
 		if err := h.routerDCSelector.UpdateFeedback(ctx, feedback); err != nil {
 			errs = append(errs, fmt.Errorf("router_dc: %w", err))
+		} else {
+			updatedComponents++
 		}
 	}
 
 	if h.autoMixSelector != nil {
 		if err := h.autoMixSelector.UpdateFeedback(ctx, feedback); err != nil {
 			errs = append(errs, fmt.Errorf("automix: %w", err))
+		} else {
+			updatedComponents++
 		}
 	}
 
 	if len(errs) > 0 {
-		return fmt.Errorf("feedback update errors: %v", errs)
+		return fmt.Errorf("feedback update errors: %w", errors.Join(errs...))
 	}
 
-	logging.Debugf("[HybridSelector] Propagated feedback to %d components", 3)
+	logging.Debugf("[HybridSelector] Propagated feedback to %d components", updatedComponents)
 	return nil
+}
+
+func (h *HybridSelector) normalizeFeedbackForComponents(feedback *Feedback) error {
+	if err := NormalizeFeedback(feedback); err != nil {
+		return err
+	}
+	if h.requiresWinnerFeedback() && feedback.WinnerModel == "" {
+		return ErrFeedbackWinnerRequired
+	}
+	return nil
+}
+
+func (h *HybridSelector) requiresWinnerFeedback() bool {
+	return h.routerDCSelector != nil || h.autoMixSelector != nil
 }
 
 // combineScores combines scores from all components with weights
@@ -474,5 +552,7 @@ func (h *HybridSelector) InitializeFromConfig(modelConfig map[string]config.Mode
 		}
 	}
 
-	logging.Infof("[HybridSelector] Initialized from config with %d models", len(modelConfig))
+	logging.ComponentEvent("selection", "hybrid_selector_initialized", map[string]interface{}{
+		"model_count": len(modelConfig),
+	})
 }

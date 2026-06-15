@@ -20,16 +20,20 @@ type EvaluationHandler struct {
 	db           *evaluation.DB
 	runner       *evaluation.Runner
 	readonlyMode bool
+	routerAPIURL string   // Router API URL for signal evaluation
+	envoyURL     string   // Envoy URL for model evaluation
 	sseClients   sync.Map // map[taskID]map[clientID]chan models.ProgressUpdate
 	cancelFuncs  sync.Map // map[taskID]context.CancelFunc
 }
 
 // NewEvaluationHandler creates a new evaluation handler.
-func NewEvaluationHandler(db *evaluation.DB, runner *evaluation.Runner, readonlyMode bool) *EvaluationHandler {
+func NewEvaluationHandler(db *evaluation.DB, runner *evaluation.Runner, readonlyMode bool, routerAPIURL, envoyURL string) *EvaluationHandler {
 	h := &EvaluationHandler{
 		db:           db,
 		runner:       runner,
 		readonlyMode: readonlyMode,
+		routerAPIURL: routerAPIURL,
+		envoyURL:     envoyURL,
 	}
 
 	// Start background goroutine to forward progress updates to SSE clients
@@ -137,56 +141,31 @@ func (h *EvaluationHandler) CreateTaskHandler() http.HandlerFunc {
 		if middleware.HandleCORSPreflight(w, r) {
 			return
 		}
-
 		if r.Method != http.MethodPost {
 			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 			return
 		}
-
-		if h.readonlyMode {
-			http.Error(w, "readonly_mode", http.StatusForbidden)
-			return
-		}
-
 		var req models.CreateTaskRequest
 		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 			http.Error(w, fmt.Sprintf("Invalid request body: %v", err), http.StatusBadRequest)
 			return
 		}
-
-		// Validate request
-		if req.Name == "" {
-			http.Error(w, "Task name is required", http.StatusBadRequest)
+		normalizeEvaluationCreateConfig(&req.Config)
+		if msg, code := validateEvaluationCreateRequest(&req); msg != "" {
+			http.Error(w, msg, code)
 			return
 		}
-		if len(req.Config.Dimensions) == 0 {
-			http.Error(w, "At least one evaluation dimension is required", http.StatusBadRequest)
-			return
-		}
-
-		// Set defaults
-		if req.Config.MaxSamples <= 0 {
-			req.Config.MaxSamples = 50
-		}
-		if req.Config.Endpoint == "" {
-			req.Config.Endpoint = "http://localhost:8801"
-		}
-		if req.Config.SamplesPerCat <= 0 {
-			req.Config.SamplesPerCat = 10
-		}
-
+		h.applyEvaluationCreateDefaults(&req.Config)
 		task := &models.EvaluationTask{
 			Name:        req.Name,
 			Description: req.Description,
 			Config:      req.Config,
 		}
-
 		if err := h.db.CreateTask(task); err != nil {
 			log.Printf("Failed to create task: %v", err)
 			http.Error(w, fmt.Sprintf("Failed to create task: %v", err), http.StatusInternalServerError)
 			return
 		}
-
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusCreated)
 		if err := json.NewEncoder(w).Encode(task); err != nil {
@@ -204,11 +183,6 @@ func (h *EvaluationHandler) DeleteTaskHandler() http.HandlerFunc {
 
 		if r.Method != http.MethodDelete {
 			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
-			return
-		}
-
-		if h.readonlyMode {
-			http.Error(w, "readonly_mode", http.StatusForbidden)
 			return
 		}
 
@@ -247,11 +221,6 @@ func (h *EvaluationHandler) RunTaskHandler() http.HandlerFunc {
 			return
 		}
 
-		if h.readonlyMode {
-			http.Error(w, "readonly_mode", http.StatusForbidden)
-			return
-		}
-
 		var req models.RunTaskRequest
 		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 			http.Error(w, fmt.Sprintf("Invalid request body: %v", err), http.StatusBadRequest)
@@ -276,6 +245,18 @@ func (h *EvaluationHandler) RunTaskHandler() http.HandlerFunc {
 		}
 		if task.Status != models.StatusPending && task.Status != models.StatusFailed {
 			http.Error(w, fmt.Sprintf("Task is already %s", task.Status), http.StatusConflict)
+			return
+		}
+
+		// Transition the task before returning so reruns do not briefly show the previous failed state.
+		if err := h.db.UpdateTaskStatus(req.TaskID, models.StatusRunning, ""); err != nil {
+			log.Printf("Failed to mark task %s as running: %v", req.TaskID, err)
+			http.Error(w, fmt.Sprintf("Failed to start task: %v", err), http.StatusInternalServerError)
+			return
+		}
+		if err := h.db.UpdateTaskProgress(req.TaskID, 0, "Starting evaluation"); err != nil {
+			log.Printf("Failed to reset task %s progress: %v", req.TaskID, err)
+			http.Error(w, fmt.Sprintf("Failed to initialize task progress: %v", err), http.StatusInternalServerError)
 			return
 		}
 
@@ -308,11 +289,6 @@ func (h *EvaluationHandler) CancelTaskHandler() http.HandlerFunc {
 
 		if r.Method != http.MethodPost {
 			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
-			return
-		}
-
-		if h.readonlyMode {
-			http.Error(w, "readonly_mode", http.StatusForbidden)
 			return
 		}
 
@@ -390,7 +366,7 @@ func (h *EvaluationHandler) StreamProgressHandler() http.HandlerFunc {
 		}()
 
 		// Send initial connection message
-		fmt.Fprintf(w, "event: connected\ndata: {\"task_id\":\"%s\"}\n\n", taskID)
+		_, _ = fmt.Fprintf(w, "event: connected\ndata: {\"task_id\":\"%s\"}\n\n", taskID)
 		flusher.Flush()
 
 		// Stream updates
@@ -408,12 +384,12 @@ func (h *EvaluationHandler) StreamProgressHandler() http.HandlerFunc {
 					log.Printf("Error marshaling progress update: %v", err)
 					continue
 				}
-				fmt.Fprintf(w, "event: progress\ndata: %s\n\n", data)
+				_, _ = fmt.Fprintf(w, "event: progress\ndata: %s\n\n", data)
 				flusher.Flush()
 
 				// Close stream if task completed
 				if update.ProgressPercent >= 100 {
-					fmt.Fprintf(w, "event: completed\ndata: {\"task_id\":\"%s\"}\n\n", taskID)
+					_, _ = fmt.Fprintf(w, "event: completed\ndata: {\"task_id\":\"%s\"}\n\n", taskID)
 					flusher.Flush()
 					return
 				}
@@ -519,7 +495,9 @@ func (h *EvaluationHandler) ExportResultsHandler() http.HandlerFunc {
 }
 
 // GetDatasetsHandler returns available datasets grouped by dimension.
-func (h *EvaluationHandler) GetDatasetsHandler() http.HandlerFunc {
+// This is a standalone function that doesn't require database initialization,
+// allowing datasets to be served even when the evaluation DB fails to initialize.
+func GetDatasetsHandler() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if middleware.HandleCORSPreflight(w, r) {
 			return

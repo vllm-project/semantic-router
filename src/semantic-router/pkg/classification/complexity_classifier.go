@@ -2,144 +2,147 @@ package classification
 
 import (
 	"fmt"
-	"time"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 )
 
-// ComplexityClassifier performs complexity-based classification using embedding similarity
-// Each rule independently classifies difficulty level using hard/easy candidates
-// Results are filtered by composer conditions in the classifier layer
+// ComplexityClassifier performs complexity-based classification using embedding similarity.
+// Each rule independently classifies difficulty level using hard/easy candidates.
+// Supports both text candidates (via text embedding model) and image candidates
+// (via the multimodal embedding model) for contrastive knowledge base comparison.
+// Results are filtered by composer conditions in the classifier layer.
 type ComplexityClassifier struct {
 	rules []config.ComplexityRule
 
-	// Precomputed embeddings for hard and easy candidates
-	hardEmbeddings map[string]map[string][]float32 // ruleName -> candidate -> embedding
-	easyEmbeddings map[string]map[string][]float32 // ruleName -> candidate -> embedding
+	// Precomputed text embeddings for hard and easy candidates
+	hardEmbeddings     map[string]map[string][]float32 // ruleName -> candidate -> embedding
+	easyEmbeddings     map[string]map[string][]float32 // ruleName -> candidate -> embedding
+	hardPrototypeBanks map[string]*prototypeBank
+	easyPrototypeBanks map[string]*prototypeBank
 
-	modelType string // Model type to use for embeddings ("qwen3" or "gemma")
+	// Precomputed image embeddings for hard and easy image candidates (multimodal)
+	imageHardEmbeddings     map[string]map[string][]float32 // ruleName -> imageRef -> embedding
+	imageEasyEmbeddings     map[string]map[string][]float32 // ruleName -> imageRef -> embedding
+	imageHardPrototypeBanks map[string]*prototypeBank
+	imageEasyPrototypeBanks map[string]*prototypeBank
+
+	modelType          string // Model type for text embeddings ("qwen3" or "gemma")
+	hasImageCandidates bool   // True if any rule uses image_candidates
+	prototypeCfg       config.PrototypeScoringConfig
 }
 
-// NewComplexityClassifier creates a new ComplexityClassifier with precomputed candidate embeddings
-func NewComplexityClassifier(rules []config.ComplexityRule, modelType string) (*ComplexityClassifier, error) {
+type ComplexityRuleResult struct {
+	RuleName       string
+	Difficulty     string
+	TextHardScore  float64
+	TextEasyScore  float64
+	TextMargin     float64
+	ImageHardScore float64
+	ImageEasyScore float64
+	ImageMargin    float64
+	FusedMargin    float64
+	Confidence     float64
+	SignalSource   string
+}
+
+// NewComplexityClassifier creates a new ComplexityClassifier with precomputed candidate embeddings.
+// When rules contain image_candidates, the multimodal model must be initialized beforehand.
+func NewComplexityClassifier(
+	rules []config.ComplexityRule,
+	modelType string,
+	prototypeCfg config.PrototypeScoringConfig,
+) (*ComplexityClassifier, error) {
 	if modelType == "" {
-		modelType = "qwen3" // Default to qwen3
+		modelType = "qwen3"
 	}
 
 	c := &ComplexityClassifier{
-		rules:          rules,
-		hardEmbeddings: make(map[string]map[string][]float32),
-		easyEmbeddings: make(map[string]map[string][]float32),
-		modelType:      modelType,
+		rules:                   rules,
+		hardEmbeddings:          make(map[string]map[string][]float32),
+		easyEmbeddings:          make(map[string]map[string][]float32),
+		hardPrototypeBanks:      make(map[string]*prototypeBank),
+		easyPrototypeBanks:      make(map[string]*prototypeBank),
+		imageHardEmbeddings:     make(map[string]map[string][]float32),
+		imageEasyEmbeddings:     make(map[string]map[string][]float32),
+		imageHardPrototypeBanks: make(map[string]*prototypeBank),
+		imageEasyPrototypeBanks: make(map[string]*prototypeBank),
+		modelType:               modelType,
+		hasImageCandidates:      config.HasImageCandidatesInRules(rules),
+		prototypeCfg:            prototypeCfg.WithDefaults(),
 	}
 
-	logging.Infof("ComplexityClassifier initialized with model type: %s", c.modelType)
+	logging.ComponentEvent("classifier", "complexity_classifier_initialized", map[string]interface{}{
+		"model_type":       c.modelType,
+		"rules":            len(rules),
+		"image_candidates": c.hasImageCandidates,
+	})
 
-	// Precompute all candidate embeddings at initialization
 	if err := c.preloadCandidateEmbeddings(); err != nil {
-		logging.Warnf("Failed to preload complexity candidate embeddings: %v", err)
+		logging.ComponentWarnEvent("classifier", "complexity_candidates_preload_failed", map[string]interface{}{
+			"model_type":       c.modelType,
+			"image_candidates": c.hasImageCandidates,
+			"error":            err.Error(),
+		})
 		return nil, err
 	}
 
 	return c, nil
 }
 
-// preloadCandidateEmbeddings computes embeddings for all hard/easy candidates
-func (c *ComplexityClassifier) preloadCandidateEmbeddings() error {
-	startTime := time.Now()
-	totalEmbeddings := 0
-
-	for _, rule := range c.rules {
-		// Initialize maps for this rule
-		c.hardEmbeddings[rule.Name] = make(map[string][]float32)
-		c.easyEmbeddings[rule.Name] = make(map[string][]float32)
-
-		// Precompute hard candidate embeddings
-		for _, candidate := range rule.Hard.Candidates {
-			output, err := getEmbeddingWithModelType(candidate, c.modelType, 0)
-			if err != nil {
-				return fmt.Errorf("failed to compute embedding for hard candidate '%s': %w", candidate, err)
-			}
-			c.hardEmbeddings[rule.Name][candidate] = output.Embedding
-			totalEmbeddings++
-		}
-
-		// Precompute easy candidate embeddings
-		for _, candidate := range rule.Easy.Candidates {
-			output, err := getEmbeddingWithModelType(candidate, c.modelType, 0)
-			if err != nil {
-				return fmt.Errorf("failed to compute embedding for easy candidate '%s': %w", candidate, err)
-			}
-			c.easyEmbeddings[rule.Name][candidate] = output.Embedding
-			totalEmbeddings++
-		}
-	}
-
-	elapsed := time.Since(startTime)
-	logging.Infof("Preloaded %d complexity embeddings (hard/easy candidates) in %v", totalEmbeddings, elapsed)
-
-	return nil
+// Classify evaluates the query against ALL complexity rules independently (text-only).
+// For CUA requests with screenshots, use ClassifyWithImage instead.
+func (c *ComplexityClassifier) Classify(query string) ([]string, error) {
+	return c.ClassifyWithImage(query, "")
 }
 
-// Classify evaluates the query against ALL complexity rules independently
-// Each rule computes its own difficulty level based on hard/easy candidate similarity
-// Returns: all matched rules in format "rulename:difficulty" (e.g., ["code_complexity:hard", "math_complexity:easy"])
-// Note: Results will be filtered by composer conditions in the classifier layer (if configured)
-func (c *ComplexityClassifier) Classify(query string) ([]string, error) {
+// ClassifyWithImage evaluates the query (and optionally a request image) against
+// ALL complexity rules independently.
+//
+// When imageURL is provided (e.g. a base64 data-URI screenshot from a CUA request),
+// SigLIP encodes the image and compares it against the image knowledge base.
+// The text query is always compared against the text knowledge base.
+// The difficulty score fuses both channels: d(t) = max(|d_vis|, |d_sem|).
+//
+// Returns: all matched rules in format "rulename:difficulty"
+// (e.g., ["cua_difficulty:hard", "cua_difficulty:easy"])
+func (c *ComplexityClassifier) ClassifyWithImage(query string, imageURL string) ([]string, error) {
+	results, err := c.ClassifyDetailedWithImage(query, imageURL)
+	if err != nil {
+		return nil, err
+	}
+	matchedRules := make([]string, 0, len(results))
+	for _, result := range results {
+		matchedRules = append(matchedRules, fmt.Sprintf("%s:%s", result.RuleName, result.Difficulty))
+	}
+	return matchedRules, nil
+}
+
+func (c *ComplexityClassifier) ClassifyDetailedWithImage(query string, imageURL string) ([]ComplexityRuleResult, error) {
+	return c.classifyDetailedWithImageCached(query, imageURL, nil)
+}
+
+// classifyDetailedWithImageCached is the cache-aware variant of
+// ClassifyDetailedWithImage. When cache is non-nil it dedupes the multimodal
+// image FFI call against any sibling signal evaluator that already resolved
+// the same (imageURL, targetDim=0) pair within this request. Text-side
+// embeddings (text and mmText) are not cached because no other signal
+// currently consumes the multimodal text embedding.
+func (c *ComplexityClassifier) classifyDetailedWithImageCached(query string, imageURL string, cache *requestImageEmbeddingCache) ([]ComplexityRuleResult, error) {
 	if len(c.rules) == 0 {
 		return nil, nil
 	}
 
-	// Compute query embedding once
-	queryOutput, err := getEmbeddingWithModelType(query, c.modelType, 0)
+	queryEmbeddings, err := c.loadQueryEmbeddingsCached(query, imageURL, cache)
 	if err != nil {
-		return nil, fmt.Errorf("failed to compute query embedding: %w", err)
+		return nil, err
 	}
-	queryEmbedding := queryOutput.Embedding
-
-	var matchedRules []string
-
-	// Evaluate each rule independently
-	for i := range c.rules {
-		rule := &c.rules[i]
-
-		// Compute max similarity to hard candidates
-		maxHardSim := float32(-1.0)
-		for _, hardEmb := range c.hardEmbeddings[rule.Name] {
-			sim := cosineSimilarity(queryEmbedding, hardEmb)
-			if sim > maxHardSim {
-				maxHardSim = sim
-			}
-		}
-
-		// Compute max similarity to easy candidates
-		maxEasySim := float32(-1.0)
-		for _, easyEmb := range c.easyEmbeddings[rule.Name] {
-			sim := cosineSimilarity(queryEmbedding, easyEmb)
-			if sim > maxEasySim {
-				maxEasySim = sim
-			}
-		}
-
-		// Compute difficulty signal
-		difficultySignal := maxHardSim - maxEasySim
-
-		// Determine difficulty level
-		var difficulty string
-		if difficultySignal > rule.Threshold {
-			difficulty = "hard"
-		} else if difficultySignal < -rule.Threshold {
-			difficulty = "easy"
-		} else {
-			difficulty = "medium"
-		}
-
-		logging.Infof("Complexity rule '%s': hard_sim=%.3f, easy_sim=%.3f, signal=%.3f, difficulty=%s",
-			rule.Name, maxHardSim, maxEasySim, difficultySignal, difficulty)
-
-		matchedRules = append(matchedRules, fmt.Sprintf("%s:%s", rule.Name, difficulty))
+	scoreOptions := defaultPrototypeScoreOptions(c.prototypeCfg)
+	results := make([]ComplexityRuleResult, 0, len(c.rules))
+	for _, rule := range c.rules {
+		result := c.classifyRuleWithEmbeddings(rule, queryEmbeddings, scoreOptions)
+		logComplexityRuleResult(rule, result, queryEmbeddings.image != nil)
+		results = append(results, result)
 	}
-
-	return matchedRules, nil
+	return results, nil
 }

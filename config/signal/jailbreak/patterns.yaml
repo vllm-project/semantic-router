@@ -1,0 +1,15 @@
+routing:
+  signals:
+    jailbreak:
+      - name: prompt_injection
+        method: hybrid
+        threshold: 0.8
+        include_history: true
+        description: Detect common prompt-injection or jailbreak attempts.
+        jailbreak_patterns:
+          - ignore previous instructions
+          - reveal the hidden prompt
+          - jailbreak mode
+        benign_patterns:
+          - explain the policy
+          - summarize the safety rules

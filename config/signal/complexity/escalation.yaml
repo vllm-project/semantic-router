@@ -1,0 +1,16 @@
+routing:
+  signals:
+    complexity:
+      - name: needs_reasoning
+        threshold: 0.75
+        description: Escalate multi-step reasoning or synthesis-heavy prompts.
+        hard:
+          candidates:
+            - solve this step by step
+            - compare multiple tradeoffs
+            - analyze the root cause
+        easy:
+          candidates:
+            - answer briefly
+            - quick summary
+            - simple rewrite

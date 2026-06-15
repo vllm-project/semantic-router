@@ -16,6 +16,10 @@
     <link rel="apple-touch-icon" href="/vllm-mobile.png" />
 
     <title>vLLM Semantic Router</title>
+
+    <!-- Preload WASM compiler for faster init -->
+    <link rel="preload" href="/wasm_exec.js" as="script" />
+    <link rel="preload" href="/signal-compiler.wasm" as="fetch" type="application/wasm" crossorigin />
   </head>
   <body>
     <div id="root"></div>

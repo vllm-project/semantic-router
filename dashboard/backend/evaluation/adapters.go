@@ -11,52 +11,15 @@ import (
 // ParseHallucinationOutput parses the output from the hallucination benchmark.
 // It first tries to read from the output file, then falls back to parsing stdout.
 func ParseHallucinationOutput(stdout, outputPath string) (map[string]interface{}, error) {
-	var result map[string]interface{}
-
-	// First, try to read from the output file
-	if outputPath != "" {
-		// The script generates files with timestamp, so find the latest one
-		dir := filepath.Dir(outputPath)
-		files, err := os.ReadDir(dir)
-		if err == nil {
-			var latestFile string
-			var latestTime int64
-			for _, f := range files {
-				if strings.HasPrefix(f.Name(), "results_") && strings.HasSuffix(f.Name(), ".json") {
-					filePath := filepath.Join(dir, f.Name())
-					info, err := f.Info()
-					if err == nil {
-						modTime := info.ModTime().UnixNano()
-						if modTime > latestTime {
-							latestTime = modTime
-							latestFile = filePath
-						}
-					}
-				}
-			}
-			if latestFile != "" {
-				data, err := os.ReadFile(latestFile)
-				if err == nil {
-					if err := json.Unmarshal(data, &result); err == nil {
-						return extractHallucinationMetrics(result), nil
-					}
-				}
-			}
-		}
+	if result, ok := tryHallucinationMetricsFromOutputFile(outputPath); ok {
+		return extractHallucinationMetrics(result), nil
 	}
-
-	// Fall back to parsing stdout for JSON
 	lines := strings.Split(stdout, "\n")
 	for _, line := range lines {
-		line = strings.TrimSpace(line)
-		if strings.HasPrefix(line, "{") && strings.HasSuffix(line, "}") {
-			if err := json.Unmarshal([]byte(line), &result); err == nil {
-				return extractHallucinationMetrics(result), nil
-			}
+		if result, ok := parseHallucinationLineFromStdout(line); ok {
+			return extractHallucinationMetrics(result), nil
 		}
 	}
-
-	// Return empty metrics if parsing failed
 	return map[string]interface{}{
 		"error":  "Failed to parse benchmark output",
 		"stdout": stdout,
@@ -263,11 +226,16 @@ func extractAccuracyMetrics(raw map[string]interface{}) map[string]interface{} {
 
 	// Copy over standard accuracy metrics
 	keys := []string{
-		"accuracy", "true_positives", "false_positives",
+		"overall_accuracy", "accuracy", "true_positives", "false_positives",
 		"true_negatives", "false_negatives",
 		"precision", "recall", "f1_score",
-		"total_samples", "correct_predictions",
-		"category_accuracy",
+		"total_samples", "total_questions", "correct_predictions", "correct", "incorrect", "skipped",
+		"successful_queries", "failed_queries",
+		"category_metrics", "category_accuracy",
+		"avg_response_time", "avg_prompt_tokens", "avg_completion_tokens", "avg_total_tokens",
+		"by_mode",
+		"details",  // Test case details
+		"metadata", // Dataset metadata (name, description, etc.)
 	}
 
 	for _, key := range keys {
@@ -276,38 +244,13 @@ func extractAccuracyMetrics(raw map[string]interface{}) map[string]interface{} {
 		}
 	}
 
-	metrics["status"] = "success"
-	return metrics
-}
-
-// ParsePrometheusMetrics parses Prometheus query results into metrics.
-func ParsePrometheusMetrics(queryResult map[string]interface{}, metricType string) (map[string]interface{}, error) {
-	metrics := make(map[string]interface{})
-
-	// Prometheus API response format:
-	// { "status": "success", "data": { "resultType": "vector/matrix", "result": [...] } }
-	if data, ok := queryResult["data"].(map[string]interface{}); ok {
-		if result, ok := data["result"].([]interface{}); ok {
-			for i, r := range result {
-				if resultMap, ok := r.(map[string]interface{}); ok {
-					// Get metric labels
-					if metric, ok := resultMap["metric"].(map[string]interface{}); ok {
-						prefix := fmt.Sprintf("%s_%d", metricType, i)
-						for k, v := range metric {
-							metrics[fmt.Sprintf("%s_%s", prefix, k)] = v
-						}
-					}
-
-					// Get value(s)
-					if value, ok := resultMap["value"].([]interface{}); ok && len(value) == 2 {
-						metrics[fmt.Sprintf("%s_%d_value", metricType, i)] = value[1]
-					}
-				}
-			}
-		}
+	// Map overall_accuracy to accuracy for consistency
+	if overallAcc, ok := raw["overall_accuracy"]; ok {
+		metrics["accuracy"] = overallAcc
 	}
 
-	return metrics, nil
+	metrics["status"] = "success"
+	return metrics
 }
 
 // CalculateDerivedMetrics calculates additional metrics from raw results.
@@ -353,4 +296,93 @@ func getFloat(m map[string]interface{}, key string) (float64, bool) {
 		}
 	}
 	return 0, false
+}
+
+// ParseSignalEvalOutput parses the output from the signal evaluation script.
+func ParseSignalEvalOutput(outputPath string) (map[string]interface{}, error) {
+	// Read the JSON output file
+	data, err := os.ReadFile(outputPath)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read output file: %w", err)
+	}
+
+	var result map[string]interface{}
+	if err := json.Unmarshal(data, &result); err != nil {
+		return nil, fmt.Errorf("failed to parse JSON: %w", err)
+	}
+
+	return extractSignalEvalMetrics(result), nil
+}
+
+// extractSignalEvalMetrics extracts the relevant metrics from signal evaluation results.
+func extractSignalEvalMetrics(raw map[string]interface{}) map[string]interface{} {
+	metrics := make(map[string]interface{})
+
+	// Extract top-level metrics
+	keys := []string{
+		"dimension",
+		"total_samples",
+		"correct",
+		"incorrect",
+		"skipped",
+		"accuracy",
+		"details",  // Include full details array for frontend display
+		"metadata", // Include metadata for frontend display
+	}
+
+	for _, key := range keys {
+		if val, ok := raw[key]; ok {
+			metrics[key] = val
+		}
+	}
+
+	metrics["status"] = "success"
+	return metrics
+}
+
+// ParseMMLUProOutput finds analysis.json under the given output dir (e.g. from mmlu_pro_vllm_eval.py) and returns metrics.
+func ParseMMLUProOutput(outputDir string) (map[string]interface{}, error) {
+	var analysisPath string
+	dirEntries, err := os.ReadDir(outputDir)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read output dir: %w", err)
+	}
+	for _, e := range dirEntries {
+		if !e.IsDir() {
+			continue
+		}
+		p := filepath.Join(outputDir, e.Name(), "analysis.json")
+		if _, statErr := os.Stat(p); statErr == nil {
+			analysisPath = p
+			break
+		}
+	}
+	if analysisPath == "" {
+		return nil, fmt.Errorf("no analysis.json found under %s", outputDir)
+	}
+	data, err := os.ReadFile(analysisPath)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read analysis file: %w", err)
+	}
+	var raw map[string]interface{}
+	if unmarshalErr := json.Unmarshal(data, &raw); unmarshalErr != nil {
+		return nil, fmt.Errorf("failed to parse analysis JSON: %w", unmarshalErr)
+	}
+	return extractMMLUProMetrics(raw), nil
+}
+
+// extractMMLUProMetrics maps MMLU-Pro analysis fields to a flat metrics map.
+func extractMMLUProMetrics(raw map[string]interface{}) map[string]interface{} {
+	metrics := make(map[string]interface{})
+	for _, key := range []string{
+		"overall_accuracy", "total_questions", "successful_queries", "failed_queries",
+		"avg_response_time", "category_accuracy",
+	} {
+		if val, ok := raw[key]; ok {
+			metrics[key] = val
+		}
+	}
+	metrics["accuracy"] = raw["overall_accuracy"]
+	metrics["status"] = "success"
+	return metrics
 }

@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"os"
 	"sync"
-	"sync/atomic"
 	"time"
 
 	"github.com/milvus-io/milvus-sdk-go/v2/client"
@@ -15,12 +14,14 @@ import (
 
 	candle_binding "github.com/vllm-project/semantic-router/candle-binding"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
+	milvuslifecycle "github.com/vllm-project/semantic-router/src/semantic-router/pkg/milvus"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/metrics"
 )
 
 // MilvusCache provides a scalable semantic cache implementation using Milvus vector database
 type MilvusCache struct {
+	SimilarityTracker   // embedded — provides LastSimilarity()
 	client              client.Client
 	config              *config.MilvusConfig
 	collectionName      string
@@ -31,6 +32,7 @@ type MilvusCache struct {
 	missCount           int64
 	lastCleanupTime     *time.Time
 	mu                  sync.RWMutex
+	embeddingModel      string // "bert", "qwen3", "gemma", "mmbert", or "multimodal"
 }
 
 // MilvusCacheOptions contains configuration parameters for Milvus cache initialization
@@ -40,9 +42,12 @@ type MilvusCacheOptions struct {
 	Enabled             bool
 	Config              *config.MilvusConfig
 	ConfigPath          string
+	EmbeddingModel      string
 }
 
 // NewMilvusCache initializes a new Milvus-backed semantic cache instance
+//
+//nolint:funlen
 func NewMilvusCache(options MilvusCacheOptions) (*MilvusCache, error) {
 	if !options.Enabled {
 		logging.Debugf("MilvusCache: disabled, returning stub")
@@ -64,8 +69,9 @@ func NewMilvusCache(options MilvusCacheOptions) (*MilvusCache, error) {
 	} else {
 		milvusConfig = options.Config
 	}
-	logging.Debugf("MilvusCache: config loaded - host=%s:%d, collection=%s, dimension=auto-detect",
-		milvusConfig.Connection.Host, milvusConfig.Connection.Port, milvusConfig.Collection.Name)
+	logging.Debugf("MilvusCache: config loaded - host=%s:%d, collection=%s, dimension=%d",
+		milvusConfig.Connection.Host, milvusConfig.Connection.Port, milvusConfig.Collection.Name,
+		semanticCacheEmbeddingDimension(milvusConfig.Collection.VectorField.Dimension, options.EmbeddingModel))
 
 	// Establish connection to Milvus server
 	connectionString := fmt.Sprintf("%s:%d", milvusConfig.Connection.Host, milvusConfig.Connection.Port)
@@ -79,11 +85,13 @@ func NewMilvusCache(options MilvusCacheOptions) (*MilvusCache, error) {
 		defer cancel()
 		logging.Debugf("MilvusCache: connection timeout set to %s", timeout)
 	}
-	milvusClient, err := client.NewGrpcClient(dialCtx, connectionString)
+	milvusClient, err := milvuslifecycle.ConnectGRPC(dialCtx, connectionString, 0)
 	if err != nil {
 		logging.Debugf("MilvusCache: failed to connect: %v", err)
 		return nil, fmt.Errorf("failed to create Milvus client: %w", err)
 	}
+
+	embeddingModel := normalizeEmbeddingModel(options.EmbeddingModel)
 
 	cache := &MilvusCache{
 		client:              milvusClient,
@@ -92,12 +100,13 @@ func NewMilvusCache(options MilvusCacheOptions) (*MilvusCache, error) {
 		similarityThreshold: options.SimilarityThreshold,
 		ttlSeconds:          options.TTLSeconds,
 		enabled:             options.Enabled,
+		embeddingModel:      embeddingModel,
 	}
 
 	// Test connection using the new CheckConnection method
 	if err := cache.CheckConnection(); err != nil {
 		logging.Debugf("MilvusCache: connection check failed: %v", err)
-		milvusClient.Close()
+		_ = milvusClient.Close() // best-effort close
 		return nil, err
 	}
 	logging.Debugf("MilvusCache: successfully connected to Milvus")
@@ -106,7 +115,7 @@ func NewMilvusCache(options MilvusCacheOptions) (*MilvusCache, error) {
 	logging.Debugf("MilvusCache: initializing collection '%s'", milvusConfig.Collection.Name)
 	if err := cache.initializeCollection(); err != nil {
 		logging.Debugf("MilvusCache: failed to initialize collection: %v", err)
-		milvusClient.Close()
+		_ = milvusClient.Close() // best-effort close
 		return nil, fmt.Errorf("failed to initialize collection: %w", err)
 	}
 	logging.Debugf("MilvusCache: initialization complete")
@@ -115,6 +124,8 @@ func NewMilvusCache(options MilvusCacheOptions) (*MilvusCache, error) {
 }
 
 // loadMilvusConfig reads and parses the Milvus configuration from file (Deprecated)
+//
+//nolint:cyclop,funlen
 func loadMilvusConfig(configPath string) (*config.MilvusConfig, error) {
 	if configPath == "" {
 		return nil, fmt.Errorf("milvus config path is required")
@@ -203,7 +214,6 @@ func (c *MilvusCache) initializeCollection() error {
 			logging.Debugf("MilvusCache: failed to drop collection: %v", err)
 			return fmt.Errorf("failed to drop collection: %w", err)
 		}
-		hasCollection = false
 		logging.Debugf("MilvusCache: dropped existing collection '%s' for development", c.collectionName)
 		logging.LogEvent("collection_dropped", map[string]interface{}{
 			"backend":    "milvus",
@@ -212,17 +222,14 @@ func (c *MilvusCache) initializeCollection() error {
 		})
 	}
 
-	// Create collection if it doesn't exist
-	if !hasCollection {
-		fmt.Printf("[DEBUG] Collection '%s' does not exist. AutoCreateCollection=%v\n",
+	if err := milvuslifecycle.EnsureCollectionLoadedWithRetry(ctx, c.client, c.collectionName, func(innerCtx context.Context) error {
+		logging.Debugf("MilvusCache: collection '%s' does not exist. AutoCreateCollection=%v",
 			c.collectionName, c.config.Development.AutoCreateCollection)
 		if !c.config.Development.AutoCreateCollection {
 			return fmt.Errorf("collection %s does not exist and auto-creation is disabled", c.collectionName)
 		}
-
-		if err := c.createCollection(); err != nil {
-			logging.Debugf("MilvusCache: failed to create collection: %v", err)
-			return fmt.Errorf("failed to create collection: %w", err)
+		if err := c.createCollection(innerCtx); err != nil {
+			return err
 		}
 		logging.Debugf("MilvusCache: created new collection '%s' with dimension %d",
 			c.collectionName, c.config.Collection.VectorField.Dimension)
@@ -231,31 +238,67 @@ func (c *MilvusCache) initializeCollection() error {
 			"collection": c.collectionName,
 			"dimension":  c.config.Collection.VectorField.Dimension,
 		})
+		return nil
+	}, milvuslifecycle.CollectionRetryOptions{}); err != nil {
+		logging.Debugf("MilvusCache: failed to ensure/load collection: %v", err)
+		return fmt.Errorf("failed to ensure/load collection: %w", err)
 	}
-
-	// Load collection into memory for queries
-	logging.Debugf("MilvusCache: loading collection '%s' into memory", c.collectionName)
-	if err := c.client.LoadCollection(ctx, c.collectionName, false); err != nil {
-		logging.Debugf("MilvusCache: failed to load collection: %v", err)
-		return fmt.Errorf("failed to load collection: %w", err)
-	}
-	logging.Debugf("MilvusCache: collection loaded successfully")
 
 	return nil
 }
 
-// createCollection builds the Milvus collection with the appropriate schema
-func (c *MilvusCache) createCollection() error {
-	ctx := context.Background()
+// getEmbedding generates an embedding based on the configured embedding model
+func (c *MilvusCache) getEmbedding(text string) ([]float32, error) {
+	modelName := c.embeddingModel
 
-	// Determine embedding dimension automatically
-	testEmbedding, err := candle_binding.GetEmbedding("test", 0) // Auto-detect
-	if err != nil {
-		return fmt.Errorf("failed to detect embedding dimension: %w", err)
+	switch modelName {
+	case "qwen3":
+		// Use GetEmbeddingBatched for Qwen3 with batching support
+		output, err := candle_binding.GetEmbeddingBatched(text, modelName, c.embeddingDimension())
+		if err != nil {
+			return nil, err
+		}
+		return output.Embedding, nil
+	case "gemma":
+		// Use GetEmbeddingWithModelType for Gemma
+		output, err := candle_binding.GetEmbeddingWithModelType(text, modelName, c.embeddingDimension())
+		if err != nil {
+			return nil, err
+		}
+		return output.Embedding, nil
+	case "mmbert":
+		output, err := candle_binding.GetEmbeddingWithModelType(text, modelName, c.embeddingDimension())
+		if err != nil {
+			return nil, err
+		}
+		return output.Embedding, nil
+	case "multimodal":
+		output, err := candle_binding.GetEmbeddingWithModelType(text, modelName, c.embeddingDimension())
+		if err != nil {
+			return nil, err
+		}
+		return output.Embedding, nil
+	case "bert":
+		// Use traditional GetEmbedding for BERT (default)
+		return candle_binding.GetEmbedding(text, 0)
+	default:
+		return nil, fmt.Errorf("unsupported embedding model: %s (must be 'bert', 'qwen3', 'gemma', 'mmbert', or 'multimodal')", c.embeddingModel)
 	}
-	actualDimension := len(testEmbedding)
+}
 
-	logging.Debugf("MilvusCache.createCollection: auto-detected embedding dimension: %d", actualDimension)
+func (c *MilvusCache) embeddingDimension() int {
+	if c == nil || c.config == nil {
+		return semanticCacheEmbeddingDimension(0, "")
+	}
+	return semanticCacheEmbeddingDimension(c.config.Collection.VectorField.Dimension, c.embeddingModel)
+}
+
+// createCollection builds the Milvus collection with the appropriate schema
+func (c *MilvusCache) createCollection(ctx context.Context) error {
+	actualDimension := c.embeddingDimension()
+	c.config.Collection.VectorField.Dimension = actualDimension
+
+	logging.Debugf("MilvusCache.createCollection: using embedding dimension: %d", actualDimension)
 
 	// Define schema with auto-detected dimension
 	schema := &entity.Schema{
@@ -297,7 +340,7 @@ func (c *MilvusCache) createCollection() error {
 				Name:     c.config.Collection.VectorField.Name,
 				DataType: entity.FieldTypeFloatVector,
 				TypeParams: map[string]string{
-					"dim": fmt.Sprintf("%d", actualDimension), // Use auto-detected dimension
+					"dim": fmt.Sprintf("%d", actualDimension),
 				},
 			},
 			{
@@ -392,6 +435,8 @@ func (c *MilvusCache) AddPendingRequest(requestID string, model string, query st
 }
 
 // UpdateWithResponse completes a pending request by adding the response
+//
+//nolint:gocognit,cyclop,funlen
 func (c *MilvusCache) UpdateWithResponse(requestID string, responseBody []byte, ttlSeconds int) error {
 	start := time.Now()
 
@@ -517,6 +562,8 @@ func (c *MilvusCache) AddEntry(requestID string, model string, query string, req
 }
 
 // AddEntriesBatch stores multiple request-response pairs in the cache efficiently
+//
+//nolint:funlen
 func (c *MilvusCache) AddEntriesBatch(entries []CacheEntry) error {
 	start := time.Now()
 
@@ -543,7 +590,7 @@ func (c *MilvusCache) AddEntriesBatch(entries []CacheEntry) error {
 	// Generate embeddings and prepare data for all entries
 	for i, entry := range entries {
 		// Generate semantic embedding for the query
-		embedding, err := candle_binding.GetEmbedding(entry.Query, 0)
+		embedding, err := c.getEmbedding(entry.Query)
 		if err != nil {
 			return fmt.Errorf("failed to generate embedding for entry %d: %w", i, err)
 		}
@@ -613,6 +660,8 @@ func (c *MilvusCache) Flush() error {
 }
 
 // addEntry handles the internal logic for storing entries in Milvus
+//
+//nolint:funlen
 func (c *MilvusCache) addEntry(id string, requestID string, model string, query string, requestBody, responseBody []byte, ttlSeconds int) error {
 	// Determine effective TTL: use provided value or fall back to cache default
 	effectiveTTL := ttlSeconds
@@ -621,7 +670,7 @@ func (c *MilvusCache) addEntry(id string, requestID string, model string, query 
 	}
 
 	// Generate semantic embedding for the query
-	embedding, err := candle_binding.GetEmbedding(query, 0) // Auto-detect dimension
+	embedding, err := c.getEmbedding(query)
 	if err != nil {
 		return fmt.Errorf("failed to generate embedding: %w", err)
 	}
@@ -690,480 +739,4 @@ func (c *MilvusCache) addEntry(id string, requestID string, model string, query 
 		"ttl_seconds":         effectiveTTL,
 	})
 	return nil
-}
-
-// FindSimilar searches for semantically similar cached requests
-func (c *MilvusCache) FindSimilar(model string, query string) ([]byte, bool, error) {
-	return c.FindSimilarWithThreshold(model, query, c.similarityThreshold)
-}
-
-// FindSimilarWithThreshold searches for semantically similar cached requests using a specific threshold
-func (c *MilvusCache) FindSimilarWithThreshold(model string, query string, threshold float32) ([]byte, bool, error) {
-	start := time.Now()
-
-	if !c.enabled {
-		logging.Debugf("MilvusCache.FindSimilarWithThreshold: cache disabled")
-		return nil, false, nil
-	}
-	queryPreview := query
-	if len(query) > 50 {
-		queryPreview = query[:50] + "..."
-	}
-	logging.Debugf("MilvusCache.FindSimilarWithThreshold: searching for model='%s', query='%s' (len=%d chars), threshold=%.4f",
-		model, queryPreview, len(query), threshold)
-
-	// Generate semantic embedding for similarity comparison
-	queryEmbedding, err := candle_binding.GetEmbedding(query, 0) // Auto-detect dimension
-	if err != nil {
-		metrics.RecordCacheOperation("milvus", "find_similar", "error", time.Since(start).Seconds())
-		return nil, false, fmt.Errorf("failed to generate embedding: %w", err)
-	}
-
-	ctx := context.Background()
-
-	// Define search parameters
-	searchParam, err := entity.NewIndexHNSWSearchParam(c.config.Search.Params.Ef)
-	if err != nil {
-		return nil, false, fmt.Errorf("failed to create search parameters: %w", err)
-	}
-
-	// Use Milvus Search for efficient similarity search
-	// Filter by has response and not expired (model filtering removed for cross-model cache sharing)
-	now := time.Now().Unix()
-	filterExpr := fmt.Sprintf("response_body != \"\" && (expires_at == 0 || expires_at > %d)", now)
-
-	searchResult, err := c.client.Search(
-		ctx,
-		c.collectionName,
-		[]string{},
-		filterExpr,
-		[]string{"response_body"},
-		[]entity.Vector{entity.FloatVector(queryEmbedding)},
-		c.config.Collection.VectorField.Name,
-		entity.MetricType(c.config.Collection.VectorField.MetricType),
-		c.config.Search.TopK,
-		searchParam,
-	)
-	if err != nil {
-		logging.Debugf("MilvusCache.FindSimilarWithThreshold: search failed: %v", err)
-		atomic.AddInt64(&c.missCount, 1)
-		metrics.RecordCacheOperation("milvus", "find_similar", "error", time.Since(start).Seconds())
-		return nil, false, nil
-	}
-
-	if len(searchResult) == 0 || searchResult[0].ResultCount == 0 {
-		atomic.AddInt64(&c.missCount, 1)
-		logging.Debugf("MilvusCache.FindSimilarWithThreshold: no entries found")
-		metrics.RecordCacheOperation("milvus", "find_similar", "miss", time.Since(start).Seconds())
-		return nil, false, nil
-	}
-
-	bestScore := searchResult[0].Scores[0]
-	if bestScore < threshold {
-		atomic.AddInt64(&c.missCount, 1)
-		logging.Debugf("MilvusCache.FindSimilarWithThreshold: CACHE MISS - best_similarity=%.4f < threshold=%.4f",
-			bestScore, threshold)
-		logging.LogEvent("cache_miss", map[string]interface{}{
-			"backend":         "milvus",
-			"best_similarity": bestScore,
-			"threshold":       threshold,
-			"model":           model,
-			"collection":      c.collectionName,
-		})
-		metrics.RecordCacheOperation("milvus", "find_similar", "miss", time.Since(start).Seconds())
-		return nil, false, nil
-	}
-
-	// Cache Hit
-	// Milvus automatically includes the primary key in search results but order is non-deterministic
-	// Check which field is the response_body by detecting if field[0] is an MD5 hash
-	responseBodyFieldIndex := 0
-	if len(searchResult[0].Fields) > 1 {
-		if testCol, ok := searchResult[0].Fields[0].(*entity.ColumnVarChar); ok && testCol.Len() > 0 {
-			testVal := testCol.Data()[0]
-			// If field[0] is exactly 32 hex chars, it's the ID hash, so response_body is in field[1]
-			if len(testVal) == 32 && isHexString(testVal) {
-				responseBodyFieldIndex = 1
-			}
-		}
-	}
-
-	var responseBody []byte
-	responseBodyColumn, ok := searchResult[0].Fields[responseBodyFieldIndex].(*entity.ColumnVarChar)
-	if ok && responseBodyColumn.Len() > 0 {
-		responseBody = []byte(responseBodyColumn.Data()[0])
-	}
-
-	if responseBody == nil {
-		logging.Debugf("MilvusCache.FindSimilarWithThreshold: cache hit but response_body is missing or not a string")
-		atomic.AddInt64(&c.missCount, 1)
-		metrics.RecordCacheOperation("milvus", "find_similar", "error", time.Since(start).Seconds())
-		return nil, false, nil
-	}
-
-	atomic.AddInt64(&c.hitCount, 1)
-	logging.Debugf("MilvusCache.FindSimilarWithThreshold: CACHE HIT - similarity=%.4f >= threshold=%.4f, response_size=%d bytes",
-		bestScore, threshold, len(responseBody))
-	logging.LogEvent("cache_hit", map[string]interface{}{
-		"backend":    "milvus",
-		"similarity": bestScore,
-		"threshold":  threshold,
-		"model":      model,
-		"collection": c.collectionName,
-	})
-	metrics.RecordCacheOperation("milvus", "find_similar", "hit", time.Since(start).Seconds())
-	return responseBody, true, nil
-}
-
-// GetAllEntries retrieves all entries from Milvus for HNSW index rebuilding
-// Returns slices of request_ids and embeddings for efficient bulk loading
-func (c *MilvusCache) GetAllEntries(ctx context.Context) ([]string, [][]float32, error) {
-	start := time.Now()
-
-	if !c.enabled {
-		return nil, nil, fmt.Errorf("milvus cache is not enabled")
-	}
-
-	logging.Infof("MilvusCache.GetAllEntries: querying all entries for HNSW rebuild")
-
-	// Query all entries with embeddings and request_ids
-	// Filter to only get entries with complete responses (not pending)
-	queryResult, err := c.client.Query(
-		ctx,
-		c.collectionName,
-		[]string{},              // Empty partitions means search all
-		"response_body != \"\"", // Only get complete entries
-		[]string{"request_id", c.config.Collection.VectorField.Name}, // Get IDs and embeddings
-	)
-	if err != nil {
-		logging.Warnf("MilvusCache.GetAllEntries: query failed: %v", err)
-		return nil, nil, fmt.Errorf("milvus query all failed: %w", err)
-	}
-
-	// Milvus automatically includes the primary key but column order may vary
-	// We requested ["request_id", embedding_field], so we expect 2-3 columns
-	// If 3 columns: primary key was auto-included, adjust indices
-	requestIDColIndex := 0
-	embeddingColIndex := 1
-	expectedMinCols := 2
-
-	if len(queryResult) >= 3 {
-		// Primary key was auto-included, adjust indices
-		requestIDColIndex = 1
-		embeddingColIndex = 2
-	}
-
-	if len(queryResult) < expectedMinCols {
-		logging.Infof("MilvusCache.GetAllEntries: no entries found or incomplete result")
-		return []string{}, [][]float32{}, nil
-	}
-
-	// Extract request IDs
-	requestIDColumn, ok := queryResult[requestIDColIndex].(*entity.ColumnVarChar)
-	if !ok {
-		return nil, nil, fmt.Errorf("unexpected request_id column type: %T", queryResult[requestIDColIndex])
-	}
-
-	// Extract embeddings
-	embeddingColumn, ok := queryResult[embeddingColIndex].(*entity.ColumnFloatVector)
-	if !ok {
-		return nil, nil, fmt.Errorf("unexpected embedding column type: %T", queryResult[embeddingColIndex])
-	}
-
-	if requestIDColumn.Len() != embeddingColumn.Len() {
-		return nil, nil, fmt.Errorf("column length mismatch: request_ids=%d, embeddings=%d",
-			requestIDColumn.Len(), embeddingColumn.Len())
-	}
-
-	entryCount := requestIDColumn.Len()
-	requestIDs := make([]string, entryCount)
-
-	// Extract request IDs from column
-	for i := 0; i < entryCount; i++ {
-		requestID, err := requestIDColumn.ValueByIdx(i)
-		if err != nil {
-			return nil, nil, fmt.Errorf("failed to get request_id at index %d: %w", i, err)
-		}
-		requestIDs[i] = requestID
-	}
-
-	// Extract embeddings directly from column data
-	embeddings := embeddingColumn.Data()
-	if len(embeddings) != entryCount {
-		return nil, nil, fmt.Errorf("embedding data length mismatch: got %d, expected %d",
-			len(embeddings), entryCount)
-	}
-
-	elapsed := time.Since(start)
-	logging.Infof("MilvusCache.GetAllEntries: loaded %d entries in %v (%.0f entries/sec)",
-		entryCount, elapsed, float64(entryCount)/elapsed.Seconds())
-
-	return requestIDs, embeddings, nil
-}
-
-// isHexString checks if a string contains only hexadecimal characters
-func isHexString(s string) bool {
-	for _, c := range s {
-		if (c < '0' || c > '9') && (c < 'a' || c > 'f') && (c < 'A' || c > 'F') {
-			return false
-		}
-	}
-	return true
-}
-
-// GetByID retrieves a document from Milvus by its request ID
-// This is much more efficient than FindSimilar when you already know the ID
-// Used by hybrid cache to fetch documents after local HNSW search
-func (c *MilvusCache) GetByID(ctx context.Context, requestID string) ([]byte, error) {
-	start := time.Now()
-
-	if !c.enabled {
-		return nil, fmt.Errorf("milvus cache is not enabled")
-	}
-
-	logging.Debugf("MilvusCache.GetByID: fetching requestID='%s'", requestID)
-
-	// Query Milvus by request_id (primary key)
-	// Filter for non-empty responses to avoid race condition with pending entries
-	queryResult, err := c.client.Query(
-		ctx,
-		c.collectionName,
-		[]string{}, // Empty partitions means search all
-		fmt.Sprintf("request_id == \"%s\" && response_body != \"\"", requestID),
-		[]string{"response_body"}, // Only fetch document, not embedding!
-	)
-	if err != nil {
-		logging.Debugf("MilvusCache.GetByID: query failed: %v", err)
-		metrics.RecordCacheOperation("milvus", "get_by_id", "error", time.Since(start).Seconds())
-		return nil, fmt.Errorf("milvus query failed: %w", err)
-	}
-
-	if len(queryResult) == 0 {
-		logging.Debugf("MilvusCache.GetByID: document not found: %s", requestID)
-		metrics.RecordCacheOperation("milvus", "get_by_id", "miss", time.Since(start).Seconds())
-		return nil, fmt.Errorf("document not found: %s", requestID)
-	}
-
-	// Milvus automatically includes the primary key but the column order is non-deterministic
-	// We need to find which column is the response_body by checking which is NOT the primary key (32-char hash)
-	responseBodyColIndex := 0
-	if len(queryResult) > 1 {
-		// Check if column[0] looks like an MD5 hash (32 hex chars)
-		if testCol, ok := queryResult[0].(*entity.ColumnVarChar); ok && testCol.Len() > 0 {
-			testVal, _ := testCol.ValueByIdx(0)
-			// If it's exactly 32 chars and all hex, it's likely the ID hash
-			if len(testVal) == 32 && isHexString(testVal) {
-				responseBodyColIndex = 1 // response_body is in column 1
-			} else {
-				responseBodyColIndex = 0 // response_body is in column 0
-			}
-		}
-	}
-
-	// Extract response body
-	responseBodyColumn, ok := queryResult[responseBodyColIndex].(*entity.ColumnVarChar)
-	if !ok {
-		logging.Debugf("MilvusCache.GetByID: unexpected response_body column type: %T", queryResult[responseBodyColIndex])
-		metrics.RecordCacheOperation("milvus", "get_by_id", "error", time.Since(start).Seconds())
-		return nil, fmt.Errorf("invalid response_body column type: %T", queryResult[responseBodyColIndex])
-	}
-
-	if responseBodyColumn.Len() == 0 {
-		logging.Debugf("MilvusCache.GetByID: response_body column is empty")
-		metrics.RecordCacheOperation("milvus", "get_by_id", "miss", time.Since(start).Seconds())
-		return nil, fmt.Errorf("response_body is empty for: %s", requestID)
-	}
-
-	// Get the response body value
-	responseBodyStr, err := responseBodyColumn.ValueByIdx(0)
-	if err != nil {
-		logging.Debugf("MilvusCache.GetByID: failed to get response_body value: %v", err)
-		metrics.RecordCacheOperation("milvus", "get_by_id", "error", time.Since(start).Seconds())
-		return nil, fmt.Errorf("failed to get response_body value: %w", err)
-	}
-
-	responseBody := []byte(responseBodyStr)
-
-	if len(responseBody) == 0 {
-		logging.Debugf("MilvusCache.GetByID: response_body is empty")
-		metrics.RecordCacheOperation("milvus", "get_by_id", "miss", time.Since(start).Seconds())
-		return nil, fmt.Errorf("response_body is empty for: %s", requestID)
-	}
-
-	logging.Debugf("MilvusCache.GetByID: SUCCESS - fetched %d bytes in %dms",
-		len(responseBody), time.Since(start).Milliseconds())
-	metrics.RecordCacheOperation("milvus", "get_by_id", "success", time.Since(start).Seconds())
-
-	return responseBody, nil
-}
-
-// Close releases all resources held by the cache
-func (c *MilvusCache) Close() error {
-	if c.client != nil {
-		return c.client.Close()
-	}
-	return nil
-}
-
-// SearchDocuments performs vector search on a specified collection for RAG retrieval
-// This method is used by the RAG plugin to retrieve context from knowledge bases
-//
-// Parameters:
-//   - vectorFieldName: Name of the vector field in the collection (defaults to cache config)
-//   - metricType: Metric type for similarity search (defaults to cache config)
-//   - ef: HNSW search parameter ef (defaults to cache config)
-//
-// If these parameters are empty/zero, the method uses the cache collection's configuration.
-// This allows RAG collections to use different configurations when needed.
-func (c *MilvusCache) SearchDocuments(ctx context.Context, collectionName string, queryEmbedding []float32, threshold float32, topK int, filterExpr string, contentField string, vectorFieldName string, metricType string, ef int) ([]string, []float32, error) {
-	if !c.enabled {
-		return nil, nil, fmt.Errorf("milvus cache is not enabled")
-	}
-
-	if c.client == nil {
-		return nil, nil, fmt.Errorf("milvus client is not initialized")
-	}
-
-	// Use provided parameters or fall back to cache config defaults
-	actualVectorFieldName := vectorFieldName
-	if actualVectorFieldName == "" {
-		actualVectorFieldName = c.config.Collection.VectorField.Name
-	}
-
-	actualMetricType := metricType
-	if actualMetricType == "" {
-		actualMetricType = c.config.Collection.VectorField.MetricType
-	}
-
-	actualEf := ef
-	if actualEf == 0 {
-		actualEf = c.config.Search.Params.Ef
-	}
-
-	// Define search parameters
-	searchParam, err := entity.NewIndexHNSWSearchParam(actualEf)
-	if err != nil {
-		return nil, nil, fmt.Errorf("failed to create search parameters: %w", err)
-	}
-
-	// Build filter expression
-	// If no filter provided and contentField is specified, default to filtering for non-empty content
-	if filterExpr == "" && contentField != "" {
-		filterExpr = fmt.Sprintf("%s != \"\"", contentField)
-	}
-
-	// Use Milvus Search with collection-specific or default parameters
-	searchResult, err := c.client.Search(
-		ctx,
-		collectionName,
-		[]string{},
-		filterExpr,
-		[]string{contentField},
-		[]entity.Vector{entity.FloatVector(queryEmbedding)},
-		actualVectorFieldName,
-		entity.MetricType(actualMetricType),
-		topK,
-		searchParam,
-	)
-	if err != nil {
-		return nil, nil, fmt.Errorf("milvus search failed: %w", err)
-	}
-
-	if len(searchResult) == 0 || searchResult[0].ResultCount == 0 {
-		return nil, nil, nil // No results, but not an error
-	}
-
-	// Extract results
-	var contents []string
-	var scores []float32
-
-	for i := 0; i < searchResult[0].ResultCount; i++ {
-		score := searchResult[0].Scores[i]
-		if score < threshold {
-			continue // Skip results below threshold
-		}
-
-		// Extract content from result
-		// Milvus may include the primary key field even when we only request one field,
-		// so we need to find the contentField by checking field types and values.
-		// We iterate through fields to find the VarChar column that matches our contentField.
-		var content string
-		found := false
-
-		for _, field := range searchResult[0].Fields {
-			if contentCol, ok := field.(*entity.ColumnVarChar); ok {
-				// Check if this column has enough entries and get the value
-				if contentCol.Len() > i {
-					fieldValue, err := contentCol.ValueByIdx(i)
-					if err == nil && fieldValue != "" {
-						// If we requested only one field, assume it's the content field
-						// Otherwise, we'd need to match by field name (not available in Milvus API)
-						// For now, since we only request contentField, the first VarChar field
-						// that's not a 32-char hex string (likely an ID) should be our content
-						if len(fieldValue) != 32 || !isHexString(fieldValue) {
-							content = fieldValue
-							found = true
-							break
-						}
-					}
-				}
-			}
-		}
-
-		if found && content != "" {
-			contents = append(contents, content)
-			scores = append(scores, score)
-		} else {
-			// Fallback: if we couldn't find content, log a warning but continue
-			// This shouldn't happen if the collection is properly configured
-			logging.Warnf("SearchDocuments: could not extract content for result %d (score=%.3f)", i, score)
-		}
-	}
-
-	return contents, scores, nil
-}
-
-// GetStats provides current cache performance metrics
-func (c *MilvusCache) GetStats() CacheStats {
-	c.mu.RLock()
-	defer c.mu.RUnlock()
-
-	hits := atomic.LoadInt64(&c.hitCount)
-	misses := atomic.LoadInt64(&c.missCount)
-	total := hits + misses
-
-	var hitRatio float64
-	if total > 0 {
-		hitRatio = float64(hits) / float64(total)
-	}
-
-	// Retrieve collection statistics from Milvus
-	totalEntries := 0
-	if c.enabled && c.client != nil {
-		ctx := context.Background()
-		stats, err := c.client.GetCollectionStatistics(ctx, c.collectionName)
-		if err == nil {
-			// Extract entity count from statistics
-			if entityCount, ok := stats["row_count"]; ok {
-				_, _ = fmt.Sscanf(entityCount, "%d", &totalEntries)
-				logging.Debugf("MilvusCache.GetStats: collection '%s' contains %d entries",
-					c.collectionName, totalEntries)
-			}
-		} else {
-			logging.Debugf("MilvusCache.GetStats: failed to get collection stats: %v", err)
-		}
-	}
-
-	cacheStats := CacheStats{
-		TotalEntries: totalEntries,
-		HitCount:     hits,
-		MissCount:    misses,
-		HitRatio:     hitRatio,
-	}
-
-	if c.lastCleanupTime != nil {
-		cacheStats.LastCleanupTime = c.lastCleanupTime
-	}
-
-	return cacheStats
 }

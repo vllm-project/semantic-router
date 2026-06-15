@@ -101,8 +101,7 @@ Plugins work together to enhance responses:
 ```yaml
 plugins:
   - type: "semantic-cache"    # Speed optimization
-  - type: "jailbreak"         # Security layer
-  - type: "pii"               # Privacy protection
+  - type: "response_jailbreak" # Response screening
   - type: "system_prompt"     # Context injection
   - type: "hallucination"     # Quality assurance
 ```

@@ -10,89 +10,26 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 )
 
+const (
+	defaultEmbeddingDimension = 768
+	defaultEmbeddingPriority  = 0.5
+)
+
 // handleEmbeddings handles embedding generation requests
 func (s *ClassificationAPIServer) handleEmbeddings(w http.ResponseWriter, r *http.Request) {
-	// Parse request
-	var req EmbeddingRequest
-	if err := s.parseJSONRequest(r, &req); err != nil {
-		s.writeErrorResponse(w, http.StatusBadRequest, "INVALID_INPUT", err.Error())
+	req, ok := s.parseEmbeddingRequest(w, r)
+	if !ok {
 		return
 	}
 
-	// Validate input
-	if len(req.Texts) == 0 {
-		s.writeErrorResponse(w, http.StatusBadRequest, "INVALID_INPUT", "texts array cannot be empty")
+	results, totalProcessingTime, err := buildEmbeddingResults(req)
+	if err != nil {
+		s.writeErrorResponse(w, http.StatusInternalServerError, "EMBEDDING_GENERATION_FAILED",
+			fmt.Sprintf("failed to generate embedding: %v", err))
 		return
 	}
 
-	// Set defaults
-	if req.Model == "" {
-		req.Model = "auto"
-	}
-	if req.Dimension == 0 {
-		req.Dimension = 768 // Default to full dimension
-	}
-	if req.QualityPriority == 0 && req.LatencyPriority == 0 {
-		req.QualityPriority = 0.5
-		req.LatencyPriority = 0.5
-	}
-
-	// Validate dimension
-	if !isValidDimension(req.Dimension) {
-		s.writeErrorResponse(w, http.StatusBadRequest, "INVALID_DIMENSION",
-			fmt.Sprintf("dimension must be one of: 128, 256, 512, 768, 1024 (got %d)", req.Dimension))
-		return
-	}
-
-	// Generate embeddings for each text
-	results := make([]EmbeddingResult, 0, len(req.Texts))
-	var totalProcessingTime int64
-
-	for _, text := range req.Texts {
-		var output *candle_binding.EmbeddingOutput
-		var err error
-
-		// Choose between manual model selection or automatic routing
-		if req.Model == "auto" || req.Model == "" {
-			// Automatic routing based on quality/latency priorities
-			output, err = candle_binding.GetEmbeddingWithMetadata(
-				text,
-				req.QualityPriority,
-				req.LatencyPriority,
-				req.Dimension,
-			)
-		} else {
-			// Manual model selection ("qwen3" or "gemma")
-			output, err = candle_binding.GetEmbeddingWithModelType(
-				text,
-				req.Model,
-				req.Dimension,
-			)
-		}
-
-		if err != nil {
-			s.writeErrorResponse(w, http.StatusInternalServerError, "EMBEDDING_GENERATION_FAILED",
-				fmt.Sprintf("failed to generate embedding: %v", err))
-			return
-		}
-
-		// Use metadata directly from Rust layer
-		processingTime := int64(output.ProcessingTimeMs)
-
-		results = append(results, EmbeddingResult{
-			Text:             text,
-			Embedding:        output.Embedding,
-			Dimension:        len(output.Embedding),
-			ModelUsed:        output.ModelType,
-			ProcessingTimeMs: processingTime,
-		})
-
-		totalProcessingTime += processingTime
-	}
-
-	// Calculate statistics
 	avgProcessingTime := float64(totalProcessingTime) / float64(len(req.Texts))
-
 	response := EmbeddingResponse{
 		Embeddings:            results,
 		TotalCount:            len(results),
@@ -106,12 +43,93 @@ func (s *ClassificationAPIServer) handleEmbeddings(w http.ResponseWriter, r *htt
 	s.writeJSONResponse(w, http.StatusOK, response)
 }
 
+func (s *ClassificationAPIServer) parseEmbeddingRequest(w http.ResponseWriter, r *http.Request) (EmbeddingRequest, bool) {
+	var req EmbeddingRequest
+	if err := s.parseJSONRequest(r, &req); err != nil {
+		s.writeJSONRequestError(w, err)
+		return EmbeddingRequest{}, false
+	}
+
+	applyEmbeddingDefaults(&req)
+	if code, message, ok := validateEmbeddingRequest(req); !ok {
+		s.writeErrorResponse(w, http.StatusBadRequest, code, message)
+		return EmbeddingRequest{}, false
+	}
+
+	return req, true
+}
+
+func applyEmbeddingDefaults(req *EmbeddingRequest) {
+	if req.Model == "" {
+		req.Model = "auto"
+	}
+	if req.Dimension == 0 {
+		req.Dimension = defaultEmbeddingDimension
+	}
+	if req.QualityPriority == 0 && req.LatencyPriority == 0 {
+		req.QualityPriority = defaultEmbeddingPriority
+		req.LatencyPriority = defaultEmbeddingPriority
+	}
+}
+
+func validateEmbeddingRequest(req EmbeddingRequest) (string, string, bool) {
+	if len(req.Texts) == 0 {
+		return "INVALID_INPUT", "texts array cannot be empty", false
+	}
+	if !isValidDimension(req.Dimension) {
+		return "INVALID_DIMENSION", fmt.Sprintf("dimension must be one of: 64, 128, 256, 512, 768, 1024 (got %d)", req.Dimension), false
+	}
+	if req.TargetLayer != 0 && req.Model != "mmbert" {
+		return "INVALID_PARAMETER", "target_layer is only supported for model='mmbert'", false
+	}
+	if req.Model == "mmbert" && req.TargetLayer != 0 && !isValidMmBertLayer(req.TargetLayer) {
+		return "INVALID_LAYER", fmt.Sprintf("target_layer must be one of: 3, 6, 11, 22 (got %d)", req.TargetLayer), false
+	}
+	return "", "", true
+}
+
+func buildEmbeddingResults(req EmbeddingRequest) ([]EmbeddingResult, int64, error) {
+	results := make([]EmbeddingResult, 0, len(req.Texts))
+	var totalProcessingTime int64
+
+	for _, text := range req.Texts {
+		output, err := embeddingOutput(req, text)
+		if err != nil {
+			return nil, 0, err
+		}
+
+		processingTime := int64(output.ProcessingTimeMs)
+		results = append(results, EmbeddingResult{
+			Text:             text,
+			Embedding:        output.Embedding,
+			Dimension:        len(output.Embedding),
+			ModelUsed:        output.ModelType,
+			ProcessingTimeMs: processingTime,
+		})
+
+		totalProcessingTime += processingTime
+	}
+
+	return results, totalProcessingTime, nil
+}
+
+func embeddingOutput(req EmbeddingRequest, text string) (*candle_binding.EmbeddingOutput, error) {
+	switch req.Model {
+	case "auto", "":
+		return candle_binding.GetEmbeddingWithMetadata(text, req.QualityPriority, req.LatencyPriority, req.Dimension)
+	case "mmbert":
+		return candle_binding.GetEmbedding2DMatryoshka(text, req.Model, req.TargetLayer, req.Dimension)
+	default:
+		return candle_binding.GetEmbeddingWithModelType(text, req.Model, req.Dimension)
+	}
+}
+
 // handleSimilarity handles text similarity calculation requests
 func (s *ClassificationAPIServer) handleSimilarity(w http.ResponseWriter, r *http.Request) {
 	// Parse request
 	var req SimilarityRequest
 	if err := s.parseJSONRequest(r, &req); err != nil {
-		s.writeErrorResponse(w, http.StatusBadRequest, "INVALID_INPUT", err.Error())
+		s.writeJSONRequestError(w, err)
 		return
 	}
 
@@ -167,42 +185,8 @@ func (s *ClassificationAPIServer) handleSimilarity(w http.ResponseWriter, r *htt
 
 // handleBatchSimilarity handles batch similarity matching requests
 func (s *ClassificationAPIServer) handleBatchSimilarity(w http.ResponseWriter, r *http.Request) {
-	// Parse request
-	var req BatchSimilarityRequest
-	if err := s.parseJSONRequest(r, &req); err != nil {
-		s.writeErrorResponse(w, http.StatusBadRequest, "INVALID_INPUT", err.Error())
-		return
-	}
-
-	// Validate input
-	if req.Query == "" {
-		s.writeErrorResponse(w, http.StatusBadRequest, "INVALID_INPUT", "query must be provided")
-		return
-	}
-	if len(req.Candidates) == 0 {
-		s.writeErrorResponse(w, http.StatusBadRequest, "INVALID_INPUT", "candidates array cannot be empty")
-		return
-	}
-
-	// Set defaults
-	if req.Model == "" {
-		req.Model = "auto"
-	}
-	if req.Dimension == 0 {
-		req.Dimension = 768 // Default to full dimension
-	}
-	if req.TopK == 0 {
-		req.TopK = len(req.Candidates) // Default to all candidates
-	}
-	if req.Model == "auto" && req.QualityPriority == 0 && req.LatencyPriority == 0 {
-		req.QualityPriority = 0.5
-		req.LatencyPriority = 0.5
-	}
-
-	// Validate dimension
-	if !isValidDimension(req.Dimension) {
-		s.writeErrorResponse(w, http.StatusBadRequest, "INVALID_DIMENSION",
-			fmt.Sprintf("dimension must be one of: 128, 256, 512, 768, 1024 (got %d)", req.Dimension))
+	req, ok := s.parseBatchSimilarityRequest(w, r)
+	if !ok {
 		return
 	}
 
@@ -220,14 +204,10 @@ func (s *ClassificationAPIServer) handleBatchSimilarity(w http.ResponseWriter, r
 		return
 	}
 
-	// Build response with matched text included
-	matches := make([]BatchSimilarityMatch, len(result.Matches))
-	for i, match := range result.Matches {
-		matches[i] = BatchSimilarityMatch{
-			Index:      match.Index,
-			Similarity: match.Similarity,
-			Text:       req.Candidates[match.Index],
-		}
+	matches, err := buildBatchSimilarityMatches(result, req.Candidates)
+	if err != nil {
+		s.writeErrorResponse(w, http.StatusInternalServerError, "BATCH_SIMILARITY_INVALID_RESULT", err.Error())
+		return
 	}
 
 	response := BatchSimilarityResponse{
@@ -243,8 +223,88 @@ func (s *ClassificationAPIServer) handleBatchSimilarity(w http.ResponseWriter, r
 	s.writeJSONResponse(w, http.StatusOK, response)
 }
 
+func (s *ClassificationAPIServer) parseBatchSimilarityRequest(w http.ResponseWriter, r *http.Request) (BatchSimilarityRequest, bool) {
+	var req BatchSimilarityRequest
+	if err := s.parseJSONRequest(r, &req); err != nil {
+		s.writeJSONRequestError(w, err)
+		return BatchSimilarityRequest{}, false
+	}
+
+	applyBatchSimilarityDefaults(&req)
+	if code, message, ok := validateBatchSimilarityRequest(req); !ok {
+		s.writeErrorResponse(w, http.StatusBadRequest, code, message)
+		return BatchSimilarityRequest{}, false
+	}
+	normalizeBatchSimilarityLimit(&req)
+
+	return req, true
+}
+
+func applyBatchSimilarityDefaults(req *BatchSimilarityRequest) {
+	if req.Model == "" {
+		req.Model = "auto"
+	}
+	if req.Dimension == 0 {
+		req.Dimension = defaultEmbeddingDimension
+	}
+	if req.TopK == 0 {
+		req.TopK = len(req.Candidates)
+	}
+	if req.Model == "auto" && req.QualityPriority == 0 && req.LatencyPriority == 0 {
+		req.QualityPriority = defaultEmbeddingPriority
+		req.LatencyPriority = defaultEmbeddingPriority
+	}
+}
+
+func validateBatchSimilarityRequest(req BatchSimilarityRequest) (string, string, bool) {
+	if req.Query == "" {
+		return "INVALID_INPUT", "query must be provided", false
+	}
+	if len(req.Candidates) == 0 {
+		return "INVALID_INPUT", "candidates array cannot be empty", false
+	}
+	if req.TopK < 0 {
+		return "INVALID_INPUT", "top_k cannot be negative", false
+	}
+	if !isValidDimension(req.Dimension) {
+		return "INVALID_DIMENSION", fmt.Sprintf("dimension must be one of: 128, 256, 512, 768, 1024 (got %d)", req.Dimension), false
+	}
+	return "", "", true
+}
+
+func normalizeBatchSimilarityLimit(req *BatchSimilarityRequest) {
+	if req.TopK > len(req.Candidates) {
+		req.TopK = len(req.Candidates)
+	}
+}
+
+func buildBatchSimilarityMatches(result *candle_binding.BatchSimilarityOutput, candidates []string) ([]BatchSimilarityMatch, error) {
+	if result == nil {
+		return nil, fmt.Errorf("batch similarity result is nil")
+	}
+
+	matches := make([]BatchSimilarityMatch, len(result.Matches))
+	for i, match := range result.Matches {
+		if match.Index < 0 || match.Index >= len(candidates) {
+			return nil, fmt.Errorf("match index %d is out of range for %d candidates", match.Index, len(candidates))
+		}
+		matches[i] = BatchSimilarityMatch{
+			Index:      match.Index,
+			Similarity: match.Similarity,
+			Text:       candidates[match.Index],
+		}
+	}
+	return matches, nil
+}
+
 // isValidDimension checks if the provided dimension is valid
 func isValidDimension(dim int) bool {
-	validDimensions := map[int]bool{128: true, 256: true, 512: true, 768: true, 1024: true}
+	validDimensions := map[int]bool{64: true, 128: true, 256: true, 512: true, 768: true, 1024: true}
 	return validDimensions[dim]
+}
+
+// isValidMmBertLayer checks if the provided layer is valid for mmBERT early exit
+func isValidMmBertLayer(layer int) bool {
+	validLayers := map[int]bool{3: true, 6: true, 11: true, 22: true}
+	return validLayers[layer]
 }

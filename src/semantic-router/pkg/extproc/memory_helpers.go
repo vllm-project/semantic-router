@@ -1,0 +1,322 @@
+package extproc
+
+import (
+	"crypto/sha256"
+	"encoding/hex"
+	"encoding/json"
+	"fmt"
+	"strings"
+
+	"github.com/openai/openai-go"
+	"github.com/tidwall/gjson"
+
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/headers"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/memory"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/responseapi"
+)
+
+// extractAutoStore checks if auto_store is enabled from per-decision plugin config.
+// Response API request overrides are resolved separately so request-level
+// false values can still disable router-level fallback.
+// Supported for both Response API and Chat Completions.
+func extractAutoStore(ctx *RequestContext) bool {
+	if ctx.VSRSelectedDecision != nil {
+		memoryPluginConfig := ctx.VSRSelectedDecision.GetMemoryConfig()
+		if memoryPluginConfig != nil && memoryPluginConfig.AutoStore != nil {
+			logging.Infof("extractAutoStore: Using per-decision plugin config, AutoStore=%v (decision: %s)",
+				*memoryPluginConfig.AutoStore, ctx.VSRSelectedDecisionName)
+			return *memoryPluginConfig.AutoStore
+		}
+	}
+
+	// Default: auto_store disabled unless explicitly enabled via plugin config
+	return false
+}
+
+// extractRequestAutoStore is defined in dev/prod build-tagged files.
+
+// extractUserID is defined in user_id_dev.go (with metadata fallback) and
+// user_id_prod.go (auth header only) using build tags.
+
+// extractMemoryInfo extracts sessionID, userID, and history from the request context.
+// Supports both Response API and Chat Completions API.
+//
+// Returns an error if userID is not available, because memory would be orphaned
+// (unretrievable) without a valid userID. Memory retrieval filters by userID first,
+// so memories stored without userID cannot be retrieved later.
+//
+// userID extraction priority:
+//  1. Auth header (x-authz-user-id) injected by external auth service (Authorino, Envoy Gateway JWT, etc.)
+//  2. metadata["user_id"] in Response API request (fallback for development/testing)
+//  3. Chat Completions "user" field (fallback for development/testing)
+func extractMemoryInfo(ctx *RequestContext) (sessionID string, userID string, history []openai.ChatCompletionMessageParamUnion, err error) {
+	// Determine API type
+	isResponseAPI := ctx.ResponseAPICtx != nil && ctx.ResponseAPICtx.IsResponseAPIRequest
+	isChatCompletions := len(ctx.ChatCompletionMessages) > 0
+
+	if !isResponseAPI && !isChatCompletions {
+		return "", "", nil, fmt.Errorf("no conversation history available for memory extraction. " +
+			"Use Response API (/v1/responses) or Chat Completions (/v1/chat/completions) with messages")
+	}
+
+	// Extract userID with priority: auth header > metadata/user field fallback
+	userID = extractUserID(ctx)
+
+	// Require userID - without it, memory would be orphaned (unretrievable)
+	if userID == "" {
+		// Extract history for error context
+		if isResponseAPI && ctx.ResponseAPICtx.ConversationHistory != nil {
+			history = convertStoredResponsesToMessages(ctx.ResponseAPICtx.ConversationHistory)
+		} else if isChatCompletions {
+			history = convertChatCompletionMessages(ctx.ChatCompletionMessages)
+		}
+		return "", "", history, fmt.Errorf("userID is required for memory extraction but not provided. " +
+			"Please set metadata[\"user_id\"] (Response API), \"user\" field (Chat Completions), " +
+			"or configure auth_user_id_header in memory config")
+	}
+
+	// Extract sessionID and history based on API type
+	if isResponseAPI {
+		sessionID = ctx.ResponseAPICtx.ConversationID
+		if sessionID == "" {
+			return "", "", nil, fmt.Errorf("ConversationID not set in Response API context")
+		}
+		if ctx.ResponseAPICtx.ConversationHistory != nil {
+			history = convertStoredResponsesToMessages(ctx.ResponseAPICtx.ConversationHistory)
+		}
+	} else if isChatCompletions {
+		// For Chat Completions, derive sessionID from conversation hash
+		sessionID = deriveSessionIDFromMessages(ctx.ChatCompletionMessages, userID)
+		history = convertChatCompletionMessages(ctx.ChatCompletionMessages)
+	}
+
+	return sessionID, userID, history, nil
+}
+
+// deriveSessionIDFromMessages creates a session ID from Chat Completions messages.
+// Uses a hash of the first few messages + userID to group related conversations.
+func deriveSessionIDFromMessages(messages []ChatCompletionMessage, userID string) string {
+	// Use first message content + userID to create a stable session ID
+	// This allows tracking turns within the same "conversation topic"
+	var builder strings.Builder
+	builder.WriteString(userID)
+	builder.WriteString(":")
+
+	// Include first user message to identify the conversation topic
+	for _, msg := range messages {
+		if msg.Role == "user" {
+			// Truncate to first 100 chars to keep hash stable for long messages
+			content := msg.Content
+			if len(content) > 100 {
+				content = content[:100]
+			}
+			builder.WriteString(content)
+			break
+		}
+	}
+
+	// Create SHA256 hash and take first 16 chars
+	hash := sha256.Sum256([]byte(builder.String()))
+	return "cc-" + hex.EncodeToString(hash[:])[:16]
+}
+
+const sessionMessageFingerprintMaxRunes = 100
+
+// deriveSessionIDFromMessagesStructure builds a session ID from the full message
+// list (roles + truncated content). Used when no stable user ID is available.
+// Prefix "cc-full-" distinguishes IDs from deriveSessionIDFromMessages (cc-).
+func deriveSessionIDFromMessagesStructure(messages []ChatCompletionMessage) string {
+	if len(messages) == 0 {
+		return ""
+	}
+	var b strings.Builder
+	for i := range messages {
+		if i > 0 {
+			b.WriteByte('|')
+		}
+		b.WriteString(messages[i].Role)
+		b.WriteByte(':')
+		content := messages[i].Content
+		if len(content) > sessionMessageFingerprintMaxRunes {
+			content = content[:sessionMessageFingerprintMaxRunes]
+		}
+		b.WriteString(content)
+	}
+	hash := sha256.Sum256([]byte(b.String()))
+	return "cc-full-" + hex.EncodeToString(hash[:])[:16]
+}
+
+// deriveSessionIDFromRequestID returns a deterministic pseudo-session from
+// RequestID (or x-request-id header) when no message-based session exists.
+func deriveSessionIDFromRequestID(ctx *RequestContext) string {
+	if ctx == nil {
+		return ""
+	}
+	rid := strings.TrimSpace(ctx.RequestID)
+	if rid == "" {
+		rid = strings.TrimSpace(headerValueCI(ctx, headers.RequestID))
+	}
+	if rid == "" {
+		return ""
+	}
+	hash := sha256.Sum256([]byte("rid:" + rid))
+	return "rid-" + hex.EncodeToString(hash[:])[:16]
+}
+
+// convertChatCompletionMessages converts ChatCompletionMessage[] to SDK message unions.
+func convertChatCompletionMessages(messages []ChatCompletionMessage) []openai.ChatCompletionMessageParamUnion {
+	result := make([]openai.ChatCompletionMessageParamUnion, 0, len(messages))
+	for _, msg := range messages {
+		result = append(result, memory.SDKMessageForRole(msg.Role, msg.Content))
+	}
+	return result
+}
+
+// convertStoredResponsesToMessages converts StoredResponse[] to SDK message unions.
+// It extracts user input and assistant output from each stored response.
+func convertStoredResponsesToMessages(storedResponses []*responseapi.StoredResponse) []openai.ChatCompletionMessageParamUnion {
+	var messages []openai.ChatCompletionMessageParamUnion
+	for _, stored := range storedResponses {
+		messages = appendInputMessages(messages, stored.Input)
+		messages = appendOutputMessages(messages, stored.OutputText, stored.Output)
+	}
+	return messages
+}
+
+// appendInputMessages appends user-side messages extracted from Response API InputItems.
+func appendInputMessages(messages []openai.ChatCompletionMessageParamUnion, items []responseapi.InputItem) []openai.ChatCompletionMessageParamUnion {
+	for _, item := range items {
+		if item.Type != "message" {
+			continue
+		}
+		content := extractContentFromInputItem(item)
+		if content == "" {
+			continue
+		}
+		role := item.Role
+		if role == "" {
+			role = "user"
+		}
+		messages = append(messages, memory.SDKMessageForRole(role, content))
+	}
+	return messages
+}
+
+// appendOutputMessages appends assistant-side messages. It prefers OutputText
+// when available and falls back to extracting from individual OutputItems.
+func appendOutputMessages(messages []openai.ChatCompletionMessageParamUnion, outputText string, items []responseapi.OutputItem) []openai.ChatCompletionMessageParamUnion {
+	if outputText != "" {
+		return append(messages, memory.SDKMessageForRole("assistant", outputText))
+	}
+	for _, item := range items {
+		if item.Type != "message" {
+			continue
+		}
+		content := extractContentFromOutputItem(item)
+		if content == "" {
+			continue
+		}
+		role := item.Role
+		if role == "" {
+			role = "assistant"
+		}
+		messages = append(messages, memory.SDKMessageForRole(role, content))
+	}
+	return messages
+}
+
+// extractContentFromInputItem extracts text content from an InputItem.
+func extractContentFromInputItem(item responseapi.InputItem) string {
+	if len(item.Content) == 0 {
+		return ""
+	}
+
+	// Try parsing as string first
+	var contentStr string
+	if err := json.Unmarshal(item.Content, &contentStr); err == nil {
+		return contentStr
+	}
+
+	// Try parsing as array of ContentPart
+	var parts []responseapi.ContentPart
+	if err := json.Unmarshal(item.Content, &parts); err == nil {
+		return extractTextFromContentParts(parts)
+	}
+
+	return ""
+}
+
+// extractContentFromOutputItem extracts text content from an OutputItem.
+func extractContentFromOutputItem(item responseapi.OutputItem) string {
+	if len(item.Content) == 0 {
+		return ""
+	}
+
+	return extractTextFromContentParts(item.Content)
+}
+
+// extractTextFromContentParts extracts text from ContentPart array.
+func extractTextFromContentParts(parts []responseapi.ContentPart) string {
+	var text strings.Builder
+	for _, part := range parts {
+		if part.Type == "output_text" && part.Text != "" {
+			text.WriteString(part.Text)
+		}
+	}
+	return text.String()
+}
+
+// extractCurrentUserMessage extracts the current user message from the request context.
+// Supports both Response API and Chat Completions.
+func extractCurrentUserMessage(ctx *RequestContext) string {
+	// Response API: extract from OriginalRequest.Input
+	if ctx.ResponseAPICtx != nil && ctx.ResponseAPICtx.OriginalRequest != nil {
+		input := ctx.ResponseAPICtx.OriginalRequest.Input
+		if len(input) > 0 {
+			// Try parsing as a simple string first
+			var inputStr string
+			if err := json.Unmarshal(input, &inputStr); err == nil {
+				return inputStr
+			}
+			// Fallback: return raw JSON as string
+			return string(input)
+		}
+	}
+
+	// Chat Completions: extract last user message
+	if len(ctx.ChatCompletionMessages) > 0 {
+		// Find the last user message (current turn)
+		for i := len(ctx.ChatCompletionMessages) - 1; i >= 0; i-- {
+			if ctx.ChatCompletionMessages[i].Role == "user" {
+				return ctx.ChatCompletionMessages[i].Content
+			}
+		}
+	}
+
+	return ""
+}
+
+// extractAssistantResponseText extracts the assistant's response text from the
+// LLM response body using openai-go typed parsing. vLLM separates reasoning
+// into the reasoning_content field, so ChatCompletion.Choices[0].Message.Content
+// is already clean. StripThinkTags is applied as a safety net for backends that
+// may still embed <think> blocks in the content field.
+func extractAssistantResponseText(responseBody []byte) string {
+	// Content is clean when vLLM separates reasoning; safety-net strip for others.
+	return memory.StripThinkTags(extractAssistantContentFromResponse(responseBody))
+}
+
+// extractAssistantContentFromResponse extracts the assistant's content from the response
+func extractAssistantContentFromResponse(responseBody []byte) string {
+	if !gjson.ValidBytes(responseBody) {
+		logging.Debugf("Failed to parse response for hallucination detection: invalid JSON")
+		return ""
+	}
+
+	content := gjson.GetBytes(responseBody, "choices.0.message.content")
+	if content.Type != gjson.String {
+		return ""
+	}
+	return content.String()
+}

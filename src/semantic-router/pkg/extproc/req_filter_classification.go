@@ -5,11 +5,11 @@ import (
 	"strings"
 	"time"
 
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/classification"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
-	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/metrics"
-	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/tracing"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/selection"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/sessiontelemetry"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/utils/entropy"
 )
 
@@ -18,322 +18,383 @@ import (
 // This is the new approach that uses Decision-based routing with AND/OR rule combinations
 // Decision evaluation is ALWAYS performed when decisions are configured (for plugin features like
 // hallucination detection), but model selection only happens for auto models.
-func (r *OpenAIRouter) performDecisionEvaluation(originalModel string, userContent string, nonUserMessages []string, ctx *RequestContext) (string, float64, entropy.ReasoningDecision, string) {
+func (r *OpenAIRouter) performDecisionEvaluation(originalModel string, history signalConversationHistory, ctx *RequestContext) (string, float64, entropy.ReasoningDecision, string, error) {
 	var decisionName string
 	var evaluationConfidence float64
 	var reasoningDecision entropy.ReasoningDecision
 	var selectedModel string
 
 	// Check if there's content to evaluate
-	if len(nonUserMessages) == 0 && userContent == "" {
-		return "", 0.0, entropy.ReasoningDecision{}, ""
+	if len(history.nonUserMessages) == 0 && history.currentUserMessage == "" {
+		return "", 0.0, entropy.ReasoningDecision{}, "", nil
 	}
 
 	// Check if decisions are configured
 	if len(r.Config.Decisions) == 0 {
 		if r.Config.IsAutoModelName(originalModel) {
 			logging.Warnf("No decisions configured, using default model")
-			return "", 0.0, entropy.ReasoningDecision{}, r.Config.DefaultModel
+			return "", 0.0, entropy.ReasoningDecision{}, r.Config.DefaultModel, nil
 		}
-		return "", 0.0, entropy.ReasoningDecision{}, ""
+		return "", 0.0, entropy.ReasoningDecision{}, "", nil
 	}
 
-	// Determine text to use for evaluation
-	evaluationText := userContent
-	if evaluationText == "" && len(nonUserMessages) > 0 {
-		evaluationText = strings.Join(nonUserMessages, " ")
+	signalInput := r.prepareSignalEvaluationInput(history)
+	ctx.VSRConversationFacts = signalInput.conversationFacts
+	if signalInput.evaluationText == "" {
+		return "", 0.0, entropy.ReasoningDecision{}, "", nil
 	}
 
-	if evaluationText == "" {
-		return "", 0.0, entropy.ReasoningDecision{}, ""
+	signals, authzErr := r.evaluateSignalsForDecision(originalModel, signalInput, history.nonUserMessages, ctx)
+	if authzErr != nil {
+		return "", 0, entropy.ReasoningDecision{}, "", authzErr
 	}
 
-	// For context token counting, we need to include ALL messages (user + non-user)
-	// This ensures multi-turn conversations are properly counted
-	var allMessagesText string
-	if userContent != "" && len(nonUserMessages) > 0 {
-		// Combine user content with all non-user messages for full context
-		allMessages := make([]string, 0, len(nonUserMessages)+1)
-		allMessages = append(allMessages, nonUserMessages...)
-		allMessages = append(allMessages, userContent)
-		allMessagesText = strings.Join(allMessages, " ")
-	} else if userContent != "" {
-		allMessagesText = userContent
-	} else {
-		allMessagesText = strings.Join(nonUserMessages, " ")
+	result, defaultModel := r.runDecisionEngine(originalModel, ctx, signals)
+	if result == nil {
+		return "", 0.0, entropy.ReasoningDecision{}, defaultModel, nil
 	}
 
-	// Start signal evaluation span (Layer 1)
-	signalStart := time.Now()
-	signalCtx, signalSpan := tracing.StartSpan(ctx.TraceContext, tracing.SpanSignalEvaluation)
-
-	// Evaluate all signals first to get detailed signal information
-	// Use evaluationText for most signals, but pass allMessagesText for context counting
-	signals := r.Classifier.EvaluateAllSignalsWithContext(evaluationText, allMessagesText)
-
-	signalLatency := time.Since(signalStart).Milliseconds()
-
-	// Store signal results in context for response headers
-	ctx.VSRMatchedKeywords = signals.MatchedKeywordRules
-	ctx.VSRMatchedEmbeddings = signals.MatchedEmbeddingRules
-	ctx.VSRMatchedDomains = signals.MatchedDomainRules
-	ctx.VSRMatchedFactCheck = signals.MatchedFactCheckRules
-	ctx.VSRMatchedUserFeedback = signals.MatchedUserFeedbackRules
-	ctx.VSRMatchedPreference = signals.MatchedPreferenceRules
-	ctx.VSRMatchedLanguage = signals.MatchedLanguageRules
-	ctx.VSRMatchedLatency = signals.MatchedLatencyRules
-	ctx.VSRMatchedContext = signals.MatchedContextRules
-	ctx.VSRContextTokenCount = signals.TokenCount
-	ctx.VSRMatchedComplexity = signals.MatchedComplexityRules
-
-	// Set fact-check context fields from signal results
-	// This replaces the old performFactCheckClassification call to avoid duplicate computation
-	r.setFactCheckFromSignals(ctx, signals.MatchedFactCheckRules)
-
-	// Log signal evaluation results
-	logging.Infof("Signal evaluation results: keyword=%v, embedding=%v, domain=%v, fact_check=%v, user_feedback=%v, preference=%v, language=%v, latency=%v",
-		signals.MatchedKeywordRules, signals.MatchedEmbeddingRules, signals.MatchedDomainRules,
-		signals.MatchedFactCheckRules, signals.MatchedUserFeedbackRules, signals.MatchedPreferenceRules, signals.MatchedLanguageRules, signals.MatchedLatencyRules)
-
-	// Set signal span attributes
-	allMatchedRules := []string{}
-	allMatchedRules = append(allMatchedRules, signals.MatchedKeywordRules...)
-	allMatchedRules = append(allMatchedRules, signals.MatchedEmbeddingRules...)
-	allMatchedRules = append(allMatchedRules, signals.MatchedDomainRules...)
-	allMatchedRules = append(allMatchedRules, signals.MatchedFactCheckRules...)
-	allMatchedRules = append(allMatchedRules, signals.MatchedUserFeedbackRules...)
-	allMatchedRules = append(allMatchedRules, signals.MatchedPreferenceRules...)
-	allMatchedRules = append(allMatchedRules, signals.MatchedLanguageRules...)
-	allMatchedRules = append(allMatchedRules, signals.MatchedLatencyRules...)
-
-	// End signal evaluation span
-	tracing.EndSignalSpan(signalSpan, allMatchedRules, 1.0, signalLatency)
-	ctx.TraceContext = signalCtx
-
-	// Process user feedback signals to automatically update Elo ratings
-	// This implements "automatic scoring by signals" as requested
-	r.processUserFeedbackForElo(signals.MatchedUserFeedbackRules, originalModel, ctx)
-
-	// Perform decision evaluation using pre-computed signals
-	// This is ALWAYS done when decisions are configured, regardless of model type,
-	// because plugins (e.g., hallucination detection) depend on the matched decision
-
-	// Start decision evaluation span (Layer 2)
-	decisionStart := time.Now()
-	decisionCtx, decisionSpan := tracing.StartDecisionSpan(ctx.TraceContext, "decision_evaluation")
-
-	result, err := r.Classifier.EvaluateDecisionWithEngine(signals)
-	decisionLatency := time.Since(decisionStart).Seconds()
-
-	// Record decision evaluation metrics
-	metrics.RecordDecisionEvaluation(decisionLatency)
-
-	if err != nil {
-		logging.Errorf("Decision evaluation error: %v", err)
-		// End decision span with error
-		tracing.EndDecisionSpan(decisionSpan, 0.0, []string{}, r.Config.Strategy)
-		ctx.TraceContext = decisionCtx
-		if r.Config.IsAutoModelName(originalModel) {
-			return "", 0.0, entropy.ReasoningDecision{}, r.Config.DefaultModel
-		}
-		return "", 0.0, entropy.ReasoningDecision{}, ""
-	}
-
-	if result == nil || result.Decision == nil {
-		// End decision span with no match
-		tracing.EndDecisionSpan(decisionSpan, 0.0, []string{}, r.Config.Strategy)
-		ctx.TraceContext = decisionCtx
-		if r.Config.IsAutoModelName(originalModel) {
-			return "", 0.0, entropy.ReasoningDecision{}, r.Config.DefaultModel
-		}
-		return "", 0.0, entropy.ReasoningDecision{}, ""
-	}
-
-	// Record decision match with confidence
-	metrics.RecordDecisionMatch(result.Decision.Name, result.Confidence)
-
-	// End decision span with success
-	tracing.EndDecisionSpan(decisionSpan, result.Confidence, result.MatchedRules, r.Config.Strategy)
-	ctx.TraceContext = decisionCtx
-
-	// Store the selected decision in context for later use (e.g., plugins, header mutations)
-	// This is critical for hallucination detection and other per-decision plugins
-	ctx.VSRSelectedDecision = result.Decision
-
-	// Set router replay config from system-level configuration if enabled
-	if r.Config.RouterReplay.Enabled {
-		cfgCopy := r.Config.RouterReplay
-		ctx.RouterReplayConfig = &cfgCopy
-	}
-
-	// Extract domain category from matched rules (for VSRSelectedCategory header)
-	// MatchedRules contains rule names like "domain:math", "keyword:thinking", etc.
-	// We extract the first domain rule as the category
-	categoryName := ""
-	for _, rule := range result.MatchedRules {
-		if strings.HasPrefix(rule, "domain:") {
-			categoryName = strings.TrimPrefix(rule, "domain:")
-			break
-		}
-	}
-	// Store category in context for response headers
-	ctx.VSRSelectedCategory = categoryName
-	ctx.VSRSelectedDecisionConfidence = evaluationConfidence
-
-	// Note: VSRMatchedKeywords is already set from signals.MatchedKeywordRules (line 61)
-	// We should NOT overwrite it with result.MatchedKeywords which contains actual keywords
-	// The header should show rule names, not the actual matched keywords
-
-	decisionName = result.Decision.Name
-	evaluationConfidence = result.Confidence
-	logging.Infof("Decision Evaluation Result: decision=%s, category=%s, confidence=%.3f, matched_rules=%v",
-		decisionName, categoryName, evaluationConfidence, result.MatchedRules)
-
-	// Model selection only happens for auto models
-	// When a specific model is requested, we keep it but still apply decision plugins
-	if !r.Config.IsAutoModelName(originalModel) {
-		logging.Infof("Model %s explicitly specified, keeping original model (decision %s plugins will be applied)",
-			originalModel, decisionName)
-		return decisionName, evaluationConfidence, reasoningDecision, ""
-	}
-
-	// Select best model from the decision's ModelRefs using configured selection algorithm
-	if len(result.Decision.ModelRefs) > 0 {
-		// Use advanced model selection (Elo, RouterDC, AutoMix, Hybrid, or Static)
-		// Pass decision's algorithm config for per-decision algorithm override
-		selectedModelRef, usedMethod := r.selectModelFromCandidates(result.Decision.ModelRefs, decisionName, userContent, result.Decision.Algorithm)
-
-		// Use LoRA name if specified, otherwise use the base model name
-		selectedModel = selectedModelRef.Model
-		if selectedModelRef.LoRAName != "" {
-			selectedModel = selectedModelRef.LoRAName
-			logging.Infof("Selected model from decision %s: %s (LoRA adapter for base model %s) using %s selection",
-				decisionName, selectedModel, selectedModelRef.Model, usedMethod)
-		} else {
-			logging.Infof("Selected model from decision %s: %s using %s selection",
-				decisionName, selectedModel, usedMethod)
-		}
-		ctx.VSRSelectedModel = selectedModel
-
-		// Determine reasoning mode from the selected model's configuration
-		if selectedModelRef.UseReasoning != nil {
-			useReasoning := *selectedModelRef.UseReasoning
-			reasoningDecision = entropy.ReasoningDecision{
-				UseReasoning:     useReasoning,
-				Confidence:       evaluationConfidence,
-				DecisionReason:   "decision_engine_evaluation",
-				FallbackStrategy: "decision_based_routing",
-				TopCategories: []entropy.CategoryProbability{
-					{
-						Category:    decisionName,
-						Probability: float32(evaluationConfidence),
-					},
-				},
-			}
-			if useReasoning {
-				ctx.VSRReasoningMode = "on"
-			} else {
-				ctx.VSRReasoningMode = "off"
-			}
-			// Note: ReasoningEffort is handled separately in req_filter_reason.go
-		}
-	} else {
-		// No model refs in decision, use default model
-		selectedModel = r.Config.DefaultModel
-		logging.Infof("No model refs in decision %s, using default model: %s", decisionName, selectedModel)
-	}
-
-	return decisionName, evaluationConfidence, reasoningDecision, selectedModel
+	decisionName, evaluationConfidence, reasoningDecision, selectedModel = r.finalizeDecisionEvaluation(
+		result,
+		originalModel,
+		history.currentUserMessage,
+		ctx,
+	)
+	return decisionName, evaluationConfidence, reasoningDecision, selectedModel, nil
 }
 
 // selectModelFromCandidates uses the configured selection algorithm to choose the best model
-// from the decision's candidate models. Falls back to first model if selection fails.
+// from the decision's candidate models. If selection cannot produce a valid
+// candidate, the first valid configured candidate is used as the default.
 // The algorithm parameter allows per-decision algorithm override (aligned with looper pattern).
+// The selCtx parameter carries the pre-built SelectionContext, including request-time
+// inputs such as query text, candidate models, and cache-affinity signals.
 // Returns the selected model and the method name used for logging.
-func (r *OpenAIRouter) selectModelFromCandidates(modelRefs []config.ModelRef, decisionName string, query string, algorithm *config.AlgorithmConfig) (*config.ModelRef, string) {
-	if len(modelRefs) == 0 {
+func (r *OpenAIRouter) selectModelFromCandidates(selCtx *selection.SelectionContext, algorithm *config.AlgorithmConfig, ctx *RequestContext) (*config.ModelRef, string) {
+	defaultCandidateModelRef := firstValidCandidateModelRef(selCtx)
+	if defaultCandidateModelRef == nil {
 		return nil, ""
+	}
+	if err := selection.ValidateSelectionContext(selCtx); err != nil {
+		logging.Warnf("[ModelSelection] Invalid selection context: %v, using default candidate", err)
+		recordAgenticSessionDecision(selCtx, nil, defaultCandidateModelRef, ctx)
+		return defaultCandidateModelRef, ""
 	}
 
 	// If only one model, no need for selection algorithm
-	if len(modelRefs) == 1 {
-		return &modelRefs[0], "single"
+	if len(selCtx.CandidateModels) == 1 {
+		recordAgenticSessionDecision(selCtx, nil, defaultCandidateModelRef, ctx)
+		return defaultCandidateModelRef, "single"
 	}
 
 	// Determine selection method: per-decision algorithm takes precedence over global config
 	method := r.getSelectionMethod(algorithm)
 
 	// Get selector from registry
-	var selector selection.Selector
-	if r.ModelSelector != nil {
-		selector, _ = r.ModelSelector.Get(method)
-	}
+	selector := r.selectorForDecisionMethod(method, algorithm)
 
-	// Fallback to first model if no selector available
+	// Use the configured default candidate if no selector is available.
 	if selector == nil {
-		logging.Warnf("[ModelSelection] No selector available for method %s, using first model", method)
-		return &modelRefs[0], string(method)
-	}
-
-	// Build selection context with cost/quality weights
-	costWeight, qualityWeight := r.getSelectionWeights(algorithm)
-
-	selCtx := &selection.SelectionContext{
-		Query:           query,
-		DecisionName:    decisionName,
-		CandidateModels: modelRefs,
-		CostWeight:      costWeight,
-		QualityWeight:   qualityWeight,
+		logging.Warnf("[ModelSelection] No selector available for method %s, using default candidate", method)
+		recordAgenticSessionDecision(selCtx, nil, defaultCandidateModelRef, ctx)
+		return defaultCandidateModelRef, string(method)
 	}
 
 	// Perform selection
 	result, err := selector.Select(context.Background(), selCtx)
 	if err != nil {
-		logging.Warnf("[ModelSelection] Selection failed: %v, using first model", err)
-		return &modelRefs[0], string(method)
+		logging.Warnf("[ModelSelection] Selection failed: %v, using default candidate", err)
+		recordAgenticSessionDecision(selCtx, nil, defaultCandidateModelRef, ctx)
+		return defaultCandidateModelRef, string(method)
+	}
+	if err := selection.ValidateSelectionResult(selCtx, result); err != nil {
+		logging.Warnf("[ModelSelection] Invalid selection result: %v, using default candidate", err)
+		recordAgenticSessionDecision(selCtx, result, defaultCandidateModelRef, ctx)
+		return defaultCandidateModelRef, string(method)
 	}
 
-	// Find the selected model in the candidates
-	for i := range modelRefs {
-		if modelRefs[i].Model == result.SelectedModel ||
-			modelRefs[i].LoRAName == result.SelectedModel {
-			logging.Infof("[ModelSelection] Selected %s (method=%s, score=%.4f, confidence=%.2f): %s",
-				result.SelectedModel, method, result.Score, result.Confidence, result.Reasoning)
-			// Record selection metrics
-			selection.RecordSelection(string(method), decisionName, result.SelectedModel, result.Score)
-			return &modelRefs[i], string(method)
+	selectedModelRef := selectedModelRefFromResult(selCtx, result)
+	if selectedModelRef == nil {
+		logging.Warnf("[ModelSelection] Selected model %s not found in candidates, using default candidate", result.SelectedModel)
+		recordAgenticSessionDecision(selCtx, result, defaultCandidateModelRef, ctx)
+		return defaultCandidateModelRef, string(method)
+	}
+	if result.SessionPolicy != nil && ctx != nil {
+		ctx.VSRSessionPolicy = result.SessionPolicy.ToMap()
+	}
+	selectedModelRef, gateApplied := r.applyPostSelectionGate(selCtx, result, selectedModelRef, ctx, method)
+	logSelectionResult(method, result, selectedModelRef, gateApplied)
+	selection.RecordSelection(string(method), selCtx.DecisionName, selectedModelRef.Model, result.Tier, result.Score)
+	recordAgenticSessionDecision(selCtx, result, selectedModelRef, ctx)
+	return selectedModelRef, string(method)
+}
+
+func (r *OpenAIRouter) selectorForDecisionMethod(method selection.SelectionMethod, algorithm *config.AlgorithmConfig) selection.Selector {
+	if method == selection.MethodSessionAware && algorithm != nil && algorithm.SessionAware != nil {
+		return r.newDecisionSessionAwareSelector(algorithm.SessionAware)
+	}
+	if r.ModelSelector == nil {
+		return nil
+	}
+	selector, _ := r.ModelSelector.Get(method)
+	return selector
+}
+
+func (r *OpenAIRouter) newDecisionSessionAwareSelector(decisionCfg *config.SessionAwareSelectionConfig) selection.Selector {
+	cfg := selection.DefaultSessionAwareConfig()
+	if r != nil && r.Config != nil {
+		cfg = buildSessionAwareSelectionConfig(r.Config, decisionCfg)
+	} else if decisionCfg != nil {
+		applySessionAwareSelectionConfig(cfg, *decisionCfg)
+	}
+	selector := selection.NewSessionAwareSelector(cfg)
+	if r == nil {
+		return selector
+	}
+	if r.Config != nil && r.Config.ModelConfig != nil {
+		selector.InitializeFromConfig(r.Config.ModelConfig)
+	}
+	if r.LookupTable != nil {
+		selector.SetLookupTable(r.LookupTable)
+	}
+	if r.ModelSelector != nil && cfg.BaseMethod != "" && cfg.BaseMethod != selection.MethodSessionAware {
+		baseSelector, _ := r.ModelSelector.Get(cfg.BaseMethod)
+		selector.SetBaseSelector(baseSelector)
+	}
+	return selector
+}
+
+func (r *OpenAIRouter) applyPostSelectionGate(
+	selCtx *selection.SelectionContext,
+	result *selection.SelectionResult,
+	selectedModelRef *config.ModelRef,
+	ctx *RequestContext,
+	method selection.SelectionMethod,
+) (*config.ModelRef, bool) {
+	if method == selection.MethodSessionAware || result.Method == selection.MethodSessionAware {
+		return selectedModelRef, false
+	}
+	return r.applyModelSwitchGate(selCtx, result, selectedModelRef, ctx)
+}
+
+func selectedModelRefFromResult(selCtx *selection.SelectionContext, result *selection.SelectionResult) *config.ModelRef {
+	for i := range selCtx.CandidateModels {
+		if selCtx.CandidateModels[i].Model == result.SelectedModel ||
+			selCtx.CandidateModels[i].LoRAName == result.SelectedModel {
+			return &selCtx.CandidateModels[i]
 		}
 	}
+	return nil
+}
 
-	// Fallback if selected model not found in candidates (shouldn't happen)
-	logging.Warnf("[ModelSelection] Selected model %s not found in candidates, using first model", result.SelectedModel)
-	return &modelRefs[0], string(method)
+func logSelectionResult(method selection.SelectionMethod, result *selection.SelectionResult, selected *config.ModelRef, gateApplied bool) {
+	if gateApplied {
+		logging.Infof("[ModelSelection] Gate enforced stay on %s (method=%s, score=%.4f, confidence=%.2f): %s",
+			selected.Model, method, result.Score, result.Confidence, result.Reasoning)
+		return
+	}
+	logging.Infof("[ModelSelection] Selected %s (method=%s, score=%.4f, confidence=%.2f): %s",
+		selected.Model, method, result.Score, result.Confidence, result.Reasoning)
+}
+
+func firstValidCandidateModelRef(selCtx *selection.SelectionContext) *config.ModelRef {
+	if selCtx == nil {
+		return nil
+	}
+	for i := range selCtx.CandidateModels {
+		if strings.TrimSpace(selCtx.CandidateModels[i].Model) != "" {
+			return &selCtx.CandidateModels[i]
+		}
+	}
+	return nil
+}
+
+// buildSelectionContext assembles the runtime inputs shared by selection
+// algorithms. Static policy comes from AlgorithmConfig; dynamic request-time
+// signals stay in SelectionContext so selectors do not need to reach back into
+// extproc state.
+func (r *OpenAIRouter) buildSelectionContext(
+	modelRefs []config.ModelRef,
+	decisionName string,
+	query string,
+	algorithm *config.AlgorithmConfig,
+	categoryName string,
+	candidateIterations []config.CandidateIterationConfig,
+	reqCtx *RequestContext,
+) *selection.SelectionContext {
+	costWeight, qualityWeight := r.getSelectionWeights(algorithm)
+	latencyAwareTPOTPercentile, latencyAwareTTFTPercentile := r.getLatencyAwarePercentiles(algorithm)
+
+	sessionID, userID, conversationHistory := r.extractSessionContext(reqCtx)
+
+	return &selection.SelectionContext{
+		Query:                      query,
+		DecisionName:               decisionName,
+		CategoryName:               categoryName,
+		CandidateModels:            modelRefs,
+		CandidateIterations:        candidateIterations,
+		CostWeight:                 costWeight,
+		QualityWeight:              qualityWeight,
+		LatencyAwareTPOTPercentile: latencyAwareTPOTPercentile,
+		LatencyAwareTTFTPercentile: latencyAwareTTFTPercentile,
+		UserID:                     userID,
+		SessionID:                  sessionID,
+		AgenticSession:             r.buildAgenticSessionContext(reqCtx, modelRefs, sessionID, userID),
+		ConversationHistory:        conversationHistory,
+		CacheAffinityCtx:           r.buildCacheAffinityContext(reqCtx, modelRefs),
+	}
+}
+
+func (r *OpenAIRouter) buildAgenticSessionContext(
+	reqCtx *RequestContext,
+	modelRefs []config.ModelRef,
+	sessionID string,
+	userID string,
+) *selection.AgenticSessionContext {
+	if reqCtx == nil {
+		return nil
+	}
+	now := time.Now()
+	snapshot, hasMemory := sessiontelemetry.GetRouterSessionSnapshot(sessionID, now)
+	previousModel := reqCtx.PreviousModel
+	if previousModel == "" && hasMemory {
+		previousModel = snapshot.CurrentModel
+	}
+	idleFor := time.Duration(reqCtx.SessionIdleSeconds * float64(time.Second))
+	idleKnown := reqCtx.SessionIdleKnown
+	if hasMemory {
+		idleFor = snapshot.IdleFor
+		idleKnown = true
+	}
+	cacheWarmth, cacheWarmthOK := r.agenticCacheWarmth(reqCtx, previousModel, snapshot, hasMemory, now)
+	facts := reqCtx.VSRConversationFacts
+	activeToolLoop := conversationFactsIndicateActiveToolLoop(facts)
+	hasNonPortableContext, nonPortableContextReason := nonPortableContextBinding(reqCtx)
+	phase := selection.AgenticPhaseUserTurn
+	if hasNonPortableContext {
+		phase = selection.AgenticPhaseProviderState
+	}
+	if activeToolLoop {
+		phase = selection.AgenticPhaseToolLoop
+	}
+	return &selection.AgenticSessionContext{
+		ID:                          sessionID,
+		UserID:                      userID,
+		TurnIndex:                   reqCtx.TurnIndex,
+		PreviousModel:               previousModel,
+		PreviousResponseID:          reqCtx.PreviousResponseID,
+		MemoryPresent:               hasMemory,
+		MemoryTurnCount:             snapshot.TurnCount,
+		MemorySwitchCount:           snapshot.SwitchCount,
+		MemoryModelTurnCnts:         snapshot.ModelTurns,
+		MemoryPromptTokens:          snapshot.CumulativePromptTokens,
+		MemoryCachedTokens:          snapshot.CumulativeCachedTokens,
+		MemoryEstimatedCachedTokens: snapshot.CumulativeEstimatedCachedTokens,
+		MemoryOutputTokens:          snapshot.CumulativeCompletionTokens,
+		MemoryCost:                  snapshot.CumulativeCost,
+		MemoryEstimatedCacheSavings: snapshot.CumulativeEstimatedCacheSavings,
+		MemoryCacheAccountingSource: snapshot.LastCacheAccountingSource,
+		LastDecisionName:            snapshot.LastDecisionName,
+		LastDecisionReason:          snapshot.LastDecisionReason,
+		HistoryTokens:               reqCtx.HistoryTokenCount,
+		ContextTokens:               reqCtx.VSRContextTokenCount,
+		IdleFor:                     idleFor,
+		IdleKnown:                   idleKnown,
+		CacheWarmth:                 cacheWarmth,
+		CacheWarmthOK:               cacheWarmthOK,
+		Phase:                       phase,
+		ActiveToolLoop:              activeToolLoop,
+		HasNonPortableContext:       hasNonPortableContext,
+		NonPortableContextReason:    nonPortableContextReason,
+		ToolCallCount:               facts.AssistantToolCallCount,
+		ToolResultCount:             facts.ToolResultCount,
+		ToolDefinitionCnt:           facts.ToolDefinitionCount,
+		ModelContextWindows:         r.modelContextWindows(modelRefs),
+	}
+}
+
+func nonPortableContextBinding(reqCtx *RequestContext) (bool, string) {
+	if reqCtx == nil {
+		return false, ""
+	}
+	if strings.TrimSpace(reqCtx.PreviousResponseID) != "" {
+		return true, "previous_response_id"
+	}
+	return false, ""
+}
+
+func conversationFactsIndicateActiveToolLoop(facts classification.ConversationFacts) bool {
+	return facts.LastMessageToolResult ||
+		facts.LastMessageRole == "tool" ||
+		facts.LastUserAfterToolResult ||
+		facts.AssistantToolCallCount > facts.ToolResultCount
+}
+
+func (r *OpenAIRouter) agenticCacheWarmth(
+	reqCtx *RequestContext,
+	previousModel string,
+	snapshot sessiontelemetry.RouterSessionSnapshot,
+	hasMemory bool,
+	now time.Time,
+) (float64, bool) {
+	cacheWarmth := reqCtx.CacheWarmthEstimate
+	cacheWarmthOK := cacheWarmth > 0
+	if ambient, ok := estimateGateCacheWarmth(previousModel, now); ok {
+		cacheWarmth = ambient
+		cacheWarmthOK = true
+	}
+	if hasMemory && snapshot.CumulativePromptTokens > 0 {
+		cachedRatio := float64(snapshot.CumulativeCachedTokens) / float64(snapshot.CumulativePromptTokens)
+		if cachedRatio > cacheWarmth {
+			cacheWarmth = cachedRatio
+			cacheWarmthOK = true
+		}
+	}
+	return cacheWarmth, cacheWarmthOK
+}
+
+func (r *OpenAIRouter) modelContextWindows(modelRefs []config.ModelRef) map[string]int {
+	if r == nil || r.Config == nil || r.Config.ModelConfig == nil {
+		return nil
+	}
+	windows := make(map[string]int, len(modelRefs))
+	for _, ref := range modelRefs {
+		if params, ok := r.Config.ModelConfig[ref.Model]; ok {
+			windows[ref.Model] = params.ContextWindowSize
+		}
+	}
+	return windows
+}
+
+// buildCacheAffinityContext extracts the pre-dispatch continuation signals used
+// by the cache-affinity estimator. Nil request context cleanly disables the
+// estimator without forcing call sites to add extra branching.
+func (r *OpenAIRouter) buildCacheAffinityContext(reqCtx *RequestContext, modelRefs []config.ModelRef) *selection.CacheAffinityContext {
+	if reqCtx == nil {
+		return nil
+	}
+
+	// Missing model window metadata is valid; the estimator treats it as a
+	// neutral fit score rather than as an error.
+	return &selection.CacheAffinityContext{
+		TurnIndex:           reqCtx.TurnIndex,
+		PreviousModel:       reqCtx.PreviousModel,
+		PreviousResponseID:  reqCtx.PreviousResponseID,
+		HistoryTokens:       reqCtx.HistoryTokenCount,
+		ContextTokens:       reqCtx.VSRContextTokenCount,
+		ModelContextWindows: r.modelContextWindows(modelRefs),
+	}
 }
 
 // getSelectionMethod determines which selection algorithm to use.
 // Per-decision algorithm is the primary configuration (aligned with looper pattern).
 // Defaults to static selection if no algorithm is specified.
 func (r *OpenAIRouter) getSelectionMethod(algorithm *config.AlgorithmConfig) selection.SelectionMethod {
-	// Check per-decision algorithm (aligned with looper pattern)
 	if algorithm != nil && algorithm.Type != "" {
-		switch algorithm.Type {
-		case "elo":
-			return selection.MethodElo
-		case "router_dc":
-			return selection.MethodRouterDC
-		case "automix":
-			return selection.MethodAutoMix
-		case "hybrid":
-			return selection.MethodHybrid
-		case "static":
-			return selection.MethodStatic
-		case "confidence", "ratings":
-			// These are looper algorithms, not selection algorithms
-			// Fall through to default
+		if method, ok := selectionMethodByAlgorithmType[algorithm.Type]; ok {
+			return method
 		}
 	}
-
-	// Default to static selection (use first model)
 	return selection.MethodStatic
 }
 
@@ -354,6 +415,15 @@ func (r *OpenAIRouter) getSelectionWeights(algorithm *config.AlgorithmConfig) (f
 
 	// Default: equal weighting (0.5 cost, 0.5 quality)
 	return 0.5, 0.5
+}
+
+// getLatencyAwarePercentiles extracts TPOT/TTFT percentile settings for latency_aware selection.
+// Returns (0, 0) when latency_aware is not configured for the decision.
+func (r *OpenAIRouter) getLatencyAwarePercentiles(algorithm *config.AlgorithmConfig) (int, int) {
+	if algorithm == nil || algorithm.LatencyAware == nil {
+		return 0, 0
+	}
+	return algorithm.LatencyAware.TPOTPercentile, algorithm.LatencyAware.TTFTPercentile
 }
 
 // processUserFeedbackForElo automatically updates Elo ratings based on detected user feedback signals.
@@ -384,13 +454,13 @@ func (r *OpenAIRouter) processUserFeedbackForElo(userFeedbackSignals []string, m
 		return
 	}
 
-	// Process each feedback signal
 	// Get decision name safely
 	decisionName := ""
 	if ctx.VSRSelectedDecision != nil {
 		decisionName = ctx.VSRSelectedDecision.Name
 	}
 
+	// Process each feedback signal
 	for _, signal := range userFeedbackSignals {
 		var feedback *selection.Feedback
 
@@ -428,4 +498,51 @@ func (r *OpenAIRouter) processUserFeedbackForElo(userFeedbackSignals []string, m
 			logging.Warnf("[AutoFeedback] Failed to update Elo: %v", err)
 		}
 	}
+}
+
+// extractSessionContext extracts session ID, user ID, and conversation history from the RequestContext.
+func (r *OpenAIRouter) extractSessionContext(ctx *RequestContext) (sessionID, userID string, conversationHistory []string) {
+	if ctx == nil {
+		return "", "", nil
+	}
+	userID = extractUserID(ctx)
+	if ctx.ResponseAPICtx != nil && ctx.ResponseAPICtx.IsResponseAPIRequest {
+		return r.extractResponseAPISessionContext(ctx, userID)
+	}
+	if len(ctx.ChatCompletionMessages) > 0 {
+		return r.extractChatCompletionSessionContext(ctx, userID)
+	}
+	return ctx.SessionID, userID, nil
+}
+
+func (r *OpenAIRouter) extractResponseAPISessionContext(ctx *RequestContext, userID string) (sessionID, userIDOut string, conversationHistory []string) {
+	sessionID = ctx.ResponseAPICtx.ConversationID
+	if ctx.ResponseAPICtx.ConversationHistory != nil {
+		for _, storedResp := range ctx.ResponseAPICtx.ConversationHistory {
+			for _, inItem := range storedResp.Input {
+				if content := extractContentFromInputItem(inItem); content != "" {
+					conversationHistory = append(conversationHistory, content)
+				}
+			}
+			for _, outItem := range storedResp.Output {
+				if content := extractContentFromOutputItem(outItem); content != "" {
+					conversationHistory = append(conversationHistory, content)
+				}
+			}
+		}
+	}
+	return sessionID, userID, conversationHistory
+}
+
+func (r *OpenAIRouter) extractChatCompletionSessionContext(ctx *RequestContext, userID string) (sessionID, userIDOut string, conversationHistory []string) {
+	sessionID = ctx.SessionID
+	if sessionID == "" {
+		sessionID = deriveSessionIDFromMessages(ctx.ChatCompletionMessages, userID)
+	}
+	for i, msg := range ctx.ChatCompletionMessages {
+		if msg.Content != "" && i < len(ctx.ChatCompletionMessages)-1 {
+			conversationHistory = append(conversationHistory, msg.Content)
+		}
+	}
+	return sessionID, userID, conversationHistory
 }

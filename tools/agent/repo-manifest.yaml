@@ -1,0 +1,306 @@
+version: 1
+default_env: cpu
+supported_envs:
+  cpu-local:
+    aliases:
+    - cpu
+    build_target: make vllm-sr-dev
+    serve_command: vllm-sr serve --image-pull-policy never
+    description: Default local Docker image workflow.
+    local_env: true
+    smoke_config: e2e/config/config.agent-smoke.cpu.yaml
+  amd-local:
+    aliases:
+    - amd
+    build_target: make vllm-sr-dev VLLM_SR_PLATFORM=amd
+    serve_command: vllm-sr serve --image-pull-policy never --platform amd
+    description: AMD ROCm local workflow.
+    local_env: true
+    smoke_config: e2e/config/config.agent-smoke.amd.yaml
+    deployment_reference: deploy/amd/README.md
+    example_config: deploy/recipes/balance.yaml
+  ci-k8s:
+    aliases:
+    - ci-k8s
+    build_target: make build-e2e
+    serve_command: make e2e-test
+    description: kind/Kubernetes merge-gate workflow.
+    local_env: false
+subsystems:
+- name: vllm-sr-cli
+  paths:
+  - src/vllm-sr/**
+  - src/vllm-sr/Dockerfile*
+  - src/vllm-sr/Makefile
+  entrypoints:
+  - src/vllm-sr/cli/main.py
+  - src/vllm-sr/cli/core.py
+  - src/vllm-sr/cli/commands/runtime.py
+  - src/vllm-sr/cli/docker_cli.py
+  - tools/make/docker.mk
+- name: fleet-sim
+  paths:
+  - src/fleet-sim/**
+  - website/docs/fleet-sim/**
+  - website/static/files/fleet-sim/**
+  - website/static/img/fleet-sim/**
+  - .github/workflows/pypi-publish-vllm-sr-sim.yml
+  entrypoints:
+  - src/fleet-sim/run_sim.py
+  - src/fleet-sim/fleet_sim/api/app.py
+  - src/fleet-sim/Dockerfile
+  - tools/make/docker.mk
+- name: router-core
+  paths:
+  - src/semantic-router/**
+  - config/**
+  - scripts/**
+  entrypoints:
+  - src/semantic-router/cmd/main.go
+- name: rust-bindings
+  paths:
+  - candle-binding/**
+  - ml-binding/**
+  - nlp-binding/**
+  entrypoints:
+  - candle-binding/src/lib.rs
+  - ml-binding/src/lib.rs
+  - nlp-binding/src/lib.rs
+- name: dashboard
+  paths:
+  - dashboard/**
+  entrypoints:
+  - dashboard/backend/main.go
+  - dashboard/frontend/src/main.tsx
+- name: e2e
+  paths:
+  - e2e/**
+  - deploy/kubernetes/**
+  - deploy/helm/**
+  - deploy/kserve/**
+  - deploy/openshift/**
+  entrypoints:
+  - e2e/cmd/e2e/main.go
+  - e2e/profiles/all/imports.go
+  - deploy/helm/semantic-router/Chart.yaml
+  - deploy/helm/semantic-router/values.yaml
+- name: agent-contract
+  paths:
+  - AGENTS.md
+  - docs/agent/**
+  - tools/agent/skills/**
+  - tools/agent/*.yaml
+  - tools/agent/scripts/**
+  - .github/copilot-instructions.md
+  - .github/PULL_REQUEST_TEMPLATE.md
+  - .github/ISSUE_TEMPLATE/**
+  - .prowlabels.yaml
+  entrypoints:
+  - AGENTS.md
+  - docs/agent/README.md
+  - tools/agent/scripts/agent_gate.py
+validation:
+  smoke:
+    container_name: vllm-sr-container
+    dashboard_url: http://localhost:8700
+    status_command: vllm-sr status all
+    router_health_path: http://localhost:8000/health
+    envoy_ready_path: http://localhost:8801/ready
+  e2e:
+    default_local_profile: kubernetes
+    full_ci_profiles:
+    - kubernetes
+    - dashboard
+docs:
+- AGENTS.md
+- docs/agent/README.md
+- docs/agent/maintainer-ops.md
+- docs/agent/governance.md
+- docs/agent/context-management.md
+- docs/agent/plans/README.md
+- docs/agent/tech-debt-register.md
+- docs/agent/tech-debt/README.md
+- docs/agent/amd-local.md
+- docs/agent/architecture-guardrails.md
+- docs/agent/openai-api-contracts.md
+- docs/agent/architecture-scorecard.md
+- docs/agent/change-surfaces.md
+- docs/agent/environments.md
+- docs/agent/feature-complete-checklist.md
+- docs/agent/glossary.md
+- docs/agent/local-rules.md
+- docs/agent/module-boundaries.md
+- docs/agent/repo-map.md
+- docs/agent/skill-catalog.md
+- docs/agent/testing-strategy.md
+- docs/agent/plans/pl-0032-architecture-scorecard-ratchet.md
+- docs/agent/plans/pl-0033-v0-3-themis-release-closure.md
+- docs/agent/tech-debt/td-006-structural-rule-exceptions.md
+- docs/agent/tech-debt/td-016-fleet-sim-shared-ruff-contract-gap.md
+- docs/agent/tech-debt/td-017-fleet-sim-structure-gate-migration-gap.md
+- docs/agent/tech-debt/td-020-classification-subsystem-boundary-collapse.md
+- docs/agent/tech-debt/td-027-fleet-sim-optimizer-and-public-surface-boundary-collapse.md
+- docs/agent/tech-debt/td-042-ffi-embedding-structure-debt.md
+- docs/agent/tech-debt/td-043-semantic-router-go-cyclop-debt.md
+local_agent_rules:
+- path: src/vllm-sr/cli/AGENTS.md
+  scope: src/vllm-sr/cli/**
+  steward: vllm-sr-cli
+  freshness: update when CLI orchestration or hotspot boundaries change
+- path: src/fleet-sim/AGENTS.md
+  scope: src/fleet-sim/**
+  steward: fleet-sim
+  freshness: update when simulator package boundaries or public exports change
+- path: src/fleet-sim/fleet_sim/optimizer/AGENTS.md
+  scope: src/fleet-sim/fleet_sim/optimizer/**
+  steward: fleet-sim
+  freshness: update when optimizer hotspot boundaries, export policy, or extraction expectations change
+- path: src/semantic-router/pkg/config/AGENTS.md
+  scope: src/semantic-router/pkg/config/**
+  steward: router-core
+  freshness: update when config-package boundaries or hotspot expectations change
+- path: src/semantic-router/pkg/classification/AGENTS.md
+  scope: src/semantic-router/pkg/classification/**
+  steward: router-core
+  freshness: update when classification-package boundaries, backend seams, or hotspot expectations change
+- path: src/semantic-router/pkg/extproc/AGENTS.md
+  scope: src/semantic-router/pkg/extproc/**
+  steward: router-core
+  freshness: update when extproc hotspot boundaries or phase seams change
+- path: deploy/operator/api/v1alpha1/AGENTS.md
+  scope: deploy/operator/api/v1alpha1/**
+  steward: operator-stack
+  freshness: update when operator API schema or admission-validation hotspot boundaries change
+- path: deploy/operator/controllers/AGENTS.md
+  scope: deploy/operator/controllers/**
+  steward: operator-stack
+  freshness: update when operator controller translation or discovery hotspot boundaries change
+- path: dashboard/frontend/src/AGENTS.md
+  scope: dashboard/frontend/src/**
+  steward: dashboard
+  freshness: update when frontend app-shell boundaries or shared route expectations change
+- path: dashboard/frontend/src/pages/AGENTS.md
+  scope: dashboard/frontend/src/pages/**
+  steward: dashboard
+  freshness: update when page-level hotspot boundaries or extraction expectations change
+- path: dashboard/frontend/src/components/AGENTS.md
+  scope: dashboard/frontend/src/components/**
+  steward: dashboard
+  freshness: update when component hotspot boundaries or extraction expectations change
+- path: dashboard/backend/handlers/AGENTS.md
+  scope: dashboard/backend/handlers/**
+  steward: dashboard
+  freshness: update when backend handler hotspot boundaries or extraction expectations change
+- path: e2e/testcases/AGENTS.md
+  scope: e2e/testcases/**
+  steward: e2e
+  freshness: update when testcase-contract boundaries or assertion expectations change
+doc_governance:
+  owner_source: tools/agent/repo-manifest.yaml
+  canonical_docs:
+  - path: AGENTS.md
+    steward: agent-contract
+    freshness: update when the harness entrypoint, command set, or rule layering changes
+  - path: docs/agent/README.md
+    steward: agent-contract
+    freshness: update when canonical harness docs are added, removed, or reorganized
+  - path: docs/agent/maintainer-ops.md
+    steward: agent-contract
+    freshness: update when this canonical harness document changes materially
+  - path: docs/agent/governance.md
+    steward: agent-contract
+    freshness: update when source-of-truth policy or rule layering changes
+  - path: docs/agent/context-management.md
+    steward: agent-contract
+    freshness: update when the task-first disclosure model or context-pack flow changes
+  - path: docs/agent/plans/README.md
+    steward: agent-contract
+    freshness: update when canonical execution plans are added, removed, or reorganized
+  - path: docs/agent/tech-debt-register.md
+    steward: agent-contract
+    freshness: update when debt workflow or landing-page guidance changes
+  - path: docs/agent/tech-debt/README.md
+    steward: agent-contract
+    freshness: update when debt entry template or inventory changes
+  - path: docs/agent/amd-local.md
+    steward: agent-contract
+    freshness: update when AMD-local workflow or deployment references change
+  - path: docs/agent/architecture-guardrails.md
+    steward: agent-contract
+    freshness: update when structural or modularity guardrails change
+  - path: docs/agent/openai-api-contracts.md
+    steward: agent-contract
+    freshness: update when OpenAI API type inventory, SDK alignment, or documented differences change
+  - path: docs/agent/architecture-scorecard.md
+    steward: agent-contract
+    freshness: update when whole-repository architecture scores, score evidence, or PR-chain priorities change
+  - path: docs/agent/change-surfaces.md
+    steward: agent-contract
+    freshness: update when surfaces or their mappings change
+  - path: docs/agent/environments.md
+    steward: agent-contract
+    freshness: update when supported environments or default smoke paths change
+  - path: docs/agent/feature-complete-checklist.md
+    steward: agent-contract
+    freshness: update when done criteria or reporting fields change
+  - path: docs/agent/glossary.md
+    steward: agent-contract
+    freshness: update when harness terms or categories change
+  - path: docs/agent/local-rules.md
+    steward: agent-contract
+    freshness: update when indexed local AGENTS files change
+  - path: docs/agent/module-boundaries.md
+    steward: agent-contract
+    freshness: update when subsystem seams or local-rule boundaries change
+  - path: docs/agent/repo-map.md
+    steward: agent-contract
+    freshness: update when core subsystems, hotspots, or entrypoints change
+  - path: docs/agent/skill-catalog.md
+    steward: agent-contract
+    freshness: update when skill taxonomy or names change
+  - path: docs/agent/testing-strategy.md
+    steward: agent-contract
+    freshness: update when gate sequencing or validation expectations change
+  - path: docs/agent/plans/pl-0032-architecture-scorecard-ratchet.md
+    steward: agent-contract
+    freshness: update at the start and end of each architecture scorecard ratchet loop and after each completed loop task
+  - path: docs/agent/plans/pl-0033-v0-3-themis-release-closure.md
+    steward: agent-contract
+    freshness: update when this canonical harness document changes materially
+  - path: docs/agent/tech-debt/td-006-structural-rule-exceptions.md
+    steward: agent-contract
+    freshness: update when the TD006 debt record changes materially
+  - path: docs/agent/tech-debt/td-016-fleet-sim-shared-ruff-contract-gap.md
+    steward: fleet-sim
+    freshness: update when the TD016 debt record changes materially
+  - path: docs/agent/tech-debt/td-017-fleet-sim-structure-gate-migration-gap.md
+    steward: fleet-sim
+    freshness: update when the TD017 debt record changes materially
+  - path: docs/agent/tech-debt/td-020-classification-subsystem-boundary-collapse.md
+    steward: router-core
+    freshness: update when the TD020 debt record changes materially
+  - path: docs/agent/tech-debt/td-027-fleet-sim-optimizer-and-public-surface-boundary-collapse.md
+    steward: fleet-sim
+    freshness: update when the TD027 debt record changes materially
+  - path: docs/agent/tech-debt/td-042-ffi-embedding-structure-debt.md
+    steward: candle-binding
+    freshness: update when the TD042 debt record changes materially
+  - path: docs/agent/tech-debt/td-043-semantic-router-go-cyclop-debt.md
+    steward: candle-binding
+    freshness: update when the TD043 debt record changes materially
+skills:
+- tools/agent/skills/config-platform-change/SKILL.md
+- tools/agent/skills/cross-stack-bugfix/SKILL.md
+- tools/agent/skills/dashboard-platform-change/SKILL.md
+- tools/agent/skills/fleet-sim-change/SKILL.md
+- tools/agent/skills/harness-contract-change/SKILL.md
+- tools/agent/skills/k8s-platform-change/SKILL.md
+- tools/agent/skills/maintainer/issue-pr-management/SKILL.md
+- tools/agent/skills/maintainer/release-ops/SKILL.md
+- tools/agent/skills/maintainer/routing-calibration/SKILL.md
+- tools/agent/skills/plugin-end-to-end/SKILL.md
+- tools/agent/skills/router-service-platform-change/SKILL.md
+- tools/agent/skills/routing-policy-change/SKILL.md
+- tools/agent/skills/signal-end-to-end/SKILL.md
+- tools/agent/skills/startup-chain-change/SKILL.md
+- tools/agent/skills/training-stack-change/SKILL.md

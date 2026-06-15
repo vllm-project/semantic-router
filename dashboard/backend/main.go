@@ -18,7 +18,7 @@ func main() {
 	log.Printf("Config file path: %s", cfg.AbsConfigPath)
 
 	// Setup routes
-	mux := router.Setup(cfg)
+	srv := router.Setup(cfg)
 
 	// Log configuration
 	addr := ":" + cfg.Port
@@ -36,6 +36,9 @@ func main() {
 	if cfg.EnvoyURL != "" {
 		log.Printf("Envoy: %s → /api/router/v1/chat/completions", cfg.EnvoyURL)
 	}
+	if cfg.FleetSimURL != "" {
+		log.Printf("Fleet Sim: %s → /api/fleet-sim/*", cfg.FleetSimURL)
+	}
 	log.Printf("Router API: %s → /api/router/*", cfg.RouterAPIURL)
 	log.Printf("Router Metrics: %s → /metrics/router", cfg.RouterMetrics)
 	if cfg.ReadonlyMode {
@@ -43,7 +46,11 @@ func main() {
 	}
 
 	// Start server
-	if err := http.ListenAndServe(addr, mux); err != nil {
-		log.Fatalf("server error: %v", err)
+	serveErr := http.ListenAndServe(addr, srv.Handler)
+	if closeErr := srv.Close(); closeErr != nil {
+		log.Printf("Warning: dashboard store shutdown: %v", closeErr)
+	}
+	if serveErr != nil {
+		log.Fatalf("server error: %v", serveErr)
 	}
 }

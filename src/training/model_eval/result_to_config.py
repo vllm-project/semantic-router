@@ -1,4 +1,4 @@
-# analyze_mmlu_results.py - Analyzes MMLU-Pro results and generates optimized config.yaml
+"""Analyze MMLU-Pro results and generate a canonical v0.3 config scaffold."""
 
 import argparse
 import glob
@@ -8,10 +8,86 @@ from collections import defaultdict
 
 import yaml
 
+DEFAULT_OUTPUT_FILE = "config/config.eval.yaml"
+
+DEFAULT_EMBEDDINGS = {
+    "semantic": {
+        "mmbert_model_path": "models/mom-embedding-ultra",
+        "use_cpu": True,
+        "embedding_config": {
+            "model_type": "mmbert",
+            "preload_embeddings": True,
+            "target_dimension": 768,
+            "target_layer": 22,
+            "min_score_threshold": 0.5,
+        },
+    }
+}
+
+DEFAULT_SEMANTIC_CACHE = {
+    "enabled": True,
+    "embedding_model": "mmbert",
+    "max_entries": 1000,
+    "ttl_seconds": 3600,
+}
+
+DEFAULT_TOOLS = {
+    "enabled": True,
+    "top_k": 3,
+    "similarity_threshold": 0.2,
+    "tools_db_path": "deploy/examples/runtime/tools/tools_db.json",
+    "fallback_to_empty": True,
+}
+
+DEFAULT_PROMPT_GUARD = {
+    "enabled": True,
+    "model_id": "models/mmbert32k-jailbreak-detector-merged",
+    "threshold": 0.7,
+    "use_cpu": True,
+    "use_mmbert_32k": True,
+    "jailbreak_mapping_path": (
+        "models/mmbert32k-jailbreak-detector-merged/jailbreak_type_mapping.json"
+    ),
+}
+
+DEFAULT_DOMAIN_CLASSIFIER = {
+    "model_id": "models/mmbert32k-intent-classifier-merged",
+    "threshold": 0.5,
+    "use_cpu": True,
+    "use_mmbert_32k": True,
+    "category_mapping_path": "models/mmbert32k-intent-classifier-merged/category_mapping.json",
+    "fallback_category": "other",
+}
+
+DEFAULT_PII_CLASSIFIER = {
+    "model_id": "models/mmbert32k-pii-detector-merged",
+    "threshold": 0.9,
+    "use_cpu": True,
+    "use_mmbert_32k": True,
+    "pii_mapping_path": "models/mmbert32k-pii-detector-merged/pii_type_mapping.json",
+}
+
+CATEGORY_REASONING = {
+    "math": True,
+    "physics": True,
+    "chemistry": True,
+    "computer science": True,
+    "engineering": True,
+    "biology": True,
+    "business": False,
+    "law": False,
+    "psychology": False,
+    "history": False,
+    "economics": False,
+    "philosophy": False,
+    "health": False,
+    "other": False,
+}
+
 
 def parse_args():
     parser = argparse.ArgumentParser(
-        description="Analyze MMLU-Pro results and generate optimized config.yaml"
+        description="Analyze MMLU-Pro results and generate a canonical v0.3 config scaffold"
     )
     parser.add_argument(
         "--results-dir",
@@ -22,245 +98,251 @@ def parse_args():
     parser.add_argument(
         "--output-file",
         type=str,
-        default="config/config.yaml",
-        help="Output file for the config.yaml",
+        default=DEFAULT_OUTPUT_FILE,
+        help="Output file for the generated canonical config scaffold",
     )
     parser.add_argument(
         "--similarity-threshold",
         type=float,
         default=0.80,
-        help="Similarity threshold for semantic cache",
+        help="Similarity threshold for the generated semantic cache override",
+    )
+    parser.add_argument(
+        "--backend-endpoint",
+        type=str,
+        default="127.0.0.1:8000",
+        help="Endpoint to bind generated providers.models[].backend_refs[] entries to",
+    )
+    parser.add_argument(
+        "--backend-protocol",
+        type=str,
+        default="http",
+        help="Protocol for generated backend_refs entries",
+    )
+    parser.add_argument(
+        "--backend-type",
+        type=str,
+        default="chat",
+        help="Backend type for generated backend_refs entries",
+    )
+    parser.add_argument(
+        "--api-format",
+        type=str,
+        default="openai",
+        help="API format for generated providers.models entries",
+    )
+    parser.add_argument(
+        "--provider-name",
+        type=str,
+        default="openai",
+        help="Provider name used in generated external_model_ids",
     )
     return parser.parse_args()
 
 
 def collect_model_accuracies(results_dir):
     """Collect all model accuracies by category from result files."""
-    # Dictionary to store category accuracies for each model
     category_accuracies = defaultdict(lambda: defaultdict(float))
-
-    # Find all analysis.json files
     analysis_files = glob.glob(
         os.path.join(results_dir, "**/analysis.json"), recursive=True
     )
 
     for file_path in analysis_files:
-        # Extract model name from directory path
         dir_name = os.path.basename(os.path.dirname(file_path))
-        # Separate model name from approach (cot or direct)
         if "_cot" in dir_name:
             model_name = dir_name.replace("_cot", "")
-            approach = "cot"
         else:
             model_name = dir_name.replace("_direct", "")
-            approach = "direct"
 
-        # Convert underscores back to slashes in model name
         model_name = (
             model_name.replace("_", "/", 1) if "_" in model_name else model_name
         )
-        model_display_name = f"{model_name}:{approach}"
 
-        # Load analysis data
-        with open(file_path, "r") as f:
-            analysis = json.load(f)
+        with open(file_path, encoding="utf-8") as handle:
+            analysis = json.load(handle)
 
-        # Store category accuracies
         for category, accuracy in analysis.get("category_accuracy", {}).items():
-            category_accuracies[category][model_display_name] = accuracy
+            category_accuracies[category][model_name] = max(
+                category_accuracies[category][model_name],
+                float(accuracy),
+            )
 
     return category_accuracies
 
 
-def generate_config_yaml(category_accuracies, similarity_threshold):
-    """Generate config.yaml with models ranked by performance for each category."""
-    # Prepare the base configuration
-    config = {
-        "bert_model": {
-            "model_id": "sentence-transformers/all-MiniLM-L12-v2",
-            "threshold": 0.6,
-            "use_cpu": True,
-        },
-        "semantic_cache": {
-            "enabled": True,
-            "similarity_threshold": similarity_threshold,
-            "max_entries": 1000,
-            "ttl_seconds": 3600,
-        },
-        "tools": {
-            "enabled": True,
-            "top_k": 3,
-            "similarity_threshold": 0.2,
-            "tools_db_path": "config/tools_db.json",
-            "fallback_to_empty": True,
-        },
-        "prompt_guard": {
-            "enabled": True,
-            "use_modernbert": True,
-            "model_id": "models/mom-jailbreak-classifier",
-            "threshold": 0.7,
-            "use_cpu": True,
-            "jailbreak_mapping_path": "models/mom-jailbreak-classifier/jailbreak_type_mapping.json",
-        },
-        "classifier": {
-            "category_model": {
-                "model_id": "models/mom-domain-classifier",
-                "use_modernbert": True,
-                "threshold": 0.6,
-                "use_cpu": True,
-                "category_mapping_path": "models/mom-domain-classifier/category_mapping.json",
-            },
-            "pii_model": {
-                "model_id": "models/pii_classifier_modernbert-base_presidio_token_model",
-                "use_modernbert": True,
-                "threshold": 0.7,
-                "use_cpu": True,
-                "pii_mapping_path": "models/mom-pii-classifier/pii_type_mapping.json",
-            },
-        },
-        "categories": [],
-        "default_reasoning_effort": "medium",  # Default reasoning effort level (low, medium, high)
-    }
-
-    # Get the best model overall to use as default (excluding 'auto')
-    all_models_avg = defaultdict(list)
-    for category, models in category_accuracies.items():
+def calculate_average_accuracies(category_accuracies):
+    """Compute average per-model accuracy across categories after variant collapse."""
+    averages = defaultdict(list)
+    for models in category_accuracies.values():
         for model_name, accuracy in models.items():
-            base_model = model_name.split(":")[0]
-            if base_model != "auto":
-                all_models_avg[model_name].append(accuracy)
+            if model_name == "auto":
+                continue
+            averages[model_name].append(float(accuracy))
 
-    # Calculate average accuracy across all categories
-    model_avg_accuracies = {
-        model: sum(accuracies) / len(accuracies)
-        for model, accuracies in all_models_avg.items()
+    return {
+        model_name: sum(scores) / len(scores)
+        for model_name, scores in averages.items()
+        if scores
     }
 
-    # Set default model to the one with highest average accuracy
-    default_model = max(model_avg_accuracies, key=model_avg_accuracies.get)
-    config["default_model"] = default_model.split(":")[0]  # Remove the approach suffix
 
-    # Define category-specific reasoning settings
-    category_reasoning = {
-        "math": {
-            "use_reasoning": True,
-            "reasoning_description": "Mathematical problems require step-by-step reasoning",
-            "reasoning_effort": "high",
-        },
-        "physics": {
-            "use_reasoning": True,
-            "reasoning_description": "Physics concepts need logical analysis",
-            "reasoning_effort": "high",
-        },
-        "chemistry": {
-            "use_reasoning": True,
-            "reasoning_description": "Chemical reactions and formulas require systematic thinking",
-            "reasoning_effort": "high",
-        },
-        "computer science": {
-            "use_reasoning": True,
-            "reasoning_description": "Programming and algorithms need logical reasoning",
-            "reasoning_effort": "high",
-        },
-        "engineering": {
-            "use_reasoning": True,
-            "reasoning_description": "Engineering problems require systematic problem-solving",
-            "reasoning_effort": "high",
-        },
-        "biology": {
-            "use_reasoning": True,
-            "reasoning_description": "Biological processes benefit from structured analysis",
-            "reasoning_effort": "medium",
-        },
-        "business": {
-            "use_reasoning": False,
-            "reasoning_description": "Business content is typically conversational",
-            "reasoning_effort": "low",
-        },
-        "law": {
-            "use_reasoning": False,
-            "reasoning_description": "Legal content is typically explanatory",
-            "reasoning_effort": "medium",
-        },
-        "psychology": {
-            "use_reasoning": False,
-            "reasoning_description": "Psychology content is usually explanatory",
-            "reasoning_effort": "medium",
-        },
-        "history": {
-            "use_reasoning": False,
-            "reasoning_description": "Historical content is narrative-based",
-            "reasoning_effort": "low",
-        },
-        "economics": {
-            "use_reasoning": False,
-            "reasoning_description": "Economic discussions are usually explanatory",
-            "reasoning_effort": "medium",
-        },
-        "philosophy": {
-            "use_reasoning": False,
-            "reasoning_description": "Philosophical discussions are conversational",
-            "reasoning_effort": "medium",
-        },
-        "health": {
-            "use_reasoning": False,
-            "reasoning_description": "Health information is typically informational",
-            "reasoning_effort": "medium",
-        },
-        "other": {
-            "use_reasoning": False,
-            "reasoning_description": "General content doesn't require reasoning",
-            "reasoning_effort": "low",
-        },
-    }
-
-    # Create category entries with ranked model-score pairs (excluding 'auto')
-    for category, models in category_accuracies.items():
-        # Sort models by accuracy (descending), exclude 'auto'
-        ranked_models = [
-            (model.split(":")[0], acc)
-            for model, acc in sorted(models.items(), key=lambda x: x[1], reverse=True)
-            if model.split(":")[0] != "auto"
-        ]
-        # Get reasoning settings for the category
-        reasoning_settings = category_reasoning.get(
-            category.lower(),
+def build_provider_models(
+    ranked_models,
+    backend_endpoint,
+    backend_protocol,
+    backend_type,
+    api_format,
+    provider_name,
+):
+    provider_models = []
+    for model_name, _average_accuracy in ranked_models:
+        provider_models.append(
             {
-                "use_reasoning": False,
-                "reasoning_description": "General content doesn't require reasoning",
-                "reasoning_effort": "low",
+                "name": model_name,
+                "provider_model_id": model_name,
+                "api_format": api_format,
+                "external_model_ids": {provider_name: model_name},
+                "backend_refs": [
+                    {
+                        "name": f"{model_name}-backend",
+                        "endpoint": backend_endpoint,
+                        "protocol": backend_protocol,
+                        "type": backend_type,
+                        "weight": 1,
+                    }
+                ],
+            }
+        )
+    return provider_models
+
+
+def build_routing_model_cards(ranked_models):
+    model_cards = []
+    for model_name, average_accuracy in ranked_models:
+        model_cards.append(
+            {
+                "name": model_name,
+                "description": (
+                    "Generated from MMLU-Pro evaluation results for category-aware routing."
+                ),
+                "quality_score": round(float(average_accuracy), 6),
+                "capabilities": ["chat"],
+                "tags": ["generated", "mmlu-pro"],
+                "modality": "ar",
+            }
+        )
+    return model_cards
+
+
+def build_domain_signals(category_accuracies):
+    domains = []
+    for category_name, models in sorted(category_accuracies.items()):
+        ranked_models = sorted(
+            (
+                (model_name, float(accuracy))
+                for model_name, accuracy in models.items()
+                if model_name != "auto"
+            ),
+            key=lambda item: (-item[1], item[0]),
+        )
+        domains.append(
+            {
+                "name": category_name,
+                "description": (
+                    f"MMLU-Pro category generated from evaluation results: {category_name}."
+                ),
+                "mmlu_categories": [category_name],
+                "model_scores": [
+                    {
+                        "model": model_name,
+                        "score": round(accuracy, 6),
+                        "use_reasoning": CATEGORY_REASONING.get(
+                            category_name.lower(), False
+                        ),
+                    }
+                    for model_name, accuracy in ranked_models
+                ],
+            }
+        )
+    return domains
+
+
+def generate_config_yaml(
+    category_accuracies,
+    similarity_threshold,
+    backend_endpoint,
+    backend_protocol,
+    backend_type,
+    api_format,
+    provider_name,
+):
+    """Generate a canonical v0.3 config scaffold from MMLU-Pro results."""
+    average_accuracies = calculate_average_accuracies(category_accuracies)
+    if not average_accuracies:
+        raise ValueError("No non-auto model results were found in the input directory")
+
+    ranked_models = sorted(
+        average_accuracies.items(),
+        key=lambda item: (-item[1], item[0]),
+    )
+    default_model = ranked_models[0][0]
+
+    return {
+        "version": "v0.3",
+        "listeners": [],
+        "providers": {
+            "defaults": {
+                "default_model": default_model,
+                "default_reasoning_effort": "medium",
             },
-        )
-        # Build the model_scores list with reasoning settings applied to each model
-        model_scores = []
-        for model, acc in ranked_models:
-            model_score = {
-                "model": model,
-                "score": float(acc),
-                "use_reasoning": reasoning_settings["use_reasoning"],
-                "reasoning_description": reasoning_settings["reasoning_description"],
-                "reasoning_effort": reasoning_settings["reasoning_effort"],
-            }
-            model_scores.append(model_score)
-
-        # Add category to config
-        config["categories"].append(
-            {
-                "name": category,
-                "model_scores": model_scores,
-            }
-        )
-
-    return config
+            "models": build_provider_models(
+                ranked_models,
+                backend_endpoint,
+                backend_protocol,
+                backend_type,
+                api_format,
+                provider_name,
+            ),
+        },
+        "routing": {
+            "modelCards": build_routing_model_cards(ranked_models),
+            "signals": {
+                "domains": build_domain_signals(category_accuracies),
+            },
+            "decisions": [],
+        },
+        "global": {
+            "stores": {
+                "semantic_cache": {
+                    **DEFAULT_SEMANTIC_CACHE,
+                    "similarity_threshold": similarity_threshold,
+                }
+            },
+            "integrations": {
+                "tools": DEFAULT_TOOLS,
+            },
+            "model_catalog": {
+                "embeddings": DEFAULT_EMBEDDINGS,
+                "modules": {
+                    "prompt_guard": DEFAULT_PROMPT_GUARD,
+                    "classifier": {
+                        "domain": DEFAULT_DOMAIN_CLASSIFIER,
+                        "pii": DEFAULT_PII_CLASSIFIER,
+                    },
+                },
+            },
+        },
+    }
 
 
 def save_config(config, output_file):
     """Save the config dictionary as a YAML file."""
-    # Ensure the output directory exists
-    os.makedirs(os.path.dirname(output_file), exist_ok=True)
+    output_dir = os.path.dirname(output_file)
+    if output_dir:
+        os.makedirs(output_dir, exist_ok=True)
 
-    with open(output_file, "w") as f:
-        yaml.dump(config, f, default_flow_style=False, sort_keys=False)
+    with open(output_file, "w", encoding="utf-8") as handle:
+        yaml.safe_dump(config, handle, default_flow_style=False, sort_keys=False)
 
     print(f"Config saved to {output_file}")
 
@@ -271,8 +353,16 @@ def main():
     print(f"Analyzing MMLU-Pro results in {args.results_dir}...")
     category_accuracies = collect_model_accuracies(args.results_dir)
 
-    print(f"Generating config.yaml...")
-    config = generate_config_yaml(category_accuracies, args.similarity_threshold)
+    print("Generating canonical v0.3 config scaffold...")
+    config = generate_config_yaml(
+        category_accuracies,
+        args.similarity_threshold,
+        args.backend_endpoint,
+        args.backend_protocol,
+        args.backend_type,
+        args.api_format,
+        args.provider_name,
+    )
 
     print(f"Saving config to {args.output_file}...")
     save_config(config, args.output_file)

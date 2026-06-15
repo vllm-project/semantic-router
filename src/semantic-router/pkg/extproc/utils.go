@@ -11,11 +11,31 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 )
 
-// sendResponse sends a response with proper error handling and logging
+// sendResponse sends a response with proper error handling and logging.
+// If response is nil, a CONTINUE BodyResponse is sent as a safe fallback
+// to prevent nil pointer dereferences in Envoy or test assertions.
 func sendResponse(stream ext_proc.ExternalProcessor_ProcessServer, response *ext_proc.ProcessingResponse, msgType string) error {
-	logging.Debugf("Processing at stage [%s]: %+v", msgType, response)
+	if response == nil {
+		logging.Warnf("Nil response for %s stage — sending CONTINUE fallback to avoid nil dereference", msgType)
+		response = &ext_proc.ProcessingResponse{
+			Response: &ext_proc.ProcessingResponse_RequestBody{
+				RequestBody: &ext_proc.BodyResponse{
+					Response: &ext_proc.CommonResponse{
+						Status: ext_proc.CommonResponse_CONTINUE,
+					},
+				},
+			},
+		}
+	}
 
-	// Debug: dump response structure if needed
+	// Redact credentials (Authorization / x-api-key / ...) before dumping the
+	// mutation: the credential resolver injects the upstream provider key as a
+	// set-header, so a verbatim %+v would leak it to the log (CWE-532). Gate on
+	// the debug level so the clone+redact cost is paid only when it is logged.
+	if logging.DebugEnabled() {
+		logging.Debugf("Processing at stage [%s]: %+v", msgType, redactResponseForLog(response))
+	}
+
 	if err := stream.Send(response); err != nil {
 		logging.Errorf("Error sending %s response: %v", msgType, err)
 		return err
@@ -32,143 +52,240 @@ func parseOpenAIRequest(data []byte) (*openai.ChatCompletionNewParams, error) {
 	return &req, nil
 }
 
-// extractStreamParam extracts the stream parameter from the original request body
+// extractStreamParam extracts the stream parameter from the original request body.
+// Uses gjson for O(scan) extraction without allocating a map.
 func extractStreamParam(originalBody []byte) bool {
-	var requestMap map[string]interface{}
-	if err := json.Unmarshal(originalBody, &requestMap); err != nil {
-		return false
-	}
-
-	if streamValue, exists := requestMap["stream"]; exists {
-		if stream, ok := streamValue.(bool); ok {
-			return stream
-		}
-	}
-	return false
+	return extractStreamParamFast(originalBody)
 }
 
-// serializeOpenAIRequestWithStream converts request back to JSON, preserving the stream parameter from original request
+// serializeOpenAIRequestWithStream converts request back to JSON, preserving
+// the stream parameter from the original request. Uses sjson for in-place
+// field insertion instead of unmarshal → modify → marshal.
 func serializeOpenAIRequestWithStream(req *openai.ChatCompletionNewParams, hasStreamParam bool) ([]byte, error) {
-	// First serialize the SDK object
 	sdkBytes, err := json.Marshal(req)
 	if err != nil {
 		return nil, err
 	}
-
-	// If original request had stream parameter, add it back along with stream_options
 	if hasStreamParam {
-		var sdkMap map[string]interface{}
-		if err := json.Unmarshal(sdkBytes, &sdkMap); err == nil {
-			sdkMap["stream"] = true
-
-			// Automatically add stream_options to enable usage tracking in streaming responses
-			// This ensures vLLM returns token usage information in the final chunk
-			sdkMap["stream_options"] = map[string]interface{}{
-				"include_usage": true,
-			}
-
-			logging.Infof("Added stream_options.include_usage=true for streaming request")
-
-			if modifiedBytes, err := json.Marshal(sdkMap); err == nil {
-				return modifiedBytes, nil
-			}
-		}
+		sdkBytes = addStreamFieldsFast(sdkBytes)
 	}
-
 	return sdkBytes, nil
 }
 
 // extractUserAndNonUserContent extracts content from request messages
 func extractUserAndNonUserContent(req *openai.ChatCompletionNewParams) (string, []string) {
-	var userContent string
-	var nonUser []string
-
-	for _, msg := range req.Messages {
-		// Extract content based on message type
-		var textContent string
-		var role string
-
-		if msg.OfUser != nil {
-			role = "user"
-			// Handle user message content
-			if msg.OfUser.Content.OfString.Value != "" {
-				textContent = msg.OfUser.Content.OfString.Value
-			} else if len(msg.OfUser.Content.OfArrayOfContentParts) > 0 {
-				// Extract text from content parts
-				var parts []string
-				for _, part := range msg.OfUser.Content.OfArrayOfContentParts {
-					if part.OfText != nil {
-						parts = append(parts, part.OfText.Text)
-					}
-				}
-				textContent = strings.Join(parts, " ")
-			}
-		} else if msg.OfSystem != nil {
-			role = "system"
-			if msg.OfSystem.Content.OfString.Value != "" {
-				textContent = msg.OfSystem.Content.OfString.Value
-			} else if len(msg.OfSystem.Content.OfArrayOfContentParts) > 0 {
-				// Extract text from content parts
-				var parts []string
-				for _, part := range msg.OfSystem.Content.OfArrayOfContentParts {
-					if part.Text != "" {
-						parts = append(parts, part.Text)
-					}
-				}
-				textContent = strings.Join(parts, " ")
-			}
-		} else if msg.OfAssistant != nil {
-			role = "assistant"
-			if msg.OfAssistant.Content.OfString.Value != "" {
-				textContent = msg.OfAssistant.Content.OfString.Value
-			} else if len(msg.OfAssistant.Content.OfArrayOfContentParts) > 0 {
-				// Extract text from content parts
-				var parts []string
-				for _, part := range msg.OfAssistant.Content.OfArrayOfContentParts {
-					if part.OfText != nil {
-						parts = append(parts, part.OfText.Text)
-					}
-				}
-				textContent = strings.Join(parts, " ")
-			}
-		}
-
-		// Categorize by role
-		if role == "user" {
-			userContent = textContent
-		} else if role != "" {
-			nonUser = append(nonUser, textContent)
-		}
-	}
-
-	return userContent, nonUser
+	history := extractSignalConversationHistory(req)
+	return history.currentUserMessage, history.nonUserMessages
 }
 
-// statusCodeToEnum converts HTTP status code to typev3.StatusCode enum
-func statusCodeToEnum(statusCode int) typev3.StatusCode {
-	switch statusCode {
-	case 200:
-		return typev3.StatusCode_OK
-	case 400:
-		return typev3.StatusCode_BadRequest
-	case 404:
-		return typev3.StatusCode_NotFound
-	case 500:
-		return typev3.StatusCode_InternalServerError
+func extractMessageRoleAndContent(msg openai.ChatCompletionMessageParamUnion) (string, string) {
+	switch {
+	case msg.OfUser != nil:
+		return "user", extractUserMessageContent(msg.OfUser.Content)
+	case msg.OfSystem != nil:
+		return "system", extractSystemMessageContent(msg.OfSystem.Content)
+	case msg.OfAssistant != nil:
+		return "assistant", extractAssistantMessageContent(msg.OfAssistant.Content)
+	case msg.OfDeveloper != nil:
+		return "developer", extractDeveloperMessageContent(msg.OfDeveloper.Content)
+	case msg.OfTool != nil:
+		return "tool", extractToolMessageContent(msg.OfTool.Content)
 	default:
-		return typev3.StatusCode_OK
+		return "", ""
 	}
 }
 
-// rewriteRequestModel rewrites the model field in the request body JSON
-// Used by looper internal requests to route to specific models
-func rewriteRequestModel(originalBody []byte, newModel string) ([]byte, error) {
-	var requestMap map[string]interface{}
-	if err := json.Unmarshal(originalBody, &requestMap); err != nil {
-		return nil, err
+func extractUserMessageContent(content openai.ChatCompletionUserMessageParamContentUnion) string {
+	if content.OfString.Value != "" {
+		return content.OfString.Value
 	}
+	return joinUserContentParts(content.OfArrayOfContentParts)
+}
 
-	requestMap["model"] = newModel
+func extractSystemMessageContent(content openai.ChatCompletionSystemMessageParamContentUnion) string {
+	if content.OfString.Value != "" {
+		return content.OfString.Value
+	}
+	return joinSystemContentParts(content.OfArrayOfContentParts)
+}
 
-	return json.Marshal(requestMap)
+func extractAssistantMessageContent(
+	content openai.ChatCompletionAssistantMessageParamContentUnion,
+) string {
+	if content.OfString.Value != "" {
+		return content.OfString.Value
+	}
+	return joinAssistantContentParts(content.OfArrayOfContentParts)
+}
+
+func extractDeveloperMessageContent(content openai.ChatCompletionDeveloperMessageParamContentUnion) string {
+	if content.OfString.Value != "" {
+		return content.OfString.Value
+	}
+	return joinSystemContentParts(content.OfArrayOfContentParts)
+}
+
+func extractToolMessageContent(content openai.ChatCompletionToolMessageParamContentUnion) string {
+	if content.OfString.Value != "" {
+		return content.OfString.Value
+	}
+	return joinSystemContentParts(content.OfArrayOfContentParts)
+}
+
+func joinUserContentParts(parts []openai.ChatCompletionContentPartUnionParam) string {
+	textParts := make([]string, 0, len(parts))
+	for _, part := range parts {
+		if part.OfText != nil {
+			textParts = append(textParts, part.OfText.Text)
+		}
+	}
+	return strings.Join(textParts, " ")
+}
+
+func joinSystemContentParts(parts []openai.ChatCompletionContentPartTextParam) string {
+	textParts := make([]string, 0, len(parts))
+	for _, part := range parts {
+		if part.Text != "" {
+			textParts = append(textParts, part.Text)
+		}
+	}
+	return strings.Join(textParts, " ")
+}
+
+func joinAssistantContentParts(
+	parts []openai.ChatCompletionAssistantMessageParamContentArrayOfContentPartUnion,
+) string {
+	textParts := make([]string, 0, len(parts))
+	for _, part := range parts {
+		if part.OfText != nil {
+			textParts = append(textParts, part.OfText.Text)
+		}
+	}
+	return strings.Join(textParts, " ")
+}
+
+var httpStatusToEnvoyCode = map[int]typev3.StatusCode{
+	200: typev3.StatusCode_OK,
+	400: typev3.StatusCode_BadRequest,
+	401: typev3.StatusCode_Unauthorized,
+	403: typev3.StatusCode_Forbidden,
+	404: typev3.StatusCode_NotFound,
+	405: typev3.StatusCode_MethodNotAllowed,
+	413: typev3.StatusCode_PayloadTooLarge,
+	422: typev3.StatusCode_UnprocessableEntity,
+	429: typev3.StatusCode_TooManyRequests,
+	500: typev3.StatusCode_InternalServerError,
+	502: typev3.StatusCode_BadGateway,
+	503: typev3.StatusCode_ServiceUnavailable,
+}
+
+func statusCodeToEnum(statusCode int) typev3.StatusCode {
+	if code, ok := httpStatusToEnvoyCode[statusCode]; ok {
+		return code
+	}
+	return typev3.StatusCode_OK
+}
+
+// isSafeImageDataURL returns true only for inline base64-encoded image data URIs
+// with an allowlisted MIME type (e.g. "data:image/png;base64,...").
+// HTTP(S) URLs, non-image data URIs, and file paths are rejected to prevent
+// SSRF, local file access, and decode errors on non-image payloads.
+func isSafeImageDataURL(url string) bool {
+	if url == "" {
+		return false
+	}
+	lower := strings.ToLower(url)
+	if !strings.HasPrefix(lower, "data:image/") {
+		return false
+	}
+	const base64Sep = ";base64,"
+	sepIdx := strings.Index(lower, base64Sep)
+	if sepIdx == -1 {
+		return false
+	}
+	mime := lower[len("data:"):sepIdx]
+	switch mime {
+	case "image/png", "image/jpeg", "image/jpg", "image/gif", "image/webp":
+	default:
+		return false
+	}
+	payload := strings.TrimSpace(url[sepIdx+len(base64Sep):])
+	return payload != ""
+}
+
+// rewriteRequestModel rewrites the model field in the request body JSON.
+// Uses sjson for in-place field replacement.
+func rewriteRequestModel(originalBody []byte, newModel string) ([]byte, error) {
+	return rewriteModelInBodyFast(originalBody, newModel)
+}
+
+// extractChatCompletionMessages extracts all messages from a Chat Completions request
+// for memory extraction. Returns messages in order (system, user, assistant, etc.)
+func extractChatCompletionMessages(req *openai.ChatCompletionNewParams) []ChatCompletionMessage {
+	var messages []ChatCompletionMessage
+	for _, msg := range req.Messages {
+		role, text := extractChatMessageRoleAndText(msg)
+		if role != "" && text != "" {
+			messages = append(messages, ChatCompletionMessage{Role: role, Content: text})
+		}
+	}
+	return messages
+}
+
+func extractChatMessageRoleAndText(msg openai.ChatCompletionMessageParamUnion) (string, string) {
+	if msg.OfUser != nil {
+		return "user", extractUserMessageText(msg.OfUser)
+	}
+	if msg.OfSystem != nil {
+		return "system", extractSystemMessageText(msg.OfSystem)
+	}
+	if msg.OfAssistant != nil {
+		return "assistant", extractAssistantMessageText(msg.OfAssistant)
+	}
+	if msg.OfDeveloper != nil {
+		return "developer", extractDeveloperMessageContent(msg.OfDeveloper.Content)
+	}
+	if msg.OfTool != nil {
+		return "tool", extractToolMessageContent(msg.OfTool.Content)
+	}
+	return "", ""
+}
+
+func extractUserMessageText(m *openai.ChatCompletionUserMessageParam) string {
+	if m.Content.OfString.Value != "" {
+		return m.Content.OfString.Value
+	}
+	var parts []string
+	for _, part := range m.Content.OfArrayOfContentParts {
+		if part.OfText != nil {
+			parts = append(parts, part.OfText.Text)
+		}
+	}
+	return strings.Join(parts, " ")
+}
+
+func extractSystemMessageText(m *openai.ChatCompletionSystemMessageParam) string {
+	if m.Content.OfString.Value != "" {
+		return m.Content.OfString.Value
+	}
+	var parts []string
+	for _, part := range m.Content.OfArrayOfContentParts {
+		if part.Text != "" {
+			parts = append(parts, part.Text)
+		}
+	}
+	return strings.Join(parts, " ")
+}
+
+func extractAssistantMessageText(m *openai.ChatCompletionAssistantMessageParam) string {
+	if m.Content.OfString.Value != "" {
+		return m.Content.OfString.Value
+	}
+	var parts []string
+	for _, part := range m.Content.OfArrayOfContentParts {
+		if part.OfText != nil {
+			parts = append(parts, part.OfText.Text)
+		}
+	}
+	return strings.Join(parts, " ")
 }

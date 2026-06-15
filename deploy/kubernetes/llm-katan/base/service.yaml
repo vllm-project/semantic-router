@@ -4,6 +4,9 @@ metadata:
   name: llm-katan
 spec:
   type: ClusterIP
+  selector:
+    app: llm-katan
+    app.kubernetes.io/name: llm-katan
   ports:
     - name: http
       port: 8000

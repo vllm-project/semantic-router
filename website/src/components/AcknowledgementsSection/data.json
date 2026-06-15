@@ -1,6 +1,6 @@
 {
   "title": "Acknowledgements",
-  "subtitle": "vLLM Semantic Router is born in open source and built on open source ❤️",
+  "subtitle": "vLLM Semantic Router is made possible by the open-source ecosystem.",
   "projects": [
     {
       "id": "vLLM",
@@ -9,11 +9,29 @@
       "url": "https://github.com/vllm-project/semantic-router",
       "description": "A high-throughput and memory-efficient inference and serving engine for LLMs"
     },{
+      "id": "pytorch",
+      "name": "PyTorch",
+      "logo": "/img/acknowledgements/pytorch.svg",
+      "url": "https://github.com/pytorch/pytorch",
+      "description": "Open-source machine learning framework for research and production"
+    },{
       "id": "huggingFace-candle",
       "name": "HuggingFace",
       "logo": "/img/acknowledgements/huggingface-logo.svg",
       "url": "https://github.com/huggingface/candle",
       "description": "Minimalist ML framework for Rust"
+    },{
+      "id": "amd",
+      "name": "AMD",
+      "logo": "/img/acknowledgements/amd.png",
+      "url": "https://github.com/ROCm",
+      "description": "High-performance CPU and GPU computing platform for AI workloads"
+    },{
+      "id": "nvidia",
+      "name": "NVIDIA",
+      "logo": "/img/acknowledgements/nvidia.svg",
+      "url": "https://github.com/NVIDIA",
+      "description": "Accelerated computing platform for AI training and inference"
     },{
       "id": "envoyproxy",
       "name": "EnvoyProxy",
@@ -33,12 +51,6 @@
       "url": "https://github.com/milvus-io/milvus",
       "description": "A cloud-native vector database, storage for next generation AI applications"
     },{
-      "id": "opentelemetry",
-      "name": "OpenTelemetry",
-      "logo": "/img/acknowledgements/opentelemetry-logo.jpg",
-      "url": "https://github.com/open-telemetry",
-      "description": "High-quality, ubiquitous, and portable telemetry to enable effective observability"
-    },{
       "id": "prometheus",
       "name": "Prometheus",
       "logo": "/img/acknowledgements/prometheus-logo.jpg",
@@ -50,12 +62,6 @@
       "logo": "/img/acknowledgements/grafana-logo.jpg",
       "url": "https://github.com/grafana/grafana",
       "description": "The open and composable observability and data visualization platform"
-    },{
-      "id": "jaeger",
-      "name": "Jaeger",
-      "logo": "/img/acknowledgements/jaeger-logo.jpg",
-      "url": "https://github.com/jaegertracing/jaeger",
-      "description": "CNCF Jaeger, a Distributed Tracing Platform"
     }
   ]
 }

@@ -56,13 +56,6 @@ spec:
           use_reasoning: true
           reasoning_effort: "medium"
       plugins:
-        - type: "pii"
+        - type: "fast_response"
           configuration:
-            enabled: true
-            threshold: 0.8
-            pii_types_allowed: ["CREDIT_CARD", "SSN", "EMAIL"]
-        - type: "jailbreak"
-          configuration:
-            enabled: true
-            threshold: 0.85
-
+            message: "Please remove personal information before continuing."

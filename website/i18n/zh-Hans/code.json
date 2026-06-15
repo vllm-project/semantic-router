@@ -322,53 +322,741 @@
     "message": "标签",
     "description": "The title of the tag list page"
   },
-  "homepage.hero.aiPowered": {
-    "message": "AI 赋能"
+
+  "homepage.hero.intelligentRouting": {
+    "message": "智能路由"
   },
-  "homepage.hero.intelligent": {
-    "message": "智能"
+  "homepage.hero.mixtureOf": {
+    "message": "面向混合"
   },
-  "homepage.hero.autoReasoning": {
-    "message": "自动推理"
+  "homepage.hero.rotating.modality": {
+    "message": "模态"
   },
-  "homepage.hero.routerFor": {
-    "message": "高效 LLM 推理路由器，基于"
+  "homepage.hero.rotating.models": {
+    "message": "模型"
   },
-  "homepage.hero.mixtureOfModels": {
-    "message": "混合模型"
+  "homepage.hero.rotating.tools": {
+    "message": "工具"
   },
-  "homepage.hero.badge.neural": {
-    "message": "神经网络"
+  "homepage.hero.rotating.skills": {
+    "message": "技能"
   },
-  "homepage.hero.badge.llm": {
-    "message": "LLM 优化"
+  "homepage.hero.subtitle.signalDriven": {
+    "message": "信号驱动"
   },
-  "homepage.hero.badge.economics": {
-    "message": "按 Token 计费"
+  "homepage.hero.subtitle.decisions": {
+    "message": "决策"
+  },
+  "homepage.hero.subtitle.pluginChain": {
+    "message": "插件链"
+  },
+  "homepage.hero.subtitle.architecture": {
+    "message": "架构"
+  },
+  "homepage.hero.subtitle.line2": {
+    "message": "云 · 数据中心 · 边缘"
+  },
+  "homepage.hero.pill.signals": {
+    "message": "信号驱动"
+  },
+  "homepage.hero.pill.plugins": {
+    "message": "插件链"
+  },
+  "homepage.hero.pill.deployment": {
+    "message": "云 · 数据中心 · 边缘"
   },
   "homepage.hero.getStarted": {
-    "message": "快速开始 - 5分钟 ⏱️"
+    "message": "快速开始"
   },
   "homepage.hero.publicBeta": {
-    "message": "公开测试版 ☁️"
+    "message": "抢先体验"
+  },
+  "homepage.hero.label": {
+    "message": "开源 LLM 路由器"
+  },
+  "homepage.hero.line1Accent": {
+    "message": "路由"
+  },
+  "homepage.hero.line1Suffix": {
+    "message": "每一个请求"
+  },
+  "homepage.hero.line2Prefix": {
+    "message": "用一个系统"
+  },
+  "homepage.hero.line2Accent": {
+    "message": "大脑"
+  },
+  "homepage.hero.line3Prefix": {
+    "message": "到"
+  },
+  "homepage.hero.line3Accent": {
+    "message": "最合适的"
+  },
+  "homepage.hero.line3Suffix": {
+    "message": "模型"
+  },
+  "homepage.hero.description": {
+    "message": "在本地、私有与前沿模型之间统一路由，由成本、时延、隐私与安全共同驱动。"
+  },
+  "homepage.hero.primaryCta": {
+    "message": "试用演示"
+  },
+  "homepage.hero.manifesto": {
+    "message": "先把请求看明白，再把系统做大；以信号驱动，以不确定性为标尺，让决策足够清晰。"
+  },
+  "homepage.hero.secondaryCta": {
+    "message": "阅读白皮书"
+  },
+  "homepage.hero.modelBand.eyebrow": {
+    "message": "系统大脑"
+  },
+  "homepage.hero.modelBand.copy": {
+    "message": "用系统大脑连接所有模型"
+  },    
+  "homepage.stats.signals.label": {
+    "message": "信号"
+  },
+  "homepage.stats.signals.description": {
+    "message": "16 类信号，覆盖启发式与学习式检测，从知识库路由到历史感知 reask。"
+  },
+  "homepage.stats.algorithms.label": {
+    "message": "选择器"
+  },
+  "homepage.stats.algorithms.description": {
+    "message": "12 种路由策略，覆盖规则、时延启发式、强化学习与机器学习选择。"
+  },
+  "homepage.stats.papers.label": {
+    "message": "论文"
+  },
+  "homepage.stats.papers.description": {
+    "message": "{count} 篇研究论文，覆盖路由、系统、安全与多模态。"
+  },
+  "homepage.capabilities.label": {
+    "message": "为什么需要路由"
+  },
+  "homepage.capabilities.heading": {
+    "message": "一个请求，多种模型选择。"
+  },
+  "homepage.capabilities.copy": {
+    "message": "模型在质量、成本、时延、隐私和模态上都不一样。一旦你不止跑一个模型，难点就不再是调用 LLM，而是把每个请求路由到正确的模型系统。"
+  },
+  "homepage.capabilities.axis.capability": {
+    "message": "能力"
+  },
+  "homepage.capabilities.axis.cost": {
+    "message": "成本"
+  },
+  "homepage.capabilities.axis.privacy": {
+    "message": "隐私"
+  },
+  "homepage.capabilities.axis.latency": {
+    "message": "时延"
+  },
+  "homepage.capabilities.checklist.label": {
+    "message": "路由器要决定什么"
+  },
+  "homepage.capabilities.checklist.copy": {
+    "message": "在回复到达用户之前，路由器每次都要回答同一组运行问题。"
+  },
+  "homepage.capabilities.task.choose": {
+    "message": "为每个请求选择合适的模型路径。"
+  },
+  "homepage.capabilities.task.connect": {
+    "message": "把本地、私有和前沿模型接进同一产品，而不是各管一摊。"
+  },
+  "homepage.capabilities.task.govern": {
+    "message": "在路由时同时执行成本、安全和隐私约束。"
+  },
+  "homepage.capabilities.checklist.footer": {
+    "message": "成本控制、安全控制和模型选择，必须在同一步完成。"
+  },
+  "homepage.capabilities.meta.selection": {
+    "message": "选择"
+  },
+  "homepage.capabilities.meta.connection": {
+    "message": "连接"
+  },
+  "homepage.capabilities.meta.governance": {
+    "message": "治理"
+  },
+  "homepage.capabilities.values.label": {
+    "message": "团队为什么部署它"
+  },
+  "homepage.capabilities.values.copy": {
+    "message": "用同一层路由同时处理成本、质量和策略决策。"
+  },
+  "homepage.capabilities.value1.title": {
+    "message": "降低单次请求成本"
+  },
+  "homepage.capabilities.value1.text": {
+    "message": "把常规流量发往更高效的模型，把真正需要的请求交给前沿推理模型，让模型选择变成可衡量的 ROI。"
+  },
+  "homepage.capabilities.value1.detail": {
+    "message": "每一美元换来更多有效输出。"
+  },
+  "homepage.capabilities.value2.title": {
+    "message": "更安全的模型决策"
+  },
+  "homepage.capabilities.value2.text": {
+    "message": "把越狱、PII 和幻觉处理放进路由链路里，让高风险请求在生成前就被拦住。"
+  },
+  "homepage.capabilities.value2.detail": {
+    "message": "安全能力直接进入请求路径。"
+  },
+  "homepage.capabilities.value3.title": {
+    "message": "一层路由接所有模型"
+  },
+  "homepage.capabilities.value3.text": {
+    "message": "用同一层路由协调本地、私有和前沿模型，从边缘部署一直覆盖到托管云。"
+  },
+  "homepage.capabilities.value3.detail": {
+    "message": "一套系统贯穿设备、VPC 和云。"
+  },
+  "homepage.capabilities.signal.title": {
+    "message": "信号提取"
+  },
+  "homepage.capabilities.signal.text": {
+    "message": "启发式规则和学习式检测器把原始请求转成可计算的路由状态。"
+  },
+  "homepage.capabilities.projection.title": {
+    "message": "投影协调"
+  },
+  "homepage.capabilities.projection.text": {
+    "message": "把分桶、打分和映射结果整理成可复用的路由事实，供后续决策复用。"
+  },
+  "homepage.capabilities.decision.title": {
+    "message": "决策引擎"
+  },
+  "homepage.capabilities.decision.text": {
+    "message": "信号与投影结果在可审计的符号规则里汇合，形成明确的路由决策。"
+  },
+  "homepage.capabilities.plugins.title": {
+    "message": "插件链"
+  },
+  "homepage.capabilities.plugins.text": {
+    "message": "缓存、安全、改写和链路追踪作为可组合能力挂接在同一条链路上。"
+  },
+  "homepage.capabilities.research.title": {
+    "message": "前沿系统研究"
+  },
+  "homepage.capabilities.research.text": {
+    "message": "这不是套壳式路由，而是一套围绕下一代 LLM 系统持续演进的研究栈。"
+  },
+  "homepage.capabilities.docs.title": {
+    "message": "控制台与运维"
+  },
+  "homepage.capabilities.docs.text": {
+    "message": "拓扑、路由、控制面与运行反馈都能在同一个控制台里观测和操作。"
+  },
+  "homepage.aiTech.label": {
+    "message": "编码器模型驱动"
   },
   "homepage.aiTech.title": {
-    "message": "神经网络处理架构"
+    "message": "先理解，再生成"
   },
   "homepage.aiTech.description": {
-    "message": "采用前沿 AI 技术，包括 ModernBERT 微调模型和先进的语义理解能力，实现智能模型路由和选择。"
+    "message": "专门训练的编码器先读懂意图、排序相关性、识别模态，再把结果交给生成模型。"
   },
-  "homepage.aiTech.feature.slm": {
-    "message": "小型语言模型"
+  "homepage.aiTech.leadLabel": {
+    "message": "信号入口面"
   },
-  "homepage.aiTech.feature.neural": {
-    "message": "神经网络处理"
+  "homepage.aiTech.leadCopy": {
+    "message": "序列分类、token 标注、嵌入检索和重排序，最终汇合成同一层系统智能。"
   },
-  "homepage.aiTech.feature.inference": {
-    "message": "实时推理"
+  "homepage.aiTech.primaryCta": {
+    "message": "查看 Hugging Face 模型"
   },
-  "homepage.aiTech.feature.semantic": {
-    "message": "语义理解"
+  "homepage.aiTech.track.sequence": {
+    "message": "序列分类负责领域识别、越狱检测、事实核查与反馈路由。"
+  },
+  "homepage.aiTech.track.token": {
+    "message": "Token 标注负责定位 PII 与高风险片段，便于做局部干预。"
+  },
+  "homepage.aiTech.track.embedding": {
+    "message": "嵌入与重排序链路支撑语义缓存、相似检索和候选打分。"
+  },
+  "homepage.aiTech.cap.multiModality": {
+    "message": "多模态"
+  },
+  "homepage.aiTech.cap.multiModality.desc": {
+    "message": "检测并路由文本、图像和音频输入到合适的模态模型。"
+  },
+  "homepage.aiTech.cap.biEncoder": {
+    "message": "Bi-Encoder 嵌入"
+  },
+  "homepage.aiTech.cap.biEncoder.desc": {
+    "message": "独立编码查询和候选项为稠密向量，用于相似度搜索和语义缓存。"
+  },
+  "homepage.aiTech.cap.crossEncoder": {
+    "message": "Cross-Encoder 学习"
+  },
+  "homepage.aiTech.cap.crossEncoder.desc": {
+    "message": "联合交叉注意力评分查询-候选对，实现高精度重排序。"
+  },
+  "homepage.aiTech.cap.classification": {
+    "message": "分类"
+  },
+  "homepage.aiTech.cap.classification.desc": {
+    "message": "基于自研 BERT 的领域、越狱、PII 和事实核查的分类器，覆盖多个 signal"
+  },
+  "homepage.aiTech.cap.attention": {
+    "message": "全注意力"
+  },
+  "homepage.aiTech.cap.attention.desc": {
+    "message": "跨 token 和句子的双向注意力 — 双向完整上下文，非因果掩码。"
+  },
+  "homepage.aiTech.cap.2dmse": {
+    "message": "2DMSE"
+  },
+  "homepage.aiTech.cap.2dmse.desc": {
+    "message": "推理时自适应调整嵌入层数和维度，按需平衡计算量与精度。"
+  },
+  "homepage.aiTech.cap.mrl": {
+    "message": "MRL"
+  },
+  "homepage.aiTech.cap.mrl.desc": {
+    "message": "无需重训即可截断嵌入向量到任意维度 — 按请求平衡精度与速度。"
+  },
+  "homepage.install.label": {
+    "message": "快速上手"
+  },
+  "homepage.install.meta": {
+    "message": "只保留一条官方支持的本地启动路径：复制安装命令，执行后即可进入控制台。"
+  },
+  "homepage.install.title.human": {
+    "message": "一条命令，本地跑起来。"
+  },
+  "homepage.install.description.human": {
+    "message": "首跑路径收敛为一个安装脚本，负责在 macOS 和 Linux 上配置 CLI 与本地服务流程。"
+  },
+  "homepage.install.frameLabel.human": {
+    "message": "一键安装"
+  },
+  "homepage.install.footer.human": {
+    "message": "默认安装到 ~/.local/share/vllm-sr，写入 ~/.local/bin/vllm-sr；Windows 仍按文档中的手动 pip 方式安装。"
+  },
+  "homepage.install.primaryCta": {
+    "message": "查看完整安装指南"
+  },
+  "homepage.install.copy.idle": {
+    "message": "复制命令"
+  },
+  "homepage.install.copy.copied": {
+    "message": "已复制"
+  },
+  "homepage.install.copy.error": {
+    "message": "复制失败"
+  },
+  "homepage.researchCarousel.label": {
+    "message": "研究"
+  },
+  "homepage.researchCarousel.title": {
+    "message": "这些论文，构成了路由器的底层思路。"
+  },
+  "homepage.researchCarousel.subtitle": {
+    "message": "从安全、多模态到编排与系统设计，这些研究线索持续塑造 vLLM Semantic Router 的演进方向。"
+  },
+  "homepage.researchCarousel.cardType": {
+    "message": "论文"
+  },
+  "homepage.researchCarousel.paperLink": {
+    "message": "查看论文"
+  },
+  "homepage.researchCarousel.footer": {
+    "message": "它们决定路由器如何感知、如何判断，以及如何扩展。"
+  },
+  "homepage.researchCarousel.cta": {
+    "message": "查看全部论文与分享"
+  },
+  "homepage.band.docs.label": {
+    "message": "文档"
+  },
+  "homepage.band.docs.title": {
+    "message": "架构、配置与运行方式，都写清楚了。"
+  },
+  "homepage.band.docs.text": {
+    "message": "从安装、配置到训练和运维，整套路径都收进一张连贯的文档图谱里。"
+  },
+  "homepage.band.docs.cta": {
+    "message": "查看文档目录"
+  },
+  "homepage.band.community.label": {
+    "message": "社区"
+  },
+  "homepage.band.community.title": {
+    "message": "研究者和构建者，在同一条反馈回路里。"
+  },
+  "homepage.band.community.text": {
+    "message": "论文、工作组和贡献者围绕同一套系统公开协作、持续迭代。"
+  },
+  "homepage.band.community.cta": {
+    "message": "查看社区入口"
+  },
+  "homepage.paperFigures.label": {
+    "message": "路由蓝图"
+  },
+  "homepage.paperFigures.title": {
+    "message": "系统如何工作"
+  },
+  "homepage.paperFigures.description": {
+    "message": "通过交互式演示理解信号提取、投影协调、决策逻辑与模型路由行为。"
+  },
+  "homepage.paperFigures.figure1.title": {
+    "message": "香农映射"
+  },
+  "homepage.paperFigures.figure1.summary": {
+    "message": "从通信理论到路由流水线的结构映射。"
+  },
+  "homepage.paperFigures.figure2.title": {
+    "message": "熵坍缩"
+  },
+  "homepage.paperFigures.figure2.summary": {
+    "message": "每增加一个信号都会降低不确定性，直到模型选择趋于确定。"
+  },
+  "homepage.paperFigures.figure3.title": {
+    "message": "四层架构"
+  },
+  "homepage.paperFigures.figure3.summary": {
+    "message": "信号提取、投影协调、决策模块与插件执行共同构成完整路由路径。"
+  },
+  "homepage.paperFigures.figure4.title": {
+    "message": "信号分类体系"
+  },
+  "homepage.paperFigures.figure4.summary": {
+    "message": "完整的 14 个信号按启发式与学习式两类组织，并汇入 S(r)。"
+  },
+  "homepage.paperFigures.figure14.title": {
+    "message": "智能体策略合成"
+  },
+  "homepage.paperFigures.figure14.summary": {
+    "message": "自然语言规范可由编码智能体编译为可执行的路由策略闭环。"
+  },
+  "homepage.paperFigures.figure9.title": {
+    "message": "分层熵折叠"
+  },
+  "homepage.paperFigures.figure9.summary": {
+    "message": "类 Transformer 的隐藏控制层会逐步折叠路由熵，收敛到确定性出口。"
+  },
+  "homepage.paperFigures.figure1.mapping.source.shannon": {
+    "message": "源"
+  },
+  "homepage.paperFigures.figure1.mapping.source.vsr": {
+    "message": "查询 r"
+  },
+  "homepage.paperFigures.figure1.mapping.source.note": {
+    "message": "用户请求是在编码前的原始源消息。"
+  },
+  "homepage.paperFigures.figure1.mapping.encoder.shannon": {
+    "message": "编码器"
+  },
+  "homepage.paperFigures.figure1.mapping.encoder.vsr": {
+    "message": "信号提取"
+  },
+  "homepage.paperFigures.figure1.mapping.encoder.note": {
+    "message": "启发式与编码器模型将文本转换为结构化信号。"
+  },
+  "homepage.paperFigures.figure1.mapping.channel.shannon": {
+    "message": "信道"
+  },
+  "homepage.paperFigures.figure1.mapping.channel.vsr": {
+    "message": "信号向量 s"
+  },
+  "homepage.paperFigures.figure1.mapping.channel.note": {
+    "message": "信号向量是连接提取层与策略逻辑的传输层。"
+  },
+  "homepage.paperFigures.figure1.mapping.decoder.shannon": {
+    "message": "解码器"
+  },
+  "homepage.paperFigures.figure1.mapping.decoder.vsr": {
+    "message": "决策引擎"
+  },
+  "homepage.paperFigures.figure1.mapping.decoder.note": {
+    "message": "布尔规则对信号模式进行解码，得到确定性的路由决策。"
+  },
+  "homepage.paperFigures.figure1.mapping.destination.shannon": {
+    "message": "目的地"
+  },
+  "homepage.paperFigures.figure1.mapping.destination.vsr": {
+    "message": "已选模型"
+  },
+  "homepage.paperFigures.figure1.mapping.destination.note": {
+    "message": "最终会选出具体模型端点并接收请求。"
+  },
+  "homepage.paperFigures.figure1.mappingSide.shannon": {
+    "message": "香农"
+  },
+  "homepage.paperFigures.figure1.mappingSide.vsr": {
+    "message": "VSR"
+  },
+  "homepage.paperFigures.figure2.stage.raw.short": {
+    "message": "原始"
+  },
+  "homepage.paperFigures.figure2.stage.raw.label": {
+    "message": "原始请求"
+  },
+  "homepage.paperFigures.figure2.stage.raw.note": {
+    "message": "尚无信号：路由熵接近最大值。"
+  },
+  "homepage.paperFigures.figure2.stage.keyword.short": {
+    "message": "+关键词"
+  },
+  "homepage.paperFigures.figure2.stage.keyword.label": {
+    "message": "+关键词"
+  },
+  "homepage.paperFigures.figure2.stage.keyword.note": {
+    "message": "关键词会快速剔除不兼容的模型族。"
+  },
+  "homepage.paperFigures.figure2.stage.domain.short": {
+    "message": "+领域"
+  },
+  "homepage.paperFigures.figure2.stage.domain.label": {
+    "message": "+领域"
+  },
+  "homepage.paperFigures.figure2.stage.domain.note": {
+    "message": "领域分类器以更高精度收窄候选池。"
+  },
+  "homepage.paperFigures.figure2.stage.signals.short": {
+    "message": "+复杂度"
+  },
+  "homepage.paperFigures.figure2.stage.signals.label": {
+    "message": "+ N 个信号..."
+  },
+  "homepage.paperFigures.figure2.stage.signals.note": {
+    "message": "复杂度、嵌入等信号会进一步压缩不确定性。"
+  },
+  "homepage.paperFigures.figure2.stage.decision.short": {
+    "message": "决策"
+  },
+  "homepage.paperFigures.figure2.stage.decision.label": {
+    "message": "决策"
+  },
+  "homepage.paperFigures.figure2.stage.decision.note": {
+    "message": "决策规则将熵坍缩到近似确定的模型选择。"
+  },
+  "homepage.paperFigures.figure3.layer.input.tag": {
+    "message": "信号"
+  },
+  "homepage.paperFigures.figure3.layer.input.title": {
+    "message": "信号提取"
+  },
+  "homepage.paperFigures.figure3.layer.input.description": {
+    "message": "启发式与学习式检测器共同产出可复用的路由事实。"
+  },
+  "homepage.paperFigures.figure3.layer.input.focus": {
+    "message": "并行采集请求特征并输出类型化信号值。"
+  },
+  "homepage.paperFigures.figure3.layer.hidden.tag": {
+    "message": "决策"
+  },
+  "homepage.paperFigures.figure3.layer.hidden.title": {
+    "message": "决策模块"
+  },
+  "homepage.paperFigures.figure3.layer.hidden.description": {
+    "message": "布尔策略读取信号与投影输出，选出唯一生效路由。"
+  },
+  "homepage.paperFigures.figure3.layer.hidden.focus": {
+    "message": "评估规则树并将候选集合坍缩为单一路径。"
+  },
+  "homepage.paperFigures.figure3.layer.projection.tag": {
+    "message": "投影"
+  },
+  "homepage.paperFigures.figure3.layer.projection.title": {
+    "message": "投影协调"
+  },
+  "homepage.paperFigures.figure3.layer.projection.description": {
+    "message": "分区、分数与映射把原始匹配整理成可复用的路由事实。"
+  },
+  "homepage.paperFigures.figure3.layer.projection.focus": {
+    "message": "协调竞争信号，并为后续策略发布命名投影输出。"
+  },
+  "homepage.paperFigures.figure3.layer.plugin.tag": {
+    "message": "插件"
+  },
+  "homepage.paperFigures.figure3.layer.plugin.title": {
+    "message": "插件链"
+  },
+  "homepage.paperFigures.figure3.layer.plugin.description": {
+    "message": "按策略绑定前/后置插件，再将请求分发到目标端点。"
+  },
+  "homepage.paperFigures.figure3.layer.plugin.focus": {
+    "message": "围绕选中路由附加缓存、安全、改写或追踪等行为。"
+  },
+  "homepage.paperFigures.figure3.layerFocus": {
+    "message": "层焦点"
+  },
+  "homepage.paperFigures.figure4.group.heuristic.title": {
+    "message": "启发式（<1ms）"
+  },
+  "homepage.paperFigures.figure4.group.heuristic.note": {
+    "message": "低成本确定性过滤先执行，用于早期剪枝。"
+  },
+  "homepage.paperFigures.figure4.group.learned.title": {
+    "message": "学习式（10-100ms）"
+  },
+  "homepage.paperFigures.figure4.group.learned.note": {
+    "message": "模型信号会补充语义精度，提升最终路由置信度。"
+  },
+  "homepage.paperFigures.figure4.signal.keyword": {
+    "message": "关键词"
+  },
+  "homepage.paperFigures.figure4.signal.language": {
+    "message": "语言"
+  },
+  "homepage.paperFigures.figure4.signal.context": {
+    "message": "上下文"
+  },
+  "homepage.paperFigures.figure4.signal.structure": {
+    "message": "结构"
+  },
+  "homepage.paperFigures.figure4.signal.authz": {
+    "message": "鉴权"
+  },
+  "homepage.paperFigures.figure4.signal.embedding": {
+    "message": "嵌入"
+  },
+  "homepage.paperFigures.figure4.signal.domain": {
+    "message": "领域"
+  },
+  "homepage.paperFigures.figure4.signal.factual": {
+    "message": "事实核查"
+  },
+  "homepage.paperFigures.figure4.signal.feedback": {
+    "message": "反馈"
+  },
+  "homepage.paperFigures.figure4.signal.modality": {
+    "message": "模态"
+  },
+  "homepage.paperFigures.figure4.signal.complexity": {
+    "message": "复杂度"
+  },
+  "homepage.paperFigures.figure4.signal.jailbreak": {
+    "message": "越狱"
+  },
+  "homepage.paperFigures.figure4.signal.pii": {
+    "message": "PII"
+  },
+  "homepage.paperFigures.figure4.signal.preference": {
+    "message": "偏好"
+  },
+  "homepage.paperFigures.figure4.summaryText": {
+    "message": "共 14 个信号。当前激活信号：{signal}。{groupNote}"
+  },
+  "homepage.paperFigures.figure14.flow.spec.label": {
+    "message": "自然语言规范"
+  },
+  "homepage.paperFigures.figure14.flow.spec.detail": {
+    "message": "\"将数学请求路由并强制执行 PII 策略\""
+  },
+  "homepage.paperFigures.figure14.flow.spec.edge": {
+    "message": "合成"
+  },
+  "homepage.paperFigures.figure14.flow.agent.label": {
+    "message": "编码智能体（LLM）"
+  },
+  "homepage.paperFigures.figure14.flow.agent.detail": {
+    "message": "在受限 DSL 上进行策略编译"
+  },
+  "homepage.paperFigures.figure14.flow.agent.edge": {
+    "message": "生成"
+  },
+  "homepage.paperFigures.figure14.flow.dsl.label": {
+    "message": "神经符号 DSL"
+  },
+  "homepage.paperFigures.figure14.flow.dsl.detail": {
+    "message": "类型化路由程序"
+  },
+  "homepage.paperFigures.figure14.flow.dsl.edge": {
+    "message": "实例化"
+  },
+  "homepage.paperFigures.figure14.flow.engine.label": {
+    "message": "推理引擎"
+  },
+  "homepage.paperFigures.figure14.flow.engine.detail": {
+    "message": "信号-投影-决策-插件执行"
+  },
+  "homepage.paperFigures.figure14.feedback.label": {
+    "message": "路由质量反馈 Q(r, m*)"
+  },
+  "homepage.paperFigures.figure14.feedback.detail": {
+    "message": "基于运行结果优化策略合成"
+  },
+  "homepage.paperFigures.figure14.note.spec": {
+    "message": "自然语言需求在策略合成开始前定义路由意图。"
+  },
+  "homepage.paperFigures.figure14.note.agent": {
+    "message": "编码智能体将意图转换为可执行的受限 DSL 策略。"
+  },
+  "homepage.paperFigures.figure14.note.dsl": {
+    "message": "生成的 DSL 配置可审计，并可编译为确定性路由行为。"
+  },
+  "homepage.paperFigures.figure14.note.engine": {
+    "message": "推理阶段会依次执行信号提取、投影协调、决策评估与插件执行。"
+  },
+  "homepage.paperFigures.figure14.note.feedback": {
+    "message": "运行质量反馈形成闭环，并用于下一轮策略优化。"
+  },
+  "homepage.paperFigures.figure14.engineOutput": {
+    "message": "引擎输出 m*"
+  },
+  "homepage.paperFigures.figure14.loop.engineOutput": {
+    "message": "引擎输出"
+  },
+  "homepage.paperFigures.figure14.loop.optimize": {
+    "message": "优化 → 编码智能体"
+  },
+  "homepage.paperFigures.figure9.layer.input.tag": {
+    "message": "输入"
+  },
+  "homepage.paperFigures.figure9.layer.input.title": {
+    "message": "输入查询 r"
+  },
+  "homepage.paperFigures.figure9.layer.input.formula": {
+    "message": "原始请求"
+  },
+  "homepage.paperFigures.figure9.layer.input.note": {
+    "message": "在提取任何控制信号前，路由从最大不确定性开始。"
+  },
+  "homepage.paperFigures.figure9.layer.embed.tag": {
+    "message": "嵌入"
+  },
+  "homepage.paperFigures.figure9.layer.embed.title": {
+    "message": "混合信号嵌入"
+  },
+  "homepage.paperFigures.figure9.layer.embed.note": {
+    "message": "信号提取会建立共享控制状态，供后续层共同读取。"
+  },
+  "homepage.paperFigures.figure9.layer.hidden.tag": {
+    "message": "隐层"
+  },
+  "homepage.paperFigures.figure9.layer.hidden.title": {
+    "message": "决策隐藏层（x N）"
+  },
+  "homepage.paperFigures.figure9.layer.hidden.note": {
+    "message": "堆叠隐藏控制深度被表示为单个模块，在 N 个决策层中持续折叠熵。"
+  },
+  "homepage.paperFigures.figure9.layer.select.tag": {
+    "message": "头部"
+  },
+  "homepage.paperFigures.figure9.layer.select.title": {
+    "message": "选择头"
+  },
+  "homepage.paperFigures.figure9.layer.select.note": {
+    "message": "选择头通过确定性的早退机制输出最终决策。"
+  },
+  "homepage.paperFigures.figure9.layer.plugins.tag": {
+    "message": "投影"
+  },
+  "homepage.paperFigures.figure9.layer.plugins.title": {
+    "message": "插件投影"
+  },
+  "homepage.paperFigures.figure9.layer.plugins.note": {
+    "message": "路由选择完成后，投影头会应用与策略绑定的插件链。"
+  },
+  "homepage.paperFigures.figure9.busLabel": {
+    "message": "共享控制状态 s 会输入到每一个决策层"
+  },
+  "homepage.paperFigures.figure9.exitLabel": {
+    "message": "来自控制层的优先早退分支"
   },
   "homepage.architecture.title": {
     "message": "架构"
@@ -787,61 +1475,28 @@
     "message": "加入特定的工作组"
   },
   "team.title": {
-    "message": "团队成员 👥"
+    "message": "团队成员"
   },
   "team.subtitle": {
-    "message": "构建智能 LLM 路由未来的热情成员们"
+    "message": "按治理职责和提交职责协作推进 vLLM Semantic Router"
   },
-  "team.coreTeam.title": {
-    "message": "核心团队"
+  "team.steering.title": {
+    "message": "指导委员会"
   },
-  "team.coreTeam.description": {
-    "message": "推动项目发展并做出关键决策的核心维护者。"
+  "team.steering.description": {
+    "message": "指导委员会负责 vLLM Semantic Router 的路线图方向、项目范围和跨社区协作。"
+  },
+  "team.committers.title": {
+    "message": "提交者"
+  },
+  "team.committers.description": {
+    "message": "提交者负责具体实现领域、代码评审、社区答疑，并维护项目在各个版本中的健康度。"
   },
   "team.joinTeam.title": {
     "message": "加入我们"
   },
   "team.joinTeam.description": {
     "message": "我们一直在寻找热情的贡献者加入我们的社区！"
-  },
-  "team.recognition.title": {
-    "message": "荣誉表彰"
-  },
-  "team.recognition.subtitle": {
-    "message": "贡献者表彰"
-  },
-  "team.recognition.description": {
-    "message": "我们相信认可社区成员的宝贵贡献。在特定领域展现持续奉献和高质量工作的贡献者可能会被邀请成为维护者，获得仓库的写入权限。"
-  },
-  "team.recognition.pathTitle": {
-    "message": "成为维护者之路："
-  },
-  "team.recognition.step1.title": {
-    "message": "定期贡献"
-  },
-  "team.recognition.step1.desc": {
-    "message": "在你感兴趣的领域做出持续、高质量的贡献"
-  },
-  "team.recognition.step2.title": {
-    "message": "加入工作组"
-  },
-  "team.recognition.step2.desc": {
-    "message": "积极参与我们的"
-  },
-  "team.recognition.step2.link": {
-    "message": "工作组"
-  },
-  "team.recognition.step3.title": {
-    "message": "社区投票"
-  },
-  "team.recognition.step3.desc": {
-    "message": "获得维护者团队的提名和批准"
-  },
-  "team.recognition.step4.title": {
-    "message": "维护者权限"
-  },
-  "team.recognition.step4.desc": {
-    "message": "获邀加入维护者团队并获得写入权限"
   },
   "team.getInvolved.title": {
     "message": "参与方式"
@@ -874,10 +1529,79 @@
     "message": "GitHub 讨论区"
   },
   "team.members.HuaminChen.role": {
-    "message": "杰出工程师"
+    "message": "@Microsoft"
   },
   "team.members.HuaminChen.bio": {
-    "message": "Red Hat 杰出工程师，推动云原生和 AI/LLM 推理技术的创新。"
+    "message": "长期孵化前沿基础设施和 AI 系统，覆盖云原生平台、开源生态和模型服务栈。"
+  },
+  "team.members.HuaminChen.expertise.cloud": {
+    "message": "云原生平台"
+  },
+  "team.members.HuaminChen.expertise.serving": {
+    "message": "模型服务栈"
+  },
+  "team.members.HuaminChen.expertise.ecosystem": {
+    "message": "开源生态"
+  },
+  "team.members.BoweiHe.role": {
+    "message": "Postdoc @ MBZUAI / McGill"
+  },
+  "team.members.BoweiHe.bio": {
+    "message": "CityUHK 博士，曾参与青云人才计划下的 Hunyuan LLM。"
+  },
+  "team.members.BoweiHe.expertise.research": {
+    "message": "学术研究"
+  },
+  "team.members.BoweiHe.expertise.llm": {
+    "message": "LLM 系统"
+  },
+  "team.members.BoweiHe.expertise.hunyuan": {
+    "message": "腾讯混元 LLM"
+  },
+  "team.members.YankaiChen.role": {
+    "message": "Postdoctoral Associate @ McGill University / MBZUAI"
+  },
+  "team.members.YankaiChen.bio": {
+    "message": "研究方向覆盖 agentic AI、人本 AI 和知识挖掘。"
+  },
+  "team.members.YankaiChen.expertise.agentic": {
+    "message": "Agentic AI"
+  },
+  "team.members.YankaiChen.expertise.hcai": {
+    "message": "人本 AI"
+  },
+  "team.members.YankaiChen.expertise.mining": {
+    "message": "知识挖掘"
+  },
+  "team.members.FuyuanLyu.role": {
+    "message": "PhD Candidate @ McGill University / Mila"
+  },
+  "team.members.FuyuanLyu.bio": {
+    "message": "研究方向包括数据中心 AI、自动特征选择，以及面向深度学习和基础模型的自动标注。"
+  },
+  "team.members.FuyuanLyu.expertise.data": {
+    "message": "数据中心 AI"
+  },
+  "team.members.FuyuanLyu.expertise.features": {
+    "message": "自动特征选择"
+  },
+  "team.members.FuyuanLyu.expertise.labeling": {
+    "message": "自动标注"
+  },
+  "team.members.SteveLiu.role": {
+    "message": "@MBZUAI / McGill / Mila"
+  },
+  "team.members.SteveLiu.bio": {
+    "message": "CAE 与 IEEE Fellow；Associate VPR @ MBZUAI；Prof @ McGill；Mila；ex-VP R&D @ Samsung AI；Chair ACM SIGBED。"
+  },
+  "team.members.SteveLiu.expertise.aiml": {
+    "message": "AI 与机器学习"
+  },
+  "team.members.SteveLiu.expertise.systems": {
+    "message": "智能系统"
+  },
+  "team.members.SteveLiu.expertise.cps": {
+    "message": "信息物理系统"
   },
   "team.members.ChenWang.role": {
     "message": "高级研究科学家"
@@ -892,10 +1616,67 @@
     "message": "IBM 研究科学家，专注于 AI 研究和 LLM 推理。"
   },
   "team.members.XunzhuoLiu.role": {
-    "message": "AI 网络"
+    "message": "LLM Routing @ vLLM"
   },
   "team.members.XunzhuoLiu.bio": {
-    "message": "腾讯 AI 网络工程师，领导 vLLM Semantic Router 开发并推动项目愿景。"
+    "message": "LLM routing builder at vLLM。"
+  },
+  "team.members.XunzhuoLiu.expertise.routing": {
+    "message": "LLM 路由"
+  },
+  "team.members.XunzhuoLiu.expertise.gateway": {
+    "message": "Kubernetes AI Gateway"
+  },
+  "team.members.XunzhuoLiu.expertise.opensource": {
+    "message": "开源基础设施"
+  },
+  "team.members.FAUST-BENCHOU.role": {
+    "message": "云原生开源贡献者"
+  },
+  "team.members.FAUST-BENCHOU.bio": {
+    "message": "参与 Karmada 与 Volcano 的云原生开源贡献者。"
+  },
+  "team.members.shraderdm.role": {
+    "message": "GTM Tech Lead"
+  },
+  "team.members.shraderdm.bio": {
+    "message": "Google GTM Tech Lead。"
+  },
+  "team.members.drivebyer.role": {
+    "message": "云原生工程师"
+  },
+  "team.members.drivebyer.bio": {
+    "message": "DaoCloud 工程师与开源贡献者，关注实用基础设施改进。"
+  },
+  "team.members.ramkrishs.role": {
+    "message": "计算机科学工程师"
+  },
+  "team.members.ramkrishs.bio": {
+    "message": "Intuit 计算机科学工程师，专注软件系统。"
+  },
+  "team.members.WUKUNTAI-0211.role": {
+    "message": "软件工程师"
+  },
+  "team.members.WUKUNTAI-0211.bio": {
+    "message": "来自台湾 Delta Electronics 的软件工程师。"
+  },
+  "team.members.AayushSaini101.role": {
+    "message": "SDE, Data and AI"
+  },
+  "team.members.AayushSaini101.bio": {
+    "message": "Red Hat Data and AI SDE，GSoC 2025 参与者，AsyncAPI Steering Committee member。"
+  },
+  "team.members.siloteemu.role": {
+    "message": "开源贡献者"
+  },
+  "team.members.siloteemu.bio": {
+    "message": "GitHub 开源贡献者。"
+  },
+  "team.members.topNewContributor.role": {
+    "message": "Release Window Committer"
+  },
+  "team.members.topNewContributor.bio": {
+    "message": "基于近期贡献者排行识别的新 committer。"
   },
   "team.members.SenanZedan.role": {
     "message": "研发经理"
@@ -938,6 +1719,12 @@
   },
   "team.members.NoaLimoy.bio": {
     "message": "具有研究思维的软件工程师，专注于云原生平台和 AI 基础设施。开源贡献者。"
+  },
+  "team.members.MarinaKoushnir.role": {
+    "message": "开源贡献者"
+  },
+  "team.members.MarinaKoushnir.bio": {
+    "message": "vLLM Semantic Router 的开源贡献者。"
   },
   "team.members.JaredforReal.role": {
     "message": "软件工程师"
@@ -997,6 +1784,18 @@
     "message": "个人贡献者"
   },
   "team.members.aeft.bio": {
+    "message": "vLLM Semantic Router 的开源贡献者。"
+  },
+  "team.members.HaoWu.role": {
+    "message": "个人贡献者"
+  },
+  "team.members.HaoWu.bio": {
+    "message": "vLLM Semantic Router 的开源贡献者。"
+  },
+  "team.members.QipingPan.role": {
+    "message": "个人贡献者"
+  },
+  "team.members.QipingPan.bio": {
     "message": "vLLM Semantic Router 的开源贡献者。"
   },
   "workGroups.title": {
@@ -1063,7 +1862,7 @@
     "message": "关于工作组的问题或参与方式："
   },
   "workGroups.contact.issue": {
-    "message": "在 GitHub 上开启一个"
+    "message": "在 GitHub 上打开一个"
   },
   "workGroups.contact.discussion": {
     "message": "参与"
@@ -1554,12 +2353,94 @@
   "publications.filter.talks": {
     "message": "🎤 演讲"
   },
-  "homepage.hero.systemLevel": {
-    "message": "系统级"
+  "publications.meta.description": {
+    "message": "vLLM Semantic Router 项目的最新研究论文、演讲与科学贡献。"
   },
-  "homepage.hero.intelligentRouter": {
-    "message": "智能路由"
+  "publications.awardType.paper": {
+    "message": "研究论文"
   },
+  "publications.awardType.talk": {
+    "message": "会议演讲"
+  },
+  "publications.detail.authors": {
+    "message": "作者："
+  },
+  "publications.detail.speakers": {
+    "message": "演讲者："
+  },
+  "publications.detail.venue": {
+    "message": "发表/活动："
+  },
+  "publications.empty.all": {
+    "message": "暂无内容。"
+  },
+  "publications.empty.paper": {
+    "message": "暂无论文。"
+  },
+  "publications.empty.talk": {
+    "message": "暂无演讲。"
+  },
+  "paperViewer.loading": {
+    "message": "正在加载 PDF…"
+  },
+  "paperViewer.error.loadPreview": {
+    "message": "无法加载 PDF 预览。"
+  },
+  "paperViewer.error.openNewTab": {
+    "message": "点击这里在新标签页中打开 PDF"
+  },
+  "paperViewer.pagination.prev": {
+    "message": "上一页"
+  },
+  "paperViewer.pagination.next": {
+    "message": "下一页"
+  },
+  "paperViewer.pagination.prevAria": {
+    "message": "上一页"
+  },
+  "paperViewer.pagination.nextAria": {
+    "message": "下一页"
+  },
+  "paperViewer.hero.label": {
+    "message": "研究文档"
+  },
+  "paperViewer.hero.download": {
+    "message": "下载 PDF"
+  },
+  "paperViewer.hero.backToPublications": {
+    "message": "查看论文与演讲"
+  },
+  "whitePaper.title": {
+    "message": "白皮书"
+  },
+  "whitePaper.metaDescription": {
+    "message": "面向混合模态模型的信号驱动决策路由"
+  },
+  "whitePaper.heroDescription": {
+    "message": "面向混合模态模型的信号驱动决策路由，以站内完整 PDF 阅读器形式呈现。"
+  },
+  "visionPaper.title": {
+    "message": "愿景论文"
+  },
+  "visionPaper.socialTitle": {
+    "message": "我们的愿景 — vLLM Semantic Router"
+  },
+  "visionPaper.metaDescription": {
+    "message": "用于 LLM 推理优化的 Workload-Router-Pool 架构：来自 vLLM Semantic Router 项目的愿景论文"
+  },
+  "visionPaper.heroDescription": {
+    "message": "用于 LLM 推理优化的 Workload-Router-Pool 架构，以 vLLM Semantic Router 愿景论文的完整 PDF 阅读器形式呈现。"
+  },
+  "homepage.meta.description": {
+    "message": "面向 Mixture-of-Models 的开源 LLM 路由器。基于成本、时延、隐私、安全和模态信号，为每个请求选择最合适的本地、私有或前沿模型。"
+  },
+  "homepage.meta.title": {
+    "message": "面向 Mixture-of-Models 的开源 LLM 路由器"
+  },
+  "homepage.meta.socialTitle": {
+    "message": "vLLM Semantic Router | 开源 LLM 路由器"
+  },
+
   "homepage.whereItLives.title": {
     "message": "它的位置"
   },
@@ -1584,6 +2465,9 @@
   "team.badge.maintainer": {
     "message": "维护者"
   },
+  "team.badge.steering": {
+    "message": "指导委员会"
+  },
   "team.badge.committer": {
     "message": "提交者"
   },
@@ -1591,24 +2475,132 @@
     "message": "贡献者"
   },
   "teamCarousel.title": {
-    "message": "认识我们的团队"
+    "message": "谁在把这套系统做成现实"
   },
   "teamCarousel.subtitle": {
-    "message": "vLLM Semantic Router 背后的优秀成员"
+    "message": "从研究到基础设施，这个项目由一群持续交付的人共同推进。"
+  },
+  "teamCarousel.label": {
+    "message": "贡献者"
+  },
+  "teamCarousel.footer": {
+    "message": "维护者、提交者与贡献者共同覆盖研究、基础设施和开源协作。"
   },
   "teamCarousel.viewAll": {
-    "message": "查看所有团队成员"
+    "message": "查看团队名单"
+  },
+  "acknowledgements.label": {
+    "message": "开源生态"
   },
   "acknowledgements.title": {
     "message": "致谢"
   },
   "acknowledgements.subtitle": {
-    "message": "vLLM Semantic Router 诞生于开源，构建于开源"
+    "message": "vLLM Semantic Router 站在开源生态之上，也持续回馈开源。"
   },
-  "aiChip.title": {
-    "message": "神经处理单元"
+  "acknowledgements.projectMeta": {
+    "message": "基础依赖"
   },
-  "aiChip.subtitle": {
-    "message": "嵌入式 • 分级 • 相似度"
+  "acknowledgements.projectLink": {
+    "message": "查看项目"
+  },
+  "community.contributors.pageTitle": {
+    "message": "贡献者排行榜"
+  },
+  "community.contributors.pageDescription": {
+    "message": "vLLM Semantic Router 贡献者排行榜：按近期与历史提交活跃度统计。"
+  },
+  "community.contributors.eyebrow": {
+    "message": "社区"
+  },
+  "community.contributors.h1": {
+    "message": "贡献者排行榜"
+  },
+  "community.contributors.startContributing": {
+    "message": "开始贡献"
+  },
+  "community.contributors.metrics.aria": {
+    "message": "贡献者排行概览"
+  },
+  "community.contributors.metrics.contributors": {
+    "message": "贡献者"
+  },
+  "community.contributors.metrics.newContributors": {
+    "message": "新增贡献者"
+  },
+  "community.contributors.metrics.commits": {
+    "message": "提交数"
+  },
+  "community.contributors.podium.aria": {
+    "message": "贡献者领奖台"
+  },
+  "community.contributors.leaderboard.aria": {
+    "message": "{rangeLabel} 贡献者排行"
+  },
+  "community.contributors.range.label": {
+    "message": "范围"
+  },
+  "community.contributors.range.aria": {
+    "message": "贡献者排行榜 release 窗口"
+  },
+  "community.contributors.range.through": {
+    "message": "截至 {date}"
+  },
+  "community.contributors.updated": {
+    "message": "更新于"
+  },
+  "community.contributors.table.rank": {
+    "message": "排名"
+  },
+  "community.contributors.table.contributor": {
+    "message": "贡献者"
+  },
+  "community.contributors.table.commits": {
+    "message": "提交"
+  },
+  "community.contributors.table.share": {
+    "message": "占比"
+  },
+  "community.contributors.table.latest": {
+    "message": "最新提交"
+  },
+  "community.contributors.gitAuthor": {
+    "message": "Git 作者"
+  },
+  "community.contributors.newContributor": {
+    "message": "新贡献者"
+  },
+  "community.contributors.avatarAlt": {
+    "message": "{name} 头像"
+  },
+  "community.contributors.range.v03ToNow.label": {
+    "message": "v0.3 -> 当前"
+  },
+  "community.contributors.range.v03ToNow.caption": {
+    "message": "当前 release"
+  },
+  "community.contributors.range.v02ToV03.label": {
+    "message": "v0.2 -> v0.3"
+  },
+  "community.contributors.range.v02ToV03.caption": {
+    "message": "Release gap"
+  },
+  "community.contributors.range.v01ToV02.label": {
+    "message": "v0.1 -> v0.2"
+  },
+  "community.contributors.range.v01ToV02.caption": {
+    "message": "Release gap"
+  },
+  "community.contributors.range.v0ToV01.label": {
+    "message": "v0 -> v0.1"
+  },
+  "community.contributors.range.v0ToV01.caption": {
+    "message": "初始 release"
+  },
+  "community.contributors.range.all.label": {
+    "message": "全部历史"
+  },
+  "community.contributors.range.all.caption": {
+    "message": "仓库全量历史"
   }
 }

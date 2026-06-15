@@ -1,0 +1,37 @@
+.page {
+  width: 100%;
+  max-width: 1440px;
+  margin: 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+}
+
+.body {
+  width: 100%;
+  max-width: 1320px;
+  margin: 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+@media (max-width: 768px) {
+  .page {
+    gap: 1rem;
+  }
+
+  .title {
+    font-size: 1.65rem;
+  }
+
+  .description {
+    font-size: 0.9rem;
+  }
+
+  .brandBadge,
+  .eyebrow,
+  .panelPill {
+    font-size: 0.74rem;
+  }
+}

@@ -1,0 +1,83 @@
+version: v0.3
+listeners: []
+providers:
+  defaults:
+    default_model: auto
+    reasoning_families:
+      qwen3:
+        type: chat_template_kwargs
+        parameter: enable_thinking
+  models:
+    - name: auto
+      reasoning_family: qwen3
+      provider_model_id: auto
+      api_format: openai
+      backend_refs:
+        - name: local_vllm
+          endpoint: 127.0.0.1:8091
+          protocol: http
+          type: chat
+          weight: 1
+routing:
+  modelCards:
+    - name: auto
+      description: Benchmark target model for ONNX signal extraction latency comparisons.
+      capabilities: [chat]
+      modality: ar
+  signals:
+    domains:
+      - name: other
+        description: General fallback traffic.
+        mmlu_categories: [other]
+      - name: math
+        description: Mathematics questions.
+        mmlu_categories: [math]
+      - name: biology
+        description: Biology questions.
+        mmlu_categories: [biology]
+      - name: engineering
+        description: Engineering and systems questions.
+        mmlu_categories: [engineering]
+      - name: "computer science"
+        description: Computer science questions.
+        mmlu_categories: ["computer science"]
+  decisions:
+    - name: default
+      description: Benchmark route that keeps signal extraction active for any supported domain.
+      priority: 100
+      rules:
+        operator: OR
+        conditions:
+          - type: domain
+            name: other
+          - type: domain
+            name: math
+          - type: domain
+            name: biology
+          - type: domain
+            name: engineering
+          - type: domain
+            name: "computer science"
+      modelRefs:
+        - model: auto
+          use_reasoning: false
+          weight: 100
+global:
+  router:
+    streamed_body:
+      enabled: true
+  services:
+    response_api:
+      enabled: false
+    router_replay:
+      store_backend: memory
+      ttl_seconds: 86400
+      async_writes: true
+  stores:
+    semantic_cache:
+      enabled: false
+      embedding_model: mmbert
+    memory:
+      embedding_model: mmbert
+    vector_store:
+      embedding_model: mmbert

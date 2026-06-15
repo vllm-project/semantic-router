@@ -1,7 +1,6 @@
-import math
 import json
+import math
 import time
-from typing import List, Optional
 
 import uvicorn
 from fastapi import FastAPI
@@ -17,8 +16,8 @@ class ChatMessage(BaseModel):
 
 class ChatRequest(BaseModel):
     model: str
-    messages: List[ChatMessage]
-    temperature: Optional[float] = 0.2
+    messages: list[ChatMessage]
+    temperature: float | None = 0.2
 
 
 @app.get("/health")

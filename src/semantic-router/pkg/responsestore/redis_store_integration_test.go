@@ -1,8 +1,11 @@
+//go:build integration
+
 package responsestore
 
 import (
 	"context"
 	"fmt"
+	"os"
 	"testing"
 	"time"
 
@@ -24,7 +27,16 @@ import (
 //   redis-cli -n 15
 //   KEYS sr:* | xargs redis-cli -n 15 DEL
 
+func skipRedisIntegrationTests(t *testing.T) {
+	t.Helper()
+	if os.Getenv("SKIP_REDIS_TESTS") == "true" {
+		t.Skip("Redis integration tests skipped due to SKIP_REDIS_TESTS=true")
+	}
+}
+
 func setupRedisStore(t *testing.T) *RedisStore {
+	skipRedisIntegrationTests(t)
+
 	cfg := StoreConfig{
 		Enabled:     true,
 		TTLSeconds:  300, // 5 minutes
@@ -194,6 +206,8 @@ func TestRedisStoreIntegration_ConversationChain(t *testing.T) {
 }
 
 func TestRedisStoreIntegration_TTL(t *testing.T) {
+	skipRedisIntegrationTests(t)
+
 	// Create store with very short TTL for testing
 	cfg := StoreConfig{
 		Enabled:     true,

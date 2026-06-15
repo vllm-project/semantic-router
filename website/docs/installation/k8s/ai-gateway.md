@@ -2,6 +2,8 @@
 
 This guide provides step-by-step instructions for integrating the vLLM Semantic Router with Envoy AI Gateway on Kubernetes for advanced traffic management and AI-specific features.
 
+For large request bodies or streamed immediate responses from Semantic Router, also see [Streamed ExtProc and immediate responses](./streamed-extproc.md). That guide shows how to switch the ExtProc filter from `BUFFERED` to `STREAMED` request bodies and how streamed Chat Completions clients receive looper or `fast_response` immediate responses.
+
 ## Architecture Overview
 
 The deployment consists of:
@@ -72,6 +74,7 @@ Gain deep insights into your LLM infrastructure:
 | [DeepInfra](https://deepinfra.com/docs/inference)            |          `{"name":"OpenAI","version":"v1/openai"}`           | [API Key](https://aigateway.envoyproxy.io/docs/api/#backendsecuritypolicyapikey) |   ✅    |
 | [DeepSeek](https://api-docs.deepseek.com/)                   |              `{"name":"OpenAI","version":"v1"}`              | [API Key](https://aigateway.envoyproxy.io/docs/api/#backendsecuritypolicyapikey) |   ✅    |
 | [Hunyuan](https://cloud.tencent.com/document/product/1729/111007) |              `{"name":"OpenAI","version":"v1"}`              | [API Key](https://aigateway.envoyproxy.io/docs/api/#backendsecuritypolicyapikey) |   ✅    |
+| [MiniMax](https://platform.minimaxi.com/document/introduction) |              `{"name":"OpenAI","version":"v1"}`              | [API Key](https://aigateway.envoyproxy.io/docs/api/#backendsecuritypolicyapikey) |   ✅    |
 | [Tencent LLM Knowledge Engine](https://www.tencentcloud.com/document/product/1255/70381?lang=en) |              `{"name":"OpenAI","version":"v1"}`              | [API Key](https://aigateway.envoyproxy.io/docs/api/#backendsecuritypolicyapikey) |   ✅    |
 | [Tetrate Agent Router Service (TARS)](https://router.tetrate.ai/) |              `{"name":"OpenAI","version":"v1"}`              | [API Key](https://aigateway.envoyproxy.io/docs/api/#backendsecuritypolicyapikey) |   ✅    |
 | [SambaNova](https://docs.sambanova.ai/sambastudio/latest/open-ai-api.html) |              `{"name":"OpenAI","version":"v1"}`              | [API Key](https://aigateway.envoyproxy.io/docs/api/#backendsecuritypolicyapikey) |   ✅    |

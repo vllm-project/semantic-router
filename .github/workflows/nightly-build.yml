@@ -1,0 +1,37 @@
+name: Nightly Build
+
+on:
+  schedule:
+    - cron: "0 2 * * *" # 2:00 AM UTC every day
+  workflow_dispatch:
+
+# Never cancel a running nightly — let it finish and report.
+concurrency:
+  group: nightly-build
+  cancel-in-progress: false
+
+jobs:
+  # ─────────────────────────────────────────────────────────────────────────────
+  # Docker: build all images tagged nightly-YYYYMMDD (multi-arch + nightly ROCm)
+  # docker-publish.yml already owns the nightly logic; we just call it here.
+  # ─────────────────────────────────────────────────────────────────────────────
+  docker-nightly:
+    name: Docker Nightly Images
+    uses: ./.github/workflows/docker-publish.yml
+    with:
+      is_nightly: true
+    secrets: inherit
+
+  # ─────────────────────────────────────────────────────────────────────────────
+  # Helm: publish chart version 0.0.0-nightly.YYYYMMDD to GHCR OCI registry
+  # ─────────────────────────────────────────────────────────────────────────────
+  helm-nightly:
+    name: Helm Nightly Chart
+    uses: ./.github/workflows/helm-publish.yml
+    with:
+      is_nightly: true
+    secrets: inherit
+
+  # Failure visibility is handled by GitHub's built-in workflow failure emails
+  # (sent to anyone watching the repo). No issue creation here — similar
+  # auto-issue patterns were previously removed from this repo due to noise.

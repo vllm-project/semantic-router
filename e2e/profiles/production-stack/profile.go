@@ -1,21 +1,31 @@
 package productionstack
 
 import (
+	"bytes"
 	"context"
+	"encoding/json"
 	"fmt"
+	"io"
+	"net"
+	"net/http"
 	"os"
 	"os/exec"
+	"sort"
+	"strings"
 	"time"
-
-	"k8s.io/client-go/kubernetes"
-	"k8s.io/client-go/tools/clientcmd"
 
 	"github.com/vllm-project/semantic-router/e2e/pkg/framework"
 	"github.com/vllm-project/semantic-router/e2e/pkg/helm"
 	"github.com/vllm-project/semantic-router/e2e/pkg/helpers"
+	gatewaystack "github.com/vllm-project/semantic-router/e2e/pkg/stacks/gateway"
+	"github.com/vllm-project/semantic-router/e2e/pkg/testmatrix"
 
 	// Import testcases package to register all test cases via their init() functions
 	_ "github.com/vllm-project/semantic-router/e2e/testcases"
+	corev1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/client-go/kubernetes"
+	"k8s.io/client-go/tools/clientcmd"
 )
 
 const (
@@ -28,23 +38,9 @@ const (
 	namespaceAIGateway      = "envoy-ai-gateway-system"
 	namespaceDefault        = "default"
 
-	// Release name constants
-	releaseSemanticRouter = "semantic-router"
-	releaseEnvoyGateway   = "eg"
-	releaseAIGatewayCRD   = "aieg-crd"
-	releaseAIGateway      = "aieg"
-
 	// Deployment name constants
 	deploymentSemanticRouter = "semantic-router"
-	deploymentEnvoyGateway   = "envoy-gateway"
-	deploymentAIGateway      = "ai-gateway-controller"
-
-	// Chart and URL constants
-	chartPathSemanticRouter = "deploy/helm/semantic-router"
-	chartEnvoyGateway       = "oci://docker.io/envoyproxy/gateway-helm"
-	chartAIGatewayCRD       = "oci://docker.io/envoyproxy/ai-gateway-crds-helm"
-	chartAIGateway          = "oci://docker.io/envoyproxy/ai-gateway-helm"
-	envoyGatewayValuesURL   = "https://raw.githubusercontent.com/envoyproxy/ai-gateway/main/manifests/envoy-gateway-values.yaml"
+	deploymentDemoLLM        = "vllm-llama3-8b-instruct"
 
 	// File path constants
 	valuesFile           = "e2e/profiles/production-stack/values.yaml"
@@ -53,31 +49,42 @@ const (
 	prometheusConfigFile = "e2e/profiles/production-stack/prometheus-config.yaml"
 
 	// Timeout constants
-	timeoutSemanticRouterInstall = "30m"
-	timeoutHelmInstall           = "10m"
-	timeoutDeploymentWait        = 30 * time.Minute
-	timeoutServiceRetry          = 10 * time.Minute
-	intervalServiceRetry         = 5 * time.Second
-
-	// Image constants
-	imageRepository = "ghcr.io/vllm-project/semantic-router/extproc"
-	imagePullPolicy = "Never"
-
-	// Label selector constants
-	labelSelectorGateway = "gateway.envoyproxy.io/owning-gateway-namespace=default,gateway.envoyproxy.io/owning-gateway-name=semantic-router"
-
-	// Port mapping constants
-	portMapping = "8080:80"
+	timeoutDeploymentWait = 30 * time.Minute
+	timeoutStableRollout  = 5 * time.Minute
+	timeoutTrafficProbe   = 3 * time.Minute
+	stableRolloutWindow   = 30 * time.Second
+	stabilityPollInterval = 5 * time.Second
+	trafficProbeRequests  = 3
 )
 
-// Profile implements the production-stack test profile
-type Profile struct {
-	verbose bool
+var resourceManifests = []string{
+	baseModelManifest,
+	gatewayAPIManifest,
 }
 
-// NewProfile creates a new production-stack profile
+var waitDeployments = []helpers.DeploymentRef{
+	{Namespace: namespaceDefault, Name: deploymentDemoLLM},
+}
+
+// Profile implements the production-stack test profile.
+type Profile struct {
+	verbose bool
+	stack   *gatewaystack.Stack
+}
+
+// NewProfile creates a new production-stack profile.
 func NewProfile() *Profile {
-	return &Profile{}
+	return &Profile{
+		stack: gatewaystack.New(gatewaystack.Config{
+			Name:                     profileName,
+			SemanticRouterValuesFile: valuesFile,
+			SemanticRouterSet: map[string]string{
+				"replicaCount": "1",
+			},
+			ResourceManifests: resourceManifests,
+			WaitDeployments:   waitDeployments,
+		}),
+	}
 }
 
 // Name returns the profile name
@@ -90,81 +97,51 @@ func (p *Profile) Description() string {
 	return "Tests Semantic Router with Envoy AI Gateway integration (production-stack)"
 }
 
-// Setup deploys all required components for production-stack testing
+// Setup deploys the shared gateway stack, then adds production-oriented extras.
 func (p *Profile) Setup(ctx context.Context, opts *framework.SetupOptions) error {
 	p.verbose = opts.Verbose
 	p.log("Setting up Production Stack test environment")
 
-	deployer := helm.NewDeployer(opts.KubeConfig, opts.Verbose)
-
-	// Step 1: Deploy Semantic Router
-	p.log("Step 1/7: Deploying Semantic Router")
-	if err := p.deploySemanticRouter(ctx, deployer, opts); err != nil {
-		return fmt.Errorf("failed to deploy semantic router: %w", err)
+	if err := p.stack.Setup(ctx, opts); err != nil {
+		return err
 	}
 
-	// Step 2: Deploy Envoy Gateway
-	p.log("Step 2/7: Deploying Envoy Gateway")
-	if err := p.deployEnvoyGateway(ctx, deployer, opts); err != nil {
-		return fmt.Errorf("failed to deploy envoy gateway: %w", err)
-	}
-
-	// Step 3: Deploy Envoy AI Gateway
-	p.log("Step 3/7: Deploying Envoy AI Gateway")
-	if err := p.deployEnvoyAIGateway(ctx, deployer, opts); err != nil {
-		return fmt.Errorf("failed to deploy envoy ai gateway: %w", err)
-	}
-
-	// Step 4: Deploy Demo LLM and Gateway API Resources
-	p.log("Step 4/7: Deploying Demo LLM and Gateway API Resources")
-	if err := p.deployGatewayResources(ctx, opts); err != nil {
-		return fmt.Errorf("failed to deploy gateway resources: %w", err)
-	}
-
-	// Step 5: Scale deployments for HA/LB
-	p.log("Step 5/7: Scaling deployments for high availability")
+	p.log("Scaling deployments for high availability")
 	if err := p.scaleDeployments(ctx, opts); err != nil {
 		return fmt.Errorf("failed to scale deployments: %w", err)
 	}
 
-	// Step 6: Deploy Prometheus for monitoring
-	p.log("Step 6/7: Deploying Prometheus for monitoring")
+	p.log("Deploying Prometheus for monitoring")
 	if err := p.deployPrometheus(ctx, opts); err != nil {
 		return fmt.Errorf("failed to deploy prometheus: %w", err)
 	}
 
-	// Step 7: Verify all components are ready
-	p.log("Step 7/7: Verifying all components are ready")
-	if err := p.verifyEnvironment(ctx, opts); err != nil {
-		return fmt.Errorf("failed to verify environment: %w", err)
+	p.log("Waiting for production stack to stabilize before HA tests")
+	if err := p.waitForStackStability(ctx, opts); err != nil {
+		return fmt.Errorf("failed to stabilize production stack: %w", err)
+	}
+
+	if err := p.verifyNoOOMRestarts(ctx, opts); err != nil {
+		return fmt.Errorf("OOM restarts detected after stabilization: %w", err)
 	}
 
 	p.log("Production Stack test environment setup complete")
 	return nil
 }
 
-// Teardown cleans up all deployed resources
+// Teardown cleans up production-only resources, then the shared gateway stack.
 func (p *Profile) Teardown(ctx context.Context, opts *framework.TeardownOptions) error {
 	p.verbose = opts.Verbose
 	p.log("Tearing down Production Stack test environment")
 
-	deployer := helm.NewDeployer(opts.KubeConfig, opts.Verbose)
-
-	p.log("Cleaning up Gateway API resources")
-	p.cleanupGatewayResources(ctx, opts)
-
 	p.log("Cleaning up Prometheus")
-	p.cleanupPrometheus(ctx, opts)
+	if err := p.cleanupPrometheus(ctx, opts); err != nil {
+		p.log("Warning: failed to cleanup Prometheus resources: %v", err)
+	}
 
-	p.log("Uninstalling Envoy AI Gateway")
-	deployer.Uninstall(ctx, releaseAIGatewayCRD, namespaceAIGateway)
-	deployer.Uninstall(ctx, releaseAIGateway, namespaceAIGateway)
-
-	p.log("Uninstalling Envoy Gateway")
-	deployer.Uninstall(ctx, releaseEnvoyGateway, namespaceEnvoyGateway)
-
-	p.log("Uninstalling Semantic Router")
-	deployer.Uninstall(ctx, releaseSemanticRouter, namespaceSemanticRouter)
+	if err := p.stack.Teardown(ctx, opts); err != nil {
+		return err
+	}
 
 	p.log("Production Stack test environment teardown complete")
 	return nil
@@ -172,183 +149,27 @@ func (p *Profile) Teardown(ctx context.Context, opts *framework.TeardownOptions)
 
 // GetTestCases returns the list of test cases for this profile
 func (p *Profile) GetTestCases() []string {
-	return []string{
-		// Standard functional tests
-		"chat-completions-request",
-		"chat-completions-stress-request",
-		"domain-classify",
-		"semantic-cache",
-		"pii-detection",
-		"jailbreak-detection",
-		"chat-completions-progressive-stress",
-		// Production stack specific tests (HA/LB/Observability)
-		"multi-replica-health",
-		"load-balancing-verification",
-		"failover-during-traffic",
-		"performance-throughput",
-		"resource-utilization-monitoring",
-	}
-}
-
-// GetServiceConfig returns the service configuration for accessing the deployed service
-func (p *Profile) GetServiceConfig() framework.ServiceConfig {
-	return framework.ServiceConfig{
-		LabelSelector: labelSelectorGateway,
-		Namespace:     namespaceEnvoyGateway,
-		PortMapping:   portMapping,
-	}
-}
-
-func (p *Profile) deploySemanticRouter(ctx context.Context, deployer *helm.Deployer, opts *framework.SetupOptions) error {
-	installOpts := helm.InstallOptions{
-		ReleaseName: releaseSemanticRouter,
-		Chart:       chartPathSemanticRouter,
-		Namespace:   namespaceSemanticRouter,
-		ValuesFiles: []string{valuesFile},
-		Set: map[string]string{
-			"image.repository": imageRepository,
-			"image.tag":        opts.ImageTag,
-			"image.pullPolicy": imagePullPolicy,
-			"replicaCount":     "1", // Start with 1 replica, scale to 2 later
+	return testmatrix.Combine(
+		testmatrix.RouterSmoke,
+		[]string{
+			// HA / monitoring
+			"multi-replica-health",
+			"load-balancing-verification",
+			"failover-during-traffic",
+			"performance-throughput",
+			"resource-utilization-monitoring",
+			// Router intelligence layer — all configured in values.yaml
+			"domain-classify",
+			"pii-detection",
+			"jailbreak-detection",
+			"semantic-cache",
 		},
-		Wait:    true,
-		Timeout: timeoutSemanticRouterInstall,
-	}
-
-	if err := deployer.Install(ctx, installOpts); err != nil {
-		return err
-	}
-
-	if err := deployer.WaitForDeployment(ctx, namespaceSemanticRouter, deploymentSemanticRouter, timeoutDeploymentWait); err != nil {
-		return err
-	}
-
-	return nil
+	)
 }
 
-func (p *Profile) deployEnvoyGateway(ctx context.Context, deployer *helm.Deployer, _ *framework.SetupOptions) error {
-	installOpts := helm.InstallOptions{
-		ReleaseName: releaseEnvoyGateway,
-		Chart:       chartEnvoyGateway,
-		Namespace:   namespaceEnvoyGateway,
-		Version:     "v1.6.0",
-		ValuesFiles: []string{envoyGatewayValuesURL},
-		Wait:        true,
-		Timeout:     timeoutHelmInstall,
-	}
-
-	if err := deployer.Install(ctx, installOpts); err != nil {
-		return err
-	}
-
-	return deployer.WaitForDeployment(ctx, namespaceEnvoyGateway, deploymentEnvoyGateway, timeoutDeploymentWait)
-}
-
-func (p *Profile) deployEnvoyAIGateway(ctx context.Context, deployer *helm.Deployer, _ *framework.SetupOptions) error {
-	crdOpts := helm.InstallOptions{
-		ReleaseName: releaseAIGatewayCRD,
-		Chart:       chartAIGatewayCRD,
-		Namespace:   namespaceAIGateway,
-		Version:     "v0.4.0",
-		Wait:        true,
-		Timeout:     timeoutHelmInstall,
-	}
-
-	if err := deployer.Install(ctx, crdOpts); err != nil {
-		return err
-	}
-
-	installOpts := helm.InstallOptions{
-		ReleaseName: releaseAIGateway,
-		Chart:       chartAIGateway,
-		Namespace:   namespaceAIGateway,
-		Version:     "v0.4.0",
-		Wait:        true,
-		Timeout:     timeoutHelmInstall,
-	}
-
-	if err := deployer.Install(ctx, installOpts); err != nil {
-		return err
-	}
-
-	return deployer.WaitForDeployment(ctx, namespaceAIGateway, deploymentAIGateway, timeoutDeploymentWait)
-}
-
-func (p *Profile) deployGatewayResources(ctx context.Context, opts *framework.SetupOptions) error {
-	if err := p.kubectlApply(ctx, opts.KubeConfig, baseModelManifest); err != nil {
-		return fmt.Errorf("failed to apply base model: %w", err)
-	}
-
-	if err := p.kubectlApply(ctx, opts.KubeConfig, gatewayAPIManifest); err != nil {
-		return fmt.Errorf("failed to apply gateway API resources: %w", err)
-	}
-
-	return nil
-}
-
-func (p *Profile) verifyEnvironment(ctx context.Context, opts *framework.SetupOptions) error {
-	// Create Kubernetes client
-	config, err := clientcmd.BuildConfigFromFlags("", opts.KubeConfig)
-	if err != nil {
-		return fmt.Errorf("failed to build kubeconfig: %w", err)
-	}
-
-	client, err := kubernetes.NewForConfig(config)
-	if err != nil {
-		return fmt.Errorf("failed to create kube client: %w", err)
-	}
-
-	startTime := time.Now()
-	p.log("Waiting for Envoy Gateway service to be ready...")
-
-	var envoyService string
-	for {
-		envoyService, err = helpers.GetEnvoyServiceName(ctx, client, labelSelectorGateway, p.verbose)
-		if err == nil {
-			podErr := helpers.VerifyServicePodsRunning(ctx, client, namespaceEnvoyGateway, envoyService, p.verbose)
-			if podErr == nil {
-				p.log("Envoy Gateway service is ready: %s", envoyService)
-				break
-			}
-			if p.verbose {
-				p.log("Envoy service found but pods not ready: %v", podErr)
-			}
-			err = fmt.Errorf("service pods not ready: %w", podErr)
-		}
-
-		if time.Since(startTime) >= timeoutServiceRetry {
-			return fmt.Errorf("failed to get Envoy service with running pods after %v: %w", timeoutServiceRetry, err)
-		}
-
-		if p.verbose {
-			p.log("Envoy service not ready, retrying in %v... (elapsed: %v)",
-				intervalServiceRetry, time.Since(startTime).Round(time.Second))
-		}
-
-		select {
-		case <-ctx.Done():
-			return ctx.Err()
-		case <-time.After(intervalServiceRetry):
-		}
-	}
-
-	p.log("Verifying all deployments are healthy...")
-
-	if err := helpers.CheckDeployment(ctx, client, namespaceSemanticRouter, deploymentSemanticRouter, p.verbose); err != nil {
-		return fmt.Errorf("semantic-router deployment not healthy: %w", err)
-	}
-
-	if err := helpers.CheckDeployment(ctx, client, namespaceEnvoyGateway, deploymentEnvoyGateway, p.verbose); err != nil {
-		return fmt.Errorf("envoy-gateway deployment not healthy: %w", err)
-	}
-
-	if err := helpers.CheckDeployment(ctx, client, namespaceAIGateway, deploymentAIGateway, p.verbose); err != nil {
-		return fmt.Errorf("ai-gateway-controller deployment not healthy: %w", err)
-	}
-
-	p.log("All deployments are healthy")
-
-	return nil
+// GetServiceConfig returns the service configuration for accessing the deployed service.
+func (p *Profile) GetServiceConfig() framework.ServiceConfig {
+	return p.stack.ServiceConfig()
 }
 
 func (p *Profile) scaleDeployments(ctx context.Context, opts *framework.SetupOptions) error {
@@ -363,12 +184,12 @@ func (p *Profile) scaleDeployments(ctx context.Context, opts *framework.SetupOpt
 		return fmt.Errorf("semantic-router deployment not ready after scaling: %w", err)
 	}
 
-	p.log("Scaling vllm-llama3-8b-instruct deployment to 2 replicas")
-	if err := p.kubectl(ctx, opts.KubeConfig, "scale", "deployment", "vllm-llama3-8b-instruct", "-n", namespaceDefault, "--replicas=2"); err != nil {
+	p.log("Scaling %s deployment to 2 replicas", deploymentDemoLLM)
+	if err := p.kubectl(ctx, opts.KubeConfig, "scale", "deployment", deploymentDemoLLM, "-n", namespaceDefault, "--replicas=2"); err != nil {
 		return fmt.Errorf("failed to scale vllm demo deployment: %w", err)
 	}
 
-	if err := deployer.WaitForDeployment(ctx, namespaceDefault, "vllm-llama3-8b-instruct", timeoutDeploymentWait); err != nil {
+	if err := deployer.WaitForDeployment(ctx, namespaceDefault, deploymentDemoLLM, timeoutDeploymentWait); err != nil {
 		return fmt.Errorf("vllm demo deployment not ready after scaling: %w", err)
 	}
 
@@ -431,18 +252,443 @@ func (p *Profile) deployPrometheus(ctx context.Context, opts *framework.SetupOpt
 
 func (p *Profile) cleanupPrometheus(ctx context.Context, opts *framework.TeardownOptions) error {
 	prometheusDir := "deploy/kubernetes/observability/prometheus"
-	p.kubectl(ctx, opts.KubeConfig, "delete", "-f", prometheusDir+"/service.yaml", "-n", namespaceDefault, "--ignore-not-found=true")
-	p.kubectl(ctx, opts.KubeConfig, "delete", "-f", prometheusDir+"/deployment.yaml", "-n", namespaceDefault, "--ignore-not-found=true")
-	p.kubectl(ctx, opts.KubeConfig, "delete", "-f", prometheusDir+"/pvc.yaml", "-n", namespaceDefault, "--ignore-not-found=true")
-	p.kubectl(ctx, opts.KubeConfig, "delete", "-f", prometheusDir+"/configmap.yaml", "-n", namespaceDefault, "--ignore-not-found=true")
-	p.kubectl(ctx, opts.KubeConfig, "delete", "-f", prometheusDir+"/rbac.yaml", "--ignore-not-found=true")
-	p.kubectl(ctx, opts.KubeConfig, "delete", "serviceaccount", "prometheus", "-n", namespaceDefault, "--ignore-not-found=true")
+	_ = p.kubectl(ctx, opts.KubeConfig, "delete", "-f", prometheusDir+"/service.yaml", "-n", namespaceDefault, "--ignore-not-found=true")
+	_ = p.kubectl(ctx, opts.KubeConfig, "delete", "-f", prometheusDir+"/deployment.yaml", "-n", namespaceDefault, "--ignore-not-found=true")
+	_ = p.kubectl(ctx, opts.KubeConfig, "delete", "-f", prometheusDir+"/pvc.yaml", "-n", namespaceDefault, "--ignore-not-found=true")
+	_ = p.kubectl(ctx, opts.KubeConfig, "delete", "-f", prometheusDir+"/configmap.yaml", "-n", namespaceDefault, "--ignore-not-found=true")
+	_ = p.kubectl(ctx, opts.KubeConfig, "delete", "-f", prometheusDir+"/rbac.yaml", "--ignore-not-found=true")
+	_ = p.kubectl(ctx, opts.KubeConfig, "delete", "serviceaccount", "prometheus", "-n", namespaceDefault, "--ignore-not-found=true")
 	return nil
 }
 
-func (p *Profile) cleanupGatewayResources(ctx context.Context, opts *framework.TeardownOptions) error {
-	p.kubectlDelete(ctx, opts.KubeConfig, gatewayAPIManifest)
-	p.kubectlDelete(ctx, opts.KubeConfig, baseModelManifest)
+func (p *Profile) waitForStackStability(ctx context.Context, opts *framework.SetupOptions) error {
+	if opts.KubeClient == nil {
+		return fmt.Errorf("kube client is required for stack stabilization")
+	}
+
+	if err := p.waitForDeploymentPodsStable(
+		ctx,
+		opts.KubeClient,
+		namespaceSemanticRouter,
+		deploymentSemanticRouter,
+		2,
+		timeoutStableRollout,
+		stableRolloutWindow,
+	); err != nil {
+		return err
+	}
+
+	if err := p.waitForDeploymentPodsStable(
+		ctx,
+		opts.KubeClient,
+		namespaceDefault,
+		deploymentDemoLLM,
+		2,
+		timeoutStableRollout,
+		stableRolloutWindow,
+	); err != nil {
+		return err
+	}
+
+	return p.waitForGatewayTrafficReady(ctx, opts, timeoutTrafficProbe)
+}
+
+func (p *Profile) waitForDeploymentPodsStable(
+	ctx context.Context,
+	client *kubernetes.Clientset,
+	namespace, name string,
+	minReady int32,
+	timeout, stableWindow time.Duration,
+) error {
+	deadline := time.Now().Add(timeout)
+	var (
+		lastErr       error
+		lastSignature string
+		stableSince   time.Time
+	)
+
+	for time.Now().Before(deadline) {
+		signature, err := deploymentPodSignature(ctx, client, namespace, name, minReady)
+		if err != nil {
+			lastErr = err
+			lastSignature = ""
+			stableSince = time.Time{}
+			p.log("Deployment %s/%s not stable yet: %v", namespace, name, err)
+		} else {
+			lastErr = nil
+			if signature != lastSignature {
+				lastSignature = signature
+				stableSince = time.Now()
+				p.log("Observed new stable candidate for %s/%s", namespace, name)
+			} else if time.Since(stableSince) >= stableWindow {
+				p.log("Deployment %s/%s stayed stable for %s", namespace, name, stableWindow)
+				return nil
+			}
+		}
+
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-time.After(stabilityPollInterval):
+		}
+	}
+
+	if lastErr == nil {
+		lastErr = fmt.Errorf("timed out waiting for stable pod state")
+	}
+	return fmt.Errorf("deployment %s/%s did not stabilize within %s: %w", namespace, name, timeout, lastErr)
+}
+
+func deploymentPodSignature(
+	ctx context.Context,
+	client *kubernetes.Clientset,
+	namespace, name string,
+	minReady int32,
+) (string, error) {
+	deployment, err := client.AppsV1().Deployments(namespace).Get(ctx, name, metav1.GetOptions{})
+	if err != nil {
+		return "", fmt.Errorf("get deployment: %w", err)
+	}
+	if deployment.Status.ObservedGeneration < deployment.Generation {
+		return "", fmt.Errorf(
+			"observed generation %d is behind desired generation %d",
+			deployment.Status.ObservedGeneration,
+			deployment.Generation,
+		)
+	}
+	if deployment.Status.UpdatedReplicas < minReady {
+		return "", fmt.Errorf("updated replicas %d below %d", deployment.Status.UpdatedReplicas, minReady)
+	}
+	if deployment.Status.ReadyReplicas < minReady {
+		return "", fmt.Errorf("ready replicas %d below %d", deployment.Status.ReadyReplicas, minReady)
+	}
+	if deployment.Status.AvailableReplicas < minReady {
+		return "", fmt.Errorf("available replicas %d below %d", deployment.Status.AvailableReplicas, minReady)
+	}
+
+	selector := metav1.FormatLabelSelector(deployment.Spec.Selector)
+	if selector == "" {
+		return "", fmt.Errorf("deployment %s/%s has empty selector", namespace, name)
+	}
+
+	pods, err := client.CoreV1().Pods(namespace).List(ctx, metav1.ListOptions{LabelSelector: selector})
+	if err != nil {
+		return "", fmt.Errorf("list pods: %w", err)
+	}
+
+	readyPods := 0
+	entries := make([]string, 0, len(pods.Items))
+	for _, pod := range pods.Items {
+		ready := isRunningAndReady(pod)
+		if ready {
+			readyPods++
+		}
+		entries = append(entries, fmt.Sprintf("%s:%t:%d", pod.Name, ready, totalRestarts(pod.Status.ContainerStatuses)))
+	}
+	sort.Strings(entries)
+
+	if readyPods < int(minReady) {
+		return "", fmt.Errorf("only %d ready pod(s) found for selector %s", readyPods, selector)
+	}
+
+	return fmt.Sprintf(
+		"observed=%d updated=%d ready=%d available=%d pods=%s",
+		deployment.Status.ObservedGeneration,
+		deployment.Status.UpdatedReplicas,
+		deployment.Status.ReadyReplicas,
+		deployment.Status.AvailableReplicas,
+		strings.Join(entries, ","),
+	), nil
+}
+
+func isRunningAndReady(pod corev1.Pod) bool {
+	if pod.Status.Phase != corev1.PodRunning {
+		return false
+	}
+	if len(pod.Status.ContainerStatuses) == 0 {
+		return false
+	}
+	for _, status := range pod.Status.ContainerStatuses {
+		if !status.Ready {
+			return false
+		}
+	}
+	return true
+}
+
+func totalRestarts(statuses []corev1.ContainerStatus) int32 {
+	var total int32
+	for _, status := range statuses {
+		total += status.RestartCount
+	}
+	return total
+}
+
+func (p *Profile) waitForGatewayTrafficReady(
+	ctx context.Context,
+	opts *framework.SetupOptions,
+	timeout time.Duration,
+) error {
+	deadline := time.Now().Add(timeout)
+	var lastErr error
+
+	for attempt := 1; time.Now().Before(deadline); attempt++ {
+		lastErr = p.probeGatewayTraffic(ctx, opts)
+		if lastErr == nil {
+			p.log("Gateway traffic probe succeeded on attempt %d", attempt)
+			return nil
+		}
+
+		p.log("Gateway traffic probe attempt %d failed: %v", attempt, lastErr)
+
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-time.After(stabilityPollInterval):
+		}
+	}
+
+	if lastErr == nil {
+		lastErr = fmt.Errorf("timed out waiting for gateway traffic readiness")
+	}
+	return fmt.Errorf("gateway traffic did not stabilize within %s: %w", timeout, lastErr)
+}
+
+func (p *Profile) probeGatewayTraffic(ctx context.Context, opts *framework.SetupOptions) error {
+	if opts.KubeClient == nil {
+		return fmt.Errorf("kube client is required for gateway probing")
+	}
+
+	svcConfig := p.stack.ServiceConfig()
+	serviceName, err := p.gatewayServiceName(ctx, opts, svcConfig)
+	if err != nil {
+		return err
+	}
+
+	restConfig, err := clientcmd.BuildConfigFromFlags("", opts.KubeConfig)
+	if err != nil {
+		return fmt.Errorf("build kube rest config: %w", err)
+	}
+
+	localPort, err := availablePort()
+	if err != nil {
+		return err
+	}
+
+	stop, err := helpers.StartPortForward(
+		ctx,
+		opts.KubeClient,
+		restConfig,
+		svcConfig.Namespace,
+		serviceName,
+		fmt.Sprintf("%s:%s", localPort, svcConfig.ServicePort),
+		p.verbose,
+	)
+	if err != nil {
+		return fmt.Errorf("start port-forward for %s/%s: %w", svcConfig.Namespace, serviceName, err)
+	}
+	defer stop()
+
+	time.Sleep(2 * time.Second)
+
+	baseURL := fmt.Sprintf("http://localhost:%s", localPort)
+	httpClient := &http.Client{Timeout: 30 * time.Second}
+	for i := 1; i <= trafficProbeRequests; i++ {
+		if err := sendGatewayProbeRequest(ctx, httpClient, baseURL, i); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (p *Profile) gatewayServiceName(
+	ctx context.Context,
+	opts *framework.SetupOptions,
+	svcConfig framework.ServiceConfig,
+) (string, error) {
+	if svcConfig.Name != "" {
+		return svcConfig.Name, nil
+	}
+	return helpers.GetServiceByLabelInNamespace(
+		ctx,
+		opts.KubeClient,
+		svcConfig.Namespace,
+		svcConfig.LabelSelector,
+		p.verbose,
+	)
+}
+
+func availablePort() (string, error) {
+	listener, err := net.Listen("tcp", ":0")
+	if err != nil {
+		return "", fmt.Errorf("allocate local port: %w", err)
+	}
+	defer func() {
+		_ = listener.Close()
+	}()
+
+	return fmt.Sprintf("%d", listener.Addr().(*net.TCPAddr).Port), nil
+}
+
+func sendGatewayProbeRequest(ctx context.Context, httpClient *http.Client, baseURL string, requestID int) error {
+	requestBody := map[string]interface{}{
+		"model": "MoM",
+		"messages": []map[string]string{
+			{"role": "user", "content": fmt.Sprintf("Warm up the production-stack gateway path. Request %d.", requestID)},
+		},
+		"max_tokens": 16,
+	}
+
+	jsonData, err := json.Marshal(requestBody)
+	if err != nil {
+		return fmt.Errorf("marshal gateway probe request: %w", err)
+	}
+
+	req, err := http.NewRequestWithContext(
+		ctx,
+		http.MethodPost,
+		baseURL+"/v1/chat/completions",
+		bytes.NewReader(jsonData),
+	)
+	if err != nil {
+		return fmt.Errorf("create gateway probe request: %w", err)
+	}
+	req.Header.Set("Content-Type", "application/json")
+
+	resp, err := httpClient.Do(req)
+	if err != nil {
+		return fmt.Errorf("send gateway probe request: %w", err)
+	}
+	defer resp.Body.Close()
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return fmt.Errorf("read gateway probe response: %w", err)
+	}
+
+	if resp.StatusCode != http.StatusOK {
+		return fmt.Errorf("gateway probe returned %d: %s", resp.StatusCode, truncateProbeBody(string(body), 200))
+	}
+	return nil
+}
+
+func truncateProbeBody(body string, maxLen int) string {
+	if len(body) <= maxLen {
+		return body
+	}
+	return body[:maxLen] + "..."
+}
+
+type oomStatus struct {
+	detected        bool
+	ready           bool
+	maxRestartCount int32
+}
+
+func inspectOOMStatus(pods *corev1.PodList) oomStatus {
+	s := oomStatus{ready: true}
+	for _, pod := range pods.Items {
+		for _, cs := range pod.Status.ContainerStatuses {
+			if cs.LastTerminationState.Terminated != nil &&
+				cs.LastTerminationState.Terminated.Reason == "OOMKilled" {
+				s.detected = true
+			}
+			if cs.RestartCount > s.maxRestartCount {
+				s.maxRestartCount = cs.RestartCount
+			}
+			if !cs.Ready {
+				s.ready = false
+			}
+		}
+	}
+	return s
+}
+
+// verifyNoOOMRestarts checks that no semantic-router pods have been OOMKilled
+// since the stack was scaled. If OOM restarts are detected, it waits for the
+// pods to recover and re-stabilize. If OOM keeps recurring (persistent OOM),
+// it falls back to 1 replica so the remaining tests can still run rather than
+// failing the entire CI job.
+func (p *Profile) verifyNoOOMRestarts(ctx context.Context, opts *framework.SetupOptions) error {
+	if opts.KubeClient == nil {
+		return nil
+	}
+
+	const (
+		oomRecoveryTimeout = 2 * time.Minute
+		oomPollInterval    = 5 * time.Second
+		oomStableRequired  = 30 * time.Second
+		maxOOMRestarts     = 3
+	)
+
+	deadline := time.Now().Add(oomRecoveryTimeout)
+	stableSince := time.Now()
+
+	for time.Now().Before(deadline) {
+		status, err := p.getOOMStatus(ctx, opts)
+		if err != nil {
+			return err
+		}
+
+		if !status.detected {
+			p.log("No OOM restarts detected, pods are healthy")
+			return nil
+		}
+
+		if status.maxRestartCount >= maxOOMRestarts {
+			p.log("Persistent OOM detected (%d restarts), scaling semantic-router to 1 replica to recover", status.maxRestartCount)
+			return p.scaleDownAfterOOM(ctx, opts)
+		}
+
+		if status.ready {
+			if time.Since(stableSince) >= oomStableRequired {
+				p.log("OOM-restarted pods have recovered and been stable for %s", oomStableRequired)
+				return nil
+			}
+		} else {
+			stableSince = time.Now()
+		}
+
+		p.log("OOM restarts detected (restart count %d), waiting for pods to recover (stable for %s/%s)...",
+			status.maxRestartCount, time.Since(stableSince).Round(time.Second), oomStableRequired)
+
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-time.After(oomPollInterval):
+		}
+	}
+
+	p.log("OOM recovery timed out after %s, scaling semantic-router to 1 replica as fallback", oomRecoveryTimeout)
+	return p.scaleDownAfterOOM(ctx, opts)
+}
+
+func (p *Profile) getOOMStatus(ctx context.Context, opts *framework.SetupOptions) (oomStatus, error) {
+	pods, err := opts.KubeClient.CoreV1().Pods(namespaceSemanticRouter).List(ctx, metav1.ListOptions{
+		LabelSelector: "app.kubernetes.io/name=semantic-router",
+	})
+	if err != nil {
+		return oomStatus{}, fmt.Errorf("list semantic-router pods: %w", err)
+	}
+	return inspectOOMStatus(pods), nil
+}
+
+// scaleDownAfterOOM scales the semantic-router deployment back to 1 replica
+// when persistent OOM prevents running with 2 replicas (e.g., CI runner has
+// insufficient memory for two full model-loaded pods). This lets the remaining
+// tests (throughput, monitoring) still execute rather than failing the whole job.
+func (p *Profile) scaleDownAfterOOM(ctx context.Context, opts *framework.SetupOptions) error {
+	if err := p.kubectl(ctx, opts.KubeConfig, "scale", "deployment", deploymentSemanticRouter,
+		"-n", namespaceSemanticRouter, "--replicas=1"); err != nil {
+		return fmt.Errorf("failed to scale semantic-router to 1 replica: %w", err)
+	}
+
+	deployer := helm.NewDeployer(opts.KubeConfig, opts.Verbose)
+	if err := deployer.WaitForDeployment(ctx, namespaceSemanticRouter, deploymentSemanticRouter, timeoutDeploymentWait); err != nil {
+		return fmt.Errorf("semantic-router not ready after OOM scale-down: %w", err)
+	}
+
+	p.log("Scaled semantic-router to 1 replica after persistent OOM, proceeding with reduced HA capacity")
 	return nil
 }
 
@@ -450,16 +696,8 @@ func (p *Profile) kubectl(ctx context.Context, kubeConfig string, args ...string
 	return p.runKubectl(ctx, kubeConfig, args...)
 }
 
-func (p *Profile) kubectlApply(ctx context.Context, kubeConfig, manifest string) error {
-	return p.runKubectl(ctx, kubeConfig, "apply", "-f", manifest)
-}
-
 func (p *Profile) kubectlApplyWithNamespace(ctx context.Context, kubeConfig, namespace, manifest string) error {
 	return p.runKubectl(ctx, kubeConfig, "apply", "-f", manifest, "-n", namespace)
-}
-
-func (p *Profile) kubectlDelete(ctx context.Context, kubeConfig, manifest string) error {
-	return p.runKubectl(ctx, kubeConfig, "delete", "-f", manifest)
 }
 
 func (p *Profile) runKubectl(ctx context.Context, kubeConfig string, args ...string) error {

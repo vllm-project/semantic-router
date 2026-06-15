@@ -91,7 +91,7 @@ llama-8b-6558848cc8-nhbgv                  1/1     Running   0          141m
 
 ## Step 4: Deploy InferencePool and LLM-D scheduler
 
-LLM-D (and Kubernetes IGW) use an API resource called InferencePool alongwith a scheduler (referred to as the LLM-D inference scheduler and sometimes equivalently as EndPoint Picker/ EPP).
+LLM-D (and Kubernetes IGW) use an API resource called InferencePool alongwith a scheduler (often abbreviated as EPP in LLM-D and Gateway API Inference Extension materials).
 
 Deploy the provided manifest in order to create an InferencePool and an LLM-D inference schedulers corresponding to the base model used in this exercise.
 
@@ -221,7 +221,7 @@ kc apply -f deploy/kubernetes/llmd-base/llmd+public-llm/httproute-openai.yaml
 
 ```bash
 ##  HttpRoute for the local llama llm as before 
-##  Note that we want the local routes to go through the endpoint picker for the llama pool 
+##  Note that we want the local routes to go through the LLM-D scheduler for the llama pool
 kubectl apply -f deploy/kubernetes/llmd-base/httproute-llama-pool.yaml
 ```
 
@@ -238,12 +238,12 @@ Now we can send LLM prompts via curl to <http://192.168.49.2:31275> to access th
 
 ### Send Test Requests
 
-Try the following cases with and without model "auto" selection to confirm that Istio + vSR + llm-d together are able to route queries to the appropriate model by combining model picking and endpoint picking. The query responses will include information about which model was used to serve that request.
+Try the following cases with and without model "auto" selection to confirm that Istio + vSR + llm-d together are able to route queries to the appropriate model while LLM-D handles replica scheduling. The query responses will include information about which model was used to serve that request.
 
 Example queries to try include the following
 
 ```bash
-# Model name llama3-8b provided explicitly, no model alteration, routed via llama EPP for endpoint picking  
+# Model name llama3-8b provided explicitly, no model alteration, routed via llama EPP scheduling
 curl http://192.168.49.2:31275/v1/chat/completions   -H "Content-Type: application/json"   -d '{
         "model": "llama3-8b",
         "messages": [

@@ -192,13 +192,6 @@ decisions:
       configuration:
         enabled: true
         similarity_threshold: 0.9  # Higher threshold for math
-    - type: "jailbreak"
-      configuration:
-        enabled: true
-    - type: "pii"
-      configuration:
-        enabled: true
-        threshold: 0.8
     - type: "system_prompt"
       configuration:
         enabled: true
@@ -459,13 +452,6 @@ decisions:
         configuration:
           enabled: true
           similarity_threshold: 0.9  # Higher for math
-      - type: "jailbreak"
-        configuration:
-          enabled: true
-      - type: "pii"
-        configuration:
-          enabled: true
-          threshold: 0.8
       - type: "system_prompt"
         configuration:
           enabled: true
@@ -585,20 +571,20 @@ model_config:
     pii_policy:
       allow_by_default: true    # Allow PII by default
       pii_types_allowed: ["EMAIL_ADDRESS", "PERSON"]
-    preferred_endpoints: ["my_endpoint"]  # Optional: specify which endpoints can serve this model
+    preferred_endpoints: ["my_endpoint"]  # Optional: backend metadata eligible for this model
 
   "gpt-4":
     pii_policy:
       allow_by_default: false
-    # preferred_endpoints omitted - router will not set endpoint header
-    # Useful when external load balancer handles endpoint selection
+    # preferred_endpoints omitted - router only emits model routing signals
+    # Useful when an external load balancer handles upstream endpoints
 ```
 
 **Note on `preferred_endpoints`:**
 
-- **Optional field**: If omitted, the router will not set the `x-vsr-destination-endpoint` header
-- **When specified**: Router selects the best endpoint based on weights and sets the header
-- **When omitted**: Upstream load balancer or service mesh handles endpoint selection
+- **Optional field**: If omitted, the router does not resolve backend metadata for this model
+- **When specified**: Router can use the referenced backend metadata for request shaping and provider-specific configuration
+- **When omitted**: Upstream load balancer or service mesh handles endpoint load balancing
 - **Validation**: Models used in categories or as `default_model` must have `preferred_endpoints` configured
 
 ### Pricing (Optional)

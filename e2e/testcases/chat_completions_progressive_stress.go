@@ -73,17 +73,28 @@ func testProgressiveStress(ctx context.Context, client *kubernetes.Clientset, op
 	// Set details for reporting
 	if opts.SetDetails != nil {
 		details := make(map[string]interface{})
+		totalRequests := 0
+		totalSuccess := 0
 		for _, stage := range stageResults {
 			stageKey := fmt.Sprintf("qps_%d", stage.QPS)
+			totalRequests += stage.TotalReqs
+			totalSuccess += stage.SuccessCount
 			details[stageKey] = map[string]interface{}{
-				"total_requests": stage.TotalReqs,
-				"successful":     stage.SuccessCount,
-				"failed":         stage.FailureCount,
-				"success_rate":   fmt.Sprintf("%.2f%%", stage.SuccessRate),
-				"avg_duration":   stage.AvgDuration.Milliseconds(),
-				"min_duration":   stage.MinDuration.Milliseconds(),
-				"max_duration":   stage.MaxDuration.Milliseconds(),
+				"total_requests":  stage.TotalReqs,
+				"successful":      stage.SuccessCount,
+				"failed":          stage.FailureCount,
+				"success_rate":    fmt.Sprintf("%.2f%%", stage.SuccessRate),
+				"avg_duration":    stage.AvgDuration.Milliseconds(),
+				"min_duration":    stage.MinDuration.Milliseconds(),
+				"max_duration":    stage.MaxDuration.Milliseconds(),
+				"sample_failures": sampleStressFailures(stage.Results, 3),
 			}
+		}
+		details["overall"] = map[string]interface{}{
+			"total_requests": totalRequests,
+			"successful":     totalSuccess,
+			"failed":         totalRequests - totalSuccess,
+			"success_rate":   fmt.Sprintf("%.2f%%", percentage(totalSuccess, totalRequests)),
 		}
 		opts.SetDetails(details)
 	}
@@ -224,4 +235,30 @@ func printProgressiveResults(stageResults []ProgressiveStageResult) {
 		}
 	}
 	fmt.Println()
+}
+
+func sampleStressFailures(results []StressTestResult, limit int) []map[string]interface{} {
+	failures := make([]map[string]interface{}, 0, limit)
+	for _, result := range results {
+		if result.Success {
+			continue
+		}
+		failures = append(failures, map[string]interface{}{
+			"request_id":    result.RequestID,
+			"status_code":   result.StatusCode,
+			"duration_ms":   result.Duration.Milliseconds(),
+			"error_message": result.ErrorMessage,
+		})
+		if len(failures) >= limit {
+			break
+		}
+	}
+	return failures
+}
+
+func percentage(passed, total int) float64 {
+	if total == 0 {
+		return 0
+	}
+	return float64(passed) / float64(total) * 100
 }

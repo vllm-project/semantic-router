@@ -1,6 +1,7 @@
 package config
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -11,6 +12,137 @@ import (
 	. "github.com/onsi/gomega"
 	"gopkg.in/yaml.v3"
 )
+
+func loadLegacyRuntimeConfigForTest(configPath string) (*RouterConfig, error) {
+	data, err := os.ReadFile(configPath)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read config file: %w", err)
+	}
+
+	data, err = rewriteLegacyRuntimeConfigForTest(data)
+	if err != nil {
+		return nil, err
+	}
+
+	return parseLegacyRuntimeConfigForTest(data)
+}
+
+func rewriteLegacyRuntimeConfigForTest(data []byte) ([]byte, error) {
+	var raw map[string]interface{}
+	if err := yaml.Unmarshal(data, &raw); err != nil {
+		return nil, fmt.Errorf("failed to parse config file: %w", err)
+	}
+	if !migrateLegacyBertModelForTest(raw) {
+		return data, nil
+	}
+
+	rewrittenData, err := yaml.Marshal(raw)
+	if err != nil {
+		return nil, fmt.Errorf("failed to rewrite legacy bert_model config: %w", err)
+	}
+	return rewrittenData, nil
+}
+
+func migrateLegacyBertModelForTest(raw map[string]interface{}) bool {
+	legacyBert := nestedStringMap(raw["bert_model"])
+	if len(legacyBert) == 0 {
+		return false
+	}
+
+	embeddingModels := ensureLegacyEmbeddingModelsForTest(raw)
+	copyLegacyBertModelField(legacyBert, embeddingModels, "model_id", "bert_model_path")
+	copyLegacyBertModelField(legacyBert, embeddingModels, "use_cpu", "use_cpu")
+	copyLegacyBertThresholdForTest(legacyBert, embeddingModels)
+	delete(raw, "bert_model")
+	return true
+}
+
+func ensureLegacyEmbeddingModelsForTest(raw map[string]interface{}) map[string]interface{} {
+	embeddingModels := nestedStringMap(raw["embedding_models"])
+	if len(embeddingModels) > 0 {
+		return embeddingModels
+	}
+
+	embeddingModels = map[string]interface{}{}
+	raw["embedding_models"] = embeddingModels
+	return embeddingModels
+}
+
+func copyLegacyBertModelField(
+	legacyBert map[string]interface{},
+	embeddingModels map[string]interface{},
+	legacyKey string,
+	embeddingKey string,
+) {
+	value, ok := legacyBert[legacyKey]
+	if !ok || embeddingModels[embeddingKey] != nil {
+		return
+	}
+	embeddingModels[embeddingKey] = value
+}
+
+func copyLegacyBertThresholdForTest(legacyBert map[string]interface{}, embeddingModels map[string]interface{}) {
+	threshold, ok := legacyBert["threshold"]
+	if !ok {
+		return
+	}
+
+	embeddingConfig := nestedStringMap(embeddingModels["embedding_config"])
+	if len(embeddingConfig) == 0 {
+		embeddingConfig = map[string]interface{}{}
+		embeddingModels["embedding_config"] = embeddingConfig
+	}
+	if embeddingConfig["min_score_threshold"] == nil {
+		embeddingConfig["min_score_threshold"] = threshold
+	}
+}
+
+func parseLegacyRuntimeConfigForTest(data []byte) (*RouterConfig, error) {
+	cfg := &RouterConfig{}
+	if err := yaml.Unmarshal(data, cfg); err != nil {
+		return nil, fmt.Errorf("failed to parse config file: %w", err)
+	}
+
+	if len(cfg.MoMRegistry) == 0 {
+		cfg.MoMRegistry = ToLegacyRegistry()
+	}
+	if cfg.VectorStore != nil {
+		cfg.VectorStore.ApplyDefaults()
+	}
+	if err := validateConfigStructure(cfg); err != nil {
+		return nil, err
+	}
+	return cfg, nil
+}
+
+func writeCanonicalLoadTestConfig(path string) error {
+	return os.WriteFile(path, []byte(`
+version: v0.3
+listeners:
+  - name: http
+    address: 0.0.0.0
+    port: 8888
+providers:
+  defaults:
+    default_model: test-model
+  models:
+    - name: test-model
+      backend_refs:
+        - endpoint: 127.0.0.1:8000
+routing:
+  modelCards:
+    - name: test-model
+  decisions:
+    - name: default-route
+      priority: 1
+      rules:
+        operator: AND
+        conditions: []
+      modelRefs:
+        - model: test-model
+          use_reasoning: false
+`), 0o644)
+}
 
 func TestConfig(t *testing.T) {
 	RegisterFailHandler(Fail)
@@ -31,7 +163,7 @@ var _ = Describe("Config Package", func() {
 	})
 
 	AfterEach(func() {
-		os.RemoveAll(tempDir)
+		Expect(os.RemoveAll(tempDir)).To(Succeed())
 		// Reset the singleton config for next test
 		ResetConfig()
 	})
@@ -120,18 +252,18 @@ tools:
 			})
 
 			It("should load configuration successfully", func() {
-				cfg, err := Load(configFile)
+				cfg, err := loadLegacyRuntimeConfigForTest(configFile)
 				Expect(err).NotTo(HaveOccurred())
 				Expect(cfg).NotTo(BeNil())
 
-				// Verify BERT model config
-				Expect(cfg.BertModel.ModelID).To(Equal("test-bert-model"))
-				Expect(cfg.BertModel.Threshold).To(Equal(float32(0.8)))
-				Expect(cfg.BertModel.UseCPU).To(BeTrue())
+				// Verify migrated similarity embedding config
+				Expect(cfg.EmbeddingModels.BertModelPath).To(Equal("test-bert-model"))
+				Expect(cfg.EmbeddingModels.MinSimilarityThreshold()).To(Equal(float32(0.8)))
+				Expect(cfg.EmbeddingModels.UseCPU).To(BeTrue())
 
 				// Verify classifier config
-				Expect(cfg.Classifier.CategoryModel.ModelID).To(Equal("test-category-model"))
-				Expect(cfg.Classifier.CategoryModel.UseModernBERT).To(BeTrue())
+				Expect(cfg.CategoryModel.ModelID).To(Equal("test-category-model"))
+				Expect(cfg.CategoryModel.UseModernBERT).To(BeTrue())
 
 				// Verify categories
 				Expect(cfg.Categories).To(HaveLen(1))
@@ -154,7 +286,6 @@ tools:
 
 				// New fields should have default/zero values when not specified
 				Expect(cfg.SemanticCache.BackendType).To(BeEmpty())
-				Expect(cfg.SemanticCache.BackendConfigPath).To(BeEmpty())
 
 				// Verify prompt guard
 				Expect(cfg.PromptGuard.Enabled).To(BeTrue())
@@ -188,6 +319,8 @@ tools:
 			})
 
 			It("should return the same config instance on subsequent calls (singleton)", func() {
+				Expect(writeCanonicalLoadTestConfig(configFile)).To(Succeed())
+
 				cfg1, err := Load(configFile)
 				Expect(err).NotTo(HaveOccurred())
 
@@ -247,7 +380,7 @@ tools:
 			})
 
 			It("should parse advanced tool filtering settings", func() {
-				cfg, err := Load(configFile)
+				cfg, err := loadLegacyRuntimeConfigForTest(configFile)
 				Expect(err).NotTo(HaveOccurred())
 				Expect(cfg).NotTo(BeNil())
 
@@ -304,7 +437,7 @@ tools:
 			})
 
 			It("should reject out-of-range values", func() {
-				_, err := Load(configFile)
+				_, err := loadLegacyRuntimeConfigForTest(configFile)
 				Expect(err).To(HaveOccurred())
 				Expect(err.Error()).To(ContainSubstring("min_combined_score must be between 0.0 and 1.0"))
 			})
@@ -329,7 +462,7 @@ observability:
 				err := os.WriteFile(configFile, []byte(configContent), 0o644)
 				Expect(err).NotTo(HaveOccurred())
 
-				cfg, err := Load(configFile)
+				cfg, err := loadLegacyRuntimeConfigForTest(configFile)
 				Expect(err).NotTo(HaveOccurred())
 				Expect(cfg.Observability.Metrics.Enabled).To(BeNil())
 			})
@@ -345,7 +478,7 @@ observability:
 				err := os.WriteFile(configFile, []byte(configContent), 0o644)
 				Expect(err).NotTo(HaveOccurred())
 
-				cfg, err := Load(configFile)
+				cfg, err := loadLegacyRuntimeConfigForTest(configFile)
 				Expect(err).NotTo(HaveOccurred())
 				Expect(cfg.Observability.Metrics.Enabled).NotTo(BeNil())
 				Expect(*cfg.Observability.Metrics.Enabled).To(BeFalse())
@@ -362,7 +495,7 @@ observability:
 				err := os.WriteFile(configFile, []byte(configContent), 0o644)
 				Expect(err).NotTo(HaveOccurred())
 
-				cfg, err := Load(configFile)
+				cfg, err := loadLegacyRuntimeConfigForTest(configFile)
 				Expect(err).NotTo(HaveOccurred())
 				Expect(cfg.Observability.Metrics.Enabled).NotTo(BeNil())
 				Expect(*cfg.Observability.Metrics.Enabled).To(BeTrue())
@@ -381,7 +514,7 @@ bert_model:
 			})
 
 			It("should return a parsing error", func() {
-				cfg, err := Load(configFile)
+				cfg, err := loadLegacyRuntimeConfigForTest(configFile)
 				Expect(err).To(HaveOccurred())
 				Expect(cfg).To(BeNil())
 				Expect(err.Error()).To(ContainSubstring("failed to parse config file"))
@@ -395,24 +528,17 @@ bert_model:
 			})
 
 			It("should load successfully with zero values", func() {
-				cfg, err := Load(configFile)
+				cfg, err := loadLegacyRuntimeConfigForTest(configFile)
 				Expect(err).NotTo(HaveOccurred())
 				Expect(cfg).NotTo(BeNil())
-				Expect(cfg.BertModel.ModelID).To(BeEmpty())
+				Expect(cfg.EmbeddingModels.BertModelPath).To(BeEmpty())
 				Expect(cfg.DefaultModel).To(BeEmpty())
 			})
 		})
 
 		Context("concurrent access", func() {
 			BeforeEach(func() {
-				validConfig := `
-bert_model:
-  model_id: "test-model"
-  threshold: 0.8
-default_model: "model-b"
-`
-				err := os.WriteFile(configFile, []byte(validConfig), 0o644)
-				Expect(err).NotTo(HaveOccurred())
+				Expect(writeCanonicalLoadTestConfig(configFile)).To(Succeed())
 			})
 
 			It("should handle concurrent Load calls safely", func() {
@@ -461,7 +587,7 @@ semantic_cache:
 			})
 
 			It("should return the semantic cache threshold", func() {
-				cfg, err := Load(configFile)
+				cfg, err := loadLegacyRuntimeConfigForTest(configFile)
 				Expect(err).NotTo(HaveOccurred())
 
 				threshold := cfg.GetCacheSimilarityThreshold()
@@ -482,7 +608,7 @@ semantic_cache:
 			})
 
 			It("should return the BERT model threshold", func() {
-				cfg, err := Load(configFile)
+				cfg, err := loadLegacyRuntimeConfigForTest(configFile)
 				Expect(err).NotTo(HaveOccurred())
 
 				threshold := cfg.GetCacheSimilarityThreshold()
@@ -523,7 +649,7 @@ default_model: "default-model"
 
 		Context("with valid decision index", func() {
 			It("should return the best model for the decision", func() {
-				cfg, err := Load(configFile)
+				cfg, err := loadLegacyRuntimeConfigForTest(configFile)
 				Expect(err).NotTo(HaveOccurred())
 
 				model := cfg.GetModelForDecisionIndex(0)
@@ -536,7 +662,7 @@ default_model: "default-model"
 
 		Context("with invalid decision index", func() {
 			It("should return the default model for negative index", func() {
-				cfg, err := Load(configFile)
+				cfg, err := loadLegacyRuntimeConfigForTest(configFile)
 				Expect(err).NotTo(HaveOccurred())
 
 				model := cfg.GetModelForDecisionIndex(-1)
@@ -544,7 +670,7 @@ default_model: "default-model"
 			})
 
 			It("should return the default model for index beyond range", func() {
-				cfg, err := Load(configFile)
+				cfg, err := loadLegacyRuntimeConfigForTest(configFile)
 				Expect(err).NotTo(HaveOccurred())
 
 				model := cfg.GetModelForDecisionIndex(10)
@@ -571,10 +697,9 @@ default_model: "fallback-model"
 			})
 
 			It("should return the default model", func() {
-				// This should fail validation since decisions must have at least one model
-				_, err := Load(configFile)
-				Expect(err).To(HaveOccurred())
-				Expect(err.Error()).To(ContainSubstring("has no modelRefs defined"))
+				// Empty modelRefs is now allowed - decisions without models are valid
+				_, err := loadLegacyRuntimeConfigForTest(configFile)
+				Expect(err).NotTo(HaveOccurred())
 			})
 		})
 	})
@@ -591,7 +716,7 @@ classifier:
 				err := os.WriteFile(configFile, []byte(configContent), 0o644)
 				Expect(err).NotTo(HaveOccurred())
 
-				cfg, err := Load(configFile)
+				cfg, err := loadLegacyRuntimeConfigForTest(configFile)
 				Expect(err).NotTo(HaveOccurred())
 
 				Expect(cfg.IsPIIClassifierEnabled()).To(BeTrue())
@@ -606,7 +731,7 @@ classifier:
 				err := os.WriteFile(configFile, []byte(configContent), 0o644)
 				Expect(err).NotTo(HaveOccurred())
 
-				cfg, err := Load(configFile)
+				cfg, err := loadLegacyRuntimeConfigForTest(configFile)
 				Expect(err).NotTo(HaveOccurred())
 
 				Expect(cfg.IsPIIClassifierEnabled()).To(BeFalse())
@@ -621,7 +746,7 @@ classifier:
 				err := os.WriteFile(configFile, []byte(configContent), 0o644)
 				Expect(err).NotTo(HaveOccurred())
 
-				cfg, err := Load(configFile)
+				cfg, err := loadLegacyRuntimeConfigForTest(configFile)
 				Expect(err).NotTo(HaveOccurred())
 
 				Expect(cfg.IsPIIClassifierEnabled()).To(BeFalse())
@@ -639,7 +764,7 @@ classifier:
 				err := os.WriteFile(configFile, []byte(configContent), 0o644)
 				Expect(err).NotTo(HaveOccurred())
 
-				cfg, err := Load(configFile)
+				cfg, err := loadLegacyRuntimeConfigForTest(configFile)
 				Expect(err).NotTo(HaveOccurred())
 
 				Expect(cfg.IsCategoryClassifierEnabled()).To(BeTrue())
@@ -650,7 +775,7 @@ classifier:
 				err := os.WriteFile(configFile, []byte(""), 0o644)
 				Expect(err).NotTo(HaveOccurred())
 
-				cfg, err := Load(configFile)
+				cfg, err := loadLegacyRuntimeConfigForTest(configFile)
 				Expect(err).NotTo(HaveOccurred())
 
 				Expect(cfg.IsCategoryClassifierEnabled()).To(BeFalse())
@@ -668,7 +793,7 @@ prompt_guard:
 				err := os.WriteFile(configFile, []byte(configContent), 0o644)
 				Expect(err).NotTo(HaveOccurred())
 
-				cfg, err := Load(configFile)
+				cfg, err := loadLegacyRuntimeConfigForTest(configFile)
 				Expect(err).NotTo(HaveOccurred())
 
 				Expect(cfg.IsPromptGuardEnabled()).To(BeTrue())
@@ -684,7 +809,7 @@ prompt_guard:
 				err := os.WriteFile(configFile, []byte(configContent), 0o644)
 				Expect(err).NotTo(HaveOccurred())
 
-				cfg, err := Load(configFile)
+				cfg, err := loadLegacyRuntimeConfigForTest(configFile)
 				Expect(err).NotTo(HaveOccurred())
 
 				Expect(cfg.IsPromptGuardEnabled()).To(BeFalse())
@@ -699,7 +824,7 @@ prompt_guard:
 				err := os.WriteFile(configFile, []byte(configContent), 0o644)
 				Expect(err).NotTo(HaveOccurred())
 
-				cfg, err := Load(configFile)
+				cfg, err := loadLegacyRuntimeConfigForTest(configFile)
 				Expect(err).NotTo(HaveOccurred())
 
 				Expect(cfg.IsPromptGuardEnabled()).To(BeFalse())
@@ -730,7 +855,7 @@ categories:
 			})
 
 			It("should return all category descriptions", func() {
-				cfg, err := Load(configFile)
+				cfg, err := loadLegacyRuntimeConfigForTest(configFile)
 				Expect(err).NotTo(HaveOccurred())
 
 				descriptions := cfg.GetCategoryDescriptions()
@@ -764,7 +889,7 @@ categories:
 			})
 
 			It("should use category name as fallback for missing descriptions", func() {
-				cfg, err := Load(configFile)
+				cfg, err := loadLegacyRuntimeConfigForTest(configFile)
 				Expect(err).NotTo(HaveOccurred())
 
 				descriptions := cfg.GetCategoryDescriptions()
@@ -782,7 +907,7 @@ categories:
 				err := os.WriteFile(configFile, []byte(""), 0o644)
 				Expect(err).NotTo(HaveOccurred())
 
-				cfg, err := Load(configFile)
+				cfg, err := loadLegacyRuntimeConfigForTest(configFile)
 				Expect(err).NotTo(HaveOccurred())
 
 				descriptions := cfg.GetCategoryDescriptions()
@@ -803,9 +928,9 @@ semantic_cache:
 			err := os.WriteFile(configFile, []byte(configContent), 0o644)
 			Expect(err).NotTo(HaveOccurred())
 
-			cfg, err := Load(configFile)
+			cfg, err := loadLegacyRuntimeConfigForTest(configFile)
 			Expect(err).NotTo(HaveOccurred())
-			Expect(cfg.BertModel.Threshold).To(Equal(float32(0)))
+			Expect(cfg.EmbeddingModels.MinSimilarityThreshold()).To(Equal(float32(0.5)))
 			Expect(cfg.SemanticCache.MaxEntries).To(Equal(0))
 			Expect(cfg.SemanticCache.TTLSeconds).To(Equal(0))
 		})
@@ -819,7 +944,7 @@ model_config:
 			err := os.WriteFile(configFile, []byte(configContent), 0o644)
 			Expect(err).NotTo(HaveOccurred())
 
-			cfg, err := Load(configFile)
+			cfg, err := loadLegacyRuntimeConfigForTest(configFile)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(cfg.ModelConfig["large-model"].PreferredEndpoints).To(ContainElement("endpoint1"))
 		})
@@ -840,9 +965,9 @@ categories:
 			err := os.WriteFile(configFile, []byte(configContent), 0o644)
 			Expect(err).NotTo(HaveOccurred())
 
-			cfg, err := Load(configFile)
+			cfg, err := loadLegacyRuntimeConfigForTest(configFile)
 			Expect(err).NotTo(HaveOccurred())
-			Expect(cfg.BertModel.ModelID).To(Equal("model/with/slashes"))
+			Expect(cfg.EmbeddingModels.BertModelPath).To(Equal("model/with/slashes"))
 			Expect(cfg.DefaultModel).To(Equal("model-with-hyphens_and_underscores"))
 			Expect(cfg.Categories[0].Name).To(Equal("category with spaces"))
 		})
@@ -891,7 +1016,7 @@ default_model: "model-b"
 
 		Describe("GetEndpointsForModel", func() {
 			It("should return preferred endpoints when configured", func() {
-				cfg, err := Load(configFile)
+				cfg, err := loadLegacyRuntimeConfigForTest(configFile)
 				Expect(err).NotTo(HaveOccurred())
 
 				endpoints := cfg.GetEndpointsForModel("model-a")
@@ -901,7 +1026,7 @@ default_model: "model-b"
 			})
 
 			It("should return empty slice when no preferred endpoints configured", func() {
-				cfg, err := Load(configFile)
+				cfg, err := loadLegacyRuntimeConfigForTest(configFile)
 				Expect(err).NotTo(HaveOccurred())
 
 				endpoints := cfg.GetEndpointsForModel("model-c")
@@ -909,7 +1034,7 @@ default_model: "model-b"
 			})
 
 			It("should return empty slice for non-existent model", func() {
-				cfg, err := Load(configFile)
+				cfg, err := loadLegacyRuntimeConfigForTest(configFile)
 				Expect(err).NotTo(HaveOccurred())
 
 				endpoints := cfg.GetEndpointsForModel("non-existent-model")
@@ -917,7 +1042,7 @@ default_model: "model-b"
 			})
 
 			It("should return only preferred endpoints", func() {
-				cfg, err := Load(configFile)
+				cfg, err := loadLegacyRuntimeConfigForTest(configFile)
 				Expect(err).NotTo(HaveOccurred())
 
 				// model-b has preferred endpoint2
@@ -929,7 +1054,7 @@ default_model: "model-b"
 
 		Describe("GetEndpointByName", func() {
 			It("should return endpoint when it exists", func() {
-				cfg, err := Load(configFile)
+				cfg, err := loadLegacyRuntimeConfigForTest(configFile)
 				Expect(err).NotTo(HaveOccurred())
 
 				endpoint, found := cfg.GetEndpointByName("endpoint1")
@@ -940,7 +1065,7 @@ default_model: "model-b"
 			})
 
 			It("should return false when endpoint doesn't exist", func() {
-				cfg, err := Load(configFile)
+				cfg, err := loadLegacyRuntimeConfigForTest(configFile)
 				Expect(err).NotTo(HaveOccurred())
 
 				endpoint, found := cfg.GetEndpointByName("non-existent")
@@ -951,7 +1076,7 @@ default_model: "model-b"
 
 		Describe("GetAllModels", func() {
 			It("should return all models from model_config", func() {
-				cfg, err := Load(configFile)
+				cfg, err := loadLegacyRuntimeConfigForTest(configFile)
 				Expect(err).NotTo(HaveOccurred())
 
 				models := cfg.GetAllModels()
@@ -960,71 +1085,331 @@ default_model: "model-b"
 			})
 		})
 
-		Describe("SelectBestEndpointForModel", func() {
-			It("should select endpoint with highest weight when multiple available", func() {
-				cfg, err := Load(configFile)
+		Describe("ResolvePrimaryBackendForModel", func() {
+			It("should return address and endpoint name for model with single endpoint", func() {
+				cfg, err := loadLegacyRuntimeConfigForTest(configFile)
 				Expect(err).NotTo(HaveOccurred())
 
-				// model-a has preferred endpoints: endpoint1 (weight 1) and endpoint3 (weight 1)
-				// Since they have the same weight, it should return the first one found
-				endpointName, found := cfg.SelectBestEndpointForModel("model-a")
+				// model-b has a single preferred endpoint: endpoint2
+				address, endpointName, found, detailErr := cfg.ResolvePrimaryBackendForModel("model-b")
+				Expect(detailErr).NotTo(HaveOccurred())
 				Expect(found).To(BeTrue())
+				Expect(address).To(Equal("127.0.0.1:8000"))
+				Expect(endpointName).To(Equal("endpoint2"))
+			})
+
+			It("should return the highest-weight endpoint for model with multiple endpoints", func() {
+				cfg, err := loadLegacyRuntimeConfigForTest(configFile)
+				Expect(err).NotTo(HaveOccurred())
+
+				// model-a has endpoint1 (weight 1) and endpoint3 (weight 1)
+				// Both have the same weight, so we get one of them
+				address, endpointName, found, detailErr := cfg.ResolvePrimaryBackendForModel("model-a")
+				Expect(detailErr).NotTo(HaveOccurred())
+				Expect(found).To(BeTrue())
+				Expect(address).To(Equal("127.0.0.1:8000"))
 				Expect(endpointName).To(BeElementOf("endpoint1", "endpoint3"))
 			})
 
 			It("should return false for non-existent model", func() {
-				cfg, err := Load(configFile)
+				cfg, err := loadLegacyRuntimeConfigForTest(configFile)
 				Expect(err).NotTo(HaveOccurred())
 
-				endpointName, found := cfg.SelectBestEndpointForModel("non-existent-model")
+				address, endpointName, found, detailErr := cfg.ResolvePrimaryBackendForModel("non-existent-model")
+				Expect(detailErr).NotTo(HaveOccurred())
 				Expect(found).To(BeFalse())
+				Expect(address).To(BeEmpty())
 				Expect(endpointName).To(BeEmpty())
 			})
 
-			It("should return false when model has no preferred endpoints", func() {
-				cfg, err := Load(configFile)
+			It("should return false for model with no preferred endpoints", func() {
+				cfg, err := loadLegacyRuntimeConfigForTest(configFile)
 				Expect(err).NotTo(HaveOccurred())
 
-				endpointName, found := cfg.SelectBestEndpointForModel("model-c")
+				// model-c has no preferred endpoints configured
+				address, endpointName, found, detailErr := cfg.ResolvePrimaryBackendForModel("model-c")
+				Expect(detailErr).NotTo(HaveOccurred())
 				Expect(found).To(BeFalse())
+				Expect(address).To(BeEmpty())
 				Expect(endpointName).To(BeEmpty())
 			})
 
-			Describe("SelectBestEndpointAddressForModel", func() {
-				It("should return endpoint address when model has preferred endpoints", func() {
-					cfg, err := Load(configFile)
-					Expect(err).NotTo(HaveOccurred())
+			It("should resolve the highest-weight backend metadata when weights differ", func() {
+				configContent := `
+vllm_endpoints:
+  - name: "ep-low"
+    address: "10.0.0.1"
+    port: 9000
+    weight: 1
+  - name: "ep-high"
+    address: "10.0.0.2"
+    port: 9001
+    weight: 10
 
-					// model-a has preferred endpoints
-					endpointAddress, found := cfg.SelectBestEndpointAddressForModel("model-a")
-					Expect(found).To(BeTrue())
-					Expect(endpointAddress).To(MatchRegexp(`127\.0\.0\.1:\d+`))
-				})
+model_config:
+  "weighted-model":
+    preferred_endpoints: ["ep-low", "ep-high"]
 
-				It("should return false when model has no preferred endpoints", func() {
-					cfg, err := Load(configFile)
-					Expect(err).NotTo(HaveOccurred())
+categories:
+  - name: "test"
+    model_scores:
+      - model: "weighted-model"
+        score: 0.9
 
-					// model-c has no preferred_endpoints configured
-					endpointAddress, found := cfg.SelectBestEndpointAddressForModel("model-c")
-					Expect(found).To(BeFalse())
-					Expect(endpointAddress).To(BeEmpty())
-				})
+default_model: "weighted-model"
+`
+				err := os.WriteFile(configFile, []byte(configContent), 0o644)
+				Expect(err).NotTo(HaveOccurred())
 
-				It("should return false for non-existent model", func() {
-					cfg, err := Load(configFile)
-					Expect(err).NotTo(HaveOccurred())
+				cfg, err := loadLegacyRuntimeConfigForTest(configFile)
+				Expect(err).NotTo(HaveOccurred())
 
-					endpointAddress, found := cfg.SelectBestEndpointAddressForModel("non-existent-model")
-					Expect(found).To(BeFalse())
-					Expect(endpointAddress).To(BeEmpty())
-				})
+				address, endpointName, found, detailErr := cfg.ResolvePrimaryBackendForModel("weighted-model")
+				Expect(detailErr).NotTo(HaveOccurred())
+				Expect(found).To(BeTrue())
+				Expect(address).To(Equal("10.0.0.2:9001"))
+				Expect(endpointName).To(Equal("ep-high"))
+			})
+		})
+
+		Describe("ResolveExternalModelID", func() {
+			It("should resolve external model ID for vllm endpoint type", func() {
+				configContent := `
+vllm_endpoints:
+  - name: "vllm-ep"
+    address: "127.0.0.1"
+    port: 8000
+    type: "vllm"
+
+model_config:
+  "my-alias":
+    preferred_endpoints: ["vllm-ep"]
+    external_model_ids:
+      vllm: "Qwen/Qwen2.5-14B-Instruct"
+
+categories:
+  - name: "test"
+    model_scores:
+      - model: "my-alias"
+        score: 0.9
+
+default_model: "my-alias"
+`
+				err := os.WriteFile(configFile, []byte(configContent), 0o644)
+				Expect(err).NotTo(HaveOccurred())
+
+				cfg, err := loadLegacyRuntimeConfigForTest(configFile)
+				Expect(err).NotTo(HaveOccurred())
+
+				resolved := cfg.ResolveExternalModelID("my-alias", "vllm-ep")
+				Expect(resolved).To(Equal("Qwen/Qwen2.5-14B-Instruct"))
+			})
+
+			It("should match aliases to provider model IDs", func() {
+				cfg := &RouterConfig{
+					BackendModels: BackendModels{
+						ModelConfig: map[string]ModelParams{
+							"my-alias": {
+								ExternalModelIDs: map[string]string{
+									"openai": "gpt-5-mini",
+								},
+							},
+						},
+					},
+				}
+
+				Expect(cfg.ModelNameMatches("my-alias", "gpt-5-mini")).To(BeTrue())
+				Expect(cfg.ModelNameMatches("gpt-5-mini", "my-alias")).To(BeTrue())
+				Expect(cfg.ModelNameMatches("other", "gpt-5-mini")).To(BeFalse())
+			})
+
+			It("should default to vllm type when endpoint has no type set", func() {
+				configContent := `
+vllm_endpoints:
+  - name: "no-type-ep"
+    address: "127.0.0.1"
+    port: 8000
+
+model_config:
+  "my-alias":
+    preferred_endpoints: ["no-type-ep"]
+    external_model_ids:
+      vllm: "Qwen/Qwen2.5-14B-Instruct"
+
+categories:
+  - name: "test"
+    model_scores:
+      - model: "my-alias"
+        score: 0.9
+
+default_model: "my-alias"
+`
+				err := os.WriteFile(configFile, []byte(configContent), 0o644)
+				Expect(err).NotTo(HaveOccurred())
+
+				cfg, err := loadLegacyRuntimeConfigForTest(configFile)
+				Expect(err).NotTo(HaveOccurred())
+
+				// Endpoint has no type, so defaults to "vllm"
+				resolved := cfg.ResolveExternalModelID("my-alias", "no-type-ep")
+				Expect(resolved).To(Equal("Qwen/Qwen2.5-14B-Instruct"))
+			})
+
+			It("should default to vllm type when endpoint name does not exist", func() {
+				configContent := `
+vllm_endpoints:
+  - name: "real-ep"
+    address: "127.0.0.1"
+    port: 8000
+
+model_config:
+  "my-alias":
+    preferred_endpoints: ["real-ep"]
+    external_model_ids:
+      vllm: "Qwen/Qwen2.5-14B-Instruct"
+
+categories:
+  - name: "test"
+    model_scores:
+      - model: "my-alias"
+        score: 0.9
+
+default_model: "my-alias"
+`
+				err := os.WriteFile(configFile, []byte(configContent), 0o644)
+				Expect(err).NotTo(HaveOccurred())
+
+				cfg, err := loadLegacyRuntimeConfigForTest(configFile)
+				Expect(err).NotTo(HaveOccurred())
+
+				// Non-existent endpoint name falls back to "vllm" type
+				resolved := cfg.ResolveExternalModelID("my-alias", "non-existent-ep")
+				Expect(resolved).To(Equal("Qwen/Qwen2.5-14B-Instruct"))
+			})
+
+			It("should resolve correct type for ollama endpoint", func() {
+				configContent := `
+vllm_endpoints:
+  - name: "ollama-ep"
+    address: "127.0.0.1"
+    port: 11434
+    type: "ollama"
+
+model_config:
+  "my-alias":
+    preferred_endpoints: ["ollama-ep"]
+    external_model_ids:
+      vllm: "Qwen/Qwen2.5-14B-Instruct"
+      ollama: "qwen2.5:14b"
+
+categories:
+  - name: "test"
+    model_scores:
+      - model: "my-alias"
+        score: 0.9
+
+default_model: "my-alias"
+`
+				err := os.WriteFile(configFile, []byte(configContent), 0o644)
+				Expect(err).NotTo(HaveOccurred())
+
+				cfg, err := loadLegacyRuntimeConfigForTest(configFile)
+				Expect(err).NotTo(HaveOccurred())
+
+				resolved := cfg.ResolveExternalModelID("my-alias", "ollama-ep")
+				Expect(resolved).To(Equal("qwen2.5:14b"))
+			})
+
+			It("should return original model name when no external_model_ids configured", func() {
+				cfg, err := loadLegacyRuntimeConfigForTest(configFile)
+				Expect(err).NotTo(HaveOccurred())
+
+				// Using the base fixture which has no external_model_ids
+				resolved := cfg.ResolveExternalModelID("model-a", "endpoint1")
+				Expect(resolved).To(Equal("model-a"))
+			})
+
+			It("should return original model name for non-existent model", func() {
+				cfg, err := loadLegacyRuntimeConfigForTest(configFile)
+				Expect(err).NotTo(HaveOccurred())
+
+				resolved := cfg.ResolveExternalModelID("non-existent-model", "endpoint1")
+				Expect(resolved).To(Equal("non-existent-model"))
+			})
+
+			It("should return original model name when endpoint type has no mapping", func() {
+				configContent := `
+vllm_endpoints:
+  - name: "custom-ep"
+    address: "127.0.0.1"
+    port: 8000
+    type: "openrouter"
+
+model_config:
+  "my-alias":
+    preferred_endpoints: ["custom-ep"]
+    external_model_ids:
+      vllm: "Qwen/Qwen2.5-14B-Instruct"
+
+categories:
+  - name: "test"
+    model_scores:
+      - model: "my-alias"
+        score: 0.9
+
+default_model: "my-alias"
+`
+				err := os.WriteFile(configFile, []byte(configContent), 0o644)
+				Expect(err).NotTo(HaveOccurred())
+
+				cfg, err := loadLegacyRuntimeConfigForTest(configFile)
+				Expect(err).NotTo(HaveOccurred())
+
+				// Endpoint type is "openrouter" but external_model_ids only has "vllm"
+				resolved := cfg.ResolveExternalModelID("my-alias", "custom-ep")
+				Expect(resolved).To(Equal("my-alias"))
+			})
+
+			It("should return original model name when config is nil", func() {
+				var nilCfg *RouterConfig
+				resolved := nilCfg.ResolveExternalModelID("some-model", "some-endpoint")
+				Expect(resolved).To(Equal("some-model"))
+			})
+
+			It("should return original model name when external_model_ids map is empty", func() {
+				configContent := `
+vllm_endpoints:
+  - name: "ep1"
+    address: "127.0.0.1"
+    port: 8000
+
+model_config:
+  "my-alias":
+    preferred_endpoints: ["ep1"]
+    external_model_ids: {}
+
+categories:
+  - name: "test"
+    model_scores:
+      - model: "my-alias"
+        score: 0.9
+
+default_model: "my-alias"
+`
+				err := os.WriteFile(configFile, []byte(configContent), 0o644)
+				Expect(err).NotTo(HaveOccurred())
+
+				cfg, err := loadLegacyRuntimeConfigForTest(configFile)
+				Expect(err).NotTo(HaveOccurred())
+
+				resolved := cfg.ResolveExternalModelID("my-alias", "ep1")
+				Expect(resolved).To(Equal("my-alias"))
 			})
 		})
 
 		Describe("ValidateEndpoints", func() {
 			It("should pass validation when all models have endpoints", func() {
-				cfg, err := Load(configFile)
+				cfg, err := loadLegacyRuntimeConfigForTest(configFile)
 				Expect(err).NotTo(HaveOccurred())
 
 				err = cfg.ValidateEndpoints()
@@ -1048,7 +1433,7 @@ default_model: "missing-default-model"
 				err := os.WriteFile(configFile, []byte(configContent), 0o644)
 				Expect(err).NotTo(HaveOccurred())
 
-				cfg, err := Load(configFile)
+				cfg, err := loadLegacyRuntimeConfigForTest(configFile)
 				Expect(err).NotTo(HaveOccurred())
 
 				err = cfg.ValidateEndpoints()
@@ -1083,7 +1468,7 @@ default_model: "test-model"
 					err := os.WriteFile(configFile, []byte(configContent), 0o644)
 					Expect(err).NotTo(HaveOccurred())
 
-					cfg, err := Load(configFile)
+					cfg, err := loadLegacyRuntimeConfigForTest(configFile)
 					Expect(err).NotTo(HaveOccurred())
 					Expect(cfg.VLLMEndpoints[0].Address).To(Equal("127.0.0.1"))
 				})
@@ -1112,7 +1497,7 @@ default_model: "test-model"
 					err := os.WriteFile(configFile, []byte(configContent), 0o644)
 					Expect(err).NotTo(HaveOccurred())
 
-					cfg, err := Load(configFile)
+					cfg, err := loadLegacyRuntimeConfigForTest(configFile)
 					Expect(err).NotTo(HaveOccurred())
 					Expect(cfg.VLLMEndpoints[0].Address).To(Equal("::1"))
 				})
@@ -1141,7 +1526,7 @@ default_model: "test-model"
 					err := os.WriteFile(configFile, []byte(configContent), 0o644)
 					Expect(err).NotTo(HaveOccurred())
 
-					cfg, err := Load(configFile)
+					cfg, err := loadLegacyRuntimeConfigForTest(configFile)
 					Expect(err).NotTo(HaveOccurred())
 					Expect(cfg.VLLMEndpoints[0].Address).To(Equal("example.com"))
 				})
@@ -1165,7 +1550,7 @@ semantic_cache:
 			})
 
 			It("should parse memory backend configuration correctly", func() {
-				cfg, err := Load(configFile)
+				cfg, err := loadLegacyRuntimeConfigForTest(configFile)
 				Expect(err).NotTo(HaveOccurred())
 
 				Expect(cfg.SemanticCache.Enabled).To(BeTrue())
@@ -1173,11 +1558,10 @@ semantic_cache:
 				Expect(*cfg.SemanticCache.SimilarityThreshold).To(Equal(float32(0.85)))
 				Expect(cfg.SemanticCache.MaxEntries).To(Equal(2000))
 				Expect(cfg.SemanticCache.TTLSeconds).To(Equal(1800))
-				Expect(cfg.SemanticCache.BackendConfigPath).To(BeEmpty())
 			})
 		})
 
-		Context("(Deprecated) with file base milvus backend configuration", func() {
+		Context("with inline milvus backend configuration", func() {
 			BeforeEach(func() {
 				configContent := `
 semantic_cache:
@@ -1185,21 +1569,26 @@ semantic_cache:
   backend_type: "milvus"
   similarity_threshold: 0.9
   ttl_seconds: 7200
-  backend_config_path: "config/semantic-cache/milvus.yaml"
+  milvus:
+    connection:
+      host: "localhost"
+      port: 19530
+    collection:
+      name: "semantic_cache"
 `
 				err := os.WriteFile(configFile, []byte(configContent), 0o644)
 				Expect(err).NotTo(HaveOccurred())
 			})
 
-			It("should parse file base milvus backend configuration correctly", func() {
-				cfg, err := Load(configFile)
+			It("should parse inline milvus backend configuration correctly", func() {
+				cfg, err := loadLegacyRuntimeConfigForTest(configFile)
 				Expect(err).NotTo(HaveOccurred())
 
 				Expect(cfg.SemanticCache.Enabled).To(BeTrue())
 				Expect(cfg.SemanticCache.BackendType).To(Equal("milvus"))
 				Expect(*cfg.SemanticCache.SimilarityThreshold).To(Equal(float32(0.9)))
 				Expect(cfg.SemanticCache.TTLSeconds).To(Equal(7200))
-				Expect(cfg.SemanticCache.BackendConfigPath).To(Equal("config/semantic-cache/milvus.yaml"))
+				Expect(cfg.SemanticCache.Milvus).NotTo(BeNil())
 
 				// MaxEntries should be ignored for Milvus backend
 				Expect(cfg.SemanticCache.MaxEntries).To(Equal(0))
@@ -1276,7 +1665,7 @@ semantic_cache:
 			})
 
 			It("should parse inline milvus backend connection configuration correctly", func() {
-				cfg, err := Load(configFile)
+				cfg, err := loadLegacyRuntimeConfigForTest(configFile)
 				Expect(err).NotTo(HaveOccurred())
 
 				Expect(cfg.SemanticCache.Milvus).ToNot(BeNil())
@@ -1295,7 +1684,7 @@ semantic_cache:
 			})
 
 			It("should parse inline milvus backend collection configuration correctly", func() {
-				cfg, err := Load(configFile)
+				cfg, err := loadLegacyRuntimeConfigForTest(configFile)
 				Expect(err).NotTo(HaveOccurred())
 
 				Expect(cfg.SemanticCache.Milvus.Collection).ToNot(BeNil())
@@ -1310,7 +1699,7 @@ semantic_cache:
 			})
 
 			It("should parse inline milvus backend search configuration correctly", func() {
-				cfg, err := Load(configFile)
+				cfg, err := loadLegacyRuntimeConfigForTest(configFile)
 				Expect(err).NotTo(HaveOccurred())
 
 				Expect(cfg.SemanticCache.Milvus.Search).ToNot(BeNil())
@@ -1320,7 +1709,7 @@ semantic_cache:
 			})
 
 			It("should parse inline milvus backend performance configuration correctly", func() {
-				cfg, err := Load(configFile)
+				cfg, err := loadLegacyRuntimeConfigForTest(configFile)
 				Expect(err).NotTo(HaveOccurred())
 
 				Expect(cfg.SemanticCache.Milvus.Performance).ToNot(BeNil())
@@ -1332,7 +1721,7 @@ semantic_cache:
 			})
 
 			It("should parse inline milvus backend data management configuration correctly", func() {
-				cfg, err := Load(configFile)
+				cfg, err := loadLegacyRuntimeConfigForTest(configFile)
 				Expect(err).NotTo(HaveOccurred())
 
 				Expect(cfg.SemanticCache.Milvus.DataManagement).ToNot(BeNil())
@@ -1344,7 +1733,7 @@ semantic_cache:
 			})
 
 			It("should parse inline milvus backend logging configuration correctly", func() {
-				cfg, err := Load(configFile)
+				cfg, err := loadLegacyRuntimeConfigForTest(configFile)
 				Expect(err).NotTo(HaveOccurred())
 
 				Expect(cfg.SemanticCache.Milvus.Logging.Level).To(Equal("info"))
@@ -1353,7 +1742,7 @@ semantic_cache:
 			})
 
 			It("should parse inline milvus backend development configuration correctly", func() {
-				cfg, err := Load(configFile)
+				cfg, err := loadLegacyRuntimeConfigForTest(configFile)
 				Expect(err).NotTo(HaveOccurred())
 
 				Expect(cfg.SemanticCache.Milvus.Development.DropCollectionOnStartup).To(BeTrue())
@@ -1409,7 +1798,7 @@ semantic_cache:
 			})
 
 			It("should parse inline redis backend connection configuration correctly", func() {
-				cfg, err := Load(configFile)
+				cfg, err := loadLegacyRuntimeConfigForTest(configFile)
 				Expect(err).NotTo(HaveOccurred())
 
 				Expect(cfg.SemanticCache.Redis).ToNot(BeNil())
@@ -1426,7 +1815,7 @@ semantic_cache:
 			})
 
 			It("should parse inline redis backend index configuration correctly", func() {
-				cfg, err := Load(configFile)
+				cfg, err := loadLegacyRuntimeConfigForTest(configFile)
 				Expect(err).NotTo(HaveOccurred())
 
 				Expect(cfg.SemanticCache.Redis.Index).ToNot(BeNil())
@@ -1441,7 +1830,7 @@ semantic_cache:
 			})
 
 			It("should parse inline redis backend search configuration correctly", func() {
-				cfg, err := Load(configFile)
+				cfg, err := loadLegacyRuntimeConfigForTest(configFile)
 				Expect(err).NotTo(HaveOccurred())
 
 				Expect(cfg.SemanticCache.Redis.Search).ToNot(BeNil())
@@ -1449,7 +1838,7 @@ semantic_cache:
 			})
 
 			It("should parse inline redis backend logging configuration correctly", func() {
-				cfg, err := Load(configFile)
+				cfg, err := loadLegacyRuntimeConfigForTest(configFile)
 				Expect(err).NotTo(HaveOccurred())
 
 				Expect(cfg.SemanticCache.Redis.Logging.Level).To(Equal("info"))
@@ -1458,7 +1847,7 @@ semantic_cache:
 			})
 
 			It("should parse inline redis backend development configuration correctly", func() {
-				cfg, err := Load(configFile)
+				cfg, err := loadLegacyRuntimeConfigForTest(configFile)
 				Expect(err).NotTo(HaveOccurred())
 
 				Expect(cfg.SemanticCache.Redis.Development.DropIndexOnStartup).To(BeTrue())
@@ -1482,7 +1871,7 @@ semantic_cache:
 			})
 
 			It("should preserve configuration even when cache is disabled", func() {
-				cfg, err := Load(configFile)
+				cfg, err := loadLegacyRuntimeConfigForTest(configFile)
 				Expect(err).NotTo(HaveOccurred())
 
 				Expect(cfg.SemanticCache.Enabled).To(BeFalse())
@@ -1502,7 +1891,7 @@ semantic_cache:
 			})
 
 			It("should handle minimal configuration with default values", func() {
-				cfg, err := Load(configFile)
+				cfg, err := loadLegacyRuntimeConfigForTest(configFile)
 				Expect(err).NotTo(HaveOccurred())
 
 				Expect(cfg.SemanticCache.Enabled).To(BeTrue())
@@ -1510,7 +1899,6 @@ semantic_cache:
 				Expect(cfg.SemanticCache.SimilarityThreshold).To(BeNil()) // Will fallback to BERT threshold
 				Expect(cfg.SemanticCache.MaxEntries).To(Equal(0))
 				Expect(cfg.SemanticCache.TTLSeconds).To(Equal(0))
-				Expect(cfg.SemanticCache.BackendConfigPath).To(BeEmpty())
 			})
 		})
 
@@ -1525,21 +1913,26 @@ semantic_cache:
   backend_type: "milvus"
   similarity_threshold: 0.95
   ttl_seconds: 14400
-  backend_config_path: "config/cache/production_milvus.yaml"
+  milvus:
+    connection:
+      host: "milvus"
+      port: 19530
+    collection:
+      name: "production_cache"
 `
 				err := os.WriteFile(configFile, []byte(configContent), 0o644)
 				Expect(err).NotTo(HaveOccurred())
 			})
 
 			It("should parse all semantic cache fields correctly", func() {
-				cfg, err := Load(configFile)
+				cfg, err := loadLegacyRuntimeConfigForTest(configFile)
 				Expect(err).NotTo(HaveOccurred())
 
 				Expect(cfg.SemanticCache.Enabled).To(BeTrue())
 				Expect(cfg.SemanticCache.BackendType).To(Equal("milvus"))
 				Expect(*cfg.SemanticCache.SimilarityThreshold).To(Equal(float32(0.95)))
 				Expect(cfg.SemanticCache.TTLSeconds).To(Equal(14400))
-				Expect(cfg.SemanticCache.BackendConfigPath).To(Equal("config/cache/production_milvus.yaml"))
+				Expect(cfg.SemanticCache.Milvus).NotTo(BeNil())
 
 				// Verify threshold resolution
 				threshold := cfg.GetCacheSimilarityThreshold()
@@ -1564,7 +1957,7 @@ semantic_cache:
 			})
 
 			It("should fall back to BERT threshold when cache threshold not specified", func() {
-				cfg, err := Load(configFile)
+				cfg, err := loadLegacyRuntimeConfigForTest(configFile)
 				Expect(err).NotTo(HaveOccurred())
 
 				Expect(cfg.SemanticCache.SimilarityThreshold).To(BeNil())
@@ -1584,14 +1977,13 @@ semantic_cache:
   similarity_threshold: 1.0
   max_entries: 0
   ttl_seconds: -1
-  backend_config_path: ""
 `
 				err := os.WriteFile(configFile, []byte(configContent), 0o644)
 				Expect(err).NotTo(HaveOccurred())
 			})
 
 			It("should handle edge case values correctly", func() {
-				cfg, err := Load(configFile)
+				cfg, err := loadLegacyRuntimeConfigForTest(configFile)
 				Expect(err).NotTo(HaveOccurred())
 
 				Expect(cfg.SemanticCache.Enabled).To(BeTrue())
@@ -1599,7 +1991,6 @@ semantic_cache:
 				Expect(*cfg.SemanticCache.SimilarityThreshold).To(Equal(float32(1.0)))
 				Expect(cfg.SemanticCache.MaxEntries).To(Equal(0))
 				Expect(cfg.SemanticCache.TTLSeconds).To(Equal(-1))
-				Expect(cfg.SemanticCache.BackendConfigPath).To(BeEmpty())
 			})
 		})
 
@@ -1616,7 +2007,7 @@ semantic_cache:
 			})
 
 			It("should parse unsupported backend type without error (validation happens at runtime)", func() {
-				cfg, err := Load(configFile)
+				cfg, err := loadLegacyRuntimeConfigForTest(configFile)
 				Expect(err).NotTo(HaveOccurred())
 
 				// Configuration parsing should succeed
@@ -1640,7 +2031,12 @@ semantic_cache:
   backend_type: "milvus"
   similarity_threshold: 0.85
   ttl_seconds: 86400  # 24 hours
-  backend_config_path: "config/semantic-cache/milvus.yaml"
+  milvus:
+    connection:
+      host: "milvus"
+      port: 19530
+    collection:
+      name: "semantic_cache"
 
 categories:
   - name: "production"
@@ -1657,20 +2053,20 @@ default_model: "gpt-4"
 			})
 
 			It("should handle production-like configuration correctly", func() {
-				cfg, err := Load(configFile)
+				cfg, err := loadLegacyRuntimeConfigForTest(configFile)
 				Expect(err).NotTo(HaveOccurred())
 
-				// Verify BERT config
-				Expect(cfg.BertModel.ModelID).To(Equal("sentence-transformers/all-MiniLM-L12-v2"))
-				Expect(cfg.BertModel.Threshold).To(Equal(float32(0.6)))
-				Expect(cfg.BertModel.UseCPU).To(BeFalse())
+				// Verify migrated similarity embedding config
+				Expect(cfg.EmbeddingModels.BertModelPath).To(Equal("sentence-transformers/all-MiniLM-L12-v2"))
+				Expect(cfg.EmbeddingModels.MinSimilarityThreshold()).To(Equal(float32(0.6)))
+				Expect(cfg.EmbeddingModels.UseCPU).To(BeFalse())
 
 				// Verify semantic cache config
 				Expect(cfg.SemanticCache.Enabled).To(BeTrue())
 				Expect(cfg.SemanticCache.BackendType).To(Equal("milvus"))
 				Expect(*cfg.SemanticCache.SimilarityThreshold).To(Equal(float32(0.85)))
 				Expect(cfg.SemanticCache.TTLSeconds).To(Equal(86400))
-				Expect(cfg.SemanticCache.BackendConfigPath).To(Equal("config/semantic-cache/milvus.yaml"))
+				Expect(cfg.SemanticCache.Milvus).NotTo(BeNil())
 
 				// Verify threshold resolution
 				threshold := cfg.GetCacheSimilarityThreshold()
@@ -1695,7 +2091,10 @@ semantic_cache:
 
   # Production configuration (commented out)
   # backend_type: "milvus"
-  # backend_config_path: "config/semantic-cache/milvus.yaml"
+  # milvus:
+  #   connection:
+  #     host: "milvus"
+  #     port: 19530
   # max_entries is ignored for Milvus
 `
 				err := os.WriteFile(configFile, []byte(configContent), 0o644)
@@ -1703,7 +2102,7 @@ semantic_cache:
 			})
 
 			It("should parse active configuration and ignore commented alternatives", func() {
-				cfg, err := Load(configFile)
+				cfg, err := loadLegacyRuntimeConfigForTest(configFile)
 				Expect(err).NotTo(HaveOccurred())
 
 				Expect(cfg.SemanticCache.Enabled).To(BeTrue())
@@ -1711,7 +2110,6 @@ semantic_cache:
 				Expect(*cfg.SemanticCache.SimilarityThreshold).To(Equal(float32(0.8)))
 				Expect(cfg.SemanticCache.MaxEntries).To(Equal(1000))
 				Expect(cfg.SemanticCache.TTLSeconds).To(Equal(3600))
-				Expect(cfg.SemanticCache.BackendConfigPath).To(BeEmpty()) // Comments are ignored
 			})
 		})
 	})
@@ -1756,7 +2154,9 @@ semantic_cache:
 			yamlContent := `
 api:
   batch_classification:
-    auto_unified_batching: true
+    max_batch_size: 64
+    concurrency_threshold: 5
+    max_concurrency: 8
     metrics:
       enabled: true
       detailed_goroutine_tracking: false
@@ -1772,6 +2172,9 @@ api:
 
 			// Verify batch classification configuration (zero-config auto-discovery)
 			batchConfig := cfg.API.BatchClassification
+			Expect(batchConfig.MaxBatchSize).To(Equal(64))
+			Expect(batchConfig.ConcurrencyThreshold).To(Equal(5))
+			Expect(batchConfig.MaxConcurrency).To(Equal(8))
 
 			// Verify metrics configuration
 			metricsConfig := batchConfig.Metrics
@@ -1789,7 +2192,7 @@ api:
 			yamlContent := `
 api:
   batch_classification:
-    auto_unified_batching: false
+    max_batch_size: 32
 `
 
 			var cfg RouterConfig
@@ -1798,6 +2201,9 @@ api:
 
 			// Verify that missing metrics configuration doesn't cause errors (zero-config)
 			batchConfig := cfg.API.BatchClassification
+			Expect(batchConfig.MaxBatchSize).To(Equal(32))
+			Expect(batchConfig.ConcurrencyThreshold).To(Equal(0))
+			Expect(batchConfig.MaxConcurrency).To(Equal(0))
 
 			// Metrics should have zero values (will be handled by defaults in application)
 			metricsConfig := batchConfig.Metrics
@@ -1809,6 +2215,7 @@ api:
 			yamlContent := `
 api:
   batch_classification:
+    concurrency_threshold: 3
     metrics:
       enabled: true
       sample_rate: 0.5
@@ -1818,6 +2225,7 @@ api:
 			err := yaml.Unmarshal([]byte(yamlContent), &cfg)
 			Expect(err).NotTo(HaveOccurred())
 
+			Expect(cfg.API.BatchClassification.ConcurrencyThreshold).To(Equal(3))
 			metricsConfig := cfg.API.BatchClassification.Metrics
 			Expect(metricsConfig.Enabled).To(BeTrue())
 			Expect(metricsConfig.SampleRate).To(Equal(0.5))
@@ -1932,260 +2340,6 @@ default_model: "test-model"
 		})
 	})
 
-	Describe("IsJailbreakEnabledForDecision", func() {
-		Context("per-decision plugin scoping", func() {
-			It("should return false for decision without explicit jailbreak plugin (even if global is enabled)", func() {
-				decision := Decision{
-					Name:      "test",
-					ModelRefs: []ModelRef{{Model: "test"}},
-					// No jailbreak plugin configured
-				}
-
-				cfg := &RouterConfig{
-					InlineModels: InlineModels{
-						PromptGuard: PromptGuardConfig{
-							Enabled: true, // Global enabled, but should not affect decisions without plugin
-						},
-					},
-					IntelligentRouting: IntelligentRouting{
-						Decisions: []Decision{decision},
-					},
-				}
-
-				// Per-decision scoping: no plugin = no jailbreak detection
-				Expect(cfg.IsJailbreakEnabledForDecision("test")).To(BeFalse())
-			})
-
-			It("should return false when decision explicitly disables jailbreak", func() {
-				decision := Decision{
-					Name:      "test",
-					ModelRefs: []ModelRef{{Model: "test"}},
-					Plugins: []DecisionPlugin{
-						{
-							Type: "jailbreak",
-							Configuration: map[string]interface{}{
-								"enabled": false,
-							},
-						},
-					},
-				}
-
-				cfg := &RouterConfig{
-					InlineModels: InlineModels{
-						PromptGuard: PromptGuardConfig{
-							Enabled: true,
-						},
-					},
-					IntelligentRouting: IntelligentRouting{
-						Decisions: []Decision{decision},
-					},
-				}
-
-				Expect(cfg.IsJailbreakEnabledForDecision("test")).To(BeFalse())
-			})
-
-			It("should return true when decision explicitly enables jailbreak", func() {
-				decision := Decision{
-					Name:      "test",
-					ModelRefs: []ModelRef{{Model: "test"}},
-					Plugins: []DecisionPlugin{
-						{
-							Type: "jailbreak",
-							Configuration: map[string]interface{}{
-								"enabled": true,
-							},
-						},
-					},
-				}
-
-				cfg := &RouterConfig{
-					InlineModels: InlineModels{
-						PromptGuard: PromptGuardConfig{
-							Enabled: true,
-						},
-					},
-					IntelligentRouting: IntelligentRouting{
-						Decisions: []Decision{decision},
-					},
-				}
-
-				Expect(cfg.IsJailbreakEnabledForDecision("test")).To(BeTrue())
-			})
-
-			It("should return false for non-existent decision", func() {
-				cfg := &RouterConfig{
-					InlineModels: InlineModels{
-						PromptGuard: PromptGuardConfig{
-							Enabled: true,
-						},
-					},
-				}
-
-				Expect(cfg.IsJailbreakEnabledForDecision("non_existent")).To(BeFalse())
-			})
-
-			It("should return false for include_history by default", func() {
-				decision := Decision{
-					Name:      "test",
-					ModelRefs: []ModelRef{{Model: "test"}},
-					Plugins: []DecisionPlugin{
-						{
-							Type: "jailbreak",
-							Configuration: map[string]interface{}{
-								"enabled": true,
-							},
-						},
-					},
-				}
-
-				cfg := &RouterConfig{
-					IntelligentRouting: IntelligentRouting{
-						Decisions: []Decision{decision},
-					},
-				}
-
-				Expect(cfg.GetJailbreakIncludeHistoryForDecision("test")).To(BeFalse())
-			})
-
-			It("should return true when include_history is explicitly enabled", func() {
-				decision := Decision{
-					Name:      "test",
-					ModelRefs: []ModelRef{{Model: "test"}},
-					Plugins: []DecisionPlugin{
-						{
-							Type: "jailbreak",
-							Configuration: map[string]interface{}{
-								"enabled":         true,
-								"include_history": true,
-							},
-						},
-					},
-				}
-
-				cfg := &RouterConfig{
-					IntelligentRouting: IntelligentRouting{
-						Decisions: []Decision{decision},
-					},
-				}
-
-				Expect(cfg.GetJailbreakIncludeHistoryForDecision("test")).To(BeTrue())
-			})
-		})
-	})
-
-	Describe("IsPIIEnabledForDecision", func() {
-		Context("per-decision plugin scoping", func() {
-			It("should return false for decision without explicit PII plugin", func() {
-				decision := Decision{
-					Name:      "test",
-					ModelRefs: []ModelRef{{Model: "test"}},
-					// No PII plugin configured
-				}
-
-				cfg := &RouterConfig{
-					IntelligentRouting: IntelligentRouting{
-						Decisions: []Decision{decision},
-					},
-				}
-
-				Expect(cfg.IsPIIEnabledForDecision("test")).To(BeFalse())
-			})
-
-			It("should return true when decision explicitly enables PII", func() {
-				decision := Decision{
-					Name:      "test",
-					ModelRefs: []ModelRef{{Model: "test"}},
-					Plugins: []DecisionPlugin{
-						{
-							Type: "pii",
-							Configuration: map[string]interface{}{
-								"enabled": true,
-							},
-						},
-					},
-				}
-
-				cfg := &RouterConfig{
-					IntelligentRouting: IntelligentRouting{
-						Decisions: []Decision{decision},
-					},
-				}
-
-				Expect(cfg.IsPIIEnabledForDecision("test")).To(BeTrue())
-			})
-
-			It("should return false when decision explicitly disables PII", func() {
-				decision := Decision{
-					Name:      "test",
-					ModelRefs: []ModelRef{{Model: "test"}},
-					Plugins: []DecisionPlugin{
-						{
-							Type: "pii",
-							Configuration: map[string]interface{}{
-								"enabled": false,
-							},
-						},
-					},
-				}
-
-				cfg := &RouterConfig{
-					IntelligentRouting: IntelligentRouting{
-						Decisions: []Decision{decision},
-					},
-				}
-
-				Expect(cfg.IsPIIEnabledForDecision("test")).To(BeFalse())
-			})
-
-			It("should return false for include_history by default", func() {
-				decision := Decision{
-					Name:      "test",
-					ModelRefs: []ModelRef{{Model: "test"}},
-					Plugins: []DecisionPlugin{
-						{
-							Type: "pii",
-							Configuration: map[string]interface{}{
-								"enabled": true,
-							},
-						},
-					},
-				}
-
-				cfg := &RouterConfig{
-					IntelligentRouting: IntelligentRouting{
-						Decisions: []Decision{decision},
-					},
-				}
-
-				Expect(cfg.GetPIIIncludeHistoryForDecision("test")).To(BeFalse())
-			})
-
-			It("should return true when include_history is explicitly enabled", func() {
-				decision := Decision{
-					Name:      "test",
-					ModelRefs: []ModelRef{{Model: "test"}},
-					Plugins: []DecisionPlugin{
-						{
-							Type: "pii",
-							Configuration: map[string]interface{}{
-								"enabled":         true,
-								"include_history": true,
-							},
-						},
-					},
-				}
-
-				cfg := &RouterConfig{
-					IntelligentRouting: IntelligentRouting{
-						Decisions: []Decision{decision},
-					},
-				}
-
-				Expect(cfg.GetPIIIncludeHistoryForDecision("test")).To(BeTrue())
-			})
-		})
-	})
-
 	Describe("IsCacheEnabledForDecision", func() {
 		Context("per-decision plugin scoping", func() {
 			It("should return false for decision without explicit semantic-cache plugin (even if global is enabled)", func() {
@@ -2215,9 +2369,9 @@ default_model: "test-model"
 					Plugins: []DecisionPlugin{
 						{
 							Type: "semantic-cache",
-							Configuration: map[string]interface{}{
+							Configuration: MustStructuredPayload(map[string]interface{}{
 								"enabled": false,
-							},
+							}),
 						},
 					},
 				}
@@ -2241,9 +2395,9 @@ default_model: "test-model"
 					Plugins: []DecisionPlugin{
 						{
 							Type: "semantic-cache",
-							Configuration: map[string]interface{}{
+							Configuration: MustStructuredPayload(map[string]interface{}{
 								"enabled": true,
-							},
+							}),
 						},
 					},
 				}
@@ -2278,10 +2432,10 @@ default_model: "test-model"
 					Plugins: []DecisionPlugin{
 						{
 							Type: "semantic-cache",
-							Configuration: map[string]interface{}{
+							Configuration: MustStructuredPayload(map[string]interface{}{
 								"enabled":              true,
 								"similarity_threshold": threshold,
-							},
+							}),
 						},
 					},
 				}
@@ -2309,10 +2463,10 @@ default_model: "test-model"
 					Plugins: []DecisionPlugin{
 						{
 							Type: "semantic-cache",
-							Configuration: map[string]interface{}{
+							Configuration: MustStructuredPayload(map[string]interface{}{
 								"enabled":     true,
 								"ttl_seconds": ttl,
-							},
+							}),
 						},
 					},
 				}
@@ -2371,7 +2525,7 @@ var _ = Describe("ParseConfigFile and ReplaceGlobalConfig", func() {
 	})
 
 	AfterEach(func() {
-		os.RemoveAll(tempDir)
+		Expect(os.RemoveAll(tempDir)).To(Succeed())
 		ResetConfig()
 	})
 
@@ -2382,7 +2536,28 @@ var _ = Describe("ParseConfigFile and ReplaceGlobalConfig", func() {
 
 		// Create real config target
 		target := filepath.Join(tempDir, "real-config.yaml")
-		content := []byte("default_model: test-model\n")
+		content := []byte(`
+version: v0.3
+listeners: []
+providers:
+  defaults:
+    default_model: test-model
+  models:
+    - name: test-model
+      backend_refs:
+        - endpoint: 127.0.0.1:8000
+routing:
+  modelCards:
+    - name: test-model
+  decisions:
+    - name: default-route
+      priority: 1
+      rules:
+        operator: AND
+        conditions: []
+      modelRefs:
+        - model: test-model
+`)
 		Expect(os.WriteFile(target, content, 0o644)).To(Succeed())
 
 		// Create symlink pointing to target
@@ -2548,7 +2723,7 @@ var _ = Describe("IP Address Validation", func() {
 				for _, addr := range domainPortAddresses {
 					err := validateIPAddress(addr)
 					Expect(err).To(HaveOccurred(), "Expected %s to be rejected", addr)
-					// 这些会被域名检测捕获，而不是端口检测
+					// These will be caught by domain detection, not port detection
 					Expect(err.Error()).To(ContainSubstring("invalid IP address format"))
 				}
 			})
@@ -2671,21 +2846,21 @@ var _ = Describe("MCP Configuration Validation", func() {
 
 		Context("when configuring stdio transport", func() {
 			It("should accept valid stdio configuration", func() {
-				cfg.Classifier.MCPCategoryModel.Enabled = true
-				cfg.Classifier.MCPCategoryModel.TransportType = "stdio"
-				cfg.Classifier.MCPCategoryModel.Command = "python"
-				cfg.Classifier.MCPCategoryModel.Args = []string{"server_keyword.py"}
-				cfg.Classifier.MCPCategoryModel.ToolName = "classify_text"
-				cfg.Classifier.MCPCategoryModel.Threshold = 0.5
-				cfg.Classifier.MCPCategoryModel.TimeoutSeconds = 30
+				cfg.MCPCategoryModel.Enabled = true
+				cfg.TransportType = "stdio"
+				cfg.Command = "python"
+				cfg.Args = []string{"server_keyword.py"}
+				cfg.ToolName = "classify_text"
+				cfg.MCPCategoryModel.Threshold = 0.5
+				cfg.TimeoutSeconds = 30
 
-				Expect(cfg.Classifier.MCPCategoryModel.Enabled).To(BeTrue())
-				Expect(cfg.Classifier.MCPCategoryModel.TransportType).To(Equal("stdio"))
-				Expect(cfg.Classifier.MCPCategoryModel.Command).To(Equal("python"))
-				Expect(cfg.Classifier.MCPCategoryModel.Args).To(HaveLen(1))
-				Expect(cfg.Classifier.MCPCategoryModel.ToolName).To(Equal("classify_text"))
-				Expect(cfg.Classifier.MCPCategoryModel.Threshold).To(BeNumerically("==", 0.5))
-				Expect(cfg.Classifier.MCPCategoryModel.TimeoutSeconds).To(Equal(30))
+				Expect(cfg.MCPCategoryModel.Enabled).To(BeTrue())
+				Expect(cfg.TransportType).To(Equal("stdio"))
+				Expect(cfg.Command).To(Equal("python"))
+				Expect(cfg.Args).To(HaveLen(1))
+				Expect(cfg.ToolName).To(Equal("classify_text"))
+				Expect(cfg.MCPCategoryModel.Threshold).To(BeNumerically("==", 0.5))
+				Expect(cfg.TimeoutSeconds).To(Equal(30))
 			})
 
 			It("should accept environment variables", func() {
@@ -2694,9 +2869,9 @@ var _ = Describe("MCP Configuration Validation", func() {
 					"LOG_LEVEL":  "debug",
 				}
 
-				Expect(cfg.Classifier.MCPCategoryModel.Env).To(HaveLen(2))
-				Expect(cfg.Classifier.MCPCategoryModel.Env["PYTHONPATH"]).To(Equal("/app/lib"))
-				Expect(cfg.Classifier.MCPCategoryModel.Env["LOG_LEVEL"]).To(Equal("debug"))
+				Expect(cfg.MCPCategoryModel.Env).To(HaveLen(2))
+				Expect(cfg.MCPCategoryModel.Env["PYTHONPATH"]).To(Equal("/app/lib"))
+				Expect(cfg.MCPCategoryModel.Env["LOG_LEVEL"]).To(Equal("debug"))
 			})
 		})
 
@@ -2707,8 +2882,8 @@ var _ = Describe("MCP Configuration Validation", func() {
 				cfg.URL = "http://localhost:8080/mcp"
 				cfg.ToolName = "classify_text"
 
-				Expect(cfg.Classifier.MCPCategoryModel.TransportType).To(Equal("http"))
-				Expect(cfg.Classifier.MCPCategoryModel.URL).To(Equal("http://localhost:8080/mcp"))
+				Expect(cfg.TransportType).To(Equal("http"))
+				Expect(cfg.URL).To(Equal("http://localhost:8080/mcp"))
 			})
 		})
 
@@ -2717,7 +2892,7 @@ var _ = Describe("MCP Configuration Validation", func() {
 				cfg.Enabled = true
 				cfg.ToolName = "classify_text"
 
-				Expect(cfg.Classifier.MCPCategoryModel.Threshold).To(BeNumerically("==", 0.0))
+				Expect(cfg.MCPCategoryModel.Threshold).To(BeNumerically("==", 0.0))
 			})
 		})
 
@@ -2727,7 +2902,7 @@ var _ = Describe("MCP Configuration Validation", func() {
 
 				for _, threshold := range testCases {
 					cfg.MCPCategoryModel.Threshold = threshold
-					Expect(cfg.Classifier.MCPCategoryModel.Threshold).To(BeNumerically("==", threshold))
+					Expect(cfg.MCPCategoryModel.Threshold).To(BeNumerically("==", threshold))
 				}
 			})
 		})
@@ -2737,7 +2912,7 @@ var _ = Describe("MCP Configuration Validation", func() {
 				cfg.Enabled = true
 				cfg.ToolName = "classify_text"
 
-				Expect(cfg.Classifier.MCPCategoryModel.TimeoutSeconds).To(Equal(0))
+				Expect(cfg.TimeoutSeconds).To(Equal(0))
 			})
 		})
 	})
@@ -2752,18 +2927,18 @@ var _ = Describe("MCP Configuration Validation", func() {
 		Context("when both in-tree and MCP are configured", func() {
 			It("should have both configurations available", func() {
 				// Configure in-tree classifier
-				cfg.Classifier.CategoryModel.ModelID = "/path/to/model"
-				cfg.Classifier.CategoryModel.CategoryMappingPath = "/path/to/mapping.json"
-				cfg.Classifier.CategoryModel.Threshold = 0.7
+				cfg.CategoryModel.ModelID = "/path/to/model"
+				cfg.CategoryMappingPath = "/path/to/mapping.json"
+				cfg.CategoryModel.Threshold = 0.7
 
 				// Configure MCP classifier
-				cfg.Classifier.MCPCategoryModel.Enabled = true
-				cfg.Classifier.MCPCategoryModel.ToolName = "classify_text"
-				cfg.Classifier.MCPCategoryModel.Threshold = 0.5
+				cfg.MCPCategoryModel.Enabled = true
+				cfg.ToolName = "classify_text"
+				cfg.MCPCategoryModel.Threshold = 0.5
 
 				// Both should be configured
-				Expect(cfg.Classifier.CategoryModel.ModelID).ToNot(BeEmpty())
-				Expect(cfg.Classifier.MCPCategoryModel.Enabled).To(BeTrue())
+				Expect(cfg.CategoryModel.ModelID).ToNot(BeEmpty())
+				Expect(cfg.MCPCategoryModel.Enabled).To(BeTrue())
 			})
 		})
 
@@ -2772,7 +2947,7 @@ var _ = Describe("MCP Configuration Validation", func() {
 				cfg.CategoryModel.ModelID = "/path/to/model"
 				cfg.CategoryMappingPath = "/path/to/mapping.json"
 
-				Expect(cfg.Classifier.CategoryModel.ModelID).ToNot(BeEmpty())
+				Expect(cfg.CategoryModel.ModelID).ToNot(BeEmpty())
 				Expect(cfg.IsMCPCategoryClassifierEnabled()).To(BeFalse())
 			})
 		})
@@ -2783,13 +2958,13 @@ var _ = Describe("MCP Configuration Validation", func() {
 				cfg.ToolName = "classify_text"
 
 				Expect(cfg.IsMCPCategoryClassifierEnabled()).To(BeTrue())
-				Expect(cfg.Classifier.CategoryModel.ModelID).To(BeEmpty())
+				Expect(cfg.CategoryModel.ModelID).To(BeEmpty())
 			})
 		})
 
 		Context("when neither is configured", func() {
 			It("should have neither enabled", func() {
-				Expect(cfg.Classifier.CategoryModel.ModelID).To(BeEmpty())
+				Expect(cfg.CategoryModel.ModelID).To(BeEmpty())
 				Expect(cfg.IsMCPCategoryClassifierEnabled()).To(BeFalse())
 			})
 		})
@@ -2803,39 +2978,39 @@ var _ = Describe("MCP Configuration Validation", func() {
 		})
 
 		It("should support all required fields for stdio transport", func() {
-			cfg.Classifier.MCPCategoryModel.Enabled = true
-			cfg.Classifier.MCPCategoryModel.TransportType = "stdio"
-			cfg.Classifier.MCPCategoryModel.Command = "python3"
-			cfg.Classifier.MCPCategoryModel.Args = []string{"-m", "server"}
-			cfg.Classifier.MCPCategoryModel.Env = map[string]string{"DEBUG": "1"}
-			cfg.Classifier.MCPCategoryModel.ToolName = "classify"
-			cfg.Classifier.MCPCategoryModel.Threshold = 0.6
-			cfg.Classifier.MCPCategoryModel.TimeoutSeconds = 60
+			cfg.MCPCategoryModel.Enabled = true
+			cfg.TransportType = "stdio"
+			cfg.Command = "python3"
+			cfg.Args = []string{"-m", "server"}
+			cfg.Env = map[string]string{"DEBUG": "1"}
+			cfg.ToolName = "classify"
+			cfg.MCPCategoryModel.Threshold = 0.6
+			cfg.TimeoutSeconds = 60
 
-			Expect(cfg.Classifier.MCPCategoryModel.Enabled).To(BeTrue())
-			Expect(cfg.Classifier.MCPCategoryModel.TransportType).To(Equal("stdio"))
-			Expect(cfg.Classifier.MCPCategoryModel.Command).To(Equal("python3"))
-			Expect(cfg.Classifier.MCPCategoryModel.Args).To(Equal([]string{"-m", "server"}))
-			Expect(cfg.Classifier.MCPCategoryModel.Env).To(HaveKeyWithValue("DEBUG", "1"))
-			Expect(cfg.Classifier.MCPCategoryModel.ToolName).To(Equal("classify"))
-			Expect(cfg.Classifier.MCPCategoryModel.Threshold).To(BeNumerically("~", 0.6, 0.01))
-			Expect(cfg.Classifier.MCPCategoryModel.TimeoutSeconds).To(Equal(60))
+			Expect(cfg.MCPCategoryModel.Enabled).To(BeTrue())
+			Expect(cfg.TransportType).To(Equal("stdio"))
+			Expect(cfg.Command).To(Equal("python3"))
+			Expect(cfg.Args).To(Equal([]string{"-m", "server"}))
+			Expect(cfg.Env).To(HaveKeyWithValue("DEBUG", "1"))
+			Expect(cfg.ToolName).To(Equal("classify"))
+			Expect(cfg.MCPCategoryModel.Threshold).To(BeNumerically("~", 0.6, 0.01))
+			Expect(cfg.TimeoutSeconds).To(Equal(60))
 		})
 
 		It("should support all required fields for HTTP transport", func() {
-			cfg.Classifier.MCPCategoryModel.Enabled = true
-			cfg.Classifier.MCPCategoryModel.TransportType = "http"
-			cfg.Classifier.MCPCategoryModel.URL = "https://mcp-server:443/api"
-			cfg.Classifier.MCPCategoryModel.ToolName = "classify"
-			cfg.Classifier.MCPCategoryModel.Threshold = 0.8
-			cfg.Classifier.MCPCategoryModel.TimeoutSeconds = 120
+			cfg.MCPCategoryModel.Enabled = true
+			cfg.TransportType = "http"
+			cfg.URL = "https://mcp-server:443/api"
+			cfg.ToolName = "classify"
+			cfg.MCPCategoryModel.Threshold = 0.8
+			cfg.TimeoutSeconds = 120
 
-			Expect(cfg.Classifier.MCPCategoryModel.Enabled).To(BeTrue())
-			Expect(cfg.Classifier.MCPCategoryModel.TransportType).To(Equal("http"))
-			Expect(cfg.Classifier.MCPCategoryModel.URL).To(Equal("https://mcp-server:443/api"))
-			Expect(cfg.Classifier.MCPCategoryModel.ToolName).To(Equal("classify"))
-			Expect(cfg.Classifier.MCPCategoryModel.Threshold).To(BeNumerically("~", 0.8, 0.01))
-			Expect(cfg.Classifier.MCPCategoryModel.TimeoutSeconds).To(Equal(120))
+			Expect(cfg.MCPCategoryModel.Enabled).To(BeTrue())
+			Expect(cfg.TransportType).To(Equal("http"))
+			Expect(cfg.URL).To(Equal("https://mcp-server:443/api"))
+			Expect(cfg.ToolName).To(Equal("classify"))
+			Expect(cfg.MCPCategoryModel.Threshold).To(BeNumerically("~", 0.8, 0.01))
+			Expect(cfg.TimeoutSeconds).To(Equal(120))
 		})
 
 		It("should allow optional fields to be omitted", func() {
@@ -2845,11 +3020,11 @@ var _ = Describe("MCP Configuration Validation", func() {
 			cfg.ToolName = "classify"
 
 			// Optional fields should have zero values
-			Expect(cfg.Classifier.MCPCategoryModel.Args).To(BeNil())
-			Expect(cfg.Classifier.MCPCategoryModel.Env).To(BeNil())
-			Expect(cfg.Classifier.MCPCategoryModel.URL).To(BeEmpty())
-			Expect(cfg.Classifier.MCPCategoryModel.Threshold).To(BeNumerically("==", 0.0))
-			Expect(cfg.Classifier.MCPCategoryModel.TimeoutSeconds).To(Equal(0))
+			Expect(cfg.Args).To(BeNil())
+			Expect(cfg.Env).To(BeNil())
+			Expect(cfg.URL).To(BeEmpty())
+			Expect(cfg.MCPCategoryModel.Threshold).To(BeNumerically("==", 0.0))
+			Expect(cfg.TimeoutSeconds).To(Equal(0))
 		})
 	})
 })
@@ -2876,7 +3051,7 @@ var _ = Describe("Hallucination Mitigation Configuration", func() {
 	})
 
 	AfterEach(func() {
-		os.RemoveAll(tempDir)
+		Expect(os.RemoveAll(tempDir)).To(Succeed())
 		ResetConfig()
 	})
 
@@ -2901,7 +3076,7 @@ hallucination_mitigation:
 			})
 
 			It("should parse hallucination mitigation configuration correctly", func() {
-				cfg, err := Load(configFile)
+				cfg, err := loadLegacyRuntimeConfigForTest(configFile)
 				Expect(err).NotTo(HaveOccurred())
 
 				Expect(cfg.HallucinationMitigation.Enabled).To(BeTrue())
@@ -2931,7 +3106,7 @@ hallucination_mitigation:
 			})
 
 			It("should parse with default values for optional fields", func() {
-				cfg, err := Load(configFile)
+				cfg, err := loadLegacyRuntimeConfigForTest(configFile)
 				Expect(err).NotTo(HaveOccurred())
 
 				Expect(cfg.HallucinationMitigation.Enabled).To(BeTrue())
@@ -2952,7 +3127,7 @@ hallucination_mitigation:
 			})
 
 			It("should have enabled set to false", func() {
-				cfg, err := Load(configFile)
+				cfg, err := loadLegacyRuntimeConfigForTest(configFile)
 				Expect(err).NotTo(HaveOccurred())
 
 				Expect(cfg.HallucinationMitigation.Enabled).To(BeFalse())
@@ -2969,7 +3144,7 @@ default_model: "test-model"
 			})
 
 			It("should have hallucination mitigation disabled by default", func() {
-				cfg, err := Load(configFile)
+				cfg, err := loadLegacyRuntimeConfigForTest(configFile)
 				Expect(err).NotTo(HaveOccurred())
 
 				Expect(cfg.HallucinationMitigation.Enabled).To(BeFalse())
@@ -3021,7 +3196,7 @@ default_model: "test-model"
 			Expect(cfg.IsFactCheckClassifierEnabled()).To(BeTrue())
 		})
 
-		It("should return false when hallucination mitigation is disabled and no fact_check_rules", func() {
+		It("should return false when no fact-check feature uses the model", func() {
 			cfg := &RouterConfig{}
 			cfg.HallucinationMitigation.Enabled = false
 			cfg.HallucinationMitigation.FactCheckModel.ModelID = "models/fact_check"
@@ -3034,6 +3209,25 @@ default_model: "test-model"
 			cfg.HallucinationMitigation.Enabled = true
 
 			Expect(cfg.IsFactCheckClassifierEnabled()).To(BeFalse())
+		})
+	})
+
+	Describe("IsFeedbackDetectorEnabled", func() {
+		It("should return true when enabled with rules and model_id", func() {
+			cfg := &RouterConfig{}
+			cfg.FeedbackDetector.Enabled = true
+			cfg.FeedbackDetector.ModelID = "models/feedback"
+			cfg.UserFeedbackRules = []UserFeedbackRule{{Name: "satisfied"}}
+
+			Expect(cfg.IsFeedbackDetectorEnabled()).To(BeTrue())
+		})
+
+		It("should return false when no user_feedback rules are configured", func() {
+			cfg := &RouterConfig{}
+			cfg.FeedbackDetector.Enabled = true
+			cfg.FeedbackDetector.ModelID = "models/feedback"
+
+			Expect(cfg.IsFeedbackDetectorEnabled()).To(BeFalse())
 		})
 	})
 
@@ -3156,6 +3350,537 @@ default_model: "test-model"
 			cfg.HallucinationMitigation.OnHallucinationDetected = "invalid"
 
 			Expect(cfg.GetHallucinationAction()).To(Equal("warn"))
+		})
+	})
+
+	Describe("Decision.GetMemoryConfig", func() {
+		It("should return nil when no memory plugin is configured", func() {
+			decision := &Decision{
+				Name: "test_decision",
+				Plugins: []DecisionPlugin{
+					{Type: "system_prompt", Configuration: MustStructuredPayload(map[string]interface{}{"enabled": true})},
+				},
+			}
+
+			Expect(decision.GetMemoryConfig()).To(BeNil())
+		})
+
+		It("should return memory config when memory plugin is configured", func() {
+			decision := &Decision{
+				Name: "test_decision",
+				Plugins: []DecisionPlugin{
+					{
+						Type: "memory",
+						Configuration: MustStructuredPayload(map[string]interface{}{
+							"enabled":              true,
+							"retrieval_limit":      10,
+							"similarity_threshold": 0.75,
+							"auto_store":           true,
+						}),
+					},
+				},
+			}
+
+			memConfig := decision.GetMemoryConfig()
+			Expect(memConfig).NotTo(BeNil())
+			Expect(memConfig.Enabled).To(BeTrue())
+			Expect(*memConfig.RetrievalLimit).To(Equal(10))
+			Expect(*memConfig.SimilarityThreshold).To(BeNumerically("~", 0.75, 0.001))
+			Expect(*memConfig.AutoStore).To(BeTrue())
+		})
+
+		It("should return memory config with partial settings", func() {
+			decision := &Decision{
+				Name: "test_decision",
+				Plugins: []DecisionPlugin{
+					{
+						Type: "memory",
+						Configuration: MustStructuredPayload(map[string]interface{}{
+							"enabled": false,
+							// Only enabled is set, other fields are nil
+						}),
+					},
+				},
+			}
+
+			memConfig := decision.GetMemoryConfig()
+			Expect(memConfig).NotTo(BeNil())
+			Expect(memConfig.Enabled).To(BeFalse())
+			Expect(memConfig.RetrievalLimit).To(BeNil())
+			Expect(memConfig.SimilarityThreshold).To(BeNil())
+			Expect(memConfig.AutoStore).To(BeNil())
+		})
+	})
+
+	// -----------------------------------------------------------------
+	// Provider profiles
+	// -----------------------------------------------------------------
+	Describe("Provider Profiles", func() {
+		Context("YAML parsing", func() {
+			It("should parse provider_profiles and endpoint references", func() {
+				yamlData := `
+provider_profiles:
+  openai-prod:
+    type: "openai"
+    base_url: "https://api.openai.com/v1"
+  azure-east:
+    type: "azure-openai"
+    base_url: "https://myresource.openai.azure.com/openai/deployments/gpt-4o"
+    api_version: "2024-10-21"
+  anthropic-prod:
+    type: "anthropic"
+    base_url: "https://api.anthropic.com"
+    extra_headers:
+      anthropic-version: "2023-06-01"
+  bedrock-west:
+    type: "bedrock"
+    base_url: "https://bedrock-mantle.us-west-2.api.aws/v1"
+vllm_endpoints:
+  - name: "openai"
+    provider_profile: "openai-prod"
+  - name: "azure"
+    provider_profile: "azure-east"
+  - name: "local-vllm"
+    address: "127.0.0.1"
+    port: 8000
+model_config:
+  "gpt-4o":
+    preferred_endpoints: ["openai", "azure"]
+  "Qwen/Qwen2.5-14B":
+    preferred_endpoints: ["local-vllm"]
+`
+				var cfg RouterConfig
+				err := yaml.Unmarshal([]byte(yamlData), &cfg)
+				Expect(err).NotTo(HaveOccurred())
+
+				// provider_profiles parsed
+				Expect(cfg.ProviderProfiles).To(HaveLen(4))
+				Expect(cfg.ProviderProfiles["openai-prod"].Type).To(Equal("openai"))
+				Expect(cfg.ProviderProfiles["azure-east"].APIVersion).To(Equal("2024-10-21"))
+				Expect(cfg.ProviderProfiles["anthropic-prod"].ExtraHeaders).To(HaveKeyWithValue("anthropic-version", "2023-06-01"))
+
+				// endpoint references
+				Expect(cfg.VLLMEndpoints).To(HaveLen(3))
+				Expect(cfg.VLLMEndpoints[0].ProviderProfileName).To(Equal("openai-prod"))
+				Expect(cfg.VLLMEndpoints[2].ProviderProfileName).To(BeEmpty())
+			})
+		})
+
+		Context("ResolveAddress", func() {
+			It("should extract host:port from base_url", func() {
+				profiles := map[string]ProviderProfile{
+					"openai-prod": {Type: "openai", BaseURL: "https://api.openai.com/v1"},
+					"azure-east":  {Type: "azure-openai", BaseURL: "https://myresource.openai.azure.com/openai/deployments/gpt-4o"},
+				}
+
+				ep := VLLMEndpoint{Name: "openai", ProviderProfileName: "openai-prod"}
+				addr, err := ep.ResolveAddress(profiles)
+				Expect(err).NotTo(HaveOccurred())
+				Expect(addr).To(Equal("api.openai.com:443"))
+
+				ep2 := VLLMEndpoint{Name: "azure", ProviderProfileName: "azure-east"}
+				addr2, err2 := ep2.ResolveAddress(profiles)
+				Expect(err2).NotTo(HaveOccurred())
+				Expect(addr2).To(Equal("myresource.openai.azure.com:443"))
+			})
+
+			It("should use address:port for legacy endpoints (no provider_profile)", func() {
+				ep := VLLMEndpoint{Name: "local", Address: "127.0.0.1", Port: 8000}
+				addr, err := ep.ResolveAddress(nil)
+				Expect(err).NotTo(HaveOccurred())
+				Expect(addr).To(Equal("127.0.0.1:8000"))
+			})
+
+			It("should error when profile is set but has no base_url", func() {
+				profiles := map[string]ProviderProfile{
+					"minimal": {Type: "openai"},
+				}
+				ep := VLLMEndpoint{Name: "ep1", Address: "10.0.0.1", Port: 9000, ProviderProfileName: "minimal"}
+				_, err := ep.ResolveAddress(profiles)
+				Expect(err).To(HaveOccurred())
+				Expect(err.Error()).To(ContainSubstring("no base_url"))
+			})
+
+			It("should error when profile is set but does not exist", func() {
+				profiles := map[string]ProviderProfile{}
+				ep := VLLMEndpoint{Name: "ep1", ProviderProfileName: "missing"}
+				_, err := ep.ResolveAddress(profiles)
+				Expect(err).To(HaveOccurred())
+				Expect(err.Error()).To(ContainSubstring("does not exist"))
+			})
+
+			It("should error when profile is set but profiles map is nil", func() {
+				ep := VLLMEndpoint{Name: "ep1", ProviderProfileName: "some-profile"}
+				_, err := ep.ResolveAddress(nil)
+				Expect(err).To(HaveOccurred())
+				Expect(err.Error()).To(ContainSubstring("no provider_profiles map"))
+			})
+
+			It("should handle explicit port in base_url", func() {
+				profiles := map[string]ProviderProfile{
+					"custom": {Type: "openai", BaseURL: "http://localhost:8080/v1"},
+				}
+				ep := VLLMEndpoint{Name: "ep1", ProviderProfileName: "custom"}
+				addr, err := ep.ResolveAddress(profiles)
+				Expect(err).NotTo(HaveOccurred())
+				Expect(addr).To(Equal("localhost:8080"))
+			})
+
+			It("should error on unsupported URL scheme", func() {
+				profiles := map[string]ProviderProfile{
+					"ftp": {Type: "openai", BaseURL: "ftp://files.example.com/v1"},
+				}
+				ep := VLLMEndpoint{Name: "ep1", ProviderProfileName: "ftp"}
+				_, err := ep.ResolveAddress(profiles)
+				Expect(err).To(HaveOccurred())
+				Expect(err.Error()).To(ContainSubstring("unsupported scheme"))
+			})
+		})
+
+		Context("ProviderType", func() {
+			It("should return correct provider type", func() {
+				for _, t := range []string{"openai", "anthropic", "azure-openai", "bedrock", "gemini", "vertex-ai", "minimax"} {
+					pt, err := (&ProviderProfile{Type: t}).ProviderType()
+					Expect(err).NotTo(HaveOccurred())
+					Expect(pt).To(Equal(t))
+				}
+			})
+
+			It("should error on unknown type", func() {
+				_, err := (&ProviderProfile{Type: "unknown"}).ProviderType()
+				Expect(err).To(HaveOccurred())
+				Expect(err.Error()).To(ContainSubstring("unknown provider profile type"))
+			})
+
+			It("should error on empty type", func() {
+				_, err := (&ProviderProfile{}).ProviderType()
+				Expect(err).To(HaveOccurred())
+				Expect(err.Error()).To(ContainSubstring("empty type"))
+			})
+
+			It("should error on nil profile", func() {
+				var nilProfile *ProviderProfile
+				_, err := nilProfile.ProviderType()
+				Expect(err).To(HaveOccurred())
+				Expect(err.Error()).To(ContainSubstring("nil"))
+			})
+		})
+
+		Context("ResolveAuthHeader", func() {
+			It("should return type-specific defaults", func() {
+				h, p, err := (&ProviderProfile{Type: "openai"}).ResolveAuthHeader()
+				Expect(err).NotTo(HaveOccurred())
+				Expect(h).To(Equal("Authorization"))
+				Expect(p).To(Equal("Bearer"))
+
+				h, p, err = (&ProviderProfile{Type: "anthropic"}).ResolveAuthHeader()
+				Expect(err).NotTo(HaveOccurred())
+				Expect(h).To(Equal("x-api-key"))
+				Expect(p).To(BeEmpty())
+
+				h, p, err = (&ProviderProfile{Type: "azure-openai"}).ResolveAuthHeader()
+				Expect(err).NotTo(HaveOccurred())
+				Expect(h).To(Equal("api-key"))
+				Expect(p).To(BeEmpty())
+
+				h, p, err = (&ProviderProfile{Type: "bedrock"}).ResolveAuthHeader()
+				Expect(err).NotTo(HaveOccurred())
+				Expect(h).To(Equal("Authorization"))
+				Expect(p).To(Equal("Bearer"))
+
+				h, p, err = (&ProviderProfile{Type: "minimax"}).ResolveAuthHeader()
+				Expect(err).NotTo(HaveOccurred())
+				Expect(h).To(Equal("Authorization"))
+				Expect(p).To(Equal("Bearer"))
+			})
+
+			It("should allow explicit overrides", func() {
+				profile := &ProviderProfile{
+					Type:       "openai",
+					AuthHeader: "X-Custom-Auth",
+					AuthPrefix: "Token",
+				}
+				h, p, err := profile.ResolveAuthHeader()
+				Expect(err).NotTo(HaveOccurred())
+				Expect(h).To(Equal("X-Custom-Auth"))
+				Expect(p).To(Equal("Token"))
+			})
+
+			It("should error on unknown type", func() {
+				_, _, err := (&ProviderProfile{Type: "bogus"}).ResolveAuthHeader()
+				Expect(err).To(HaveOccurred())
+				Expect(err.Error()).To(ContainSubstring("unknown provider type"))
+			})
+		})
+
+		Context("ResolveChatPath", func() {
+			It("should return type-specific default paths", func() {
+				path, err := (&ProviderProfile{Type: "openai", BaseURL: "https://api.openai.com/v1"}).ResolveChatPath()
+				Expect(err).NotTo(HaveOccurred())
+				Expect(path).To(Equal("/v1/chat/completions"))
+
+				path, err = (&ProviderProfile{Type: "anthropic", BaseURL: "https://api.anthropic.com"}).ResolveChatPath()
+				Expect(err).NotTo(HaveOccurred())
+				Expect(path).To(Equal("/v1/messages"))
+
+				path, err = (&ProviderProfile{Type: "minimax", BaseURL: "https://api.minimax.io"}).ResolveChatPath()
+				Expect(err).NotTo(HaveOccurred())
+				Expect(path).To(Equal("/v1/chat/completions"))
+			})
+
+			It("should append api-version for azure-openai", func() {
+				profile := &ProviderProfile{
+					Type:       "azure-openai",
+					BaseURL:    "https://myresource.openai.azure.com/openai/deployments/gpt-4o",
+					APIVersion: "2024-10-21",
+				}
+				path, err := profile.ResolveChatPath()
+				Expect(err).NotTo(HaveOccurred())
+				Expect(path).To(Equal("/openai/deployments/gpt-4o/chat/completions?api-version=2024-10-21"))
+			})
+
+			It("should error for unrecognised type", func() {
+				_, err := (&ProviderProfile{Type: "vllm"}).ResolveChatPath()
+				Expect(err).To(HaveOccurred())
+				Expect(err.Error()).To(ContainSubstring("unknown provider type"))
+			})
+
+			It("should use explicit ChatPath override", func() {
+				profile := &ProviderProfile{Type: "openai", ChatPath: "/custom/path"}
+				path, err := profile.ResolveChatPath()
+				Expect(err).NotTo(HaveOccurred())
+				Expect(path).To(Equal("/custom/path"))
+			})
+
+			It("should error for nil profile", func() {
+				var nilProfile *ProviderProfile
+				_, err := nilProfile.ResolveChatPath()
+				Expect(err).To(HaveOccurred())
+				Expect(err.Error()).To(ContainSubstring("nil"))
+			})
+		})
+
+		Context("ExtraHeaders", func() {
+			It("should pass through explicit extra_headers only", func() {
+				profile := &ProviderProfile{
+					Type:         "anthropic",
+					ExtraHeaders: map[string]string{"anthropic-version": "2023-06-01", "custom": "value"},
+				}
+				Expect(profile.ExtraHeaders).To(HaveKeyWithValue("anthropic-version", "2023-06-01"))
+				Expect(profile.ExtraHeaders).To(HaveKeyWithValue("custom", "value"))
+			})
+
+			It("should be nil when not configured", func() {
+				profile := &ProviderProfile{Type: "openai"}
+				Expect(profile.ExtraHeaders).To(BeNil())
+			})
+		})
+
+		Context("GetProviderProfileForEndpoint", func() {
+			It("should resolve endpoint to profile", func() {
+				cfg := &RouterConfig{
+					BackendModels: BackendModels{
+						VLLMEndpoints: []VLLMEndpoint{
+							{Name: "openai", ProviderProfileName: "openai-prod"},
+							{Name: "local", Address: "127.0.0.1", Port: 8000},
+						},
+						ProviderProfiles: map[string]ProviderProfile{
+							"openai-prod": {Type: "openai", BaseURL: "https://api.openai.com/v1"},
+						},
+					},
+				}
+				profile, err := cfg.GetProviderProfileForEndpoint("openai")
+				Expect(err).NotTo(HaveOccurred())
+				Expect(profile).NotTo(BeNil())
+				Expect(profile.Type).To(Equal("openai"))
+
+				// Endpoint without profile — valid, returns nil profile and no error
+				profile, err = cfg.GetProviderProfileForEndpoint("local")
+				Expect(err).NotTo(HaveOccurred())
+				Expect(profile).To(BeNil())
+			})
+
+			It("should error on non-existent endpoint", func() {
+				cfg := &RouterConfig{
+					BackendModels: BackendModels{
+						VLLMEndpoints: []VLLMEndpoint{
+							{Name: "local", Address: "127.0.0.1", Port: 8000},
+						},
+					},
+				}
+				_, err := cfg.GetProviderProfileForEndpoint("nonexistent")
+				Expect(err).To(HaveOccurred())
+				Expect(err.Error()).To(ContainSubstring("not found"))
+			})
+
+			It("should error on dangling profile reference", func() {
+				cfg := &RouterConfig{
+					BackendModels: BackendModels{
+						VLLMEndpoints: []VLLMEndpoint{
+							{Name: "openai", ProviderProfileName: "missing-profile"},
+						},
+						ProviderProfiles: map[string]ProviderProfile{
+							"other-profile": {Type: "openai"},
+						},
+					},
+				}
+				_, err := cfg.GetProviderProfileForEndpoint("openai")
+				Expect(err).To(HaveOccurred())
+				Expect(err.Error()).To(ContainSubstring("does not exist"))
+				Expect(err.Error()).To(ContainSubstring("missing-profile"))
+			})
+		})
+
+		Context("ResolvePrimaryBackendForModel with profiles", func() {
+			It("should use base_url for address resolution", func() {
+				cfg := &RouterConfig{
+					BackendModels: BackendModels{
+						ModelConfig: map[string]ModelParams{
+							"gpt-4o": {PreferredEndpoints: []string{"openai"}},
+						},
+						VLLMEndpoints: []VLLMEndpoint{
+							{Name: "openai", ProviderProfileName: "openai-prod"},
+						},
+						ProviderProfiles: map[string]ProviderProfile{
+							"openai-prod": {Type: "openai", BaseURL: "https://api.openai.com/v1"},
+						},
+					},
+				}
+
+				addr, name, found, detailErr := cfg.ResolvePrimaryBackendForModel("gpt-4o")
+				Expect(detailErr).NotTo(HaveOccurred())
+				Expect(found).To(BeTrue())
+				Expect(name).To(Equal("openai"))
+				Expect(addr).To(Equal("api.openai.com:443"))
+			})
+		})
+	})
+
+	// -----------------------------------------------------------------------
+	// PromptCompressionConfig
+	// -----------------------------------------------------------------------
+	Describe("PromptCompressionConfig", func() {
+		Context("profiles", func() {
+			It("should expose the stable built-in profile list", func() {
+				Expect(ValidPromptCompressionProfiles()).To(Equal([]string{
+					"default",
+					"coding",
+					"medical",
+					"security",
+					"multi_turn",
+				}))
+			})
+
+			It("should normalize omitted and hyphenated profile names", func() {
+				Expect((PromptCompressionConfig{}).NormalizedProfile()).To(Equal("default"))
+				Expect((PromptCompressionConfig{Profile: "Multi-Turn"}).NormalizedProfile()).To(Equal("multi_turn"))
+			})
+
+			It("should reject unknown profile names during config validation", func() {
+				cfg := &RouterConfig{
+					InlineModels: InlineModels{
+						PromptCompression: PromptCompressionConfig{
+							Enabled:   true,
+							Profile:   "finance",
+							MaxTokens: 512,
+						},
+					},
+				}
+				err := validateConfigContracts(cfg, configValidationScopeFile)
+				Expect(err).To(MatchError(ContainSubstring("unknown prompt_compression.profile")))
+				Expect(err).To(MatchError(ContainSubstring("default, coding, medical, security, multi_turn")))
+			})
+
+			It("should accept the multi-turn profile alias during config validation", func() {
+				cfg := &RouterConfig{
+					InlineModels: InlineModels{
+						PromptCompression: PromptCompressionConfig{
+							Enabled:   true,
+							Profile:   "multi-turn",
+							MaxTokens: 512,
+						},
+					},
+				}
+				Expect(validateConfigContracts(cfg, configValidationScopeFile)).To(Succeed())
+			})
+		})
+
+		Context("SkipSignalsSet", func() {
+			It("should default to jailbreak and pii when SkipSignals is empty", func() {
+				pc := PromptCompressionConfig{Enabled: true, MaxTokens: 512}
+				s := pc.SkipSignalsSet()
+				Expect(s).To(HaveKey("jailbreak"))
+				Expect(s).To(HaveKey("pii"))
+				Expect(s).To(HaveLen(2))
+			})
+
+			It("should use configured SkipSignals when provided", func() {
+				pc := PromptCompressionConfig{
+					Enabled:     true,
+					MaxTokens:   512,
+					SkipSignals: []string{"jailbreak"},
+				}
+				s := pc.SkipSignalsSet()
+				Expect(s).To(HaveKey("jailbreak"))
+				Expect(s).NotTo(HaveKey("pii"))
+				Expect(s).To(HaveLen(1))
+			})
+
+			It("should support adding custom signal types to skip list", func() {
+				pc := PromptCompressionConfig{
+					Enabled:     true,
+					MaxTokens:   512,
+					SkipSignals: []string{"jailbreak", "pii", "fact_check"},
+				}
+				s := pc.SkipSignalsSet()
+				Expect(s).To(HaveKey("jailbreak"))
+				Expect(s).To(HaveKey("pii"))
+				Expect(s).To(HaveKey("fact_check"))
+				Expect(s).To(HaveLen(3))
+			})
+		})
+
+		Context("MinLength", func() {
+			It("should be zero by default", func() {
+				pc := PromptCompressionConfig{Enabled: true, MaxTokens: 512}
+				Expect(pc.MinLength).To(Equal(0))
+			})
+
+			It("should parse from YAML", func() {
+				yamlStr := `
+enabled: true
+max_tokens: 512
+min_length: 2000
+skip_signals:
+  - jailbreak
+  - pii
+`
+				var pc PromptCompressionConfig
+				err := yaml.Unmarshal([]byte(yamlStr), &pc)
+				Expect(err).NotTo(HaveOccurred())
+				Expect(pc.Enabled).To(BeTrue())
+				Expect(pc.MaxTokens).To(Equal(512))
+				Expect(pc.MinLength).To(Equal(2000))
+				Expect(pc.SkipSignals).To(Equal([]string{"jailbreak", "pii"}))
+			})
+
+			It("should parse custom skip signals from YAML", func() {
+				yamlStr := `
+enabled: true
+max_tokens: 256
+min_length: 1000
+skip_signals:
+  - jailbreak
+`
+				var pc PromptCompressionConfig
+				err := yaml.Unmarshal([]byte(yamlStr), &pc)
+				Expect(err).NotTo(HaveOccurred())
+				Expect(pc.MinLength).To(Equal(1000))
+				Expect(pc.SkipSignals).To(Equal([]string{"jailbreak"}))
+				s := pc.SkipSignalsSet()
+				Expect(s).To(HaveKey("jailbreak"))
+				Expect(s).NotTo(HaveKey("pii"))
+			})
 		})
 	})
 })

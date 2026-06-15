@@ -3,7 +3,12 @@ import Layout from '@theme/Layout'
 import Translate from '@docusaurus/Translate'
 import Link from '@docusaurus/Link'
 import styles from './team.module.css'
-import { FaGithub, FaLinkedin } from 'react-icons/fa'
+import { FaExternalLinkAlt, FaGithub, FaLinkedin } from 'react-icons/fa'
+
+interface MemberLink {
+  label: string
+  href: string
+}
 
 interface TeamMember {
   name: string
@@ -12,25 +17,194 @@ interface TeamMember {
   avatar: string
   github?: string
   linkedin?: string
+  externalLinks?: MemberLink[]
   bio: React.ReactNode
-  memberType: 'maintainer' | 'committer' | 'committer'
+  expertise?: React.ReactNode[]
+  memberType: 'steering' | 'committer'
 }
 
 interface TeamMemberProps {
   member: TeamMember
 }
 
-const allTeamMembers: TeamMember[] = [
+const steeringCommitteeMembers: TeamMember[] = [
+  {
+    name: 'Xunzhuo Liu',
+    role: <Translate id="team.members.XunzhuoLiu.role">LLM Routing @ vLLM</Translate>,
+    avatar: '/img/team/xunzhuo.png',
+    github: 'https://github.com/Xunzhuo',
+    linkedin: 'http://linkedin.com/in/bitliu',
+    externalLinks: [
+      { label: 'Website', href: 'https://www.liuxunzhuo.com/' },
+    ],
+    bio: <Translate id="team.members.XunzhuoLiu.bio">LLM routing builder at vLLM.</Translate>,
+    expertise: [
+      <Translate id="team.members.XunzhuoLiu.expertise.routing">LLM routing</Translate>,
+      <Translate id="team.members.XunzhuoLiu.expertise.gateway">Kubernetes AI Gateway</Translate>,
+      <Translate id="team.members.XunzhuoLiu.expertise.opensource">Open-source infrastructure</Translate>,
+    ],
+    memberType: 'steering',
+  },
+  {
+    name: 'Bowei He',
+    role: <Translate id="team.members.BoweiHe.role">Postdoc @ MBZUAI / McGill</Translate>,
+    avatar: 'https://agentic-in.ai/people/bowei-he.jpeg',
+    linkedin: 'https://www.linkedin.com/in/bowei-he-8a9450199/',
+    externalLinks: [
+      { label: 'Google Scholar', href: 'https://scholar.google.com/citations?user=1cH0A9cAAAAJ&hl=zh-CN' },
+    ],
+    bio: <Translate id="team.members.BoweiHe.bio">PhD from CityUHK and former Hunyuan LLM under the Qingyun Talent program.</Translate>,
+    expertise: [
+      <Translate id="team.members.BoweiHe.expertise.research">Academic research</Translate>,
+      <Translate id="team.members.BoweiHe.expertise.llm">LLM systems</Translate>,
+      <Translate id="team.members.BoweiHe.expertise.hunyuan">Tencent Hunyuan LLM</Translate>,
+    ],
+    memberType: 'steering',
+  },
+  {
+    name: 'Yankai Chen',
+    role: <Translate id="team.members.YankaiChen.role">Postdoctoral Associate @ McGill University / MBZUAI</Translate>,
+    avatar: 'https://agentic-in.ai/people/yankai-chen.jpg',
+    linkedin: 'https://www.linkedin.com/in/yankai-chen-923001154/',
+    externalLinks: [
+      { label: 'Website', href: 'https://yankai-chen.github.io/' },
+      { label: 'Google Scholar', href: 'https://scholar.google.com/citations?user=5ZOi7UAAAAAJ&hl=zh-CN' },
+    ],
+    bio: <Translate id="team.members.YankaiChen.bio">Research spanning agentic AI, human-centered AI, and knowledge mining.</Translate>,
+    expertise: [
+      <Translate id="team.members.YankaiChen.expertise.agentic">Agentic AI</Translate>,
+      <Translate id="team.members.YankaiChen.expertise.hcai">Human-centered AI</Translate>,
+      <Translate id="team.members.YankaiChen.expertise.mining">Knowledge mining</Translate>,
+    ],
+    memberType: 'steering',
+  },
+  {
+    name: 'Fuyuan Lyu',
+    role: <Translate id="team.members.FuyuanLyu.role">PhD Candidate @ McGill University / Mila</Translate>,
+    avatar: 'https://agentic-in.ai/people/fuyuan-lv.jpeg',
+    linkedin: 'https://www.linkedin.com/in/fuyuan-lyu-560756167/',
+    externalLinks: [
+      { label: 'Website', href: 'https://fuyuanlyu.github.io/' },
+      { label: 'Google Scholar', href: 'https://scholar.google.com/citations?user=dOjmAVQAAAAJ&hl=en' },
+    ],
+    bio: <Translate id="team.members.FuyuanLyu.bio">Research in data-centric AI, automatic feature selection, and automatic labeling for deep learning and foundation models.</Translate>,
+    expertise: [
+      <Translate id="team.members.FuyuanLyu.expertise.data">Data-centric AI</Translate>,
+      <Translate id="team.members.FuyuanLyu.expertise.features">Automatic feature selection</Translate>,
+      <Translate id="team.members.FuyuanLyu.expertise.labeling">Automatic labeling</Translate>,
+    ],
+    memberType: 'steering',
+  },
   {
     name: 'Huamin Chen',
-    role: <Translate id="team.members.HuaminChen.role">Distinguished Engineer</Translate>,
-    company: 'Red Hat',
+    role: <Translate id="team.members.HuaminChen.role">@Microsoft</Translate>,
     avatar: '/img/team/huamin.png',
     github: 'https://github.com/rootfs',
     linkedin: 'https://www.linkedin.com/in/huaminchen',
-    bio: <Translate id="team.members.HuaminChen.bio">Distinguished Engineer at Red Hat, driving innovation in cloud-native and AI/LLM Inference technologies.</Translate>,
-    memberType: 'maintainer',
+    externalLinks: [
+      { label: 'Hugging Face', href: 'https://huggingface.co/HuaminChen' },
+    ],
+    bio: <Translate id="team.members.HuaminChen.bio">Long-term incubator of frontier infrastructure and AI systems across cloud-native platforms, open-source ecosystems, and model-serving stacks.</Translate>,
+    expertise: [
+      <Translate id="team.members.HuaminChen.expertise.cloud">Cloud-native platforms</Translate>,
+      <Translate id="team.members.HuaminChen.expertise.serving">Model-serving stacks</Translate>,
+      <Translate id="team.members.HuaminChen.expertise.ecosystem">Open-source ecosystems</Translate>,
+    ],
+    memberType: 'steering',
   },
+  {
+    name: 'Steve Liu',
+    role: <Translate id="team.members.SteveLiu.role">@MBZUAI / McGill / Mila</Translate>,
+    avatar: 'https://agentic-in.ai/people/steve-liu.jpeg',
+    linkedin: 'https://ca.linkedin.com/in/xueliu',
+    externalLinks: [
+      { label: 'MBZUAI', href: 'https://mbzuai.ac.ae/study/faculty/steve-liu/' },
+      { label: 'Google Scholar', href: 'https://scholar.google.com/citations?user=rfLIRakAAAAJ&hl=en' },
+    ],
+    bio: <Translate id="team.members.SteveLiu.bio">Fellow CAE & IEEE; Associate VPR @ MBZUAI; Prof @ McGill; Mila; ex-VP R&D @ Samsung AI; Chair ACM SIGBED.</Translate>,
+    expertise: [
+      <Translate id="team.members.SteveLiu.expertise.aiml">AI and machine learning</Translate>,
+      <Translate id="team.members.SteveLiu.expertise.systems">Intelligent systems</Translate>,
+      <Translate id="team.members.SteveLiu.expertise.cps">Cyber-physical systems</Translate>,
+    ],
+    memberType: 'steering',
+  },
+]
+
+const topNewContributorMembers: TeamMember[] = [
+  {
+    name: 'FAUST',
+    role: <Translate id="team.members.FAUST-BENCHOU.role">Cloud-native Open Source Contributor</Translate>,
+    company: 'Tongji University',
+    avatar: 'https://github.com/FAUST-BENCHOU.png',
+    github: 'https://github.com/FAUST-BENCHOU',
+    bio: <Translate id="team.members.FAUST-BENCHOU.bio">Cloud-native open source contributor across Karmada and Volcano.</Translate>,
+    memberType: 'committer',
+  },
+  {
+    name: 'David Shrader',
+    role: <Translate id="team.members.shraderdm.role">GTM Tech Lead</Translate>,
+    company: 'Google',
+    avatar: 'https://github.com/shraderdm.png',
+    github: 'https://github.com/shraderdm',
+    linkedin: 'https://www.linkedin.com/in/shraderdm/',
+    externalLinks: [
+      { label: 'Website', href: 'https://shrader.dev' },
+    ],
+    bio: <Translate id="team.members.shraderdm.bio">GTM Tech Lead at Google.</Translate>,
+    memberType: 'committer',
+  },
+  {
+    name: 'yangw',
+    role: <Translate id="team.members.drivebyer.role">Cloud-native Engineer</Translate>,
+    company: 'DaoCloud',
+    avatar: 'https://github.com/drivebyer.png',
+    github: 'https://github.com/drivebyer',
+    bio: <Translate id="team.members.drivebyer.bio">DaoCloud engineer and open-source contributor focused on practical infrastructure improvements.</Translate>,
+    memberType: 'committer',
+  },
+  {
+    name: 'Ramakrishnan Sathyavageeswaran',
+    role: <Translate id="team.members.ramkrishs.role">Computer Science Engineer</Translate>,
+    company: 'Intuit',
+    avatar: 'https://github.com/ramkrishs.png',
+    github: 'https://github.com/ramkrishs',
+    externalLinks: [
+      { label: 'Website', href: 'http://ramakrishnan.me' },
+    ],
+    bio: <Translate id="team.members.ramkrishs.bio">Computer science engineer at Intuit focused on software systems.</Translate>,
+    memberType: 'committer',
+  },
+  {
+    name: 'WUKUNTAI',
+    role: <Translate id="team.members.WUKUNTAI-0211.role">Software Engineer</Translate>,
+    company: 'DELTA ELECTRONICS, INC.',
+    avatar: 'https://github.com/WUKUNTAI-0211.png',
+    github: 'https://github.com/WUKUNTAI-0211',
+    bio: <Translate id="team.members.WUKUNTAI-0211.bio">Software engineer at Delta Electronics in Taiwan.</Translate>,
+    memberType: 'committer',
+  },
+  {
+    name: 'Aayush Saini',
+    role: <Translate id="team.members.AayushSaini101.role">SDE, Data and AI</Translate>,
+    company: 'Red Hat',
+    avatar: 'https://github.com/AayushSaini101.png',
+    github: 'https://github.com/AayushSaini101',
+    bio: <Translate id="team.members.AayushSaini101.bio">SDE in Red Hat Data and AI, GSoC 2025 participant, and AsyncAPI Steering Committee member.</Translate>,
+    memberType: 'committer',
+  },
+  {
+    name: 'siloteemu',
+    role: <Translate id="team.members.siloteemu.role">Open Source Contributor</Translate>,
+    avatar: 'https://github.com/siloteemu.png',
+    github: 'https://github.com/siloteemu',
+    bio: <Translate id="team.members.siloteemu.bio">Open-source contributor on GitHub.</Translate>,
+    memberType: 'committer',
+  },
+]
+
+const committerMembers: TeamMember[] = [
+  ...topNewContributorMembers,
   {
     name: 'Chen Wang',
     role: <Translate id="team.members.ChenWang.role">Senior Staff Research Scientist</Translate>,
@@ -39,7 +213,7 @@ const allTeamMembers: TeamMember[] = [
     github: 'https://github.com/wangchen615',
     linkedin: 'https://www.linkedin.com/in/chenw615/',
     bio: <Translate id="team.members.ChenWang.bio">Senior Staff Research Scientist at IBM, focusing on advanced AI systems and research.</Translate>,
-    memberType: 'maintainer',
+    memberType: 'committer',
   },
   {
     name: 'Yue Zhu',
@@ -49,17 +223,7 @@ const allTeamMembers: TeamMember[] = [
     github: 'https://github.com/yuezhu1',
     linkedin: 'https://www.linkedin.com/in/yue-zhu-b26526a3/',
     bio: <Translate id="team.members.YueZhu.bio">Staff Research Scientist at IBM, specializing in AI research and LLM Inference.</Translate>,
-    memberType: 'maintainer',
-  },
-  {
-    name: 'Xunzhuo Liu',
-    role: <Translate id="team.members.XunzhuoLiu.role">AI Networking</Translate>,
-    company: 'Tencent',
-    avatar: '/img/team/xunzhuo.png',
-    github: 'https://github.com/Xunzhuo',
-    linkedin: 'https://www.linkedin.com/in/bitliu/',
-    bio: <Translate id="team.members.XunzhuoLiu.bio">AI Networking at Tencent, leading the development of vLLM Semantic Router and driving the project vision.</Translate>,
-    memberType: 'maintainer',
+    memberType: 'committer',
   },
   {
     name: 'Senan Zedan',
@@ -116,7 +280,7 @@ const allTeamMembers: TeamMember[] = [
     role: <Translate id="team.members.Yehudit.role">Software Engineer</Translate>,
     company: 'Red Hat',
     avatar: 'https://avatars.githubusercontent.com/u/34643974?s=400&v=4',
-    github: 'https://github.com/yehudit1987',
+    github: 'https://github.com/yehuditkerido',
     linkedin: 'https://www.linkedin.com/in/yehuditkerido/',
     bio: <Translate id="team.members.Yehudit.bio">Software engineer with a research-driven mindset, focused on cloud-native platforms and AI infrastructure. Open-source contributor.</Translate>,
     memberType: 'committer',
@@ -129,6 +293,15 @@ const allTeamMembers: TeamMember[] = [
     github: 'https://github.com/noalimoy',
     linkedin: 'https://www.linkedin.com/in/noalimoy/',
     bio: <Translate id="team.members.NoaLimoy.bio">Software engineer with a research-driven mindset, focused on cloud-native platforms and AI infrastructure. Open-source contributor.</Translate>,
+    memberType: 'committer',
+  },
+  {
+    name: 'Marina Koushnir',
+    role: <Translate id="team.members.MarinaKoushnir.role">Open Source Contributor</Translate>,
+    company: 'Red Hat',
+    avatar: 'https://github.com/mkoushni.png',
+    github: 'https://github.com/mkoushni',
+    bio: <Translate id="team.members.MarinaKoushnir.bio">Open source contributor to vLLM Semantic Router.</Translate>,
     memberType: 'committer',
   },
   {
@@ -221,6 +394,23 @@ const allTeamMembers: TeamMember[] = [
     bio: <Translate id="team.members.aeft.bio">Open source contributor to vLLM Semantic Router.</Translate>,
     memberType: 'committer',
   },
+  {
+    name: 'Hao Wu',
+    role: <Translate id="team.members.HaoWu.role">Individual Contributor</Translate>,
+    avatar: 'https://github.com/haowu1234.png',
+    github: 'https://github.com/haowu1234',
+    bio: <Translate id="team.members.HaoWu.bio">Open source contributor to vLLM Semantic Router.</Translate>,
+    memberType: 'committer',
+  },
+  {
+    name: 'Qiping Pan',
+    role: <Translate id="team.members.QipingPan.role">Individual Contributor</Translate>,
+    avatar: 'https://github.com/ppppqp.png',
+    github: 'https://github.com/ppppqp',
+    linkedin: 'https://www.linkedin.com/in/qiping-pan-8662ab215/',
+    bio: <Translate id="team.members.QipingPan.bio">Open source contributor to vLLM Semantic Router.</Translate>,
+    memberType: 'committer',
+  },
 ]
 
 const TeamMemberCard: React.FC<TeamMemberProps> = ({ member }) => {
@@ -236,11 +426,9 @@ const TeamMemberCard: React.FC<TeamMemberProps> = ({ member }) => {
           <div className={styles.nameWithBadge}>
             <h3 className={styles.memberName}>{member.name}</h3>
             <span className={`${styles.badge} ${styles[member.memberType]}`}>
-              {member.memberType === 'maintainer'
-                ? <Translate id="team.badge.maintainer">Maintainer</Translate>
-                : member.memberType === 'committer'
-                  ? <Translate id="team.badge.committer">Committer</Translate>
-                  : <Translate id="team.badge.contributor">Contributor</Translate>}
+              {member.memberType === 'steering'
+                ? <Translate id="team.badge.steering">Steering Committee</Translate>
+                : <Translate id="team.badge.committer">Committer</Translate>}
             </span>
           </div>
           <p className={styles.memberRole}>
@@ -256,6 +444,14 @@ const TeamMemberCard: React.FC<TeamMemberProps> = ({ member }) => {
       </div>
 
       <p className={styles.memberBio}>{member.bio}</p>
+
+      {member.expertise && (
+        <ul className={styles.expertiseList}>
+          {member.expertise.map((expertise, index) => (
+            <li key={index}>{expertise}</li>
+          ))}
+        </ul>
+      )}
 
       <div className={styles.memberActions}>
         {member.github && member.github !== '#' && (
@@ -281,6 +477,19 @@ const TeamMemberCard: React.FC<TeamMemberProps> = ({ member }) => {
             LinkedIn
           </a>
         )}
+
+        {member.externalLinks?.map(link => (
+          <a
+            key={link.href}
+            href={link.href}
+            target="_blank"
+            rel="noopener noreferrer"
+            className={styles.actionLink}
+          >
+            <FaExternalLinkAlt />
+            {link.label}
+          </a>
+        ))}
       </div>
     </div>
   )
@@ -294,7 +503,7 @@ const Team: React.FC = () => {
     >
       <div className={styles.container}>
         <header className={styles.header}>
-          <h1><Translate id="team.title">Meet Our Team 👥</Translate></h1>
+          <h1><Translate id="team.title">Meet Our Team</Translate></h1>
           <p className={styles.subtitle}>
             <Translate id="team.subtitle">Innovation thrives when great minds come together</Translate>
           </p>
@@ -303,16 +512,15 @@ const Team: React.FC = () => {
         <main className={styles.main}>
           <section className={styles.section}>
             <h2>
-              👥
-              <Translate id="team.coreTeam.title">Our Team</Translate>
+              <Translate id="team.steering.title">Steering Committee</Translate>
             </h2>
             <p className={styles.sectionDescription}>
-              <Translate id="team.coreTeam.description">
-                Meet the talented people who make vLLM Semantic Router possible.
+              <Translate id="team.steering.description">
+                The steering committee guides roadmap direction, project scope, and cross-community alignment for vLLM Semantic Router.
               </Translate>
             </p>
-            <div className={styles.teamGrid}>
-              {allTeamMembers.map((member, index) => (
+            <div className={styles.steeringGrid}>
+              {steeringCommitteeMembers.map((member, index) => (
                 <TeamMemberCard key={index} member={member} />
               ))}
             </div>
@@ -320,71 +528,27 @@ const Team: React.FC = () => {
 
           <section className={styles.section}>
             <h2>
-              🏆
-              <Translate id="team.recognition.title">Recognition</Translate>
+              <Translate id="team.committers.title">Committers</Translate>
             </h2>
-            <div className={styles.recognitionCard}>
-              <h3><Translate id="team.recognition.subtitle">Contributor Recognition</Translate></h3>
-              <p>
-                <Translate id="team.recognition.description">
-                  We believe in recognizing the valuable contributions of our community members.
-                  Contributors who show consistent dedication and quality work in specific areas
-                  may be invited to become maintainers with write access to the repository.
-                </Translate>
-              </p>
-
-              <div className={styles.pathToMaintainer}>
-                <h4><Translate id="team.recognition.pathTitle">Path to Maintainership:</Translate></h4>
-                <div className={styles.steps}>
-                  <div className={styles.step}>
-                    <span className={styles.stepNumber}>1</span>
-                    <div>
-                      <h5><Translate id="team.recognition.step1.title">Contribute Regularly</Translate></h5>
-                      <p><Translate id="team.recognition.step1.desc">Make consistent, quality contributions to your area of interest</Translate></p>
-                    </div>
-                  </div>
-
-                  <div className={styles.step}>
-                    <span className={styles.stepNumber}>2</span>
-                    <div>
-                      <h5><Translate id="team.recognition.step2.title">Join a Working Group</Translate></h5>
-                      <p>
-                        <Translate id="team.recognition.step2.desc">Participate actively in one of our</Translate>
-                        {' '}
-                        <Link to="/community/work-groups"><Translate id="team.recognition.step2.link">Working Groups</Translate></Link>
-                      </p>
-                    </div>
-                  </div>
-
-                  <div className={styles.step}>
-                    <span className={styles.stepNumber}>3</span>
-                    <div>
-                      <h5><Translate id="team.recognition.step3.title">Community Vote</Translate></h5>
-                      <p><Translate id="team.recognition.step3.desc">Receive nomination and approval from the maintainer team</Translate></p>
-                    </div>
-                  </div>
-
-                  <div className={styles.step}>
-                    <span className={styles.stepNumber}>4</span>
-                    <div>
-                      <h5><Translate id="team.recognition.step4.title">Maintainer Access</Translate></h5>
-                      <p><Translate id="team.recognition.step4.desc">Get invited to the maintainer group with write access</Translate></p>
-                    </div>
-                  </div>
-                </div>
-              </div>
+            <p className={styles.sectionDescription}>
+              <Translate id="team.committers.description">
+                Committers own implementation areas, review changes, answer community questions, and keep the project healthy across releases.
+              </Translate>
+            </p>
+            <div className={styles.teamGrid}>
+              {committerMembers.map((member, index) => (
+                <TeamMemberCard key={index} member={member} />
+              ))}
             </div>
           </section>
 
           <section className={styles.section}>
             <h2>
-              📞
               <Translate id="team.getInvolved.title">Get Involved</Translate>
             </h2>
             <div className={styles.involvementGrid}>
               <div className={styles.involvementCard}>
                 <h3>
-                  🚀
                   <Translate id="team.getInvolved.contribute.title">Start Contributing</Translate>
                 </h3>
                 <p><Translate id="team.getInvolved.contribute.desc">Ready to make your first contribution?</Translate></p>
@@ -395,7 +559,6 @@ const Team: React.FC = () => {
 
               <div className={styles.involvementCard}>
                 <h3>
-                  👥
                   <Translate id="team.getInvolved.workGroups.title">Join Working Groups</Translate>
                 </h3>
                 <p><Translate id="team.getInvolved.workGroups.desc">Find your area of expertise and connect with like-minded contributors.</Translate></p>
@@ -406,7 +569,6 @@ const Team: React.FC = () => {
 
               <div className={styles.involvementCard}>
                 <h3>
-                  💬
                   <Translate id="team.getInvolved.discussions.title">Join Discussions</Translate>
                 </h3>
                 <p><Translate id="team.getInvolved.discussions.desc">Participate in community discussions and share your ideas.</Translate></p>

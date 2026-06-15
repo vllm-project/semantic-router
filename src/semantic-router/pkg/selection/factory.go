@@ -17,8 +17,15 @@ limitations under the License.
 package selection
 
 import (
+	"context"
+	"fmt"
+	"net/http"
+	"strings"
+	"time"
+
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/selection/lookuptable"
 )
 
 // ModelSelectionConfig represents the configuration for model selection
@@ -37,6 +44,24 @@ type ModelSelectionConfig struct {
 
 	// Hybrid configuration (used when method is "hybrid")
 	Hybrid *HybridConfig `yaml:"hybrid,omitempty"`
+
+	// ML configuration (used for knn, kmeans, svm methods)
+	ML *MLSelectorConfig `yaml:"ml,omitempty"`
+
+	// RLDriven configuration (used when method is "rl_driven")
+	// Implements Router-R1 reward structure for RL training
+	RLDriven *RLDrivenConfig `yaml:"rl_driven,omitempty"`
+
+	// GMTRouter configuration (used when method is "gmtrouter")
+	// Implements heterogeneous graph learning for personalized routing
+	GMTRouter *GMTRouterConfig `yaml:"gmtrouter,omitempty"`
+
+	// MultiFactor configuration (used when method is "multi_factor")
+	// Implements weighted quality/latency/cost/load composition. Issue #37.
+	MultiFactor *MultiFactorConfig `yaml:"multi_factor,omitempty"`
+
+	// SessionAware configuration (used when method is "session_aware")
+	SessionAware *SessionAwareConfig `yaml:"session_aware,omitempty"`
 }
 
 // DefaultModelSelectionConfig returns the default configuration
@@ -52,6 +77,7 @@ type Factory struct {
 	modelConfig   map[string]config.ModelParams
 	categories    []config.Category
 	embeddingFunc func(string) ([]float32, error)
+	lookupTable   lookuptable.LookupTable
 }
 
 // NewFactory creates a new selector factory
@@ -79,6 +105,13 @@ func (f *Factory) WithCategories(categories []config.Category) *Factory {
 // WithEmbeddingFunc sets the embedding function for RouterDC
 func (f *Factory) WithEmbeddingFunc(fn func(string) ([]float32, error)) *Factory {
 	f.embeddingFunc = fn
+	return f
+}
+
+// WithLookupTable sets the lookup table used by selectors that support data-driven
+// constant resolution (e.g. HybridSelector's quality-gap threshold).
+func (f *Factory) WithLookupTable(lt lookuptable.LookupTable) *Factory {
+	f.lookupTable = lt
 	return f
 }
 
@@ -124,7 +157,48 @@ func (f *Factory) Create() Selector {
 		if f.embeddingFunc != nil && hybridSelector.routerDCSelector != nil {
 			hybridSelector.routerDCSelector.SetEmbeddingFunc(f.embeddingFunc)
 		}
+		if f.lookupTable != nil {
+			hybridSelector.SetLookupTable(f.lookupTable)
+		}
 		selector = hybridSelector
+
+	case MethodGMTRouter:
+		gmtRouterSelector := NewGMTRouterSelector(f.cfg.GMTRouter)
+		if f.modelConfig != nil {
+			gmtRouterSelector.InitializeFromConfig(f.modelConfig)
+		}
+		if f.embeddingFunc != nil {
+			gmtRouterSelector.SetEmbeddingFunc(f.embeddingFunc)
+		}
+		selector = gmtRouterSelector
+
+	case MethodRLDriven:
+		rlDrivenSelector := NewRLDrivenSelector(f.cfg.RLDriven)
+		if f.modelConfig != nil {
+			rlDrivenSelector.InitializeFromConfig(f.modelConfig, f.categories)
+		}
+		selector = rlDrivenSelector
+
+	case MethodLatencyAware:
+		selector = NewLatencyAwareSelector(nil)
+
+	case MethodMultiFactor:
+		multiFactorSelector := NewMultiFactorSelector(f.cfg.MultiFactor)
+		if f.modelConfig != nil {
+			multiFactorSelector.InitializeFromConfig(f.modelConfig)
+		}
+		selector = multiFactorSelector
+
+	case MethodSessionAware:
+		sessionAwareSelector := NewSessionAwareSelector(f.cfg.SessionAware)
+		if f.modelConfig != nil {
+			sessionAwareSelector.InitializeFromConfig(f.modelConfig)
+		}
+		if f.lookupTable != nil {
+			sessionAwareSelector.SetLookupTable(f.lookupTable)
+		}
+		sessionAwareSelector.SetBaseSelector(f.createSessionAwareBaseSelector(sessionAwareSelector.config.BaseMethod))
+		selector = sessionAwareSelector
 
 	default:
 		// Default to static selector
@@ -201,10 +275,202 @@ func (f *Factory) CreateAll() *Registry {
 	if f.modelConfig != nil {
 		hybridSelector.InitializeFromConfig(f.modelConfig, f.categories)
 	}
+	if f.lookupTable != nil {
+		hybridSelector.SetLookupTable(f.lookupTable)
+	}
 	registry.Register(MethodHybrid, hybridSelector)
 
-	logging.Infof("[SelectionFactory] Created all selectors: static, elo, router_dc, automix, hybrid")
+	// Create ML-based selectors (KNN, KMeans, SVM)
+	mlCfg := f.cfg.ML
+	if mlCfg == nil {
+		mlCfg = DefaultMLSelectorConfig()
+	}
+
+	// Create KNN selector
+	knnAdapter, err := CreateKNNSelector(mlCfg, f.embeddingFunc)
+	if err != nil {
+		logging.Warnf("[SelectionFactory] Failed to create KNN selector: %v", err)
+	} else {
+		registry.Register(MethodKNN, knnAdapter)
+	}
+
+	// Create KMeans selector
+	kmeansAdapter, err := CreateKMeansSelector(mlCfg, f.embeddingFunc)
+	if err != nil {
+		logging.Warnf("[SelectionFactory] Failed to create KMeans selector: %v", err)
+	} else {
+		registry.Register(MethodKMeans, kmeansAdapter)
+	}
+
+	// Create SVM selector
+	svmAdapter, err := CreateSVMSelector(mlCfg, f.embeddingFunc)
+	if err != nil {
+		logging.Warnf("[SelectionFactory] Failed to create SVM selector: %v", err)
+	} else {
+		registry.Register(MethodSVM, svmAdapter)
+	}
+
+	// Create MLP selector (GPU-accelerated via Candle)
+	mlpAdapter, err := CreateMLPSelector(mlCfg, f.embeddingFunc)
+	if err != nil {
+		logging.Warnf("[SelectionFactory] Failed to create MLP selector: %v", err)
+	} else {
+		registry.Register(MethodMLP, mlpAdapter)
+	}
+
+	// Create RL-Driven selector
+	rlDrivenCfg := f.cfg.RLDriven
+	if rlDrivenCfg == nil {
+		rlDrivenCfg = DefaultRLDrivenConfig()
+	}
+	rlDrivenSelector := NewRLDrivenSelector(rlDrivenCfg)
+	if f.modelConfig != nil {
+		rlDrivenSelector.InitializeFromConfig(f.modelConfig, f.categories)
+	}
+	registry.Register(MethodRLDriven, rlDrivenSelector)
+
+	// Create GMTRouter selector
+	gmtRouterCfg := f.cfg.GMTRouter
+	if gmtRouterCfg == nil {
+		gmtRouterCfg = DefaultGMTRouterConfig()
+	}
+	gmtRouterSelector := NewGMTRouterSelector(gmtRouterCfg)
+	if f.modelConfig != nil {
+		gmtRouterSelector.InitializeFromConfig(f.modelConfig)
+	}
+	if f.embeddingFunc != nil {
+		gmtRouterSelector.SetEmbeddingFunc(f.embeddingFunc)
+	}
+	registry.Register(MethodGMTRouter, gmtRouterSelector)
+
+	// Create LatencyAware selector
+	latencyAwareSelector := NewLatencyAwareSelector(nil)
+	registry.Register(MethodLatencyAware, latencyAwareSelector)
+
+	// Create MultiFactor selector
+	multiFactorSelector := NewMultiFactorSelector(f.cfg.MultiFactor)
+	if f.modelConfig != nil {
+		multiFactorSelector.InitializeFromConfig(f.modelConfig)
+	}
+	registry.Register(MethodMultiFactor, multiFactorSelector)
+
+	// Create SessionAware selector after base selectors so it can wrap one.
+	sessionAwareSelector := NewSessionAwareSelector(f.cfg.SessionAware)
+	if f.modelConfig != nil {
+		sessionAwareSelector.InitializeFromConfig(f.modelConfig)
+	}
+	if f.lookupTable != nil {
+		sessionAwareSelector.SetLookupTable(f.lookupTable)
+	}
+	if baseSelector, ok := registry.Get(sessionAwareSelector.config.BaseMethod); ok {
+		sessionAwareSelector.SetBaseSelector(baseSelector)
+	} else if baseSelector, ok := registry.Get(MethodStatic); ok {
+		sessionAwareSelector.SetBaseSelector(baseSelector)
+	}
+	registry.Register(MethodSessionAware, sessionAwareSelector)
+
+	LogRegisteredAlgorithms(registry)
+	logging.ComponentEvent("selection", "selection_factory_initialized", map[string]interface{}{
+		"selector_count": len(registry.selectors),
+	})
 	return registry
+}
+
+func (f *Factory) createSessionAwareBaseSelector(method SelectionMethod) Selector {
+	if method == "" || method == MethodSessionAware {
+		method = MethodHybrid
+	}
+	cfg := *f.cfg
+	cfg.Method = string(method)
+	return NewFactory(&cfg).
+		WithModelConfig(f.modelConfig).
+		WithCategories(f.categories).
+		WithEmbeddingFunc(f.embeddingFunc).
+		WithLookupTable(f.lookupTable).
+		Create()
+}
+
+// LogRegisteredAlgorithms logs the tier and dependencies of each registered algorithm
+func LogRegisteredAlgorithms(registry *Registry) {
+	registry.mu.RLock()
+	defer registry.mu.RUnlock()
+
+	for method, selector := range registry.selectors {
+		deps := selector.ExternalDependencies()
+		if len(deps) == 0 {
+			logging.Infof("[Selection] Registered algorithm: %s (tier=%s, dependencies=none)", method, selector.Tier())
+		} else {
+			depNames := make([]string, len(deps))
+			for i, dep := range deps {
+				depNames[i] = fmt.Sprintf("%s (%s)", dep.Name, dep.Type)
+			}
+			logging.Infof("[Selection] Registered algorithm: %s (tier=%s, dependencies=[%s])",
+				method, selector.Tier(), strings.Join(depNames, ", "))
+		}
+	}
+}
+
+// WarnExperimentalAlgorithms logs prominent warnings for experimental algorithms
+// that are actually configured in operator decisions
+func WarnExperimentalAlgorithms(registry *Registry, configuredMethods []SelectionMethod) {
+	for _, method := range configuredMethods {
+		selector, ok := registry.Get(method)
+		if !ok {
+			continue
+		}
+		if selector.Tier() != TierExperimental {
+			continue
+		}
+
+		deps := selector.ExternalDependencies()
+		logging.Warnf("[Selection] WARNING: Algorithm %q is EXPERIMENTAL and not recommended for production use", method)
+		for _, dep := range deps {
+			if dep.HealthURL != "" {
+				logging.Warnf("[Selection]   External dependency: %s (%s)", dep.Name, dep.HealthURL)
+			} else {
+				logging.Warnf("[Selection]   Dependency: %s — %s", dep.Name, dep.Description)
+			}
+		}
+	}
+}
+
+// CheckDependencyHealth checks reachability of external service dependencies
+// for the given algorithms. Logs results but never fails.
+func CheckDependencyHealth(registry *Registry, configuredMethods []SelectionMethod) {
+	for _, method := range configuredMethods {
+		selector, ok := registry.Get(method)
+		if !ok {
+			continue
+		}
+
+		for _, dep := range selector.ExternalDependencies() {
+			if dep.Type != DependencyExternalService || dep.HealthURL == "" {
+				continue
+			}
+
+			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+			client := &http.Client{Timeout: 5 * time.Second}
+			req, err := http.NewRequestWithContext(ctx, "GET", dep.HealthURL, nil)
+			if err != nil {
+				logging.Warnf("[Selection] Dependency check: %s — UNREACHABLE (bad URL: %v)", dep.Name, err)
+				cancel()
+				continue
+			}
+
+			resp, err := client.Do(req)
+			cancel()
+			if err != nil {
+				logging.Warnf("[Selection] Dependency check: %s at %s — UNREACHABLE (will degrade at runtime)", dep.Name, dep.HealthURL)
+			} else {
+				_ = resp.Body.Close()
+				if resp.StatusCode == http.StatusOK {
+					logging.Infof("[Selection] Dependency check: %s at %s — OK", dep.Name, dep.HealthURL)
+				} else {
+					logging.Warnf("[Selection] Dependency check: %s at %s — unhealthy (status %d)", dep.Name, dep.HealthURL, resp.StatusCode)
+				}
+			}
+		}
+	}
 }
 
 // Initialize sets up the global registry with all selectors
@@ -217,7 +483,9 @@ func Initialize(cfg *ModelSelectionConfig, modelConfig map[string]config.ModelPa
 	// Create all selectors and register globally
 	GlobalRegistry = factory.CreateAll()
 
-	logging.Infof("[Selection] Initialized global selector registry")
+	logging.ComponentEvent("selection", "selection_registry_initialized", map[string]interface{}{
+		"selector_count": len(GlobalRegistry.selectors),
+	})
 }
 
 // GetSelector returns a selector for the specified method from global registry

@@ -48,7 +48,7 @@ mod integration_tests {
 
         match result {
             Ok(classifier) => {
-                println!("✅ Successfully loaded model: {}", model_id);
+                println!("Successfully loaded model: {}", model_id);
                 println!("   Device: {:?}", classifier.device());
                 println!("   Num classes: {}", classifier.num_classes());
                 println!("   Labels: {:?}", classifier.get_all_labels());
@@ -57,7 +57,7 @@ mod integration_tests {
                 let safe_text = "What is the weather today?";
                 match classifier.classify_text(safe_text) {
                     Ok((label, confidence)) => {
-                        println!("\n✅ Safe text classification:");
+                        println!("\nSafe text classification:");
                         println!("   Input: '{}'", safe_text);
                         println!(
                             "   Prediction: {} (confidence: {:.2}%)",
@@ -121,7 +121,7 @@ mod integration_tests {
 
             match classifier.classify_batch(&texts) {
                 Ok(results) => {
-                    println!("✅ Batch classification succeeded:");
+                    println!("Batch classification succeeded:");
                     for (i, (label, confidence)) in results.iter().enumerate() {
                         println!(
                             "   [{}] '{}' -> {} ({:.2}%)",
@@ -169,7 +169,7 @@ mod integration_tests {
             match classifier.classify_batch(&jailbreak_attempts) {
                 Ok(results) => {
                     let mut detected = 0;
-                    println!("✅ Jailbreak detection results:");
+                    println!("Jailbreak detection results:");
                     for (i, (label, confidence)) in results.iter().enumerate() {
                         let is_detected = label == "INJECTION";
                         if is_detected {

@@ -1,6 +1,8 @@
 package cache
 
 import (
+	"math"
+	"sync/atomic"
 	"time"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
@@ -49,11 +51,33 @@ type CacheBackend interface {
 	// Returns the cached response, match status, and any error
 	FindSimilarWithThreshold(model string, query string, threshold float32) ([]byte, bool, error)
 
+	// LastSimilarity returns the similarity score from the most recent
+	// FindSimilarWithThreshold call. Returns 0 if no lookup has been performed.
+	// Used by the extproc layer to set the x-vsr-cache-similarity response header.
+	LastSimilarity() float32
+
 	// Close releases all resources held by the cache backend
 	Close() error
 
 	// GetStats provides cache performance and usage metrics
 	GetStats() CacheStats
+}
+
+// SimilarityTracker provides thread-safe storage for the last similarity score.
+// Embed this in cache backends to satisfy the LastSimilarity() interface method.
+type SimilarityTracker struct {
+	lastSimilarity uint64 // atomic; stores float32 bits
+}
+
+// StoreSimilarity records a similarity score (thread-safe).
+func (t *SimilarityTracker) StoreSimilarity(similarity float32) {
+	atomic.StoreUint64(&t.lastSimilarity, uint64(math.Float32bits(similarity)))
+}
+
+// LastSimilarity returns the most recently stored similarity score.
+func (t *SimilarityTracker) LastSimilarity() float32 {
+	bits := atomic.LoadUint64(&t.lastSimilarity)
+	return math.Float32frombits(uint32(bits & 0xFFFFFFFF)) //nolint:gosec // intentional: float32 bits fit in 32 bits
 }
 
 // CacheStats holds performance metrics and usage statistics for cache operations
@@ -78,8 +102,14 @@ const (
 	// RedisCacheType specifies the Redis vector database backend
 	RedisCacheType CacheBackendType = "redis"
 
+	// ValkeyCacheType specifies the Valkey vector database backend
+	ValkeyCacheType CacheBackendType = "valkey"
+
 	// HybridCacheType specifies the hybrid HNSW + Milvus backend
 	HybridCacheType CacheBackendType = "hybrid"
+
+	// QdrantCacheType specifies the Qdrant vector search engine backend
+	QdrantCacheType CacheBackendType = "qdrant"
 )
 
 // EvictionPolicyType defines the available eviction policies
@@ -119,11 +149,14 @@ type CacheConfig struct {
 	// Redis specific settings
 	Redis *config.RedisConfig `yaml:"redis,omitempty"`
 
+	// Valkey specific settings
+	Valkey *config.ValkeyConfig `yaml:"valkey,omitempty"`
+
 	// Milvus specific settings
 	Milvus *config.MilvusConfig `yaml:"milvus,omitempty"`
 
-	// BackendConfigPath points to backend-specific configuration files (Deprecated)
-	BackendConfigPath string `yaml:"backend_config_path,omitempty"`
+	// Qdrant specific settings
+	Qdrant *config.QdrantConfig `yaml:"qdrant,omitempty"`
 
 	// UseHNSW enables HNSW index for faster search in memory backend
 	UseHNSW bool `yaml:"use_hnsw,omitempty"`
@@ -138,6 +171,6 @@ type CacheConfig struct {
 	MaxMemoryEntries int `yaml:"max_memory_entries,omitempty"` // Max entries in HNSW for hybrid cache
 
 	// EmbeddingModel specifies which embedding model to use
-	// Options: "bert" (default), "qwen3", "gemma"
+	// Options: "bert" (default), "qwen3", "gemma", "mmbert", "multimodal"
 	EmbeddingModel string `yaml:"embedding_model,omitempty"`
 }

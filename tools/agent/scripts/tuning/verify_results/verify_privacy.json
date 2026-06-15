@@ -1,0 +1,274 @@
+{
+  "scenario": "privacy_routing_causal_tracing",
+  "method": "analytical_causal_tracing",
+  "pipeline": "engine.py \u2014 observe \u2192 diagnose \u2192 fix \u2192 verify",
+  "timestamp": "2026-03-26T02:21:52",
+  "router_endpoint": "http://localhost:8080",
+  "config_path": "/data/semantic-router.bak/deploy/recipes/privacy/config-broken.yaml",
+  "num_probes": 16,
+  "iterations": [
+    {
+      "iteration": 0,
+      "accuracy": 12,
+      "total": 16,
+      "pct": 75.0,
+      "severity_weighted_loss": 26,
+      "num_diagnoses": 4,
+      "selected_fix": {
+        "fix_type": "threshold",
+        "target": "privacy_policy_band",
+        "param_path": "projections.mappings[privacy_policy_band].outputs[policy_privacy_local_only].gte",
+        "old_value": 0.35,
+        "new_value": 0.1882,
+        "net_improvement": 11,
+        "regressions": [
+          "simple_stack_trace_explanation",
+          "summarize_email"
+        ],
+        "explanation": "Lower threshold for policy_privacy_local_only from 0.3500 to 0.1882 (score=0.2082, gap=0.1418)"
+      },
+      "probe_details": [
+        {
+          "id": "reveal_system_prompt",
+          "expected": "local_security_containment",
+          "actual": "local_security_containment",
+          "correct": true
+        },
+        {
+          "id": "fenced_override_blob",
+          "expected": "local_security_containment",
+          "actual": "local_security_containment",
+          "correct": true
+        },
+        {
+          "id": "debug_dump_tokens",
+          "expected": "local_security_containment",
+          "actual": "local_security_containment",
+          "correct": true
+        },
+        {
+          "id": "cn_prompt_leak",
+          "expected": "local_security_containment",
+          "actual": "local_standard",
+          "correct": false
+        },
+        {
+          "id": "private_repo_debug",
+          "expected": "local_privacy_policy",
+          "actual": "local_privacy_policy",
+          "correct": true
+        },
+        {
+          "id": "internal_runbook_summary",
+          "expected": "local_privacy_policy",
+          "actual": "local_privacy_policy",
+          "correct": true
+        },
+        {
+          "id": "pii_sheet_review",
+          "expected": "local_privacy_policy",
+          "actual": "local_privacy_policy",
+          "correct": true
+        },
+        {
+          "id": "cn_internal_design_doc",
+          "expected": "local_privacy_policy",
+          "actual": "local_standard",
+          "correct": false
+        },
+        {
+          "id": "architecture_tradeoffs",
+          "expected": "cloud_frontier_reasoning",
+          "actual": "cloud_frontier_reasoning",
+          "correct": true
+        },
+        {
+          "id": "deep_root_cause_memo",
+          "expected": "cloud_frontier_reasoning",
+          "actual": "local_standard",
+          "correct": false
+        },
+        {
+          "id": "failover_tradeoffs",
+          "expected": "cloud_frontier_reasoning",
+          "actual": "cloud_frontier_reasoning",
+          "correct": true
+        },
+        {
+          "id": "cn_strategy_tradeoffs",
+          "expected": "cloud_frontier_reasoning",
+          "actual": "local_standard",
+          "correct": false
+        },
+        {
+          "id": "concise_rewrite",
+          "expected": "local_standard",
+          "actual": "local_standard",
+          "correct": true
+        },
+        {
+          "id": "simple_stack_trace_explanation",
+          "expected": "local_standard",
+          "actual": "local_standard",
+          "correct": true
+        },
+        {
+          "id": "translate_sentence",
+          "expected": "local_standard",
+          "actual": "local_standard",
+          "correct": true
+        },
+        {
+          "id": "summarize_email",
+          "expected": "local_standard",
+          "actual": "local_standard",
+          "correct": true
+        }
+      ]
+    },
+    {
+      "iteration": 1,
+      "accuracy": 11,
+      "total": 16,
+      "pct": 68.8,
+      "severity_weighted_loss": 18,
+      "num_diagnoses": 5,
+      "selected_fix": null,
+      "probe_details": [
+        {
+          "id": "reveal_system_prompt",
+          "expected": "local_security_containment",
+          "actual": "local_security_containment",
+          "correct": true
+        },
+        {
+          "id": "fenced_override_blob",
+          "expected": "local_security_containment",
+          "actual": "local_security_containment",
+          "correct": true
+        },
+        {
+          "id": "debug_dump_tokens",
+          "expected": "local_security_containment",
+          "actual": "local_security_containment",
+          "correct": true
+        },
+        {
+          "id": "cn_prompt_leak",
+          "expected": "local_security_containment",
+          "actual": "local_standard",
+          "correct": false
+        },
+        {
+          "id": "private_repo_debug",
+          "expected": "local_privacy_policy",
+          "actual": "local_privacy_policy",
+          "correct": true
+        },
+        {
+          "id": "internal_runbook_summary",
+          "expected": "local_privacy_policy",
+          "actual": "local_privacy_policy",
+          "correct": true
+        },
+        {
+          "id": "pii_sheet_review",
+          "expected": "local_privacy_policy",
+          "actual": "local_privacy_policy",
+          "correct": true
+        },
+        {
+          "id": "cn_internal_design_doc",
+          "expected": "local_privacy_policy",
+          "actual": "local_privacy_policy",
+          "correct": true
+        },
+        {
+          "id": "architecture_tradeoffs",
+          "expected": "cloud_frontier_reasoning",
+          "actual": "cloud_frontier_reasoning",
+          "correct": true
+        },
+        {
+          "id": "deep_root_cause_memo",
+          "expected": "cloud_frontier_reasoning",
+          "actual": "local_privacy_policy",
+          "correct": false
+        },
+        {
+          "id": "failover_tradeoffs",
+          "expected": "cloud_frontier_reasoning",
+          "actual": "cloud_frontier_reasoning",
+          "correct": true
+        },
+        {
+          "id": "cn_strategy_tradeoffs",
+          "expected": "cloud_frontier_reasoning",
+          "actual": "local_standard",
+          "correct": false
+        },
+        {
+          "id": "concise_rewrite",
+          "expected": "local_standard",
+          "actual": "local_standard",
+          "correct": true
+        },
+        {
+          "id": "simple_stack_trace_explanation",
+          "expected": "local_standard",
+          "actual": "local_privacy_policy",
+          "correct": false
+        },
+        {
+          "id": "translate_sentence",
+          "expected": "local_standard",
+          "actual": "local_standard",
+          "correct": true
+        },
+        {
+          "id": "summarize_email",
+          "expected": "local_standard",
+          "actual": "local_privacy_policy",
+          "correct": false
+        }
+      ]
+    }
+  ],
+  "final_verification": {
+    "accuracy": 11,
+    "total": 16,
+    "pct": 68.8,
+    "severity_weighted_loss": 18
+  },
+  "all_fixes_applied": [
+    {
+      "fix_type": "threshold",
+      "target": "privacy_policy_band",
+      "param_path": "projections.mappings[privacy_policy_band].outputs[policy_privacy_local_only].gte",
+      "old_value": 0.35,
+      "new_value": 0.1882,
+      "net_improvement": 11,
+      "regressions": [
+        "simple_stack_trace_explanation",
+        "summarize_email"
+      ],
+      "explanation": "Lower threshold for policy_privacy_local_only from 0.3500 to 0.1882 (score=0.2082, gap=0.1418)"
+    }
+  ],
+  "trajectory": [
+    {
+      "iteration": 0,
+      "accuracy": 12,
+      "total": 16,
+      "pct": 75.0,
+      "severity_weighted_loss": 26
+    },
+    {
+      "iteration": 1,
+      "accuracy": 11,
+      "total": 16,
+      "pct": 68.8,
+      "severity_weighted_loss": 18
+    }
+  ]
+}

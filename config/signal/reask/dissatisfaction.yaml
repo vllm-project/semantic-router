@@ -1,0 +1,11 @@
+routing:
+  signals:
+    reasks:
+      - name: likely_dissatisfied
+        description: Current user turn closely repeats the immediately previous user turn.
+        threshold: 0.8
+        lookback_turns: 1
+      - name: persistently_dissatisfied
+        description: Current user turn repeats the last two user turns in a row.
+        threshold: 0.8
+        lookback_turns: 2

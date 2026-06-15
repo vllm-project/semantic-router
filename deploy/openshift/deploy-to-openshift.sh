@@ -15,6 +15,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 DEPLOY_OBSERVABILITY=true
 USE_SIMULATOR=false
 USE_KSERVE=false
+USE_CLASSIFIER_GPU=false
 
 # Parse command line arguments
 while [[ $# -gt 0 ]]; do
@@ -31,17 +32,23 @@ while [[ $# -gt 0 ]]; do
             USE_KSERVE=true
             shift
             ;;
+        --classifier-gpu)
+            USE_CLASSIFIER_GPU=true
+            shift
+            ;;
         --help|-h)
             echo "Usage: $0 [OPTIONS]"
             echo ""
             echo "Options:"
             echo "  --simulator           Use mock-vllm simulator instead of llm-katan (no GPU required)"
             echo "  --kserve              Deploy semantic-router with a KServe backend (use --simulator for KServe sim)"
+            echo "  --classifier-gpu      Run semantic router classifier on GPU"
             echo "  --no-observability    Skip deploying dashboard, OpenWebUI, Grafana, and Prometheus"
             echo "  --help, -h            Show this help message"
             echo ""
             echo "By default, deploys the full stack with llm-katan (requires GPU)."
             echo "Use --simulator for CPU-only clusters without GPUs."
+            echo "Use --classifier-gpu with --simulator to run classifier on GPU but vLLM models on CPU."
             exit 0
             ;;
         *)
@@ -77,68 +84,163 @@ fi
 
 success "Logged in as $(oc whoami)"
 
-if [[ "$USE_KSERVE" == "true" && "$USE_SIMULATOR" != "true" ]]; then
-    error "--kserve currently supports simulator mode only via this script. Use deploy/kserve/deploy.sh for non-simulator KServe deploys."
-    exit 1
+
+if [[ "$USE_CLASSIFIER_GPU" == "true" ]]; then
+    if ! command -v yq >/dev/null 2>&1; then
+        error "yq is required for --classifier-gpu. Install mikefarah/yq and retry."
+        exit 1
+    fi
 fi
+
+# GPU mode (--kserve without --simulator) requires GPU resources
+# Simulator mode (--kserve --simulator) works without GPU
+# --classifier-gpu requires GPU resources (can be used with or without --simulator)
 
 # Create namespace
 log "Creating namespace: $NAMESPACE"
 oc create namespace "$NAMESPACE" --dry-run=client -o yaml | oc apply -f -
+for i in {1..30}; do
+    if oc get namespace "$NAMESPACE" -o jsonpath='{.metadata.deletionTimestamp}' 2>/dev/null | grep -q .; then
+        warn "Namespace $NAMESPACE is terminating, waiting..."
+        sleep 2
+        continue
+    fi
+    break
+done
 success "Namespace ready"
 
-# KServe mode: deploy simulator InferenceService and semantic-router using KServe backend
+# KServe mode: deploy LLMInferenceService and semantic-router
 if [[ "$USE_KSERVE" == "true" ]]; then
     KSERVE_SCRIPT="$SCRIPT_DIR/../kserve/deploy.sh"
     KSERVE_INSTALL_SCRIPT="$SCRIPT_DIR/../kserve/install-kserve.sh"
-    KSERVE_ISVC_MANIFEST_A="$SCRIPT_DIR/../kserve/inference-examples/inferenceservice-llm-d-sim-model-a.yaml"
-    KSERVE_ISVC_MANIFEST_B="$SCRIPT_DIR/../kserve/inference-examples/inferenceservice-llm-d-sim-model-b.yaml"
 
     if [[ ! -x "$KSERVE_SCRIPT" ]]; then
         error "KServe deploy script not found: $KSERVE_SCRIPT"
         exit 1
     fi
 
-    if ! oc get crd inferenceservices.serving.kserve.io &>/dev/null; then
-        if [[ -x "$KSERVE_INSTALL_SCRIPT" ]]; then
-            log "KServe CRD missing; installing KServe dependencies..."
-            "$KSERVE_INSTALL_SCRIPT"
-        else
-            error "KServe CRD missing and installer not found: $KSERVE_INSTALL_SCRIPT"
-            exit 1
-        fi
-    fi
-
-    if [[ ! -f "$KSERVE_ISVC_MANIFEST_A" || ! -f "$KSERVE_ISVC_MANIFEST_B" ]]; then
-        error "KServe simulator InferenceService manifests not found in $SCRIPT_DIR/../kserve/inference-examples"
+    if [[ ! -x "$KSERVE_INSTALL_SCRIPT" ]]; then
+        error "KServe install script not found: $KSERVE_INSTALL_SCRIPT"
         exit 1
     fi
 
-    if ! oc get inferenceservice model-a -n "$NAMESPACE" &>/dev/null; then
-        log "Creating KServe simulator InferenceService: model-a"
-        oc apply -n "$NAMESPACE" -f "$KSERVE_ISVC_MANIFEST_A"
-    else
-        log "KServe InferenceService already exists: model-a"
+    log "Installing KServe and LLMInferenceService CRDs..."
+    "$KSERVE_INSTALL_SCRIPT"
+
+    # Ensure LLMInferenceServiceConfig templates exist before creating LLMInferenceServices
+    if oc get crd llminferenceserviceconfigs.serving.kserve.io &>/dev/null; then
+        if ! oc get llminferenceserviceconfig kserve-config-llm-template -n kserve &>/dev/null; then
+            log "Applying LLMInferenceServiceConfig templates..."
+            if [[ -d /home/ubuntu/tmp/kserve/config/llmisvcconfig ]]; then
+                for f in /home/ubuntu/tmp/kserve/config/llmisvcconfig/config-llm-*.yaml; do
+                    oc apply -n kserve -f "$f" 2>/dev/null || true
+                done
+            else
+                warn "Local kserve repo not found at /home/ubuntu/tmp/kserve; LLMInferenceServiceConfig templates may be missing."
+            fi
+        fi
     fi
 
-    if ! oc get inferenceservice model-b -n "$NAMESPACE" &>/dev/null; then
-        log "Creating KServe simulator InferenceService: model-b"
-        oc apply -n "$NAMESPACE" -f "$KSERVE_ISVC_MANIFEST_B"
+    # Wait briefly for llmisvc controller and webhook to settle before creating LLMInferenceServices
+    oc wait --for=condition=Available deployment/llmisvc-controller-manager -n kserve --timeout=3m 2>/dev/null || true
+    for i in {1..30}; do
+        ENDPOINTS=$(oc get endpoints llmisvc-webhook-server-service -n kserve -o jsonpath='{.subsets[*].addresses[*].ip}' 2>/dev/null || echo "")
+        if [[ -n "$ENDPOINTS" ]]; then
+            break
+        fi
+        sleep 2
+    done
+
+    if [[ "$USE_SIMULATOR" == "true" ]]; then
+        # Simulator mode: deploy LLMInferenceServices for Model-A and Model-B
+        SIM_ISVC_A="$SCRIPT_DIR/../kserve/inference-examples/inferenceservice-llm-d-sim-model-a.yaml"
+        SIM_ISVC_B="$SCRIPT_DIR/../kserve/inference-examples/inferenceservice-llm-d-sim-model-b.yaml"
+
+        if [[ ! -f "$SIM_ISVC_A" || ! -f "$SIM_ISVC_B" ]]; then
+            error "Simulator LLMInferenceService manifests not found."
+            exit 1
+        fi
+
+        log "Ensuring simulator service account and SCC..."
+        oc create serviceaccount llmisvc-workload -n "$NAMESPACE" 2>/dev/null || true
+        oc adm policy add-scc-to-user anyuid -z llmisvc-workload -n "$NAMESPACE" 2>/dev/null || true
+        oc adm policy add-scc-to-user privileged -z llmisvc-workload -n "$NAMESPACE" 2>/dev/null || true
+        oc adm policy add-scc-to-user privileged system:serviceaccount:kserve:llmisvc-controller-manager -n "$NAMESPACE" 2>/dev/null || true
+
+        log "Deploying simulator LLMInferenceServices..."
+        oc apply -n "$NAMESPACE" -f "$SIM_ISVC_A"
+        oc apply -n "$NAMESPACE" -f "$SIM_ISVC_B"
+
+        log "Waiting for simulator LLMInferenceServices to be ready..."
+        oc wait --for=condition=Ready llminferenceservice/model-a -n "$NAMESPACE" --timeout=10m
+        oc wait --for=condition=Ready llminferenceservice/model-b -n "$NAMESPACE" --timeout=10m
+
+        KSERVE_ARGS=(--simulator -n "$NAMESPACE")
     else
-        log "KServe InferenceService already exists: model-b"
+        # GPU mode: deploy real Qwen model on GPU
+        QWEN_LLMISVC="$SCRIPT_DIR/../kserve/inference-examples/inferenceservice-qwen-0.6b-gpu.yaml"
+
+        if [[ ! -f "$QWEN_LLMISVC" ]]; then
+            error "Qwen LLMInferenceService manifest not found: $QWEN_LLMISVC"
+            exit 1
+        fi
+
+        # Check for GPU resources
+        GPU_NODES=$(oc get nodes -o jsonpath='{.items[*].status.allocatable.nvidia\.com/gpu}' 2>/dev/null | tr ' ' '\n' | grep -v '^$' | grep -v '<none>' -c)
+        if [[ "$GPU_NODES" -eq 0 ]]; then
+            warn "No GPU resources detected. Install GPU operator first:"
+            warn "  ./deploy/kserve/install-gpu-operator.sh"
+            error "GPU required for non-simulator KServe deployment"
+            exit 1
+        fi
+        log "Found $GPU_NODES node(s) with GPU resources"
+
+        log "Granting privileged SCC to default service account for model download..."
+        oc adm policy add-scc-to-user privileged -z default -n "$NAMESPACE" 2>/dev/null || true
+
+        log "Deploying Qwen 0.6B LLMInferenceService on GPU..."
+        for i in {1..3}; do
+            if oc apply -n "$NAMESPACE" -f "$QWEN_LLMISVC"; then
+                break
+            fi
+            warn "Failed to apply Qwen LLMInferenceService (attempt $i); retrying..."
+            sleep 5
+        done
+
+        log "Waiting for Qwen LLMInferenceService to be ready (this may take several minutes for model download)..."
+        oc wait --for=condition=Ready llminferenceservice/qwen-0-6b -n "$NAMESPACE" --timeout=15m
+
+        KSERVE_ARGS=(-n "$NAMESPACE" --inferenceservice qwen-0-6b --model "Qwen/Qwen3-0.6B")
     fi
 
-    log "Waiting for KServe simulator InferenceServices to be ready..."
-    oc wait --for=condition=Ready "inferenceservice/model-a" -n "$NAMESPACE" --timeout=10m
-    oc wait --for=condition=Ready "inferenceservice/model-b" -n "$NAMESPACE" --timeout=10m
-
-    KSERVE_ARGS=(--simulator -n "$NAMESPACE")
+    if [[ "$USE_CLASSIFIER_GPU" == "true" ]]; then
+        GPU_NODES=$(oc get nodes -o jsonpath='{.items[*].status.allocatable.nvidia\.com/gpu}' 2>/dev/null | tr ' ' '\n' | grep -v '^$' | grep -v '<none>' -c)
+        if [[ "$GPU_NODES" -eq 0 ]]; then
+            warn "No GPU resources detected. Install GPU operator first:"
+            warn "  ./deploy/kserve/install-gpu-operator.sh"
+            error "GPU required for --classifier-gpu deployment"
+            exit 1
+        fi
+        log "Found $GPU_NODES node(s) with GPU resources for semantic router classifier"
+        KSERVE_ARGS+=(--classifier-gpu)
+    fi
 
     log "KServe mode: Deploying semantic-router with KServe backend..."
     "$KSERVE_SCRIPT" "${KSERVE_ARGS[@]}"
     success "KServe deployment complete"
-    log "KServe mode finished; skipping vLLM model deployment and OpenShift routes."
     exit 0
+fi
+
+# Check for GPU resources when --classifier-gpu is used
+if [[ "$USE_CLASSIFIER_GPU" == "true" ]]; then
+    GPU_NODES=$(oc get nodes -o jsonpath='{.items[*].status.allocatable.nvidia\.com/gpu}' 2>/dev/null | tr ' ' '\n' | grep -v '^$' | grep -v '<none>' -c)
+    if [[ "$GPU_NODES" -eq 0 ]]; then
+        warn "No GPU resources detected. Install GPU operator first:"
+        warn "  ./deploy/kserve/install-gpu-operator.sh"
+        error "GPU required for --classifier-gpu deployment"
+        exit 1
+    fi
+    log "Found $GPU_NODES node(s) with GPU resources for semantic router classifier"
 fi
 
 # Build model backend image based on mode
@@ -221,7 +323,7 @@ spec:
     - ReadWriteOnce
   resources:
     requests:
-      storage: 10Gi
+      storage: 20Gi
   storageClassName: gp3-csi
 ---
 apiVersion: v1
@@ -280,6 +382,32 @@ else
     oc apply -f "$SCRIPT_DIR/deployment.yaml" -n "$NAMESPACE"
 fi
 
+if [[ "$USE_CLASSIFIER_GPU" == "true" ]]; then
+    oc patch deployment/semantic-router -n "$NAMESPACE" --type='merge' -p '{
+      "spec": {
+        "template": {
+          "spec": {
+            "nodeSelector": {"nvidia.com/gpu.present": "true"},
+            "tolerations": [{"key": "nvidia.com/gpu", "operator": "Exists", "effect": "NoSchedule"}],
+            "containers": [{
+              "name": "semantic-router",
+              "env": [
+                {"name": "NVIDIA_VISIBLE_DEVICES", "value": "all"},
+                {"name": "NVIDIA_DRIVER_CAPABILITIES", "value": "compute,utility"},
+                {"name": "CUDA_VISIBLE_DEVICES", "value": "0"}
+              ],
+              "resources": {
+                "requests": {"nvidia.com/gpu": 1},
+                "limits": {"nvidia.com/gpu": 1}
+              }
+            }]
+          }
+        }
+      }
+    }' >/dev/null
+    log "Patched semantic-router deployment for GPU classifier"
+fi
+
 # Wait for services to be created and get ClusterIPs
 log "Waiting for vLLM services to get ClusterIPs..."
 for i in {1..30}; do
@@ -302,9 +430,19 @@ done
 # Generate dynamic config with actual ClusterIPs
 log "Generating dynamic configuration with ClusterIPs..."
 TEMP_CONFIG="/tmp/config-openshift-dynamic.yaml"
+
 sed -e "s/DYNAMIC_MODEL_A_IP/$MODEL_A_IP/g" \
     -e "s/DYNAMIC_MODEL_B_IP/$MODEL_B_IP/g" \
     "$SCRIPT_DIR/config-openshift.yaml" > "$TEMP_CONFIG"
+
+if [[ "$USE_CLASSIFIER_GPU" == "true" ]]; then
+    yq eval \
+      '.global.model_catalog.modules.prompt_guard.use_cpu = false |
+       .global.model_catalog.modules.classifier.domain.use_cpu = false |
+       .global.model_catalog.modules.classifier.pii.use_cpu = false' \
+      -i "$TEMP_CONFIG"
+    log "Patched config for GPU classifier (use_cpu=false)"
+fi
 
 # Verify the IPs were substituted
 if ! grep -q "$MODEL_A_IP" "$TEMP_CONFIG" || ! grep -q "$MODEL_B_IP" "$TEMP_CONFIG"; then
@@ -331,11 +469,6 @@ success "ConfigMaps created with dynamic IPs"
 rm -f "$TEMP_CONFIG"
 
 success "Deployment manifests applied"
-
-# Deploy Dashboard
-log "Deploying Dashboard..."
-oc apply -f "$SCRIPT_DIR/dashboard/dashboard-deployment.yaml" -n "$NAMESPACE"
-success "Dashboard deployment applied"
 
 # Create routes
 log "Creating OpenShift routes..."
@@ -407,23 +540,23 @@ spec:
 EOF
 success "Routes created"
 
-# Deploy Jaeger for tracing
-log "Deploying Jaeger for distributed tracing..."
-if [[ -d "$SCRIPT_DIR/observability/jaeger" ]]; then
-    oc apply -f "$SCRIPT_DIR/observability/jaeger/deployment.yaml" -n "$NAMESPACE"
-    oc apply -f "$SCRIPT_DIR/observability/jaeger/service.yaml" -n "$NAMESPACE"
-    oc apply -f "$SCRIPT_DIR/observability/jaeger/route.yaml" -n "$NAMESPACE"
-    success "Jaeger deployed"
-else
-    warn "Jaeger deployment files not found at $SCRIPT_DIR/observability/jaeger, skipping..."
-fi
-
 log "Waiting for deployments to be ready..."
 log "This may take several minutes as models are downloaded..."
 
 # Deploy observability components if enabled
 if [[ "$DEPLOY_OBSERVABILITY" == "true" ]]; then
     log "Deploying observability components..."
+
+    # Deploy Jaeger for tracing
+    log "Deploying Jaeger for distributed tracing..."
+    if [[ -d "$SCRIPT_DIR/observability/jaeger" ]]; then
+        oc apply -f "$SCRIPT_DIR/observability/jaeger/deployment.yaml" -n "$NAMESPACE"
+        oc apply -f "$SCRIPT_DIR/observability/jaeger/service.yaml" -n "$NAMESPACE"
+        oc apply -f "$SCRIPT_DIR/observability/jaeger/route.yaml" -n "$NAMESPACE"
+        success "Jaeger deployed"
+    else
+        warn "Jaeger deployment files not found at $SCRIPT_DIR/observability/jaeger, skipping..."
+    fi
 
     # Deploy Grafana with dynamic route URL
     log "Deploying Grafana..."
@@ -524,7 +657,13 @@ else
     log "Skipping observability components (--no-observability flag provided)"
 fi
 
-success "Deployment initiated! Check status with the following commands:"
+if [[ "$USE_CLASSIFIER_GPU" == "true" ]]; then
+    success "GPU-enabled classifier deployment initiated! Semantic router classifier will run on GPU."
+else
+    success "Deployment initiated!"
+fi
+echo ""
+echo "Check status with the following commands:"
 echo ""
 echo "  # View all pods"
 echo "  oc get pods -n $NAMESPACE"

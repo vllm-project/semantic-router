@@ -1,0 +1,72 @@
+version: v0.3
+listeners: []
+providers:
+  defaults:
+    default_model: qwen3
+    reasoning_families:
+      qwen3:
+        type: chat_template_kwargs
+        parameter: enable_thinking
+  models:
+    - name: qwen3
+      reasoning_family: qwen3
+      backend_refs:
+        - name: mock-vllm
+          endpoint: 127.0.0.1:8002
+          weight: 1
+routing:
+  decisions:
+    - name: general_decision
+      description: General questions
+      priority: 100
+      rules:
+        operator: OR
+        conditions:
+          - type: domain
+            name: general
+          - type: fact_check
+            name: needs_fact_check
+      modelRefs:
+        - model: qwen3
+          use_reasoning: false
+      plugins:
+        - type: hallucination
+          configuration:
+            enabled: true
+            use_nli: true
+            hallucination_action: header
+            unverified_factual_action: header
+            include_hallucination_details: true
+  signals:
+    domains:
+      - name: general
+        description: General questions
+        mmlu_categories:
+          - other
+    fact_check:
+      - name: needs_fact_check
+        description: Query contains factual claims that should be verified against context
+      - name: no_fact_check_needed
+        description: Query is creative, code-related, or opinion-based - no fact verification needed
+  modelCards:
+    - name: qwen3
+global:
+  router:
+    strategy: priority
+  services:
+    api:
+      batch_classification:
+        metrics:
+          enabled: true
+          detailed_goroutine_tracking: true
+          high_resolution_timing: false
+          sample_rate: 1.0
+  stores:
+    semantic_cache:
+      enabled: false
+      embedding_model: mmbert
+    memory:
+      embedding_model: mmbert
+    vector_store:
+      embedding_model: mmbert
+  integrations: {}

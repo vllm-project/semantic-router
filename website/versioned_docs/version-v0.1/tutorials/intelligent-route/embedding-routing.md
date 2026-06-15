@@ -225,4 +225,4 @@ dimension: 768  # or 512, 256, 128 for Matryoshka
 
 ## Reference
 
-See [embedding.yaml](https://github.com/vllm-project/semantic-router/blob/main/config/intelligent-routing/in-tree/embedding.yaml) for complete configuration.
+Use the snippet on this page as the v0.1 reference configuration. The main branch no longer carries the old full example file.

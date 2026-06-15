@@ -31,11 +31,17 @@ const sidebars: SidebarsConfig = {
       label: 'Installation',
       items: [
         'installation/installation',
+        'installation/k8s/operator',
+        'installation/configuration',
+        'installation/native-backends',
+        'installation/upgrade-rollback',
         {
           type: 'category',
           label: 'Install with Gateways',
           items: [
             'installation/k8s/ai-gateway',
+            'installation/k8s/agentgateway',
+            'installation/k8s/streamed-extproc',
             'installation/k8s/istio',
             'installation/k8s/gateway-api-inference-extension',
           ],
@@ -50,6 +56,13 @@ const sidebars: SidebarsConfig = {
             'installation/k8s/dynamo',
           ],
         },
+        {
+          type: 'category',
+          label: 'Backend Stores',
+          items: [
+            'installation/valkey-memory',
+          ],
+        },
       ],
     },
     {
@@ -58,46 +71,166 @@ const sidebars: SidebarsConfig = {
       items: [
         {
           type: 'category',
-          label: 'Intelligent Route',
+          label: 'Signals',
           items: [
-            'tutorials/intelligent-route/keyword-routing',
-            'tutorials/intelligent-route/embedding-routing',
-            'tutorials/intelligent-route/domain-routing',
-            'tutorials/intelligent-route/fact-check-routing',
-            'tutorials/intelligent-route/user-feedback-routing',
-            'tutorials/intelligent-route/preference-routing',
-            'tutorials/intelligent-route/mcp-routing',
-            'tutorials/intelligent-route/lora-routing',
-            'tutorials/intelligent-route/router-memory',
+            'tutorials/signal/overview',
+            {
+              type: 'category',
+              label: 'Heuristic',
+              items: [
+                'tutorials/signal/heuristic/authz',
+                'tutorials/signal/heuristic/context',
+                'tutorials/signal/heuristic/conversation',
+                'tutorials/signal/heuristic/keyword',
+                'tutorials/signal/heuristic/language',
+                'tutorials/signal/heuristic/event',
+                'tutorials/signal/heuristic/structure',
+              ],
+            },
+            {
+              type: 'category',
+              label: 'Learned',
+              items: [
+                'tutorials/signal/learned/complexity',
+                'tutorials/signal/learned/domain',
+                'tutorials/signal/learned/embedding',
+                'tutorials/signal/learned/embedding-design-principles',
+                'tutorials/signal/learned/modality',
+                'tutorials/signal/learned/fact-check',
+                'tutorials/signal/learned/jailbreak',
+                'tutorials/signal/learned/pii',
+                'tutorials/signal/learned/preference',
+                'tutorials/signal/learned/reask',
+                'tutorials/signal/learned/kb',
+                'tutorials/signal/learned/user-feedback',
+              ],
+            },
           ],
         },
         {
           type: 'category',
-          label: 'Semantic Cache',
+          label: 'Projections',
           items: [
-            'tutorials/semantic-cache/in-memory-cache',
-            'tutorials/semantic-cache/redis-cache',
-            'tutorials/semantic-cache/milvus-cache',
-            'tutorials/semantic-cache/hybrid-cache',
+            'tutorials/projection/overview',
+            'tutorials/projection/partitions',
+            'tutorials/projection/scores',
+            'tutorials/projection/mappings',
           ],
         },
         {
           type: 'category',
-          label: 'Content Safety',
+          label: 'Decisions',
           items: [
-            'tutorials/content-safety/pii-detection',
-            'tutorials/content-safety/jailbreak-protection',
-            'tutorials/content-safety/hallucination-detection',
+            'tutorials/decision/overview',
+            'tutorials/decision/single',
+            'tutorials/decision/and',
+            'tutorials/decision/or',
+            'tutorials/decision/not',
+            'tutorials/decision/composite',
+            'tutorials/decision/retention',
           ],
         },
         {
           type: 'category',
-          label: 'Observability',
+          label: 'Algorithms',
           items: [
-            'tutorials/observability/metrics',
-            'tutorials/observability/dashboard',
-            'tutorials/observability/distributed-tracing',
+            'tutorials/algorithm/overview',
+            {
+              type: 'category',
+              label: 'Selection',
+              items: [
+                'tutorials/algorithm/selection/automix',
+                'tutorials/algorithm/selection/elo',
+                'tutorials/algorithm/selection/gmtrouter',
+                'tutorials/algorithm/selection/hybrid',
+                'tutorials/algorithm/selection/kmeans',
+                'tutorials/algorithm/selection/knn',
+                'tutorials/algorithm/selection/latency-aware',
+                'tutorials/algorithm/selection/mlp',
+                'tutorials/algorithm/selection/multi-factor',
+                'tutorials/algorithm/selection/rl-driven',
+                'tutorials/algorithm/selection/router-dc',
+                'tutorials/algorithm/selection/session-aware',
+                'tutorials/algorithm/selection/static',
+                'tutorials/algorithm/selection/svm',
+              ],
+            },
+            {
+              type: 'category',
+              label: 'Looper',
+              items: [
+                'tutorials/algorithm/looper/confidence',
+                'tutorials/algorithm/looper/ratings',
+                'tutorials/algorithm/looper/remom',
+              ],
+            },
           ],
+        },
+        {
+          type: 'category',
+          label: 'Plugins',
+          items: [
+            'tutorials/plugin/overview',
+            {
+              type: 'category',
+              label: 'Response and Mutation',
+              items: [
+                'tutorials/plugin/fast-response',
+                'tutorials/plugin/header-mutation',
+                'tutorials/plugin/image-gen',
+                'tutorials/plugin/request-params',
+                'tutorials/plugin/system-prompt',
+                'tutorials/plugin/tool-selection',
+                'tutorials/plugin/tools',
+              ],
+            },
+            {
+              type: 'category',
+              label: 'Retrieval and Memory',
+              items: [
+                'tutorials/plugin/memory',
+                'tutorials/plugin/rag',
+                'tutorials/plugin/router-replay',
+                'tutorials/plugin/semantic-cache',
+              ],
+            },
+            {
+              type: 'category',
+              label: 'Safety and Generation',
+              items: [
+                'tutorials/plugin/content-safety',
+                'tutorials/plugin/hallucination',
+                'tutorials/plugin/response-jailbreak',
+              ],
+            },
+          ],
+        },
+        {
+          type: 'category',
+          label: 'Global',
+          items: [
+            'tutorials/global/overview',
+            'tutorials/global/api-and-observability',
+            'tutorials/global/stores-and-tools',
+            'tutorials/global/safety-models-and-policy',
+          ],
+        },
+      ],
+    },
+    {
+      type: 'category',
+      label: 'Fleet Simulator',
+      items: [
+        'fleet-sim/overview',
+        'fleet-sim/getting-started',
+        'fleet-sim/dashboard-integration',
+        'fleet-sim/use-cases',
+        'fleet-sim/sim-algorithms',
+        'fleet-sim/power-model',
+        {
+          type: 'link',
+          label: 'Fleet Simulator PDF',
+          href: 'pathname:///files/fleet-sim/fleet-sim.pdf',
         },
       ],
     },
@@ -105,10 +238,15 @@ const sidebars: SidebarsConfig = {
       type: 'category',
       label: 'Proposals',
       items: [
+        'proposals/unified-config-contract-v0-3',
         'proposals/hallucination-mitigation-milestone',
         'proposals/prompt-classification-routing',
         'proposals/nvidia-dynamo-integration',
         'proposals/production-stack-integration',
+        'proposals/multi-protocol-adaptor',
+        'proposals/agentic-rag',
+        'proposals/agentic-memory',
+        'proposals/Prism-153key',
       ],
     },
     {
@@ -117,16 +255,7 @@ const sidebars: SidebarsConfig = {
       items: [
         'training/training-overview',
         'training/model-performance-eval',
-      ],
-    },
-    {
-      type: 'category',
-      label: 'Cookbook',
-      items: [
-        'cookbook/classifier-tuning',
-        'cookbook/pii-policy',
-        'cookbook/vllm-endpoints',
-        'cookbook/anthropic-models',
+        'training/ml-model-selection',
       ],
     },
     {
@@ -134,7 +263,7 @@ const sidebars: SidebarsConfig = {
       label: 'API Reference',
       items: [
         'api/router',
-        'api/classification',
+        'api/apiserver',
         'api/crd-reference',
       ],
     },
@@ -162,3 +291,5 @@ const sidebars: SidebarsConfig = {
 }
 
 export default sidebars
+
+// ci: trigger rerun

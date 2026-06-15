@@ -31,29 +31,71 @@ Before you begin, ensure you have the following installed:
    cd semantic-router
    ```
 
-2. **Start the development environment:**
+2. **Use the canonical local image workflow:**
 
    ```bash
-   make vllm-sr-start
+   make vllm-sr-dev
+   vllm-sr serve --image-pull-policy never
    ```
 
-   This single command handles everything:
-   - Cleans up old containers
-   - Builds the Docker image with all dependencies (Rust, Go, models)
+   For AMD ROCm development:
+
+   ```bash
+   make vllm-sr-dev VLLM_SR_PLATFORM=amd
+   vllm-sr serve --image-pull-policy never --platform amd
+   ```
+
+   This workflow:
+   - Rebuilds the local image
    - Installs the `vllm-sr` CLI tool
-   - Starts all services (semantic router, envoy, dashboard)
+   - Uses the local image only, without pulling a remote fallback
 
 3. **Install Python dependencies (Optional):**
 
+   There is no repository-root `requirements.txt`. Use the file for the area you are working in, for example:
+
    ```bash
-   # For training and development
-   pip install -r requirements.txt
-   
-   # For end-to-end testing
+   # vllm-sr CLI and its Python dependencies (typical for local dev)
+   pip install -r src/vllm-sr/requirements.txt
+
+   # End-to-end testing
    pip install -r e2e/testing/requirements.txt
    ```
 
+   Training, benchmarks, and other subprojects each have their own `requirements.txt` under their directories (for example `bench/`, `src/training/**/`).
+
 ## Running Tests
+
+### Agent Gates
+
+The repository-specific agent harness is indexed in [docs/agent/README.md](docs/agent/README.md). Treat [AGENTS.md](AGENTS.md) as the short entrypoint and `docs/agent/*` plus `tools/agent/*` as the durable source of truth.
+If a real architecture or code/spec gap remains after your change, add or update the durable debt entry indexed from [docs/agent/tech-debt/README.md](docs/agent/tech-debt/README.md).
+
+Read these first:
+
+- [docs/agent/testing-strategy.md](docs/agent/testing-strategy.md)
+- [docs/agent/module-boundaries.md](docs/agent/module-boundaries.md)
+
+Use the agent-specific gates for changed files:
+
+```bash
+make agent-bootstrap
+make agent-validate
+make agent-scorecard
+make agent-report ENV=cpu CHANGED_FILES="path/one,path/two"
+make agent-ci-lint CHANGED_FILES="path/one,path/two"
+make precommit-branch-gate
+make agent-ci-gate CHANGED_FILES="path/one,path/two"
+make agent-pr-gate
+make test-and-build-local
+make agent-feature-gate ENV=cpu CHANGED_FILES="path/one,path/two"
+```
+
+Use `make agent-ci-lint` when you want to reproduce the same changed-file lint path that the CI pre-commit workflow runs, including the shared agent bootstrap toolchain and tracked-file codespell check.
+Use `make precommit-branch-gate` when you want to run the local branch prelint bundle on demand before a push or PR update.
+Use `make agent-pr-gate` when you want the repo-native local baseline for the PR jobs contributors most often miss: `Pre-commit / Run pre-commit hooks` and `Test And Build`.
+
+`ENV=amd` is required when platform-specific behavior changed.
 
 ### Unit Tests
 
@@ -138,24 +180,26 @@ The test suite includes:
 3. **Build and test:**
 
    ```bash
-   make vllm-sr-start  # Start all services
-   make test           # Run unit tests
+   make agent-report ENV=cpu CHANGED_FILES="path/one,path/two"
+   make agent-ci-gate CHANGED_FILES="path/one,path/two"
+   make agent-feature-gate ENV=cpu CHANGED_FILES="path/one,path/two"
    ```
 
 4. **Run end-to-end tests:**
 
    ```bash
-   # Services are already running from vllm-sr-start
-   python e2e/testing/run_all_tests.py
+   make agent-e2e-affected CHANGED_FILES="path/one,path/two"
+   # Or run a specific profile directly
+   make e2e-test E2E_PROFILE=ai-gateway
    ```
 
 5. **Commit your changes:**
 
-   Commit your changes with a clear message, making sure to **sign off** on your work using the `-s` flag. This is required by the project's **Developer Certificate of Origin (DCO)**.
+   Commit your changes with a clear message, making sure to **sign off** on your work using the `-s` flag. This is required by the project's **Developer Certificate of Origin (DCO)**. The repository does not require commit messages to use the PR title classification prefixes.
 
    ```bash
    git add .
-   git commit -s -m "feat: add your feature description"
+   git commit -s -m "clarify PR title guidance"
    ```
 
 ### Debugging
@@ -186,11 +230,13 @@ brew install pre-commit
 **Step 2: Install pre-commit hooks for this repository**
 
 ```bash
-# Install pre-commit hooks
-pre-commit install
+# Install the repo-native pre-commit + pre-push hooks
+make precommit-install
 
 # Run all checks
 pre-commit run --all-files
+# OR
+make precommit-branch-gate
 # OR
 make precommit-local
 ```
@@ -232,31 +278,38 @@ make precommit-local
    - Unit tests for all components
 
 2. **Create a pull request** with:
-   - Clear description of changes
+   - A module-aligned PR title using the repository prefixes from [.github/PULL_REQUEST_TEMPLATE.md](.github/PULL_REQUEST_TEMPLATE.md), such as `[Docs][CI/Build] Align PR template with vLLM` or `[Router][Dashboard] Tighten route visibility in the console`
+   - A clear `Purpose` section describing the change and affected module(s)
    - Reference to any related issues
-   - Test results and validation steps
+   - A `Test Plan` and `Test Result` section with the actual validation steps and outcomes
 
 3. **Address review feedback** promptly
 
 ## Project Structure
 
 ```
+├── bench/                   # Benchmarking tools and workloads
 ├── candle-binding/          # Rust library for BERT classification
-├── src/semantic-router/     # Go implementation of the router
-├── src/training/           # Model training scripts
-├── e2e/testing/              # End-to-end test suite
-├── config/                 # Configuration files
-├── docs/                   # Documentation
-├── deploy/                 # Deployment configurations
-├── Makefile               # Build automation
-└── requirements.txt       # Python dependencies
+├── config/                  # Sample and reference configuration
+├── dashboard/               # Web UI and backend API
+├── deploy/                  # Kubernetes, operators, Helm charts, etc.
+├── docs/                    # Contributor docs (see also docs/agent)
+├── e2e/                     # End-to-end test harness
+├── src/semantic-router/     # Go router (Envoy ExtProc)
+├── src/vllm-sr/             # Python CLI (`requirements.txt` for its deps)
+├── src/training/            # Model training scripts
+├── tools/                   # Agent harness, scripts, automation
+├── website/                 # Documentation site (Docusaurus)
+└── Makefile                 # Build automation
 ```
 
 ### Key Components
 
 - **Candle Binding:** Rust library providing BERT-based classification
 - **Semantic Router:** Go service implementing the Envoy ExtProc interface
+- **vllm-sr CLI:** Python tooling and local dev workflow (`src/vllm-sr/`)
 - **Training Scripts:** Python scripts for fine-tuning classification models
+- **Dashboard:** Web console for operations and playground traffic
 - **Configuration:** YAML files defining routing rules and model endpoints
 
 ## Getting Help

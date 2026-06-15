@@ -87,30 +87,30 @@ func validateHeaderValue(value string) (string, error) {
 
 // retrieveFromExternalAPI retrieves context from external API backend
 func (r *OpenAIRouter) retrieveFromExternalAPI(traceCtx context.Context, ctx *RequestContext, ragConfig *config.RAGPluginConfig) (string, error) {
-	apiConfig, ok := ragConfig.BackendConfig.(*config.ExternalAPIRAGConfig)
-	if !ok {
-		return "", fmt.Errorf("invalid external API RAG config")
+	apiConfig, err := ragConfig.ExternalAPIBackendConfig()
+	if err != nil {
+		return "", fmt.Errorf("invalid external API RAG config: %w", err)
 	}
 
 	// Build request based on format
 	var requestBody []byte
-	var err error
+	var buildErr error
 
 	switch apiConfig.RequestFormat {
 	case "pinecone":
-		requestBody, err = r.buildPineconeRequest(ctx, ragConfig)
+		requestBody, buildErr = r.buildPineconeRequest(ctx, ragConfig)
 	case "weaviate":
-		requestBody, err = r.buildWeaviateRequest(ctx, ragConfig)
+		requestBody, buildErr = r.buildWeaviateRequest(ctx, ragConfig)
 	case "elasticsearch":
-		requestBody, err = r.buildElasticsearchRequest(ctx, ragConfig)
+		requestBody, buildErr = r.buildElasticsearchRequest(ctx, ragConfig)
 	case "custom":
-		requestBody, err = r.buildCustomRequest(ctx, ragConfig, apiConfig.RequestTemplate)
+		requestBody, buildErr = r.buildCustomRequest(ctx, ragConfig, apiConfig.RequestTemplate)
 	default:
 		return "", fmt.Errorf("unsupported request format: %s", apiConfig.RequestFormat)
 	}
 
-	if err != nil {
-		return "", fmt.Errorf("failed to build request: %w", err)
+	if buildErr != nil {
+		return "", fmt.Errorf("failed to build request: %w", buildErr)
 	}
 
 	// Create HTTP request
@@ -177,7 +177,9 @@ func (r *OpenAIRouter) retrieveFromExternalAPI(traceCtx context.Context, ctx *Re
 	if err != nil {
 		return "", fmt.Errorf("API request failed: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() {
+		_ = resp.Body.Close()
+	}()
 
 	latency := time.Since(start).Seconds()
 	ctx.RAGRetrievalLatency = latency

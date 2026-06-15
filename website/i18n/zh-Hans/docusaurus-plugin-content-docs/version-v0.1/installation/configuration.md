@@ -196,13 +196,6 @@ decisions:
       configuration:
         enabled: true
         similarity_threshold: 0.9  # 数学问题需要更高的阈值
-    - type: "jailbreak"
-      configuration:
-        enabled: true
-    - type: "pii"
-      configuration:
-        enabled: true
-        threshold: 0.8
     - type: "system_prompt"
       configuration:
         enabled: true
@@ -463,13 +456,6 @@ decisions:
         configuration:
           enabled: true
           similarity_threshold: 0.9  # 数学问题更高
-      - type: "jailbreak"
-        configuration:
-          enabled: true
-      - type: "pii"
-        configuration:
-          enabled: true
-          threshold: 0.8
       - type: "system_prompt"
         configuration:
           enabled: true
@@ -594,15 +580,15 @@ model_config:
   "gpt-4":
     pii_policy:
       allow_by_default: false
-    # preferred_endpoints 省略 - 路由器将不设置端点头
-    # 当外部负载均衡器处理端点选择时很有用
+    # preferred_endpoints 省略 - 路由器只发出模型路由信号
+    # 当外部负载均衡器处理上游端点时很有用
 ```
 
 **关于 `preferred_endpoints` 的说明：**
 
-- **可选字段**：如果省略，路由将不会设置 `x-vsr-destination-endpoint` 头
-- **如果指定**：路由根据权重选择最佳端点并设置头
-- **如果省略**：上游负载均衡器或服务网格处理端点选择
+- **可选字段**：如果省略，路由器不会为该模型解析后端元数据
+- **如果指定**：路由器可以使用引用的后端元数据进行请求改写和 provider-specific 配置
+- **如果省略**：上游负载均衡器或服务网格处理端点负载均衡
 - **验证**：在类别中使用或作为 `default_model` 的模型必须配置 `preferred_endpoints`
 
 ### 定价（可选）

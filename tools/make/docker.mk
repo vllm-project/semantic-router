@@ -4,19 +4,27 @@
 
 ##@ Docker
 
-# Docker image tags
+# ── Image registry and tag configuration ────────────────────────────────────
+# Override DOCKER_REGISTRY and DOCKER_TAG on the command line or via environment
+# variables to target a different registry or release channel.
+#
+# Release channels:
+#   DOCKER_TAG=latest              (default) most recent build pushed to main
+#   DOCKER_TAG=v0.3.0              specific immutable release tag — recommended for production
+#   DOCKER_TAG=nightly-20260115    nightly build from a specific date
+#
+# Examples:
+#   make docker-build-extproc DOCKER_TAG=v0.3.0
+#   make docker-pull-release  DOCKER_TAG=v0.3.0
+# ────────────────────────────────────────────────────────────────────────────
 DOCKER_REGISTRY ?= ghcr.io/vllm-project/semantic-router
 DOCKER_TAG ?= latest
 
-# Default docker compose environment
-# Point Compose to the relocated main stack by default; override by exporting COMPOSE_FILE
-export COMPOSE_FILE ?= deploy/docker-compose/docker-compose.yml
-# Keep a stable project name so network/volume names are predictable across runs
-export COMPOSE_PROJECT_NAME ?= semantic-router
-
 # Build all Docker images
+# Note: extproc-rocm is excluded because it requires x86_64 + ROCm hardware.
+# Build it explicitly with: make docker-build-extproc-rocm
 docker-build-all: ## Build all Docker images
-docker-build-all: docker-build-extproc docker-build-llm-katan docker-build-dashboard docker-build-precommit
+docker-build-all: docker-build-extproc docker-build-llm-katan docker-build-dashboard docker-build-precommit docker-build-vllm-sr-sim
 
 # Build extproc Docker image
 docker-build-extproc: ## Build extproc Docker image
@@ -24,6 +32,21 @@ docker-build-extproc:
 	@$(LOG_TARGET)
 	@echo "Building extproc Docker image..."
 	@$(CONTAINER_RUNTIME) build -f tools/docker/Dockerfile.extproc -t $(DOCKER_REGISTRY)/extproc:$(DOCKER_TAG) .
+
+# Build extproc-rocm Docker image (AMD GPU / ROCm, x86_64 only)
+docker-build-extproc-rocm: ## Build extproc-rocm Docker image (AMD GPU)
+docker-build-extproc-rocm:
+	@$(LOG_TARGET)
+	@echo "Building extproc-rocm Docker image (x86_64 only, ROCm 7.0)..."
+	@$(CONTAINER_RUNTIME) build -f tools/docker/Dockerfile.extproc-rocm -t $(DOCKER_REGISTRY)/extproc-rocm:$(DOCKER_TAG) .
+
+
+# Build openvino-binding Docker image (OpenVINO inference backend, x86_64 only)
+docker-build-openvino-binding: ## Build openvino-binding Docker image
+docker-build-openvino-binding:
+	@$(LOG_TARGET)
+	@echo "Building openvino-binding Docker image (x86_64 only)..."
+	@$(CONTAINER_RUNTIME) build -f openvino-binding/Dockerfile -t $(DOCKER_REGISTRY)/openvino-binding:$(DOCKER_TAG) .
 
 # Build llm-katan Docker image
 docker-build-llm-katan: ## Build llm-katan Docker image
@@ -39,6 +62,27 @@ docker-build-dashboard:
 	@echo "Building dashboard Docker image..."
 	@$(CONTAINER_RUNTIME) build -f dashboard/backend/Dockerfile -t $(DOCKER_REGISTRY)/dashboard:$(DOCKER_TAG) .
 
+# Ensure the official Envoy image is available locally
+docker-build-vllm-sr-envoy: ## Build vllm-sr-envoy Docker image
+docker-build-vllm-sr-envoy:
+	@$(LOG_TARGET)
+	@echo "Ensuring official Envoy image is available..."
+	@$(CONTAINER_RUNTIME) image inspect $(VLLM_SR_ENVOY_IMAGE) >/dev/null 2>&1 || $(CONTAINER_RUNTIME) pull $(VLLM_SR_ENVOY_IMAGE)
+
+# Build router runtime image using the existing vllm-sr Dockerfile
+docker-build-vllm-sr-router: ## Build vllm-sr-router Docker image
+docker-build-vllm-sr-router:
+	@$(LOG_TARGET)
+	@echo "Building vllm-sr-router Docker image..."
+	@$(CONTAINER_RUNTIME) build $(VLLM_SR_BUILD_ARGS) -f $(VLLM_SR_DOCKERFILE) -t $(DOCKER_REGISTRY)/vllm-sr-router:$(DOCKER_TAG) .
+
+# Build vllm-sr-sim Docker image
+docker-build-vllm-sr-sim: ## Build vllm-sr-sim Docker image
+docker-build-vllm-sr-sim:
+	@$(LOG_TARGET)
+	@echo "Building vllm-sr-sim Docker image..."
+	@$(CONTAINER_RUNTIME) build -f src/fleet-sim/Dockerfile -t $(DOCKER_REGISTRY)/vllm-sr-sim:$(DOCKER_TAG) .
+
 # Build precommit Docker image
 docker-build-precommit: ## Build precommit Docker image
 docker-build-precommit:
@@ -52,7 +96,7 @@ docker-test-llm-katan:
 	@$(LOG_TARGET)
 	@echo "Testing llm-katan Docker image..."
 	@curl -f http://localhost:8000/v1/models || (echo "Models endpoint failed" && exit 1)
-	@echo "\n✅ llm-katan Docker image test passed"
+	@echo "\nllm-katan Docker image test passed"
 
 # Run llm-katan Docker image locally
 docker-run-llm-katan: ## Run llm-katan Docker image locally
@@ -77,6 +121,20 @@ docker-run-llm-katan-custom:
 	@$(CONTAINER_RUNTIME) run --rm -p 8000:8000 $(DOCKER_REGISTRY)/llm-katan:$(DOCKER_TAG) \
 		llm-katan --model "Qwen/Qwen3-0.6B" --served-model-name "$(SERVED_NAME)" --host 0.0.0.0 --port 8000
 
+# Pull a specific release of all production images
+# Usage: make docker-pull-release DOCKER_TAG=v0.3.0
+docker-pull-release: ## Pull all production images at a specific DOCKER_TAG (default: latest)
+docker-pull-release:
+	@$(LOG_TARGET)
+	@if [ "$(DOCKER_TAG)" = "latest" ]; then \
+		echo "WARNING: pulling :latest — consider pinning with DOCKER_TAG=v<version> or DOCKER_TAG=nightly-YYYYMMDD"; \
+	fi
+	@echo "Pulling images at tag: $(DOCKER_TAG)"
+	@$(CONTAINER_RUNTIME) pull $(DOCKER_REGISTRY)/extproc:$(DOCKER_TAG)
+	@$(CONTAINER_RUNTIME) pull $(DOCKER_REGISTRY)/vllm-sr:$(DOCKER_TAG)
+	@$(CONTAINER_RUNTIME) pull $(DOCKER_REGISTRY)/dashboard:$(DOCKER_TAG)
+	@echo "All images pulled at $(DOCKER_TAG)"
+
 # Clean up Docker images
 docker-clean: ## Clean up Docker images
 docker-clean:
@@ -86,8 +144,9 @@ docker-clean:
 	@echo "Docker cleanup completed"
 
 # Push Docker images (for CI/CD)
-docker-push-all: ## Build all Docker images
-docker-push-all: docker-push-extproc docker-push-llm-katan
+# Note: extproc-rocm is excluded; push it explicitly with: make docker-push-extproc-rocm
+docker-push-all: ## Push all Docker images
+docker-push-all: docker-push-extproc docker-push-llm-katan docker-push-dashboard docker-push-vllm-sr-sim
 	@$(LOG_TARGET)
 	@echo "All Docker images pushed successfully"
 
@@ -97,229 +156,330 @@ docker-push-extproc:
 	@echo "Pushing extproc Docker image..."
 	@$(CONTAINER_RUNTIME) push $(DOCKER_REGISTRY)/extproc:$(DOCKER_TAG)
 
+docker-push-extproc-rocm: ## Push extproc-rocm Docker image
+docker-push-extproc-rocm:
+	@$(LOG_TARGET)
+	@echo "Pushing extproc-rocm Docker image..."
+	@$(CONTAINER_RUNTIME) push $(DOCKER_REGISTRY)/extproc-rocm:$(DOCKER_TAG)
+
 docker-push-llm-katan: ## Push llm-katan Docker image
 docker-push-llm-katan:
 	@$(LOG_TARGET)
 	@echo "Pushing llm-katan Docker image..."
 	@$(CONTAINER_RUNTIME) push $(DOCKER_REGISTRY)/llm-katan:$(DOCKER_TAG)
 
-# Docker compose build flag logic
-# Usage: make docker-compose-up REBUILD=1  (forces image rebuild)
-REBUILD ?=
-BUILD_FLAG=$(if $(REBUILD),--build,)
-
-# Compose command: use podman compose (plugin) for podman, docker compose (plugin) for docker
-# Both use COMPOSE_FILE and COMPOSE_PROJECT_NAME environment variables automatically
-ifeq ($(CONTAINER_RUNTIME),podman)
-COMPOSE_CMD = podman compose
-else
-COMPOSE_CMD = $(CONTAINER_RUNTIME) compose
-endif
-
-# Docker compose shortcuts (no rebuild by default)
-docker-compose-up: ## Start services (default includes llm-katan; REBUILD=1 to rebuild)
-docker-compose-up:
+docker-push-dashboard: ## Push dashboard Docker image
+docker-push-dashboard:
 	@$(LOG_TARGET)
-	@echo "Starting services with $(COMPOSE_CMD) (default includes llm-katan) (REBUILD=$(REBUILD))..."
-	@$(COMPOSE_CMD) --profile llm-katan up -d $(BUILD_FLAG)
+	@echo "Pushing dashboard Docker image..."
+	@$(CONTAINER_RUNTIME) push $(DOCKER_REGISTRY)/dashboard:$(DOCKER_TAG)
 
-docker-compose-up-testing: ## Start with testing profile (REBUILD=1 optional)
-docker-compose-up-testing:
+docker-push-vllm-sr-router: ## Push vllm-sr-router Docker image
+docker-push-vllm-sr-router:
 	@$(LOG_TARGET)
-	@echo "Starting services with $(COMPOSE_CMD) (testing profile) (REBUILD=$(REBUILD))..."
-	@$(COMPOSE_CMD) --profile testing up -d $(BUILD_FLAG)
+	@echo "Pushing vllm-sr-router Docker image..."
+	@$(CONTAINER_RUNTIME) push $(DOCKER_REGISTRY)/vllm-sr-router:$(DOCKER_TAG)
 
-docker-compose-up-llm-katan: ## Start with llm-katan profile (REBUILD=1 optional)
-docker-compose-up-llm-katan:
+docker-push-vllm-sr-envoy: ## Push vllm-sr-envoy Docker image
+docker-push-vllm-sr-envoy:
 	@$(LOG_TARGET)
-	@echo "Starting services with $(COMPOSE_CMD) (llm-katan profile) (REBUILD=$(REBUILD))..."
-	@$(COMPOSE_CMD) --profile llm-katan up -d $(BUILD_FLAG)
+	@echo "Skipping push for upstream-managed Envoy image: $(VLLM_SR_ENVOY_IMAGE)"
 
-# Start core services only (closer to production; excludes llm-katan)
-docker-compose-up-core: ## Start core services only (no llm-katan)
-docker-compose-up-core:
+docker-push-vllm-sr-sim: ## Push vllm-sr-sim Docker image
+docker-push-vllm-sr-sim:
 	@$(LOG_TARGET)
-	@echo "Starting core services with $(COMPOSE_CMD) (no llm-katan) (REBUILD=$(REBUILD))..."
-	@$(COMPOSE_CMD) up -d $(BUILD_FLAG)
+	@echo "Pushing vllm-sr-sim Docker image..."
+	@$(CONTAINER_RUNTIME) push $(DOCKER_REGISTRY)/vllm-sr-sim:$(DOCKER_TAG)
 
-# Explicit rebuild targets for convenience
-docker-compose-rebuild: ## Force rebuild then start
-docker-compose-rebuild: REBUILD=1
-docker-compose-rebuild: docker-compose-up
-
-docker-compose-rebuild-testing: ## Force rebuild (testing profile)
-docker-compose-rebuild-testing: REBUILD=1
-docker-compose-rebuild-testing: docker-compose-up-testing
-
-docker-compose-rebuild-llm-katan: ## Force rebuild (llm-katan profile)
-docker-compose-rebuild-llm-katan: REBUILD=1
-docker-compose-rebuild-llm-katan: docker-compose-up-llm-katan
-
-docker-compose-down:
-docker-compose-down: ## Stop services (default includes llm-katan)
-	@$(LOG_TARGET)
-	@echo "Stopping services with $(COMPOSE_CMD) (default includes llm-katan)..."
-	@$(COMPOSE_CMD) --profile llm-katan down
-
-docker-compose-down-core: ## Stop core services only (no llm-katan)
-docker-compose-down-core:
-	@$(LOG_TARGET)
-	@echo "Stopping core services with $(COMPOSE_CMD) (no llm-katan)..."
-	@$(COMPOSE_CMD) down
-
-docker-compose-down-testing: ## Stop services with testing profile
-docker-compose-down-testing:
-	@$(LOG_TARGET)
-	@echo "Stopping services with $(COMPOSE_CMD) (testing profile)..."
-	@$(COMPOSE_CMD) --profile testing down
-
-docker-compose-down-llm-katan: ## Stop services with llm-katan profile
-docker-compose-down-llm-katan:
-	@$(LOG_TARGET)
-	@echo "Stopping services with $(COMPOSE_CMD) (llm-katan profile)..."
-	@$(COMPOSE_CMD) --profile llm-katan down
-
-##@ CI Docker Compose (minimal services for CI testing)
-
-# CI compose file path
-CI_COMPOSE_FILE ?= deploy/docker-compose/docker-compose.ci.yml
-
-docker-compose-up-ci: ## Start minimal CI services (semantic-router, envoy, llm-katan) with local build
-docker-compose-up-ci:
-	@$(LOG_TARGET)
-	@echo "Building and starting CI services with $(COMPOSE_CMD) (minimal for CI)..."
-	@$(COMPOSE_CMD) -f $(CI_COMPOSE_FILE) up -d --build
-
-docker-compose-down-ci: ## Stop CI services
-docker-compose-down-ci:
-	@$(LOG_TARGET)
-	@echo "Stopping CI services with $(COMPOSE_CMD)..."
-	@$(COMPOSE_CMD) -f $(CI_COMPOSE_FILE) down
-
-docker-compose-logs-ci: ## Show logs for CI services
-docker-compose-logs-ci:
-	@$(LOG_TARGET)
-	@$(COMPOSE_CMD) -f $(CI_COMPOSE_FILE) logs
-
-docker-compose-ps-ci: ## Show status of CI services
-docker-compose-ps-ci:
-	@$(LOG_TARGET)
-	@$(COMPOSE_CMD) -f $(CI_COMPOSE_FILE) ps
-
-##@ Response API Docker Compose (for Response API testing)
-
-# Response API compose file path
-RESPONSE_API_COMPOSE_FILE ?= deploy/docker-compose/docker-compose.response-api.yml
-
-response-api-test-up: ## Start Response API test services (semantic-router, envoy, mock-vllm)
-response-api-test-up:
-	@$(LOG_TARGET)
-	@echo "Building and starting Response API test services..."
-	@$(COMPOSE_CMD) -f $(RESPONSE_API_COMPOSE_FILE) up -d --build
-
-response-api-test-down: ## Stop Response API test services
-response-api-test-down:
-	@$(LOG_TARGET)
-	@echo "Stopping Response API test services..."
-	@$(COMPOSE_CMD) -f $(RESPONSE_API_COMPOSE_FILE) down
-
-response-api-test-logs: ## Show logs for Response API test services
-response-api-test-logs:
-	@$(LOG_TARGET)
-	@$(COMPOSE_CMD) -f $(RESPONSE_API_COMPOSE_FILE) logs -f
-
-response-api-test-ps: ## Show status of Response API test services
-response-api-test-ps:
-	@$(LOG_TARGET)
-	@$(COMPOSE_CMD) -f $(RESPONSE_API_COMPOSE_FILE) ps
-
-response-api-test-run: ## Run Response API error handling tests
-response-api-test-run:
-	@$(LOG_TARGET)
-	@echo "Running Response API error handling tests..."
-	@./scripts/test-response-api-errors.sh
-
-response-api-test: ## Start services and run Response API error handling tests
-response-api-test: response-api-test-up
-	@$(LOG_TARGET)
-	@echo "Waiting for services to be healthy..."
-	@sleep 10
-	@$(MAKE) response-api-test-run
-	@$(MAKE) response-api-test-down
 # Help target for Docker commands
 docker-help:
 docker-help: ## Show help for Docker-related make targets and environment variables
 	@echo "Environment Variables:"
-	@echo "  CONTAINER_RUNTIME - Container runtime (default: docker, can be set to podman)"
+	@echo "  CONTAINER_RUNTIME - Container runtime (default: docker; Podman is not supported)"
 	@echo "  DOCKER_REGISTRY   - Docker registry (default: ghcr.io/vllm-project/semantic-router)"
 	@echo "  DOCKER_TAG        - Docker tag (default: latest)"
+	@echo "  SKIP_ROUTER_IMAGE - set to 1 only when the local router image is already up to date"
 	@echo "  SERVED_NAME       - Served model name for custom runs"
+	@echo "  VLLM_SR_PLATFORM  - vllm-sr platform hint (set to amd to use ROCm defaults)"
+	@echo "  VLLM_SR_TARGETARCH - target image architecture (default: host-native, amd64 for ROCm)"
+	@echo "  VLLM_SR_BUILDPLATFORM - Docker build platform (default: host-native, linux/amd64 for ROCm)"
+	@echo "  VLLM_SR_DOCKERFILE_AMD - Dockerfile used when VLLM_SR_PLATFORM=amd"
+	@echo "  VLLM_SR_ROUTER_IMAGE - router runtime image override (defaults to VLLM_SR_ROUTER_IMAGE_DEFAULT)"
+	@echo "  VLLM_SR_ENVOY_IMAGE - envoy runtime image override (defaults to VLLM_SR_ENVOY_IMAGE_DEFAULT)"
+	@echo "  VLLM_SR_DASHBOARD_IMAGE - dashboard runtime image override (defaults to VLLM_SR_DASHBOARD_IMAGE_DEFAULT)"
+	@echo "  VLLM_SR_SIM_PORT  - host port for the vllm-sr-sim service container"
 
 ##@ vLLM-SR (Semantic Router CLI)
 
-# vLLM-SR specific variables
-VLLM_SR_IMAGE ?= ghcr.io/vllm-project/semantic-router/vllm-sr:latest
+# vLLM-SR specific variables — image tags default to DOCKER_TAG so that a
+# single `DOCKER_TAG=v0.3.0` on the command line pins every image at once.
+VLLM_SR_IMAGE ?= ghcr.io/vllm-project/semantic-router/vllm-sr:$(DOCKER_TAG)
+VLLM_SR_IMAGE_ROCM ?= ghcr.io/vllm-project/semantic-router/vllm-sr-rocm:$(DOCKER_TAG)
+VLLM_SR_ROUTER_IMAGE_DEFAULT ?= $(VLLM_SR_IMAGE)
+VLLM_SR_ROUTER_IMAGE_ROCM ?= $(VLLM_SR_IMAGE_ROCM)
+VLLM_SR_ENVOY_IMAGE_DEFAULT ?= envoyproxy/envoy:v1.34-latest
+VLLM_SR_DASHBOARD_IMAGE_DEFAULT ?= ghcr.io/vllm-project/semantic-router/dashboard:$(DOCKER_TAG)
+VLLM_SR_ROUTER_IMAGE ?= $(VLLM_SR_ROUTER_IMAGE_DEFAULT)
+VLLM_SR_ENVOY_IMAGE ?= $(VLLM_SR_ENVOY_IMAGE_DEFAULT)
+VLLM_SR_DASHBOARD_IMAGE ?= $(VLLM_SR_DASHBOARD_IMAGE_DEFAULT)
 VLLM_SR_CONTAINER ?= vllm-sr-container
+VLLM_SR_ROUTER_CONTAINER ?= vllm-sr-router-container
+VLLM_SR_ENVOY_CONTAINER ?= vllm-sr-envoy-container
+VLLM_SR_DASHBOARD_CONTAINER ?= vllm-sr-dashboard-container
+VLLM_SR_RUNTIME_CONTAINERS ?= $(VLLM_SR_CONTAINER) $(VLLM_SR_ROUTER_CONTAINER) $(VLLM_SR_ENVOY_CONTAINER) $(VLLM_SR_DASHBOARD_CONTAINER)
+VLLM_SR_PLATFORM ?=
+VLLM_SR_PLATFORM_NORMALIZED := $(shell echo "$(VLLM_SR_PLATFORM)" | tr '[:upper:]' '[:lower:]')
+VLLM_SR_TOPOLOGY ?= split
+VLLM_SR_TOPOLOGY_NORMALIZED := $(shell echo "$(VLLM_SR_TOPOLOGY)" | tr '[:upper:]' '[:lower:]')
+VLLM_SR_DOCKERFILE ?= src/vllm-sr/Dockerfile
+VLLM_SR_DOCKERFILE_AMD ?= src/vllm-sr/Dockerfile.rocm
+VLLM_SR_DASHBOARD_DOCKERFILE ?= dashboard/backend/Dockerfile
+VLLM_SR_SIM_IMAGE ?= ghcr.io/vllm-project/semantic-router/vllm-sr-sim:latest
+VLLM_SR_SIM_CONTAINER ?= vllm-sr-sim-container
+VLLM_SR_SIM_DOCKERFILE ?= src/fleet-sim/Dockerfile
+VLLM_SR_SIM_DIR ?= src/fleet-sim
+VLLM_SR_SIM_PORT ?= 8810
+SKIP_ROUTER_IMAGE_SOURCE := $(origin SKIP_ROUTER_IMAGE)
+SKIP_COMPAT_IMAGE_SOURCE := $(origin SKIP_COMPAT_IMAGE)
+SKIP_ROUTER_IMAGE_DEFAULT := 0
+ifeq ($(SKIP_ROUTER_IMAGE_SOURCE),undefined)
+ifeq ($(SKIP_COMPAT_IMAGE_SOURCE),undefined)
+SKIP_ROUTER_IMAGE_EFFECTIVE := $(SKIP_ROUTER_IMAGE_DEFAULT)
+else
+SKIP_ROUTER_IMAGE_EFFECTIVE := $(SKIP_COMPAT_IMAGE)
+endif
+else
+SKIP_ROUTER_IMAGE_EFFECTIVE := $(SKIP_ROUTER_IMAGE)
+endif
+VLLM_SR_HOST_ARCH_RAW := $(shell uname -m)
+ifeq ($(VLLM_SR_HOST_ARCH_RAW),arm64)
+VLLM_SR_TARGETARCH ?= arm64
+VLLM_SR_BUILDPLATFORM ?= linux/arm64
+else ifeq ($(VLLM_SR_HOST_ARCH_RAW),aarch64)
+VLLM_SR_TARGETARCH ?= arm64
+VLLM_SR_BUILDPLATFORM ?= linux/arm64
+else
+VLLM_SR_TARGETARCH ?= amd64
+VLLM_SR_BUILDPLATFORM ?= linux/amd64
+endif
 
-vllm-sr-dev: ## Rebuild vLLM Semantic Router image and install CLI
+# AMD platform defaults (can still be overridden via env/CLI variables)
+ifeq ($(VLLM_SR_PLATFORM_NORMALIZED),amd)
+ifeq ($(origin VLLM_SR_IMAGE),file)
+VLLM_SR_IMAGE := $(VLLM_SR_IMAGE_ROCM)
+endif
+ifeq ($(origin VLLM_SR_ROUTER_IMAGE),file)
+VLLM_SR_ROUTER_IMAGE := $(VLLM_SR_ROUTER_IMAGE_ROCM)
+endif
+ifeq ($(origin VLLM_SR_DOCKERFILE),file)
+VLLM_SR_DOCKERFILE := $(VLLM_SR_DOCKERFILE_AMD)
+endif
+ifeq ($(origin VLLM_SR_TARGETARCH),file)
+VLLM_SR_TARGETARCH := amd64
+endif
+ifeq ($(origin VLLM_SR_BUILDPLATFORM),file)
+VLLM_SR_BUILDPLATFORM := linux/amd64
+endif
+endif
+
+# Default 1 so vllm-sr build works behind corporate proxies; set GIT_SSL_NO_VERIFY=0 for strict SSL verification.
+GIT_SSL_NO_VERIFY ?= 1
+VLLM_SR_BUILD_ARGS := --network=host --build-arg TARGETARCH=$(VLLM_SR_TARGETARCH) --build-arg BUILDPLATFORM=$(VLLM_SR_BUILDPLATFORM)
+ifeq ($(GIT_SSL_NO_VERIFY),1)
+VLLM_SR_BUILD_ARGS += --build-arg GIT_SSL_NO_VERIFY=1
+endif
+
+vllm-sr-dev: ## Rebuild vLLM Semantic Router router image and install CLI
 vllm-sr-dev:
 	@$(LOG_TARGET)
 	@echo "=========================================="
 	@echo "vLLM Semantic Router Development Setup"
 	@echo "=========================================="
 	@echo ""
+	@echo "Topology: $(VLLM_SR_TOPOLOGY_NORMALIZED)"
 	@echo "This will:"
 	@echo "  1. Clean up old containers"
-	@echo "  2. Rebuild Docker image with all dependencies"
-	@echo "  3. Install vLLM-SR CLI in development mode"
+	@if [ "$(SKIP_ROUTER_IMAGE_EFFECTIVE)" = "1" ]; then \
+		echo "  2. Reuse the existing vLLM-SR router Docker image"; \
+	else \
+		echo "  2. Rebuild the vLLM-SR router Docker image"; \
+	fi
+	@if [ "$(VLLM_SR_TOPOLOGY_NORMALIZED)" = "split" ]; then \
+		echo "  3. Ensure the official Envoy image is available"; \
+		echo "  4. Rebuild the dashboard Docker image"; \
+		echo "  5. Build the vLLM-SR-Sim service image"; \
+		echo "  6. Install vLLM-SR and vLLM-SR-Sim CLIs in development mode"; \
+	else \
+		echo "  3. Build the vLLM-SR-Sim service image"; \
+		echo "  4. Install vLLM-SR and vLLM-SR-Sim CLIs in development mode"; \
+	fi
 	@echo ""
 	@echo "1. Cleaning up old containers..."
-	@$(CONTAINER_RUNTIME) rm -f $(VLLM_SR_CONTAINER) 2>/dev/null || echo "  No container to remove"
+	@$(CONTAINER_RUNTIME) rm -f $(VLLM_SR_RUNTIME_CONTAINERS) 2>/dev/null || echo "  No runtime containers to remove"
+	@$(CONTAINER_RUNTIME) rm -f $(VLLM_SR_SIM_CONTAINER) 2>/dev/null || echo "  No simulator container to remove"
 	@echo ""
-	@echo "2. Rebuilding Docker image..."
-	@echo "  Building from: $(PWD)"
-	@echo "  Image: $(VLLM_SR_IMAGE)"
+	@if [ "$(SKIP_ROUTER_IMAGE_EFFECTIVE)" = "1" ]; then \
+		echo "2. Reusing existing vLLM-SR router Docker image (SKIP_ROUTER_IMAGE=1)"; \
+		echo "   Only use this when the local router image already includes your latest code changes."; \
+		echo ""; \
+	else \
+		echo "2. Rebuilding vLLM-SR router Docker image..."; \
+		echo "  Building from: $(PWD)"; \
+		echo "  Platform: $(if $(VLLM_SR_PLATFORM_NORMALIZED),$(VLLM_SR_PLATFORM_NORMALIZED),default)"; \
+		echo "  Target arch: $(VLLM_SR_TARGETARCH)"; \
+		echo "  Build platform: $(VLLM_SR_BUILDPLATFORM)"; \
+		echo "  Dockerfile: $(VLLM_SR_DOCKERFILE)"; \
+		echo "  Image: $(VLLM_SR_IMAGE)"; \
+		echo ""; \
+		$(CONTAINER_RUNTIME) build $(VLLM_SR_BUILD_ARGS) -t $(VLLM_SR_IMAGE) -f $(VLLM_SR_DOCKERFILE) .; \
+		echo ""; \
+		echo "Router image built: $(VLLM_SR_IMAGE)"; \
+		echo ""; \
+	fi
+	@if [ "$(VLLM_SR_TOPOLOGY_NORMALIZED)" = "split" ]; then \
+		echo "3. Ensuring official Envoy image is available..."; \
+		echo "  Image: $(VLLM_SR_ENVOY_IMAGE)"; \
+		echo ""; \
+		$(CONTAINER_RUNTIME) image inspect $(VLLM_SR_ENVOY_IMAGE) >/dev/null 2>&1 || $(CONTAINER_RUNTIME) pull $(VLLM_SR_ENVOY_IMAGE); \
+		echo ""; \
+		echo "Envoy image available: $(VLLM_SR_ENVOY_IMAGE)"; \
+		echo ""; \
+		echo "4. Rebuilding dashboard Docker image..."; \
+		echo "  Dockerfile: $(VLLM_SR_DASHBOARD_DOCKERFILE)"; \
+		echo "  Image: $(VLLM_SR_DASHBOARD_IMAGE)"; \
+		echo ""; \
+		$(CONTAINER_RUNTIME) build $(VLLM_SR_BUILD_ARGS) -t $(VLLM_SR_DASHBOARD_IMAGE) -f $(VLLM_SR_DASHBOARD_DOCKERFILE) .; \
+		echo ""; \
+		echo "Dashboard image built: $(VLLM_SR_DASHBOARD_IMAGE)"; \
+		echo ""; \
+		echo "5. Building vLLM-SR-Sim service image..."; \
+	else \
+		echo "3. Building vLLM-SR-Sim service image..."; \
+	fi
+	@$(CONTAINER_RUNTIME) build -t $(VLLM_SR_SIM_IMAGE) -f $(VLLM_SR_SIM_DOCKERFILE) .
 	@echo ""
-	@$(CONTAINER_RUNTIME) build -t $(VLLM_SR_IMAGE) -f src/vllm-sr/Dockerfile .
+	@echo "Simulator image built: $(VLLM_SR_SIM_IMAGE)"
 	@echo ""
-	@echo "✓ Image built: $(VLLM_SR_IMAGE)"
-	@echo ""
-	@echo "3. Installing vLLM-SR CLI in development mode..."
-	@pip install -e src/vllm-sr
-	@echo "✓ vLLM-SR CLI installed"
+	@if [ "$(VLLM_SR_TOPOLOGY_NORMALIZED)" = "split" ]; then \
+		echo "6. Installing vLLM-SR and vLLM-SR-Sim CLIs in development mode..."; \
+	else \
+		echo "4. Installing vLLM-SR and vLLM-SR-Sim CLIs in development mode..."; \
+	fi
+	@if [ -x "$(AGENT_VENV)/bin/pip" ]; then \
+		"$(AGENT_VENV)/bin/pip" install -q -e src/vllm-sr -e "$(VLLM_SR_SIM_DIR)[dev]"; \
+	else \
+		python3 -m pip install --break-system-packages -e src/vllm-sr -e "$(VLLM_SR_SIM_DIR)[dev]" 2>/dev/null || \
+		python3 -m pip install -e src/vllm-sr -e "$(VLLM_SR_SIM_DIR)[dev]"; \
+	fi
+	@echo "vLLM-SR CLI and vLLM-SR-Sim installed"
 	@echo ""
 	@echo "=========================================="
-	@echo "✓ Development Setup Complete"
+	@echo "Development Setup Complete"
 	@echo "=========================================="
 	@echo ""
 	@echo "Next steps:"
-	@echo "  Start service: cd src/vllm-sr && vllm-sr serve config.yaml"
+	@echo "  Start service: cd src/vllm-sr && vllm-sr serve --config config.yaml"
 	@echo "  Or use:        make vllm-sr-start"
 	@echo ""
 
-vllm-sr-build: ## Build vLLM Semantic Router Docker image
+vllm-sr-build: ## Build vLLM Semantic Router router Docker image
 vllm-sr-build:
 	@$(LOG_TARGET)
-	@echo "Building vLLM Semantic Router Docker image..."
-	@$(CONTAINER_RUNTIME) build -t $(VLLM_SR_IMAGE) -f src/vllm-sr/Dockerfile .
-	@echo "✓ Image built: $(VLLM_SR_IMAGE)"
+	@echo "Building vLLM Semantic Router router Docker image..."
+	@echo "  Platform: $(if $(VLLM_SR_PLATFORM_NORMALIZED),$(VLLM_SR_PLATFORM_NORMALIZED),default)"
+	@echo "  Target arch: $(VLLM_SR_TARGETARCH)"
+	@echo "  Build platform: $(VLLM_SR_BUILDPLATFORM)"
+	@echo "  Dockerfile: $(VLLM_SR_DOCKERFILE)"
+	@$(CONTAINER_RUNTIME) build $(VLLM_SR_BUILD_ARGS) -t $(VLLM_SR_IMAGE) -f $(VLLM_SR_DOCKERFILE) .
+	@echo "Image built: $(VLLM_SR_IMAGE)"
+
+vllm-sr-router-build: ## Build vLLM Semantic Router router Docker image
+vllm-sr-router-build:
+	@$(LOG_TARGET)
+	@echo "Building vLLM Semantic Router router Docker image..."
+	@echo "  Target arch: $(VLLM_SR_TARGETARCH)"
+	@echo "  Build platform: $(VLLM_SR_BUILDPLATFORM)"
+	@echo "  Dockerfile: $(VLLM_SR_DOCKERFILE)"
+	@$(CONTAINER_RUNTIME) build $(VLLM_SR_BUILD_ARGS) -t $(VLLM_SR_ROUTER_IMAGE) -f $(VLLM_SR_DOCKERFILE) .
+	@echo "Image built: $(VLLM_SR_ROUTER_IMAGE)"
+
+vllm-sr-envoy-build: ## Build vLLM Semantic Router Envoy Docker image
+vllm-sr-envoy-build:
+	@$(LOG_TARGET)
+	@echo "Ensuring official Envoy image is available..."
+	@$(CONTAINER_RUNTIME) image inspect $(VLLM_SR_ENVOY_IMAGE) >/dev/null 2>&1 || $(CONTAINER_RUNTIME) pull $(VLLM_SR_ENVOY_IMAGE)
+	@echo "Image available: $(VLLM_SR_ENVOY_IMAGE)"
+
+vllm-sr-dashboard-build: ## Build vLLM Semantic Router dashboard Docker image
+vllm-sr-dashboard-build:
+	@$(LOG_TARGET)
+	@echo "Building vLLM Semantic Router dashboard Docker image..."
+	@echo "  Target arch: $(VLLM_SR_TARGETARCH)"
+	@echo "  Build platform: $(VLLM_SR_BUILDPLATFORM)"
+	@echo "  Dockerfile: $(VLLM_SR_DASHBOARD_DOCKERFILE)"
+	@$(CONTAINER_RUNTIME) build $(VLLM_SR_BUILD_ARGS) -t $(VLLM_SR_DASHBOARD_IMAGE) -f $(VLLM_SR_DASHBOARD_DOCKERFILE) .
+	@echo "Image built: $(VLLM_SR_DASHBOARD_IMAGE)"
 
 vllm-sr-start: ## Start vLLM Semantic Router service
 vllm-sr-start: vllm-sr-dev
 	@$(LOG_TARGET)
 	@echo "Starting vLLM Semantic Router service..."
-	@vllm-sr serve --image-pull-policy=ifnotpresent --image $(VLLM_SR_IMAGE)
+	@VLLM_SR_IMAGE=$(VLLM_SR_IMAGE) \
+	VLLM_SR_ROUTER_IMAGE=$(VLLM_SR_ROUTER_IMAGE) \
+	VLLM_SR_ENVOY_IMAGE=$(VLLM_SR_ENVOY_IMAGE) \
+	VLLM_SR_DASHBOARD_IMAGE=$(VLLM_SR_DASHBOARD_IMAGE) \
+	VLLM_SR_TOPOLOGY=$(VLLM_SR_TOPOLOGY_NORMALIZED) \
+	vllm-sr serve --image-pull-policy=ifnotpresent
 	@vllm-sr dashboard
 
 ##@ vLLM-SR Tests (e2e tests for vllm-sr CLI)
 # Tests are located in e2e/testing/vllm-sr-cli/
 
-vllm-sr-test: ## Run CLI unit tests (fast, no Docker image required)
-vllm-sr-test:
-	@$(LOG_TARGET)
-	@cd e2e/testing/vllm-sr-cli && python run_cli_tests.py --verbose
+vllm-sr-install-cli: ## Install vLLM-SR CLI in editable mode for local test execution
+vllm-sr-install-cli: agent-venv-install
+	@"$(AGENT_PYTHON)" -m pip install -e src/vllm-sr
 
-vllm-sr-test-integration: ## Run CLI unit + integration tests (requires Docker image)
-vllm-sr-test-integration: vllm-sr-build
+vllm-sr-sim-install-cli: ## Install vLLM-SR-Sim with dev extras for local execution
+vllm-sr-sim-install-cli: agent-venv-install
+	@"$(AGENT_PYTHON)" -m pip install -e "$(VLLM_SR_SIM_DIR)[dev]"
+
+vllm-sr-sim-test: ## Run vLLM-SR-Sim tests
+vllm-sr-sim-test: vllm-sr-sim-install-cli
 	@$(LOG_TARGET)
-	@cd e2e/testing/vllm-sr-cli && RUN_INTEGRATION_TESTS=true python run_cli_tests.py --verbose --integration
+	@cd $(VLLM_SR_SIM_DIR) && PATH="$(AGENT_VENV)/bin:$$PATH" "$(AGENT_PYTHON)" -m pytest tests -v
+
+vllm-sr-sim-build: ## Build the vLLM-SR-Sim service image
+vllm-sr-sim-build:
+	@$(LOG_TARGET)
+	@$(CONTAINER_RUNTIME) build -t $(VLLM_SR_SIM_IMAGE) -f $(VLLM_SR_SIM_DOCKERFILE) .
+
+vllm-sr-sim-start: ## Start the vLLM-SR-Sim service container
+vllm-sr-sim-start: vllm-sr-sim-build
+	@$(LOG_TARGET)
+	@echo "Starting vLLM-SR-Sim service on http://localhost:$(VLLM_SR_SIM_PORT)"
+	@$(CONTAINER_RUNTIME) rm -f $(VLLM_SR_SIM_CONTAINER) 2>/dev/null || true
+	@$(CONTAINER_RUNTIME) run -d --name $(VLLM_SR_SIM_CONTAINER) -p $(VLLM_SR_SIM_PORT):8000 $(VLLM_SR_SIM_IMAGE)
+
+vllm-sr-test: ## Run CLI unit tests (fast, no Docker image required)
+vllm-sr-test: vllm-sr-install-cli
+	@$(LOG_TARGET)
+	@cd e2e/testing/vllm-sr-cli && PATH="$(AGENT_VENV)/bin:$$PATH" "$(AGENT_PYTHON)" run_cli_tests.py --verbose
+
+vllm-sr-test-integration: ## Run CLI unit + integration tests (requires local router + simulator images)
+vllm-sr-test-integration: vllm-sr-build vllm-sr-envoy-build vllm-sr-dashboard-build vllm-sr-sim-build vllm-sr-install-cli
+	@$(LOG_TARGET)
+	@cd e2e/testing/vllm-sr-cli && PATH="$(AGENT_VENV)/bin:$$PATH" CONTAINER_RUNTIME=$(CONTAINER_RUNTIME) VLLM_SR_IMAGE=$(VLLM_SR_IMAGE) VLLM_SR_ROUTER_IMAGE=$(VLLM_SR_ROUTER_IMAGE) VLLM_SR_ENVOY_IMAGE=$(VLLM_SR_ENVOY_IMAGE) VLLM_SR_DASHBOARD_IMAGE=$(VLLM_SR_DASHBOARD_IMAGE) VLLM_SR_SIM_IMAGE=$(VLLM_SR_SIM_IMAGE) RUN_INTEGRATION_TESTS=true "$(AGENT_PYTHON)" run_cli_tests.py --verbose --integration
+
+memory-test-integration: ## Run memory integration tests with local Milvus, llm-katan, and vllm-sr serve
+memory-test-integration: vllm-sr-build vllm-sr-envoy-build vllm-sr-dashboard-build vllm-sr-sim-build vllm-sr-install-cli docker-build-llm-katan
+	@$(LOG_TARGET)
+	@CONTAINER_RUNTIME=$(CONTAINER_RUNTIME) \
+	DOCKER_REGISTRY=$(DOCKER_REGISTRY) \
+	DOCKER_TAG=$(DOCKER_TAG) \
+	VLLM_SR_IMAGE=$(VLLM_SR_IMAGE) \
+	VLLM_SR_ROUTER_IMAGE=$(VLLM_SR_ROUTER_IMAGE) \
+	VLLM_SR_ENVOY_IMAGE=$(VLLM_SR_ENVOY_IMAGE) \
+	VLLM_SR_DASHBOARD_IMAGE=$(VLLM_SR_DASHBOARD_IMAGE) \
+	VLLM_SR_SIM_IMAGE=$(VLLM_SR_SIM_IMAGE) \
+	PATH="$(AGENT_VENV)/bin:$$PATH" \
+	bash e2e/testing/run_memory_integration.sh

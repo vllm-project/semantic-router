@@ -1,47 +1,141 @@
 package cache
 
 import (
+	"crypto/hmac"
+	"crypto/sha256"
 	"encoding/json"
 	"fmt"
+	"os"
+	"strings"
+	"sync"
+
+	"github.com/openai/openai-go"
 )
 
-// ChatMessage represents a message in the OpenAI chat format with role and content
-type ChatMessage struct {
-	Role    string `json:"role"`
-	Content string `json:"content"`
+// extractUserContent returns the text portion of a user message's content.
+// Handles both plain string and multimodal content array variants via the
+// official openai-go SDK union type.
+func extractUserContent(content openai.ChatCompletionUserMessageParamContentUnion) string {
+	if content.OfString.Value != "" {
+		return content.OfString.Value
+	}
+	var result string
+	for _, part := range content.OfArrayOfContentParts {
+		if part.OfText != nil {
+			result += part.OfText.Text
+		}
+	}
+	return result
 }
 
-// OpenAIRequest represents the structure of an OpenAI API request
-type OpenAIRequest struct {
-	Model       string        `json:"model"`
-	Messages    []ChatMessage `json:"messages"`
-	Stream      bool          `json:"stream,omitempty"`
-	Temperature float32       `json:"temperature,omitempty"`
-	MaxTokens   int           `json:"max_tokens,omitempty"`
-	Tools       []interface{} `json:"tools,omitempty"`
-	TopP        float32       `json:"top_p,omitempty"`
-}
-
-// ExtractQueryFromOpenAIRequest parses an OpenAI request and extracts the user query
+// ExtractQueryFromOpenAIRequest parses an OpenAI request using the official
+// openai-go SDK types and extracts the user query (last user message text)
+// along with the model name.
 func ExtractQueryFromOpenAIRequest(requestBody []byte) (string, string, error) {
-	var req OpenAIRequest
+	var req openai.ChatCompletionNewParams
 	if err := json.Unmarshal(requestBody, &req); err != nil {
 		return "", "", fmt.Errorf("invalid request body: %w", err)
 	}
 
-	// Find user messages in the conversation
 	var userMessages []string
 	for _, msg := range req.Messages {
-		if msg.Role == "user" {
-			userMessages = append(userMessages, msg.Content)
+		if msg.OfUser != nil {
+			text := extractUserContent(msg.OfUser.Content)
+			if text != "" {
+				userMessages = append(userMessages, text)
+			}
 		}
 	}
 
-	// Use the most recent user message as the query
 	query := ""
 	if len(userMessages) > 0 {
 		query = userMessages[len(userMessages)-1]
 	}
 
 	return req.Model, query, nil
+}
+
+// scopeNamespaceRepeat controls how many times the user namespace token is
+// repeated in the scoped prefix. Repeating the token amplifies its weight in
+// the embedding so that queries from different users land in distinct regions
+// of the vector space, even when the original question text is identical.
+const scopeNamespaceRepeat = 3
+
+// ScopeQueryToUser adds a deterministic user namespace to the cache query.
+// If userID is empty, the original query is returned unchanged for backward compatibility.
+func ScopeQueryToUser(query string, userID string) string {
+	normalizedUserID := strings.TrimSpace(userID)
+	if normalizedUserID == "" || query == "" {
+		return query
+	}
+
+	namespace := userScopeNamespace(normalizedUserID)
+	tokens := make([]string, scopeNamespaceRepeat)
+	for i := range tokens {
+		tokens[i] = namespace
+	}
+	// Single-line prefix so log/trace consumers never see raw newlines from user text.
+	return fmt.Sprintf("cache-scope %s %s", strings.Join(tokens, " "), query)
+}
+
+var (
+	userScopeSecretOnce   sync.Once
+	cachedUserScopeSecret string
+)
+
+func userScopeNamespace(userID string) string {
+	// Use a keyed construction (HMAC-SHA256) to avoid exposing a plain hash
+	// of the userID, which is vulnerable to offline guessing attacks when
+	// user IDs are predictable (e.g., emails, incremental IDs).
+	//
+	// The secret key is expected to be provided via environment variable
+	// USER_SCOPE_NAMESPACE_SECRET so that it is not hard-coded in source
+	// and can be managed per deployment.
+	userScopeSecretOnce.Do(func() {
+		cachedUserScopeSecret = os.Getenv("USER_SCOPE_NAMESPACE_SECRET")
+	})
+	secret := cachedUserScopeSecret
+	if secret != "" {
+		mac := hmac.New(sha256.New, []byte(secret))
+		_, _ = mac.Write([]byte(userID))
+		sum := mac.Sum(nil)
+		return fmt.Sprintf("%x", sum[:8])
+	}
+
+	// Fallback to the previous behavior if no secret is configured, to avoid
+	// breaking existing deployments. For production use, configuring a secret
+	// is strongly recommended.
+	digest := sha256.Sum256([]byte(userID))
+	return fmt.Sprintf("%x", digest[:8])
+}
+
+const defaultEmbeddingModel = "bert"
+
+// normalizeEmbeddingModel normalizes the embedding model name by trimming whitespace and converting to lowercase.
+// If the resulting model name is empty, it returns "bert" as the default embedding model.
+func normalizeEmbeddingModel(model string) string {
+	normalized := strings.ToLower(strings.TrimSpace(model))
+	if normalized == "" {
+		return defaultEmbeddingModel
+	}
+	return normalized
+}
+
+func semanticCacheEmbeddingDimension(configured int, embeddingModel string) int {
+	if configured > 0 {
+		return configured
+	}
+
+	switch normalizeEmbeddingModel(embeddingModel) {
+	case "qwen3":
+		return 1024
+	case "gemma":
+		return 768
+	case "mmbert":
+		return 768
+	case "multimodal":
+		return 384
+	default:
+		return 384
+	}
 }

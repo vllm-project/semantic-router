@@ -1,0 +1,142 @@
+% vLLM Semantic Router: Signal Driven Decision Routing for Mixture-of-Modality Models
+% Main document -- compile with: pdflatex main && bibtex main && pdflatex main && pdflatex main
+
+\documentclass{vllm}
+
+% ---------- template / layout ----------
+\usepackage[margin=1.2in]{geometry}
+\graphicspath{{../website/static/img/}}
+
+% ---------- packages ----------
+\usepackage{amsfonts}
+\usepackage{amsmath,amssymb,amsthm}
+\usepackage{mathtools}
+\usepackage{algorithm}
+\usepackage{algorithmic}
+\usepackage[noabbrev,nameinlink]{cleveref}
+\usepackage{enumitem}
+\usepackage{float}
+\usepackage{listings}
+\usepackage{tabularx}
+\usepackage{tikz}
+\usepackage{cite}
+\usetikzlibrary{shapes,shapes.geometric,arrows,arrows.meta,positioning,fit,calc,backgrounds,decorations.pathreplacing,matrix,shadows,patterns}
+
+% ---------- theorem environments ----------
+\theoremstyle{definition}
+\newtheorem{definition}{Definition}
+\theoremstyle{plain}
+\newtheorem{theorem}{Theorem}
+\newtheorem{proposition}{Proposition}
+
+% ---------- listing style ----------
+\lstset{
+  basicstyle=\ttfamily\small,
+  keywordstyle=\color{metablue}\bfseries,
+  commentstyle=\color{black!55},
+  stringstyle=\color{metafg},
+  breaklines=true,
+  frame=single,
+  numbers=left,
+  numberstyle=\tiny\color{black!45},
+  captionpos=b,
+  tabsize=2
+}
+
+% ---------- hyperref metadata ----------
+\hypersetup{
+  pdfauthor={vLLM Semantic Router Team},
+  pdftitle={vLLM Semantic Router: Signal Driven Decision Routing for Mixture-of-Modality Models}
+}
+
+% ---------- custom commands ----------
+\newcommand{\sysname}{vLLM Semantic Router}
+\newcommand{\mom}{MoM}
+\newcommand{\halugate}{HaluGate}
+\newcommand{\extproc}{ExtProc}
+\newcommand{\lora}{LoRA}
+\newcommand{\vsr}{\texttt{vllm-sr}}
+
+\setlength{\emergencystretch}{2em}
+
+\title{vLLM Semantic Router}
+\subtitle{Signal Driven Decision Routing for Mixture-of-Modality Models}
+
+\author{%
+Xunzhuo Liu, Huamin Chen, Samzong Lu, Yossi Ovadia, Guohong Wen, Hao Wu,\\
+Zhengda Tan, Jintao Zhang, Senan Zedan, Yehudit Kerido, Liav Weiss, Haichen Zhang,\\
+Bishen Yu, Asaad Balum, Noa Limoy, Abdallah Samara, Baofa Fan, Sanjeev Rampal,\\
+Brent Salisbury, Ryan Cook, Zhijie Wang, Qiping Pan, Rehan Khan, Avishek Goswami,\\
+Houston H.\ Zhang, Shuyi Wang, Ziang Tang, Fang Han, Zohaib Hassan, Jianqiao Zheng,\\
+Avinash Changrani%
+}
+
+\date{March 2026}
+\abstract{\input{sections/abstract}}
+
+% =====================================================================
+%  DOCUMENT
+% =====================================================================
+\begin{document}
+
+\maketitle
+
+% --- Introduction ---
+\input{sections/introduction}
+
+% --- System Architecture ---
+\input{sections/architecture}
+
+% --- Signal Extraction Engine ---
+\input{sections/signal_engine}
+
+% --- Decision Engine ---
+\input{sections/decision_engine}
+
+% --- Plugin Framework ---
+\input{sections/plugins}
+
+% --- Programmable Neural-Symbolic Configuration Language ---
+\input{sections/dsl_specification}
+
+% --- Safety: Jailbreak + PII ---
+\input{sections/safety}
+
+% --- HaluGate ---
+\input{sections/halugate}
+
+% --- Modular LoRA + MoM Family ---
+\input{sections/lora_mom}
+
+% --- Model Selection Algorithms ---
+\input{sections/model_selection}
+
+% --- ML Inference Bindings ---
+\input{sections/ml_inference}
+
+% --- ExtProc Pipeline ---
+\input{sections/extproc_pipeline}
+
+% --- Memory + RAG ---
+\input{sections/memory_rag}
+
+% --- Observability ---
+\input{sections/observability}
+
+% --- Deployment ---
+\input{sections/deployment}
+
+% --- Evaluation ---
+\input{sections/evaluation}
+
+% --- Related Work ---
+\input{sections/related_work}
+
+% --- Conclusion ---
+\input{sections/conclusion}
+
+% --- Bibliography ---
+\bibliographystyle{unsrt}
+\bibliography{references}
+
+\end{document}

@@ -1,0 +1,131 @@
+{{- if and .Values.dashboard.enabled (gt (int .Values.dashboard.replicaCount) 1) }}
+{{- fail "dashboard.replicaCount > 1 is not supported with the current SQLite auth/session store; use one dashboard replica until a shared auth/session store is configured" }}
+{{- end }}
+{{- if and .Values.dashboard.enabled .Values.dashboard.persistence.enabled }}
+{{- if not (has .Values.dashboard.persistence.accessMode (list "ReadWriteOnce" "ReadWriteOncePod")) }}
+{{- fail "dashboard.persistence.accessMode must be ReadWriteOnce or ReadWriteOncePod: the dashboard's SQLite auth/session store requires single-writer access. ReadWriteMany would allow concurrent writers and corrupt the database" }}
+{{- end }}
+{{- end }}
+{{- if .Values.dashboard.enabled }}
+{{- $psc := .Values.dashboard.podSecurityContext | default dict }}
+{{- if kindIs "map" $psc }}
+{{- if or (dig "runAsNonRoot" false $psc | toString | eq "true") (and (hasKey $psc "runAsUser") (ne (int (dig "runAsUser" 0 $psc)) 0)) }}
+{{- fail "dashboard.podSecurityContext must let the container start as root (UID 0): the dashboard image entrypoint starts as root to fix ownership of the mounted config file and then drops to the nonroot user (UID 65532) via gosu. Setting runAsNonRoot: true or runAsUser to a non-zero value prevents the root start and the container will fail; this pod is therefore incompatible with the PodSecurity 'restricted' profile. Use a custom image with a true non-root entrypoint if you require non-root start" }}
+{{- end }}
+{{- end }}
+{{- end }}
+{{- if .Values.dashboard.enabled }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "semantic-router.fullname" . }}-dashboard
+  namespace: {{ include "semantic-router.namespace" . }}
+  labels:
+    {{- include "semantic-router.labels" . | nindent 4 }}
+    app.kubernetes.io/component: dashboard
+spec:
+  replicas: {{ .Values.dashboard.replicaCount }}
+  # Recreate (not RollingUpdate): the SQLite auth/session store is single-writer,
+  # so the old pod must fully terminate and release the PVC before the new pod
+  # starts. RollingUpdate would briefly run two pods writing the same database.
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      {{- include "semantic-router.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: dashboard
+  template:
+    metadata:
+      labels:
+        {{- include "semantic-router.selectorLabels" . | nindent 8 }}
+        app.kubernetes.io/component: dashboard
+    spec:
+      securityContext:
+        {{- toYaml .Values.dashboard.podSecurityContext | nindent 8 }}
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      containers:
+      - name: dashboard
+        image: "{{ .Values.dashboard.image.repository }}:{{ .Values.dashboard.image.tag }}"
+        imagePullPolicy: {{ .Values.dashboard.image.pullPolicy }}
+        ports:
+        - containerPort: {{ .Values.dashboard.service.targetPort }}
+          name: http
+          protocol: TCP
+        env:
+        - name: TARGET_ROUTER_API_URL
+          value: "http://{{ include "semantic-router.fullname" . }}:{{ .Values.service.api.port }}"
+        - name: TARGET_ROUTER_METRICS_URL
+          value: "http://{{ include "semantic-router.fullname" . }}-metrics:{{ .Values.service.metrics.port }}/metrics"
+        {{- if .Values.dashboard.jwtSecret.existingSecret }}
+        - name: DASHBOARD_JWT_SECRET
+          valueFrom:
+            secretKeyRef:
+              name: {{ .Values.dashboard.jwtSecret.existingSecret }}
+              key: {{ .Values.dashboard.jwtSecret.existingSecretKey }}
+        {{- end }}
+        {{- if .Values.dashboard.readonly }}
+        - name: DASHBOARD_READONLY
+          value: "true"
+        {{- end }}
+        {{- if .Values.dashboard.allowOpenBootstrap }}
+        - name: DASHBOARD_ALLOW_OPEN_BOOTSTRAP
+          value: "true"
+        {{- end }}
+        {{- if .Values.dashboard.persistence.enabled }}
+        - name: DASHBOARD_AUTH_DB_PATH
+          value: "{{ .Values.dashboard.persistence.mountPath }}/auth.db"
+        - name: DASHBOARD_WORKFLOW_DB_PATH
+          value: "{{ .Values.dashboard.persistence.mountPath }}/workflow.sqlite"
+        {{- end }}
+        {{- if .Values.dependencies.observability.prometheus.enabled }}
+        - name: TARGET_PROMETHEUS_URL
+          value: "http://{{ .Release.Name }}-prometheus-server:80"
+        {{- end }}
+        {{- if .Values.dependencies.observability.grafana.enabled }}
+        - name: TARGET_GRAFANA_URL
+          value: "http://{{ .Release.Name }}-grafana:80"
+        {{- end }}
+        {{- if .Values.dependencies.observability.jaeger.enabled }}
+        - name: TARGET_JAEGER_URL
+          value: "http://{{ .Release.Name }}-jaeger-query:16686"
+        {{- end }}
+        volumeMounts:
+        - name: config-volume
+          mountPath: /app/config/config.yaml
+          subPath: config.yaml
+          readOnly: true
+        - name: config-volume
+          mountPath: /app/config/tools_db.json
+          subPath: tools_db.json
+          readOnly: true
+        {{- if .Values.dashboard.persistence.enabled }}
+        - name: dashboard-data
+          mountPath: {{ .Values.dashboard.persistence.mountPath }}
+        {{- end }}
+        livenessProbe:
+          httpGet:
+            path: /healthz
+            port: http
+          initialDelaySeconds: 10
+          periodSeconds: 30
+        readinessProbe:
+          httpGet:
+            path: /healthz
+            port: http
+          initialDelaySeconds: 5
+          periodSeconds: 10
+        resources:
+          {{- toYaml .Values.dashboard.resources | nindent 10 }}
+      volumes:
+      - name: config-volume
+        configMap:
+          name: {{ include "semantic-router.fullname" . }}-config
+      {{- if .Values.dashboard.persistence.enabled }}
+      - name: dashboard-data
+        persistentVolumeClaim:
+          claimName: {{ include "semantic-router.dashboardPvcName" . }}
+      {{- end }}
+{{- end }}

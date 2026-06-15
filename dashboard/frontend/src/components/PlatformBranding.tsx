@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useReadonly } from '../contexts/ReadonlyContext'
+import { isImagePreloaded, preloadImageSrc } from '../utils/platformAssets'
 import styles from './PlatformBranding.module.css'
 
 interface PlatformBrandingProps {
@@ -7,40 +8,20 @@ interface PlatformBrandingProps {
   className?: string
 }
 
-// Preload cache to track which images have been loaded
-const preloadedImages = new Set<string>()
-
-// Preload an image and cache it
-const preloadImage = (src: string): Promise<void> => {
-  if (preloadedImages.has(src)) {
-    return Promise.resolve()
-  }
-
-  return new Promise((resolve) => {
-    const img = new Image()
-    img.onload = () => {
-      preloadedImages.add(src)
-      resolve()
-    }
-    img.onerror = () => resolve() // Resolve anyway to not block
-    img.src = src
-  })
-}
-
 const PlatformBranding = ({ variant = 'default', className = '' }: PlatformBrandingProps) => {
   const { platform } = useReadonly()
   const [isImageLoaded, setIsImageLoaded] = useState(false)
 
   const isAmd = platform?.toLowerCase() === 'amd'
-  const imageSrc = '/amd.png'
+  const imageSrc = '/amd-logo.png'
 
   // Preload image when platform is AMD
   useEffect(() => {
     if (isAmd) {
-      if (preloadedImages.has(imageSrc)) {
+      if (isImagePreloaded(imageSrc)) {
         setIsImageLoaded(true)
       } else {
-        preloadImage(imageSrc).then(() => setIsImageLoaded(true))
+        preloadImageSrc(imageSrc).then(() => setIsImageLoaded(true))
       }
     }
   }, [isAmd])
@@ -62,12 +43,4 @@ const PlatformBranding = ({ variant = 'default', className = '' }: PlatformBrand
   )
 }
 
-// Export preload function for early loading
-export const preloadPlatformAssets = (platform?: string) => {
-  if (platform?.toLowerCase() === 'amd') {
-    preloadImage('/amd.png')
-  }
-}
-
 export default PlatformBranding
-

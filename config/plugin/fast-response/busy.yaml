@@ -1,0 +1,4 @@
+plugin:
+  type: fast_response
+  configuration:
+    message: The primary model is saturated, so a lightweight response was returned immediately.

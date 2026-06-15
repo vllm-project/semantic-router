@@ -8,6 +8,8 @@ on:
     branches: [main]
     paths:
       - 'src/vllm-sr/**'
+      - 'src/vllm-sr/Dockerfile*'
+      - 'tools/make/docker.mk'
       - 'e2e/testing/vllm-sr-cli/**'
       - '.github/workflows/integration-test-vllm-sr-cli.yml'
 
@@ -15,6 +17,8 @@ on:
     branches: [main]
     paths:
       - 'src/vllm-sr/**'
+      - 'src/vllm-sr/Dockerfile*'
+      - 'tools/make/docker.mk'
       - 'e2e/testing/vllm-sr-cli/**'
       - '.github/workflows/integration-test-vllm-sr-cli.yml'
 
@@ -35,6 +39,19 @@ jobs:
       #######################################
       - name: Check out the repo
         uses: actions/checkout@v4
+
+      - name: Free disk space
+        run: |
+          echo "=== Disk space before cleanup ==="
+          df -h
+          # Remove large unnecessary components to free up space
+          sudo rm -rf /usr/share/dotnet
+          sudo rm -rf /usr/local/lib/android
+          sudo rm -rf /opt/ghc
+          sudo rm -rf /opt/hostedtoolcache/CodeQL
+          sudo docker system prune -af || true
+          echo "=== Disk space after cleanup ==="
+          df -h
 
       - name: Set up Python
         uses: actions/setup-python@v5
@@ -60,12 +77,18 @@ jobs:
         run: |
           echo "=== Container Status ==="
           docker ps -a
-          echo "=== vllm-sr Container Logs ==="
+          echo "=== Router Logs ==="
+          docker logs vllm-sr-router-container 2>&1 | tail -200 || true
+          echo "=== Envoy Logs ==="
+          docker logs vllm-sr-envoy-container 2>&1 | tail -200 || true
+          echo "=== Dashboard Logs ==="
+          docker logs vllm-sr-dashboard-container 2>&1 | tail -200 || true
+          echo "=== Legacy Single-Container Logs ==="
           docker logs vllm-sr-container 2>&1 | tail -200 || true
 
       - name: Clean up
         if: always()
         run: |
-          docker stop vllm-sr-container 2>/dev/null || true
-          docker rm vllm-sr-container 2>/dev/null || true
+          docker stop vllm-sr-container vllm-sr-router-container vllm-sr-envoy-container vllm-sr-dashboard-container vllm-sr-sim-container vllm-sr-grafana vllm-sr-prometheus vllm-sr-jaeger 2>/dev/null || true
+          docker rm vllm-sr-container vllm-sr-router-container vllm-sr-envoy-container vllm-sr-dashboard-container vllm-sr-sim-container vllm-sr-grafana vllm-sr-prometheus vllm-sr-jaeger 2>/dev/null || true
           docker system prune -f || true

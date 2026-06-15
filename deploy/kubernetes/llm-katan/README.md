@@ -753,35 +753,33 @@ kubectl get svc -n llm-katan-system
 
 #### Step 2: Configure Semantic Router
 
-Update `config/config.yaml` to point to LLM Katan endpoints:
+Update `config/config.yaml` to point to the LLM Katan endpoints using the canonical v0.3 layout:
 
 ```yaml
 # config/config.yaml
 
-vllm_endpoints:
-  - name: "gpt35-katan"
-    address: "llm-katan-gpt35.llm-katan-system"  # Kubernetes DNS
-    port: 8000
-    weight: 1
+providers:
+  defaults:
+    default_model: "gpt-3.5-turbo"
+  models:
+    - name: "gpt-3.5-turbo"
+      backend_refs:
+        - name: "gpt35-katan"
+          endpoint: "llm-katan-gpt35.llm-katan-system:8000"
+    - name: "claude-3-haiku-20240307"
+      backend_refs:
+        - name: "claude-katan"
+          endpoint: "llm-katan-claude.llm-katan-system:8000"
 
-  - name: "claude-katan"
-    address: "llm-katan-claude.llm-katan-system"
-    port: 8000
-    weight: 1
-
-model_config:
-  "gpt-3.5-turbo":
-    preferred_endpoints: ["gpt35-katan"]
-  
-  "claude-3-haiku-20240307":
-    preferred_endpoints: ["claude-katan"]
-
-categories:
-  - name: coding
-    utterances:
-      - "write code"
-      - "debug"
-    model_scores:
+routing:
+  modelCards:
+    - name: "gpt-3.5-turbo"
+    - name: "claude-3-haiku-20240307"
+  signals:
+    domains:
+      - name: coding
+        description: "Programming and debugging requests"
+        mmlu_categories: ["computer science"]
       "gpt-3.5-turbo": 0.9
 ```
 

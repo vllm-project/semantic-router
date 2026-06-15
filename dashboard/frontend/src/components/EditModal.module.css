@@ -16,9 +16,9 @@
   background-color: var(--color-bg);
   border-radius: var(--radius-lg);
   box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
-  max-width: 600px;
-  width: 90%;
-  max-height: 90vh;
+  max-width: 720px;
+  width: min(92vw, 720px);
+  max-height: 94vh;
   display: flex;
   flex-direction: column;
   border: 1px solid var(--color-border);
@@ -243,4 +243,3 @@
   opacity: 0.5;
   cursor: not-allowed;
 }
-

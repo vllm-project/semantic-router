@@ -1,7 +1,3 @@
-# Example configuration for multiple KServe InferenceServices
-# This shows how to configure the semantic router to route between multiple models
-# based on query category and complexity
-
 apiVersion: v1
 kind: ConfigMap
 metadata:
@@ -11,257 +7,119 @@ metadata:
     component: config
 data:
   config.yaml: |
-    bert_model:
-      model_id: models/mom-embedding-light
-      threshold: 0.6
-      use_cpu: true
-
-    semantic_cache:
-      enabled: true
-      backend_type: "memory"
-      similarity_threshold: 0.85
-      max_entries: 5000
-      ttl_seconds: 7200
-      eviction_policy: "lru"
-      use_hnsw: true
-      hnsw_m: 16
-      hnsw_ef_construction: 200
-      embedding_model: "bert"
-
-    tools:
-      enabled: true
-      top_k: 5
-      similarity_threshold: 0.2
-      tools_db_path: "config/tools_db.json"
-      fallback_to_empty: true
-
-    prompt_guard:
-      enabled: true
-      use_modernbert: true
-      model_id: "models/mom-jailbreak-classifier"
-      threshold: 0.7
-      use_cpu: true
-      jailbreak_mapping_path: "models/mom-jailbreak-classifier/jailbreak_type_mapping.json"
-
-    # Multiple vLLM Endpoints - KServe InferenceServices
-    # Example: Small model for simple queries, large model for complex ones
-    # Replace <namespace> with your actual namespace
-    vllm_endpoints:
-      # Small, fast model (e.g., Granite 3.2 8B)
-      - name: "granite32-8b-endpoint"
-        address: "granite32-8b-predictor.<namespace>.svc.cluster.local"
-        port: 80
-        weight: 1
-
-      # Larger, more capable model (e.g., Granite 3.2 78B or Llama 3.1 70B)
-      # - name: "granite32-78b-endpoint"
-      #   address: "granite32-78b-predictor.<namespace>.svc.cluster.local"
-      #   port: 80
-      #   weight: 1
-
-      # Specialized coding model (e.g., CodeLlama or Granite Code)
-      # - name: "granite-code-endpoint"
-      #   address: "granite-code-predictor.<namespace>.svc.cluster.local"
-      #   port: 80
-      #   weight: 1
-
-    model_config:
-      # Small model - good for general queries, fast
-      "granite32-8b":
-        reasoning_family: "qwen3"
-        preferred_endpoints: ["granite32-8b-endpoint"]
-          allow_by_default: true
-          pii_types_allowed: ["EMAIL_ADDRESS"]
-
-      # Large model - better for complex reasoning
-      # "granite32-78b":
-      #   reasoning_family: "qwen3"
-      #   preferred_endpoints: ["granite32-78b-endpoint"]
-      #   pii_policy:
-      #     allow_by_default: true
-      #     pii_types_allowed: ["EMAIL_ADDRESS"]
-
-      # Code-specialized model
-      # "granite-code":
-      #   reasoning_family: "qwen3"
-      #   preferred_endpoints: ["granite-code-endpoint"]
-      #   pii_policy:
-      #     allow_by_default: true
-
-    classifier:
-      category_model:
-        model_id: "models/mom-domain-classifier"
-        use_modernbert: true
-        threshold: 0.6
-        use_cpu: true
-        category_mapping_path: "models/mom-domain-classifier/category_mapping.json"
-      pii_model:
-        model_id: "models/pii_classifier_modernbert-base_presidio_token_model"
-        use_modernbert: true
-        threshold: 0.7
-        use_cpu: true
-        pii_mapping_path: "models/mom-pii-classifier/pii_type_mapping.json"
-
-    # Categories define domain metadata only (no routing logic)
-    categories:
-      - name: business
-        description: "Business and management related queries"
-        mmlu_categories: ["business"]
-      - name: law
-        description: "Legal questions and law-related topics"
-        mmlu_categories: ["law"]
-      - name: psychology
-        description: "Psychology and mental health topics"
-        mmlu_categories: ["psychology"]
-      - name: biology
-        description: "Biology and life sciences questions"
-        mmlu_categories: ["biology"]
-      - name: chemistry
-        description: "Chemistry and chemical sciences questions"
-        mmlu_categories: ["chemistry"]
-      - name: history
-        description: "Historical questions and cultural topics"
-        mmlu_categories: ["history"]
-      - name: other
-        description: "General knowledge and miscellaneous topics"
-        mmlu_categories: ["other"]
-      - name: health
-        description: "Health and medical information queries"
-        mmlu_categories: ["health"]
-      - name: economics
-        description: "Economics and financial topics"
-        mmlu_categories: ["economics"]
-      - name: math
-        description: "Mathematics and quantitative reasoning"
-        mmlu_categories: ["math"]
-      - name: physics
-        description: "Physics and physical sciences"
-        mmlu_categories: ["physics"]
-      - name: computer_science
-        description: "Computer science and programming"
-        mmlu_categories: ["computer_science"]
-      - name: philosophy
-        description: "Philosophy and ethical questions"
-        mmlu_categories: ["philosophy"]
-      - name: engineering
-        description: "Engineering and technical problem-solving"
-        mmlu_categories: ["engineering"]
-
-    strategy: "priority"
-
-    decisions:
-      - name: "business_decision"
-        description: "Business and management related queries"
-        priority: 100
-        rules:
-          operator: "AND"
-          conditions:
-            - type: "domain"
-              name: "business"
-        modelRefs:
-          - model: "granite32-8b"
-            use_reasoning: false
-        plugins:
-          - type: "system_prompt"
-            configuration:
-              system_prompt: "You are a senior business consultant and strategic advisor."
-          - type: "pii"
-            configuration:
-              enabled: true
-              pii_types_allowed: []
-
-      - name: "math_decision"
-        description: "Mathematics and quantitative reasoning"
-        priority: 100
-        rules:
-          operator: "AND"
-          conditions:
-            - type: "domain"
-              name: "math"
-        modelRefs:
-          - model: "granite32-8b"
-            use_reasoning: true
-        plugins:
-          - type: "system_prompt"
-            configuration:
-              system_prompt: "You are a mathematics expert."
-          - type: "pii"
-            configuration:
-              enabled: true
-              pii_types_allowed: []
-
-      - name: "general_decision"
-        description: "General knowledge and miscellaneous topics"
-        priority: 50
-        rules:
-          operator: "AND"
-          conditions:
-            - type: "domain"
-              name: "other"
-        modelRefs:
-          - model: "granite32-8b"
-            use_reasoning: false
-        plugins:
-          - type: "system_prompt"
-            configuration:
-              system_prompt: "You are a helpful assistant."
-          - type: "semantic-cache"
-            configuration:
-              enabled: true
-              similarity_threshold: 0.75
-          - type: "pii"
-            configuration:
-              enabled: true
-              pii_types_allowed: []
-
-    default_model: granite32-8b
-
-    reasoning_families:
-      deepseek:
-        type: "chat_template_kwargs"
-        parameter: "thinking"
-      qwen3:
-        type: "chat_template_kwargs"
-        parameter: "enable_thinking"
-      gpt-oss:
-        type: "reasoning_effort"
-        parameter: "reasoning_effort"
-      gpt:
-        type: "reasoning_effort"
-        parameter: "reasoning_effort"
-
-    default_reasoning_effort: high
-
-    api:
-      batch_classification:
-        max_batch_size: 100
-        concurrency_threshold: 5
-        max_concurrency: 8
-        metrics:
+    version: v0.3
+    providers:
+      defaults:
+        default_model: granite32-8b
+        reasoning_families:
+          qwen3:
+            type: chat_template_kwargs
+            parameter: enable_thinking
+        default_reasoning_effort: medium
+      models:
+        - name: granite32-8b
+          reasoning_family: qwen3
+          provider_model_id: granite32-8b
+          backend_refs:
+            - name: granite32-8b-endpoint
+              endpoint: granite32-8b-predictor.<namespace>.svc.cluster.local:80
+              weight: 1
+        - name: granite32-78b
+          reasoning_family: qwen3
+          provider_model_id: granite32-78b
+          backend_refs:
+            - name: granite32-78b-endpoint
+              endpoint: granite32-78b-predictor.<namespace>.svc.cluster.local:80
+              weight: 1
+    routing:
+      modelCards:
+        - name: granite32-8b
+          param_size: 8B
+          capabilities:
+            - chat
+            - reasoning
+        - name: granite32-78b
+          param_size: 78B
+          capabilities:
+            - chat
+            - reasoning
+            - long-context
+      signals:
+        domains:
+          - name: business
+            description: Business and management related queries
+            mmlu_categories:
+              - business
+          - name: math
+            description: Mathematics and quantitative reasoning
+            mmlu_categories:
+              - math
+          - name: other
+            description: General knowledge and miscellaneous topics
+            mmlu_categories:
+              - other
+        complexity:
+          - name: needs_reasoning
+            threshold: 0.7
+            description: Escalate difficult or multi-step prompts.
+            hard:
+              candidates:
+                - solve this step by step
+                - analyze the tradeoffs
+            easy:
+              candidates:
+                - quick summary
+                - answer briefly
+      decisions:
+        - name: business_default
+          description: Business traffic stays on the fast Granite tier.
+          priority: 100
+          rules:
+            operator: AND
+            conditions:
+              - type: domain
+                name: business
+          modelRefs:
+            - model: granite32-8b
+              use_reasoning: false
+        - name: math_escalation
+          description: Math and other hard requests escalate to the larger model.
+          priority: 110
+          rules:
+            operator: OR
+            conditions:
+              - type: domain
+                name: math
+              - type: complexity
+                name: needs_reasoning:hard
+          modelRefs:
+            - model: granite32-78b
+              use_reasoning: true
+        - name: general_fallback
+          description: Fallback route for general prompts.
+          priority: 10
+          rules:
+            operator: AND
+            conditions:
+              - type: domain
+                name: other
+          modelRefs:
+            - model: granite32-8b
+              use_reasoning: false
+    global:
+      router:
+        strategy: priority
+      stores:
+        semantic_cache:
           enabled: true
-          detailed_goroutine_tracking: true
-          high_resolution_timing: false
-          sample_rate: 1.0
-          duration_buckets: [0.001, 0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1, 2.5, 5, 10, 30]
-          size_buckets: [1, 2, 5, 10, 20, 50, 100, 200]
-
-    embedding_models:
-      qwen3_model_path: "models/mom-embedding-pro"
-      gemma_model_path: "models/mom-embedding-flash"
-      use_cpu: true
-
-    observability:
-      tracing:
-        enabled: false
-        provider: "opentelemetry"
-        exporter:
-          type: "stdout"
-          endpoint: "localhost:4317"
-          insecure: true
-        sampling:
-          type: "always_on"
-          rate: 1.0
-        resource:
-          service_name: "vllm-semantic-router"
-          service_version: "v0.1.0"
-          deployment_environment: "production"
+          backend_type: memory
+          similarity_threshold: 0.85
+          max_entries: 5000
+          ttl_seconds: 7200
+      integrations:
+        tools:
+          enabled: true
+          top_k: 5
+          similarity_threshold: 0.2
+          tools_db_path: config/tools_db.json
+          fallback_to_empty: true

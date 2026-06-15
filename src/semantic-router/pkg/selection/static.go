@@ -82,7 +82,9 @@ func (s *StaticSelector) InitializeFromConfig(categories []config.Category) {
 		}
 	}
 
-	logging.Infof("[StaticSelector] Initialized scores for %d categories", len(s.categoryScores))
+	logging.ComponentEvent("selection", "static_selector_initialized", map[string]interface{}{
+		"category_count": len(s.categoryScores),
+	})
 }
 
 // SetCategoryScore sets a static score for a model in a category
@@ -98,8 +100,8 @@ func (s *StaticSelector) SetCategoryScore(category, model string, score float64)
 
 // Select chooses the best model based on static configuration scores
 func (s *StaticSelector) Select(ctx context.Context, selCtx *SelectionContext) (*SelectionResult, error) {
-	if len(selCtx.CandidateModels) == 0 {
-		return nil, fmt.Errorf("no candidate models provided")
+	if err := ValidateSelectionContext(selCtx); err != nil {
+		return nil, err
 	}
 
 	allScores := make(map[string]float64)

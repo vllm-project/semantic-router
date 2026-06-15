@@ -175,4 +175,4 @@ curl -X POST http://localhost:8801/v1/chat/completions \
 
 ## 参考
 
-完整配置请参见 [keyword.yaml](https://github.com/vllm-project/semantic-router/blob/main/config/intelligent-routing/in-tree/keyword.yaml)。
+请直接使用本页代码片段作为 v0.1 参考配置；主分支已经不再保留旧的完整示例文件。

@@ -92,8 +92,7 @@ decisions:
 ```yaml
 plugins:
   - type: "semantic-cache"    # 首先检查缓存
-  - type: "jailbreak"         # 检测对抗性 prompt
-  - type: "pii"               # 过滤敏感数据
+  - type: "response_jailbreak" # 响应侧风险筛查
   - type: "system_prompt"     # 添加上下文
   - type: "hallucination"     # 验证事实
 ```

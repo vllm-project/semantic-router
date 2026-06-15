@@ -6,12 +6,14 @@ import (
 	"os"
 	"runtime"
 	"time"
+
+	"github.com/vllm-project/semantic-router/perf/pkg/profiler"
 )
 
 // Runner orchestrates benchmark execution and profiling
 type Runner struct {
 	config    *Config
-	profiler  *Profiler
+	profiler  *profiler.Profiler
 	collector *MetricsCollector
 }
 
@@ -22,12 +24,12 @@ func NewRunner(configPath string) (*Runner, error) {
 		return nil, fmt.Errorf("failed to load config: %w", err)
 	}
 
-	profiler := NewProfiler(config.Profiling.OutputDir)
+	prof := profiler.New(config.Profiling.OutputDir)
 	collector := NewMetricsCollector()
 
 	return &Runner{
 		config:    config,
-		profiler:  profiler,
+		profiler:  prof,
 		collector: collector,
 	}, nil
 }
@@ -109,19 +111,6 @@ type SuiteResult struct {
 	TestCount int
 	Passed    int
 	Failed    int
-}
-
-// Profiler handles pprof profiling
-type Profiler struct {
-	outputDir string
-	cpuFile   *os.File
-}
-
-// NewProfiler creates a new profiler
-func NewProfiler(outputDir string) *Profiler {
-	return &Profiler{
-		outputDir: outputDir,
-	}
 }
 
 // MetricsCollector collects runtime metrics

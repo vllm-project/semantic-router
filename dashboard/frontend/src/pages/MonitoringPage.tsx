@@ -3,6 +3,7 @@ import styles from './MonitoringPage.module.css'
 import ServiceNotConfigured, {
   ServiceConfig,
 } from '../components/ServiceNotConfigured'
+import { withAuthQuery } from '../utils/authFetch'
 
 // Grafana service configuration
 const GRAFANA_SERVICE: ServiceConfig = {
@@ -80,7 +81,7 @@ const MonitoringPage: React.FC = () => {
     // This is the cleanest approach and avoids redirect loops
     const url = `/embedded/grafana/goto/llm-router-metrics?orgId=1&theme=${theme}&refresh=30s`
     console.log('Grafana URL:', url)
-    return url
+    return withAuthQuery(url)
   }
 
   const handleIframeLoad = () => {

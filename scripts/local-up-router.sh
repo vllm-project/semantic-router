@@ -19,7 +19,7 @@ API_HOST_IP=${API_HOST_IP:-"127.0.0.1"} # Used for all components
 # TODO: generate the envoy config dynamically based on 
 # the ROUTER_API_PORT and ENVOY_PROXY_PORT values
 ENVOY_PROXY_PORT=${ENVOY_PROXY_PORT:-"8801"}
-ENVOY_CONFIG=${ENVOY_CONFIG:-"config/envoy.yaml"}
+ENVOY_CONFIG=${ENVOY_CONFIG:-"deploy/local/envoy.yaml"}
 ENVOY_VERSION=${ENVOY_VERSION:-"1.35.4"}
 
 # Router settings

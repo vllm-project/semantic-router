@@ -62,18 +62,9 @@ spec:
           use_reasoning: true
           reasoning_effort: "high"
       plugins:
-        - type: "pii"
-          configuration:
-            enabled: true
-            threshold: 0.85
-            pii_types_allowed: ["CREDIT_CARD", "BANK_ACCOUNT", "SSN"]
         - type: "system_prompt"
           configuration:
             system_prompt: "You are a financial information assistant. Provide general financial education but remind users this is not professional financial advice."
-        - type: "jailbreak"
-          configuration:
-            enabled: true
-            threshold: 0.85
         - type: "semantic-cache"
           configuration:
             enabled: true

@@ -1,0 +1,62 @@
+version: v0.3
+providers:
+  defaults:
+    default_model: "Qwen/Qwen-Image"
+  models:
+    - name: "Qwen/Qwen-Image"
+      backend_refs:
+        - name: vllm-omni
+          endpoint: 127.0.0.1:8001
+          weight: 1
+routing:
+  modelCards:
+    - name: "Qwen/Qwen-Image"
+      modality: diffusion
+      capabilities: [image_generation]
+  signals:
+    modality:
+      - name: DIFFUSION
+        description: Pure image generation requests.
+  decisions:
+    - name: image_only
+      description: Route image-generation prompts into the image backend.
+      priority: 100
+      rules:
+        operator: AND
+        conditions:
+          - type: modality
+            name: DIFFUSION
+      modelRefs:
+        - model: "Qwen/Qwen-Image"
+          use_reasoning: false
+      plugins:
+        - type: image_gen
+          configuration:
+            enabled: true
+            backend: vllm_omni
+            backend_config:
+              base_url: "http://localhost:8001"
+              model: "Qwen/Qwen-Image"
+              num_inference_steps: 4
+              cfg_scale: 0.0
+            default_width: 1024
+            default_height: 1024
+            timeout_seconds: 120
+global:
+  stores:
+    semantic_cache:
+      enabled: false
+      embedding_model: mmbert
+    memory:
+      embedding_model: mmbert
+    vector_store:
+      embedding_model: mmbert
+  services:
+    response_api:
+      enabled: true
+      store_backend: memory
+      ttl_seconds: 3600
+      max_responses: 100
+  integrations:
+    tools:
+      enabled: false

@@ -13,17 +13,18 @@ func TestRetrieveFromOpenAI_DirectSearch(t *testing.T) {
 	// For now, we test the configuration parsing and workflow mode selection
 
 	ragConfig := &config.RAGPluginConfig{
-		BackendConfig: &config.OpenAIRAGConfig{
+		Backend: "openai",
+		BackendConfig: config.MustStructuredPayload(&config.OpenAIRAGConfig{
 			VectorStoreID: "vs_test123",
 			APIKey:        "test-key",
 			WorkflowMode:  "direct_search",
 			MaxNumResults: intPtr(10),
-		},
+		}),
 	}
 
-	openaiConfig, ok := ragConfig.BackendConfig.(*config.OpenAIRAGConfig)
-	if !ok {
-		t.Fatalf("Failed to cast BackendConfig to OpenAIRAGConfig")
+	openaiConfig, err := ragConfig.OpenAIBackendConfig()
+	if err != nil {
+		t.Fatalf("Failed to decode BackendConfig: %v", err)
 	}
 
 	if openaiConfig.VectorStoreID != "vs_test123" {
@@ -39,17 +40,18 @@ func TestRetrieveFromOpenAI_DirectSearch(t *testing.T) {
 
 func TestRetrieveFromOpenAI_ToolBased(t *testing.T) {
 	ragConfig := &config.RAGPluginConfig{
-		BackendConfig: &config.OpenAIRAGConfig{
+		Backend: "openai",
+		BackendConfig: config.MustStructuredPayload(&config.OpenAIRAGConfig{
 			VectorStoreID: "vs_test123",
 			APIKey:        "test-key",
 			WorkflowMode:  "tool_based",
 			FileIDs:       []string{"file-1", "file-2"},
-		},
+		}),
 	}
 
-	openaiConfig, ok := ragConfig.BackendConfig.(*config.OpenAIRAGConfig)
-	if !ok {
-		t.Fatalf("Failed to cast BackendConfig to OpenAIRAGConfig")
+	openaiConfig, err := ragConfig.OpenAIBackendConfig()
+	if err != nil {
+		t.Fatalf("Failed to decode BackendConfig: %v", err)
 	}
 
 	if openaiConfig.WorkflowMode != "tool_based" {

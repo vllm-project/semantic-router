@@ -1,0 +1,36 @@
+# GMTRouter Training Configuration
+# Reference: arXiv:2511.08590
+
+# Graph configuration
+hidden_dim: 256
+num_layers: 3
+num_heads: 4
+dropout: 0.1
+
+# Node embedding dimensions
+user_embed_dim: 64
+llm_embed_dim: 64
+query_embed_dim: 256
+response_embed_dim: 256
+
+# Training configuration
+learning_rate: 1.0e-4
+num_epochs: 50
+batch_size: 32
+weight_decay: 1.0e-5
+
+# Few-shot personalization
+# Number of interactions needed to adapt to new user
+num_support_interactions: 5
+
+# Output configuration
+output_dir: "./checkpoints/gmtrouter"
+save_steps: 100
+eval_steps: 50
+
+# Data configuration
+train_data_path: "./data/train_interactions.json"
+eval_data_path: "./data/eval_interactions.json"
+
+# Hardware
+device: "cuda"

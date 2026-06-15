@@ -1,0 +1,311 @@
+/*
+Copyright 2025 vLLM Semantic Router.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
+
+package config
+
+import "fmt"
+
+// VectorStoreConfig holds configuration for the vector store feature.
+type VectorStoreConfig struct {
+	// Enabled controls whether vector store functionality is active.
+	Enabled bool `json:"enabled" yaml:"enabled"`
+
+	// BackendType selects the storage backend: "memory", "milvus", "llama_stack", or "valkey".
+	BackendType string `json:"backend_type" yaml:"backend_type"`
+
+	// FileStorageDir is the base directory for uploaded file storage.
+	// Default: "/var/lib/vsr/data"
+	FileStorageDir string `json:"file_storage_dir,omitempty" yaml:"file_storage_dir,omitempty"`
+
+	// MaxFileSizeMB limits the maximum file upload size in megabytes.
+	// Default: 50
+	MaxFileSizeMB int `json:"max_file_size_mb,omitempty" yaml:"max_file_size_mb,omitempty"`
+
+	// EmbeddingModel specifies the model for document embeddings.
+	// Options: "bert" (default), "qwen3", "gemma", "mmbert", "multimodal"
+	EmbeddingModel string `json:"embedding_model,omitempty" yaml:"embedding_model,omitempty"`
+
+	// EmbeddingDimension is the dimensionality of the embedding vectors.
+	// Default: 768
+	EmbeddingDimension int `json:"embedding_dimension,omitempty" yaml:"embedding_dimension,omitempty"`
+
+	// IngestionWorkers is the number of concurrent ingestion pipeline workers.
+	// Default: 2
+	IngestionWorkers int `json:"ingestion_workers,omitempty" yaml:"ingestion_workers,omitempty"`
+
+	// SupportedFormats lists the allowed file extensions for upload.
+	// Default: [".txt", ".md", ".json", ".csv", ".html"]
+	SupportedFormats []string `json:"supported_formats,omitempty" yaml:"supported_formats,omitempty"`
+
+	// Milvus holds Milvus-specific configuration (reuses existing MilvusConfig).
+	Milvus *MilvusConfig `json:"milvus,omitempty" yaml:"milvus,omitempty"`
+
+	// Memory holds in-memory backend configuration.
+	Memory *VectorStoreMemoryConfig `json:"memory,omitempty" yaml:"memory,omitempty"`
+
+	// LlamaStack holds Llama Stack backend configuration.
+	// When backend_type is "llama_stack", vSR delegates vector storage and
+	// embedding to a locally-running Llama Stack instance via its REST API.
+	// Llama Stack handles embedding internally, so vSR's CandleEmbedder is
+	// not used for insert/search — only Llama Stack's configured model is used.
+	LlamaStack *LlamaStackVectorStoreConfig `json:"llama_stack,omitempty" yaml:"llama_stack,omitempty"`
+
+	// Valkey holds Valkey vector store backend configuration.
+	// When backend_type is "valkey", vSR uses Valkey with the valkey-search
+	// module for vector storage via the valkey-glide Go client.
+	Valkey *ValkeyVectorStoreConfig `json:"valkey,omitempty" yaml:"valkey,omitempty"`
+
+	// Qdrant holds Qdrant vector store backend configuration.
+	// When backend_type is "qdrant", vSR uses Qdrant via its gRPC client.
+	Qdrant *QdrantVectorStoreConfig `json:"qdrant,omitempty" yaml:"qdrant,omitempty"`
+
+	// MetadataStore selects the backend for persisting vector store and file
+	// metadata across restarts: "memory" (default, ephemeral) or "postgres".
+	MetadataStore string `json:"metadata_store,omitempty" yaml:"metadata_store,omitempty"`
+
+	// MetadataPostgres holds Postgres connection parameters for the metadata
+	// registry when metadata_store is "postgres".
+	MetadataPostgres *VectorStoreMetadataPostgresConfig `json:"metadata_postgres,omitempty" yaml:"metadata_postgres,omitempty"`
+}
+
+// VectorStoreMetadataPostgresConfig holds connection parameters for the
+// Postgres-backed vector store metadata registry.
+type VectorStoreMetadataPostgresConfig struct {
+	Host            string `json:"host" yaml:"host"`
+	Port            int    `json:"port" yaml:"port"`
+	Database        string `json:"database" yaml:"database"`
+	User            string `json:"user" yaml:"user"`
+	Password        string `json:"password" yaml:"password"`
+	SSLMode         string `json:"ssl_mode,omitempty" yaml:"ssl_mode,omitempty"`
+	MaxOpenConns    int    `json:"max_open_conns,omitempty" yaml:"max_open_conns,omitempty"`
+	MaxIdleConns    int    `json:"max_idle_conns,omitempty" yaml:"max_idle_conns,omitempty"`
+	ConnMaxLifetime int    `json:"conn_max_lifetime,omitempty" yaml:"conn_max_lifetime,omitempty"`
+	TableName       string `json:"table_name,omitempty" yaml:"table_name,omitempty"`
+}
+
+// VectorStoreMemoryConfig holds configuration for the in-memory backend.
+type VectorStoreMemoryConfig struct {
+	// MaxEntriesPerStore limits entries per vector store collection.
+	// Default: 100000
+	MaxEntriesPerStore int `json:"max_entries_per_store,omitempty" yaml:"max_entries_per_store,omitempty"`
+}
+
+// LlamaStackVectorStoreConfig holds configuration for the Llama Stack backend.
+type LlamaStackVectorStoreConfig struct {
+	// Endpoint is the base URL of the Llama Stack server (e.g. "http://localhost:8321").
+	Endpoint string `json:"endpoint" yaml:"endpoint"`
+
+	// AuthToken is an optional bearer token for Llama Stack authentication.
+	AuthToken string `json:"auth_token,omitempty" yaml:"auth_token,omitempty"`
+
+	// EmbeddingModel is the embedding model ID registered in Llama Stack
+	// (e.g. "all-MiniLM-L6-v2"). Llama Stack uses this to embed chunks and queries.
+	// If empty, Llama Stack uses its configured default embedding model.
+	EmbeddingModel string `json:"embedding_model,omitempty" yaml:"embedding_model,omitempty"`
+
+	// RequestTimeoutSeconds is the HTTP request timeout in seconds. Default: 30.
+	RequestTimeoutSeconds int `json:"request_timeout_seconds,omitempty" yaml:"request_timeout_seconds,omitempty"`
+
+	// SearchType controls the search strategy used by Llama Stack.
+	// Options: "vector" (default, semantic only) or "hybrid" (vector + keyword
+	// with Reciprocal Rank Fusion). Hybrid requires the Milvus vector_io provider.
+	SearchType string `json:"search_type,omitempty" yaml:"search_type,omitempty"`
+}
+
+// ValkeyVectorStoreConfig holds configuration for the Valkey vector store backend.
+// This is the dedicated configuration struct used by the vector_store.valkey config block.
+type ValkeyVectorStoreConfig struct {
+	// Host is the Valkey server hostname (default "localhost").
+	Host string `json:"host" yaml:"host"`
+
+	// Port is the Valkey server port (default 6379).
+	Port int `json:"port" yaml:"port"`
+
+	// Database number (default 0).
+	Database int `json:"database" yaml:"database"`
+
+	// Password for Valkey authentication (optional).
+	Password string `json:"password,omitempty" yaml:"password,omitempty"`
+
+	// ConnectTimeout in seconds (default 10).
+	ConnectTimeout int `json:"connect_timeout" yaml:"connect_timeout"`
+
+	// CollectionPrefix is the prefix for hash keys and index names (default "vsr_vs_").
+	CollectionPrefix string `json:"collection_prefix" yaml:"collection_prefix"`
+
+	// MetricType is the distance metric: "COSINE", "L2", or "IP" (default "COSINE").
+	MetricType string `json:"metric_type" yaml:"metric_type"`
+
+	// IndexM is the HNSW M parameter (default 16).
+	IndexM int `json:"index_m" yaml:"index_m"`
+
+	// IndexEfConstruction is the HNSW efConstruction parameter (default 200).
+	IndexEfConstruction int `json:"index_ef_construction" yaml:"index_ef_construction"`
+}
+
+// QdrantVectorStoreConfig holds configuration for the Qdrant vector store backend.
+type QdrantVectorStoreConfig struct {
+	// Host is the Qdrant server hostname (default "localhost").
+	Host string `json:"host" yaml:"host"`
+
+	// Port is the Qdrant gRPC port (default 6334).
+	Port int `json:"port,omitempty" yaml:"port,omitempty"`
+
+	// APIKey is an optional API key for Qdrant Cloud or secured deployments.
+	APIKey string `json:"api_key,omitempty" yaml:"api_key,omitempty"`
+
+	// UseTLS enables TLS for the gRPC connection.
+	UseTLS bool `json:"use_tls,omitempty" yaml:"use_tls,omitempty"`
+
+	// ConnectTimeout in seconds (default 10).
+	ConnectTimeout int `json:"connect_timeout,omitempty" yaml:"connect_timeout,omitempty"`
+
+	// CollectionPrefix is prepended to vector store IDs to form collection names (default "vsr_vs_").
+	CollectionPrefix string `json:"collection_prefix,omitempty" yaml:"collection_prefix,omitempty"`
+}
+
+// Validate checks the vector store configuration for errors.
+func (c *VectorStoreConfig) Validate() error {
+	if !c.Enabled {
+		return nil
+	}
+	if err := validateVectorStoreBackendType(c.BackendType); err != nil {
+		return err
+	}
+	if err := validateVectorStoreMetadataStore(c); err != nil {
+		return err
+	}
+	return validateVectorStoreBackendConfig(c)
+}
+
+func validateVectorStoreBackendType(backendType string) error {
+	switch backendType {
+	case "memory", "milvus", "llama_stack", "valkey", "qdrant":
+		return nil
+	case "":
+		return fmt.Errorf("vector_store.backend_type is required when enabled")
+	default:
+		return fmt.Errorf(
+			"vector_store.backend_type must be 'memory', 'milvus', 'llama_stack', 'valkey', or 'qdrant', got '%s'",
+			backendType,
+		)
+	}
+}
+
+func validateVectorStoreBackendConfig(c *VectorStoreConfig) error {
+	switch c.BackendType {
+	case "milvus":
+		return validateMilvusVectorStoreConfig(c)
+	case "valkey":
+		return validateValkeyVectorStoreConfig(c)
+	case "llama_stack":
+		return validateLlamaStackVectorStoreConfig(c)
+	case "qdrant":
+		return validateQdrantVectorStoreConfig(c)
+	default:
+		return nil
+	}
+}
+
+func validateQdrantVectorStoreConfig(c *VectorStoreConfig) error {
+	if c.Qdrant == nil {
+		return fmt.Errorf("vector_store.qdrant configuration is required when backend_type is 'qdrant'")
+	}
+	if c.Qdrant.Host == "" {
+		return fmt.Errorf("vector_store.qdrant.host is required")
+	}
+	return nil
+}
+
+func validateMilvusVectorStoreConfig(c *VectorStoreConfig) error {
+	if c.Milvus == nil {
+		return fmt.Errorf("vector_store.milvus configuration is required when backend_type is 'milvus'")
+	}
+	return nil
+}
+
+func validateValkeyVectorStoreConfig(c *VectorStoreConfig) error {
+	if c.Valkey == nil {
+		return fmt.Errorf("vector_store.valkey configuration is required when backend_type is 'valkey'")
+	}
+	if c.Valkey.Host == "" {
+		return fmt.Errorf("vector_store.valkey.host is required")
+	}
+	return nil
+}
+
+func validateLlamaStackVectorStoreConfig(c *VectorStoreConfig) error {
+	if c.LlamaStack == nil {
+		return fmt.Errorf("vector_store.llama_stack configuration is required when backend_type is 'llama_stack'")
+	}
+	if c.LlamaStack.Endpoint == "" {
+		return fmt.Errorf("vector_store.llama_stack.endpoint is required")
+	}
+	return validateLlamaStackVectorStoreSearchType(c.LlamaStack.SearchType)
+}
+
+func validateLlamaStackVectorStoreSearchType(searchType string) error {
+	if searchType == "" || searchType == "vector" || searchType == "hybrid" {
+		return nil
+	}
+	return fmt.Errorf("vector_store.llama_stack.search_type must be 'vector' or 'hybrid', got '%s'", searchType)
+}
+
+func validateVectorStoreMetadataStore(c *VectorStoreConfig) error {
+	switch c.MetadataStore {
+	case "", "memory":
+		return nil
+	case "postgres":
+		if c.MetadataPostgres == nil {
+			return fmt.Errorf("vector_store.metadata_postgres is required when metadata_store is 'postgres'")
+		}
+		return nil
+	default:
+		return fmt.Errorf("vector_store.metadata_store must be 'memory' or 'postgres', got '%s'", c.MetadataStore)
+	}
+}
+
+// ApplyDefaults fills in default values for unset fields.
+func (c *VectorStoreConfig) ApplyDefaults() {
+	if c.FileStorageDir == "" {
+		c.FileStorageDir = "/var/lib/vsr/data"
+	}
+	if c.MaxFileSizeMB <= 0 {
+		c.MaxFileSizeMB = 50
+	}
+	if c.EmbeddingModel == "" {
+		c.EmbeddingModel = "bert"
+	}
+	if c.EmbeddingDimension <= 0 {
+		// Default dimension depends on model:
+		// - bert/multimodal = 384
+		// - qwen3/gemma/mmbert = 768
+		if c.EmbeddingModel == "bert" || c.EmbeddingModel == "multimodal" {
+			c.EmbeddingDimension = 384
+		} else {
+			c.EmbeddingDimension = 768
+		}
+	}
+	if c.IngestionWorkers <= 0 {
+		c.IngestionWorkers = 2
+	}
+	if len(c.SupportedFormats) == 0 {
+		c.SupportedFormats = []string{".txt", ".md", ".json", ".csv", ".html"}
+	}
+	if c.MetadataStore == "" {
+		c.MetadataStore = "memory"
+	}
+}

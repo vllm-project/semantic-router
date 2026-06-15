@@ -24,11 +24,17 @@ use crate::model_architectures::generative::qwen3_with_lora::{
 };
 use crate::model_architectures::prefix_cache::{PrefixCache, PrefixCacheConfig};
 use candle_core::{DType, Device, Tensor};
-use candle_nn::VarBuilder;
 use serde::{Deserialize, Serialize};
 use std::path::Path;
 use std::sync::Arc;
 use tokenizers::Tokenizer;
+
+mod qwen3_guard_generation;
+mod qwen3_guard_loading;
+mod qwen3_guard_sampling;
+
+use qwen3_guard_loading::load_guard_var_builder;
+use qwen3_guard_sampling::{apply_repeat_penalty, sample_argmax, sample_topp};
 
 /// Guard generation result (just raw text, no parsing)
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -117,7 +123,7 @@ impl Qwen3GuardModel {
         device: &Device,
         config: Option<Qwen3GuardConfig>,
     ) -> UnifiedResult<Self> {
-        println!("🛡️  Initializing Qwen3Guard Model");
+        println!("Initializing Qwen3Guard Model");
         println!("  Model path: {}", model_path);
 
         let base_dir = Path::new(model_path);
@@ -159,68 +165,7 @@ impl Qwen3GuardModel {
 
         // Load model weights
         println!("  Loading model weights...");
-        let vb = {
-            let single_weights_path = base_dir.join("model.safetensors");
-            let index_path = base_dir.join("model.safetensors.index.json");
-
-            if single_weights_path.exists() {
-                // Single file
-                unsafe {
-                    VarBuilder::from_mmaped_safetensors(&[single_weights_path], dtype, device)
-                        .map_err(|e| UnifiedError::Processing {
-                            operation: "load weights".to_string(),
-                            source: e.to_string(),
-                            input_context: None,
-                        })?
-                }
-            } else if index_path.exists() {
-                // Sharded model
-                let index_data = std::fs::read(&index_path)?;
-                let index: serde_json::Value =
-                    serde_json::from_slice(&index_data).map_err(|e| {
-                        UnifiedError::Configuration {
-                            operation: "parse index".to_string(),
-                            source: ConfigErrorType::ParseError(e.to_string()),
-                            context: None,
-                        }
-                    })?;
-
-                let weight_map =
-                    index["weight_map"]
-                        .as_object()
-                        .ok_or_else(|| UnifiedError::Configuration {
-                            operation: "parse weight_map".to_string(),
-                            source: ConfigErrorType::ParseError("Missing weight_map".to_string()),
-                            context: None,
-                        })?;
-
-                let mut weight_files = std::collections::HashSet::new();
-                for file in weight_map.values() {
-                    if let Some(f) = file.as_str() {
-                        weight_files.insert(base_dir.join(f));
-                    }
-                }
-
-                let weight_files: Vec<_> = weight_files.into_iter().collect();
-                unsafe {
-                    VarBuilder::from_mmaped_safetensors(&weight_files, dtype, device).map_err(
-                        |e| UnifiedError::Processing {
-                            operation: "load weights".to_string(),
-                            source: e.to_string(),
-                            input_context: None,
-                        },
-                    )?
-                }
-            } else {
-                return Err(UnifiedError::Configuration {
-                    operation: "find weights".to_string(),
-                    source: ConfigErrorType::ParseError(
-                        "No model.safetensors or model.safetensors.index.json found".to_string(),
-                    ),
-                    context: None,
-                });
-            }
-        };
+        let vb = load_guard_var_builder(base_dir, dtype, device)?;
 
         // Load model
         let model = Qwen3Model::new(&model_config, vb).map_err(|e| UnifiedError::Processing {
@@ -229,7 +174,7 @@ impl Qwen3GuardModel {
             input_context: None,
         })?;
 
-        println!("✅ Qwen3Guard model loaded successfully");
+        println!("Qwen3Guard model loaded successfully");
 
         let config = config.unwrap_or_default();
 
@@ -252,7 +197,7 @@ impl Qwen3GuardModel {
             }
             instance.initialize_prefix_caches()?;
             if instance.config.prefix_cache.verbose {
-                println!("✅ Prefix cache initialized successfully");
+                println!("Prefix cache initialized successfully");
             }
         }
 
@@ -518,310 +463,4 @@ impl Qwen3GuardModel {
 
         Ok(GuardGenerationResult { raw_output: output })
     }
-
-    /// Generate with prefix caching (faster tokenization + KV reuse!)
-    ///
-    /// This method:
-    /// 1. Uses pre-tokenized prefix (saves tokenization time)
-    /// 2. Processes prefix through model (KV cache accumulates automatically)
-    /// 3. Tokenizes only the variable part (user text + suffix)
-    /// 4. Generates from the accumulated KV state
-    fn generate_with_prefix_cache(&mut self, text: &str, mode: &str) -> UnifiedResult<String> {
-        // Get cache reference
-        let cache = match mode {
-            "input" => {
-                self.prefix_cache_input
-                    .as_ref()
-                    .ok_or_else(|| UnifiedError::Processing {
-                        operation: "get prefix cache".to_string(),
-                        source: "input cache not initialized".to_string(),
-                        input_context: None,
-                    })?
-            }
-            "output" => {
-                self.prefix_cache_output
-                    .as_ref()
-                    .ok_or_else(|| UnifiedError::Processing {
-                        operation: "get prefix cache".to_string(),
-                        source: "output cache not initialized".to_string(),
-                        input_context: None,
-                    })?
-            }
-            _ => {
-                return Err(UnifiedError::Processing {
-                    operation: "get prefix cache".to_string(),
-                    source: format!("invalid mode: {}", mode),
-                    input_context: None,
-                })
-            }
-        };
-
-        // Clear KV cache and process prefix
-        self.model.clear_kv_cache();
-        self.model
-            .process_prefix(cache.prefix_tokens())
-            .map_err(|e| UnifiedError::Processing {
-                operation: "process prefix cache".to_string(),
-                source: e.to_string(),
-                input_context: None,
-            })?;
-
-        // Format the suffix part (user text + fixed suffix)
-        let user_label = if mode == "output" {
-            "ASSISTANT"
-        } else {
-            "USER"
-        };
-        let suffix = format!(
-            "{}\n\n\
-            <END CONVERSATION>\n\n\
-            Provide your safety assessment for ONLY THE LAST **{}'s query** in the above conversation:\n \
-            - The first line must be one of: 'Safety: Safe', 'Safety: Unsafe', 'Safety: Controversial'.\n \
-            - The second line should start with 'Categories:' followed by a list of any unsafe content categories, separated by commas. If the content is safe, use 'Categories: None'.<|im_end|>\n\
-            <|im_start|>assistant\n\
-            <think>\n\n\
-            </think>\n\n",
-            text, user_label
-        );
-
-        // Tokenize suffix
-        let encoding = self.tokenizer.encode(suffix.as_str(), true).map_err(|e| {
-            UnifiedError::Configuration {
-                operation: "tokenize suffix".to_string(),
-                source: ConfigErrorType::ParseError(e.to_string()),
-                context: None,
-            }
-        })?;
-
-        let mut tokens: Vec<u32> = encoding.get_ids().to_vec();
-        let prefix_len = cache.prefix_length();
-        let mut generated_text = String::new();
-
-        // Process suffix through model (with cached prefix KV)
-        let suffix_tensor = Tensor::new(&tokens[..], &self.device)
-            .map_err(|e| UnifiedError::Processing {
-                operation: "create suffix tensor".to_string(),
-                source: e.to_string(),
-                input_context: None,
-            })?
-            .unsqueeze(0)
-            .map_err(|e| UnifiedError::Processing {
-                operation: "unsqueeze suffix tensor".to_string(),
-                source: e.to_string(),
-                input_context: None,
-            })?;
-
-        self.model
-            .forward(&suffix_tensor, prefix_len)
-            .map_err(|e| UnifiedError::Processing {
-                operation: "forward suffix".to_string(),
-                source: e.to_string(),
-                input_context: None,
-            })?;
-
-        // Update token count
-        let mut total_tokens = prefix_len + tokens.len();
-
-        // Generation loop (same as generate method)
-        for _step in 0..self.config.max_tokens {
-            let context_size = 1; // Only process last token
-            let start_pos = total_tokens - context_size;
-            let ctxt = &tokens[tokens.len().saturating_sub(context_size)..];
-
-            // Forward pass
-            let input = Tensor::new(ctxt, &self.device)
-                .map_err(|e| UnifiedError::Processing {
-                    operation: "create tensor".to_string(),
-                    source: e.to_string(),
-                    input_context: None,
-                })?
-                .unsqueeze(0)
-                .map_err(|e| UnifiedError::Processing {
-                    operation: "unsqueeze".to_string(),
-                    source: e.to_string(),
-                    input_context: None,
-                })?;
-
-            let logits =
-                self.model
-                    .forward(&input, start_pos)
-                    .map_err(|e| UnifiedError::Processing {
-                        operation: "forward pass".to_string(),
-                        source: e.to_string(),
-                        input_context: None,
-                    })?;
-
-            // Extract last token logits
-            let logits = logits
-                .squeeze(0)
-                .map_err(|e| UnifiedError::Processing {
-                    operation: "squeeze".to_string(),
-                    source: e.to_string(),
-                    input_context: None,
-                })?
-                .squeeze(0)
-                .map_err(|e| UnifiedError::Processing {
-                    operation: "squeeze".to_string(),
-                    source: e.to_string(),
-                    input_context: None,
-                })?
-                .to_dtype(DType::F32)
-                .map_err(|e| UnifiedError::Processing {
-                    operation: "to_dtype".to_string(),
-                    source: e.to_string(),
-                    input_context: None,
-                })?;
-
-            // Apply repeat penalty
-            let logits = if self.config.repeat_penalty != 1.0 {
-                let start_at = tokens.len().saturating_sub(self.config.repeat_last_n);
-                apply_repeat_penalty(&logits, self.config.repeat_penalty, &tokens[start_at..])?
-            } else {
-                logits
-            };
-
-            // Sample next token
-            let next_token = if self.config.temperature == 0.0 {
-                sample_argmax(&logits)?
-            } else {
-                sample_topp(&logits, self.config.temperature, self.config.top_p)?
-            };
-
-            // Check for EOS
-            if next_token == self.eos_token_id || next_token == self.im_end_token_id {
-                break;
-            }
-
-            tokens.push(next_token);
-            total_tokens += 1;
-
-            // Decode token
-            if let Ok(piece) = self.tokenizer.decode(&[next_token], true) {
-                generated_text.push_str(&piece);
-            }
-        }
-
-        Ok(generated_text)
-    }
-}
-
-// ================================================================================================
-// Sampling Functions
-// ================================================================================================
-
-/// Apply repeat penalty to logits
-fn apply_repeat_penalty(logits: &Tensor, penalty: f32, context: &[u32]) -> UnifiedResult<Tensor> {
-    let logits_vec = logits
-        .to_vec1::<f32>()
-        .map_err(|e| UnifiedError::Processing {
-            operation: "to_vec1".to_string(),
-            source: e.to_string(),
-            input_context: None,
-        })?;
-
-    let mut modified_logits = logits_vec.clone();
-    for &token_id in context {
-        let idx = token_id as usize;
-        if idx < modified_logits.len() {
-            if modified_logits[idx] < 0.0 {
-                modified_logits[idx] *= penalty;
-            } else {
-                modified_logits[idx] /= penalty;
-            }
-        }
-    }
-
-    Tensor::new(modified_logits, logits.device()).map_err(|e| UnifiedError::Processing {
-        operation: "create tensor".to_string(),
-        source: e.to_string(),
-        input_context: None,
-    })
-}
-
-/// Greedy sampling (argmax)
-fn sample_argmax(logits: &Tensor) -> UnifiedResult<u32> {
-    let logits_vec = logits
-        .to_vec1::<f32>()
-        .map_err(|e| UnifiedError::Processing {
-            operation: "to_vec1".to_string(),
-            source: e.to_string(),
-            input_context: None,
-        })?;
-
-    let max_idx = logits_vec
-        .iter()
-        .enumerate()
-        .max_by(|(_, a), (_, b)| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal))
-        .map(|(idx, _)| idx)
-        .unwrap_or(0);
-
-    Ok(max_idx as u32)
-}
-
-/// Top-p (nucleus) sampling
-fn sample_topp(logits: &Tensor, temperature: f64, top_p: f64) -> UnifiedResult<u32> {
-    let logits_vec = logits
-        .to_vec1::<f32>()
-        .map_err(|e| UnifiedError::Processing {
-            operation: "to_vec1".to_string(),
-            source: e.to_string(),
-            input_context: None,
-        })?;
-
-    // Apply temperature
-    let scaled_logits: Vec<f32> = logits_vec.iter().map(|&x| x / temperature as f32).collect();
-
-    // Compute softmax
-    let max_logit = scaled_logits
-        .iter()
-        .cloned()
-        .fold(f32::NEG_INFINITY, f32::max);
-    let exp_logits: Vec<f32> = scaled_logits
-        .iter()
-        .map(|&x| (x - max_logit).exp())
-        .collect();
-    let sum_exp: f32 = exp_logits.iter().sum();
-    let probs: Vec<f32> = exp_logits.iter().map(|&x| x / sum_exp).collect();
-
-    // Sort by probability
-    let mut indexed_probs: Vec<(usize, f32)> = probs.iter().cloned().enumerate().collect();
-    indexed_probs.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap_or(std::cmp::Ordering::Equal));
-
-    // Compute cumulative probabilities and apply top-p
-    let mut cumulative_prob = 0.0;
-    let mut sampled_probs = Vec::new();
-
-    for (idx, prob) in indexed_probs.iter() {
-        sampled_probs.push((*idx, *prob));
-        cumulative_prob += prob;
-        if cumulative_prob >= top_p as f32 {
-            break;
-        }
-    }
-
-    // Normalize filtered probabilities
-    let filtered_sum: f32 = sampled_probs.iter().map(|(_, p)| p).sum();
-    let normalized_probs: Vec<(usize, f32)> = sampled_probs
-        .iter()
-        .map(|(idx, p)| (*idx, p / filtered_sum))
-        .collect();
-
-    // Sample from distribution
-    use rand::Rng;
-    let mut rng = rand::thread_rng();
-    let random_value: f32 = rng.gen();
-
-    let mut cumulative = 0.0;
-    for (idx, prob) in normalized_probs.iter() {
-        cumulative += prob;
-        if random_value <= cumulative {
-            return Ok(*idx as u32);
-        }
-    }
-
-    // Fallback to last token
-    Ok(normalized_probs
-        .last()
-        .map(|(idx, _)| *idx as u32)
-        .unwrap_or(0))
 }

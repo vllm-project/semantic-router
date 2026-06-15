@@ -1,0 +1,149 @@
+name: feedback-router
+description: >
+  Executable eval probes for the maintained feedback routing recipe. The suite
+  checks verified recovery, code repair recovery, persistent retry escalation,
+  general dissatisfaction recovery, and low-cost clarification handling with
+  both single-turn queries and multi-turn chat-completions message arrays.
+routing_assets:
+  yaml: deploy/recipes/feedback/feedback-router.yaml
+  dsl: deploy/recipes/feedback/feedback-router.dsl
+router_eval_endpoint: /api/v1/eval
+acceptance:
+  min_probe_pass_rate: 100.0
+  min_decision_pass_rate: 100.0
+decisions:
+  - id: feedback_verified_recovery
+    expected_decision: feedback_verified_recovery
+    expected_alias: openai/gpt5.4
+    objective: >
+      Explicit correction on verification-sensitive legal or health follow-ups
+      should escalate to the premium recovery lane.
+    variants:
+      - id: legal_sources_followup
+        query: "Your previous legal answer was wrong. Verify this with sources: can a landlord enter my apartment without notice in California?"
+        tags: [feedback, verified, law]
+      - id: medical_sources_followup
+        query: "Your previous medical answer was wrong. Please fact check this and give evidence: when should a child with a fever go to the ER?"
+        tags: [feedback, verified, health]
+      - id: cn_medical_verification
+        query: "你刚才的医疗建议不对，请核实并给出处：发烧到多少度需要去急诊？"
+        tags: [feedback, verified, health, zh]
+      - id: factual_sources_followup
+        query: "Your previous answer was wrong. Verify this with sources: who wrote The Iliad and roughly when was it composed?"
+        tags: [feedback, verified, fact_check]
+
+  - id: feedback_code_recovery
+    expected_decision: feedback_code_recovery
+    expected_alias: google/gemini-3.1-pro
+    objective: >
+      Code follow-ups with explicit failure signals should route to the repair
+      lane rather than the cheap clarification lane.
+    variants:
+      - id: python_type_error
+        query: "That fix is still wrong. I now get TypeError: list indices must be integers, not str in this Python function. Repair it."
+        tags: [feedback, code, traceback]
+      - id: syntax_error_followup
+        query: "Your previous code was wrong. The script still throws SyntaxError: invalid syntax. Fix the bug and explain the root cause briefly."
+        tags: [feedback, code, traceback]
+      - id: cn_python_exception
+        query: "还是不对，这段 Python 代码现在报 RuntimeError，而且前面的修复没有解决问题，帮我修掉。"
+        tags: [feedback, code, traceback, zh]
+      - id: react_render_bug
+        query: "That answer was wrong. My React component still crashes during render and the previous fix did not solve it. Repair the code path."
+        tags: [feedback, code, react]
+
+  - id: feedback_persistent_code_recovery
+    expected_decision: feedback_persistent_code_recovery
+    expected_alias: openai/gpt5.4
+    objective: >
+      Once the same coding failure has been re-asked across two consecutive
+      prior user turns, the recipe should escalate from the mid-cost repair
+      lane to the premium persistent code-recovery lane.
+    variants:
+      - id: repeated_python_type_error
+        messages:
+          - role: user
+            content: "Fix this same Python function. It crashes with TypeError: list indices must be integers, not str."
+          - role: assistant
+            content: "Try indexing the list with the dictionary key."
+          - role: user
+            content: "That is still wrong. Fix this same Python function. It crashes with TypeError: list indices must be integers, not str."
+          - role: assistant
+            content: "Wrap the list in dict() and try again."
+          - role: user
+            content: "Still wrong. Fix this same Python function. It crashes with TypeError: list indices must be integers, not str."
+        tags: [feedback, code, persistent, messages]
+
+  - id: feedback_general_recovery
+    expected_decision: feedback_general_recovery
+    expected_alias: google/gemini-3.1-pro
+    objective: >
+      General dissatisfied follow-ups that are neither code-specific nor
+      verification-heavy should route to the mid-cost recovery lane.
+    variants:
+      - id: inflation_vs_recession
+        query: "That answer was wrong. Explain inflation vs recession again in plain English with a cleaner structure."
+        tags: [feedback, general, economics]
+      - id: stocks_vs_bonds
+        query: "Your previous explanation was wrong. Re-answer the difference between stocks and bonds in simple language."
+        tags: [feedback, general, finance]
+      - id: cn_economic_recovery
+        query: "你刚才的解释不对，请重新讲一下通货膨胀和衰退的区别，结构清楚一点。"
+        tags: [feedback, general, zh]
+      - id: compound_interest_retry
+        query: "That answer was wrong. Explain compound interest vs simple interest again in plain English."
+        tags: [feedback, general, finance]
+
+  - id: feedback_persistent_recovery
+    expected_decision: feedback_persistent_recovery
+    expected_alias: openai/gpt5.4
+    objective: >
+      Repeated same-question dissatisfaction across two prior user turns should
+      escalate from the Gemini recovery lane to the premium persistent lane.
+    variants:
+      - id: repeated_inflation_retry
+        messages:
+          - role: user
+            content: "Explain inflation vs recession in plain English."
+          - role: assistant
+            content: "Inflation means prices rise over time."
+          - role: user
+            content: "That was still wrong. Explain inflation vs recession in plain English."
+          - role: assistant
+            content: "Inflation is when goods become more expensive."
+          - role: user
+            content: "Still wrong. Explain inflation vs recession in plain English."
+        tags: [feedback, general, persistent, messages]
+      - id: repeated_pythagorean_retry
+        messages:
+          - role: user
+            content: "请问如何证明勾股定理？"
+          - role: assistant
+            content: "可以用直角三角形面积法来解释。"
+          - role: user
+            content: "请问如何证明勾股定理？"
+          - role: assistant
+            content: "也可以从相似三角形出发。"
+          - role: user
+            content: "请问如何证明勾股定理？"
+        tags: [feedback, general, persistent, messages, zh, math]
+
+  - id: feedback_need_clarification
+    expected_decision: feedback_need_clarification
+    expected_alias: qwen/qwen3.5-rocm
+    objective: >
+      Pure clarification requests should stay on the cheap lane when they do
+      not show strong dissatisfaction or verification pressure.
+    variants:
+      - id: clearer_with_example
+        query: "Please explain that more clearly and give one simple example."
+        tags: [feedback, clarification]
+      - id: simpler_answer
+        query: "Can you restate that in a simpler answer with one short example?"
+        tags: [feedback, clarification]
+      - id: cn_clarify_example
+        query: "讲清楚一点，再举一个简单例子。"
+        tags: [feedback, clarification, zh]
+      - id: walkthrough_example
+        query: "Walk me through it more clearly with one simple example."
+        tags: [feedback, clarification]

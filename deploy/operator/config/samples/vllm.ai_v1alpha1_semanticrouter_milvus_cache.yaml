@@ -37,10 +37,8 @@ spec:
 
   # Semantic router configuration
   config:
-    # BERT model for embeddings (required for semantic cache)
-    bert_model:
-      model_id: models/mom-embedding-light
-      threshold: "0.6"
+    embedding_models:
+      mmbert_model_path: "models/mom-embedding-ultra"
       use_cpu: true
 
     # Semantic cache with Milvus backend
@@ -49,7 +47,7 @@ spec:
       backend_type: milvus
       similarity_threshold: "0.90"
       ttl_seconds: 7200
-      embedding_model: bert  # Using BERT for this example
+      embedding_model: mmbert
 
       # Milvus configuration
       # NOTE: Update host to match your Milvus deployment namespace
@@ -73,7 +71,7 @@ spec:
           description: "Semantic cache for LLM responses"
           vector_field:
             name: embedding
-            dimension: 384  # For BERT embeddings
+            dimension: 768  # For Gemma embeddings (384 for BERT, 1024 for Qwen3)
             metric_type: IP
           index:
             type: HNSW

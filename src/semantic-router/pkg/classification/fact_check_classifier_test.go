@@ -20,9 +20,7 @@ func getHalugateSentinelModelPath() string {
 // skipIfNoFactCheckModel skips the test if the halugate-sentinel model is not available
 func skipIfNoFactCheckModel(t *testing.T) {
 	modelPath := getHalugateSentinelModelPath()
-	if _, err := os.Stat(modelPath); os.IsNotExist(err) {
-		t.Skipf("Skipping test: halugate-sentinel model not found at %s. Set HALUGATE_SENTINEL_MODEL_PATH env var.", modelPath)
-	}
+	skipTestIfModelArtifactsMissing(t, "Fact-check model", modelPath)
 }
 
 // TestFactCheckClassifier_NilConfig tests that nil config returns nil classifier

@@ -1,0 +1,6 @@
+algorithm:
+  type: ratings
+  ratings:
+    max_concurrent: 3
+    on_error: skip
+

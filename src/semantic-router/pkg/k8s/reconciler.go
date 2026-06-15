@@ -18,10 +18,13 @@ package k8s
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"strings"
 	"sync"
 	"time"
 
+	yamlv3 "gopkg.in/yaml.v3"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/rest"
@@ -163,17 +166,32 @@ func (r *Reconciler) watchLoop(ctx context.Context) {
 
 // reconcile performs the reconciliation logic
 func (r *Reconciler) reconcile(ctx context.Context) error {
-	// Get IntelligentPool
-	pool, err := r.getIntelligentPool(ctx)
-	if err != nil {
-		return fmt.Errorf("failed to get IntelligentPool: %w", err)
+	// The reconciler emits a single canonical config and so expects exactly
+	// one pool and one route. When several coexist, short-circuiting would
+	// leave every CR with an empty status indefinitely (#1908); instead mark
+	// each conflicting CR Ready=False so the conflict is observable.
+	poolList := &v1alpha1.IntelligentPoolList{}
+	if err := r.client.List(ctx, poolList, client.InNamespace(r.namespace)); err != nil {
+		return fmt.Errorf("failed to list IntelligentPools: %w", err)
+	}
+	routeList := &v1alpha1.IntelligentRouteList{}
+	if err := r.client.List(ctx, routeList, client.InNamespace(r.namespace)); err != nil {
+		return fmt.Errorf("failed to list IntelligentRoutes: %w", err)
 	}
 
-	// Get IntelligentRoute
-	route, err := r.getIntelligentRoute(ctx)
-	if err != nil {
-		return fmt.Errorf("failed to get IntelligentRoute: %w", err)
+	if len(poolList.Items) == 0 {
+		return fmt.Errorf("no IntelligentPool found in namespace %s", r.namespace)
 	}
+	if len(routeList.Items) == 0 {
+		return fmt.Errorf("no IntelligentRoute found in namespace %s", r.namespace)
+	}
+
+	if len(poolList.Items) > 1 || len(routeList.Items) > 1 {
+		return r.reportConflict(ctx, poolList.Items, routeList.Items)
+	}
+
+	pool := &poolList.Items[0]
+	route := &routeList.Items[0]
 
 	// Check if anything changed
 	r.mu.RLock()
@@ -201,38 +219,29 @@ func (r *Reconciler) reconcile(ctx context.Context) error {
 	return nil
 }
 
-// getIntelligentPool retrieves the IntelligentPool from the namespace
-func (r *Reconciler) getIntelligentPool(ctx context.Context) (*v1alpha1.IntelligentPool, error) {
-	poolList := &v1alpha1.IntelligentPoolList{}
-	if err := r.client.List(ctx, poolList, client.InNamespace(r.namespace)); err != nil {
-		return nil, fmt.Errorf("failed to list IntelligentPools: %w", err)
+// reportConflict marks every IntelligentPool and IntelligentRoute in the
+// namespace Ready=False/Reason=Conflict and returns an error so the watch
+// loop logs the condition without silently dropping all CRs' status.
+func (r *Reconciler) reportConflict(ctx context.Context, pools []v1alpha1.IntelligentPool, routes []v1alpha1.IntelligentRoute) error {
+	var msgs []string
+
+	if len(pools) > 1 {
+		msg := fmt.Sprintf("found %d IntelligentPools in namespace %s, expected exactly 1; resolve the conflict so a single configuration can be applied", len(pools), r.namespace)
+		msgs = append(msgs, msg)
+		for i := range pools {
+			r.updatePoolStatus(ctx, &pools[i], metav1.ConditionFalse, "Conflict", msg)
+		}
 	}
 
-	if len(poolList.Items) == 0 {
-		return nil, fmt.Errorf("no IntelligentPool found in namespace %s", r.namespace)
-	}
-	if len(poolList.Items) > 1 {
-		return nil, fmt.Errorf("multiple IntelligentPools found in namespace %s, expected exactly 1", r.namespace)
-	}
-
-	return &poolList.Items[0], nil
-}
-
-// getIntelligentRoute retrieves the IntelligentRoute from the namespace
-func (r *Reconciler) getIntelligentRoute(ctx context.Context) (*v1alpha1.IntelligentRoute, error) {
-	routeList := &v1alpha1.IntelligentRouteList{}
-	if err := r.client.List(ctx, routeList, client.InNamespace(r.namespace)); err != nil {
-		return nil, fmt.Errorf("failed to list IntelligentRoutes: %w", err)
+	if len(routes) > 1 {
+		msg := fmt.Sprintf("found %d IntelligentRoutes in namespace %s, expected exactly 1; resolve the conflict so a single configuration can be applied", len(routes), r.namespace)
+		msgs = append(msgs, msg)
+		for i := range routes {
+			r.updateRouteStatus(ctx, &routes[i], metav1.ConditionFalse, "Conflict", msg)
+		}
 	}
 
-	if len(routeList.Items) == 0 {
-		return nil, fmt.Errorf("no IntelligentRoute found in namespace %s", r.namespace)
-	}
-	if len(routeList.Items) > 1 {
-		return nil, fmt.Errorf("multiple IntelligentRoutes found in namespace %s, expected exactly 1", r.namespace)
-	}
-
-	return &routeList.Items[0], nil
+	return errors.New(strings.Join(msgs, "; "))
 }
 
 // validateAndUpdate validates CRDs and updates configuration
@@ -245,33 +254,36 @@ func (r *Reconciler) validateAndUpdate(ctx context.Context, pool *v1alpha1.Intel
 		return err
 	}
 
-	// Convert to internal config
-	backendModels, err := r.converter.ConvertIntelligentPool(pool)
+	canonicalBase := config.CanonicalStaticConfigFromRouterConfig(r.staticConfig)
+	canonicalCfg, err := r.converter.Convert(pool, route, &canonicalBase)
 	if err != nil {
-		return fmt.Errorf("failed to convert IntelligentPool: %w", err)
+		return fmt.Errorf("failed to convert CRDs to canonical config: %w", err)
 	}
 
-	intelligentRouting, err := r.converter.ConvertIntelligentRoute(route)
+	canonicalBytes, err := yamlv3.Marshal(canonicalCfg)
 	if err != nil {
-		return fmt.Errorf("failed to convert IntelligentRoute: %w", err)
+		return fmt.Errorf("failed to marshal canonical config: %w", err)
 	}
 
-	// Create new config by merging with static config
-	newConfig := *r.staticConfig
-	newConfig.BackendModels = *backendModels
+	newConfig, err := config.ParseYAMLBytes(canonicalBytes)
+	if err != nil {
+		return fmt.Errorf("failed to normalize canonical config: %w", err)
+	}
+	newConfig.ConfigSource = config.ConfigSourceKubernetes
 
-	// Copy IntelligentRouting fields explicitly (since it's embedded with ,inline in YAML)
-	// Assigning the whole struct doesn't work correctly with embedded structs
-	newConfig.KeywordRules = intelligentRouting.KeywordRules
-	newConfig.EmbeddingRules = intelligentRouting.EmbeddingRules
-	newConfig.Categories = intelligentRouting.Categories
-	newConfig.Decisions = intelligentRouting.Decisions
-	newConfig.Strategy = intelligentRouting.Strategy
-	newConfig.ReasoningConfig = intelligentRouting.ReasoningConfig
+	// The initial Kubernetes static-config parse is intentionally tolerant
+	// because routing state comes from CRDs. Once pool and route have been
+	// converted, run the shared K8s-safe validator dispatch so reconcile holds
+	// CRD-loaded config to the same family contracts as file-loaded config.
+	if err := config.ValidateKubernetesConfigContracts(newConfig); err != nil {
+		r.updatePoolStatus(ctx, pool, metav1.ConditionFalse, "ValidationFailed", err.Error())
+		r.updateRouteStatus(ctx, route, metav1.ConditionFalse, "ValidationFailed", err.Error())
+		return fmt.Errorf("kubernetes config validation failed: %w", err)
+	}
 
 	// Call update callback
 	if r.onConfigUpdate != nil {
-		if err := r.onConfigUpdate(&newConfig); err != nil {
+		if err := r.onConfigUpdate(newConfig); err != nil {
 			r.updatePoolStatus(ctx, pool, metav1.ConditionFalse, "UpdateFailed", err.Error())
 			r.updateRouteStatus(ctx, route, metav1.ConditionFalse, "UpdateFailed", err.Error())
 			return fmt.Errorf("config update failed: %w", err)
@@ -288,95 +300,11 @@ func (r *Reconciler) validateAndUpdate(ctx context.Context, pool *v1alpha1.Intel
 
 // validate validates the CRDs
 func (r *Reconciler) validate(pool *v1alpha1.IntelligentPool, route *v1alpha1.IntelligentRoute) error {
-	// Build model map
-	modelMap := make(map[string]*v1alpha1.ModelConfig)
-	for i := range pool.Spec.Models {
-		model := &pool.Spec.Models[i]
-		modelMap[model.Name] = model
+	var reasoningFamilies map[string]config.ReasoningFamilyConfig
+	if r.staticConfig != nil {
+		reasoningFamilies = r.staticConfig.ReasoningFamilies
 	}
-
-	// Build signal name sets
-	keywordSignalNames := make(map[string]bool)
-	embeddingSignalNames := make(map[string]bool)
-	domainSignalNames := make(map[string]bool)
-
-	for _, signal := range route.Spec.Signals.Keywords {
-		if keywordSignalNames[signal.Name] {
-			return fmt.Errorf("duplicate keyword signal name: %s", signal.Name)
-		}
-		keywordSignalNames[signal.Name] = true
-	}
-
-	for _, signal := range route.Spec.Signals.Embeddings {
-		if embeddingSignalNames[signal.Name] {
-			return fmt.Errorf("duplicate embedding signal name: %s", signal.Name)
-		}
-		embeddingSignalNames[signal.Name] = true
-	}
-
-	// Domains is now an array of DomainSignal with name and description
-	for _, domain := range route.Spec.Signals.Domains {
-		if domainSignalNames[domain.Name] {
-			return fmt.Errorf("duplicate domain signal name: %s", domain.Name)
-		}
-		domainSignalNames[domain.Name] = true
-	}
-
-	// Validate decisions
-	for _, decision := range route.Spec.Decisions {
-		// Validate signal references
-		for _, condition := range decision.Signals.Conditions {
-			switch condition.Type {
-			case "keyword":
-				if !keywordSignalNames[condition.Name] {
-					return fmt.Errorf("decision %s references unknown keyword signal: %s", decision.Name, condition.Name)
-				}
-			case "embedding":
-				if !embeddingSignalNames[condition.Name] {
-					return fmt.Errorf("decision %s references unknown embedding signal: %s", decision.Name, condition.Name)
-				}
-			case "domain":
-				if !domainSignalNames[condition.Name] {
-					return fmt.Errorf("decision %s references unknown domain signal: %s", decision.Name, condition.Name)
-				}
-			}
-		}
-
-		// Validate model scores
-		for _, ms := range decision.ModelRefs {
-			model, ok := modelMap[ms.Model]
-			if !ok {
-				return fmt.Errorf("decision %s references unknown model: %s", decision.Name, ms.Model)
-			}
-
-			// Validate LoRA reference
-			if ms.LoRAName != "" {
-				found := false
-				for _, lora := range model.LoRAs {
-					if lora.Name == ms.LoRAName {
-						found = true
-						break
-					}
-				}
-				if !found {
-					return fmt.Errorf("decision %s references unknown LoRA %s for model %s", decision.Name, ms.LoRAName, ms.Model)
-				}
-			}
-		}
-	}
-
-	// Validate reasoning families
-	if r.staticConfig != nil && r.staticConfig.ReasoningFamilies != nil {
-		for _, model := range pool.Spec.Models {
-			if model.ReasoningFamily != "" {
-				if _, ok := r.staticConfig.ReasoningFamilies[model.ReasoningFamily]; !ok {
-					return fmt.Errorf("model %s references unknown reasoning family: %s", model.Name, model.ReasoningFamily)
-				}
-			}
-		}
-	}
-
-	return nil
+	return validatePoolRoute(pool, route, reasoningFamilies)
 }
 
 // updatePoolStatus updates the status of IntelligentPool

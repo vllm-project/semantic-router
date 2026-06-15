@@ -9,14 +9,24 @@
 //!
 //! The variant is auto-detected from config.json or can be explicitly specified.
 
+/// Maximum input length (in tokens) used for classification inference.
+///
+/// ModernBERT-32K and mmBERT-32K use global attention (full quadratic O(n²))
+/// every `global_attn_every_n_layers` layers (≈7–8 out of 22). At 4000 tokens
+/// those layers allocate ~6–8 GB of activation memory per batch item, which
+/// reliably triggers an OOM kill with no container logs. Classification tasks
+/// (intent, jailbreak, PII, feedback, fact-check) don't benefit from sequences
+/// longer than 512 tokens. This cap matches `max_length` in tokenizer_config.json.
+pub(crate) const MAX_CLASSIFICATION_SEQ_LEN: usize = 512;
+
 use crate::core::{config_errors, processing_errors, ModelErrorType, UnifiedError};
 use crate::model_error;
 use anyhow::{Error as E, Result};
 use candle_core::{DType, Device, IndexOp, Tensor, D};
 use candle_nn::{ops, LayerNorm, Linear, Module, VarBuilder};
-use candle_transformers::models::modernbert::{
-    ClassifierConfig, ClassifierPooling, Config, ModernBert,
-};
+// Use local copy of ModernBERT with Flash Attention support
+// Import from parent module's re-exports (more reliable across branches)
+use super::{ClassifierConfig, ClassifierPooling, Config, ModernBert};
 use std::collections::HashMap;
 use std::sync::{Arc, OnceLock};
 use tokenizers::{PaddingParams, PaddingStrategy, Tokenizer};
@@ -35,6 +45,13 @@ pub enum ModernBertVariant {
     /// mmBERT - Multilingual ModernBERT (1800+ languages, 256k vocab, 8192 max length)
     /// Reference: https://huggingface.co/jhu-clsp/mmBERT-base
     Multilingual,
+    /// ModernBERT-base-32k - Extended context ModernBERT (32,768 max length with RoPE)
+    /// Reference: https://huggingface.co/llm-semantic-router/modernbert-base-32k
+    Extended32K,
+    /// mmBERT-32K - YaRN-scaled Multilingual ModernBERT (32768 max length)
+    /// Extended from 8K to 32K using YaRN RoPE scaling (theta=160000)
+    /// Reference: https://huggingface.co/llm-semantic-router/mmbert-32k-yarn
+    Multilingual32K,
 }
 
 impl ModernBertVariant {
@@ -43,6 +60,8 @@ impl ModernBertVariant {
         match self {
             ModernBertVariant::Standard => 512,
             ModernBertVariant::Multilingual => 8192,
+            ModernBertVariant::Extended32K => 32768,
+            ModernBertVariant::Multilingual32K => 32768,
         }
     }
 
@@ -52,8 +71,12 @@ impl ModernBertVariant {
             ModernBertVariant::Standard => {
                 crate::core::tokenization::TokenizationStrategy::ModernBERT
             }
-            ModernBertVariant::Multilingual => {
+            ModernBertVariant::Multilingual | ModernBertVariant::Multilingual32K => {
                 crate::core::tokenization::TokenizationStrategy::MmBERT
+            }
+            ModernBertVariant::Extended32K => {
+                // 32K variant uses ModernBERT tokenization strategy
+                crate::core::tokenization::TokenizationStrategy::ModernBERT
             }
         }
     }
@@ -63,10 +86,30 @@ impl ModernBertVariant {
         match self {
             ModernBertVariant::Standard => "[PAD]",
             ModernBertVariant::Multilingual => "<pad>",
+            ModernBertVariant::Extended32K => "[PAD]",
+            ModernBertVariant::Multilingual32K => "<pad>",
         }
     }
 
-    /// Detect variant from config.json
+    /// Check if this variant uses YaRN RoPE scaling
+    pub fn uses_yarn_scaling(&self) -> bool {
+        matches!(
+            self,
+            ModernBertVariant::Multilingual32K | ModernBertVariant::Extended32K
+        )
+    }
+
+    /// Get the expected RoPE theta for this variant
+    pub fn expected_rope_theta(&self) -> f64 {
+        match self {
+            ModernBertVariant::Standard => 10000.0,
+            ModernBertVariant::Multilingual => 10000.0,
+            ModernBertVariant::Extended32K => 10000.0, // Uses YaRN but different theta
+            ModernBertVariant::Multilingual32K => 160000.0, // YaRN-scaled
+        }
+    }
+
+    /// Detect variant from config.json and training_config.json
     pub fn detect_from_config(config_path: &str) -> Result<Self, candle_core::Error> {
         let config_str = std::fs::read_to_string(config_path).map_err(|_e| {
             let unified_err = config_errors::file_not_found(config_path);
@@ -88,9 +131,94 @@ impl ModernBertVariant {
             .and_then(|v| v.as_str())
             .unwrap_or("");
 
+        let max_position_embeddings = config_json
+            .get("max_position_embeddings")
+            .and_then(|v| v.as_u64())
+            .unwrap_or(512);
+
+        let global_rope_theta = config_json
+            .get("global_rope_theta")
+            .and_then(|v| v.as_f64())
+            .unwrap_or(10000.0);
+
+        // Check for 32K support via YaRN RoPE scaling in training_config.json
+        // ModernBERT-base-32k uses YaRN to extend from 8K to 32K
+        // IMPORTANT: Only trust training_config.json if config.json also indicates extended context
+        // This prevents misclassifying existing models that might have training_config.json
+        let model_dir = std::path::Path::new(config_path).parent().ok_or_else(|| {
+            let unified_err = config_errors::file_not_found("config.json parent directory");
+            candle_core::Error::from(unified_err)
+        })?;
+
+        let training_config_path = model_dir.join("training_config.json");
+        if training_config_path.exists() {
+            if let Ok(training_config_str) = std::fs::read_to_string(&training_config_path) {
+                if let Ok(training_config_json) =
+                    serde_json::from_str::<serde_json::Value>(&training_config_str)
+                {
+                    // Check for YaRN RoPE scaling with 32K model_max_length
+                    let rope_scaling_type = training_config_json
+                        .get("rope_scaling_type")
+                        .and_then(|v| v.as_str())
+                        .unwrap_or("");
+                    let model_max_length = training_config_json
+                        .get("model_max_length")
+                        .and_then(|v| v.as_u64())
+                        .unwrap_or(0);
+                    let rope_original_max = training_config_json
+                        .get("rope_original_max_position_embeddings")
+                        .and_then(|v| v.as_u64())
+                        .unwrap_or(0);
+
+                    // If YaRN scaling is configured and model_max_length is 32K
+                    // AND config.json indicates this is an extended context model
+                    // (either max_position_embeddings >= 16384 OR we have mmBERT vocab)
+                    if (rope_scaling_type == "yarn" || rope_scaling_type == "YaRN")
+                        && model_max_length >= 32768
+                    {
+                        // Additional validation: config.json should indicate extended context
+                        // For Extended32K: base max_position_embeddings should be 8192 (extended to 32K via YaRN)
+                        // For Multilingual32K: should have mmBERT vocab (>=200000) or extended context indicators
+                        let is_extended_context = if vocab_size >= 200000 {
+                            // mmBERT with extended context
+                            max_position_embeddings >= 16384 || global_rope_theta >= 100000.0
+                        } else {
+                            // Extended32K: base should be 8192, extended to 32K via YaRN
+                            // Check that rope_original_max is 8192 (base) and we're extending to 32K
+                            (rope_original_max == 8192 || max_position_embeddings == 8192)
+                                && position_embedding_type == "sans_pos"
+                        };
+
+                        if is_extended_context {
+                            // Distinguish between Extended32K (English) and Multilingual32K
+                            if vocab_size >= 200000 {
+                                return Ok(ModernBertVariant::Multilingual32K);
+                            } else {
+                                return Ok(ModernBertVariant::Extended32K);
+                            }
+                        }
+                        // If training_config.json says 32K but config.json doesn't match,
+                        // fall through to normal detection logic
+                    }
+                }
+            }
+        }
+
         // mmBERT has vocab_size >= 200000 and uses sans_pos (RoPE)
         if vocab_size >= 200000 && position_embedding_type == "sans_pos" {
-            Ok(ModernBertVariant::Multilingual)
+            // Check for 32K YaRN-scaled variant:
+            // - max_position_embeddings >= 16384 (extended context)
+            // - OR global_rope_theta >= 100000 (YaRN scaling indicator)
+            if max_position_embeddings >= 16384 || global_rope_theta >= 100000.0 {
+                Ok(ModernBertVariant::Multilingual32K)
+            } else {
+                Ok(ModernBertVariant::Multilingual)
+            }
+        }
+        // ModernBERT-base-32k: max_position_embeddings >= 32768 and uses sans_pos (RoPE)
+        // This should be checked after mmBERT to avoid false positives
+        else if max_position_embeddings >= 32768 && position_embedding_type == "sans_pos" {
+            Ok(ModernBertVariant::Extended32K)
         } else {
             Ok(ModernBertVariant::Standard)
         }
@@ -133,6 +261,10 @@ pub struct TraditionalModernBertTokenClassifier {
 pub type MmBertClassifier = TraditionalModernBertClassifier;
 /// mmBERT token classifier (alias for TraditionalModernBertTokenClassifier with Multilingual variant)
 pub type MmBertTokenClassifier = TraditionalModernBertTokenClassifier;
+/// mmBERT-32K sequence classifier (alias for TraditionalModernBertClassifier with Multilingual32K variant)
+pub type MmBert32KClassifier = TraditionalModernBertClassifier;
+/// mmBERT-32K token classifier (alias for TraditionalModernBertTokenClassifier with Multilingual32K variant)
+pub type MmBert32KTokenClassifier = TraditionalModernBertTokenClassifier;
 
 // Global static instances using OnceLock pattern for zero-cost reads after initialization
 pub static TRADITIONAL_MODERNBERT_CLASSIFIER: OnceLock<Arc<TraditionalModernBertClassifier>> =
@@ -431,6 +563,64 @@ impl TraditionalModernBertClassifier {
         }
     }
 
+    /// Normalize config JSON to handle different HuggingFace model config formats
+    /// Some models (e.g., mmbert-32k-yarn) use top-level global_rope_theta/local_rope_theta
+    /// Other models (e.g., feedback-detector) use nested rope_parameters structure
+    /// This function extracts rope_theta from rope_parameters if top-level fields are missing
+    pub fn normalize_config_json(config_str: &str) -> String {
+        let Ok(mut config_json) = serde_json::from_str::<serde_json::Value>(config_str) else {
+            return config_str.to_string();
+        };
+
+        let obj = match config_json.as_object_mut() {
+            Some(obj) => obj,
+            None => return config_str.to_string(),
+        };
+
+        // If global_rope_theta is missing, try to extract from rope_parameters
+        if !obj.contains_key("global_rope_theta") {
+            if let Some(rope_params) = obj.get("rope_parameters") {
+                // Try to get from full_attention or sliding_attention
+                let theta = rope_params
+                    .get("full_attention")
+                    .and_then(|v| v.get("rope_theta"))
+                    .and_then(|v| v.as_f64())
+                    .or_else(|| {
+                        rope_params
+                            .get("sliding_attention")
+                            .and_then(|v| v.get("rope_theta"))
+                            .and_then(|v| v.as_f64())
+                    })
+                    .unwrap_or(160000.0); // Default for mmBERT-32K
+
+                obj.insert(
+                    "global_rope_theta".to_string(),
+                    serde_json::Value::from(theta),
+                );
+            } else {
+                // No rope_parameters either, use default
+                obj.insert(
+                    "global_rope_theta".to_string(),
+                    serde_json::Value::from(160000.0),
+                );
+            }
+        }
+
+        // If local_rope_theta is missing, use the same value as global_rope_theta
+        if !obj.contains_key("local_rope_theta") {
+            let global_theta = obj
+                .get("global_rope_theta")
+                .and_then(|v| v.as_f64())
+                .unwrap_or(160000.0);
+            obj.insert(
+                "local_rope_theta".to_string(),
+                serde_json::Value::from(global_theta),
+            );
+        }
+
+        serde_json::to_string(&config_json).unwrap_or_else(|_| config_str.to_string())
+    }
+
     /// Load from directory with auto-detected variant (Standard or Multilingual/mmBERT)
     pub fn load_from_directory(
         model_path: &str,
@@ -461,10 +651,27 @@ impl TraditionalModernBertClassifier {
             candle_core::Error::from(unified_err)
         })?;
 
-        let config: Config = serde_json::from_str(&config_str).map_err(|e| {
+        // Pre-process config to handle different HuggingFace config formats
+        // Some models use top-level global_rope_theta/local_rope_theta, others use nested rope_parameters
+        let config_str = Self::normalize_config_json(&config_str);
+
+        let mut config: Config = serde_json::from_str(&config_str).map_err(|e| {
             let unified_err = config_errors::invalid_json(&config_path, &e.to_string());
             candle_core::Error::from(unified_err)
         })?;
+
+        // Override max_position_embeddings for Extended32K variant to support full 32K context
+        // The Candle library's ModernBERT uses config.max_position_embeddings to initialize RoPE cache
+        // For Extended32K variant, we need to ensure it's set to 32768 even if config.json has a lower value
+        // NOTE: This override is safe because Extended32K models use YaRN RoPE scaling which dynamically
+        // generates position embeddings for any length up to 32K, even if the base config.json specifies
+        // a lower max_position_embeddings value.
+        if variant == ModernBertVariant::Extended32K {
+            let expected_max_len = variant.max_length(); // 32768
+            if config.max_position_embeddings < expected_max_len {
+                config.max_position_embeddings = expected_max_len;
+            }
+        }
 
         // 3. Dynamic class detection from id2label using unified config loader
         let num_classes = Self::load_modernbert_num_classes(model_path)?;
@@ -495,16 +702,20 @@ impl TraditionalModernBertClassifier {
         }
 
         let vb = unsafe {
-            VarBuilder::from_mmaped_safetensors(&[weights_path.clone()], DType::F32, &device)
-                .map_err(|e| {
-                    let unified_err = model_error!(
-                        ModelErrorType::ModernBERT,
-                        "weights loading",
-                        format!("Failed to load weights from {}: {}", weights_path, e),
-                        &weights_path
-                    );
-                    candle_core::Error::from(unified_err)
-                })?
+            VarBuilder::from_mmaped_safetensors(
+                std::slice::from_ref(&weights_path),
+                DType::F32,
+                &device,
+            )
+            .map_err(|e| {
+                let unified_err = model_error!(
+                    ModelErrorType::ModernBERT,
+                    "weights loading",
+                    format!("Failed to load weights from {}: {}", weights_path, e),
+                    &weights_path
+                );
+                candle_core::Error::from(unified_err)
+            })?
         };
 
         // 6. Create ModernBERT model - try both with and without prefix
@@ -543,9 +754,37 @@ impl TraditionalModernBertClassifier {
             candle_core::Error::from(unified_err)
         })?;
 
-        // 9. Create unified tokenizer wrapper with variant-specific config
+        // 9. Load training_config.json for 32K models to get actual max_length.
+        // The architectural max from training_config is recorded but then capped at
+        // MAX_CLASSIFICATION_SEQ_LEN. ModernBERT-32K / mmBERT-32K have global-attention
+        // layers that scale O(n²); at 4000 tokens they OOM the container with no logs.
+        // Classification tasks don't benefit from sequences longer than 512 tokens.
+        let model_max_length = if variant == ModernBertVariant::Extended32K {
+            let training_config_path = format!("{}/training_config.json", model_path);
+            if let Ok(training_config_str) = std::fs::read_to_string(&training_config_path) {
+                if let Ok(training_config_json) =
+                    serde_json::from_str::<serde_json::Value>(&training_config_str)
+                {
+                    // Use model_max_length from training_config if available
+                    training_config_json
+                        .get("model_max_length")
+                        .and_then(|v| v.as_u64())
+                        .map(|v| v as usize)
+                        .unwrap_or(variant.max_length())
+                } else {
+                    variant.max_length()
+                }
+            } else {
+                variant.max_length()
+            }
+        } else {
+            variant.max_length()
+        };
+        let effective_max_length = model_max_length.min(MAX_CLASSIFICATION_SEQ_LEN);
+
+        // 10. Create unified tokenizer wrapper with variant-specific config
         let tokenizer_config = crate::core::tokenization::TokenizationConfig {
-            max_length: variant.max_length(),
+            max_length: effective_max_length,
             add_special_tokens: true,
             truncation_strategy: tokenizers::TruncationStrategy::LongestFirst,
             truncation_direction: tokenizers::TruncationDirection::Right,
@@ -585,6 +824,261 @@ impl TraditionalModernBertClassifier {
         })
     }
 
+    /// Load classifier with custom base model from separate paths
+    ///
+    /// This method allows loading a base model from one path and classifier weights from another path.
+    /// This is useful when you have a base model (e.g., Extended32K) and want to use classifier weights
+    /// from a different model (e.g., Standard ModernBERT classifier).
+    ///
+    /// # Arguments
+    /// * `base_model_path` - Path to the base model directory (contains config.json, tokenizer.json, model.safetensors)
+    /// * `classifier_path` - Path to the classifier model directory (contains config.json with id2label, model.safetensors with classifier weights)
+    /// * `variant` - The ModernBERT variant to use (should match the base model)
+    /// * `use_cpu` - Whether to use CPU instead of GPU
+    ///
+    /// # Returns
+    /// * `Result<Self>` - The loaded classifier with custom base model
+    ///
+    /// # Example
+    ///
+    /// ```rust,no_run
+    /// use candle_semantic_router::model_architectures::traditional::modernbert::{
+    ///     ModernBertVariant, TraditionalModernBertClassifier
+    /// };
+    ///
+    /// // Load Extended32K base model with PII classifier weights
+    /// let classifier = TraditionalModernBertClassifier::load_with_custom_base_model(
+    ///     "/path/to/modernbert-base-32k",           // Base model path
+    ///     "/path/to/pii_classifier_modernbert-base", // Classifier weights path
+    ///     ModernBertVariant::Extended32K,
+    ///     true, // use_cpu
+    /// )?;
+    ///
+    /// // Now classify text with 32K context support
+    /// let (class_id, confidence) = classifier.classify_text("My email is john@example.com")?;
+    /// ```
+    pub fn load_with_custom_base_model(
+        base_model_path: &str,
+        classifier_path: &str,
+        variant: ModernBertVariant,
+        use_cpu: bool,
+    ) -> Result<Self, candle_core::Error> {
+        // 1. Determine device
+        let device = if use_cpu {
+            Device::Cpu
+        } else {
+            Device::cuda_if_available(0).unwrap_or(Device::Cpu)
+        };
+
+        // 2. Load base model config.json
+        let base_config_path = format!("{}/config.json", base_model_path);
+        let base_config_str = std::fs::read_to_string(&base_config_path).map_err(|_e| {
+            let unified_err = config_errors::file_not_found(&base_config_path);
+            candle_core::Error::from(unified_err)
+        })?;
+
+        let config: Config = serde_json::from_str(&base_config_str).map_err(|e| {
+            let unified_err = config_errors::invalid_json(&base_config_path, &e.to_string());
+            candle_core::Error::from(unified_err)
+        })?;
+
+        // 3. Load number of classes from classifier config.json
+        let num_classes = Self::load_modernbert_num_classes(classifier_path)?;
+
+        // 4. Load tokenizer from base model
+        let tokenizer_path = format!("{}/tokenizer.json", base_model_path);
+        let mut tokenizer = Tokenizer::from_file(&tokenizer_path).map_err(|e| {
+            let unified_err = model_error!(
+                ModelErrorType::Tokenizer,
+                "tokenizer loading",
+                format!("Failed to load tokenizer from {}: {}", tokenizer_path, e),
+                &tokenizer_path
+            );
+            candle_core::Error::from(unified_err)
+        })?;
+
+        // Configure padding for batch processing
+        if let Some(pad_token) = tokenizer.get_padding() {
+            let mut padding_params = pad_token.clone();
+            padding_params.strategy = tokenizers::PaddingStrategy::BatchLongest;
+            tokenizer.with_padding(Some(padding_params));
+        }
+
+        // 5. Load base model weights
+        let base_weights_path = format!("{}/model.safetensors", base_model_path);
+        if !std::path::Path::new(&base_weights_path).exists() {
+            let unified_err = config_errors::file_not_found(&base_weights_path);
+            return Err(candle_core::Error::from(unified_err));
+        }
+
+        let base_vb = unsafe {
+            VarBuilder::from_mmaped_safetensors(
+                std::slice::from_ref(&base_weights_path),
+                DType::F32,
+                &device,
+            )
+            .map_err(|e| {
+                let unified_err = model_error!(
+                    ModelErrorType::ModernBERT,
+                    "base model weights loading",
+                    format!(
+                        "Failed to load base model weights from {}: {}",
+                        base_weights_path, e
+                    ),
+                    &base_weights_path
+                );
+                candle_core::Error::from(unified_err)
+            })?
+        };
+
+        // 6. Load base ModernBERT model - try both with and without prefix
+        let model = if let Ok(model) = ModernBert::load(base_vb.clone(), &config) {
+            model
+        } else if let Ok(model) = ModernBert::load(base_vb.pp("_orig_mod"), &config) {
+            model
+        } else {
+            let unified_err = model_error!(
+                ModelErrorType::ModernBERT,
+                "base model loading",
+                "Failed to load base ModernBERT model with or without _orig_mod prefix",
+                base_model_path
+            );
+            return Err(candle_core::Error::from(unified_err));
+        };
+
+        // 7. Load classifier weights from classifier path
+        let classifier_weights_path = format!("{}/model.safetensors", classifier_path);
+        if !std::path::Path::new(&classifier_weights_path).exists() {
+            let unified_err = config_errors::file_not_found(&classifier_weights_path);
+            return Err(candle_core::Error::from(unified_err));
+        }
+
+        let classifier_vb = unsafe {
+            VarBuilder::from_mmaped_safetensors(
+                std::slice::from_ref(&classifier_weights_path),
+                DType::F32,
+                &device,
+            )
+            .map_err(|e| {
+                let unified_err = model_error!(
+                    ModelErrorType::Classifier,
+                    "classifier weights loading",
+                    format!(
+                        "Failed to load classifier weights from {}: {}",
+                        classifier_weights_path, e
+                    ),
+                    &classifier_weights_path
+                );
+                candle_core::Error::from(unified_err)
+            })?
+        };
+
+        // Try to load head from classifier (if exists)
+        let head = FixedModernBertHead::load(classifier_vb.pp("head"), &config).ok();
+
+        // 8. Load classifier weights from classifier path
+        let classifier = FixedModernBertClassifier::load_with_classes(
+            classifier_vb.pp("classifier"),
+            &config,
+            num_classes,
+        )
+        .map_err(|e| {
+            let unified_err = model_error!(
+                ModelErrorType::Classifier,
+                "classifier loading",
+                format!("Failed to load classifier from {}: {}", classifier_path, e),
+                classifier_path
+            );
+            candle_core::Error::from(unified_err)
+        })?;
+
+        // 9. Determine effective max length (for Extended32K, check training_config.json).
+        // Always cap at MAX_CLASSIFICATION_SEQ_LEN — see comment in load_from_directory_with_variant.
+        let model_max_length_custom = if variant == ModernBertVariant::Extended32K {
+            let training_config_path = format!("{}/training_config.json", base_model_path);
+            if let Ok(training_config_str) = std::fs::read_to_string(&training_config_path) {
+                if let Ok(training_config_json) =
+                    serde_json::from_str::<serde_json::Value>(&training_config_str)
+                {
+                    training_config_json
+                        .get("model_max_length")
+                        .and_then(|v| v.as_u64())
+                        .map(|v| v as usize)
+                        .unwrap_or_else(|| variant.max_length())
+                } else {
+                    variant.max_length()
+                }
+            } else {
+                variant.max_length()
+            }
+        } else {
+            variant.max_length()
+        };
+        let effective_max_length = model_max_length_custom.min(MAX_CLASSIFICATION_SEQ_LEN);
+
+        // 10. Create unified tokenizer wrapper with variant-specific config
+        let tokenizer_config = crate::core::tokenization::TokenizationConfig {
+            max_length: effective_max_length,
+            add_special_tokens: true,
+            truncation_strategy: tokenizers::TruncationStrategy::LongestFirst,
+            truncation_direction: tokenizers::TruncationDirection::Right,
+            pad_token_id: config.pad_token_id,
+            pad_token: variant.pad_token().to_string(),
+            tokenization_strategy: variant.tokenization_strategy(),
+            token_data_type: crate::core::tokenization::TokenDataType::U32,
+        };
+
+        let tokenizer_wrapper = Box::new(
+            crate::core::tokenization::UnifiedTokenizer::new(
+                tokenizer,
+                tokenizer_config,
+                device.clone(),
+            )
+            .map_err(|e| {
+                let unified_err = model_error!(
+                    ModelErrorType::Tokenizer,
+                    "tokenizer wrapper creation",
+                    format!("Failed to create tokenizer wrapper: {}", e),
+                    base_model_path
+                );
+                candle_core::Error::from(unified_err)
+            })?,
+        ) as Box<dyn DualPathTokenizer>;
+
+        // 11. Determine classifier pooling from classifier config
+        let classifier_config_path = format!("{}/config.json", classifier_path);
+        let classifier_config_str = std::fs::read_to_string(&classifier_config_path)
+            .ok()
+            .and_then(|s| serde_json::from_str::<serde_json::Value>(&s).ok());
+
+        let classifier_pooling = if let Some(config_json) = &classifier_config_str {
+            if config_json
+                .get("classifier_pooling")
+                .and_then(|v| v.as_str())
+                .map(|s| s == "mean")
+                .unwrap_or(false)
+            {
+                ClassifierPooling::MEAN
+            } else {
+                ClassifierPooling::CLS
+            }
+        } else {
+            ClassifierPooling::MEAN // Default to MEAN
+        };
+
+        Ok(Self {
+            model,
+            head,
+            classifier,
+            classifier_pooling,
+            tokenizer: tokenizer_wrapper,
+            device,
+            config,
+            num_classes,
+            variant,
+        })
+    }
+
     /// Load mmBERT (multilingual) model from directory
     /// Convenience method that explicitly loads as Multilingual variant
     pub fn load_mmbert_from_directory(
@@ -594,18 +1088,41 @@ impl TraditionalModernBertClassifier {
         Self::load_from_directory_with_variant(model_path, use_cpu, ModernBertVariant::Multilingual)
     }
 
-    /// Get the model variant (Standard or Multilingual)
+    /// Load mmBERT-32K (YaRN-scaled multilingual) model from directory
+    /// Convenience method that explicitly loads as Multilingual32K variant
+    /// This variant supports 32K context length with YaRN RoPE scaling (theta=160000)
+    /// Reference: https://huggingface.co/llm-semantic-router/mmbert-32k-yarn
+    pub fn load_mmbert_32k_from_directory(
+        model_path: &str,
+        use_cpu: bool,
+    ) -> Result<Self, candle_core::Error> {
+        Self::load_from_directory_with_variant(
+            model_path,
+            use_cpu,
+            ModernBertVariant::Multilingual32K,
+        )
+    }
+
+    /// Get the model variant (Standard, Multilingual, or Multilingual32K)
     pub fn variant(&self) -> ModernBertVariant {
         self.variant
     }
 
-    /// Check if this is a multilingual (mmBERT) model
+    /// Check if this is a multilingual (mmBERT) model (8K or 32K)
     pub fn is_multilingual(&self) -> bool {
-        self.variant == ModernBertVariant::Multilingual
+        matches!(
+            self.variant,
+            ModernBertVariant::Multilingual | ModernBertVariant::Multilingual32K
+        )
     }
 
-    /// Classify text using real model inference - REAL IMPLEMENTATION
-    pub fn classify_text(&self, text: &str) -> Result<(usize, f32), candle_core::Error> {
+    /// Check if this is a 32K YaRN-scaled model
+    pub fn is_32k_yarn(&self) -> bool {
+        self.variant == ModernBertVariant::Multilingual32K
+    }
+
+    /// classify_internal classifies text using real model inference - REAL IMPLEMENTATION
+    fn classify_internal(&self, text: &str) -> Result<(usize, f32, Vec<f32>), candle_core::Error> {
         // 1. Tokenize input text
         let tokenization_result = self.tokenizer.tokenize(text).map_err(|e| {
             let unified_err = processing_errors::tensor_operation("tokenization", &e.to_string());
@@ -654,8 +1171,7 @@ impl TraditionalModernBertClassifier {
 
         // 5. Apply head layer if present
         let classifier_input = if let Some(ref head) = self.head {
-            let head_output = head.forward(&pooled_output)?;
-            head_output
+            head.forward(&pooled_output)?
         } else {
             pooled_output
         };
@@ -683,7 +1199,22 @@ impl TraditionalModernBertClassifier {
             }
         }
 
+        Ok((predicted_class, max_prob, probabilities_vec))
+    }
+
+    /// Classify text and return the top-1 prediction (class index + confidence).
+    pub fn classify_text(&self, text: &str) -> Result<(usize, f32), candle_core::Error> {
+        let (predicted_class, max_prob, _) = self.classify_internal(text)?;
         Ok((predicted_class, max_prob))
+    }
+
+    /// Classify text and return the top-1 prediction together with the full
+    /// softmax probability distribution across all classes.
+    pub fn classify_text_with_probabilities(
+        &self,
+        text: &str,
+    ) -> Result<(usize, f32, Vec<f32>), candle_core::Error> {
+        self.classify_internal(text)
     }
 
     /// Get class labels mapping
@@ -699,6 +1230,9 @@ impl TraditionalModernBertClassifier {
         self.num_classes
     }
 }
+
+/// Token entity tuple returned by `classify_tokens`: (token, label_id, confidence, start, end)
+type TokenEntityTuple = (String, usize, f32, usize, usize);
 
 impl TraditionalModernBertTokenClassifier {
     /// Create a new traditional ModernBERT token classifier with auto-detected variant
@@ -726,6 +1260,8 @@ impl TraditionalModernBertTokenClassifier {
         let config_path = std::path::Path::new(model_id).join("config.json");
         let config_str = std::fs::read_to_string(&config_path)
             .map_err(|e| E::msg(format!("Failed to read config.json: {}", e)))?;
+        // Pre-process config to handle different HuggingFace config formats
+        let config_str = TraditionalModernBertClassifier::normalize_config_json(&config_str);
         let config: Config = serde_json::from_str(&config_str)
             .map_err(|e| E::msg(format!("Failed to parse config.json: {}", e)))?;
 
@@ -734,15 +1270,17 @@ impl TraditionalModernBertTokenClassifier {
         let base_tokenizer = Tokenizer::from_file(&tokenizer_path)
             .map_err(|e| E::msg(format!("Failed to load tokenizer: {}", e)))?;
 
-        // Create dual-path compatible tokenizer based on variant
+        // Create dual-path compatible tokenizer based on variant.
+        // Always cap at MAX_CLASSIFICATION_SEQ_LEN — see comment at the top of this file.
         let tokenizer = match variant {
-            ModernBertVariant::Multilingual => {
-                crate::core::tokenization::create_mmbert_compatibility_tokenizer(
+            ModernBertVariant::Multilingual | ModernBertVariant::Multilingual32K => {
+                crate::core::tokenization::create_mmbert_compatibility_tokenizer_with_max_length(
                     base_tokenizer,
                     device.clone(),
+                    MAX_CLASSIFICATION_SEQ_LEN,
                 )?
             }
-            ModernBertVariant::Standard => {
+            ModernBertVariant::Standard | ModernBertVariant::Extended32K => {
                 crate::core::tokenization::create_modernbert_compatibility_tokenizer(
                     base_tokenizer,
                     device.clone(),
@@ -809,18 +1347,33 @@ impl TraditionalModernBertTokenClassifier {
         Self::new_with_variant(model_id, use_cpu, ModernBertVariant::Multilingual)
     }
 
-    /// Get the model variant
+    /// Create mmBERT-32K (YaRN-scaled multilingual) token classifier
+    /// This variant supports 32K context length with YaRN RoPE scaling (theta=160000)
+    /// Reference: https://huggingface.co/llm-semantic-router/mmbert-32k-yarn
+    pub fn new_mmbert_32k(model_id: &str, use_cpu: bool) -> Result<Self> {
+        Self::new_with_variant(model_id, use_cpu, ModernBertVariant::Multilingual32K)
+    }
+
+    /// Get the model variant (Standard, Multilingual, or Multilingual32K)
     pub fn variant(&self) -> ModernBertVariant {
         self.variant
     }
 
-    /// Check if this is a multilingual (mmBERT) model
+    /// Check if this is a multilingual (mmBERT) model (8K or 32K)
     pub fn is_multilingual(&self) -> bool {
-        self.variant == ModernBertVariant::Multilingual
+        matches!(
+            self.variant,
+            ModernBertVariant::Multilingual | ModernBertVariant::Multilingual32K
+        )
+    }
+
+    /// Check if this is a 32K YaRN-scaled model
+    pub fn is_32k_yarn(&self) -> bool {
+        self.variant == ModernBertVariant::Multilingual32K
     }
 
     /// Classify tokens in text
-    pub fn classify_tokens(&self, text: &str) -> Result<Vec<(String, usize, f32, usize, usize)>> {
+    pub fn classify_tokens(&self, text: &str) -> Result<Vec<TokenEntityTuple>> {
         // Tokenize the text
         let tokenization_result = self.tokenizer.tokenize(text)?;
 
@@ -936,8 +1489,9 @@ impl TraditionalModernBertTokenClassifier {
             .zip(tokenization_result.offsets.iter())
             .enumerate()
         {
-            // Skip special tokens (they have offset (0,0))
-            if offset.0 == 0 && offset.1 == 0 && i > 0 {
+            // Skip special tokens (BOS, EOS, PAD, etc. have offset (0,0))
+            // Note: All special tokens have zero-length offsets, including BOS at index 0
+            if offset.0 == 0 && offset.1 == 0 {
                 continue;
             }
 
@@ -948,13 +1502,13 @@ impl TraditionalModernBertTokenClassifier {
                 .clone();
             let confidence = probs_data[i][pred_id as usize];
 
-            if label.starts_with("B-") {
+            if let Some(stripped) = label.strip_prefix("B-") {
                 // Beginning of new entity
                 if let Some(entity) = current_entity.take() {
                     entities.push(entity);
                 }
 
-                let entity_type = label[2..].to_string(); // Remove 'B-' prefix
+                let entity_type = stripped.to_string();
                 current_entity = Some(TokenEntity {
                     entity_type,
                     start: offset.0,

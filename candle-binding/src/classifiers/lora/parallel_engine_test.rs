@@ -19,7 +19,7 @@ fn test_parallel_engine_creation(
         && cached_pii_classifier.is_some()
         && cached_security_classifier.is_some()
     {
-        println!("✅ All classifiers available for parallel engine testing");
+        println!("All classifiers available for parallel engine testing");
     } else {
         println!("⏭️  Skipping parallel engine creation test - models not cached");
     }
@@ -52,7 +52,7 @@ fn test_parallel_classify_basic(
 
     // Note: This test validates the API structure
     // Actual performance testing requires model files
-    println!("✅ Test inputs prepared: {} texts", test_texts.len());
+    println!("Test inputs prepared: {} texts", test_texts.len());
     println!("   - Intent text: '{}'", test_texts[0]);
     println!("   - PII text: '{}'", test_texts[1]);
     println!("   - Security text: '{}'", test_texts[2]);
@@ -168,7 +168,7 @@ fn test_performance_batch_vs_single(
             "Parallel processing should produce same number of results"
         );
         println!(
-            "\n✅ Correctness verified: {} results match",
+            "\nCorrectness verified: {} results match",
             par_results.len()
         );
     }
@@ -350,7 +350,7 @@ fn test_performance_rayon_vs_manual(
         }
     }
 
-    println!("\n✅ Benefits of rayon::join:");
+    println!("\nBenefits of rayon::join:");
     println!("   • No Arc<Mutex> overhead");
     println!("   • No manual thread management");
     println!("   • Cleaner code (~70% reduction)");

@@ -1,0 +1,21 @@
+algorithm:
+  type: session_aware
+  session_aware:
+    base_method: hybrid
+    idle_timeout_seconds: 300
+    min_turns_before_switch: 1
+    switch_margin: 0.05
+    stay_bias: 0.10
+    tool_loop_hard_lock: true
+    context_portability_hard_lock: true
+    decision_drift_reset: true
+    tool_loop_stay_bias: 0.35
+    prefix_cache_weight: 0.20
+    handoff_penalty_weight: 1.0
+    default_handoff_penalty: 0.05
+    quality_gap_multiplier: 1.0
+    max_cache_cost_multiplier: 2.5
+    switch_history_weight: 0.04
+    remaining_turn_prior_weight: 1.0
+    remaining_turn_prior_horizon: 8
+    min_remaining_turn_prior_samples: 3

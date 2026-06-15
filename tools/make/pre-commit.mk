@@ -2,42 +2,35 @@
 
 PRECOMMIT_CONTAINER := ghcr.io/vllm-project/semantic-router/precommit:latest
 
-precommit-install: ## Install pre-commit Python package
+AGENT_PRE_COMMIT ?= $(CURDIR)/.venv-agent/bin/pre-commit
+
+precommit-install: ## Install the repo-local pre-commit hook into the agent harness venv
 precommit-install:
-	pip install pre-commit
+	@$(MAKE) agent-venv-install
+	@echo "Installing repo-local git hooks (pre-commit)..."
+	@"$(AGENT_PRE_COMMIT)" install --hook-type pre-commit
 
-precommit-check: ## Run pre-commit checks on all relevant files
-precommit-check:
-	@FILES=$$(find . -type f \( -name "*.go" -o -name "*.rs" -o -name "*.py" -o -name "*.js" -o -name "*.sh" -o -name "*.md" -o -name "*.yaml" -o -name "*.yml" \) \
-		! -path "./target/*" \
-		! -path "./candle-binding/target/*" \
-    ! -path "./website/node_modules/*" \
-    ! -path "./frontend/node_modules/*" \
-    ! -path "./website/.docusaurus/*" \
-		! -path "./__pycache__/*" \
-    ! -path "./.venv/*" \
-    ! -path "./vendor/*" \
-		! -name "*.pb.go" \
-    ! -path "./.git/*" \
-		| tr '\n' ' '); \
-	if [ -n "$$FILES" ]; then \
-		FILE_COUNT=$$(echo $$FILES | wc -w | tr -d ' '); \
-		echo "Running pre-commit on $$FILE_COUNT files..."; \
-		pre-commit run --files $$FILES; \
-	else \
-		echo "No Go, Rust, JavaScript, Shell, Markdown, Yaml, or Python files found to check"; \
-	fi
+precommit-branch-gate: agent-venv-install ## Run the local branch prelint bundle on demand
+	@$(MAKE) agent-ci-lint AGENT_BASE_REF="$(AGENT_BASE_REF)"
+	@$(MAKE) precommit-check
 
-# Run pre-commit hooks in a Docker container,
-# and you can exec container to run bash for debug.
-# export PRECOMMIT_CONTAINER=ghcr.io/vllm-project/semantic-router/precommit:latest
-# docker run --rm -it \
-#     -v $(pwd):/app \
-#     -w /app \
-#     --name precommit-container ${PRECOMMIT_CONTAINER} \
-#     bash
-# and then, run `pre-commit install && pre-commit run --all-files` command
-precommit-local: ## Run pre-commit hooks in a Docker/Podman container
+precommit-check: agent-venv-install ## Run pre-commit checks on all relevant files
+	@echo "Running pre-commit on all tracked files..."
+	@"$(AGENT_PRE_COMMIT)" run --all-files
+
+# Run the full CI pre-commit pipeline in a Docker container.
+# This mirrors .github/workflows/pre-commit.yml by running both
+# `make precommit-branch-gate` and `make precommit-check` inside the
+# containerized toolchain.
+#
+# For interactive debugging:
+#   export PRECOMMIT_CONTAINER=ghcr.io/vllm-project/semantic-router/precommit:latest
+#   docker run --rm -it \
+#       -v $(pwd):/app \
+#       -w /app \
+#       --name precommit-container ${PRECOMMIT_CONTAINER} \
+#       bash
+precommit-local: ## Run full CI pre-commit pipeline in a Docker/Podman container
 precommit-local:
 	@if command -v docker > /dev/null 2>&1; then \
 		CONTAINER_CMD=docker; \
@@ -54,6 +47,7 @@ precommit-local:
 		echo "Image found locally. Skipping pull."; \
 	fi; \
 	$$CONTAINER_CMD run --rm \
+	    -e AGENT_BASE_REF="$(AGENT_BASE_REF)" \
 	    -v $(shell pwd):/app \
 	    -w /app \
-	    ${PRECOMMIT_CONTAINER} bash -c 'pre-commit install && pre-commit run --all-files'
+	    ${PRECOMMIT_CONTAINER} bash -c 'make precommit-branch-gate'

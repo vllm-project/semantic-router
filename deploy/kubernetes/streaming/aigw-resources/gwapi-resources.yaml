@@ -1,0 +1,194 @@
+# Gateway API resources for Streaming Body E2E profile.
+#
+# Identical to deploy/kubernetes/routing-strategies/aigw-resources/gwapi-resources.yaml
+# except the EnvoyPatchPolicy sets request_body_mode: STREAMED (not BUFFERED).
+# This causes Envoy to send the request body as multiple gRPC chunks to the
+# semantic-router ext_proc, exercising the StreamedBodyHandler code path.
+apiVersion: gateway.networking.k8s.io/v1
+kind: GatewayClass
+metadata:
+  name: semantic-router
+spec:
+  controllerName: gateway.envoyproxy.io/gatewayclass-controller
+---
+apiVersion: gateway.envoyproxy.io/v1alpha1
+kind: EnvoyProxy
+metadata:
+  name: semantic-router
+  namespace: default
+spec:
+  provider:
+    type: Kubernetes
+    kubernetes:
+      envoyDeployment:
+        replicas: 1
+        container:
+          resources: {}
+  logging:
+    level:
+      default: trace
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: Gateway
+metadata:
+  name: semantic-router
+  namespace: default
+spec:
+  gatewayClassName: semantic-router
+  listeners:
+  - name: http
+    protocol: HTTP
+    port: 80
+  infrastructure:
+    parametersRef:
+      group: gateway.envoyproxy.io
+      kind: EnvoyProxy
+      name: semantic-router
+---
+# Buffer limit must be large enough for AI workloads (images, long prompts).
+apiVersion: gateway.envoyproxy.io/v1alpha1
+kind: ClientTrafficPolicy
+metadata:
+  name: semantic-router
+  namespace: default
+spec:
+  targetRefs:
+  - group: gateway.networking.k8s.io
+    kind: Gateway
+    name: semantic-router
+  connection:
+    bufferLimit: 50Mi
+---
+apiVersion: aigateway.envoyproxy.io/v1alpha1
+kind: AIGatewayRoute
+metadata:
+  name: semantic-router
+  namespace: default
+spec:
+  parentRefs:
+  - name: semantic-router
+    kind: Gateway
+    group: gateway.networking.k8s.io
+  rules:
+  - matches:
+    - headers:
+      - type: Exact
+        name: x-ai-eg-model
+        value: math-expert
+    backendRefs:
+    - name: vllm-llama3-8b-instruct
+    timeouts:
+      request: 60s
+      backendRequest: 60s
+  - matches:
+    - headers:
+      - type: Exact
+        name: x-ai-eg-model
+        value: science-expert
+    backendRefs:
+    - name: vllm-llama3-8b-instruct
+    timeouts:
+      request: 60s
+      backendRequest: 60s
+  - matches:
+    - headers:
+      - type: Exact
+        name: x-ai-eg-model
+        value: social-expert
+    backendRefs:
+    - name: vllm-llama3-8b-instruct
+    timeouts:
+      request: 60s
+      backendRequest: 60s
+  - matches:
+    - headers:
+      - type: Exact
+        name: x-ai-eg-model
+        value: humanities-expert
+    backendRefs:
+    - name: vllm-llama3-8b-instruct
+    timeouts:
+      request: 60s
+      backendRequest: 60s
+  - matches:
+    - headers:
+      - type: Exact
+        name: x-ai-eg-model
+        value: law-expert
+    backendRefs:
+    - name: vllm-llama3-8b-instruct
+    timeouts:
+      request: 60s
+      backendRequest: 60s
+  - matches:
+    - headers:
+      - type: Exact
+        name: x-ai-eg-model
+        value: general-expert
+    backendRefs:
+    - name: vllm-llama3-8b-instruct
+    timeouts:
+      request: 60s
+      backendRequest: 60s
+  - backendRefs:
+    - name: vllm-llama3-8b-instruct
+    timeouts:
+      request: 60s
+      backendRequest: 60s
+---
+apiVersion: gateway.envoyproxy.io/v1alpha1
+kind: EnvoyPatchPolicy
+metadata:
+  name: ai-gateway-prepost-extproc-patch-policy
+  namespace: default
+spec:
+  jsonPatches:
+  - name: default/semantic-router/http
+    operation:
+      op: add
+      path: /default_filter_chain/filters/0/typed_config/http_filters/0
+      value:
+        name: semantic-router-extproc
+        typedConfig:
+          '@type': type.googleapis.com/envoy.extensions.filters.http.ext_proc.v3.ExternalProcessor
+          allow_mode_override: true
+          grpcService:
+            envoyGrpc:
+              authority: semantic-router.vllm-semantic-router-system:50051
+              clusterName: semantic-router
+            timeout: 60s
+          message_timeout: 60s
+          processing_mode:
+            # KEY DIFFERENCE: STREAMED instead of BUFFERED
+            request_body_mode: STREAMED
+            request_header_mode: SEND
+            request_trailer_mode: SKIP
+            response_body_mode: BUFFERED
+            response_header_mode: SEND
+            response_trailer_mode: SKIP
+    type: type.googleapis.com/envoy.config.listener.v3.Listener
+  - name: semantic-router
+    operation:
+      op: add
+      path: ''
+      value:
+        connect_timeout: 60s
+        http2_protocol_options: {}
+        lb_policy: ROUND_ROBIN
+        load_assignment:
+          cluster_name: semantic-router
+          endpoints:
+          - lb_endpoints:
+            - endpoint:
+                address:
+                  socket_address:
+                    address: semantic-router.vllm-semantic-router-system.svc.cluster.local
+                    port_value: 50051
+        name: semantic-router
+        type: STRICT_DNS
+    type: type.googleapis.com/envoy.config.cluster.v3.Cluster
+  targetRef:
+    group: gateway.networking.k8s.io
+    kind: Gateway
+    name: semantic-router
+  type: JSONPatch

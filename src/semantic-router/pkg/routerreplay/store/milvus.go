@@ -4,11 +4,14 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"sort"
 	"sync"
 	"time"
 
 	"github.com/milvus-io/milvus-sdk-go/v2/client"
 	"github.com/milvus-io/milvus-sdk-go/v2/entity"
+
+	milvuslifecycle "github.com/vllm-project/semantic-router/src/semantic-router/pkg/milvus"
 )
 
 const (
@@ -46,17 +49,13 @@ func NewMilvusStore(cfg *MilvusConfig, ttlSeconds int, asyncWrites bool) (*Milvu
 		collectionName = DefaultMilvusCollection
 	}
 
-	// Create Milvus client
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	defer cancel()
-
-	milvusClient, err := client.NewClient(ctx, client.Config{
+	milvusClient, err := milvuslifecycle.Connect(context.Background(), client.Config{
 		Address:  cfg.Address,
 		Username: cfg.Username,
 		Password: cfg.Password,
-	})
+	}, 10*time.Second)
 	if err != nil {
-		return nil, fmt.Errorf("failed to create milvus client: %w", err)
+		return nil, err
 	}
 
 	store := &MilvusStore{
@@ -68,25 +67,18 @@ func NewMilvusStore(cfg *MilvusConfig, ttlSeconds int, asyncWrites bool) (*Milvu
 		pendingWrites:  make(map[string]struct{}),
 	}
 
-	// Create collection if not exists with retry logic
-	var collErr error
-	for i := 0; i < 3; i++ {
-		collCtx, collCancel := context.WithTimeout(context.Background(), 20*time.Second)
-		collErr = store.createCollection(collCtx, cfg)
-		collCancel()
-
-		if collErr == nil {
-			break
-		}
-
-		// Wait before retry
-		if i < 2 {
-			time.Sleep(time.Duration(i+1) * 2 * time.Second)
-		}
-	}
-
-	if collErr != nil {
-		return nil, fmt.Errorf("failed to create collection after retries: %w", collErr)
+	if err := milvuslifecycle.Retry(
+		context.Background(),
+		3,
+		2*time.Second,
+		"ensure router replay Milvus collection",
+		func(ctx context.Context) error {
+			collCtx, collCancel := context.WithTimeout(ctx, 20*time.Second)
+			defer collCancel()
+			return store.createCollection(collCtx, cfg)
+		},
+	); err != nil {
+		return nil, err
 	}
 
 	if asyncWrites {
@@ -98,110 +90,107 @@ func NewMilvusStore(cfg *MilvusConfig, ttlSeconds int, asyncWrites bool) (*Milvu
 }
 
 // createCollection creates the Milvus collection if it doesn't exist.
+//
+//nolint:gocognit
 func (m *MilvusStore) createCollection(ctx context.Context, cfg *MilvusConfig) error {
-	// Check if collection exists
-	has, err := m.client.HasCollection(ctx, m.collectionName)
-	if err != nil {
-		return fmt.Errorf("failed to check collection: %w", err)
-	}
-
-	if has {
-		// Ensure required vector index exists (Milvus needs one before insert)
-		idxes, idxErr := m.client.DescribeIndex(ctx, m.collectionName, "vector")
-		if idxErr != nil {
-			return fmt.Errorf("failed to describe vector index: %w", idxErr)
-		}
-
-		if len(idxes) == 0 {
-			vectorIdx, idxErr := entity.NewIndexAUTOINDEX(entity.L2)
-			if idxErr != nil {
-				return fmt.Errorf("failed to build vector index: %w", idxErr)
+	return milvuslifecycle.EnsureCollectionLoadedWithHooksRetry(
+		ctx,
+		m.client,
+		m.collectionName,
+		func(innerCtx context.Context) error {
+			// Create schema
+			schema := &entity.Schema{
+				CollectionName: m.collectionName,
+				Description:    "Router replay records",
+				Fields: []*entity.Field{
+					{
+						Name:       "id",
+						DataType:   entity.FieldTypeVarChar,
+						PrimaryKey: true,
+						AutoID:     false,
+						TypeParams: map[string]string{
+							"max_length": "255",
+						},
+					},
+					{
+						Name:     "timestamp",
+						DataType: entity.FieldTypeInt64,
+					},
+					{
+						Name:     "data",
+						DataType: entity.FieldTypeVarChar,
+						TypeParams: map[string]string{
+							"max_length": "65535",
+						},
+					},
+					{
+						Name:     "vector",
+						DataType: entity.FieldTypeFloatVector,
+						TypeParams: map[string]string{
+							"dim": "2",
+						},
+					},
+				},
 			}
 
-			if idxErr := m.client.CreateIndex(ctx, m.collectionName, "vector", vectorIdx, false); idxErr != nil {
-				return fmt.Errorf("failed to create vector index: %w", idxErr)
+			shardNum := cfg.ShardNum
+			if shardNum <= 0 {
+				shardNum = DefaultMilvusShardNum
 			}
-		}
+			if shardNum > 2147483647 {
+				shardNum = DefaultMilvusShardNum
+			}
 
-		// Load collection into memory
-		return m.client.LoadCollection(ctx, m.collectionName, false)
-	}
+			// Create collection
+			//nolint:gosec // shardNum is validated to be within int32 range
+			if err := m.client.CreateCollection(innerCtx, schema, int32(shardNum)); err != nil {
+				return err
+			}
 
-	// Create schema
-	schema := &entity.Schema{
-		CollectionName: m.collectionName,
-		Description:    "Router replay records",
-		Fields: []*entity.Field{
-			{
-				Name:       "id",
-				DataType:   entity.FieldTypeVarChar,
-				PrimaryKey: true,
-				AutoID:     false,
-				TypeParams: map[string]string{
-					"max_length": "255",
-				},
-			},
-			{
-				Name:     "timestamp",
-				DataType: entity.FieldTypeInt64,
-			},
-			{
-				Name:     "data",
-				DataType: entity.FieldTypeVarChar,
-				TypeParams: map[string]string{
-					"max_length": "65535",
-				},
-			},
-			{
-				Name:     "vector",
-				DataType: entity.FieldTypeFloatVector,
-				TypeParams: map[string]string{
-					"dim": "2",
-				},
-			},
+			// Create vector index (required by Milvus even for dummy vectors)
+			vectorIdx, err := entity.NewIndexAUTOINDEX(entity.L2)
+			if err != nil {
+				return fmt.Errorf("failed to build vector index: %w", err)
+			}
+
+			if err := m.client.CreateIndex(innerCtx, m.collectionName, "vector", vectorIdx, false); err != nil {
+				return fmt.Errorf("failed to create vector index: %w", err)
+			}
+
+			// Create index on timestamp for efficient querying
+			timeIdx := entity.NewGenericIndex(
+				"timestamp_idx",
+				entity.Sorted,
+				map[string]string{},
+			)
+
+			if err := m.client.CreateIndex(innerCtx, m.collectionName, "timestamp", timeIdx, false); err != nil {
+				return fmt.Errorf("failed to create index: %w", err)
+			}
+
+			return nil
 		},
-	}
+		func(innerCtx context.Context) error {
+			// Ensure required vector index exists (Milvus needs one before insert)
+			idxes, err := m.client.DescribeIndex(innerCtx, m.collectionName, "vector")
+			if err != nil {
+				return fmt.Errorf("failed to describe vector index: %w", err)
+			}
 
-	shardNum := cfg.ShardNum
-	if shardNum <= 0 {
-		shardNum = DefaultMilvusShardNum
-	}
-	if shardNum > 2147483647 {
-		shardNum = DefaultMilvusShardNum
-	}
+			if len(idxes) == 0 {
+				vectorIdx, err := entity.NewIndexAUTOINDEX(entity.L2)
+				if err != nil {
+					return fmt.Errorf("failed to build vector index: %w", err)
+				}
 
-	// Create collection
-	//nolint:gosec // shardNum is validated to be within int32 range
-	err = m.client.CreateCollection(ctx, schema, int32(shardNum))
-	if err != nil {
-		return fmt.Errorf("failed to create collection: %w", err)
-	}
-
-	// Create vector index (required by Milvus even for dummy vectors)
-	vectorIdx, err := entity.NewIndexAUTOINDEX(entity.L2)
-	if err != nil {
-		return fmt.Errorf("failed to build vector index: %w", err)
-	}
-
-	err = m.client.CreateIndex(ctx, m.collectionName, "vector", vectorIdx, false)
-	if err != nil {
-		return fmt.Errorf("failed to create vector index: %w", err)
-	}
-
-	// Create index on timestamp for efficient querying
-	timeIdx := entity.NewGenericIndex(
-		"timestamp_idx",
-		entity.Sorted,
-		map[string]string{},
+				if err := m.client.CreateIndex(innerCtx, m.collectionName, "vector", vectorIdx, false); err != nil {
+					return fmt.Errorf("failed to create vector index: %w", err)
+				}
+			}
+			return nil
+		},
+		milvuslifecycle.CollectionRetryOptions{},
 	)
-
-	err = m.client.CreateIndex(ctx, m.collectionName, "timestamp", timeIdx, false)
-	if err != nil {
-		return fmt.Errorf("failed to create index: %w", err)
-	}
-
-	// Load collection
-	return m.client.LoadCollection(ctx, m.collectionName, false)
 }
 
 // asyncWriter processes async write operations.
@@ -370,14 +359,9 @@ func (m *MilvusStore) List(ctx context.Context) ([]Record, error) {
 		records = append(records, record)
 	}
 
-	// Sort by timestamp descending
-	for i := 0; i < len(records)-1; i++ {
-		for j := i + 1; j < len(records); j++ {
-			if records[i].Timestamp.Before(records[j].Timestamp) {
-				records[i], records[j] = records[j], records[i]
-			}
-		}
-	}
+	sort.Slice(records, func(i, j int) bool {
+		return records[i].Timestamp.After(records[j].Timestamp)
+	})
 
 	return records, nil
 }
@@ -433,6 +417,60 @@ func (m *MilvusStore) AttachResponse(ctx context.Context, id string, body string
 	record.ResponseBody = body
 	record.ResponseBodyTruncated = record.ResponseBodyTruncated || truncated
 
+	return m.upsertRecord(ctx, record)
+}
+
+// UpdateHallucinationStatus updates hallucination detection results for a record.
+func (m *MilvusStore) UpdateHallucinationStatus(ctx context.Context, id string, detected bool, confidence float32, spans []string) error {
+	record, found, err := m.Get(ctx, id)
+	if err != nil {
+		return err
+	}
+	if !found {
+		return fmt.Errorf("record with ID %s not found", id)
+	}
+
+	record.HallucinationDetected = detected
+	record.HallucinationConfidence = confidence
+	record.HallucinationSpans = spans
+
+	return m.upsertRecord(ctx, record)
+}
+
+// UpdateUsageCost updates token usage and pricing-derived cost fields for a record.
+func (m *MilvusStore) UpdateUsageCost(ctx context.Context, id string, usage UsageCost) error {
+	record, found, err := m.Get(ctx, id)
+	if err != nil {
+		return err
+	}
+	if !found {
+		return fmt.Errorf("record with ID %s not found", id)
+	}
+
+	record.PromptTokens = cloneIntPtr(usage.PromptTokens)
+	record.CachedPromptTokens = cloneIntPtr(usage.CachedPromptTokens)
+	record.CompletionTokens = cloneIntPtr(usage.CompletionTokens)
+	record.TotalTokens = cloneIntPtr(usage.TotalTokens)
+	record.ActualCost = cloneFloat64Ptr(usage.ActualCost)
+	record.BaselineCost = cloneFloat64Ptr(usage.BaselineCost)
+	record.CostSavings = cloneFloat64Ptr(usage.CostSavings)
+	record.Currency = cloneStringPtr(usage.Currency)
+	record.BaselineModel = cloneStringPtr(usage.BaselineModel)
+
+	return m.upsertRecord(ctx, record)
+}
+
+// UpdateToolTrace updates tool-calling trace details for a record.
+func (m *MilvusStore) UpdateToolTrace(ctx context.Context, id string, trace ToolTrace) error {
+	record, found, err := m.Get(ctx, id)
+	if err != nil {
+		return err
+	}
+	if !found {
+		return fmt.Errorf("record with ID %s not found", id)
+	}
+
+	record.ToolTrace = cloneToolTrace(&trace)
 	return m.upsertRecord(ctx, record)
 }
 

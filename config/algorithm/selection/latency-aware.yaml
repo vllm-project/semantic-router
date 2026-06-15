@@ -1,0 +1,6 @@
+algorithm:
+  type: latency_aware
+  latency_aware:
+    tpot_percentile: 90
+    ttft_percentile: 95
+

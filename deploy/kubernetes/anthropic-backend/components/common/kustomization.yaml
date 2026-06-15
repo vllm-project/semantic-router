@@ -1,0 +1,10 @@
+apiVersion: kustomize.config.k8s.io/v1alpha1
+kind: Component
+
+# Common labels applied to every resource that uses this component.
+labels:
+  - includeSelectors: true
+    pairs:
+      app.kubernetes.io/name: anthropic-backend
+      app.kubernetes.io/part-of: semantic-router-workspaces
+      app.kubernetes.io/managed-by: kustomize

@@ -1,0 +1,8 @@
+algorithm:
+  type: elo
+  elo:
+    initial_rating: 1200
+    k_factor: 32
+    category_weighted: true
+    min_comparisons: 10
+

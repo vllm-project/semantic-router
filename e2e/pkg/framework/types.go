@@ -4,15 +4,14 @@ import (
 	"context"
 
 	"k8s.io/client-go/kubernetes"
+
+	pkgtestcases "github.com/vllm-project/semantic-router/e2e/pkg/testcases"
 )
 
 // Profile defines the interface that all test profiles must implement
 type Profile interface {
 	// Name returns the profile name
 	Name() string
-
-	// Description returns a description of what this profile tests
-	Description() string
 
 	// Setup prepares the environment for testing (e.g., deploy Helm charts)
 	Setup(ctx context.Context, opts *SetupOptions) error
@@ -27,13 +26,8 @@ type Profile interface {
 	GetServiceConfig() ServiceConfig
 }
 
-// ServiceConfig contains configuration for accessing a service
-type ServiceConfig struct {
-	LabelSelector string // e.g., "gateway.envoyproxy.io/owning-gateway-namespace=default,..."
-	Namespace     string
-	Name          string // optional, if empty will use LabelSelector to find service
-	PortMapping   string // e.g., "8080:80"
-}
+// ServiceConfig is the canonical service-connection contract shared by profiles and testcases.
+type ServiceConfig = pkgtestcases.ServiceConfig
 
 // SetupOptions contains options for profile setup
 type SetupOptions struct {
@@ -53,6 +47,7 @@ type SetupOptions struct {
 	Verbose bool
 
 	// ValuesFiles contains paths to Helm values files
+	// keyed by Helm release name for profile-specific overlays.
 	ValuesFiles map[string]string
 }
 
@@ -82,7 +77,7 @@ type TestOptions struct {
 	// ImageTag is the Docker image tag to use
 	ImageTag string
 
-	// KeepCluster keeps the cluster after tests complete
+	// KeepCluster preserves the kind cluster and profile resources after the run.
 	KeepCluster bool
 
 	// UseExistingCluster uses an existing cluster instead of creating a new one
@@ -102,6 +97,9 @@ type TestOptions struct {
 
 	// SkipSetup skips profile setup and only runs tests (assumes environment is already deployed)
 	SkipSetup bool
+
+	// UseWorkspaceModels mounts the workspace models/ directory into semantic-router.
+	UseWorkspaceModels bool
 }
 
 // TestResult represents the result of a test case

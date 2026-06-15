@@ -1,3 +1,27 @@
+{{- $routerMultiReplica := false -}}
+{{- if .Values.autoscaling.enabled -}}
+{{- $routerMultiReplica = gt (int .Values.autoscaling.maxReplicas) 1 -}}
+{{- else -}}
+{{- $routerMultiReplica = gt (int .Values.replicaCount) 1 -}}
+{{- end -}}
+{{- $localSelectorStateDecisions := list -}}
+{{- $config := (get .Values "config") | default (dict) -}}
+{{- $routing := (get $config "routing") | default (dict) -}}
+{{- range $decision := ((get $routing "decisions") | default (list)) -}}
+{{- $algorithm := (get $decision "algorithm") | default (dict) -}}
+{{- $algorithmType := (get $algorithm "type") | default "" -}}
+{{- if or (eq $algorithmType "elo") (eq $algorithmType "rl_driven") (eq $algorithmType "gmtrouter") -}}
+{{- $localSelectorStateDecisions = append $localSelectorStateDecisions ((get $decision "name") | default "<unnamed>") -}}
+{{- end -}}
+{{- end -}}
+{{- $safetyGuards := (get .Values "safetyGuards") | default (dict) -}}
+{{- $rejectMultiReplicaLocalSelectorState := true -}}
+{{- if hasKey $safetyGuards "rejectMultiReplicaLocalSelectorState" -}}
+{{- $rejectMultiReplicaLocalSelectorState = get $safetyGuards "rejectMultiReplicaLocalSelectorState" -}}
+{{- end -}}
+{{- if and $rejectMultiReplicaLocalSelectorState $routerMultiReplica (gt (len $localSelectorStateDecisions) 0) -}}
+{{- fail (printf "multi-replica router deployments cannot use local learning selector state for decisions [%s]; configure a shared selector-state store or set safetyGuards.rejectMultiReplicaLocalSelectorState=false after accepting replica-local learning divergence" (join ", " $localSelectorStateDecisions)) -}}
+{{- end }}
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -5,6 +29,7 @@ metadata:
   namespace: {{ include "semantic-router.namespace" . }}
   labels:
     {{- include "semantic-router.labels" . | nindent 4 }}
+    app.kubernetes.io/component: router
 spec:
   {{- if not .Values.autoscaling.enabled }}
   replicas: {{ .Values.replicaCount }}
@@ -21,6 +46,7 @@ spec:
       {{- end }}
       labels:
         {{- include "semantic-router.selectorLabels" . | nindent 8 }}
+        app.kubernetes.io/component: router
     spec:
       {{- with .Values.imagePullSecrets }}
       imagePullSecrets:
@@ -58,14 +84,39 @@ spec:
         - containerPort: {{ .Values.service.api.targetPort }}
           name: classify-api
           protocol: TCP
-        {{- with .Values.env }}
+        {{- if or .Values.env .Values.extraEnv }}
         env:
+        {{- with .Values.env }}
           {{- toYaml . | nindent 10 }}
+        {{- end }}
+        {{- with .Values.extraEnv }}
+          {{- toYaml . | nindent 10 }}
+        {{- end }}
+        {{- end }}
+        {{- with .Values.envFromSecrets }}
+        envFrom:
+          {{- range . }}
+          - secretRef:
+              name: {{ . }}
+          {{- end }}
         {{- end }}
         volumeMounts:
         - name: config-volume
-          mountPath: /app/config
+          mountPath: /app/config/config.yaml
+          subPath: config.yaml
           readOnly: true
+        - name: config-volume
+          mountPath: /app/config/tools_db.json
+          subPath: tools_db.json
+          readOnly: true
+        {{- if and .Values.knowledgeBases.enabled .Values.knowledgeBases.existingConfigMap }}
+        - name: knowledge-bases-volume
+          mountPath: {{ .Values.knowledgeBases.mountPath | quote }}
+          readOnly: true
+        {{- end }}
+        {{- with .Values.extraVolumeMounts }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
         {{- if .Values.persistence.enabled }}
         - name: models-volume
           mountPath: /app/models
@@ -103,10 +154,18 @@ spec:
       - name: config-volume
         configMap:
           name: {{ include "semantic-router.fullname" . }}-config
+      {{- if and .Values.knowledgeBases.enabled .Values.knowledgeBases.existingConfigMap }}
+      - name: knowledge-bases-volume
+        configMap:
+          name: {{ .Values.knowledgeBases.existingConfigMap | quote }}
+      {{- end }}
       {{- if .Values.persistence.enabled }}
       - name: models-volume
         persistentVolumeClaim:
           claimName: {{ include "semantic-router.pvcName" . }}
+      {{- end }}
+      {{- with .Values.extraVolumes }}
+      {{- toYaml . | nindent 6 }}
       {{- end }}
       {{- with .Values.nodeSelector }}
       nodeSelector:

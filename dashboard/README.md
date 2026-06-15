@@ -6,7 +6,7 @@ Unified dashboard that brings together Configuration Management, an Interactive 
 
 - Single landing page for new/existing users
 - Embed Observability (Grafana/Prometheus) via iframes behind a single backend proxy for auth and CORS/CSP control
-- Read-only configuration viewer powered by the existing Semantic Router Classification API
+- Read-only configuration viewer powered by the existing Semantic Router router apiserver
 - Environment-agnostic: consistent URLs and behavior for local dev, Compose, and K8s
 
 ## What’s already in this repo (reused)
@@ -18,7 +18,7 @@ Unified dashboard that brings together Configuration Management, an Interactive 
   - Provisioned datasource and dashboard in `tools/observability/`
 - Router metrics and API
   - Metrics at `:9190/metrics` (Prometheus format)
-  - Classification API on `:8080` with endpoints like `GET /api/v1`, `GET /config/classification`
+  - Router apiserver on `:8080` with endpoints like `GET /api/v1`, `GET /config/router`
 
 These are sufficient to embed and proxy—no need to duplicate core functionality.
 
@@ -40,11 +40,13 @@ Pages:
 - **Config** (`/config`): Real-time configuration viewer with editable panels and save support
 - **Topology** (`/topology`): Visual topology of request flow and model selection using React Flow
 - **Playground** (`/playground`): Built-in chat playground for testing
+- **ML Setup** (`/ml-setup`): 3-step wizard for ML model selection — benchmark, train, and generate deployment config
+- **Security Policy** (`/security`): RBAC-to-router integration — map roles/groups to models and rate-limit tiers, preview generated router config fragments
 
 Features:
 
 - 🌓 Dark/Light theme toggle with localStorage persistence (default: light)
-- � Collapsible sidebar with quick section navigation (Models, Prompt Guard, Similarity Cache, Intelligent Routing, Topology, Tools Selection, Observability, Classification API)
+- � Collapsible sidebar with quick section navigation (Models, Prompt Guard, Similarity Cache, Intelligent Routing, Topology, Tools Selection, Observability, Router Apiserver)
 - �📱 Responsive design
 - ⚡ Fast navigation with React Router
 - 🎨 Modern UI inspired by vLLM website design
@@ -52,12 +54,23 @@ Features:
 
 Config editing:
 
-- The Config page includes edit/add modals for multiple sections (Models, Endpoints, Prompt Guard, Similarity Cache, Categories, Reasoning Families, Tools, Observability, Batch Classification API).
+- The Config page includes edit/add modals for multiple sections (Models, Endpoints, Prompt Guard, Similarity Cache, Categories, Reasoning Families, Tools, Observability, Batch Classification Settings).
 - Backend supports read/write operations:
   - `GET /api/router/config/all` returns the current config (YAML parsed and served as JSON).
   - `POST /api/router/config/update` updates the config file on disk (writes YAML). Requires the process to have write permission to the specified config path.
 - Tools DB panel loads `/api/tools-db`, which serves `tools_db.json` from the same directory as your config file.
 - Note for containers/Kubernetes: if the config is mounted from a read-only ConfigMap, updates won’t persist. Mount a writable volume or manage config externally if you need persistence.
+
+ML Model Selection Setup (`/ml-setup`):
+
+- A 3-step guided wizard for configuring ML-based intelligent request routing:
+  - **Step 1 — Benchmark**: Upload a models YAML and queries JSONL file, then run benchmarks against your LLMs to collect performance data. Real-time progress via SSE with per-query granularity.
+  - **Step 2 — Train**: Select one or more ML algorithms (KNN, K-Means, SVM, MLP) and train classifiers on the benchmark data. Trained model files are saved to a fixed `ml-train/` directory under the ML pipeline data path. The Device selector (CPU/CUDA) is shown only when MLP is selected.
+  - **Step 3 — Configure**: Define routing decisions (name, priority, algorithm, domains, model names) and generate a deployment-ready `ml-model-selection-values.yaml`. The generated YAML follows the semantic-router config schema and can be merged into your `config.yaml` for online inference.
+- The ML pipeline data directory (`data/ml-pipeline/`) is created automatically at server startup. Subdirectories (`ml-train/`, `ml-benchmark-<id>/`, `ml-config-<id>/`) are created dynamically when each flow runs.
+- Supports two execution modes:
+  - **Subprocess mode** (default): Runs Python scripts directly via `python3` — no additional services needed.
+  - **HTTP mode**: Connects to a Python ML service sidecar (set `ML_SERVICE_URL=http://ml-service:8686`), with SSE-based progress streaming.
 
 Read-only dashboard mode:
 
@@ -67,7 +80,7 @@ Read-only dashboard mode:
   - Frontend hides add/edit/delete actions and shows a read-only banner
   - Backend rejects write APIs with `403 Forbidden` for:
     - `POST /api/router/config/update`
-    - `POST /api/router/config/defaults/update`
+    - `POST /api/router/config/global/update`
 
 ### Backend (Go HTTP Server)
 
@@ -75,12 +88,22 @@ Read-only dashboard mode:
 - Reverse proxy with auth/cors/csp controls:
   - `GET /embedded/grafana/*` → Grafana
   - `GET /embedded/prometheus/*` → Prometheus (optional link-outs)
-  - `GET /api/router/*` → Router Classification API (`:8080`)
+  - `GET /api/router/*` → Router apiserver (`:8080`)
   - `GET /metrics/router` → Router `/metrics` (optional aggregation later)
   - `GET /api/router/config/all` → Returns your `config.yaml` as JSON (parsed from YAML)
   - `POST /api/router/config/update` → Updates your `config.yaml` (writes YAML)
   - `GET /api/tools-db` → Returns `tools_db.json` next to your config
   - `GET /healthz` → Health check endpoint
+  - `POST /api/ml-pipeline/benchmark` → Start a benchmark job (multipart: models YAML + queries JSONL)
+  - `POST /api/ml-pipeline/train` → Start a training job on benchmark data
+  - `POST /api/ml-pipeline/config` → Generate deployment-ready YAML config
+  - `GET /api/ml-pipeline/jobs` → List all ML pipeline jobs
+  - `GET /api/ml-pipeline/jobs/{id}` → Get job status and output files
+  - `GET /api/ml-pipeline/stream/{id}` → SSE stream for real-time job progress
+  - `GET /api/ml-pipeline/download/{id}/{filename}` → Download job output files
+  - `GET /api/security/policy` → Get current security policy config
+  - `PUT /api/security/policy` → Update security policy, generate router config fragment, and auto-apply to router config
+  - `POST /api/security/policy/preview` → Preview generated fragment without saving
 - Normalizes headers for iframe embedding: strips/overrides `X-Frame-Options` and `Content-Security-Policy` frame-ancestors as needed
 - SPA routing support: serves `index.html` for all non-asset routes
 - Central point for JWT/OIDC in the future (forward or exchange tokens to upstreams)
@@ -104,7 +127,11 @@ dashboard/
 │   │   │   ├── MonitoringPage.tsx  # Grafana iframe with path control
 │   │   │   ├── ConfigPage.tsx      # Config viewer with API fetch
 │   │   │   ├── PlaygroundPage.tsx  # Built-in chat playground
+│   │   │   ├── MLSetupPage.tsx     # ML model selection 3-step wizard
+│   │   │   ├── SecurityPolicyPage.tsx # RBAC role-to-model & rate-limit management
 │   │   │   └── *.module.css        # Scoped styles per page
+│   │   ├── hooks/
+│   │   │   └── useMLPipeline.ts    # ML pipeline state management & API hooks
 │   │   ├── App.tsx                 # Root component with routing
 │   │   ├── main.tsx                # Entry point
 │   │   └── index.css               # Global styles & CSS variables
@@ -115,6 +142,9 @@ dashboard/
 │   └── index.html                  # SPA shell
 ├── backend/                         # Go reverse proxy server
 │   ├── main.go                     # Proxy routes & static file server
+│   ├── handlers/mlpipeline.go      # ML pipeline HTTP handlers & SSE streaming
+│   ├── handlers/security_policy.go # Security policy API & config fragment generation
+│   ├── mlpipeline/runner.go        # ML job orchestration (benchmark, train, config gen)
 │   ├── go.mod                      # Go module (minimal dependencies)
 │   └── Dockerfile                  # Multi-stage build (Node + Go + Alpine)
 ├── README.md                        # This file
@@ -138,6 +168,8 @@ Optional:
 
 - `ROUTER_CONFIG_PATH` (default: `../../config/config.yaml`) — path to the router config file used by the config APIs and Tools DB.
 - `DASHBOARD_STATIC_DIR` — override static assets directory (defaults to `../frontend`).
+- `ML_SERVICE_URL` — URL of the Python ML service sidecar for HTTP mode (e.g., `http://ml-service:8686`). If not set, the dashboard uses subprocess mode (runs Python scripts directly).
+- `ML_PIPELINE_ENABLED` — set to `true` to enable ML pipeline features in Docker Compose/K8s deployments.
   Note: The backend already adjusts frame-busting headers (X-Frame-Options/CSP) to allow embedding from the dashboard origin; no extra env flag is required.
 
 Recommended upstream settings for embedding:
@@ -186,9 +218,14 @@ Recommended upstream settings for embedding:
 
 ## Security & access control
 
-- MVP: bearer token/JWT support via `Authorization: Bearer <token>` in requests to `/api/router/*` (forwarded to router API)
-- Frame embedding: backend strips/overrides `X-Frame-Options` and `Content-Security-Policy` headers from upstreams to permit `frame-ancestors 'self'` only
-- Future: OIDC login on dashboard, session cookie, and per-route RBAC; signed proxy sessions to embedded services
+- Dashboard auth uses JWTs from `Authorization: Bearer <token>` for protected `/api/*` and `/embedded/*` requests.
+- Protected embedded entry URLs may also carry `authToken=<token>`. Login and bootstrap responses set an HttpOnly `vsr_session` cookie, and logout revokes newly issued server-side session ids before clearing that cookie.
+- Frame embedding: backend strips/overrides `X-Frame-Options` and `Content-Security-Policy` headers from upstreams to permit `frame-ancestors 'self'` only.
+- **Security Policy page** (`/security`, accessible via Manager dropdown): allows admins to define role-to-model RBAC mappings and per-role rate-limit tiers. On save, the dashboard translates these into canonical router config (`routing.signals.role_bindings`, `routing.decisions`, and `global.services.ratelimit`), merges them into the running `config.yaml`, and triggers a hot-reload so the router enforces the new policy immediately. Requires the `security.manage` permission for writes; `config.read` is sufficient for viewing. See [security-hardening.md](../docs/architecture/security-hardening.md) for full details.
+- **Dashboard RBAC permissions**: `feedback.submit`, `replay.read`, and `security.manage` extend the built-in role/permission matrix. Only admin-role users receive `security.manage` by default.
+- Auth users, roles, permissions, audit logs, workflow state, and session ids use SQLite under `./data` by default. In containers or Kubernetes, mount `/app/data` or set `DASHBOARD_AUTH_DB_PATH` and `DASHBOARD_WORKFLOW_DB_PATH` to persistent paths if you need state to survive restarts.
+- The current SQLite auth/session store is single-replica local state. Run one dashboard replica unless you add a shared production auth/session store.
+- Future: OIDC login on dashboard and signed proxy sessions to embedded services.
 
 Write access warning for config updates:
 
@@ -331,6 +368,7 @@ kubectl -n vllm-semantic-router-system port-forward svc/semantic-router-dashboar
 Notes:
 
 - Configure environment variables to match your in-cluster service DNS names and namespace.
+- For Helm deployments, `dashboard.persistence.enabled=true` mounts `/app/data` and wires the auth/session and workflow SQLite paths into that persistent volume. The production values profile enables this, but still keeps the dashboard at one replica because the current auth/session store is not a shared HA store.
 - Mount your actual `config.yaml` via ConfigMap/Secret or a writable volume if you need runtime changes.
 - To expose externally, add an Ingress or Service of type LoadBalancer according to your cluster.
 

@@ -46,13 +46,14 @@ hf download KRLabsOrg/lettucedect-large-modernbert-en-v1 \
 Edit `bench/hallucination/config-7b.yaml`:
 
 ```yaml
-hallucination_mitigation:
-  enabled: true
-  
-  hallucination_model:
-    model_id: "models/lettucedect-large-modernbert-en-v1"  # Use large model
-    threshold: 0.5
-    use_cpu: true  # Set to false for GPU
+global:
+  model_catalog:
+    modules:
+      hallucination_mitigation:
+        detector:
+          model_id: "models/lettucedect-large-modernbert-en-v1"  # Use large model
+          threshold: 0.5
+          use_cpu: true  # Set to false for GPU
 ```
 
 ### Step 3: Restart Router
@@ -80,20 +81,26 @@ Both use `ModernBertForTokenClassification` architecture supported by candle-bin
 Key settings in `config-7b.yaml`:
 
 ```yaml
-# vLLM endpoint
-vllm_endpoints:
-  - name: "vllm-general"
-    address: "127.0.0.1"
-    port: 8083
+providers:
+  models:
+    - name: Qwen/Qwen2.5-14B-Instruct-AWQ
+      backend_refs:
+        - endpoint: 127.0.0.1:8083
+          protocol: http
+          type: chat
 
-# Hallucination detection
-hallucination_mitigation:
-  enabled: true
-  hallucination_model:
-    model_id: "models/lettucedect-large-modernbert-en-v1"
-    threshold: 0.5
-    use_cpu: true
-  on_hallucination_detected: "warn"  # or "block"
+global:
+  model_catalog:
+    modules:
+      prompt_guard:
+        enabled: true
+      hallucination_mitigation:
+        enabled: true
+        detector:
+          model_id: "models/lettucedect-large-modernbert-en-v1"
+          threshold: 0.5
+          use_cpu: true
+        on_hallucination_detected: warn  # or block
 ```
 
 ### Multi-Level Filtering Parameters

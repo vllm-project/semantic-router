@@ -12,7 +12,7 @@ static_resources:
       socket_address:
         address: {{ listener.address }}
         port_value: {{ listener.port }}
-    perConnectionBufferLimitBytes: 52428800
+    perConnectionBufferLimitBytes: 524288000
     filter_chains:
     - filters:
       - name: envoy.filters.network.http_connection_manager
@@ -25,6 +25,15 @@ static_resources:
             virtual_hosts:
             - name: local_service
               domains: ["*"]
+              # Security: strip internal headers from client requests to prevent
+              # looper bypass, identity spoofing, and credential leakage.
+              request_headers_to_remove:
+              - "x-vsr-looper-request"
+              - "x-vsr-looper-secret"
+              - "x-vsr-looper-decision"
+              - "x-vsr-looper-iteration"
+              - "x-authz-user-id"
+              - "x-authz-user-groups"
               routes:
               {% for model in models %}
               # Route for model: {{ model.name }}
@@ -36,16 +45,16 @@ static_resources:
                       exact: "{{ model.name }}"
                 route:
                   cluster: {{ model.cluster_name }}_cluster
-                  timeout: {{ listener.timeout | default('300s') }}
-                  idleTimeout: 300s
+                  timeout: {{ listener.timeout | default('1200s') }}
+                  idleTimeout: 1200s
                   # Rewrite Host header to match upstream server
-                  host_rewrite_literal: "{{ model.endpoints[0].address }}"
+                  host_rewrite_literal: "{{ model.endpoints[0].host_authority }}"
                   {% if model.path_prefix %}
                   # Prepend path prefix to all requests (e.g., /compatible-mode + /v1/chat/completions = /compatible-mode/v1/chat/completions)
                   regex_rewrite:
                     pattern:
                       google_re2: {}
-                      regex: "^(.*)$"
+                      regex: "^/v1(.*)$"
                     substitution: "{{ model.path_prefix }}\\1"
                   {% endif %}
               {% endfor %}
@@ -59,8 +68,8 @@ static_resources:
                       exact: "{{ model.name }}"
                 route:
                   cluster: anthropic_api_cluster
-                  timeout: {{ listener.timeout | default('300s') }}
-                  idleTimeout: 300s
+                  timeout: {{ listener.timeout | default('1200s') }}
+                  idleTimeout: 1200s
                   host_rewrite_literal: "api.anthropic.com"
               {% endfor %}
               # Default route (no x-selected-model header)
@@ -73,20 +82,48 @@ static_resources:
                   {% else %}
                   cluster: vllm_static_cluster
                   {% endif %}
-                  timeout: {{ listener.timeout | default('300s') }}
+                  timeout: {{ listener.timeout | default('1200s') }}
                   {% if models %}
                   # Rewrite Host header to match upstream server
-                  host_rewrite_literal: "{{ models[0].endpoints[0].address }}"
+                  host_rewrite_literal: "{{ models[0].endpoints[0].host_authority }}"
                   {% endif %}
                   {% if models and models[0].path_prefix %}
                   # Prepend path prefix to all requests (e.g., /compatible-mode + /v1/chat/completions = /compatible-mode/v1/chat/completions)
                   regex_rewrite:
                     pattern:
                       google_re2: {}
-                      regex: "^(.*)$"
+                      regex: "^/v1(.*)$"
                     substitution: "{{ models[0].path_prefix }}\\1"
                   {% endif %}
           http_filters:
+          {% if listener.api_keys %}
+          - name: envoy.filters.http.lua
+            typed_config:
+              "@type": type.googleapis.com/envoy.extensions.filters.http.lua.v3.LuaPerRoute
+          - name: envoy.filters.http.lua
+            typed_config:
+              "@type": type.googleapis.com/envoy.extensions.filters.http.lua.v3.Lua
+              inline_code: |
+                local VALID_KEYS = {
+                {% for key in listener.api_keys %}
+                  ["{{ key }}"] = true,
+                {% endfor %}
+                }
+                function envoy_on_request(request_handle)
+                  local auth = request_handle:headers():get("authorization") or
+                               request_handle:headers():get("Authorization") or ""
+                  local token = string.match(auth, "^[Bb]earer%s+(.+)$")
+                  if token and VALID_KEYS[token] then
+                    return
+                  end
+                  request_handle:respond(
+                    {[":status"] = "401",
+                     ["content-type"] = "application/json",
+                     ["www-authenticate"] = "Bearer realm=\"vllm-semantic-router\""},
+                    "{\"error\":{\"message\":\"Unauthorized: missing or invalid API key\",\"type\":\"authentication_error\",\"code\":\"invalid_api_key\"}}"
+                  )
+                end
+          {% endif %}
           - name: envoy.filters.http.ext_proc
             typed_config:
               "@type": type.googleapis.com/envoy.extensions.filters.http.ext_proc.v3.ExternalProcessor
@@ -94,13 +131,13 @@ static_resources:
               grpc_service:
                 envoy_grpc:
                   cluster_name: extproc_service
-                timeout: 300s
+                timeout: 1200s
               processing_mode:
                 request_header_mode: "SEND"
                 response_header_mode: "SEND"
                 request_body_mode: "BUFFERED"
                 response_body_mode: "BUFFERED"
-              message_timeout: {{ listener.timeout | default('300s') }}
+              message_timeout: {{ listener.timeout | default('1200s') }}
           - name: envoy.filters.http.router
             typed_config:
               "@type": type.googleapis.com/envoy.extensions.filters.http.router.v3.Router
@@ -115,8 +152,11 @@ static_resources:
   clusters:
   # ExtProc service (semantic router)
   - name: extproc_service
-    connect_timeout: 300s
-    type: STATIC
+    connect_timeout: 1200s
+    type: {{ extproc_cluster_type }}
+    {% if extproc_cluster_type == 'LOGICAL_DNS' %}
+    dns_lookup_family: V4_ONLY
+    {% endif %}
     lb_policy: ROUND_ROBIN
     http2_protocol_options: {}
     load_assignment:
@@ -126,15 +166,21 @@ static_resources:
         - endpoint:
             address:
               socket_address:
-                address: 127.0.0.1
+                address: {{ extproc_host }}
                 port_value: {{ extproc_port }}
+            {% if extproc_host_is_domain %}
+            hostname: "{{ extproc_host }}"
+            {% endif %}
 
   {% if not models %}
   # Fallback cluster for API-only configs (not actually used, but required for valid Envoy config)
   # When all models are API-based, the router handles requests directly without routing through Envoy clusters
   - name: vllm_static_cluster
     connect_timeout: 30s
-    type: STATIC
+    type: {{ router_api_cluster_type }}
+    {% if router_api_cluster_type == 'LOGICAL_DNS' %}
+    dns_lookup_family: V4_ONLY
+    {% endif %}
     lb_policy: ROUND_ROBIN
     load_assignment:
       cluster_name: vllm_static_cluster
@@ -143,14 +189,17 @@ static_resources:
         - endpoint:
             address:
               socket_address:
-                address: 127.0.0.1
-                port_value: 8080
+                address: {{ router_api_host }}
+                port_value: {{ router_api_port }}
+            {% if router_api_host_is_domain %}
+            hostname: "{{ router_api_host }}"
+            {% endif %}
   {% endif %}
 
   {% for model in models %}
   # Cluster for model: {{ model.name }}
   - name: {{ model.cluster_name }}_cluster
-    connect_timeout: 300s
+    connect_timeout: 1200s
     type: {{ model.cluster_type }}
     {% if model.cluster_type == 'LOGICAL_DNS' %}
     dns_lookup_family: V4_ONLY
@@ -189,7 +238,7 @@ static_resources:
   - name: anthropic_api_cluster
     type: LOGICAL_DNS
     dns_lookup_family: V4_ONLY
-    connect_timeout: 60s
+    connect_timeout: 1200s
     lb_policy: ROUND_ROBIN
     load_assignment:
       cluster_name: anthropic_api_cluster
