@@ -1,31 +1,7 @@
 package handlers
 
 func collectInContainerStatus(runtimePath, routerAPIURL string) SystemStatus {
-	if managedRuntimeUsesSplitContainers() {
-		return collectManagedDockerStatus(runtimePath, routerAPIURL)
-	}
-
-	status := baseSystemStatus()
-	status.DeploymentType = "docker"
-	status.Overall = "healthy"
-	status.Endpoints = []string{"http://localhost:8899"}
-
-	routerHealthy, routerMsg := checkServiceFromContainerLogs("router")
-	envoyHealthy, envoyMsg := checkServiceFromContainerLogs("envoy")
-	dashboardHealthy := true
-	dashboardMsg := "Running"
-
-	status.RouterRuntime = resolveRouterRuntimeStatus(runtimePath, routerAPIURL, routerHealthy)
-	routerMsg = applyRuntimeMessage(routerMsg, status.RouterRuntime)
-	status.Models = fetchModelsWhenReady(routerAPIURL, routerHealthy)
-	status.Services = append(status.Services,
-		buildServiceStatus("Router", boolToStatus(routerHealthy), routerHealthy, routerMsg, "container"),
-		buildServiceStatus("Envoy", boolToStatus(envoyHealthy), envoyHealthy, envoyMsg, "container"),
-		buildServiceStatus("Dashboard", boolToStatus(dashboardHealthy), dashboardHealthy, dashboardMsg, "container"),
-	)
-	setDegradedWhenUnhealthy(&status, routerHealthy, envoyHealthy, dashboardHealthy)
-
-	return status
+	return collectManagedDockerStatus(runtimePath, routerAPIURL)
 }
 
 func collectHostStatus(runtimePath, routerAPIURL string) SystemStatus {
@@ -33,19 +9,10 @@ func collectHostStatus(runtimePath, routerAPIURL string) SystemStatus {
 		return status
 	}
 
-	switch containerStatus := getDockerContainerStatus(vllmSrContainerName); containerStatus {
-	case "running":
-		return collectRunningDockerStatus(runtimePath, routerAPIURL)
-	case "exited":
-		return exitedContainerStatus()
-	case "not found":
-		if status, ok := collectDirectStatus(runtimePath, routerAPIURL); ok {
-			return status
-		}
-		return baseSystemStatus()
-	default:
-		return unknownContainerStatus(containerStatus)
+	if status, ok := collectDirectStatus(runtimePath, routerAPIURL); ok {
+		return status
 	}
+	return baseSystemStatus()
 }
 
 func collectSplitManagedHostStatus(runtimePath, routerAPIURL string) (SystemStatus, bool) {
@@ -87,51 +54,15 @@ func collectManagedDockerStatus(runtimePath, routerAPIURL string) SystemStatus {
 	return status
 }
 
-func collectRunningDockerStatus(runtimePath, routerAPIURL string) SystemStatus {
-	status := baseSystemStatus()
-	status.DeploymentType = "docker"
-	status.Overall = "healthy"
-	status.Endpoints = []string{"http://localhost:8899"}
-
-	logContent := getContainerLogsTail(500)
-	routerHealthy, routerMsg := checkServiceInLogContent("router", logContent)
-	envoyHealthy, envoyMsg := checkServiceInLogContent("envoy", logContent)
-	dashboardHealthy, dashboardMsg := checkServiceInLogContent("dashboard", logContent)
-
-	status.RouterRuntime = resolveRouterRuntimeStatus(runtimePath, routerAPIURL, routerHealthy)
-	routerMsg = applyRuntimeMessage(routerMsg, status.RouterRuntime)
-	status.Models = fetchModelsWhenReady(routerAPIURL, routerHealthy)
-	status.Services = append(status.Services,
-		buildServiceStatus("Router", boolToStatus(routerHealthy), routerHealthy, routerMsg, "container"),
-		buildServiceStatus("Envoy", boolToStatus(envoyHealthy), envoyHealthy, envoyMsg, "container"),
-		buildServiceStatus("Dashboard", boolToStatus(dashboardHealthy), dashboardHealthy, dashboardMsg, "container"),
-	)
-	setDegradedWhenUnhealthy(&status, routerHealthy, envoyHealthy, dashboardHealthy)
-
-	return status
-}
-
-func exitedContainerStatus() SystemStatus {
-	status := baseSystemStatus()
-	status.DeploymentType = "docker"
-	status.Overall = "stopped"
-	status.Services = append(status.Services, ServiceStatus{
-		Name:    "vllm-sr-container",
-		Status:  "exited",
-		Healthy: false,
-		Message: "Container exited. Check logs with: vllm-sr logs router",
-	})
-	return status
-}
-
 func unknownContainerStatus(containerStatus string) SystemStatus {
 	status := baseSystemStatus()
 	status.DeploymentType = "docker"
 	status.Overall = containerStatus
 	status.Services = append(status.Services, ServiceStatus{
-		Name:    "vllm-sr-container",
-		Status:  containerStatus,
-		Healthy: false,
+		Name:      "Runtime",
+		Status:    containerStatus,
+		Healthy:   false,
+		Component: "container",
 	})
 	return status
 }

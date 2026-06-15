@@ -2,19 +2,19 @@ package handlers
 
 import "testing"
 
-func TestManagedContainerNameForServiceDefaultsToLegacyRuntimeContainer(t *testing.T) {
+func TestManagedContainerNameForServiceDefaultsToSplitRuntimeContainers(t *testing.T) {
 	t.Setenv(routerContainerNameEnv, "")
 	t.Setenv(envoyContainerNameEnv, "")
 	t.Setenv(dashboardContainerNameEnv, "")
 
-	if got := managedContainerNameForService("router"); got != vllmSrContainerName {
-		t.Fatalf("router container default = %q, want %q", got, vllmSrContainerName)
+	if got := managedContainerNameForService("router"); got != defaultRouterContainerName {
+		t.Fatalf("router container default = %q, want %q", got, defaultRouterContainerName)
 	}
-	if got := managedContainerNameForService("envoy"); got != vllmSrContainerName {
-		t.Fatalf("envoy container default = %q, want %q", got, vllmSrContainerName)
+	if got := managedContainerNameForService("envoy"); got != defaultEnvoyContainerName {
+		t.Fatalf("envoy container default = %q, want %q", got, defaultEnvoyContainerName)
 	}
-	if got := managedContainerNameForService("dashboard"); got != vllmSrContainerName {
-		t.Fatalf("dashboard container default = %q, want %q", got, vllmSrContainerName)
+	if got := managedContainerNameForService("dashboard"); got != defaultDashboardContainerName {
+		t.Fatalf("dashboard container default = %q, want %q", got, defaultDashboardContainerName)
 	}
 }
 
@@ -37,13 +37,13 @@ func TestManagedContainerNameForServiceUsesExplicitEnvOverrides(t *testing.T) {
 	}
 }
 
-func TestManagedRuntimeUsesSplitContainersDefaultsToFalse(t *testing.T) {
+func TestManagedRuntimeUsesSplitContainersDefaultsToTrue(t *testing.T) {
 	t.Setenv(routerContainerNameEnv, "")
 	t.Setenv(envoyContainerNameEnv, "")
 	t.Setenv(dashboardContainerNameEnv, "")
 
-	if managedRuntimeUsesSplitContainers() {
-		t.Fatal("expected legacy single-container runtime by default")
+	if !managedRuntimeUsesSplitContainers() {
+		t.Fatal("expected split runtime by default")
 	}
 }
 
@@ -57,18 +57,29 @@ func TestManagedRuntimeUsesSplitContainersDetectsRoleOverrides(t *testing.T) {
 	}
 }
 
-func TestManagedContainerNamesForComponentAllDeduplicatesLegacyContainer(t *testing.T) {
+func TestManagedContainerNamesForComponentAllKeepsSplitRoleOrder(t *testing.T) {
 	t.Setenv(routerContainerNameEnv, "")
 	t.Setenv(envoyContainerNameEnv, "")
 	t.Setenv(dashboardContainerNameEnv, "")
 
 	got := managedContainerNamesForComponent("all")
-	if len(got) != 1 || got[0] != vllmSrContainerName {
-		t.Fatalf("all managed containers = %#v", got)
+	want := []string{
+		defaultRouterContainerName,
+		defaultEnvoyContainerName,
+		defaultDashboardContainerName,
+	}
+
+	if len(got) != len(want) {
+		t.Fatalf("managed container count = %d, want %d (%#v)", len(got), len(want), got)
+	}
+	for i := range want {
+		if got[i] != want[i] {
+			t.Fatalf("managed containers[%d] = %q, want %q", i, got[i], want[i])
+		}
 	}
 }
 
-func TestManagedContainerNamesForComponentAllKeepsSplitRoleOrder(t *testing.T) {
+func TestManagedContainerNamesForComponentAllKeepsCustomRoleOrder(t *testing.T) {
 	t.Setenv(routerContainerNameEnv, "lane-a-vllm-sr-router-container")
 	t.Setenv(envoyContainerNameEnv, "lane-a-vllm-sr-envoy-container")
 	t.Setenv(dashboardContainerNameEnv, "lane-a-vllm-sr-dashboard-container")

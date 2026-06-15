@@ -47,7 +47,7 @@ exit 1
 	return dockerPath
 }
 
-func TestCollectHostStatusPrefersSplitManagedRuntimeOverLegacyContainerResidue(t *testing.T) {
+func TestCollectHostStatusUsesSplitManagedRuntime(t *testing.T) {
 	dockerPath := writeFakeStatusDockerCLI(t)
 	t.Setenv("PATH", filepath.Dir(dockerPath)+":"+os.Getenv("PATH"))
 
@@ -56,8 +56,6 @@ func TestCollectHostStatusPrefersSplitManagedRuntimeOverLegacyContainerResidue(t
 	t.Setenv(dashboardContainerNameEnv, "lane-a-vllm-sr-dashboard-container")
 	t.Setenv("TARGET_ENVOY_URL", "http://127.0.0.1:1")
 
-	t.Setenv("TEST_LEGACY_CONTAINER", vllmSrContainerName)
-	t.Setenv("TEST_LEGACY_STATUS", "exited")
 	t.Setenv("TEST_ROUTER_CONTAINER", "lane-a-vllm-sr-router-container")
 	t.Setenv("TEST_ROUTER_STATUS", "running")
 	t.Setenv("TEST_ENVOY_CONTAINER", "lane-a-vllm-sr-envoy-container")
@@ -76,9 +74,6 @@ func TestCollectHostStatusPrefersSplitManagedRuntimeOverLegacyContainerResidue(t
 		t.Fatalf("first service = %q, want Router", status.Services[0].Name)
 	}
 	for _, service := range status.Services {
-		if service.Name == vllmSrContainerName {
-			t.Fatalf("legacy container residue leaked into split status: %#v", status.Services)
-		}
 		if service.Status != "running" {
 			t.Fatalf("service %q status = %q, want running", service.Name, service.Status)
 		}

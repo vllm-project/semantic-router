@@ -1,5 +1,5 @@
 import { execFileSync } from 'node:child_process'
-import { existsSync, mkdirSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { dirname, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
@@ -7,6 +7,11 @@ const scriptDir = dirname(fileURLToPath(import.meta.url))
 const repoRoot = resolve(scriptDir, '..', '..')
 const outputPath = resolve(repoRoot, 'website', 'src', 'data', 'contributorRank.generated.ts')
 const githubRepo = 'vllm-project/semantic-router'
+const releaseTags = {
+  v01: 'v0.1.0',
+  v02: 'v0.2.0',
+  v03: 'v0.3.0',
+}
 
 const identityOverrides = [
   {
@@ -246,35 +251,23 @@ for (const identity of identityOverrides) {
   overrideByName.set(normalizeName(identity.name), identity)
 }
 
-const rangeDefinitions = [
-  {
-    id: 'last3months',
-    label: 'Last 3 months',
-    startDate: formatLocalDate(shiftMonths(new Date(), -3)),
-    description: 'Recent non-merge commit activity.',
-  },
-  {
-    id: 'last365days',
-    label: 'Last 365 days',
-    startDate: formatLocalDate(shiftDays(new Date(), -365)),
-    description: 'Trailing year non-merge commit activity.',
-  },
-  {
-    id: 'all',
-    label: 'All time',
-    startDate: null,
-    description: 'Full repository non-merge commit history.',
-  },
-]
-
 try {
   const generatedAt = formatLocalDate(new Date())
   const allRows = readContributorRows(null)
-  const release = readLatestRelease()
-  const newContributorsSinceRelease = buildNewContributorsSinceRelease(release, allRows)
-  const newContributorKeys = new Set(newContributorsSinceRelease.entries.map(entry => entry.key))
+  const releaseTimeline = readReleaseTimeline()
+
+  if (!releaseTimeline) {
+    throw new Error('Release metadata is unavailable for contributor rank release windows.')
+  }
+
+  const releaseWindow = {
+    baseRelease: releaseTimeline.v02,
+    targetRelease: releaseTimeline.v03,
+  }
+  const rangeDefinitions = buildReleaseRangeDefinitions(releaseTimeline, generatedAt)
+  const newContributorsSinceRelease = buildNewContributorsSinceRelease(releaseWindow, allRows)
   const snapshots = Object.fromEntries(
-    rangeDefinitions.map(range => [range.id, buildSnapshot(range, generatedAt, allRows, newContributorKeys)]),
+    rangeDefinitions.map(range => [range.id, buildSnapshot(range, generatedAt, allRows)]),
   )
 
   mkdirSync(dirname(outputPath), { recursive: true })
@@ -289,9 +282,60 @@ catch (error) {
   throw error
 }
 
-function buildSnapshot(range, generatedAt, allRows, newContributorKeys) {
-  const rows = filterRowsByStartDate(allRows, range.startDate)
+function buildReleaseRangeDefinitions(releaseTimeline, generatedAt) {
+  return [
+    {
+      id: 'v03ToNow',
+      label: 'v0.3 -> Now',
+      startTagName: releaseTimeline.v03.tagName,
+      endTagName: null,
+      startDate: releaseTimeline.v03.publishedAt.slice(0, 10),
+      endDate: generatedAt,
+      description: 'Current non-merge commit activity after v0.3.0.',
+    },
+    {
+      id: 'v02ToV03',
+      label: 'v0.2 -> v0.3',
+      startTagName: releaseTimeline.v02.tagName,
+      endTagName: releaseTimeline.v03.tagName,
+      startDate: releaseTimeline.v02.publishedAt.slice(0, 10),
+      endDate: releaseTimeline.v03.publishedAt.slice(0, 10),
+      description: 'Non-merge commit activity between v0.2.0 and v0.3.0.',
+    },
+    {
+      id: 'v01ToV02',
+      label: 'v0.1 -> v0.2',
+      startTagName: releaseTimeline.v01.tagName,
+      endTagName: releaseTimeline.v02.tagName,
+      startDate: releaseTimeline.v01.publishedAt.slice(0, 10),
+      endDate: releaseTimeline.v02.publishedAt.slice(0, 10),
+      description: 'Non-merge commit activity between v0.1.0 and v0.2.0.',
+    },
+    {
+      id: 'v0ToV01',
+      label: 'v0 -> v0.1',
+      startTagName: null,
+      endTagName: releaseTimeline.v01.tagName,
+      startDate: null,
+      endDate: releaseTimeline.v01.publishedAt.slice(0, 10),
+      description: 'Initial non-merge commit activity through v0.1.0.',
+    },
+    {
+      id: 'all',
+      label: 'All time',
+      startTagName: null,
+      endTagName: null,
+      startDate: null,
+      endDate: generatedAt,
+      description: 'Full repository non-merge commit history.',
+    },
+  ]
+}
+
+function buildSnapshot(range, generatedAt, allRows) {
+  const rows = readRowsForRange(range, allRows)
   const byContributor = collectContributorStats(rows)
+  const newContributorKeys = readNewContributorKeysForRange(range, allRows, byContributor)
   const totalCommits = [...byContributor.values()].reduce((sum, entry) => sum + entry.commits, 0)
   const entries = rankContributorEntries(byContributor, totalCommits, newContributorKeys)
   const newContributors = entries.filter(entry => entry.isNewContributorSinceRelease).length
@@ -301,7 +345,7 @@ function buildSnapshot(range, generatedAt, allRows, newContributorKeys) {
     label: range.label,
     generatedAt,
     startDate: range.startDate,
-    endDate: generatedAt,
+    endDate: range.endDate,
     description: range.description,
     totalCommits,
     totalContributors: entries.length,
@@ -310,12 +354,70 @@ function buildSnapshot(range, generatedAt, allRows, newContributorKeys) {
   }
 }
 
-function buildNewContributorsSinceRelease(release, allRows) {
-  if (!release) {
+function readRowsForRange(range, allRows) {
+  if (!range.startTagName && !range.endTagName) {
+    return allRows
+  }
+
+  const commitShas = readCommitShasForRange(range)
+  if (commitShas) {
+    return allRows.filter(row => row.sha && commitShas.has(row.sha))
+  }
+
+  return filterRowsByDateRange(allRows, range.startDate, range.endDate)
+}
+
+function readCommitShasForRange(range) {
+  if (range.startTagName && range.endTagName) {
+    return readCommitShasBetweenTags(range.startTagName, range.endTagName)
+  }
+
+  if (range.startTagName) {
+    return readCommitShasSinceTag(range.startTagName)
+  }
+
+  if (range.endTagName) {
+    return readCommitShasThroughTag(range.endTagName)
+  }
+
+  return null
+}
+
+function readNewContributorKeysForRange(range, allRows, byContributor) {
+  if (!range.startTagName && !range.startDate) {
+    return new Set(byContributor.keys())
+  }
+
+  const historicalRows = readRowsBeforeRange(range, allRows)
+  const historicalContributorKeys = new Set(collectContributorStats(historicalRows).keys())
+
+  return new Set([...byContributor.keys()].filter(key => !historicalContributorKeys.has(key)))
+}
+
+function readRowsBeforeRange(range, allRows) {
+  if (range.startTagName) {
+    const commitShas = readCommitShasThroughTag(range.startTagName)
+    if (commitShas) {
+      return allRows.filter(row => row.sha && commitShas.has(row.sha))
+    }
+  }
+
+  if (!range.startDate) {
+    return []
+  }
+
+  return allRows.filter(row => row.date.slice(0, 10) < range.startDate)
+}
+
+function buildNewContributorsSinceRelease(releaseWindow, allRows) {
+  if (!releaseWindow) {
     return {
       tagName: null,
       releaseName: null,
       releaseDate: null,
+      targetTagName: null,
+      targetReleaseName: null,
+      targetReleaseDate: null,
       comparisonMode: 'none',
       totalCommits: 0,
       totalContributors: 0,
@@ -323,15 +425,14 @@ function buildNewContributorsSinceRelease(release, allRows) {
     }
   }
 
-  const commitShasSinceTag = readCommitShasSinceTag(release.tagName)
-  const rowsSinceRelease = commitShasSinceTag
-    ? allRows.filter(row => row.sha && commitShasSinceTag.has(row.sha))
-    : allRows.filter(row => row.date >= release.publishedAt)
-  const rowsBeforeRelease = commitShasSinceTag
-    ? allRows.filter(row => !row.sha || !commitShasSinceTag.has(row.sha))
-    : allRows.filter(row => row.date < release.publishedAt)
-  const historicalContributorKeys = new Set(collectContributorStats(rowsBeforeRelease).keys())
-  const byContributor = collectContributorStats(rowsSinceRelease)
+  const { baseRelease, targetRelease } = releaseWindow
+  const commitShasInWindow = readCommitShasBetweenTags(baseRelease.tagName, targetRelease.tagName)
+  const rowsInWindow = commitShasInWindow
+    ? allRows.filter(row => row.sha && commitShasInWindow.has(row.sha))
+    : allRows.filter(row => row.date >= baseRelease.publishedAt && row.date <= targetRelease.publishedAt)
+  const rowsBeforeBaseRelease = allRows.filter(row => row.date < baseRelease.publishedAt)
+  const historicalContributorKeys = new Set(collectContributorStats(rowsBeforeBaseRelease).keys())
+  const byContributor = collectContributorStats(rowsInWindow)
 
   for (const key of historicalContributorKeys) {
     byContributor.delete(key)
@@ -341,13 +442,44 @@ function buildNewContributorsSinceRelease(release, allRows) {
   const entries = rankContributorEntries(byContributor, totalCommits, new Set(byContributor.keys()))
 
   return {
-    tagName: release.tagName,
-    releaseName: release.name,
-    releaseDate: release.publishedAt.slice(0, 10),
-    comparisonMode: commitShasSinceTag ? 'tag' : 'date',
+    tagName: baseRelease.tagName,
+    releaseName: baseRelease.name,
+    releaseDate: baseRelease.publishedAt.slice(0, 10),
+    targetTagName: targetRelease.tagName,
+    targetReleaseName: targetRelease.name,
+    targetReleaseDate: targetRelease.publishedAt.slice(0, 10),
+    comparisonMode: commitShasInWindow ? 'tag' : 'date',
     totalCommits,
     totalContributors: entries.length,
     entries,
+  }
+}
+
+function readExistingNewContributorsSinceRelease() {
+  if (!existsSync(outputPath)) {
+    return null
+  }
+
+  try {
+    const source = readFileSync(outputPath, 'utf8')
+    const match = source.match(/export const newContributorsSinceRelease = ([\s\S]*?) satisfies NewContributorsSinceReleaseSnapshot/)
+    if (!match?.[1]) {
+      return null
+    }
+
+    const snapshot = JSON.parse(match[1])
+    if (!Array.isArray(snapshot.entries) || snapshot.entries.length === 0) {
+      return null
+    }
+
+    console.warn('Reusing existing newContributorsSinceRelease snapshot because release window metadata is unavailable.')
+
+    return snapshot
+  }
+  catch (error) {
+    console.warn(`Unable to reuse existing newContributorsSinceRelease snapshot: ${error.message}`)
+
+    return null
   }
 }
 
@@ -418,7 +550,20 @@ function readContributorRows(startDate) {
   }
 }
 
-function readLatestRelease() {
+function readReleaseTimeline() {
+  const releaseByTag = readGitHubReleaseMap()
+  const v01 = releaseByTag.get(releaseTags.v01) ?? readLocalReleaseTagIfAvailable(releaseTags.v01)
+  const v02 = releaseByTag.get(releaseTags.v02) ?? readLocalReleaseTagIfAvailable(releaseTags.v02)
+  const v03 = releaseByTag.get(releaseTags.v03) ?? readLocalReleaseTagIfAvailable(releaseTags.v03)
+
+  if (!v01 || !v02 || !v03) {
+    return null
+  }
+
+  return { v01, v02, v03 }
+}
+
+function readGitHubReleaseMap() {
   try {
     const output = execFileSync('gh', ['api', `repos/${githubRepo}/releases`], {
       cwd: repoRoot,
@@ -427,51 +572,118 @@ function readLatestRelease() {
       stdio: ['ignore', 'pipe', 'pipe'],
     }).trim()
 
-    const release = JSON.parse(output)
+    const releases = uniqueReleasesByTag(JSON.parse(output)
       .filter(candidate => !candidate.draft)
-      .sort((left, right) => String(right.published_at).localeCompare(String(left.published_at)))[0]
+      .sort((left, right) => String(right.published_at).localeCompare(String(left.published_at))))
 
-    if (release?.tag_name && release?.published_at) {
-      return {
+    return new Map(releases
+      .filter(release => release?.tag_name && release?.published_at)
+      .map(release => [release.tag_name, {
         tagName: release.tag_name,
         name: release.name ?? release.tag_name,
         publishedAt: release.published_at,
-      }
-    }
+      }]))
   }
   catch (error) {
     console.warn(`Falling back to local git release tag data: ${error.message}`)
-  }
 
-  return readLatestLocalTag()
+    return new Map()
+  }
 }
 
-function readLatestLocalTag() {
+function readLocalReleaseTagIfAvailable(tagName) {
   try {
-    const tagName = execFileSync('git', ['tag', '--sort=-creatordate'], {
-      cwd: repoRoot,
-      encoding: 'utf8',
-      stdio: ['ignore', 'pipe', 'pipe'],
-    }).trim().split('\n').find(Boolean)
+    return readLocalReleaseTag(tagName)
+  }
+  catch (error) {
+    console.warn(`Unable to read local release tag ${tagName}: ${error.message}`)
 
-    if (!tagName) {
-      return null
+    return null
+  }
+}
+
+function uniqueReleasesByTag(releases) {
+  const seen = new Set()
+  const unique = []
+
+  for (const release of releases) {
+    const tagName = release?.tag_name
+    if (!tagName || seen.has(tagName)) {
+      continue
     }
 
-    const publishedAt = execFileSync('git', ['log', '-1', '--format=%aI', tagName], {
+    seen.add(tagName)
+    unique.push(release)
+  }
+
+  return unique
+}
+
+function readLocalReleaseTag(tagName) {
+  const publishedAt = execFileSync('git', ['log', '-1', '--format=%aI', tagName], {
+    cwd: repoRoot,
+    encoding: 'utf8',
+    stdio: ['ignore', 'pipe', 'pipe'],
+  }).trim()
+
+  return {
+    tagName,
+    name: tagName,
+    publishedAt,
+  }
+}
+
+function readCommitShasBetweenTags(baseTagName, targetTagName) {
+  if (!baseTagName || !targetTagName) {
+    return null
+  }
+
+  try {
+    const output = execFileSync('gh', [
+      'api',
+      '--paginate',
+      '--slurp',
+      `repos/${githubRepo}/compare/${baseTagName}...${targetTagName}?per_page=100`,
+    ], {
       cwd: repoRoot,
       encoding: 'utf8',
+      maxBuffer: 1024 * 1024 * 64,
       stdio: ['ignore', 'pipe', 'pipe'],
     }).trim()
+    const pages = JSON.parse(output)
+    const shas = pages.flatMap(page => page.commits ?? []).map(commit => commit.sha).filter(Boolean)
 
-    return {
-      tagName,
-      name: tagName,
-      publishedAt,
+    if (shas.length > 0) {
+      return new Set(shas)
     }
   }
   catch (error) {
-    console.warn(`Unable to read local release tag data: ${error.message}`)
+    console.warn(`Falling back to local tag comparison: ${error.message}`)
+  }
+
+  try {
+    execFileSync('git', ['rev-parse', '--verify', `${baseTagName}^{commit}`], {
+      cwd: repoRoot,
+      encoding: 'utf8',
+      stdio: ['ignore', 'pipe', 'pipe'],
+    })
+    execFileSync('git', ['rev-parse', '--verify', `${targetTagName}^{commit}`], {
+      cwd: repoRoot,
+      encoding: 'utf8',
+      stdio: ['ignore', 'pipe', 'pipe'],
+    })
+
+    const output = execFileSync('git', ['log', '--no-merges', '--format=%H', `${baseTagName}..${targetTagName}`], {
+      cwd: repoRoot,
+      encoding: 'utf8',
+      maxBuffer: 1024 * 1024 * 8,
+      stdio: ['ignore', 'pipe', 'pipe'],
+    }).trim()
+
+    return new Set(output ? output.split('\n') : [])
+  }
+  catch (error) {
+    console.warn(`Falling back to release-date contributor detection: ${error.message}`)
 
     return null
   }
@@ -513,6 +725,34 @@ function readCommitShasSinceTag(tagName) {
     })
 
     const output = execFileSync('git', ['log', '--no-merges', '--format=%H', `${tagName}..HEAD`], {
+      cwd: repoRoot,
+      encoding: 'utf8',
+      maxBuffer: 1024 * 1024 * 8,
+      stdio: ['ignore', 'pipe', 'pipe'],
+    }).trim()
+
+    return new Set(output ? output.split('\n') : [])
+  }
+  catch (error) {
+    console.warn(`Falling back to release-date contributor detection: ${error.message}`)
+
+    return null
+  }
+}
+
+function readCommitShasThroughTag(tagName) {
+  if (!tagName) {
+    return null
+  }
+
+  try {
+    execFileSync('git', ['rev-parse', '--verify', `${tagName}^{commit}`], {
+      cwd: repoRoot,
+      encoding: 'utf8',
+      stdio: ['ignore', 'pipe', 'pipe'],
+    })
+
+    const output = execFileSync('git', ['log', '--no-merges', '--format=%H', tagName], {
       cwd: repoRoot,
       encoding: 'utf8',
       maxBuffer: 1024 * 1024 * 8,
@@ -595,12 +835,12 @@ function readGitLog(startDate) {
   })
 }
 
-function filterRowsByStartDate(rows, startDate) {
-  if (!startDate) {
-    return rows
-  }
+function filterRowsByDateRange(rows, startDate, endDate) {
+  return rows.filter((row) => {
+    const date = row.date.slice(0, 10)
 
-  return rows.filter(row => row.date >= `${startDate}T00:00:00`)
+    return (!startDate || date >= startDate) && (!endDate || date <= endDate)
+  })
 }
 
 function resolveIdentity(name, email, source = {}) {
@@ -792,20 +1032,6 @@ function maxDate(left, right) {
   return left > right ? left : right
 }
 
-function shiftMonths(date, months) {
-  const next = new Date(date)
-  next.setMonth(next.getMonth() + months)
-
-  return next
-}
-
-function shiftDays(date, days) {
-  const next = new Date(date)
-  next.setDate(next.getDate() + days)
-
-  return next
-}
-
 function formatLocalDate(date) {
   const year = date.getFullYear()
   const month = String(date.getMonth() + 1).padStart(2, '0')
@@ -819,7 +1045,7 @@ function renderTypeScript(generatedAt, snapshots, newContributorsSinceRelease) {
 // This file is generated by \`npm run contributors:rank\`.
 // Source: GitHub commits API with local git fallback.
 
-export type ContributorRankRange = 'last3months' | 'last365days' | 'all'
+export type ContributorRankRange = 'v03ToNow' | 'v02ToV03' | 'v01ToV02' | 'v0ToV01' | 'all'
 
 export interface ContributorRankEntry {
   rank: number
@@ -853,6 +1079,9 @@ export interface NewContributorsSinceReleaseSnapshot {
   tagName: string | null
   releaseName: string | null
   releaseDate: string | null
+  targetTagName: string | null
+  targetReleaseName: string | null
+  targetReleaseDate: string | null
   comparisonMode: 'tag' | 'date' | 'none'
   totalCommits: number
   totalContributors: number

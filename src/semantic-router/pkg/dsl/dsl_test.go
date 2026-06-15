@@ -597,7 +597,7 @@ SIGNAL fact_check fc { description: "fact check" }
 SIGNAL user_feedback uf { description: "feedback" }
 SIGNAL reask ra { description: "repeat question" threshold: 0.8 lookback_turns: 2 }
 SIGNAL preference pref { description: "preference" threshold: 0.7 examples: ["keep it concise", "bullet points only"] }
-SIGNAL language lang { description: "English" }
+SIGNAL language lang { description: "English" threshold: 0.6 }
 SIGNAL context ctx { min_tokens: "1K" max_tokens: "32K" }
 SIGNAL complexity comp { threshold: 0.1 hard: { candidates: ["hard task"] } easy: { candidates: ["easy task"] } }
 SIGNAL modality mod { description: "image" }
@@ -640,6 +640,9 @@ SIGNAL authz auth { role: "admin" subjects: [{ kind: "User", name: "admin" }] }
 	}
 	if len(cfg.LanguageRules) != 1 {
 		t.Errorf("expected 1 language rule, got %d", len(cfg.LanguageRules))
+	}
+	if cfg.LanguageRules[0].Threshold != 0.6 {
+		t.Errorf("unexpected language threshold: %v", cfg.LanguageRules[0].Threshold)
 	}
 	if len(cfg.ContextRules) != 1 {
 		t.Errorf("expected 1 context rule, got %d", len(cfg.ContextRules))
@@ -2507,7 +2510,7 @@ SIGNAL fact_check fc { description: "fact check" }
 SIGNAL user_feedback uf { description: "feedback" }
 SIGNAL reask ra { description: "repeat question" threshold: 0.8 lookback_turns: 2 }
 SIGNAL preference pref { description: "preference" threshold: 0.7 examples: ["keep it concise", "bullet points only"] }
-SIGNAL language lang { description: "English" }
+SIGNAL language lang { description: "English" threshold: 0.6 }
 SIGNAL context ctx { min_tokens: "1K" max_tokens: "32K" }
 SIGNAL complexity comp { threshold: 0.1 hard: { candidates: ["hard"] } easy: { candidates: ["easy"] } }
 SIGNAL modality mod { description: "image" }
@@ -2560,6 +2563,9 @@ ROUTE test_route {
 	}
 	if len(rt.LanguageRules) != 1 {
 		t.Errorf("language rules: %d", len(rt.LanguageRules))
+	}
+	if rt.LanguageRules[0].Threshold != 0.6 {
+		t.Errorf("unexpected language round-trip threshold: %v", rt.LanguageRules[0].Threshold)
 	}
 	if len(rt.ContextRules) != 1 {
 		t.Errorf("context rules: %d", len(rt.ContextRules))
@@ -3467,7 +3473,7 @@ SIGNAL fact_check fc { description: "fact check" }
 SIGNAL user_feedback uf { description: "feedback" }
 SIGNAL reask ra { description: "repeat question" threshold: 0.8 lookback_turns: 2 }
 SIGNAL preference pref { description: "preference" threshold: 0.7 examples: ["keep it concise", "bullet points only"] }
-SIGNAL language lang { description: "English" }
+SIGNAL language lang { description: "English" threshold: 0.6 }
 SIGNAL context ctx { min_tokens: "1K" max_tokens: "32K" }
 SIGNAL structure struct { feature: { type: "count", source: { type: "regex", pattern: "[?]" } } predicate: { gte: 1 } }
 SIGNAL conversation conv {
@@ -3525,6 +3531,9 @@ ROUTE test_route { PRIORITY 1 WHEN domain("dom") MODEL "m:1b" }
 	}
 	if !strings.Contains(dslText, `lookback_turns: 2`) {
 		t.Error("decompiled DSL missing reask lookback_turns")
+	}
+	if !strings.Contains(dslText, `threshold: 0.6`) {
+		t.Error("decompiled DSL missing language threshold")
 	}
 	for _, want := range []string{
 		`query_modality: "image"`,

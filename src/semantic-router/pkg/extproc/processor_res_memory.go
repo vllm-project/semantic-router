@@ -8,7 +8,9 @@ import (
 
 func (r *OpenAIRouter) scheduleResponseMemoryStore(ctx *RequestContext, responseBody []byte) {
 	autoStoreEnabled := extractAutoStore(ctx)
-	if !autoStoreEnabled && r.Config != nil && r.Config.Memory.AutoStore {
+	if requestAutoStore, ok := extractRequestAutoStore(ctx); ok {
+		autoStoreEnabled = requestAutoStore
+	} else if !autoStoreEnabled && r.Config != nil && r.Config.Memory.AutoStore {
 		logging.Infof("extractAutoStore: Falling back to router config, AutoStore=%v", r.Config.Memory.AutoStore)
 		autoStoreEnabled = true
 	}

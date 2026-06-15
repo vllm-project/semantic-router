@@ -11,6 +11,7 @@ var BaselineRouterContract = []string{
 	"anthropic-messages-request",
 	"anthropic-messages-protocol-headers",
 	"anthropic-messages-response-shape",
+	"anthropic-messages-streaming",
 	"apiserver-runtime-config-endpoints",
 	"apiserver-classification-endpoints",
 	"chat-completions-stress-request",
@@ -46,6 +47,8 @@ var DashboardContract = []string{
 	"dashboard-deploy-invalid-yaml",
 	// Evaluation endpoints (tasks/CRUD require CGO — only datasets works without it)
 	"dashboard-eval-datasets",
+	// Workflow persistence survives dashboard pod restart (requires dashboard PVC)
+	"dashboard-restart-recovery",
 	// Security Policy RBAC + ratelimit apply
 	"security-policy-apply",
 }

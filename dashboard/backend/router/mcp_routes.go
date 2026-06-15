@@ -12,20 +12,23 @@ import (
 	"github.com/vllm-project/semantic-router/dashboard/backend/handlers"
 	"github.com/vllm-project/semantic-router/dashboard/backend/mcp"
 	"github.com/vllm-project/semantic-router/dashboard/backend/middleware"
+	"github.com/vllm-project/semantic-router/dashboard/backend/workflowstore"
 )
 
 const internalOpenClawMCPPath = "/_internal/openclaw/mcp"
 
 // SetupMCP configures MCP related routes
 // Returns MCP Manager instance for lifecycle management
-func SetupMCP(mux *http.ServeMux, cfg *config.Config, openClawHandler *handlers.OpenClawHandler) *mcp.Manager {
+func SetupMCP(mux *http.ServeMux, cfg *config.Config, wf *workflowstore.Store, openClawHandler *handlers.OpenClawHandler) *mcp.Manager {
 	if !cfg.MCPEnabled {
 		log.Printf("MCP feature disabled")
 		return nil
 	}
 
-	// Initialize MCP manager (in-memory only, no config persistence)
-	mcpManager := mcp.NewManager()
+	mcpManager, err := mcp.NewManager(wf)
+	if err != nil {
+		log.Fatalf("MCP manager: %v", err)
+	}
 
 	// Register built-in OpenClaw MCP endpoint and server config.
 	if cfg.OpenClawEnabled && openClawHandler != nil {
@@ -55,7 +58,7 @@ func registerBuiltInOpenClawMCP(
 	mux.Handle(internalOpenClawMCPPath, loopbackOnly(openClawMCPHandler))
 
 	serverURL := fmt.Sprintf("http://127.0.0.1:%s%s", port, internalOpenClawMCPPath)
-	if err := mcpManager.AddServer(&mcp.ServerConfig{
+	if err := mcpManager.UpsertServer(&mcp.ServerConfig{
 		ID:          mcp.BuiltinOpenClawServerID,
 		Name:        mcp.BuiltinOpenClawServerName,
 		Description: "Built-in MCP server for OpenClaw team, worker, and connection management",

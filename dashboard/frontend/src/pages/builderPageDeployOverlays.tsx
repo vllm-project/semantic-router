@@ -1,6 +1,7 @@
 import React, { useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { DiffEditor } from "@monaco-editor/react";
+import type { MonacoDiffEditor } from "@monaco-editor/react";
 
 import type { DeployResult, DeployStep } from "@/types/dsl";
 
@@ -87,8 +88,7 @@ const BuilderDeployConfirmModal: React.FC<BuilderDeployConfirmModalProps> = ({
   onClose,
   onConfirm,
 }) => {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const diffEditorRef = useRef<any>(null);
+  const diffEditorRef = useRef<MonacoDiffEditor | null>(null);
   const [diffChangeCount, setDiffChangeCount] = useState(0);
 
   if (!open) return null;

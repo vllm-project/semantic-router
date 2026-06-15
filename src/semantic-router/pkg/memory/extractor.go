@@ -235,39 +235,40 @@ func (e *MemoryExtractor) ProcessResponseWithHistory(
 	}
 
 	startTime := time.Now()
-	turnStored := false
+	factsCount := 0
 	status := "success"
 	defer func() {
 		duration := time.Since(startTime).Seconds()
-		count := 1
-		if turnStored {
-			count = 1
-		}
-		RecordMemoryExtraction(status, duration, count, "episodic")
+		RecordMemoryExtraction(status, duration, factsCount, "episodic")
 	}()
 
 	// --- Per-turn chunk ---
 	if isLowEntropy(userMessage, assistantResponse) {
 		logging.Debugf("Memory chunk store: SKIPPED low-entropy turn for user=%s", userID)
-	} else if err := e.storeTurnChunk(ctx, userMessage, assistantResponse, userID); err != nil {
+	} else if stored, err := e.storeTurnChunk(ctx, userMessage, assistantResponse, userID); err != nil {
 		status = "error"
+		// Negative count skips the facts-count histogram for failed extraction attempts.
+		factsCount = -1
 		return err
-	} else {
-		turnStored = true
+	} else if stored {
+		factsCount++
 	}
 
 	// --- Session-level rolling window chunk ---
-	e.maybeStoreSessionChunk(ctx, userID, userMessage, assistantResponse, history)
+	if e.maybeStoreSessionChunk(ctx, userID, userMessage, assistantResponse, history) {
+		// The session window is stored as a separate episodic memory chunk.
+		factsCount++
+	}
 
 	return nil
 }
 
-func (e *MemoryExtractor) storeTurnChunk(ctx context.Context, userMessage, assistantResponse, userID string) error {
+func (e *MemoryExtractor) storeTurnChunk(ctx context.Context, userMessage, assistantResponse, userID string) (bool, error) {
 	chunk := formatTurnChunk(userMessage, assistantResponse)
 	sanitized, err := sanitizeMemoryContent(chunk)
 	if err != nil {
-		logging.Debugf("Memory chunk store: REJECTED - %v (user=%s)", err, userID)
-		return nil
+		logging.Debugf("Memory chunk store: sanitization rejected: not stored - %v (user=%s)", err, userID)
+		return false, nil
 	}
 	mem := &Memory{
 		ID:         generateMemoryID(),
@@ -279,25 +280,26 @@ func (e *MemoryExtractor) storeTurnChunk(ctx context.Context, userMessage, assis
 		Importance: 0.5,
 	}
 	if err := e.store.Store(ctx, mem); err != nil {
-		return fmt.Errorf("failed to store conversation chunk: %w", err)
+		return false, fmt.Errorf("failed to store conversation chunk: %w", err)
 	}
 	logging.Infof("Memory chunk store: stored turn for user=%s (len=%d)", userID, len(sanitized))
-	return nil
+	return true, nil
 }
 
 // maybeStoreSessionChunk stores a session-level chunk every `stride` turns.
 // Each chunk covers the last `windowSize` turns, creating overlapping windows
 // (stride < windowSize) so facts near window boundaries still co-occur in at
-// least one chunk -- critical for multi-hop retrieval.
+// least one chunk -- critical for multi-hop retrieval. It returns true when a
+// session chunk was actually stored.
 func (e *MemoryExtractor) maybeStoreSessionChunk(
 	ctx context.Context,
 	userID string,
 	userMessage string,
 	assistantResponse string,
 	history []openai.ChatCompletionMessageParamUnion,
-) {
+) bool {
 	if len(history) == 0 {
-		return
+		return false
 	}
 
 	windowSize := e.sessionWindowSize
@@ -312,23 +314,23 @@ func (e *MemoryExtractor) maybeStoreSessionChunk(
 	// history contains prior turns; +1 for the current turn
 	totalTurns := countTurns(history) + 1
 	if totalTurns < stride {
-		return
+		return false
 	}
 	// Fire on every stride-th turn (once we have enough turns for a window)
 	if totalTurns%stride != 0 {
-		return
+		return false
 	}
 
 	// Build session chunk from the last windowSize turns of history + current
 	sessionChunk := buildSessionChunk(history, userMessage, assistantResponse, windowSize)
 	if sessionChunk == "" {
-		return
+		return false
 	}
 
 	sanitized, err := sanitizeMemoryContent(sessionChunk)
 	if err != nil {
 		logging.Debugf("Memory session chunk: REJECTED - %v (user=%s)", err, userID)
-		return
+		return false
 	}
 
 	mem := &Memory{
@@ -343,11 +345,12 @@ func (e *MemoryExtractor) maybeStoreSessionChunk(
 
 	if err := e.store.Store(ctx, mem); err != nil {
 		logging.Warnf("Memory session chunk: failed to store for user=%s: %v", userID, err)
-		return
+		return false
 	}
 
 	logging.Infof("Memory session chunk: stored %d-turn window (stride=%d) for user=%s (len=%d)",
 		windowSize, stride, userID, len(sanitized))
+	return true
 }
 
 // countTurns counts user turns in a message history. Each user message is one turn.

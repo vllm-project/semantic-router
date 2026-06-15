@@ -1,6 +1,8 @@
 package dsl
 
 import (
+	"fmt"
+
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 )
 
@@ -114,6 +116,12 @@ func pluginFieldsHallucination(p *config.DecisionPlugin) map[string]Value {
 	}
 	if cfg.Enabled {
 		fields["enabled"] = BoolValue{V: true}
+	}
+	if cfg.UseNLI {
+		fields["use_nli"] = BoolValue{V: true}
+	}
+	if cfg.HallucinationAction != "" {
+		fields["hallucination_action"] = StringValue{V: cfg.HallucinationAction}
 	}
 	return fields
 }
@@ -239,6 +247,13 @@ func pluginFieldsRAG(p *config.DecisionPlugin) map[string]Value {
 	if !ok {
 		return fields
 	}
+	addRAGCoreFields(fields, cfg)
+	addRAGBackendAndFailureFields(fields, cfg)
+	addRAGCacheFields(fields, cfg)
+	return fields
+}
+
+func addRAGCoreFields(fields map[string]Value, cfg *config.RAGPluginConfig) {
 	if cfg.Enabled {
 		fields["enabled"] = BoolValue{V: true}
 	}
@@ -257,7 +272,27 @@ func pluginFieldsRAG(p *config.DecisionPlugin) map[string]Value {
 	if cfg.InjectionMode != "" {
 		fields["injection_mode"] = StringValue{V: cfg.InjectionMode}
 	}
-	return fields
+}
+
+func addRAGBackendAndFailureFields(fields map[string]Value, cfg *config.RAGPluginConfig) {
+	if backendConfig, ok := structuredPayloadObjectValue(cfg.BackendConfig); ok {
+		fields["backend_config"] = backendConfig
+	}
+	if cfg.OnFailure != "" {
+		fields["on_failure"] = StringValue{V: cfg.OnFailure}
+	}
+}
+
+func addRAGCacheFields(fields map[string]Value, cfg *config.RAGPluginConfig) {
+	if cfg.CacheResults {
+		fields["cache_results"] = BoolValue{V: true}
+	}
+	if cfg.CacheTTLSeconds != nil {
+		fields["cache_ttl_seconds"] = IntValue{V: *cfg.CacheTTLSeconds}
+	}
+	if cfg.MinConfidenceThreshold != nil {
+		fields["min_confidence_threshold"] = FloatValue{V: float64(*cfg.MinConfidenceThreshold)}
+	}
 }
 
 func pluginFieldsHeaderMutation(p *config.DecisionPlugin) map[string]Value {
@@ -290,4 +325,47 @@ func pluginFieldsHeaderMutation(p *config.DecisionPlugin) map[string]Value {
 		fields["delete"] = stringsToArray(cfg.Delete)
 	}
 	return fields
+}
+
+func structuredPayloadObjectValue(payload *config.StructuredPayload) (ObjectValue, bool) {
+	raw, err := payload.AsStringMap()
+	if err != nil || len(raw) == 0 {
+		return ObjectValue{}, false
+	}
+	return interfaceMapObjectValue(raw), true
+}
+
+func interfaceMapObjectValue(raw map[string]interface{}) ObjectValue {
+	fields := make(map[string]Value, len(raw))
+	for key, value := range raw {
+		fields[key] = interfaceValueToDSLValue(value)
+	}
+	return ObjectValue{Fields: fields}
+}
+
+func interfaceValueToDSLValue(raw interface{}) Value {
+	switch typed := normalizePluginConfigValue(raw).(type) {
+	case string:
+		return StringValue{V: typed}
+	case bool:
+		return BoolValue{V: typed}
+	case int:
+		return IntValue{V: typed}
+	case int64:
+		return IntValue{V: int(typed)}
+	case float32:
+		return FloatValue{V: float64(typed)}
+	case float64:
+		return FloatValue{V: typed}
+	case []interface{}:
+		items := make([]Value, 0, len(typed))
+		for _, item := range typed {
+			items = append(items, interfaceValueToDSLValue(item))
+		}
+		return ArrayValue{Items: items}
+	case map[string]interface{}:
+		return interfaceMapObjectValue(typed)
+	default:
+		return StringValue{V: fmt.Sprintf("%v", typed)}
+	}
 }

@@ -129,6 +129,9 @@ func (d *decompiler) decompileLanguageSignals() {
 		if lang.Description != "" {
 			d.write("  description: %q\n", lang.Description)
 		}
+		if lang.Threshold != 0 {
+			d.write("  threshold: %g\n", lang.Threshold)
+		}
 		d.write("}\n\n")
 	}
 }
@@ -211,6 +214,9 @@ func (d *decompiler) decompileAuthzSignals() {
 		d.write("SIGNAL authz %s {\n", quoteName(rb.Name))
 		if rb.Role != "" {
 			d.write("  role: %q\n", rb.Role)
+		}
+		if rb.Description != "" {
+			d.write("  description: %q\n", rb.Description)
 		}
 		if len(rb.Subjects) > 0 {
 			d.write("  subjects: [")

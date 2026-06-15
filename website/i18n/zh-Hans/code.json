@@ -1475,61 +1475,28 @@
     "message": "加入特定的工作组"
   },
   "team.title": {
-    "message": "团队成员 👥"
+    "message": "团队成员"
   },
   "team.subtitle": {
-    "message": "构建智能 LLM 路由未来的热情成员们"
+    "message": "按治理职责和提交职责协作推进 vLLM Semantic Router"
   },
-  "team.coreTeam.title": {
-    "message": "核心团队"
+  "team.steering.title": {
+    "message": "指导委员会"
   },
-  "team.coreTeam.description": {
-    "message": "推动项目发展并做出关键决策的核心维护者。"
+  "team.steering.description": {
+    "message": "指导委员会负责 vLLM Semantic Router 的路线图方向、项目范围和跨社区协作。"
+  },
+  "team.committers.title": {
+    "message": "提交者"
+  },
+  "team.committers.description": {
+    "message": "提交者负责具体实现领域、代码评审、社区答疑，并维护项目在各个版本中的健康度。"
   },
   "team.joinTeam.title": {
     "message": "加入我们"
   },
   "team.joinTeam.description": {
     "message": "我们一直在寻找热情的贡献者加入我们的社区！"
-  },
-  "team.recognition.title": {
-    "message": "荣誉表彰"
-  },
-  "team.recognition.subtitle": {
-    "message": "贡献者表彰"
-  },
-  "team.recognition.description": {
-    "message": "我们相信认可社区成员的宝贵贡献。在特定领域展现持续奉献和高质量工作的贡献者可能会被邀请成为维护者，获得仓库的写入权限。"
-  },
-  "team.recognition.pathTitle": {
-    "message": "成为维护者之路："
-  },
-  "team.recognition.step1.title": {
-    "message": "定期贡献"
-  },
-  "team.recognition.step1.desc": {
-    "message": "在你感兴趣的领域做出持续、高质量的贡献"
-  },
-  "team.recognition.step2.title": {
-    "message": "加入工作组"
-  },
-  "team.recognition.step2.desc": {
-    "message": "积极参与我们的"
-  },
-  "team.recognition.step2.link": {
-    "message": "工作组"
-  },
-  "team.recognition.step3.title": {
-    "message": "社区投票"
-  },
-  "team.recognition.step3.desc": {
-    "message": "获得维护者团队的提名和批准"
-  },
-  "team.recognition.step4.title": {
-    "message": "维护者权限"
-  },
-  "team.recognition.step4.desc": {
-    "message": "获邀加入维护者团队并获得写入权限"
   },
   "team.getInvolved.title": {
     "message": "参与方式"
@@ -1562,10 +1529,79 @@
     "message": "GitHub 讨论区"
   },
   "team.members.HuaminChen.role": {
-    "message": "杰出工程师"
+    "message": "@Microsoft"
   },
   "team.members.HuaminChen.bio": {
-    "message": "Red Hat 杰出工程师，推动云原生和 AI/LLM 推理技术的创新。"
+    "message": "长期孵化前沿基础设施和 AI 系统，覆盖云原生平台、开源生态和模型服务栈。"
+  },
+  "team.members.HuaminChen.expertise.cloud": {
+    "message": "云原生平台"
+  },
+  "team.members.HuaminChen.expertise.serving": {
+    "message": "模型服务栈"
+  },
+  "team.members.HuaminChen.expertise.ecosystem": {
+    "message": "开源生态"
+  },
+  "team.members.BoweiHe.role": {
+    "message": "Postdoc @ MBZUAI / McGill"
+  },
+  "team.members.BoweiHe.bio": {
+    "message": "CityUHK 博士，曾参与青云人才计划下的 Hunyuan LLM。"
+  },
+  "team.members.BoweiHe.expertise.research": {
+    "message": "学术研究"
+  },
+  "team.members.BoweiHe.expertise.llm": {
+    "message": "LLM 系统"
+  },
+  "team.members.BoweiHe.expertise.hunyuan": {
+    "message": "腾讯混元 LLM"
+  },
+  "team.members.YankaiChen.role": {
+    "message": "Postdoctoral Associate @ McGill University / MBZUAI"
+  },
+  "team.members.YankaiChen.bio": {
+    "message": "研究方向覆盖 agentic AI、人本 AI 和知识挖掘。"
+  },
+  "team.members.YankaiChen.expertise.agentic": {
+    "message": "Agentic AI"
+  },
+  "team.members.YankaiChen.expertise.hcai": {
+    "message": "人本 AI"
+  },
+  "team.members.YankaiChen.expertise.mining": {
+    "message": "知识挖掘"
+  },
+  "team.members.FuyuanLyu.role": {
+    "message": "PhD Candidate @ McGill University / Mila"
+  },
+  "team.members.FuyuanLyu.bio": {
+    "message": "研究方向包括数据中心 AI、自动特征选择，以及面向深度学习和基础模型的自动标注。"
+  },
+  "team.members.FuyuanLyu.expertise.data": {
+    "message": "数据中心 AI"
+  },
+  "team.members.FuyuanLyu.expertise.features": {
+    "message": "自动特征选择"
+  },
+  "team.members.FuyuanLyu.expertise.labeling": {
+    "message": "自动标注"
+  },
+  "team.members.SteveLiu.role": {
+    "message": "@MBZUAI / McGill / Mila"
+  },
+  "team.members.SteveLiu.bio": {
+    "message": "CAE 与 IEEE Fellow；Associate VPR @ MBZUAI；Prof @ McGill；Mila；ex-VP R&D @ Samsung AI；Chair ACM SIGBED。"
+  },
+  "team.members.SteveLiu.expertise.aiml": {
+    "message": "AI 与机器学习"
+  },
+  "team.members.SteveLiu.expertise.systems": {
+    "message": "智能系统"
+  },
+  "team.members.SteveLiu.expertise.cps": {
+    "message": "信息物理系统"
   },
   "team.members.ChenWang.role": {
     "message": "高级研究科学家"
@@ -1580,10 +1616,67 @@
     "message": "IBM 研究科学家，专注于 AI 研究和 LLM 推理。"
   },
   "team.members.XunzhuoLiu.role": {
-    "message": "智能路由"
+    "message": "LLM Routing @ vLLM"
   },
   "team.members.XunzhuoLiu.bio": {
-    "message": "专注于将集体智能带入 LLM 系统。"
+    "message": "LLM routing builder at vLLM。"
+  },
+  "team.members.XunzhuoLiu.expertise.routing": {
+    "message": "LLM 路由"
+  },
+  "team.members.XunzhuoLiu.expertise.gateway": {
+    "message": "Kubernetes AI Gateway"
+  },
+  "team.members.XunzhuoLiu.expertise.opensource": {
+    "message": "开源基础设施"
+  },
+  "team.members.FAUST-BENCHOU.role": {
+    "message": "云原生开源贡献者"
+  },
+  "team.members.FAUST-BENCHOU.bio": {
+    "message": "参与 Karmada 与 Volcano 的云原生开源贡献者。"
+  },
+  "team.members.shraderdm.role": {
+    "message": "GTM Tech Lead"
+  },
+  "team.members.shraderdm.bio": {
+    "message": "Google GTM Tech Lead。"
+  },
+  "team.members.drivebyer.role": {
+    "message": "云原生工程师"
+  },
+  "team.members.drivebyer.bio": {
+    "message": "DaoCloud 工程师与开源贡献者，关注实用基础设施改进。"
+  },
+  "team.members.ramkrishs.role": {
+    "message": "计算机科学工程师"
+  },
+  "team.members.ramkrishs.bio": {
+    "message": "Intuit 计算机科学工程师，专注软件系统。"
+  },
+  "team.members.WUKUNTAI-0211.role": {
+    "message": "软件工程师"
+  },
+  "team.members.WUKUNTAI-0211.bio": {
+    "message": "来自台湾 Delta Electronics 的软件工程师。"
+  },
+  "team.members.AayushSaini101.role": {
+    "message": "SDE, Data and AI"
+  },
+  "team.members.AayushSaini101.bio": {
+    "message": "Red Hat Data and AI SDE，GSoC 2025 参与者，AsyncAPI Steering Committee member。"
+  },
+  "team.members.siloteemu.role": {
+    "message": "开源贡献者"
+  },
+  "team.members.siloteemu.bio": {
+    "message": "GitHub 开源贡献者。"
+  },
+  "team.members.topNewContributor.role": {
+    "message": "Release Window Committer"
+  },
+  "team.members.topNewContributor.bio": {
+    "message": "基于近期贡献者排行识别的新 committer。"
   },
   "team.members.SenanZedan.role": {
     "message": "研发经理"
@@ -1691,6 +1784,18 @@
     "message": "个人贡献者"
   },
   "team.members.aeft.bio": {
+    "message": "vLLM Semantic Router 的开源贡献者。"
+  },
+  "team.members.HaoWu.role": {
+    "message": "个人贡献者"
+  },
+  "team.members.HaoWu.bio": {
+    "message": "vLLM Semantic Router 的开源贡献者。"
+  },
+  "team.members.QipingPan.role": {
+    "message": "个人贡献者"
+  },
+  "team.members.QipingPan.bio": {
     "message": "vLLM Semantic Router 的开源贡献者。"
   },
   "workGroups.title": {
@@ -2360,6 +2465,9 @@
   "team.badge.maintainer": {
     "message": "维护者"
   },
+  "team.badge.steering": {
+    "message": "指导委员会"
+  },
   "team.badge.committer": {
     "message": "提交者"
   },
@@ -2433,7 +2541,7 @@
     "message": "范围"
   },
   "community.contributors.range.aria": {
-    "message": "贡献者排行榜时间范围"
+    "message": "贡献者排行榜 release 窗口"
   },
   "community.contributors.range.through": {
     "message": "截至 {date}"
@@ -2465,17 +2573,29 @@
   "community.contributors.avatarAlt": {
     "message": "{name} 头像"
   },
-  "community.contributors.range.last3months.label": {
-    "message": "近 3 个月"
+  "community.contributors.range.v03ToNow.label": {
+    "message": "v0.3 -> 当前"
   },
-  "community.contributors.range.last3months.caption": {
-    "message": "默认"
+  "community.contributors.range.v03ToNow.caption": {
+    "message": "当前 release"
   },
-  "community.contributors.range.last365days.label": {
-    "message": "近 365 天"
+  "community.contributors.range.v02ToV03.label": {
+    "message": "v0.2 -> v0.3"
   },
-  "community.contributors.range.last365days.caption": {
-    "message": "过去一年"
+  "community.contributors.range.v02ToV03.caption": {
+    "message": "Release gap"
+  },
+  "community.contributors.range.v01ToV02.label": {
+    "message": "v0.1 -> v0.2"
+  },
+  "community.contributors.range.v01ToV02.caption": {
+    "message": "Release gap"
+  },
+  "community.contributors.range.v0ToV01.label": {
+    "message": "v0 -> v0.1"
+  },
+  "community.contributors.range.v0ToV01.caption": {
+    "message": "初始 release"
   },
   "community.contributors.range.all.label": {
     "message": "全部历史"

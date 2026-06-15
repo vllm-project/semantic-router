@@ -8,7 +8,7 @@ CONFIG_FILE="${1:-/app/config.yaml}"
 echo "Starting router from canonical config..."
 echo "  Config file: $CONFIG_FILE"
 
-# Preserve setup-mode behavior from the legacy supervisord entrypoint.
+# Preserve setup-mode behavior from the historical single-container entrypoint.
 if python3 -c "
 import sys, yaml
 try:
