@@ -2,7 +2,6 @@ package services
 
 import (
 	"encoding/json"
-	"fmt"
 	"strings"
 )
 
@@ -39,7 +38,7 @@ func (req IntentRequest) resolveSignalInput() (intentSignalInput, error) {
 
 	text := strings.TrimSpace(req.Text)
 	if text == "" {
-		return intentSignalInput{}, fmt.Errorf("text cannot be empty")
+		return intentSignalInput{}, ErrEmptyText
 	}
 
 	return intentSignalInput{

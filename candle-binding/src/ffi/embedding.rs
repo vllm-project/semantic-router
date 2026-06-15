@@ -1723,13 +1723,16 @@ pub extern "C" fn free_batch_similarity_result(result: *mut BatchSimilarityResul
     unsafe {
         let batch_result = &mut *result;
 
-        // Free the matches array if it's not null
+        // Free the matches array if it's not null. The array was allocated with
+        // `into_boxed_slice()`, so it must be reclaimed as a `Box<[SimilarityMatch]>`
+        // over the full length. Reconstructing a `Box<SimilarityMatch>` from the
+        // element pointer frees with the layout of a single element and is undefined
+        // behavior whenever num_matches > 1.
         if !batch_result.matches.is_null() && batch_result.num_matches > 0 {
-            let matches_slice = std::slice::from_raw_parts_mut(
+            let _ = Box::from_raw(std::ptr::slice_from_raw_parts_mut(
                 batch_result.matches,
                 batch_result.num_matches as usize,
-            );
-            let _ = Box::from_raw(matches_slice.as_mut_ptr());
+            ));
         }
 
         // Reset the result
@@ -1870,8 +1873,13 @@ pub extern "C" fn free_embedding_models_info(
                 }
             }
 
-            // Free the models array
-            let _ = Box::from_raw(models_slice.as_mut_ptr());
+            // Free the models array as the boxed slice it was allocated as. The
+            // element-pointer form would free with single-element layout while
+            // num_models is always 2, so reclaim the full-length slice.
+            let _ = Box::from_raw(std::ptr::slice_from_raw_parts_mut(
+                info_result.models,
+                info_result.num_models as usize,
+            ));
         }
 
         // Reset the result
