@@ -145,6 +145,25 @@ vllm-sr validate config.yaml
 
 `vllm-sr init` was removed in v0.3. Author `config.yaml` directly using the canonical `version/listeners/providers/routing/global` layout, migrate an older file with `vllm-sr config migrate --config old-config.yaml`, or import supported OpenClaw model providers with `vllm-sr config import --from openclaw`. Router-wide defaults come from the router itself and can be overridden under `global:`.
 
+### Inspect configured models
+
+Use `vllm-sr model list` to print the provider models and routing model cards from your active config without opening the dashboard.
+
+```bash
+# Uses config.yaml in the current directory
+vllm-sr model list
+
+# Inspect a specific config file
+vllm-sr model list --config my-config.yaml
+```
+
+The output is split into two sections:
+
+- **Provider models**: configured model names, the default model marker, provider model IDs, reasoning family, API format, and backend identity fields such as provider, redacted base URL, protocol, and weight.
+- **Model cards**: routing metadata such as modality, parameter size, context window, capabilities, tags, and LoRA names.
+
+Credential fields are intentionally not printed. API keys, API key environment variable names, embedded URL credentials, and sensitive query parameters are omitted or redacted so the command is safe to use in support logs.
+
 ## Features
 
 - **Router**: Intelligent request routing based on intent classification
