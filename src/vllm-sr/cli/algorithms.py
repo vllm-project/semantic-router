@@ -1,5 +1,7 @@
 """Algorithm configuration models for multi-model orchestration."""
 
+from typing import Literal
+
 from pydantic import BaseModel, ConfigDict, Field
 
 
@@ -100,6 +102,28 @@ class ReMoMAlgorithmConfig(BaseModel):
 
     # Maximum number of responses to keep per round (for memory efficiency)
     max_responses_per_round: int | None = None
+
+
+class FusionAlgorithmConfig(BaseModel):
+    """Configuration for Fusion multi-model deliberation.
+
+    The ``model`` field is the judge/calling model. ``analysis_models`` can
+    override decision.modelRefs when a route wants a dedicated panel list.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    model: str | None = None
+    analysis_models: list[str] | None = None
+    max_concurrent: int | None = Field(default=None, ge=1)
+    max_completion_tokens: int | None = Field(default=None, ge=1)
+    temperature: float | None = Field(default=None, ge=0)
+    include_analysis: bool | None = True
+    include_intermediate_responses: bool | None = True
+    on_error: Literal["skip", "fail"] | None = "skip"
+    analysis_template: str | None = None
+    synthesis_template: str | None = None
+    judge_prompt_version: str | None = "fusion-v1"
 
 
 class LatencyAwareAlgorithmConfig(BaseModel):
@@ -369,6 +393,7 @@ class AlgorithmConfig(BaseModel):
        - "confidence": Try smaller models first, escalate if confidence is low
        - "ratings": Coordinate bounded candidate execution
        - "remom": Multi-round parallel reasoning with intelligent synthesis
+       - "fusion": Parallel panel deliberation with judge analysis and final synthesis
 
     2. Selection algorithms (single model selection from candidates):
        - "static": Use first model (default)
@@ -387,7 +412,7 @@ class AlgorithmConfig(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
-    # Algorithm type: looper ("confidence", "ratings", "remom") or
+    # Algorithm type: looper ("confidence", "ratings", "remom", "fusion") or
     # selection ("static", "elo", "router_dc", "automix", "hybrid",
     #            "knn", "kmeans", "svm", "mlp", "multi_factor",
     #            "rl_driven", "gmtrouter", "latency_aware", "session_aware")
@@ -397,6 +422,7 @@ class AlgorithmConfig(BaseModel):
     confidence: ConfidenceAlgorithmConfig | None = None
     ratings: RatingsAlgorithmConfig | None = None
     remom: ReMoMAlgorithmConfig | None = None
+    fusion: FusionAlgorithmConfig | None = None
     latency_aware: LatencyAwareAlgorithmConfig | None = None
 
     # Selection algorithm configurations (from PR #1089, #1104)
