@@ -132,6 +132,9 @@ func (r *OpenAIRouter) selectModelFromCandidates(selCtx *selection.SelectionCont
 }
 
 func (r *OpenAIRouter) selectorForDecisionMethod(method selection.SelectionMethod, algorithm *config.AlgorithmConfig) selection.Selector {
+	if method == selection.MethodHybrid && algorithm != nil && algorithm.Hybrid != nil {
+		return r.newDecisionHybridSelector(algorithm.Hybrid)
+	}
 	if method == selection.MethodSessionAware && algorithm != nil && algorithm.SessionAware != nil {
 		return r.newDecisionSessionAwareSelector(algorithm.SessionAware)
 	}
@@ -139,6 +142,43 @@ func (r *OpenAIRouter) selectorForDecisionMethod(method selection.SelectionMetho
 		return nil
 	}
 	selector, _ := r.ModelSelector.Get(method)
+	return selector
+}
+
+func (r *OpenAIRouter) newDecisionHybridSelector(decisionCfg *config.HybridSelectionConfig) selection.Selector {
+	var cfg *selection.HybridConfig
+	if r != nil && r.Config != nil {
+		cfg = buildHybridSelectionConfig(r.Config, decisionCfg)
+	} else {
+		cfg = selection.DefaultHybridConfig()
+	}
+
+	var eloSelector *selection.EloSelector
+	var routerDCSelector *selection.RouterDCSelector
+	var autoMixSelector *selection.AutoMixSelector
+	if r != nil && r.ModelSelector != nil {
+		if selector, ok := r.ModelSelector.Get(selection.MethodElo); ok {
+			eloSelector, _ = selector.(*selection.EloSelector)
+		}
+		if selector, ok := r.ModelSelector.Get(selection.MethodRouterDC); ok {
+			routerDCSelector, _ = selector.(*selection.RouterDCSelector)
+		}
+		if selector, ok := r.ModelSelector.Get(selection.MethodAutoMix); ok {
+			autoMixSelector, _ = selector.(*selection.AutoMixSelector)
+		}
+	}
+
+	selector := selection.NewHybridSelectorWithComponents(cfg, eloSelector, routerDCSelector, autoMixSelector)
+	if r != nil && r.Config != nil && r.Config.ModelConfig != nil {
+		for model, params := range r.Config.ModelConfig {
+			if params.Pricing.PromptPer1M > 0 {
+				selector.SetModelCost(model, params.Pricing.PromptPer1M)
+			}
+		}
+	}
+	if r != nil && r.LookupTable != nil {
+		selector.SetLookupTable(r.LookupTable)
+	}
 	return selector
 }
 
