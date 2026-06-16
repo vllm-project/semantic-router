@@ -2208,8 +2208,8 @@ func TestVSRHeadersAddedOnSuccessfulNonCachedResponse(t *testing.T) {
 
 	setHeaders := headerMutation.GetSetHeaders()
 	// 2 keystone headers (x-vsr-schema-version + x-vsr-response-path, #2203) +
-	// 4 standard decision headers + x-vsr-inbound-protocol +
-	// x-vsr-outbound-protocol (translation-cell markers added by the
+	// 4 standard decision headers + x-vsr-client-protocol +
+	// x-vsr-upstream-protocol (translation-cell markers added by the
 	// Anthropic ingress series; emitted on every non-cache-hit response
 	// so operators can identify the cell that handled the request).
 	assert.Len(t, setHeaders, 8, "Should have 8 VSR headers (2 keystone + 4 decision + 2 protocol)")
@@ -2226,8 +2226,8 @@ func TestVSRHeadersAddedOnSuccessfulNonCachedResponse(t *testing.T) {
 	assert.Equal(t, "on", headerMap["x-vsr-selected-reasoning"])
 	assert.Equal(t, "deepseek-v31", headerMap["x-vsr-selected-model"])
 	assert.Equal(t, "true", headerMap["x-vsr-injected-system-prompt"])
-	assert.Equal(t, "openai", headerMap["x-vsr-inbound-protocol"])
-	assert.Equal(t, "openai", headerMap["x-vsr-outbound-protocol"])
+	assert.Equal(t, "openai", headerMap["x-vsr-client-protocol"])
+	assert.Equal(t, "openai", headerMap["x-vsr-upstream-protocol"])
 }
 
 func TestVSRHeadersNotAddedOnCacheHit(t *testing.T) {
@@ -2299,8 +2299,8 @@ func TestVSRHeadersNotAddedOnErrorResponse(t *testing.T) {
 
 	// Decision/signal headers are NOT added on error responses, but the v0.4
 	// keystone headers (x-vsr-schema-version + x-vsr-response-path) and the
-	// translation-cell protocol markers (x-vsr-inbound-protocol,
-	// x-vsr-outbound-protocol) ride on every non-cache-hit response — success
+	// translation-cell protocol markers (x-vsr-client-protocol,
+	// x-vsr-upstream-protocol) ride on every non-cache-hit response — success
 	// or error — so operators can identify the contract version, the response
 	// path, and which translation cell handled a failed request. The error
 	// here is an upstream-returned 500, so response-path is "upstream".
@@ -2315,8 +2315,8 @@ func TestVSRHeadersNotAddedOnErrorResponse(t *testing.T) {
 	}
 	assert.Equal(t, "2", headerMap["x-vsr-schema-version"])
 	assert.Equal(t, "upstream", headerMap["x-vsr-response-path"])
-	assert.Equal(t, "openai", headerMap["x-vsr-inbound-protocol"])
-	assert.Equal(t, "openai", headerMap["x-vsr-outbound-protocol"])
+	assert.Equal(t, "openai", headerMap["x-vsr-client-protocol"])
+	assert.Equal(t, "openai", headerMap["x-vsr-upstream-protocol"])
 	assert.NotContains(t, headerMap, "x-vsr-selected-category", "decision headers must not appear on error")
 	assert.NotContains(t, headerMap, "x-vsr-selected-model", "decision headers must not appear on error")
 }
@@ -2361,7 +2361,7 @@ func TestVSRHeadersPartialInformation(t *testing.T) {
 	// 2 keystone headers (x-vsr-schema-version + x-vsr-response-path, #2203) +
 	// 3 standard decision headers (excluding empty reasoning mode, but
 	// including injected-system-prompt) + 2 translation-cell protocol
-	// markers (x-vsr-inbound-protocol + x-vsr-outbound-protocol).
+	// markers (x-vsr-client-protocol + x-vsr-upstream-protocol).
 	assert.Len(t, setHeaders, 7, "Should have 7 VSR headers (2 keystone + 3 decision + 2 protocol)")
 
 	// Verify each header

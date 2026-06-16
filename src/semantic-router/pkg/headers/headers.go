@@ -241,21 +241,21 @@ const (
 // and 5xx) so clients can always tell which translation cell handled the
 // call and what was lost during translation.
 const (
-	// VSRInboundProtocol describes the wire format of the inbound request
+	// VSRClientProtocol describes the wire format of the inbound request
 	// as seen by the router (e.g. "openai", "anthropic"). Defaults to
 	// "openai" when no other protocol was detected.
-	VSRInboundProtocol = "x-vsr-inbound-protocol"
+	VSRClientProtocol = "x-vsr-client-protocol"
 
-	// VSROutboundProtocol describes the wire format of the outbound
+	// VSRUpstreamProtocol describes the wire format of the outbound
 	// request sent to the upstream backend. Defaults to "openai" when no
 	// explicit APIFormat was resolved.
-	VSROutboundProtocol = "x-vsr-outbound-protocol"
+	VSRUpstreamProtocol = "x-vsr-upstream-protocol"
 
-	// VSRLossinessWarnings carries a structured, comma-separated list
+	// VSRProtocolWarnings carries a structured, comma-separated list
 	// of translation observations emitted by the inbound parser during
 	// a lossy translation. Each entry is "severity;reason;field".
 	// Absent when no warnings were produced.
-	VSRLossinessWarnings = "x-vsr-lossiness-warnings"
+	VSRProtocolWarnings = "x-vsr-protocol-warnings"
 )
 
 // Legacy Security Headers (kept for backward compatibility with replay recorder)

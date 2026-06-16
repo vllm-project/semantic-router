@@ -74,8 +74,8 @@ func TestBuildResponseHeaderMutation_ProtocolMarkersDefaultToOpenAI(t *testing.T
 	require.NotNil(t, mutation)
 
 	headerMap := mutationToMap(mutation.SetHeaders)
-	assert.Equal(t, "openai", headerMap[headers.VSRInboundProtocol])
-	assert.Equal(t, "openai", headerMap[headers.VSROutboundProtocol])
+	assert.Equal(t, "openai", headerMap[headers.VSRClientProtocol])
+	assert.Equal(t, "openai", headerMap[headers.VSRUpstreamProtocol])
 }
 
 func TestBuildResponseHeaderMutation_ProtocolMarkersReflectAnthropicIngress(t *testing.T) {
@@ -88,8 +88,8 @@ func TestBuildResponseHeaderMutation_ProtocolMarkersReflectAnthropicIngress(t *t
 	require.NotNil(t, mutation)
 
 	headerMap := mutationToMap(mutation.SetHeaders)
-	assert.Equal(t, "anthropic", headerMap[headers.VSRInboundProtocol])
-	assert.Equal(t, "anthropic", headerMap[headers.VSROutboundProtocol])
+	assert.Equal(t, "anthropic", headerMap[headers.VSRClientProtocol])
+	assert.Equal(t, "anthropic", headerMap[headers.VSRUpstreamProtocol])
 }
 
 func TestBuildResponseHeaderMutation_ProtocolMarkersEmittedOnFailedResponse(t *testing.T) {
@@ -101,8 +101,8 @@ func TestBuildResponseHeaderMutation_ProtocolMarkersEmittedOnFailedResponse(t *t
 	require.NotNil(t, mutation)
 
 	headerMap := mutationToMap(mutation.SetHeaders)
-	assert.Equal(t, "anthropic", headerMap[headers.VSRInboundProtocol])
-	assert.Equal(t, "openai", headerMap[headers.VSROutboundProtocol])
+	assert.Equal(t, "anthropic", headerMap[headers.VSRClientProtocol])
+	assert.Equal(t, "openai", headerMap[headers.VSRUpstreamProtocol])
 
 	// Existing pre-PR3 markers stay gated by isSuccessful.
 	assert.NotContains(t, headerMap, headers.VSRSelectedCategory)
@@ -238,7 +238,7 @@ func TestAddLossinessWarnings_SingleEntry(t *testing.T) {
 	headerMap := mutationToMap(builder.setHeaders)
 	assert.Equal(t,
 		"lossy;top_k_drop_on_openai_backend;top_k",
-		headerMap[headers.VSRLossinessWarnings],
+		headerMap[headers.VSRProtocolWarnings],
 	)
 }
 
@@ -257,7 +257,7 @@ func TestAddLossinessWarnings_MultipleEntriesCommaSeparated(t *testing.T) {
 		"lossy;unsupported_block_type;messages[0].content[2],"+
 			"lossy;dropped;top_k,"+
 			"info;coerced_string;tool_choice.disable_parallel_tool_use",
-		headerMap[headers.VSRLossinessWarnings],
+		headerMap[headers.VSRProtocolWarnings],
 	)
 }
 
@@ -278,7 +278,7 @@ func TestAddLossinessWarnings_TruncationAppendsTrailer(t *testing.T) {
 	builder.addLossinessWarnings(ctx, warnings)
 
 	headerMap := mutationToMap(builder.setHeaders)
-	got := headerMap[headers.VSRLossinessWarnings]
+	got := headerMap[headers.VSRProtocolWarnings]
 
 	assert.NotEmpty(t, got)
 	// The encoded list lives close to 4 KB; the trailer itself adds a
@@ -300,7 +300,7 @@ func TestAddLossinessWarnings_SanitizesSeparatorsInFieldPaths(t *testing.T) {
 	headerMap := mutationToMap(builder.setHeaders)
 	assert.Equal(t,
 		"lossy;dropped%3Bextra%2Cbits;weird%3Bfield%2Cname",
-		headerMap[headers.VSRLossinessWarnings],
+		headerMap[headers.VSRProtocolWarnings],
 	)
 }
 
@@ -315,7 +315,7 @@ func TestAddLossinessWarnings_SanitizesCRLFInFieldPaths(t *testing.T) {
 	}})
 
 	headerMap := mutationToMap(builder.setHeaders)
-	got := headerMap[headers.VSRLossinessWarnings]
+	got := headerMap[headers.VSRProtocolWarnings]
 	assert.NotContains(t, got, "\r")
 	assert.NotContains(t, got, "\n")
 	assert.Contains(t, got, "%0D%0A")
@@ -340,11 +340,11 @@ func TestBuildResponseHeaderMutation_EmitsWarningsAlongsideStandardHeaders(t *te
 	require.NotNil(t, mutation)
 
 	headerMap := mutationToMap(mutation.SetHeaders)
-	assert.Equal(t, "anthropic", headerMap[headers.VSRInboundProtocol])
-	assert.Equal(t, "openai", headerMap[headers.VSROutboundProtocol])
+	assert.Equal(t, "anthropic", headerMap[headers.VSRClientProtocol])
+	assert.Equal(t, "openai", headerMap[headers.VSRUpstreamProtocol])
 	assert.Equal(t,
 		"lossy;top_k_drop_on_openai_backend;top_k",
-		headerMap[headers.VSRLossinessWarnings],
+		headerMap[headers.VSRProtocolWarnings],
 	)
 	assert.Equal(t, "math", headerMap[headers.VSRSelectedCategory])
 }

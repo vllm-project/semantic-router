@@ -23,9 +23,9 @@ Cache-hit responses can emit cache headers, but they do not re-run routing and t
 
 | Header | Description |
 | ------ | ----------- |
-| `x-vsr-inbound-protocol` | Inbound protocol shape seen by the router, for example `openai` or `anthropic`. |
-| `x-vsr-outbound-protocol` | Protocol shape sent to the selected upstream backend. |
-| `x-vsr-lossiness-warnings` | Comma-separated protocol translation warnings encoded as `severity;reason;field`. |
+| `x-vsr-client-protocol` | Inbound protocol shape seen by the router, for example `openai` or `anthropic`. |
+| `x-vsr-upstream-protocol` | Protocol shape sent to the selected upstream backend. |
+| `x-vsr-protocol-warnings` | Comma-separated protocol translation warnings encoded as `severity;reason;field`. |
 | `x-vsr-replay-id` | Opaque router replay record identifier for correlating a response with replay/Insights data. |
 
 ## Decision Headers
@@ -91,8 +91,8 @@ Projection scores and full projection traces are stored in router replay records
 ```http
 HTTP/1.1 200 OK
 Content-Type: application/json
-x-vsr-inbound-protocol: openai
-x-vsr-outbound-protocol: openai
+x-vsr-client-protocol: openai
+x-vsr-upstream-protocol: openai
 x-vsr-selected-decision: critical_event_tool_session_route
 x-vsr-selected-confidence: 1.0000
 x-vsr-selected-model: anthropic/claude-opus-4.6
