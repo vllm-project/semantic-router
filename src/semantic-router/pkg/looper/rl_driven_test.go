@@ -103,9 +103,14 @@ func TestRLDrivenLooper_FormatJSONResponse(t *testing.T) {
 	modelsUsed := []string{"gpt-4", "claude-3"}
 	iterations := 2
 
-	resp, err := looper.formatJSONResponse(content, model, modelsUsed, iterations)
+	usage := TokenUsage{PromptTokens: 30, CompletionTokens: 12, TotalTokens: 42}
+	resp, err := looper.formatJSONResponse(content, model, modelsUsed, iterations, usage)
 	if err != nil {
 		t.Fatalf("formatJSONResponse failed: %v", err)
+	}
+
+	if resp.Usage != usage {
+		t.Errorf("Expected response usage %+v, got %+v", usage, resp.Usage)
 	}
 
 	if resp == nil {
@@ -151,7 +156,7 @@ func TestRLDrivenLooper_FormatStreamingResponse(t *testing.T) {
 	modelsUsed := []string{"claude-3"}
 	iterations := 1
 
-	resp, err := looper.formatStreamingResponse(content, model, modelsUsed, iterations)
+	resp, err := looper.formatStreamingResponse(content, model, modelsUsed, iterations, TokenUsage{})
 	if err != nil {
 		t.Fatalf("formatStreamingResponse failed: %v", err)
 	}
