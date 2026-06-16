@@ -66,8 +66,17 @@ func resolveSelectionEmbeddingFunc(cfg *config.RouterConfig) func(string) ([]flo
 	case "openvino":
 		return openvinoEmbeddingFunc(modelType)
 	default:
+		if candle_binding.SupportsBatchedEmbedding(modelType) {
+			return func(text string) ([]float32, error) {
+				output, err := candle_binding.GetEmbeddingBatched(text, modelType, 1024)
+				if err != nil {
+					return nil, err
+				}
+				return output.Embedding, nil
+			}
+		}
 		return func(text string) ([]float32, error) {
-			output, err := candle_binding.GetEmbeddingBatched(text, modelType, 1024)
+			output, err := candle_binding.GetEmbeddingWithModelType(text, modelType, 0)
 			if err != nil {
 				return nil, err
 			}
