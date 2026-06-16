@@ -11,23 +11,42 @@ const (
 	DefaultFusionJudgePromptVersion = "fusion-v1"
 	FusionOnErrorSkip               = "skip"
 	FusionOnErrorFail               = "fail"
+
+	// Grounding reference modes select what panel responses are scored against.
+	FusionGroundingReferenceHybrid  = "hybrid"  // detector against context if present, else cross-model NLI
+	FusionGroundingReferenceContext = "context" // detector against provided RAG/tool context only
+	FusionGroundingReferencePanel   = "panel"   // cross-model NLI only (panel as its own reference)
 )
 
 // FusionAlgorithmConfig configures Fusion-style panel execution for
 // decision.algorithm.type=fusion. Model is the judge/calling model; analysis
 // models come from analysis_models when set, otherwise from decision.modelRefs.
 type FusionAlgorithmConfig struct {
-	Model                        string   `yaml:"model,omitempty" json:"model,omitempty"`
-	AnalysisModels               []string `yaml:"analysis_models,omitempty" json:"analysis_models,omitempty"`
-	MaxConcurrent                int      `yaml:"max_concurrent,omitempty" json:"max_concurrent,omitempty"`
-	MaxCompletionTokens          int      `yaml:"max_completion_tokens,omitempty" json:"max_completion_tokens,omitempty"`
-	Temperature                  *float64 `yaml:"temperature,omitempty" json:"temperature,omitempty"`
-	IncludeAnalysis              *bool    `yaml:"include_analysis,omitempty" json:"include_analysis,omitempty"`
-	OnError                      string   `yaml:"on_error,omitempty" json:"on_error,omitempty"`
-	AnalysisTemplate             string   `yaml:"analysis_template,omitempty" json:"analysis_template,omitempty"`
-	SynthesisTemplate            string   `yaml:"synthesis_template,omitempty" json:"synthesis_template,omitempty"`
-	JudgePromptVersion           string   `yaml:"judge_prompt_version,omitempty" json:"judge_prompt_version,omitempty"`
-	IncludeIntermediateResponses *bool    `yaml:"include_intermediate_responses,omitempty" json:"include_intermediate_responses,omitempty"`
+	Model                        string                 `yaml:"model,omitempty" json:"model,omitempty"`
+	AnalysisModels               []string               `yaml:"analysis_models,omitempty" json:"analysis_models,omitempty"`
+	MaxConcurrent                int                    `yaml:"max_concurrent,omitempty" json:"max_concurrent,omitempty"`
+	MaxCompletionTokens          int                    `yaml:"max_completion_tokens,omitempty" json:"max_completion_tokens,omitempty"`
+	Temperature                  *float64               `yaml:"temperature,omitempty" json:"temperature,omitempty"`
+	IncludeAnalysis              *bool                  `yaml:"include_analysis,omitempty" json:"include_analysis,omitempty"`
+	OnError                      string                 `yaml:"on_error,omitempty" json:"on_error,omitempty"`
+	AnalysisTemplate             string                 `yaml:"analysis_template,omitempty" json:"analysis_template,omitempty"`
+	SynthesisTemplate            string                 `yaml:"synthesis_template,omitempty" json:"synthesis_template,omitempty"`
+	JudgePromptVersion           string                 `yaml:"judge_prompt_version,omitempty" json:"judge_prompt_version,omitempty"`
+	IncludeIntermediateResponses *bool                  `yaml:"include_intermediate_responses,omitempty" json:"include_intermediate_responses,omitempty"`
+	Grounding                    *FusionGroundingConfig `yaml:"grounding,omitempty" json:"grounding,omitempty"`
+}
+
+// FusionGroundingConfig configures the optional grounding stage that scores each
+// panel response for faithfulness before the judge synthesizes. When nil or
+// disabled, Fusion behaves exactly as without grounding. Grounding makes no extra
+// LLM calls: it uses local encoder models (hallucination detector + NLI).
+type FusionGroundingConfig struct {
+	Enabled                 bool    `yaml:"enabled,omitempty" json:"enabled,omitempty"`
+	Reference               string  `yaml:"reference,omitempty" json:"reference,omitempty"`
+	MinScore                float64 `yaml:"min_score,omitempty" json:"min_score,omitempty"`
+	MinKeep                 int     `yaml:"min_keep,omitempty" json:"min_keep,omitempty"`
+	NLIContradictionPenalty float64 `yaml:"nli_contradiction_penalty,omitempty" json:"nli_contradiction_penalty,omitempty"`
+	OnError                 string  `yaml:"on_error,omitempty" json:"on_error,omitempty"`
 }
 
 // FusionRuntimeConfig registers direct Fusion model slugs. The panel and judge
@@ -107,7 +126,34 @@ func ValidateFusionAlgorithmConfig(cfg *FusionAlgorithmConfig) error {
 	if cfg.Temperature != nil && *cfg.Temperature < 0 {
 		return fmt.Errorf("temperature must be >= 0 when set")
 	}
+	if err := ValidateFusionGroundingConfig(cfg.Grounding); err != nil {
+		return err
+	}
 	return nil
+}
+
+// ValidateFusionGroundingConfig validates the grounding block. Bounds are kept
+// identical to the Python CLI mirror (see src/vllm-sr/cli/algorithms.py).
+func ValidateFusionGroundingConfig(cfg *FusionGroundingConfig) error {
+	if cfg == nil {
+		return nil
+	}
+	switch strings.TrimSpace(cfg.Reference) {
+	case "", FusionGroundingReferenceHybrid, FusionGroundingReferenceContext, FusionGroundingReferencePanel:
+	default:
+		return fmt.Errorf("grounding.reference must be one of %q, %q or %q, got %q",
+			FusionGroundingReferenceHybrid, FusionGroundingReferenceContext, FusionGroundingReferencePanel, cfg.Reference)
+	}
+	if cfg.MinScore < 0 || cfg.MinScore > 1 {
+		return fmt.Errorf("grounding.min_score must be between 0 and 1")
+	}
+	if cfg.MinKeep < 0 {
+		return fmt.Errorf("grounding.min_keep must be >= 0")
+	}
+	if cfg.NLIContradictionPenalty < 0 {
+		return fmt.Errorf("grounding.nli_contradiction_penalty must be >= 0")
+	}
+	return validateFusionOnError(cfg.OnError)
 }
 
 func ValidateFusionRuntimeConfig(cfg FusionRuntimeConfig) error {
