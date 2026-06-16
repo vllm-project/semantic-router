@@ -64,6 +64,7 @@ type AlgorithmConfig struct {
 	Confidence   *ConfidenceAlgorithmConfig   `yaml:"confidence,omitempty"`
 	Ratings      *RatingsAlgorithmConfig      `yaml:"ratings,omitempty"`
 	ReMoM        *ReMoMAlgorithmConfig        `yaml:"remom,omitempty"`
+	Fusion       *FusionAlgorithmConfig       `yaml:"fusion,omitempty"`
 	Elo          *EloSelectionConfig          `yaml:"elo,omitempty"`
 	RouterDC     *RouterDCSelectionConfig     `yaml:"router_dc,omitempty"`
 	AutoMix      *AutoMixSelectionConfig      `yaml:"automix,omitempty"`

@@ -4,6 +4,8 @@ import (
 	"time"
 
 	ext_proc "github.com/envoyproxy/go-control-plane/envoy/service/ext_proc/v3"
+
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 )
 
 // OpenAIModel represents a single model in the OpenAI /v1/models response
@@ -27,41 +29,46 @@ type OpenAIModelList struct {
 func (r *OpenAIRouter) handleModelsRequest(_ string) (*ext_proc.ProcessingResponse, error) {
 	now := time.Now().Unix()
 
-	// Start with the configured auto model name (or default "MoM")
-	// The model list uses the actual configured name, not "auto"
-	// However, "auto" is still accepted as an alias in request handling for backward compatibility
 	models := []OpenAIModel{}
+	seenModels := map[string]bool{}
+	appendModel := func(id, description string) {
+		if id == "" || seenModels[id] {
+			return
+		}
+		seenModels[id] = true
+		models = append(models, OpenAIModel{
+			ID:          id,
+			Object:      "model",
+			Created:     now,
+			OwnedBy:     "vllm-semantic-router",
+			Description: description,
+		})
+	}
 
-	// Add the effective auto model name (configured or default "MoM")
+	// Start with all configured auto model aliases.
+	autoModelNames := config.DefaultAutoModelNames()
 	if r.Config != nil {
-		effectiveAutoModelName := r.Config.GetEffectiveAutoModelName()
-		models = append(models, OpenAIModel{
-			ID:          effectiveAutoModelName,
-			Object:      "model",
-			Created:     now,
-			OwnedBy:     "vllm-semantic-router",
-			Description: "Intelligent Router for Mixture-of-Models",
-			LogoURL:     "https://github.com/vllm-project/semantic-router/blob/main/website/static/img/vllm.png", // You can customize this URL
-		})
-	} else {
-		// Fallback if no config
-		models = append(models, OpenAIModel{
-			ID:          "MoM",
-			Object:      "model",
-			Created:     now,
-			OwnedBy:     "vllm-semantic-router",
-			Description: "Intelligent Router for Mixture-of-Models",
-			LogoURL:     "https://github.com/vllm-project/semantic-router/blob/main/website/static/img/vllm.png", // You can customize this URL
-		})
+		autoModelNames = r.Config.EffectiveAutoModelNames()
+	}
+	for _, autoModelName := range autoModelNames {
+		appendModel(autoModelName, "Intelligent Router for Mixture-of-Models")
+	}
+
+	// Fusion aliases are runtime entries, not backend model cards. Expose them
+	// only when the looper integration is enabled.
+	if r.Config != nil && r.Config.Looper.IsEnabled() {
+		for _, fusionModelName := range r.Config.Looper.Fusion.EffectiveModelNames() {
+			appendModel(fusionModelName, "Fusion multi-model deliberation")
+		}
 	}
 
 	// Append underlying models from config (if available and configured to include them)
 	if r.Config != nil && r.Config.IncludeConfigModelsInList {
 		for _, m := range r.Config.GetAllModels() {
-			// Skip if already added as the configured auto model name (avoid duplicates)
-			if m == r.Config.GetEffectiveAutoModelName() {
+			if seenModels[m] {
 				continue
 			}
+			seenModels[m] = true
 			models = append(models, OpenAIModel{
 				ID:      m,
 				Object:  "model",

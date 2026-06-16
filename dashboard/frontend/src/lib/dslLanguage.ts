@@ -57,30 +57,80 @@ export const monarchTokens: monacoNs.languages.IMonarchLanguage = {
   ignoreCase: false,
 
   keywords: [
-    'SIGNAL', 'ROUTE', 'PLUGIN', 'PROJECTION', 'DECISION_TREE', 'TEST',
-    'PRIORITY', 'WHEN', 'MODEL', 'ALGORITHM', 'TIER', 'DESCRIPTION',
-    'IF', 'ELSE',
+    'SIGNAL',
+    'ROUTE',
+    'PLUGIN',
+    'PROJECTION',
+    'DECISION_TREE',
+    'TEST',
+    'PRIORITY',
+    'WHEN',
+    'MODEL',
+    'ALGORITHM',
+    'TIER',
+    'DESCRIPTION',
+    'IF',
+    'ELSE',
   ],
 
   operators: ['AND', 'OR', 'NOT'],
 
-	signalTypes: [
-	  'keyword', 'embedding', 'domain', 'fact_check', 'user_feedback',
-	  'reask',
-	  'preference', 'language', 'context', 'structure', 'complexity', 'modality', 'authz',
-	  'jailbreak', 'pii', 'kb', 'conversation', 'event',
-	],
+  signalTypes: [
+    'keyword',
+    'embedding',
+    'domain',
+    'fact_check',
+    'user_feedback',
+    'reask',
+    'preference',
+    'language',
+    'context',
+    'structure',
+    'complexity',
+    'modality',
+    'authz',
+    'jailbreak',
+    'pii',
+    'kb',
+    'conversation',
+    'event',
+  ],
 
   pluginTypes: [
-    'semantic_cache', 'memory', 'system_prompt',
-    'header_mutation', 'hallucination', 'router_replay', 'rag', 'image_gen', 'tools',
-    'fast_response', 'request_params', 'response_jailbreak', 'tool_selection',
+    'semantic_cache',
+    'memory',
+    'system_prompt',
+    'header_mutation',
+    'hallucination',
+    'router_replay',
+    'rag',
+    'image_gen',
+    'tools',
+    'fast_response',
+    'request_params',
+    'response_jailbreak',
+    'tool_selection',
   ],
 
   algoTypes: [
-    'confidence', 'ratings', 'remom', 'static', 'elo', 'router_dc',
-    'automix', 'hybrid', 'rl_driven', 'gmtrouter', 'latency_aware',
-    'knn', 'kmeans', 'svm', 'mlp', 'multi_factor', 'session_aware',
+    'confidence',
+    'ratings',
+    'remom',
+    'fusion',
+    'static',
+    'elo',
+    'router_dc',
+    'automix',
+    'hybrid',
+    'rl_driven',
+    'gmtrouter',
+    'latency_aware',
+    'knn',
+    'kmeans',
+    'svm',
+    'mlp',
+    'multi_factor',
+    'session_aware',
   ],
 
   booleans: ['true', 'false'],
@@ -111,7 +161,7 @@ export const monarchTokens: monacoNs.languages.IMonarchLanguage = {
 
       // Signal types (after SIGNAL keyword)
       [
-		/\b(keyword|embedding|domain|fact_check|user_feedback|reask|preference|language|context|structure|complexity|modality|authz|jailbreak|pii|kb|conversation|event)\b/,
+        /\b(keyword|embedding|domain|fact_check|user_feedback|reask|preference|language|context|structure|complexity|modality|authz|jailbreak|pii|kb|conversation|event)\b/,
         'type',
       ],
 
@@ -123,7 +173,7 @@ export const monarchTokens: monacoNs.languages.IMonarchLanguage = {
 
       // Algorithm types
       [
-        /\b(confidence|ratings|remom|static|elo|router_dc|automix|hybrid|rl_driven|gmtrouter|latency_aware|knn|kmeans|svm|mlp|multi_factor|session_aware)\b/,
+        /\b(confidence|ratings|remom|fusion|static|elo|router_dc|automix|hybrid|rl_driven|gmtrouter|latency_aware|knn|kmeans|svm|mlp|multi_factor|session_aware)\b/,
         'type.algorithm',
       ],
 
@@ -188,18 +238,56 @@ export function defineTheme(monaco: typeof monacoNs): void {
 // ---------- Completion Provider ----------
 
 const KEYWORD_SUGGESTIONS = [
-  { label: 'MODEL block', insertText: 'MODEL ${1:name} {\n\t$0\n}', detail: 'Top-level routing model declaration' },
-  { label: 'SIGNAL', insertText: 'SIGNAL ${1:keyword} ${2:name} {\n\t$0\n}', detail: 'Signal declaration' },
-  { label: 'ROUTE', insertText: 'ROUTE ${1:name} (description = "${2:desc}") {\n\tPRIORITY ${3:10}\n\tWHEN ${4:condition}\n\tMODEL "${5:model}"\n\t$0\n}', detail: 'Route declaration' },
-  { label: 'PLUGIN', insertText: 'PLUGIN ${1:name} ${2:type} {\n\t$0\n}', detail: 'Plugin template' },
-  { label: 'PROJECTION', insertText: 'PROJECTION ${1|score,mapping,partition|} ${2:name} {\n\t$0\n}', detail: 'Projection declaration (score, mapping, or partition)' },
-  { label: 'DECISION_TREE', insertText: 'DECISION_TREE ${1:name} {\n\tIF ${2:condition} {\n\t\tMODEL "${3:model}"\n\t} ELSE {\n\t\tMODEL "${4:fallback}"\n\t}\n}', detail: 'Decision tree with if/else branching' },
-  { label: 'PRIORITY', insertText: 'PRIORITY ${1:10}', detail: 'Route priority (higher = matched first)' },
+  {
+    label: 'MODEL block',
+    insertText: 'MODEL ${1:name} {\n\t$0\n}',
+    detail: 'Top-level routing model declaration',
+  },
+  {
+    label: 'SIGNAL',
+    insertText: 'SIGNAL ${1:keyword} ${2:name} {\n\t$0\n}',
+    detail: 'Signal declaration',
+  },
+  {
+    label: 'ROUTE',
+    insertText:
+      'ROUTE ${1:name} (description = "${2:desc}") {\n\tPRIORITY ${3:10}\n\tWHEN ${4:condition}\n\tMODEL "${5:model}"\n\t$0\n}',
+    detail: 'Route declaration',
+  },
+  {
+    label: 'PLUGIN',
+    insertText: 'PLUGIN ${1:name} ${2:type} {\n\t$0\n}',
+    detail: 'Plugin template',
+  },
+  {
+    label: 'PROJECTION',
+    insertText: 'PROJECTION ${1|score,mapping,partition|} ${2:name} {\n\t$0\n}',
+    detail: 'Projection declaration (score, mapping, or partition)',
+  },
+  {
+    label: 'DECISION_TREE',
+    insertText:
+      'DECISION_TREE ${1:name} {\n\tIF ${2:condition} {\n\t\tMODEL "${3:model}"\n\t} ELSE {\n\t\tMODEL "${4:fallback}"\n\t}\n}',
+    detail: 'Decision tree with if/else branching',
+  },
+  {
+    label: 'PRIORITY',
+    insertText: 'PRIORITY ${1:10}',
+    detail: 'Route priority (higher = matched first)',
+  },
   { label: 'TIER', insertText: 'TIER ${1:1}', detail: 'Route tier grouping' },
-  { label: 'DESCRIPTION', insertText: 'DESCRIPTION "${1:description}"', detail: 'Route description' },
+  {
+    label: 'DESCRIPTION',
+    insertText: 'DESCRIPTION "${1:description}"',
+    detail: 'Route description',
+  },
   { label: 'WHEN', insertText: 'WHEN ${1:condition}', detail: 'Route condition' },
   { label: 'MODEL', insertText: 'MODEL "${1:model-name}"', detail: 'Model reference' },
-  { label: 'ALGORITHM', insertText: 'ALGORITHM ${1:confidence} {\n\t$0\n}', detail: 'Algorithm block' },
+  {
+    label: 'ALGORITHM',
+    insertText: 'ALGORITHM ${1:confidence} {\n\t$0\n}',
+    detail: 'Algorithm block',
+  },
   { label: 'AND', insertText: 'AND', detail: 'Boolean AND' },
   { label: 'OR', insertText: 'OR', detail: 'Boolean OR' },
   { label: 'NOT', insertText: 'NOT', detail: 'Boolean NOT' },
@@ -246,6 +334,7 @@ const ALGO_TYPE_SUGGESTIONS = [
   { label: 'confidence', detail: 'Confidence-based routing' },
   { label: 'ratings', detail: 'Ratings-based routing' },
   { label: 'remom', detail: 'ReMoM algorithm' },
+  { label: 'fusion', detail: 'Fusion panel deliberation' },
   { label: 'static', detail: 'Static model assignment' },
   { label: 'elo', detail: 'Elo rating algorithm' },
   { label: 'router_dc', detail: 'Router DC algorithm' },
@@ -266,7 +355,10 @@ const ALGO_TYPE_SUGGESTIONS = [
  * Determine the completion context by scanning backwards from the cursor.
  * Returns the context keyword if the cursor is in a recognizable position.
  */
-function getCompletionContext(model: monacoNs.editor.ITextModel, position: monacoNs.Position): string {
+function getCompletionContext(
+  model: monacoNs.editor.ITextModel,
+  position: monacoNs.Position,
+): string {
   const lineContent = model.getLineContent(position.lineNumber)
   const textBefore = lineContent.substring(0, position.column - 1).trim()
 
@@ -290,7 +382,8 @@ function getCompletionContext(model: monacoNs.editor.ITextModel, position: monac
   for (let ln = position.lineNumber; ln >= Math.max(1, position.lineNumber - 5); ln--) {
     const line = model.getLineContent(ln).trim()
     if (/^WHEN\b/.test(line)) return 'when-expr'
-    if (/^(PRIORITY|MODEL|ALGORITHM|PLUGIN|TIER|DESCRIPTION|\}|ROUTE|DECISION_TREE)\b/.test(line)) break
+    if (/^(PRIORITY|MODEL|ALGORITHM|PLUGIN|TIER|DESCRIPTION|\}|ROUTE|DECISION_TREE)\b/.test(line))
+      break
   }
 
   return 'default'
@@ -442,21 +535,23 @@ export function diagnosticsToMarkers(
     endColumn: Math.max(1, d.column + 1),
     source: 'signal-dsl',
     // Encode fix info as JSON in relatedInformation tag for CodeAction provider
-    ...(d.fixes?.length ? { tags: [], relatedInformation: d.fixes.map(f => ({
-      resource: { path: '' } as unknown as monacoNs.Uri,
-      message: JSON.stringify({ description: f.description, newText: f.newText }),
-      startLineNumber: Math.max(1, d.line),
-      startColumn: Math.max(1, d.column),
-      endLineNumber: Math.max(1, d.line),
-      endColumn: Math.max(1, d.column + 1),
-    })) } : {}),
+    ...(d.fixes?.length
+      ? {
+          tags: [],
+          relatedInformation: d.fixes.map((f) => ({
+            resource: { path: '' } as unknown as monacoNs.Uri,
+            message: JSON.stringify({ description: f.description, newText: f.newText }),
+            startLineNumber: Math.max(1, d.line),
+            startColumn: Math.max(1, d.column),
+            endLineNumber: Math.max(1, d.line),
+            endColumn: Math.max(1, d.column + 1),
+          })),
+        }
+      : {}),
   }))
 }
 
-function diagLevelToSeverity(
-  monaco: typeof monacoNs,
-  level: string,
-): monacoNs.MarkerSeverity {
+function diagLevelToSeverity(monaco: typeof monacoNs, level: string): monacoNs.MarkerSeverity {
   switch (level) {
     case 'error':
       return monaco.MarkerSeverity.Error
@@ -482,10 +577,11 @@ export function createCodeActionProvider(
 
       for (const marker of context.markers) {
         // Find matching diagnostic with fixes
-        const diag = diagnostics.find(d =>
-          d.line === marker.startLineNumber &&
-          d.column === marker.startColumn &&
-          d.message === marker.message
+        const diag = diagnostics.find(
+          (d) =>
+            d.line === marker.startLineNumber &&
+            d.column === marker.startColumn &&
+            d.message === marker.message,
         )
         if (!diag?.fixes?.length) continue
 
@@ -505,19 +601,21 @@ export function createCodeActionProvider(
             diagnostics: [marker],
             isPreferred: true,
             edit: {
-              edits: [{
-                resource: model.uri,
-                textEdit: {
-                  range: {
-                    startLineNumber: diag.line,
-                    startColumn: startCol,
-                    endLineNumber: diag.line,
-                    endColumn: endCol,
+              edits: [
+                {
+                  resource: model.uri,
+                  textEdit: {
+                    range: {
+                      startLineNumber: diag.line,
+                      startColumn: startCol,
+                      endLineNumber: diag.line,
+                      endColumn: endCol,
+                    },
+                    text: fix.newText,
                   },
-                  text: fix.newText,
+                  versionId: model.getVersionId(),
                 },
-                versionId: model.getVersionId(),
-              }],
+              ],
             },
           })
         }
@@ -549,7 +647,10 @@ export function registerDSLLanguage(
   )
   // Register CodeAction provider for Quick Fix support
   if (getDiagnostics) {
-    monaco.languages.registerCodeActionProvider(DSL_LANGUAGE_ID, createCodeActionProvider(monaco, getDiagnostics))
+    monaco.languages.registerCodeActionProvider(
+      DSL_LANGUAGE_ID,
+      createCodeActionProvider(monaco, getDiagnostics),
+    )
   }
   defineTheme(monaco)
 }
