@@ -77,6 +77,11 @@ type Response struct {
 	// IntermediateResponses contains intermediate responses from multi-round algorithms (e.g., ReMoM)
 	// This is used for visualization in the dashboard
 	IntermediateResponses interface{} `json:"intermediate_responses,omitempty"`
+
+	// Usage is the aggregated token usage across all model calls made during
+	// this execution. It mirrors the usage block embedded in Body so callers
+	// (extproc, dashboard, metrics) can read totals without re-parsing the body.
+	Usage TokenUsage `json:"usage,omitempty"`
 }
 
 // Looper defines the interface for multi-model execution strategies

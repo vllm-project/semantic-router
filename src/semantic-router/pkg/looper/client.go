@@ -134,6 +134,11 @@ type ModelResponse struct {
 
 	// StreamingChunks contains the raw SSE chunks for streaming responses
 	StreamingChunks []string
+
+	// Usage holds the token counts reported by the backend for this single
+	// call. It is zero when the backend omits usage (e.g. streaming responses
+	// without stream_options.include_usage).
+	Usage TokenUsage
 }
 
 // LogprobsConfig controls logprobs behavior for model calls
@@ -251,6 +256,11 @@ func (c *Client) parseNonStreamingResponse(body []byte, modelName string) (*Mode
 		Parsed:      &completion,
 		Model:       modelName, // Use the requested model name, not the backend's response
 		IsStreaming: false,
+		Usage: TokenUsage{
+			PromptTokens:     completion.Usage.PromptTokens,
+			CompletionTokens: completion.Usage.CompletionTokens,
+			TotalTokens:      completion.Usage.TotalTokens,
+		},
 	}
 
 	// Extract content, tool_calls, and logprobs
