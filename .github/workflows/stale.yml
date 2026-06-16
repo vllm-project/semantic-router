@@ -1,0 +1,63 @@
+name: Mark Stale Issues and PRs
+
+# Marks issues and pull requests as stale after 30 days without activity,
+# then closes them after a further grace period if there is still no activity.
+# Any new activity (comment, push, label change) removes the stale mark.
+
+on:
+  schedule:
+    - cron: "30 1 * * *" #daily at 01:30 AM UTC.
+  workflow_dispatch: {}
+
+permissions: {}
+
+jobs:
+  stale:
+    runs-on: ubuntu-latest
+    permissions:
+      issues: write
+      pull-requests: write
+    steps:
+      - uses: actions/stale@eb5cf3af3ac0a1aa4c9c45633dd1ae542a27a899  # v10.3.0
+        with:
+          repo-token: ${{ secrets.GITHUB_TOKEN }}
+
+          # Inactivity windows.
+          days-before-stale: 30
+          days-before-close: 7
+
+          # Labels applied when an item becomes stale.
+          stale-issue-label: stale
+          stale-pr-label: stale
+
+          # Messages posted when an item is marked stale.
+          stale-pr-message: >
+            This pull request has had no activity from the submitter for 30
+            days and has been marked as stale. It will be closed in 7 days if
+            no further activity occurs.
+          stale-issue-message: >
+            This issue has had no activity for 30 days and has been marked as
+            stale. It will be closed in 7 days if no further activity occurs.
+
+          # Messages posted when an item is closed for being stale.
+          close-pr-message: >
+            This pull request was closed because it has been stale for 7 days
+            with no activity.
+          close-issue-message: >
+            This issue was closed because it has been stale for 7 days with no
+            activity.
+
+          # Remove the stale label as soon as there is new activity.
+          remove-stale-when-updated: true
+
+          # Labels that exempt an item from being marked stale. Empty for now;
+          # add comma-separated labels here when overrides are needed.
+          exempt-issue-labels: ""
+          exempt-pr-labels: ""
+
+          # Skip PRs that are still open as drafts.
+          exempt-draft-pr: true
+
+          # Process the oldest items first; large enough for this repo's volume.
+          operations-per-run: 200
+          ascending: true

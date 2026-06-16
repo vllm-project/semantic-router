@@ -12,6 +12,7 @@ var algorithmTutorialBuckets = map[string]string{
 	"automix":       "selection",
 	"confidence":    "looper",
 	"elo":           "selection",
+	"fusion":        "looper",
 	"gmtrouter":     "selection",
 	"hybrid":        "selection",
 	"kmeans":        "selection",

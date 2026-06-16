@@ -3107,6 +3107,21 @@ func TestHandleModelsRequest(t *testing.T) {
 		},
 	}
 
+	cfgWithFusion := &config.RouterConfig{
+		Looper: config.LooperConfig{
+			Endpoint: "http://looper",
+		},
+	}
+
+	cfgWithFusionAliases := &config.RouterConfig{
+		Looper: config.LooperConfig{
+			Endpoint: "http://looper",
+			Fusion: config.FusionRuntimeConfig{
+				ModelNames: []string{"vllm-sr/fusion", "custom/fusion"},
+			},
+		},
+	}
+
 	tests := []struct {
 		name           string
 		config         *config.RouterConfig
@@ -3118,29 +3133,43 @@ func TestHandleModelsRequest(t *testing.T) {
 			name:           "GET /v1/models - only auto model (default)",
 			config:         cfg,
 			path:           "/v1/models",
-			expectedModels: []string{"MoM"},
-			expectedCount:  1,
+			expectedModels: []string{"vllm-sr/auto", "auto", "MoM"},
+			expectedCount:  3,
 		},
 		{
 			name:           "GET /v1/models - with include_config_models_in_list enabled",
 			config:         cfgWithModels,
 			path:           "/v1/models",
-			expectedModels: []string{"MoM", "gpt-4o-mini", "llama-3.1-8b-instruct"},
-			expectedCount:  3,
+			expectedModels: []string{"vllm-sr/auto", "auto", "MoM", "gpt-4o-mini", "llama-3.1-8b-instruct"},
+			expectedCount:  5,
+		},
+		{
+			name:           "GET /v1/models - includes fusion model when looper is enabled",
+			config:         cfgWithFusion,
+			path:           "/v1/models",
+			expectedModels: []string{"vllm-sr/auto", "auto", "MoM", "vllm-sr/fusion"},
+			expectedCount:  4,
+		},
+		{
+			name:           "GET /v1/models - includes configured fusion aliases when looper is enabled",
+			config:         cfgWithFusionAliases,
+			path:           "/v1/models",
+			expectedModels: []string{"vllm-sr/auto", "auto", "MoM", "vllm-sr/fusion", "custom/fusion"},
+			expectedCount:  5,
 		},
 		{
 			name:           "GET /v1/models?model=auto - only auto model (default)",
 			config:         cfg,
 			path:           "/v1/models?model=auto",
-			expectedModels: []string{"MoM"},
-			expectedCount:  1,
+			expectedModels: []string{"vllm-sr/auto", "auto", "MoM"},
+			expectedCount:  3,
 		},
 		{
 			name:           "GET /v1/models?model=auto - with include_config_models_in_list enabled",
 			config:         cfgWithModels,
 			path:           "/v1/models?model=auto",
-			expectedModels: []string{"MoM", "gpt-4o-mini", "llama-3.1-8b-instruct"},
-			expectedCount:  3,
+			expectedModels: []string{"vllm-sr/auto", "auto", "MoM", "gpt-4o-mini", "llama-3.1-8b-instruct"},
+			expectedCount:  5,
 		},
 	}
 

@@ -23,6 +23,7 @@ if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
 main = importlib.import_module("cli.main").main
+README_PATH = PROJECT_ROOT / "README.md"
 
 
 _VALID_CONFIG = {
@@ -106,6 +107,15 @@ def test_model_list_help_describes_subcommand():
 
     assert result.exit_code == 0
     assert "list" in result.output
+
+
+def test_readme_documents_model_list_usage():
+    content = README_PATH.read_text(encoding="utf-8")
+
+    assert "vllm-sr model list" in content
+    assert "vllm-sr model list --config my-config.yaml" in content
+    assert "Provider models" in content
+    assert "Model cards" in content
 
 
 def test_model_list_prints_provider_models_and_model_cards(tmp_path: Path, caplog):

@@ -64,6 +64,7 @@ var decisionAlgorithmCatalog = []AlgorithmCatalogEntry{
 	{Type: "automix", Tier: "experimental"},
 	{Type: "confidence", Tier: "supported"},
 	{Type: "elo", Tier: "supported"},
+	{Type: "fusion", Tier: "experimental"},
 	{Type: "gmtrouter", Tier: "experimental"},
 	{Type: "hybrid", Tier: "supported"},
 	{Type: "kmeans", Tier: "experimental"},
