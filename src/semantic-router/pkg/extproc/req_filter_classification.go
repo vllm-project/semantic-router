@@ -16,8 +16,10 @@ import (
 // performDecisionEvaluation performs decision evaluation using DecisionEngine
 // Returns (decisionName, confidence, reasoningDecision, selectedModel)
 // This is the new approach that uses Decision-based routing with AND/OR rule combinations
-// Decision evaluation is ALWAYS performed when decisions are configured (for plugin features like
-// hallucination detection), but model selection only happens for auto models.
+// Decision evaluation is ALWAYS performed when decisions are configured (for
+// plugin features like hallucination detection), but model selection only
+// happens for auto models. Fusion model slugs use the same signal extraction
+// path while limiting decision candidates to Fusion-capable decisions.
 func (r *OpenAIRouter) performDecisionEvaluation(originalModel string, history signalConversationHistory, ctx *RequestContext) (string, float64, entropy.ReasoningDecision, string, error) {
 	var decisionName string
 	var evaluationConfidence float64
@@ -49,7 +51,7 @@ func (r *OpenAIRouter) performDecisionEvaluation(originalModel string, history s
 		return "", 0, entropy.ReasoningDecision{}, "", authzErr
 	}
 
-	result, defaultModel := r.runDecisionEngine(originalModel, ctx, signals)
+	result, defaultModel := r.runDecisionEngine(originalModel, ctx, signals, r.decisionCandidatesForRequestModel(originalModel))
 	if result == nil {
 		return "", 0.0, entropy.ReasoningDecision{}, defaultModel, nil
 	}

@@ -356,6 +356,9 @@ const (
 	// Used by extproc to lookup decision configuration and apply plugins.
 	// Value: decision name (e.g., "remom_low_effort")
 	VSRLooperDecision = "x-vsr-looper-decision"
+
+	// VSRFusionDepth marks internal Fusion subrequests to prevent recursive Fusion execution.
+	VSRFusionDepth = "x-vsr-fusion-depth"
 )
 
 // Looper Response Headers
