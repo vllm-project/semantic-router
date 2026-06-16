@@ -58,8 +58,9 @@ func (r *OpenAIRouter) handleModelsRequest(_ string) (*ext_proc.ProcessingRespon
 	// Append underlying models from config (if available and configured to include them)
 	if r.Config != nil && r.Config.IncludeConfigModelsInList {
 		for _, m := range r.Config.GetAllModels() {
-			// Skip if already added as the configured auto model name (avoid duplicates)
-			if m == r.Config.GetEffectiveAutoModelName() {
+			// Skip any model that is itself an auto model alias (avoid duplicates and
+			// avoid advertising an auto alias as a regular upstream backend)
+			if r.Config.IsAutoModelName(m) {
 				continue
 			}
 			models = append(models, OpenAIModel{

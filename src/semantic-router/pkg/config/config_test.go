@@ -2249,6 +2249,15 @@ api:
 				Expect(cfg.GetEffectiveAutoModelName()).To(Equal("CustomAuto"))
 			})
 
+			It("should return primary alias when AutoModelName contains multiple aliases", func() {
+				cfg := &RouterConfig{
+					RouterOptions: RouterOptions{
+						AutoModelName: "MoM, MoM[1M]",
+					},
+				}
+				Expect(cfg.GetEffectiveAutoModelName()).To(Equal("MoM"))
+			})
+
 			It("should return default 'MoM' when AutoModelName is not set", func() {
 				cfg := &RouterConfig{
 					RouterOptions: RouterOptions{
@@ -2289,7 +2298,30 @@ api:
 						AutoModelName: "",
 					},
 				}
+				Expect(cfg.IsAutoModelName("auto")).To(BeTrue())
 				Expect(cfg.IsAutoModelName("MoM")).To(BeTrue())
+			})
+
+			It("should recognize comma-separated AutoModelName aliases", func() {
+				cfg := &RouterConfig{
+					RouterOptions: RouterOptions{
+						AutoModelName: "MoM, MoM[1M]",
+					},
+				}
+				Expect(cfg.IsAutoModelName("MoM")).To(BeTrue())
+				Expect(cfg.IsAutoModelName("MoM[1M]")).To(BeTrue())
+				Expect(cfg.GetEffectiveAutoModelName()).To(Equal("MoM"))
+			})
+
+			It("should trim whitespace around comma-separated AutoModelName aliases", func() {
+				cfg := &RouterConfig{
+					RouterOptions: RouterOptions{
+						AutoModelName: " MoM , MoM[1M] ",
+					},
+				}
+				Expect(cfg.IsAutoModelName("MoM")).To(BeTrue())
+				Expect(cfg.IsAutoModelName("MoM[1M]")).To(BeTrue())
+				Expect(cfg.GetEffectiveAutoModelName()).To(Equal("MoM"))
 			})
 
 			It("should not recognize other model names as auto", func() {
@@ -2299,6 +2331,7 @@ api:
 					},
 				}
 				Expect(cfg.IsAutoModelName("gpt-4")).To(BeFalse())
+				Expect(cfg.IsAutoModelName("gpt-4o")).To(BeFalse())
 				Expect(cfg.IsAutoModelName("claude")).To(BeFalse())
 			})
 
@@ -2311,6 +2344,16 @@ api:
 				Expect(cfg.IsAutoModelName("auto")).To(BeTrue())
 				Expect(cfg.IsAutoModelName("MoM")).To(BeTrue())
 				Expect(cfg.IsAutoModelName("other")).To(BeFalse())
+			})
+
+			It("should ignore blank entries in comma-separated AutoModelName aliases", func() {
+				cfg := &RouterConfig{
+					RouterOptions: RouterOptions{
+						AutoModelName: "MoM,,",
+					},
+				}
+				Expect(cfg.IsAutoModelName("")).To(BeFalse())
+				Expect(cfg.IsAutoModelName("MoM")).To(BeTrue())
 			})
 		})
 

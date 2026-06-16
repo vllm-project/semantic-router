@@ -43,8 +43,9 @@ func (s *ClassificationAPIServer) handleOpenAIModels(w http.ResponseWriter, _ *h
 	// Append underlying models from config (if available and configured to include them)
 	if cfg != nil && cfg.IncludeConfigModelsInList {
 		for _, m := range cfg.GetAllModels() {
-			// Skip if already added as the configured auto model name (avoid duplicates)
-			if m == cfg.GetEffectiveAutoModelName() {
+			// Skip any model that is itself an auto model alias (avoid duplicates and
+			// avoid advertising an auto alias as a regular upstream backend)
+			if cfg.IsAutoModelName(m) {
 				continue
 			}
 			models = append(models, OpenAIModel{

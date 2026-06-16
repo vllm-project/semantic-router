@@ -8,6 +8,8 @@ import (
 	"strings"
 )
 
+const defaultAutoModelName = "MoM"
+
 // GetModelReasoningFamily returns the reasoning family configuration for a given model name
 func (rc *RouterConfig) GetModelReasoningFamily(modelName string) *ReasoningFamilyConfig {
 	familyName, ok := rc.GetModelReasoningFamilyName(modelName)
@@ -69,23 +71,39 @@ func (c *RouterConfig) resolveModelConfigKey(modelName string) (string, bool) {
 	return "", false
 }
 
+func (c *RouterConfig) getAutoModelNameAliases() []string {
+	var aliases []string
+	for _, alias := range strings.Split(c.AutoModelName, ",") {
+		alias = strings.TrimSpace(alias)
+		if alias != "" {
+			aliases = append(aliases, alias)
+		}
+	}
+	if len(aliases) == 0 {
+		return []string{defaultAutoModelName}
+	}
+	return aliases
+}
+
 // GetEffectiveAutoModelName returns the effective auto model name for automatic model selection
-// Returns the configured AutoModelName if set, otherwise defaults to "MoM"
+// Returns the primary configured AutoModelName alias if set, otherwise defaults to "MoM"
 // This is the primary model name that triggers automatic routing
 func (c *RouterConfig) GetEffectiveAutoModelName() string {
-	if c.AutoModelName != "" {
-		return c.AutoModelName
-	}
-	return "MoM" // Default value
+	return c.getAutoModelNameAliases()[0]
 }
 
 // IsAutoModelName checks if the given model name should trigger automatic model selection
-// Returns true if the model name is either the configured AutoModelName or "auto" (for backward compatibility)
+// Returns true if the model name is either a configured AutoModelName alias or "auto" (for backward compatibility)
 func (c *RouterConfig) IsAutoModelName(modelName string) bool {
 	if modelName == "auto" {
 		return true // Always support "auto" for backward compatibility
 	}
-	return modelName == c.GetEffectiveAutoModelName()
+	for _, alias := range c.getAutoModelNameAliases() {
+		if modelName == alias {
+			return true
+		}
+	}
+	return false
 }
 
 // GetCategoryDescriptions returns all category descriptions for similarity matching
