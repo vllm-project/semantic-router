@@ -105,20 +105,21 @@ func (l *FusionLooper) Execute(ctx context.Context, req *Request) (*Response, er
 		return nil, err
 	}
 
-	analysis := l.runFusionAnalysis(ctx, req, cfg, panelResponses)
+	analysis, analysisResp := l.runFusionAnalysis(ctx, req, cfg, panelResponses)
 	finalResp, err := l.runFusionFinal(ctx, req, cfg, panelResponses, analysis)
 	if err != nil {
 		return nil, err
 	}
+	usage := SumUsage(panelResponses...).Add(analysisResp, finalResp)
 
 	trace := buildFusionTrace(cfg, panelResponses, failedModels, analysis)
 	modelsUsed := orderedFusionModelsUsed(cfg.AnalysisModels, cfg.Model)
 	iterations := len(cfg.AnalysisModels) + 2
 
 	if req.IsStreaming {
-		return l.formatFusionStreamingResponse(finalResp, modelsUsed, iterations, cfg, trace)
+		return l.formatFusionStreamingResponse(finalResp, modelsUsed, iterations, cfg, trace, usage)
 	}
-	return l.formatFusionJSONResponse(finalResp, modelsUsed, iterations, cfg, trace)
+	return l.formatFusionJSONResponse(finalResp, modelsUsed, iterations, cfg, trace, usage)
 }
 
 func (l *FusionLooper) resolveFusionExecutionConfig(req *Request) fusionExecutionConfig {
@@ -348,7 +349,7 @@ func (l *FusionLooper) runFusionAnalysis(
 	req *Request,
 	cfg fusionExecutionConfig,
 	panelResponses []*ModelResponse,
-) *FusionAnalysis {
+) (*FusionAnalysis, *ModelResponse) {
 	prompt := buildFusionAnalysisPrompt(cfg, extractOriginalContent(req.OriginalRequest), panelResponses)
 	analysisReq := replaceLastMessage(req.OriginalRequest, prompt)
 	resp, err := l.callFusionModel(ctx, &Request{OriginalRequest: analysisReq, ModelParams: req.ModelParams}, cfg, cfg.Model, false, len(panelResponses)+1)
@@ -357,7 +358,7 @@ func (l *FusionLooper) runFusionAnalysis(
 			"judge_model": cfg.Model,
 			"error":       err.Error(),
 		})
-		return nil
+		return nil, nil
 	}
 	analysis, parseErr := parseFusionAnalysis(resp.Content)
 	if parseErr != nil {
@@ -365,9 +366,9 @@ func (l *FusionLooper) runFusionAnalysis(
 			"judge_model": cfg.Model,
 			"error":       parseErr.Error(),
 		})
-		return &FusionAnalysis{Raw: resp.Content, ParseFailed: true}
+		return &FusionAnalysis{Raw: resp.Content, ParseFailed: true}, resp
 	}
-	return analysis
+	return analysis, resp
 }
 
 func (l *FusionLooper) runFusionFinal(
@@ -535,6 +536,7 @@ func (l *FusionLooper) formatFusionJSONResponse(
 	iterations int,
 	cfg fusionExecutionConfig,
 	trace *FusionTrace,
+	usage TokenUsage,
 ) (*Response, error) {
 	completion := map[string]interface{}{
 		"id":      fmt.Sprintf("chatcmpl-fusion-%d", time.Now().UnixNano()),
@@ -551,11 +553,7 @@ func (l *FusionLooper) formatFusionJSONResponse(
 				"finish_reason": "stop",
 			},
 		},
-		"usage": map[string]interface{}{
-			"prompt_tokens":     0,
-			"completion_tokens": 0,
-			"total_tokens":      0,
-		},
+		"usage": usage.Map(),
 	}
 	if cfg.IncludeAnalysis || cfg.IncludeIntermediateResponses || len(trace.FailedModels) > 0 {
 		completion["fusion"] = trace
@@ -572,6 +570,7 @@ func (l *FusionLooper) formatFusionJSONResponse(
 		Iterations:            iterations,
 		AlgorithmType:         "fusion",
 		IntermediateResponses: trace,
+		Usage:                 usage,
 	}, nil
 }
 
@@ -581,12 +580,14 @@ func (l *FusionLooper) formatFusionStreamingResponse(
 	iterations int,
 	cfg fusionExecutionConfig,
 	trace *FusionTrace,
+	usage TokenUsage,
 ) (*Response, error) {
 	timestamp := time.Now().Unix()
 	id := fmt.Sprintf("chatcmpl-fusion-%d", timestamp)
 	body := buildFusionStreamingSSE(id, timestamp, finalResp.Model, finalResp.Content, cfg, trace)
 	resp := streamingLooperResponse(body, finalResp.Model, modelsUsed, iterations, "fusion")
 	resp.IntermediateResponses = trace
+	resp.Usage = usage
 	return resp, nil
 }
 

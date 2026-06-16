@@ -53,10 +53,17 @@ func TestFusionLooperExecutesPanelJudgeAndFinal(t *testing.T) {
 	assert.Equal(t, []string{"panel-a", "panel-b", "judge"}, resp.ModelsUsed)
 	assert.Equal(t, 4, resp.Iterations)
 	assert.ElementsMatch(t, []string{"panel-a", "panel-b", "judge", "judge"}, seenModels)
+	expectedUsage := TokenUsage{PromptTokens: 90, CompletionTokens: 13, TotalTokens: 103}
+	assert.Equal(t, expectedUsage, resp.Usage)
 
 	var body map[string]interface{}
 	require.NoError(t, json.Unmarshal(resp.Body, &body))
 	assert.Equal(t, "judge", body["model"])
+	var usageBody struct {
+		Usage TokenUsage `json:"usage"`
+	}
+	require.NoError(t, json.Unmarshal(resp.Body, &usageBody))
+	assert.Equal(t, expectedUsage, usageBody.Usage)
 	fusionTrace := body["fusion"].(map[string]interface{})
 	assert.Len(t, fusionTrace["responses"], 2)
 	assert.Equal(t, "judge", fusionTrace["judge_model"])
@@ -229,6 +236,20 @@ func newFusionStubServer(
 					"finish_reason": "stop",
 				},
 			},
+			"usage": fusionTestUsage(payload.Model),
 		})
 	}))
+}
+
+func fusionTestUsage(model string) map[string]int64 {
+	switch model {
+	case "panel-a":
+		return map[string]int64{"prompt_tokens": 10, "completion_tokens": 2, "total_tokens": 12}
+	case "panel-b":
+		return map[string]int64{"prompt_tokens": 20, "completion_tokens": 3, "total_tokens": 23}
+	case "judge":
+		return map[string]int64{"prompt_tokens": 30, "completion_tokens": 4, "total_tokens": 34}
+	default:
+		return map[string]int64{"prompt_tokens": 1, "completion_tokens": 1, "total_tokens": 2}
+	}
 }
