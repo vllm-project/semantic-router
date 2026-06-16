@@ -22,8 +22,6 @@ const RESPONSE_HEADER_KEYS = [
   'x-vsr-cache-hit',
   'x-vsr-selected-reasoning',
   'x-vsr-fast-response',
-  'x-vsr-jailbreak-blocked',
-  'x-vsr-pii-violation',
   'x-vsr-hallucination-detected',
   'x-vsr-fact-check-needed',
   'x-vsr-matched-keywords',

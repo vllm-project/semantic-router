@@ -30,14 +30,6 @@ const HEADER_INFO: Record<string, { label: string; type: 'info' | 'success' | 'w
     label: 'Fast Response',
     type: 'success',
   },
-  'x-vsr-jailbreak-blocked': {
-    label: 'Jailbreak Blocked',
-    type: 'danger',
-  },
-  'x-vsr-pii-violation': {
-    label: 'PII Violation',
-    type: 'danger',
-  },
   'x-vsr-hallucination-detected': {
     label: 'Hallucination',
     type: 'warning',
