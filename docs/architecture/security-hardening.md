@@ -50,6 +50,33 @@ This is configured in both:
 - `deploy/local/envoy.yaml` (local development)
 - `src/vllm-sr/cli/templates/envoy.template.yaml` (production template)
 
+### Looper Request Authentication
+
+Stripping headers at Envoy is defense-in-depth, not the primary control: the
+`request_headers_to_remove` rules run in Envoy's router filter, which executes
+*after* ext_proc. They stop internal headers from leaking to upstream backends,
+but they do not stop a client-injected header from reaching ext_proc.
+
+The primary control is an application-layer secret. The router owns a looper
+secret (`pkg/looper.Secret()`); the in-process looper client attaches it as
+`x-vsr-looper-secret` on every internal multi-model call, and ext_proc only
+honors the `x-vsr-looper-request` fast-path when that secret validates with a
+constant-time comparison. A request that carries `x-vsr-looper-request` without
+a valid secret is logged (`extproc looper_request_rejected`) and processed as a
+normal external request, so it still passes through decision evaluation,
+jailbreak, PII, and authz checks. This closes the bypass where any client could
+set `x-vsr-looper-request: true` to skip the entire security pipeline.
+
+**Secret source:**
+
+- By default each router process generates a random 256-bit secret in memory at
+  first use. This is correct for single-process and sidecar-per-Envoy
+  deployments, where the looper's internal call returns to the same process.
+- For multi-replica deployments where Envoy may load-balance the internal looper
+  call to a different router replica, set the `VSR_LOOPER_SECRET` environment
+  variable to the same value on every replica (e.g. from a Kubernetes Secret) so
+  all replicas trust one secret. The secret is never written to config or disk.
+
 ## 2. Dashboard RBAC Integration
 
 ### Security Policy API
@@ -208,3 +235,6 @@ For production multi-user deployments:
 - [ ] Review dashboard user roles — only admins should have `security.manage`
 - [ ] Ensure the looper endpoint is only accessible from the router container
       (network-level isolation)
+- [ ] For multi-replica router deployments, set a shared `VSR_LOOPER_SECRET`
+      (e.g. from a Kubernetes Secret) on every replica so internal looper calls
+      are accepted across replicas

@@ -13,6 +13,7 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/headers"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/ir"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/looper"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/tracing"
 )
@@ -84,6 +85,10 @@ func captureRequestHeaders(
 	skipProcessingGateEnabled bool,
 ) (string, string) {
 	requestHeaders := v.RequestHeaders.Headers
+	var (
+		looperMarker bool
+		looperSecret string
+	)
 	for _, header := range requestHeaders.Headers {
 		headerValue := extractHeaderValue(header)
 		ctx.Headers[header.Key] = headerValue
@@ -96,7 +101,12 @@ func captureRequestHeaders(
 			ctx.RequestID = headerValue
 		}
 		if lowerKey == headers.VSRLooperRequest && headerValue == "true" {
-			ctx.LooperRequest = true
+			looperMarker = true
+		}
+		// The looper secret value is compared exactly (case-sensitive) by
+		// resolveLooperRequest, so only the header key is normalized here.
+		if lowerKey == headers.VSRLooperSecret {
+			looperSecret = headerValue
 		}
 		// The x-vsr-skip-processing opt-out is gated by the deployment-level
 		// global.router.skip_processing.enabled flag. When disabled (the
@@ -108,6 +118,13 @@ func captureRequestHeaders(
 			ctx.SkipProcessing = true
 		}
 	}
+
+	// Authorize the internal looper fast-path: the x-vsr-looper-request marker
+	// is only honored when accompanied by a valid secret that the in-process
+	// looper client attaches to every internal call. A marker without a valid
+	// secret is treated as a normal external request so the full security
+	// pipeline still runs (issue #1443).
+	ctx.LooperRequest = resolveLooperRequest(looperMarker, looperSecret, ctx.RequestID)
 
 	method := ctx.Headers[":method"]
 	path := ctx.Headers[":path"]
@@ -121,6 +138,26 @@ func captureRequestHeaders(
 	})
 
 	return method, path
+}
+
+// resolveLooperRequest authorizes the looper fast-path. It returns true only
+// when the looper marker is present and the accompanying secret matches the
+// process looper secret (constant-time comparison). A marker without a valid
+// secret is logged as a potential bypass attempt and rejected; the request
+// then continues through the normal security pipeline instead of skipping it.
+// See issue #1443.
+func resolveLooperRequest(marker bool, secret, requestID string) bool {
+	if !marker {
+		return false
+	}
+	if looper.ValidateSecret(secret) {
+		return true
+	}
+	logging.ComponentWarnEvent("extproc", "looper_request_rejected", map[string]interface{}{
+		"request_id": requestID,
+		"reason":     "missing_or_invalid_looper_secret",
+	})
+	return false
 }
 
 func setRequestHeaderSpanAttributes(

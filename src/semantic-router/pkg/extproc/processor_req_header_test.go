@@ -10,6 +10,7 @@ import (
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/ir"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/looper"
 )
 
 type requestHeaderTestCase struct {
@@ -158,6 +159,7 @@ func TestHandleRequestHeadersSetsLooperAndStreamingFlags(t *testing.T) {
 					{Key: ":path", Value: "/v1/chat/completions"},
 					{Key: "accept", Value: "text/event-stream"},
 					{Key: "x-vsr-looper-request", Value: "true"},
+					{Key: "x-vsr-looper-secret", Value: looper.Secret()},
 					{Key: "x-request-id", Value: "req-123"},
 				},
 			},
@@ -180,6 +182,59 @@ func TestHandleRequestHeadersSetsLooperAndStreamingFlags(t *testing.T) {
 	}
 	if ctx.RequestID != "req-123" {
 		t.Fatalf("expected request ID to be captured, got %q", ctx.RequestID)
+	}
+}
+
+// TestHandleRequestHeadersRejectsForgedLooperRequest verifies that an external
+// client cannot bypass the security pipeline by forging x-vsr-looper-request:
+// without a valid x-vsr-looper-secret the request is not treated as a looper
+// request, so it continues through normal processing. Regression test for the
+// looper header-injection bypass (issue #1443).
+func TestHandleRequestHeadersRejectsForgedLooperRequest(t *testing.T) {
+	cases := []struct {
+		name    string
+		headers []*core.HeaderValue
+	}{
+		{
+			name: "missing secret",
+			headers: []*core.HeaderValue{
+				{Key: ":method", Value: "POST"},
+				{Key: ":path", Value: "/v1/chat/completions"},
+				{Key: "x-vsr-looper-request", Value: "true"},
+			},
+		},
+		{
+			name: "wrong secret",
+			headers: []*core.HeaderValue{
+				{Key: ":method", Value: "POST"},
+				{Key: ":path", Value: "/v1/chat/completions"},
+				{Key: "x-vsr-looper-request", Value: "true"},
+				{Key: "x-vsr-looper-secret", Value: "not-the-real-secret"},
+			},
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			router := &OpenAIRouter{}
+			requestHeaders := &ext_proc.ProcessingRequest_RequestHeaders{
+				RequestHeaders: &ext_proc.HttpHeaders{
+					Headers: &core.HeaderMap{Headers: tc.headers},
+				},
+			}
+
+			ctx := &RequestContext{Headers: make(map[string]string)}
+			response, err := router.handleRequestHeaders(requestHeaders, ctx)
+			if err != nil {
+				t.Fatalf("handleRequestHeaders failed: %v", err)
+			}
+			if response.GetRequestHeaders() == nil {
+				t.Fatal("expected continue request headers response")
+			}
+			if ctx.LooperRequest {
+				t.Fatal("forged looper request must not be honored without a valid secret")
+			}
+		})
 	}
 }
 
