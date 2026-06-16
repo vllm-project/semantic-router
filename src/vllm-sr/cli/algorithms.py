@@ -191,16 +191,16 @@ class RouterDCSelectionConfig(BaseModel):
     min_similarity: float | None = Field(default=0.3, ge=0, le=1)
 
     # Enable query-side contrastive learning
-    use_query_contrastive: bool | None = False
+    use_query_contrastive: bool | None = True
 
     # Enable model-side contrastive learning
-    use_model_contrastive: bool | None = False
+    use_model_contrastive: bool | None = True
 
     # Require all models to have descriptions
     require_descriptions: bool | None = False
 
     # Include capability tags in embeddings
-    use_capabilities: bool | None = False
+    use_capabilities: bool | None = True
 
 
 class AutoMixSelectionConfig(BaseModel):

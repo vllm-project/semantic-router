@@ -107,6 +107,9 @@ class TestRouterDCSelectionConfig:
         assert config.temperature == 0.07
         assert config.dimension_size == 768
         assert config.min_similarity == 0.3
+        assert config.use_query_contrastive is True
+        assert config.use_model_contrastive is True
+        assert config.use_capabilities is True
 
     def test_temperature_validation(self):
         """Test that temperature must be positive."""
