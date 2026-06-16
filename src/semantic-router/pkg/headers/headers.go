@@ -230,25 +230,6 @@ const (
 	VSRLossinessWarnings = "x-vsr-lossiness-warnings"
 )
 
-// Legacy Security Headers (kept for backward compatibility with replay recorder)
-// New signal-driven architecture uses x-vsr-matched-jailbreak and x-vsr-matched-pii instead.
-const (
-	// VSRPIIViolation indicates that the request was blocked due to PII policy violation.
-	VSRPIIViolation = "x-vsr-pii-violation"
-
-	// VSRPIITypes contains the comma-separated list of PII types that were detected and denied.
-	VSRPIITypes = "x-vsr-pii-types"
-
-	// VSRJailbreakBlocked indicates that a jailbreak attempt was detected and blocked.
-	VSRJailbreakBlocked = "x-vsr-jailbreak-blocked"
-
-	// VSRJailbreakType specifies the type of jailbreak attempt that was detected.
-	VSRJailbreakType = "x-vsr-jailbreak-type"
-
-	// VSRJailbreakConfidence indicates the confidence level of the jailbreak detection.
-	VSRJailbreakConfidence = "x-vsr-jailbreak-confidence"
-)
-
 // Hallucination Mitigation Headers
 // These headers are added to responses when hallucination detection is enabled
 // and potential hallucinations are detected in the LLM response.
