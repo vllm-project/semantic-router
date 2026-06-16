@@ -29,26 +29,37 @@ type OpenAIModelList struct {
 func (r *OpenAIRouter) handleModelsRequest(_ string) (*ext_proc.ProcessingResponse, error) {
 	now := time.Now().Unix()
 
-	// Start with all configured auto model aliases.
 	models := []OpenAIModel{}
 	seenModels := map[string]bool{}
+	appendModel := func(id, description string) {
+		if id == "" || seenModels[id] {
+			return
+		}
+		seenModels[id] = true
+		models = append(models, OpenAIModel{
+			ID:          id,
+			Object:      "model",
+			Created:     now,
+			OwnedBy:     "vllm-semantic-router",
+			Description: description,
+		})
+	}
 
+	// Start with all configured auto model aliases.
 	autoModelNames := config.DefaultAutoModelNames()
 	if r.Config != nil {
 		autoModelNames = r.Config.EffectiveAutoModelNames()
 	}
 	for _, autoModelName := range autoModelNames {
-		if autoModelName == "" || seenModels[autoModelName] {
-			continue
+		appendModel(autoModelName, "Intelligent Router for Mixture-of-Models")
+	}
+
+	// Fusion aliases are runtime entries, not backend model cards. Expose them
+	// only when the looper integration is enabled.
+	if r.Config != nil && r.Config.Looper.IsEnabled() {
+		for _, fusionModelName := range r.Config.Looper.Fusion.EffectiveModelNames() {
+			appendModel(fusionModelName, "Fusion multi-model deliberation")
 		}
-		seenModels[autoModelName] = true
-		models = append(models, OpenAIModel{
-			ID:          autoModelName,
-			Object:      "model",
-			Created:     now,
-			OwnedBy:     "vllm-semantic-router",
-			Description: "Intelligent Router for Mixture-of-Models",
-		})
 	}
 
 	// Append underlying models from config (if available and configured to include them)

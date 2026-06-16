@@ -274,7 +274,7 @@ func (l *FusionLooper) executeFusionPanel(
 		go func(index int, modelName string) {
 			sem <- struct{}{}
 			defer func() { <-sem }()
-			resp, err := l.callFusionModel(ctx, req, cfg, modelName, false, index+1)
+			resp, err := l.callFusionModel(ctx, req, cfg, modelName, false, false, index+1)
 			results <- fusionPanelResult{index: index, model: modelName, resp: resp, err: err}
 		}(i, model)
 	}
@@ -314,10 +314,14 @@ func (l *FusionLooper) callFusionModel(
 	req *Request,
 	cfg fusionExecutionConfig,
 	modelName string,
+	allowTools bool,
 	streaming bool,
 	iteration int,
 ) (*ModelResponse, error) {
 	callReq := cloneRequest(req.OriginalRequest)
+	if !allowTools {
+		callReq = stripFusionToolUse(callReq)
+	}
 	if cfg.Temperature != nil {
 		callReq.Temperature = openai.Float(*cfg.Temperature)
 	}
@@ -351,8 +355,8 @@ func (l *FusionLooper) runFusionAnalysis(
 	panelResponses []*ModelResponse,
 ) (*FusionAnalysis, *ModelResponse) {
 	prompt := buildFusionAnalysisPrompt(cfg, extractOriginalContent(req.OriginalRequest), panelResponses)
-	analysisReq := replaceLastMessage(req.OriginalRequest, prompt)
-	resp, err := l.callFusionModel(ctx, &Request{OriginalRequest: analysisReq, ModelParams: req.ModelParams}, cfg, cfg.Model, false, len(panelResponses)+1)
+	analysisReq := appendFusionStageMessage(req.OriginalRequest, prompt)
+	resp, err := l.callFusionModel(ctx, &Request{OriginalRequest: analysisReq, ModelParams: req.ModelParams}, cfg, cfg.Model, false, false, len(panelResponses)+1)
 	if err != nil {
 		logging.ComponentWarnEvent("looper", "fusion_analysis_failed", map[string]interface{}{
 			"judge_model": cfg.Model,
@@ -379,8 +383,8 @@ func (l *FusionLooper) runFusionFinal(
 	analysis *FusionAnalysis,
 ) (*ModelResponse, error) {
 	prompt := buildFusionFinalPrompt(cfg, extractOriginalContent(req.OriginalRequest), panelResponses, analysis)
-	finalReq := replaceLastMessage(req.OriginalRequest, prompt)
-	resp, err := l.callFusionModel(ctx, &Request{OriginalRequest: finalReq, ModelParams: req.ModelParams}, cfg, cfg.Model, false, len(panelResponses)+2)
+	finalReq := appendFusionStageMessage(req.OriginalRequest, prompt)
+	resp, err := l.callFusionModel(ctx, &Request{OriginalRequest: finalReq, ModelParams: req.ModelParams}, cfg, cfg.Model, true, false, len(panelResponses)+2)
 	if err != nil {
 		return nil, fmt.Errorf("fusion final synthesis failed for judge model %q: %w", cfg.Model, err)
 	}
@@ -538,6 +542,10 @@ func (l *FusionLooper) formatFusionJSONResponse(
 	trace *FusionTrace,
 	usage TokenUsage,
 ) (*Response, error) {
+	if finalResp.HasToolCalls {
+		return l.formatFusionToolCallJSONResponse(finalResp, modelsUsed, iterations, cfg, trace, usage)
+	}
+
 	completion := map[string]interface{}{
 		"id":      fmt.Sprintf("chatcmpl-fusion-%d", time.Now().UnixNano()),
 		"object":  "chat.completion",
@@ -574,6 +582,40 @@ func (l *FusionLooper) formatFusionJSONResponse(
 	}, nil
 }
 
+func (l *FusionLooper) formatFusionToolCallJSONResponse(
+	finalResp *ModelResponse,
+	modelsUsed []string,
+	iterations int,
+	cfg fusionExecutionConfig,
+	trace *FusionTrace,
+	usage TokenUsage,
+) (*Response, error) {
+	var completion map[string]interface{}
+	if err := json.Unmarshal(finalResp.Raw, &completion); err != nil {
+		return nil, fmt.Errorf("failed to parse fusion tool-call response: %w", err)
+	}
+	completion["id"] = fmt.Sprintf("chatcmpl-fusion-%d", time.Now().UnixNano())
+	completion["model"] = finalResp.Model
+	completion["usage"] = usage.Map()
+	if cfg.IncludeAnalysis || cfg.IncludeIntermediateResponses || len(trace.FailedModels) > 0 {
+		completion["fusion"] = trace
+	}
+	body, err := json.Marshal(completion)
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal fusion tool-call response: %w", err)
+	}
+	return &Response{
+		Body:                  body,
+		ContentType:           "application/json",
+		Model:                 finalResp.Model,
+		ModelsUsed:            modelsUsed,
+		Iterations:            iterations,
+		AlgorithmType:         "fusion",
+		IntermediateResponses: trace,
+		Usage:                 usage,
+	}, nil
+}
+
 func (l *FusionLooper) formatFusionStreamingResponse(
 	finalResp *ModelResponse,
 	modelsUsed []string,
@@ -584,7 +626,18 @@ func (l *FusionLooper) formatFusionStreamingResponse(
 ) (*Response, error) {
 	timestamp := time.Now().Unix()
 	id := fmt.Sprintf("chatcmpl-fusion-%d", timestamp)
-	body := buildFusionStreamingSSE(id, timestamp, finalResp.Model, finalResp.Content, cfg, trace)
+	var (
+		body []byte
+		err  error
+	)
+	if finalResp.HasToolCalls {
+		body, err = buildFusionStreamingToolCallSSE(id, timestamp, finalResp.Model, finalResp.Raw, cfg, trace)
+		if err != nil {
+			return nil, err
+		}
+	} else {
+		body = buildFusionStreamingSSE(id, timestamp, finalResp.Model, finalResp.Content, cfg, trace)
+	}
 	resp := streamingLooperResponse(body, finalResp.Model, modelsUsed, iterations, "fusion")
 	resp.IntermediateResponses = trace
 	resp.Usage = usage
