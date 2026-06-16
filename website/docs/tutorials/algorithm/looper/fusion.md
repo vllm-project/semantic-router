@@ -6,12 +6,13 @@
 
 It aligns to `config/algorithm/looper/fusion.yaml`.
 
-The same runtime also supports a direct Fusion model slug through `global.integrations.looper.fusion.model_names`. The built-in default is `vllm-sr/fusion`; add `openrouter/fusion` there only when you intentionally want an OpenRouter-compatible alias. The direct slug still executes the Fusion decision matched by the request, so the judge and panel remain per-decision policy.
+The same runtime also supports a direct Fusion model slug through `global.integrations.looper.fusion.model_names`. The built-in default is `vllm-sr/fusion`; add `openrouter/fusion` there only when you intentionally want an OpenRouter-compatible alias. Direct Fusion is still signal-driven: vLLM-SR evaluates the request against Fusion-capable decisions and then executes the matched decision's judge and panel policy.
 
 ## Key Advantages
 
 - Runs analysis models concurrently instead of choosing only one model.
 - Produces structured judge analysis before final synthesis.
+- Keeps Fusion policy inside vLLM-SR decisions: `vllm-sr/auto` can choose any route, while `vllm-sr/fusion` intelligently chooses among Fusion routes only.
 - Lets clients override the judge and analysis panel per request with `plugins[].id = fusion`.
 - Degrades on partial panel failures while preserving failed model metadata.
 
@@ -27,22 +28,33 @@ Fusion executes a three-stage flow:
 
 ```mermaid
 flowchart TD
-    A[Request arrives] --> B{Fusion model slug or decision.algorithm.type=fusion?}
-    B -- Yes --> C[Resolve matched Fusion decision and request plugin overrides]
-    C --> D[Run analysis panel concurrently]
-    D --> E{Any panel success?}
-    E -- No --> F[Return typed Fusion error]
-    E -- Yes --> G[Judge structured analysis]
-    G --> H{JSON parsed?}
-    H -- Yes --> I[Final synthesis with structured analysis]
-    H -- No --> J[Final synthesis from raw panel responses]
-    I --> K[Return final answer + optional fusion trace]
-    J --> K
+    A[Request arrives] --> B{Request model}
+    B -- vllm-sr/auto --> C[Evaluate all decisions]
+    B -- vllm-sr/fusion --> D[Evaluate Fusion decisions only]
+    C --> E{Matched decision uses algorithm.type=fusion?}
+    D --> F{Matched Fusion decision?}
+    E -- No --> G[Use normal selected route]
+    E -- Yes --> H[Resolve Fusion execution config]
+    F -- Yes --> H
+    F -- No --> I{Request plugin has analysis_models?}
+    I -- No --> J[Return no eligible Fusion decision error]
+    I -- Yes --> K[Build request-scoped fusion_direct decision]
+    K --> H
+    H --> L[Apply request plugin overrides]
+    L --> M[Run analysis panel concurrently]
+    M --> N{Any panel success?}
+    N -- No --> O[Return typed Fusion error]
+    N -- Yes --> P[Judge structured analysis]
+    P --> Q{JSON parsed?}
+    Q -- Yes --> R[Final synthesis with structured analysis]
+    Q -- No --> S[Final synthesis from raw panel responses]
+    R --> T[Return final answer + optional fusion trace]
+    S --> T
 ```
 
 ## What Problem Does It Solve?
 
-Some prompts benefit from multiple independent attempts and a judge pass rather than a single route decision. `fusion` makes that orchestration a router-owned policy, so clients can use it through the same chat completions endpoint.
+Some prompts benefit from multiple independent attempts and a judge pass rather than a single route decision. `fusion` makes that orchestration a router-owned policy, so clients can use it through the same chat completions endpoint. Unlike a fixed provider-side Fusion endpoint, `vllm-sr/fusion` first uses vLLM-SR signals and decision priority to pick the right Fusion route for the request.
 
 ## When to Use
 
@@ -79,7 +91,20 @@ algorithm:
     judge_prompt_version: fusion-v1
 ```
 
-Direct slug registration:
+Automatic routing aliases:
+
+```yaml
+global:
+  router:
+    auto_model_names:
+      - vllm-sr/auto
+      - auto
+      - MoM
+```
+
+`vllm-sr/auto` evaluates all decisions. If the matched decision uses `algorithm.type=fusion`, the request enters Fusion; otherwise it follows the matched non-Fusion route.
+
+Direct Fusion slug registration:
 
 ```yaml
 global:
@@ -93,7 +118,7 @@ global:
 
 `global.integrations.looper.fusion` only registers direct request model names. It does not own route policy, a default route, judge selection, panel selection, concurrency, templates, or error handling.
 
-The judge model, analysis panel, concurrency, templates, and error policy belong under `routing.decisions[].algorithm.fusion`. Direct slug calls use the Fusion decision selected by the normal routing pipeline. Request-level `plugins[].id = fusion` can still override the decision panel for one call; if no Fusion decision matched, a plugin override with `analysis_models` can provide a request-only panel.
+The judge model, analysis panel, concurrency, templates, and error policy belong under `routing.decisions[].algorithm.fusion`. Direct slug calls evaluate only Fusion-capable decisions, so `vllm-sr/fusion` cannot silently fall back to a normal single-model route. Request-level `plugins[].id = fusion` can still override the decision panel for one call; if no Fusion decision matched, a plugin override with `analysis_models` can provide a request-only panel.
 
 To expose an OpenRouter-compatible alias, opt in explicitly:
 

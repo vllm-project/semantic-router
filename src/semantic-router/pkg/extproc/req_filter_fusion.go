@@ -22,6 +22,7 @@ func (r *OpenAIRouter) handleDirectFusionExecution(
 		return r.createErrorResponse(500, "Fusion execution requires global.integrations.looper.endpoint"), nil
 	}
 
+	ctx.RequestModel = originalModel
 	decision, status, err := r.resolveDirectFusionDecision(ctx)
 	if err != nil {
 		return r.createErrorResponse(status, err.Error()), nil
@@ -29,7 +30,6 @@ func (r *OpenAIRouter) handleDirectFusionExecution(
 	ctx.VSRSelectedDecision = decision
 	ctx.VSRSelectedDecisionName = decision.Name
 	ctx.VSRSelectionMethod = "fusion"
-	ctx.RequestModel = originalModel
 
 	return r.handleLooperExecution(ctx.TraceContext, openAIRequest, decision, ctx)
 }
@@ -47,11 +47,24 @@ func (r *OpenAIRouter) resolveDirectFusionDecision(ctx *RequestContext) (*config
 		return buildRequestOnlyFusionDecision(), 0, nil
 	}
 
-	return nil, 500, fmt.Errorf("fusion direct model requires the matched routing decision to use algorithm.type=fusion or a request plugins[].id=fusion analysis_models override")
+	return nil, 400, fmt.Errorf("no eligible Fusion decision matched for model %q and no request plugins[].id=fusion analysis_models override was provided", ctx.RequestModel)
 }
 
 func isFusionDecision(decision *config.Decision) bool {
 	return decision != nil && decision.Algorithm != nil && decision.Algorithm.Type == "fusion"
+}
+
+func (r *OpenAIRouter) decisionCandidatesForRequestModel(modelName string) []config.Decision {
+	if r == nil || r.Config == nil || !r.Config.IsFusionModelName(modelName) {
+		return nil
+	}
+	candidates := make([]config.Decision, 0)
+	for _, decision := range r.Config.Decisions {
+		if isFusionDecision(&decision) {
+			candidates = append(candidates, decision)
+		}
+	}
+	return candidates
 }
 
 func buildRequestOnlyFusionDecision() *config.Decision {

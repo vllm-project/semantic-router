@@ -15,6 +15,8 @@ Implement Support Fusion API for multi-model deliberation (#2193) end to end, th
 ## Exit Criteria
 
 - `model: "vllm-sr/fusion"` works by executing a configured Fusion decision.
+- `model: "vllm-sr/fusion"` limits decision matching to Fusion-capable decisions; it does not fall back to normal non-Fusion routes.
+- `model: "vllm-sr/auto"` is supported as a namespaced auto-routing alias alongside legacy `auto` and `MoM`.
 - `model: "openrouter/fusion"` is supported only as an opt-in compatibility alias when configured.
 - Request-level Fusion plugin overrides can set `model` and `analysis_models`.
 - Panel model calls run concurrently and degrade on partial failure.
@@ -23,6 +25,7 @@ Implement Support Fusion API for multi-model deliberation (#2193) end to end, th
 - Fusion execution is guarded against recursive Fusion calls.
 - Config catalog, reference config, docs, and CLI schema are synchronized.
 - `global.integrations.looper.fusion` registers direct slugs only; route selection, judge, and analysis panel config remain under `routing.decisions[].algorithm.fusion`.
+- `global.router.auto_model_names` registers auto-routing aliases only; it does not own route policy or algorithm defaults.
 - Targeted unit tests and harness gates pass.
 - AMD regression is run and the validation evidence is recorded in the final report.
 

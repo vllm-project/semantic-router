@@ -134,13 +134,25 @@ func (r *OpenAIRouter) runDecisionEngine(
 	originalModel string,
 	ctx *RequestContext,
 	signals *classification.SignalResults,
+	candidates []config.Decision,
 ) (*decision.DecisionResult, string) {
 	// llm_decision_evaluation_latency_seconds and llm_decision_match_total are
 	// emitted by decision.DecisionEngine.EvaluateDecisionsWithSignals; do not
 	// emit them here or both metrics will be double-counted.
 	decisionCtx, decisionSpan := tracing.StartDecisionSpan(ctx.TraceContext, "decision_evaluation")
 
-	result, err := r.Classifier.EvaluateDecisionWithEngine(signals)
+	var result *decision.DecisionResult
+	var err error
+	if candidates != nil {
+		if len(candidates) == 0 {
+			tracing.EndDecisionSpan(decisionSpan, 0.0, []string{}, r.Config.Strategy)
+			ctx.TraceContext = decisionCtx
+			return nil, ""
+		}
+		result, err = r.Classifier.EvaluateDecisionWithEngineForDecisions(signals, candidates)
+	} else {
+		result, err = r.Classifier.EvaluateDecisionWithEngine(signals)
+	}
 	if err != nil {
 		logging.ComponentErrorEvent("extproc", "decision_evaluation_failed", map[string]interface{}{
 			"request_id": ctx.RequestID,

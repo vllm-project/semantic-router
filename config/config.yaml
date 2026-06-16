@@ -1360,6 +1360,10 @@ global:
     config_source: file
     strategy: priority
     auto_model_name: exhaustive-reference
+    auto_model_names:
+      - vllm-sr/auto
+      - auto
+      - exhaustive-reference
     include_config_models_in_list: true
     clear_route_cache: false
     streamed_body:

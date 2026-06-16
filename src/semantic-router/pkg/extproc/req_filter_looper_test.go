@@ -189,8 +189,8 @@ func TestResolveDirectFusionDecisionRejectsNonFusionMatchedDecision(t *testing.T
 		},
 	})
 	require.Error(t, err)
-	assert.Equal(t, 500, status)
-	assert.Contains(t, err.Error(), "matched routing decision")
+	assert.Equal(t, 400, status)
+	assert.Contains(t, err.Error(), "no eligible Fusion decision matched")
 }
 
 func TestResolveDirectFusionDecisionAllowsRequestOnlyPluginPanel(t *testing.T) {
@@ -213,6 +213,31 @@ func TestResolveDirectFusionDecisionAllowsRequestOnlyPluginPanel(t *testing.T) {
 	assert.Equal(t, directFusionDecisionName, decision.Name)
 	assert.Equal(t, "fusion", decision.Algorithm.Type)
 	assert.Empty(t, decision.ModelRefs)
+}
+
+func TestDecisionCandidatesForFusionModelOnlyIncludesFusionDecisions(t *testing.T) {
+	router := &OpenAIRouter{
+		Config: &config.RouterConfig{
+			IntelligentRouting: config.IntelligentRouting{
+				Decisions: []config.Decision{
+					{
+						Name:      "static-route",
+						Algorithm: &config.AlgorithmConfig{Type: "static"},
+					},
+					{
+						Name:      "fusion-route",
+						Algorithm: &config.AlgorithmConfig{Type: "fusion"},
+					},
+				},
+			},
+		},
+	}
+
+	assert.Nil(t, router.decisionCandidatesForRequestModel("vllm-sr/auto"))
+
+	candidates := router.decisionCandidatesForRequestModel("vllm-sr/fusion")
+	require.Len(t, candidates, 1)
+	assert.Equal(t, "fusion-route", candidates[0].Name)
 }
 
 func TestCreateLooperResponseIncludesTrackedHeaders(t *testing.T) {
