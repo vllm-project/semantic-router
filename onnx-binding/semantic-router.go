@@ -688,6 +688,13 @@ func GetEmbeddingBatched(text string, modelType string, targetDim int) (*Embeddi
 	return GetEmbeddingWithModelType(text, modelType, targetDim)
 }
 
+// SupportsBatchedEmbedding reports whether the given modelType uses the
+// continuous-batching path. In onnx-binding all models route through
+// GetEmbeddingWithModelType, so this always returns false.
+func SupportsBatchedEmbedding(_ string) bool {
+	return false
+}
+
 // ============================================================================
 // Additional candle_binding Compatible Functions
 // ============================================================================
