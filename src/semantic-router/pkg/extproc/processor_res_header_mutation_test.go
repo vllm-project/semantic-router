@@ -14,7 +14,10 @@ import (
 )
 
 func TestBuildResponseHeaderMutation_IncludesExtendedMatchedSignalHeaders(t *testing.T) {
+	// Matched signal headers are demoted to the debug surface (#2205), so the
+	// request opts into x-vsr-debug to exercise them.
 	ctx := &RequestContext{
+		Headers:              map[string]string{headers.VSRDebug: "true"},
 		VSRMatchedKeywords:   []string{"keyword:math"},
 		VSRMatchedEmbeddings: []string{"embedding:math"},
 		VSRMatchedDomains:    []string{"domain:math"},
@@ -45,7 +48,11 @@ func TestBuildResponseHeaderMutation_IncludesExtendedMatchedSignalHeaders(t *tes
 }
 
 func TestBuildResponseHeaderMutation_EmitsZeroDecisionConfidence(t *testing.T) {
+	// The decision/confidence/model facts ride on the default surface; the
+	// session phase and context-token count are demoted to x-vsr-debug (#2205),
+	// so the request opts into debug to exercise all five fields together.
 	ctx := &RequestContext{
+		Headers:                       map[string]string{headers.VSRDebug: "true"},
 		VSRSelectedDecisionName:       "agentic_routing",
 		VSRSelectedDecisionConfidence: 0,
 		VSRSelectedModel:              "qwen-small",
@@ -368,7 +375,7 @@ func TestBuildResponseHeaderMutation_EmitsWarningsAlongsideStandardHeaders(t *te
 				Severity: ir.WarningSeverityLossy,
 			}},
 		},
-		VSRSelectedCategory: "math",
+		VSRSelectedDecisionName: "math_decision",
 	}
 
 	mutation := buildResponseHeaderMutation(ctx, true)
@@ -381,7 +388,8 @@ func TestBuildResponseHeaderMutation_EmitsWarningsAlongsideStandardHeaders(t *te
 		"lossy;top_k_drop_on_openai_backend;top_k",
 		headerMap[headers.VSRProtocolWarnings],
 	)
-	assert.Equal(t, "math", headerMap[headers.VSRSelectedCategory])
+	// The warnings ride alongside the default-surface routing facts (#2205).
+	assert.Equal(t, "math_decision", headerMap[headers.VSRSelectedDecision])
 }
 
 func TestNormalizeProtocol(t *testing.T) {
