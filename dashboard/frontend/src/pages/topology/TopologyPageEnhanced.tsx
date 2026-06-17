@@ -225,7 +225,10 @@ const TopologyFlow: React.FC = () => {
               <div className={styles.toolbarRow}>
                 <button
                   type="button"
-                  className={`${styles.toolBtn} ${focusMode ? styles.toolBtnActive : ''}`}
+                  role="switch"
+                  aria-checked={focusMode}
+                  aria-label="Toggle focus mode"
+                  className={`${styles.focusSwitch} ${focusMode ? styles.focusSwitchOn : ''}`}
                   onClick={() => {
                     setFocusMode(prev => {
                       const next = !prev
@@ -234,7 +237,10 @@ const TopologyFlow: React.FC = () => {
                     })
                   }}
                 >
-                  {focusMode ? 'On' : 'Off'}
+                  <span className={styles.focusSwitchTrack} aria-hidden="true">
+                    <span className={styles.focusSwitchThumb} />
+                  </span>
+                  <span className={styles.focusSwitchText}>{focusMode ? 'On' : 'Off'}</span>
                 </button>
                 {focusedDecisionName && (
                   <button
