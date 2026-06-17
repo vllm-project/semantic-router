@@ -835,6 +835,14 @@ func GetEmbeddingBatched(text string, modelType string, targetDim int) (*Embeddi
 	}, nil
 }
 
+// SupportsBatchedEmbedding reports whether the given modelType can use the
+// continuous-batching FFI (GetEmbeddingBatched / init_embedding_models_batched).
+// Only "qwen3" has a batched implementation; all other model types must use
+// the single-text path (GetEmbeddingWithModelType).
+func SupportsBatchedEmbedding(modelType string) bool {
+	return strings.ToLower(strings.TrimSpace(modelType)) == "qwen3"
+}
+
 // InitEmbeddingModels initializes Qwen3, Gemma, and/or mmBERT embedding models (standard version).
 //
 // Note: For high-concurrency workloads, use InitEmbeddingModelsBatched instead for 2-5x better throughput.

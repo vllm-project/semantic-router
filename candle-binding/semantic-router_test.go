@@ -4687,3 +4687,26 @@ func TestMmBert32KAllClassifiersLongPrompt(t *testing.T) {
 	t.Run("modality", func(t *testing.T) { runModalityLongPrompt(t, longText) })
 	t.Run("pii_tokens", func(t *testing.T) { runPIILongPrompt(t, longText) })
 }
+
+// TestSupportsBatchedEmbedding verifies that only qwen3 reports batched support;
+// all other model types (including the default mmbert) use the single-text path.
+func TestSupportsBatchedEmbedding(t *testing.T) {
+	cases := []struct {
+		modelType string
+		want      bool
+	}{
+		{"qwen3", true},
+		{"Qwen3", true},
+		{"  qwen3  ", true},
+		{"mmbert", false},
+		{"gemma", false},
+		{"bert", false},
+		{"modernbert", false},
+		{"", false},
+	}
+	for _, tc := range cases {
+		if got := SupportsBatchedEmbedding(tc.modelType); got != tc.want {
+			t.Errorf("SupportsBatchedEmbedding(%q) = %v, want %v", tc.modelType, got, tc.want)
+		}
+	}
+}
