@@ -9,6 +9,15 @@ interface HeaderRevealProps {
 
 // Header metadata for display
 const HEADER_INFO: Record<string, { label: string; description: string }> = {
+  // Response contract (v0.4 keystone) headers (#2203)
+  'x-vsr-schema-version': {
+    label: 'Schema Version',
+    description: 'Response header contract revision',
+  },
+  'x-vsr-response-path': {
+    label: 'Response Path',
+    description: 'How the response was produced (upstream, cache, fast_response, looper, ...)',
+  },
   // Signal headers
   'x-vsr-matched-keywords': {
     label: 'Keywords',
@@ -117,14 +126,6 @@ const HEADER_INFO: Record<string, { label: string; description: string }> = {
     label: 'Fast Response',
     description: 'Request short-circuited by fast_response plugin',
   },
-  'x-vsr-jailbreak-blocked': {
-    label: 'Jailbreak Blocked',
-    description: 'Request blocked by jailbreak protection',
-  },
-  'x-vsr-pii-violation': {
-    label: 'PII Violation',
-    description: 'Request blocked by PII protection',
-  },
   'x-vsr-hallucination-detected': {
     label: 'Quality: Hallucination',
     description: 'Potential hallucination detected',
@@ -189,6 +190,10 @@ const HeaderReveal = ({ headers, onComplete, displayDuration = 2000 }: HeaderRev
 
   // Group headers by category based on the comments in HEADER_INFO
   const groupedHeaders = {
+    // Response contract (keystone) headers: schema-version + response-path
+    response: displayHeaders.filter(
+      ([key]) => key === 'x-vsr-schema-version' || key === 'x-vsr-response-path',
+    ),
     // Signal headers: all x-vsr-matched-*
     signals: displayHeaders.filter(([key]) => key.startsWith('x-vsr-matched-')),
     // Decision headers: selected-decision
@@ -204,8 +209,6 @@ const HeaderReveal = ({ headers, onComplete, displayDuration = 2000 }: HeaderRev
         key === 'x-vsr-selected-reasoning' ||
         key === 'x-vsr-fast-response' ||
         key === 'x-vsr-context-token-count' ||
-        key === 'x-vsr-jailbreak-blocked' ||
-        key === 'x-vsr-pii-violation' ||
         key === 'x-vsr-hallucination-detected' ||
         key === 'x-vsr-fact-check-needed',
     ),
@@ -243,6 +246,7 @@ const HeaderReveal = ({ headers, onComplete, displayDuration = 2000 }: HeaderRev
       <div className={styles.container}>
         <div className={styles.title}>Signal Driven Decision</div>
         <div className={styles.sections}>
+          {renderSection('RESPONSE', groupedHeaders.response, true)}
           {renderSection('MODEL', groupedHeaders.model, true)}
           {renderSection('DECISION', groupedHeaders.decision, true)}
           {renderSection('SIGNALS', groupedHeaders.signals)}
