@@ -5,7 +5,19 @@ interface HeaderDisplayProps {
 }
 
 // Header metadata for display
-const HEADER_INFO: Record<string, { label: string; type: 'info' | 'success' | 'warning' | 'danger' }> = {
+const HEADER_INFO: Record<
+  string,
+  { label: string; type: 'info' | 'success' | 'warning' | 'danger' }
+> = {
+  // v0.4 keystone headers (#2203)
+  'x-vsr-schema-version': {
+    label: 'Schema Version',
+    type: 'info',
+  },
+  'x-vsr-response-path': {
+    label: 'Response Path',
+    type: 'info',
+  },
   'x-vsr-selected-model': {
     label: 'Model',
     type: 'info',
@@ -163,13 +175,15 @@ const HEADER_INFO: Record<string, { label: string; type: 'info' | 'success' | 'w
 }
 
 function shouldSummarizeHeaderValue(key: string, values: string[]): boolean {
-  return values.length > 1 && (key.startsWith('x-vsr-matched-') || key === 'x-vsr-looper-models-used')
+  return (
+    values.length > 1 && (key.startsWith('x-vsr-matched-') || key === 'x-vsr-looper-models-used')
+  )
 }
 
 function summarizeHeaderValue(key: string, rawValue: string): string {
   const values = rawValue
     .split(',')
-    .map(value => value.trim())
+    .map((value) => value.trim())
     .filter(Boolean)
 
   if (!shouldSummarizeHeaderValue(key, values)) {
@@ -194,7 +208,11 @@ const HeaderDisplay = ({ headers }: HeaderDisplayProps) => {
           const info = HEADER_INFO[key]
           const displayValue = summarizeHeaderValue(key, value)
           return (
-            <div key={key} className={`${styles.header} ${styles[info.type]}`} title={`${info.label}: ${value}`}>
+            <div
+              key={key}
+              className={`${styles.header} ${styles[info.type]}`}
+              title={`${info.label}: ${value}`}
+            >
               <span className={styles.label}>{info.label}</span>
               <span className={styles.value}>{displayValue}</span>
             </div>
