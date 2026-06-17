@@ -153,33 +153,47 @@ func (r *OpenAIRouter) newDecisionHybridSelector(decisionCfg *config.HybridSelec
 		cfg = selection.DefaultHybridConfig()
 	}
 
-	var eloSelector *selection.EloSelector
-	var routerDCSelector *selection.RouterDCSelector
-	var autoMixSelector *selection.AutoMixSelector
-	if r != nil && r.ModelSelector != nil {
-		if selector, ok := r.ModelSelector.Get(selection.MethodElo); ok {
-			eloSelector, _ = selector.(*selection.EloSelector)
-		}
-		if selector, ok := r.ModelSelector.Get(selection.MethodRouterDC); ok {
-			routerDCSelector, _ = selector.(*selection.RouterDCSelector)
-		}
-		if selector, ok := r.ModelSelector.Get(selection.MethodAutoMix); ok {
-			autoMixSelector, _ = selector.(*selection.AutoMixSelector)
-		}
-	}
+	eloSelector, routerDCSelector, autoMixSelector := r.hybridComponentSelectors()
 
 	selector := selection.NewHybridSelectorWithComponents(cfg, eloSelector, routerDCSelector, autoMixSelector)
-	if r != nil && r.Config != nil && r.Config.ModelConfig != nil {
-		for model, params := range r.Config.ModelConfig {
-			if params.Pricing.PromptPer1M > 0 {
-				selector.SetModelCost(model, params.Pricing.PromptPer1M)
-			}
-		}
-	}
+	r.applyHybridModelCosts(selector)
 	if r != nil && r.LookupTable != nil {
 		selector.SetLookupTable(r.LookupTable)
 	}
 	return selector
+}
+
+// hybridComponentSelectors resolves the underlying elo/routerDC/autoMix selectors
+// that the hybrid selector composes, when they are registered on the router.
+func (r *OpenAIRouter) hybridComponentSelectors() (*selection.EloSelector, *selection.RouterDCSelector, *selection.AutoMixSelector) {
+	if r == nil || r.ModelSelector == nil {
+		return nil, nil, nil
+	}
+	var eloSelector *selection.EloSelector
+	var routerDCSelector *selection.RouterDCSelector
+	var autoMixSelector *selection.AutoMixSelector
+	if selector, ok := r.ModelSelector.Get(selection.MethodElo); ok {
+		eloSelector, _ = selector.(*selection.EloSelector)
+	}
+	if selector, ok := r.ModelSelector.Get(selection.MethodRouterDC); ok {
+		routerDCSelector, _ = selector.(*selection.RouterDCSelector)
+	}
+	if selector, ok := r.ModelSelector.Get(selection.MethodAutoMix); ok {
+		autoMixSelector, _ = selector.(*selection.AutoMixSelector)
+	}
+	return eloSelector, routerDCSelector, autoMixSelector
+}
+
+// applyHybridModelCosts seeds per-model prompt pricing into the hybrid selector.
+func (r *OpenAIRouter) applyHybridModelCosts(selector *selection.HybridSelector) {
+	if r == nil || r.Config == nil || r.Config.ModelConfig == nil {
+		return
+	}
+	for model, params := range r.Config.ModelConfig {
+		if params.Pricing.PromptPer1M > 0 {
+			selector.SetModelCost(model, params.Pricing.PromptPer1M)
+		}
+	}
 }
 
 func (r *OpenAIRouter) newDecisionSessionAwareSelector(decisionCfg *config.SessionAwareSelectionConfig) selection.Selector {
