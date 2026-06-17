@@ -222,33 +222,40 @@ func testSinglePluginChain(ctx context.Context, testCase PluginChainCase, localP
 
 	result.Correct = piiCorrect && cacheCorrect && promptCorrect
 
-	if verbose {
-		if result.Correct {
-			fmt.Printf("[Test] ✓ Plugin chain executed correctly\n")
-			fmt.Printf("  Query: %s\n", truncateString(testCase.Query, 60))
-			fmt.Printf("  PII Blocked: %v (expected: %v)\n", result.PIIBlocked, testCase.ExpectPIIBlock)
-			if result.PIIDetected != "" {
-				fmt.Printf("  PII Detected: %s\n", result.PIIDetected)
-			}
-		} else {
-			fmt.Printf("[Test] ✗ Plugin chain execution failed\n")
-			fmt.Printf("  Query: %s\n", testCase.Query)
-			fmt.Printf("  Expected PII Block: %v, Actual: %v\n", testCase.ExpectPIIBlock, result.PIIBlocked)
-			fmt.Printf("  PII Detected: %s\n", result.PIIDetected)
-			fmt.Printf("  Status Code: %d\n", result.StatusCode)
-			fmt.Printf("  Description: %s\n", testCase.Description)
-		}
-	}
-
-	// Read response body for detailed error
-	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusForbidden {
-		bodyBytes, _ := io.ReadAll(resp.Body)
-		if verbose {
-			fmt.Printf("  Response: %s\n", string(bodyBytes))
-		}
-	}
+	logPluginChainResult(result, testCase, resp, verbose)
 
 	return result
+}
+
+// logPluginChainResult prints the per-case outcome and, on an unexpected status,
+// the response body — only when verbose. Extracted from testSinglePluginChain to
+// keep it within the structure-lint function-size limit.
+func logPluginChainResult(result PluginChainResult, testCase PluginChainCase, resp *http.Response, verbose bool) {
+	if !verbose {
+		return
+	}
+
+	if result.Correct {
+		fmt.Printf("[Test] ✓ Plugin chain executed correctly\n")
+		fmt.Printf("  Query: %s\n", truncateString(testCase.Query, 60))
+		fmt.Printf("  PII Blocked: %v (expected: %v)\n", result.PIIBlocked, testCase.ExpectPIIBlock)
+		if result.PIIDetected != "" {
+			fmt.Printf("  PII Detected: %s\n", result.PIIDetected)
+		}
+	} else {
+		fmt.Printf("[Test] ✗ Plugin chain execution failed\n")
+		fmt.Printf("  Query: %s\n", testCase.Query)
+		fmt.Printf("  Expected PII Block: %v, Actual: %v\n", testCase.ExpectPIIBlock, result.PIIBlocked)
+		fmt.Printf("  PII Detected: %s\n", result.PIIDetected)
+		fmt.Printf("  Status Code: %d\n", result.StatusCode)
+		fmt.Printf("  Description: %s\n", testCase.Description)
+	}
+
+	// Surface the response body on an unexpected status.
+	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusForbidden {
+		bodyBytes, _ := io.ReadAll(resp.Body)
+		fmt.Printf("  Response: %s\n", string(bodyBytes))
+	}
 }
 
 func printPluginChainResults(results []PluginChainResult, totalTests, correctTests int, accuracy float64) {

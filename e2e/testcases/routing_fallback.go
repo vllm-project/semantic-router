@@ -312,28 +312,7 @@ func printRoutingFallbackResults(results []RoutingFallbackResult, totalTests, co
 		fmt.Println("\nFailed Tests:")
 		for _, result := range results {
 			if !result.Correct || !result.MethodCorrect || result.Error != "" {
-				fmt.Printf("\n  Test: %s\n", result.Name)
-				fmt.Printf("    Query: %s\n", result.Query)
-				if result.Error != "" {
-					fmt.Printf("    Error: %s\n", result.Error)
-				} else {
-					if !result.Correct {
-						fmt.Printf("    ✗ Category: expected=%s, actual=%s\n",
-							result.ExpectedCategory, result.ActualCategory)
-					} else {
-						fmt.Printf("    ✓ Category: %s\n", result.ActualCategory)
-					}
-					if !result.MethodCorrect {
-						fmt.Printf("    ✗ Method: expected=%s, actual=%s\n",
-							result.ExpectedMethod, result.ActualMethod)
-					} else {
-						fmt.Printf("    ✓ Method: %s\n", result.ActualMethod)
-					}
-					if !result.ConfidenceMet {
-						fmt.Printf("    ✗ Confidence: expected>=%.2f, actual=%.2f\n",
-							result.ExpectedConfidence, result.ActualConfidence)
-					}
-				}
+				printRoutingFallbackFailure(result)
 			}
 		}
 	}
@@ -359,4 +338,33 @@ func printRoutingFallbackResults(results []RoutingFallbackResult, totalTests, co
 	}
 
 	fmt.Println(separator + "\n")
+}
+
+// printRoutingFallbackFailure prints the detail for one failed case. Extracted
+// from printRoutingFallbackResults to keep its nesting within the structure-lint
+// limit; the early return on Error flattens the category/method branches.
+func printRoutingFallbackFailure(result RoutingFallbackResult) {
+	fmt.Printf("\n  Test: %s\n", result.Name)
+	fmt.Printf("    Query: %s\n", result.Query)
+	if result.Error != "" {
+		fmt.Printf("    Error: %s\n", result.Error)
+		return
+	}
+
+	if !result.Correct {
+		fmt.Printf("    ✗ Category: expected=%s, actual=%s\n",
+			result.ExpectedCategory, result.ActualCategory)
+	} else {
+		fmt.Printf("    ✓ Category: %s\n", result.ActualCategory)
+	}
+	if !result.MethodCorrect {
+		fmt.Printf("    ✗ Method: expected=%s, actual=%s\n",
+			result.ExpectedMethod, result.ActualMethod)
+	} else {
+		fmt.Printf("    ✓ Method: %s\n", result.ActualMethod)
+	}
+	if !result.ConfidenceMet {
+		fmt.Printf("    ✗ Confidence: expected>=%.2f, actual=%.2f\n",
+			result.ExpectedConfidence, result.ActualConfidence)
+	}
 }
