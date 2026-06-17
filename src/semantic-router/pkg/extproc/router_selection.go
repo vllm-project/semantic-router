@@ -66,14 +66,32 @@ func resolveSelectionEmbeddingFunc(cfg *config.RouterConfig) func(string) ([]flo
 	case "openvino":
 		return openvinoEmbeddingFunc(modelType)
 	default:
+		// Batched FFI only supports qwen3 (1024-dim). Other types (default
+		// mmbert, gemma, ...) use the single-text FFI with target_dim 0 so
+		// each model returns its native dimension.
+		if candleEmbeddingSupportsBatched(modelType) {
+			return func(text string) ([]float32, error) {
+				output, err := candle_binding.GetEmbeddingBatched(text, modelType, 1024)
+				if err != nil {
+					return nil, err
+				}
+				return output.Embedding, nil
+			}
+		}
 		return func(text string) ([]float32, error) {
-			output, err := candle_binding.GetEmbeddingBatched(text, modelType, 1024)
+			output, err := candle_binding.GetEmbeddingWithModelType(text, modelType, 0)
 			if err != nil {
 				return nil, err
 			}
 			return output.Embedding, nil
 		}
 	}
+}
+
+// candleEmbeddingSupportsBatched reports whether the batched embedding FFI
+// supports the model type. Only qwen3 does; others use the single-text FFI.
+func candleEmbeddingSupportsBatched(modelType string) bool {
+	return modelType == "qwen3"
 }
 
 func collectConfiguredAlgorithmMethods(cfg *config.RouterConfig) []selection.SelectionMethod {

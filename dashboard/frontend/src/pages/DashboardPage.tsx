@@ -289,7 +289,7 @@ const DashboardPage: React.FC = () => {
                       {status.overall === 'not_running' ? 'Not Running' :
                        status.overall.charAt(0).toUpperCase() + status.overall.slice(1)}
                     </span>
-                    {status.version && <span className={styles.versionBadge}>v{status.version}</span>}
+                    {status.version && <span className={styles.versionBadge}>{status.version}</span>}
                     {status.deployment_type && status.deployment_type !== 'none' && (
                       <span className={styles.deployBadge}>{status.deployment_type}</span>
                     )}
