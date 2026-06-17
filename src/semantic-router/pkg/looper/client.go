@@ -38,6 +38,7 @@ type Client struct {
 	endpoint          string
 	headers           map[string]string
 	decisionName      string            // Decision name to pass in looper requests
+	fusionDepth       int               // Recursion guard for Fusion requests
 	endpointOverrides map[string]string // Per-model endpoint URL overrides
 }
 
@@ -62,6 +63,11 @@ func NewClient(cfg *config.LooperConfig) *Client {
 // SetDecisionName sets the decision name for this client
 func (c *Client) SetDecisionName(name string) {
 	c.decisionName = name
+}
+
+// SetFusionDepth sets the Fusion recursion depth marker for internal requests.
+func (c *Client) SetFusionDepth(depth int) {
+	c.fusionDepth = depth
 }
 
 // SetEndpointOverrides sets per-model endpoint URL overrides.
@@ -134,6 +140,11 @@ type ModelResponse struct {
 
 	// StreamingChunks contains the raw SSE chunks for streaming responses
 	StreamingChunks []string
+
+	// Usage holds the token counts reported by the backend for this single
+	// call. It is zero when the backend omits usage (e.g. streaming responses
+	// without stream_options.include_usage).
+	Usage TokenUsage
 }
 
 // LogprobsConfig controls logprobs behavior for model calls
@@ -209,6 +220,9 @@ func (c *Client) CallModel(ctx context.Context, req *openai.ChatCompletionNewPar
 	// These allow extproc to identify looper requests and lookup decision configuration
 	httpReq.Header.Set("x-vsr-looper-request", "true")
 	httpReq.Header.Set("x-vsr-looper-iteration", fmt.Sprintf("%d", iteration))
+	if c.fusionDepth > 0 {
+		httpReq.Header.Set("x-vsr-fusion-depth", fmt.Sprintf("%d", c.fusionDepth))
+	}
 
 	// Add decision name header for extproc to lookup decision configuration
 	if c.decisionName != "" {
@@ -251,6 +265,11 @@ func (c *Client) parseNonStreamingResponse(body []byte, modelName string) (*Mode
 		Parsed:      &completion,
 		Model:       modelName, // Use the requested model name, not the backend's response
 		IsStreaming: false,
+		Usage: TokenUsage{
+			PromptTokens:     completion.Usage.PromptTokens,
+			CompletionTokens: completion.Usage.CompletionTokens,
+			TotalTokens:      completion.Usage.TotalTokens,
+		},
 	}
 
 	// Extract content, tool_calls, and logprobs

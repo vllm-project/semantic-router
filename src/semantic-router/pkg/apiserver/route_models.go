@@ -5,6 +5,8 @@ package apiserver
 import (
 	"net/http"
 	"time"
+
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 )
 
 // handleOpenAIModels handles OpenAI-compatible model listing at /v1/models
@@ -14,25 +16,21 @@ func (s *ClassificationAPIServer) handleOpenAIModels(w http.ResponseWriter, _ *h
 	now := time.Now().Unix()
 	cfg := s.currentConfig()
 
-	// Start with the configured auto model name (or default "MoM")
-	// The model list uses the actual configured name, not "auto"
-	// However, "auto" is still accepted as an alias in request handling for backward compatibility
+	// Start with all configured auto model aliases.
 	models := []OpenAIModel{}
+	seenModels := map[string]bool{}
 
-	// Add the effective auto model name (configured or default "MoM")
+	autoModelNames := config.DefaultAutoModelNames()
 	if cfg != nil {
-		effectiveAutoModelName := cfg.GetEffectiveAutoModelName()
+		autoModelNames = cfg.EffectiveAutoModelNames()
+	}
+	for _, autoModelName := range autoModelNames {
+		if autoModelName == "" || seenModels[autoModelName] {
+			continue
+		}
+		seenModels[autoModelName] = true
 		models = append(models, OpenAIModel{
-			ID:          effectiveAutoModelName,
-			Object:      "model",
-			Created:     now,
-			OwnedBy:     "vllm-semantic-router",
-			Description: "Intelligent Router for Mixture-of-Models",
-		})
-	} else {
-		// Fallback if no config
-		models = append(models, OpenAIModel{
-			ID:          "MoM",
+			ID:          autoModelName,
 			Object:      "model",
 			Created:     now,
 			OwnedBy:     "vllm-semantic-router",
@@ -43,10 +41,10 @@ func (s *ClassificationAPIServer) handleOpenAIModels(w http.ResponseWriter, _ *h
 	// Append underlying models from config (if available and configured to include them)
 	if cfg != nil && cfg.IncludeConfigModelsInList {
 		for _, m := range cfg.GetAllModels() {
-			// Skip if already added as the configured auto model name (avoid duplicates)
-			if m == cfg.GetEffectiveAutoModelName() {
+			if seenModels[m] {
 				continue
 			}
+			seenModels[m] = true
 			models = append(models, OpenAIModel{
 				ID:      m,
 				Object:  "model",

@@ -45,8 +45,8 @@ type PIIEntity struct {
 func (s *ClassificationService) DetectPII(req PIIRequest) (*PIIResponse, error) {
 	start := time.Now()
 
-	if req.Text == "" {
-		return nil, fmt.Errorf("text cannot be empty")
+	if blankText(req.Text) {
+		return nil, ErrEmptyText
 	}
 
 	if s.classifier == nil {

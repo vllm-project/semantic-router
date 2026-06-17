@@ -35,6 +35,21 @@ func (d *decompiler) keywordToSignal(kw *config.KeywordRule) *SignalDecl {
 	if kw.Method != "" {
 		fields["method"] = StringValue{V: kw.Method}
 	}
+	if kw.FuzzyMatch {
+		fields["fuzzy_match"] = BoolValue{V: true}
+	}
+	if kw.FuzzyThreshold != 0 {
+		fields["fuzzy_threshold"] = IntValue{V: kw.FuzzyThreshold}
+	}
+	if kw.BM25Threshold != 0 {
+		fields["bm25_threshold"] = FloatValue{V: float64(kw.BM25Threshold)}
+	}
+	if kw.NgramThreshold != 0 {
+		fields["ngram_threshold"] = FloatValue{V: float64(kw.NgramThreshold)}
+	}
+	if kw.NgramArity != 0 {
+		fields["ngram_arity"] = IntValue{V: kw.NgramArity}
+	}
 	return &SignalDecl{SignalType: "keyword", Name: kw.Name, Fields: fields}
 }
 
@@ -118,6 +133,9 @@ func (d *decompiler) contextToSignal(ctx *config.ContextRule) *SignalDecl {
 	if ctx.MaxTokens != "" {
 		fields["max_tokens"] = StringValue{V: string(ctx.MaxTokens)}
 	}
+	if ctx.Description != "" {
+		fields["description"] = StringValue{V: ctx.Description}
+	}
 	return &SignalDecl{SignalType: "context", Name: ctx.Name, Fields: fields}
 }
 
@@ -180,6 +198,9 @@ func (d *decompiler) roleBindingToSignal(rb *config.RoleBinding) *SignalDecl {
 	fields := make(map[string]Value)
 	if rb.Role != "" {
 		fields["role"] = StringValue{V: rb.Role}
+	}
+	if rb.Description != "" {
+		fields["description"] = StringValue{V: rb.Description}
 	}
 	if len(rb.Subjects) > 0 {
 		var items []Value

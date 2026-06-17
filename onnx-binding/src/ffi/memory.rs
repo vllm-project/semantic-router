@@ -7,6 +7,7 @@ use std::ffi::{c_char, CString};
 /// # Safety
 /// - `data` must be a valid pointer allocated by Rust
 /// - `length` must match the original allocation length
+#[allow(clippy::not_unsafe_ptr_arg_deref)]
 #[no_mangle]
 pub extern "C" fn free_embedding(data: *mut f32, length: i32) {
     if data.is_null() || length <= 0 {
@@ -14,7 +15,7 @@ pub extern "C" fn free_embedding(data: *mut f32, length: i32) {
     }
 
     unsafe {
-        let _ = Box::from_raw(std::slice::from_raw_parts_mut(data, length as usize));
+        let _ = Box::from_raw(std::ptr::slice_from_raw_parts_mut(data, length as usize));
     }
 }
 
@@ -22,6 +23,7 @@ pub extern "C" fn free_embedding(data: *mut f32, length: i32) {
 ///
 /// # Safety
 /// - `s` must be a valid CString pointer allocated by Rust
+#[allow(clippy::not_unsafe_ptr_arg_deref)]
 #[no_mangle]
 pub extern "C" fn free_cstring(s: *mut c_char) {
     if s.is_null() {
@@ -37,6 +39,7 @@ pub extern "C" fn free_cstring(s: *mut c_char) {
 ///
 /// # Safety
 /// - `result` must be a valid pointer to BatchSimilarityResult
+#[allow(clippy::not_unsafe_ptr_arg_deref)]
 #[no_mangle]
 pub extern "C" fn free_batch_similarity_result(result: *mut super::types::BatchSimilarityResult) {
     if result.is_null() {
@@ -46,12 +49,14 @@ pub extern "C" fn free_batch_similarity_result(result: *mut super::types::BatchS
     unsafe {
         let batch_result = &mut *result;
 
+        // The array was allocated with `into_boxed_slice()` and must be reclaimed as
+        // a full-length `Box<[SimilarityMatch]>`. The element-pointer form frees with
+        // single-element layout, which is undefined behavior when num_matches > 1.
         if !batch_result.matches.is_null() && batch_result.num_matches > 0 {
-            let matches_slice = std::slice::from_raw_parts_mut(
+            let _ = Box::from_raw(std::ptr::slice_from_raw_parts_mut(
                 batch_result.matches,
                 batch_result.num_matches as usize,
-            );
-            let _ = Box::from_raw(matches_slice.as_mut_ptr());
+            ));
         }
 
         batch_result.matches = std::ptr::null_mut();
@@ -63,6 +68,7 @@ pub extern "C" fn free_batch_similarity_result(result: *mut super::types::BatchS
 ///
 /// # Safety
 /// - `result` must be a valid pointer to EmbeddingModelsInfoResult
+#[allow(clippy::not_unsafe_ptr_arg_deref)]
 #[no_mangle]
 pub extern "C" fn free_embedding_models_info(result: *mut super::types::EmbeddingModelsInfoResult) {
     if result.is_null() {
@@ -88,7 +94,12 @@ pub extern "C" fn free_embedding_models_info(result: *mut super::types::Embeddin
                 }
             }
 
-            let _ = Box::from_raw(models_slice.as_mut_ptr());
+            // Reclaim the models array as the full-length boxed slice it was
+            // allocated as, not as a single-element box.
+            let _ = Box::from_raw(std::ptr::slice_from_raw_parts_mut(
+                info_result.models,
+                info_result.num_models as usize,
+            ));
         }
 
         info_result.models = std::ptr::null_mut();

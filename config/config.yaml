@@ -772,6 +772,52 @@ routing:
                 - api key
                 - password
 
+    - name: deliberation-fusion-route
+      description: Fusion route for prompts that benefit from panel deliberation.
+      priority: 165
+      rules:
+        operator: AND
+        conditions:
+          - type: domain
+            name: business
+          - type: complexity
+            name: needs_reasoning:hard
+      modelRefs:
+        - model: qwen3-8b
+          use_reasoning: true
+          reasoning_effort: medium
+          weight: 0.5
+        - model: qwen3-32b
+          use_reasoning: true
+          reasoning_effort: high
+          weight: 0.5
+      algorithm:
+        type: fusion
+        fusion:
+          model: qwen3-32b
+          analysis_models:
+            - qwen3-8b
+            - qwen3-32b
+          max_concurrent: 2
+          max_completion_tokens: 512
+          temperature: 0.2
+          include_analysis: true
+          include_intermediate_responses: true
+          on_error: skip
+          analysis_template: ""
+          synthesis_template: ""
+          judge_prompt_version: fusion-v1
+          # Grounding-aware synthesis: score panel responses for faithfulness
+          # (hallucination detector against context, else cross-model NLI) and
+          # rank/filter them before the judge. Disabled by default.
+          grounding:
+            enabled: false
+            reference: hybrid          # hybrid | context | panel
+            min_score: 0.0             # drop responses scoring below this (0-1)
+            min_keep: 1                # always keep at least this many
+            nli_contradiction_penalty: 1.0
+            on_error: skip             # skip (fall back to plain fusion) | fail
+
     - name: terse_elo_route
       description: Personalized terse-answer route using Elo selection.
       priority: 160
@@ -1325,6 +1371,10 @@ global:
     config_source: file
     strategy: priority
     auto_model_name: exhaustive-reference
+    auto_model_names:
+      - vllm-sr/auto
+      - auto
+      - exhaustive-reference
     include_config_models_in_list: true
     clear_route_cache: false
     streamed_body:
@@ -1914,6 +1964,9 @@ global:
       retry_count: 2
       headers:
         X-Trace-Source: looper
+      fusion:
+        model_names:
+          - vllm-sr/fusion
 
   model_catalog:
     embeddings:

@@ -116,6 +116,10 @@ func (r *OpenAIRouter) handleModelRouting(openAIRequest *openai.ChatCompletionNe
 		targetModel = selectedModel
 	}
 
+	if r.Config != nil && r.Config.IsFusionModelName(originalModel) {
+		return r.handleDirectFusionExecution(openAIRequest, originalModel, ctx)
+	}
+
 	// Anthropic model routing
 	if r.Config.GetModelAPIFormat(targetModel) == config.APIFormatAnthropic {
 		return r.handleAnthropicRouting(openAIRequest, originalModel, targetModel, decisionName, ctx)

@@ -40,6 +40,8 @@ pub use state_manager::*;
 #[cfg(test)]
 pub mod classify_test;
 #[cfg(test)]
+pub mod dealloc_layout_test;
+#[cfg(test)]
 pub mod embedding_test;
 #[cfg(test)]
 pub mod init_test;

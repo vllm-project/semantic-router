@@ -86,6 +86,34 @@ const (
 	// Values: "true" or "false"
 	VSRInjectedSystemPrompt = "x-vsr-injected-system-prompt"
 
+	// --- v0.4 keystone response-contract headers (issue #2203) ---
+	// These two headers are emitted on every VSR-processed response and form
+	// the foundation of the v0.4 header contract: schema-version stamps the
+	// contract revision and response-path names how the response was produced.
+	// Everything else in the contract keys off response-path.
+
+	// VSRSchemaVersion stamps the response-header contract revision so clients
+	// know which contract they are parsing. Value: SchemaVersionValue.
+	VSRSchemaVersion = "x-vsr-schema-version"
+
+	// VSRResponsePath names the final path that produced the response.
+	// Value is one of the ResponsePath* constants below.
+	VSRResponsePath = "x-vsr-response-path"
+
+	// ResponsePath* are the valid values for VSRResponsePath.
+	ResponsePathUpstream        = "upstream"         // forwarded to and answered by the upstream model
+	ResponsePathCache           = "cache"            // served from semantic cache, no upstream call
+	ResponsePathFastResponse    = "fast_response"    // short-circuited by the fast_response plugin
+	ResponsePathLooper          = "looper"           // produced by the agent looper
+	ResponsePathImageGeneration = "image_generation" // produced by the image-generation path
+	ResponsePathBlocked         = "blocked"          // rejected by a guardrail (e.g. jailbreak/PII)
+	ResponsePathRateLimited     = "rate_limited"     // rejected by rate limiting
+	ResponsePathError           = "error"            // router-side error response
+
+	// SchemaVersionValue is the current response-header contract revision
+	// emitted in VSRSchemaVersion. v0.4 is contract revision "2".
+	SchemaVersionValue = "2"
+
 	// VSRCacheHit indicates that the response was served from cache.
 	// Value: "true"
 	VSRCacheHit = "x-vsr-cache-hit"
@@ -230,25 +258,6 @@ const (
 	VSRLossinessWarnings = "x-vsr-lossiness-warnings"
 )
 
-// Legacy Security Headers (kept for backward compatibility with replay recorder)
-// New signal-driven architecture uses x-vsr-matched-jailbreak and x-vsr-matched-pii instead.
-const (
-	// VSRPIIViolation indicates that the request was blocked due to PII policy violation.
-	VSRPIIViolation = "x-vsr-pii-violation"
-
-	// VSRPIITypes contains the comma-separated list of PII types that were detected and denied.
-	VSRPIITypes = "x-vsr-pii-types"
-
-	// VSRJailbreakBlocked indicates that a jailbreak attempt was detected and blocked.
-	VSRJailbreakBlocked = "x-vsr-jailbreak-blocked"
-
-	// VSRJailbreakType specifies the type of jailbreak attempt that was detected.
-	VSRJailbreakType = "x-vsr-jailbreak-type"
-
-	// VSRJailbreakConfidence indicates the confidence level of the jailbreak detection.
-	VSRJailbreakConfidence = "x-vsr-jailbreak-confidence"
-)
-
 // Hallucination Mitigation Headers
 // These headers are added to responses when hallucination detection is enabled
 // and potential hallucinations are detected in the LLM response.
@@ -356,6 +365,9 @@ const (
 	// Used by extproc to lookup decision configuration and apply plugins.
 	// Value: decision name (e.g., "remom_low_effort")
 	VSRLooperDecision = "x-vsr-looper-decision"
+
+	// VSRFusionDepth marks internal Fusion subrequests to prevent recursive Fusion execution.
+	VSRFusionDepth = "x-vsr-fusion-depth"
 )
 
 // Looper Response Headers

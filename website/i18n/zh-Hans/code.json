@@ -2481,10 +2481,10 @@
     "message": "从研究到基础设施，这个项目由一群持续交付的人共同推进。"
   },
   "teamCarousel.label": {
-    "message": "贡献者"
+    "message": "治理"
   },
   "teamCarousel.footer": {
-    "message": "维护者、提交者与贡献者共同覆盖研究、基础设施和开源协作。"
+    "message": "指导委员会成员与提交者共同覆盖研究、基础设施和开源协作。"
   },
   "teamCarousel.viewAll": {
     "message": "查看团队名单"
@@ -2541,7 +2541,7 @@
     "message": "范围"
   },
   "community.contributors.range.aria": {
-    "message": "贡献者排行榜时间范围"
+    "message": "贡献者排行榜 release 窗口"
   },
   "community.contributors.range.through": {
     "message": "截至 {date}"
@@ -2573,17 +2573,29 @@
   "community.contributors.avatarAlt": {
     "message": "{name} 头像"
   },
-  "community.contributors.range.last3months.label": {
-    "message": "近 3 个月"
+  "community.contributors.range.v03ToNow.label": {
+    "message": "v0.3 -> 当前"
   },
-  "community.contributors.range.last3months.caption": {
-    "message": "默认"
+  "community.contributors.range.v03ToNow.caption": {
+    "message": "当前 release"
   },
-  "community.contributors.range.last365days.label": {
-    "message": "近 365 天"
+  "community.contributors.range.v02ToV03.label": {
+    "message": "v0.2 -> v0.3"
   },
-  "community.contributors.range.last365days.caption": {
-    "message": "过去一年"
+  "community.contributors.range.v02ToV03.caption": {
+    "message": "Release gap"
+  },
+  "community.contributors.range.v01ToV02.label": {
+    "message": "v0.1 -> v0.2"
+  },
+  "community.contributors.range.v01ToV02.caption": {
+    "message": "Release gap"
+  },
+  "community.contributors.range.v0ToV01.label": {
+    "message": "v0 -> v0.1"
+  },
+  "community.contributors.range.v0ToV01.caption": {
+    "message": "初始 release"
   },
   "community.contributors.range.all.label": {
     "message": "全部历史"

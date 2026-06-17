@@ -176,6 +176,8 @@ type AggregatedResponse struct {
 // When the final response contains tool_calls, the original raw response
 // is preserved (with metadata patched) to avoid dropping tool_calls.
 func (l *BaseLooper) formatJSONResponse(agg *AggregatedResponse, modelsUsed []string, iterations int) (*Response, error) {
+	usage := SumUsage(agg.Responses...)
+
 	// If the final response has tool_calls, use the original raw response
 	// but patch the model name and id to reflect the looper wrapper.
 	if agg.HasToolCalls && len(agg.Responses) > 0 {
@@ -194,6 +196,7 @@ func (l *BaseLooper) formatJSONResponse(agg *AggregatedResponse, modelsUsed []st
 						ModelsUsed:    modelsUsed,
 						Iterations:    iterations,
 						AlgorithmType: "simple",
+						Usage:         usage,
 					}, nil
 				}
 			}
@@ -214,6 +217,7 @@ func (l *BaseLooper) formatJSONResponse(agg *AggregatedResponse, modelsUsed []st
 				ModelsUsed:    modelsUsed,
 				Iterations:    iterations,
 				AlgorithmType: "simple",
+				Usage:         usage,
 			}, nil
 		}
 	}
@@ -233,11 +237,7 @@ func (l *BaseLooper) formatJSONResponse(agg *AggregatedResponse, modelsUsed []st
 				"finish_reason": "stop",
 			},
 		},
-		"usage": map[string]interface{}{
-			"prompt_tokens":     0,
-			"completion_tokens": 0,
-			"total_tokens":      0,
-		},
+		"usage": usage.Map(),
 	}
 
 	body, err := json.Marshal(completion)
@@ -252,6 +252,7 @@ func (l *BaseLooper) formatJSONResponse(agg *AggregatedResponse, modelsUsed []st
 		ModelsUsed:    modelsUsed,
 		Iterations:    iterations,
 		AlgorithmType: "simple",
+		Usage:         usage,
 	}, nil
 }
 
@@ -348,9 +349,12 @@ func (l *BaseLooper) formatStreamingResponse(agg *AggregatedResponse, modelsUsed
 	// If we have real SSE streams from the underlying model(s), preserve the SSE
 	// framing instead of simulating it. This still returns a single response body,
 	// but avoids the "fake streaming" behavior where we pre-split text.
+	usage := SumUsage(agg.Responses...)
 	if len(agg.Responses) > 0 && agg.Responses[0].IsStreaming {
 		body := concatModelSSEStreams(agg.Responses)
-		return streamingLooperResponse(body, agg.FinalModel, modelsUsed, iterations, "simple"), nil
+		resp := streamingLooperResponse(body, agg.FinalModel, modelsUsed, iterations, "simple")
+		resp.Usage = usage
+		return resp, nil
 	}
 
 	timestamp := time.Now().Unix()
@@ -360,7 +364,9 @@ func (l *BaseLooper) formatStreamingResponse(agg *AggregatedResponse, modelsUsed
 	sseBody := buildSimulatedChatCompletionSSE(
 		id, timestamp, agg.FinalModel, chunks, toolName, toolArgs, toolCallID, hasToolCall,
 	)
-	return streamingLooperResponse(sseBody, agg.FinalModel, modelsUsed, iterations, "simple"), nil
+	resp := streamingLooperResponse(sseBody, agg.FinalModel, modelsUsed, iterations, "simple")
+	resp.Usage = usage
+	return resp, nil
 }
 
 func concatModelSSEStreams(responses []*ModelResponse) []byte {

@@ -4,6 +4,7 @@ package apiserver
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"time"
@@ -11,6 +12,19 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/metrics"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/services"
 )
+
+// writeClassificationError maps a classification service error to an HTTP
+// status code: empty/whitespace input is a client error (400 INVALID_INPUT);
+// anything else is treated as an internal error (500 CLASSIFICATION_ERROR).
+// This keeps the classify endpoints aligned with their documented OpenAPI
+// contract ({200, 400}) and with sibling endpoints (combined/batch/embeddings).
+func (s *ClassificationAPIServer) writeClassificationError(w http.ResponseWriter, err error) {
+	if errors.Is(err, services.ErrEmptyText) {
+		s.writeErrorResponse(w, http.StatusBadRequest, "INVALID_INPUT", err.Error())
+		return
+	}
+	s.writeErrorResponse(w, http.StatusInternalServerError, "CLASSIFICATION_ERROR", err.Error())
+}
 
 // handleIntentClassification handles intent classification requests
 func (s *ClassificationAPIServer) handleIntentClassification(w http.ResponseWriter, r *http.Request) {
@@ -23,7 +37,7 @@ func (s *ClassificationAPIServer) handleIntentClassification(w http.ResponseWrit
 	// Use signal-driven classification (always uses signal-driven architecture)
 	response, err := s.classificationSvc.ClassifyIntent(req)
 	if err != nil {
-		s.writeErrorResponse(w, http.StatusInternalServerError, "CLASSIFICATION_ERROR", err.Error())
+		s.writeClassificationError(w, err)
 		return
 	}
 
@@ -50,7 +64,7 @@ func (s *ClassificationAPIServer) handleEvalClassification(w http.ResponseWriter
 
 	response, err := s.classificationSvc.ClassifyIntentForEval(req)
 	if err != nil {
-		s.writeErrorResponse(w, http.StatusInternalServerError, "CLASSIFICATION_ERROR", err.Error())
+		s.writeClassificationError(w, err)
 		return
 	}
 
@@ -67,7 +81,7 @@ func (s *ClassificationAPIServer) handlePIIDetection(w http.ResponseWriter, r *h
 
 	response, err := s.classificationSvc.DetectPII(req)
 	if err != nil {
-		s.writeErrorResponse(w, http.StatusInternalServerError, "CLASSIFICATION_ERROR", err.Error())
+		s.writeClassificationError(w, err)
 		return
 	}
 
@@ -84,7 +98,7 @@ func (s *ClassificationAPIServer) handleSecurityDetection(w http.ResponseWriter,
 
 	response, err := s.classificationSvc.CheckSecurity(req)
 	if err != nil {
-		s.writeErrorResponse(w, http.StatusInternalServerError, "CLASSIFICATION_ERROR", err.Error())
+		s.writeClassificationError(w, err)
 		return
 	}
 
@@ -331,7 +345,7 @@ func (s *ClassificationAPIServer) handleFactCheckClassification(w http.ResponseW
 
 	response, err := s.classificationSvc.ClassifyFactCheck(req)
 	if err != nil {
-		s.writeErrorResponse(w, http.StatusInternalServerError, "CLASSIFICATION_ERROR", err.Error())
+		s.writeClassificationError(w, err)
 		return
 	}
 
@@ -348,7 +362,7 @@ func (s *ClassificationAPIServer) handleUserFeedbackClassification(w http.Respon
 
 	response, err := s.classificationSvc.ClassifyUserFeedback(req)
 	if err != nil {
-		s.writeErrorResponse(w, http.StatusInternalServerError, "CLASSIFICATION_ERROR", err.Error())
+		s.writeClassificationError(w, err)
 		return
 	}
 
