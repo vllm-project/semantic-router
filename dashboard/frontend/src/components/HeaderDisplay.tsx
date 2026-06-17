@@ -42,13 +42,9 @@ const HEADER_INFO: Record<
     label: 'Fast Response',
     type: 'success',
   },
-  'x-vsr-hallucination-detected': {
-    label: 'Hallucination',
+  'x-vsr-response-warnings': {
+    label: 'Response Warnings',
     type: 'warning',
-  },
-  'x-vsr-fact-check-needed': {
-    label: 'Fact Check',
-    type: 'info',
   },
   'x-vsr-matched-keywords': {
     label: 'Keywords',
