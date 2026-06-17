@@ -104,6 +104,25 @@ class ReMoMAlgorithmConfig(BaseModel):
     max_responses_per_round: int | None = None
 
 
+class FusionGroundingConfig(BaseModel):
+    """Configuration for grounding-aware fusion.
+
+    Scores each panel response for faithfulness before the judge synthesizes,
+    then ranks/filters the panel. Uses local encoder models (hallucination
+    detector + NLI) and makes no extra LLM calls. Bounds here MUST match the Go
+    validator in pkg/config/fusion_config.go (ValidateFusionGroundingConfig).
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    enabled: bool | None = False
+    reference: Literal["hybrid", "context", "panel"] | None = "hybrid"
+    min_score: float | None = Field(default=0.0, ge=0, le=1)
+    min_keep: int | None = Field(default=1, ge=0)
+    nli_contradiction_penalty: float | None = Field(default=1.0, ge=0)
+    on_error: Literal["skip", "fail"] | None = "skip"
+
+
 class FusionAlgorithmConfig(BaseModel):
     """Configuration for Fusion multi-model deliberation.
 
@@ -124,6 +143,7 @@ class FusionAlgorithmConfig(BaseModel):
     analysis_template: str | None = None
     synthesis_template: str | None = None
     judge_prompt_version: str | None = "fusion-v1"
+    grounding: FusionGroundingConfig | None = None
 
 
 class LatencyAwareAlgorithmConfig(BaseModel):

@@ -14,14 +14,14 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/metrics"
 )
 
-// lossinessHeaderSizeLimit caps the encoded x-vsr-lossiness-warnings
+// lossinessHeaderSizeLimit caps the encoded x-vsr-protocol-warnings
 // header at a conservative size well under any HTTP/2 frame limit.
 // >50 warnings already represent a deeper translation regression worth
 // investigating via the structured log rather than the header.
 const lossinessHeaderSizeLimit = 4096
 
 // protocolDefault is the wire-shape token emitted in x-vsr-inbound-
-// protocol / x-vsr-outbound-protocol when the request context did not
+// protocol / x-vsr-upstream-protocol when the request context did not
 // resolve an explicit protocol. The router's default contract is
 // OpenAI-compatible.
 const protocolDefault = "openai"
@@ -73,6 +73,22 @@ func (builder *responseHeaderMutationBuilder) addKeystone(ctx *RequestContext) {
 	builder.addString(headers.VSRResponsePath, path)
 }
 
+// addProtocolMarkers emits the client/upstream protocol markers
+// (x-vsr-client-protocol, x-vsr-upstream-protocol). Per the v0.4 contract
+// (#2206) they ride on cross-protocol responses — when the inbound client
+// protocol differs from the outbound upstream protocol, i.e. a translation
+// actually happened — or when the request opted into debug headers (#2216).
+// Same-protocol non-debug calls omit them to keep the contract lean.
+func (builder *responseHeaderMutationBuilder) addProtocolMarkers(ctx *RequestContext) {
+	client := normalizeProtocol(ctx.ClientProtocol)
+	upstream := normalizeProtocol(ctx.APIFormat)
+	if client == upstream && !debugHeadersRequested(ctx) {
+		return
+	}
+	builder.addString(headers.VSRClientProtocol, client)
+	builder.addString(headers.VSRUpstreamProtocol, upstream)
+}
+
 func (builder *responseHeaderMutationBuilder) addFloat(key string, value float64) {
 	if value <= 0 {
 		return
@@ -112,7 +128,7 @@ func (builder *responseHeaderMutationBuilder) addJoined(key string, values []str
 }
 
 // addLossinessWarnings encodes ctx.IRExtensions.Warnings into the
-// x-vsr-lossiness-warnings header, increments the per-warning Prometheus
+// x-vsr-protocol-warnings header, increments the per-warning Prometheus
 // counter, and emits a structured log event per warning. Returns
 // without emitting anything when warnings is empty.
 //
@@ -163,7 +179,7 @@ func (builder *responseHeaderMutationBuilder) addLossinessWarnings(
 		sb.WriteString(trailer)
 	}
 
-	builder.addString(headers.VSRLossinessWarnings, sb.String())
+	builder.addString(headers.VSRProtocolWarnings, sb.String())
 }
 
 func formatLossinessEntry(w ir.Warning) string {
@@ -242,21 +258,20 @@ func buildResponseHeaderMutation(
 
 	builder := newResponseHeaderMutationBuilder()
 
-	// Protocol markers and lossiness warnings ride on every response
-	// (success or 4xx/5xx) so clients can always tell which translation
-	// cell handled the call. Cache-hit responses are an exception: the
-	// IRExtensions.Warnings slice is per-request, so a cached response
-	// would attribute warnings from a different request — we skip the
-	// new headers entirely on cache hits and let the cached payload
+	// The keystone headers, protocol markers, and protocol warnings ride on
+	// every non-cache-hit response (success or 4xx/5xx). Cache-hit responses
+	// are an exception: the IRExtensions.Warnings slice is per-request, so a
+	// cached response would attribute warnings from a different request — we
+	// skip these headers entirely on cache hits and let the cached payload
 	// flow unchanged.
 	if !ctx.VSRCacheHit {
-		// Keystone headers ride on every non-cache-hit response (success or
-		// 4xx/5xx). Cache hits emit their own response-path: cache from the
-		// cache immediate-response builder. This function only handles upstream
-		// responses, so the path defaults to "upstream".
+		// Keystone headers (schema-version + response-path) ride on every
+		// non-cache-hit response. This function only handles upstream responses,
+		// so the path defaults to "upstream".
 		builder.addKeystone(ctx)
-		builder.addString(headers.VSRInboundProtocol, normalizeProtocol(ctx.ClientProtocol))
-		builder.addString(headers.VSROutboundProtocol, normalizeProtocol(ctx.APIFormat))
+		// Client/upstream protocol markers ride only on cross-protocol responses
+		// (#2206); same-protocol calls omit them.
+		builder.addProtocolMarkers(ctx)
 		if ctx.IRExtensions != nil {
 			builder.addLossinessWarnings(ctx, ctx.IRExtensions.Warnings)
 		}

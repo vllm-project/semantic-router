@@ -74,10 +74,17 @@ type RequestContext struct {
 	// Streaming accumulation for caching
 	HasStreamingChunks bool                            // True when at least one SSE chunk has been received
 	StreamingContent   string                          // Accumulated content from delta.content
+	StreamingReasoning string                          // Accumulated reasoning from delta.reasoning_content
 	StreamingMetadata  map[string]interface{}          // id, model, created from first chunk
 	StreamingToolCalls map[int]*StreamingToolCallState // Accumulated delta.tool_calls keyed by tool index
 	StreamingComplete  bool                            // True when [DONE] marker received
 	StreamingAborted   bool                            // True if stream ended abnormally (EOF, cancel, timeout)
+
+	// UpstreamStatusCode is the HTTP status the upstream returned, captured at
+	// the response-header phase. Zero means the status was never observed for
+	// this request (e.g. response headers not processed). The cache-write path
+	// reads it to avoid caching non-2xx error bodies (cache poisoning).
+	UpstreamStatusCode int
 
 	// TTFT tracking
 	TTFTRecorded bool

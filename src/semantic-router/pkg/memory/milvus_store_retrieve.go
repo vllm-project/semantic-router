@@ -84,7 +84,7 @@ func (m *MilvusStore) normalizeRetrieveOpts(opts RetrieveOptions) (limit int, th
 }
 
 func retrieveFilterExpr(userID string, types []MemoryType) string {
-	filterExpr := fmt.Sprintf("user_id == \"%s\"", userID)
+	filterExpr := milvusUserScopeFilter(userID)
 	if tf := buildTypeFilter(types); tf != "" {
 		filterExpr = fmt.Sprintf("%s && %s", filterExpr, tf)
 	}

@@ -4,7 +4,7 @@ This page documents the public `x-vsr-*` headers emitted by vLLM Semantic Router
 
 ## Emission Rules
 
-The router emits protocol headers on every non-cache-hit response. It emits routing decision and matched-signal headers only when all of the following are true:
+The router emits the keystone headers (`x-vsr-schema-version`, `x-vsr-response-path`) on every non-cache-hit response. The client/upstream protocol markers ride only on cross-protocol handling or when `x-vsr-debug` is set, and `x-vsr-protocol-warnings` only when warnings exist. It emits routing decision and matched-signal headers only when all of the following are true:
 
 1. The upstream response is successful (`2xx`).
 2. The response was not served from semantic cache.
@@ -18,14 +18,15 @@ Cache-hit responses can emit cache headers, but they do not re-run routing and t
 | ------ | --------- | ----------- |
 | `x-session-id` | request | Stable client-provided session identifier for Chat Completions. `session_aware` uses this to reason about stay-vs-switch decisions across turns. |
 | `x-vsr-skip-processing` | request | Opts a request out of router processing when `global.router.skip_processing.enabled` is enabled. Use value `true`. |
+| `x-vsr-debug` | request | Opts the request into verbose/debug response headers — headers the contract otherwise omits or demotes to replay are emitted inline for that request. Use value `true`. |
 
 ## Protocol And Replay Headers
 
 | Header | Description |
 | ------ | ----------- |
-| `x-vsr-inbound-protocol` | Inbound protocol shape seen by the router, for example `openai` or `anthropic`. |
-| `x-vsr-outbound-protocol` | Protocol shape sent to the selected upstream backend. |
-| `x-vsr-lossiness-warnings` | Comma-separated protocol translation warnings encoded as `severity;reason;field`. |
+| `x-vsr-client-protocol` | Inbound protocol shape seen by the router, for example `openai` or `anthropic`. Emitted only on cross-protocol handling (client protocol differs from upstream), or when `x-vsr-debug` is set. |
+| `x-vsr-upstream-protocol` | Protocol shape sent to the selected upstream backend. Emitted only on cross-protocol handling, or when `x-vsr-debug` is set. |
+| `x-vsr-protocol-warnings` | Comma-separated protocol translation warnings encoded as `severity;reason;field`. Emitted only when warnings exist. |
 | `x-vsr-replay-id` | Opaque router replay record identifier for correlating a response with replay/Insights data. |
 
 ## Decision Headers
@@ -91,8 +92,8 @@ Projection scores and full projection traces are stored in router replay records
 ```http
 HTTP/1.1 200 OK
 Content-Type: application/json
-x-vsr-inbound-protocol: openai
-x-vsr-outbound-protocol: openai
+x-vsr-client-protocol: anthropic
+x-vsr-upstream-protocol: openai
 x-vsr-selected-decision: critical_event_tool_session_route
 x-vsr-selected-confidence: 1.0000
 x-vsr-selected-model: anthropic/claude-opus-4.6

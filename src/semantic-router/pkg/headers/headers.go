@@ -45,6 +45,12 @@ const (
 	// global.router.skip_processing.enabled is true. Value: "true" (case-insensitive).
 	// See https://github.com/vllm-project/semantic-router/issues/1808.
 	VSRSkipProcessing = "x-vsr-skip-processing"
+
+	// VSRDebug opts a request into verbose/debug response headers. Value: "true"
+	// (case-insensitive). When set, headers that the v0.4 contract otherwise
+	// omits or demotes to replay are emitted inline for that request — the
+	// debug/replay-mode trigger for the v0.4 header surface. See issue #2216.
+	VSRDebug = "x-vsr-debug"
 )
 
 // VSR Decision Tracking Headers
@@ -241,40 +247,21 @@ const (
 // and 5xx) so clients can always tell which translation cell handled the
 // call and what was lost during translation.
 const (
-	// VSRInboundProtocol describes the wire format of the inbound request
+	// VSRClientProtocol describes the wire format of the inbound request
 	// as seen by the router (e.g. "openai", "anthropic"). Defaults to
 	// "openai" when no other protocol was detected.
-	VSRInboundProtocol = "x-vsr-inbound-protocol"
+	VSRClientProtocol = "x-vsr-client-protocol"
 
-	// VSROutboundProtocol describes the wire format of the outbound
+	// VSRUpstreamProtocol describes the wire format of the outbound
 	// request sent to the upstream backend. Defaults to "openai" when no
 	// explicit APIFormat was resolved.
-	VSROutboundProtocol = "x-vsr-outbound-protocol"
+	VSRUpstreamProtocol = "x-vsr-upstream-protocol"
 
-	// VSRLossinessWarnings carries a structured, comma-separated list
+	// VSRProtocolWarnings carries a structured, comma-separated list
 	// of translation observations emitted by the inbound parser during
 	// a lossy translation. Each entry is "severity;reason;field".
 	// Absent when no warnings were produced.
-	VSRLossinessWarnings = "x-vsr-lossiness-warnings"
-)
-
-// Legacy Security Headers (kept for backward compatibility with replay recorder)
-// New signal-driven architecture uses x-vsr-matched-jailbreak and x-vsr-matched-pii instead.
-const (
-	// VSRPIIViolation indicates that the request was blocked due to PII policy violation.
-	VSRPIIViolation = "x-vsr-pii-violation"
-
-	// VSRPIITypes contains the comma-separated list of PII types that were detected and denied.
-	VSRPIITypes = "x-vsr-pii-types"
-
-	// VSRJailbreakBlocked indicates that a jailbreak attempt was detected and blocked.
-	VSRJailbreakBlocked = "x-vsr-jailbreak-blocked"
-
-	// VSRJailbreakType specifies the type of jailbreak attempt that was detected.
-	VSRJailbreakType = "x-vsr-jailbreak-type"
-
-	// VSRJailbreakConfidence indicates the confidence level of the jailbreak detection.
-	VSRJailbreakConfidence = "x-vsr-jailbreak-confidence"
+	VSRProtocolWarnings = "x-vsr-protocol-warnings"
 )
 
 // Hallucination Mitigation Headers

@@ -126,14 +126,6 @@ const HEADER_INFO: Record<string, { label: string; description: string }> = {
     label: 'Fast Response',
     description: 'Request short-circuited by fast_response plugin',
   },
-  'x-vsr-jailbreak-blocked': {
-    label: 'Jailbreak Blocked',
-    description: 'Request blocked by jailbreak protection',
-  },
-  'x-vsr-pii-violation': {
-    label: 'PII Violation',
-    description: 'Request blocked by PII protection',
-  },
   'x-vsr-hallucination-detected': {
     label: 'Quality: Hallucination',
     description: 'Potential hallucination detected',
@@ -217,8 +209,6 @@ const HeaderReveal = ({ headers, onComplete, displayDuration = 2000 }: HeaderRev
         key === 'x-vsr-selected-reasoning' ||
         key === 'x-vsr-fast-response' ||
         key === 'x-vsr-context-token-count' ||
-        key === 'x-vsr-jailbreak-blocked' ||
-        key === 'x-vsr-pii-violation' ||
         key === 'x-vsr-hallucination-detected' ||
         key === 'x-vsr-fact-check-needed',
     ),

@@ -359,6 +359,33 @@ class TestFusionAlgorithmConfig:
         with pytest.raises(PydanticValidationError):
             FusionAlgorithmConfig(on_error="ignore")
 
+    def test_grounding_defaults(self):
+        config = FusionAlgorithmConfig(grounding={"enabled": True})
+        assert config.grounding.enabled is True
+        assert config.grounding.reference == "hybrid"
+        assert config.grounding.min_score == 0.0
+        assert config.grounding.min_keep == 1
+        assert config.grounding.nli_contradiction_penalty == 1.0
+        assert config.grounding.on_error == "skip"
+
+    def test_grounding_bounds_match_go_validator(self):
+        # min_score in [0, 1]
+        with pytest.raises(PydanticValidationError):
+            FusionAlgorithmConfig(grounding={"min_score": 1.5})
+        with pytest.raises(PydanticValidationError):
+            FusionAlgorithmConfig(grounding={"min_score": -0.1})
+        # min_keep >= 0
+        with pytest.raises(PydanticValidationError):
+            FusionAlgorithmConfig(grounding={"min_keep": -1})
+        # penalty >= 0
+        with pytest.raises(PydanticValidationError):
+            FusionAlgorithmConfig(grounding={"nli_contradiction_penalty": -1})
+        # reference enum + on_error enum
+        with pytest.raises(PydanticValidationError):
+            FusionAlgorithmConfig(grounding={"reference": "elsewhere"})
+        with pytest.raises(PydanticValidationError):
+            FusionAlgorithmConfig(grounding={"on_error": "ignore"})
+
 
 class TestAlgorithmConfigIntegration:
     """Integration tests for AlgorithmConfig with nested configs."""
