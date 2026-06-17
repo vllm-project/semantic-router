@@ -270,15 +270,15 @@ const TopologyFlow: React.FC = () => {
             fitViewOptions={{ padding: 0.16, minZoom: 0.15, maxZoom: 1.0 }}
             defaultViewport={{ x: 0, y: 0, zoom: 0.32 }}
           >
-            <Background 
+            <Background
               variant={BackgroundVariant.Dots}
               gap={20}
               size={1}
               color={isDark ? 'rgba(255, 255, 255, 0.05)' : 'rgba(0, 0, 0, 0.08)'}
             />
             <Controls />
-            <MiniMap 
-              nodeColor={getNodeColor} 
+            <MiniMap
+              nodeColor={getNodeColor}
               maskColor={isDark ? 'rgba(0, 0, 0, 0.2)' : 'rgba(255, 255, 255, 0.3)'}
               style={{
                 backgroundColor: isDark ? '#141414' : '#ffffff',
