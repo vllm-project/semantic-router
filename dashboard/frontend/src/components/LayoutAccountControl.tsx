@@ -82,29 +82,15 @@ const LayoutAccountControl: React.FC<LayoutAccountControlProps> = ({
         aria-controls={isOpen ? dialogId : undefined}
         aria-expanded={isOpen}
         aria-haspopup="dialog"
-        aria-label={`Open account details for ${accountName}`}
+        aria-label={`View account details for ${accountName}`}
         data-testid={isRail ? 'playground-account-control' : undefined}
         onClick={onToggle}
-        title={isRail ? accountName : undefined}
+        title={isRail ? accountName : 'View account details'}
       >
         <span className={`${styles.triggerAvatar} ${isRail ? styles.triggerAvatarRail : ''}`} aria-hidden="true">
           {initials}
         </span>
         {isRail ? null : <span className={styles.triggerName}>{accountName}</span>}
-        {isRail ? null : (
-          <svg
-            className={`${styles.triggerChevron} ${isOpen ? styles.triggerChevronOpen : ''}`}
-            width="12"
-            height="12"
-            viewBox="0 0 12 12"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="1.5"
-            aria-hidden="true"
-          >
-            <path d="M3 4.5L6 7.5L9 4.5" strokeLinecap="round" strokeLinejoin="round" />
-          </svg>
-        )}
       </button>
 
       {isOpen && typeof document !== 'undefined'

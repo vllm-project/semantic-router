@@ -14,9 +14,9 @@ func bootstrapCanRegisterHandler(svc *Service) http.HandlerFunc {
 			return
 		}
 
-		// When the open web-form bootstrap is disabled, always report false. This
-		// also avoids leaking to unauthenticated callers whether the instance is
-		// freshly deployed and claimable.
+		// When neither explicit open bootstrap nor dashboard setup mode is active,
+		// always report false. This avoids leaking to unauthenticated callers
+		// whether a non-bootstrap instance is freshly deployed and claimable.
 		if !svc.OpenBootstrapEnabled() {
 			respondJSON(w, BootstrapStatusResponse{CanRegister: false})
 			return
@@ -30,6 +30,12 @@ func bootstrapCanRegisterHandler(svc *Service) http.HandlerFunc {
 
 		respondJSON(w, BootstrapStatusResponse{CanRegister: canRegister})
 	}
+}
+
+// hashBootstrapPassword is an indirection over Service.HashPassword so tests
+// can observe that no bcrypt work happens once the bootstrap window is closed.
+var hashBootstrapPassword = func(svc *Service, password string) (string, error) {
+	return svc.HashPassword(password)
 }
 
 func bootstrapRegisterHandler(svc *Service) http.HandlerFunc {
@@ -54,7 +60,23 @@ func bootstrapRegisterHandler(svc *Service) http.HandlerFunc {
 			return
 		}
 
-		hash, err := svc.HashPassword(req.Password)
+		// Fast-reject before the expensive bcrypt hash: once an admin exists this
+		// request is certain to fail, and hashing first lets unauthenticated
+		// callers burn a full cost-12 bcrypt round per request for as long as the
+		// bootstrap endpoint stays enabled. This check is a cheap pre-filter
+		// only; BootstrapRegister re-checks under its lock, which remains the
+		// correctness gate for concurrent requests.
+		canBootstrap, err := svc.CanBootstrap(r.Context())
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		if !canBootstrap {
+			http.Error(w, "bootstrap is disabled", http.StatusConflict)
+			return
+		}
+
+		hash, err := hashBootstrapPassword(svc, req.Password)
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return

@@ -43,6 +43,7 @@ func TestGetAlgorithmTier(t *testing.T) {
 		{"latency_aware", "supported"},
 		{"hybrid", "supported"},
 		{"automix", "experimental"},
+		{"fusion", "experimental"},
 		{"rl_driven", "experimental"},
 		{"gmtrouter", "experimental"},
 		{"knn", "experimental"},
