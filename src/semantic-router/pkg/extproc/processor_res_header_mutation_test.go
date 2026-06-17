@@ -67,18 +67,22 @@ func TestBuildResponseHeaderMutation_EmitsZeroDecisionConfidence(t *testing.T) {
 	assert.Equal(t, "42", headerMap[headers.VSRContextTokenCount])
 }
 
-func TestBuildResponseHeaderMutation_ProtocolMarkersDefaultToOpenAI(t *testing.T) {
+func TestBuildResponseHeaderMutation_SameProtocolOmitsMarkers(t *testing.T) {
+	// Default ctx: client and upstream both normalize to "openai" — no
+	// cross-protocol translation, so the protocol markers are omitted (#2206).
 	ctx := &RequestContext{}
 
 	mutation := buildResponseHeaderMutation(ctx, true)
 	require.NotNil(t, mutation)
 
 	headerMap := mutationToMap(mutation.SetHeaders)
-	assert.Equal(t, "openai", headerMap[headers.VSRClientProtocol])
-	assert.Equal(t, "openai", headerMap[headers.VSRUpstreamProtocol])
+	assert.NotContains(t, headerMap, headers.VSRClientProtocol)
+	assert.NotContains(t, headerMap, headers.VSRUpstreamProtocol)
 }
 
-func TestBuildResponseHeaderMutation_ProtocolMarkersReflectAnthropicIngress(t *testing.T) {
+func TestBuildResponseHeaderMutation_SameProtocolAnthropicOmitsMarkers(t *testing.T) {
+	// Anthropic in and anthropic out is still same-protocol (no translation),
+	// so the markers are omitted (#2206).
 	ctx := &RequestContext{
 		ClientProtocol: config.ClientProtocolAnthropic,
 		APIFormat:      config.APIFormatAnthropic,
@@ -88,8 +92,24 @@ func TestBuildResponseHeaderMutation_ProtocolMarkersReflectAnthropicIngress(t *t
 	require.NotNil(t, mutation)
 
 	headerMap := mutationToMap(mutation.SetHeaders)
+	assert.NotContains(t, headerMap, headers.VSRClientProtocol)
+	assert.NotContains(t, headerMap, headers.VSRUpstreamProtocol)
+}
+
+func TestBuildResponseHeaderMutation_CrossProtocolEmitsMarkers(t *testing.T) {
+	// Anthropic client translated to an OpenAI upstream — cross-protocol, so
+	// both markers are emitted (#2206).
+	ctx := &RequestContext{
+		ClientProtocol: config.ClientProtocolAnthropic,
+		APIFormat:      "openai",
+	}
+
+	mutation := buildResponseHeaderMutation(ctx, true)
+	require.NotNil(t, mutation)
+
+	headerMap := mutationToMap(mutation.SetHeaders)
 	assert.Equal(t, "anthropic", headerMap[headers.VSRClientProtocol])
-	assert.Equal(t, "anthropic", headerMap[headers.VSRUpstreamProtocol])
+	assert.Equal(t, "openai", headerMap[headers.VSRUpstreamProtocol])
 }
 
 func TestBuildResponseHeaderMutation_ProtocolMarkersEmittedOnFailedResponse(t *testing.T) {

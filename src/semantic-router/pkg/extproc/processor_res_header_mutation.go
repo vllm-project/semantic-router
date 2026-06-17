@@ -73,6 +73,21 @@ func (builder *responseHeaderMutationBuilder) addKeystone(ctx *RequestContext) {
 	builder.addString(headers.VSRResponsePath, path)
 }
 
+// addProtocolMarkers emits the client/upstream protocol markers
+// (x-vsr-client-protocol, x-vsr-upstream-protocol). Per the v0.4 contract
+// (#2206) they ride only on cross-protocol responses — when the inbound client
+// protocol differs from the outbound upstream protocol, i.e. a translation
+// actually happened. Same-protocol calls omit them to keep the contract lean.
+func (builder *responseHeaderMutationBuilder) addProtocolMarkers(ctx *RequestContext) {
+	client := normalizeProtocol(ctx.ClientProtocol)
+	upstream := normalizeProtocol(ctx.APIFormat)
+	if client == upstream {
+		return
+	}
+	builder.addString(headers.VSRClientProtocol, client)
+	builder.addString(headers.VSRUpstreamProtocol, upstream)
+}
+
 func (builder *responseHeaderMutationBuilder) addFloat(key string, value float64) {
 	if value <= 0 {
 		return
@@ -242,21 +257,20 @@ func buildResponseHeaderMutation(
 
 	builder := newResponseHeaderMutationBuilder()
 
-	// Protocol markers and lossiness warnings ride on every response
-	// (success or 4xx/5xx) so clients can always tell which translation
-	// cell handled the call. Cache-hit responses are an exception: the
-	// IRExtensions.Warnings slice is per-request, so a cached response
-	// would attribute warnings from a different request — we skip the
-	// new headers entirely on cache hits and let the cached payload
+	// The keystone headers, protocol markers, and protocol warnings ride on
+	// every non-cache-hit response (success or 4xx/5xx). Cache-hit responses
+	// are an exception: the IRExtensions.Warnings slice is per-request, so a
+	// cached response would attribute warnings from a different request — we
+	// skip these headers entirely on cache hits and let the cached payload
 	// flow unchanged.
 	if !ctx.VSRCacheHit {
-		// Keystone headers ride on every non-cache-hit response (success or
-		// 4xx/5xx). Cache hits emit their own response-path: cache from the
-		// cache immediate-response builder. This function only handles upstream
-		// responses, so the path defaults to "upstream".
+		// Keystone headers (schema-version + response-path) ride on every
+		// non-cache-hit response. This function only handles upstream responses,
+		// so the path defaults to "upstream".
 		builder.addKeystone(ctx)
-		builder.addString(headers.VSRClientProtocol, normalizeProtocol(ctx.ClientProtocol))
-		builder.addString(headers.VSRUpstreamProtocol, normalizeProtocol(ctx.APIFormat))
+		// Client/upstream protocol markers ride only on cross-protocol responses
+		// (#2206); same-protocol calls omit them.
+		builder.addProtocolMarkers(ctx)
 		if ctx.IRExtensions != nil {
 			builder.addLossinessWarnings(ctx, ctx.IRExtensions.Warnings)
 		}
