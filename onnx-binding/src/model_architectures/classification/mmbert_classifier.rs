@@ -167,7 +167,7 @@ impl MmBertClassifierConfig {
 /// Execution provider preference
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum ClassifierExecutionProvider {
-    /// Automatic selection (ROCm > CUDA > OpenVINO > CPU)
+    /// Automatic selection (ROCm > CUDA > CPU; OpenVINO requires an explicit `OpenVino` request)
     Auto,
     /// Force CPU
     Cpu,
@@ -432,9 +432,11 @@ impl MmBertSequenceClassifier {
                     }
                 }
 
-                // Auto selection priority is ROCm > CUDA > OpenVINO > CPU. On a
-                // CUDA build the ROCm block above is compiled out, so Auto must
-                // also try CUDA here before falling back to CPU. Without this,
+                // Auto selection priority is ROCm > CUDA > CPU. OpenVINO is not
+                // part of the Auto chain; it is only used for an explicit
+                // `OpenVino` request. On a CUDA build the ROCm block above is
+                // compiled out, so Auto must also try CUDA here before falling
+                // back to CPU. Without this,
                 // Auto silently ran every classifier (PII, jailbreak, intent,
                 // factcheck) on CPU even on NVIDIA GPUs, because the dedicated
                 // CUDA arm below is only reached for an explicit `Cuda` request.
