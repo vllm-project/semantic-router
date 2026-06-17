@@ -29,6 +29,14 @@ Cache-hit responses can emit cache headers, but they do not re-run routing and t
 | `x-vsr-protocol-warnings` | Comma-separated protocol translation warnings encoded as `severity;reason;field`. Emitted only when warnings exist. |
 | `x-vsr-replay-id` | Opaque router replay record identifier for correlating a response with replay/Insights data. |
 
+## Response Warnings
+
+| Header | Description |
+| ------ | ----------- |
+| `x-vsr-response-warnings` | Comma-separated response-quality warning codes for the completion, in fixed order: `hallucination`, `unverified_factual`, `response_jailbreak`. Emitted only when at least one applies. |
+
+This header consolidates the v0.3 `x-vsr-hallucination-detected`, `x-vsr-unverified-factual-response`, and `x-vsr-response-jailbreak-detected` headers. The per-warning detail (hallucination spans, jailbreak type/confidence, fact-check verification context) is kept in the replay record rather than the response headers, recoverable via `x-vsr-replay-id`; the individual warning and detail headers are removed from the v0.4 contract.
+
 ## Decision Headers
 
 | Header | Description | Example |
