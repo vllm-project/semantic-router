@@ -96,9 +96,10 @@ func TestVSRRoutingHeadersAreDocumented(t *testing.T) {
 	headers := []string{
 		XSessionID,
 		VSRSkipProcessing,
-		VSRInboundProtocol,
-		VSROutboundProtocol,
-		VSRLossinessWarnings,
+		VSRDebug,
+		VSRClientProtocol,
+		VSRUpstreamProtocol,
+		VSRProtocolWarnings,
 		RouterReplayID,
 		VSRSelectedCategory,
 		VSRSelectedDecision,
