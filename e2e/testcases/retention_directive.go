@@ -45,7 +45,7 @@ func testRetentionDirective(ctx context.Context, client *kubernetes.Clientset, o
 
 	query := "Diagnostics request " + retentionProbeKeyword + " please run."
 
-	response, err := sendLocalChatCompletion(ctx, localPort, "MoM", query, 30*time.Second)
+	response, err := sendLocalChatCompletion(ctx, localPort, "MoM", query, 30*time.Second, false)
 	if err != nil {
 		return fmt.Errorf("retention directive request failed: %w", err)
 	}

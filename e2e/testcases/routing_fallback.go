@@ -176,6 +176,9 @@ func testSingleRoutingFallback(ctx context.Context, testCase RoutingFallbackCase
 		return result
 	}
 	req.Header.Set("Content-Type", "application/json")
+	// v0.4 demotes the intermediate decision/signal headers behind x-vsr-debug
+	// (#2205); opt in so the routing assertions below can read them.
+	req.Header.Set("x-vsr-debug", "true")
 
 	httpClient := &http.Client{Timeout: 30 * time.Second}
 	resp, err := httpClient.Do(req)

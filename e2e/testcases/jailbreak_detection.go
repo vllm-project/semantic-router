@@ -130,7 +130,7 @@ func testSingleJailbreakDetection(ctx context.Context, testCase JailbreakTestCas
 		ExpectedBlocked: testCase.ExpectedBlocked,
 	}
 
-	response, err := sendLocalChatCompletion(ctx, localPort, "MoM", testCase.Question, 30*time.Second)
+	response, err := sendLocalChatCompletion(ctx, localPort, "MoM", testCase.Question, 30*time.Second, true)
 	if err != nil {
 		result.Error = err.Error()
 		return result
