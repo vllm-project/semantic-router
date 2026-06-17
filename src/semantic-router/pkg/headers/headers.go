@@ -45,6 +45,12 @@ const (
 	// global.router.skip_processing.enabled is true. Value: "true" (case-insensitive).
 	// See https://github.com/vllm-project/semantic-router/issues/1808.
 	VSRSkipProcessing = "x-vsr-skip-processing"
+
+	// VSRDebug opts a request into verbose/debug response headers. Value: "true"
+	// (case-insensitive). When set, headers that the v0.4 contract otherwise
+	// omits or demotes to replay are emitted inline for that request — the
+	// debug/replay-mode trigger for the v0.4 header surface. See issue #2216.
+	VSRDebug = "x-vsr-debug"
 )
 
 // VSR Decision Tracking Headers

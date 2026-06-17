@@ -112,6 +112,21 @@ func TestBuildResponseHeaderMutation_CrossProtocolEmitsMarkers(t *testing.T) {
 	assert.Equal(t, "openai", headerMap[headers.VSRUpstreamProtocol])
 }
 
+func TestBuildResponseHeaderMutation_DebugHeaderEmitsMarkersOnSameProtocol(t *testing.T) {
+	// Same-protocol (both openai), but the request opted into debug headers via
+	// x-vsr-debug, so the markers are emitted anyway (#2216).
+	ctx := &RequestContext{
+		Headers: map[string]string{headers.VSRDebug: "true"},
+	}
+
+	mutation := buildResponseHeaderMutation(ctx, true)
+	require.NotNil(t, mutation)
+
+	headerMap := mutationToMap(mutation.SetHeaders)
+	assert.Equal(t, "openai", headerMap[headers.VSRClientProtocol])
+	assert.Equal(t, "openai", headerMap[headers.VSRUpstreamProtocol])
+}
+
 func TestBuildResponseHeaderMutation_ProtocolMarkersEmittedOnFailedResponse(t *testing.T) {
 	ctx := &RequestContext{
 		ClientProtocol: config.ClientProtocolAnthropic,

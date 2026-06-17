@@ -75,13 +75,14 @@ func (builder *responseHeaderMutationBuilder) addKeystone(ctx *RequestContext) {
 
 // addProtocolMarkers emits the client/upstream protocol markers
 // (x-vsr-client-protocol, x-vsr-upstream-protocol). Per the v0.4 contract
-// (#2206) they ride only on cross-protocol responses — when the inbound client
+// (#2206) they ride on cross-protocol responses — when the inbound client
 // protocol differs from the outbound upstream protocol, i.e. a translation
-// actually happened. Same-protocol calls omit them to keep the contract lean.
+// actually happened — or when the request opted into debug headers (#2216).
+// Same-protocol non-debug calls omit them to keep the contract lean.
 func (builder *responseHeaderMutationBuilder) addProtocolMarkers(ctx *RequestContext) {
 	client := normalizeProtocol(ctx.ClientProtocol)
 	upstream := normalizeProtocol(ctx.APIFormat)
-	if client == upstream {
+	if client == upstream && !debugHeadersRequested(ctx) {
 		return
 	}
 	builder.addString(headers.VSRClientProtocol, client)
