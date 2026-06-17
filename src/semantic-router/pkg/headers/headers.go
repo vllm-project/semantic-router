@@ -307,6 +307,21 @@ const (
 	ResponseJailbreakConfidence = "x-vsr-response-jailbreak-confidence"
 )
 
+// Response Warnings Header (v0.4)
+// VSRResponseWarnings consolidates the response-quality warnings into a single
+// comma-separated header on the default response surface (#2204, #2200). The
+// per-warning detail (hallucination spans, jailbreak type/confidence,
+// fact-check verification context) stays in the replay record, recoverable via
+// x-vsr-replay-id. Absent when no warnings were produced.
+const (
+	VSRResponseWarnings = "x-vsr-response-warnings"
+
+	// Warning codes carried, in order, in the VSRResponseWarnings value.
+	ResponseWarningHallucination     = "hallucination"
+	ResponseWarningUnverifiedFactual = "unverified_factual"
+	ResponseWarningJailbreak         = "response_jailbreak"
+)
+
 // Auth Backend Injected Headers
 // These headers are set by the external authorization service (Authorino, Envoy Gateway JWT,
 // oauth2-proxy, etc.) after successful user authentication.
