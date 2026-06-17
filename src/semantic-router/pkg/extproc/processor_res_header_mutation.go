@@ -281,14 +281,16 @@ func buildResponseHeaderMutation(
 		return builder.mutation()
 	}
 
-	// Final routing facts ride on every successful response. Retention stays on
-	// the default surface too: it is a functional inference-pool directive
-	// (#2009), not client observability. The intermediate decision/classification
-	// details and matched signals are demoted to the x-vsr-debug surface (#2205);
-	// they remain recoverable from the replay record via x-vsr-replay-id.
+	// Final routing facts ride on every successful response. The intermediate
+	// decision/classification details, matched signals, and the retention
+	// directive headers are demoted to the x-vsr-debug surface (#2205, #2200):
+	// they remain recoverable from the replay record via x-vsr-replay-id. The
+	// retention directive's runtime effects (cache write skip, TTL override,
+	// model-switch-gate stay) are applied internally regardless of the header,
+	// so demoting the wire header does not change behavior.
 	addFinalDecisionHeaders(builder, ctx)
-	addRetentionDirectiveHeaders(builder, ctx)
 	if debugHeadersRequested(ctx) {
+		addRetentionDirectiveHeaders(builder, ctx)
 		addDecisionDetailHeaders(builder, ctx)
 		addMatchedSignalHeaders(builder, ctx)
 	}
@@ -296,12 +298,13 @@ func buildResponseHeaderMutation(
 }
 
 // addRetentionDirectiveHeaders emits the matched decision's EMIT retention
-// directive to the response as x-vsr-retention-* headers so the inference pool
-// and operators can observe the router's retention intent at the wire
-// (issue #2009). Only fields the directive explicitly set are emitted, mirroring
-// the tri-state semantics of config.RetentionDirective; an unset field is
-// omitted rather than sent as a default. Emitted only on successful,
-// non-cache-hit responses (same gate as the standard decision headers).
+// directive to the response as x-vsr-retention-* headers so operators can
+// observe the router's retention intent at the wire (issue #2009). Per the v0.4
+// contract (#2200) these are demoted to the x-vsr-debug surface: the directive's
+// runtime effects are applied internally, so the headers are observability only.
+// Only fields the directive explicitly set are emitted, mirroring the tri-state
+// semantics of config.RetentionDirective; an unset field is omitted rather than
+// sent as a default.
 func addRetentionDirectiveHeaders(builder *responseHeaderMutationBuilder, ctx *RequestContext) {
 	r := ctx.EmittedRetention
 	if r == nil {

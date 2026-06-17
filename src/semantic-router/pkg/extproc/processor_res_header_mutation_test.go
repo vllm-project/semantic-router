@@ -169,6 +169,7 @@ func TestBuildResponseHeaderMutation_NilContextReturnsNil(t *testing.T) {
 
 func TestBuildResponseHeaderMutation_EmitsRetentionDirectiveHeaders(t *testing.T) {
 	ctx := &RequestContext{
+		Headers:                 map[string]string{headers.VSRDebug: "true"},
 		VSRSelectedDecisionName: "agentic_routing",
 		VSRSelectedModel:        "qwen-small",
 		EmittedRetention: &config.RetentionDirective{
@@ -190,6 +191,7 @@ func TestBuildResponseHeaderMutation_EmitsRetentionDirectiveHeaders(t *testing.T
 func TestBuildResponseHeaderMutation_OmitsUnsetRetentionHeaders(t *testing.T) {
 	// Tri-state: only fields the directive explicitly set are emitted.
 	ctx := &RequestContext{
+		Headers:                 map[string]string{headers.VSRDebug: "true"},
 		VSRSelectedDecisionName: "agentic_routing",
 		VSRSelectedModel:        "qwen-small",
 		EmittedRetention:        &config.RetentionDirective{PreferPrefixRetention: boolPtr(true)},
@@ -211,6 +213,7 @@ func TestBuildResponseHeaderMutation_EmitsExplicitZeroTTLTurns(t *testing.T) {
 	// are rejected). Regression guard against the old "*TTLTurns > 0" gate that
 	// silently dropped the header for an explicit zero.
 	ctx := &RequestContext{
+		Headers:                 map[string]string{headers.VSRDebug: "true"},
 		VSRSelectedDecisionName: "agentic_routing",
 		VSRSelectedModel:        "qwen-small",
 		EmittedRetention:        &config.RetentionDirective{TTLTurns: intPtr(0)},
@@ -228,6 +231,7 @@ func TestBuildResponseHeaderMutation_EmitsExplicitFalseRetentionBools(t *testing
 	// set bool field of value false must still be emitted as "false" (not
 	// suppressed), so the wire contract is symmetric across every field.
 	ctx := &RequestContext{
+		Headers:                 map[string]string{headers.VSRDebug: "true"},
 		VSRSelectedDecisionName: "agentic_routing",
 		VSRSelectedModel:        "qwen-small",
 		EmittedRetention: &config.RetentionDirective{
