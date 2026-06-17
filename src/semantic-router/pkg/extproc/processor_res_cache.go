@@ -186,6 +186,11 @@ func buildReconstructedStreamingResponse(
 	} else {
 		message["content"] = nil
 	}
+	// Preserve reasoning so a cache hit returns the same reasoning_content the
+	// live stream delivered (reasoning models stream it under delta.reasoning_content).
+	if ctx.StreamingReasoning != "" {
+		message["reasoning_content"] = ctx.StreamingReasoning
+	}
 
 	toolCalls := buildStreamingResponseToolCalls(ctx)
 	if includeToolCalls && len(toolCalls) > 0 {
