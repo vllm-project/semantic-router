@@ -35,6 +35,13 @@ type fusionExecutionConfig struct {
 	AnalysisTemplate             string
 	SynthesisTemplate            string
 	JudgePromptVersion           string
+
+	GroundingEnabled                 bool
+	GroundingReference               string
+	GroundingMinScore                float64
+	GroundingMinKeep                 int
+	GroundingNLIContradictionPenalty float64
+	GroundingOnError                 string
 }
 
 type FusionAnalysis struct {
@@ -65,6 +72,7 @@ type FusionTrace struct {
 	JudgeModel     string                `json:"judge_model,omitempty"`
 	AnalysisModels []string              `json:"analysis_models,omitempty"`
 	PromptVersion  string                `json:"prompt_version,omitempty"`
+	Grounding      *FusionGroundingTrace `json:"grounding,omitempty"`
 }
 
 type fusionPanelResult struct {
@@ -105,14 +113,21 @@ func (l *FusionLooper) Execute(ctx context.Context, req *Request) (*Response, er
 		return nil, err
 	}
 
-	analysis, analysisResp := l.runFusionAnalysis(ctx, req, cfg, panelResponses)
-	finalResp, err := l.runFusionFinal(ctx, req, cfg, panelResponses, analysis)
+	// Grounding (optional) ranks/filters the panel before the judge. It makes no
+	// model calls, so usage is summed from the full panel (the real cost paid).
+	groundedPanel, groundingScores, groundingMode, err := l.applyGrounding(req, cfg, panelResponses)
+	if err != nil {
+		return nil, err
+	}
+
+	analysis, analysisResp := l.runFusionAnalysis(ctx, req, cfg, groundedPanel, groundingScores)
+	finalResp, err := l.runFusionFinal(ctx, req, cfg, groundedPanel, analysis)
 	if err != nil {
 		return nil, err
 	}
 	usage := SumUsage(panelResponses...).Add(analysisResp, finalResp)
 
-	trace := buildFusionTrace(cfg, panelResponses, failedModels, analysis)
+	trace := buildFusionTrace(cfg, groundedPanel, failedModels, analysis, groundingMode, groundingScores)
 	modelsUsed := orderedFusionModelsUsed(cfg.AnalysisModels, cfg.Model)
 	iterations := len(cfg.AnalysisModels) + 2
 
@@ -153,7 +168,27 @@ func (l *FusionLooper) resolveFusionExecutionConfig(req *Request) fusionExecutio
 	if cfg.MaxConcurrent <= 0 || cfg.MaxConcurrent > len(cfg.AnalysisModels) {
 		cfg.MaxConcurrent = len(cfg.AnalysisModels)
 	}
+	applyGroundingDefaults(&cfg)
 	return cfg
+}
+
+// applyGroundingDefaults fills in grounding defaults when grounding is enabled.
+func applyGroundingDefaults(cfg *fusionExecutionConfig) {
+	if !cfg.GroundingEnabled {
+		return
+	}
+	if cfg.GroundingReference == "" {
+		cfg.GroundingReference = config.FusionGroundingReferenceHybrid
+	}
+	if cfg.GroundingMinKeep <= 0 {
+		cfg.GroundingMinKeep = 1
+	}
+	if cfg.GroundingNLIContradictionPenalty <= 0 {
+		cfg.GroundingNLIContradictionPenalty = 1.0
+	}
+	if strings.TrimSpace(cfg.GroundingOnError) == "" {
+		cfg.GroundingOnError = cfg.OnError
+	}
 }
 
 func validateFusionExecutionConfig(cfg fusionExecutionConfig) error {
@@ -199,6 +234,19 @@ func mergeFusionAlgorithmConfig(dst *fusionExecutionConfig, src *config.FusionAl
 	if src.JudgePromptVersion != "" {
 		dst.JudgePromptVersion = src.JudgePromptVersion
 	}
+	mergeFusionGroundingConfig(dst, src.Grounding)
+}
+
+func mergeFusionGroundingConfig(dst *fusionExecutionConfig, src *config.FusionGroundingConfig) {
+	if src == nil {
+		return
+	}
+	dst.GroundingEnabled = src.Enabled
+	dst.GroundingReference = src.Reference
+	dst.GroundingMinScore = src.MinScore
+	dst.GroundingMinKeep = src.MinKeep
+	dst.GroundingNLIContradictionPenalty = src.NLIContradictionPenalty
+	dst.GroundingOnError = src.OnError
 }
 
 func mergeFusionRequestConfig(dst *fusionExecutionConfig, src *config.FusionRequestConfig) {
@@ -353,8 +401,12 @@ func (l *FusionLooper) runFusionAnalysis(
 	req *Request,
 	cfg fusionExecutionConfig,
 	panelResponses []*ModelResponse,
+	groundingScores []groundingScore,
 ) (*FusionAnalysis, *ModelResponse) {
 	prompt := buildFusionAnalysisPrompt(cfg, extractOriginalContent(req.OriginalRequest), panelResponses)
+	if notes := formatGroundingNotes(groundingScores); notes != "" {
+		prompt = prompt + "\n\n" + notes
+	}
 	analysisReq := appendFusionStageMessage(req.OriginalRequest, prompt)
 	resp, err := l.callFusionModel(ctx, &Request{OriginalRequest: analysisReq, ModelParams: req.ModelParams}, cfg, cfg.Model, false, false, len(panelResponses)+1)
 	if err != nil {
@@ -494,12 +546,20 @@ func buildFusionTrace(
 	panelResponses []*ModelResponse,
 	failedModels []FusionFailedModel,
 	analysis *FusionAnalysis,
+	groundingMode string,
+	groundingScores []groundingScore,
 ) *FusionTrace {
 	trace := &FusionTrace{
 		JudgeModel:     cfg.Model,
 		AnalysisModels: append([]string(nil), cfg.AnalysisModels...),
 		FailedModels:   failedModels,
 		PromptVersion:  cfg.JudgePromptVersion,
+	}
+	if len(groundingScores) > 0 {
+		trace.Grounding = &FusionGroundingTrace{
+			ReferenceMode: groundingMode,
+			Scores:        groundingScores,
+		}
 	}
 	if cfg.IncludeAnalysis {
 		trace.Analysis = analysis
@@ -563,7 +623,7 @@ func (l *FusionLooper) formatFusionJSONResponse(
 		},
 		"usage": usage.Map(),
 	}
-	if cfg.IncludeAnalysis || cfg.IncludeIntermediateResponses || len(trace.FailedModels) > 0 {
+	if cfg.IncludeAnalysis || cfg.IncludeIntermediateResponses || len(trace.FailedModels) > 0 || trace.Grounding != nil {
 		completion["fusion"] = trace
 	}
 	body, err := json.Marshal(completion)
@@ -597,7 +657,7 @@ func (l *FusionLooper) formatFusionToolCallJSONResponse(
 	completion["id"] = fmt.Sprintf("chatcmpl-fusion-%d", time.Now().UnixNano())
 	completion["model"] = finalResp.Model
 	completion["usage"] = usage.Map()
-	if cfg.IncludeAnalysis || cfg.IncludeIntermediateResponses || len(trace.FailedModels) > 0 {
+	if cfg.IncludeAnalysis || cfg.IncludeIntermediateResponses || len(trace.FailedModels) > 0 || trace.Grounding != nil {
 		completion["fusion"] = trace
 	}
 	body, err := json.Marshal(completion)
@@ -659,7 +719,7 @@ func buildFusionStreamingSSE(
 		"finish_reason": nil,
 	}
 	var extra map[string]interface{}
-	if cfg.IncludeAnalysis || cfg.IncludeIntermediateResponses || len(trace.FailedModels) > 0 {
+	if cfg.IncludeAnalysis || cfg.IncludeIntermediateResponses || len(trace.FailedModels) > 0 || trace.Grounding != nil {
 		extra = map[string]interface{}{"fusion": trace}
 	}
 	body = appendSSEDataLine(body, chatCompletionChunkPayload(id, created, model, roleChoice, extra))
