@@ -58,6 +58,21 @@ func (builder *responseHeaderMutationBuilder) addBool(key string, value bool) {
 	builder.addString(key, strconv.FormatBool(value))
 }
 
+// addKeystone emits the v0.4 keystone headers that ride on every
+// VSR-processed response: x-vsr-schema-version stamps the contract revision
+// and x-vsr-response-path names how the response was produced. The path
+// defaults to "upstream" when the caller has not classified a more specific
+// path (cache, fast_response, looper, rate_limited, error, image_generation).
+// See issue #2203.
+func (builder *responseHeaderMutationBuilder) addKeystone(ctx *RequestContext) {
+	path := ctx.ResponsePath
+	if path == "" {
+		path = headers.ResponsePathUpstream
+	}
+	builder.addString(headers.VSRSchemaVersion, headers.SchemaVersionValue)
+	builder.addString(headers.VSRResponsePath, path)
+}
+
 func (builder *responseHeaderMutationBuilder) addFloat(key string, value float64) {
 	if value <= 0 {
 		return
@@ -235,6 +250,11 @@ func buildResponseHeaderMutation(
 	// new headers entirely on cache hits and let the cached payload
 	// flow unchanged.
 	if !ctx.VSRCacheHit {
+		// Keystone headers ride on every non-cache-hit response (success or
+		// 4xx/5xx). Cache hits emit their own response-path: cache from the
+		// cache immediate-response builder. This function only handles upstream
+		// responses, so the path defaults to "upstream".
+		builder.addKeystone(ctx)
 		builder.addString(headers.VSRInboundProtocol, normalizeProtocol(ctx.ClientProtocol))
 		builder.addString(headers.VSROutboundProtocol, normalizeProtocol(ctx.APIFormat))
 		if ctx.IRExtensions != nil {
