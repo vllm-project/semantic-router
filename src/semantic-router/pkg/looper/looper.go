@@ -49,6 +49,9 @@ type Request struct {
 	// DecisionName is the name of the decision that triggered this looper execution
 	// Used by extproc to lookup decision configuration and apply plugins
 	DecisionName string
+
+	// Fusion carries request-level plugins[].id=fusion overrides.
+	Fusion *config.FusionRequestConfig
 }
 
 // Response contains the output from looper execution
@@ -113,6 +116,8 @@ func FactoryWithSelectionRegistry(
 		return NewRatingsLooper(cfg)
 	case "remom":
 		return NewReMoMLooper(cfg)
+	case "fusion":
+		return NewFusionLooper(cfg)
 	case "rl_driven":
 		return NewRLDrivenLooperWithSelectionRegistry(cfg, selectorRegistry)
 	default:

@@ -49,6 +49,7 @@ ALGORITHM_CONFIG_BLOCKS = (
     "confidence",
     "ratings",
     "remom",
+    "fusion",
     "elo",
     "router_dc",
     "automix",

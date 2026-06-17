@@ -661,7 +661,8 @@ func (r *OpenAIRouter) buildBothResponse(textResp map[string]interface{}, imgRes
 // buildImmediateResponseWithModality creates a JSON immediate response and adds
 // the x-vsr-selected-modality header.
 func (r *OpenAIRouter) buildImmediateResponseWithModality(statusCode int, body []byte, result ModalityClassificationResult) *ext_proc.ProcessingResponse {
-	procResp := r.createJSONResponseWithBody(statusCode, body)
+	// All callers are the diffusion/image-generation modality path (#2203).
+	procResp := r.createJSONResponseWithBody(statusCode, body, headers.ResponsePathImageGeneration)
 
 	modalityValue := result.Modality
 	if result.Method != "" {

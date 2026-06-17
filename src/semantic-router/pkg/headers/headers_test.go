@@ -31,11 +31,6 @@ func TestHeaderConstants(t *testing.T) {
 		{"VSRMatchedReask", VSRMatchedReask, "x-vsr-matched-reask"},
 		{"VSRMatchedEvent", VSRMatchedEvent, "x-vsr-matched-event"},
 		{"VSRMatchedProjection", VSRMatchedProjection, "x-vsr-matched-projections"},
-		// Legacy security headers (kept for backward compatibility)
-		{"VSRPIIViolation", VSRPIIViolation, "x-vsr-pii-violation"},
-		{"VSRJailbreakBlocked", VSRJailbreakBlocked, "x-vsr-jailbreak-blocked"},
-		{"VSRJailbreakType", VSRJailbreakType, "x-vsr-jailbreak-type"},
-		{"VSRJailbreakConfidence", VSRJailbreakConfidence, "x-vsr-jailbreak-confidence"},
 		// Hallucination mitigation headers
 		{"HallucinationDetected", HallucinationDetected, "x-vsr-hallucination-detected"},
 		{"HallucinationSpans", HallucinationSpans, "x-vsr-hallucination-spans"},
@@ -101,9 +96,10 @@ func TestVSRRoutingHeadersAreDocumented(t *testing.T) {
 	headers := []string{
 		XSessionID,
 		VSRSkipProcessing,
-		VSRInboundProtocol,
-		VSROutboundProtocol,
-		VSRLossinessWarnings,
+		VSRDebug,
+		VSRClientProtocol,
+		VSRUpstreamProtocol,
+		VSRProtocolWarnings,
 		RouterReplayID,
 		VSRSelectedCategory,
 		VSRSelectedDecision,
