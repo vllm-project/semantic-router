@@ -90,7 +90,7 @@ spec:
         {{- end }}
         {{- if .Values.dependencies.observability.jaeger.enabled }}
         - name: TARGET_JAEGER_URL
-          value: "http://{{ .Release.Name }}-jaeger-query:16686"
+          value: "http://{{ .Release.Name }}-jaeger:16686"
         {{- end }}
         volumeMounts:
         - name: config-volume
