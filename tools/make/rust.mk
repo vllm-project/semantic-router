@@ -27,7 +27,7 @@ test-rust-ci:
 			exit 1; \
 		}; \
 		echo "Running $$test_filter"; \
-		cargo test --release --no-default-features --lib "$$test_filter" -- --exact --test-threads=1 --nocapture; \
+		cargo test --release --no-default-features --lib "$$test_filter" -- --exact --test-threads=1 --nocapture || exit 1; \
 	done
 
 # Test Rust unit tests (with release optimization for performance)
