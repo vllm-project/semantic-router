@@ -79,6 +79,12 @@ type RequestContext struct {
 	StreamingComplete  bool                            // True when [DONE] marker received
 	StreamingAborted   bool                            // True if stream ended abnormally (EOF, cancel, timeout)
 
+	// UpstreamStatusCode is the HTTP status the upstream returned, captured at
+	// the response-header phase. Zero means the status was never observed for
+	// this request (e.g. response headers not processed). The cache-write path
+	// reads it to avoid caching non-2xx error bodies (cache poisoning).
+	UpstreamStatusCode int
+
 	// TTFT tracking
 	TTFTRecorded bool
 	TTFTSeconds  float64
