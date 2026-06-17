@@ -147,6 +147,9 @@ func (r *OpenAIRouter) applyResponseWarnings(
 		modifiedBody, code = r.applyUnverifiedFactualWarning(ctx, modifiedBody)
 		codes = appendNonEmpty(codes, code)
 	}
+	// Jailbreak never rewrites the body, so its position relative to the
+	// body-prepending warnings above is immaterial; it is appended last only to
+	// fix the code order in the header value.
 	codes = appendNonEmpty(codes, r.responseJailbreakWarningCode(ctx))
 
 	if len(codes) > 0 {

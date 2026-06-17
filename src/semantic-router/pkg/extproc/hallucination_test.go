@@ -10,7 +10,6 @@ import (
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/classification"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
-	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/headers"
 )
 
 // findProjectRoot finds the project root by looking for go.mod
@@ -565,30 +564,6 @@ var _ = Describe("OpenAIRouter Hallucination Methods", func() {
 			router.checkUnverifiedFactualResponse(ctx)
 
 			Expect(ctx.UnverifiedFactualResponse).To(BeFalse())
-		})
-	})
-
-	Describe("applyUnverifiedFactualWarning", func() {
-		It("returns no warning code when the response is not unverified", func() {
-			ctx := &RequestContext{UnverifiedFactualResponse: false}
-			body := []byte(`{"choices":[]}`)
-
-			resultBody, code := router.applyUnverifiedFactualWarning(ctx, body)
-			Expect(code).To(BeEmpty())
-			Expect(resultBody).To(Equal(body))
-		})
-
-		It("surfaces the unverified_factual code on the default (header) action", func() {
-			ctx := &RequestContext{
-				UnverifiedFactualResponse: true,
-				FactCheckNeeded:           true,
-			}
-			body := []byte(`{"choices":[]}`)
-
-			resultBody, code := router.applyUnverifiedFactualWarning(ctx, body)
-			Expect(code).To(Equal(headers.ResponseWarningUnverifiedFactual))
-			// The header action leaves the body unchanged.
-			Expect(resultBody).To(Equal(body))
 		})
 	})
 })

@@ -47,16 +47,16 @@ func TestHeaderConstants(t *testing.T) {
 func TestResponseWarningsCodes(t *testing.T) {
 	// The v0.4 contract consolidates the hallucination / unverified-factual /
 	// response-jailbreak warnings into x-vsr-response-warnings; these are the
-	// codes carried in its value.
-	cases := map[string]string{
-		ResponseWarningHallucination:     "hallucination",
-		ResponseWarningUnverifiedFactual: "unverified_factual",
-		ResponseWarningJailbreak:         "response_jailbreak",
+	// codes carried in its value. Assert the constants directly — a map keyed by
+	// the constant would compare each value to itself and never fail.
+	if ResponseWarningHallucination != "hallucination" {
+		t.Errorf("ResponseWarningHallucination = %q, want %q", ResponseWarningHallucination, "hallucination")
 	}
-	for got, want := range cases {
-		if got != want {
-			t.Errorf("response warning code = %q, want %q", got, want)
-		}
+	if ResponseWarningUnverifiedFactual != "unverified_factual" {
+		t.Errorf("ResponseWarningUnverifiedFactual = %q, want %q", ResponseWarningUnverifiedFactual, "unverified_factual")
+	}
+	if ResponseWarningJailbreak != "response_jailbreak" {
+		t.Errorf("ResponseWarningJailbreak = %q, want %q", ResponseWarningJailbreak, "response_jailbreak")
 	}
 }
 
@@ -75,6 +75,7 @@ func TestVSRRoutingHeadersAreDocumented(t *testing.T) {
 		VSRClientProtocol,
 		VSRUpstreamProtocol,
 		VSRProtocolWarnings,
+		VSRResponseWarnings,
 		RouterReplayID,
 		VSRSelectedCategory,
 		VSRSelectedDecision,
