@@ -662,6 +662,7 @@ export interface RouterCoreConfig {
   config_source?: string
   strategy?: string
   auto_model_name?: string
+  auto_model_names?: string[]
   include_config_models_in_list?: boolean
   clear_route_cache?: boolean
   streamed_body?: StreamedBodyConfig

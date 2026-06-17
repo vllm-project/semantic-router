@@ -86,6 +86,11 @@ var (
 			scopes:   configValidationScopeFile | configValidationScopeKubernetes,
 		},
 		{
+			name:     "fusion",
+			validate: validateFusionContracts,
+			scopes:   configValidationScopeFile | configValidationScopeKubernetes,
+		},
+		{
 			name:     "advanced_tool_filtering",
 			validate: validateAdvancedToolFilteringConfig,
 			scopes:   configValidationScopeFile | configValidationScopeKubernetes,

@@ -304,6 +304,10 @@ function summaryForKey(key: RouterSystemKey, data: unknown): RouterSectionSummar
         { label: 'Config source', value: stringOrFallback(section?.config_source, 'file') },
         { label: 'Strategy', value: stringOrFallback(section?.strategy) },
         { label: 'Auto model name', value: stringOrFallback(section?.auto_model_name) },
+        {
+          label: 'Auto model aliases',
+          value: Array.isArray(section?.auto_model_names) ? section.auto_model_names.join(', ') : 'Not set',
+        },
       ]
     case 'response_api':
       return [
@@ -526,6 +530,7 @@ function fieldsForKey(key: RouterSystemKey): FieldConfig[] {
         { name: 'config_source', label: 'Config Source', type: 'select', options: ['file', 'kubernetes'], required: true },
         { name: 'strategy', label: 'Routing Strategy', type: 'text', placeholder: 'static, elo, router_dc, automix...' },
         { name: 'auto_model_name', label: 'Auto Model Name', type: 'text', placeholder: 'MoM' },
+        { name: 'auto_model_names', label: 'Auto Model Aliases (JSON)', type: 'json', placeholder: '["vllm-sr/auto","auto","MoM"]' },
         { name: 'include_config_models_in_list', label: 'Include Config Models In List', type: 'boolean' },
         { name: 'streamed_body', label: 'Streamed Body (JSON)', type: 'json', placeholder: '{"enabled":false}' },
       ]
@@ -735,6 +740,7 @@ function editDataForKey(key: RouterSystemKey, data: unknown): EditFormData {
       config_source: router?.config_source,
       strategy: router?.strategy,
       auto_model_name: router?.auto_model_name,
+      auto_model_names: Array.isArray(router?.auto_model_names) ? router.auto_model_names : [],
       include_config_models_in_list: router?.include_config_models_in_list,
       streamed_body: asObject(router?.streamed_body) || {},
     }
@@ -798,6 +804,7 @@ function saveForKey(key: RouterSystemKey, data: EditFormData): Partial<ConfigDat
       config_source: data.config_source,
       strategy: data.strategy,
       auto_model_name: data.auto_model_name,
+      auto_model_names: Array.isArray(data.auto_model_names) ? data.auto_model_names : [],
       include_config_models_in_list: Boolean(data.include_config_models_in_list),
       streamed_body: asObject(data.streamed_body) || {},
     }) as Partial<ConfigData>

@@ -539,7 +539,7 @@ def validate_algorithm_configurations(config: UserConfig) -> List[ValidationErro
     """
     Validate algorithm configurations in decisions.
 
-    Validates both looper algorithms (confidence, ratings, remom)
+    Validates both looper algorithms (confidence, ratings, remom, fusion)
     and selection algorithms (static, elo, router_dc, automix, hybrid,
     knn, kmeans, svm, mlp, multi_factor, latency_aware, session_aware,
     rl_driven, gmtrouter).
@@ -553,7 +553,7 @@ def validate_algorithm_configurations(config: UserConfig) -> List[ValidationErro
     errors = []
 
     # Valid algorithm types
-    looper_types = {"confidence", "ratings", "remom"}
+    looper_types = {"confidence", "ratings", "remom", "fusion"}
     selection_types = {
         "static",
         "elo",
