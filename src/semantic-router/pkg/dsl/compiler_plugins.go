@@ -49,6 +49,15 @@ func (c *Compiler) compileRAGPlugin(fields map[string]Value) config.RAGPluginCon
 	if v, ok := getStringField(fields, "on_failure"); ok {
 		cfg.OnFailure = v
 	}
+	if v, ok := getBoolField(fields, "cache_results"); ok {
+		cfg.CacheResults = v
+	}
+	if v, ok := getIntField(fields, "cache_ttl_seconds"); ok {
+		cfg.CacheTTLSeconds = &v
+	}
+	if v, ok := getFloat32Field(fields, "min_confidence_threshold"); ok {
+		cfg.MinConfidenceThreshold = &v
+	}
 	cfg.BackendConfig = c.compileRAGBackendConfig(fields)
 	return cfg
 }

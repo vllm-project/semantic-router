@@ -72,22 +72,6 @@
   font-weight: 400;
 }
 
-.triggerChevron {
-  flex-shrink: 0;
-  opacity: 0.62;
-  transition: transform var(--transition-fast), opacity var(--transition-fast);
-}
-
-.triggerActive .triggerChevron,
-.trigger:hover .triggerChevron,
-.trigger:focus-visible .triggerChevron {
-  opacity: 1;
-}
-
-.triggerChevronOpen {
-  transform: rotate(180deg);
-}
-
 .overlay {
   position: fixed;
   inset: 0;

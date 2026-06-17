@@ -168,6 +168,7 @@ type LLMObservability struct {
 
 type RouterOptions struct {
 	AutoModelName             string               `yaml:"auto_model_name,omitempty"`
+	AutoModelNames            []string             `yaml:"auto_model_names,omitempty"`
 	IncludeConfigModelsInList bool                 `yaml:"include_config_models_in_list,omitempty"`
 	ClearRouteCache           bool                 `yaml:"clear_route_cache"`
 	StreamedBodyMode          bool                 `yaml:"streamed_body_mode,omitempty"`

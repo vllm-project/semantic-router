@@ -23,6 +23,8 @@ type Service struct {
 
 	// allowOpenBootstrap gates the public web-form bootstrap endpoint (off by default).
 	allowOpenBootstrap bool
+	// setupMode enables bootstrap during dashboard-first local install (trusted phase).
+	setupMode bool
 	// bootstrapMu serializes the check-then-create in BootstrapRegister so that two
 	// concurrent requests cannot both pass the "no users yet" check and each create an
 	// admin. The dashboard runs single-replica (enforced by the chart's replicaCount
@@ -56,8 +58,11 @@ func NewService(store *Store, secret string, ttlHours int) *Service {
 // SetAllowOpenBootstrap toggles the public web-form bootstrap endpoint.
 func (s *Service) SetAllowOpenBootstrap(v bool) { s.allowOpenBootstrap = v }
 
+// SetSetupMode toggles dashboard-first setup mode for trusted first-run bootstrap.
+func (s *Service) SetSetupMode(v bool) { s.setupMode = v }
+
 // OpenBootstrapEnabled reports whether the public web-form bootstrap endpoint is enabled.
-func (s *Service) OpenBootstrapEnabled() bool { return s.allowOpenBootstrap }
+func (s *Service) OpenBootstrapEnabled() bool { return s.allowOpenBootstrap || s.setupMode }
 
 // BootstrapRegister atomically creates the first admin. The "no users yet" check and
 // the create run under bootstrapMu, so two concurrent requests cannot each create an

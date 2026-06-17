@@ -1,6 +1,7 @@
 import React from 'react'
 import styles from './ConfigPage.module.css'
 import ConfigPageManagerLayout from './ConfigPageManagerLayout'
+import ConfigPageDomainCategoryPicker from './ConfigPageDomainCategoryPicker'
 import TableHeader from '../components/TableHeader'
 import { DataTable, type Column } from '../components/DataTable'
 import type { FieldConfig } from '../components/EditModal'
@@ -585,6 +586,16 @@ export default function ConfigPageSignalsSection({
   }
 
   const openSignalEditor = (mode: 'add' | 'edit', signal?: UnifiedSignal) => {
+    const readMmluCategories = (value: unknown): string[] => {
+      if (typeof value === 'string') {
+        return listInputToArray(value)
+      }
+      if (Array.isArray(value)) {
+        return value.filter((item): item is string => typeof item === 'string')
+      }
+      return []
+    }
+
     const defaultForm: AddSignalFormState = {
       type: 'Keywords',
       name: '',
@@ -771,8 +782,8 @@ export default function ConfigPageSignalsSection({
       {
         name: 'aggregation_method',
         label: 'Aggregation Method (embeddings only)',
-        type: 'text',
-        placeholder: 'mean',
+        type: 'select',
+        options: ['mean', 'max', 'any'],
         shouldHide: conditionallyHideFieldExceptType('Embeddings')
       },
       {
@@ -785,8 +796,13 @@ export default function ConfigPageSignalsSection({
       {
         name: 'mmlu_categories',
         label: 'MMLU Categories (domains only)',
-        type: 'textarea',
-        placeholder: 'Comma or newline separated categories',
+        type: 'custom',
+        customRender: (value, onChange) => (
+          <ConfigPageDomainCategoryPicker
+            value={readMmluCategories(value)}
+            onChange={(nextCategories) => onChange(nextCategories.join('\n'))}
+          />
+        ),
         shouldHide: conditionallyHideFieldExceptType('Domain')
       },
       {
