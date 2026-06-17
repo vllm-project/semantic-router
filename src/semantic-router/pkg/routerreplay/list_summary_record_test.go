@@ -10,16 +10,16 @@ import (
 func TestListSummaryRecordStripsLargeFields(t *testing.T) {
 	huge := strings.Repeat("z", 1000)
 	rec := RoutingRecord{
-		ID:               "r1",
-		RequestBody:      huge,
-		ResponseBody:     huge,
-		Prompt:           huge,
-		ToolDefinitions:  huge,
-		ProjectionTrace:  &projectiontrace.Trace{SchemaVersion: projectiontrace.SchemaVersion},
-		ToolTrace:        &ToolTrace{Flow: "f", Steps: []ToolTraceStep{{ToolName: "t1", RawOutput: huge}}},
-		Decision:         "d1",
-		OriginalModel:    "m1",
-		SelectedModel:    "m2",
+		ID:                "r1",
+		RequestBody:       huge,
+		ResponseBody:      huge,
+		Prompt:            huge,
+		ToolDefinitions:   huge,
+		ProjectionTrace:   &projectiontrace.Trace{SchemaVersion: projectiontrace.SchemaVersion},
+		ToolTrace:         &ToolTrace{Flow: "f", Steps: []ToolTraceStep{{ToolName: "t1", RawOutput: huge}}},
+		Decision:          "d1",
+		OriginalModel:     "m1",
+		SelectedModel:     "m2",
 		SignalConfidences: map[string]float64{"a": 0.5},
 	}
 	out := ListSummaryRecord(rec)
