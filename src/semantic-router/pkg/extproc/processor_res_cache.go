@@ -27,6 +27,18 @@ func (r *OpenAIRouter) updateResponseCache(ctx *RequestContext, responseBody []b
 		return
 	}
 
+	// Status gate: never cache a non-2xx upstream body. Caching an error
+	// (4xx/5xx/3xx) would let a later cache hit replay it as an HTTP 200,
+	// freezing a transient upstream failure for the whole TTL.
+	if skip, reason := shouldSkipCacheWriteForStatus(ctx); skip {
+		metrics.RecordCacheWriteSkipped(reason)
+		logging.Infof("Skipping cache write for request ID %s: upstream status %d is not 2xx (reason=%s)", ctx.RequestID, ctx.UpstreamStatusCode, reason)
+		if span := trace.SpanFromContext(ctx.TraceContext); span.IsRecording() {
+			span.SetAttributes(attribute.String(tracing.AttrCacheWriteSkippedReason, reason))
+		}
+		return
+	}
+
 	// Retention drop gate: DSL-author-explicit signal takes precedence over
 	// the implicit personalized-context heuristic. Order is locked in
 	// docs/design (issue #1747 §2.8): scope -> retention -> personalized -> TTL -> write.
@@ -74,6 +86,18 @@ func (r *OpenAIRouter) cacheStreamingResponse(ctx *RequestContext) error {
 
 	decisionName := ctx.VSRSelectedDecisionName
 	if !r.semanticCacheEnabledForScope(decisionName) {
+		return nil
+	}
+
+	// Status gate: never cache a non-2xx upstream body (see updateResponseCache).
+	// Streaming errors are usually filtered by the preconditions above, but an
+	// error that still carries content must not be frozen into the cache either.
+	if skip, reason := shouldSkipCacheWriteForStatus(ctx); skip {
+		metrics.RecordCacheWriteSkipped(reason)
+		logging.Infof("Skipping streaming cache write for request ID %s: upstream status %d is not 2xx (reason=%s)", ctx.RequestID, ctx.UpstreamStatusCode, reason)
+		if span := trace.SpanFromContext(ctx.TraceContext); span.IsRecording() {
+			span.SetAttributes(attribute.String(tracing.AttrCacheWriteSkippedReason, reason))
+		}
 		return nil
 	}
 
@@ -161,6 +185,11 @@ func buildReconstructedStreamingResponse(
 		message["content"] = ctx.StreamingContent
 	} else {
 		message["content"] = nil
+	}
+	// Preserve reasoning so a cache hit returns the same reasoning_content the
+	// live stream delivered (reasoning models stream it under delta.reasoning_content).
+	if ctx.StreamingReasoning != "" {
+		message["reasoning_content"] = ctx.StreamingReasoning
 	}
 
 	toolCalls := buildStreamingResponseToolCalls(ctx)
