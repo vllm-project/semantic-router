@@ -86,6 +86,34 @@ const (
 	// Values: "true" or "false"
 	VSRInjectedSystemPrompt = "x-vsr-injected-system-prompt"
 
+	// --- v0.4 keystone response-contract headers (issue #2203) ---
+	// These two headers are emitted on every VSR-processed response and form
+	// the foundation of the v0.4 header contract: schema-version stamps the
+	// contract revision and response-path names how the response was produced.
+	// Everything else in the contract keys off response-path.
+
+	// VSRSchemaVersion stamps the response-header contract revision so clients
+	// know which contract they are parsing. Value: SchemaVersionValue.
+	VSRSchemaVersion = "x-vsr-schema-version"
+
+	// VSRResponsePath names the final path that produced the response.
+	// Value is one of the ResponsePath* constants below.
+	VSRResponsePath = "x-vsr-response-path"
+
+	// ResponsePath* are the valid values for VSRResponsePath.
+	ResponsePathUpstream        = "upstream"         // forwarded to and answered by the upstream model
+	ResponsePathCache           = "cache"            // served from semantic cache, no upstream call
+	ResponsePathFastResponse    = "fast_response"    // short-circuited by the fast_response plugin
+	ResponsePathLooper          = "looper"           // produced by the agent looper
+	ResponsePathImageGeneration = "image_generation" // produced by the image-generation path
+	ResponsePathBlocked         = "blocked"          // rejected by a guardrail (e.g. jailbreak/PII)
+	ResponsePathRateLimited     = "rate_limited"     // rejected by rate limiting
+	ResponsePathError           = "error"            // router-side error response
+
+	// SchemaVersionValue is the current response-header contract revision
+	// emitted in VSRSchemaVersion. v0.4 is contract revision "2".
+	SchemaVersionValue = "2"
+
 	// VSRCacheHit indicates that the response was served from cache.
 	// Value: "true"
 	VSRCacheHit = "x-vsr-cache-hit"
