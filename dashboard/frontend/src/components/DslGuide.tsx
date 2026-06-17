@@ -45,7 +45,11 @@ const CodeBlock: React.FC<{
     {label && <div className={styles.codeLabel}>{label}</div>}
     <pre className={styles.codeContent}>{code}</pre>
     {onInsert && (
-      <button className={styles.insertBtn} onClick={() => onInsert(code)} title="Insert into editor">
+      <button
+        className={styles.insertBtn}
+        onClick={() => onInsert(code)}
+        title="Insert into editor"
+      >
         + Insert
       </button>
     )}
@@ -54,13 +58,24 @@ const CodeBlock: React.FC<{
 
 // Field schema table
 const FieldTable: React.FC<{
-  fields: { key: string; label: string; type: string; required?: boolean; description?: string; options?: string[] }[]
+  fields: {
+    key: string
+    label: string
+    type: string
+    required?: boolean
+    description?: string
+    options?: string[]
+  }[]
 }> = ({ fields }) => {
   if (fields.length === 0) return <div className={styles.muted}>No configurable fields</div>
   return (
     <table className={styles.fieldTable}>
       <thead>
-        <tr><th>Field</th><th>Type</th><th>Info</th></tr>
+        <tr>
+          <th>Field</th>
+          <th>Type</th>
+          <th>Info</th>
+        </tr>
       </thead>
       <tbody>
         {fields.map((f) => (
@@ -87,7 +102,14 @@ const FieldTable: React.FC<{
 const TypeDetail: React.FC<{
   name: string
   description?: string
-  fields: { key: string; label: string; type: string; required?: boolean; description?: string; options?: string[] }[]
+  fields: {
+    key: string
+    label: string
+    type: string
+    required?: boolean
+    description?: string
+    options?: string[]
+  }[]
 }> = ({ name, description, fields }) => {
   const [expanded, setExpanded] = useState(false)
   return (
@@ -225,9 +247,12 @@ const SIGNAL_DESCRIPTIONS: Record<string, string> = {
 const DslGuide: React.FC<DslGuideProps> = ({ onInsertSnippet }) => {
   const [searchQuery, setSearchQuery] = useState('')
 
-  const handleInsert = useCallback((snippet: string) => {
-    onInsertSnippet?.(snippet)
-  }, [onInsertSnippet])
+  const handleInsert = useCallback(
+    (snippet: string) => {
+      onInsertSnippet?.(snippet)
+    },
+    [onInsertSnippet],
+  )
 
   const q = searchQuery.toLowerCase().trim()
   const matchesSearch = (text: string) => !q || text.toLowerCase().includes(q)
@@ -236,7 +261,14 @@ const DslGuide: React.FC<DslGuideProps> = ({ onInsertSnippet }) => {
     <div className={styles.guide}>
       {/* Search */}
       <div className={styles.searchBox}>
-        <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5">
+        <svg
+          width="12"
+          height="12"
+          viewBox="0 0 16 16"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="1.5"
+        >
           <circle cx="6.5" cy="6.5" r="5" />
           <path d="M10 10l4.5 4.5" strokeLinecap="round" />
         </svg>
@@ -249,7 +281,14 @@ const DslGuide: React.FC<DslGuideProps> = ({ onInsertSnippet }) => {
         />
         {searchQuery && (
           <button className={styles.searchClear} onClick={() => setSearchQuery('')}>
-            <svg width="10" height="10" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2">
+            <svg
+              width="10"
+              height="10"
+              viewBox="0 0 16 16"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+            >
               <path d="M4 4l8 8M12 4l-8 8" strokeLinecap="round" />
             </svg>
           </button>
@@ -260,9 +299,8 @@ const DslGuide: React.FC<DslGuideProps> = ({ onInsertSnippet }) => {
       {matchesSearch('quick start template example') && (
         <Section title="Quick Start" icon="⚡" defaultOpen>
           <p className={styles.hint}>
-            A DSL file defines <strong>signals</strong> (what to detect),{' '}
-            <strong>routes</strong> (how to decide),{' '}
-            <strong>models</strong> (semantic catalog), and{' '}
+            A DSL file defines <strong>signals</strong> (what to detect), <strong>routes</strong>{' '}
+            (how to decide), <strong>models</strong> (semantic catalog), and{' '}
             <strong>plugins</strong> (reusable route helpers).
           </p>
           <CodeBlock code={QUICK_START_SNIPPET} label="Full Example" onInsert={handleInsert} />
@@ -283,13 +321,53 @@ const DslGuide: React.FC<DslGuideProps> = ({ onInsertSnippet }) => {
             <code>MODEL &lt;name&gt; {'{ fields }'}</code>
           </p>
           <table className={styles.fieldTable}>
-            <thead><tr><th>Field</th><th>Type</th><th>Description</th></tr></thead>
+            <thead>
+              <tr>
+                <th>Field</th>
+                <th>Type</th>
+                <th>Description</th>
+              </tr>
+            </thead>
             <tbody>
-              <tr><td><code>param_size</code></td><td>string</td><td>Logical size hint such as <code>3b</code> or <code>70b</code></td></tr>
-              <tr><td><code>description</code></td><td>string</td><td>Human-readable routing summary</td></tr>
-              <tr><td><code>capabilities</code></td><td>string[]</td><td>Semantic tags used by selection or tooling</td></tr>
-              <tr><td><code>quality_score</code></td><td>number</td><td>Optional quality hint for selection logic</td></tr>
-              <tr><td><code>modality</code></td><td>string</td><td>Expected modality such as <code>text</code> or <code>image</code></td></tr>
+              <tr>
+                <td>
+                  <code>param_size</code>
+                </td>
+                <td>string</td>
+                <td>
+                  Logical size hint such as <code>3b</code> or <code>70b</code>
+                </td>
+              </tr>
+              <tr>
+                <td>
+                  <code>description</code>
+                </td>
+                <td>string</td>
+                <td>Human-readable routing summary</td>
+              </tr>
+              <tr>
+                <td>
+                  <code>capabilities</code>
+                </td>
+                <td>string[]</td>
+                <td>Semantic tags used by selection or tooling</td>
+              </tr>
+              <tr>
+                <td>
+                  <code>quality_score</code>
+                </td>
+                <td>number</td>
+                <td>Optional quality hint for selection logic</td>
+              </tr>
+              <tr>
+                <td>
+                  <code>modality</code>
+                </td>
+                <td>string</td>
+                <td>
+                  Expected modality such as <code>text</code> or <code>image</code>
+                </td>
+              </tr>
             </tbody>
           </table>
           <CodeBlock code={MODEL_SNIPPET} label="Model catalog example" onInsert={handleInsert} />
@@ -303,7 +381,9 @@ const DslGuide: React.FC<DslGuideProps> = ({ onInsertSnippet }) => {
             Signals detect patterns in user queries. Syntax:{' '}
             <code>SIGNAL &lt;type&gt; &lt;name&gt; {'{ fields }'}</code>
           </p>
-          {SIGNAL_TYPES.filter((t) => matchesSearch(`signal ${t} ${SIGNAL_DESCRIPTIONS[t] || ''}`)).map((t) => (
+          {SIGNAL_TYPES.filter((t) =>
+            matchesSearch(`signal ${t} ${SIGNAL_DESCRIPTIONS[t] || ''}`),
+          ).map((t) => (
             <TypeDetail
               key={t}
               name={t}
@@ -325,28 +405,109 @@ const DslGuide: React.FC<DslGuideProps> = ({ onInsertSnippet }) => {
           <div className={styles.subsection}>
             <h4>Route Structure</h4>
             <table className={styles.fieldTable}>
-              <thead><tr><th>Clause</th><th>Required</th><th>Description</th></tr></thead>
+              <thead>
+                <tr>
+                  <th>Clause</th>
+                  <th>Required</th>
+                  <th>Description</th>
+                </tr>
+              </thead>
               <tbody>
-                <tr><td><code>PRIORITY</code></td><td>Yes</td><td>Integer priority (higher = matched first)</td></tr>
-                <tr><td><code>TIER</code></td><td>No</td><td>Integer tier grouping for route classification</td></tr>
-                <tr><td><code>DESCRIPTION</code></td><td>No</td><td>Route description (can also be set in header)</td></tr>
-                <tr><td><code>WHEN</code></td><td>No</td><td>Boolean expression of signal references</td></tr>
-                <tr><td><code>MODEL</code></td><td>Yes</td><td>One or more model references with attributes</td></tr>
-                <tr><td><code>ALGORITHM</code></td><td>No</td><td>Model selection algorithm with config</td></tr>
-                <tr><td><code>PLUGIN</code></td><td>No</td><td>Plugin references (with optional inline overrides)</td></tr>
+                <tr>
+                  <td>
+                    <code>PRIORITY</code>
+                  </td>
+                  <td>Yes</td>
+                  <td>Integer priority (higher = matched first)</td>
+                </tr>
+                <tr>
+                  <td>
+                    <code>TIER</code>
+                  </td>
+                  <td>No</td>
+                  <td>Integer tier grouping for route classification</td>
+                </tr>
+                <tr>
+                  <td>
+                    <code>DESCRIPTION</code>
+                  </td>
+                  <td>No</td>
+                  <td>Route description (can also be set in header)</td>
+                </tr>
+                <tr>
+                  <td>
+                    <code>WHEN</code>
+                  </td>
+                  <td>No</td>
+                  <td>Boolean expression of signal references</td>
+                </tr>
+                <tr>
+                  <td>
+                    <code>MODEL</code>
+                  </td>
+                  <td>Yes</td>
+                  <td>One or more model references with attributes</td>
+                </tr>
+                <tr>
+                  <td>
+                    <code>ALGORITHM</code>
+                  </td>
+                  <td>No</td>
+                  <td>Model selection algorithm with config</td>
+                </tr>
+                <tr>
+                  <td>
+                    <code>PLUGIN</code>
+                  </td>
+                  <td>No</td>
+                  <td>Plugin references (with optional inline overrides)</td>
+                </tr>
               </tbody>
             </table>
           </div>
 
           <div className={styles.subsection}>
             <h4>WHEN Boolean Expressions</h4>
-            <p className={styles.hint}>Combine signal references with <code>AND</code>, <code>OR</code>, <code>NOT</code>, and parentheses.</p>
+            <p className={styles.hint}>
+              Combine signal references with <code>AND</code>, <code>OR</code>, <code>NOT</code>,
+              and parentheses.
+            </p>
             <table className={styles.fieldTable}>
-              <thead><tr><th>Operator</th><th>Precedence</th><th>Example</th></tr></thead>
+              <thead>
+                <tr>
+                  <th>Operator</th>
+                  <th>Precedence</th>
+                  <th>Example</th>
+                </tr>
+              </thead>
               <tbody>
-                <tr><td><code>NOT</code></td><td>Highest</td><td><code>NOT domain(&quot;other&quot;)</code></td></tr>
-                <tr><td><code>AND</code></td><td>Medium</td><td><code>keyword(&quot;a&quot;) AND embedding(&quot;b&quot;)</code></td></tr>
-                <tr><td><code>OR</code></td><td>Lowest</td><td><code>domain(&quot;math&quot;) OR domain(&quot;code&quot;)</code></td></tr>
+                <tr>
+                  <td>
+                    <code>NOT</code>
+                  </td>
+                  <td>Highest</td>
+                  <td>
+                    <code>NOT domain(&quot;other&quot;)</code>
+                  </td>
+                </tr>
+                <tr>
+                  <td>
+                    <code>AND</code>
+                  </td>
+                  <td>Medium</td>
+                  <td>
+                    <code>keyword(&quot;a&quot;) AND embedding(&quot;b&quot;)</code>
+                  </td>
+                </tr>
+                <tr>
+                  <td>
+                    <code>OR</code>
+                  </td>
+                  <td>Lowest</td>
+                  <td>
+                    <code>domain(&quot;math&quot;) OR domain(&quot;code&quot;)</code>
+                  </td>
+                </tr>
               </tbody>
             </table>
             <CodeBlock
@@ -358,14 +519,62 @@ const DslGuide: React.FC<DslGuideProps> = ({ onInsertSnippet }) => {
           <div className={styles.subsection}>
             <h4>MODEL Attributes</h4>
             <table className={styles.fieldTable}>
-              <thead><tr><th>Attribute</th><th>Type</th><th>Description</th></tr></thead>
+              <thead>
+                <tr>
+                  <th>Attribute</th>
+                  <th>Type</th>
+                  <th>Description</th>
+                </tr>
+              </thead>
               <tbody>
-                <tr><td><code>reasoning</code></td><td>boolean</td><td>Enable reasoning mode</td></tr>
-                <tr><td><code>effort</code></td><td>string</td><td><code>low</code> | <code>medium</code> | <code>high</code></td></tr>
-                <tr><td><code>param_size</code></td><td>string</td><td>e.g. <code>3b</code>, <code>70b</code></td></tr>
-                <tr><td><code>weight</code></td><td>number</td><td>Routing weight (0-1)</td></tr>
-                <tr><td><code>lora</code></td><td>string</td><td>LoRA adapter name</td></tr>
-                <tr><td><code>reasoning_family</code></td><td>string</td><td>e.g. <code>qwen3</code>, <code>deepseek</code></td></tr>
+                <tr>
+                  <td>
+                    <code>reasoning</code>
+                  </td>
+                  <td>boolean</td>
+                  <td>Enable reasoning mode</td>
+                </tr>
+                <tr>
+                  <td>
+                    <code>effort</code>
+                  </td>
+                  <td>string</td>
+                  <td>
+                    <code>low</code> | <code>medium</code> | <code>high</code>
+                  </td>
+                </tr>
+                <tr>
+                  <td>
+                    <code>param_size</code>
+                  </td>
+                  <td>string</td>
+                  <td>
+                    e.g. <code>3b</code>, <code>70b</code>
+                  </td>
+                </tr>
+                <tr>
+                  <td>
+                    <code>weight</code>
+                  </td>
+                  <td>number</td>
+                  <td>Routing weight (0-1)</td>
+                </tr>
+                <tr>
+                  <td>
+                    <code>lora</code>
+                  </td>
+                  <td>string</td>
+                  <td>LoRA adapter name</td>
+                </tr>
+                <tr>
+                  <td>
+                    <code>reasoning_family</code>
+                  </td>
+                  <td>string</td>
+                  <td>
+                    e.g. <code>qwen3</code>, <code>deepseek</code>
+                  </td>
+                </tr>
               </tbody>
             </table>
             <CodeBlock
@@ -378,13 +587,15 @@ const DslGuide: React.FC<DslGuideProps> = ({ onInsertSnippet }) => {
       )}
 
       {/* Algorithms */}
-      {matchesSearch('algorithm confidence ratings remom static elo') && (
+      {matchesSearch('algorithm confidence ratings remom fusion static elo') && (
         <Section title={`Algorithms (${ALGORITHM_TYPES.length} types)`} icon="🧮">
           <p className={styles.hint}>
             Algorithms determine how to select among multiple models. Syntax:{' '}
             <code>ALGORITHM &lt;type&gt; {'{ fields }'}</code> (inside a ROUTE)
           </p>
-          {ALGORITHM_TYPES.filter((t) => matchesSearch(`algorithm ${t} ${ALGORITHM_DESCRIPTIONS[t] || ''}`)).map((t) => (
+          {ALGORITHM_TYPES.filter((t) =>
+            matchesSearch(`algorithm ${t} ${ALGORITHM_DESCRIPTIONS[t] || ''}`),
+          ).map((t) => (
             <TypeDetail
               key={t}
               name={t}
@@ -396,14 +607,18 @@ const DslGuide: React.FC<DslGuideProps> = ({ onInsertSnippet }) => {
       )}
 
       {/* Plugins */}
-      {matchesSearch('plugin jailbreak pii cache memory rag image_gen request_params fast_response response_jailbreak tools') && (
+      {matchesSearch(
+        'plugin jailbreak pii cache memory rag image_gen request_params fast_response response_jailbreak tools',
+      ) && (
         <Section title={`Plugins (${PLUGIN_TYPES.length} types)`} icon="🔌">
           <p className={styles.hint}>
             Plugins add pre/post processing. Declare with{' '}
             <code>PLUGIN &lt;name&gt; &lt;type&gt; {'{ fields }'}</code>, reference in routes with{' '}
             <code>PLUGIN &lt;name&gt;</code>.
           </p>
-          {PLUGIN_TYPES.filter((t) => matchesSearch(`plugin ${t} ${PLUGIN_DESCRIPTIONS[t] || ''}`)).map((t) => (
+          {PLUGIN_TYPES.filter((t) =>
+            matchesSearch(`plugin ${t} ${PLUGIN_DESCRIPTIONS[t] || ''}`),
+          ).map((t) => (
             <TypeDetail
               key={t}
               name={t}
@@ -423,23 +638,33 @@ const DslGuide: React.FC<DslGuideProps> = ({ onInsertSnippet }) => {
               <span>Declare a routing model catalog entry</span>
             </div>
             <div className={styles.cheatItem}>
-              <code className={styles.cheatSyntax}>SIGNAL &lt;type&gt; &lt;name&gt; {'{ ... }'}</code>
+              <code className={styles.cheatSyntax}>
+                SIGNAL &lt;type&gt; &lt;name&gt; {'{ ... }'}
+              </code>
               <span>Declare a signal</span>
             </div>
             <div className={styles.cheatItem}>
-              <code className={styles.cheatSyntax}>ROUTE &lt;name&gt; (description = &quot;...&quot;) {'{ ... }'}</code>
+              <code className={styles.cheatSyntax}>
+                ROUTE &lt;name&gt; (description = &quot;...&quot;) {'{ ... }'}
+              </code>
               <span>Define a route</span>
             </div>
             <div className={styles.cheatItem}>
-              <code className={styles.cheatSyntax}>DECISION_TREE &lt;name&gt; {'{ IF ... ELSE ... }'}</code>
+              <code className={styles.cheatSyntax}>
+                DECISION_TREE &lt;name&gt; {'{ IF ... ELSE ... }'}
+              </code>
               <span>Define if/else conditional routing logic</span>
             </div>
             <div className={styles.cheatItem}>
-              <code className={styles.cheatSyntax}>PROJECTION &lt;score|mapping|partition&gt; &lt;name&gt; {'{ ... }'}</code>
+              <code className={styles.cheatSyntax}>
+                PROJECTION &lt;score|mapping|partition&gt; &lt;name&gt; {'{ ... }'}
+              </code>
               <span>Declare a signal projection</span>
             </div>
             <div className={styles.cheatItem}>
-              <code className={styles.cheatSyntax}>PLUGIN &lt;name&gt; &lt;type&gt; {'{ ... }'}</code>
+              <code className={styles.cheatSyntax}>
+                PLUGIN &lt;name&gt; &lt;type&gt; {'{ ... }'}
+              </code>
               <span>Declare a plugin template</span>
             </div>
             <div className={styles.cheatItem}>

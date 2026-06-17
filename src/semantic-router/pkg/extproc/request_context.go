@@ -120,6 +120,13 @@ type RequestContext struct {
 	VSRInjectedSystemPrompt       bool                   // Whether a system prompt was injected into the request
 	VSRSelectedDecision           *config.Decision       // The decision object selected by DecisionEngine (for plugins)
 
+	// ResponsePath records how the final response was produced, surfaced as the
+	// v0.4 keystone x-vsr-response-path header (one of the headers.ResponsePath*
+	// values). It defaults to "upstream"; immediate-response paths (cache,
+	// fast_response, looper, rate-limit, error, image generation) set it
+	// explicitly so the emitted path is accurate. See issue #2203.
+	ResponsePath string
+
 	// Modality routing classification result (AR/DIFFUSION/BOTH)
 	ModalityClassification *ModalityClassificationResult // Set by classifyModality()
 

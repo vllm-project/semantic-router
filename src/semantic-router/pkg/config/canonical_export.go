@@ -137,6 +137,7 @@ func CanonicalGlobalFromRouterConfig(cfg *RouterConfig) *CanonicalGlobal {
 			ConfigSource:              normalizedConfigSource(cfg.ConfigSource),
 			Strategy:                  cfg.Strategy,
 			AutoModelName:             cfg.AutoModelName,
+			AutoModelNames:            append([]string(nil), cfg.AutoModelNames...),
 			IncludeConfigModelsInList: cfg.IncludeConfigModelsInList,
 			ClearRouteCache:           cfg.ClearRouteCache,
 			StreamedBody: CanonicalStreamedBody{
