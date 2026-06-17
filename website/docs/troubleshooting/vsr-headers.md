@@ -4,7 +4,7 @@ This page documents the public `x-vsr-*` headers emitted by vLLM Semantic Router
 
 ## Emission Rules
 
-The router emits protocol headers on every non-cache-hit response. It emits routing decision and matched-signal headers only when all of the following are true:
+The router emits the keystone headers (`x-vsr-schema-version`, `x-vsr-response-path`) on every non-cache-hit response. The client/upstream protocol markers ride only on cross-protocol handling or when `x-vsr-debug` is set, and `x-vsr-protocol-warnings` only when warnings exist. It emits routing decision and matched-signal headers only when all of the following are true:
 
 1. The upstream response is successful (`2xx`).
 2. The response was not served from semantic cache.
