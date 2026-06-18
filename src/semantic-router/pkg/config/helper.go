@@ -8,6 +8,12 @@ import (
 	"strings"
 )
 
+const (
+	DefaultAutoModelName    = "MoM"
+	LegacyAutoModelAlias    = "auto"
+	DefaultVSRAutoModelName = "vllm-sr/auto"
+)
+
 // GetModelReasoningFamily returns the reasoning family configuration for a given model name
 func (rc *RouterConfig) GetModelReasoningFamily(modelName string) *ReasoningFamilyConfig {
 	familyName, ok := rc.GetModelReasoningFamilyName(modelName)
@@ -76,16 +82,51 @@ func (c *RouterConfig) GetEffectiveAutoModelName() string {
 	if c.AutoModelName != "" {
 		return c.AutoModelName
 	}
-	return "MoM" // Default value
+	return DefaultAutoModelName
 }
 
-// IsAutoModelName checks if the given model name should trigger automatic model selection
-// Returns true if the model name is either the configured AutoModelName or "auto" (for backward compatibility)
-func (c *RouterConfig) IsAutoModelName(modelName string) bool {
-	if modelName == "auto" {
-		return true // Always support "auto" for backward compatibility
+func DefaultAutoModelNames() []string {
+	return []string{DefaultVSRAutoModelName, LegacyAutoModelAlias, DefaultAutoModelName}
+}
+
+// EffectiveAutoModelNames returns all request model names that trigger
+// automatic routing. auto_model_names is an explicit allow-list; when omitted,
+// vLLM-SR keeps the new namespaced alias plus legacy auto/MoM compatibility.
+func (c *RouterConfig) EffectiveAutoModelNames() []string {
+	if c == nil {
+		return DefaultAutoModelNames()
 	}
-	return modelName == c.GetEffectiveAutoModelName()
+	if names := normalizeAutoModelNames(c.AutoModelNames); len(names) > 0 {
+		return names
+	}
+	return normalizeAutoModelNames([]string{
+		DefaultVSRAutoModelName,
+		LegacyAutoModelAlias,
+		c.GetEffectiveAutoModelName(),
+	})
+}
+
+func normalizeAutoModelNames(names []string) []string {
+	seen := make(map[string]bool, len(names))
+	result := make([]string, 0, len(names))
+	for _, name := range names {
+		trimmed := strings.TrimSpace(name)
+		if trimmed == "" || seen[trimmed] {
+			continue
+		}
+		seen[trimmed] = true
+		result = append(result, trimmed)
+	}
+	return result
+}
+
+// IsAutoModelName checks if the given model name should trigger automatic model selection.
+func (c *RouterConfig) IsAutoModelName(modelName string) bool {
+	normalized := strings.TrimSpace(modelName)
+	if normalized == "" {
+		return false
+	}
+	return slices.Contains(c.EffectiveAutoModelNames(), normalized)
 }
 
 // GetCategoryDescriptions returns all category descriptions for similarity matching

@@ -71,6 +71,11 @@ var (
 			scopes:   configValidationScopeFile | configValidationScopeKubernetes,
 		},
 		{
+			name:     "semantic_cache",
+			validate: validateSemanticCacheContracts,
+			scopes:   configValidationScopeFile | configValidationScopeKubernetes,
+		},
+		{
 			name:     "embedding",
 			validate: validateEmbeddingContracts,
 			scopes:   configValidationScopeFile | configValidationScopeKubernetes,
@@ -83,6 +88,11 @@ var (
 		{
 			name:     "model_selection",
 			validate: validateModelSelectionConfig,
+			scopes:   configValidationScopeFile | configValidationScopeKubernetes,
+		},
+		{
+			name:     "fusion",
+			validate: validateFusionContracts,
 			scopes:   configValidationScopeFile | configValidationScopeKubernetes,
 		},
 		{

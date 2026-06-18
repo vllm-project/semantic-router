@@ -18,6 +18,9 @@ package extproc
 
 import (
 	"context"
+	"fmt"
+	"math"
+	"strings"
 	"testing"
 	"time"
 
@@ -183,6 +186,119 @@ func TestSelectModelFromCandidatesUsesDecisionScopedSessionAwareConfig(t *testin
 	}
 	if ctx.VSRSessionPolicy == nil || ctx.VSRSessionPolicy["idle_expired"] != true {
 		t.Fatalf("expected decision-scoped idle timeout in session policy, got %#v", ctx.VSRSessionPolicy)
+	}
+}
+
+func TestNewDecisionSessionAwareSelectorWithRouterDCBaseProducesFiniteScore(t *testing.T) {
+	cfg := config.DefaultGlobalConfig()
+	cfg.BackendModels.ModelConfig = map[string]config.ModelParams{
+		"current":  {Description: "general chat"},
+		"frontier": {Description: "coding specialist"},
+	}
+
+	modelSelectionCfg := buildModelSelectionConfig(&cfg)
+	registry := selection.NewFactory(modelSelectionCfg).
+		WithModelConfig(cfg.BackendModels.ModelConfig).
+		WithEmbeddingFunc(func(text string) ([]float32, error) {
+			lower := strings.ToLower(text)
+			switch {
+			case strings.Contains(lower, "coding"):
+				return []float32{1, 0}, nil
+			case strings.Contains(lower, "general"):
+				return []float32{0, 1}, nil
+			default:
+				return []float32{0.5, 0.5}, nil
+			}
+		}).
+		CreateAll()
+
+	router := &OpenAIRouter{
+		Config:        &cfg,
+		ModelSelector: registry,
+	}
+
+	selector := router.newDecisionSessionAwareSelector(&config.SessionAwareSelectionConfig{
+		BaseMethod:           "router_dc",
+		IdleTimeoutSeconds:   extprocIntPtr(1),
+		MinTurnsBeforeSwitch: extprocIntPtr(1),
+	})
+
+	result, err := selector.Select(context.Background(), &selection.SelectionContext{
+		Query:           "need help with coding",
+		DecisionName:    "agentic_session_routing",
+		CandidateModels: []config.ModelRef{{Model: "current"}, {Model: "frontier"}},
+		AgenticSession: &selection.AgenticSessionContext{
+			ID:            "session-router-dc",
+			TurnIndex:     3,
+			PreviousModel: "current",
+			IdleKnown:     true,
+			IdleFor:       2 * time.Second,
+		},
+	})
+	if err != nil {
+		t.Fatalf("Select returned error: %v", err)
+	}
+	if result.Method != selection.MethodSessionAware {
+		t.Fatalf("expected session_aware method, got %q", result.Method)
+	}
+	if math.IsNaN(result.Score) || math.IsInf(result.Score, 0) {
+		t.Fatalf("expected finite session-aware score, got %v", result.Score)
+	}
+	if result.SessionPolicy == nil {
+		t.Fatal("expected session policy trace from session_aware selector")
+	}
+	if result.SelectedModel != "frontier" {
+		t.Fatalf("expected router_dc base selection to surface frontier, got %q", result.SelectedModel)
+	}
+}
+
+func TestSelectorForDecisionMethodBuildsDecisionScopedHybridSelector(t *testing.T) {
+	cfg := config.DefaultGlobalConfig()
+	cfg.BackendModels.ModelConfig = map[string]config.ModelParams{
+		"current":  {Description: "general chat"},
+		"frontier": {Description: "coding specialist"},
+	}
+
+	modelSelectionCfg := buildModelSelectionConfig(&cfg)
+	registry := selection.NewFactory(modelSelectionCfg).
+		WithModelConfig(cfg.BackendModels.ModelConfig).
+		WithEmbeddingFunc(func(text string) ([]float32, error) {
+			lower := strings.ToLower(text)
+			switch {
+			case strings.Contains(lower, "coding"):
+				return []float32{1, 0}, nil
+			case strings.Contains(lower, "general"):
+				return []float32{0, 1}, nil
+			default:
+				return []float32{0.5, 0.5}, nil
+			}
+		}).
+		CreateAll()
+
+	router := &OpenAIRouter{
+		Config:        &cfg,
+		ModelSelector: registry,
+	}
+
+	selector := router.selectorForDecisionMethod(selection.MethodHybrid, &config.AlgorithmConfig{
+		Type: "hybrid",
+		Hybrid: &config.HybridSelectionConfig{
+			EloWeight:      0.6,
+			RouterDCWeight: 0.4,
+		},
+	})
+
+	result, err := selector.Select(context.Background(), &selection.SelectionContext{
+		Query:           "need help with coding",
+		DecisionName:    "hybrid_route",
+		CandidateModels: []config.ModelRef{{Model: "current"}, {Model: "frontier"}},
+	})
+	if err != nil {
+		t.Fatalf("Select returned error: %v", err)
+	}
+	wantWeights := fmt.Sprintf("weights=[elo:%.2f, dc:%.2f, am:%.2f, cost:%.2f]", 0.6, 0.4, 0.2, 0.2)
+	if !strings.Contains(result.Reasoning, wantWeights) {
+		t.Fatalf("expected decision-scoped hybrid weights in reasoning, got %q", result.Reasoning)
 	}
 }
 

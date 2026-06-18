@@ -27,25 +27,25 @@ export const SIGNAL_ICONS: Record<SignalType, string> = {
 
 // ============== Signal Colors (Gray Nodes, Green Paths) ==============
 export const SIGNAL_COLORS: Record<SignalType, { background: string; border: string }> = {
-  keyword: { background: '#4a5568', border: '#2d3748' },      // Dark Gray
-  embedding: { background: '#4a5568', border: '#2d3748' },    // Dark Gray
-  domain: { background: '#4a5568', border: '#2d3748' },       // Dark Gray
-  fact_check: { background: '#4a5568', border: '#2d3748' },   // Dark Gray
+  keyword: { background: '#4a5568', border: '#2d3748' }, // Dark Gray
+  embedding: { background: '#4a5568', border: '#2d3748' }, // Dark Gray
+  domain: { background: '#4a5568', border: '#2d3748' }, // Dark Gray
+  fact_check: { background: '#4a5568', border: '#2d3748' }, // Dark Gray
   user_feedback: { background: '#4a5568', border: '#2d3748' }, // Dark Gray
-  reask: { background: '#4a5568', border: '#2d3748' },        // Dark Gray
-  preference: { background: '#4a5568', border: '#2d3748' },   // Dark Gray
-  language: { background: '#4a5568', border: '#2d3748' },     // Dark Gray
-  context: { background: '#4a5568', border: '#2d3748' },      // Dark Gray
-  structure: { background: '#4a5568', border: '#2d3748' },    // Dark Gray
-  complexity: { background: '#4a5568', border: '#2d3748' },   // Dark Gray
-  modality: { background: '#4a5568', border: '#2d3748' },     // Dark Gray
-  authz: { background: '#4a5568', border: '#2d3748' },        // Dark Gray
-  jailbreak: { background: '#4a5568', border: '#2d3748' },    // Dark Gray
-  pii: { background: '#4a5568', border: '#2d3748' },          // Dark Gray
-  kb: { background: '#4a5568', border: '#2d3748' },           // Dark Gray
+  reask: { background: '#4a5568', border: '#2d3748' }, // Dark Gray
+  preference: { background: '#4a5568', border: '#2d3748' }, // Dark Gray
+  language: { background: '#4a5568', border: '#2d3748' }, // Dark Gray
+  context: { background: '#4a5568', border: '#2d3748' }, // Dark Gray
+  structure: { background: '#4a5568', border: '#2d3748' }, // Dark Gray
+  complexity: { background: '#4a5568', border: '#2d3748' }, // Dark Gray
+  modality: { background: '#4a5568', border: '#2d3748' }, // Dark Gray
+  authz: { background: '#4a5568', border: '#2d3748' }, // Dark Gray
+  jailbreak: { background: '#4a5568', border: '#2d3748' }, // Dark Gray
+  pii: { background: '#4a5568', border: '#2d3748' }, // Dark Gray
+  kb: { background: '#4a5568', border: '#2d3748' }, // Dark Gray
   conversation: { background: '#4a5568', border: '#2d3748' }, // Dark Gray
   event: { background: '#4a5568', border: '#2d3748' }, // Dark Gray
-  projection: { background: '#4a5568', border: '#2d3748' },   // Dark Gray
+  projection: { background: '#4a5568', border: '#2d3748' }, // Dark Gray
 }
 
 // ============== Signal Latency ==============
@@ -74,35 +74,35 @@ export const SIGNAL_LATENCY: Record<SignalType, string> = {
 // ============== Plugin Icons ==============
 export const PLUGIN_ICONS: Record<PluginType, string> = {
   'semantic-cache': 'SC',
-  'memory': 'MEM',
-  'system_prompt': 'SP',
-  'header_mutation': 'HM',
-  'hallucination': 'HAL',
-  'router_replay': 'RR',
-  'rag': 'RAG',
-  'image_gen': 'IMG',
-  'fast_response': 'FR',
-  'request_params': 'RP',
-  'response_jailbreak': 'RJ',
-  'tools': 'TL',
-  'tool_selection': 'TS',
+  memory: 'MEM',
+  system_prompt: 'SP',
+  header_mutation: 'HM',
+  hallucination: 'HAL',
+  router_replay: 'RR',
+  rag: 'RAG',
+  image_gen: 'IMG',
+  fast_response: 'FR',
+  request_params: 'RP',
+  response_jailbreak: 'RJ',
+  tools: 'TL',
+  tool_selection: 'TS',
 }
 
 // ============== Plugin Colors (NVIDIA Dark Theme) ==============
 export const PLUGIN_COLORS: Record<PluginType, { background: string; border: string }> = {
-  'semantic-cache': { background: '#76b900', border: '#5a8f00' },  // NVIDIA Green
-  'memory': { background: '#3f6b73', border: '#2e4f55' },
-  'system_prompt': { background: '#8fd400', border: '#76b900' },   // Light Green
-  'header_mutation': { background: '#606c7a', border: '#3d4a59' }, // Slate Gray
-  'hallucination': { background: '#556b7d', border: '#3d4a59' },   // Cool Gray
-  'router_replay': { background: '#6ba300', border: '#5a8f00' },   // Green (consistent with other plugins)
-  'rag': { background: '#2f855a', border: '#276749' },
-  'image_gen': { background: '#7b5ea7', border: '#5b3f86' },
-  'fast_response': { background: '#4a5568', border: '#2d3748' },   // Dark Gray
-  'request_params': { background: '#805ad5', border: '#6b46c1' },
-  'response_jailbreak': { background: '#c05621', border: '#9c4221' },
-  'tools': { background: '#5a6c7d', border: '#3d4a59' },
-  'tool_selection': { background: '#4b6f7f', border: '#344f5c' },
+  'semantic-cache': { background: '#76b900', border: '#5a8f00' }, // NVIDIA Green
+  memory: { background: '#3f6b73', border: '#2e4f55' },
+  system_prompt: { background: '#8fd400', border: '#76b900' }, // Light Green
+  header_mutation: { background: '#606c7a', border: '#3d4a59' }, // Slate Gray
+  hallucination: { background: '#556b7d', border: '#3d4a59' }, // Cool Gray
+  router_replay: { background: '#6ba300', border: '#5a8f00' }, // Green (consistent with other plugins)
+  rag: { background: '#2f855a', border: '#276749' },
+  image_gen: { background: '#7b5ea7', border: '#5b3f86' },
+  fast_response: { background: '#4a5568', border: '#2d3748' }, // Dark Gray
+  request_params: { background: '#805ad5', border: '#6b46c1' },
+  response_jailbreak: { background: '#c05621', border: '#9c4221' },
+  tools: { background: '#5a6c7d', border: '#3d4a59' },
+  tool_selection: { background: '#4b6f7f', border: '#344f5c' },
 }
 
 // ============== Algorithm Icons ==============
@@ -117,6 +117,7 @@ export const ALGORITHM_ICONS: Record<AlgorithmType, string> = {
   automix: 'AM',
   hybrid: 'HY',
   remom: 'RM',
+  fusion: 'FU',
   rl_driven: 'RL',
   gmtrouter: 'GMT',
   latency_aware: 'LAT',
@@ -130,18 +131,19 @@ export const ALGORITHM_ICONS: Record<AlgorithmType, string> = {
 
 // ============== Algorithm Colors (NVIDIA Dark Theme) ==============
 export const ALGORITHM_COLORS: Record<AlgorithmType, { background: string; border: string }> = {
-  confidence: { background: '#76b900', border: '#5a8f00' },    // NVIDIA Green
-  concurrent: { background: '#5a6c7d', border: '#3d4a59' },    // Blue Gray
-  sequential: { background: '#4a5568', border: '#2d3748' },    // Dark Gray
-  ratings: { background: '#8fd400', border: '#76b900' },       // Light Green
-  static: { background: '#606c7a', border: '#3d4a59' },        // Slate Gray
-  elo: { background: '#718096', border: '#4a5568' },           // Medium Gray
-  router_dc: { background: '#556b7d', border: '#3d4a59' },     // Cool Gray
-  remom: { background: '#76b900', border: '#5a8f00' },         // NVIDIA Green (same as plugins)
-  automix: { background: '#5d6d7e', border: '#3d4a59' },       // Steel Gray
-  hybrid: { background: '#4a5568', border: '#2d3748' },        // Dark Gray
-  rl_driven: { background: '#556b7d', border: '#3d4a59' },     // Cool Gray
-  gmtrouter: { background: '#4f5f6f', border: '#364555' },     // Steel Gray
+  confidence: { background: '#76b900', border: '#5a8f00' }, // NVIDIA Green
+  concurrent: { background: '#5a6c7d', border: '#3d4a59' }, // Blue Gray
+  sequential: { background: '#4a5568', border: '#2d3748' }, // Dark Gray
+  ratings: { background: '#8fd400', border: '#76b900' }, // Light Green
+  static: { background: '#606c7a', border: '#3d4a59' }, // Slate Gray
+  elo: { background: '#718096', border: '#4a5568' }, // Medium Gray
+  router_dc: { background: '#556b7d', border: '#3d4a59' }, // Cool Gray
+  remom: { background: '#76b900', border: '#5a8f00' }, // NVIDIA Green (same as plugins)
+  fusion: { background: '#60784f', border: '#455a36' }, // Muted Green
+  automix: { background: '#5d6d7e', border: '#3d4a59' }, // Steel Gray
+  hybrid: { background: '#4a5568', border: '#2d3748' }, // Dark Gray
+  rl_driven: { background: '#556b7d', border: '#3d4a59' }, // Cool Gray
+  gmtrouter: { background: '#4f5f6f', border: '#364555' }, // Steel Gray
   latency_aware: { background: '#5a6c7d', border: '#3d4a59' }, // Blue Gray
   knn: { background: '#687887', border: '#4b5968' },
   kmeans: { background: '#596b5d', border: '#3f5144' },
@@ -152,43 +154,47 @@ export const ALGORITHM_COLORS: Record<AlgorithmType, { background: string; borde
 }
 
 // ============== Reasoning Effort Display (NVIDIA Dark Theme) ==============
-export const REASONING_EFFORT_DISPLAY: Record<string, { icon: string; label: string; color: string }> = {
-  'low': { icon: 'L', label: 'Low', color: '#8fd400' },       // Light Green
-  'medium': { icon: 'M', label: 'Medium', color: '#76b900' }, // NVIDIA Green
-  'high': { icon: 'H', label: 'High', color: '#5a8f00' },     // Dark Green
+export const REASONING_EFFORT_DISPLAY: Record<
+  string,
+  { icon: string; label: string; color: string }
+> = {
+  low: { icon: 'L', label: 'Low', color: '#8fd400' }, // Light Green
+  medium: { icon: 'M', label: 'Medium', color: '#76b900' }, // NVIDIA Green
+  high: { icon: 'H', label: 'High', color: '#5a8f00' }, // Dark Green
 }
 
 export const MODEL_NODE_WIDTH = 220
 
 // ============== Global Plugin Display (NVIDIA Dark Theme) ==============
-export const GLOBAL_PLUGIN_DISPLAY: Record<string, { icon: string; label: string; color: string }> = {
-  'prompt_guard': { icon: 'PG', label: 'Jailbreak Guard', color: '#718096' },   // Medium Gray
-  'pii_detection': { icon: 'PII', label: 'PII Detection', color: '#5a6c7d' },   // Blue Gray
-  'semantic_cache': { icon: 'SC', label: 'Semantic Cache', color: '#76b900' },  // NVIDIA Green
-}
+export const GLOBAL_PLUGIN_DISPLAY: Record<string, { icon: string; label: string; color: string }> =
+  {
+    prompt_guard: { icon: 'PG', label: 'Jailbreak Guard', color: '#718096' }, // Medium Gray
+    pii_detection: { icon: 'PII', label: 'PII Detection', color: '#5a6c7d' }, // Blue Gray
+    semantic_cache: { icon: 'SC', label: 'Semantic Cache', color: '#76b900' }, // NVIDIA Green
+  }
 
 // ============== Node Colors (Gray Nodes, Green Paths) ==============
 export const NODE_COLORS = {
-  client: { background: '#76b900', border: '#5a8f00' },        // NVIDIA Green (Client stays green)
+  client: { background: '#76b900', border: '#5a8f00' }, // NVIDIA Green (Client stays green)
   decision: {
-    normal: { background: '#4a5568', border: '#2d3748' },      // Dark Gray
-    reasoning: { background: '#4a5568', border: '#2d3748' },   // Dark Gray
+    normal: { background: '#4a5568', border: '#2d3748' }, // Dark Gray
+    reasoning: { background: '#4a5568', border: '#2d3748' }, // Dark Gray
     unreachable: { background: '#3d4a59', border: '#2d3748' }, // Very Dark Gray
   },
   model: {
-    standard: { background: '#5a6c7d', border: '#3d4a59' },    // Blue Gray (Models gray)
-    reasoning: { background: '#5a6c7d', border: '#3d4a59' },   // Blue Gray (Models gray)
+    standard: { background: '#5a6c7d', border: '#3d4a59' }, // Blue Gray (Models gray)
+    reasoning: { background: '#5a6c7d', border: '#3d4a59' }, // Blue Gray (Models gray)
   },
   classification: { background: '#606c7a', border: '#3d4a59' }, // Slate Gray
-  disabled: { background: '#3d4a59', border: '#2d3748' },      // Very Dark Gray
+  disabled: { background: '#3d4a59', border: '#2d3748' }, // Very Dark Gray
 }
 
 // ============== Edge Colors (Green Paths) ==============
 export const EDGE_COLORS = {
-  normal: '#76b900',      // NVIDIA Green (All paths green)
-  reasoning: '#76b900',   // NVIDIA Green (All paths green)
-  active: '#76b900',      // NVIDIA Green
-  disabled: '#3d4a59',    // Very Dark Gray
+  normal: '#76b900', // NVIDIA Green (All paths green)
+  reasoning: '#76b900', // NVIDIA Green (All paths green)
+  active: '#76b900', // NVIDIA Green
+  disabled: '#3d4a59', // Very Dark Gray
   highlighted: '#8fd400', // Light Green (Highlighted paths brighter)
 }
 
@@ -205,15 +211,15 @@ export const LAYOUT_CONFIG = {
   },
   nodeWidth: 180,
   nodeHeight: 100,
-  verticalSpacing: 15,   // Minimum space between nodes in same column (reduced from 25)
-  groupSpacing: 20,      // Extra space between signal groups (reduced from 35)
+  verticalSpacing: 15, // Minimum space between nodes in same column (reduced from 25)
+  groupSpacing: 20, // Extra space between signal groups (reduced from 35)
   // Base heights for different node types (actual height = base + content)
-  decisionBaseHeight: 120,   // Decision nodes base
+  decisionBaseHeight: 120, // Decision nodes base
   decisionConditionHeight: 22, // Per condition line
-  signalGroupBaseHeight: 80,   // Signal group base
-  signalItemHeight: 20,        // Per signal item
-  pluginChainBaseHeight: 60,   // Plugin chain base
-  pluginItemHeight: 20,        // Per plugin item
+  signalGroupBaseHeight: 80, // Signal group base
+  signalItemHeight: 20, // Per signal item
+  pluginChainBaseHeight: 60, // Plugin chain base
+  pluginItemHeight: 20, // Per plugin item
 }
 
 // ============== Three-Layer LR Layout (Brain Page) ==============

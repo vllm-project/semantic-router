@@ -3,6 +3,8 @@ package classification
 import (
 	"fmt"
 
+	candle "github.com/vllm-project/semantic-router/candle-binding"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/looper"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 )
 
@@ -52,7 +54,31 @@ func (c *Classifier) initializeHallucinationDetector() error {
 
 	c.initializeHallucinationNLI(detector)
 	c.hallucinationDetector = detector
+	wireFusionGroundingBackends(detector)
 	return nil
+}
+
+// wireFusionGroundingBackends injects the candle-backed NLI + hallucination
+// detection functions into the looper package so grounding-aware fusion can score
+// panel responses. This keeps the candle/CGO dependency out of the looper import
+// graph (the looper package stays hermetically testable).
+func wireFusionGroundingBackends(detector *HallucinationDetector) {
+	looper.SetGroundingBackends(
+		func(premise, hypothesis string) (float32, float32, error) {
+			r, err := candle.ClassifyNLI(premise, hypothesis)
+			if err != nil {
+				return 0, 0, err
+			}
+			return r.EntailmentProb, r.ContradictProb, nil
+		},
+		func(context, question, answer string) ([]string, float32, error) {
+			r, err := detector.Detect(context, question, answer)
+			if err != nil {
+				return nil, 0, err
+			}
+			return r.UnsupportedSpans, r.Confidence, nil
+		},
+	)
 }
 
 func (c *Classifier) initializeHallucinationNLI(detector *HallucinationDetector) {

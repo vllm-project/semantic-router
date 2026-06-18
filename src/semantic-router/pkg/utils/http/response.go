@@ -203,6 +203,16 @@ func buildNonStreamingCacheBody(cachedResponse []byte) []byte {
 	return marshaledBody
 }
 
+// KeystoneHeaderOptions returns the v0.4 keystone header options
+// (x-vsr-schema-version + x-vsr-response-path) for an immediate response on the
+// given response path. See issue #2203.
+func KeystoneHeaderOptions(path string) []*core.HeaderValueOption {
+	return []*core.HeaderValueOption{
+		{Header: &core.HeaderValue{Key: headers.VSRSchemaVersion, RawValue: []byte(headers.SchemaVersionValue)}},
+		{Header: &core.HeaderValue{Key: headers.VSRResponsePath, RawValue: []byte(path)}},
+	}
+}
+
 // CreateCacheHitResponse creates an immediate response from cache
 func CreateCacheHitResponse(cachedResponse []byte, isStreaming bool, category string, decisionName string, matchedKeywords []string, similarity ...float32) *ext_proc.ProcessingResponse {
 	var responseBody []byte
@@ -267,6 +277,9 @@ func CreateCacheHitResponse(cachedResponse []byte, isStreaming bool, category st
 			},
 		})
 	}
+
+	// v0.4 keystone headers: this is the semantic-cache path (#2203).
+	setHeaders = append(setHeaders, KeystoneHeaderOptions(headers.ResponsePathCache)...)
 
 	immediateResponse := &ext_proc.ImmediateResponse{
 		Status: &typev3.HttpStatus{
@@ -411,6 +424,9 @@ func CreateFastResponse(message string, isStreaming bool, decisionName string) *
 			},
 		},
 	}
+
+	// v0.4 keystone headers: this is the fast_response plugin path (#2203).
+	setHeaders = append(setHeaders, KeystoneHeaderOptions(headers.ResponsePathFastResponse)...)
 
 	immediateResponse := &ext_proc.ImmediateResponse{
 		Status: &typev3.HttpStatus{

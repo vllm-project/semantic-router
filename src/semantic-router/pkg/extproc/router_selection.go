@@ -66,14 +66,32 @@ func resolveSelectionEmbeddingFunc(cfg *config.RouterConfig) func(string) ([]flo
 	case "openvino":
 		return openvinoEmbeddingFunc(modelType)
 	default:
+		// Batched FFI only supports qwen3 (1024-dim). Other types (default
+		// mmbert, gemma, ...) use the single-text FFI with target_dim 0 so
+		// each model returns its native dimension.
+		if candleEmbeddingSupportsBatched(modelType) {
+			return func(text string) ([]float32, error) {
+				output, err := candle_binding.GetEmbeddingBatched(text, modelType, 1024)
+				if err != nil {
+					return nil, err
+				}
+				return output.Embedding, nil
+			}
+		}
 		return func(text string) ([]float32, error) {
-			output, err := candle_binding.GetEmbeddingBatched(text, modelType, 1024)
+			output, err := candle_binding.GetEmbeddingWithModelType(text, modelType, 0)
 			if err != nil {
 				return nil, err
 			}
 			return output.Embedding, nil
 		}
 	}
+}
+
+// candleEmbeddingSupportsBatched reports whether the batched embedding FFI
+// supports the model type. Only qwen3 does; others use the single-text FFI.
+func candleEmbeddingSupportsBatched(modelType string) bool {
+	return modelType == "qwen3"
 }
 
 func collectConfiguredAlgorithmMethods(cfg *config.RouterConfig) []selection.SelectionMethod {
@@ -102,7 +120,7 @@ func buildModelSelectionConfig(cfg *config.RouterConfig) *selection.ModelSelecti
 	modelSelectionCfg.Elo = buildEloSelectionConfig(cfg, decisionCfgs.elo)
 	modelSelectionCfg.RouterDC = buildRouterDCSelectionConfig(cfg, decisionCfgs.routerDC)
 	modelSelectionCfg.AutoMix = buildAutoMixSelectionConfig(cfg)
-	modelSelectionCfg.Hybrid = buildHybridSelectionConfig(cfg)
+	modelSelectionCfg.Hybrid = buildHybridSelectionConfig(cfg, nil)
 	modelSelectionCfg.SessionAware = buildSessionAwareSelectionConfig(cfg, decisionCfgs.sessionAware)
 	modelSelectionCfg.ML = buildMLSelectionConfig(cfg)
 	modelSelectionCfg.MultiFactor = buildMultiFactorSelectionConfig(decisionCfgs.multiFactor)
@@ -241,10 +259,13 @@ func buildAutoMixSelectionConfig(cfg *config.RouterConfig) *selection.AutoMixCon
 	}
 }
 
-func buildHybridSelectionConfig(cfg *config.RouterConfig) *selection.HybridConfig {
+func buildHybridSelectionConfig(
+	cfg *config.RouterConfig,
+	decisionCfg *config.HybridSelectionConfig,
+) *selection.HybridConfig {
 	intelligentRouting := cfg.IntelligentRouting
 	hybridCfg := intelligentRouting.ModelSelection.Hybrid
-	return &selection.HybridConfig{
+	result := &selection.HybridConfig{
 		EloWeight:           hybridCfg.EloWeight,
 		RouterDCWeight:      hybridCfg.RouterDCWeight,
 		AutoMixWeight:       hybridCfg.AutoMixWeight,
@@ -252,6 +273,29 @@ func buildHybridSelectionConfig(cfg *config.RouterConfig) *selection.HybridConfi
 		QualityGapThreshold: hybridCfg.QualityGapThreshold,
 		NormalizeScores:     hybridCfg.NormalizeScores,
 	}
+
+	if decisionCfg == nil {
+		return result
+	}
+	if decisionCfg.EloWeight != 0 {
+		result.EloWeight = decisionCfg.EloWeight
+	}
+	if decisionCfg.RouterDCWeight != 0 {
+		result.RouterDCWeight = decisionCfg.RouterDCWeight
+	}
+	if decisionCfg.AutoMixWeight != 0 {
+		result.AutoMixWeight = decisionCfg.AutoMixWeight
+	}
+	if decisionCfg.CostWeight != 0 {
+		result.CostWeight = decisionCfg.CostWeight
+	}
+	if decisionCfg.QualityGapThreshold != 0 {
+		result.QualityGapThreshold = decisionCfg.QualityGapThreshold
+	}
+	if decisionCfg.NormalizeScores {
+		result.NormalizeScores = true
+	}
+	return result
 }
 
 func buildSessionAwareSelectionConfig(

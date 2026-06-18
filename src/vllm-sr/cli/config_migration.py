@@ -561,6 +561,7 @@ def _place_global_block(global_config: dict[str, Any], key: str, value: Any) -> 
     if key in {
         "strategy",
         "auto_model_name",
+        "auto_model_names",
         "include_config_models_in_list",
         "clear_route_cache",
         "model_selection",
