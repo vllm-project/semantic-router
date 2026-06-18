@@ -2,12 +2,13 @@ package config
 
 // LooperConfig defines configuration for multi-model execution.
 type LooperConfig struct {
-	Endpoint         string            `yaml:"endpoint"`
-	ModelEndpoints   map[string]string `yaml:"model_endpoints,omitempty"`
-	GRPCMaxMsgSizeMB int               `yaml:"grpc_max_msg_size_mb,omitempty"`
-	TimeoutSeconds   int               `yaml:"timeout_seconds,omitempty"`
-	RetryCount       int               `yaml:"retry_count,omitempty"`
-	Headers          map[string]string `yaml:"headers,omitempty"`
+	Endpoint         string              `yaml:"endpoint"`
+	ModelEndpoints   map[string]string   `yaml:"model_endpoints,omitempty"`
+	GRPCMaxMsgSizeMB int                 `yaml:"grpc_max_msg_size_mb,omitempty"`
+	TimeoutSeconds   int                 `yaml:"timeout_seconds,omitempty"`
+	RetryCount       int                 `yaml:"retry_count,omitempty"`
+	Headers          map[string]string   `yaml:"headers,omitempty"`
+	Fusion           FusionRuntimeConfig `yaml:"fusion,omitempty"`
 }
 
 func (l *LooperConfig) IsEnabled() bool {

@@ -14,6 +14,11 @@ func (r *OpenAIRouter) handleResponseHeaders(v *ext_proc.ProcessingRequest_Respo
 	}
 
 	outcome := evaluateResponseHeaderOutcome(v, ctx)
+	if ctx != nil {
+		// Persist the upstream status so the later response-body cache-write
+		// path can avoid caching non-2xx error bodies (cache poisoning).
+		ctx.UpstreamStatusCode = outcome.statusCode
+	}
 	finishUpstreamResponseSpan(ctx, outcome)
 	maybeRecordResponseHeaderTTFT(ctx)
 	r.updateRouterReplayStatus(ctx, outcome.statusCode, ctx != nil && ctx.IsStreamingResponse)
