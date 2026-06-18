@@ -289,6 +289,12 @@ nightly-YYYYMMDD  ──→  (manual QA + CI green)  ──→  v0.3.0
 3. 推送 `v<version>` tag —— 会同时触发 `docker-release.yml`、`helm-publish.yml`、`pypi-publish.yml`、`publish-crate.yml` 与 `release.yml`。
 4. `release.yml` workflow 会先验证各个发布面版本一致，然后再创建 GitHub Release。
 
+对于 dashboard 镜像，Docker release workflow 还会把推送的 `v<version>` tag
+传入 dashboard backend 构建。Dashboard `/api/status` 响应因此会报告与发布镜像一致的
+tag 形式版本。非正式 Docker publish 构建会使用 `src/vllm-sr/pyproject.toml` 版本，
+再追加 PR、commit 或 nightly 元数据，例如 `v0.3.0-dev.<sha>` 或
+`v0.3.0-nightly.<date>.<sha>`。
+
 Fleet simulator 包通过 bump `src/fleet-sim/pyproject.toml` 并推送 `vllm-sr-sim-v<version>` tag 来晋升，触发 `pypi-publish-vllm-sr-sim.yml`。
 
 nightly → release 没有自动化 gating；是否晋升由 release owner 决策。
