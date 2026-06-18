@@ -820,6 +820,39 @@ class ImageGenPluginConfig(BaseModel):
     timeout_seconds: Optional[int] = Field(default=None, ge=1)
 
 
+class SessionAwareLearningTuning(BaseModel):
+    """Stable session-aware Router Learning tuning knobs."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    idle_timeout_seconds: Optional[int] = Field(default=None, ge=0)
+    min_turns_before_switch: Optional[int] = Field(default=None, ge=0)
+    switch_margin: Optional[float] = Field(default=None, ge=0.0)
+    cache_weight: Optional[float] = Field(default=None, ge=0.0)
+    handoff_penalty: Optional[float] = Field(default=None, ge=0.0)
+    handoff_penalty_weight: Optional[float] = Field(default=None, ge=0.0)
+    switch_history_weight: Optional[float] = Field(default=None, ge=0.0)
+    max_cache_cost_multiplier: Optional[float] = Field(default=None, ge=1.0)
+
+
+class DecisionSessionAwareAdaptationConfig(BaseModel):
+    """Decision-local control for the session-aware Router Learning adaptation."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    mode: Optional[Literal["apply", "observe", "bypass"]] = None
+    scope: Optional[Literal["conversation", "session"]] = None
+    tuning: Optional[SessionAwareLearningTuning] = None
+
+
+class DecisionAdaptationsConfig(BaseModel):
+    """Decision-local Router Learning adaptation controls."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    session_aware: Optional[DecisionSessionAwareAdaptationConfig] = None
+
+
 class Decision(BaseModel):
     """Routing decision configuration."""
 
@@ -831,6 +864,7 @@ class Decision(BaseModel):
     rules: Rules
     modelRefs: List[ModelRef] = Field(alias="modelRefs")
     algorithm: Optional[AlgorithmConfig] = None  # Multi-model orchestration algorithm
+    adaptations: Optional[DecisionAdaptationsConfig] = None
     plugins: Optional[List[PluginConfig]] = []
 
 

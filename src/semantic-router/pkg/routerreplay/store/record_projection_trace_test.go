@@ -25,7 +25,14 @@ func TestRecordJSONRoundTripProjectionTrace(t *testing.T) {
 		},
 	}
 	rec := Record{
-		ID:              "rid",
+		ID: "rid",
+		RouteDiagnostics: &RouteDiagnostics{
+			Decision:             "agentic_session_route",
+			PreviousModel:        "qwen/qwen3.6-rocm",
+			SelectedModel:        "google/gemini-2.5-flash-lite",
+			SessionPolicyApplied: true,
+			SessionAction:        "switch",
+		},
 		Signals:         Signal{},
 		ProjectionTrace: tr,
 	}
@@ -54,6 +61,9 @@ func TestRecordJSONRoundTripProjectionTrace(t *testing.T) {
 	if len(decoded.ProjectionTrace.Mappings) != 1 || decoded.ProjectionTrace.Mappings[0].SelectedOutput != "out1" {
 		t.Fatalf("mappings = %+v", decoded.ProjectionTrace.Mappings)
 	}
+	if decoded.RouteDiagnostics == nil || decoded.RouteDiagnostics.SessionAction != "switch" {
+		t.Fatalf("route diagnostics = %+v", decoded.RouteDiagnostics)
+	}
 }
 
 func TestCloneRecordCopiesProjectionTrace(t *testing.T) {
@@ -63,10 +73,21 @@ func TestCloneRecordCopiesProjectionTrace(t *testing.T) {
 			{MappingName: "m", SourceScore: "s", ScoreValue: 0.5},
 		},
 	}
-	rec := Record{ID: "1", Signals: Signal{}, ProjectionTrace: tr}
+	rec := Record{
+		ID: "1",
+		RouteDiagnostics: &RouteDiagnostics{
+			Decision:      "agentic_session_route",
+			SelectedModel: "qwen/qwen3.6-rocm",
+		},
+		Signals:         Signal{},
+		ProjectionTrace: tr,
+	}
 	cl := cloneRecord(rec)
 	if cl.ProjectionTrace == nil || cl.ProjectionTrace == rec.ProjectionTrace {
 		t.Fatal("expected deep-cloned projection trace pointer")
+	}
+	if cl.RouteDiagnostics == nil || cl.RouteDiagnostics == rec.RouteDiagnostics {
+		t.Fatal("expected cloned route diagnostics pointer")
 	}
 	if len(cl.ProjectionTrace.Mappings) != 1 {
 		t.Fatalf("mappings len = %d", len(cl.ProjectionTrace.Mappings))

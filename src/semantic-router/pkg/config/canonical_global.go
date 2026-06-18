@@ -28,6 +28,7 @@ type CanonicalRouterGlobal struct {
 	StreamedBody              CanonicalStreamedBody `yaml:"streamed_body"`
 	SkipProcessing            SkipProcessingConfig  `yaml:"skip_processing"`
 	ModelSelection            ModelSelectionConfig  `yaml:"model_selection"`
+	Learning                  RouterLearningConfig  `yaml:"learning,omitempty"`
 }
 
 // CanonicalStreamedBody groups streaming request body controls.
@@ -217,6 +218,7 @@ func applyCanonicalGlobal(cfg *RouterConfig, global *CanonicalGlobal) error {
 	cfg.StreamedBodyTimeoutSec = global.Router.StreamedBody.TimeoutSec
 	cfg.SkipProcessing = global.Router.SkipProcessing
 	cfg.ModelSelection = global.Router.ModelSelection
+	cfg.RouterLearning = global.Router.Learning
 
 	cfg.API = global.Services.API
 	cfg.ResponseAPI = global.Services.ResponseAPI

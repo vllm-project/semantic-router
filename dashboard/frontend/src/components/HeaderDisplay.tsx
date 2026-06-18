@@ -38,6 +38,26 @@ const HEADER_INFO: Record<
     label: 'Reasoning',
     type: 'info',
   },
+  'x-vsr-learning-methods': {
+    label: 'Learning Methods',
+    type: 'info',
+  },
+  'x-vsr-learning-actions': {
+    label: 'Learning Actions',
+    type: 'info',
+  },
+  'x-vsr-learning-scopes': {
+    label: 'Learning Scopes',
+    type: 'info',
+  },
+  'x-vsr-learning-reasons': {
+    label: 'Learning Reasons',
+    type: 'info',
+  },
+  'x-vsr-learning-modes': {
+    label: 'Learning Modes',
+    type: 'info',
+  },
   'x-vsr-fast-response': {
     label: 'Fast Response',
     type: 'success',

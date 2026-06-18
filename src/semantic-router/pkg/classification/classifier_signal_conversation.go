@@ -81,9 +81,21 @@ func resolveConversationRawCount(feature config.ConversationFeature, facts Conve
 		return facts.AssistantToolCallCount
 	case "assistant_tool_cycle":
 		return facts.ToolResultCount
+	case "active_tool_loop":
+		return activeToolLoopCount(facts)
 	default:
 		return 0
 	}
+}
+
+func activeToolLoopCount(facts ConversationFacts) int {
+	if facts.LastMessageToolResult ||
+		facts.LastMessageRole == "tool" ||
+		facts.LastUserAfterToolResult ||
+		facts.AssistantToolCallCount > facts.ToolResultCount {
+		return 1
+	}
+	return 0
 }
 
 func countMessagesByRole(role string, facts ConversationFacts) int {

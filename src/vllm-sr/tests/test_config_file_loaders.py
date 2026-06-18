@@ -99,6 +99,55 @@ def test_parse_user_config_preserves_cached_input_pricing(tmp_path: Path) -> Non
     assert pricing.model_dump()["cached_input_per_1m"] == 0.25
 
 
+def test_parse_user_config_accepts_decision_session_aware_overrides(tmp_path: Path) -> None:
+    config_path = tmp_path / "config.yaml"
+    write_minimal_config(config_path)
+    data = yaml.safe_load(config_path.read_text(encoding="utf-8"))
+    data.setdefault("global", {}).setdefault("router", {})["learning"] = {
+        "enabled": True,
+        "adaptations": {
+            "session_aware": {
+                "enabled": True,
+                "scope": "conversation",
+            }
+        },
+    }
+    data["routing"]["decisions"][0]["adaptations"] = {
+        "session_aware": {
+            "mode": "observe",
+            "scope": "session",
+            "tuning": {
+                "switch_margin": 0.11,
+                "cache_weight": 0.25,
+            },
+        }
+    }
+    config_path.write_text(yaml.safe_dump(data, sort_keys=False), encoding="utf-8")
+
+    parsed = parse_user_config(str(config_path))
+
+    adaptation = parsed.decisions[0].adaptations.session_aware
+    assert adaptation is not None
+    assert adaptation.mode == "observe"
+    assert adaptation.scope == "session"
+    assert adaptation.tuning is not None
+    assert adaptation.tuning.switch_margin == 0.11
+    assert adaptation.tuning.cache_weight == 0.25
+
+
+def test_parse_user_config_rejects_unknown_decision_adaptation(tmp_path: Path) -> None:
+    config_path = tmp_path / "config.yaml"
+    write_minimal_config(config_path)
+    data = yaml.safe_load(config_path.read_text(encoding="utf-8"))
+    data["routing"]["decisions"][0]["adaptations"] = {
+        "unknown_learning": {"mode": "apply"}
+    }
+    config_path.write_text(yaml.safe_dump(data, sort_keys=False), encoding="utf-8")
+
+    with pytest.raises(ConfigParseError, match="unknown_learning"):
+        parse_user_config(str(config_path))
+
+
 def test_parse_user_config_rejects_unknown_pricing_fields(tmp_path: Path) -> None:
     config_path = tmp_path / "config.yaml"
     write_minimal_config(config_path)
@@ -118,7 +167,7 @@ def test_parse_user_config_rejects_unknown_pricing_fields(tmp_path: Path) -> Non
     assert "Extra inputs are not permitted" in str(exc.value)
 
 
-def test_parse_user_config_rejects_removed_session_aware_fallback_method(
+def test_parse_user_config_rejects_removed_session_aware_algorithm(
     tmp_path: Path,
 ) -> None:
     config_path = tmp_path / "config.yaml"
@@ -133,8 +182,8 @@ def test_parse_user_config_rejects_removed_session_aware_fallback_method(
     with pytest.raises(ConfigParseError) as exc:
         parse_user_config(str(config_path))
 
-    assert "fallback_method" in str(exc.value)
-    assert "Extra inputs are not permitted" in str(exc.value)
+    assert "Removed Router Learning config fields" in str(exc.value)
+    assert "global.router.learning.adaptations.session_aware" in str(exc.value)
 
 
 def test_load_config_file_rejects_missing_file(tmp_path: Path) -> None:

@@ -196,7 +196,6 @@ function extractDecisionAlgorithm(
     svm: algorithm.svm,
     mlp: algorithm.mlp,
     multi_factor: algorithm.multi_factor,
-    session_aware: algorithm.session_aware,
   }
 }
 

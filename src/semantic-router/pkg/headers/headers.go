@@ -88,6 +88,27 @@ const (
 	// Example values: "user_turn", "tool_loop", "provider_state"
 	VSRSessionPhase = "x-vsr-session-phase"
 
+	// VSRLearningMethods names Router Learning adaptations summarized by the
+	// companion learning headers. Full diagnostics live in Router Replay.
+	// Example: "session_aware" or "session_aware,bandit"
+	VSRLearningMethods = "x-vsr-learning-methods"
+
+	// VSRLearningActions contains method-keyed compact learning decisions.
+	// Example: "session_aware=switch"
+	VSRLearningActions = "x-vsr-learning-actions"
+
+	// VSRLearningScopes contains method-keyed identity scopes.
+	// Example: "session_aware=conversation"
+	VSRLearningScopes = "x-vsr-learning-scopes"
+
+	// VSRLearningReasons contains method-keyed machine-readable reasons.
+	// Example: "session_aware=hard_lock=tool_loop"
+	VSRLearningReasons = "x-vsr-learning-reasons"
+
+	// VSRLearningModes contains method-keyed learning modes.
+	// Example: "session_aware=apply"
+	VSRLearningModes = "x-vsr-learning-modes"
+
 	// VSRInjectedSystemPrompt indicates whether a system prompt was injected into the request.
 	// Values: "true" or "false"
 	VSRInjectedSystemPrompt = "x-vsr-injected-system-prompt"

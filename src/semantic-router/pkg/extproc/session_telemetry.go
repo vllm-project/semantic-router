@@ -85,6 +85,7 @@ func recordSessionTurn(ctx *RequestContext, usage responseUsageMetrics, pricing 
 		p.Chat = &sessiontelemetry.ChatInput{UserID: userID, Messages: msgs}
 	}
 	sessiontelemetry.RecordTurn(p)
+	recordRouterLearningUsageFromContext(ctx, usage, pricing, accounting)
 }
 
 func recordRouterSessionUsageFromContext(
@@ -94,10 +95,35 @@ func recordRouterSessionUsageFromContext(
 	accounting routerCacheAccounting,
 ) {
 	if ctx == nil || ctx.SessionID == "" || ctx.RequestModel == "" {
+		recordRouterLearningUsageFromContext(ctx, usage, pricing, accounting)
 		return
 	}
 	sessiontelemetry.RecordSessionUsage(sessiontelemetry.SessionUsageParams{
 		SessionID:                   ctx.SessionID,
+		Model:                       ctx.RequestModel,
+		PromptTokens:                usage.promptTokens,
+		CachedPromptTokens:          usage.cachedPromptTokens,
+		EstimatedCachedPromptTokens: accounting.estimatedCachedTokens,
+		CompletionTokens:            usage.completionTokens,
+		Cost:                        sessionTurnCost(usage, pricing),
+		EstimatedCacheSavings:       accounting.estimatedSavings,
+		CacheAccountingSource:       accounting.source,
+		Timestamp:                   time.Now(),
+	})
+	recordRouterLearningUsageFromContext(ctx, usage, pricing, accounting)
+}
+
+func recordRouterLearningUsageFromContext(
+	ctx *RequestContext,
+	usage responseUsageMetrics,
+	pricing sessiontelemetry.TurnPricing,
+	accounting routerCacheAccounting,
+) {
+	if ctx == nil || ctx.VSRLearningSessionID == "" || ctx.VSRLearningSessionID == ctx.SessionID || ctx.RequestModel == "" {
+		return
+	}
+	sessiontelemetry.RecordSessionUsage(sessiontelemetry.SessionUsageParams{
+		SessionID:                   ctx.VSRLearningSessionID,
 		Model:                       ctx.RequestModel,
 		PromptTokens:                usage.promptTokens,
 		CachedPromptTokens:          usage.cachedPromptTokens,
