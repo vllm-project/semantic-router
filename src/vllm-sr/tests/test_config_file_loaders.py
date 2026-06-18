@@ -99,7 +99,9 @@ def test_parse_user_config_preserves_cached_input_pricing(tmp_path: Path) -> Non
     assert pricing.model_dump()["cached_input_per_1m"] == 0.25
 
 
-def test_parse_user_config_accepts_decision_session_aware_overrides(tmp_path: Path) -> None:
+def test_parse_user_config_accepts_decision_session_aware_overrides(
+    tmp_path: Path,
+) -> None:
     config_path = tmp_path / "config.yaml"
     write_minimal_config(config_path)
     data = yaml.safe_load(config_path.read_text(encoding="utf-8"))
