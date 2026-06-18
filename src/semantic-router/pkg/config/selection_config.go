@@ -166,10 +166,10 @@ type RouterDCSelectionConfig struct {
 	Temperature         float64 `yaml:"temperature,omitempty"`
 	DimensionSize       int     `yaml:"dimension_size,omitempty"`
 	MinSimilarity       float64 `yaml:"min_similarity,omitempty"`
-	UseQueryContrastive bool    `yaml:"use_query_contrastive,omitempty"`
-	UseModelContrastive bool    `yaml:"use_model_contrastive,omitempty"`
-	RequireDescriptions bool    `yaml:"require_descriptions,omitempty"`
-	UseCapabilities     bool    `yaml:"use_capabilities,omitempty"`
+	UseQueryContrastive bool    `yaml:"use_query_contrastive"`
+	UseModelContrastive bool    `yaml:"use_model_contrastive"`
+	RequireDescriptions bool    `yaml:"require_descriptions"`
+	UseCapabilities     bool    `yaml:"use_capabilities"`
 }
 
 type AutoMixSelectionConfig struct {
@@ -187,7 +187,7 @@ type HybridSelectionConfig struct {
 	AutoMixWeight       float64 `yaml:"automix_weight,omitempty"`
 	CostWeight          float64 `yaml:"cost_weight,omitempty"`
 	QualityGapThreshold float64 `yaml:"quality_gap_threshold,omitempty"`
-	NormalizeScores     bool    `yaml:"normalize_scores,omitempty"`
+	NormalizeScores     bool    `yaml:"normalize_scores"`
 }
 
 // SessionAwareSelectionConfig configures the session_aware selector. It wraps
