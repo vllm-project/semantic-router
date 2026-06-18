@@ -153,6 +153,12 @@
               "type": "string"
             }
           }
+        },
+        "extraEnv": {
+          "type": "array"
+        },
+        "envFrom": {
+          "type": "array"
         }
       }
     }
