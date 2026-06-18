@@ -266,7 +266,7 @@ func validateDecisionAlgorithmConfig(decisionName string, algorithm *AlgorithmCo
 }
 
 func configuredAlgorithmBlocks(algorithm *AlgorithmConfig) []string {
-	configuredBlocks := make([]string, 0, 12)
+	configuredBlocks := make([]string, 0, 13)
 	addBlock := func(name string, configured bool) {
 		if configured {
 			configuredBlocks = append(configuredBlocks, name)
@@ -276,6 +276,7 @@ func configuredAlgorithmBlocks(algorithm *AlgorithmConfig) []string {
 	addBlock("confidence", algorithm.Confidence != nil)
 	addBlock("ratings", algorithm.Ratings != nil)
 	addBlock("remom", algorithm.ReMoM != nil)
+	addBlock("fusion", algorithm.Fusion != nil)
 	addBlock("elo", algorithm.Elo != nil)
 	addBlock("router_dc", algorithm.RouterDC != nil)
 	addBlock("automix", algorithm.AutoMix != nil)
@@ -293,6 +294,7 @@ func expectedAlgorithmBlock(normalizedType string) (string, bool) {
 		"confidence":    "confidence",
 		"ratings":       "ratings",
 		"remom":         "remom",
+		"fusion":        "fusion",
 		"elo":           "elo",
 		"router_dc":     "router_dc",
 		"automix":       "automix",
@@ -322,6 +324,10 @@ func validateSpecializedAlgorithmConfig(decisionName string, normalizedType stri
 		}
 		if err := validateSessionAwareSelectionConfig(*algorithm.SessionAware); err != nil {
 			return fmt.Errorf("decision '%s', algorithm.session_aware: %w", decisionName, err)
+		}
+	case "fusion":
+		if err := ValidateFusionAlgorithmConfig(algorithm.Fusion); err != nil {
+			return fmt.Errorf("decision '%s', algorithm.fusion: %w", decisionName, err)
 		}
 	}
 	return nil

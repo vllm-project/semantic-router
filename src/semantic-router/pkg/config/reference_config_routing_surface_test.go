@@ -46,6 +46,7 @@ func assertSupportedAlgorithmsInReferenceConfig(t testingT, decisions []interfac
 	assertReferenceConfidenceAlgorithmCoverage(t, algorithmsByType)
 	assertMapCoversStructFields(t, mustMapAt(t, algorithmsByType["ratings"], "ratings"), reflect.TypeOf(RatingsAlgorithmConfig{}), "routing.decisions[].algorithm.ratings")
 	assertMapCoversStructFields(t, mustMapAt(t, algorithmsByType["remom"], "remom"), reflect.TypeOf(ReMoMAlgorithmConfig{}), "routing.decisions[].algorithm.remom")
+	assertMapCoversStructFields(t, mustMapAt(t, algorithmsByType["fusion"], "fusion"), reflect.TypeOf(FusionAlgorithmConfig{}), "routing.decisions[].algorithm.fusion")
 	assertMapCoversStructFields(t, mustMapAt(t, algorithmsByType["elo"], "elo"), reflect.TypeOf(EloSelectionConfig{}), "routing.decisions[].algorithm.elo")
 	assertMapCoversStructFields(t, mustMapAt(t, algorithmsByType["router_dc"], "router_dc"), reflect.TypeOf(RouterDCSelectionConfig{}), "routing.decisions[].algorithm.router_dc")
 	assertMapCoversStructFields(t, mustMapAt(t, algorithmsByType["automix"], "automix"), reflect.TypeOf(AutoMixSelectionConfig{}), "routing.decisions[].algorithm.automix")

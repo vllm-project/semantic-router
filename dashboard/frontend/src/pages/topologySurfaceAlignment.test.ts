@@ -1,9 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import {
-  ALGORITHM_ICONS,
-  PLUGIN_ICONS,
-  SIGNAL_TYPES,
-} from './topology/constants'
+import { ALGORITHM_ICONS, PLUGIN_ICONS, SIGNAL_TYPES } from './topology/constants'
 import { parseConfigToTopology } from './topology/utils/topologyParser'
 import type { ConfigData } from './topology/types'
 
@@ -51,7 +47,7 @@ describe('topology v0.3 surface alignment', () => {
 
     const topology = parseConfigToTopology(config)
 
-    expect(topology.signals.map(signal => signal.type)).toEqual(
+    expect(topology.signals.map((signal) => signal.type)).toEqual(
       expect.arrayContaining(['conversation', 'event']),
     )
     expect(topology.decisions[0].algorithm?.type).toBe('session_aware')
@@ -60,10 +56,9 @@ describe('topology v0.3 surface alignment', () => {
   })
 
   it('declares display metadata for v0.3 topology surfaces', () => {
-    expect(SIGNAL_TYPES).toEqual(
-      expect.arrayContaining(['conversation', 'event']),
-    )
+    expect(SIGNAL_TYPES).toEqual(expect.arrayContaining(['conversation', 'event']))
     expect(ALGORITHM_ICONS).toMatchObject({
+      fusion: 'FU',
       mlp: 'MLP',
       multi_factor: 'MF',
       session_aware: 'SA',

@@ -165,6 +165,12 @@ func extractStreamingContent(ctx *RequestContext, chunkData map[string]interface
 			if content, ok := delta["content"].(string); ok && content != "" {
 				ctx.StreamingContent += content
 			}
+			// Reasoning models stream their thinking under delta.reasoning_content.
+			// Accumulate it so the reconstructed (cached) response carries the same
+			// reasoning the live stream delivered, instead of silently dropping it.
+			if reasoning, ok := delta["reasoning_content"].(string); ok && reasoning != "" {
+				ctx.StreamingReasoning += reasoning
+			}
 		}
 		if finishReason, ok := choice["finish_reason"].(string); ok && finishReason != "" {
 			ctx.StreamingMetadata["finish_reason"] = finishReason

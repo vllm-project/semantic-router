@@ -151,14 +151,28 @@ func emitChunkEvents(
 	}
 
 	if len(chunk.Choices) == 0 {
-		// Usage-only chunk (no choices). If it carries usage and no prior
-		// chunk has already driven the terminal sequence, treat it as the
-		// terminal chunk so message_stop still fires — otherwise an Anthropic
-		// client would hang waiting for an end event. In the common path the
-		// finish_reason chunk already sent message_stop (caught by the
-		// MessageStopSent guard above), so this only fires when usage is the
-		// sole terminal signal. With no choices there is nothing else to emit.
-		if chunkHasUsage(chunk) {
+		// Usage-only chunk (no choices). Whether it is terminal depends on
+		// its position in the stream:
+		//
+		//   - AFTER content (state.contentStarted()): this is the stream's
+		//     final usage summary. Some OpenAI backends end the stream with
+		//     a usage-only chunk instead of a finish_reason chunk, so treat
+		//     it as terminal — otherwise an Anthropic client hangs waiting
+		//     for an end event. With no choices there is nothing else to emit.
+		//
+		//   - BEFORE any content (issue #2215): this is a gateway "preview"
+		//     usage chunk (e.g. {"choices":[],"usage":{"completion_tokens":4}})
+		//     sent at stream start. The real content and the real terminal
+		//     chunk (carrying the true usage, e.g. completion_tokens:252)
+		//     follow. Treating the preview as terminal would emit message_stop
+		//     after the first chunk, truncate the response, and record the
+		//     preview's token counts. Skip it and wait for the real terminal
+		//     signal.
+		//
+		// The common split-finish/usage path (finish_reason chunk first, then
+		// a trailing usage-only chunk) is handled by the MessageStopSent guard
+		// above, not here.
+		if chunkHasUsage(chunk) && state.contentStarted() {
 			out.Write(emitTerminalEvents(state, "", chunk.Usage, ext))
 			return out.Bytes(), true, nil
 		}
@@ -594,6 +608,17 @@ func formatAnthropicSSEEvent(eventName string, payload []byte) []byte {
 	buf.Write(payload)
 	buf.WriteString("\n\n")
 	return buf.Bytes()
+}
+
+// contentStarted reports whether the outbound emitter has opened at
+// least one Anthropic content block (text, thinking, or tool_use) for
+// this stream. NextBlockIndex is allocated monotonically as blocks open
+// and is never reset, so a non-zero value means real content has already
+// been emitted. Used to tell a stream-ending usage-only summary chunk
+// (after content) from a gateway "preview" usage chunk (before any
+// content; issue #2215).
+func (s *StreamState) contentStarted() bool {
+	return s.NextBlockIndex > 0
 }
 
 // chunkHasUsage returns true when an OpenAI chunk carries a non-zero

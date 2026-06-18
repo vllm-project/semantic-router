@@ -1,0 +1,13 @@
+# Run artifacts — these embed absolute local paths / machine-specific config and
+# must never be committed. Only source (.py/.sh/.md/testdata) is tracked.
+results/
+results_sweep/
+__pycache__/
+*.pyc
+
+# Generated router configs (created by make_configs.py; contain local endpoints)
+config-fusion-on.yaml
+config-fusion-off.yaml
+config-fusion-on-*.yaml
+config-fusion-off-*.yaml
+router-runtime.json

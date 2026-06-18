@@ -22,14 +22,14 @@ func TestOpenAIModelsEndpoint(t *testing.T) {
 		{
 			name:                      "default excludes config models",
 			includeConfiguredModels:   false,
-			expectedModels:            []string{"MoM"},
-			expectedModelResultLength: 1,
+			expectedModels:            []string{"vllm-sr/auto", "auto", "MoM"},
+			expectedModelResultLength: 3,
 		},
 		{
 			name:                      "router option includes config models",
 			includeConfiguredModels:   true,
-			expectedModels:            []string{"MoM", "gpt-4o-mini", "llama-3.1-8b-instruct"},
-			expectedModelResultLength: 3,
+			expectedModels:            []string{"vllm-sr/auto", "auto", "MoM", "gpt-4o-mini", "llama-3.1-8b-instruct"},
+			expectedModelResultLength: 5,
 		},
 	}
 
