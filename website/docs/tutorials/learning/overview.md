@@ -13,7 +13,7 @@ The first supported adaptation is session-aware learning:
   boundaries.
 - `x-session-id` identifies the long-lived client session.
 - `x-conversation-id` identifies one agent run or conversation.
-- `x-vsr-learning` summarizes the adaptation result in response headers.
+- `x-vsr-learning-*` summarizes bounded adaptation results in response headers.
 - Router Replay stores the full trace under `learning.adaptations`.
 
 Use Router Learning when a decision should remain semantic, but repeated
@@ -81,14 +81,17 @@ multiple runs inside the same client session.
 
 ## Header And Replay
 
-`x-vsr-learning` is intentionally compact:
+The `x-vsr-learning-*` header family is intentionally compact:
 
 ```http
-x-vsr-learning: session_aware;mode=apply;action=hard_lock;reason=hard_lock=tool_loop;scope=conversation
+x-vsr-learning-methods: session_aware
+x-vsr-learning-actions: session_aware=hard_lock
+x-vsr-learning-scopes: session_aware=conversation
+x-vsr-learning-reasons: session_aware=hard_lock=tool_loop
+x-vsr-learning-modes: session_aware=apply
 ```
 
-It tells a client which adaptation ran, whether the matched decision allowed it
-to apply, what action it took, why, and which scope was active. Detailed fields
-such as base selected model, final selected model, cache warmth, memory token
-counts, and candidate score traces belong in Router Replay, keyed by
-`x-vsr-replay-id`.
+It tells a client which learning methods ran, what action each method took, why,
+and which scope was active. Detailed fields such as base selected model, final
+selected model, cache warmth, memory token counts, and candidate score traces
+belong in Router Replay, keyed by `x-vsr-replay-id`.

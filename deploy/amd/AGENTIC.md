@@ -234,7 +234,8 @@ Conversation-scope behavior should be validated with:
 - same-session multi-run: a new `x-conversation-id` can re-route inside the
   same `x-session-id`
 - tool-loop stability: tool-result turns keep the established model and emit
-  `x-vsr-learning: ...action=hard_lock...scope=conversation`
+  `x-vsr-learning-actions: session_aware=hard_lock` with
+  `x-vsr-learning-scopes: session_aware=conversation`
 
 Session-scope behavior should be validated by changing only
 `global.router.learning.adaptations.session_aware.scope` to `session` and
@@ -244,11 +245,16 @@ running a same-session multi-run test:
 - a later run with a different `x-conversation-id` stays on that model
 - privacy or security runs still bypass and route to `qwen/qwen3.6-rocm`
 
-`x-vsr-learning` is the compact response header for this check. It reports the
-adaptation, decision mode, action, reason, and scope, for example:
+The `x-vsr-learning-*` header family is the compact response surface for this
+check. It reports method-keyed learning mode, action, reason, and scope, for
+example:
 
 ```http
-x-vsr-learning: session_aware;mode=apply;action=hard_lock;reason=hard_lock=tool_loop;scope=conversation
+x-vsr-learning-methods: session_aware
+x-vsr-learning-actions: session_aware=hard_lock
+x-vsr-learning-scopes: session_aware=conversation
+x-vsr-learning-reasons: session_aware=hard_lock=tool_loop
+x-vsr-learning-modes: session_aware=apply
 ```
 
 Use `x-vsr-replay-id` to inspect full Router Replay diagnostics, including base
