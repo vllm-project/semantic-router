@@ -129,3 +129,78 @@ func TestBuildRerankResultsEchoesDocumentsWhenRequested(t *testing.T) {
 		t.Fatalf("expected echoed document 'second', got %+v", results[0].Document)
 	}
 }
+
+func TestRequestsCrossEncoderMatchesAliasAndServedName(t *testing.T) {
+	prev := crossEncoderServedName
+	defer func() { crossEncoderServedName = prev }()
+
+	crossEncoderServedName = ""
+	if !requestsCrossEncoder("cross-encoder") {
+		t.Fatalf("expected the 'cross-encoder' alias to route to the cross-encoder backend")
+	}
+	if requestsCrossEncoder("cross-encoder/ms-marco-MiniLM-L-6-v2") {
+		t.Fatalf("expected a real model id to fall through when no served name is configured")
+	}
+	if requestsCrossEncoder("auto") {
+		t.Fatalf("expected 'auto' to use the bi-encoder path")
+	}
+
+	crossEncoderServedName = "cross-encoder/ms-marco-MiniLM-L-6-v2"
+	if !requestsCrossEncoder("cross-encoder/ms-marco-MiniLM-L-6-v2") {
+		t.Fatalf("expected the configured served model id to route to the cross-encoder backend")
+	}
+	if !requestsCrossEncoder("cross-encoder") {
+		t.Fatalf("expected the alias to keep working alongside a configured served name")
+	}
+	if requestsCrossEncoder("BAAI/bge-reranker-v2-m3") {
+		t.Fatalf("expected an unconfigured model id to use the bi-encoder path")
+	}
+}
+
+func TestServedRerankModelNamePrefersConfiguredName(t *testing.T) {
+	prev := crossEncoderServedName
+	defer func() { crossEncoderServedName = prev }()
+
+	crossEncoderServedName = ""
+	if got := servedRerankModelName(); got != "cross-encoder" {
+		t.Fatalf("expected alias fallback 'cross-encoder', got %q", got)
+	}
+
+	crossEncoderServedName = "cross-encoder/ms-marco-MiniLM-L-6-v2"
+	if got := servedRerankModelName(); got != crossEncoderServedName {
+		t.Fatalf("expected served name %q, got %q", crossEncoderServedName, got)
+	}
+}
+
+func TestBuildRerankResultsFromCrossEncoderRejectsInvalidIndex(t *testing.T) {
+	out := &candle_binding.RerankOutput{
+		Matches: []candle_binding.RerankMatch{{Index: 7, Score: 0.9}},
+	}
+
+	if _, err := buildRerankResultsFromCrossEncoder(out, []string{"a", "b"}, false); err == nil {
+		t.Fatalf("expected out-of-range index to return an error")
+	}
+}
+
+func TestBuildRerankResultsFromCrossEncoderPreservesScoreOrderAndEchoesDocs(t *testing.T) {
+	out := &candle_binding.RerankOutput{
+		Matches: []candle_binding.RerankMatch{
+			{Index: 2, Score: 0.99},
+			{Index: 0, Score: 0.02},
+		},
+	}
+
+	results, err := buildRerankResultsFromCrossEncoder(out, []string{"doc0", "doc1", "doc2"}, true)
+	if err != nil {
+		t.Fatalf("expected valid results, got %v", err)
+	}
+	if len(results) != 2 {
+		t.Fatalf("expected 2 results, got %d", len(results))
+	}
+	if results[0].Index != 2 || results[0].RelevanceScore != 0.99 {
+		t.Fatalf("expected top result index=2 score=0.99, got %+v", results[0])
+	}
+	if results[0].Document == nil || results[0].Document.Text != "doc2" {
+		t.Fatalf("expected echoed document 'doc2', got %+v", results[0].Document)
+	}
+}

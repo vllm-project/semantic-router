@@ -6,8 +6,11 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"os"
+	"strings"
 	"time"
 
+	candle_binding "github.com/vllm-project/semantic-router/candle-binding"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/memory"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
@@ -35,6 +38,12 @@ func InitWithRuntime(configPath string, port int, runtimeRegistry *routerruntime
 
 	classificationSvc := resolveClassificationService(cfg, runtimeRegistry)
 	classificationSvc = ensureClassificationService(cfg, runtimeRegistry, classificationSvc)
+
+	// Best-effort init of the Phase 2 cross-encoder reranker. When
+	// SR_CROSS_ENCODER_MODEL_PATH points at a reranker checkpoint, /v1/rerank
+	// with model="cross-encoder" uses true cross-encoder scoring. Non-fatal: if
+	// it fails, the bi-encoder Phase 1 path still works.
+	initCrossEncoderFromEnv()
 
 	// Initialize batch metrics configuration
 	if cfg.API.BatchClassification.Metrics.Enabled {
@@ -103,6 +112,47 @@ func InitWithRuntime(configPath string, port int, runtimeRegistry *routerruntime
 		"port": port,
 	})
 	return server.ListenAndServe()
+}
+
+// initCrossEncoderFromEnv loads the cross-encoder reranker if
+// SR_CROSS_ENCODER_MODEL_PATH is set. SR_CROSS_ENCODER_USE_CPU=false forces GPU
+// (default is CPU). SR_CROSS_ENCODER_MODEL_NAME optionally sets the public model
+// id clients use to request this reranker (e.g.
+// "cross-encoder/ms-marco-MiniLM-L-6-v2"); the "cross-encoder" alias always
+// works regardless. This is intentionally non-fatal.
+//
+// INTERIM: env-based loading is a deliberate stopgap. The intended end state is
+// declaring rerankers in the model catalog/config (alongside other models) and
+// loading them through the same path; this env hook keeps the Phase 2 backend
+// usable until that config plumbing lands. See the PR/issue for the plan.
+func initCrossEncoderFromEnv() {
+	// Clear any prior served-name mapping first so a no-op/failed (re)init can never
+	// leave dispatch pointing at a previously loaded model.
+	crossEncoderServedName = ""
+
+	modelPath := strings.TrimSpace(os.Getenv("SR_CROSS_ENCODER_MODEL_PATH"))
+	if modelPath == "" {
+		return
+	}
+	useCPU := !strings.EqualFold(strings.TrimSpace(os.Getenv("SR_CROSS_ENCODER_USE_CPU")), "false")
+
+	if err := candle_binding.InitCrossEncoder(modelPath, useCPU); err != nil {
+		logging.ComponentWarnEvent("apiserver", "cross_encoder_init_failed", map[string]interface{}{
+			"model_path": modelPath,
+			"error":      err.Error(),
+		})
+		return
+	}
+
+	// Map a public model id to this reranker so clients can request it by name,
+	// matching the Cohere/vLLM contract. Falls back to the "cross-encoder" alias.
+	crossEncoderServedName = strings.TrimSpace(os.Getenv("SR_CROSS_ENCODER_MODEL_NAME"))
+
+	logging.ComponentEvent("apiserver", "cross_encoder_initialized", map[string]interface{}{
+		"model_path": modelPath,
+		"model_name": crossEncoderServedName,
+		"use_cpu":    useCPU,
+	})
 }
 
 func resolveAPIServerConfig(runtimeRegistry *routerruntime.Registry) *config.RouterConfig {
