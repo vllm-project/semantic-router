@@ -157,6 +157,25 @@ func TestRequestsCrossEncoderMatchesAliasAndServedName(t *testing.T) {
 	}
 }
 
+func TestConfigureCrossEncoderServedNameFromEnv(t *testing.T) {
+	prev := crossEncoderServedName
+	defer func() { crossEncoderServedName = prev }()
+
+	// A stale value must be cleared when no env override is present.
+	crossEncoderServedName = "stale/model"
+	t.Setenv("SR_CROSS_ENCODER_MODEL_NAME", "")
+	configureCrossEncoderServedName()
+	if crossEncoderServedName != "" {
+		t.Fatalf("expected served name to be cleared when unset, got %q", crossEncoderServedName)
+	}
+
+	t.Setenv("SR_CROSS_ENCODER_MODEL_NAME", "  cross-encoder/ms-marco-MiniLM-L-6-v2  ")
+	configureCrossEncoderServedName()
+	if crossEncoderServedName != "cross-encoder/ms-marco-MiniLM-L-6-v2" {
+		t.Fatalf("expected trimmed served name, got %q", crossEncoderServedName)
+	}
+}
+
 func TestServedRerankModelNamePrefersConfiguredName(t *testing.T) {
 	prev := crossEncoderServedName
 	defer func() { crossEncoderServedName = prev }()

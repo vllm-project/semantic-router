@@ -7,8 +7,36 @@
 use std::ffi::{c_char, CStr};
 use std::sync::Arc;
 
-use crate::ffi::types::{RerankMatch, RerankResult};
 use crate::model_architectures::traditional::{BertCrossEncoder, CROSS_ENCODER};
+
+/// A single cross-encoder rerank result.
+#[repr(C)]
+#[derive(Debug)]
+pub struct RerankMatch {
+    pub index: i32, // Index of the document in the input array
+    pub score: f32, // Relevance score in [0, 1] (higher = more relevant)
+}
+
+/// Result of cross-encoder reranking.
+#[repr(C)]
+#[derive(Debug)]
+pub struct RerankResult {
+    pub matches: *mut RerankMatch, // Array of matches, sorted by score (descending)
+    pub num_matches: i32,          // Number of matches returned (<= top_n)
+    pub processing_time_ms: f32,   // Processing time in milliseconds
+    pub error: bool,               // Whether an error occurred
+}
+
+impl Default for RerankResult {
+    fn default() -> Self {
+        Self {
+            matches: std::ptr::null_mut(),
+            num_matches: 0,
+            processing_time_ms: 0.0,
+            error: true,
+        }
+    }
+}
 
 /// Initialize the global cross-encoder reranker from a model path (local dir or
 /// HuggingFace Hub id). Safe to call once; subsequent calls are no-ops that

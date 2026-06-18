@@ -15,7 +15,8 @@ import (
 const crossEncoderAlias = "cross-encoder"
 
 // crossEncoderServedName is the public model id that maps to the loaded
-// cross-encoder, configured at startup (see server.go initCrossEncoderFromEnv).
+// cross-encoder, resolved at startup (see server.go configureCrossEncoderServedName;
+// the reranker itself is loaded on the model-runtime path).
 // When set (e.g. "cross-encoder/ms-marco-MiniLM-L-6-v2"), a client can request
 // that exact id and get the cross-encoder backend, matching the Cohere/vLLM
 // contract where `model` names the served reranker. Empty means only the
