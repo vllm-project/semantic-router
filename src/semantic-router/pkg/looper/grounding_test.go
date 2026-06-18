@@ -54,6 +54,69 @@ func TestScoreByPanel_RanksContradictedLower(t *testing.T) {
 	assert.Empty(t, scores[0].FlaggedSpans)
 }
 
+// TestScoreByPanel_LongAnswerSentenceChunking verifies that on long answers (which
+// would otherwise truncate the hypothesis away in a single 512-token NLI call) the
+// scorer chunks the hypothesis into sentences and still discriminates: a long answer
+// whose peers contradict one of its sentences scores below a fully-corroborated one.
+func TestScoreByPanel_LongAnswerSentenceChunking(t *testing.T) {
+	// Stub NLI keyed on the hypothesis sentence: any sentence containing the
+	// "FALSE" marker is contradicted by its peers; everything else is entailed.
+	var calls int
+	withGroundingBackends(t, func(_, hypothesis string) (float32, float32, error) {
+		calls++
+		if strings.Contains(hypothesis, "FALSE") {
+			return 0.05, 0.9, nil
+		}
+		return 0.9, 0.05, nil
+	}, nil)
+
+	// Both answers exceed nliSingleCallBudget runes so the chunking path engages.
+	long := func(dirty bool) string {
+		var b strings.Builder
+		for i := 0; i < 24; i++ {
+			if dirty {
+				b.WriteString("This FALSE clinical claim is rejected by the other panel models, item ")
+			} else {
+				b.WriteString("This is a benign and well supported clinical statement, item number ")
+			}
+			b.WriteString(string(rune('A' + (i % 26))))
+			b.WriteString(". ")
+		}
+		return b.String()
+	}
+
+	clean := long(false)
+	dirty := long(true)
+
+	p := panel(clean, dirty)
+	scores, err := scoreByPanel(p, fusionExecutionConfig{GroundingNLIContradictionPenalty: 1.0})
+	require.NoError(t, err)
+	require.Len(t, scores, 2)
+
+	// The chunking path must actually run (many NLI calls, not one per pair).
+	assert.Greater(t, calls, 4, "expected sentence-level chunking to issue many NLI calls")
+	// The answer with a contradicted sentence scores lower and is flagged.
+	assert.Greater(t, scores[0].Score, scores[1].Score)
+	assert.NotEmpty(t, scores[1].FlaggedSpans)
+}
+
+func TestSplitSentencesCapped(t *testing.T) {
+	got := splitSentencesCapped("First real sentence here. Short. Second real sentence here!\nThird real one?", 1000, 10)
+	// "Short." is < 12 runes and dropped; the three real sentences survive.
+	require.Len(t, got, 3)
+	assert.Contains(t, got[0], "First real sentence")
+	assert.Contains(t, got[2], "Third real one")
+}
+
+func TestChunkTextCapped(t *testing.T) {
+	windows := chunkTextCapped("aaaaabbbbbccccc", 5, 10)
+	require.Len(t, windows, 3)
+	assert.Equal(t, "aaaaa", windows[0])
+	assert.Equal(t, "ccccc", windows[2])
+	// maxWindows caps the count even when more content remains.
+	assert.Len(t, chunkTextCapped("aaaaabbbbbccccc", 5, 2), 2)
+}
+
 func TestScoreByContext_FewerUnsupportedSpansScoresHigher(t *testing.T) {
 	// "bad" answers have an unsupported span; grounded ones have none.
 	withGroundingBackends(t, nil, func(_, _, answer string) ([]string, float32, error) {
