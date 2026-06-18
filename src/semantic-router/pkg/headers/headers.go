@@ -45,6 +45,12 @@ const (
 	// global.router.skip_processing.enabled is true. Value: "true" (case-insensitive).
 	// See https://github.com/vllm-project/semantic-router/issues/1808.
 	VSRSkipProcessing = "x-vsr-skip-processing"
+
+	// VSRDebug opts a request into verbose/debug response headers. Value: "true"
+	// (case-insensitive). When set, headers that the v0.4 contract otherwise
+	// omits or demotes to replay are emitted inline for that request — the
+	// debug/replay-mode trigger for the v0.4 header surface. See issue #2216.
+	VSRDebug = "x-vsr-debug"
 )
 
 // VSR Decision Tracking Headers
@@ -85,6 +91,34 @@ const (
 	// VSRInjectedSystemPrompt indicates whether a system prompt was injected into the request.
 	// Values: "true" or "false"
 	VSRInjectedSystemPrompt = "x-vsr-injected-system-prompt"
+
+	// --- v0.4 keystone response-contract headers (issue #2203) ---
+	// These two headers are emitted on every VSR-processed response and form
+	// the foundation of the v0.4 header contract: schema-version stamps the
+	// contract revision and response-path names how the response was produced.
+	// Everything else in the contract keys off response-path.
+
+	// VSRSchemaVersion stamps the response-header contract revision so clients
+	// know which contract they are parsing. Value: SchemaVersionValue.
+	VSRSchemaVersion = "x-vsr-schema-version"
+
+	// VSRResponsePath names the final path that produced the response.
+	// Value is one of the ResponsePath* constants below.
+	VSRResponsePath = "x-vsr-response-path"
+
+	// ResponsePath* are the valid values for VSRResponsePath.
+	ResponsePathUpstream        = "upstream"         // forwarded to and answered by the upstream model
+	ResponsePathCache           = "cache"            // served from semantic cache, no upstream call
+	ResponsePathFastResponse    = "fast_response"    // short-circuited by the fast_response plugin
+	ResponsePathLooper          = "looper"           // produced by the agent looper
+	ResponsePathImageGeneration = "image_generation" // produced by the image-generation path
+	ResponsePathBlocked         = "blocked"          // rejected by a guardrail (e.g. jailbreak/PII)
+	ResponsePathRateLimited     = "rate_limited"     // rejected by rate limiting
+	ResponsePathError           = "error"            // router-side error response
+
+	// SchemaVersionValue is the current response-header contract revision
+	// emitted in VSRSchemaVersion. v0.4 is contract revision "2".
+	SchemaVersionValue = "2"
 
 	// VSRCacheHit indicates that the response was served from cache.
 	// Value: "true"
@@ -213,40 +247,21 @@ const (
 // and 5xx) so clients can always tell which translation cell handled the
 // call and what was lost during translation.
 const (
-	// VSRInboundProtocol describes the wire format of the inbound request
+	// VSRClientProtocol describes the wire format of the inbound request
 	// as seen by the router (e.g. "openai", "anthropic"). Defaults to
 	// "openai" when no other protocol was detected.
-	VSRInboundProtocol = "x-vsr-inbound-protocol"
+	VSRClientProtocol = "x-vsr-client-protocol"
 
-	// VSROutboundProtocol describes the wire format of the outbound
+	// VSRUpstreamProtocol describes the wire format of the outbound
 	// request sent to the upstream backend. Defaults to "openai" when no
 	// explicit APIFormat was resolved.
-	VSROutboundProtocol = "x-vsr-outbound-protocol"
+	VSRUpstreamProtocol = "x-vsr-upstream-protocol"
 
-	// VSRLossinessWarnings carries a structured, comma-separated list
+	// VSRProtocolWarnings carries a structured, comma-separated list
 	// of translation observations emitted by the inbound parser during
 	// a lossy translation. Each entry is "severity;reason;field".
 	// Absent when no warnings were produced.
-	VSRLossinessWarnings = "x-vsr-lossiness-warnings"
-)
-
-// Legacy Security Headers (kept for backward compatibility with replay recorder)
-// New signal-driven architecture uses x-vsr-matched-jailbreak and x-vsr-matched-pii instead.
-const (
-	// VSRPIIViolation indicates that the request was blocked due to PII policy violation.
-	VSRPIIViolation = "x-vsr-pii-violation"
-
-	// VSRPIITypes contains the comma-separated list of PII types that were detected and denied.
-	VSRPIITypes = "x-vsr-pii-types"
-
-	// VSRJailbreakBlocked indicates that a jailbreak attempt was detected and blocked.
-	VSRJailbreakBlocked = "x-vsr-jailbreak-blocked"
-
-	// VSRJailbreakType specifies the type of jailbreak attempt that was detected.
-	VSRJailbreakType = "x-vsr-jailbreak-type"
-
-	// VSRJailbreakConfidence indicates the confidence level of the jailbreak detection.
-	VSRJailbreakConfidence = "x-vsr-jailbreak-confidence"
+	VSRProtocolWarnings = "x-vsr-protocol-warnings"
 )
 
 // Hallucination Mitigation Headers

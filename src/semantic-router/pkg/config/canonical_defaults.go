@@ -22,6 +22,22 @@ func defaultCanonicalRouterGlobal() CanonicalRouterGlobal {
 		ModelSelection: ModelSelectionConfig{
 			Enabled: true,
 			Method:  "knn",
+			RouterDC: RouterDCSelectionConfig{
+				Temperature:         0.07,
+				DimensionSize:       768,
+				MinSimilarity:       0.3,
+				UseQueryContrastive: true,
+				UseModelContrastive: true,
+				UseCapabilities:     true,
+			},
+			Hybrid: HybridSelectionConfig{
+				EloWeight:           0.3,
+				RouterDCWeight:      0.3,
+				AutoMixWeight:       0.2,
+				CostWeight:          0.2,
+				QualityGapThreshold: 0.1,
+				NormalizeScores:     true,
+			},
 		},
 	}
 }
