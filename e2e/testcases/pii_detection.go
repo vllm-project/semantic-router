@@ -131,7 +131,7 @@ func testSinglePIIDetection(ctx context.Context, testCase PIITestCase, localPort
 		ExpectedBlocked: testCase.ExpectedBlocked,
 	}
 
-	response, err := sendLocalChatCompletion(ctx, localPort, "MoM", testCase.Question, 30*time.Second, true)
+	response, err := sendLocalChatCompletion(ctx, localPort, "MoM", testCase.Question, 30*time.Second)
 	if err != nil {
 		result.Error = err.Error()
 		return result

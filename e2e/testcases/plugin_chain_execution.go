@@ -268,12 +268,17 @@ func printPluginChainResults(results []PluginChainResult, totalTests, correctTes
 	fmt.Printf("Accuracy Rate: %.2f%%\n", accuracy)
 	fmt.Println(separator)
 
-	// Print summary by behavior type
-	piiBlockTests := 0
-	piiBlockCorrect := 0
-	cleanQueryTests := 0
-	cleanQueryCorrect := 0
+	printPluginChainBreakdown(results)
+	printPluginChainFailures(results)
+	printPluginChainErrors(results)
 
+	fmt.Println(separator + "\n")
+}
+
+// printPluginChainBreakdown prints accuracy split by PII-blocking vs clean query.
+func printPluginChainBreakdown(results []PluginChainResult) {
+	piiBlockTests, piiBlockCorrect := 0, 0
+	cleanQueryTests, cleanQueryCorrect := 0, 0
 	for _, result := range results {
 		if result.ExpectPIIBlock {
 			piiBlockTests++
@@ -290,51 +295,55 @@ func printPluginChainResults(results []PluginChainResult, totalTests, correctTes
 
 	fmt.Println("\nTest Breakdown:")
 	if piiBlockTests > 0 {
-		piiBlockAccuracy := float64(piiBlockCorrect) / float64(piiBlockTests) * 100
-		fmt.Printf("  - PII Blocking Tests: %d/%d (%.2f%%)\n", piiBlockCorrect, piiBlockTests, piiBlockAccuracy)
+		fmt.Printf("  - PII Blocking Tests: %d/%d (%.2f%%)\n",
+			piiBlockCorrect, piiBlockTests, float64(piiBlockCorrect)/float64(piiBlockTests)*100)
 	}
 	if cleanQueryTests > 0 {
-		cleanQueryAccuracy := float64(cleanQueryCorrect) / float64(cleanQueryTests) * 100
-		fmt.Printf("  - Clean Query Tests:  %d/%d (%.2f%%)\n", cleanQueryCorrect, cleanQueryTests, cleanQueryAccuracy)
+		fmt.Printf("  - Clean Query Tests:  %d/%d (%.2f%%)\n",
+			cleanQueryCorrect, cleanQueryTests, float64(cleanQueryCorrect)/float64(cleanQueryTests)*100)
 	}
+}
 
-	// Print failed cases
+// printPluginChainFailures prints cases with a wrong outcome (excluding request errors).
+func printPluginChainFailures(results []PluginChainResult) {
 	failedCount := 0
 	for _, result := range results {
 		if !result.Correct && result.Error == "" {
 			failedCount++
 		}
 	}
-
-	if failedCount > 0 {
-		fmt.Println("\nFailed Plugin Chain Executions:")
-		for _, result := range results {
-			if !result.Correct && result.Error == "" {
-				fmt.Printf("  - Query: %s\n", truncateString(result.Query, 70))
-				fmt.Printf("    Expected PII Block: %v, Actual: %v\n", result.ExpectPIIBlock, result.PIIBlocked)
-				fmt.Printf("    PII Detected: %s\n", result.PIIDetected)
-				fmt.Printf("    Status Code: %d\n", result.StatusCode)
-			}
-		}
+	if failedCount == 0 {
+		return
 	}
 
-	// Print errors
+	fmt.Println("\nFailed Plugin Chain Executions:")
+	for _, result := range results {
+		if !result.Correct && result.Error == "" {
+			fmt.Printf("  - Query: %s\n", truncateString(result.Query, 70))
+			fmt.Printf("    Expected PII Block: %v, Actual: %v\n", result.ExpectPIIBlock, result.PIIBlocked)
+			fmt.Printf("    PII Detected: %s\n", result.PIIDetected)
+			fmt.Printf("    Status Code: %d\n", result.StatusCode)
+		}
+	}
+}
+
+// printPluginChainErrors prints cases that failed with a request error.
+func printPluginChainErrors(results []PluginChainResult) {
 	errorCount := 0
 	for _, result := range results {
 		if result.Error != "" {
 			errorCount++
 		}
 	}
-
-	if errorCount > 0 {
-		fmt.Println("\nErrors:")
-		for _, result := range results {
-			if result.Error != "" {
-				fmt.Printf("  - Query: %s\n", truncateString(result.Query, 70))
-				fmt.Printf("    Error: %s\n", result.Error)
-			}
-		}
+	if errorCount == 0 {
+		return
 	}
 
-	fmt.Println(separator + "\n")
+	fmt.Println("\nErrors:")
+	for _, result := range results {
+		if result.Error != "" {
+			fmt.Printf("  - Query: %s\n", truncateString(result.Query, 70))
+			fmt.Printf("    Error: %s\n", result.Error)
+		}
+	}
 }

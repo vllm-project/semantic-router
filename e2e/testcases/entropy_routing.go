@@ -165,7 +165,7 @@ func testSingleEntropyRouting(ctx context.Context, testCase EntropyRoutingCase, 
 		MaxConfidence:       testCase.MaxConfidence,
 	}
 
-	response, err := sendLocalChatCompletion(ctx, localPort, "MoM", testCase.Query, 30*time.Second, true)
+	response, err := sendLocalChatCompletion(ctx, localPort, "MoM", testCase.Query, 30*time.Second)
 	if err != nil {
 		result.Error = err.Error()
 		return result

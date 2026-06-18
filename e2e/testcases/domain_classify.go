@@ -203,12 +203,19 @@ func printDomainClassifyResults(results []ClassificationResult, totalTests, corr
 	fmt.Printf("Accuracy Rate: %.2f%%\n", accuracy)
 	fmt.Println(separator)
 
-	// Group results by category
+	printDomainCategoryStats(results)
+	printDomainFailedClassifications(results)
+	printDomainErrors(results)
+
+	fmt.Println(separator + "\n")
+}
+
+// printDomainCategoryStats prints the per-category correct/total breakdown.
+func printDomainCategoryStats(results []ClassificationResult) {
 	categoryStats := make(map[string]struct {
 		total   int
 		correct int
 	})
-
 	for _, result := range results {
 		stats := categoryStats[result.ExpectedCategory]
 		stats.total++
@@ -218,50 +225,54 @@ func printDomainClassifyResults(results []ClassificationResult, totalTests, corr
 		categoryStats[result.ExpectedCategory] = stats
 	}
 
-	// Print per-category results
 	fmt.Println("\nPer-Category Results:")
 	for category, stats := range categoryStats {
 		categoryAccuracy := float64(stats.correct) / float64(stats.total) * 100
 		fmt.Printf("  - %-20s: %d/%d (%.2f%%)\n", category, stats.correct, stats.total, categoryAccuracy)
 	}
+}
 
-	// Print failed cases
+// printDomainFailedClassifications prints cases that returned a wrong category
+// (excluding request errors).
+func printDomainFailedClassifications(results []ClassificationResult) {
 	failedCount := 0
 	for _, result := range results {
 		if !result.Correct && result.Error == "" {
 			failedCount++
 		}
 	}
-
-	if failedCount > 0 {
-		fmt.Println("\nFailed Classifications:")
-		for _, result := range results {
-			if !result.Correct && result.Error == "" {
-				fmt.Printf("  - Question: %s\n", result.Question)
-				fmt.Printf("    Expected Category: %s\n", result.ExpectedCategory)
-				fmt.Printf("    Actual Category:   %s\n", result.ActualCategory)
-				fmt.Printf("    Actual Reasoning:  %s\n", result.ActualReasoning)
-			}
-		}
+	if failedCount == 0 {
+		return
 	}
 
-	// Print errors
+	fmt.Println("\nFailed Classifications:")
+	for _, result := range results {
+		if !result.Correct && result.Error == "" {
+			fmt.Printf("  - Question: %s\n", result.Question)
+			fmt.Printf("    Expected Category: %s\n", result.ExpectedCategory)
+			fmt.Printf("    Actual Category:   %s\n", result.ActualCategory)
+			fmt.Printf("    Actual Reasoning:  %s\n", result.ActualReasoning)
+		}
+	}
+}
+
+// printDomainErrors prints cases that failed with a request error.
+func printDomainErrors(results []ClassificationResult) {
 	errorCount := 0
 	for _, result := range results {
 		if result.Error != "" {
 			errorCount++
 		}
 	}
-
-	if errorCount > 0 {
-		fmt.Println("\nErrors:")
-		for _, result := range results {
-			if result.Error != "" {
-				fmt.Printf("  - Question: %s\n", result.Question)
-				fmt.Printf("    Error: %s\n", result.Error)
-			}
-		}
+	if errorCount == 0 {
+		return
 	}
 
-	fmt.Println(separator + "\n")
+	fmt.Println("\nErrors:")
+	for _, result := range results {
+		if result.Error != "" {
+			fmt.Printf("  - Question: %s\n", result.Question)
+			fmt.Printf("    Error: %s\n", result.Error)
+		}
+	}
 }
