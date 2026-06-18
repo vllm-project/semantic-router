@@ -144,20 +144,6 @@ export const newContributorsSinceRelease = {
     },
     {
       "rank": 7,
-      "name": "刘启灏",
-      "login": "BruceLoveDecimal",
-      "avatarLogin": "BruceLoveDecimal",
-      "avatarUrl": "https://avatars.githubusercontent.com/u/39156883?v=4",
-      "avatarSeed": "liuqihao",
-      "key": "github:brucelovedecimal",
-      "commits": 7,
-      "share": 0.0372,
-      "firstCommitDate": "2026-04-15",
-      "latestCommitDate": "2026-04-29",
-      "isNewContributorSinceRelease": true
-    },
-    {
-      "rank": 8,
       "name": "siloteemu",
       "login": "siloteemu",
       "avatarLogin": "siloteemu",
@@ -168,6 +154,20 @@ export const newContributorsSinceRelease = {
       "share": 0.0372,
       "firstCommitDate": "2026-05-27",
       "latestCommitDate": "2026-06-03",
+      "isNewContributorSinceRelease": true
+    },
+    {
+      "rank": 8,
+      "name": "刘启灏",
+      "login": "BruceLoveDecimal",
+      "avatarLogin": "BruceLoveDecimal",
+      "avatarUrl": "https://avatars.githubusercontent.com/u/39156883?v=4",
+      "avatarSeed": "liuqihao",
+      "key": "github:brucelovedecimal",
+      "commits": 7,
+      "share": 0.0372,
+      "firstCommitDate": "2026-04-15",
+      "latestCommitDate": "2026-04-29",
       "isNewContributorSinceRelease": true
     },
     {
@@ -1177,20 +1177,6 @@ export const contributorRankData = {
       },
       {
         "rank": 11,
-        "name": "刘启灏",
-        "login": "BruceLoveDecimal",
-        "avatarLogin": "BruceLoveDecimal",
-        "avatarUrl": "https://avatars.githubusercontent.com/u/39156883?v=4",
-        "avatarSeed": "liuqihao",
-        "key": "github:brucelovedecimal",
-        "commits": 7,
-        "share": 0.0197,
-        "firstCommitDate": "2026-04-15",
-        "latestCommitDate": "2026-04-29",
-        "isNewContributorSinceRelease": true
-      },
-      {
-        "rank": 12,
         "name": "siloteemu",
         "login": "siloteemu",
         "avatarLogin": "siloteemu",
@@ -1204,7 +1190,7 @@ export const contributorRankData = {
         "isNewContributorSinceRelease": true
       },
       {
-        "rank": 13,
+        "rank": 12,
         "name": "Yehudit",
         "login": "yehuditkerido",
         "avatarLogin": "yehuditkerido",
@@ -1216,6 +1202,20 @@ export const contributorRankData = {
         "firstCommitDate": "2026-03-12",
         "latestCommitDate": "2026-04-14",
         "isNewContributorSinceRelease": false
+      },
+      {
+        "rank": 13,
+        "name": "刘启灏",
+        "login": "BruceLoveDecimal",
+        "avatarLogin": "BruceLoveDecimal",
+        "avatarUrl": "https://avatars.githubusercontent.com/u/39156883?v=4",
+        "avatarSeed": "liuqihao",
+        "key": "github:brucelovedecimal",
+        "commits": 7,
+        "share": 0.0197,
+        "firstCommitDate": "2026-04-15",
+        "latestCommitDate": "2026-04-29",
+        "isNewContributorSinceRelease": true
       },
       {
         "rank": 14,
@@ -2307,20 +2307,6 @@ export const contributorRankData = {
       },
       {
         "rank": 23,
-        "name": "杨朱 · Kiki",
-        "login": "carlory",
-        "avatarLogin": "carlory",
-        "avatarUrl": "https://avatars.githubusercontent.com/u/28390961?v=4",
-        "avatarSeed": "carlory",
-        "key": "github:carlory",
-        "commits": 3,
-        "share": 0.0098,
-        "firstCommitDate": "2026-01-13",
-        "latestCommitDate": "2026-01-13",
-        "isNewContributorSinceRelease": false
-      },
-      {
-        "rank": 24,
         "name": "Avishek Goswami",
         "login": "GOavi101",
         "avatarLogin": "GOavi101",
@@ -2334,7 +2320,7 @@ export const contributorRankData = {
         "isNewContributorSinceRelease": true
       },
       {
-        "rank": 25,
+        "rank": 24,
         "name": "cryo-zd",
         "login": "cryo-zd",
         "avatarLogin": "cryo-zd",
@@ -2348,7 +2334,7 @@ export const contributorRankData = {
         "isNewContributorSinceRelease": false
       },
       {
-        "rank": 26,
+        "rank": 25,
         "name": "yuluo-yx",
         "login": "yuluo-yx",
         "avatarLogin": "yuluo-yx",
@@ -2359,6 +2345,20 @@ export const contributorRankData = {
         "share": 0.0098,
         "firstCommitDate": "2026-01-05",
         "latestCommitDate": "2026-01-28",
+        "isNewContributorSinceRelease": false
+      },
+      {
+        "rank": 26,
+        "name": "杨朱 · Kiki",
+        "login": "carlory",
+        "avatarLogin": "carlory",
+        "avatarUrl": "https://avatars.githubusercontent.com/u/28390961?v=4",
+        "avatarSeed": "carlory",
+        "key": "github:carlory",
+        "commits": 3,
+        "share": 0.0098,
+        "firstCommitDate": "2026-01-13",
+        "latestCommitDate": "2026-01-13",
         "isNewContributorSinceRelease": false
       },
       {
@@ -2767,20 +2767,6 @@ export const contributorRankData = {
       },
       {
         "rank": 15,
-        "name": "杨朱 · Kiki",
-        "login": "carlory",
-        "avatarLogin": "carlory",
-        "avatarUrl": "https://avatars.githubusercontent.com/u/28390961?v=4",
-        "avatarSeed": "carlory",
-        "key": "github:carlory",
-        "commits": 8,
-        "share": 0.0115,
-        "firstCommitDate": "2025-10-17",
-        "latestCommitDate": "2025-11-17",
-        "isNewContributorSinceRelease": true
-      },
-      {
-        "rank": 16,
         "name": "Sanjeev Rampal",
         "login": "srampal",
         "avatarLogin": "srampal",
@@ -2791,6 +2777,20 @@ export const contributorRankData = {
         "share": 0.0115,
         "firstCommitDate": "2025-08-23",
         "latestCommitDate": "2025-11-22",
+        "isNewContributorSinceRelease": true
+      },
+      {
+        "rank": 16,
+        "name": "杨朱 · Kiki",
+        "login": "carlory",
+        "avatarLogin": "carlory",
+        "avatarUrl": "https://avatars.githubusercontent.com/u/28390961?v=4",
+        "avatarSeed": "carlory",
+        "key": "github:carlory",
+        "commits": 8,
+        "share": 0.0115,
+        "firstCommitDate": "2025-10-17",
+        "latestCommitDate": "2025-11-17",
         "isNewContributorSinceRelease": true
       },
       {
@@ -3592,20 +3592,6 @@ export const contributorRankData = {
       },
       {
         "rank": 23,
-        "name": "杨朱 · Kiki",
-        "login": "carlory",
-        "avatarLogin": "carlory",
-        "avatarUrl": "https://avatars.githubusercontent.com/u/28390961?v=4",
-        "avatarSeed": "carlory",
-        "key": "github:carlory",
-        "commits": 11,
-        "share": 0.0077,
-        "firstCommitDate": "2025-10-17",
-        "latestCommitDate": "2026-01-13",
-        "isNewContributorSinceRelease": true
-      },
-      {
-        "rank": 24,
         "name": "henschwartz",
         "login": "henschwartz",
         "avatarLogin": "henschwartz",
@@ -3619,7 +3605,7 @@ export const contributorRankData = {
         "isNewContributorSinceRelease": true
       },
       {
-        "rank": 25,
+        "rank": 24,
         "name": "Yue Zhu",
         "login": "yuezhu1",
         "avatarLogin": "yuezhu1",
@@ -3630,6 +3616,20 @@ export const contributorRankData = {
         "share": 0.0077,
         "firstCommitDate": "2025-08-29",
         "latestCommitDate": "2025-12-10",
+        "isNewContributorSinceRelease": true
+      },
+      {
+        "rank": 25,
+        "name": "杨朱 · Kiki",
+        "login": "carlory",
+        "avatarLogin": "carlory",
+        "avatarUrl": "https://avatars.githubusercontent.com/u/28390961?v=4",
+        "avatarSeed": "carlory",
+        "key": "github:carlory",
+        "commits": 11,
+        "share": 0.0077,
+        "firstCommitDate": "2025-10-17",
+        "latestCommitDate": "2026-01-13",
         "isNewContributorSinceRelease": true
       },
       {
@@ -3746,20 +3746,6 @@ export const contributorRankData = {
       },
       {
         "rank": 34,
-        "name": "刘启灏",
-        "login": "BruceLoveDecimal",
-        "avatarLogin": "BruceLoveDecimal",
-        "avatarUrl": "https://avatars.githubusercontent.com/u/39156883?v=4",
-        "avatarSeed": "liuqihao",
-        "key": "github:brucelovedecimal",
-        "commits": 7,
-        "share": 0.0049,
-        "firstCommitDate": "2026-04-15",
-        "latestCommitDate": "2026-04-29",
-        "isNewContributorSinceRelease": true
-      },
-      {
-        "rank": 35,
         "name": "Marina Koushnir",
         "login": "mkoushni",
         "avatarLogin": "mkoushni",
@@ -3770,6 +3756,20 @@ export const contributorRankData = {
         "share": 0.0049,
         "firstCommitDate": "2026-02-04",
         "latestCommitDate": "2026-04-16",
+        "isNewContributorSinceRelease": true
+      },
+      {
+        "rank": 35,
+        "name": "刘启灏",
+        "login": "BruceLoveDecimal",
+        "avatarLogin": "BruceLoveDecimal",
+        "avatarUrl": "https://avatars.githubusercontent.com/u/39156883?v=4",
+        "avatarSeed": "liuqihao",
+        "key": "github:brucelovedecimal",
+        "commits": 7,
+        "share": 0.0049,
+        "firstCommitDate": "2026-04-15",
+        "latestCommitDate": "2026-04-29",
         "isNewContributorSinceRelease": true
       },
       {
