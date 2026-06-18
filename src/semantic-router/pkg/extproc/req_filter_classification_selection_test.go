@@ -161,6 +161,19 @@ func TestRouterLearningSessionAwareKeepsCurrentModelAcrossDecisionCandidates(t *
 	if ctx.VSRLearningPolicy["action"] != "hard_lock" {
 		t.Fatalf("expected hard_lock learning action, got %#v", ctx.VSRLearningPolicy)
 	}
+	if _, ok := ctx.VSRLearningPolicy["session_id"]; ok {
+		t.Fatalf("learning diagnostics must not expose raw session_id: %#v", ctx.VSRLearningPolicy)
+	}
+	if _, ok := ctx.VSRLearningPolicy["conversation_id"]; ok {
+		t.Fatalf("learning diagnostics must not expose raw conversation_id: %#v", ctx.VSRLearningPolicy)
+	}
+	sessionIdentity := learningIdentityPart(t, ctx.VSRLearningPolicy, "session")
+	if sessionIdentity["status"] != "present" || sessionIdentity["source"] != "header:x-session-id" {
+		t.Fatalf("expected hashed session identity diagnostics, got %#v", sessionIdentity)
+	}
+	if sessionIdentity["hash"] == "session-a" || sessionIdentity["hash"] == "" {
+		t.Fatalf("expected non-raw session identity hash, got %#v", sessionIdentity)
+	}
 	if ctx.VSRLearningSessionID != "session-a/conversation-a" {
 		t.Fatalf("expected conversation memory key, got %q", ctx.VSRLearningSessionID)
 	}
@@ -229,6 +242,10 @@ func TestRouterLearningSessionAwareSessionScopeProtectsAcrossConversations(t *te
 	}
 	if ctx.VSRLearningPolicy["reason"] != "session_scope_protect" {
 		t.Fatalf("expected session scope protect reason, got %#v", ctx.VSRLearningPolicy)
+	}
+	conversationIdentity := learningIdentityPart(t, ctx.VSRLearningPolicy, "conversation")
+	if conversationIdentity["status"] != "present" || conversationIdentity["required"] != false {
+		t.Fatalf("expected optional conversation identity for session scope, got %#v", conversationIdentity)
 	}
 }
 
@@ -335,6 +352,10 @@ func TestRouterLearningSessionAwareMissingIdentityNoOps(t *testing.T) {
 		ctx.VSRLearningPolicy["reason"] != "identity_missing" {
 		t.Fatalf("expected identity_missing noop policy, got %#v", ctx.VSRLearningPolicy)
 	}
+	conversationIdentity := learningIdentityPart(t, ctx.VSRLearningPolicy, "conversation")
+	if conversationIdentity["status"] != "missing" || conversationIdentity["required"] != true {
+		t.Fatalf("expected missing required conversation identity diagnostics, got %#v", conversationIdentity)
+	}
 }
 
 func TestRouterLearningSessionAwareBypassLeavesBaseDecisionFinal(t *testing.T) {
@@ -371,6 +392,9 @@ func TestRouterLearningSessionAwareBypassLeavesBaseDecisionFinal(t *testing.T) {
 	}
 	if ctx.VSRLearningPolicy["action"] != "bypass" {
 		t.Fatalf("expected bypass learning policy, got %#v", ctx.VSRLearningPolicy)
+	}
+	if ctx.VSRLearningPolicy["scope"] != config.RouterLearningScopeConversation {
+		t.Fatalf("expected bypass learning policy to include scope, got %#v", ctx.VSRLearningPolicy)
 	}
 }
 
@@ -598,4 +622,17 @@ func routerLearningRequestContext(sessionID string, conversationID string) *Requ
 		},
 		SessionID: sessionID,
 	}
+}
+
+func learningIdentityPart(t *testing.T, policy map[string]interface{}, name string) map[string]interface{} {
+	t.Helper()
+	identity, ok := policy["identity"].(map[string]interface{})
+	if !ok {
+		t.Fatalf("expected identity diagnostics in learning policy, got %#v", policy)
+	}
+	part, ok := identity[name].(map[string]interface{})
+	if !ok {
+		t.Fatalf("expected %s identity diagnostics, got %#v", name, identity)
+	}
+	return part
 }

@@ -172,6 +172,18 @@ Router Replay stores the full structured trace:
         "reason": "stay_has_best_adjusted_score",
         "base_selected_model": "small-model",
         "selected_model": "frontier-model",
+        "identity": {
+          "session": {
+            "source": "header:x-session-id",
+            "status": "present",
+            "hash": "4f2a8c0e9b7d3411"
+          },
+          "conversation": {
+            "source": "header:x-conversation-id",
+            "status": "present",
+            "hash": "0bb97f4a3c812efe"
+          }
+        },
         "cache_warmth": 0.91,
         "memory_prompt_tokens": 3840
       }
@@ -182,8 +194,8 @@ Router Replay stores the full structured trace:
 
 Use the replay record when you need full debugging detail: base proposal,
 final model, protected current model, candidate scores, cache warmth, memory
-token counters, phase, and hard-lock state. The response header only carries
-the bounded summary.
+token counters, hashed identity diagnostics, phase, and hard-lock state. The
+response header only carries the bounded summary.
 
 `decision.algorithm.type=session_aware` is removed from the public config
 contract. If a route needs an explicit base selector, configure a normal

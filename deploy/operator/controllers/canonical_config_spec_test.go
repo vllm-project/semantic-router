@@ -118,7 +118,7 @@ func TestBuildCanonicalConfigAppliesCanonicalRoutingOverride(t *testing.T) {
 					},
 					"decisions": [
 						{
-							"name": "agentic_session_route",
+							"name": "agentic_workflow_route",
 							"rules": {
 								"operator": "AND",
 								"conditions": [
@@ -132,13 +132,12 @@ func TestBuildCanonicalConfigAppliesCanonicalRoutingOverride(t *testing.T) {
 								{"model": "deep-model"}
 							],
 							"algorithm": {
-								"type": "session_aware",
-								"session_aware": {
-									"base_method": "hybrid",
-									"tool_loop_hard_lock": true,
-									"context_portability_hard_lock": true,
-									"prefix_cache_weight": 0.2,
-									"handoff_penalty_weight": 1.0
+								"type": "hybrid",
+								"hybrid": {
+									"elo_weight": 0.4,
+									"router_dc_weight": 0.4,
+									"automix_weight": 0.2,
+									"normalize_scores": true
 								}
 							}
 						}
@@ -156,14 +155,14 @@ func TestBuildCanonicalConfigAppliesCanonicalRoutingOverride(t *testing.T) {
 	assertCanonicalV03RoutingConfig(t, canonical)
 }
 
-func TestBuildCanonicalConfigPreservesLegacyDecisionAlgorithm(t *testing.T) {
+func TestBuildCanonicalConfigPreservesDecisionAlgorithm(t *testing.T) {
 	r := &SemanticRouterReconciler{}
 	sr := &vllmv1alpha1.SemanticRouter{
 		Spec: vllmv1alpha1.SemanticRouterSpec{
 			Config: vllmv1alpha1.ConfigSpec{
 				Decisions: []vllmv1alpha1.DecisionConfig{
 					{
-						Name: "legacy-session-route",
+						Name: "hybrid-route",
 						Rules: vllmv1alpha1.RuleCombinationConfig{
 							Operator: "AND",
 							Conditions: []vllmv1alpha1.RuleConditionConfig{
@@ -175,10 +174,12 @@ func TestBuildCanonicalConfigPreservesLegacyDecisionAlgorithm(t *testing.T) {
 							{Model: "deep-model"},
 						},
 						Algorithm: rawCanonicalRoutingJSON(t, `{
-							"type": "session_aware",
-							"session_aware": {
-								"base_method": "hybrid",
-								"tool_loop_hard_lock": true
+							"type": "hybrid",
+							"hybrid": {
+								"elo_weight": 0.4,
+								"router_dc_weight": 0.4,
+								"automix_weight": 0.2,
+								"normalize_scores": true
 							}
 						}`),
 					},
@@ -196,11 +197,11 @@ func TestBuildCanonicalConfigPreservesLegacyDecisionAlgorithm(t *testing.T) {
 		t.Fatalf("expected one decision, got %#v", canonical.Routing.Decisions)
 	}
 	algorithm := canonical.Routing.Decisions[0].Algorithm
-	if algorithm == nil || algorithm.Type != "session_aware" || algorithm.SessionAware == nil {
-		t.Fatalf("expected session_aware algorithm to survive typed decision conversion, got %#v", algorithm)
+	if algorithm == nil || algorithm.Type != "hybrid" || algorithm.Hybrid == nil {
+		t.Fatalf("expected hybrid algorithm to survive typed decision conversion, got %#v", algorithm)
 	}
-	if algorithm.SessionAware.ToolLoopHardLock == nil || !*algorithm.SessionAware.ToolLoopHardLock {
-		t.Fatalf("expected tool_loop_hard_lock to survive typed decision conversion, got %#v", algorithm.SessionAware)
+	if algorithm.Hybrid.EloWeight != 0.4 || !algorithm.Hybrid.NormalizeScores {
+		t.Fatalf("expected hybrid fields to survive typed decision conversion, got %#v", algorithm.Hybrid)
 	}
 	if canonical.Routing.Decisions[0].Rules.Conditions[0].Type != "event" {
 		t.Fatalf("expected event condition to survive typed decision conversion, got %#v", canonical.Routing.Decisions[0].Rules)
@@ -234,7 +235,7 @@ func assertCanonicalV03RoutingConfig(t *testing.T, canonical *routerconfig.Canon
 	assertCanonicalConversationSignal(t, canonical.Routing.Signals.Conversation)
 	assertCanonicalEventSignal(t, canonical.Routing.Signals.EventRules)
 	assertCanonicalProjectionConfig(t, canonical.Routing.Projections)
-	assertCanonicalSessionAwareDecision(t, canonical.Routing.Decisions)
+	assertCanonicalAgenticWorkflowDecision(t, canonical.Routing.Decisions)
 }
 
 func assertCanonicalConversationSignal(t *testing.T, signals []routerconfig.ConversationRule) {
@@ -275,7 +276,7 @@ func assertCanonicalProjectionConfig(t *testing.T, projections routerconfig.Cano
 	}
 }
 
-func assertCanonicalSessionAwareDecision(t *testing.T, decisions []routerconfig.Decision) {
+func assertCanonicalAgenticWorkflowDecision(t *testing.T, decisions []routerconfig.Decision) {
 	t.Helper()
 
 	if len(decisions) != 1 {
@@ -290,11 +291,11 @@ func assertCanonicalSessionAwareDecision(t *testing.T, decisions []routerconfig.
 		decision.Rules.Conditions[2].Type != "projection" {
 		t.Fatalf("unexpected decision condition types: %#v", decision.Rules.Conditions)
 	}
-	if decision.Algorithm == nil || decision.Algorithm.Type != "session_aware" || decision.Algorithm.SessionAware == nil {
-		t.Fatalf("expected session_aware algorithm, got %#v", decision.Algorithm)
+	if decision.Algorithm == nil || decision.Algorithm.Type != "hybrid" || decision.Algorithm.Hybrid == nil {
+		t.Fatalf("expected hybrid algorithm, got %#v", decision.Algorithm)
 	}
-	if decision.Algorithm.SessionAware.ToolLoopHardLock == nil || !*decision.Algorithm.SessionAware.ToolLoopHardLock {
-		t.Fatalf("expected tool loop hard lock, got %#v", decision.Algorithm.SessionAware)
+	if decision.Algorithm.Hybrid.EloWeight != 0.4 || !decision.Algorithm.Hybrid.NormalizeScores {
+		t.Fatalf("expected hybrid fields, got %#v", decision.Algorithm.Hybrid)
 	}
 }
 

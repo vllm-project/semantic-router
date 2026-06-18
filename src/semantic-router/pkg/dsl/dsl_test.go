@@ -1308,6 +1308,27 @@ ROUTE test {
 	}
 }
 
+func TestNegativeCompileRemovedSessionAwareAlgorithm(t *testing.T) {
+	input := `
+SIGNAL domain test { description: "test" }
+ROUTE test {
+  PRIORITY 1
+  WHEN domain("test")
+  MODEL "m:1b"
+  ALGORITHM session_aware {
+    base_method: "hybrid"
+  }
+}
+`
+	_, errs := Compile(input)
+	if len(errs) == 0 {
+		t.Fatal("expected compile error for removed session_aware algorithm, got none")
+	}
+	if !strings.Contains(errs[0].Error(), `unknown algorithm type "session_aware"`) {
+		t.Fatalf("unexpected error for removed session_aware algorithm: %v", errs)
+	}
+}
+
 func TestNegativeParseErrors(t *testing.T) {
 	tests := []struct {
 		name      string
@@ -1609,28 +1630,6 @@ func TestCompileAllAlgorithmTypes(t *testing.T) {
 				}
 			},
 		},
-		{
-			name:     "session_aware",
-			algoType: "session_aware",
-			body:     `base_method: "hybrid" idle_timeout_seconds: 600 min_turns_before_switch: 2 switch_margin: 0.12 stay_bias: 0.2 tool_loop_hard_lock: true context_portability_hard_lock: false decision_drift_reset: true max_cache_cost_multiplier: 1.5 remaining_turn_prior_horizon: 6`,
-			verify: func(t *testing.T, algo *config.AlgorithmConfig) {
-				if algo.SessionAware == nil {
-					t.Fatal("expected session_aware config")
-				}
-				if algo.SessionAware.BaseMethod != "hybrid" {
-					t.Errorf("base_method = %q, want hybrid", algo.SessionAware.BaseMethod)
-				}
-				if algo.SessionAware.IdleTimeoutSeconds == nil || *algo.SessionAware.IdleTimeoutSeconds != 600 {
-					t.Fatalf("idle_timeout_seconds = %#v, want 600", algo.SessionAware.IdleTimeoutSeconds)
-				}
-				if algo.SessionAware.ContextPortabilityHardLock == nil || *algo.SessionAware.ContextPortabilityHardLock {
-					t.Fatalf("context_portability_hard_lock = %#v, want false", algo.SessionAware.ContextPortabilityHardLock)
-				}
-				if algo.SessionAware.MaxCacheCostMultiplier == nil || *algo.SessionAware.MaxCacheCostMultiplier != 1.5 {
-					t.Fatalf("max_cache_cost_multiplier = %#v, want 1.5", algo.SessionAware.MaxCacheCostMultiplier)
-				}
-			},
-		},
 	}
 
 	for _, tc := range algoDSLs {
@@ -1665,12 +1664,6 @@ ROUTE test {
 }
 
 func TestDecompileCurrentAlgorithmSurfaceRoundTrips(t *testing.T) {
-	falseValue := false
-	trueValue := true
-	idleTimeout := 600
-	stayBias := 0.2
-	cacheMultiplier := 1.5
-
 	cfg := &config.RouterConfig{
 		IntelligentRouting: config.IntelligentRouting{Decisions: []config.Decision{
 			{
@@ -1699,24 +1692,6 @@ func TestDecompileCurrentAlgorithmSurfaceRoundTrips(t *testing.T) {
 					},
 				},
 			},
-			{
-				Name: "session-aware-route",
-				ModelRefs: []config.ModelRef{
-					{Model: "m1"},
-					{Model: "m2"},
-				},
-				Algorithm: &config.AlgorithmConfig{
-					Type: "session_aware",
-					SessionAware: &config.SessionAwareSelectionConfig{
-						BaseMethod:                 "hybrid",
-						IdleTimeoutSeconds:         &idleTimeout,
-						StayBias:                   &stayBias,
-						ToolLoopHardLock:           &trueValue,
-						ContextPortabilityHardLock: &falseValue,
-						MaxCacheCostMultiplier:     &cacheMultiplier,
-					},
-				},
-			},
 		}},
 	}
 
@@ -1728,9 +1703,7 @@ func TestDecompileCurrentAlgorithmSurfaceRoundTrips(t *testing.T) {
 		"ALGORITHM multi_factor",
 		"latency_percentile: 99",
 		"weights:",
-		"ALGORITHM session_aware",
-		"context_portability_hard_lock: false",
-		"max_cache_cost_multiplier: 1.5",
+		"on_no_candidates: \"fail\"",
 	} {
 		if !strings.Contains(dslText, fragment) {
 			t.Fatalf("decompiled DSL missing %q:\n%s", fragment, dslText)
@@ -1752,9 +1725,8 @@ func TestDecompileCurrentAlgorithmSurfaceRoundTrips(t *testing.T) {
 	if multiFactor == nil || multiFactor.Weights == nil || multiFactor.Weights.Quality != 0.4 {
 		t.Fatalf("round-trip multi_factor weights = %#v", multiFactor)
 	}
-	sessionAware := byName["session-aware-route"].SessionAware
-	if sessionAware == nil || sessionAware.ContextPortabilityHardLock == nil || *sessionAware.ContextPortabilityHardLock {
-		t.Fatalf("round-trip session_aware context_portability_hard_lock = %#v", sessionAware)
+	if byName["multi-factor-route"].MultiFactor.SLO.MaxInflight != 20 || byName["multi-factor-route"].MultiFactor.OnNoCandidates != "fail" {
+		t.Fatalf("round-trip multi_factor details = %#v", byName["multi-factor-route"].MultiFactor)
 	}
 }
 

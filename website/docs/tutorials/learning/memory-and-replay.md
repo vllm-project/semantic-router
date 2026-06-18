@@ -48,6 +48,18 @@ Learning diagnostics are written into replay records when replay is enabled:
       "session_aware": {
         "action": "stay",
         "reason": "stay_has_best_adjusted_score",
+        "identity": {
+          "session": {
+            "source": "header:x-session-id",
+            "status": "present",
+            "hash": "4f2a8c0e9b7d3411"
+          },
+          "conversation": {
+            "source": "header:x-conversation-id",
+            "status": "present",
+            "hash": "0bb97f4a3c812efe"
+          }
+        },
         "memory_cached_tokens": 2048,
         "last_cache_accounting_source": "backend_reported"
       }

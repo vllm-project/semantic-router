@@ -2,7 +2,12 @@
 
 ## Status
 
-Proposal.
+Accepted. The first implementation covers session-aware Router Learning with
+conversation/session scopes, decision-level `apply` / `observe` / `bypass`,
+generic learning headers, replay diagnostics, and the AMD agentic routing
+recipe. Broader Router Memory features such as public memory configuration,
+replay-derived priors, multi-adaptation composition, and migration of other
+learning-style algorithms remain future work.
 
 ## Summary
 
@@ -70,6 +75,25 @@ adaptations:
 
 The default decision behavior is `mode: apply`.
 
+## Implementation Status
+
+| Area | Status | Notes |
+| --- | --- | --- |
+| Global `router.learning.adaptations.session_aware` API | Implemented | Session-aware routing moved out of `algorithm.type=session_aware`. |
+| Decision-level `adaptations.session_aware` | Implemented | Supports `apply`, `observe`, `bypass`, sparse scope overrides, and tuning overrides. |
+| Conversation and session identity scopes | Implemented | `conversation` protects one run; `session` protects across runs until idle release. |
+| Online session/conversation state | Implemented | First implementation uses low-latency in-process router state and single-replica assumptions. |
+| Generic learning response headers | Implemented | Uses `x-vsr-learning-methods`, `x-vsr-learning-actions`, `x-vsr-learning-scopes`, `x-vsr-learning-reasons`, and `x-vsr-learning-modes`. |
+| Replay learning diagnostics | Implemented, partial | Records method/action/reason/scope, base/final model evidence, cache/cost evidence, and hashed identity diagnostics. The exact replay schema can evolve. |
+| Clean break from old public session-aware algorithm config | Implemented | Old `algorithm.type=session_aware`, `algorithm.session_aware`, `model_switch_gate`, and public `lookup_tables` config are rejected instead of rewritten. |
+| AMD agentic routing recipe and guide | Implemented | Recipe uses session-aware Router Learning plus decision bypasses for hard privacy/security boundaries. |
+| Public `router.learning.memory` config | Future work | Online state is internal today; no public memory backend, TTL, or storage controls are exposed. |
+| Replay-derived materialized priors | Future work | Lookup tables remain a roadmap concept under Router Learning memory, not a supported public API. |
+| Additional adaptations and composition | Future work | Only `session_aware` is implemented; bandit, personalization, provider health, and cost optimizer need separate designs. |
+| Elo / RL / GMT migration | Future work | These remain decision algorithms in this implementation. |
+| Distributed memory consistency | Future work | Multi-replica memory semantics, storage hot-path policy, and sticky routing are out of scope. |
+| Full eval harness | Future work | Unit and recipe validation exist; broader cost/cache/latency/replay-quality eval belongs in the external eval harness. |
+
 ## Background
 
 The AMD agentic routing recipe demonstrates a common production pattern:
@@ -81,9 +105,9 @@ The AMD agentic routing recipe demonstrates a common production pattern:
 - agent conversations should remain stable during tool loops and cache-heavy
   continuations
 
-The current recipe uses a synthetic `agentic_session_route` decision and
-`algorithm.type: session_aware` to attach this stability behavior. That works
-for a narrow demonstration, but it has the wrong abstraction boundary.
+An earlier recipe draft used a synthetic `agentic_session_route` decision and
+`algorithm.type: session_aware` to attach this stability behavior. That worked
+for a narrow demonstration, but it had the wrong abstraction boundary.
 
 An agentic conversation can move through multiple semantic decisions. A first
 turn may match `complex_code`, a follow-up tool result may match
@@ -969,11 +993,22 @@ The event log should include structured diagnostics:
         "mode": "apply",
         "scope": "conversation",
         "identity": {
-          "session_id": "hash:s-123",
-          "conversation_id": "hash:c-456",
-          "sources": {
-            "session": "header:x-session-id",
-            "conversation": "header:x-conversation-id"
+          "scope": "conversation",
+          "headers": {
+            "session": "x-session-id",
+            "conversation": "x-conversation-id"
+          },
+          "session": {
+            "source": "header:x-session-id",
+            "required": true,
+            "status": "present",
+            "hash": "4f2a8c0e9b7d3411"
+          },
+          "conversation": {
+            "source": "header:x-conversation-id",
+            "required": true,
+            "status": "present",
+            "hash": "0bb97f4a3c812efe"
           }
         },
         "base_model": "simple-model",
@@ -995,8 +1030,9 @@ The event log should include structured diagnostics:
 }
 ```
 
-Raw session and conversation identifiers should be treated as operationally
-sensitive. The event log should support hashing or redaction.
+Raw session and conversation identifiers are operationally sensitive. Learning
+diagnostics should store source and status plus a bounded hash, not the raw
+identity values.
 
 ## Breaking Change and Migration
 

@@ -2,6 +2,8 @@ package extproc
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"fmt"
 	"strings"
 	"time"
@@ -49,10 +51,12 @@ func (s learningSelectionResult) Tier() selection.AlgorithmTier                {
 func (s learningSelectionResult) ExternalDependencies() []selection.Dependency { return nil }
 
 type sessionAwareLearningIdentity struct {
-	sessionID      string
-	conversationID string
-	memoryKey      string
-	scope          string
+	sessionID          string
+	conversationID     string
+	memoryKey          string
+	scope              string
+	sessionHeader      string
+	conversationHeader string
 }
 
 func (r *OpenAIRouter) applyRouterLearning(
@@ -86,20 +90,21 @@ func (r *OpenAIRouter) applySessionAwareLearning(
 
 	mode := sessionAwareAdaptationMode(ctx)
 	if mode == config.DecisionAdaptationModeBypass {
-		setSessionAwareLearningPolicy(ctx, mode, "bypass", "decision_bypass", "")
+		setSessionAwareLearningPolicy(ctx, sessionAwareCfg, mode, "bypass", "decision_bypass", sessionAwareCfg.EffectiveScope())
 		return selCtx, baseResult, selectedModelRef, false
 	}
 
 	identity, ok := r.sessionAwareLearningIdentity(ctx, sessionAwareCfg)
 	if !ok {
-		setSessionAwareLearningPolicy(ctx, mode, "noop", "identity_missing", sessionAwareCfg.EffectiveScope())
+		setSessionAwareLearningPolicy(ctx, sessionAwareCfg, mode, "noop", "identity_missing", sessionAwareCfg.EffectiveScope())
 		return selCtx, baseResult, selectedModelRef, false
 	}
 
 	learningCtx := r.learningSelectionContext(selCtx, ctx, identity)
 	r.addCurrentLearningCandidate(learningCtx, ctx)
 
-	if protectedResult, ok := sessionScopeProtectedResult(sessionAwareCfg, baseResult, learningCtx, identity); ok {
+	protectedResult, protected := sessionScopeProtectedResult(sessionAwareCfg, baseResult, learningCtx, identity)
+	if protected {
 		recordSessionAwareLearningPolicy(ctx, protectedResult, identity, mode)
 		if mode == config.DecisionAdaptationModeObserve {
 			return learningCtx, baseResult, selectedModelRef, true
@@ -199,7 +204,7 @@ func mergeSessionAwareLearningTuning(
 	return base
 }
 
-func setSessionAwareLearningPolicy(ctx *RequestContext, mode, action, reason, scope string) {
+func setSessionAwareLearningPolicy(ctx *RequestContext, cfg config.SessionAwareLearningConfig, mode, action, reason, scope string) {
 	policy := sessionAwareLearningPolicyMap(map[string]interface{}{
 		"adaptation": "session_aware",
 		"mode":       mode,
@@ -209,6 +214,14 @@ func setSessionAwareLearningPolicy(ctx *RequestContext, mode, action, reason, sc
 	if scope != "" {
 		policy["scope"] = scope
 	}
+	policy["identity"] = sessionAwareIdentityDiagnostics(
+		scope,
+		cfg.HeaderName("session"),
+		cfg.HeaderName("conversation"),
+		strings.TrimSpace(headerValueCI(ctx, cfg.HeaderName("session"))),
+		strings.TrimSpace(headerValueCI(ctx, cfg.HeaderName("conversation"))),
+		"",
+	)
 	ctx.VSRLearningPolicy = policy
 	ctx.VSRSessionPolicy = policy
 }
@@ -269,8 +282,10 @@ func (r *OpenAIRouter) sessionAwareLearningIdentity(
 	cfg config.SessionAwareLearningConfig,
 ) (sessionAwareLearningIdentity, bool) {
 	scope := cfg.EffectiveScope()
-	sessionID := strings.TrimSpace(headerValueCI(ctx, cfg.HeaderName("session")))
-	conversationID := strings.TrimSpace(headerValueCI(ctx, cfg.HeaderName("conversation")))
+	sessionHeader := cfg.HeaderName("session")
+	conversationHeader := cfg.HeaderName("conversation")
+	sessionID := strings.TrimSpace(headerValueCI(ctx, sessionHeader))
+	conversationID := strings.TrimSpace(headerValueCI(ctx, conversationHeader))
 	if sessionID == "" {
 		return sessionAwareLearningIdentity{}, false
 	}
@@ -282,10 +297,12 @@ func (r *OpenAIRouter) sessionAwareLearningIdentity(
 		memoryKey = fmt.Sprintf("%s/%s", sessionID, conversationID)
 	}
 	return sessionAwareLearningIdentity{
-		sessionID:      sessionID,
-		conversationID: conversationID,
-		memoryKey:      memoryKey,
-		scope:          scope,
+		sessionID:          sessionID,
+		conversationID:     conversationID,
+		memoryKey:          memoryKey,
+		scope:              scope,
+		sessionHeader:      sessionHeader,
+		conversationHeader: conversationHeader,
 	}, true
 }
 
@@ -483,13 +500,64 @@ func learningPolicyFromSessionAwareResult(
 	policy["adaptation"] = "session_aware"
 	policy["mode"] = mode
 	policy["scope"] = identity.scope
-	policy["session_id"] = identity.sessionID
-	policy["learning_session_id"] = identity.memoryKey
-	if identity.conversationID != "" {
-		policy["conversation_id"] = identity.conversationID
-	}
+	delete(policy, "session_id")
+	delete(policy, "user_id")
+	policy["identity"] = sessionAwareIdentityDiagnostics(
+		identity.scope,
+		identity.sessionHeader,
+		identity.conversationHeader,
+		identity.sessionID,
+		identity.conversationID,
+		identity.memoryKey,
+	)
 	annotateSessionAwareLearningAction(policy)
 	return sessionAwareLearningPolicyMap(policy)
+}
+
+func sessionAwareIdentityDiagnostics(
+	scope string,
+	sessionHeader string,
+	conversationHeader string,
+	sessionID string,
+	conversationID string,
+	memoryKey string,
+) map[string]interface{} {
+	conversationRequired := scope == config.RouterLearningScopeConversation
+	identity := map[string]interface{}{
+		"scope": scope,
+		"headers": map[string]interface{}{
+			"session":      sessionHeader,
+			"conversation": conversationHeader,
+		},
+		"session":      sessionAwareIdentityPart(sessionHeader, sessionID, true),
+		"conversation": sessionAwareIdentityPart(conversationHeader, conversationID, conversationRequired),
+	}
+	if memoryKey != "" {
+		identity["memory_key_hash"] = shortLearningIdentityHash(memoryKey)
+	}
+	return identity
+}
+
+func sessionAwareIdentityPart(headerName string, value string, required bool) map[string]interface{} {
+	status := "not_required"
+	if required {
+		status = "missing"
+	}
+	part := map[string]interface{}{
+		"source":   "header:" + headerName,
+		"required": required,
+		"status":   status,
+	}
+	if strings.TrimSpace(value) != "" {
+		part["status"] = "present"
+		part["hash"] = shortLearningIdentityHash(value)
+	}
+	return part
+}
+
+func shortLearningIdentityHash(value string) string {
+	sum := sha256.Sum256([]byte(value))
+	return hex.EncodeToString(sum[:])[:16]
 }
 
 func annotateSessionAwareLearningAction(policy map[string]interface{}) {
