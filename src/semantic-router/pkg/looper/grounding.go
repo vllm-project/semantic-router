@@ -3,8 +3,10 @@ package looper
 import (
 	"encoding/json"
 	"fmt"
+	"math"
 	"sort"
 	"strings"
+	"unicode/utf8"
 
 	"github.com/openai/openai-go"
 
@@ -121,6 +123,22 @@ func resolveGroundingReference(mode, contextText string) (useContext bool) {
 	}
 }
 
+// NLI input budgets. The underlying NLI encoder truncates its (premise [SEP]
+// hypothesis) input to ~512 tokens. Panel answers routinely run to thousands of
+// tokens, so a single document-vs-document call truncates the hypothesis away
+// entirely and the model — seeing only half of one answer — predicts "neutral"
+// for everything. To keep the hypothesis intact we score it sentence-by-sentence
+// against bounded windows of the premise (SummaC/AlignScore-style), taking each
+// hypothesis sentence's best-supporting premise window. Budgets are in runes
+// (~4 chars/token, kept well under the 512-token cap with room for both sides).
+const (
+	nliSingleCallBudget    = 1600 // premise+hypothesis below this -> one fast call
+	nliPremiseWindowChars  = 1200
+	nliHypSentenceMaxChars = 600
+	nliMaxHypSentences     = 16 // caps per-pair NLI calls (= sentences x windows)
+	nliMaxPremiseWindows   = 2
+)
+
 // scoreByPanel scores each response by how well its peers entail (vs contradict)
 // it — the panel as its own mutual reference.
 func scoreByPanel(panel []*ModelResponse, cfg fusionExecutionConfig) ([]groundingScore, error) {
@@ -144,11 +162,13 @@ func scoreByPanel(panel []*ModelResponse, cfg fusionExecutionConfig) ([]groundin
 			if i == j || p == nil {
 				continue
 			}
-			entail, contradict, err := groundingNLIClassify(p.Content, r.Content)
+			// Directional consistency: does peer p (premise) entail/contradict
+			// response r (hypothesis)?
+			entail, contradict, err := nliPairSignal(p.Content, r.Content)
 			if err != nil {
 				return nil, err
 			}
-			sum += float64(entail) - penalty*float64(contradict)
+			sum += entail - penalty*contradict
 			n++
 			if contradict > entail && contradict >= 0.5 {
 				flagged = append(flagged, p.Model)
@@ -163,6 +183,96 @@ func scoreByPanel(panel []*ModelResponse, cfg fusionExecutionConfig) ([]groundin
 		scores[i].FlaggedSpans = flagged
 	}
 	return scores, nil
+}
+
+// nliPairSignal returns the mean entailment and contradiction of premise toward
+// hypothesis. Short inputs use a single NLI call (preserving the cheap path);
+// long inputs are chunked so the hypothesis is never truncated away: each
+// hypothesis sentence is scored against every bounded premise window and credited
+// with its best-supporting window, then averaged over sentences.
+func nliPairSignal(premise, hypothesis string) (entail, contradict float64, err error) {
+	if runeLen(premise)+runeLen(hypothesis) <= nliSingleCallBudget {
+		e, c, err := groundingNLIClassify(premise, hypothesis)
+		return float64(e), float64(c), err
+	}
+
+	sentences := splitSentencesCapped(hypothesis, nliHypSentenceMaxChars, nliMaxHypSentences)
+	windows := chunkTextCapped(premise, nliPremiseWindowChars, nliMaxPremiseWindows)
+	if len(sentences) == 0 || len(windows) == 0 {
+		// Nothing usable to chunk; fall back to a single (truncated) call.
+		e, c, err := groundingNLIClassify(premise, hypothesis)
+		return float64(e), float64(c), err
+	}
+
+	var sumE, sumC float64
+	var n int
+	for _, s := range sentences {
+		bestSignal := math.Inf(-1)
+		var bestE, bestC float64
+		for _, w := range windows {
+			e, c, err := groundingNLIClassify(w, s)
+			if err != nil {
+				return 0, 0, err
+			}
+			if signal := float64(e) - float64(c); signal > bestSignal {
+				bestSignal, bestE, bestC = signal, float64(e), float64(c)
+			}
+		}
+		sumE += bestE
+		sumC += bestC
+		n++
+	}
+	if n == 0 {
+		return 0, 0, nil
+	}
+	return sumE / float64(n), sumC / float64(n), nil
+}
+
+// splitSentencesCapped splits text on sentence terminators / newlines, drops
+// trivial fragments, hard-caps each sentence to maxChars (rune-safe) and limits
+// the count to maxCount.
+func splitSentencesCapped(text string, maxChars, maxCount int) []string {
+	fields := strings.FieldsFunc(text, func(r rune) bool {
+		return r == '.' || r == '!' || r == '?' || r == '\n'
+	})
+	out := make([]string, 0, len(fields))
+	for _, f := range fields {
+		f = strings.TrimSpace(f)
+		if runeLen(f) < 12 { // skip trivial fragments (headings, list bullets)
+			continue
+		}
+		out = append(out, truncateRunes(f, maxChars))
+		if len(out) >= maxCount {
+			break
+		}
+	}
+	return out
+}
+
+// chunkTextCapped splits text into at most maxWindows contiguous windows of
+// roughly maxChars runes each.
+func chunkTextCapped(text string, maxChars, maxWindows int) []string {
+	r := []rune(text)
+	out := make([]string, 0, maxWindows)
+	for start := 0; start < len(r) && len(out) < maxWindows; start += maxChars {
+		end := start + maxChars
+		if end > len(r) {
+			end = len(r)
+		}
+		if w := strings.TrimSpace(string(r[start:end])); w != "" {
+			out = append(out, w)
+		}
+	}
+	return out
+}
+
+func runeLen(s string) int { return utf8.RuneCountInString(s) }
+
+func truncateRunes(s string, max int) string {
+	if utf8.RuneCountInString(s) <= max {
+		return s
+	}
+	return string([]rune(s)[:max])
 }
 
 // scoreByContext scores each response by its faithfulness to the provided context
