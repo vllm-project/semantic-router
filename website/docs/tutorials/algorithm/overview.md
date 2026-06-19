@@ -77,6 +77,7 @@ The repo now keeps one tutorial page per algorithm.
 | Algorithm | Description | Key Feature |
 |-----------|-------------|-------------|
 | **[Confidence](./looper/confidence)** | Small-to-large escalation | Logprob-based confidence evaluation |
+| **[Fusion](./looper/fusion)** | Parallel panel deliberation | Judge analysis + final synthesis |
 | **[Ratings](./looper/ratings)** | Bounded concurrent execution | Concurrency cap + rating aggregation |
 | **[ReMoM](./looper/remom)** | Multi-round parallel reasoning | Breadth schedule + intelligent synthesis |
 
@@ -110,7 +111,9 @@ flowchart TD
     Q11 -- Yes --> Confidence[Confidence]
     Q11 -- No --> Q12{Multi-round reasoning?}
     Q12 -- Yes --> ReMoM[ReMoM]
-    Q12 -- No --> Ratings[Ratings]
+    Q12 -- No --> Q13{Need judge synthesis?}
+    Q13 -- Yes --> Fusion[Fusion]
+    Q13 -- No --> Ratings[Ratings]
 ```
 
 ### Selection Algorithms
@@ -132,5 +135,6 @@ flowchart TD
 ### Looper Algorithms
 
 - [Confidence](./looper/confidence)
+- [Fusion](./looper/fusion)
 - [Ratings](./looper/ratings)
 - [ReMoM](./looper/remom)

@@ -408,6 +408,58 @@ func TestEmitAnthropicSSEChunk_UsageOnlyTerminalClosesThinkingAndToolBlocks(t *t
 	assert.Less(t, lastStop, msgStop, "all content_block_stop events must precede message_stop")
 }
 
+// TestEmitAnthropicSSEChunk_PreviewUsageChunkNotTerminal locks the fix for
+// issue #2215: a gateway may send a usage-only "preview" chunk (empty
+// choices, usage present, no finish_reason) as the FIRST chunk of a stream.
+// That preview usage is not the stream's final summary — real content and a
+// real terminal chunk (with the true usage) follow. The emitter must NOT
+// treat the preview chunk as terminal, or it fires message_stop after the
+// first chunk, truncates the response, and reports the preview's
+// completion_tokens (4) instead of the real total (252).
+//
+// This is the counterpart to UsageOnlyTerminal: there the usage-only chunk
+// trails content and IS terminal; here it precedes all content and is NOT.
+func TestEmitAnthropicSSEChunk_PreviewUsageChunkNotTerminal(t *testing.T) {
+	state := NewStreamState()
+
+	// Chunk 1: preview usage-only chunk at stream start — empty choices,
+	// usage present (small preview value), no finish_reason.
+	chunk1 := buildOpenAISSE(
+		`{"id":"c","object":"chat.completion.chunk","choices":[],"usage":{"prompt_tokens":37494,"completion_tokens":4,"total_tokens":37498}}`,
+	)
+	out1, done1, err := EmitAnthropicSSEChunk(chunk1, state, nil, "claude-opus-4-6")
+	require.NoError(t, err)
+	assert.False(t, done1, "preview usage chunk must NOT end the stream")
+	assert.False(t, state.MessageStopSent, "preview usage chunk must not set MessageStopSent")
+	assert.Equal(t, 0, strings.Count(string(out1), "event: message_stop"), "preview usage chunk must not emit message_stop")
+
+	// Chunk 2: real content.
+	chunk2 := buildOpenAISSE(
+		`{"id":"c","object":"chat.completion.chunk","choices":[{"index":0,"delta":{"role":"assistant","content":"hello world"}}]}`,
+	)
+	out2, done2, err := EmitAnthropicSSEChunk(chunk2, state, nil, "claude-opus-4-6")
+	require.NoError(t, err)
+	assert.False(t, done2, "content chunk must not end the stream")
+	assert.Contains(t, string(out2), `"text":"hello world"`, "content after the preview chunk must reach the client")
+
+	// Chunk 3: real terminal chunk — finish_reason plus the true usage.
+	chunk3 := buildOpenAISSE(
+		`{"id":"c","object":"chat.completion.chunk","choices":[{"index":0,"delta":{},"finish_reason":"stop"}],"usage":{"prompt_tokens":37494,"completion_tokens":252,"total_tokens":37746}}`,
+	)
+	out3, done3, err := EmitAnthropicSSEChunk(chunk3, state, nil, "claude-opus-4-6")
+	require.NoError(t, err)
+	assert.True(t, done3, "the real finish_reason chunk must end the stream")
+	body3 := string(out3)
+	assert.Equal(t, 1, strings.Count(body3, "event: message_stop"), "exactly one message_stop, on the real terminal chunk")
+	// The terminal usage must come from the real chunk (252), not the preview (4).
+	assert.Contains(t, body3, `"output_tokens":252`, "message_delta usage must reflect the real total, not the preview")
+	assert.NotContains(t, body3, `"output_tokens":4`, "preview completion_tokens must not be reported")
+
+	// Across the whole stream: exactly one message_stop, after content.
+	combined := string(out1) + string(out2) + body3
+	assert.Equal(t, 1, strings.Count(combined, "event: message_stop"), "exactly one message_stop total")
+}
+
 // TestEmitAnthropicSSEChunk_ErrorPath covers the IsError emitter branch:
 // an error event followed by terminal state flags and no second emission.
 func TestEmitAnthropicSSEChunk_ErrorPath(t *testing.T) {

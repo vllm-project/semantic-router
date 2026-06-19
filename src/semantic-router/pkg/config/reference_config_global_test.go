@@ -165,6 +165,7 @@ func assertReferenceConfigIntegrationGlobalCoverage(t testingT, integrations map
 		"global.integrations.tools.advanced_filtering.weights",
 	)
 	assertMapCoversStructFields(t, mustMapAt(t, integrations, "looper"), reflect.TypeOf(LooperConfig{}), "global.integrations.looper")
+	assertMapCoversStructFields(t, mustMapAt(t, integrations, "looper", "fusion"), reflect.TypeOf(FusionRuntimeConfig{}), "global.integrations.looper.fusion")
 }
 
 func assertReferenceConfigModelCatalogCoverage(t testingT, modelCatalog map[string]interface{}) {

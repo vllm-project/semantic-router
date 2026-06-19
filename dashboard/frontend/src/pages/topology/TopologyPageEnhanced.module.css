@@ -198,6 +198,86 @@
   color: #f4f8ee;
 }
 
+.focusSwitch {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  min-height: 28px;
+  padding: 3px 8px 3px 4px;
+  border: 1px solid rgba(118, 185, 0, 0.32);
+  border-radius: 999px;
+  background: rgba(26, 30, 25, 0.84);
+  color: rgba(219, 226, 211, 0.82);
+  cursor: pointer;
+  transition:
+    background 0.2s ease,
+    border-color 0.2s ease,
+    color 0.2s ease,
+    box-shadow 0.2s ease;
+}
+
+.focusSwitch:hover {
+  border-color: rgba(118, 185, 0, 0.72);
+  color: #f4f8ee;
+}
+
+.focusSwitch:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 2px rgba(118, 185, 0, 0.2);
+}
+
+.focusSwitchOn {
+  background: rgba(118, 185, 0, 0.18);
+  border-color: rgba(118, 185, 0, 0.82);
+  color: #f4f8ee;
+}
+
+.focusSwitchTrack {
+  position: relative;
+  width: 34px;
+  height: 18px;
+  flex: 0 0 auto;
+  border-radius: 999px;
+  background: rgba(6, 8, 6, 0.92);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  transition:
+    background 0.2s ease,
+    border-color 0.2s ease;
+}
+
+.focusSwitchThumb {
+  position: absolute;
+  top: 50%;
+  left: 2px;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: rgba(219, 226, 211, 0.84);
+  transform: translateY(-50%);
+  transition:
+    transform 0.2s ease,
+    background 0.2s ease,
+    box-shadow 0.2s ease;
+}
+
+.focusSwitchOn .focusSwitchTrack {
+  background: rgba(118, 185, 0, 0.28);
+  border-color: rgba(118, 185, 0, 0.54);
+}
+
+.focusSwitchOn .focusSwitchThumb {
+  background: #f4f8ee;
+  transform: translate(16px, -50%);
+  box-shadow: 0 0 10px rgba(118, 185, 0, 0.5);
+}
+
+.focusSwitchText {
+  min-width: 18px;
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1;
+}
+
 /* ReactFlow Custom Styling */
 .flowContainer :global(.react-flow) {
   background: transparent;
