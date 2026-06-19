@@ -241,6 +241,7 @@ func registerValidateConfigStructureLoRASpecs() {
 
 func registerValidateConfigStructureAlgorithmSpecs() {
 	registerValidateConfigStructureAlgorithmSchemaSpecs()
+	registerValidateConfigStructureFusionSpecs()
 	registerValidateConfigStructureAlgorithmTypeMismatchSpecs()
 	registerValidateConfigStructureLegacyLatencySpecs()
 }
@@ -307,6 +308,77 @@ func registerValidateConfigStructureAlgorithmSchemaSpecs() {
 		err := validateConfigStructure(cfg)
 		Expect(err).To(HaveOccurred())
 		Expect(err.Error()).To(ContainSubstring("cannot be combined with multiple algorithm config blocks"))
+	})
+}
+
+func registerValidateConfigStructureFusionSpecs() {
+	It("uses only the vllm-sr Fusion slug by default", func() {
+		cfg := &RouterConfig{}
+
+		Expect(cfg.Looper.Fusion.EffectiveModelNames()).To(Equal([]string{DefaultFusionModelName}))
+		Expect(cfg.IsFusionModelName(DefaultFusionModelName)).To(BeTrue())
+		Expect(cfg.IsFusionModelName(OpenRouterFusionModelAlias)).To(BeFalse())
+	})
+
+	It("allows OpenRouter Fusion alias only when configured", func() {
+		cfg := &RouterConfig{
+			Looper: LooperConfig{
+				Fusion: FusionRuntimeConfig{
+					ModelNames: []string{
+						DefaultFusionModelName,
+						OpenRouterFusionModelAlias,
+					},
+				},
+			},
+		}
+
+		Expect(cfg.Looper.Fusion.EffectiveModelNames()).To(Equal([]string{
+			DefaultFusionModelName,
+			OpenRouterFusionModelAlias,
+		}))
+		Expect(cfg.IsFusionModelName(DefaultFusionModelName)).To(BeTrue())
+		Expect(cfg.IsFusionModelName(OpenRouterFusionModelAlias)).To(BeTrue())
+	})
+
+	It("accepts fusion with decision modelRefs and no fusion block", func() {
+		cfg := &RouterConfig{
+			IntelligentRouting: IntelligentRouting{
+				Decisions: []Decision{{
+					Name: "fusion-with-model-refs",
+					ModelRefs: []ModelRef{{
+						Model:                 "model-a",
+						ModelReasoningControl: ModelReasoningControl{UseReasoning: boolPtr(true)},
+					}},
+					Algorithm: &AlgorithmConfig{Type: "fusion"},
+				}},
+			},
+		}
+
+		Expect(validateConfigStructure(cfg)).To(Succeed())
+	})
+
+	It("rejects invalid decision fusion on_error", func() {
+		cfg := &RouterConfig{
+			IntelligentRouting: IntelligentRouting{
+				Decisions: []Decision{{
+					Name: "fusion-invalid-on-error",
+					ModelRefs: []ModelRef{{
+						Model:                 "model-a",
+						ModelReasoningControl: ModelReasoningControl{UseReasoning: boolPtr(true)},
+					}},
+					Algorithm: &AlgorithmConfig{
+						Type: "fusion",
+						Fusion: &FusionAlgorithmConfig{
+							OnError: "ignore",
+						},
+					},
+				}},
+			},
+		}
+
+		err := validateConfigStructure(cfg)
+		Expect(err).To(HaveOccurred())
+		Expect(err.Error()).To(ContainSubstring("algorithm.fusion: on_error must be one of"))
 	})
 }
 

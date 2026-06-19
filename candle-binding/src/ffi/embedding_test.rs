@@ -22,6 +22,23 @@ use std::sync::Once;
 /// Global initializer to ensure ModelFactory is initialized once
 static INIT: Once = Once::new();
 
+fn l2_norm(values: &[f32]) -> f32 {
+    values.iter().map(|v| v * v).sum::<f32>().sqrt()
+}
+
+#[test]
+fn test_truncate_embedding_renormalizes_prefix() {
+    let full = vec![0.6, 0.0, 0.8];
+
+    let truncated = truncate_embedding_to_dimension(full, Some(1));
+
+    assert_eq!(truncated, vec![1.0]);
+    assert!(
+        (l2_norm(&truncated) - 1.0).abs() < 1e-6,
+        "truncated embedding must stay unit-normalized"
+    );
+}
+
 /// Setup fixture: Initialize embedding models before tests
 ///
 /// This fixture initializes the global ModelFactory with both Qwen3 and Gemma models.
@@ -62,7 +79,7 @@ fn test_get_embedding_smart_medium_text(_setup_embedding_models: ()) {
     let status = get_embedding_smart(text.as_ptr(), 0.5, 0.5, &mut result);
 
     assert_eq!(status, 0, "Should succeed");
-    assert_eq!(result.error, false, "Should not have error");
+    assert!(!result.error, "Should not have error");
 
     // Embedding dimension should be either 768 (Gemma) or 1024 (Qwen3)
     assert!(
@@ -117,7 +134,7 @@ fn test_get_embedding_smart_priority_combinations(
     );
 
     assert_eq!(status, 0, "Should succeed with any valid priority");
-    assert_eq!(result.error, false);
+    assert!(!result.error);
 
     // Embedding dimension should be either 768 (Gemma) or 1024 (Qwen3)
     assert!(

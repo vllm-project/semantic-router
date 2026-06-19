@@ -10,39 +10,43 @@ import {
 import styles from './AuthTransitionPage.module.css'
 
 type Milestone = {
-  year: string
-  text: string
+  key: string
+  label: string
+  detail: string
   revealAt: number
 }
 
 const PROGRESS_SEGMENTS = [
-  { duration: 700, from: 0, to: 14 },
-  { duration: 650, from: 14, to: 45 },
-  { duration: 850, from: 45, to: 45 },
-  { duration: 950, from: 45, to: 82 },
-  { duration: 650, from: 82, to: 100 },
+  { duration: 520, from: 0, to: 24 },
+  { duration: 620, from: 24, to: 54 },
+  { duration: 680, from: 54, to: 84 },
+  { duration: 480, from: 84, to: 100 },
 ]
 
 const MILESTONES: Milestone[] = [
   {
-    year: '1938',
-    text: 'Claude Shannon - A Symbolic Analysis of Relay and Switching Circuits',
+    key: 'session',
+    label: 'Session verified',
+    detail: 'Credentials accepted',
     revealAt: 8,
   },
   {
-    year: '1948',
-    text: 'Claude Shannon - A Mathematical Theory of Communication',
-    revealAt: 32,
+    key: 'workspace',
+    label: 'Workspace synced',
+    detail: 'Setup state loaded',
+    revealAt: 34,
   },
   {
-    year: '2025',
-    text: 'vLLM Semantic Router: Signal Decision Routing for Mixture-of-Modalities Models',
-    revealAt: 56,
+    key: 'policy',
+    label: 'Policy hydrated',
+    detail: 'Routes and signals prepared',
+    revealAt: 62,
   },
   {
-    year: 'Future',
-    text: 'Standing on the shoulders of giants, we honor that legacy and explore the future together.',
-    revealAt: 78,
+    key: 'dashboard',
+    label: 'Dashboard ready',
+    detail: 'Opening console',
+    revealAt: 86,
   },
 ]
 
@@ -66,6 +70,12 @@ function getTransitionProgress(elapsedMs: number): number {
   return 100
 }
 
+function getActiveMilestoneIndex(progress: number): number {
+  return MILESTONES.reduce((activeIndex, milestone, index) => {
+    return progress >= milestone.revealAt ? index : activeIndex
+  }, 0)
+}
+
 const TransitionScene: React.FC<{ progress: number }> = ({ progress }) => {
   const containerRef = useRef<HTMLDivElement | null>(null)
   const progressRef = useRef(progress)
@@ -81,160 +91,193 @@ const TransitionScene: React.FC<{ progress: number }> = ({ progress }) => {
     }
 
     const scene = new THREE.Scene()
-    const aspect = container.clientWidth / Math.max(container.clientHeight, 1)
-    const viewDistance = 5
-    const camera = new THREE.OrthographicCamera(
-      -viewDistance * aspect,
-      viewDistance * aspect,
-      viewDistance,
-      -viewDistance,
-      1,
-      1000,
-    )
-    camera.position.set(10, 10, 10)
-    camera.lookAt(scene.position)
+    const camera = new THREE.PerspectiveCamera(42, 1, 0.1, 100)
+    camera.position.set(0, 0.9, 8.8)
+    camera.lookAt(0, 0, 0)
 
     const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true })
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2))
     renderer.setClearColor(0x000000, 0)
+    renderer.domElement.style.display = 'block'
     container.appendChild(renderer.domElement)
-
-    const noiseVertexShader = `
-      varying vec2 vUv;
-
-      void main() {
-        vUv = uv;
-        gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
-      }
-    `
-
-    const noiseFragmentShader = `
-      uniform float uTime;
-      uniform vec2 uResolution;
-      varying vec2 vUv;
-
-      float random(vec2 st) {
-        return fract(sin(dot(st.xy, vec2(12.9898, 78.233))) * 43758.5453123);
-      }
-
-      void main() {
-        vec2 center = vec2(0.45, 0.45);
-        float dist = distance(vUv, center);
-        float angle = atan(vUv.y - center.y, vUv.x - center.x);
-        float radius = 0.30 + 0.08 * sin(angle * 3.0 + uTime * 0.55);
-        float mask = smoothstep(radius, 0.0, dist);
-        vec2 noiseUv = vUv * min(uResolution.x, uResolution.y) * 0.5;
-        float noiseVal = random(noiseUv + uTime * 0.1);
-        float stipple = step(noiseVal, mask * 1.4);
-        gl_FragColor = vec4(vec3(1.0), stipple * 0.24);
-      }
-    `
-
-    const noiseGeometry = new THREE.PlaneGeometry(15, 15)
-    const noiseMaterial = new THREE.ShaderMaterial({
-      vertexShader: noiseVertexShader,
-      fragmentShader: noiseFragmentShader,
-      transparent: true,
-      uniforms: {
-        uTime: { value: 0 },
-        uResolution: { value: new THREE.Vector2(container.clientWidth, container.clientHeight) },
-      },
-    })
-    const noisePlane = new THREE.Mesh(noiseGeometry, noiseMaterial)
-    noisePlane.lookAt(camera.position)
-    noisePlane.position.set(-1, -1, -2)
-    scene.add(noisePlane)
 
     const group = new THREE.Group()
     scene.add(group)
 
-    const boxGeometry = new THREE.BoxGeometry(6, 6, 6)
-    const boxEdges = new THREE.EdgesGeometry(boxGeometry)
-    const wireframeMaterial = new THREE.LineBasicMaterial({
-      color: 0xffffff,
+    const ambientLight = new THREE.AmbientLight(0xffffff, 0.48)
+    scene.add(ambientLight)
+
+    const keyLight = new THREE.PointLight(0x8fd400, 18, 12)
+    keyLight.position.set(-2.6, 2.4, 4)
+    scene.add(keyLight)
+
+    const cyanLight = new THREE.PointLight(0x00d4ff, 10, 12)
+    cyanLight.position.set(2.8, -1.4, 3)
+    scene.add(cyanLight)
+
+    const nodePositions = [
+      new THREE.Vector3(-3.2, -0.65, 0),
+      new THREE.Vector3(-1.05, 0.72, 0),
+      new THREE.Vector3(1.14, -0.18, 0),
+      new THREE.Vector3(3.08, 0.58, 0),
+    ]
+
+    const curve = new THREE.CatmullRomCurve3(nodePositions)
+    const curvePoints = curve.getPoints(96)
+    const routeGeometry = new THREE.BufferGeometry().setFromPoints(curvePoints)
+    const routeMaterial = new THREE.LineBasicMaterial({
+      color: 0x8fd400,
       transparent: true,
-      opacity: 1,
+      opacity: 0.28,
     })
-    const wireframeBox = new THREE.LineSegments(boxEdges, wireframeMaterial)
-    group.add(wireframeBox)
+    const routeLine = new THREE.Line(routeGeometry, routeMaterial)
+    group.add(routeLine)
 
-    const cylinderGeometry = new THREE.CylinderGeometry(2.5, 2.5, 0.5, 32)
-    const fillVertexShader = `
-      varying vec3 vPosition;
-
-      void main() {
-        vPosition = position;
-        gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
-      }
-    `
-
-    const fillFragmentShader = `
-      varying vec3 vPosition;
-      uniform float uProgress;
-
-      void main() {
-        float wipe = step(vPosition.y + 2.5, uProgress * 5.0);
-        if (wipe < 0.5) {
-          discard;
-        }
-        gl_FragColor = vec4(vec3(1.0), 1.0);
-      }
-    `
-
-    const fillMaterial = new THREE.ShaderMaterial({
-      vertexShader: fillVertexShader,
-      fragmentShader: fillFragmentShader,
-      side: THREE.DoubleSide,
-      uniforms: { uProgress: { value: 0 } },
+    const completedRouteGeometry = new THREE.BufferGeometry().setFromPoints([nodePositions[0], nodePositions[0]])
+    const completedRouteMaterial = new THREE.LineBasicMaterial({
+      color: 0xb7ff56,
+      transparent: true,
+      opacity: 0.86,
     })
-    const fillMesh = new THREE.Mesh(cylinderGeometry, fillMaterial)
-    fillMesh.rotation.x = Math.PI / 2
-    group.add(fillMesh)
+    const completedRouteLine = new THREE.Line(completedRouteGeometry, completedRouteMaterial)
+    group.add(completedRouteLine)
 
-    const cylinderEdges = new THREE.EdgesGeometry(cylinderGeometry)
-    const cylinderWireframe = new THREE.LineSegments(
-      cylinderEdges,
-      new THREE.LineBasicMaterial({
-        color: 0xffffff,
+    const nodeGeometry = new THREE.SphereGeometry(0.17, 32, 16)
+    const nodeMaterials = nodePositions.map(() =>
+      new THREE.MeshStandardMaterial({
+        color: 0x76b900,
+        emissive: 0x76b900,
+        emissiveIntensity: 0.15,
+        metalness: 0.18,
+        roughness: 0.48,
         transparent: true,
-        opacity: 0.54,
+        opacity: 0.5,
       }),
     )
-    fillMesh.add(cylinderWireframe)
+    const nodeMeshes = nodePositions.map((position, index) => {
+      const mesh = new THREE.Mesh(nodeGeometry, nodeMaterials[index])
+      mesh.position.copy(position)
+      group.add(mesh)
+      return mesh
+    })
 
-    const clock = new THREE.Clock()
+    const nodeRingGeometry = new THREE.RingGeometry(0.28, 0.31, 40)
+    const nodeRingMaterial = new THREE.MeshBasicMaterial({
+      color: 0xffffff,
+      transparent: true,
+      opacity: 0.2,
+      side: THREE.DoubleSide,
+    })
+    const nodeRings = nodePositions.map((position) => {
+      const ring = new THREE.Mesh(nodeRingGeometry, nodeRingMaterial.clone())
+      ring.position.copy(position)
+      ring.lookAt(camera.position)
+      group.add(ring)
+      return ring
+    })
+
+    const particleCount = 22
+    const particleGeometry = new THREE.SphereGeometry(0.045, 16, 8)
+    const particleMaterial = new THREE.MeshBasicMaterial({
+      color: 0xd9ff8a,
+      transparent: true,
+      opacity: 0.78,
+    })
+    const particles = Array.from({ length: particleCount }, (_, index) => {
+      const particle = new THREE.Mesh(particleGeometry, particleMaterial.clone())
+      particle.userData.offset = index / particleCount
+      group.add(particle)
+      return particle
+    })
+
+    const arcGeometry = new THREE.TorusGeometry(1.65, 0.01, 8, 128, Math.PI * 1.42)
+    const arcMaterial = new THREE.MeshBasicMaterial({
+      color: 0x76b900,
+      transparent: true,
+      opacity: 0.42,
+    })
+    const progressArc = new THREE.Mesh(arcGeometry, arcMaterial)
+    progressArc.position.set(0, 0, -0.28)
+    progressArc.rotation.set(0, 0, -Math.PI * 0.18)
+    group.add(progressArc)
+
+    const haloGeometry = new THREE.RingGeometry(1.98, 2, 128)
+    const haloMaterial = new THREE.MeshBasicMaterial({
+      color: 0xffffff,
+      transparent: true,
+      opacity: 0.08,
+      side: THREE.DoubleSide,
+    })
+    const halo = new THREE.Mesh(haloGeometry, haloMaterial)
+    halo.position.set(0, 0, -0.34)
+    halo.lookAt(camera.position)
+    group.add(halo)
+
+    const startTime = performance.now()
     let frameId = 0
     let currentProgress = 0
 
     const updateRendererSize = () => {
       const width = container.clientWidth || window.innerWidth
       const height = container.clientHeight || window.innerHeight
-      const nextAspect = width / Math.max(height, 1)
 
-      camera.left = -viewDistance * nextAspect
-      camera.right = viewDistance * nextAspect
-      camera.top = viewDistance
-      camera.bottom = -viewDistance
+      camera.aspect = width / Math.max(height, 1)
+      camera.fov = width < 640 ? 52 : 42
+      camera.position.z = width < 640 ? 9.8 : 8.8
       camera.updateProjectionMatrix()
 
-      renderer.setSize(width, height)
-      noiseMaterial.uniforms.uResolution.value.set(width, height)
+      renderer.setSize(width, height, false)
     }
 
     const renderFrame = () => {
       frameId = window.requestAnimationFrame(renderFrame)
-      const time = clock.getElapsedTime()
+      const time = (performance.now() - startTime) / 1000
 
-      currentProgress += (progressRef.current - currentProgress) * 0.06
-      noiseMaterial.uniforms.uTime.value = time
-      fillMaterial.uniforms.uProgress.value = currentProgress / 100
+      currentProgress += (progressRef.current - currentProgress) * 0.08
+      const normalizedProgress = Math.max(0, Math.min(currentProgress / 100, 1))
+      const visiblePointCount = Math.max(2, Math.floor(curvePoints.length * normalizedProgress))
+      completedRouteGeometry.setFromPoints(curvePoints.slice(0, visiblePointCount))
 
-      wireframeMaterial.opacity = 1 - currentProgress / 135
-      const boxScale = 1 + currentProgress / 200
-      wireframeBox.scale.set(boxScale, boxScale, boxScale)
-      group.rotation.y = time * (0.16 + currentProgress * 0.012)
-      group.rotation.x = Math.sin(time * 0.35) * 0.18
-      group.rotation.z = Math.cos(time * 0.25) * 0.08
+      keyLight.intensity = 15 + Math.sin(time * 1.4) * 2
+      cyanLight.intensity = 8 + Math.cos(time * 1.1) * 1.5
+      group.rotation.y = Math.sin(time * 0.28) * 0.12
+      group.rotation.x = Math.cos(time * 0.24) * 0.06
+
+      progressArc.scale.setScalar(0.92 + normalizedProgress * 0.24)
+      arcMaterial.opacity = 0.28 + normalizedProgress * 0.34
+      halo.rotation.z = time * 0.08
+      haloMaterial.opacity = 0.06 + Math.sin(time * 1.8) * 0.015
+
+      nodeMeshes.forEach((mesh, index) => {
+        const threshold = MILESTONES[index]?.revealAt ?? 100
+        const activeAmount = Math.max(0, Math.min((currentProgress - threshold + 16) / 22, 1))
+        const pulse = Math.sin(time * 2.2 + index * 0.8) * 0.035
+        const scale = 0.88 + activeAmount * 0.56 + pulse
+        mesh.scale.setScalar(scale)
+        nodeMaterials[index].opacity = 0.38 + activeAmount * 0.62
+        nodeMaterials[index].emissiveIntensity = 0.12 + activeAmount * 0.82
+      })
+
+      nodeRings.forEach((ring, index) => {
+        const threshold = MILESTONES[index]?.revealAt ?? 100
+        const activeAmount = Math.max(0, Math.min((currentProgress - threshold + 12) / 20, 1))
+        ring.lookAt(camera.position)
+        ring.rotation.z += 0.01 + activeAmount * 0.012
+        ring.scale.setScalar(0.8 + activeAmount * 0.8 + Math.sin(time * 1.7 + index) * 0.04)
+        ;(ring.material as THREE.MeshBasicMaterial).opacity = 0.1 + activeAmount * 0.38
+      })
+
+      particles.forEach((particle, index) => {
+        const baseOffset = particle.userData.offset as number
+        const travel = (baseOffset + time * 0.13) % 1
+        const gatedTravel = Math.min(travel, normalizedProgress)
+        const point = curve.getPointAt(gatedTravel)
+        const wobble = Math.sin(time * 2.2 + index) * 0.035
+        particle.position.set(point.x, point.y + wobble, point.z + Math.cos(time + index) * 0.025)
+        const particleActive = travel <= normalizedProgress || normalizedProgress > 0.96
+        ;(particle.material as THREE.MeshBasicMaterial).opacity = particleActive ? 0.28 + normalizedProgress * 0.62 : 0
+        particle.scale.setScalar(0.7 + Math.sin(time * 3 + index) * 0.16)
+      })
 
       renderer.render(scene, camera)
     }
@@ -248,15 +291,20 @@ const TransitionScene: React.FC<{ progress: number }> = ({ progress }) => {
       window.cancelAnimationFrame(frameId)
       window.removeEventListener('resize', updateRendererSize)
       renderer.dispose()
-      noiseGeometry.dispose()
-      noiseMaterial.dispose()
-      boxGeometry.dispose()
-      boxEdges.dispose()
-      wireframeMaterial.dispose()
-      cylinderGeometry.dispose()
-      cylinderEdges.dispose()
-      fillMaterial.dispose()
-      ;(cylinderWireframe.material as THREE.Material).dispose()
+      routeGeometry.dispose()
+      routeMaterial.dispose()
+      completedRouteGeometry.dispose()
+      completedRouteMaterial.dispose()
+      nodeGeometry.dispose()
+      nodeMaterials.forEach((material) => material.dispose())
+      nodeRingGeometry.dispose()
+      nodeRings.forEach((ring) => (ring.material as THREE.Material).dispose())
+      particleGeometry.dispose()
+      particles.forEach((particle) => (particle.material as THREE.Material).dispose())
+      arcGeometry.dispose()
+      arcMaterial.dispose()
+      haloGeometry.dispose()
+      haloMaterial.dispose()
       container.removeChild(renderer.domElement)
     }
   }, [])
@@ -274,7 +322,8 @@ const AuthTransitionPage: React.FC = () => {
 
   const fallbackTarget = setupState?.setupMode ? '/setup' : '/dashboard'
   const target = sanitizeAuthTransitionTarget(searchParams.get('to'), fallbackTarget)
-  const counterValue = Math.floor(progress)
+  const activeMilestoneIndex = getActiveMilestoneIndex(progress)
+  const activeMilestone = MILESTONES[activeMilestoneIndex]
 
   useEffect(() => {
     let frameId = 0
@@ -310,7 +359,7 @@ const AuthTransitionPage: React.FC = () => {
   }
 
   return (
-    <main className={styles.page}>
+    <main className={styles.page} aria-busy={!animationComplete} aria-live="polite" role="status">
       <div className={styles.grid} aria-hidden="true">
         {Array.from({ length: 9 }, (_, index) => (
           <div key={index} className={styles.gridCell} />
@@ -321,38 +370,41 @@ const AuthTransitionPage: React.FC = () => {
 
       <div className={styles.overlay}>
         <section className={styles.topLeft}>
-          <span className={styles.metaText}>SYS.ID: VSR-2025</span>
-          <span className={styles.metaText}>INITIATING SEQUENCE</span>
+          <span className={styles.metaText}>VSR Dashboard</span>
+          <span className={styles.metaText}>{activeMilestone.label}</span>
         </section>
 
         <section className={styles.topRight} aria-hidden="true">
-          <span className={styles.asterisk}>* * *</span>
+          <span className={styles.statusBeacon} />
+          <span className={styles.metaText}>Live route handoff</span>
         </section>
 
         <section className={styles.center}>
-          <div className={styles.counterWrapper}>
-            <span className={styles.counterNumber}>{counterValue}</span>
-            <span className={styles.counterSymbol}>%</span>
+          <div className={styles.centerCopy}>
+            <span className={styles.centerEyebrow}>Authenticated</span>
+            <h1 className={styles.centerTitle}>Opening dashboard</h1>
+            <p className={styles.centerText}>{activeMilestone.detail}</p>
           </div>
         </section>
 
         <section className={styles.bottomLeft}>
           <div className={styles.sequencePanel}>
-            <span className={styles.sequenceHeader}>Signal lineage</span>
+            <span className={styles.sequenceHeader}>Loading sequence</span>
             <ol className={styles.sequenceList} aria-live="polite">
               {MILESTONES.map((milestone, index) => {
                 const isVisible = progress >= milestone.revealAt
-                const isActive =
-                  isVisible &&
-                  (index === MILESTONES.length - 1 || progress < MILESTONES[index + 1].revealAt)
+                const isActive = index === activeMilestoneIndex
 
                 return (
                   <li
-                    key={milestone.year}
+                    key={milestone.key}
                     className={`${styles.sequenceItem} ${isVisible ? styles.sequenceItemVisible : ''} ${isActive ? styles.sequenceItemActive : ''}`}
                   >
-                    <span className={styles.sequenceYear}>{milestone.year}</span>
-                    <span className={styles.sequenceCopy}>{milestone.text}</span>
+                    <span className={styles.sequenceYear}>{String(index + 1).padStart(2, '0')}</span>
+                    <span>
+                      <span className={styles.sequenceCopy}>{milestone.label}</span>
+                      <span className={styles.sequenceDetail}>{milestone.detail}</span>
+                    </span>
                   </li>
                 )
               })}
@@ -362,13 +414,20 @@ const AuthTransitionPage: React.FC = () => {
 
         <section className={styles.bottomRight}>
           <div className={styles.metaBlock}>
-            <span className={styles.metaLabel}>VOL.</span>
-            <span className={styles.metaValue}>04</span>
+            <span className={styles.metaLabel}>Progress</span>
+            <span className={styles.metaValue}>{Math.round(progress)}%</span>
           </div>
         </section>
 
-        <div className={styles.progressTrack} aria-hidden="true">
-          <div className={styles.progressBar} style={{ width: `${progress}%` }} />
+        <div
+          className={styles.progressTrack}
+          role="progressbar"
+          aria-label="Opening dashboard"
+          aria-valuemin={0}
+          aria-valuemax={100}
+          aria-valuenow={Math.round(progress)}
+        >
+          <div className={styles.progressBar} style={{ transform: `scaleX(${progress / 100})` }} />
         </div>
       </div>
     </main>

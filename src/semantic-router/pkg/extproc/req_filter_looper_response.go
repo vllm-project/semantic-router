@@ -10,6 +10,7 @@ import (
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/headers"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/looper"
+	httputil "github.com/vllm-project/semantic-router/src/semantic-router/pkg/utils/http"
 )
 
 // createLooperResponse creates an ImmediateResponse from looper output.
@@ -37,6 +38,8 @@ func buildLooperResponseHeaders(
 	setHeaders := baseLooperResponseHeaders(resp)
 	appendLooperSignalHeaders(&setHeaders, reqCtx)
 	appendLooperRoutingHeaders(&setHeaders, resp, reqCtx)
+	// v0.4 keystone headers: this is the looper path (#2203).
+	setHeaders = append(setHeaders, httputil.KeystoneHeaderOptions(headers.ResponsePathLooper)...)
 	return setHeaders
 }
 

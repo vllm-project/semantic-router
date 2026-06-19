@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"net"
 	"os"
 	"path/filepath"
 	"testing"
@@ -108,5 +109,38 @@ func TestCollectHostStatusReportsStandbyForCreatedSplitServices(t *testing.T) {
 	}
 	if got := status.Services[1].Message; got != "Standby (setup mode)" {
 		t.Fatalf("envoy message = %q, want standby", got)
+	}
+}
+
+func TestCollectHostStatusReportsDashboardWhenRouterIsUnavailable(t *testing.T) {
+	t.Setenv(routerContainerNameEnv, "vllm-sr-runtime-container")
+	t.Setenv(envoyContainerNameEnv, "vllm-sr-runtime-container")
+	t.Setenv(dashboardContainerNameEnv, "vllm-sr-runtime-container")
+
+	listener, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatalf("listen on unused port: %v", err)
+	}
+	routerAPIURL := "http://" + listener.Addr().String()
+	if err := listener.Close(); err != nil {
+		t.Fatalf("close listener: %v", err)
+	}
+
+	status := collectHostStatus("", routerAPIURL)
+	if status.Overall != "not_running" {
+		t.Fatalf("overall status = %q, want not_running", status.Overall)
+	}
+	if len(status.Services) != 2 {
+		t.Fatalf("service count = %d, want 2 (%#v)", len(status.Services), status.Services)
+	}
+
+	router := status.Services[0]
+	if router.Name != "Router" || router.Healthy || router.Status != "not running" {
+		t.Fatalf("router service = %#v, want Router not running and unhealthy", router)
+	}
+
+	dashboard := status.Services[1]
+	if dashboard.Name != "Dashboard" || !dashboard.Healthy || dashboard.Status != "running" {
+		t.Fatalf("dashboard service = %#v, want Dashboard running and healthy", dashboard)
 	}
 }

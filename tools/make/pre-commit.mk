@@ -40,12 +40,23 @@ precommit-local:
 		echo "Error: Neither docker nor podman is installed. Please install one of them."; \
 		exit 1; \
 	fi; \
-	if ! $$CONTAINER_CMD image inspect ${PRECOMMIT_CONTAINER} > /dev/null 2>&1; then \
-		echo "Image not found locally. Pulling..."; \
-		$$CONTAINER_CMD pull ${PRECOMMIT_CONTAINER}; \
+	IMAGE_SOURCE="freshly pulled image"; \
+	echo "Refreshing ${PRECOMMIT_CONTAINER}..."; \
+	if $$CONTAINER_CMD pull ${PRECOMMIT_CONTAINER}; then \
+		:; \
 	else \
-		echo "Image found locally. Skipping pull."; \
+		echo "Warning: failed to pull ${PRECOMMIT_CONTAINER}; checking for a cached image..." >&2; \
+		IMAGE_SOURCE="cached local image"; \
 	fi; \
+	if ! $$CONTAINER_CMD image inspect ${PRECOMMIT_CONTAINER} > /dev/null 2>&1; then \
+		echo "Error: ${PRECOMMIT_CONTAINER} is unavailable locally and could not be pulled."; \
+		exit 1; \
+	fi; \
+	IMAGE_REF=$$($$CONTAINER_CMD image inspect ${PRECOMMIT_CONTAINER} --format '{{if .RepoDigests}}{{index .RepoDigests 0}}{{else}}{{.Id}}{{end}}' 2>/dev/null); \
+	if [ -z "$$IMAGE_REF" ]; then \
+		IMAGE_REF=${PRECOMMIT_CONTAINER}; \
+	fi; \
+	echo "Using $$IMAGE_SOURCE: $$IMAGE_REF"; \
 	$$CONTAINER_CMD run --rm \
 	    -e AGENT_BASE_REF="$(AGENT_BASE_REF)" \
 	    -v $(shell pwd):/app \
