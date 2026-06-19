@@ -156,7 +156,7 @@ func (h *HybridSelector) SetLookupTable(lt lookuptable.LookupTable) {
 //
 // TODO: integrate into model upgrade decision logic in Select.
 //
-//nolint:unused // Reserved for upcoming lookup-table consumption.
+//lint:ignore U1000 reserved for upcoming lookup-table consumption by model upgrade decision logic
 func (h *HybridSelector) resolveQualityGap(taskFamily, currentModel, candidateModel string) float64 {
 	if h.lookupTable != nil && taskFamily != "" && currentModel != "" && candidateModel != "" {
 		if gap, ok := h.lookupTable.QualityGap(taskFamily, currentModel, candidateModel); ok {

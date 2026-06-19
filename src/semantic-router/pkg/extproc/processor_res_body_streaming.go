@@ -63,6 +63,15 @@ func ensureStreamingState(ctx *RequestContext) {
 }
 
 func (r *OpenAIRouter) finalizeStreamingResponse(ctx *RequestContext) {
+	// Idempotency guard: finalization records completion-latency metrics,
+	// ends the inflight token, and attaches the replay body — all of which
+	// must happen exactly once. The Anthropic-client streaming cell can
+	// reach this twice for one stream (the emitter's streamDone fires on
+	// one chunk, then a later terminal chunk still matches the
+	// "data: [DONE]" guard), so a second entry must be a no-op.
+	if ctx.StreamingComplete {
+		return
+	}
 	ctx.StreamingComplete = true
 	logging.ComponentDebugEvent("extproc", "streaming_response_finalized", map[string]interface{}{
 		"model":            ctx.RequestModel,
@@ -155,6 +164,12 @@ func extractStreamingContent(ctx *RequestContext, chunkData map[string]interface
 		if delta, ok := choice["delta"].(map[string]interface{}); ok {
 			if content, ok := delta["content"].(string); ok && content != "" {
 				ctx.StreamingContent += content
+			}
+			// Reasoning models stream their thinking under delta.reasoning_content.
+			// Accumulate it so the reconstructed (cached) response carries the same
+			// reasoning the live stream delivered, instead of silently dropping it.
+			if reasoning, ok := delta["reasoning_content"].(string); ok && reasoning != "" {
+				ctx.StreamingReasoning += reasoning
 			}
 		}
 		if finishReason, ok := choice["finish_reason"].(string); ok && finishReason != "" {

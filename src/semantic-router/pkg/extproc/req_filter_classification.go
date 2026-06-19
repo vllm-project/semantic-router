@@ -16,8 +16,10 @@ import (
 // performDecisionEvaluation performs decision evaluation using DecisionEngine
 // Returns (decisionName, confidence, reasoningDecision, selectedModel)
 // This is the new approach that uses Decision-based routing with AND/OR rule combinations
-// Decision evaluation is ALWAYS performed when decisions are configured (for plugin features like
-// hallucination detection), but model selection only happens for auto models.
+// Decision evaluation is ALWAYS performed when decisions are configured (for
+// plugin features like hallucination detection), but model selection only
+// happens for auto models. Fusion model slugs use the same signal extraction
+// path while limiting decision candidates to Fusion-capable decisions.
 func (r *OpenAIRouter) performDecisionEvaluation(originalModel string, history signalConversationHistory, ctx *RequestContext) (string, float64, entropy.ReasoningDecision, string, error) {
 	var decisionName string
 	var evaluationConfidence float64
@@ -49,7 +51,7 @@ func (r *OpenAIRouter) performDecisionEvaluation(originalModel string, history s
 		return "", 0, entropy.ReasoningDecision{}, "", authzErr
 	}
 
-	result, defaultModel := r.runDecisionEngine(originalModel, ctx, signals)
+	result, defaultModel := r.runDecisionEngine(originalModel, ctx, signals, r.decisionCandidatesForRequestModel(originalModel))
 	if result == nil {
 		return "", 0.0, entropy.ReasoningDecision{}, defaultModel, nil
 	}
@@ -130,6 +132,9 @@ func (r *OpenAIRouter) selectModelFromCandidates(selCtx *selection.SelectionCont
 }
 
 func (r *OpenAIRouter) selectorForDecisionMethod(method selection.SelectionMethod, algorithm *config.AlgorithmConfig) selection.Selector {
+	if method == selection.MethodHybrid && algorithm != nil && algorithm.Hybrid != nil {
+		return r.newDecisionHybridSelector(algorithm.Hybrid)
+	}
 	if method == selection.MethodSessionAware && algorithm != nil && algorithm.SessionAware != nil {
 		return r.newDecisionSessionAwareSelector(algorithm.SessionAware)
 	}
@@ -138,6 +143,57 @@ func (r *OpenAIRouter) selectorForDecisionMethod(method selection.SelectionMetho
 	}
 	selector, _ := r.ModelSelector.Get(method)
 	return selector
+}
+
+func (r *OpenAIRouter) newDecisionHybridSelector(decisionCfg *config.HybridSelectionConfig) selection.Selector {
+	var cfg *selection.HybridConfig
+	if r != nil && r.Config != nil {
+		cfg = buildHybridSelectionConfig(r.Config, decisionCfg)
+	} else {
+		cfg = selection.DefaultHybridConfig()
+	}
+
+	eloSelector, routerDCSelector, autoMixSelector := r.hybridComponentSelectors()
+
+	selector := selection.NewHybridSelectorWithComponents(cfg, eloSelector, routerDCSelector, autoMixSelector)
+	r.applyHybridModelCosts(selector)
+	if r != nil && r.LookupTable != nil {
+		selector.SetLookupTable(r.LookupTable)
+	}
+	return selector
+}
+
+// hybridComponentSelectors resolves the underlying elo/routerDC/autoMix selectors
+// that the hybrid selector composes, when they are registered on the router.
+func (r *OpenAIRouter) hybridComponentSelectors() (*selection.EloSelector, *selection.RouterDCSelector, *selection.AutoMixSelector) {
+	if r == nil || r.ModelSelector == nil {
+		return nil, nil, nil
+	}
+	var eloSelector *selection.EloSelector
+	var routerDCSelector *selection.RouterDCSelector
+	var autoMixSelector *selection.AutoMixSelector
+	if selector, ok := r.ModelSelector.Get(selection.MethodElo); ok {
+		eloSelector, _ = selector.(*selection.EloSelector)
+	}
+	if selector, ok := r.ModelSelector.Get(selection.MethodRouterDC); ok {
+		routerDCSelector, _ = selector.(*selection.RouterDCSelector)
+	}
+	if selector, ok := r.ModelSelector.Get(selection.MethodAutoMix); ok {
+		autoMixSelector, _ = selector.(*selection.AutoMixSelector)
+	}
+	return eloSelector, routerDCSelector, autoMixSelector
+}
+
+// applyHybridModelCosts seeds per-model prompt pricing into the hybrid selector.
+func (r *OpenAIRouter) applyHybridModelCosts(selector *selection.HybridSelector) {
+	if r == nil || r.Config == nil || r.Config.ModelConfig == nil {
+		return
+	}
+	for model, params := range r.Config.ModelConfig {
+		if params.Pricing.PromptPer1M > 0 {
+			selector.SetModelCost(model, params.Pricing.PromptPer1M)
+		}
+	}
 }
 
 func (r *OpenAIRouter) newDecisionSessionAwareSelector(decisionCfg *config.SessionAwareSelectionConfig) selection.Selector {

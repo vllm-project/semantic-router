@@ -1,5 +1,5 @@
 export const AUTH_TRANSITION_PATH = '/auth/transition'
-export const AUTH_TRANSITION_MIN_DURATION_MS = 3800
+export const AUTH_TRANSITION_MIN_DURATION_MS = 2300
 
 const DASHBOARD_ORIGIN = 'http://vsr-dashboard.local'
 

@@ -41,6 +41,7 @@ const sidebars: SidebarsConfig = {
           items: [
             'installation/k8s/ai-gateway',
             'installation/k8s/agentgateway',
+            'installation/k8s/streamed-extproc',
             'installation/k8s/istio',
             'installation/k8s/gateway-api-inference-extension',
           ],
@@ -159,6 +160,7 @@ const sidebars: SidebarsConfig = {
               label: 'Looper',
               items: [
                 'tutorials/algorithm/looper/confidence',
+                'tutorials/algorithm/looper/fusion',
                 'tutorials/algorithm/looper/ratings',
                 'tutorials/algorithm/looper/remom',
               ],
