@@ -227,6 +227,13 @@ Recommended upstream settings for embedding:
 - The current SQLite auth/session store is single-replica local state. Run one dashboard replica unless you add a shared production auth/session store.
 - Future: OIDC login on dashboard and signed proxy sessions to embedded services.
 
+## Runtime status and version reporting
+
+- `/api/status` is the dashboard's live runtime summary endpoint. It is protected by dashboard auth and requires the logs/observability read permission.
+- The status response reports the dashboard backend version in tag form, such as `v0.3.0`, `v0.3.0-dev.<sha>`, or `v0.3.0-nightly.<date>.<sha>`.
+- Version values are injected into release dashboard images from the pushed `v<version>` tag. Non-release dashboard images derive their version from `src/vllm-sr/pyproject.toml` plus CI context. Local source runs fall back to `src/vllm-sr/pyproject.toml` plus Go VCS metadata when available.
+- When the dashboard backend is running but Router or Envoy is not reachable, `/api/status` still reports the Dashboard service as `running` and marks Router as not running instead of returning an empty `0/0` service list.
+
 Write access warning for config updates:
 
 - The `POST /api/router/config/update` endpoint writes to the mounted config path. In Docker/K8s this may be read-only if sourced from a ConfigMap. Use a writable volume, bind-mount, or external configuration service if you need runtime persistence.
