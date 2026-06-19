@@ -133,6 +133,15 @@ jobs:
           TAG="pr-${{ github.event.number }}"
           echo "tags=ghcr.io/${REPO_LOWER}/semantic-router/${{ matrix.image }}:${TAG}" >> $GITHUB_OUTPUT
 
+      - name: Resolve build args
+        id: build-args
+        env:
+          MATRIX_IMAGE: ${{ matrix.image }}
+          CARGO_BUILD_JOBS: "8"
+          DASHBOARD_VERSION_MODE: pr
+          PR_NUMBER: ${{ github.event.number }}
+        run: bash tools/ci/docker-build-args.sh
+
       - name: Record build start time
         id: build-start
         run: echo "start=$(date +%s)" >> $GITHUB_OUTPUT
@@ -150,12 +159,7 @@ jobs:
           tags: ${{ steps.tags.outputs.tags }}
           cache-from: type=gha,scope=${{ matrix.image }}-amd64
           cache-to: type=gha,mode=max,scope=${{ matrix.image }}-amd64,ignore-error=true
-          build-args: |
-            BUILDKIT_INLINE_CACHE=1
-            CARGO_BUILD_JOBS=8
-            CARGO_INCREMENTAL=1
-            RUSTC_WRAPPER=""
-            CARGO_NET_GIT_FETCH_WITH_CLI=true
+          build-args: ${{ steps.build-args.outputs.args }}
 
       - name: Build summary and timing
         if: always()
@@ -283,6 +287,16 @@ jobs:
           echo "tags=ghcr.io/${REPO_LOWER}/semantic-router/${{ matrix.image }}:${TAG}-${PLATFORM_SUFFIX}" >> $GITHUB_OUTPUT
           echo "tag_base=${TAG}" >> $GITHUB_OUTPUT
 
+      - name: Resolve build args
+        id: build-args
+        env:
+          MATRIX_IMAGE: ${{ matrix.image }}
+          CARGO_BUILD_JOBS: "20"
+          DASHBOARD_VERSION_MODE: publish
+          IS_NIGHTLY: ${{ inputs.is_nightly }}
+          NIGHTLY_DATE: ${{ steps.date.outputs.date_tag }}
+        run: bash tools/ci/docker-build-args.sh
+
       - name: Additional cleanup for llm-katan (large Python packages)
         if: matrix.image == 'llm-katan'
         run: |
@@ -306,12 +320,7 @@ jobs:
           tags: ${{ steps.tags.outputs.tags }}
           cache-from: type=gha,scope=${{ matrix.image }}-${{ steps.build-params.outputs.platform_suffix }}
           cache-to: type=gha,mode=max,scope=${{ matrix.image }}-${{ steps.build-params.outputs.platform_suffix }},ignore-error=true
-          build-args: |
-            BUILDKIT_INLINE_CACHE=1
-            CARGO_BUILD_JOBS=20
-            CARGO_INCREMENTAL=1
-            RUSTC_WRAPPER=""
-            CARGO_NET_GIT_FETCH_WITH_CLI=true
+          build-args: ${{ steps.build-args.outputs.args }}
           provenance: false
 
       - name: Build summary and timing
