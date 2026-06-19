@@ -2,6 +2,7 @@ package extproc
 
 import (
 	"encoding/json"
+	"strings"
 	"time"
 
 	"go.opentelemetry.io/otel/attribute"
@@ -121,8 +122,35 @@ func firstSystemMessage(messages []interface{}) (string, bool) {
 	if !ok || role != "system" {
 		return "", false
 	}
-	content, _ := firstMsg["content"].(string)
-	return content, true
+	return systemMessageContentText(firstMsg["content"]), true
+}
+
+// systemMessageContentText returns the text of a system message whose content
+// may be a plain string or an array of content parts (both valid OpenAI input).
+// Without handling the structured form, the content was coerced to "" and the
+// original system instructions were silently dropped during insert-mode merging.
+func systemMessageContentText(content interface{}) string {
+	switch v := content.(type) {
+	case string:
+		return v
+	case []interface{}:
+		parts := make([]string, 0, len(v))
+		for _, item := range v {
+			m, ok := item.(map[string]interface{})
+			if !ok {
+				continue
+			}
+			if t, ok := m["type"].(string); ok && t != "" && t != "text" && t != "input_text" {
+				continue
+			}
+			if txt, ok := m["text"].(string); ok && txt != "" {
+				parts = append(parts, txt)
+			}
+		}
+		return strings.Join(parts, "\n")
+	default:
+		return ""
+	}
 }
 
 func systemPromptContent(systemPrompt string, mode string, existingSystemContent string, hasSystemMessage bool) (string, string) {
