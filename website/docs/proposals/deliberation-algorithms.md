@@ -87,12 +87,22 @@ Reliability hierarchy of signals: grounded > peer-supported > confident >
 self-consistent > relevant. None is truth, but stacked they give a robust *relative*
 score — enough to down-weight the least-supported responses before synthesis.
 
+**Use the score as a soft weight, not a hard filter.** The first evaluation
+(`bench/grounded_fusion/FINDINGS.md`) found that *hard-dropping* the least
+mutually-consistent panel response regresses quality on contested factual questions:
+three weaker models can be confidently wrong together (high mutual entailment) while
+the lone dissenter — often the strongest model — is right, and consistency filtering
+deletes exactly that signal. The grounding stage therefore defaults to the `weight`
+policy (keep every response, let the judge weight by score and protect a correct
+dissenter); `filter` remains available but is opt-in.
+
 ## 6. Recommendation — Grounding-Aware Fusion (hybrid reference)
 
 Extend the existing `FusionLooper` with an optional grounding stage (off by default):
 after the panel returns and before the judge runs, score each response for
-groundedness, then rank and filter. Hybrid reference: detector against context when
-present, otherwise cross-model NLI.
+groundedness, then guide synthesis with the scores (soft-weight by default; hard
+filter is opt-in). Hybrid reference: detector against context when present, otherwise
+cross-model NLI.
 
 This is the highest-leverage first build because:
 
