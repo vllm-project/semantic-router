@@ -25,9 +25,14 @@ func Compile(input string) (*config.RouterConfig, []error) {
 }
 
 func CompileAST(prog *Program) (*config.RouterConfig, []error) {
+	defaults := config.DefaultGlobalConfig()
 	c := &Compiler{
-		prog:            prog,
-		config:          &config.RouterConfig{},
+		prog: prog,
+		config: &config.RouterConfig{
+			IntelligentRouting: config.IntelligentRouting{
+				ModelSelection: defaults.ModelSelection,
+			},
+		},
 		pluginTemplates: make(map[string]*PluginDecl),
 	}
 	c.compile()

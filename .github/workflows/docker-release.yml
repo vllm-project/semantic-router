@@ -323,3 +323,5 @@ jobs:
         tags: |
           ghcr.io/${{ env.REPOSITORY_OWNER_LOWER }}/semantic-router/dashboard:${{ steps.extract_tag.outputs.tag }}
           ghcr.io/${{ env.REPOSITORY_OWNER_LOWER }}/semantic-router/dashboard:latest
+        build-args: |
+          DASHBOARD_VERSION=${{ steps.extract_tag.outputs.tag }}

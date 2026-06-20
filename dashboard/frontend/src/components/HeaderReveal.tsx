@@ -126,13 +126,10 @@ const HEADER_INFO: Record<string, { label: string; description: string }> = {
     label: 'Fast Response',
     description: 'Request short-circuited by fast_response plugin',
   },
-  'x-vsr-hallucination-detected': {
-    label: 'Quality: Hallucination',
-    description: 'Potential hallucination detected',
-  },
-  'x-vsr-fact-check-needed': {
-    label: 'Quality: Fact Check',
-    description: 'Fact checking recommended',
+  'x-vsr-response-warnings': {
+    label: 'Quality: Response Warnings',
+    description:
+      'Comma-separated response-quality warnings (hallucination, unverified_factual, response_jailbreak)',
   },
   // Looper headers
   'x-vsr-looper-model': {
@@ -209,8 +206,7 @@ const HeaderReveal = ({ headers, onComplete, displayDuration = 2000 }: HeaderRev
         key === 'x-vsr-selected-reasoning' ||
         key === 'x-vsr-fast-response' ||
         key === 'x-vsr-context-token-count' ||
-        key === 'x-vsr-hallucination-detected' ||
-        key === 'x-vsr-fact-check-needed',
+        key === 'x-vsr-response-warnings',
     ),
     // Looper headers: all x-vsr-looper-*
     looper: displayHeaders.filter(([key]) => key.startsWith('x-vsr-looper-')),

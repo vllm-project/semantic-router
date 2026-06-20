@@ -16,6 +16,6 @@ func baseSystemStatus() SystemStatus {
 		Overall:        "not_running",
 		DeploymentType: "none",
 		Services:       []ServiceStatus{},
-		Version:        "v0.1.0",
+		Version:        statusVersion(),
 	}
 }

@@ -45,6 +45,12 @@ const (
 	// global.router.skip_processing.enabled is true. Value: "true" (case-insensitive).
 	// See https://github.com/vllm-project/semantic-router/issues/1808.
 	VSRSkipProcessing = "x-vsr-skip-processing"
+
+	// VSRDebug opts a request into verbose/debug response headers. Value: "true"
+	// (case-insensitive). When set, headers that the v0.4 contract otherwise
+	// omits or demotes to replay are emitted inline for that request — the
+	// debug/replay-mode trigger for the v0.4 header surface. See issue #2216.
+	VSRDebug = "x-vsr-debug"
 )
 
 // VSR Decision Tracking Headers
@@ -241,64 +247,36 @@ const (
 // and 5xx) so clients can always tell which translation cell handled the
 // call and what was lost during translation.
 const (
-	// VSRInboundProtocol describes the wire format of the inbound request
+	// VSRClientProtocol describes the wire format of the inbound request
 	// as seen by the router (e.g. "openai", "anthropic"). Defaults to
 	// "openai" when no other protocol was detected.
-	VSRInboundProtocol = "x-vsr-inbound-protocol"
+	VSRClientProtocol = "x-vsr-client-protocol"
 
-	// VSROutboundProtocol describes the wire format of the outbound
+	// VSRUpstreamProtocol describes the wire format of the outbound
 	// request sent to the upstream backend. Defaults to "openai" when no
 	// explicit APIFormat was resolved.
-	VSROutboundProtocol = "x-vsr-outbound-protocol"
+	VSRUpstreamProtocol = "x-vsr-upstream-protocol"
 
-	// VSRLossinessWarnings carries a structured, comma-separated list
+	// VSRProtocolWarnings carries a structured, comma-separated list
 	// of translation observations emitted by the inbound parser during
 	// a lossy translation. Each entry is "severity;reason;field".
 	// Absent when no warnings were produced.
-	VSRLossinessWarnings = "x-vsr-lossiness-warnings"
+	VSRProtocolWarnings = "x-vsr-protocol-warnings"
 )
 
-// Hallucination Mitigation Headers
-// These headers are added to responses when hallucination detection is enabled
-// and potential hallucinations are detected in the LLM response.
+// Response Warnings Header (v0.4)
+// VSRResponseWarnings consolidates the response-quality warnings into a single
+// comma-separated header on the default response surface (#2204, #2200). The
+// per-warning detail (hallucination spans, jailbreak type/confidence,
+// fact-check verification context) stays in the replay record, recoverable via
+// x-vsr-replay-id. Absent when no warnings were produced.
 const (
-	// HallucinationDetected indicates that potential hallucination was detected in the response.
-	// Value: "true"
-	HallucinationDetected = "x-vsr-hallucination-detected"
+	VSRResponseWarnings = "x-vsr-response-warnings"
 
-	// HallucinationSpans contains a summary of unsupported claims found in the response.
-	// Value: semicolon-separated list of claim summaries (truncated if too long)
-	HallucinationSpans = "x-vsr-hallucination-spans"
-
-	// FactCheckNeeded indicates whether the original prompt was classified as needing fact-checking.
-	// Value: "true" or "false"
-	FactCheckNeeded = "x-vsr-fact-check-needed"
-
-	// UnverifiedFactualResponse indicates the response contains factual claims that could not be verified.
-	// This occurs when the prompt was classified as needing fact-checking but no tool/RAG context
-	// was available to verify the response against.
-	// Value: "true"
-	UnverifiedFactualResponse = "x-vsr-unverified-factual-response"
-
-	// VerificationContextMissing indicates that no tool/RAG context was available for verification.
-	// This header is set alongside UnverifiedFactualResponse to explain why verification couldn't occur.
-	// Value: "true"
-	VerificationContextMissing = "x-vsr-verification-context-missing"
-)
-
-// Response Jailbreak Detection Headers
-// These headers are added to responses when response-level jailbreak detection
-// finds adversarial content (e.g., memory poisoning patterns) in the LLM response.
-const (
-	// ResponseJailbreakDetected indicates that jailbreak content was detected in the LLM response.
-	// Value: "true"
-	ResponseJailbreakDetected = "x-vsr-response-jailbreak-detected"
-
-	// ResponseJailbreakType specifies the type of jailbreak detected in the response.
-	ResponseJailbreakType = "x-vsr-response-jailbreak-type"
-
-	// ResponseJailbreakConfidence indicates the confidence level of the response jailbreak detection.
-	ResponseJailbreakConfidence = "x-vsr-response-jailbreak-confidence"
+	// Warning codes carried, in order, in the VSRResponseWarnings value.
+	ResponseWarningHallucination     = "hallucination"
+	ResponseWarningUnverifiedFactual = "unverified_factual"
+	ResponseWarningJailbreak         = "response_jailbreak"
 )
 
 // Auth Backend Injected Headers
