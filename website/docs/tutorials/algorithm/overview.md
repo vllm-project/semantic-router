@@ -70,13 +70,13 @@ The repo now keeps one tutorial page per algorithm.
 | **[SVM](./selection/svm)** | ML (Rust) | No (offline) | No | — | Decision boundary classification |
 | **[MLP](./selection/mlp)** | ML (GPU) | No (offline) | No | — | Non-linear neural network routing |
 | **[Latency Aware](./selection/latency-aware)** | Metrics | No | No | — | Fastest model selection by TPOT/TTFT |
-| **[Session Aware](./selection/session-aware)** | Session policy | No | Session | — | Agentic multi-turn routing with tool-loop and prefix-cache stay policy |
 
 ### Looper Algorithms (multi-model orchestration)
 
 | Algorithm | Description | Key Feature |
 |-----------|-------------|-------------|
 | **[Confidence](./looper/confidence)** | Small-to-large escalation | Logprob-based confidence evaluation |
+| **[Fusion](./looper/fusion)** | Parallel panel deliberation | Judge analysis + final synthesis |
 | **[Ratings](./looper/ratings)** | Bounded concurrent execution | Concurrency cap + rating aggregation |
 | **[ReMoM](./looper/remom)** | Multi-round parallel reasoning | Breadth schedule + intelligent synthesis |
 
@@ -87,9 +87,7 @@ flowchart TD
     Start[Need algorithm?] --> Q1{Multiple models in modelRefs?}
     Q1 -- No --> Static[Static: first model wins]
     Q1 -- Yes --> Q2{Orchestration type?}
-    Q2 -- Single model selection --> QS{Need session continuity?}
-    QS -- Yes --> SessionAware[Session Aware]
-    QS -- No --> Q3{Need learning?}
+    Q2 -- Single model selection --> Q3{Need learning?}
     Q3 -- No --> Q4{Latency critical?}
     Q4 -- Yes --> Latency[Latency Aware]
     Q4 -- No --> Q5{Semantic matching needed?}
@@ -110,10 +108,17 @@ flowchart TD
     Q11 -- Yes --> Confidence[Confidence]
     Q11 -- No --> Q12{Multi-round reasoning?}
     Q12 -- Yes --> ReMoM[ReMoM]
-    Q12 -- No --> Ratings[Ratings]
+    Q12 -- No --> Q13{Need judge synthesis?}
+    Q13 -- Yes --> Fusion[Fusion]
+    Q13 -- No --> Ratings[Ratings]
 ```
 
 ### Selection Algorithms
+
+Session-aware continuity is configured as Router Learning, not as a decision
+algorithm. See [Session-Aware Learning](../learning/session-aware). There is no
+`algorithm/selection/session-aware` tutorial in the clean v0.3 surface because
+`algorithm.type: session_aware` is not a supported public algorithm.
 
 - [Automix](./selection/automix)
 - [Elo](./selection/elo)
@@ -125,12 +130,12 @@ flowchart TD
 - [MLP](./selection/mlp)
 - [RL Driven](./selection/rl-driven)
 - [Router DC](./selection/router-dc)
-- [Session Aware](./selection/session-aware)
 - [Static](./selection/static)
 - [SVM](./selection/svm)
 
 ### Looper Algorithms
 
 - [Confidence](./looper/confidence)
+- [Fusion](./looper/fusion)
 - [Ratings](./looper/ratings)
 - [ReMoM](./looper/remom)

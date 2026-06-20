@@ -150,7 +150,6 @@ const sidebars: SidebarsConfig = {
                 'tutorials/algorithm/selection/multi-factor',
                 'tutorials/algorithm/selection/rl-driven',
                 'tutorials/algorithm/selection/router-dc',
-                'tutorials/algorithm/selection/session-aware',
                 'tutorials/algorithm/selection/static',
                 'tutorials/algorithm/selection/svm',
               ],
@@ -160,10 +159,22 @@ const sidebars: SidebarsConfig = {
               label: 'Looper',
               items: [
                 'tutorials/algorithm/looper/confidence',
+                'tutorials/algorithm/looper/fusion',
                 'tutorials/algorithm/looper/ratings',
                 'tutorials/algorithm/looper/remom',
               ],
             },
+          ],
+        },
+        {
+          type: 'category',
+          label: 'Learning',
+          items: [
+            'tutorials/learning/overview',
+            'tutorials/learning/session-aware',
+            'tutorials/learning/memory-and-replay',
+            'tutorials/learning/decision-adaptations',
+            'tutorials/learning/priors',
           ],
         },
         {

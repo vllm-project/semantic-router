@@ -70,7 +70,7 @@ def test_serve_help_describes_docker_only_runtime():
     assert "--topology" not in result.output
     assert "--log-level" in result.output
     assert "latency_aware" in result.output
-    assert "session_aware" in result.output
+    assert "session_aware" not in result.output
     assert "--sim-image" in result.output
     assert "router_r1" not in result.output
     assert "thompson" not in result.output

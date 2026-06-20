@@ -16,8 +16,10 @@ import (
 // performDecisionEvaluation performs decision evaluation using DecisionEngine
 // Returns (decisionName, confidence, reasoningDecision, selectedModel)
 // This is the new approach that uses Decision-based routing with AND/OR rule combinations
-// Decision evaluation is ALWAYS performed when decisions are configured (for plugin features like
-// hallucination detection), but model selection only happens for auto models.
+// Decision evaluation is ALWAYS performed when decisions are configured (for
+// plugin features like hallucination detection), but model selection only
+// happens for auto models. Fusion model slugs use the same signal extraction
+// path while limiting decision candidates to Fusion-capable decisions.
 func (r *OpenAIRouter) performDecisionEvaluation(originalModel string, history signalConversationHistory, ctx *RequestContext) (string, float64, entropy.ReasoningDecision, string, error) {
 	var decisionName string
 	var evaluationConfidence float64
@@ -49,7 +51,7 @@ func (r *OpenAIRouter) performDecisionEvaluation(originalModel string, history s
 		return "", 0, entropy.ReasoningDecision{}, "", authzErr
 	}
 
-	result, defaultModel := r.runDecisionEngine(originalModel, ctx, signals)
+	result, defaultModel := r.runDecisionEngine(originalModel, ctx, signals, r.decisionCandidatesForRequestModel(originalModel))
 	if result == nil {
 		return "", 0.0, entropy.ReasoningDecision{}, defaultModel, nil
 	}
@@ -83,8 +85,7 @@ func (r *OpenAIRouter) selectModelFromCandidates(selCtx *selection.SelectionCont
 
 	// If only one model, no need for selection algorithm
 	if len(selCtx.CandidateModels) == 1 {
-		recordAgenticSessionDecision(selCtx, nil, defaultCandidateModelRef, ctx)
-		return defaultCandidateModelRef, "single"
+		return r.selectSingleCandidateModel(selCtx, defaultCandidateModelRef, ctx)
 	}
 
 	// Determine selection method: per-decision algorithm takes precedence over global config
@@ -122,16 +123,41 @@ func (r *OpenAIRouter) selectModelFromCandidates(selCtx *selection.SelectionCont
 	if result.SessionPolicy != nil && ctx != nil {
 		ctx.VSRSessionPolicy = result.SessionPolicy.ToMap()
 	}
+	recordSelCtx, result, selectedModelRef, learningApplied := r.applyRouterLearning(selCtx, result, selectedModelRef, ctx)
+	if result.SessionPolicy != nil && ctx != nil {
+		ctx.VSRSessionPolicy = result.SessionPolicy.ToMap()
+	}
 	selectedModelRef, gateApplied := r.applyPostSelectionGate(selCtx, result, selectedModelRef, ctx, method)
-	logSelectionResult(method, result, selectedModelRef, gateApplied)
+	logSelectionResult(method, result, selectedModelRef, gateApplied, learningApplied)
 	selection.RecordSelection(string(method), selCtx.DecisionName, selectedModelRef.Model, result.Tier, result.Score)
-	recordAgenticSessionDecision(selCtx, result, selectedModelRef, ctx)
+	recordAgenticSessionDecision(recordSelCtx, result, selectedModelRef, ctx)
 	return selectedModelRef, string(method)
 }
 
+func (r *OpenAIRouter) selectSingleCandidateModel(
+	selCtx *selection.SelectionContext,
+	defaultCandidateModelRef *config.ModelRef,
+	ctx *RequestContext,
+) (*config.ModelRef, string) {
+	result := &selection.SelectionResult{
+		SelectedModel: defaultCandidateModelRef.Model,
+		LoRAName:      defaultCandidateModelRef.LoRAName,
+		Score:         1.0,
+		Confidence:    1.0,
+		Method:        selection.MethodStatic,
+		Tier:          selection.TierSupported,
+		Reasoning:     "single candidate",
+		AllScores:     map[string]float64{defaultCandidateModelRef.Model: 1.0},
+	}
+	recordSelCtx, result, selectedModelRef, learningApplied := r.applyRouterLearning(selCtx, result, defaultCandidateModelRef, ctx)
+	logSelectionResult(selection.MethodStatic, result, selectedModelRef, false, learningApplied)
+	recordAgenticSessionDecision(recordSelCtx, result, selectedModelRef, ctx)
+	return selectedModelRef, "single"
+}
+
 func (r *OpenAIRouter) selectorForDecisionMethod(method selection.SelectionMethod, algorithm *config.AlgorithmConfig) selection.Selector {
-	if method == selection.MethodSessionAware && algorithm != nil && algorithm.SessionAware != nil {
-		return r.newDecisionSessionAwareSelector(algorithm.SessionAware)
+	if method == selection.MethodHybrid && algorithm != nil && algorithm.Hybrid != nil {
+		return r.newDecisionHybridSelector(algorithm.Hybrid)
 	}
 	if r.ModelSelector == nil {
 		return nil
@@ -140,28 +166,55 @@ func (r *OpenAIRouter) selectorForDecisionMethod(method selection.SelectionMetho
 	return selector
 }
 
-func (r *OpenAIRouter) newDecisionSessionAwareSelector(decisionCfg *config.SessionAwareSelectionConfig) selection.Selector {
-	cfg := selection.DefaultSessionAwareConfig()
+func (r *OpenAIRouter) newDecisionHybridSelector(decisionCfg *config.HybridSelectionConfig) selection.Selector {
+	var cfg *selection.HybridConfig
 	if r != nil && r.Config != nil {
-		cfg = buildSessionAwareSelectionConfig(r.Config, decisionCfg)
-	} else if decisionCfg != nil {
-		applySessionAwareSelectionConfig(cfg, *decisionCfg)
+		cfg = buildHybridSelectionConfig(r.Config, decisionCfg)
+	} else {
+		cfg = selection.DefaultHybridConfig()
 	}
-	selector := selection.NewSessionAwareSelector(cfg)
-	if r == nil {
-		return selector
-	}
-	if r.Config != nil && r.Config.ModelConfig != nil {
-		selector.InitializeFromConfig(r.Config.ModelConfig)
-	}
-	if r.LookupTable != nil {
+
+	eloSelector, routerDCSelector, autoMixSelector := r.hybridComponentSelectors()
+
+	selector := selection.NewHybridSelectorWithComponents(cfg, eloSelector, routerDCSelector, autoMixSelector)
+	r.applyHybridModelCosts(selector)
+	if r != nil && r.LookupTable != nil {
 		selector.SetLookupTable(r.LookupTable)
 	}
-	if r.ModelSelector != nil && cfg.BaseMethod != "" && cfg.BaseMethod != selection.MethodSessionAware {
-		baseSelector, _ := r.ModelSelector.Get(cfg.BaseMethod)
-		selector.SetBaseSelector(baseSelector)
-	}
 	return selector
+}
+
+// hybridComponentSelectors resolves the underlying elo/routerDC/autoMix selectors
+// that the hybrid selector composes, when they are registered on the router.
+func (r *OpenAIRouter) hybridComponentSelectors() (*selection.EloSelector, *selection.RouterDCSelector, *selection.AutoMixSelector) {
+	if r == nil || r.ModelSelector == nil {
+		return nil, nil, nil
+	}
+	var eloSelector *selection.EloSelector
+	var routerDCSelector *selection.RouterDCSelector
+	var autoMixSelector *selection.AutoMixSelector
+	if selector, ok := r.ModelSelector.Get(selection.MethodElo); ok {
+		eloSelector, _ = selector.(*selection.EloSelector)
+	}
+	if selector, ok := r.ModelSelector.Get(selection.MethodRouterDC); ok {
+		routerDCSelector, _ = selector.(*selection.RouterDCSelector)
+	}
+	if selector, ok := r.ModelSelector.Get(selection.MethodAutoMix); ok {
+		autoMixSelector, _ = selector.(*selection.AutoMixSelector)
+	}
+	return eloSelector, routerDCSelector, autoMixSelector
+}
+
+// applyHybridModelCosts seeds per-model prompt pricing into the hybrid selector.
+func (r *OpenAIRouter) applyHybridModelCosts(selector *selection.HybridSelector) {
+	if r == nil || r.Config == nil || r.Config.ModelConfig == nil {
+		return
+	}
+	for model, params := range r.Config.ModelConfig {
+		if params.Pricing.PromptPer1M > 0 {
+			selector.SetModelCost(model, params.Pricing.PromptPer1M)
+		}
+	}
 }
 
 func (r *OpenAIRouter) applyPostSelectionGate(
@@ -187,9 +240,14 @@ func selectedModelRefFromResult(selCtx *selection.SelectionContext, result *sele
 	return nil
 }
 
-func logSelectionResult(method selection.SelectionMethod, result *selection.SelectionResult, selected *config.ModelRef, gateApplied bool) {
+func logSelectionResult(method selection.SelectionMethod, result *selection.SelectionResult, selected *config.ModelRef, gateApplied bool, learningApplied bool) {
 	if gateApplied {
 		logging.Infof("[ModelSelection] Gate enforced stay on %s (method=%s, score=%.4f, confidence=%.2f): %s",
+			selected.Model, method, result.Score, result.Confidence, result.Reasoning)
+		return
+	}
+	if learningApplied {
+		logging.Infof("[ModelSelection] Router Learning adjusted selection to %s (base_method=%s, score=%.4f, confidence=%.2f): %s",
 			selected.Model, method, result.Score, result.Confidence, result.Reasoning)
 		return
 	}

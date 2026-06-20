@@ -63,6 +63,43 @@ def _deprecated_config_fields(data: Dict[str, Any]) -> list[str]:
     return fields
 
 
+def _removed_router_learning_fields(data: Dict[str, Any]) -> list[str]:
+    fields: list[str] = []
+
+    global_config = data.get("global")
+    if isinstance(global_config, dict):
+        router = global_config.get("router")
+        if isinstance(router, dict):
+            model_selection = router.get("model_selection")
+            if isinstance(model_selection, dict):
+                for field_name in (
+                    "session_aware",
+                    "model_switch_gate",
+                    "lookup_tables",
+                ):
+                    if field_name in model_selection:
+                        fields.append(f"global.router.model_selection.{field_name}")
+
+    routing = data.get("routing")
+    if isinstance(routing, dict):
+        decisions = routing.get("decisions")
+        if isinstance(decisions, list):
+            for index, decision in enumerate(decisions):
+                if not isinstance(decision, dict):
+                    continue
+                algorithm = decision.get("algorithm")
+                if not isinstance(algorithm, dict):
+                    continue
+                if str(algorithm.get("type", "")).strip().lower() == "session_aware":
+                    fields.append(
+                        f"routing.decisions[{index}].algorithm.type=session_aware"
+                    )
+                if "session_aware" in algorithm:
+                    fields.append(f"routing.decisions[{index}].algorithm.session_aware")
+
+    return fields
+
+
 def parse_user_config(config_path: str) -> UserConfig:
     """
     Parse and validate user configuration file.
@@ -101,6 +138,16 @@ def parse_user_config(config_path: str) -> UserConfig:
             "Deprecated config fields are no longer supported: "
             f"{joined_fields}. Use `vllm-sr config migrate --config {config_path}` "
             "or rewrite the file to canonical v0.3 `providers/routing/global`."
+        )
+
+    removed_router_learning_fields = _removed_router_learning_fields(data)
+    if removed_router_learning_fields:
+        joined_fields = ", ".join(removed_router_learning_fields)
+        raise ConfigParseError(
+            "Removed Router Learning config fields are no longer supported: "
+            f"{joined_fields}. Enable `global.router.learning.adaptations.session_aware` "
+            "and use `routing.decisions[].adaptations.session_aware` only when a "
+            "decision needs apply/observe/bypass control or sparse scope/tuning overrides."
         )
 
     # Validate with Pydantic

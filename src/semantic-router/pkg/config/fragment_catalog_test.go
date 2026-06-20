@@ -29,6 +29,7 @@ func TestConfigFragmentCatalogCoversSupportedRoutingSurfaces(t *testing.T) {
 		"automix":       filepath.Join("selection", "automix.yaml"),
 		"confidence":    filepath.Join("looper", "confidence.yaml"),
 		"elo":           filepath.Join("selection", "elo.yaml"),
+		"fusion":        filepath.Join("looper", "fusion.yaml"),
 		"gmtrouter":     filepath.Join("selection", "gmtrouter.yaml"),
 		"hybrid":        filepath.Join("selection", "hybrid.yaml"),
 		"kmeans":        filepath.Join("selection", "kmeans.yaml"),
@@ -40,7 +41,6 @@ func TestConfigFragmentCatalogCoversSupportedRoutingSurfaces(t *testing.T) {
 		"remom":         filepath.Join("looper", "remom.yaml"),
 		"rl_driven":     filepath.Join("selection", "rl-driven.yaml"),
 		"router_dc":     filepath.Join("selection", "router-dc.yaml"),
-		"session_aware": filepath.Join("selection", "session-aware.yaml"),
 		"static":        filepath.Join("selection", "static.yaml"),
 		"svm":           filepath.Join("selection", "svm.yaml"),
 	}

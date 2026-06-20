@@ -64,6 +64,7 @@ var decisionAlgorithmCatalog = []AlgorithmCatalogEntry{
 	{Type: "automix", Tier: "experimental"},
 	{Type: "confidence", Tier: "supported"},
 	{Type: "elo", Tier: "supported"},
+	{Type: "fusion", Tier: "experimental"},
 	{Type: "gmtrouter", Tier: "experimental"},
 	{Type: "hybrid", Tier: "supported"},
 	{Type: "kmeans", Tier: "experimental"},
@@ -75,7 +76,6 @@ var decisionAlgorithmCatalog = []AlgorithmCatalogEntry{
 	{Type: "remom", Tier: "supported"},
 	{Type: "rl_driven", Tier: "experimental"},
 	{Type: "router_dc", Tier: "supported"},
-	{Type: "session_aware", Tier: "supported"},
 	{Type: "static", Tier: "supported"},
 	{Type: "svm", Tier: "experimental"},
 }

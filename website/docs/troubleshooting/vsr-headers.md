@@ -4,7 +4,7 @@ This page documents the public `x-vsr-*` headers emitted by vLLM Semantic Router
 
 ## Emission Rules
 
-The router emits protocol headers on every non-cache-hit response. It emits routing decision and matched-signal headers only when all of the following are true:
+The router emits the keystone headers (`x-vsr-schema-version`, `x-vsr-response-path`) on every non-cache-hit response. The client/upstream protocol markers ride only on cross-protocol handling or when `x-vsr-debug` is set, and `x-vsr-protocol-warnings` only when warnings exist. It emits routing decision and matched-signal headers only when all of the following are true:
 
 1. The upstream response is successful (`2xx`).
 2. The response was not served from semantic cache.
@@ -16,17 +16,27 @@ Cache-hit responses can emit cache headers, but they do not re-run routing and t
 
 | Header | Direction | Description |
 | ------ | --------- | ----------- |
-| `x-session-id` | request | Stable client-provided session identifier for Chat Completions. `session_aware` uses this to reason about stay-vs-switch decisions across turns. |
+| `x-session-id` | request | Stable client-provided session identifier for Chat Completions. Session-aware Router Learning uses this, together with the configured conversation identity, to reason about stay-vs-switch decisions across turns. |
+| `x-conversation-id` | request | Stable client-provided conversation or agent-run identifier. Session-aware Router Learning uses this by default when `scope: conversation`. |
 | `x-vsr-skip-processing` | request | Opts a request out of router processing when `global.router.skip_processing.enabled` is enabled. Use value `true`. |
+| `x-vsr-debug` | request | Opts the request into verbose/debug response headers — headers the contract otherwise omits or demotes to replay are emitted inline for that request. Use value `true`. |
 
 ## Protocol And Replay Headers
 
 | Header | Description |
 | ------ | ----------- |
-| `x-vsr-inbound-protocol` | Inbound protocol shape seen by the router, for example `openai` or `anthropic`. |
-| `x-vsr-outbound-protocol` | Protocol shape sent to the selected upstream backend. |
-| `x-vsr-lossiness-warnings` | Comma-separated protocol translation warnings encoded as `severity;reason;field`. |
+| `x-vsr-client-protocol` | Inbound protocol shape seen by the router, for example `openai` or `anthropic`. Emitted only on cross-protocol handling (client protocol differs from upstream), or when `x-vsr-debug` is set. |
+| `x-vsr-upstream-protocol` | Protocol shape sent to the selected upstream backend. Emitted only on cross-protocol handling, or when `x-vsr-debug` is set. |
+| `x-vsr-protocol-warnings` | Comma-separated protocol translation warnings encoded as `severity;reason;field`. Emitted only when warnings exist. |
 | `x-vsr-replay-id` | Opaque router replay record identifier for correlating a response with replay/Insights data. |
+
+## Response Warnings
+
+| Header | Description |
+| ------ | ----------- |
+| `x-vsr-response-warnings` | Comma-separated response-quality warning codes for the completion, in fixed order: `hallucination`, `unverified_factual`, `response_jailbreak`. Emitted only when at least one applies. |
+
+This header consolidates the v0.3 `x-vsr-hallucination-detected`, `x-vsr-unverified-factual-response`, and `x-vsr-response-jailbreak-detected` headers. The per-warning detail (hallucination spans, jailbreak type/confidence, fact-check verification context) is kept in the replay record rather than the response headers, recoverable via `x-vsr-replay-id`; the individual warning and detail headers are removed from the v0.4 contract.
 
 ## Decision Headers
 
@@ -39,7 +49,17 @@ Cache-hit responses can emit cache headers, but they do not re-run routing and t
 | `x-vsr-selected-modality` | Modality result and optional method. | `AR;classifier` |
 | `x-vsr-selected-model` | Logical model alias selected by the router. | `qwen/qwen3.5-rocm` |
 | `x-vsr-session-phase` | Session-aware phase from the selected policy trace. | `user_turn`, `tool_loop`, `provider_state` |
+| `x-vsr-learning-methods` | Router Learning methods summarized by this response. Full score/cache details live in Router Replay. | `session_aware`, `session_aware,bandit` |
+| `x-vsr-learning-actions` | Method-keyed compact learning actions. | `session_aware=switch` |
+| `x-vsr-learning-scopes` | Method-keyed identity scopes used by learning. | `session_aware=conversation` |
+| `x-vsr-learning-reasons` | Method-keyed machine-readable reasons for actions. | `session_aware=hard_lock=tool_loop` |
+| `x-vsr-learning-modes` | Method-keyed decision-level learning modes. | `session_aware=apply`, `session_aware=observe` |
 | `x-vsr-injected-system-prompt` | Whether a system-prompt plugin injected text into the request. | `true` |
+
+For UI display guidance, translate `x-vsr-learning-actions` into user-facing
+phrases such as `tool-loop pinned`, `model switched`, or `learning bypassed`.
+The raw `select` first-route event is usually useful only in debug signals,
+where it can be shown as `first route for this run`.
 
 ## Matched Signal Headers
 
@@ -91,8 +111,8 @@ Projection scores and full projection traces are stored in router replay records
 ```http
 HTTP/1.1 200 OK
 Content-Type: application/json
-x-vsr-inbound-protocol: openai
-x-vsr-outbound-protocol: openai
+x-vsr-client-protocol: anthropic
+x-vsr-upstream-protocol: openai
 x-vsr-selected-decision: critical_event_tool_session_route
 x-vsr-selected-confidence: 1.0000
 x-vsr-selected-model: anthropic/claude-opus-4.6
@@ -107,4 +127,4 @@ x-vsr-replay-id: replay_01J...
 
 - `x-vsr-matched-projections` is the v0.3 projection header. The old singular form is not part of the public v0.3 contract.
 - `event` is the public signal type used by decisions and DSL. Canonical YAML stores event rules under `routing.signals.events`, matching other plural signal containers.
-- `session_aware` uses router-owned session state internally. Users configure it through `routing.decisions[].algorithm.session_aware` and pass stable session identity with `x-session-id`; there is no separate user-managed session-state block in the v0.3 public contract.
+- Session-aware Router Learning uses router-owned online state internally. Users enable it through `global.router.learning.adaptations.session_aware`, pass stable identity headers, and optionally set `routing.decisions[].adaptations.session_aware.mode` to `apply`, `observe`, or `bypass`. `scope: conversation` protects one `x-conversation-id`; `scope: session` protects the broader `x-session-id`. The old `routing.decisions[].algorithm.session_aware` shape is not part of the public v0.3 contract.

@@ -48,7 +48,15 @@ dashboard-build-frontend: dashboard-install dashboard-build-wasm ## Build dashbo
 dashboard-build-backend: ## Build dashboard backend binary
 	@$(LOG_TARGET)
 	@echo "Building dashboard backend..."
-	cd $(DASHBOARD_BACKEND_DIR) && go build -o bin/dashboard-server ./main.go
+	@PROJECT_VERSION=$$(sed -n 's/^version = "\(.*\)"/\1/p' src/vllm-sr/pyproject.toml | head -n1); \
+		GIT_REVISION=$$(git rev-parse --short=7 HEAD 2>/dev/null || echo local); \
+		if [ -z "$${DASHBOARD_VERSION:-}" ]; then \
+			DASHBOARD_VERSION="$${PROJECT_VERSION}-dev.$${GIT_REVISION}"; \
+			if [ -n "$$(git status --porcelain -- dashboard/backend dashboard/frontend src/vllm-sr/pyproject.toml 2>/dev/null)" ]; then DASHBOARD_VERSION="$${DASHBOARD_VERSION}.dirty"; fi; \
+		fi; \
+		cd $(DASHBOARD_BACKEND_DIR) && go build \
+			-ldflags "-X github.com/vllm-project/semantic-router/dashboard/backend/handlers.dashboardStatusVersion=$$DASHBOARD_VERSION" \
+			-o bin/dashboard-server ./main.go
 	@echo "dashboard/backend build completed"
 
 dashboard-build: dashboard-build-frontend dashboard-build-backend ## Build dashboard (frontend + backend)

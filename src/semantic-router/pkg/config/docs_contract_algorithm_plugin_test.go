@@ -12,6 +12,7 @@ var algorithmTutorialBuckets = map[string]string{
 	"automix":       "selection",
 	"confidence":    "looper",
 	"elo":           "selection",
+	"fusion":        "looper",
 	"gmtrouter":     "selection",
 	"hybrid":        "selection",
 	"kmeans":        "selection",
@@ -23,7 +24,6 @@ var algorithmTutorialBuckets = map[string]string{
 	"remom":         "looper",
 	"rl-driven":     "selection",
 	"router-dc":     "selection",
-	"session-aware": "selection",
 	"static":        "selection",
 	"svm":           "selection",
 }
