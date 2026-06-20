@@ -5,26 +5,30 @@
 Accepted. The first implementation covers session-aware Router Learning with
 conversation/session scopes, decision-level `apply` / `observe` / `bypass`,
 generic learning headers, replay diagnostics, and the AMD agentic routing
-recipe. Broader Router Memory features such as public memory configuration,
-replay-derived priors, multi-adaptation composition, and migration of other
-learning-style algorithms remain future work.
+recipe. Broader Router Learning memory features such as public memory configuration,
+Router Learning experience, adaptation composition, distributed state, and
+migration of other learning-style algorithms remain future work.
 
 ## Summary
 
 The router needs one product concept for cross-request routing intelligence:
 **Router Learning**.
 
-Router Learning has two parts:
+Router Learning has four product layers:
 
-- **Memory** records and learns from routing traffic.
-- **Learning adaptations** consume memory to adjust a base routing decision.
+- **Replay** records what happened as a durable event log.
+- **States** keep the live routing facts needed by active adaptations.
+- **Experience** materializes historical routing evidence from replay, evals,
+  and operator overrides.
+- **Adaptations** consume states and experience to adjust a base routing
+  decision.
 
-Router Learning memory should unify three existing concepts that are currently described
-separately:
+These layers unify concepts that were previously described separately:
 
 - replay records as the event log
-- session and conversation memory as online state
-- lookup tables as replay-derived materialized priors
+- session and conversation memory as live states
+- lookup tables as legacy materialized experience
+- learning-style selectors as adaptations plus shared states and experience
 
 The first learning adaptation is session-aware routing stability. It decides when
 to keep the current model and when to switch based on conversation continuity,
@@ -82,17 +86,18 @@ The default decision behavior is `mode: apply`.
 | Global `router.learning.adaptations.session_aware` API | Implemented | Session-aware routing moved out of `algorithm.type=session_aware`. |
 | Decision-level `adaptations.session_aware` | Implemented | Supports `apply`, `observe`, `bypass`, sparse scope overrides, and tuning overrides. |
 | Conversation and session identity scopes | Implemented | `conversation` protects one run; `session` protects across runs until idle release. |
-| Online session/conversation state | Implemented | First implementation uses low-latency in-process router state and single-replica assumptions. |
+| Session/conversation states | Implemented | First implementation uses low-latency in-process router states and single-replica assumptions. |
+| Bandit day-0 adaptation | Implemented | `bandit` supports `linucb` and `linear_thompson` API values, decision-scoped local states, explicit feedback rewards, cost goals, and conservative no-op behavior when states are missing. |
 | Generic learning response headers | Implemented | Uses `x-vsr-learning-methods`, `x-vsr-learning-actions`, `x-vsr-learning-scopes`, `x-vsr-learning-reasons`, and `x-vsr-learning-modes`. |
 | Replay learning diagnostics | Implemented, partial | Records method/action/reason/scope, base/final model evidence, cache/cost evidence, and hashed identity diagnostics. The exact replay schema can evolve. |
-| Clean break from old public session-aware algorithm config | Implemented | Old `algorithm.type=session_aware`, `algorithm.session_aware`, `model_switch_gate`, and public `lookup_tables` config are rejected instead of rewritten. |
+| Clean break from old public learning-style algorithm config | Implemented | Old `session_aware`, `elo`, `rl_driven`, and `gmtrouter` algorithm types, old learning blocks, `model_switch_gate`, and public `lookup_tables` config are rejected instead of rewritten. |
 | AMD agentic routing recipe and guide | Implemented | Recipe uses session-aware Router Learning plus decision bypasses for hard privacy/security boundaries. |
-| Public `router.learning.memory` config | Future work | Online state is internal today; no public memory backend, TTL, or storage controls are exposed. |
-| Replay-derived materialized priors | Future work | Lookup tables remain a roadmap concept under Router Learning memory, not a supported public API. |
-| Additional adaptations and composition | Future work | Only `session_aware` is implemented; bandit, personalization, provider health, and cost optimizer need separate designs. |
-| Elo / RL / GMT migration | Future work | These remain decision algorithms in this implementation. |
-| Distributed memory consistency | Future work | Multi-replica memory semantics, storage hot-path policy, and sticky routing are out of scope. |
-| Full eval harness | Future work | Unit and recipe validation exist; broader cost/cache/latency/replay-quality eval belongs in the external eval harness. |
+| Router Learning states contract | Implemented, internal | States are local/in-process and exposed to API-server feedback through a narrow runtime interface. No public states backend, TTL, or storage controls are exposed. |
+| Router Learning experience | Implemented, minimal | Replay diagnostics include method-level experience status such as missing/used. Materializers from replay, evals, and overrides remain future work. |
+| Adaptation composition | Implemented, minimal | The composer records every adaptation, hard changes win over soft changes, observe does not change the final route, and headers/replay stay method-keyed. |
+| Stateful algorithm migration | Implemented, day-0 | Old public algorithm config is rejected. `bandit`, `elo`, and `personalization` have Router Learning states, shared feedback updates, and conservative fail-open routing behavior. |
+| Distributed states semantics | Future work | Multi-replica states semantics, storage hot-path policy, and sticky routing are out of scope. |
+| Full eval harness | Future work | Unit and recipe validation exist; broader cost/cache/latency/replay-quality eval is a final validation step for the complete Router Learning architecture. |
 
 ## Background
 
@@ -132,8 +137,8 @@ algorithm over the selected route.
 - Support both common stability modes:
   - conversation-level protection
   - session-level protection
-- Define Router Learning memory as one product surface with event-log, online-state, and
-  materialized-prior layers.
+- Define Router Learning memory as one product surface with replay, states, and
+  experience layers.
 - Keep the user-facing API small while preserving advanced tuning knobs.
 - Provide a common extension point for future router-memory learning adaptations.
 
@@ -142,7 +147,7 @@ algorithm over the selected route.
 - This proposal does not redesign semantic signals or projections.
 - This proposal does not introduce prompt-visible user memory.
 - The first implementation does not require a distributed memory backend or
-  multi-replica online-state consistency.
+  multi-replica states consistency.
 - This proposal does not require every future learning adaptation to use
   session and conversation identity.
 - This proposal does not let learning silently override decisions that opt out
@@ -157,10 +162,10 @@ request
   -> signals and projections
   -> decision rules
   -> base selection algorithm
-  -> router learning memory read
+  -> router learning states and experience read
   -> router learning adaptations
   -> final model
-  -> router learning memory write
+  -> router learning replay and states write
 ```
 
 The ownership boundary is:
@@ -170,8 +175,10 @@ The ownership boundary is:
 | `decision.rules` | Decide which semantic scenario matched. |
 | `decision.modelRefs` | Define the base candidate set for the matched scenario. |
 | `decision.algorithm` | Produce the proposed model for the matched scenario. |
-| `router.learning.memory` | Store event logs, online state, and materialized priors. |
-| `router.learning.adaptations` | Adjust the proposed model using router learning memory. |
+| `router.learning.replay` | Durable event log through Router Replay. This remains configured by `global.services.router_replay`. |
+| `router.learning.states` | Live session, conversation, provider, feedback, or personalization state owned by enabled adaptations. |
+| `router.learning.experience` | Materialized historical evidence from replay, evals, and overrides. |
+| `router.learning.adaptations` | Adjust the proposed model using Router Learning states and experience. |
 | `decision.adaptations` | Decide whether this decision allows each learning adaptation to affect the final result. |
 
 This keeps the recipe explainable:
@@ -234,12 +241,11 @@ learning adaptations. Decisions route using their semantic rules and base
 `algorithm` only.
 
 If any `router.learning.adaptations.<name>.enabled: true`, Router Learning needs
-memory. The router creates the low-latency online state required by enabled
-adaptations. That online state is runtime state, not a new public storage
-backend knob.
+memory. The router creates the low-latency states required by enabled
+adaptations. Those states are runtime memory, not a new public storage backend knob.
 
-Online state is not a public toggle. If an enabled adaptation needs session,
-conversation, provider, or feedback state, the router owns that state
+States are not a public toggle. If an enabled adaptation needs session,
+conversation, provider, or feedback states, the router owns those states
 internally.
 
 Router Learning event-log data should reuse the existing Router Replay service:
@@ -257,9 +263,9 @@ Router Learning:
 
 - single router replica only
 - no required external storage reads on the request path
-- session-aware online state stored in process memory
+- session-aware states stored in process memory
 - Router Replay used only as the event log and eval/debug source
-- replay-derived priors documented as the roadmap, not required for the first
+- Router Learning experience documented as the roadmap, not required for the first
   session-aware migration
 - future adaptation ordering left as an extension point, since the first
   implementation has only `session_aware`
@@ -497,18 +503,19 @@ the durable memory themselves.
 | `multi_factor` | `algorithm` | Request-local quality, latency, cost, and load scoring. |
 | `latency_aware` | `algorithm` | Request-local runtime metric scoring, unless it starts owning cross-request health state. |
 | `router_dc` | `algorithm` | Query/model contrastive matching is a request-time selector. Learned affinity state, if added later, should be learning evidence. |
-| `automix` | mostly `algorithm` | Escalation and verification are request-time selection behavior. Durable verifier success priors should move to Router Memory. |
+| `automix` | mostly `algorithm` | Escalation and verification are request-time selection behavior. Durable verifier success experience should move to Router Learning. |
 | `knn`, `kmeans`, `svm`, `mlp` | `algorithm` | Trained model artifacts are offline selector assets, not online router memory. |
 | `session_aware` | `router.learning.adaptations.session_aware` | It is cross-request continuity and stay/switch behavior. |
 | `model_switch_gate` | `router.learning.adaptations.session_aware` | It is also stay/switch behavior and overlaps with session-aware routing. |
-| `lookup_tables` | `router.learning.memory.priors` | They are replay-derived memory views, not selector configuration. |
-| `elo` | split; ratings in Router Memory, scoring policy optional | Elo ratings are cross-request learned state. A future Elo scorer can read Router Memory. |
-| `rl_driven` / Thompson | split; posterior in Router Learning memory, scoring policy optional | Bandit posterior and feedback updates are cross-request learning. |
-| `gmtrouter` | split; interaction graph in Router Learning memory, scoring policy optional | User/model/task interaction history is cross-request personalization memory. |
+| `lookup_tables` | `router.learning.experience` | They are legacy materialized evidence, not selector configuration. |
+| `elo` | `router.learning.adaptations.elo` plus `states` and optional `experience` | Elo ratings and updates are cross-request learned state. Seed ratings or aggregates can become experience. |
+| `rl_driven` / Thompson | `router.learning.adaptations.bandit` plus `states` and optional `experience` | Bandit posterior and reward updates are cross-request learning. |
+| `gmtrouter` | `router.learning.adaptations.personalization` plus `states` and optional `experience` | User/model/task interaction history is cross-request personalization memory. |
 
 This means `router_dc` can remain an algorithm, as long as it is doing
 request-time semantic matching. If it later learns query/model affinity from
-traffic, that learned affinity becomes Router Memory that `router_dc` may read.
+traffic, that learned affinity becomes Router Learning experience that
+`router_dc` may read.
 
 The final public algorithm surface should keep request-time selectors and remove
 learning-owned selectors:
@@ -523,7 +530,7 @@ move out of algorithm:
 ```
 
 `hybrid` can still combine memory-backed evidence, such as Elo ratings or
-bandit priors, but those facts should be read from Router Memory. The hybrid
+bandit experience, but those facts should be read from Router Learning. The hybrid
 algorithm should not own the rating store, posterior, interaction graph, or
 feedback update loop.
 
@@ -532,13 +539,14 @@ feedback update loop.
 Learning-capable selectors should be decomposed into:
 
 ```text
-durable state/update loop -> router.learning.memory
+states/update loop -> router.learning.states
+historical aggregates -> router.learning.experience
 read-time learning policy -> router.learning.adaptations.<name>
 base request-time selector -> decision.algorithm
 ```
 
 For example, Thompson Sampling should not keep posterior state inside
-`algorithm.rl_driven`. The posterior belongs to Router Learning memory:
+`algorithm.rl_driven`. The posterior belongs to Router Learning states:
 
 ```yaml
 global:
@@ -547,9 +555,12 @@ global:
       adaptations:
         bandit:
           enabled: true
-          method: thompson
-          reward: quality_cost_latency
-          memory_scope: decision
+          algorithm: linear_thompson
+          goals:
+            quality: 0.7
+            cost: 0.2
+            latency: 0.1
+          scope: decision
 ```
 
 Most decisions can omit `algorithm`. The bandit learning adaptation then
@@ -572,43 +583,47 @@ global:
           k_factor: 32
 ```
 
-The ratings are router memory. A read-time Elo scoring policy can consume those
-ratings, but config should not imply that a decision-local algorithm owns the
-rating store.
+The ratings are Router Learning states. Historical ratings or offline estimates
+can seed experience, but config should not imply that a decision-local
+algorithm owns the rating store.
 
-## Router Memory Product Model
+## Router Learning Memory Product Model
 
-Router Memory should be the product-level umbrella for replay, live state, and
-derived priors. Users should not need to reason about three independent systems.
+Router Learning memory should be the product-level umbrella for replay, states,
+and experience. Users should not need to reason about three independent systems,
+but the implementation must keep their latency and durability contracts
+separate.
 
 ```text
-Router Memory
-  event_log
+Router Learning memory
+  replay
     replay records
     immutable or append-oriented history for audit, debug, eval, and replay
 
-  online_state
+  states
     session state, conversation state, provider health, bandit posterior,
     Elo ratings, personalization graph
 
-  priors
-    materialized views derived from event_log and optional overrides:
-    quality_gap, handoff_penalty, remaining_turn_prior
+  experience
+    materialized historical evidence derived from replay, eval, and optional
+    operator overrides:
+    handoff_penalty, remaining_turn_estimate, quality_gap, reward_stats
 ```
 
 The product relationship is:
 
 ```text
 requests and responses
-  -> Router Memory event_log
+  -> Router Learning replay
   -> aggregation / outcome scoring
-  -> Router Memory online_state and priors
-  -> Router Learning consumers
+  -> Router Learning experience
+  -> Router Learning adaptations
 ```
 
-Replay is the event-log layer. Session and conversation memory are online-state
-views. The old lookup tables become materialized priors. They are all Router
-Memory.
+Replay is the event-log layer. Session and conversation memory are
+states-layer views.
+The old lookup table implementation is migration material for experience, but
+`lookup_tables` is not a public product concept.
 
 ### Latency Model
 
@@ -617,38 +632,45 @@ round trip. The memory layers have different latency contracts:
 
 | Layer | Hot Request Path | Storage Path | Examples |
 | --- | --- | --- | --- |
-| `online_state` | Read and update locally during routing. This is latency-sensitive. | Optional shared backend or replay-derived rebuild, but not required for every request. | current model, tool-loop state, turn count, cache warmth, switch history |
-| `priors` | Read from an in-process or locally cached snapshot. | Recomputed from replay by background jobs or offline commands. | quality gaps, handoff penalties, remaining-turn priors |
-| `event_log` | Append after the routing decision, preferably async or fail-open. Reads are not required for the current decision. | Durable Router Replay backend. | replay records, diagnostics, eval traces |
+| `states` | Read and update locally during routing. This is latency-sensitive. | Optional shared synchronization later, but not required for every request. | current model, tool-loop state, turn count, cache warmth, switch history, Elo ratings, bandit posterior |
+| `experience` | Read from an in-process or locally cached snapshot. | Recomputed from replay, eval, or overrides by background jobs or offline commands. | handoff penalties, remaining-turn estimates, quality gaps, reward statistics |
+| `replay` | Append after the routing decision, preferably async or fail-open. Reads are not required for the current decision. | Durable Router Replay backend. | replay records, diagnostics, eval traces |
 
 The hot path should therefore be:
 
 ```text
 request
-  -> read online_state from local memory
-  -> read priors from local snapshot
+  -> read states from local memory
+  -> read experience from local snapshot
   -> compute adaptations
-  -> update online_state locally
+  -> update states locally
   -> append replay event asynchronously or fail-open
 ```
 
 External storage calls are appropriate for:
 
 - replay writes and replay APIs
-- background prior materialization
-- cold-start seeding of online state or prior snapshots
-- optional shared online-state synchronization when an operator chooses that
+- background experience materialization
+- cold-start seeding of states or experience snapshots
+- optional shared states synchronization when an operator chooses that
   deployment mode
 
 External storage calls should not be required to decide every request. If a
-shared online-state backend is introduced, it needs a small timeout,
-fail-open behavior, and local fallback so storage latency or transient outages
-do not become routing latency spikes.
+shared states backend is introduced, it needs a small timeout, fail-open
+behavior, and local fallback so storage latency or transient outages do not
+become routing latency spikes.
 
 ### Memory API
 
-Router Memory is the product model, but the public API should reuse existing
-storage seams instead of introducing a second replay backend.
+Router Learning memory is the product model, but the first follow-up should not
+introduce a broad public memory config. Public config should remain behavior
+oriented:
+
+- Router Replay storage remains configured through `global.services.router_replay`.
+- Enabled adaptations create the states they need internally.
+- Experience gets a public config only when the first materializer is
+  implemented and users can make meaningful choices about source, refresh, and
+  staleness.
 
 The existing Router Replay implementation already provides the event-log
 building blocks:
@@ -665,10 +687,10 @@ building blocks:
 
 Router Learning should therefore attach learning diagnostics to Router Replay
 records instead of inventing a parallel event-log service. Replay remains the
-append-oriented history used for audit, eval, and prior materialization; it is
-not the low-latency online state that decides the next request.
+append-oriented history used for audit, eval, and experience materialization; it
+is not the low-latency states that decide the next request.
 
-The event-log layer is Router Replay:
+The replay layer is Router Replay:
 
 ```yaml
 global:
@@ -681,14 +703,6 @@ global:
   router:
     learning:
       enabled: true
-      memory:
-        priors:
-          source: router_replay
-          populate_interval: 15m
-          overrides:
-            quality_gaps: []
-            handoff_penalties: []
-            remaining_turn_priors: []
 ```
 
 The default recipe can keep Router Learning itself simple:
@@ -738,85 +752,75 @@ plugins:
 Learning diagnostics, selected model, decision, signal names, token counts,
 cache counts, and cost estimates are enough for the first eval path.
 
-`online_state` is intentionally not configurable. It is required runtime state
-for enabled adaptations, so exposing `online_state.enabled` would let users
-create invalid or confusing configs.
+`states` is intentionally not configurable as a generic top-level switch. It is
+required runtime memory for enabled adaptations, so exposing
+`states.enabled` would let users create invalid or confusing configs.
 
-`priors` is optional and advanced. It exists for replay-derived materialized
-views and manual overrides. `source: router_replay` means the priors are built
-from the same event log exposed by `/v1/router_replay`. If omitted,
-adaptations still work from live online state and built-in defaults.
+`experience` is optional and advanced. It exists for materialized historical
+evidence and manual overrides. When implemented, experience snapshots are built
+from the router's learning inputs such as Router Replay, evals, and offline
+imports. If experience is unavailable, adaptations still work from live states
+and built-in defaults.
 
-When memory is configured, learning adaptations can consume the available layers
-by default.
+When experience is configured, learning adaptations can consume it by default.
 For example, `session_aware` reads conversation state, session state, cache
-accounting, and materialized priors when those views exist.
+accounting, and materialized handoff or remaining-turn experience when those
+views exist.
 
 ### Memory Views
 
-Initial Router Memory should expose at least these views:
+Initial Router Learning memory should expose these categories:
 
 | View | Layer | Source | Consumers |
 | --- | --- | --- | --- |
-| `replay_record` | `event_log` | request/response records | audit, eval, replay, priors |
-| `session_state` | `online_state` | request/response telemetry | `session_aware` |
-| `conversation_state` | `online_state` | request/response telemetry | `session_aware` |
-| `provider_health` | `online_state` | transport outcomes | `provider_health`, `multi_factor`, `hybrid` |
-| `elo_rating` | `online_state` | feedback/outcome updates | `elo`, `hybrid` |
-| `bandit_posterior` | `online_state` | feedback/outcome updates | `bandit`, `hybrid` |
-| `interaction_graph` | `online_state` | feedback, user/session history | `personalization`, future GMTRouter policy |
-| `quality_gap` | `priors` | replay aggregation, outcomes, overrides | `session_aware`, `hybrid`, `bandit` |
-| `handoff_penalty` | `priors` | replay aggregation, overrides | `session_aware` |
-| `remaining_turn_prior` | `priors` | replay aggregation, overrides | `session_aware` |
+| `replay_record` | `replay` | request/response records | audit, eval, replay, experience |
+| `session_state` | `states` | request/response telemetry | `session_aware` |
+| `conversation_state` | `states` | request/response telemetry | `session_aware` |
+| `provider_health` | `states` | transport outcomes | `provider_health`, `multi_factor`, `hybrid` |
+| `elo_rating` | `states` | feedback/outcome updates | `elo`, `hybrid` |
+| `bandit_posterior` | `states` | feedback/outcome updates | `bandit`, `hybrid` |
+| `interaction_graph` | `states` | feedback, user/session history | `personalization` |
+| `handoff_penalty` | `experience` | replay/eval aggregation, overrides | `session_aware` |
+| `remaining_turn_estimate` | `experience` | replay/eval aggregation, overrides | `session_aware` |
+| `quality_gap` | `experience` | replay/eval aggregation, outcomes, overrides | `hybrid`, `bandit`, future quality adaptations |
 
 The important part is that these are shared memory views. They should not be
 private fields inside individual algorithms.
 
-### Lookup Table Migration
+### Lookup Table Cleanup
 
-The current `lookup_tables` block is useful conceptually but sits in the wrong
-place:
+The current `lookup_tables` concept is useful implementation material but sits
+in the wrong product layer. It should not be renamed directly into the public
+API.
 
-```yaml
-global:
-  router:
-    model_selection:
-      lookup_tables:
-        enabled: true
-```
+Instead:
 
-It is not a model-selection algorithm. It is the old name for materialized
-Router Memory priors.
+- Remove `model_selection.lookup_tables` from the public contract.
+- Keep or refactor the existing lookup-table code only as internal migration
+  material for experience snapshots.
+- Do not expose `storage_path` or `auto_save_interval` as Router Learning
+  memory knobs.
+- Add a public `router.learning.experience` shape only when the first
+  experience materializer exists.
 
-| Old Field | New Field |
-| --- | --- |
-| `model_selection.lookup_tables.enabled` | `router.learning.memory.priors.enabled` |
-| `model_selection.lookup_tables.storage_path` | Implementation detail removed from public config. |
-| `model_selection.lookup_tables.auto_save_interval` | Implementation detail removed from public config. |
-| `model_selection.lookup_tables.populate_from_replay` | `router.learning.memory.priors.source: router_replay` |
-| `model_selection.lookup_tables.populate_interval` | `router.learning.memory.priors.populate_interval` |
-| `model_selection.lookup_tables.quality_gaps` | `router.learning.memory.priors.overrides.quality_gaps` |
-| `model_selection.lookup_tables.handoff_penalties` | `router.learning.memory.priors.overrides.handoff_penalties` |
-| `model_selection.lookup_tables.remaining_turn_priors` | `router.learning.memory.priors.overrides.remaining_turn_priors` |
+Manual overrides remain useful, but they should become experience overrides,
+not selector-local tables.
 
-Manual overrides remain useful, but they become overrides for Router Memory
-priors, not selector-local tables.
+### States vs Experience
 
-### Online State vs Priors
-
-Online state and priors are different layers of Router Memory.
+States and experience are different layers of Router Learning memory.
 
 | Memory Layer | Scope | Purpose |
 | --- | --- | --- |
-| `online_state` | live session, conversation, provider, user, or decision | Protect current continuity, cache, tool loops, health, preference, and switch history. |
-| `priors` | aggregate traffic history | Provide learned quality gaps, handoff penalties, and expected remaining turns. |
+| `states` | live session, conversation, provider, user, or decision | Protect current continuity, cache, tool loops, health, preference, and switch history. |
+| `experience` | aggregate traffic history or offline eval output | Provide learned handoff costs, remaining-turn estimates, quality gaps, and reward statistics. |
 
 Session-aware learning should read both:
 
 ```text
 conversation_state says: active tool loop, keep current model
 session_state says: cache is warm, switching has been frequent
-priors say: switching from local to frontier has handoff penalty 0.05
+experience says: switching from local to frontier has handoff penalty 0.05
 ```
 
 This lets the runtime make an auditable stay/switch decision without putting
@@ -1070,8 +1074,9 @@ global:
 express stay-vs-switch behavior. In the final API, that behavior belongs under
 `global.router.learning.adaptations.session_aware`.
 
-`model_selection.lookup_tables` is a replay-derived memory view. It belongs
-under `global.router.learning.memory.priors`.
+`model_selection.lookup_tables` is no longer a public concept. Its useful
+implementation ideas belong to future Router Learning experience, not to
+selector-local config.
 
 Learning-owned algorithm types should also be rejected as final public
 adaptations:
@@ -1155,11 +1160,11 @@ omit `algorithm` entirely.
 | `model_switch_gate.default_handoff_penalty` | `router.learning.adaptations.session_aware.tuning.handoff_penalty` |
 | `model_switch_gate.mode: shadow` | `decision.adaptations.session_aware.mode: observe` for rollout decisions |
 | `model_switch_gate.mode: enforce` | `decision.adaptations.session_aware.mode: apply` |
-| `model_selection.lookup_tables` | `router.learning.memory.priors` |
+| `model_selection.lookup_tables` | no direct replacement; future experience materializers may reuse the implementation ideas |
 | `algorithm.type: elo` | `router.learning.adaptations.elo`; add a base `algorithm` only if the decision needs one |
 | `model_selection.elo` | `router.learning.adaptations.elo` |
 | `algorithm.type: rl_driven` | `router.learning.adaptations.bandit`; add a base `algorithm` only if the decision needs one |
-| `algorithm.rl_driven.use_thompson_sampling` | `router.learning.adaptations.bandit.method: thompson` |
+| `algorithm.rl_driven.use_thompson_sampling` | `router.learning.adaptations.bandit.algorithm: linear_thompson` |
 | `algorithm.type: gmtrouter` | `router.learning.adaptations.personalization`; add a base `algorithm` only if the decision needs one |
 | `algorithm.gmtrouter.storage_path` | `router.learning.memory` backend configuration |
 
@@ -1173,9 +1178,9 @@ These old fields should not have public replacements in the clean API:
 | `context_portability_hard_lock` | Default enabled in session-aware learning. |
 | `decision_drift_reset` | Replaced by explicit conversation identity. |
 | `quality_gap_multiplier` | Internal selector-normalization detail. |
-| `remaining_turn_prior_weight` | Internal or future advanced setting. |
-| `remaining_turn_prior_horizon` | Internal or future advanced setting. |
-| `min_remaining_turn_prior_samples` | Internal or future advanced setting. |
+| `remaining_turn_prior_weight` | Internal or future experience advanced setting. |
+| `remaining_turn_prior_horizon` | Internal or future experience advanced setting. |
+| `min_remaining_turn_prior_samples` | Internal or future experience advanced setting. |
 
 ### Validation Behavior
 
@@ -1217,7 +1222,7 @@ algorithm.
 
 ```text
 global.router.model_selection.lookup_tables has moved to
-global.router.learning.memory.priors.
+future Router Learning experience. Remove lookup_tables from the public config.
 ```
 
 Runtime config loading should not silently rewrite old config, and the first
@@ -1225,209 +1230,344 @@ implementation should not provide an automatic config rewrite command. Migration
 is a deliberate manual edit from the old API shape to the new one. Silent or
 automatic rewrites would preserve ambiguity in the API.
 
-## Implementation Plan
+## Current Implementation Closure Plan
 
-### 1. Config Contract
+The current implementation should close the first Router Learning follow-up
+tranche without attempting to implement the full Router Learning roadmap. The
+closure boundary is:
 
-- Add `global.router.learning`.
-- Add `global.router.learning.adaptations.session_aware`.
-- Add decision-level `adaptations.session_aware`.
-- Remove `global.router.model_selection.session_aware` from the final public
-  config contract.
-- Remove `algorithm.type: session_aware` from the final public config contract.
-- Fold `model_switch_gate` into session-aware learning and reject the old
-  standalone block.
-- Reject `lookup_tables` from `global.router.model_selection`; replay-derived
-  priors move to the Router Learning roadmap.
-- Reuse `global.services.router_replay` as the Router Memory event-log
-  implementation.
-- Add `global.router.learning.memory.priors` only for replay-derived materialized
-  priors and manual overrides in the roadmap; the first implementation can omit
-  prior materialization.
-- Implement required online state internally for enabled adaptations.
-- Validate `scope` values: `conversation`, `session`.
-- Validate `mode` values: `apply`, `bypass`, `observe`.
-- Emit hard validation errors for old memory, learning, and session-aware config
-  shapes with explicit migration messages.
-- Add defaults:
-  - `router.learning.enabled: false` unless a recipe enables it
-  - enabled learning adaptations create required online state automatically
-  - Router Learning diagnostics attach to Router Replay records when
-    `global.services.router_replay.enabled: true`
-  - Router Replay storage defaults and backends remain owned by
-    `global.services.router_replay`
-  - `scope: conversation`
-  - `identity.headers.session: x-session-id`
-  - `identity.headers.conversation: x-conversation-id`
-  - decision mode defaults to `apply`
+- session-aware routing is a global adaptation, not a decision algorithm
+- bandit day0 is a Router Learning adaptation, not a decision algorithm
+- decision-level `apply`, `observe`, and `bypass` are supported
+- conversation and session scopes are supported
+- generic learning headers and replay diagnostics explain the result
+- old learning-style public algorithm config fails validation with actionable
+  errors instead of being rewritten
+- AMD agentic routing recipe and guide use the new API
+- docs clearly describe remaining work without implying it already exists
 
-The final architecture still classifies `elo`, `rl_driven`, and `gmtrouter` as
-learning-owned capabilities. Moving them requires new feedback, posterior, and
-personalization adaptation APIs, so that migration is future Router Learning
-work rather than part of this session-aware implementation.
+### 1. Terminology and Public Surface
 
-### 2. Request Identity
+Finish the vocabulary cleanup:
 
-- Parse identity values from `identity.headers`.
-- For `session_aware`, require the `session` key and use the `conversation` key
-  when present.
-- Treat configured identity header names as the source of truth.
-- If identity is missing, use only explicit fallback behavior and mark the
-  identity source as missing in diagnostics when diagnostics are captured.
-- If the required identity is missing, session-aware learning should no-op and
-  allow the base routing decision to proceed.
-- Store identity source in diagnostics.
-- Treat conversation identity as distinct from session identity throughout
-  request context, selection context, learning trace, and event-log records.
+- Use `replay`, `states`, `experience`, and `adaptations` as the four Router
+  Learning memory layers.
+- Remove `priors` from the public proposal language.
+- Treat `lookup_tables` as legacy implementation material, not a public API.
+- Keep `decision.algorithm` scoped to current-request base selection.
+- Keep `global.router.learning.adaptations.<name>` as the place where
+  cross-request learning adjusts the base route.
 
-### 3. Learning Runtime
+Acceptance:
 
-- Run decision matching as today.
-- Run the decision's base `algorithm` to produce a proposed model.
-- Apply enabled Router Learning adaptations after base selection.
-- For session-aware learning:
-  - read Router Memory `online_state`
-  - read `priors` when a local snapshot exists
-  - read conversation state and session state from `online_state`
-  - evaluate the decision's adaptation mode
-  - compute keep/switch/observe
-  - produce a final model and structured trace
-- Allow protected carry-over of the previous model across decision modelRef
-  boundaries only when mode is `apply`.
-- Never override a decision with `mode: bypass`.
+- The proposal and issue roadmap use the same terminology.
+- No section suggests that `lookup_tables` is the future public config name.
+- No section suggests that `router.learning.states.enabled` or a broad public
+  memory backend is required for the current implementation.
 
-### 4. Router Memory
+### 2. Session-Aware Adaptation Contract
 
-- Keep the request hot path free of required external storage reads.
-- Read `online_state` from in-process state or a local fast cache.
-- Read `priors` from an in-process snapshot refreshed outside the request path.
-- Treat shared online-state backends as optional synchronization layers with
-  timeout and fail-open behavior, not mandatory per-request dependencies.
-- Use existing Router Replay records as the durable event stream for audit,
-  debugging, eval, and prior generation.
-- Extend replay records with generic learning diagnostics instead of adding a
-  parallel learning event store.
-- Reuse existing Router Replay storage backends and API surfaces:
-  - `store_backend: postgres|redis|milvus|qdrant|memory`
-  - `/v1/router_replay`
-  - `/v1/router_replay/aggregate`
-  - `/v1/router_replay/trajectory`
-  - route-local `router_replay` plugin capture policy
-- Do not make learning depend on replay payload fields. Request bodies,
-  response bodies, prompts, tool schemas, tool arguments, and tool outputs are
-  controlled by the existing Router Replay capture policy.
-- Keep replay writes off the critical path where possible. Async writes should
-  have bounded queues, backpressure metrics, and safe drop behavior for
-  diagnostics when the replay backend is unhealthy.
-- Implement first-version `online_state` as single-replica in-process state:
-  - conversation-scoped state keyed by session ID and conversation ID
-  - session-scoped state keyed by session ID
-- Record session-aware online state:
-  - previous model
-  - turn count
-  - active tool-loop state
-  - non-portable context state
-  - switch history
-  - cache accounting
-  - last decision and last learning reason
-- Leave `priors` as roadmap materialized views derived from `event_log`:
-  - quality gaps
-  - handoff penalties
-  - remaining-turn priors
-- Future implementations can refresh prior snapshots through a background
-  materializer or offline command.
-- Expire online state by idle timeout or configured TTL.
+Lock the first supported adaptation contract:
 
-### 5. Event Log and Headers
+- global config:
+  `global.router.learning.adaptations.session_aware`
+- decision config:
+  `routing.decisions[].adaptations.session_aware`
+- modes: `apply`, `observe`, `bypass`
+- scopes: `conversation`, `session`
+- identity headers under:
+  `identity.headers.session` and `identity.headers.conversation`
+- states are in-process and single-replica for the current implementation
 
-- Add structured learning diagnostics to Router Replay records.
-- Add compact generic response headers for bounded adaptation summaries:
+Acceptance:
+
+- Missing identity no-ops learning and falls back to the base route.
+- `bypass` decisions cannot be overwritten by learning.
+- `observe` records the learning result without changing the final model.
+- `session` scope protects the session model until idle release.
+- `conversation` scope protects one agent run while allowing a later
+  conversation to re-route.
+
+### 3. Replay and Diagnostics
+
+Keep diagnostics generic and bounded:
+
+- learning response headers remain method-keyed:
   `x-vsr-learning-methods`, `x-vsr-learning-actions`,
   `x-vsr-learning-scopes`, `x-vsr-learning-reasons`, and
-  `x-vsr-learning-modes`.
-- Keep `x-vsr-replay-id` as the stable pointer to full diagnostics.
-- Include cache details needed to debug cache protection:
-  - prompt tokens
-  - cached tokens
-  - cache source
-  - estimated cache gap where exact backend accounting is unavailable
+  `x-vsr-learning-modes`
+- `x-vsr-replay-id` points to full diagnostics
+- Router Replay stores learning details under
+  `learning.adaptations.<name>`
+- replay diagnostics include base model, final model, action, reason, scope,
+  mode, cache evidence, and hashed identity diagnostics where available
 
-### 6. Recipe Migration
+Acceptance:
 
-- Remove the synthetic `agentic_session_route`.
-- Configure `global.services.router_replay` when eval/debug event logs are
-  required.
-- Configure global `router.learning.adaptations.session_aware`.
-- Keep simple, complex, privacy, and domain decisions as semantic decisions.
-- Mark privacy, security, and local-only policy decisions with
-  `mode: bypass`.
-- Leave normal simple, complex, and domain decisions on the default
-  `mode: apply`.
+- The old session-aware replay shape is not compatibility-filled for new
+  diagnostics.
+- Compact headers do not become a dumping ground for full score traces.
+- Full explanation lives in Router Replay.
 
-### 7. Evaluation
+### 4. AMD Agentic Recipe and Guide
 
-- Update the agentic routing eval profile to send configured identity headers
-  for session and conversation.
-- Capture `x-vsr-learning-*` and `x-vsr-replay-id` from router responses.
-- Validate semantic routing:
-  - simple requests route to the simple model
-  - complex requests route to the stronger model
-  - privacy-sensitive requests route to the local model
-  - domain requests route to the domain model
-- Validate conversation scope:
-  - same session and same conversation protects tool-loop continuity
-  - same session and new conversation releases tool-loop hard locks
-  - same session and new conversation still accounts for cache and handoff cost
-- Validate session scope:
-  - same session strongly preserves the established model across conversations
-  - bypass decisions still override session protection
-- Validate Router Memory event log:
-  - every learning adaptation has action, scope, reason, base model, and
-    final model
-  - cache accounting appears when available
-  - observe mode records the hypothetical result without changing the final
-    model
-- Report cache and cost evidence:
-  - cached tokens
-  - cache gap
-  - estimated cost delta from auto routing and cache preservation
-- Report learning latency overhead at p50 and p95.
+Keep the AMD recipe semantic:
 
-### 8. Documentation
+- simple tasks route to the simple/local model
+- complex tasks route to the stronger model
+- privacy-sensitive tasks route to the local/private model
+- domain tasks route to the domain model
+- session-aware learning protects continuity, tool loops, cache, and handoff
+  cost after the base decision proposes a model
 
-- Add a dedicated tutorial section under `docs/tutorials/learning/`.
-- Use the section as the user-facing home for Router Learning, Router Memory,
-  and learning adaptations.
-- Start with these pages:
-  - `docs/tutorials/learning/overview.md`
-  - `docs/tutorials/learning/session-aware.md`
-  - `docs/tutorials/learning/memory-and-replay.md`
-  - `docs/tutorials/learning/decision-adaptations.md`
-  - `docs/tutorials/learning/priors.md`
-- Keep future pages in the same section as new adaptations graduate:
-  - `docs/tutorials/learning/bandit.md`
-  - `docs/tutorials/learning/personalization.md`
-  - `docs/tutorials/learning/provider-health.md`
-- Cover these concepts in the tutorials:
-  - why Router Learning is separate from `decision.algorithm`
-  - how `router.learning.memory` works at a product level
-  - how `router.learning.adaptations.<name>` registers global behavior
-  - how `decision.adaptations.<name>.mode` controls hard boundaries
-  - session vs conversation identity and headers
-  - `apply`, `bypass`, and `observe`
-  - replay records, diagnostics, and cache evidence
-  - how to evaluate a learning adaptation before enabling it broadly
-- Cross-link the tutorials from:
-  - the AMD agentic routing recipe
-  - the router config reference
-  - any agentic routing blog post
-  - future adaptation-specific proposal or reference pages
+Acceptance:
+
+- The recipe does not add a synthetic `agentic_session_route`.
+- Privacy, security, and local-only decisions use `bypass`.
+- Normal simple, complex, and domain decisions inherit `apply`.
+- The guide explains both `conversation` and `session` protection.
+
+### 5. Documentation Closure
+
+The proposal should be the source of truth for follow-up agents. It must state:
+
+- what the current implementation covers
+- what the current implementation deliberately does not implement
+- which follow-up tasks belong to the roadmap
+- how old learning-style algorithms should move into the new architecture
+- why eval is the final architecture validation step, while normal tests still
+  belong with each implementation PR
+
+Acceptance:
+
+- A future agent can read this proposal and know which task belongs to which
+  phase.
+- Follow-up tasks do not depend on ambiguous terms such as `priors` or
+  `lookup table` as product concepts.
+
+## Follow-Up Roadmap
+
+The follow-up roadmap is clean-break only. Old config paths should fail
+validation with actionable errors; they should not be rewritten or silently
+mapped into the new API.
+
+### 1. Router Learning Runtime Contract
+
+Current status: implemented for session-aware, bandit, Elo, and personalization.
+The contract is internal, keeps request-time reads local, records method-keyed
+diagnostics, and lets the API server forward explicit feedback into Router
+Learning states without depending on extproc internals.
+
+Define the internal contract that all future adaptations use:
+
+- adaptation input:
+  base route, candidate set, matched decision, request identity, states snapshot,
+  and experience snapshot
+- adaptation output:
+  method, mode, scope, action, reason, base model, final model, score deltas,
+  hard/soft classification, and diagnostics
+- states update contract:
+  request-time updates are local and fail-open
+- replay contract:
+  records facts after the decision for audit, eval, and experience generation
+
+Acceptance:
+
+- A second adaptation can be implemented without adding new decision-level
+  concepts.
+- Request-time routing does not require synchronous external storage reads.
+- Missing states or experience falls back to the base route or built-in defaults.
+
+### 2. Router Learning Experience
+
+Current status: minimal diagnostics implemented. Adaptation policies can record
+whether expected experience views are `used` or `missing`; full replay/eval
+materializers, refresh policy, and operator overrides remain future work.
+
+Implement experience as materialized historical routing evidence, not as a
+direct rename of lookup tables. Experience is not a user-managed feature flag.
+Enabled adaptations declare what experience they can use, and the router
+consumes available experience automatically.
+
+Do not add public config like:
+
+```yaml
+experience:
+  enabled: true
+  source: ...
+```
+
+Those fields do not give users a meaningful product choice today. Router Replay
+is the canonical event log, eval and offline imports can feed the same internal
+experience snapshot, and missing experience should only affect warm start or
+calibration.
+
+Experience should be defined by adaptation needs:
+
+| Adaptation | Experience examples |
+| --- | --- |
+| `session_aware` | switch cost, cache-loss estimate, multi-turn length pattern |
+| `elo` | initial ratings, domain/model win rates, pairwise outcome seeds |
+| `bandit` | posterior warm start, reward calibration, cost/latency baseline |
+| `personalization` | user cluster seeds, workspace preference summaries, interaction snapshots |
+| `provider_health` | reliability baseline, region/model failure pattern |
+| `cost_optimizer` | cost-quality curve, cache-retention value |
+
+Acceptance:
+
+- Experience is generated asynchronously from replay, eval, or operator
+  overrides.
+- The request path reads an in-memory or locally cached snapshot only.
+- Experience entries carry source, sample count, version, freshness, and
+  applicable model or recipe scope.
+- Adaptations declare the experience views they can consume.
+- Missing, stale, or invalid experience falls back to built-in defaults or
+  cold-start state and is recorded in replay diagnostics as
+  `used`, `missing`, `stale`, or `ignored`.
+
+### 3. Adaptation Composition
+
+Current status: minimal deterministic composer implemented. It records every
+adaptation, ignores final-model changes from `observe`, and lets hard changes
+win over soft changes. Rich soft-policy arbitration remains a future extension.
+
+Define the composer before adding multiple final-model-changing adaptations.
+
+Minimum rules:
+
+- decision `bypass` wins for that adaptation
+- hard guards win over soft score adjustments
+- `observe` records a hypothetical result but does not change the final model
+- soft adjustments flow into one final arbiter
+- replay records each adaptation result and the final combined result
+
+Acceptance:
+
+- Two adaptations can disagree and the final route is deterministic.
+- Headers remain compact and method-keyed.
+- Replay explains both per-adaptation decisions and the final combined route.
+
+### 4. Stateful Algorithm Migration
+
+Current status: public config migration is implemented for the old learning
+algorithm paths. `session_aware`, `elo`, `rl_driven`, and `gmtrouter` are
+rejected as public `decision.algorithm.type` values. `bandit`, `elo`, and
+`personalization` have conservative day-0 Router Learning states and feedback
+update loops.
+
+Migrate learning-style algorithms into the new architecture instead of keeping
+private state inside `decision.algorithm`.
+
+Targets:
+
+- `elo` becomes `router.learning.adaptations.elo`
+  - ratings are states
+  - historical rating seeds can be experience
+- `rl_driven` and Thompson sampling become
+  `router.learning.adaptations.bandit`
+  - posterior and reward updates are states
+  - historical reward aggregates can be experience
+  - day0 algorithms: `linucb` as default and `linear_thompson` as supported
+  - `epsilon_greedy` can exist as an internal/test baseline, not the
+    recommended public algorithm
+- `gmtrouter` becomes a personalization adaptation
+  - user interaction graph and preference history are states and experience
+- `lookup_tables` are removed as a public concept and only reused as internal
+  migration material if helpful
+
+Non-targets:
+
+- `router_dc` remains a base algorithm.
+- `hybrid` remains a base algorithm, but any learned evidence it consumes must
+  come from Router Learning states or experience.
+- Router-R1 LLM-as-router should be evaluated separately as a base algorithm.
+- Multi-round aggregation should be treated as an execution strategy, not
+  forced into adaptation semantics.
+
+Acceptance:
+
+- No learning-style algorithm owns a separate long-lived rating store,
+  posterior store, or interaction graph outside Router Learning.
+- Feedback and reward updates use the shared learning states/replay path.
+- Old public algorithm config for migrated capabilities is rejected with clear
+  errors.
+- Bandit uses a global algorithm choice and allows per-decision sparse
+  overrides for `mode`, `goals`, and necessary `tuning`, but not per-decision
+  algorithm overrides.
+
+### 5. Distributed States Semantics
+
+Define deployment behavior after the single-replica implementation:
+
+- single replica: fully supported
+- sticky multi-replica: recommended production path for session/conversation
+  state
+- shared experience plus local states: acceptable because experience is a
+  snapshot
+- shared hot states: future design only, with strict latency and failure-mode
+  requirements
+
+Acceptance:
+
+- Kubernetes guidance states when sticky routing is required.
+- Non-sticky deployments degrade or observe explicitly; they do not silently
+  claim stable session protection.
+- Shared state is not introduced without timeout, fail-open, and local fallback
+  semantics.
+
+### 6. Architecture Eval
+
+Eval is the final validation step for the full Router Learning architecture.
+Each implementation PR still needs focused unit and integration tests.
+
+The architecture eval should cover:
+
+- route correctness
+- base model versus final model
+- adaptation method, mode, action, reason, and scope
+- cache/cost delta
+- unnecessary switch rate
+- conversation-scope and session-scope protection
+- privacy/security bypass behavior
+- Elo, bandit, and personalization migration behavior
+- replay explainability coverage
+- learning overhead at p50 and p95
+
+Acceptance:
+
+- The eval can identify reasonable and unreasonable routing choices.
+- The eval quantifies cost/cache impact in auto mode.
+- The eval can be run from deterministic replay fixtures and reported in a
+  concise human-readable plus machine-readable form.
+
+## Confirmed Follow-Up Decisions
+
+- The historical evidence layer is called `experience`.
+- Experience is internal to Router Learning and is not exposed through a broad
+  `experience.enabled`, `experience.source`, or `experience.views` public API.
+- Enabled adaptations declare which experience views they can consume.
+- `states` is not a broad public config object in the first follow-up.
+- Bandit day0 supports `linucb` as the default and `linear_thompson` as a
+  supported algorithm.
+- Bandit follow-ups should track non-stationary, budgeted, preference,
+  adversarial, dueling, and neural bandit variants.
+- Bandit goals use a weighted map. Day0 goals are `quality`, `cost`, and
+  `latency`, with defaults favoring quality and cost.
+- Decision-level bandit overrides can include `mode`, `scope`, `goals`, and
+  necessary `tuning`. They should not override the global bandit algorithm.
+- The current implementation closes session-aware Router Learning, method-keyed
+  diagnostics, minimal composition, clean-break public config migration, bandit
+  day-0 runtime, Elo rating states, and personalization preference states.
+  Experience materialization, distributed states, and architecture eval remain
+  follow-up tasks.
+- Existing local lookup-table code may be refactored or removed during the
+  experience work; the public `lookup_tables` concept should not survive.
 
 ## Future Learning Extensions
 
-`router.learning.adaptations` is intentionally broader than session-aware routing. Future
-router-memory adaptations should use the same Router Memory plus
-global learning plus decision override model.
+`router.learning.adaptations` is intentionally broader than session-aware
+routing. Future adaptations should use the same replay, states, experience, and
+decision override model.
 
 Example:
 
@@ -1441,10 +1581,6 @@ global:
   router:
     learning:
       enabled: true
-      memory:
-        priors:
-          source: router_replay
-          populate_interval: 15m
 
       adaptations:
         session_aware:
@@ -1453,7 +1589,13 @@ global:
 
         bandit:
           enabled: false
-          exploration_rate: 0.05
+          algorithm: linucb
+          goals:
+            quality: 1.0
+            cost: 0.25
+            latency: 0.10
+          tuning:
+            exploration_budget: 0.05
 
         personalization:
           enabled: false
@@ -1470,6 +1612,11 @@ adaptations:
     mode: apply
   bandit:
     mode: observe
+    goals:
+      quality: 1.0
+      cost: 0.10
+    tuning:
+      exploration_budget: 0.02
   personalization:
     mode: bypass
 ```
@@ -1482,6 +1629,39 @@ The common contract is:
 | `mode` | Whether a decision allows that learning adaptation to affect the final result. |
 | `observe` | Safe rollout mode that records evidence without changing routing. |
 | diagnostics | Every learning adaptation must explain base result, final result, action, and reason. |
+| states | Live cross-request facts owned by enabled adaptations. |
+| experience | Optional materialized historical evidence consumed by adaptations when available. |
+| goals | Weighted optimization goals for adaptations that optimize multiple objectives. |
+| tuning | Sparse advanced controls for the adaptation when defaults are not enough. |
+
+`goals` is a weighted map rather than a string objective. The router owns the
+direction of each built-in goal: `quality` is maximized, while `cost` and
+`latency` are minimized. Future goals such as `reliability` and
+`cache_efficiency` can be added without changing the API shape. Privacy and
+security remain hard decision boundaries, not soft optimization goals.
+
+Bandit day0 should support:
+
+| Algorithm | Role |
+| --- | --- |
+| `linucb` | Default contextual bandit for routing with query/request features. |
+| `linear_thompson` | Supported migration path for Thompson-style exploration. |
+| `epsilon_greedy` | Internal/test baseline only, not the recommended public algorithm. |
+
+Bandit follow-ups should track:
+
+| Algorithm Family | Use Case |
+| --- | --- |
+| `discounted_linucb`, `sliding_window_linucb` | Non-stationary traffic and model drift. |
+| `budgeted_linucb` / bandits with knapsack | Hard budget constraints. |
+| preference-conditioned contextual bandits | User or tenant cost/performance preference vectors. |
+| dueling bandits | Pairwise preference feedback. |
+| `exp3` | Adversarial or high-shift traffic. |
+| `neural_linear`, `neural_ucb`, `neural_ts` | Higher-capacity contextual bandits after data and explainability justify them. |
+
+Decision-level bandit overrides should be sparse and should not override the
+global bandit algorithm. Allow `mode`, `goals`, and necessary `tuning`; keep the
+algorithm family global so states and diagnostics remain coherent.
 
 Potential future learning adaptations:
 
@@ -1498,8 +1678,18 @@ These should not require new top-level decision fields. They should plug into
 
 ## Confirmed Decisions
 
-- The public namespace is `global.router.learning.memory` and
+- The public namespace is `global.router.learning` and
   `global.router.learning.adaptations.<name>`.
+- Router Learning memory is described as replay, states, and experience.
+- Replay is configured through `global.services.router_replay`, not a second
+  learning-specific replay backend.
+- States are runtime memory owned by enabled adaptations; they are not a broad
+  public `states.enabled` switch.
+- Experience is the future materialized historical evidence layer. It is not a
+  direct rename of lookup tables.
+- Experience does not expose broad public `enabled`, `source`, or `views`
+  toggles. Enabled adaptations declare their usable experience internally and
+  fall back when experience is missing.
 - Session-aware identity lives under
   `global.router.learning.adaptations.session_aware.identity`.
 - Session-aware identity uses a generic map:
@@ -1522,7 +1712,7 @@ These should not require new top-level decision fields. They should plug into
   agent conversations.
 - The migration is a one-time breaking change. Old API shapes should fail
   validation with actionable errors rather than silently rewrite.
-- Router Memory event-log records should reuse the existing Router Replay
+- Router Learning replay records should reuse the existing Router Replay
   service, storage backends, route-local plugin, and replay API.
 - Response diagnostics should use a small generic `x-vsr-learning-*` header
   family plus the existing `x-vsr-replay-id` pointer. Adaptation-specific
@@ -1535,21 +1725,26 @@ These should not require new top-level decision fields. They should plug into
 - New replay diagnostics use `learning.adaptations.<name>` only; the new
   implementation should not compatibility-fill older session-aware-specific
   replay fields.
-- Replay-derived priors are roadmap work. The first implementation focuses on
-  moving session-aware routing into Router Learning.
+- Router Learning experience is roadmap work. The first implementation focuses
+  on moving session-aware routing into Router Learning.
+- Bandit day0 uses a weighted `goals` map for multi-objective optimization.
+  Built-in day0 goals are `quality`, `cost`, and `latency`.
+- Bandit day0 supports `linucb` as the default and `linear_thompson` as a
+  supported algorithm. Decision-level bandit overrides can tune `mode`,
+  `goals`, and necessary `tuning`, but not the global algorithm family.
 
 ## Closed Decisions For First Implementation
 
 ### 1. Hot Path
 
 Request-time routing must not require synchronous external storage reads.
-Session-aware learning reads and writes in-process online state. Replay writes
-are off the critical path and should fail open.
+Session-aware learning reads and writes in-process state. Replay writes are off
+the critical path and should fail open.
 
 ### 2. Deployment Scope
 
-The first implementation targets a single router replica. Multi-replica online
-state, shared Redis state, sticky routing requirements, and cross-replica
+The first implementation targets a single router replica. Multi-replica state,
+shared Redis state, sticky routing requirements, and cross-replica
 consistency are roadmap items.
 
 ### 3. Missing Identity
@@ -1572,10 +1767,10 @@ Use the new generic diagnostics shape:
 `learning.adaptations.<name>`. Do not compatibility-fill older
 session-aware-specific replay fields for the new implementation.
 
-### 6. Priors Roadmap
+### 6. Experience Roadmap
 
-Replay-derived priors remain in the design and roadmap, but they are not part of
-the first implementation. The first implementation focuses on moving
+Router Learning experience remains in the design and roadmap, but it is not part
+of the first implementation. The first implementation focuses on moving
 session-aware routing into Router Learning.
 
 ### 7. Future Adaptation Ordering
