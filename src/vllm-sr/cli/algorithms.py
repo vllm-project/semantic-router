@@ -117,6 +117,11 @@ class FusionGroundingConfig(BaseModel):
 
     enabled: bool | None = False
     reference: Literal["hybrid", "context", "panel"] | None = "hybrid"
+    # How the groundedness scores are used. weight/annotate keep every response and
+    # let the judge soft-weight; filter hard-drops below min_score. Default weight:
+    # hard-dropping the least consistent response regresses quality on contested
+    # factual items (see bench/grounded_fusion/FINDINGS.md).
+    policy: Literal["weight", "annotate", "filter"] | None = "weight"
     min_score: float | None = Field(default=0.0, ge=0, le=1)
     min_keep: int | None = Field(default=1, ge=0)
     nli_contradiction_penalty: float | None = Field(default=1.0, ge=0)
