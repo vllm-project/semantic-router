@@ -264,47 +264,19 @@ const (
 	VSRProtocolWarnings = "x-vsr-protocol-warnings"
 )
 
-// Hallucination Mitigation Headers
-// These headers are added to responses when hallucination detection is enabled
-// and potential hallucinations are detected in the LLM response.
+// Response Warnings Header (v0.4)
+// VSRResponseWarnings consolidates the response-quality warnings into a single
+// comma-separated header on the default response surface (#2204, #2200). The
+// per-warning detail (hallucination spans, jailbreak type/confidence,
+// fact-check verification context) stays in the replay record, recoverable via
+// x-vsr-replay-id. Absent when no warnings were produced.
 const (
-	// HallucinationDetected indicates that potential hallucination was detected in the response.
-	// Value: "true"
-	HallucinationDetected = "x-vsr-hallucination-detected"
+	VSRResponseWarnings = "x-vsr-response-warnings"
 
-	// HallucinationSpans contains a summary of unsupported claims found in the response.
-	// Value: semicolon-separated list of claim summaries (truncated if too long)
-	HallucinationSpans = "x-vsr-hallucination-spans"
-
-	// FactCheckNeeded indicates whether the original prompt was classified as needing fact-checking.
-	// Value: "true" or "false"
-	FactCheckNeeded = "x-vsr-fact-check-needed"
-
-	// UnverifiedFactualResponse indicates the response contains factual claims that could not be verified.
-	// This occurs when the prompt was classified as needing fact-checking but no tool/RAG context
-	// was available to verify the response against.
-	// Value: "true"
-	UnverifiedFactualResponse = "x-vsr-unverified-factual-response"
-
-	// VerificationContextMissing indicates that no tool/RAG context was available for verification.
-	// This header is set alongside UnverifiedFactualResponse to explain why verification couldn't occur.
-	// Value: "true"
-	VerificationContextMissing = "x-vsr-verification-context-missing"
-)
-
-// Response Jailbreak Detection Headers
-// These headers are added to responses when response-level jailbreak detection
-// finds adversarial content (e.g., memory poisoning patterns) in the LLM response.
-const (
-	// ResponseJailbreakDetected indicates that jailbreak content was detected in the LLM response.
-	// Value: "true"
-	ResponseJailbreakDetected = "x-vsr-response-jailbreak-detected"
-
-	// ResponseJailbreakType specifies the type of jailbreak detected in the response.
-	ResponseJailbreakType = "x-vsr-response-jailbreak-type"
-
-	// ResponseJailbreakConfidence indicates the confidence level of the response jailbreak detection.
-	ResponseJailbreakConfidence = "x-vsr-response-jailbreak-confidence"
+	// Warning codes carried, in order, in the VSRResponseWarnings value.
+	ResponseWarningHallucination     = "hallucination"
+	ResponseWarningUnverifiedFactual = "unverified_factual"
+	ResponseWarningJailbreak         = "response_jailbreak"
 )
 
 // Auth Backend Injected Headers

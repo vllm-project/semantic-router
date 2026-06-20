@@ -57,6 +57,7 @@ ENV GOPROXY=https://proxy.golang.org,direct
 # Accept build arguments for target architecture
 ARG TARGETARCH
 ARG TARGETOS=linux
+ARG DASHBOARD_VERSION
 
 RUN set -eux; \
     apt_get_install_with_retry() { \
@@ -76,6 +77,7 @@ RUN set -eux; \
 # Copy src/semantic-router first (required by dashboard/backend/go.mod replace directive)
 # Only copy the packages we actually need for dashboard backend builds - NOT pkg/cli which has extra deps
 COPY src/semantic-router/go.mod src/semantic-router/go.sum /app/src/semantic-router/
+COPY src/vllm-sr/pyproject.toml /app/src/vllm-sr/pyproject.toml
 COPY src/semantic-router/internal/nlgen/ /app/src/semantic-router/internal/nlgen/
 COPY src/semantic-router/pkg/config/ /app/src/semantic-router/pkg/config/
 COPY src/semantic-router/pkg/dsl/ /app/src/semantic-router/pkg/dsl/
@@ -91,7 +93,11 @@ RUN go mod download
 
 # Copy source code and build
 COPY dashboard/backend/ /app/dashboard/backend/
-RUN CGO_ENABLED=1 GOOS=${TARGETOS} GOARCH=${TARGETARCH} go build -ldflags="-w -s" -o /app/dashboard-backend main.go
+RUN PROJECT_VERSION="$(sed -n 's/^version = "\(.*\)"/\1/p' /app/src/vllm-sr/pyproject.toml | head -n1)" && \
+    RESOLVED_DASHBOARD_VERSION="${DASHBOARD_VERSION:-${PROJECT_VERSION}-dev.container}" && \
+    CGO_ENABLED=1 GOOS=${TARGETOS} GOARCH=${TARGETARCH} go build \
+      -ldflags="-w -s -X github.com/vllm-project/semantic-router/dashboard/backend/handlers.dashboardStatusVersion=${RESOLVED_DASHBOARD_VERSION}" \
+      -o /app/dashboard-backend main.go
 
 # Stage 3: Final runtime image
 FROM python:3.11-slim-bookworm
