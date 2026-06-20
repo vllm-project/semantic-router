@@ -85,8 +85,7 @@ func (r *OpenAIRouter) selectModelFromCandidates(selCtx *selection.SelectionCont
 
 	// If only one model, no need for selection algorithm
 	if len(selCtx.CandidateModels) == 1 {
-		recordAgenticSessionDecision(selCtx, nil, defaultCandidateModelRef, ctx)
-		return defaultCandidateModelRef, "single"
+		return r.selectSingleCandidateModel(selCtx, defaultCandidateModelRef, ctx)
 	}
 
 	// Determine selection method: per-decision algorithm takes precedence over global config
@@ -124,19 +123,41 @@ func (r *OpenAIRouter) selectModelFromCandidates(selCtx *selection.SelectionCont
 	if result.SessionPolicy != nil && ctx != nil {
 		ctx.VSRSessionPolicy = result.SessionPolicy.ToMap()
 	}
+	recordSelCtx, result, selectedModelRef, learningApplied := r.applyRouterLearning(selCtx, result, selectedModelRef, ctx)
+	if result.SessionPolicy != nil && ctx != nil {
+		ctx.VSRSessionPolicy = result.SessionPolicy.ToMap()
+	}
 	selectedModelRef, gateApplied := r.applyPostSelectionGate(selCtx, result, selectedModelRef, ctx, method)
-	logSelectionResult(method, result, selectedModelRef, gateApplied)
+	logSelectionResult(method, result, selectedModelRef, gateApplied, learningApplied)
 	selection.RecordSelection(string(method), selCtx.DecisionName, selectedModelRef.Model, result.Tier, result.Score)
-	recordAgenticSessionDecision(selCtx, result, selectedModelRef, ctx)
+	recordAgenticSessionDecision(recordSelCtx, result, selectedModelRef, ctx)
 	return selectedModelRef, string(method)
+}
+
+func (r *OpenAIRouter) selectSingleCandidateModel(
+	selCtx *selection.SelectionContext,
+	defaultCandidateModelRef *config.ModelRef,
+	ctx *RequestContext,
+) (*config.ModelRef, string) {
+	result := &selection.SelectionResult{
+		SelectedModel: defaultCandidateModelRef.Model,
+		LoRAName:      defaultCandidateModelRef.LoRAName,
+		Score:         1.0,
+		Confidence:    1.0,
+		Method:        selection.MethodStatic,
+		Tier:          selection.TierSupported,
+		Reasoning:     "single candidate",
+		AllScores:     map[string]float64{defaultCandidateModelRef.Model: 1.0},
+	}
+	recordSelCtx, result, selectedModelRef, learningApplied := r.applyRouterLearning(selCtx, result, defaultCandidateModelRef, ctx)
+	logSelectionResult(selection.MethodStatic, result, selectedModelRef, false, learningApplied)
+	recordAgenticSessionDecision(recordSelCtx, result, selectedModelRef, ctx)
+	return selectedModelRef, "single"
 }
 
 func (r *OpenAIRouter) selectorForDecisionMethod(method selection.SelectionMethod, algorithm *config.AlgorithmConfig) selection.Selector {
 	if method == selection.MethodHybrid && algorithm != nil && algorithm.Hybrid != nil {
 		return r.newDecisionHybridSelector(algorithm.Hybrid)
-	}
-	if method == selection.MethodSessionAware && algorithm != nil && algorithm.SessionAware != nil {
-		return r.newDecisionSessionAwareSelector(algorithm.SessionAware)
 	}
 	if r.ModelSelector == nil {
 		return nil
@@ -196,30 +217,6 @@ func (r *OpenAIRouter) applyHybridModelCosts(selector *selection.HybridSelector)
 	}
 }
 
-func (r *OpenAIRouter) newDecisionSessionAwareSelector(decisionCfg *config.SessionAwareSelectionConfig) selection.Selector {
-	cfg := selection.DefaultSessionAwareConfig()
-	if r != nil && r.Config != nil {
-		cfg = buildSessionAwareSelectionConfig(r.Config, decisionCfg)
-	} else if decisionCfg != nil {
-		applySessionAwareSelectionConfig(cfg, *decisionCfg)
-	}
-	selector := selection.NewSessionAwareSelector(cfg)
-	if r == nil {
-		return selector
-	}
-	if r.Config != nil && r.Config.ModelConfig != nil {
-		selector.InitializeFromConfig(r.Config.ModelConfig)
-	}
-	if r.LookupTable != nil {
-		selector.SetLookupTable(r.LookupTable)
-	}
-	if r.ModelSelector != nil && cfg.BaseMethod != "" && cfg.BaseMethod != selection.MethodSessionAware {
-		baseSelector, _ := r.ModelSelector.Get(cfg.BaseMethod)
-		selector.SetBaseSelector(baseSelector)
-	}
-	return selector
-}
-
 func (r *OpenAIRouter) applyPostSelectionGate(
 	selCtx *selection.SelectionContext,
 	result *selection.SelectionResult,
@@ -243,9 +240,14 @@ func selectedModelRefFromResult(selCtx *selection.SelectionContext, result *sele
 	return nil
 }
 
-func logSelectionResult(method selection.SelectionMethod, result *selection.SelectionResult, selected *config.ModelRef, gateApplied bool) {
+func logSelectionResult(method selection.SelectionMethod, result *selection.SelectionResult, selected *config.ModelRef, gateApplied bool, learningApplied bool) {
 	if gateApplied {
 		logging.Infof("[ModelSelection] Gate enforced stay on %s (method=%s, score=%.4f, confidence=%.2f): %s",
+			selected.Model, method, result.Score, result.Confidence, result.Reasoning)
+		return
+	}
+	if learningApplied {
+		logging.Infof("[ModelSelection] Router Learning adjusted selection to %s (base_method=%s, score=%.4f, confidence=%.2f): %s",
 			selected.Model, method, result.Score, result.Confidence, result.Reasoning)
 		return
 	}

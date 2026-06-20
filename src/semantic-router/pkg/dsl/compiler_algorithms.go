@@ -38,9 +38,6 @@ var algorithmSubConfigCompilers = map[string]algorithmSubConfigCompiler{
 	"multi_factor": func(c *Compiler, algo *config.AlgorithmConfig, fields map[string]Value) {
 		algo.MultiFactor = c.compileMultiFactorAlgo(fields)
 	},
-	"session_aware": func(c *Compiler, algo *config.AlgorithmConfig, fields map[string]Value) {
-		algo.SessionAware = c.compileSessionAwareAlgo(fields)
-	},
 	"static": func(*Compiler, *config.AlgorithmConfig, map[string]Value) {},
 	"knn":    func(*Compiler, *config.AlgorithmConfig, map[string]Value) {},
 	"kmeans": func(*Compiler, *config.AlgorithmConfig, map[string]Value) {},
@@ -468,79 +465,4 @@ func parseMultiFactorSLO(fields map[string]Value) *config.MultiFactorSLOConfig {
 		cfg.MaxInflight = v
 	}
 	return cfg
-}
-
-func (c *Compiler) compileSessionAwareAlgo(fields map[string]Value) *config.SessionAwareSelectionConfig {
-	cfg := &config.SessionAwareSelectionConfig{}
-	fillSessionAwareCoreFields(cfg, fields)
-	fillSessionAwareLockFields(cfg, fields)
-	fillSessionAwareCostFields(cfg, fields)
-	fillSessionAwareHistoryFields(cfg, fields)
-	return cfg
-}
-
-func fillSessionAwareCoreFields(cfg *config.SessionAwareSelectionConfig, fields map[string]Value) {
-	if v, ok := getStringField(fields, "base_method"); ok {
-		cfg.BaseMethod = v
-	}
-	if v, ok := getIntField(fields, "idle_timeout_seconds"); ok {
-		cfg.IdleTimeoutSeconds = &v
-	}
-	if v, ok := getIntField(fields, "min_turns_before_switch"); ok {
-		cfg.MinTurnsBeforeSwitch = &v
-	}
-	if v, ok := getFloat64Field(fields, "switch_margin"); ok {
-		cfg.SwitchMargin = &v
-	}
-	if v, ok := getFloat64Field(fields, "stay_bias"); ok {
-		cfg.StayBias = &v
-	}
-}
-
-func fillSessionAwareLockFields(cfg *config.SessionAwareSelectionConfig, fields map[string]Value) {
-	if v, ok := getBoolField(fields, "tool_loop_hard_lock"); ok {
-		cfg.ToolLoopHardLock = &v
-	}
-	if v, ok := getBoolField(fields, "context_portability_hard_lock"); ok {
-		cfg.ContextPortabilityHardLock = &v
-	}
-	if v, ok := getBoolField(fields, "decision_drift_reset"); ok {
-		cfg.DecisionDriftReset = &v
-	}
-}
-
-func fillSessionAwareCostFields(cfg *config.SessionAwareSelectionConfig, fields map[string]Value) {
-	if v, ok := getFloat64Field(fields, "tool_loop_stay_bias"); ok {
-		cfg.ToolLoopStayBias = &v
-	}
-	if v, ok := getFloat64Field(fields, "prefix_cache_weight"); ok {
-		cfg.PrefixCacheWeight = &v
-	}
-	if v, ok := getFloat64Field(fields, "handoff_penalty_weight"); ok {
-		cfg.HandoffPenaltyWeight = &v
-	}
-	if v, ok := getFloat64Field(fields, "default_handoff_penalty"); ok {
-		cfg.DefaultHandoffPenalty = &v
-	}
-	if v, ok := getFloat64Field(fields, "quality_gap_multiplier"); ok {
-		cfg.QualityGapMultiplier = &v
-	}
-	if v, ok := getFloat64Field(fields, "max_cache_cost_multiplier"); ok {
-		cfg.MaxCacheCostMultiplier = &v
-	}
-}
-
-func fillSessionAwareHistoryFields(cfg *config.SessionAwareSelectionConfig, fields map[string]Value) {
-	if v, ok := getFloat64Field(fields, "switch_history_weight"); ok {
-		cfg.SwitchHistoryWeight = &v
-	}
-	if v, ok := getFloat64Field(fields, "remaining_turn_prior_weight"); ok {
-		cfg.RemainingTurnPriorWeight = &v
-	}
-	if v, ok := getIntField(fields, "remaining_turn_prior_horizon"); ok {
-		cfg.RemainingTurnPriorHorizon = &v
-	}
-	if v, ok := getIntField(fields, "min_remaining_turn_prior_samples"); ok {
-		cfg.MinRemainingTurnPriorSamples = &v
-	}
 }

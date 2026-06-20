@@ -22,11 +22,13 @@ const (
 )
 
 type (
-	Signal        = store.Signal
-	RoutingRecord = store.Record
-	ToolTrace     = store.ToolTrace
-	ToolTraceStep = store.ToolTraceStep
-	UsageCost     = store.UsageCost
+	Signal              = store.Signal
+	LearningDiagnostics = store.LearningDiagnostics
+	RouteDiagnostics    = store.RouteDiagnostics
+	RoutingRecord       = store.Record
+	ToolTrace           = store.ToolTrace
+	ToolTraceStep       = store.ToolTraceStep
+	UsageCost           = store.UsageCost
 )
 
 type Recorder struct {

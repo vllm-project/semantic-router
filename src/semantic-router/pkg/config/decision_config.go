@@ -9,6 +9,7 @@ type Decision struct {
 	Rules               RuleCombination            `yaml:"rules"`
 	ModelRefs           []ModelRef                 `yaml:"modelRefs,omitempty"`
 	Algorithm           *AlgorithmConfig           `yaml:"algorithm,omitempty"`
+	Adaptations         DecisionAdaptationsConfig  `yaml:"adaptations,omitempty"`
 	Plugins             []DecisionPlugin           `yaml:"plugins,omitempty"`
 	CandidateIterations []CandidateIterationConfig `yaml:"candidateIterations,omitempty"`
 	// Emits carries declarative side-effect directives produced by EMIT blocks
@@ -73,7 +74,7 @@ type AlgorithmConfig struct {
 	GMTRouter    *GMTRouterSelectionConfig    `yaml:"gmtrouter,omitempty"`
 	LatencyAware *LatencyAwareAlgorithmConfig `yaml:"latency_aware,omitempty"`
 	MultiFactor  *MultiFactorSelectionConfig  `yaml:"multi_factor,omitempty"`
-	SessionAware *SessionAwareSelectionConfig `yaml:"session_aware,omitempty"`
+	SessionAware *SessionAwareSelectionConfig `yaml:"-"`
 	OnError      string                       `yaml:"on_error,omitempty"`
 }
 

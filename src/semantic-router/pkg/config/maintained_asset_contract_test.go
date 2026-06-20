@@ -10,6 +10,7 @@ import (
 )
 
 var maintainedFullConfigAssets = []string{
+	"deploy/recipes/agentic-saars.yaml",
 	"deploy/recipes/balance.yaml",
 	"deploy/recipes/feedback/feedback-router.yaml",
 	"deploy/kubernetes/istio/config.yaml",

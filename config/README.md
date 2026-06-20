@@ -23,7 +23,7 @@ Inside canonical `config.yaml`:
 - structure `density` features now use built-in multilingual text-unit normalization; the contract no longer exposes a per-rule `normalize_by` switch
 - the dashboard and DSL builder now expose the same projection surface directly; see `website/docs/tutorials/projection/overview.md` and the maintained `deploy/recipes/balance.{yaml,dsl}` pair for end-to-end usage
 - `global.router`, `global.services`, `global.stores`, `global.integrations`, and `global.model_catalog` expose router-wide overrides explicitly
-- `decision.algorithm.type=session_aware` wraps a base selector with agentic session policy: tool loops and non-portable provider-state continuations stay on the current model, decision drift and idle boundaries can reselect, non-idle sessions pay handoff, switch-history, confidence-gated remaining-turn-prior, and input checkout prefix-cache costs before switching, and router replay records the full policy trace for experiments. Cache-cost multipliers must be neutral-or-stricter (`max_cache_cost_multiplier >= 1`) and remaining-turn horizons must be positive.
+- `global.router.learning.adaptations.session_aware` adds agentic stay-vs-switch policy after the base decision algorithm: tool loops and non-portable provider-state continuations stay on the current model, idle boundaries can reselect, non-idle conversations pay handoff, switch-history, and prefix-cache costs before switching, and router replay records the policy trace for experiments. Decisions can opt out with `routing.decisions[].adaptations.session_aware.mode: bypass`. `decision.algorithm.type=session_aware` is no longer a supported public algorithm.
 - `global.services.router_replay.enabled` is the router-wide replay default; when it is on, decisions inherit replay capture unless a route-local `router_replay` plugin sets `enabled: false`
 - embedding fallback tuning such as `global.model_catalog.embeddings.semantic.embedding_config.top_k` lives under the router-owned model catalog, not under individual signal rules
 - prototype-aware exemplar compression and label scoring live alongside their owning signal families: `global.model_catalog.embeddings.semantic.embedding_config.prototype_scoring`, `global.model_catalog.modules.classifier.preference.prototype_scoring`, `global.model_catalog.kbs[].prototype_scoring`, and `global.model_catalog.modules.complexity.prototype_scoring`
@@ -49,7 +49,7 @@ Candidate iteration fragments must stay bounded to `decision.candidates` or an e
 `config/algorithm/` is organized by routing policy:
 
 - `looper/`: multi-model execution policies such as `confidence`, `ratings`, `remom`, and `fusion`
-- `selection/`: candidate-selection policies such as `elo`, `router_dc`, `automix`, `session_aware`, and `latency_aware`
+- `selection/`: candidate-selection policies such as `elo`, `router_dc`, `automix`, `multi_factor`, and `latency_aware`
 
 Each supported algorithm now has its own tutorial page under `website/docs/tutorials/algorithm/`.
 
@@ -70,6 +70,7 @@ Latest official tutorials mirror the same top-level taxonomy:
   - `tutorials/signal/learned/` for embedding- and classifier-driven signals
 - `tutorials/decision/`
 - `tutorials/algorithm/` with one page per algorithm
+- `tutorials/learning/` for cross-request Router Learning adaptations such as session-aware stay-vs-switch policy
 - `tutorials/plugin/` with one page per plugin
 - `tutorials/global/`
 

@@ -47,7 +47,6 @@ class TestAlgorithmConfigTypes:
             "mlp",
             "multi_factor",
             "latency_aware",
-            "session_aware",
             "rl_driven",
             "gmtrouter",
         ]

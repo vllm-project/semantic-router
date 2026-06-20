@@ -19,6 +19,13 @@ func replayRoutingRecordMetadataTestContext() *RequestContext {
 		VSRSelectionMethod:            "router_dc",
 		VSRCacheHit:                   true,
 		ExpectStreamingResponse:       true,
+		VSRSessionPolicy: map[string]interface{}{
+			"phase":               "user_turn",
+			"current_model":       "model-a",
+			"base_selected_model": "model-c",
+			"selected_model":      "model-b",
+			"decision_reason":     "switch_has_best_adjusted_score",
+		},
 		VSRSelectedDecision: &config.Decision{
 			Name:     "balance",
 			Tier:     3,
@@ -50,6 +57,7 @@ func TestBuildReplayRoutingRecordCapturesSessionAndDecisionMetadata(t *testing.T
 	record := buildReplayRoutingRecord(ctx, "model-a", "model-b", "balance")
 
 	assertReplayRoutingMetadata(t, record)
+	assertReplayRouteDiagnostics(t, record)
 	assertReplayMatchedSignals(t, record)
 }
 
@@ -78,6 +86,29 @@ func assertReplayRoutingMetadata(t *testing.T, record routerreplay.RoutingRecord
 	}
 	if got := record.SignalValues["reask:persistently_dissatisfied"]; got != 2 {
 		t.Fatalf("expected signal value 2, got %v", got)
+	}
+}
+
+func assertReplayRouteDiagnostics(t *testing.T, record routerreplay.RoutingRecord) {
+	t.Helper()
+	diagnostics := record.RouteDiagnostics
+	if diagnostics == nil {
+		t.Fatal("expected route diagnostics")
+	}
+	if diagnostics.Decision != "balance" || diagnostics.SelectionMethod != "router_dc" {
+		t.Fatalf("unexpected diagnostics decision/method: %#v", diagnostics)
+	}
+	if diagnostics.OriginalModel != "model-a" ||
+		diagnostics.ProposalModel != "model-c" ||
+		diagnostics.PreviousModel != "model-a" ||
+		diagnostics.SelectedModel != "model-b" {
+		t.Fatalf("unexpected diagnostics models: %#v", diagnostics)
+	}
+	if !diagnostics.SessionPolicyApplied ||
+		diagnostics.SessionAction != "switch" ||
+		diagnostics.SessionPhase != "user_turn" ||
+		diagnostics.SessionReason != "switch_has_best_adjusted_score" {
+		t.Fatalf("unexpected diagnostics session summary: %#v", diagnostics)
 	}
 }
 

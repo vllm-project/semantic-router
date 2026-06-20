@@ -423,7 +423,6 @@ class AlgorithmConfig(BaseModel):
        - "hybrid": Combine multiple selection methods
        - "knn", "kmeans", "svm", "mlp": Shared ML model-selection selectors
        - "multi_factor": Combine quality, latency, cost, and load
-       - "session_aware": Agentic long-horizon routing with router-owned session memory
 
     3. RL-driven selection algorithms:
        - "rl_driven": Canonical online learning with optional Thompson / Router-R1 modes
@@ -435,7 +434,7 @@ class AlgorithmConfig(BaseModel):
     # Algorithm type: looper ("confidence", "ratings", "remom", "fusion") or
     # selection ("static", "elo", "router_dc", "automix", "hybrid",
     #            "knn", "kmeans", "svm", "mlp", "multi_factor",
-    #            "rl_driven", "gmtrouter", "latency_aware", "session_aware")
+    #            "rl_driven", "gmtrouter", "latency_aware")
     type: str
 
     # Looper algorithm configurations
@@ -451,6 +450,8 @@ class AlgorithmConfig(BaseModel):
     automix: AutoMixSelectionConfig | None = None
     hybrid: HybridSelectionConfig | None = None
     multi_factor: MultiFactorSelectionConfig | None = None
+    # Legacy field retained only so config validation can return an actionable
+    # Router Learning migration message.
     session_aware: SessionAwareSelectionConfig | None = None
 
     # RL-driven and personalized selection algorithms

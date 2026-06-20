@@ -18,7 +18,6 @@ export const ALGORITHM_TYPES = [
   'svm',
   'mlp',
   'multi_factor',
-  'session_aware',
 ] as const
 
 export type AlgorithmType = (typeof ALGORITHM_TYPES)[number]
@@ -41,7 +40,6 @@ export const ALGORITHM_DESCRIPTIONS: Record<string, string> = {
   svm: 'Support Vector Machine for model classification (no extra fields)',
   mlp: 'Neural model-selection classifier using shared ML settings (no extra fields)',
   multi_factor: 'Combine quality, latency, cost, and load into one SLO-aware score',
-  session_aware: 'Agentic stay-vs-switch policy for multi-turn sessions',
 }
 
 export function getAlgorithmFieldSchema(algoType: string): FieldSchema[] {
@@ -478,72 +476,6 @@ export function getAlgorithmFieldSchema(algoType: string): FieldSchema[] {
           label: 'No Candidates Policy',
           type: 'select',
           options: ['', 'cheapest', 'first', 'fail'],
-        },
-      ]
-    case 'session_aware':
-      return [
-        {
-          key: 'base_method',
-          label: 'Base Method',
-          type: 'select',
-          options: [
-            '',
-            'static',
-            'elo',
-            'router_dc',
-            'automix',
-            'hybrid',
-            'multi_factor',
-            'latency_aware',
-          ],
-        },
-        {
-          key: 'idle_timeout_seconds',
-          label: 'Idle Timeout Seconds',
-          type: 'number',
-          placeholder: '600',
-        },
-        {
-          key: 'min_turns_before_switch',
-          label: 'Min Turns Before Switch',
-          type: 'number',
-          placeholder: '2',
-        },
-        { key: 'switch_margin', label: 'Switch Margin', type: 'number', placeholder: '0.1' },
-        { key: 'stay_bias', label: 'Stay Bias', type: 'number', placeholder: '0.2' },
-        { key: 'tool_loop_hard_lock', label: 'Tool Loop Hard Lock', type: 'boolean' },
-        {
-          key: 'context_portability_hard_lock',
-          label: 'Context Portability Hard Lock',
-          type: 'boolean',
-        },
-        { key: 'decision_drift_reset', label: 'Decision Drift Reset', type: 'boolean' },
-        { key: 'tool_loop_stay_bias', label: 'Tool Loop Stay Bias', type: 'number' },
-        { key: 'prefix_cache_weight', label: 'Prefix Cache Weight', type: 'number' },
-        { key: 'handoff_penalty_weight', label: 'Handoff Penalty Weight', type: 'number' },
-        { key: 'default_handoff_penalty', label: 'Default Handoff Penalty', type: 'number' },
-        { key: 'quality_gap_multiplier', label: 'Quality Gap Multiplier', type: 'number' },
-        {
-          key: 'max_cache_cost_multiplier',
-          label: 'Max Cache Cost Multiplier',
-          type: 'number',
-          placeholder: '1.0',
-        },
-        { key: 'switch_history_weight', label: 'Switch History Weight', type: 'number' },
-        {
-          key: 'remaining_turn_prior_weight',
-          label: 'Remaining Turn Prior Weight',
-          type: 'number',
-        },
-        {
-          key: 'remaining_turn_prior_horizon',
-          label: 'Remaining Turn Prior Horizon',
-          type: 'number',
-        },
-        {
-          key: 'min_remaining_turn_prior_samples',
-          label: 'Min Remaining Turn Samples',
-          type: 'number',
         },
       ]
     default:

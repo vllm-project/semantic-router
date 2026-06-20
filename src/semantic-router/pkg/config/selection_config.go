@@ -15,14 +15,14 @@ type ModelSelectionConfig struct {
 	Hybrid   HybridSelectionConfig   `yaml:"hybrid,omitempty"`
 	ML       MLSelectionConfig       `yaml:"ml,omitempty"`
 
-	SessionAware SessionAwareSelectionConfig `yaml:"session_aware,omitempty"`
+	SessionAware SessionAwareSelectionConfig `yaml:"-"`
 	Momentum     MomentumSelectionConfig     `yaml:"momentum,omitempty"`
 
 	// ModelSwitchGate configures session-aware stay-vs-switch evaluation.
-	ModelSwitchGate ModelSwitchGateConfig `yaml:"model_switch_gate,omitempty"`
+	ModelSwitchGate ModelSwitchGateConfig `yaml:"-"`
 
 	// LookupTables configures persisted lookup tables for session-aware routing.
-	LookupTables LookupTableConfig `yaml:"lookup_tables,omitempty"`
+	LookupTables LookupTableConfig `yaml:"-"`
 }
 
 // LookupTableConfig configures session-routing lookup tables that replace
