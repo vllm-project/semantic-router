@@ -809,14 +809,22 @@ routing:
           judge_prompt_version: fusion-v1
           # Grounding-aware synthesis: score panel responses for faithfulness
           # (hallucination detector against context, else cross-model NLI) and
-          # rank/filter them before the judge. Disabled by default.
+          # use the scores to guide the judge. Disabled by default.
           grounding:
             enabled: false
             reference: hybrid          # hybrid | context | panel
-            min_score: 0.0             # drop responses scoring below this (0-1)
-            min_keep: 1                # always keep at least this many
+            policy: weight             # weight | annotate | filter (see below)
+            min_score: 0.0             # filter policy only: drop below this (0-1)
+            min_keep: 1                # filter policy only: keep at least this many
             nli_contradiction_penalty: 1.0
             on_error: skip             # skip (fall back to plain fusion) | fail
+            # policy controls how the scores are used:
+            #   weight   (default) keep every response; tell the judge to weight
+            #            each answer by its score (a correct lone dissenter is kept).
+            #   annotate keep every response; pass the scores to the judge as notes.
+            #   filter   hard-drop responses below min_score (keep min_keep).
+            # filter regresses quality on contested factual questions because it
+            # deletes the correct dissenter; see bench/grounded_fusion/FINDINGS.md.
 
     - name: terse_elo_route
       description: Personalized terse-answer route using Elo selection.

@@ -11,14 +11,34 @@ reward correctness/coverage; negative criteria, down to −500, penalize
 confident-but-wrong / unsafe / badly-sourced claims). We score two levels:
 
 - **Level 2 (extrinsic)** — does grounding-aware fusion beat plain fusion on the
-  final answer? Headline: the **negative-criteria penalty** should drop (grounding
-  keeps ungrounded panel responses out of synthesis). `compare.py` reports paired
-  bootstrap CIs, overall + per-domain + "contested slice" (items where grounding
-  actually dropped a response).
+  final answer? Headline: the **negative-criteria penalty** should drop. `compare.py`
+  reports paired bootstrap CIs, overall + per-domain + "contested slice" (items where
+  the `filter` policy actually dropped a response — meaningful only under `filter`).
 - **Level 1 (intrinsic)** — is the grounding *scorer* any good? `--grade-panel`
   grades each panel response too, and `evaluate.py` reports the Spearman
   correlation between the cross-model NLI grounding score and panel-response
   quality, plus discard precision/recall.
+
+## Grounding policy (what we use the score for)
+
+The grounding stage now defaults to **`policy: weight`** — keep every panel response
+and let the judge soft-weight by groundedness score (protecting a correct lone
+dissenter) — instead of hard-dropping. `make_configs.py --policy {weight,annotate,filter}`
+selects the lever for the `on` arm so follow-up CRs can A/B them.
+
+**Status / open questions (tracked, not yet answered here):**
+
+- ✅ **Hard-drop (`filter`) hurts.** The first DRACO A/B showed dropping the least
+  mutually-consistent response significantly *lowers* answer quality on contested
+  factual items (the dissenter is often the right minority view). So the production
+  default no longer drops facts — see `FINDINGS.md`. This is why `weight` is default.
+- ❓ **Does `annotate`/`weight` actually *help*?** Unknown. Keeping all responses and
+  passing scores to the judge as weights/notes may help, hurt, or be neutral vs plain
+  fusion. To be measured in a follow-up CR (`--policy weight` and `--policy annotate`
+  arms vs the `off` baseline).
+- ❓ **Is the *scorer* trustworthy enough to weight on?** Level-1 Spearman was +0.21
+  (it discriminates), but whether that signal is strong enough to improve synthesis
+  when used as a soft weight is not yet established. Follow-up experiment.
 
 ## Architecture (local stack)
 
@@ -50,8 +70,10 @@ python3 -m venv .venv-bench
 .venv-bench/bin/pip install openai requests numpy scipy tqdm pandas pyyaml pytest \
   --trusted-host pypi.org --trusted-host files.pythonhosted.org
 
-# 3. Generate the two router configs (grounding on/off)
-.venv-bench/bin/python -m bench.grounded_fusion.make_configs
+# 3. Generate the two router configs (grounding on/off).
+#    --policy {weight,annotate,filter} picks the lever for the 'on' arm
+#    (default weight = no hard-drop).
+.venv-bench/bin/python -m bench.grounded_fusion.make_configs --policy weight
 ```
 
 ## Run
@@ -103,7 +125,7 @@ overnight-scale job; start with a pilot. Runs are resumable (`--resume`).
 | `make_configs.py` | generates the two router configs |
 | `ollama_proxy.py` | OpenAI→Ollama-native shim that disables Qwen3 thinking |
 | `run_ab.sh` | end-to-end A/B driver |
-| `run_sweep.sh` | `min_score` threshold-sweep driver (off arm + on arms, resumable) |
+| `run_sweep.sh` | `min_score` threshold-sweep driver (`filter` policy only; off arm + on arms, resumable) |
 | `sanitize_results.py` | strip local paths from result JSON before sharing |
 | `test_grounded_fusion.py` | unit tests (loader + grader math, no model needed) |
 | `FINDINGS.md` | evaluation write-up: bugs fixed, results, next experiments |
