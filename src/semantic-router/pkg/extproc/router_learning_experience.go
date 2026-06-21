@@ -3,10 +3,15 @@ package extproc
 import "sort"
 
 const (
-	routerLearningExperienceStatusUsed    = "used"
-	routerLearningExperienceStatusMissing = "missing"
+	routerLearningExperienceStatusUsed    routerLearningExperienceStatus = "used"
+	routerLearningExperienceStatusMissing routerLearningExperienceStatus = "missing"
 
-	routerLearningExperienceSourceLookupTable = "internal_lookup_table"
+	routerLearningExperienceSourceLookupTable routerLearningExperienceSource = "internal_lookup_table"
+)
+
+type (
+	routerLearningExperienceStatus string
+	routerLearningExperienceSource string
 )
 
 type routerLearningExperienceSnapshot struct {
@@ -20,8 +25,8 @@ type routerLearningExperienceDiagnostics struct {
 type routerLearningExperienceView struct {
 	name        string
 	method      routerLearningMethod
-	status      string
-	source      string
+	status      routerLearningExperienceStatus
+	source      routerLearningExperienceSource
 	version     string
 	freshness   string
 	sampleCount int
@@ -29,7 +34,7 @@ type routerLearningExperienceView struct {
 
 func (r *OpenAIRouter) routerLearningExperienceSnapshot() routerLearningExperienceSnapshot {
 	status := routerLearningExperienceStatusMissing
-	source := ""
+	var source routerLearningExperienceSource
 	if r != nil && r.LookupTable != nil {
 		status = routerLearningExperienceStatusUsed
 		source = routerLearningExperienceSourceLookupTable
@@ -104,7 +109,7 @@ func (d routerLearningExperienceDiagnostics) Empty() bool {
 	return len(d.views) == 0
 }
 
-func (d routerLearningExperienceDiagnostics) appendLearningPolicyFields(out map[string]interface{}) {
+func (d routerLearningExperienceDiagnostics) appendLearningPolicyFields(fields *routerLearningPolicyFields) {
 	if len(d.views) == 0 {
 		return
 	}
@@ -116,7 +121,7 @@ func (d routerLearningExperienceDiagnostics) appendLearningPolicyFields(out map[
 		experience[view.name] = view.diagnostics()
 	}
 	if len(experience) > 0 {
-		out["experience"] = experience
+		fields.Set(learningPolicyFieldExperience, experience)
 	}
 }
 
@@ -126,10 +131,10 @@ func (v routerLearningExperienceView) diagnostics() map[string]interface{} {
 		status = routerLearningExperienceStatusMissing
 	}
 	result := map[string]interface{}{
-		"status": status,
+		"status": string(status),
 	}
 	if v.source != "" {
-		result["source"] = v.source
+		result["source"] = string(v.source)
 	}
 	if v.version != "" {
 		result["version"] = v.version

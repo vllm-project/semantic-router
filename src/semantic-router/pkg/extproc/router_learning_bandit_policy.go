@@ -14,7 +14,7 @@ type routerLearningBanditScoreDiagnostic struct {
 	FeedbackCount int     `json:"feedback_count"`
 }
 
-type routerLearningBanditDetail struct {
+type routerLearningBanditDiagnostics struct {
 	algorithm    string
 	goals        map[string]float64
 	stateKeyHash string
@@ -41,7 +41,7 @@ func banditLearningPolicy(
 	policy.Scope = cfg.EffectiveScope()
 	policy.Action = action
 	policy.Reason = reason
-	detail := &routerLearningBanditDetail{
+	detail := &routerLearningBanditDiagnostics{
 		algorithm: cfg.EffectiveAlgorithm(),
 		goals:     normalizedLearningGoals(cfg.Goals),
 	}
@@ -57,29 +57,29 @@ func banditLearningPolicy(
 	if len(scores) > 0 {
 		detail.scores = banditScoreDiagnostics(scores)
 	}
-	policy.Detail = detail
+	policy.Details.Bandit = detail
 	return policy
 }
 
-func (d *routerLearningBanditDetail) appendLearningPolicyFields(out map[string]interface{}) {
+func (d *routerLearningBanditDiagnostics) appendLearningPolicyFields(fields *routerLearningPolicyFields) {
 	if d == nil {
 		return
 	}
 	if d.algorithm != "" {
-		out["algorithm"] = d.algorithm
+		fields.SetString(learningPolicyFieldAlgorithm, d.algorithm)
 	}
 	if len(d.goals) > 0 {
-		out["goals"] = cloneLearningGoals(d.goals)
+		fields.Set(learningPolicyFieldGoals, cloneLearningGoals(d.goals))
 	}
 	if d.stateKeyHash != "" {
-		out["state_key_hash"] = d.stateKeyHash
+		fields.SetString(learningPolicyFieldStateKey, d.stateKeyHash)
 	}
 	if d.selected != nil {
-		out["selected_model"] = d.selected.model
-		out["selected_score"] = d.selected.score
+		fields.SetString(learningPolicyFieldSelectedModel, d.selected.model)
+		fields.SetNumber(learningPolicyFieldSelectedScore, d.selected.score)
 	}
 	if len(d.scores) > 0 {
-		out["scores"] = append([]routerLearningBanditScoreDiagnostic(nil), d.scores...)
+		fields.Set(learningPolicyFieldScores, append([]routerLearningBanditScoreDiagnostic(nil), d.scores...))
 	}
 }
 

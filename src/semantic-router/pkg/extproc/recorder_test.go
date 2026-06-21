@@ -6,6 +6,7 @@ import (
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/routerreplay"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/selection"
 )
 
 func replayRoutingRecordMetadataTestContext() *RequestContext {
@@ -90,6 +91,41 @@ func TestBuildReplayRoutingRecordCapturesLearningAdaptations(t *testing.T) {
 	}
 	if got := record.Learning.Adaptations["bandit"]["mode"]; got != "observe" {
 		t.Fatalf("expected bandit mode recorded, got %#v", record.Learning.Adaptations)
+	}
+}
+
+func TestBuildReplayRoutingRecordPrefersTypedLearningSessionPolicy(t *testing.T) {
+	ctx := replayRoutingRecordMetadataTestContext()
+	ctx.VSRSessionPolicy = map[string]interface{}{
+		"phase":          "stale_map_phase",
+		"current_model":  "stale-model",
+		"selected_model": "stale-selected",
+	}
+	policy := newRouterLearningPolicy(routerLearningMethodSessionAware)
+	policy.Details.SessionAware = newSessionAwareLearningDiagnostics(
+		&selection.SessionPolicyTrace{
+			Phase:             "typed_phase",
+			CurrentModel:      "model-a",
+			BaseSelectedModel: "model-c",
+			SelectedModel:     "model-b",
+			DecisionReason:    "typed_policy_wins",
+		},
+		sessionAwareIdentityDiagnostics{},
+	)
+	ctx.VSRLearningPolicies = map[routerLearningMethod]routerLearningPolicy{
+		routerLearningMethodSessionAware: policy,
+	}
+
+	record := buildReplayRoutingRecord(ctx, "model-a", "model-b", "balance")
+	diagnostics := record.RouteDiagnostics
+	if diagnostics == nil {
+		t.Fatal("expected route diagnostics")
+	}
+	if diagnostics.SessionPhase != "typed_phase" ||
+		diagnostics.PreviousModel != "model-a" ||
+		diagnostics.SelectedModel != "model-b" ||
+		diagnostics.SessionReason != "typed_policy_wins" {
+		t.Fatalf("expected replay diagnostics from typed learning policy, got %#v", diagnostics)
 	}
 }
 

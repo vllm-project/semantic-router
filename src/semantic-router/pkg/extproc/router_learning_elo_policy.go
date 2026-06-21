@@ -12,7 +12,7 @@ type routerLearningEloScoreDiagnostic struct {
 	Ties        int     `json:"ties"`
 }
 
-type routerLearningEloDetail struct {
+type routerLearningEloDiagnostics struct {
 	initialRating float64
 	kFactor       float64
 	stateKeyHash  string
@@ -40,7 +40,7 @@ func eloLearningPolicy(
 	policy.Scope = cfg.EffectiveScope()
 	policy.Action = action
 	policy.Reason = reason
-	detail := &routerLearningEloDetail{
+	detail := &routerLearningEloDiagnostics{
 		initialRating: roundLearningFloat(eloInitialRating(cfg)),
 		kFactor:       roundLearningFloat(eloKFactor(cfg)),
 	}
@@ -57,26 +57,26 @@ func eloLearningPolicy(
 	if len(scores) > 0 {
 		detail.ratings = eloScoreDiagnostics(scores)
 	}
-	policy.Detail = detail
+	policy.Details.Elo = detail
 	return policy
 }
 
-func (d *routerLearningEloDetail) appendLearningPolicyFields(out map[string]interface{}) {
+func (d *routerLearningEloDiagnostics) appendLearningPolicyFields(fields *routerLearningPolicyFields) {
 	if d == nil {
 		return
 	}
-	out["initial_rating"] = d.initialRating
-	out["k_factor"] = d.kFactor
+	fields.SetNumber(learningPolicyFieldInitialRating, d.initialRating)
+	fields.SetNumber(learningPolicyFieldKFactor, d.kFactor)
 	if d.stateKeyHash != "" {
-		out["state_key_hash"] = d.stateKeyHash
+		fields.SetString(learningPolicyFieldStateKey, d.stateKeyHash)
 	}
 	if d.selected != nil {
-		out["selected_model"] = d.selected.model
-		out["selected_score"] = d.selected.score
-		out["selected_rating"] = d.selected.rating
+		fields.SetString(learningPolicyFieldSelectedModel, d.selected.model)
+		fields.SetNumber(learningPolicyFieldSelectedScore, d.selected.score)
+		fields.SetNumber(learningPolicyFieldSelectedRating, d.selected.rating)
 	}
 	if len(d.ratings) > 0 {
-		out["ratings"] = append([]routerLearningEloScoreDiagnostic(nil), d.ratings...)
+		fields.Set(learningPolicyFieldRatings, append([]routerLearningEloScoreDiagnostic(nil), d.ratings...))
 	}
 }
 

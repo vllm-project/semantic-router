@@ -117,10 +117,10 @@ func TestAttachRouterLearningExperienceAddsMethodDiagnostics(t *testing.T) {
 	if !ok {
 		t.Fatalf("expected handoff_penalty diagnostics, got %#v", experience)
 	}
-	if got := replayPolicyString(handoff, "status"); got != routerLearningExperienceStatusUsed {
+	if got := replayPolicyString(handoff, "status"); got != string(routerLearningExperienceStatusUsed) {
 		t.Fatalf("expected used experience status, got %#v", handoff)
 	}
-	if got := replayPolicyString(handoff, "source"); got != routerLearningExperienceSourceLookupTable {
+	if got := replayPolicyString(handoff, "source"); got != string(routerLearningExperienceSourceLookupTable) {
 		t.Fatalf("expected lookup-table experience source, got %#v", handoff)
 	}
 	if got := replayNumericDiagnostic(handoff["sample_count"]); got != 12 {
@@ -138,8 +138,8 @@ func TestRouterLearningPoliciesUseTypedDetails(t *testing.T) {
 		[]routerLearningBanditScore{{model: "winner", score: 0.9}},
 		routerLearningBanditScore{model: "winner", score: 0.9},
 	)
-	if _, ok := banditPolicy.Detail.(*routerLearningBanditDetail); !ok {
-		t.Fatalf("expected typed bandit detail, got %T", banditPolicy.Detail)
+	if banditPolicy.Details.Bandit == nil || len(banditPolicy.Details.ActiveMethods()) != 1 {
+		t.Fatalf("expected one typed bandit detail, got %#v", banditPolicy.Details.ActiveMethods())
 	}
 	if got := banditPolicy.String("selected_model"); got != "winner" {
 		t.Fatalf("expected selected model from typed bandit detail, got %q", got)
@@ -154,8 +154,8 @@ func TestRouterLearningPoliciesUseTypedDetails(t *testing.T) {
 		[]routerLearningEloScore{{model: "winner", score: 0.7, rating: 1210}},
 		routerLearningEloScore{model: "winner", score: 0.7, rating: 1210},
 	)
-	if _, ok := eloPolicy.Detail.(*routerLearningEloDetail); !ok {
-		t.Fatalf("expected typed Elo detail, got %T", eloPolicy.Detail)
+	if eloPolicy.Details.Elo == nil || len(eloPolicy.Details.ActiveMethods()) != 1 {
+		t.Fatalf("expected one typed Elo detail, got %#v", eloPolicy.Details.ActiveMethods())
 	}
 	if got := eloPolicy.String("selected_model"); got != "winner" {
 		t.Fatalf("expected selected model from typed Elo detail, got %q", got)
@@ -171,21 +171,52 @@ func TestRouterLearningPoliciesUseTypedDetails(t *testing.T) {
 		[]routerLearningPersonalizationScore{{model: "winner", score: 0.8, preference: 0.9}},
 		routerLearningPersonalizationScore{model: "winner", score: 0.8, preference: 0.9},
 	)
-	if _, ok := personalizationPolicy.Detail.(*routerLearningPersonalizationDetail); !ok {
-		t.Fatalf("expected typed personalization detail, got %T", personalizationPolicy.Detail)
+	if personalizationPolicy.Details.Personalization == nil || len(personalizationPolicy.Details.ActiveMethods()) != 1 {
+		t.Fatalf("expected one typed personalization detail, got %#v", personalizationPolicy.Details.ActiveMethods())
 	}
 	if got := personalizationPolicy.String("user_hash"); got == "" {
 		t.Fatalf("expected user hash from typed personalization detail, got %q", got)
 	}
 }
 
-func TestRouterLearningAdapterRegistryIsMethodKeyed(t *testing.T) {
-	router := &OpenAIRouter{}
-	adapters := router.routerLearningAdapters()
-	got := make([]routerLearningMethod, 0, len(adapters))
-	for _, adapter := range adapters {
-		got = append(got, adapter.Method())
+func TestRouterLearningPolicySerializationKeepsCommonFieldsAuthoritative(t *testing.T) {
+	policy := newRouterLearningPolicy(routerLearningMethodSessionAware)
+	policy.Mode = config.DecisionAdaptationModeApply
+	policy.Scope = config.RouterLearningScopeConversation
+	policy.Action = routerLearningActionSwitch
+	policy.Reason = "switch_allowed"
+	policy.Details.SessionAware = newSessionAwareLearningDiagnostics(
+		&selection.SessionPolicyTrace{
+			Phase:          "provider_state",
+			CurrentModel:   "qwen-small",
+			SelectedModel:  "qwen-large",
+			HardLocked:     true,
+			HardLockReason: "tool_loop",
+		},
+		sessionAwareIdentityDiagnostics{},
+	)
+
+	serialized := policy.ToMap()
+	if got := replayPolicyString(serialized, "learning"); got != routerLearningPolicyName {
+		t.Fatalf("expected learning marker, got %#v", serialized)
 	}
+	if got := replayPolicyString(serialized, "adaptation"); got != string(routerLearningMethodSessionAware) {
+		t.Fatalf("expected common adaptation field to be authoritative, got %#v", serialized)
+	}
+	if got := replayPolicyString(serialized, "action"); got != string(routerLearningActionSwitch) {
+		t.Fatalf("expected common action field to be authoritative, got %#v", serialized)
+	}
+	if got := policy.SessionPhase(); got != "provider_state" {
+		t.Fatalf("expected typed session phase accessor, got %q", got)
+	}
+	if !policy.HardLocked() {
+		t.Fatalf("expected typed hard lock accessor")
+	}
+}
+
+func TestRouterLearningAdapterRegistryIsMethodKeyed(t *testing.T) {
+	registry := defaultRouterLearningAdapterRegistry()
+	got := registry.Methods()
 	want := []routerLearningMethod{
 		routerLearningMethodSessionAware,
 		routerLearningMethodBandit,
@@ -199,6 +230,28 @@ func TestRouterLearningAdapterRegistryIsMethodKeyed(t *testing.T) {
 		if got[i] != want[i] {
 			t.Fatalf("unexpected adapter order: got %#v want %#v", got, want)
 		}
+	}
+
+	seen := map[routerLearningMethod]struct{}{}
+	for _, method := range got {
+		if _, exists := seen[method]; exists {
+			t.Fatalf("adapter registry must not contain duplicate method %q", method)
+		}
+		seen[method] = struct{}{}
+	}
+	adapters := registry.Adapters(&OpenAIRouter{})
+	if len(adapters) != len(want) {
+		t.Fatalf("expected %d adapters, got %#v", len(want), adapters)
+	}
+
+	deduped := newRouterLearningAdapterRegistry([]routerLearningAdapterFactory{
+		{method: routerLearningMethodBandit, build: newBanditLearningAdapter},
+		{method: routerLearningMethodBandit, build: newEloLearningAdapter},
+		{method: "", build: newSessionAwareLearningAdapter},
+		{method: routerLearningMethodElo},
+	})
+	if got := deduped.Methods(); len(got) != 1 || got[0] != routerLearningMethodBandit {
+		t.Fatalf("expected duplicate and invalid factories filtered, got %#v", got)
 	}
 }
 

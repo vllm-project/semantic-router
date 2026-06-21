@@ -17,7 +17,7 @@ const (
 
 type sessionAwareIdentityStatus string
 
-type sessionAwareLearningDetail struct {
+type sessionAwareLearningDiagnostics struct {
 	trace    *selection.SessionPolicyTrace
 	identity sessionAwareIdentityDiagnostics
 }
@@ -51,8 +51,9 @@ func buildSessionAwareLearningPolicy(
 	policy.Action = action
 	policy.Reason = reason
 	policy.Scope = scope
-	policy.Detail = &sessionAwareLearningDetail{
-		identity: newSessionAwareIdentityDiagnostics(
+	policy.Details.SessionAware = newSessionAwareLearningDiagnostics(
+		nil,
+		newSessionAwareIdentityDiagnostics(
 			scope,
 			cfg.HeaderName("session"),
 			cfg.HeaderName("conversation"),
@@ -60,7 +61,7 @@ func buildSessionAwareLearningPolicy(
 			strings.TrimSpace(headerValueCI(ctx, cfg.HeaderName("conversation"))),
 			"",
 		),
-	}
+	)
 	return policy
 }
 
@@ -75,9 +76,9 @@ func learningPolicyFromSessionAwareResult(
 	policy.Scope = identity.scope
 	policy.Action = sessionAwareLearningAction(trace)
 	policy.Reason = sessionAwareLearningReason(trace)
-	policy.Detail = &sessionAwareLearningDetail{
-		trace: trace,
-		identity: newSessionAwareIdentityDiagnostics(
+	policy.Details.SessionAware = newSessionAwareLearningDiagnostics(
+		trace,
+		newSessionAwareIdentityDiagnostics(
 			identity.scope,
 			identity.sessionHeader,
 			identity.conversationHeader,
@@ -85,8 +86,18 @@ func learningPolicyFromSessionAwareResult(
 			identity.conversationID,
 			identity.memoryKey,
 		),
-	}
+	)
 	return policy
+}
+
+func newSessionAwareLearningDiagnostics(
+	trace *selection.SessionPolicyTrace,
+	identity sessionAwareIdentityDiagnostics,
+) *sessionAwareLearningDiagnostics {
+	return &sessionAwareLearningDiagnostics{
+		trace:    trace,
+		identity: identity,
+	}
 }
 
 func sessionAwareTraceFromResult(result *selection.SelectionResult) *selection.SessionPolicyTrace {
@@ -119,21 +130,28 @@ func sessionAwareLearningReason(trace *selection.SessionPolicyTrace) string {
 	return firstNonEmpty(trace.HardLockReason, trace.DecisionReason)
 }
 
-func (d *sessionAwareLearningDetail) appendLearningPolicyFields(out map[string]interface{}) {
+func (d *sessionAwareLearningDiagnostics) appendLearningPolicyFields(fields *routerLearningPolicyFields) {
 	if d == nil {
 		return
 	}
 	if d.trace != nil {
 		for key, value := range d.trace.ToMap() {
-			switch key {
-			case "session_id", "user_id", "action", "reason", "learning", "adaptation", "mode", "scope":
+			field := routerLearningPolicyField(key)
+			switch field {
+			case "session_id", "user_id",
+				learningPolicyFieldAction,
+				learningPolicyFieldReason,
+				learningPolicyFieldLearning,
+				learningPolicyFieldAdaptation,
+				learningPolicyFieldMode,
+				learningPolicyFieldScope:
 				continue
 			default:
-				out[key] = value
+				fields.Set(field, value)
 			}
 		}
 	}
-	d.identity.appendLearningPolicyFields(out)
+	d.identity.appendLearningPolicyFields(fields)
 }
 
 func newSessionAwareIdentityDiagnostics(
@@ -175,7 +193,7 @@ func newSessionAwareIdentityPart(
 	return part
 }
 
-func (d sessionAwareIdentityDiagnostics) appendLearningPolicyFields(out map[string]interface{}) {
+func (d sessionAwareIdentityDiagnostics) appendLearningPolicyFields(fields *routerLearningPolicyFields) {
 	identity := map[string]interface{}{
 		"scope": d.scope,
 		"headers": map[string]interface{}{
@@ -188,7 +206,7 @@ func (d sessionAwareIdentityDiagnostics) appendLearningPolicyFields(out map[stri
 	if d.memoryKeyHash != "" {
 		identity["memory_key_hash"] = d.memoryKeyHash
 	}
-	out["identity"] = identity
+	fields.Set(learningPolicyFieldIdentity, identity)
 }
 
 func (p sessionAwareIdentityPart) toMap() map[string]interface{} {

@@ -109,8 +109,7 @@ func sessionAwareSelectionAdaptationResult(
 }
 
 func sessionAwarePolicyHardLocked(policy routerLearningPolicy) bool {
-	detail, ok := policy.Detail.(*sessionAwareLearningDetail)
-	return ok && detail != nil && detail.trace != nil && detail.trace.HardLocked
+	return policy.HardLocked()
 }
 
 func (r *OpenAIRouter) sessionAwareLearningConfig(

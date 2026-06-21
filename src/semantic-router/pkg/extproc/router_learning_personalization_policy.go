@@ -12,7 +12,7 @@ type routerLearningPersonalizationScoreDiagnostic struct {
 	Interactions int     `json:"interactions"`
 }
 
-type routerLearningPersonalizationDetail struct {
+type routerLearningPersonalizationDiagnostics struct {
 	stateKeyHash string
 	userHash     string
 	selected     *routerLearningPersonalizationSelectionDetail
@@ -40,7 +40,7 @@ func personalizationLearningPolicy(
 	policy.Scope = cfg.EffectiveScope()
 	policy.Action = action
 	policy.Reason = reason
-	detail := &routerLearningPersonalizationDetail{}
+	detail := &routerLearningPersonalizationDiagnostics{}
 	if stateKey != "" {
 		detail.stateKeyHash = shortLearningIdentityHash(stateKey)
 	}
@@ -57,27 +57,27 @@ func personalizationLearningPolicy(
 	if len(scores) > 0 {
 		detail.preferences = personalizationScoreDiagnostics(scores)
 	}
-	policy.Detail = detail
+	policy.Details.Personalization = detail
 	return policy
 }
 
-func (d *routerLearningPersonalizationDetail) appendLearningPolicyFields(out map[string]interface{}) {
+func (d *routerLearningPersonalizationDiagnostics) appendLearningPolicyFields(fields *routerLearningPolicyFields) {
 	if d == nil {
 		return
 	}
 	if d.stateKeyHash != "" {
-		out["state_key_hash"] = d.stateKeyHash
+		fields.SetString(learningPolicyFieldStateKey, d.stateKeyHash)
 	}
 	if d.userHash != "" {
-		out["user_hash"] = d.userHash
+		fields.SetString(learningPolicyFieldUserHash, d.userHash)
 	}
 	if d.selected != nil {
-		out["selected_model"] = d.selected.model
-		out["selected_score"] = d.selected.score
-		out["selected_preference"] = d.selected.preference
+		fields.SetString(learningPolicyFieldSelectedModel, d.selected.model)
+		fields.SetNumber(learningPolicyFieldSelectedScore, d.selected.score)
+		fields.SetNumber(learningPolicyFieldSelectedPref, d.selected.preference)
 	}
 	if len(d.preferences) > 0 {
-		out["preferences"] = append([]routerLearningPersonalizationScoreDiagnostic(nil), d.preferences...)
+		fields.Set(learningPolicyFieldPreferences, append([]routerLearningPersonalizationScoreDiagnostic(nil), d.preferences...))
 	}
 }
 

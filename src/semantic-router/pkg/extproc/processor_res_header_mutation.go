@@ -336,10 +336,10 @@ func addStandardDecisionHeaders(builder *responseHeaderMutationBuilder, ctx *Req
 	builder.addString(headers.VSRSelectedModel, ctx.VSRSelectedModel)
 	builder.addString(headers.VSRSessionPhase, sessionPolicyPhase(ctx))
 	builder.addString(headers.VSRLearningMethods, learningPolicyMethodsHeader(ctx))
-	builder.addString(headers.VSRLearningActions, learningPolicyPairHeader(ctx, "action"))
-	builder.addString(headers.VSRLearningScopes, learningPolicyPairHeader(ctx, "scope"))
-	builder.addString(headers.VSRLearningReasons, learningPolicyPairHeader(ctx, "reason"))
-	builder.addString(headers.VSRLearningModes, learningPolicyPairHeader(ctx, "mode"))
+	builder.addString(headers.VSRLearningActions, learningPolicyPairHeader(ctx, learningPolicyFieldAction))
+	builder.addString(headers.VSRLearningScopes, learningPolicyPairHeader(ctx, learningPolicyFieldScope))
+	builder.addString(headers.VSRLearningReasons, learningPolicyPairHeader(ctx, learningPolicyFieldReason))
+	builder.addString(headers.VSRLearningModes, learningPolicyPairHeader(ctx, learningPolicyFieldMode))
 	builder.addBool(headers.VSRInjectedSystemPrompt, ctx.VSRInjectedSystemPrompt)
 	builder.addString(headers.RouterReplayID, ctx.RouterReplayID)
 	if ctx.VSRCacheSimilarity > 0 {
@@ -374,10 +374,15 @@ func addMatchedSignalHeaders(builder *responseHeaderMutationBuilder, ctx *Reques
 }
 
 func sessionPolicyPhase(ctx *RequestContext) string {
+	if policy, ok := sessionAwareLearningPolicyForContext(ctx); ok {
+		if phase := policy.SessionPhase(); phase != "" {
+			return phase
+		}
+	}
 	if ctx == nil || ctx.VSRSessionPolicy == nil {
 		return ""
 	}
-	phase, ok := ctx.VSRSessionPolicy["phase"].(string)
+	phase, ok := ctx.VSRSessionPolicy[string(learningPolicyFieldPhase)].(string)
 	if !ok {
 		return ""
 	}
@@ -397,7 +402,7 @@ func learningPolicyMethodsHeader(ctx *RequestContext) string {
 	return strings.Join(values, ",")
 }
 
-func learningPolicyPairHeader(ctx *RequestContext, key string) string {
+func learningPolicyPairHeader(ctx *RequestContext, field routerLearningPolicyField) string {
 	policies := learningPoliciesForHeaders(ctx)
 	methods := sortedRouterLearningPolicyMethods(policies)
 	if len(methods) == 0 {
@@ -406,7 +411,7 @@ func learningPolicyPairHeader(ctx *RequestContext, key string) string {
 	pairs := make([]string, 0, len(methods))
 	for _, method := range methods {
 		policy := policies[method]
-		value := policy.String(key)
+		value := policy.StringField(field)
 		if value == "" {
 			continue
 		}

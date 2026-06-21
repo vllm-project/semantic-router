@@ -11,6 +11,15 @@ type routerLearningAdapter interface {
 	Observe(routerLearningInput, routerLearningComposition)
 }
 
+type routerLearningAdapterFactory struct {
+	method routerLearningMethod
+	build  func(*OpenAIRouter) routerLearningAdapter
+}
+
+type routerLearningAdapterRegistry struct {
+	factories []routerLearningAdapterFactory
+}
+
 type routerLearningBaseAdapter struct {
 	router *OpenAIRouter
 }
@@ -108,12 +117,54 @@ func (a personalizationLearningAdapter) Apply(input routerLearningInput) (router
 }
 
 func (r *OpenAIRouter) routerLearningAdapters() []routerLearningAdapter {
-	return []routerLearningAdapter{
-		newSessionAwareLearningAdapter(r),
-		newBanditLearningAdapter(r),
-		newEloLearningAdapter(r),
-		newPersonalizationLearningAdapter(r),
+	return defaultRouterLearningAdapterRegistry().Adapters(r)
+}
+
+func defaultRouterLearningAdapterRegistry() routerLearningAdapterRegistry {
+	return newRouterLearningAdapterRegistry([]routerLearningAdapterFactory{
+		{method: routerLearningMethodSessionAware, build: newSessionAwareLearningAdapter},
+		{method: routerLearningMethodBandit, build: newBanditLearningAdapter},
+		{method: routerLearningMethodElo, build: newEloLearningAdapter},
+		{method: routerLearningMethodPersonalization, build: newPersonalizationLearningAdapter},
+	})
+}
+
+func newRouterLearningAdapterRegistry(factories []routerLearningAdapterFactory) routerLearningAdapterRegistry {
+	registry := routerLearningAdapterRegistry{
+		factories: make([]routerLearningAdapterFactory, 0, len(factories)),
 	}
+	seen := map[routerLearningMethod]struct{}{}
+	for _, factory := range factories {
+		if factory.method == "" || factory.build == nil {
+			continue
+		}
+		if _, ok := seen[factory.method]; ok {
+			continue
+		}
+		seen[factory.method] = struct{}{}
+		registry.factories = append(registry.factories, factory)
+	}
+	return registry
+}
+
+func (r routerLearningAdapterRegistry) Methods() []routerLearningMethod {
+	methods := make([]routerLearningMethod, 0, len(r.factories))
+	for _, factory := range r.factories {
+		methods = append(methods, factory.method)
+	}
+	return methods
+}
+
+func (r routerLearningAdapterRegistry) Adapters(router *OpenAIRouter) []routerLearningAdapter {
+	adapters := make([]routerLearningAdapter, 0, len(r.factories))
+	for _, factory := range r.factories {
+		adapter := factory.build(router)
+		if adapter == nil || adapter.Method() != factory.method {
+			continue
+		}
+		adapters = append(adapters, adapter)
+	}
+	return adapters
 }
 
 func (r *OpenAIRouter) applyRouterLearning(

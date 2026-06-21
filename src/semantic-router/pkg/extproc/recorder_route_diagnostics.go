@@ -34,19 +34,32 @@ func buildReplayRouteDiagnostics(
 		SessionAction:    replaySessionActionNone,
 	}
 
+	if policy, ok := sessionAwareLearningPolicyForContext(ctx); ok {
+		diagnostics.SessionPolicyApplied = true
+		diagnostics.SessionPhase = policy.SessionPhase()
+		diagnostics.PreviousModel = policy.CurrentModel()
+		diagnostics.ProposalModel = firstNonEmpty(policy.BaseSelectedModel(), diagnostics.ProposalModel)
+		diagnostics.SelectedModel = firstNonEmpty(policy.SelectedModel(), diagnostics.SelectedModel)
+		diagnostics.HardLockReason = policy.HardLockReason()
+		diagnostics.DecisionReason = policy.DecisionReason()
+		diagnostics.SessionAction = replaySessionAction(diagnostics, policy.HardLocked())
+		diagnostics.SessionReason = replaySessionReason(diagnostics)
+		return diagnostics
+	}
+
 	policy := ctx.VSRSessionPolicy
 	if len(policy) == 0 {
 		return diagnostics
 	}
 
 	diagnostics.SessionPolicyApplied = true
-	diagnostics.SessionPhase = replayPolicyString(policy, "phase")
-	diagnostics.PreviousModel = replayPolicyString(policy, "current_model")
-	diagnostics.ProposalModel = firstNonEmpty(replayPolicyString(policy, "base_selected_model"), diagnostics.ProposalModel)
-	diagnostics.SelectedModel = firstNonEmpty(replayPolicyString(policy, "selected_model"), diagnostics.SelectedModel)
-	diagnostics.HardLockReason = replayPolicyString(policy, "hard_lock_reason")
-	diagnostics.DecisionReason = replayPolicyString(policy, "decision_reason")
-	diagnostics.SessionAction = replaySessionAction(diagnostics, replayPolicyBool(policy, "hard_locked"))
+	diagnostics.SessionPhase = replayPolicyString(policy, string(learningPolicyFieldPhase))
+	diagnostics.PreviousModel = replayPolicyString(policy, string(learningPolicyFieldCurrentModel))
+	diagnostics.ProposalModel = firstNonEmpty(replayPolicyString(policy, string(learningPolicyFieldBaseSelectedModel)), diagnostics.ProposalModel)
+	diagnostics.SelectedModel = firstNonEmpty(replayPolicyString(policy, string(learningPolicyFieldSelectedModel)), diagnostics.SelectedModel)
+	diagnostics.HardLockReason = replayPolicyString(policy, string(learningPolicyFieldHardLockReason))
+	diagnostics.DecisionReason = replayPolicyString(policy, string(learningPolicyFieldDecisionReason))
+	diagnostics.SessionAction = replaySessionAction(diagnostics, replayPolicyBool(policy, string(learningPolicyFieldHardLocked)))
 	diagnostics.SessionReason = replaySessionReason(diagnostics)
 	return diagnostics
 }
