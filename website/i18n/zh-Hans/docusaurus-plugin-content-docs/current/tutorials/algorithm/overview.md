@@ -62,19 +62,23 @@ routing:
 ### 选择类算法
 
 - [Automix](./selection/automix)
-- [Elo](./selection/elo)
-- [GMT Router](./selection/gmtrouter)
 - [Hybrid](./selection/hybrid)
 - [KMeans](./selection/kmeans)
 - [KNN](./selection/knn)
 - [Latency Aware](./selection/latency-aware)
-- [RL Driven](./selection/rl-driven)
+- [MLP](./selection/mlp)
+- [Multi Factor](./selection/multi-factor)
 - [Router DC](./selection/router-dc)
 - [Static](./selection/static)
 - [SVM](./selection/svm)
 
+Session-aware continuity 配置为 Router Learning，而不是决策算法。请参见
+[Router Learning](../learning/adaptations)。Feedback-driven Elo、bandit/Thompson
+和 personalization 行为也位于 Router Learning，而不是 `decision.algorithm`。
+
 ### 循环类算法
 
 - [Confidence](./looper/confidence)
+- [Fusion](./looper/fusion)
 - [Ratings](./looper/ratings)
 - [ReMoM](./looper/remom)
