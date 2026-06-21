@@ -22,10 +22,17 @@ func (r *OpenAIRouter) handleAnthropicStreamingResponseBody(
 		ctx.AnthropicStream = anthropic.NewStreamState()
 	}
 
+	// Pass IRExtensions through so the merged Anthropic→OpenAI cell
+	// captures cache counters, stop_reason round-trip fields, and
+	// per-block thinking signatures onto the request-scoped sidecar.
+	// Even for an OpenAI client the IR fields keep observability,
+	// router replay, and downstream non-streaming responses consistent
+	// with the streaming case.
 	transformed, streamDone, err := anthropic.TransformSSEChunkToOpenAI(
 		responseBody,
 		ctx.AnthropicStream,
 		ctx.RequestModel,
+		ctx.IRExtensions,
 	)
 	if err != nil {
 		logging.Errorf("Failed to transform Anthropic streaming chunk: %v", err)

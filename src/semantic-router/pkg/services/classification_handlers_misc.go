@@ -28,8 +28,8 @@ type FactCheckResponse struct {
 func (s *ClassificationService) ClassifyFactCheck(req FactCheckRequest) (*FactCheckResponse, error) {
 	start := time.Now()
 
-	if req.Text == "" {
-		return nil, fmt.Errorf("text cannot be empty")
+	if blankText(req.Text) {
+		return nil, ErrEmptyText
 	}
 
 	// Check if classifier is available
@@ -93,8 +93,8 @@ type UserFeedbackResponse struct {
 func (s *ClassificationService) ClassifyUserFeedback(req UserFeedbackRequest) (*UserFeedbackResponse, error) {
 	start := time.Now()
 
-	if req.Text == "" {
-		return nil, fmt.Errorf("text cannot be empty")
+	if blankText(req.Text) {
+		return nil, ErrEmptyText
 	}
 
 	// Check if classifier is available

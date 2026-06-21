@@ -18,6 +18,8 @@ package extproc
 
 import (
 	"context"
+	"fmt"
+	"strings"
 	"testing"
 	"time"
 
@@ -126,63 +128,323 @@ func TestSelectModelFromCandidatesRecordsSingleCandidateInRouterMemory(t *testin
 	}
 }
 
-func TestSelectModelFromCandidatesUsesDecisionScopedSessionAwareConfig(t *testing.T) {
-	registry := selection.NewRegistry()
-	registry.Register(selection.MethodStatic, selectionResultSelector{result: &selection.SelectionResult{
-		SelectedModel: "frontier",
-		Score:         0.90,
-		Method:        selection.MethodStatic,
-		AllScores: map[string]float64{
-			"current":  0.20,
-			"frontier": 0.90,
-		},
-	}})
+func TestRouterLearningSessionAwareKeepsCurrentModelAcrossDecisionCandidates(t *testing.T) {
+	sessiontelemetry.ResetRouterSessionMemoryForTesting()
+	t.Cleanup(sessiontelemetry.ResetRouterSessionMemoryForTesting)
 
-	router := &OpenAIRouter{
-		ModelSelector: registry,
-		Config: &config.RouterConfig{
-			IntelligentRouting: config.IntelligentRouting{
-				ModelSelection: config.ModelSelectionConfig{
-					SessionAware: config.SessionAwareSelectionConfig{
-						IdleTimeoutSeconds: extprocIntPtr(300),
-					},
-				},
+	sessiontelemetry.RecordSessionDecision(sessiontelemetry.SessionDecisionParams{
+		SessionID:      "session-a/conversation-a",
+		SelectedModel:  "frontier",
+		DecisionName:   "complex-code",
+		TurnIndex:      2,
+		ActiveToolLoop: true,
+		Timestamp:      time.Now(),
+	})
+
+	router := &OpenAIRouter{Config: routerLearningTestConfig(config.RouterLearningScopeConversation)}
+	ctx := routerLearningRequestContext("session-a", "conversation-a")
+	ctx.VSRSelectedDecision = &config.Decision{Name: "simple-followup"}
+	ctx.VSRConversationFacts = classification.ConversationFacts{LastMessageToolResult: true}
+
+	selected, method := router.selectModelFromCandidates(&selection.SelectionContext{
+		SessionID:       "session-a",
+		DecisionName:    "simple-followup",
+		CandidateModels: []config.ModelRef{{Model: "cheap"}},
+	}, nil, ctx)
+
+	if selected == nil || selected.Model != "frontier" {
+		t.Fatalf("expected learning to keep frontier across decision candidates, got %#v", selected)
+	}
+	if method != "single" {
+		t.Fatalf("expected base method single, got %q", method)
+	}
+	if ctx.VSRLearningPolicy["action"] != "hard_lock" {
+		t.Fatalf("expected hard_lock learning action, got %#v", ctx.VSRLearningPolicy)
+	}
+	if _, ok := ctx.VSRLearningPolicy["session_id"]; ok {
+		t.Fatalf("learning diagnostics must not expose raw session_id: %#v", ctx.VSRLearningPolicy)
+	}
+	if _, ok := ctx.VSRLearningPolicy["conversation_id"]; ok {
+		t.Fatalf("learning diagnostics must not expose raw conversation_id: %#v", ctx.VSRLearningPolicy)
+	}
+	sessionIdentity := learningIdentityPart(t, ctx.VSRLearningPolicy, "session")
+	if sessionIdentity["status"] != "present" || sessionIdentity["source"] != "header:x-session-id" {
+		t.Fatalf("expected hashed session identity diagnostics, got %#v", sessionIdentity)
+	}
+	if sessionIdentity["hash"] == "session-a" || sessionIdentity["hash"] == "" {
+		t.Fatalf("expected non-raw session identity hash, got %#v", sessionIdentity)
+	}
+	if ctx.VSRLearningSessionID != "session-a/conversation-a" {
+		t.Fatalf("expected conversation memory key, got %q", ctx.VSRLearningSessionID)
+	}
+}
+
+func TestRouterLearningSessionAwareReleasesOnNewConversationScope(t *testing.T) {
+	sessiontelemetry.ResetRouterSessionMemoryForTesting()
+	t.Cleanup(sessiontelemetry.ResetRouterSessionMemoryForTesting)
+
+	sessiontelemetry.RecordSessionDecision(sessiontelemetry.SessionDecisionParams{
+		SessionID:     "session-a/conversation-a",
+		SelectedModel: "frontier",
+		DecisionName:  "complex-code",
+		TurnIndex:     2,
+		Timestamp:     time.Now(),
+	})
+
+	router := &OpenAIRouter{Config: routerLearningTestConfig(config.RouterLearningScopeConversation)}
+	ctx := routerLearningRequestContext("session-a", "conversation-b")
+	ctx.VSRSelectedDecision = &config.Decision{Name: "simple-new-run"}
+
+	selected, _ := router.selectModelFromCandidates(&selection.SelectionContext{
+		SessionID:       "session-a",
+		DecisionName:    "simple-new-run",
+		CandidateModels: []config.ModelRef{{Model: "cheap"}},
+	}, nil, ctx)
+
+	if selected == nil || selected.Model != "cheap" {
+		t.Fatalf("expected new conversation to route to cheap base candidate, got %#v", selected)
+	}
+	if ctx.VSRLearningSessionID != "session-a/conversation-b" {
+		t.Fatalf("expected new conversation memory key, got %q", ctx.VSRLearningSessionID)
+	}
+}
+
+func TestRouterLearningSessionAwareSessionScopeProtectsAcrossConversations(t *testing.T) {
+	sessiontelemetry.ResetRouterSessionMemoryForTesting()
+	t.Cleanup(sessiontelemetry.ResetRouterSessionMemoryForTesting)
+
+	sessiontelemetry.RecordSessionDecision(sessiontelemetry.SessionDecisionParams{
+		SessionID:     "session-a",
+		SelectedModel: "frontier",
+		DecisionName:  "complex-code",
+		TurnIndex:     2,
+		Timestamp:     time.Now(),
+	})
+
+	router := &OpenAIRouter{Config: routerLearningTestConfig(config.RouterLearningScopeSession)}
+	ctx := routerLearningRequestContext("session-a", "conversation-b")
+	ctx.VSRSelectedDecision = &config.Decision{Name: "simple-new-run"}
+
+	selected, _ := router.selectModelFromCandidates(&selection.SelectionContext{
+		SessionID:       "session-a",
+		DecisionName:    "simple-new-run",
+		CandidateModels: []config.ModelRef{{Model: "cheap"}},
+	}, nil, ctx)
+
+	if selected == nil || selected.Model != "frontier" {
+		t.Fatalf("expected session scope to keep frontier, got %#v", selected)
+	}
+	if ctx.VSRLearningSessionID != "session-a" {
+		t.Fatalf("expected session memory key, got %q", ctx.VSRLearningSessionID)
+	}
+	if ctx.VSRLearningPolicy["action"] != "stay" {
+		t.Fatalf("expected session scope stay action, got %#v", ctx.VSRLearningPolicy)
+	}
+	if ctx.VSRLearningPolicy["reason"] != "session_scope_protect" {
+		t.Fatalf("expected session scope protect reason, got %#v", ctx.VSRLearningPolicy)
+	}
+	conversationIdentity := learningIdentityPart(t, ctx.VSRLearningPolicy, "conversation")
+	if conversationIdentity["status"] != "present" || conversationIdentity["required"] != false {
+		t.Fatalf("expected optional conversation identity for session scope, got %#v", conversationIdentity)
+	}
+}
+
+func TestRouterLearningDecisionScopeOverrideProtectsAcrossConversations(t *testing.T) {
+	sessiontelemetry.ResetRouterSessionMemoryForTesting()
+	t.Cleanup(sessiontelemetry.ResetRouterSessionMemoryForTesting)
+
+	sessiontelemetry.RecordSessionDecision(sessiontelemetry.SessionDecisionParams{
+		SessionID:     "session-a",
+		SelectedModel: "frontier",
+		DecisionName:  "complex-code",
+		TurnIndex:     2,
+		Timestamp:     time.Now(),
+	})
+
+	router := &OpenAIRouter{Config: routerLearningTestConfig(config.RouterLearningScopeConversation)}
+	ctx := routerLearningRequestContext("session-a", "conversation-b")
+	ctx.VSRSelectedDecision = &config.Decision{
+		Name: "session-sticky",
+		Adaptations: config.DecisionAdaptationsConfig{
+			SessionAware: &config.DecisionSessionAwareAdaptationConfig{
+				Scope: config.RouterLearningScopeSession,
 			},
 		},
 	}
-	ctx := &RequestContext{SessionID: "decision-session"}
-	trueValue := true
-	selected, method := router.selectModelFromCandidates(&selection.SelectionContext{
-		SessionID:       "decision-session",
-		DecisionName:    "idle-route",
-		CandidateModels: []config.ModelRef{{Model: "current"}, {Model: "frontier"}},
-		AgenticSession: &selection.AgenticSessionContext{
-			ID:            "decision-session",
-			TurnIndex:     3,
-			PreviousModel: "current",
-			IdleKnown:     true,
-			IdleFor:       2 * time.Second,
-		},
-	}, &config.AlgorithmConfig{
-		Type: "session_aware",
-		SessionAware: &config.SessionAwareSelectionConfig{
-			BaseMethod:           "static",
-			IdleTimeoutSeconds:   extprocIntPtr(1),
-			MinTurnsBeforeSwitch: extprocIntPtr(1),
-			SwitchMargin:         extprocFloat64Ptr(0.05),
-			StayBias:             extprocFloat64Ptr(0.10),
-			ToolLoopHardLock:     &trueValue,
-		},
-	}, ctx)
+
+	selected, _ := router.selectModelFromCandidates(&selection.SelectionContext{
+		SessionID:       "session-a",
+		DecisionName:    "session-sticky",
+		CandidateModels: []config.ModelRef{{Model: "cheap"}},
+	}, nil, ctx)
 
 	if selected == nil || selected.Model != "frontier" {
-		t.Fatalf("expected frontier from decision-scoped idle policy, got %#v", selected)
+		t.Fatalf("expected decision scope override to keep frontier, got %#v", selected)
 	}
-	if method != string(selection.MethodSessionAware) {
-		t.Fatalf("expected session_aware method, got %q", method)
+	if ctx.VSRLearningSessionID != "session-a" {
+		t.Fatalf("expected session memory key from decision override, got %q", ctx.VSRLearningSessionID)
 	}
-	if ctx.VSRSessionPolicy == nil || ctx.VSRSessionPolicy["idle_expired"] != true {
-		t.Fatalf("expected decision-scoped idle timeout in session policy, got %#v", ctx.VSRSessionPolicy)
+	if ctx.VSRLearningPolicy["scope"] != config.RouterLearningScopeSession {
+		t.Fatalf("expected session-scope learning policy, got %#v", ctx.VSRLearningPolicy)
+	}
+}
+
+func TestRouterLearningSessionAwareObserveRecordsWithoutChangingModel(t *testing.T) {
+	sessiontelemetry.ResetRouterSessionMemoryForTesting()
+	t.Cleanup(sessiontelemetry.ResetRouterSessionMemoryForTesting)
+
+	sessiontelemetry.RecordSessionDecision(sessiontelemetry.SessionDecisionParams{
+		SessionID:      "session-a/conversation-a",
+		SelectedModel:  "frontier",
+		DecisionName:   "complex-code",
+		TurnIndex:      2,
+		ActiveToolLoop: true,
+		Timestamp:      time.Now(),
+	})
+
+	router := &OpenAIRouter{Config: routerLearningTestConfig(config.RouterLearningScopeConversation)}
+	ctx := routerLearningRequestContext("session-a", "conversation-a")
+	ctx.VSRSelectedDecision = &config.Decision{
+		Name: "observe-route",
+		Adaptations: config.DecisionAdaptationsConfig{
+			SessionAware: &config.DecisionSessionAwareAdaptationConfig{
+				Mode: config.DecisionAdaptationModeObserve,
+			},
+		},
+	}
+	ctx.VSRConversationFacts = classification.ConversationFacts{LastMessageToolResult: true}
+
+	selected, _ := router.selectModelFromCandidates(&selection.SelectionContext{
+		SessionID:       "session-a",
+		DecisionName:    "observe-route",
+		CandidateModels: []config.ModelRef{{Model: "cheap"}},
+	}, nil, ctx)
+
+	if selected == nil || selected.Model != "cheap" {
+		t.Fatalf("expected observe mode to keep base candidate, got %#v", selected)
+	}
+	if ctx.VSRLearningPolicy["mode"] != config.DecisionAdaptationModeObserve ||
+		ctx.VSRLearningPolicy["action"] != "hard_lock" {
+		t.Fatalf("expected observe hard_lock policy, got %#v", ctx.VSRLearningPolicy)
+	}
+}
+
+func TestRouterLearningSessionAwareMissingIdentityNoOps(t *testing.T) {
+	sessiontelemetry.ResetRouterSessionMemoryForTesting()
+	t.Cleanup(sessiontelemetry.ResetRouterSessionMemoryForTesting)
+
+	router := &OpenAIRouter{Config: routerLearningTestConfig(config.RouterLearningScopeConversation)}
+	ctx := &RequestContext{
+		Headers: map[string]string{"x-session-id": "session-a"},
+	}
+	ctx.VSRSelectedDecision = &config.Decision{Name: "simple"}
+
+	selected, _ := router.selectModelFromCandidates(&selection.SelectionContext{
+		SessionID:       "session-a",
+		DecisionName:    "simple",
+		CandidateModels: []config.ModelRef{{Model: "cheap"}},
+	}, nil, ctx)
+
+	if selected == nil || selected.Model != "cheap" {
+		t.Fatalf("expected missing conversation identity to keep base candidate, got %#v", selected)
+	}
+	if ctx.VSRLearningPolicy["action"] != "noop" ||
+		ctx.VSRLearningPolicy["reason"] != "identity_missing" {
+		t.Fatalf("expected identity_missing noop policy, got %#v", ctx.VSRLearningPolicy)
+	}
+	conversationIdentity := learningIdentityPart(t, ctx.VSRLearningPolicy, "conversation")
+	if conversationIdentity["status"] != "missing" || conversationIdentity["required"] != true {
+		t.Fatalf("expected missing required conversation identity diagnostics, got %#v", conversationIdentity)
+	}
+}
+
+func TestRouterLearningSessionAwareBypassLeavesBaseDecisionFinal(t *testing.T) {
+	sessiontelemetry.ResetRouterSessionMemoryForTesting()
+	t.Cleanup(sessiontelemetry.ResetRouterSessionMemoryForTesting)
+
+	sessiontelemetry.RecordSessionDecision(sessiontelemetry.SessionDecisionParams{
+		SessionID:      "session-a/conversation-a",
+		SelectedModel:  "frontier",
+		DecisionName:   "complex-code",
+		TurnIndex:      2,
+		ActiveToolLoop: true,
+		Timestamp:      time.Now(),
+	})
+
+	router := &OpenAIRouter{Config: routerLearningTestConfig(config.RouterLearningScopeConversation)}
+	ctx := routerLearningRequestContext("session-a", "conversation-a")
+	ctx.VSRSelectedDecision = &config.Decision{
+		Name: "privacy",
+		Adaptations: config.DecisionAdaptationsConfig{
+			SessionAware: &config.DecisionSessionAwareAdaptationConfig{Mode: config.DecisionAdaptationModeBypass},
+		},
+	}
+	ctx.VSRConversationFacts = classification.ConversationFacts{LastMessageToolResult: true}
+
+	selected, _ := router.selectModelFromCandidates(&selection.SelectionContext{
+		SessionID:       "session-a",
+		DecisionName:    "privacy",
+		CandidateModels: []config.ModelRef{{Model: "cheap"}},
+	}, nil, ctx)
+
+	if selected == nil || selected.Model != "cheap" {
+		t.Fatalf("expected bypass decision to keep base candidate, got %#v", selected)
+	}
+	if ctx.VSRLearningPolicy["action"] != "bypass" {
+		t.Fatalf("expected bypass learning policy, got %#v", ctx.VSRLearningPolicy)
+	}
+	if ctx.VSRLearningPolicy["scope"] != config.RouterLearningScopeConversation {
+		t.Fatalf("expected bypass learning policy to include scope, got %#v", ctx.VSRLearningPolicy)
+	}
+}
+
+func TestSelectorForDecisionMethodBuildsDecisionScopedHybridSelector(t *testing.T) {
+	cfg := config.DefaultGlobalConfig()
+	cfg.BackendModels.ModelConfig = map[string]config.ModelParams{
+		"current":  {Description: "general chat"},
+		"frontier": {Description: "coding specialist"},
+	}
+
+	modelSelectionCfg := buildModelSelectionConfig(&cfg)
+	registry := selection.NewFactory(modelSelectionCfg).
+		WithModelConfig(cfg.BackendModels.ModelConfig).
+		WithEmbeddingFunc(func(text string) ([]float32, error) {
+			lower := strings.ToLower(text)
+			switch {
+			case strings.Contains(lower, "coding"):
+				return []float32{1, 0}, nil
+			case strings.Contains(lower, "general"):
+				return []float32{0, 1}, nil
+			default:
+				return []float32{0.5, 0.5}, nil
+			}
+		}).
+		CreateAll()
+
+	router := &OpenAIRouter{
+		Config:        &cfg,
+		ModelSelector: registry,
+	}
+
+	selector := router.selectorForDecisionMethod(selection.MethodHybrid, &config.AlgorithmConfig{
+		Type: "hybrid",
+		Hybrid: &config.HybridSelectionConfig{
+			EloWeight:      0.6,
+			RouterDCWeight: 0.4,
+		},
+	})
+
+	result, err := selector.Select(context.Background(), &selection.SelectionContext{
+		Query:           "need help with coding",
+		DecisionName:    "hybrid_route",
+		CandidateModels: []config.ModelRef{{Model: "current"}, {Model: "frontier"}},
+	})
+	if err != nil {
+		t.Fatalf("Select returned error: %v", err)
+	}
+	wantWeights := fmt.Sprintf("weights=[elo:%.2f, dc:%.2f, am:%.2f, cost:%.2f]", 0.6, 0.4, 0.2, 0.2)
+	if !strings.Contains(result.Reasoning, wantWeights) {
+		t.Fatalf("expected decision-scoped hybrid weights in reasoning, got %q", result.Reasoning)
 	}
 }
 
@@ -291,31 +553,29 @@ func TestBuildSelectionContextMarksPreviousResponseIDAsNonPortableContext(t *tes
 	}
 }
 
-func TestApplySessionAwareSelectionConfigPreservesExplicitZeroValues(t *testing.T) {
-	cfg := selection.DefaultSessionAwareConfig()
-	falseValue := false
-	applySessionAwareSelectionConfig(cfg, config.SessionAwareSelectionConfig{
-		IdleTimeoutSeconds:         extprocIntPtr(0),
-		MinTurnsBeforeSwitch:       extprocIntPtr(0),
-		SwitchMargin:               extprocFloat64Ptr(0),
-		StayBias:                   extprocFloat64Ptr(0),
-		ToolLoopHardLock:           &falseValue,
-		ContextPortabilityHardLock: &falseValue,
-		DecisionDriftReset:         &falseValue,
-		PrefixCacheWeight:          extprocFloat64Ptr(0),
-		RemainingTurnPriorWeight:   extprocFloat64Ptr(0),
+func TestSessionAwareLearningConfigPreservesExplicitZeroValues(t *testing.T) {
+	cfg := sessionAwareSelectionConfigFromLearning(config.SessionAwareLearningConfig{
+		Tuning: config.SessionAwareLearningTuning{
+			IdleTimeoutSeconds:     extprocIntPtr(0),
+			MinTurnsBeforeSwitch:   extprocIntPtr(0),
+			SwitchMargin:           extprocFloat64Ptr(0),
+			CacheWeight:            extprocFloat64Ptr(0),
+			HandoffPenalty:         extprocFloat64Ptr(0),
+			HandoffPenaltyWeight:   extprocFloat64Ptr(0),
+			SwitchHistoryWeight:    extprocFloat64Ptr(0),
+			MaxCacheCostMultiplier: extprocFloat64Ptr(0),
+		},
 	})
 
 	if cfg.IdleTimeoutSeconds != 0 ||
 		cfg.MinTurnsBeforeSwitch != 0 ||
 		cfg.SwitchMargin != 0 ||
-		cfg.StayBias != 0 ||
-		cfg.ToolLoopHardLock ||
-		cfg.ContextPortabilityHardLock ||
-		cfg.DecisionDriftReset ||
 		cfg.PrefixCacheWeight != 0 ||
-		cfg.RemainingTurnPriorWeight != 0 {
-		t.Fatalf("expected explicit zero/false session-aware config to be preserved, got %#v", cfg)
+		cfg.DefaultHandoffPenalty != 0 ||
+		cfg.HandoffPenaltyWeight != 0 ||
+		cfg.SwitchHistoryWeight != 0 ||
+		cfg.MaxCacheCostMultiplier != 0 {
+		t.Fatalf("expected explicit zero session-aware learning tuning to be preserved, got %#v", cfg)
 	}
 }
 
@@ -325,4 +585,54 @@ func extprocIntPtr(v int) *int {
 
 func extprocFloat64Ptr(v float64) *float64 {
 	return &v
+}
+
+func routerLearningTestConfig(scope string) *config.RouterConfig {
+	return &config.RouterConfig{
+		BackendModels: config.BackendModels{
+			DefaultModel: "cheap",
+			ModelConfig: map[string]config.ModelParams{
+				"cheap":    {},
+				"frontier": {},
+			},
+		},
+		RouterLearning: config.RouterLearningConfig{
+			Enabled: true,
+			Adaptations: config.RouterLearningAdaptations{
+				SessionAware: config.SessionAwareLearningConfig{
+					Enabled: true,
+					Scope:   scope,
+					Identity: config.SessionAwareIdentityConfig{
+						Headers: map[string]string{
+							"session":      "x-session-id",
+							"conversation": "x-conversation-id",
+						},
+					},
+				},
+			},
+		},
+	}
+}
+
+func routerLearningRequestContext(sessionID string, conversationID string) *RequestContext {
+	return &RequestContext{
+		Headers: map[string]string{
+			"x-session-id":      sessionID,
+			"x-conversation-id": conversationID,
+		},
+		SessionID: sessionID,
+	}
+}
+
+func learningIdentityPart(t *testing.T, policy map[string]interface{}, name string) map[string]interface{} {
+	t.Helper()
+	identity, ok := policy["identity"].(map[string]interface{})
+	if !ok {
+		t.Fatalf("expected identity diagnostics in learning policy, got %#v", policy)
+	}
+	part, ok := identity[name].(map[string]interface{})
+	if !ok {
+		t.Fatalf("expected %s identity diagnostics, got %#v", name, identity)
+	}
+	return part
 }

@@ -1,0 +1,14 @@
+algorithm:
+  type: fusion
+  fusion:
+    model: qwen3-32b
+    analysis_models:
+      - qwen3-8b
+      - qwen3-32b
+    max_concurrent: 2
+    max_completion_tokens: 512
+    temperature: 0.2
+    include_analysis: true
+    include_intermediate_responses: true
+    on_error: skip
+    judge_prompt_version: fusion-v1

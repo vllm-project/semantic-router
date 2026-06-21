@@ -9,6 +9,15 @@ interface HeaderRevealProps {
 
 // Header metadata for display
 const HEADER_INFO: Record<string, { label: string; description: string }> = {
+  // Response contract (v0.4 keystone) headers (#2203)
+  'x-vsr-schema-version': {
+    label: 'Schema Version',
+    description: 'Response header contract revision',
+  },
+  'x-vsr-response-path': {
+    label: 'Response Path',
+    description: 'How the response was produced (upstream, cache, fast_response, looper, ...)',
+  },
   // Signal headers
   'x-vsr-matched-keywords': {
     label: 'Keywords',
@@ -100,6 +109,27 @@ const HEADER_INFO: Record<string, { label: string; description: string }> = {
     label: 'Selected Modality',
     description: 'The modality chosen by the router',
   },
+  // Router Learning headers
+  'x-vsr-learning-methods': {
+    label: 'Learning Methods',
+    description: 'Router Learning methods summarized by this response',
+  },
+  'x-vsr-learning-actions': {
+    label: 'Learning Actions',
+    description: 'Method-keyed Router Learning actions',
+  },
+  'x-vsr-learning-scopes': {
+    label: 'Learning Scopes',
+    description: 'Method-keyed identity scopes used by Router Learning',
+  },
+  'x-vsr-learning-reasons': {
+    label: 'Learning Reasons',
+    description: 'Method-keyed compact reasons for Router Learning actions',
+  },
+  'x-vsr-learning-modes': {
+    label: 'Learning Modes',
+    description: 'Method-keyed Router Learning modes',
+  },
   // Plugin status headers
   'x-vsr-cache-hit': {
     label: 'Cache Status',
@@ -117,21 +147,10 @@ const HEADER_INFO: Record<string, { label: string; description: string }> = {
     label: 'Fast Response',
     description: 'Request short-circuited by fast_response plugin',
   },
-  'x-vsr-jailbreak-blocked': {
-    label: 'Jailbreak Blocked',
-    description: 'Request blocked by jailbreak protection',
-  },
-  'x-vsr-pii-violation': {
-    label: 'PII Violation',
-    description: 'Request blocked by PII protection',
-  },
-  'x-vsr-hallucination-detected': {
-    label: 'Quality: Hallucination',
-    description: 'Potential hallucination detected',
-  },
-  'x-vsr-fact-check-needed': {
-    label: 'Quality: Fact Check',
-    description: 'Fact checking recommended',
+  'x-vsr-response-warnings': {
+    label: 'Quality: Response Warnings',
+    description:
+      'Comma-separated response-quality warnings (hallucination, unverified_factual, response_jailbreak)',
   },
   // Looper headers
   'x-vsr-looper-model': {
@@ -148,7 +167,7 @@ const HEADER_INFO: Record<string, { label: string; description: string }> = {
   },
   'x-vsr-looper-algorithm': {
     label: 'Algorithm',
-    description: 'The multi-model algorithm used (confidence, ratings)',
+    description: 'The multi-model algorithm used (confidence, ratings, remom, fusion)',
   },
   // Retention directive headers (issue #2009)
   'x-vsr-retention-drop': {
@@ -189,38 +208,33 @@ const HeaderReveal = ({ headers, onComplete, displayDuration = 2000 }: HeaderRev
 
   // Group headers by category based on the comments in HEADER_INFO
   const groupedHeaders = {
+    // Response contract (keystone) headers: schema-version + response-path
+    response: displayHeaders.filter(
+      ([key]) => key === 'x-vsr-schema-version' || key === 'x-vsr-response-path',
+    ),
     // Signal headers: all x-vsr-matched-*
-    signals: displayHeaders.filter(([key]) =>
-      key.startsWith('x-vsr-matched-')
-    ),
+    signals: displayHeaders.filter(([key]) => key.startsWith('x-vsr-matched-')),
     // Decision headers: selected-decision
-    decision: displayHeaders.filter(([key]) =>
-      key === 'x-vsr-selected-decision'
-    ),
+    decision: displayHeaders.filter(([key]) => key === 'x-vsr-selected-decision'),
     // Model selection headers: selected-model
-    model: displayHeaders.filter(([key]) =>
-      key === 'x-vsr-selected-model' ||
-      key === 'x-vsr-selected-modality'
+    model: displayHeaders.filter(
+      ([key]) => key === 'x-vsr-selected-model' || key === 'x-vsr-selected-modality',
     ),
+    // Router Learning headers: bounded primary adaptation summary
+    learning: displayHeaders.filter(([key]) => key.startsWith('x-vsr-learning')),
     // Plugin status headers: cache, reasoning, context, security, quality
-    plugin: displayHeaders.filter(([key]) =>
-      key === 'x-vsr-cache-hit' ||
-      key === 'x-vsr-selected-reasoning' ||
-      key === 'x-vsr-fast-response' ||
-      key === 'x-vsr-context-token-count' ||
-      key === 'x-vsr-jailbreak-blocked' ||
-      key === 'x-vsr-pii-violation' ||
-      key === 'x-vsr-hallucination-detected' ||
-      key === 'x-vsr-fact-check-needed'
+    plugin: displayHeaders.filter(
+      ([key]) =>
+        key === 'x-vsr-cache-hit' ||
+        key === 'x-vsr-selected-reasoning' ||
+        key === 'x-vsr-fast-response' ||
+        key === 'x-vsr-context-token-count' ||
+        key === 'x-vsr-response-warnings',
     ),
     // Looper headers: all x-vsr-looper-*
-    looper: displayHeaders.filter(([key]) =>
-      key.startsWith('x-vsr-looper-')
-    ),
+    looper: displayHeaders.filter(([key]) => key.startsWith('x-vsr-looper-')),
     // Retention directive headers: all x-vsr-retention-*
-    retention: displayHeaders.filter(([key]) =>
-      key.startsWith('x-vsr-retention-')
-    ),
+    retention: displayHeaders.filter(([key]) => key.startsWith('x-vsr-retention-')),
   }
 
   const renderSection = (title: string, items: [string, string][], isPrimary = false) => {
@@ -232,7 +246,10 @@ const HeaderReveal = ({ headers, onComplete, displayDuration = 2000 }: HeaderRev
           {items.map(([key, value]) => {
             const info = HEADER_INFO[key]
             return (
-              <div key={key} className={`${styles.headerItem} ${isPrimary ? styles.headerItemPrimary : ''}`}>
+              <div
+                key={key}
+                className={`${styles.headerItem} ${isPrimary ? styles.headerItemPrimary : ''}`}
+              >
                 <div className={styles.headerLabel}>{info.label}</div>
                 <div className={styles.headerValue}>{value}</div>
               </div>
@@ -248,16 +265,16 @@ const HeaderReveal = ({ headers, onComplete, displayDuration = 2000 }: HeaderRev
       <div className={styles.container}>
         <div className={styles.title}>Signal Driven Decision</div>
         <div className={styles.sections}>
+          {renderSection('RESPONSE', groupedHeaders.response, true)}
           {renderSection('MODEL', groupedHeaders.model, true)}
           {renderSection('DECISION', groupedHeaders.decision, true)}
+          {renderSection('LEARNING', groupedHeaders.learning)}
           {renderSection('SIGNALS', groupedHeaders.signals)}
           {renderSection('PLUGIN', groupedHeaders.plugin)}
           {renderSection('LOOPER', groupedHeaders.looper)}
           {renderSection('RETENTION', groupedHeaders.retention)}
         </div>
-        <div className={styles.hint}>
-          Response will appear shortly...
-        </div>
+        <div className={styles.hint}>Response will appear shortly...</div>
       </div>
     </div>
   )

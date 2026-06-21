@@ -38,6 +38,7 @@ type Config struct {
 	// AllowOpenBootstrap enables first-admin creation via the public, unauthenticated
 	// web-form bootstrap endpoint. Off by default; production should provision the
 	// admin via DASHBOARD_ADMIN_* instead of exposing an open registration path.
+	// SetupMode is a separate trusted bootstrap path for dashboard-first local install.
 	AllowOpenBootstrap bool
 
 	// Platform branding (e.g., "amd" for AMD GPU deployments)

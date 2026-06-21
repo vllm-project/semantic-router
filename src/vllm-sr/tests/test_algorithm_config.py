@@ -9,6 +9,7 @@ from cli.algorithms import (
     AlgorithmConfig,
     AutoMixSelectionConfig,
     EloSelectionConfig,
+    FusionAlgorithmConfig,
     GMTRouterConfig,
     HybridSelectionConfig,
     MultiFactorSelectionConfig,
@@ -26,7 +27,7 @@ class TestAlgorithmConfigTypes:
 
     def test_valid_looper_types(self):
         """Test that looper algorithm types are accepted."""
-        looper_types = ["confidence", "ratings", "remom"]
+        looper_types = ["confidence", "ratings", "remom", "fusion"]
 
         for algo_type in looper_types:
             config = AlgorithmConfig(type=algo_type)
@@ -46,7 +47,6 @@ class TestAlgorithmConfigTypes:
             "mlp",
             "multi_factor",
             "latency_aware",
-            "session_aware",
             "rl_driven",
             "gmtrouter",
         ]
@@ -106,6 +106,9 @@ class TestRouterDCSelectionConfig:
         assert config.temperature == 0.07
         assert config.dimension_size == 768
         assert config.min_similarity == 0.3
+        assert config.use_query_contrastive is True
+        assert config.use_model_contrastive is True
+        assert config.use_capabilities is True
 
     def test_temperature_validation(self):
         """Test that temperature must be positive."""
@@ -318,6 +321,71 @@ class TestReMoMAlgorithmConfig:
             ReMoMAlgorithmConfig()  # Missing required field
 
 
+class TestFusionAlgorithmConfig:
+    """Test Fusion multi-model deliberation configuration."""
+
+    def test_default_values(self):
+        config = FusionAlgorithmConfig()
+        assert config.include_analysis is True
+        assert config.include_intermediate_responses is True
+        assert config.on_error == "skip"
+        assert config.judge_prompt_version == "fusion-v1"
+
+    def test_custom_panel_and_judge(self):
+        config = FusionAlgorithmConfig(
+            model="judge-model",
+            analysis_models=["panel-a", "panel-b"],
+            max_concurrent=2,
+            max_completion_tokens=512,
+            temperature=0.2,
+        )
+        assert config.model == "judge-model"
+        assert config.analysis_models == ["panel-a", "panel-b"]
+        assert config.max_concurrent == 2
+        assert config.max_completion_tokens == 512
+        assert config.temperature == 0.2
+
+    def test_positive_limits(self):
+        with pytest.raises(PydanticValidationError):
+            FusionAlgorithmConfig(max_concurrent=0)
+
+        with pytest.raises(PydanticValidationError):
+            FusionAlgorithmConfig(max_completion_tokens=0)
+
+    def test_on_error_validation(self):
+        assert FusionAlgorithmConfig(on_error="fail").on_error == "fail"
+
+        with pytest.raises(PydanticValidationError):
+            FusionAlgorithmConfig(on_error="ignore")
+
+    def test_grounding_defaults(self):
+        config = FusionAlgorithmConfig(grounding={"enabled": True})
+        assert config.grounding.enabled is True
+        assert config.grounding.reference == "hybrid"
+        assert config.grounding.min_score == 0.0
+        assert config.grounding.min_keep == 1
+        assert config.grounding.nli_contradiction_penalty == 1.0
+        assert config.grounding.on_error == "skip"
+
+    def test_grounding_bounds_match_go_validator(self):
+        # min_score in [0, 1]
+        with pytest.raises(PydanticValidationError):
+            FusionAlgorithmConfig(grounding={"min_score": 1.5})
+        with pytest.raises(PydanticValidationError):
+            FusionAlgorithmConfig(grounding={"min_score": -0.1})
+        # min_keep >= 0
+        with pytest.raises(PydanticValidationError):
+            FusionAlgorithmConfig(grounding={"min_keep": -1})
+        # penalty >= 0
+        with pytest.raises(PydanticValidationError):
+            FusionAlgorithmConfig(grounding={"nli_contradiction_penalty": -1})
+        # reference enum + on_error enum
+        with pytest.raises(PydanticValidationError):
+            FusionAlgorithmConfig(grounding={"reference": "elsewhere"})
+        with pytest.raises(PydanticValidationError):
+            FusionAlgorithmConfig(grounding={"on_error": "ignore"})
+
+
 class TestAlgorithmConfigIntegration:
     """Integration tests for AlgorithmConfig with nested configs."""
 
@@ -396,6 +464,19 @@ class TestAlgorithmConfigIntegration:
         assert config.type == "remom"
         assert config.remom.breadth_schedule == [32, 8, 2]
         assert config.remom.model_distribution == "equal"
+
+    def test_fusion_algorithm_config(self):
+        """Test AlgorithmConfig with Fusion looper."""
+        config = AlgorithmConfig(
+            type="fusion",
+            fusion=FusionAlgorithmConfig(
+                model="judge-model",
+                analysis_models=["panel-a", "panel-b"],
+            ),
+        )
+        assert config.type == "fusion"
+        assert config.fusion.model == "judge-model"
+        assert config.fusion.analysis_models == ["panel-a", "panel-b"]
 
     def test_hybrid_algorithm_config(self):
         """Test AlgorithmConfig with Hybrid selection and all weights."""

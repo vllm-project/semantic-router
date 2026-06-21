@@ -74,10 +74,17 @@ type RequestContext struct {
 	// Streaming accumulation for caching
 	HasStreamingChunks bool                            // True when at least one SSE chunk has been received
 	StreamingContent   string                          // Accumulated content from delta.content
+	StreamingReasoning string                          // Accumulated reasoning from delta.reasoning_content
 	StreamingMetadata  map[string]interface{}          // id, model, created from first chunk
 	StreamingToolCalls map[int]*StreamingToolCallState // Accumulated delta.tool_calls keyed by tool index
 	StreamingComplete  bool                            // True when [DONE] marker received
 	StreamingAborted   bool                            // True if stream ended abnormally (EOF, cancel, timeout)
+
+	// UpstreamStatusCode is the HTTP status the upstream returned, captured at
+	// the response-header phase. Zero means the status was never observed for
+	// this request (e.g. response headers not processed). The cache-write path
+	// reads it to avoid caching non-2xx error bodies (cache poisoning).
+	UpstreamStatusCode int
 
 	// TTFT tracking
 	TTFTRecorded bool
@@ -114,11 +121,21 @@ type RequestContext struct {
 	VSRReasoningMode              string                 // "on" or "off" - whether reasoning mode was determined to be used
 	VSRSelectedModel              string                 // The model selected by VSR
 	VSRSelectionMethod            string                 // Model selection algorithm used (e.g., "elo", "static", "router_dc")
+	VSRLearningPolicy             map[string]interface{} // Router Learning adaptation trace for replay/experiments
+	VSRLearningSessionID          string                 // Router Learning memory key used for this request
+	VSRLearningConversationID     string                 // Client-declared conversation identity used by Router Learning
 	VSRSessionPolicy              map[string]interface{} // Session-aware routing policy trace for replay/experiments
 	VSRCacheHit                   bool                   // Whether this request hit the cache
 	VSRCacheSimilarity            float32                // Similarity score from last cache lookup (0 = no lookup performed)
 	VSRInjectedSystemPrompt       bool                   // Whether a system prompt was injected into the request
 	VSRSelectedDecision           *config.Decision       // The decision object selected by DecisionEngine (for plugins)
+
+	// ResponsePath records how the final response was produced, surfaced as the
+	// v0.4 keystone x-vsr-response-path header (one of the headers.ResponsePath*
+	// values). It defaults to "upstream"; immediate-response paths (cache,
+	// fast_response, looper, rate-limit, error, image generation) set it
+	// explicitly so the emitted path is accurate. See issue #2203.
+	ResponsePath string
 
 	// Modality routing classification result (AR/DIFFUSION/BOTH)
 	ModalityClassification *ModalityClassificationResult // Set by classifyModality()

@@ -26,9 +26,7 @@ func recordAgenticSessionDecision(
 	previousModel := ctx.PreviousModel
 	if selCtx.AgenticSession != nil {
 		activeToolLoop = selCtx.AgenticSession.ActiveToolLoop
-		if previousModel == "" {
-			previousModel = selCtx.AgenticSession.PreviousModel
-		}
+		previousModel = selCtx.AgenticSession.PreviousModel
 	}
 	sessiontelemetry.RecordSessionDecision(sessiontelemetry.SessionDecisionParams{
 		SessionID:      selCtx.SessionID,

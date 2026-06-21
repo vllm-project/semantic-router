@@ -53,6 +53,7 @@ export const DEFAULT_SECTIONS: Record<RouterSystemKey, unknown> = {
   router_core: {
     config_source: 'file',
     auto_model_name: 'MoM',
+    auto_model_names: ['vllm-sr/auto', 'auto', 'MoM'],
     include_config_models_in_list: false,
     clear_route_cache: true,
     model_selection: {

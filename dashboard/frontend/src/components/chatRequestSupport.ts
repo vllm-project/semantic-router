@@ -16,16 +16,16 @@ export interface OutboundChatMessage {
 }
 
 const RESPONSE_HEADER_KEYS = [
+  // v0.4 keystone headers (#2203)
+  'x-vsr-schema-version',
+  'x-vsr-response-path',
   'x-vsr-selected-model',
   'x-vsr-selected-decision',
   'x-vsr-selected-modality',
   'x-vsr-cache-hit',
   'x-vsr-selected-reasoning',
   'x-vsr-fast-response',
-  'x-vsr-jailbreak-blocked',
-  'x-vsr-pii-violation',
-  'x-vsr-hallucination-detected',
-  'x-vsr-fact-check-needed',
+  'x-vsr-response-warnings',
   'x-vsr-matched-keywords',
   'x-vsr-matched-embeddings',
   'x-vsr-matched-domains',
@@ -60,7 +60,7 @@ export const buildChatMessages = (
   messages: Message[],
   nextUserMessage: string,
   enableClawMode: boolean,
-  nextUserAttachments: PlaygroundAttachment[] = []
+  nextUserAttachments: PlaygroundAttachment[] = [],
 ): OutboundChatMessage[] => {
   const chatMessages: OutboundChatMessage[] = []
 
@@ -68,10 +68,7 @@ export const buildChatMessages = (
     if (message.role === 'user') {
       chatMessages.push({
         role: 'user',
-        content: buildPromptWithAttachments(
-          message.content,
-          message.playgroundAttachments ?? []
-        ),
+        content: buildPromptWithAttachments(message.content, message.playgroundAttachments ?? []),
       })
       continue
     }
@@ -95,7 +92,7 @@ export const buildChatMessages = (
 export const buildChatRequestBody = (
   model: string,
   messages: OutboundChatMessage[],
-  activeTools: unknown[]
+  activeTools: unknown[],
 ): Record<string, unknown> => {
   const requestBody: Record<string, unknown> = {
     model,

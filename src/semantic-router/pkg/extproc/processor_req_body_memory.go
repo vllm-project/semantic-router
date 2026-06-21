@@ -11,6 +11,7 @@ import (
 	"github.com/openai/openai-go"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/headers"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/memory"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/metrics"
@@ -290,6 +291,9 @@ func (r *OpenAIRouter) createRateLimitResponse(decision *ratelimit.Decision) *ex
 			}})
 		}
 	}
+
+	// v0.4 keystone headers: this is the rate-limit path (#2203).
+	respHeaders = append(respHeaders, httputil.KeystoneHeaderOptions(headers.ResponsePathRateLimited)...)
 
 	return &ext_proc.ProcessingResponse{
 		Response: &ext_proc.ProcessingResponse_ImmediateResponse{

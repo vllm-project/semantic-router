@@ -26,7 +26,6 @@ ALGORITHM_TYPES = [
     "svm",
     "mlp",
     "multi_factor",
-    "session_aware",
 ]
 
 ALGORITHM_HINTS = {
@@ -41,7 +40,6 @@ ALGORITHM_HINTS = {
     "svm": "  Tip: Configure global.router.model_selection.ml.svm for trained SVM routing",
     "mlp": "  Tip: Configure global.router.model_selection.ml.mlp for trained MLP routing",
     "multi_factor": "  Tip: Configure decision.algorithm.multi_factor for SLO-aware scoring",
-    "session_aware": "  Tip: Preserve agentic continuity with decision.algorithm.session_aware",
     "gmtrouter": "  Tip: Learns user preferences via graph neural network",
 }
 
@@ -49,6 +47,7 @@ ALGORITHM_CONFIG_BLOCKS = (
     "confidence",
     "ratings",
     "remom",
+    "fusion",
     "elo",
     "router_dc",
     "automix",
@@ -57,7 +56,6 @@ ALGORITHM_CONFIG_BLOCKS = (
     "gmtrouter",
     "latency_aware",
     "multi_factor",
-    "session_aware",
 )
 
 EXPECTED_CONFIG_BLOCK_BY_ALGORITHM = {
@@ -69,7 +67,6 @@ EXPECTED_CONFIG_BLOCK_BY_ALGORITHM = {
     "gmtrouter": "gmtrouter",
     "latency_aware": "latency_aware",
     "multi_factor": "multi_factor",
-    "session_aware": "session_aware",
 }
 
 DEFAULT_CONFIG_BLOCK_BY_ALGORITHM: dict[str, dict[str, object]] = {
