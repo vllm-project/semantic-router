@@ -62,15 +62,29 @@ AMD validation, and a GitHub PR.
 - [x] RLF-011 Update tutorials, proposal status, and deployment/distributed
   states guidance.
 - [x] RLF-012 Run local gates and fix failures.
-- [ ] RLF-013 Run AMD deployment validation.
-- [ ] RLF-014 Push branch and open PR.
+- [x] RLF-013 Run AMD deployment validation.
+- [x] RLF-014 Push branch and open PR.
 
 ## Next Action
 
-Run RLF-013 AMD deployment validation next. Local focused tests,
+Monitor PR review and follow-up comments. Local focused tests,
 `make agent-validate`, `make agent-lint`, `make vllm-sr-test`,
-`make test-semantic-router`, and `make agent-ci-gate` pass. Local integration
-smoke that needs a running Docker daemon is deferred to the AMD validation host.
+`make test-semantic-router`, and `make agent-ci-gate` passed before AMD
+deployment validation. AMD validation ran on PR head `6c162e31` with the
+`agentic-saars.yaml` recipe and PR images:
+
+- Router Envoy ready on `:8899`, dashboard ready on `:8700`, and the vLLM ROCm
+  backend serving the recipe aliases.
+- Conversation-scope routing covered simple/local, privacy bypass, high-care
+  legal/health, complex/code, independent new conversations, and tool-loop
+  hard locks with `x-vsr-learning-*` headers.
+- Temporary session-scope validation covered first-selected session protection
+  across conversations and idle-time release to a stronger model.
+- Router Replay captured method-keyed learning diagnostics, and vLLM metrics
+  exposed prefix-cache counters.
+- PR #2258 is open at
+  `https://github.com/vllm-project/semantic-router/pull/2258`; checks are
+  green/neutral and merge is blocked only by review policy.
 
 ## Operating Rules
 
