@@ -52,13 +52,35 @@ func buildReplayRouteDiagnostics(
 }
 
 func buildReplayLearningDiagnostics(ctx *RequestContext) *routerreplay.LearningDiagnostics {
-	if ctx == nil || len(ctx.VSRLearningPolicy) == 0 {
+	policies := learningPoliciesForReplay(ctx)
+	if len(policies) == 0 {
 		return nil
 	}
+	adaptations := make(map[string]map[string]interface{}, len(policies))
+	for method, policy := range policies {
+		adaptations[string(method)] = policy.ToMap()
+	}
 	return &routerreplay.LearningDiagnostics{
-		Adaptations: map[string]map[string]interface{}{
-			"session_aware": cloneReplayInterfaceMap(ctx.VSRLearningPolicy),
-		},
+		Adaptations: adaptations,
+	}
+}
+
+func learningPoliciesForReplay(ctx *RequestContext) map[routerLearningMethod]routerLearningPolicy {
+	if ctx == nil {
+		return nil
+	}
+	if len(ctx.VSRLearningPolicies) > 0 {
+		return ctx.VSRLearningPolicies
+	}
+	if ctx.VSRLearningPolicy == nil || ctx.VSRLearningPolicy.Empty() {
+		return nil
+	}
+	adaptation := ctx.VSRLearningPolicy.Adaptation
+	if adaptation == "" {
+		adaptation = routerLearningMethodSessionAware
+	}
+	return map[routerLearningMethod]routerLearningPolicy{
+		adaptation: *ctx.VSRLearningPolicy,
 	}
 }
 

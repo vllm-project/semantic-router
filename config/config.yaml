@@ -826,8 +826,8 @@ routing:
             # filter regresses quality on contested factual questions because it
             # deletes the correct dissenter; see bench/grounded_fusion/FINDINGS.md.
 
-    - name: terse_elo_route
-      description: Personalized terse-answer route using Elo selection.
+    - name: terse_feedback_route
+      description: Terse-answer route that allows Elo Router Learning to adjust feedback-driven routing.
       priority: 160
       rules:
         operator: AND
@@ -839,17 +839,9 @@ routing:
           use_reasoning: false
         - model: qwen3-32b
           use_reasoning: false
-      algorithm:
-        type: elo
+      adaptations:
         elo:
-          initial_rating: 1200
-          k_factor: 32
-          category_weighted: true
-          decay_factor: 0.97
-          min_comparisons: 10
-          cost_scaling_factor: 0.15
-          storage_path: state/elo-selection.json
-          auto_save_interval: 5m
+          mode: apply
       plugins:
         - type: fast_response
           configuration:
@@ -961,8 +953,8 @@ routing:
           cost_weight: 0.1
           quality_gap_threshold: 0.08
           normalize_scores: true
-    - name: spanish_rl_route
-      description: RL-driven route for Spanish-language traffic with Milvus RAG.
+    - name: spanish_bandit_route
+      description: Spanish-language route that observes bandit Router Learning with Milvus RAG.
       priority: 135
       rules:
         operator: AND
@@ -974,29 +966,16 @@ routing:
           use_reasoning: false
         - model: qwen3-32b
           use_reasoning: true
-      algorithm:
-        type: rl_driven
-        rl_driven:
-          exploration_rate: 0.15
-          exploration_decay: 0.97
-          min_exploration: 0.03
-          use_thompson_sampling: true
-          enable_personalization: true
-          personalization_blend: 0.4
-          session_context_weight: 0.35
-          implicit_feedback_weight: 0.5
-          cost_awareness: true
-          cost_weight: 0.2
-          storage_path: state/rl-driven.json
-          auto_save_interval: 30s
-          use_router_r1_rewards: true
-          cost_reward_alpha: 0.3
-          format_reward_penalty: -1.0
-          enable_llm_routing: true
-          router_r1_server_url: http://router-r1:8080
-          llm_routing_fallback: thompson
-          enable_multi_round_aggregation: true
-          max_aggregation_rounds: 3
+      adaptations:
+        bandit:
+          mode: observe
+          scope: decision
+          goals:
+            quality: 1.0
+            cost: 0.2
+            latency: 0.1
+          tuning:
+            exploration_budget: 0.03
       plugins:
         - type: rag
           configuration:
@@ -1017,8 +996,8 @@ routing:
               metadata_field: metadata
               filter_expression: locale == "es"
 
-    - name: admin_gmtrouter_route
-      description: Admin route with personalized GMTRouter selection and external API RAG.
+    - name: admin_personalized_route
+      description: Admin route with personalization Router Learning and external API RAG.
       priority: 130
       rules:
         operator: AND
@@ -1028,22 +1007,9 @@ routing:
       modelRefs:
         - model: qwen3-32b
           use_reasoning: true
-      algorithm:
-        type: gmtrouter
-        gmtrouter:
-          enable_personalization: true
-          history_sample_size: 50
-          embedding_dimension: 768
-          num_gnn_layers: 2
-          attention_heads: 8
-          min_interactions_for_personalization: 5
-          max_interactions_per_user: 200
-          feedback_types:
-            - rating
-            - ranking
-            - response
-          model_path: models/gmtrouter.pt
-          storage_path: state/gmtrouter.db
+      adaptations:
+        personalization:
+          mode: apply
       plugins:
         - type: rag
           configuration:
@@ -1361,15 +1327,6 @@ global:
     model_selection:
       method: hybrid
       enabled: true
-      elo:
-        initial_rating: 1200
-        k_factor: 32
-        category_weighted: true
-        decay_factor: 0.97
-        min_comparisons: 5
-        cost_scaling_factor: 0.2
-        storage_path: state/elo-global.json
-        auto_save_interval: 5m
       router_dc:
         temperature: 0.2
         dimension_size: 384
@@ -1433,6 +1390,24 @@ global:
             handoff_penalty_weight: 1.0
             switch_history_weight: 0.04
             max_cache_cost_multiplier: 2.5
+        bandit:
+          enabled: false
+          algorithm: linucb
+          scope: decision
+          goals:
+            quality: 1.0
+            cost: 0.25
+            latency: 0.1
+          tuning:
+            exploration_budget: 0.05
+        elo:
+          enabled: false
+          scope: decision
+          initial_rating: 1200
+          k_factor: 32
+        personalization:
+          enabled: false
+          scope: decision
 
   services:
     api:

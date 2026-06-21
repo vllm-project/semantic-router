@@ -61,6 +61,53 @@ func TestBuildReplayRoutingRecordCapturesSessionAndDecisionMetadata(t *testing.T
 	assertReplayMatchedSignals(t, record)
 }
 
+func TestBuildReplayRoutingRecordCapturesLearningAdaptations(t *testing.T) {
+	ctx := replayRoutingRecordMetadataTestContext()
+	ctx.VSRLearningPolicies = map[routerLearningMethod]routerLearningPolicy{
+		routerLearningMethodSessionAware: replayTestLearningPolicy(
+			routerLearningMethodSessionAware,
+			"apply",
+			routerLearningActionStay,
+			"cache_hot",
+			"conversation",
+		),
+		routerLearningMethodBandit: replayTestLearningPolicy(
+			routerLearningMethodBandit,
+			"observe",
+			routerLearningActionSwitch,
+			"quality_goal",
+			"request",
+		),
+	}
+
+	record := buildReplayRoutingRecord(ctx, "model-a", "model-b", "balance")
+
+	if record.Learning == nil {
+		t.Fatal("expected learning diagnostics")
+	}
+	if got := record.Learning.Adaptations["session_aware"]["action"]; got != "stay" {
+		t.Fatalf("expected session_aware action recorded, got %#v", record.Learning.Adaptations)
+	}
+	if got := record.Learning.Adaptations["bandit"]["mode"]; got != "observe" {
+		t.Fatalf("expected bandit mode recorded, got %#v", record.Learning.Adaptations)
+	}
+}
+
+func replayTestLearningPolicy(
+	method routerLearningMethod,
+	mode string,
+	action routerLearningAction,
+	reason string,
+	scope string,
+) routerLearningPolicy {
+	policy := newRouterLearningPolicy(method)
+	policy.Mode = mode
+	policy.Action = action
+	policy.Reason = reason
+	policy.Scope = scope
+	return policy
+}
+
 func assertReplayRoutingMetadata(t *testing.T, record routerreplay.RoutingRecord) {
 	t.Helper()
 	if record.SessionID != "sess-replay-test" {

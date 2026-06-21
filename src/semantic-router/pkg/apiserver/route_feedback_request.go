@@ -32,13 +32,14 @@ func normalizeAndValidateFeedbackRequest(req *FeedbackRequest) (string, *feedbac
 	}
 
 	feedback := &selection.Feedback{
-		WinnerModel:  req.WinnerModel,
-		LoserModel:   req.LoserModel,
-		DecisionName: req.DecisionName,
-		UserID:       req.UserID,
-		SessionID:    req.SessionID,
-		FeedbackType: req.FeedbackType,
-		Confidence:   req.Confidence,
+		WinnerModel:    req.WinnerModel,
+		LoserModel:     req.LoserModel,
+		DecisionName:   req.DecisionName,
+		UserID:         req.UserID,
+		SessionID:      req.SessionID,
+		ConversationID: req.ConversationID,
+		FeedbackType:   req.FeedbackType,
+		Confidence:     req.Confidence,
 	}
 	if err := selection.NormalizeFeedback(feedback); err != nil {
 		return "", feedbackValidationFromSelectionError(err)
@@ -55,6 +56,7 @@ func normalizeAndValidateFeedbackRequest(req *FeedbackRequest) (string, *feedbac
 	req.DecisionName = feedback.DecisionName
 	req.UserID = feedback.UserID
 	req.SessionID = feedback.SessionID
+	req.ConversationID = feedback.ConversationID
 	req.FeedbackType = feedback.FeedbackType
 	return feedback.DecisionName, nil
 }

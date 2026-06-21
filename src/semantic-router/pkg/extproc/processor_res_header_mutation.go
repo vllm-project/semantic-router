@@ -385,32 +385,51 @@ func sessionPolicyPhase(ctx *RequestContext) string {
 }
 
 func learningPolicyMethodsHeader(ctx *RequestContext) string {
-	adaptation := learningPolicyMethod(ctx)
-	if adaptation == "" {
+	policies := learningPoliciesForHeaders(ctx)
+	methods := sortedRouterLearningPolicyMethods(policies)
+	if len(methods) == 0 {
 		return ""
 	}
-	return sanitizeWarningField(adaptation)
+	values := make([]string, 0, len(methods))
+	for _, method := range methods {
+		values = append(values, sanitizeWarningField(string(method)))
+	}
+	return strings.Join(values, ",")
 }
 
 func learningPolicyPairHeader(ctx *RequestContext, key string) string {
-	adaptation := learningPolicyMethod(ctx)
-	if adaptation == "" {
+	policies := learningPoliciesForHeaders(ctx)
+	methods := sortedRouterLearningPolicyMethods(policies)
+	if len(methods) == 0 {
 		return ""
 	}
-	value := replayPolicyString(ctx.VSRLearningPolicy, key)
-	if value == "" {
-		return ""
+	pairs := make([]string, 0, len(methods))
+	for _, method := range methods {
+		policy := policies[method]
+		value := policy.String(key)
+		if value == "" {
+			continue
+		}
+		pairs = append(pairs, sanitizeWarningField(string(method))+"="+sanitizeWarningField(value))
 	}
-	return sanitizeWarningField(adaptation) + "=" + sanitizeWarningField(value)
+	return strings.Join(pairs, ",")
 }
 
-func learningPolicyMethod(ctx *RequestContext) string {
-	if ctx == nil || len(ctx.VSRLearningPolicy) == 0 {
-		return ""
+func learningPoliciesForHeaders(ctx *RequestContext) map[routerLearningMethod]routerLearningPolicy {
+	if ctx == nil {
+		return nil
 	}
-	adaptation := replayPolicyString(ctx.VSRLearningPolicy, "adaptation")
+	if len(ctx.VSRLearningPolicies) > 0 {
+		return ctx.VSRLearningPolicies
+	}
+	if ctx.VSRLearningPolicy == nil || ctx.VSRLearningPolicy.Empty() {
+		return nil
+	}
+	adaptation := ctx.VSRLearningPolicy.Adaptation
 	if adaptation == "" {
-		return "session_aware"
+		adaptation = routerLearningMethodSessionAware
 	}
-	return adaptation
+	return map[routerLearningMethod]routerLearningPolicy{
+		adaptation: *ctx.VSRLearningPolicy,
+	}
 }

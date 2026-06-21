@@ -81,3 +81,4 @@ Tasks use stable IDs and checkbox status:
 - [pl-0032-architecture-scorecard-ratchet.md](pl-0032-architecture-scorecard-ratchet.md)
 - [pl-0034-fusion-api.md](pl-0034-fusion-api.md)
 - [pl-0035-router-learning-session-aware.md](pl-0035-router-learning-session-aware.md)
+- [pl-0036-router-learning-followups.md](pl-0036-router-learning-followups.md)

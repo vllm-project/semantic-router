@@ -48,7 +48,7 @@ Use `observe` for rollout:
 
 ```yaml
 adaptations:
-  session_aware:
+  bandit:
     mode: observe
 ```
 
@@ -69,4 +69,4 @@ adaptations:
 Unset fields inherit from
 `global.router.learning.adaptations.session_aware`. The router validates
 decision adaptation names and fields strictly: an unknown adaptation name or an
-unknown `session_aware` field fails config validation instead of being ignored.
+unknown adaptation field fails config validation instead of being ignored.

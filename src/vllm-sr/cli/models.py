@@ -845,12 +845,42 @@ class DecisionSessionAwareAdaptationConfig(BaseModel):
     tuning: Optional[SessionAwareLearningTuning] = None
 
 
+class BanditLearningTuning(BaseModel):
+    """Sparse day-0 bandit Router Learning tuning."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    exploration_budget: Optional[float] = Field(default=None, ge=0.0, le=1.0)
+
+
+class DecisionLearningAdaptationConfig(BaseModel):
+    """Decision-local control for a Router Learning adaptation."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    mode: Optional[Literal["apply", "observe", "bypass"]] = None
+
+
+class DecisionBanditAdaptationConfig(BaseModel):
+    """Decision-local bandit Router Learning controls."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    mode: Optional[Literal["apply", "observe", "bypass"]] = None
+    scope: Optional[Literal["decision", "conversation", "session"]] = None
+    goals: Optional[Dict[Literal["quality", "cost", "latency"], float]] = None
+    tuning: Optional[BanditLearningTuning] = None
+
+
 class DecisionAdaptationsConfig(BaseModel):
     """Decision-local Router Learning adaptation controls."""
 
     model_config = ConfigDict(extra="forbid")
 
     session_aware: Optional[DecisionSessionAwareAdaptationConfig] = None
+    bandit: Optional[DecisionBanditAdaptationConfig] = None
+    elo: Optional[DecisionLearningAdaptationConfig] = None
+    personalization: Optional[DecisionLearningAdaptationConfig] = None
 
 
 class Decision(BaseModel):

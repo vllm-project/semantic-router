@@ -386,13 +386,13 @@ func TestBuildResponseHeaderMutation_EmitsWarningsAlongsideStandardHeaders(t *te
 
 func TestBuildResponseHeaderMutation_EmitsSplitRouterLearningHeaders(t *testing.T) {
 	ctx := &RequestContext{
-		VSRLearningPolicy: map[string]interface{}{
-			"adaptation": "session_aware",
-			"mode":       "apply",
-			"action":     "switch",
-			"reason":     "switch_allowed",
-			"scope":      "conversation",
-		},
+		VSRLearningPolicy: headerTestLearningPolicy(
+			routerLearningMethodSessionAware,
+			"apply",
+			routerLearningActionSwitch,
+			"switch_allowed",
+			"conversation",
+		),
 	}
 
 	mutation := buildResponseHeaderMutation(ctx, true)
@@ -408,13 +408,13 @@ func TestBuildResponseHeaderMutation_EmitsSplitRouterLearningHeaders(t *testing.
 
 func TestBuildResponseHeaderMutation_EmitsNonApplyLearningMode(t *testing.T) {
 	ctx := &RequestContext{
-		VSRLearningPolicy: map[string]interface{}{
-			"adaptation": "session_aware",
-			"mode":       "observe",
-			"action":     "stay",
-			"reason":     "hard_lock=tool_loop",
-			"scope":      "session",
-		},
+		VSRLearningPolicy: headerTestLearningPolicy(
+			routerLearningMethodSessionAware,
+			"observe",
+			routerLearningActionStay,
+			"hard_lock=tool_loop",
+			"session",
+		),
 	}
 
 	mutation := buildResponseHeaderMutation(ctx, true)
@@ -424,6 +424,52 @@ func TestBuildResponseHeaderMutation_EmitsNonApplyLearningMode(t *testing.T) {
 	assert.Equal(t, "session_aware=observe", headerMap[headers.VSRLearningModes])
 	assert.Equal(t, "session_aware=stay", headerMap[headers.VSRLearningActions])
 	assert.Equal(t, "session_aware=session", headerMap[headers.VSRLearningScopes])
+}
+
+func TestBuildResponseHeaderMutation_EmitsMultipleLearningPolicies(t *testing.T) {
+	ctx := &RequestContext{
+		VSRLearningPolicies: map[routerLearningMethod]routerLearningPolicy{
+			routerLearningMethodSessionAware: *headerTestLearningPolicy(
+				routerLearningMethodSessionAware,
+				"apply",
+				routerLearningActionStay,
+				"cache_hot",
+				"conversation",
+			),
+			routerLearningMethodBandit: *headerTestLearningPolicy(
+				routerLearningMethodBandit,
+				"observe",
+				routerLearningActionSwitch,
+				"quality_goal",
+				"request",
+			),
+		},
+	}
+
+	mutation := buildResponseHeaderMutation(ctx, true)
+	require.NotNil(t, mutation)
+
+	headerMap := mutationToMap(mutation.SetHeaders)
+	assert.Equal(t, "bandit,session_aware", headerMap[headers.VSRLearningMethods])
+	assert.Equal(t, "bandit=switch,session_aware=stay", headerMap[headers.VSRLearningActions])
+	assert.Equal(t, "bandit=request,session_aware=conversation", headerMap[headers.VSRLearningScopes])
+	assert.Equal(t, "bandit=quality_goal,session_aware=cache_hot", headerMap[headers.VSRLearningReasons])
+	assert.Equal(t, "bandit=observe,session_aware=apply", headerMap[headers.VSRLearningModes])
+}
+
+func headerTestLearningPolicy(
+	method routerLearningMethod,
+	mode string,
+	action routerLearningAction,
+	reason string,
+	scope string,
+) *routerLearningPolicy {
+	policy := newRouterLearningPolicy(method)
+	policy.Mode = mode
+	policy.Action = action
+	policy.Reason = reason
+	policy.Scope = scope
+	return &policy
 }
 
 func TestNormalizeProtocol(t *testing.T) {

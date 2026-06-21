@@ -76,9 +76,12 @@ def _removed_router_learning_fields(data: Dict[str, Any]) -> list[str]:
                     "session_aware",
                     "model_switch_gate",
                     "lookup_tables",
+                    "elo",
                 ):
                     if field_name in model_selection:
                         fields.append(f"global.router.model_selection.{field_name}")
+                if str(model_selection.get("method", "")).strip().lower() == "elo":
+                    fields.append("global.router.model_selection.method=elo")
 
     routing = data.get("routing")
     if isinstance(routing, dict):
@@ -90,12 +93,22 @@ def _removed_router_learning_fields(data: Dict[str, Any]) -> list[str]:
                 algorithm = decision.get("algorithm")
                 if not isinstance(algorithm, dict):
                     continue
-                if str(algorithm.get("type", "")).strip().lower() == "session_aware":
+                algorithm_type = str(algorithm.get("type", "")).strip().lower()
+                if algorithm_type == "session_aware":
                     fields.append(
                         f"routing.decisions[{index}].algorithm.type=session_aware"
                     )
+                if algorithm_type in {"elo", "rl_driven", "gmtrouter"}:
+                    fields.append(
+                        f"routing.decisions[{index}].algorithm.type={algorithm_type}"
+                    )
                 if "session_aware" in algorithm:
                     fields.append(f"routing.decisions[{index}].algorithm.session_aware")
+                for field_name in ("elo", "rl_driven", "gmtrouter"):
+                    if field_name in algorithm:
+                        fields.append(
+                            f"routing.decisions[{index}].algorithm.{field_name}"
+                        )
 
     return fields
 
@@ -145,9 +158,11 @@ def parse_user_config(config_path: str) -> UserConfig:
         joined_fields = ", ".join(removed_router_learning_fields)
         raise ConfigParseError(
             "Removed Router Learning config fields are no longer supported: "
-            f"{joined_fields}. Enable `global.router.learning.adaptations.session_aware` "
-            "and use `routing.decisions[].adaptations.session_aware` only when a "
-            "decision needs apply/observe/bypass control or sparse scope/tuning overrides."
+            f"{joined_fields}. Enable the matching `global.router.learning.adaptations.<name>` "
+            "block (`session_aware`, `elo`, `bandit`, or `personalization`) "
+            "such as `global.router.learning.adaptations.session_aware`; "
+            "and use `routing.decisions[].adaptations.<name>` only when a "
+            "decision needs apply/observe/bypass control or sparse overrides."
         )
 
     # Validate with Pydantic

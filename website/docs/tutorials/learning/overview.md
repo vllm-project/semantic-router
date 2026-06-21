@@ -6,9 +6,16 @@ Router Learning is the router layer for cross-request routing intelligence. It
 adjusts the model proposed by semantic decisions without making learning state
 part of `decision.algorithm`.
 
-The first supported adaptation is session-aware learning:
+The first production adaptation is session-aware learning. The same namespace
+also contains day-0 and roadmap learning adaptations:
 
 - `global.router.learning.adaptations.session_aware` enables the adaptation.
+- `global.router.learning.adaptations.bandit` enables conservative
+  feedback/cost-aware online scoring.
+- `global.router.learning.adaptations.elo` enables day-0 pairwise rating
+  states.
+- `global.router.learning.adaptations.personalization` enables day-0 user
+  preference states.
 - `routing.decisions[].adaptations.session_aware.mode` controls hard decision
   boundaries.
 - `x-session-id` identifies the long-lived client session.
@@ -20,7 +27,9 @@ Use Router Learning when a decision should remain semantic, but repeated
 requests should consider router memory such as current model, tool-loop state,
 prefix-cache evidence, handoff cost, or switch history.
 
-See [Session-Aware Learning](./session-aware) for the concrete configuration.
+See [Learning Adaptations](./adaptations) for the adaptation map and
+[Session-Aware Learning](./session-aware) for the production continuity
+configuration.
 
 ## Key Advantages
 
@@ -54,6 +63,13 @@ global:
         session_aware:
           enabled: true
           scope: conversation
+        bandit:
+          enabled: false
+          scope: decision
+        elo:
+          enabled: false
+        personalization:
+          enabled: false
 ```
 
 Decisions only need local config when they opt out, observe, or need a sparse
@@ -62,6 +78,12 @@ scope/tuning override:
 ```yaml
 adaptations:
   session_aware:
+    mode: bypass
+  bandit:
+    mode: observe
+  elo:
+    mode: observe
+  personalization:
     mode: bypass
 ```
 

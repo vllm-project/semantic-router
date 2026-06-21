@@ -208,9 +208,9 @@ def _execute_serve(
     "--algorithm",
     type=click.Choice(ALGORITHM_TYPES, case_sensitive=False),
     default=None,
-    help="Selection algorithm override: static, elo, router_dc, automix, hybrid, "
-    "latency_aware, knn, kmeans, svm, mlp, multi_factor, rl_driven, or gmtrouter. "
-    "Overrides decision.algorithm.type in the config file.",
+    help="Request-time base algorithm override: static, router_dc, automix, hybrid, "
+    "latency_aware, knn, kmeans, svm, mlp, or multi_factor. "
+    "Cross-request learning uses global.router.learning.adaptations.",
 )
 @click.option("--target", default=None, help=TARGET_HELP)
 @click.option(

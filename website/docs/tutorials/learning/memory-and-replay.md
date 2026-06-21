@@ -18,14 +18,15 @@ and eval.
 Learning adaptations need state from earlier requests, but synchronous storage
 calls would make routing fragile. The router keeps low-latency online state in
 memory and writes durable event records through Router Replay. Evals and future
-prior materializers can read replay records without changing the request path.
+experience materializers can read replay records without changing the request
+path.
 
 ## When to Use
 
 - You need to debug why an adaptation stayed or switched models.
 - You want evals to replay model choices and cache evidence.
 - You need durable audit records for Router Learning decisions.
-- You plan to build replay-derived priors later.
+- You plan to build replay-derived experience later.
 
 ## Configuration
 

@@ -44,6 +44,30 @@ func newRuntimeSelectionServer(registry *selection.Registry) *ClassificationAPIS
 	return &ClassificationAPIServer{runtimeRegistry: runtimeRegistry}
 }
 
+type feedbackLearningRuntime struct {
+	updates int
+	last    *selection.Feedback
+}
+
+func (r *feedbackLearningRuntime) UpdateFeedback(_ context.Context, feedback *selection.Feedback) int {
+	r.updates++
+	r.last = feedback
+	return 1
+}
+
+type feedbackLearningRatingsRuntime struct {
+	feedbackLearningRuntime
+	ratings []selection.ModelRating
+}
+
+func (r *feedbackLearningRatingsRuntime) EloLearningEnabled() bool {
+	return true
+}
+
+func (r *feedbackLearningRatingsRuntime) EloLeaderboard(_ string) []selection.ModelRating {
+	return append([]selection.ModelRating(nil), r.ratings...)
+}
+
 func TestHandleFeedback_Success(t *testing.T) {
 	// Register a test Elo selector
 	registry := selection.NewRegistry()
@@ -95,9 +119,11 @@ func TestHandleFeedbackUsesRuntimeSelectionRegistry(t *testing.T) {
 	server := newRuntimeSelectionServer(registry)
 
 	body, _ := json.Marshal(FeedbackRequest{
-		WinnerModel:  "gpt-4",
-		LoserModel:   "llama-70b",
-		DecisionName: "coding",
+		WinnerModel:    "gpt-4",
+		LoserModel:     "llama-70b",
+		DecisionName:   "coding",
+		SessionID:      " session-a ",
+		ConversationID: " conversation-a ",
 	})
 	req := httptest.NewRequest(http.MethodPost, "/api/v1/feedback", bytes.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
@@ -110,6 +136,72 @@ func TestHandleFeedbackUsesRuntimeSelectionRegistry(t *testing.T) {
 	}
 	if got := eloSelector.GetLeaderboard("coding"); len(got) == 0 {
 		t.Fatalf("expected runtime Elo selector to record feedback")
+	}
+}
+
+func TestHandleFeedbackUsesRuntimeLearningRuntime(t *testing.T) {
+	withFeedbackRegistry(t, selection.NewRegistry())
+
+	learningRuntime := &feedbackLearningRuntime{}
+	runtimeRegistry := routerruntime.NewRegistry(nil)
+	runtimeRegistry.SetLearningRuntime(learningRuntime)
+	server := &ClassificationAPIServer{runtimeRegistry: runtimeRegistry}
+
+	body, _ := json.Marshal(FeedbackRequest{
+		WinnerModel:    "gpt-4",
+		LoserModel:     "llama-70b",
+		DecisionName:   "coding",
+		SessionID:      " session-a ",
+		ConversationID: " conversation-a ",
+	})
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/feedback", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+
+	server.handleFeedback(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected status 200 from runtime learning, got %d: %s", w.Code, w.Body.String())
+	}
+	if learningRuntime.updates != 1 {
+		t.Fatalf("expected learning runtime update, got %d", learningRuntime.updates)
+	}
+	if learningRuntime.last == nil ||
+		learningRuntime.last.SessionID != "session-a" ||
+		learningRuntime.last.ConversationID != "conversation-a" {
+		t.Fatalf("expected normalized feedback identity, got %#v", learningRuntime.last)
+	}
+}
+
+func TestHandleGetRatingsUsesRouterLearningElo(t *testing.T) {
+	withFeedbackRegistry(t, selection.NewRegistry())
+
+	runtimeRegistry := routerruntime.NewRegistry(nil)
+	runtimeRegistry.SetLearningRuntime(&feedbackLearningRatingsRuntime{
+		ratings: []selection.ModelRating{
+			{Model: "gpt-4", Rating: 1516, Wins: 1},
+			{Model: "llama-70b", Rating: 1484, Losses: 1},
+		},
+	})
+	server := &ClassificationAPIServer{runtimeRegistry: runtimeRegistry}
+
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/ratings?category=coding", nil)
+	w := httptest.NewRecorder()
+
+	server.handleGetRatings(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected status 200 from Router Learning ratings, got %d: %s", w.Code, w.Body.String())
+	}
+	var resp map[string]interface{}
+	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("failed to parse ratings response: %v", err)
+	}
+	if resp["source"] != "router_learning" || resp["category"] != "coding" {
+		t.Fatalf("unexpected ratings response: %#v", resp)
+	}
+	if resp["count"].(float64) != 2 {
+		t.Fatalf("expected two ratings, got %#v", resp)
 	}
 }
 
