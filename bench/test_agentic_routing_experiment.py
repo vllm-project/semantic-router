@@ -2,6 +2,8 @@ import importlib.util
 import sys
 from pathlib import Path
 
+FULL_PERCENT = 100.0
+
 
 def load_experiment_module():
     path = Path(__file__).with_name("agentic_routing_experiment.py")
@@ -132,3 +134,25 @@ def test_initial_policy_models_merged_1974_capability_boundary():
     assert initial_provider_state is None
     assert full_topic_drift == (stronger, "decision_drift_select")
     assert initial_topic_drift is None
+
+
+def test_learning_architecture_eval_reports_required_metrics(tmp_path):
+    exp = load_experiment_module()
+
+    summary = exp.write_learning_architecture_outputs(tmp_path)
+
+    assert summary["route_correctness_pct"] == FULL_PERCENT
+    assert summary["replay_explainability_coverage_pct"] == FULL_PERCENT
+    assert summary["bypass_correctness_pct"] == FULL_PERCENT
+    assert summary["p50_overhead_ms"] is not None
+    assert summary["p95_overhead_ms"] is not None
+    assert summary["method_counts"]["session_aware"] >= 1
+    assert summary["method_counts"]["bandit"] >= 1
+    assert summary["method_counts"]["elo"] >= 1
+    assert summary["method_counts"]["personalization"] >= 1
+    assert (tmp_path / "learning_architecture_cases.csv").exists()
+    assert (tmp_path / "learning_architecture_summary.json").exists()
+    report = (tmp_path / "learning_architecture_report.md").read_text()
+    assert "Router Learning Architecture Eval" in report
+    assert "conversation-cache-stay" in report
+    assert "privacy-bypass-local" in report

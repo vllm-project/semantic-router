@@ -199,6 +199,9 @@ func validateDecisionAlgorithmConfig(decisionName string, algorithm *AlgorithmCo
 			decisionName,
 		)
 	}
+	if err := validateMigratedLearningAlgorithm(decisionName, normalizedType, algorithm); err != nil {
+		return err
+	}
 
 	configuredBlocks := configuredAlgorithmBlocks(algorithm)
 	if len(configuredBlocks) > 1 {
@@ -240,6 +243,32 @@ func validateDecisionAlgorithmConfig(decisionName string, algorithm *AlgorithmCo
 	return nil
 }
 
+func validateMigratedLearningAlgorithm(decisionName string, normalizedType string, algorithm *AlgorithmConfig) error {
+	migrations := map[string]string{
+		"elo":       "global.router.learning.adaptations.elo",
+		"rl_driven": "global.router.learning.adaptations.bandit",
+		"gmtrouter": "global.router.learning.adaptations.personalization",
+	}
+	if target, ok := migrations[normalizedType]; ok {
+		return fmt.Errorf(
+			"decision '%s': algorithm.type=%s has moved to %s; remove the learning algorithm type and choose a request-time base algorithm only when needed",
+			decisionName,
+			normalizedType,
+			target,
+		)
+	}
+	if algorithm.Elo != nil {
+		return fmt.Errorf("decision '%s': algorithm.elo has moved to global.router.learning.adaptations.elo", decisionName)
+	}
+	if algorithm.RLDriven != nil {
+		return fmt.Errorf("decision '%s': algorithm.rl_driven has moved to global.router.learning.adaptations.bandit", decisionName)
+	}
+	if algorithm.GMTRouter != nil {
+		return fmt.Errorf("decision '%s': algorithm.gmtrouter has moved to global.router.learning.adaptations.personalization", decisionName)
+	}
+	return nil
+}
+
 func configuredAlgorithmBlocks(algorithm *AlgorithmConfig) []string {
 	configuredBlocks := make([]string, 0, 13)
 	addBlock := func(name string, configured bool) {
@@ -270,12 +299,9 @@ func expectedAlgorithmBlock(normalizedType string) (string, bool) {
 		"ratings":       "ratings",
 		"remom":         "remom",
 		"fusion":        "fusion",
-		"elo":           "elo",
 		"router_dc":     "router_dc",
 		"automix":       "automix",
 		"hybrid":        "hybrid",
-		"rl_driven":     "rl_driven",
-		"gmtrouter":     "gmtrouter",
 		"latency_aware": "latency_aware",
 		"multi_factor":  "multi_factor",
 	}

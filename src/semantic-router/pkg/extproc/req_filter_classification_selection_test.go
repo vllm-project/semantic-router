@@ -158,13 +158,14 @@ func TestRouterLearningSessionAwareKeepsCurrentModelAcrossDecisionCandidates(t *
 	if method != "single" {
 		t.Fatalf("expected base method single, got %q", method)
 	}
-	if ctx.VSRLearningPolicy["action"] != "hard_lock" {
+	if ctx.VSRLearningPolicy.String("action") != string(routerLearningActionHardLock) {
 		t.Fatalf("expected hard_lock learning action, got %#v", ctx.VSRLearningPolicy)
 	}
-	if _, ok := ctx.VSRLearningPolicy["session_id"]; ok {
+	policyMap := ctx.VSRLearningPolicy.ToMap()
+	if _, ok := policyMap["session_id"]; ok {
 		t.Fatalf("learning diagnostics must not expose raw session_id: %#v", ctx.VSRLearningPolicy)
 	}
-	if _, ok := ctx.VSRLearningPolicy["conversation_id"]; ok {
+	if _, ok := policyMap["conversation_id"]; ok {
 		t.Fatalf("learning diagnostics must not expose raw conversation_id: %#v", ctx.VSRLearningPolicy)
 	}
 	sessionIdentity := learningIdentityPart(t, ctx.VSRLearningPolicy, "session")
@@ -237,10 +238,10 @@ func TestRouterLearningSessionAwareSessionScopeProtectsAcrossConversations(t *te
 	if ctx.VSRLearningSessionID != "session-a" {
 		t.Fatalf("expected session memory key, got %q", ctx.VSRLearningSessionID)
 	}
-	if ctx.VSRLearningPolicy["action"] != "stay" {
+	if ctx.VSRLearningPolicy.String("action") != string(routerLearningActionStay) {
 		t.Fatalf("expected session scope stay action, got %#v", ctx.VSRLearningPolicy)
 	}
-	if ctx.VSRLearningPolicy["reason"] != "session_scope_protect" {
+	if ctx.VSRLearningPolicy.String("reason") != "session_scope_protect" {
 		t.Fatalf("expected session scope protect reason, got %#v", ctx.VSRLearningPolicy)
 	}
 	conversationIdentity := learningIdentityPart(t, ctx.VSRLearningPolicy, "conversation")
@@ -284,7 +285,7 @@ func TestRouterLearningDecisionScopeOverrideProtectsAcrossConversations(t *testi
 	if ctx.VSRLearningSessionID != "session-a" {
 		t.Fatalf("expected session memory key from decision override, got %q", ctx.VSRLearningSessionID)
 	}
-	if ctx.VSRLearningPolicy["scope"] != config.RouterLearningScopeSession {
+	if ctx.VSRLearningPolicy.String("scope") != config.RouterLearningScopeSession {
 		t.Fatalf("expected session-scope learning policy, got %#v", ctx.VSRLearningPolicy)
 	}
 }
@@ -323,8 +324,8 @@ func TestRouterLearningSessionAwareObserveRecordsWithoutChangingModel(t *testing
 	if selected == nil || selected.Model != "cheap" {
 		t.Fatalf("expected observe mode to keep base candidate, got %#v", selected)
 	}
-	if ctx.VSRLearningPolicy["mode"] != config.DecisionAdaptationModeObserve ||
-		ctx.VSRLearningPolicy["action"] != "hard_lock" {
+	if ctx.VSRLearningPolicy.String("mode") != config.DecisionAdaptationModeObserve ||
+		ctx.VSRLearningPolicy.String("action") != string(routerLearningActionHardLock) {
 		t.Fatalf("expected observe hard_lock policy, got %#v", ctx.VSRLearningPolicy)
 	}
 }
@@ -348,8 +349,8 @@ func TestRouterLearningSessionAwareMissingIdentityNoOps(t *testing.T) {
 	if selected == nil || selected.Model != "cheap" {
 		t.Fatalf("expected missing conversation identity to keep base candidate, got %#v", selected)
 	}
-	if ctx.VSRLearningPolicy["action"] != "noop" ||
-		ctx.VSRLearningPolicy["reason"] != "identity_missing" {
+	if ctx.VSRLearningPolicy.String("action") != string(routerLearningActionNoop) ||
+		ctx.VSRLearningPolicy.String("reason") != "identity_missing" {
 		t.Fatalf("expected identity_missing noop policy, got %#v", ctx.VSRLearningPolicy)
 	}
 	conversationIdentity := learningIdentityPart(t, ctx.VSRLearningPolicy, "conversation")
@@ -390,10 +391,10 @@ func TestRouterLearningSessionAwareBypassLeavesBaseDecisionFinal(t *testing.T) {
 	if selected == nil || selected.Model != "cheap" {
 		t.Fatalf("expected bypass decision to keep base candidate, got %#v", selected)
 	}
-	if ctx.VSRLearningPolicy["action"] != "bypass" {
+	if ctx.VSRLearningPolicy.String("action") != string(routerLearningActionBypass) {
 		t.Fatalf("expected bypass learning policy, got %#v", ctx.VSRLearningPolicy)
 	}
-	if ctx.VSRLearningPolicy["scope"] != config.RouterLearningScopeConversation {
+	if ctx.VSRLearningPolicy.String("scope") != config.RouterLearningScopeConversation {
 		t.Fatalf("expected bypass learning policy to include scope, got %#v", ctx.VSRLearningPolicy)
 	}
 }
@@ -624,9 +625,10 @@ func routerLearningRequestContext(sessionID string, conversationID string) *Requ
 	}
 }
 
-func learningIdentityPart(t *testing.T, policy map[string]interface{}, name string) map[string]interface{} {
+func learningIdentityPart(t *testing.T, policy *routerLearningPolicy, name string) map[string]interface{} {
 	t.Helper()
-	identity, ok := policy["identity"].(map[string]interface{})
+	policyMap := policy.ToMap()
+	identity, ok := policyMap["identity"].(map[string]interface{})
 	if !ok {
 		t.Fatalf("expected identity diagnostics in learning policy, got %#v", policy)
 	}

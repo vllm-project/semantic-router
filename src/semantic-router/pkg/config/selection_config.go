@@ -9,7 +9,7 @@ type ModelSelectionConfig struct {
 	Enabled bool `yaml:"enabled,omitempty"`
 
 	// Family-specific configuration blocks.
-	Elo      EloSelectionConfig      `yaml:"elo,omitempty"`
+	Elo      EloSelectionConfig      `yaml:"-"`
 	RouterDC RouterDCSelectionConfig `yaml:"router_dc,omitempty"`
 	AutoMix  AutoMixSelectionConfig  `yaml:"automix,omitempty"`
 	Hybrid   HybridSelectionConfig   `yaml:"hybrid,omitempty"`

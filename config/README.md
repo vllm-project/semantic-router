@@ -23,7 +23,7 @@ Inside canonical `config.yaml`:
 - structure `density` features now use built-in multilingual text-unit normalization; the contract no longer exposes a per-rule `normalize_by` switch
 - the dashboard and DSL builder now expose the same projection surface directly; see `website/docs/tutorials/projection/overview.md` and the maintained `deploy/recipes/balance.{yaml,dsl}` pair for end-to-end usage
 - `global.router`, `global.services`, `global.stores`, `global.integrations`, and `global.model_catalog` expose router-wide overrides explicitly
-- `global.router.learning.adaptations.session_aware` adds agentic stay-vs-switch policy after the base decision algorithm: tool loops and non-portable provider-state continuations stay on the current model, idle boundaries can reselect, non-idle conversations pay handoff, switch-history, and prefix-cache costs before switching, and router replay records the policy trace for experiments. Decisions can opt out with `routing.decisions[].adaptations.session_aware.mode: bypass`. `decision.algorithm.type=session_aware` is no longer a supported public algorithm.
+- `global.router.learning.adaptations` adds cross-request Router Learning after the base decision algorithm. `session_aware` provides agentic stay-vs-switch policy; `bandit` provides conservative day-0 feedback/cost-aware scoring; `elo` provides day-0 pairwise rating states; `personalization` provides day-0 user preference states. Decisions can opt out with `routing.decisions[].adaptations.<name>.mode: bypass`. `decision.algorithm.type=session_aware|elo|rl_driven|gmtrouter` is no longer a supported public algorithm.
 - `global.services.router_replay.enabled` is the router-wide replay default; when it is on, decisions inherit replay capture unless a route-local `router_replay` plugin sets `enabled: false`
 - embedding fallback tuning such as `global.model_catalog.embeddings.semantic.embedding_config.top_k` lives under the router-owned model catalog, not under individual signal rules
 - prototype-aware exemplar compression and label scoring live alongside their owning signal families: `global.model_catalog.embeddings.semantic.embedding_config.prototype_scoring`, `global.model_catalog.modules.classifier.preference.prototype_scoring`, `global.model_catalog.kbs[].prototype_scoring`, and `global.model_catalog.modules.complexity.prototype_scoring`
@@ -49,7 +49,7 @@ Candidate iteration fragments must stay bounded to `decision.candidates` or an e
 `config/algorithm/` is organized by routing policy:
 
 - `looper/`: multi-model execution policies such as `confidence`, `ratings`, `remom`, and `fusion`
-- `selection/`: candidate-selection policies such as `elo`, `router_dc`, `automix`, `multi_factor`, and `latency_aware`
+- `selection/`: request-time candidate-selection policies such as `router_dc`, `automix`, `hybrid`, `multi_factor`, and `latency_aware`
 
 Each supported algorithm now has its own tutorial page under `website/docs/tutorials/algorithm/`.
 

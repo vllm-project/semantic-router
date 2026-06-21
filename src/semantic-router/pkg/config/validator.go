@@ -231,7 +231,10 @@ func validateModelSelectionConfig(cfg *RouterConfig) error {
 		return fmt.Errorf("global.router.model_selection.model_switch_gate has been folded into global.router.learning.adaptations.session_aware.tuning")
 	}
 	if isLookupTableConfigConfigured(cfg.ModelSelection.LookupTables) {
-		return fmt.Errorf("global.router.model_selection.lookup_tables has moved to global.router.learning memory priors; replay-derived priors are not part of the first session-aware learning implementation")
+		return fmt.Errorf("global.router.model_selection.lookup_tables has moved to future Router Learning experience; remove lookup_tables from public config")
+	}
+	if cfg.ModelSelection.Method == "elo" || isEloSelectionConfigConfigured(cfg.ModelSelection.Elo) {
+		return fmt.Errorf("global.router.model_selection.elo has moved to global.router.learning.adaptations.elo")
 	}
 	return nil
 }

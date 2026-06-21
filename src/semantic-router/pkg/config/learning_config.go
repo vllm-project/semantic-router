@@ -1,6 +1,8 @@
 package config
 
 const (
+	// RouterLearningScopeDecision scopes learning state to one matched decision.
+	RouterLearningScopeDecision = "decision"
 	// RouterLearningScopeConversation protects one agent conversation while
 	// allowing later conversations in the same session to be re-evaluated.
 	RouterLearningScopeConversation = "conversation"
@@ -13,6 +15,20 @@ const (
 	DecisionAdaptationModeObserve = "observe"
 	// DecisionAdaptationModeBypass disables an adaptation for a hard policy route.
 	DecisionAdaptationModeBypass = "bypass"
+
+	// RouterLearningMethodSessionAware is the session/conversation continuity adaptation.
+	RouterLearningMethodSessionAware = "session_aware"
+	// RouterLearningMethodBandit is the online exploration/exploitation adaptation.
+	RouterLearningMethodBandit = "bandit"
+	// RouterLearningMethodElo is the pairwise feedback rating adaptation.
+	RouterLearningMethodElo = "elo"
+	// RouterLearningMethodPersonalization is the user/workspace preference adaptation.
+	RouterLearningMethodPersonalization = "personalization"
+
+	// RouterLearningBanditAlgorithmLinUCB is the default day-0 contextual bandit.
+	RouterLearningBanditAlgorithmLinUCB = "linucb"
+	// RouterLearningBanditAlgorithmLinearThompson preserves the Thompson-style migration path.
+	RouterLearningBanditAlgorithmLinearThompson = "linear_thompson"
 )
 
 // RouterLearningConfig is the public cross-request routing intelligence surface.
@@ -25,7 +41,10 @@ type RouterLearningConfig struct {
 
 // RouterLearningAdaptations contains globally registered learning adaptations.
 type RouterLearningAdaptations struct {
-	SessionAware SessionAwareLearningConfig `yaml:"session_aware,omitempty"`
+	SessionAware    SessionAwareLearningConfig    `yaml:"session_aware,omitempty"`
+	Bandit          BanditLearningConfig          `yaml:"bandit,omitempty"`
+	Elo             EloLearningConfig             `yaml:"elo,omitempty"`
+	Personalization PersonalizationLearningConfig `yaml:"personalization,omitempty"`
 }
 
 // SessionAwareLearningConfig configures session-aware Router Learning.
@@ -57,10 +76,41 @@ type SessionAwareLearningTuning struct {
 	MaxCacheCostMultiplier *float64 `yaml:"max_cache_cost_multiplier,omitempty"`
 }
 
+// BanditLearningConfig configures the Router Learning bandit adaptation.
+type BanditLearningConfig struct {
+	Enabled   bool                 `yaml:"enabled,omitempty"`
+	Algorithm string               `yaml:"algorithm,omitempty"`
+	Scope     string               `yaml:"scope,omitempty"`
+	Goals     map[string]float64   `yaml:"goals,omitempty"`
+	Tuning    BanditLearningTuning `yaml:"tuning,omitempty"`
+}
+
+// BanditLearningTuning exposes sparse day-0 bandit controls.
+type BanditLearningTuning struct {
+	ExplorationBudget *float64 `yaml:"exploration_budget,omitempty"`
+}
+
+// EloLearningConfig configures the Router Learning Elo adaptation.
+type EloLearningConfig struct {
+	Enabled       bool     `yaml:"enabled,omitempty"`
+	Scope         string   `yaml:"scope,omitempty"`
+	InitialRating *float64 `yaml:"initial_rating,omitempty"`
+	KFactor       *float64 `yaml:"k_factor,omitempty"`
+}
+
+// PersonalizationLearningConfig configures the personalization adaptation.
+type PersonalizationLearningConfig struct {
+	Enabled bool   `yaml:"enabled,omitempty"`
+	Scope   string `yaml:"scope,omitempty"`
+}
+
 // DecisionAdaptationsConfig lets one matched decision control globally enabled
 // learning adaptations.
 type DecisionAdaptationsConfig struct {
-	SessionAware *DecisionSessionAwareAdaptationConfig `yaml:"session_aware,omitempty"`
+	SessionAware    *DecisionSessionAwareAdaptationConfig `yaml:"session_aware,omitempty"`
+	Bandit          *DecisionBanditAdaptationConfig       `yaml:"bandit,omitempty"`
+	Elo             *DecisionLearningAdaptationConfig     `yaml:"elo,omitempty"`
+	Personalization *DecisionLearningAdaptationConfig     `yaml:"personalization,omitempty"`
 }
 
 // DecisionSessionAwareAdaptationConfig controls the session-aware adaptation
@@ -69,6 +119,21 @@ type DecisionSessionAwareAdaptationConfig struct {
 	Mode   string                     `yaml:"mode,omitempty"`
 	Scope  string                     `yaml:"scope,omitempty"`
 	Tuning SessionAwareLearningTuning `yaml:"tuning,omitempty"`
+}
+
+// DecisionLearningAdaptationConfig controls a non-session-aware adaptation for
+// one decision. Empty mode inherits apply.
+type DecisionLearningAdaptationConfig struct {
+	Mode string `yaml:"mode,omitempty"`
+}
+
+// DecisionBanditAdaptationConfig adds sparse per-decision bandit overrides.
+// The global bandit algorithm remains global so state and replay stay coherent.
+type DecisionBanditAdaptationConfig struct {
+	Mode   string               `yaml:"mode,omitempty"`
+	Scope  string               `yaml:"scope,omitempty"`
+	Goals  map[string]float64   `yaml:"goals,omitempty"`
+	Tuning BanditLearningTuning `yaml:"tuning,omitempty"`
 }
 
 func (cfg SessionAwareLearningConfig) EffectiveScope() string {
@@ -97,4 +162,53 @@ func (cfg DecisionAdaptationsConfig) SessionAwareMode() string {
 		return DecisionAdaptationModeApply
 	}
 	return cfg.SessionAware.Mode
+}
+
+func (cfg BanditLearningConfig) EffectiveAlgorithm() string {
+	if cfg.Algorithm == "" {
+		return RouterLearningBanditAlgorithmLinUCB
+	}
+	return cfg.Algorithm
+}
+
+func (cfg BanditLearningConfig) EffectiveScope() string {
+	if cfg.Scope == "" {
+		return RouterLearningScopeDecision
+	}
+	return cfg.Scope
+}
+
+func (cfg DecisionAdaptationsConfig) BanditMode() string {
+	if cfg.Bandit == nil || cfg.Bandit.Mode == "" {
+		return DecisionAdaptationModeApply
+	}
+	return cfg.Bandit.Mode
+}
+
+func (cfg EloLearningConfig) EffectiveScope() string {
+	if cfg.Scope == "" {
+		return RouterLearningScopeDecision
+	}
+	return cfg.Scope
+}
+
+func (cfg DecisionAdaptationsConfig) EloMode() string {
+	if cfg.Elo == nil || cfg.Elo.Mode == "" {
+		return DecisionAdaptationModeApply
+	}
+	return cfg.Elo.Mode
+}
+
+func (cfg PersonalizationLearningConfig) EffectiveScope() string {
+	if cfg.Scope == "" {
+		return RouterLearningScopeDecision
+	}
+	return cfg.Scope
+}
+
+func (cfg DecisionAdaptationsConfig) PersonalizationMode() string {
+	if cfg.Personalization == nil || cfg.Personalization.Mode == "" {
+		return DecisionAdaptationModeApply
+	}
+	return cfg.Personalization.Mode
 }

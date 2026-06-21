@@ -14,12 +14,9 @@ import (
 )
 
 var selectionMethodByAlgorithmType = map[string]selection.SelectionMethod{
-	"elo":           selection.MethodElo,
 	"router_dc":     selection.MethodRouterDC,
 	"automix":       selection.MethodAutoMix,
 	"hybrid":        selection.MethodHybrid,
-	"rl_driven":     selection.MethodRLDriven,
-	"gmtrouter":     selection.MethodGMTRouter,
 	"latency_aware": selection.MethodLatencyAware,
 	"static":        selection.MethodStatic,
 	"knn":           selection.MethodKNN,

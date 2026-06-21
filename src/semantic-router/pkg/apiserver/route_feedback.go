@@ -37,6 +37,9 @@ type FeedbackRequest struct {
 	// SessionID for multi-turn context (optional)
 	SessionID string `json:"session_id,omitempty"`
 
+	// ConversationID for a run within the session (optional)
+	ConversationID string `json:"conversation_id,omitempty"`
+
 	// FeedbackType for implicit feedback (satisfied, wrong_answer, etc.)
 	FeedbackType string `json:"feedback_type,omitempty"`
 
@@ -67,16 +70,17 @@ func (s *ClassificationAPIServer) handleFeedback(w http.ResponseWriter, r *http.
 
 	// Create feedback object with all fields
 	feedback := &selection.Feedback{
-		Query:        req.Query,
-		WinnerModel:  req.WinnerModel,
-		LoserModel:   req.LoserModel,
-		Tie:          req.Tie,
-		DecisionName: decisionName,
-		UserID:       req.UserID,
-		SessionID:    req.SessionID,
-		FeedbackType: req.FeedbackType,
-		Confidence:   req.Confidence,
-		Timestamp:    feedbackTimestamp().Unix(),
+		Query:          req.Query,
+		WinnerModel:    req.WinnerModel,
+		LoserModel:     req.LoserModel,
+		Tie:            req.Tie,
+		DecisionName:   decisionName,
+		UserID:         req.UserID,
+		SessionID:      req.SessionID,
+		ConversationID: req.ConversationID,
+		FeedbackType:   req.FeedbackType,
+		Confidence:     req.Confidence,
+		Timestamp:      feedbackTimestamp().Unix(),
 	}
 
 	ctx := r.Context()
@@ -85,6 +89,10 @@ func (s *ClassificationAPIServer) handleFeedback(w http.ResponseWriter, r *http.
 	}
 	selectorsUpdated := 0
 	registry := s.currentSelectionRegistry()
+	learningUpdated := 0
+	if learningRuntime := s.currentLearningRuntime(); learningRuntime != nil {
+		learningUpdated = learningRuntime.UpdateFeedback(ctx, feedback)
+	}
 
 	selectorsUpdated += updateFeedbackSelector(
 		ctx,
@@ -119,15 +127,15 @@ func (s *ClassificationAPIServer) handleFeedback(w http.ResponseWriter, r *http.
 		},
 	)
 
-	// Require at least one selector to be configured
-	if selectorsUpdated == 0 {
+	// Require at least one learning adaptation or legacy selector to be configured.
+	if selectorsUpdated == 0 && learningUpdated == 0 {
 		s.writeErrorResponse(w, http.StatusServiceUnavailable, "NO_SELECTOR_CONFIGURED",
-			"No selection algorithm configured. Enable elo or rl_driven selection to use feedback API.")
+			"No learning adaptation or selection algorithm configured. Enable router.learning.adaptations.bandit, router.learning.adaptations.elo, or router.learning.adaptations.personalization to use feedback API.")
 		return
 	}
 
-	logging.Infof("[FeedbackAPI] Feedback recorded: winner=%s, loser=%s, tie=%v, decision=%s, user=%s, selectors=%d",
-		req.WinnerModel, req.LoserModel, req.Tie, decisionName, req.UserID, selectorsUpdated)
+	logging.Infof("[FeedbackAPI] Feedback recorded: winner=%s, loser=%s, tie=%v, decision=%s, user=%s, selectors=%d, learning=%d",
+		req.WinnerModel, req.LoserModel, req.Tie, decisionName, req.UserID, selectorsUpdated, learningUpdated)
 
 	// Return success response
 	response := FeedbackResponse{
@@ -174,17 +182,53 @@ type RatingInfo struct {
 
 // handleGetRatings handles GET /api/v1/ratings for retrieving current Elo ratings
 func (s *ClassificationAPIServer) handleGetRatings(w http.ResponseWriter, r *http.Request) {
+	if learningRuntime := s.currentLearningRuntime(); learningRuntime != nil {
+		ratingsRuntime, hasRatingsRuntime := learningRuntime.(interface {
+			EloLeaderboard(string) []selection.ModelRating
+		})
+		enabledRuntime, hasEnabledRuntime := learningRuntime.(interface {
+			EloLearningEnabled() bool
+		})
+		if hasRatingsRuntime && (!hasEnabledRuntime || enabledRuntime.EloLearningEnabled()) {
+			category := r.URL.Query().Get("category")
+			leaderboard := ratingsRuntime.EloLeaderboard(category)
+			ratings := make([]RatingInfo, 0, len(leaderboard))
+			for _, rating := range leaderboard {
+				ratings = append(ratings, RatingInfo{
+					Model:  rating.Model,
+					Rating: rating.Rating,
+					Wins:   rating.Wins,
+					Losses: rating.Losses,
+					Ties:   rating.Ties,
+				})
+			}
+			categoryLabel := category
+			if categoryLabel == "" {
+				categoryLabel = "global"
+			}
+			response := map[string]interface{}{
+				"ratings":   ratings,
+				"category":  categoryLabel,
+				"count":     len(ratings),
+				"source":    "router_learning",
+				"timestamp": time.Now().UTC().Format(time.RFC3339),
+			}
+			s.writeJSONResponse(w, http.StatusOK, response)
+			return
+		}
+	}
+
 	// Get the Elo selector from the active runtime registry.
 	registry := s.currentSelectionRegistry()
 	if registry == nil {
 		s.writeErrorResponse(w, http.StatusServiceUnavailable, "ELO_NOT_CONFIGURED",
-			"Elo selection is not configured. Enable elo selection to view ratings.")
+			"Elo is not configured. Enable router.learning.adaptations.elo to view Router Learning ratings.")
 		return
 	}
 	selector, ok := registry.Get(selection.MethodElo)
 	if !ok {
 		s.writeErrorResponse(w, http.StatusServiceUnavailable, "ELO_NOT_CONFIGURED",
-			"Elo selection is not configured. Enable elo selection to view ratings.")
+			"Elo is not configured. Enable router.learning.adaptations.elo to view Router Learning ratings.")
 		return
 	}
 
@@ -224,6 +268,7 @@ func (s *ClassificationAPIServer) handleGetRatings(w http.ResponseWriter, r *htt
 		"ratings":   ratings,
 		"category":  categoryLabel,
 		"count":     len(ratings),
+		"source":    "legacy_selector",
 		"timestamp": time.Now().UTC().Format(time.RFC3339),
 	}
 

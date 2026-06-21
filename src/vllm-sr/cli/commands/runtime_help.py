@@ -15,18 +15,19 @@ MODEL SELECTION ALGORITHMS:
 
 \b
 static     - Use first configured model (default, no learning)
-elo        - Rating-based selection using user feedback
 router_dc  - Query-model matching via embedding similarity
 automix    - Cost-quality optimization using POMDP
 hybrid     - Combine multiple methods with configurable weights
-gmtrouter  - Graph neural network for personalized routing (RL-driven)
 latency_aware - TPOT/TTFT percentile-aware selection
 knn        - KNN selector using shared ML model-selection settings
 kmeans     - KMeans selector using shared ML model-selection settings
 svm        - SVM selector using shared ML model-selection settings
 mlp        - MLP selector using shared ML model-selection settings
 multi_factor - Quality, latency, cost, and load scoring
-rl_driven  - Online learning selector with optional Thompson / Router-R1 modes
+
+Cross-request learning lives under global.router.learning.adaptations
+instead of --algorithm. Use adaptations.elo, adaptations.bandit, or
+adaptations.personalization for feedback-driven learning.
 
 Examples:
     # Basic usage (uses config.yaml, Docker target)
@@ -37,9 +38,6 @@ Examples:
 
     # Custom config file
     vllm-sr serve --config my-config.yaml
-
-    # Use Elo rating selection (learns from feedback)
-    vllm-sr serve --algorithm elo
 
     # Use cost-optimized selection
     vllm-sr serve --algorithm automix

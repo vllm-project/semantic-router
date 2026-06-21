@@ -23,3 +23,26 @@
 - `vllm-sr status all` reports the container and dashboard as healthy
 - No unexpected fallback to the default non-AMD image
 - Relevant local E2E profiles still pass
+
+## Router Learning AMD Validation
+
+For the agentic AMD recipe, validate both Router Learning scopes before using
+the endpoint as PR evidence:
+
+- `conversation` scope: keep the same `x-session-id`, change
+  `x-conversation-id`, and verify a new user run can re-route while turns inside
+  one conversation stay stable during tool loops or cache-heavy follow-ups.
+- `session` scope: keep the same `x-session-id` across multiple
+  `x-conversation-id` values and verify the established session model is
+  protected until `idle_timeout_seconds` releases it or a decision uses
+  `adaptations.session_aware.mode: bypass`.
+- Privacy, security, and local-only decisions should bypass Router Learning and
+  route to the local model even when the previous protected model was remote.
+- Responses should include compact learning headers such as
+  `x-vsr-learning-methods`, `x-vsr-learning-actions`,
+  `x-vsr-learning-scopes`, `x-vsr-learning-reasons`, and
+  `x-vsr-learning-modes`; full details should be joined through
+  `x-vsr-replay-id` and Router Replay.
+- Dashboard and API readiness require the Envoy/OpenAI endpoint, router status,
+  replay diagnostics, and dashboard health to be available from the validation
+  host before reporting the AMD router address.
