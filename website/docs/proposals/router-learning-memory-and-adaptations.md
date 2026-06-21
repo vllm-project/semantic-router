@@ -276,6 +276,61 @@ If the required identity is missing, session-aware learning should no-op rather
 than fail the request. The base routing decision remains valid, and diagnostics
 can record `identity_missing` when replay/debug evidence is available.
 
+### Internal Adaptation Contract
+
+Router Learning should use a strongly typed internal contract. It should not
+grow by passing loose `map[string]interface{}` payloads between adaptations,
+composition, replay, and headers.
+
+The current implementation shape is:
+
+```text
+routerLearningAdapter
+  Method() -> session_aware | bandit | elo | personalization | ...
+  Apply(input) -> routerLearningAdaptationResult
+  Observe(input, composed) -> optional post-routing state update
+  constructed through a method-specific adapter factory
+
+routerLearningAdaptationResult
+  method, mode, scope, action, reason
+  hard / changesModel
+  selected model refs and selection result
+  routerLearningPolicy
+
+routerLearningPolicy
+  envelope: learning, adaptation, mode, scope, action, reason
+  detail: method-specific typed payload
+  experience: typed experience diagnostics
+```
+
+Each adaptation owns its own detail struct:
+
+- `session_aware` owns the typed session-policy trace and hashed identity
+  diagnostics.
+- `bandit` owns algorithm, weighted goals, selected score, and candidate score
+  diagnostics.
+- `elo` owns rating parameters, selected rating, and leaderboard diagnostics.
+- `personalization` owns user hash, selected preference, and preference
+  diagnostics.
+
+The only place where these details become `map[string]interface{}` is the
+serialization boundary for response headers and Router Replay diagnostics.
+Headers read only the compact envelope fields. Replay receives the full
+method-keyed diagnostic map. This keeps the hot-path implementation
+type-checked while preserving a flexible JSON event-log schema.
+
+New adaptations should follow the same pattern:
+
+1. Add a concrete `routerLearningAdapter` implementation and constructor.
+2. Add a method-specific typed detail payload.
+3. Keep state ownership inside Router Learning states, not inside decision
+   algorithms.
+4. Serialize to replay only at the boundary.
+
+Do not add generic `policy.Set(...)`-style APIs or anonymous temporary structs
+for adaptation diagnostics. If a field is important enough to appear in replay,
+it should belong to a named detail type with tests.
+
 ### `session_aware.enabled`
 
 Turns the session-aware learning adaptation on or off.

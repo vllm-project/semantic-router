@@ -13,6 +13,10 @@ type routerLearningExperienceSnapshot struct {
 	views map[string]routerLearningExperienceView
 }
 
+type routerLearningExperienceDiagnostics struct {
+	views []routerLearningExperienceView
+}
+
 type routerLearningExperienceView struct {
 	name        string
 	method      routerLearningMethod
@@ -78,8 +82,8 @@ func newRouterLearningExperienceSnapshot(views []routerLearningExperienceView) r
 	return snapshot
 }
 
-func (s routerLearningExperienceSnapshot) diagnostics(method routerLearningMethod) map[string]interface{} {
-	result := map[string]interface{}{}
+func (s routerLearningExperienceSnapshot) diagnostics(method routerLearningMethod) routerLearningExperienceDiagnostics {
+	result := routerLearningExperienceDiagnostics{}
 	if method == "" {
 		return result
 	}
@@ -91,10 +95,29 @@ func (s routerLearningExperienceSnapshot) diagnostics(method routerLearningMetho
 	}
 	sort.Strings(keys)
 	for _, key := range keys {
-		view := s.views[key]
-		result[view.name] = view.diagnostics()
+		result.views = append(result.views, s.views[key])
 	}
 	return result
+}
+
+func (d routerLearningExperienceDiagnostics) Empty() bool {
+	return len(d.views) == 0
+}
+
+func (d routerLearningExperienceDiagnostics) appendLearningPolicyFields(out map[string]interface{}) {
+	if len(d.views) == 0 {
+		return
+	}
+	experience := make(map[string]interface{}, len(d.views))
+	for _, view := range d.views {
+		if view.name == "" {
+			continue
+		}
+		experience[view.name] = view.diagnostics()
+	}
+	if len(experience) > 0 {
+		out["experience"] = experience
+	}
 }
 
 func (v routerLearningExperienceView) diagnostics() map[string]interface{} {
@@ -127,9 +150,6 @@ func attachRouterLearningExperience(
 	if result.method == "" {
 		return result
 	}
-	experience := snapshot.diagnostics(result.method)
-	if len(experience) > 0 {
-		result.policy.Set("experience", experience)
-	}
+	result.policy.Experience = snapshot.diagnostics(result.method)
 	return result
 }

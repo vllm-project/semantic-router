@@ -128,6 +128,80 @@ func TestAttachRouterLearningExperienceAddsMethodDiagnostics(t *testing.T) {
 	}
 }
 
+func TestRouterLearningPoliciesUseTypedDetails(t *testing.T) {
+	banditPolicy := banditLearningPolicy(
+		config.BanditLearningConfig{Goals: map[string]float64{"quality": 1}},
+		config.DecisionAdaptationModeApply,
+		routerLearningActionSwitch,
+		banditReasonScoreWin,
+		"decision:coding",
+		[]routerLearningBanditScore{{model: "winner", score: 0.9}},
+		routerLearningBanditScore{model: "winner", score: 0.9},
+	)
+	if _, ok := banditPolicy.Detail.(*routerLearningBanditDetail); !ok {
+		t.Fatalf("expected typed bandit detail, got %T", banditPolicy.Detail)
+	}
+	if got := banditPolicy.String("selected_model"); got != "winner" {
+		t.Fatalf("expected selected model from typed bandit detail, got %q", got)
+	}
+
+	eloPolicy := eloLearningPolicy(
+		config.EloLearningConfig{},
+		config.DecisionAdaptationModeApply,
+		routerLearningActionSwitch,
+		eloReasonRatingWin,
+		"decision:coding",
+		[]routerLearningEloScore{{model: "winner", score: 0.7, rating: 1210}},
+		routerLearningEloScore{model: "winner", score: 0.7, rating: 1210},
+	)
+	if _, ok := eloPolicy.Detail.(*routerLearningEloDetail); !ok {
+		t.Fatalf("expected typed Elo detail, got %T", eloPolicy.Detail)
+	}
+	if got := eloPolicy.String("selected_model"); got != "winner" {
+		t.Fatalf("expected selected model from typed Elo detail, got %q", got)
+	}
+
+	personalizationPolicy := personalizationLearningPolicy(
+		config.PersonalizationLearningConfig{},
+		config.DecisionAdaptationModeApply,
+		routerLearningActionSwitch,
+		personalizationReasonPreferenceWin,
+		"user:user-1/decision:coding",
+		"user-1",
+		[]routerLearningPersonalizationScore{{model: "winner", score: 0.8, preference: 0.9}},
+		routerLearningPersonalizationScore{model: "winner", score: 0.8, preference: 0.9},
+	)
+	if _, ok := personalizationPolicy.Detail.(*routerLearningPersonalizationDetail); !ok {
+		t.Fatalf("expected typed personalization detail, got %T", personalizationPolicy.Detail)
+	}
+	if got := personalizationPolicy.String("user_hash"); got == "" {
+		t.Fatalf("expected user hash from typed personalization detail, got %q", got)
+	}
+}
+
+func TestRouterLearningAdapterRegistryIsMethodKeyed(t *testing.T) {
+	router := &OpenAIRouter{}
+	adapters := router.routerLearningAdapters()
+	got := make([]routerLearningMethod, 0, len(adapters))
+	for _, adapter := range adapters {
+		got = append(got, adapter.Method())
+	}
+	want := []routerLearningMethod{
+		routerLearningMethodSessionAware,
+		routerLearningMethodBandit,
+		routerLearningMethodElo,
+		routerLearningMethodPersonalization,
+	}
+	if len(got) != len(want) {
+		t.Fatalf("expected %d adapters, got %#v", len(want), got)
+	}
+	for i := range want {
+		if got[i] != want[i] {
+			t.Fatalf("unexpected adapter order: got %#v want %#v", got, want)
+		}
+	}
+}
+
 func replayNumericDiagnostic(value interface{}) float64 {
 	switch typed := value.(type) {
 	case int:

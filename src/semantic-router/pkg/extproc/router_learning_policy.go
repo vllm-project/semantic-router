@@ -4,56 +4,46 @@ import "strings"
 
 const routerLearningPolicyName = "router_learning"
 
+type routerLearningPolicyDetail interface {
+	appendLearningPolicyFields(map[string]interface{})
+}
+
 type routerLearningPolicy struct {
 	Adaptation routerLearningMethod
 	Mode       string
 	Scope      string
 	Action     routerLearningAction
 	Reason     string
-	Fields     map[string]interface{}
+	Detail     routerLearningPolicyDetail
+	Experience routerLearningExperienceDiagnostics
 }
 
 func newRouterLearningPolicy(method routerLearningMethod) routerLearningPolicy {
 	return routerLearningPolicy{
 		Adaptation: method,
-		Fields:     map[string]interface{}{},
 	}
-}
-
-func routerLearningPolicyFromMap(
-	method routerLearningMethod,
-	mode string,
-	scope string,
-	fields map[string]interface{},
-) routerLearningPolicy {
-	policy := newRouterLearningPolicy(method)
-	if fields != nil {
-		policy.Fields = cloneReplayInterfaceMap(fields)
-	}
-	policy.Mode = firstNonEmpty(replayPolicyString(policy.Fields, "mode"), mode)
-	policy.Scope = firstNonEmpty(replayPolicyString(policy.Fields, "scope"), scope)
-	policy.Action = routerLearningAction(replayPolicyString(policy.Fields, "action"))
-	policy.Reason = replayPolicyString(policy.Fields, "reason")
-	delete(policy.Fields, "learning")
-	delete(policy.Fields, "adaptation")
-	delete(policy.Fields, "mode")
-	delete(policy.Fields, "scope")
-	delete(policy.Fields, "action")
-	delete(policy.Fields, "reason")
-	return policy
 }
 
 func (p routerLearningPolicy) Empty() bool {
-	return p.Adaptation == "" && p.Mode == "" && p.Scope == "" && p.Action == "" && p.Reason == "" && len(p.Fields) == 0
+	return p.Adaptation == "" &&
+		p.Mode == "" &&
+		p.Scope == "" &&
+		p.Action == "" &&
+		p.Reason == "" &&
+		p.Detail == nil &&
+		p.Experience.Empty()
 }
 
 func (p routerLearningPolicy) ToMap() map[string]interface{} {
 	if p.Empty() {
 		return nil
 	}
-	result := cloneReplayInterfaceMap(p.Fields)
-	if result == nil {
-		result = map[string]interface{}{}
+	result := map[string]interface{}{}
+	if p.Detail != nil {
+		p.Detail.appendLearningPolicyFields(result)
+	}
+	if !p.Experience.Empty() {
+		p.Experience.appendLearningPolicyFields(result)
 	}
 	result["learning"] = routerLearningPolicyName
 	if p.Adaptation != "" {
@@ -91,21 +81,11 @@ func (p routerLearningPolicy) String(key string) string {
 	case "reason":
 		return strings.TrimSpace(p.Reason)
 	default:
-		return replayPolicyString(p.Fields, key)
+		return replayPolicyString(p.ToMap(), key)
 	}
 	return ""
 }
 
 func (p routerLearningPolicy) Bool(key string) bool {
-	return replayPolicyBool(p.Fields, key)
-}
-
-func (p *routerLearningPolicy) Set(key string, value interface{}) {
-	if p == nil || strings.TrimSpace(key) == "" {
-		return
-	}
-	if p.Fields == nil {
-		p.Fields = map[string]interface{}{}
-	}
-	p.Fields[key] = value
+	return replayPolicyBool(p.ToMap(), key)
 }

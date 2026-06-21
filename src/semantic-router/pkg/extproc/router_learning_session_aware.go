@@ -97,15 +97,20 @@ func sessionAwareSelectionAdaptationResult(
 		method:           routerLearningMethodSessionAware,
 		mode:             mode,
 		scope:            identity.scope,
-		action:           routerLearningAction(policy.String("action")),
-		reason:           policy.String("reason"),
-		hard:             policy.Bool("hard_locked"),
+		action:           policy.Action,
+		reason:           policy.Reason,
+		hard:             sessionAwarePolicyHardLocked(policy),
 		changesModel:     mode != config.DecisionAdaptationModeObserve && learningChangesModel(baseResult, learningResult),
 		selectionContext: learningCtx,
 		selectionResult:  learningResult,
 		selectedModelRef: learningSelected,
 		policy:           policy,
 	}
+}
+
+func sessionAwarePolicyHardLocked(policy routerLearningPolicy) bool {
+	detail, ok := policy.Detail.(*sessionAwareLearningDetail)
+	return ok && detail != nil && detail.trace != nil && detail.trace.HardLocked
 }
 
 func (r *OpenAIRouter) sessionAwareLearningConfig(
