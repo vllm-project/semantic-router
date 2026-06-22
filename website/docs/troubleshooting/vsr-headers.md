@@ -21,7 +21,8 @@ Cache-hit responses can emit cache headers, but they do not re-run routing and t
 
 | Header | Direction | Description |
 | ------ | --------- | ----------- |
-| `x-session-id` | request | Stable client-provided session identifier for Chat Completions. `session_aware` uses this to reason about stay-vs-switch decisions across turns. |
+| `x-session-id` | request | Stable client-provided session identifier for Chat Completions. Session-aware Router Learning uses this, together with the configured conversation identity, to reason about stay-vs-switch decisions across turns. |
+| `x-conversation-id` | request | Stable client-provided conversation or agent-run identifier. Session-aware Router Learning uses this by default when `scope: conversation`. |
 | `x-vsr-skip-processing` | request | Opts a request out of router processing when `global.router.skip_processing.enabled` is enabled. Use value `true`. |
 | `x-vsr-debug` | request | Opts the request into verbose/debug response headers — headers the contract otherwise omits or demotes to replay are emitted inline for that request. Use value `true`. |
 
@@ -34,9 +35,17 @@ Cache-hit responses can emit cache headers, but they do not re-run routing and t
 | `x-vsr-protocol-warnings` | Comma-separated protocol translation warnings encoded as `severity;reason;field`. Emitted only when warnings exist. |
 | `x-vsr-replay-id` | Opaque router replay record identifier for correlating a response with replay/Insights data. |
 
+## Response Warnings
+
+| Header | Description |
+| ------ | ----------- |
+| `x-vsr-response-warnings` | Comma-separated response-quality warning codes for the completion, in fixed order: `hallucination`, `unverified_factual`, `response_jailbreak`. Emitted only when at least one applies. |
+
+This header consolidates the v0.3 `x-vsr-hallucination-detected`, `x-vsr-unverified-factual-response`, and `x-vsr-response-jailbreak-detected` headers. The per-warning detail (hallucination spans, jailbreak type/confidence, fact-check verification context) is kept in the replay record rather than the response headers, recoverable via `x-vsr-replay-id`; the individual warning and detail headers are removed from the v0.4 contract.
+
 ## Decision Headers
 
-The final routing facts ride on the default surface; the intermediate details are demoted to `x-vsr-debug` (#2205).
+The final routing facts ride on the default surface; the intermediate details (including the Router Learning observability headers) are demoted to `x-vsr-debug` (#2205).
 
 | Header | Surface | Description | Example |
 | ------ | ------- | ----------- | ------- |
@@ -47,7 +56,17 @@ The final routing facts ride on the default surface; the intermediate details ar
 | `x-vsr-selected-reasoning` | debug | Reasoning mode selected for the request. | `on` |
 | `x-vsr-selected-modality` | debug | Modality result and optional method. | `AR;classifier` |
 | `x-vsr-session-phase` | debug | Session-aware phase from the selected policy trace. | `user_turn`, `tool_loop`, `provider_state` |
+| `x-vsr-learning-methods` | debug | Router Learning methods summarized by this response. Full score/cache details live in Router Replay. | `session_aware`, `session_aware,bandit` |
+| `x-vsr-learning-actions` | debug | Method-keyed compact learning actions. | `session_aware=switch` |
+| `x-vsr-learning-scopes` | debug | Method-keyed identity scopes used by learning. | `session_aware=conversation` |
+| `x-vsr-learning-reasons` | debug | Method-keyed machine-readable reasons for actions. | `session_aware=hard_lock=tool_loop` |
+| `x-vsr-learning-modes` | debug | Method-keyed decision-level learning modes. | `session_aware=apply`, `session_aware=observe` |
 | `x-vsr-injected-system-prompt` | debug | Whether a system-prompt plugin injected text into the request. | `true` |
+
+For UI display guidance, translate `x-vsr-learning-actions` into user-facing
+phrases such as `tool-loop pinned`, `model switched`, or `learning bypassed`.
+The raw `select` first-route event is usually useful only in debug signals,
+where it can be shown as `first route for this run`.
 
 ## Matched Signal Headers
 
@@ -132,4 +151,4 @@ x-vsr-replay-id: replay_01J...
 
 - `x-vsr-matched-projections` is the v0.3 projection header. The old singular form is not part of the public v0.3 contract.
 - `event` is the public signal type used by decisions and DSL. Canonical YAML stores event rules under `routing.signals.events`, matching other plural signal containers.
-- `session_aware` uses router-owned session state internally. Users configure it through `routing.decisions[].algorithm.session_aware` and pass stable session identity with `x-session-id`; there is no separate user-managed session-state block in the v0.3 public contract.
+- Session-aware Router Learning uses router-owned online state internally. Users enable it through `global.router.learning.adaptations.session_aware`, pass stable identity headers, and optionally set `routing.decisions[].adaptations.session_aware.mode` to `apply`, `observe`, or `bypass`. `scope: conversation` protects one `x-conversation-id`; `scope: session` protects the broader `x-session-id`. The old `routing.decisions[].algorithm.session_aware` shape is not part of the public v0.3 contract.

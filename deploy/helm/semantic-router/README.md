@@ -127,6 +127,8 @@ the locked chart dependencies.
 | config.global.stores.semantic_cache.ttl_seconds | int | `3600` |  |
 | dashboard.allowOpenBootstrap | bool | `false` | Allow first-admin creation via the public, unauthenticated web-form bootstrap endpoint. Off by default: a fresh, internet-reachable deployment should not be claimable by the first stranger who finds it. Production provisions the admin via the DASHBOARD_ADMIN_* env vars (which create it at startup and close the bootstrap path automatically). Set this to true only for demos where signing up the first admin through the UI is acceptable. |
 | dashboard.enabled | bool | `false` | Enable the vLLM-SR dashboard |
+| dashboard.envFrom | list | `[]` | Extra envFrom sources for the dashboard container (configMapRef / secretRef). Standard core/v1 EnvFromSource list. |
+| dashboard.extraEnv | list | `[]` | Extra environment variables for the dashboard container, appended after the chart-managed TARGET_* vars. Use this to set optional integration env the chart does not expose explicitly (for example OPENCLAW_*, TARGET_ENVOY_URL, or PROXY_OVERRIDE_ORIGIN) without forking the chart. Standard core/v1 EnvVar list. Avoid redefining a chart-managed var (TARGET_*, DASHBOARD_JWT_SECRET): it produces a duplicate env key and Kubernetes applies last-wins. |
 | dashboard.image.pullPolicy | string | `"IfNotPresent"` | Dashboard image pull policy |
 | dashboard.image.repository | string | `"ghcr.io/vllm-project/semantic-router/dashboard"` | Dashboard image repository |
 | dashboard.image.tag | string | `"latest"` | Dashboard image tag |

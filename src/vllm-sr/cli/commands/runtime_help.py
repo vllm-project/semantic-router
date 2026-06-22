@@ -27,7 +27,6 @@ svm        - SVM selector using shared ML model-selection settings
 mlp        - MLP selector using shared ML model-selection settings
 multi_factor - Quality, latency, cost, and load scoring
 rl_driven  - Online learning selector with optional Thompson / Router-R1 modes
-session_aware - Agentic stay-vs-switch policy for long sessions
 
 Examples:
     # Basic usage (uses config.yaml, Docker target)
@@ -47,9 +46,6 @@ Examples:
 
     # Use latency-aware selection
     vllm-sr serve --algorithm latency_aware
-
-    # Keep agentic sessions stable across tool loops
-    vllm-sr serve --algorithm session_aware
 
     # Custom image
     vllm-sr serve --image ghcr.io/vllm-project/semantic-router/vllm-sr:latest

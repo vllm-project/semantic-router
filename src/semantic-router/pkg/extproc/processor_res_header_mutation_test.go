@@ -396,6 +396,48 @@ func TestBuildResponseHeaderMutation_EmitsWarningsAlongsideStandardHeaders(t *te
 	assert.Equal(t, "math_decision", headerMap[headers.VSRSelectedDecision])
 }
 
+func TestBuildResponseHeaderMutation_EmitsSplitRouterLearningHeaders(t *testing.T) {
+	ctx := &RequestContext{
+		VSRLearningPolicy: map[string]interface{}{
+			"adaptation": "session_aware",
+			"mode":       "apply",
+			"action":     "switch",
+			"reason":     "switch_allowed",
+			"scope":      "conversation",
+		},
+	}
+
+	mutation := buildResponseHeaderMutation(ctx, true)
+	require.NotNil(t, mutation)
+
+	headerMap := mutationToMap(mutation.SetHeaders)
+	assert.Equal(t, "session_aware", headerMap[headers.VSRLearningMethods])
+	assert.Equal(t, "session_aware=switch", headerMap[headers.VSRLearningActions])
+	assert.Equal(t, "session_aware=conversation", headerMap[headers.VSRLearningScopes])
+	assert.Equal(t, "session_aware=switch_allowed", headerMap[headers.VSRLearningReasons])
+	assert.Equal(t, "session_aware=apply", headerMap[headers.VSRLearningModes])
+}
+
+func TestBuildResponseHeaderMutation_EmitsNonApplyLearningMode(t *testing.T) {
+	ctx := &RequestContext{
+		VSRLearningPolicy: map[string]interface{}{
+			"adaptation": "session_aware",
+			"mode":       "observe",
+			"action":     "stay",
+			"reason":     "hard_lock=tool_loop",
+			"scope":      "session",
+		},
+	}
+
+	mutation := buildResponseHeaderMutation(ctx, true)
+	require.NotNil(t, mutation)
+
+	headerMap := mutationToMap(mutation.SetHeaders)
+	assert.Equal(t, "session_aware=observe", headerMap[headers.VSRLearningModes])
+	assert.Equal(t, "session_aware=stay", headerMap[headers.VSRLearningActions])
+	assert.Equal(t, "session_aware=session", headerMap[headers.VSRLearningScopes])
+}
+
 func TestNormalizeProtocol(t *testing.T) {
 	assert.Equal(t, "openai", normalizeProtocol(""))
 	assert.Equal(t, "openai", normalizeProtocol("  "))

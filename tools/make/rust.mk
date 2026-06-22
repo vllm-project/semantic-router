@@ -5,6 +5,32 @@
 # Default GPU device for testing (can be overridden: TEST_GPU_DEVICE=3 make test-rust)
 TEST_GPU_DEVICE ?= 2
 
+# Rust lib unit tests that are safe for PR CI:
+# - no downloaded model assets
+# - no GPU/CUDA requirement
+# - deterministic pure Rust/FFI helper logic
+#
+# Keep this list explicit. Do not include tests whose fixtures initialize
+# models from ../models unless those tests have been converted to skip cleanly.
+RUST_CI_LIB_TESTS ?= \
+	core::tokenization_test::test_tokenization_config_default \
+	core::tokenization_test::test_tokenization_config_custom \
+	ffi::embedding_test::test_truncate_embedding_renormalizes_prefix
+
+test-rust-ci:
+	@$(LOG_TARGET)
+	@echo "Running CI-safe Rust lib unit tests (CPU-only, no model assets)"
+	@cd candle-binding && \
+	test_list="$$(cargo test --release --no-default-features --lib -- --list)" && \
+	for test_filter in $(RUST_CI_LIB_TESTS); do \
+		echo "$$test_list" | grep -F "$${test_filter}:" >/dev/null || { \
+			echo "Configured Rust CI test not found: $$test_filter"; \
+			exit 1; \
+		}; \
+		echo "Running $$test_filter"; \
+		cargo test --release --no-default-features --lib "$$test_filter" -- --exact --test-threads=1 --nocapture || exit 1; \
+	done
+
 # Test Rust unit tests (with release optimization for performance)
 # Note: Uses TEST_GPU_DEVICE env var (default: 2) to avoid GPU 0/1 which may be busy
 # Override with: TEST_GPU_DEVICE=3 make test-rust

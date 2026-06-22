@@ -455,11 +455,9 @@ routing:
       - name: active_tool_use
         description: Tool-result continuation inside an agent loop.
         feature:
-          type: count
+          type: exists
           source:
-            type: assistant_tool_cycle
-        predicate:
-          gte: 1
+            type: active_tool_loop
       - name: has_developer_msg
         description: Request contains a developer message.
         feature:
@@ -694,6 +692,9 @@ routing:
         ratings:
           max_concurrent: 3
           on_error: skip
+      adaptations:
+        session_aware:
+          mode: bypass
       plugins:
         - type: router_replay
           configuration:
@@ -808,14 +809,22 @@ routing:
           judge_prompt_version: fusion-v1
           # Grounding-aware synthesis: score panel responses for faithfulness
           # (hallucination detector against context, else cross-model NLI) and
-          # rank/filter them before the judge. Disabled by default.
+          # use the scores to guide the judge. Disabled by default.
           grounding:
             enabled: false
             reference: hybrid          # hybrid | context | panel
-            min_score: 0.0             # drop responses scoring below this (0-1)
-            min_keep: 1                # always keep at least this many
+            policy: weight             # weight | annotate | filter (see below)
+            min_score: 0.0             # filter policy only: drop below this (0-1)
+            min_keep: 1                # filter policy only: keep at least this many
             nli_contradiction_penalty: 1.0
             on_error: skip             # skip (fall back to plain fusion) | fail
+            # policy controls how the scores are used:
+            #   weight   (default) keep every response; tell the judge to weight
+            #            each answer by its score (a correct lone dissenter is kept).
+            #   annotate keep every response; pass the scores to the judge as notes.
+            #   filter   hard-drop responses below min_score (keep min_keep).
+            # filter regresses quality on contested factual questions because it
+            # deletes the correct dissenter; see bench/grounded_fusion/FINDINGS.md.
 
     - name: terse_elo_route
       description: Personalized terse-answer route using Elo selection.
@@ -1123,39 +1132,6 @@ routing:
           latency_percentile: 95
           on_no_candidates: cheapest
 
-    - name: agentic_session_route
-      description: Session-aware policy for agentic multi-turn traffic.
-      priority: 123
-      rules:
-        operator: AND
-        conditions:
-          - type: conversation
-            name: active_tool_use
-      modelRefs:
-        - model: qwen3-8b
-        - model: qwen3-32b
-      algorithm:
-        type: session_aware
-        session_aware:
-          base_method: hybrid
-          idle_timeout_seconds: 300
-          min_turns_before_switch: 1
-          switch_margin: 0.05
-          stay_bias: 0.10
-          tool_loop_hard_lock: true
-          context_portability_hard_lock: true
-          decision_drift_reset: true
-          tool_loop_stay_bias: 0.35
-          prefix_cache_weight: 0.20
-          handoff_penalty_weight: 1.0
-          default_handoff_penalty: 0.05
-          quality_gap_multiplier: 1.0
-          max_cache_cost_multiplier: 2.5
-          switch_history_weight: 0.04
-          remaining_turn_prior_weight: 1.0
-          remaining_turn_prior_horizon: 8
-          min_remaining_turn_prior_samples: 3
-
     - name: fallback_knn_route
       description: KNN fallback route for general traffic with OpenAI vector-store RAG.
       priority: 120
@@ -1416,36 +1392,11 @@ global:
         cost_weight: 0.1
         quality_gap_threshold: 0.08
         normalize_scores: true
-      session_aware:
-        base_method: hybrid
-        idle_timeout_seconds: 300
-        min_turns_before_switch: 1
-        switch_margin: 0.05
-        stay_bias: 0.10
-        tool_loop_hard_lock: true
-        context_portability_hard_lock: true
-        decision_drift_reset: true
-        tool_loop_stay_bias: 0.35
-        prefix_cache_weight: 0.20
-        handoff_penalty_weight: 1.0
-        default_handoff_penalty: 0.05
-        quality_gap_multiplier: 1.0
-        max_cache_cost_multiplier: 2.5
-        switch_history_weight: 0.04
-        remaining_turn_prior_weight: 1.0
-        remaining_turn_prior_horizon: 8
-        min_remaining_turn_prior_samples: 3
       momentum:
         enabled: false
         attack: 0.7
         release: 0.3
         threshold: 0.6
-      model_switch_gate:
-        enabled: false
-        mode: shadow
-        min_switch_advantage: 0.0
-        default_handoff_penalty: 0.0
-        cache_warmth_weight: 0.0
       ml:
         models_path: models/model-selection
         embedding_dim: 384
@@ -1463,24 +1414,25 @@ global:
         mlp:
           device: cpu
           pretrained_path: models/model-selection/mlp.pt
-      lookup_tables:
-        enabled: false
-        storage_path: ""
-        auto_save_interval: ""
-        populate_from_replay: false
-        populate_interval: ""
-        quality_gaps:
-          - task_family: coding
-            current_model: small
-            candidate_model: large
-            value: 0.15
-        handoff_penalties:
-          - from_model: small
-            to_model: large
-            value: 0.02
-        remaining_turn_priors:
-          - intent_or_domain: support
-            value: 3.5
+    learning:
+      enabled: true
+      adaptations:
+        session_aware:
+          enabled: true
+          scope: conversation
+          identity:
+            headers:
+              session: x-session-id
+              conversation: x-conversation-id
+          tuning:
+            idle_timeout_seconds: 300
+            min_turns_before_switch: 1
+            switch_margin: 0.05
+            cache_weight: 0.20
+            handoff_penalty: 0.05
+            handoff_penalty_weight: 1.0
+            switch_history_weight: 0.04
+            max_cache_cost_multiplier: 2.5
 
   services:
     api:

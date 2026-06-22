@@ -117,6 +117,11 @@ class FusionGroundingConfig(BaseModel):
 
     enabled: bool | None = False
     reference: Literal["hybrid", "context", "panel"] | None = "hybrid"
+    # How the groundedness scores are used. weight/annotate keep every response and
+    # let the judge soft-weight; filter hard-drops below min_score. Default weight:
+    # hard-dropping the least consistent response regresses quality on contested
+    # factual items (see bench/grounded_fusion/FINDINGS.md).
+    policy: Literal["weight", "annotate", "filter"] | None = "weight"
     min_score: float | None = Field(default=0.0, ge=0, le=1)
     min_keep: int | None = Field(default=1, ge=0)
     nli_contradiction_penalty: float | None = Field(default=1.0, ge=0)
@@ -211,16 +216,16 @@ class RouterDCSelectionConfig(BaseModel):
     min_similarity: float | None = Field(default=0.3, ge=0, le=1)
 
     # Enable query-side contrastive learning
-    use_query_contrastive: bool | None = False
+    use_query_contrastive: bool | None = True
 
     # Enable model-side contrastive learning
-    use_model_contrastive: bool | None = False
+    use_model_contrastive: bool | None = True
 
     # Require all models to have descriptions
     require_descriptions: bool | None = False
 
     # Include capability tags in embeddings
-    use_capabilities: bool | None = False
+    use_capabilities: bool | None = True
 
 
 class AutoMixSelectionConfig(BaseModel):
@@ -423,7 +428,6 @@ class AlgorithmConfig(BaseModel):
        - "hybrid": Combine multiple selection methods
        - "knn", "kmeans", "svm", "mlp": Shared ML model-selection selectors
        - "multi_factor": Combine quality, latency, cost, and load
-       - "session_aware": Agentic long-horizon routing with router-owned session memory
 
     3. RL-driven selection algorithms:
        - "rl_driven": Canonical online learning with optional Thompson / Router-R1 modes
@@ -435,7 +439,7 @@ class AlgorithmConfig(BaseModel):
     # Algorithm type: looper ("confidence", "ratings", "remom", "fusion") or
     # selection ("static", "elo", "router_dc", "automix", "hybrid",
     #            "knn", "kmeans", "svm", "mlp", "multi_factor",
-    #            "rl_driven", "gmtrouter", "latency_aware", "session_aware")
+    #            "rl_driven", "gmtrouter", "latency_aware")
     type: str
 
     # Looper algorithm configurations
@@ -451,6 +455,8 @@ class AlgorithmConfig(BaseModel):
     automix: AutoMixSelectionConfig | None = None
     hybrid: HybridSelectionConfig | None = None
     multi_factor: MultiFactorSelectionConfig | None = None
+    # Legacy field retained only so config validation can return an actionable
+    # Router Learning migration message.
     session_aware: SessionAwareSelectionConfig | None = None
 
     # RL-driven and personalized selection algorithms

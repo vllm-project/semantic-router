@@ -91,6 +91,11 @@ var (
 			scopes:   configValidationScopeFile | configValidationScopeKubernetes,
 		},
 		{
+			name:     "router_learning",
+			validate: validateRouterLearningConfig,
+			scopes:   configValidationScopeFile | configValidationScopeKubernetes,
+		},
+		{
 			name:     "fusion",
 			validate: validateFusionContracts,
 			scopes:   configValidationScopeFile | configValidationScopeKubernetes,
@@ -219,12 +224,14 @@ func validateModelSelectionConfig(cfg *RouterConfig) error {
 	if err := validateVLLMClassifierConfig(&cfg.PromptGuard); err != nil {
 		return err
 	}
-	if err := validateModelSwitchGate(cfg.ModelSelection.ModelSwitchGate); err != nil {
-		return err
+	if isSessionAwareSelectionConfigConfigured(cfg.ModelSelection.SessionAware) {
+		return fmt.Errorf("global.router.model_selection.session_aware has moved to global.router.learning.adaptations.session_aware")
 	}
-	if err := validateSessionAwareSelectionConfig(cfg.ModelSelection.SessionAware); err != nil {
-		return err
+	if isModelSwitchGateConfigured(cfg.ModelSelection.ModelSwitchGate) {
+		return fmt.Errorf("global.router.model_selection.model_switch_gate has been folded into global.router.learning.adaptations.session_aware.tuning")
 	}
-	warnModelSwitchGateEnforceWithoutCostSignals(cfg.ModelSelection)
+	if isLookupTableConfigConfigured(cfg.ModelSelection.LookupTables) {
+		return fmt.Errorf("global.router.model_selection.lookup_tables has moved to global.router.learning memory priors; replay-derived priors are not part of the first session-aware learning implementation")
+	}
 	return nil
 }

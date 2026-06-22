@@ -151,7 +151,6 @@ def validate_algorithm_one_of(config: UserConfig) -> List[ValidationError]:
         "gmtrouter": "gmtrouter",
         "latency_aware": "latency_aware",
         "multi_factor": "multi_factor",
-        "session_aware": "session_aware",
     }
 
     for decision in config.decisions:
@@ -187,6 +186,18 @@ def validate_algorithm_one_of(config: UserConfig) -> List[ValidationError]:
 
         display_type = (algorithm.type or "").strip() or "<empty>"
         normalized_type = (algorithm.type or "").strip().lower()
+
+        if normalized_type == "session_aware" or algorithm.session_aware is not None:
+            errors.append(
+                ValidationError(
+                    f"decision '{decision.name}' algorithm.type=session_aware has moved to "
+                    "global.router.learning.adaptations.session_aware; remove "
+                    "algorithm.type=session_aware and configure a normal base algorithm only "
+                    "when this decision needs one",
+                    field=f"decisions.{decision.name}.algorithm",
+                )
+            )
+            continue
 
         if len(configured_blocks) > 1:
             errors.append(
@@ -520,19 +531,22 @@ def _maybe_hybrid_weight_error(
     if algo_type != "hybrid" or not algo.hybrid:
         return None
     h = algo.hybrid
+    # Per-weight non-negativity is enforced by the pydantic model (ge=0).
+    # Weights are normalized at runtime, so they need not sum to 1.0 — but an
+    # all-zero set leaves the selector with nothing to normalize, so reject it.
     total = (
         (0.3 if h.elo_weight is None else h.elo_weight)
         + (0.3 if h.router_dc_weight is None else h.router_dc_weight)
         + (0.2 if h.automix_weight is None else h.automix_weight)
         + (0.2 if h.cost_weight is None else h.cost_weight)
     )
-    if abs(total - 1.0) <= 0.01:
-        return None
-    return ValidationError(
-        f"Decision '{decision_name}' hybrid weights sum to {total:.2f}, "
-        "should sum to 1.0",
-        field=f"decisions.{decision_name}.algorithm.hybrid",
-    )
+    if total <= 0:
+        return ValidationError(
+            f"Decision '{decision_name}' hybrid weights are all zero; "
+            "at least one weight must be positive",
+            field=f"decisions.{decision_name}.algorithm.hybrid",
+        )
+    return None
 
 
 def validate_algorithm_configurations(config: UserConfig) -> List[ValidationError]:
@@ -541,8 +555,7 @@ def validate_algorithm_configurations(config: UserConfig) -> List[ValidationErro
 
     Validates both looper algorithms (confidence, ratings, remom, fusion)
     and selection algorithms (static, elo, router_dc, automix, hybrid,
-    knn, kmeans, svm, mlp, multi_factor, latency_aware, session_aware,
-    rl_driven, gmtrouter).
+    knn, kmeans, svm, mlp, multi_factor, latency_aware, rl_driven, gmtrouter).
 
     Args:
         config: User configuration
@@ -565,7 +578,6 @@ def validate_algorithm_configurations(config: UserConfig) -> List[ValidationErro
         "svm",
         "mlp",
         "multi_factor",
-        "session_aware",
         "latency_aware",
         "rl_driven",
         "gmtrouter",
@@ -578,6 +590,9 @@ def validate_algorithm_configurations(config: UserConfig) -> List[ValidationErro
 
         algo = decision.algorithm
         algo_type = algo.type
+
+        if algo_type == "session_aware":
+            continue
 
         # Validate algorithm type
         if algo_type not in all_types:

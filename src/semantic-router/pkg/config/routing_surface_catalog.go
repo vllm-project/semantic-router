@@ -76,7 +76,6 @@ var decisionAlgorithmCatalog = []AlgorithmCatalogEntry{
 	{Type: "remom", Tier: "supported"},
 	{Type: "rl_driven", Tier: "experimental"},
 	{Type: "router_dc", Tier: "supported"},
-	{Type: "session_aware", Tier: "supported"},
 	{Type: "static", Tier: "supported"},
 	{Type: "svm", Tier: "experimental"},
 }

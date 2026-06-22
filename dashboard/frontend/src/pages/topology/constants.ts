@@ -126,7 +126,6 @@ export const ALGORITHM_ICONS: Record<AlgorithmType, string> = {
   svm: 'SVM',
   mlp: 'MLP',
   multi_factor: 'MF',
-  session_aware: 'SA',
 }
 
 // ============== Algorithm Colors (NVIDIA Dark Theme) ==============
@@ -150,7 +149,6 @@ export const ALGORITHM_COLORS: Record<AlgorithmType, { background: string; borde
   svm: { background: '#6d687a', border: '#504a5c' },
   mlp: { background: '#586d7a', border: '#40515d' },
   multi_factor: { background: '#4e6f63', border: '#38534a' },
-  session_aware: { background: '#6a704d', border: '#4f5438' },
 }
 
 // ============== Reasoning Effort Display (NVIDIA Dark Theme) ==============

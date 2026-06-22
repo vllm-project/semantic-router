@@ -354,6 +354,11 @@ func addDecisionDetailHeaders(builder *responseHeaderMutationBuilder, ctx *Reque
 	}
 	builder.addString(headers.VSRSelectedReasoning, ctx.VSRReasoningMode)
 	builder.addString(headers.VSRSessionPhase, sessionPolicyPhase(ctx))
+	builder.addString(headers.VSRLearningMethods, learningPolicyMethodsHeader(ctx))
+	builder.addString(headers.VSRLearningActions, learningPolicyPairHeader(ctx, "action"))
+	builder.addString(headers.VSRLearningScopes, learningPolicyPairHeader(ctx, "scope"))
+	builder.addString(headers.VSRLearningReasons, learningPolicyPairHeader(ctx, "reason"))
+	builder.addString(headers.VSRLearningModes, learningPolicyPairHeader(ctx, "mode"))
 	builder.addBool(headers.VSRInjectedSystemPrompt, ctx.VSRInjectedSystemPrompt)
 	if ctx.VSRCacheSimilarity > 0 {
 		builder.addFloat("x-vsr-cache-similarity", float64(ctx.VSRCacheSimilarity))
@@ -395,4 +400,35 @@ func sessionPolicyPhase(ctx *RequestContext) string {
 		return ""
 	}
 	return strings.TrimSpace(phase)
+}
+
+func learningPolicyMethodsHeader(ctx *RequestContext) string {
+	adaptation := learningPolicyMethod(ctx)
+	if adaptation == "" {
+		return ""
+	}
+	return sanitizeWarningField(adaptation)
+}
+
+func learningPolicyPairHeader(ctx *RequestContext, key string) string {
+	adaptation := learningPolicyMethod(ctx)
+	if adaptation == "" {
+		return ""
+	}
+	value := replayPolicyString(ctx.VSRLearningPolicy, key)
+	if value == "" {
+		return ""
+	}
+	return sanitizeWarningField(adaptation) + "=" + sanitizeWarningField(value)
+}
+
+func learningPolicyMethod(ctx *RequestContext) string {
+	if ctx == nil || len(ctx.VSRLearningPolicy) == 0 {
+		return ""
+	}
+	adaptation := replayPolicyString(ctx.VSRLearningPolicy, "adaptation")
+	if adaptation == "" {
+		return "session_aware"
+	}
+	return adaptation
 }

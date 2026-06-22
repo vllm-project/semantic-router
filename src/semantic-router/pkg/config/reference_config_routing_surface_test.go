@@ -55,7 +55,6 @@ func assertSupportedAlgorithmsInReferenceConfig(t testingT, decisions []interfac
 	assertMapCoversStructFields(t, mustMapAt(t, algorithmsByType["gmtrouter"], "gmtrouter"), reflect.TypeOf(GMTRouterSelectionConfig{}), "routing.decisions[].algorithm.gmtrouter")
 	assertMapCoversStructFields(t, mustMapAt(t, algorithmsByType["latency_aware"], "latency_aware"), reflect.TypeOf(LatencyAwareAlgorithmConfig{}), "routing.decisions[].algorithm.latency_aware")
 	assertMapCoversStructFields(t, mustMapAt(t, algorithmsByType["multi_factor"], "multi_factor"), reflect.TypeOf(MultiFactorSelectionConfig{}), "routing.decisions[].algorithm.multi_factor")
-	assertMapCoversStructFields(t, mustMapAt(t, algorithmsByType["session_aware"], "session_aware"), reflect.TypeOf(SessionAwareSelectionConfig{}), "routing.decisions[].algorithm.session_aware")
 }
 
 func assertReferenceConfidenceAlgorithmCoverage(t testingT, algorithmsByType map[string]map[string]interface{}) {

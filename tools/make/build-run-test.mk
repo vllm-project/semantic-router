@@ -94,7 +94,7 @@ test-semantic-router: build-router
 #   4. Run test-binding-lora
 # In local dev, run all tests together
 ifeq ($(CI),true)
-test: vet check-go-mod-tidy download-models test-binding-minimal test-semantic-router clean-minimal-models download-models-lora test-binding-lora
+test: vet check-go-mod-tidy test-rust-ci download-models test-binding-minimal test-semantic-router clean-minimal-models download-models-lora test-binding-lora
 else
 test: vet check-go-mod-tidy download-models $(if $(CI),,test-rust) test-binding test-semantic-router
 endif

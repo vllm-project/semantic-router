@@ -121,6 +121,9 @@ type RequestContext struct {
 	VSRReasoningMode              string                 // "on" or "off" - whether reasoning mode was determined to be used
 	VSRSelectedModel              string                 // The model selected by VSR
 	VSRSelectionMethod            string                 // Model selection algorithm used (e.g., "elo", "static", "router_dc")
+	VSRLearningPolicy             map[string]interface{} // Router Learning adaptation trace for replay/experiments
+	VSRLearningSessionID          string                 // Router Learning memory key used for this request
+	VSRLearningConversationID     string                 // Client-declared conversation identity used by Router Learning
 	VSRSessionPolicy              map[string]interface{} // Session-aware routing policy trace for replay/experiments
 	VSRCacheHit                   bool                   // Whether this request hit the cache
 	VSRCacheSimilarity            float32                // Similarity score from last cache lookup (0 = no lookup performed)

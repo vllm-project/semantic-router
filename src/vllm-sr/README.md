@@ -164,6 +164,45 @@ The output is split into two sections:
 
 Credential fields are intentionally not printed. API keys, API key environment variable names, embedded URL credentials, and sensitive query parameters are omitted or redacted so the command is safe to use in support logs.
 
+### Inspect ingested vector stores
+
+Use `vllm-sr rag list` to list the vector stores created through the router's OpenAI-compatible Vector Stores API (`POST /v1/vector_stores`). The command queries the running router's `GET /v1/vector_stores` endpoint, so the router must be up (`vllm-sr serve`).
+
+```bash
+# Talk to the local router (default: http://localhost:8080, shifted by VLLM_SR_PORT_OFFSET)
+vllm-sr rag list
+
+# Override the endpoint (remote router, port-forwarded stack, or stack started with VLLM_SR_PORT_OFFSET)
+vllm-sr rag list --endpoint http://localhost:8080
+vllm-sr rag list --endpoint http://router.example.com:8080
+```
+
+For each vector store, the output prints name, id, status, backend type, and file counts (total / completed / in-progress / failed):
+
+```
+vLLM Semantic Router - Vector Stores
+============================================================
+Endpoint: http://localhost:8080/v1/vector_stores
+
+Vector stores (2):
+  - docs-prod  (vs_abc123)
+      status:       active
+      backend:      milvus
+      files:        10 total (9 completed, 1 in progress, 0 failed)
+  - support-kb  (vs_def456)
+      status:       active
+      backend:      memory
+      files:        4 total (3 completed, 0 in progress, 1 failed)
+```
+
+Common outcomes:
+
+- **No stores ingested yet**: prints `(none created)`.
+- **Vector store feature disabled**: the router returns `503` and the CLI exits with `Vector store feature is not enabled on the router. Enable a vector store backend in your config to use RAG ingestion and retrieval.`
+- **Router not running / wrong port**: the CLI exits with an actionable message pointing at `vllm-sr serve` or the router API port.
+
+`vllm-sr rag list` only reads; it does not create, modify, or delete stores. Create stores through the Vector Stores API (e.g. `POST /v1/vector_stores`); this command is purely an inspection surface, mirroring how `vllm-sr model list` inspects configured models.
+
 ## Features
 
 - **Router**: Intelligent request routing based on intent classification
@@ -404,11 +443,11 @@ routing:
 
 Router replay records are exposed through:
 
-- `GET /v1/router_replay?limit=20&offset=0&search=req-123&decision=foo&model=bar&cache_status=cached` - List recent records with pagination metadata. Default page size is `20`; larger `limit` values are capped at `100`.
+- `GET /v1/router_replay?limit=20&offset=0&search=req-123&decision=foo&model=bar&cache_status=cached&showDetails=false` - List recent records with pagination metadata. Default page size is `20`; larger `limit` values are capped at `100`. Use `showDetails=false` (default `true`) to omit large captured bodies and traces from each row so the list stays under the ext-proc response limit; fetch `GET /v1/router_replay/{id}` for full payloads.
 - `GET /v1/router_replay/aggregate?search=req-123&decision=foo&model=bar&cache_status=cached` - Return summary and chart aggregates for the filtered replay set.
 - `GET /v1/router_replay/{id}` - Fetch a single replay record.
 
-If a replay page would exceed the ext-proc gRPC message budget, the router returns `413 Payload Too Large` instead of failing the stream.
+If a replay page would exceed the ext-proc gRPC message budget, the router returns `413 Payload Too Large` instead of failing the stream. Prefer `showDetails=false` on list calls when rows may contain large request or response bodies.
 
 **Validation Rules:**
 
