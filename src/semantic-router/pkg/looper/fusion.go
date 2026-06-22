@@ -325,6 +325,14 @@ func (l *FusionLooper) executeFusionPanel(
 	req *Request,
 	cfg fusionExecutionConfig,
 ) ([]*ModelResponse, []FusionFailedModel, error) {
+	// Paired multi-arm evaluation supplies the panel verbatim so every arm
+	// synthesizes from a byte-identical panel (see bench/grounded_fusion). Skip
+	// the live model calls and feed the cached panel straight into grounding +
+	// synthesis, which are source-agnostic over []*ModelResponse.
+	if len(req.CachedPanel) > 0 {
+		return req.CachedPanel, nil, nil
+	}
+
 	results := make(chan fusionPanelResult, len(cfg.AnalysisModels))
 	sem := make(chan struct{}, cfg.MaxConcurrent)
 	for i, model := range cfg.AnalysisModels {
