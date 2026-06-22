@@ -203,7 +203,6 @@ export type AlgorithmType =
   | 'svm'
   | 'mlp'
   | 'multi_factor'
-  | 'session_aware'
 
 export interface AlgorithmConfig {
   type: AlgorithmType
@@ -225,7 +224,6 @@ export interface AlgorithmConfig {
   svm?: GenericAlgorithmConfig
   mlp?: GenericAlgorithmConfig
   multi_factor?: GenericAlgorithmConfig
-  session_aware?: GenericAlgorithmConfig
 }
 
 export type RawDecisionAlgorithmConfig = Omit<Partial<AlgorithmConfig>, 'type'> & {

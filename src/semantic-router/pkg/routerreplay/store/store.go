@@ -87,6 +87,33 @@ type ToolTraceStep struct {
 	Truncated bool `json:"truncated,omitempty"`
 }
 
+// RouteDiagnostics summarizes the final route and any session-aware policy
+// outcome in a stable replay-facing shape. Detailed per-candidate scoring
+// remains in SessionPolicy; this object gives eval clients a compact contract
+// without expanding public response headers.
+type RouteDiagnostics struct {
+	Decision             string `json:"decision,omitempty"`
+	DecisionTier         int    `json:"decision_tier,omitempty"`
+	DecisionPriority     int    `json:"decision_priority,omitempty"`
+	SelectionMethod      string `json:"selection_method,omitempty"`
+	OriginalModel        string `json:"original_model,omitempty"`
+	ProposalModel        string `json:"proposal_model,omitempty"`
+	PreviousModel        string `json:"previous_model,omitempty"`
+	SelectedModel        string `json:"selected_model,omitempty"`
+	SessionPolicyApplied bool   `json:"session_policy_applied,omitempty"`
+	SessionAction        string `json:"session_action,omitempty"`
+	SessionPhase         string `json:"session_phase,omitempty"`
+	SessionReason        string `json:"session_reason,omitempty"`
+	HardLockReason       string `json:"hard_lock_reason,omitempty"`
+	DecisionReason       string `json:"decision_reason,omitempty"`
+}
+
+// LearningDiagnostics stores router-learning adaptation outputs in a generic
+// namespace. Detailed adaptation-specific fields live under adaptations.<name>.
+type LearningDiagnostics struct {
+	Adaptations map[string]map[string]interface{} `json:"adaptations,omitempty"`
+}
+
 // Record represents a routing decision record with metadata and captured payloads.
 type Record struct {
 	ID                    string                 `json:"id"`
@@ -105,6 +132,8 @@ type Record struct {
 	ReasoningMode         string                 `json:"reasoning_mode,omitempty"`
 	ConfidenceScore       float64                `json:"confidence_score,omitempty"`
 	SelectionMethod       string                 `json:"selection_method,omitempty"`
+	RouteDiagnostics      *RouteDiagnostics      `json:"route_diagnostics,omitempty"`
+	Learning              *LearningDiagnostics   `json:"learning,omitempty"`
 	SessionPolicy         map[string]interface{} `json:"session_policy,omitempty"`
 	Signals               Signal                 `json:"signals"`
 	Projections           []string               `json:"projections,omitempty"`
@@ -311,6 +340,8 @@ func cloneSignal(signal Signal) Signal {
 
 func cloneRecord(record Record) Record {
 	cloned := record
+	cloned.RouteDiagnostics = cloneRouteDiagnostics(record.RouteDiagnostics)
+	cloned.Learning = cloneLearningDiagnostics(record.Learning)
 	cloned.Signals = cloneSignal(record.Signals)
 	cloned.Projections = cloneStringSlice(record.Projections)
 	cloned.ProjectionScores = cloneFloat64Map(record.ProjectionScores)
@@ -331,6 +362,28 @@ func cloneRecord(record Record) Record {
 	cloned.Currency = cloneStringPtr(record.Currency)
 	cloned.BaselineModel = cloneStringPtr(record.BaselineModel)
 	return cloned
+}
+
+func cloneLearningDiagnostics(value *LearningDiagnostics) *LearningDiagnostics {
+	if value == nil {
+		return nil
+	}
+	cloned := &LearningDiagnostics{}
+	if value.Adaptations != nil {
+		cloned.Adaptations = make(map[string]map[string]interface{}, len(value.Adaptations))
+		for name, policy := range value.Adaptations {
+			cloned.Adaptations[name] = cloneInterfaceMap(policy)
+		}
+	}
+	return cloned
+}
+
+func cloneRouteDiagnostics(value *RouteDiagnostics) *RouteDiagnostics {
+	if value == nil {
+		return nil
+	}
+	cloned := *value
+	return &cloned
 }
 
 func cloneIntPtr(value *int) *int {

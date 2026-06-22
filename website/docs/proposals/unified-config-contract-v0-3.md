@@ -91,8 +91,8 @@ Router-global defaults are now owned by the router itself, not by a second user-
 - `global:` only overrides what you need to change
 - `global.router` groups router-engine control knobs, including `config_source`
 - `global.router.auto_model_names` registers full-router auto aliases such as `vllm-sr/auto`, `auto`, and `MoM`; the legacy `auto_model_name` field remains a single-name compatibility shortcut
-- `global.router.model_selection.model_switch_gate` is the optional shadow/enforce policy seam for auditing session-aware model stay-vs-switch decisions
-- `session_aware` selection can consume replay-derived `remaining_turn_prior` lookup-table entries, hard-lock non-portable provider-state continuations, reset continuity on decision drift, price prefix-cache loss by input checkout cost, and expose those facts in `session_policy` traces for experiments. Its cache-cost multiplier is constrained to neutral-or-stricter values and its remaining-turn prior horizon must be positive.
+- `global.router.learning` owns cross-request Router Learning state and adaptations.
+- `global.router.learning.adaptations.session_aware` is the session/conversation stay-vs-switch adaptation. Decisions remain semantic and can opt out with `routing.decisions[].adaptations.session_aware.mode: bypass`; `algorithm.type: session_aware` is not part of the public contract.
 - `global.services` groups shared APIs and runtime services
 - `global.services.router_replay.enabled` provides the router-wide replay default, while route-local `router_replay.enabled: false` is the explicit opt-out
 - `global.stores` groups storage-backed services

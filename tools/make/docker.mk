@@ -60,7 +60,7 @@ docker-build-dashboard: ## Build dashboard Docker image
 docker-build-dashboard:
 	@$(LOG_TARGET)
 	@echo "Building dashboard Docker image..."
-	@$(CONTAINER_RUNTIME) build -f dashboard/backend/Dockerfile -t $(DOCKER_REGISTRY)/dashboard:$(DOCKER_TAG) .
+	@$(CONTAINER_RUNTIME) build $(VLLM_SR_DASHBOARD_BUILD_ARGS) -f dashboard/backend/Dockerfile -t $(DOCKER_REGISTRY)/dashboard:$(DOCKER_TAG) .
 
 # Ensure the official Envoy image is available locally
 docker-build-vllm-sr-envoy: ## Build vllm-sr-envoy Docker image
@@ -288,6 +288,16 @@ VLLM_SR_BUILD_ARGS := --network=host --build-arg TARGETARCH=$(VLLM_SR_TARGETARCH
 ifeq ($(GIT_SSL_NO_VERIFY),1)
 VLLM_SR_BUILD_ARGS += --build-arg GIT_SSL_NO_VERIFY=1
 endif
+VLLM_SR_PROJECT_VERSION := $(shell sed -n 's/^version = "\(.*\)"/\1/p' src/vllm-sr/pyproject.toml | head -n1)
+VLLM_SR_GIT_REVISION := $(shell git rev-parse --short=7 HEAD 2>/dev/null || echo local)
+VLLM_SR_DASHBOARD_VERSION_SOURCE := $(origin VLLM_SR_DASHBOARD_VERSION)
+VLLM_SR_DASHBOARD_VERSION ?= $(VLLM_SR_PROJECT_VERSION)-dev.$(VLLM_SR_GIT_REVISION)
+ifeq ($(VLLM_SR_DASHBOARD_VERSION_SOURCE),undefined)
+ifneq ($(shell git status --porcelain -- dashboard/backend dashboard/frontend src/vllm-sr/pyproject.toml 2>/dev/null),)
+VLLM_SR_DASHBOARD_VERSION := $(VLLM_SR_DASHBOARD_VERSION).dirty
+endif
+endif
+VLLM_SR_DASHBOARD_BUILD_ARGS := $(VLLM_SR_BUILD_ARGS) --build-arg DASHBOARD_VERSION=$(VLLM_SR_DASHBOARD_VERSION)
 
 vllm-sr-dev: ## Rebuild vLLM Semantic Router router image and install CLI
 vllm-sr-dev:
@@ -348,7 +358,7 @@ vllm-sr-dev:
 		echo "  Dockerfile: $(VLLM_SR_DASHBOARD_DOCKERFILE)"; \
 		echo "  Image: $(VLLM_SR_DASHBOARD_IMAGE)"; \
 		echo ""; \
-		$(CONTAINER_RUNTIME) build $(VLLM_SR_BUILD_ARGS) -t $(VLLM_SR_DASHBOARD_IMAGE) -f $(VLLM_SR_DASHBOARD_DOCKERFILE) .; \
+		$(CONTAINER_RUNTIME) build $(VLLM_SR_DASHBOARD_BUILD_ARGS) -t $(VLLM_SR_DASHBOARD_IMAGE) -f $(VLLM_SR_DASHBOARD_DOCKERFILE) .; \
 		echo ""; \
 		echo "Dashboard image built: $(VLLM_SR_DASHBOARD_IMAGE)"; \
 		echo ""; \
@@ -417,7 +427,7 @@ vllm-sr-dashboard-build:
 	@echo "  Target arch: $(VLLM_SR_TARGETARCH)"
 	@echo "  Build platform: $(VLLM_SR_BUILDPLATFORM)"
 	@echo "  Dockerfile: $(VLLM_SR_DASHBOARD_DOCKERFILE)"
-	@$(CONTAINER_RUNTIME) build $(VLLM_SR_BUILD_ARGS) -t $(VLLM_SR_DASHBOARD_IMAGE) -f $(VLLM_SR_DASHBOARD_DOCKERFILE) .
+	@$(CONTAINER_RUNTIME) build $(VLLM_SR_DASHBOARD_BUILD_ARGS) -t $(VLLM_SR_DASHBOARD_IMAGE) -f $(VLLM_SR_DASHBOARD_DOCKERFILE) .
 	@echo "Image built: $(VLLM_SR_DASHBOARD_IMAGE)"
 
 vllm-sr-start: ## Start vLLM Semantic Router service

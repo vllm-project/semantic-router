@@ -38,9 +38,6 @@ var algorithmFieldExporters = map[string]algorithmFieldExporter{
 	"multi_factor": func(algo *config.AlgorithmConfig, fields map[string]Value) {
 		multiFactorAlgorithmToFields(algo.MultiFactor, fields)
 	},
-	"session_aware": func(algo *config.AlgorithmConfig, fields map[string]Value) {
-		sessionAwareAlgorithmToFields(algo.SessionAware, fields)
-	},
 }
 
 func (d *decompiler) algorithmToFields(algo *config.AlgorithmConfig) map[string]Value {
@@ -228,30 +225,6 @@ func multiFactorAlgorithmToFields(m *config.MultiFactorSelectionConfig, fields m
 	setStringValue(fields, "on_no_candidates", m.OnNoCandidates)
 }
 
-func sessionAwareAlgorithmToFields(s *config.SessionAwareSelectionConfig, fields map[string]Value) {
-	if s == nil {
-		return
-	}
-	setStringValue(fields, "base_method", s.BaseMethod)
-	setIntPointerValue(fields, "idle_timeout_seconds", s.IdleTimeoutSeconds)
-	setIntPointerValue(fields, "min_turns_before_switch", s.MinTurnsBeforeSwitch)
-	setFloatPointerValue(fields, "switch_margin", s.SwitchMargin)
-	setFloatPointerValue(fields, "stay_bias", s.StayBias)
-	setBoolPointerValue(fields, "tool_loop_hard_lock", s.ToolLoopHardLock)
-	setBoolPointerValue(fields, "context_portability_hard_lock", s.ContextPortabilityHardLock)
-	setBoolPointerValue(fields, "decision_drift_reset", s.DecisionDriftReset)
-	setFloatPointerValue(fields, "tool_loop_stay_bias", s.ToolLoopStayBias)
-	setFloatPointerValue(fields, "prefix_cache_weight", s.PrefixCacheWeight)
-	setFloatPointerValue(fields, "handoff_penalty_weight", s.HandoffPenaltyWeight)
-	setFloatPointerValue(fields, "default_handoff_penalty", s.DefaultHandoffPenalty)
-	setFloatPointerValue(fields, "quality_gap_multiplier", s.QualityGapMultiplier)
-	setFloatPointerValue(fields, "max_cache_cost_multiplier", s.MaxCacheCostMultiplier)
-	setFloatPointerValue(fields, "switch_history_weight", s.SwitchHistoryWeight)
-	setFloatPointerValue(fields, "remaining_turn_prior_weight", s.RemainingTurnPriorWeight)
-	setIntPointerValue(fields, "remaining_turn_prior_horizon", s.RemainingTurnPriorHorizon)
-	setIntPointerValue(fields, "min_remaining_turn_prior_samples", s.MinRemainingTurnPriorSamples)
-}
-
 func setStringValue(fields map[string]Value, key string, value string) {
 	if value != "" {
 		fields[key] = StringValue{V: value}
@@ -273,24 +246,6 @@ func setFloatValue(fields map[string]Value, key string, value float64) {
 func setBoolTrueValue(fields map[string]Value, key string, value bool) {
 	if value {
 		fields[key] = BoolValue{V: true}
-	}
-}
-
-func setBoolPointerValue(fields map[string]Value, key string, value *bool) {
-	if value != nil {
-		fields[key] = BoolValue{V: *value}
-	}
-}
-
-func setIntPointerValue(fields map[string]Value, key string, value *int) {
-	if value != nil {
-		fields[key] = IntValue{V: *value}
-	}
-}
-
-func setFloatPointerValue(fields map[string]Value, key string, value *float64) {
-	if value != nil {
-		fields[key] = FloatValue{V: *value}
 	}
 }
 

@@ -47,7 +47,6 @@ class TestAlgorithmConfigTypes:
             "mlp",
             "multi_factor",
             "latency_aware",
-            "session_aware",
             "rl_driven",
             "gmtrouter",
         ]
@@ -363,6 +362,7 @@ class TestFusionAlgorithmConfig:
         config = FusionAlgorithmConfig(grounding={"enabled": True})
         assert config.grounding.enabled is True
         assert config.grounding.reference == "hybrid"
+        assert config.grounding.policy == "weight"
         assert config.grounding.min_score == 0.0
         assert config.grounding.min_keep == 1
         assert config.grounding.nli_contradiction_penalty == 1.0
@@ -385,6 +385,9 @@ class TestFusionAlgorithmConfig:
             FusionAlgorithmConfig(grounding={"reference": "elsewhere"})
         with pytest.raises(PydanticValidationError):
             FusionAlgorithmConfig(grounding={"on_error": "ignore"})
+        # policy enum
+        with pytest.raises(PydanticValidationError):
+            FusionAlgorithmConfig(grounding={"policy": "drop"})
 
 
 class TestAlgorithmConfigIntegration:

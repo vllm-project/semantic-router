@@ -109,6 +109,27 @@ const HEADER_INFO: Record<string, { label: string; description: string }> = {
     label: 'Selected Modality',
     description: 'The modality chosen by the router',
   },
+  // Router Learning headers
+  'x-vsr-learning-methods': {
+    label: 'Learning Methods',
+    description: 'Router Learning methods summarized by this response',
+  },
+  'x-vsr-learning-actions': {
+    label: 'Learning Actions',
+    description: 'Method-keyed Router Learning actions',
+  },
+  'x-vsr-learning-scopes': {
+    label: 'Learning Scopes',
+    description: 'Method-keyed identity scopes used by Router Learning',
+  },
+  'x-vsr-learning-reasons': {
+    label: 'Learning Reasons',
+    description: 'Method-keyed compact reasons for Router Learning actions',
+  },
+  'x-vsr-learning-modes': {
+    label: 'Learning Modes',
+    description: 'Method-keyed Router Learning modes',
+  },
   // Plugin status headers
   'x-vsr-cache-hit': {
     label: 'Cache Status',
@@ -126,13 +147,10 @@ const HEADER_INFO: Record<string, { label: string; description: string }> = {
     label: 'Fast Response',
     description: 'Request short-circuited by fast_response plugin',
   },
-  'x-vsr-hallucination-detected': {
-    label: 'Quality: Hallucination',
-    description: 'Potential hallucination detected',
-  },
-  'x-vsr-fact-check-needed': {
-    label: 'Quality: Fact Check',
-    description: 'Fact checking recommended',
+  'x-vsr-response-warnings': {
+    label: 'Quality: Response Warnings',
+    description:
+      'Comma-separated response-quality warnings (hallucination, unverified_factual, response_jailbreak)',
   },
   // Looper headers
   'x-vsr-looper-model': {
@@ -202,6 +220,8 @@ const HeaderReveal = ({ headers, onComplete, displayDuration = 2000 }: HeaderRev
     model: displayHeaders.filter(
       ([key]) => key === 'x-vsr-selected-model' || key === 'x-vsr-selected-modality',
     ),
+    // Router Learning headers: bounded primary adaptation summary
+    learning: displayHeaders.filter(([key]) => key.startsWith('x-vsr-learning')),
     // Plugin status headers: cache, reasoning, context, security, quality
     plugin: displayHeaders.filter(
       ([key]) =>
@@ -209,8 +229,7 @@ const HeaderReveal = ({ headers, onComplete, displayDuration = 2000 }: HeaderRev
         key === 'x-vsr-selected-reasoning' ||
         key === 'x-vsr-fast-response' ||
         key === 'x-vsr-context-token-count' ||
-        key === 'x-vsr-hallucination-detected' ||
-        key === 'x-vsr-fact-check-needed',
+        key === 'x-vsr-response-warnings',
     ),
     // Looper headers: all x-vsr-looper-*
     looper: displayHeaders.filter(([key]) => key.startsWith('x-vsr-looper-')),
@@ -249,6 +268,7 @@ const HeaderReveal = ({ headers, onComplete, displayDuration = 2000 }: HeaderRev
           {renderSection('RESPONSE', groupedHeaders.response, true)}
           {renderSection('MODEL', groupedHeaders.model, true)}
           {renderSection('DECISION', groupedHeaders.decision, true)}
+          {renderSection('LEARNING', groupedHeaders.learning)}
           {renderSection('SIGNALS', groupedHeaders.signals)}
           {renderSection('PLUGIN', groupedHeaders.plugin)}
           {renderSection('LOOPER', groupedHeaders.looper)}
