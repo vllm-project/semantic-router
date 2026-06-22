@@ -397,7 +397,11 @@ func TestBuildResponseHeaderMutation_EmitsWarningsAlongsideStandardHeaders(t *te
 }
 
 func TestBuildResponseHeaderMutation_EmitsSplitRouterLearningHeaders(t *testing.T) {
+	// Router Learning headers are part of the intermediate decision detail and
+	// are demoted to the x-vsr-debug surface (#2205), so the request opts into
+	// debug to exercise them.
 	ctx := &RequestContext{
+		Headers: map[string]string{headers.VSRDebug: "true"},
 		VSRLearningPolicy: map[string]interface{}{
 			"adaptation": "session_aware",
 			"mode":       "apply",
@@ -419,7 +423,9 @@ func TestBuildResponseHeaderMutation_EmitsSplitRouterLearningHeaders(t *testing.
 }
 
 func TestBuildResponseHeaderMutation_EmitsNonApplyLearningMode(t *testing.T) {
+	// Demoted to the x-vsr-debug surface (#2205), so opt into debug.
 	ctx := &RequestContext{
+		Headers: map[string]string{headers.VSRDebug: "true"},
 		VSRLearningPolicy: map[string]interface{}{
 			"adaptation": "session_aware",
 			"mode":       "observe",
