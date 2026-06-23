@@ -45,6 +45,18 @@ type UsageCost struct {
 	BaselineModel      *string  `json:"baseline_model,omitempty"`
 }
 
+// Outcome captures typed post-route feedback linked to a replay record.
+type Outcome struct {
+	Timestamp time.Time         `json:"timestamp,omitempty"`
+	Source    string            `json:"source"`
+	Target    string            `json:"target"`
+	TargetRef string            `json:"target_ref,omitempty"`
+	Verdict   string            `json:"verdict"`
+	Reason    string            `json:"reason,omitempty"`
+	Score     float64           `json:"score,omitempty"`
+	Metadata  map[string]string `json:"metadata,omitempty"`
+}
+
 // ToolTrace captures the request-local assistant/tool exchange timeline.
 type ToolTrace struct {
 	Flow      string          `json:"flow,omitempty"`
@@ -87,10 +99,9 @@ type ToolTraceStep struct {
 	Truncated bool `json:"truncated,omitempty"`
 }
 
-// RouteDiagnostics summarizes the final route and any session-aware policy
-// outcome in a stable replay-facing shape. Detailed per-candidate scoring
-// remains in SessionPolicy; this object gives eval clients a compact contract
-// without expanding public response headers.
+// RouteDiagnostics summarizes the final route and any Router Learning
+// protection outcome in a stable replay-facing shape. Detailed per-candidate
+// learning diagnostics live in the typed Learning block.
 type RouteDiagnostics struct {
 	Decision             string `json:"decision,omitempty"`
 	DecisionTier         int    `json:"decision_tier,omitempty"`
@@ -106,12 +117,6 @@ type RouteDiagnostics struct {
 	SessionReason        string `json:"session_reason,omitempty"`
 	HardLockReason       string `json:"hard_lock_reason,omitempty"`
 	DecisionReason       string `json:"decision_reason,omitempty"`
-}
-
-// LearningDiagnostics stores router-learning adaptation outputs in a generic
-// namespace. Detailed adaptation-specific fields live under adaptations.<name>.
-type LearningDiagnostics struct {
-	Adaptations map[string]map[string]interface{} `json:"adaptations,omitempty"`
 }
 
 // Record represents a routing decision record with metadata and captured payloads.
@@ -134,6 +139,7 @@ type Record struct {
 	SelectionMethod       string                 `json:"selection_method,omitempty"`
 	RouteDiagnostics      *RouteDiagnostics      `json:"route_diagnostics,omitempty"`
 	Learning              *LearningDiagnostics   `json:"learning,omitempty"`
+	Outcomes              []Outcome              `json:"outcomes,omitempty"`
 	SessionPolicy         map[string]interface{} `json:"session_policy,omitempty"`
 	Signals               Signal                 `json:"signals"`
 	Projections           []string               `json:"projections,omitempty"`
@@ -220,6 +226,9 @@ type Writer interface {
 
 	// AttachResponse updates the response body for an existing record.
 	AttachResponse(ctx context.Context, id string, body string, truncated bool) error
+
+	// AppendOutcome links post-route feedback to an existing replay record.
+	AppendOutcome(ctx context.Context, id string, outcome Outcome) error
 }
 
 // Reader retrieves router replay records.
@@ -263,6 +272,17 @@ func cloneFloat64Map(values map[string]float64) map[string]float64 {
 		return nil
 	}
 	cloned := make(map[string]float64, len(values))
+	for key, value := range values {
+		cloned[key] = value
+	}
+	return cloned
+}
+
+func cloneStringMap(values map[string]string) map[string]string {
+	if values == nil {
+		return nil
+	}
+	cloned := make(map[string]string, len(values))
 	for key, value := range values {
 		cloned[key] = value
 	}
@@ -342,6 +362,7 @@ func cloneRecord(record Record) Record {
 	cloned := record
 	cloned.RouteDiagnostics = cloneRouteDiagnostics(record.RouteDiagnostics)
 	cloned.Learning = cloneLearningDiagnostics(record.Learning)
+	cloned.Outcomes = cloneOutcomes(record.Outcomes)
 	cloned.Signals = cloneSignal(record.Signals)
 	cloned.Projections = cloneStringSlice(record.Projections)
 	cloned.ProjectionScores = cloneFloat64Map(record.ProjectionScores)
@@ -364,18 +385,37 @@ func cloneRecord(record Record) Record {
 	return cloned
 }
 
+func cloneOutcomes(values []Outcome) []Outcome {
+	if values == nil {
+		return nil
+	}
+	cloned := make([]Outcome, len(values))
+	copy(cloned, values)
+	for i := range cloned {
+		cloned[i].Metadata = cloneStringMap(values[i].Metadata)
+	}
+	return cloned
+}
+
+func cloneOutcome(value Outcome) Outcome {
+	cloned := value
+	cloned.Metadata = cloneStringMap(value.Metadata)
+	return cloned
+}
+
 func cloneLearningDiagnostics(value *LearningDiagnostics) *LearningDiagnostics {
 	if value == nil {
 		return nil
 	}
-	cloned := &LearningDiagnostics{}
-	if value.Adaptations != nil {
-		cloned.Adaptations = make(map[string]map[string]interface{}, len(value.Adaptations))
-		for name, policy := range value.Adaptations {
-			cloned.Adaptations[name] = cloneInterfaceMap(policy)
-		}
+	b, err := json.Marshal(value)
+	if err != nil {
+		return nil
 	}
-	return cloned
+	var cloned LearningDiagnostics
+	if err := json.Unmarshal(b, &cloned); err != nil {
+		return nil
+	}
+	return &cloned
 }
 
 func cloneRouteDiagnostics(value *RouteDiagnostics) *RouteDiagnostics {

@@ -31,7 +31,7 @@ func defaultCanonicalRouterGlobal() CanonicalRouterGlobal {
 				UseCapabilities:     true,
 			},
 			Hybrid: HybridSelectionConfig{
-				EloWeight:           0.3,
+				ExperienceWeight:    0.3,
 				RouterDCWeight:      0.3,
 				AutoMixWeight:       0.2,
 				CostWeight:          0.2,

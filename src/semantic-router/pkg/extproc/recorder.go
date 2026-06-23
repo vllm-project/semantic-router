@@ -203,7 +203,7 @@ func buildReplayRoutingRecord(
 		SelectionMethod:   ctx.VSRSelectionMethod,
 		RouteDiagnostics:  buildReplayRouteDiagnostics(ctx, originalModel, selectedModel, decisionName, decisionTier, decisionPriority),
 		Learning:          buildReplayLearningDiagnostics(ctx),
-		SessionPolicy:     cloneReplayInterfaceMap(ctx.VSRSessionPolicy),
+		SessionPolicy:     sessionPolicyMapForReplay(ctx),
 		Signals:           replaySignalState(ctx),
 		Projections:       replayProjectionState(ctx),
 		ProjectionScores:  cloneReplayFloat64Map(ctx.VSRProjectionScores),

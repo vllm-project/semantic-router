@@ -193,9 +193,10 @@ helm install semantic-router ./deploy/helm/semantic-router \
 **Features:**
 
 - Router replicas scale from 2 minimum to 10 through HPA
-- Helm rejects multi-replica router renders when the active config uses
-  local-state learning selectors such as `elo`, `rl_driven`, or `gmtrouter`,
-  unless that safety guard is explicitly disabled after externalizing state
+- Helm rejects multi-replica router renders when the active config enables
+  Router Learning request-time local state, unless that safety guard is
+  explicitly disabled after accepting replica-local learning divergence or
+  adding sticky routing
 - Dashboard stays at one replica in the production values profile; it can mount
   dashboard-local SQLite state on a PVC, but the current auth/session store is
   not a shared HA store
