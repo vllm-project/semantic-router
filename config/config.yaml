@@ -1531,6 +1531,17 @@ global:
               requests_per_unit: 1000
               tokens_per_unit: 2000000
               unit: hour
+    session_token_budget:
+      # Runtime per-session token-budget enforcement (Opp-5). Opt-in: a no-op
+      # unless enabled is true and budget_tokens > 0. Over-budget sessions
+      # escalate through a graduated ladder rather than a binary deny.
+      enabled: false
+      budget_tokens: 40000
+      thresholds:
+        shape_tools: 1.0
+        compress: 1.5
+        downgrade: 2.0
+        terminate: 3.0
     startup_status:
       store_backend: file
     router_replay:

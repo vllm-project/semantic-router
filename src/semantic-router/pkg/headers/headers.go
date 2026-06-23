@@ -347,6 +347,24 @@ const (
 	AuthzUserGroups = "x-authz-user-groups"
 )
 
+// VSR Session Budget Headers (Opp-5)
+// These headers report runtime session token-budget enforcement on responses
+// (including the terminate short-circuit). Emitted only when budget evaluation
+// ran (enforcement enabled and the request resolved to a session).
+const (
+	// VSRBudgetStage is the graduated stage selected by the session token-budget
+	// evaluator. Values: "none", "shape_tools", "compress", "downgrade", "terminate".
+	VSRBudgetStage = "x-vsr-budget-stage"
+
+	// VSRBudgetRatio is the over-budget ratio (cumulative tokens / configured
+	// budget) at evaluation time, formatted with two decimals (e.g. "2.40").
+	VSRBudgetRatio = "x-vsr-budget-ratio"
+
+	// VSRBudgetExceeded is "true" only when the session was terminated for
+	// exceeding its token budget; absent otherwise.
+	VSRBudgetExceeded = "x-vsr-budget-exceeded"
+)
+
 // Looper Request Headers
 // These headers are added to looper internal requests to identify them
 // and allow the extproc to lookup decision configuration and apply plugins.

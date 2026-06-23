@@ -114,6 +114,11 @@ type RequestContext struct {
 	// HistoryTokenCount is zero (server-side conversation state).
 	PreviousResponseID string
 
+	// SessionBudget is the write-once result of session token-budget
+	// evaluation (Opp-5). Nil when enforcement is disabled or the request did
+	// not resolve to a session.
+	SessionBudget *SessionBudgetDecision
+
 	// VSR decision tracking
 	VSRSelectedCategory           string                 // The category from domain classification (MMLU category)
 	VSRSelectedDecisionName       string                 // The decision name from DecisionEngine evaluation
