@@ -1,0 +1,101 @@
+name: Check Linked Issue
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, edited, ready_for_review]
+    branches:
+      - main
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check-linked-issue:
+    if: >-
+      (
+        github.repository == 'vllm-project/semantic-router'
+        || github.repository == 'MilindRastogi24/semantic-router'
+      )
+      && !github.event.pull_request.draft
+      && github.event.pull_request.user.type != 'Bot'
+    runs-on: ubuntu-latest
+    permissions:
+      pull-requests: read
+      issues: read
+    steps:
+      - name: Verify pull request links an issue
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const query = `
+              query ($owner: String!, $repo: String!, $number: Int!) {
+                repository(owner: $owner, name: $repo) {
+                  pullRequest(number: $number) {
+                    closingIssuesReferences(first: 20) {
+                      nodes {
+                        number
+                        title
+                        url
+                      }
+                    }
+                    timelineItems(first: 50, itemTypes: [CONNECTED_EVENT]) {
+                      nodes {
+                        ... on ConnectedEvent {
+                          subject {
+                            ... on Issue {
+                              number
+                              title
+                              url
+                            }
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            `;
+
+            const { repository } = await github.graphql(query, {
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              number: context.payload.pull_request.number,
+            });
+
+            const closingIssues =
+              repository.pullRequest.closingIssuesReferences.nodes ?? [];
+            const connectedIssues =
+              (repository.pullRequest.timelineItems.nodes ?? [])
+                .map((node) => node.subject)
+                .filter((subject) => subject && subject.number);
+
+            const linkedIssues = [
+              ...new Map(
+                [...closingIssues, ...connectedIssues].map((issue) => [
+                  issue.number,
+                  issue,
+                ]),
+              ).values(),
+            ];
+
+            if (linkedIssues.length === 0) {
+              core.setFailed(
+                [
+                  "This pull request is not linked to an issue.",
+                  "",
+                  "Link an issue before review so changes can be tracked correctly:",
+                  "- Add a closing keyword in the PR description or title, for example: Closes #123",
+                  "- Or link the issue from the pull request sidebar under Development",
+                  "",
+                  "See the PR template and https://github.com/orgs/community/discussions/84771",
+                ].join("\n"),
+              );
+              return;
+            }
+
+            core.info(
+              `Linked issue(s): ${linkedIssues
+                .map((issue) => `#${issue.number} (${issue.url})`)
+                .join(", ")}`,
+            );
